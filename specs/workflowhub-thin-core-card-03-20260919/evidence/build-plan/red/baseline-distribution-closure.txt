@@ -1,0 +1,160 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+
+ ❯ tests/integration/distribution-closure.test.mjs (22 tests | 10 failed) 1858ms
+   × portable build-prd workflow closure > contains the five workflows and their declared skill closure only 58ms
+     → skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review
+   × portable build-prd workflow closure > rejects removal of the persisted portable workflow closure 59ms
+     → skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review
+   × portable build-prd workflow closure > rejects unmanifested files in a closed release 56ms
+     → skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review
+   × portable build-prd workflow closure > rejects valid-hash extra files added to the manifest and disk 51ms
+     → skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review
+   × portable build-prd workflow closure > rejects an unsafe release manifest file 56ms
+     → skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review
+   × portable build-prd workflow closure > rejects hard-linked release source files 137ms
+     → expected [Function] to throw error matching /hard-linked/ but got 'skill closure is not closed: build-co…'
+   × portable build-prd workflow closure > rejects a forbidden declared asset instead of silently dropping it 142ms
+     → expected [Function] to throw error matching /forbidden path/ but got 'skill closure is not closed: build-co…'
+   × carries the canonical shared definitions owner through the runner import closure 54ms
+     → skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review
+   × P5 released workflow source rejects missing bytes after a valid baseline 53ms
+     → skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review
+   × P5 released workflow source rejects tampered bytes after a valid baseline 58ms
+     → skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 10 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/distribution-closure.test.mjs > portable build-prd workflow closure > contains the five workflows and their declared skill closure only
+Error: skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review
+ ❯ assertSourceClosure runtime/distribution/skill-bundle-release.mjs:292:25
+    290| function assertSourceClosure(root) {
+    291|   const result = checkSkillClosure(root);
+    292|   if (!result.ok) throw new Error(`skill closure is not closed: ${resu…
+       |                         ^
+    293| }
+    294| 
+ ❯ collectSourceClosure runtime/distribution/skill-bundle-release.mjs:296:3
+ ❯ Module.buildSkillBundleRelease runtime/distribution/skill-bundle-release.mjs:372:22
+ ❯ tests/integration/distribution-closure.test.mjs:155:27
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/10]⎯
+
+ FAIL  tests/integration/distribution-closure.test.mjs > portable build-prd workflow closure > rejects removal of the persisted portable workflow closure
+Error: skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review
+ ❯ assertSourceClosure runtime/distribution/skill-bundle-release.mjs:292:25
+    290| function assertSourceClosure(root) {
+    291|   const result = checkSkillClosure(root);
+    292|   if (!result.ok) throw new Error(`skill closure is not closed: ${resu…
+       |                         ^
+    293| }
+    294| 
+ ❯ collectSourceClosure runtime/distribution/skill-bundle-release.mjs:296:3
+ ❯ Module.buildSkillBundleRelease runtime/distribution/skill-bundle-release.mjs:372:22
+ ❯ tests/integration/distribution-closure.test.mjs:218:28
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/10]⎯
+
+ FAIL  tests/integration/distribution-closure.test.mjs > portable build-prd workflow closure > rejects unmanifested files in a closed release
+Error: skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review
+ ❯ assertSourceClosure runtime/distribution/skill-bundle-release.mjs:292:25
+    290| function assertSourceClosure(root) {
+    291|   const result = checkSkillClosure(root);
+    292|   if (!result.ok) throw new Error(`skill closure is not closed: ${resu…
+       |                         ^
+    293| }
+    294| 
+ ❯ collectSourceClosure runtime/distribution/skill-bundle-release.mjs:296:3
+ ❯ Module.buildSkillBundleRelease runtime/distribution/skill-bundle-release.mjs:372:22
+ ❯ tests/integration/distribution-closure.test.mjs:235:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/10]⎯
+
+ FAIL  tests/integration/distribution-closure.test.mjs > portable build-prd workflow closure > rejects valid-hash extra files added to the manifest and disk
+Error: skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review
+ ❯ assertSourceClosure runtime/distribution/skill-bundle-release.mjs:292:25
+    290| function assertSourceClosure(root) {
+    291|   const result = checkSkillClosure(root);
+    292|   if (!result.ok) throw new Error(`skill closure is not closed: ${resu…
+       |                         ^
+    293| }
+    294| 
+ ❯ collectSourceClosure runtime/distribution/skill-bundle-release.mjs:296:3
+ ❯ Module.buildSkillBundleRelease runtime/distribution/skill-bundle-release.mjs:372:22
+ ❯ tests/integration/distribution-closure.test.mjs:266:28
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/10]⎯
+
+ FAIL  tests/integration/distribution-closure.test.mjs > portable build-prd workflow closure > rejects an unsafe release manifest file
+Error: skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review
+ ❯ assertSourceClosure runtime/distribution/skill-bundle-release.mjs:292:25
+    290| function assertSourceClosure(root) {
+    291|   const result = checkSkillClosure(root);
+    292|   if (!result.ok) throw new Error(`skill closure is not closed: ${resu…
+       |                         ^
+    293| }
+    294| 
+ ❯ collectSourceClosure runtime/distribution/skill-bundle-release.mjs:296:3
+ ❯ Module.buildSkillBundleRelease runtime/distribution/skill-bundle-release.mjs:372:22
+ ❯ tests/integration/distribution-closure.test.mjs:309:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/10]⎯
+
+ FAIL  tests/integration/distribution-closure.test.mjs > portable build-prd workflow closure > rejects hard-linked release source files
+AssertionError: expected [Function] to throw error matching /hard-linked/ but got 'skill closure is not closed: build-co…'
+
+- Expected: 
+/hard-linked/
+
++ Received: 
+"skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review"
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/10]⎯
+
+ FAIL  tests/integration/distribution-closure.test.mjs > portable build-prd workflow closure > rejects a forbidden declared asset instead of silently dropping it
+AssertionError: expected [Function] to throw error matching /forbidden path/ but got 'skill closure is not closed: build-co…'
+
+- Expected: 
+/forbidden path/
+
++ Received: 
+"skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review"
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/10]⎯
+
+ FAIL  tests/integration/distribution-closure.test.mjs > carries the canonical shared definitions owner through the runner import closure
+Error: skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review
+ ❯ assertSourceClosure runtime/distribution/skill-bundle-release.mjs:292:25
+    290| function assertSourceClosure(root) {
+    291|   const result = checkSkillClosure(root);
+    292|   if (!result.ok) throw new Error(`skill closure is not closed: ${resu…
+       |                         ^
+    293| }
+    294| 
+ ❯ collectSourceClosure runtime/distribution/skill-bundle-release.mjs:296:3
+ ❯ Module.buildSkillBundleRelease runtime/distribution/skill-bundle-release.mjs:372:22
+ ❯ tests/integration/distribution-closure.test.mjs:419:37
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/10]⎯
+
+ FAIL  tests/integration/distribution-closure.test.mjs > P5 released workflow source rejects missing bytes after a valid baseline
+ FAIL  tests/integration/distribution-closure.test.mjs > P5 released workflow source rejects tampered bytes after a valid baseline
+Error: skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review
+ ❯ assertSourceClosure runtime/distribution/skill-bundle-release.mjs:292:25
+    290| function assertSourceClosure(root) {
+    291|   const result = checkSkillClosure(root);
+    292|   if (!result.ok) throw new Error(`skill closure is not closed: ${resu…
+       |                         ^
+    293| }
+    294| 
+ ❯ collectSourceClosure runtime/distribution/skill-bundle-release.mjs:296:3
+ ❯ Module.buildSkillBundleRelease runtime/distribution/skill-bundle-release.mjs:372:22
+ ❯ tests/integration/distribution-closure.test.mjs:444:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/10]⎯
+
+ Test Files  1 failed (1)
+      Tests  10 failed | 12 passed (22)
+   Start at  23:27:54
+   Duration  2.05s (transform 37ms, setup 0ms, collect 66ms, tests 1.86s, environment 0ms, prepare 28ms)
+

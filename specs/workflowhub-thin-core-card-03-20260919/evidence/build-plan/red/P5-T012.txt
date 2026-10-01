@@ -1,0 +1,57 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+
+ ❯ tests/contract/material-set-per-stage.test.mjs (4 tests | 2 failed) 5ms
+   × post material set is scoped per stage (G1) > make-decision requires only decision-log.md 3ms
+     → expected [ 'decision-log.md', 'spec.md', …(1) ] to deeply equal [ 'decision-log.md' ]
+   × post material set is scoped per stage (G1) > the make-decision stage-end handoff declaration no longer throws 'post Phase index is missing' 1ms
+     → expected [Function] to not throw an error but 'TypeError: post Phase index is missing' was thrown
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/material-set-per-stage.test.mjs > post material set is scoped per stage (G1) > make-decision requires only decision-log.md
+AssertionError: expected [ 'decision-log.md', 'spec.md', …(1) ] to deeply equal [ 'decision-log.md' ]
+
+- Expected
++ Received
+
+  Array [
+    "decision-log.md",
++   "spec.md",
++   "phases/index.md",
+  ]
+
+ ❯ tests/contract/material-set-per-stage.test.mjs:15:87
+     13| describe("post material set is scoped per stage (G1)", () => {
+     14|   it("make-decision requires only decision-log.md", () => {
+     15|     expect(materialFilesForCohort("post", DECISION_ONLY, { stage: "mak…
+       |                                                                                       ^
+     16|   });
+     17| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/contract/material-set-per-stage.test.mjs > post material set is scoped per stage (G1) > the make-decision stage-end handoff declaration no longer throws 'post Phase index is missing'
+AssertionError: expected [Function] to not throw an error but 'TypeError: post Phase index is missing' was thrown
+
+- Expected: 
+undefined
+
++ Received: 
+"TypeError: post Phase index is missing"
+
+ ❯ tests/contract/material-set-per-stage.test.mjs:29:12
+     27|     expect(() => {
+     28|       declaration = handoffDeclaration(DECISION_ONLY, "post", { stage:…
+     29|     }).not.toThrow();
+       |            ^
+     30|     expect(declaration.value).toBeNull();
+     31|     expect(typeof declaration.reason).toBe("string");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 2 passed (4)
+   Start at  00:55:08
+   Duration  701ms (transform 246ms, setup 0ms, collect 576ms, tests 5ms, environment 0ms, prepare 36ms)
+

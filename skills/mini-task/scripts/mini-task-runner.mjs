@@ -310,8 +310,9 @@ function currentMiniTaskMaterials(task, worktreeRoot) {
   };
 }
 
-function reviewRequest(task, _workspace, reviewKind, materials, hostProvider) {
-  text(hostProvider, "hostProvider");
+// host_provider is no longer part of a review request (card-03); a caller that
+// still passes hostProvider has it ignored.
+function reviewRequest(task, _workspace, reviewKind, materials) {
   return {
     task_path: task.taskPath,
     project_name: task.identity.projectName,
@@ -319,7 +320,6 @@ function reviewRequest(task, _workspace, reviewKind, materials, hostProvider) {
     stage: "build-code",
     phase_id: MINI_REVIEW_PHASE[reviewKind.split(".")[1]],
     review_kind: reviewKind,
-    host_provider: hostProvider,
     materials,
   };
 }
@@ -931,16 +931,15 @@ export function recordMiniTaskDesignReview({ task: taskHandle, kernel: taskKerne
   ] });
 }
 
-export async function runMiniTaskDesignReview({ task: taskHandle, kernel: taskKernel, reviewRunner, runReview, hostProvider, findingDispositions } = {}) {
+export async function runMiniTaskDesignReview({ task: taskHandle, kernel: taskKernel, reviewRunner, runReview, findingDispositions } = {}) {
   const task = assertTaskHandle(taskHandle); const kernel = assertTaskKernel(taskKernel);
   if (kernel.task !== task) throw new Error("mini-task design review TaskHandle/TaskKernel mismatch");
-  text(hostProvider, "hostProvider");
   const workspace = openCurrentTaskWorkspace(task);
   const snapshot = captureExecutionSnapshot(workspace.worktreeRoot, task.identity.taskId);
   const runner = reviewRunnerFor({ reviewRunner, runReview });
   let outcome;
   try {
-    outcome = await runner(reviewRequest(task, workspace, MINI_REVIEW_KIND.design, currentMiniTaskMaterials(task, workspace.worktreeRoot), hostProvider));
+    outcome = await runner(reviewRequest(task, workspace, MINI_REVIEW_KIND.design, currentMiniTaskMaterials(task, workspace.worktreeRoot)));
   } catch (error) {
     outcome = { status: "unavailable", error_code: error?.code ?? "REVIEW_UNAVAILABLE", error: { message: String(error?.message ?? error) } };
   }
@@ -1132,10 +1131,9 @@ export function recordMiniTaskQuality({ task: taskHandle, kernel: taskKernel, wo
   return recordCapturedMiniTaskQuality({ task, kernel, receipt, testFact, implementationReview, userRecord, acTrace: trace, coverageLimits, skipReasons, remainingRisks, findingDispositions, humanConfirmation });
 }
 
-export async function runMiniTaskImplementationReview({ task: taskHandle, kernel: taskKernel, workspace, testCommand, receiptRef = "quality/tests/mini-task-implementation.json", outputRef = "quality/tests/output/mini-task-implementation.output", userResult, acTrace = null, coverageLimits = [], skipReasons = [], remainingRisks = [], findingDispositions, humanConfirmation = null, reviewRunner, runReview, hostProvider } = {}) {
+export async function runMiniTaskImplementationReview({ task: taskHandle, kernel: taskKernel, workspace, testCommand, receiptRef = "quality/tests/mini-task-implementation.json", outputRef = "quality/tests/output/mini-task-implementation.output", userResult, acTrace = null, coverageLimits = [], skipReasons = [], remainingRisks = [], findingDispositions, humanConfirmation = null, reviewRunner, runReview } = {}) {
   const task = assertTaskHandle(taskHandle); const kernel = assertTaskKernel(taskKernel);
   if (kernel.task !== task) throw new Error("mini-task implementation review TaskHandle/TaskKernel mismatch");
-  text(hostProvider, "hostProvider");
   const safeWorkspace = workspace ?? openCurrentTaskWorkspace(task);
   text(testCommand, "testCommand");
   if (!Array.isArray(coverageLimits) || !Array.isArray(skipReasons) || !Array.isArray(remainingRisks)) throw new TypeError("mini-task quality limits must be arrays");
@@ -1160,7 +1158,7 @@ export async function runMiniTaskImplementationReview({ task: taskHandle, kernel
         skip_reasons: [...skipReasons],
         remaining_risks: [...remainingRisks],
       };
-      outcome = await runner(reviewRequest(task, safeWorkspace, MINI_REVIEW_KIND.implementation, materials, hostProvider));
+      outcome = await runner(reviewRequest(task, safeWorkspace, MINI_REVIEW_KIND.implementation, materials));
     } catch (error) {
       outcome = { status: "unavailable", error_code: error?.code ?? "REVIEW_UNAVAILABLE", error: { message: String(error?.message ?? error) } };
     }

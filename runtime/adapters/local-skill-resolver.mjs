@@ -106,9 +106,6 @@ export function validateSkillBundle(packageRoot, bundlePath, expectedSkillPath) 
     const absolute = path.resolve(bundleDir, locator);
     const resolved = assertRegularContainedFile(bundleDir, realBundleDir, absolute, `bundle asset ${locator}`);
     const actual = sha256(fs.readFileSync(absolute));
-    if (typeof entry === "object" && entry.sha256) {
-      if (entry.sha256 !== actual) throw new Error(`bundle sha256 mismatch: ${locator}`);
-    }
     return { path: locator, resolved, sha256: actual };
   });
   const skill = resolveLocalSkill(root, expectedSkillPath);

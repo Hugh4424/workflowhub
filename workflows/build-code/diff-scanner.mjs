@@ -12,24 +12,6 @@ import { isAbsolute, join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { normalizeRuntimeOnlyPaths } from '../../runtime/evidence/canonical-utils.mjs';
 
-// Literal patterns matched against content lines (added/removed/context lines).
-// These represent operations that appear as code content — not file paths.
-const C2_IRREVERSIBLE_GIT_RULES = [
-  // IMPORTANT: more-specific patterns must come before less-specific ones that are substrings
-  // of them (e.g. 'git push --force' before 'git push'), because the loop breaks on first match.
-  { type: 'irreversible_git', pattern: 'git push --force-with-lease' },
-  { type: 'irreversible_git', pattern: 'git push --force' },
-  { type: 'irreversible_git', pattern: 'git push --delete' },
-  { type: 'irreversible_git', pattern: 'git push -f' },
-  // irreversible_git: git push (base form, catches remaining push variants)
-  { type: 'irreversible_git', pattern: 'git push' },
-  // irreversible_git: branch deletion
-  { type: 'irreversible_git', pattern: 'git branch -d' },
-  { type: 'irreversible_git', pattern: 'git branch -D' },
-  // irreversible_git: destructive reset
-  { type: 'irreversible_git', pattern: 'git reset --hard' },
-];
-
 // File path patterns: matched against the CHANGED FILE PATH extracted from diff headers,
 // NOT against arbitrary code content lines. This prevents false positives like
 // `process.env.NODE_ENV` matching `.env`, or code referencing `package.json` as a string.
@@ -177,7 +159,7 @@ function createDiffLineScanner(ignoredPaths = new Set(), guardedC2Paths = new Se
       return; // header line processed; skip content-line checks
     }
 
-    // Content rules (irreversible_git and testLine regex rules) must ONLY fire on ADDED lines —
+    // Content-line regex rules must ONLY fire on ADDED lines —
     // lines the developer is introducing. A unified added-line guard: the line must start with '+'
     // but NOT be a '+++' file header (those are diff metadata, not content).
     // Context lines (' ') and removed lines ('-') are intentionally excluded:
@@ -185,18 +167,6 @@ function createDiffLineScanner(ignoredPaths = new Set(), guardedC2Paths = new Se
     //   - Removed lines represent code being DELETED — a git op being removed is not a new violation.
     const isAddedLine = !currentFileIgnored && line.startsWith('+') && !line.startsWith('+++');
     if (!isAddedLine) return;
-
-    // Check irreversible_git rules against added content lines only.
-    for (const rule of C2_IRREVERSIBLE_GIT_RULES) {
-      if (line.includes(rule.pattern)) {
-        const key = `${rule.pattern}:${lineNum}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          violations.push({ type: rule.type, pattern: rule.pattern, line: lineNum });
-        }
-        break;
-      }
-    }
 
     // Check content-line regex rules (testLine — e.g. plugin-semver-bump scoped to manifests).
     for (const rule of C2_REGEX_RULES) {

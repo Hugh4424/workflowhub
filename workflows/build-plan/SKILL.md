@@ -140,6 +140,10 @@ for validation before claiming that build-plan itself is accepted. This
 confirmation does not turn confirmation into a machine work permit. Missing
 review facts do not block continued work: continue research, planning, or
 repair in this same task.
+确认问题按**三选一**提出，不把「没有回答」当成默认继续：①按现有材料把缺口修完再进；
+②**指派缺口负责人后进**（写清谁负责哪条缺口）；③**取消本次执行**。用户未回答时保持草稿、
+在本 task 内继续研究/规划/修复，缺的确认事实如实记为缺失；它不阻断同任务内的后续动作
+（见上：确认不是机器工作许可），也不新增确认点、字段或文件。
 确认后的实际执行事实写入既有 task facts/quality evidence；Phase 正文与索引不充当进度账。
 改变方向的规划歧义按现有 fallback protocol 路由回 `make-decision`。
 Do not implement production code or claim GREEN here. Write and run applicable
@@ -189,13 +193,19 @@ log, a parallel review output, or a process summary. `simplicity-guard` and
 `plan-eng-review` are ordinary advisory lenses in the declared review contract,
 not new workflow stages and not gates.
 
+## 按工作类型派子代理
+
+规则唯一权威见 `AGENTS.md`。调研、实现设计与 Phase 草稿实施、RED 测试和独立审查/红队派子代理；修复回原实施子代理。范围裁决、用户交互及计划确认由主会话执行，纯材料任务不虚构运行时测试。
+子代理先落盘重产物，再回传引用。只回摘要与 ref，不回正文或长日志。按子问题增量落盘并回传，不攒到最后。
+G-1 产出侧：并行方案登记的接口必须变更时触发 G-1，注明受影响工作包并指向 `workflows/build-code/SKILL.md` 的收场侧。
+
 ## Work sequence
 
 1. Read the current decision and every already-present material. For a
    pre-cohort task, `spec.md` is required upstream input; for a post-cohort
    task, draft `spec.md` from the decision at `spec-specify` before using it
    for phase planning. Extract requirements, FR/AC, constraints, non-goals,
-   risks, deferred items, and open questions.
+   risks, deferred items, and open questions. Also read the three existing "subtraction" carriers in the current `decision-log.md`: `decision-omission-acceptance.v1` (an accepted "not doing"), `retain_or_delete` (a deletion decision), and `not_applicable` (not applicable). An accepted "not doing" is a legitimate registration, not a gap to close.
 2. Research only in proportion to implementation risk. Verify code anchors,
    existing consumers, interfaces, data changes, failure paths, ownership,
    testing conventions, and rollback options. Put durable conclusions in
@@ -206,13 +216,13 @@ not new workflow stages and not gates.
    interfaces/data flow, exact global NEW/MODIFY/DO NOT TOUCH boundary,
    alternatives, dependencies, rollback, risks, testing strategy, and the
    single source → FR → AC → Phase/task → oracle map.
-5. Write one independent `phases/P<n>.md` per Phase. Each file has L0/L1/L2,
-   a stable pointer to the spec global goal, its own exact write set and
-   dependency, RED/GREEN tasks, test tier/skill/scenario/fixture, `gate_cmd`,
-   expected exits, oracle, evidence path, coverage limit, STOP, done evidence,
-   and rollback. Render `phases/index.md` as a pure pointer table: authority
-   path, semantic anchor, write set, dependency, consumer. The final aggregate
-   is an ordinary Phase task, not a new public stage.
+5. Write one independent `phases/P<n>.md` per Phase with L0/L1/L2.
+   Use `skills/spec-plan/templates/phase-template.md` as the field authority;
+   refer to that template rather than duplicating its field enumeration here.
+   Keep the stable pointer to the spec global goal in each Phase file.
+   Render `phases/index.md` as a pure pointer table containing
+   authority path, semantic anchor, write set, dependency, consumer.
+   The final aggregate is an ordinary Phase task, not a new public stage.
    Within this existing `spec-plan` step, build-plan writes each applicable
    behavior test in the authenticated worktree before implementation and runs
    its Task's exact `gate_cmd`. Capture the real command, exit, raw output/ref,
@@ -285,7 +295,7 @@ work merely for convenience. If a genuinely required cross-repository check is
 part of the AC, keep it explicit with its actual scope and limits. Splitting a
 long aggregate into ordinary tasks is optional plan authoring, not a runtime
 gate; a timeout remains `incomplete` and does not trigger an automatic full
-rerun.
+rerun. Slice discipline applies to every split, including this one: the split must pass two checks — there is at least one slice that can be discarded wholesale because it is low-value or can be deferred, and the slices are roughly equal in size. When the material or the scope exceeds what can be read in one pass, the action is to split the problem into smaller pieces, not to keep writing into the same one. Neither check carries a numeric threshold.
 
 Each implementation file appears in one Phase boundary and each task file list is a subset of
 that phase. Parallel phases/tasks require independent inputs, dependencies, and

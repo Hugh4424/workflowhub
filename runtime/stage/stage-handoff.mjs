@@ -181,10 +181,10 @@ function deriveNextAction(stage, stageStatus, materials = null) {
   const materialPhrase = post ? "当前 cohort 材料集合（spec.md、phases/index.md 和全部物理 Phase）" : "当前四份材料";
   const boundaryPhrase = post ? "对应 Phase 文件" : "plan.md / tasks.md";
   if (stageStatus === "in_progress") {
-    return `继续处理当前 \`${stage}\`：按本 handoff 的非完成行与 run 结果修复后重跑本阶段。`;
+    return `继续处理当前 \`${stage}\`：按非完成行与 run 结果修复受影响步骤，沿既有步骤顺序前移；只针对新代码、新失败或新疑点做必要定向检查，不因质量缺口整体回跑本阶段。阶段完成仍以正式事实与完成判据为准。`;
   }
   if (stageStatus !== "completed") {
-    return `当前 \`${stage}\` 的完成状态为 \`${stageStatus}\`；不要据此进入下一阶段，先读取现有正式事实并确认当前阶段是否完成。`;
+    return `当前 \`${stage}\` 的完成状态为 \`${stageStatus}\`；先回读正式事实定位缺口。当前 cohort 材料齐备可读且现有 \`work_status=ready\`、\`continuation_allowed=true\` 时，继续同 task 的修复或安全复核；质量缺口不作工作冻结，也不证明阶段完成。验收、确认和不可逆交付授权各按既有边界处理。`;
   }
   if (next === null) {
     return `\`${stage}\` 不在四阶段作者链条上：按四份材料与正式质量原件确认后续动作。`;

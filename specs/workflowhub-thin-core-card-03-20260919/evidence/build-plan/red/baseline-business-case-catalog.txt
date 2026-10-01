@@ -1,0 +1,55 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+
+ ❯ tests/contract/business-case-catalog.test.mjs (2 tests | 2 failed) 5ms
+   × CARD-04 business-case catalog: explicit sourced business relationships > materializes a versioned, machine-readable catalog with real CARD-04 and affected regression cases 4ms
+     → expected false to be true // Object.is equality
+   × CARD-04 business-case catalog: explicit sourced business relationships > does not let three P6/P7 seeds conceal the sourced P9..P12 B2 obligations 1ms
+     → sourced B2 obligation missing path specs/workflowhub-thin-core-card-04-20260919/phases/P9.md: expected false to be true // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/business-case-catalog.test.mjs > CARD-04 business-case catalog: explicit sourced business relationships > materializes a versioned, machine-readable catalog with real CARD-04 and affected regression cases
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ checkCase tests/contract/business-case-catalog.test.mjs:34:56
+     32|   expect(nonempty(entry.owner)).toBe(true);
+     33|   expect(nonempty(entry.source.path)).toBe(true);
+     34|   expect(existsSync(resolve(root, entry.source.path))).toBe(true);
+       |                                                        ^
+     35|   expect(nonempty(entry.source.revision)).toBe(true);
+     36|   expect(nonempty(entry.rule.id)).toBe(true);
+ ❯ tests/contract/business-case-catalog.test.mjs:93:8
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/contract/business-case-catalog.test.mjs > CARD-04 business-case catalog: explicit sourced business relationships > does not let three P6/P7 seeds conceal the sourced P9..P12 B2 obligations
+AssertionError: sourced B2 obligation missing path specs/workflowhub-thin-core-card-04-20260919/phases/P9.md: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/contract/business-case-catalog.test.mjs:171:95
+    169|       expect(entry.change_trigger, `${phase}/${task} needs a sourced c…
+    170|       for (const path of [entry.source_path, entry.test_target, entry.…
+    171|         expect(existsSync(resolve(root, path)), `sourced B2 obligation…
+       |                                                                                               ^
+    172|       }
+    173|       if (entry.status === "not_done") expect(active.has(entry.case_id…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+ Test Files  1 failed (1)
+      Tests  2 failed (2)
+   Start at  01:20:05
+   Duration  128ms (transform 12ms, setup 0ms, collect 9ms, tests 5ms, environment 0ms, prepare 28ms)
+

@@ -1,0 +1,24 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/build-code-case-reconciliation.test.mjs [ tests/contract/build-code-case-reconciliation.test.mjs ]
+Error: ENOENT: no such file or directory, open 'specs/workflowhub-thin-core-card-04-20260919/decision-log.md'
+ ❯ tests/contract/build-code-case-reconciliation.test.mjs:826:26
+    824|   });
+    825| 
+    826|   const actualDecision = readFileSync("specs/workflowhub-thin-core-car…
+       |                          ^
+    827|   it.each([
+    828|     ["real current source", actualDecision, true],
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  01:20:04
+   Duration  695ms (transform 256ms, setup 0ms, collect 0ms, tests 0ms, environment 0ms, prepare 26ms)
+

@@ -22,7 +22,7 @@ make-decision. Do not accept or derive any filesystem root or task path.
 Produce the human-readable `decision-log.md` from
 [`templates/decision-log-template.md`](./templates/decision-log-template.md).
 The main document and every accepted omission use the same
-`decision-entry.v1` shape; there is no shorter appendix-only decision shape.
+`decision-entry.v1` shape.
 Return the content to the parent, which records it through TaskHandle/TaskKernel.
 Missing load-bearing reasoning is reported rather than invented.
 
@@ -145,7 +145,7 @@ inventory. This separation keeps the skill portable without creating a second
 checker or runtime schema.
 
 Keep the log as a decision index: one compact row per original requirement,
-research point, Talk/Grill conclusion, review finding, and load-bearing decision.
+research point, Talk/Grill conclusion, load-bearing review finding, and load-bearing decision.
 Do not copy the spec, page flow, API fields, task steps, or test procedure into
 the log; link them by ID and source instead.
 

@@ -2,7 +2,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { reconcileCases } from "../../workflows/build-code/case-reconciliation.mjs";
@@ -186,7 +186,7 @@ function taskCaseFixture(ac = "AC-26", { secondCaseMissingAc = false, specAccept
   writeFileSync(join(repo, ".gitignore"), "node_modules/\n.vite/\n");
   const decision = decisionText ?? "# Decision\n\n## 需求变更记录\n\n### U-001\nsource\n\n## 原始需求索引\nR-001\n\n## 逐字声明层（verbatim）\nV-001\n";
   const spec = `# Spec\n\n- **FR-001**: Current fact source.\n${acceptedIds.map((id) => `- [ ] **${id}**: Current case.`).join("\n")}\n`;
-  const phase = "# Phase P1\n\nCurrent fact source.\n";
+  const phase = "# Phase P1\n\n## Rule\n\nCurrent fact source.\n";
   writeFileSync(join(specs, "decision-log.md"), decision);
   writeFileSync(join(specs, "spec.md"), spec);
   writeFileSync(join(phaseDir, "P1.md"), phase);
@@ -210,9 +210,9 @@ function taskCaseFixture(ac = "AC-26", { secondCaseMissingAc = false, specAccept
       owner: "fixture test asset owner", status: "active", registered_test_ids: secondIds }] : [])] };
   writeFileSync(join(repo, "docs/quality/test-asset-registry.json"), `${JSON.stringify(registry, null, 2)}\n`);
   const sourcePath = `specs/${taskId}/decision-log.md`, rulePath = `specs/${taskId}/phases/P1.md`;
-  const ruleRevision = `sha256:${sha256(phase)}`;
+  const ruleRevision = "anchor:## Rule";
   const entry = { id: caseId ?? `CURRENT-${acIds.join("-")}`, status: "active", ac_ids: acIds, task_ids: ["T021"], phase_ids: ["P1"],
-    source: { path: sourcePath, revision: `sha256:${sha256(decision)}` },
+    source: { path: sourcePath, revision: "anchor:## 需求变更记录" },
     rule: { id: "CURRENT-RULE", path: rulePath, revision: ruleRevision, statement: "Current Task fact only" },
     change_triggers: ["product.mjs"], related_case_ids: [],
     execution: { target, machine_command: command, registered_test_ids: ids,
@@ -538,14 +538,17 @@ describe("ORACLE-P10-CURRENT-CASE: outer receipt and per-target reporter are sep
     }
   }, 90_000);
 
-  it("keeps the three current CARD-04 case leaf partitions and effect limits explicit", () => {
+  it("keeps the five current CARD-04 case leaf partitions and effect limits explicit", () => {
     const catalog = JSON.parse(readFileSync("docs/quality/business-case-catalog.json", "utf8"));
     const registry = JSON.parse(readFileSync("docs/quality/test-asset-registry.json", "utf8"));
-    expect(catalog.cases.map((item) => item.execution.registered_test_ids.length)).toEqual([6, 28, 15]);
+    expect(catalog.cases.map((item) => item.execution.registered_test_ids.length)).toEqual([6, 28, 15, 7, 8]);
     for (const item of catalog.cases) {
       const target = registry.targets.find((entry) => entry.path === item.execution.target);
       expect(target?.registered_test_ids).toEqual(item.execution.registered_test_ids);
-      expect(item.ac_ids).toEqual([item.id === "CARD04-DECISION-LOG-CENSUS" ? "AC-26" : "AC-27"]);
+      const criterion = { "CARD04-DECISION-LOG-CENSUS": "AC-26", "CARD04-ACCEPTANCE-MACHINE-CLASSES": "AC-27",
+        "CARD04-DEFERRED-ACCEPTANCE-REGRESSION": "AC-27", "CARD04-AUTHENTICATED-TASK-CHANGE-SCOPE": "AC-32", "CARD04-INDEPENDENT-TEST-INVENTORY": "AC-30" }[item.id];
+      expect(criterion).toBeDefined();
+      expect(item.ac_ids).toEqual([criterion]);
       expect(item.effect_observation.observation_status).toBe("not_yet_observed");
     }
     expect(catalog.cases[1].effect_observation.producer_status).toBe("not_implemented");
@@ -823,7 +826,7 @@ describe("ORACLE-P10-CURRENT-EFFECT: independently read current Task evidence", 
     } finally { rmSync(state.root, { recursive: true, force: true }); }
   });
 
-  const actualDecision = readFileSync("specs/workflowhub-thin-core-card-04-20260919/decision-log.md", "utf8");
+  const actualDecision = readFileSync("specs/archive/workflowhub-thin-core-card-04-20260919/decision-log.md", "utf8");
   it.each([
     ["real current source", actualDecision, true],
     ["forged derived source", actualDecision.replace("母 PRD CARD-04 :322-352（派生，非 U/V）", "随便写的来源（派生，非 U/V）"), false],
@@ -875,7 +878,7 @@ describe("ORACLE-P10-A1-A2-INDEPENDENT-OBSERVATION", () => {
     state.entry.execution.target = movedTarget;
     state.entry.execution.machine_command = `npx vitest run ${movedTarget} --reporter=json`;
     state.entry.execution.registered_test_ids = state.ids.map((id) => id.replace(oldTarget, movedTarget));
-    state.entry.change_triggers = expectedPaths.filter((path) => path !== "unmapped-production.mjs");
+    state.entry.change_triggers = [...expectedPaths];
     rmSync(join(root, "product.mjs"));
     writeFileSync(join(root, "replacement.mjs"), "export const effect = 'new';\n");
     writeFileSync(join(root, "committed-clean.mjs"), "export const committed = true;\n");
@@ -886,7 +889,8 @@ describe("ORACLE-P10-A1-A2-INDEPENDENT-OBSERVATION", () => {
     writeFileSync(join(root, "untracked-production.mjs"), "export const untracked = true;\n");
     writeFileSync(join(root, "unmapped-production.mjs"), "export const unmapped = true;\n");
     const inventoryTarget = "tests/contract/inventory-case.test.mjs";
-    const inventorySource = "import { it, expect } from 'vitest';\nimport { effect } from '../../replacement.mjs';\nit('reads the actual changed source value', () => expect(effect).toBe('new'));\nit('preserves the independently specified source value', () => expect(effect === 'old').toBe(false));\n";
+    const markerSource = `import { writeFileSync } from 'node:fs'; writeFileSync(${JSON.stringify(join(state.root, "independent-run.marker"))}, 'ran');\n`;
+    const inventorySource = markerSource + "import { it, expect } from 'vitest';\nimport { effect } from '../../replacement.mjs';\nit('reads the actual changed source value', () => expect(effect).toBe('new'));\nit('preserves the independently specified source value', () => expect(effect === 'old').toBe(false));\n";
     writeFileSync(join(root, inventoryTarget), inventorySource);
     const inventoryIds = [`${inventoryTarget} > reads the actual changed source value`,
       `${inventoryTarget} > preserves the independently specified source value`];
@@ -909,8 +913,9 @@ describe("ORACLE-P10-A1-A2-INDEPENDENT-OBSERVATION", () => {
     writeFileSync(catalogPath, `${JSON.stringify(catalog, null, 2)}\n`);
     capture = await runCapture((await import("../../workflows/build-code/capture.mjs")).FIXED_TARGETED_CAPTURE_COMMAND,
       "quality/tests/independent-observation.json", { task: state.task, workspace: state.workspace });
-    expect(capture.targeted_capture).toMatchObject({ status: "unavailable", reason: "unmapped_changed_path",
-      selected_case_ids: [a1, a2], unmapped_changed_paths: ["unmapped-production.mjs"] });
+    expect(capture.targeted_capture, (capture.output_ref ? state.task.readRecord(capture.output_ref) : `No child output artifact: ${JSON.stringify(capture)}`)).toMatchObject({ status: "executed", selected_case_ids: [a1, a2], business_effect_status: "unknown" });
+    expect(capture.exit_code).toBe(0);
+    expect(existsSync(join(state.root, "independent-run.marker"))).toBe(true);
   }, 90_000);
   afterAll(() => {
     if (state) rmSync(state.root, { recursive: true, force: true });
@@ -920,10 +925,10 @@ describe("ORACLE-P10-A1-A2-INDEPENDENT-OBSERVATION", () => {
   const read = (usedCapture = capture) => taskReconciliation.reconcileCurrentTaskCases({
     task: state.task, workspace: state.workspace, capture: usedCapture });
   const entry = (value, id) => value.entries.find((row) => row.case_id === id);
-  it("independently observes all Git changes and both rename sides while retaining the unmapped path", () => {
+  it("independently observes all registered Git changes and both rename sides including the formerly unmapped path", () => {
     const value = read();
-    expect(value).toMatchObject({ status: "unavailable", reason: "unmapped_changed_path",
-      business_effect_status: "unknown", unmapped_changed_paths: ["unmapped-production.mjs"] });
+    expect(value).toMatchObject({ status: "unavailable", reason: "current_execution_unverified",
+      business_effect_status: "unknown" });
     expect(entry(value, a1)).toMatchObject({ source_identity_status: "verified",
       rule_observation: { status: "observed", rule: "authenticated_task_change_scope",
         expected_changed_paths: expectedPaths, selected_case_ids: [a1, a2],
@@ -959,8 +964,7 @@ describe("ORACLE-P10-A1-A2-INDEPENDENT-OBSERVATION", () => {
     const value = read({ ...capture, change_scope: { ...capture.change_scope, changed_paths: ["replacement.mjs"], changes: [] } });
     expect(entry(value, a1).rule_observation).toMatchObject({ status: "observed",
       expected_changed_paths: expectedPaths, returned_change_scope_binding: "unavailable" });
-    expect(value).toMatchObject({ status: "unavailable", reason: "unmapped_changed_path",
-      unmapped_changed_paths: ["unmapped-production.mjs"], business_effect_status: "unknown" });
+    expect(value).toMatchObject({ status: "unavailable", reason: "current_execution_unverified", business_effect_status: "unknown" });
   });
   it("rejects a shared-AC caller case attribution mismatch before any local observation", () => {
     const reports = capture.targeted_capture.reports.map((report, index) => index === 1 ? { ...report, case_id: a1 } : report);
@@ -980,6 +984,29 @@ describe("ORACLE-P10-A1-A2-INDEPENDENT-OBSERVATION", () => {
       expect(read()).toMatchObject({ status: "unavailable", reason: "missing_target_report", entries: [] });
     } finally { writeFileSync(path, original); }
   });
+  it("rejects a new actual unknown path without execution and keeps the original source stale", async () => {
+    const root = state.workspace.worktreeRoot, marker = join(state.root, "independent-run.marker");
+    const unknown = "unregistered-after-observation.mjs";
+    const originals = [capture.receipt_ref, capture.output_ref, capture.targeted_capture.manifest_ref,
+      ...capture.targeted_capture.reports.map((report) => report.raw_ref)];
+    const before = originals.map((ref) => state.task.readRecord(ref));
+    rmSync(marker);
+    writeFileSync(join(root, unknown), "export const unknown = true;\n");
+    try {
+      const blocked = await runCapture((await import("../../workflows/build-code/capture.mjs")).FIXED_TARGETED_CAPTURE_COMMAND,
+        "quality/tests/independent-observation-unknown.json", { task: state.task, workspace: state.workspace });
+      expect(blocked.targeted_capture).toMatchObject({ status: "unavailable", reason: "unmapped_changed_path",
+        unmapped_changed_paths: [unknown] });
+      expect(blocked.exit_code).toBe(1);
+      expect(blocked.dispatch_state).not.toBe("executed");
+      expect(blocked).not.toHaveProperty("receipt_ref");
+      expect(blocked).not.toHaveProperty("output_ref");
+      expect(existsSync(marker)).toBe(false);
+      expect(read()).toMatchObject({ status: "unavailable", reason: "snapshot_mismatch", entries: [] });
+      originals.forEach((ref, index) => expect(state.task.readRecord(ref)).toBe(before[index]));
+    } finally { rmSync(join(root, unknown)); }
+  });
+
 });
 
 // P10 producer target: real isolated Task and canonical fixed capture, never actual CARD04 proof.
@@ -1037,9 +1064,9 @@ describe("ORACLE-P10-T021: official same-call source producer", () => {
 });
 
 
-// Actual isolated partial execution; never a fixture claim about CARD04's 201 real paths.
-describe("ORACLE-P10-T021: partial same-call source producer", () => {
-  it("publishes the authenticated partial receipt source while preserving every unmapped path and unknown business result", async () => {
+// Genuine full mapped capture and strict unknown-source negative; no partial-current proof.
+describe("ORACLE-P10-T021: mapped same-call source and unknown rejection", () => {
+  it("publishes an authentic mapped source then rejects new unknown paths without rewriting originals", async () => {
     const state = taskCaseFixture("AC-26", { caseId: "CARD04-DECISION-LOG-CENSUS", decisionText: censusDecision });
     try {
       const exclude = join(state.root, "partial-producer-excludes");
@@ -1047,6 +1074,19 @@ describe("ORACLE-P10-T021: partial same-call source producer", () => {
       git(state.workspace.worktreeRoot, "config", "core.excludesfile", exclude);
       writeFileSync(join(state.workspace.worktreeRoot, "unmapped-first.mjs"), "export const first = true;\n");
       writeFileSync(join(state.workspace.worktreeRoot, "unmapped-second.mjs"), "export const second = true;\n");
+      const marker = join(state.root, "mapped-run.marker");
+      const targetPath = join(state.workspace.worktreeRoot, state.entry.execution.target);
+      const targetSource = `import { writeFileSync } from 'node:fs'; writeFileSync(${JSON.stringify(marker)}, 'ran');\n`
+        + readFileSync(targetPath, "utf8");
+      writeFileSync(targetPath, targetSource);
+      const registryPath = join(state.workspace.worktreeRoot, "docs/quality/test-asset-registry.json");
+      const registry = JSON.parse(readFileSync(registryPath));
+      registry.targets[0].sha256 = sha256(targetSource);
+      writeFileSync(registryPath, `${JSON.stringify(registry, null, 2)}\n`);
+      const catalogPath = join(state.workspace.worktreeRoot, "docs/quality/business-case-catalog.json");
+      const catalog = JSON.parse(readFileSync(catalogPath));
+      catalog.cases[0].change_triggers.push("unmapped-first.mjs", "unmapped-second.mjs");
+      writeFileSync(catalogPath, `${JSON.stringify(catalog, null, 2)}\n`);
       const kernel = createTaskKernel(state.task, { workspace: state.workspace });
       const context = { stage: "build-code", task: state.task, kernel, identity: state.task.identity,
         workflowRunId: kernel.deriveStageWorkflowRunId("build-code"), manifest: state.task.manifest,
@@ -1058,15 +1098,14 @@ describe("ORACLE-P10-T021: partial same-call source producer", () => {
       const { FIXED_TARGETED_CAPTURE_COMMAND } = await import("../../workflows/build-code/capture.mjs");
       const capture = await runCapture(FIXED_TARGETED_CAPTURE_COMMAND, "quality/tests/p10-partial-producer.json",
         { task: state.task, workspace: state.workspace });
-      expect(capture.exit_code).toBe(0);
-      expect(capture.targeted_capture).toMatchObject({ status: "unavailable", reason: "unmapped_changed_path",
-        unmapped_changed_paths: ["unmapped-first.mjs", "unmapped-second.mjs"], business_effect_status: "unknown" });
+      expect(capture.exit_code, (capture.output_ref ? state.task.readRecord(capture.output_ref) : `No child output artifact: ${JSON.stringify(capture)}`)).toBe(0);
+      expect(capture.targeted_capture).toMatchObject({ status: "executed", business_effect_status: "unknown" });
       const implementation = writeCurrentImplementationReceipt({ task: state.task, workspace: state.workspace });
       const run = await runOfficialStage("build-code", context, {
         receipts: { implementation: implementation.ref, tests: capture.receipt_ref } });
       expect(run.stage_reflection).toMatchObject({ status: "unavailable", availability: { value: { reason_code: "executor_absent" } } });
       expect(run.stage_reflection.stage_row_write?.ref).toMatch(/^facts\.jsonl#\d+$/);
-      expect(run.p10_consumption_evidence, "a fully authenticated partial receipt must have an explicit source locator").toEqual({
+      expect(run.p10_consumption_evidence, "a fully authenticated mapped receipt must have an explicit source locator").toEqual({
         ref: expect.stringMatching(/^quality\/evidence\/stage-quality\/build-code\/p10-consumption-[a-f0-9]{64}\.json$/),
         sha256: expect.stringMatching(/^[a-f0-9]{64}$/) });
       const source = JSON.parse(state.task.readRecord(run.p10_consumption_evidence.ref));
@@ -1080,13 +1119,48 @@ describe("ORACLE-P10-T021: partial same-call source producer", () => {
         acceptedAcIds: new Set(["AC-26"]) })?.byAc.has("AC-26")).toBe(true);
       const readback = taskReconciliation.reconcileCurrentTaskCases({ task: state.task, workspace: state.workspace,
         capture, consumptionEvidence: run.p10_consumption_evidence });
-      expect(readback).toMatchObject({ status: "unavailable", reason: "unmapped_changed_path",
-        business_effect_status: "unknown", unmapped_changed_paths: capture.targeted_capture.unmapped_changed_paths });
+      expect(readback).toMatchObject({ status: "unavailable", business_effect_status: "unknown" });
       expect(readback.entries).toHaveLength(1);
       expect(readback.entries.some((entry) => entry.status === "passed")).toBe(false);
-      const damaged = { ...capture, targeted_capture: { ...capture.targeted_capture, unmapped_changed_paths: [] } };
+      const damaged = { ...capture, targeted_capture: { ...capture.targeted_capture, selected_case_ids: [] } };
       expect(taskReconciliation.reconcileCurrentTaskCases({ task: state.task, workspace: state.workspace,
         capture: damaged, consumptionEvidence: run.p10_consumption_evidence }).reason).toBe("catalog_case_mismatch");
+      expect(existsSync(marker)).toBe(true);
+      const originalRefs = [capture.receipt_ref, capture.output_ref, capture.targeted_capture.manifest_ref,
+        run.p10_consumption_evidence.ref, ...capture.targeted_capture.reports.map((report) => report.raw_ref)];
+      const originalBytes = originalRefs.map((ref) => state.task.readRecord(ref));
+      rmSync(marker);
+      const unknownPaths = ["unregistered-first.mjs", "unregistered-second.mjs"];
+      for (const path of unknownPaths) writeFileSync(join(state.workspace.worktreeRoot, path), "export const unknown = true;\n");
+      const blocked = await runCapture(FIXED_TARGETED_CAPTURE_COMMAND, "quality/tests/p10-unknown-after-mapped.json",
+        { task: state.task, workspace: state.workspace });
+      expect(blocked.targeted_capture).toMatchObject({ status: "unavailable", reason: "unmapped_changed_path",
+        unmapped_changed_paths: unknownPaths });
+      expect(blocked.exit_code).toBe(1);
+      expect(blocked.dispatch_state).not.toBe("executed");
+      expect(blocked).not.toHaveProperty("receipt_ref");
+      expect(blocked).not.toHaveProperty("output_ref");
+      expect(existsSync(marker)).toBe(false);
+      // Deliberate in-memory attacker claims only. Neither clone is a receipt
+      // or authenticated partial source; original canonical bytes stay intact.
+      const forgedCurrentClaim = { ...capture,
+        snapshot_tree: blocked.change_scope.snapshot_tree, source_digest: blocked.change_scope.source_digest,
+        targeted_capture: { ...capture.targeted_capture, status: "unavailable", reason: "unmapped_changed_path",
+          scope_summary: blocked.targeted_capture.scope_summary, unmapped_changed_paths: [...unknownPaths] } };
+      const rejectClaim = (claim) => taskReconciliation.reconcileCurrentTaskCases({ task: state.task,
+        workspace: state.workspace, capture: claim, consumptionEvidence: run.p10_consumption_evidence });
+      // Full actual unknown list gets past only the list guard and still fails
+      // original receipt authentication. It is not a partial-positive control.
+      expect(rejectClaim(forgedCurrentClaim))
+        .toMatchObject({ status: "unavailable", reason: "invalid_test_receipt", entries: [] });
+      const clippedUnknownClaim = { ...forgedCurrentClaim,
+        targeted_capture: { ...forgedCurrentClaim.targeted_capture, unmapped_changed_paths: [] } };
+      expect(rejectClaim(clippedUnknownClaim))
+        .toMatchObject({ status: "unavailable", reason: "catalog_case_mismatch", entries: [] });
+      expect(taskReconciliation.reconcileCurrentTaskCases({ task: state.task, workspace: state.workspace,
+        capture, consumptionEvidence: run.p10_consumption_evidence }))
+        .toMatchObject({ status: "unavailable", reason: "snapshot_mismatch", entries: [] });
+      originalRefs.forEach((ref, index) => expect(state.task.readRecord(ref)).toBe(originalBytes[index]));
     } finally { rmSync(state.root, { recursive: true, force: true }); }
   }, 90_000);
 });
@@ -1122,6 +1196,7 @@ describe("ORACLE-P10-REAL-RULES-AND-CONSUMPTION", () => {
     }
     writeFileSync(registryPath, `${JSON.stringify(registry, null, 2)}\n`);
     catalog.cases = [copyCase("CARD04-DECISION-LOG-CENSUS", "AC-26"), machine, deferred];
+    for (const entry of catalog.cases) entry.change_triggers = [...new Set([...entry.change_triggers, "unmapped-business.mjs"])];
     writeFileSync(catalogPath, `${JSON.stringify(catalog, null, 2)}\n`);
     writeFileSync(join(root, "unmapped-business.mjs"), "export const unresolved = true;\n");
     const kernel = createTaskKernel(state.task, { workspace: state.workspace });
@@ -1134,7 +1209,7 @@ describe("ORACLE-P10-REAL-RULES-AND-CONSUMPTION", () => {
         recorded_at: new Date().toISOString() } });
     capture = await runCapture((await import("../../workflows/build-code/capture.mjs")).FIXED_TARGETED_CAPTURE_COMMAND,
       "quality/tests/p10-rule-observation.json", { task: state.task, workspace: state.workspace });
-    expect(capture.exit_code).toBe(0);
+    expect(capture.exit_code, (capture.output_ref ? state.task.readRecord(capture.output_ref) : `No child output artifact: ${JSON.stringify(capture)}`)).toBe(0);
     prior = publishCurrentAcceptance(state, capture, { subject: "AC-27", result: "deferred", status: "missing" });
     const fact = JSON.parse(state.task.readRecord(prior.ref));
     prior = { ...prior, acceptance: fact.evidence[0] };
@@ -1153,10 +1228,7 @@ describe("ORACLE-P10-REAL-RULES-AND-CONSUMPTION", () => {
   const row = (value, id) => value.entries.find((e) => e.case_id === id);
   it("observes the actual nonzero census and keeps missing AC evidence separate from same-call receipt consumption", () => {
     const value = read(), entry = row(value, "CARD04-DECISION-LOG-CENSUS");
-    expect(value).toMatchObject({ status: "unavailable", reason: "unmapped_changed_path",
-      unmapped_changed_paths: ["docs/quality/business-case-catalog.json", "docs/quality/test-asset-registry.json",
-        "tests/contract/deferred-rule.test.mjs", "tests/contract/machine-rule.test.mjs", "unmapped-business.mjs"],
-      run_consumption_status: "verified", business_effect_status: "unknown" });
+    expect(value).toMatchObject({ status: "unavailable", run_consumption_status: "verified", business_effect_status: "unknown" });
     expect(entry.rule_observation).toMatchObject({ status: "observed", rule: "decision_log_census", source_structure_valid: true });
     expect(entry.rule_observation.source_denominator).toBe(8);
     expect(entry.quality_fact_binding).toMatchObject({ status: "bound", receipt_binding: "same_call_consumption",

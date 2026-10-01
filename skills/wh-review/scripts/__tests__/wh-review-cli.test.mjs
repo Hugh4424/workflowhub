@@ -232,12 +232,29 @@ describe("wh-review production CLI", () => {
     }
   });
 
-  it("forbids caller-selected providers and review scope overrides", async () => {
+  it("ignores caller-selected providers and derives review scope from the trusted identity", async () => {
+    // card-03: caller provider/scope/commit fields are never read for provider
+    // selection, scope or commit binding. This case used to pass for the wrong
+    // reason -- runSimpleReview threw "host_provider is required" for every
+    // field, and that message happened to match the old /provider/ pattern.
+    // With the host input gone the real contract is asserted directly: the
+    // fields are ignored (like the retired scope revision and runtime
+    // continuation inputs below), and only review_scope is still validated
+    // because it is part of the review identity.
     const { runReviewRound } = await import(cli.href);
-    for (const field of ["providers", "provider_allowlist", "providerAllowlist", "path_filter", "paths", "base_commit", "candidate_commit", "commit_range", "diff", "review_scope", "reviewScope", "workflow_run_id", "workflowRunId"]) {
-      await expect(runReviewRound({ [field]: field === "providers" ? ["claude-code"] : "forged", task_path: "/tmp/task", stage: "build-code" }))
-        .rejects.toThrow(/forbidden|derived|provider|unsupported/i);
+    const ignored = ["providers", "provider_allowlist", "providerAllowlist", "path_filter", "paths", "base_commit", "candidate_commit", "commit_range", "diff", "workflow_run_id", "workflowRunId"];
+    for (const field of ignored) {
+      const forged = field === "providers" ? ["claude-code"] : "forged";
+      const result = await runReviewRound({ [field]: forged, task_path: "/tmp/task", stage: "build-code", materials: { approved_spec: "spec.md" } });
+      expect(result).toBeTypeOf("object");
+      expect(JSON.stringify(result)).not.toContain(JSON.stringify(forged).replaceAll('"', ""));
     }
+    for (const field of ["review_scope", "reviewScope"]) {
+      await expect(runReviewRound({ [field]: "forged", task_path: "/tmp/task", stage: "build-code", materials: { approved_spec: "spec.md" } }))
+        .rejects.toThrow(/review_scope/);
+    }
+    await expect(runReviewRound({ task_path: "/tmp/task", stage: "build-code" }))
+      .rejects.toThrow(/materials are required/);
   });
 
   it("ignores the removed scope revision public input", async () => {

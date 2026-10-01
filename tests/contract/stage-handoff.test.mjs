@@ -9,7 +9,7 @@ import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { readTaskFacts } from "../../runtime/task/task-store.mjs";
-import { deriveStageOutcomeStatuses } from "../../runtime/stage/completion-predicates.mjs";
+import { deriveStageOutcomeStatuses, deriveStageProgress } from "../../runtime/stage/completion-predicates.mjs";
 import { runStageEndReflection, runOfficialStage, authenticateStageOutcomeForProjection } from "../../runtime/stage/stage-runner.mjs";
 import { renderStageHandoff, publishStageHandoff, SECTION_TITLES } from "../../runtime/stage/stage-handoff.mjs";
 import { publishStageReflectionExecutionFailure, validateStageReflectionSibling } from "../../runtime/stage/stage-reflect.mjs";
@@ -220,14 +220,32 @@ describe("stage-handoff current view contract", () => {
     expect([...raw.matchAll(/^## (\d+)\. (.+)$/gm)].map((match) => match[2])).toEqual(SECTION_TITLES);
   });
 
-  it("renders explicit unknowns when an outcome omits optional identity fields", () => {
+  it.each(["pre", "post"])("renders unknown completion without freezing ready work (%s)", (activationCohort) => {
+    const materials = activationCohort === "post" ? {
+      "decision-log.md": "# Decision\n",
+      "spec.md": "# Spec\n",
+      "phases/index.md": "# Index\n\n## Execution Index\n\n| Phase | Authority Ref |\n| --- | --- |\n| `P1` | `phases/P1.md` |\n",
+      "phases/P1.md": "# Phase P1\n",
+    } : canonicalStageMaterials();
+    const readiness = deriveStageProgress("build-code", [], materials, { activationCohort });
+    expect(readiness).toMatchObject({
+      work_status: "ready", continuation_allowed: true, readiness_source: "current-material-presence",
+    });
     const raw = renderStageHandoff({
-      taskId: "task-1", stage: "build-spec", snapshotTree: "tree-1",
+      taskId: "task-1", stage: "build-code", snapshotTree: "tree-1",
       materialScopeRevision: "revision-1", reflectionStatus: "completed",
+      materials, artifacts: { read: (name) => materials[name] },
       stageOutcomeValue: { step_outcomes: [], skill_outcomes: [] },
-      nextAction: "继续读取当前材料",
     });
     expect(raw).toContain("- stage outcome: `unknown`（attempt `unknown`）");
+    expect(raw).toContain("- stage status: `unknown`");
+    expect(raw).toContain("当前 cohort 材料齐备可读且现有 `work_status=ready`、`continuation_allowed=true` 时");
+    expect(raw).toContain("继续同 task 的修复或安全复核");
+    expect(raw).toContain("质量缺口不作工作冻结，也不证明阶段完成");
+    expect(raw).toContain("验收、确认和不可逆交付授权各按既有边界处理");
+    expect(raw).not.toContain("不要据此进入下一阶段");
+    expect(raw).not.toContain("进入 `verify-code`");
+    expect(raw).not.toContain("- stage status: `completed`");
     expect(raw).not.toContain("undefined");
   });
 
@@ -637,9 +655,10 @@ describe("stage-handoff current view contract", () => {
 
   it("keeps build-code current when its run succeeds but completion remains in progress", async () => {
     const state = fixture("handoff-build-code-in-progress", "build-code");
+    const handlerResult = Object.freeze({ status: "in_progress", quality_status: "incomplete" });
     const result = await runStageEndReflection(state.context, {
       stageStatus: "completed",
-      handlerResult: { status: "in_progress", quality_status: "incomplete" },
+      handlerResult,
       judgment: judgmentFor(state),
       stageOutcome: state.source,
       now: NOW,
@@ -647,8 +666,14 @@ describe("stage-handoff current view contract", () => {
 
     const row = readTaskFacts(state.task.taskPath).find((entry) => entry.record_kind === "stage" && entry.stage === "build-code");
     expect(row?.layer_states).toMatchObject({
-      implementation_completion: "partial",
+      implementation_completion: "unavailable",
       stage_quality: "incomplete",
+    });
+    expect(result).toMatchObject({ status: "completed", stage_handoff: { status: "published", current: true } });
+    expect(result.stage_row_error).toBeUndefined();
+    expect(handlerResult).toEqual({ status: "in_progress", quality_status: "incomplete" });
+    expect(deriveStageProgress("build-code", [], canonicalStageMaterials())).toMatchObject({
+      work_status: "ready", continuation_allowed: true, readiness_source: "current-material-presence",
     });
     const status = deriveStageOutcomeStatuses({
       task_id: state.context.identity.taskId,
@@ -656,18 +681,25 @@ describe("stage-handoff current view contract", () => {
       authenticate: () => null,
       read_task_facts: () => readTaskFacts(state.task.taskPath),
     });
-    expect(status["build-code"]).toBe("partial");
+    expect(status["build-code"]).toBe("unavailable");
     const handoff = readFileSync(join(state.task.taskPath, result.stage_handoff.ref), "utf8");
     expect(handoff).toContain("- stage status: `in_progress`");
     expect(handoff).toContain("继续处理当前 `build-code`");
+    expect(handoff).toContain("沿既有步骤顺序前移");
+    expect(handoff).toContain("只针对新代码、新失败或新疑点做必要定向检查");
+    expect(handoff).toContain("不因质量缺口整体回跑本阶段");
+    expect(handoff).toContain("阶段完成仍以正式事实与完成判据为准");
+    expect(handoff).not.toContain("修复后重跑本阶段");
+    expect(handoff).not.toContain("- stage status: `completed`");
     expect(handoff).not.toContain("进入 `verify-code`");
   });
 
-  it("advances build-code only when the existing completion predicate is complete", async () => {
+  it("preserves a terminal handler result without claiming unavailable implementation is complete", async () => {
     const state = fixture("handoff-build-code-complete", "build-code");
+    const handlerResult = Object.freeze({ status: "completed", quality_status: "passed" });
     const result = await runStageEndReflection(state.context, {
       stageStatus: "completed",
-      handlerResult: { status: "completed", quality_status: "passed" },
+      handlerResult,
       judgment: judgmentFor(state),
       stageOutcome: state.source,
       now: NOW,
@@ -675,8 +707,21 @@ describe("stage-handoff current view contract", () => {
 
     const row = readTaskFacts(state.task.taskPath).find((entry) => entry.record_kind === "stage" && entry.stage === "build-code");
     expect(row?.layer_states).toMatchObject({
-      implementation_completion: "completed",
+      implementation_completion: "unavailable",
       stage_quality: "completed",
+    });
+    expect(result).toMatchObject({ status: "completed", stage_handoff: { status: "published", current: true } });
+    expect(result.stage_row_error).toBeUndefined();
+    expect(handlerResult).toEqual({ status: "completed", quality_status: "passed" });
+    const status = deriveStageOutcomeStatuses({
+      task_id: state.context.identity.taskId,
+      read: () => { throw new Error("current stage row must remain the sole status source"); },
+      authenticate: () => null,
+      read_task_facts: () => readTaskFacts(state.task.taskPath),
+    });
+    expect(status["build-code"]).toBe("unavailable");
+    expect(deriveStageProgress("build-code", [], canonicalStageMaterials())).toMatchObject({
+      work_status: "ready", continuation_allowed: true, readiness_source: "current-material-presence",
     });
     const handoff = readFileSync(join(state.task.taskPath, result.stage_handoff.ref), "utf8");
     expect(handoff).toContain("- stage status: `completed`");

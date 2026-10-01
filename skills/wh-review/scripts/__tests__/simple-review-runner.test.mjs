@@ -1544,7 +1544,6 @@ describe("review flow static preflight", () => {
 
   it.each([
     ["empty route", { initial: [], mode: "single_round" }, { providers: ["other/model"] }, "route"],
-    ["same-source route", { initial: ["codex/luna"], mode: "single_round" }, new Error("SAME_SOURCE: host and reviewer share an adapter"), "host_provider"],
   ])("rejects %s before provider dispatch", async (_label, route, selection, field) => {
     const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-static-preflight-route-")));
     roots.push(attachmentRoot);
@@ -1718,11 +1717,11 @@ describe("review flow static preflight", () => {
     expect(existsSync(join(attachmentRoot, ".wh-review-packets"))).toBe(false);
   });
 
-  // AC-PREFLIGHT-001 / FR-PREFLIGHT-001: the invalid host must be rejected by
-  // the trusted host-config seam before the runner can create a bundle or ask
-  // the provider client to acquire its dispatch/claim boundary.
-  it("blocks an unsupported host_provider before bundle, lock, or dispatch", async () => {
-    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-host-provider-preflight-")));
+  // card-03: simple review needs no host_provider. The default trusted
+  // selection is called as selectProviders(config, route) by the shared route
+  // identity seam, so a request without a host must still select and dispatch.
+  it("dispatches through the trusted selection without a host_provider", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-no-host-")));
     roots.push(attachmentRoot);
     const brokerConfig = join(attachmentRoot, "3rd-review.json");
     writeFileSync(brokerConfig, JSON.stringify({
@@ -1733,34 +1732,27 @@ describe("review flow static preflight", () => {
       },
     }));
     const route = { initial: ["antigravity/flash"], mode: "single_round", minimum_heterologous: 1 };
-    const events = [];
-    let dispatches = 0;
+    const requests = [];
     const result = await runSimpleReview({
       stage: "build-code",
-      host_provider: "claude",
       preflight: true,
       materials: buildCodePhaseMaterials(),
     }, {
       loadConfig: () => ({ whReview: {}, config: brokerConfig, attachmentRoot, command: ["unused"] }),
       resolveRoute: () => route,
-      selectProviders: (configPath, hostProvider, selectedRoute) =>
-        selectTrustedReviewProviderSelection(configPath, hostProvider, selectedRoute),
-      buildBundle: () => { events.push("bundle"); return preparedBundle(attachmentRoot); },
-      client: { async runGroup() {
-        events.push("lock", "dispatch");
-        dispatches += 1;
-        return { runtimeId: "runtime-invalid-host", outcome: "unavailable", providers: [] };
+      selectProviders: (configPath, selectedRoute) => selectTrustedReviewProviderSelection(configPath, selectedRoute),
+      buildBundle: () => preparedBundle(attachmentRoot),
+      client: { async runGroup(request) {
+        requests.push(request);
+        return { runtimeId: "runtime-no-host", outcome: "unavailable", providers: [] };
       } },
     });
 
-    expect(result).toMatchObject({
-      status: "unavailable",
-      dispatch_state: "blocked_before_dispatch",
-      provider_attempts: 0,
-    });
-    expect(dispatches).toBe(0);
-    expect(events).toEqual([]);
-    expect(existsSync(join(attachmentRoot, ".wh-review-packets"))).toBe(false);
+    expect(requests).toHaveLength(1);
+    expect(requests[0].providers).toEqual(["antigravity/flash"]);
+    expect(requests[0]).not.toHaveProperty("hostProvider");
+    expect(result.dispatch_state).not.toBe("blocked_before_dispatch");
+    expect(JSON.stringify(result)).not.toMatch(/host_provider is required/);
   });
 
   // AC-PREFLIGHT-002 / FR-PREFLIGHT-002: keep every probe's machine code and

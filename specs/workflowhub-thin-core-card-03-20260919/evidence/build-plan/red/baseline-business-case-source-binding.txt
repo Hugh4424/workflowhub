@@ -1,0 +1,114 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+
+ × tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-DECISION-LOG-CENSUS binds its source and rule revision to current material bytes
+   → expected [ 'missing declared source', …(2) ] to deeply equal []
+ × tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-ACCEPTANCE-MACHINE-CLASSES binds its source and rule revision to current material bytes
+   → expected [ 'missing declared source', …(2) ] to deeply equal []
+ × tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-DEFERRED-ACCEPTANCE-REGRESSION binds its source and rule revision to current material bytes
+   → expected [ 'missing declared source', …(2) ] to deeply equal []
+ × tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-AUTHENTICATED-TASK-CHANGE-SCOPE binds its source and rule revision to current material bytes
+   → expected [ 'missing declared source', …(2) ] to deeply equal []
+ × tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-INDEPENDENT-TEST-INVENTORY binds its source and rule revision to current material bytes
+   → expected [ 'missing declared source', …(2) ] to deeply equal []
+ × tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > rejects a different existing source, a missing source, and a stale rule revision
+   → expected [ 'missing declared source', …(2) ] to include 'stale rule.revision'
+ ✓ tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > pins the proposed effect reader to the existing canonical fact and acceptance ref writers
+ ✓ tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-DECISION-LOG-CENSUS records a source-bound future observation without claiming an effect
+ ✓ tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-ACCEPTANCE-MACHINE-CLASSES records a source-bound future observation without claiming an effect
+ ✓ tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-DEFERRED-ACCEPTANCE-REGRESSION records a source-bound future observation without claiming an effect
+ ✓ tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-AUTHENTICATED-TASK-CHANGE-SCOPE records a source-bound future observation without claiming an effect
+ ✓ tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-INDEPENDENT-TEST-INVENTORY records a source-bound future observation without claiming an effect
+ ✓ tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > rejects fake observation and missing-evidence success in the proposed contract
+ ✓ tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > does not let deferred or another subject stand in for AC-27 machine-class effects
+ × tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-AUTHENTICATED-TASK-CHANGE-SCOPE binds the finite business rule, real consumer, all runner leaves and unknown effect
+   → expected [ 'missing declared source', …(2) ] to deeply equal []
+ ✓ tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-AUTHENTICATED-TASK-CHANGE-SCOPE selects its case when only its own test file changes and rejects a removed trigger
+ × tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-INDEPENDENT-TEST-INVENTORY binds the finite business rule, real consumer, all runner leaves and unknown effect
+   → expected [ 'missing declared source', …(2) ] to deeply equal []
+ ✓ tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-INDEPENDENT-TEST-INVENTORY selects its case when only its own test file changes and rejects a removed trigger
+ × tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > rejects A1/A2 wrong origin, stale rule bytes, absent consumer, missing leaf and fake effect
+   → expected [ 'missing declared source', …(3) ] to include 'stale rule.revision'
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 9 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-DECISION-LOG-CENSUS binds its source and rule revision to current material bytes
+ FAIL  tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-ACCEPTANCE-MACHINE-CLASSES binds its source and rule revision to current material bytes
+ FAIL  tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-DEFERRED-ACCEPTANCE-REGRESSION binds its source and rule revision to current material bytes
+ FAIL  tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-AUTHENTICATED-TASK-CHANGE-SCOPE binds its source and rule revision to current material bytes
+ FAIL  tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-INDEPENDENT-TEST-INVENTORY binds its source and rule revision to current material bytes
+AssertionError: expected [ 'missing declared source', …(2) ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   "missing declared source",
++   "missing authoritative source",
++   "missing authoritative rule",
++ ]
+
+ ❯ tests/contract/business-case-source-binding.test.mjs:201:55
+    199|     it(`${id} binds its source and rule revision to current material b…
+    200|       expect(cases.has(id)).toBe(true);
+    201|       expect(bindingErrors(cases.get(id), authority)).toEqual([]);
+       |                                                       ^
+    202|     });
+    203|   }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/9]⎯
+
+ FAIL  tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > rejects a different existing source, a missing source, and a stale rule revision
+AssertionError: expected [ 'missing declared source', …(2) ] to include 'stale rule.revision'
+ ❯ tests/contract/business-case-source-binding.test.mjs:215:8
+    213|       .toContain("missing declared source");
+    214|     expect(bindingErrors({ ...entry, rule: { ...entry.rule, revision: …
+    215|       .toContain("stale rule.revision");
+       |        ^
+    216|   });
+    217| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/9]⎯
+
+ FAIL  tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-AUTHENTICATED-TASK-CHANGE-SCOPE binds the finite business rule, real consumer, all runner leaves and unknown effect
+ FAIL  tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > CARD04-INDEPENDENT-TEST-INVENTORY binds the finite business rule, real consumer, all runner leaves and unknown effect
+AssertionError: expected [ 'missing declared source', …(2) ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   "missing declared source",
++   "missing authoritative source",
++   "missing authoritative rule",
++ ]
+
+ ❯ tests/contract/business-case-source-binding.test.mjs:263:60
+    261|     it(`${id} binds the finite business rule, real consumer, all runne…
+    262|       expect(cases.has(id)).toBe(true);
+    263|       expect(finiteP9CaseErrors(cases.get(id), authority)).toEqual([]);
+       |                                                            ^
+    264|     });
+    265|     it(`${id} selects its case when only its own test file changes and…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/9]⎯
+
+ FAIL  tests/contract/business-case-source-binding.test.mjs > CARD-04 P8 case source binding > rejects A1/A2 wrong origin, stale rule bytes, absent consumer, missing leaf and fake effect
+AssertionError: expected [ 'missing declared source', …(3) ] to include 'stale rule.revision'
+ ❯ tests/contract/business-case-source-binding.test.mjs:296:10
+    294|         .toContain("wrong source.path");
+    295|       expect(finiteP9CaseErrors({ ...entry, rule: { ...entry.rule, rev…
+    296|         .toContain("stale rule.revision");
+       |          ^
+    297|       expect(finiteP9CaseErrors({ ...entry, consumers: [] }, authority…
+    298|       expect(finiteP9CaseErrors({ ...entry, execution: { ...entry.exec…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/9]⎯
+
+ Test Files  1 failed (1)
+      Tests  9 failed | 10 passed (19)
+   Start at  01:12:38
+   Duration  121ms (transform 15ms, setup 0ms, collect 14ms, tests 9ms, environment 0ms, prepare 27ms)
+

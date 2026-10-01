@@ -5,18 +5,19 @@ import { officialStageHandler, verifyUnavailableReview } from "./stage-handlers.
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { Buffer } from "node:buffer";
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join, relative, isAbsolute, sep } from "node:path";
 import { captureWorkspaceSnapshot } from "../evidence/canonical-receipt-writer.mjs";
 import { deriveStageCompletion, deriveStageProgress, stageFactMaterialFiles, stageMaterialScopeRevision, STAGE_ADVISORY_PREDICATES, STAGE_PREDICATES } from "../stage/completion-predicates.mjs";
 import { summarizeStageOutcome } from "../evidence/stage-completion-facts.mjs";
+import { validateAcceptanceEvidence } from "../evidence/acceptance-evidence-validator.mjs";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { CURRENT_MATERIAL_FILES, materialFilesForCohort, phaseFilesFromIndex } from "../task/material-workspace.mjs";
 import { isExecutionRecordOnlyMaterialDelta, isStageMaterialOnlySnapshotDelta, materialRevisionFromValues, taskExecutionRecordOnly } from "../task/git-worktree-snapshot.mjs";
 import { loadStageManifest } from "./step-manifest.mjs";
 import { activeAcceptanceCriterionIds, STAGE_SPEC_ANALYZE_PROFILES, deriveDecisionLogOriginalSourceCensus, projectAcceptanceExecutionData, projectPostPhaseAcceptanceExecutionData, validateStageSpecAnalyzeProfile } from "./stage-content-contracts.mjs";
-import { STAGE_OUTCOME_REF, STAGE_REFLECTION_REF, WORKFLOWHUB_CURRENT_SESSION_SOURCE_ID, WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND, acceptanceExecutionOutcomeStatus, deriveAcceptanceExecutionAssertions, isHumanConfirmationVersion, validateAcceptanceExecutionEvidence, validateCanonicalImplementationReceipt, validateCanonicalTestReceipt, validateHumanConfirmation, validateStageOutcomeProducerIdentity, validateStageOutcomeProof } from "../evidence/canonical-evidence-validators.mjs";
+import { currentPhaseWriteSetSnapshot as phaseSnapshot, phaseWriteSetChanges, STAGE_OUTCOME_REF, STAGE_REFLECTION_REF, WORKFLOWHUB_CURRENT_SESSION_SOURCE_ID, WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND, acceptanceExecutionOutcomeStatus, deriveAcceptanceExecutionAssertions, isHumanConfirmationVersion, validateAcceptanceExecutionEvidence, validateCanonicalImplementationReceipt, validateCanonicalTestReceipt, validateHumanConfirmation, validateStageOutcomeProducerIdentity, validateStageOutcomeProof } from "../evidence/canonical-evidence-validators.mjs";
 import { validateSchema } from "../review/schema-validator.mjs";
 import { canonicalReviewFindings, isActionableSeriousFinding } from "../review/stage-review-disposition.mjs";
 import { loadStageSkillManifest, validateSkillConsumerBinding, validateSkillOutcomeLifecycle } from "./stage-skill-runtime.mjs";
@@ -28,7 +29,7 @@ import { buildStageEndReportFacts, renderStageEndReport } from "./stage-end-repo
 import { initializeTaskStore, writeStageRow } from "../task/task-store.mjs";
 import { createQualityFact, qualityFactDigest } from "../evidence/quality-fact.mjs";
 import { runWorkspaceCommand, runCandidateWorkspaceCommand } from "../task/workspace-runner.mjs";
-import { authenticateBuildCodeCompletion, isFutureStageAcceptanceDeferred, authenticateOrdinaryExecutionReview, authenticateExecutionConfirmation, authenticateCodeReviewRepairs, authenticateStageReviewResult, authenticateP5AdvisorySources, isCompleteP5T007VitestOutput, parseP5HumanExceptionDeclaration } from "../evidence/freshness.mjs";
+import { authenticateQualityFactRecord, authenticateAcceptanceExecutionAggregate, authenticateBuildCodeCompletion, isFutureStageAcceptanceDeferred, authenticateOrdinaryExecutionReview, authenticateExecutionConfirmation, authenticateCodeReviewRepairs, authenticateStageReviewResult, authenticateP5AdvisorySources, isCompleteP5T007VitestOutput, parseP5HumanExceptionDeclaration } from "../evidence/freshness.mjs";
 
 const UPSTREAM_STAGE = Object.freeze({
   "make-decision": null,
@@ -603,9 +604,7 @@ function validateCodeReviewOutcome(ctx, record, stage, snapshot, materialRevisio
   const reviewStep = manifest.steps.find((step) => step.step_slug === "finalize-code-review");
   if (!reviewStep || review.step_slug !== reviewStep.step_slug) throw outcomeError("stage outcome code_review is not bound to finalize-code-review");
   if (review.skill_id !== "ocr-delegation") throw outcomeError("stage outcome code_review must bind ocr-delegation");
-  const skillOutcome = record.skill_outcomes.find((entry) => entry?.skill_id === "ocr-delegation");
   const stepOutcome = record.step_outcomes.find((entry) => entry?.step_slug === reviewStep.step_slug);
-  if (!skillOutcome?.trigger || skillOutcome.executed !== true) throw outcomeError("verify-code code-review skill was not executed");
   if (!stepOutcome) throw outcomeError("verify-code code-review closure step outcome is missing");
   const result = outcomeObject(review.result, "stage outcome code_review.result");
   if (!new Set(["clean", "findings", "unavailable"]).has(result.status)) throw outcomeError("stage outcome code_review.result.status is invalid");
@@ -704,8 +703,8 @@ function validateCodeReviewOutcome(ctx, record, stage, snapshot, materialRevisio
   if (record.status === "completed" && (result.status === "unavailable" || (actionableFindings.length > 0 && resolution !== "resolved"))) {
     throw outcomeError("completed verify-code stage requires every actionable finding to be fixed or rejected as invalid");
   }
-  if (record.status === "completed" && (skillOutcome.status !== "completed" || stepOutcome.status !== "completed")) {
-    throw outcomeError("completed verify-code stage must complete the code-review skill and closure step");
+  if (record.status === "completed" && stepOutcome.status !== "completed") {
+    throw outcomeError("completed verify-code stage must complete the code-review closure step");
   }
   return Object.freeze({ review, resolution });
 }
@@ -1181,7 +1180,11 @@ export async function runStageEndReflection(context, {
           : "incomplete";
     resolvedStageProgress = Object.freeze({
       completion,
-      implementationCompletion: completion === "completed" ? "completed" : completion === "in_progress" ? "partial" : "incomplete",
+      implementationCompletion: stage === "build-code"
+        ? new Set(["completed", "partial", "incomplete", "unavailable"]).has(handlerResult?.completion?.implementation_completion)
+          ? handlerResult.completion.implementation_completion
+          : "unavailable"
+        : completion === "completed" ? "completed" : completion === "in_progress" ? "partial" : "incomplete",
       stageQuality: quality,
       handoffStatus: stageStatus === "completed" ? completion : "failed",
     });
@@ -1233,7 +1236,7 @@ export async function runStageEndReflection(context, {
         ? { value: null, reason: "the current stage handoff is pending publication" }
         : handoffFacts === null
         ? { value: null, reason: `${stage} declares no handoff item and publishes no current stage handoff` }
-        : handoffDeclaration(handoffFacts.materials, ctx.task?.manifest?.activation_cohort ?? "pre");
+        : handoffDeclaration(handoffFacts.materials, ctx.task?.manifest?.activation_cohort ?? "pre", { stage });
       const materialScopeRevision = handoffFacts === null
         ? handoffStageOutcome?.value?.material_scope_revision ?? ctx.kernel.currentVNextMaterialScopeRevision(stage)
         : handoffFacts.materialScopeRevision;
@@ -1690,32 +1693,87 @@ export function readCurrentE2eAcceptanceEvidence(ctx, receipts = {}) {
     independent_review: { status: "missing", ref: null, sha256: null, reviewer_actor: null, frozen_material: null },
     user_confirmation: { status: "missing", ref: null, sha256: null } };
   if (projection.status !== "ready") result.reason = `${activationCohort === "post" ? "post Phase" : "acceptance"} acceptance contract is ${projection.status}: ${(projection.errors ?? []).join("; ")}`;
-  // verify-code's review receipt belongs to a build-code Phase review and
-  // quality_review belongs to its OCR code review. The accepted confirmation
-  // already names the independent E2E review it confirms.
-  if (typeof receipts.confirmation !== "string") return result;
   const materialScope = stageFactMaterialFiles("verify-code", materials, { activationCohort });
   const current = { task_id: ctx.identity.taskId, stage: "verify-code", snapshot_tree: ctx.kernel.currentVNextSnapshot().tree,
     material_revision: ctx.kernel.currentVNextMaterialRevision(), material_scope: materialScope,
     material_scope_revision: stageMaterialScopeRevision("verify-code", materials, { activationCohort }) };
-  const read = (ref) => /^quality\/evidence\/stage-quality\/build-code\/acceptance-(?:stdout|stderr)-[a-f0-9]{64}\.bin$/.test(ref)
+  const read = (ref) => /acceptance-(?:stdout|stderr)-[a-f0-9]{64}\.bin$/.test(ref)
     ? ctx.task.readRecordBytes(ref) : ctx.task.readRecord(ref);
   const dependencies = {};
+  // Execution, its independent review and confirmation are separately readable.
+  // A code-only review never supplies the missing execution-review binding.
   try {
-    const confirmationRaw = read(receipts.confirmation), confirmation = JSON.parse(confirmationRaw);
-    if (!REVIEW_RESULT_REF.test(confirmation.subject_ref ?? "")) {
-      throw new Error("E2E confirmation does not name a canonical independent review result");
+    const candidates = new Map();
+    const activeIds = activeAcceptanceCriterionIds(materials["spec.md"]);
+    for (const ref of ctx.task.listCanonicalQualityFactRefs?.() ?? []) {
+      const raw = read(ref), fact = JSON.parse(raw);
+      if (fact.task_id !== current.task_id || fact.stage !== "build-code" || fact.subject !== "acceptance_execution"
+          || fact.snapshot_tree !== current.snapshot_tree || fact.material_revision !== current.material_revision) continue;
+      if (fact.evidence?.length === 1) result.execution = { ...result.execution, ref: fact.evidence[0].ref, sha256: fact.evidence[0].sha256 };
+      if (fact.kind !== "acceptance_criterion" || fact.evidence?.length !== 1
+          || !authenticateQualityFactRecord({ ...fact, ref, sha256: createHash("sha256").update(raw).digest("hex") }, {
+            read, workspaceRoot: ctx.workspace?.worktreeRoot ?? ctx.candidateWorkspace?.worktreeRoot,
+          }).authenticated) throw new Error(`current execution fact is unauthenticated: ${ref}`);
+      const reference = fact.evidence[0], wrapper = JSON.parse(read(reference.ref));
+      validateAcceptanceEvidence(wrapper);
+      if (wrapper.refs.length !== 1) throw new Error("current execution has no unique aggregate");
+      const aggregate = JSON.parse(read(wrapper.refs[0].ref));
+      const actor = authenticateAcceptanceExecutionAggregate(aggregate, fact, read);
+      const covered = new Set();
+      const items = aggregate.subject_fact.execution_items;
+      let complete = fact.status === "passed" && projection.status === "ready"
+        && items.length === projection.scenarios.length && items.every((item, index) =>
+          canonicalJson(Object.fromEntries(Object.keys(projection.scenarios[index]).filter((key) => key !== "task_id").map((key) => [key, item[key]])))
+            === canonicalJson(Object.fromEntries(Object.entries(projection.scenarios[index]).filter(([key]) => key !== "task_id"))));
+      for (const item of aggregate.subject_fact.execution_items) {
+        complete &&= item.status === "executed";
+        for (const leafRef of item.evidence_refs) {
+          if (item.tier === "browser") { item.acceptance_criterion_ids.forEach((id) => covered.add(id)); continue; }
+          const leaf = JSON.parse(read(leafRef.ref));
+          covered.add(leaf.subject);
+          complete &&= leaf.subject_fact.status === "passed";
+        }
+      }
+      complete &&= covered.size === activeIds.length && activeIds.every((id) => covered.has(id));
+      const candidate = { status: complete ? "passed" : fact.status === "failed" ? "failed" : "missing",
+        ref: reference.ref, sha256: reference.sha256, executor_actor: actor,
+        ...(!complete ? { reason: "current execution is readable but does not pass every active acceptance criterion" } : {}) };
+      candidates.set(wrapper.refs[0].sha256, candidate);
     }
-    const reviewRaw = read(confirmation.subject_ref), review = JSON.parse(reviewRaw);
-    const reviewReference = { ref: confirmation.subject_ref, sha256: createHash("sha256").update(reviewRaw).digest("hex") };
+    if (candidates.size > 1) throw new Error("current execution sources are ambiguous");
+    if (candidates.size === 1) result.execution = [...candidates.values()][0];
+  } catch (error) { result.execution.reason = error.message; }
+  let reviewReference = null, confirmation = null, confirmationRaw = null;
+  try {
+    // receipts.review belongs to a Phase review. A supplied confirmation names
+    // its exact execution review; otherwise quality_review can expose it early.
+    let reviewRef = receipts.quality_review;
+    if (typeof receipts.confirmation === "string") {
+      confirmationRaw = read(receipts.confirmation);
+      confirmation = JSON.parse(confirmationRaw);
+      reviewRef = confirmation.subject_ref;
+    }
+    if (!REVIEW_RESULT_REF.test(reviewRef ?? "")) throw new Error("E2E independent review canonical result is missing");
+    const reviewRaw = read(reviewRef), review = JSON.parse(reviewRaw);
+    reviewReference = { ref: reviewRef, sha256: createHash("sha256").update(reviewRaw).digest("hex") };
     const authenticated = authenticateOrdinaryExecutionReview(review, current, read, dependencies, "execution-review", reviewReference);
-    result.execution = { status: "passed", ...authenticated.execution.wrapperReference, executor_actor: authenticated.execution.actor };
+    // Keep separately authenticated incomplete execution visible. The reviewed
+    // aggregate running successfully is not proof of full AC business coverage.
+    if (result.execution.ref !== authenticated.execution.wrapperReference.ref
+        || result.execution.sha256 !== authenticated.execution.wrapperReference.sha256) {
+      throw new Error("independent review does not bind the selected current execution");
+    }
     result.independent_review = { status: "recorded", ...reviewReference, reviewer_actor: authenticated.binding.reviewer_actor, frozen_material: authenticated.binding.frozen_material };
-    const reference = { ref: receipts.confirmation, sha256: createHash("sha256").update(confirmationRaw).digest("hex") };
-    authenticateExecutionConfirmation(confirmation, reference, reviewReference, current, read, dependencies);
-    result.user_confirmation = { status: "accepted", ...reference };
   } catch (error) {
+    result.independent_review.reason = error.message;
     result.reason = error.message;
+  }
+  if (confirmation && result.independent_review.status === "recorded") {
+    try {
+      const reference = { ref: receipts.confirmation, sha256: createHash("sha256").update(confirmationRaw).digest("hex") };
+      authenticateExecutionConfirmation(confirmation, reference, reviewReference, current, read, dependencies);
+      result.user_confirmation = { status: "accepted", ...reference };
+    } catch (error) { result.user_confirmation.reason = error.message; result.reason = error.message; }
   }
   return Object.freeze(result);
 }
@@ -1806,6 +1864,56 @@ export function acceptanceResultForSubjectStatus(status) {
   if (status === "inconclusive") return "inconclusive";
   if (status === "deferred" || status === "missing" || status === "not_applicable") return "deferred";
   throw new Error(`unsupported acceptance subject status: ${status}`);
+}
+
+// Reuse only byte-authenticated completed executions with identical code,
+// materials and scenario inputs. This intentionally falls back to execution
+// for any code delta; it does not invent a scope-only compatibility promise.
+function currentAcceptanceExecution(ctx, { snapshot_tree: snapshotTree, projection }) {
+  if (projection?.status !== "ready" || !projection.requires_execution) return null;
+  const materialRevision = ctx.kernel.currentVNextMaterialRevision();
+  const refs = ctx.task.listCanonicalQualityFactRefs?.() ?? [];
+  const candidates = new Map();
+  const read = (ref) => /acceptance-(?:stdout|stderr)-[a-f0-9]{64}\.bin$/.test(ref)
+    ? ctx.task.readRecordBytes(ref) : ctx.task.readRecord(ref);
+  const readBound = (reference) => {
+    if (typeof reference?.ref !== "string" || !reference.ref.startsWith("quality/")
+        || !SHA256_HEX.test(reference.sha256 ?? "")) throw new Error("acceptance reuse reference is invalid");
+    const raw = read(reference.ref);
+    if (createHash("sha256").update(raw).digest("hex") !== reference.sha256) throw new Error("acceptance reuse reference hash mismatch");
+    return JSON.parse(raw);
+  };
+  for (const ref of refs) {
+    const fact = JSON.parse(ctx.task.readRecord(ref));
+    if (fact.subject !== "acceptance_execution" || fact.stage !== "build-code"
+        || fact.task_id !== ctx.identity.taskId || fact.status !== "passed"
+        || fact.snapshot_tree !== snapshotTree || fact.material_revision !== materialRevision) continue;
+    if (ref !== `quality/facts/${qualityFactDigest(fact)}.json`) throw new Error("acceptance reuse quality fact digest mismatch");
+    for (const reference of fact.evidence ?? []) {
+      const wrapper = readBound(reference);
+      validateAcceptanceEvidence(wrapper);
+      if (wrapper.acceptance_criterion_id !== "acceptance_execution" || wrapper.snapshot_tree !== snapshotTree
+          || wrapper.freshness?.material_revision !== materialRevision) throw new Error("acceptance reuse wrapper identity mismatch");
+      for (const nested of wrapper.refs ?? []) {
+        const aggregate = readBound(nested);
+        if (aggregate.subject !== "acceptance_execution") continue;
+        authenticateAcceptanceExecutionAggregate(aggregate, fact, read);
+        const items = aggregate.subject_fact.execution_items;
+        if (items.length !== projection.scenarios.length || items.some((item, index) =>
+          canonicalJson(Object.fromEntries(Object.keys(projection.scenarios[index]).filter((key) => key !== "task_id").map((key) => [key, item[key]])))
+            !== canonicalJson(Object.fromEntries(Object.entries(projection.scenarios[index]).filter(([key]) => key !== "task_id"))))) continue;
+        const evidenceRefs = items.flatMap((item) => item.evidence_refs);
+        candidates.set(nested.sha256, Object.freeze({ authenticated: true, execution: Object.freeze({
+          status: "executed", requires_execution: true,
+          requires_independent_verdict: projection.requires_independent_verdict,
+          items, evidence_refs: evidenceRefs,
+          execution_binding: aggregate.subject_fact.execution_binding,
+          missing_items: [],
+        }) }));
+      }
+    }
+  }
+  return candidates.size === 1 ? [...candidates.values()][0] : null;
 }
 
 function currentConfirmationCandidate(ctx, snapshotTree) {
@@ -2384,7 +2492,10 @@ const HANDOFF_ITEM_ID = /^HANDOFF-[A-Za-z0-9]+$/;
  * handoff row fails loudly so the row write surfaces an error rather than
  * publishing invented facts.
  */
-export function handoffDeclaration(materials, activationCohort = "pre") {
+export function handoffDeclaration(materials, activationCohort = "pre", { stage } = {}) {
+  if (activationCohort === "post" && stage === "make-decision" && typeof materials?.["phases/index.md"] !== "string") {
+    return { value: null, reason: "make-decision does not yet declare an indexed Phase handoff" };
+  }
   if (activationCohort !== "pre" && activationCohort !== "post") throw new TypeError("activation cohort must be pre or post");
   const refs = activationCohort === "post"
     ? phaseFilesFromIndex(materials?.["phases/index.md"])
@@ -2444,7 +2555,7 @@ export function handoffDeclaration(materials, activationCohort = "pre") {
  */
 function currentStageRow(taskRoot, taskId, stage) {
   const factsPath = join(taskRoot, "facts.jsonl");
-  if (!existsSync(factsPath)) return null;
+  if (!existsSync(factsPath) || statSync(factsPath).isDirectory()) return null;
   const raw = readFileSync(factsPath, "utf8");
   if (raw.trimEnd() === "") return null;
   for (const line of raw.trimEnd().split("\n")) {
@@ -2915,12 +3026,12 @@ async function executeAcceptanceCommandOrService(ctx, scenario, binding, executi
     if (!Array.isArray(value) && value.status === "not-read") return true;
     return Object.values(value).some(containsNotReadPlaceholder);
   };
+  // Finishing an evaluation is independent of achieving its criterion.
+  // Failed assertions and incomplete outcomes remain on their original AC
+  // leaves; only unread/malformed/nonterminal execution means not executed.
   const executed = !inconclusive && processPassed && rows.length === ids.length
-    && rows.every((row) => row.outcome !== "incomplete" && (row.outcome !== "deferred" || isFutureStageAcceptanceDeferred({
-      spec: currentMaterialTexts(ctx)?.["spec.md"], activeCriterionIds: activeAcceptanceCriterionIds(currentMaterialTexts(ctx)?.["spec.md"]),
-      criterionId: row.acceptance_criterion_id, outcome: row.outcome, owner: row.owner }))
-      && row.assertions.every((assertion) => assertion.result === "passed"
-        && !containsNotReadPlaceholder(assertion.expected)
+    && rows.every((row) => row.assertions.length > 0
+      && row.assertions.every((assertion) => !containsNotReadPlaceholder(assertion.expected)
         && !containsNotReadPlaceholder(assertion.actual)));
   return Object.freeze({ status: executed ? "executed" : "failed", tier: scenario.tier,
     executor: "workspace-command", ...(executed ? {} : { reason: reason ?? "runtime assertion failed" }), evidence_refs: Object.freeze(evidenceRefs) });
@@ -3151,7 +3262,9 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
             || (dispositions?.status === "recorded" && items.every((item) => item.status !== "needs_human"));
           return {
             status: complete ? "passed" : "missing",
-            detail: "serious findings are fixed or explicitly risk-accepted",
+            detail: dispositions?.status === "not_applicable"
+              ? "authenticated unavailable review has no findings to dispose; review availability remains unavailable"
+              : "serious findings are fixed or explicitly risk-accepted",
             disposition_items: items,
             source_review_refs: dispositions?.source_review_refs ?? [],
             risk_acceptance_refs: dispositions?.risk_acceptance_refs ?? [],
@@ -3912,6 +4025,7 @@ function officialWorkerContext(ctx, publication = {}, invocation = {}, authentic
       ? { runControlledUiQa: publication.runControlledUiQa }
       : {}),
     ...(ctx.stage === "build-code" ? {
+      readCurrentAcceptanceExecution: (request) => currentAcceptanceExecution(ctx, request),
       runAcceptanceScenario: (scenario) => privateAcceptanceScenario(ctx, publication, scenario, invocation.attempt_id, signal),
     } : {}),
     ...(ctx.stage === "verify-code" ? {
@@ -4285,45 +4399,122 @@ export function buildPostAcceptanceChainRows({ rows, spec, decisionLog, boundEvi
   const section = typeof spec === "string"
     ? spec.match(/(?:^|\n)##\s+来源与决策映射[^\n]*\n([\s\S]*?)(?=\n##\s|$)/)?.[1] ?? ""
     : "";
-  const idsIn = (cell, prefix) => {
-    const ids = [];
-    const pattern = new RegExp(`\\b${prefix}-(\\d+)(?:\\.\\.(?:${prefix}-)?(\\d+))?\\b`, "g");
-    for (const match of String(cell ?? "").matchAll(pattern)) {
-      const first = Number(match[1]);
-      const last = match[2] === undefined ? first : Number(match[2]);
-      if (last < first || last - first > 100) continue;
-      for (let number = first; number <= last; number += 1) {
-        const id = `${prefix}-${String(number).padStart(match[1].length, "0")}`;
+  const mappingErrors = [];
+  const tableCells = (line) => line.split("|").slice(1, -1).map((cell) => cell.trim());
+  const normalizedHeader = (cell) => cell.replace(/`/g, "").replace(/\s/g, "").toLowerCase();
+  const headerRole = (cell) => {
+    const name = normalizedHeader(cell);
+    if (["来源", "sourceid"].includes(name)) return "source";
+    if (["决策", "decisionid"].includes(name)) return "decision";
+    if (name === "fr") return "fr";
+    if (name === "ac") return "ac";
+    if (name === "fr/ac") return "criteria";
+    if (["状态/影响面", "status", "未决/交接", "handoff"].includes(name)) return "ignored";
+    return null;
+  };
+  // Preserve each declared ID family and width; malformed syntax is disclosed,
+  // not expanded into invented edges. Combined cells admit both FR and AC.
+  const idsIn = (cell, wanted, allowed = [wanted]) => {
+    const ids = [], errors = [];
+    const text = String(cell ?? "").replace(/`/g, "");
+    const pattern = /\b([A-Z]+-(?:[A-Z][A-Z0-9]*-)*\d+)(?:\s*(?:\.\.|…)\s*([A-Z]+-(?:[A-Z][A-Z0-9]*-)*\d+|\d+))?/g;
+    const unmatched = text.replace(pattern, (whole, firstId, finalId) => {
+      const first = /^(.*-)(\d+)$/.exec(firstId);
+      const prefix = firstId.split("-")[0];
+      if (!allowed.includes(prefix)) { errors.push(`unrecognized ${wanted} token ${whole}`); return ""; }
+      const final = finalId === undefined ? first : /^(.*-)(\d+)$/.exec(finalId)
+        ?? ( /^\d+$/.test(finalId) ? [finalId, first[1], finalId] : null );
+      const firstNumber = Number(first[2]);
+      const finalNumber = final ? Number(final[2]) : NaN;
+      if (!final || !Number.isSafeInteger(firstNumber) || !Number.isSafeInteger(finalNumber)
+          || first[1] !== final[1] || first[2].length !== final[2].length
+          || finalNumber < firstNumber || finalNumber - firstNumber > 100) {
+        errors.push(`invalid ${wanted} range ${whole}`); return "";
+      }
+      if (prefix === wanted) for (let number = firstNumber; number <= finalNumber; number += 1) {
+        const id = `${first[1]}${String(number).padStart(first[2].length, "0")}`;
         if (!ids.includes(id)) ids.push(id);
       }
-    }
-    return ids;
+      return "";
+    });
+    if (unmatched.replace(/[\s、,，;；/]/g, "") !== "") errors.push(`unreadable ${wanted} syntax ${text}`);
+    return { ids: errors.length ? [] : ids, errors };
   };
   const decisions = new Set(
     [...String(decisionLog ?? "").matchAll(/^#{1,6}\s+(D-\d{3})\b/gm)].map((match) => match[1]),
   );
+  const tTable = String(decisionLog ?? "").match(/(?:^|\n)##\s+本卡问答记录（T 表）[^\n]*\n([\s\S]*?)(?=\n##\s|$)/)?.[1] ?? "";
+  let questionRoles = null;
+  for (const line of tTable.split(/\r?\n/)) {
+    if (!line.startsWith("|")) continue;
+    const cells = tableCells(line);
+    if (cells.every((cell) => /^[-:\s]+$/.test(cell))) continue;
+    if (questionRoles === null) {
+      const names = cells.map(normalizedHeader);
+      const roles = [names.indexOf("问题id"), names.indexOf("用户选择"), names.indexOf("选择含义"), names.indexOf("来源")];
+      questionRoles = roles.every((index) => index >= 0) ? roles : [];
+      continue;
+    }
+    if (questionRoles.length !== 4) continue;
+    const [id, choice, meaning, source] = questionRoles.map((index) => cells[index] ?? "");
+    if (/^T-\d{3}$/.test(id) && [choice, meaning, source].every((value) => value.trim()
+        && !/^(?:unknown|unavailable|待定|未确认|待确认)$/i.test(value.trim()))) decisions.add(id);
+  }
+  // Explicit existing recorded choices under 决定 remain material trace facts;
+  // discovering one does not constitute a new human confirmation.
+  const decidedSection = String(decisionLog ?? "").match(/(?:^|\n)##\s+决定\s*\n([\s\S]*?)(?=\n##\s|$)/)?.[1] ?? "";
+  for (const match of decidedSection.matchAll(/\b(T-\d{3})\s*=\s*[A-Z]\b/g)) decisions.add(match[1]);
   const sourceCensus = deriveDecisionLogOriginalSourceCensus(decisionLog);
   const originalSourceIds = new Set((sourceCensus.entries ?? []).map((entry) => entry.id));
-  const indexByR = new Map((sourceCensus.index_entries ?? []).map((entry) => [entry.id, entry.source_refs]));
-  const trustedIndex = sourceCensus.status === "present" && sourceCensus.errors.length === 0
+  const indexByR = new Map();
+  const ambiguousRIds = new Set();
+  // Invalid decision cells are omitted by the census parser; their row
+  // identity must still prevent a valid sibling from hiding a duplicate.
+  const rawIndex = String(decisionLog ?? "").match(/(?:^|\n)## 原始需求索引\s*\n([\s\S]*?)(?=\n## |$)/)?.[1] ?? "";
+  const rawIds = new Set();
+  for (const [, id] of rawIndex.matchAll(/^\| (R-\d{3}) \|/gm)) {
+    if (rawIds.has(id)) ambiguousRIds.add(id);
+    rawIds.add(id);
+  }
+  for (const entry of sourceCensus.index_entries ?? []) {
+    if (indexByR.has(entry.id)) ambiguousRIds.add(entry.id);
+    indexByR.set(entry.id, entry.source_refs);
+  }
+  const trustedIndex = sourceCensus.status === "present"
     && indexByR.size > 0 && originalSourceIds.size > 0;
   // R references are trace edges, never authenticated original source IDs.
   const noOriginalSourceIndex = indexByR.size === 0 && (sourceCensus.source_units ?? []).length === 0;
-  for (const line of section.split(/\r?\n/)) {
-    if (!line.startsWith("|")) continue;
-    const cells = line.split("|").slice(1, -1).map((cell) => cell.trim());
-    if (cells.length !== 4 || cells[0] === "来源" || /^[-:\s]+$/.test(cells[0])) continue;
-    const sourceIds = idsIn(cells[0], "R");
-    const decisionIds = idsIn(cells[1], "D");
-    const frIds = idsIn(cells[2], "FR");
-    for (const acId of idsIn(cells[3], "AC")) {
-      const entry = mapped.get(acId) ?? { sourceIds: [], decisionIds: [], missingDecisionIds: [], frIds: [] };
-      for (const id of sourceIds) if (!entry.sourceIds.includes(id)) entry.sourceIds.push(id);
-      for (const id of decisionIds) {
+  const table = section.split(/\r?\n/).filter((line) => line.startsWith("|"));
+  const headers = table.length ? tableCells(table[0]) : [];
+  const roles = headers.map(headerRole);
+  const count = (role) => roles.filter((value) => value === role).length;
+  const splitCriteria = count("fr") === 1 && count("ac") === 1 && count("criteria") === 0;
+  const combinedCriteria = count("criteria") === 1 && count("fr") === 0 && count("ac") === 0;
+  const validHeader = roles.every((role) => role !== null) && count("source") === 1 && count("decision") === 1
+    && (splitCriteria || combinedCriteria);
+  if (!validHeader) mappingErrors.push("MATERIAL_INCOMPLETE: 来源与决策映射 header/表头缺失、未知或歧义。");
+  for (const line of validHeader ? table.slice(1) : []) {
+    const cells = tableCells(line);
+    if (cells.every((cell) => /^[-:\s]+$/.test(cell))) continue;
+    if (cells.length !== headers.length) {
+      mappingErrors.push("MATERIAL_INCOMPLETE: 来源与决策映射行与表头列数不一致。"); continue;
+    }
+    const cell = (role) => cells[roles.indexOf(role)];
+    const source = idsIn(cell("source"), "R");
+    const d = idsIn(cell("decision"), "D", ["D", "T"]), t = idsIn(cell("decision"), "T", ["D", "T"]);
+    const fr = idsIn(cell(combinedCriteria ? "criteria" : "fr"), "FR", combinedCriteria ? ["FR", "AC"] : ["FR"]);
+    const ac = idsIn(cell(combinedCriteria ? "criteria" : "ac"), "AC", combinedCriteria ? ["FR", "AC"] : ["AC"]);
+    const rowErrors = [...new Set([...source.errors, ...d.errors, ...t.errors, ...fr.errors, ...ac.errors])];
+    if (!ac.ids.length && rowErrors.length) mappingErrors.push(...rowErrors.map((error) => `MATERIAL_INCOMPLETE: ${error}`));
+    for (const acId of ac.ids) {
+      const entry = mapped.get(acId) ?? { sourceIds: [], decisionIds: [], missingDecisionIds: [], frIds: [], errors: [] };
+      for (const id of source.ids) if (!entry.sourceIds.includes(id)) entry.sourceIds.push(id);
+      for (const id of [...d.ids, ...t.ids]) {
         const target = decisions.has(id) ? entry.decisionIds : entry.missingDecisionIds;
         if (!target.includes(id)) target.push(id);
       }
-      for (const id of frIds) if (!entry.frIds.includes(id)) entry.frIds.push(id);
+      for (const id of fr.ids) if (!entry.frIds.includes(id)) entry.frIds.push(id);
+      entry.errors.push(...rowErrors.map((error) => `MATERIAL_INCOMPLETE: ${error}`));
       mapped.set(acId, entry);
     }
   }
@@ -4337,8 +4528,11 @@ export function buildPostAcceptanceChainRows({ rows, spec, decisionLog, boundEvi
     const sourceIds = [];
     const unmappedRIds = [];
     for (const rId of mapping?.sourceIds ?? []) {
-      const originalIds = trustedIndex
-        ? (indexByR.get(rId) ?? []).filter((id) => originalSourceIds.has(id)) : [];
+      const refs = indexByR.get(rId) ?? [];
+      const knownUnits = new Set((sourceCensus.source_units ?? []).map((unit) => unit.id));
+      const originalIds = trustedIndex && !ambiguousRIds.has(rId)
+          && refs.every((id) => knownUnits.has(id))
+        ? refs.filter((id) => originalSourceIds.has(id)) : [];
       if (originalIds.length === 0) unmappedRIds.push(rId);
       for (const id of originalIds) if (!sourceIds.includes(id)) sourceIds.push(id);
     }
@@ -4357,13 +4551,14 @@ export function buildPostAcceptanceChainRows({ rows, spec, decisionLog, boundEvi
         && row.coverage_limits.some((item) => typeof item !== "string" || !item.trim())) {
       limits.push(`${acId}: 既有 coverage_limits 含无法读取的条目。`);
     }
+    limits.push(...mappingErrors, ...(mapping?.errors ?? []));
     limits.push("CARD-05 维护 review_ref；task_ids 沿用其现有派生。本阶段材料引用不替代逐 AC 业务效果或独立审查，机器判定类与人写声明类不可互替。");
     if (noOriginalSourceIndex) limits.push(`${acId}: decision-log 无原始需求索引，R 编号不能作为真实原始来源。`);
     if (!trustedIndex && !noOriginalSourceIndex) limits.push(`${acId}: 原始需求索引或 U/V 普查不完整，未认证来源转换。`);
     if (unmappedRIds.length > 0) limits.push(`${acId}: ${unmappedRIds.join("、")} 在原始需求索引没有可认证 U/V 边，未写入 source_ids。`);
     if (sourceIds.length === 0) limits.push(`${acId}: 未得到可认证原始来源 ID。`);
-    if (decisionIds.length === 0) limits.push(`${acId}: decision-log 没有可回读的 D 决策条目。`);
-    if (mapping?.missingDecisionIds.length) limits.push(`${acId}: 映射所列 ${mapping.missingDecisionIds.join("、")} 不在 decision-log 的 D 标题中。`);
+    if (decisionIds.length === 0) limits.push(`${acId}: decision-log 没有可回读的 D/T 决策条目。`);
+    if (mapping?.missingDecisionIds.length) limits.push(`${acId}: 映射所列 ${mapping.missingDecisionIds.join("、")} 不在 decision-log 的可回读 D/T 决策条目中。`);
     if (frIds.length === 0) limits.push(`${acId}: 来源与决策映射没有 FR 编号。`);
     if (evidenceRefs.length === 0) limits.push(`${acId}: 当前快照没有可回读的带哈希证据引用。`);
     if (!row.file_symbol || !row.implementation_anchor || !row.verification_anchor) {
@@ -4466,8 +4661,187 @@ async function currentPostBuildCodeSpecAnalyze(ctx, preflight, handlerResult, ru
     scenario_refs: [],
     oracle_refs: [],
   }));
+  // Only the current handler's native references are admissible here. Keep
+  // observations distinct from caller claims and from the outer unit receipt.
+  const nativeExecution = handlerResult?.facts?.acceptance_execution;
+  const nativeItems = Array.isArray(nativeExecution?.items) ? nativeExecution.items : [];
+  const canonicalNative = (value) => {
+    if (Array.isArray(value)) return `[${value.map(canonicalNative).join(",")}]`;
+    if (value && typeof value === "object") return `{${Object.keys(value).sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalNative(value[key])}`).join(",")}}`;
+    return JSON.stringify(value);
+  };
+  const materialGateCards = [];
+  for (const phase of Object.values(phases)) {
+    const sections = String(phase).split(/^###\s+(T\d+)\b[^\n]*\n/gm);
+    for (let index = 1; index < sections.length; index += 2) {
+      const fields = {};
+      for (const line of sections[index + 1].split(/^##\s+L2\b/m)[0].split(/\r?\n/)) {
+        const field = line.match(/^\s*-\s+\*\*([^*]+)\*\*\s*[:：]\s*(.*)$/);
+        if (field) fields[field[1].trim()] = field[2].trim();
+      }
+      const exitText = String(fields.expected_exit ?? fields["预期退出码"] ?? "").replace(/`/g, "").trim();
+      const green = /\bGREEN\s+(-?\d+)(?=\s*(?:[,，;；。]|且\s*其余\s+\d+\s*条|$))/.exec(exitText);
+      const greenTail = green ? exitText.slice(green.index + green[0].length) : "";
+      const singleGreen = (exitText.match(/\bGREEN\b/g) ?? []).length === 1
+        && !/(?:\bor\b|或)/i.test(exitText) && !/^\s*[,，;；。]\s*-?\d/.test(greenTail);
+      const expected = /^-?\d+$/.test(exitText) ? Number(exitText)
+        : singleGreen && green ? Number(green[1]) : NaN;
+      const oracles = [...new Set(String(fields["GREEN oracle"] ?? fields["GREEN 判定器"] ?? fields.oracle ?? "").match(/\bORACLE-[A-Z0-9-]+\b/g) ?? [])];
+      if (Number.isSafeInteger(expected) && oracles.length === 1) materialGateCards.push({
+        acIds: String(fields["Source / FR / AC"] ?? fields["来源 / FR / AC"] ?? "").match(/\bAC-[A-Z0-9-]+\b/g) ?? [],
+        expectedExit: expected, oracle: oracles[0],
+      });
+    }
+  }
+  const nativeArg = (value) => /^[A-Za-z0-9_@%+=:,./-]+$/.test(value)
+    ? value : "'" + value.replace(/'/g, "'\\''") + "'";
+  const projectedNativeRows = acceptanceRows.map((row) => {
+    const acId = row.acceptance_criterion_id;
+    const required = (acceptanceProjection.scenarios ?? []).filter((scenario) => scenario.acceptance_criterion_ids?.includes(acId));
+    if (!required.length || !nativeItems.length) return row;
+    const gaps = [], observations = [], gateLeaves = [], seenRefs = new Set();
+    const sameScenario = (a, b) => ["source", "sample", "scenario", "tier"].every((field) => a?.[field] === b?.[field]);
+    const ownRefs = new Map((Array.isArray(row.evidence_refs) ? row.evidence_refs : [])
+      .map((reference) => [reference.ref, reference.sha256]));
+    for (const scenario of required) {
+      const matching = nativeItems.filter((item) => item.acceptance_criterion_ids?.includes(acId) && sameScenario(item, scenario));
+      if (matching.length !== 1) {
+        gaps.push(`MATERIAL_INCOMPLETE: ${acId} native scenario ${scenario.scenario} requires exactly one current execution item.`);
+        continue;
+      }
+      const refs = matching[0].evidence_refs ?? [];
+      const ownLeaves = [];
+      for (const reference of refs) {
+        try {
+          if (!reference || typeof reference.ref !== "string" || !SHA256_HEX.test(reference.sha256 ?? "")) {
+            throw new Error("native reference is invalid");
+          }
+          const raw = ctx.task.readRecord(reference.ref);
+          if (createHash("sha256").update(raw).digest("hex") !== reference.sha256) throw new Error("native reference hash mismatch");
+          const leaf = JSON.parse(raw);
+          validateAcceptanceExecutionEvidence(leaf);
+          // A scenario can execute several ACs; inspect only this row's leaf.
+          if (leaf.subject !== acId) continue;
+          if (seenRefs.has(reference.ref)) throw new Error("duplicate native AC reference");
+          seenRefs.add(reference.ref);
+          if (ownRefs.get(reference.ref) !== reference.sha256) throw new Error("native AC reference is absent from current coverage");
+          if (leaf.task_id !== ctx.identity.taskId || leaf.stage !== "build-code"
+              || leaf.snapshot_tree !== snapshotTree || leaf.material_revision !== materialRevision
+              || canonicalNative(leaf.subject_fact.execution_binding) !== canonicalNative(nativeExecution.execution_binding)
+              || !sameScenario(leaf.subject_fact.execution, scenario)) throw new Error("native AC identity/scenario/execution binding mismatch");
+          const bound = evidence.find((entry) => entry.kind === "acceptance" && entry.ref === reference.ref
+            && entry.hash === reference.sha256 && entry.snapshot_tree === snapshotTree);
+          if (!bound) throw new Error("native AC reference is not bound to current packet evidence");
+          ownLeaves.push({ subject: leaf.subject_fact, reference, bound });
+        } catch (error) {
+          gaps.push(`MATERIAL_INCOMPLETE: ${acId} native scenario ${scenario.scenario}: ${error.message}`);
+        }
+      }
+      if (ownLeaves.length !== 1) gaps.push(`MATERIAL_INCOMPLETE: ${acId} native scenario ${scenario.scenario} requires exactly one authenticated AC leaf.`);
+      else {
+        const { subject, reference, bound } = ownLeaves[0];
+        gateLeaves.push({ subject, reference, bound });
+        observations.push({ scenario: subject.execution.scenario, outcome: subject.outcome,
+          assertions: subject.assertions.map(({ id, actual, result }) => ({ id, actual, result })),
+          ...(subject.outcome_reason ? { reason: subject.outcome_reason } : {}) });
+        if (!subject.assertions.length) gaps.push(`MATERIAL_INCOMPLETE: ${acId} native assertions are missing.`);
+        const execution = subject.execution;
+        if (execution.timed_out || execution.cancelled || execution.signal !== null || execution.error
+            || execution.cleanup?.status !== "completed") gaps.push(`MATERIAL_INCOMPLETE: ${acId} native execution did not settle cleanly.`);
+      }
+    }
+    const limits = [...(Array.isArray(row.coverage_limits) ? row.coverage_limits
+      : row.coverage_limits === undefined ? [] : [row.coverage_limits]), ...gaps];
+    // Preserve authenticated partial observations as facts, while their gaps
+    // remain explicit. They do not change the handler's coverage verdict.
+    if (!observations.length) {
+      if ((typeof row.scenario === "string" && row.scenario.trim())
+          || (typeof row.actual_outcome === "string" && row.actual_outcome.trim())) {
+        throw outcomeError(`${acId}: caller semantic claim has no authenticated native acceptance facts`);
+      }
+      return { ...row, coverage_limits: limits };
+    }
+    const scenario = `${acId}: ${observations.map((observation) => observation.scenario).join("; ")}`;
+    const actualOutcome = JSON.stringify(observations.map(({ scenario: ignoredScenario, ...observation }) => observation));
+    if ((typeof row.scenario === "string" && row.scenario.trim() && row.scenario !== scenario)
+        || (typeof row.actual_outcome === "string" && row.actual_outcome.trim() && row.actual_outcome !== actualOutcome)) {
+      throw outcomeError(`${acId}: caller semantic claim conflicts with authenticated native acceptance facts`);
+    }
+    let gateProjection = {};
+    // A native service's exit0 and the parent unit receipt are not AC gates.
+    // Only one authenticated AC scope, material oracle and real child qualify.
+    if (!gaps.length && required.length === 1 && gateLeaves.length === 1) {
+      const { subject, reference, bound } = gateLeaves[0];
+      const scopes = subject.assertions.filter((assertion) => assertion.id.startsWith(`${acId}:scope:`));
+      const declared = materialGateCards.filter((card) => card.acIds.includes(acId)
+        && subject.assertions.some((assertion) => assertion.id.startsWith(`${card.oracle}:`)
+          && Object.hasOwn(assertion, "expected")));
+      if (scopes.length === 1 && declared.length === 1
+          && scopes[0].expected?.status === "passed" && scopes[0].actual?.status === "passed"
+          && subject.outcome === "achieved" && subject.assertions.every((assertion) => assertion.result === "passed")) {
+        try {
+          const scope = scopes[0].id.slice(`${acId}:scope:`.length).split(":")[0];
+          if (!/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/.test(scope)) throw new Error("native gate scope path is invalid");
+          const execution = subject.execution;
+          const raw = ctx.task.readRecordBytes(execution.stdout_ref);
+          if (createHash("sha256").update(raw).digest("hex") !== execution.stdout_hash) throw new Error("native gate stdout hash mismatch");
+          const output = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(raw));
+          const commands = Array.isArray(output.commands) ? output.commands : [];
+          // A batch exit belongs to every file in that batch collectively,
+          // not to this AC's passing scoped oracle. Keep the raw batch fact,
+          // but only project an exit gate for an actual scope-only command.
+          const matching = commands.filter((child) => Array.isArray(child?.args)
+            && child.args.filter((arg) => arg === scope).length === 1
+            && (!Array.isArray(child.files) || (child.files.length === 1 && child.files[0] === scope))
+            && child.args.filter((arg) => typeof arg === "string"
+              && /(?:^|\/)[^/]+\.(?:test|spec)\.[cm]?[jt]sx?$/.test(arg)).every((arg) => arg === scope));
+          if (matching.length !== 1) {
+            if (row.gate !== undefined || row.test_result !== undefined) throw outcomeError("caller gate/test_result conflicts with authenticated native scope");
+            if (matching.length === 0 && commands.some((child) => Array.isArray(child?.args)
+                && child.args.includes(scope))) {
+              return { ...row, scenario, actual_outcome: actualOutcome, coverage_limits: limits };
+            }
+            throw new Error("native gate scope requires one actual scope-only child command");
+          }
+          const child = matching[0];
+          if (typeof child.command !== "string" || !child.command.trim()
+              || child.args.some((arg) => typeof arg !== "string" || /<[^>]+>|\0/.test(arg))
+              || /<[^>]+>|\0/.test(child.command) || !Number.isInteger(child.exit_code)
+              || child.signal !== null || child.timed_out !== false || child.cancelled === true || child.error
+              || (child.cleanup && child.cleanup.status !== "completed")) throw new Error("native gate argv or child execution is unavailable");
+          for (const stream of ["stdout", "stderr"]) {
+            const nested = child.raw_evidence?.[stream];
+            if (!nested || !SHA256_HEX.test(nested.sha256 ?? "")
+                || nested.ref !== `quality/evidence/stage-quality/build-code/acceptance-${stream}-${nested.sha256}.bin`
+                || (nested.original_sha256 !== undefined && nested.original_sha256 !== nested.sha256)
+                || createHash("sha256").update(ctx.task.readRecordBytes(nested.ref)).digest("hex") !== nested.sha256) {
+              throw new Error(`native gate child ${stream} binding mismatch`);
+            }
+          }
+          const command = [child.command, ...child.args].map(nativeArg).join(" ");
+          const gate = { command, expected_exit: declared[0].expectedExit, oracle: declared[0].oracle };
+          const testResult = { evidence_ref: reference.ref, command, expected_exit: gate.expected_exit,
+            actual_exit: child.exit_code, oracle: gate.oracle, actual_outcome: `exit_code=${child.exit_code}` };
+          if ((row.gate !== undefined && canonicalNative(row.gate) !== canonicalNative(gate))
+              || (row.test_result !== undefined && canonicalNative(row.test_result) !== canonicalNative(testResult))
+              || (bound.test_result !== undefined && canonicalNative(bound.test_result) !== canonicalNative(testResult))) {
+            throw outcomeError("caller gate/test_result conflicts with authenticated native child");
+          }
+          // The original ref/hash/tree are unchanged. Both typed carriers share
+          // exactly this current child's result, including any actual exit1.
+          bound.test_result = testResult;
+          gateProjection = { gate, test_result: testResult };
+        } catch (error) {
+          if (error.code === "MATERIAL_INCOMPLETE") throw error;
+          limits.push(`MATERIAL_INCOMPLETE: ${acId} native gate/test_result: ${error.message}`);
+        }
+      }
+    }
+    return { ...row, scenario, actual_outcome: actualOutcome, ...gateProjection, coverage_limits: limits };
+  });
   const acceptanceChain = buildPostAcceptanceChainRows({
-    rows: acceptanceRows.map((row) => ({
+    rows: projectedNativeRows.map((row) => ({
       ...row,
       ...((acceptanceTaskIdsByCriterion.get(row.acceptance_criterion_id) ?? []).length > 0
         ? { task_ids: acceptanceTaskIdsByCriterion.get(row.acceptance_criterion_id) }
@@ -4595,7 +4969,7 @@ async function currentPostBuildCodeSpecAnalyze(ctx, preflight, handlerResult, ru
           lens_source_ids: Object.freeze([...lens.source_ids]),
         }),
         findings: Object.freeze([...(boundResult.findings ?? []), ...(lens.result.findings ?? [])]),
-        errors: Object.freeze([...(boundResult.errors ?? []), ...lens.result.errors]),
+        errors: Object.freeze([...new Set([...(boundResult.errors ?? []), ...lens.result.errors])]),
       });
     }
   }
@@ -4630,6 +5004,7 @@ function p5HumanExceptionFromDecisionLog(ctx, acceptanceChain, auditInputRef, ca
   // source exists; do not treat parsed fields as that source.
   return parsed.kind === "none" || parsed.kind === "declared" ? parsed : null;
 }
+
 
 function publishP5SameRunSource(ctx, invocation, stageResult, acceptanceChain, previousStageRow) {
   const progress = stageResult.stage_reflection?.stage_row_write?.value?.phase_progress
@@ -4671,10 +5046,11 @@ function publishP5SameRunSource(ctx, invocation, stageResult, acceptanceChain, p
     const implementation = JSON.parse(implementationRaw);
     const tests = JSON.parse(testRaw);
     const review = JSON.parse(reviewRaw);
+    const currentSnapshot = phaseSnapshot(root, ctx.identity.taskId, snapshot.tree, "P5");
     validateCanonicalImplementationReceipt(implementation, { taskId: ctx.identity.taskId,
-      snapshotTree: snapshot.tree, read: readRecord });
+      snapshotTree: snapshot.tree, currentSnapshot, read: readRecord });
     validateCanonicalTestReceipt(tests, { taskId: ctx.identity.taskId, stage: "build-code",
-      snapshotTree: snapshot.tree, expectedProducerComponent: "build-code-test-capture", requirePassed: true });
+      snapshotTree: snapshot.tree, currentSnapshot, expectedProducerComponent: "build-code-test-capture", requirePassed: true });
     const t007Command = /^(?:npx |\.\/node_modules\/\.bin\/)vitest run runtime\/stage\/stage-end-report\.test\.mjs(?: --config vitest\.config\.mjs --poolOptions\.forks\.singleFork --no-fileParallelism)?$/;
     const output = readRecord(tests.output_ref);
     if (!t007Command.test(tests.command) || !isCompleteP5T007VitestOutput(output)
@@ -4701,7 +5077,8 @@ function publishP5SameRunSource(ctx, invocation, stageResult, acceptanceChain, p
       const raw = readRecord(ref);
       const value = JSON.parse(raw);
       if (value.task_id !== ctx.identity.taskId || value.stage !== "build-code"
-          || value.snapshot_tree !== snapshot.tree || value.material_revision !== materials.revision
+          || (currentSnapshot ? phaseWriteSetChanges({ ...currentSnapshot, fromTree: value.snapshot_tree, toTree: snapshot.tree }).length > 0
+            : value.snapshot_tree !== snapshot.tree) || value.material_revision !== materials.revision
           || ref !== `quality/facts/${qualityFactDigest(value)}.json`) throw new Error("P5 quality fact is not current");
       return { ref, sha256: createHash("sha256").update(raw).digest("hex"), value };
     });
@@ -4740,7 +5117,9 @@ function publishP5SameRunSource(ctx, invocation, stageResult, acceptanceChain, p
     ref: `quality/evidence/stage-quality/build-code/P5/material-${digest(raw)}.txt`, sha256: digest(raw), raw }));
   const publicationMaterials = materialRecords.map(({ raw, ...binding }) => binding);
   const stageResultValue = JSON.parse(JSON.stringify(stageResult));
-  if (current.review.snapshot_tree !== snapshot.tree || current.review.material_revision !== materials.revision) {
+  const reviewSnapshot = phaseSnapshot(worktree, ctx.identity.taskId, snapshot.tree, "P5");
+  if ((reviewSnapshot ? phaseWriteSetChanges({ ...reviewSnapshot, fromTree: current.review.snapshot_tree, toTree: snapshot.tree }).length > 0
+    : current.review.snapshot_tree !== snapshot.tree) || current.review.material_revision !== materials.revision) {
     // This is a derived report warning. Preserve the actual canonical fact
     // status/bytes and independently recheck this derivation in the reader.
     stageResultValue.quality_warnings = [...(stageResultValue.quality_warnings ?? []),
@@ -5129,7 +5508,7 @@ export async function runOfficialStage(stage, context, invocation, publication, 
     const receipt = JSON.parse(receiptRaw);
     const { FIXED_TARGETED_CAPTURE_COMMAND } = await import("../../workflows/build-code/capture.mjs");
     validateCanonicalTestReceipt(receipt, { taskId: ctx.identity.taskId, stage: "build-code",
-      snapshotTree: snapshot.tree, expectedProducerComponent: "build-code-test-capture",
+      snapshotTree: snapshot.tree, currentSnapshot: phaseSnapshot(workspace.worktreeRoot, ctx.identity.taskId, snapshot.tree, "P10"), expectedProducerComponent: "build-code-test-capture",
       expectedCommand: FIXED_TARGETED_CAPTURE_COMMAND, requirePassed: true });
     const output = ctx.task.readRecord(receipt.output_ref);
     if (digest(output) !== receipt.output_hash) return stageResult;

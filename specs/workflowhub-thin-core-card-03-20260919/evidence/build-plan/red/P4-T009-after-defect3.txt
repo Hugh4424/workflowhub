@@ -1,0 +1,77 @@
+# P4 / T009 — ORACLE-REV-002 RED（加入缺陷③预写用例之后）
+# 用途：F-d0135c98e121 把缺陷③（当前命名空间里一个损坏的 pair 成员拖垮整次历史读取）纳入 T009 范围后，
+#       重新采集的真实 RED 原件。
+# worktree: /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+# HEAD:     8a7adcbbb2c677ae6faba6c58bf5fe6f135a6151（未提交改动只含本任务两个文件）
+# date:     2026-09-30T01:48:22Z
+# cmd:      npx --no-install vitest run tests/contract/card03-review-orchestration.test.mjs -t "ORACLE-REV-002" --poolOptions.forks.singleFork --no-fileParallelism --reporter=dot
+# 原始完整输出: /tmp/card03-bp/red/P4-T009-after-defect3.raw.txt
+
+## 退出码
+EXIT=1
+
+## 汇总行（原文）
+ Test Files  1 failed (1)
+      Tests  2 failed | 1 passed | 12 skipped (15)
+
+（文件原来 14 条：本轮为缺陷③新增 1 条，故 skipped 从 12 变 13、总数 15。T008/T010 行的
+ `(14)` 是加用例前的历史计数，本轮未重跑那两个定向命令，故未改动。）
+
+## 逐条（reporter=dot 的原样行）
+ ❯ tests/contract/card03-review-orchestration.test.mjs (15 tests | 2 failed | 12 skipped) 6040ms
+   × ORACLE-REV-002 partial coverage and same-triple reuse > no longer lets the historical flag release partial coverage 3ms
+     → expected 'import { createHash, randomUUID } fro…' not to match /allowHistoricalPartialCoverage/
+   ✓ ORACLE-REV-002 partial coverage and same-triple reuse > reuses an existing semantic result for the same review triple instead of dispatching 3062ms
+   × ORACLE-REV-002 partial coverage and same-triple reuse > does not let one damaged pair member abort the whole history read 2974ms
+     → 一条损坏的 pair 成员拖垮了整次历史读取：REVIEW_RECORD_INCOMPLETE canonical review evidence is incomplete or changed: expected Error: canonical review evidence is incom… { …(3) } to be undefined
+
+## 失败断言 1 原文与位置（原记录，反转前已有的目标失败）
+FAIL  tests/contract/card03-review-orchestration.test.mjs > ORACLE-REV-002 partial coverage and same-triple reuse > no longer lets the historical flag release partial coverage
+AssertionError: expected 'import { createHash, randomUUID } fro…' not to match /allowHistoricalPartialCoverage/
+
+- Expected:
+/allowHistoricalPartialCoverage/
+
++ Received:
+"import { createHash, randomUUID } fro…"（runtime/review/review-record-route.mjs 源码全文）
+
+位置：
+ ❯ tests/contract/card03-review-orchestration.test.mjs:259:68
+    257| describe("ORACLE-REV-002 partial coverage and same-triple reuse", () =…
+    258|   it("no longer lets the historical flag release partial coverage", ()…
+    259|     expect(readRepo("runtime/review/review-record-route.mjs")).not.toM…
+    260|   });
+
+## 失败断言 2 原文与位置（本轮新增：缺陷③）
+FAIL  tests/contract/card03-review-orchestration.test.mjs > ORACLE-REV-002 partial coverage and same-triple reuse > does not let one damaged pair member abort the whole history read
+AssertionError: 一条损坏的 pair 成员拖垮了整次历史读取：REVIEW_RECORD_INCOMPLETE canonical review evidence is incomplete or changed: expected Error: canonical review evidence is incom… { …(3) } to be undefined
+
+- Expected:
+undefined
+
++ Received:
+[Error: canonical review evidence is incomplete or changed]
+（error.code = REVIEW_RECORD_INCOMPLETE，由 recordSimpleReviewRequest 的读侧 catch 升码）
+
+位置：
+ ❯ tests/contract/card03-review-orchestration.test.mjs:294:7
+    292|       settled.error,
+    293|       `一条损坏的 pair 成员拖垮了整次历史读取：${settled.error?.code ?…
+    294|     ).toBeUndefined();
+    295|     expect(settled.value, "损坏成员所在的那对记录之外的健康成员必须照…
+    296|       reused: true, dispatch_state: "reused", attempt_ref: healthy.att…
+
+## 本轮实测到的真实机制（供 build-code/verify-code 使用，不编）
+- 夹具：同命名空间先写入一条健康的单条评审（可复用），再用 `recordSimpleReviewResult({pair_id, role_results:{red,blue}, minimum_heterologous:1})`
+  写入一对 canonical 评审，最后把 blue 成员 attempt 记录的绑定字段 `material_id` 改成 `"d".repeat(64)`
+  （只改绑定字段，不改报告里的语义/coverage 声明）。
+- 现码行为：`readCanonicalReviewHistory`（`runtime/review/review-record-route.mjs:1238`）在逐条 map 阶段
+  就抛 `canonical review evidence is incomplete or changed`（:1316），调用点把它升为
+  `REVIEW_RECORD_INCOMPLETE` 并 reject ⇒ 整次历史读取中断，同命名空间里那条健康记录也读不回来，
+  本次请求以异常收场、零复用。
+- 与 P4 卡原文引用的抛点（pair 过滤块 :1367 `canonical review pair member binding is invalid`）不同：
+  改绑定字段会先被逐条完整性检查（:1309-1317）拦下。两者是同一缺陷的两条路径，本用例走到的是先触发的那条。
+- 跨卡关系（须裁决）：`tests/contract/review-history-canonical-reader.test.mjs` 的 it[C]（pair 摘要 role 引用
+  指向缺失 attempt）与 it[D]（成员报告 coverage 被伪造）要求「当前命名空间 pair 损坏 ⇒ fail-closed + 零派发」。
+  本用例要求「绑定字段损坏 ⇒ 跳过那一对、其余记录照常读回」。实现须区分「伪造语义/覆盖声明」与「配对链接断开」；
+  若不区分，it[C]/it[D] 可能转红。

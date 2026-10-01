@@ -70,16 +70,16 @@ describe("spec and plan content artifact closure", () => {
 
     expect(`${phaseSkill}\n${phaseTemplate}`).toMatch(/sole phase (?:engineering )?author|单一 phase 工程权威/i);
     for (const level of ["L0", "L1", "L2"]) expect(phaseTemplate, `${level} phase contract`).toContain(level);
-    expect(phaseTemplate).toMatch(/write set|写集/i);
-    expect(phaseTemplate).toMatch(/DO NOT TOUCH|禁改/i);
-    expect(phaseTemplate).toMatch(/gate_cmd/);
-    expect(phaseTemplate).toMatch(/oracle/i);
-    expect(phaseTemplate).toMatch(/STOP/);
+    expect(phaseTemplate).toMatch(/write set|写集|写入集/i);
+    expect(phaseTemplate).toMatch(/DO NOT TOUCH|禁改|禁止改动|不得改动/i);
+    expect(phaseTemplate).toMatch(/gate_cmd|门禁命令/);
+    expect(phaseTemplate).toMatch(/oracle|判定器/i);
+    expect(phaseTemplate).toMatch(/STOP|停止/);
 
     expect(`${indexSkill}\n${indexTemplate}`).toMatch(/pure pointer|纯指针/i);
     expect(indexTemplate).toMatch(/^## (?:Execution )?Index|^## 执行索引/m);
     expect(indexTemplate).toMatch(/semantic anchor|语义锚点/i);
-    expect(indexTemplate).toMatch(/write set|写集/i);
+    expect(indexTemplate).toMatch(/write set|写集|写入集/i);
     expect(indexTemplate).toMatch(/consumer|消费者/i);
     expect(indexTemplate).not.toMatch(/^## Phase P\d+/m);
     expect(indexTemplate).not.toMatch(/^#### T\d+ /m);

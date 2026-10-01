@@ -199,7 +199,7 @@ async function phaseReview(state, phaseId = "P5") {
   const recorded = await recordSimpleReviewRequest({
     task, kernel,
     request: { stage: "build-code", review_scope: "phase", subject_kind: "phase", phase_id: phaseId,
-      host_provider: "codex/luna", materials: { implementation: `fixture review of ${phaseId}` } },
+      host_provider: "codex/luna", materials: { approved_spec: `fixture review of ${phaseId}` } },
     resolveRouteIdentity: () => ({ route_identity: "a".repeat(64) }),
     runRound: async (request) => ({
       status: "available", stage: "build-code", review_track: null, review_kind: null,

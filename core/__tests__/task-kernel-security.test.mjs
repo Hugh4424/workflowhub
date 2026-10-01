@@ -178,3 +178,22 @@ describe("TaskKernel trust boundary", () => {
     expect(() => kernel.readAccepted("make-decision")).toThrow(/retired|current four materials/i);
   });
 });
+
+
+describe("OCR original provider bytes canonical writer", () => {
+  it("retains non-UTF8 bytes, reuses identical content, and rejects mismatched hashes", () => {
+    const { task } = fixture();
+    const kernel = createTaskKernel(task);
+    const bytes = Buffer.from([0xff, 0xfe, 0x00, 0x61]);
+    const digest = createHash("sha256").update(bytes).digest("hex");
+    for (const stage of ["build-code", "verify-code"]) {
+      const ref = `quality/evidence/stage-quality/${stage}/ocr-provider-output-${digest}.bin`;
+      expect(kernel.publishCanonicalRecord(ref, bytes)).toEqual({ ref, sha256: digest });
+      expect(task.readRecordBytes(ref)).toEqual(bytes);
+      expect(kernel.publishCanonicalRecord(ref, Buffer.from(bytes))).toEqual({ ref, sha256: digest });
+      expect(() => kernel.publishCanonicalRecord(ref, Buffer.from("wrong"))).toThrow(/original bytes/);
+      expect(() => kernel.publishCanonicalRecord(ref, bytes.toString("utf8"))).toThrow(/original bytes/);
+      expect(() => kernel.publishCanonicalRecord(`quality/evidence/stage-quality/${stage}/ocr-provider-output-${"0".repeat(64)}.bin`, bytes)).toThrow(/original bytes/);
+    }
+  });
+});

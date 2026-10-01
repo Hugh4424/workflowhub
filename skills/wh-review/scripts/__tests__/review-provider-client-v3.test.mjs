@@ -24,7 +24,8 @@ const member = (provider, adapter = provider.split("/", 1)[0], status = "complet
 
 function group(providers = ["opencode/v4flash", "codex/luna"]) {
   return {
-    host_provider: "codex/terra",
+    // The broker echoes the fixed WorkflowHub host identity it was sent.
+    host_provider: "dsh",
     material_id: "material-id",
     outcome: "completed",
     providers: providers.map((provider) => member(provider)),
@@ -335,7 +336,7 @@ test("client rejects a mixed-version group instead of silently converting it", a
 test("client rejects a legacy group instead of silently converting it for the v3 consumer", async () => {
   const legacy = {
     version: 4, outcome: "completed", runtime_id: "runtime-legacy", round: 0,
-    host_provider: "codex/terra", selected_tier: 0,
+    host_provider: "dsh", selected_tier: 0,
     providers: [{
       adapter: "opencode", continuable: false, effort: null, error: null,
       material_id: "material-id", model: null, output: "{\"findings\":[]}", provider: "opencode/v4flash",

@@ -295,7 +295,7 @@ function findingReview(state, provider = "codex") {
 async function ocrFindingReview(state) {
   const materialId = sha256("ocr repair fixture");
   const request = { stage: "verify-code", subject_kind: "worktree", host_provider: "codex/luna",
-    materials: { implementation: "fixture before repair", acceptance_criteria: "AC-1: repair the fixture finding." } };
+    materials: { implementation_assessment: "fixture before repair", test_context: "AC-1: repair the fixture finding." } };
   const recorded = await recordSimpleReviewRequest({
     task: state.task, kernel: state.context.kernel, request,
     resolveRouteIdentity: () => ({ route_identity: "a".repeat(64) }),
@@ -312,6 +312,31 @@ async function ocrFindingReview(state) {
         identity: { provider: "codex/luna", adapter: "codex", source_id: "fixture/source", config_id: "fixture/config", model: "fixture-model" },
         error: null, timing: { started_at_ms: 1, completed_at_ms: 2, duration_ms: 1 }, usage: null,
         evidence_anchor_valid: [true],
+      }],
+    }),
+  });
+  return { resultRef: recorded.result_ref, attemptRef: recorded.attempt_ref };
+}
+
+// Real canonical OCR consumer path with a clean injected provider result.
+async function cleanOcrReview(state) {
+  const materialId = sha256("clean OCR binding fixture");
+  const request = { stage: "verify-code", subject_kind: "worktree", host_provider: "codex/luna",
+    materials: { implementation_assessment: "Clean fixture implementation", test_context: "Binding-only canonical OCR consumer fixture; no E2E acceptance." } };
+  const recorded = await recordSimpleReviewRequest({
+    task: state.task, kernel: state.context.kernel, request,
+    resolveRouteIdentity: () => ({ route_identity: "a".repeat(64) }),
+    materialIdForRequest: () => materialId,
+    runRound: async () => ({
+      status: "available", stage: "verify-code", review_track: null, review_kind: null,
+      subject_kind: "worktree", phase_id: null, review_scope: null, material_id: materialId,
+      runtime_id: "ocr-clean-binding-fixture", outcome: "completed",
+      ocr: { version: "fixture-ocr", preview: { reviewable_files: [] }, rules: { rules: [] }, manifest: [] },
+      findings: [],
+      provider_results: [{ provider: "codex/luna", status: "completed",
+        identity: { provider: "codex/luna", adapter: "codex", source_id: "fixture/source", config_id: "fixture/config", model: "fixture-model" },
+        error: null, timing: { started_at_ms: 1, completed_at_ms: 2, duration_ms: 1 }, usage: null,
+        evidence_anchor_valid: [],
       }],
     }),
   });
@@ -351,7 +376,7 @@ function commitRepairSourceBaseline(state) {
 describe("verify-code canonical review binding derivation", () => {
   it("derives the exact dsh-code-review pair from the authenticated outcome when host omits it", async () => {
     const state = fixture("verify-code-binding-derivation-omission");
-    const review = formalReview(state);
+    const review = await cleanOcrReview(state);
     const outcome = publishOutcome(state, review);
     const result = await runOfficialStage("verify-code", state.context, {
       attempt_id: "verify-code-binding-attempt",
@@ -375,7 +400,7 @@ describe("verify-code canonical review binding derivation", () => {
 
   it("accepts an equal host ref without changing the authenticated binding", async () => {
     const state = fixture("verify-code-binding-derivation-equal-host");
-    const review = formalReview(state);
+    const review = await cleanOcrReview(state);
     const outcome = publishOutcome(state, review);
     const result = await runOfficialStage("verify-code", state.context, {
       attempt_id: "verify-code-binding-attempt",
@@ -491,7 +516,7 @@ describe("verify-code canonical review binding derivation", () => {
 
   it("rejects a host ref conflict with a frozen non-enumerable binding diagnostic", async () => {
     const state = fixture("verify-code-binding-derivation-host-conflict");
-    const outcomeReview = formalReview(state, "dsh-code-review");
+    const outcomeReview = await cleanOcrReview(state);
     const hostReview = formalReview(state, "host-supplied");
     const outcome = publishOutcome(state, outcomeReview);
     const error = await runOfficialStage("verify-code", state.context, {
@@ -510,12 +535,12 @@ describe("verify-code canonical review binding derivation", () => {
   });
 });
 
-// The existing formalReview fixture deliberately has no execution binding.
-// Admission of the explicit confirmation receipt must preserve that limitation.
+// A clean canonical OCR binding has no E2E acceptance binding.
+// Admission of explicit confirmation must preserve that limitation.
 describe("P3 T009 explicit confirmation receipt consumer", () => {
   it("admits a post-review confirmation without upgrading a historical review into execution acceptance", async () => {
     const state = fixture("p9-explicit-confirmation-receipt");
-    const review = formalReview(state);
+    const review = await cleanOcrReview(state);
     const before = state.task.readRecord(review.resultRef);
     const outcome = publishOutcome(state, review);
     const confirmation = state.context.kernel.publishHumanConfirmation("verify-code", {
@@ -524,7 +549,7 @@ describe("P3 T009 explicit confirmation receipt consumer", () => {
     });
     const result = await runOfficialStage("verify-code", state.context, {
       attempt_id: "verify-code-binding-attempt",
-      receipts: { stage_outcomes: outcome.ref, review: review.resultRef, confirmation: confirmation.ref },
+      receipts: { stage_outcomes: outcome.ref, quality_review: review.resultRef, confirmation: confirmation.ref },
     });
     const facts = result.quality_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)));
     expect(facts.find(({ subject }) => subject === "code_review")).toMatchObject({
@@ -573,7 +598,7 @@ describe("verify-code review currentness and resolved-source binding", () => {
       attempt_id: "verify-code-non-dsh-current-review-repair-attempt",
       receipts: { quality_review: review.resultRef },
       code_review_repairs: repairs,
-    })).rejects.toThrow(/authenticated OCR provider result/i);
+    })).rejects.toThrow(/authenticated OCR result or eligible Architect fallback/i);
   });
 
   it("resolves current-session repairs from one authenticated OCR provider", async () => {
@@ -600,7 +625,7 @@ describe("verify-code review currentness and resolved-source binding", () => {
     const review = findingReview(state);
     const { reviewValue, repairs } = createRepairEvidence(state, review, "non-dsh-stage-outcome-repair");
     const reviewHash = sha256(state.task.readRecord(review.resultRef));
-    expect(() => publishOutcome(state, review, "verify-code-non-dsh-stage-outcome-repair-attempt", {
+    const outcome = publishOutcome(state, review, "verify-code-non-dsh-stage-outcome-repair-attempt", {
       code_review: {
         quality_review_ref: review.resultRef,
         quality_review_hash: reviewHash,
@@ -612,7 +637,12 @@ describe("verify-code review currentness and resolved-source binding", () => {
           focus: ["correctness", "lifecycle", "security", "consumer_fit", "test_strength"],
         },
       },
-    })).toThrow(/manifests must declare architect-code-review/);
+    });
+    await expect(runOfficialStage("verify-code", state.context, {
+      attempt_id: "verify-code-non-dsh-stage-outcome-repair-attempt",
+      receipts: { stage_outcomes: outcome.ref, quality_review: review.resultRef },
+      code_review_repairs: repairs,
+    })).rejects.toThrow(/authenticated OCR result or eligible Architect fallback/i);
   });
 });
 

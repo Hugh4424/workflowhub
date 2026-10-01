@@ -13,6 +13,24 @@ version: 2.2.0
 pre/history 回 `build-spec`，post 回 `build-plan` 的 `spec-clarify`；方向级问题回 `make-decision` 做增量决策；材料缺口回对应
 owner；环境不可用只记录 attempt。错配只让正式完成事实保持 `incomplete`，保留同 task 修复，禁止整阶段重跑；不新增 stage、public command、store 或 gate。
 
+### 计划缺口的集中退回
+
+发现在做的工作本身是计划缺口（Phase 的 allowed files/symbols 不对、覆盖的 AC 无法验证、
+Phase 之间的边界重叠、依赖顺序不成立、计划里的测试路由跑不起来），执行者必须**停下来成组退回**，
+而不是现场边做边改计划：
+
+1. **先列全，再退回**：把本 Phase 已发现的缺口一次性列全，每条写四样——缺口一句话、影响的 Phase/AC、
+   不修会怎样、需要 owner 回答什么。不要在只发现第一条时就退回，也不要发现第三条时再退一次。
+2. **只退回一次**：post 回 `build-plan` 的 `spec-clarify`，pre 回 `build-spec`/`build-plan`；方向性缺口回
+   `make-decision`。一次把全部缺口交出去，并在退回时说明"在等答复之前我不打算动哪些部分"。
+3. **退回期间停手范围**：只做不受该缺口影响的安全修复；受影响的部分在 task facts 里标
+   `blocked_by_plan_gap` 并写明是哪一条缺口，**不再猜着实现、不再自行改材料**。
+4. **第二次缺口并入第一份清单**：本 Phase 后续再发现缺口时，追加进同一份清单再退回一次，
+   不得就地自行决定。
+5. 确实需要"先按自己的理解做一点"时，先在 handoff 里写明理由和代价，再动。
+
+本条是执行纪律，不是新的 stage、gate 或质量结论；它不新增状态、不阻断同 task 的安全修复。
+
 ## Goal
 
 Implement the current task with the smallest correct change, real tests,
@@ -228,6 +246,11 @@ canonical review result。当前 `receipts.review` 仍须消费原 OCR 的
 不可用时须有该次失败调用及 `unverified` 披露。缺任何原件仍记 incomplete。
 这项 AC 判断不是新的推进 gate，也不改变正式 `phase_review` 质量事实。
 
+## 按工作类型派子代理
+
+规则唯一权威见 `AGENTS.md`。实施、测试与独立审查/红队按工作类型派子代理；调研仅在有真实未知问题时派发。测试或审查发现的修复回原实施子代理，在同一会话的连续上下文里完成，不另起执行者重读实现。修复派发时必须附上审查/测试发现的原文或可读取的原件 ref，保留原始 finding/失败输出。主会话处理范围裁决、派发回收和用户交互；纯文档任务的具体运行时测试不适用并记录理由。
+G-1 收场侧：登记接口必须变更时先停并行，由主会话重排工作包与接口边界，记录作废批次；产出约定见 `workflows/build-plan/SKILL.md`。
+
 ## Work loop
 
 1. Read current cohort materials and the physical Phase authority, then select
@@ -235,13 +258,26 @@ canonical review result。当前 `receipts.review` 仍须消费原 OCR 的
    Phase Card in the task's working area: goal, exact allowed files and symbols,
    covered ACs, non-goals, compatibility boundary, predesigned test route, stop
    conditions, and expected stage-end summary. Completion: the change boundary
-   and its ACs are explicit before editing.
+   and its ACs are explicit before editing. 续跑的第一步是**先对现实**：跑 `git status --short`，再跑本 Phase **自己写的** `gate_cmd` 看它当前的输出。材料与代码不一致时**以代码为准**，并把不一致如实记进本 Phase 的 task facts。
+
+   Phase Card 里再写两行**版本锚**（给人看的绑定，不是 machine gate）：
+   - `规则锚`：本 Phase 依赖的业务规则，逐条写「文件 + 章节标题逐字」或「FR/AC 编号 + 该段首句逐字」。
+     不要写整份文件的哈希——材料里与本 Phase 无关的段落变化，不构成本 Phase 事实作废的理由。
+   - `材料变更影响`：本次实施预计会改动材料（`phases/P<n>.md`、`spec.md`）的哪些段落；
+     不会改动的段落**不在本 Phase 的审查与实现范围内**。
+   当材料发生变化时，先对照这两行判断"变的是不是我盯的那一段"：不是，就照常继续并只在 handoff 记一句；
+   是，才把本 Phase 的实施/测试/审查事实读为 stale。
+
 2. Apply the Task's predesigned route. When behavior can be tested, write the
    focused behavior test and capture real RED before implementation. Make the
    smallest production change, then inspect the actual changed files. A pure
    documentation or material Task may mark testing not applicable with a plain
    reason. Completion: every changed file belongs to the Phase Card or is
    explained as a same-task scope correction.
+   重试前自述一行并写进本 Phase 的 task facts：**「自上次以来我改了什么：<一句话>；失败信号：与上次相同／已变」**。
+   写不出这行＝卡住成立：停下这一次重试，按 `AGENTS.md` 的 `### 卡住与升级` 段用大白话把
+   「卡在哪、为什么不能继续、有几条路、每条路的代价」报告给人，由人决定继续／换路／缩小范围／取消。
+   本判据不设次数或时长阈值，也不是机器阻断。
 3. Compare the actual changed files with the predesigned route. Use
    `test-routing-advisor` directly for this Phase even when the route is
    unchanged; record the old route, selected route, and whether a reroute was
@@ -254,6 +290,10 @@ canonical review result。当前 `receipts.review` 仍须消费原 OCR 的
    Record actual commands, outcomes, and limits. Completion: every affected AC
    has `pass`, `fail`, `unknown`, `deferred`, or `not_applicable` with a short
    reason and evidence where available.
+   人读结论用三词：**达成／未达成（写明下一步）／退役**——退役＝这一条不再做、已由决定退出，不用「以后再说」这类模糊说法。
+   三词只是同一份真实结果的大白话读法：上面那组机器取值与验收证据的冻结机器取值域**取值域不变**，不因三词增删任何取值——验收证据的 `result` 是既有的冻结八值 `pass`、`fail`、`inconclusive`、`deferred`、`missing`、`inconsistent`、`incomplete`、`unavailable`。
+   既有来源：`runtime/evidence/acceptance-evidence-validator.mjs:6`、`runtime/review/schemas/ac-evidence-summary.schema.json:32-33`；冻结裁定 `tests/contract/acceptance-result-machine-classes.test.mjs:95-99`（均为实读既有事实，不是本卡新取的域）。
+   本词表只约束人读措辞；`quality/evidence/acceptance/**` 的 `result` 取值域与 `decision-log` 的处置列**一字不动**。未达成如实记为未达成并进失败事实清单；这一条不新增任何推进前置。
 5. Use the review dependency declared in `skill-deps.yaml` directly for one
    review of the completed Phase. Preserve the actual findings,
    transport status, and provenance;
@@ -262,11 +302,30 @@ canonical review result。当前 `receipts.review` 仍须消费原 OCR 的
    merely to chase an empty findings list. Completion: the review or its real
    unavailability is recorded with provenance; an unavailable attempt keeps the
    stage quality claim incomplete.
+
+   发起前先回答三个问题，并把答案写进本 Phase 的 task facts：
+   - **审什么**：列出本次审查范围 = `phase_id` + 本 Phase Card 的 allowed files/symbols + covered AC 列表，
+     作为 `review --action=record` 的 `subject` 原样提交。`subject` 不许留空；留空等于声明"范围未限定"。
+     同时必须显式写全 `review_scope="phase"`、`subject_kind="phase"`、`phase_id="P<n>"` 三者——
+     三者缺一时不要靠默认值，先补齐再提交。
+   - **审过了吗**：读当前 task 的 `quality/reviews/attempts/` 与 `quality/reviews/results/`，
+     列出同一 `phase_id` 下**已存在的成功回执**及其 `subject`。
+   - **要不要再派**：只有当本次范围**超出**已有回执范围（新增文件/新增 AC），或已有回执是 `unavailable`，
+     才发起一次新审查；必须写明"超出的是哪一条"。**修 finding 造成的材料字节变化不是重派理由。**
+   若本 Phase 仍然出现了第二次派发，必须在 Phase handoff 里写清两次 `subject` 的差异和第二次的必要性。
+   本条是执行纪律，不是新的 stage、gate 或质量结论。
+
 6. Inspect every finding and record `fixed`, `rejected_invalid`,
    `accepted_risk`, or `needs_human`. Repair valid findings in this same task and
    rerun affected checks. Reject invalid findings with evidence. Keep serious
    unresolved risk visible and obtain the user's exact acceptance before calling
    the affected work complete. Completion: no finding is unexplained.
+
+   修复前先写下**受影响的测试集合**（文件/用例名），只跑这一集合；把每条的 exit code 与结果直接写在
+   对应 finding 的处置里（哪个 finding → 跑了哪条命令 → 结果如何）。没有受影响的测试时写
+   `not_applicable` 和原因，**不要用全量回归代替定向复测**；确实需要一条例外命令时，
+   写清是谁要求的、范围是什么（照 `AGENTS.md` 的测试硬规则）。
+
 7. End the Phase with a plain-language handoff: delivered behavior, actual test
    layer and result, AC limits, review fact, finding disposition, unresolved
    risk, deferred work, and the next Task. For pre/history, update the existing
@@ -284,9 +343,23 @@ canonical review result。当前 `receipts.review` 仍须消费原 OCR 的
    with the next `pending` or `in_progress` Task; do not replay earlier Phases
    or reconstruct historical process indexes.
 
+   收尾时回答一句：当前推进中的 Phase 只有一个吗？如果有第二个已经开始，写清它是什么、为什么提前开始。
+
+   handoff 里再加一行**本 Phase 成本**，用大白话写数字；写不出就写 `unavailable` 和原因：
+   「改了几次实现、跑了几次 focused 测试（分别是什么）、发起过几次正式审查（含 unavailable 的尝试）、
+   等 provider 一共多久、改过几次材料、从开始到 handoff 一共多久」。
+   这一行只用于诊断，不设预算上限，也不作为推进条件；它不阻断任何后续动作。
+
 Every completed Phase executes its recorded route, checks the real changed-file
 range, uses the applicable concrete testing skill, and records test, AC, review,
 finding-disposition, and plain-language stage facts.
+
+Phase 收尾把这条已有要求做完整，只使用既有字段，不新增字段、命令或 schema：
+① 执行本 Phase 记录的那条 route 与其 `gate_cmd`，命令按字面跑，不换成别的命令，也不用全量回归代替；
+② 把这次运行的**原始输出**写入本 Phase 契约头自己声明的 `evidence_path`（原件，不写摘要、不写结论）；
+③ 本 Phase 的交付锚是**一次 `git commit`**：只在既有 commit 授权到位时执行（见下方授权段）；
+   缺授权时如实记 `delivery pending`——它不是进入、继续、测试、修复或交接的前置。
+这三件事是执行纪律：缺哪一件都如实记缺失，不阻断同任务内的后续动作。**进展 = 交付锚**（新提交或新证据），不是动作次数；拿不出外部锚时，按本文件 `:272-275` 的既有判据自述一行，写不出即报告给人。本条不设次数或时长阈值。
 
 Before `publish-code-result`, execute the declared `stage-end-spec-analyze`
 step. It compares the original requirement and current cohort materials with
@@ -296,7 +369,7 @@ or files. Repair valid gaps in build-code when they belong to implementation or
 task facts; keep product/spec/Phase ownership with its owning stage. Emit the
 shared six-part plain-language summary: current stage work, requirement
 coverage, upstream alignment, repairs made here, remaining risks, and the next
-stage boundary.
+stage boundary. `remaining risks` 段必须对本期**失败信号**给一句成句解读；唯一允许的空态写法是「这一轮没有失败信号」，不许留空、不许只写 `none` 或 `N/A`。
 
 After the phase facts are recorded, a phase may be committed only when the
 user has separately authorized the irreversible operation. The public form is
@@ -307,6 +380,13 @@ commit is a Git delivery fact and a useful review anchor; it is never required
 to start, continue, test, repair, or hand off the same task. Missing delivery
 authorization means `delivery pending`, not a build-code entry, continuation,
 testing, repair, or handoff blocker.
+
+整树丢弃类动作（`git restore/reset/checkout -- :/`）与 delete+add 整体替换权威材料属于**销毁性动作**，
+适用既有 F7 不可逆授权边界（`CONSTITUTION.md` 的不可逆授权条款、本任务 `decision-log.md` 的不可逆授权需求条目、
+本任务 `design.md` 的 F7 段）：强推、删分支、删任务目录同样落在这一边界内；这类动作不得由阶段确认顺带授权，
+也不得作为绕过既有授权的捷径。不新增公共动作、不新增确认点、不新增 schema；真的发生时在既有 task facts
+如实登记。本条是既有边界的复述与范围举例，不是新的 stage、gate 或质量结论。
+
 A current Phase review is required as a recorded quality fact. Its findings and transport status are not a progression gate: an unavailable or adverse fact stays visible, limits the completion claim, and still allows same-task repair and the next safe work item. Every stage review is advice-only; it does not need to pass or return empty findings. A provider verdict, where one exists, is also a recorded quality fact; `provider pass` is never required.
 Never require a provider pass.
 
@@ -316,6 +396,8 @@ When status reports `work_status=ready` with `quality_status=in_progress|incompl
 ## Preflight self-check
 
 Before submission, optionally run `stage-runtime.mjs run --action=preflight --stage=build-code --input=<payload.json>` as a local payload-shape self-check (not a quality gate), and fix any reported protocol errors first.
+
+阶段收尾按 finding 严重度消费：blocking 与 major finding 在 Phase 关闭前逐条处置，记录修或不修、理由与 owner；minor 追加进 `findings-minor.md` 附录，在阶段末统一扫。原始发现全量保留，不限制审查者多报；执行者在收尾摘要逐条点名本轮发现的处置去向。
 
 ## Final aggregate
 

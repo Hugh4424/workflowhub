@@ -10,10 +10,10 @@ describe("post-cohort executable authoring", () => {
     const design = template.split("## 实现设计（全局权威）")[1]?.split("## Appendix A")[0];
     expect(design).toBeTruthy();
     for (const heading of [
-      "### Code Anchors", "### Interfaces and Failure Semantics",
-      "### Requirement-to-Task Trace", "### Global Verification Strategy",
+      "### 代码锚点", "### 接口与失败语义",
+      "### 需求到任务追踪", "### 全局验证策略",
     ]) expect(design, heading).toContain(heading);
-    for (const requirement of ["原始 PRD/用户要求", "source / decision", "Phase / task", "oracle / evidence", "失败语义", "NEW", "MODIFY", "DO NOT TOUCH"]) {
+    for (const requirement of ["原始 PRD/用户要求", "来源 / 决定", "Phase / Task", "正例 + 负例判据 / 证据", "失败语义", "新增", "修改", "禁止改动"]) {
       expect(design, requirement).toContain(requirement);
     }
   });
@@ -27,16 +27,16 @@ describe("post-cohort executable authoring", () => {
     const taskCard = template.split("### Tnnn — ")[1]?.split("## L2")[0];
     expect(taskCard).toBeTruthy();
     for (const field of [
-      "Source / FR / AC", "Files / symbols", "Action", "Inputs", "Outputs / failure",
-      "Dependency", "RED/GREEN gate_cmd", "RED target failure", "GREEN oracle",
-      "Evidence", "STOP / recovery", "Coverage limit",
+      "来源 / FR / AC", "文件 / 符号", "动作", "输入", "输出 / 失败",
+      "依赖", "RED/GREEN 门禁命令", "RED 目标失败", "GREEN 判定器",
+      "证据", "停止 / 恢复", "覆盖上限",
     ]) expect(taskCard, field).toContain(`**${field}**`);
-    expect(taskCard).toContain("first edit");
-    expect(taskCard).toContain("same oracle ID");
+    expect(taskCard).toContain("第一处改动");
+    expect(taskCard).toContain("同一个判定器编号");
     expect(template).not.toContain("one-line results");
     expect(author).toContain("unique across the entire task, not per Phase");
     expect(author).toContain("Never restart at `T001` in each Phase");
-    expect(template).toContain("next Phase continues the sequence");
+    expect(template).toContain("下一个 Phase 接续编号");
   });
 
   it("routes blueprint and test tier into physical Phase cards, not post plan/tasks", () => {
@@ -70,7 +70,7 @@ describe("post-cohort executable authoring", () => {
     }
     expect(workflow).not.toContain("Do not implement code or execute RED/GREEN");
     expect(author).not.toContain("Build-plan designs these checks; build-code executes them");
-    for (const field of ["Prewritten test", "RED evidence", "DO NOT TOUCH", "test change request"]) {
+    for (const field of ["预写测试", "RED 证据", "禁止改动", "测试变更请求"]) {
       expect(template).toContain(field);
     }
   });

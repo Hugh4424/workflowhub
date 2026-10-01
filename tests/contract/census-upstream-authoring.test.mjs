@@ -33,6 +33,7 @@
 //
 // 约束：零新依赖（只用 vitest 2.1.9 与 node:*）；只读仓库文件，不写任何材料。
 import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
@@ -214,5 +215,343 @@ describe("普查前置到写入契约：模板与 SKILL 必须自带三节格式
     expect(census.status, "缺三节时 status 仍是 present（有材料），不是 missing").toBe("present");
     expect(Array.isArray(census.errors), "缺三节时必须返回 errors 数组用于报告，而不是抛错").toBe(true);
     expect(typeof census.entries?.length, "缺三节时 entries 仍是可读数组").toBe("number");
+  });
+});
+
+import { buildPostAcceptanceChainRows } from "../../runtime/stage/stage-runner.mjs";
+
+// Labelled unit user quotation, never the current task's missing host source.
+function card03CanonicalSourceFixture({ decision = "D-001", derived = false } = {}) {
+  return `# Constructed source fixture
+
+## 需求变更记录
+
+### U-001
+
+> 测试用户逐字夹具：请保留需求来源。
+
+## 原始需求索引
+
+| R 编号 | 来源 | 决策 |
+| --- | --- | --- |
+| R-001 | U-001 | ${decision} |
+${derived ? `| R-002 | design.md 推导；host 用户原话 unavailable | ${decision} |\n` : ""}
+## 逐字声明层（verbatim）
+
+| V 编号 | 说话人 | 来源 | 原文 |
+| --- | --- | --- | --- |
+| V-001 | 用户 | fixture exact excerpt | 请保留需求来源。 |
+
+## 构造决定
+
+### D-001
+
+构造性legacy决定。
+
+## 本卡问答记录（T 表）
+
+| 问题 id | 问题（大白话） | 选项全集 | 用户选择 | 选择含义 | 来源 |
+| --- | --- | --- | --- | --- | --- |
+| T-001 | 构造fixture选择 | A=保留／B=删除 | A | 保留当前构造要求 | fixture:user-message |
+`;
+}
+function card03ChainFixture(spec, decisionLog, ac = "AC-DISP-001") {
+  return buildPostAcceptanceChainRows({ rows: [{ acceptance_criterion_id: ac }], spec, decisionLog,
+    boundEvidenceRefs: [], materialRevision: "unit-current-material", snapshotTree: "a".repeat(40), taskId: "unit-constructed", tests: null })[0];
+}
+const card03CurrentMap = (source = "R-001", decision = "T-001", headers = "Source ID | Decision ID | FR / AC | 状态 / 影响面 | 未决 / 交接") =>
+  `# Spec
+
+## 来源与决策映射
+
+| ${headers} |
+| --- | --- | --- | --- | --- |
+| ${source} | ${decision} | FR-DISP-001 / AC-DISP-001 | current | no extra source |
+`;
+
+describe("CARD-03 census current T index preserves original sources (ORACLE-RT-001)", () => {
+  it("recognizes a real canonical T-index edge without renumbering its original quoted U source", () => {
+    const text = card03CanonicalSourceFixture({ decision: "T-001" });
+    const census = deriveDecisionLogOriginalSourceCensus(text);
+    expect(census.errors).toEqual([]);
+    expect(census.index_entries[0]).toMatchObject({ id: "R-001", decision: "T-001", source_refs: ["U-001"] });
+    expect(census.entries.map((row) => row.id)).toEqual(["U-001"]);
+    const quote = census.source_units.find((row) => row.id === "U-001");
+    expect(Buffer.from(text).subarray(quote.byte_start, quote.byte_end).toString()).toBe(quote.raw_excerpt);
+    expect(quote.raw_excerpt).toContain("> 测试用户逐字夹具：请保留需求来源。");
+  });
+
+  it("retains D legacy and keeps design-derived R/T rows outside the original-source denominator", () => {
+    const legacy = deriveDecisionLogOriginalSourceCensus(card03CanonicalSourceFixture());
+    const current = deriveDecisionLogOriginalSourceCensus(card03CanonicalSourceFixture({ decision: "T-001", derived: true }));
+    expect(legacy.errors).toEqual([]);
+    expect(legacy.index_entries[0].decision).toBe("D-001");
+    expect(current.errors).toEqual([]);
+    expect(current.index_entries.find((row) => row.id === "R-002")).toMatchObject({ decision: "T-001", source_refs: [] });
+    expect(current.entries.map((row) => row.id)).toEqual(legacy.entries.map((row) => row.id));
+    const chain = card03ChainFixture(card03CurrentMap("R-002"), card03CanonicalSourceFixture({ decision: "T-001", derived: true }));
+    expect(chain.source_ids).toEqual([]);
+    expect(chain.coverage_limits).toMatch(/R-002.*没有可认证 U\/V 边|未得到可认证原始来源/);
+    expect(chain).not.toHaveProperty("review_ref");
+    expect(chain).not.toHaveProperty("stage_end_ref");
+  });
+});
+
+describe("CARD-03 stage-end acceptance mapping current headers (ORACLE-RT-001)", () => {
+  it("keeps the legacy four-column numeric D mapping intact", () => {
+    const spec = "## 来源与决策映射\n\n| 来源 | 决策 | FR | AC |\n| --- | --- | --- | --- |\n| R-001 | D-001 | FR-001 | AC-001 |\n";
+    const row = card03ChainFixture(spec, card03CanonicalSourceFixture(), "AC-001");
+    expect(row.source_ids).toEqual(["U-001"]);
+    expect(row.decision_ids).toEqual(["D-001"]);
+    expect(row.fr_ids).toEqual(["FR-001"]);
+  });
+
+  it("reads the approved five-column combined typed FR/AC and explicit T question decision without filling rich-chain gaps", () => {
+    const row = card03ChainFixture(card03CurrentMap(), card03CanonicalSourceFixture({ decision: "T-001" }));
+    expect(row.source_ids).toEqual(["U-001"]);
+    expect(row.decision_ids).toEqual(["T-001"]);
+    expect(row.fr_ids).toEqual(["FR-DISP-001"]);
+    expect(row).not.toHaveProperty("implementation_anchor");
+    expect(row).not.toHaveProperty("review_ref");
+    expect(row.coverage_limits).toMatch(/独立实现\/验证锚点未齐/);
+  });
+
+  it("exposes unknown mapping header, unknown source and unknown decision instead of silently inventing coverage", () => {
+    const badHeader = card03ChainFixture(card03CurrentMap("R-001", "T-001", "opaque source | Decision ID | FR / AC | status | handoff"), card03CanonicalSourceFixture({ decision: "T-001" }));
+    expect(badHeader.coverage_limits).toMatch(/MATERIAL_INCOMPLETE.*header|MATERIAL_INCOMPLETE.*表头/);
+    expect(badHeader.source_ids).toEqual([]);
+    const unknownSource = card03ChainFixture(card03CurrentMap("R-999"), card03CanonicalSourceFixture({ decision: "T-001" }));
+    expect(unknownSource.source_ids).toEqual([]);
+    expect(unknownSource.coverage_limits).toMatch(/R-999/);
+    const unknownDecision = card03ChainFixture(card03CurrentMap("R-001", "T-999"), card03CanonicalSourceFixture({ decision: "T-001" }));
+    expect(unknownDecision.decision_ids).toEqual([]);
+    expect(unknownDecision.coverage_limits).toMatch(/T-999/);
+  });
+
+  it("never treats R as an original U/V source when the authenticated census is absent", () => {
+    const row = card03ChainFixture(card03CurrentMap(), "## 本卡问答记录（T 表）\n\nT-001 is merely prose, no authentic decision row.");
+    expect(row.source_ids).toEqual([]);
+    expect(row.decision_ids).toEqual([]);
+    expect(row.coverage_limits).toMatch(/原始需求索引|未得到可认证原始来源/);
+  });
+});
+
+
+describe("CARD-03 stage-end acceptance mapping current header boundaries (ORACLE-RT-001)", () => {
+  it("reads reordered recognized header roles rather than fixed cell positions", () => {
+    const spec = "## 来源与决策映射\n\n| FR / AC | 未决 / 交接 | Decision ID | Source ID | 状态 / 影响面 |\n| --- | --- | --- | --- | --- |\n| FR-DISP-001 / AC-DISP-001 | no invented refs | T-001 | R-001 | current |\n";
+    const row = card03ChainFixture(spec, card03CanonicalSourceFixture({ decision: "T-001" }));
+    expect(row.source_ids).toEqual(["U-001"]);
+    expect(row.decision_ids).toEqual(["T-001"]);
+    expect(row.fr_ids).toEqual(["FR-DISP-001"]);
+  });
+
+  for (const headers of ["Source ID | Source ID | FR / AC | 状态 / 影响面 | 未决 / 交接",
+    "Source ID | Decision ID | opaque criteria | 状态 / 影响面 | 未决 / 交接"]) {
+    it(`discloses ambiguous or missing header roles: ${headers}`, () => {
+      const row = card03ChainFixture(card03CurrentMap("R-001", "T-001", headers), card03CanonicalSourceFixture({ decision: "T-001" }));
+      expect(row.source_ids).toEqual([]);
+      expect(row.fr_ids).toEqual([]);
+      expect(row.coverage_limits).toMatch(/MATERIAL_INCOMPLETE/);
+    });
+  }
+
+  it("rejects an unknown legacy D decision and a T prose mention or unresolved choice", () => {
+    const d = card03ChainFixture(card03CurrentMap("R-001", "D-999"), card03CanonicalSourceFixture());
+    expect(d.decision_ids).toEqual([]);
+    expect(d.coverage_limits).toMatch(/D-999/);
+    const unresolved = card03CanonicalSourceFixture({ decision: "T-001" }).replace("| A | 保留当前构造要求 | fixture:user-message |", "| unknown | 保留当前构造要求 | fixture:user-message |");
+    const row = card03ChainFixture(card03CurrentMap(), unresolved);
+    expect(row.decision_ids).toEqual([]);
+    expect(row.coverage_limits).toMatch(/T-001|未.*决策|没有可回读/);
+  });
+
+  it("expands only explicit same-family typed and numeric ranges without renumbering", () => {
+    const current = card03CurrentMap().replace("FR-DISP-001 / AC-DISP-001", "FR-DISP-001…FR-DISP-003 / AC-DISP-001…AC-DISP-003");
+    for (const ac of ["AC-DISP-001", "AC-DISP-002", "AC-DISP-003"]) {
+      const row = card03ChainFixture(current, card03CanonicalSourceFixture({ decision: "T-001" }), ac);
+      expect(row.fr_ids).toEqual(["FR-DISP-001", "FR-DISP-002", "FR-DISP-003"]);
+      expect(row.source_ids).toEqual(["U-001"]);
+    }
+    const legacy = "## 来源与决策映射\n\n| 来源 | 决策 | FR | AC |\n| --- | --- | --- | --- |\n| R-001 | D-001 | FR-01..FR-02 | AC-01..AC-02 |\n";
+    expect(card03ChainFixture(legacy, card03CanonicalSourceFixture(), "AC-02").fr_ids).toEqual(["FR-01", "FR-02"]);
+  });
+
+  for (const token of ["FR-DISP-003…FR-DISP-001", "FR-DISP-001…FR-SKL-003", "FR-DISP-001…FR-DISP-999", "FR-DISP-001???FR-DISP-002"]) {
+    it(`keeps malformed or unsafe range explicit: ${token}`, () => {
+      const row = card03ChainFixture(card03CurrentMap().replace("FR-DISP-001 / AC-DISP-001", `${token} / AC-DISP-001`), card03CanonicalSourceFixture({ decision: "T-001" }));
+      expect(row.fr_ids).toEqual([]);
+      expect(row.coverage_limits).toMatch(/MATERIAL_INCOMPLETE/);
+    });
+  }
+});
+
+describe("CARD-03 census current source negative boundaries (ORACLE-RT-001)", () => {
+  it("reports a missing original U reference without creating source units or stage-chain coverage for it", () => {
+    const text = card03CanonicalSourceFixture().replace("| R-001 | U-001 |", "| R-001 | U-999 |");
+    const census = deriveDecisionLogOriginalSourceCensus(text);
+    expect(census.errors).toEqual(expect.arrayContaining(["R index row cites absent U/V source: R-001 -> U-999"]));
+    expect(census.source_units.some((row) => row.id === "U-999")).toBe(false);
+    const chain = card03ChainFixture("## 来源与决策映射\n\n| 来源 | 决策 | FR | AC |\n| --- | --- | --- | --- |\n| R-001 | D-001 | FR-001 | AC-001 |\n", text, "AC-001");
+    expect(chain.source_ids).toEqual([]);
+    expect(chain.coverage_limits).toMatch(/未认证来源转换|没有可认证 U\/V 边/);
+  });
+
+  it("does not count an AI-speaker V or design summary as verbatim user requirements", () => {
+    const text = card03CanonicalSourceFixture({ derived: true }).replace("| V-001 | 用户 |", "| V-001 | AI | ");
+    const census = deriveDecisionLogOriginalSourceCensus(text);
+    expect(census.entries.map((row) => row.id)).toEqual(["U-001"]);
+    expect(census.source_units.some((row) => row.id === "V-001")).toBe(false);
+    expect(census.index_entries.find((row) => row.id === "R-002").source_refs).toEqual([]);
+  });
+});
+
+
+describe("CARD-03 census multiple decision cell keeps original trace (ORACLE-RT-001)", () => {
+  it("preserves a real multi-T decision cell string with explicitly constructed quoted source", () => {
+    const text = card03CanonicalSourceFixture({ decision: "T-009、T-020" });
+    const census = deriveDecisionLogOriginalSourceCensus(text);
+    expect(census.errors).toEqual([]);
+    expect(census.index_entries[0]).toMatchObject({ id: "R-001", decision: "T-009、T-020", source_refs: ["U-001"] });
+    expect(typeof census.index_entries[0].decision).toBe("string");
+    const quote = census.source_units.find((row) => row.id === "U-001");
+    expect(Buffer.from(text).subarray(quote.byte_start, quote.byte_end).toString()).toBe(quote.raw_excerpt);
+  });
+
+  it("retains legacy multi-D and mixed explicit D/T list tokens without new decision fields", () => {
+    for (const decision of ["D-001、D-002", "D-001, T-001"]) {
+      const census = deriveDecisionLogOriginalSourceCensus(card03CanonicalSourceFixture({ decision }));
+      expect(census.errors).toEqual([]);
+      expect(census.index_entries[0].decision).toBe(decision);
+      expect(census.index_entries[0].source_refs).toEqual(["U-001"]);
+      expect(census.index_entries[0]).not.toHaveProperty("decision_ids");
+    }
+  });
+
+  for (const decision of ["X-001", "T-001???T-002", "T-001、", "T-001、unknown"]) {
+    it(`discloses invalid decision cell rather than hiding the R row: ${decision}`, () => {
+      const census = deriveDecisionLogOriginalSourceCensus(card03CanonicalSourceFixture({ decision }));
+      expect(census.errors.some((error) => /R-001/.test(error) && /decision|决策/.test(error))).toBe(true);
+      expect(census.index_entries.some((row) => row.id === "R-001")).toBe(false);
+    });
+  }
+
+  it("does not authenticate an unknown syntactically valid decision just because its index token is readable", () => {
+    const text = card03CanonicalSourceFixture({ decision: "T-999、T-998" });
+    const census = deriveDecisionLogOriginalSourceCensus(text);
+    expect(census.index_entries[0].decision).toBe("T-999、T-998");
+    const row = card03ChainFixture(card03CurrentMap("R-001", "T-999、T-998"), text);
+    expect(row.decision_ids).toEqual([]);
+    expect(row.coverage_limits).toMatch(/T-999.*T-998/);
+  });
+
+  it("reads all twenty real current R rows while derived edges and unauthenticated originals stay incomplete", () => {
+    const decisionLog = read("specs/workflowhub-thin-core-card-03-20260919/decision-log.md");
+    const spec = read("specs/workflowhub-thin-core-card-03-20260919/spec.md");
+    const census = deriveDecisionLogOriginalSourceCensus(decisionLog);
+    expect(census.index_entries.map((row) => row.id)).toEqual(Array.from({ length: 20 }, (_, i) => `R-${String(i + 1).padStart(3, "0")}`));
+    expect(census.index_entries.find((row) => row.id === "R-003").decision).toBe("T-009、T-020");
+    const derived = census.index_entries.filter((row) => row.source.includes("derived trace"));
+    expect(derived).toHaveLength(18);
+    expect(derived.every((row) => row.source_refs.length === 0)).toBe(true);
+    expect(census.errors).toHaveLength(4); // Real four V originals have no provable R edge; no fake edges.
+    for (const ac of ["AC-DISP-001", "AC-ACC-001"]) {
+      const row = card03ChainFixture(spec, decisionLog, ac);
+      expect(row.source_ids).toEqual(ac === "AC-DISP-001" ? ["U-001"] : []); // Valid local edge survives; whole census remains incomplete.
+      expect(row.coverage_limits).toMatch(/未认证来源转换|没有可认证|未得到可认证/);
+      expect(row).not.toHaveProperty("review_ref");
+      expect(row).not.toHaveProperty("stage_end_ref");
+    }
+  });
+});
+
+// Run the real synchronous consumer in an owned child: an unsafe Number loop
+// must fail the test without blocking the test runner itself.
+function card03EndpointChild({ fr, ac = "AC-001", criterion = ac }) {
+  const timeout = 5000;
+  const entered = "CARD03_ENTERED_CURRENT_MAPPING";
+  const returned = "CARD03_RETURNED_CURRENT_MAPPING:";
+  const fixture = {
+    rows: [{ acceptance_criterion_id: criterion }],
+    spec: `## 来源与决策映射\n\n| 来源 | 决策 | FR | AC |\n| --- | --- | --- | --- |\n| R-001 | D-001 | ${fr} | ${ac} |\n`,
+    decisionLog: card03CanonicalSourceFixture(), boundEvidenceRefs: [],
+    materialRevision: "unit-current-material", snapshotTree: "a".repeat(40),
+    taskId: "unit-constructed", tests: null,
+  };
+  const moduleUrl = new URL("../../runtime/stage/stage-runner.mjs", import.meta.url).href;
+  const program = `import { readFileSync, writeSync } from "node:fs";
+    import { buildPostAcceptanceChainRows } from ${JSON.stringify(moduleUrl)};
+    const fixture = JSON.parse(readFileSync(0, "utf8"));
+    writeSync(1, ${JSON.stringify(entered + "\n")});
+    const rows = buildPostAcceptanceChainRows(fixture);
+    writeSync(1, ${JSON.stringify(returned)} + JSON.stringify(rows) + ${JSON.stringify("\n")});`;
+  const child = spawnSync(process.execPath, ["--input-type=module", "--eval", program], {
+    input: JSON.stringify(fixture), encoding: "utf8", timeout, maxBuffer: 8 * 1024 * 1024,
+  });
+  const diagnostic = JSON.stringify({ fr, ac, criterion, timeout,
+    status: child.status, signal: child.signal,
+    error: child.error && { code: child.error.code, message: child.error.message },
+    stdout: child.stdout, stderr: child.stderr });
+  expect(child.stdout, `consumer reach missing (environment/import failure): ${diagnostic}`).toContain(entered);
+  expect(child.error, `consumer did not return: ${diagnostic}`).toBeUndefined();
+  expect(child.status, diagnostic).toBe(0);
+  expect(child.signal, diagnostic).toBeNull();
+  expect(child.stdout, diagnostic).toContain(returned);
+  return { row: JSON.parse(child.stdout.split(returned)[1].trim())[0], diagnostic };
+}
+
+describe("CARD-03 mapping numeric endpoint finite safe boundary (ORACLE-RT-001)", () => {
+  const unsafeCases = [
+    ["FR", "9007199254740992", "single"],
+    ["AC", "9007199254740992", "single"],
+    ["FR", "9007199254740991..FR-9007199254740992", "range unsafe end"],
+    ["AC", "9007199254740991..AC-9007199254740992", "range unsafe end"],
+    ["FR", "9".repeat(400), "single infinite Number"],
+    ["AC", "9".repeat(400), "single infinite Number"],
+  ];
+  for (const [prefix, value, form] of unsafeCases) {
+    it(`rejects ${prefix} ${form} without blocking the current mapping consumer`, () => {
+      const token = `${prefix}-${value}`;
+      const { row, diagnostic } = card03EndpointChild(prefix === "FR"
+        ? { fr: token } : { fr: "FR-001", ac: token, criterion: token.split("..")[0] });
+      expect(row.coverage_limits, diagnostic).toMatch(/MATERIAL_INCOMPLETE/);
+      expect(row.fr_ids, diagnostic).toEqual([]);
+      if (prefix === "AC") expect(row.source_ids, diagnostic).toEqual([]);
+      expect(row, diagnostic).not.toHaveProperty("review_ref");
+      expect(row, diagnostic).not.toHaveProperty("stage_end_ref");
+    }, 10000);
+  }
+  it("preserves the largest safe single FR endpoint literally", () => {
+    const { row, diagnostic } = card03EndpointChild({ fr: "FR-9007199254740991" });
+    expect(row.fr_ids, diagnostic).toEqual(["FR-9007199254740991"]);
+    expect(row.source_ids, diagnostic).toEqual(["U-001"]);
+    expect(row.decision_ids, diagnostic).toEqual(["D-001"]);
+    expect(row.coverage_limits, diagnostic).not.toContain("MATERIAL_INCOMPLETE");
+  }, 10000);
+  it("preserves both exact FR IDs in the bounded range ending at the largest safe integer", () => {
+    const { row, diagnostic } = card03EndpointChild({ fr: "FR-9007199254740990..FR-9007199254740991" });
+    expect(row.fr_ids, diagnostic).toEqual(["FR-9007199254740990", "FR-9007199254740991"]);
+    expect(row.source_ids, diagnostic).toEqual(["U-001"]);
+    expect(row.coverage_limits, diagnostic).not.toContain("MATERIAL_INCOMPLETE");
+  }, 10000);
+});
+
+
+describe("CARD-03 stage-end existing native acceptance projection (ORACLE-RT-001)", () => {
+  it("keeps pure trusted mapping short of rich native facts despite a green outer unit receipt", () => {
+    const row = buildPostAcceptanceChainRows({
+      rows: [{ acceptance_criterion_id: "AC-DISP-001", status: "unknown" }],
+      spec: card03CurrentMap(), decisionLog: card03CanonicalSourceFixture({ decision: "T-001" }),
+      boundEvidenceRefs: [{ ref: "tests", kind: "tests", status: "fresh", hash: "b".repeat(64), snapshot_tree: "a".repeat(40),
+        test_result: { command: "unit outer command", expected_exit: 0, actual_exit: 0, oracle: "outer unit", actual_outcome: "unit pass" } }],
+      materialRevision: "unit-current-material", snapshotTree: "a".repeat(40), taskId: "unit-constructed",
+      tests: { receipt_ref: "unit-tests", exit_code: 0 },
+    })[0];
+    expect(row.source_ids).toEqual(["U-001"]);
+    expect(row.status).toBe("unknown");
+    for (const field of ["scenario", "actual_outcome", "gate", "test_result", "file_symbol", "implementation_anchor", "verification_anchor", "review_ref", "stage_end_ref"]) {
+      expect(row).not.toHaveProperty(field);
+    }
+    expect(row.coverage_limits).toMatch(/独立实现\/验证锚点未齐/);
   });
 });

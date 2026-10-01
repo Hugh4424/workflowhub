@@ -7,7 +7,7 @@ import yaml from "js-yaml";
 
 import { createSkillBundleContract } from "../interface/runner-contract.mjs";
 import { validateSkillBundle } from "../adapters/local-skill-resolver.mjs";
-import { checkSkillClosure, workflowDeclarations } from "../evidence/check-skill-closure.mjs";
+import { checkSkillClosure, promptSkillReferences, workflowDeclarations } from "../evidence/check-skill-closure.mjs";
 import { SHA256_HEX } from "../evidence/canonical-utils.mjs";
 
 const STAGES = Object.freeze(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
@@ -326,6 +326,8 @@ function collectDeclaredClosure(root, { release = false } = {}) {
     for (const dependency of manifest.skills ?? []) {
       addSkillClosure(root, dependency.name, locators, visitedSkills);
     }
+    const prompt = fs.readFileSync(path.join(root, base, "SKILL.md"), "utf8");
+    for (const name of promptSkillReferences(prompt)) addSkillClosure(root, name, locators, visitedSkills);
   }
   addStaticImportClosure(root, locators, { requireDependencies: release });
   return locators;

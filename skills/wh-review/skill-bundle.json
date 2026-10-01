@@ -1,133 +1,36 @@
 {
   "schema_version": 1,
   "skill": "wh-review",
-  "runtime_dependencies": [
-    {
-      "name": "3rd-review-broker",
-      "version": ">=1.2.0",
-      "source": "host-provided broker; runtime compatibility probe reports unknown when semver is unavailable"
-    }
-  ],
   "files": [
-    {
-      "path": "SKILL.md",
-      "sha256": "c8d28bb073bbffd830a9a480480bb8e8d56b1ac2610887d1ae7a0e06833a5040"
-    },
-    {
-      "path": "contracts/build-code.md",
-      "sha256": "1600db35156dffc232224ff6e00cd4b55fcad5670b19c49f5c92294860b16ff8"
-    },
-    {
-      "path": "contracts/build-prd.md",
-      "sha256": "b1221d3397fc224755ac9a9a05f3378a47fa9822cf6ebf03969e622dc02f749d"
-    },
-    {
-      "path": "contracts/build-plan.md",
-      "sha256": "dd6cb2ac90391169a612f20481544da8b33f57ec9491f9e46fb058b8b26847ab"
-    },
-    {
-      "path": "contracts/build-spec.md",
-      "sha256": "b9a34dfc64b662a71ed38347d85e7a9eeaa8694190cc0d00bd6f6b65f3cc599b"
-    },
-    {
-      "path": "contracts/make-decision.md",
-      "sha256": "327c6d89f2ba20cb605bd6d33ba4df562d740e95efc7a3625d619ee79c62392d"
-    },
-    {
-      "path": "contracts/mini-task-design.md",
-      "sha256": "534602fcdf83d2fc140fb3c2eaa9696a7528b49dc7ecd82d17a836533061f16c"
-    },
-    {
-      "path": "contracts/mini-task-implementation.md",
-      "sha256": "2f8cb4a93080a6bb290b0af488c08b94457efdf5ee3f7b3102926718a0112954"
-    },
-    {
-      "path": "contracts/provider-protocol.md",
-      "sha256": "2f4d80ae3a6dc94452b9e15cc7609ada9d317adafcfdc5d4d1c4218a375dad77"
-    },
-    {
-      "path": "contracts/verify-code.md",
-      "sha256": "cc9f19a39ae5f0e9b58760248464c3e94048df59c1c82d8bb41640c854a5fa38"
-    },
-    {
-      "path": "contracts/workflowhub-result.v1.json",
-      "sha256": "6f079be969acaed5e25c054b03fade459364ce7cf08d6d3ebeec2b639282d312"
-    },
-    {
-      "path": "contracts/workflowhub-result.v2.json",
-      "sha256": "e9ac467ef51418cfacf8546d515befc779b8fbb0a3cb34be4fdc013a91e0f6bc"
-    },
-    {
-      "path": "contracts/workflowhub-result.v3.json",
-      "sha256": "f646ca65af24438f1648c9900f16992998ffd93feee6a0bcfcd2e711a36a6ca2"
-    },
-    {
-      "path": "manifest.json",
-      "sha256": "a29471a869042030af782b0c94febdef8d5cd83e30a24e44507d92fe27d7a5db"
-    },
-    {
-      "path": "scripts/lib/safe-id.mjs",
-      "sha256": "38bdda4bf49378bc90790e694390bb64da537a8b47b3bd582ea838feaf25dcb0"
-    },
-    {
-      "path": "scripts/integration-review-subject.mjs",
-      "sha256": "32665440da77138d306c3481d88395c55bceb8c5ce5a6eac659f400066c11a54"
-    },
-    {
-      "path": "scripts/review-materials.mjs",
-      "sha256": "fc20d9ab18709b631cb04de0fb699f6801c1c83f89e97329007e7ea55fe65d35"
-    },
-    {
-      "path": "scripts/ac-evidence-summary.mjs",
-      "sha256": "5868ce6dad8181e476184e76ac32ec2c0fadf5b6c2a5e3f7e2111989b3fea466"
-    },
-    {
-      "path": "scripts/review-output.mjs",
-      "sha256": "bd5c7622f0b22650b890f01dec5b4da99adc04c620d9e8481289fc254b58d074"
-    },
-    {
-      "path": "scripts/review-provider-client.mjs",
-      "sha256": "8fb40d932c0aa0b849ffeb13cdc058d7373c565d9fd5c53253120872ce08dbdb"
-    },
-    {
-      "path": "scripts/review-result.mjs",
-      "sha256": "2cb1f76c78f4e967ae09adbcafcd33bffa73470b06b54ec3ee7084074e9968aa"
-    },
-    {
-      "path": "scripts/review-runner.mjs",
-      "sha256": "25ef2a3743d4b8a53a46b5375b7479e3a44e0cf4098b80a964a643c7362fd1f7"
-    },
-    {
-      "path": "scripts/review-semantic-projection.mjs",
-      "sha256": "2459e5c2891b7178622b55bb209666340ea48106ffea69ad3e78b79e440f415e"
-    },
-    {
-      "path": "scripts/review-source.mjs",
-      "sha256": "e4f12515ef6724e07daf99df6963048cb36b92ca863fcb70dbe9875ea4d21703"
-    },
-    {
-      "path": "scripts/schema-validator.mjs",
-      "sha256": "abf5855e0f5b3ead8bfc1566bafe16ddb31d0e0b14d9ad245438d471f1525ec4"
-    },
-    {
-      "path": "scripts/third-review-host-config.mjs",
-      "sha256": "353ed37cd83ee0fec1e1b56383158f87e3eb3e273e895c27030f8d6c7483ed44"
-    },
-    {
-      "path": "scripts/wh-review-cli.mjs",
-      "sha256": "9d7e70f1eba9974097ab6d3bfd05e3c95a94f0fb1a2903c5346b7ed883bdcf2c"
-    },
-    {
-      "path": "scripts/simple-review-runner.mjs",
-      "sha256": "341db7ba109aad1646e60304917d721a1c985e123d648cbdbbe27d5f2b9a4cd8"
-    },
-    {
-      "path": "stage-skill-plan.json",
-      "sha256": "62d5c97617c273a198fe066d75e793645bac0bc5003eb96cfeb89742800b8170"
-    },
-    {
-      "path": "scripts/review-input-bounds.mjs",
-      "sha256": "c15ee499599ded1b94866666abeca018babbd661ac4b12672815c5eade088462"
-    }
+    "SKILL.md",
+    "contracts/build-code.md",
+    "contracts/build-plan.md",
+    "contracts/build-prd.md",
+    "contracts/build-spec.md",
+    "contracts/make-decision.md",
+    "contracts/mini-task-design.md",
+    "contracts/mini-task-implementation.md",
+    "contracts/provider-protocol.md",
+    "contracts/verify-code.md",
+    "contracts/workflowhub-result.v1.json",
+    "contracts/workflowhub-result.v2.json",
+    "contracts/workflowhub-result.v3.json",
+    "manifest.json",
+    "scripts/ac-evidence-summary.mjs",
+    "scripts/integration-review-subject.mjs",
+    "scripts/lib/safe-id.mjs",
+    "scripts/review-input-bounds.mjs",
+    "scripts/review-materials.mjs",
+    "scripts/review-output.mjs",
+    "scripts/review-provider-client.mjs",
+    "scripts/review-result.mjs",
+    "scripts/review-runner.mjs",
+    "scripts/review-semantic-projection.mjs",
+    "scripts/review-source.mjs",
+    "scripts/schema-validator.mjs",
+    "scripts/simple-review-runner.mjs",
+    "scripts/third-review-host-config.mjs",
+    "scripts/wh-review-cli.mjs",
+    "stage-skill-plan.json"
   ]
 }

@@ -8,7 +8,7 @@
 > 主干只保留稳定指针，避免双写。
 
 - **功能名**：[填写：面向用户的名称]
-- **来源**：[填写：PRD/decision-log、accepted decision 或用户故事的精确引用]
+- **来源**：[填写：PRD/decision-log、已接受裁决或用户故事的精确引用]
 - **状态**：[填写：草稿 / 已接受 / 已替换]
 
 ## 速读卡（30 秒）
@@ -26,11 +26,11 @@
 
 > 本节只保存 ID 关系，不复制 decision-log 正文；没有来源的新增需求必须回到 make-decision。来源必须明确标注原始 PRD/用户要求、decision-log 或已接受裁决。
 
-| Source ID | Decision ID | FR / AC IDs | Status / affected scope | Unresolved / handoff |
+| 来源 ID | 决定 ID | FR / AC ID | 状态 / 受影响范围 | 未决 / 交接 |
 | --- | --- | --- | --- | --- |
 | `[填写：R* / F*-* / INC-*]` | `[填写：D*]` | `[填写：FR/AC]` | `[填写：current / deferred / non-goal / unknown]` | `[填写：风险或下一阶段]` |
 
-每条 FR/AC 都必须能回到本表；scope revision 只追加受影响映射和 revision note，
+每条 FR/AC 都必须能回到本表；范围修订只追加受影响映射与修订说明，
 不另建需求账本。
 
 ## 1. 需求解释：问题与紧迫性
@@ -61,9 +61,9 @@
 ### SCN-001：[填写：场景标题]
 
 - **角色**：[填写：用户或系统角色]
-- **Given**：[填写：前置状态]
-- **When**：[填写：动作或事件]
-- **Then**：[填写：可观察结果]
+- **前提**：[填写：前置状态]
+- **触发**：[填写：动作或事件]
+- **结果**：[填写：可观察结果]
 
 ### 状态覆盖清单
 
@@ -81,10 +81,10 @@
 > 这是 WorkflowHub 在 AgentHub 正文上的事实层。每条只选择一种状态，其他状态字段删除。
 
 - **PFACT-001**：[填写：影响需求或验收的产品、用户或流程事实]
-  - **status**：`verified` / `inferred` / `unknown` / `not_applicable`
+  - **状态**：`verified` / `inferred` / `unknown` / `not_applicable`
   - **证据或来源**：[填写：verified 的 ref/hash/source ID，或 inferred 的来源和限制]
-  - **owner、影响**：[填写：unknown 的负责人、影响和关联 OPEN/RISK ID]
-  - **不适用理由**：[填写：仅 not_applicable 使用]
+  - **负责人、影响**：[填写：unknown 的负责人、影响和关联 OPEN/RISK ID]
+  - **不适用理由**：[填写：仅 not_applicable（不适用）使用]
   - **关联**：[填写：FR ID、AC ID]
 
 > `unknown` 必须关联 RISK 或 OPEN；不能把推断写成已核实事实。
@@ -183,32 +183,32 @@
 > 本节消费 PRD/decision-log，不再决定产品目标。每项缺失写
 > `unknown — owner / impact / next action`；不以猜测填空。
 
-### Code Anchors
+### 代码锚点
 
 - **来源边界**：原始 PRD/用户要求与 decision-log 只作为来源映射，不在实现设计中创建第二份需求账本。
 - **现状与目标差异**：[填写：已核实的现有行为、目标行为、真实消费者；证据路径/符号]
-- **读取顺序**：[填写：实现者先查的最小路径与符号，再查的邻接 consumer；无需全仓扫描]
-- **代码锚点**：[填写：每个被改接口的精确路径、符号、签名、schema 和证据；不存在时写 NEW + 目标 consumer]
-- **运行条件**：[填写：runtime 版本、相关依赖、存储/环境、当前测试入口；不涉及时 N/A — reason]
+- **读取顺序**：[填写：实现者先查的最小路径与符号，再查的邻接消费方；无需全仓扫描]
+- **代码锚点**：[填写：每个被改接口的精确路径、符号、签名、schema 和证据；不存在时写 新增 + 目标消费方]
+- **运行条件**：[填写：运行时版本、相关依赖、存储/环境、当前测试入口；不涉及时 N/A — 理由]
 
-### Interfaces and Failure Semantics
+### 接口与失败语义
 
-- **选择的架构方案**：[填写：reuse / extend / new、理由、被放弃方案及取舍]
-- **模块职责**：[填写：每个 owner 消费什么、产出什么、不能裁决什么；跨模块链路用生产者 → consumer]
+- **选择的架构方案**：[填写：复用 / 扩展 / 新增、理由、被放弃方案及取舍]
+- **模块职责**：[填写：每个归属模块消费什么、产出什么、不能裁决什么；跨模块链路用生产者 → 消费者]
 - **接口与数据流**：[填写：输入、变换、输出、状态转换、持久化与兼容范围；含旧/新消费者]
 - **失败语义**：[填写：无效输入、缺失数据、异常、竞态、重试/恢复及可观察错误；不要默认为成功]
-- **新增控制面**：[填写：真实 consumer、owner、测试、删除条件；无则 N/A — reason]
+- **新增控制面**：[填写：真实消费者、负责人、测试、删除条件；无则 N/A — 理由]
 
 ### 全局文件边界与依赖
 
-- **NEW**：[填写：精确新增路径或 N/A — reason]
-- **MODIFY**：[填写：精确修改路径或 N/A — reason]
-- **DO NOT TOUCH**：[填写：精确保护路径及原因]
-- **全局依赖**：[填写：Phase DAG 的生产者 → 消费者、串行原因、可并行条件；无则 N/A — reason]
+- **新增**：[填写：精确新增路径或 N/A — 理由]
+- **修改**：[填写：精确修改路径或 N/A — 理由]
+- **禁止改动**：[填写：精确保护路径及原因]
+- **全局依赖**：[填写：Phase DAG 的生产者 → 消费者、串行原因、可并行条件；无则 N/A — 理由]
 - **文件归属**：[填写：每个可修改文件归属唯一 Phase；重复写集写出拆分或串行合并理由]
 - **回滚与恢复**：[填写：触发、最小可逆动作、数据及兼容边界]
 
-### Requirement-to-Task Trace
+### 需求到任务追踪
 
 从当前 `decision-log.md` 的逐字声明层/明确原子条目逐条核对已确认 decision；
 上游 PRD 原件在适用时另作只读对照。不能只复述 decision 摘要，也不能由本规格
@@ -217,19 +217,19 @@
 revision 由正式 analyzer 读取同一当前原件绑定，不在 spec 复制一份可漂移账本。
 缺原件标 `unknown — owner / impact / next action`，不得猜补。每个 in-scope source 必须连到
 FR、AC、物理 Phase 的 Task、同义正反 oracle；反向检查每个 Task 有来源、验收和
-真实 consumer。标为 deferred/non-goal 的来源保留决策理由，不伪装成已实现。
+真实消费者。标为 deferred/non-goal 的来源保留决策理由，不伪装成已实现。
 ID、文件名或绿色测试名出现但没有具体行为、负例与原文强度对照，不算覆盖。
 
-| source / decision (decision-log ID/location; upstream ref if applicable) | original behavior/strength | FR / AC | Phase / task | positive + negative oracle / evidence | dependency / status |
+| 来源 / 决定（decision-log ID/位置；适用时附上游引用） | 原义行为/强度 | FR / AC | Phase / Task | 正例 + 负例判据 / 证据 | 依赖 / 状态 |
 | --- | --- | --- | --- | --- | --- |
 | [填写：逐字 U/V/原子 ID、位置与 D ID；没有原件写 unknown] | [填写：原义约束，不复制长段原文] | [填写：FR/AC ID] | [填写：P/T ID] | [填写：正例、失败 oracle ID / 证据类型] | [填写：前置 Phase、未决 owner 或 none] |
 
-### Global Verification Strategy
+### 全局验证策略
 
-- **验证策略**：[填写：风险维度、test tier、测试技能、场景、真实输入/fixture、负例、证据位置与覆盖限制]
-- **RED/GREEN 设计**：[填写：每个行为变更共享 gate_cmd/oracle，RED 必须是目标断言失败，GREEN exit 0；命令正文由所属 Phase 定义]
+- **验证策略**：[填写：风险维度、测试层级、测试技能、场景、真实输入/夹具、负例、证据位置与覆盖限制]
+- **RED/GREEN 设计**：[填写：每个行为变更共享同一条门禁命令与判定器，RED 必须是目标断言失败，GREEN 退出码 0；命令正文由所属 Phase 定义]
 - **最终聚合**：[填写：跨 Phase 消费者与逐 AC 的实际验收路径；不在此宣称执行结果]
-- **不能证明的内容**：[填写：目标检查的覆盖上限、所需人工/外部证据及归属；无则 N/A — reason]
+- **不能证明的内容**：[填写：目标检查的覆盖上限、所需人工/外部证据及归属；无则 N/A — 理由]
 
 每个 Phase `phases/P<n>.md` 指向本节和全局目标的稳定锚点，不复制全局设计；
 每个 Task 再写自己的第一步代码动作、同命令 RED/GREEN 和失败 oracle。
@@ -250,16 +250,16 @@ ID、文件名或绿色测试名出现但没有具体行为、负例与原文强
   - **受影响 ID**：[填写：PFACT、FR、AC]
   - **触发条件**：[填写：何时发生]
   - **后果**：[填写：用户可观察影响]
-  - **缓解或 STOP**：[填写：最小动作或停止条件]
-  - **处理 Stage**：`make-decision` / `build-spec` / `build-plan` / `build-code` / `verify-code`
+  - **缓解或停止**：[填写：最小动作或停止条件]
+  - **处理阶段**：`make-decision` / `build-spec` / `build-plan` / `build-code` / `verify-code`
   - **验证**：[填写：如何证明已处理或仍存在]
 
 - **OPEN-01**：[填写：未决问题]
   - **受影响 ID**：[填写：PFACT、FR、AC]
-  - **owner**：[填写：负责决定的人或角色]
+  - **负责人**：[填写：负责决定的人或角色]
   - **影响**：[填写：不解决会改变什么]
-  - **处理 Stage**：[填写：处理阶段]
-  - **关闭条件或 STOP**：[填写：什么事实可关闭，何时必须停止]
+  - **处理阶段**：[填写：处理阶段]
+  - **关闭条件或停止**：[填写：什么事实可关闭，何时必须停止]
 
 ## 13. 业务影响与回归范围
 

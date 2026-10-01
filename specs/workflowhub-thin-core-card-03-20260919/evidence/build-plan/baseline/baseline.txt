@@ -1,0 +1,2866 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+
+ ❯ tests/contract/card04-final-aggregate.test.mjs (3 tests | 3 failed) 14ms
+   × ORACLE-CARD04-FINAL-AGGREGATE: P13/T024 ordinary final report > requires the actual final artifact after P1–P12, with canonical gate and task identities 9ms
+     → expected { …(20) } to match object { …(7) }
+(23 matching properties omitted from actual)
+   × ORACLE-CARD04-FINAL-AGGREGATE: P13/T024 ordinary final report > delivers a distinct final rendering and an independently authored, unchanged plain-language narrative 3ms
+     → expected { …(20) } to match object { …(7) }
+(23 matching properties omitted from actual)
+   × ORACLE-CARD04-FINAL-AGGREGATE: P13/T024 ordinary final report > rejects absent, stale, displaced bad-news and unknown-laundered refs without creating receipts 1ms
+     → source missing: specs/workflowhub-thin-core-card-04-20260919/phases/P12.md: expected false to be true // Object.is equality
+ ❯ tests/contract/freeze-classification-budget-usage-protocol.test.mjs (36 tests | 3 failed) 12374ms
+   × P7 AC-REBIND-001..003 freeze and confirmation text contracts > AC-REBIND-001 freezes make-decision materials after step 10 and removes the four agent-created sections 3ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919/specs/workflowhub-cost-baseline-and-blocker-close-20260917/decision-log.md'
+   × P7 AC-REBIND-001..003 freeze and confirmation text contracts > AC-REBIND-003 makes tasks.md execution status the only post-confirmation writable area 1ms
+     → expected '---\nname: build-plan\ndescription: T…' to match /确认后唯一可写区是 tasks\.md 的执行状态填写区/
+   ✓ Phase 3 canonical review reuse and explicit retry contracts > redispatches changed material and accepts one explicit retry 4999ms
+   ✓ Phase 3 canonical review reuse and explicit retry contracts > does not trust caller-only retry, budget, or narrow-diff fields 3577ms
+   × Phase 3 canonical review reuse and explicit retry contracts > keeps phase review lineage separate from the integration review lineage 3767ms
+     → expected 2 to be 3 // Object.is equality
+ ❯ tests/integration/distribution-closure.test.mjs (22 tests | 10 failed) 1871ms
+   × portable build-prd workflow closure > contains the five workflows and their declared skill closure only 56ms
+     → skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review
+   × portable build-prd workflow closure > rejects removal of the persisted portable workflow closure 58ms
+     → skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review
+   × portable build-prd workflow closure > rejects unmanifested files in a closed release 52ms
+     → skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review
+   × portable build-prd workflow closure > rejects valid-hash extra files added to the manifest and disk 52ms
+     → skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review
+   × portable build-prd workflow closure > rejects an unsafe release manifest file 54ms
+     → skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review
+   × portable build-prd workflow closure > rejects hard-linked release source files 187ms
+     → expected [Function] to throw error matching /hard-linked/ but got 'skill closure is not closed: build-co…'
+   × portable build-prd workflow closure > rejects a forbidden declared asset instead of silently dropping it 133ms
+     → expected [Function] to throw error matching /forbidden path/ but got 'skill closure is not closed: build-co…'
+   × carries the canonical shared definitions owner through the runner import closure 55ms
+     → skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review
+   × P5 released workflow source rejects missing bytes after a valid baseline 54ms
+     → skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review
+   × P5 released workflow source rejects tampered bytes after a valid baseline 50ms
+     → skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review
+ ✓ tests/build-code-diff-only.test.mjs (33 tests) 1508ms
+ ✓ tests/contract/plan-acceptance-task-gate.test.mjs (23 tests) 11ms
+ ✓ tests/contract/stage-reflection-e2e-constructed.test.mjs (4 tests) 7983ms
+   ✓ stage-reflection constructed end-to-end contract > writes completed and failed reflections, preserves raw lessons, and reads confirmation versions 7235ms
+   ✓ stage-reflection constructed end-to-end contract > derives referenced edges, keeps unresolved consumption unknown, runs the page with zero AI, and leaves history read-only 509ms
+ ❯ tests/contract/post-phase-contract.test.mjs (16 tests | 4 failed) 1054ms
+   × post-cohort independent Phase authority > accepts two separate Phase files with one pure pointer index 3ms
+     → P1/T001 dependency must be none or identify a Phase/Task: expected false to be true // Object.is equality
+   × post-cohort independent Phase authority > keeps an explicitly deferred AC visible in history but outside current formal coverage 1ms
+     → P1/T001 dependency must be none or identify a Phase/Task: expected false to be true // Object.is equality
+   × post-cohort independent Phase authority > accepts independent parallel Phases with no artificial serial edge 0ms
+     → P1/T001 dependency must be none or identify a Phase/Task: expected false to be true // Object.is equality
+   × post-cohort independent Phase authority > uses the Phase files as the strict post build-plan analysis inputs 1ms
+     → P1/T001 dependency must be none or identify a Phase/Task: expected false to be true // Object.is equality
+   ✓ post-cohort independent Phase authority > keeps CARD-05 D-044 acceptance incomplete when current canonical proof is absent 1038ms
+ ❯ tests/contract/phase-quality-handoff.test.mjs (10 tests | 2 failed) 8423ms
+   × Phase quality and handoff contract > renders post-cohort handoff pointers without resurrecting plan/tasks 4ms
+     → handoff materials require an authenticated ArtifactDir reader
+   × Phase quality and handoff contract > keeps the post Phase index pointer-only 1ms
+     → expected '# Phase 索引 — [任务名]\n\n> 指向各 Phase 独立权…' to match /Execution Index/
+   ✓ Phase quality and handoff contract > derives committed Phase files from the commit parent and candidate tree 820ms
+   ✓ Phase quality and handoff contract > records a dirty Phase without inventing a commit 742ms
+   ✓ Phase quality and handoff contract > invalidates a Phase review when its committed tree differs from the candidate tree 638ms
+   ✓ Phase quality and handoff contract > T004 keeps finding dispositions on one stage row and renders the same row in the current handoff 1518ms
+   ✓ Phase quality and handoff contract > T004 projects the real build-plan handler result into the row before its handoff reads it 4697ms
+ ✓ tests/contract/four-material-non-gate-contract.test.mjs (16 tests) 81ms
+ ✓ tests/contract/filled-plan-task-production.test.mjs (7 tests) 14ms
+ ❯ tests/contract/stage-routing-and-concrete-testing.test.mjs (14 tests | 1 failed) 27ms
+   × D-015 stage routing and concrete testing contract > declares real build-code route facts while quality limits completion 4ms
+     → expected '通过 review --action=record 派发严格一次 OCR …' to match /一次 OCR 独立代码审查/
+ ✓ tests/contract/census-upstream-authoring.test.mjs (15 tests) 10ms
+ ✓ tests/contract/stage-interaction-batching.test.mjs (12 tests) 5ms
+ ❯ tests/requirements-completeness-audit-acceptance.test.mjs (34 tests | 3 failed) 21ms
+   × requirements-completeness-audit current acceptance matrix > AC-015: current four materials are authoritative 6ms
+     → expected 'import { describe, expect, it } from …' to contain 'uses the four materials as the curren…'
+   × requirements-completeness-audit current acceptance matrix > AC-025: content skills and templates are consumed 1ms
+     → expected 'stage: build-spec\nskills:\n  # Revie…' to contain 'spec-specify'
+   × requirements-completeness-audit current acceptance matrix > AC-029: restored content skills have auditable provenance 3ms
+     → expected 'import { existsSync, readFileSync, st…' to contain 'keeps the recovered content skills de…'
+ ❯ tests/step-manifest.test.mjs (16 tests | 2 failed) 9ms
+   × canonical step manifest > keeps all five portable manifests on four materials and quality facts without legacy control-plane containers 3ms
+     → expected '当前会话发布大白话 handoff，说明方向、原因、风险、延期和下游边界；…' to match /plain-language handoff|大白话交接|验收通知/i
+   × canonical step manifest > RED: establishes the OI before research and keeps the three consumer duties separate 2ms
+     → expected [ { step_id: 1, …(6) }, …(12) ] to have a length of 14 but got 13
+ ✓ tests/contract/stage-skill-consumer-contract.test.mjs (8 tests) 21ms
+ ✓ tests/contract/spec-stage-artifact-closure.test.mjs (6 tests) 19ms
+ ❯ tests/contract/workflow-quality-regression.test.mjs (7 tests | 1 failed) 8ms
+   × workflow quality regression and historical replay > keeps spec-analyze on authoring stages and code review on verify-code 3ms
+     → expected 'After finding disposition and the las…' to match /checks|检查|evidence|证据/i
+ ✓ tests/skill-provenance-strict.test.mjs (7 tests) 327ms
+   ✓ strict skill provenance > fails closure for invalid baselines, stale entries, and invalid entries 307ms
+ ❯ tests/contract/tier-c-deletion-boundary.test.mjs (5 tests | 1 failed) 62ms
+   × Tier-C quality verify deletion boundary > updates active governance and the public-behavior fixture without rewriting immutable history 21ms
+     → expected [Function] to not throw an error but 'Error: Command failed: git diff --qui…' was thrown
+ ✓ tests/contract/stage-skill-invocation-contract.test.mjs (8 tests) 49ms
+ ✓ tests/decision-log-content-contract.test.mjs (4 tests) 4ms
+ ❯ tests/contract/build-code-apply-contract.test.mjs (5 tests | 3 failed) 8ms
+   × build-code apply quality contract > uses the plan route as a baseline and reroutes concrete testing against real scope 4ms
+     → expected 'stage: build-code\nskills:\n  - { nam…' to contain 'wh-review'
+   × build-code apply quality contract > requires per-phase execution facts and a final task strategy summary 1ms
+     → expected '---\nname: build-code\ndescription: I…' to match /dedicated final Task\/Phase…/Phase card
+   × build-code apply quality contract > records task strategy and execution facts in the canonical step manifest 2ms
+     → expected [ 'test_strategy' ] to deeply equal [ 'test_strategy', 'stage_outcome' ]
+ ✓ tests/contract/post-cohort-executable-authoring.test.mjs (4 tests) 5ms
+ ❯ tests/contract/stage-reflection-skill-contract.test.mjs (7 tests | 1 failed) 7ms
+   × stage-reflection skill contract > declares the v2 six-block judgment protocol and a valid bundle 5ms
+     → missing protocol anchor: current stage step/skill outcome: expected '---\nname: stage-reflection\ndescript…' to contain 'current stage step/skill outcome'
+ ✓ tests/contract/session-binding-removed.test.mjs (4 tests) 18ms
+ ✓ tests/contract/post-cohort-authoring-files.test.mjs (3 tests) 2ms
+ ❯ tests/contract/material-producer-consumer-roundtrip.test.mjs (1 test | 1 failed) 3ms
+   × material producer and consumer round-trip > RED: makes the phase the sole engineering body and tasks a pure execution index 3ms
+     → expected '---\nname: spec-plan\ndescription: Au…' to match /single phase engineering authority|单…/i
+ ✓ tests/contract/post-cohort-spec-design-authority.test.mjs (2 tests) 2ms
+ ❯ tests/contract/governance-review-dispatch-boundary.test.mjs (3 tests | 1 failed) 4ms
+   × governance review dispatch boundary > keeps standard workflow without a unified budget gate 2ms
+     → expected '# WorkflowHub 标准执行流程\n\n这份文档是五个正式 sta…' to match /健康的 provider 由 3rd-review 自己监管/
+stderr | tests/contract/review-materials-contract.test.mjs > current review material and capture contracts > RED: records and drops a near-miss material key while preserving true forbidden keys
+MATERIAL_UNKNOWN_KEY_DROPPED: acceptance_criterias is not in the stage material allowlist
+
+ ❯ tests/contract/review-materials-contract.test.mjs (54 tests | 2 failed) 53158ms
+   ✓ current review material and capture contracts > RED: records and drops a near-miss material key while preserving true forbidden keys 2909ms
+   ✓ current review material and capture contracts > reports all missing verify-code materials in one preflight 514ms
+   ✓ current review material and capture contracts > normalizes identity aliases and rejects inherited material keys 501ms
+   ✓ current review material and capture contracts > RED: rejects retired material keys and enumerates the canonical legal keys 512ms
+   × current review material and capture contracts > selects every reviewable implementation and test diff above 486777B 5ms
+     → expected [ …(2) ] to deeply equal [ 'tests/z.test.ts', …(2) ]
+   × current review material and capture contracts > delivers external implementation and test shards with manifest and packet-plan bindings 1612ms
+     → MATERIAL_INCOMPLETE: verify-code requires an included test diff when that kind changed
+   ✓ current review material and capture contracts > uses the current canonical receipt writer through both build and verify capture wrappers 2726ms
+   ✓ current review material and capture contracts > keeps the build-plan projection for spec-analyze without sending a second copy to the provider 512ms
+   ✓ current review material and capture contracts > sends post build-plan independent Phase files and rejects absent or legacy substitutes 526ms
+   ✓ current review material and capture contracts > delivers a large non-build-code packet without truncating its provider material 518ms
+   ✓ current review material and capture contracts > delivers a complete task-bound provider packet above 486777B without truncation 516ms
+   ✓ current review material and capture contracts > constructs both mini-task packets and binds implementation evidence to the current snapshot 1434ms
+   ✓ current review material and capture contracts > keeps a near-limit mini-task design packet provider-visible without dropping frozen materials 501ms
+   ✓ current review material and capture contracts > fails a mini-task packet when the decision log cannot yield the bounded original requirement 1272ms
+   ✓ current review material and capture contracts > rejects a mini-task implementation test receipt from an older snapshot 1457ms
+   ✓ current review material and capture contracts > captures the complete changed file set without caller path filters 688ms
+   ✓ current review material and capture contracts > keeps committed task changes visible to the current review Workspace 1664ms
+   ✓ current review material and capture contracts > rejects a build-code phase test receipt from an older snapshot 1449ms
+   ✓ current review material and capture contracts > accepts a phase test receipt across execution-status-only tasks writeback 3880ms
+   ✓ current review material and capture contracts > rejects a phase test receipt without canonical provenance 1417ms
+   ✓ current review material and capture contracts > accepts an integration packet when only the execution-status block changed 3398ms
+   ✓ current review material and capture contracts > accepts a current passing integration receipt with its actual limited command 2748ms
+   ✓ current review material and capture contracts > still builds a semantic integration packet when the test receipt is unavailable 1308ms
+   ✓ current review material and capture contracts > ORACLE-P3-PACKET: only candidate integration receives the real diff and full AC text 1426ms
+   ✓ current review material and capture contracts > delivers the full frozen diff for every change in a large candidate integration packet 1619ms
+   ✓ current review material and capture contracts > ORACLE-P3-PACKET: verify candidate receives full AC beside a sharded real diff 1629ms
+   ✓ current review material and capture contracts > ORACLE-P3-PACKET: verify candidate is unavailable for missing acceptance criteria 1484ms
+   ✓ current review material and capture contracts > ORACLE-P3-PACKET: verify candidate is unavailable for empty acceptance criteria 1430ms
+   ✓ current review material and capture contracts > ORACLE-P3-PACKET: verify candidate is unavailable for incomplete acceptance criteria 1369ms
+   ✓ current review material and capture contracts > ORACLE-P3-PACKET: verify candidate is unavailable for partial current AC set acceptance criteria 1389ms
+   ✓ current review material and capture contracts > treats an explicit missing integration test receipt as unavailable 1291ms
+   ✓ current review material and capture contracts > rejects unavailable integration test evidence bound to an older snapshot 1236ms
+   ✓ current review material and capture contracts > keeps the integration AC trace host-only 2880ms
+   ✓ current review material and capture contracts > bounds integration provider context to delivery-critical excerpts 2553ms
+   ✓ current review material and capture contracts > does not duplicate acceptance sections inside the integration approved spec 2776ms
+ ✓ tests/contract/post-cohort-governance-materials.test.mjs (1 test) 2ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 38 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/requirements-completeness-audit-acceptance.test.mjs > requirements-completeness-audit current acceptance matrix > AC-015: current four materials are authoritative
+AssertionError: expected 'import { describe, expect, it } from …' to contain 'uses the four materials as the curren…'
+
+- Expected
++ Received
+
+- uses the four materials as the current work authority
++ import { describe, expect, it } from "vitest";
++ import { readFileSync } from "node:fs";
++ import { join, resolve } from "node:path";
++
++ const root = resolve(new URL("..", import.meta.url).pathname);
++ const stages = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
++ const materials = ["decision-log.md", "spec.md", "plan.md", "tasks.md"];
++ const readStage = (stage) => readFileSync(join(root, "workflows", stage, "SKILL.md"), "utf8");
++ const hasAny = (text, patterns) => patterns.some((pattern) => pattern.test(text));
++
++ function expectConcept(text, patterns, label) {
++   expect(hasAny(text, patterns), label).toBe(true);
++ }
++
++ function expectFourMaterials(text, stage) {
++   for (const material of materials) expect(text, `${stage}: ${material}`).toContain(material);
++ }
++
++ describe("five-stage current-material contract", () => {
++   it.each(stages)("%s has a current skill identity", (stage) => {
++     const skill = readStage(stage);
++     expect(skill).toMatch(new RegExp(`^---[\\s\\S]*name: ${stage}[\\s\\S]*version: [0-9]+\\.[0-9]+\\.[0-9]+[\\s\\S]*---`));
++   });
++
++   it("uses cohort-specific current materials as work authority", () => {
++     for (const stage of stages) expectFourMaterials(readStage(stage), stage);
++
++     for (const stage of ["build-spec"]) {
++       expectConcept(readStage(stage), [
++         /only current work truth/i,
++         /only current (?:work )?authority/i,
++       ], `${stage}: current materials are authoritative`);
++     }
++     expect(readStage("build-plan")).toMatch(/post-cohort[\s\S]*spec\.md[\s\S]*phases\/P<n>\.md[\s\S]*phases\/index\.md/i);
++     expect(readStage("build-code")).toMatch(/For post[\s\S]*spec\.md[\s\S]*phases\/index\.md[\s\S]*phases\/P<n>\.md/i);
++     expectConcept(readStage("verify-code"), [
++       /当前 task 的 cohort 材料存在且可读，就直接开始或继续验收/,
++     ], "verify-code: readable materials permit work");
++   });
++
++   it("keeps old facts read-only and outside work eligibility", () => {
++     const decision = readStage("make-decision");
++     const code = readStage("build-code");
++     const verify = readStage("verify-code");
++
++     expectConcept(decision, [/audit facts only/i], "make-decision: old facts are audit-only");
++     expectConcept(decision, [/neither authorize nor\s+block/i], "make-decision: old facts are not permits");
++     expectConcept(code, [/facts, not work permits/i], "build-code: auxiliary facts are not permits");
++     expectConcept(code, [/never freeze implementation or same-task\s+repair/i], "build-code: old facts cannot freeze work");
++     expectConcept(verify, [/只作背景，不是工作许可证/], "verify-code: old facts are background only");
++     expectConcept(verify, [/不能冻结.*同 task 修复/s], "verify-code: old facts cannot freeze repair");
++   });
++
++   it("keeps Talk, research, and Grill in make-decision while Clarify stays downstream", () => {
++     const decision = readStage("make-decision");
++     for (const dependency of ["talk-with-zhipeng", "grill-with-docs", "decision-log", "wh-review"]) {
++       expect(decision).toContain(dependency);
++     }
++     expectConcept(decision, [/Do not invent user answers/i], "make-decision: confirmation is real");
++     expectConcept(decision, [/Research runs only when its answer could materially change/i], "make-decision: research is proportional");
++     expectConcept(decision, [/`build-spec` is the only owner of[\s\S]{0,80}Clarify/i], "Clarify has one downstream owner");
++
++     const stepSlugs = JSON.parse(readFileSync(join(root, "workflows", "make-decision", "steps.json"), "utf8"))
++       .steps.map(({ step_slug }) => step_slug);
++     expect(stepSlugs.slice(2, 10)).toEqual([
++       "research-and-diverge", "direction-advice", "outline-talk", "grill-with-docs",
++       "module-convergence", "write-decision-draft", "detail-advice", "approve-decision",
++     ]);
++     expect(stepSlugs.some((slug) => /^talk-round-\d+$/.test(slug))).toBe(false);
++
++     const plan = readStage("build-plan");
++     expectConcept(plan, [/Do not run Talk, Clarify, or Grill/i], "build-plan: decision activities stay upstream");
++     expectConcept(plan, [/Trace every decision, FR, and AC/i], "build-plan: implementation traceability remains");
++     expectConcept(plan, [/obtain the user's actual reply[\s\S]{0,120}before claiming/i], "build-plan: normal confirmation remains real");
++     expect(plan).not.toMatch(/Do not invent or claim to obtain the user's actual reply/i);
++     expectConcept(plan, [/does not turn confirmation\s+into a machine work permit/i], "build-plan: confirmation is not work eligibility");
++   });
++
++   it("keeps post Phase index pointer-only instead of a second completion ledger", () => {
++     const skill = readFileSync(join(root, "skills", "spec-tasks", "SKILL.md"), "utf8");
++     const template = readFileSync(join(root, "skills", "spec-tasks", "templates", "index-template.md"), "utf8");
++     expect(skill).toMatch(/Write only `phases\/index\.md`/);
++     expect(skill).toMatch(/pure pointer index/i);
++     expect(template).toMatch(/authority ref.*semantic anchor.*write set.*dependency.*consumer/i);
++     expect(template).not.toMatch(/gate_cmd|execution status|evidence_path/i);
++   });
++
++   it("records unavailable review honestly without turning it into pass", () => {
++     for (const stage of stages) {
++       const skill = readStage(stage);
++       expect(skill, `${stage}: records unavailable`).toContain("unavailable");
++       expectConcept(skill, [
++         /unavailable[\s\S]{0,140}(?:never|not)[\s\S]{0,40}`?pass`?/i,
++         /Never turn[\s\S]{0,100}quality evidence[\s\S]{0,80}`?pass`?/i,
++         /unavailable[\s\S]{0,140}(?:绝不是|不能)[\s\S]{0,40}`?pass`?/i,
++       ], `${stage}: unavailable is not pass`);
++     }
++   });
++
++   it("separates completion claims from permission to continue work", () => {
++     const expectations = {
++       "make-decision": [/limit only the\s+completion claim/i, /do\s+not\s+prevent continued Talk/i],
++       "build-spec": [/lowers the completion claim/i, /continue drafting or\s+repairing this same task/i],
++       "build-plan": [/lowers the completion claim/i, /continue research, planning, or repair in this\s+same task/i],
++       "build-code": [/limits the completion claim/i, /still allows same-task repair and the\s+next safe work item/i],
++       "verify-code": [/缺质量事实只限制完成声明/, /不限制继续验收和修复/],
++     };
++
++     for (const [stage, concepts] of Object.entries(expectations)) {
++       const skill = readStage(stage);
++       for (const concept of concepts) expectConcept(skill, [concept], `${stage}: completion/work split`);
++     }
++   });
++
++   it("repairs the same task instead of creating replacement or continuation tasks", () => {
++     const sameTaskContracts = {
++       "make-decision": [/continue in the same task/i],
++       "build-spec": [/does not create a new task/i],
++       "build-plan": [/does not create a new task/i],
++       "build-code": [/never require a new task/i],
++       "verify-code": [/不能触发新建[\s\S]*(?:successor|continuation) task/i, /回同一 task 修复，不新建任务/],
++     };
++
++     for (const [stage, alternatives] of Object.entries(sameTaskContracts)) {
++       expectConcept(readStage(stage), alternatives, `${stage}: same-task repair without replacement`);
++     }
++   });
++
++   it("keeps context and the atomic-step inventory free of retired progression permits", () => {
++     const context = readFileSync(join(root, "CONTEXT.md"), "utf8");
++     const inventory = readFileSync(join(root, "docs/stage-atomic-step-inventory.md"), "utf8");
++     expect(context).toMatch(/历史恢复记录（仅审计）/);
++     expect(context).toMatch(/不授权、阻止或改变普通工作/);
++     expect(context).not.toMatch(/Phase pointer 等业务状态恢复仍使用恢复代次/);
++     expect(context).not.toMatch(/在通过\*\*恢复门禁\*\*后才可成为当前事实/);
++     expect(inventory).not.toMatch(/controlled build-code reopen|plan-hash-bound operation|automatic acceptance/i);
++     expect(inventory).toMatch(/never creates a reopen or recovery permit/i);
++   });
++
++   it("keeps integration review independent of an accepted checkpoint", () => {
++     const adr = readFileSync(join(root, "docs/adr/0007-phase-and-integration-review-material-architecture.md"), "utf8");
++     expect(adr).toMatch(/当前四份材料、当前代码树、fresh test/);
++     expect(adr).toMatch(/不再\s*要求 accepted build-plan checkpoint/);
++     expect(adr).toMatch(/不成为编辑、修复或进入下一阶段的许可门槛/);
++     expect(adr).not.toMatch(/必须从 accepted build-plan checkpoint/);
++   });
++ });
++
+
+ ❯ tests/requirements-completeness-audit-acceptance.test.mjs:55:30
+     53|       expect(tasks).toContain(id);
+     54|       expect(read(implementationPath)).toContain(implementationMarker);
+     55|       expect(read(testPath)).toContain(testMarker);
+       |                              ^
+     56|     });
+     57|   }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/38]⎯
+
+ FAIL  tests/requirements-completeness-audit-acceptance.test.mjs > requirements-completeness-audit current acceptance matrix > AC-025: content skills and templates are consumed
+AssertionError: expected 'stage: build-spec\nskills:\n  # Revie…' to contain 'spec-specify'
+
+- Expected
++ Received
+
+- spec-specify
++ stage: build-spec
++ skills:
++   # Review results use the actual canonical result ref, or unavailable attempt ref,
++   # in receipts.review; safeReviewFacts authenticates them.
++   - { name: spec-research, path: skills/spec-research/SKILL.md, execution: independent, trigger: conditional_research, bundle: skills/spec-research/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#testFacts", inputs: ["receipts.research"], identity: ["task_id", "stage", "workspace_path"], result: "facts.research" } }
++   - { name: simplicity-guard, path: skills/simplicity-guard/SKILL.md, execution: inline, trigger: simplicity_check, bundle: skills/simplicity-guard/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#safeReviewFacts", inputs: ["receipts.review"], identity: ["task_id", "stage", "workspace_path"], result: "facts.review" } }
++   - { name: plan-ceo-review, path: skills/plan-ceo-review/SKILL.md, execution: inline, trigger: product_direction_check, bundle: skills/plan-ceo-review/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#safeReviewFacts", inputs: ["receipts.review"], identity: ["task_id", "stage", "workspace_path"], result: "facts.review" } }
++   - { name: ui-project-init, path: skills/ui-project-init/SKILL.md, execution: independent, trigger: ui_scope, bundle: skills/ui-project-init/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#officialStageHandler(\"build-spec\")", inputs: ["contract_facts.ui_project_init", "artifacts.spec.md"], identity: ["task_id", "stage", "workspace_path"], result: "facts.ui_project_init" } }
++   - { name: design-source-readiness, path: skills/design-source-readiness/SKILL.md, execution: independent, trigger: ui_scope, bundle: skills/design-source-readiness/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#officialStageHandler(\"build-spec\")", inputs: ["contract_facts.design_source_readiness", "artifacts.spec.md"], identity: ["task_id", "stage", "workspace_path"], result: "facts.design_source_readiness" } }
++   - { name: frontend-prototype-render, path: skills/frontend-prototype-render/SKILL.md, execution: independent, trigger: ui_scope, bundle: skills/frontend-prototype-render/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#officialStageHandler(\"build-spec\")", inputs: ["contract_facts.frontend_prototype_render", "artifacts.spec.md"], identity: ["task_id", "stage", "workspace_path"], result: "facts.frontend_prototype_render" } }
++   - { name: plan-design-review, path: skills/plan-design-review/SKILL.md, execution: independent, trigger: ui_scope, bundle: skills/plan-design-review/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#officialStageHandler(\"build-spec\")", inputs: ["contract_facts.plan_design_review", "artifacts.spec.md"], identity: ["task_id", "stage", "workspace_path"], result: "facts.plan_design_review" } }
++   - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, trigger: review, bundle: skills/wh-review/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#safeReviewFacts", inputs: ["receipts.review"], identity: ["task_id", "stage", "workspace_path"], result: "facts.review" } }
++   - { name: spec-analyze, path: skills/spec-analyze/SKILL.md, execution: inline, trigger: stage_end_consistency, bundle: skills/spec-analyze/skill-bundle.json, owner: stage, consumer: { target: "stage-runner#validateStageSpecAnalyzeOutcome", inputs: ["artifacts.decision-log.md", "artifacts.spec.md"], identity: ["task_id", "stage", "workspace_path"], result: "facts" } }
++   - { name: stage-reflection, path: skills/stage-reflection/SKILL.md, execution: inline, trigger: on_stage_end, bundle: skills/stage-reflection/skill-bundle.json, owner: stage, consumer: { target: "stage-runner#runStageEndReflection", inputs: ["artifacts.decision-log.md", "artifacts.spec.md"], identity: ["task_id", "stage", "workspace_path"], result: "stage_reflection" } }
++   - { name: stage-handoff, path: skills/stage-handoff/SKILL.md, execution: inline, trigger: on_stage_end, bundle: skills/stage-handoff/skill-bundle.json, owner: stage, consumer: { target: "stage-runner#runStageEndReflection", inputs: ["artifacts.decision-log.md", "artifacts.spec.md"], identity: ["task_id", "stage", "workspace_path"], result: "stage_handoff" } }
++ runtime_capabilities:
++   - { id: node, kind: cli, version_policy: ">=24", doctor: [node, --version], required_when: always, absence_semantics: diagnostic }
++   - { id: shell, kind: cli, doctor: [sh, -c, "exit 0"], required_when: always, absence_semantics: diagnostic }
++   - { id: git, kind: cli, doctor: [git, --version], required_when: always, absence_semantics: diagnostic }
++   - { id: process, kind: cli, doctor: [ps, -p, "1"], required_when: review, absence_semantics: diagnostic }
++ external_capabilities:
++   - { id: host-subagent, kind: host, doctor: [host-capability, host-subagent], required_when: review, absence_semantics: diagnostic }
++   - { id: wh-review-provider, kind: review, doctor: [workflowhub-capability, wh-review-provider], required_when: review, absence_semantics: diagnostic }
++
+
+ ❯ tests/requirements-completeness-audit-acceptance.test.mjs:54:40
+     52|       expect(spec).toContain(id);
+     53|       expect(tasks).toContain(id);
+     54|       expect(read(implementationPath)).toContain(implementationMarker);
+       |                                        ^
+     55|       expect(read(testPath)).toContain(testMarker);
+     56|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/38]⎯
+
+ FAIL  tests/requirements-completeness-audit-acceptance.test.mjs > requirements-completeness-audit current acceptance matrix > AC-029: restored content skills have auditable provenance
+AssertionError: expected 'import { existsSync, readFileSync, st…' to contain 'keeps the recovered content skills de…'
+
+- Expected
++ Received
+
+- keeps the recovered content skills declared by their owning stage
++ import { existsSync, readFileSync, statSync } from "node:fs";
++ import { join } from "node:path";
++ import yaml from "js-yaml";
++ import { describe, expect, it } from "vitest";
++
++ import { buildPlanningArtifacts } from "../../skills/wh-review/scripts/review-materials.mjs";
++ import { validateSkillBundle } from "../../runtime/adapters/local-skill-resolver.mjs";
++
++ const root = process.cwd();
++ const read = (file) => readFileSync(join(root, file), "utf8");
++ const taskCards = (markdown) => markdown.split(/^#{3,4} /m).slice(1).map((part) => {
++   const [heading, ...lines] = part.split("\n");
++   return { id: heading.slice(0, 4), body: lines.join("\n") };
++ });
++ const backtickValues = (body, label) => {
++   const line = body.split("\n").find((item) => item.startsWith("- **" + label + "**：")) ?? "";
++   return [...line.matchAll(/`([^`]+)`/g)].map(([, value]) => value);
++ };
++
++ describe("spec and plan content artifact closure", () => {
++   it("keeps the current OI authority inside decision-log and synchronizes its bundle", () => {
++     const skill = read("skills/decision-log/SKILL.md");
++     const template = read("skills/decision-log/templates/decision-log-template.md");
++     const workflow = read("workflows/make-decision/SKILL.md");
++     expect(`${skill}\n${template}`).toMatch(/one current OI|唯一.*OI/i);
++     expect(`${skill}\n${template}`).toMatch(/questions-only/);
++     expect(workflow).toMatch(/`approve-decision`[\s\S]{0,180}(?:existing|既有)/i);
++     const bundle = validateSkillBundle(root, "skills/decision-log/skill-bundle.json", "skills/decision-log/SKILL.md");
++     const catalog = yaml.load(read("skills/catalog.yaml"));
++     expect(catalog.skills.find((entry) => entry.name === "decision-log").local_bundle_hash).toBe(bundle.bundleHash);
++   });
++
++   it("puts the decision-log source index into the derived build-plan packet", () => {
++     const matrix = JSON.parse(read("runtime/review/stage-materials.json"));
++     expect(matrix.stages["build-plan"].generated).toContain("planning_artifacts");
++     expect(matrix.stages["build-plan"].required).toContain("raw_requirement");
++     const packet = buildPlanningArtifacts({
++       rawRequirementIndex: {
++         schema_version: "raw-requirement-index.v1",
++         source_artifact: "decision-log",
++         entries: [{ id: "R-001", decision_ids: ["D-001"], summary: "原始要求" }],
++       },
++       approvedSpec: "spec",
++       acceptanceCriteria: "acceptance",
++       draftPlan: "plan",
++       draftTasks: "tasks",
++     });
++     expect(packet.schema_version).toBe("spec-analyze-planning-artifacts.v1");
++     expect(packet.raw_requirement_index.source_artifact).toBe("decision-log");
++     expect(packet).not.toHaveProperty("decision_log_index");
++     expect(packet.draft_tasks).toBe("tasks");
++   });
++
++   it("RED: makes spec-plan the sole phase author and spec-tasks a pointer-only index", () => {
++     const specSkill = read("skills/spec-specify/SKILL.md");
++     const specTemplate = read("skills/spec-specify/templates/spec-template.md");
++     const phaseSkill = read("skills/spec-plan/SKILL.md");
++     const phaseTemplate = read("skills/spec-plan/templates/phase-template.md");
++     const indexSkill = read("skills/spec-tasks/SKILL.md");
++     const indexTemplate = read("skills/spec-tasks/templates/index-template.md");
++     const buildSpec = yaml.load(read("workflows/build-spec/skill-deps.yaml"));
++     const buildPlan = yaml.load(read("workflows/build-plan/skill-deps.yaml"));
++
++     expect(`${specSkill}\n${specTemplate}`).toMatch(/narrative|叙事/i);
++     expect(`${specSkill}\n${specTemplate}`).toMatch(/Appendix A|附件 A/i);
++     expect(`${specSkill}\n${specTemplate}`).toMatch(/requirement|需求/i);
++     expect(`${specSkill}\n${specTemplate}`).toMatch(/acceptance.*flow|验收流程/is);
++     expect(`${specSkill}\n${specTemplate}`).toMatch(/test.*standard|测试标准/is);
++     expect(`${specSkill}\n${specTemplate}`).toMatch(/architecture.*boundar|架构边界/is);
++
++     expect(`${phaseSkill}\n${phaseTemplate}`).toMatch(/sole phase (?:engineering )?author|单一 phase 工程权威/i);
++     for (const level of ["L0", "L1", "L2"]) expect(phaseTemplate, `${level} phase contract`).toContain(level);
++     expect(phaseTemplate).toMatch(/write set|写集|写入集/i);
++     expect(phaseTemplate).toMatch(/DO NOT TOUCH|禁改|禁止改动|不得改动/i);
++     expect(phaseTemplate).toMatch(/gate_cmd|门禁命令/);
++     expect(phaseTemplate).toMatch(/oracle|判定器/i);
++     expect(phaseTemplate).toMatch(/STOP|停止/);
++
++     expect(`${indexSkill}\n${indexTemplate}`).toMatch(/pure pointer|纯指针/i);
++     expect(indexTemplate).toMatch(/^## (?:Execution )?Index|^## 执行索引/m);
++     expect(indexTemplate).toMatch(/semantic anchor|语义锚点/i);
++     expect(indexTemplate).toMatch(/write set|写集|写入集/i);
++     expect(indexTemplate).toMatch(/consumer|消费者/i);
++     expect(indexTemplate).not.toMatch(/^## Phase P\d+/m);
++     expect(indexTemplate).not.toMatch(/^#### T\d+ /m);
++     expect(indexTemplate).not.toMatch(/^### (?:Goal|Files|Tasks|Verify|Knowledge|STOP|Done|Risks and rollback)$/m);
++     expect(indexTemplate).not.toMatch(/gate_cmd|expected_exit|oracle|evidence_path/);
++
++     expect(buildPlan.skills.map((item) => item.name)).toEqual(expect.arrayContaining([
++       "spec-specify", "spec-clarify", "spec-plan", "spec-tasks",
++     ]));
++     expect(buildSpec.skills.map((item) => item.name)).not.toEqual(expect.arrayContaining([
++       "spec-specify", "spec-plan", "spec-tasks", "spec-clarify",
++     ]));
++   });
++
++   it("keeps post-cohort build-plan as the coherent specification owner", () => {
++     const buildPlan = read("workflows/build-plan/SKILL.md");
++     const specSkill = read("skills/spec-specify/SKILL.md");
++     const clarifySkill = read("skills/spec-clarify/SKILL.md");
++
++     expect(buildPlan).toMatch(/post-cohort[\s\S]{0,180}writes[\s\S]{0,120}spec\.md[\s\S]{0,120}phases\/P<n>\.md[\s\S]{0,120}phases\/index\.md/i);
++     expect(buildPlan).toMatch(/pre-cohort 回 `build-spec`，post-cohort 回本 stage 的\s*`spec-specify`/);
++     expect(buildPlan).not.toMatch(/This stage owns only `plan\.md` and `tasks\.md`/);
++     expect(specSkill).toMatch(/callbacks supplied by the owning author stage:[\s\S]{0,120}`build-plan` for post-cohort tasks/i);
++     expect(clarifySkill).toMatch(/owning spec-authoring step/i);
++   });
++
++   it("keeps portable skill bundles closed after the authoring split", () => {
++     const catalog = yaml.load(read("skills/catalog.yaml"));
++     const authoringSkills = new Set([
++       "decision-log", "spec-specify", "spec-plan", "spec-tasks",
++       "spec-analyze", "wh-review",
++     ]);
++     for (const item of catalog.skills.filter((entry) => authoringSkills.has(entry.name) && entry.local_bundle_hash && entry.path)) {
++       const bundle = item.path.replace(/SKILL\.md$/, "skill-bundle.json");
++       if (!existsSync(join(root, bundle))) continue;
++       expect(validateSkillBundle(root, bundle, item.path).bundleHash, `${item.name} bundle hash`).toBe(item.local_bundle_hash);
++     }
++     expect(catalog.skills.find((item) => item.name === "spec-clarify").used_by_stages).toEqual(["build-plan"]);
++   });
++
++   it("keeps the current P3 task cards source-bound and executable", () => {
++     const markdown = read("specs/archive/multica-issues-monitoring-g6-g7-20260805/tasks.md");
++     const cards = taskCards(markdown).filter(({ id }) => ["T005", "T006"].includes(id));
++     expect(cards).toHaveLength(2);
++     const requiredLabels = ["source_refs / decision_refs", "execution_file_paths", "test_strategy_owner", "test tier / test method", "fixtures_services", "evidence_path", "coverage limits"];
++     for (const { id, body } of cards) {
++       for (const label of requiredLabels) {
++         const hasLabel = body.split("\n").some((line) => line.startsWith("- **" + label + "**：") || (label === "coverage limits" && line.startsWith("- **coverage_limits**：")));
++         expect(hasLabel, id + " missing " + label).toBe(true);
++       }
++       const exact = backtickValues(body, "精确文件");
++       const execution = backtickValues(body, "execution_file_paths").flatMap((value) => { try { return JSON.parse(value); } catch { return [value]; } });
++       expect(exact.length, id + " has no exact file boundary").toBeGreaterThan(0);
++       expect(execution.length, id + " has no execution file paths").toBeGreaterThan(0);
++       expect(new Set(exact)).toEqual(new Set(execution));
++       for (const file of [...exact, ...execution]) {
++         expect(file.endsWith("/") || file.includes("*") || file.includes("..."), id + " contains a directory/glob path").toBe(false);
++         expect(statSync(join(root, file)).isFile(), id + " path is not a file: " + file).toBe(true);
++       }
++       expect(body).toMatch(/- \*\*test_strategy_owner\*\*：`?build-plan\/high-intelligence-model/);
++       expect(body).toMatch(/source_refs \/ decision_refs.*(?:R-[0-9]+|D-[0-9]+)/);
++     }
++     expect(markdown).toMatch(/## 4\. Final current-snapshot aggregate strategy/);
++     expect(markdown).toMatch(/\*\*execution_contract\*\*：当前快照运行一次/s);
++   });
++ });
++
+
+ ❯ tests/requirements-completeness-audit-acceptance.test.mjs:55:30
+     53|       expect(tasks).toContain(id);
+     54|       expect(read(implementationPath)).toContain(implementationMarker);
+     55|       expect(read(testPath)).toContain(testMarker);
+       |                              ^
+     56|     });
+     57|   }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/38]⎯
+
+ FAIL  tests/step-manifest.test.mjs > canonical step manifest > keeps all five portable manifests on four materials and quality facts without legacy control-plane containers
+AssertionError: expected '当前会话发布大白话 handoff，说明方向、原因、风险、延期和下游边界；…' to match /plain-language handoff|大白话交接|验收通知/i
+
+- Expected: 
+/plain-language handoff|大白话交接|验收通知/i
+
++ Received: 
+"当前会话发布大白话 handoff，说明方向、原因、风险、延期和下游边界；评论是通知，不是第二套状态机或推进门。"
+
+ ❯ tests/step-manifest.test.mjs:165:46
+    163|       ]));
+    164|       const handoffStep = item.steps.findLast((stepItem) => stepItem.s…
+    165|       expect(handoffStep?.observable_result).toMatch(/plain-language h…
+       |                                              ^
+    166| 
+    167|       for (const stepItem of item.steps) {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/38]⎯
+
+ FAIL  tests/step-manifest.test.mjs > canonical step manifest > RED: establishes the OI before research and keeps the three consumer duties separate
+AssertionError: expected [ { step_id: 1, …(6) }, …(12) ] to have a length of 14 but got 13
+
+- Expected
++ Received
+
+- 14
++ 13
+
+ ❯ tests/step-manifest.test.mjs:203:28
+    201|     const manifest = loadStageManifest("make-decision", repoRoot);
+    202|     const steps = manifest.steps.filter((item) => item.step_slug !== "…
+    203|     expect(manifest.steps).toHaveLength(14);
+       |                            ^
+    204|     expect(steps[0].observable_result).toMatch(/initial|current|唯一.*…
+    205|     expect(steps[1].observable_result).toMatch(/OI|大纲/);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/38]⎯
+
+ FAIL  tests/contract/build-code-apply-contract.test.mjs > build-code apply quality contract > uses the plan route as a baseline and reroutes concrete testing against real scope
+AssertionError: expected 'stage: build-code\nskills:\n  - { nam…' to contain 'wh-review'
+
+- Expected
++ Received
+
+- wh-review
++ stage: build-code
++ skills:
++   - { name: test-routing-advisor, path: skills/test-routing-advisor/SKILL.md, execution: independent, trigger: every_behavior_phase_actual_scope, bundle: skills/test-routing-advisor/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#buildCodeContractFacts", inputs: ["contract_facts"], identity: ["task_id", "stage", "workspace_path"], result: "facts.contract_facts" } }
++   - { name: backend-testing, path: skills/backend-testing/SKILL.md, execution: independent, trigger: actual_backend_test, bundle: skills/backend-testing/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#testFacts", inputs: ["receipts.tests"], identity: ["task_id", "stage", "workspace_path"], result: "facts.tests" } }
++   - { name: frontend-testing, path: skills/frontend-testing/SKILL.md, execution: independent, trigger: actual_frontend_test, bundle: skills/frontend-testing/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#testFacts", inputs: ["receipts.tests"], identity: ["task_id", "stage", "workspace_path"], result: "facts.tests" } }
++   - { name: frontend-component-quality, path: skills/frontend-component-quality/SKILL.md, execution: inline, trigger: actual_frontend_test, bundle: skills/frontend-component-quality/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#controlledBrowserQaFacts", inputs: ["contract_facts.component_quality_map"], identity: ["task_id", "stage", "workspace_path"], result: "facts.ui_qa" } }
++   - { name: fullstack-slice-testing, path: skills/fullstack-slice-testing/SKILL.md, execution: independent, trigger: actual_fullstack_test, bundle: skills/fullstack-slice-testing/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#testFacts", inputs: ["receipts.tests"], identity: ["task_id", "stage", "workspace_path"], result: "facts.tests" } }
++   - { name: spec-analyze, path: skills/spec-analyze/SKILL.md, execution: inline, trigger: stage_end_consistency, bundle: skills/spec-analyze/skill-bundle.json, owner: stage, consumer: { target: "stage-runner#validateStageSpecAnalyzeOutcome", inputs: ["artifacts.decision-log.md", "artifacts.spec.md", "artifacts.phases/index.md", "artifacts.phases/P<n>.md"], identity: ["task_id", "stage", "workspace_path"], result: "facts" } }
++   - { name: stage-reflection, path: skills/stage-reflection/SKILL.md, execution: inline, trigger: on_stage_end, bundle: skills/stage-reflection/skill-bundle.json, owner: stage, consumer: { target: "stage-runner#runStageEndReflection", inputs: ["artifacts.decision-log.md", "artifacts.spec.md", "artifacts.phases/index.md", "artifacts.phases/P<n>.md"], identity: ["task_id", "stage", "workspace_path"], result: "stage_reflection" } }
++   - { name: stage-handoff, path: skills/stage-handoff/SKILL.md, execution: inline, trigger: on_stage_end, bundle: skills/stage-handoff/skill-bundle.json, owner: stage, consumer: { target: "stage-runner#runStageEndReflection", inputs: ["artifacts.decision-log.md", "artifacts.spec.md", "artifacts.phases/index.md", "artifacts.phases/P<n>.md"], identity: ["task_id", "stage", "workspace_path"], result: "stage_handoff" } }
++ runtime_capabilities:
++   - { id: node, kind: cli, version_policy: ">=24", doctor: [node, --version], required_when: always, absence_semantics: diagnostic }
++   - { id: shell, kind: cli, doctor: [sh, -c, "exit 0"], required_when: always, absence_semantics: diagnostic }
++   - { id: process, kind: cli, doctor: [ps, -p, "1"], required_when: phase_execution, absence_semantics: diagnostic }
++   - { id: git, kind: cli, doctor: [git, --version], required_when: always, absence_semantics: diagnostic }
++   - { id: target-test-command, kind: command, doctor: [target-test-command, --version], required_when: always, absence_semantics: diagnostic }
++ external_capabilities:
++   - { id: host-subagent, kind: host, doctor: [host-capability, host-subagent], required_when: phase_execution, absence_semantics: diagnostic }
++
+
+ ❯ tests/contract/build-code-apply-contract.test.mjs:15:22
+     13|     for (const name of ["test-routing-advisor", "backend-testing", "fr…
+     14|     expect(manifest).not.toContain("testing-system-blueprint");
+     15|     expect(manifest).toContain("wh-review");
+       |                      ^
+     16|     expect(skill).toMatch(/tasks\.md/);
+     17|     expect(skill).toMatch(/predesigned[\s\S]*route/i);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/38]⎯
+
+ FAIL  tests/contract/build-code-apply-contract.test.mjs > build-code apply quality contract > requires per-phase execution facts and a final task strategy summary
+AssertionError: expected '---\nname: build-code\ndescription: I…' to match /dedicated final Task\/Phase…/Phase card
+
+- Expected: 
+/dedicated final Task\/Phase card/
+
++ Received: 
+"---
+name: build-code
+description: Implement the current cohort's Phase contract in the verified task worktree.
+version: 2.2.0
+---
+
+# Build Code
+
+## 统一回退协议
+
+五个正式 stage 共用 `runtime/stage/stage-content-contracts.mjs` 的
+`validateFallbackProtocol`。实现级问题留在当前 stage 修复；规格歧义在
+pre/history 回 `build-spec`，post 回 `build-plan` 的 `spec-clarify`；方向级问题回 `make-decision` 做增量决策；材料缺口回对应
+owner；环境不可用只记录 attempt。错配只让正式完成事实保持 `incomplete`，保留同 task 修复，禁止整阶段重跑；不新增 stage、public command、store 或 gate。
+
+### 计划缺口的集中退回
+
+发现在做的工作本身是计划缺口（Phase 的 allowed files/symbols 不对、覆盖的 AC 无法验证、
+Phase 之间的边界重叠、依赖顺序不成立、计划里的测试路由跑不起来），执行者必须**停下来成组退回**，
+而不是现场边做边改计划：
+
+1. **先列全，再退回**：把本 Phase 已发现的缺口一次性列全，每条写四样——缺口一句话、影响的 Phase/AC、
+   不修会怎样、需要 owner 回答什么。不要在只发现第一条时就退回，也不要发现第三条时再退一次。
+2. **只退回一次**：post 回 `build-plan` 的 `spec-clarify`，pre 回 `build-spec`/`build-plan`；方向性缺口回
+   `make-decision`。一次把全部缺口交出去，并在退回时说明\"在等答复之前我不打算动哪些部分\"。
+3. **退回期间停手范围**：只做不受该缺口影响的安全修复；受影响的部分在 task facts 里标
+   `blocked_by_plan_gap` 并写明是哪一条缺口，**不再猜着实现、不再自行改材料**。
+4. **第二次缺口并入第一份清单**：本 Phase 后续再发现缺口时，追加进同一份清单再退回一次，
+   不得就地自行决定。
+5. 确实需要\"先按自己的理解做一点\"时，先在 handoff 里写明理由和代价，再动。
+
+本条是执行纪律，不是新的 stage、gate 或质量结论；它不新增状态、不阻断同 task 的安全修复。
+
+## Goal
+
+Implement the current task with the smallest correct change, real tests,
+per-AC evidence, OCR review, and explicit finding disposition.
+
+## 阶段末遗漏披露
+
+阶段结束的大白话总结必须逐项列出本阶段所有未完成、失败、跳过、不适用、`unknown`、`unavailable` 或 `incomplete` 的 step 和 skill，并写真实原因与证据引用；没有遗漏就明确写“无遗漏”。执行事实通过正式 `run` 输入提交，不依赖宿主会话绑定、隐式选 task 或等待时限。
+若没有 stage outcome，也必须明确披露“outcome 缺失”；这不是“跳过”，而是当前事实 unavailable。
+
+阶段末逐项披露协议：主会话先读取本 stage 的 `workflows/<stage>/steps.json`
+manifest，再按声明顺序对齐当前阶段事实、产物和质量证据。阶段 outcome 不是必需输入；
+若某项没有当前事实，明确写真实原因。每一项分别读回并报告执行状态、产物存在性和完成判据是否齐备；
+产物存在不能替代完成判据。至少区分“未启动”“跳过”“产物缺失”“完成判据缺失”、
+`unknown` 与 `unavailable`。`executor_absent` 只能记为不可用，不能记为正常跳过；
+不得用一条阶段结论均摊到所有 step/skill。
+
+## 阶段末复盘（必须执行）
+
+阶段结束时，当前主会话按 `stage-reflection` 产出 `stage-reflection.v2` judgment JSON，经现有 `run --action=reflect` 或 runner 的 `on_stage_end` 调度提交。`judgments[].evidence_refs` 引用本阶段当前可复核的质量事实、测试、review 或阶段行；不要求外部 Stage Agent、bridge、session 或 stage outcome。writer 直接核对当前 `identity` 的 task、worktree、branch、attempt、material_revision 和 snapshot_tree。缺 judgment 或 reflection executor 时保持 `unavailable(executor_absent)`，保留实际错误且不阻断 stage、repair 或 close，不借用旧复盘。
+
+JSON 保留六个结构化区块：`what_helped`、`what_to_improve`、`blockers`、`intervention_reasons`、`what_to_simplify`、`simplifiable_now`，以及 `status_matrix`、`source_completeness`。条目写真实证据与 confidence；无发现写 `none_observed`，未知写 `unknown` 和原因，不适用写 `not_applicable` 和原因。
+
+消费实际返回的 `quality/stage-reflection/<stage>/<semantic-key>.json` 与原始 bytes 的 `sha256`；key 与 bytes hash 含义不同。同来源同判断重试复用首次 ref、时间和 bytes，来源或判断变化产生新原件；旧 `<stage>.json` 只作显式历史读取。复盘异常、lesson 合并失败和原 stage 错误分别保留，不覆盖原件，也不改变原 stage 失败。
+
+`validate-stage-reflection.mjs` 内部验证消费边：较早 output 与较晚 input 的同一引用才形成 edge；来源不完整保持 partial/unknown。`remove_candidate` 仍须既有完整零消费证明和人工介入条件，否则降为 `needs_evidence`。
+
+The current WorkflowHub session owns delivery. It performs the smallest real
+verification needed for the current task and publishes the current facts through
+the existing public `run` behavior. No external Stage Agent, bridge,
+`WORKFLOWHUB_STAGE_OUTCOME_PATH`, transcript, or session/outcome packet is
+needed. Any step not actually performed is recorded as `incomplete` with its
+real reason; quality facts remain separate from the permission to continue.
+
+## Authority and entry
+
+Current materials are cohort-specific. For pre/history, read `decision-log.md`,
+`spec.md`, `plan.md`, and `tasks.md`. For post, read `decision-log.md`, the
+product/global-design `spec.md`, `phases/index.md`, and every physical
+`phases/P<n>.md` referenced by the index. On resume, read the current
+`phase_progress` returned by `status --action=begin`; if its material revision
+matches, continue at that Phase/Task. If absent or stale, derive the next
+incomplete task from the physical Phase files and current task facts. The index
+is navigation only; never use a copied index body or absent post
+`plan.md`/`tasks.md`. Old reviews, execution records, provider state, audit
+history, and other auxiliary objects are facts, not work permits. Missing,
+stale, failed, or unavailable auxiliary facts never require a new task and
+never freeze implementation or same-task repair.
+
+`make-decision` exclusively owns Talk, Grill, and `decision-log.md`.
+The owning spec-authoring stage owns specification research and
+`spec-clarify` (`build-spec` for pre/history; `build-plan` for post). Build-code does not replay them or ask the user to reconstruct
+the decision process. If implementation exposes a direction-changing gap, keep
+the same task and return that decision to `make-decision`. Build-code does not
+author or rewrite current authoring materials: a post `spec.md` or Phase
+correction belongs to `build-plan`; a pre `spec.md` correction belongs to
+`build-spec` and pre plan/tasks authoring to `build-plan`. For pre/history,
+the existing task card's `执行状态填写区` remains the same-task exception for
+actual executor facts. For post, execution status, commands, AC and review
+facts go to existing task facts/quality evidence; `phases/index.md` remains
+pure pointers and Phase design remains unchanged. Record the concrete material
+gap and continue safe code, task-fact, or quality-fact repair in the same task;
+do not silently change the material owner or invent a new task.
+
+## Portable dependencies
+
+Use the dependency packages declared in `skill-deps.yaml` directly: open each
+selected dependency's declared `SKILL.md` and follow it in the current agent
+context. Do not route dependency use through a dispatcher, invocation protocol,
+or auxiliary progress gate.
+
+- Use `test-routing-advisor` once for every behavior Phase against the actual
+  changed-file boundary. If the actual boundary matches the planned route,
+  record the same route; if it differs, record the reroute and reason. The
+  advisor is stateless and never executes tests or grants permission.
+- Use exactly one applicable concrete testing skill directly:
+  `backend-testing`, `frontend-testing`, or `fullstack-slice-testing`.
+- Use the existing OCR delegation adapter through public `review --action=record`
+  once for each Phase. The adapter selects the packet; the host
+  returns findings. Verify-code owns the one final worktree review.
+
+If a dependency is unavailable, preserve that fact and use any safe repository
+test commands already specified in the owning pre task card or post Phase file. The missing dependency limits the
+quality or completion claim; it does not prohibit code or material repair.
+
+## Affected business cases
+
+When a Phase calls for P8/P9 business-case selection, authenticate the current
+Task start, source snapshot, catalog revision, and independent runnable-test
+inventory before using them. Start the Phase's fixed trusted capture command
+once; its inner selection must derive cases and related regressions from the
+actual changed paths, then run validated test targets with argv and `shell:false`.
+The agent supplies the fixed command, not a hand-picked list of case paths.
+`selectAffectedCases`, `runTargetedCases`, and `reconcileCases` are importable
+seams, not a fixed launcher or independent authentication authority. If the
+fixed consumer, exact inventory identity, or canonical binding is absent,
+record the attempted route and `unknown`/`unavailable` for affected ACs.
+
+For each selected case, retain the rule and catalog revision, AC, test file and
+full runnable identity, argv, child exit, raw report/ref/hash, source snapshot,
+observable business inputs and before/after effect refs. Check the supplied
+effect against a project-owned oracle and its source revision; a passing TAP
+name, exit 0, or a matching fixture field cannot establish a business pass.
+Record structural and risk gaps with their owners. On same-task repair, retain
+the old failure ref, take a new snapshot, recompute the affected set, rerun
+adjacent regressions, and link the new receipt to the old fact without
+overwriting either. Complete the AC claim only after current authenticated
+case evidence and the independent review facts have been recorded.
+
+## Conditional UI implementation handoff
+
+When the current phase has `ui_applicability=ui`, consume the existing
+`frontend-component-quality` Component Quality Map before editing. For every
+entry, check the real consumer, state owner, typed ViewModel, CSS/token owner,
+and any `story_or_test_update` against the actual diff. Preserve `unknown`, `unavailable`, and `N/A +
+reason` when a planned consumer, design source, browser, fixture, viewport, or
+screenshot fact is missing; these facts are not a gate and do not authorize a
+new stage or public command.
+
+Build-code is the owner that executes `frontend-testing` for the changed UI
+behavior. The implementation order remains static composition, state and
+interaction, then DTO-to-typed-ViewModel wiring; the test route must observe
+the real consumer and recovery behavior rather than a component snapshot.
+Non-UI phases keep the existing backend or fullstack route and record the UI
+skill as not applicable.
+
+For an applicable UI phase, the official `build-code` handler is the only
+execution seam for controlled browser QA. It may invoke the existing
+`isolated-browser-qa` adapter once for the current attempt, with the current
+task, material revision, snapshot, AC, Design.md/Experience.md identities, and
+service/API/DTO identities. A retry is a new invocation and keeps the previous
+failure. Success requires the adapter's real evidence, cancellation state, and
+cleanup result to validate against `browser-qa-evidence.v1`; a fixture-only
+return, identity mismatch, browser failure, cancellation, or cleanup failure
+is retained as `failed`, `unknown`, `blocked`, or `incomplete` as appropriate.
+No public Runner, QA command, or persistent QA control object is created.
+This remains inside build-code: it creates no new stage, and UI quality evidence
+is no gate for continuing same-task repair.
+
+For a declared browser acceptance scenario, build-code passes the four-field
+`acceptance_scenario` to the private controlled-QA adapter. The adapter must
+first persist direct `browser-qa-evidence.v1` bytes, then return the matching
+canonical `{ref,sha256}` and payload. Missing or mismatched source, sample,
+scenario, tier, task, attempt, material, snapshot, or invocation remains
+`unavailable`; a normal QA run remains compatible without this optional field.
+
+## Real acceptance and review inputs
+
+For a Task with `acceptance_role=acceptance`, consume its declared `acceptance_data`:
+command scenarios supply `execution.command`, `args`, and `timeout_ms`; service
+scenarios supply worktree-relative `module_ref`, `export_name`, `input`, and
+`timeout_ms`. The official build-code handler invokes the private runner for
+these scenarios. The runtime records actual assertions, exit/signal, timeout,
+cancellation, cleanup, raw stdout/stderr refs, per-AC evidence, and the aggregate
+bound to the authenticated executor outcome. The aggregate subject is
+`acceptance_execution`; retain its actual
+`quality/evidence/stage-quality/build-code/acceptance_execution-<rawsha>.json`
+ref and raw bytes `sha256`. Obtain `quality_fact_ref` from the returned
+`quality_fact_refs`: read the `kind=acceptance_criterion`,
+`subject=acceptance_execution` fact and its evidence wrapper, whose explicit
+aggregate ref/hash must match. The `quality/facts/<digest>.json` path uses the
+quality fact's semantic digest; it is neither the aggregate ref nor its raw hash.
+Hand these exact values to ordinary verify-code review as
+`input.request.reviewed_execution={ref,sha256,quality_fact_ref}`. This selector
+is for the ordinary verify-code request, not the build-code Phase review.
+Compare each actual result with
+its oracle; exit 0 or a hand-written `executed` field does not prove acceptance.
+Missing, failed, skipped, and unavailable items remain visible. Non-UI does not
+make command/service acceptance not applicable.
+
+For each ordinary `build-code/phase` review, submit `review --action=record`
+with `input.request` binding `review_scope=\"phase\"`, `subject_kind=\"phase\"`,
+and `phase_id=\"P<n>\"`. No candidate flag or comparative go/no-go is required.
+The OCR adapter selects the authenticated packet and files; the host executor
+returns the real findings. Consume the returned canonical
+`result_ref` or unavailable `attempt_ref` through `run` `receipts.review`.
+The Phase result is `phase_review`; the final worktree review belongs to
+verify-code. Historical integration attempts remain readable facts, not a
+current build-code step or completion condition.
+Malformed code-surface requests fail before dispatch. An unavailable host
+remains an unavailable review fact and permits same-task repair.
+
+Direct OCR providers have the same fixed 600,000 ms host deadline as verify-code;
+health/output sampling is diagnostic only. A timed-out provider remains a failed
+provider attempt, while another successful route can still be retained.
+
+### AC-REVIEW-011：OCR 工具不可用时的替代审查
+
+当前 WorkflowHub 主会话读取本 Phase 的 OCR canonical attempt：仅当工具
+`unavailable` 且零成功审查路时，在同一 Phase 内调用一次
+`skills/architect-code-review/SKILL.md`。把当前 diff、完整 AC、OCR packet
+可读部分及原始失败原因交给能够调用的执行者审查；
+此条件调用由主会话显式读取技能，不增加每 Phase 的常规依赖或固定轮次。
+只核对输入范围、执行能力和真实输出。reviewer 与实现者是否同源、是否使用同一
+宿主或模型都不构成阻塞。无法启动时，该一次替代机会记为 unavailable。已有成功路的 findings
+照常入账；局部覆盖缺口单独披露。明确的人为取消按取消事实处理，不自动重派。
+
+一次替代调用完成后，保存原始输入范围、task/Phase、材料版本与代码快照、OCR
+`attempt_ref`、执行者身份、调用命令或 host invocation、
+开始/结束时间、exit/transport、原始输出、findings、覆盖缺口和各原件 hash。
+可用时逐条处理替代 finding；替代也不可用时
+明确记 `unverified`、两路原因和缺失维度，不重派、不写 `findings: []`。
+旧 wh-review/broker 仅供历史读取，不是本分支的执行者。
+
+使用现有证据发布能力保存这份调用记录，保留其返回的原件 ref/hash；
+`capture-evidence` 如可用，只把工作区文件收为 `quality/evidence`，并不生成
+canonical review result。当前 `receipts.review` 仍须消费原 OCR 的
+`result_ref` 或 unavailable `attempt_ref`；在正式 review consumer 无法认证
+替代结果前，Phase review 质量保持 `incomplete/unverified`，不得把证据
+附件冒充 `quality/reviews/results`。单独判断 AC-REVIEW-011：若同一 Phase
+的 OCR unavailable attempt、恰好一次真实替代调用及其身份/原始
+输出/exit、来源缺口和最终披露均可核对，则本 AC 可记 achieved；替代也
+不可用时须有该次失败调用及 `unverified` 披露。缺任何原件仍记 incomplete。
+这项 AC 判断不是新的推进 gate，也不改变正式 `phase_review` 质量事实。
+
+## Work loop
+
+1. Read current cohort materials and the physical Phase authority, then select
+   the next incomplete Phase task from its task facts. Write a small
+   Phase Card in the task's working area: goal, exact allowed files and symbols,
+   covered ACs, non-goals, compatibility boundary, predesigned test route, stop
+   conditions, and expected stage-end summary. Completion: the change boundary
+   and its ACs are explicit before editing.
+
+   Phase Card 里再写两行**版本锚**（给人看的绑定，不是 machine gate）：
+   - `规则锚`：本 Phase 依赖的业务规则，逐条写「文件 + 章节标题逐字」或「FR/AC 编号 + 该段首句逐字」。
+     不要写整份文件的哈希——材料里与本 Phase 无关的段落变化，不构成本 Phase 事实作废的理由。
+   - `材料变更影响`：本次实施预计会改动材料（`phases/P<n>.md`、`spec.md`）的哪些段落；
+     不会改动的段落**不在本 Phase 的审查与实现范围内**。
+   当材料发生变化时，先对照这两行判断\"变的是不是我盯的那一段\"：不是，就照常继续并只在 handoff 记一句；
+   是，才把本 Phase 的实施/测试/审查事实读为 stale。
+
+2. Apply the Task's predesigned route. When behavior can be tested, write the
+   focused behavior test and capture real RED before implementation. Make the
+   smallest production change, then inspect the actual changed files. A pure
+   documentation or material Task may mark testing not applicable with a plain
+   reason. Completion: every changed file belongs to the Phase Card or is
+   explained as a same-task scope correction.
+   重试前自述一行并写进本 Phase 的 task facts：**「自上次以来我改了什么：<一句话>；失败信号：与上次相同／已变」**。
+   写不出这行＝卡住成立：停下这一次重试，按 `AGENTS.md` 的 `### 卡住与升级` 段用大白话把
+   「卡在哪、为什么不能继续、有几条路、每条路的代价」报告给人，由人决定继续／换路／缩小范围／取消。
+   本判据不设次数或时长阈值，也不是机器阻断。
+3. Compare the actual changed files with the predesigned route. Use
+   `test-routing-advisor` directly for this Phase even when the route is
+   unchanged; record the old route, selected route, and whether a reroute was
+   needed. Then use the selected concrete testing skill directly against the
+   actual range. Completion: the selected route contains a focused command,
+   oracle, expected evidence, and known coverage limits.
+4. Run the focused GREEN oracle. Scan the complete diff against every affected
+   FR and AC, including behavior, state/data, error/cancel/recovery, shared
+   interfaces, concurrency/atomicity, and real browser behavior when relevant.
+   Record actual commands, outcomes, and limits. Completion: every affected AC
+   has `pass`, `fail`, `unknown`, `deferred`, or `not_applicable` with a short
+   reason and evidence where available.
+   人读结论用三词：**达成／未达成（写明下一步）／退役**——退役＝这一条不再做、已由决定退出，不用「以后再说」这类模糊说法。
+   三词只是同一份真实结果的大白话读法：上面那组机器取值与验收证据的冻结机器取值域**取值域不变**，不因三词增删任何取值——验收证据的 `result` 是既有的冻结八值 `pass`、`fail`、`inconclusive`、`deferred`、`missing`、`inconsistent`、`incomplete`、`unavailable`。
+   既有来源：`runtime/evidence/acceptance-evidence-validator.mjs:6`、`runtime/review/schemas/ac-evidence-summary.schema.json:32-33`；冻结裁定 `tests/contract/acceptance-result-machine-classes.test.mjs:95-99`（均为实读既有事实，不是本卡新取的域）。
+   本词表只约束人读措辞；`quality/evidence/acceptance/**` 的 `result` 取值域与 `decision-log` 的处置列**一字不动**。未达成如实记为未达成并进失败事实清单；这一条不新增任何推进前置。
+5. Use the review dependency declared in `skill-deps.yaml` directly for one
+   review of the completed Phase. Preserve the actual findings,
+   transport status, and provenance;
+   OCR 工具 unavailable 且零成功路时执行上面的 AC-REVIEW-011 分支恰好一次；
+   `unavailable` remains an unavailable fact. Do not re-review an unchanged change
+   merely to chase an empty findings list. Completion: the review or its real
+   unavailability is recorded with provenance; an unavailable attempt keeps the
+   stage quality claim incomplete.
+
+   发起前先回答三个问题，并把答案写进本 Phase 的 task facts：
+   - **审什么**：列出本次审查范围 = `phase_id` + 本 Phase Card 的 allowed files/symbols + covered AC 列表，
+     作为 `review --action=record` 的 `subject` 原样提交。`subject` 不许留空；留空等于声明\"范围未限定\"。
+     同时必须显式写全 `review_scope=\"phase\"`、`subject_kind=\"phase\"`、`phase_id=\"P<n>\"` 三者——
+     三者缺一时不要靠默认值，先补齐再提交。
+   - **审过了吗**：读当前 task 的 `quality/reviews/attempts/` 与 `quality/reviews/results/`，
+     列出同一 `phase_id` 下**已存在的成功回执**及其 `subject`。
+   - **要不要再派**：只有当本次范围**超出**已有回执范围（新增文件/新增 AC），或已有回执是 `unavailable`，
+     才发起一次新审查；必须写明\"超出的是哪一条\"。**修 finding 造成的材料字节变化不是重派理由。**
+   若本 Phase 仍然出现了第二次派发，必须在 Phase handoff 里写清两次 `subject` 的差异和第二次的必要性。
+   本条是执行纪律，不是新的 stage、gate 或质量结论。
+
+6. Inspect every finding and record `fixed`, `rejected_invalid`,
+   `accepted_risk`, or `needs_human`. Repair valid findings in this same task and
+   rerun affected checks. Reject invalid findings with evidence. Keep serious
+   unresolved risk visible and obtain the user's exact acceptance before calling
+   the affected work complete. Completion: no finding is unexplained.
+
+   修复前先写下**受影响的测试集合**（文件/用例名），只跑这一集合；把每条的 exit code 与结果直接写在
+   对应 finding 的处置里（哪个 finding → 跑了哪条命令 → 结果如何）。没有受影响的测试时写
+   `not_applicable` 和原因，**不要用全量回归代替定向复测**；确实需要一条例外命令时，
+   写清是谁要求的、范围是什么（照 `AGENTS.md` 的测试硬规则）。
+
+7. End the Phase with a plain-language handoff: delivered behavior, actual test
+   layer and result, AC limits, review fact, finding disposition, unresolved
+   risk, deferred work, and the next Task. For pre/history, update the existing
+   task card's `执行状态填写区`; for post, record the same actual facts in existing
+   task facts/quality evidence without writing to the Phase authority or
+   pointer index. After recording each completed Task, update the one in-place
+   resume cursor through the existing public `run --action=execute` input, for example
+   `{\"phase_progress\":{\"phase_id\":\"P5\",\"task_id\":\"T011\"}}`; point it at
+   the next incomplete Task, or the last Task when the Phase is complete. The
+   cursor is navigation only: it does not certify completion or unlock work.
+   It is bound to the current material revision, not the changing code snapshot.
+   A Task is
+   `completed` only when those facts cover its actual changes, commands/exits,
+   affected AC results, evidence, review outcome, and handoff. Then continue
+   with the next `pending` or `in_progress` Task; do not replay earlier Phases
+   or reconstruct historical process indexes.
+
+   收尾时回答一句：当前推进中的 Phase 只有一个吗？如果有第二个已经开始，写清它是什么、为什么提前开始。
+
+   handoff 里再加一行**本 Phase 成本**，用大白话写数字；写不出就写 `unavailable` 和原因：
+   「改了几次实现、跑了几次 focused 测试（分别是什么）、发起过几次正式审查（含 unavailable 的尝试）、
+   等 provider 一共多久、改过几次材料、从开始到 handoff 一共多久」。
+   这一行只用于诊断，不设预算上限，也不作为推进条件；它不阻断任何后续动作。
+
+Every completed Phase executes its recorded route, checks the real changed-file
+range, uses the applicable concrete testing skill, and records test, AC, review,
+finding-disposition, and plain-language stage facts.
+
+Phase 收尾把这条已有要求做完整，只使用既有字段，不新增字段、命令或 schema：
+① 执行本 Phase 记录的那条 route 与其 `gate_cmd`，命令按字面跑，不换成别的命令，也不用全量回归代替；
+② 把这次运行的**原始输出**写入本 Phase 契约头自己声明的 `evidence_path`（原件，不写摘要、不写结论）；
+③ 本 Phase 的交付锚是**一次 `git commit`**：只在既有 commit 授权到位时执行（见下方授权段）；
+   缺授权时如实记 `delivery pending`——它不是进入、继续、测试、修复或交接的前置。
+这三件事是执行纪律：缺哪一件都如实记缺失，不阻断同任务内的后续动作。
+
+Before `publish-code-result`, execute the declared `stage-end-spec-analyze`
+step. It compares the original requirement and current cohort materials with
+the actual implementation, tests, AC trace, review facts, and real user-result
+evidence. It checks actual semantics and evidence, not only IDs, paths, hashes,
+or files. Repair valid gaps in build-code when they belong to implementation or
+task facts; keep product/spec/Phase ownership with its owning stage. Emit the
+shared six-part plain-language summary: current stage work, requirement
+coverage, upstream alignment, repairs made here, remaining risks, and the next
+stage boundary.
+
+After the phase facts are recorded, a phase may be committed only when the
+user has separately authorized the irreversible operation. The public form is
+`node tools/cli/stage-runtime.mjs authorize --action=commit`; the normal
+`task-close close` action is the user-facing alternative and internally writes
+the per-operation authorizations required by the frozen close plan. A phase
+commit is a Git delivery fact and a useful review anchor; it is never required
+to start, continue, test, repair, or hand off the same task. Missing delivery
+authorization means `delivery pending`, not a build-code entry, continuation,
+testing, repair, or handoff blocker.
+
+整树丢弃类动作（`git restore/reset/checkout -- :/`）与 delete+add 整体替换权威材料属于**销毁性动作**，
+适用既有 F7 不可逆授权边界（`CONSTITUTION.md` 的不可逆授权条款、本任务 `decision-log.md` 的不可逆授权需求条目、
+本任务 `design.md` 的 F7 段）：强推、删分支、删任务目录同样落在这一边界内；这类动作不得由阶段确认顺带授权，
+也不得作为绕过既有授权的捷径。不新增公共动作、不新增确认点、不新增 schema；真的发生时在既有 task facts
+如实登记。本条是既有边界的复述与范围举例，不是新的 stage、gate 或质量结论。
+
+A current Phase review is required as a recorded quality fact. Its findings and transport status are not a progression gate: an unavailable or adverse fact stays visible, limits the completion claim, and still allows same-task repair and the next safe work item. Every stage review is advice-only; it does not need to pass or return empty findings. A provider verdict, where one exists, is also a recorded quality fact; `provider pass` is never required.
+Never require a provider pass.
+
+`unavailable` is never `pass` and never a work blocker.
+When status reports `work_status=ready` with `quality_status=in_progress|incomplete|unavailable`, continue the next safe implementation or focused verification action; do not wait for a provider or rerun a completed review. Later implementation changes do not send the workflow back to that review step.
+
+## Preflight self-check
+
+Before submission, optionally run `stage-runtime.mjs run --action=preflight --stage=build-code --input=<payload.json>` as a local payload-shape self-check (not a quality gate), and fix any reported protocol errors first.
+
+## Final aggregate
+
+After all implementation Tasks, use the dedicated final task in the pre
+`tasks.md` or post physical Phase file. Recheck its route against the full actual change, run the recorded
+final aggregate strategy once, and record its command, oracle, result, limits,
+and per-AC impact. Reconcile the Phase review findings and repairs with the
+final test and AC facts, then continue to `stage-end-spec-analyze`. Verify-code
+performs one final worktree OCR review and replays the risky paths
+and complete user flow. Historical integration review outcomes stay visible but
+do not require a new dispatch.
+
+The final full test is a build-code handoff fact; it is not a provider pass or
+a new quality gate.
+
+Build-code does not run the aggregate regression command after each Task.
+Focused tests belong to each Phase; the recorded final command belongs to the
+final aggregate.
+
+## Completion and fail-loud writes
+
+Rule: publish no completion unless the requested behavior is implemented, relevant
+real tests ran, every applicable AC has a result, a current OCR review
+result is recorded, every finding has a disposition, and the stage-end
+plain-language summary exists. Keep adverse, unavailable, failed, and unknown
+review facts visible; an unavailable attempt remains quality-incomplete and does
+not block same-task repair.
+
+A fact write with a wrong task, workspace, runtime, hash, schema, or declared
+write boundary fails loudly for that write. Preserve the error and never invent
+success. That failure does not freeze code edits, material correction, tests, or
+finding repair in the same task; it only prevents the affected fact or completion
+claim until repaired.
+
+## Reporting
+
+After each Phase, report only delivered behavior, actual focused test results,
+AC limits, review findings/transport facts, finding disposition, unresolved risk,
+and next Task.
+At the end, explain in plain language what changed, which evidence is current,
+what remains unknown, and what `verify-code` will check. Verify-code reads this
+summary and current cohort materials; it does not repeat Talk, Grill, or require a
+process index.
+
+Do not expose internal execution machinery or duplicate completion views to the
+user. Commit, push, merge, archive, and cleanup require separate authorization.
+"
+
+ ❯ tests/contract/build-code-apply-contract.test.mjs:31:19
+     29|     expect(skill).toMatch(/Every completed Phase executes/);
+     30|     expect(skill).toMatch(/final aggregate strategy/);
+     31|     expect(skill).toMatch(/dedicated final Task\/Phase card/);
+       |                   ^
+     32|     expect(skill).toMatch(/test-routing-advisor/);
+     33|     expect(skill).toMatch(/final full test is a build-code handoff fac…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/38]⎯
+
+ FAIL  tests/contract/build-code-apply-contract.test.mjs > build-code apply quality contract > records task strategy and execution facts in the canonical step manifest
+AssertionError: expected [ 'test_strategy' ] to deeply equal [ 'test_strategy', 'stage_outcome' ]
+
+- Expected
++ Received
+
+  Array [
+    "test_strategy",
+-   "stage_outcome",
+  ]
+
+ ❯ tests/contract/build-code-apply-contract.test.mjs:57:67
+     55|     expect(route.observable_result).toMatch(/actual changed files/i);
+     56|     const concrete = steps.steps.find((step) => step.step_slug === "in…
+     57|     expect(concrete.completion_evidence.map((item) => item.kind)).toEq…
+       |                                                                   ^
+     58|     expect(concrete.observable_result).toMatch(/backend\/frontend\/ful…
+     59|     const runTests = steps.steps.find((step) => step.step_slug === "ru…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/38]⎯
+
+ FAIL  tests/contract/card04-final-aggregate.test.mjs > ORACLE-CARD04-FINAL-AGGREGATE: P13/T024 ordinary final report > requires the actual final artifact after P1–P12, with canonical gate and task identities
+AssertionError: expected { …(20) } to match object { …(7) }
+(23 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  Object {
+    "canonical_receipt": false,
+-   "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919",
++   "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+    "exit_code": 0,
+    "phase_id": "P6",
+    "scope": "node_guard_only",
+    "task_id": "workflowhub-thin-core-card-04-20260919",
+    "timing": "executed_after_original_final_report_publication",
+  }
+
+ ❯ assertP6Guard tests/contract/card04-final-aggregate.test.mjs:319:18
+
+ ❯ mergeP6Guard tests/contract/card04-final-aggregate.test.mjs:354:3
+ ❯ currentReport tests/contract/card04-final-aggregate.test.mjs:469:10
+ ❯ tests/contract/card04-final-aggregate.test.mjs:502:14
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/38]⎯
+
+ FAIL  tests/contract/card04-final-aggregate.test.mjs > ORACLE-CARD04-FINAL-AGGREGATE: P13/T024 ordinary final report > delivers a distinct final rendering and an independently authored, unchanged plain-language narrative
+AssertionError: expected { …(20) } to match object { …(7) }
+(23 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  Object {
+    "canonical_receipt": false,
+-   "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919",
++   "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-04-20260919",
+    "exit_code": 0,
+    "phase_id": "P6",
+    "scope": "node_guard_only",
+    "task_id": "workflowhub-thin-core-card-04-20260919",
+    "timing": "executed_after_original_final_report_publication",
+  }
+
+ ❯ assertP6Guard tests/contract/card04-final-aggregate.test.mjs:319:18
+
+ ❯ mergeP6Guard tests/contract/card04-final-aggregate.test.mjs:354:3
+ ❯ currentReport tests/contract/card04-final-aggregate.test.mjs:469:10
+ ❯ tests/contract/card04-final-aggregate.test.mjs:506:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/38]⎯
+
+ FAIL  tests/contract/card04-final-aggregate.test.mjs > ORACLE-CARD04-FINAL-AGGREGATE: P13/T024 ordinary final report > rejects absent, stale, displaced bad-news and unknown-laundered refs without creating receipts
+AssertionError: source missing: specs/workflowhub-thin-core-card-04-20260919/phases/P12.md: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ source tests/contract/card04-final-aggregate.test.mjs:87:55
+     85|   const allowed = isAbsolute(path) && within(root, full) ? root : isAb…
+     86|   expect(within(allowed, full), `source outside authenticated ${allowe…
+     87|   expect(existsSync(full), `source missing: ${path}`).toBe(true);
+       |                                                       ^
+     88|   expect(within(realpathSync(allowed), realpathSync(full)), `source sy…
+     89|   return readFileSync(full);
+ ❯ tests/contract/card04-final-aggregate.test.mjs:531:68
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/38]⎯
+
+ FAIL  tests/contract/freeze-classification-budget-usage-protocol.test.mjs > P7 AC-REBIND-001..003 freeze and confirmation text contracts > AC-REBIND-001 freezes make-decision materials after step 10 and removes the four agent-created sections
+Error: ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919/specs/workflowhub-cost-baseline-and-blocker-close-20260917/decision-log.md'
+ ❯ readProjectFile tests/contract/freeze-classification-budget-usage-protocol.test.mjs:330:45
+    328| 
+    329| describe("P7 AC-REBIND-001..003 freeze and confirmation text contracts…
+    330|   const readProjectFile = (relativePath) => readFileSync(new URL(`../.…
+       |                                             ^
+    331| 
+    332|   it("AC-REBIND-001 freezes make-decision materials after step 10 and …
+ ❯ tests/contract/freeze-classification-budget-usage-protocol.test.mjs:334:25
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/38]⎯
+
+ FAIL  tests/contract/freeze-classification-budget-usage-protocol.test.mjs > P7 AC-REBIND-001..003 freeze and confirmation text contracts > AC-REBIND-003 makes tasks.md execution status the only post-confirmation writable area
+AssertionError: expected '---\nname: build-plan\ndescription: T…' to match /确认后唯一可写区是 tasks\.md 的执行状态填写区/
+
+- Expected: 
+/确认后唯一可写区是 tasks\.md 的执行状态填写区/
+
++ Received: 
+"---
+name: build-plan
+description: Turn the current decision and specification into an executable implementation plan and task list.
+version: 4.1.0
+---
+
+# Build Plan
+
+## Post-cohort 13-step contract
+
+For post-cohort work, this stage is the sole current authoring chain. It writes
+the product and implementation `spec.md`, independent `phases/P<n>.md` files,
+and a pure pointer `phases/index.md` execution index;
+`build-spec` remains readable only for pre-cohort and history. The
+ordered steps are `read-current-materials`, `conditional-spec-research`,
+`spec-clarify`, `spec-specify`, `conditional-ui-readiness`, `spec-plan`,
+`testing-system-blueprint`, `test-routing-advisor`, `merged-review`,
+`main-agent-disposes-findings`, `final-spec-analyze`,
+`publish-result-and-confirm`, and `stage-reflection`.
+
+K1 source-to-FR/AC translation; K2 requirement coverage; K3 four-part AC;
+K4 state coverage; K5 one clarify owner; K6 one review and disposition; K7
+current-material consistency report; K8 packet lenses; K9 frozen RED/GREEN and oracle; K10
+routing and test blueprint; K11 explicit omissions/reflection; K12 structured
+questions and actual confirmation. Each K has the named step as consumer and
+the corresponding observable result as oracle. No K creates a new stage, skill,
+public command, store, or compatibility dual writer.
+
+## 统一回退协议
+
+五个正式 stage 共用 `runtime/stage/stage-content-contracts.mjs` 的
+`validateFallbackProtocol`。实现级问题留在当前 stage 修复；规格歧义走
+`spec-clarify`：pre-cohort 回 `build-spec`，post-cohort 回本 stage 的
+`spec-specify`；方向级问题回 `make-decision` 做增量决策；材料缺口回对应
+owner；环境不可用只记录 attempt。错配只让正式完成事实保持 `incomplete`，保留同 task 修复，禁止整阶段重跑；不新增 stage、public command、store 或 gate。
+
+## Responsibility and authority
+
+For pre-cohort tasks, retain the historical `plan.md`/`tasks.md` contract.
+For post-cohort tasks, this stage owns current `spec.md`, independent
+`phases/P<n>.md` files, and `phases/index.md`: `spec-specify` writes the
+product specification first, `spec-plan` adds implementation design to that
+same spec and authors each Phase file, then `spec-tasks` renders the pointer
+index. No post-cohort plan/tasks dual write occurs. In either cohort it does not change
+product direction or implement production code. For an applicable behavior test,
+post build-plan writes and executes the prewritten test to observe target RED.
+Those post-cohort materials are the current work truth. Old reviews, provider
+state, execution history, and audit facts may explain quality, but they do not
+replace the current decision/spec or freeze same-task planning and repair. A
+direction-changing gap is returned to `make-decision`; unaffected planning
+continues without guessing.
+当前材料统一落在认证 worktree 的 specs/<task-id>/ 下；外置任务追踪目录只保存
+`task.json`、`facts.jsonl`、`quality/`、`index.json` 等执行文件，不替代材料，也不新增 gate。
+`m15-retirement` 材料迁移与仓外 `Knowledge/Projects/workflowhub/tasks/Projects/`
+清理不属于本技能范围。
+
+## 阶段末遗漏披露
+
+阶段结束的大白话总结必须逐项列出本阶段所有未完成、失败、跳过、不适用、`unknown`、`unavailable` 或 `incomplete` 的 step 和 skill，并写真实原因与证据引用；没有遗漏就明确写“无遗漏”。执行事实通过正式 `run` 输入提交，不依赖宿主会话绑定、隐式选 task 或等待时限。
+若没有 stage outcome，也必须明确披露“outcome 缺失”；这不是“跳过”，而是当前事实 unavailable。
+
+阶段末逐项披露协议：主会话先读取本 stage 的 `workflows/<stage>/steps.json`
+manifest，再按声明顺序对齐当前阶段事实、产物和质量证据。阶段 outcome 不是必需输入；
+若某项没有当前事实，明确写真实原因。每一项分别读回并报告执行状态、产物存在性和完成判据是否齐备；
+产物存在不能替代完成判据。至少区分“未启动”“跳过”“产物缺失”“完成判据缺失”、
+`unknown` 与 `unavailable`。`executor_absent` 只能记为不可用，不能记为正常跳过；
+不得用一条阶段结论均摊到所有 step/skill。
+
+## 阶段末复盘（必须执行）
+
+阶段结束时，当前主会话先按 `stage-reflection` 技能产出 `stage-reflection.v2` judgment JSON，再调用实际的公共入口 `run --action=reflect`。`judgments[].evidence_refs` 引用当前 `build-plan` 可复核的阶段行、质量事实、测试或 review；不要求外部 Stage Agent、bridge、session 或 stage outcome。`identity` 的 task、真实 worktree/branch、attempt、material_revision 与 snapshot_tree 必须匹配当前认证工作区。没有 judgment 或 executor 时如实为 `unavailable(executor_absent)`，不借用旧运行身份。JSON 要用六个结构化区块回答什么帮了忙、什么要改进、什么阻塞、为什么需要人工介入、什么应简化、什么现在就能简化：`what_helped`、`what_to_improve`、`blockers`、`intervention_reasons`、`what_to_simplify`、`simplifiable_now`。每块条目必须带真实 `evidence_refs` 与 `confidence`；已检查无发现为 `none_observed`，输入不足为 `unknown` 并写 `unknown_reason`，不适用为 `not_applicable` 并写理由，不能静默省略。
+
+返回后把实际 `quality/stage-reflection/build-plan/<semantic-key>.json` 的 ref 与原件 bytes 的 sha256 交给既有 lesson/report consumer。semantic key 不等于原件 hash：同判断 A 复用首件 bytes/ref/time，判断或真实执行身份变化 B 写新件并保留 A；旧 fixed ref 只读。缺 executor/judgment 保持 `unavailable`。复盘失败保留原 stage error 和实际 `reflection_error`；既有 stage 事实继续有效。
+
+`validate-stage-reflection.mjs` 在验证内部调用 `deriveConsumptionEdges`，技能不另行派生消费边。实际边只由较早 subject 的 `output_refs` 与较晚 subject 的 `input_refs` 同引用形成；当前阶段事实或 output 不全时 `coverage_status=partial`、消费为 unknown，不能当零消费。只有完整扫描、近 30 天登记 output 的 `zero_consumption_proof`，以及人工 rejected 或同一步骤至少两次介入，`remove_candidate` 才保留，否则变为 `needs_evidence`。如果 route 尚未实现，记录真实 unavailable/dependency，不发明私有命令。
+
+## Portable dependencies
+
+Read inline packages in `skill-deps.yaml` directly in this WorkflowHub session context.
+Packages declared `execution: independent` run in their own independent
+context and return only their findings; do not inline them or route them
+through a dispatcher. This includes research when needed and
+`test-routing-advisor`. `spec-plan`, `simplicity-guard`, `plan-eng-review`,
+`testing-system-blueprint`, `spec-tasks`, and `spec-analyze` remain inline.
+The review dependency declared in `skill-deps.yaml` is the stage's review adapter;
+its broker request must produce findings in an independent reviewer context. It is not
+an inline self-review lens and does not share the current session's judgment.
+`simplicity-guard` and the plan-review lenses inspect the same plan material and
+return advisory findings; they do not create extra calls, state, or permission
+checks.
+
+`testing-system-blueprint` designs risks, scenarios, oracle, evidence path, and
+coverage limits. `test-routing-advisor` chooses the applicable concrete test
+skill. For an applicable behavior change, the build-plan author writes a real
+test and executes its scoped command to establish target RED. Build-code uses
+the selected concrete `backend-testing`, `frontend-testing`, or
+`fullstack-slice-testing` skill to make that same test GREEN and check adjacent
+behavior; the planning RED is not a code implementation or a GREEN claim.
+
+An unavailable dependency or reviewer is recorded as an honest quality fact.
+It does not block writing or same-task repair and is never rewritten as a clean
+result.
+
+Review is a quality fact, not a progression gate or permission to continue
+working. Missing or unavailable quality evidence lowers the completion claim;
+an unavailable review is never `pass` and does not block continued research,
+planning, or repair in this same task. The declared review step records real
+advice and advances to finding disposition and final analysis; downstream edits
+do not dispatch that completed review step again.
+
+### Stage-input packet and context facts
+
+Before `spec-plan` and `spec-tasks` execute, the host assembles one frozen
+`stage-input-packet.v1` bound to the current `task_id`, stage,
+`material_revision`, `snapshot_tree`, source digests, derived-file authority,
+and exact `packet_freeze_hash`. The inline skills and dispatched contexts read
+only this packet; the main session retains the packet reference, hash, binding,
+and a summary no longer than 500 characters. `spec.md` carries global design;
+each Phase file is independent and `phases/index.md` is regenerable pointers.
+Packet,
+dispatch, or summary failure stays unavailable/degraded with owner and next
+action. Provider usage is recorded when present or marked unavailable, and the
+three character proxies (`full_reread_count`, `subagent_input_bytes`,
+`review_material_bytes`) are observations only; do not claim token savings or a
+decrease without evidence.
+
+## Boundaries: no direction replay
+
+Do not run Talk, Clarify, or Grill here. Do not run `talk-with-zhipeng` as a
+substitute. Those activities belong to `make-decision`; build-plan consumes
+their current conclusions in
+`decision-log.md`. Do not invent a product choice from code, history, or a
+review suggestion. Build-plan's business confirmation is required at handoff:
+do not invent the user's actual reply. Present the completed plan in plain
+language and obtain the user's actual reply before claiming that build-plan
+itself is accepted; the current session must then publish that reply as the
+existing `human-confirmation.v3` record under
+`quality/confirmations/<sha256>.json`, then pass its ref to the official handler
+for validation before claiming that build-plan itself is accepted. This
+confirmation does not turn confirmation into a machine work permit. Missing
+review facts do not block continued work: continue research, planning, or
+repair in this same task.
+确认问题按**三选一**提出，不把「没有回答」当成默认继续：①按现有材料把缺口修完再进；
+②**指派缺口负责人后进**（写清谁负责哪条缺口）；③**取消本次执行**。用户未回答时保持草稿、
+在本 task 内继续研究/规划/修复，缺的确认事实如实记为缺失；它不阻断同任务内的后续动作
+（见上：确认不是机器工作许可），也不新增确认点、字段或文件。
+确认后的实际执行事实写入既有 task facts/quality evidence；Phase 正文与索引不充当进度账。
+改变方向的规划歧义按现有 fallback protocol 路由回 `make-decision`。
+Do not implement production code or claim GREEN here. Write and run applicable
+behavior tests for target RED; leave their implementation and same-oracle GREEN
+to `build-code`. Missing execution, review, confirmation, or formal stage facts
+stay missing; a planned command is not a test result.
+
+## Conditional UI component-quality plan
+
+For an applicable UI phase, the `frontend-component-quality` dependency is the
+single owner of the **Component Quality Map**. Each entry names the action
+(`reuse`, `modify`, `extend-state-or-variant`, `add-local`, `extract-shared`,
+or `remove-after-no-consumers`), every real consumer, compatibility impact,
+state owner, typed ViewModel, and the single CSS/token owner. `extract-shared`
+requires at least two real consumers; a removal requires `no_consumer_evidence`
+or `evidence_refs` proving that no current consumer remains. A `modify` or
+`extend-state-or-variant`, `add-local`, or `extract-shared` entry also names the
+non-empty `story_or_test_update` fact to update. A structured
+`unknown`/`unavailable` consumer with a reason remains a handoff risk; it is not
+silently treated as zero consumers or a deletion proof.
+
+The map is conditional: non-UI phases keep the existing plan and record
+`N/A + reason`. Missing consumers, owners, preview, browser, or screenshot
+facts stay `unknown`/`unavailable` and become handoff risks. Build-plan designs
+the facts and does not execute frontend-testing (the `frontend-testing` skill);
+build-code owns execution
+and verify-code checks the real consumer. The map records component facts,
+unknowns, and rework risks within the existing stage; it is no gate for planning
+or same-task repair and creates no new stage.
+
+The plan consumes the project-level Design.md and Experience.md identities and
+any explicitly supplied `consumer-census.v1` bound to its source snapshot.
+`buildConsumerCensus` validates supplied scanner facts; it does not scan the
+repository or guarantee an upstream census. Missing scanner facts remain
+`unknown`/`missing`, with their actual owner and evidence gap recorded; absence
+is not zero consumers. Plan entries must say which source
+owns each rule: Design.md for visual/component standards, Experience.md for
+page/interaction/test behavior. A plan may schedule an update to either source
+only when the confirmed change crosses that source's responsibility; reusing a
+bound rule is not a documentation task. Consumer coverage, CSS/token owner,
+state owner, and unknown reasons are planned as facts, not inferred from a
+component name. Build-plan designs these checks only; it does not run browser
+QA, create a Runner, or add another project standard file.
+
+Do not create a double-solution exercise, a build-plan Grill, a second decision
+log, a parallel review output, or a process summary. `simplicity-guard` and
+`plan-eng-review` are ordinary advisory lenses in the declared review contract,
+not new workflow stages and not gates.
+
+## Work sequence
+
+1. Read the current decision and every already-present material. For a
+   pre-cohort task, `spec.md` is required upstream input; for a post-cohort
+   task, draft `spec.md` from the decision at `spec-specify` before using it
+   for phase planning. Extract requirements, FR/AC, constraints, non-goals,
+   risks, deferred items, and open questions.
+2. Research only in proportion to implementation risk. Verify code anchors,
+   existing consumers, interfaces, data changes, failure paths, ownership,
+   testing conventions, and rollback options. Put durable conclusions in
+   `spec.md` implementation design or the affected Phase file.
+3. Choose the simplest adequate solution: reuse, then narrow extension, then
+   new mechanism only with a real reason. Record complexity and F10 reasoning.
+4. Extend `spec.md` with implementation design: verified code anchors,
+   interfaces/data flow, exact global NEW/MODIFY/DO NOT TOUCH boundary,
+   alternatives, dependencies, rollback, risks, testing strategy, and the
+   single source → FR → AC → Phase/task → oracle map.
+5. Write one independent `phases/P<n>.md` per Phase. Each file has L0/L1/L2,
+   a stable pointer to the spec global goal, its own exact write set and
+   dependency, RED/GREEN tasks, test tier/skill/scenario/fixture, `gate_cmd`,
+   expected exits, oracle, evidence path, coverage limit, STOP, done evidence,
+   and rollback. Render `phases/index.md` as a pure pointer table: authority
+   path, semantic anchor, write set, dependency, consumer. The final aggregate
+   is an ordinary Phase task, not a new public stage.
+   Within this existing `spec-plan` step, build-plan writes each applicable
+   behavior test in the authenticated worktree before implementation and runs
+   its Task's exact `gate_cmd`. Capture the real command, exit, raw output/ref,
+   target failing assertion, test path and current material identity in existing
+   task facts/quality evidence. RED is valid only when the named target assertion
+   fails, not when collection, setup, environment, or configuration fails. Mark
+   that test and any scoring logic as DO NOT TOUCH for build-code. An explicit
+   test change request with reason and independent review is required before
+   changing the frozen oracle; preserve the previous bytes and RED evidence.
+   For pure documentation or exploratory work where a meaningful failing test
+   cannot be written, use G-2: add a falsifiable check, or record `N/A` with
+   a concrete reason, risk, objective alternative, and acceptance disclosure.
+6. Cross-check decision, spec, every Phase, and index for omissions, contradictions, orphan tasks,
+   boundary widening, missing two-way traceability, and invalid commands.
+7. Trace every decision, FR, and AC into spec/Phases before requesting one
+   independent findings review of the current materials through the declared
+   `wh-review` adapter. Submit the real request through the existing `review`
+   entry, retain its canonical `attempt_ref` and actual `result_ref`, and pass
+   that explicit ref as `receipts.review` to the official build-plan handler.
+   It authenticates the attempt/result and provider outputs before producing
+   `facts.review`; a skill name or hand-written `executed=true` is not proof.
+   Preserve actual provider/model/transport/provenance and findings, including
+   partial results and unavailable attempts. Usage/timing come from the
+   authenticated attempt's `provider_attempts[].execution`, independently
+   unavailable when missing; a reused request adds no new provider execution. Dispose findings as
+   `fixed`, `rejected_invalid`, `accepted_risk`, or `needs_human`; repair valid
+   findings in this same task.
+   Only concrete failure that has changed in the frozen material, provider
+   route, or authenticated source may trigger a retry; never retry an
+   unchanged request merely to obtain a cleaner label.
+8. After findings disposition and the last authored spec/Phase/index revision, actually
+   invoke the existing `spec-analyze` lens once as the final report-only
+   cross-document check before `publish-plan-result` (the user may call this
+   `speckit-analyze`). The runtime reports current decision-log, spec, Phase
+   and index structure, required fields, references and index agreement.
+   Requirement omissions, flow/state/boundary/non-goal meaning,
+   `DEFER-*`/`OPEN-*` handoff semantics and oracle adequacy are judged by the
+   existing independent merged review and its finding disposition. Record
+   the returned result in the existing quality-fact path; a prose claim that
+   it ran is not execution evidence. This report does not require a separate
+   raw-requirement inventory or caller-provided coverage array. The existing
+   independent merged review, finding disposition and actual user confirmation
+   carry semantic quality judgment. A result of `reported` means the final
+   check ran; it is not semantic consistency or review pass. Retain findings or
+   `incomplete`/`unavailable` honestly; do not create a fifth material or a
+   new quality gate.
+
+## Plan and phase contract
+
+Every Phase is an independent file with L0/L1/L2, exact write set and
+dependency, tasks, tests, STOP, done evidence, and rollback. Global solution
+and source-to-acceptance trace live in `spec.md`; execution facts live in task
+facts/quality evidence, not the pointer index.
+
+For every applicable behavior change, build-plan authors the real test and
+observes target RED before freezing it. Build-code changes implementation only
+and uses the same executable `gate_cmd`, oracle identity, and test path for
+GREEN (`0`) while retaining named negative behavior. RED expects a non-zero
+target assertion failure, not setup or environment failure. If a meaningful
+RED is inapplicable, apply G-2 with the exact reason, risk, alternative check,
+and later acceptance disclosure; pure documentation does not need a ceremonial
+failing test. Do not call a merely designed test \"prewritten\" or \"RED\".
+`gate_cmd` names a test command only; it never decides whether an agent may
+start, continue, or publish work.
+
+The final aggregate remains one ordinary task card. Prefer a bounded command
+for the current task, reuse current canonical test receipts when they already
+cover the same scope, and do not add unrelated provider or cross-repository
+work merely for convenience. If a genuinely required cross-repository check is
+part of the AC, keep it explicit with its actual scope and limits. Splitting a
+long aggregate into ordinary tasks is optional plan authoring, not a runtime
+gate; a timeout remains `incomplete` and does not trigger an automatic full
+rerun.
+
+Each implementation file appears in one Phase boundary and each task file list is a subset of
+that phase. Parallel phases/tasks require independent inputs, dependencies, and
+file ownership. Missing signatures, invalid commands, scope widening, or a new
+product decision is a STOP back to the owning material.
+
+## Quality and handoff
+
+Review, test, research, and evidence are quality facts. `unknown`,
+`unavailable`, and `incomplete` remain visible and lower the completion claim;
+continue research, planning, or repair in this same task. A review cannot grant a pass or block the
+next safe work item. Do not claim the plan is ready when a source/FR/AC/task
+mapping, command, boundary, or serious finding is unexplained.
+The final `spec-analyze` is the last report-only consistency fact before
+publish; it does not replace the independent `wh-review` advice or authorize
+publication by itself.
+
+End in plain language: what will be built, how phases and files are split, how
+testing will prove it, key risks/unknowns, review findings and dispositions, and
+what `build-code` should do next without guessing. The handoff is notification,
+not a machine work permit and not authorization to commit, push, merge, archive,
+or clean up. After the user's actual reply, the current session must publish
+the existing `human-confirmation.v3` record through `confirm --action=decision` at
+`quality/confirmations/<sha256>.json`; the official build-plan handler consumes
+that ref and includes `facts.human_confirmation` plus its evidence in the
+existing completion. Do not append confirmation or execution status to the
+Phase index or duplicate the confirmation record.
+This stage does not create a new task to bypass a missing fact or finding.
+"
+
+ ❯ tests/contract/freeze-classification-budget-usage-protocol.test.mjs:356:23
+    354|     const buildPlan = readProjectFile("workflows/build-plan/SKILL.md");
+    355|     const standard = readProjectFile("docs/standard-workflow.md");
+    356|     expect(buildPlan).toMatch(/确认后唯一可写区是 tasks\.md 的执行状态…
+       |                       ^
+    357|     expect(buildPlan).toMatch(/plan\.md 语义段不得再改/);
+    358|     expect(standard).toMatch(/build-plan step 12[\s\S]*?人工确认/);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/38]⎯
+
+ FAIL  tests/contract/freeze-classification-budget-usage-protocol.test.mjs > Phase 3 canonical review reuse and explicit retry contracts > keeps phase review lineage separate from the integration review lineage
+AssertionError: expected 2 to be 3 // Object.is equality
+
+- Expected
++ Received
+
+- 3
++ 2
+
+ ❯ tests/contract/freeze-classification-budget-usage-protocol.test.mjs:564:24
+    562|     const firstP2 = await recordSimpleReviewRequest({ task, kernel, re…
+    563|     const repeatedP1 = await recordSimpleReviewRequest({ task, kernel,…
+    564|     expect(dispatches).toBe(3);
+       |                        ^
+    565|     expect(firstP2.attempt_ref).not.toBe(firstP1.attempt_ref);
+    566|     expect(repeatedP1).toMatchObject({ status: "recorded", reused: fal…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/38]⎯
+
+ FAIL  tests/contract/governance-review-dispatch-boundary.test.mjs > governance review dispatch boundary > keeps standard workflow without a unified budget gate
+AssertionError: expected '# WorkflowHub 标准执行流程\n\n这份文档是五个正式 sta…' to match /健康的 provider 由 3rd-review 自己监管/
+
+- Expected: 
+/健康的 provider 由 3rd-review 自己监管/
+
++ Received: 
+"# WorkflowHub 标准执行流程
+
+这份文档是五个正式 stage 的人读规范。正式集合不等于每个普通任务的实际路线：`pre` 走
+`make-decision → build-spec → build-plan → build-code → verify-code`，`post` 走
+`make-decision → build-plan → build-code → verify-code`；缺少冻结 cohort 的历史任务按 `pre` 读取。
+真正的执行顺序、依赖和 step 名称以对应的
+`workflows/*/steps.json` 为准；技能说明、handler 和本规范必须保持一致。文档本身不
+产生新的状态、权限、质量 gate 或交付许可证。
+
+## 先记住三条规则
+
+1. 当前任务的需求真相在认证 worktree 的 `specs/<task-id>/`，按 cohort 读取：
+   pre/history 是 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md`；post 是
+   `decision-log.md`、含全局实现设计的 `spec.md`、独立 `phases/P<n>.md`、纯指针
+   `phases/index.md`。原始需求和历史记录是来源与事实，不是第二份当前材料。
+   外置任务追踪目录只放 `task.json`、`facts.jsonl`、`quality/`、
+   `index.json` 等执行文件，不替代 worktree 材料；这只是落点约定，不是新 gate。
+2. 每个声明的 step 都要留下真实的最小结果：完成、跳过（有真实原因）、未完成或不可用。
+   manifest 只是预期拓扑，不能代替实际执行；缺步、重复、乱序、旧快照和依赖未完成都要
+   真实暴露。
+3. `make-decision`、`build-spec`（仅 pre）、`build-code`，以及 pre cohort 的 `build-plan`，
+   各自在本 stage 收尾调用 `spec-analyze` 执行既有语义检查和质量事实契约。post cohort 的
+   `build-plan` 也调用 `spec-analyze`，但只报告材料结构；语义判断由现有 merged review 和
+   finding dispositions 承担。`verify-code` 不调用它，以一次 OCR worktree 审查核对当前实现。现有 stage
+   publication 是唯一写入路径，原子写入 `quality/facts` 与 acceptance evidence。
+   `spec-analyze` 不直接改当前材料，不创建第二 store、投影或门禁；结果只是现有事实和摘要。
+   缺失或 `unavailable` 不等于通过，也不能阻止同 task 修复。
+
+## 正式 stage 集合与 cohort 路线
+
+| stage | 主要输入 | 核心产物 | 下游直接消费 |
+| --- | --- | --- | --- |
+| `make-decision` | 原始需求、仓库事实 | `decision-log.md` | pre → build-spec；post → build-plan |
+| `build-spec`（pre/history） | 原始需求、decision-log | `spec.md` | build-plan 的行为规格 |
+| `build-plan` | 原始需求、decision-log；pre 另读 spec | post 写 `spec.md`、独立 `phases/P<n>.md`、`phases/index.md`；pre 写 plan/tasks | build-code 的实施任务 |
+| `build-code` | 当前 cohort 材料、真实工作区 | 实现、测试、review、AC 证据 | verify-code 的当前实现 |
+| `verify-code` | 当前实现、真实 consumer、相关测试上下文、代码风险 | 一次代码 review findings 和处置 | 自动记录结果；随后单独谈 close 授权 |
+
+`post` 不注册或执行 build-spec；它保留为 pre/history 的正式 stage，而不是死代码。每个 stage 还会产生既有 `quality/facts/`、`quality/evidence/`、`quality/tests/`、
+`quality/reviews/results/` 或 `quality/reviews/attempts/`。旧 stage outcome 仅作历史兼容事实，当前阶段不依赖它。前四 stage 的 `spec-analyze` 结果由现有 stage
+publication 原子写入对应的 quality fact 和 acceptance evidence。它们用于证明实际发生了
+什么，不会覆盖当前材料，也不会把 `unknown`、`unavailable` 或 `incomplete` 改写成通过。
+
+## 三个状态视角和十个读取入口
+
+三个视角只从当前事实即时派生：`work_progress` 看能否继续修复，`stage_quality` 看本阶段
+质量是否闭合，`physical_delivery` 只看 close 的真实物理结果。status/close 以 `facts.jsonl`
+K2 当前行和 K1–K6 具名 ref 为准；C6 removal 收口后 active `quality/verify.v1` object graph、
+`product_release` 与 `status_groups` 不再是输出。`specs/archive/**`、`docs/research/**` 只读保留。
+它们不是新状态机，也不是继续工作的许可证。
+
+host、doctor、status、monitor、run、review、verify、confirm、authorize、close 只按职责读取
+这些视角；先给主结论，再给当前绑定、失败原因、未改变事实和唯一下一步。任何入口都不能把
+“还能继续修复”、`unavailable`、`not_released` 或 physical delivery 已完成显示成正常完成。
+
+## 通用执行合同
+
+### 进入 stage
+
+当前 WorkflowHub 会话先读取当前 stage 的 workflow skill、依赖清单、原始需求、适用的 cohort 材料和
+已有真实事实。只读取当前任务范围；旧 task、旧 review 和历史 snapshot 只能作为只读
+背景。先确认当前工作区、依赖、接口、权限、安全和测试环境是否满足本 stage 的工作条件。
+
+### 执行 step
+
+按 `steps.json` 的顺序执行。每个 step 结束时至少记录：
+
+- 实际做了什么，结果对应哪个需求、FR、AC 或用户流程；
+- 使用了哪个 skill、输入和当前快照；
+- 产物或事实引用、测试命令和退出码（适用时）；
+- `completed`、`skipped`、`incomplete` 或 `unavailable`，以及跳过/失败原因。
+
+发现事实漏写，调用该材料已有 writer；发现实现、测试或 stage 自己的问题就在当前 stage
+修复；发现会改变产品方向的内容，停在当前 stage 取得必要的用户决定。不能把未解决的问题
+静默交给下游，也不能用下游补写前置决定。
+
+普通 step 完成后按 manifest 的 `depends_on` 向后续 step 前移。下游处置 finding 或修改产物，
+不自动重新执行已经真实完成的上游 step；review finding 与材料变化都不构成回跳理由。只有后来
+证明上游 step 本身未真实完成或执行错误时，才像修复其他普通 step 一样回到该 step 修复重做。
+
+### review、测试和成本
+
+代码审查使用 OCR delegation：`build-code` 每个 Phase 一次，`verify-code` 在最终 worktree
+一次。`wh-review` 保留给 make-decision、build-spec、build-plan 等其它审查面。各自的
+provider 身份、终态、findings 与失败原样记录；无真实审查结果时保留 `unavailable`，
+不把空 findings 当作补救结果。
+
+没有真实主题变化，不重复全文读取、测试、review 或 analyzer。材料、风险或有效 finding
+实际变化时，只重跑受影响的检查；build-code 的最终 aggregate 按计划在全部 phase 完成后
+运行一次。时间和 token 只作诊断，按 step、skill、读取、交互、provider wait、测试、review、
+返工和用户等待拆分；不可得就写 `unavailable`，不设统一预算 gate；review preflight 只记录
+当前请求的可观测事实，不改变 provider status 的运行时所有权。
+
+`build-code` 还要额外**按 Phase** 记一行同类数据（含实现改动次数、focused 测试次数、正式审查派发次数、等待总时长、材料修订次数、Phase 总时长），写进该 Phase 的 handoff。它只服务诊断——用于在耗时明显超出估计时查明是计划缺口、实现 bug 还是外部等待——不是新的 gate，也不触发自动拆分或终止。
+
+复核件纪律：同一主题在同一阶段内只保留一份复核件。第二次及以后的复核不另起新文件，而是在原件尾部追加一节「本次相对上次新增的事实」，并写清触发这次复核的真实变化是什么。没有真实主题变化时，不写复核件，只在阶段摘要里说明本轮无新事实。禁止把整棵工作树、整个目录、或同一份材料的多个副本当作复核材料或证据反复复制；复核材料只包含本次判断真正读到的那些文件。
+
+`build-code` 的每个 Phase 只有**一次**正式 OCR 审查：同一 Phase 同一范围已有成功回执时，不重派。
+\"同一范围\"由 `phase_id` + 该 Phase 的 allowed files/symbols + 覆盖的 AC 列表共同定义，
+由执行者在发起前写清（见 `workflows/build-code/SKILL.md` 的 work loop 第 5 条）。
+
+**修 finding 造成的材料字节变化不是重派理由**——它不是\"真实主题变化\"。要重派必须先回答：
+\"已有回执没有覆盖的到底是哪一条（文件/AC）？\"答不出来就不重派，只把旧回执连同本次处置一起记入 facts。
+`AC-REVIEW-011` 的替代调用是同一 Phase 内的第二次独立审查，只在工具 `unavailable` 且零成功审查路时发生一次，
+它**不产生第二份正式回执**（`skills/architect-code-review/SKILL.md` 已有等价措辞）。
+
+### 证据只留原始件
+
+每个阶段只保存**能证明事实的最小原始件**，同一个事实不存第二份：
+
+- **原始测试输出**：每个实际跑过的 focused 命令存一份原始输出即可。同一命令重跑时，
+  只有在结果发生变化（或用户/CI 明确要求）时才新增一份，并在文件名或同目录说明里写清\"重跑原因\"。
+- **正式回执**：`quality/reviews/attempts/` 与 `quality/reviews/results/` 各一次派发一份，
+  不复制、不镜像到 `quality/evidence/`，不做可读副本。
+- **review 原件**：保留 provider 返回的原始字节与 ref/hash（`workflows/build-code/SKILL.md` 的
+  AC-REVIEW-011 段已要求），不额外再存一份它的整理版。
+- **禁止整棵树/整目录快照**：不得把工作区目录、整个 `quality/`、`git archive` 产物、整树 tar 或
+  文件树清单作为证据写入 `quality/evidence/`。需要证明\"改动前是那样\"时，
+  只存本 Phase 实际涉及的那几个文件的原始字节 + 路径 + hash。
+- **说明性文字不入证据目录**：缺口清单、成本行、范围声明这类\"人写的话\"写进当前 task facts 或
+  phase handoff，不写成新的证据文件。
+
+本条是执行纪律，不是新的 gate；它不改变 `capture-evidence` 的行为，只约束执行者交给它的内容。
+
+### stage 结束
+
+`make-decision`、`build-spec`、`build-code` 以及 pre cohort 的 `build-plan` 在各自 stage
+结束前调用对应的 `spec-analyze` 语义检查 profile；post cohort 的 `build-plan` 只调用结构报告，
+语义责任由现有 merged review 和 finding dispositions 承担。`verify-code` 对最终 worktree
+执行一次 OCR 独立代码审查，并把
+与本 stage 职责对应的摘要交给用户：
+
+1. 当前阶段做了什么；
+2. 本 stage 负责的需求、实现或代码风险覆盖到什么程度；
+3. 与上游产物、实际语义和必要事实是否一致；
+4. 当前阶段当场修复了什么；
+5. 剩余风险、未决和延期；
+6. 下游可以直接消费什么、不能自行猜什么。
+
+**关于第 2 项和第 5 项**：这两项必须逐条标明归属——这条风险是**本阶段现在就能修的计划缺口**，还是**实现尚未开始的未知**（只能由下游执行事实回答）。两类不得混写成一句「还有风险」。每条给一条真实证据引用；没有证据就写 `unavailable`。这样要求的目的只有一个：让下一次复盘能在很早的时候分清「是计划没写清」还是「是实现写错了」，而不是在几十小时之后才发现。本条是执行纪律，不是新的 gate 或质量结论。
+
+发现的 finding 由当前 stage 逐条处置；实际修复后只重跑受影响的检查，使用
+`spec-analyze` 的 stage 也仅重跑受影响的 profile。六项摘要和
+`unavailable`/`incomplete` 事实随当前阶段事实交接，不新建
+store 或门禁。摘要说的是当前事实，不是“文档存在所以完成”。交接只交接已确认的材料和事实。
+
+每个 stage 结束时，当前主会话必须按 `stage-reflection` 技能先产出 judgment JSON，再调用实际公共入口 `run --action=reflect`。判断 JSON 使用六个结构化区块：`what_helped`、`what_to_improve`、`blockers`、`intervention_reasons`、`what_to_simplify`、`simplifiable_now`；每个区块条目带真实 `evidence_refs` 与 `confidence`。已检查但无观察写 `none_observed`，无法判断写 `unknown` 并给 `unknown_reason`，确实不适用写 `not_applicable` 并说明原因，不能静默省略。v2 还保留 `status_matrix`、`identity`、`source_completeness` 三件套；它们是事实投影，不是质量结论。
+
+`validate-stage-reflection.mjs` 在验证内部调用 `deriveConsumptionEdges`。实际消费边只由较早 subject 的 `output_refs` 与较晚 subject 的 `input_refs` 含同一引用形成；所有五个 stage 的 outcome 文件有效且声明 output 存在时，扫描才是 `coverage_status=complete`，否则为 partial/unknown。单个 output 没有后续边也不能直接称为零消费；只有完整扫描、近 30 天登记 output 且 consumer 全为零的 `zero_consumption_proof`，再加人工 rejected 或同一步骤至少两次介入，`remove_candidate` 才能保留，否则降为 `needs_evidence`。当前 route 若未实现，保留真实 unavailable/dependency，不用未支持命令替代。
+
+用户明确执行 `close` 时，WorkflowHub 才按冻结计划执行 Git commit、spec archive、merge、push、
+worktree cleanup 和 branch cleanup，并对每一步做物理读回。
+
+阶段末指令是每个正式 stage 的共同收尾动作；上述六块 judgment JSON 与 `run --action=reflect` 适用于 `make-decision`、`build-spec`、`build-plan`、`build-code` 和 `verify-code`，不改变任何 `steps.json` 拓扑或 `skill-deps.yaml` 依赖声明。
+
+## `make-decision`：把需求和前置条件一次弄清楚
+
+### 标准输入
+
+原始用户需求、仓库和运行环境事实、当前 worktree/依赖状态、宪法，以及当前已有的
+`decision-log.md`。后续材料不能被提前假设为存在：pre 是 `spec.md`、`plan.md`、`tasks.md`，post 是 `spec.md`、`phases/P<n>.md`、`phases/index.md`。
+
+进入研究前，主会话在同一份 `decision-log.md` 建立唯一 OI 大纲：以
+`background`、`problem`、`goal`、`solution`、`acceptance`、`extension` 六个需求框架节点
+为骨架，并逐项列出 `complete_user_flow`、`page_scope`、`data_state`、
+`success_failure_boundary`、`non_goals`、`deferred` 六类。每个节点/类别必须有 OI，或有
+`empty: true` 和具体理由；省略、重复、只写 `none` 或改名替代都算缺口。OI 是当前唯一
+权威，不新增材料或状态机。
+
+### 标准步骤与最小结果
+
+1. `load-context`：读取 portable workflow、依赖和原始需求。
+2. `triage-scope`：写清当前范围、不确定性和非目标。
+3. `talk-round-1`：先核实现有实现、依赖、worktree、服务和可查事实；只向用户询问
+   agent 无法自行确定的方向问题。
+4. `research-inputs`：按需完成或如实记录研究 skipped/unavailable。
+5. `talk-round-2`：用一组互不依赖的大白话问题收敛方向；每题给编号、推荐项、后果和风险，
+   用户可以只回编号。
+6. `direction-advice`：记录一次独立方向建议；它是建议，不是 provider pass。
+7. `talk-round-3`：处理建议、矛盾、关键假设和剩余风险，真实保存 ask/wait/reply/resume。
+8. `grill-with-docs`：用现有文档和领域模型压力测试方案，不把 Grill 当成 review。
+9. `write-decision-draft`：把原始需求、关键事实、选择、理由、风险、非目标和延期写入
+   同一份 `decision-log.md`。
+10. `detail-advice`：审查细节，不改变用户未确认的方向。
+11. `approve-decision`：记录用户真实确认或拒绝，并把确认绑定到当前 decision-log 和交互事实。
+12. `stage-end-spec-analyze`：检查原始需求、决策语义、完整交互、最终确认、用户流程、前置
+    材料和证据，并在本 stage 修复缺口；若修复改变方向，重新确认后再分析。
+13. `publish-decision`：交接已确认的 `decision-log.md` 和阶段事实。
+
+方向审查只看当前 OI 的 `convergence_outline` questions-only 投影（全部 ID、类别、问题/未知、
+来源和版本身份，展示状态统一为 `open`，不含答案或处置）；细节审查逐条对账当前 OI 的
+终态字段；`approve-decision` 在既有整体确认中按主题分组展示选项、后果和风险，并记录
+所选处置与现有交互凭证。三个消费者职责独立，审查仍是质量事实而非推进许可，也不增加
+新的正常确认点。
+
+### 本阶段必须形成的内容
+
+在进入 build-spec 前，必须明确：用户和角色、完整用户旅程、页面/入口范围、数据来源与
+状态、成功/失败/取消/重试/恢复边界、权限与安全、前置依赖和兼容性、迁移/回滚、可观测性、
+验收环境、非目标和延期项。页面需求要有可确认的设计输入；依赖不足时要在这里决定补齐、
+调整或延期。若只是小型独立 enabling change，可按 `mini-task` 独立交付后再继续 A；不能
+把它偷偷改写进 A 的当前需求。
+
+### 完成与失败边界
+
+完成是：用户确认的 decision-log 含完整需求边界、事实、选择、理由、风险、非目标、延期、
+前置准备和当前阶段真实事实。旧 stage outcome（若有）只是历史 provenance，不是完成前置；方向未定、页面/依赖材料未准备、错误回复未匹配或关键语义
+被猜测时，不能发布成已确认决定；应在本 stage 继续询问、修复或如实保留未决。
+
+### 下游交接
+
+build-spec 只消费已确认的方向和真实事实，不再替用户补产品方向；它可以把决定细化成规格，
+但不能把遗漏的方向选择伪装成规格细节。
+
+### 专业质量
+
+本阶段的专业质量由需求准备检查、Talk/Grill 的方向性收敛、独立方向/细节建议和用户确认
+共同形成；它们检查的是需求是否真的能被实现和验收，不是只检查 `decision-log.md` 是否存在。
+
+## `build-spec`：把已确认方向变成可实现规格
+
+### 标准输入
+
+原始需求、已确认 `decision-log.md`、已有当前 `spec.md`（如有）和前置事实；不要求 stage outcome。
+
+### 标准步骤与最小结果
+
+1. `read-decision-log`：读取当前决定和 portable 依赖。
+2. `conditional-spec-research`：先查当前事实；确有规格事实缺口才研究，明确 skipped 或
+   unavailable。
+3. `spec-clarify`：只处理规格层歧义，使用一组批量、编号、推荐、后果和风险问题；不能
+   重新决定产品方向。
+4. `spec-specify`：生成当前行为规格。
+5. `simplicity-guard`：删除无目标、无证据或可复用的扩张。
+6. `plan-ceo-review`：检查问题、价值、范围和替代方案。
+7. `conditional-plan-design-review`：有 UI 才检查设计；无 UI 记录不适用。
+8. `freeze-spec`：冻结用户流程、页面、数据状态、FR、AC、边界、非目标和延期。
+9. `review-frozen-spec`：对当前 spec 做一次 advice review，保存真实 provenance。
+10. `main-agent-disposes-findings`：在本 stage 修复有效规格问题，记录其他 finding 的理由。
+11. `stage-end-spec-analyze`：检查原始需求、decision-log、spec 语义、用户流程和证据。
+12. `publish-spec-result`：交接规格和六项大白话摘要。`freeze-spec` 与
+    `review-frozen-spec` 之后不得改写 decision-log.md；规格歧义按
+    `fallback_protocol` 路由回 `make-decision`。
+
+### 产物、完成与失败边界
+
+核心产物是 `spec.md`。它必须能让下游直接知道入口、成功路径、失败/取消/重试/恢复、页面
+范围、数据状态、权限安全、接口/依赖、FR/AC、非目标和延期。研究或 Clarify 未完成、规格仍
+含方向性猜测、UI 设计未冻结或语义与 decision-log 冲突时，不能声称规格闭合；应在本 stage
+修复，不能把问题留给 plan 或 code。
+
+### 专业质量
+
+本阶段的专业质量由规格澄清、简洁性审查、方向/设计/规格审查、冻结规格和 stage-end
+`spec-analyze` 共同形成；它们检查行为、边界、页面/数据状态和可验收性，不能用完整的
+`spec.md`、FR/AC 编号或文档存在代替真实规格质量。
+
+### 下游交接
+
+pre build-plan 以既有 `spec.md` 为输入，继续写历史 plan/tasks。post build-plan
+在同一份 `spec.md` 内完成需求翻译、全局实现设计与验证策略，再生成独立 Phase；
+它不重新发明 PRD/decision 的目标，也不把 spec 缺口藏进 Phase 索引。
+
+## `build-plan`：把规格变成可执行任务
+
+### 标准输入
+
+原始需求、`decision-log.md` 与前置事实。pre 另读既有 `spec.md`、`plan.md`/`tasks.md`；
+post 读取已有 `spec.md` 与 `phases/P<n>.md`、`phases/index.md`（如有），按当前版本增量修复。
+
+### 标准步骤与最小结果
+
+post 按 `workflows/build-plan/steps.json` 的 13 步执行：读取当前材料 → 条件研究 →
+规格澄清 → `spec-specify` 写产品规格 → 条件 UI readiness → `spec-plan` 在同一
+`spec.md` 写全局工程方案并生成每个 `phases/P<n>.md` → 测试系统蓝图 →
+测试路由 → 一次合并独立审查 → 主会话处置 findings → 最终结构型 `spec-analyze` 报告 →
+发布并取得真实人工确认 → 阶段反思。`spec-tasks` 从各 Phase 头部生成
+`phases/index.md`，只列路径、锚点、写集、依赖和 consumer，不复制正文或执行状态。
+pre/history 继续按原 `build-spec → build-plan` 路线消费旧四材料，不迁移旧文件。
+
+交付确认（`workflows/build-plan/steps.json` step 12）的问题按**三选一**提出：按现有材料把缺口修完再进／
+指派缺口负责人后进／取消本次执行；未回答时保持草稿、在同一 task 内继续修复，缺的确认事实如实记为缺失，
+它不阻断同任务内的后续动作。确认仍复用既有 `human-confirmation.v3` 记录，不新增确认点、字段或文件。
+
+### 产物、完成与失败边界
+
+post 核心产物是含需求翻译四件与全局实现设计的 `spec.md`、独立
+`phases/P<n>.md` 和纯指针 `phases/index.md`；不生成 `plan.md/tasks.md` 双写。
+pre/history 核心产物仍是 `plan.md`、`tasks.md`。每个行为 Phase 必须有窄文件边界、依赖、实施顺序、
+失败恢复、测试策略、证据路径和停止条件；计划只能设计，不冒充代码、测试或 review 已完成。
+缺 AC/FR 映射、任务无真实 oracle、文件边界不明、依赖未解决或 DEFER/OPEN 没有 owner/触发
+条件/消费者/关闭条件时，当前 stage 修复后再交接。
+
+build-plan 交接前把「可执行性」当成完成条件核对一次，核对结果写进材料本身：
+直接打开源文件确认入口、真实消费者、权限、测试工具、样例原件与外部依赖是否已经具备；
+抽一条最难的链路（需求 → 真实入口 → 原始结果 → 独立判断 → 验收项）走通一次；
+预写的 RED 必须因为目标行为而失败，不能是导入错误、路径错误或零测试。
+核不到的东西写成 `unknown` 与它的负责人。这是 build-plan 的完成条件与工作纪律，不是推进前置。
+
+### 专业质量
+
+post 阶段的专业质量由测试系统蓝图、工程审查、测试路由、计划审查、现有合并审查及其
+finding dispositions 共同形成；post build-plan 的 `spec-analyze` 只检查材料结构，不负责
+需求语义判断。pre/history build-plan 保持既有 `spec-analyze` 语义检查合同。每个行为风险都必须
+落到可执行任务和真实 oracle，不能用任务数量、文件列表或测试命令字符串代替设计质量。
+
+### 下游交接
+
+build-code 按当前 cohort 材料中的 Phase 执行：post 读 `spec.md`、
+`phases/P<n>.md` 和 `phases/index.md`，pre/history 读 plan/tasks。它以真实改动范围重判测试，不
+能因为计划写了某个路径就声称该路径实际改动或已验证。
+
+## `build-code`：按 phase 实施并保留真实证据
+
+### 标准输入
+
+当前 cohort 材料、当前 Phase、真实 worktree、依赖和设计的测试路线。历史记录不能
+代替当前实现或当前证据。
+
+### 每个 phase 的标准循环
+
+一次只推进**一个** Phase：当前 Phase 未收尾（review 已记录、每条 finding 已处置、handoff 已写）之前，
+不开工下一个 Phase 的实现，也不并发修订多个 `phases/P<n>.md`。
+
+计划里标了 `[P]` 的任务允许在**同一个 Phase 内**并行；`[P]` 不授权跨 Phase 并行推进。
+确实需要提前动下一个 Phase 的材料或代码时，先在 handoff 里写明\"为什么必须现在动\"和\"代价是什么\"，再动。
+
+1. `read-current-task-documents`：读取当前 cohort 材料并选择下一个未完成 Phase task。
+2. `write-red-tests`：行为变化先写并运行 RED；纯材料任务明确记录不适用。
+3. `implement-change`：只改 phase 允许的文件和同 task 事实栏。
+4. `inspect-and-route-actual-tests`：检查真实 diff，必要时重判测试层级。
+5. `invoke-concrete-testing-skill`：直接调用适用的 backend、frontend 或 fullstack testing。
+6. `run-tests`：按实际范围跑 focused test，保存命令、退出码、oracle、快照和限制。
+7. `scan-diff`：反向检查 FR、AC、状态、错误/取消/恢复、并发和接口边界。
+8. `review-change`：对当前 Phase diff 发起一次 OCR 独立审查，记录真实结果或 unavailable。
+9. `analyze-review-findings`：逐条记录 fixed、rejected_invalid、accepted_risk 或 needs_human。
+10. `capture-implementation`：保存实现、测试、AC trace、review 和阶段事实。
+11. `authenticate-current-task-completion`：确认 task facts 绑定**该 phase 声明的写集**
+    （即 phase 文件 `Write set` 列出的路径本身；不并入本次实际改动的文件，也不并入受影响的检查清单）。
+    删掉跨 phase 的全量快照绑定：不与上一轮的字节级快照逐字节比对。同一材料版本内的两次结果
+    视为同一绑定；只有当该 phase 声明的写集变化时才需要重做对应部分。
+    代码快照变化本身不使材料失效。不把旧结果冒充当前结果。
+
+每个 phase 都重复以上循环，但不重复无关的全量测试或 review。有效问题在当前 phase 修复，
+然后只重跑受影响检查。所有 implementation phase 完成后才进入最终步骤：
+
+1. `run-final-aggregate-and-ac-trace`：在同一 current snapshot 按计划运行一次最终 aggregate，
+    逐 AC 记录 pass、fail、unknown、deferred 或 not_applicable。
+    人读结论仍用三词：**达成／未达成（写明下一步）／退役**（退役＝不再做、已由决定退出，不用「以后再说」类说法）；机器取值域不变——上面这组取值与验收证据的冻结机器取值域都不因三词增删；验收证据的 `result` 是既有的冻结八值 `pass`、`fail`、`inconclusive`、`deferred`、`missing`、`inconsistent`、`incomplete`、`unavailable`。
+    既有来源：`runtime/evidence/acceptance-evidence-validator.mjs:6`、`runtime/review/schemas/ac-evidence-summary.schema.json:32-33`；冻结裁定 `tests/contract/acceptance-result-machine-classes.test.mjs:95-99`（均为实读既有事实，不是本卡新取的域）。本词表只约束人读措辞：`quality/evidence/acceptance/**` 的 `result` 取值域与 `decision-log` 的处置列**一字不动**；未达成如实记为未达成，不新增推进前置。
+2. `stage-end-spec-analyze`：检查原始需求、当前 cohort 材料、实现、测试、AC、review 和真实用户
+    结果；当前 stage 修复实现或事实缺口。
+3. `publish-code-result`：交接实现和完整 build-code 摘要。已有 integration review 原件作为
+    只读历史事实保留，不作为当前额外审查或完成证明。
+
+### 产物、完成与失败边界
+
+核心产物是实现变更、phase task facts、canonical test receipts、review facts、AC trace、
+final aggregate 和当前阶段事实。不能只凭“代码改了”“测试绿了”或“review 空了”
+宣称完成；provider failure、测试失败、缺 AC 证据、缺 step outcome、snapshot 漂移和 serious
+finding 必须原样保留。它们是质量事实，不得伪造，但也不应被错误地扩展成新的工作许可证。
+
+### 专业质量
+
+本阶段的专业质量由实际 changed files 路由、具体测试技能、scan-diff、每个 Phase 的一次
+OCR 独立审查、finding 处置、当前快照绑定、最终 aggregate 和逐 AC 结果共同形成。跨 Phase
+接口在实际测试、AC 与最终 worktree 审查中核对；绿色测试或空 findings 都不能单独证明交付。
+
+### 下游交接
+
+verify-code 消费当前实现、真实 consumer 和相关测试上下文，不能只消费旧 tasks.md 或新 Phase 索引的文字状态；
+它不重新审计 AC、材料或 evidence tree。未授权的 commit、
+push、merge、cleanup 不在 build-code 中自动执行。
+
+## `verify-code`：代码审查并在 close 前停下
+
+### 标准输入
+
+当前 worktree diff、完整 AC、真实入口和 consumer、实现评估、相关测试上下文、
+失败/恢复边界和开放代码风险。当前 cohort 材料用于理解意图；逐 AC 的实际结果由
+build-code 的最终 aggregate 与验收事实承载，verify-code 核对代码风险，不重跑聚合测试。
+
+### 标准步骤与最小结果
+
+1. `read-current-materials-and-code`：读取当前改动、完整 AC 和上游材料背景，确定真实入口、consumer 与风险。
+2. `ocr-code-review`：以当前 worktree diff、完整 AC、真实执行上下文发起一次终末 OCR 独立审查；记录 findings 或 unavailable。
+3. `publish-code-review-fact`：消费该次 canonical result 或 unavailable attempt，发布当前代码质量事实。
+4. `main-agent-repair-batch-1`：逐条判断有效 finding，并在同一任务修复。
+5. `inspect-real-entry-and-tests`：沿真实入口、consumer、接口、生命周期、安全和失败边界检查代码与测试强度。
+6. `targeted-recheck`：仅对实际修复及受影响行为做必要的定向复验。
+7. `record-finding-dispositions`：记录每条 finding 的处置和实际复验结果。
+8. `run-final-code-check-and-handoff`：核对当前代码风险、逐项实际结果和剩余缺口。
+9. `handoff-code-review`：交接代码入口、consumer、修复、审查事实和风险。
+10. `finalize-code-review`：读回同一次 review 及处置，按当前 task、材料和快照记录结论。
+11. `publish-verification-result`：汇报代码质量和验收限制，在 close 前停下。
+
+### 产物、完成与失败边界
+
+核心产物是当前实现代码 review、一次异源 findings、finding 处置和必要的窄检查事实。
+`passed` 只表示当前代码没有未处置的 actionable serious finding；`failed` 表示代码明确失败；
+`incomplete` 表示代码 review unavailable 或仍有 actionable code finding。AC、材料、测试 receipt
+和 evidence tree 由所属 stage 负责，不能在 verify-code 变成兜底门禁。
+
+### 专业质量
+
+本阶段的专业质量由一次终末 OCR worktree 审查、真实 consumer/lifecycle/security 检查、
+finding 处置和必要的定向复验形成。Architect-Code-Review 只供显式独立诊断或历史结果解读；
+已有 integration review 事实只读保留。上游材料问题回对应 stage 处理。
+
+### 下游交接和停止点
+
+verify-code 结束时只汇报代码入口、consumer、修复、异源 findings、必要检查和剩余代码风险。若用户另行授权，
+后续才执行计划内 commit、archive、merge、push、cleanup 和物理读回；本规范不把 close 自动塞进 verify，
+也不在缺失证据时用补救式重跑掩盖问题。
+
+## `mini-task` 的位置
+
+`mini-task` 是独立的精简交付流程，不是第六个 stage，也不是历史 `scope_revision`、successor
+或 continuation。它复用当前 cohort 材料和现有 task-close，只有两个专用 review 主题：
+`mini_task.design` 审方案，`mini_task.implementation` 审实施、测试、AC trace 和真实结果。
+它适合边界清楚、单一结果、影响面有限且没有重大架构/迁移/权限/安全决定的功能；用户明确
+指定时可以使用，但 Agent 必须说明风险。来自 A 的 mini-task 完成后，A 按普通 stage 重新调用
+继续，不把 mini-task 结果伪装成 A 已完成。
+
+## close：交付动作集与三种收口语义
+
+阅读 `close` 时区分交付动作集、阶段收口和质量记录归档三种语义。只有用户明确调用
+`task-close.mjs close` 才执行完整物理交付：
+系统自动冻结 delivery plan，把这次调用作为该计划的人工确认，再在内部生成逐项不可逆操作授权，
+按顺序执行并读回 commit、spec archive、merge、push、worktree cleanup 和 branch cleanup。只有
+所有物理事实读回成功后，才写入不可变 `operations/close/completed.json`。
+
+质量或产品发布事实不足时，仍可在用户明确执行 `close` 的前提下带风险交付；完成记录会保留
+`quality_status=incomplete`、`quality_gaps` 和风险记录，绝不伪造质量通过。脏的目标仓库、
+任务/分支/worktree 身份漂移、远端基线变化、冲突或不安全清理属于结构错误，必须明确失败，不能
+靠状态记录冒充 close。
+
+`prepare`、`confirm`、`execute`、`complete` 只作为内部执行和测试接口，不要求用户重复确认；
+不再提供第二个用户-facing close 动作。
+
+close/status 的只读视图由 `runtime/stage/current-close-projection.mjs` 组合三个独立域：
+`work_progress`、`stage_quality`、`physical_delivery`。它只消费 K2 当前行、K1–K6 具名 ref、
+计划、不可变步骤记录和现场读回；不生成或消费 `product_release`、`status_groups`。
+物理状态只允许 `not_started`、`incomplete`、`removed`、`not_applicable_recorded`、
+`unavailable`、`unknown`；计划预测不等于执行结果，质量或发布状态也不等于物理交付状态。
+计划、步骤、完成结果分开；确认先于逐动作授权，失败步骤保留且同一计划只读回补足，不覆盖旧失败。
+
+## 四层状态的最终读法
+
+- 需求实现：原始需求是否真的落到用户可观察结果。
+- 质量验收：测试、AC、review、运行和证据是否足够可信。
+- Git 交付：commit、merge、push、cleanup 是否实际完成并读回。
+- 任务结束：是否写入完整 `task-close-completed.v1`；记录质量和发布缺口，但不把它们改写成通过。
+
+四层独立报告。任何一层的绿色事实都不能覆盖另一层的 `unknown`、`unavailable`、`partial` 或
+`incomplete`。
+"
+
+ ❯ tests/contract/governance-review-dispatch-boundary.test.mjs:27:22
+     25|   it("keeps standard workflow without a unified budget gate", () => {
+     26|     expect(workflow).toMatch(/不可得就写 `unavailable`，不设统一预算 g…
+     27|     expect(workflow).toMatch(/健康的 provider 由 3rd-review 自己监管/);
+       |                      ^
+     28|   });
+     29| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/38]⎯
+
+ FAIL  tests/contract/material-producer-consumer-roundtrip.test.mjs > material producer and consumer round-trip > RED: makes the phase the sole engineering body and tasks a pure execution index
+AssertionError: expected '---\nname: spec-plan\ndescription: Au…' to match /single phase engineering authority|单…/i
+
+- Expected: 
+/single phase engineering authority|单一 phase 工程权威/i
+
++ Received: 
+"---
+name: spec-plan
+description: Author implementation design in spec.md and independent Phase files for post-cohort build-plan.
+---
+
+# Spec Plan
+
+## Post-cohort authoring contract
+
+Read the confirmed `decision-log.md`, current `spec.md`, and verified code facts from the frozen stage packet. `spec.md` owns the global product contract **and implementation design**: code anchors, chosen solution, interfaces, global file boundary, dependency graph, source → FR → AC → Phase → oracle trace, risks, rollback, and testing strategy. Extend its implementation design section in place; preserve its product narrative and acceptance criteria.
+
+This skill is the sole Phase engineering author. Write one independent `phases/P<n>.md` file per Phase using `templates/phase-template.md`. A Phase contains only its implementation delta and a stable pointer to the global goal in `spec.md`, not a copy of the global design or another Phase. The separate `spec-tasks` skill renders the pointer index. No post-cohort `plan.md` or `tasks.md` writer exists; pre-cohort and archived files are read-only.
+
+Each Phase owns L0 outcome, machine-checkable L1 contract, removable L2 reference, exact write set, dependency, test design and oracle, coverage limit, STOP condition, done evidence, and rollback. Within L1, write an executable card for **every** Task using `templates/phase-template.md`. A one-line task list or Phase-level command is not a substitute for task inputs, exact code anchors/actions, outputs, paired RED/GREEN, failure oracle, evidence, and recovery. Keep actual execution status in task facts; authored cards describe intent, not invented completion.
+
+Task IDs are unique across the entire task, not per Phase. Assign `T001`, `T002`, … in `phases/index.md` Phase order and within-Phase execution order; the next Phase continues after the previous Phase's last ID. A Task dependency may name only an earlier Phase or already-defined Task. Never restart at `T001` in each Phase.
+
+## Design and boundary
+
+Choose reuse, then narrow extension, then new mechanism with stated consumer, owner, test, and removal condition. Record verified interfaces and failure behavior. Unknown facts stay `unknown` with owner and next action. Declare global NEW, MODIFY, and DO NOT TOUCH exact paths in `spec.md`. Every Phase write set is a subset of that boundary; each implementation path has one Phase owner. Order producers before consumers. Parallel work requires independent inputs, dependencies, and file ownership. No directory-wide or glob write set is valid.
+
+凡写入 DO NOT TOUCH、或依赖「外部尚未改动」的受保护文件，计划里必须留下核实那一刻的实读结果：文件路径、读到的字段/签名/版本项**逐字清单**、读取所用的命令或工具、日期。字段个数、必填项、版本项这类断言只能来自实读，不能来自记忆、推断或上游摘要——上游摘要是线索，不是证据。实读结果与已有断言不一致时，先改断言再继续；本轮无法实读就写 `unknown`，并写明 owner 与下次核实动作。计划里出现「恰含 N 个字段」「签名未变」「只依赖既有接口」这类句子而没有实读记录时，按未核实处理。
+
+Trace every current source requirement, FR, and AC to a Phase, Task, and objective oracle. Read the original requirement as well as the decision: a compact decision summary is not proof that every requested behavior reached the plan. Check both directions: every in-scope source has implementation and a failure oracle, and every task has an authorized source. A mere ID occurrence is not coverage. Resolve an omitted source before calling the plan executable. A direction-changing gap returns to `make-decision`; a product-detail gap returns to the owning `spec-specify`/`spec-clarify` step. Continue unaffected planning and same-task repair.
+
+## Test design and quality
+
+For each applicable behavior change, build-plan authors a real executable test before implementation, runs its scoped `gate_cmd`, and preserves actual RED evidence. RED is valid only when the named target assertion fails, not setup/environment/configuration; a planned command or unrelated nonzero is not RED. Freeze that test and any scoring logic in DO NOT TOUCH. A later test change needs an explicit change request, reason, previous evidence, and independent review; build-code changes implementation to make the same test/oracle GREEN without silently relaxing assertions. Every behavior Task records tier, concrete testing skill, scenario/input, fixture or service, command, expected exit, oracle, test path, actual RED ref or honest unavailable, GREEN evidence path, coverage limit, and STOP. G-2 for pure documentation or exploratory work permits N/A only with a concrete reason, risk, objective alternative (prefer a falsifiable check), and acceptance disclosure; do not manufacture a failure. The final aggregate is an ordinary Phase task, not a new gate.
+
+计划里每一条红测都必须同时写下归因：目标行为失败 / 夹具或环境失败 / 本来就通过；只写命令与期望退出码不算写完。
+
+Cross-check the original requirement, decision, `spec.md`, every `phases/P<n>.md`, and generated `phases/index.md` for omissions, contradictions, cycles, duplicated bodies, boundary widening, and two-way traceability. Perform an execution dry-run on each Task card: can an implementer using only current spec, index, and that Phase identify the first symbol to inspect, the first edit, target RED, GREEN, negative case, and recovery without inventing a product choice? Repair any no. Independent findings review and final `spec-analyze` are quality facts, not work permits. Preserve partial and unavailable facts honestly; repair valid findings in this task.
+
+Bind output to the stage-input packet's task, material revision, snapshot, and source digests. A missing or invalid packet is `unavailable` with owner and next action, not empty content.
+
+# 实现计划：[填写：功能名]
+
+- **输入材料**：`[填写：decision-log.md 引用]`、`[填写：spec.md 引用]`
+- **模板版本**：`plan-task.v4`
+
+## 材料导航
+
+[填写：根据当前四份材料的实际章节与锚点再生成本表；仅用于定位，正文仍由各自材料负责。M/S/B/P 表示主会话、子代理、后台执行和并行工作在何时读取，不产生第五份权威材料。]
+
+| 章节 / 材料锚点 | 职责与摘要 | M/S/B/P 读取时机 |
+| --- | --- | --- |
+| `decision-log.md#[填写：实际决策锚点]` | 已确认的方向、范围、理由与非目标 | [填写：读取角色与时机] |
+| `spec.md#[填写：实际 FR/AC 锚点]` | 产品行为、状态、验收判据与失败边界 | [填写：读取角色与时机] |
+| `plan.md#[填写：实际工程方案锚点]` | 工程方案、接口、依赖、验证与恢复策略 | [填写：读取角色与时机] |
+| `tasks.md#[填写：实际 Phase/Task 锚点]` | 可执行任务边界、命令及实际完成记录 | [填写：读取角色与时机] |
+
+## 速读卡
+
+- **目标**：[填写：完成后的可观察结果]
+- **非目标**：[填写：明确不做什么]（来源：[填写：已确认的来源/决定引用]；决定：[填写：决定编号]）
+- **改动前**：[填写：已核实的当前行为或缺口]
+- **改动后**：[填写：目标行为]
+- **主要风险**：[填写：最可能影响交付的风险]
+- **下一步**：[填写：首个可执行动作或停止条件]
+
+## 技术上下文
+
+### 全局约束
+
+- **已核实事实**：[填写：影响实现的仓库、接口、数据和运行事实]
+- **语言 / 运行时**：[填写：已核实版本]
+- **主要依赖**：[填写：已有依赖及用途；无则写 `N/A — 理由`]
+- **存储 / 状态**：[填写：数据与持久化边界；无则写 `N/A — 理由`]
+- **测试**：[填写：真实测试工具、资源和清理约束]
+- **目标环境**：[填写：目标环境与兼容范围]
+- **规模 / 范围**：[填写：文件、模块和数据范围]
+- **未决事实**：[填写：未知事实、影响、处理阶段；无则写 `N/A — 理由`]
+
+## 代码锚点
+
+- **已核实锚点**：[填写：精确路径、符号、现有消费者]
+- **既有接口**：[填写：已核实签名、schema 或事件；无则写 `N/A — 理由`]
+- **现在必读**：[填写：设计阶段必须读取的最小锚点]
+- **动手前必读**：[填写：执行前才需要读取的锚点；无则写 `N/A — 理由`]
+- **上下文模式**：[填写：Lite / Full / N/A — 工程理由]
+
+### 复用 → 扩展 → 新增
+
+| 能力 | 决策 | 既有锚点 | 理由 / 删除条件 |
+| --- | --- | --- | --- |
+| [填写：能力] | 复用 / 扩展 / 新增 | `[填写：路径:符号]` | [填写：最小方案理由；新增需写消费者、负责人、测试、删除条件] |
+
+## 方案设计
+
+### 总览
+
+[填写：用 2–4 个短段落讲清完整技术链路、关键数据流和最小改动方式。]
+
+### 模块职责
+
+#### [填写：模块名称]
+
+- **职责**：[填写：单一职责]
+- **消费**：[填写：准确接口或 schema]
+- **产出**：[填写：准确接口或 schema]
+- **不得决定**：[填写：权威边界]
+
+### 接口、数据与生命周期
+
+- **接口 / schema**：[填写：签名、数据契约和兼容边界；无则写 `N/A — 理由`]
+- **数据流 / 状态**：[填写：输入、变换、输出、失败与恢复]
+- **API 契约**：[填写：method、path、request、response、error；无则写 `N/A — 理由`]
+- **UI / 外部代码**：[填写：信息层级、交互、可访问性或最小 hook；无则写 `N/A — 理由`]
+- **明确失败**：[填写：无效输入或状态如何明确失败]
+
+## UI 交付契约（仅 UI phase/task 使用）
+
+- **UI 适用性**：`ui_scope` / `non_ui` / `unknown`；若无 UI 改动填 `N/A — 理由`。
+- **组件动作**：`reuse` / `modify` / `extend-state-or-variant` / `add-local` / `extract-shared` / `remove-after-no-consumers`。
+- **真实消费者**：[填写真实页面/组件消费者；没有时写 `unknown — 理由`]
+- **状态归属**：[填写状态所属组件或 hook]
+- **类型化视图模型**：[填写输入/输出类型、adapter 或 `N/A — 理由`]
+- **样式 / token 归属**：[填写样式与 token 所有者、边界和禁止的全局覆盖]
+- **夹具 / 视口**：[填写假数据夹具、视口名称/尺寸和响应式断点]
+- **浏览器 / a11y / 性能**：[填写交互、键盘、无障碍、性能测试路线]
+- **截图交接**：[填写截图路径/命令；被阻塞或未知时写失败原因]
+- **覆盖边界**：[填写不覆盖的浏览器、视觉、API 或性能范围]
+- **N/A 或未知的理由**：[填写为什么无法执行或只能人工确认]
+
+### 设计缺项交接（不改变 Design.md 权威）
+
+- `design_status`（设计状态）：`approved` / `acknowledged` / `not_approved` / `unknown`。
+- `missing_items`（缺项与原因）：[填写缺项和原因；没有缺项填 `[]`]
+- `fallback_visual_basis`（降级视觉依据）：[填写真实组件+假数据、设计工具结果或 `N/A — 理由`]
+- `constraints` / `assumptions`（约束与假设）：[填写交互、label、组件限制和实现假设]
+- `rework_risk` / `human_confirmation`（返工风险与人工确认）：[填写返工风险与人工确认事实]
+- `current_material_ref` / `design_revision`（当前材料引用与设计版本）：[填写当前四份材料引用和 Design.md 版本字符串]
+- `visible_labels`（可见文案）：[填写页面和操作的可见 label]
+- `preview_refs` / `fixture_refs` / `viewport_refs` / `screenshot_refs`（可回放引用）：[填写可回放引用；缺失必须保留 `unknown` 或 `N/A — 理由`]
+- `responsive` / `a11y`（响应式与无障碍）：[每个状态填写窄视口重排、溢出、焦点、键盘、语义和错误关联意图]
+
+## 文件边界
+
+### 新增
+
+- `[填写：精确新增文件路径 / N/A — 理由]`
+
+### 修改
+
+- `[填写：精确修改文件路径]`
+
+### 禁止改动
+
+- `[填写：精确保护文件路径及理由]`
+
+## 技术决策
+
+### DEC-001 — [填写：决策名称]
+
+- **问题**：[填写：真实工程问题]
+- **候选方案**：[填写：候选方案及取舍]
+- **已选**：[填写：复用 / 扩展 / 新增 及选择]
+- **理由**：[填写：为什么是最简单的充分方案]
+- **后果 / 风险**：[填写：代价和风险]
+- **回退方式**：[填写：边界内回退方式]
+- **F10 真实威胁**：[填写：仅「已选」为新增时保留]
+- **F10 既有覆盖**：[填写：仅「已选」为新增时保留]
+- **F10 可绕过**：[填写：仅「已选」为新增时保留]
+- **F10 维护成本**：[填写：仅「已选」为新增时保留]
+- **F10 处置**：[填写：`keep` / `simplify` / `remove`]
+
+## 测试策略
+
+设计 RED/GREEN，不在 build-plan 执行命令。两者使用同一条 `gate_cmd` 和
+同一个判据身份；`gate_cmd` 只是测试命令，不是工作许可证。
+
+| 目标 | Task | 角色 | gate_cmd / 预期退出码 | 判据 / 证据路径 |
+| --- | --- | --- | --- | --- |
+| [填写：FR/AC] | [填写：T-ID] | RED | `[填写：可执行命令]` / `[填写：非零]` | `[填写：ORACLE-ID、失败信号、相对任务根路径]` |
+| [填写：FR/AC] | [填写：T-ID] | GREEN | `[填写：同一命令]` / `0` | `[填写：同一 ORACLE-ID、成功/负例、相对任务根路径]` |
+
+规划涉及真实验收时，在现有接口契约和任务卡中绑定 tier、数据来源/样例/场景、逐 AC 判据与原始证据消费者。`command` 设计 argv/timeout；`service` 设计相对工作树的 module/export/input/timeout；精确 JSON 形状与逐 AC `entries[].assertions` 输出见 tasks-template 的交付契约字段。build-plan 只设计，build-code 的认证结果驱动真实执行；verify-code 认证当前执行、普通独立审查与用户确认，三者缺一保持缺失/不可用。
+
+审查通过既有入口产生 canonical attempt/result，消费者使用实际引用/哈希认证；partial、provider/transport 失败及缺失 usage/timing 保留原事实。阶段反思使用 v2、唯一显式结果与返回的语义引用/原始哈希，A 复用首件、B 保留 A；原 stage 错误与 reflection_error 分别披露。这些约束写进现有任务输出/证据/恢复栏，不增加执行状态权威。
+
+## 风险与回滚
+
+- **全局恢复规则**：[填写：只回滚当前实现，保留四份材料和既有质量事实]
+- **不可逆边界**：[填写：需要明确授权的 commit/push/merge/archive/cleanup；无则写 `N/A — 理由`]
+- **恢复负责人**：[填写：失败后由谁执行哪一步]
+
+### 工程风险交接
+
+- **PLAN-RISK-001**：[填写：风险主题]
+  - **受影响 ID**：[填写：来源/FR/AC/T-ID]
+  - **触发条件**：[填写：何时发生]
+  - **后果**：[填写：可观察后果]
+  - **缓解或停止**：[填写：最小缓解或停止条件]
+  - **处理阶段**：[填写：build-plan / build-code / verify-code]
+  - **验证**：[填写：如何证明已处理或仍存在]
+
+## 实施顺序
+
+[填写：producer-before-consumer 顺序、Phase 编号和必须串行的原因。]
+
+## 依赖与并行
+
+- **依赖**：[填写：producer → consumer 及串行原因；无则写 `N/A — 理由`]
+- **并行工作**：[填写：独立输入、依赖和文件所有权；无则写 `N/A — 理由`]
+- **外部依赖**：[填写：已核实依赖与缺失语义；无则写 `N/A — 理由`]
+
+## 需求与验证追踪
+
+| 来源 / 决定 | FR | AC | Phase / Task | 依赖 | 精确文件 | 命令 / 判据 |
+| --- | --- | --- | --- | --- | --- | --- |
+| [填写：R*/D*] | [填写：FR-ID] | [填写：AC-ID] | [填写：P1/T001] | [填写：T-ID / 无] | `[填写：精确路径]` | `[填写：命令 / ORACLE-ID]` |
+
+## 治理同步矩阵
+
+| 治理面 | 实际文件 | 变更 / 不变更 | Task 编号 | 理由 |
+| --- | --- | --- | --- | --- |
+| [填写：宪法/技能/测试/文档] | `[填写：精确路径]` | 变更 / 不变更 | [填写：T-ID] | [填写：边界理由] |
+
+## 宪法逐项检查
+
+- **宪法绑定**：`{\"artifact_kind\":\"constitution\",\"ref\":\"[填写：constitution-checklist.md 引用]\",\"hash\":\"[填写：真实 SHA-256]\",\"id\":\"CONSTITUTION\",\"version\":\"[填写：版本]\",\"clause_count\":22}`
+- **F1**：[填写：逐条事实与证据]
+- **F2**：[填写：逐条事实与证据]
+- **F3**：[填写：逐条事实与证据]
+- **F4**：[填写：逐条事实与证据]
+- **F5**：[填写：逐条事实与证据]
+- **F6**：[填写：逐条事实与证据]
+- **F7**：[填写：逐条事实与证据]
+- **F8**：[填写：逐条事实与证据]
+- **F9**：[填写：逐条事实与证据]
+- **F10**：[填写：逐条事实与证据]
+- **F11**：[填写：逐条事实与证据]
+- **Q1**：[填写：逐条事实与证据]
+- **Q2**：[填写：逐条事实与证据]
+- **Q3**：[填写：逐条事实与证据]
+- **S1**：[填写：逐条事实与证据]
+- **S2**：[填写：逐条事实与证据]
+- **S3**：[填写：逐条事实与证据]
+- **S4**：[填写：逐条事实与证据]
+- **S5**：[填写：逐条事实与证据]
+- **S6**：[填写：逐条事实与证据]
+- **S7**：[填写：逐条事实与证据]
+- **S8**：[填写：逐条事实与证据]
+
+## Phase P1 — [填写：Phase 名]
+
+### 目标
+
+[填写：本 Phase 的可观察结果。]
+
+### L0 — 目标
+
+[填写：本包为什么存在、用户或消费者能观察到什么。]
+
+### L1 — 契约
+
+[填写：可机检的输入/输出、不变量、失败语义和所有者。]
+
+### L2 — 可删除参考
+
+[填写：只帮助当前执行者的参考；删除它不得改变 L0/L1，写明退出条件。]
+
+### 文件
+
+- **写入集**：[填写：本 Phase 精确文件集；不得用目录或 glob]
+- **新增**：`[填写：精确路径 / N/A — 理由]`
+- **修改**：`[填写：精确路径]`
+- **禁止改动**：`[填写：精确保护路径及理由]`
+
+### 任务
+
+- `[填写：T-ID：一行结果]`
+
+### 验证
+
+[填写：命令、预期退出码、判据、证据路径；与本 Phase 任务判据对齐。]
+
+### 知识
+
+[填写：下一阶段必须知道的已核实事实。]
+
+### 停止
+
+[填写：返回哪个归属材料的具体条件。]
+
+### 完成
+
+[填写：可以诚实报告的测试、AC、审查、证据和交接事实。]
+
+### 风险与回滚
+
+[填写：受影响 ID、触发条件、后果、缓解办法、回滚。]
+"
+
+ ❯ tests/contract/material-producer-consumer-roundtrip.test.mjs:15:47
+     13|     const indexSkill = read("skills/spec-tasks/SKILL.md");
+     14| 
+     15|     expect(`${phaseSkill}\n${phaseTemplate}`).toMatch(/single phase en…
+       |                                               ^
+     16|     expect(phaseTemplate).toMatch(/^## Phase P1/m);
+     17|     expect(phaseTemplate).toMatch(/L0[\s\S]{0,120}(?:Goal|目标)/i);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/38]⎯
+
+ FAIL  tests/contract/phase-quality-handoff.test.mjs > Phase quality and handoff contract > renders post-cohort handoff pointers without resurrecting plan/tasks
+Error: handoff materials require an authenticated ArtifactDir reader
+ ❯ fail runtime/stage/stage-handoff.mjs:196:17
+    194| 
+    195| function fail(message, code = "STAGE_HANDOFF_INPUT_INVALID") {
+    196|   const error = new Error(message);
+       |                 ^
+    197|   error.code = code;
+    198|   throw error;
+ ❯ materialSourceRefs runtime/stage/stage-handoff.mjs:234:59
+ ❯ Module.renderStageHandoff runtime/stage/stage-handoff.mjs:342:55
+ ❯ tests/contract/phase-quality-handoff.test.mjs:41:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/38]⎯
+
+ FAIL  tests/contract/phase-quality-handoff.test.mjs > Phase quality and handoff contract > keeps the post Phase index pointer-only
+AssertionError: expected '# Phase 索引 — [任务名]\n\n> 指向各 Phase 独立权…' to match /Execution Index/
+
+- Expected: 
+/Execution Index/
+
++ Received: 
+"# Phase 索引 — [任务名]
+
+> 指向各 Phase 独立权威的纯指针。由 Phase 标题重新生成；本文件没有实现或完成权威。
+> 每个 `phases/P<n>.md` 恰好一行；请替换示例编号与路径。
+
+## 执行索引
+
+| 阶段 | 权威引用 | 语义锚点 | 写入集 | 依赖 | 消费者 |
+| --- | --- | --- | --- | --- | --- |
+| `P1` | `phases/P1.md` | `[稳定的 L0/L1 锚点]` | `[精确路径]` | `[P 编号或无]` | `[真实读取方]` |
+
+pre cohort 的旧任务卡只读保留，在本文件中没有有效行。
+"
+
+ ❯ tests/contract/phase-quality-handoff.test.mjs:107:22
+    105|     expect(tasks).toMatch(/pure pointer index/);
+    106|     expect(tasks).toMatch(/not a task card, Phase procedure, progress …
+    107|     expect(template).toMatch(/Execution Index/);
+       |                      ^
+    108|     expect(template).not.toMatch(/gate_cmd|expected_exit|\boracle\b/);
+    109|     expect(tasks).toMatch(/Do not copy its L0\/L1\/L2 body[\s\S]*execu…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/38]⎯
+
+ FAIL  tests/contract/post-phase-contract.test.mjs > post-cohort independent Phase authority > accepts two separate Phase files with one pure pointer index
+AssertionError: P1/T001 dependency must be none or identify a Phase/Task: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/contract/post-phase-contract.test.mjs:162:49
+    160|   it("accepts two separate Phase files with one pure pointer index", (…
+    161|     const result = validatePostPhaseContract({ spec, index, phases });
+    162|     expect(result.ok, result.errors.join("; ")).toBe(true);
+       |                                                 ^
+    163|     expect(result.facts).toMatchObject({
+    164|       phase_count: 2,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/38]⎯
+
+ FAIL  tests/contract/post-phase-contract.test.mjs > post-cohort independent Phase authority > keeps an explicitly deferred AC visible in history but outside current formal coverage
+AssertionError: P1/T001 dependency must be none or identify a Phase/Task: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/contract/post-phase-contract.test.mjs:179:49
+    177|     // P2 and its trace remain as historical material; only P1 is curr…
+    178|     const result = validatePostPhaseContract({ spec: deferredSpec, ind…
+    179|     expect(result.ok, result.errors.join("; ")).toBe(true);
+       |                                                 ^
+    180|     expect(result.facts.ac_coverage).toMatchObject({
+    181|       accepted_count: 1,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/38]⎯
+
+ FAIL  tests/contract/post-phase-contract.test.mjs > post-cohort independent Phase authority > accepts independent parallel Phases with no artificial serial edge
+AssertionError: P1/T001 dependency must be none or identify a Phase/Task: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/contract/post-phase-contract.test.mjs:205:49
+    203|     const parallelIndex = index.replace("| `P2` | `phases/P2.md` | `ph…
+    204|     const result = validatePostPhaseContract({ spec, index: parallelIn…
+    205|     expect(result.ok, result.errors.join("; ")).toBe(true);
+       |                                                 ^
+    206|   });
+    207| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/38]⎯
+
+ FAIL  tests/contract/post-phase-contract.test.mjs > post-cohort independent Phase authority > uses the Phase files as the strict post build-plan analysis inputs
+AssertionError: P1/T001 dependency must be none or identify a Phase/Task: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/contract/post-phase-contract.test.mjs:247:49
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/38]⎯
+
+ FAIL  tests/contract/review-materials-contract.test.mjs > current review material and capture contracts > selects every reviewable implementation and test diff above 486777B
+AssertionError: expected [ …(2) ] to deeply equal [ 'tests/z.test.ts', …(2) ]
+
+- Expected
++ Received
+
+  Array [
+-   "tests/z.test.ts",
+    "paperbuilder/application/core.py",
+    "frontend/src/secondary.ts",
+  ]
+
+ ❯ tests/contract/review-materials-contract.test.mjs:450:69
+    448|     ];
+    449|     expect(sections.reduce((total, section) => total + section.bytes.l…
+    450|     expect([...selectVerifyCodeDiffPaths(sections, "verify-code")]).to…
+       |                                                                     ^
+    451|       "tests/z.test.ts",
+    452|       "paperbuilder/application/core.py",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[23/38]⎯
+
+ FAIL  tests/contract/review-materials-contract.test.mjs > current review material and capture contracts > delivers external implementation and test shards with manifest and packet-plan bindings
+Error: MATERIAL_INCOMPLETE: verify-code requires an included test diff when that kind changed
+ ❯ validateDiffIndexBundle skills/wh-review/scripts/review-materials.mjs:1705:45
+    1703|       .filter(Boolean));
+    1704|     for (const kind of requiredKinds) {
+    1705|       if (!verifyCodeKinds.has(kind)) throw new Error(`MATERIAL_INCOMP…
+       |                                             ^
+    1706|     }
+    1707|   }
+ ❯ Module.buildReviewMaterials skills/wh-review/scripts/review-materials.mjs:2238:3
+ ❯ tests/contract/review-materials-contract.test.mjs:467:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[24/38]⎯
+
+ FAIL  tests/contract/stage-reflection-skill-contract.test.mjs > stage-reflection skill contract > declares the v2 six-block judgment protocol and a valid bundle
+AssertionError: missing protocol anchor: current stage step/skill outcome: expected '---\nname: stage-reflection\ndescript…' to contain 'current stage step/skill outcome'
+
+- Expected
++ Received
+
+- current stage step/skill outcome
++ ---
++ name: stage-reflection
++ description: 会话内、非阻断的阶段末过程复盘；输出带证据的结构化判断，不生成质量裁决。
++ version: 1.0.0
++ ---
++
++ # stage-reflection
++
++ ## 目的与边界
++
++ For post-cohort build-plan, read the current 13-step manifest in order and
++ report every step/skill independently as completed, not_started, skipped,
++ unavailable, unknown, or incomplete with its real artifact and criterion. One
++ stage conclusion never fills another row, and a pointer execution index is
++ navigation rather than a second engineering authority.
++
++ 本技能在当前正式 stage 的步骤结束时由当前主会话执行一次。它回答：哪些
++ step/skill 帮助了工作、需要改进、造成阻塞、引发人工介入、应该简化，以及现在
++ 就能简化什么。输出是 judgment layer，永远 `judgment != fact`；它不是质量分数、
++ grade、质量 verdict、release/acceptance 结论，也不阻断 stage、repair 或 close。
++
++ 复盘不改变五阶段拓扑，不增加 stage，不启动第二个 Agent，也不创建新的状态机。
++ 它只准备 judgment JSON，再交给现有公共 `run` 行为的 `reflect` action 做机器闭环。
++ 当前 checkout 若尚未提供该 route，要如实记录 unavailable；不要用私有脚本替代公共入口。
++
++ ## 输入：三个只读来源
++
++ 只消费当前会话已经保留的最小事实，不读取完整 transcript，也不读四份材料全文
++ （`decision-log.md`、`spec.md`、`plan.md`、`tasks.md`）。三个来源是：
++
++ 1. **当前 session memory**：本次会话真实发生的判断、阻塞、修复、等待、用户回复和失败；
++ 2. **lessons/** 索引：`<storageRoot>/Projects/<proj>/lessons/` 下当前 stage 的 JSONL，
++    保留 raw/merged 原文和引用；旧 lesson 是背景，不是当前事实；
++ 3. **current stage facts**：当前 stage 的阶段行、质量事实、测试/review 结果和
++    `human-confirmation.v3` 确认事实。阶段 outcome 不是当前会话的前置输入。
++
++ 输入缺失必须显式保留 `unknown`，不能用编号、文件存在、默认成功或历史任务补全。
++ 冷启动允许 `evidence_refs: []`，但相应判断的 `confidence` 不能是 `high`。
++
++ ## 六个结构化区块
++
++ 判断 JSON 必须携带下列六个区块。每个区块使用当前 v2 schema 的形状：
++
++ ```json
++ {
++   "state": "observed | none_observed | unknown",
++   "unknown_reason": "仅 state=unknown 时必填",
++   "items": [
++     {
++       "subject_id": "P5",
++       "subject_kind": "skill",
++       "classification": "needs_evidence",
++       "severity": "medium",
++       "reason": "一条可复核的判断及其边界",
++       "summary": "一条可复核的简短判断",
++       "evidence_refs": ["quality/evidence/<真实文件>.json"],
++       "confidence": "high | medium | low",
++       "next_review_trigger": "出现新的当前事实时复核"
++     }
++   ]
++ }
++ ```
++
++ - `what_helped`：哪些 step/skill 或做法实际帮助了本阶段；
++ - `what_to_improve`：哪些 step/skill 需要改变，以及改变什么；
++ - `blockers`：哪里阻塞、等待或导致失败；
++ - `intervention_reasons`：用户为什么纠正、补充、停止或重定向；
++ - `what_to_simplify`：哪些步骤、技能或交接可以更简单；
++ - `simplifiable_now`：不需新决定、现在即可安全简化的事项。
++
++ ### 调研深度维度（事实，不是 gate）
++
++ 当本 stage 使用了调研时，六个区块可附带以下事实维度：一手来源率、收敛率、
++ OPEN 数、工具使用记录。它们只描述过程和输入质量，不是 pass 判据，不新增 gate，
++ 缺失也不阻断 stage；无法适用时明确记为 `not_applicable`，不知道时保留
++ `unknown` 及原因。该维度只记录当前 stage 已观察到的事实，不从分数推导质量结论。
++
++ `state=none_observed` 表示已经检查过且没有观察到该类事实，不等于没读到输入；
++ `state=unknown` 必须带非空 `unknown_reason`，说明缺了什么以及为什么不能判断。
++ 当前 `structured_block` schema 没有把 `not_applicable` 作为第三种区块 state，因此
++ 不要发明 `state=not_applicable`。确实不适用时，在区块 `items` 中写出带原因的
++ `not_applicable` 摘要；能使用该枚举的事实栏（例如 `status_matrix`）则使用
++ `state=not_applicable` 并绑定证据。这样“不适用”可见，且不被伪装成 observed、
++ none_observed 或 unknown。
++
++ 每个 item 都写真实 `evidence_refs` 和 `confidence`。证据引用必须是当前 task/stage
++ 可复核的安全引用；引用不存在时不能补猜。`confidence` 表示这条判断的把握，不是
++ 分数或质量等级。判断条目仍必须有 `subject_id`、`subject_kind`、
++ `classification`、`severity`、`reason`、`evidence_refs`、`confidence` 和
++ `next_review_trigger`；`subject_kind` 只能是 `step` 或 `skill`，classification 只能是
++ `keep|optimize|simplify|merge|remove_candidate|add|needs_evidence`。
++
++ ## 事实投影与判断输入
++
++ 优先输出 `runtime/schemas/stage-reflection.v2.json`；v1
++ `runtime/schemas/stage-reflection.v1.json` 仍可读以兼容旧记录。v2 judgment JSON
++ 还携带三件套：
++
++ - `status_matrix`：`code`、`verify`、`physical_close`、`acceptance`、`release` 五栏；
++   每栏是 `state`（`completed|failed|not_applicable|unknown`）和 `evidence_refs`。
++   它只记录状态事实，禁止从它推导质量结论；
++ - `identity`：`task_id`、`worktree`、`branch`、`attempt`、`snapshot_tree`、
++   `material_revision` 的当前快照；
++ - `source_completeness`：`compaction`、`truncation`、`visible_scope` 和
++   `unknown_reasons`。看不到、压缩或截断时如实写 `unknown` 及原因。
++
++ 顶层 `stage_status`、`status`、`error`、`judgments`、`interventions`、`lessons_added`
++ 也必须符合 schema。`status:failed` 要有非空 `error.summary`；部分可验证输入导致
++ `status:degraded`。机器事实由机器前奏填充，主会话不把判断写入 `facts.jsonl`，
++ 也不把 `ok` 猜出来。
++
++ ## 人工介入归因
++
++ 从 `human-confirmation.v3` 读取用户真实 `reply_text` 和 `step_slug`，保留
++ `confirmation_ref`、`attribution`、`confidence`。没有 v3 事实时必须写
++ `reply_text=null`，且 confidence 只能是 medium 或 low；不能猜用户意图，也不能重写
++ confirmation 事实。`intervention_reasons` 区块仍要明确是 observed、none_observed，
++ 还是带理由的 unknown/not_applicable。
++
++ ## 阶段末公共入口与机器顺序
++
++ 主会话先按上面的输入和六个区块产出 judgment JSON，然后调用唯一的公共阶段末入口：
++
++ ```sh
++ run --action=reflect
++ ```
++
++ 这不是另一个 public behavior，也不是新命令类别；JSON 是本次 route 的判断输入。
++ 机器负责 raw 前奏、schema/完整性校验、教训合并和 immutable 发布；主会话负责判断
++ 内容。复盘失败或 unavailable 是非阻断事实，不翻转 stage 状态，不阻断 close。
++
++ ### validator 的真实消费边行为
++
++ 主会话不直接派生消费边。`tools/cli/validate-stage-reflection.mjs` 在
++ `validateReflectionValue` 内部调用 `deriveConsumptionEdges`（实现位于
++ `tools/cli/derive-consumption-edges.mjs`），再按当前 project/task 取边。消费边的实际
++ 规则是：较早 subject 的 `output_refs` 只有在较晚 subject 的 `input_refs` 中出现同一
++ 引用时才形成 edge；每个 output 还保留 `consumer_count` 和
++ `consumption_status`。
++
++ - validator 扫描当前已登记的 output/input 事实；阶段 outcome 缺失不再阻止当前
++   reflection，相关消费覆盖保持 `partial`/`unknown`；
++ - output 没找到后续输入边时标 `consumption_status=unknown`，不能称为零消费；
++ - 只有完整扫描证明、近 30 天内有已登记 output 且每个 consumer count 都是 0 时，
++   `remove_candidate` 才可能通过消费信号；还必须有人工 rejected 或同一 step 的至少
++   两次人工介入，否则 validator 改成 `needs_evidence`。LLM 不能把 unknown 当 zero；
++ - 缺失 judgment 证据引用会记录 missing ref、把 high confidence 降为 medium，并把
++   终态降为 `status:degraded`；缺失 confirmation 的 intervention 会回写
++   `reply_text=null` 和非 high confidence。v2 缺少六区块或三件套时，validator 产生
++   显式 completeness annotation，不替会话生成内容。
++
++ 因此，技能只描述并引用 validator 的派生结果，不重复调用
++ `derive-consumption-edges.mjs`，不声称“没有找到边”就是 unused，也不手工写
++ `consumer_scan` 的零消费证明。
++
++ ## lessons 生命周期与失败语义
++
++ 机器 raw 前奏使用 `append-lesson-observation.mjs` 追加 `raw_observation`；技能不重复
++ 追加。只有判断经 validator 通过并完成发布后，机器才按 `entry_id` 去重合并为
++ `merged_lesson`，保留 `occurrence_count`、`source_refs` 和 `supersedes`，并把对应 raw
++ 行标记 merged。`status:failed`、超时、技能未启动或 validator unavailable 时不合并
++ lessons；原始失败事实留在阶段反思失败记录和 raw JSONL。
++
++ 同字节提交应保持幂等，异字节 immutable 路径冲突必须明确失败且不覆盖。无执行器或未
++ 调度时使用真实 `unavailable`/`not_scheduled` 事实，不写假失败判断；这些状态不产生
++ judgments、interventions 或 lessons。任何 unavailable、failed、degraded、unknown 和
++ not_applicable 都必须在交接和下游消费中原样可见。
++
++ ## 完成检查
++
++ 在交接前逐项确认：
++
++ 1. 六个区块都出现，且每个区块状态明确；
++ 2. 每个 observed 判断和 judgment 都有真实 evidence refs 与 confidence；
++ 3. unknown 有 `unknown_reason`，not_applicable 有明确文字/原因，不能静默留空；
++ 4. v2 三件套的状态、身份和来源完整性只记录事实，不推导质量结论；
++ 5. 已准备 judgment JSON，并尝试公共 `run --action=reflect`；route 不可用时如实交接
++    dependency，不调用替代私有命令；
++ 6. 机器 validator 的 annotations、missing refs、消费边 coverage 和最终 status 被
++    原样接受，不把它们改写为通过。
++
++ 本技能只交接判断、证据引用和真实机器结果；页面或 M16 只能消费已发布记录与 lessons
++ 索引，不能从 judgment 反推出质量通过或产品发布。
++
+
+ ❯ tests/contract/stage-reflection-skill-contract.test.mjs:54:59
+     52|       stageEndRoute,
+     53|     ]) {
+     54|       expect(skill, `missing protocol anchor: ${phrase}`).toContain(ph…
+       |                                                           ^
+     55|     }
+     56| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[25/38]⎯
+
+ FAIL  tests/contract/stage-routing-and-concrete-testing.test.mjs > D-015 stage routing and concrete testing contract > declares real build-code route facts while quality limits completion
+AssertionError: expected '通过 review --action=record 派发严格一次 OCR …' to match /一次 OCR 独立代码审查/
+
+- Expected: 
+/一次 OCR 独立代码审查/
+
++ Received: 
+"通过 review --action=record 派发严格一次 OCR 代码审查，绑定当前 diff、完整 AC、材料和快照；保留真实 provider findings 或 unavailable attempt。可选 reviewed_execution 仅作执行对照 provenance，reviewer 与实现者是否同源不影响派发、绑定或完成。"
+
+ ❯ tests/contract/stage-routing-and-concrete-testing.test.mjs:188:43
+    186|     const verifySteps = steps("verify-code");
+    187|     const finalReview = verifySteps.find((step) => step.step_slug === …
+    188|     expect(finalReview.observable_result).toMatch(/一次 OCR 独立代码审…
+       |                                           ^
+    189|     expect(verifySteps.find((step) => step.step_slug === "publish-code…
+    190|       .toMatch(/code_review 质量事实/);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[26/38]⎯
+
+ FAIL  tests/contract/tier-c-deletion-boundary.test.mjs > Tier-C quality verify deletion boundary > updates active governance and the public-behavior fixture without rewriting immutable history
+AssertionError: expected [Function] to not throw an error but 'Error: Command failed: git diff --qui…' was thrown
+
+- Expected: 
+undefined
+
++ Received: 
+"Error: Command failed: git diff --quiet c33acd3b36d59ea37c97e3784706a8a57fd6f0b7 -- docs/research specs/archive"
+
+ ❯ tests/contract/tier-c-deletion-boundary.test.mjs:118:125
+    116|     const fixture = read("tests/fixtures/public-behavior-baseline/v1/c…
+    117|     expect(fixture).not.toMatch(/product_release|quality\/verify\.json…
+    118|     expect(() => execFileSync("git", ["diff", "--quiet", BASE, "--", "…
+       |                                                                                                                             ^
+    119|   });
+    120| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[27/38]⎯
+
+ FAIL  tests/contract/workflow-quality-regression.test.mjs > workflow quality regression and historical replay > keeps spec-analyze on authoring stages and code review on verify-code
+AssertionError: expected 'After finding disposition and the las…' to match /checks|检查|evidence|证据/i
+
+- Expected: 
+/checks|检查|evidence|证据/i
+
++ Received: 
+"After finding disposition and the last material revision, the current build-plan session actually invokes spec-analyze on authenticated raw requirements, decision-log, spec, index and every Phase; it publishes and reads back one identity-bound report-only quality fact. Missing original source, semantic mismatch, or absent execution remains material_incomplete, inconsistent, or unavailable, never a clean result or work gate."
+
+ ❯ tests/contract/workflow-quality-regression.test.mjs:71:42
+     69|       const analyzer = manifest.steps.find((step) => ["stage-end-spec-…
+     70|       expect(analyzer, `${stage}: analyzer step`).toBeTruthy();
+     71|       expect(analyzer.observable_result).toMatch(/checks|检查|evidence…
+       |                                          ^
+     72|       expect(analyzer.completion_evidence.some((item) => item.kind ===…
+     73|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[28/38]⎯
+
+ FAIL  tests/integration/distribution-closure.test.mjs > portable build-prd workflow closure > contains the five workflows and their declared skill closure only
+Error: skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review
+ ❯ assertSourceClosure runtime/distribution/skill-bundle-release.mjs:292:25
+    290| function assertSourceClosure(root) {
+    291|   const result = checkSkillClosure(root);
+    292|   if (!result.ok) throw new Error(`skill closure is not closed: ${resu…
+       |                         ^
+    293| }
+    294| 
+ ❯ collectSourceClosure runtime/distribution/skill-bundle-release.mjs:296:3
+ ❯ Module.buildSkillBundleRelease runtime/distribution/skill-bundle-release.mjs:372:22
+ ❯ tests/integration/distribution-closure.test.mjs:155:27
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[29/38]⎯
+
+ FAIL  tests/integration/distribution-closure.test.mjs > portable build-prd workflow closure > rejects removal of the persisted portable workflow closure
+Error: skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review
+ ❯ assertSourceClosure runtime/distribution/skill-bundle-release.mjs:292:25
+    290| function assertSourceClosure(root) {
+    291|   const result = checkSkillClosure(root);
+    292|   if (!result.ok) throw new Error(`skill closure is not closed: ${resu…
+       |                         ^
+    293| }
+    294| 
+ ❯ collectSourceClosure runtime/distribution/skill-bundle-release.mjs:296:3
+ ❯ Module.buildSkillBundleRelease runtime/distribution/skill-bundle-release.mjs:372:22
+ ❯ tests/integration/distribution-closure.test.mjs:218:28
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[30/38]⎯
+
+ FAIL  tests/integration/distribution-closure.test.mjs > portable build-prd workflow closure > rejects unmanifested files in a closed release
+Error: skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review
+ ❯ assertSourceClosure runtime/distribution/skill-bundle-release.mjs:292:25
+    290| function assertSourceClosure(root) {
+    291|   const result = checkSkillClosure(root);
+    292|   if (!result.ok) throw new Error(`skill closure is not closed: ${resu…
+       |                         ^
+    293| }
+    294| 
+ ❯ collectSourceClosure runtime/distribution/skill-bundle-release.mjs:296:3
+ ❯ Module.buildSkillBundleRelease runtime/distribution/skill-bundle-release.mjs:372:22
+ ❯ tests/integration/distribution-closure.test.mjs:235:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[31/38]⎯
+
+ FAIL  tests/integration/distribution-closure.test.mjs > portable build-prd workflow closure > rejects valid-hash extra files added to the manifest and disk
+Error: skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review
+ ❯ assertSourceClosure runtime/distribution/skill-bundle-release.mjs:292:25
+    290| function assertSourceClosure(root) {
+    291|   const result = checkSkillClosure(root);
+    292|   if (!result.ok) throw new Error(`skill closure is not closed: ${resu…
+       |                         ^
+    293| }
+    294| 
+ ❯ collectSourceClosure runtime/distribution/skill-bundle-release.mjs:296:3
+ ❯ Module.buildSkillBundleRelease runtime/distribution/skill-bundle-release.mjs:372:22
+ ❯ tests/integration/distribution-closure.test.mjs:266:28
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[32/38]⎯
+
+ FAIL  tests/integration/distribution-closure.test.mjs > portable build-prd workflow closure > rejects an unsafe release manifest file
+Error: skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review
+ ❯ assertSourceClosure runtime/distribution/skill-bundle-release.mjs:292:25
+    290| function assertSourceClosure(root) {
+    291|   const result = checkSkillClosure(root);
+    292|   if (!result.ok) throw new Error(`skill closure is not closed: ${resu…
+       |                         ^
+    293| }
+    294| 
+ ❯ collectSourceClosure runtime/distribution/skill-bundle-release.mjs:296:3
+ ❯ Module.buildSkillBundleRelease runtime/distribution/skill-bundle-release.mjs:372:22
+ ❯ tests/integration/distribution-closure.test.mjs:309:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[33/38]⎯
+
+ FAIL  tests/integration/distribution-closure.test.mjs > portable build-prd workflow closure > rejects hard-linked release source files
+AssertionError: expected [Function] to throw error matching /hard-linked/ but got 'skill closure is not closed: build-co…'
+
+- Expected: 
+/hard-linked/
+
++ Received: 
+"skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review"
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[34/38]⎯
+
+ FAIL  tests/integration/distribution-closure.test.mjs > portable build-prd workflow closure > rejects a forbidden declared asset instead of silently dropping it
+AssertionError: expected [Function] to throw error matching /forbidden path/ but got 'skill closure is not closed: build-co…'
+
+- Expected: 
+/forbidden path/
+
++ Received: 
+"skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review"
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[35/38]⎯
+
+ FAIL  tests/integration/distribution-closure.test.mjs > carries the canonical shared definitions owner through the runner import closure
+Error: skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review
+ ❯ assertSourceClosure runtime/distribution/skill-bundle-release.mjs:292:25
+    290| function assertSourceClosure(root) {
+    291|   const result = checkSkillClosure(root);
+    292|   if (!result.ok) throw new Error(`skill closure is not closed: ${resu…
+       |                         ^
+    293| }
+    294| 
+ ❯ collectSourceClosure runtime/distribution/skill-bundle-release.mjs:296:3
+ ❯ Module.buildSkillBundleRelease runtime/distribution/skill-bundle-release.mjs:372:22
+ ❯ tests/integration/distribution-closure.test.mjs:419:37
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[36/38]⎯
+
+ FAIL  tests/integration/distribution-closure.test.mjs > P5 released workflow source rejects missing bytes after a valid baseline
+ FAIL  tests/integration/distribution-closure.test.mjs > P5 released workflow source rejects tampered bytes after a valid baseline
+Error: skill closure is not closed: build-code: prompt references undeclared skill architect-code-review; build-code: forbidden external or user-local skill locator in prompt; verify-code: prompt references undeclared skill architect-code-review
+ ❯ assertSourceClosure runtime/distribution/skill-bundle-release.mjs:292:25
+    290| function assertSourceClosure(root) {
+    291|   const result = checkSkillClosure(root);
+    292|   if (!result.ok) throw new Error(`skill closure is not closed: ${resu…
+       |                         ^
+    293| }
+    294| 
+ ❯ collectSourceClosure runtime/distribution/skill-bundle-release.mjs:296:3
+ ❯ Module.buildSkillBundleRelease runtime/distribution/skill-bundle-release.mjs:372:22
+ ❯ tests/integration/distribution-closure.test.mjs:444:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[37/38]⎯
+
+ Test Files  15 failed | 17 passed (32)
+      Tests  38 failed | 352 passed (390)
+   Start at  20:37:44
+   Duration  53.79s (transform 468ms, setup 0ms, collect 3.23s, tests 87.10s, environment 2ms, prepare 752ms)
+

@@ -1268,7 +1268,11 @@ describe("review flow task record", () => {
     expect(attempt.error).toEqual(result.error);
   });
 
-  it("consumes a provider-preflight quorum shortfall before dispatch", async () => {
+  it("dispatches despite a route minimum_heterologous that provider preflight cannot satisfy", async () => {
+    // card-03 removed the minimum-heterologous headcount gate (SIMPLE_REVIEW_QUORUM
+    // = 1). A route that declares minimum_heterologous: 2 while provider preflight
+    // leaves a single distinct eligible model must still reach the broker; it must
+    // never be consumed as REVIEW_THRESHOLD_INVALID before dispatch.
     const { task, kernel } = makeTask();
     const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "review-record-post-filter-quorum-current-")));
     roots.push(attachmentRoot);
@@ -1296,20 +1300,21 @@ describe("review flow task record", () => {
         }),
         client: { async runGroup() {
           brokerCalls += 1;
-          throw new Error("provider dispatch must not run after quorum preflight");
+          throw Object.assign(new Error("stub broker dispatch"), { code: "PROVIDER_NO_TERMINAL_RESULT" });
         } },
       }),
     });
     const attempt = JSON.parse(task.readRecord(recorded.attempt_ref));
 
-    expect(recorded).toMatchObject({ status: "recorded", dispatch_state: "blocked_before_dispatch", result_ref: null });
-    expect(recorded.error).toMatchObject({ code: "REVIEW_THRESHOLD_INVALID" });
-    expect(attempt).toMatchObject({
-      terminal_status: "unavailable",
-      dispatch_state: "blocked_before_dispatch",
-      provider_attempts: [],
-    });
-    expect(brokerCalls).toBe(0);
+    expect(brokerCalls).toBe(1);
+    expect(recorded.status).toBe("recorded");
+    expect(recorded.dispatch_state).toBe("dispatched");
+    expect(recorded.error?.code).not.toBe("REVIEW_THRESHOLD_INVALID");
+    expect(attempt.dispatch_state).toBe("dispatched");
+    // The stub broker throws before producing a provider record, so the attempt
+    // proves the dispatch through dispatch_state/brokerCalls rather than through
+    // provider_attempts. The old contract never reached this point at all.
+    expect(attempt.provider_attempts).toEqual([]);
     validateSchema("attempt", attempt);
   });
 

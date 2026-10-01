@@ -215,7 +215,7 @@ describe("simple wh-review contracts", () => {
     expect(validateAttempt(pathValue)).toBe(false);
   });
 
-  it("RED: rejects a private host path before managed dispatch", async () => {
+  it("sends the fixed dsh broker host and ignores a caller host on managed dispatch", async () => {
     const calls = [];
     const client = new ReviewProviderClient({
       invoke: async (value) => {
@@ -234,75 +234,18 @@ describe("simple wh-review contracts", () => {
       },
     });
 
-    await expect(client.startManaged({
+    await client.startManaged({
       requestId: "request-p4",
+      // A historical caller field: never forwarded, so a private path cannot leak.
       hostProvider: "file://private/host",
       providers: ["other/model"],
       materials: { bundleRoot: "bundle", materialId: hash, deliveryManifest: [] },
       prompt: "review",
       minimumHeterologous: 1,
-    })).rejects.toThrow();
-    expect(calls).toEqual([]);
-  });
-
-  it("RED: rejects a private host path on statusManaged before broker invocation", async () => {
-    const calls = [];
-    const client = new ReviewProviderClient({
-      invoke: async (value) => {
-        calls.push(value);
-        return {
-          exitCode: 0,
-          stdout: `${JSON.stringify({
-            version: "workflowhub-run.v1",
-            request_id: "request-p4",
-            runtime_id: "runtime-p4",
-            state: "running",
-            material_id: hash,
-          })}\n`,
-          stderr: "",
-        };
-      },
     });
-
-    await expect(client.statusManaged({
-      requestId: "request-p4",
-      runtimeId: "runtime-p4",
-      hostProvider: "/private/host",
-      providers: ["other/model"],
-      materials: { materialId: hash },
-    })).rejects.toMatchObject({ code: "PUBLIC_RESULT_INVALID" });
-    expect(calls).toEqual([]);
-  });
-
-  it("rejects private and opaque hosts on cancelManaged before broker invocation", async () => {
-    for (const hostProvider of ["/private/host", "file://private/host"]) {
-      const calls = [];
-      const client = new ReviewProviderClient({
-        invoke: async (value) => {
-          calls.push(value);
-          return {
-            exitCode: 0,
-            stdout: `${JSON.stringify({
-              version: "workflowhub-run.v1",
-              request_id: "request-p4",
-              runtime_id: "runtime-p4",
-              state: "running",
-              material_id: hash,
-            })}\n`,
-            stderr: "",
-          };
-        },
-      });
-
-      await expect(client.cancelManaged({
-        requestId: "request-p4",
-        runtimeId: "runtime-p4",
-        hostProvider,
-        providers: ["other/model"],
-        materials: { materialId: hash },
-      })).rejects.toMatchObject({ code: "PUBLIC_RESULT_INVALID" });
-      expect(calls).toEqual([]);
-    }
+    expect(calls).toHaveLength(1);
+    expect(calls[0].request.host_provider).toBe("dsh");
+    expect(JSON.stringify(calls[0])).not.toContain("private/host");
   });
 
   it("keeps caller material keys and runner-owned instructions fail-closed", async () => {
@@ -396,7 +339,7 @@ describe("simple wh-review contracts", () => {
     expect(result.material_id).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it("RED: rechecks quorum after preflight removes a provider", async () => {
+  it("dispatches the remaining provider after preflight removes one, without a heterologous headcount gate", async () => {
     const blockedProvider = "antigravity/flash";
     const healthyProvider = "kimi/coding";
     const selection = selectionFor([blockedProvider, healthyProvider], {
@@ -428,7 +371,6 @@ describe("simple wh-review contracts", () => {
       : { provider, status: "ready" };
     const result = await runSimpleReview({
       stage: "build-code",
-      host_provider: "codex",
       preflight: true,
       materials: {
         approved_spec: "approved spec",
@@ -437,13 +379,12 @@ describe("simple wh-review contracts", () => {
       },
     }, dependencies);
     expect(result).toMatchObject({
-      status: "unavailable",
-      dispatch_state: "blocked_before_dispatch",
-      provider_attempts: 0,
-      provider_results: [],
-      error: { code: "REVIEW_THRESHOLD_INVALID" },
+      status: "available",
+      dispatch_state: "dispatched",
+      minimum_heterologous: 1,
     });
-    expect(calls).toEqual([]);
+    expect(result.error?.code).not.toBe("REVIEW_THRESHOLD_INVALID");
+    expect(calls).toEqual(["run"]);
   });
 
   it("keeps provider results bound to the selected provider identity", () => {
@@ -551,9 +492,12 @@ describe("simple wh-review contracts", () => {
 
   it("documents the complete public review input instead of forcing callers to guess", () => {
     const skill = readFileSync(join(root, "wh-review", "SKILL.md"), "utf8");
-    for (const field of ["stage", "host_provider", "materials"]) {
+    for (const field of ["stage", "materials"]) {
       expect(skill, field).toContain(`\"${field}\"`);
     }
+    // host_provider is a historical field: documented as ignored, never required.
+    expect(skill).not.toContain('"host_provider"');
+    expect(skill).toMatch(/`host_provider` is no longer read/);
     for (const field of ["task_path", "project_name", "task_id"]) {
       expect(skill, field).toContain(`\`${field}\``);
     }

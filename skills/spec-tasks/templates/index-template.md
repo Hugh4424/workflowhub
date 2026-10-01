@@ -1,12 +1,12 @@
-# Phase index — [task]
+# Phase 索引 — [任务名]
 
-> Pure pointers to the independent Phase authorities. Regenerate from Phase headers; this document has no implementation or completion authority.
-> Every `phases/P<n>.md` has exactly one row; replace the example ID and path.
+> 指向各 Phase 独立权威的纯指针。由 Phase 标题重新生成；本文件没有实现或完成权威。
+> 每个 `phases/P<n>.md` 恰好一行；请替换示例编号与路径。
 
 ## Execution Index
 
-| phase | authority ref | semantic anchor | write set | dependency | consumer |
+| 阶段 | 权威引用 | 语义锚点 | 写入集 | 依赖 | 消费者 |
 | --- | --- | --- | --- | --- | --- |
-| `P1` | `phases/P1.md` | `[stable L0/L1 anchor]` | `[exact paths]` | `[P IDs or none]` | `[real reader]` |
+| `P1` | `phases/P1.md` | `[稳定的 L0/L1 锚点]` | `[精确路径]` | `[P 编号或无]` | `[真实读取方]` |
 
-Historical pre-cohort cards are read-only and have no active row here.
+pre cohort 的旧任务卡只读保留，在本文件中没有有效行。

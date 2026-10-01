@@ -46,7 +46,6 @@ export async function runAuditFixture({ outputRoot } = {}) {
     const result = await runSimpleReview({
       stage,
       review_track: reviewTrack,
-      host_provider: "codex",
       materials: {
         raw_requirement: "fixture requirement",
         ...(stage === "make-decision" && reviewTrack === "direction" ? {

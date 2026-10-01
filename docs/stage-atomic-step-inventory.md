@@ -12,18 +12,17 @@ legacy-reference mappings. Unknown legacy actions fail closed through `docs/migr
 |---|---:|---|---|---|
 | make-decision | 1 | load-context | S0 | missing task/worktree: fail-loud |
 | make-decision | 2 | triage-scope | S0.5 | scope mode is recorded, never guessed |
-| make-decision | 3 | talk-round-1 | S2 | ask only direction-changing questions |
-| make-decision | 4 | research-inputs | S1/S3 | no real question: record skipped |
-| make-decision | 5 | talk-round-2 | S4 | preserve user choices and risks |
-| make-decision | 6 | direction-advice | S5 | wh-review owns the provider |
-| make-decision | 7 | talk-round-3 | S7 | clarify only unresolved direction items |
-| make-decision | 8 | grill-with-docs | S7 | main agent communicates with user |
-| make-decision | 9 | write-decision-draft | S7 | write the current decision log |
-| make-decision | 10 | detail-advice | S7 | retain advisory findings |
-| make-decision | 11 | approve-decision | S9 | only real user confirmation counts |
-| make-decision | 12 | stage-end-spec-analyze | S9.5 | final consistency check after confirmation and aggregate |
-| make-decision | 13 | publish-decision | S10 | publish the current artifact snapshot |
-| make-decision | 14 | stage-reflection | on-stage-end | write judgment-layer reflection; failure is recorded and non-blocking |
+| make-decision | 3 | research-and-diverge | S1/S3 | real gap only; preserve skipped or unavailable |
+| make-decision | 4 | direction-advice | S5 | independent direction advice |
+| make-decision | 5 | outline-talk | S7 | main agent owns real outline talk |
+| make-decision | 6 | grill-with-docs | S7 | main agent communicates with user |
+| make-decision | 7 | module-convergence | S7 | converge current modules and OI |
+| make-decision | 8 | write-decision-draft | S7 | write the current decision log |
+| make-decision | 9 | detail-advice | S7 | retain advisory findings |
+| make-decision | 10 | approve-decision | S9 | only real user confirmation counts |
+| make-decision | 11 | stage-end-spec-analyze | S9.5 | final consistency check after confirmation |
+| make-decision | 12 | publish-decision | S10 | publish the current artifact snapshot |
+| make-decision | 13 | stage-reflection | on-stage-end | write judgment-layer reflection; failure is recorded and non-blocking |
 | build-spec | 1 | read-decision-log | pre-read | read the controlled current materials |
 | build-spec | 2 | conditional-spec-research | research | real question only; else skipped |
 | build-spec | 3 | spec-clarify | clarification | unique build-spec clarification owner |
@@ -39,18 +38,18 @@ legacy-reference mappings. Unknown legacy actions fail closed through `docs/migr
 | build-spec | 13 | stage-end-spec-analyze | final cross-material trace | report-only consistency check before publish |
 | build-spec | 14 | publish-spec-result | handoff | publish spec and facts |
 | build-spec | 15 | stage-reflection | on-stage-end | write judgment-layer reflection; failure is recorded and non-blocking |
-| build-plan | 1 | read-current-materials | pre-read | read decision-log and spec |
+| build-plan | 1 | read-current-materials | pre-read | read current cohort materials |
 | build-plan | 2 | conditional-spec-research | research | real question only; else skipped |
-| build-plan | 3 | testing-system-blueprint | test design | outline behavior, state, error, seam, and delivery cases |
-| build-plan | 4 | spec-plan | plan generation | produce plan draft |
-| build-plan | 5 | simplicity-guard | simplicity lens | delete, narrow, or reuse |
-| build-plan | 6 | plan-eng-review | engineering lens | inspect boundaries and failure paths |
-| build-plan | 7 | test-routing-advisor | test routing | preselect tier and concrete skill |
-| build-plan | 8 | spec-tasks | task generation | record commands, oracle, evidence |
-| build-plan | 9 | review-plan | wh-review | one advisory异源 review |
+| build-plan | 3 | spec-clarify | clarification | unique clarify owner |
+| build-plan | 4 | spec-specify | spec generation | produce post spec.md |
+| build-plan | 5 | conditional-ui-readiness | UI readiness | non-UI is not applicable with reason |
+| build-plan | 6 | spec-plan | plan generation | produce independent Phase authorities and real target RED |
+| build-plan | 7 | testing-system-blueprint | test design | record scenarios, command, oracle and coverage |
+| build-plan | 8 | test-routing-advisor | test routing | preselect tier and concrete skill |
+| build-plan | 9 | merged-review | wh-review | one advisory merged review |
 | build-plan | 10 | main-agent-disposes-findings | disposition | inspect every finding |
 | build-plan | 11 | final-spec-analyze | final cross-material trace | report-only check before publish |
-| build-plan | 12 | publish-plan-result | handoff | publish plan/tasks and facts |
+| build-plan | 12 | publish-result-and-confirm | handoff | publish result and real confirmation |
 | build-plan | 13 | stage-reflection | on-stage-end | write judgment-layer reflection; failure is recorded and non-blocking |
 | build-code | 1 | read-current-task-documents | pre-read | read the current cohort materials |
 | build-code | 2 | write-red-tests | TDD RED | record real RED or unknown |

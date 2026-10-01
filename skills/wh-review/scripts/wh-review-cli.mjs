@@ -264,8 +264,7 @@ async function runBareReview(request, runRound, resolveRouteIdentity, requestIde
       : null;
     let routeIdentity = null;
     try {
-      routeIdentity = request.stage && (request.host_provider ?? request.hostProvider)
-        ? resolveRouteIdentity(request)?.route_identity : null;
+      routeIdentity = request.stage ? resolveRouteIdentity(request)?.route_identity : null;
       if (routeIdentity !== null && !SHA256_HEX.test(routeIdentity ?? "")) throw new TypeError("trusted route identity must be a sha256 hex string");
     } catch (error) {
       const diagnostic = { code: "ROUTE_UNAVAILABLE", message: safeRecoveryError(error).message };

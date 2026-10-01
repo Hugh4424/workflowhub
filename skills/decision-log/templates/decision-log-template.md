@@ -1,4 +1,4 @@
-# Decision Log
+# 决策日志（decision-log）
 
 ## 任务身份
 
@@ -55,7 +55,7 @@
 
 ### 需求框架（先选一类，再逐步回填）
 
-- **framework**：`functional`（背景→问题→目标→方案→验收→扩展） / `research`（问题→论断→证据→裁决）
+- **framework（框架）**：`functional`（背景→问题→目标→方案→验收→扩展） / `research`（问题→论断→证据→裁决）
 - **选择理由**：
 - **回填规则**：调研、Talk、审查、Grill 只能扩展已有节点；混合任务以 `functional` 为外层，在受影响节点下挂 `research` 子树。
 
@@ -73,7 +73,7 @@
 必须有 OI 引用，或明确写 `empty: true` 与具体理由；不能省略、重复、用类别
 改名掩盖缺口，也不能只写 `none`。
 
-#### Framework nodes
+#### 框架节点
 
 | node_id | framework_node | oi_ids | empty | reason |
 | --- | --- | --- | --- | --- |
@@ -84,7 +84,7 @@
 | N-acceptance | acceptance |  | false |  |
 | N-extension | extension |  | false |  |
 
-#### Fixed categories
+#### 固定类别
 
 | category | oi_ids | empty | reason |
 | --- | --- | --- | --- |
@@ -95,7 +95,7 @@
 | non_goals |  | false |  |
 | deferred |  | false |  |
 
-#### OI records and consumers
+#### OI 记录与消费者
 
 每个 OI 是一个可独立处置的收敛项，字段如下；`status` 只能是
 `open|confirmed|deferred|not_applicable`。终态才填写终态字段，核心确认项还要
@@ -191,7 +191,7 @@ ID、类别、问题/未知、来源和 `task_id`/`outline_version`，展示状�
 ## 决定
 
 决定区按需求框架的方案或裁决模块使用 `### <module>` 分组；每组内按
-`需求/question → facts/constraints → option → decision → feature/consumer → acceptance`
+`需求 → 事实/约束 → 选项 → 决定 → 功能/消费者 → 验收`
 链序排列。跨模块依赖必须写 `D-ID + derived_from`，根决定写
 `derived_from: []`。以下四个字段只属于文本层链记录，不改
 `decision-entry.v1`：
@@ -268,7 +268,7 @@ artifacts: []
 }
 ```
 
-## grill
+## grill（质询）
 
 | grill_id | CONTEXT/冲突 | 结论 | ADR/四项退出 | source/evidence |
 | --- | --- | --- | --- | --- |
@@ -311,9 +311,22 @@ artifacts: []
 | --- | --- | --- | --- |
 | OPEN-001 |  |  |  |
 
-## Supersedes
+## 退役登记（retirement）
 
-## Append-only 更正
+退役是一次**决定**，不是进度：不写百分比、不写状态机。被取消、删除或永久退出的对象（需求、
+Phase、Task、材料、机制）在这里各占一行；没有退役对象时保留表头并写一行「本卡无退役对象」。
+
+| 日期 | 哪张（R/FR/AC/Phase/Task/材料 编号或 ID） | 为什么退役 | 谁决定 | 原来的需求编号 |
+| --- | --- | --- | --- | --- |
+|  |  |  |  |  |
+
+「原来的需求编号」写这张对象原本承接的 R/FR 编号；找不到承接编号时写 `unknown` 和原因，不猜。
+退役不用「以后再说」这类模糊说法：要么在本行写明日期、对象、理由和决定人，要么留在
+`## 未决项` 里带 owner 与触发条件。
+
+## Supersedes（被替代记录）
+
+## Append-only 更正（只追加）
 
 只追加更正记录；不得重写已确认 ADR。每条更正引用被替代 ADR、原因和新的 ADR。
 
@@ -321,11 +334,11 @@ artifacts: []
 
 - CONTEXT.md：changed/no-change，原因和文件引用：
 - ADR：created/not-needed，原因和文件引用：
-- ADR criteria：hard to reverse / surprising without context / genuine trade-off：
+- ADR 判据：hard to reverse / surprising without context / genuine trade-off（难以逆转 / 无上下文会意外 / 真实取舍）：
 - 术语/ADR 冲突及处理：
 - 不复制 spec 的边界：
 
-### Exit checks
+### Exit checks（退出检查）
 
 - 上下文一致：
 - owner/接口一致：

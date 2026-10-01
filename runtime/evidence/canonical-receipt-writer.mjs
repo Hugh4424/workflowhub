@@ -399,7 +399,7 @@ function currentImplementationReceipt({ task, workspace, version }) {
   const safeWorkspace = assertWorkspace(workspace);
   const snapshot = captureWorkspaceSnapshot(safeWorkspace, safeTask.identity.taskId, safeTask.manifest.activation_cohort ?? "pre");
   const patch = workspaceCommand(safeWorkspace, "git", ["diff", "--binary", "--no-ext-diff", safeWorkspace.baselineCommit, "--"], "implementation diff");
-  const tracked = workspaceGit(safeWorkspace, ["diff", "--name-only", safeWorkspace.baselineCommit, "--"]).split("\n").filter(Boolean);
+  const tracked = workspaceGit(safeWorkspace, ["diff", "--no-renames", "--name-only", safeWorkspace.baselineCommit, "--"]).split("\n").filter(Boolean);
   const untracked = workspaceGit(safeWorkspace, ["ls-files", "--others", "--exclude-standard"]).split("\n")
     .filter(Boolean)
     .filter((path) => !path.startsWith(".multica/") && !path.startsWith("quality/"));

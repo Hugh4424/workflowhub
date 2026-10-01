@@ -1,0 +1,61 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919
+
+ × tests/contract/card03-skill-bundle-closure.test.mjs > T003 ORACLE-SKL-001 skill 包只保留运行时聚合摘要 > 39 个 skill-bundle.json 的 files[] 都不再存逐文件 sha256
+   → 仍存逐文件 sha256 的 bundle：architect-code-review, backend-testing, debate, decision-log, deep-research, diagnosing-bugs, frontend-prototype-render, frontend-testing, fullstack-slice-testing, grill-with-docs, isolated-browser-qa, mini-task, spec-analyze, spec-clarify, spec-plan, spec-prd, spec-research, spec-specify, spec-tasks, stage-handoff, stage-reflection, talk-with-zhipeng, test-routing-advisor, testing-system-blueprint, wh-review, workflowhub-multica-sync: expected [ 'architect-code-review', …(25) ] to deeply equal []
+ ✓ tests/contract/card03-skill-bundle-closure.test.mjs > T003 ORACLE-SKL-001 skill 包只保留运行时聚合摘要 > resolver 聚合摘要可按字节重算，并与 catalog local_bundle_hash 一致
+ ✓ tests/contract/card03-skill-bundle-closure.test.mjs > T003 ORACLE-SKL-001 skill 包只保留运行时聚合摘要 > 去掉逐文件值后，改动包内文件仍被 check:skill-closure 的聚合摘要发现
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/card03-skill-bundle-closure.test.mjs > T003 ORACLE-SKL-001 skill 包只保留运行时聚合摘要 > 39 个 skill-bundle.json 的 files[] 都不再存逐文件 sha256
+AssertionError: 仍存逐文件 sha256 的 bundle：architect-code-review, backend-testing, debate, decision-log, deep-research, diagnosing-bugs, frontend-prototype-render, frontend-testing, fullstack-slice-testing, grill-with-docs, isolated-browser-qa, mini-task, spec-analyze, spec-clarify, spec-plan, spec-prd, spec-research, spec-specify, spec-tasks, stage-handoff, stage-reflection, talk-with-zhipeng, test-routing-advisor, testing-system-blueprint, wh-review, workflowhub-multica-sync: expected [ 'architect-code-review', …(25) ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   "architect-code-review",
++   "backend-testing",
++   "debate",
++   "decision-log",
++   "deep-research",
++   "diagnosing-bugs",
++   "frontend-prototype-render",
++   "frontend-testing",
++   "fullstack-slice-testing",
++   "grill-with-docs",
++   "isolated-browser-qa",
++   "mini-task",
++   "spec-analyze",
++   "spec-clarify",
++   "spec-plan",
++   "spec-prd",
++   "spec-research",
++   "spec-specify",
++   "spec-tasks",
++   "stage-handoff",
++   "stage-reflection",
++   "talk-with-zhipeng",
++   "test-routing-advisor",
++   "testing-system-blueprint",
++   "wh-review",
++   "workflowhub-multica-sync",
++ ]
+
+ ❯ tests/contract/card03-skill-bundle-closure.test.mjs:57:70
+     55|     const carrying = names.filter((name) => JSON.parse(read(`skills/${…
+     56|       .some((entry) => typeof entry === "object" && entry !== null && …
+     57|     expect(carrying, `仍存逐文件 sha256 的 bundle：${carrying.join(", …
+       |                                                                      ^
+     58|   });
+     59| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed | 9 skipped (12)
+   Start at  02:01:31
+   Duration  436ms (transform 34ms, setup 0ms, collect 61ms, tests 262ms, environment 0ms, prepare 34ms)
+

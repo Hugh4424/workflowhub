@@ -659,25 +659,9 @@ function brokerModelIdentity(config, provider) {
   return typeof model === "string" && model.length > 0 ? model : null;
 }
 
-function sameSourceProfile(config, provider, hostProvider) {
-  // The host's own profile key is same-source by definition; the model
-  // comparison only ever widens that exclusion, never replaces it.
-  if (provider === hostProvider) return true;
-  const model = brokerModelIdentity(config, provider);
-  const hostModel = brokerModelIdentity(config, hostProvider);
-  // A missing identity.model cannot establish a positive same-source match
-  // (and must not silently collapse two model-less profiles onto each other),
-  // so such a candidate is not certified same-source and keeps the
-  // pre-existing profile-key judgement.
-  if (model === null || hostModel === null) return false;
-  return model === hostModel;
-}
-
 function highestPriorityProfilesByAdapter(providers) {
-  // The already ranked route order chooses the first profile for an adapter.
-  // A second
-  // profile on the same CLI stays in the broker group only for its attested
-  // SAME_SOURCE outcome, never as a second heterologous reviewer.
+  // Legacy fallback tier only: the already ranked tier order chooses the
+  // first enabled profile for each adapter as the one dispatched reviewer.
   const adapters = new Set();
   return providers.filter((provider) => {
     const adapter = adapterOf(provider, "3rd-review provider");
@@ -695,10 +679,19 @@ function rankRouteProfiles(route, profileSet) {
     .map(({ provider }) => provider);
 }
 
-export function selectTrustedReviewProviderSelection(configuredPath, hostProvider, configuredRoute = null, profileSet = "initial") {
-  if (typeof hostProvider !== "string" || hostProvider.length === 0) throw new TypeError("host_provider is required");
+function selectionArguments(args) {
+  // Historical callers passed (configuredPath, hostProvider, route, profileSet).
+  // host_provider is no longer read: a string in that slot is dropped.
+  const rest = typeof args[0] === "string" ? args.slice(1) : args;
+  return { configuredRoute: rest[0] ?? null, profileSet: rest[1] ?? "initial" };
+}
+
+// Reviewer selection needs no host identity: an explicit route dispatches
+// every configured profile, and there is no same-source exclusion and no
+// minimum heterologous headcount (card-03, mirroring the OCR path).
+export function selectTrustedReviewProviderSelection(configuredPath, ...args) {
+  const { configuredRoute, profileSet } = selectionArguments(args);
   if (!new Set(["initial", "closure"]).has(profileSet)) throw new TypeError("profileSet is invalid");
-  adapterOf(hostProvider, "host_provider");
   const config = brokerConfig(configuredPath);
   const selectedRoute = configuredRoute
     ? (profileSet === "closure" ? configuredRoute.closure : configuredRoute.initial)
@@ -719,33 +712,18 @@ export function selectTrustedReviewProviderSelection(configuredPath, hostProvide
         throw new Error("wh_review route references disabled 3rd-review provider " + provider);
       }
     }
-    const sameSourceExcluded = tier.filter((provider) => config.providers[provider]?.enabled === true && sameSourceProfile(config, provider, hostProvider));
-    const enabledHeterologous = tier.filter((provider) => config.providers[provider]?.enabled === true && !sameSourceProfile(config, provider, hostProvider));
+    const enabled = tier.filter((provider) => config.providers[provider]?.enabled === true);
     // An explicit WorkflowHub route is an operator decision: dispatch every
     // configured profile. Adapter-level deduplication is only retained for
     // the legacy fallback tier, never for a declared review surface.
-    const selected = configuredRoute ? enabledHeterologous : highestPriorityProfilesByAdapter(enabledHeterologous);
-    const minimum = configuredRoute ? configuredRoute.minimum_heterologous : 1;
-    if (configuredRoute && (!Number.isSafeInteger(minimum) || minimum < 1)) {
-      throw new Error("wh_review route minimum_heterologous must be an explicit positive integer");
-    }
-    // Explicit routes are already validated as fully enabled. Legacy tiers
-    // must not leak disabled fallbacks into the broker allowlist or dispatch
-    // group merely because another member of the tier is eligible.
-    const dispatchProfiles = configuredRoute ? [...tier] : tier.filter((provider) => config.providers[provider]?.enabled === true);
+    const selected = configuredRoute ? enabled : highestPriorityProfilesByAdapter(enabled);
+    const dispatchProfiles = configuredRoute ? [...tier] : selected;
     const providerModels = Object.fromEntries(dispatchProfiles.map((provider) => [provider, brokerModelIdentity(config, provider)]));
     const selectedModels = selected.map((provider) => providerModels[provider]).filter((model) => typeof model === "string" && model.length > 0);
     if (configuredRoute && selectedModels.length !== selected.length) {
       throw new Error("wh_review route has provider(s) without an underlying model identity");
     }
-    const distinctModels = new Set(selectedModels).size;
-    if (configuredRoute && distinctModels < minimum) {
-      throw new Error("wh_review route has insufficient distinct underlying model identities");
-    }
     if (selected.length > 0) return {
-      // This is the complete candidate group that must reach 3rd-review.
-      // eligibleProfiles is local quorum accounting only; it never chooses
-      // which same-source candidate the broker gets to attest.
       providers: dispatchProfiles,
       eligibleProfiles: selected,
       requestedProfiles: dispatchProfiles,
@@ -754,14 +732,13 @@ export function selectTrustedReviewProviderSelection(configuredPath, hostProvide
         source_id: brokerSourceId(provider, config.providers[provider]),
         config_id: brokerConfigId(provider, config.providers[provider]),
       })]))),
-      provider_models: Object.freeze(Object.fromEntries(dispatchProfiles.map((provider) => [provider, brokerModelIdentity(config, provider)]))),
-      sameSourceExcluded,
+      provider_models: Object.freeze(providerModels),
       effectiveProfiles: selected.map((provider) => effectiveProfile(config, provider)),
     };
   }
-  throw new Error(configuredRoute ? "wh_review route has no enabled heterologous provider" : "3rd-review config has no enabled heterologous provider tier");
+  throw new Error(configuredRoute ? "wh_review route has no enabled provider" : "3rd-review config has no enabled provider tier");
 }
 
-export function selectTrustedReviewProviders(configuredPath, hostProvider, configuredRoute = null, profileSet = "initial") {
-  return selectTrustedReviewProviderSelection(configuredPath, hostProvider, configuredRoute, profileSet).providers;
+export function selectTrustedReviewProviders(configuredPath, ...args) {
+  return selectTrustedReviewProviderSelection(configuredPath, ...args).providers;
 }

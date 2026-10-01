@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
-import { registerReviewSupplement, ReviewProviderClient } from "./review-provider-client.mjs";
+import { BROKER_HOST_PROVIDER, registerReviewSupplement, ReviewProviderClient } from "./review-provider-client.mjs";
 import { parseReviewerOutput } from "./review-output.mjs";
 import {
   loadTrustedThirdReviewConfig,
@@ -145,7 +145,7 @@ function stableValue(value) {
 // TTL; the managed public envelope and its exact key set remain unchanged.
 const MANAGED_REQUEST_ID_PROTOCOL_VERSION = "managed-request-id.v1";
 
-function managedRequestId(input, { materialId, hostProvider, providers, providerIdentities, minimumHeterologous, reviewMode, prompt }) {
+function managedRequestId(input, { materialId, providers, providerIdentities, minimumHeterologous, reviewMode, prompt }) {
   const subject = {
     stage: input.stage,
     review_track: input.review_track ?? input.reviewTrack ?? null,
@@ -156,7 +156,7 @@ function managedRequestId(input, { materialId, hostProvider, providers, provider
     pair_id: input.pair_id ?? input.pairId ?? null,
     role: input.role ?? null,
   };
-  const identity = stableValue({ protocol_version: MANAGED_REQUEST_ID_PROTOCOL_VERSION, material_id: materialId, host_provider: hostProvider, providers, provider_identities: providerIdentities ?? null, minimum_heterologous: minimumHeterologous, review_mode: reviewMode, prompt, subject });
+  const identity = stableValue({ protocol_version: MANAGED_REQUEST_ID_PROTOCOL_VERSION, material_id: materialId, host_provider: BROKER_HOST_PROVIDER, providers, provider_identities: providerIdentities ?? null, minimum_heterologous: minimumHeterologous, review_mode: reviewMode, prompt, subject });
   return "wh-review-" + hash(JSON.stringify(identity));
 }
 
@@ -217,24 +217,10 @@ function providerSelectionShape(selection) {
   };
 }
 
-function validateReviewThreshold(route, selection) {
-  const minimum = route?.minimum_heterologous;
-  if (!Number.isSafeInteger(minimum) || minimum < 1) {
-    throw new TypeError("minimum_heterologous must be an explicit positive integer");
-  }
-  const models = selection?.provider_models;
-  if (!models) throw new TypeError("provider selection is missing underlying model identities");
-  const eligible = selection.eligible_profiles ?? selection.providers;
-  const eligibleModels = eligible.map((provider) => models[provider]);
-  if (eligibleModels.some((model) => typeof model !== "string" || model.trim() === "")) {
-    throw new TypeError("provider selection contains a member without an underlying model identity");
-  }
-  const distinct = new Set(eligibleModels).size;
-  if (distinct < minimum) {
-    throw new TypeError(`minimum_heterologous ${minimum} exceeds ${distinct} distinct eligible underlying model identities`);
-  }
-  return minimum;
-}
+// Simple review has no minimum heterologous headcount gate (card-03): one
+// successful configured provider is enough, as on the OCR path. The value is
+// still emitted as minimum_heterologous provenance for downstream records.
+const SIMPLE_REVIEW_QUORUM = 1;
 
 function providerSelectionOutput(selection) {
   return {
@@ -411,7 +397,6 @@ function canonicalProviderIdentities(providers, identities) {
 }
 
 function canonicalProviderEnvelopeFields(value) {
-  if (typeof value.host_provider !== "string" || value.host_provider.trim() === "") throw new TypeError("provider input host_provider is invalid");
   if (!Array.isArray(value.providers) || value.providers.length === 0
       || value.providers.some((provider) => typeof provider !== "string" || provider.trim() === "")
       || new Set(value.providers).size !== value.providers.length) {
@@ -420,7 +405,10 @@ function canonicalProviderEnvelopeFields(value) {
   if (typeof value.review_mode !== "string" || !REVIEW_MODES.has(value.review_mode)) throw new TypeError("provider input review_mode is invalid");
   if (typeof value.prompt !== "string" || value.prompt.length === 0) throw new TypeError("provider input prompt is invalid");
   return {
-    host_provider: value.host_provider,
+    // Historical provenance only: never read for dispatch or selection. An
+    // already frozen envelope keeps its recorded value so its digest holds.
+    host_provider: typeof value.host_provider === "string" && value.host_provider.trim() !== ""
+      ? value.host_provider : BROKER_HOST_PROVIDER,
     providers: [...value.providers],
     provider_identities: canonicalProviderIdentities(value.providers, value.provider_identities),
     review_mode: value.review_mode,
@@ -559,13 +547,13 @@ function buildBundle(attachmentRoot, input) {
   };
 }
 
-async function waitForManagedTerminal({ lifecycle, client, requestId, hostProvider, providers, materials }, dependencies) {
+async function waitForManagedTerminal({ lifecycle, client, requestId, providers, materials }, dependencies) {
   const signal = assertReviewAbortSignal(dependencies.signal ?? null);
   const pollMs = dependencies.managedStatusPollMs ?? DEFAULT_MANAGED_STATUS_POLL_MS;
   if (!Number.isSafeInteger(pollMs) || pollMs < 0) throw new TypeError("managedStatusPollMs must be a non-negative safe integer");
   let current = lifecycle;
   let lastObservation = lifecycle;
-  const context = { requestId, hostProvider, providers, materials, runtimeId: lifecycle.runtime_id };
+  const context = { requestId, providers, materials, runtimeId: lifecycle.runtime_id };
   let cancellation = null;
   let cancellationRequested = false;
   const cancelManagedReview = async () => {
@@ -697,7 +685,7 @@ export function createSimpleReviewPacket(input) {
 export function serializeProviderInput(input) {
   const packet = rebuildSerializedPacket(input?.packet);
   const envelope = canonicalProviderEnvelopeFields({
-    host_provider: input?.hostProvider ?? input?.host_provider,
+    host_provider: BROKER_HOST_PROVIDER,
     providers: input?.providers,
     provider_identities: input?.providerIdentities ?? input?.provider_identities ?? null,
     review_mode: input?.reviewMode ?? input?.review_mode,
@@ -745,13 +733,12 @@ export async function dispatchFrozenProviderInput({ bytes, attachmentRoot, clien
   const restored = rehydrateProviderInput(bytes, attachmentRoot);
   try {
     return await client.runGroup({
-      hostProvider: restored.host_provider,
       providers: restored.providers,
       providerIdentities: restored.provider_identities,
       materials: restored.materials,
       prompt: restored.prompt,
       reviewMode: restored.review_mode,
-      minimumHeterologous: restored.review_policy?.minimum_heterologous,
+      minimumHeterologous: SIMPLE_REVIEW_QUORUM,
       strictProtocol: true,
     });
   } finally { restored.materials.dispose(); }
@@ -980,20 +967,9 @@ async function runStaticPreflight(input, {
   if (!providerSelection || !Array.isArray(providerSelection.providers) || providerSelection.providers.length === 0) {
     return blockedPreflight(input, "ROUTE_UNAVAILABLE", "review provider selection is empty", preflightDiagnostic({
       field: "provider_selection",
-      expected: "at least one heterologous provider",
+      expected: "at least one enabled provider",
       actual: "empty",
-      nextAction: "configure an enabled heterologous provider and retry",
-    }), pair);
-  }
-  let minimum;
-  try {
-    minimum = validateReviewThreshold(route, providerSelection);
-  } catch (error) {
-    return blockedPreflight(input, "REVIEW_THRESHOLD_INVALID", error.message, preflightDiagnostic({
-      field: "minimum_heterologous",
-      expected: "explicit positive integer no greater than distinct eligible underlying model identities",
-      actual: route?.minimum_heterologous ?? "missing",
-      nextAction: "repair the trusted review route/model identities and retry",
+      nextAction: "configure an enabled provider and retry",
     }), pair);
   }
   const materialPreflight = shouldRunMaterialPreflight(input, rule)
@@ -1235,8 +1211,6 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
   throwIfReviewAborted(signal);
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new TypeError("review request must be an object");
   if (typeof input.stage !== "string" || input.stage.trim() === "") throw new TypeError("stage is required");
-  const hostProvider = input.host_provider ?? input.hostProvider;
-  if (typeof hostProvider !== "string" || hostProvider.trim() === "") throw new TypeError("host_provider is required");
   if (!input.materials || typeof input.materials !== "object" || Array.isArray(input.materials) || Object.keys(input.materials).length === 0) throw new TypeError("materials are required");
   let identity;
   try {
@@ -1336,12 +1310,12 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
   }), pair);
   let selection;
   try {
-    selection = selectProviders(trusted.config, input.host_provider ?? input.hostProvider, route);
+    selection = selectProviders(trusted.config, route);
   } catch (error) {
     const source = String(error?.message ?? error);
     return blockedPreflight(input, "ROUTE_UNAVAILABLE", source, preflightDiagnostic({
-      field: /same.source|same source|host.*reviewer/i.test(source) ? "host_provider" : "provider_selection",
-      expected: /same.source|same source|host.*reviewer/i.test(source) ? "heterologous provider" : "enabled provider selection",
+      field: "provider_selection",
+      expected: "enabled provider selection",
       actual: "unavailable",
       nextAction: "repair the provider route and retry",
     }), pair);
@@ -1371,30 +1345,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
   const selectedProviders = providerSelection.providers;
   const blockedProviderSet = new Set(blockedProviderResults.map((item) => item.provider));
   const dispatchProviders = selectedProviders.filter((provider) => !blockedProviderSet.has(provider));
-  const dispatchEligibleProfiles = (providerSelection.eligible_profiles ?? selectedProviders)
-    .filter((provider) => !blockedProviderSet.has(provider));
-  let minimum;
-  try {
-    // Preflight may remove providers after the initial route selection. The
-    // broker must receive a quorum that is valid for the providers that can
-    // actually be dispatched, not for the stale preflight selection.
-    minimum = validateReviewThreshold(route, {
-      ...providerSelection,
-      providers: dispatchProviders,
-      eligible_profiles: dispatchEligibleProfiles,
-    });
-  } catch (error) {
-    const dispatchModels = dispatchEligibleProfiles.map((provider) => providerSelection.provider_models?.[provider]);
-    return blockedPreflight(canonicalInput, "REVIEW_THRESHOLD_INVALID", error.message, preflightDiagnostic({
-      field: "minimum_heterologous",
-      expected: "explicit positive integer no greater than distinct eligible underlying model identities after provider preflight",
-      actual: `${new Set(dispatchModels).size} distinct eligible underlying model identities remain after filtering blocked providers`,
-      nextAction: "repair provider availability or review threshold and retry",
-    }), pair, {
-      minimum_heterologous: route?.minimum_heterologous ?? null,
-      provider_selection: providerSelectionOutput(providerSelection),
-    });
-  }
+  const minimum = SIMPLE_REVIEW_QUORUM;
   const selectedIdentities = providerSelection.provider_identities ?? null;
   const selectedModels = providerSelection.provider_models ?? null;
   const selectedSet = new Set(selectedProviders);
@@ -1416,14 +1367,12 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
   }
   try {
     const client = dependencies.client ?? new ReviewProviderClient({ command: trusted.command, config: trusted.config });
-    const hostProvider = input.host_provider ?? input.hostProvider;
     const prompt = promptForPair(pair);
     let group;
     let reviewCancellation = null;
     if (typeof client.startManaged === "function") {
       const requestId = managedRequestId(input, {
         materialId: bundle.materialId,
-        hostProvider,
         providers: dispatchProviders,
         providerIdentities: selectedIdentities,
         minimumHeterologous: minimum,
@@ -1433,7 +1382,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
       let lifecycle = null;
       try {
         lifecycle = await client.startManaged({
-          requestId, hostProvider, providers: dispatchProviders, materials: bundle, prompt,
+          requestId, providers: dispatchProviders, materials: bundle, prompt,
           minimumHeterologous: minimum,
           reviewMode: route.mode,
           reviewFlow: input.review_flow ?? input.reviewFlow ?? null,
@@ -1443,7 +1392,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
           const consumeTerminal = dependencies.onManagedTerminal
             ?? ((value) => waitForManagedTerminal(value, dependencies));
           const terminal = await consumeTerminal({
-            lifecycle, client, requestId, hostProvider, providers: dispatchProviders,
+            lifecycle, client, requestId, providers: dispatchProviders,
             materials: bundle, prompt, reviewMode: route.mode,
           });
           reviewCancellation = terminal?.review_cancellation ?? null;
@@ -1459,7 +1408,6 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
             await client.cancelManaged({
               runtimeId: lifecycle.runtime_id,
               requestId,
-              hostProvider,
               providers: dispatchProviders,
               materials: bundle,
             });
@@ -1513,7 +1461,6 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
     } else {
       try {
         group = await client.runGroup({
-          hostProvider,
           providers: dispatchProviders,
           materials: bundle,
           prompt,

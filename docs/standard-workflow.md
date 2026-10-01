@@ -91,6 +91,37 @@ provider 身份、终态、findings 与失败原样记录；无真实审查结�
 返工和用户等待拆分；不可得就写 `unavailable`，不设统一预算 gate；review preflight 只记录
 当前请求的可观测事实，不改变 provider status 的运行时所有权。
 
+`build-code` 还要额外**按 Phase** 记一行同类数据（含实现改动次数、focused 测试次数、正式审查派发次数、等待总时长、材料修订次数、Phase 总时长），写进该 Phase 的 handoff。它只服务诊断——用于在耗时明显超出估计时查明是计划缺口、实现 bug 还是外部等待——不是新的 gate，也不触发自动拆分或终止。
+
+复核件纪律：同一主题在同一阶段内只保留一份复核件。第二次及以后的复核不另起新文件，而是在原件尾部追加一节「本次相对上次新增的事实」，并写清触发这次复核的真实变化是什么。没有真实主题变化时，不写复核件，只在阶段摘要里说明本轮无新事实。禁止把整棵工作树、整个目录、或同一份材料的多个副本当作复核材料或证据反复复制；复核材料只包含本次判断真正读到的那些文件。
+
+`build-code` 的每个 Phase 只有**一次**正式 OCR 审查：同一 Phase 同一范围已有成功回执时，不重派。
+"同一范围"由 `phase_id` + 该 Phase 的 allowed files/symbols + 覆盖的 AC 列表共同定义，
+由执行者在发起前写清（见 `workflows/build-code/SKILL.md` 的 work loop 第 5 条）。
+
+**修 finding 造成的材料字节变化不是重派理由**——它不是"真实主题变化"。要重派必须先回答：
+"已有回执没有覆盖的到底是哪一条（文件/AC）？"答不出来就不重派，只把旧回执连同本次处置一起记入 facts。
+`AC-REVIEW-011` 的替代调用是同一 Phase 内的第二次独立审查，只在工具 `unavailable` 且零成功审查路时发生一次，
+它**不产生第二份正式回执**（`skills/architect-code-review/SKILL.md` 已有等价措辞）。
+
+### 证据只留原始件
+
+每个阶段只保存**能证明事实的最小原始件**，同一个事实不存第二份：
+
+- **原始测试输出**：每个实际跑过的 focused 命令存一份原始输出即可。同一命令重跑时，
+  只有在结果发生变化（或用户/CI 明确要求）时才新增一份，并在文件名或同目录说明里写清"重跑原因"。
+- **正式回执**：`quality/reviews/attempts/` 与 `quality/reviews/results/` 各一次派发一份，
+  不复制、不镜像到 `quality/evidence/`，不做可读副本。
+- **review 原件**：保留 provider 返回的原始字节与 ref/hash（`workflows/build-code/SKILL.md` 的
+  AC-REVIEW-011 段已要求），不额外再存一份它的整理版。
+- **禁止整棵树/整目录快照**：不得把工作区目录、整个 `quality/`、`git archive` 产物、整树 tar 或
+  文件树清单作为证据写入 `quality/evidence/`。需要证明"改动前是那样"时，
+  只存本 Phase 实际涉及的那几个文件的原始字节 + 路径 + hash。
+- **说明性文字不入证据目录**：缺口清单、成本行、范围声明这类"人写的话"写进当前 task facts 或
+  phase handoff，不写成新的证据文件。
+
+本条是执行纪律，不是新的 gate；它不改变 `capture-evidence` 的行为，只约束执行者交给它的内容。
+
 ### stage 结束
 
 `make-decision`、`build-spec`、`build-code` 以及 pre cohort 的 `build-plan` 在各自 stage
@@ -105,6 +136,8 @@ provider 身份、终态、findings 与失败原样记录；无真实审查结�
 4. 当前阶段当场修复了什么；
 5. 剩余风险、未决和延期；
 6. 下游可以直接消费什么、不能自行猜什么。
+
+**关于第 2 项和第 5 项**：这两项必须逐条标明归属——这条风险是**本阶段现在就能修的计划缺口**，还是**实现尚未开始的未知**（只能由下游执行事实回答）。两类不得混写成一句「还有风险」。每条给一条真实证据引用；没有证据就写 `unavailable`。这样要求的目的只有一个：让下一次复盘能在很早的时候分清「是计划没写清」还是「是实现写错了」，而不是在几十小时之后才发现。本条是执行纪律，不是新的 gate 或质量结论。
 
 发现的 finding 由当前 stage 逐条处置；实际修复后只重跑受影响的检查，使用
 `spec-analyze` 的 stage 也仅重跑受影响的 profile。六项摘要和
@@ -245,6 +278,10 @@ post 按 `workflows/build-plan/steps.json` 的 13 步执行：读取当前材料
 `phases/index.md`，只列路径、锚点、写集、依赖和 consumer，不复制正文或执行状态。
 pre/history 继续按原 `build-spec → build-plan` 路线消费旧四材料，不迁移旧文件。
 
+交付确认（`workflows/build-plan/steps.json` step 12）的问题按**三选一**提出：按现有材料把缺口修完再进／
+指派缺口负责人后进／取消本次执行；未回答时保持草稿、在同一 task 内继续修复，缺的确认事实如实记为缺失，
+它不阻断同任务内的后续动作。确认仍复用既有 `human-confirmation.v3` 记录，不新增确认点、字段或文件。
+
 ### 产物、完成与失败边界
 
 post 核心产物是含需求翻译四件与全局实现设计的 `spec.md`、独立
@@ -254,12 +291,18 @@ pre/history 核心产物仍是 `plan.md`、`tasks.md`。每个行为 Phase 必�
 缺 AC/FR 映射、任务无真实 oracle、文件边界不明、依赖未解决或 DEFER/OPEN 没有 owner/触发
 条件/消费者/关闭条件时，当前 stage 修复后再交接。
 
+build-plan 交接前把「可执行性」当成完成条件核对一次，核对结果写进材料本身：
+直接打开源文件确认入口、真实消费者、权限、测试工具、样例原件与外部依赖是否已经具备；
+抽一条最难的链路（需求 → 真实入口 → 原始结果 → 独立判断 → 验收项）走通一次；
+预写的 RED 必须因为目标行为而失败，不能是导入错误、路径错误或零测试。
+核不到的东西写成 `unknown` 与它的负责人。这是 build-plan 的完成条件与工作纪律，不是推进前置。
+
 ### 专业质量
 
 post 阶段的专业质量由测试系统蓝图、工程审查、测试路由、计划审查、现有合并审查及其
 finding dispositions 共同形成；post build-plan 的 `spec-analyze` 只检查材料结构，不负责
 需求语义判断。pre/history build-plan 保持既有 `spec-analyze` 语义检查合同。每个行为风险都必须
-落到可执行任务和真实 oracle，不能用任务数量、文件列表或测试命令字符串代替设计质量。
+落到可执行任务和真实 oracle，不能用任务数量、文件列表或测试命令字符串代替设计质量。**完成声明的上限 = 独立来源的结论**；该结论为 `adverse` 或 `unavailable` 时，只能声明到该结论允许的程度，不得把未验证的部分说成已完成；这只限制声明的措辞，不阻断同任务内的修复与后续安全工作。
 
 ### 下游交接
 
@@ -276,6 +319,12 @@ build-code 按当前 cohort 材料中的 Phase 执行：post 读 `spec.md`、
 
 ### 每个 phase 的标准循环
 
+一次只推进**一个** Phase：当前 Phase 未收尾（review 已记录、每条 finding 已处置、handoff 已写）之前，
+不开工下一个 Phase 的实现，也不并发修订多个 `phases/P<n>.md`。
+
+计划里标了 `[P]` 的任务允许在**同一个 Phase 内**并行；`[P]` 不授权跨 Phase 并行推进。
+确实需要提前动下一个 Phase 的材料或代码时，先在 handoff 里写明"为什么必须现在动"和"代价是什么"，再动。
+
 1. `read-current-task-documents`：读取当前 cohort 材料并选择下一个未完成 Phase task。
 2. `write-red-tests`：行为变化先写并运行 RED；纯材料任务明确记录不适用。
 3. `implement-change`：只改 phase 允许的文件和同 task 事实栏。
@@ -286,14 +335,19 @@ build-code 按当前 cohort 材料中的 Phase 执行：post 读 `spec.md`、
 8. `review-change`：对当前 Phase diff 发起一次 OCR 独立审查，记录真实结果或 unavailable。
 9. `analyze-review-findings`：逐条记录 fixed、rejected_invalid、accepted_risk 或 needs_human。
 10. `capture-implementation`：保存实现、测试、AC trace、review 和阶段事实。
-11. `authenticate-current-task-completion`：确认 task facts 绑定当前 snapshot，不把旧结果冒充
-    当前结果。
+11. `authenticate-current-task-completion`：确认 task facts 绑定**该 phase 声明的写集**
+    （即 phase 文件 `Write set` 列出的路径本身；不并入本次实际改动的文件，也不并入受影响的检查清单）。
+    删掉跨 phase 的全量快照绑定：不与上一轮的字节级快照逐字节比对。同一材料版本内的两次结果
+    视为同一绑定；只有当该 phase 声明的写集变化时才需要重做对应部分。
+    代码快照变化本身不使材料失效。不把旧结果冒充当前结果。
 
 每个 phase 都重复以上循环，但不重复无关的全量测试或 review。有效问题在当前 phase 修复，
 然后只重跑受影响检查。所有 implementation phase 完成后才进入最终步骤：
 
 1. `run-final-aggregate-and-ac-trace`：在同一 current snapshot 按计划运行一次最终 aggregate，
     逐 AC 记录 pass、fail、unknown、deferred 或 not_applicable。
+    人读结论仍用三词：**达成／未达成（写明下一步）／退役**（退役＝不再做、已由决定退出，不用「以后再说」类说法）；机器取值域不变——上面这组取值与验收证据的冻结机器取值域都不因三词增删；验收证据的 `result` 是既有的冻结八值 `pass`、`fail`、`inconclusive`、`deferred`、`missing`、`inconsistent`、`incomplete`、`unavailable`。
+    既有来源：`runtime/evidence/acceptance-evidence-validator.mjs:6`、`runtime/review/schemas/ac-evidence-summary.schema.json:32-33`；冻结裁定 `tests/contract/acceptance-result-machine-classes.test.mjs:95-99`（均为实读既有事实，不是本卡新取的域）。本词表只约束人读措辞：`quality/evidence/acceptance/**` 的 `result` 取值域与 `decision-log` 的处置列**一字不动**；未达成如实记为未达成，不新增推进前置。
 2. `stage-end-spec-analyze`：检查原始需求、当前 cohort 材料、实现、测试、AC、review 和真实用户
     结果；当前 stage 修复实现或事实缺口。
 3. `publish-code-result`：交接实现和完整 build-code 摘要。已有 integration review 原件作为
