@@ -114,6 +114,7 @@
     "tests/step-manifest.test.mjs",
     "tests/task-record-paths-check.test.mjs",
     "tests/verify-requirement-replay-contract.test.mjs",
+    "tests/vitest-resource-policy.test.mjs",
     "tests/workflow-v2-contract.test.mjs",
     "tools/cli/check-task-record-paths.mjs",
     "tools/cli/run-checks.mjs",

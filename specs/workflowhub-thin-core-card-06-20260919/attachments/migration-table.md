@@ -20,10 +20,10 @@
 | ARCHIVE | 35 |
 | DELETE | 396 |
 | MOVE | 2 |
-| NARROW | 231 |
+| NARROW | 232 |
 | NEW | 18 |
 | PENDING | 3 |
-| SURVIVOR | 166 |
+| SURVIVOR | 165 |
 | **合计** | **851** |
 
 **批次计数**
@@ -31,7 +31,7 @@
 | 批次 | 行数 | 写集文件数 |
 | --- | --- | --- |
 | B0/P1 | 15 | 14 |
-| B1/P2 | 113 | 102 |
+| B1/P2 | 113 | 103 |
 | B2/P3 | 31 | 27 |
 | B3/P4 | 60 | 34 |
 | B4/P5 | 280 | 256 |
@@ -736,7 +736,7 @@
 | MT-6-359 | tests/verify-code-facts.test.mjs | W/verify-code/facts-assembly, W/verify-code/design-alignment, R/evidence/quality-store, R/stage/stage-handlers, R/task/task-handle …(+1) | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | verify-code facts 组装 |
 | MT-6-360 | tests/verify-code-freshness.test.mjs | W/verify-code/freshness, W/verify-code/design-alignment | 测试文件（随被测对象处置） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | freshness |
 | MT-6-361 | tests/verify-requirement-replay-contract.test.mjs | 文本:W/verify-code/SKILL.md | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | SKILL 文本 |
-| MT-6-362 | tests/vitest-resource-policy.test.mjs | 文本:core/__tests__/check-extensibility.test, core/__tests__/check-anti-host.test, T/run-checks | 测试文件（随被测对象处置） | SURVIVOR | B1/P2 | 无需回滚（只动断言不动语义）或 git checkout backup/card-06-b1 -- tests/vitest-resource-policy.test.mjs | — | 否 | 保留：vitest 并发上限/独占批（Card-09 资源相关）；B1/P2 去掉钉死具体文件清单（见片段 5 静态清单同步） |
+| MT-6-362 | tests/vitest-resource-policy.test.mjs | 文本:core/__tests__/check-extensibility.test, core/__tests__/check-anti-host.test, T/run-checks | 测试文件（随被测对象处置） | NARROW | B1/P2 | 无需回滚（只动断言不动语义）或 git checkout backup/card-06-b1 -- tests/vitest-resource-policy.test.mjs | — | 否 | 合并审查 finding-B2：T010 改写其断言（去钉死文件清单），原 SURVIVOR 与「只动断言不动语义」自相矛盾，改 NARROW，批次仍 B1/P2。 保留：vitest 并发上限/独占批（Card-09 资源相关）；B1/P2 去掉钉死具体文件清单（见片段 5 静态清单同步） |
 | MT-6-363 | tests/workflow-v2-contract.test.mjs | —(仓库文本/无 import) | 测试文件（随被测对象处置） | DELETE | B1/P2 | git revert B1 提交 | — | 否 | cohort 材料权威文本 |
 | MT-6-364 | tests/workflowhub-multica-sync.test.mjs | skills/workflowhub-multica-sync/scripts/multica-skill-sync | 测试文件（随被测对象处置） | NARROW | B5/P6 | git revert B5 提交 | — | 否 | PENDING：multica 同步技能保留；去 check-skill-closure 哈希依赖（ADR-013）［报告判 PENDING/待定］ |
 | MT-6-365 | tests/acceptance/card-03-current.mjs | T/stage-runtime、R/evidence/canonical-evidence-validators | 测试文件（随被测对象处置） | SURVIVOR | B1/P2 | 无需回滚（无改动） | — | 是(A) | ARCHIVE：卡片专属验收生产者，冻结 33 文件/38 失败基线；只读保留不入 vitest 分组 |
