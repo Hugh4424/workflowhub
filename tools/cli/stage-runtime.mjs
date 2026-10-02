@@ -7,7 +7,7 @@ import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { importCanonicalReviewResult, recordSimpleReviewRequest } from "../../runtime/review/review-record-route.mjs";
+import { recordSimpleReviewRequest } from "../../runtime/review/review-record-route.mjs";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { resolveCanonicalTaskPath } from "../../core/load-config.mjs";
 
@@ -1349,149 +1349,20 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     return writeBuildCodePhaseProgressCursor(context, input.phase_progress);
   }
   if (command === "review-record") {
-    if (!input || typeof input !== "object" || Array.isArray(input)) {
-      throw new TypeError("review-record input requires exactly one of 'request' or 'result'");
+    if(!input || typeof input!=="object" || Array.isArray(input) || !input.request || input.result!==undefined) throw new TypeError("review --action=record requires a request; importing caller-authored results is retired");
+    const original=input.request;
+    if(original.stage!==undefined && original.stage!==values.stage) throw new TypeError("review request stage differs from CLI stage");
+    const request={...original,stage:values.stage,activation_cohort:context.manifest.activation_cohort ?? "pre"};
+    const isPhase=values.stage==="build-code" && (request.review_kind ?? request.reviewKind ?? null)===null;
+    if(isPhase) {
+      request.review_scope=request.review_scope ?? request.reviewScope ?? "phase";
+      request.phase_id=request.phase_id ?? request.phaseId ?? values["phase-id"] ?? null;
+      request.subject_kind=request.subject_kind ?? "phase";
     }
-    const hasRequest = Object.prototype.hasOwnProperty.call(input, "request");
-    const hasResult = Object.prototype.hasOwnProperty.call(input, "result");
-    if (hasRequest === hasResult) throw new TypeError("review-record input requires exactly one of 'request' or 'result'");
-    context = { ...context, kernel: createTaskKernel(context.task), artifacts: ArtifactDir.open(context.workspace.worktreeRoot, context.task) };
-    let reviewRequest = input.request;
-    if (hasRequest && (values.stage === "verify-code"
-        || (values.stage === "build-code" && (reviewRequest?.review_kind ?? reviewRequest?.reviewKind ?? null) === null))) {
-      validateOcrCodeReviewRequest(reviewRequest, values.stage);
-    }
-    if (hasRequest && values.stage === "build-plan") {
-      const authenticatedCohort = context.manifest?.activation_cohort ?? "pre";
-      for (const key of ["activation_cohort", "activationCohort"]) {
-        if (reviewRequest?.[key] !== undefined && reviewRequest[key] !== authenticatedCohort) {
-          throw new TypeError(`build-plan review ${key} differs from authenticated task cohort`);
-        }
-      }
-      reviewRequest = { ...reviewRequest, activation_cohort: authenticatedCohort };
-    }
-    let preparedBundle = null;
-    const useTaskBoundBuildCodeBundle = hasRequest
-      && typeof services[isNormalOcrCodeReviewRequest(reviewRequest) ? "runOcrDelegationRound" : "runReviewRound"] !== "function"
-      && isTaskBoundBuildCodeReviewRequest(reviewRequest);
-    const prepareBundle = (request) => {
-      if (preparedBundle === null) {
-        preparedBundle = prepareTaskBoundBuildCodeReviewBundle(context, request, services.reviewBundleDependencies);
-      }
-      return preparedBundle;
-    };
-    const runTaskBoundBuildCodeReview = async (request, { signal = null } = {}) => {
-      const bundle = prepareBundle(request);
-      const result = await runSimpleReview(request, {
-        buildBundle: () => bundle,
-        ...(signal === null ? {} : { signal }),
-      });
-      // The broker may echo a packet identity that does not match the
-      // authenticated task-bound material bundle. Preserve that transport
-      // failure as an unavailable review fact so the recorder can retain the
-      // attempt; never let a mismatched provider identity become a review
-      // result or make the route fail before recording provenance.
-      if (result?.material_id !== bundle.materialId) {
-        if (result?.status === "unavailable") {
-          return {
-            ...result,
-            material_id: bundle.materialId,
-          };
-        }
-        return {
-          ...result,
-          status: "unavailable",
-          outcome: "unavailable",
-          material_id: bundle.materialId,
-          error: {
-            code: "REVIEW_MATERIAL_MISMATCH",
-            message: "review broker result material_id does not match the authenticated task-bound material",
-          },
-        };
-      }
-      return result;
-    };
-    const useOcr = hasRequest && isNormalOcrCodeReviewRequest(reviewRequest);
-    let ocrHostContext = null;
-    const resolveOcrRouteIdentity = async (request) => {
-      ocrHostContext = prepareConfiguredOcrHostContext(request);
-      return {
-        route_identity: ocrHostContext.route_identity,
-        provider_selection: ocrHostContext.selection,
-      };
-    };
-    const runOcrReview = async (request, options = {}) => {
-      const onProviderHealth = typeof services.onOcrProviderHealth === "function"
-        ? services.onOcrProviderHealth : writeOcrProviderHealthDiagnostic;
-      const onProviderResult = typeof options.onProviderResult === "function"
-        ? options.onProviderResult
-        : typeof services.onOcrProviderResult === "function"
-          ? services.onOcrProviderResult
-          : null;
-      const runner = typeof services.runOcrDelegationRound === "function"
-        ? services.runOcrDelegationRound
-        : runOcrDelegationRound;
-      const executor = typeof services.ocrExecutor === "function"
-        ? services.ocrExecutor
-        : typeof services.runOcrDelegationRound === "function"
-          ? null
-          : (executorRequest) => runConfiguredOcrHostReview(executorRequest, {
-            trustedContext: ocrHostContext,
-            sourceBundle: prepareBundle(request),
-            snapshotRoot: context.workspace.worktreeRoot,
-            rawOutputSink: (ref, bytes) => context.kernel.publishCanonicalRecord(ref, bytes),
-            ...(services.ocrManagedClient ? { managedClient: services.ocrManagedClient } : {}),
-            ...(typeof services.ocrProviderExecutor === "function" ? { providerExecutor: services.ocrProviderExecutor } : {}),
-            onProviderHealth,
-            onProviderResult: executorRequest.onProviderResult,
-          });
-      return runner(request, {
-        ...options,
-        onProviderHealth,
-        onProviderResult,
-        ...(useTaskBoundBuildCodeBundle ? { buildBundle: () => prepareBundle(request) } : {}),
-        ...(executor === null ? {} : { executor }),
-      });
-    };
-    let refs;
-    try {
-      refs = hasRequest
-        ? await recordSimpleReviewRequest({
-          task: context.task,
-          kernel: context.kernel,
-          request: reviewRequest,
-          resolveRouteIdentity: typeof services.resolveRouteIdentity === "function"
-            ? services.resolveRouteIdentity
-            : useOcr ? resolveOcrRouteIdentity : resolveSimpleReviewRouteIdentity,
-          runRound: useOcr
-            ? runOcrReview
-            : typeof services.runReviewRound === "function"
-            ? services.runReviewRound
-            : useTaskBoundBuildCodeBundle
-              ? runTaskBoundBuildCodeReview
-              : (request, options) => runSimpleReview(request, options),
-          materialIdForRequest: typeof services.materialIdForRequest === "function"
-            ? services.materialIdForRequest
-            : useTaskBoundBuildCodeBundle
-              ? (request) => prepareBundle(request).materialId
-              : simpleReviewProviderMaterialId,
-          reviewRoundTimeoutMs: reviewRecordTimeoutForRunner({
-            managed: useOcr || typeof services.runReviewRound !== "function",
-          }),
-          ...(typeof services.onOcrProviderResult === "function" ? { onProviderResult: services.onOcrProviderResult } : {}),
-          signal: services.reviewSignal ?? null,
-        })
-        : importCanonicalReviewResult({
-          task: context.task,
-          result: input.result,
-          provenance: input.provenance,
-          kernel: context.kernel,
-        });
-    } finally {
-      preparedBundle?.dispose();
-    }
-    return refs.authoritative === false ? refs : { status: "recorded", ...refs };
+    const runner=typeof services.runReviewRound==="function" ? services.runReviewRound : (request,options)=>runSimpleReview(request,options);
+    return recordSimpleReviewRequest({taskDir:context.task.taskPath,request,runRound:runner,signal:services.reviewSignal ?? null});
   }
+
   throw new Error(`unknown internal runtime operation: ${command}`);
 }
 

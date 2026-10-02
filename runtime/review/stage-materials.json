@@ -3,64 +3,235 @@
   "surfaces": {
     "make-decision/direction": {
       "contract": "contracts/make-decision.md",
-      "problem_order": ["problem", "constraints", "failure_consequence", "smaller_reversible_option"],
-      "semantic_fields": ["raw_requirement", "objective_facts", "direction_constraints", "current_selection", "independent_reconstruction", "direction_flow", "convergence_outline", "ui_applicability", "project_inventory", "planned_or_changed_frontend_fact"]
+      "problem_order": [
+        "problem",
+        "constraints",
+        "failure_consequence",
+        "smaller_reversible_option"
+      ],
+      "semantic_fields": [
+        "raw_requirement",
+        "objective_facts",
+        "direction_constraints",
+        "current_selection",
+        "independent_reconstruction",
+        "direction_flow",
+        "convergence_outline",
+        "ui_applicability",
+        "project_inventory",
+        "planned_or_changed_frontend_fact"
+      ]
     },
     "make-decision/detail": {
       "contract": "contracts/make-decision.md",
-      "problem_order": ["scope", "user_flow", "states", "acceptance", "risk", "simplicity"],
-      "semantic_fields": ["raw_requirement", "approved_direction", "draft_spec_or_acceptance", "oi_terminal_records", "confirmation_groups", "ui_applicability", "ui_contract"]
-    },
-    "build-spec": {
-      "contract": "contracts/build-spec.md",
-      "problem_order": ["requirement_coverage", "journey_states", "failure_recovery", "oracle", "scope"],
-      "semantic_fields": ["raw_requirement", "approved_decision", "draft_spec", "acceptance_criteria", "user_flow", "data_states", "failure_boundaries", "ui_applicability", "ui_contract", "design_status", "missing_items", "human_confirmation"]
+      "problem_order": [
+        "scope",
+        "user_flow",
+        "states",
+        "acceptance",
+        "risk",
+        "simplicity"
+      ],
+      "semantic_fields": [
+        "raw_requirement",
+        "approved_direction",
+        "draft_spec_or_acceptance",
+        "oi_terminal_records",
+        "confirmation_groups",
+        "ui_applicability",
+        "ui_contract"
+      ]
     },
     "build-plan": {
       "contract": "contracts/build-plan.md",
-      "problem_order": ["causal_graph", "dependencies", "consumers", "verification", "recovery", "necessity"],
-      "semantic_fields": ["raw_requirement", "approved_spec", "draft_spec", "acceptance_criteria", "draft_plan", "draft_tasks", "phase_authorities", "phase_index", "dependencies", "verification", "ui_applicability", "ui_contract", "component_quality_map", "real_consumer", "state_owner", "typed_view_model", "css_token_owner"]
+      "problem_order": [
+        "causal_graph",
+        "dependencies",
+        "consumers",
+        "verification",
+        "recovery",
+        "necessity"
+      ],
+      "semantic_fields": [
+        "raw_requirement",
+        "approved_spec",
+        "draft_spec",
+        "acceptance_criteria",
+        "draft_plan",
+        "draft_tasks",
+        "phase_authorities",
+        "phase_index",
+        "dependencies",
+        "verification",
+        "ui_applicability",
+        "ui_contract",
+        "component_quality_map",
+        "real_consumer",
+        "state_owner",
+        "typed_view_model",
+        "css_token_owner"
+      ]
     },
     "build-code/phase": {
       "contract": "contracts/build-code.md",
-      "problem_order": ["spec_conformance", "correctness", "necessity"],
-      "semantic_fields": ["approved_spec", "acceptance_criteria", "phase_map", "impact_map", "reuse_map", "acceptance_map", "change_map", "test_evidence", "ui_applicability", "ui_contract", "component_quality_map", "real_consumer", "state_owner", "typed_view_model", "css_token_owner"]
-    },
-    "build-code/integration": {
-      "contract": "contracts/build-code.md",
-      "problem_order": ["user_flow", "cross_phase_seams", "interfaces", "failure_recovery", "necessity"],
-      "semantic_fields": ["approved_spec", "acceptance_criteria", "implementation_summary", "implementation_context", "test_evidence", "open_risks", "ui_applicability", "ui_contract", "component_quality_map", "real_consumer", "state_owner", "typed_view_model", "css_token_owner"]
+      "problem_order": [
+        "spec_conformance",
+        "correctness",
+        "necessity"
+      ],
+      "semantic_fields": [
+        "approved_spec",
+        "acceptance_criteria",
+        "phase_map",
+        "impact_map",
+        "reuse_map",
+        "acceptance_map",
+        "change_map",
+        "test_evidence",
+        "ui_applicability",
+        "ui_contract",
+        "component_quality_map",
+        "real_consumer",
+        "state_owner",
+        "typed_view_model",
+        "css_token_owner"
+      ]
     },
     "verify-code": {
       "contract": "contracts/verify-code.md",
-      "problem_order": ["implementation", "consumer", "correctness", "lifecycle_security", "test_strength"],
-      "semantic_fields": ["changed_files", "acceptance_criteria", "implementation_assessment", "test_context", "open_risks", "architect_assessment", "ui_applicability", "ui_contract", "component_quality_map", "real_consumer", "state_owner", "typed_view_model", "css_token_owner", "design_alignment"]
+      "problem_order": [
+        "implementation",
+        "consumer",
+        "correctness",
+        "lifecycle_security",
+        "test_strength"
+      ],
+      "semantic_fields": [
+        "changed_files",
+        "acceptance_criteria",
+        "implementation_assessment",
+        "test_context",
+        "open_risks",
+        "architect_assessment",
+        "ui_applicability",
+        "ui_contract",
+        "component_quality_map",
+        "real_consumer",
+        "state_owner",
+        "typed_view_model",
+        "css_token_owner",
+        "design_alignment"
+      ]
     },
     "mini-task/design": {
       "contract": "contracts/mini-task-design.md",
-      "problem_order": ["still_small", "scope", "states", "risks", "tests", "rollback"],
-      "semantic_fields": ["raw_requirement", "decision_log", "spec", "plan", "tasks", "objective_facts", "risks", "rollback"]
+      "problem_order": [
+        "still_small",
+        "scope",
+        "states",
+        "risks",
+        "tests",
+        "rollback"
+      ],
+      "semantic_fields": [
+        "raw_requirement",
+        "decision_log",
+        "spec",
+        "plan",
+        "tasks",
+        "objective_facts",
+        "risks",
+        "rollback",
+        "phase_authorities",
+        "phase_index"
+      ]
     },
     "mini-task/implementation": {
       "contract": "contracts/mini-task-implementation.md",
-      "problem_order": ["spec_conformance", "correctness", "necessity", "user_result", "scope_boundary"],
-      "semantic_fields": ["raw_requirement", "decision_log", "spec", "plan", "tasks", "test_evidence", "ac_trace", "user_result", "coverage_limits", "skip_reasons", "remaining_risks", "change_map"]
+      "problem_order": [
+        "spec_conformance",
+        "correctness",
+        "necessity",
+        "user_result",
+        "scope_boundary"
+      ],
+      "semantic_fields": [
+        "raw_requirement",
+        "decision_log",
+        "spec",
+        "plan",
+        "tasks",
+        "test_evidence",
+        "ac_trace",
+        "user_result",
+        "coverage_limits",
+        "skip_reasons",
+        "remaining_risks",
+        "change_map",
+        "phase_authorities",
+        "phase_index"
+      ]
     },
     "build-prd": {
       "contract": "contracts/build-prd.md",
-      "problem_order": ["prd_coverage", "task_ownership", "handoff", "design_facts", "acceptance", "necessity"],
-      "semantic_fields": ["decision_log", "prd", "task_map", "map_confirmation", "design_facts", "quality_facts", "source_facts", "confirmation_facts", "delivery_facts", "analysis_facts", "reflection_facts"]
+      "problem_order": [
+        "prd_coverage",
+        "task_ownership",
+        "handoff",
+        "design_facts",
+        "acceptance",
+        "necessity"
+      ],
+      "semantic_fields": [
+        "decision_log",
+        "prd",
+        "task_map",
+        "map_confirmation",
+        "design_facts",
+        "quality_facts",
+        "source_facts",
+        "confirmation_facts",
+        "delivery_facts",
+        "analysis_facts",
+        "reflection_facts"
+      ]
     }
   },
   "non_stage": {
     "build_prd": {
       "source_bundle": "none",
-      "required": ["decision_log", "prd", "task_map", "design_facts", "quality_facts", "review_instructions"],
-      "optional": ["map_confirmation", "source_facts", "confirmation_facts", "delivery_facts", "analysis_facts", "reflection_facts"],
-      "generated": ["review_instructions"],
-      "forbidden": ["approved_spec", "acceptance_criteria", "draft_plan", "draft_tasks", "plan", "tasks", "changes_diff", "changed_files", "test_evidence", "ac_trace"],
-      "minimum_reviewers": 1,
-      "v2_required_maps": []
+      "required": [
+        "decision_log",
+        "prd",
+        "task_map",
+        "design_facts",
+        "quality_facts",
+        "review_instructions"
+      ],
+      "optional": [
+        "map_confirmation",
+        "source_facts",
+        "confirmation_facts",
+        "delivery_facts",
+        "analysis_facts",
+        "reflection_facts"
+      ],
+      "generated": [
+        "review_instructions"
+      ],
+      "forbidden": [
+        "approved_spec",
+        "acceptance_criteria",
+        "draft_plan",
+        "draft_tasks",
+        "plan",
+        "tasks",
+        "changes_diff",
+        "changed_files",
+        "test_evidence",
+        "ac_trace"
+      ],
+      "minimum_reviewers": 1
     }
   },
   "stages": {
@@ -68,50 +239,98 @@
       "tracks": {
         "direction": {
           "source_bundle": "none",
-          "required": ["raw_requirement", "objective_facts", "convergence_outline", "review_instructions"],
-          "optional": ["current_selection", "alternatives", "selection_rationale", "key_assumptions", "independent_reconstruction", "direction_flow"],
-          "generated": ["review_instructions"],
-          "forbidden": ["proposed_solution", "decision_log", "spec", "plan", "changes_diff", "changed_files"],
-          "minimum_reviewers": 1,
-          "v2_required_maps": []
+          "required": [
+            "raw_requirement",
+            "objective_facts",
+            "convergence_outline",
+            "review_instructions"
+          ],
+          "optional": [
+            "current_selection",
+            "alternatives",
+            "selection_rationale",
+            "key_assumptions",
+            "independent_reconstruction",
+            "direction_flow"
+          ],
+          "generated": [
+            "review_instructions"
+          ],
+          "forbidden": [
+            "proposed_solution",
+            "decision_log",
+            "spec",
+            "plan",
+            "changes_diff",
+            "changed_files"
+          ],
+          "minimum_reviewers": 1
         },
         "detail": {
           "source_bundle": "none",
-          "required": ["raw_requirement", "approved_direction", "draft_spec_or_acceptance", "review_instructions"],
-          "optional": ["context_map", "evidence_map"],
-          "generated": ["review_instructions"],
+          "required": [
+            "raw_requirement",
+            "approved_direction",
+            "draft_spec_or_acceptance",
+            "review_instructions"
+          ],
+          "optional": [
+            "context_map",
+            "evidence_map"
+          ],
+          "generated": [
+            "review_instructions"
+          ],
           "forbidden": [],
-          "minimum_reviewers": 1,
-          "v2_required_maps": []
+          "minimum_reviewers": 1
         }
       }
     },
-    "build-spec": {
-      "source_bundle": "none",
-      "required": ["raw_requirement", "approved_decision", "draft_spec", "review_instructions"],
-      "optional": ["context_map", "evidence_map"],
-      "generated": ["review_instructions"],
-      "forbidden": [],
-      "minimum_reviewers": 1,
-      "v2_required_maps": []
-    },
     "build-plan": {
       "source_bundle": "none",
-      "required": ["raw_requirement", "approved_spec", "acceptance_criteria", "draft_plan", "draft_tasks", "review_instructions"],
-      "optional": ["context_map", "evidence_map"],
-      "generated": ["review_instructions", "planning_artifacts"],
+      "required": [
+        "raw_requirement",
+        "approved_spec",
+        "acceptance_criteria",
+        "draft_plan",
+        "draft_tasks",
+        "review_instructions"
+      ],
+      "optional": [
+        "context_map",
+        "evidence_map"
+      ],
+      "generated": [
+        "review_instructions",
+        "planning_artifacts"
+      ],
       "forbidden": [],
       "minimum_reviewers": 1,
-      "v2_required_maps": [],
       "profiles": {
         "post": {
           "source_bundle": "none",
-          "required": ["raw_requirement", "draft_spec", "acceptance_criteria", "phase_authorities", "phase_index", "review_instructions"],
-          "optional": ["context_map", "evidence_map"],
-          "generated": ["review_instructions", "planning_artifacts"],
-          "forbidden": ["approved_spec", "draft_plan", "draft_tasks"],
-          "minimum_reviewers": 1,
-          "v2_required_maps": []
+          "required": [
+            "raw_requirement",
+            "draft_spec",
+            "acceptance_criteria",
+            "phase_authorities",
+            "phase_index",
+            "review_instructions"
+          ],
+          "optional": [
+            "context_map",
+            "evidence_map"
+          ],
+          "generated": [
+            "review_instructions",
+            "planning_artifacts"
+          ],
+          "forbidden": [
+            "approved_spec",
+            "draft_plan",
+            "draft_tasks"
+          ],
+          "minimum_reviewers": 1
         }
       }
     },
@@ -119,52 +338,115 @@
       "profiles": {
         "phase": {
           "source_bundle": "diff",
-          "required": ["approved_spec", "acceptance_criteria", "test_evidence", "review_instructions"],
-          "optional": ["phase_map", "impact_map", "reuse_map", "acceptance_map"],
-          "generated": ["review_instructions", "change_map", "test_summary"],
+          "required": [
+            "approved_spec",
+            "acceptance_criteria",
+            "test_evidence",
+            "review_instructions"
+          ],
+          "optional": [
+            "phase_map",
+            "impact_map",
+            "reuse_map",
+            "acceptance_map"
+          ],
+          "generated": [
+            "review_instructions",
+            "change_map",
+            "test_summary"
+          ],
           "forbidden": [],
-          "minimum_reviewers": 1,
-          "v2_required_maps": []
-        },
-        "integration": {
-          "source_bundle": "none",
-          "required": ["approved_spec", "acceptance_criteria", "test_evidence", "ac_trace", "review_instructions"],
-          "optional": [],
-          "generated": ["review_instructions", "test_summary"],
-          "forbidden": ["changes_diff", "cumulative_diff", "phase_diff", "raw_log", "integration_map"],
-          "minimum_reviewers": 1,
-          "v2_required_maps": []
+          "minimum_reviewers": 1
         }
       }
     },
     "verify-code": {
       "source_bundle": "diff",
-      "required": ["changed_files", "implementation_assessment", "test_context", "open_risks", "review_instructions"],
-      "optional": ["approved_spec", "architect_assessment", "context_map"],
-      "generated": ["review_instructions"],
-      "forbidden": ["acceptance_criteria", "acceptance_evidence", "evidence_map", "final_test_summary", "quality_verify", "requirement_replay"],
-      "minimum_reviewers": 1,
-      "v2_required_maps": []
+      "required": [
+        "changed_files",
+        "implementation_assessment",
+        "test_context",
+        "open_risks",
+        "review_instructions"
+      ],
+      "optional": [
+        "approved_spec",
+        "architect_assessment",
+        "context_map"
+      ],
+      "generated": [
+        "review_instructions"
+      ],
+      "forbidden": [
+        "acceptance_criteria",
+        "acceptance_evidence",
+        "evidence_map",
+        "final_test_summary",
+        "quality_verify",
+        "requirement_replay"
+      ],
+      "minimum_reviewers": 1
     }
   },
   "mini_task": {
     "design": {
       "source_bundle": "none",
-      "required": ["raw_requirement", "decision_log", "spec", "plan", "tasks", "review_instructions"],
-      "optional": ["objective_facts", "context_map", "evidence_map"],
-      "generated": ["review_instructions"],
-      "forbidden": ["changes_diff", "changed_files", "test_evidence", "ac_trace", "user_result"],
-      "minimum_reviewers": 1,
-      "v2_required_maps": []
+      "required": [
+        "raw_requirement",
+        "decision_log",
+        "spec",
+        "review_instructions"
+      ],
+      "optional": [
+        "objective_facts",
+        "context_map",
+        "evidence_map",
+        "plan",
+        "tasks",
+        "phase_authorities",
+        "phase_index"
+      ],
+      "generated": [
+        "review_instructions"
+      ],
+      "forbidden": [
+        "changes_diff",
+        "changed_files",
+        "test_evidence",
+        "ac_trace",
+        "user_result"
+      ],
+      "minimum_reviewers": 1
     },
     "implementation": {
       "source_bundle": "diff",
-      "required": ["raw_requirement", "decision_log", "spec", "plan", "tasks", "test_evidence", "ac_trace", "user_result", "coverage_limits", "skip_reasons", "remaining_risks", "review_instructions"],
-      "optional": ["context_map", "evidence_map"],
-      "generated": ["review_instructions", "change_map", "test_summary"],
+      "required": [
+        "raw_requirement",
+        "decision_log",
+        "spec",
+        "test_evidence",
+        "ac_trace",
+        "user_result",
+        "coverage_limits",
+        "skip_reasons",
+        "remaining_risks",
+        "review_instructions"
+      ],
+      "optional": [
+        "context_map",
+        "evidence_map",
+        "plan",
+        "tasks",
+        "phase_authorities",
+        "phase_index"
+      ],
+      "generated": [
+        "review_instructions",
+        "change_map",
+        "test_summary"
+      ],
       "forbidden": [],
-      "minimum_reviewers": 1,
-      "v2_required_maps": []
+      "minimum_reviewers": 1
     }
   }
 }

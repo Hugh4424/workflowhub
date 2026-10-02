@@ -1,9 +1,9 @@
 import matrix from "./stage-materials.json" with { type: "json" };
 
-const FORMAL_STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
+const FORMAL_STAGES = new Set(["make-decision", "build-plan", "build-code", "verify-code"]);
 const REVIEW_KINDS = new Set(["mini_task.design", "mini_task.implementation", "build_prd"]);
 const REVIEW_TRACKS = new Set(["direction", "detail"]);
-const REVIEW_SCOPES = new Set(["phase", "integration"]);
+const REVIEW_SCOPES = new Set(["phase"]);
 
 function coalesceReviewField(input, snake, camel) {
   const snakeValue = input?.[snake];
@@ -47,7 +47,7 @@ export function assertReviewIdentity(input = {}) {
     throw new TypeError(`${stage} does not use a review track`);
   }
   if (stage === "build-code") {
-    if (reviewScope !== null && reviewScope !== undefined && !REVIEW_SCOPES.has(reviewScope)) throw new TypeError("build-code requires phase or integration review_scope");
+    if (reviewScope !== null && reviewScope !== undefined && !REVIEW_SCOPES.has(reviewScope)) throw new TypeError("build-code requires phase review_scope; integration review is retired");
   } else if (reviewScope !== null && reviewScope !== undefined) {
     throw new TypeError(`${stage} does not use review_scope`);
   }
@@ -88,7 +88,7 @@ export function reviewRuleFor(stage, track = null, reviewScope = null) {
   }
   if (stage === "build-code") {
     const scope = reviewScope ?? "phase";
-    if (!["phase", "integration"].includes(scope)) throw new Error("MATERIAL_INCOMPLETE: build-code requires phase or integration review_scope");
+    if (scope !== "phase") throw new Error("MATERIAL_INCOMPLETE: ordinary integration review is retired; use the current phase review");
     const rule = stageRule.profiles?.[scope];
     if (!rule) throw new Error(`MATERIAL_INCOMPLETE: build-code has no ${scope} material profile`);
     return rule;

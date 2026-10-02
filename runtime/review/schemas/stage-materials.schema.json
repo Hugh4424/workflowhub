@@ -2,67 +2,128 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "wh-review stage material matrix",
   "type": "object",
-  "required": ["version", "surfaces", "stages", "mini_task", "non_stage"],
+  "required": [
+    "version",
+    "surfaces",
+    "stages",
+    "mini_task",
+    "non_stage"
+  ],
   "properties": {
-    "version": { "const": "wh-review-stage-materials.v2" },
+    "version": {
+      "const": "wh-review-stage-materials.v2"
+    },
     "surfaces": {
       "type": "object",
-      "required": ["make-decision/direction", "make-decision/detail", "build-spec", "build-plan", "build-code/phase", "build-code/integration", "verify-code", "mini-task/design", "mini-task/implementation", "build-prd"],
+      "required": [
+        "make-decision/direction",
+        "make-decision/detail",
+        "build-plan",
+        "build-code/phase",
+        "verify-code",
+        "mini-task/design",
+        "mini-task/implementation",
+        "build-prd"
+      ],
       "properties": {
-        "make-decision/direction": { "$ref": "#/$defs/surface" },
-        "make-decision/detail": { "$ref": "#/$defs/surface" },
-        "build-spec": { "$ref": "#/$defs/surface" },
-        "build-plan": { "$ref": "#/$defs/surface" },
-        "build-code/phase": { "$ref": "#/$defs/surface" },
-        "build-code/integration": { "$ref": "#/$defs/surface" },
-        "verify-code": { "$ref": "#/$defs/surface" },
-        "mini-task/design": { "$ref": "#/$defs/surface" },
-        "mini-task/implementation": { "$ref": "#/$defs/surface" },
-        "build-prd": { "$ref": "#/$defs/surface" }
+        "make-decision/direction": {
+          "$ref": "#/$defs/surface"
+        },
+        "make-decision/detail": {
+          "$ref": "#/$defs/surface"
+        },
+        "build-plan": {
+          "$ref": "#/$defs/surface"
+        },
+        "build-code/phase": {
+          "$ref": "#/$defs/surface"
+        },
+        "verify-code": {
+          "$ref": "#/$defs/surface"
+        },
+        "mini-task/design": {
+          "$ref": "#/$defs/surface"
+        },
+        "mini-task/implementation": {
+          "$ref": "#/$defs/surface"
+        },
+        "build-prd": {
+          "$ref": "#/$defs/surface"
+        }
       },
       "additionalProperties": false
     },
     "stages": {
       "type": "object",
-      "required": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"],
+      "required": [
+        "make-decision",
+        "build-plan",
+        "build-code",
+        "verify-code"
+      ],
       "properties": {
         "make-decision": {
           "type": "object",
-          "required": ["tracks"],
+          "required": [
+            "tracks"
+          ],
           "properties": {
             "tracks": {
               "type": "object",
-              "required": ["direction", "detail"],
+              "required": [
+                "direction",
+                "detail"
+              ],
               "properties": {
-                "direction": { "$ref": "#/$defs/rule" },
-                "detail": { "$ref": "#/$defs/rule" }
+                "direction": {
+                  "$ref": "#/$defs/rule"
+                },
+                "detail": {
+                  "$ref": "#/$defs/rule"
+                }
               },
               "additionalProperties": false
             }
           },
           "additionalProperties": false
         },
-        "build-spec": { "$ref": "#/$defs/rule" },
-        "build-plan": { "$ref": "#/$defs/buildPlanRule" },
-        "build-code": { "$ref": "#/$defs/buildCodeProfiles" },
-        "verify-code": { "$ref": "#/$defs/rule" }
+        "build-plan": {
+          "$ref": "#/$defs/buildPlanRule"
+        },
+        "build-code": {
+          "$ref": "#/$defs/buildCodeProfiles"
+        },
+        "verify-code": {
+          "$ref": "#/$defs/rule"
+        }
       },
       "additionalProperties": false
     },
     "non_stage": {
       "type": "object",
-      "required": ["build_prd"],
+      "required": [
+        "build_prd"
+      ],
       "properties": {
-        "build_prd": { "$ref": "#/$defs/rule" }
+        "build_prd": {
+          "$ref": "#/$defs/rule"
+        }
       },
       "additionalProperties": false
     },
     "mini_task": {
       "type": "object",
-      "required": ["design", "implementation"],
+      "required": [
+        "design",
+        "implementation"
+      ],
       "properties": {
-        "design": { "$ref": "#/$defs/rule" },
-        "implementation": { "$ref": "#/$defs/miniImplementationRule" }
+        "design": {
+          "$ref": "#/$defs/rule"
+        },
+        "implementation": {
+          "$ref": "#/$defs/miniImplementationRule"
+        }
       },
       "additionalProperties": false
     }
@@ -70,58 +131,225 @@
   "$defs": {
     "surface": {
       "type": "object",
-      "required": ["contract", "problem_order", "semantic_fields"],
+      "required": [
+        "contract",
+        "problem_order",
+        "semantic_fields"
+      ],
       "properties": {
-        "contract": { "type": "string", "minLength": 1 },
-        "problem_order": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
-        "semantic_fields": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+        "contract": {
+          "type": "string",
+          "minLength": 1
+        },
+        "problem_order": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "semantic_fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
       },
       "additionalProperties": false
     },
     "rule": {
       "type": "object",
-      "required": ["source_bundle", "required", "optional", "generated", "forbidden", "minimum_reviewers", "v2_required_maps"],
+      "required": [
+        "source_bundle",
+        "required",
+        "optional",
+        "generated",
+        "forbidden",
+        "minimum_reviewers"
+      ],
       "properties": {
-        "source_bundle": { "enum": ["none", "diff"] },
-        "required": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
-        "optional": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
-        "generated": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
-        "forbidden": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
-        "minimum_reviewers": { "type": "integer", "minimum": 1 },
-        "v2_required_maps": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+        "source_bundle": {
+          "enum": [
+            "none",
+            "diff"
+          ]
+        },
+        "required": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "optional": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "generated": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "forbidden": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "minimum_reviewers": {
+          "type": "integer",
+          "minimum": 1
+        }
       },
       "additionalProperties": false
     },
     "buildPlanRule": {
       "type": "object",
-      "required": ["source_bundle", "required", "optional", "generated", "forbidden", "minimum_reviewers", "v2_required_maps", "profiles"],
+      "required": [
+        "source_bundle",
+        "required",
+        "optional",
+        "generated",
+        "forbidden",
+        "minimum_reviewers",
+        "profiles"
+      ],
       "properties": {
-        "source_bundle": { "const": "none" },
-        "required": { "type": "array", "uniqueItems": true, "contains": { "const": "draft_tasks" }, "items": { "type": "string", "minLength": 1 } },
-        "optional": { "type": "array", "uniqueItems": true, "not": { "contains": { "const": "draft_tasks" } }, "items": { "type": "string", "minLength": 1 } },
-        "generated": { "type": "array", "uniqueItems": true, "not": { "contains": { "const": "draft_tasks" } }, "items": { "type": "string", "minLength": 1 } },
-        "forbidden": { "type": "array", "uniqueItems": true, "not": { "contains": { "const": "draft_tasks" } }, "items": { "type": "string", "minLength": 1 } },
-        "minimum_reviewers": { "type": "integer", "minimum": 1 },
-        "v2_required_maps": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "source_bundle": {
+          "const": "none"
+        },
+        "required": {
+          "type": "array",
+          "uniqueItems": true,
+          "contains": {
+            "const": "draft_tasks"
+          },
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "optional": {
+          "type": "array",
+          "uniqueItems": true,
+          "not": {
+            "contains": {
+              "const": "draft_tasks"
+            },
+            "type": "array"
+          },
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "generated": {
+          "type": "array",
+          "uniqueItems": true,
+          "not": {
+            "contains": {
+              "const": "draft_tasks"
+            },
+            "type": "array"
+          },
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "forbidden": {
+          "type": "array",
+          "uniqueItems": true,
+          "not": {
+            "contains": {
+              "const": "draft_tasks"
+            },
+            "type": "array"
+          },
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "minimum_reviewers": {
+          "type": "integer",
+          "minimum": 1
+        },
         "profiles": {
           "type": "object",
-          "required": ["post"],
+          "required": [
+            "post"
+          ],
           "properties": {
             "post": {
               "allOf": [
-                { "$ref": "#/$defs/rule" },
-                { "properties": {
-                  "required": { "allOf": [
-                    { "contains": { "const": "draft_spec" } },
-                    { "contains": { "const": "phase_authorities" } },
-                    { "contains": { "const": "phase_index" } }
-                  ] },
-                  "forbidden": { "allOf": [
-                    { "contains": { "const": "draft_plan" } },
-                    { "contains": { "const": "draft_tasks" } },
-                    { "contains": { "const": "approved_spec" } }
-                  ] }
-                } }
+                {
+                  "$ref": "#/$defs/rule"
+                },
+                {
+                  "properties": {
+                    "required": {
+                      "allOf": [
+                        {
+                          "contains": {
+                            "const": "draft_spec"
+                          },
+                          "type": "array"
+                        },
+                        {
+                          "contains": {
+                            "const": "phase_authorities"
+                          },
+                          "type": "array"
+                        },
+                        {
+                          "contains": {
+                            "const": "phase_index"
+                          },
+                          "type": "array"
+                        }
+                      ]
+                    },
+                    "forbidden": {
+                      "allOf": [
+                        {
+                          "contains": {
+                            "const": "draft_plan"
+                          },
+                          "type": "array"
+                        },
+                        {
+                          "contains": {
+                            "const": "draft_tasks"
+                          },
+                          "type": "array"
+                        },
+                        {
+                          "contains": {
+                            "const": "approved_spec"
+                          },
+                          "type": "array"
+                        }
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
               ]
             }
           },
@@ -132,14 +360,19 @@
     },
     "buildCodeProfiles": {
       "type": "object",
-      "required": ["profiles"],
+      "required": [
+        "profiles"
+      ],
       "properties": {
         "profiles": {
           "type": "object",
-          "required": ["phase", "integration"],
+          "required": [
+            "phase"
+          ],
           "properties": {
-            "phase": { "$ref": "#/$defs/phaseRule" },
-            "integration": { "$ref": "#/$defs/integrationRule" }
+            "phase": {
+              "$ref": "#/$defs/phaseRule"
+            }
           },
           "additionalProperties": false
         }
@@ -148,57 +381,105 @@
     },
     "phaseRule": {
       "allOf": [
-        { "$ref": "#/$defs/rule" },
+        {
+          "$ref": "#/$defs/rule"
+        },
         {
           "properties": {
-            "source_bundle": { "const": "diff" },
-            "required": { "contains": { "const": "test_evidence" } }
-          }
-        }
-      ]
-    },
-    "integrationRule": {
-      "allOf": [
-        { "$ref": "#/$defs/rule" },
-        {
-          "properties": {
-            "source_bundle": { "const": "none" },
-            "required": {
-              "allOf": [
-                { "contains": { "const": "test_evidence" } },
-                { "contains": { "const": "ac_trace" } },
-                { "not": { "contains": { "const": "phase_coverage" } } },
-                { "not": { "contains": { "const": "seam_index" } } },
-                { "not": { "contains": { "const": "phase_map_trace" } } }
-              ]
+            "source_bundle": {
+              "const": "diff"
             },
-            "forbidden": {
-              "allOf": [
-                { "contains": { "const": "changes_diff" } },
-                { "contains": { "const": "cumulative_diff" } },
-                { "contains": { "const": "phase_diff" } },
-                { "contains": { "const": "integration_map" } }
-              ]
+            "required": {
+              "contains": {
+                "const": "test_evidence"
+              },
+              "type": "array"
             }
-          }
+          },
+          "type": "object"
         }
       ]
     },
     "miniImplementationRule": {
       "allOf": [
-        { "$ref": "#/$defs/rule" },
+        {
+          "$ref": "#/$defs/rule"
+        },
         {
           "properties": {
-            "source_bundle": { "const": "diff" }
+            "source_bundle": {
+              "const": "diff"
+            }
           },
           "allOf": [
-            { "properties": { "required": { "contains": { "const": "test_evidence" } } } },
-            { "properties": { "required": { "contains": { "const": "ac_trace" } } } },
-            { "properties": { "required": { "contains": { "const": "user_result" } } } },
-            { "properties": { "required": { "contains": { "const": "coverage_limits" } } } },
-            { "properties": { "required": { "contains": { "const": "skip_reasons" } } } },
-            { "properties": { "required": { "contains": { "const": "remaining_risks" } } } }
-          ]
+            {
+              "properties": {
+                "required": {
+                  "contains": {
+                    "const": "test_evidence"
+                  },
+                  "type": "array"
+                }
+              },
+              "type": "object"
+            },
+            {
+              "properties": {
+                "required": {
+                  "contains": {
+                    "const": "ac_trace"
+                  },
+                  "type": "array"
+                }
+              },
+              "type": "object"
+            },
+            {
+              "properties": {
+                "required": {
+                  "contains": {
+                    "const": "user_result"
+                  },
+                  "type": "array"
+                }
+              },
+              "type": "object"
+            },
+            {
+              "properties": {
+                "required": {
+                  "contains": {
+                    "const": "coverage_limits"
+                  },
+                  "type": "array"
+                }
+              },
+              "type": "object"
+            },
+            {
+              "properties": {
+                "required": {
+                  "contains": {
+                    "const": "skip_reasons"
+                  },
+                  "type": "array"
+                }
+              },
+              "type": "object"
+            },
+            {
+              "properties": {
+                "required": {
+                  "contains": {
+                    "const": "remaining_risks"
+                  },
+                  "type": "array"
+                }
+              },
+              "type": "object"
+            }
+          ],
+          "type": "object"
         }
       ]
     }

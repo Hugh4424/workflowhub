@@ -3,8 +3,8 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SHA256_HEX_CASE_INSENSITIVE } from "../../../runtime/evidence/canonical-utils.mjs";
-import { parseReviewerOutput } from "./review-output.mjs";
+const SHA256_HEX_CASE_INSENSITIVE = /^[a-f0-9]{64}$/i;
+import { parseReviewerOutput } from "../../../runtime/review/review-output.mjs";
 
 const protocol = "workflowhub-result.v3";
 const reviewModes = new Set(["single_round", "adaptive", "full_only", "full_on_structural_rework", "legacy"]);
@@ -145,14 +145,19 @@ function managedEnvelopeObservation(result, wire) {
 // spawn failure is the only case where nothing was transmitted.
 function dispatchedFailure(code, message, result, wire) {
   const error = failure(code, message);
-  if (!wire?.spawnError) error.managed_observation = managedEnvelopeObservation(result, wire);
+  if (!wire?.spawnError && wire?.started !== false) error.managed_observation = managedEnvelopeObservation(result, wire);
   return error;
 }
 
-function contractFailure(error, wire) {
+function contractFailure(error, wire, classification = "contract_failure") {
   Object.defineProperty(error, "diagnostic", {
     value: Object.freeze({
-      classification: "contract_failure",
+      classification,
+      started: typeof wire?.started === "boolean" ? wire.started : null,
+      cancelled: wire?.cancelled === true,
+      timed_out: wire?.timedOut === true,
+      exit_code: Number.isInteger(wire?.exitCode) ? wire.exitCode : null,
+      signal: wire?.signal ?? null,
       raw_stdout: String(wire?.stdout ?? ""),
       raw_stderr: String(wire?.stderr ?? ""),
       stdout_sha256: digest(wire?.stdout),
@@ -186,7 +191,7 @@ function assertReviewAbortSignal(signal) {
 function execute(command, args, { timeoutMs = null, signal = null } = {}) {
   signal = assertReviewAbortSignal(signal);
   if (signal?.aborted) {
-    return Promise.resolve({ exitCode: null, stdout: "", stderr: "", spawnError: null, timedOut: false, cancelled: true });
+    return Promise.resolve({ exitCode: null, stdout: "", stderr: "", spawnError: null, started: false, timedOut: false, cancelled: true });
   }
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
@@ -209,7 +214,7 @@ function execute(command, args, { timeoutMs = null, signal = null } = {}) {
       if (timeoutTimer !== null) clearTimeout(timeoutTimer);
       if (killTimer !== null) clearTimeout(killTimer);
       signal?.removeEventListener("abort", onAbort);
-      resolve(value);
+      resolve({ ...value, started: !value.spawnError });
     };
     child.stdout.on("data", (bytes) => { stdout += bytes; }); child.stderr.on("data", (bytes) => { stderr += bytes; });
     child.once("error", (error) => {
@@ -751,7 +756,7 @@ function validateManagedHealthProviders(value, providers) {
 }
 
 function parseManagedEnvelope(wire, context) {
-  if (wire?.cancelled) throw failure("PROCESS_CANCELLED", "3rd-review managed lifecycle was cancelled locally");
+  if (wire?.cancelled) throw contractFailure(dispatchedFailure("PROCESS_CANCELLED", "3rd-review managed lifecycle was cancelled locally", null, wire), wire, "process_cancelled");
   if (wire?.timedOut) throw failure("PROCESS_TIMEOUT", "3rd-review managed lifecycle exceeded the local broker timeout");
   let result;
   try { result = JSON.parse(wire?.stdout ?? ""); }
@@ -800,7 +805,7 @@ function parseManagedEnvelope(wire, context) {
 }
 
 function parsePublicRun(wire) {
-  if (wire?.cancelled) throw failure("PROCESS_CANCELLED", "3rd-review public run was cancelled locally");
+  if (wire?.cancelled) throw contractFailure(dispatchedFailure("PROCESS_CANCELLED", "3rd-review public run was cancelled locally", null, wire), wire, "process_cancelled");
   const timeout = () => failure("PROCESS_TIMEOUT", "3rd-review public run exceeded the local broker timeout");
   let result = null;
   try { result = JSON.parse(wire?.stdout ?? ""); }
