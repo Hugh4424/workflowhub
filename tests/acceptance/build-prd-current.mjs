@@ -20,6 +20,7 @@ const ACCEPTANCE_CRITERIA = [
 // reviewed. Additions are free; a removal or an emptied file fails.
 const targetedTests = [
   { file: "tests/integration/distribution-closure.test.mjs", minimum_passed: 22 },
+  { file: "tests/contract/spec-prd-skill-contract.test.mjs", minimum_passed: 13 },
   { file: "tests/contract/build-prd-review-contract.test.mjs", minimum_passed: 10 },
   { file: "tests/integration/build-prd-delivery.test.mjs", minimum_passed: 9 },
 ];

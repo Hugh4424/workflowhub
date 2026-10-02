@@ -6,6 +6,11 @@ import { load as loadYaml } from "js-yaml";
 
 const repoRoot = resolve(fileURLToPath(import.meta.url), "..", "..");
 
+const retiredFiles = [
+  "core/multica-source-adapter.mjs",
+  "scripts/agenthub-baseline.mjs",
+];
+
 const currentContractDocs = [
   "docs/audit-contracts.md",
   "docs/migration-and-fallback.md",
@@ -100,11 +105,18 @@ function lineFindings(repoPath, pattern, reason) {
 }
 
 describe("WorkflowHub host independence", () => {
+  it("has retired the Multica source adapter and AgentHub baseline bridge", () => {
+    const present = retiredFiles.filter((path) => existsSync(join(repoRoot, path)));
+
+    expect(present, `retired host bridges still exist:\n${present.join("\n")}`).toEqual([]);
+  });
+
   it("keeps active runtime, CLI, Skills, CI, and contracts host-neutral", () => {
     const findings = activeSurfaceFiles().flatMap((repoPath) => {
       if (isSourceRecord(repoPath)) return [];
       const isGenericHostGuard = new Set([
         "tools/cli/check-anti-host.mjs",
+        "tools/cli/check-task-record-paths.mjs",
       ]).has(repoPath);
       return [
         ...lineFindings(

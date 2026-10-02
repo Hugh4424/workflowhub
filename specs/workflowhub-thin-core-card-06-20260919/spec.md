@@ -337,13 +337,13 @@
 
 ## 迁移契约
 
-- **冻结**：用户已授权（ADR-022）本 build-plan 完成后提交一次（迁移表 + spec + phases + 决策补记），该提交即冻结点，提交号写入迁移表"冻结记录"节。首个删除提交必须是冻结提交的后代且晚于它。冻结后只允许 append-only 补记行并立即向用户汇报。 新G-3动议034尚未批准；仅在用户明确批准该提案实际patch后，允许对主表 MT-1-066 / MT-1-071 及 MT-6-138 三行的批次、对应回滚批次和误分类/consumer理由作定点纠正（MT-1-066/071：B1/P2→B4/P5；MT-6-138：B1/P2→B5/P6），并同步P2/P5/index；其它冻结主表行与冻结锚不变。此单次材料修正不是执行记录回写或新的通用改表许可。
+- **冻结**：用户已授权（ADR-022）本 build-plan 完成后提交一次（迁移表 + spec + phases + 决策补记），该提交即冻结点，提交号写入迁移表"冻结记录"节。首个删除提交必须是冻结提交的后代且晚于它。冻结后只允许 append-only 补记行并立即向用户汇报。
 - **删除前快照**：每批第一个改动提交之前，在当时 HEAD 打本地标签 `backup/card-06-b<N>`（N=批次号 0～7）。不推送标签。
 - **切换点**：P5/T017 的提交是"公共入口后端从 kernel 切到窄工具"的切换点；P5/T023 之前旧机制仍在仓库中可回退。
 - **失败回退**：批内失败先在同 task 修复；无法修复时，用 `git revert` 撤销该批提交（非破坏性，可直接执行）；若需要 `git reset --hard backup/card-06-b<N>`，先向用户说明并取得授权。
 - **dirty worktree 处置**：每批开工前 `git status --porcelain` 必须为空；不为空则停下向用户报告文件清单，不 stash、不自动提交、不丢弃。
 - **过渡基线（SD-16）**：Card-03 的 wh-review/runtime/review 修复按 ADR-018 转为正式保留代码，迁移表逐文件登记（SURVIVOR 或 NARROW），不静默留存。
-- **执行记录位置**：每批的 G-3 扫描、消费者核对、测试输出、汇报写在 task 目录 `quality/evidence/card06-batches/` 与 `quality/tests/`（新命名），不回写本 spec、Phase 或迁移表冻结行。 上述034三行定点纠正仅是需具体批准的build-plan材料修正，不把后续执行进度写回权威材料。
+- **执行记录位置**：每批的 G-3 扫描、消费者核对、测试输出、汇报写在 task 目录 `quality/evidence/card06-batches/` 与 `quality/tests/`（新命名），不回写本 spec、Phase 或迁移表冻结行。
 
 ## 执行纪律（ADR-007、ADR-015、ADR-023）
 
@@ -399,7 +399,7 @@
 ### 全局文件边界与依赖
 
 - **NEW / MODIFY / DELETE**：唯一权威为 `attachments/migration-table.md`，每个路径一行、一个批次（=唯一 owner Phase）；唯一的同文件串行 MODIFY 例外仅为下述已获023具体用户批准的 move-map 六工具登记与后续迁移更新（批准原件与范围见下述），迁移主表仍保留该路径一行。build-plan 新增并冻结的 oracle 测试：`tests/contract/narrow-tool-*.test.mjs`（6 个）、`tests/contract/narrow-tools-isolation.test.mjs`、`tests/contract/card06-migration-ledger.test.mjs`、`tests/contract/thin-core-residue.test.mjs`、`tests/contract/ocr-review-contract-bundle.test.mjs`、`tests/contract/code-review-ocr-fallback.test.mjs`。
-- **DO NOT TOUCH**：`specs/workflowhub-thin-core-rebuild-planning-20260919/**`（母材料）、`specs/archive/**`、`docs/research/**`、`docs/adr/**` 既有文件正文、外置任务存储中任何已有任务目录与记录、本卡 `decision-log.md`（只允许 make-decision 增量）、迁移表冻结行（除上述新G-3动议034取得具体批准后的三行定点纠正）、上述 build-plan 预写测试的断言（改动须走 test change request + 独立审查）。
+- **DO NOT TOUCH**：`specs/workflowhub-thin-core-rebuild-planning-20260919/**`（母材料）、`specs/archive/**`、`docs/research/**`、`docs/adr/**` 既有文件正文、外置任务存储中任何已有任务目录与记录、本卡 `decision-log.md`（只允许 make-decision 增量）、迁移表冻结行、上述 build-plan 预写测试的断言（改动须走 test change request + 独立审查）。
 - **全局依赖**：P1 → P2 → P3 → P4 → P5 → P6 → P7 → P8，严格串行（ADR-004）。串行原因：先立新后拆旧；P5 前人为门与审查链必须已有替代；P6 的 hash 字段删除依赖 P5 已删除 closure 以外的全部消费者；P8 文档依赖前面批次删除了守护文档文本的测试。
 - **文件归属**：迁移表批次列唯一；多批次都需要改的共享文件按"最早一次改完、会打断存活消费者则推后"合并到一个批次（迁移表备注写合并原因）。上述合并原则仅对下述已获023具体用户批准的 move-map 元数据限定例外作唯一豁免（批准原件与范围见下述）；除此以外不得跨 Phase 分拆同路径修改。合并过程中的 14 条判据见迁移表 `#3-聚合裁定`（A-1～A-14）。
 - **既有创建/删除交接例外**：开工横幅 `CARD-06-IN-PROGRESS.md` 由 P1 创建（迁移表 MT-7-114，owner=P1），P8/T027 执行其声明的收口删除。为避免同一路径出现两个 Phase owner，它只登记在 P1 写集；这是本卡唯一一处"创建 Phase 与删除 Phase 不同"的路径，已在迁移表 A-14 登记。
