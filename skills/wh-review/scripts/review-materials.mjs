@@ -601,6 +601,7 @@ export function buildReviewMaterials({attachmentRoot,reviewDataRoot,stage,review
   const write=(path,value)=>{if(isAbsolute(path)||path.split("/").some(x=>!x||x===".."||x==="."))throw new Error("MATERIAL_INCOMPLETE: unsafe bundle path");const bytes=materialBytes(redactProviderHostPaths(value));const target=join(bundleRoot,path);mkdirSync(dirname(target),{recursive:true});writeFileSync(target,bytes,{flag:"wx",mode:0o600});entries.push({path,bytes:bytes.length,sha256:sha256(bytes)});};
   try {
     const documentFace=surface==="document"&&stage==="build-code";
+    const codePacket=["build-code","verify-code"].includes(stage)&&!documentFace;
     const instruction=documentFace
       ? `Review stage build-code; subject_kind=phase; review_scope=phase; phase_id=${phaseId ?? "not supplied"}; surface=document. This is the current Phase's document review, not a build-plan stage result or an OCR code review. Read the complete submitted specification, Phase material, method/contract documents and metadata. Apply contracts/build-plan.md as the existing document review lens: requirement-to-implementation-to-consumer-to-verification, dependencies, boundary, recovery and necessity. The actual stage remains build-code. Do not evaluate unsubmitted code or demand snapshot/hash/receipt/lineage permits. Read manifest-declared reviewer skills and contracts/provider-protocol.md. Report only concrete delivery findings with relative file/line anchors and genuine serious evidence. Findings, including empty findings, are advice only; missing quality stays unknown and provider/transport/parse failure remains unavailable/incomplete. Do not access repository files, Git, shell, network or host paths. Return exactly one findings JSON.\n`
       : reviewInstructionsFor(stage,reviewTrack,uiScope,reviewScope,reviewKind,stage==="make-decision"&&reviewTrack==="direction"?"combined":"full",role);
@@ -610,11 +611,14 @@ export function buildReviewMaterials({attachmentRoot,reviewDataRoot,stage,review
     if(typeof contract!=="string" || !/^contracts\/[a-z0-9-]+\.md$/.test(contract))throw new Error(`MATERIAL_INCOMPLETE: missing contract for ${surfaceName}`);
     write(contract,readRegisteredFile(resolve(here,"..",contract),contract));
     write("contracts/provider-protocol.md",readRegisteredFile(resolve(here,"..","contracts","provider-protocol.md"),"provider-protocol.md"));
-    for(const name of [...new Set([...(plan.required_skills ?? []),...(uiScope ? (plan.optional_skills ?? []).filter(x=>x.when==="ui").map(x=>x.name) : [])])]) {
+    if(codePacket)for(const name of ["build-code.md","verify-code.md"]){const path=`contracts/${name}`;if(!entries.some(entry=>entry.path===path))write(path,readRegisteredFile(resolve(here,"..","contracts",name),path));}
+    const lensPlans=codePacket ? [plan,stagePlanFor("build-code",null),stagePlanFor("verify-code",null)] : [plan];
+    for(const name of [...new Set(lensPlans.flatMap(p=>[...(p.required_skills ?? []),...(uiScope ? (p.optional_skills ?? []).filter(x=>x.when==="ui").map(x=>x.name) : [])]))]) {
       if(typeof name!=="string" || !/^[a-z0-9][a-z0-9-]*$/.test(name))throw new Error("MATERIAL_INCOMPLETE: unsafe skill name");
       write(`skills/${name}/SKILL.md`,readRegisteredFile(resolve(workflowhubSkills,name,"SKILL.md"),name));
     }
-    providerMaterialEntries({stage,review_track:reviewTrack,review_scope:reviewScope,review_kind:reviewKind,activation_cohort:activationCohort,materials:filtered.materials}).forEach(([key,value],index)=>{if(key!=="review_instructions")write(providerMaterialPath(key,index,redactProviderHostPaths(value)),value);});
+    providerMaterialEntries({stage,review_track:reviewTrack,review_scope:reviewScope,review_kind:reviewKind,activation_cohort:activationCohort,materials:filtered.materials}).forEach(([key,value],index)=>{if(key!=="review_instructions")write(codePacket&&key==="acceptance_criteria" ? `requirements/acceptance_criteria.${typeof value==="string" ? "md" : "json"}` : providerMaterialPath(key,index,redactProviderHostPaths(value)),value);});
+    if(codePacket&&source)write("source.json",{captured_head:source.capturedHead,baseline_commit:source.baseCommit});
     if(source?.diffPath)write("changes.diff",readRegisteredFile(source.diffPath,"supplied diff"));
     if(authenticated_evidence!==undefined)write("authenticated-evidence.json",authenticated_evidence);
     const manifest={version:1,stage,review_scope:reviewScope,subject_kind:reviewScope==="phase" ? "phase" : "document",phase_id:phaseId,surface:surface ?? reviewKind ?? stage,files:[...entries]};write("manifest.json",JSON.stringify(manifest,null,2)+"\n");

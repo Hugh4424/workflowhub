@@ -372,13 +372,13 @@
       "optional": [
         "approved_spec",
         "architect_assessment",
-        "context_map"
+        "context_map",
+        "acceptance_criteria"
       ],
       "generated": [
         "review_instructions"
       ],
       "forbidden": [
-        "acceptance_criteria",
         "acceptance_evidence",
         "evidence_map",
         "final_test_summary",

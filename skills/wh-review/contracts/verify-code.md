@@ -1,54 +1,31 @@
-# Verify Code 异源代码审查合同
+# Verify Code 最终代码审查合同
 
-这是一次 post-repair 的异源代码审查，不是材料审计、AC 覆盖审计或证据 pass 门。
-本次只调用 `wh-review` 一次；provider 审查当前代码 diff、真实 consumer、相关测试和代码风险。
-主 agent 已先完成一次架构代码检查和第一批修复；provider 只找真正影响交付的问题。
-审查完成后主 agent 只处理这一轮 findings，再做最后检查，不重复调用 provider。
+审查最终 worktree 的当前代码差异、真实入口、消费者、相关测试与代码风险。
+实现方提供 implementation_assessment、test_context、open_risks 和适用验收标准全文；
+这些是判断代码主张的上下文，不要求完整历史证据树，也不把材料审计替代代码审查。
 
-## 必需材料
+## 审查顺序和重点
 
-- 当前代码 diff 和真实实现上下文；
-- 主 agent 的 `implementation_assessment`：入口、consumer、接口、生命周期、安全和失败边界的短结论；
-- `test_context`：相关测试是否走到真实入口、关键分支和失败边界；不要求测试 receipt；
-- `open_risks`：未决代码风险或 `无`；
-- `review-instructions.md`；
-- `manifest.json`。
+固定顺序：代码入口 → 真实消费者 → 接口与状态 → 测试断言 → 实际结果 → 弱 oracle/假绿。
+检查跨 Phase 接口、生命周期、并发与取消、资源释放、权限、数据泄漏和真实失败路径。
+核对代码是否被实际调用，异常是否可见；重点寻找“测试通过但用户仍会失败”的具体原因。
+不要只复述实现，也不要把模拟、绿色命令、缺失质量或旧审查当作当前结果。
 
-正式 `verify-code` 的 wh-review attempt/result 还记录 `material_revision`：它由当前四份
-WorkflowHub 材料计算，并由 stage-runtime 在写入 `independent_review` 前重新校验。
-`material_id` 仍只表示 provider 可见 packet 的 manifest；两者缺一不可，旧 evidence 不能只靠
-同一个 snapshot 重新包装。`Architect-Code-Review` 才是完成语义上的 canonical `code_review`；其
-上游 provider source id 保留 `dsh-code-review`。stage-runtime 要求它绑定当前的 review result/attempt
-引用和字节哈希，wh-review 只保留异源建议与原始发现。
+读取包内阶段合同、provider 协议、当前审查重点和声明的 lens 技能全文。
+实现、diff、适用验收标准和必要上下文应完整；缺少判断依据时报告真实限制，不能假定通过。
+只访问列出的包内文件，不访问仓库、Git、网络、宿主路径，不写文件或派其他 agent。
 
-这些材料只保留能影响代码判断的事实。禁止发送或要求完整 evidence tree、AC coverage、
-requirement replay、task completion、receipt、旧 review ledger、provider session 或本机绝对路径。
-若请求绑定 `reviewed_execution`，同包 `authenticated-evidence.json` 中的当前执行原件只用于
-核对代码/测试主张、识别 false-green；不审计证据完整度，不把缺失项变成代码 finding 或阶段门槛。
-必要的实现锚点由代码 diff 和架构报告给出；没有锚点就报告代码风险，不能假设通过。
+## 执行方式与失败
 
-## 审查重点
+优先由已安装且符合 ADR-021 最低版本 1.12.9 的 OCR 执行同一代码审查面。
+OCR 未安装或低于该版本时，wh-review 按本合同执行同一审查面。
+已安装的合格 OCR 执行失败、取消或没有可解析结果时，保留 unavailable/incomplete；
+不能假装未安装而追加 fallback，也不能把失败改写为空 findings。
 
-- 当前实现的真实入口、consumer 和接口两端是否一致；
-- 状态、生命周期、并发、取消、资源释放和成功/失败边界有没有漏；
-- module/interface/seam 是否放对，是否重复造轮子或把复杂度推给调用方；
-- 代码是否真的被真实 consumer 使用，失败处理是否可观察；
-- 测试是否测到关键入口、外部状态和失败分支，而不是只靠 mock 或绿色命令；
-- 是否有安全、权限、数据泄漏和并发问题；
-- 是否有会影响交付的严重遗漏。
+## 输出与处置
 
-审查返回的每个代码 finding 都必须进入处理清单。`fixed`、`rejected_invalid`、
-`accepted_risk`、`needs_human` 只表示主 agent 的代码 finding 处置结果；不要求为材料
-缺口创建处置记录。
-
-审查顺序固定为：代码入口 → 真实消费者 → 接口与状态 → 测试断言 → 实际结果 →
-弱 oracle/假绿。重点攻击“看起来通过但用户仍会失败”的地方：测试没有走到关键分支、mock
-绕过真实 seam、错误被吞掉、成功结果没有被真实入口消费。不要把 verify-code 变成材料考古或
-第二套 receipt 审计。
-
-## 结果
-
-只输出 provider protocol 要求的最小 JSON：只包含 `findings`。
-findings、传输状态和 `unavailable` 都是代码质量事实。主 agent 必须逐条判断 finding；
-stage 是否形成 `passed` 或 `incomplete` 只由代码 review 结果和代码 finding 处置决定，不由
-AC/evidence/receipt 完整度决定，也不通过重复审查制造绿色。
+按根因合并重复 finding，保留具体消费者、路径、真实行号和源码证据。
+严重 finding 必须包含 root_cause、evidence_kind、evidence；无可靠锚点时说明限制，不猜行号。
+只返回 provider-protocol 规定的一个 findings JSON，不输出 pass、阶段判决或完成结论。
+不可用≠空≠pass。每个实际代码 finding 由主会话处置；接受具体风险必须有真实用户回复、
+明确影响和后果，不能用标签或空结果代替决定。修复不自动触发同主题的再次审查。
