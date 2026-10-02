@@ -399,7 +399,7 @@
 ### 全局文件边界与依赖
 
 - **NEW / MODIFY / DELETE**：唯一权威为 `attachments/migration-table.md`，每个路径一行、一个批次（=唯一 owner Phase）；唯一的同文件串行 MODIFY 例外仅为下述已获023具体用户批准的 move-map 六工具登记与后续迁移更新（批准原件与范围见下述），迁移主表仍保留该路径一行。build-plan 新增并冻结的 oracle 测试：`tests/contract/narrow-tool-*.test.mjs`（6 个）、`tests/contract/narrow-tools-isolation.test.mjs`、`tests/contract/card06-migration-ledger.test.mjs`、`tests/contract/thin-core-residue.test.mjs`、`tests/contract/ocr-review-contract-bundle.test.mjs`、`tests/contract/code-review-ocr-fallback.test.mjs`。
-- **DO NOT TOUCH**：`specs/workflowhub-thin-core-rebuild-planning-20260919/**`（母材料）、`specs/archive/**`、`docs/research/**`、`docs/adr/**` 既有文件正文、外置任务存储中任何已有任务目录与记录、本卡 `decision-log.md`（只允许 make-decision 增量）、迁移表冻结行（除上述新G-3动议034取得具体批准后的三行定点纠正）、上述 build-plan 预写测试的断言（改动须走 test change request + 独立审查）。
+- **DO NOT TOUCH**：`specs/workflowhub-thin-core-rebuild-planning-20260919/**`（母材料）、`specs/archive/**`、`docs/research/**`、`docs/adr/**` 既有文件正文、外置任务存储中任何已有任务目录与记录、本卡 `decision-log.md`（只允许 make-decision 增量）、迁移表冻结行（除已获034具体批准后的三行定点纠正，以及动议053获得绑定六项候选的真实具体批准后才允许的MT-1-031、MT-3-084/086/088/094/091六行限定修正及对应计数；053当前未批准，尚不生效）、上述 build-plan 预写测试的断言（改动须走 test change request + 独立审查）。
 - **全局依赖**：P1 → P2 → P3 → P4 → P5 → P6 → P7 → P8，严格串行（ADR-004）。串行原因：先立新后拆旧；P5 前人为门与审查链必须已有替代；P6 的 hash 字段删除依赖 P5 已删除 closure 以外的全部消费者；P8 文档依赖前面批次删除了守护文档文本的测试。
 - **文件归属**：迁移表批次列唯一；多批次都需要改的共享文件按"最早一次改完、会打断存活消费者则推后"合并到一个批次（迁移表备注写合并原因）。上述合并原则仅对下述已获023具体用户批准的 move-map 元数据限定例外作唯一豁免（批准原件与范围见下述）；除此以外不得跨 Phase 分拆同路径修改。合并过程中的 14 条判据见迁移表 `#3-聚合裁定`（A-1～A-14）。
 - **既有创建/删除交接例外**：开工横幅 `CARD-06-IN-PROGRESS.md` 由 P1 创建（迁移表 MT-7-114，owner=P1），P8/T027 执行其声明的收口删除。为避免同一路径出现两个 Phase owner，它只登记在 P1 写集；这是本卡唯一一处"创建 Phase 与删除 Phase 不同"的路径，已在迁移表 A-14 登记。

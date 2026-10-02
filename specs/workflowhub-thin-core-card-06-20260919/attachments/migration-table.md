@@ -20,13 +20,13 @@
 | ARCHIVE | 35 |
 | DELETE | 397 |
 | MOVE | 2 |
-| NARROW | 271 |
+| NARROW | 272 |
 | NEW | 18 |
 | PENDING | 3 |
-| SURVIVOR | 125 |
+| SURVIVOR | 124 |
 | **合计** | **851** |
 
-**批次计数**
+**批次计数（冻结时原始字面，当前/本候选差量见末尾 §13）**
 
 | 批次 | 行数 | 写集文件数 |
 | --- | --- | --- |
@@ -76,7 +76,7 @@
 | MT-1-028 | runtime/evidence/host-session-transcript.mjs | tools/host/workflowhub-stage-agent-bridge（T1） | 无（职责删除） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 唯一消费者＝旧 bridge（AGENTS：不得再成为门） |
 | MT-1-029 | runtime/evidence/invocation-identity.mjs | runtime/evidence/write-boundary-preflight、tools/cli/task-bootstrap（T3） | 无（职责删除） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | 官方调用身份（runner dirty/source_clean）+ `identity/executions/*.json` 产物；删除后 task 目录不再产生 identity/ |
 | MT-1-030 | runtime/evidence/kernel.mjs | tools/cli/check-extensibility.mjs（T1） | 无（职责删除） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | `runKernel` 原始薄核心（**不是** task kernel）；AC-29 "kernel" 静态扫的误中点，须在片段 3/6 的扫描规则里说明 |
-| MT-1-031 | runtime/evidence/protected-paths.mjs | 无生产消费者（仅 core/__tests__/protected-paths.test.mjs，T1） | 无（职责删除） | DELETE | B3/P4 | git revert B3 提交 | G3-07 | 否 | 零生产消费者孤儿（原消费者 boundary-confirm 全仓已不存在）；G-3 候选待独立审查确认 |
+| MT-1-031 | runtime/evidence/protected-paths.mjs | 无生产消费者（仅 core/__tests__/protected-paths.test.mjs，T1） | 无（职责删除） | DELETE | B4/P5 | git revert B4/P5 提交（backup/card-06-b4 可读回原字节） | G3-07 | 否 | 零生产消费者孤儿（原消费者 boundary-confirm 全仓已不存在）；G-3 候选待独立审查确认 053冻结纠正候选待具体用户批准：唯一现时consumer core/__tests__/protected-paths.test.mjs:9 为 MT-6-023 DELETE/P5；仅延期到P5同批删除，不把零生产consumer说成零测试consumer，不新增工具①能力；G3-07提醒职责原退役意图不变。 |
 | MT-1-032 | runtime/evidence/quality-fact.mjs | core/task-close、freshness、review-record-route、stage-runner、task-kernel-implementation（T8） | 无（职责删除） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | quality fact 身份/摘要/发布（fact graph 写入点 `quality/facts/<sha256>.json`） |
 | MT-1-033 | runtime/evidence/quality-store.mjs | workflows/build-code/case-reconciliation（串 tools/cli/produce-final-current-snapshot，T8） | 无（职责删除） | DELETE | B4/P5 | git revert B4 提交 | — | 否 | AGENTS C6 已规定移除 active `quality/verify.v1` object graph；`validateVerifyLeaves`+`atomicCreate` 同删 |
 | MT-1-034 | runtime/evidence/research-report.mjs | runtime/stage/stage-handlers、runtime/task/task-kernel-implementation、tools/cli/stage-runtime(status)（T2） | 普通文件名调研报告（ADR-016）由本文件 NARROW 后承接 | NARROW | B4/P5 | git revert B4 提交 | — | 否 | 删 `researchReportHash` 与 `listCurrentResearchReports` 的 snapshot/material-scope 过滤；保留报告形状校验并按目录+文件名排序列举。调研报告 01 §2.3 建议 DELETE，本表按 ADR-016"新记录形态同步就位"取 NARROW（见存疑清单 S-1） |
@@ -273,17 +273,17 @@
 | MT-3-081 | skills/wh-review/contracts/workflowhub-result.v2.json | review-provider-client、manifest legacy | 3rd-review broker 协议 | NARROW | B4/P5 | `git revert <B4 提交>` | — | 否 | L7 `material_id` 64-hex 必填属材料身份哈希；去必填需与跨仓 3rd-review broker 同步（T019 coverage limit 之外）→ 见 §D-3 |
 | MT-3-082 | skills/wh-review/contracts/workflowhub-result.v3.json | review-provider-client、manifest `provider_result_contract` | 3rd-review broker 协议 | NARROW | B4/P5 | `git revert <B4 提交>` | — | 否 | 同 v2；当前 provider 结果契约，去 material_id 哈希需 broker 同步（§D-3） |
 | MT-3-083 | skills/wh-review/scripts/ac-evidence-summary.mjs | review-materials | verify-code OCR 的 AC 摘要校验 | NARROW | B4/P5 | `git revert <B4 提交>` | — | 否 | 去 `task-kernel-implementation#validateAcceptanceEvidence` 依赖（kernel 在 B4 删除）；AC 摘要事实逻辑保留 |
-| MT-3-084 | skills/wh-review/scripts/integration-review-subject.mjs | check-task-record-paths | 无 | DELETE | B3/P4 | `git checkout backup/card-06-b3 -- skills/wh-review/scripts/integration-review-subject.mjs` | — | 否 | 19 行纯转发 shim（runtime 同名模块）；ADR-019 集成审查已停派 |
+| MT-3-084 | skills/wh-review/scripts/integration-review-subject.mjs | check-task-record-paths | 无 | DELETE | B4/P5 | git revert B4/P5 提交（backup/card-06-b4 可读回原字节） | — | 否 | 19 行纯转发 shim（runtime 同名模块）；ADR-019 集成审查已停派 053冻结纠正候选待具体用户批准：review-runner.mjs:8/518当前真实import/默认调用；P5/T019先按MT-3-091 NARROW剥已退役integration/defaultwriter分支，再T023删除本转发层；ADR-019不恢复集成审查点。 |
 | MT-3-085 | skills/wh-review/scripts/lib/safe-id.mjs | 仅 skill-bundle.json:69 登记 | 无 | DELETE | B3/P4 | `git checkout backup/card-06-b3 -- skills/wh-review/scripts/lib/safe-id.mjs` | — | 否 | 孤儿：全仓无 importer |
-| MT-3-086 | skills/wh-review/scripts/review-input-bounds.mjs | 无 | 无 | DELETE | B3/P4 | `git checkout backup/card-06-b3 -- skills/wh-review/scripts/review-input-bounds.mjs` | — | 否 | 与 `runtime/review/review-input-bounds.mjs` 逐字节相同（重复） |
+| MT-3-086 | skills/wh-review/scripts/review-input-bounds.mjs | 无 | 无 | DELETE | B4/P5 | git revert B4/P5 提交（backup/card-06-b4 可读回原字节） | — | 否 | 原来源表述“与runtime逐字节相同”不成立；skills与runtime当前sha不等。simple-review-runner实际只需两处同语义export compactVerifyCodeMaterials：原材料直返 {materials,diff:null}，无本地压缩/体量拒绝 053冻结纠正候选待具体用户批准：simple-review-runner.mjs:19当前真实import compactVerifyCodeMaterials原材料直返seam；P5/T019先直连当前runtime/review/review-input-bounds.mjs（MT-1-049 SURVIVOR原路径），保持该所需export的原材料直返/返回shape；runtime额外gitDiffPath、compactReviewDiff(writeSet)的真实Git路径解析/写集过滤/错误guard保留，不宣称整文件或全部exports等价，再T023删除重复层，不创建替代模块。 |
 | MT-3-087 | skills/wh-review/scripts/review-materials.mjs | stage-runtime.mjs:74（`buildReviewMaterials`/`validateVerifyAcceptanceSummary`，OCR 使用） | 文档面 + OCR packet 组装 | NARROW | B4/P5 | `git revert <B4 提交>` | G3-15 | 否 | 保留 realpath/symlink/nlink 校验（L1119）、原子写（L1184）与 `redactProviderHostPaths`（L2151）；删 manifest 字节/hash 绑定（L1426-1452）与 `freezeCanonicalEvidence` 回执 readback 前置（L2283-2294） |
-| MT-3-088 | skills/wh-review/scripts/review-output.mjs | wh-review 内部 | 无 | DELETE | B3/P4 | `git checkout backup/card-06-b3 -- skills/wh-review/scripts/review-output.mjs` | — | 否 | 1 行 re-export（runtime/review/review-output.mjs） |
+| MT-3-088 | skills/wh-review/scripts/review-output.mjs | wh-review 内部 | 无 | DELETE | B4/P5 | git revert B4/P5 提交（backup/card-06-b4 可读回原字节） | — | 否 | 1 行 re-export（runtime/review/review-output.mjs） 053冻结纠正候选待具体用户批准：simple-review-runner:6、review-provider-client:7、review-runner:10当前真实import解析器；P5/T019先直连runtime/review/review-output.mjs（MT-1-050 SURVIVOR原路径）并保留解析/体量上限/失败事实，再T023删除re-export。 |
 | MT-3-089 | skills/wh-review/scripts/review-provider-client.mjs | simple-review-runner、wh-review-cli、provider-smoke | 文档面 broker 客户端 | NARROW | B4/P5 | `git revert <B4 提交>` | G3-15 | 是 | 保留 spawn 与私有路径/secret 脱敏（L55-58、L174-180、L897）；去 material_id/route hash 校验（L474/602/1769 对应机器在 T019 剥离） |
 | MT-3-090 | skills/wh-review/scripts/review-result.mjs | wh-review 内部 | 只读历史 | SURVIVOR | B4/P5 | `—（未改动）` | G3-11 | 否 | 旧结果写入（canonical-receipt-writer）+ accepted_risk；转只读、无新写者（报告标 ARCHIVE） |
-| MT-3-091 | skills/wh-review/scripts/review-runner.mjs | wh-review-cli | 只读历史 | SURVIVOR | B4/P5 | `—（未改动）` | — | 否 | 旧 runner；随 wh-review-cli 保留入口只读（报告标 ARCHIVE） |
+| MT-3-091 | skills/wh-review/scripts/review-runner.mjs | wh-review-cli.mjs:10/574（verifyFinal当前真实调用）、MT-6-058定向测试 | 文档面真实必要的只读结果查询/纯处置行为（P5改接后实测；不新建active history runtime） | NARROW | B4/P5 | git revert B4/P5 提交（原文件字节由backup/card-06-b4保留） | — | 否 | 053冻结纠正候选待具体用户批准：原SURVIVOR只读历史分类与真实顶层转发import/默认writer分支不符。P5/T019仅剥退役integration/defaultwriter、材料身份/快照绑定和旧转发import；真实必要只读查询及parse/schema错误行为保持，由wh-review-cli实际需要与MT-6-058定向测试核对。不得为保留旧代码恢复集成审查/新写者/active history runtime，不盲目删仍有consumer的纯处置函数；没有真实读者的分支明确退役。替代关系=必要读者直连当前parser/validator而非shim；本窄职责的删除条件=实际只读consumer经逐项证明退役或已有经过审查的替代，不凭文件名保留。 |
 | MT-3-092 | skills/wh-review/scripts/review-semantic-projection.mjs | wh-review 内部 | 只读历史 | SURVIVOR | B4/P5 | `—（未改动）` | — | 否 | 语义投影；转只读（报告标 ARCHIVE） |
 | MT-3-093 | skills/wh-review/scripts/review-source.mjs | stage-runtime.mjs:73（`captureReviewSource`，OCR 使用） | 同左（工作区 diff 采集） | NARROW | B4/P5 | `git revert <B4 提交>` | G3-15 | 否 | 保留 source/target realpath 边界（L69/206/220）；删 `captureExecutionSnapshot`/`snapshotTree`（L105-181）与 git-worktree-snapshot 依赖 |
-| MT-3-094 | skills/wh-review/scripts/schema-validator.mjs | wh-review 内部 | 无 | DELETE | B3/P4 | `git checkout backup/card-06-b3 -- skills/wh-review/scripts/schema-validator.mjs` | — | 否 | 1 行 re-export（runtime/review/schema-validator.mjs） |
+| MT-3-094 | skills/wh-review/scripts/schema-validator.mjs | wh-review 内部 | 无 | DELETE | B4/P5 | git revert B4/P5 提交（backup/card-06-b4 可读回原字节） | — | 否 | 1 行 re-export（runtime/review/schema-validator.mjs） 053冻结纠正候选待具体用户批准：ac-evidence-summary:6、review-runner:13当前真实import；P5/T019必要存活consumer直连当前runtime/review/schema-validator.mjs，保留必要校验与错误；实体MT-1-055仍NARROW/P6，仅其SCHEMAS收敛在P6，不前移实体owner。T023删shim，不新增validator。 |
 | MT-3-095 | skills/wh-review/scripts/simple-review-runner.mjs | stage-runtime.mjs:66（`runSimpleReview`，L1865/1951 非 OCR 默认 runRound）、run-wh-review-audit-e2e | 文档审查面执行者（ADR-018） | NARROW | B4/P5 | `git revert <B4 提交>` | G3-13、G3-15 | 是 | 保留文档面派发与脱敏；删 material_id 重建/比对（L474/602/1769）、managed status identity、脱敏以外 hash；信号/中断处理保留（G3-13） |
 | MT-3-096 | skills/wh-review/scripts/third-review-host-config.mjs | stage-runtime.mjs:75（`loadTrustedThirdReviewConfig`，OCR 与旧链都用）、simple-review-runner | 同左（可信宿主配置加载） | NARROW | B4/P5 | `git revert <B4 提交>` | G3-16 | 是 | **保留** `atomicReplace`（L75-78）与预期 hash 守卫的用户 `~/.config` 配置迁移/恢复（L26-151）、realpath/symlink 校验；只删其余 route/config hash |
 | MT-3-097 | skills/wh-review/scripts/wh-review-cli.mjs | runtime/distribution/runner-release.mjs、mini-task-runner | mini_task 改接后仅保留必要分支 | NARROW | B4/P5 | `git revert <B4 提交>` | G3-25 | 是 | 旧 CLI 入口；mini-task 改接窄工具④⑤后删 `mini_task.*` 分支，`build_prd` 分支随文档面保留（是否整体转只读待 P5 裁定） |
@@ -1334,3 +1334,13 @@ find <task> -type f | wc -l
 - **有限冻结规则待决**：本034尚需用户一次具体批准，允许仅MT-1-066/071/MT-6-138三条原数字主表行batch、相应rollback批次与误分类/consumer理由定点修正；final DELETE意图不变，freeze锚与其它原行/原计数字面不变。本次非append-only；ledger/residue只解析数字主表，MT-A叙事不能延期旧P2删除断言。此单次材料修正不造新reader/第二registry/永久许可，原d3cd/P1commitcbd可读原字节；023 metadata例外及Git总体授权不能代此新G-3具体答复。
 - **有效计数差量**：851path/DELETE总数不变。拟P2=110行、87DELETE、102write paths；P5=290行、153DELETE、270write paths；P6=183行、183write paths。§0旧冻结计数保留，本段解释新差量，不证明任何删除已实施或其它87已安全。
 - **存活义务与资源**：P5旧outcome/same-run对象可随实际producer/consumer退役；一般不伪造人回复/人工例外、失败/unknown不吞、覆盖限制与缺口真实披露仍需保持。P5 NARROW acceptance-evidence-validator MT-1-018须有相应实际验收coverage；窄记录/人读汇报只能证明实际覆盖，不按名字假替代。T023删除前逐条处置保护，存活义务缺替代/退役证明时按现G-3具体回报。P6同样先改catalog真实旧test声明并读回存活portable契约coverage。P2T010保留现check-anti-host/check-extensibility真实repo writer的定向exclusive/singleFork/noFileParallelism和普通组排除，直至实际writer移除/经证明隔离；不新增gate或claim新机制已实现。
+
+## 13. P4五个转发/孤儿DELETE延期与只读consumer窄改动议053（未批准、未应用）
+
+- **六项一次具体待决**：只修改原数字主表MT-1-031、MT-3-084/086/088/094的batch/rollback/consumer理由（DELETE意图不变，P4→P5）以及MT-3-091（SURVIVOR→NARROW，仍P5）；同步处置计数、P4/P5/index写集及本条解释。冻结锚点原行不变，其余数字主表行不改；未获053绑定的真实具体用户答复前，本候选规则不生效，不能借023/034或本地Git总体授权应用。
+- **真实consumer与唯一owner**：protected-paths仅现时MT-6-023测试consumer/P5，同批删除；压缩/解析/校验转发层的实际文档面consumer均在P5一次改接，integration shim的review-runner也在P5窄改。所有6path仍各一数字行/单owner。不是P4先NARROW、P5再写同path，也不新增共享例外/registry/schema/工具命令。
+- **G3四字段**：G3-07 consumer=core/__tests__/protected-paths.test.mjs:9；owner=P5/T023；action=模块与测试同批DELETE；安全职责=原提醒/零生产consumer分类不扩大。审查解析/脱敏/体量及校验的真实consumer=simple-review-runner/provider-client/ac-evidence-summary/必要readonly查询；owner=P5/T019改接、T023删除转发；action=保留必要业务guard/错误与parser体量限制，用当前既有实体直连，不吞错或改成pass；删除条件=只在全部实际存活consumer已改接/退役后删shim。G3-13/15/16信号、脱敏、路径边界、用户配置原子守卫维持既有义务和owner；G3-25 mini-task安全runner仍P5，本次不调batch。
+- **有效计数**：851path、DELETE397不变；NARROW272（+1）、SURVIVOR124（-1），其它类别不变。P4=50主表行/48声明写路径；P5=295主表行/276声明写路径（当前034后P5=290行/270路径）。§0批次表是冻结时原字面，不冒充当前计数；P2/P3/P6既有纠正不被本候选回退。
+- **先改接后删**：P5/T019按真实CLI与MT-6-058核对必要只读查询，退役integration/defaultwriter及其无consumer分支；必要完整材料直返/解析/校验分别直连MT-1-049/050与MT-1-055当前实体。MT-1-055实体依旧唯一owner P6，不提前改SCHEMAS；真正helper职责不退役、不改名复活被删shim。T023逐条原DELETE consumer读回/有意义针对性反证后再删除五路径。旧read-only文件存在不等于可忽略真实import。 所需compactVerifyCodeMaterials仅原材料直返、两文件不逐字节等同；runtime额外compactReviewDiff(writeSet)/gitDiffPath的解析、过滤与错误guard必须继续按真实consumer保留，不能拿无本地压缩seam替代或删除这些guard。
+- **材料技术纠正**：P4以ADR-024/025保留handoff方法、删除requirement-lineage；冻结B3 residue模式只有receipts.，不声称它覆盖run--action、sha文件名或问答IO；ledger只有DELETE无树/无存活引用与NEW存在，无wh-review幸存者断言。必要方法/幸存文档面/安全语义检查需独立实际读回和定向证据，missing保持incomplete，不改冻结oracle。
+- **未来执行**：本候选、用户答复、独立审查与实施是不同事实；全部未来literal命令/行为验证planned，未测试、未commit、未执行P4或P5。
