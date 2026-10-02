@@ -4,88 +4,33 @@
   "steps": [
     {
       "step_id": 1,
-      "step_slug": "load-parent-decision",
-      "order": 1,
-      "entry_conditions": [
-        { "kind": "portable_workflow_package", "uri_or_path": "workflows/build-prd/SKILL.md" },
-        { "kind": "portable_workflow_dependencies", "uri_or_path": "workflows/build-prd/skill-deps.yaml" },
-        { "kind": "parent_decision", "uri_or_path": "decision-log.md" }
-      ],
-      "completion_evidence": [
-        { "kind": "parent_decision", "uri_or_path": "decision-log.md" },
-        { "kind": "portable_workflow_outcome", "uri_or_path": "quality/evidence/portable-workflow-outcomes/build-prd/<sha256>.json" }
-      ],
-      "observable_result": "The portable workflow package and the authenticated parent decision and required source revisions are available, or concrete missing-source facts are reported.",
-      "depends_on": []
+      "step_slug": "load-confirmed-inputs",
+      "observable_result": "父决策和必要来源可读，完整旅程、需求范围、排除理由与未知项明确；不推断缺失确认。"
     },
     {
       "step_id": 2,
-      "step_slug": "draft-outline-and-task-map",
-      "order": 2,
-      "entry_conditions": [
-        { "kind": "parent_decision", "uri_or_path": "step://1" }
-      ],
-      "completion_evidence": [
-        { "kind": "outline_and_task_map", "uri_or_path": "workflow://build-prd/outline" },
-        { "kind": "portable_workflow_outcome", "uri_or_path": "quality/evidence/portable-workflow-outcomes/build-prd/<sha256>.json" }
-      ],
-      "observable_result": "The sole spec-prd content owner returns a versioned outline and result-oriented task map as a draft for real user review; no formal PRD body is written.",
-      "depends_on": [1]
+      "step_slug": "generate-outline-and-task-map",
+      "observable_result": "第一次spec-prd内容调用产大纲/任务地图，每需求有负责卡或明确排除；实际稿件已展示，未答仍为草稿。"
     },
     {
       "step_id": 3,
       "step_slug": "confirm-map-and-conditional-design",
-      "order": 3,
-      "entry_conditions": [
-        { "kind": "outline_and_task_map", "uri_or_path": "step://2" }
-      ],
-      "completion_evidence": [
-        { "kind": "map_or_design_confirmation", "uri_or_path": "workflow://build-prd/confirmation" },
-        { "kind": "portable_workflow_outcome", "uri_or_path": "quality/evidence/portable-workflow-outcomes/build-prd/<sha256>.json" }
-      ],
-      "observable_result": "The displayed map revision receives a real response; applicable UI design facts are bound to that revision, while non-UI or unavailable design remains explicit.",
-      "depends_on": [2]
+      "observable_result": "主会话保留地图及适用设计的真实答复；未展示、旧稿指代、拒绝或未答不当当前批准。"
     },
     {
       "step_id": 4,
       "step_slug": "expand-single-prd",
-      "order": 4,
-      "entry_conditions": [
-        { "kind": "map_or_design_confirmation", "uri_or_path": "step://3" }
-      ],
-      "completion_evidence": [
-        { "kind": "prd_draft_or_body", "uri_or_path": "workflow://build-prd/prd" },
-        { "kind": "portable_workflow_outcome", "uri_or_path": "quality/evidence/portable-workflow-outcomes/build-prd/<sha256>.json" }
-      ],
-      "observable_result": "The same spec-prd owner expands the confirmed revision into one PRD draft or reports the exact unresolved source, design, or confirmation gap; no second content writer is introduced.",
-      "depends_on": [3]
+      "observable_result": "地图/设计真实答复后第二次同一spec-prd作者写完整PRD，来源/语义一致，缺口保留，不新增第三内容调用。"
     },
     {
       "step_id": 5,
-      "step_slug": "confirm-final-displayed-draft",
-      "order": 5,
-      "entry_conditions": [
-        { "kind": "prd_draft_or_body", "uri_or_path": "step://4" }
-      ],
-      "completion_evidence": [
-        { "kind": "final_displayed_draft_confirmation", "uri_or_path": "workflow://build-prd/final-confirmation" },
-        { "kind": "portable_workflow_outcome", "uri_or_path": "quality/evidence/portable-workflow-outcomes/build-prd/<sha256>.json" }
-      ],
-      "observable_result": "The displayed draft is confirmed only when decision, source, map, and PRD revisions, displayed hash, display_before_reply, and human_approved all match; refusal, unanswered response, wrong revision, flag, or hash mismatch preserves draft status and reports the concrete gap.",
-      "depends_on": [4]
+      "step_slug": "review-and-confirm-final-draft",
+      "observable_result": "完整稿经wh-review文档建议和逐项处置，最终实际展示稿取得真实confirm；版本指代不清或未答保持draft。"
     },
     {
       "step_id": 6,
-      "step_slug": "report-facts-and-handoff",
-      "order": 6,
-      "entry_conditions": [
-        { "kind": "final_displayed_draft_confirmation", "uri_or_path": "step://5" }
-      ],
-      "completion_evidence": [
-        { "kind": "portable_workflow_outcome", "uri_or_path": "quality/evidence/portable-workflow-outcomes/build-prd/<sha256>.json" }
-      ],
-      "observable_result": "The existing reportFactsAndHandoff→readReflectionForReport save/read seam publishes one non-empty task/workflow-bound payload by raw-byte SHA and reports the validated readback; source, confirmation, review, analysis, reflection, delivery, and unavailable facts stay separate, and the handoff does not claim external host invocation or physical delivery without supplied evidence.",
-      "depends_on": [5]
+      "step_slug": "stage-handoff",
+      "observable_result": "主会话分开报告来源、问答、审查、未知项和交付事实，并写供子任务的人读交接；不声称未发生的host/发布/close。"
     }
   ]
 }

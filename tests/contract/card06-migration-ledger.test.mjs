@@ -120,19 +120,31 @@ function survivingTextFiles() {
   return out;
 }
 
-const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-// 模块 basename：去 .mjs/.js/.ts/.json/.md 等扩展；目录行（尾斜杠）取末级目录名。
-const moduleBaseName = (p) => {
-  const last = p.replace(/\/+$/, '').split('/').pop();
-  return last.replace(/\.(mjs|cjs|mts|js|ts|json|md|ya?ml|html)$/i, '');
-};
-// 存活引用模式：import/from/require（含动态 import()）的模块说明符以 basename 结尾
-//（允许任意相对前缀与可选扩展名）。纯静态文本扫描，可能误中注释/字符串，
-// AC-29 语义以人工审查与残留测试交叉兜底。
-const importRefRe = (base) =>
-  new RegExp(
-    `(?:from\\s*\\(\\s*|from\\s+|import\\s*\\(\\s*|import\\s+|require\\s*\\(\\s*)["'][^"']*${escapeRe(base)}(?:\\.(?:mjs|cjs|mts|js|ts|json|md|ya?ml|html))?["']`,
-  );
+// Resolve only literal references against the importing file. A shared basename
+// (for example another workflow's steps.json) is not this retired path. Aliases,
+// computed imports and template expressions need the declared AC-29 readback.
+function literalReferenceTargets(text, reader) {
+  const targets = [];
+  const refs = /\b(?:from\s+|import\s*(?:\(\s*)?|require\s*\(\s*)['"]([^'"\r\n]+)['"]/g;
+  for (const [, value] of text.matchAll(refs)) {
+    const specifier = value.split(/[?#]/, 1)[0];
+    let absolute;
+    if (specifier.startsWith('file:')) absolute = fileURLToPath(specifier);
+    else if (path.isAbsolute(specifier)) absolute = specifier;
+    else if (specifier.startsWith('./') || specifier.startsWith('../')) {
+      absolute = path.resolve(ROOT, path.dirname(reader), specifier);
+    } else if (SEVEN_ROOTS.some((root) => specifier.startsWith(`${root}/`))) {
+      absolute = path.resolve(ROOT, specifier);
+    } else continue; // Bare/aliased module identities cannot be resolved here.
+    const relative = path.relative(ROOT, absolute).replaceAll('\\', '/');
+    if (relative && !relative.startsWith('../') && !path.isAbsolute(relative)) targets.push(relative);
+  }
+  return targets;
+}
+const referenceTargetsDeleted = (reference, retired) => retired.endsWith('/')
+  ? reference === retired.slice(0, -1) || reference.startsWith(retired)
+  : reference === retired || (!path.extname(reference)
+    && reference === retired.replace(/\.(mjs|cjs|mts|js|ts|json|md|ya?ml|html)$/i, ''));
 
 describe('card06 migration ledger（AC-27/AC-52）', () => {
   describe('台账结构（不分批，任何时候成立）', () => {
@@ -228,14 +240,12 @@ describe('card06 migration ledger（AC-27/AC-52）', () => {
           expect({ onDisk, tracked, path: r.path }, '被删路径仍存在于仓库文件树').toEqual({ onDisk: false, tracked: false, path: r.path });
         });
         it(`DELETE ${r.path} 无存活引用`, () => {
-          const base = moduleBaseName(r.path);
-          const re = importRefRe(base);
           const hits = [];
           for (const rel of survivingTextFiles()) {
             const text = fs.readFileSync(path.join(ROOT, rel), 'utf8');
-            if (re.test(text)) hits.push(rel);
+            if (literalReferenceTargets(text, rel).some((reference) => referenceTargetsDeleted(reference, r.path))) hits.push(rel);
           }
-          expect(hits, `存活文件仍引用已删模块 ${base}（${r.path}）`).toEqual([]);
+          expect(hits, `存活文件仍引用具体已删路径 ${r.path}`).toEqual([]);
         });
       }
       for (const r of batchNews) {

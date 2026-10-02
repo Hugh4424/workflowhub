@@ -159,26 +159,70 @@ const moduleBaseName = (p) => {
   return last.replace(/\.(mjs|cjs|mts|js|ts|json|md|ya?ml|html)$/i, '');
 };
 
-// A basename collision is only a new implementation when it is not an
-// independently declared, pre-existing peer. Use the existing frozen migration
-// anchor for path existence, never current bytes or a new tree snapshot.
+// Use the existing freeze object only to classify individual basename peers;
+// no tree snapshot, new identity record or blanket surviving-file exclusion.
 const frozenMatch = fs.readFileSync(TABLE, 'utf8').match(/\*\*冻结记录\*\*：`([a-f0-9]{40})`/);
 if (!frozenMatch) throw new Error('迁移表冻结记录缺失，无法区分既存同名文件与新实现');
 const FROZEN_COMMIT = frozenMatch[1];
-const peerExistenceAtFreeze = new Map();
-function isDeclaredPreexistingPeer(rel) {
-  const peer = ROWS.find((row) => {
-    if (row.path === rel && ['NARROW', 'SURVIVOR'].includes(row.disposition)) return true;
-    if (!row.disposition.startsWith('MOVE→')) return false;
-    return row.path === rel || row.disposition.slice('MOVE→'.length) === rel;
-  });
-  if (!peer) return false; // NEW, DELETE, unregistered, or merely asserted peers remain candidates.
-  if (!peerExistenceAtFreeze.has(peer.path)) {
-    const paths = git(['ls-tree', '-z', '--full-tree', '--name-only', FROZEN_COMMIT, '--', peer.path]).split('\0');
-    peerExistenceAtFreeze.set(peer.path, paths.includes(peer.path));
+const frozenBlobs = new Map();
+function frozenBlob(rel) {
+  if (!frozenBlobs.has(rel)) {
+    const entries = git(['ls-tree', '-z', '--full-tree', '-l', FROZEN_COMMIT, '--', rel]).split('\0');
+    const entry = entries.find((value) => value.slice(value.indexOf('\t') + 1) === rel);
+    const match = entry?.match(/^100(?:644|755) blob ([a-f0-9]{40,64})\s+(\d+)\t/s);
+    frozenBlobs.set(rel, match ? { oid: match[1], bytes: Number(match[2]) } : null);
   }
-  return peerExistenceAtFreeze.get(peer.path);
+  return frozenBlobs.get(rel);
 }
+function peerOwner(rel) {
+  return ROWS.find((row) => row.path === rel)
+    ?? ROWS.filter((row) => row.path.endsWith('/') && rel.startsWith(row.path))
+      .sort((left, right) => right.path.length - left.path.length)[0];
+}
+function isPreexistingPeer(rel, retired) {
+  const owner = peerOwner(rel);
+  if (owner?.disposition === 'NEW') return false;
+  const currentOid = execFileSync('git', ['hash-object', '--stdin'], {
+    cwd: ROOT, input: fs.readFileSync(path.join(ROOT, rel)), encoding: 'utf8',
+    stdio: ['pipe', 'pipe', 'pipe'],
+  }).trim();
+  const original = frozenBlob(rel);
+  if (original?.oid === currentOid) return true; // Including unchanged future DELETE/PENDING and omission peers.
+  const retiredBlob = frozenBlob(retired);
+  if (retiredBlob?.bytes > 0 && retiredBlob.oid === currentOid) return false; // Whole retired implementation copied back.
+  const phase = owner ? batchIndex(owner.batch) : -1;
+  if (original && owner?.disposition === 'NARROW' && phase >= 0 && phase <= CURRENT) return true;
+  const move = ROWS.find((row) => row.disposition.startsWith('MOVE→')
+    && row.disposition.slice('MOVE→'.length) === rel);
+  return Boolean(move && batchIndex(move.batch) >= 0 && batchIndex(move.batch) <= CURRENT
+    && frozenBlob(move.path)?.oid === currentOid);
+}
+
+// Resolve only literal references against the importing file. A shared basename
+// (for example another workflow's steps.json) is not this retired path. Aliases,
+// computed imports and template expressions need the declared AC-29 readback.
+function literalReferenceTargets(text, reader) {
+  const targets = [];
+  const refs = /\b(?:from\s+|import\s*(?:\(\s*)?|require\s*\(\s*)['"]([^'"\r\n]+)['"]/g;
+  for (const [, value] of text.matchAll(refs)) {
+    const specifier = value.split(/[?#]/, 1)[0];
+    let absolute;
+    if (specifier.startsWith('file:')) absolute = fileURLToPath(specifier);
+    else if (path.isAbsolute(specifier)) absolute = specifier;
+    else if (specifier.startsWith('./') || specifier.startsWith('../')) {
+      absolute = path.resolve(ROOT, path.dirname(reader), specifier);
+    } else if (SEVEN_ROOTS.some((root) => specifier.startsWith(`${root}/`))) {
+      absolute = path.resolve(ROOT, specifier);
+    } else continue; // Bare/aliased module identities cannot be resolved here.
+    const relative = path.relative(ROOT, absolute).replaceAll('\\', '/');
+    if (relative && !relative.startsWith('../') && !path.isAbsolute(relative)) targets.push(relative);
+  }
+  return targets;
+}
+const referenceTargetsDeleted = (reference, retired) => retired.endsWith('/')
+  ? reference === retired.slice(0, -1) || reference.startsWith(retired)
+  : reference === retired || (!path.extname(reference)
+    && reference === retired.replace(/\.(mjs|cjs|mts|js|ts|json|md|ya?ml|html)$/i, ''));
 
 // ---- 认证残留模式归属（按迁移表备注中最贴近的删除批次；用户指示「B3 组查 skills
 // 文本；B5/P6 组查 catalog/bundle hash 字段」） ----
@@ -221,24 +265,22 @@ describe('thin-core residue（AC-29）', () => {
     describe(label, () => {
       for (const r of rows) {
         // 断言 1：换名复活——已删模块 basename 不得作为同名新文件出现在七类根
-        //（原扫描面与排除清单不变）；允许主表声明且冻结时已存在的独立NARROW/SURVIVOR/MOVE peer，
-        // NEW、未登记、冻结后新增或其它DELETE peer仍不得成为「同名不同路径的新实现」。
+        //（原扫描面与排除清单不变）；逐path/blob核既存peer及已实施NARROW/MOVE。
+        // 新path/NEW、未来或未声明peer的字节改动、完整退休blob搬回仍是候选；部分语义拷贝需AC-29人工核对。
         it(`已删模块 ${r.path} 无同名新实现（换名复活）`, () => {
           const base = moduleBaseName(r.path);
           const reborn = allSevenRootFiles().filter((rel) => rel !== r.path
-            && moduleBaseName(rel) === base && !isDeclaredPreexistingPeer(rel));
+            && moduleBaseName(rel) === base && !isPreexistingPeer(rel, r.path));
           expect(reborn, `已删模块 ${base} 以新路径复活：${reborn.join(', ')}`).toEqual([]);
         });
         // 断言 2：调用点——存活生产代码不得出现 from "...<被删模块路径>" 或
         // import("<被删模块路径>") 的静态文本。动态拼接的 import 静态扫不到，
         // 由 AC-29 自举（人工审查 + 关键词交叉扫描）补足。
         it(`存活生产代码无 ${r.path} 静态调用点`, () => {
-          const esc = escapeRe(r.path);
-          const re = new RegExp(`(?:from\\s+["'][^"']*${esc}["']|import\\s*\\(\\s*["'][^"']*${esc}["'])`);
           const hits = [];
           for (const rel of productionCodeFiles()) {
             const text = fs.readFileSync(path.join(ROOT, rel), 'utf8');
-            if (re.test(text)) hits.push(rel);
+            if (literalReferenceTargets(text, rel).some((reference) => referenceTargetsDeleted(reference, r.path))) hits.push(rel);
           }
           expect(hits, `存活生产代码仍静态引用 ${r.path}：${hits.join(', ')}`).toEqual([]);
         });

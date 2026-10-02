@@ -2,27 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import yaml from "js-yaml";
 import { resolveSkillPackage } from "../adapters/local-skill-resolver.mjs";
-import { validateStepManifest } from "./step-manifest.mjs";
 
-const IDENTITY_FIELDS = Object.freeze(["task_id", "stage", "workspace_path"]);
 const OUTCOME_STATUSES = new Set(["completed", "skipped", "not_applicable", "incomplete", "unavailable"]);
-const GENERIC_CONSUMER = /(?:executed|package|event|monitoring|generic|stage-outcome)/i;
-const FORMAL_CONSUMERS = new Set([
-  "stage-handlers#clarifyFacts",
-  "stage-handlers#testFacts",
-  "stage-handlers#researchFacts",
-  "stage-handlers#officialStageHandler(\"make-decision\")",
-  "stage-handlers#officialStageHandler(\"build-spec\")",
-  "stage-handlers#officialStageHandler(\"build-plan\")",
-  "stage-handlers#officialStageHandler(\"verify-code\")",
-  "stage-handlers#safeReviewFacts",
-  "stage-handlers#controlledBrowserQaFacts",
-  "stage-handlers#buildCodeContractFacts",
-  "stage-handlers#codeReviewFacts",
-  "stage-runner#validateStageSpecAnalyzeOutcome",
-  "stage-runner#runStageEndReflection",
-  "stage-content-contracts#validateComponentQualityMap",
-]);
 
 function object(value, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} must be an object`);
@@ -32,39 +13,6 @@ function object(value, label) {
 function text(value, label) {
   if (typeof value !== "string" || value.trim() === "") throw new TypeError(`${label} must be non-empty`);
   return value.trim();
-}
-
-function identity(value) {
-  const current = object(value, "skill consumer identity");
-  for (const field of IDENTITY_FIELDS) text(current[field], `skill consumer identity.${field}`);
-  return Object.freeze(Object.fromEntries(IDENTITY_FIELDS.map((field) => [field, current[field]])));
-}
-
-export function validateSkillConsumerDescriptor(value, label = "skill consumer") {
-  const descriptor = object(value, label);
-  const target = text(descriptor.target, `${label}.target`);
-  if (!FORMAL_CONSUMERS.has(target) || GENERIC_CONSUMER.test(target)) {
-    throw new Error(`${label}.target must name one concrete formal consumer: ${target}`);
-  }
-  if (!Array.isArray(descriptor.inputs) || descriptor.inputs.length === 0
-      || descriptor.inputs.some((input) => typeof input !== "string" || input.trim() === "" || GENERIC_CONSUMER.test(input))) {
-    throw new Error(`${label}.inputs must list concrete result/material inputs`);
-  }
-  if (descriptor.inputs.some((input) => input.includes("="))) {
-    throw new Error(`${label}.inputs must use concrete result/material inputs; selector inputs are unsupported`);
-  }
-  if (!Array.isArray(descriptor.identity)
-      || descriptor.identity.length !== IDENTITY_FIELDS.length
-      || descriptor.identity.some((field, index) => field !== IDENTITY_FIELDS[index])) {
-    throw new Error(`${label}.identity must bind task_id, stage and workspace_path`);
-  }
-  if (descriptor.result !== undefined) text(descriptor.result, `${label}.result`);
-  return Object.freeze({
-    target,
-    inputs: Object.freeze(descriptor.inputs.map((input) => input.trim())),
-    identity: IDENTITY_FIELDS,
-    ...(descriptor.result === undefined ? {} : { result: descriptor.result.trim() }),
-  });
 }
 
 /**
@@ -89,22 +37,17 @@ export function validateSkillOutcomeLifecycle(value, label = "skill outcome") {
 }
 
 /**
- * Authenticate the small declaration-to-result seam before a stage outcome is
- * accepted. This is an in-memory binding only; it creates no second record.
+ * Retain the reported lifecycle without requiring formal consumer selectors
+ * or task identity declarations in a portable method manifest.
  */
-export function validateSkillConsumerBinding({ dependency, outcome, identity: currentIdentity } = {}) {
-  const descriptor = validateSkillConsumerDescriptor(dependency?.consumer, `skill ${dependency?.name ?? "unknown"} consumer`);
+export function validateSkillConsumerBinding({ outcome } = {}) {
   const value = validateSkillOutcomeLifecycle(outcome);
   if (value.status !== "completed") text(value.reason ?? value.error, "skill outcome reason");
-  const boundIdentity = identity(currentIdentity);
   return Object.freeze({
     status: value.status,
     trigger: value.trigger,
     executed: value.executed,
-    consumer: descriptor.target,
-    inputs: descriptor.inputs,
-    ...(descriptor.result === undefined ? {} : { result: descriptor.result }),
-    identity: boundIdentity,
+    ...(value.status === "completed" ? {} : { reason: value.reason ?? value.error }),
   });
 }
 
@@ -116,11 +59,11 @@ function validateStageSkillManifest(manifest, stage) {
     const name = text(dependency.name, `${stage} skill manifest entry ${index + 1}.name`);
     if (names.has(name)) throw new Error(`${stage}: duplicate skill dependency: ${name}`);
     names.add(name);
-    // Several declared skills may intentionally share one formal consumer
-    // (for example the three test-routing skills all feed testFacts).  The
-    // invariant is one concrete consumer per skill, not one skill per
-    // consumer. Duplicate skill names remain rejected above.
-    validateSkillConsumerDescriptor(dependency.consumer, `${stage}/${name} consumer`);
+    const locator = text(dependency.path, `${stage}/${name}.path`);
+    text(dependency.trigger, `${stage}/${name}.trigger`);
+    if (path.isAbsolute(locator)) throw new Error(`skill locator must be relative: ${locator}`);
+    if (locator.split(/[\\/]/).includes("..")) throw new Error(`skill locator may not traverse: ${locator}`);
+    if (!locator.startsWith("skills/")) throw new Error(`skill path escapes package skills/: ${locator}`);
   });
 }
 
@@ -141,8 +84,6 @@ export function loadStageSkillStepManifest(packageRoot, stage) {
   const relative = `workflows/${stage}/steps.json`;
   const source = path.join(root, relative);
   const manifest = JSON.parse(fs.readFileSync(source, "utf8"));
-  const validation = validateStepManifest(manifest);
-  if (!validation.ok) throw new Error(`${stage}: invalid step manifest: ${validation.errors.join("; ")}`);
   return { root, relative, source, manifest };
 }
 

@@ -1,12 +1,70 @@
 stage: verify-code
 skills:
-  - { name: frontend-component-quality, path: skills/frontend-component-quality/SKILL.md, execution: inline, trigger: ui_acceptance, bundle: skills/frontend-component-quality/skill-bundle.json, owner: stage, consumer: { target: "stage-content-contracts#validateComponentQualityMap", inputs: ["contract_facts.component_quality_map"], identity: ["task_id", "stage", "workspace_path"], result: "facts.component_quality" } }
-  - { name: stage-reflection, path: skills/stage-reflection/SKILL.md, execution: inline, trigger: on_stage_end, bundle: skills/stage-reflection/skill-bundle.json, owner: stage, consumer: { target: "stage-runner#runStageEndReflection", inputs: ["artifacts.decision-log.md", "artifacts.spec.md", "artifacts.phases/index.md", "artifacts.phases/P<n>.md"], identity: ["task_id", "stage", "workspace_path"], result: "stage_reflection" } }
+  - name: frontend-component-quality
+    path: skills/frontend-component-quality/SKILL.md
+    trigger: ui_acceptance
+  - name: stage-handoff
+    path: skills/stage-handoff/SKILL.md
+    trigger: stage_end_human_handoff
+  - name: wh-review
+    path: skills/wh-review/SKILL.md
+    trigger: ocr_missing_or_version_below_1_12_9_same_code_scope
+  - name: spec-analyze
+    path: skills/spec-analyze/SKILL.md
+    trigger: upstream_material_risk_read_only
 runtime_capabilities:
-  - { id: node, kind: cli, version_policy: ">=24", doctor: [node, --version], required_when: always, absence_semantics: diagnostic }
-  - { id: shell, kind: cli, doctor: [sh, -c, "exit 0"], required_when: always, absence_semantics: diagnostic }
-  - { id: git, kind: cli, doctor: [git, --version], required_when: always, absence_semantics: diagnostic }
-  - { id: target-test-command, kind: command, doctor: [target-test-command, --version], required_when: always, absence_semantics: diagnostic }
-  - { id: browser-cli, kind: cli, doctor_any: [[agent-browser, --version], [browser-use, doctor]], required_when: ui_acceptance, absence_semantics: diagnostic }
+  - id: node
+    kind: cli
+    version_policy: '>=24'
+    doctor:
+      - node
+      - '--version'
+    required_when: always
+    absence_semantics: diagnostic
+  - id: shell
+    kind: cli
+    doctor:
+      - sh
+      - '-c'
+      - exit 0
+    required_when: always
+    absence_semantics: diagnostic
+  - id: git
+    kind: cli
+    doctor:
+      - git
+      - '--version'
+    required_when: always
+    absence_semantics: diagnostic
+  - id: target-test-command
+    kind: command
+    doctor:
+      - target-test-command
+      - '--version'
+    required_when: always
+    absence_semantics: diagnostic
+  - id: browser-cli
+    kind: cli
+    doctor_any:
+      - - agent-browser
+        - '--version'
+      - - browser-use
+        - doctor
+    required_when: ui_acceptance
+    absence_semantics: diagnostic
 external_capabilities:
-  - { id: ocr-cli, kind: cli, doctor: [ocr, --version], required_when: code_review, absence_semantics: diagnostic }
+  - id: ocr-cli
+    kind: cli
+    doctor:
+      - ocr
+      - '--version'
+    required_when: code_review
+    absence_semantics: diagnostic
+    version_policy: '>=1.12.9'
+  - id: wh-review-provider
+    kind: review
+    doctor:
+      - workflowhub-capability
+      - wh-review-provider
+    required_when: ocr_missing_or_version_below_1_12_9_fallback
+    absence_semantics: diagnostic
