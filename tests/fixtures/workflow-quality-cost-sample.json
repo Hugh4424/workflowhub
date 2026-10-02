@@ -1,0 +1,56 @@
+{
+  "schema_version": "workflowhub-cost-comparison-fixture.v1",
+  "sample_id": "WH-DELIVERY-FLOW-COST-001",
+  "input_hash": "raw-requirement-decision-spec-packet-v1",
+  "case_set_hash": "same-current-snapshot-case-set-v1",
+  "grain": "task-stage-step-skill",
+  "source_contract": "workflowhub-execution-facts.v1",
+  "baseline": {
+    "variant_id": "baseline-before-delivery-flow-v1",
+    "source": "current-task-recorded-facts-before-this-implementation",
+    "execution_id": "baseline-recorded-facts",
+    "input_hash": "raw-requirement-decision-spec-packet-v1",
+    "case_set_hash": "same-current-snapshot-case-set-v1",
+    "metrics": {
+      "interaction": { "status": "recorded", "value": "serial-frontier-and-late-clarification" },
+      "read": { "status": "recorded", "value": "repeated-material-and-history-reads" },
+      "provider_wait": { "status": "recorded", "value": "long-review-wait-and-missing-terminal-fact" },
+      "test": { "status": "recorded", "value": "repeated-full-reruns-after-snapshot-or-record-only-change" },
+      "review": { "status": "recorded", "value": "packet-repair-and-repeat-review-cost" },
+      "rework": { "status": "recorded", "value": "late-semantic-and-ui-rework" },
+      "user_wait": { "status": "recorded", "value": "serial-question-and-status-roundtrips" },
+      "tokens": { "status": "unavailable", "value": null, "reason": "historical-token-distribution-not-available" }
+    },
+    "quality_facts": ["historical-three-task-audit", "decision-log-source-groups"]
+  },
+  "candidate": {
+    "variant_id": "delivery-flow-quality-v1",
+    "source": "current-task-implementation-snapshot",
+    "execution_id": "candidate-current-snapshot",
+    "input_hash": "raw-requirement-decision-spec-packet-v1",
+    "case_set_hash": "same-current-snapshot-case-set-v1",
+    "metrics": {
+      "interaction": { "status": "observed", "value": "batched-independent-frontier" },
+      "read": { "status": "observed", "value": "reused-four-material-and-stage-scoped-packets" },
+      "provider_wait": { "status": "observed", "value": "broker-terminal-fact-or-truthful-unavailable" },
+      "test": { "status": "observed", "value": "phase-scoped-and-final-aggregate-routes" },
+      "review": { "status": "observed", "value": "current-snapshot-material-bound-review" },
+      "rework": { "status": "observed", "value": "same-stage-repair-and-phase-local-change" },
+      "user_wait": { "status": "observed", "value": "partial-reply-rerank-and-resume" },
+      "tokens": { "status": "unavailable", "value": null, "reason": "comparable-token-population-not-captured" }
+    },
+    "quality_facts": ["phase-receipts", "current-review-provenance", "stage-outcome-facts"]
+  },
+  "comparison": {
+    "status": "observation_only",
+    "same_input_hash": true,
+    "same_case_set_hash": true,
+    "quality_preserved": true,
+    "requirement_coverage_preserved": true,
+    "step_coverage_preserved": true,
+    "review_provenance_preserved": true,
+    "token_delta": "unavailable",
+    "do_not_claim": ["fixed token savings", "perfect historical replay", "provider always available"],
+    "reason": "historical duration is diagnostic only and exact token distribution is unavailable"
+  }
+}
