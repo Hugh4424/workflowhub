@@ -1,0 +1,142 @@
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+import yaml from "js-yaml";
+
+const readStage = (stage) => readFileSync(new URL(`../workflows/${stage}/SKILL.md`, import.meta.url), "utf8");
+const hasAny = (text, patterns) => patterns.some((pattern) => pattern.test(text));
+
+describe("review policy", () => {
+  it("keeps authoring review separate from the direct OCR code-review surfaces", () => {
+    const buildSpec = yaml.load(readFileSync(new URL("../workflows/build-spec/skill-deps.yaml", import.meta.url), "utf8"));
+    const buildPlan = yaml.load(readFileSync(new URL("../workflows/build-plan/skill-deps.yaml", import.meta.url), "utf8"));
+    const buildCode = yaml.load(readFileSync(new URL("../workflows/build-code/skill-deps.yaml", import.meta.url), "utf8"));
+    const verifyCode = yaml.load(readFileSync(new URL("../workflows/verify-code/skill-deps.yaml", import.meta.url), "utf8"));
+    const buildPlanNames = buildPlan.skills.map((entry) => entry.name);
+    expect(buildPlanNames).toEqual(expect.arrayContaining([
+      "spec-research", "spec-clarify", "spec-specify", "spec-plan", "spec-tasks",
+      "testing-system-blueprint", "test-routing-advisor", "wh-review", "spec-analyze", "stage-reflection",
+    ]));
+    expect(buildPlanNames.filter((name) => name === "wh-review")).toHaveLength(1);
+    expect(readStage("build-spec")).toMatch(/pre[- ]cohort|historical[\s\S]{0,80}read-only|历史[\s\S]{0,80}只读/i);
+    expect(buildCode.skills.map((entry) => entry.name)).toEqual([
+      "test-routing-advisor", "backend-testing", "frontend-testing",
+      "frontend-component-quality", "fullstack-slice-testing", "spec-analyze", "stage-reflection", "stage-handoff",
+    ]);
+    expect(verifyCode.skills.map((entry) => entry.name)).toEqual(["frontend-component-quality", "stage-reflection"]);
+    for (const manifest of [buildSpec, buildPlan]) {
+      expect(manifest.skills.map((entry) => entry.name)).toContain("wh-review");
+      expect(manifest.skills.every((entry) => entry.owner === "stage")).toBe(true);
+      expect(manifest.skills.every((entry) => !("invocation" in entry) && !("dispatch" in entry))).toBe(true);
+      expect([...manifest.runtime_capabilities, ...manifest.external_capabilities]
+        .every((entry) => entry.absence_semantics === "diagnostic")).toBe(true);
+    }
+    for (const manifest of [buildCode, verifyCode]) {
+      expect(manifest.skills.map((entry) => entry.name)).not.toContain("wh-review");
+      expect(manifest.external_capabilities.map((entry) => entry.id)).not.toContain("wh-review-provider");
+      expect([...manifest.runtime_capabilities, ...manifest.external_capabilities]
+        .every((entry) => entry.absence_semantics === "diagnostic")).toBe(true);
+    }
+    expect(verifyCode.external_capabilities.map((entry) => entry.id)).toContain("ocr-cli");
+  });
+
+  it("RED: replaces the old 15 + 13 authoring chain with the authoritative 13 build-plan steps", () => {
+    const steps = JSON.parse(readFileSync(new URL("../workflows/build-plan/steps.json", import.meta.url), "utf8")).steps;
+    const expected = [
+      "read-current-materials",
+      "conditional-spec-research",
+      "spec-clarify",
+      "spec-specify",
+      "conditional-ui-readiness",
+      "spec-plan",
+      "testing-system-blueprint",
+      "test-routing-advisor",
+      "merged-review",
+      "main-agent-disposes-findings",
+      "final-spec-analyze",
+      "publish-result-and-confirm",
+      "stage-reflection",
+    ];
+    expect(steps.map(({ step_slug }) => step_slug)).toEqual(expected);
+    expect(new Set(expected)).toHaveLength(13);
+
+    const workflow = readStage("build-plan");
+    for (const key of Array.from({ length: 12 }, (_, index) => `K${index + 1}`)) {
+      expect(workflow, `${key} consumer/oracle mapping`).toContain(key);
+    }
+    expect(workflow).toMatch(/single phase engineering authority|sole current authoring chain|单一 phase 工程权威/i);
+    expect(workflow).toMatch(/pure pointer .*index|纯指针.*索引/i);
+  });
+
+  it.each(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"])("%s keeps review as quality evidence, not work permission", (stage) => {
+    const skill = readStage(stage);
+    expect(hasAny(skill, [
+      /review is a quality fact/i,
+      /review[^.\n]*(?:quality fact|质量事实)/i,
+      /review fact/i,
+    ]), `${stage}: review is evidence`).toBe(true);
+    expect(hasAny(skill, [
+      /not permission to continue working/i,
+      /not permission to\s+continue working/i,
+      /not\s+permission to continue working/i,
+      /not a progression gate/i,
+      /limit only the completion claim/i,
+      /does not prohibit code or material repair/i,
+      /缺质量事实只限制完成声明，不限制继续验收和修复/,
+    ]), `${stage}: review does not license or block work`).toBe(true);
+    expect(skill).toContain("unavailable");
+    expect(skill).toContain("pass");
+  });
+
+  it("keeps planning context and evidence maps optional", () => {
+    const matrix = JSON.parse(readFileSync(new URL("../runtime/review/stage-materials.json", import.meta.url), "utf8"));
+    const rules = [
+      matrix.stages["make-decision"].tracks.detail,
+      matrix.stages["build-spec"],
+      matrix.stages["build-plan"],
+    ];
+    for (const rule of rules) {
+      expect(rule.v2_required_maps).toEqual([]);
+      expect(rule.optional).toEqual(expect.arrayContaining(["context_map", "evidence_map"]));
+      expect(rule.required).not.toEqual(expect.arrayContaining(["context_map", "evidence_map"]));
+    }
+  });
+
+  it("RED: keeps OI consumers advisory and does not add a second authority or confirmation gate", () => {
+    const workflow = readStage("make-decision");
+    const review = readFileSync(new URL("../skills/wh-review/contracts/make-decision.md", import.meta.url), "utf8");
+    expect(workflow).toMatch(/one current OI|唯一.*OI/i);
+    expect(workflow).toMatch(/direction[\s\S]{0,500}questions-only/);
+    expect(workflow).toMatch(/detail[\s\S]{0,700}(?:each OI|逐.*OI|terminal|终态)/i);
+    expect(workflow).toMatch(/`approve-decision`[\s\S]{0,180}(?:existing|既有)/i);
+    expect(workflow).toMatch(/not[\s\S]{0,80}fifth material|不[\s\S]{0,80}第五份材料/i);
+    expect(review).toMatch(/advisory quality facts|quality facts|质量事实/i);
+    expect(review).not.toMatch(/review.*permission|审查.*推进资格/i);
+  });
+
+  it("does not require snapshot, replacement, or continuation controls in review materials", () => {
+    const matrix = JSON.parse(readFileSync(new URL("../runtime/review/stage-materials.json", import.meta.url), "utf8"));
+    const serialized = JSON.stringify(matrix).toLowerCase();
+
+    for (const retiredControl of [
+      "snapshot",
+      "checkpoint",
+      "replacement",
+      "continuation",
+      "successor",
+      "rebind",
+    ]) {
+      expect(serialized, retiredControl).not.toContain(retiredControl);
+    }
+  });
+
+  it("keeps unavailable review visible while same-task work continues", () => {
+    for (const stage of ["build-spec", "build-plan", "build-code", "verify-code"]) {
+      const skill = readStage(stage);
+      expect(skill).toContain("unavailable");
+      expect(skill).toMatch(/same task|same-task|同一 task/i);
+    }
+    expect(readStage("build-plan")).toMatch(/does not create a new task/i);
+    expect(readStage("build-code")).toMatch(/never require a new task/i);
+    expect(readStage("verify-code")).toMatch(/回同一 task 修复，不新建任务/);
+  });
+});

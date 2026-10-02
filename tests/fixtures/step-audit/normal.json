@@ -1,0 +1,32 @@
+{
+  "fixture_id": "phase2-normal",
+  "workflow_run_id": "run-phase2-001",
+  "stage_slug": "bc",
+  "journal_events": [
+    {
+      "event_type": "step_entry",
+      "workflow_run_id": "run-phase2-001",
+      "stage_slug": "bc",
+      "step_id": "bc.work.1",
+      "attempt_id": "attempt-1",
+      "journal_entry_id": "entry-1",
+      "timestamp": "2026-07-13T00:00:00.000Z",
+      "entry_evidence": { "kind": "manifest", "uri_or_path": "workflows/build-code/steps.json" },
+      "prev_step_id": null,
+      "next_step_id": null
+    },
+    {
+      "event_type": "step_exit",
+      "workflow_run_id": "run-phase2-001",
+      "stage_slug": "bc",
+      "step_id": "bc.work.1",
+      "attempt_id": "attempt-1",
+      "exit_journal_entry_id": "entry-1",
+      "timestamp": "2026-07-13T00:01:00.000Z",
+      "terminal_status": "success",
+      "completion_evidence": { "kind": "test", "uri_or_path": "evidence/phase-2-GREEN.json" },
+      "verdict": "passed",
+      "next_step_id": null
+    }
+  ]
+}

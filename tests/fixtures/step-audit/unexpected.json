@@ -1,0 +1,56 @@
+{
+  "fixture_id": "phase2-unexpected-observed-step",
+  "workflow_run_id": "run-phase2-unexpected",
+  "stage_slug": "bc",
+  "audit_context": {
+    "manifest": {
+      "expected_steps": [
+        { "step_id": "bc.work.1", "attempt_id": "attempt-1" }
+      ]
+    }
+  },
+  "journal_events": [
+    {
+      "event_type": "step_entry",
+      "workflow_run_id": "run-phase2-unexpected",
+      "stage_slug": "bc",
+      "step_id": "bc.work.1",
+      "attempt_id": "attempt-1",
+      "journal_entry_id": "entry-1",
+      "timestamp": "2026-07-13T00:00:00.000Z",
+      "entry_evidence": { "kind": "manifest", "uri_or_path": "workflows/build-code/steps.json" }
+    },
+    {
+      "event_type": "step_exit",
+      "workflow_run_id": "run-phase2-unexpected",
+      "stage_slug": "bc",
+      "step_id": "bc.work.1",
+      "attempt_id": "attempt-1",
+      "exit_journal_entry_id": "entry-1",
+      "timestamp": "2026-07-13T00:01:00.000Z",
+      "terminal_status": "success",
+      "completion_evidence": { "kind": "test", "uri_or_path": "evidence/phase-2-GREEN.json" }
+    },
+    {
+      "event_type": "step_entry",
+      "workflow_run_id": "run-phase2-unexpected",
+      "stage_slug": "bc",
+      "step_id": "bc.work.rogue",
+      "attempt_id": "attempt-1",
+      "journal_entry_id": "entry-rogue",
+      "timestamp": "2026-07-13T00:02:00.000Z",
+      "entry_evidence": { "kind": "manifest", "uri_or_path": "workflows/build-code/steps.json" }
+    },
+    {
+      "event_type": "step_exit",
+      "workflow_run_id": "run-phase2-unexpected",
+      "stage_slug": "bc",
+      "step_id": "bc.work.rogue",
+      "attempt_id": "attempt-1",
+      "exit_journal_entry_id": "entry-rogue",
+      "timestamp": "2026-07-13T00:03:00.000Z",
+      "terminal_status": "success",
+      "completion_evidence": { "kind": "test", "uri_or_path": "evidence/phase-2-GREEN.json" }
+    }
+  ]
+}

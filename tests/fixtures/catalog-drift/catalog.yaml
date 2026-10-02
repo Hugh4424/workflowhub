@@ -1,0 +1,32 @@
+schema_version: 2
+skills:
+  - name: core-runtime
+    path: skills/core-runtime/SKILL.md
+    local_version: 1.2.3
+    status: native
+    used_by_stages: [build-code]
+    upstream:
+      - github_url: https://github.com/example/framework
+        path: skills/core-runtime/SKILL.md
+    local_changes: native runtime contract
+    metrics_enabled: true
+  - name: optional-doc
+    path: skills/optional-doc/SKILL.md
+    local_version: 0.4.0
+    status: adapted
+    used_by_stages: []
+    upstream: []
+    local_changes: documentation-only adaptation
+    metrics_enabled: false
+  - name: multi-origin
+    path: skills/multi-origin/SKILL.md
+    local_version: 2.0.0
+    status: adapted
+    used_by_stages: [verify-code]
+    upstream:
+      - github_url: https://github.com/example/first-framework
+        path: skills/first/SKILL.md
+      - github_url: https://github.com/example/second-framework
+        path: skills/second/SKILL.md
+    local_changes: combines two reviewed sources
+    metrics_enabled: true
