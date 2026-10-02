@@ -159,6 +159,27 @@ const moduleBaseName = (p) => {
   return last.replace(/\.(mjs|cjs|mts|js|ts|json|md|ya?ml|html)$/i, '');
 };
 
+// A basename collision is only a new implementation when it is not an
+// independently declared, pre-existing peer. Use the existing frozen migration
+// anchor for path existence, never current bytes or a new tree snapshot.
+const frozenMatch = fs.readFileSync(TABLE, 'utf8').match(/\*\*冻结记录\*\*：`([a-f0-9]{40})`/);
+if (!frozenMatch) throw new Error('迁移表冻结记录缺失，无法区分既存同名文件与新实现');
+const FROZEN_COMMIT = frozenMatch[1];
+const peerExistenceAtFreeze = new Map();
+function isDeclaredPreexistingPeer(rel) {
+  const peer = ROWS.find((row) => {
+    if (row.path === rel && ['NARROW', 'SURVIVOR'].includes(row.disposition)) return true;
+    if (!row.disposition.startsWith('MOVE→')) return false;
+    return row.path === rel || row.disposition.slice('MOVE→'.length) === rel;
+  });
+  if (!peer) return false; // NEW, DELETE, unregistered, or merely asserted peers remain candidates.
+  if (!peerExistenceAtFreeze.has(peer.path)) {
+    const paths = git(['ls-tree', '-z', '--full-tree', '--name-only', FROZEN_COMMIT, '--', peer.path]).split('\0');
+    peerExistenceAtFreeze.set(peer.path, paths.includes(peer.path));
+  }
+  return peerExistenceAtFreeze.get(peer.path);
+}
+
 // ---- 认证残留模式归属（按迁移表备注中最贴近的删除批次；用户指示「B3 组查 skills
 // 文本；B5/P6 组查 catalog/bundle hash 字段」） ----
 const RESIDUE_PATTERNS = {
@@ -200,10 +221,12 @@ describe('thin-core residue（AC-29）', () => {
     describe(label, () => {
       for (const r of rows) {
         // 断言 1：换名复活——已删模块 basename 不得作为同名新文件出现在七类根
-        //（排除 archive/research 与测试自排除清单），即不存在「同名不同路径的新实现」。
+        //（原扫描面与排除清单不变）；允许主表声明且冻结时已存在的独立NARROW/SURVIVOR/MOVE peer，
+        // NEW、未登记、冻结后新增或其它DELETE peer仍不得成为「同名不同路径的新实现」。
         it(`已删模块 ${r.path} 无同名新实现（换名复活）`, () => {
           const base = moduleBaseName(r.path);
-          const reborn = allSevenRootFiles().filter((rel) => rel !== r.path && moduleBaseName(rel) === base);
+          const reborn = allSevenRootFiles().filter((rel) => rel !== r.path
+            && moduleBaseName(rel) === base && !isDeclaredPreexistingPeer(rel));
           expect(reborn, `已删模块 ${base} 以新路径复活：${reborn.join(', ')}`).toEqual([]);
         });
         // 断言 2：调用点——存活生产代码不得出现 from "...<被删模块路径>" 或
