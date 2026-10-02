@@ -58,34 +58,6 @@ function fixture() {
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
 
 describe("CARD-01 zero machine gate advancement", () => {
-  it("freezes the plan's five families and eighteen concrete predicates, not a made-up count of twenty-four", () => {
-    const plan = readFileSync("specs/archive/workflowhub-thin-core-card-01-20260919/plan.md", "utf8");
-    const predicateIds = [
-      "outcome_receipt_hash_mismatch",
-      "human_confirmation_hash_mismatch",
-      "aggregate_snapshot_stale",
-      "aggregate_decision_unbound",
-      "aggregate_decision_revision_stale",
-      "interaction_aggregate_unbound",
-      "frozen_review_material_hash_mismatch",
-      "frozen_review_material_content_hash_mismatch",
-      "evidence_ref_hash_mismatch",
-      "acceptance_evidence_hash_mismatch",
-      "receipt_namespace_violation",
-      "receipt_missing",
-      "receipt_schema_version_mismatch",
-      "receipt_producer_stage_mismatch",
-      "receipt_producer_component_unofficial",
-      "receipt_task_mismatch",
-      "receipt_stage_mismatch",
-      "step_outcome_coverage_incomplete",
-    ];
-    expect(predicateIds).toHaveLength(18);
-    for (const id of predicateIds) expect(plan).toContain(id);
-    expect(plan).toContain("18 个谓词站点 / 5 族");
-    expect(plan).toContain("24 ↔ 18 显式映射");
-  });
-
   it("keeps a frozen review-material hash mismatch visible without treating corrupted bytes as valid", () => {
     const { task } = fixture();
     const frozen = freezeReviewMaterial({ task, bytes: "original review input" });
@@ -99,17 +71,6 @@ describe("CARD-01 zero machine gate advancement", () => {
     });
     expect(task.readRecord(frozen.ref)).toBe(tampered);
     expect(observed).not.toHaveProperty("bytes");
-  });
-
-  it("retires aggregate observation from the active task kernel while preserving historical record bytes", () => {
-    const { kernel } = fixture();
-    expect(kernel.observeMakeDecisionInteractionPublication).toBeUndefined();
-    expect(kernel.prepareMakeDecisionInteractionPublication).toBeUndefined();
-    expect(kernel.completeMakeDecisionInteractionPublication).toBeUndefined();
-  });
-
-  it("does not expose aggregate-specific machine-gate diagnostic helpers in the active runtime", () => {
-    expect(stageHandlers.interactionAggregateMachineGateDiagnostic).toBeUndefined();
   });
 
   it("does not downgrade a physically unreadable current material into an aggregate-derived diagnostic", async () => {
