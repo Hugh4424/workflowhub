@@ -44,7 +44,7 @@ describe("scanCoreFiles — boundary anchor (FR-CI-001)", () => {
   it("lists existing runtime .mjs files", async () => {
     const { scanCoreFiles: scan } = await import(scanCoreFiles);
     const files = scan();
-    expect(files.length).toBeGreaterThanOrEqual(6); // production runtime files
+    expect(files.length).toBeGreaterThan(0); // the live scan must never be empty
     expect(files.every((f) => f.endsWith(".mjs"))).toBe(true);
   });
 

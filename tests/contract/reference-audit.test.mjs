@@ -1,13 +1,17 @@
-import { describe, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { afterEach, describe, expect, it } from "vitest";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 import { auditReferences, classifyReferenceAudit } from "../../tools/architecture/reference-audit.mjs";
 
+const roots = [];
+afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
+
 describe("reference audit", () => {
   it("audits every control-plane slice instead of treating empty targets as zero consumers", () => {
     const root = mkdtempSync(join(tmpdir(), "workflowhub-reference-audit-"));
+    roots.push(root);
     mkdirSync(join(root, "runtime/task"), { recursive: true });
     mkdirSync(join(root, "tests"), { recursive: true });
     writeFileSync(join(root, "runtime/task/consumer.mjs"), "import \"../../core/git-checkpoint.mjs\";\n");
