@@ -1,180 +1,38 @@
 ---
 name: spec-prd
-description: Produce one maintainable task-group PRD in two version-bound calls: outline/map, then detail cards.
+description: 根据已确认方向分两步形成可维护的任务组 PRD，展示任务地图与详情稿并保留真实用户答复。
 version: 1.0.0
 ---
 
 # Spec PRD
 
-`spec-prd` is the **唯一 single writer** and formal content owner for the planning
-`prd.md`. `build-prd` only binds inputs, coordinates conditional work, presents
-versions, records real replies, and reports facts. It never writes the formal
-PRD body. A caller may invoke this skill from `build-prd` or as an independent,
-portable call.
+spec-prd 是规划 prd.md 的唯一正文作者。build-prd 协调条件工作、展示与真实答复；其它阶段/子任务只读该 PRD，不代写它。独立调用可仅返回正文，尚未落盘就不能声称写盘、发布、归档或物理授权。
 
-## Authority and write boundary
+## 输入和写面
 
-- Consume the current, explicitly confirmed decision and the necessary source
-  references. A file name, summary, historical PRD, or model inference cannot
-  supply missing product direction.
-- The only formal write target is one `specs/<task-id>/prd.md`. No other skill,
-  workflow, stage, or parallel worker may write that file. Returned text for an
-  independent caller is not a claim that the file was written.
-- The PRD is a planning handoff, not a fifth current material: do not write
-  `spec.md`, `plan.md`, `tasks.md`, stage state, review verdict, provider fact,
-  Git fact, or physical authorization.
+读取当前已明确确认的决定及必要原始来源。来源的文件路径、人读版本/节定位用于说明依据，不作四 revision/hash 认证；缺母决定、冲突来源或真实确认就返回具体缺口。只写已授权的一个 `specs/<task-id>/prd.md`，不写当前 spec/Phase/index、任务状态、review verdict 或 Git 事实。
 
-## Exactly two internal calls
+## 正常两步内容方法
 
-Run exactly two content calls for a normal planning request. Both calls carry
-and compare the same `decision revision` and `source revision`; a mismatch is
-an error, not a reason to merge versions.
+1. 先写 outline/map：从已确认的完整用户旅程和需求整理结果导向任务地图。卡片按可独立观察的用户结果划分，说明责任 consumer、oracle、owner、共享定义、准备/实现/验收/合并四类依赖、排除理由。每条原需求有卡片落点或用户明确选择的排除；技术层列表不等于完整旅程覆盖。地图能审查后先展示并等待真实地图答复，未答/拒绝仍为 draft，不提前写详情。
+2. 用户确认实际展示地图后展开 detail cards：重读当前决定、来源、地图与答复的含义，变化影响已确认范围时先处理差异。UI 分支展示所有范围内页面、完整流程组、状态和 viewport 的真实设计，说明漏项；展示前的答复不算 design confirmation。non_ui 写事实理由，仅跳过 UI 分支。完成适用准备后按 [prd-template.md](templates/prd-template.md) 写共享定义和完整任务卡。
 
-1. **第一次调用 — outline/map**
-   - Read the explicit decision and required sources at one bound revision.
-   - Return a draft **大纲** and a **结果导向任务地图**. Organize cards by
-     independently verifiable user result, not by technical layer, fixed card
-     count, or copied historical wave.
-   - For a planning task, first check the **完整用户旅程** at the direction
-     level. Every confirmed requirement must have **需求覆盖** in a responsible
-     card or an explicitly approved exclusion with **明确排除理由**; a short map
-     or a technical inventory is not complete journey coverage.
-   - Attach every confirmed requirement to a responsible card, an acceptance
-     oracle, or an explicitly approved exclusion. Record each card's real
-     `consumer`, `oracle`, `owner`, shared definitions, and four dependency
-     classes: `准备依赖`, `实现依赖`, `验收依赖`, and `合并依赖`.
-   - Stop before detail cards and before the formal `prd.md` write. Show the
-     map revision, perform **地图核对**, and wait for a real map confirmation bound to that revision.
+两步描述内容先后，不是固定调用次数或机器步骤认证。地图确认不能替详情稿确认；发生真实内容修复时只重做受影响部分。
 
-2. **第二次调用 — detail cards**
-   - Accept only a real response confirming the currently displayed map
-     revision. Re-read the current decision/source bindings and verify
-     `same revision` before expanding the document.
-   - For `ui_applicability=ui`, only after map confirmation run the existing
-     conditional UI design chain: display the real design by complete-flow
-     all in-scope UI pages, complete-flow groups, states, and viewports; bind the `真实展示版本` and record a no-omissions coverage check. Missing any in-scope page, state, viewport, or coverage evidence keeps the result draft; then
-     require `display_before_reply` plus `human_approved`. Only after this coverage and confirmation produce
-     detail cards.
-   - For `ui_applicability=non_ui`, record the factual non-UI reason and skip
-     the UI confirmation path; non-UI planning does not acquire an extra daily
-     confirmation or a browser implementation.
-   - Expand the same revision into the single formal PRD and write only the
-     one `prd.md`. The detailed body contains the shared definitions and
-     complete detail cards described by the template.
+## 最终展示确认
 
-The order is therefore: same-version decision → outline/result-oriented map →
-real map confirmation → only-if-UI conditional design chain → detail cards →
-`prd.md`. A map response is never treated as detail-card or final confirmation.
+详细 PRD 写成完整、可审查草稿后展示给用户，记录其对该展示稿的真实答复和实际文件/节路径。只有明确同意的内容可写 final。拒绝、未答、取消、确认的是另一稿、缺来源或冲突都保持 draft，列具体缺口与受影响范围。普通同方向修文不重问已有授权；改变已确认方向/范围/设计行为/验收，先准备更改稿再取得真实选择。没有四 revision 或 displayed_draft_hash 绑定，不把展示确认变成开发/交付许可证。
 
-## Post-detail final confirmation
+## 设计来源缺口
 
-After the second content call has rendered the detailed PRD, display that draft and
-ask for one real final confirmation. This is a **post-second-call user gate**, not
-a third content call: no third content call occurs for final confirmation. It
-must bind the exact displayed draft to all four revisions:
-`decision_revision`, `source_revision`, `map_revision`, and `prd_revision` (and
-the displayed draft hash when available). A reply is valid only when its
-`confirmation_revision` matches each of the four bound revisions (`decision_revision`,
-`source_revision`, `map_revision`, and `prd_revision`) and records
-`display_before_reply=true` plus `human_approved=true`. When a displayed draft
-hash is bound, the confirmation must include the same `displayed_draft_hash`; a
-hash mismatch is draft-preserving failure.
+缺 Design.md/Experience.md 时记录真实任务级设计基线，给规范责任卡明确 consumer、oracle、责任与缺口。二者都缺就保持 draft；stale/unknown/unavailable 和不可读范围可见，不编责任人、任务号或视觉结果。风险接受、提示词 acknowledgement 不等于真实设计或最终确认。
 
-A refusal, unanswered response, or `confirmation_revision` mismatch is a real
-failure fact: keep the document `draft`, report the concrete gap and affected
-scope, and do not treat the draft as approved, complete, published, or ready for
-handoff. This applies to both `ui_applicability=ui` and `non_ui`; non-UI skips
-only the conditional UI design confirmation chain. Final PRD confirmation is not
-a build-plan/build-code entry license, a new formal stage, a delivery action, or
-an extra daily confirmation. After a valid final confirmation, spec-prd may
-mark the same displayed PRD `final` and remains its only writer.
+## 任务卡与子任务
 
-## Design and Experience source gaps
+每张卡保留模板全部16字段：结果/consumer、范围、流程/状态、FR、AC及失败判据、oracle、准备/实现/验收/合并依赖、共享资源冲突与集成责任、来源/设计、局部风险、可后置技术项、最小读取集和五阶段开工说明。shared definitions 只写一次，用稳定标题/anchor 引用。
 
-When a UI planning object lacks `Design.md` or `Experience.md`, first record a
-truthful **任务级设计基线** and add a **规范责任卡** (specification-responsibility
-card). That card must name a **real consumer** and an **oracle** for bringing the
-missing project standard into the task; do not invent a person, task number, or
-visual result. If both Design and Experience are missing, keep the document
-`draft` and do not finalize it. Missing, stale, conflicting, unavailable, or
-unreadable standards remain visible in the affected scope.
+子任务只消费自身最小读取集和必要共享定义；母任务、兄弟材料/workspace 为只读。子任务不触发母任务 close、不移动或删除他人文件；边界偏离在自己的材料说明原边界、实际偏离和理由。结构齐全不证明子任务语义验收或质量通过。
 
-## Draft preservation and failure facts
+## 维护与交接
 
-Any failed, **拒绝**, cancelled, **取消**, **未答**, wrong-revision/**错版**, missing-source,
-conflicting-source/**冲突**, or invalid shared-reference result must **保持 draft**.
-Return the concrete **缺口** and **受影响范围**, including the owner and next
-fact needed. In particular:
-
-- an absent mother decision is a `缺母决定` and returns a **具体缺口**;
-- a map confirmation from another revision is rejected as `错版`;
-- missing or stale shared definitions/dependencies remain `失效共享引用`;
-- a UI design that is not returned, is rejected, cancelled, unanswered, or
-  has the wrong version cannot be promoted to final; the document **不得定稿**.
-- risk acceptance or a prompt acknowledgement cannot replace a real design,
-  map confirmation, or final confirmation;
-- do not say complete, approved, published, delivered, or ready to start when
-  the required fact was not observed.
-
-After a source, design, or shared reference is corrected, re-read the current
-materials and redo only the affected map/design/detail scope. Never silently
-reuse an old confirmation.
-
-## Independent portable calls
-
-An **独立调用** must receive **显式输入**: confirmed decision content and
-revision, required source content/revisions, the caller's requested output
-mode, and any real map/design/final confirmation refs it claims. With complete
-inputs it returns the same outline/map and detailed PRD content contract and may
-return **仅返回正文**. With a missing decision it returns the specific gap and
-affected scope. It must **不伪造** WorkflowHub identity, user reply, map or
-final confirmation, `写盘`, `发布`, `归档`, provider success, host invocation,
-Git result, or `物理授权`.
-
-## Detail-card and handoff contract
-
-### Child-task handoff
-
-When a card is handed to a **子任务**, the child consumes only its **最小读取集**:
-the card, the shared definitions it names, and its own material. The **母任务**
- and **兄弟** cards, records, and workspaces are **只读** context; the child must
-not write them, **不触发母任务close**, **不移动**, or **不删除** files. The child
-records any **边界偏离** in its own material with the original boundary, the
-**实际偏离**, and the **原因**. A byte-preserving read or a structural handoff
-does not prove the child's complete semantic acceptance.
-
-Every card is a result-oriented unit and declares:
-
-- result and `consumer`, scope, user flow and state transitions;
-- requirement IDs (`FR`) and acceptance criteria (`AC`) with failure判据 and an
-  executable `oracle`;
-- `准备依赖`, `实现依赖`, `验收依赖`, and `合并依赖`, including shared-resource
-  conflicts and integration ownership;
-- source and design references with their revision, local risk, and deferred
-  technical items;
-- a semantic-closure **最小读取集** distinguishing required, conditional, and
-  normally-unused references; and
-- a copyable **五阶段开工说明** that identifies the current decision/spec/plan/
-  tasks inputs for the subsequent standard development task. It does not turn
-  the PRD into a fifth material.
-
-Use stable headings/anchors for navigation and cite shared definitions once.
-Do not claim token savings without execution evidence.
-
-## Archived maintenance
-
-Classify an archived change by commitment impact. A narrow typo, link, or
-clarifying **小修** keeps its **依据** and **影响** in change notes. A
-**实质变化** to direction, permission, scope, design behavior, or
-acceptance must first show the before/after commitments and obtain **真实确认**;
-then record the source revision, affected clauses/cards, and in-flight impact in
-`变更说明`. Preserve old decision, confirmation, review, test, and physical
-**历史事实**. New tasks read the current PRD and record their accepted source;
-existing in-flight tasks retain their own four materials and are **不自动覆盖**.
-
-## Boundary
-
-This portable skill has no product UI, browser implementation, new stage,
-`CURRENT_MATERIAL_FILES` entry, public command, second dispatcher, second
-writer, review gate, or physical delivery controller. It reuses the existing
-conditional UI semantics; it does not copy or replace `workflows/build-spec/**`.
+归档小修保留依据与影响；承诺有实质变化先展示前后差异并取得真实选择，再写变更说明和在途影响。保留历史决定、确认、审查、测试和 Git/物理事实；新任务记录采用的来源，现有在途任务不自动覆盖。交接分别说明规划、材料可用、开发、质量、附件和物理动作事实；阶段末的人读交接按 stage-handoff 方法执行，不创建第五材料、状态机或新 gate。

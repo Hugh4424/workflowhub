@@ -6,53 +6,20 @@ version: 1.0.0
 
 # UI Project Init
 
-这是一个可搬运的输入整理技能，不是阶段编排器、质量评分器或推进 gate。
+在 build-plan 的真实 UI 范围中使用；整理 `new` 或 `legacy` 项目的最小可观察基线，交给设计和实现任务。它是 no stage、no gate 的可搬运方法，不执行产品 UI、不打 quality score。
 
-## 两份项目规范的身份
+## 规范职责
 
-UI 项目必须只有一份 `Design.md` 和一份 `Experience.md`。`Design.md` 是唯一视觉/组件规范：
-设计原则、token、布局/响应式、组件 API、视觉状态、视觉 a11y、性能预算和治理规则都放
-这里；它不写页面流转、业务动作或某次运行结果。`Experience.md` 是唯一页面/交互/长期测试
-场景规范：页面索引、状态、流转、异常恢复、键盘语义、操作/预期/覆盖边界和已知缺口都放
-这里；它不写颜色、字体、间距、断点、token 或组件视觉规则。两份文件都要有 owner、revision、
-原始内容 `content_sha256`、显式 `anchor_id`/`anchor_title`；不能用标题 slug 冒充稳定 anchor，
-也不能把它们当 task 的第五份材料。
+项目只有一份 Design.md（视觉/组件、token、布局、响应式、组件 API、视觉 a11y/性能预算）和一份 Experience.md（页面、业务动作、状态流转、异常恢复、键盘语义及长期测试场景）。记录实际文件路径、人读 version 与稳定 section/page anchor、职责和当前缺口；标题 slug 不能假装已有稳定 anchor。规范不承载本任务进度或截图结论。
 
-## new
+## 方法
 
-新项目只建立第一个真实界面所需的最小基线：
+1. 从原始需求和当前代码核实 ui/non_ui/backend/fullstack；来源不足写 unknown，不用调用者标签绕过实际 UI 范围。
+2. new：只为首个真实界面整理两份规范、页面/组件与 CSS owner、fixture 数据形状、viewport 和 Preview 计划。未知与不适用分别写 unknown / N/A + reason。
+3. legacy：只读盘点技术栈、路由、CSS 副作用、数据入口、组件候选、测试能力、可限界首个页面、例外和耦合风险。用户决定后选择低耦合范围；没有候选报告 not_ready 和缩小方案，不自动全仓组件化或 reset CSS。
+4. 已有视觉规则直接引用；页面/交互/长期场景变更由 Experience 的明确作者处理，视觉规则变更由 Design 的明确作者处理。按当前任务已授权写集写入：build-plan 本技能只读整理；实际项目规范实现由 build-code 承接，不默默改规范。
+5. 返回模式、两份来源及版本、范围、组件/样式边界、fixture、viewport、Preview、真实盘点、假设、缺项及用户实际选择。无 Preview 就没有视觉通过；输出能定位真实源和具体下一步即可，不要求 runtime classifier/schema/proof 包装。
 
-- 项目级 `Design.md` 的初始版本字符串（例如 `2026.08`）；
-- 项目级 `Experience.md` 的初始版本字符串（例如 `2026.08`）；
-- 页面/区域边界、现有或待建组件与样式 owner；
-- 固定 fixture 的数据形状、目标 viewport、Preview/截图实施卡；
-- 缺失项用 `unknown` 或 `N/A + reason` 记录。
+## 完成边界
 
-`Design.md` 是项目通用设计源，不保存本任务状态、FR/AC、task 状态或截图结论。版本是可读
-引用，但下游绑定还必须保存项目相对路径、原始 UTF-8 内容 hash、revision 和显式 anchor。
-只使用既有视觉规则时绑定 Design，不要求更新 Design；页面/交互/长期场景改变时更新
-Experience；视觉规则改变时更新 Design，同一改动可同时更新两份。
-
-## legacy
-
-历史项目先做只读盘点：技术栈、路由、CSS 副作用、数据入口、组件候选、测试能力、可限界的 first-page 和耦合风险。人工确认后只选择一个低耦合页面/区域开始；不自动全仓组件化、reset CSS 或迁移不可控数据。没有可限界候选时输出 `not_ready`、风险和缩小建议，但不把它变成阻塞 gate。
-
-## 输出合同
-
-输出必须能被下游引用，并明确：`mode`、`design_revision`、`experience_revision`、`scope`、`component_boundary`、`style_boundary`、`fixture`、`viewport`、`preview`、`source_identities`、`missing_items`、`assumptions`、`human_confirmation`。`legacy` 还必须输出 `legacy_inventory`，包含 `technology_stack`、`routes`、`css_side_effects`、`data_entrypoints`、`component_candidates`、`testing_capability`、`baseline`、`legacy_exceptions`、`first_page_candidates`、`coupling_risks`、`minimal_scope_reduction`。缺输入仍输出事实和原因；没有 Preview 不伪造视觉通过。
-
-运行时合同由 `validateProjectStandardSources(input)` 统一检查两份规范的 identity、职责边界、
-stale/missing 状态和唯一 writer；`buildConsumerCensus(input)` 统一接收可复现盘点。盘点必须带
-`schema_version`、scanner version、源码 snapshot、scan config、逐项 `support_matrix`、稳定
-`consumer_id` 和枚举 `unknown_reason`；合同版本固定为 `consumer-census.v1`，人工语义只能用 `source=human` 追加，不能覆盖 scanner
-事实。影响分类由盘点和原始事实推导为 `non_ui`、`ui`、`backend`、`fullstack` 或 `unknown`，
-不能由调用者标签降级。Only build-code may write a changed project standard; all other stages only
-bind or verify the identity.
-
-实际输出由 `runtime/stage/stage-content-contracts.mjs` 的
-`buildUiProjectInitFact(input)` 生成。技能只负责收集输入和把返回事实写入
-现有 `spec.md`/`quality/facts/`；不得用一段 Markdown 代替函数结果。
-
-## 边界
-
-本技能不调用 Figma/Storybook，不执行浏览器测试，不创建新 stage、第五材料、独立状态机或 no-design gate。它是 no stage、no gate 的便携输入整理器；真实测试由 build-code 的具体 testing skill 执行。
+全部适用输入均有实际来源或明确缺项、责任与影响；有 legacy_inventory 时逐项说明扫描/人读范围及 unknown，不把人工判断覆盖原始机器事实。不得宣称未读代码、未运行 Preview 或未测页面已经通过。浏览器验证由 `skills/isolated-browser-qa/SKILL.md` 的隔离路线执行。

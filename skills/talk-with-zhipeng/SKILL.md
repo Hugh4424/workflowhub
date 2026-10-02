@@ -23,20 +23,14 @@ description: 通用对话式收敛技能。把已有调研摆给人看，按"对
   或逐模块收敛中的未决项。批次数量由真实 OI 决定，不预设轮数。
 
 若输入缺失，不直接提问，先进入输入充分性护栏并说明缺什么。本技能只负责 Talk；
-Clarify 由 build-spec 的 `spec-clarify` 独占，不能在这里补一套。
+Clarify 由 build-plan 的 `spec-clarify` 处理规格歧义，Talk 只处理当前方向问答。
 
 ### 问答工具 IO 契约
 
 宿主有结构化问答工具时，每个问题输入必须包含 `question_id`、`axis`、`options` 和
 `recommended`；`options` 最多 3 个，每个选项用大白话写清含义、直接后果和主要风险。
-工具输出必须包含 `answers`，其中答案只能是选项 `option_id` 或用户的 `free_text`，并由
-宿主认证 `reply_ref` 与 `reply_hash`。宿主没有问答工具时，改发同内容的文本卡，并如实
+工具输出必须包含 `answers`，其中答案只能是选项 `option_id` 或用户的 `free_text`，及其用户真实答复来源。宿主没有问答工具时，改发同内容的文本卡，并如实
 记录工具降级事实；不得伪造工具调用、答案或回复凭证。
-
-本段定义的是宿主工具的外部 IO。下方 `ask → wait → reply → resume` 回放示例使用现有
-stage validator 的内部兼容字段 `recommended_option` 与 `number`；适配层必须把外部的
-`recommended`、`option_id` 和 `free_text` 映射到该内部事件后再校验，不能把两套字段混发
-给宿主或把内部编号当成用户回复凭证。
 
 ## 执行协议
 
@@ -90,12 +84,12 @@ stage validator 的内部兼容字段 `recommended_option` 与 `number`；适配
 ### 3. 每答重排
 
 每个问题批次必须严格执行 `ask → wait/pause → real reply → resume → re-rank`：提问交给宿主可见会话后，
-当前调用立即暂停；只有宿主返回与这张卡、当前 Round 和题号绑定的真实回复，恢复调用
-才可继续。Agent 生成的答案、默认选择、旧回复或 decision-log 自报都不能充当 reply，
+暂停依赖这张卡答案的工作；只有收到用户对该问题的真实答复才继续并重排，
+不依赖答案的事实核实可以继续。Agent 生成的答案、默认选择、旧回复或 decision-log 自报都不能充当 reply，
 也不能据此进入下一题、改稿或审查。
 
-真实生命周期至少要能回放为四个临时事件：`ask` 发布一张带正整数 `round` 的卡，`wait` 明确等待用户，
-`reply` 带用户真实回复的来源、hash 和同一 `round`，`resume` 绑定同一张卡、同一 `round` 和同一回复后才继续。
+真实对话中先提问、明确等待用户，
+回答来自用户的实际回复；主会话只在收到该问题的真实答复后继续并重排，不需要 round/hash 事件认证。
 Talk 的 `ask.questions` 可以是一组问题，但每题必须使用统一问题卡：
 
 ```yaml
@@ -197,7 +191,7 @@ recommendation_reason: "当前事实最支持这个选项"
 ### 11. 返回最小交互事实
 
 候选队列、问题卡、ask/reply/re-rank 过程只用于当前对话内收敛，不形成 run、revision、
-latest、ledger 或独立交互历史。动态问题批次结束后，本技能只把父 Stage Agent 完成
+latest、ledger 或独立交互历史。动态问题批次结束后，本技能只把当前主会话 完成
 当前决策所需的最小结构化事实返回内存：
 
 ```yaml
@@ -213,7 +207,7 @@ decision_updates:
 
 `architecture_direction_covered` 与 `user_outcome_covered` 只有在当前批次真实覆盖后才能为
 `true`。仍有会改变方向的问题时，当前批次不能写 `status: completed`。本技能不填写 task、stage、snapshot、
-decision ref/hash、文件路径或内容 hash；这些绑定由父 Stage Agent 在最终决策完成时组装。
+decision ref/hash、文件路径或内容 hash；这些绑定由当前主会话 在最终决策完成时组装。
 
 不得返回或持久化完整候选队列、完整问题卡、逐轮问答历史、Grill 历史、secret、token、
 password、credential、cookie 或其他秘密。用户真实答案的决策含义进入
@@ -239,7 +233,7 @@ password、credential、cookie 或其他秘密。用户真实答案的决策含�
 核心层产出的是「调研入 / 最小决策事实出」的纯逻辑。薄适配层只做两件事：
 
 1. **读调研**：从当前 workflowhub 任务约定的相对路径读取调研、规格、计划或测试证据，整理成初始咨询材料。
-2. **返回事实**：把最小 `talk` 和 `decision_updates` 返回父 Stage Agent；本技能
+2. **返回事实**：把最小 `talk` 和 `decision_updates` 返回当前主会话；本技能
    不直接写工作流文件或质量记录。
 
 适配层只负责「从哪读、往哪写」，不含对话收敛判断逻辑。换一个工作流只需换这一层，核心层不动。
@@ -250,7 +244,7 @@ password、credential、cookie 或其他秘密。用户真实答案的决策含�
 - 同一批次可以包含多个互相独立的关键问题；每题只问一个决策轴，互相依赖的问题拆到后续批次。
 - 只把用户实际给出的回复当作回答；不得由 Agent 模拟、补写或代替用户确认。提问后必须等待用户回复，再继续依赖该答案的步骤。
 - 每个动态批次的职责、开始队列、每答重排和结束结论必须在当前会话真实执行；长期只保留
-  父 Stage Agent 完成决策所需的最小摘要，一个批次的结果不能冒充另一个批次已执行。
+  当前主会话 完成决策所需的最小摘要，一个批次的结果不能冒充另一个批次已执行。
 - 核心层不触碰任何具体工作流的私有路径。
 - 不修改与对话无关的文件；丢弃任一需求条目必须登记理由。
 

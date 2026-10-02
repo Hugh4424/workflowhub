@@ -99,7 +99,7 @@
 
 每个 OI 是一个可独立处置的收敛项，字段如下；`status` 只能是
 `open|confirmed|deferred|not_applicable`。终态才填写终态字段，核心确认项还要
-绑定分组和现有交互凭证：
+注明实际展示分组及用户真实答复来源：
 
 ```yaml
 task_id: <current task>
@@ -114,7 +114,7 @@ impact_dimensions: [goal|scope|acceptance|ordinary_detail]
 requires_user_decision: true|false
 visible_group_id: <existing approve-decision group>
 batch_id: <optional alias for the same visible group>
-# 核心 OI 的当前确认通过本文件的直接处置字段与既有 confirmation fact 绑定。
+# 核心 OI 的当前确认通过本文件的直接处置字段与用户实际答复对应。
 # 不创建或消费 interaction aggregate；旧记录里的 interaction_ref / interaction_hash
 # 只读保留，不再是当前凭证来源或完成依赖。
 ```
@@ -123,7 +123,7 @@ batch_id: <optional alias for the same visible group>
 ID、类别、问题/未知、来源和 `task_id`/`outline_version`，展示状态统一为
 `open`，遮蔽答案、处置、依据、结论和拟议方案）。细节审查逐条消费当前 OI
 终态字段；既有 `approve-decision` 在同一次整体确认中按主题展示
-`visible_group_id|batch_id`、选项、后果和风险，并记录所选处置与交互凭证。三者
+`visible_group_id|batch_id`、选项、后果和风险，并记录所选处置与真实答复来源。三者
 职责不可互相替代，也不增加新的正常确认点。
 
 ## 发散候选与可证伪大纲
@@ -241,32 +241,13 @@ artifacts: []
 
 ## 调研候选交付
 
-只有 `research-report.v1` 明确声明候选时填写。每条都是用户可见的大白话；全文只按 ref
-按需展开，不复制到主文。没有用户可见候选时，报告仍须写 `candidates: []`，本节说明不适用。
+有真实研究候选时填写；全文只按普通文件路径读取一次，不复制到主文。没有候选写理由；研究未完成则保留实际缺口。
 
-完整报告：`quality/evidence/research/<sha256>.json`
+完整报告：`quality/evidence/research/日期-主题.md`
 
 | 候选 ID | 大白话摘要 | 推荐/不推荐 | 理由 | 出处与全文 |
 | --- | --- | --- | --- | --- |
-| C-001 |  | recommended/not_recommended |  | source-ref；完整报告 ref |
-
-```json
-{
-  "schema_version": "workflowhub-research-candidate-delivery.v1",
-  "report_ref": "quality/evidence/research/<sha256>.json",
-  "report_sha256": "<sha256>",
-  "candidates": [
-    {
-      "candidate_id": "C-001",
-      "plain_language_summary": "",
-      "source_refs": ["source-ref"],
-      "evidence_refs": ["E-001"],
-      "recommendation": "recommended",
-      "recommendation_reason": ""
-    }
-  ]
-}
-```
+| C-001 |  | recommended/not_recommended |  | 原始来源定位；报告实际路径 |
 
 ## grill（质询）
 

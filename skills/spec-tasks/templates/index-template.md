@@ -1,7 +1,7 @@
 # Phase 索引 — [任务名]
 
 > 指向各 Phase 独立权威的纯指针。由 Phase 标题重新生成；本文件没有实现或完成权威。
-> 每个 `phases/P<n>.md` 恰好一行；请替换示例编号与路径。
+> 每个 `phases/P<n>.md` 恰好一行；从实际 Phase 契约头读取引用与字段，替换示例编号与路径。核对的是实际指针可读与职责，不以 hash/认证 readback 判完成。
 
 ## Execution Index
 

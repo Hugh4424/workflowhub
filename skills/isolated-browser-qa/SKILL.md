@@ -220,59 +220,13 @@ For details, read `references/auth.md`.
 
 ## Output Contract
 
-For UI scope, publish `browser-qa-evidence.v1` with:
+Return a plain report with the actual routes/pages/scenarios, real component and fixture paths, viewport/state coverage, selected tool/engine/session and auth reuse (reused/fresh/none), performance metrics or an honest not_measured/not_applicable reason, screenshots and their actual paths, test command/output path/exit, visual and a11y observations, failures and coverage limits.
 
-- route, page, and scenario tested
-- the actual component previewed, including its name and a path/ref when available
-- tool, selected engine, and derived session
-- auth mode `reused`, `fresh`, or `none`, consistent with whether login state was reused
-- performance status: `measured` with metrics, or `not_measured` / `not_applicable` with a reason
-- screenshot references and SHA-256 hashes
-- test command, test file, output reference and SHA-256 hash, and exit code
-- cleanup status `completed` and whether the app service was left running
-- `engine_switch: no`
+For a declared acceptance scenario state the actual source/sample/scenario/tier; ordinary QA does not require that acceptance wrapper. No preview or fixture, unreadable evidence, cancellation, oracle/tool error or cleanup failure remains failed/blocked/unknown with its original reason. A component fixture is not the real page, and no observed screenshot means no visual pass.
 
-The canonical stage-content envelope supplies the task, run, and Workspace
-snapshot binding. Cookie, token, password, authorization, API-key, secret, and
-profile content must never be included in evidence.
+Cleanup is complete only after this run's owned browser session/PIDs/temp resources are handled and the user's app service remains running. Use the bundled session cleanup route; never kill an unrelated browser, live user profile or app service. Preserve partial cleanup and exit failures. For non-UI scope give not_applicable with the actual reason, not missing-evidence pass.
 
-For a declared browser acceptance scenario only, also write
-`acceptance_scenario={source,sample,scenario,tier:"browser"}` into the direct
-canonical `browser-qa-evidence.v1` JSON bytes before returning its `{ref,sha256}`.
-The callback payload and stored bytes must carry the same four fields and the
-same task, attempt, material, snapshot, and invocation binding. Ordinary QA
-does not require this optional field.
-
-For non-UI scope, publish only `applicability: not_applicable` and a reason.
-This disclosure is not a global browser Gate.
-
-For UI scope, bind the evidence to the plan/task card's state, viewport, fixture,
-`design_revision`, visual observation, and `a11y` result. A blocked or unknown run
-may have zero screenshots, but it must include a non-empty `failure_reason` and a
-non-zero test exit; never convert a missing preview, missing fixture, or unavailable
-engine into a pass. A pass/fail run keeps the normal screenshot and test evidence.
-If visual status is `not_observed`/`not_applicable`, or a11y status is
-`not_checked`/`not_applicable`, include a non-empty reason; a `pass` result never
-silently skips those checks.
-
-If the selected engine stayed blocked, report:
-
-- selected engine
-- failure symptom
-- repair steps attempted
-- why the run stopped
-
-## WorkflowHub build-code handoff
-
-本技能只提供一次 invocation-scoped 的受控执行链；不创建 Runner、公共命令或持久浏览器状态。正式
-build-code handler 负责调用它并保存结果，重试必须使用新的 invocation，旧失败不能覆盖。证据除页面
-和截图外，还必须绑定 task、stage attempt、material revision、源码 snapshot、AC、Design.md 与
-Experience.md identity、service instance、API/DTO contract、隔离 browser profile，以及 console、
-network、focus、overflow、visual、a11y、performance 和 cleanup 事实。
-
-真实服务/API 不可用、身份错配、用户取消、浏览器或 oracle 失败、cleanup 失败，都要保留原始
-`failure_reason` 并返回 `failed`/`blocked`/`unknown`。组件 fixture 不等于真实页面；运行结果不回写
-Experience.md。没有 UI consumer 时只能输出带理由的 `not_applicable`，不能把缺证据当作 pass。
+Keep only one original output per fact. Use ordinary paths rather than {ref,sha256}/task snapshot/material/invocation certification. Never include cookie, token, password, Authorization, API key, secret or profile contents. Do not write QA outcomes back into Experience.md; send actual outcomes and limitations to the caller.
 
 ## Bundled Resources
 

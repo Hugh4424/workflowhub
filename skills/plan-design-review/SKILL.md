@@ -5,9 +5,8 @@ description: Report-only UI design lens for information architecture, states, ac
 
 # plan-design-review
 
-Source: adapted from the project design review baseline. Mode: `advisory`,
-stage-owned, file-only; apply only when build-spec declares UI scope. It runs
-before the final wh-review, which only reads its fact and does not duplicate it.
+Source: adapted from the project design review baseline. Mode: `advisory`, file-only.
+Use this lens for build-plan's actual UI scope and build-prd's conditional design material. Review the supplied journey, design sources and real previews within the existing merged document review; findings join that review instead of creating another review point.
 
 ## Check
 

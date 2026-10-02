@@ -7,12 +7,12 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import yaml from "js-yaml";
 
-const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
+const STAGES = ["make-decision", "build-plan", "build-code", "verify-code", "build-prd"];
 const STAGE_SUPPORT_FILES = ["skill-deps.yaml", "steps.json"];
 const CORE_AGENTS = {
   "工头": { stage: null },
   "Decision Maker": { stage: "make-decision" },
-  "Spec Builder": { stage: "build-spec" },
+  "PRD Builder": { stage: "build-prd" },
   "Plan Builder": { stage: "build-plan" },
   "Code Builder": { stage: "build-code" },
   "Code Verifier": { stage: "verify-code" },
@@ -26,15 +26,7 @@ const LEGACY_PROMPT_MARKERS = [
   /必须验证[^\n]*runner_root/i,
   /把已验证的 `runner_root` 设为/i,
 ];
-const CURRENT_PROMPT_MARKERS = [
-  /execution_mode=per_invocation/i,
-  /launcher-owned runtime/i,
-  /执行身份.{0,12}只记录/i,
-  /doctor[\s\S]*status[\s\S]*run[\s\S]*review[\s\S]*verify[\s\S]*confirm[\s\S]*authorize/i,
-  /不要从 root、task_path、cwd 或业务仓猜执行环境/i,
-  /不得用[\s\S]{0,24}task-bootstrap\.mjs --runner-root/i,
-];
-const CURRENT_PROMPT_BLOCK = "0. `workflowhub-context.root` 只是存储根。新任务按 `execution_mode=per_invocation` 运行：不要求 `runner_root`、`runner_oid` 或 `migration_ref`，也不把 task 绑定本机目录、固定 commit 或 replacement。每次官方入口由 launcher-owned runtime 独立认证当前代码，并把 commit/tree、合同版本和能力写入审计；执行身份只记录，不决定需求、质量、阶段结果或放行。只允许使用公共入口 `doctor`、`status`、`run`、`review`、`verify`、`confirm`、`authorize`；`prepare`、`start-run`、`publish-*`、`record-*`、`recover-*`、`rebind-*`、`phase-*` 只能由运行时内部使用。不要从 root、task_path、cwd 或业务仓猜执行环境，也不要复制宿主文件到目标仓。不得用 `task-bootstrap.mjs --runner-root` 重新准备已有 task。旧 `legacy_pinned` 字段只读兼容，不能作为新业务门禁。";
+const CURRENT_PROMPT_BLOCK = "0. `workflowhub-context.root` 只是存储根。读取当前任务的 `decision-log.md`、`spec.md`、独立 `phases/P<n>.md`、纯指针 `phases/index.md` 与 task facts，按实际材料和事实继续同任务。post 五阶段为 `make-decision`、`build-plan`、`build-code`、`verify-code`、`build-prd`；build-plan 承担产品规格与实现设计，build-prd 承担产品表达。只使用公共入口 `doctor`、`status`、`run`、`review`、`verify`、`confirm`、`authorize`；`prepare`、`start-run`、`publish-*`、`record-*`、`recover-*`、`rebind-*`、`phase-*` 仅为私有实现。不要从 root、task_path、cwd 或业务仓猜执行环境，也不要复制宿主文件到目标仓。已有用户授权覆盖当前动作与范围时，针对当前 HEAD 记录并消费不可逆授权；HEAD 不一致拒绝旧记录，新增未覆盖动作才询问用户。测试和审查只产生真实事实，缺失、失败和未执行如实披露，不作为继续修复的许可证。";
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 class SyncError extends Error {
@@ -220,7 +212,7 @@ function expectedAgentSkills(repo, name, timeoutMs, mainRef = "main") {
 function promptIssues(instructions) {
   return {
     legacy: LEGACY_PROMPT_MARKERS.filter(pattern => pattern.test(instructions)).map(pattern => pattern.source),
-    missing_current: CURRENT_PROMPT_MARKERS.filter(pattern => !pattern.test(instructions)).map(pattern => pattern.source),
+    missing_current: instructions.includes(CURRENT_PROMPT_BLOCK) ? [] : [CURRENT_PROMPT_BLOCK],
   };
 }
 
@@ -256,17 +248,6 @@ function assertSkillFileReadback(profile, workspace, online, item, file, expecte
 
 function listAgents(profile, workspace, timeoutMs) { return unwrap(multica(profile, workspace, ["agent", "list", "--output", "json"], { timeoutMs }), "agents"); }
 function listSkills(profile, workspace, timeoutMs) { return unwrap(multica(profile, workspace, ["skill", "list", "--output", "json"], { timeoutMs }), "skills"); }
-
-function closureCheck(repo, statusText, mainCommit, timeoutMs) {
-  const head = git(repo, ["rev-parse", "HEAD"], timeoutMs).trim();
-  if (statusText || head !== mainCommit) return { status: "unknown", reason: "工作树不是干净的 main 快照，不能把当前闭包结果冒充 main 闭包" };
-  try {
-    const output = run(process.execPath, [path.join(repo, "runtime/evidence/check-skill-closure.mjs"), repo], { cwd: repo, timeoutMs });
-    return { status: "passed", output: output.trim() };
-  } catch (error) {
-    return { status: "failed", reason: error.message };
-  }
-}
 
 function snapshotHash(report) {
   const value = {
@@ -305,7 +286,6 @@ function audit({ repo, profile, workspace, timeoutMs }) {
   const mainSnapshot = verifyMainSnapshot(repo, mainCommit, timeoutMs, mainRef);
   let originMain = null;
   try { originMain = git(repo, ["rev-parse", "origin/main"], timeoutMs).trim(); } catch {}
-  const closure = closureCheck(repo, statusText, mainCommit, timeoutMs);
   const scopeFiles = ["skills/catalog.yaml", ...STAGES.flatMap(stage => STAGE_SUPPORT_FILES.map(file => `workflows/${stage}/${file}`))]
     .map(relativePath => ({ path: relativePath, sha256: sha(mainBytes(repo, relativePath, timeoutMs, mainRef)) }));
   const externalNames = externalSkillNames(repo, timeoutMs, mainRef);
@@ -318,7 +298,8 @@ function audit({ repo, profile, workspace, timeoutMs }) {
     const local = STAGES.includes(name) ? stageSnapshot(repo, name, timeoutMs, mainRef) : localSkillSnapshot(repo, name, timeoutMs, mainRef);
     const listed = onlineSkills.get(name);
     if (!listed) {
-      skillReports.push({ ...local, status: externalNames.has(name) ? "external_unmanaged" : "missing_online", online_id: null, files: { missing: Object.keys(local.files), mismatched: [], extra: [], protected_extra: [] }, online_files: [] });
+      const status = local.local_status !== "present" ? "cannot_confirm" : (externalNames.has(name) ? "external_unmanaged" : "missing_online");
+      skillReports.push({ ...local, status, online_id: null, files: { missing: Object.keys(local.files), mismatched: [], extra: [], protected_extra: [] }, online_files: [] });
       continue;
     }
     const online = onlineSkillDetail(profile, workspace, listed, timeoutMs);
@@ -368,7 +349,6 @@ function audit({ repo, profile, workspace, timeoutMs }) {
   const syncBlockers = [];
   if (statusText) syncBlockers.push("dirty_worktree");
   if (!originMain || originMain !== mainCommit) syncBlockers.push("main_origin_mismatch");
-  if (closure.status !== "passed") syncBlockers.push(`closure_${closure.status}`);
   const summary = {
     local_skill_count: localNames.size,
     online_managed_count: skillReports.filter(item => item.status === "match").length,
@@ -387,8 +367,6 @@ function audit({ repo, profile, workspace, timeoutMs }) {
     main_commit: mainCommit,
     main_tree: mainSnapshot.main_tree,
     origin_main: originMain,
-    closure_status: closure.status,
-    closure_reason: closure.reason ?? null,
     sync_blockers: syncBlockers,
   };
   const report = { version: "workflowhub-multica-sync.v5", repo, profile, workspace, scope_files: scopeFiles, snapshot: { main_commit: mainCommit, origin_main: originMain }, summary, skills: skillReports, agents: agentReports, retired_online_skills: retiredOnline, retired_bindings: retiredBindings };
@@ -426,7 +404,7 @@ function printAudit(report) {
   console.log(`main=${summary.main_commit} tree=${summary.main_tree} origin/main=${summary.origin_main ?? "not-found"} branch=${summary.branch} dirty=${summary.dirty_worktree} snapshot=${report.snapshot_hash}`);
   console.log(`技能：本地闭包 ${summary.local_skill_count}，需处理 ${summary.skill_changes}，无法确认 ${summary.unconfirmed}，外部差异 ${summary.external_differences}`);
   console.log(`Multica 旧技能：${summary.retired_online_skills.join(", ") || "无"}；外部保留：${summary.external_online_skills.join(", ") || "无"}`);
-  console.log(`Agent：需更新 ${summary.agent_changes}，需人工检查 ${summary.agent_warnings}，旧技能绑定 ${summary.retired_binding_count}；技能附件警告 ${summary.skill_warnings ?? 0}；闭包=${summary.closure_status}`);
+  console.log(`Agent：需更新 ${summary.agent_changes}，需人工检查 ${summary.agent_warnings}，旧技能绑定 ${summary.retired_binding_count}；技能附件警告 ${summary.skill_warnings ?? 0}`);
   console.log(`唯一执行计划：${report.plan.length} 项；同步当前闭包，删除无引用旧附件和已吸收技能；外部技能不变`);
   if (summary.sync_blockers.length) console.log(`同步阻塞：${summary.sync_blockers.join(", ")}`);
   for (const item of report.skills.filter(value => value.status !== "match" || value.files.extra.length || value.files.protected_extra?.length)) console.log(`- 技能 ${item.name}: ${item.status}; primary=${item.primary_mismatch ? "不一致" : "一致"}; missing=${item.files.missing.join(",") || "无"}; unreadable=${item.files.unreadable?.join(",") || "无"}; mismatched=${item.files.mismatched.join(",") || "无"}; 删除=${item.files.extra.join(",") || "无"}; 保留=${item.files.protected_extra?.join(",") || "无"}`);

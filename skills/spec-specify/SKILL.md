@@ -1,6 +1,6 @@
 ---
 name: spec-specify
-description: Draft the post-cohort product specification and global implementation-design scaffold in spec.md from frozen decisions.
+description: Draft the post-cohort product specification and global implementation-design scaffold in spec.md from confirmed decisions.
 ---
 
 # Spec Specify
@@ -21,20 +21,9 @@ solution, global dependencies, file boundaries, and verification strategy to
 that same file before writing the independent Phase deltas. Neither step
 replaces the PRD or `decision-log.md` as the product-goal authority.
 
-Input is decision/scope content plus controlled `readArtifact(name)` and
-`writeArtifact(name, content)` callbacks supplied by the owning author stage:
-`build-plan` for post-cohort tasks and `build-spec` only for authenticated
-pre-cohort records. This component does not receive task identity, storage
-configuration, workspace paths, or an ambient shell location.
+Input is the current decision/scope and named source material supplied by build-plan. Use only the authorized spec.md write target; historical pre-cohort records remain read-only. Missing input or an unsafe target is a real error.
 
-When the host provides a stage-input packet, consume only that frozen packet:
-retain its `task_id`, stage, `material_revision`, `snapshot_tree`, source
-digests, packet hash, and short summary. Do not read the task directory or
-re-read full source material outside the packet. New `spec.md` output must
-include a regenerable, non-authoritative `## 材料导航` section near the top;
-each row names a section, one-line summary, and suggested M/S/B/P read timing.
-If packet assembly or binding is unavailable, return the explicit unavailable
-reason and do not claim a context optimization.
+Read the caller-supplied current decision and necessary source material. Supplied packets are convenient reading subsets, not snapshot/hash authorization. Missing load-bearing source is unavailable with the specific gap; do not invent direction. New spec.md includes a regenerable non-authoritative 材料导航 with section/summary/read timing pointers.
 
 Use `templates/spec-template.md`. Produce a testable, readable specification
 covering user outcomes, urgency, scope, scenarios, edge states, requirements,
@@ -45,13 +34,10 @@ into four discoverable surfaces: requirement explanation, acceptance flow,
 test standard, and architecture boundary. Link each to source/decision IDs;
 do not rewrite the PRD goal or decision rationale. Before choosing or retaining a solution shape, self-check with `simplicity-guard`'s core questions (has this layer earned its place; can an existing capability carry it instead) and write the conclusion into the existing solution trade-off and 非目标 text, not into a new artifact.
 
-The template is the same content contract consumed by strict stage-end
+The template is the same content contract consumed by stage-end
 `spec-analyze`. Generate canonical `PFACT-{NNN}` and `AC-{DOMAIN}-{NNN}`
 records with explicit status, source/decision mapping, scenario, verification
-method, oracle, and failure condition. A generated spec must be parseable as-is;
-the host must not repair labels, statuses, or oracle text by hand after this
-skill returns. Legacy compact labels remain read-only migration input and never
-change the current strict profile.
+method, oracle, and failure condition. A generated spec must explain its sources, criteria and failures without a downstream reader guessing them. The owning author repairs omissions; legacy material remains read-only background.
 
 For every new AC, use four plain, unindented labels in this exact order:
 `验证：`, `通过：`, `失败：`, `证据：`. Each label's body must be non-empty;
@@ -78,12 +64,7 @@ type. Consider default, empty, error, loading, cancellation, boundary,
 permission, and race states; link each applicable state to a scenario or record
 `N/A — reason`.
 
-New typed publication uses `content_profile: "spec-content.v3"`. It carries
-scenario cards, FR `scenario_refs`, AC `failure_condition`, and OPEN cards with
-affected IDs, owner, impact, handling Stage, and close condition or STOP. The
-profile is fail-closed: an unknown profile is invalid. Legacy
-`ambiguity-ledger.v2` payloads remain readable without being rewritten; only new
-content must satisfy the canonical `FR-{DOMAIN}-{NNN}` grammar and added fields.
+Use scenario cards, source mappings, FR/AC failure conditions and OPEN items with affected IDs, owner, impact and handling condition. These are the readable specification contract, not a typed publication or schema license. Historical formats remain read-only; the owning author repairs the actual content instead of expecting downstream readers to invent missing semantics.
 
 PFACT uses exactly one status: `verified`, `inferred`, `unknown`, or
 `not_applicable`. A verified PFACT names formal evidence. An inferred PFACT

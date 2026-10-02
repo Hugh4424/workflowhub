@@ -5,15 +5,13 @@ description: Blind review lens for the problem, framing, scope, and feasibility 
 
 # Intake Decision Review
 
-This skill is a pure review lens used only by the `wh-review` make-decision
-direction track. `wh-review` owns material freezing, provider selection,
-provider invocation, transport validation, retries, and result publication.
+This skill is a pure review lens for make-decision direction advice. The document-review executor `wh-review` owns provider invocation and original result handling; the lens owns only the supplied problem/framing/scope/feasibility questions.
 This lens never invokes a provider, asks the user a question, waits for
 confirmation, or writes task or product files.
 
 ## Input contract
 
-Read only `review-packet.v1` and its frozen direction bundle. Allowed material:
+Read only the direction material supplied by the caller. Allowed material:
 
 - the raw user requirement;
 - objective facts with traceable sources;
@@ -54,7 +52,7 @@ object.
 
 ## Failure contract
 
-Missing required material, forbidden material, or an unreadable frozen packet
+Missing required material, forbidden material, or unreadable supplied material
 is `unavailable`, never `pass`. A material disagreement is a finding, not a
 prompt for interactive clarification. The parent make-decision flow decides
 whether a finding becomes a round-3 question or remains a visible fact.

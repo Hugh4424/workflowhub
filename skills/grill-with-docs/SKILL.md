@@ -21,12 +21,8 @@ dependent questions stay out of the batch and are re-ranked after the reply.
 
 结构化问答工具的每题输入固定为 `question_id`、`axis`、`options`（最多 3 个，逐项写明
 含义、直接后果和主要风险）与 `recommended`。输出固定包含 `answers`（`option_id` 或
-`free_text`）以及宿主认证的 `reply_ref`、`reply_hash`。宿主没有该工具时，使用同内容的
+`free_text`）及用户真实答复的会话来源。宿主没有该工具时，使用同内容的
 大白话文本卡，并如实登记工具降级事实；不得伪造工具调用或回复凭证。
-
-本段定义的是宿主工具的外部 IO。下方生命周期回放沿用现有 stage validator 的内部兼容
-字段 `recommended_option` 与 `number`；适配层必须把外部的 `recommended`、`option_id` 和
-`free_text` 映射到内部事件后再校验，不能把内部编号当成用户回复凭证。
 
 每题使用和 Talk、Clarify 相同的大白话问题卡：`question_id`、一个 `axis`、
 `independent: true`、2～3 个带 `meaning`、`consequence`、`risk` 的选项、
@@ -50,9 +46,7 @@ Agent 生成、默认、旧回复或文档自报都不能替代 reply。用户�
 ID、hash、receipt、attempt、runner 等执行黑话，不得要求开放式填空。多个决策轴按
 依赖拆开，每次真实回答后重新核对剩余问题。
 
-Grill 的临时交互事实必须能回放为 `ask`、`wait`、`reply`、`resume` 四个事件：`ask`
-绑定正整数 `round`；`reply` 必须来自用户并绑定同一张卡和同一 `round`，允许是部分答案；
-`resume` 必须使用同一张卡、同一 `round` 和同一回复后才可重排。Grill 只是交互式思考，绝不调用 wh-review、生成 review finding 或写 review fact。
+主会话保留真实提问、等待和用户答复的会话来源，回答后重排；不用 round 事件或凭证认证替代实际对话。Grill 只是交互式思考，不调用 wh-review 或写 review verdict。
 
 **Failure contract**: skill 读取、代码核实或文档写入失败时，先自行诊断并做安全重试。
 只有仍缺少会改变方向的事实、且 Agent 无法自行核实时，才用大白话决策卡请用户决定。
@@ -67,7 +61,7 @@ Grill 的临时交互事实必须能回放为 `ask`、`wait`、`reply`、`resume
 4. 成功、失败、取消和验收边界（`success_failure_acceptance`）；
 5. 约束、非目标、延期和风险（`constraint_non_goal_defer`）。
 
-每条已认证原始消息都必须落到一个决策轴；高/中影响轴必须有用户选择，或明确记录“不提问”的事实理由，并绑定 decision、FR、AC。缺少整个消息类、缺少整条轴、只有 spec-analyze/review 细节而没有全需求覆盖时，Grill 不能返回 completed。覆盖矩阵是当前调用内的临时验证视图，不是第五份材料，也不持久化原文。
+每条可定位的真实原始消息都必须落到一个决策轴；高/中影响轴必须有用户选择，或明确记录“不提问”的事实理由，并绑定 decision、FR、AC。缺少整个消息类、缺少整条轴、只有 spec-analyze/review 细节而没有全需求覆盖时，Grill 不能返回 completed。覆盖矩阵是当前调用内的临时验证视图，不是第五份材料，也不持久化原文。
 
 **退出条件（客观 checklist，不是主观判断）**：不再用“用户能否复述四件事”这类主观标准判断是否可以退出。先逐类完成全需求覆盖，再逐项记录下面四项：
 
@@ -91,7 +85,7 @@ decision-log 使用：
 4. 与现有术语或 ADR 的冲突，以及处理结果；
 5. 四项退出检查逐项的 `pass` 或未解决结果及事实依据。
 
-结束时只向父 Stage Agent 返回最小 `grill_summary`：
+结束时只向当前主会话 返回最小 `grill_summary`：
 
 ```yaml
 grill_summary:
@@ -115,9 +109,9 @@ grill_summary:
 
 候选队列、问题卡、ask/reply/resume/re-rank、完整问答和 Grill 历史只在当前会话内使用，不形成
 run、revision、latest、ledger 或独立持久记录。本技能不填写 task、stage、snapshot、
-decision ref/hash、文件路径或内容 hash，也不调用受控 writer。父 Stage Agent 只把
+机器身份认证，也不代写任务状态。当前主会话 只把
 `decision_updates` 和必要的 CONTEXT/ADR 结果写进 `decision-log.md`；当前
-`workflowhub-interaction-aggregate.v1` 不保存 Grill 历史，Grill 事实也不向下游重复传递。
+普通决策记录不复制 Grill 历史，Grill 事实也不向下游重复传递。
 不得返回或持久化完整问题卡原文或 secret、token、password、credential、cookie 等秘密。
 
 `CONTEXT.md` 只在领域术语、含义或边界确有变化时最小更新。ADR 只有三项判据全部为

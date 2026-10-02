@@ -1,6 +1,6 @@
 # {{prd_title}}
 
-> 状态：`{{prd_status}}` | 决定版本：{{decision_revision}} | 来源版本：{{source_revision}}
+> 状态：`{{prd_status}}` | 决定来源：{{decision_reference}} | 资料来源：{{source_reference}}
 > 写入者：`spec-prd` | 写入目标：`specs/{{task_id}}/prd.md`
 
 ## 导航
@@ -31,23 +31,16 @@
 {{task_map}}
 
 任务地图确认：{{map_confirmation}}
-任务地图确认版本：{{map_confirmation_revision}}
+任务地图实际展示稿与答复来源：{{map_confirmation_reference}}
 
-## 最终展示稿确认（第二次调用后）
+## 最终展示稿确认
 
-- **展示稿状态**：{{displayed_draft_status}}
-- **展示稿 hash**：{{displayed_draft_hash}}
-- **决定版本（decision_revision）**：{{decision_revision}}
-- **来源版本（source_revision）**：{{source_revision}}
-- **地图版本（map_revision）**：{{map_confirmation_revision}}
-- **PRD 版本（prd_revision）**：{{prd_revision}}
-- **最终确认 revision**：{{final_confirmation_revision}}
-- **display_before_reply**：{{display_before_reply}}
-- **human_approved**：{{human_approved}}
+- **实际展示稿与范围**：{{displayed_draft_reference_and_scope}}
+- **展示事实**：{{actual_display}}
+- **用户真实答复与来源**：{{actual_user_reply_and_source}}
 - **确认结果与缺口**：{{final_confirmation_result_and_gaps}}
 
-拒绝、未答或错版最终确认必须保持 `draft`，列出具体缺口和受影响范围；
-该确认发生在第二次内容调用之后，不是第三次内容调用。
+先准备完整可审稿再展示；拒绝、未答、取消或确认另一稿保持 draft，并说明具体缺口与影响。地图答复不能代替详情稿最终确认。普通补字不重复询问已覆盖授权；改变决定的内容先准备再取得真实选择。
 
 ## 任务卡
 
@@ -97,6 +90,6 @@
 
 {{change_notes}}
 
-归档维护时保留原因/证据（`依据`）、受影响范围（`影响`）、承诺的前后对比、来源版本、
-确认引用，以及在途影响。小改保持范围狭窄；实质性变更必须先取得真实确认，才能更新本节。
+归档维护时保留原因/证据（`依据`）、受影响范围（`影响`）、承诺的前后对比、实际来源、
+真实确认引用，以及在途影响。小改保持范围狭窄；实质性变更必须先取得真实确认，才能更新本节。
 历史决定、确认、审查、测试与物理事实一律不可改写。

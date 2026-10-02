@@ -5,37 +5,15 @@ description: 用独立 task/worktree/branch 紧凑交付一个小功能，并在
 
 # mini-task
 
-`mini-task` 是独立的小功能交付流程，不是第六个正式 stage，也不是历史
-`scope_revision`、successor、continuation 或 recovery 状态。它只在独立
-TaskHandle、worktree 和 branch 中工作，复用当前四份材料和既有 quality/Git
-能力。
+边界清楚、单一结果、有限影响的小功能可用独立 task/worktree/branch 交付。它不是第六正式阶段，不创建 successor/recovery 关系对象。范围扩大到重大架构/迁移/权限/安全选择时，把风险写清，给用户缩小当前小任务或采用普通五阶段任务的真实选择；不自动转换。
 
-## 适用边界
+## 方法
 
-默认适用于边界清楚、单一结果、影响面有限，且不需要重大架构、迁移、权限或安全
-决定的需求。用户可以明确指定使用；此时必须把额外风险写进材料。范围明显变大时
-暂停，让用户选择缩小当前 mini-task 或重新创建普通五阶段任务，不自动转换。
+1. 确认目标仓库/分支、已授权范围和工作区状态，独立工作。post 依当前 decision-log、spec、独立 Phase 与指针 index 组织材料，历史 pre 四材料只读，不补旧 plan/tasks 双写。
+2. 对方案作独立文档建议；对实现作当前工作流规定的独立代码建议。文档走 wh-review，代码走 OCR；未安装或低于1.12.9才用 wh-review 回退，已安装失败保留 unavailable。mini_task.* 旧 runner 路由在 P5 改接前是实际中间态，不把新方法文字当已实测新执行器。
+3. 实现限定功能，核真实用户结果和受影响测试，保存命令、actual exit、oracle、覆盖限制、原始发现/失败和逐AC结果。有效问题在小任务内修，不用 caller pass 或空 findings 代真实审查。
+4. 不可逆 Git 操作前按④记录并核对分支/当时 HEAD；消费前 HEAD 漂移拒绝旧记录。已有用户授权覆盖动作/范围时按当前HEAD重记录消费，新增动作或范围才请用户决定。①核脏源/目标和边界，⑤处理真实共享记录写者；没有授权不执行，未完成照实报告。
+5. 使用已声明 close/交付能力完成计划内操作，逐项读回 commit/merge/push/archive/cleanup 的实际物理结果。不在计划内的操作说明 skipped；发布、质量、Git 和物理关闭分别报告。
+6. 由任务 A 触发时，先按既有授权保存 A 的实际进度，在 A 的真实 worktree 对已核 target OID 正常 merge。冲突立即 abort，保留 A 的进度与失败，无 MERGE_HEAD/假完成；只复验受影响范围，再从 A 原阶段继续。只读母任务/兄弟边界，不无声覆盖它们。
 
-## 固定流程
-
-1. 创建独立 task/worktree/branch，先用精简模板一次形成 `decision-log.md`、
-   `spec.md`、`plan.md`、`tasks.md`。
-2. 调用 `wh-review` 的 `mini_task.design`，只审冻结的四份材料和方案风险；有效
-   finding 在当前 mini-task 内修复。
-3. 实现功能，执行与功能类型相称的真实用户结果和聚焦测试。
-4. 调用 `wh-review` 的 `mini_task.implementation`，材料必须包含当前
-   diff/snapshot、测试命令和 oracle、实际结果、逐 AC trace、coverage limits、
-   跳过理由和剩余风险；有效 finding 仍在当前 mini-task 内修复。
-5. 使用现有 `task-close` 完成计划内且已授权的 Git 操作，并逐项读回物理结果。
-   未授权保持 `pending/incomplete`；不在计划内的操作记录 `skipped` 和理由。
-6. 如果由任务 A 触发，先按授权保存 A 的真实进度；mini-task 交付后，在认证的 A
-   worktree 中把冻结目标 OID 正常 merge 进 A，冲突就地 abort 并保留证据，重验受影响
-   范围，再从 A 原来的 stage 普通重调。不要创建任务关系对象。
-
-取消只停止未来动作，保留四份材料、facts、worktree、branch 和已有 Git 对象；任何
-   reset、删除、回退或 cleanup 都必须另行明确授权。
-
-## Runner
-
-`scripts/mini-task-runner.mjs` 是薄编排层。它不启动 provider、不读取私有 session、
-不写第五份材料、不发布 mini stage completion，也不改变七类公共 runtime。
+取消只停止未来动作，保留材料、事实、worktree、branch 和已有Git对象；reset/删除/回退/cleanup 需已有授权明确覆盖，缺授权先准备可审查方案再取得决定。当前 `scripts/mini-task-runner.mjs` 的生产改接归P5，本技能不改运行器，不调用私有 session 或声称尚未发生的同步/交付。

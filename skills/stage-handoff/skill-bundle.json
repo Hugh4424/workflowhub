@@ -3,7 +3,5 @@
   "skill": "stage-handoff",
   "files": [
     "SKILL.md"
-  ],
-  "contract": "current-stage-handoff.v1",
-  "contract_owner": "runtime/stage/stage-handoff.mjs"
+  ]
 }

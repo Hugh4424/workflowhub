@@ -20,16 +20,9 @@ build-code 对每个 Phase 发起一次 OCR 审查，随后完成最终聚合测
 
 ## 边界
 
-本技能可独立审查指定 diff，供显式诊断使用。正常 build-code Phase OCR 审查经 public
-`review --action=record` 产生事实，由 `run` 的 `receipts.review` 消费；verify-code 的一次
-终末 OCR 审查由 `receipts.quality_review` 消费。历史 integration 结果只读保留。本技能
-只检查代码、真实消费者、相关接口、测试和实现风险；上游材料仅作背景。
+本技能读取调用方指定的当前 diff、真实消费者与验收原件，返回独立审查发现。正常代码审查与 OCR 缺失/版本不足时的回退按 `workflows/verify-code/SKILL.md`、`workflows/build-code/SKILL.md` 执行；文档审查仍由 wh-review 负责。
 
-独立诊断时，缺少任务审查 receipt、AC evidence 或 provider 结果不妨碍阅读和报告代码问题，
-诊断输出只作诊断事实。verify-code 本次终末 OCR unavailable 且零成功路时，按
-`workflows/verify-code/SKILL.md` 的 AC-REVIEW-011 恰好调用一次本技能，读取当前最终 diff、
-完整 AC、逐项验收原件、可读 OCR packet 和原始失败原因。明确取消或已有成功 OCR 路时
-保留该 OCR 事实。push、merge 和发布仍是独立操作。
+历史 integration/OCR 结果只读保留，不能冒充当前审查。缺少旧 receipt 不妨碍检查当前代码，但未执行、取消或不可用不能写成空 findings。OCR 已安装但运行失败时保留 unavailable 原因，不自动切换回退。push、merge 与发布按实际授权独立处理。
 
 ## 审查顺序
 
@@ -58,12 +51,7 @@ build-code 对每个 Phase 发起一次 OCR 审查，随后完成最终聚合测
 
 ## 结果边界
 
-把本技能的 JSON 结果交给调用者。本技能本身不写正式 `code_review` 或 review receipt。
-显式诊断与历史对照保留其原范围；AC-REVIEW-011 的替代输出由当前会话经既有
-`recordDshCodeReviewResult` 写入 canonical attempt/result，再由 `receipts.quality_review`
-消费符合当前 task/stage/snapshot/material 与 OCR unavailable 条件的 `result_ref`。
-provider 保持 `dsh-code-review`，原 OCR attempt 原样保留；原始 invocation、执行者、
-output、exit、findings、覆盖、错误及 hash 按 verify-code 合同保存。
+把本次实际 JSON 结果和覆盖范围交给调用者；调用者保留原始执行者、命令、退出码、输出及错误。历史结果带原范围，不替当前实现下结论。本技能不生成身份认证、快照许可或阶段完成事实。
 
 ## 处置
 

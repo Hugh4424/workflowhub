@@ -1,112 +1,33 @@
 ---
 name: wh-review
-description: Send current-stage materials to configured heterologous reviewers and return their real findings.
+description: 执行文档面独立审查，并在 OCR 缺失或版本不足时代为执行同一代码审查面，保留真实发现与失败。
 version: 4.1.0
 ---
 
 # wh-review
 
-## Change notes
+## 分工与真实消费者
 
-- 4.1.0 (minor): declare the host-provided 3rd-review broker range and preserve an explicit `unknown` compatibility result when the broker does not expose semver metadata.
+wh-review 是 make-decision 方向/细节、build-plan 合并审查及 build-prd 文档审查的执行者。代码审查正常由 OCR 执行：build-code 每 Phase 一次、verify-code 终末一次。只有检测到 OCR 未安装（ENOENT）或版本低于1.12.9，才由 wh-review 执行同一代码面并记录回退原因；已安装的执行失败、超时、取消或输出无效保留 unavailable，不转成回退通过。
 
-## Purpose
+stage-skill-plan.json 仍在本技能原路径提供 required_skills/optional_skills：文档组包读者和 OCR 合同/lens 适配读者复用这些声明。它是选材，不是另一个调度器或审查点；不会把它搬入 runtime/review。历史 build-spec 登记退出当前调用，旧集成审查不恢复为正常节点。
 
-`wh-review` does one thing: review the bytes submitted in the current call with the current stage's review prompt.
+## 输入与方法
 
-It does not open or validate a Workspace, TaskHandle, Git repository, branch, snapshot, material revision, current four-material set, stage status, receipt, or completion fact. Those belong to the calling stage when actually needed.
+1. 接收本次实际 stage/track、允许范围与完整材料。方向盲审只看原始要求、客观事实、约束和非目标；细节审查读当前方向与细节；PRD 读实际任务地图/正文；代码面读声明的真实 diff、合同、lens 和相关验收原件。缺必要材料如实报 MATERIAL_INCOMPLETE，不补猜或擅读范围外文件。
+2. 按现有配置选择实际 provider/route，采用既有 broker 请求和阶段审查重点。先准备可读材料，再调用；当前脚本的内部包封装/hash 在 P5 剥离前仍是中间实现事实，本方法不把它当人类确认或继续工作的许可证。
+3. 一次请求返回原始 provider 身份、传输状态、真实 findings、错误及覆盖限制。provider 只读本次提交材料，不访问真实仓库、父目录、Git、shell、网络或宿主秘密。Temporary bundle 使用现有安全路径/清理，失败保持原错误，不能静默丢材料。
+4. 主会话保留一份真实 review 原件及执行回执，处置 fixed、rejected_invalid、accepted_risk 或 needs_human。finding 要有能回读的问题/根因/建议/证据；无效锚点标记留原件，内容仍由独立事实判断，不能自动删真实问题。严重未修问题先展示损失并取得该问题真实风险选择。
+5. 请求只要已经返回语义建议，就不因修复或想追空 findings 重派同 scope 轮次。无语义结果且具体传输/材料问题已改变时，按原调用范围处理安全重试。恢复/长等待沿同一个实际请求，取消按现信号路径执行；本技能不新建异步对象或第二层生命周期。
 
-## Input
+## 输出和失败边界
 
-```json
-{
-  "stage": "make-decision",
-  "review_track": "detail",
-  "materials": {
-    "raw_requirement": "...",
-    "approved_direction": "...",
-    "draft_spec_or_acceptance": "..."
-  }
-}
-```
+available 只表示实际收到可读建议，至少一个有效语义 sibling 可以与其它失败并存；partial/available-with-failures 不等于通过。空 findings 只表示本次完成阅读后未提出问题；未执行、不可用、取消、无效 JSON 或缺材料都不是空 findings，也不是用户同意或交付完成。
 
-Required fields:
+保留 provider 原身份与失败类别：ROUTE_UNAVAILABLE/REVIEW_BROKER_START_FAILED 只用于路线/启动失败；timeout、cancelled、invalid output、material missing、RATE_LIMITED 等保留真实类别。必要脱敏、realpath范围、输入/输出体量与解析限制、配置原子写、并集聚合和信号/资源清理义务仍在；P5 才改生产链，不能把方法改文当这些行为已实测。
 
-- `stage`: current review stage.
-- `materials`: the complete material bytes for this review.
+原始私有 provider 文本仅留在原有安全诊断位置，公开报告用原始记录引用、脱敏信息和真实错误，不外泄 cookie/token/password/Authorization/API key 或宿主私有路径。材料、独立质量、用户选择、Git/发布分别记录，不由 review 输出授予继续工作权限。
 
-`review_track` is required only for `make-decision`; `review_kind` is used only for mini-task reviews.
+## 现有接口
 
-`host_provider` is no longer read. A caller that still sends it has it ignored; it never selects, excludes, or blocks a reviewer.
-
-Do not send `task_path`, `project_name`, `task_id`, Workspace, Git, snapshot, revision, provider allowlist, or result-storage fields. Extra task/workspace fields from an older caller are ignored and never become review gates.
-
-## Behavior
-
-1. Select the configured reviewer route for the supplied stage/track (every configured profile; no same-source exclusion and no minimum headcount).
-2. Generate the stage-focused review instructions.
-3. Freeze exactly the submitted `materials` into one temporary bundle and hash those bytes.
-4. Make one broker group request.
-5. Return the real provider identities, transport outcome, findings, and material hash.
-6. Delete the temporary bundle.
-
-The provider may read only the submitted bundle. It may not access the repository, Workspace, TaskHandle, Git, shell, network, or host paths.
-
-## Output
-
-Available:
-
-```json
-{
-  "status": "available",
-  "stage": "make-decision",
-  "review_track": "detail",
-  "material_id": "...",
-  "runtime_id": "...",
-  "provider_results": [],
-  "findings": []
-}
-```
-
-For completed providers, the simple runner may also include
-`evidence_anchor_valid`, a boolean per returned finding. It is computed against
-the submitted bundle path and line; callers must preserve it when recording the
-canonical attempt/result and must not replace an unknown anchor with `true`.
-
-Unavailable:
-
-```json
-{
-  "status": "unavailable",
-  "error": {
-    "code": "...",
-    "message": "..."
-  }
-}
-```
-
-`available` only means at least one reviewer returned valid findings JSON. Empty findings are advice, not completion or approval. `unavailable` is not empty findings and must not be rewritten as pass.
-An unavailable response preserves the real public result and provenance: it is never a pass. The `error.code` must preserve the failure category: use `ROUTE_UNAVAILABLE` or `REVIEW_BROKER_START_FAILED` only for route/start failures; use `REVIEW_EXECUTION_TIMEOUT`, `REVIEW_CANCELLED`, `REVIEW_PROVIDER_OUTPUT_INVALID`, `MATERIAL_INCOMPLETE`, `RATE_LIMITED`, or the broker's original code for other failures. A timeout, signal, non-zero broker exit, malformed output, or one rate-limited sibling must never be relabeled `REVIEW_PROVIDER_UNAVAILABLE`; one valid semantic sibling keeps the aggregate `available`.
-
-## Long-review host convention
-
-Long reviews are run in the host's **后台执行** path; the foreground uses the host's existing wait/poll interface to collect the final wh-review JSON. `wh-review` itself still makes one synchronous broker request and does not add an async state object, a second timeout, or another process lifecycle.
-
-When a workflow is currently executing a declared review step and explicitly calls the recorder, the existing `material_fingerprint` prevents reuse of a result for different material. This currentness check does not create another call after downstream disposition or edits. Apply the current stage specification's terminal matrix: timeout is unavailable, partial is `available-with-failures`, `PUBLIC_RESULT_INVALID` and host-chain failures are unavailable, and zero-byte/invalid JSON is the internal `contract_failure` label. Raw provider text stays only in broker/host-private diagnostics; WorkflowHub task records and public boundaries retain error codes, sanitized messages, and stdout/stderr digests, never raw streams or host paths. A partial result is never a pass.
-
-## Responsibility boundary
-
-- `wh-review` does not write WorkflowHub task state or quality facts.
-- Empty findings are advice, never a pass; when a review round returns zero findings, the calling host adds one human-readable sentence to its own existing review record for that round — why zero findings, and what this round's review scope covered.
-- That sentence is a human-read discipline only: no new field, no findings-schema change, not a gate, does not block progress, and adds no confirmation point.
-- The calling stage records the returned review result and disposes each finding in its own material.
-- A review failure never blocks Talk, drafting, repair, or user confirmation.
-- Retry only when the previous call returned no semantic advice and the concrete transport/material problem changed.
-
-## Command
-
-```bash
-node skills/wh-review/scripts/wh-review-cli.mjs run <<'JSON'
-{"stage":"make-decision","review_track":"detail","materials":{"decision":"..."}}
-JSON
-```
+当前 CLI 保留 run、verify-final、doctor 的真实既有接口，按实际脚本参数调用；不要为方法改写发明新 flag/public command。verify-final 的必要只读结果查询及 parser/error 行为和 mini_task 旧路由由 P5 唯一 owner 改接。contracts、runner/provider/source/helper/schema 路径保持；这次只改变方法与登记，不承诺旧 runtime/canonical/bundle 消费者运行等价。

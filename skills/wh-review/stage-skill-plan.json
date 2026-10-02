@@ -5,7 +5,11 @@
       "tracks": {
         "direction": {
           "logical_skill_id": "wh-review/make-decision-direction",
-          "required_skills": ["intake-decision-review", "plan-ceo-review", "review"],
+          "required_skills": [
+            "intake-decision-review",
+            "plan-ceo-review",
+            "review"
+          ],
           "review_mode": "lens-only",
           "lens_owner": "wh-review",
           "lens_dispatch": "delegated",
@@ -13,7 +17,11 @@
         },
         "detail": {
           "logical_skill_id": "wh-review/make-decision-detail",
-          "required_skills": ["simplicity-guard", "plan-ceo-review", "review"],
+          "required_skills": [
+            "simplicity-guard",
+            "plan-ceo-review",
+            "review"
+          ],
           "review_mode": "lens-only",
           "lens_owner": "wh-review",
           "lens_dispatch": "delegated",
@@ -21,17 +29,11 @@
         }
       }
     },
-    "build-spec": {
-      "logical_skill_id": "wh-review/build-spec",
-      "required_skills": ["review"],
-      "review_mode": "lens-only",
-      "lens_owner": "wh-review",
-      "lens_dispatch": "delegated",
-      "delivery_mode": "file_only"
-    },
     "build-plan": {
       "logical_skill_id": "wh-review/build-plan",
-      "required_skills": ["review"],
+      "required_skills": [
+        "review"
+      ],
       "review_mode": "lens-only",
       "lens_owner": "wh-review",
       "lens_dispatch": "delegated",
@@ -39,7 +41,10 @@
     },
     "build-code": {
       "logical_skill_id": "wh-review/build-code",
-      "required_skills": ["simplicity-guard", "review"],
+      "required_skills": [
+        "simplicity-guard",
+        "review"
+      ],
       "review_mode": "lens-only",
       "lens_owner": "wh-review",
       "lens_dispatch": "delegated",
@@ -47,9 +52,10 @@
     },
     "verify-code": {
       "logical_skill_id": "wh-review/verify-code",
-      "required_skills": ["review"],
+      "required_skills": [
+        "review"
+      ],
       "review_mode": "lens-only",
-      "invocation": "post-first-repair-non-gate",
       "lens_owner": "wh-review",
       "lens_dispatch": "delegated",
       "delivery_mode": "file_only"
@@ -59,7 +65,10 @@
     "build_prd": {
       "review_kind": "build_prd",
       "logical_skill_id": "wh-review/build-prd",
-      "required_skills": ["review", "simplicity-guard"],
+      "required_skills": [
+        "review",
+        "simplicity-guard"
+      ],
       "review_mode": "lens-only",
       "lens_owner": "wh-review",
       "lens_dispatch": "delegated",
@@ -70,7 +79,9 @@
     "design": {
       "review_kind": "mini_task.design",
       "logical_skill_id": "wh-review/mini-task-design",
-      "required_skills": ["review"],
+      "required_skills": [
+        "review"
+      ],
       "review_mode": "lens-only",
       "lens_owner": "wh-review",
       "lens_dispatch": "delegated",
@@ -79,7 +90,10 @@
     "implementation": {
       "review_kind": "mini_task.implementation",
       "logical_skill_id": "wh-review/mini-task-implementation",
-      "required_skills": ["simplicity-guard", "review"],
+      "required_skills": [
+        "simplicity-guard",
+        "review"
+      ],
       "review_mode": "lens-only",
       "lens_owner": "wh-review",
       "lens_dispatch": "delegated",

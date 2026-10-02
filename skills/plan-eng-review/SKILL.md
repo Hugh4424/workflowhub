@@ -6,20 +6,12 @@ kind: sub-skill
 
 # plan-eng-review
 
-Source: adapted from the project engineering review baseline. Mode:
-`advisory`, file-only, no stage result and no provider verdict. build-plan calls
-it directly after the plan draft and before test routing; wh-review only reads
-the resulting fact and remains the sole independent provider review authority.
-It remains a lens-only observation source, not a runner or progression gate.
+Source: adapted from the project engineering review baseline. Mode: `advisory`, file-only.
+Read the engineering draft during build-plan and return anchored observations for the existing wh-review merged document review. This lens is not a runner, provider invocation or work permit.
 
 ## Required material
 
-Review the accepted specification, the complete draft plan, and any available
-early task outline for the same frozen snapshot. At this point `tasks.md` may
-not exist yet because this skill intentionally runs before `test-routing-advisor`
-and `spec-tasks`; missing tasks are therefore an expected stage-order fact, not
-a reason to invent task details. Do not accept a provider pass as a replacement
-for missing plan evidence.
+Review the current accepted specification, its global implementation design, all available Phase drafts and their task cards. In post tasks, engineering authorities are `spec.md` and `phases/P<n>.md`; `phases/index.md` only points to them. A draft index may be absent while cards are being authored; disclose this instead of inventing tasks. Historical plan/tasks remain read-only background. A provider pass does not supply missing engineering evidence.
 
 ## Check
 
@@ -52,7 +44,7 @@ for missing plan evidence.
    historical omission classes and answer each explicitly — anchored evidence,
    `none_observed` with what was compared, or `not_checked`. A skipped class
    is itself a finding:
-   (a) 真实来源/生产者未认证 — every requirement row cites an authenticated
+   (a) 真实来源/生产者未核实 — every requirement row cites a real
        source; a requirement with no real source is a finding.
    (b) 真实消费者/入口不存在 — every named consumer/entry point is verified to
        exist and to actually read the declared interface.
@@ -66,11 +58,10 @@ for missing plan evidence.
        need; missing semantics are named, not assumed.
    (g) 读回/负控/隐藏失败边界 — readback and negative controls exist where a
        failure could stay silent.
-   (h) 版本·身份·绑定缺失 — versions, identities, and evidence bindings are
-       declared for every artifact a downstream stage must trust.
+   (h) 来源或适用范围缺失 — every downstream artifact has a readable source, applicable version when needed, and honest coverage limits.
    (i) 规模未知 — scale/range facts are stated, or explicitly `unknown` with an
        owner and a handling stage.
-   Reconciliation gate: walk the original-requirement list row by row; every
+   Source reconciliation: walk the original-requirement list row by row; every
    R/FR/AC row must map to a concrete Task or carry an explicit
    not-doing/deferral reason with owner. Silent disappearance is a finding
    regardless of how good the written plan is.
