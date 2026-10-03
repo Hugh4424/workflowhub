@@ -147,9 +147,24 @@ const skillTextFiles = () => {
 };
 
 // docs 治理文本扫描面（B7/P8 组用）：docs/ 下存活 .md，排除归档/调研与决策日志（见排除清单）。
+// MT-7-075 is the single retained CARD-04 historical entry/help record, not
+// current governance. Its original row and unchanged pre-P8 bytes identify it;
+// no other SURVIVOR document or changed implementation is excluded here.
+function isRetainedHistoricalEntryRecord(rel) {
+  if (rel !== 'docs/architecture/real-entry-inventory.md' || CURRENT < 7) return false;
+  const row = ROWS.find((entry) => entry.id === 'MT-7-075' && entry.path === rel);
+  if (row?.disposition !== 'SURVIVOR' || row.batch !== '—'
+      || row.source !== '无代码消费者' || row.target !== '同左（人工阅读）') return false;
+  const current = fs.readFileSync(path.join(ROOT, rel));
+  const original = execFileSync('git', ['show', `backup/card-06-b7:${rel}`],
+    { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'] });
+  return original.equals(current)
+    && current.toString('utf8').startsWith('# 真实入口库存（CARD-04）')
+    && current.toString('utf8').includes('2026-09-26 11:53 UTC');
+}
 let docsFilesCache = null;
 const docsTextFiles = () => {
-  if (!docsFilesCache) docsFilesCache = walkFiles(['docs'], (abs) => path.extname(abs) === '.md');
+  if (!docsFilesCache) docsFilesCache = walkFiles(['docs'], (abs, rel) => path.extname(abs) === '.md' && !isRetainedHistoricalEntryRecord(rel));
   return docsFilesCache;
 };
 

@@ -252,7 +252,29 @@ describe('card06 migration ledger（AC-27/AC-52）', () => {
         // B0/P1 的 NEW 行 = 五窄工具 + 配套合同测试 + 开工横幅（MT-1-001..006、MT-6-001..007、
         // MT-7-114）。build-plan 阶段这些文件尚不存在 → 本组实跑必 RED，这是设计意图：
         // 预写测试先冻结合同，build-code 各批次实现后转 GREEN。
-        it(`NEW ${r.path} 存在`, () => {
+        const closedBanner = r.path === 'CARD-06-IN-PROGRESS.md' && CURRENT >= 7;
+        it(closedBanner ? `NEW ${r.path} 的 P1 创建/P8 收口生命周期成立` : `NEW ${r.path} 存在`, () => {
+          if (closedBanner) {
+            // MT-7-114 is the sole declared create-in-P1/delete-in-P8 lifecycle.
+            // Ordinary Git history proves the P1 addition; no supplied metadata
+            // or snapshot field is accepted as evidence of creation.
+            const beforeP1 = git(['rev-parse', 'backup/card-06-b0^{commit}']).trim();
+            const afterP1 = git(['rev-parse', 'backup/card-06-b1^{commit}']).trim();
+            expect(git(['ls-tree', '--name-only', beforeP1, '--', r.path]).trim(), `${r.path} 在 P1 前已存在`).toBe('');
+            git(['merge-base', '--is-ancestor', beforeP1, afterP1]);
+            git(['merge-base', '--is-ancestor', afterP1, 'HEAD']);
+            const additions = git(['log', '--reverse', '--format=%H', '--diff-filter=A',
+              `${beforeP1}..${afterP1}`, '--', r.path]).trim().split('\n').filter(Boolean);
+            expect(additions.length, `${r.path} 没有真实 P1 Git 新增记录`).toBeGreaterThan(0);
+            const creation = additions[0];
+            git(['merge-base', '--is-ancestor', beforeP1, creation]);
+            git(['merge-base', '--is-ancestor', creation, afterP1]);
+            expect(git(['diff-tree', '--no-commit-id', '--name-status', '-r', creation, '--', r.path]).trim())
+              .toBe(`A\t${r.path}`);
+            expect({ onDisk: fs.existsSync(path.join(ROOT, r.path)), tracked: git(['ls-files', '--', r.path]).trim() !== '' })
+              .toEqual({ onDisk: false, tracked: false });
+            return;
+          }
           expect(fs.existsSync(path.join(ROOT, r.path)), `${r.path} 尚未创建（${r.id}）`).toBe(true);
         });
       }

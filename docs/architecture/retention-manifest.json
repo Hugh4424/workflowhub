@@ -1,6 +1,6 @@
 {
   "schema_version": "workflowhub-retention-manifest.v1",
-  "phase": "CARD-06 P7 / T026 current physical MOVE sources removed",
+  "phase": "CARD-06 P7 directory roles / P8 actual original archive readback",
   "owner": "CARD-06 P7 / T026 / MT-5-050",
   "policy": "只读资料保留说明；不是 registry、哈希认证、删除裁决、质量或推进许可。当前生产路径职责唯一以 move-map 为准。原历史 task、review、test、receipt、snapshot 与 M14–M17 原件只读保留／按已决定归档，不改名、不补造、不另写账本。",
   "retain": [
@@ -173,284 +173,284 @@
     {
       "path": "docs/architecture/final-coverage-audit.md",
       "destination": "docs/archive/final-coverage-audit.md",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B7/P8",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/architecture/test-asset-inventory.md",
       "destination": "docs/archive/test-asset-inventory.md",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B7/P8",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/3rd-review-error-and-recovery.md",
       "destination": "docs/archive/3rd-review-error-and-recovery.md",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B7/P8",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/3rd-review-provider-contract.md",
       "destination": "docs/archive/3rd-review-provider-contract.md",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B7/P8",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/3rd-review-redesign-draft.md",
       "destination": "docs/archive/3rd-review-redesign-draft.md",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B7/P8",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/3rd-review-redesign-v2.md",
       "destination": "docs/archive/3rd-review-redesign-v2.md",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B7/P8",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/freeze-and-retire.md",
       "destination": "docs/archive/freeze-and-retire.md",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B7/P8",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/migration-and-fallback.md",
       "destination": "docs/archive/migration-and-fallback.md",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B7/P8",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/plain-language-mechanism-design.md",
       "destination": "docs/archive/plain-language-mechanism-design.md",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B7/P8",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/stage-atomic-step-inventory.md",
       "destination": "docs/archive/stage-atomic-step-inventory.md",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B7/P8",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/wh-review-e2e.md",
       "destination": "docs/archive/wh-review-e2e.md",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B7/P8",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/architecture/deletion-plan.json",
       "destination": "docs/archive/deletion-plan.json",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B6/P7",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/architecture/complexity-baseline.json",
       "destination": "docs/archive/complexity-baseline.json",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B6/P7",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/architecture/final-complexity-report.json",
       "destination": "docs/archive/final-complexity-report.json",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B6/P7",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/architecture/deletions-proof.json",
       "destination": "docs/archive/deletions-proof.json",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B6/P7",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/architecture/legacy-import-proof.json",
       "destination": "docs/archive/legacy-import-proof.json",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B6/P7",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/architecture/history-inventory.json",
       "destination": "docs/archive/history-inventory.json",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B6/P7",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/architecture/repository-inventory.tsv",
       "destination": "docs/archive/repository-inventory.tsv",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B6/P7",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/architecture/legacy-task-inventory.json",
       "destination": "docs/archive/legacy-task-inventory.json",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B6/P7",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/operations/claude-e2e-sample.md",
       "destination": "docs/archive/claude-e2e-sample.md",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B7/P8",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/operations/clean-install-archive.md",
       "destination": "docs/archive/clean-install-archive.md",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B7/P8",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/operations/codex-support-verification.md",
       "destination": "docs/archive/codex-support-verification.md",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B7/P8",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/operations/deferred-tasks-m17.md",
       "destination": "docs/archive/deferred-tasks-m17.md",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B7/P8",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/operations/old-tree-archive.md",
       "destination": "docs/archive/old-tree-archive.md",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B7/P8",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/superpowers/plans/2026-07-12-wh-review-v4-implementation.md",
       "destination": "docs/archive/2026-07-12-wh-review-v4-implementation.md",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B7/P8",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/superpowers/plans/2026-07-13-unstaged-review-snapshots.md",
       "destination": "docs/archive/2026-07-13-unstaged-review-snapshots.md",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B7/P8",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/superpowers/plans/2026-07-13-wh-review-v4-design-gap-closure.md",
       "destination": "docs/archive/2026-07-13-wh-review-v4-design-gap-closure.md",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B7/P8",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/superpowers/plans/2026-07-14-review-delivery-plan.md",
       "destination": "docs/archive/2026-07-14-review-delivery-plan.md",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B7/P8",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/superpowers/plans/2026-07-15-wh-review-quality-repair.md",
       "destination": "docs/archive/2026-07-15-wh-review-quality-repair.md",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B7/P8",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/superpowers/plans/2026-07-15-wh-review-sealed-contract-recovery.md",
       "destination": "docs/archive/2026-07-15-wh-review-sealed-contract-recovery.md",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B7/P8",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/superpowers/plans/2026-07-15-wh-review-simple-reliable-plan.md",
       "destination": "docs/archive/2026-07-15-wh-review-simple-reliable-plan.md",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B7/P8",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/superpowers/specs/2026-07-12-wh-review-v4-redesign-design.md",
       "destination": "docs/archive/2026-07-12-wh-review-v4-redesign-design.md",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B7/P8",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/superpowers/specs/2026-07-14-local-skill-closure-design.md",
       "destination": "docs/archive/2026-07-14-local-skill-closure-design.md",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B7/P8",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/superpowers/specs/2026-07-15-wh-review-simple-reliable-design.md",
       "destination": "docs/archive/2026-07-15-wh-review-simple-reliable-design.md",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B7/P8",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     },
     {
       "path": "docs/superpowers/specs/2026-07-15-wh-review-simple-reliable-review.md",
       "destination": "docs/archive/2026-07-15-wh-review-simple-reliable-review.md",
-      "status": "declared-archive-pending",
+      "status": "archived",
       "owner": "B7/P8",
       "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
-      "original_bytes": "只允许单原件精确 rename；历史报告正文不改、不复制镜像"
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
     }
   ],
-  "coverage": "本清单登记原决定保留的18项只读资料及35项已声明、尚待P8单原件迁移的历史资料。生产职责覆盖由当前move-map承接；不是目录快照、hash认证或质量结论。旧core/artifact-dir.mjs与core/load-config.mjs已在当前真实incoming归零后物理移除，runtime目标保留；该事实不替代P5/P6/P7原literal gates或整个stage质量。",
+  "coverage": "本清单登记原决定保留的18项只读资料及35项已实际单原件迁移到既定docs/archive目标的历史资料。生产职责覆盖由当前move-map承接；不是目录快照、hash认证或质量结论。旧core/artifact-dir.mjs与core/load-config.mjs在真实incoming归零后已移除，runtime目标保留。该事实不替代原literal gates或整个stage质量。外置124历史README由T028实际回执另行承接，不据本表宣称已写。",
   "historical_policy_source": "原 Phase 0 retention 定义仅可通过既有 Git 历史 backup/card-06-b6:docs/architecture/retention-manifest.json 查阅；不以旧 frozen_sources/content_hash/history_verification 作当前认证。"
 }
