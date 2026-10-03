@@ -23,6 +23,7 @@ function real(path) { const value = resolve(path); if (realpathSync(value) !== v
 function read(path) { real(path); const s = lstatSync(path); if (!s.isFile() || s.nlink !== 1) throw fail("UNSAFE_FILE", `regular single-link file required: ${path}`); return readFileSync(path); }
 function context(taskDir) {
   const root = real(taskDir), manifest = JSON.parse(read(join(root, "task.json")));
+  if (manifest.activation_cohort !== "post") throw fail("MINI_TASK_READ_ONLY", "mini-task writes require an explicit post task; pre/history and missing or unknown cohorts are read-only");
   if (root.split("/").slice(-4).join("/") !== `Projects/${manifest.project_name}/tasks/${manifest.task_id}`) throw fail("TASK_PATH_MISMATCH", "task.json and directory identities differ");
   const repo = real(manifest.target_repo_root);
   const branch = `task/${manifest.project_name}/${manifest.task_id}`;
