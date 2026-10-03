@@ -400,11 +400,34 @@
 
 - **NEW / MODIFY / DELETE**：唯一权威为 `attachments/migration-table.md`，每个路径一行、一个批次（=唯一 owner Phase）；唯一的同文件串行 MODIFY 例外仅为下述已获023具体用户批准的 move-map 六工具登记与后续迁移更新（批准原件与范围见下述），迁移主表仍保留该路径一行。build-plan 新增并冻结的 oracle 测试：`tests/contract/narrow-tool-*.test.mjs`（6 个）、`tests/contract/narrow-tools-isolation.test.mjs`、`tests/contract/card06-migration-ledger.test.mjs`、`tests/contract/thin-core-residue.test.mjs`、`tests/contract/ocr-review-contract-bundle.test.mjs`、`tests/contract/code-review-ocr-fallback.test.mjs`。
 - **DO NOT TOUCH**：`specs/workflowhub-thin-core-rebuild-planning-20260919/**`（母材料）、`specs/archive/**`、`docs/research/**`、`docs/adr/**` 既有文件正文、外置任务存储中任何已有任务目录与记录、本卡 `decision-log.md`（只允许 make-decision 增量）、迁移表冻结行（除已获034具体批准后的三行定点纠正，以及动议053获得绑定六项候选的真实具体批准后才允许的MT-1-031、MT-3-084/086/088/094/091六行限定修正及对应计数；053当前未批准，尚不生效）、上述 build-plan 预写测试的断言（改动须走 test change request + 独立审查）。
-- **全局依赖**：P1 → P2 → P3 → P4 → P5 → P6 → P7 → P8，严格串行（ADR-004）。串行原因：先立新后拆旧；P5 前人为门与审查链必须已有替代；P6 的 hash 字段删除依赖 P5 已删除 closure 以外的全部消费者；P8 文档依赖前面批次删除了守护文档文本的测试。
+- **全局依赖**：P1 → P2 → P3 → P4 的顺序不变；P5～P7 按下文同一串行切换窗口执行，窗口结束后进入 P8。Phase 依赖栏保留较早材料/改接输入的指针，不把整 Phase GREEN 当作必要 consumer 改接的开工许可。每文件仍归迁移表唯一 owner；先立新、先改实际 consumer，再删 producer。P6 的 catalog/bundle hash 字段仍只在对应旧消费者退役后删除；P8 文档仍等待前面相关处置实际完成。
 - **文件归属**：迁移表批次列唯一；多批次都需要改的共享文件按"最早一次改完、会打断存活消费者则推后"合并到一个批次（迁移表备注写合并原因）。上述合并原则仅对下述已获023具体用户批准的 move-map 元数据限定例外作唯一豁免（批准原件与范围见下述）；除此以外不得跨 Phase 分拆同路径修改。合并过程中的 14 条判据见迁移表 `#3-聚合裁定`（A-1～A-14）。
 - **既有创建/删除交接例外**：开工横幅 `CARD-06-IN-PROGRESS.md` 由 P1 创建（迁移表 MT-7-114，owner=P1），P8/T027 执行其声明的收口删除。为避免同一路径出现两个 Phase owner，它只登记在 P1 写集；这是本卡唯一一处"创建 Phase 与删除 Phase 不同"的路径，已在迁移表 A-14 登记。
 - **新增元数据串行修改例外（023具体批准已记录）**：仅 `docs/architecture/move-map.json`，P1/T008 在既有 `entries` 预登记六个 `runtime/interface/{safe-write,record-lock,workspace-check,run-command,git-authorize,human-confirm}.mjs` 的职责、owner、真实当前消费者、替代/删除条件；当前首次实施已先创建，首次只能如实补登记，不能回填事前事实。P7/T026 在 P1～P6 完成后更新迁移完成的真实职责/消费者，保留并复用六条 P1 登记，不丢弃或重复登记。仅此元数据文件分别列入 P1/P7 写集、严格串行，不并行双写；主表 MT-5-048 的 B6/P7 主迁移 owner 与路径唯一性不变，其余路径仍按单 owner 合并原则。迁移表 §9 的 `MT-7-A001` 明确对原 A-2 及全局共享文件规则的限定修正；它不新增生产接口、registry、schema、对象或命令。本例外的具体批准已由唯一原件 `quality/confirmations/2026-10-01-001-build-code-accepted.json` 证明（SHA256 `ea10e39dc293431bc838842decf75a69c3c12236da06b9d56f06c2fc8134357a`），HEAD `ec9dec41caaee0d5d45e073f585ec7e3b45feb5e`，material_refs 绑定 `2026-10-02-023-p1-registration-and-raw-path-final-candidate.md` 与同stem patch。021是方案设计来源，023是实际批准/应用字节；此例外现已生效，仅限已批准范围，不将该授权解释成正式stage或整体质量接受。
 - **回滚与恢复**：见"迁移契约"。
+
+### P5～P7 串行切换窗口（仅执行次序纠正）
+
+原顺序要求 P5/T023 删除前所有外部存活 import 为零，同时 P6 必须等 P5 GREEN 才改接 `task-bootstrap` 与删除旧工具，P7 才改接部分存活测试；当前 `task-bootstrap.mjs` 的两个顶层 import 和后续批次旧工具证明这两项要求不能按原顺序同时成立。纯执行次序在本 task 内纠正，不改变 FR、AC、DELETE 分类、文件 owner、Done、oracle、三个审查点或公共七类入口，也不创建阶段、gate、selector、持久对象或进度账本。
+
+1. P5 先完成 T016～T022 和本 Phase 仍存的 NARROW consumer 改接；未改接的真实 consumer 返回其既有 owner 修，不能仅因未调用而说没有依赖。T023 的 B4 producer 此时保留，不把 P5 声明完成。
+2. 在同一串行窗口，P6 的 T024/T025 owner 先处理本写集中的必要存活 consumer（含 `task-bootstrap` 完整改接与 await）及已登记 DELETE 的旧 consumer；P7/T026 owner 先处理本写集中的必要存活 consumer。已有较早 Phase 的残留 consumer 返回原 owner 修；不让 P5 静默修改其它 owner 的文件，不添加同步桥或新的窄工具能力。每个文件保持其唯一原 owner，所需代码/测试/路径更新在该 owner 的完整处置内完成。
+3. 在实际剩余 consumer import 为零之后，执行 T023 的 B4 producer 删除；只允许 T023 已声明的同批 DELETE 豁免。没有替代/真实保护证据的 consumer 不删。后续 owner 准备或工具未被调用均不替代这一真实检查。
+4. 完成本窗口 P6/T024、T025 和 P7/T026 的其余原定处置；catalog/bundle hash 只在旧读取者退役后删，MOVE 与 import 更新按原 owner 作为完整处置落地，move-map 只写已发生的真实职责和 consumer。
+5. 按真实原始检查分别收口 P5、P6、P7；未满足自身原 Done 时只报告局部事实，保持 incomplete，不先填 GREEN 再补证据。P8 只在本窗口相关任务实际完成后执行。
+
+每批首个实际改动前仍在当时真实 HEAD 创建其原 `backup/card-06-b<N>` 标签，不删除、改指或重造既有标签；中途失败按原 revert 策略处理。批前 dirty 纪律、原始件唯一性及外送授权范围不变。
+
+冻结的台账和残留测试读最高已存在 backup 标签，并累积启用 `批次 ≤ current`。提前创建 B5/B6 标签不证明这些批次已完成，可能扩大真实 RED 范围；保留该原件，不更改 CURRENT、筛掉旧断言或删除标签。最高 B6 时，原 P5/T023 两文件命令和 P5/P6/P7 原 literal gate 都必须满足 B0～B6 实际 DELETE/NEW/引用/残留条件。只有本窗口完整处置后才可能收取这些命令的最终 GREEN；中途 consumer 定向检查和局部通过不能替代它们。
+
+| 原 literal 检查 | 窗口内执行与完成边界 |
+| --- | --- |
+| T021 两文件；T022 当前游标合同 | 各自行为改接后真实执行，保留当时 source 与原始结果；只证明相应 Task。新修复只复验受影响集合。 |
+| T023 台账 + 残留；P5 五文件 gate | B4 consumer 改接/删除的实况可产生目标 RED；最终在 B4～B6 必要处置全部落地后原命令实跑，不要求最高标签退回 B4。 |
+| P6 台账 + 残留 + resolver；T024/T025 原命令 | 必要 consumer 预处理后只留定向事实；原 literal 最终收口仍待完整 B5 与最高标签累积范围的实际处置，路径逃逸负例不降级。 |
+| P7 台账 + 残留 + P1 隔离 + OCR fallback；T026 原命令 | 必要 consumer 改接只留局部事实；MOVE、import、move-map 和最高标签累积范围全部落地后原 literal 实跑。 |
+
+本窗口不声称冻结测试一定 GREEN。若实际原 literal 仍失败，区分真实实施缺陷与独立可证的冻结 oracle/fixture 错误；前者回原 owner 修，后者由原材料/测试作者提交精确技术 TCR 并独立审读，保留失败，不以改弱断言换绿。已观察到的 P8 横幅创建/删除生命周期冲突另行按原作者 TCR 处理，不在本次执行次序修改中偷改断言。
 
 ### Requirement-to-Task Trace
 

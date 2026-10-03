@@ -11,18 +11,29 @@ import { parseReviewerOutput } from "./review-output.mjs";
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const DEFAULT_EXECUTOR_CANCELLATION_GRACE_MS = 30_000;
 const GIT_OID = /^[a-f0-9]{40,64}$/;
+const OCR_PROVIDER_DEADLINE_MS = 600_000;
 const REQUIRED_AGENT_TOOL_PROHIBITION = "Do not invoke Agent, subagent, child-agent, or other agent tools.";
 const REQUIRED_WAIT_POLL_PROHIBITION = "Do not wait for or poll agents, sessions, or processes; do not invoke wait/poll tools.";
-const KIMI_REVIEW_AGENT_FILE = ".workflowhub-ocr-read-only-agent.md";
-const KIMI_REVIEW_SKILLS_DIR = ".workflowhub-ocr-empty-skills";
-const KIMI_REVIEW_AGENT = `---
-name: workflowhub-ocr-read-only-review
-description: Read-only WorkflowHub OCR reviewer.
-tools:
-  - Read
----
-Read only the files named in review-prompt.md. Do not use any other tool, path, shell, Git, network, or write operation. Return the exact JSON object requested by the review prompt and no prose.
-`;
+/** Inspect the current PATH without dispatching a review or changing configuration. */
+export function detectOcr({ env = process.env } = {}) {
+  const detected_by = "ocr --version (current PATH)";
+  let output;
+  try { output = execFileSync("ocr", ["--version"], {env:{...env,OCR_NO_UPDATE:"1"},encoding:"utf8",timeout:10000,maxBuffer:65536,stdio:["ignore","pipe","pipe"]}); }
+  catch(error) {
+    if(error.code === "ENOENT") return {status:"not_installed",version:null,reason:"not_installed: ENOENT",detected_by};
+    return {status:"unavailable",version:null,reason:"ocr version detection failed",detected_by,error:{code:String(error.code ?? "OCR_VERSION_FAILED")}};
+  }
+  const named=/^\s*(?:open[- ]?code[- ]?review|ocr)\s*(?:version\s*[:=]?\s*)?v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\s|$)/i;
+  const bare=/^\s*v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?\s*$/;
+  const matches=output.split(/\r?\n/).map(line=>line.match(named) ?? line.match(bare)).filter(Boolean);
+  const versions=new Map(matches.map(match=>[match.slice(1,5).join("|"),match]));
+  const match=versions.size===1 ? [...versions.values()][0] : null;
+  if(!match) return {status:"unavailable",version:null,reason:"ocr version output is missing or ambiguous",detected_by,error:{code:"OCR_VERSION_INVALID"}};
+  const values=match.slice(1,4).map(Number),version=match.slice(1,4).join(".")+(match[4] ? "-"+match[4] : "");
+  const minimum=[1,12,9];let comparison=0;for(let i=0;i<3;i++){if(values[i]!==minimum[i]){comparison=values[i]>minimum[i] ? 1 : -1;break;}}
+  if(comparison<0 || comparison===0&&match[4])return {status:"not_installed",version,reason:`not_installed: version ${version} below 1.12.9`,detected_by};
+  return {status:"installed",version,reason:null,detected_by};
+}
 
 export function isCandidateOcrReviewRequest(request) {
   const scope = request?.review_scope ?? request?.reviewScope ?? null;
@@ -93,10 +104,14 @@ async function settleWithin(promise, timeoutMs) {
 }
 
 function command(cwd, args) {
+  const env={...process.env};
+  for(const key of Object.keys(env))if(key.startsWith("GIT_"))delete env[key];
+  env.GIT_OPTIONAL_LOCKS="0";
+  if(args[0]==="ocr")env.OCR_NO_UPDATE="1";
   try {
     return execFileSync(args[0], args.slice(1), {
       cwd,
-      env: args[0] === "ocr" ? { ...process.env, OCR_NO_UPDATE: "1" } : process.env,
+      env,
       encoding: "utf8",
       maxBuffer: 4 * 1024 * 1024,
       stdio: ["ignore", "pipe", "pipe"],
@@ -193,12 +208,13 @@ function materializeAndInspect(bundleRoot, files) {
     command(packetRoot, ["git", "init", "-q", "."]);
     const version = command(packetRoot, ["ocr", "--version"]).trim();
     const rule = {
-      include: ["**/*.md", "**/*.mjs", "**/*.json", "**/*.yaml", "**/*.txt"],
+      include: ["**/*"],
       rules: [
         { path: "**/*.md", rule: "Review requirements, contracts, diffs, lifecycle and failure boundaries; report only evidence-backed issues." },
         { path: "**/*.mjs", rule: "Review correctness, consumer fit, lifecycle, cancellation, security and tests; report only evidence-backed issues." },
         { path: "**/*.json", rule: "Review schema, identity, provenance and failure semantics; report only evidence-backed issues." },
         { path: "**/*.yaml", rule: "Review configuration and contract consistency; report only evidence-backed issues." },
+        { path: "**/*.diff", rule: "Review the complete supplied code diff against current source and consumer lines; do not infer code outside the packet." },
         { path: "**/*.txt", rule: "Review the supplied candidate diff and packet facts; report only evidence-backed issues." },
       ],
     };
@@ -363,23 +379,23 @@ export async function runOcrDelegationRound(request, {
           });
         }
       }
-      return unavailable(
-        request,
-        materialId,
-        settled.settled && !cancellationError ? "OCR_EXECUTOR_CANCELLED" : "OCR_EXECUTOR_CANCEL_UNCONFIRMED",
-        settled.settled && !cancellationError
-          ? "OCR executor terminated after cancellation"
-          : "OCR executor termination was not confirmed before the cancellation deadline",
-        {
-          dispatch_state: "sent_unparsed",
-          cancellation: {
-            termination_requested: cancellationHandler !== null,
-            termination_confirmed: settled.settled && !cancellationError,
-            ...(cancellationError ? { termination_error: cancellationError } : {}),
-            ...(preservePacketUntilExecutorExit ? { packet_cleanup: "deferred_until_executor_exit" } : {}),
-          },
+      const observed=settled.settled && !settled.error && settled.value && typeof settled.value==="object" && !Array.isArray(settled.value) ? settled.value : null;
+      const code=settled.settled && !cancellationError ? "OCR_EXECUTOR_CANCELLED" : "OCR_EXECUTOR_CANCEL_UNCONFIRMED";
+      const message=settled.settled && !cancellationError ? "OCR executor terminated after cancellation" : "OCR executor termination was not confirmed before the cancellation deadline";
+      return unavailable(request,materialId,code,message,{
+        ...(observed ?? {}),
+        status:"unavailable",outcome:"unavailable",
+        // A settled provider group is a real source even when this outer
+        // request was cancelled; retain every member and its original facts.
+        dispatch_state:observed?.dispatch_state ?? settled.error?.dispatch_state ?? "unknown",
+        error:observed?.error ?? {code,message},
+        cancellation:{
+          termination_requested:cancellationHandler!==null,
+          termination_confirmed:settled.settled && !cancellationError,
+          ...(cancellationError ? {termination_error:cancellationError} : {}),
+          ...(preservePacketUntilExecutorExit ? {packet_cleanup:"deferred_until_executor_exit"} : {}),
         },
-      );
+      });
     }
     if (outcome.kind === "error") throw outcome.error;
     const result = outcome.result;
@@ -749,12 +765,6 @@ function createOcrHostMaterials(packet, files) {
   }
 }
 
-function prepareKimiReadOnlyProfile(bundleRoot) {
-  writeFileSync(join(bundleRoot, KIMI_REVIEW_AGENT_FILE), KIMI_REVIEW_AGENT, { flag: "wx", mode: 0o600 });
-  mkdirSync(join(bundleRoot, KIMI_REVIEW_SKILLS_DIR), { recursive: true, mode: 0o700 });
-}
-
-
 function safeOcrSnapshotPath(path) {
   return typeof path === "string" && path.length > 0 && !isAbsolute(path) && !path.includes("\\")
     && !path.split("/").some((part) => part === "" || part === "." || part === "..");
@@ -768,7 +778,7 @@ function readVerifiedOcrBundleFile(bundle, manifestByPath, path) {
     const root = realpathSync(bundle.bundleRoot);
     const candidate = resolve(root, ...path.split("/"));
     const stat = lstatSync(candidate);
-    if (stat.isSymbolicLink() || !stat.isFile()) return null;
+    if (stat.isSymbolicLink() || !stat.isFile() || stat.nlink!==1) return null;
     const actual = realpathSync(candidate);
     const rel = relative(root, actual);
     if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) return null;
@@ -796,40 +806,6 @@ function ocrUtf8Text(bytes) {
   return Buffer.from(text, "utf8").equals(bytes) && !text.includes("\0") ? text : null;
 }
 
-function ocrSnapshotPathReader(snapshotRoot, snapshotTree, injectedReader) {
-  if (!GIT_OID.test(snapshotTree ?? "")) return null;
-  if (typeof injectedReader === "function") {
-    return (path) => {
-      if (!safeOcrSnapshotPath(path)) return null;
-      try {
-        const bytes = Buffer.from(injectedReader(snapshotTree, path));
-        const text = ocrUtf8Text(bytes);
-        return text === null ? null : { bytes, text };
-      } catch { return null; }
-    };
-  }
-  if (typeof snapshotRoot !== "string" || snapshotRoot.trim() === "") return null;
-  return (path) => {
-    if (!safeOcrSnapshotPath(path)) return null;
-    try {
-      const treeEntry = execFileSync("git", ["-C", snapshotRoot, "ls-tree", "-z", snapshotTree, "--", path], {
-        encoding: null,
-        maxBuffer: 1024 * 1024,
-        stdio: ["ignore", "pipe", "ignore"],
-      });
-      const record = treeEntry.toString("utf8").split("\0").filter(Boolean);
-      if (record.length !== 1 || !record[0].endsWith(`\t${path}`)
-          || !/^100(?:644|755) blob [a-f0-9]{40,64}\t/.test(record[0])) return null;
-      const bytes = execFileSync("git", ["-C", snapshotRoot, "show", `${snapshotTree}:${path}`], {
-        encoding: null,
-        maxBuffer: 16 * 1024 * 1024,
-        stdio: ["ignore", "pipe", "ignore"],
-      });
-      const text = ocrUtf8Text(bytes);
-      return text === null ? null : { bytes, text };
-    } catch { return null; }
-  };
-}
 
 function ocrDiffPacketRaw(packetText, packetPath, sourcePath, rawBytes) {
   const expectedPath = packetPath === "diff/changes.md" ? "changes.diff" : sourcePath;
@@ -955,85 +931,25 @@ function ocrIndexedDiffForFinding({ bundle, manifestByPath, packetFilesByPath, p
   return { diffText: ocrUtf8Text(diffBytes), diffLine, targetPath: change.path };
 }
 
-function createOcrSnapshotAnchorResolver({ sourceBundle, snapshotRoot, snapshotReader, packetFiles }) {
-  const manifestByPath = ocrBundleManifest(sourceBundle);
-  if (!manifestByPath) return () => null;
-  const sourceBytes = readVerifiedOcrBundleFile(sourceBundle, manifestByPath, "source.json");
-  if (!sourceBytes) return () => null;
-  let sourceIdentity;
-  try { sourceIdentity = JSON.parse(sourceBytes.toString("utf8")); } catch { return () => null; }
-  const readSnapshot = ocrSnapshotPathReader(snapshotRoot, sourceIdentity.snapshot_tree, snapshotReader);
-  if (!readSnapshot) return () => null;
-  const packetFilesByPath = new Map(packetFiles.map(({ path, content }) => [path, content]));
-  const snapshotCache = new Map();
-  const getSnapshot = (path) => {
-    if (!snapshotCache.has(path)) snapshotCache.set(path, readSnapshot(path));
-    return snapshotCache.get(path);
-  };
-  return (finding) => {
-    if (!safeOcrSnapshotPath(finding?.path) || !Number.isSafeInteger(finding.line) || finding.line < 1) return null;
-    const packetPath = finding.path;
-    const packetText = packetFilesByPath.get(packetPath);
-      if (typeof packetText !== "string") return null;
-    let path = packetPath;
-    let line = finding.line;
-    let diffPatch = false;
-    let patchLine = null;
-    if (packetPath.startsWith("context/")) {
-      const contextBytes = readVerifiedOcrBundleFile(sourceBundle, manifestByPath, packetPath);
-      const contextText = contextBytes && ocrUtf8Text(contextBytes);
-      if (contextText === null || packetText !== redactProviderHostPaths(contextText)) return null;
-      const headerBreak = contextText.indexOf("\n");
-      if (headerBreak < 0) return null;
-      let header;
-      try { header = JSON.parse(contextText.slice(0, headerBreak)); } catch { return null; }
-      if (header?.schema_version !== "wh-review-context.v1" || header.provider_path !== packetPath
-          || !safeOcrSnapshotPath(header.path) || !Number.isSafeInteger(header.start_line) || header.start_line < 1
-          || !Number.isSafeInteger(header.end_line) || header.end_line < header.start_line
-          || !/^[a-f0-9]{64}$/i.test(header.snapshot_sha256 ?? "")) return null;
-      const snapshot = getSnapshot(header.path);
-      if (!snapshot || sha256(snapshot.bytes) !== header.snapshot_sha256.toLowerCase()) return null;
-      const sourceLines = snapshot.text.split(/\r?\n/);
-      const excerpt = contextText.slice(headerBreak + 1).replace(/\n$/, "");
-      const excerptLines = excerpt.split(/\r?\n/);
-      const expectedLines = sourceLines.slice(header.start_line - 1, header.end_line);
-      if (expectedLines.length !== header.end_line - header.start_line + 1
-          || excerptLines.length !== expectedLines.length
-          || redactProviderHostPaths(expectedLines.join("\n")) !== excerpt) return null;
-      path = header.path;
-      line = header.start_line + finding.line - 2;
-      if (finding.line < 2 || line > header.end_line) return null;
-    } else if (packetPath === "diff/changes.md" || /^diff-shards\/S-[A-Za-z0-9_-]+\.md$/.test(packetPath)) {
-      const diff = ocrIndexedDiffForFinding({ bundle: sourceBundle, manifestByPath, packetFilesByPath, packetPath, packetLine: finding.line });
-      if (!diff?.diffText) return null;
-      const pathFromDiff = diff.targetPath ?? null;
-      const lineMapping = pathFromDiff
-        ? ocrDiffSourceLine(diff.diffText, pathFromDiff, diff.diffLine)
-        : (() => {
-            const allChanges = [...diff.diffText.matchAll(/^\+\+\+ b\/(.+)$/gm)].map((match) => match[1]);
-            const candidates = [...new Set(allChanges.filter(safeOcrSnapshotPath))];
-            const mappings = candidates.map((candidate) => ({ candidate, mapped: ocrDiffSourceLine(diff.diffText, candidate, diff.diffLine) }))
-              .filter(({ mapped }) => mapped !== null);
-            return mappings.length === 1 ? { ...mappings[0].mapped, path: mappings[0].candidate } : null;
-          })();
-      if (!lineMapping) return null;
-      path = pathFromDiff ?? lineMapping.path;
-      line = lineMapping.line;
-      patchLine = lineMapping.patch;
-      diffPatch = true;
-    } else {
-      const bundledBytes = readVerifiedOcrBundleFile(sourceBundle, manifestByPath, packetPath);
-      const bundledText = bundledBytes && ocrUtf8Text(bundledBytes);
-      if (bundledText === null || packetText !== redactProviderHostPaths(bundledText)) return null;
-      const snapshot = getSnapshot(path);
-      if (!snapshot || redactProviderHostPaths(snapshot.text) !== redactProviderHostPaths(bundledText)) return null;
+function createOcrSourceAnchorResolver({ sourceBundle, packetFiles }) {
+  const manifestByPath=ocrBundleManifest(sourceBundle);if(!manifestByPath)return ()=>null;
+  const files=new Map(packetFiles.map(({path,content})=>[path,content]));
+  const sourceFor=path=>{const bytes=readVerifiedOcrBundleFile(sourceBundle,manifestByPath,path);const text=bytes&&ocrUtf8Text(bytes);return typeof text==="string" ? {bytes,text} : null;};
+  return finding=>{
+    if(!safeOcrSnapshotPath(finding?.path)||!Number.isSafeInteger(finding.line)||finding.line<1)return null;
+    const path=finding.path,packetText=files.get(path);if(typeof packetText!=="string")return null;
+    const original=sourceFor(path);if(!original||redactProviderHostPaths(original.text)!==packetText)return null;
+    if(path==="changes.diff"){
+      const targets=[...new Set([...original.text.matchAll(/^\+\+\+ b\/(.+)$/gm)].map(m=>m[1]).filter(safeOcrSnapshotPath))];
+      const mapped=targets.map(target=>({target,line:ocrDiffSourceLine(original.text,target,finding.line)})).filter(x=>x.line);
+      if(mapped.length!==1)return null;
+      const source=sourceFor(mapped[0].target);if(!source)return null;
+      const lines=source.text.split(/\r?\n/);const line=mapped[0].line;
+      if(lines[line.line-1]!==line.patch)return null;
+      return {path:mapped[0].target,line:line.line,content:source.text,diffPatch:true};
     }
-    const snapshot = getSnapshot(path);
-    if (!snapshot) return null;
-    const lines = snapshot.text.split(/\r?\n/);
-    if (line < 1 || line > lines.length) return null;
-    if (diffPatch && lines[line - 1] !== patchLine) return null;
-    return { path, line, content: snapshot.text, diffPatch };
+    const lines=original.text.split(/\r?\n/);if(finding.line>lines.length)return null;
+    return {path,line:finding.line,content:original.text,diffPatch:false};
   };
 }
 
@@ -1062,26 +978,36 @@ function ocrProviderPlan(provider, profile, { cwd = null } = {}) {
   }
   const model = profile?.model;
   const entry = "Read review-prompt.md in this directory, then use the packet indexes to inspect the implementation and evidence files needed for this review. Do not blindly dump every listed file; inspect all implementation and test changes relevant to findings, and read raw execution output only when a claim depends on it. Return only the requested JSON object.";
-  if (adapter === "codex") return {
-    adapter, executable,
-    args: ["exec", "--json", "--sandbox", "read-only", "--skip-git-repo-check", "--ephemeral",
-      ...(model ? ["--model", model] : []),
-      ...(profile.effort ? ["-c", "model_reasoning_effort=" + JSON.stringify(profile.effort)] : []),
-      "Read review-prompt.md, use the packet indexes first, then inspect the implementation and evidence files needed for this review. Do not blindly dump every listed file. If no Read tool is available, use only read-only file-view commands (such as cat or sed -n) on review-prompt.md and the selected relative packet paths inside this isolated packet cwd. Never write, use Git or network commands, or access parent paths. Return only the requested JSON object."],
-  };
-  if (adapter === "kimi") {
+  if (adapter === "codex") {
     if (typeof cwd !== "string" || cwd.trim() === "") {
-      throw Object.assign(new Error("Kimi OCR requires a prepared read-only agent profile"), {
+      throw Object.assign(new Error("Codex OCR requires a prepared packet read root"), {
         code: "OCR_PROVIDER_RUNTIME_INVALID",
       });
     }
+    // This invocation uses native filesystem permissions, not the legacy
+    // read-only write policy. User config/rules and non-shell host tools are
+    // disabled; unsupported flags/configuration fail before a review runs.
+    const permissions = "permissions.wh_ocr={filesystem={\":root\"=\"deny\",\":minimal\"=\"read\",\":tmpdir\"=\"deny\",\":slash_tmp\"=\"deny\","
+      + JSON.stringify(cwd) + "=\"read\"},network={enabled=false}}";
     return {
       adapter, executable,
-      args: ["--agent-file", join(cwd, KIMI_REVIEW_AGENT_FILE),
-        "--skills-dir", join(cwd, KIMI_REVIEW_SKILLS_DIR),
-        "--prompt", entry, "--output-format", "stream-json",
-        ...(model ? ["--model", model.replace(/^kimi-code\//, "kimi-for-coding/")] : [])],
+      args: ["exec", "--ignore-user-config", "--ignore-rules", "--strict-config", "--json",
+        "--skip-git-repo-check", "--ephemeral", "-C", cwd, "-c", "default_permissions=\"wh_ocr\"", "-c", permissions,
+        "-c", "approval_policy=\"never\"", "-c", "web_search=\"disabled\"",
+        "-c", "shell_environment_policy.inherit=\"none\"",
+        ...["apps", "plugins", "multi_agent", "view_image", "skill_search",
+          "skill_mcp_dependency_install", "memories", "browser_use", "computer_use",
+          "image_generation", "tool_suggest", "goals"].flatMap((feature) => ["--disable", feature]),
+        "--enable", "skip_host_skill_discovery",
+        ...(model ? ["--model", model] : []),
+        ...(profile.effort ? ["-c", "model_reasoning_effort=" + JSON.stringify(profile.effort)] : []),
+        entry],
     };
+  }
+  if (adapter === "kimi") {
+    throw Object.assign(new Error("Kimi native Read has no verified packet filesystem boundary; direct review is unavailable"), {
+      code: "OCR_PROVIDER_PACKET_BOUNDARY_UNAVAILABLE",
+    });
   }
   if (adapter === "claude-code") return {
     adapter, executable,
@@ -1272,7 +1198,12 @@ function runOcrProviderProcess({ provider, profile, cwd, signal, onProviderHealt
         cwd, stdio: process.platform === "win32"
           ? ["ignore", "pipe", "pipe"] : ["pipe", "pipe", "pipe", "ipc"],
         detached: false,
-        env: { ...process.env, OCR_NO_UPDATE: "1" },
+        env: (() => {
+          const env = { ...process.env, OCR_NO_UPDATE: "1" };
+          // A nested review must not inherit the desktop host tool channel.
+          delete env.CODEX_APP_TOOLS_PIPE_PATH;
+          return env;
+        })(),
       });
     } catch (error) {
       resolveRun({ status: "failed", output: null, error: { code: "OCR_PROVIDER_SPAWN_FAILED", message: safeText(error.code ?? error.message) },
@@ -1292,6 +1223,8 @@ function runOcrProviderProcess({ provider, profile, cwd, signal, onProviderHealt
     let spawnError = null;
     let killTimer = null;
     let healthTimer = null;
+    let deadlineTimer = null;
+    let stopCause = null;
     let providerPid = null;
     let providerExit = null;
     const supervisorDiagnostics = [];
@@ -1333,9 +1266,23 @@ function runOcrProviderProcess({ provider, profile, cwd, signal, onProviderHealt
       terminate(kind);
     };
     const onAbort = () => {
+      // Preserve the first observed stop: an earlier explicit cancellation is
+      // not reclassified when its cleanup crosses the transport deadline.
+      stopCause ??= Date.now() - startedAt >= OCR_PROVIDER_DEADLINE_MS ? "timeout" : "cancelled";
+      if (deadlineTimer) clearTimeout(deadlineTimer);
       stopProvider("SIGTERM");
       if (process.platform === "win32") killTimer ??= setTimeout(() => terminate("SIGKILL"), 2_000);
     };
+    // A fixed transport deadline is independent of health/output samples and
+    // stops only this provider. Cleanup may finish later; its late bytes remain
+    // source facts, never a completed review after the deadline.
+    deadlineTimer = setTimeout(() => {
+      if (settled || stopCause === "cancelled") return;
+      stopCause ??= "timeout";
+      stopProvider("SIGTERM");
+      killTimer ??= setTimeout(() => stopProvider("SIGKILL"), 2_000);
+    }, Math.max(0, OCR_PROVIDER_DEADLINE_MS - (Date.now() - startedAt)));
+    deadlineTimer.unref?.();
     const capture = (stream, bytes) => {
       if (stream === "stdout") stdoutBytes += bytes.length;
       else stderrBytes += bytes.length;
@@ -1352,6 +1299,8 @@ function runOcrProviderProcess({ provider, profile, cwd, signal, onProviderHealt
       // This bounds captured provider output only; OCR packet input is file based.
       if (!overflow && stdoutBytes + stderrBytes > 16 * 1024 * 1024) {
         overflow = true;
+        stopCause ??= "output_limit";
+        if (deadlineTimer) clearTimeout(deadlineTimer);
         terminate("SIGTERM");
         if (process.platform === "win32") killTimer ??= setTimeout(() => terminate("SIGKILL"), 2_000);
       }
@@ -1360,7 +1309,11 @@ function runOcrProviderProcess({ provider, profile, cwd, signal, onProviderHealt
     child.stdout?.on("data", (bytes) => capture("stdout", bytes));
     child.stderr?.on("data", (bytes) => capture("stderr", bytes));
     child.on("message", (message) => {
-      if (message?.ocr_provider_spawn_error) spawnError = { code: message.ocr_provider_spawn_error };
+      if (message?.ocr_provider_spawn_error) {
+        spawnError = { code: message.ocr_provider_spawn_error };
+        stopCause ??= "spawn_failed";
+        if (deadlineTimer) clearTimeout(deadlineTimer);
+      }
       if (message?.ocr_provider_exit) providerExit = message.ocr_provider_exit;
       if (message?.ocr_provider_diagnostic) supervisorDiagnostics.push(message.ocr_provider_diagnostic);
       if (Number.isSafeInteger(message?.ocr_provider_pid) && message.ocr_provider_pid > 0) {
@@ -1373,24 +1326,32 @@ function runOcrProviderProcess({ provider, profile, cwd, signal, onProviderHealt
       healthTimer = setInterval(() => observe("running"), healthPollMs);
       healthTimer.unref?.();
     });
-    child.once("error", (error) => { spawnError = error; });
+    child.once("error", (error) => {
+      spawnError = error;
+      stopCause ??= "spawn_failed";
+      if (deadlineTimer) clearTimeout(deadlineTimer);
+    });
     child.once("close", (exitCode, exitSignal) => {
       settled = true;
       if (killTimer) clearTimeout(killTimer);
       if (healthTimer) clearInterval(healthTimer);
+      if (deadlineTimer) clearTimeout(deadlineTimer);
       signal?.removeEventListener("abort", onAbort);
       const completedAt = Date.now();
+      // A delayed event loop can deliver close before the timer callback.
+      // Wall-clock expiry is still a timeout unless an earlier cancel exists.
+      if (stopCause === null && completedAt - startedAt >= OCR_PROVIDER_DEADLINE_MS) stopCause = "timeout";
+      const deadlineExceeded = stopCause === "timeout";
       const stdout = Buffer.concat(stdoutChunks);
       const stderr = Buffer.concat(stderrChunks);
       const stderrText = stderr.toString("utf8");
       const printTimeout = plan.adapter === "antigravity" && /\bprint timeout\b/i.test(stderrText);
-      const status = signal?.aborted ? "cancelled"
-        : exitCode === 0 && !overflow && !spawnError && !printTimeout && !healthObserverError ? "completed" : "failed";
-      const code = signal?.aborted ? "OCR_PROVIDER_CANCELLED"
-        : overflow ? "OCR_PROVIDER_OUTPUT_LIMIT"
-        : spawnError ? "OCR_PROVIDER_SPAWN_FAILED"
-        : printTimeout ? "OCR_PROVIDER_TIMEOUT"
-        : healthObserverError ? "OCR_HEALTH_OBSERVER_FAILED" : "OCR_PROVIDER_EXIT_NONZERO";
+      const status = stopCause === "cancelled" ? "cancelled"
+        : stopCause === null && exitCode === 0 && !overflow && !spawnError && !printTimeout && !healthObserverError ? "completed" : "failed";
+      const code = ({ timeout: "OCR_PROVIDER_TIMEOUT", cancelled: "OCR_PROVIDER_CANCELLED",
+        output_limit: "OCR_PROVIDER_OUTPUT_LIMIT", spawn_failed: "OCR_PROVIDER_SPAWN_FAILED" })[stopCause]
+        ?? (overflow ? "OCR_PROVIDER_OUTPUT_LIMIT" : spawnError ? "OCR_PROVIDER_SPAWN_FAILED"
+          : printTimeout ? "OCR_PROVIDER_TIMEOUT" : healthObserverError ? "OCR_HEALTH_OBSERVER_FAILED" : "OCR_PROVIDER_EXIT_NONZERO");
       const health = observe(status, false);
       resolveRun({
         status, output: status === "completed" ? stdout.toString("utf8") : null,
@@ -1400,11 +1361,15 @@ function runOcrProviderProcess({ provider, profile, cwd, signal, onProviderHealt
           cancelled: signal?.aborted === true, captured_output_limited: overflow,
           stdout_bytes: stdoutBytes, stderr_bytes: stderrBytes },
         process_diagnostics: supervisorDiagnostics,
-        process_outcome: spawnError ? "launch_failure" : printTimeout ? "timeout"
+        process_outcome: spawnError ? "launch_failure" : deadlineExceeded || printTimeout ? "timeout"
           : providerExit?.signal || exitSignal ? null
             : (providerExit ? providerExit.code : exitCode) === 0 ? "ok" : "exit_nonzero",
         error: status === "completed" ? null : { code, message: safeText(
-          healthObserverError || spawnError?.code || stderrText.trim() || exitSignal || code) },
+          deadlineExceeded ? ["provider exceeded the fixed 600000 ms host deadline",
+            healthObserverError ? `observed host health error: ${healthObserverError}` : null,
+            spawnError?.code ? `observed spawn error: ${spawnError.code}` : null,
+            stderrText.trim() ? `provider stderr: ${stderrText.trim()}` : null].filter(Boolean).join("; ")
+            : healthObserverError || spawnError?.code || stderrText.trim() || exitSignal || code) },
         timing: { started_at_ms: startedAt, completed_at_ms: completedAt, duration_ms: completedAt - startedAt },
         usage: null,
         retry: { count: 0, progress_events: progressEvents },
@@ -1424,8 +1389,6 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
   readConfig = (path) => JSON.parse(readFileSync(path, "utf8")),
   trustedContext = null,
   sourceBundle = null,
-  snapshotRoot = null,
-  snapshotReader = null,
   providerExecutor = runOcrProviderProcess,
   onProviderHealth = null,
   onProviderResult = null,
@@ -1479,15 +1442,6 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
   try {
     const prompt = ocrHostPrompt(request, packet, files);
     writeFileSync(join(materials.bundleRoot, "review-prompt.md"), prompt + "\n", { flag: "wx", mode: 0o600 });
-    if (providers.some((provider) => provider.split("/", 1)[0] === "kimi")) {
-      // Kimi has no generic --sandbox flag.  Its documented agent-file tool
-      // allowlist is the provider-side read-only boundary: expose only Read,
-      // and replace user/project skill discovery with an empty packet-local
-      // directory.  This is a real capability restriction, not a prompt-only
-      // promise, so Kimi can participate without a caller host identity or a
-      // fake unsupported-provider result.
-      prepareKimiReadOnlyProfile(materials.bundleRoot);
-    }
     const guardianCleanup = new Map();
     if (process.platform !== "win32" && providerExecutor === runOcrProviderProcess) {
       const guardians = providers.filter((provider) => {
@@ -1510,9 +1464,7 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
         }
       }
     }
-    const resolveSnapshotAnchor = createOcrSnapshotAnchorResolver({
-      sourceBundle, snapshotRoot, snapshotReader, packetFiles: files,
-    });
+    const resolveSourceAnchor = createOcrSourceAnchorResolver({ sourceBundle, packetFiles: files });
     runs = providers.map((provider) => {
       const profile = config.providers?.[provider];
       if (provider.split("/", 1)[0] === "opencode") {
@@ -1570,6 +1522,7 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
       let parsed = null;
       let parseOutcome = null;
       let rawOutputRef = null;
+      const rawEvidenceRefs=[];
       let diagnosticCode = null;
       const diagnostics = [];
       const raw = member?.raw_output;
@@ -1586,8 +1539,10 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
           for (const stream of ["stdout", "stderr"]) {
             const digest = hashes[`${stream}_sha256`];
             if (saved.has(digest)) continue;
-            const ref = `quality/evidence/stage-quality/${stage}/ocr-provider-output-${digest}.bin`;
-            try { await rawOutputSink(ref, raw[stream]); saved.add(digest); }
+            const hint = `quality/reviews/ocr-${stage}-${provider.replace(/[^a-z0-9-]/gi,"-")}-${stream}.output`;
+            try { const ref=await rawOutputSink(hint, raw[stream], {provider,stream});
+              if(typeof ref!=="string" || !/^quality\/reviews\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(ref))throw new Error("raw output sink returned no safe task-relative original reference");
+              rawEvidenceRefs.push(ref); saved.add(digest); }
             catch (saveError) {
               saveErrors.push(`${stream}: ${safeText(saveError?.message ?? saveError, 1024)}`);
             }
@@ -1597,7 +1552,7 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
             diagnosticCode = "OCR_PROVIDER_OUTPUT_SAVE_FAILED";
             error = { code: diagnosticCode, message: "original provider output could not be saved" };
             diagnostics.unshift(`raw_output_save_error=${saveErrors.join("; ")}`);
-          } else rawOutputRef = { version: "broker-output-ref.v1", runtime_id: runtimeId, provider, ...hashes };
+          } else rawOutputRef = rawEvidenceRefs[0] ?? null;
         } else {
           diagnosticCode = "OCR_PROVIDER_RAW_OUTPUT_UNAVAILABLE";
           diagnostics.unshift("original provider bytes unavailable: raw output sink is absent; output was not persisted");
@@ -1630,7 +1585,7 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
       }
       if (status !== "completed" && !error) error = { code: "OCR_PROVIDER_FAILED", message: "provider ended without a successful review" };
       const rawFindings = parsed?.findings ?? [];
-      const mappedAnchors = rawFindings.map((finding) => resolveSnapshotAnchor(finding));
+      const mappedAnchors = rawFindings.map((finding) => resolveSourceAnchor(finding));
       const findings = rawFindings.map((finding, findingIndex) => ({
         provider, ...finding,
         ...(mappedAnchors[findingIndex] ? { path: mappedAnchors[findingIndex].path, line: mappedAnchors[findingIndex].line } : {}),
@@ -1640,6 +1595,7 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
         provider, status, identity, error: status === "completed" ? null : error,
         timing, usage, findings,
         raw_output_ref: rawOutputRef,
+        ...(rawEvidenceRefs.length ? {evidence_refs:rawEvidenceRefs} : {}),
         process_outcome: member?.process_outcome ?? (member?.status === "completed" ? "ok" : null),
         parse_outcome: parseOutcome,
         ...(diagnostics.length && (status !== "completed" || diagnosticCode || member?.process_diagnostics?.length) ? { unavailable_diagnostics: {
@@ -1653,7 +1609,7 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
             mapped.content, { diffPatch: mapped.diffPatch }) : false;
         }),
         coverage: { selected_files: files.map((file) => file.path), read_confirmed: false },
-        execution: { adapter: identity.adapter, model: identity.model, timing, usage,
+        execution: { adapter: identity.adapter, model: identity.model, effort:null, thinking:null, timing, usage,
           retry: member?.retry ?? { count: 0, progress_events: 0 },
           ...(member?.health ? { health: member.health } : {}),
           runtime_id: runtimeId },

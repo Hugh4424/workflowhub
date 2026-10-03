@@ -60,7 +60,7 @@ export async function recordSimpleReviewRequest({taskDir,request,runRound=runSim
     if(signal?.aborted) throw coded("REVIEW_CANCELLED","review cancelled before dispatch");
     const started=new Date().toISOString(); let result;
     let rawCount=0;
-    const onProviderOutput=async ({provider,role=null,output})=>{if(typeof output!=="string" || typeof provider!=="string")throw coded("PROVIDER_OUTPUT_INVALID","provider raw output must be named text");const path=await appendRecord(dir,`${tuple.stage}-${tuple.review_scope ?? "document"}-provider-${++rawCount}`,"output",output);return relative(root,path).split("\\").join("/");};
+    const onProviderOutput=async ({provider,role=null,output})=>{if(typeof output!=="string" && !Buffer.isBuffer(output) && !(output instanceof Uint8Array) || typeof provider!=="string")throw coded("PROVIDER_OUTPUT_INVALID","provider raw output must be named text or original bytes");const path=await appendRecord(dir,`${tuple.stage}-${tuple.review_scope ?? "document"}-provider-${++rawCount}`,"output",output);return relative(root,path).split("\\").join("/");};
     try { result=await runRound({...request,...tuple},{...(signal ? {signal} : {}),onProviderOutput}); }
     catch(error) { result={status:"unavailable",outcome:"unavailable",dispatch_state:error.dispatch_state ?? "unknown",provider_results:[],findings:[],error:{code:error.code ?? "REVIEW_ERROR",message:redactProviderHostPaths(String(error.message ?? error))}}; }
     if(!result || typeof result!=="object" || !["available","available-with-failures","unavailable","incomplete"].includes(result.status)) throw coded("REVIEW_RESULT_INVALID","runner returned no observable result status");

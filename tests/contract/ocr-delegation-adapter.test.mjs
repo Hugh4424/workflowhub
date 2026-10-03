@@ -1,14 +1,28 @@
 import { createHash } from "node:crypto";
-import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawn } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { prepareConfiguredOcrHostContext, runConfiguredOcrHostReview, runOcrDelegationRound } from "../../runtime/review/ocr-delegation-adapter.mjs";
 import { authenticatedEvidenceDigest } from "../../runtime/review/review-packet-identity.mjs";
+import { appendRecord } from "../../runtime/interface/safe-write.mjs";
 
 const roots = [];
+
+// Skip only an absent executable. Low versions and installed-tool failures
+// remain observable failures in the existing real CLI-dependent assertions.
+function realOcrCommandMissing() {
+  try {
+    execFileSync("ocr", ["--version"], {
+      env: { ...process.env, OCR_NO_UPDATE: "1" },
+      timeout: 10_000, maxBuffer: 65_536, stdio: ["ignore", "pipe", "pipe"],
+    });
+    return false;
+  } catch (error) { return error.code === "ENOENT"; }
+}
+const realOcrMissing = realOcrCommandMissing();
 
 const compliantReviewPrompt = [
   "Review the supplied implementation and report evidence-backed findings.",
@@ -213,13 +227,22 @@ const fs = require("node:fs");
 const args = process.argv.slice(2);
 const prompt = fs.readFileSync("review-prompt.md", "utf8");
 const entry = args.at(-1);
+const configs = args.flatMap((arg,index)=>arg==="-c"?[args[index+1]]:[]);
+const disabled = args.flatMap((arg,index)=>arg==="--disable"?[args[index+1]]:[]);
+const permission = 'permissions.wh_ocr={filesystem={":root"="deny",":minimal"="read",":tmpdir"="deny",":slash_tmp"="deny",'
+  + JSON.stringify(process.cwd()) + '="read"},network={enabled=false}}';
+if (!configs.includes('default_permissions="wh_ocr"') || !configs.includes(permission)
+    || !configs.includes('approval_policy="never"') || !configs.includes('web_search="disabled"')
+    || !configs.includes('shell_environment_policy.inherit="none"')
+    || !["apps","plugins","multi_agent","view_image","skill_search","skill_mcp_dependency_install","memories",
+      "browser_use","computer_use","image_generation","tool_suggest","goals"].every(feature=>disabled.includes(feature))
+    || !args.includes("--enable") || args[args.indexOf("--enable")+1]!=="skip_host_skill_discovery") process.exit(7);
 if (args[0] !== "exec" || !args.includes("--json")
-    || args[args.indexOf("--sandbox") + 1] !== "read-only"
+    || !args.includes("--ignore-user-config") || !args.includes("--ignore-rules") || !args.includes("--strict-config")
     || !args.includes("--skip-git-repo-check") || !args.includes("--ephemeral")
-    || !entry.includes("If no Read tool is available")
-    || !entry.includes("read-only file-view commands")
-    || !entry.includes("selected relative packet paths inside this isolated packet cwd")
-    || !entry.includes("Never write, use Git or network commands, or access parent paths")
+    || args[args.indexOf("-C")+1] !== process.cwd()
+    || !entry.includes("Read review-prompt.md in this directory")
+    || process.env.CODEX_APP_TOOLS_PIPE_PATH !== undefined
     || !prompt.includes("Codex CLI only:")
     || !prompt.includes("cat or sed -n")
     || !prompt.includes("All other providers must use a read tool only.")) process.exit(8);
@@ -231,9 +254,17 @@ process.stdout.write(JSON.stringify({type:"turn.completed",usage:{input_tokens:3
     const packet = configuredPacket("x".repeat(1024 * 1024 + 1));
     const priorHostDirs = new Set(readdirSync(tmpdir()).filter((name) =>
       name.startsWith("workflowhub-ocr-host-") && !name.startsWith("workflowhub-ocr-host-test-")));
-    const result = await runConfiguredOcrHostReview({ request, packet }, {
-      trustedContext: configuredContext(["codex/luna"], executable),
-    });
+    const priorPipe = process.env.CODEX_APP_TOOLS_PIPE_PATH;
+    process.env.CODEX_APP_TOOLS_PIPE_PATH = join(root, "owned-unused-app-pipe-sentinel");
+    let result;
+    try {
+      result = await runConfiguredOcrHostReview({ request, packet }, {
+        trustedContext: configuredContext(["codex/luna"], executable),
+      });
+    } finally {
+      if (priorPipe === undefined) delete process.env.CODEX_APP_TOOLS_PIPE_PATH;
+      else process.env.CODEX_APP_TOOLS_PIPE_PATH = priorPipe;
+    }
     expect(result).toMatchObject({
       status: "available", outcome: "completed", dispatch_state: "dispatched",
       provider_results: [{ status: "completed", findings: [], coverage: { read_confirmed: false } }],
@@ -282,27 +313,35 @@ process.stdout.write(JSON.stringify({type:"turn.completed",usage:{input_tokens:3
     });
   });
 
-  it("runs Kimi through a packet-local read-only agent profile", async () => {
-    const root = mkdtempSync(join(tmpdir(), "workflowhub-ocr-kimi-profile-"));
+  it("blocks unverified Kimi before spawning while retaining a successful Codex sibling", async () => {
+    const root = mkdtempSync(join(tmpdir(), "workflowhub-ocr-native-route-"));
     roots.push(root);
-    const executable = join(root, "fake-kimi");
+    const executable = join(root, "owned-cli"), launches = join(root, "launches.jsonl");
     writeFileSync(executable, `#!/usr/bin/env node
 const fs = require("node:fs");
-const args = process.argv.slice(2);
-const agentIndex = args.indexOf("--agent-file");
-const skillsIndex = args.indexOf("--skills-dir");
-if (agentIndex < 0 || skillsIndex < 0
-    || !fs.readFileSync(args[agentIndex + 1], "utf8").includes("tools:\\n  - Read")
-    || fs.readdirSync(args[skillsIndex + 1]).length !== 0) process.exit(8);
-process.stdout.write(JSON.stringify({ role: "assistant", content: [{ type: "text", text: JSON.stringify({ findings: [] }) }] }) + "\\n");
+const adapter = process.argv[2] === "exec" ? "codex" : "kimi";
+fs.appendFileSync(${JSON.stringify(launches)},JSON.stringify({adapter})+"\\n");
+if(adapter === "codex") {
+  process.stdout.write(JSON.stringify({type:"item.completed",item:{type:"agent_message",text:JSON.stringify({findings:[]})}})+"\\n");
+  process.stdout.write(JSON.stringify({type:"turn.completed",usage:{input_tokens:3}})+"\\n");
+} else process.stdout.write(JSON.stringify({role:"assistant",content:[{type:"text",text:JSON.stringify({findings:[]})}]})+"\\n");
 `, { mode: 0o700 });
-    const result = await runConfiguredOcrHostReview({ request, packet: configuredPacket() }, {
+    // Local owned fake CLI proves argv/fail-closed behavior. Native packet
+    // containment is supported separately by actual Codex exec evidence.
+    const alone = await runConfiguredOcrHostReview({ request, packet: configuredPacket() }, {
       trustedContext: configuredContext(["kimi/coding"], executable),
     });
-    expect(result).toMatchObject({
-      status: "available", outcome: "completed",
-      provider_results: [{ status: "completed", error: null }],
+    expect(alone).toMatchObject({status:"unavailable",outcome:"failed",provider_results:[{
+      provider:"kimi/coding",status:"failed",findings:[],error:{code:"OCR_PROVIDER_PACKET_BOUNDARY_UNAVAILABLE"},raw_output_ref:null,
+    }]});
+    expect(existsSync(launches)).toBe(false);
+    const mixed = await runConfiguredOcrHostReview({ request, packet: configuredPacket() }, {
+      trustedContext: configuredContext(["kimi/coding","codex/luna"], executable),
     });
+    expect(mixed.status).toBe("available-with-failures");
+    expect(mixed.provider_results[0]).toMatchObject({provider:"kimi/coding",status:"failed",findings:[],error:{code:"OCR_PROVIDER_PACKET_BOUNDARY_UNAVAILABLE"},raw_output_ref:null});
+    expect(mixed.provider_results[1]).toMatchObject({provider:"codex/luna",status:"completed",findings:[],usage:{input_tokens:3}});
+    expect(readFileSync(launches,"utf8").trim().split("\n").map(line=>JSON.parse(line))).toEqual([{adapter:"codex"}]);
   });
 
   it("dispatches every configured provider even when sources overlap", async () => {
@@ -700,7 +739,7 @@ describe("OCR delegation adapter", () => {
     expect(controlled.provider_results[0].error.code).toBe("OCR_PROVIDER_UNSUPPORTED");
   });
 
-  it.each([
+  it.skipIf(realOcrMissing).each([
     ["Agent/subagent", "Do not wait for or poll agents, sessions, or processes; do not invoke wait/poll tools."],
     ["wait/poll", "Do not invoke Agent, subagent, child-agent, or other agent tools."],
   ])("does not dispatch when the prompt omits the %s prohibition", async (_constraint, retainedConstraint) => {
@@ -718,7 +757,7 @@ describe("OCR delegation adapter", () => {
     expect(calls).toBe(0);
   });
 
-  it("also validates an explicitly supplied prompt before dispatch", async () => {
+  it.skipIf(realOcrMissing)("also validates an explicitly supplied prompt before dispatch", async () => {
     let calls = 0;
     const result = await runOcrDelegationRound({ ...request, prompt: "Review the packet and return findings." }, {
       buildBundle: bundle,
@@ -748,7 +787,7 @@ describe("OCR delegation adapter", () => {
     expect(calls).toBe(0);
   });
 
-  it("runs deterministic packet preparation and stays unavailable without a host executor", async () => {
+  it.skipIf(realOcrMissing)("runs deterministic packet preparation and stays unavailable without a host executor", async () => {
     const result = await runOcrDelegationRound(request, { buildBundle: bundle });
 
     expect(result).toMatchObject({
@@ -766,7 +805,7 @@ describe("OCR delegation adapter", () => {
     expect(result.ocr.rules).toBeTruthy();
   });
 
-  it("gives an independent executor only the materialized packet and removes it after use", async () => {
+  it.skipIf(realOcrMissing)("gives an independent executor only the materialized packet and removes it after use", async () => {
     let packetRoot;
     const result = await runOcrDelegationRound(request, {
       buildBundle: bundle,
@@ -786,7 +825,7 @@ describe("OCR delegation adapter", () => {
     expect(existsSync(packetRoot)).toBe(false);
   });
 
-  it("binds verify-code semantic OCR output to redacted request evidence instead of forged executor fields", async () => {
+  it.skipIf(realOcrMissing)("binds verify-code semantic OCR output to redacted request evidence instead of forged executor fields", async () => {
     const authenticatedEvidence = { reviewed_execution: { ref: "quality/evidence/current.json" }, source_path: "/Users/Hugh/private/reviewed.mjs" };
     const result = await runOcrDelegationRound({ stage: "verify-code", authenticated_evidence: authenticatedEvidence }, {
       buildBundle: bundle,
@@ -804,7 +843,7 @@ describe("OCR delegation adapter", () => {
     expect(JSON.stringify(result)).not.toContain("/Users/Hugh/private/reviewed.mjs");
   });
 
-  it("keeps the original unavailable OCR error with the same redacted evidence digest", async () => {
+  it.skipIf(realOcrMissing)("keeps the original unavailable OCR error with the same redacted evidence digest", async () => {
     const authenticatedEvidence = { reviewed_execution: { ref: "quality/evidence/current.json" }, source_path: "/Users/Hugh/private/reviewed.mjs" };
     const result = await runOcrDelegationRound({ stage: "verify-code", authenticated_evidence: authenticatedEvidence }, {
       buildBundle: bundle,
@@ -845,7 +884,7 @@ describe("OCR delegation adapter", () => {
     expect(readFileSync(outsideMarkdown, "utf8")).toBe("preserve outside file\n");
   });
 
-  it("redacts host paths from executor errors and OCR diagnostics", async () => {
+  it.skipIf(realOcrMissing)("redacts host paths from executor errors and OCR diagnostics", async () => {
     const result = await runOcrDelegationRound(request, {
       buildBundle: bundle,
       executor: async () => { throw new Error("failed reading /Users/Hugh/private/source.mjs and /tmp/ocr-secret"); },
@@ -863,7 +902,7 @@ describe("OCR delegation adapter", () => {
     expect(serialized).not.toContain("/private/var/folders");
   });
 
-  it("requests executor termination and bounds cleanup when the request is cancelled", async () => {
+  it.skipIf(realOcrMissing)("requests executor termination and bounds cleanup when the request is cancelled", async () => {
     const controller = new AbortController();
     let packetRoot;
     let terminationRequests = 0;
@@ -888,7 +927,7 @@ describe("OCR delegation adapter", () => {
 
     expect(result).toMatchObject({
       status: "unavailable",
-      dispatch_state: "sent_unparsed",
+      dispatch_state: "unknown",
       error: { code: "OCR_EXECUTOR_CANCELLED" },
       cancellation: { termination_requested: true, termination_confirmed: true },
     });
@@ -896,7 +935,7 @@ describe("OCR delegation adapter", () => {
     expect(existsSync(packetRoot)).toBe(false);
   });
 
-  it("records when executor termination cannot be confirmed within the grace period", async () => {
+  it.skipIf(realOcrMissing)("records when executor termination cannot be confirmed within the grace period", async () => {
     const controller = new AbortController();
     let packetRoot;
     const pending = runOcrDelegationRound(request, {
@@ -915,7 +954,7 @@ describe("OCR delegation adapter", () => {
 
     expect(result).toMatchObject({
       status: "unavailable",
-      dispatch_state: "sent_unparsed",
+      dispatch_state: "unknown",
       error: { code: "OCR_EXECUTOR_CANCEL_UNCONFIRMED" },
       cancellation: { termination_requested: true, termination_confirmed: false, packet_cleanup: "deferred_until_executor_exit" },
     });
@@ -923,7 +962,34 @@ describe("OCR delegation adapter", () => {
     roots.push(packetRoot);
   });
 
-  it("cleans the packet if an unconfirmed executor later exits", async () => {
+  it.skipIf(realOcrMissing).each(["dispatched", "blocked_before_dispatch"])("retains the executor's explicit %s state after cancellation", async (dispatchState) => {
+    const controller = new AbortController();
+    let finishExecution;
+    const execution = new Promise((resolve) => { finishExecution = resolve; });
+    const observed = {
+      status: "unavailable", outcome: "failed", dispatch_state: dispatchState,
+      error: { code: "CONTROLLED_SOURCE_FAILED", message: "controlled executor observation" },
+      provider_results: [{ provider: "controlled/source", status: "failed", error: { code: "CONTROLLED_SOURCE_FAILED" } }],
+      findings: [],
+    };
+    const pending = runOcrDelegationRound(request, {
+      buildBundle: bundle, signal: controller.signal, cancellationGraceMs: 100,
+      executor: ({ registerCancellation }) => {
+        registerCancellation(() => { finishExecution(observed); });
+        return execution;
+      },
+    });
+    controller.abort();
+    const result = await pending;
+    expect(result).toMatchObject({
+      status: "unavailable", dispatch_state: dispatchState,
+      provider_results: observed.provider_results,
+      error: observed.error,
+      cancellation: { termination_requested: true, termination_confirmed: true },
+    });
+  });
+
+  it.skipIf(realOcrMissing)("cleans the packet if an unconfirmed executor later exits", async () => {
     const controller = new AbortController();
     let packetRoot;
     let finishExecution;
@@ -949,7 +1015,7 @@ describe("OCR delegation adapter", () => {
     expect(existsSync(packetRoot)).toBe(false);
   });
 
-  it("does not start an executor when already cancelled", async () => {
+  it.skipIf(realOcrMissing)("does not start an executor when already cancelled", async () => {
     const controller = new AbortController();
     controller.abort();
     let calls = 0;
@@ -971,24 +1037,48 @@ describe("OCR delegation adapter", () => {
 
 describe("OCR original provider bytes", () => {
   function rawFixture(providers, body) {
-    const root = mkdtempSync(join(tmpdir(), "workflowhub-ocr-raw-"));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-ocr-raw-")));
     roots.push(root);
     const executable = join(root, "fake-provider");
     writeFileSync(executable, "#!/usr/bin/env node\n" + body, { mode: 0o700 });
     const trustedContext = configuredContext(providers, executable);
     for (const provider of providers) trustedContext.providerConfig.providers[provider].model = provider.split("/")[1];
-    const saved = new Map();
-    const rawOutputSink = (ref, bytes) => {
+    const directory = join(root, "quality", "reviews");
+    mkdirSync(directory, { recursive: true });
+    const saved = new Map(), returnedRefs = new Map();
+    const rawOutputSink = async (hint, bytes, metadata) => {
       expect(Buffer.isBuffer(bytes)).toBe(true);
-      expect(ref).toBe(`quality/evidence/stage-quality/build-code/ocr-provider-output-${createHash("sha256").update(bytes).digest("hex")}.bin`);
-      saved.set(ref, Buffer.from(bytes));
+      expect(providers).toContain(metadata.provider);
+      expect(["stdout", "stderr"]).toContain(metadata.stream);
+      expect(hint).toMatch(/^quality\/reviews\/ocr-build-code-[a-z0-9-]+-(stdout|stderr)\.output$/);
+      const slug = `ocr-build-code-${metadata.provider.replace(/[^a-z0-9-]/gi, "-")}-${metadata.stream}`;
+      const file = await appendRecord(directory, slug, "output", bytes);
+      const ref = relative(root, file).replaceAll("\\", "/");
+      expect(ref).toMatch(/^quality\/reviews\/\d{4}-\d{2}-\d{2}-\d{3}-[a-z0-9-]+\.output$/);
+      const original = readFileSync(file);
+      expect(original.equals(bytes)).toBe(true);
+      saved.set(ref, original);
+      returnedRefs.set(`${metadata.provider}\0${metadata.stream}`, ref);
+      return ref;
     };
-    return { root, trustedContext, saved, rawOutputSink };
+    return { root, trustedContext, saved, returnedRefs, rawOutputSink };
   }
   function rawBytes(state, member, stream) {
-    const ref = member.raw_output_ref;
-    expect(ref).toMatchObject({ version: "broker-output-ref.v1", provider: member.provider, runtime_id: member.execution.runtime_id });
-    return state.saved.get(`quality/evidence/stage-quality/build-code/ocr-provider-output-${ref[stream + "_sha256"]}.bin`);
+    const refs = member.evidence_refs;
+    expect(Array.isArray(refs)).toBe(true);
+    expect(member.raw_output_ref === null || typeof member.raw_output_ref === "string").toBe(true);
+    if (member.raw_output_ref !== null) expect(member.raw_output_ref).toBe(refs[0]);
+    let ref = state.returnedRefs.get(`${member.provider}\0${stream}`);
+    // Identical channels may share one original; read that actual returned ref.
+    if (ref === undefined) {
+      expect(refs).toHaveLength(1);
+      ref = refs[0];
+    }
+    expect(refs).toContain(ref);
+    expect(ref).toMatch(/^quality\/reviews\/\d{4}-\d{2}-\d{2}-\d{3}-[a-z0-9-]+\.output$/);
+    const original = readFileSync(join(state.root, ref));
+    expect(original.equals(state.saved.get(ref))).toBe(true);
+    return original;
   }
 
   it("saves stdout/stderr before parse failure and keeps the later successful sibling", async () => {
@@ -1060,9 +1150,9 @@ if (model === "bad") {
     const state = rawFixture(["codex/bad", "codex/good"], `const model=process.argv[process.argv.indexOf("--model")+1]; process.stdout.write(model==="bad"?${JSON.stringify(invalid)}:${JSON.stringify(valid)}); if(model==="bad") process.exitCode=7;`);
     const sink = state.rawOutputSink;
     const result = await runConfiguredOcrHostReview({ request, packet: configuredPacket() }, {
-      ...state, rawOutputSink: (ref, bytes) => {
+      ...state, rawOutputSink: (ref, bytes, metadata) => {
         if (bytes.toString() === invalid) throw new Error("fixture canonical write failed");
-        return sink(ref, bytes);
+        return sink(ref, bytes, metadata);
       },
     });
     expect(result.status).toBe("available-with-failures");
@@ -1088,9 +1178,9 @@ if(model==="bad") {
     const observed = [];
     const result = await runConfiguredOcrHostReview({ request, packet: configuredPacket() }, {
       ...state,
-      rawOutputSink: (ref, bytes) => {
+      rawOutputSink: (ref, bytes, metadata) => {
         if (bytes.equals(Buffer.from(invalid))) throw new Error("fixture canonical write failed");
-        return sink(ref, bytes);
+        return sink(ref, bytes, metadata);
       },
       onProviderResult: ({ result }) => observed.push(result),
     });
@@ -1104,8 +1194,8 @@ if(model==="bad") {
     expect(bad.unavailable_diagnostics.message).toMatch(/JSON|Unexpected|Expected|position/);
     expect(bad.unavailable_diagnostics.message).toContain("exit_code=0");
     expect(bad.unavailable_diagnostics.message).toContain("captured_output_limited=false");
-    expect(state.saved.has(`quality/evidence/stage-quality/build-code/ocr-provider-output-${createHash("sha256").update(invalid).digest("hex")}.bin`)).toBe(false);
-    expect(state.saved.get(`quality/evidence/stage-quality/build-code/ocr-provider-output-${createHash("sha256").update(badStderr).digest("hex")}.bin`)).toEqual(badStderr);
+    expect(state.returnedRefs.has("codex/bad\0stdout")).toBe(false);
+    expect(rawBytes(state, bad, "stderr")).toEqual(badStderr);
     expect(good).toMatchObject({ status: "completed", process_outcome: "ok", parse_outcome: "ok" });
     expect(rawBytes(state, good, "stdout")).toEqual(Buffer.from(valid));
     expect(observed.find((member) => member.provider === "codex/bad").parse_outcome).toBe("invalid");
@@ -1142,4 +1232,140 @@ if(model==="bad") {
     expect(result.provider_results[0]).toMatchObject({ status: "completed", raw_output_ref: null, unavailable_diagnostics: { code: "OCR_PROVIDER_RAW_OUTPUT_UNAVAILABLE" } });
     expect(result.provider_results[0].unavailable_diagnostics.message).toContain("original provider bytes unavailable");
   });
+
+  it("enforces one fixed 600000ms deadline despite activity and preserves raw bytes and a completed sibling", async () => {
+    const fastOutput = directProviderOutput("codex/fast", []);
+    const state = rawFixture(["codex/fast", "codex/active"], `
+const fs = require("node:fs");
+const model = process.argv[process.argv.indexOf("--model") + 1];
+if (model === "fast") process.stdout.write(${JSON.stringify(fastOutput)});
+else {
+  process.stdout.write(Buffer.from([0xff, 0x00, 0x61]));
+  process.stderr.write(Buffer.from([0xfe, 0x62]));
+  process.on("SIGTERM", () => process.exit(0));
+  setInterval(() => process.stderr.write("active tick\\n"), 20);
+}
+`);
+    // All fixtures are local executables. This is deadline/byte evidence,
+    // never a claim that the legacy Codex/Kimi filesystem route is safe.
+    const realSetTimeout = globalThis.setTimeout;
+    const realClearTimeout = globalThis.clearTimeout;
+    const realNow = Date.now;
+    const fixedNow = realNow();
+    const scheduled = [], cleared = new Set(), observed = [], completed = [];
+    const controller = new AbortController();
+    const beforeHostDirs = new Set(readdirSync(tmpdir()).filter((name) =>
+      name.startsWith("workflowhub-ocr-host-") && !name.startsWith("workflowhub-ocr-host-test-")));
+    Date.now = () => fixedNow;
+    globalThis.setTimeout = (callback, delay, ...args) => {
+      if (delay !== 600_000) return realSetTimeout(callback, delay, ...args);
+      const handle = realSetTimeout(callback, 1_500, ...args);
+      scheduled.push({ requested_ms: delay, handle });
+      return handle;
+    };
+    globalThis.clearTimeout = (handle) => { cleared.add(handle); return realClearTimeout(handle); };
+    // This uses the unmodified real clock and only bounds a missing-deadline
+    // RED; its explicit cancellation must never masquerade as timeout.
+    const watchdog = realSetTimeout(() => controller.abort(new Error("owned test watchdog: production deadline absent")), 3_500);
+    let pending;
+    try {
+      pending = runConfiguredOcrHostReview({ request, packet: configuredPacket(), signal: controller.signal }, {
+        ...state,
+        healthPollMs: 20,
+        onProviderHealth: (health) => observed.push(health),
+        onProviderResult: (member) => completed.push(member),
+      });
+      const result = await pending;
+      const fast = result.provider_results.find((member) => member.provider === "codex/fast");
+      const active = result.provider_results.find((member) => member.provider === "codex/active");
+      expect(active).toMatchObject({ status: "failed", process_outcome: "timeout", parse_outcome: null,
+        error: { code: "OCR_PROVIDER_TIMEOUT" } });
+      expect(scheduled).toHaveLength(2); // one fixed deadline per actual process, no health renewal
+      expect(scheduled.every(({ requested_ms, handle }) => requested_ms === 600_000 && cleared.has(handle))).toBe(true);
+      expect(result.status).toBe("available-with-failures");
+      expect(fast).toMatchObject({ status: "completed", process_outcome: "ok", parse_outcome: "ok" });
+      expect(rawBytes(state, fast, "stdout").equals(Buffer.from(fastOutput))).toBe(true);
+      expect(rawBytes(state, active, "stdout").equals(Buffer.from([0xff, 0x00, 0x61]))).toBe(true);
+      const stderr = rawBytes(state, active, "stderr");
+      expect(stderr.subarray(0, 2).equals(Buffer.from([0xfe, 0x62]))).toBe(true);
+      expect(stderr.subarray(2).toString()).toContain("active tick");
+      expect(active.execution.health).toMatchObject({ status: "failed", liveness: false });
+      expect(observed.filter((health) => health.provider === "codex/active" && health.status === "running"
+        && health.liveness === true && health.progress_events > 0).length).toBeGreaterThan(2);
+      expect(completed.map((member) => member.provider)).toEqual(expect.arrayContaining(["codex/fast", "codex/active"]));
+      expect(readdirSync(tmpdir()).filter((name) => name.startsWith("workflowhub-ocr-host-")
+        && !name.startsWith("workflowhub-ocr-host-test-") && !beforeHostDirs.has(name))).toEqual([]);
+      console.log(JSON.stringify({ oracle: "fixed-provider-deadline", original_ms: 600_000, mapped_test_ms: 1_500,
+        schedules: scheduled.length, clears: scheduled.filter(({ handle }) => cleared.has(handle)).length,
+        active_error: active.error.code, active_process_outcome: active.process_outcome,
+        sibling_status: fast.status, real_model_calls: 0 }));
+    } finally {
+      realClearTimeout(watchdog);
+      controller.abort(new Error("owned test cleanup"));
+      if (pending) await pending.catch(() => {});
+      Date.now = realNow;
+      globalThis.setTimeout = realSetTimeout;
+      globalThis.clearTimeout = realClearTimeout;
+    }
+  });
+
+  describe("fixed deadline cause races", () => {
+    async function raceCase(kind) {
+      const output = directProviderOutput("codex/race", []);
+      const script = `process.on("SIGTERM",()=>process.exit(0)); process.stdout.write(${JSON.stringify(output)}); process.stderr.write("owned race stderr\\n"); ${kind === "late-close" ? "setTimeout(()=>process.exit(0),120);" : "setInterval(()=>{},100);"}`;
+      const state = rawFixture(["codex/race"], script);
+      const realNow=Date.now, realSetTimeout=globalThis.setTimeout, realClearTimeout=globalThis.clearTimeout;
+      const start=realNow(), timers=new Set(), controller=new AbortController();
+      let now=start, fired=0, priorCancel=false, watchdogFired=false;
+      Date.now=()=>now;
+      globalThis.setTimeout=(fn,delay,...args)=>{
+        if(delay!==600_000) return realSetTimeout(fn,delay,...args);
+        const suppressed=["late-close","cancel"].includes(kind);
+        const handle=realSetTimeout(()=>{
+          fired++; fn(...args);
+        },suppressed?12_000:1_000);
+        timers.add(handle); return handle;
+      };
+      globalThis.clearTimeout=(handle)=>{
+        // First-cause was already observed before cleanup crossed the deadline.
+        if(timers.has(handle) && kind==="cancel") now=start+700_000;
+        return realClearTimeout(handle);
+      };
+      const watchdog=realSetTimeout(()=>{watchdogFired=true;controller.abort(new Error("owned race watchdog"));},3_500);
+      let pending;
+      try {
+        pending=runConfiguredOcrHostReview({request,packet:configuredPacket(),signal:controller.signal},{...state,healthPollMs:20,
+          onProviderHealth:health=>{
+            if(health.status!=="running" || health.stdout_bytes < Buffer.byteLength(output)) return;
+            if(kind==="late-close") now=start+700_000;
+            if(kind==="cancel" && !priorCancel){priorCancel=true;now=start+100;controller.abort(new Error("owned earlier cancellation"));}
+          }});
+        const result=await pending, member=result.provider_results[0];
+        return {state,member,result,fired,priorCancel,watchdogFired,output};
+      } finally {
+        realClearTimeout(watchdog);controller.abort(new Error("owned race cleanup"));
+        if(pending) await pending.catch(()=>{});
+        for(const timer of timers) realClearTimeout(timer);
+        Date.now=realNow;globalThis.setTimeout=realSetTimeout;globalThis.clearTimeout=realClearTimeout;
+      }
+    }
+    it("treats late exit0 as timeout even when its deadline callback was suppressed", async()=>{
+      const {state,member,fired,watchdogFired,output}=await raceCase("late-close");
+      expect(watchdogFired).toBe(false);
+      expect(fired).toBe(0);
+      expect(member).toMatchObject({status:"failed",process_outcome:"timeout",parse_outcome:null,error:{code:"OCR_PROVIDER_TIMEOUT"}});
+      expect(rawBytes(state,member,"stdout")).toEqual(Buffer.from(output));
+      expect(member.unavailable_diagnostics.message).toContain("exit_code=0");
+    });
+    it("keeps an earlier cancellation when cleanup crosses the deadline", async()=>{
+      const {state,member,fired,priorCancel,watchdogFired,output}=await raceCase("cancel");
+      expect(priorCancel).toBe(true);expect(watchdogFired).toBe(false);
+      expect(fired).toBe(0);expect(member).toMatchObject({status:"cancelled",error:{code:"OCR_PROVIDER_CANCELLED"}});
+      expect(member.timing.duration_ms).toBeGreaterThanOrEqual(600_000);
+      expect(rawBytes(state,member,"stdout")).toEqual(Buffer.from(output));
+      expect(member.findings).toEqual([]);
+    });
+
+  });
+
 });

@@ -16,7 +16,7 @@ const LOCAL_HOST_PATH = /\/(?:Users|home|private|tmp|var|etc|opt|mnt|Volumes|roo
 const URL_TEXT = /\b(?:https?|file):\/\/[^\s"'`<>()[\]{}\u2018-\u201f\u2026\u3000-\u303f\ufe30-\ufe4f\uff01-\uff0f\uff1a-\uff20\uff3b-\uff40\uff5b-\uff65]+/gi;
 const SECRET_PLACEHOLDER = "<secret-redacted>";
 const SECRET_TOKEN = "[^\\s\\\"'`,;<>()[\\]{}\\u2018-\\u201f\\u2026\\u3000-\\u303f\\ufe30-\\ufe4f\\uff01-\\uff0f\\uff1a-\\uff20\\uff3b-\\uff40\\uff5b-\\uff65]+";
-const KEY_VALUE_SECRET = new RegExp(`(["']?[A-Za-z0-9_.-]*(?:api[_-]?key|access[_-]?token|refresh[_-]?token|id[_-]?token|auth[_-]?token|bearer[_-]?token|client[_-]?secret|password|passwd|secret|authorization|credentials?)["']?[ \\t]*[:=][ \\t]*)(?:((?:Bearer|Basic)[ \\t]+${SECRET_TOKEN})|("[^"\\r\\n]*"|'[^'\\r\\n]*'|${SECRET_TOKEN}))`, "gi");
+const KEY_VALUE_SECRET = new RegExp(`(?<![A-Za-z0-9_.-])(["']?[A-Za-z0-9_.-]*(?:api[_-]?key|access[_-]?token|refresh[_-]?token|id[_-]?token|auth[_-]?token|bearer[_-]?token|client[_-]?secret|password|passwd|secret|authorization|credentials?)["']?[ \\t]*[:=][ \\t]*)(?:((?:Bearer|Basic)[ \\t]+${SECRET_TOKEN})|("[^"\\r\\n]*"|'[^'\\r\\n]*'|${SECRET_TOKEN}))`, "gi");
 const BEARER_SECRET = new RegExp(`\\b(Bearer[ \\t]+)${SECRET_TOKEN}`, "gi");
 function sensitiveKey(key, query = false) {
   const normalized = key.replace(/[^a-z0-9]/gi, "").toLowerCase();

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { accessSync, constants as fsConstants, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { accessSync, closeSync, fstatSync, openSync, constants as fsConstants, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { homedir } from "node:os";
@@ -33,7 +33,7 @@ import { deriveResearchStatus, listCurrentResearchReports } from "../../runtime/
 import { CURRENT_MATERIAL_FILES, materialFilesForCohort, phaseFilesFromIndex } from "../../runtime/task/material-workspace.mjs";
 // The two stage-result projections read their current result from the frozen
 // stage row of the single execution record, never from stage-outcome bytes.
-import { readTaskFacts, writeStageRow } from "../../runtime/task/task-store.mjs";
+import { readTaskFacts, STAGE_ROW_KEYS, writeStageRow } from "../../runtime/task/task-store.mjs";
 import { materialRevisionFromValues } from "../../runtime/task/git-worktree-snapshot.mjs";
 import { openTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { inspectWorkspace } from "../../runtime/interface/workspace-check.mjs";
@@ -62,11 +62,12 @@ import {
   prepareConfiguredOcrHostContext,
   runConfiguredOcrHostReview,
   runOcrDelegationRound,
+  detectOcr,
 } from "../../runtime/review/ocr-delegation-adapter.mjs";
 export { runConfiguredOcrHostReview };
-import { compactReviewDiff } from "../../runtime/review/review-input-bounds.mjs";
+import { compactReviewDiff, gitDiffPath } from "../../runtime/review/review-input-bounds.mjs";
 import { captureReviewSource } from "../../skills/wh-review/scripts/review-source.mjs";
-import { buildReviewMaterials, canonicalMaterialManifest, reviewInstructionsFor, validateVerifyAcceptanceSummary } from "../../skills/wh-review/scripts/review-materials.mjs";
+import { buildReviewMaterials, canonicalMaterialManifest, reviewMaterialBytes, reviewInstructionsFor, validateVerifyAcceptanceSummary } from "../../skills/wh-review/scripts/review-materials.mjs";
 import { loadTrustedThirdReviewConfig } from "../../skills/wh-review/scripts/third-review-host-config.mjs";
 
 const DESIGN_ARTIFACTS = Object.freeze({
@@ -228,7 +229,7 @@ export function assertTaskWriteIdentity({
   requireWorkspace = true,
 } = {}) {
   if (!task || typeof task !== "object" || !task.identity || !task.manifest) {
-    throw new TypeError("TaskHandle is required for write identity validation");
+    throw new TypeError("task metadata is required for write identity validation");
   }
   const violations = [];
   if (project !== task.identity.projectName) violations.push("PROJECT_ID_MISMATCH");
@@ -410,15 +411,14 @@ function deriveIdentityFromAuthenticatedWorktree(cwd, env) {
     throw new Error(`WorkflowHub identity conflict: multiple task manifests are registered for worktree ${worktreeRoot}`);
   }
   const candidate = candidates[0];
-  const task = openTask(candidate.taskPath, candidate.projectName, candidate.taskId);
-  const workspace = openCurrentTaskWorkspace(task);
-  if (workspace.worktreeRoot !== worktreeRoot) {
-    throw new Error("authenticated task worktree does not match the current Git worktree");
-  }
+  const metadata=readPlainTaskMetadata(candidate.taskPath,candidate.projectName,candidate.taskId);
+  const declared=metadata.manifest.workspace_mode==="existing" ? metadata.manifest.workspace_root
+    : resolve(dirname(repositoryRoot),`${basename(repositoryRoot)}-${candidate.taskId}`);
+  if(typeof declared!=="string" || realpathSync(resolve(declared))!==worktreeRoot)throw new Error("task metadata workspace does not match the current Git worktree");
   return Object.freeze({
-    project: task.identity.projectName,
-    task: task.identity.taskId,
-    taskPath: task.taskPath,
+    project: metadata.identity.projectName,
+    task: metadata.identity.taskId,
+    taskPath: metadata.taskPath,
     source: "worktree",
     taskPathSource: "authenticated_worktree",
   });
@@ -496,7 +496,9 @@ function ocrReviewInstructionsFor(request) {
     focus,
     "按根因合并重复 finding，保留真实消费者、后果和源码行证据。不可用≠空≠pass；缺少可用结果说明限制，不能当作没有问题。",
     "Return exactly one findings JSON. Code findings use packet-relative paths and real positive line numbers. Serious findings also include root_cause, evidence_kind and a verbatim source excerpt in backticks at the cited line or next two lines. Do not output verdict, stage completion or workflow permission.",
-    "Read only listed packet files. Do not access parent directories, Git, shell, network or host paths; do not write, invoke agents or wait/poll for other agents.",
+    "Read only listed packet files. Do not access parent directories, Git, shell, network or host paths; do not write.",
+    "Do not invoke Agent, subagent, child-agent, or other agent tools.",
+    "Do not wait for or poll agents, sessions, or processes; do not invoke wait/poll tools.",
   ].join("\n");
 }
 
@@ -542,7 +544,7 @@ function writeOcrCurrentMaterialProjection(bundleRoot, projected, evidence) {
   }
 }
 
-function projectOcrCodeReviewBundle(built, attachmentRoot, request) {
+function projectOcrCodeReviewBundle(built, attachmentRoot, request, source) {
   const selected = built.manifest.filter(({ path }) => path !== "packet-plan.json" && path !== "manifest.json");
   const paths = new Set(selected.map(({ path }) => path));
   for (const path of ["contracts/build-code.md", "contracts/verify-code.md", "contracts/provider-protocol.md", "skills/simplicity-guard/SKILL.md", "skills/review/SKILL.md"]) {
@@ -572,6 +574,28 @@ function projectOcrCodeReviewBundle(built, attachmentRoot, request) {
       if (projectedBytes === bytes) copyFileSync(join(built.bundleRoot, entry.path), destination);
       else writeFileSync(destination, projectedBytes);
       projected.push({ path: entry.path, bytes: projectedBytes.length, sha256: sha256(projectedBytes) });
+    }
+    // Capture only this selected diff's physical source files, never a tree.
+    // Their submitted bytes, not a private Git snapshot, support reviewer lines.
+    const diffText=readFileSync(source.diffPath,"utf8");
+    const sourcePaths=new Set();
+    for(const line of diffText.split("\n"))if(line.startsWith("diff --git ")){
+      const tokens=line.slice(11).match(/"(?:\\.|[^"\\])*"|\S+/g);
+      if(tokens?.length!==2)throw new Error("OCR code diff contains an invalid Git header");
+      sourcePaths.add(gitDiffPath(tokens[1]));
+    }
+    const sourceRoot=realpathSync(source.sourceRoot);
+    for(const path of sourcePaths){
+      if(isAbsolute(path)||path.split("/").some(x=>!x||x==="."||x===".."))throw new Error("OCR source path is unsafe");
+      if(projected.some(entry=>entry.path===path))throw new Error(`OCR source path conflicts with packet control: ${path}`);
+      const target=join(sourceRoot,path);let named;
+      try{let cursor=sourceRoot;for(const part of path.split("/")){cursor=join(cursor,part);const st=lstatSync(cursor);if(st.isSymbolicLink()||realpathSync(cursor)!==cursor)throw new Error(`OCR source path alias: ${path}`);}named=lstatSync(target);}
+      catch(error){if(error.code==="ENOENT")continue;throw error;}
+      if(!named.isFile()||named.nlink!==1)throw new Error(`OCR source is not a single-link regular file: ${path}`);
+      const fd=openSync(target,fsConstants.O_RDONLY|fsConstants.O_NOFOLLOW);let raw;
+      try{const st=fstatSync(fd);if(st.dev!==named.dev||st.ino!==named.ino||!st.isFile()||st.nlink!==1)throw new Error(`OCR source changed: ${path}`);raw=readFileSync(fd);}finally{closeSync(fd);}
+      const bytes=reviewMaterialBytes(path,raw);
+      const destination=join(bundleRoot,path);mkdirSync(dirname(destination),{recursive:true});writeFileSync(destination,bytes,{flag:"wx",mode:0o600});projected.push({path,bytes:bytes.length,sha256:sha256(bytes)});
     }
     if (request.authenticated_evidence !== undefined) {
       if (paths.has(AUTHENTICATED_EVIDENCE_PATH)) throw new Error("OCR source packet duplicated authenticated evidence");
@@ -666,7 +690,7 @@ export function prepareTaskBoundBuildCodeReviewBundle(context, request, {
     try {
       const manifest = built.deliveryManifest ?? built.manifest;
       packet = candidateExperiment && Array.isArray(manifest)
-        ? projectOcrCodeReviewBundle({ ...built, manifest }, trusted.attachmentRoot, request)
+        ? projectOcrCodeReviewBundle({ ...built, manifest }, trusted.attachmentRoot, request, selectedSource)
         : built;
     } catch (error) {
       rmSync(built.bundleRoot, { recursive: true, force: true });
@@ -1003,20 +1027,25 @@ function parseArgs(argv) {
 }
 
 function readTaskBoundInput(context, inputPath) {
-  try {
-    return JSON.parse(readFileSync(inputPath, "utf8"));
-  } catch (error) {
-    // Quality inputs are written to the authenticated external task store,
-    // while the launcher runs from the dedicated worktree.  Resolve only an
-    // explicit canonical quality ref after the normal filesystem read fails;
-    // never scan for the latest record or accept an arbitrary external path.
-    if (error?.code !== "ENOENT"
-        || typeof inputPath !== "string"
-        || !/^quality\/(?:tests|evidence)\//.test(inputPath)
-        || inputPath.includes("..")) throw error;
-    const raw = context.task.readRecord(inputPath);
-    return JSON.parse(raw);
-  }
+  const taskRef=typeof inputPath==="string"&&/^quality\/(?:tests|evidence)\//.test(inputPath)&&!inputPath.split("/").includes("..");
+  const path=taskRef ? resolve(context.task.taskPath,inputPath) : resolve(context.workspace.worktreeRoot,inputPath);
+  return JSON.parse(readPlainInputFile(path,"review input"));
+}
+
+// Native metadata readers are private consumers of the existing files. They
+// create no TaskHandle, kernel, receipt graph, latest selector or persisted view.
+function readPlainInputFile(path,label) {
+  const absolute=resolve(path);let cursor="/";
+  for(const part of absolute.split("/").filter(Boolean)){cursor=join(cursor,part);const stat=lstatSync(cursor);if(stat.isSymbolicLink()||realpathSync(cursor)!==cursor)throw Object.assign(new Error(`${label} path alias`),{code:"TASK_PATH_ALIAS"});}
+  const named=lstatSync(absolute);if(!named.isFile()||named.nlink!==1)throw Object.assign(new Error(`${label} must be a single-link regular file`),{code:"TASK_FILE_INVALID"});
+  const fd=openSync(absolute,fsConstants.O_RDONLY|fsConstants.O_NOFOLLOW);
+  try{const st=fstatSync(fd);if(st.dev!==named.dev||st.ino!==named.ino||!st.isFile()||st.nlink!==1)throw Object.assign(new Error(`${label} changed`),{code:"TASK_FILE_CHANGED"});return readFileSync(fd,"utf8");}finally{closeSync(fd);}
+}
+function readPlainTaskMetadata(taskPath,projectName,taskId) {
+  const path=resolve(taskPath);if(realpathSync(path)!==path||!lstatSync(path).isDirectory())throw Object.assign(new Error("task directory must be real"),{code:"TASK_PATH_ALIAS"});
+  const manifest=JSON.parse(readPlainInputFile(join(path,"task.json"),"task manifest"));
+  if(manifest.project_name!==projectName||manifest.task_id!==taskId)throw Object.assign(new Error("task manifest differs from requested project/task"),{code:"TASK_ID_MISMATCH"});
+  return {taskPath:path,manifest,identity:{projectName,taskId}};
 }
 
 export function phaseProgressTargetExists(cursor, materials) {
@@ -1026,19 +1055,17 @@ export function phaseProgressTargetExists(cursor, materials) {
   return materials[ref].split("\n").some((line) => /^###\s+T[0-9]{3,}\b/.test(line) && line.match(/^###\s+(T[0-9]{3,})\b/)[1] === cursor.task_id);
 }
 
-export function derivePhaseProgressStatus({ cursor = null, currentMaterialRevision = null } = {}) {
+export function derivePhaseProgressStatus({ cursor = null, currentPhasesHead = null } = {}) {
   if (cursor === null) return null;
-  const current = typeof currentMaterialRevision === "string"
-    && cursor.material_revision === currentMaterialRevision;
+  const current = GIT_OID.test(currentPhasesHead ?? "") && cursor.phases_head === currentPhasesHead;
   return Object.freeze({
     freshness: current ? "current" : "stale",
     cursor: Object.freeze({
-      phase_id: cursor.phase_id,
-      task_id: cursor.task_id,
-      material_revision: cursor.material_revision,
+      phase_id: cursor.phase_id, task_id: cursor.task_id,
+      ...(cursor.phases_head === undefined ? {} : { phases_head: cursor.phases_head }),
       recorded_at: cursor.recorded_at,
     }),
-    ...(current ? {} : { reason: "material_revision_mismatch" }),
+    ...(current ? {} : { reason: "phases_head_mismatch" }),
   });
 }
 
@@ -1080,16 +1107,25 @@ function currentPostPhaseMaterialState(context) {
   return Object.freeze({
     materials: Object.freeze(materials),
     materialFiles,
-    materialRevision: materialRevisionFromValues(materialFiles.map((file) => [file, materials[file]])),
+    phasesHead: currentPhaseMaterialsHead(context),
   });
 }
 
-function writeBuildCodePhaseProgressCursor(context, inputCursor) {
+function currentPhaseMaterialsHead(context) {
+  const prefix = `specs/${context.identity.taskId}`;
+  const head = execFileSync("git", ["log", "-1", "--format=%H", "--", `${prefix}/spec.md`, `${prefix}/phases/`], {
+    cwd: context.workspace.worktreeRoot, env: gitMetadataEnvironment(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+  }).trim();
+  return GIT_OID.test(head) ? head : null;
+}
+
+async function writeBuildCodePhaseProgressCursor(context, inputCursor) {
   if (!inputCursor || typeof inputCursor !== "object" || Array.isArray(inputCursor)
       || Object.keys(inputCursor).sort().join("\0") !== ["phase_id", "task_id"].sort().join("\0")) {
     throw new TypeError("phase_progress input must contain exactly phase_id and task_id");
   }
-  const { materials, materialRevision } = currentPostPhaseMaterialState(context);
+  const { materials, phasesHead } = currentPostPhaseMaterialState(context);
+  if (phasesHead === null) throw new Error("phase_progress requires a real tracked materials commit");
   if (typeof inputCursor.phase_id !== "string" || !/^P[1-9][0-9]*$/.test(inputCursor.phase_id)
       || typeof inputCursor.task_id !== "string" || !/^T[0-9]{3,}$/.test(inputCursor.task_id)) {
     throw new TypeError("phase_progress phase_id or task_id is invalid");
@@ -1100,37 +1136,29 @@ function writeBuildCodePhaseProgressCursor(context, inputCursor) {
   const phaseProgress = Object.freeze({
     phase_id: inputCursor.phase_id,
     task_id: inputCursor.task_id,
-    material_revision: materialRevision,
+    phases_head: phasesHead,
     recorded_at: new Date().toISOString(),
   });
   const currentRow = readTaskFacts(context.task.taskPath).find((row) =>
     row?.record_kind === "stage" && row.stage === "build-code") ?? null;
   const rowInput = currentRow
-    ? { ...currentRow, phase_progress: phaseProgress }
+    ? { ...Object.fromEntries(STAGE_ROW_KEYS.filter(key => Object.hasOwn(currentRow, key)).map(key => [key, currentRow[key]])), phase_progress: phaseProgress }
     : {
       record_kind: "stage",
       task_id: context.identity.taskId,
       stage: "build-code",
       source: PHASE_PROGRESS_ONLY_SOURCE,
-      material_digest: { value: null, reason: "a resume cursor does not authenticate material evidence" },
-      snapshot_tree: { value: null, reason: "a resume cursor does not capture or bind a Git snapshot" },
       phase_progress: phaseProgress,
       review_origin: "not_run",
       review_result_ref: { value: null, reason: "a resume cursor is not a review result" },
       finding_dispositions: [],
       spec_analyze: { value: null, reason: "a resume cursor does not run stage-end reflection" },
       evidence: { value: null, reason: "a resume cursor does not execute stage-end work" },
-      layer_states: {
-        implementation_completion: "unavailable",
-        stage_quality: "unavailable",
-        delivery: "unavailable",
-        task_closure: "unavailable",
-      },
       serious_issue_disposition: { value: null, reason: "a resume cursor carries no serious-issue disposition" },
       close_action: { value: null, reason: "a resume cursor carries no close action" },
       handoff: { value: null, reason: "a resume cursor publishes no handoff" },
     };
-  const written = writeStageRow(context.task.taskPath, rowInput);
+  const written = await writeStageRow(context.task.taskPath, rowInput);
   return Object.freeze({
     status: "recorded",
     stage: "build-code",
@@ -1212,16 +1240,22 @@ function thinMaterialAccess(worktreeRoot, taskId) {
 }
 
 async function thinTaskContext(values, cwd) {
-  const identity = resolveWorkflowHubIdentity(values, cwd);
-  const task = openTask(identity.taskPath, identity.project, identity.task);
-  const workspace = openCurrentTaskWorkspace(task);
-  assertTaskWriteIdentity({ task, project: identity.project, taskId: identity.task, taskPath: identity.taskPath, workspace, cwd });
-  const manifest = task.manifest;
-  const root = resolve(manifest.target_repo_root);
-  const target = workspace.worktreeRoot;
-  if (realpathSync(root) !== root || realpathSync(target) !== target) throw new Error("task/worktree path aliases are forbidden");
-  const physical = await inspectWorkspace({ root, target, baseline: workspace.baselineCommit });
-  return { task, workspace, manifest, identity: task.identity, artifacts: thinMaterialAccess(target, task.identity.taskId), physical };
+  const identity=resolveWorkflowHubIdentity(values,cwd);
+  const task=readPlainTaskMetadata(identity.taskPath,identity.project,identity.task),manifest=task.manifest;
+  const target=gitWorktreeRoot(cwd);if(!target)throw new Error("CURRENT_WORKTREE_UNAVAILABLE: current Git worktree is required");
+  const repositoryRoot=gitRepositoryRoot(cwd,target);if(!repositoryRoot)throw new Error("repository root is unavailable");
+  const declared=manifest.workspace_mode==="existing" ? manifest.workspace_root : resolve(dirname(repositoryRoot),`${basename(repositoryRoot)}-${identity.task}`);
+  if(typeof declared!=="string"||resolve(declared)!==target||realpathSync(declared)!==target)throw Object.assign(new Error("CURRENT_WORKTREE_MISMATCH: declared task workspace differs from cwd"),{code:"WRITE_IDENTITY_PREFLIGHT_FAILED"});
+  const root=resolve(manifest.target_repo_root);if(realpathSync(root)!==root)throw new Error("target repository path alias is forbidden");
+  const metadataGit=args=>execFileSync("git",args,{cwd:target,env:gitMetadataEnvironment(),encoding:"utf8",stdio:["ignore","pipe","pipe"]}).trim();
+  const head=metadataGit(["rev-parse","--verify","HEAD^{commit}"]);
+  let baselineCommit=manifest.baseline_commit ?? null;
+  if(baselineCommit!==null){if(!GIT_OID.test(baselineCommit))throw new TypeError("task baseline_commit must be a real Git commit");metadataGit(["cat-file","-e",`${baselineCommit}^{commit}`]);metadataGit(["merge-base","--is-ancestor",baselineCommit,head]);}
+  else {const branches=metadataGit(["for-each-ref","--format=%(refname)","refs/heads/main"]);baselineCommit=branches ? metadataGit(["merge-base",head,"refs/heads/main"]) : head;}
+  const workspace={worktreeRoot:target,targetRepoRoot:root,baselineCommit};
+  assertTaskWriteIdentity({task,project:identity.project,taskId:identity.task,taskPath:identity.taskPath,workspace,cwd});
+  const physical=await inspectWorkspace({root,target,baseline:baselineCommit});
+  return {task,workspace,manifest,identity:task.identity,artifacts:thinMaterialAccess(target,task.identity.taskId),physical};
 }
 
 function thinMaterials(context) {
@@ -1236,9 +1270,18 @@ function thinMaterials(context) {
   return materials;
 }
 
-function thinQuality(row) {
+function thinQuality(context, row) {
   if (!row || row.source === PHASE_PROGRESS_ONLY_SOURCE || row.review_origin === "not_run") return "unknown";
-  return row.layer_states?.stage_quality ?? "unknown";
+  if (row.review_origin === "unavailable") return "unavailable";
+  const ref = typeof row.review_result_ref === "string" ? row.review_result_ref : row.review_result_ref?.value;
+  if (typeof ref !== "string" || !ref.startsWith("quality/reviews/") || isAbsolute(ref) || ref.split(/[\\/]/).some(part => part === ".." || part === "")) return "unknown";
+  let result;
+  try { result = JSON.parse(readPlainInputFile(join(context.task.taskPath, ref), "review result")); }
+  catch (error) { if (error.code === "ENOENT") return "unknown"; throw error; }
+  if (result.task_id !== context.identity.taskId || result.stage !== row.stage) throw new Error("review result differs from current row identity");
+  if (result.status === "unavailable") return "unavailable";
+  // A review is one quality fact; it cannot certify stage completion.
+  return ["available", "available-with-failures", "incomplete"].includes(result.status) ? "incomplete" : "unknown";
 }
 
 function requireOptions(values, names, operation) {
@@ -1263,7 +1306,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
   if (command === "doctor") return {
     stage: values.stage, task_id: context.task.identity.taskId, worktree_root: context.workspace.worktreeRoot,
     baseline_commit: context.workspace.baselineCommit, workspace: context.physical,
-    storage: doctorStorage(context), materials: thinMaterials(context),
+    storage: doctorStorage(context), materials: thinMaterials(context), ocr: detectOcr(),
   };
   if (command === "status") {
     const rows = readTaskFacts(context.task.taskPath); // malformed JSON and permissions are real errors
@@ -1274,13 +1317,13 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     const missing = needed.filter((file) => materials[file] === null || !String(materials[file] ?? "").trim());
     const row = rows.find((value) => value.record_kind === "stage" && value.stage === values.stage) ?? null;
     const currentCursor = rows.find((value) => value.record_kind === "stage" && value.stage === "build-code")?.phase_progress ?? null;
-    const materialFiles = materialFilesForCohort(cohort, materials);
-    const revision = cohort === "post" ? materialRevisionFromValues(materialFiles.map((file) => [file, materials[file]])) : null;
+    const phasesHead = cohort === "post" ? currentPhaseMaterialsHead(context) : null;
+    const qualityStatus = thinQuality(context, row);
     return { task_id: context.task.identity.taskId, stage: values.stage, work_status: missing.length ? "not_ready" : "ready",
-      readiness_source: "current-material-presence", missing_materials: missing, quality_status: thinQuality(row),
-      quality: { status: thinQuality(row), review_origin: row?.review_origin ?? "not_run", review_result_ref: row?.review_result_ref ?? null },
+      readiness_source: "current-material-presence", missing_materials: missing, quality_status: qualityStatus,
+      quality: { status: qualityStatus, review_origin: row?.review_origin ?? "not_run", review_result_ref: row?.review_result_ref ?? null },
       materials: Object.fromEntries(Object.entries(materials).map(([file, value]) => [file, value !== null])),
-      ...(values.stage === "build-code" ? { phase_progress: derivePhaseProgressStatus({ cursor: currentCursor, currentMaterialRevision: revision }) } : {}),
+      ...(values.stage === "build-code" ? { phase_progress: derivePhaseProgressStatus({ cursor: currentCursor, currentPhasesHead: phasesHead }) } : {}),
       facts: rows, workspace: context.physical,
     };
   }
@@ -1341,7 +1384,32 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       request.phase_id=request.phase_id ?? request.phaseId ?? values["phase-id"] ?? null;
       request.subject_kind=request.subject_kind ?? "phase";
     }
-    const runner=typeof services.runReviewRound==="function" ? services.runReviewRound : (request,options)=>runSimpleReview(request,options);
+    const codeSurface=["build-code","verify-code"].includes(request.stage)
+      && (request.review_kind ?? request.reviewKind ?? null)===null && request.surface!=="document";
+    if(codeSurface)request.surface="code";
+    const runner=async (current,options)=>{
+      const whReview=typeof services.runReviewRound==="function" ? services.runReviewRound : runSimpleReview;
+      if(!codeSurface)return whReview(current,options);
+      const detection=detectOcr();
+      if(detection.status==="unavailable")return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:detection.error?.code ?? "OCR_DETECTION_UNAVAILABLE",message:detection.reason}};
+      if(detection.status==="not_installed"){
+        const fallback={from:"ocr",reason:detection.reason,detected_by:detection.detected_by};
+        const result=typeof services.runReviewRound==="function" ? await whReview(current,options)
+          : await whReview(current,{...options,buildBundle:()=>prepareTaskBoundBuildCodeReviewBundle(context,current)});
+        return {...result,executor:"wh-review",fallback};
+      }
+      const ocrRunner=services.runOcrDelegationRound;
+      if(typeof ocrRunner==="function")return {...await ocrRunner(current,options),executor:"ocr"};
+      let bundle;
+      try {
+        bundle=prepareTaskBoundBuildCodeReviewBundle(context,current);
+        const trustedContext=prepareConfiguredOcrHostContext(current);
+        const result=await runOcrDelegationRound(current,{buildBundle:()=>bundle,signal:options.signal,
+          executor:params=>runConfiguredOcrHostReview(params,{trustedContext,sourceBundle:bundle,
+            rawOutputSink:async (hint,bytes,metadata={})=>options.onProviderOutput({provider:metadata.provider ?? "ocr",role:null,channel:metadata.stream ?? "raw-output",output:bytes})})});
+        return {...result,executor:"ocr"};
+      } finally {bundle?.dispose();}
+    };
     return recordSimpleReviewRequest({taskDir:context.task.taskPath,request,runRound:runner,signal:services.reviewSignal ?? null});
   }
 

@@ -1,21 +1,12 @@
-import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { constants, closeSync, fstatSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, realpathSync } from "node:fs";
+import { appendRecord } from "../interface/safe-write.mjs";
 import { isAbsolute, join, resolve } from "node:path";
 
 const WORKFLOW = "build-prd";
 const TERMINAL_DIRECTORY = "quality/evidence/portable-workflow-outcomes/build-prd/terminal";
-const STEP_RESULT_REF = /^quality\/evidence\/portable-workflow-outcomes\/build-prd\/([a-f0-9]{64})\.json$/;
+const STEP_RESULT_REF = /^quality\/evidence\/portable-workflow-outcomes\/build-prd\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/;
 const TERMINAL_STATES = new Set(["not-started", "in-progress", "succeeded", "failed", "unverified", "blocked", "abandoned"]);
 const STEP_STATUSES = new Set(["completed", "in-progress", "failed", "unverified", "blocked", "abandoned", "unavailable", "incomplete"]);
-const EXPECTED_STEP_SLUGS = Object.freeze([
-  "load-parent-decision",
-  "draft-outline-and-task-map",
-  "confirm-map-and-conditional-design",
-  "expand-single-prd",
-  "confirm-final-displayed-draft",
-  "report-facts-and-handoff",
-]);
-const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
 function validIso(value) {
   return typeof value === "string" && Number.isFinite(Date.parse(value));
@@ -30,7 +21,7 @@ function nowIso(now) {
 function requirePortableManifest(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)
       || value.schema_version !== "2.0.0" || value.stage_slug !== WORKFLOW || !Array.isArray(value.steps)
-      || value.steps.length !== 6) {
+      || value.steps.length === 0) {
     throw new Error("portable build-prd steps manifest is invalid");
   }
   const seenIds = new Set();
@@ -38,10 +29,8 @@ function requirePortableManifest(value) {
   for (const [index, step] of value.steps.entries()) {
     if (!step || typeof step !== "object" || Array.isArray(step)
         || !Number.isSafeInteger(step.step_id) || step.step_id !== index + 1 || seenIds.has(step.step_id)
-        || typeof step.step_slug !== "string" || step.step_slug !== EXPECTED_STEP_SLUGS[index] || seenSlugs.has(step.step_slug)
-        || !Number.isSafeInteger(step.order) || step.order !== index + 1
-        || !Array.isArray(step.entry_conditions) || !Array.isArray(step.completion_evidence)
-        || !Array.isArray(step.depends_on) || typeof step.observable_result !== "string" || !step.observable_result.trim()) {
+        || typeof step.step_slug !== "string" || !step.step_slug.trim() || seenSlugs.has(step.step_slug)
+        || typeof step.observable_result !== "string" || !step.observable_result.trim()) {
       throw new Error(`portable build-prd step ${index + 1} is invalid`);
     }
     seenIds.add(step.step_id);
@@ -75,16 +64,26 @@ function terminalRecord({ taskId, state, reason, failedStep, stepResultRefs, sta
   });
 }
 
-function terminalPath(raw) {
-  return `${TERMINAL_DIRECTORY}/${sha256(raw)}.json`;
+function readOriginal(path) {
+  const absolute=resolve(path);let cursor="/";
+  for(const part of absolute.split("/").filter(Boolean)){cursor=join(cursor,part);const st=lstatSync(cursor);if(st.isSymbolicLink()||realpathSync(cursor)!==cursor)throw new Error("portable record path alias");}
+  const named=lstatSync(absolute);if(!named.isFile()||named.nlink!==1)throw new Error("portable record must be single-link regular file");
+  const fd=openSync(absolute,constants.O_RDONLY|constants.O_NOFOLLOW);
+  try{const opened=fstatSync(fd);if(opened.dev!==named.dev||opened.ino!==named.ino)throw new Error("portable record changed");return readFileSync(fd,"utf8");}finally{closeSync(fd);}
 }
-
-function writeTerminal(task, terminal) {
-  if (!task || typeof task.createRecordAtomic !== "function") throw new TypeError("TaskHandle canonical record writer is required");
+function taskIdentity(task) {
+  if(!task?.identity?.taskId||typeof task.taskPath!=="string"||!isAbsolute(task.taskPath))throw new TypeError("plain task metadata is required");
+  const manifest=JSON.parse(readOriginal(join(task.taskPath,"task.json")));
+  if(manifest.task_id!==task.identity.taskId)throw new Error("portable task identity mismatch");
+  return manifest.task_id;
+}
+async function writeTerminal(task, terminal) {
+  taskIdentity(task);
+  const directory=join(task.taskPath,...TERMINAL_DIRECTORY.split("/"));let cursor=task.taskPath;
+  for(const part of TERMINAL_DIRECTORY.split("/")){cursor=join(cursor,part);try{const st=lstatSync(cursor);if(st.isSymbolicLink()||!st.isDirectory())throw new Error("portable storage path alias");}catch(error){if(error.code!=="ENOENT")throw error;mkdirSync(cursor,{mode:0o700});}}
   const raw = `${JSON.stringify(terminal, null, 2)}\n`;
-  const ref = terminalPath(raw);
-  task.createRecordAtomic(ref, raw);
-  return Object.freeze({ ref, sha256: sha256(raw), terminal });
+  const path = await appendRecord(directory,"build-prd-terminal","json",raw);
+  return Object.freeze({ ref: `${TERMINAL_DIRECTORY}/${path.slice(directory.length+1)}`, terminal });
 }
 
 function nextCompletionTime(task, candidate) {
@@ -101,12 +100,10 @@ function failedTerminal(taskId, reason, startedAt, completedAt, failedStep = nul
 }
 
 function validateStepResultEvidence(task, result, taskId, step) {
-  const match = STEP_RESULT_REF.exec(result.result_ref);
-  if (!match) return `portable workflow step result_ref is outside the canonical outcome namespace for ${step.step_slug}`;
+  if (!STEP_RESULT_REF.test(result.result_ref)) return `portable workflow step result_ref is outside the canonical outcome namespace for ${step.step_slug}`;
   let raw;
-  try { raw = task.readRecord(result.result_ref); }
+  try { raw = readOriginal(join(task.taskPath, result.result_ref)); }
   catch (error) { return `portable workflow step result evidence is unavailable for ${step.step_slug}: ${error.message}`; }
-  if (sha256(raw) !== match[1]) return `portable workflow step result evidence hash mismatch for ${step.step_slug}`;
   let value;
   try { value = JSON.parse(raw); }
   catch { return `portable workflow step result evidence is not JSON for ${step.step_slug}`; }
@@ -157,7 +154,7 @@ function validateStepResults(input, taskId, steps, task) {
 
 function stateForStepResults(results) {
   const first = results.find(({ status }) => status !== "completed");
-  if (!first) return { state: "succeeded", failedStep: null, reason: "all six portable step outcomes are completed" };
+  if (!first) return { state: "succeeded", failedStep: null, reason: "all supplied portable step outcomes are completed" };
   if (first.status === "in-progress") return { state: "in-progress", failedStep: first.step_slug, reason: `portable step is in progress: ${first.step_slug}` };
   if (first.status === "unverified") return { state: "unverified", failedStep: first.step_slug, reason: `portable step requires verification: ${first.step_slug}` };
   if (first.status === "blocked") return { state: "blocked", failedStep: first.step_slug, reason: `portable step waits for ${first.dependency}: ${first.unblock_condition}` };
@@ -166,25 +163,24 @@ function stateForStepResults(results) {
 }
 
 /** Validate session-produced build-prd step outcomes and append one terminal record. */
-export function runPortableWorkflow({ task, worktreeRoot, input = undefined, now = () => new Date() } = {}) {
-  if (!task?.identity?.taskId) throw new TypeError("TaskHandle is required for portable workflow execution");
+export async function runPortableWorkflow({ task, worktreeRoot, input = undefined, now = () => new Date() } = {}) {
+  const taskId = taskIdentity(task);
   const startedAt = nowIso(now);
-  const taskId = task.identity.taskId;
   if (input === undefined) return Object.freeze({ state: "not-started", ref: null, terminal: null });
   let manifest;
   try { manifest = loadPortableWorkflowManifest({ worktreeRoot }); }
   catch (error) {
     const terminal = failedTerminal(taskId, error.message, startedAt, nextCompletionTime(task, nowIso(now)));
-    return Object.freeze({ state: terminal.state, ...writeTerminal(task, terminal) });
+    return Object.freeze({ state: terminal.state, ...await writeTerminal(task, terminal) });
   }
   const validation = validateStepResults(input, taskId, manifest.steps, task);
   if (validation.error) {
     const terminal = failedTerminal(taskId, validation.error, startedAt, nextCompletionTime(task, nowIso(now)), validation.failedStep ?? null, validation.refs ?? []);
-    return Object.freeze({ state: terminal.state, ...writeTerminal(task, terminal) });
+    return Object.freeze({ state: terminal.state, ...await writeTerminal(task, terminal) });
   }
   if (validation.missingStep) {
     const terminal = failedTerminal(taskId, `missing portable step outcome: ${validation.missingStep}`, startedAt, nextCompletionTime(task, nowIso(now)), validation.missingStep, validation.refs);
-    return Object.freeze({ state: terminal.state, ...writeTerminal(task, terminal) });
+    return Object.freeze({ state: terminal.state, ...await writeTerminal(task, terminal) });
   }
   const outcome = stateForStepResults(validation.results);
   const terminal = terminalRecord({
@@ -196,7 +192,7 @@ export function runPortableWorkflow({ task, worktreeRoot, input = undefined, now
     startedAt,
     completedAt: nextCompletionTime(task, nowIso(now)),
   });
-  return Object.freeze({ state: terminal.state, ...writeTerminal(task, terminal) });
+  return Object.freeze({ state: terminal.state, ...await writeTerminal(task, terminal) });
 }
 
 function validTerminal(value, taskId) {
@@ -211,22 +207,20 @@ function validTerminal(value, taskId) {
 }
 
 export function readLatestPortableTerminal({ task } = {}) {
-  if (!task?.identity?.taskId || typeof task.readRecord !== "function" || typeof task.taskPath !== "string") throw new TypeError("TaskHandle is required to read portable workflow status");
-  const directory = join(task.taskPath, ...TERMINAL_DIRECTORY.split("/"));
-  if (!existsSync(directory)) return null;
-  const terminals = [];
-  for (const name of readdirSync(directory)) {
-    if (!/^[a-f0-9]{64}\.json$/.test(name)) continue;
-    const ref = `${TERMINAL_DIRECTORY}/${name}`;
-    try {
-      const raw = task.readRecord(ref);
-      if (sha256(raw) !== name.slice(0, -5)) continue;
-      const value = JSON.parse(raw);
-      if (validTerminal(value, task.identity.taskId)) terminals.push({ ref, sha256: name.slice(0, -5), ...value });
-    } catch { /* malformed historical records are not current status */ }
+  const taskId=taskIdentity(task);
+  const directory=join(task.taskPath,...TERMINAL_DIRECTORY.split("/"));
+  let names;try{let cursor=task.taskPath;for(const part of TERMINAL_DIRECTORY.split("/")){cursor=join(cursor,part);const stat=lstatSync(cursor);if(stat.isSymbolicLink()||!stat.isDirectory())throw new Error("portable terminal storage must be real");}names=readdirSync(directory);}catch(error){if(error.code==="ENOENT")return null;throw error;}
+  const terminals=[];
+  for(const name of names){
+    if(!/^[A-Za-z0-9][A-Za-z0-9._-]*\.json$/.test(name))continue;
+    const ref=`${TERMINAL_DIRECTORY}/${name}`;
+    const raw=readOriginal(join(directory,name));
+    const value=JSON.parse(raw);
+    if(!validTerminal(value,taskId))throw new Error(`portable terminal record is invalid: ${ref}`);
+    terminals.push({ref,...value});
   }
-  terminals.sort((left, right) => Date.parse(right.completed_at) - Date.parse(left.completed_at) || right.ref.localeCompare(left.ref));
-  return terminals[0] ? Object.freeze(terminals[0]) : null;
+  terminals.sort((left,right)=>Date.parse(right.completed_at)-Date.parse(left.completed_at)||right.ref.localeCompare(left.ref));
+  return terminals[0]?Object.freeze(terminals[0]):null;
 }
 
 export function projectPortableWorkflowStatus({ task } = {}) {

@@ -658,6 +658,34 @@
         "code",
         null
       ]
+    },
+    "fallback": {
+      "type": "object",
+      "required": [
+        "from",
+        "reason",
+        "detected_by"
+      ],
+      "properties": {
+        "from": {
+          "const": "ocr"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "detected_by": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "executor": {
+      "enum": [
+        "ocr",
+        "wh-review"
+      ]
     }
   },
   "$defs": {

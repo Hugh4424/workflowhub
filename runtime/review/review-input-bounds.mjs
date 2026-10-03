@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-function gitDiffPath(token) {
+export function gitDiffPath(token) {
   let path = token;
   if (token.startsWith('"')) {
     const bytes = [];

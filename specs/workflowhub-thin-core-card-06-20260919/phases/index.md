@@ -20,7 +20,7 @@
 
 - 先读 `spec.md#实现设计全局权威`，再按 authority ref 打开对应 Phase 的 L0/L1；L2 是可删除的参考。
 - 索引与 Phase 头部的写集、依赖、消费者不一致时停止声明完成；缺件、额外文件或不连续编号不得由旧 plan/tasks 代偿。
-- 依赖顺序为 P1 → P2 → … → P8，严格串行（ADR-004：先立新后拆旧）。同 task 缺陷返修回原 owner，不产生循环前置。
+- Phase 行维持 P1～P8 材料指针顺序，dependency 列仍指较早输入；P5～P7 的实际执行次序只读 `spec.md#P5～P7 串行切换窗口（仅执行次序纠正）` 与各 Phase 正文。窗口串行、先改 consumer 再删 producer；各 Phase 原 Done 独立核实，不把指针或预处理当整 Phase 完成。同 task 缺陷回原 owner，不新增循环许可证或进度账。
 - 每批执行事实（G-3 扫描、消费者核对、测试结果、批后汇报）写在任务目录 `quality/evidence/card06-batches/` 与 `quality/tests/`，不回写本索引或 Phase 正文。
 
 ## 历史边界
