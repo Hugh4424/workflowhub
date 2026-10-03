@@ -1,11 +1,11 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { bootstrapTask } from "../../tools/cli/task-bootstrap.mjs";
-import { createTask } from "../../runtime/task/task-handle.mjs";
+import { initializeTaskStore, withStoreLock } from "../../runtime/task/task-store.mjs";
 
 const roots = [];
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
@@ -21,19 +21,21 @@ describe("task bootstrap target repository boundary", () => {
     return { home, storage, repo, env: { HOME: home, WORKFLOWHUB_TASK_DIR: storage } };
   }
 
-  it("rejects a nested target before creating immutable task.json", () => {
+  it("rejects a nested target before creating immutable task.json", async () => {
     const f = fixture(), nested = join(f.repo, "nested"); mkdirSync(nested);
-    expect(() => bootstrapTask({ project: "Demo", task: "nested-target", "target-repo": nested }, { ...f, cwd: f.repo })).toThrow(/Git toplevel/i);
-    expect(() => bootstrapTask({ project: "Demo", task: "nested-target", "target-repo": f.repo }, { ...f, cwd: f.repo })).not.toThrow();
+    await expect(bootstrapTask({ project: "Demo", task: "nested-target", "target-repo": nested }, { env:f.env,home:f.home })).rejects.toThrow();
+    expect(existsSync(join(f.storage,"Projects/Demo/tasks/nested-target/task.json"))).toBe(false);
+    await expect(bootstrapTask({ project: "Demo", task: "nested-target", "target-repo": f.repo }, { env:f.env,home:f.home })).resolves.toMatchObject({project:"Demo",task:"nested-target"});
   });
 
-  it("rejects a non-Git target before creating immutable task.json", () => {
+  it("rejects a non-Git target before creating immutable task.json", async () => {
     const f = fixture(), plain = join(f.home, "plain"); mkdirSync(plain);
-    expect(() => bootstrapTask({ project: "Demo", task: "plain-target", "target-repo": plain }, { ...f, cwd: f.repo })).toThrow(/target repository validation failed/i);
-    expect(() => bootstrapTask({ project: "Demo", task: "plain-target", "target-repo": f.repo }, { ...f, cwd: f.repo })).not.toThrow();
+    await expect(bootstrapTask({ project: "Demo", task: "plain-target", "target-repo": plain }, { env:f.env,home:f.home })).rejects.toThrow();
+    expect(existsSync(join(f.storage,"Projects/Demo/tasks/plain-target/task.json"))).toBe(false);
+    await expect(bootstrapTask({ project: "Demo", task: "plain-target", "target-repo": f.repo }, { env:f.env,home:f.home })).resolves.toMatchObject({project:"Demo",task:"plain-target"});
   });
 
-  it("binds an explicitly supplied existing trusted worktree without deriving a second one", () => {
+  it("binds an explicitly supplied existing trusted worktree without deriving a second one", async () => {
     const f = fixture();
     writeFileSync(join(f.repo, "baseline.txt"), "baseline\n");
     execFileSync("git", ["add", "."], { cwd: f.repo });
@@ -41,12 +43,12 @@ describe("task bootstrap target repository boundary", () => {
     const worktree = join(f.home, "trusted-task-worktree");
     execFileSync("git", ["worktree", "add", "-b", "codex/demo-existing-worktree", worktree, "HEAD"], { cwd: f.repo });
 
-    const result = bootstrapTask({
+    const result = await bootstrapTask({
       project: "Demo",
       task: "demo-existing-worktree",
       "target-repo": f.repo,
       "workspace-root": worktree,
-    }, { ...f, cwd: worktree });
+    }, { env:f.env,home:f.home });
 
     const manifest = JSON.parse(readFileSync(join(result.task_path, "task.json"), "utf8"));
     expect(manifest).toMatchObject({
@@ -56,36 +58,37 @@ describe("task bootstrap target repository boundary", () => {
     });
   });
 
-  it("opens a legacy pinned manifest read-only and authenticates a fresh invocation independently", () => {
-    const f = fixture(), runner = join(f.home, "runner"); mkdirSync(runner);
-    execFileSync("git", ["init", "-q", "-b", "task/workflowhub/m14b-fact-collection-g2"], { cwd: runner });
-    writeFileSync(join(runner, "AGENTS.md"), "# Runner\n");
-    writeFileSync(join(runner, "CONSTITUTION.md"), "# Constitution\n");
-    mkdirSync(join(runner, "workflows", "verify-code"), { recursive: true });
-    writeFileSync(join(runner, "workflows", "verify-code", "SKILL.md"), "# verify-code\n");
-    execFileSync("git", ["add", "."], { cwd: runner });
-    execFileSync("git", ["-c", "user.name=WorkflowHub Tests", "-c", "user.email=tests@workflowhub.local", "commit", "-qm", "runner"], { cwd: runner });
-    const task = createTask({ storageRoot: f.storage, manifest: {
-      schema_version: "1.0.0", project_name: "workflowhub", task_id: "m14b-fact-collection-g2",
-      created_at: "2026-07-19T00:00:00.000Z", target_repo_root: f.repo, issue_ids: ["ZHI-102"], inputs: {},
-    } });
-    const before = JSON.stringify({
-      ...task.manifest,
-      execution_mode: "legacy_pinned",
-      runner_root: "/retired/workflowhub-runner",
-      runner_oid: "0".repeat(40),
-      runner_root_migration: { ref: "identity/migrations/runner-root/historical.json" },
-    }, null, 2) + "\n";
-    writeFileSync(join(task.taskPath, "task.json"), before);
-    const resultWithoutRunner = bootstrapTask({ "task-path": task.taskPath, project: "workflowhub", task: "m14b-fact-collection-g2" }, { env: {}, home: join(f.home, "missing-home"), cwd: f.repo });
-    expect(resultWithoutRunner).toMatchObject({ task_path: task.taskPath, project: "workflowhub", task: "m14b-fact-collection-g2" });
-    const result = bootstrapTask({ "task-path": task.taskPath, project: "workflowhub", task: "m14b-fact-collection-g2", "runner-root": realpathSync(runner), stage: "verify-code" }, { env: {}, home: join(f.home, "missing-home"), cwd: f.repo });
-    expect(result).toMatchObject({
-      task_path: task.taskPath, project: "workflowhub", task: "m14b-fact-collection-g2",
-      runner_identity: { source_kind: "git_invocation", stage: "verify-code", source: { git_oid: execFileSync("git", ["rev-parse", "HEAD"], { cwd: runner, encoding: "utf8" }).trim() } },
-    });
-    expect(readFileSync(join(task.taskPath, "task.json"), "utf8")).toBe(before);
-    expect(() => bootstrapTask({ "task-path": task.taskPath, project: "workflowhub", task: "m14b-fact-collection-g2", "runner-root": f.repo, stage: "verify-code" })).toThrow(/AGENTS|runner identity/i);
+  function existing(f,id,cohort="post") {
+    const worktree=join(f.home,"worktree-"+id);
+    execFileSync("git",["worktree","add","-q","-b","codex/"+id,worktree,"HEAD"],{cwd:f.repo});
+    const taskPath=join(f.storage,"Projects/workflowhub/tasks",id);mkdirSync(taskPath,{recursive:true});
+    const manifest={schema_version:"1.0.0",execution_mode:"per_invocation",record_model:"vnext-single-write",project_name:"workflowhub",task_id:id,created_at:"2026-10-03T00:00:00.000Z",target_repo_root:f.repo,workspace_mode:"existing",workspace_root:worktree,activation_cohort:cohort,issue_ids:[],inputs:{}};
+    const before=JSON.stringify(manifest,null,3)+"\n";writeFileSync(join(taskPath,"task.json"),before);
+    return {taskPath,before,values:{"task-path":taskPath,project:"workflowhub",task:id}};
+  }
+  it("awaits existing post initialization without rewriting its manifest or historical rows", async () => {
+    const f=fixture(),x=existing(f,"p6-existing-post");
+    const old=' {"task_id":"p6-existing-post","stage":"make-decision","retired_passive":{"a":1}}\n';writeFileSync(join(x.taskPath,"facts.jsonl"),old);
+    let release,entered;const gate=new Promise(r=>release=r),ready=new Promise(r=>entered=r);
+    const held=withStoreLock(x.taskPath,async()=>{entered();await gate;});await ready;
+    let settled=false;const pending=Promise.resolve().then(()=>bootstrapTask(x.values,{env:f.env,home:f.home})).finally(()=>{settled=true;});
+    try {await new Promise(r=>setTimeout(r,60));expect(settled).toBe(false);}
+    finally {release();await held;await pending.catch(()=>{});await initializeTaskStore(x.taskPath);await new Promise(r=>setTimeout(r,80));}
+    await pending;
+    expect(readFileSync(join(x.taskPath,"task.json"),"utf8")).toBe(x.before);
+    expect(readFileSync(join(x.taskPath,"facts.jsonl"),"utf8")).toBe(old);
+    expect(existsSync(join(x.taskPath,"quality/reviews"))).toBe(true);
+  });
+  it("rejects pre and unknown existing cohorts before initializing any records", async () => {
+    const f=fixture();for(const cohort of ["pre","unknown"]){
+      const x=existing(f,"p6-readonly-"+cohort,cohort);let error;
+      try {await bootstrapTask(x.values,{env:f.env,home:f.home});}catch(e){error=e;}
+      await new Promise(r=>setTimeout(r,100));
+      expect(error?.message??"").toMatch(/pre\/history.*read-only/);
+      expect(readFileSync(join(x.taskPath,"task.json"),"utf8")).toBe(x.before);
+      expect(existsSync(join(x.taskPath,"facts.jsonl"))).toBe(false);
+      expect(existsSync(join(x.taskPath,"quality"))).toBe(false);
+    }
   });
 
 });

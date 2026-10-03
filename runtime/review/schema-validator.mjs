@@ -2,9 +2,7 @@ import { readFileSync } from "node:fs";
 import Ajv2020 from "ajv/dist/2020.js";
 
 const SCHEMAS = {
-  attempt: "attempt.schema.json",
   result: "result.schema.json",
-  ac_evidence_summary: "ac-evidence-summary.schema.json",
 };
 
 // Conditional `required` clauses intentionally target properties declared at

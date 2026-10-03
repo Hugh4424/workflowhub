@@ -9,10 +9,8 @@
   "runtime_review": {
     "stage_materials": "runtime/review/stage-materials.json",
     "schemas": {
-      "attempt": "runtime/review/schemas/attempt.schema.json",
       "result": "runtime/review/schemas/result.schema.json",
-      "stage_materials": "runtime/review/schemas/stage-materials.schema.json",
-      "ac_evidence_summary": "runtime/review/schemas/ac-evidence-summary.schema.json"
+      "stage_materials": "runtime/review/schemas/stage-materials.schema.json"
     }
   },
   "stage_skill_plan": "stage-skill-plan.json",

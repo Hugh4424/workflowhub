@@ -18,7 +18,6 @@
       "kind": "user-provided-local-source",
       "path": "isolated-browser-qa",
       "license": "user-owned",
-      "snapshot_sha256": "a6bc203bddc596bc8dc2464bbc01cdeb5f1cf75972381927371d17b84b394a68",
       "authorization_basis": "user explicitly supplied local source and authorized migration into workflowhub",
       "reviewed_at": "2026-07-14",
       "review_outcome": "accepted"

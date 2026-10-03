@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import path from "node:path";
-import crypto from "node:crypto";
 
 function assertRelative(locator) {
   if (!locator || path.isAbsolute(locator)) throw new Error(`skill locator must be relative: ${locator}`);
@@ -11,13 +10,6 @@ function inside(root, candidate) {
   return candidate === root || candidate.startsWith(`${root}${path.sep}`);
 }
 
-function canonical(value) {
-  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
-  if (value && typeof value === "object") return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`;
-  return JSON.stringify(value);
-}
-
-function sha256(bytes) { return crypto.createHash("sha256").update(bytes).digest("hex"); }
 
 export function createSkillDiagnostic({
   source,
@@ -105,42 +97,11 @@ export function validateSkillBundle(packageRoot, bundlePath, expectedSkillPath) 
     seen.add(locator);
     const absolute = path.resolve(bundleDir, locator);
     const resolved = assertRegularContainedFile(bundleDir, realBundleDir, absolute, `bundle asset ${locator}`);
-    const actual = sha256(fs.readFileSync(absolute));
-    return { path: locator, resolved, sha256: actual };
+    return { path: locator, resolved };
   });
   const skill = resolveLocalSkill(root, expectedSkillPath);
   if (!fileEntries.some(entry => entry.resolved === skill)) throw new Error(`bundle does not include declared SKILL.md: ${expectedSkillPath}`);
-  const bundleHash = sha256(canonical(fileEntries.map(({ path: locator, sha256: hash }) => ({ path: locator, sha256: hash })).sort((a, b) => a.path.localeCompare(b.path))));
-  return { bundle, bundlePath: absoluteBundle, files: fileEntries.map(entry => entry.resolved), fileEntries, bundleHash };
-}
-
-export function validateReviewBundleProjection(packageRoot, reviewBundlePath, expectedSkillPath) {
-  assertRelative(reviewBundlePath);
-  const root = fs.realpathSync(packageRoot);
-  const skillName = expectedSkillPath.split("/").at(-2);
-  const checked = validateSkillBundle(root, `skills/${skillName}/skill-bundle.json`, expectedSkillPath);
-  const skillDir = path.join(root, "skills", skillName);
-  const projectionPath = path.resolve(root, reviewBundlePath);
-  assertRegularContainedFile(skillDir, fs.realpathSync(skillDir), projectionPath, `review bundle ${reviewBundlePath}`);
-  const projection = JSON.parse(fs.readFileSync(projectionPath, "utf8"));
-  if (projection.schema_version !== 1 || projection.skill !== skillName || !Array.isArray(projection.files) || projection.files.length === 0) {
-    throw new Error(`invalid review bundle projection: ${reviewBundlePath}`);
-  }
-  if (projection.mode !== "lens-only" || !["file_only", "always_embed"].includes(projection.delivery_mode)) {
-    throw new Error(`review bundle must be a lens-only delivery projection: ${reviewBundlePath}`);
-  }
-  const entrypoint = projection.entrypoint || "SKILL.md";
-  const allowed = new Map(checked.fileEntries.map(entry => [entry.path, entry]));
-  const selected = [];
-  for (const locator of projection.files) {
-    assertRelative(locator);
-    const entry = allowed.get(locator);
-    if (!entry) throw new Error(`review bundle asset is not in skill-bundle.json: ${locator}`);
-    selected.push(entry);
-  }
-  if (!selected.some(entry => entry.path === entrypoint)) throw new Error(`review bundle omits entrypoint: ${entrypoint}`);
-  const projectionHash = sha256(canonical(selected.map(({ path: locator, sha256: hash }) => ({ path: locator, sha256: hash })).sort((a, b) => a.path.localeCompare(b.path))));
-  return { projection, projectionPath, entrypoint, files: selected, bundleHash: checked.bundleHash, projectionHash };
+  return { bundle, bundlePath: absoluteBundle, files: fileEntries.map(entry => entry.resolved), fileEntries };
 }
 
 export function resolveSkillPackage({ packageRoot, manifestPath, dependency }) {
@@ -157,7 +118,6 @@ export function resolveSkillPackage({ packageRoot, manifestPath, dependency }) {
       name: skill,
       resolved_skill_path: skillPath,
       resolved_bundle_paths: checked.fileEntries.map(entry => entry.resolved),
-      bundle_hash: checked.bundleHash,
       source_manifest: manifest,
       package_root: root,
       diagnostic: createSkillDiagnostic({

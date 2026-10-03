@@ -4,6 +4,9 @@
  * RUN_CHECKS_FORCE_FAIL_CHECKER provides the existing failure-injection seam.
  */
 import { spawnSync } from "node:child_process";
+import { validateSkillBundle } from "../../runtime/adapters/local-skill-resolver.mjs";
+import { findUndeclaredStaticDependencies } from "../../runtime/evidence/skill-static-deps.mjs";
+import yaml from "js-yaml";
 import { readFileSync } from "node:fs";
 import { validateContract } from "../../runtime/evidence/validate-contract.mjs";
 import { CORE_FIELDS, validateRecord } from "../../metrics/record-schema.mjs";
@@ -94,6 +97,19 @@ function checkMetricsSchema() {
   return failures;
 }
 
+function checkSkillStaticDependencies() {
+  const catalog=yaml.load(readFileSync(resolve(repoRoot,"skills/catalog.yaml"),"utf8"));
+  const entries=Array.isArray(catalog?.skills)?catalog.skills:[];
+  const failures=[];
+  for(const entry of entries) {
+    if(typeof entry.path!=="string" || !entry.path.startsWith("skills/")) continue;
+    const skillDir=dirname(resolve(repoRoot,entry.path));
+    const checked=validateSkillBundle(repoRoot,`${entry.path.slice(0,-"SKILL.md".length)}skill-bundle.json`,entry.path);
+    for(const item of findUndeclaredStaticDependencies({skillDir,fileEntries:checked.fileEntries})) failures.push(`${entry.name}/${item.source}: ${item.locator} ${item.reason}`);
+  }
+  return failures;
+}
+
 function runAggregate() {
   const failures = [];
 
@@ -107,6 +123,10 @@ function runAggregate() {
   console.log("[run-checks] running check-metrics-schema ...");
   const metricsCode = runChecker("check-metrics-schema", [], checkMetricsSchema);
   if (metricsCode !== 0) failures.push({ name: "check-metrics-schema", code: metricsCode });
+
+  console.log("[run-checks] running skill-static-deps ...");
+  const skillDepsCode=runChecker("skill-static-deps",[],checkSkillStaticDependencies);
+  if(skillDepsCode!==0)failures.push({name:"skill-static-deps",code:skillDepsCode});
 
   // 2. check-stage-quality (M5 FR-GATE-001/002 — quality-class blocking gates = 0)
   console.log("[run-checks] running check-stage-quality ...");

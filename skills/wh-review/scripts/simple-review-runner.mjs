@@ -1208,10 +1208,40 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
     pair,
   );
   if (preflight?.status) return preflight;
-  const blockedProviderResults = preflight?.blocked_provider_results ?? [];
+  const blockedProviderResults = [...(preflight?.blocked_provider_results ?? [])];
   const selectedProviders = providerSelection.providers;
   const blockedProviderSet = new Set(blockedProviderResults.map((item) => item.provider));
+  // The broker's Kimi Read route has no hard packet root. Its Codex
+  // app-server route is distinct from the verified direct OCR invocation;
+  // effective host-tool/temp/auth boundaries have not been demonstrated.
+  // Preserve selected identities and failure facts without launching either.
+  // Existing private injected transports have their own execution boundary;
+  // their fake/parser fixtures do not launch this native broker.
+  for (const provider of selectedProviders) {
+    const adapter = providerAdapter(provider);
+    if ((dependencies.client != null && !(dependencies.client instanceof ReviewProviderClient))
+        || !["kimi", "codex"].includes(adapter) || blockedProviderSet.has(provider)) continue;
+    blockedProviderSet.add(provider);
+    blockedProviderResults.push({ provider, status: "blocked",
+      identity: { provider, adapter, ...(providerSelection.provider_identities?.[provider] ?? {}),
+        model: providerSelection.provider_models?.[provider] ?? null },
+      timing: null, usage: null,
+      error: { code: "PROVIDER_PACKET_BOUNDARY_UNAVAILABLE",
+        message: adapter === "kimi"
+          ? "Kimi broker Read has no verified packet filesystem boundary; review is unavailable"
+          : "Codex broker native tool and packet filesystem boundaries are unverified; review is unavailable" },
+    });
+  }
   const dispatchProviders = selectedProviders.filter((provider) => !blockedProviderSet.has(provider));
+  if (dispatchProviders.length === 0) return unavailableResult(reviewInput, {
+    code: "PROVIDER_PACKET_BOUNDARY_UNAVAILABLE",
+    message: "Selected broker review providers have no verified packet boundary; no review was dispatched",
+  }, pair, { provider_selection: providerSelectionOutput(providerSelection),
+    provider_attempts: 0, dispatch_state: "blocked_before_dispatch",
+    provider_results: blockedProviderResults.map((item) => publicProviderResult({
+      ...item, status: "failed",
+    }, undefined, pair)),
+  });
   const minimum = SIMPLE_REVIEW_QUORUM;
   const selectedIdentities = providerSelection.provider_identities ?? null;
   const selectedModels = providerSelection.provider_models ?? null;
@@ -1481,7 +1511,8 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
         ...item,
         status: "failed",
         error: {
-          code: "PROVIDER_HEALTH_FAILED",
+          code: sourceError.code === "PROVIDER_PACKET_BOUNDARY_UNAVAILABLE"
+            ? sourceError.code : "PROVIDER_HEALTH_FAILED",
           message: sourceError.message ?? "provider preflight failed",
           ...(typeof sourceError.code === "string" && sourceError.code.trim() !== ""
             ? { cause_code: sourceError.code }

@@ -68,7 +68,6 @@ skills:
   - name: stage-reflection
     path: skills/stage-reflection/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: dabc829e249da9fa8f65922e3ebff94fc28df669614507cda4de06ce25d93039
     m16_contract: consumer-scan-proof.v1
     last_reviewed_at: '2026-07-14'
     status: native
@@ -89,7 +88,6 @@ skills:
   - name: stage-handoff
     path: skills/stage-handoff/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 87fa3825aff65d20d32c6bc8c715137143eb2164a55f68139f4e21e00e583291
     last_reviewed_at: "2026-09-10"
     status: native
     metrics_enabled: true
@@ -103,7 +101,6 @@ skills:
   - name: anysearch
     path: skills/anysearch/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 266d24d43ecc01b8a0aef9502ac79bb8e2b0fb3580b77361576f5bb23fea0bbf
     last_reviewed_at: '2026-07-14'
     status: adopted
     metrics_enabled: false
@@ -127,7 +124,6 @@ skills:
   - name: decision-log
     path: skills/decision-log/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 5e0a116b3a637ff6705ba1277591fd6a12887ca9b16253181da33cce4600f493
     last_reviewed_at: "2026-09-22"
     status: native
     metrics_enabled: true
@@ -143,7 +139,6 @@ skills:
   - name: deep-research
     path: skills/deep-research/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 1ad2a78c3ba470b010281803ecb0520a98e69d7fafdfb56fa32a37627625d59e
     last_reviewed_at: "2026-09-22"
     status: native
     metrics_enabled: true
@@ -159,7 +154,6 @@ skills:
   - name: grill-with-docs
     path: skills/grill-with-docs/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: d57ce5c448669f1ad595c9b228fc2870d099f6765458f45256ce73b44bf3d67a
     last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true
@@ -199,7 +193,6 @@ skills:
   - name: intake-decision-review
     path: skills/intake-decision-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 4f211fb462932454bac880431dd7dd2a381fcbf8f93b0e85ebb55b03c6ee5ef5
     last_reviewed_at: '2026-07-14'
     status: native
     metrics_enabled: true
@@ -215,7 +208,6 @@ skills:
   - name: simplicity-guard
     path: skills/simplicity-guard/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 599d8807813218fbe7b1f1fbd49d36f2c05a274cee16d85b81d5f734a303bffa
     last_reviewed_at: '2026-07-14'
     status: native
     metrics_enabled: true
@@ -234,7 +226,6 @@ skills:
   - name: talk-with-zhipeng
     path: skills/talk-with-zhipeng/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 10fb0383879580431be55351bde5f7a009da73596350bf4ef06f22053b1c5194
     last_reviewed_at: '2026-07-14'
     status: native
     metrics_enabled: true
@@ -250,7 +241,6 @@ skills:
   - name: spec-prd
     path: skills/spec-prd/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: b8dc6399917d54a24429144c5e160d268ba77493debaa5e9c74f94c966eff23c
     last_reviewed_at: '2026-07-14'
     status: native
     metrics_enabled: true
@@ -266,7 +256,6 @@ skills:
   - name: spec-research
     path: skills/spec-research/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 6c4c9896ac28de68b35a0e54f4555690d6c5d28ea141d4ea9d8658ab9cf1a157
     last_reviewed_at: '2026-07-14'
     status: native
     metrics_enabled: true
@@ -283,7 +272,6 @@ skills:
   - name: spec-specify
     path: skills/spec-specify/SKILL.md
     local_version: 1.2.0
-    local_bundle_hash: 8ec7d43d206ef1d83a74aede159b5e6f8840a966491a3f32f7314db23f983a4b
     last_reviewed_at: '2026-09-22'
     status: adapted
     metrics_enabled: true
@@ -308,7 +296,6 @@ skills:
   - name: spec-clarify
     path: skills/spec-clarify/SKILL.md
     local_version: 1.1.0
-    local_bundle_hash: 92d8baf7515bb3253d4d0d16607cb2979b731e78690f350fc40cde759f059aa2
     last_reviewed_at: '2026-08-31'
     status: adapted
     metrics_enabled: true
@@ -332,7 +319,6 @@ skills:
   - name: spec-plan
     path: skills/spec-plan/SKILL.md
     local_version: 1.3.0
-    local_bundle_hash: ca59a5413c5d73aca1f1d323ae5a0474972263ec5137006acbca769897684eda
     last_reviewed_at: '2026-09-22'
     status: adapted
     metrics_enabled: true
@@ -364,7 +350,6 @@ skills:
   - name: spec-tasks
     path: skills/spec-tasks/SKILL.md
     local_version: 2.2.0
-    local_bundle_hash: 50f9030d6acaa4b189a698b289b7da0ddcd43034f243ed3401130df1ef4f6a22
     last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true
@@ -396,7 +381,6 @@ skills:
   - name: spec-analyze
     path: skills/spec-analyze/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 9794e984f808fc5558527c66225b56aea42ddd39e71a450638411cb15fcb6cf9
     last_reviewed_at: '2026-09-22'
     status: native
     metrics_enabled: true
@@ -415,7 +399,6 @@ skills:
   - name: architect-code-review
     path: skills/architect-code-review/SKILL.md
     local_version: 1.1.0
-    local_bundle_hash: 942579475a93b9dc211ef873810faf190bd4fb2824151109110937422302b381
     last_reviewed_at: '2026-09-25'
     status: adapted
     metrics_enabled: true
@@ -468,56 +451,9 @@ skills:
     dependency_closure:
       - skills/architect-code-review
     update_policy: 上游代码审查规则变更时人工复核，不恢复材料门禁
-  - name: stage-step-receipts
-    path: skills/stage-step-receipts/SKILL.md
-    local_version: 1.0.0
-    local_bundle_hash: 22512da6779c471471905f54a7ae4479d43da596a61cecdec6cc757518bb37db
-    last_reviewed_at: '2026-07-14'
-    status: absorbed
-    metrics_enabled: false
-    standalone: true
-    purpose: 为 canonical workflow step 生成或校验 typed receipt
-    design_idea: 只承载步骤证据，不引入第二 verdict engine
-    used_by_stages: []
-    upstream: []
-    local_changes: 仅保留历史合同 provenance；当前阶段不依赖该 absorbed skill，不恢复独立 receipt runtime；closure test 只确认它没有被重新接入；当历史审计与 provenance 不再需要该条目时移除
-    dependency_closure: []
-    update_policy: 随 canonical step 与 receipt schema 变更审查
-  - name: audit-summary-carrier
-    path: skills/audit-summary-carrier/SKILL.md
-    local_version: 1.0.0
-    local_bundle_hash: c4e736fb8b55e3a0996caeead7368a77b2cbd31becc98af5eb4c70c47b513621
-    last_reviewed_at: '2026-07-14'
-    status: absorbed
-    metrics_enabled: false
-    standalone: true
-    purpose: 在阶段间传递有界审计摘要
-    design_idea: 保留可验证引用，不复制第二份事实源
-    used_by_stages: []
-    upstream: []
-    local_changes: 已吸收到 runtime evidence facts；当前没有阶段 consumer，不保留独立 runtime skill；catalog 与 closure test 只保留其历史 provenance；当历史审计与 provenance 不再需要该条目时移除
-    dependency_closure: []
-    update_policy: 随 stage-result audit schema 变更审查
-  - name: requirement-lineage
-    path: skills/requirement-lineage/SKILL.md
-    local_version: 1.0.0
-    local_bundle_hash: 92655a6403eb6e444ada2c785b685c2c7cb5aec3abf8b2106469d631df9425f2
-    last_reviewed_at: '2026-07-14'
-    status: native
-    metrics_enabled: false
-    standalone: true
-    purpose: 关联原始需求、AC、实现和验证证据
-    design_idea: 以 manifest/hash 绑定的 ledger 与 coverage 保持需求谱系
-    used_by_stages: []
-    upstream: []
-    local_changes: make-decision audit P0 原生合同；由 canonical requirements artifacts 消费
-    dependency_closure:
-      - skills/requirement-lineage
-    update_policy: 随 requirement ledger/coverage schema 变更审查
   - name: workflowhub-host-protocol
     path: skills/workflowhub-host-protocol/SKILL.md
     local_version: 0.1.1
-    local_bundle_hash: 3f0a4eaa22befccccc0f48d8c48cdf09c81b834da9f46d5c4dc47b52402ff2c1
     last_reviewed_at: "2026-07-14"
     status: adapted
     metrics_enabled: false
@@ -532,7 +468,6 @@ skills:
   - name: workflowhub-multica-sync
     path: skills/workflowhub-multica-sync/SKILL.md
     local_version: 1.3.0
-    local_bundle_hash: 4fd9df6ca17ed4aa20d5f05b1a822e7441117c5ae719b4521147fe5ef5e87e91
     last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: false
@@ -548,7 +483,6 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 4.1.0
-    local_bundle_hash: ed71254d9bf55bf9e316173f4be9b311c97f9d2442f1be08bb5319160dae5a28
     last_reviewed_at: "2026-07-14"
     status: native
     metrics_enabled: true
@@ -566,7 +500,6 @@ skills:
   - name: mini-task
     path: skills/mini-task/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: f4d8b285cfa5072338f2290b260d019fa69e335199a4b1d8df8fc27f1d915886
     last_reviewed_at: '2026-07-14'
     status: native
     metrics_enabled: false
@@ -582,7 +515,6 @@ skills:
   - name: plan-ceo-review
     path: skills/plan-ceo-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: b571c3deb4109ef5b6a6e8b837b62200a5acb4592c0b946c0625e25175bb90bc
     last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true
@@ -607,7 +539,6 @@ skills:
   - name: plan-design-review
     path: skills/plan-design-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 7be5ec4257737961a394c9351bdf7982474b5cd746cd00648f3ded396e21822a
     last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true
@@ -631,7 +562,6 @@ skills:
   - name: plan-eng-review
     path: skills/plan-eng-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: ca120f215b0e8111926344898dba50816369c15e1431e67a7c22645cbc3bf44c
     last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true
@@ -655,7 +585,6 @@ skills:
   - name: review
     path: skills/review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: e87012fd585550d14f5078e8d97b3ccbab7889136e8ee95f450721a20d03155d
     last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true
@@ -683,7 +612,6 @@ skills:
   - name: resolving-merge-conflicts
     path: skills/resolving-merge-conflicts/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 5aa9176b84f89a3cf51520adfa735e679594ebf626f4f5d7af2b6c6fe4a5afe7
     last_reviewed_at: '2026-07-14'
     status: native
     metrics_enabled: false
@@ -697,41 +625,9 @@ skills:
     dependency_closure:
       - skills/resolving-merge-conflicts
     update_policy: 随 verify-code close 合同变更审查
-  - name: test-strategy
-    path: skills/test-strategy/SKILL.md
-    local_version: 1.0.0
-    local_bundle_hash: 46dc51676f159e20c95991868dd5365c7063c09e94bbf50d6825e5dabeaee629
-    last_reviewed_at: '2026-07-14'
-    status: absorbed
-    metrics_enabled: false
-    purpose: 从 AC、UI impact 和风险生成测试路由
-    design_idea: 独立上下文产出 AC-to-test-route strategy
-    standalone: true
-    used_by_stages: []
-    upstream:
-      - github_url: https://github.com/mattpocock/skills
-        commit: 66898f60e8c744e269f8ce06c2b2b99ce7660d5f
-        commit_url: https://github.com/mattpocock/skills/commit/66898f60e8c744e269f8ce06c2b2b99ce7660d5f
-        license: MIT
-        reviewed_at: '2026-07-14'
-        review_outcome: accepted
-        path: skills/engineering/tdd/SKILL.md
-        skill_url: https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/tdd/SKILL.md
-      - github_url: https://github.com/obra/superpowers
-        commit: d884ae04edebef577e82ff7c4e143debd0bbec99
-        commit_url: https://github.com/obra/superpowers/commit/d884ae04edebef577e82ff7c4e143debd0bbec99
-        license: MIT
-        reviewed_at: '2026-07-14'
-        review_outcome: accepted
-        path: skills/test-driven-development/testing-anti-patterns.md
-        skill_url: https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/test-driven-development/testing-anti-patterns.md
-    local_changes: 已吸收到 build-code/verify-code 当前测试与 fresh-evidence 合同；保留 provenance，不保留独立 runtime skill
-    dependency_closure: []
-    update_policy: 人工比较路由和风险规则
   - name: debate
     path: skills/debate/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 9e6d5290a7ebe2d2b164dcc6323d0e21167c18fa26a265be375caf63b70b0b0d
     last_reviewed_at: '2026-07-14'
     status: adopted
     metrics_enabled: false
@@ -748,13 +644,12 @@ skills:
         review_outcome: accepted
         path: SKILL.md
         skill_url: https://github.com/Hugh4424/debate/blob/af121a1e24ae3af48f5e132d3de1342d16eccf31/SKILL.md
-    local_changes: 保留仓内 provenance；仅作可选诊断，不进入核心 Bundle 或生产扫描；测试文件不纳入可分发 bundle；local_bundle_hash 使用 resolver canonical file-closure hash，inventory 最后一列记录 manifest 文件自身 sha256
+    local_changes: 保留仓内 provenance；仅作可选诊断，不进入核心 Bundle 或生产扫描；测试文件不纳入可分发 bundle；bundle 按普通文件名登记，resolver 保留路径包含与逃逸检查
     dependency_closure: []
     update_policy: 比较固定 commit；只同步协议和规则，不依赖全局安装
   - name: diagnosing-bugs
     path: skills/diagnosing-bugs/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 7f50397d98926dd5345f337f7e8cc2407cca061733fdc5821f32ae46c2e0db68
     last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: false
@@ -790,34 +685,9 @@ skills:
     local_changes: 保留仓内 provenance；根因事实由当前 build-code 直接记录，不进入核心 Bundle 或生产扫描
     dependency_closure: []
     update_policy: 三方更新时比较诊断方法；禁止引入自动补丁循环
-  - name: review-response
-    path: skills/review-response/SKILL.md
-    local_version: 1.0.0
-    local_bundle_hash: 6e989caada28c4ebc20617474586efa62718a0c78f6e39e9a1c1cdc376aeeb05
-    last_reviewed_at: '2026-07-14'
-    status: absorbed
-    metrics_enabled: false
-    purpose: 严格消费 revise_required finding
-    design_idea: 核实、根因聚类、同类扫描、最小修复、补证据、同 flow 重审
-    standalone: true
-    used_by_stages: []
-    upstream:
-      - github_url: https://github.com/obra/superpowers
-        commit: d884ae04edebef577e82ff7c4e143debd0bbec99
-        commit_url: https://github.com/obra/superpowers/commit/d884ae04edebef577e82ff7c4e143debd0bbec99
-        license: MIT
-        reviewed_at: '2026-07-14'
-        review_outcome: accepted
-        path: skills/receiving-code-review
-        skill_url: https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/receiving-code-review
-    local_changes: 最小 disposition fact 已合并到 wh-review；删除独立 flow/resolution validator
-    dependency_closure:
-      - skills/wh-review
-    update_policy: 人工比较 finding 消费纪律，不引入宿主专属命令
   - name: test-routing-advisor
     path: skills/test-routing-advisor/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: d2015fb77961467dd4c41c46c40ccb547697b0d56ed9b93487f6d0d9b72a9b9a
     last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true
@@ -842,7 +712,6 @@ skills:
   - name: testing-system-blueprint
     path: skills/testing-system-blueprint/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: bec99b795480ef3dd8546dea4e39df62dc886903a00dc8b3e973d575d3df1fd7
     last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true
@@ -866,7 +735,6 @@ skills:
   - name: backend-testing
     path: skills/backend-testing/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: aa1e90e5178bfe8db9aad6fecebc6e05b2add7406c0c7e08de434b07acc2dffc
     last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true
@@ -890,7 +758,6 @@ skills:
   - name: frontend-testing
     path: skills/frontend-testing/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: be95bfd74d7891c9ca44bd507d7754a81f9dc3dd5cfce55af0d61ee3a8d42e89
     last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true
@@ -914,7 +781,6 @@ skills:
   - name: fullstack-slice-testing
     path: skills/fullstack-slice-testing/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 5a9ac25c2a9173bf72c907d0f80917ee1f6354ac4febe6b09e9e0ccdd0123d46
     last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true
@@ -938,7 +804,6 @@ skills:
   - name: isolated-browser-qa
     path: skills/isolated-browser-qa/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: a6bc203bddc596bc8dc2464bbc01cdeb5f1cf75972381927371d17b84b394a68
     last_reviewed_at: '2026-07-14'
     status: adopted
     metrics_enabled: false
@@ -950,7 +815,6 @@ skills:
       - kind: user-provided-local-source
         path: isolated-browser-qa
         license: user-owned
-        snapshot_sha256: a6bc203bddc596bc8dc2464bbc01cdeb5f1cf75972381927371d17b84b394a68
         authorization_basis: user explicitly supplied local source and authorized migration into workflowhub
         reviewed_at: '2026-07-14'
         review_outcome: accepted
@@ -961,7 +825,6 @@ skills:
   - name: ui-project-init
     path: skills/ui-project-init/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 99a3ef9e7f5ff7178266a4d4865a01e8ec47d38424da8c6488c5ee72d1df302b
     last_reviewed_at: '2026-07-14'
     status: native
     metrics_enabled: true
@@ -978,7 +841,6 @@ skills:
   - name: design-source-readiness
     path: skills/design-source-readiness/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 0817e2ab99557a5b7d9af47f21b8decf44f4d7f3991545fcfccb1b89d570f14e
     last_reviewed_at: '2026-07-14'
     status: native
     metrics_enabled: true
@@ -995,7 +857,6 @@ skills:
   - name: frontend-prototype-render
     path: skills/frontend-prototype-render/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 6e8c4ecb64d9ceb51099469c212b80539e1c4d65c9acd8b465b5a4e0727a934b
     last_reviewed_at: '2026-07-14'
     status: native
     metrics_enabled: true
@@ -1012,7 +873,6 @@ skills:
   - name: frontend-component-quality
     path: skills/frontend-component-quality/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 2049ebfb27713db624d7bc87b6e654127191be8ee67ca5b4a61a83b8893bd479
     last_reviewed_at: '2026-07-14'
     status: adapted
     metrics_enabled: true

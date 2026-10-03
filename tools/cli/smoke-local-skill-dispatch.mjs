@@ -3,12 +3,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   loadStageSkillManifest,
-  loadStageSkillStepManifest,
   resolveStageSkillPackages,
 } from "../../runtime/stage/stage-skill-runtime.mjs";
-import { SHA256_HEX } from "../../runtime/evidence/canonical-utils.mjs";
 
-const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
+const STAGES = ["make-decision", "build-plan", "build-code", "verify-code"];
 
 function isInside(root, candidate) {
   return candidate === root || candidate.startsWith(`${root}${path.sep}`);
@@ -18,7 +16,6 @@ export function smokeLocalSkillPackages(packageRoot) {
   const root = fs.realpathSync(packageRoot);
   return STAGES.map((stage) => {
     const loaded = loadStageSkillManifest(root, stage);
-    const orderedSteps = loadStageSkillStepManifest(root, stage);
     const resolved = resolveStageSkillPackages({ packageRoot: root, stage });
     const declaredNames = loaded.manifest.skills.map((dependency) => dependency.name);
 
@@ -26,11 +23,7 @@ export function smokeLocalSkillPackages(packageRoot) {
         || JSON.stringify([...resolved.payloads.keys()]) !== JSON.stringify(declaredNames)) {
       throw new Error(`${stage}: resolved skill packages do not preserve manifest order`);
     }
-    if (!orderedSteps.manifest.steps.every((step, index) => step.order === index + 1)) {
-      throw new Error(`${stage}: steps are not stored in declared order`);
-    }
 
-    const bundleHashes = [];
     for (const name of declaredNames) {
       const payload = resolved.payloads.get(name);
       if (payload.package_root !== root || payload.source_manifest !== loaded.source) {
@@ -40,17 +33,11 @@ export function smokeLocalSkillPackages(packageRoot) {
           || !payload.resolved_bundle_paths.every((entry) => isInside(path.join(root, "skills"), entry))) {
         throw new Error(`${stage}/${name}: resolved path escaped the portable package`);
       }
-      if (!SHA256_HEX.test(payload.bundle_hash)) {
-        throw new Error(`${stage}/${name}: invalid bundle hash`);
-      }
-      bundleHashes.push(payload.bundle_hash);
     }
 
     return Object.freeze({
       stage,
       skill_count: declaredNames.length,
-      step_count: orderedSteps.manifest.steps.length,
-      bundle_hashes: Object.freeze(bundleHashes),
     });
   });
 }

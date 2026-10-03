@@ -1,4 +1,3 @@
-import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,10 +6,8 @@ import yaml from "js-yaml";
 
 import { createSkillBundleContract } from "../interface/runner-contract.mjs";
 import { validateSkillBundle } from "../adapters/local-skill-resolver.mjs";
-import { checkSkillClosure, promptSkillReferences, workflowDeclarations } from "../evidence/check-skill-closure.mjs";
-import { SHA256_HEX } from "../evidence/canonical-utils.mjs";
 
-const STAGES = Object.freeze(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
+const STAGES = Object.freeze(["make-decision", "build-plan", "build-code", "verify-code"]);
 const PORTABLE_WORKFLOW_KIND = "portable_workflow";
 const REQUIRED_PORTABLE_WORKFLOW = Object.freeze({
   component_id: "build-prd",
@@ -26,8 +23,16 @@ function inside(root, candidate) {
   return candidate === root || candidate.startsWith(`${root}${path.sep}`);
 }
 
-function sha256(bytes) {
-  return crypto.createHash("sha256").update(bytes).digest("hex");
+function promptSkillReferences(prompt) {
+  return [...new Set(prompt.split("\n").filter(line => !line.includes("原组件路径"))
+    .flatMap(line => [...line.matchAll(/skills\/([a-z][a-z0-9-]*)\/SKILL\.md/g)].map(match => match[1])))];
+}
+function workflowDeclarations(root) {
+  // The retired M2 config registry is not a publishing input. This existing
+  // portable workflow declaration has one real package reader and must have
+  // readable source bytes; missing source is a publication failure.
+  readStableFile(root, REQUIRED_PORTABLE_WORKFLOW.path, "portable workflow declaration");
+  return { portable: [REQUIRED_PORTABLE_WORKFLOW] };
 }
 
 function assertRoot(candidate, label) {
@@ -287,21 +292,12 @@ function addStaticImportClosure(root, locators, { requireDependencies = false } 
   }
 }
 
-function assertSourceClosure(root) {
-  const result = checkSkillClosure(root);
-  if (!result.ok) throw new Error(`skill closure is not closed: ${result.errors.join("; ")}`);
-}
-
 function collectSourceClosure(root) {
-  assertSourceClosure(root);
   return collectDeclaredClosure(root);
 }
 
 function collectDeclaredClosure(root, { release = false } = {}) {
-  const locators = new Set([
-    "runtime/schemas/skill-bundle.schema.json",
-    "runtime/schemas/stage-skill-deps.schema.json",
-  ]);
+  const locators = new Set();
   const visitedSkills = new Set();
   const declaredPortableWorkflows = workflowDeclarations(root).portable
     .filter((entry) => entry.kind === PORTABLE_WORKFLOW_KIND)
@@ -319,11 +315,21 @@ function collectDeclaredClosure(root, { release = false } = {}) {
         throw new Error(`portable workflow directory escapes package root: ${workflow}`);
       }
     }
-    for (const name of ["SKILL.md", "skill-deps.yaml", "steps.json"]) {
+    const declarationFiles = declaredPortableWorkflows.includes(workflow)
+      ? PORTABLE_WORKFLOW_FILES : ["SKILL.md", "skill-deps.yaml"];
+    for (const name of declarationFiles) {
       if (release || fs.existsSync(path.join(root, base, name))) locators.add(`${base}/${name}`);
     }
     const manifest = yaml.load(fs.readFileSync(path.join(root, base, "skill-deps.yaml"), "utf8"));
     for (const dependency of manifest.skills ?? []) {
+      if (!dependency || !/^[a-z][a-z0-9-]*$/.test(dependency.name ?? "")
+          || dependency.path !== `skills/${dependency.name}/SKILL.md`
+          || dependency.bundle !== `skills/${dependency.name}/skill-bundle.json`) {
+        throw new Error(`skill dependency path/bundle does not match its declared name: ${workflow}`);
+      }
+      // Validate the real declarations used by resolveSkillPackage rather than
+      // silently replacing a broken declaration with the conventional name path.
+      validateSkillBundle(root, dependency.bundle, dependency.path);
       addSkillClosure(root, dependency.name, locators, visitedSkills);
     }
     const prompt = fs.readFileSync(path.join(root, base, "SKILL.md"), "utf8");
@@ -333,16 +339,16 @@ function collectDeclaredClosure(root, { release = false } = {}) {
   return locators;
 }
 
-function captureSourceHashes(root, locators) {
-  return new Map([...locators].map((locator) => [locator, sha256(readStableFile(root, locator, "release source"))]));
+function captureSourceBytes(root, locators) {
+  return new Map([...locators].map((locator) => [locator, readStableFile(root, locator, "release source")]));
 }
 
-function assertSourceSnapshotStable(root, locators, sourceHashes, files) {
-  const copied = new Map(files.map((entry) => [entry.path, entry.sha256]));
+function assertSourceBytesStable(root, locators, sourceBytes, stagingDir) {
   for (const locator of locators) {
-    const expected = sourceHashes.get(locator);
-    const current = sha256(readStableFile(root, locator, "release source"));
-    if (current !== expected || copied.get(locator) !== expected) {
+    const expected = sourceBytes.get(locator);
+    const current = readStableFile(root, locator, "release source");
+    const copied = readStableFile(stagingDir, locator, "copied release file");
+    if (!current.equals(expected) || !copied.equals(expected)) {
       throw new Error(`source changed during skill bundle release: ${locator}`);
     }
   }
@@ -353,7 +359,7 @@ async function copy(packageRoot, outputDir, locator) {
   ensureDestinationParent(outputDir, locator);
   const target = path.join(outputDir, locator);
   await fs.promises.writeFile(target, bytes, { flag: "wx" });
-  return { path: locator, sha256: sha256(bytes) };
+  return { path: locator };
 }
 
 export async function buildSkillBundleRelease({
@@ -372,18 +378,18 @@ export async function buildSkillBundleRelease({
   let stagingDir = fs.mkdtempSync(path.join(outputParent, `.${path.basename(outputPath)}.staging-`));
   try {
     const locators = collectSourceClosure(root);
-    const sourceHashes = captureSourceHashes(root, locators);
+    const sourceBytes = captureSourceBytes(root, locators);
     const files = await Promise.all([...locators].sort().map((locator) => copy(root, stagingDir, locator)));
-    assertSourceSnapshotStable(root, locators, sourceHashes, files);
+    assertSourceBytesStable(root, locators, sourceBytes, stagingDir);
     // Re-resolve after copying so a manifest/import graph mutation cannot add
-    // an un-copied file or leave an obsolete file hash in the release.
+    // an un-copied file or change copied source bytes.
     const finalLocators = collectSourceClosure(root);
     if (finalLocators.size !== locators.size || [...finalLocators].some((locator) => !locators.has(locator))) {
       throw new Error("source closure changed during skill bundle release");
     }
-    const finalHashes = captureSourceHashes(root, finalLocators);
+    const finalBytes = captureSourceBytes(root, finalLocators);
     for (const locator of locators) {
-      if (finalHashes.get(locator) !== sourceHashes.get(locator)) {
+      if (!finalBytes.get(locator).equals(sourceBytes.get(locator))) {
         throw new Error(`source changed during skill bundle release: ${locator}`);
       }
     }
@@ -409,6 +415,9 @@ export async function buildSkillBundleRelease({
     // rename replaces the caller-provided empty directory atomically; any
     // failure leaves the previous output untouched and removes only staging.
     const validated = validateSkillBundleRelease({ releaseRoot: stagingDir });
+    // Verify the actual copied bytes again after declaration validation; the
+    // current source returning to its original bytes cannot hide a changed copy.
+    assertSourceBytesStable(root, locators, sourceBytes, stagingDir);
     fs.renameSync(stagingDir, outputPath);
     stagingDir = null;
     return Object.freeze(validated);
@@ -442,14 +451,12 @@ export function validateSkillBundleRelease({ releaseRoot } = {}) {
   const seen = new Set();
   for (const entry of manifest.files) {
     if (!entry || typeof entry.path !== "string" || entry.path === RELEASE_MANIFEST_LOCATOR
-        || !SHA256_HEX.test(entry.sha256 ?? "")
-        || Object.keys(entry).some((key) => !new Set(["path", "sha256"]).has(key))
+        || Object.keys(entry).some((key) => !new Set(["path"]).has(key))
         || path.isAbsolute(entry.path) || entry.path.split(/[\\/]/).includes("..") || seen.has(entry.path)) {
       throw new Error("skill bundle file manifest is invalid");
     }
     const bytes = readStableFile(root, entry.path);
     seen.add(entry.path);
-    if (sha256(bytes) !== entry.sha256) throw new Error(`skill bundle hash mismatch: ${entry.path}`);
   }
   validatePortableReleaseDeclarations(manifest, seen, root);
   // Reconstruct from workflow and skill declarations, independently of the
