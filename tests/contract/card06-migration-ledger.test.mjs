@@ -226,6 +226,18 @@ describe('card06 migration ledger（AC-27/AC-52）', () => {
     });
   });
 
+  describe('SURVIVOR 原登记路径保留（AC-THIN-006）', () => {
+    const survivors = ROWS.filter((row) => dispositionOf(row.disposition) === 'SURVIVOR');
+    it('存在明确的幸存者断言对象', () => { expect(survivors.length).toBeGreaterThan(0); });
+    for (const row of survivors) {
+      it(`SURVIVOR ${row.id} ${row.path} 仍存在`, () => {
+        // Includes historical/read-only owners at their original declared path;
+        // no rename, substitute blob or placeholder can satisfy this assertion.
+        expect(fs.existsSync(path.join(ROOT, row.path)), `${row.id} 原幸存者路径缺失：${row.path}`).toBe(true);
+      });
+    }
+  });
+
   // 断言 6/7：分批断言。对每个批次 b ≤ current 一个 describe 组（组名 "B0/P1".."B7/P8"）。
   for (const [index, label] of BATCH_LABELS.entries()) {
     if (index > CURRENT) break;

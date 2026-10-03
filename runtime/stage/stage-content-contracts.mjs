@@ -1119,8 +1119,75 @@ export function validatePostPhaseContract({ spec, index, phases } = {}) {
       if (!/(?:assert|断言|expected|预期|nonzero|失败)/i.test(fields["RED target failure"] ?? "")) {
         errors.push(`${expectedPath} ${taskId} RED target failure must identify the failing assertion`);
       }
-      if (!/RED[^\n]*\b(?:nonzero|[1-9])\b/i.test(fields.expected_exit ?? "")
-          || !/GREEN[^\n]*\b0\b/i.test(fields.expected_exit ?? "")) {
+      // This is a declaration-only exception, never an execution/quality fact.
+      // Read Task fields and the SAME owned paths checked above, not Phase text.
+      const normalize = (value) => String(value ?? "").trim().replace(/\s+/g, " ");
+      const clauses = (value) => normalize(value).split(/[；;。\n]/u).map((part) => part.trim()).filter(Boolean);
+      const noBehavior = /(?:无|不|未)(?:新增)?\s*(?:runtime|运行行为)|无新行为/i;
+      const docDeclaration = [fields.Inputs, fields["Scenario / fixture or service"]].some((value) =>
+        /G-2/i.test(value ?? "") && /文档/.test(value ?? "") && noBehavior.test(value ?? ""));
+      const behaviorExit = /RED[^\n]*\b(?:nonzero|[1-9])\b/i.test(fields.expected_exit ?? "")
+        && /GREEN[^\n]*\b0\b/i.test(fields.expected_exit ?? "");
+      // Mentioning G-2 while satisfying the normal behavioral contract is not
+      // an exemption request. Inapplicable tags must not reject legal behavior.
+      const requestsG2 = !behaviorExit && [fields.Inputs, fields["Scenario / fixture or service"]].some((value) => /G-2/i.test(value ?? ""));
+      const g2Missing = [];
+      if (requestsG2) {
+        if (!docDeclaration) g2Missing.push("pure documentation declaration (文档无新增运行行为)");
+        const ownedPaths = inlinePaths(fields["Files / symbols"] ?? "");
+        if (ownedPaths.length === 0 || ownedPaths.some((path) => !/\.md$/i.test(path))) g2Missing.push("documentation-only owned write set");
+        // Bound this optional field to its own line: the general reader's \s
+        // can otherwise consume the next field when RED evidence is empty.
+        const redEvidenceLine = cardBody.split(/\r?\n/).find((line) => /^\s*-\s+\*\*(?:RED evidence|RED 证据)\*\*\s*[:：]/i.test(line));
+        const redEvidence = normalize(fieldValue(redEvidenceLine, "RED evidence"));
+        if (!redEvidence) g2Missing.push("empty RED evidence / reason");
+        else if (/^N\/A[。.]?$/i.test(redEvidence)) g2Missing.push("bare N/A / reason");
+        if (!/^N\/A\s*[—–-]/i.test(redEvidence)
+            || !clauses(redEvidence).some((part) => /文档/.test(part) && noBehavior.test(part))) g2Missing.push("reason (具体纯文档、无新增 runtime/运行行为)");
+        // The legacy reason can introduce risk after a comma. Only a labeled
+        // segment supplies it; incidental 风险 in the reason is not a risk label.
+        const risk = clauses(redEvidence).flatMap((part) => part.split(/[，,]/u))
+          .map((part) => part.trim()).find((part) => /^风险(?:为|是|[:：])/u.test(part));
+        const riskContent = risk?.replace(/^风险(?:为|是|[:：])\s*/u, "") ?? "";
+        const riskPredicate = riskContent.match(/^(.{2,}?)(误把|误认|误用|遗漏|泄露|未执行|当作|当成)(.*)$/u);
+        if (!riskPredicate || /(?:无风险|风险为风险|失败风险|失败的可能|待补|TBD|TODO)/i.test(riskContent)
+            || /^(?:风险|失败|可能)$/u.test(riskPredicate?.[1] ?? "")
+            || (/^(?:误把|误认|误用|当作|当成)$/u.test(riskPredicate?.[2] ?? "")
+              && (riskPredicate?.[3].trim().length ?? 0) < 2)) g2Missing.push("risk (具体对象/后果)");
+        const alternativeFields = [redEvidence, fields.Evidence, fields["GREEN oracle"]];
+        const alternative = alternativeFields.flatMap(clauses).flatMap((part) => part.split(/[，,]/u))
+          .map((part) => part.trim().replace(/^(?:`[^`]+`\s*)+/u, ""))
+          .find((part) => /^客观替代(?:为|是|[:：])/u.test(part));
+        // A bare assertion label is not a criterion. A document-review name can
+        // use either paired ORACLE field to supply the concrete judgment object.
+        const concreteCriterion = [alternative, fields["RED target failure"], fields["GREEN oracle"]].flatMap(clauses).some((part) => {
+          const criterion = part.replace(/\bORACLE-[A-Z0-9-]+\b/g, "")
+            .replace(/(?:断言|assert(?:ion)?|判定|预期|expected)\s*[:：]?/gi, "").trim();
+          // Supported predicates bind a named subject to an observable outcome,
+          // rather than treating a four-character "pass" as a judgment object.
+          const subjectOutcome = criterion.match(/^(.{2,}?)(不会发布|不发布|可(?:在.{1,80})?复放|不被.{2,80}吞掉|拒绝|保留|保持可见)/u);
+          const englishOutcome = criterion.match(/^([A-Za-z][\w.-]+(?:\s+[A-Za-z][\w.-]*)*)\s+(?:must not|does not|rejects|preserves|remains)\s+(.{2,})$/i);
+          return Boolean((subjectOutcome && !/^(?:检查|验证|结果|测试)\s*$/u.test(subjectOutcome[1].trim()))
+            || (englishOutcome && !/^(?:test|check|result)$/i.test(englishOutcome[1])));
+        });
+        if (!alternative || !concreteCriterion || /(?:替代为替代|按需|待补)/u.test(alternative)
+            || !/(?:[A-Za-z][\w-]*\s*(?:用例|fixture|流程)?\s*(?:重放|复放)|(?:独立|逐步|具名).*文档审查)/iu.test(alternative)
+            || !/(?:重放|复放|审查)/u.test(alternative)
+            || !/(?:断言|assert|预期|expected)/i.test(fields["RED target failure"] ?? "")) g2Missing.push("objective alternative (具名检查和判定对象)");
+        const disclosure = [fields.expected_exit, fields.Evidence, fields["Coverage limit"]].flatMap(clauses);
+        if (!disclosure.some((part) => /(?:lint\s*(?:仍)?\s*false|替代.*未执行|不能.*(?:GREEN|通过)|结构接纳不等于.*(?:GREEN|替代已执行|阶段完成|质量成功))/i.test(part))) g2Missing.push("acceptance disclosure (真实限制，非已披露占位)");
+        if (!/(?:客观|检查)[^；;。]*预期\s*0\b/u.test(normalize(fields.expected_exit))
+            || !/不执行\s*RED\b/i.test(fields.expected_exit ?? "")) g2Missing.push("expected_exit (客观检查预期0、不执行RED)");
+        const declarations = [fields.Inputs, fields["Scenario / fixture or service"], redEvidence,
+          fields.expected_exit, fields.Evidence, fields["Coverage limit"], fields["GREEN oracle"], fields.Action, fields["Outputs / failure"]];
+        // Strip supported negative forms before looking for affirmative conflicts.
+        const affirmativeConflict = declarations.flatMap(clauses).some((part) =>
+          /(?:新增\s*(?:runtime|运行行为)|修改\s*执行逻辑)/i.test(part.replace(/(?:无|不|未|不会)\s*(?:新增\s*(?:runtime|运行行为)|修改\s*执行逻辑)/gi, "")));
+        if (affirmativeConflict) g2Missing.push("contradiction (新增 runtime/运行行为或修改执行逻辑)");
+        for (const missing of g2Missing) errors.push(`${expectedPath} ${taskId} G-2 missing concrete ${missing}`);
+      }
+      const pureDocumentAlternative = requestsG2 && g2Missing.length === 0;
+      if (!pureDocumentAlternative && !behaviorExit) {
         errors.push(`${expectedPath} ${taskId} expected_exit must distinguish RED target failure from GREEN 0`);
       }
       if (!/(?:`[^`]+`|\bP\d+\b|\bT\d+\b|\bnone\b|无)/i.test(fields.Dependency ?? "")) {
