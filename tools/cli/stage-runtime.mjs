@@ -336,6 +336,7 @@ function ocrReviewInstructionsFor(request) {
     `OCR code review: ${request.stage}/${request.phase_id ?? request.phaseId ?? "worktree"}.`,
     "Read the complete contracts/build-code.md, contracts/verify-code.md, contracts/provider-protocol.md and manifest-declared lens skill bodies. Apply the actual stage's reviewer contract and the review focus below; the other code contract supplies the adjacent review boundary.",
     "Start with source.json, review-instructions.md, the complete current diff and full acceptance-criteria text. Read included implementation, consumer and test context needed to assess concrete delivery failures. Do not replace required bodies with summaries or truncate contracts.",
+    "When a changed file in the current diff also serves as a fixed reviewer body, its identical manifest entry serves both roles. Review the complete bytes as changed implementation source as well as reviewer instructions; neither role is omitted.",
     focus,
     "按根因合并重复 finding，保留真实消费者、后果和源码行证据。不可用≠空≠pass；缺少可用结果说明限制，不能当作没有问题。",
     "Return exactly one findings JSON. Code findings use packet-relative paths and real positive line numbers. Serious findings also include root_cause, evidence_kind and a verbatim source excerpt in backticks at the cited line or next two lines. Do not output verdict, stage completion or workflow permission.",
@@ -430,7 +431,6 @@ function projectOcrCodeReviewBundle(built, attachmentRoot, request, source) {
     const sourceRoot=realpathSync(source.sourceRoot);
     for(const path of sourcePaths){
       if(isAbsolute(path)||path.split("/").some(x=>!x||x==="."||x===".."))throw new Error("OCR source path is unsafe");
-      if(projected.some(entry=>entry.path===path))throw new Error(`OCR source path conflicts with packet control: ${path}`);
       const target=join(sourceRoot,path);let named;
       try{let cursor=sourceRoot;for(const part of path.split("/")){cursor=join(cursor,part);const st=lstatSync(cursor);if(st.isSymbolicLink()||realpathSync(cursor)!==cursor)throw new Error(`OCR source path alias: ${path}`);}named=lstatSync(target);}
       catch(error){if(error.code==="ENOENT")continue;throw error;}
@@ -438,6 +438,13 @@ function projectOcrCodeReviewBundle(built, attachmentRoot, request, source) {
       const fd=openSync(target,fsConstants.O_RDONLY|fsConstants.O_NOFOLLOW);let raw;
       try{const st=fstatSync(fd);if(st.dev!==named.dev||st.ino!==named.ino||!st.isFile()||st.nlink!==1)throw new Error(`OCR source changed: ${path}`);raw=readFileSync(fd);}finally{closeSync(fd);}
       const bytes=reviewMaterialBytes(path,raw);
+      const existing=projected.find(entry=>entry.path===path);
+      if(existing){
+        // A changed reviewer body can be both source context and fixed control.
+        // Reuse only the complete identical bytes, never replace either role.
+        if(!readFileSync(join(bundleRoot,path)).equals(bytes))throw new Error(`OCR source path conflicts with packet control: ${path}`);
+        continue;
+      }
       const destination=join(bundleRoot,path);mkdirSync(dirname(destination),{recursive:true});writeFileSync(destination,bytes,{flag:"wx",mode:0o600});projected.push({path,bytes:bytes.length,sha256:sha256(bytes)});
     }
     if (request.authenticated_evidence !== undefined) {

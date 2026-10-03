@@ -12,11 +12,12 @@
 
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { buildReviewMaterials } from "../../skills/wh-review/scripts/review-materials.mjs";
 import { ArtifactDir } from "../../runtime/evidence/artifact-dir.mjs";
 import { captureCommand } from "../../runtime/interface/run-command.mjs";
 import { openTask } from "../../runtime/task/task-handle.mjs";
@@ -272,5 +273,69 @@ describe("OCR code review packet carries the reviewer contract bodies (T020)", (
           return { bundleRoot, materialId: "c".repeat(64), manifest };
         },
       })).toThrow(/provider-protocol/);
+  });
+});
+
+
+describe("changed reviewer source and packet control paths", () => {
+  function request(path) {
+    return {stage:"verify-code", subject_kind:"worktree", materials:{
+      changed_files:path, acceptance_criteria:"AC-1: preserve the complete changed reviewer source and fixed reviewer body.",
+      implementation_assessment:"Review the changed lens source as well as the fixed reviewer protocol.",
+      test_context:"Owned packet construction only, no provider dispatch.", open_risks:"none declared",
+    }};
+  }
+  function changedLens(state, name) {
+    const path = `skills/${name}/SKILL.md`;
+    mkdirSync(dirname(join(state.worktreeRoot, path)), {recursive:true});
+    writeFileSync(join(state.worktreeRoot, path), "# Previous owned reviewer source\n");
+    git(state.worktreeRoot, ["add", path]);
+    git(state.worktreeRoot, ["commit", "-qm", "owned previous lens source"]);
+    const bytes = lensSkillBytes(name);
+    writeFileSync(join(state.worktreeRoot, path), bytes);
+    return {path, bytes};
+  }
+  it.each(["simplicity-guard", "review"])("keeps changed %s source and identical fixed lens as one complete manifest entry", async name => {
+    const state = fixture(), {path, bytes} = changedLens(state, name);
+    const attachmentRoot = join(state.root, "review-data");
+    mkdirSync(attachmentRoot);
+    const bundle = prepareTaskBoundBuildCodeReviewBundle(await contextFor(state), request(path), {loadConfig:()=>({attachmentRoot})});
+    try {
+      expectContractBodies(bundle);
+      expectLensBodies(bundle);
+      const entries = bundle.manifest.filter(entry => entry.path === path);
+      expect(entries).toHaveLength(1);
+      expect(entries[0]).toMatchObject({bytes:bytes.length, sha256:createHash("sha256").update(bytes).digest("hex")});
+      expect(readFileSync(join(bundle.bundleRoot, path))).toEqual(bytes);
+      expect(readFileSync(join(state.worktreeRoot, path))).toEqual(bytes);
+      expect(readFileSync(join(bundle.bundleRoot, "changes.diff"), "utf8")).toContain(`diff --git a/${path} b/${path}`);
+      const instructions = readFileSync(join(bundle.bundleRoot, "review-instructions.md"), "utf8");
+      expect(instructions).toContain("its identical manifest entry serves both roles");
+      const manifest = JSON.parse(readFileSync(join(bundle.bundleRoot, "manifest.json"), "utf8"));
+      expect(manifest.filter(entry => entry.path === path)).toEqual(entries);
+    } finally { bundle.dispose(); }
+    expect(readdirSync(attachmentRoot).filter(name => name.startsWith(".ocr-code-review-") || name.startsWith("review-"))).toEqual([]);
+  });
+  it("rejects differing source/control bytes without overwriting the changed source or leaving a packet", async () => {
+    const state = fixture(), {path, bytes} = changedLens(state, "simplicity-guard");
+    const attachmentRoot = join(state.root, "review-data");
+    mkdirSync(attachmentRoot);
+    const context = await contextFor(state);
+    let controlBytes;
+    expect(() => prepareTaskBoundBuildCodeReviewBundle(context, request(path), {
+      loadConfig:()=>({attachmentRoot}),
+      buildMaterials:input=>{
+        const built = buildReviewMaterials(input);
+        controlBytes = Buffer.from("# Distinct owned fixed reviewer body\n");
+        writeFileSync(join(built.bundleRoot, path), controlBytes);
+        built.deliveryManifest = built.deliveryManifest.map(entry => entry.path === path ? {
+          path, bytes:controlBytes.length, sha256:createHash("sha256").update(controlBytes).digest("hex"),
+        } : entry);
+        return built;
+      },
+    })).toThrow(`OCR source path conflicts with packet control: ${path}`);
+    expect(controlBytes.equals(bytes)).toBe(false);
+    expect(readFileSync(join(state.worktreeRoot, path))).toEqual(bytes);
+    expect(readdirSync(attachmentRoot).filter(name => name.startsWith(".ocr-code-review-") || name.startsWith("review-"))).toEqual([]);
   });
 });
