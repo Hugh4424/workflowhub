@@ -57,6 +57,20 @@ describe("post-cohort executable authoring", () => {
     expect(read("skills/test-routing-advisor/SKILL.md")).toContain("逐 Task 卡");
   });
 
+  it("documents the narrow legacy pure-document alternative without new required fields", () => {
+    const template = read("skills/spec-plan/templates/phase-template.md");
+    const example = template.split("### G-2 纯文档示例（既有字段，无新增运行行为）")[1]?.split("### 编号与交接")[0];
+    expect(example, "authors need a concrete compatible G-2 card, not only a footnote").toBeTruthy();
+    for (const text of ["G-2文档无新行为", "理由", "风险", "客观替代", "披露", "预期0", "不执行RED", "结构接纳不等于", "行为或混合", ".md", "ORACLE-"]) {
+      expect(example, text).toContain(text);
+    }
+    for (const field of ["输入", "文件 / 符号", "预期退出码", "RED 目标失败", "RED 证据", "GREEN 判定器", "完成"]) {
+      expect(example, field).toContain(`**${field}**`);
+    }
+    expect(example).not.toContain("**verification_role**");
+    expect(example).not.toContain("**paired_task**");
+  });
+
   it("makes build-plan author the real test/target RED owner and freezes the oracle for build-code", () => {
     const workflow = read("workflows/build-plan/SKILL.md");
     const author = read("skills/spec-plan/SKILL.md");
