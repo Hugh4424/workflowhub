@@ -1,78 +1,17 @@
-import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
-
-import { loadPortableWorkflowManifest, runPortableWorkflow } from "../../runtime/task/portable-workflow-run.mjs";
-import { resolveTopology } from "../../runtime/task/task-topology.mjs";
-import { createTask } from "../../runtime/task/task-handle.mjs";
-
-const ROOT = process.cwd();
-const roots = [];
-
-afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
-
-function bindPortableStepEvidence(task, stepResults) {
-  const value = {
-    task_id: task.identity.taskId,
-    workflow: "build-prd",
-    step_results: stepResults.map(({ step_id, step_slug, status }) => ({ step_id, step_slug, status })),
-  };
-  const raw = `${JSON.stringify(value, null, 2)}\n`;
-  const sha256 = createHash("sha256").update(raw).digest("hex");
-  const ref = `quality/evidence/portable-workflow-outcomes/build-prd/${sha256}.json`;
-  task.createRecordAtomic(ref, raw);
-  return stepResults.map((result) => ({ ...result, result_ref: ref }));
-}
-
-describe("CARD-01 planning and ordinary task journeys", () => {
-  it("projects planning, post-activation ordinary, and pre-activation ordinary journeys exactly", () => {
-    expect(resolveTopology({ task_type: "规划任务", activation_cohort: "pre" }))
-      .toEqual(["make-decision", "build-prd"]);
-    expect(resolveTopology({ task_type: "普通任务", activation_cohort: "post" }))
-      .toEqual(["make-decision", "build-plan", "build-code", "verify-code"]);
-    expect(resolveTopology({ task_type: "普通任务", activation_cohort: "pre" }))
-      .toEqual(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
-  });
-
-  it("keeps build-prd failure and re-entry inside the portable journey, never a code stage", () => {
-    const storageRoot = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-card01-journey-")));
-    roots.push(storageRoot);
-    const task = createTask({
-      storageRoot,
-      manifest: {
-        schema_version: "1.0.0", execution_mode: "per_invocation", record_model: "vnext-single-write",
-        project_name: "workflowhub", task_id: "card-01-journey-fixture", created_at: "2026-09-20T00:00:00.000Z",
-        target_repo_root: ROOT, issue_ids: [], inputs: {},
-      },
-    });
-    const manifest = loadPortableWorkflowManifest({ worktreeRoot: ROOT });
-    const failed = runPortableWorkflow({ task, worktreeRoot: ROOT, input: { workflow: "build-prd", step_results: [] } });
-    const completeSteps = manifest.steps.map((step) => ({
-      task_id: task.identity.taskId, workflow: "build-prd", step_id: step.step_id, step_slug: step.step_slug,
-      status: "completed", result_ref: null,
-    }));
-    const completed = runPortableWorkflow({ task, worktreeRoot: ROOT, input: {
-      task_id: task.identity.taskId,
-      workflow: "build-prd",
-      step_results: bindPortableStepEvidence(task, completeSteps),
-    } });
-    expect(failed.terminal).toMatchObject({ state: "failed" });
-    expect(completed.terminal).toMatchObject({ state: "succeeded" });
-    expect(completed.ref).not.toMatch(/build-code|verify-code/);
-  });
-
-  it("publishes all six interface lines plus the human-boundary and review-replay addendum", () => {
-    const blueprint = readFileSync("docs/contracts/card-01-stage-material-interface.md", "utf8");
-    for (const heading of [
-      "任务类型受控值",
-      "类型到拓扑映射",
-      "正式阶段与 build-prd portable 身份",
-      "七值状态",
-      "材料与执行事实归属",
-      "推进事实与完成事实",
-      "人工边界与审查重派",
-    ]) expect(blueprint).toContain(heading);
-  });
+import {afterEach,describe,expect,it} from "vitest";
+import {execFileSync,spawnSync} from "node:child_process";
+import {mkdirSync,mkdtempSync,readFileSync,realpathSync,rmSync,writeFileSync,existsSync,readdirSync,symlinkSync,linkSync} from "node:fs";
+import {tmpdir} from "node:os";import{join}from"node:path";
+const roots=[];afterEach(()=>{while(roots.length)rmSync(roots.pop(),{recursive:true,force:true});});
+function env(){const e={...process.env};for(const k of Object.keys(e))if(k.startsWith("GIT_"))delete e[k];return e;}
+const git=(cwd,...args)=>execFileSync("git",args,{cwd,env:env(),encoding:"utf8",stdio:["ignore","pipe","pipe"]}).trim();
+function root(){const p=realpathSync(mkdtempSync(join(tmpdir(),"card06-ordinary-consumer-")));roots.push(p);return p;}
+function repository(p){mkdirSync(p);git(p,"init","-q","-b","main");git(p,"config","user.name","Owned ordinary test");git(p,"config","user.email","owned@test.invalid");writeFileSync(join(p,"README.md"),"owned baseline\n");git(p,"add",".");git(p,"commit","-qm","baseline");}
+import{createTask}from"../../runtime/task/task-handle.mjs";import{loadPortableWorkflowManifest,runPortableWorkflow,projectPortableWorkflowStatus}from"../../runtime/task/portable-workflow-run.mjs";
+async function portableFixture(){const r=root(),repo=join(r,"repo");repository(repo);const task=await createTask({storageRoot:r,manifest:{schema_version:"1.0.0",execution_mode:"per_invocation",record_model:"vnext-single-write",activation_cohort:"post",project_name:"OwnedJourney",task_id:"portable-owned",created_at:"2026-10-03T00:00:00Z",target_repo_root:repo,issue_ids:[],inputs:{}}});mkdirSync(join(repo,"workflows/build-prd"),{recursive:true});writeFileSync(join(repo,"workflows/build-prd/steps.json"),JSON.stringify({schema_version:"2.0.0",stage_slug:"build-prd",steps:[{step_id:1,step_slug:"owned-step",observable_result:"owned visible outcome"}]})+"\n");return{r,repo,task};}
+async function resultInput(f,status){const rows=[{task_id:f.task.identity.taskId,workflow:"build-prd",step_id:1,step_slug:"owned-step",status,...(status==="blocked"?{dependency:"owned dependency",unblock_condition:"owned repair"}:{})}];const ref=`quality/evidence/portable-workflow-outcomes/build-prd/${status}.json`;await f.task.createRecord(ref,JSON.stringify({task_id:f.task.identity.taskId,workflow:"build-prd",step_results:rows})+"\n");return{task_id:f.task.identity.taskId,workflow:"build-prd",step_results:rows.map(row=>({...row,result_ref:ref}))};}
+describe("ordinary portable journey facts without cohort topology authority",()=>{
+ it("keeps failure and re-entry in actual build-prd outcomes without a code stage or overwrite",async()=>{const f=await portableFixture();expect(loadPortableWorkflowManifest({worktreeRoot:f.repo}).steps).toHaveLength(1);const failed=await runPortableWorkflow({task:f.task,worktreeRoot:f.repo,input:{task_id:f.task.identity.taskId,workflow:"build-prd",step_results:[]}});expect(failed.terminal.state).toBe("failed");const original=readFileSync(join(f.task.taskPath,failed.ref));const complete=await runPortableWorkflow({task:f.task,worktreeRoot:f.repo,input:await resultInput(f,"completed")});expect(complete.terminal.state).toBe("succeeded");expect(complete.ref).not.toMatch(/build-code|verify-code/);expect(readFileSync(join(f.task.taskPath,failed.ref))).toEqual(original);expect(projectPortableWorkflowStatus({task:f.task}).state).toBe("succeeded");});
+ it.each([["in-progress","in-progress"],["unverified","unverified"],["blocked","blocked"],["abandoned","abandoned"],["failed","failed"],["unavailable","failed"],["incomplete","failed"]])("preserves %s outcome as honest %s state",async(status,state)=>{const f=await portableFixture(),result=await runPortableWorkflow({task:f.task,worktreeRoot:f.repo,input:await resultInput(f,status)});expect(result.terminal.state).toBe(state);expect(JSON.parse(readFileSync(join(f.task.taskPath,result.ref))).state).toBe(state);});
+ it("rejects wrong identity and missing actual outcome bytes rather than manufacture success",async()=>{const f=await portableFixture(),input=await resultInput(f,"completed");input.step_results[0].task_id="foreign";const wrong=await runPortableWorkflow({task:f.task,worktreeRoot:f.repo,input});expect(wrong.state).toBe("failed");input.step_results[0].task_id=f.task.identity.taskId;rmSync(join(f.task.taskPath,input.step_results[0].result_ref));const missing=await runPortableWorkflow({task:f.task,worktreeRoot:f.repo,input});expect(missing.state).toBe("failed");expect(missing.terminal.reason).toMatch(/evidence is unavailable/);});
 });

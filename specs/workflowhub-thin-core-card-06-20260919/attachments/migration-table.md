@@ -18,9 +18,9 @@
 | 处置 | 行数 |
 | --- | --- |
 | ARCHIVE | 35 |
-| DELETE | 397 |
+| DELETE | 398 |
 | MOVE | 2 |
-| NARROW | 272 |
+| NARROW | 271 |
 | NEW | 18 |
 | PENDING | 3 |
 | SURVIVOR | 124 |
@@ -87,7 +87,7 @@
 | MT-1-039 | runtime/evidence/storage-root.mjs | core/load-config、runtime/stage/stage-context、tools/cli/stage-runtime、tools/cli/task-bootstrap（T2） | 同左（不变） | SURVIVOR | B6/P7 | 无需回滚（无改动） | — | 否 | 纯路径解析，无机器依赖；B6/P7 归位时 move-map 登记 |
 | MT-1-040 | runtime/evidence/validate-contract.mjs | tools/cli/check-contract、tools/cli/check-metrics-schema（串 metrics/*.mjs，T2） | 同左（不变） | SURVIVOR | B6/P7 | 无需回滚（无改动） | — | 否 | metrics 合同最小校验，不在本卡删除职责内 |
 | MT-1-041 | runtime/evidence/workflow-evolution.mjs | runtime/stage/stage-reflect、tools/cli/append-lesson-observation、build-reflection-page、derive-consumption-edges（T4） | 反思观察/候选/质量税投影（去项目锁后）由本文件承接 | NARROW | B4/P5 | git revert B4 提交 | G3-05 | 否 | 删 `acquireProjectLock`/`assertProjectLockCurrent` 与 guard（G3-05）及哈希派生 id（`deriveObservationId`）；保留 observation/candidate 投影，消费者随片段 3 CLI 改接 |
-| MT-1-042 | runtime/evidence/write-boundary-preflight.mjs | runtime/stage/stage-context、tools/cli/task-close（T1） | 职责由 runtime/interface/workspace-check.mjs（①）承接 | NARROW | B4/P5 | git revert B4 提交 | G3-08 | 否 | 去 `authenticateOfficialInvocation`/`persistOfficialInvocation` 与 L73 字节身份校验；路径一致性核对并入①，本文件转薄壳后随调用方改接再评估 DELETE |
+| MT-1-042 | runtime/evidence/write-boundary-preflight.mjs | runtime/stage/stage-context、tools/cli/task-close（T1） | 真实保护由①与当前 task/workspace/stage-context 承接；本文件零生产残余 | DELETE | B4/P5 | git revert B4 提交 | G3-08 | 否 | 去 `authenticateOfficialInvocation`/`persistOfficialInvocation` 与 L73 字节身份校验；路径一致性核对并入①，本文件转薄壳后随调用方改接再评估 DELETE；2026-10-03 原 S-5 条件结果：当前生产调用方已改接，零残余即删、不留死薄壳；MT-6-018 普通保护精确承接及实际旧 import 退役后才物理删除，原 B4 owner／回滚／零引用验收不变。 |
 | MT-1-043 | runtime/interface/runner-contract.mjs | runtime/interface/runtime-facade、runtime/distribution/runner-release、skill-bundle-release、tools/cli/stage-runtime（T2） | 公共行为前置断言（改名单后）由本文件承接 | NARROW | B5/P6 | git revert B5 提交 | — | 否 | 版本兼容断言（非哈希）保留；名单随分发链去双层 hash 调整，避免断言引用已删 bundle 字段 |
 | MT-1-044 | runtime/interface/runtime-facade.mjs | tools/cli/stage-runtime（串 scripts/constitution-mapping-check、tools/architecture/complexity-report，T4） | 七类公共行为门面（实质保留） | NARROW | B4/P5 | git revert B4 提交 | — | 否 | 七类名单保留；`BEHAVIOR_BY_INTERNAL_OPERATION` 随私有路由删除重写；ADR-003 要求 B6/P7 以 move-map 澄清 runtime/interface 只留窄工具 |
 | MT-1-045 | runtime/review/canonical-review-result.mjs | core/task-close、freshness、review-record-route、stage-handlers、skills/wh-review/review-result、simple-review-runner（T7） | OCR 结果落盘（parse+聚合）由本文件承接 | NARROW | B4/P5 | git revert B4 提交 | — | 否 | 删 `authenticateCanonicalReviewResult`/`conservativelyAssessUnattestedAnchors` 认证；保留 `parseCanonicalReviewerOutput`/`aggregateCanonicalProviderResults`（OCR 落盘必需） |
@@ -1344,3 +1344,9 @@ find <task> -type f | wc -l
 - **先改接后删**：P5/T019按真实CLI与MT-6-058核对必要只读查询，退役integration/defaultwriter及其无consumer分支；必要完整材料直返/解析/校验分别直连MT-1-049/050与MT-1-055当前实体。MT-1-055实体依旧唯一owner P6，不提前改SCHEMAS；真正helper职责不退役、不改名复活被删shim。T023逐条原DELETE consumer读回/有意义针对性反证后再删除五路径。旧read-only文件存在不等于可忽略真实import。 所需compactVerifyCodeMaterials仅原材料直返、两文件不逐字节等同；runtime额外compactReviewDiff(writeSet)/gitDiffPath的解析、过滤与错误guard必须继续按真实consumer保留，不能拿无本地压缩seam替代或删除这些guard。
 - **材料技术纠正**：P4以ADR-024/025保留handoff方法、删除requirement-lineage；冻结B3 residue模式只有receipts.，不声称它覆盖run--action、sha文件名或问答IO；ledger只有DELETE无树/无存活引用与NEW存在，无wh-review幸存者断言。必要方法/幸存文档面/安全语义检查需独立实际读回和定向证据，missing保持incomplete，不改冻结oracle。
 - **未来执行**：本候选、用户答复、独立审查与实施是不同事实；全部未来literal命令/行为验证planned，未测试、未commit、未执行P4或P5。
+
+## 14. S-5 已定零残余条件结果：MT-1-042
+
+- 原冻结 MT-1-042／片段1 S-5 已将“①改接后零残余即DELETE”留到本阶段真实核对；本次只履行该一项条件，不新增路径、owner或方向，不将023/034/053等例外泛化。原冻结记录／原始字节仍由Git保留，不重锚；当前数字行明确有效DELETE，不能仍写NARROW再偷偷删文件。
+- 有效处置差量：851path不变；DELETE398（+1）、NARROW271（-1），其余类别和B4/P5 owner/回滚不变。§0处置计数同步有效当前值；原397/272字面在冻结提交及§13历史解释保留。
+- 执行边界依spec对应S5段：当前无production caller不等于全部incoming归零。MT-6-018仍NARROW，原tester先保普通task/path/history/真实IO义务、退役旧invocation/sourceBytes认证import；实际旧caller／测试尚在时不删producer。T023原零引用、FRAC、Done、literal不改，不以材料或统计差量宣告删除／GREEN。

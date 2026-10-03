@@ -21,7 +21,7 @@ import { homedir } from "os";
 import { randomUUID } from "crypto";
 import { spawnSync } from "child_process";
 import { assertTaskHandle } from "../runtime/task/task-handle.mjs";
-import { assertWorkspace } from "../runtime/stage/stage-context.mjs";
+import { assertWorkspace } from "../runtime/task/workspace.mjs";
 
 const GAP = "gap";
 const OWN_RESULTS = new Set([
@@ -73,12 +73,12 @@ export function createMetricsLauncherConfig(loadedConfig) {
   return capability;
 }
 
-export function configForCollector(launcherConfig, { task, workspace, onWarn } = {}) {
+export async function configForCollector(launcherConfig, { task, workspace, onWarn } = {}) {
   if (!launcherConfig || !METRICS_LAUNCHER_CONFIGS.has(launcherConfig)) {
     throw new TypeError("trusted metrics launcher config capability required");
   }
   const taskHandle = assertTaskHandle(task);
-  const authenticWorkspace = workspace === undefined ? undefined : assertWorkspace(workspace);
+  const authenticWorkspace = workspace === undefined ? undefined : await assertWorkspace(workspace);
   const capability = {
     globalMetricsPath: launcherConfig.globalMetricsPath,
     taskHandle,
@@ -105,14 +105,19 @@ function readTaskAll(cfg) {
   }
 }
 
-function upsertTask(executionId, patch, cfg) {
-  const records = readTaskAll(cfg);
-  const index = records.findIndex((record) => record.execution_id === executionId);
-  if (index < 0) records.push({ execution_id: executionId, ...patch });
-  else records[index] = { ...records[index], ...patch };
+async function upsertTask(executionId, patch, cfg) {
   try {
-    cfg.taskHandle.writeRecordAtomic("task-metrics.jsonl", records.map((record) => JSON.stringify(record)).join("\n") + "\n");
-    return true;
+    // The existing TaskHandle writer is now async. Keep the existing read/merge
+    // operation serialized through its shared lock so awaiting publication
+    // cannot lose another simultaneous execution's row or fields.
+    return await cfg.taskHandle.withRecordLock("task-metrics", async () => {
+      const records = readTaskAll(cfg);
+      const index = records.findIndex(record => record.execution_id === executionId);
+      if (index < 0) records.push({ execution_id: executionId, ...patch });
+      else records[index] = { ...records[index], ...patch };
+      await cfg.taskHandle.writeRecordAtomic("task-metrics.jsonl", records.map(record => JSON.stringify(record)).join("\n") + "\n");
+      return true;
+    });
   } catch (error) {
     warn(cfg, `metrics write failed: ${error.message}`);
     return false;
@@ -175,8 +180,8 @@ function upsertGlobal(execution_id, patch, cfg) {
   return writeAll(path, records, cfg);
 }
 
-export function updateTaskRecord(execution_id, patch, cfg) {
-  return upsertTask(execution_id, patch, assertCollectorConfig(cfg));
+export async function updateTaskRecord(execution_id, patch, cfg) {
+  return await upsertTask(execution_id, patch, assertCollectorConfig(cfg));
 }
 
 // Count actions deduped by their own action_id (FR-GUARD-002), never by message_id.
@@ -214,7 +219,7 @@ function toGlobalRow(record, cfg) {
  * recordSkeleton — timing 1: skill start. Lays down a minimal record (FR-COLLECT-003).
  * Dual-writes to task + global (FR-COLLECT-006). Never blocks (FR-GUARD-001).
  */
-export function recordSkeleton(seed, cfg) {
+export async function recordSkeleton(seed, cfg) {
   const record = {
     execution_id: seed.execution_id,
     skill_or_stage: seed.skill_or_stage ?? null,
@@ -230,7 +235,7 @@ export function recordSkeleton(seed, cfg) {
     stage_unit: seed.stage_unit ?? null,
     own_result: ownResult(seed.own_result ?? "entry", cfg, "entry"),
   };
-  upsertTask(record.execution_id, record, cfg);
+  await upsertTask(record.execution_id, record, cfg);
   upsertGlobal(record.execution_id, toGlobalRow(record, cfg), cfg);
   return record;
 }
@@ -239,7 +244,7 @@ export function recordSkeleton(seed, cfg) {
  * updateOwnResult — timing 2: skill end. Patches the record's own result fields
  * (tokens/duration/executed). Re-locates by execution_id from disk (FR-COLLECT-004).
  */
-export function updateOwnResult(execution_id, patch, cfg) {
+export async function updateOwnResult(execution_id, patch, cfg) {
   const resolved = { ...patch };
   if ("own_result" in resolved) {
     const normalized = ownResult(resolved.own_result, cfg);
@@ -249,10 +254,10 @@ export function updateOwnResult(execution_id, patch, cfg) {
   if ("tokens" in resolved || cfg.tokenSourceReachable === false) {
     resolved.tokens = resolveTokens(resolved.tokens, cfg);
   }
-  upsertTask(execution_id, resolved, cfg);
+  await upsertTask(execution_id, resolved, cfg);
   const current = readRecord(execution_id, cfg);
   if (current) upsertGlobal(execution_id, toGlobalRow(current, cfg), cfg);
-  collectFacts(execution_id, patch, cfg);
+  await collectFacts(execution_id, patch, cfg);
   return current;
 }
 
@@ -264,7 +269,7 @@ export function updateOwnResult(execution_id, patch, cfg) {
  * can add richer signals without changing the signature. Ceiling: integrate with journal
  * transcript when review-phase records become available.
  */
-export function collectFacts(execution_id, factSeed, cfg) {
+export async function collectFacts(execution_id, factSeed, cfg) {
   try {
     const patch = factSeed ?? {};
 
@@ -308,7 +313,7 @@ export function collectFacts(execution_id, factSeed, cfg) {
     }
 
     const facts = { exit_code, git_sha, files_changed, review_invoked };
-    const ok = upsertTask(execution_id, { facts }, cfg);
+    const ok = await upsertTask(execution_id, { facts }, cfg);
     if (ok === false) {
       process.stderr.write(
         `[collectFacts warn] fact write failed for ${execution_id}\n`
@@ -325,8 +330,8 @@ export function collectFacts(execution_id, factSeed, cfg) {
  * updateStageImpact — timing 3: stage end. Patches the skill's impact on the whole
  * stage onto the SAME record (one-record-three-updates, FR-COLLECT-003/004).
  */
-export function updateStageImpact(execution_id, patch, cfg) {
-  upsertTask(execution_id, patch, cfg);
+export async function updateStageImpact(execution_id, patch, cfg) {
+  await upsertTask(execution_id, patch, cfg);
   const current = readRecord(execution_id, cfg);
   if (current) upsertGlobal(execution_id, toGlobalRow(current, cfg), cfg);
   return current;

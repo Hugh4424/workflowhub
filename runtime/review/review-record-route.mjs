@@ -51,7 +51,14 @@ async function providerFact(member,dir,slug,root) {
 export async function recordSimpleReviewRequest({taskDir,request,runRound=runSimpleReview,signal=null,lockWaitMs=2000}={}) {
   if(typeof runRound!=="function" || !request || typeof request!=="object" || Array.isArray(request)) throw new TypeError("review request and runner are required");
   if(signal!==null && (typeof signal.aborted!=="boolean" || typeof signal.addEventListener!=="function")) throw new TypeError("review signal must be an AbortSignal");
-  const {root,manifest}=readTask(taskDir);const tuple=subject(request);const dir=join(root,"quality","reviews");
+  // The supplied subject is ordinary request provenance, not an identity or
+  // completion predicate. Capture its JSON value once so transport mutation
+  // cannot erase or relabel the scope the caller actually submitted.
+  const subjectJson=Object.hasOwn(request,"subject") ? JSON.stringify(request.subject) : undefined;
+  const submittedSubject=subjectJson===undefined ? {} : {subject:JSON.parse(subjectJson)};
+  const {root,manifest}=readTask(taskDir);
+  if(manifest.activation_cohort!=="post") throw coded("REVIEW_TASK_READ_ONLY","review writes require an explicit post task; pre/history and unknown cohorts are read-only");
+  const tuple=subject(request);const dir=join(root,"quality","reviews");
   checkedPath(root,{directory:true});
   const quality=join(root,"quality");try{checkedPath(quality,{directory:true});}catch(error){if(error.code!=="ENOENT")throw error;mkdirSync(quality);checkedPath(quality,{directory:true});}
   try{checkedPath(dir,{directory:true});}catch(error){if(error.code!=="ENOENT")throw error;checkedPath(quality,{directory:true});mkdirSync(dir);checkedPath(dir,{directory:true});}
@@ -61,15 +68,20 @@ export async function recordSimpleReviewRequest({taskDir,request,runRound=runSim
     const started=new Date().toISOString(); let result;
     let rawCount=0;
     const onProviderOutput=async ({provider,role=null,output})=>{if(typeof output!=="string" && !Buffer.isBuffer(output) && !(output instanceof Uint8Array) || typeof provider!=="string")throw coded("PROVIDER_OUTPUT_INVALID","provider raw output must be named text or original bytes");const path=await appendRecord(dir,`${tuple.stage}-${tuple.review_scope ?? "document"}-provider-${++rawCount}`,"output",output);return relative(root,path).split("\\").join("/");};
-    try { result=await runRound({...request,...tuple},{...(signal ? {signal} : {}),onProviderOutput}); }
+    try { result=await runRound({...request,...tuple,...structuredClone(submittedSubject)},{...(signal ? {signal} : {}),onProviderOutput}); }
     catch(error) { result={status:"unavailable",outcome:"unavailable",dispatch_state:error.dispatch_state ?? "unknown",provider_results:[],findings:[],error:{code:error.code ?? "REVIEW_ERROR",message:redactProviderHostPaths(String(error.message ?? error))}}; }
     if(!result || typeof result!=="object" || !["available","available-with-failures","unavailable","incomplete"].includes(result.status)) throw coded("REVIEW_RESULT_INVALID","runner returned no observable result status");
     for(const key of ["stage","review_scope","review_track","review_kind","subject_kind","phase_id","surface"]) if(result[key]!==undefined && result[key]!==tuple[key]) throw coded("REVIEW_SUBJECT_MISMATCH",`runner result differs in ${key}`);
     let findings=[];
-    if(["available","available-with-failures"].includes(result.status)) {
+    const partialFindings=["unavailable","incomplete"].includes(result.status) && Array.isArray(result.findings) && result.findings.length>0;
+    if(["available","available-with-failures"].includes(result.status) || partialFindings) {
       if(!Array.isArray(result.provider_results) || result.provider_results.length===0) throw coded("PROVIDER_RESULT_INVALID","semantic result has no provider provenance");
+      if(partialFindings && result.findings.some(finding=>typeof finding?.provider!=="string" || !result.provider_results.some(member=>member?.provider===finding.provider))) throw coded("PROVIDER_RESULT_INVALID","partial finding is not bound to an observed provider");
       const parsed=parseReviewerOutput(JSON.stringify({findings:result.findings}),{requireEvidence:true});
-      findings=parsed.findings.map(normalized=>{const original=result.findings.find(f=>f.path===normalized.path&&f.issue===normalized.issue&&(f.line ?? null)===(normalized.line ?? null));return {...original,...normalized};});
+      // Normalization keeps finding order. Consume each submitted finding once
+      // so identical findings from different providers retain their own source.
+      const originals=result.findings.filter(original=>parseReviewerOutput(JSON.stringify({findings:[original]}),{requireEvidence:true}).findings.length>0);
+      findings=parsed.findings.map(normalized=>{const index=originals.findIndex(f=>f.path===normalized.path&&f.issue===normalized.issue&&(f.line ?? null)===(normalized.line ?? null));if(index<0) throw coded("REVIEW_RESULT_INVALID","normalized finding has no submitted source");const [original]=originals.splice(index,1);return {...original,...normalized};});
       result={...result,discarded_facts:[...(result.discarded_facts ?? []),...(parsed.discarded_facts ?? [])]};
     }
     const providers=[];
@@ -77,7 +89,7 @@ export async function recordSimpleReviewRequest({taskDir,request,runRound=runSim
     const slug=`${tuple.stage}-${tuple.review_scope ?? tuple.review_track ?? "document"}${tuple.phase_id ? "-"+tuple.phase_id.toLowerCase() : ""}`;
     const {material_id,authenticated_evidence,authenticated_evidence_sha256,snapshot_tree,candidate_tree,base_tree,request_key,request_hash,closure_manifest,material_revision,source,...ordinary}=result;
     const record={version:"wh-review-result.v1",...ordinary,task_id:manifest.task_id,...tuple,started_at:started,completed_at:new Date().toISOString(),
-      request:{...tuple,material_keys:Object.keys(request.materials ?? {})},provider_results:providers,findings,
+      request:{...tuple,...submittedSubject,material_keys:Object.keys(request.materials ?? {})},provider_results:providers,findings,
       ...(signal?.aborted ? {status:"unavailable",error:{code:"REVIEW_CANCELLED",message:"review cancelled; settled provider facts retained"}} : {}),authoritative:false};
     const path=await appendRecord(dir,slug,"json",JSON.stringify(record,null,2)+"\n");
     const ref=relative(root,path).split("\\").join("/");return {status:record.status,result_ref:ref,path,stage:tuple.stage,review_scope:tuple.review_scope,subject_kind:tuple.subject_kind,phase_id:tuple.phase_id,authoritative:false};

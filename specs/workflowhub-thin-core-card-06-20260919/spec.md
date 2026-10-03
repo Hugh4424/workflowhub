@@ -267,6 +267,16 @@
 - **依赖谁**：窄工具 ②③⑤；OCR（可选）；3rd-review broker（文档面与回退）
 - **测试边界**：OCR 合同包测试、OCR 回退测试、既有审查功能测试（去哈希断言后）
 
+#### 文档审查内部运输安全修复（原职责与实施边界）
+
+ADR-018 保留 wh-review 及其 broker 职责；其依据 V-016/V-019 是保留文档执行者 `runSimpleReview`，没有指定每一个 native 模型只能通过 app-server。当前 broker 的 native route 缺少本次材料范围的已证安全边界时，先如实 unavailable，不能把全不可用包装成文档能力完成。P5/T019 原 owner 可在现 `ReviewProviderClient` 的同一运输职责内，为同一已选 Codex provider 修复私有 native 子进程执行；文档执行者仍为 wh-review，代码正常仍为 OCR，工具／模型不重新选型。
+
+修复复用已有输入、provider 身份、`runGroup`／`startManaged` 接口及原始输出／终末生命周期，实际 native 记录不冒称 broker 调用，也不把文档改成 OCR executor。只在提交材料的真实范围、无宿主秘密访问、固定 600,000 ms host deadline、取消与清理、输出／解析限制均有当前原生证据时使用；未证路线保留真实 unavailable／失败及 sibling，不能借 injected fake seam 宣称 native 安全。保留必要 broker 代码／配置职责，不修改或安装外部 3rd-review、不复制认证到隔离 HOME／CODEX_HOME、不改用户全局配置；不增加公开 mode／command、持久 managed store、双写、永久双路线兼容桥或新许可。
+
+原文档合同的“禁 shell”与本机 Codex native 仅提供 exec 文本查看能力有实施字面冲突。仅在已证明 hard packet filesystem、native tool 与环境约束的同一 Codex native 路线，包内只读 `cat`／`sed`／`rg` 查看可作为“只读本次提交材料”的限定例外；不是一般 shell 执行许可。写入、Git、网络、parent／宿主材料、Agent／wait 等仍禁，必要 minimal runtime 读取例外只支持工具本身运行，不作为额外审查输入。P5 原 owner 成组澄清实际选入的文档合同、provider 协议与生成的审查指令，P4 原 owner 按真实运输修正方法说明；原文本保留路径、审查要求和失败边界，不新建命令 allowlist 框架、审批、control 或外部 owner 改动。不因 fake tool／违约文件阅读称文档能力已交付。
+
+此限定是修复现运输的实现缺口；ADR、FR、AC、finding／聚合／unavailable 语义与原 Done／literal 不改。三审查点真实记录及一次文档执行证明仍须实际满足，native 桩或空 findings 不代替它们。P4 原 owner 在必要方法文本中按已发生的真实运输说明边界；不能只写新词就称运行行为通过。若具体候选改成删除 wh-review／broker 职责、重新选型或另建执行流程，则超出本修复边界，先提交具体可审方向与损失，由主会话取得人类决定。
+
 ### 方法层（workflows/、skills/）
 
 - **负责什么**：阶段方法说明、技能正文、人为门出现位置、审查点位置
@@ -428,6 +438,72 @@
 | P7 台账 + 残留 + P1 隔离 + OCR fallback；T026 原命令 | 必要 consumer 改接只留局部事实；MOVE、import、move-map 和最高标签累积范围全部落地后原 literal 实跑。 |
 
 本窗口不声称冻结测试一定 GREEN。若实际原 literal 仍失败，区分真实实施缺陷与独立可证的冻结 oracle/fixture 错误；前者回原 owner 修，后者由原材料/测试作者提交精确技术 TCR 并独立审读，保留失败，不以改弱断言换绿。已观察到的 P8 横幅创建/删除生命周期冲突另行按原作者 TCR 处理，不在本次执行次序修改中偷改断言。
+
+### P5 只读历史幸存者执行材料补漏（原 owner）
+
+MT-3-090 将 `skills/wh-review/scripts/review-result.mjs` 保留为 SURVIVOR，只承接只读历史，并明确“转只读、无新写者”；同一行的“未改动”说明却与当前顶层 `canonical-receipt-writer` 依赖及四个旧 graph writer 导出冲突。本文件若仍 import 已登记 B4 DELETE 的 producer，该 producer 的删除前零引用条件便不成立，不能因没有调用旧 writer 而忽略真实模块依赖。
+
+由 P5/T023 原 owner 在已有消费者优先窗口完成这一个限定技术执行例外：将本文件明确追加到 P5 写集，删除依赖旧 receipt writer 的 `writeProviderOutput`、`writeAttempt`、`writeSemanticResult`、`writeReviewReport` 分支及仅供它们使用的 import，保留现有历史结果的纯读取／解析／聚合／人读报告职责及原错误、身份与来源事实。它不成为新 task writer，不复制 canonical writer、旧 graph、认证门或永久兼容桥，也不新增 schema、持久对象或公共入口。若真实存活 caller 仍调用这四个 writer，必须回其既有 owner 完成原定改接／退役，不能静默留存、改名活用或声称零引用；只读历史 caller 不因 producer 删除而丢失读取职责。
+
+该例外不改 MT-3-090 冻结行、SURVIVOR 分类、原 B4/P5 owner、FR、AC、Done、原 literal 检查或零引用验收，也不假称源码“未改动”。当前持续按计划实施授权覆盖已定的只读历史职责落地；材料和精确生产 delta 均须独立审读，冻结测试变更由原测试作者提出技术 TCR，保留真实当前 writer 与历史 reader 保护，不用断言改弱或仅文本无 import 证明行为 GREEN。
+
+### P5 普通调研报告测试的单原件归位（原 owner，test_only）
+
+原 MT-6-191 的 `tests/contract/research-report.test.mjs` 仍按 B4/P5 DELETE 处置，冻结主表 851 行、DELETE/NARROW 统计、FR/AC、Done、原 literal gate 均不改变。旧 schema 强存在与哈希/快照/Stage Agent 机器断言已由原测试作者精确技术 TCR 退役；其中十四项普通报告形状、状态、来源、候选、attempt/budget、fallback、时间歧义、真实③普通文件发布和受保护历史读取义务已经在当前源中保留。为了同时落实原 DELETE 路径消失与普通义务保留，将该唯一现测试源按原字节同目录 rename 为 `tests/contract/research-report-current.test.mjs`，禁止复制双写或删除这些普通断言。该源是 test_only，唯一测试执行 consumer 为现 Vitest `tests/**/*.test.mjs` 发现规则和有范围的 `verify` 显式新路径命令；被测生产 consumer 为现 `runtime/evidence/research-report.mjs`、TaskHandle 受保护读与③普通发布，owner 仍是原 B4/P5 测试作者。
+
+该测试没有新生产能力、schema、运行时对象或推进许可证；它替代 MT-6-191 旧混合测试中已保留的普通断言，删除条件为这些普通业务随其真正生产消费者退役，或由经独立审读的真实消费者测试完整承接后删除。现 `docs/architecture/move-map.json` 只追加这一个 test_only 职责登记，不改变旧 MT 条目或登记新的控制面。MOVE 前应核当前单原件字节和源/目标路径身份，之后同一十四项针对新路径真实验证；此前 112 在旧路径执行的原件保留，不回填成新路径结果。后续删除 guard 的有限 actor 范围须读取该已登记新测试源，包括提交后 clean 时，不仅靠 dirty/new 路径发现。
+
+原 MT-6-365／366 明确为冻结 Card-03 历史验收脚本与测试、只读不入当前 Vitest 分组，其旧 MT-6-191 字符串保原字节；现有限 package/runchecks/public stage 没有该历史 pair 的外部执行入口，不能把旧历史文件名引用改写成当前路径。generic Vitest glob 能发现历史测试文件本身不证明当前执行；若后续明确实际调用该历史 pair，须如实处理其真实 caller，不作为通用或永久豁免。
+
+### P5 attempt schema 历史原定义留存（原 owner）
+
+MT-5-001 仍按 NARROW / B4/P5 保留 `runtime/review/schemas/attempt.schema.json`，不改变分类或删除文件。原备注“Card-05 新链正在用”经当前消费者核对已不成立：当前唯一 schema registry、wh-review manifest 与 Runner release 都没有 attempt 注册／发布，普通新审查记录只消费 result；旧 attempt writer／认证 graph 不恢复。139 真实审查指出本卡把 attempt 改成仅 title 不同的 result 副本，当前错误字节不是历史原定义，不能以“只读历史”称它正确。
+
+由 P5/T019 原 source owner 恢复 `backup/card-06-b4:runtime/review/schemas/attempt.schema.json` 的真正原定义字节（SHA-256 `53a1f9925abaffc836de894b4d0ecc9494d3eebbe49d44da5177d985b549a24c`），仅作历史只读资料；原历史定义的 snapshot／material 字段只描述已有旧原件，不给新 task 使用，不进入当前 registry、Skill Bundle／Runner release、writer、推进或质量前置。恢复字节不是重建旧运行分支，也不生成新的 attempt 对象、reader、schema、许可或持久账本。当前 result 新记录形态与字段语义保持原要求。
+
+这是原“不删文件”留存职责的限定实施澄清，替代 T019 对无当前消费者 attempt schema 的“去必填 hash 字段”操作；不变更 FR、AC、MT 分类／owner、Done、literal gate、三审查点或历史 review／任务原件。材料由独立来源审读后原作者应用；精确 schema 字节、无活动 binding／发布与实际历史 sample 验证由独立来源承接。只有真实证据符合后记录该 finding 的处置，不把 active binding 删除直接写成 schema 已正确。
+
+### P5 S5 零残余条件结果（原 owner）
+
+冻结 MT-1-042 与片段 1 的 S-5 已约定，①及真实调用方改接后“零残余即 DELETE”，避免留下空壳。当前 `stage-context`、`task-close` 与公共 CLI 已通过真实 task／workspace 前置消费①及存活 `TaskHandle`／`Workspace` 的身份、路径保护，没有当前 production caller 使用 `write-boundary-preflight.mjs`。不为保留该文件创造新 actor、通用投影或死薄壳，也不应用临时 076362 候选；履行原已定条件，将这一原数字行的有效处置明确为 DELETE，保持原 B4/P5 owner、回滚与写集。
+
+原冻结提交和原始字面仍由 Git 保留，不重锚；本次仅落实 S-5 本来延期到改接后的一个条件结果，记录该行 NARROW→DELETE 的差量，不扩展为任意改写冻结行的授权。FR、AC、Done、literal、七类面与每路径唯一 owner 不改。MT-6-018 `invocation-identity.test.mjs` 仍为 NARROW：旧 invocation／hash／sourceBytes 认证义务按原意退役；实际 task／workspace 身份、历史旧 manifest 只读与当前受保护 I/O 义务必须由原测试作者用当前真实 consumer／原件精确承接，并独立审读技术 TCR。不能仅因旧文件无生产调用而丢存活保护，不能复制旧认证器保测试绿色。
+
+物理删除仍待这些测试／实际 consumer 改接完成以及原外集合 incoming import／真实非 ESM 调用归零，按 T023 原删除边界由主会话执行。条件评估或材料变化不证明 producer 已删、Phase 已 GREEN，旧 consumer 尚在时不执行删除。
+
+### P5 存活测试的 MOVE 消费补漏（同一窗口，原 owner）
+
+MT-1-049 既存 `runtime/review/review-input-bounds.mjs` 的 SURVIVOR／B4/P5 “未改动”说明另有一个明确且仅此一个技术消费例外：将原有 `function gitDiffPath` 加上 `export`，由已在本卡写集的 `tools/cli/stage-runtime.mjs` 在真实 diff/code packet 路径解析处消费（当前 import:28、call:428）；函数体、其余文件字节与路径／写集／错误保护不变，不复制第二解析器。MT-3-086 已明确删除 skill-local 重复层并直连该既存 runtime peer；`compactVerifyCodeMaterials` 的原材料直返形状及 runtime 原 `compactReviewDiff`／`gitDiffPath` 业务保持原职责。该唯一导出行如实记录到 P5 写集，原 MT-1-049 SURVIVOR 分类、原 owner、冻结记录、FR／AC／Done／literal／max batch 不变；不能泛化成所有 SURVIVOR 可改、whole retired blob 可保留或新增 peer 能力。材料与既存 peer 为当前真实消费说明，不是阶段许可或新控制面。
+
+同一已授权窗口的最终补漏还包括 MT-6-061 `skills/wh-review/scripts/__tests__/schema-validator.test.mjs`（SURVIVOR、B4/P5）：其旧 skill-local schema shim／attempt／ac-evidence 资产消费随对应 DELETE 退休，普通 result JSON 的必需身份、status、phase、finding/provider provenance 和畸形输入报错改接当前 `runtime/review/schema-validator.mjs` 的唯一 result 注册。明确追加 P5 写集；不恢复旧注册、writer、发布对象或 hash 认证。原 SURVIVOR 分类、原 owner、FR／AC／Done／literal 不变，源码实际改动如实记载。此前已登记的 159／160／312 和 024／metrics 例外不重复改变范围。MT-6-071 原字面分类为 SURVIVOR、B1/P2，但原备注明确 ARCHIVE／卡片专属历史验收生产者／只读保留／不入 vitest 分组，按该只读处置保原字节及旧引用，不能当当前调用脚本改接。原 SURVIVOR 082（B6/P7 的普通接受程度观察测试）若实际消费退休入口，由原 owner 将原普通观察改接既有当前公开接口，去掉对应退休控制链；不新增执行 actor、未来需求或完成许可，必要路径列在其原 Phase 写集中。本次用户明确收尾方式为原作者集中实施、受影响针对性验证和最终一次独立质量核对，不再为这些已定技术消费逐项生成中间审查循环。
+
+当前旧 `core/artifact-dir.mjs` 的有限反向核对发现，MT-6-159、MT-6-160、MT-6-312 三个 SURVIVOR 测试仍有真实模块 import；三者归 B4/P5，却未列入 P5 写集。原表已分别保留公共审查路由、生产默认行为与 managed 生命周期职责，并要求身份断言窄化；不能一边保留旧路径消费，一边把它们称为“未改动”，也不能用原 SURVIVOR 字面豁免 producer 删除前的真实零引用。
+
+由 P5 原 owner 将 `tests/contract/ocr-delegation-route.test.mjs`、`tests/contract/ocr-production-cutover.test.mjs`、`tests/review/review-managed-lifecycle.test.mjs` 明列入本 Phase 写集，作为同一消费者优先窗口的限定技术执行例外：改接已登记 MOVE 的 `runtime/evidence/artifact-dir.mjs` 与相关当前异步普通 API，保留原公共路由／默认选择／审查事实、真实错误、来源及生命周期保护。旧 attempt／snapshot／quality-predicate／显式 candidate 机器断言按原退役范围逐条区分，不复制旧实现、增设 validator、控制对象、权限或未来消费者。三行仍为原 SURVIVOR、原 B4/P5 owner，不静默改分类或把源码“未改动”作为实际事实；若普通业务断言必须迁移，由原测试作者提交精确义务映射及技术 TCR，独立审读后实施，不能仅改 import／await 就宣行为通过。
+
+其它已在原 Phase 写集中的 NARROW 测试按其原 owner 完整改接，P7 只协调 MOVE 的实际 consumer 闭合，不成为第二个测试 owner。MT-6-010 NEW 的代码审查合同 body／focus／lens／缺合同失败保护仍须由当前真实 producer 承接，既有 P5 写集已覆盖，不将本例外解释为放弃 NEW 业务义务。MT-6-076 历史 acceptance 文件按原表“只读保留、不入 vitest 分组”保持原字节，不修改旧 import 或启动历史运行分支；它是历史 provenance，不是本次活动测试。原有限语法库存仍保留 79 imports／30 non-DELETE paths 的捕获事实，扣除这一已分类历史项后的 29 是当时的活动候选数，不是当前完成数或删除前全体零引用结论。
+
+此补漏只承接既定 MOVE 的真实 consumer 和原保留业务，不改变 FR、AC、MT 分类、原 owner、Done、literal、backup、index 六列、三审查点或删除前零引用。精确材料、测试 TCR 和实际当前行为各由独立来源核对；未完成的普通 consumer 仍阻止旧 MOVE 源物理删除，定向通过不替代原 Phase gate。
+
+### P7 显式路径普通测试的消费改接（同一窗口，原 owner）
+
+当前有限反向核对确认，MT-1-015 `runtime/adapters/resolve-path.mjs` 仅被孤儿 MT-1-010 的旧 M2 parser 和 MT-6-024 `core/__tests__/resolve-path.test.mjs` 消费；前者已按原 DELETE 实际移除。MT-6-024 原为 SURVIVOR／B6/P7、“显式路径解析，工具①底座”，但其真实 import 仍指向待删孤儿；不能保留悬空 import，也不能为了旧测试重建该 resolver 或未来生产调用者。
+
+由 P7 原 owner 将 MT-6-024 明列入本 Phase 写集，作为“无改动”说明的限定技术消费例外：原测试作者将普通显式根／缺失、undefined、null、空值、不读 REPO_ROOT、不爬目录或推断 cwd 的保护接到既有真实工具① `runtime/interface/workspace-check.mjs` 的 `inspectWorkspace`，不新增生产 export、控制对象、兼容桥或复制旧 parser。正例的旧任意路径字符串样本改为 owned 真实 Git 工作区，以现①返回的注册状态、实际分支与 HEAD 对照 owned 指定 root／target 的真实 Git 事实，不声称返回对象另有 root／target 字段；必要 await／错误断言依现真实 API，原负例与调用方输入／环境不变义务仍保。不能把原纯字符串函数结果与现实际工作区事实假称全兼容，也不能用不存在的路径／setup 失败冒充保护 RED。
+
+该单测试仍为原 SURVIVOR、原 B6/P7 owner；不改 MT-1-015／MT-6-024 原冻结行、分类、FR、AC、原 Done／literal、backup、index 六列或 producer 删除前组外实际调用者归零。精确技术 TCR 须独立审读、真实针对性验证后实施；普通保护未承接且原 consumer 尚存时不删 resolver。材料澄清或定向通过均不证明整个 P7 已完成。
+
+### P7 存活消费者执行材料补漏（同一窗口，原 owner）
+
+本次成组核对发现三个执行材料缺口：① `metrics/collector.mjs` 的真实 `assertWorkspace` / `writeRecordAtomic` 消费仍按同步接口书写，P5 已计划改成异步，而 P7 写集未列必要改接；`workflows/verify-code/metrics-writer.mjs` 只导入 collector，当前只有既有最小冒烟测试调用其导出 API，没有已证实的公共生产入口调用；保持该已保留 API 的返回时点需要对应 await，不能称 Card-09 待确认需求已经决定；② MT-1-007 已要求 `ArtifactDir.writeAtomic` 交③、删 `MigrationArtifactInspector`，T026 的“只改 import”不能执行该既有窄化；③ MT-2-040 已退役 M2 registry，而 MT-1-009 的现存 `loadConfig` 只被 B4 DELETE 的 kernel 调用，其 registry 校验已无存活生产消费者；共同前置 `resolveCanonicalTaskPath` 仍被真实公共入口使用，必须保留其身份、存储根和路径保护。
+
+这三项由 P7/T026 原 owner 在上述消费者优先窗口成组修复：
+
+- 两个 metrics 文件明确追加到 P7 必要改接写集。collector 只 await MT-1-078 已计划③／⑤的真实异步依赖，既有 task record 的读／合并／写用同一⑤串行保护。metrics-writer 保留 MT-3-152 的 SURVIVOR 分类与 Card-09 PENDING；它没有当前生产调用者，不新增入口或未来消费者，只维持原导出 API／最小冒烟已经要求的“已有写入完成才返回”语义。该 await 配对是 MT-3-152 “未改动”说明的限定技术执行例外，不能同时声称源码未改；不改该冻结行或其分类、不接受 Card-09 新需求。当前用户持续按计划实施授权覆盖已定职责的等价接口修复，由原 P7 owner 处理；精确材料与代码均须独立核后实施。两文件保留字段、去重、已有全局记录及非阻断错误报告语义；不恢复产品配置的 `metrics_path`、M2 registry 或旧身份认证，保留 MT-6-333/334 原测试责任。
+- `core/artifact-dir.mjs` 按 MT-1-007 原处置完整 MOVE 到 `runtime/evidence/artifact-dir.mjs`；原 `writeAtomic` 用③实现，由真实存活消费者等待其结果。删除已登记的 `MigrationArtifactInspector`，保留当前 specs 材料 no-follow、祖先目录和目录检查，不复制另一套 validator。
+- `core/load-config.mjs` 按 MT-1-009 原 MOVE 到 `runtime/task/load-config.mjs`；保留真实共同前置 `resolveCanonicalTaskPath` 与现有安全语义；删除只服务已退役 M2 kernel 的 `loadConfig`/registry/placeholder 校验，不为旧 fixture 恢复无消费者配置机器。审查链注入的同名 `loadConfig` 不读本文件，行为不改。公共入口 import 随当前真实 owner 的完整改接处理，不能留下悬空依赖。
+
+这是已定职责的执行补漏，不改变迁移表行、FR、AC、分类、外部效果、原 Done、原 literal 检查、backup 标签、删除前零引用或 index 六列。两个 metrics 源文件的此次必要改接明确归 P7 原 owner；其它原 owner 不挪归 P7。冻结 tests 只由原测试作者提出精确技术 TCR 并独立审读；保留真正读写失败、异步等待／锁、路径安全和 metrics 业务负例，不把退役机器断言原样搬到新实现，也不改弱断言换绿。定向 RED/GREEN 只作当前行为事实，原 P7 全部验收仍须实际满足。
 
 ### Requirement-to-Task Trace
 

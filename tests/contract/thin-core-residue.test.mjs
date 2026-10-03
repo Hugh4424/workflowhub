@@ -191,6 +191,22 @@ function isPreexistingPeer(rel, retired) {
   const retiredBlob = frozenBlob(retired);
   if (retiredBlob?.bytes > 0 && retiredBlob.oid === currentOid) return false; // Whole retired implementation copied back.
   const phase = owner ? batchIndex(owner.batch) : -1;
+  // MT-1-049 was already this runtime peer. Its one existing Git-path parser
+  // export is the coupled MT-3-086 cutover; no other SURVIVOR change is waived.
+  if (rel === 'runtime/review/review-input-bounds.mjs'
+      && retired === 'skills/wh-review/scripts/review-input-bounds.mjs'
+      && owner?.id === 'MT-1-049' && owner.disposition === 'SURVIVOR'
+      && owner.batch === 'B4/P5' && phase >= 0 && phase <= CURRENT && original) {
+    const before = execFileSync('git', ['show', `${FROZEN_COMMIT}:${rel}`], {
+      cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const text = before.toString('utf8');
+    const declaration = 'function gitDiffPath(token) {';
+    if (text.split(declaration).length === 2
+        && !text.includes(`export ${declaration}`)
+        && Buffer.from(text.replace(declaration, `export ${declaration}`), 'utf8')
+          .equals(fs.readFileSync(path.join(ROOT, rel)))) return true;
+  }
   if (original && owner?.disposition === 'NARROW' && phase >= 0 && phase <= CURRENT) return true;
   const move = ROWS.find((row) => row.disposition.startsWith('MOVE→')
     && row.disposition.slice('MOVE→'.length) === rel);

@@ -1,126 +1,21 @@
-import { afterEach, describe, expect, it } from "vitest";
-import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
-
-import { createTask } from "../../runtime/task/task-handle.mjs";
-import { stageRuntimeCliMain } from "../../tools/cli/stage-runtime.mjs";
-
-const roots = [];
-const taskId = "post-plan-missing-index";
-const git = (cwd, args) => execFileSync("git", args, { cwd, encoding: "utf8" });
-const cliPath = fileURLToPath(new URL("../../tools/cli/stage-runtime.mjs", import.meta.url));
-
-afterEach(() => {
-  while (roots.length) rmSync(roots.pop(), { recursive: true, force: true });
-});
-
-function taskWithoutPhaseIndex() {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-post-plan-index-")));
-  roots.push(root);
-  const repo = join(root, "repo");
-  const worktree = join(root, "worktree");
-  mkdirSync(repo);
-  git(repo, ["init", "-q", "-b", "main"]);
-  git(repo, ["config", "user.name", "WorkflowHub Tests"]);
-  git(repo, ["config", "user.email", "tests@workflowhub.local"]);
-  git(repo, ["commit", "--allow-empty", "-qm", "baseline"]);
-  git(repo, ["worktree", "add", "-q", "-b", `task/workflowhub/${taskId}`, worktree, "main"]);
-  const task = createTask({
-    storageRoot: root,
-    manifest: {
-      schema_version: "1.0.0", project_name: "workflowhub", task_id: taskId,
-      created_at: "2026-09-27T00:00:00.000Z", target_repo_root: repo,
-      workspace_mode: "existing", workspace_root: worktree, activation_cohort: "post",
-      issue_ids: [], inputs: {},
-    },
-  });
-  const materialRoot = join(worktree, "specs", taskId);
-  mkdirSync(materialRoot, { recursive: true });
-  writeFileSync(join(materialRoot, "decision-log.md"), "## 任务身份\n\n- **任务类型**：普通任务\n");
-  writeFileSync(join(materialRoot, "spec.md"), "# Current post specification\n");
-  const input = join(worktree, "run-input.json");
-  writeFileSync(input, "{}\n");
-  return { root, worktree, task, input };
-}
-
-function runCli(state, action, extra = []) {
-  const home = join(state.root, "child-home");
-  mkdirSync(home, { recursive: true });
-  return spawnSync(process.execPath, [
-    cliPath, "run", `--action=${action}`, "--stage=build-plan", "--project=workflowhub",
-    `--task=${taskId}`, `--task-path=${state.task.taskPath}`, ...extra,
-  ], {
-    cwd: state.worktree,
-    env: {
-      ...process.env,
-      HOME: home,
-      XDG_CONFIG_HOME: join(home, ".config"),
-      WORKFLOWHUB_TASK_DIR: state.root,
-    },
-    encoding: "utf8",
-    timeout: 15000,
-  });
-}
-
-const phaseIndex = "## Execution Index\n\n| phase | authority ref |\n| --- | --- |\n| `P1` | `phases/P1.md` |\n";
-
-describe("post build-plan run missing Phase index", () => {
-  it("reports the missing authored material through the public run protocol", async () => {
-    const state = taskWithoutPhaseIndex();
-    const previous = Object.fromEntries(["HOME", "XDG_CONFIG_HOME", "WORKFLOWHUB_TASK_DIR"].map((key) => [key, process.env[key]]));
-    const home = join(state.root, "home");
-    mkdirSync(home);
-    process.env.HOME = home;
-    process.env.XDG_CONFIG_HOME = join(home, ".config");
-    process.env.WORKFLOWHUB_TASK_DIR = state.root;
-    try {
-      await expect(stageRuntimeCliMain([
-        "run", "--action=execute", "--stage=build-plan", "--project=workflowhub", `--task=${taskId}`,
-        `--task-path=${state.task.taskPath}`, `--input=${state.input}`,
-      ], { cwd: state.worktree })).rejects.toThrow("current task material missing or unreadable: phases/index.md");
-    } finally {
-      for (const [key, value] of Object.entries(previous)) {
-        if (value === undefined) delete process.env[key];
-        else process.env[key] = value;
-      }
-    }
-  });
-
-  it("exits with a precise first-line CLI error rather than raw ENOENT", () => {
-    const state = taskWithoutPhaseIndex();
-    const result = runCli(state, "execute", [`--input=${state.input}`]);
-    expect(result.error).toBeUndefined();
-    expect(result.status).toBe(1);
-    expect(result.stderr.split("\n")[0]).toBe("Error: current task material missing or unreadable: phases/index.md");
-    expect(result.stderr).not.toMatch(/ENOENT/);
-  });
-
-  it("still lets the post build-plan author draft a missing Phase index", () => {
-    const state = taskWithoutPhaseIndex();
-    const source = join(state.worktree, "draft-index.md");
-    writeFileSync(source, phaseIndex);
-    const result = runCli(state, "draft", ["--name=phases/index.md", `--input=${source}`]);
-    expect(result.error).toBeUndefined();
-    expect(result.status).toBe(0);
-    expect(JSON.parse(result.stdout).artifact_ref).toContain("phases/index.md");
-    expect(existsSync(join(state.worktree, "specs", taskId, "phases", "index.md"))).toBe(true);
-  });
-
-  it("passes the material precheck after index and Phase file are present", () => {
-    const state = taskWithoutPhaseIndex();
-    const phaseRoot = join(state.worktree, "specs", taskId, "phases");
-    mkdirSync(phaseRoot);
-    writeFileSync(join(phaseRoot, "index.md"), phaseIndex);
-    writeFileSync(join(phaseRoot, "P1.md"), "# Phase P1\n");
-    const result = runCli(state, "execute", [`--input=${state.input}`]);
-    expect(result.error).toBeUndefined();
-    // This fixture deliberately lacks an executable plan. Its later contract
-    // rejection proves the newly added material precheck admitted it.
-    expect(result.status).toBe(1);
-    expect(result.stderr).toMatch(/build-plan minimum executable contract failed/);
-    expect(result.stderr).not.toMatch(/current task material missing or unreadable|ENOENT/);
-  });
+import { afterEach, describe, expect, it } from 'vitest';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createTask } from '../../runtime/task/task-handle.mjs';
+import { initializeTaskStore } from '../../runtime/task/task-store.mjs';
+const roots=[],taskId='post-plan-missing-index',cliPath=fileURLToPath(new URL('../../tools/cli/stage-runtime.mjs',import.meta.url));
+const git=(cwd,args)=>execFileSync('git',args,{cwd,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
+afterEach(()=>{while(roots.length)rmSync(roots.pop(),{recursive:true,force:true});});
+async function fixture(){const root=realpathSync(mkdtempSync(join(tmpdir(),'workflowhub-post-plan-index-')));roots.push(root);const repo=join(root,'repo'),worktree=join(root,'worktree'),storage=join(root,'storage'),home=join(root,'owned-child-home');for(const p of[repo,storage,home])mkdirSync(p);git(repo,['init','-q','-b','main']);git(repo,['config','user.name','WorkflowHub Tests']);git(repo,['config','user.email','tests@workflowhub.local']);git(repo,['commit','--allow-empty','-qm','baseline']);git(repo,['worktree','add','-q','-b',`task/workflowhub/${taskId}`,worktree,'main']);const task=await createTask({storageRoot:storage,manifest:{schema_version:'1.0.0',project_name:'workflowhub',task_id:taskId,created_at:'2026-09-27T00:00:00.000Z',target_repo_root:repo,workspace_mode:'existing',workspace_root:worktree,activation_cohort:'post',execution_mode:'per_invocation',record_model:'vnext-single-write',issue_ids:[],inputs:{}}});await initializeTaskStore(task.taskPath,{taskId});const materialRoot=join(worktree,'specs',taskId);mkdirSync(materialRoot,{recursive:true});const decision='## 任务身份\n\n- **任务类型**：普通任务\n',spec='# Current post specification\r\n';writeFileSync(join(materialRoot,'decision-log.md'),decision);writeFileSync(join(materialRoot,'spec.md'),spec);const input=join(worktree,'cursor-input.json');writeFileSync(input,JSON.stringify({phase_progress:{phase_id:'P1',task_id:'T001'}})+'\n');return{root,repo,worktree,storage,home,task,materialRoot,input,decision,spec};}
+function cli(f,command,stage='build-code',extra=[]){return spawnSync(process.execPath,[cliPath,command,...(command==='status'?['--action=begin']:[]),`--stage=${stage}`,'--project=workflowhub',`--task=${taskId}`,`--task-path=${f.task.taskPath}`,...extra],{cwd:f.worktree,env:{...process.env,HOME:f.home,XDG_CONFIG_HOME:join(f.home,'.config'),WORKFLOWHUB_TASK_DIR:f.storage},encoding:'utf8',timeout:15000});}
+const index='## Execution Index\n\n| phase | authority ref |\n| --- | --- |\n| `P1` | `phases/P1.md` |\n';
+function originals(f){return{manifest:readFileSync(join(f.task.taskPath,'task.json')),facts:readFileSync(join(f.task.taskPath,'facts.jsonl')),decision:readFileSync(join(f.materialRoot,'decision-log.md')),spec:readFileSync(join(f.materialRoot,'spec.md'))};}
+describe('post authored Phase index current public behavior',()=>{
+  it('reports the exact missing authored index as material readiness without a completion or quality claim',async()=>{const f=await fixture(),before=originals(f),r=cli(f,'status');expect(r.error).toBeUndefined();expect(r.status).toBe(0);const result=JSON.parse(r.stdout);expect(result.work_status).toBe('not_ready');expect(result.missing_materials).toEqual(['phases/index.md']);expect(result.materials['phases/index.md']).toBe(false);expect(result.quality_status).toBe('unknown');expect(result.facts).toEqual([]);expect(originals(f)).toEqual(before);expect(existsSync(join(f.materialRoot,'phases'))).toBe(false);});
+  it('actual public run with an absent index fails with the real missing path before any cursor write',async()=>{const f=await fixture(),before=originals(f),r=cli(f,'run','build-code',['--action=execute',`--input=${f.input}`]);expect(r.error).toBeUndefined();expect(r.status).toBe(1);const failure=JSON.parse(r.stderr);expect(failure.code).toBe('ENOENT');expect(failure.error).toContain(join(f.materialRoot,'phases/index.md'));expect(originals(f)).toEqual(before);expect(existsSync(join(f.materialRoot,'phases'))).toBe(false);});
+  it('still lets the build-plan author draft a missing index with exact ordinary bytes',async()=>{const f=await fixture(),before=originals(f),source=join(f.worktree,'draft-index.md');writeFileSync(source,index);const r=cli(f,'run','build-plan',['--action=draft','--name=phases/index.md',`--input=${source}`]);expect(r.error).toBeUndefined();expect(r.status).toBe(0);expect(JSON.parse(r.stdout).artifact_ref).toBe(`specs/${taskId}/phases/index.md`);expect(readFileSync(join(f.materialRoot,'phases/index.md'),'utf8')).toBe(index);expect(originals(f)).toEqual(before);const status=cli(f,'status');expect(status.status).toBe(0);expect(JSON.parse(status.stdout).missing_materials).toEqual(['phases/P1.md']);expect(existsSync(join(f.materialRoot,'phases/P1.md'))).toBe(false);});
+  it('reads present index and Phase as ready while retired stage execution cannot manufacture facts',async()=>{const f=await fixture();mkdirSync(join(f.materialRoot,'phases'));writeFileSync(join(f.materialRoot,'phases/index.md'),index);writeFileSync(join(f.materialRoot,'phases/P1.md'),'# Phase P1\n');const before=originals(f),r=cli(f,'status');expect(r.error).toBeUndefined();expect(r.status).toBe(0);const value=JSON.parse(r.stdout);expect(value.work_status).toBe('ready');expect(value.missing_materials).toEqual([]);expect(value.materials['phases/index.md']).toBe(true);expect(value.materials['phases/P1.md']).toBe(true);expect(value.quality_status).toBe('unknown');expect(value.facts).toEqual([]);const old=join(f.worktree,'retired-run-input.json');writeFileSync(old,'{}\n');const retired=cli(f,'run','build-plan',['--action=execute',`--input=${old}`]);expect(retired.error).toBeUndefined();expect(retired.status).toBe(1);expect(retired.stderr).toMatch(/only records the existing build-code phase_progress cursor; official stage execution is retired/);expect(originals(f)).toEqual(before);expect(readFileSync(join(f.materialRoot,'phases/index.md'),'utf8')).toBe(index);expect(readFileSync(join(f.materialRoot,'phases/P1.md'),'utf8')).toBe('# Phase P1\n');});
 });

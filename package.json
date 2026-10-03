@@ -12,9 +12,9 @@
     "test:close": "vitest run tests/close",
     "test:left-shift": "vitest run tests/left-shift",
     "test:skills": "vitest run skills",
-    "test:core": "vitest run core/__tests__ --exclude=core/__tests__/check-extensibility.test.mjs --exclude=core/__tests__/check-anti-host.test.mjs",
+    "test:core": "vitest run core/__tests__ --exclude=core/__tests__/check-anti-host.test.mjs",
     "test:root": "vitest run tests/*.test.mjs",
-    "test:exclusive": "vitest run core/__tests__/check-extensibility.test.mjs core/__tests__/check-anti-host.test.mjs --poolOptions.forks.singleFork --no-fileParallelism",
+    "test:exclusive": "vitest run core/__tests__/check-anti-host.test.mjs --poolOptions.forks.singleFork --no-fileParallelism",
     "test:scripts": "vitest run scripts",
     "test:runtime": "vitest run runtime"
   },

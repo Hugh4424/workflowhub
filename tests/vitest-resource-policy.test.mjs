@@ -6,10 +6,9 @@ import { describe, expect, it } from "vitest";
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const scripts = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).scripts;
 const config = (await import(pathToFileURL(join(root, "vitest.config.mjs")).href)).default.test;
-// These two surviving tests still mutate this repository. This is their current
+// Surviving repository writers retain serial execution. This is their current
 // safety obligation, not a fixed inventory of all test groups or exclusive files.
 const knownRootWriters = [
-  "core/__tests__/check-extensibility.test.mjs",
   "core/__tests__/check-anti-host.test.mjs",
 ].filter((file) => existsSync(join(root, file)));
 

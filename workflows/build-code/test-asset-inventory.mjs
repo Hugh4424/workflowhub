@@ -1,18 +1,11 @@
-import { createHash } from "node:crypto";
-import { readFileSync, realpathSync, statSync } from "node:fs";
+import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, realpathSync } from "node:fs";
 import { isAbsolute, resolve, sep } from "node:path";
+import { inspectWorkspace } from "../../runtime/interface/workspace-check.mjs";
 
-import { captureExecutionSnapshot } from "../../runtime/task/git-worktree-snapshot.mjs";
-
-import { taskWorkspaceMatches } from "./change-scope.mjs";
-
-const SHA256 = /^[a-f0-9]{64}$/;
 const NODE_TAP_COMMAND = /^node --test --test-reporter=tap ([A-Za-z0-9._/-]+\.test\.mjs)$/;
 const VITEST_JSON_COMMAND = /^npx vitest run ([A-Za-z0-9._/-]+\.test\.mjs) --reporter=json$/;
 const REGISTRY_REF = "docs/quality/test-asset-registry.json";
 const TEST_TARGET = /^tests\/(?:[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_.-]+\.test\.mjs$/;
-
-const hash = (raw) => createHash("sha256").update(raw).digest("hex");
 
 function literalTarget(command, pattern) {
   const match = pattern.exec(command ?? "");
@@ -20,39 +13,6 @@ function literalTarget(command, pattern) {
   const target = match[1];
   if (target.startsWith("/") || target.split("/").includes("..") || target.split("/").includes(".")) return null;
   return target;
-}
-
-function canonicalReceipt(task, receipt) {
-  if (!receipt || typeof receipt !== "object" || typeof receipt.receipt_ref !== "string"
-      || !SHA256.test(receipt.receipt_hash ?? "")) throw new Error("test inventory requires a canonical test receipt");
-  const raw = task.readRecord(receipt.receipt_ref);
-  if (hash(raw) !== receipt.receipt_hash) throw new Error("test inventory receipt hash mismatch");
-  const stored = JSON.parse(raw);
-  if (stored.schema_version !== "workflowhub-receipt.v1" || stored.stage !== "build-code"
-      || stored.producer?.component !== "build-code-test-capture"
-      || stored.task_id !== task.identity.taskId
-      || !SHA256.test(stored.output_hash ?? "")
-      || !SHA256.test(stored.source_digest ?? "")
-      || stored.snapshot_tree !== receipt.snapshot_tree
-      || stored.source_digest !== receipt.source_digest
-      || stored.output_ref !== receipt.output_ref
-      || stored.output_hash !== receipt.output_hash
-      || stored.command !== receipt.command
-      || stored.exit_code !== receipt.exit_code) {
-    throw new Error("test inventory receipt does not match the task and returned capture");
-  }
-  const output = task.readRecord(stored.output_ref);
-  if (hash(output) !== stored.output_hash) throw new Error("test inventory output hash mismatch");
-  return { stored, output };
-}
-
-function currentSnapshot(task, workspace, stored) {
-  const observed = captureExecutionSnapshot(workspace.worktreeRoot, task.identity.taskId,
-    task.manifest.activation_cohort ?? "pre");
-  if (stored.snapshot_head !== observed.head || stored.snapshot_tree !== observed.tree
-      || stored.snapshot_commit !== observed.commit || stored.source_digest !== observed.source_digest) {
-    throw new Error("test inventory receipt is stale against the current source snapshot");
-  }
 }
 
 function parseVitestJson(output, file, workspaceRoot, exitCode) {
@@ -165,112 +125,69 @@ function parseNodeTap(output, file) {
   return tests;
 }
 
-/** Read a canonical Node TAP capture into a return-only runnable-test inventory. */
-export function collectTestInventory({ task, workspace, receipt, registeredTestIds } = {}) {
-  if (!taskWorkspaceMatches({ task, workspace })) throw new Error("test inventory task/workspace mismatch");
-  if (!Array.isArray(registeredTestIds) || registeredTestIds.some((id) => typeof id !== "string" || id.trim() === "")
-      || new Set(registeredTestIds).size !== registeredTestIds.length) {
-    throw new TypeError("registeredTestIds must be an array of unique nonempty runnable IDs");
-  }
-  const { stored, output } = canonicalReceipt(task, receipt);
-  currentSnapshot(task, workspace, stored);
-  const nodeTarget = literalTarget(stored.command, NODE_TAP_COMMAND);
-  const vitestTarget = literalTarget(stored.command, VITEST_JSON_COMMAND);
-  if (nodeTarget === null && vitestTarget === null) {
-    return Object.freeze({ status: "unavailable", reason: "unsupported test runner or nonliteral Node TAP target",
-      task_id: stored.task_id, snapshot_tree: stored.snapshot_tree, source_digest: stored.source_digest,
-      output_ref: stored.output_ref });
-  }
-  const runner = nodeTarget === null ? "vitest" : "node:test";
-  const tests = nodeTarget === null
-    ? parseVitestJson(output, vitestTarget, workspace.worktreeRoot, stored.exit_code)
-    : parseNodeTap(output, nodeTarget);
-  const registered = new Set(registeredTestIds);
-  const discovered = new Set(tests.map((entry) => entry.full_id));
-  return Object.freeze({
-    schema_version: "workflowhub-test-asset-inventory.v1", status: "recorded", task_id: stored.task_id,
-    snapshot_tree: stored.snapshot_tree, source_digest: stored.source_digest,
-    receipt_ref: receipt.receipt_ref, output_ref: stored.output_ref, output_hash: stored.output_hash,
-    runner, runner_version: "unknown", command: stored.command, exit_code: stored.exit_code,
-    tests, registered_test_ids: [...registeredTestIds],
-    unmatched: tests.filter((entry) => !registered.has(entry.full_id)).map((entry) => entry.full_id),
-    missing: registeredTestIds.filter((id) => !discovered.has(id)),
-    skipped: tests.filter((entry) => entry.status === "skipped").map((entry) => entry.full_id),
-  });
+/** Interpret original reporter text as facts; no receipt/source-snapshot authentication. */
+export function collectTestInventory({ output, command, workspaceRoot, exitCode, registeredTestIds, outputRef = null } = {}) {
+  if (typeof output !== "string" || !Number.isSafeInteger(exitCode)) throw new TypeError("original reporter text and actual exitCode are required");
+  if (!Array.isArray(registeredTestIds) || registeredTestIds.some(id => typeof id !== "string" || !id.trim())
+      || new Set(registeredTestIds).size !== registeredTestIds.length) throw new TypeError("registeredTestIds must be unique nonempty runnable IDs");
+  const nodeTarget = literalTarget(command, NODE_TAP_COMMAND), vitestTarget = literalTarget(command, VITEST_JSON_COMMAND);
+  if (nodeTarget === null && vitestTarget === null) return Object.freeze({ status: "unavailable", reason: "unsupported_runner_or_nonliteral_target", command, exit_code: exitCode, output_ref: outputRef });
+  const tests = nodeTarget === null ? parseVitestJson(output, vitestTarget, workspaceRoot, exitCode) : parseNodeTap(output, nodeTarget);
+  const registered = new Set(registeredTestIds), discovered = new Set(tests.map(entry => entry.full_id));
+  return Object.freeze({ status: "recorded", canonical_receipt: false, runner: nodeTarget === null ? "vitest" : "node:test",
+    runner_version: "unknown", command, exit_code: exitCode, output_ref: outputRef, tests,
+    registered_test_ids: [...registeredTestIds], unmatched: tests.filter(entry => !registered.has(entry.full_id)).map(entry => entry.full_id),
+    missing: registeredTestIds.filter(id => !discovered.has(id)), skipped: tests.filter(entry => entry.status === "skipped").map(entry => entry.full_id) });
 }
 
-/** Read the independent finite test registration from the authenticated task worktree. */
-export function readCurrentTestAssetRegistry({ task, workspace } = {}) {
-  if (!taskWorkspaceMatches({ task, workspace })) throw new Error("test registry task/workspace mismatch");
-  const root = realpathSync(workspace.worktreeRoot);
-  const registryPath = resolve(root, REGISTRY_REF);
-  if (realpathSync(registryPath) !== registryPath || !statSync(registryPath).isFile()) {
-    throw new Error("test registry path is not a regular worktree file");
-  }
-  const raw = readFileSync(registryPath);
-  let value;
-  try { value = JSON.parse(raw.toString("utf8")); }
-  catch { throw new Error("test registry JSON is invalid"); }
-  if (value?.schema !== "workflowhub-test-asset-registry.v1"
-      || typeof value.revision !== "string" || value.revision.trim() === ""
-      || typeof value.owner !== "string" || value.owner.trim() === ""
-      || value.outside_scope !== "unknown"
-      || typeof value.retirement_policy !== "string" || value.retirement_policy.trim() === ""
-      || !Array.isArray(value.targets) || value.targets.length === 0) {
-    throw new Error("test registry identity or finite scope is invalid");
-  }
+function readWorktreeFile(root, ref) {
+  const path = resolve(root, ref);
+  if (!path.startsWith(`${root}${sep}`) || realpathSync(path) !== path) throw new Error("inventory source path contains an alias or leaves the worktree");
+  const before = lstatSync(path);
+  if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1) throw new Error("inventory source must be a single-link regular file");
+  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    const opened = fstatSync(fd);
+    if (opened.dev !== before.dev || opened.ino !== before.ino || opened.nlink !== 1) throw new Error("inventory source changed before reading");
+    const bytes = readFileSync(fd), after = lstatSync(path), final = fstatSync(fd);
+    if (after.dev !== opened.dev || after.ino !== opened.ino || after.nlink !== 1 || final.nlink !== 1 || realpathSync(path) !== path) throw new Error("inventory source changed while reading");
+    return bytes;
+  } finally { closeSync(fd); }
+}
+
+/** Read the finite ordinary registration; stored old hashes are passive data, never a permit. */
+export async function readCurrentTestAssetRegistry({ workspace } = {}) {
+  await inspectWorkspace({ root: workspace?.targetRepoRoot, target: workspace?.worktreeRoot, baseline: workspace?.baselineCommit,
+    ...(workspace?.branch ? { expectBranch: workspace.branch } : {}) });
+  const root = realpathSync(workspace.worktreeRoot), value = JSON.parse(readWorktreeFile(root, REGISTRY_REF));
+  if (value?.schema !== "workflowhub-test-asset-registry.v1" || typeof value.revision !== "string" || !value.revision.trim()
+      || !Array.isArray(value.targets) || value.targets.length === 0) throw new Error("ordinary test registry shape is invalid");
   const paths = new Set(), allIds = new Set();
   for (const entry of value.targets) {
     const path = entry?.path;
-    if (typeof path !== "string" || !TEST_TARGET.test(path)
-        || path.split("/").some((part) => part === "." || part === "..") || paths.has(path)) {
-      throw new Error("test registry target path is unsafe or duplicated");
-    }
+    if (typeof path !== "string" || !TEST_TARGET.test(path) || path.split("/").some(part => part === "." || part === "..") || paths.has(path)) throw new Error("test registry target path is unsafe or duplicated");
     paths.add(path);
-    if (!SHA256.test(entry.sha256 ?? "") || !["active", "retired"].includes(entry.status)
-        || typeof entry.owner !== "string" || entry.owner.trim() === ""
-        || !["node:test", "vitest"].includes(entry.runner)
-        || entry.command !== (entry.runner === "node:test"
-          ? `node --test --test-reporter=tap ${path}`
-          : `npx vitest run ${path} --reporter=json`)
-        || !Array.isArray(entry.registered_test_ids) || entry.registered_test_ids.length === 0) {
-      throw new Error(`test registry target identity is invalid: ${path}`);
-    }
+    if (!["active", "retired"].includes(entry.status) || !["node:test", "vitest"].includes(entry.runner)
+        || entry.command !== (entry.runner === "node:test" ? `node --test --test-reporter=tap ${path}` : `npx vitest run ${path} --reporter=json`)
+        || !Array.isArray(entry.registered_test_ids) || entry.registered_test_ids.length === 0) throw new Error(`test registry target shape is invalid: ${path}`);
     for (const id of entry.registered_test_ids) {
-      if (typeof id !== "string" || !id.startsWith(`${path} > `)
-          || id.slice(path.length + 3).trim() === "" || allIds.has(id)) {
-        throw new Error(`duplicate registered test identity or invalid leaf: ${id}`);
-      }
+      if (typeof id !== "string" || !id.startsWith(`${path} > `) || !id.slice(path.length + 3).trim() || allIds.has(id)) throw new Error(`duplicate or invalid registered test leaf: ${id}`);
       allIds.add(id);
     }
-    const file = resolve(root, path);
-    if (realpathSync(file) !== file || !statSync(file).isFile()) {
-      throw new Error(`test registry target is not a regular worktree file: ${path}`);
-    }
-    if (hash(readFileSync(file)) !== entry.sha256) throw new Error(`test registry source hash drift: ${path}`);
+    readWorktreeFile(root, path);
   }
-  return Object.freeze({ status: "recorded", revision: value.revision,
-    registry_ref: REGISTRY_REF, registry_sha256: hash(raw), outside_scope: "unknown",
-    targets: Object.freeze(value.targets.map((entry) => Object.freeze({ ...entry,
-      registered_test_ids: Object.freeze([...entry.registered_test_ids]) }))) });
+  return Object.freeze({ status: "recorded", revision: value.revision, registry_ref: REGISTRY_REF,
+    outside_scope: "unknown", targets: Object.freeze(value.targets.map(entry => Object.freeze({ ...entry, registered_test_ids: Object.freeze([...entry.registered_test_ids]) }))) });
 }
 
-/** Compare one canonical reporter output with the independently owned registry. */
-export function collectRegisteredTestInventory({ task, workspace, receipt } = {}) {
-  const registry = readCurrentTestAssetRegistry({ task, workspace });
-  const target = registry.targets.find((entry) => entry.status === "active" && entry.command === receipt?.command);
-  if (!target) throw new Error("unregistered test command");
-  const observed = collectTestInventory({ task, workspace, receipt,
-    registeredTestIds: target.registered_test_ids });
-  if (hash(readFileSync(resolve(workspace.worktreeRoot, REGISTRY_REF))) !== registry.registry_sha256) {
-    throw new Error("test registry changed during reporter comparison");
-  }
-  const nonpassing = observed.tests.filter((entry) => entry.status !== "passed");
+/** Compare one observed original reporter with finite registration; never complete a phase. */
+export async function collectRegisteredTestInventory({ workspace, output, command, exitCode, outputRef } = {}) {
+  const registry = await readCurrentTestAssetRegistry({ workspace });
+  const target = registry.targets.find(entry => entry.status === "active" && entry.command === command);
+  if (!target) throw new Error("reporter command is not in the finite active test registry");
+  const observed = collectTestInventory({ output, command, workspaceRoot: workspace.worktreeRoot, exitCode, outputRef, registeredTestIds: target.registered_test_ids });
   const reason = observed.missing.length || observed.unmatched.length ? "registry_reporter_leaf_mismatch"
-    : observed.skipped.length ? "skipped_test_leaf"
-      : nonpassing.length || observed.exit_code !== 0 ? "nonpassing_test_leaf" : null;
-  return Object.freeze({ ...observed, status: reason === null ? "recorded" : "inconsistent",
-    ...(reason === null ? {} : { reason }), registry_ref: registry.registry_ref,
-    registry_revision: registry.revision, registry_sha256: registry.registry_sha256,
-    target: target.path });
+    : observed.skipped.length ? "skipped_test_leaf" : observed.tests.some(entry => entry.status !== "passed") || exitCode !== 0 ? "nonpassing_test_leaf" : null;
+  return Object.freeze({ ...observed, status: reason === null ? "recorded" : "inconsistent", ...(reason === null ? {} : { reason }),
+    registry_ref: registry.registry_ref, registry_revision: registry.revision, target: target.path });
 }

@@ -71,14 +71,15 @@ function readOriginal(path) {
   const fd=openSync(absolute,constants.O_RDONLY|constants.O_NOFOLLOW);
   try{const opened=fstatSync(fd);if(opened.dev!==named.dev||opened.ino!==named.ino)throw new Error("portable record changed");return readFileSync(fd,"utf8");}finally{closeSync(fd);}
 }
-function taskIdentity(task) {
+function taskIdentity(task, { write = false } = {}) {
   if(!task?.identity?.taskId||typeof task.taskPath!=="string"||!isAbsolute(task.taskPath))throw new TypeError("plain task metadata is required");
   const manifest=JSON.parse(readOriginal(join(task.taskPath,"task.json")));
   if(manifest.task_id!==task.identity.taskId)throw new Error("portable task identity mismatch");
+  if(write && manifest.activation_cohort!=="post")throw Object.assign(new Error("portable workflow writes require an explicit post task; historical and unknown tasks are read-only"),{code:"PORTABLE_TASK_READ_ONLY"});
   return manifest.task_id;
 }
 async function writeTerminal(task, terminal) {
-  taskIdentity(task);
+  taskIdentity(task, { write: true });
   const directory=join(task.taskPath,...TERMINAL_DIRECTORY.split("/"));let cursor=task.taskPath;
   for(const part of TERMINAL_DIRECTORY.split("/")){cursor=join(cursor,part);try{const st=lstatSync(cursor);if(st.isSymbolicLink()||!st.isDirectory())throw new Error("portable storage path alias");}catch(error){if(error.code!=="ENOENT")throw error;mkdirSync(cursor,{mode:0o700});}}
   const raw = `${JSON.stringify(terminal, null, 2)}\n`;
@@ -164,7 +165,7 @@ function stateForStepResults(results) {
 
 /** Validate session-produced build-prd step outcomes and append one terminal record. */
 export async function runPortableWorkflow({ task, worktreeRoot, input = undefined, now = () => new Date() } = {}) {
-  const taskId = taskIdentity(task);
+  const taskId = taskIdentity(task, { write: input !== undefined });
   const startedAt = nowIso(now);
   if (input === undefined) return Object.freeze({ state: "not-started", ref: null, terminal: null });
   let manifest;

@@ -391,7 +391,7 @@ describe("simple material-only review", () => {
     const result = await runSimpleReview({
       stage: "verify-code", host_provider: "codex",
       materials: {
-        changed_files: "runtime/review/integration-review-subject.mjs",
+        changed_files: "runtime/review/review-output.mjs",
         implementation_assessment: "current implementation",
         test_context: "focused test passed",
         open_risks: "none",

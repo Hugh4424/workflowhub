@@ -1,61 +1,47 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-
 import { runSimpleReview } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 
-describe("left-shift suite (T7)", () => {
-  it("FR-LEFT-001: stage-runner source contains write-boundary identity and cwd assertions", () => {
-    const src = readFileSync(fileURLToPath(new URL("../../runtime/stage/stage-runner.mjs", import.meta.url)), "utf8");
-    expect(src).toContain("function assertWriteBoundary(");
-    expect(src).toContain("kernel.task !== task");
-    expect(src).toContain("cwd is outside the task worktree");
-    expect(src).toContain("assertWriteBoundary(ctx);");
+function currentPhaseRequest() {
+  return { stage: "build-code", activation_cohort: "post", subject_kind: "phase", phase_id: "P1", surface: "code",
+    review_scope: "phase", review_track: null,
+    materials: { approved_spec: "# Approved current scope\n\nAC-OWNED: preserve the submitted task result.\n",
+      acceptance_criteria: "AC-OWNED: verify the actual submitted scope.\n", test_evidence: "Current test evidence is unknown; no completion is inferred.\n" } };
+}
+
+describe("left-shift current input and typed failures", () => {
+  it("FR-LEFT-002/003: actual review rejects malformed inputs and retired integration identity as TypeError", async () => {
+    await expect(runSimpleReview(null)).rejects.toThrow(TypeError);
+    await expect(runSimpleReview({ ...currentPhaseRequest(), materials: {} })).rejects.toThrow(TypeError);
+    await expect(runSimpleReview({ ...currentPhaseRequest(), materials: [] })).rejects.toThrow(TypeError);
+    await expect(runSimpleReview({ ...currentPhaseRequest(), stage: "" })).rejects.toThrow(TypeError);
+    await expect(runSimpleReview({ ...currentPhaseRequest(), review_scope: "integration" })).rejects.toThrow(TypeError);
+    await expect(runSimpleReview({ ...currentPhaseRequest(), review_track: "direction" })).rejects.toThrow(TypeError);
   });
 
-  it("FR-LEFT-002/003: simple-review-runner classifies invalid input vs unavailable route", async () => {
-    await expect(runSimpleReview(null)).rejects.toThrow(TypeError);
-    await expect(runSimpleReview({ stage: "build-code", host_provider: "dsh", materials: {} })).rejects.toThrow(TypeError);
-    await expect(runSimpleReview({ stage: "", host_provider: "dsh", materials: { a: "b" } })).rejects.toThrow(TypeError);
-    await expect(runSimpleReview({ stage: "build-code", host_provider: "", materials: { a: "b" } })).rejects.toThrow(TypeError);
+  it("FR-LEFT-003: current phase route absence and host config failure stay typed unavailable before preparation or dispatch", async () => {
+    const input = currentPhaseRequest(), original = JSON.stringify(input); let bundleCalls = 0, dispatchCalls = 0;
+    const owned = { loadConfig: () => ({ whReview: {}, config: "/owned-unused-no-dispatch.json", command: ["owned-never-launched"] }),
+      resolveRoute: () => null, buildBundle() { bundleCalls += 1; throw new Error("owned bundle must not be reached"); },
+      client: { runGroup() { dispatchCalls += 1; throw new Error("owned provider must not be reached"); } } };
+    const missing = await runSimpleReview(input, owned);
+    expect(missing.status).toBe("unavailable"); expect(missing.error.code).toBe("ROUTE_UNAVAILABLE");
+    const config = await runSimpleReview(input, { ...owned, loadConfig() { throw Object.assign(new Error("MATERIAL_FORBIDDEN invalid input parser message is owned diagnostic only"), { code: "OWNED_CONFIG_ERROR" }); } });
+    expect(config.status).toBe("unavailable"); expect(config.error.code).toBe("ROUTE_UNAVAILABLE");
+    expect(config.error.message).toContain("MATERIAL_FORBIDDEN invalid input parser message");
+    expect(bundleCalls).toBe(0); expect(dispatchCalls).toBe(0); expect(JSON.stringify(input)).toBe(original);
+  });
 
-    const result = await runSimpleReview(
-      { stage: "build-code", host_provider: "dsh", materials: { a: "b" }, review_scope: "integration" },
-      { resolveRoute: () => null },
-    );
-    expect(result.status).toBe("unavailable");
-    expect(result.error.code).toBe("ROUTE_UNAVAILABLE");
-  }, 2000);
-
-  it("FR-LEFT-003: four fallback consumers do not regex-guess error codes", () => {
-    for (const file of [
-      "../../tools/cli/stage-runtime.mjs",
-      "../../runtime/stage/stage-runner.mjs",
-      "../../runtime/stage/stage-agent-outcome-adapter.mjs",
-      "../../tools/host/workflowhub-stage-agent-bridge.mjs",
-    ]) {
+  it("FR-LEFT-003: surviving fallback consumers do not regex-guess control errors from messages", () => {
+    for (const file of ["../../tools/cli/stage-runtime.mjs", "../../skills/wh-review/scripts/simple-review-runner.mjs", "../../runtime/review/review-record-route.mjs"]) {
       const src = readFileSync(fileURLToPath(new URL(file, import.meta.url)), "utf8");
-      expect(src).not.toMatch(/match\(.*error\.message.*\)/i);
-      expect(src).not.toMatch(/message\.match\(/i);
+      expect(src).not.toMatch(/match\(.*error\.message.*\)/i); expect(src).not.toMatch(/message\.match\(/i);
     }
   });
 
-  it("FR-LEFT-004/005: explicit code_review and agent outcome receipt consumers exist", () => {
-    const bridge = readFileSync(fileURLToPath(new URL("../../tools/host/workflowhub-stage-agent-bridge.mjs", import.meta.url)), "utf8");
-    expect(bridge).toContain("agent_run_id");
-    const outcomeAdapter = readFileSync(fileURLToPath(new URL("../../runtime/stage/stage-agent-outcome-adapter.mjs", import.meta.url)), "utf8");
-    expect(outcomeAdapter).toContain("code_review");
-    expect(outcomeAdapter).toContain("publishUnavailableStageAgentOutcome");
-    const stageRunner = readFileSync(fileURLToPath(new URL("../../runtime/stage/stage-runner.mjs", import.meta.url)), "utf8");
-    expect(stageRunner).toContain("agent_outcome");
-  });
-
-  it("FR-C5-002/003: write boundary has no retired source-card path", () => {
-    for (const file of [
-      "../../runtime/evidence/write-boundary-preflight.mjs",
-      "../../runtime/task/task-handle.mjs",
-      "../../tools/cli/task-close.mjs",
-    ]) {
+  it("FR-C5-002/003: current TaskHandle and task-close retain no retired source-card path", () => {
+    for (const file of ["../../runtime/task/task-handle.mjs", "../../tools/cli/task-close.mjs"]) {
       const src = readFileSync(fileURLToPath(new URL(file, import.meta.url)), "utf8");
       expect(src).not.toMatch(/path-card|path card|PATH_CARD|createPathCardRecord|persistWriteBoundaryPathCard/i);
     }

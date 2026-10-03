@@ -7,7 +7,6 @@
 import { describe, expect, it } from "vitest";
 
 import { materialFilesForCohort } from "../../runtime/task/material-workspace.mjs";
-import { handoffDeclaration } from "../../runtime/stage/stage-runner.mjs";
 
 const DECISION_ONLY = Object.freeze({ "decision-log.md": "# Decision\n\n## 目标\n- keep the direction.\n" });
 describe("post material set is scoped per stage (G1)", () => {
@@ -22,18 +21,4 @@ describe("post material set is scoped per stage (G1)", () => {
     }
   });
 
-  it("the make-decision stage-end handoff declaration no longer throws 'post Phase index is missing'", () => {
-    let declaration;
-    expect(() => {
-      declaration = handoffDeclaration(DECISION_ONLY, "post", { stage: "make-decision" });
-    }).not.toThrow();
-    expect(declaration.value).toBeNull();
-    expect(typeof declaration.reason).toBe("string");
-    expect(declaration.reason).not.toMatch(/post Phase index is missing/);
-  });
-
-  it("build-code still fails loudly when the post Phase index is absent", () => {
-    expect(() => handoffDeclaration(DECISION_ONLY, "post", { stage: "build-code" }))
-      .toThrow(/post Phase index is missing/);
-  });
 });

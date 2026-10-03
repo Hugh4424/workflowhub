@@ -3,7 +3,7 @@ import { readFileSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { execFileSync } from "node:child_process";
-import { resolveCanonicalTaskPath } from "../../core/load-config.mjs";
+import { resolveCanonicalTaskPath } from "../../runtime/task/load-config.mjs";
 import { prepareDeliveryClosePlan, confirmClosePlan, authorizeClosePlan, executeClosePlan, inspectDeliveryCloseState, closeDelivery } from "../../core/task-close.mjs";
 
 function args(argv) {

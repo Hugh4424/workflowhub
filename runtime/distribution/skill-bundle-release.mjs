@@ -322,14 +322,17 @@ function collectDeclaredClosure(root, { release = false } = {}) {
     }
     const manifest = yaml.load(fs.readFileSync(path.join(root, base, "skill-deps.yaml"), "utf8"));
     for (const dependency of manifest.skills ?? []) {
+      // P3 keeps name/path/trigger declarations. A missing bundle field uses
+      // the same conventional sibling already consumed by addSkillClosure;
+      // an explicitly supplied field must still name that real skill bundle.
+      const bundleLocator = dependency?.bundle === undefined
+        ? `skills/${dependency?.name}/skill-bundle.json` : dependency.bundle;
       if (!dependency || !/^[a-z][a-z0-9-]*$/.test(dependency.name ?? "")
           || dependency.path !== `skills/${dependency.name}/SKILL.md`
-          || dependency.bundle !== `skills/${dependency.name}/skill-bundle.json`) {
+          || bundleLocator !== `skills/${dependency.name}/skill-bundle.json`) {
         throw new Error(`skill dependency path/bundle does not match its declared name: ${workflow}`);
       }
-      // Validate the real declarations used by resolveSkillPackage rather than
-      // silently replacing a broken declaration with the conventional name path.
-      validateSkillBundle(root, dependency.bundle, dependency.path);
+      validateSkillBundle(root, bundleLocator, dependency.path);
       addSkillClosure(root, dependency.name, locators, visitedSkills);
     }
     const prompt = fs.readFileSync(path.join(root, base, "SKILL.md"), "utf8");

@@ -1,13 +1,13 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { ArtifactDir } from "../../core/artifact-dir.mjs";
-import { createTask } from "../../runtime/task/task-handle.mjs";
-import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
+import { ArtifactDir } from "../../runtime/evidence/artifact-dir.mjs";
+import { openTask } from "../../runtime/task/task-handle.mjs";
+import { openCurrentTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { runOcrDelegationRound } from "../../runtime/review/ocr-delegation-adapter.mjs";
 import { authenticatedEvidenceBytes, authenticatedEvidenceDigest } from "../../runtime/review/review-packet-identity.mjs";
 import { prepareTaskBoundBuildCodeReviewBundle, reviewRecordTimeoutForRunner, runConfiguredOcrHostReview, stageRuntimeCliMain, stageRuntimeMain, writeOcrProviderHealthDiagnostic } from "../../tools/cli/stage-runtime.mjs";
@@ -16,53 +16,126 @@ const roots = [];
 const materialId = createHash("sha256").update("ocr-production-cutover-fixture").digest("hex");
 
 function git(cwd, args) {
-  return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) if (key.startsWith("GIT_")) delete env[key];
+  env.GIT_OPTIONAL_LOCKS = "0";
+  return execFileSync("git", args, { cwd, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 }
 
-function fixture() {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), "ocr-production-cutover-")));
+async function fixture() {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "ocr-production-cutover-current-")));
   roots.push(root);
   const repo = join(root, "repo");
   mkdirSync(repo);
   git(repo, ["init", "-q", "-b", "main"]);
-  git(repo, ["config", "user.name", "WorkflowHub cutover test"]);
-  git(repo, ["config", "user.email", "workflowhub-cutover@test.local"]);
-  writeFileSync(join(repo, "README.md"), "cutover fixture\n", "utf8");
+  git(repo, ["config", "user.name", "WorkflowHub OCR fallback test"]);
+  git(repo, ["config", "user.email", "ocr-fallback@workflowhub.local"]);
+  writeFileSync(join(repo, "README.md"), "ocr fallback fixture\n", "utf8");
   git(repo, ["add", "README.md"]);
   git(repo, ["commit", "-qm", "fixture"]);
-  const taskId = `ocr-production-cutover-${Math.random().toString(16).slice(2)}`;
-  const task = createTask({
-    storageRoot: root,
-    taskPath: join(root, "Projects", "workflowhub", "tasks", taskId),
-    manifest: {
-      schema_version: "1.0.0", execution_mode: "per_invocation", record_model: "vnext-single-write",
-      project_name: "workflowhub", task_id: taskId, created_at: "2026-09-25T00:00:00.000Z",
-      target_repo_root: repo, issue_ids: [], inputs: {},
-    },
-  });
-  const workspace = prepareTaskWorkspace(task);
-  const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
-  artifacts.writeAtomic("decision-log.md", "# Decision log\n\n## 任务身份\n\n- **任务类型**：普通任务\n");
-  for (const name of ["spec.md", "plan.md", "tasks.md"]) artifacts.writeAtomic(name, `# ${name}\n`);
+  const taskId = `ocr-production-cutover-current-${Math.random().toString(16).slice(2)}`;
+  const worktreeRoot = join(root, "worktree");
+  git(repo, ["worktree", "add", "-q", "-b", `task/workflowhub/${taskId}`, worktreeRoot, "main"]);
+  const taskDir = join(root, "Projects", "workflowhub", "tasks", taskId);
+  mkdirSync(taskDir, { recursive: true });
+  writeFileSync(join(taskDir, "task.json"), JSON.stringify({
+    schema_version: "1.0.0", record_model: "vnext-single-write", activation_cohort: "post",
+    project_name: "workflowhub", task_id: taskId, created_at: "2026-10-03T00:00:00.000Z",
+    target_repo_root: worktreeRoot, workspace_mode: "existing", workspace_root: worktreeRoot,
+    issue_ids: [], inputs: {},
+  }));
+  writeFileSync(join(taskDir, "facts.jsonl"), "");
+  const materialRoot = join(worktreeRoot, "specs", taskId);
+  mkdirSync(join(materialRoot, "phases"), { recursive: true });
+  writeFileSync(join(materialRoot, "decision-log.md"), "# Decision log\n\n## 任务身份\n\n- **任务类型**：普通任务\n");
+  const gate = "npx --no-install vitest run tests/contract/ocr-production-cutover-current.test.mjs --reporter=dot";
+  const paths = ["prior-one.md", "prior-two.md", "README.md"];
+  const trace = paths.map((_file, i) => `| R-001 | FR-1 | AC-1 | P${i + 1}/T00${i + 1} | ORACLE-OCR-FALLBACK |`);
+  writeFileSync(join(materialRoot, "spec.md"), [
+    "# Owned OCR routing fixture", "- **FR-1**：OCR availability and same-surface fallback.",
+    "- [ ] **AC-1 — OCR routing**", "  - **需求**：FR-1",
+    "  - **验证方法**：actual assertions in this frozen fallback test.",
+    "  - **通过条件**：actual routing and failure assertions pass.", "  - **失败条件**：wrong route or false fallback.",
+    "## 实现设计（全局权威）", "### Code Anchors", "The owned source is `README.md`.",
+    "### Interfaces and Failure Semantics", "Preserve current code surface and unavailable provider errors.",
+    "### Requirement-to-Task Trace", "| source | FR | AC | task | oracle |", "| --- | --- | --- | --- | --- |", ...trace,
+    "### Global Verification Strategy", `\`${gate}\``, "",
+  ].join("\n"));
+  writeFileSync(join(materialRoot, "phases", "index.md"), [
+    "# Phase index", "## Execution Index",
+    "| phase | authority ref | semantic anchor | write set | dependency | consumer |", "| --- | --- | --- | --- | --- | --- |",
+    ...paths.map((file, i) => `| \`P${i + 1}\` | \`phases/P${i + 1}.md\` | \`phase-p${i + 1}\` | \`${file}\` | ${i === 0 ? "none" : `P${i}`} | OCR routing fixture |`), "",
+  ].join("\n"));
+  for (const [i, file] of paths.entries()) {
+    const n = i + 1;
+    writeFileSync(join(materialRoot, "phases", `P${n}.md`), [
+      `# Phase P${n} — owned fixture`, "- **Global spec**：`spec.md`", `- **Write set**：\`${file}\``,
+      `- **Dependency**：${i === 0 ? "none" : `P${i}`}`, "- **Consumer**：OCR routing fixture", "## L0",
+      `- **gate_cmd**：\`${gate}\``, "- **expected_exit**：0 only after actual assertions pass",
+      "- **oracle**：ORACLE-OCR-FALLBACK", "- **evidence_path**：quality/tests/output/owned-fixture.output",
+      "- **STOP**：preserve an actual routing failure", "- **Done**：actual assertions only, not production quality", "## L1",
+      `### T00${n} — owned routing fixture`, "- **Source / FR / AC**：R-001 / FR-1 / AC-1",
+      `- **Files / symbols**：\`${file}\` (symbol: N/A — fixture source text)`, "- **Action**：read the actual routing fixture",
+      "- **Inputs**：owned Git and plain task metadata", "- **Outputs / failure**：same code surface or observable unavailable",
+      "- **Boundary / DO NOT TOUCH**：no production or user repositories", `- **Dependency**：${i === 0 ? "none" : `T00${i}`}`,
+      "- **Test tier / skill**：feature / backend-testing", "- **Scenario / fixture or service**：owned CLI and injected reviewer result",
+      `- **RED/GREEN gate_cmd**：\`${gate}\``, "- **expected_exit**：RED nonzero; GREEN 0",
+      "- **RED target failure**：ORACLE-OCR-FALLBACK wrong routing assertion fails", "- **GREEN oracle**：ORACLE-OCR-FALLBACK actual assertions",
+      "- **Evidence**：quality/tests/output/owned-fixture.output", "- **STOP / recovery**：no claimed provider call without one",
+      "- **Coverage limit**：no external provider quality", "- **Done**：actual targeted assertions only", "## L2",
+      "Owned fixture data, not a WorkflowHub execution permit.", "",
+    ].join("\n"));
+  }
+  writeFileSync(join(worktreeRoot, "README.md"), "fallback implementation under review\n");
+
+  // host config：third_review/wh_review 可解析，但 provider 命令指向不存在路径
+  // （「config 无可用 provider」）。
   const home = join(root, "home");
-  mkdirSync(home);
-  return { root, home, task, workspace };
+  const hostDir = join(home, ".config", "workflowhub");
+  mkdirSync(hostDir, { recursive: true });
+  const attachmentRoot = join(root, "attachments");
+  mkdirSync(attachmentRoot);
+  const configPath = join(root, "providers.json");
+  writeFileSync(configPath, JSON.stringify({
+    tiers: [["codex/luna"]],
+    providers: { "codex/luna": { enabled: true, model: "reviewer-model", command: join(root, "missing-ocr-provider") } },
+    attachment_roots: [{ root: attachmentRoot, sources: [".wh-review-packets"] }],
+  }));
+  writeFileSync(join(hostDir, "config.json"), JSON.stringify({
+    task_dir: root,
+    third_review: { command: [join(root, "missing-wh-review-broker")], config: configPath, attachment_root: attachmentRoot },
+    wh_review: { version: 2, stages: { "build-code": { initial: ["codex/luna"], mode: "full_only", minimum_heterologous: 1 } } },
+  }));
+  const task = openTask(taskDir, { projectName: "workflowhub", taskId });
+  const workspace = await openCurrentTaskWorkspace(task);
+  const bin = join(root, "bin"); mkdirSync(bin);
+  writeFileSync(join(bin, "ocr"), `#!${process.execPath}
+const args=process.argv.slice(2);
+if(args[0]==="--version")console.log("1.12.9");
+else if(args[1]==="preview"){
+ const fs=require("node:fs"),path=require("node:path"),files=[];
+ function walk(dir,depth=0){if(depth>32)throw new Error("owned packet depth exceeded");for(const item of fs.readdirSync(dir,{withFileTypes:true})){if(item.name===".git")continue;const file=path.join(dir,item.name),st=fs.lstatSync(file);if(st.isSymbolicLink())throw new Error("owned packet alias");if(st.isDirectory())walk(file,depth+1);else if(st.isFile()){if(st.nlink!==1||files.length>=512)throw new Error("owned packet file limit or link");files.push({path:path.relative(process.cwd(),file).split(path.sep).join("/")});}}}
+ walk(process.cwd());console.log(JSON.stringify({reviewable_files:files}));
+}
+else if(args[1]==="rule")console.log(JSON.stringify({rules:[{path:"README.md",rule:"Owned packet inspection."}]}));
+else process.exitCode=9;
+`, {mode:0o700});
+  return { root, home, taskId, taskDir, worktreeRoot, task, workspace, bin };
+}
+
+
+async function contextFor(state) {
+  return { task: state.task, manifest: state.task.manifest, workspace: await openCurrentTaskWorkspace(state.task), artifacts: ArtifactDir.open(state.worktreeRoot, state.task) };
 }
 
 async function withRuntimeEnvironment(state, action) {
-  const keys = ["HOME", "WORKFLOWHUB_TASK_DIR", "CODEX_SESSION_ID", "CODEX_THREAD_ID", "CODEX_ROLLOUT_PATH", "WORKFLOWHUB_CODEX_ROLLOUT_PATH"];
-  const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
-  process.env.HOME = state.home;
+  const previous = process.env.PATH, previousStorage = process.env.WORKFLOWHUB_TASK_DIR;
   process.env.WORKFLOWHUB_TASK_DIR = state.root;
-  for (const key of keys.slice(2)) delete process.env[key];
-  try {
-    return await action();
-  } finally {
-    for (const [key, value] of Object.entries(previous)) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
-  }
+  // Only owned deterministic OCR selection. Public calls bind the task path
+  // explicitly; HOME/auth/config remain untouched and all reviewer calls use DI.
+  process.env.PATH = `${state.bin}:${previous ?? "/usr/bin:/bin"}`;
+  try { return await action(); }
+  finally { if(previous===undefined)delete process.env.PATH;else process.env.PATH=previous;if(previousStorage===undefined)delete process.env.WORKFLOWHUB_TASK_DIR;else process.env.WORKFLOWHUB_TASK_DIR=previousStorage; }
 }
 
 function reviewResultFor(request) {
@@ -92,7 +165,7 @@ afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, fo
 
 describe("OCR production cutover defaults", () => {
   it("delivers reviewed execution evidence in the OCR manifest and direct provider packet", async () => {
-    const state = fixture();
+    const state = await fixture();
     writeFileSync(join(state.workspace.worktreeRoot, "README.md"), "reviewed execution source\n");
     const attachmentRoot = join(state.root, "review-data");
     mkdirSync(attachmentRoot);
@@ -109,7 +182,7 @@ describe("OCR production cutover defaults", () => {
         acceptance_criteria: "AC-EXE-002: Preserve the unavailable execution fact for review." },
       authenticated_evidence: authenticatedEvidence,
     };
-    const bundle = prepareTaskBoundBuildCodeReviewBundle({ task: state.task, workspace: openCurrentTaskWorkspace(state.task) }, request,
+    const bundle = prepareTaskBoundBuildCodeReviewBundle(await contextFor(state), request,
       { loadConfig: () => ({ attachmentRoot }) });
     const providerEvidence = {
       runtime_current_materials: { "decision-log.md": { bytes: Buffer.byteLength("# Current decision\n", "utf8"), sha256: createHash("sha256").update("# Current decision\n").digest("hex") } },
@@ -123,7 +196,7 @@ describe("OCR production cutover defaults", () => {
     try {
       expect(bundle.manifest).toContainEqual({ path: "authenticated-evidence.json", bytes: expectedBytes.length,
         sha256: createHash("sha256").update(expectedBytes).digest("hex") });
-      const result = await runOcrDelegationRound(request, {
+      const result = await withRuntimeEnvironment(state, () => runOcrDelegationRound(request, {
         buildBundle: () => bundle,
         executor: ({ request: delegated, packet }) => runConfiguredOcrHostReview({ request: delegated, packet }, {
           trustedContext: {
@@ -141,10 +214,10 @@ describe("OCR production cutover defaults", () => {
               content: [{ type: "text", text: '{"findings":[]}' }] }) };
           },
         }),
-      });
+      }));
       expect(receivedBytes).toEqual(expectedBytes);
       expect(receivedCurrentMaterial).toBe("# Current decision\n");
-      expect(receivedInstructions).toContain("compare code/test claims with recorded execution");
+      expect(receivedInstructions).toContain("use it only to check whether current code and test claims match the recorded execution and to identify false-green behavior");
       expect(receivedInstructions).toContain("identify false-green behavior");
       expect(result.authenticated_evidence_sha256).toBe(authenticatedEvidenceDigest(authenticatedEvidence));
     } finally {
@@ -152,7 +225,7 @@ describe("OCR production cutover defaults", () => {
     }
   });
 
-  it("reports silent but live provider health on stderr without imposing a review deadline", () => {
+  it("reports silent but live provider health on stderr without treating health as a deadline renewal", () => {
     const lines = [];
     writeOcrProviderHealthDiagnostic({
       provider: "codex/luna", status: "running", liveness: true,
@@ -176,17 +249,17 @@ describe("OCR production cutover defaults", () => {
     ["phase", "build-code", { review_scope: "phase", subject_kind: "phase", phase_id: "P3" }, "phase_review", "review"],
     ["final", "verify-code", { subject_kind: "worktree" }, "code_review", "quality_review"],
   ])("routes ordinary %s through OCR without a candidate flag or legacy dispatch", async (_scope, stage, scope, factSubject, receiptKey) => {
-    const state = fixture();
+    const state = await fixture();
     const calls = { legacy: 0, ocr: 0 };
     const healthEvents = [];
     const reviewInputPath = join(state.root, "ordinary-review.json");
     writeFileSync(reviewInputPath, JSON.stringify({ request: {
-      stage, ...scope, host_provider: "codex/luna", materials: { implementation: "current diff" },
+      stage, ...scope, host_provider: "codex/luna", materials: { acceptance_criteria:"AC-1: preserve the complete current criterion.", implementation_assessment:"Inspect the real current diff." },
     } }), "utf8");
     await withRuntimeEnvironment(state, async () => {
       const recorded = await stageRuntimeCliMain([
         "review", "--action=record", `--stage=${stage}`, "--project=workflowhub",
-        `--task=${state.task.identity.taskId}`, `--input=${reviewInputPath}`,
+        `--task=${state.task.identity.taskId}`, `--task-path=${state.taskDir}`, `--input=${reviewInputPath}`,
       ], {
         cwd: state.workspace.worktreeRoot,
         services: {
@@ -204,50 +277,35 @@ describe("OCR production cutover defaults", () => {
       });
       expect(calls).toEqual({ legacy: 0, ocr: 1 });
       expect(healthEvents).toMatchObject([{ status: "running", liveness: true, progress_events: 0 }]);
-      const runInputPath = join(state.root, "ocr-run.json");
-      writeFileSync(runInputPath, JSON.stringify({ receipts: { [receiptKey]: recorded.result_ref } }), "utf8");
+      const canonical = JSON.parse(state.task.readRecord(recorded.result_ref));
+      expect(recorded.status).toBe("available");
+      expect(canonical).toMatchObject({stage, review_scope:scope.review_scope ?? null,
+        subject_kind:scope.subject_kind,phase_id:scope.phase_id ?? null,executor:"ocr",
+        provider_results:[{provider:"codex/luna",identity:{source_id:"fixture/source"}}],authoritative:false});
+      expect(canonical).not.toHaveProperty("attempt_ref");
+      expect(canonical).not.toHaveProperty("material_id");
+      const status = await stageRuntimeCliMain(["status","--action=begin",`--stage=${stage}`,"--project=workflowhub",
+        `--task=${state.taskId}`,`--task-path=${state.taskDir}`],{cwd:state.workspace.worktreeRoot});
+      expect(status).not.toHaveProperty("quality_predicates");
+      expect(status.quality.status).toBe("unknown"); // review-only did not write stage facts or completion
+      expect(state.task.readRecord("facts.jsonl")).toBe("");
 
-      const run = await stageRuntimeMain([
-        "run", `--stage=${stage}`, "--project=workflowhub", `--task=${state.task.identity.taskId}`, `--input=${runInputPath}`,
-      ], { cwd: state.workspace.worktreeRoot });
-      const facts = run.quality_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)));
-      const reviewFact = facts.find((fact) => fact.kind === "review" && fact.subject === factSubject);
-      expect(reviewFact).toMatchObject({ status: "recorded", review_status: "clean" });
-      const reviewRef = reviewFact.evidence.find((entry) => entry.evidence_type === "review_result").ref;
-      const review = JSON.parse(state.task.readRecord(reviewRef));
-      expect(review).toMatchObject({
-        stage, review_scope: scope.review_scope ?? null,
-        subject_kind: scope.subject_kind, phase_id: scope.phase_id ?? null,
-        provider_results: [{ provider: "codex/luna" }],
-      });
-      const attempt = JSON.parse(state.task.readRecord(review.attempt_ref));
-      expect(attempt.provider_attempts).toMatchObject([
-        { provider: "codex/luna", identity: { source_id: "fixture/source" } },
-      ]);
-      const status = await stageRuntimeMain([
-        "status", `--stage=${stage}`, "--project=workflowhub", `--task=${state.task.identity.taskId}`,
-      ], { cwd: state.workspace.worktreeRoot });
-      expect(status.quality_predicates).not.toHaveProperty("integration_review");
-      if (stage === "verify-code") {
-        expect(status.quality_predicates.code_review.status).toBe("satisfied");
-        expect(status.quality_missing).not.toContain("code_review");
-      }
     });
   });
 
   it("keeps an explicit candidate flag compatible with the same OCR route", async () => {
-    const state = fixture();
+    const state = await fixture();
     const inputPath = join(state.root, "candidate-review.json");
     writeFileSync(inputPath, JSON.stringify({ request: {
       stage: "build-code", review_scope: "phase", subject_kind: "phase", phase_id: "P3",
-      candidate_experiment: true, host_provider: "codex/luna", materials: { implementation: "isolated candidate" },
+      candidate_experiment: true, host_provider: "codex/luna", materials: { approved_spec:"Current phase specification.",acceptance_criteria:"AC-1: preserve current code review." },
     } }), "utf8");
     const calls = { ocr: 0, legacy: 0 };
 
     await withRuntimeEnvironment(state, async () => {
       const recorded = await stageRuntimeCliMain([
         "review", "--action=record", "--stage=build-code", "--project=workflowhub",
-        `--task=${state.task.identity.taskId}`, `--input=${inputPath}`,
+        `--task=${state.task.identity.taskId}`, `--task-path=${state.taskDir}`, `--input=${inputPath}`,
       ], {
         cwd: state.workspace.worktreeRoot,
         services: {
@@ -258,7 +316,7 @@ describe("OCR production cutover defaults", () => {
         },
       });
 
-      expect(recorded.status).toBe("recorded");
+      expect(recorded.status).toBe("available");
       expect(calls).toEqual({ ocr: 1, legacy: 0 });
       expect(JSON.parse(state.task.readRecord(recorded.result_ref))).toMatchObject({
         stage: "build-code", review_scope: "phase", phase_id: "P3", subject_kind: "phase",
@@ -267,99 +325,44 @@ describe("OCR production cutover defaults", () => {
   });
 
   it("rejects a malformed code-surface request before any review runner", async () => {
-    const state = fixture();
+    const state = await fixture();
     const inputPath = join(state.root, "malformed-review.json");
     writeFileSync(inputPath, JSON.stringify({ request: {
       stage: "build-code", review_scope: "phase", subject_kind: "worktree", phase_id: "P3",
-      host_provider: "codex/luna", materials: { implementation: "current diff" },
+      host_provider: "codex/luna", materials: { acceptance_criteria:"AC-1: preserve the complete current criterion.", implementation_assessment:"Inspect the real current diff." },
     } }), "utf8");
     const calls = { ocr: 0, legacy: 0 };
     await withRuntimeEnvironment(state, async () => {
       await expect(stageRuntimeCliMain([
         "review", "--action=record", "--stage=build-code", "--project=workflowhub",
-        `--task=${state.task.identity.taskId}`, `--input=${inputPath}`,
+        `--task=${state.task.identity.taskId}`, `--task-path=${state.taskDir}`, `--input=${inputPath}`,
       ], { cwd: state.workspace.worktreeRoot, services: {
         runOcrDelegationRound: async () => { calls.ocr += 1; },
         runReviewRound: async () => { calls.legacy += 1; },
-      } })).rejects.toThrow(/malformed OCR code-surface request/);
+      } })).rejects.toThrow(/phase review requires a concrete phase_id and subject_kind=phase/);
       expect(calls).toEqual({ ocr: 0, legacy: 0 });
     });
   });
 
-  it("rejects a verify-code result without OCR provenance", async () => {
-    const state = fixture();
-    const reviewInputPath = join(state.root, "non-ocr-final.json");
-    writeFileSync(reviewInputPath, JSON.stringify({ request: {
-      stage: "verify-code", subject_kind: "worktree",
-      host_provider: "codex/luna", materials: { implementation: "current diff" },
-    } }));
-    await withRuntimeEnvironment(state, async () => {
-      const recorded = await stageRuntimeCliMain([
-        "review", "--action=record", "--stage=verify-code", "--project=workflowhub",
-        `--task=${state.task.identity.taskId}`, `--input=${reviewInputPath}`,
-      ], { cwd: state.workspace.worktreeRoot, services: {
-        resolveRouteIdentity: () => ({ route_identity: "c".repeat(64) }),
-        materialIdForRequest: () => materialId,
-        runOcrDelegationRound: async (request) => {
-          const result = reviewResultFor(request);
-          delete result.ocr;
-          return result;
-        },
-      } });
-      const runInputPath = join(state.root, "non-ocr-run.json");
-      writeFileSync(runInputPath, JSON.stringify({ receipts: { quality_review: recorded.result_ref } }));
-      await expect(stageRuntimeMain([
-        "run", "--stage=verify-code", "--project=workflowhub", `--task=${state.task.identity.taskId}`,
-        `--input=${runInputPath}`,
-      ], { cwd: state.workspace.worktreeRoot })).rejects.toThrow(/not an authenticated OCR delegation result/);
-      const status = await stageRuntimeMain([
-        "status", "--stage=verify-code", "--project=workflowhub", `--task=${state.task.identity.taskId}`,
-      ], { cwd: state.workspace.worktreeRoot });
-      expect(status.quality_predicates.code_review.status).toBe("missing");
-    });
+  it("rejects caller-authored verify results before dispatch rather than creating a second authentication gate", async () => {
+    const state=await fixture(); const path=join(state.root,"imported-result.json");
+    writeFileSync(path,JSON.stringify({request:{stage:"verify-code",subject_kind:"worktree"},result:reviewResultFor({stage:"verify-code"})}));
+    const calls={ocr:0,legacy:0}; const before=state.task.readRecord("facts.jsonl");
+    await expect(withRuntimeEnvironment(state,()=>stageRuntimeCliMain(["review","--action=record","--stage=verify-code","--project=workflowhub",`--task=${state.taskId}`,`--task-path=${state.taskDir}`,`--input=${path}`],{
+      cwd:state.workspace.worktreeRoot,services:{runOcrDelegationRound:async()=>{calls.ocr++;},runReviewRound:async()=>{calls.legacy++;}}
+    }))).rejects.toThrow(/importing caller-authored results is retired/);
+    expect(calls).toEqual({ocr:0,legacy:0});expect(state.task.readRecord("facts.jsonl")).toBe(before);
+    expect(existsSync(join(state.taskDir,"quality","reviews"))).toBe(false);
   });
 
-  it("keeps explicit historical integration review compatible without making it a completion predicate", async () => {
-    const state = fixture();
-    const reviewInputPath = join(state.root, "multi-provider-integration.json");
-    writeFileSync(reviewInputPath, JSON.stringify({ request: {
-      stage: "build-code", review_scope: "integration", subject_kind: "worktree", phase_id: null,
-      host_provider: "codex/luna", materials: { implementation: "current diff" },
-    } }));
-    await withRuntimeEnvironment(state, async () => {
-      const recorded = await stageRuntimeCliMain([
-        "review", "--action=record", "--stage=build-code", "--project=workflowhub",
-        `--task=${state.task.identity.taskId}`, `--input=${reviewInputPath}`,
-      ], { cwd: state.workspace.worktreeRoot, services: {
-        resolveRouteIdentity: () => ({ route_identity: "d".repeat(64) }),
-        materialIdForRequest: () => materialId,
-        runOcrDelegationRound: async (request) => {
-          const result = reviewResultFor(request);
-          result.provider_results.push({
-            provider: "claude/sonnet", status: "failed",
-            identity: { provider: "claude/sonnet", adapter: "claude", source_id: "fixture/second-source", config_id: "fixture/second-config", model: "fixture-model" },
-            error: { code: "OCR_PROVIDER_EXIT_NONZERO", message: "second member failed" },
-            timing: { started_at_ms: 1, completed_at_ms: 2, duration_ms: 1 }, usage: null,
-            evidence_anchor_valid: [],
-          });
-          return result;
-        },
-      } });
-      const canonical = JSON.parse(state.task.readRecord(recorded.result_ref));
-      const attempt = JSON.parse(state.task.readRecord(canonical.attempt_ref));
-      expect(attempt.provider_attempts).toHaveLength(2);
-      expect(canonical.provider_results).toHaveLength(1);
-      const runInputPath = join(state.root, "multi-provider-run.json");
-      writeFileSync(runInputPath, JSON.stringify({ receipts: { review: recorded.result_ref } }));
-      await stageRuntimeMain([
-        "run", "--stage=build-code", "--project=workflowhub", `--task=${state.task.identity.taskId}`,
-        `--input=${runInputPath}`,
-      ], { cwd: state.workspace.worktreeRoot });
-      const status = await stageRuntimeMain([
-        "status", "--stage=build-code", "--project=workflowhub", `--task=${state.task.identity.taskId}`,
-      ], { cwd: state.workspace.worktreeRoot });
-      expect(status.quality_predicates).not.toHaveProperty("integration_review");
-      expect(status.quality_missing).not.toContain("integration_review");
-    });
+  it("rejects retired integration scope before either runner while leaving original task facts untouched", async () => {
+    const state=await fixture();const path=join(state.root,"retired-integration.json");
+    writeFileSync(path,JSON.stringify({request:{stage:"build-code",review_scope:"integration",subject_kind:"worktree",phase_id:null,materials:{implementation_summary:"old integration input"}}}));
+    const calls={ocr:0,legacy:0};const before=state.task.readRecord("facts.jsonl");
+    await expect(withRuntimeEnvironment(state,()=>stageRuntimeCliMain(["review","--action=record","--stage=build-code","--project=workflowhub",`--task=${state.taskId}`,`--task-path=${state.taskDir}`,`--input=${path}`],{
+      cwd:state.workspace.worktreeRoot,services:{runOcrDelegationRound:async()=>{calls.ocr++;},runReviewRound:async()=>{calls.legacy++;}}
+    }))).rejects.toThrow(/integration review is retired/);
+    expect(calls).toEqual({ocr:0,legacy:0});expect(state.task.readRecord("facts.jsonl")).toBe(before);
+    expect(existsSync(join(state.taskDir,"quality","reviews"))).toBe(false);
   });
 });

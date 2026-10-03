@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { realpathSync, statSync } from "node:fs";
+import { readFileSync, realpathSync, statSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -244,3 +244,100 @@ export async function runTargetedCases({ selection, workspaceRoot, runner } = {}
       raw_output_sha256: sha256(raw_output), raw_stderr: stderrReports.join("\n"),
       source: "direct_runner", canonical_receipt: false } });
 }
+
+// Ordinary raw TAP and independently observed account effects, moved from the
+// retired case-reconciliation producer. Observations never certify completion.
+const SHA256 = /^[a-f0-9]{64}$/;
+const nonempty = value => typeof value === "string" && value.trim() !== "";
+const digest = sha256;
+function readArtifact(ref, expectedHash) {
+  if (!nonempty(ref) || !isAbsolute(ref) || !SHA256.test(expectedHash ?? "")) return null;
+  try {
+    const bytes = readFileSync(ref);
+    return { bytes, matches: digest(bytes) === expectedHash };
+  } catch { return null; }
+}
+
+function reportMatches(raw, title) {
+  const lines = raw.toString("utf8").split(/\r?\n/);
+  return lines.find((line) => line.trim()) === "TAP version 13"
+    && lines.filter((line) => line === `# Subtest: ${title}`).length === 1
+    && lines.filter((line) => line === `ok 1 - ${title}`).length === 1
+    && lines.includes("# tests 1") && lines.includes("# pass 1")
+    && lines.includes("# fail 0") && lines.includes("# skipped 0")
+    && lines.includes("# todo 0");
+}
+
+export function reconcileCases({ selection, observations, oracleEvidence, task } = {}) {
+  const reject = reason => Object.freeze({status:"unavailable",reason,entries:[]});
+  if (selection?.status !== "selected" || !Array.isArray(selection.cases)
+      || selection.cases.length === 0 || !Array.isArray(observations)
+      || observations.length === 0 || !nonempty(task?.task_id)
+      || !Array.isArray(task.acceptance_criterion_ids)) return reject("missing_business_oracle");
+  if (observations.some((row) => row?.status !== "passed" || row.exit_code !== 0)) {
+    return reject("nonpassing_runner_status");
+  }
+  const identities = observations.map((row) => `${row.case_id}\u0000${row.test_file}\u0000${row.full_id}`);
+  if (new Set(identities).size !== identities.length) return reject("duplicate_runner_identity");
+  if (!Array.isArray(oracleEvidence) || oracleEvidence.length === 0) {
+    return reject("missing_business_oracle");
+  }
+  const observed = [];
+  for (const item of selection.cases) {
+    const criteria = item?.acceptance_criterion_ids;
+    if (!nonempty(item?.id) || !Array.isArray(criteria) || criteria.length === 0
+        || criteria.some((id) => !task.acceptance_criterion_ids.includes(id))) {
+      return reject("missing_business_oracle");
+    }
+    const rows = observations.filter((row) => row.case_id === item.id);
+    if (rows.length !== 1 || rows[0].test_file !== item.execution?.target
+        || rows[0].full_id !== item.execution?.expected_test_identity) {
+      return reject("runner_identity_mismatch");
+    }
+    const row = rows[0];
+    for (const criterion of criteria) {
+      const proofs = oracleEvidence.filter((evidence) => evidence?.case_id === item.id
+        && evidence.acceptance_criterion_id === criterion);
+      if (proofs.length !== 1) return reject("missing_business_oracle");
+      const proof = proofs[0];
+      const report = readArtifact(row.report_ref, row.raw_report_sha256);
+      const reported = readArtifact(proof.report_ref, proof.raw_report_sha256);
+      if (!report || !reported || !report.matches || !reported.matches
+          || row.report_ref !== proof.report_ref
+          || row.raw_report_sha256 !== proof.raw_report_sha256) {
+        return reject("report_digest_mismatch");
+      }
+      if (!reportMatches(report.bytes, row.full_id)) return reject("runner_identity_mismatch");
+      const before = readArtifact(proof.before_ref, proof.before_sha256);
+      const after = readArtifact(proof.after_ref, proof.after_sha256);
+      if (!before || !after || !before.matches || !after.matches) return reject("missing_effect_artifact");
+      let prior;
+      let current;
+      try {
+        prior = JSON.parse(before.bytes.toString("utf8"));
+        current = JSON.parse(after.bytes.toString("utf8"));
+      } catch { return reject("missing_effect_artifact"); }
+      // This narrow contradiction check uses only the fixture's explicit
+      // cancellation/balance observation. Matching values do not establish an
+      // independent, versioned product rule or an official acceptance pass.
+      if (item.execution?.runner === "node:test"
+          && item.execution.expected_test_identity.startsWith("cancellation preserves account balance ")) {
+        if (current.account_id !== prior.account_id
+            || !Number.isSafeInteger(prior.balance_cents)
+            || current.balance_cents !== prior.balance_cents
+            || prior.cancelled !== false || current.cancelled !== true
+            || proof.balance_before_cents !== prior.balance_cents
+            || proof.balance_after_cents !== current.balance_cents
+            || proof.cancelled !== current.cancelled) return reject("business_effect_mismatch");
+      }
+      observed.push(Object.freeze({ case_id: item.id, acceptance_criterion_id: criterion,
+        status: "observed", report_ref: proof.report_ref, raw_report_sha256: row.raw_report_sha256,
+        before_ref: proof.before_ref, before_sha256: proof.before_sha256,
+        after_ref: proof.after_ref, after_sha256: proof.after_sha256 }));
+    }
+  }
+  if (observations.length !== selection.cases.length) return reject("runner_identity_mismatch");
+  return Object.freeze({ status: "unavailable", reason: "unauthenticated_business_oracle",
+    entries: Object.freeze(observed), task_id: task.task_id });
+}
+

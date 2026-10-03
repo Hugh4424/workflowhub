@@ -1,6 +1,6 @@
 # Build Plan 审查合同
 
-审查当前提交的材料。provider 只读取 bundle，不访问真实仓库、Git、shell、网络或宿主路径。
+审查当前提交的材料。provider 只读取 bundle，不访问真实仓库、Git、一般 shell、网络或宿主路径。只有实际 host transport 已证明原生硬包根、工具及环境边界的 Codex，可用 cat、sed、rg 等只读文件查看命令读取该 packet 内声明的路径。这不是一般 shell 许可：仍禁止写入、Git、网络、父目录、宿主材料、Agent/subagent 和 wait/poll。原生权限的 minimal runtime 例外只用于工具运行，不属于审查材料。
 
 ## 材料与问题
 

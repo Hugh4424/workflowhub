@@ -1,103 +1,22 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
-
-import { captureBefore, verifyUnchanged } from "../../tools/architecture/history-inventory.mjs";
-import { authenticateQualityFactRecord, sha256 } from "../../runtime/evidence/freshness.mjs";
-
-const roots = [];
-afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
-
-function fixture() {
-  const root = mkdtempSync(join(tmpdir(), "workflowhub-history-read-only-"));
-  roots.push(root);
-  mkdirSync(join(root, "specs", "archive", "m14a"), { recursive: true });
-  mkdirSync(join(root, "docs", "architecture"), { recursive: true });
-  writeFileSync(join(root, "specs", "archive", "m14a", "spec.md"), "historical\n");
-  writeFileSync(join(root, "docs", "architecture", "legacy-task-inventory.json"), "{}\n");
-  return root;
-}
-
-describe("history inventory is read-only", () => {
-  it("captures paths, bytes, and hashes without depending on mtime", () => {
-    const root = fixture();
-    const before = captureBefore({ root, baseline: "fixture" });
-    expect(before.file_count).toBe(2);
-    const inventory = JSON.parse(readFileSync(join(root, "docs", "architecture", "history-inventory.json"), "utf8"));
-    expect(inventory.files).toEqual(expect.arrayContaining([
-      expect.objectContaining({ path: "specs/archive/m14a/spec.md" }),
-      expect.objectContaining({ path: "docs/architecture/legacy-task-inventory.json" }),
-    ]));
-    expect(verifyUnchanged({ root })).toMatchObject({ ok: true, before_count: 2, after_count: 2 });
-  });
-
-  it("fails on historical byte changes, removals, and new files", () => {
-    const root = fixture();
-    captureBefore({ root, baseline: "fixture" });
-    writeFileSync(join(root, "specs", "archive", "m14a", "spec.md"), "changed\n");
-    writeFileSync(join(root, "specs", "archive", "new.md"), "new\n");
-    expect(verifyUnchanged({ root }).errors).toEqual(expect.arrayContaining([
-      "historical file changed: specs/archive/m14a/spec.md",
-      "new historical file appeared: specs/archive/new.md",
-    ]));
-  });
-
-  it("refuses to overwrite an existing frozen inventory", () => {
-    const root = fixture();
-    const first = captureBefore({ root, baseline: "fixture" });
-    expect(() => captureBefore({ root, baseline: "different" })).toThrow(/refusing to overwrite/);
-    expect(JSON.parse(readFileSync(join(root, "docs", "architecture", "history-inventory.json"), "utf8"))).toMatchObject({
-      baseline_commit: first.baseline_commit,
-      file_count: first.file_count,
-    });
-  });
-
-  it("does not let a historical review ref satisfy current quality", () => {
-    const review = {
-      version: "wh-review-result.v1",
-      task_id: "task",
-      stage: "verify-code",
-      review_track: null,
-      subject_kind: "worktree",
-      phase_id: null,
-      review_scope: null,
-      base_tree: "a".repeat(40),
-      candidate_tree: "a".repeat(40),
-      source: { target_commit: "b".repeat(40), base_commit: "b".repeat(40), base_tree: "a".repeat(40), captured_head: "b".repeat(40) },
-      snapshot_tree: "a".repeat(40),
-      material_id: "c".repeat(64),
-      attempt_ref: "reviews/attempts/legacy.json",
-      provider_results: [{ provider: "fixture", output: { findings: [] } }],
-      findings: [],
-      adjudication: { version: "wh-review-adjudication.v1", clusters: [] },
-    };
-    const reviewRaw = JSON.stringify(review);
-    const fact = {
-      schema_version: "quality-fact.v1",
-      fact_id: "historical-review-fact",
-      task_id: "task",
-      stage: "verify-code",
-      material_revision: "revision",
-      snapshot_tree: "a".repeat(40),
-      kind: "review",
-      subject: "code_review",
-      status: "recorded",
-      ref: "fact.json",
-      sha256: "",
-      evidence: [{ ref: "reviews/results/legacy.json", sha256: sha256(reviewRaw), evidence_type: "review_result" }],
-    };
-    const factRaw = JSON.stringify(fact);
-    const records = new Map([["fact.json", factRaw], ["reviews/results/legacy.json", reviewRaw]]);
-    const read = (ref) => {
-      if (!records.has(ref)) { const error = new Error("missing"); error.code = "ENOENT"; throw error; }
-      return records.get(ref);
-    };
-    // The freshness/currentness comparison chain was removed. A historical
-    // fact whose own recorded hash does not match its bytes must still fail
-    // authentication instead of being promoted to a current result.
-    expect(authenticateQualityFactRecord({ ...fact, sha256: sha256(factRaw) }, {
-      read,
-    })).toMatchObject({ authenticated: false });
-  });
+import {afterEach,describe,expect,it} from "vitest";
+import {execFileSync,spawnSync} from "node:child_process";
+import {mkdirSync,mkdtempSync,readFileSync,realpathSync,rmSync,writeFileSync,existsSync,readdirSync,symlinkSync,linkSync} from "node:fs";
+import {tmpdir} from "node:os";import{join}from"node:path";
+const roots=[];afterEach(()=>{while(roots.length)rmSync(roots.pop(),{recursive:true,force:true});});
+function env(){const e={...process.env};for(const k of Object.keys(e))if(k.startsWith("GIT_"))delete e[k];return e;}
+const git=(cwd,...args)=>execFileSync("git",args,{cwd,env:env(),encoding:"utf8",stdio:["ignore","pipe","pipe"]}).trim();
+function root(){const p=realpathSync(mkdtempSync(join(tmpdir(),"card06-ordinary-consumer-")));roots.push(p);return p;}
+function repository(p){mkdirSync(p);git(p,"init","-q","-b","main");git(p,"config","user.name","Owned ordinary test");git(p,"config","user.email","owned@test.invalid");writeFileSync(join(p,"README.md"),"owned baseline\n");git(p,"add",".");git(p,"commit","-qm","baseline");}
+import{bootstrapTask}from"../../tools/cli/task-bootstrap.mjs";
+const cli=new URL("../../tools/cli/stage-runtime.mjs",import.meta.url).href;
+async function fixture(){const r=root(),repo=join(r,"repo"),storage=join(r,"storage"),home=join(r,"home");repository(repo);mkdirSync(storage);mkdirSync(home);const boot=await bootstrapTask({project:"OwnedEntry",task:"current-entry", "target-repo":repo},{env:{HOME:home,WORKFLOWHUB_TASK_DIR:storage},home,cwd:repo});const wt=boot.workspace.worktree_root,material=join(wt,"specs/current-entry");mkdirSync(join(material,"phases"),{recursive:true});for(const[name,text]of Object.entries({"decision-log.md":"# Current decision\n\n## 任务身份\n- **任务类型**：普通任务\n", "spec.md":"# Current specification\n", "phases/index.md":"## Execution Index\n\n| phase | authority ref | semantic anchor | write set | dependency | consumer |\n| --- | --- | --- | --- | --- | --- |\n| `P1` | `phases/P1.md` | owned | README.md | none | build-code |\n", "phases/P1.md":"# Phase P1\n\n### T001 — Owned current task\n"}))writeFileSync(join(material,name),text);git(wt,"add","specs");git(wt,"commit","-qm","owned current materials");return{r,repo,storage,home,wt,material,taskPath:boot.task_path,n:0};}
+function call(f,behavior,action,{stage="build-code",input,extra=[],review=false}={}){const argv=[behavior,`--action=${action}`,`--stage=${stage}`,"--project=OwnedEntry","--task=current-entry",`--task-path=${f.taskPath}`,...extra];if(input!==undefined){const p=join(f.wt,`input-${++f.n}.json`);writeFileSync(p,JSON.stringify(input)+"\n");argv.push(`--input=${p}`);}const code=`import{stageRuntimeCliMain}from${JSON.stringify(cli)};try{const value=await stageRuntimeCliMain(JSON.parse(process.argv[1]),${review?'{services:{runReviewRound:async(request,options)=>{await options.onProviderOutput({provider:"owned/stub",output:Buffer.from([0xff,0x00,0x41])});return{status:"unavailable",dispatch_state:"unknown",findings:[],provider_results:[],error:{code:"OWNED_UNAVAILABLE",message:"controlled no-model review"}};}}}':'{}'});console.log(JSON.stringify({ok:true,value}));}catch(error){console.log(JSON.stringify({ok:false,error:{code:error.code??null,message:error.message}}));}`;const result=spawnSync(process.execPath,["--input-type=module","-e",code,JSON.stringify(argv)],{cwd:f.wt,env:{...env(),HOME:f.home,XDG_CONFIG_HOME:join(f.home,".config"),WORKFLOWHUB_TASK_DIR:f.storage},encoding:"utf8",timeout:15000,stdio:["ignore","pipe","pipe"]});expect(result.error).toBeUndefined();expect(result.status).toBe(0);return JSON.parse(result.stdout);}
+function originalFacts(f){return readFileSync(join(f.taskPath,"facts.jsonl"));}
+import{openTask}from"../../runtime/task/task-handle.mjs";
+function oldTask(){const r=root(),taskPath=join(r,"Projects/History/tasks/old"),q=join(taskPath,"quality/reviews");mkdirSync(q,{recursive:true});writeFileSync(join(taskPath,"task.json"),JSON.stringify({schema_version:"1.0.0",project_name:"History",task_id:"old",target_repo_root:r,activation_cohort:"history"})+"\n");const ref="quality/reviews/old.json",bytes=Buffer.from('{"status":"passed","snapshot_tree":"historical-passive","findings":[]}\r\n');writeFileSync(join(taskPath,ref),bytes);return{r,taskPath,ref,bytes,task:openTask(taskPath,"History","old")};}
+describe("original history is readable without current quality or new writes",()=>{
+ it("reads original historical bytes and refuses new record/write/lock before effects",async()=>{const f=oldTask(),manifest=readFileSync(join(f.taskPath,"task.json"));expect(f.task.readRecordBytes(f.ref)).toEqual(f.bytes);for(const invoke of[()=>f.task.createRecord("quality/evidence/new.json","{}"),()=>f.task.writeRecordAtomic(f.ref,"{}"),()=>f.task.withRecordLock("history",()=>{throw Error("must not reach callback");})])await expect(invoke()).rejects.toThrow(/read.only/);expect(readFileSync(join(f.taskPath,f.ref))).toEqual(f.bytes);expect(readFileSync(join(f.taskPath,"task.json"))).toEqual(manifest);expect(existsSync(join(f.taskPath,"quality/evidence"))).toBe(false);});
+ it("does not swallow malformed original JSON or replace its bytes",()=>{const f=oldTask(),bad=Buffer.from('{bad original}\n');writeFileSync(join(f.taskPath,f.ref),bad);expect(()=>JSON.parse(f.task.readRecord(f.ref))).toThrow(SyntaxError);expect(readFileSync(join(f.taskPath,f.ref))).toEqual(bad);});
+ it.each(["symlink","hardlink"])("rejects %s aliases and reports missing source explicitly",kind=>{const f=oldTask(),outside=join(f.r,"outside.json");writeFileSync(outside,"owned outside");rmSync(join(f.taskPath,f.ref));expect(()=>f.task.readRecord(f.ref)).toThrow(/ENOENT/);if(kind==="symlink")symlinkSync(outside,join(f.taskPath,f.ref));else linkSync(outside,join(f.taskPath,f.ref));expect(()=>f.task.readRecord(f.ref)).toThrow(/alias|single.link/);expect(readFileSync(outside,"utf8")).toBe("owned outside");});
+ it("keeps legacy completed/quality fields passive when current status has no named current review",async()=>{const f=await fixture(),path=join(f.taskPath,"facts.jsonl"),raw=Buffer.from(JSON.stringify({record_kind:"stage",task_id:"current-entry",stage:"build-code",status:"completed",layer_states:{review:"passed"},receipts:{review:"specs/archive/old/review.json"},quality:{status:"passed"}})+"\n");writeFileSync(path,raw);const value=call(f,"status","begin");expect(value).toMatchObject({ok:true,value:{quality_status:"unknown",quality:{review_origin:"not_run",review_result_ref:null}}});expect(readFileSync(path)).toEqual(raw);});
 });

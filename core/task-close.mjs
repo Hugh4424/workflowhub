@@ -8,6 +8,7 @@ import { withLock } from "../runtime/interface/record-lock.mjs";
 import { appendRecord } from "../runtime/interface/safe-write.mjs";
 import { recordConfirmation } from "../runtime/interface/human-confirm.mjs";
 import { readTaskFacts } from "../runtime/task/task-store.mjs";
+import { openTask } from "../runtime/task/task-handle.mjs";
 
 const OPERATIONS = new Set(["commit", "merge", "archive", "push", "cleanup"]);
 const AUTH = fileURLToPath(new URL("../runtime/interface/git-authorize.mjs", import.meta.url));
@@ -50,6 +51,15 @@ function readFile(root, rel) {
   if (!stat.isFile() || stat.nlink !== 1) throw failure("UNSAFE_FILE", `a singly linked regular file is required: ${path}`);
   return readFileSync(path);
 }
+function closeEvidencePath(taskDir) {
+  return realDirectory(join(realDirectory(taskDir), "quality", "evidence", "close"));
+}
+function assertPostWriter(taskDir) {
+  const directory = realDirectory(taskDir);
+  const pathIdentity = directory.split(sep).slice(-4);
+  const task = openTask(directory, { projectName: pathIdentity[1], taskId: pathIdentity[3] });
+  if (task.manifest.activation_cohort !== "post") throw failure("TASK_HISTORY_READ_ONLY", "pre/history or unknown task metadata is read-only");
+}
 function evidenceDirectory(taskDir) {
   let cursor = realDirectory(taskDir);
   for (const part of ["quality", "evidence", "close"]) {
@@ -61,7 +71,7 @@ function evidenceDirectory(taskDir) {
 }
 function authorizationDirectory(taskDir) {
   let cursor = realDirectory(taskDir);
-  for (const part of ["quality", "authorizations"]) {
+  for (const part of ["quality", "evidence", "git-authorizations"]) {
     cursor = join(cursor, part); if (!existsSync(cursor)) mkdirSync(cursor); realDirectory(cursor);
   }
   return cursor;
@@ -92,7 +102,7 @@ function context(taskDir, { worktreeRequired = true, targetBranch = "main" } = {
   return { taskDir: directory, manifest, root, worktree, explicit, facts };
 }
 function contextForPlan(taskDir, planRef) {
-  const dir = realDirectory(taskDir), base = evidenceDirectory(dir), path = resolve(planRef);
+  const dir = realDirectory(taskDir), base = closeEvidencePath(dir), path = resolve(planRef);
   if (dirname(path) !== base || !/^\d{4}-\d{2}-\d{2}-\d{3}-close-plan\.json$/.test(basename(path))) throw failure("CLOSE_PLAN_REFERENCE", "an explicit task-owned ordinary plan reference is required");
   const preview = JSON.parse(readFile(base, basename(path)));
   return context(dir, { worktreeRequired: false, targetBranch: preview.target_branch });
@@ -112,7 +122,7 @@ function declaredTaskType(markdown) {
   return values.length === 1 && ["规划任务", "普通任务"].includes(values[0]) ? values[0] : "unknown";
 }
 function actionFacts(c, planRef) {
-  const base = evidenceDirectory(c.taskDir);
+  const base = closeEvidencePath(c.taskDir);
   return readdirSync(base).filter(name => /^\d{4}-\d{2}-\d{2}-\d{3}-close-action\.json$/.test(name)).sort().map(name => JSON.parse(readFile(base,name))).filter(row => row.plan_ref === planRef);
 }
 function entries(root) {
@@ -163,7 +173,7 @@ function validatePlan(plan, c) {
 }
 function readPlan(c, planRef) {
   const absolute = resolve(planRef);
-  const base = evidenceDirectory(c.taskDir);
+  const base = closeEvidencePath(c.taskDir);
   if (dirname(absolute) !== base || !/^\d{4}-\d{2}-\d{2}-\d{3}-close-plan\.json$/.test(absolute.slice(base.length + 1))) throw failure("CLOSE_PLAN_REFERENCE", "an explicit ordinary close plan evidence reference is required");
   return validatePlan(JSON.parse(readFile(base, absolute.slice(base.length + 1))), c);
 }
@@ -194,6 +204,7 @@ function authorize(c, operation, action, input) {
   catch (error) { let native; try { native = JSON.parse(String(error.stderr)); } catch { throw error; } throw failure(native.code ?? "AUTHORIZATION_FAILED", native.message ?? String(error.stderr)); }
 }
 export async function prepareDeliveryClosePlan({ taskDir, delivery = {}, closeMode, priorPlanRef, archiveDeclarationRef } = {}) {
+  assertPostWriter(taskDir);
   if (priorPlanRef !== undefined || archiveDeclarationRef !== undefined) {
     if (!priorPlanRef || !archiveDeclarationRef) throw failure("ARCHIVE_DECLARATION", "post-cleanup archive requires explicit prior plan and human-readable declaration references");
     const c = contextForPlan(taskDir, priorPlanRef);
@@ -241,6 +252,7 @@ export async function prepareDeliveryClosePlan({ taskDir, delivery = {}, closeMo
   return { plan, plan_ref: planRef, quality_status: "unknown" };
 }
 export async function confirmClosePlan({ taskDir, planRef, outcome = "confirmed", replyText } = {}) {
+  assertPostWriter(taskDir);
   const c = contextForPlan(taskDir, planRef); const plan = readPlan(c, planRef);
   if (plan.mode === "post-cleanup-archive") c.worktree = c.root;
   else realDirectory(c.worktree);
@@ -249,17 +261,20 @@ export async function confirmClosePlan({ taskDir, planRef, outcome = "confirmed"
     if (replyText !== undefined && replyText !== "") throw failure("CONFIRMATION_REPLY", "timeout must not invent a human reply");
     return { status: "blocked", outcome, confirmation_ref: await writeEvidence(c, "close-timeout", { plan_ref: planRef, outcome, recorded_at: new Date().toISOString() }) };
   }
-  const value = await recordConfirmation({ stage: "verify-code", decision: outcome, reply: replyText, materialRefs: [planRef] }, { cwd: c.worktree, dir: join(c.taskDir, "quality", "confirmations") });
+  const value = await recordConfirmation({ stage: "verify-code", decision: outcome, reply: replyText, materialRefs: [planRef] }, { cwd: c.worktree, dir: join(c.taskDir, "quality", "evidence", "human-confirmations") });
   return { status: outcome === "confirmed" ? "confirmed" : "blocked", outcome, confirmation_ref: value.path, record: value };
 }
 function acceptedConfirmation(c, planRef, confirmationRef) {
-  const root = join(c.taskDir, "quality", "confirmations");
-  if (dirname(resolve(confirmationRef)) !== root) throw failure("CONFIRMATION_REFERENCE", "confirmation must be this task's native record");
+  const root = dirname(resolve(confirmationRef));
+  const roots = [join(c.taskDir, "quality", "evidence", "human-confirmations"), join(c.taskDir, "quality", "confirmations")];
+  if (!roots.includes(root)) throw failure("CONFIRMATION_REFERENCE", "confirmation must be this task's explicit native record");
+  // Old confirmation originals are read in place; new writes use evidence only.
   const value = JSON.parse(readFile(root, resolve(confirmationRef).slice(root.length + 1)));
   if (value.decision !== "confirmed" || value.stage !== "verify-code" || !value.reply || !value.material_refs?.includes(planRef)) throw failure("CONFIRMATION_REJECTED", "confirmed verbatim user reply for this plan is required");
   return value;
 }
 export async function authorizeClosePlan({ taskDir, planRef, confirmationRef, operations } = {}) {
+  assertPostWriter(taskDir);
   const c = contextForPlan(taskDir, planRef); const plan = readPlan(c, planRef);
   if (plan.mode === "post-cleanup-archive") c.worktree = c.root; else realDirectory(c.worktree);
   acceptedConfirmation(c, planRef, confirmationRef);
@@ -288,6 +303,7 @@ export async function inspectDeliveryCloseState({ taskDir, planRef } = {}) {
   return { task_id: plan.task_id, plan_ref: planRef, facts, remote, step_records: actions, quality_status: "unknown", known_gaps: plan.known_gaps };
 }
 export async function executeClosePlan({ taskDir, planRef, confirmationRef, signal } = {}) {
+  assertPostWriter(taskDir);
   const c = contextForPlan(taskDir, planRef); const plan = readPlan(c, planRef);
   if (plan.mode === "post-cleanup-archive") c.worktree = c.root; else realDirectory(c.worktree);
   acceptedConfirmation(c, planRef, confirmationRef);

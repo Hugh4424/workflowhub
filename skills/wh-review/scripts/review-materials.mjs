@@ -84,18 +84,13 @@ const VERIFY_CODE_FULL_DIFF_FILES = new Set([
   "workflows/verify-code/steps.json",
 ]);
 const VERIFY_CODE_RELEVANT_TEST_FILES = new Set([
-  "tests/contract/acceptance-execution-tier.test.mjs",
   "tests/contract/ocr-delegation-adapter.test.mjs",
   "tests/contract/ocr-delegation-route.test.mjs",
   "tests/contract/ocr-production-cutover.test.mjs",
   "tests/review/review-record-route.test.mjs",
   "tests/contract/review-materials-contract.test.mjs",
-  "tests/contract/stage-completion.test.mjs",
   "tests/contract/verify-architect-acceptance.test.mjs",
-  "tests/e2e/vnext-five-stage-current.test.mjs",
-  "tests/integration/vnext-official-stage-run.test.mjs",
   "tests/stage-review-cost-policy.test.mjs",
-  "tests/verify-code-facts.test.mjs",
 ]);
 // The current verify-code OCR surface is the host/provider boundary and its
 // authenticated execution consumer. Other implementation changes remain in
@@ -104,7 +99,6 @@ const VERIFY_CODE_RELEVANT_TEST_FILES = new Set([
 // repository scan and is the source of the observed multi-minute stalls.
 const VERIFY_CODE_REVIEW_SURFACE_PREFIXES = [
   "runtime/review/",
-  "runtime/evidence/freshness.mjs",
   "tools/cli/stage-runtime.mjs",
   "skills/wh-review/scripts/review-materials.mjs",
   "skills/wh-review/scripts/simple-review-runner.mjs",
@@ -160,11 +154,10 @@ export function verifyCodeDiffDeliveryForPath(path) {
 
 export function selectVerifyCodeDiffPaths(sections, stage) {
   if (stage !== "verify-code") return null;
-  const hasWorkflowHubRuntimeSurface = sections.some((section) => section.path.startsWith("runtime/"));
   return new Set(sections
     .filter((section) => VERIFY_CODE_FULL_DIFF_FILES.has(section.path)
       || VERIFY_CODE_REVIEW_SURFACE_PREFIXES.some((prefix) => section.path === prefix || section.path.startsWith(prefix))
-      || (!hasWorkflowHubRuntimeSurface && classifyReviewableCodePath(section.path) === "implementation")
+      || ["implementation", "test"].includes(classifyReviewableCodePath(section.path))
       || VERIFY_CODE_RELEVANT_TEST_FILES.has(section.path))
     .map((section) => section.path));
 }
@@ -517,6 +510,8 @@ function stageReviewFocus(stage, track, reviewScope, reviewKind = null, directio
   return "Focus on the supplied stage subject, its contract, and its evidence; report advice only.";
 }
 
+const PACKET_BOUND_CODEX_READ_EXCEPTION = "Codex only when the host transport has demonstrated native hard packet filesystem, tool and environment boundaries: read-only file-view commands such as cat, sed or rg may read manifest-listed paths in this packet. This is not general shell permission. Writes, Git, network, parent/host materials, Agent/subagent and wait/poll remain prohibited. Minimal runtime read exceptions exist only to run the tools, never as review materials.";
+
 export function reviewInstructionsFor(stage, track = null, uiScope = false, reviewScope = null, reviewKind = null, directionMode = "full", role = null, candidateExperiment = false) {
   assertReviewIdentity({ stage, reviewTrack: track, reviewScope, reviewKind });
   if (role !== null && !["red", "blue"].includes(role)) throw new Error(`MATERIAL_INCOMPLETE: invalid review role ${role}`);
@@ -574,7 +569,7 @@ export function reviewInstructionsFor(stage, track = null, uiScope = false, revi
   const candidateOcrToolBoundaries = candidateExperiment && ["build-code", "verify-code"].includes(stage)
     ? " Do not invoke Agent, subagent, child-agent, or other agent tools. Do not wait for or poll agents, sessions, or processes; do not invoke wait/poll tools."
     : "";
-  return `Review stage ${scope}. All provider-visible files are under bundle/; begin with bundle/review-instructions.md and read only files in that bundle. Read contracts/ and ${skillInstruction} The manifest lists the supplied provider files. Do not fetch excluded raw logs or treat receipts and checksums as workflow permission. ${subjectReading} Use context/ only for map-selected dependencies. ${stageFocus} ${verifyBound} ${roleBoundary} ${adviceBoundary} ${buildCodeBoundary} ${miniImplementationBoundary} ${findingBudget} Return only one JSON object with findings using the requested findings-only reviewer schema; findings may be empty. Do not output verdict, pass/fail status, summary, checklist, skill execution receipts, or a second JSON object. Do not access the repository, parent directories, Git, shell, network, or host paths.${candidateOcrToolBoundaries}\n`;
+  return `Review stage ${scope}. Read the manifest-listed relative packet paths only; begin with review-instructions.md. A broker may present the packet with a bundle/ delivery prefix; native transport presents these paths directly at its packet root. Do not add that transport prefix to findings anchors. Read contracts/ and ${skillInstruction} The manifest lists the supplied provider files. Do not fetch excluded raw logs or treat receipts and checksums as workflow permission. ${subjectReading} Use context/ only for map-selected dependencies. ${stageFocus} ${verifyBound} ${roleBoundary} ${adviceBoundary} ${buildCodeBoundary} ${miniImplementationBoundary} ${findingBudget} Return only one JSON object with findings using the requested findings-only reviewer schema; findings may be empty. Do not output verdict, pass/fail status, summary, checklist, skill execution receipts, or a second JSON object. Do not access the repository, parent directories, Git, general shell, network, or host paths. ${PACKET_BOUND_CODEX_READ_EXCEPTION}${candidateOcrToolBoundaries}\n`;
 }
 
 export function minimumReviewersFor(stage, track = null, reviewScope = null) { return ruleFor(stage, track, reviewScope).minimum_reviewers; }
@@ -603,7 +598,7 @@ export function buildReviewMaterials({attachmentRoot,reviewDataRoot,stage,review
     const documentFace=surface==="document"&&stage==="build-code";
     const codePacket=["build-code","verify-code"].includes(stage)&&!documentFace;
     const instruction=documentFace
-      ? `Review stage build-code; subject_kind=phase; review_scope=phase; phase_id=${phaseId ?? "not supplied"}; surface=document. This is the current Phase's document review, not a build-plan stage result or an OCR code review. Read the complete submitted specification, Phase material, method/contract documents and metadata. Apply contracts/build-plan.md as the existing document review lens: requirement-to-implementation-to-consumer-to-verification, dependencies, boundary, recovery and necessity. The actual stage remains build-code. Do not evaluate unsubmitted code or demand snapshot/hash/receipt/lineage permits. Read manifest-declared reviewer skills and contracts/provider-protocol.md. Report only concrete delivery findings with relative file/line anchors and genuine serious evidence. Findings, including empty findings, are advice only; missing quality stays unknown and provider/transport/parse failure remains unavailable/incomplete. Do not access repository files, Git, shell, network or host paths. Return exactly one findings JSON.\n`
+      ? `Review stage build-code; subject_kind=phase; review_scope=phase; phase_id=${phaseId ?? "not supplied"}; surface=document. This is the current Phase's document review, not a build-plan stage result or an OCR code review. Read the complete submitted specification, Phase material, method/contract documents and metadata. Apply contracts/build-plan.md as the existing document review lens: requirement-to-implementation-to-consumer-to-verification, dependencies, boundary, recovery and necessity. The actual stage remains build-code. Do not evaluate unsubmitted code or demand snapshot/hash/receipt/lineage permits. Read manifest-declared reviewer skills and contracts/provider-protocol.md. Report only concrete delivery findings with relative file/line anchors and genuine serious evidence. Findings, including empty findings, are advice only; missing quality stays unknown and provider/transport/parse failure remains unavailable/incomplete. Do not access repository files, Git, general shell, network or host paths. ${PACKET_BOUND_CODEX_READ_EXCEPTION} Return exactly one findings JSON.\n`
       : reviewInstructionsFor(stage,reviewTrack,uiScope,reviewScope,reviewKind,stage==="make-decision"&&reviewTrack==="direction"?"combined":"full",role);
     write("review-instructions.md",instruction+(missing.length ? `\nSupplied material is incomplete: ${missing.join(", ")}. Missing quality is unknown, not a pass.\n` : ""));
     const plan=stagePlanFor(stage,reviewTrack,reviewKind);if(!plan)throw new Error(`MATERIAL_INCOMPLETE: no skill plan for ${stage}`);

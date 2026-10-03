@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 import { constants, closeSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { resolveCanonicalTaskPath } from "../../core/load-config.mjs";
+import { resolveCanonicalTaskPath } from "../../runtime/task/load-config.mjs";
 import { resolveStorageRootDetails } from "../../runtime/evidence/storage-root.mjs";
 import { initializeTaskStore } from "../../runtime/task/task-store.mjs";
 import { inspectWorkspace } from "../../runtime/interface/workspace-check.mjs";
@@ -44,9 +44,17 @@ function readManifest(root) {
     return value;
   } finally {closeSync(fd);}
 }
+function linkedTarget(target) {
+  const dotGit = lstatSync(join(target, ".git"));
+  if (dotGit.isSymbolicLink() || (!dotGit.isFile() && !dotGit.isDirectory()) || (dotGit.isFile() && dotGit.nlink !== 1)) {
+    throw new Error("target Git metadata must be a real directory or single-link file");
+  }
+  return dotGit.isFile();
+}
 async function workspace(target, root, branch) {
   const checked=await inspectWorkspace({root:target,target:root,baseline:"HEAD",...(branch?{expectBranch:branch}:{})});
-  if(root===target || !lstatSync(join(root,".git")).isFile()) throw new Error("task requires a registered linked parallel worktree");
+  const dotGit=lstatSync(join(root,".git"));
+  if(!dotGit.isFile() || dotGit.isSymbolicLink() || dotGit.nlink!==1) throw new Error("task requires a registered linked parallel worktree");
   if(realpathSync(resolve(root,git(root,["rev-parse","--git-common-dir"])))!==realpathSync(resolve(target,git(target,["rev-parse","--git-common-dir"])))) throw new Error("task workspace differs from target Git repository");
   return checked;
 }
@@ -68,8 +76,10 @@ export async function bootstrapTask(values,{env=process.env,home}={}) {
     const root=directory(resolution.taskPath),manifest=readManifest(root);
     if(!plain(manifest) || manifest.project_name!==resolution.project || manifest.task_id!==resolution.task)throw new Error("task manifest identity mismatch");
     if(manifest.activation_cohort!=="post")throw new Error("pre/history task is read-only; bootstrap cannot initialize or rewrite its records");
-    const target=directory(manifest.target_repo_root),worktree=manifest.workspace_mode==="existing"?directory(manifest.workspace_root):resolve(dirname(target),`${basename(target)}-${resolution.task}`);
-    await workspace(target,worktree,manifest.workspace_mode==="existing"?null:`task/${resolution.project}/${resolution.task}`);
+    const target=directory(manifest.target_repo_root);
+    const existingWorkspace=manifest.workspace_mode==="existing" || (manifest.workspace_mode===undefined && linkedTarget(target));
+    const worktree=manifest.workspace_mode==="existing"?directory(manifest.workspace_root):existingWorkspace?target:resolve(dirname(target),`${basename(target)}-${resolution.task}`);
+    await workspace(target,worktree,existingWorkspace?null:`task/${resolution.project}/${resolution.task}`);
     await initializeTaskStore(root,{taskId:resolution.task});
     return Object.freeze({task_path:root,project:resolution.project,task:resolution.task,task_path_source:resolution.source});
   }
@@ -78,10 +88,14 @@ export async function bootstrapTask(values,{env=process.env,home}={}) {
   await inspectWorkspace({root:target,target,baseline:"HEAD"});
   const inputs=requirementInputs(values.inputs);
   const supplied=values["workspace-root"]!==undefined;
-  const worktree=supplied?directory(resolve(values["workspace-root"])):resolve(dirname(target),`${basename(target)}-${resolution.task}`);
+  // A user-supplied linked target already is the trusted existing parallel
+  // worktree. Preserve the original physical resolver meaning, without
+  // creating a sibling or normalizing the user's merge target/branch.
+  const existingWorkspace=supplied || linkedTarget(target);
+  const worktree=supplied?directory(resolve(values["workspace-root"])):existingWorkspace?target:resolve(dirname(target),`${basename(target)}-${resolution.task}`);
   const branch=`task/${resolution.project}/${resolution.task}`;
   let physical;
-  if(supplied) physical=await workspace(target,worktree,null);
+  if(existingWorkspace) physical=await workspace(target,worktree,null);
   else {
     let exists;try{lstatSync(worktree);exists=true;}catch(error){if(error.code!=="ENOENT")throw error;exists=false;}
     let branchExists;try{git(target,["show-ref","--verify","--quiet",`refs/heads/${branch}`]);branchExists=true;}catch(error){if(error.status!==1)throw error;branchExists=false;}
@@ -91,7 +105,7 @@ export async function bootstrapTask(values,{env=process.env,home}={}) {
   }
   const storage=resolveStorageRootDetails({env,home});
   const taskPath=directory(resolution.taskPath,{create:true});
-  const manifest={schema_version:"1.0.0",execution_mode:"per_invocation",record_model:"vnext-single-write",project_name:resolution.project,task_id:resolution.task,created_at:new Date().toISOString(),target_repo_root:target,activation_cohort:"post",write_resolution_source:storage.selected_source,baseline_commit:physical.head,...(supplied?{workspace_mode:"existing",workspace_root:worktree}:{}),issue_ids:values.issues?values.issues.split(",").filter(Boolean):[],inputs:inputs.raw_requirement?{...inputs,raw_requirement:{ref:inputs.raw_requirement.ref,sha256:inputs.raw_requirement.sha256}}:inputs};
+  const manifest={schema_version:"1.0.0",execution_mode:"per_invocation",record_model:"vnext-single-write",project_name:resolution.project,task_id:resolution.task,created_at:new Date().toISOString(),target_repo_root:target,activation_cohort:"post",write_resolution_source:storage.selected_source,baseline_commit:physical.head,...(existingWorkspace?{workspace_mode:"existing",workspace_root:worktree}:{}),issue_ids:values.issues?values.issues.split(",").filter(Boolean):[],inputs:inputs.raw_requirement?{...inputs,raw_requirement:{ref:inputs.raw_requirement.ref,sha256:inputs.raw_requirement.sha256}}:inputs};
   await createFileOnce(taskPath,"task.json",JSON.stringify(manifest,null,2)+"\n");
   await initializeTaskStore(taskPath,{taskId:resolution.task});
   for(const record of inputs.raw_requirement?.records??[]) {

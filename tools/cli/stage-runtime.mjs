@@ -1,70 +1,30 @@
 #!/usr/bin/env node
 
-import { accessSync, closeSync, fstatSync, openSync, constants as fsConstants, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, fstatSync, openSync, constants as fsConstants, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { recordSimpleReviewRequest } from "../../runtime/review/review-record-route.mjs";
-import { ArtifactDir } from "../../core/artifact-dir.mjs";
-import { resolveCanonicalTaskPath } from "../../core/load-config.mjs";
-
-import { authenticateCurrentArchitectReviewFact, authenticateCurrentOcrReviewFact, authenticateStageOutcomeForProjection } from "../../runtime/stage/stage-runner.mjs";
-import { validateStageInvocation, verifyUnavailableReview } from "../../runtime/stage/stage-handlers.mjs";
-import { diagnoseMissingInput } from "../../runtime/stage/stage-handlers.mjs";
-import {
-  validateAcceptanceEvidence,
-  publishEvidence,
-} from "../../runtime/evidence/canonical-receipt-writer.mjs";
+import { resolveCanonicalTaskPath } from "../../runtime/task/load-config.mjs";
+import { bootstrapStage } from "../../runtime/stage/stage-context.mjs";
+import { openTask } from "../../runtime/task/task-handle.mjs";
 import { invokeRuntimeCommand, RUNTIME_BEHAVIORS } from "../../runtime/interface/runtime-facade.mjs";
 import { LOCAL_RUNNER_CONTRACT, LOCAL_SKILL_BUNDLE_CONTRACT } from "../../runtime/interface/runner-contract.mjs";
-import { deriveExecutionOutcomes, deriveStageCompletion, deriveStageProgress, stageMaterialScopeRevision, stageMaterialScopeRevisions } from "../../runtime/stage/completion-predicates.mjs";
-import {
-  activeAcceptanceCriterionIds,
-  deriveDecisionDivergenceOutline,
-  deriveDecisionLogOriginalSourceCensus,
-  validatePlanTaskContract,
-  validatePostPhaseContract,
-} from "../../runtime/stage/stage-content-contracts.mjs";
-import { authenticateBuildCodeCompletion, authenticateQualityFactRecord } from "../../runtime/evidence/freshness.mjs";
-import { deriveResearchStatus, listCurrentResearchReports } from "../../runtime/evidence/research-report.mjs";
+import { validatePostPhaseContract } from "../../runtime/stage/stage-content-contracts.mjs";
 import { CURRENT_MATERIAL_FILES, materialFilesForCohort, phaseFilesFromIndex } from "../../runtime/task/material-workspace.mjs";
-// The two stage-result projections read their current result from the frozen
-// stage row of the single execution record, never from stage-outcome bytes.
 import { readTaskFacts, STAGE_ROW_KEYS, writeStageRow } from "../../runtime/task/task-store.mjs";
-import { materialRevisionFromValues } from "../../runtime/task/git-worktree-snapshot.mjs";
-import { openTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { inspectWorkspace } from "../../runtime/interface/workspace-check.mjs";
-import { writeFileAtomic } from "../../runtime/interface/safe-write.mjs";
 import { captureCommand } from "../../runtime/interface/run-command.mjs";
 import { recordConfirmation } from "../../runtime/interface/human-confirm.mjs";
-import { openCurrentTaskWorkspace } from "../../runtime/task/workspace.mjs";
-import {
-  assertNoTaskTypeArguments,
-  inspectTaskType,
-  isTypeRelatedStage,
-  readActivationCohort,
-  recordTypeAttempt,
-  validateStageForTopology,
-} from "../../runtime/task/task-topology.mjs";
-import {
-  projectPortableWorkflowStatus,
-  runPortableWorkflow,
-} from "../../runtime/task/portable-workflow-run.mjs";
-import { validateProjectName, validateTaskId } from "../../runtime/task/task-identity.mjs";
+import { validateTaskId } from "../../runtime/task/task-identity.mjs";
 import { resolveStorageRoot, resolveStorageRootDetails } from "../../runtime/evidence/storage-root.mjs";
 import { AUTHENTICATED_EVIDENCE_PATH, redactProviderHostPaths } from "../../runtime/review/provider-material-projection.mjs";
 import { authenticatedEvidenceBytes } from "../../runtime/review/review-packet-identity.mjs";
-import { resolveSimpleReviewRouteIdentity, runSimpleReview, simpleReviewProviderMaterialId } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
-import {
-  prepareConfiguredOcrHostContext,
-  runConfiguredOcrHostReview,
-  runOcrDelegationRound,
-  detectOcr,
-} from "../../runtime/review/ocr-delegation-adapter.mjs";
-export { runConfiguredOcrHostReview };
+import { runSimpleReview } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
+import { prepareConfiguredOcrHostContext, runConfiguredOcrHostReview, runOcrDelegationRound, detectOcr } from "../../runtime/review/ocr-delegation-adapter.mjs";
 import { compactReviewDiff, gitDiffPath } from "../../runtime/review/review-input-bounds.mjs";
 import { captureReviewSource } from "../../skills/wh-review/scripts/review-source.mjs";
 import { buildReviewMaterials, canonicalMaterialManifest, reviewMaterialBytes, reviewInstructionsFor, validateVerifyAcceptanceSummary } from "../../skills/wh-review/scripts/review-materials.mjs";
@@ -74,7 +34,9 @@ const DESIGN_ARTIFACTS = Object.freeze({
   "make-decision": new Set(["decision-log.md"]),
   "build-plan": new Set(["plan.md", "tasks.md"]),
 });
+
 const POST_PHASE_ARTIFACT = /^phases\/P[1-9][0-9]*\.md$/;
+
 const PHASE_PROGRESS_ONLY_SOURCE = "phase-progress-cursor";
 
 function isDesignArtifact(stage, name, activationCohort = "pre") {
@@ -90,20 +52,18 @@ export function stageRuntimeProcessExitCode(result) {
   if (Number.isInteger(result?.exit_code)) return result.exit_code;
   return result?.status === "protocol_invalid" ? 2 : stageRowWriteFailed ? 1 : 0;
 }
-const RUNNER_ROOT = fileURLToPath(new URL("../../", import.meta.url));
+
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+
 const GIT_OID = /^[a-f0-9]{40,64}$/;
-const WORKFLOW_STAGES = Object.freeze(["make-decision", "build-plan", "build-code", "verify-code", "build-prd"]);
+
 const PORTABLE_WORKFLOW_STAGE = "build-prd";
 
-// Managed OCR reviews are observed until a real terminal state or explicit
-// cancellation. Test-injected legacy runners retain a bounded default.
 export function reviewRecordTimeoutForRunner({ managed = false } = {}) {
   if (typeof managed !== "boolean") throw new TypeError("managed review runner flag must be boolean");
   return managed ? null : undefined;
 }
 
-/** Ephemeral OCR liveness only; no provider output, host paths, or persisted state. */
 export function writeOcrProviderHealthDiagnostic(health, { stderr = process.stderr } = {}) {
   const provider = typeof health?.provider === "string" && health.provider.length <= 100
     && /^[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/.test(health.provider)
@@ -120,72 +80,6 @@ export function writeOcrProviderHealthDiagnostic(health, { stderr = process.stde
   };
   try { stderr.write(`[ocr-review] ${JSON.stringify(diagnostic)}\n`); }
   catch { /* diagnostics must not change the review outcome */ }
-}
-
-function topologyRouteError(message, details = {}) {
-  const error = new Error(message);
-  error.code = "TASK_TOPOLOGY_INVALID";
-  Object.assign(error, details);
-  return error;
-}
-
-/**
- * Read the sole human declaration and select the frozen topology. The public
- * run entry authenticates its write identity before calling this function,
- * because an unknown declaration can append an immutable attempt fact.
- */
-export function resolveTaskTopologyRoute({ identity, stage, recordUnknownAttempt = true } = {}) {
-  const task = openTask(identity?.taskPath, identity?.project, identity?.task);
-  const workspace = openCurrentTaskWorkspace(task);
-  const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
-  let decisionLog = "";
-  let readError = null;
-  try {
-    decisionLog = artifacts.read("decision-log.md");
-  } catch (error) {
-    if (error?.code !== "ENOENT") throw error;
-    readError = error;
-  }
-  const taskType = inspectTaskType(decisionLog);
-  if (taskType.status !== "known") {
-    let attempt = null;
-    let attemptError = null;
-    if (recordUnknownAttempt) {
-      try {
-        attempt = recordTypeAttempt({
-          task,
-          observed_kind: taskType.observed_kind,
-          observed_summary: readError?.message ?? taskType.reason,
-        });
-      } catch (error) {
-        attemptError = error;
-      }
-    }
-    throw topologyRouteError(
-      "任务类型无法识别，请在 make-decision 的任务身份段声明恰一条受控值标签",
-      { task_type: taskType, task_type_attempt: attempt, task_type_attempt_error: attemptError?.message ?? null },
-    );
-  }
-  const activationCohort = readActivationCohort(task.manifest);
-  const validation = validateStageForTopology({
-    task_type: taskType.task_type,
-    activation_cohort: activationCohort,
-    stage,
-  });
-  if (!validation.ok) {
-    throw topologyRouteError(
-      `阶段 ${stage} 不在任务类型 ${taskType.task_type} 的拓扑中；期望 ${validation.expected.join(" → ")}`,
-      { task_type: taskType, activation_cohort: activationCohort, topology: validation.expected },
-    );
-  }
-  return Object.freeze({
-    task,
-    workspace,
-    artifacts,
-    task_type: taskType.task_type,
-    activation_cohort: activationCohort,
-    topology: validation.expected,
-  });
 }
 
 export function resolveWorkflowHubIdentity(values, cwd = process.cwd(), env = process.env) {
@@ -211,11 +105,6 @@ export function resolveWorkflowHubIdentity(values, cwd = process.cwd(), env = pr
   throw new Error("WorkflowHub identity missing: supply --project and --task or run from an authenticated task worktree");
 }
 
-/**
- * Check the complete identity tuple immediately before a formal write.
- * Explicit task/path values are useful diagnostics, but they never replace the
- * canonical task path or the Workspace bound to the opened TaskHandle.
- */
 export function assertTaskWriteIdentity({
   task,
   project,
@@ -382,11 +271,10 @@ function registeredTaskCandidates(storageRoot, repositoryRoot, worktreeRoot) {
           if (error?.code === "ENOENT") continue;
           continue;
         }
-        if (manifest?.workspace_mode !== "existing"
-            || typeof manifest.workspace_root !== "string"
-            || resolve(manifest.workspace_root) !== worktreeRoot
-            || typeof manifest.target_repo_root !== "string"
-            || resolve(manifest.target_repo_root) !== repositoryRoot) continue;
+        const explicitExisting = manifest?.workspace_mode === "existing" && typeof manifest.workspace_root === "string" && resolve(manifest.workspace_root) === worktreeRoot;
+        const targetIsWorkspace = worktreeRoot !== repositoryRoot && manifest?.workspace_mode === undefined && typeof manifest.target_repo_root === "string" && resolve(manifest.target_repo_root) === worktreeRoot;
+        if ((!explicitExisting && !targetIsWorkspace) || typeof manifest.target_repo_root !== "string"
+            || ![repositoryRoot, worktreeRoot].includes(resolve(manifest.target_repo_root))) continue;
       }
       candidates.push(Object.freeze({
         projectName: projectEntry.name,
@@ -411,9 +299,10 @@ function deriveIdentityFromAuthenticatedWorktree(cwd, env) {
     throw new Error(`WorkflowHub identity conflict: multiple task manifests are registered for worktree ${worktreeRoot}`);
   }
   const candidate = candidates[0];
-  const metadata=readPlainTaskMetadata(candidate.taskPath,candidate.projectName,candidate.taskId);
-  const declared=metadata.manifest.workspace_mode==="existing" ? metadata.manifest.workspace_root
-    : resolve(dirname(repositoryRoot),`${basename(repositoryRoot)}-${candidate.taskId}`);
+  const metadata = openTask(candidate.taskPath, candidate.projectName, candidate.taskId);
+  const declared = metadata.manifest.workspace_mode === "existing" ? metadata.manifest.workspace_root
+    : metadata.manifest.workspace_mode === undefined && resolve(metadata.manifest.target_repo_root) === worktreeRoot
+      ? worktreeRoot : resolve(dirname(repositoryRoot), `${basename(repositoryRoot)}-${candidate.taskId}`);
   if(typeof declared!=="string" || realpathSync(resolve(declared))!==worktreeRoot)throw new Error("task metadata workspace does not match the current Git worktree");
   return Object.freeze({
     project: metadata.identity.projectName,
@@ -422,35 +311,6 @@ function deriveIdentityFromAuthenticatedWorktree(cwd, env) {
     source: "worktree",
     taskPathSource: "authenticated_worktree",
   });
-}
-
-export function normalizeAcceptanceEvidencePublication(input, snapshotTree) {
-  if (!input || typeof input !== "object" || Array.isArray(input)
-      || typeof input.acceptance_criterion_id !== "string"
-      || !new Set(["pass", "fail"]).has(input.result)
-      || !Array.isArray(input.refs)) {
-    throw new TypeError("acceptance evidence input requires acceptance_criterion_id, result, refs, and optional summary");
-  }
-  const allowed = new Set(["acceptance_criterion_id", "result", "refs", "summary", "source_digest"]);
-  const unknown = Object.keys(input).filter((key) => !allowed.has(key));
-  if (unknown.length) {
-    throw new TypeError(`acceptance evidence input has caller-forbidden or unknown field: ${unknown.join(", ")}`);
-  }
-  if (!GIT_OID.test(snapshotTree ?? "")) throw new TypeError("acceptance evidence runtime snapshot_tree is required");
-  return validateAcceptanceEvidence({
-    schema_version: "acceptance-evidence.v1",
-    acceptance_criterion_id: input.acceptance_criterion_id,
-    result: input.result,
-    refs: input.refs,
-    ...(input.source_digest === undefined ? {} : { source_digest: input.source_digest }),
-    ...(input.summary === undefined ? {} : { summary: input.summary }),
-    snapshot_tree: snapshotTree,
-  });
-}
-
-function isIntegrationReviewRequest(request) {
-  return request?.stage === "build-code"
-    && (request.review_scope ?? request.reviewScope ?? null) === "integration";
 }
 
 function isTaskBoundBuildCodeReviewRequest(request) {
@@ -469,23 +329,6 @@ function isNormalOcrCodeReviewRequest(request) {
     || (request?.stage === "verify-code" && scope === null));
 }
 
-function validateOcrCodeReviewRequest(request, stage) {
-  if (!request || typeof request !== "object" || Array.isArray(request) || request.stage !== stage) {
-    throw new TypeError("code review request must bind the public stage");
-  }
-  const scope = request.review_scope ?? request.reviewScope ?? null;
-  const kind = request.subject_kind ?? request.subjectKind ?? "worktree";
-  const phase = request.phase_id ?? request.phaseId ?? null;
-  if ((request.review_kind ?? request.reviewKind ?? null) !== null
-      || (request.review_track ?? request.reviewTrack ?? null) !== null
-      || (stage === "build-code" && !(
-        (scope === "phase" && kind === "phase" && /^P[1-9][0-9]*$/.test(phase ?? ""))
-        || (scope === "integration" && kind === "worktree" && phase === null)))
-      || (stage === "verify-code" && (scope !== null || kind !== "worktree" || phase !== null))) {
-    throw new TypeError("malformed OCR code-surface request");
-  }
-}
-
 function ocrReviewInstructionsFor(request) {
   const focus = reviewInstructionsFor(request.stage, null, false,
     request.review_scope ?? request.reviewScope ?? null, null, "full", null, true);
@@ -496,7 +339,7 @@ function ocrReviewInstructionsFor(request) {
     focus,
     "按根因合并重复 finding，保留真实消费者、后果和源码行证据。不可用≠空≠pass；缺少可用结果说明限制，不能当作没有问题。",
     "Return exactly one findings JSON. Code findings use packet-relative paths and real positive line numbers. Serious findings also include root_cause, evidence_kind and a verbatim source excerpt in backticks at the cited line or next two lines. Do not output verdict, stage completion or workflow permission.",
-    "Read only listed packet files. Do not access parent directories, Git, shell, network or host paths; do not write.",
+    "Read only listed packet files. Only Codex with verified native packet filesystem, tool and environment boundaries may use cat, sed or rg for declared packet paths; this is not general shell permission. Do not access parent directories, Git, network or host paths; do not write. Minimal runtime exceptions are for tool operation, not review material.",
     "Do not invoke Agent, subagent, child-agent, or other agent tools.",
     "Do not wait for or poll agents, sessions, or processes; do not invoke wait/poll tools.",
   ].join("\n");
@@ -639,7 +482,6 @@ function phaseReviewSourceProjection(context, request, source, attachmentRoot) {
   return Object.freeze({ ...source, diffPath, diffBytes: Buffer.byteLength(selected, "utf8") });
 }
 
-/** Build the provider-visible build-code packet from the authenticated task workspace. */
 export function prepareTaskBoundBuildCodeReviewBundle(context, request, {
   loadConfig = loadTrustedThirdReviewConfig,
   captureSource = captureReviewSource,
@@ -711,305 +553,6 @@ export function prepareTaskBoundBuildCodeReviewBundle(context, request, {
   }
 }
 
-/** Kept as a named compatibility export for integration callers. */
-export function prepareTaskBoundIntegrationReviewBundle(context, request, dependencies = {}) {
-  if (!isIntegrationReviewRequest(request)) throw new TypeError("task-bound integration review request required");
-  return prepareTaskBoundBuildCodeReviewBundle(context, request, dependencies);
-}
-
-function readQualityEvidence(task) {
-  return (ref) => /^quality\/evidence\/stage-quality\/build-code\/acceptance-(?:stdout|stderr)-[a-f0-9]{64}\.bin$/.test(ref)
-    ? task.readRecordBytes(ref) : task.readRecord(ref);
-}
-
-function codeReviewSource(task, fact) {
-  if (!((fact?.stage === "verify-code" && fact?.subject === "code_review")
-      || (fact?.stage === "build-code" && fact?.subject === "integration_review"))) return undefined;
-  const identity = {
-    snapshotTree: fact.snapshot_tree,
-    materialRevision: fact.material_revision,
-  };
-  if (authenticateCurrentOcrReviewFact(task, fact, identity)) return "ocr-delegation";
-  if (authenticateCurrentArchitectReviewFact(task, fact, identity)) return "architect-code-review";
-  return "unverified";
-}
-
-function collectCurrentQualityFactObservations({ context, stage = null, currentSnapshot = null, materialRevision = null }) {
-  const observations = [];
-  for (const ref of context.task.listCanonicalQualityFactRefs()) {
-    let value;
-    let raw;
-    try {
-      raw = context.task.readRecord(ref);
-      value = JSON.parse(raw);
-    } catch { continue; }
-    if (value?.task_id !== context.task.identity.taskId || (stage !== null && value?.stage !== stage)) continue;
-    // Authentication proves which snapshot a fact belongs to; it does not
-    // make that snapshot current. A verify-code review is current only while
-    // both the implementation tree and its stage materials still match.
-    if (value?.stage === "verify-code" && value?.subject === "code_review"
-        && (typeof currentSnapshot?.tree !== "string"
-          || value.snapshot_tree !== currentSnapshot.tree
-          || value.material_revision !== materialRevision)) continue;
-    // An authenticated E2E fact can still describe an obsolete verification
-    // target. Only project it when both its source tree and stage materials
-    // match the current contract inputs.
-    if (value?.stage === "verify-code" && value?.subject === "e2e_acceptance"
-        && (typeof currentSnapshot?.tree !== "string"
-          || value.snapshot_tree !== currentSnapshot.tree
-          || value.material_revision !== materialRevision)) continue;
-    const authentication = authenticateQualityFactRecord({ ...value, ref, sha256: sha256(raw) }, {
-      read: readQualityEvidence(context.task),
-      workspaceRoot: context.workspace?.worktreeRoot ?? context.candidateWorkspace?.worktreeRoot,
-    });
-    const reviewSource = codeReviewSource(context.task, value);
-    observations.push({
-      fact: { ref, value }, authenticated: authentication.authenticated === true, recorded: true, authentication,
-      ...(reviewSource === undefined ? {} : { review_source: reviewSource }),
-    });
-  }
-  return observations;
-}
-
-/**
- * Read the six named status reference classes from canonical task facts.
- * Directory contents never decide which reference is current: K1-K3 are
- * fixed names, and K4-K6 are names carried by the frozen facts row.
- */
-export const REFLECTION_CONCLUSION_FIELDS = Object.freeze([
-  "what_helped",
-  "what_to_improve",
-  "blockers",
-  "intervention_reasons",
-  "what_to_simplify",
-  "simplifiable_now",
-]);
-
-function statusRootCauseId(gap) {
-  const text = String(gap);
-  const prerequisite = /^verify-code prerequisite missing:\s*(.+)$/.exec(text);
-  if (prerequisite) return statusRootCauseId(prerequisite[1]);
-  const stagePredicate = /^stage_predicate_missing:([^:]+):(.+)$/.exec(text);
-  if (stagePredicate) return `stage_predicate_missing:${stagePredicate[1]}:${stagePredicate[2]}`;
-  const stageCompletion = /^stage_completion_(?:missing|not_completed|unbound):(.+)$/.exec(text);
-  if (stageCompletion) return `stage_completion:${stageCompletion[1]}`;
-  const acceptance = /^(acceptance_result_(?:not_pass|unbound|missing|unexpected)):(.+?)(?::.*)?$/.exec(text);
-  if (acceptance) return `${acceptance[1]}:${acceptance[2]}`;
-  return text;
-}
-
-function collectNamedRefs(value, refs = new Set()) {
-  if (typeof value === "string") {
-    const normalized = value.replace(/^\.\//, "");
-    if (/^(?:quality|evidence|operations|review|reviews)\/[A-Za-z0-9._/-]+$/.test(normalized)) refs.add(normalized);
-    return refs;
-  }
-  if (!value || typeof value !== "object") return refs;
-  for (const nested of Object.values(value)) collectNamedRefs(nested, refs);
-  return refs;
-}
-
-function canonicalTaskFacts(context) {
-  try {
-    return readTaskFacts(context.task.taskPath);
-  } catch {
-    return [];
-  }
-}
-
-export function readStageReflectionConclusion(context, stage, facts) {
-  const refs = new Set();
-  for (const row of facts) {
-    if (row?.stage !== stage) continue;
-    for (const ref of collectNamedRefs(row)) {
-      if (ref.includes("stage-reflection")) refs.add(ref);
-    }
-  }
-  const ref = [...refs].sort()[0] ?? null;
-  if (!ref) return Object.freeze({ status: "unavailable", ref: null, conclusion: null });
-  try {
-    const value = JSON.parse(context.task.readRecord(ref));
-    return Object.freeze({
-      status: typeof value?.status === "string" ? value.status : "recorded",
-      ref,
-      conclusion: value?.conclusion ?? value?.summary ?? value?.reflection ?? null,
-      status_matrix: value?.status_matrix ?? null,
-      ...Object.fromEntries(REFLECTION_CONCLUSION_FIELDS.map((field) => [field, value?.[field] ?? null])),
-    });
-  } catch {
-    return Object.freeze({
-      status: "unavailable",
-      ref,
-      conclusion: null,
-      status_matrix: null,
-      ...Object.fromEntries(REFLECTION_CONCLUSION_FIELDS.map((field) => [field, null])),
-    });
-  }
-}
-
-export function diagnoseStageInput(options = {}) {
-  return diagnoseMissingInput(options);
-}
-
-export function deriveNamedStatusRefs({ facts = [], activationCohort = "pre", materials = {} } = {}) {
-  const materialRefs = materialFilesForCohort(activationCohort, materials);
-  const K4 = new Set();
-  const K5 = new Set();
-  for (const row of facts) {
-    for (const ref of collectNamedRefs(row)) {
-      if (/^quality\/(?:confirmations|authorizations)\/[a-f0-9]{64}\.json$/.test(ref)) K4.add(ref);
-      else K5.add(ref);
-    }
-  }
-  return Object.freeze([
-    Object.freeze({ class: "K1", name: "task.json", refs: Object.freeze(["task.json"]), source: "task.json" }),
-    Object.freeze({ class: "K2", name: "facts.jsonl", refs: Object.freeze(["facts.jsonl"]), source: "facts.jsonl" }),
-    Object.freeze({ class: "K3", name: "current materials", refs: Object.freeze([...materialRefs]), source: "authenticated worktree" }),
-    Object.freeze({ class: "K4", name: "named confirmations and authorizations", refs: Object.freeze([...K4].sort()), source: "facts.jsonl" }),
-    Object.freeze({ class: "K5", name: "named evidence references", refs: Object.freeze([...K5].sort()), source: "facts.jsonl or close-action row" }),
-    Object.freeze({ class: "K6", name: "material diff inputs", refs: Object.freeze(materialRefs.map((file) => `${file}:HEAD-diff`)), source: "git diff" }),
-  ]);
-}
-
-export function deriveStatusRootCauses({ quality = null, research = null, divergenceOutline = null, sliceAdvisory = null, stale = null, activationCohort = "pre", materials = {} } = {}) {
-  const causes = new Map();
-  const add = (id, status, source, refs = [], detail = null) => {
-    const rootCauseId = statusRootCauseId(id);
-    const current = causes.get(rootCauseId) ?? { root_cause_id: rootCauseId, status, source, refs: [], details: [] };
-    for (const ref of refs) if (typeof ref === "string" && !current.refs.includes(ref)) current.refs.push(ref);
-    if (detail !== null && !current.details.includes(detail)) current.details.push(detail);
-    causes.set(rootCauseId, current);
-  };
-  for (const gap of quality?.missing ?? []) {
-    const subject = String(gap);
-    const normalized = statusRootCauseId(subject);
-    add(subject, "actionable", "quality facts", [quality?.predicates?.[subject]?.fact_ref ?? quality?.predicates?.[normalized]?.fact_ref ?? "facts.jsonl"], subject);
-  }
-  if (["unavailable", "unknown", "incomplete"].includes(research?.status)) {
-    add("research", research.status, "research report", [research.report_ref].filter(Boolean), `research:${research.status}`);
-  }
-  if (research?.candidate_delivery?.status === "incomplete") {
-    const delivery = research.candidate_delivery;
-    const ref = delivery.full_report?.ref ?? research.report_ref;
-    const ids = delivery.missing_candidate_ids?.join(",") || "unknown";
-    add("research_candidate_delivery", "actionable", "research report", [ref].filter(Boolean), `candidate delivery incomplete:${ids}`);
-  }
-  if (research?.candidate_presentation?.status === "incomplete") {
-    const presentation = research.candidate_presentation;
-    const ref = presentation.full_report?.ref ?? research.report_ref;
-    add("research_candidate_presentation", "actionable", "decision-log.md", [ref, "decision-log.md"].filter(Boolean), `candidate presentation incomplete:${presentation.reason ?? "unknown"}`);
-  }
-  if (divergenceOutline?.status === "incomplete") {
-    add("decision_divergence_outline", "actionable", "decision-log.md", ["decision-log.md"], `divergence outline incomplete:${divergenceOutline.reason ?? "unknown"}`);
-  }
-  if (sliceAdvisory?.status === "unexplained_overage" || sliceAdvisory?.diagnostics?.length) {
-    const refs = activationCohort === "post"
-      ? materialFilesForCohort("post", materials).filter((file) => file.startsWith("phases/"))
-      : ["plan.md"];
-    add("slice_advisory", "advisory", refs[0], refs, "slice advisory requires operator review");
-  }
-  if (stale?.status === "stale") {
-    add("stale", "stale", stale.source ?? "named material diff", [stale.source].filter(Boolean), stale.detail ?? "current target advanced");
-  }
-  if (causes.size === 0) {
-    add("none", "clear", "facts.jsonl", ["facts.jsonl"], "no canonical root cause recorded");
-  }
-  return Object.freeze([...causes.values()].map((cause) => Object.freeze({
-    ...cause,
-    refs: Object.freeze(cause.refs),
-    details: Object.freeze(cause.details),
-  })));
-}
-
-function postPhaseSliceAdvisory(materials) {
-  const files = materialFilesForCohort("post", materials).filter((file) => POST_PHASE_ARTIFACT.test(file));
-  const validation = validatePostPhaseContract({
-    spec: materials["spec.md"],
-    index: materials["phases/index.md"],
-    phases: Object.fromEntries(files.map((file) => [file, materials[file]])),
-  });
-  const details = [];
-  const owners = new Map();
-  for (const phase of validation.facts?.phase_rows ?? []) {
-    if (new Set(phase.write_set).size > 10) {
-      details.push(Object.freeze({ signal: "SIG-FILES", phase: phase.id, file_count: new Set(phase.write_set).size, explained: false }));
-    }
-    for (const file of phase.write_set) owners.set(file, [...(owners.get(file) ?? []), phase.id]);
-  }
-  for (const [file, phases] of owners) {
-    if (new Set(phases).size > 1) details.push(Object.freeze({ signal: "SIG-CROSS-PHASE", file, phases: Object.freeze([...new Set(phases)]), explained: false }));
-  }
-  const signals = [...new Set(details.map((detail) => detail.signal))];
-  return Object.freeze({
-    status: validation.ok ? signals.length ? "unexplained_overage" : "within_budget" : "unavailable",
-    signals: Object.freeze(signals),
-    explained_signals: Object.freeze([]),
-    unexplained_signals: Object.freeze(signals),
-    signal_details: Object.freeze(details),
-    markers: Object.freeze([]),
-    marker_count: 0,
-    diagnostics: Object.freeze([
-      ...validation.errors,
-      ...details.map((detail) => `${detail.signal} overage is not explained in ${detail.phase ?? detail.phases?.join(", ")}`),
-    ]),
-  });
-}
-
-/**
- * Derive the current status from authenticated quality facts and the frozen
- * task row. The result has three fact domains, six named reference classes,
- * and one stage-reflection conclusion; it does not create another authority.
- */
-function buildCodeCompletionAdvisories(quality, observations, snapshotTree, materialRevision) {
-  const entries = observations.filter((entry) => {
-    const fact = entry.fact?.value ?? entry.fact;
-    return entry.authenticated === true && fact?.stage === "build-code" && fact.status === "missing"
-      && fact.snapshot_tree === snapshotTree && fact.material_revision === materialRevision
-      && ((fact.subject === "acceptance_criteria" && quality.predicates.acceptance_execution?.status === "satisfied")
-        || (fact.subject === "finding_dispositions" && !quality.predicates.finding_dispositions));
-  });
-  return { quality_advisory_fact_refs: Object.freeze(entries.map((entry) => entry.fact.ref).sort()),
-    quality_advisories: Object.freeze(entries.map((entry) => `${(entry.fact.value ?? entry.fact).subject}:missing:completion_source_separate_from_quality`)) };
-}
-
-export function deriveCurrentStatusDomains(context, {
-  stage = "verify-code",
-  currentSnapshot,
-  materialRevision,
-  materials,
-  stale = null,
-} = {}) {
-  if (!context?.task || !context?.kernel || !currentSnapshot || typeof materialRevision !== "string" || !materials || typeof materials !== "object" || Array.isArray(materials)) {
-    throw new TypeError("current status domain derivation requires an authenticated context, snapshot, material revision, and materials");
-  }
-  const observations = collectCurrentQualityFactObservations({ context, currentSnapshot, materialRevision, materials, stage });
-  const quality = deriveStageCompletion(stage, observations, {
-    authenticateBuildCodeCompletion: ({ observations: entries }) => authenticateBuildCodeCompletion({
-      task: context.task, read: readQualityEvidence(context.task), currentMaterialRevision: materialRevision, snapshotTree: currentSnapshot.tree,
-      spec: materials["spec.md"], activeCriterionIds: activeAcceptanceCriterionIds(materials["spec.md"]), observations: entries, verifyUnavailableReview,
-    }),
-    authenticateCodeReview: ({ fact }) => codeReviewSource(context.task, fact) !== "unverified",
-  });
-  const facts = canonicalTaskFacts(context);
-  const divergenceOutline = deriveDecisionDivergenceOutline(materials["decision-log.md"]);
-  const activationCohort = context.manifest?.activation_cohort ?? "pre";
-  const materialRefs = materialFilesForCohort(activationCohort, materials);
-  const stageReflection = readStageReflectionConclusion(context, stage, facts);
-  return Object.freeze({
-    work_progress: deriveStageProgress(stage, observations, materials, {
-      activationCohort: context.manifest?.activation_cohort ?? "pre",
-    }),
-    stage_quality: quality,
-    ...(stage === "build-code" ? buildCodeCompletionAdvisories(quality, observations, currentSnapshot.tree, materialRevision) : {}),
-    root_causes: deriveStatusRootCauses({ quality, divergenceOutline, stale, activationCohort, materials }),
-    named_refs: deriveNamedStatusRefs({ facts, activationCohort, materials }),
-    stage_reflection: stageReflection,
-    status_matrix: stageReflection.status_matrix ?? null,
-    identity: Object.freeze({ task_id: context.identity.taskId, material_revision: materialRevision, snapshot_tree: currentSnapshot.tree }),
-    source_completeness: Object.freeze({ task_json: true, facts_jsonl: facts.length > 0, materials: materialRefs.every((file) => typeof materials[file] === "string") }),
-  });
-}
-
 function parseArgs(argv) {
   const [command, ...raw] = argv;
   const values = {};
@@ -1032,8 +575,6 @@ function readTaskBoundInput(context, inputPath) {
   return JSON.parse(readPlainInputFile(path,"review input"));
 }
 
-// Native metadata readers are private consumers of the existing files. They
-// create no TaskHandle, kernel, receipt graph, latest selector or persisted view.
 function readPlainInputFile(path,label) {
   const absolute=resolve(path);let cursor="/";
   for(const part of absolute.split("/").filter(Boolean)){cursor=join(cursor,part);const stat=lstatSync(cursor);if(stat.isSymbolicLink()||realpathSync(cursor)!==cursor)throw Object.assign(new Error(`${label} path alias`),{code:"TASK_PATH_ALIAS"});}
@@ -1041,12 +582,7 @@ function readPlainInputFile(path,label) {
   const fd=openSync(absolute,fsConstants.O_RDONLY|fsConstants.O_NOFOLLOW);
   try{const st=fstatSync(fd);if(st.dev!==named.dev||st.ino!==named.ino||!st.isFile()||st.nlink!==1)throw Object.assign(new Error(`${label} changed`),{code:"TASK_FILE_CHANGED"});return readFileSync(fd,"utf8");}finally{closeSync(fd);}
 }
-function readPlainTaskMetadata(taskPath,projectName,taskId) {
-  const path=resolve(taskPath);if(realpathSync(path)!==path||!lstatSync(path).isDirectory())throw Object.assign(new Error("task directory must be real"),{code:"TASK_PATH_ALIAS"});
-  const manifest=JSON.parse(readPlainInputFile(join(path,"task.json"),"task manifest"));
-  if(manifest.project_name!==projectName||manifest.task_id!==taskId)throw Object.assign(new Error("task manifest differs from requested project/task"),{code:"TASK_ID_MISMATCH"});
-  return {taskPath:path,manifest,identity:{projectName,taskId}};
-}
+
 
 export function phaseProgressTargetExists(cursor, materials) {
   if (!cursor || typeof cursor !== "object" || !materials || typeof materials !== "object") return false;
@@ -1198,64 +734,27 @@ function doctorStorage(context, { env = process.env, home = homedir() } = {}) {
   });
 }
 
-
-// Public entry points use task identity, physical workspace checks, and native
-// tools. The existing review recorder alone retains its old backend until T019.
-function thinMaterialAccess(worktreeRoot, taskId) {
-  const root = resolve(worktreeRoot, "specs", taskId);
-  const check = (path, { allowMissing = false } = {}) => {
-    const absolute = resolve(path);
-    const rel = relative(worktreeRoot, absolute);
-    if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) throw new Error("material path escapes the worktree");
-    let cursor = worktreeRoot;
-    for (const part of rel.split(/[\\/]/)) {
-      cursor = join(cursor, part);
-      try {
-        const stat = lstatSync(cursor);
-        if (stat.isSymbolicLink() || realpathSync(cursor) !== cursor) throw new Error(`material path alias is forbidden: ${cursor}`);
-        if (stat.isFile() && stat.nlink !== 1) {
-          throw Object.assign(new Error(`material file must have exactly one link: ${cursor}`), { code: "MATERIAL_MULTILINK" });
-        }
-      } catch (error) { if (allowMissing && error.code === "ENOENT") return; throw error; }
-    }
-  };
-  const filePath = (name) => {
-    if (typeof name !== "string" || !name || isAbsolute(name) || name.split(/[\\/]/).includes("..")) throw new TypeError("material name must be a relative path");
-    return resolve(root, name);
-  };
-  return {
-    root,
-    read(name) {
-      const path = filePath(name);
-      check(path);
-      if (!lstatSync(path).isFile()) {
-        throw Object.assign(new Error(`material must be a regular file: ${path}`), { code: "MATERIAL_NOT_REGULAR" });
-      }
-      return readFileSync(path, "utf8");
-    },
-    reference(name) { return filePath(name); },
-    ensureRoot() { check(root, { allowMissing: true }); mkdirSync(root, { recursive: true }); check(root); },
-    prepareWrite(name) { const path = filePath(name); check(dirname(path), { allowMissing: true }); mkdirSync(dirname(path), { recursive: true }); check(dirname(path)); },
-  };
-}
-
-async function thinTaskContext(values, cwd) {
-  const identity=resolveWorkflowHubIdentity(values,cwd);
-  const task=readPlainTaskMetadata(identity.taskPath,identity.project,identity.task),manifest=task.manifest;
-  const target=gitWorktreeRoot(cwd);if(!target)throw new Error("CURRENT_WORKTREE_UNAVAILABLE: current Git worktree is required");
-  const repositoryRoot=gitRepositoryRoot(cwd,target);if(!repositoryRoot)throw new Error("repository root is unavailable");
-  const declared=manifest.workspace_mode==="existing" ? manifest.workspace_root : resolve(dirname(repositoryRoot),`${basename(repositoryRoot)}-${identity.task}`);
-  if(typeof declared!=="string"||resolve(declared)!==target||realpathSync(declared)!==target)throw Object.assign(new Error("CURRENT_WORKTREE_MISMATCH: declared task workspace differs from cwd"),{code:"WRITE_IDENTITY_PREFLIGHT_FAILED"});
-  const root=resolve(manifest.target_repo_root);if(realpathSync(root)!==root)throw new Error("target repository path alias is forbidden");
-  const metadataGit=args=>execFileSync("git",args,{cwd:target,env:gitMetadataEnvironment(),encoding:"utf8",stdio:["ignore","pipe","pipe"]}).trim();
-  const head=metadataGit(["rev-parse","--verify","HEAD^{commit}"]);
-  let baselineCommit=manifest.baseline_commit ?? null;
-  if(baselineCommit!==null){if(!GIT_OID.test(baselineCommit))throw new TypeError("task baseline_commit must be a real Git commit");metadataGit(["cat-file","-e",`${baselineCommit}^{commit}`]);metadataGit(["merge-base","--is-ancestor",baselineCommit,head]);}
-  else {const branches=metadataGit(["for-each-ref","--format=%(refname)","refs/heads/main"]);baselineCommit=branches ? metadataGit(["merge-base",head,"refs/heads/main"]) : head;}
-  const workspace={worktreeRoot:target,targetRepoRoot:root,baselineCommit};
-  assertTaskWriteIdentity({task,project:identity.project,taskId:identity.task,taskPath:identity.taskPath,workspace,cwd});
-  const physical=await inspectWorkspace({root,target,baseline:baselineCommit});
-  return {task,workspace,manifest,identity:task.identity,artifacts:thinMaterialAccess(target,task.identity.taskId),physical};
+async function thinTaskContext(values, cwd, { readOnly = false } = {}) {
+  const identity = resolveWorkflowHubIdentity(values, cwd);
+  const context = await bootstrapStage(values.stage, { projectName: identity.project, taskId: identity.task, taskPath: identity.taskPath, readOnly });
+  if (!context.workspace) throw Object.assign(new Error(context.workspace_unavailable?.message ?? "current task workspace is unavailable"), { code: context.workspace_unavailable?.code ?? "CURRENT_WORKTREE_UNAVAILABLE" });
+  const target = gitWorktreeRoot(cwd);
+  if (!target || target !== context.workspace.worktreeRoot) throw Object.assign(new Error("CURRENT_WORKTREE_MISMATCH: declared task workspace differs from cwd"), { code: "WRITE_IDENTITY_PREFLIGHT_FAILED" });
+  const metadataGit = args => execFileSync("git", args, { cwd: target, env: gitMetadataEnvironment(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  const head = metadataGit(["rev-parse", "--verify", "HEAD^{commit}"]);
+  let baselineCommit = context.manifest.baseline_commit ?? null;
+  if (baselineCommit !== null) {
+    if (!GIT_OID.test(baselineCommit)) throw new TypeError("task baseline_commit must be a real Git commit");
+    metadataGit(["cat-file", "-e", `${baselineCommit}^{commit}`]);
+    metadataGit(["merge-base", "--is-ancestor", baselineCommit, head]);
+  } else {
+    const branches = metadataGit(["for-each-ref", "--format=%(refname)", "refs/heads/main"]);
+    baselineCommit = branches ? metadataGit(["merge-base", head, "refs/heads/main"]) : head;
+  }
+  const workspace = Object.freeze({ ...context.workspace, baselineCommit });
+  assertTaskWriteIdentity({ task: context.task, project: identity.project, taskId: identity.task, taskPath: identity.taskPath, workspace, cwd });
+  const physical = await inspectWorkspace({ root: workspace.targetRepoRoot, target, baseline: baselineCommit });
+  return Object.freeze({ ...context, workspace, physical });
 }
 
 function thinMaterials(context) {
@@ -1265,8 +764,8 @@ function thinMaterials(context) {
     catch (error) { if (error.code === "ENOENT") materials[file] = null; else throw error; }
   };
   const cohort = context.manifest.activation_cohort ?? "pre";
-  for (const file of cohort === "post" ? ["decision-log.md", "spec.md", "phases/index.md"] : CURRENT_MATERIAL_FILES) read(file);
-  for (const file of materialFilesForCohort(cohort, materials)) if (!(file in materials)) read(file);
+  for (const file of cohort === "post" ? CURRENT_MATERIAL_FILES : ["decision-log.md", "spec.md", "plan.md", "tasks.md"]) read(file);
+  if (cohort === "post") for (const file of materialFilesForCohort(cohort, materials)) if (!(file in materials)) read(file);
   return materials;
 }
 
@@ -1301,19 +800,19 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
   };
   requireOptions(values, options[command] ?? [], command);
   if (["artifact", "capture-tests", "review-record", "run"].includes(command) && !values.input) throw new TypeError(`${command} requires --input`);
-  let context = await thinTaskContext(values, cwd);
+  let context = await thinTaskContext(values, cwd, { readOnly: command === "doctor" || command === "status" });
   const input = values.input === undefined || command === "artifact" ? undefined : readTaskBoundInput(context, values.input);
   if (command === "doctor") return {
     stage: values.stage, task_id: context.task.identity.taskId, worktree_root: context.workspace.worktreeRoot,
     baseline_commit: context.workspace.baselineCommit, workspace: context.physical,
-    storage: doctorStorage(context), materials: thinMaterials(context), ocr: detectOcr(),
+    storage: doctorStorage(context), materials: thinMaterials(context), ocr: detectOcr(), target_workspace: context.targetStatus,
   };
   if (command === "status") {
     const rows = readTaskFacts(context.task.taskPath); // malformed JSON and permissions are real errors
     const materials = thinMaterials(context);
     const cohort = context.manifest.activation_cohort ?? "pre";
     const needed = values.stage === "make-decision" ? [] : values.stage === "build-plan" ? ["decision-log.md"]
-      : values.stage === "build-prd" ? ["decision-log.md"] : materialFilesForCohort(cohort, materials);
+      : values.stage === "build-prd" ? ["decision-log.md"] : cohort === "post" ? materialFilesForCohort(cohort, materials) : ["decision-log.md", "spec.md", "plan.md", "tasks.md"];
     const missing = needed.filter((file) => materials[file] === null || !String(materials[file] ?? "").trim());
     const row = rows.find((value) => value.record_kind === "stage" && value.stage === values.stage) ?? null;
     const currentCursor = rows.find((value) => value.record_kind === "stage" && value.stage === "build-code")?.phase_progress ?? null;
@@ -1324,16 +823,14 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       quality: { status: qualityStatus, review_origin: row?.review_origin ?? "not_run", review_result_ref: row?.review_result_ref ?? null },
       materials: Object.fromEntries(Object.entries(materials).map(([file, value]) => [file, value !== null])),
       ...(values.stage === "build-code" ? { phase_progress: derivePhaseProgressStatus({ cursor: currentCursor, currentPhasesHead: phasesHead }) } : {}),
-      facts: rows, workspace: context.physical,
+      facts: rows, workspace: context.physical, target_workspace: context.targetStatus,
     };
   }
   if (command === "artifact") {
     const prd = values.stage === "build-prd" && values.name === "prd.md";
     if (!prd && !isDesignArtifact(values.stage, values.name, context.manifest.activation_cohort ?? "pre")) throw new TypeError(`unsupported ${values.stage} artifact: ${values.name}`);
-    context.artifacts.ensureRoot();
     const relativeName = values.name;
-    context.artifacts.prepareWrite(relativeName);
-    await writeFileAtomic(context.artifacts.root, relativeName, readFileSync(values.input));
+    await context.artifacts.writeAtomic(relativeName, readFileSync(values.input));
     return { artifact_ref: context.artifacts.reference(relativeName) };
   }
   if (command === "capture-tests") {
@@ -1356,14 +853,14 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
   if (command === "confirm") {
     const fields = input ?? { stage: values.stage, decision: values.decision, reply: values["reply-text"], materialRefs: values["material-ref"] === undefined ? [] : [values["material-ref"]] };
     if (fields.stage !== undefined && fields.stage !== values.stage) throw new TypeError("confirmation stage differs from CLI stage");
-    return { status: "recorded", ...(await recordConfirmation({ ...fields, stage: values.stage }, { cwd: context.workspace.worktreeRoot, dir: join(context.task.taskPath, "quality", "confirmations") })) };
+    return { status: "recorded", ...(await recordConfirmation({ ...fields, stage: values.stage }, { cwd: context.workspace.worktreeRoot, dir: join(context.task.taskPath, "quality", "evidence", "human-confirmations") })) };
   }
   if (command === "authorize-operation") {
     if (!["commit", "push", "merge", "archive", "cleanup"].includes(values.operation) || !values["subject-ref"]) throw new TypeError("authorize requires a supported operation and --subject-ref");
     // The native authorization API intentionally binds process.cwd(). Invoke
     // its existing CLI in the real worktree; never mutate this process cwd.
     const output = execFileSync(process.execPath, [fileURLToPath(new URL("../../runtime/interface/git-authorize.mjs", import.meta.url)), "record",
-      "--operation", values.operation, "--confirmation-ref", values["subject-ref"], "--dir", join(context.task.taskPath, "quality", "authorizations")],
+      "--operation", values.operation, "--confirmation-ref", values["subject-ref"], "--dir", join(context.task.taskPath, "quality", "evidence", "git-authorizations")],
       { cwd: context.workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
     return { status: "recorded", ...JSON.parse(output) };
   }
@@ -1398,14 +895,16 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
           : await whReview(current,{...options,buildBundle:()=>prepareTaskBoundBuildCodeReviewBundle(context,current)});
         return {...result,executor:"wh-review",fallback};
       }
+      const onProviderHealth=services.onOcrProviderHealth ?? writeOcrProviderHealthDiagnostic;
+      if(typeof onProviderHealth!=="function")throw new TypeError("OCR health observer must be a function");
       const ocrRunner=services.runOcrDelegationRound;
-      if(typeof ocrRunner==="function")return {...await ocrRunner(current,options),executor:"ocr"};
+      if(typeof ocrRunner==="function")return {...await ocrRunner(current,{...options,onProviderHealth}),executor:"ocr"};
       let bundle;
       try {
         bundle=prepareTaskBoundBuildCodeReviewBundle(context,current);
         const trustedContext=prepareConfiguredOcrHostContext(current);
         const result=await runOcrDelegationRound(current,{buildBundle:()=>bundle,signal:options.signal,
-          executor:params=>runConfiguredOcrHostReview(params,{trustedContext,sourceBundle:bundle,
+          executor:params=>runConfiguredOcrHostReview(params,{trustedContext,sourceBundle:bundle,onProviderHealth,
             rawOutputSink:async (hint,bytes,metadata={})=>options.onProviderOutput({provider:metadata.provider ?? "ocr",role:null,channel:metadata.stream ?? "raw-output",output:bytes})})});
         return {...result,executor:"ocr"};
       } finally {bundle?.dispose();}
@@ -1534,6 +1033,8 @@ export async function stageRuntimeCliMain(argv = process.argv.slice(2), {
     ? runReviewRecordWithSignalHandling(invoke, { signalProcess: services.signalProcess ?? process })
     : invoke();
 }
+
+export { runConfiguredOcrHostReview };
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   stageRuntimeCliMain().then((result) => {

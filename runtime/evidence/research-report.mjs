@@ -1,25 +1,16 @@
-import { createHash } from "node:crypto";
-import { SHA256_HEX } from "./canonical-utils.mjs";
-import Ajv2020 from "ajv/dist/2020.js";
+import { lstatSync, readdirSync, realpathSync } from "node:fs";
+import { basename, dirname, isAbsolute } from "node:path";
+import { appendRecord } from "../interface/safe-write.mjs";
 
-import schema from "../schemas/research-report.v1.json" with { type: "json" };
-
-const ajv = new Ajv2020({ allErrors: true, strict: false });
-const validateSchema = ajv.compile(schema);
-const TREE = /^[a-f0-9]{40}$/i;
-const REVISION = /^revision-[a-f0-9]{64}$/;
-const REPORT_REF = /^quality\/evidence\/research\/([a-f0-9]{64})\.json$/;
+const REPORT_REF = /^quality\/evidence\/research\/([A-Za-z0-9-]+)\.json$/;
 const STAGES = new Set(["make-decision", "build-spec", "build-plan"]);
 const ATTEMPT_STATUSES = new Set(["ok", "usage_error", "auth_error", "http_error", "timeout", "tls_unreachable", "quota"]);
 
-const hashBytes = (bytes) => createHash("sha256").update(bytes).digest("hex");
-const errorText = (validator) => (validator.errors ?? []).map((error) => `${error.instancePath || "/"} ${error.message}`).join("; ");
 const isObject = (value) => value && typeof value === "object" && !Array.isArray(value);
 
 function assertIdentity(report, expected = {}) {
   if (expected.taskId !== undefined && report.task_id !== expected.taskId) throw new Error("research report task identity mismatch");
   if (expected.stage !== undefined && report.stage !== expected.stage) throw new Error("research report stage identity mismatch");
-  if (expected.materialScopeRevision !== undefined && report.material_scope_revision !== expected.materialScopeRevision) throw new Error("research report material identity mismatch");
 }
 
 function validateAttempts(report) {
@@ -64,12 +55,84 @@ function validateCompleted(report) {
   if (!report.triangulation?.status || !report.saturation?.status || !report.saturation?.reason?.trim()) throw new Error("completed research requires triangulation and saturation facts");
 }
 
+function validateOrdinaryShape(report) {
+  const fail = label => { throw new TypeError(`research report ${label} is invalid`); };
+  const text = value => typeof value === "string" && value.length > 0;
+  const nullableText = value => value === null || typeof value === "string";
+  const requiredText = (item, fields, label) => {
+    if (!isObject(item) || fields.some(key => !text(item[key]))) fail(label);
+  };
+  const strings = (value, label, nonempty = false) => {
+    if (!Array.isArray(value) || value.some(item => typeof item !== "string" || nonempty && !item.length)) fail(label);
+  };
+  if (!isObject(report) || report.schema_version !== "research-report.v1" || !STAGES.has(report.stage)
+      || !["completed", "skipped", "unavailable"].includes(report.status)) fail("shape");
+  requiredText(report, ["task_id", "question", "decision_axis"], "identity/question");
+  if (!Array.isArray(report.tool_usage) || !Array.isArray(report.open_items)) fail("tool_usage/open_items");
+  for (const question of report.questions ?? []) requiredText(question, ["question_id", "text"], "question");
+  for (const item of report.open_items) requiredText(item, ["question_id", "code", "reason", "next_action"], "open item");
+  if (!isObject(report.review) || !["pending", "completed", "unavailable"].includes(report.review.status)
+      || !nullableText(report.review.evidence_ref) || report.review.findings !== undefined && !Array.isArray(report.review.findings)) fail("review");
+  if (!isObject(report.fallback) || !["not_requested", "awaiting_user_approval", "approved", "declined"].includes(report.fallback.approval_status)
+      || !nullableText(report.fallback.requested_route) || report.fallback.approval_ref !== undefined && !nullableText(report.fallback.approval_ref)) fail("fallback");
+  strings(report.fallback.used_routes, "fallback used_routes");
+  for (const usage of report.tool_usage) {
+    requiredText(usage, ["tool"], "tool usage");
+    for (const key of ["question_id", "route"]) if (usage[key] !== undefined && !text(usage[key])) fail(`tool usage ${key}`);
+    if (usage.queries !== undefined) strings(usage.queries, "queries");
+    if (usage.attempts !== undefined && !Array.isArray(usage.attempts)) fail("attempts");
+    const checkAttempt = (attempt, full) => {
+      if (!isObject(attempt)) fail("attempt");
+      if (full && ["route", "attempt", "status", "elapsed_ms", "http_status", "error_code", "message"].some(key => !Object.hasOwn(attempt, key) || attempt[key] === undefined)) fail("attempt required fields");
+      if (attempt.route !== undefined && !text(attempt.route)) fail("attempt route");
+      if (attempt.attempt !== undefined && (!Number.isInteger(attempt.attempt) || attempt.attempt < 1 || full && attempt.attempt > 2)) fail("attempt number");
+      if (attempt.status !== undefined && !ATTEMPT_STATUSES.has(attempt.status)) fail("attempt status");
+      if (attempt.elapsed_ms !== undefined && (!Number.isInteger(attempt.elapsed_ms) || attempt.elapsed_ms < 0 || full && attempt.elapsed_ms > 30000)) fail("attempt elapsed_ms");
+      if (attempt.http_status !== undefined && attempt.http_status !== null && (!Number.isInteger(attempt.http_status) || attempt.http_status < 100 || attempt.http_status > 599)) fail("attempt http_status");
+      for (const key of ["error_code", "message"]) if (attempt[key] !== undefined && !nullableText(attempt[key])) fail(`attempt ${key}`);
+    };
+    checkAttempt(usage, false);
+    for (const attempt of usage.attempts ?? []) checkAttempt(attempt, true);
+  }
+  for (const key of ["questions", "sources", "evidence", "candidates"]) if (report[key] !== undefined && !Array.isArray(report[key])) fail(key);
+  for (const source of report.sources ?? []) {
+    requiredText(source, ["url_or_ref"], "source");
+    if (!["primary", "secondary", "inferred"].includes(source.source_tier) || source.read_original !== true
+        || source.locator !== undefined && !nullableText(source.locator)) fail("source provenance");
+  }
+  for (const evidence of report.evidence ?? []) {
+    requiredText(evidence, ["claim", "source_ref", "locator"], "evidence");
+    if (!["high", "medium", "low"].includes(evidence.confidence) || evidence.read_original !== undefined && evidence.read_original !== true) fail("evidence confidence/original");
+    if (evidence.evidence_id !== undefined && !text(evidence.evidence_id)) fail("evidence_id");
+    if (evidence.candidate_ids !== undefined) strings(evidence.candidate_ids, "candidate_ids", true);
+  }
+  for (const candidate of report.candidates ?? []) {
+    requiredText(candidate, ["candidate_id"], "candidate");
+    for (const key of ["plain_language_summary", "recommendation_reason"]) if (candidate[key] !== undefined && !text(candidate[key])) fail(`candidate ${key}`);
+    for (const key of ["source_refs", "evidence_refs"]) if (candidate[key] !== undefined) strings(candidate[key], `candidate ${key}`, true);
+    if (candidate.recommendation !== undefined && !["recommended", "not_recommended"].includes(candidate.recommendation)) fail("candidate recommendation");
+  }
+  for (const key of ["reason", "non_impact_basis", "error_class"]) if (report[key] !== undefined && !text(report[key])) fail(key);
+  for (const key of ["evidence_refs", "pending_questions"]) if (report[key] !== undefined) strings(report[key], key, true);
+  if (report.rounds !== undefined && (!Number.isInteger(report.rounds) || report.rounds < 0)) fail("rounds");
+  if (report.status === "completed") {
+    if (!Number.isInteger(report.rounds) || report.rounds < 0 || !Array.isArray(report.sources) || !Array.isArray(report.evidence)
+        || !isObject(report.triangulation) || !["confirmed", "supported", "disputed", "unresolved"].includes(report.triangulation.status)
+        || !Array.isArray(report.triangulation.conflicts) || !isObject(report.coverage)
+        || !Object.hasOwn(report.coverage, "first_party_ratio") || !["number", "string"].includes(typeof report.coverage.first_party_ratio) && report.coverage.first_party_ratio !== null
+        || !isObject(report.saturation) || !["saturated", "timeboxed", "not_saturated"].includes(report.saturation.status) || !text(report.saturation.reason)) fail("completed report facts");
+    strings(report.coverage.dimensions, "coverage dimensions");
+    for (const key of ["required_questions", "covered_questions"]) if (report.coverage[key] !== undefined) strings(report.coverage[key], `coverage ${key}`);
+  } else if (report.status === "skipped") {
+    requiredText(report, ["reason", "non_impact_basis"], "skipped reason"); strings(report.evidence_refs, "skipped evidence_refs", true);
+  } else {
+    requiredText(report, ["error_class", "reason"], "unavailable reason"); strings(report.pending_questions, "pending_questions", true);
+  }
+}
+
 export function validateResearchReport(report, expected = {}) {
-  if (!validateSchema(report)) throw new TypeError(`research report does not match research-report.v1: ${errorText(validateSchema)}`);
-  if (!STAGES.has(report.stage)) throw new TypeError("research report stage is invalid");
-  if (!TREE.test(report.snapshot_tree)) throw new TypeError("research report snapshot_tree is invalid");
-  if (!REVISION.test(report.material_scope_revision)) throw new TypeError("research report material_scope_revision is invalid");
-  if (report.recorded_at !== undefined && !Number.isFinite(Date.parse(report.recorded_at))) {
+  validateOrdinaryShape(report);
+  if (report.recorded_at !== undefined && (typeof report.recorded_at !== "string" || !report.recorded_at.length || !Number.isFinite(Date.parse(report.recorded_at)))) {
     throw new TypeError("research report recorded_at is invalid");
   }
   assertIdentity(report, expected);
@@ -91,16 +154,6 @@ export function validateResearchReport(report, expected = {}) {
   return Object.freeze(structuredClone(report));
 }
 
-export function researchReportHash(raw) {
-  if (!(typeof raw === "string" || Buffer.isBuffer(raw))) throw new TypeError("research report raw bytes are required");
-  return hashBytes(raw);
-}
-
-export function researchReportRef(rawOrHash) {
-  const digest = SHA256_HEX.test(rawOrHash ?? "") ? rawOrHash : researchReportHash(rawOrHash);
-  return `quality/evidence/research/${digest}.json`;
-}
-
 export function parseResearchReport(raw, expected = {}) {
   const bytes = Buffer.isBuffer(raw) ? raw : Buffer.from(String(raw), "utf8");
   let value;
@@ -109,22 +162,19 @@ export function parseResearchReport(raw, expected = {}) {
   return validateResearchReport(value, expected);
 }
 
-export function readResearchReport({ read, task, ref, taskId, stage, snapshotTree, materialScopeRevision } = {}) {
-  if (typeof read !== "function" && task && typeof task.readRecord === "function") read = (candidateRef) => task.readRecord(candidateRef);
+export function readResearchReport({ read, task, ref, taskId, stage } = {}) {
+  if (typeof read !== "function" && task && typeof task.readRecord === "function") read = candidateRef => task.readRecord(candidateRef);
   if (typeof read !== "function") throw new TypeError("research report reader requires read");
-  const match = REPORT_REF.exec(ref ?? "");
-  if (!match) throw new Error("research report ref must use quality/evidence/research/<sha256>.json");
+  if (!REPORT_REF.test(ref ?? "")) throw new Error("research report ref must name an ordinary research JSON file");
   const raw = read(ref);
-  const actualHash = researchReportHash(raw);
-  if (actualHash !== match[1]) throw new Error("research report ref hash does not match its raw UTF-8 bytes");
-  const value = parseResearchReport(raw, { taskId, stage, snapshotTree, materialScopeRevision });
-  return Object.freeze({ ref, sha256: actualHash, raw, value });
+  const value = parseResearchReport(raw, { taskId, stage });
+  return Object.freeze({ ref, raw, value });
 }
 
 function candidateDelivery({ record = null, status, reason = null, candidates = [], missingCandidateIds = [], missingFieldsByCandidate = {} } = {}) {
   return Object.freeze({
     status,
-    full_report: record ? Object.freeze({ ref: record.ref, sha256: record.sha256 }) : null,
+    full_report: record ? Object.freeze({ ref: record.ref }) : null,
     candidates: Object.freeze(candidates.map((candidate) => Object.freeze({
       ...candidate,
       source_refs: Object.freeze([...(candidate.source_refs ?? [])]),
@@ -236,7 +286,7 @@ export function researchFacts(record) {
   return Object.freeze({
     status: report.status,
     report_ref: record.ref,
-    report_sha256: record.sha256,
+
     required_questions: [...questions],
     covered_questions: [...covered],
     tool_attempts: toolAttempts,
@@ -251,20 +301,20 @@ export function researchFacts(record) {
   });
 }
 
-/** Compatibility adapter for authenticated TaskHandle readers. */
+/** Protected task record reader; no hash or material identity certification. */
 export function readResearchReportFromTask({ task, ...input } = {}) {
   if (!task || typeof task.readRecord !== "function") throw new TypeError("research report task reader requires TaskHandle");
   return readResearchReport({ ...input, read: (ref) => task.readRecord(ref) });
 }
 
-/** Derive the only status disclosure from current authenticated report records. */
+/** Project the recorded research facts; this does not complete a stage. */
 export function deriveResearchStatus(records = []) {
   if (!Array.isArray(records) || records.length === 0) {
     return Object.freeze({
       status: "unavailable",
       reason: "research_record_missing",
       report_ref: null,
-      report_sha256: null,
+
       required_questions: [],
       covered_questions: [],
       tool_attempts: [],
@@ -279,7 +329,7 @@ export function deriveResearchStatus(records = []) {
       status: "unavailable",
       reason: "research_record_integrity_failure",
       report_ref: integrityFailure.ref ?? null,
-      report_sha256: integrityFailure.sha256 ?? null,
+
       required_questions: [],
       covered_questions: [],
       tool_attempts: [],
@@ -290,41 +340,48 @@ export function deriveResearchStatus(records = []) {
   }
   if (records.length > 1) {
     if (records.some((record) => !record.value?.recorded_at)) {
-      return Object.freeze({ status: "unavailable", reason: "research_record_ambiguous", report_ref: null, report_sha256: null, required_questions: [], covered_questions: [], tool_attempts: [], gaps: [], candidate_delivery: candidateDelivery({ status: "unavailable", reason: "research_record_ambiguous" }), fallback: { approval_status: "not_requested", requested_route: null, used_routes: [] } });
+      return Object.freeze({ status: "unavailable", reason: "research_record_ambiguous", report_ref: null, required_questions: [], covered_questions: [], tool_attempts: [], gaps: [], candidate_delivery: candidateDelivery({ status: "unavailable", reason: "research_record_ambiguous" }), fallback: { approval_status: "not_requested", requested_route: null, used_routes: [] } });
     }
     const newest = Math.max(...records.map((record) => Date.parse(record.value.recorded_at)));
     const latest = records.filter((record) => Date.parse(record.value.recorded_at) === newest);
     if (!Number.isFinite(newest) || latest.length !== 1) {
-      return Object.freeze({ status: "unavailable", reason: "research_record_ambiguous", report_ref: null, report_sha256: null, required_questions: [], covered_questions: [], tool_attempts: [], gaps: [], candidate_delivery: candidateDelivery({ status: "unavailable", reason: "research_record_ambiguous" }), fallback: { approval_status: "not_requested", requested_route: null, used_routes: [] } });
+      return Object.freeze({ status: "unavailable", reason: "research_record_ambiguous", report_ref: null, required_questions: [], covered_questions: [], tool_attempts: [], gaps: [], candidate_delivery: candidateDelivery({ status: "unavailable", reason: "research_record_ambiguous" }), fallback: { approval_status: "not_requested", requested_route: null, used_routes: [] } });
     }
     records = latest;
   }
   return researchFacts(records[0]);
 }
 
-/** Read only current, authenticated reports; stale/foreign/corrupt records are not projected. */
-export function listCurrentResearchReports({ task, taskId, stage, snapshotTree, materialScopeRevision } = {}) {
-  if (!task || typeof task.listCanonicalResearchReportRefs !== "function") return [];
-  return task.listCanonicalResearchReportRefs().flatMap((ref) => {
-    try {
-      return [readResearchReportFromTask({ task, ref, taskId, stage, snapshotTree, materialScopeRevision })];
-    } catch (error) {
-      if (/research report (?:task|stage|snapshot|material) identity mismatch/.test(error instanceof Error ? error.message : String(error))) return [];
-      return [{ ref, sha256: REPORT_REF.exec(ref)?.[1] ?? null, error: error instanceof Error ? error.message : String(error) }];
+/** Ordinary sorted directory listing; old filenames and bytes remain read-only. */
+export function listCurrentResearchReports({ task, taskId, stage } = {}) {
+  if (!task || typeof task.recordPath !== "function" || typeof task.readRecord !== "function") throw new TypeError("research listing requires a protected task reader");
+  const directory = task.recordPath("quality/evidence/research");
+  let before;
+  try { before = lstatSync(directory); }
+  catch (error) { if (error.code === "ENOENT") return []; throw error; }
+  if (!before.isDirectory() || before.isSymbolicLink() || realpathSync(directory) !== directory) throw new Error("research report directory contains an alias");
+  const names = readdirSync(directory);
+  const after = lstatSync(directory);
+  if (before.dev !== after.dev || before.ino !== after.ino || !after.isDirectory() || after.isSymbolicLink() || realpathSync(directory) !== directory) throw new Error("research report directory changed while listing");
+  return names.filter(name => REPORT_REF.test(`quality/evidence/research/${name}`)).sort().flatMap(name => {
+    const ref = `quality/evidence/research/${name}`;
+    try { return [readResearchReportFromTask({ task, ref, taskId, stage })]; }
+    catch (error) {
+      if (/research report (?:task|stage) identity mismatch/.test(error.message)) return [];
+      return [{ ref, error: error.message }];
     }
   });
 }
 
-export function publishResearchReport({ publish, report, raw = null, taskId, stage, snapshotTree, materialScopeRevision, recordedAt } = {}) {
-  if (typeof publish !== "function") throw new TypeError("research report publisher requires publish");
-  const reportWithTimestamp = raw === null && recordedAt !== undefined
-    ? { ...report, recorded_at: recordedAt }
-    : report;
+/** Append one ordinary report using the existing immutable record interface ③. */
+export async function publishResearchReport({ recordDir, slug = "research", report, raw = null, taskId, stage, recordedAt } = {}) {
+  if (typeof recordDir !== "string" || !isAbsolute(recordDir) || basename(recordDir) !== "research" || basename(dirname(recordDir)) !== "evidence" || basename(dirname(dirname(recordDir))) !== "quality") throw new TypeError("recordDir must be the ordinary quality/evidence/research directory");
+  const reportWithTimestamp = raw === null && recordedAt !== undefined ? { ...report, recorded_at: recordedAt } : report;
   const bytes = raw === null ? `${JSON.stringify(reportWithTimestamp, null, 2)}\n` : (Buffer.isBuffer(raw) ? raw : String(raw));
-  const value = parseResearchReport(bytes, { taskId, stage, snapshotTree, materialScopeRevision });
-  const ref = researchReportRef(bytes);
-  const result = publish(ref, bytes);
-  return Object.freeze({ ref, sha256: researchReportHash(bytes), value, ...(result && typeof result === "object" ? result : {}) });
+  const value = parseResearchReport(bytes, { taskId, stage });
+  if (["snapshot_tree", "material_scope_revision"].some(key => Object.hasOwn(value, key))) throw new Error("retired research bindings are read-only and cannot be published as a new report");
+  const path = await appendRecord(recordDir, slug, "json", bytes);
+  return Object.freeze({ ref: `quality/evidence/research/${basename(path)}`, path, value });
 }
 
 export { REPORT_REF as RESEARCH_REPORT_REF };

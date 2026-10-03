@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
-import { BROKER_HOST_PROVIDER, registerReviewSupplement, ReviewProviderClient } from "./review-provider-client.mjs";
+import { BROKER_HOST_PROVIDER, registerReviewSupplement, ReviewProviderClient, validateDirectionFlow } from "./review-provider-client.mjs";
 import { parseReviewerOutput } from "../../../runtime/review/review-output.mjs";
 import {
   loadTrustedThirdReviewConfig,
@@ -745,6 +745,23 @@ function staticReviewRule(input) {
     : reviewRuleFor(stage, track, scope);
 }
 
+/** Fix the existing direction protocol at the actual stage/track boundary. */
+function directionRequest(input) {
+  if (input.stage !== "make-decision" || input.review_track !== "direction") return input;
+  const fixedFlow = validateDirectionFlow();
+  for (const value of [input.review_flow, input.reviewFlow]) if (value != null) validateDirectionFlow(value);
+  const supplied = input.materials?.direction_flow;
+  if (supplied != null) {
+    const value = Buffer.isBuffer(supplied) || supplied instanceof Uint8Array
+      ? JSON.parse(Buffer.from(supplied).toString("utf8"))
+      : typeof supplied === "string" ? JSON.parse(supplied) : supplied;
+    validateDirectionFlow(value);
+  }
+  return { ...input, review_flow: fixedFlow,
+    ...(Object.hasOwn(input, "reviewFlow") ? { reviewFlow: fixedFlow } : {}),
+    materials: { ...input.materials, direction_flow: supplied ?? fixedFlow } };
+}
+
 function projectRunnerMaterials(input) {
   if (input.stage === "build-prd") return { input, discardedFacts: [] };
   const rule = staticReviewRule(input);
@@ -984,6 +1001,8 @@ function publicProviderResult(item, evidenceAnchors = undefined, pair = null) {
     usage: item.usage,
     ...(item.execution ? { execution: item.execution } : {}),
     ...(item.raw_output_ref ? { raw_output_ref: item.raw_output_ref } : {}),
+    ...(Array.isArray(item.evidence_refs) ? { evidence_refs: item.evidence_refs } : {}),
+    ...(item.transport ? { transport: item.transport } : {}),
     ...(item.unavailable_diagnostics ? { unavailable_diagnostics: item.unavailable_diagnostics } : {}),
     ...(evidenceAnchors === undefined ? {} : { evidence_anchor_valid: evidenceAnchors }),
   };
@@ -1039,6 +1058,8 @@ function normalizeManagedGroup(lifecycle, selectedIdentities, selectedModels = n
     outcome: group.outcome,
     round: group.round,
     selectedTier: group.selected_tier,
+    ...(Object.hasOwn(group, "dispatch_state") ? { dispatch_state: group.dispatch_state } : {}),
+    ...(group.transport ? { transport: group.transport } : {}),
     ...(materialId === undefined ? {} : { material_id: materialId }),
     ...(Object.hasOwn(group, "initial_result_ref") ? { initial_result_ref: group.initial_result_ref } : {}),
     ...(group.publication ? { publication: group.publication } : {}),
@@ -1105,6 +1126,13 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
     review_kind: identity.reviewKind,
   };
   let materialDiscardedFacts = [];
+  try { canonicalInput = directionRequest(canonicalInput); }
+  catch (error) {
+    return blockedPreflight(canonicalInput, "MATERIAL_INCOMPLETE", error.message, preflightDiagnostic({
+      field: "review_flow/direction_flow", expected: "the fixed reconstruct -> reveal -> challenge protocol",
+      actual: "invalid or conflicting supplied direction flow", nextAction: "supply the existing fixed direction-review.v1 protocol or omit it",
+    }), pair, { material_id: null });
+  }
   try {
     const projected = projectRunnerMaterials(canonicalInput);
     canonicalInput = projected.input;
@@ -1211,16 +1239,15 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
   const blockedProviderResults = [...(preflight?.blocked_provider_results ?? [])];
   const selectedProviders = providerSelection.providers;
   const blockedProviderSet = new Set(blockedProviderResults.map((item) => item.provider));
-  // The broker's Kimi Read route has no hard packet root. Its Codex
-  // app-server route is distinct from the verified direct OCR invocation;
-  // effective host-tool/temp/auth boundaries have not been demonstrated.
-  // Preserve selected identities and failure facts without launching either.
-  // Existing private injected transports have their own execution boundary;
-  // their fake/parser fixtures do not launch this native broker.
+  // Default host transports dispatch only a provider with a demonstrated
+  // packet read root. Keep unsupported selected members as unavailable facts.
+  // Private injected transports retain their own execution responsibility;
+  // parser/fake fixtures do not demonstrate native filesystem isolation.
+  const nativeClient = dependencies.client ?? new ReviewProviderClient({ command: trusted.command, config: trusted.config });
   for (const provider of selectedProviders) {
     const adapter = providerAdapter(provider);
-    if ((dependencies.client != null && !(dependencies.client instanceof ReviewProviderClient))
-        || !["kimi", "codex"].includes(adapter) || blockedProviderSet.has(provider)) continue;
+    if (!(nativeClient instanceof ReviewProviderClient) || nativeClient.transportKind === "injected"
+        || nativeClient.supportsPacketBoundProvider(provider) || blockedProviderSet.has(provider)) continue;
     blockedProviderSet.add(provider);
     blockedProviderResults.push({ provider, status: "blocked",
       identity: { provider, adapter, ...(providerSelection.provider_identities?.[provider] ?? {}),
@@ -1229,13 +1256,13 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
       error: { code: "PROVIDER_PACKET_BOUNDARY_UNAVAILABLE",
         message: adapter === "kimi"
           ? "Kimi broker Read has no verified packet filesystem boundary; review is unavailable"
-          : "Codex broker native tool and packet filesystem boundaries are unverified; review is unavailable" },
+          : "Selected native provider has no verified packet filesystem boundary; review is unavailable" },
     });
   }
   const dispatchProviders = selectedProviders.filter((provider) => !blockedProviderSet.has(provider));
   if (dispatchProviders.length === 0) return unavailableResult(reviewInput, {
-    code: "PROVIDER_PACKET_BOUNDARY_UNAVAILABLE",
-    message: "Selected broker review providers have no verified packet boundary; no review was dispatched",
+    code: blockedProviderResults.find(item => item.error?.code === "NATIVE_DIRECTION_VISIBILITY_UNAVAILABLE")?.error.code ?? "PROVIDER_PACKET_BOUNDARY_UNAVAILABLE",
+    message: "Selected review providers have no verified packet or staged visibility boundary; no review was dispatched",
   }, pair, { provider_selection: providerSelectionOutput(providerSelection),
     provider_attempts: 0, dispatch_state: "blocked_before_dispatch",
     provider_results: blockedProviderResults.map((item) => publicProviderResult({
@@ -1263,7 +1290,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
     });
   }
   try {
-    const client = dependencies.client ?? new ReviewProviderClient({ command: trusted.command, config: trusted.config });
+    const client = nativeClient;
     const prompt = promptForPair(pair);
     let group;
     let reviewCancellation = null;
@@ -1282,7 +1309,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
           requestId, providers: dispatchProviders, materials: bundle, prompt,
           minimumHeterologous: minimum,
           reviewMode: route.mode,
-          reviewFlow: input.review_flow ?? input.reviewFlow ?? null,
+          reviewFlow: canonicalInput.review_flow ?? canonicalInput.reviewFlow ?? null,
           ...(signal === null ? {} : { signal }),
         });
         if (lifecycle.state !== "terminal") {
@@ -1368,7 +1395,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
           // contract: a direction review is one request carrying its ordered
           // reconstruct -> reveal -> challenge flow. Omitting it here would let
           // the unmanaged path silently downgrade the governed flow.
-          reviewFlow: input.review_flow ?? input.reviewFlow ?? null,
+          reviewFlow: canonicalInput.review_flow ?? canonicalInput.reviewFlow ?? null,
           strictProtocol: true,
           ...pairFields(pair),
           ...(signal === null ? {} : { signal }),
@@ -1404,8 +1431,21 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
     const semanticModels = new Set();
     const receivedProviders = Array.isArray(group?.providers) ? group.providers : [];
     if (typeof dependencies.onProviderOutput === "function") {
-      for (const item of receivedProviders) if (item && typeof item.output === "string") {
-        item.raw_output_ref = await dependencies.onProviderOutput({provider:item.provider ?? item.identity?.provider,role:pair?.role ?? null,output:item.output});
+      for (const item of receivedProviders) if (item) {
+        const provider = item.provider ?? item.identity?.provider;
+        const originals = Array.isArray(item.raw_outputs) && item.raw_outputs.length ? item.raw_outputs
+          : Buffer.isBuffer(item.raw_output?.stdout) && Buffer.isBuffer(item.raw_output?.stderr) ? [item.raw_output] : [];
+        if (originals.length) {
+          const refs = [];
+          for (const original of originals) for (const stream of ["stdout", "stderr"]) {
+            if (!Buffer.isBuffer(original[stream])) throw new TypeError("native provider original stream must be bytes");
+            refs.push(await dependencies.onProviderOutput({ provider, role: pair?.role ?? null, channel: original.step ? `${original.step}-${stream}` : stream, output: original[stream] }));
+          }
+          item.raw_output_ref = refs[0] ?? null;
+          item.evidence_refs = refs;
+        } else if (typeof item.output === "string") {
+          item.raw_output_ref = await dependencies.onProviderOutput({ provider, role: pair?.role ?? null, output: item.output });
+        }
       }
     }
     const seenProviders = new Set();
@@ -1511,7 +1551,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
         ...item,
         status: "failed",
         error: {
-          code: sourceError.code === "PROVIDER_PACKET_BOUNDARY_UNAVAILABLE"
+          code: ["PROVIDER_PACKET_BOUNDARY_UNAVAILABLE", "NATIVE_DIRECTION_VISIBILITY_UNAVAILABLE"].includes(sourceError.code)
             ? sourceError.code : "PROVIDER_HEALTH_FAILED",
           message: sourceError.message ?? "provider preflight failed",
           ...(typeof sourceError.code === "string" && sourceError.code.trim() !== ""
@@ -1557,7 +1597,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
       review_kind: reviewKind,
       material_id: observedMaterialId,
       ...pairFields(pair),
-      dispatch_state: "dispatched",
+      dispatch_state: group.transport === "codex-native" && semanticModels.size === 0 && group.dispatch_state === "dispatched" ? "sent_unparsed" : group.dispatch_state ?? "dispatched",
       provider_attempts: dispatchProviders.length,
       runtime_id: group.runtimeId,
       outcome: group.outcome,

@@ -1,292 +1,58 @@
-import { appendFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync } from "node:fs";
+import { afterEach, describe, expect, it } from "vitest";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { describe, expect, it } from "vitest";
-
+import { join, relative } from "node:path";
 import { createTask } from "../../runtime/task/task-handle.mjs";
 import { initializeTaskStore, readTaskFacts, STAGE_ROW_KEYS, writeStageRow } from "../../runtime/task/task-store.mjs";
-import { publishQualityFact } from "../../runtime/evidence/quality-store.mjs";
-
-function taskRoot() {
-  const storageRoot = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-task-storage-")));
-  const targetRepo = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-target-")));
-  const taskId = "minimal-task";
-  const task = createTask({
-    storageRoot,
-    taskPath: join(storageRoot, "Projects", "legacy", "tasks", taskId),
-    manifest: {
-      schema_version: "1.0.0",
-      project_name: "legacy",
-      task_id: taskId,
-      created_at: new Date().toISOString(),
-      target_repo_root: targetRepo,
-      issue_ids: [],
-      inputs: {},
-    },
-  });
-  return task.taskPath;
+import { appendRecord } from "../../runtime/interface/safe-write.mjs";
+const EXPECTED_STAGE_KEYS=["record_kind","task_id","stage","source","created_at","review_origin","review_result_ref","finding_dispositions","spec_analyze","evidence","serious_issue_disposition","close_action","handoff"];
+const roots=[];
+async function fixture(){
+ const storage=realpathSync(mkdtempSync(join(tmpdir(),"workflowhub-minimal-store-")));roots.push(storage);
+ const repo=join(storage,"owned-target");mkdirSync(repo);
+ const git=args=>execFileSync("git",args,{cwd:repo,encoding:"utf8",stdio:["ignore","pipe","pipe"]}).trim();
+ git(["init","-q","-b","main"]);git(["config","user.name","Owned storage test"]);git(["config","user.email","owned@test.invalid"]);git(["commit","--allow-empty","-qm","owned commit"]);
+ const task=await createTask({storageRoot:storage,manifest:{schema_version:"1.0.0",project_name:"legacy",task_id:"minimal-task",created_at:"2026-10-03T00:00:00Z",target_repo_root:repo,activation_cohort:"post",execution_mode:"per_invocation",record_model:"vnext-single-write",issue_ids:[],inputs:{}}});
+ await initializeTaskStore(task.taskPath,{taskId:task.identity.taskId});return{task,root:task.taskPath,head:git(["rev-parse","HEAD"])};
 }
-
-describe("minimal task storage", () => {
-  it("creates only identity, the execution record, and quality paths", () => {
-    const root = taskRoot();
-
-    initializeTaskStore(root, { taskId: "minimal-task" });
-
-    expect(existsSync(join(root, "task.json"))).toBe(true);
-    expect(existsSync(join(root, "facts.jsonl"))).toBe(true);
-    expect(existsSync(join(root, "quality", "reviews"))).toBe(true);
-    expect(existsSync(join(root, "quality", "tests"))).toBe(true);
-    // The quality/verify.v1 object and its writer were removed; task
-    // initialization must not recreate it.
-    expect(existsSync(join(root, "quality", "verify.json"))).toBe(false);
-    expect(existsSync(join(root, "index.json"))).toBe(false);
-    expect(readdirSync(root).sort()).toEqual(["facts.jsonl", "quality", "task.json"]);
-  });
-
-  it("keeps one row per stage without any lineage field", () => {
-    const root = taskRoot();
-    initializeTaskStore(root, { taskId: "minimal-task" });
-
-    const row = (stage, reviewOrigin) => ({
-      record_kind: "stage",
-      stage,
-      source: "focused-test",
-      review_origin: reviewOrigin,
-      finding_dispositions: [],
-      evidence: { value: [{ command: "true", exit_code: 0, failure_signature: "none" }] },
-    });
-    const first = writeStageRow(root, row("build-code", "not_run"));
-    const second = writeStageRow(root, row("build-plan", "not_run"));
-    const repaired = writeStageRow(root, row("build-code", "unavailable"));
-
-    expect(first.action).toBe("inserted");
-    expect(second.action).toBe("inserted");
-    expect(repaired.action).toBe("replaced");
-    expect(readTaskFacts(root)).toHaveLength(2);
-    expect(JSON.stringify(readTaskFacts(root))).not.toMatch(/parent|previous|generation|selector|successor/);
-  });
-
-  it("stores one build-code resume cursor and preserves it when later row writes omit it", () => {
-    const root = taskRoot();
-    initializeTaskStore(root, { taskId: "minimal-task" });
-    const cursor = {
-      phase_id: "P2",
-      task_id: "T004",
-      material_revision: `revision-${"a".repeat(64)}`,
-      recorded_at: "2026-09-25T01:02:03.000Z",
-    };
-
-    expect(writeStageRow(root, {
-      record_kind: "stage",
-      stage: "build-code",
-      source: "phase-progress-cursor",
-      phase_progress: cursor,
-    }).action).toBe("inserted");
-
-    const initialRow = readTaskFacts(root)[0];
-    expect(initialRow.phase_progress).toEqual(cursor);
-    expect(Object.keys(initialRow).sort()).toEqual([...STAGE_ROW_KEYS, "phase_progress"].sort());
-
-    expect(writeStageRow(root, {
-      record_kind: "stage",
-      stage: "build-code",
-      source: "stage-end:build-code",
-      evidence: { value: [{ command: "stage-end:build-code", exit_code: 0, failure_signature: "stage_end_recorded" }] },
-    }).action).toBe("replaced");
-
-    const rows = readTaskFacts(root);
-    expect(rows).toHaveLength(1);
-    expect(rows[0].source).toBe("stage-end:build-code");
-    expect(rows[0].phase_progress).toEqual(cursor);
-  });
-
-  it("reads legacy sixteen-field rows without migrating or rewriting them", () => {
-    const root = taskRoot();
-    initializeTaskStore(root, { taskId: "minimal-task" });
-    writeStageRow(root, {
-      record_kind: "stage",
-      stage: "build-code",
-      source: "legacy-stage-row",
-    });
-    const factsPath = join(root, "facts.jsonl");
-    const before = readFileSync(factsPath, "utf8");
-
-    const [row] = readTaskFacts(root);
-
-    expect(Object.keys(row).sort()).toEqual([...STAGE_ROW_KEYS].sort());
-    expect(row).not.toHaveProperty("phase_progress");
-    expect(readFileSync(factsPath, "utf8")).toBe(before);
-  });
-
-  it("fails loudly on malformed historical monitoring rows", () => {
-    const base = {
-      schema_version: ["monitoring", "fact.v1"].join("-"),
-      fact_id: "fact-1",
-      task_id: "minimal-task",
-      project_name: "legacy",
-      fact_type: "stage",
-      stage: "build-code",
-      step_id: null,
-      step_slug: null,
-      skill_id: null,
-      session_id: null,
-      subagent_id: null,
-      run_id: null,
-      attempt_id: null,
-      status: "present",
-      value: { outcome: "completed" },
-      reason: null,
-      error: null,
-      observed_at: "2026-08-30T00:00:00Z",
-      source: { kind: "stage", ref: "ref-1", source_id: "source-1", source_version: "v1" },
-      coverage: { expected: 1, observed: 1 },
-      contract_version: "v1",
-      collector_version: "v1",
-      adapter_version: null,
-      skill_version: null,
-      evidence_refs: [],
-    };
-    const malformed = [
-      Object.fromEntries(Object.entries(base).filter(([key]) => key !== "coverage")),
-      { ...base, status: "bogus" },
-      { ...base, value: [] },
-      { ...base, coverage: { expected: 0, observed: 1 } },
-    ];
-    for (const value of malformed) {
-      const root = taskRoot();
-      initializeTaskStore(root, { taskId: "minimal-task" });
-      appendFileSync(join(root, "facts.jsonl"), `${JSON.stringify(value)}\n`);
-      expect(() => readTaskFacts(root)).toThrow(/historical monitoring fact is invalid/);
-    }
-  });
-
-  it("stores quality facts in their separate quality paths", () => {
-    const root = taskRoot();
-    initializeTaskStore(root, { taskId: "minimal-task" });
-
-    const review = publishQualityFact(root, "reviews", {
-      task_id: "minimal-task",
-      stage: "build-code",
-      status: "unavailable",
-      source: "wh-review",
-      schema_version: "review-fact.v1",
-      content_hash: "f".repeat(64),
-    });
-    const test = publishQualityFact(root, "tests", {
-      task_id: "minimal-task",
-      stage: "build-code",
-      status: "passed",
-      source: "vitest",
-      schema_version: "test-fact.v1",
-      content_hash: "1".repeat(64),
-    });
-
-    expect(review.ref).toMatch(/^quality\/reviews\/[a-f0-9]{64}\.json$/);
-    expect(test.ref).toMatch(/^quality\/tests\/[a-f0-9]{64}\.json$/);
-    // quality/verify.json was removed with its writer; it must not reappear.
-    expect(existsSync(join(root, "quality", "verify.json"))).toBe(false);
-    expect(readdirSync(join(root, "quality", "reviews"))).toHaveLength(1);
-    expect(readdirSync(join(root, "quality", "tests"))).toHaveLength(1);
-    expect(readdirSync(root).some((name) => /index/i.test(name))).toBe(false);
-  });
-
-  it("T1 AC-MS-009 enforces the exact stage and close-action field contract", () => {
-    const root = taskRoot();
-    initializeTaskStore(root, { taskId: "minimal-task" });
-
-    const stageRow = {
-      record_kind: "stage", stage: "build-code", source: "field-contract-fixture",
-      review_origin: "conducted", review_result_ref: { value: "quality/reviews/results/current.json" },
-      finding_dispositions: [{ finding: "F-1", disposition: "fixed" }],
-      spec_analyze: { value: "aligned" },
-      evidence: { value: [{ command: "npx vitest run tests/demo.test.mjs", exit_code: 0, failure_signature: "none" }] },
-      layer_states: { implementation_completion: "completed", stage_quality: "completed", delivery: "unavailable", task_closure: "unavailable" },
-      serious_issue_disposition: { value: null, reason: "no serious issue in this fixture" },
-      close_action: { value: null, reason: "stage rows never carry a close action" },
-      handoff: { value: "HANDOFF-001", reason: "one named handoff item" },
-    };
-    writeStageRow(root, stageRow);
-    const row = readTaskFacts(root)[0];
-    // Two row types share one frozen field table.
-    expect(Object.keys(row).sort()).toEqual([
-      "close_action", "created_at", "evidence", "finding_dispositions", "handoff", "layer_states",
-      "material_digest", "record_kind", "review_origin", "review_result_ref", "serious_issue_disposition",
-      "snapshot_tree", "source", "spec_analyze", "stage", "task_id",
-    ]);
-    // Four independent layers, never merged into one verdict.
-    expect(Object.keys(row.layer_states).sort()).toEqual(["delivery", "implementation_completion", "stage_quality", "task_closure"]);
-    for (const state of Object.values(row.layer_states)) expect(["completed", "unavailable", "incomplete", "partial"]).toContain(state);
-    // Nested element shapes are frozen too.
-    expect(row.finding_dispositions[0]).toEqual({ finding: "F-1", disposition: "fixed" });
-    expect(row.evidence.value[0]).toEqual({ command: "npx vitest run tests/demo.test.mjs", exit_code: 0, failure_signature: "none" });
-    // Conditional fields use the empty-with-reason encoding, never a missing key.
-    expect(row.close_action.value).toBeNull();
-    expect(typeof row.close_action.reason).toBe("string");
-
-    // A close-action row is the same key set with the close-specific values.
-    writeStageRow(root, {
-      record_kind: "close_action", stage: "close", source: "field-contract-fixture",
-      review_origin: "not_run", finding_dispositions: [],
-      evidence: { value: [{ command: "git push", exit_code: 0, failure_signature: "none" }] },
-      layer_states: { implementation_completion: "completed", stage_quality: "completed", delivery: "completed", task_closure: "incomplete" },
-      close_action: { action: "push", result: "pushed", ref: "origin/main" },
-      handoff: { value: null, reason: "no handoff item on a close-action row" },
-    });
-    const closeRow = readTaskFacts(root).find((value) => value.record_kind === "close_action");
-    expect(Object.keys(closeRow).sort()).toEqual(Object.keys(row).sort());
-    expect(closeRow.close_action).toMatchObject({ action: "push", result: "pushed", ref: "origin/main" });
-    expect(closeRow.stage).toBe("close");
-
-    // The five terminal-or-paused finding dispositions are the only accepted machine values.
-    expect(writeStageRow(root, {
-      ...stageRow,
-      stage: "verify-code",
-      finding_dispositions: [{ finding: "F-user", disposition: "user_decided", reply_ref: "quality/confirmations/user-decision.json" }],
-    }).action).toBe("inserted");
-    expect(() => writeStageRow(root, {
-      ...stageRow,
-      stage: "build-spec",
-      finding_dispositions: [{ finding: "F-user-missing-reply", disposition: "user_decided" }],
-    })).toThrow(/user_decided_requires_reply_ref/);
-    expect(() => writeStageRow(root, { ...stageRow, stage: "build-plan", finding_dispositions: [{ finding: "F-2", disposition: "looks_fine" }] }))
-      .toThrow(/finding_disposition_is_invalid/);
-    expect(() => writeStageRow(root, { ...stageRow, stage: "build-spec", review_origin: "conducted", review_result_ref: { value: null, reason: "forgot the ref" } }))
-      .toThrow(/conducted reviews require a named review_result_ref/);
-
-    // close_action is a conditional field on stage rows too, so the same
-    // empty-with-reason encoding applies: an empty value needs a real reason.
-    expect(() => writeStageRow(root, { ...stageRow, stage: "build-plan", close_action: { value: null } }))
-      .toThrow(/close_action requires a reason when its value is empty/);
-    expect(() => writeStageRow(root, { ...stageRow, stage: "build-plan", close_action: { value: null, reason: "   " } }))
-      .toThrow(/close_action requires a reason when its value is empty/);
-    expect(() => writeStageRow(root, { ...stageRow, stage: "build-plan", close_action: { reason: "no value position" } }))
-      .toThrow(/close_action must carry only value and reason/);
-    // A stage row still never carries a close action, in the frozen shape or
-    // in the close-action row shape.
-    expect(() => writeStageRow(root, { ...stageRow, stage: "build-plan", close_action: { value: { action: "push", result: "pushed" } } }))
-      .toThrow(/stage rows must leave close_action empty with a reason/);
-    expect(() => writeStageRow(root, { ...stageRow, stage: "build-plan", close_action: { action: "push", result: "pushed" } }))
-      .toThrow(/close_action must carry only value and reason/);
-    expect(writeStageRow(root, { ...stageRow, stage: "build-plan", close_action: { value: null, reason: "this stage row carries no close action" } }).action)
-      .toBe("inserted");
-    expect(readTaskFacts(root).find((value) => value.stage === "build-plan").close_action)
-      .toEqual({ value: null, reason: "this stage row carries no close action" });
-  });
-  it("T1 AC-MS-007 writes facts without index", () => {
-    const taskRootPath = taskRoot();
-    initializeTaskStore(taskRootPath, { taskId: "minimal-task" });
-    const row = (stage) => ({
-      record_kind: "stage", stage, source: "ac007-fixture",
-      review_origin: "not_run", finding_dispositions: [],
-      evidence: { value: [{ command: "true", exit_code: 0, failure_signature: "none" }] },
-    });
-    writeStageRow(taskRootPath, row("build-code"));
-    writeStageRow(taskRootPath, row("verify-code"));
-    const rows = readTaskFacts(taskRootPath);
-    expect(rows.map((row) => row.stage)).toEqual(["build-code", "verify-code"]);
-    // The execution record file is the only non-quality execution artefact.
-    expect(readdirSync(taskRootPath).sort()).toEqual(["facts.jsonl", "quality", "task.json"]);
-    expect(readdirSync(taskRootPath).some((name) => /index/i.test(name))).toBe(false);
-  });
+const row=(stage="build-code",review_origin="not_run")=>({record_kind:"stage",stage,source:"owned-storage-fixture",review_origin,finding_dispositions:[]});
+afterEach(()=>{while(roots.length)rmSync(roots.pop(),{recursive:true,force:true});});
+describe("minimal current task storage",()=>{
+ it("creates only identity, the execution record and the current two quality directories",async()=>{
+  const{root}=await fixture();expect(readdirSync(root).sort()).toEqual(["facts.jsonl","quality","task.json"]);expect(readdirSync(join(root,"quality")).sort()).toEqual(["reviews","tests"]);expect(readFileSync(join(root,"facts.jsonl"),"utf8")).toBe("");
+ });
+ it("replaces one row per stage without adding a historical sequence or lineage field",async()=>{
+  const{root}=await fixture();expect((await writeStageRow(root,row())).action).toBe("inserted");expect((await writeStageRow(root,row("build-plan"))).action).toBe("inserted");expect((await writeStageRow(root,row("build-code","unavailable"))).action).toBe("replaced");
+  const rows=readTaskFacts(root);expect(rows).toHaveLength(2);expect(rows.map(value=>value.stage)).toEqual(["build-code","build-plan"]);expect(rows[0].review_origin).toBe("unavailable");expect(JSON.stringify(rows)).not.toMatch(/parent|previous|generation|selector|successor/);
+ });
+ it("keeps exactly one current cursor with an owned Git ID and retains it when a later same-row write omits it",async()=>{
+  const{root,head}=await fixture(),cursor={phase_id:"P2",task_id:"T004",phases_head:head,recorded_at:"2026-10-03T01:02:03Z"};
+  await writeStageRow(root,{...row(),source:"phase-progress-cursor",phase_progress:cursor});expect(readTaskFacts(root)[0].phase_progress).toEqual(cursor);expect([...STAGE_ROW_KEYS].sort()).toEqual([...EXPECTED_STAGE_KEYS].sort());expect(Object.keys(readTaskFacts(root)[0]).sort()).toEqual([...EXPECTED_STAGE_KEYS,"phase_progress"].sort());
+  await writeStageRow(root,{...row(),source:"later-ordinary-stage-fact"});const rows=readTaskFacts(root);expect(rows).toHaveLength(1);expect(rows[0].phase_progress).toEqual(cursor);expect(rows[0].review_origin).toBe("not_run");expect(rows[0].evidence.value).toBeNull();expect(rows[0]).not.toHaveProperty("completed");
+ });
+ it("reads original historical fields passively and keeps their line byte-for-byte during a different current stage write",async()=>{
+  const{root}=await fixture(),path=join(root,"facts.jsonl"),old={...row("build-spec"),task_id:"minimal-task",created_at:"2026-08-30T00:00:00Z",review_result_ref:{value:null,reason:"old"},spec_analyze:{value:null,reason:"old"},evidence:{value:null,reason:"old"},serious_issue_disposition:{value:null,reason:"old"},close_action:{value:null,reason:"old"},handoff:{value:null,reason:"old"},snapshot_tree:"historical-source",material_digest:{value:"historical-source"},layer_states:{implementation_completion:"completed"}};
+  expect(Object.keys(old)).toHaveLength(16);const raw="  "+JSON.stringify(old)+"  \n";writeFileSync(path,raw);expect(readTaskFacts(root)).toEqual([old]);expect(readFileSync(path,"utf8")).toBe(raw);
+  await writeStageRow(root,row());const rows=readTaskFacts(root);expect(rows).toHaveLength(2);expect(rows[0]).toEqual(old);expect(readFileSync(path,"utf8").split("\n")[0]+"\n").toBe(raw);expect(rows[1]).not.toHaveProperty("snapshot_tree");expect(rows[1]).not.toHaveProperty("material_digest");expect(rows[1]).not.toHaveProperty("layer_states");
+ });
+ it("exposes bad JSON or real historical task identity mismatch without rewriting original sources",async()=>{
+  const{root}=await fixture(),path=join(root,"facts.jsonl");
+  for(const[raw,error]of[['{not JSON}\n',/facts\.jsonl line 1 is invalid JSON/],[JSON.stringify({task_id:"foreign",stage:"build-code"})+"\n",/invalid task identity/],[JSON.stringify({task_id:"minimal-task",project_name:"foreign"})+"\n",/invalid task identity/]]){writeFileSync(path,raw);expect(()=>readTaskFacts(root)).toThrow(error);expect(readFileSync(path,"utf8")).toBe(raw);}
+ });
+ it("stores immutable ordinary named fixture records in separate review/test directories without a hash-addressed publisher",async()=>{
+  const{root,task}=await fixture();
+  for(const kind of["reviews","tests"]){const bytes=JSON.stringify({task_id:"minimal-task",stage:"build-code",status:"unavailable",source:"owned storage-only fixture; no executed quality verdict"})+"\n";const path=await appendRecord(join(root,"quality",kind),"owned-storage","json",bytes);expect(relative(root,path)).toMatch(new RegExp('^quality/'+kind+'/[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{3}-owned-storage\\.json$'));expect(task.readRecord(relative(root,path))).toBe(bytes);const secondBytes=JSON.stringify({task_id:"minimal-task",stage:"build-code",status:"unavailable",source:"second distinct storage-only fixture; no executed quality verdict"})+"\n";const second=await appendRecord(join(root,"quality",kind),"owned-storage","json",secondBytes);expect(second).not.toBe(path);expect(relative(root,second)).toMatch(new RegExp('^quality/'+kind+'/[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{3}-owned-storage\\.json$'));expect(task.readRecord(relative(root,path))).toBe(bytes);expect(task.readRecord(relative(root,second))).toBe(secondBytes);expect(readdirSync(join(root,"quality",kind))).toHaveLength(2);}
+  expect(readdirSync(root).sort()).toEqual(["facts.jsonl","quality","task.json"]);expect(readTaskFacts(root)).toEqual([]);
+ });
+ it("keeps current ordinary stage/close-action fields and typed storage failures without retired completion certification",async()=>{
+  const{root}=await fixture(),path=join(root,"facts.jsonl");await writeStageRow(root,{...row(),review_origin:"conducted",review_result_ref:{value:"quality/reviews/owned.json"},finding_dispositions:[{finding:"F-1",disposition:"user_decided"}]});
+  const first=readTaskFacts(root)[0];expect([...STAGE_ROW_KEYS].sort()).toEqual([...EXPECTED_STAGE_KEYS].sort());expect(Object.keys(first).sort()).toEqual([...EXPECTED_STAGE_KEYS].sort());expect(first.finding_dispositions).toEqual([{finding:"F-1",disposition:"user_decided"}]);
+  await writeStageRow(root,{...row("close"),record_kind:"close_action",close_action:{action:"push",result:"owned fixture only—not actual Git delivery",ref:"owned/ref"}});expect(readTaskFacts(root).find(value=>value.record_kind==="close_action").close_action.ref).toBe("owned/ref");
+  const before=readFileSync(path);
+  for(const bad of[{...row(),review_origin:"conducted"},{...row(),close_action:{value:null}},{...row(),close_action:{value:{action:"push",result:"no"}}},{...row(),phase_progress:{phase_id:"P1",task_id:"T001",material_revision:"retired",recorded_at:"2026-10-03T00:00:00Z"}},...['layer_states','material_digest','snapshot_tree','selector'].map(key=>({...row(),[key]:"retired"}))]){await expect(writeStageRow(root,bad)).rejects.toThrow(/reference|reason|close action|phase_progress|unsupported fields/);expect(readFileSync(path)).toEqual(before);}
+ });
+ it("writes the two current stage rows without creating an index or status projection",async()=>{
+  const{root}=await fixture();await writeStageRow(root,row());await writeStageRow(root,row("verify-code"));expect(readTaskFacts(root).map(value=>value.stage)).toEqual(["build-code","verify-code"]);expect(readdirSync(root).sort()).toEqual(["facts.jsonl","quality","task.json"]);
+ });
 });

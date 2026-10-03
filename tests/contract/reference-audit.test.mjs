@@ -1,49 +1,8 @@
-import { afterEach, describe, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
-
-import { auditReferences, classifyReferenceAudit } from "../../tools/architecture/reference-audit.mjs";
-
-const roots = [];
-afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
-
-describe("reference audit", () => {
-  it("audits every control-plane slice instead of treating empty targets as zero consumers", () => {
-    const root = mkdtempSync(join(tmpdir(), "workflowhub-reference-audit-"));
-    roots.push(root);
-    mkdirSync(join(root, "runtime/task"), { recursive: true });
-    mkdirSync(join(root, "tests"), { recursive: true });
-    writeFileSync(join(root, "runtime/task/consumer.mjs"), "import \"../../core/git-checkpoint.mjs\";\n");
-    writeFileSync(join(root, "tests/consumer.test.mjs"), "const old = 'results/build-code/accepted.json';\n");
-
-    const result = auditReferences({ root });
-    expect(result.schema_version).toBe("workflowhub-reference-audit.v2");
-    expect(result.targets).toEqual(expect.arrayContaining([
-      "core/git-checkpoint.mjs",
-      "results/build-code/accepted.json",
-      "evidence/phases/",
-    ]));
-    expect(result.violations).toEqual(expect.arrayContaining([
-      expect.objectContaining({ path: "runtime/task/consumer.mjs", target: "core/git-checkpoint.mjs", match: "relative-import", scope: "live" }),
-    ]));
-    expect(result.test_references).toEqual(expect.arrayContaining([
-      expect.objectContaining({ path: "tests/consumer.test.mjs", target: "results/build-code/accepted.json", scope: "test" }),
-    ]));
-  });
-
-  it("classifies registered KEEP targets without hiding unexpected consumers", () => {
-    const result = {
-      violations: [
-        { path: "runtime/a.mjs", target: "core/git-checkpoint.mjs" },
-        { path: "runtime/b.mjs", target: "unknown-retired-path" },
-      ],
-      metadata_references: [],
-    };
-    const classified = classifyReferenceAudit(result, new Set(["core/git-checkpoint.mjs"]));
-    expect(classified.allowed_violations).toHaveLength(1);
-    expect(classified.unexpected_violations).toEqual([
-      { path: "runtime/b.mjs", target: "unknown-retired-path" },
-    ]);
-  });
+import{readFileSync,existsSync}from"node:fs";import{describe,expect,it}from"vitest";
+const mapRef=new URL("../../docs/architecture/move-map.json",import.meta.url),retentionRef=new URL("../../docs/architecture/retention-manifest.json",import.meta.url);
+// Read declared current paths only. The old reference-audit CLI and its
+// control-plane allowlist are retired; this is metadata, not an execution permit.
+describe("finite current ownership and reference metadata",()=>{
+ it("retains a unique responsibility/owner/consumer/deletion declaration per current destination",()=>{const bytes=readFileSync(mapRef),m=JSON.parse(bytes);expect(m.task_id).toBe("workflowhub-thin-core-card-06-20260919");expect(m.entries.length).toBeGreaterThan(0);expect(new Set(m.entries.map(e=>e.destination)).size).toBe(m.entries.length);for(const e of m.entries){for(const k of(e.role==="test_only"?["source","destination","content_change","owner","consumer","delete_condition"]:["source","destination","responsibility","owner","consumer","delete_condition"]))expect(typeof e[k]==="string"&&e[k].trim().length>0,`${e.destination} missing ${k}`).toBe(true);expect(["production","test_only","historical_readonly"]).toContain(e.role);if(e.role!=="test_only")expect(Array.isArray(e.module_consumers)&&Array.isArray(e.named_data_readers)).toBe(true);}expect(readFileSync(mapRef)).toEqual(bytes);});
+ it("makes the real material reader and its current callers explicit without a second scanner authority",()=>{const m=JSON.parse(readFileSync(mapRef)),entry=m.entries.find(e=>e.destination==="runtime/evidence/artifact-dir.mjs");expect(entry).toBeDefined();expect(entry.module_consumers).toContain("runtime/stage/stage-context.mjs");const reader=readFileSync(new URL("../../runtime/stage/stage-context.mjs",import.meta.url),"utf8");expect(reader).toContain("../evidence/artifact-dir.mjs");expect(existsSync(new URL("../../runtime/evidence/artifact-dir.mjs",import.meta.url))).toBe(true);const raw=readFileSync(retentionRef);expect(()=>JSON.parse(raw)).not.toThrow();expect(readFileSync(retentionRef)).toEqual(raw);});
 });

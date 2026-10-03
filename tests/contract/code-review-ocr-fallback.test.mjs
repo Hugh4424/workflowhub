@@ -16,6 +16,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { stageRuntimeCliMain, stageRuntimeMain } from "../../tools/cli/stage-runtime.mjs";
+import { validateSchema } from "../../runtime/review/schema-validator.mjs";
 
 const roots = [];
 
@@ -313,5 +314,36 @@ describe("code review falls back to wh-review only when OCR is not installed (T0
         expect(review.provider_results[0]).toMatchObject({ provider: "codex/luna", status: "failed", process_outcome: "exit_nonzero", parse_outcome: null, error: { code: "PROCESS_FAILED", message: "controlled OCR provider failure" } });
         expect(review).not.toHaveProperty("fallback");
       });
+  });
+});
+
+
+describe("canonical review request subject provenance", () => {
+  it.each(["string", "object", "absent", "in-flight mutation"])("retains the original %s subject through the actual public writer", async (kind) => {
+    const state=fixture(),request=reviewRequest();
+    if(kind==="string") request.subject="P3 source and explicitly declared review boundary";
+    if(kind==="object" || kind==="in-flight mutation") request.subject={summary:"owned original scope",allowed_files:["README.md"],allowed_symbols:["fixture"],covered_fr:["FR-1"],covered_ac:["AC-1"]};
+    const hadSubject=Object.hasOwn(request,"subject"),original=hadSubject?JSON.parse(JSON.stringify(request.subject)):undefined;
+    const inputPath=join(state.root,"subject-review.json");writeFileSync(inputPath,JSON.stringify({request}));
+    const stubDir=writeOcrStub(join(state.root,"bin"),"1.12.9");let calls=0;
+    await withRuntimeEnvironment({HOME:state.home,WORKFLOWHUB_TASK_DIR:state.root,PATH:`${stubDir}:${pathWithoutOcr()}`},async()=>{
+      const recorded=await stageRuntimeCliMain(["review","--action=record","--stage=build-code","--project=workflowhub",`--task=${state.taskId}`,`--input=${inputPath}`],{
+        cwd:state.worktreeRoot,services:{runOcrDelegationRound:async(roundRequest)=>{
+          calls++;expect(roundRequest.subject).toEqual(original);
+          if(kind==="in-flight mutation") {roundRequest.subject.allowed_files.push("mutated-by-controlled-executor.md");roundRequest.subject.summary="controlled executor changed delivered scope";}
+          return unavailableOcrResult(request);
+        },runReviewRound:async()=>{throw new Error("no fallback may run for installed OCR");}}
+      });
+      expect(calls).toBe(1);expect(recorded.status).toBe("unavailable");
+      const actual=JSON.parse(readFileSync(join(state.taskDir,recorded.result_ref),"utf8"));
+      expect(actual).toMatchObject({stage:"build-code",phase_id:"P3",subject_kind:"phase",review_scope:"phase",surface:"code",status:"unavailable",error:{code:"OCR_ALL_PROVIDERS_FAILED"}});
+      expect(actual.provider_results[0]).toMatchObject({status:"failed",error:{code:"PROCESS_FAILED"}});
+      expect(actual).not.toHaveProperty("fallback");
+      if(hadSubject) expect(actual.request.subject).toEqual(original);
+      else expect(Object.hasOwn(actual.request,"subject")).toBe(false);
+      expect(actual.request.material_keys).toContain("acceptance_criteria");
+      expect(actual.request).not.toHaveProperty("material_digest");expect(actual.request).not.toHaveProperty("snapshot_tree");
+      expect(()=>validateSchema("result",actual)).not.toThrow();
+    });
   });
 });

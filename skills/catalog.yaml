@@ -860,16 +860,17 @@ skills:
     last_reviewed_at: '2026-07-14'
     status: native
     metrics_enabled: true
-    purpose: 为 build-spec UI 分支生成真实组件预览和截图证据
+    purpose: 为 build-plan UI 分支与 build-prd 条件设计分支生成真实组件预览和截图证据
     design_idea: 真实组件输入、可运行本地渲染和用户授权降级
     standalone: true
     used_by_stages:
-      - build-spec
+      - build-plan
+      - build-prd
     upstream: []
-    local_changes: WorkflowHub 原生渲染入口；owner 是 build-spec，唯一 consumer 是 build-spec UI path；test=tests/contract/frontend-prototype-render-skill.test.mjs；不改产品源码；delete-condition build-spec UI consumer 迁移后
+    local_changes: WorkflowHub 原生渲染入口；owner 是 UI 方法当前调用主会话，consumer 是 workflows/build-plan/SKILL.md:19 与 frontend-prototype-render/SKILL.md:9 的 build-prd 条件设计分支；test=tests/contract/ui-skill-contract.test.mjs；不改产品源码；delete-condition 两个当前方法 consumer 退役或由已审替代方法承接后
     dependency_closure:
       - skills/frontend-prototype-render
-    update_policy: 随真实组件渲染命令、截图证据和 build-spec consumer 合同人工审查
+    update_policy: 随真实组件渲染命令、截图证据和 当前 build-plan/build-prd consumer 合同人工审查
   - name: frontend-component-quality
     path: skills/frontend-component-quality/SKILL.md
     local_version: 1.0.0

@@ -1,292 +1,133 @@
-// CARD-03 P4 预写测试：T008（ORACLE-REV-001）、T009（ORACLE-REV-002）、T010（ORACLE-SKL-003）。
-// 夹具沿用 tests/contract/review-material-change-redispatch.test.mjs 的最小任务仓。
-import { randomUUID } from "node:crypto";
+// Current semantic tuple and physically narrowed packet; the retired T0
+// snapshot/attempt/pair/retry authentication machine is not a stage predicate.
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync,mkdtempSync,readFileSync,realpathSync,rmSync,writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname,join,resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, it } from "vitest";
-
-import { ArtifactDir } from "../../core/artifact-dir.mjs";
+import { afterEach,describe,expect,it } from "vitest";
+import { ArtifactDir } from "../../runtime/evidence/artifact-dir.mjs";
+import { openTask } from "../../runtime/task/task-handle.mjs";
+import { openCurrentTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { compactReviewDiff } from "../../runtime/review/review-input-bounds.mjs";
-import { recordSimpleReviewRequest, recordSimpleReviewResult } from "../../runtime/review/review-record-route.mjs";
-import { reviewPacketMaterialId } from "../../runtime/review/review-packet-identity.mjs";
-import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
-import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
+import { recordSimpleReviewRequest } from "../../runtime/review/review-record-route.mjs";
+import { createSimpleReviewPacket } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 import { reviewInstructionsFor } from "../../skills/wh-review/scripts/review-materials.mjs";
 import { prepareTaskBoundBuildCodeReviewBundle } from "../../tools/cli/stage-runtime.mjs";
-
-const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const readRepo = (path) => readFileSync(resolve(repoRoot, path), "utf8");
-const roots = [];
-
-afterEach(() => {
-  while (roots.length) rmSync(roots.pop(), { recursive: true, force: true });
-});
-
-function fixture({ physicalPhase = false } = {}) {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-card03-review-")));
+const roots=[];afterEach(()=>{while(roots.length)rmSync(roots.pop(),{recursive:true,force:true});});
+const repoRoot=resolve(dirname(fileURLToPath(import.meta.url)),"../..");const readRepo=p=>readFileSync(join(repoRoot,p),"utf8");
+function git(cwd, args) {
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) if (key.startsWith("GIT_")) delete env[key];
+  env.GIT_OPTIONAL_LOCKS = "0";
+  return execFileSync("git", args, { cwd, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+}
+async function fixture() {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "ocr-route-current-")));
   roots.push(root);
   const repo = join(root, "repo");
   mkdirSync(repo);
-  const git = (args) => execFileSync("git", args, { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
-  git(["init", "-q", "-b", "main"]);
-  git(["config", "user.name", "WorkflowHub card03 test"]);
-  git(["config", "user.email", "card03@workflowhub.local"]);
-  writeFileSync(join(repo, "README.md"), "card03 review fixture\n", "utf8");
-  if (physicalPhase) writeFileSync(join(repo, "outside.md"), "outside baseline\n", "utf8");
-  git(["add", "."]);
-  git(["commit", "-qm", "fixture"]);
-  const taskId = randomUUID();
-  const task = createTask({
-    storageRoot: root,
-    taskPath: join(root, "Projects", "workflowhub", "tasks", taskId),
-    manifest: {
-      schema_version: "1.0.0",
-      project_name: "workflowhub",
-      task_id: taskId,
-      created_at: "2026-09-19T00:00:00.000Z",
-      target_repo_root: repo,
-      issue_ids: [],
-      inputs: {},
-      record_model: "vnext-single-write",
-      ...(physicalPhase ? { activation_cohort: "post" } : {}),
-    },
-  });
-  const workspace = prepareTaskWorkspace(task);
-  const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
-  for (const [name, content] of Object.entries({
-    "decision-log.md": "# Decision\n", "spec.md": "# Spec\n", "plan.md": "# Plan\n", "tasks.md": "# Tasks\n",
-  })) artifacts.writeAtomic(name, content);
-  if (physicalPhase) {
-    artifacts.writeAtomic("phases/index.md", "# Phase index\n\n## Execution Index\n\n| phase | authority ref | semantic anchor | write set | dependency | consumer |\n| --- | --- | --- | --- | --- | --- |\n| `P1` | `phases/P1.md` | `phase-p1` | `README.md` | `none` | build-code |\n");
-    artifacts.writeAtomic("phases/P1.md", "# Phase P1\n\n- **Global spec**: `spec.md`\n- **Write set**: `README.md`\n- **Dependency**: none\n- **Consumer**: build-code\n- **gate_cmd**: `node check.mjs`\n- **oracle**: ORACLE-DRIFT-001\n- **evidence_path**: quality/tests/drift.json\n- **STOP**: owned bytes changed\n- **Done**: canonical source stays honest\n\n## L0 — Outcome\n\nKeep original reviewed bytes.\n\n## L1 — Contract\n\n- **FR / AC**: FR-001 / AC-001\n\n### T001 — Keep review scope\n\n## L2 — Reference\n");
+  git(repo, ["init", "-q", "-b", "main"]);
+  git(repo, ["config", "user.name", "WorkflowHub OCR fallback test"]);
+  git(repo, ["config", "user.email", "ocr-fallback@workflowhub.local"]);
+  writeFileSync(join(repo, "README.md"), "ocr fallback fixture\n", "utf8");
+  git(repo, ["add", "README.md"]);
+  git(repo, ["commit", "-qm", "fixture"]);
+  const taskId = `ocr-route-current-${Math.random().toString(16).slice(2)}`;
+  const worktreeRoot = join(root, "worktree");
+  git(repo, ["worktree", "add", "-q", "-b", `task/workflowhub/${taskId}`, worktreeRoot, "main"]);
+  const taskDir = join(root, "Projects", "workflowhub", "tasks", taskId);
+  mkdirSync(taskDir, { recursive: true });
+  writeFileSync(join(taskDir, "task.json"), JSON.stringify({
+    schema_version: "1.0.0", record_model: "vnext-single-write", activation_cohort: "post",
+    project_name: "workflowhub", task_id: taskId, created_at: "2026-10-03T00:00:00.000Z",
+    target_repo_root: worktreeRoot, workspace_mode: "existing", workspace_root: worktreeRoot,
+    issue_ids: [], inputs: {},
+  }));
+  writeFileSync(join(taskDir, "facts.jsonl"), "");
+  const materialRoot = join(worktreeRoot, "specs", taskId);
+  mkdirSync(join(materialRoot, "phases"), { recursive: true });
+  writeFileSync(join(materialRoot, "decision-log.md"), "# Decision log\n\n## 任务身份\n\n- **任务类型**：普通任务\n");
+  const gate = "npx --no-install vitest run tests/contract/ocr-route-current.test.mjs --reporter=dot";
+  const paths = ["prior-one.md", "prior-two.md", "README.md"];
+  const trace = paths.map((_file, i) => `| R-001 | FR-1 | AC-1 | P${i + 1}/T00${i + 1} | ORACLE-OCR-FALLBACK |`);
+  writeFileSync(join(materialRoot, "spec.md"), [
+    "# Owned OCR routing fixture", "- **FR-1**：OCR availability and same-surface fallback.",
+    "- [ ] **AC-1 — OCR routing**", "  - **需求**：FR-1",
+    "  - **验证方法**：actual assertions in this frozen fallback test.",
+    "  - **通过条件**：actual routing and failure assertions pass.", "  - **失败条件**：wrong route or false fallback.",
+    "## 实现设计（全局权威）", "### Code Anchors", "The owned source is `README.md`.",
+    "### Interfaces and Failure Semantics", "Preserve current code surface and unavailable provider errors.",
+    "### Requirement-to-Task Trace", "| source | FR | AC | task | oracle |", "| --- | --- | --- | --- | --- |", ...trace,
+    "### Global Verification Strategy", `\`${gate}\``, "",
+  ].join("\n"));
+  writeFileSync(join(materialRoot, "phases", "index.md"), [
+    "# Phase index", "## Execution Index",
+    "| phase | authority ref | semantic anchor | write set | dependency | consumer |", "| --- | --- | --- | --- | --- | --- |",
+    ...paths.map((file, i) => `| \`P${i + 1}\` | \`phases/P${i + 1}.md\` | \`phase-p${i + 1}\` | \`${file}\` | ${i === 0 ? "none" : `P${i}`} | OCR routing fixture |`), "",
+  ].join("\n"));
+  for (const [i, file] of paths.entries()) {
+    const n = i + 1;
+    writeFileSync(join(materialRoot, "phases", `P${n}.md`), [
+      `# Phase P${n} — owned fixture`, "- **Global spec**：`spec.md`", `- **Write set**：\`${file}\``,
+      `- **Dependency**：${i === 0 ? "none" : `P${i}`}`, "- **Consumer**：OCR routing fixture", "## L0",
+      `- **gate_cmd**：\`${gate}\``, "- **expected_exit**：0 only after actual assertions pass",
+      "- **oracle**：ORACLE-OCR-FALLBACK", "- **evidence_path**：quality/tests/output/owned-fixture.output",
+      "- **STOP**：preserve an actual routing failure", "- **Done**：actual assertions only, not production quality", "## L1",
+      `### T00${n} — owned routing fixture`, "- **Source / FR / AC**：R-001 / FR-1 / AC-1",
+      `- **Files / symbols**：\`${file}\` (symbol: N/A — fixture source text)`, "- **Action**：read the actual routing fixture",
+      "- **Inputs**：owned Git and plain task metadata", "- **Outputs / failure**：same code surface or observable unavailable",
+      "- **Boundary / DO NOT TOUCH**：no production or user repositories", `- **Dependency**：${i === 0 ? "none" : `T00${i}`}`,
+      "- **Test tier / skill**：feature / backend-testing", "- **Scenario / fixture or service**：owned CLI and injected reviewer result",
+      `- **RED/GREEN gate_cmd**：\`${gate}\``, "- **expected_exit**：RED nonzero; GREEN 0",
+      "- **RED target failure**：ORACLE-OCR-FALLBACK wrong routing assertion fails", "- **GREEN oracle**：ORACLE-OCR-FALLBACK actual assertions",
+      "- **Evidence**：quality/tests/output/owned-fixture.output", "- **STOP / recovery**：no claimed provider call without one",
+      "- **Coverage limit**：no external provider quality", "- **Done**：actual targeted assertions only", "## L2",
+      "Owned fixture data, not a WorkflowHub execution permit.", "",
+    ].join("\n"));
   }
-  return { task, workspace, artifacts, kernel: createTaskKernel(task, { candidateWorkspace: workspace, artifacts }) };
+  writeFileSync(join(worktreeRoot, "README.md"), "fallback implementation under review\n");
+
+  // host config：third_review/wh_review 可解析，但 provider 命令指向不存在路径
+  // （「config 无可用 provider」）。
+  const home = join(root, "home");
+  const hostDir = join(home, ".config", "workflowhub");
+  mkdirSync(hostDir, { recursive: true });
+  const attachmentRoot = join(root, "attachments");
+  mkdirSync(attachmentRoot);
+  const configPath = join(root, "providers.json");
+  writeFileSync(configPath, JSON.stringify({
+    tiers: [["codex/luna"]],
+    providers: { "codex/luna": { enabled: true, model: "reviewer-model", command: join(root, "missing-ocr-provider") } },
+    attachment_roots: [{ root: attachmentRoot, sources: [".wh-review-packets"] }],
+  }));
+  writeFileSync(join(hostDir, "config.json"), JSON.stringify({
+    task_dir: root,
+    third_review: { command: [join(root, "missing-wh-review-broker")], config: configPath, attachment_root: attachmentRoot },
+    wh_review: { version: 2, stages: { "build-code": { initial: ["codex/luna"], mode: "full_only", minimum_heterologous: 1 } } },
+  }));
+  const task = openTask(taskDir, { projectName: "workflowhub", taskId });
+  const workspace = await openCurrentTaskWorkspace(task);
+  const bin=join(root,"bin");mkdirSync(bin);
+  writeFileSync(join(bin,"ocr"),`#!${process.execPath}
+if(process.argv[2]==="--version")console.log("1.12.9");else process.exitCode=9;
+`,{mode:0o700});
+  return { root, repo, home, taskId, taskDir, worktreeRoot, task, workspace, bin };
 }
 
-const route = () => ({ route_identity: "a".repeat(64) });
-
-function reviewResult(input, overrides = {}) {
-  return {
-    status: "available",
-    stage: input.stage,
-    material_id: reviewPacketMaterialId(input),
-    runtime_id: "card03-review-fixture",
-    outcome: "completed",
-    provider_results: [{
-      provider: "codex/luna",
-      status: "completed",
-      identity: { provider: "codex/luna", adapter: "codex", source_id: "codex/luna", config_id: "fixture-config", model: "gpt-5.6-luna" },
-      error: null,
-      timing: { started_at_ms: 1, completed_at_ms: 2, duration_ms: 1 },
-      usage: null,
-      evidence_anchor_valid: [],
-    }],
-    findings: [],
-    ...overrides,
-  };
-}
-
-const attemptCount = (task) => task.listCanonicalReviewAttemptRefs().length;
-const goodRequest = { stage: "build-code", host_provider: "codex/luna", materials: { approved_spec: "spec.md" } };
-
-async function expectRejectedBeforeDispatch(request, reason) {
-  const state = fixture();
-  let dispatches = 0;
-  const startedAt = Date.now();
-  await expect(recordSimpleReviewRequest({
-    task: state.task, kernel: state.kernel, request, resolveRouteIdentity: route,
-    runRound: async (input) => { dispatches += 1; return reviewResult(input); },
-  })).rejects.toThrow(reason);
-  expect(Date.now() - startedAt).toBeLessThan(1000);
-  expect(dispatches).toBe(0);
-  expect(attemptCount(state.task)).toBe(0);
-}
-
-describe("ORACLE-REV-001 review request precheck, bad results and packet narrowing", () => {
-  it.each(["design", "implementation"])("dispatches mini-task %s through its registered semantic surface and still rejects unknown keys", async (mode) => {
-    const state = fixture();
-    const reviewKind = `mini_task.${mode}`;
-    const request = { stage: "build-code", review_kind: reviewKind, subject_kind: "phase", phase_id: "P1", review_scope: "phase",
-      materials: { raw_requirement: "Keep one small change.", decision_log: "# Decision", spec: "# Spec", plan: "# Plan", tasks: "# Tasks" },
-    };
-    let dispatches = 0;
-    const saved = await recordSimpleReviewRequest({ task: state.task, kernel: state.kernel, request, resolveRouteIdentity: route,
-      runRound: async (input) => {
-        dispatches += 1;
-        return reviewResult(input, { review_kind: reviewKind, subject_kind: "phase", phase_id: "P1", review_scope: "phase" });
-      },
-    });
-    expect(dispatches).toBe(1);
-    expect(saved.result_ref).toBeTruthy();
-    expect(JSON.parse(state.task.readRecord(saved.attempt_ref))).toMatchObject({ review_kind: reviewKind, terminal_status: "semantic" });
-    await expectRejectedBeforeDispatch({ ...request, materials: { ...request.materials, unsupported_mini_field: "out of scope" } }, /unsupported_mini_field/);
-  });
-
-  it("records a normal verify-code request with complete AC text through the actual packet producer", async () => {
-    const state = fixture();
-    const acceptance = "AC-001: Preserve the current implementation and expose its failure path.\nAC-002: Reject unsupported request keys before dispatch.";
-    state.artifacts.writeAtomic("spec.md", `# Spec\n\n${acceptance}\n`);
-    writeFileSync(join(state.workspace.worktreeRoot, "README.md"), "current implementation for AC-001\n");
-    const attachmentRoot = join(state.workspace.worktreeRoot, "..", "review-packets");
-    mkdirSync(attachmentRoot);
-    const request = { stage: "verify-code", subject_kind: "worktree", materials: {
-      changed_files: "README.md", implementation_assessment: "Inspect the actual README consumer.",
-      test_context: "This test checks request and packet transport, not business acceptance.",
-      open_risks: "Business effects remain unverified.", acceptance_criteria: acceptance,
-    } };
-    let bundle;
-    let dispatches = 0;
-    const materialIdForRequest = (input) => {
-      bundle ??= prepareTaskBoundBuildCodeReviewBundle({ task: state.task, workspace: openCurrentTaskWorkspace(state.task) }, input,
-        { loadConfig: () => ({ attachmentRoot }) });
-      return bundle.materialId;
-    };
-    const record = () => recordSimpleReviewRequest({ task: state.task, kernel: state.kernel, request,
-      resolveRouteIdentity: route, materialIdForRequest, runRound: async (input) => {
-        dispatches += 1;
-        expect(readFileSync(join(bundle.bundleRoot, "requirements/acceptance_criteria.md"), "utf8")).toBe(acceptance);
-        expect(readFileSync(join(bundle.bundleRoot, "changes.diff"), "utf8")).toContain("current implementation for AC-001");
-        return reviewResult(input, { material_id: bundle.materialId });
-      },
-    });
-    try {
-      const first = await record();
-      expect(JSON.parse(state.task.readRecord(first.attempt_ref)).error).toBeNull();
-      expect(first).toMatchObject({ status: "recorded", dispatch_state: "dispatched", reused: false });
-      expect(first.result_ref).toBeTruthy();
-      const repeated = await record();
-      expect(repeated).toMatchObject({ reused: true, attempt_ref: first.attempt_ref, result_ref: first.result_ref });
-      expect(dispatches).toBe(1);
-      expect(attemptCount(state.task)).toBe(1);
-    } finally { bundle?.dispose(); }
-    await expectRejectedBeforeDispatch({ ...request, materials: { ...request.materials, unsupported_criterion: "AC-003" } }, /unsupported_criterion/);
-  });
-
-it("keeps canonical phase review bound to T0 after out-of-scope code changes", async () => {
-  for (const mutationPoint of ["route", "dispatch"]) {
-    const state = fixture({ physicalPhase: true });
-    const before = state.kernel.currentVNextContext();
-    const request = { ...goodRequest, review_scope: "phase", subject_kind: "phase", phase_id: "P1" };
-    const mutate = () => writeFileSync(join(state.workspace.worktreeRoot, "outside.md"), "outside changed\n");
-    const saved = await recordSimpleReviewRequest({
-      task: state.task, kernel: state.kernel, request,
-      resolveRouteIdentity: async () => { if (mutationPoint === "route") mutate(); return route(); },
-      runRound: async (input) => { if (mutationPoint === "dispatch") mutate(); return reviewResult(input); },
-    });
-    const attempt = JSON.parse(state.task.readRecord(saved.attempt_ref));
-    expect(attempt.terminal_status).toBe("semantic");
-    expect(saved.result_ref).toBeTruthy();
-    expect(attempt.snapshot_tree).toBe(before.snapshot.tree);
-    expect(attempt.source.base_tree).toBe(before.snapshot.tree);
-    expect(attempt.source.target_commit).toBe(before.snapshot.head);
-    expect(attempt.material_revision).toBe(before.materialRevision);
-    expect(state.kernel.currentVNextContext().snapshot.tree).not.toBe(before.snapshot.tree);
-  }
-});
-it("rejects own-code or authoritative-material drift and keeps missing Phase conservative", async () => {
-  for (const mutation of ["owned", "material", "missingPhase", "nonPhase"]) {
-    const state = fixture({ physicalPhase: !["missingPhase", "nonPhase"].includes(mutation) });
-    const before = state.kernel.currentVNextContext();
-    const request = mutation === "nonPhase"
-      ? { stage: "build-plan", materials: { approved_spec: "spec.md" } }
-      : { ...goodRequest, review_scope: "phase", subject_kind: "phase", phase_id: "P1" };
-    const saved = await recordSimpleReviewRequest({ task: state.task, kernel: state.kernel, request, resolveRouteIdentity: route,
-      runRound: async (input) => {
-        if (mutation === "material") state.artifacts.writeAtomic("spec.md", "# Spec changed\n");
-        else writeFileSync(join(state.workspace.worktreeRoot, mutation === "owned" ? "README.md" : "outside.md"), "changed\n");
-        return reviewResult(input);
-      },
-    });
-    const attempt = JSON.parse(state.task.readRecord(saved.attempt_ref));
-    expect(attempt.terminal_status).toBe("unavailable");
-    expect(attempt.error?.code).toBe("REVIEW_SOURCE_DRIFT");
-    expect(saved.result_ref ?? null).toBeNull();
-    expect(attempt.provider_attempts[0].status).toBe("completed");
-    expect(attempt.snapshot_tree).toBe(before.snapshot.tree);
-    if (mutation === "nonPhase") {
-      expect(attempt.stage).toBe("build-plan");
-      expect(state.kernel.currentVNextContext().materialRevision).toBe(before.materialRevision);
-      expect(state.kernel.currentVNextContext().snapshot.tree).not.toBe(before.snapshot.tree);
-    }
-  }
+const phaseRequest={stage:"build-code",review_scope:"phase",subject_kind:"phase",phase_id:"P3",surface:"code",materials:{approved_spec:"spec.md",acceptance_criteria:"AC-1: OCR routing"}};
+const unavailable=()=>({status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],error:{code:"OWNED_UNAVAILABLE",message:"no external model"}});
+async function context(f){return{task:f.task,manifest:f.task.manifest,workspace:await openCurrentTaskWorkspace(f.task),artifacts:ArtifactDir.open(f.worktreeRoot,f.task)};}
+describe("current request tuple and physical review scope",()=>{
+ it.each(["design","implementation"])("records the actual registered mini-task %s semantic identity",async mode=>{const f=await fixture(),request={...phaseRequest,review_kind:`mini_task.${mode}`};let calls=0;const saved=await recordSimpleReviewRequest({taskDir:f.taskDir,request,runRound:async input=>{calls++;expect(input.review_kind).toBe(request.review_kind);return unavailable();}});const value=JSON.parse(f.task.readRecord(saved.result_ref));expect(calls).toBe(1);expect(value).toMatchObject({stage:"build-code",review_kind:request.review_kind,phase_id:"P3",review_scope:"phase",authoritative:false});});
+ it("physically prepares normal verify-code AC text and implementation diff without a snapshot authority",async()=>{const f=await fixture(),ctx=await context(f),attachmentRoot=join(f.root,"owned-review");mkdirSync(attachmentRoot);const acceptance="AC-1: OCR routing";const request={stage:"verify-code",subject_kind:"worktree",materials:{changed_files:"README.md",implementation_assessment:"Inspect actual README code.",test_context:"This is a controlled packet test.",open_risks:"No external quality claim.",acceptance_criteria:acceptance}};const bundle=prepareTaskBoundBuildCodeReviewBundle(ctx,request,{loadConfig:()=>({attachmentRoot})});try{expect(readFileSync(join(bundle.bundleRoot,"requirements/acceptance_criteria.md"),"utf8")).toBe(acceptance);expect(readFileSync(join(bundle.bundleRoot,"changes.diff"),"utf8")).toContain("fallback implementation under review");expect(bundle.materialId).toBeTruthy();}finally{bundle.dispose();}});
+ it("narrows phase physical diff to its write set and retains the submitted bytes after an outside change",async()=>{const f=await fixture(),ctx=await context(f),attachmentRoot=join(f.root,"owned-phase-review");mkdirSync(attachmentRoot);writeFileSync(join(f.worktreeRoot,"outside.md"),"outside owned source\n");const bundle=prepareTaskBoundBuildCodeReviewBundle(ctx,phaseRequest,{loadConfig:()=>({attachmentRoot})});try{const bytes=readFileSync(join(bundle.bundleRoot,"changes.diff"));expect(bytes.toString()).toContain("README.md");expect(bytes.toString()).not.toContain("outside.md");writeFileSync(join(f.worktreeRoot,"outside.md"),"later outside source\n");expect(readFileSync(join(bundle.bundleRoot,"changes.diff"))).toEqual(bytes);}finally{bundle.dispose();}});
+ it("rejects unknown formal stage and caller-provided generated review instructions through the actual packet input API",()=>{expect(()=>createSimpleReviewPacket({stage:"no-such-stage",materials:{approved_spec:"owned"}})).toThrow(/unknown review stage/);expect(()=>createSimpleReviewPacket({...phaseRequest,materials:{approved_spec:"owned",review_instructions:"caller authored instructions"}})).toThrow(/MATERIAL_FORBIDDEN/);});
+ it("records requests with absent or empty caller host and does not use historical host identity as authority",async()=>{const f=await fixture();let calls=0;for(const request of [phaseRequest,{...phaseRequest,host_provider:""}]){const saved=await recordSimpleReviewRequest({taskDir:f.taskDir,request,runRound:async()=>{calls++;return unavailable();}});expect(saved.status).toBe("unavailable");}expect(calls).toBe(2);for(const p of ["runtime/review/review-record-route.mjs","skills/wh-review/scripts/simple-review-runner.mjs","skills/wh-review/scripts/third-review-host-config.mjs"])expect(readRepo(p)).not.toMatch(/host_provider is required/);});
+ it("adds no asynchronous public command or persisted phase/session authority",()=>{const source=readRepo("tools/cli/stage-runtime.mjs");expect(source).not.toMatch(/--async\b/);expect(source).not.toMatch(/["']collect["']/);const current=JSON.parse(readRepo("runtime/review/schemas/result.schema.json"));expect(JSON.stringify(current)).not.toContain("result_invalid");});
 });
 
-  it("rejects a request that also carries a result before any attempt exists", async () => {
-    await expectRejectedBeforeDispatch({ ...goodRequest, result: { findings: [] } }, /result/);
-  });
-
-  it("rejects host-owned identity fields before any attempt exists", async () => {
-    await expectRejectedBeforeDispatch({ ...goodRequest, snapshot_tree: "b".repeat(40) }, /host-owned: snapshot_tree/);
-  });
-
-  it("rejects a stage without semantic_fields in stage-materials.json before any attempt exists", async () => {
-    await expectRejectedBeforeDispatch({ ...goodRequest, stage: "no-such-stage" }, /no-such-stage/);
-  });
-
-  it("rejects material keys outside the stage semantic fields before any attempt exists", async () => {
-    await expectRejectedBeforeDispatch(
-      { ...goodRequest, materials: { approved_spec: "spec.md", not_a_semantic_field: "x" } },
-      /not_a_semantic_field/,
-    );
-  });
-
-  it("dispatches a request without a caller host_provider instead of requiring one", async () => {
-    // card-03 reversed the old expectation: host_provider is no longer part of a
-    // review request, so omitting it (and even sending an empty value) must
-    // dispatch and record normally, and no reachable path may fail with
-    // "host_provider is required".
-    for (const request of [
-      { stage: "build-code", materials: { approved_spec: "spec.md" } },
-      { ...goodRequest, host_provider: "" },
-    ]) {
-      const state = fixture();
-      let dispatches = 0;
-      const recorded = await recordSimpleReviewRequest({
-        task: state.task, kernel: state.kernel, request, resolveRouteIdentity: route,
-        runRound: async (input) => { dispatches += 1; return reviewResult(input); },
-      });
-      expect(dispatches).toBe(1);
-      expect(recorded).toMatchObject({ status: "recorded", dispatch_state: "dispatched", reused: false });
-      expect(attemptCount(state.task)).toBe(1);
-    }
-    const reachable = [
-      readRepo("runtime/review/review-record-route.mjs"),
-      readRepo("skills/wh-review/scripts/simple-review-runner.mjs"),
-      readRepo("skills/wh-review/scripts/third-review-host-config.mjs"),
-    ];
-    for (const source of reachable) expect(source).not.toMatch(/host_provider is required/);
-  });
-
-  it("records a malformed provider result as unavailable with a reason and does not redispatch it", async () => {
-    const state = fixture();
-    let dispatches = 0;
-    const runRound = async (input) => { dispatches += 1; return reviewResult(input, { findings: "not-an-array" }); };
-    const first = await recordSimpleReviewRequest({ task: state.task, kernel: state.kernel, request: goodRequest, resolveRouteIdentity: route, runRound });
-    const attempt = JSON.parse(state.task.readRecord(first.attempt_ref));
-    expect(attempt.terminal_status).toBe("unavailable");
-    expect(attempt.error?.code).toMatch(/^[A-Z_]+$/);
-    expect(attempt.error?.message).toBeTruthy();
-    expect(first.result_ref ?? null).toBeNull();
-
-    const repeated = await recordSimpleReviewRequest({ task: state.task, kernel: state.kernel, request: goodRequest, resolveRouteIdentity: route, runRound });
-    expect(dispatches).toBe(1);
-    expect(repeated).toMatchObject({ reused: true, attempt_ref: first.attempt_ref });
-  });
-
-  it("adds no CLI verb and no dispatch_state value for asynchronous review", () => {
-    const cli = readRepo("tools/cli/stage-runtime.mjs");
-    expect(cli).not.toMatch(/--async\b/);
-    expect(cli).not.toMatch(/["']collect["']/);
-    const attemptSchema = readRepo("runtime/review/schemas/attempt.schema.json");
-    const dispatchState = JSON.parse(attemptSchema).properties?.dispatch_state?.enum
-      ?? JSON.parse(attemptSchema.match(/"dispatch_state"\s*:\s*(\{[^}]*\})/)[1]).enum;
-    expect(dispatchState).toEqual(["dispatched", "blocked_before_dispatch", "sent_unparsed", "reused"]);
-    expect(attemptSchema).not.toMatch(/result_invalid/);
-  });
-
+describe("ordinary current diff scope",()=>{
   it("selects directory-owned changed paths without matching a sibling prefix", () => {
     const section = (path) => `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1 +1 @@\n-old\n+new\n`;
     const diff = section("tests/review/owned.test.mjs") + section("tests/review-other/foreign.test.mjs");
@@ -314,180 +155,6 @@ it("rejects own-code or authoritative-material drift and keeps missing Phase con
     expect(JSON.stringify(compacted.index)).not.toMatch(/material_id|snapshot_tree|material_revision|task_id/);
   });
 });
-
-// 缺陷③ 夹具：当前命名空间的一对 canonical 评审记录（red/blue），写入后把其中一个
-// 成员记录的 pair 绑定字段（material_id）改坏。这不是 foreign 记录（stage/snapshot/
-// material_revision/review_scope 都与本次请求同命名空间），所以读取器不能按
-// 「旧 pair 跳过」处理。
-const DAMAGED_PAIR_ID = "card03-rev-002-damaged-pair";
-const DAMAGED_PAIR_REQUEST_KEY = "p".repeat(64);
-const DAMAGED_PAIR_MATERIAL_ID = "c".repeat(64);
-
-function pairMember(role, provider) {
-  const adapter = provider.startsWith("claude/") ? "claude" : "codex";
-  const identity = { provider, adapter, source_id: provider, config_id: "fixture-config", model: "gpt-5.6-luna" };
-  return {
-    status: "available",
-    stage: "build-code",
-    review_track: null,
-    review_kind: null,
-    review_scope: "integration",
-    subject_kind: "worktree",
-    role,
-    pair_id: DAMAGED_PAIR_ID,
-    minimum_heterologous: 1,
-    material_id: DAMAGED_PAIR_MATERIAL_ID,
-    runtime_id: "card03-review-fixture",
-    outcome: "completed",
-    provider_results: [{
-      provider,
-      status: "completed",
-      identity,
-      error: null,
-      timing: { started_at_ms: 1, completed_at_ms: 2, duration_ms: 1 },
-      usage: null,
-      evidence_anchor_valid: [],
-    }],
-    findings: [],
-    provider_selection: { providers: [provider], provider_identities: { [provider]: identity } },
-  };
-}
-
-function writeDamagedPair(state) {
-  const red = pairMember("red", "codex/luna");
-  const blue = pairMember("blue", "claude/opus");
-  const summary = recordSimpleReviewResult({
-    task: state.task,
-    kernel: state.kernel,
-    requestKey: DAMAGED_PAIR_REQUEST_KEY,
-    result: {
-      status: "available",
-      stage: "build-code",
-      review_track: null,
-      review_kind: null,
-      review_scope: "integration",
-      subject_kind: "worktree",
-      pair_id: DAMAGED_PAIR_ID,
-      minimum_heterologous: 1,
-      material_id: DAMAGED_PAIR_MATERIAL_ID,
-      runtime_id: null,
-      outcome: "completed",
-      provider_results: [...red.provider_results, ...blue.provider_results],
-      findings: [],
-      role_results: { red, blue },
-    },
-  });
-  const damagedRef = summary.role_results.blue.attempt_ref;
-  const damaged = JSON.parse(state.task.readRecord(damagedRef));
-  // 只改坏「这条成员记录与那一对记录的绑定字段」，不改报告里的语义/覆盖声明：
-  // 这不是伪造 coverage（那仍须 fail-closed），而是配对链接断掉。
-  damaged.material_id = "d".repeat(64);
-  state.task.writeRecordAtomic(damagedRef, JSON.stringify(damaged));
-  return { summary, damagedRef, damagedBytes: state.task.readRecord(damagedRef) };
-}
-
-describe("ORACLE-REV-002 partial coverage and same-triple reuse", () => {
-  it("no longer lets the historical flag release partial coverage", () => {
-    expect(readRepo("runtime/review/review-record-route.mjs")).not.toMatch(/allowHistoricalPartialCoverage/);
-  });
-
-  async function assertPartialTerminalReuse({ minimum }) {
-    const state = fixture();
-    let dispatches = 0;
-    const runRound = async (input) => {
-      dispatches += 1;
-      const completed = reviewResult(input).provider_results[0];
-      return reviewResult(input, {
-        status: "available-with-failures",
-        outcome: "partial",
-        ...(minimum === undefined ? {} : { minimum_heterologous: minimum }),
-        provider_results: [completed, {
-          provider: "kimi/coding", status: "failed",
-          identity: { provider: "kimi/coding", adapter: "kimi", source_id: "kimi/coding", config_id: "fixture-config", model: "fixture-model" },
-          error: { code: "REVIEW_PROVIDER_FAILED", message: "Controlled terminal provider failure" },
-          timing: { started_at_ms: 1, completed_at_ms: 2, duration_ms: 1 },
-          usage: null, evidence_anchor_valid: [],
-        }],
-      });
-    };
-    const first = await recordSimpleReviewRequest({ task: state.task, kernel: state.kernel,
-      request: goodRequest, resolveRouteIdentity: route, runRound });
-    const attempt = JSON.parse(state.task.readRecord(first.attempt_ref));
-    expect(attempt.provider_attempts.map((provider) => provider.status)).toEqual(["completed", "failed"]);
-    const completedOutput = attempt.provider_attempts[0].output_ref;
-    expect(completedOutput).toBeTruthy();
-    const originalRefs = [first.attempt_ref, first.report_ref, completedOutput,
-      ...(first.result_ref ? [first.result_ref] : [])];
-    const originalBytes = originalRefs.map((ref) => state.task.readRecord(ref));
-    if (minimum === undefined) {
-      expect(attempt.terminal_status).toBe("unavailable");
-      expect(attempt.error?.code).toBe("REVIEW_QUORUM_INCOMPLETE");
-      expect(first.result_ref ?? null).toBeNull();
-      expect(state.task.readRecord(first.report_ref)).toContain('"coverage": "incomplete"');
-    } else {
-      expect(attempt.terminal_status).toBe("semantic");
-      expect(first.result_ref).toBeTruthy();
-      expect(state.task.readRecord(first.report_ref)).toContain('"coverage": "satisfied"');
-    }
-    const repeated = await recordSimpleReviewRequest({ task: state.task, kernel: state.kernel,
-      request: goodRequest, resolveRouteIdentity: route, runRound });
-    expect(dispatches).toBe(1);
-    expect(attemptCount(state.task)).toBe(1);
-    expect(repeated).toMatchObject({ reused: true, dispatch_state: "reused", attempt_ref: first.attempt_ref });
-    expect(repeated.result_ref ?? null).toBe(first.result_ref ?? null);
-    originalRefs.forEach((ref, index) => expect(state.task.readRecord(ref)).toBe(originalBytes[index]));
-  }
-
-  it("reuses the terminal partial attempt without a declared minimum and preserves incomplete original provider facts", async () => {
-    await assertPartialTerminalReuse({});
-  });
-
-  it("reuses the complete minimum-one partial control without dispatching providers again", async () => {
-    await assertPartialTerminalReuse({ minimum: 1 });
-  });
-
-  it("reuses an existing semantic result for the same review triple instead of dispatching", async () => {
-    const state = fixture();
-    let dispatches = 0;
-    const runRound = async (input) => { dispatches += 1; return reviewResult(input); };
-    const first = await recordSimpleReviewRequest({ task: state.task, kernel: state.kernel, request: goodRequest, resolveRouteIdentity: route, runRound });
-    const repeated = await recordSimpleReviewRequest({ task: state.task, kernel: state.kernel, request: goodRequest, resolveRouteIdentity: route, runRound });
-    expect(dispatches).toBe(1);
-    expect(repeated).toMatchObject({ reused: true, dispatch_state: "reused", attempt_ref: first.attempt_ref, result_ref: first.result_ref });
-    expect(attemptCount(state.task)).toBe(1);
-  });
-
-  it("does not let one damaged pair member abort the whole history read", async () => {
-    const state = fixture();
-    // 同一命名空间里已有一条健康的历史（这一次请求自己的语义结果）。
-    const healthy = await recordSimpleReviewRequest({
-      task: state.task, kernel: state.kernel, request: goodRequest, resolveRouteIdentity: route,
-      runRound: async (input) => reviewResult(input),
-    });
-    // 再放进一对成员记录被改坏的同命名空间 pair。
-    const { damagedRef, damagedBytes } = writeDamagedPair(state);
-
-    let dispatches = 0;
-    const settled = await recordSimpleReviewRequest({
-      task: state.task, kernel: state.kernel, request: goodRequest, resolveRouteIdentity: route,
-      runRound: async (input) => { dispatches += 1; return reviewResult(input); },
-    }).then((value) => ({ value }), (error) => ({ error }));
-
-    // 一条损坏的 pair 成员只该让那一对记录被跳过：整次历史读取不得中断，同命名空间
-    // 里另一条健康的成员记录必须照常读回并被复用（零派发）。
-    expect(
-      settled.error,
-      `一条损坏的 pair 成员拖垮了整次历史读取：${settled.error?.code ?? ""} ${String(settled.error?.message ?? "")}`,
-    ).toBeUndefined();
-    expect(settled.value, "损坏成员所在的那对记录之外的健康成员必须照常读回").toMatchObject({
-      reused: true, dispatch_state: "reused", attempt_ref: healthy.attempt_ref, result_ref: healthy.result_ref,
-    });
-    expect(dispatches).toBe(0);
-    // 容忍 ≠ 删除：损坏记录原样保留，不被静默改写。
-    expect(state.task.readRecord(damagedRef)).toBe(damagedBytes);
-  });
-});
-
 describe("ORACLE-SKL-003 runner reviewer skills follow stage-skill-plan.json", () => {
   const plan = JSON.parse(readRepo("skills/wh-review/stage-skill-plan.json"));
   for (const stage of ["build-plan", "build-code", "verify-code"]) {
@@ -510,7 +177,7 @@ describe("CARD-03 Git diff path prefix boundary", () => {
     it(`rejects real Git no-prefix ${kind} paths while preserving the prefixed control`, () => {
       const repo = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-card03-prefix-")));
       roots.push(repo);
-      const git = (args) => execFileSync("git", args, { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+      const git = (args) => {const env={...process.env};for(const key of Object.keys(env))if(key.startsWith("GIT_"))delete env[key];return execFileSync("git", args, {cwd:repo,env,encoding:"utf8",stdio:["ignore","pipe","pipe"]});};
       git(["init", "-q", "-b", "main"]);
       git(["config", "user.name", "WorkflowHub prefix test"]);
       git(["config", "user.email", "prefix@workflowhub.local"]);

@@ -1,13 +1,12 @@
-// Selection over supplied facts. Authentication belongs to the Task/P9 producer;
+// Selection over supplied facts. Selection is advice over ordinary caller facts;
 // no property of these caller-owned objects independently proves provenance.
 const reject = (reason, extra = {}) => Object.freeze({ status: "unavailable", reason, cases: [], ...extra });
 const nonempty = (value) => typeof value === "string" && value.trim() !== "";
 const paths = (value) => Array.isArray(value) && value.length > 0
   && value.every(nonempty) && new Set(value).size === value.length;
-const SHA256 = /^[a-f0-9]{64}$/;
 const REGISTRY_REF = "docs/quality/test-asset-registry.json";
 
-// The authenticated Git diff is deliberately broader than the business
+// The supplied Git diff is deliberately broader than the business
 // selection. These classes keep source provenance complete while preventing
 // support/history files from masquerading as missing business cases. A path
 // outside this small, stable vocabulary remains unmapped and fails closed
@@ -56,7 +55,7 @@ function scopeSummary(rows) {
 }
 
 /**
- * Classify the complete authenticated source diff without reducing it to
+ * Classify the complete supplied source diff without reducing it to
  * business cases. Exact active triggers are business paths; known project
  * support/history roots are non-business paths; everything else is unknown.
  */
@@ -77,16 +76,12 @@ export function classifyChangedPaths(changedPaths, catalog) {
 }
 
 function preRunRegistryStatus(registry, changeScope) {
-  if (registry?.task_id !== changeScope.task_id
-      || registry?.snapshot_tree !== changeScope.snapshot_tree
-      || registry?.source_digest !== changeScope.source_digest) return "invalid_change_provenance";
   if (registry.status !== "recorded" || registry.registry_ref !== REGISTRY_REF
-      || !nonempty(registry.revision) || !SHA256.test(registry.registry_sha256 ?? "")
+      || !nonempty(registry.revision)
       || !Array.isArray(registry.targets) || registry.targets.length === 0) return "missing_inventory_identity";
   const targets = registry.targets.map((target) => target?.path);
   if (targets.some((path) => !nonempty(path)) || new Set(targets).size !== targets.length
-      || registry.targets.some((target) => !SHA256.test(target.sha256 ?? "")
-        || !["active", "retired"].includes(target.status)
+      || registry.targets.some((target) => !["active", "retired"].includes(target.status)
         || !Array.isArray(target.registered_test_ids)
         || target.registered_test_ids.length === 0
         || new Set(target.registered_test_ids).size !== target.registered_test_ids.length)) {
@@ -145,25 +140,12 @@ export function selectAffectedCases({ changeScope, catalog, inventory, registry 
   if (changeScope?.status !== "recorded" || !paths(changeScope.changed_paths)) {
     return reject("unknown_change_scope");
   }
-  // Detect an observable contradiction. A tree mismatch cannot be established
-  // here without an independent Git/receipt reader; never infer one from a
-  // different but otherwise valid-looking tree ID.
-  if (nonempty(changeScope.start_commit) && nonempty(changeScope.head_commit)
-      && changeScope.start_commit === changeScope.head_commit) {
-    return reject("invalid_change_provenance");
-  }
   if (registry !== undefined && inventory !== undefined) return reject("missing_inventory_identity");
   if (registry !== undefined) {
     const registryProblem = preRunRegistryStatus(registry, changeScope);
     if (registryProblem) return reject(registryProblem);
   }
   const inventories = registry === undefined ? (Array.isArray(inventory) ? inventory : [inventory]) : [];
-  if (inventories.some((item) => item?.status === "recorded"
-      && (item.snapshot_tree !== changeScope.snapshot_tree
-        || item.source_digest !== changeScope.source_digest
-        || item.task_id !== changeScope.task_id))) {
-    return reject("invalid_change_provenance");
-  }
   if (!nonempty(catalog?.revision) || !Array.isArray(catalog.cases)
       || (registry === undefined && inventories.some((item) => !Array.isArray(item?.tests)))) return reject("missing_inventory_identity");
 
@@ -212,13 +194,12 @@ export function selectAffectedCases({ changeScope, catalog, inventory, registry 
       unmapped_changed_paths: Object.freeze(unmappedChangedPaths) } : {}),
     ...scopeDetails,
     catalog_revision: catalog.revision,
-    // The producer must authenticate these refs before a consumer may use them.
-    provenance: "supplied_unverified", task_id: changeScope.task_id,
-    snapshot_tree: changeScope.snapshot_tree, source_digest: changeScope.source_digest,
+    // A candidate selection does not prove execution, coverage or completion.
+    provenance: "supplied_unverified",
     changed_paths: Object.freeze([...changeScope.changed_paths]),
     ...(registry === undefined ? {} : {
       inventory_basis: "registered_pre_run", test_execution_status: "not_run",
-      registry_ref: registry.registry_ref, registry_sha256: registry.registry_sha256,
+      registry_ref: registry.registry_ref,
       registry_revision: registry.revision,
     }),
     cases: Object.freeze(cases),
