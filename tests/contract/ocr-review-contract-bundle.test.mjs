@@ -21,7 +21,8 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { buildReviewMaterials, redactProviderHostPaths } from "../../skills/wh-review/scripts/review-materials.mjs";
 import { captureReviewSource } from "../../skills/wh-review/scripts/review-source.mjs";
-import { runConfiguredOcrHostReview } from "../../runtime/review/ocr-delegation-adapter.mjs";
+import { runConfiguredOcrHostReview, runOcrDelegationRound } from "../../runtime/review/ocr-delegation-adapter.mjs";
+import { recordSimpleReviewRequest } from "../../runtime/review/review-record-route.mjs";
 import { ArtifactDir } from "../../runtime/evidence/artifact-dir.mjs";
 import { captureCommand } from "../../runtime/interface/run-command.mjs";
 import { openTask } from "../../runtime/task/task-handle.mjs";
@@ -441,30 +442,58 @@ describe("complete diff navigation and named per-file shards", () => {
       expect(bundle.manifest.filter(entry => entry.path === "skills/simplicity-guard/SKILL.md")).toHaveLength(1);
       expect(readFileSync(join(bundle.bundleRoot, "requirements/acceptance_criteria.md"), "utf8")).toBe(finalRequest.materials.acceptance_criteria);
       expect(readFileSync(join(bundle.bundleRoot, "review-instructions.md"), "utf8")).toContain("complete diff content is in all manifest-declared per-file patch shards");
-      // Exercise only the existing private parser, not OCR or native provider dispatch.
+      // Actual deterministic OCR materialization plus an owned native CLI;
+      // this proves transport paths/bytes, not model quality or native FS policy.
       const activeChange = index.changes.find(change => change.path === "src/active.mjs"), shard = activeChange.shards[0];
       const raw = readFileSync(join(bundle.bundleRoot, shard.ref), "utf8");
       const exactLine = active.split("\n")[19];
       const patchLine = raw.split("\n").findIndex(line => line === "+" + exactLine) + 1;
       expect(patchLine).toBeGreaterThan(0);
-      const packetRoot = join(state.root, "owned-parser-packet"), path = shard.ref.replace(/\.diff$/, ".md");
-      mkdirSync(dirname(join(packetRoot,path)), {recursive:true});
-      const content = `# WorkflowHub candidate diff: ${shard.ref}\n\n\`\`\`diff\n${raw}\n\`\`\`\n`;
-      writeFileSync(join(packetRoot,path), content);
-      const parsed = await runConfiguredOcrHostReview({request:finalRequest,packet:{root:packetRoot,material_id:bundle.materialId,
-        preview:{reviewable_files:[{path}]}, rules:{rules:[]}, manifest:[{path,bytes:Buffer.byteLength(content),sha256:hash(content)}]}}, {
-        sourceBundle:bundle, trustedContext:{trusted:{},route:{minimum_heterologous:1},selection:{providers:["codex/owned"]},
-          providerConfig:{providers:{"codex/owned":{enabled:true,command:"/unused/owned-parser",model:"owned-parser"}}}},
-        providerExecutor:async()=>({status:"completed",output:[JSON.stringify({type:"item.completed",item:{type:"agent_message",text:JSON.stringify({findings:[{
-          severity:"major",path,line:patchLine+3,issue:"Owned source mapping assertion",recommendation:"Inspect this actual source line",
-          root_cause:"owned fixture",evidence_kind:"direct",evidence:`\`${exactLine}\``,
-        }]})}}),JSON.stringify({type:"turn.completed"})].join("\n")}),
-      });
+      const nativeCli=join(state.root,"owned-native-index-cli");
+      const finding={severity:"major",path:shard.ref,line:patchLine,issue:"Owned source mapping assertion",recommendation:"Inspect this actual source line",
+        root_cause:"owned fixture",evidence_kind:"direct",evidence:`\`${exactLine}\``};
+      writeFileSync(nativeCli,String.raw`#!/usr/bin/env node
+const fs=require("node:fs"),crypto=require("node:crypto");
+const hash=bytes=>crypto.createHash("sha256").update(bytes).digest("hex");
+const prompt=fs.readFileSync("review-prompt.md","utf8");
+if(prompt.includes("change-map.json"))throw new Error("prompt named an unavailable index");
+const index=JSON.parse(fs.readFileSync("diff-index.json","utf8")),full=[];
+let reads=0;
+for(const change of index.changes)for(const part of change.shards){
+  const raw=fs.readFileSync(part.ref);
+  if(raw.length!==part.bytes||hash(raw)!==part.sha256)throw new Error("delivered raw shard differs from index");
+  if(fs.existsSync(part.ref.replace(/\.diff$/,".md")))throw new Error("unexpected alias copy");
+  full.push(raw);reads++;
+}
+const joined=Buffer.concat(full);
+if(joined.length!==index.full_diff_bytes||hash(joined)!==index.full_diff_sha256)throw new Error("delivered full diff differs from source index");
+if(reads!==${index.changes.reduce((count,change)=>count+change.shards.length,0)})throw new Error("not every ref was read");
+process.stdout.write(JSON.stringify({type:"thread.started",thread_id:"owned-delivered-index-session"})+"\n");
+process.stdout.write(JSON.stringify({type:"item.completed",item:{type:"agent_message",text:JSON.stringify({findings:[${JSON.stringify(finding)}]})}})+"\n");
+process.stdout.write(JSON.stringify({type:"turn.completed"})+"\n");
+`,{mode:0o700});
+      let deliveryObserved=false;
+      const parsed=await runOcrDelegationRound({...finalRequest,candidate_experiment:true},{buildBundle:()=>bundle,executor:params=>{
+        const deliveredIndex=JSON.parse(readFileSync(join(params.packet.root,"diff-index.json"),"utf8"));
+        expect(deliveredIndex).toEqual(index);
+        const allowlist=new Map(params.packet.manifest.map(entry=>[entry.path,entry]));
+        for(const change of deliveredIndex.changes)for(const part of change.shards){
+          expect(allowlist.get(part.ref)).toMatchObject({bytes:part.bytes,sha256:part.sha256});
+          expect(params.packet.preview.reviewable_files.map(file=>file.path)).toContain(part.ref);
+          expectBytes(readFileSync(join(params.packet.root,part.ref)),readFileSync(join(bundle.bundleRoot,part.ref)),"actual delivered shard ref bytes");
+        }
+        deliveryObserved=true;
+        return runConfiguredOcrHostReview(params,{sourceBundle:bundle,trustedContext:{trusted:{},route:{minimum_heterologous:1},selection:{providers:["codex/owned"]},
+          providerConfig:{providers:{"codex/owned":{enabled:true,command:nativeCli,model:"owned-native-cli"}}}}});
+      }});
+      expect(deliveryObserved).toBe(true);
+      expect(parsed.status,JSON.stringify(parsed.provider_results?.map(member=>member.error)??parsed.error)).toBe("available");
       expect(parsed.findings[0]).toMatchObject({path:"src/active.mjs",line:20});
       expect(parsed.provider_results[0].evidence_anchor_valid).toEqual([true]);
+      expect(parsed.provider_results[0].session_id).toBe("owned-delivered-index-session");
     } finally { bundle.dispose(); }
     expect(readdirSync(attachmentRoot).filter(name => name.startsWith(".ocr-code-review-") || name.startsWith("review-"))).toEqual([]);
-  });
+  }, 15000);
   it("keeps the existing non-UTF8 current-source rejection and cleans a failed large bundle", async () => {
     const state=fixture(), root=state.worktreeRoot;
     mkdirSync(join(root,"src")); writeFileSync(join(root,"src/binary.dat"),Buffer.from([0,255,128]));
@@ -497,3 +526,43 @@ describe("complete diff navigation and named per-file shards", () => {
     expect(readdirSync(attachmentRoot).filter(name=>name.startsWith(".ocr-code-review-")||name.startsWith("review-"))).toEqual([]);
   });
 });
+
+
+it("retains only a real observed thread ID in a failed native review's canonical record", async () => {
+  for(const [id,expected] of [["owned-observed-cancel-session","owned-observed-cancel-session"],["/invalid/owned-id",null],[null,null]]){
+    const state=fixture(), root=join(state.root,"observed-session"); mkdirSync(root);
+    const executable=join(root,"owned-observer-cli");
+    const event=id===null?{type:"item.started",owned_pid:null}:{type:"thread.started",thread_id:id};
+    writeFileSync(executable,String.raw`#!/usr/bin/env node
+const event=${JSON.stringify(event)}; event.owned_pid=process.pid;
+process.stdout.write(JSON.stringify(event)+"\n");
+setInterval(()=>{},100);
+`,{mode:0o700});
+    const packetRoot=join(root,"packet"); mkdirSync(packetRoot);
+    const content="export const observed = true;\n"; writeFileSync(join(packetRoot,"owned.mjs"),content);
+    const hash=bytes=>createHash("sha256").update(bytes).digest("hex");
+    const packet={root:packetRoot,material_id:"a".repeat(64),preview:{reviewable_files:[{path:"owned.mjs"}]},rules:{rules:[]},
+      manifest:[{path:"owned.mjs",bytes:Buffer.byteLength(content),sha256:hash(content)}]};
+    const controller=new AbortController();let watchdogFired=false;
+    const watchdog=setTimeout(()=>{watchdogFired=true;controller.abort(new Error("owned test watchdog"));},3500);
+    let recorded;
+    try{
+      recorded=await recordSimpleReviewRequest({taskDir:state.taskDir,request:{stage:"verify-code",subject_kind:"worktree",surface:"code",materials:{}},signal:controller.signal,
+        runRound:(request,options)=>runConfiguredOcrHostReview({request,packet,signal:options.signal},{
+          trustedContext:{trusted:{},route:{minimum_heterologous:1},selection:{providers:["codex/owned"]},
+            providerConfig:{providers:{"codex/owned":{enabled:true,command:executable,model:"owned-observer"}}}},
+          onProviderHealth:health=>{if(health.stdout_bytes>0)controller.abort(new Error("owned explicit cancellation after actual output"));},
+          rawOutputSink:(hint,bytes,metadata)=>options.onProviderOutput({provider:metadata.provider,output:bytes}),
+        })});
+    }finally{clearTimeout(watchdog);}
+    expect(watchdogFired).toBe(false);
+    const original=JSON.parse(readFileSync(recorded.path,"utf8"));
+    expect(original).toMatchObject({status:"unavailable",authoritative:false,findings:[],provider_results:[{
+      provider:"codex/owned",status:"cancelled",session_id:expected,error:{code:"OCR_PROVIDER_CANCELLED"},parse_outcome:null,
+    }]});
+    const raw=readFileSync(join(state.taskDir,original.provider_results[0].raw_output_ref),"utf8");
+    const observed=JSON.parse(raw.trim());expect(observed.type).toBe(event.type);
+    if(id!==null)expect(observed.thread_id).toBe(id);
+    expect(()=>process.kill(observed.owned_pid,0)).toThrow();
+  }
+},15000);
