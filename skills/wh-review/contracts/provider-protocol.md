@@ -19,7 +19,7 @@ WorkflowHub 的 wh-review / ReviewProviderClient 保留 reviewer group 的输入
 请求中配置的 profile 各自保留 attribution；不同配置不能无声丢弃，异源判断按实际 adapter/source。
 broker 附件传输按能力协商 file_only 或 always_embed；安全原生 Codex 使用完整声明文件的受限 packet。必要合同、来源和内容不能截断，transport 差异不拆成新的公共审查。
 审查入口可等待同一次 managed 请求的真实终态；不能把仍 running 的成员当成 completed。
-公共结果的 identity、timing、usage、实际取消/清理、过程 outcome 与 provider 归属必须按实际 transport 校验。原生每个 provider 的整个请求共用固定 600000 ms host 截止，内部步骤及 health/output 观测不得续期；usage 不可得保持 null。
+公共结果的 identity、timing、usage、实际取消/清理、过程 outcome 与 provider 归属必须按实际 transport 校验。文档原生三段请求共用既有显式 600000 ms host 截止，内部步骤及 health/output 观测不得续期。OCR direct code provider 不额外设置 elapsed-time host kill，等待 provider 自身真实终态；显式调用方取消、ownerloss guardian、既有资源与失败边界及清理保持，health/output 只作诊断，不作为取消或继续的许可。首因、原始输出、已观察 session 与 usage 按真实过程保留，usage 不可得保持 null。
 传输层完整性和来源事实由实际 transport 保留，不作为 WorkflowHub 继续工作或质量通过的许可。
 未返回 usage 时保持 null，不用文件大小推算 token 或费用。
 

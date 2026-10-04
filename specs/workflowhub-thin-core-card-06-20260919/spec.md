@@ -271,7 +271,7 @@
 
 ADR-018 保留 wh-review 及其 broker 职责；其依据 V-016/V-019 是保留文档执行者 `runSimpleReview`，没有指定每一个 native 模型只能通过 app-server。当前 broker 的 native route 缺少本次材料范围的已证安全边界时，先如实 unavailable，不能把全不可用包装成文档能力完成。P5/T019 原 owner 可在现 `ReviewProviderClient` 的同一运输职责内，为同一已选 Codex provider 修复私有 native 子进程执行；文档执行者仍为 wh-review，代码正常仍为 OCR，工具／模型不重新选型。
 
-修复复用已有输入、provider 身份、`runGroup`／`startManaged` 接口及原始输出／终末生命周期，实际 native 记录不冒称 broker 调用，也不把文档改成 OCR executor。只在提交材料的真实范围、无宿主秘密访问、固定 600,000 ms host deadline、取消与清理、输出／解析限制均有当前原生证据时使用；未证路线保留真实 unavailable／失败及 sibling，不能借 injected fake seam 宣称 native 安全。保留必要 broker 代码／配置职责，不修改或安装外部 3rd-review、不复制认证到隔离 HOME／CODEX_HOME、不改用户全局配置；不增加公开 mode／command、持久 managed store、双写、永久双路线兼容桥或新许可。
+修复复用已有输入、provider 身份、`runGroup`／`startManaged` 接口及原始输出／终末生命周期，实际 native 记录不冒称 broker 调用，也不把文档改成 OCR executor。只在提交材料的真实范围、无宿主秘密访问、文档三段请求既有显式 600,000 ms 统一截止、取消与清理、输出／解析限制均有当前原生证据时使用；未证路线保留真实 unavailable／失败及 sibling，不能借 injected fake seam 宣称 native 安全。保留必要 broker 代码／配置职责，不修改或安装外部 3rd-review、不复制认证到隔离 HOME／CODEX_HOME、不改用户全局配置；不增加公开 mode／command、持久 managed store、双写、永久双路线兼容桥或新许可。 OCR direct code provider 不额外设置 elapsed-time host kill；等待 provider 自身真实终态，保留显式调用方取消、ownerloss guardian、既有资源与失败边界、首因、原始输出、已观察 session 与清理。该分界不改变文档三段请求的既有显式统一截止，也不新增预算字段或推进许可。
 
 原文档合同的“禁 shell”与本机 Codex native 仅提供 exec 文本查看能力有实施字面冲突。仅在已证明 hard packet filesystem、native tool 与环境约束的同一 Codex native 路线，包内只读 `cat`／`sed`／`rg` 查看可作为“只读本次提交材料”的限定例外；不是一般 shell 执行许可。写入、Git、网络、parent／宿主材料、Agent／wait 等仍禁，必要 minimal runtime 读取例外只支持工具本身运行，不作为额外审查输入。P5 原 owner 成组澄清实际选入的文档合同、provider 协议与生成的审查指令，P4 原 owner 按真实运输修正方法说明；原文本保留路径、审查要求和失败边界，不新建命令 allowlist 框架、审批、control 或外部 owner 改动。不因 fake tool／违约文件阅读称文档能力已交付。
 

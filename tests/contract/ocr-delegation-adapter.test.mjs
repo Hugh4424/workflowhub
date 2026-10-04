@@ -1269,139 +1269,106 @@ if(model==="bad") {
     expect(result.provider_results[0].unavailable_diagnostics.message).toContain("original provider bytes unavailable");
   });
 
-  it("enforces one fixed 600000ms deadline despite activity and preserves raw bytes and a completed sibling", async () => {
-    const fastOutput = directProviderOutput("codex/fast", []);
+  it("keeps an active direct native provider past the former 600000ms boundary and preserves raw bytes and a completed sibling", async () => {
+    const fastOutput = directProviderOutput("codex/fast", []), activeOutput = directProviderOutput("codex/active", []);
     const state = rawFixture(["codex/fast", "codex/active"], `
-const fs = require("node:fs");
 const model = process.argv[process.argv.indexOf("--model") + 1];
 if (model === "fast") process.stdout.write(${JSON.stringify(fastOutput)});
 else {
   process.stdout.write(Buffer.from([0xff, 0x00, 0x61]));
   process.stderr.write(Buffer.from([0xfe, 0x62]));
   process.on("SIGTERM", () => process.exit(0));
-  setInterval(() => process.stderr.write("active tick\\n"), 20);
+  const activity = setInterval(() => process.stderr.write("active tick\\n"), 20);
+  setTimeout(() => { clearInterval(activity); process.stdout.write("\\n" + ${JSON.stringify(activeOutput)}); }, 250);
 }
 `);
-    // All fixtures are local executables. This is deadline/byte evidence,
-    // never a claim that the legacy Codex/Kimi filesystem route is safe.
-    const realSetTimeout = globalThis.setTimeout;
-    const realClearTimeout = globalThis.clearTimeout;
-    const realNow = Date.now;
-    const fixedNow = realNow();
-    const scheduled = [], cleared = new Set(), observed = [], completed = [];
-    const controller = new AbortController();
-    const beforeHostDirs = new Set(readdirSync(tmpdir()).filter((name) =>
-      name.startsWith("workflowhub-ocr-host-") && !name.startsWith("workflowhub-ocr-host-test-")));
-    Date.now = () => fixedNow;
-    globalThis.setTimeout = (callback, delay, ...args) => {
-      if (delay !== 600_000) return realSetTimeout(callback, delay, ...args);
-      const handle = realSetTimeout(callback, 1_500, ...args);
-      scheduled.push({ requested_ms: delay, handle });
-      return handle;
+    // Local native executables only; wall-clock observation is controlled.
+    const realSetTimeout=globalThis.setTimeout, realClearTimeout=globalThis.clearTimeout, realNow=Date.now;
+    const start=realNow(), scheduled=[], observed=[], completed=[];
+    let now=start, watchdogFired=false;
+    const controller=new AbortController();
+    const beforeHostDirs=new Set(readdirSync(tmpdir()).filter(name=>name.startsWith("workflowhub-ocr-host-")&&!name.startsWith("workflowhub-ocr-host-test-")));
+    Date.now=()=>now;
+    globalThis.setTimeout=(callback,delay,...args)=>{
+      if(delay===600_000){scheduled.push(delay);return realSetTimeout(callback,1500,...args);}
+      return realSetTimeout(callback,delay,...args);
     };
-    globalThis.clearTimeout = (handle) => { cleared.add(handle); return realClearTimeout(handle); };
-    // This uses the unmodified real clock and only bounds a missing-deadline
-    // RED; its explicit cancellation must never masquerade as timeout.
-    const watchdog = realSetTimeout(() => controller.abort(new Error("owned test watchdog: production deadline absent")), 3_500);
+    const watchdog=realSetTimeout(()=>{watchdogFired=true;controller.abort(new Error("owned native lifetime watchdog"));},3500);
     let pending;
-    try {
-      pending = runConfiguredOcrHostReview({ request, packet: configuredPacket(), signal: controller.signal }, {
-        ...state,
-        healthPollMs: 20,
-        onProviderHealth: (health) => observed.push(health),
-        onProviderResult: (member) => completed.push(member),
+    try{
+      pending=runConfiguredOcrHostReview({request,packet:configuredPacket(),signal:controller.signal},{...state,healthPollMs:20,
+        onProviderHealth:health=>{observed.push(health);if(health.provider==="codex/active"&&health.stdout_bytes>0)now=start+700_000;},
+        onProviderResult:member=>completed.push(member),
       });
-      const result = await pending;
-      const fast = result.provider_results.find((member) => member.provider === "codex/fast");
-      const active = result.provider_results.find((member) => member.provider === "codex/active");
-      expect(active).toMatchObject({ status: "failed", process_outcome: "timeout", parse_outcome: null,
-        error: { code: "OCR_PROVIDER_TIMEOUT" } });
-      expect(scheduled).toHaveLength(2); // one fixed deadline per actual process, no health renewal
-      expect(scheduled.every(({ requested_ms, handle }) => requested_ms === 600_000 && cleared.has(handle))).toBe(true);
-      expect(result.status).toBe("available-with-failures");
-      expect(fast).toMatchObject({ status: "completed", process_outcome: "ok", parse_outcome: "ok" });
-      expect(rawBytes(state, fast, "stdout").equals(Buffer.from(fastOutput))).toBe(true);
-      expect(rawBytes(state, active, "stdout").equals(Buffer.from([0xff, 0x00, 0x61]))).toBe(true);
-      const stderr = rawBytes(state, active, "stderr");
-      expect(stderr.subarray(0, 2).equals(Buffer.from([0xfe, 0x62]))).toBe(true);
+      const result=await pending, fast=result.provider_results.find(member=>member.provider==="codex/fast"), active=result.provider_results.find(member=>member.provider==="codex/active");
+      expect(watchdogFired).toBe(false);expect(scheduled).toEqual([]);
+      expect(result.status).toBe("available");
+      expect(active).toMatchObject({status:"completed",process_outcome:"ok",parse_outcome:"ok",error:null});
+      expect(active.timing.duration_ms).toBeGreaterThanOrEqual(600_000);
+      expect(fast).toMatchObject({status:"completed",process_outcome:"ok",parse_outcome:"ok"});
+      expect(rawBytes(state,fast,"stdout").equals(Buffer.from(fastOutput))).toBe(true);
+      expect(rawBytes(state,active,"stdout").equals(Buffer.concat([Buffer.from([0xff,0x00,0x61]),Buffer.from("\n"+activeOutput)]))).toBe(true);
+      const stderr=rawBytes(state,active,"stderr");expect(stderr.subarray(0,2).equals(Buffer.from([0xfe,0x62]))).toBe(true);
       expect(stderr.subarray(2).toString()).toContain("active tick");
-      expect(active.execution.health).toMatchObject({ status: "failed", liveness: false });
-      expect(observed.filter((health) => health.provider === "codex/active" && health.status === "running"
-        && health.liveness === true && health.progress_events > 0).length).toBeGreaterThan(2);
-      expect(completed.map((member) => member.provider)).toEqual(expect.arrayContaining(["codex/fast", "codex/active"]));
-      expect(readdirSync(tmpdir()).filter((name) => name.startsWith("workflowhub-ocr-host-")
-        && !name.startsWith("workflowhub-ocr-host-test-") && !beforeHostDirs.has(name))).toEqual([]);
-      console.log(JSON.stringify({ oracle: "fixed-provider-deadline", original_ms: 600_000, mapped_test_ms: 1_500,
-        schedules: scheduled.length, clears: scheduled.filter(({ handle }) => cleared.has(handle)).length,
-        active_error: active.error.code, active_process_outcome: active.process_outcome,
-        sibling_status: fast.status, real_model_calls: 0 }));
-    } finally {
-      realClearTimeout(watchdog);
-      controller.abort(new Error("owned test cleanup"));
-      if (pending) await pending.catch(() => {});
-      Date.now = realNow;
-      globalThis.setTimeout = realSetTimeout;
-      globalThis.clearTimeout = realClearTimeout;
+      expect(active.execution.health).toMatchObject({status:"completed",liveness:false});
+      expect(observed.filter(health=>health.provider==="codex/active"&&health.status==="running"&&health.liveness===true&&health.progress_events>0).length).toBeGreaterThan(2);
+      expect(completed.map(member=>member.provider)).toEqual(expect.arrayContaining(["codex/fast","codex/active"]));
+      expect(readdirSync(tmpdir()).filter(name=>name.startsWith("workflowhub-ocr-host-")&&!name.startsWith("workflowhub-ocr-host-test-")&&!beforeHostDirs.has(name))).toEqual([]);
+      console.log(JSON.stringify({oracle:"direct-native-lifecycle",observed_elapsed_ms:active.timing.duration_ms,direct_deadline_schedules:scheduled.length,
+        active_status:active.status,sibling_status:fast.status,watchdog_fired:watchdogFired,real_model_calls:0}));
+    }finally{
+      realClearTimeout(watchdog);controller.abort(new Error("owned native lifetime cleanup"));
+      if(pending)await pending.catch(()=>{});
+      Date.now=realNow;globalThis.setTimeout=realSetTimeout;globalThis.clearTimeout=realClearTimeout;
     }
   });
 
-  describe("fixed deadline cause races", () => {
+  describe("direct native lifetime cause races", () => {
     async function raceCase(kind) {
-      const output = directProviderOutput("codex/race", []);
-      const script = `process.on("SIGTERM",()=>process.exit(0)); process.stdout.write(${JSON.stringify(output)}); process.stderr.write("owned race stderr\\n"); ${kind === "late-close" ? "setTimeout(()=>process.exit(0),120);" : "setInterval(()=>{},100);"}`;
-      const state = rawFixture(["codex/race"], script);
-      const realNow=Date.now, realSetTimeout=globalThis.setTimeout, realClearTimeout=globalThis.clearTimeout;
-      const start=realNow(), timers=new Set(), controller=new AbortController();
-      let now=start, fired=0, priorCancel=false, watchdogFired=false;
+      const output=directProviderOutput("codex/race",[]);
+      const script=`process.on("SIGTERM",()=>process.exit(0));process.stdout.write(${JSON.stringify(output)});process.stderr.write("owned race stderr\\n");${kind==="late-close"?"setTimeout(()=>process.exit(0),120);":"setInterval(()=>{},100);"}`;
+      const state=rawFixture(["codex/race"],script);
+      const realNow=Date.now,realSetTimeout=globalThis.setTimeout,realClearTimeout=globalThis.clearTimeout;
+      const start=realNow(),controller=new AbortController(),timers=new Set();
+      let now=start,scheduled=0,priorCancel=false,watchdogFired=false;
       Date.now=()=>now;
       globalThis.setTimeout=(fn,delay,...args)=>{
-        if(delay!==600_000) return realSetTimeout(fn,delay,...args);
-        const suppressed=["late-close","cancel"].includes(kind);
-        const handle=realSetTimeout(()=>{
-          fired++; fn(...args);
-        },suppressed?12_000:1_000);
-        timers.add(handle); return handle;
+        if(delay===600_000){scheduled++;const handle=realSetTimeout(fn,12000,...args);timers.add(handle);return handle;}
+        return realSetTimeout(fn,delay,...args);
       };
-      globalThis.clearTimeout=(handle)=>{
-        // First-cause was already observed before cleanup crossed the deadline.
-        if(timers.has(handle) && kind==="cancel") now=start+700_000;
-        return realClearTimeout(handle);
-      };
-      const watchdog=realSetTimeout(()=>{watchdogFired=true;controller.abort(new Error("owned race watchdog"));},3_500);
+      const watchdog=realSetTimeout(()=>{watchdogFired=true;controller.abort(new Error("owned native race watchdog"));},3500);
       let pending;
-      try {
-        pending=runConfiguredOcrHostReview({request,packet:configuredPacket(),signal:controller.signal},{...state,healthPollMs:20,
-          onProviderHealth:health=>{
-            if(health.status!=="running" || health.stdout_bytes < Buffer.byteLength(output)) return;
-            if(kind==="late-close") now=start+700_000;
-            if(kind==="cancel" && !priorCancel){priorCancel=true;now=start+100;controller.abort(new Error("owned earlier cancellation"));}
-          }});
-        const result=await pending, member=result.provider_results[0];
-        return {state,member,result,fired,priorCancel,watchdogFired,output};
-      } finally {
-        realClearTimeout(watchdog);controller.abort(new Error("owned race cleanup"));
-        if(pending) await pending.catch(()=>{});
-        for(const timer of timers) realClearTimeout(timer);
+      try{
+        pending=runConfiguredOcrHostReview({request,packet:configuredPacket(),signal:controller.signal},{...state,healthPollMs:20,onProviderHealth:health=>{
+          if(health.status!=="running"||health.stdout_bytes<Buffer.byteLength(output))return;
+          if(kind==="late-close")now=start+700_000;
+          if(kind==="cancel"&&!priorCancel){priorCancel=true;now=start+100;controller.abort(new Error("owned earlier explicit cancellation"));now=start+700_000;}
+        }});
+        const result=await pending,member=result.provider_results[0];
+        return{state,member,result,scheduled,priorCancel,watchdogFired,output};
+      }finally{
+        realClearTimeout(watchdog);controller.abort(new Error("owned native race cleanup"));
+        if(pending)await pending.catch(()=>{});
+        for(const timer of timers)realClearTimeout(timer);
         Date.now=realNow;globalThis.setTimeout=realSetTimeout;globalThis.clearTimeout=realClearTimeout;
       }
     }
-    it("treats late exit0 as timeout even when its deadline callback was suppressed", async()=>{
-      const {state,member,fired,watchdogFired,output}=await raceCase("late-close");
-      expect(watchdogFired).toBe(false);
-      expect(fired).toBe(0);
-      expect(member).toMatchObject({status:"failed",process_outcome:"timeout",parse_outcome:null,error:{code:"OCR_PROVIDER_TIMEOUT"}});
-      expect(rawBytes(state,member,"stdout")).toEqual(Buffer.from(output));
-      expect(member.unavailable_diagnostics.message).toContain("exit_code=0");
-    });
-    it("keeps an earlier cancellation when cleanup crosses the deadline", async()=>{
-      const {state,member,fired,priorCancel,watchdogFired,output}=await raceCase("cancel");
-      expect(priorCancel).toBe(true);expect(watchdogFired).toBe(false);
-      expect(fired).toBe(0);expect(member).toMatchObject({status:"cancelled",error:{code:"OCR_PROVIDER_CANCELLED"}});
+    it("keeps a real late exit0 terminal successful without a direct host deadline",async()=>{
+      const{state,member,scheduled,watchdogFired,output}=await raceCase("late-close");
+      expect(watchdogFired).toBe(false);expect(scheduled).toBe(0);
+      expect(member).toMatchObject({status:"completed",process_outcome:"ok",parse_outcome:"ok",error:null});
       expect(member.timing.duration_ms).toBeGreaterThanOrEqual(600_000);
-      expect(rawBytes(state,member,"stdout")).toEqual(Buffer.from(output));
+      expect(rawBytes(state,member,"stdout").equals(Buffer.from(output))).toBe(true);
+      expect(rawBytes(state,member,"stderr").equals(Buffer.from("owned race stderr\n"))).toBe(true);
+    });
+    it("keeps an earlier explicit cancellation when cleanup crosses the former elapsed boundary",async()=>{
+      const{state,member,scheduled,priorCancel,watchdogFired,output}=await raceCase("cancel");
+      expect(priorCancel).toBe(true);expect(watchdogFired).toBe(false);expect(scheduled).toBe(0);
+      expect(member).toMatchObject({status:"cancelled",error:{code:"OCR_PROVIDER_CANCELLED"}});
+      expect(member.timing.duration_ms).toBeGreaterThanOrEqual(600_000);
+      expect(rawBytes(state,member,"stdout").equals(Buffer.from(output))).toBe(true);
       expect(member.findings).toEqual([]);
     });
-
   });
 
 });

@@ -1001,7 +1001,7 @@ function ocrProviderPlan(provider, profile, { cwd = null } = {}) {
   const model = profile?.model;
   const entry = "Read review-prompt.md in this directory, then use the packet indexes to inspect the implementation and evidence files needed for this review. Do not blindly dump every listed file; inspect all implementation and test changes relevant to findings, and read raw execution output only when a claim depends on it. Return only the requested JSON object.";
   if (adapter === "codex") {
-    const packetReadEntry = process.platform === "win32" ? entry : entry + " On this POSIX native route, use exec_command with shell=/bin/sh and login=false. Start with /bin/cat review-prompt.md. Follow the exact packet paths listed there; if manifest.json and review-instructions.md are listed, read those named files next. Use existing system /bin/cat, /usr/bin/sed -n for declared packet files. Do not assume rg or fd exists, search the host PATH, install tools, inherit host environment, or run login-shell startup files. A command-not-found result is not evidence of filesystem denial: use a listed system reader and retain the actual tool error. Do not fabricate findings or reinterpret a transport error object as findings. All original no-write/no-Git/no-network/no-parent/host restrictions still apply.";
+    const packetReadEntry = process.platform === "win32" ? entry : entry + " On this POSIX native route, use exec_command with shell=/bin/sh and login=false. Start with /bin/cat review-prompt.md. Follow the exact packet paths listed there; if manifest.json and review-instructions.md are listed, read those named files next. Use existing system /bin/cat, /usr/bin/sed -n for declared packet files. A line range needs the p command: /usr/bin/sed -n '1,160p' followed by a listed path. /bin/cat can read several listed paths in one invocation; batch only declared paths, without pipes or redirects. Do not assume rg or fd exists, search the host PATH, install tools, inherit host environment, or run login-shell startup files. A command-not-found result is not evidence of filesystem denial: use a listed system reader and retain the actual tool error. Do not fabricate findings or reinterpret a transport error object as findings. All original no-write/no-Git/no-network/no-parent/host restrictions still apply.";
     if (typeof cwd !== "string" || cwd.trim() === "") {
       throw Object.assign(new Error("Codex OCR requires a prepared packet read root"), {
         code: "OCR_PROVIDER_RUNTIME_INVALID",
@@ -1196,6 +1196,8 @@ provider.once("close", (code, signal) => {
 `;
 
 function nativeStopBeforeSpawn(signal, deadlineAt, getAbortObservedAt) {
+  if (deadlineAt === null) return signal?.aborted ? { status: "cancelled", output: null, timing: null, usage: null,
+    error: { code: "OCR_PROVIDER_CANCELLED", message: "native cancellation was observed before dispatch" } } : null;
   const now = Date.now(), known = getAbortObservedAt?.();
   const observed = Number.isSafeInteger(known) && known <= now ? known : now;
   if (signal?.aborted && observed < deadlineAt) return { status: "cancelled", output: null, timing: null, usage: null,
@@ -1209,9 +1211,11 @@ function nativeStopBeforeSpawn(signal, deadlineAt, getAbortObservedAt) {
 
 function runOcrProviderProcess({ provider, profile, cwd, signal, onProviderHealth, healthPollMs = 5_000, guardianCleanup = null, hostStartedAt = null, getAbortObservedAt = null }) {
   const startedAt = Date.now();
-  const deadlineStart = hostStartedAt ?? startedAt;
-  if (!Number.isSafeInteger(deadlineStart) || deadlineStart > startedAt) throw new TypeError("native provider deadline start must be an observed past host timestamp");
-  const deadlineAt = deadlineStart + OCR_PROVIDER_DEADLINE_MS;
+  // Direct code review follows the native terminal/caller/owner lifecycle.
+  // Only the existing document-flow caller supplies its shared host budget.
+  const deadlineStart = hostStartedAt;
+  if (deadlineStart !== null && (!Number.isSafeInteger(deadlineStart) || deadlineStart > startedAt)) throw new TypeError("native provider deadline start must be an observed past host timestamp");
+  const deadlineAt = deadlineStart === null ? null : deadlineStart + OCR_PROVIDER_DEADLINE_MS;
   let plan;
   try { plan = ocrProviderPlan(provider, profile, { cwd }); }
   catch (error) {
@@ -1305,21 +1309,22 @@ function runOcrProviderProcess({ provider, profile, cwd, signal, onProviderHealt
       // not reclassified when its cleanup crosses the transport deadline.
       const now = Date.now(), observed = getAbortObservedAt?.();
       const abortedAt = Number.isSafeInteger(observed) && observed <= now ? observed : now;
-      stopCause ??= abortedAt >= deadlineAt ? "timeout" : "cancelled";
+      stopCause ??= deadlineAt !== null && abortedAt >= deadlineAt ? "timeout" : "cancelled";
       if (deadlineTimer) clearTimeout(deadlineTimer);
       stopProvider("SIGTERM");
       if (process.platform === "win32") killTimer ??= setTimeout(() => terminate("SIGKILL"), 2_000);
     };
-    // A fixed transport deadline is independent of health/output samples and
-    // stops only this provider. Cleanup may finish later; its late bytes remain
-    // source facts, never a completed review after the deadline.
-    deadlineTimer = setTimeout(() => {
-      if (settled || stopCause === "cancelled") return;
-      stopCause ??= "timeout";
-      stopProvider("SIGTERM");
-      killTimer ??= setTimeout(() => stopProvider("SIGKILL"), 2_000);
-    }, Math.max(0, deadlineAt - Date.now()));
-    deadlineTimer.unref?.();
+    // Preserve only the existing document request's shared fixed budget.
+    // Direct code review has no additional WorkflowHub wall-clock termination.
+    if (deadlineAt !== null) {
+      deadlineTimer = setTimeout(() => {
+        if (settled || stopCause === "cancelled") return;
+        stopCause ??= "timeout";
+        stopProvider("SIGTERM");
+        killTimer ??= setTimeout(() => stopProvider("SIGKILL"), 2_000);
+      }, Math.max(0, deadlineAt - Date.now()));
+      deadlineTimer.unref?.();
+    }
     const capture = (stream, bytes) => {
       if (stream === "stdout") stdoutBytes += bytes.length;
       else stderrBytes += bytes.length;
@@ -1375,9 +1380,9 @@ function runOcrProviderProcess({ provider, profile, cwd, signal, onProviderHealt
       if (deadlineTimer) clearTimeout(deadlineTimer);
       signal?.removeEventListener("abort", onAbort);
       const completedAt = Date.now();
-      // A delayed event loop can deliver close before the timer callback.
-      // Wall-clock expiry is still a timeout unless an earlier cancel exists.
-      if (stopCause === null && completedAt >= deadlineAt) stopCause = "timeout";
+      // Only document-flow expiry remains subject to its shared host budget.
+      // A direct native terminal is not relabeled by elapsed host time.
+      if (deadlineAt !== null && stopCause === null && completedAt >= deadlineAt) stopCause = "timeout";
       const deadlineExceeded = stopCause === "timeout";
       const stdout = Buffer.concat(stdoutChunks);
       const stderr = Buffer.concat(stderrChunks);

@@ -1,4 +1,4 @@
-// Fixed deadline, cancellation and owned-owner loss replace old health renewal and env-gated live reviews.
+// Direct native completion, explicit cancellation and owned-owner loss; no WorkflowHub provider wall-clock or env-gated live reviews.
 import{afterEach,expect,it}from"vitest";import{createHash}from"node:crypto";import{existsSync,mkdirSync,mkdtempSync,readFileSync,realpathSync,rmSync,writeFileSync}from"node:fs";import{tmpdir}from"node:os";import{join}from"node:path";import{prepareConfiguredOcrHostContext,runConfiguredOcrHostReview}from"../../runtime/review/ocr-delegation-adapter.mjs";
 const roots=[];afterEach(()=>{while(roots.length)rmSync(roots.pop(),{recursive:true,force:true});});const sha=b=>createHash("sha256").update(b).digest("hex");
 function packet(){const root=realpathSync(mkdtempSync(join(tmpdir(),"owned-ocr-experiment-")));roots.push(root);mkdirSync(join(root,"src"));const body="export const reviewed = true;\n",path="src/reviewed.mjs";writeFileSync(join(root,path),body);return{root,preview:{reviewable_files:[{path}]},rules:{rules:[{path,rule:"Inspect actual correctness."}]},manifest:[{path,bytes:Buffer.byteLength(body),sha256:sha(body)}]};}
@@ -8,8 +8,42 @@ import{spawn}from"node:child_process";import{appendRecord}from"../../runtime/int
 const delay=ms=>new Promise(r=>setTimeout(r,ms));async function until(fn,limit=5000){const end=Date.now()+limit;while(!fn()&&Date.now()<end)await delay(20);expect(fn()).toBe(true);}
 function native(p,providers=["codex/active"]){const marker=join(p.root,"started.json"),command=join(p.root,"owned-provider");writeFileSync(command,`#!${process.execPath}\nconst fs=require('node:fs');const model=process.argv[process.argv.indexOf('--model')+1];if(model==='fast'){process.stdout.write(${JSON.stringify(output())});}else{fs.writeFileSync(${JSON.stringify(marker)},JSON.stringify({pid:process.pid,cwd:process.cwd()}));process.stdout.write(Buffer.from([255,65,0]));process.on('SIGTERM',()=>process.exit(0));setInterval(()=>process.stderr.write('owned healthy tick\\n'),20);}`,{mode:0o700});return{marker,command,trustedContext:context(p.root,Object.fromEntries(providers.map(x=>[x,{enabled:true,command,model:x.split('/')[1],source_id:x}]))) };}
 function alive(pid){try{process.kill(pid,0);return true;}catch(e){if(e.code==='ESRCH')return false;throw e;}}
-it("one fixed 600000ms provider deadline is not renewed by real child activity and completed sibling/raw survive",async()=>{const p=packet(),n=native(p,["codex/fast","codex/active"]),realTimer=globalThis.setTimeout,realClear=globalThis.clearTimeout,realNow=Date.now,fixed=realNow(),scheduled=[],raw=new Map(),c=new AbortController();let watchdogFired=false,pending;const watchdog=realTimer(()=>{watchdogFired=true;c.abort(Error('owned missing deadline watchdog'));},4000);Date.now=()=>fixed;globalThis.setTimeout=(fn,ms,...args)=>{if(ms!==600000)return realTimer(fn,ms,...args);scheduled.push(ms);return realTimer(fn,1500,...args);};
- try{pending=runConfiguredOcrHostReview({request,packet:p,signal:c.signal},{trustedContext:n.trustedContext,healthPollMs:20,rawOutputSink:async(_hint,bytes,meta)=>{const dir=join(p.root,'quality','reviews');mkdirSync(dir,{recursive:true});const file=await appendRecord(dir,meta.provider.replaceAll('/','-')+'-'+meta.stream,'output',bytes);raw.set(meta.provider+':'+meta.stream,readFileSync(file));return 'quality/reviews/'+file.split('/').at(-1);}});const r=await pending,slow=r.provider_results.find(x=>x.provider==='codex/active'),fast=r.provider_results.find(x=>x.provider==='codex/fast');expect(watchdogFired).toBe(false);expect(scheduled).toEqual([600000,600000]);expect(slow).toMatchObject({status:'failed',process_outcome:'timeout',error:{code:'OCR_PROVIDER_TIMEOUT'}});expect(fast.status).toBe('completed');expect(raw.get('codex/active:stdout')).toEqual(Buffer.from([255,65,0]));expect(raw.get('codex/active:stderr').toString()).toContain('owned healthy tick');const observed=JSON.parse(readFileSync(n.marker,'utf8'));expect(alive(observed.pid)).toBe(false);expect(existsSync(observed.cwd)).toBe(false);
+it("direct native completion beyond the former 600000ms boundary preserves completed sibling and actual raw bytes",async()=>{
+ const p=packet(),n=native(p,["codex/fast","codex/active"]);
+ // Only this owned fixture completes normally; cancellation/ownerloss cases
+ // keep their existing long-lived native helper unchanged.
+ writeFileSync(n.command,String.raw`#!${process.execPath}
+const fs=require('node:fs');const model=process.argv[process.argv.indexOf('--model')+1];
+if(model==='fast')process.stdout.write(${JSON.stringify(output())});
+else{
+ fs.writeFileSync(${JSON.stringify(n.marker)},JSON.stringify({pid:process.pid,cwd:process.cwd()}));
+ process.stdout.write(Buffer.from([255,65,0]));
+ process.on('SIGTERM',()=>process.exit(0));
+ const activity=setInterval(()=>process.stderr.write('owned healthy tick\n'),20);
+ setTimeout(()=>{clearInterval(activity);process.stdout.write('\n'+${JSON.stringify(output())});},250);
+}
+`,{mode:0o700});
+ const realTimer=globalThis.setTimeout,realClear=globalThis.clearTimeout,realNow=Date.now,start=realNow(),scheduled=[],raw=new Map(),c=new AbortController();
+ let now=start,watchdogFired=false,pending;
+ const watchdog=realTimer(()=>{watchdogFired=true;c.abort(Error('owned native completion watchdog'));},4000);
+ Date.now=()=>now;
+ globalThis.setTimeout=(fn,ms,...args)=>{if(ms!==600000)return realTimer(fn,ms,...args);scheduled.push(ms);return realTimer(fn,1500,...args);};
+ try{
+  pending=runConfiguredOcrHostReview({request,packet:p,signal:c.signal},{trustedContext:n.trustedContext,healthPollMs:20,
+   onProviderHealth:health=>{if(health.provider==='codex/active'&&health.stdout_bytes>0)now=start+700000;},
+   rawOutputSink:async(_hint,bytes,meta)=>{const dir=join(p.root,'quality','reviews');mkdirSync(dir,{recursive:true});const file=await appendRecord(dir,meta.provider.replaceAll('/','-')+'-'+meta.stream,'output',bytes);raw.set(meta.provider+':'+meta.stream,readFileSync(file));return 'quality/reviews/'+file.split('/').at(-1);}});
+  const r=await pending,slow=r.provider_results.find(x=>x.provider==='codex/active'),fast=r.provider_results.find(x=>x.provider==='codex/fast');
+  expect(watchdogFired).toBe(false);expect(scheduled).toEqual([]);
+  expect(r.status).toBe('available');
+  expect(slow).toMatchObject({status:'completed',process_outcome:'ok',parse_outcome:'ok',error:null});
+  expect(slow.timing.duration_ms).toBeGreaterThanOrEqual(600000);
+  expect(slow.execution.health).toMatchObject({status:'completed',liveness:false});
+  expect(fast).toMatchObject({status:'completed',process_outcome:'ok',parse_outcome:'ok'});
+  expect(raw.get('codex/fast:stdout').equals(Buffer.from(output()))).toBe(true);
+  expect(raw.get('codex/active:stdout').equals(Buffer.concat([Buffer.from([255,65,0]),Buffer.from('\n'+output())]))).toBe(true);
+  expect(raw.get('codex/active:stderr').toString()).toContain('owned healthy tick');
+  const observed=JSON.parse(readFileSync(n.marker,'utf8'));
+  expect(alive(observed.pid)).toBe(false);expect(existsSync(observed.cwd)).toBe(false);
  }finally{Date.now=realNow;globalThis.setTimeout=realTimer;globalThis.clearTimeout=realClear;realClear(watchdog);c.abort(Error('owned cleanup'));if(pending)await pending;}
 });
 it("explicit cancellation reaps the actual owned provider and removes its packet while preserving cancelled facts",async()=>{const p=packet(),n=native(p),c=new AbortController();let pending;try{pending=runConfiguredOcrHostReview({request,packet:p,signal:c.signal},{trustedContext:n.trustedContext,healthPollMs:20});await until(()=>existsSync(n.marker));const observed=JSON.parse(readFileSync(n.marker,'utf8'));expect(alive(observed.pid)).toBe(true);c.abort(Error('explicit owned cancellation'));const r=await pending;expect(r).toMatchObject({status:'unavailable',outcome:'cancelled',provider_results:[{status:'cancelled',error:{code:'OCR_PROVIDER_CANCELLED'}}]});expect(alive(observed.pid)).toBe(false);expect(existsSync(observed.cwd)).toBe(false);}finally{c.abort(Error('owned cleanup'));if(pending)await pending;}});
