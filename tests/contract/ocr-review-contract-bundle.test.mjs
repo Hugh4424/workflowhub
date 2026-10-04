@@ -12,12 +12,16 @@
 
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { buildReviewMaterials } from "../../skills/wh-review/scripts/review-materials.mjs";
+import { buildReviewMaterials, redactProviderHostPaths } from "../../skills/wh-review/scripts/review-materials.mjs";
+import { captureReviewSource } from "../../skills/wh-review/scripts/review-source.mjs";
+import { runConfiguredOcrHostReview } from "../../runtime/review/ocr-delegation-adapter.mjs";
 import { ArtifactDir } from "../../runtime/evidence/artifact-dir.mjs";
 import { captureCommand } from "../../runtime/interface/run-command.mjs";
 import { openTask } from "../../runtime/task/task-handle.mjs";
@@ -337,5 +341,159 @@ describe("changed reviewer source and packet control paths", () => {
     expect(controlBytes.equals(bytes)).toBe(false);
     expect(readFileSync(join(state.worktreeRoot, path))).toEqual(bytes);
     expect(readdirSync(attachmentRoot).filter(name => name.startsWith(".ocr-code-review-") || name.startsWith("review-"))).toEqual([]);
+  });
+});
+
+
+describe("complete diff navigation and named per-file shards", () => {
+  const hash = bytes => createHash("sha256").update(bytes).digest("hex");
+  function expectBytes(actual, expected, label) {
+    const received=Buffer.from(actual), wanted=Buffer.from(expected);
+    const equal=received.equals(wanted);
+    let firstMismatch=null;
+    if(!equal){firstMismatch=0;while(firstMismatch<Math.min(received.length,wanted.length)&&received[firstMismatch]===wanted[firstMismatch])firstMismatch++;}
+    expect(equal,JSON.stringify({label,actual_bytes:received.length,expected_bytes:wanted.length,
+      actual_sha256:hash(received),expected_sha256:hash(wanted),first_mismatch:firstMismatch})).toBe(true);
+  }
+  const finalRequest = {stage:"verify-code", subject_kind:"worktree", materials:{
+    changed_files:"all owned modified, deleted and renamed source paths", acceptance_criteria:"AC-1: retain every full patch byte and its current source anchors.",
+    implementation_assessment:"Inspect the owned entry point, consumer and deleted paths through the complete navigation.",
+    test_context:"Owned producer and anchor parser effects only; no OCR command or external provider.", open_risks:"none declared",
+  }};
+  function ownedSource(state, attachmentRoot, baseline, capture) {
+    return () => {
+      const source = captureReviewSource({sourceRoot:state.worktreeRoot, baselineCommit:baseline, reviewDataRoot:attachmentRoot});
+      capture(readFileSync(source.diffPath));
+      return source;
+    };
+  }
+  it("reconstructs every large multi-file patch byte while retaining full current source, controls and source-line anchors", async () => {
+    const controls="diff --git a/new.mjs b/new.mjs\nnew file mode 100644\n--- /dev/null\n+++ b/new.mjs\n@@ -0,0 +1 @@\n+const api_key = \"SELF_CREATED_FAKE_SECRET_123\";\n"
+      + "diff --git a/old.mjs b/old.mjs\ndeleted file mode 100644\n--- a/old.mjs\n+++ /dev/null\n@@ -1 +0,0 @@\n-old\n"
+      + "ordinary /dev/null\n+++ /Users/owned/private/file\n";
+    const projectedControls=redactProviderHostPaths(controls);
+    expect(projectedControls).toContain("--- /dev/null\n"); expect(projectedControls).toContain("+++ /dev/null\n");
+    expect(projectedControls).not.toContain("SELF_CREATED_FAKE_SECRET_123"); expect(projectedControls).not.toContain("/Users/owned/private/file");
+    expect(projectedControls).toContain("ordinary <host-path-redacted>\n");
+    expect(redactProviderHostPaths("+++ /dev/null\nordinary /dev/null\n")).toBe("+++ <host-path-redacted>\nordinary <host-path-redacted>\n");
+    const state = fixture(), root = state.worktreeRoot;
+    for (const directory of ["src", "legacy", "skills/simplicity-guard"]) mkdirSync(join(root, directory), {recursive:true});
+    writeFileSync(join(root, "src/active.mjs"), "export const before = true;\n");
+    writeFileSync(join(root, "src/old-name.mjs"), "export const renamed = true;\n");
+    writeFileSync(join(root, "src/名字 file.mjs"), "export const unicode = false;\n");
+    writeFileSync(join(root, "legacy/deleted.mjs"), "// old deleted implementation\n".repeat(12000));
+    writeFileSync(join(root, "legacy/deleted-binary.dat"), Buffer.from([0,255,1,128,2,127]));
+    writeFileSync(join(root, "skills/simplicity-guard/SKILL.md"), "# Previous owned lens\n");
+    git(root, ["add", "."]); git(root, ["commit", "-qm", "owned full baseline"]);
+    const baseline = git(root, ["rev-parse", "HEAD"]);
+    const active = Array.from({length:16000}, (_, index) => `export const line${String(index + 1).padStart(5,"0")} = "完整 source ${index + 1}";\n`).join("");
+    writeFileSync(join(root, "src/active.mjs"), active);
+    fs.renameSync(join(root, "src/old-name.mjs"), join(root, "src/new-name.mjs"));
+    writeFileSync(join(root, "src/名字 file.mjs"), "export const unicode = true;\n");
+    rmSync(join(root, "legacy/deleted.mjs")); rmSync(join(root, "legacy/deleted-binary.dat"));
+    const lens = lensSkillBytes("simplicity-guard"); writeFileSync(join(root, "skills/simplicity-guard/SKILL.md"), lens);
+    git(root, ["add", "."]);
+    const attachmentRoot = join(state.root, "review-data"); mkdirSync(attachmentRoot);
+    let original;
+    const bundle = prepareTaskBoundBuildCodeReviewBundle(await contextFor(state), finalRequest, {
+      loadConfig:()=>({attachmentRoot}), captureSource:ownedSource(state, attachmentRoot, baseline, bytes => {original=bytes;}),
+    });
+    try {
+      expectContractBodies(bundle); expectLensBodies(bundle);
+      const index = JSON.parse(readFileSync(join(bundle.bundleRoot, "diff-index.json"), "utf8"));
+      expect(index.schema_version).toBe("wh-review-diff-index.v1");
+      expect(index.changes.map(change => change.path)).toEqual([
+        "legacy/deleted-binary.dat", "legacy/deleted.mjs", "skills/simplicity-guard/SKILL.md", "src/active.mjs", "src/new-name.mjs", "src/名字 file.mjs",
+      ]);
+      const sections = [];
+      for (const change of index.changes) {
+        const parts = [];
+        let offset = 0;
+        for (const shard of change.shards) {
+          expect(shard.delivery).toBe("included"); expect(shard.offset).toBe(offset);
+          expect(shard.ref).toBe(`diff-shards/${shard.shard_id}.diff`);
+          const part = readFileSync(join(bundle.bundleRoot, shard.ref));
+          expect(part.length).toBeLessThanOrEqual(96 * 1024);
+          expect(hash(part)).toBe(shard.sha256); expect(part.length).toBe(shard.bytes);
+          expectBytes(Buffer.from(part.toString("utf8"), "utf8"),part,"shard UTF-8 round trip");
+          expect(bundle.files).toContain(shard.ref);
+          expect(bundle.manifest.find(entry => entry.path === shard.ref)).toMatchObject({bytes:part.length,sha256:hash(part)});
+          parts.push(part); offset += part.length;
+        }
+        const section = Buffer.concat(parts); sections.push(section);
+        expect(section.length).toBe(change.bytes); expect(hash(section)).toBe(change.sha256);
+        expect((section.toString("utf8").match(/\n/g) ?? []).length).toBe(change.line_count);
+        expect(change.diff_offset).toBe(Buffer.concat(sections.slice(0,-1)).length);
+        expect(change.current_source_listed).toBe(change.status !== "deleted");
+        expect(change.current_source_ref).toBe(change.status === "deleted" ? null : change.path);
+      }
+      const rebuilt = Buffer.concat(sections);
+      expectBytes(rebuilt,original,"complete original diff reconstruction");
+      expect(rebuilt.toString("utf8")).toContain("+++ /dev/null\n");
+      expect(index.full_diff_bytes).toBe(original.length); expect(index.full_diff_sha256).toBe(hash(original));
+      expect(index.captured_diff_bytes).toBe(original.length); expect(index.captured_diff_sha256).toBe(hash(original));
+      expect(index.changes.find(change => change.path === "legacy/deleted-binary.dat")).toMatchObject({status:"deleted",binary:true,current_source_listed:false});
+      expect(index.changes.find(change => change.path === "src/new-name.mjs")).toMatchObject({status:"renamed",old_path:"src/old-name.mjs"});
+      expect(fs.existsSync(join(bundle.bundleRoot, "changes.diff"))).toBe(false);
+      expect(bundle.manifest.some(entry => entry.path === "changes.diff")).toBe(false);
+      expectBytes(readFileSync(join(bundle.bundleRoot,"src/active.mjs")),Buffer.from(active),"complete current active source");
+      expectBytes(readFileSync(join(bundle.bundleRoot,"skills/simplicity-guard/SKILL.md")),lens,"current lens/source complete bytes");
+      expect(bundle.manifest.filter(entry => entry.path === "skills/simplicity-guard/SKILL.md")).toHaveLength(1);
+      expect(readFileSync(join(bundle.bundleRoot, "requirements/acceptance_criteria.md"), "utf8")).toBe(finalRequest.materials.acceptance_criteria);
+      expect(readFileSync(join(bundle.bundleRoot, "review-instructions.md"), "utf8")).toContain("complete diff content is in all manifest-declared per-file patch shards");
+      // Exercise only the existing private parser, not OCR or native provider dispatch.
+      const activeChange = index.changes.find(change => change.path === "src/active.mjs"), shard = activeChange.shards[0];
+      const raw = readFileSync(join(bundle.bundleRoot, shard.ref), "utf8");
+      const exactLine = active.split("\n")[19];
+      const patchLine = raw.split("\n").findIndex(line => line === "+" + exactLine) + 1;
+      expect(patchLine).toBeGreaterThan(0);
+      const packetRoot = join(state.root, "owned-parser-packet"), path = shard.ref.replace(/\.diff$/, ".md");
+      mkdirSync(dirname(join(packetRoot,path)), {recursive:true});
+      const content = `# WorkflowHub candidate diff: ${shard.ref}\n\n\`\`\`diff\n${raw}\n\`\`\`\n`;
+      writeFileSync(join(packetRoot,path), content);
+      const parsed = await runConfiguredOcrHostReview({request:finalRequest,packet:{root:packetRoot,material_id:bundle.materialId,
+        preview:{reviewable_files:[{path}]}, rules:{rules:[]}, manifest:[{path,bytes:Buffer.byteLength(content),sha256:hash(content)}]}}, {
+        sourceBundle:bundle, trustedContext:{trusted:{},route:{minimum_heterologous:1},selection:{providers:["codex/owned"]},
+          providerConfig:{providers:{"codex/owned":{enabled:true,command:"/unused/owned-parser",model:"owned-parser"}}}},
+        providerExecutor:async()=>({status:"completed",output:[JSON.stringify({type:"item.completed",item:{type:"agent_message",text:JSON.stringify({findings:[{
+          severity:"major",path,line:patchLine+3,issue:"Owned source mapping assertion",recommendation:"Inspect this actual source line",
+          root_cause:"owned fixture",evidence_kind:"direct",evidence:`\`${exactLine}\``,
+        }]})}}),JSON.stringify({type:"turn.completed"})].join("\n")}),
+      });
+      expect(parsed.findings[0]).toMatchObject({path:"src/active.mjs",line:20});
+      expect(parsed.provider_results[0].evidence_anchor_valid).toEqual([true]);
+    } finally { bundle.dispose(); }
+    expect(readdirSync(attachmentRoot).filter(name => name.startsWith(".ocr-code-review-") || name.startsWith("review-"))).toEqual([]);
+  });
+  it("keeps the existing non-UTF8 current-source rejection and cleans a failed large bundle", async () => {
+    const state=fixture(), root=state.worktreeRoot;
+    mkdirSync(join(root,"src")); writeFileSync(join(root,"src/binary.dat"),Buffer.from([0,255,128]));
+    writeFileSync(join(root,"src/large.mjs"),"export const previous = true;\n");
+    git(root,["add","."]); git(root,["commit","-qm","owned binary baseline"]);
+    const baseline=git(root,["rev-parse","HEAD"]);
+    writeFileSync(join(root,"src/binary.dat"),Buffer.from([0,255,128,1]));
+    writeFileSync(join(root,"src/large.mjs"),"export const value = true;\n".repeat(16000));
+    const attachmentRoot=join(state.root,"review-data"); mkdirSync(attachmentRoot);
+    const context=await contextFor(state);
+    expect(()=>prepareTaskBoundBuildCodeReviewBundle(context,finalRequest,{
+      loadConfig:()=>({attachmentRoot}),captureSource:ownedSource(state,attachmentRoot,baseline,()=>{}),
+    })).toThrow(/MATERIAL_NOT_UTF8/);
+    expect(readdirSync(attachmentRoot).filter(name=>name.startsWith(".ocr-code-review-")||name.startsWith("review-"))).toEqual([]);
+  });
+  it("exposes cleanup failure and lets the same owned bundle retry cleanup", async () => {
+    const state=fixture(), attachmentRoot=join(state.root,"review-data"); mkdirSync(attachmentRoot);
+    const bundle=prepareTaskBoundBuildCodeReviewBundle(await contextFor(state),finalRequest,{loadConfig:()=>({attachmentRoot})});
+    const originalRemove=fs.rmSync; let fired=false;
+    try {
+      fs.rmSync=(path,options)=>{
+        if(path===bundle.bundleRoot&&!fired){fired=true;throw Object.assign(new Error("owned packet cleanup failure"),{code:"OWNED_CLEANUP_FAILURE"});}
+        return originalRemove(path,options);
+      };
+      syncBuiltinESMExports();
+      expect(()=>bundle.dispose()).toThrow("owned packet cleanup failure"); expect(fired).toBe(true);
+      expect(fs.existsSync(bundle.bundleRoot)).toBe(true);
+    } finally {fs.rmSync=originalRemove;syncBuiltinESMExports();}
+    bundle.dispose(); expect(fs.existsSync(bundle.bundleRoot)).toBe(false);
+    expect(readdirSync(attachmentRoot).filter(name=>name.startsWith(".ocr-code-review-")||name.startsWith("review-"))).toEqual([]);
   });
 });

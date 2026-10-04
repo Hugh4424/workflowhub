@@ -335,7 +335,7 @@ function ocrReviewInstructionsFor(request) {
   return [
     `OCR code review: ${request.stage}/${request.phase_id ?? request.phaseId ?? "worktree"}.`,
     "Read the complete contracts/build-code.md, contracts/verify-code.md, contracts/provider-protocol.md and manifest-declared lens skill bodies. Apply the actual stage's reviewer contract and the review focus below; the other code contract supplies the adjacent review boundary.",
-    "Start with source.json, review-instructions.md, the complete current diff and full acceptance-criteria text. Read included implementation, consumer and test context needed to assess concrete delivery failures. Do not replace required bodies with summaries or truncate contracts.",
+    "Start with source.json, diff-index.json when present, review-instructions.md and full acceptance-criteria text. The complete diff content is in all manifest-declared per-file patch shards listed in diff-index.json; small packets instead contain changes.diff. Read the complete navigation first, then the relevant full patches and current implementation/consumer/test files according to real entry points, risk and changed interfaces. Do not blindly cat a cumulative diff or every historical/deleted body. Deleted and historical patches remain fully available by index reference and must be read when a concrete removal, consumer or security claim requires them. No diff section is omitted, summarized instead of supplied, or truncated; never infer a source line from a shard line. Do not replace required bodies with summaries or truncate contracts.",
     "When a changed file in the current diff also serves as a fixed reviewer body, its identical manifest entry serves both roles. Review the complete bytes as changed implementation source as well as reviewer instructions; neither role is omitted.",
     focus,
     "按根因合并重复 finding，保留真实消费者、后果和源码行证据。不可用≠空≠pass；缺少可用结果说明限制，不能当作没有问题。",
@@ -429,6 +429,7 @@ function projectOcrCodeReviewBundle(built, attachmentRoot, request, source) {
       sourcePaths.add(gitDiffPath(tokens[1]));
     }
     const sourceRoot=realpathSync(source.sourceRoot);
+    const includedSources=new Set();
     for(const path of sourcePaths){
       if(isAbsolute(path)||path.split("/").some(x=>!x||x==="."||x===".."))throw new Error("OCR source path is unsafe");
       const target=join(sourceRoot,path);let named;
@@ -438,6 +439,7 @@ function projectOcrCodeReviewBundle(built, attachmentRoot, request, source) {
       const fd=openSync(target,fsConstants.O_RDONLY|fsConstants.O_NOFOLLOW);let raw;
       try{const st=fstatSync(fd);if(st.dev!==named.dev||st.ino!==named.ino||!st.isFile()||st.nlink!==1)throw new Error(`OCR source changed: ${path}`);raw=readFileSync(fd);}finally{closeSync(fd);}
       const bytes=reviewMaterialBytes(path,raw);
+      includedSources.add(path);
       const existing=projected.find(entry=>entry.path===path);
       if(existing){
         // A changed reviewer body can be both source context and fixed control.
@@ -446,6 +448,20 @@ function projectOcrCodeReviewBundle(built, attachmentRoot, request, source) {
         continue;
       }
       const destination=join(bundleRoot,path);mkdirSync(dirname(destination),{recursive:true});writeFileSync(destination,bytes,{flag:"wx",mode:0o600});projected.push({path,bytes:bytes.length,sha256:sha256(bytes)});
+    }
+    const diffIndexEntry=projected.find(entry=>entry.path==="diff-index.json");
+    if(diffIndexEntry){
+      const indexPath=join(bundleRoot,"diff-index.json");
+      const index=JSON.parse(readFileSync(indexPath,"utf8"));
+      if(index.schema_version!=="wh-review-diff-index.v1"||!Array.isArray(index.changes))throw new Error("OCR diff index is invalid");
+      for(const change of index.changes){
+        change.current_source_listed=includedSources.has(change.path);
+        change.current_source_ref=change.current_source_listed ? change.path : null;
+      }
+      const indexBytes=reviewMaterialBytes("diff-index.json",index);
+      writeFileSync(indexPath,indexBytes);
+      diffIndexEntry.bytes=indexBytes.length;
+      diffIndexEntry.sha256=sha256(indexBytes);
     }
     if (request.authenticated_evidence !== undefined) {
       if (paths.has(AUTHENTICATED_EVIDENCE_PATH)) throw new Error("OCR source packet duplicated authenticated evidence");
@@ -550,9 +566,9 @@ export function prepareTaskBoundBuildCodeReviewBundle(context, request, {
       ...packet,
       dispose() {
         if (disposed) return;
-        disposed = true;
         if (packet !== built) rmSync(packet.bundleRoot, { recursive: true, force: true });
         rmSync(built.bundleRoot, { recursive: true, force: true });
+        disposed = true;
       },
     });
   } finally {

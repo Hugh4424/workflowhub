@@ -52,14 +52,26 @@ function redactKnownSecrets(value) {
 }
 export function redactHostPathText(value) {
   const text = redactKnownSecrets(value);
+  // /dev/null is Git's add/delete header sentinel, not a host input file.
+  // Preserve only exact header lines before a hunk; ordinary prose is redacted.
+  const gitNullOffsets = new Set();
+  let inGitHeader = false;
+  for (const match of text.matchAll(/^[^\n]*(?:\n|$)/gm)) {
+    const line = match[0].replace(/\r?\n$/, "");
+    if (line.startsWith("diff --git ")) inGitHeader = true;
+    else if (/^(?:@@ |GIT binary patch$|Binary files |```)/.test(line)) inGitHeader = false;
+    if (inGitHeader && /^(?:---|\+\+\+) \/dev\/null\r?$/.test(line)) gitNullOffsets.add(match.index + 4);
+  }
+  const redactLocal = (chunk, base) => chunk.replace(LOCAL_HOST_PATH, (path, offset) =>
+    path === "/dev/null" && gitNullOffsets.has(base + offset) ? path : HOST_PATH_PLACEHOLDER);
   // Public URL chunks are handled before local paths, so /Users/ in a remote
   // URL and the s:/ inside https:// cannot be mistaken for host paths.
   let output = "", offset = 0;
   for (const match of text.matchAll(URL_TEXT)) {
-    output += text.slice(offset, match.index).replace(LOCAL_HOST_PATH, HOST_PATH_PLACEHOLDER) + redactUrl(match[0]);
+    output += redactLocal(text.slice(offset, match.index), offset) + redactUrl(match[0]);
     offset = match.index + match[0].length;
   }
-  return output + text.slice(offset).replace(LOCAL_HOST_PATH, HOST_PATH_PLACEHOLDER);
+  return output + redactLocal(text.slice(offset), offset);
 }
 
 export function redactProviderHostPaths(value) {

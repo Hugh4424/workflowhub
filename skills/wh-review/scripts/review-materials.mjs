@@ -4,6 +4,7 @@ import { dirname, extname, isAbsolute, join, relative, resolve } from "node:path
 import { fileURLToPath } from "node:url";
 import { redactProviderHostPaths, providerMaterialEntries, providerMaterialPath } from "../../../runtime/review/provider-material-projection.mjs";
 import { deliveredMaterialId } from "../../../runtime/review/review-packet-identity.mjs";
+import { gitDiffPath } from "../../../runtime/review/review-input-bounds.mjs";
 import { assertReviewIdentity, reviewIdentityFromInput, reviewRuleFor } from "../../../runtime/review/review-policy.mjs";
 import stageMaterials from "../../../runtime/review/stage-materials.json" with { type: "json" };
 const here=dirname(fileURLToPath(import.meta.url));
@@ -585,6 +586,62 @@ export {redactProviderHostPaths};
 export function canonicalMaterialManifest(entries){return JSON.stringify([...entries].sort((a,b)=>Buffer.compare(Buffer.from(a.path),Buffer.from(b.path))).map(({path,bytes,sha256})=>({path,bytes,sha256})));}
 export function reviewMaterialBytes(key,value){return materialBytes(redactProviderHostPaths(value));}
 export function requirementIds(value){return [...new Set([...String(value).matchAll(ACCEPTANCE_IDS)].map(([id])=>id))];}
+
+// Presentation only: all selected patch bytes survive in declared file shards.
+// The inline threshold changes neither scope nor provider/quality eligibility.
+function writeReviewDiff(write, raw) {
+  const bytes = reviewMaterialBytes("changes.diff", raw);
+  if (bytes.length <= PHASE_DIFF_INLINE_LIMIT_BYTES) {
+    write("changes.diff", bytes);
+    return;
+  }
+  const text = bytes.toString("utf8");
+  const sections = text.match(/^diff --git [\s\S]*?(?=^diff --git |$(?![\s\S]))/gm) ?? [];
+  if (sections.length === 0 || sections.join("") !== text) {
+    throw new Error("MATERIAL_INCOMPLETE: cannot split the complete diff without losing bytes");
+  }
+  const changes = [];
+  let diffOffset = 0;
+  for (const [ordinal, section] of sections.entries()) {
+    const tokens = section.split("\n", 1)[0].slice("diff --git ".length).match(/"(?:\\.|[^"\\])*"|\S+/g);
+    if (tokens?.length !== 2) throw new Error("MATERIAL_INCOMPLETE: invalid diff section header");
+    const [oldPath, path] = tokens.map(gitDiffPath);
+    for (const name of [oldPath, path]) {
+      if (isAbsolute(name) || name.includes("\\") || name.split("/").some(part => !part || part === "." || part === "..")) {
+        throw new Error("MATERIAL_INCOMPLETE: unsafe diff section path");
+      }
+    }
+    const patch = Buffer.from(section, "utf8"), shards = [];
+    const status = /^deleted file mode /m.test(section) ? "deleted"
+      : /^new file mode /m.test(section) ? "added"
+      : /^rename from /m.test(section) || oldPath !== path ? "renamed" : "modified";
+    const stem = path.replace(/[^A-Za-z0-9_-]/g, "_").slice(-72);
+    let offset = 0;
+    while (offset < patch.length) {
+      let end = Math.min(offset + PHASE_DIFF_SHARD_TARGET_BYTES, patch.length);
+      if (end < patch.length) {
+        const newline = patch.lastIndexOf(0x0a, end - 1);
+        if (newline >= offset) end = newline + 1;
+        else while (end > offset && (patch[end] & 0xc0) === 0x80) end--;
+      }
+      if (end <= offset) throw new Error("MATERIAL_INCOMPLETE: invalid diff shard boundary");
+      const part = patch.subarray(offset, end);
+      const shardId = `S-${String(ordinal + 1).padStart(5, "0")}-${stem}-P${String(shards.length + 1).padStart(4, "0")}`;
+      const ref = `diff-shards/${shardId}.diff`;
+      write(ref, part);
+      shards.push({shard_id:shardId, ref, delivery:"included", offset, bytes:part.length, sha256:sha256(part)});
+      offset = end;
+    }
+    changes.push({path, old_path:oldPath, status, binary:/^GIT binary patch$|^Binary files /m.test(section),
+      diff_offset:diffOffset, bytes:patch.length, line_count:(section.match(/\n/g) ?? []).length + (section.endsWith("\n") ? 0 : 1),
+      sha256:sha256(patch), shards});
+    diffOffset += patch.length;
+  }
+  write("diff-index.json", {schema_version:"wh-review-diff-index.v1", presentation:"complete_file_shards",
+    full_diff_bytes:bytes.length, full_diff_sha256:sha256(bytes),
+    captured_diff_bytes:raw.length, captured_diff_sha256:sha256(raw), changes});
+}
+
 export function buildReviewMaterials({attachmentRoot,reviewDataRoot,stage,reviewTrack=null,reviewScope=null,reviewKind=null,materials,source=null,role=null,uiScope=false,activationCohort="pre",authenticated_evidence=undefined,surface=null,phaseId=null}={}) {
   const identity=reviewIdentityFromInput({stage,review_track:reviewTrack,review_scope:reviewScope,review_kind:reviewKind});
   const rule=identity.stage==="build-plan"&&activationCohort==="post" ? stageMaterials.stages["build-plan"].profiles.post : ruleForIdentity(identity.stage,identity.reviewTrack,identity.reviewScope,identity.reviewKind);
@@ -614,7 +671,7 @@ export function buildReviewMaterials({attachmentRoot,reviewDataRoot,stage,review
     }
     providerMaterialEntries({stage,review_track:reviewTrack,review_scope:reviewScope,review_kind:reviewKind,activation_cohort:activationCohort,materials:filtered.materials}).forEach(([key,value],index)=>{if(key!=="review_instructions")write(codePacket&&key==="acceptance_criteria" ? `requirements/acceptance_criteria.${typeof value==="string" ? "md" : "json"}` : providerMaterialPath(key,index,redactProviderHostPaths(value)),value);});
     if(codePacket&&source)write("source.json",{captured_head:source.capturedHead,baseline_commit:source.baseCommit});
-    if(source?.diffPath)write("changes.diff",readRegisteredFile(source.diffPath,"supplied diff"));
+    if(source?.diffPath)writeReviewDiff(write,readRegisteredFile(source.diffPath,"supplied diff"));
     if(authenticated_evidence!==undefined)write("authenticated-evidence.json",authenticated_evidence);
     const manifest={version:1,stage,review_scope:reviewScope,subject_kind:reviewScope==="phase" ? "phase" : "document",phase_id:phaseId,surface:surface ?? reviewKind ?? stage,files:[...entries]};write("manifest.json",JSON.stringify(manifest,null,2)+"\n");
     return {bundleRoot,attachmentRoot:base,sourcePrefix:relative(base,bundleRoot).split("\\").join("/"),materialId:deliveredMaterialId(entries),deliveryManifest:entries,discarded_facts:filtered.discarded_facts,dispose(){rmSync(bundleRoot,{recursive:true,force:true});}};
