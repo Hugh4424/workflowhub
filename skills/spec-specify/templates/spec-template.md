@@ -82,7 +82,7 @@
 
 - **PFACT-001**：[填写：影响需求或验收的产品、用户或流程事实]
   - **状态**：`verified` / `inferred` / `unknown` / `not_applicable`
-  - **证据或来源**：[填写：verified 的 ref/hash/source ID，或 inferred 的来源和限制]
+  - **证据或来源**：[填写：verified 的实际原始证据路径/source ID，或 inferred 的来源和限制]
   - **负责人、影响**：[填写：unknown 的负责人、影响和关联 OPEN/RISK ID]
   - **不适用理由**：[填写：仅 not_applicable（不适用）使用]
   - **关联**：[填写：FR ID、AC ID]
@@ -90,12 +90,11 @@
 > `unknown` 必须关联 RISK 或 OPEN；不能把推断写成已核实事实。
 
 生成约束：本模板的 PFACT、FR、AC、场景、来源映射、验证方法、oracle 和失败条件必须直接满足
-`spec-content.v3`。生成结果会原样交给严格 `spec-analyze`；禁止依赖主 agent 手工补写状态、标签或
-失败条件。旧格式只作为迁移测试输入，不作为新的输出格式。
+本节明确的来源、场景与验收内容。作者逐项补齐真实状态和失败条件；spec-analyze 只报告实际结构/引用缺口，独立审查判断语义质量。旧格式只读保留。
 
 ## 5. 功能需求
 
-> 沿用 AgentHub 的“叙述层 + 编号字段层”：先讲清完整行为，再做机器追溯。
+> 沿用 AgentHub 的“叙述层 + 编号字段层”：先讲清完整行为，再做来源追溯。
 
 ### [填写：功能域名称]（DOMAIN）
 
@@ -213,8 +212,7 @@
 从当前 `decision-log.md` 的逐字声明层/明确原子条目逐条核对已确认 decision；
 上游 PRD 原件在适用时另作只读对照。不能只复述 decision 摘要，也不能由本规格
 或 analyzer 请求自报需求分母。先定位每个独立可验收的原始行为、量词、否定、
-先后、边界和失败条件，在本表给可回读 source ID/位置；原文字节 hash 和材料
-revision 由正式 analyzer 读取同一当前原件绑定，不在 spec 复制一份可漂移账本。
+先后、边界和失败条件，在本表给可回读 source ID/位置；原始来源直接引用当前原件/节位置，不在 spec 复制认证身份或第二份需求账本。
 缺原件标 `unknown — owner / impact / next action`，不得猜补。每个 in-scope source 必须连到
 FR、AC、物理 Phase 的 Task、同义正反 oracle；反向检查每个 Task 有来源、验收和
 真实消费者。标为 deferred/non-goal 的来源保留决策理由，不伪装成已实现。

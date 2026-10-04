@@ -1,32 +1,32 @@
-# Build Code 代码审查边界
+# Build Code 代码审查合同
 
-## 当前普通流程
+审查当前 Phase 的完整实现差异、适用验收标准全文、直接消费者与相关测试。
+只根据本次实际提供的代码和材料判断交付问题；旧审查结果只作历史线索。
+审查重点按顺序展开：实现与需求一致性 → 真实入口与消费者 → 接口、状态和生命周期 →
+测试断言与失败边界 → 实际结果 → 弱 oracle 与假绿。不得用只看局部文件的结论代表完整实现。
 
-`build-code` 对每个 Phase 的当前真实 diff 发起一次 OCR delegation 独立审查。
-审查读取适用的验收标准全文、实现、直接 consumer、相关测试和失败边界，
-输出有源码锚点的 findings 或真实 `unavailable`。主会话逐条处置 finding，
-在同一任务修复，并只复验受影响行为。Phase 的审查事实绑定当次 task、
-Phase、材料与代码快照；旧快照的结果保留原身份。
+## 必需正文
 
-所有 Phase 后，`build-code` 在当前快照执行一次最终 aggregate 测试，并逐 AC
-记录实际结果、证据与限制。`verify-code` 随后对最终 worktree 发起一次 OCR
-独立代码审查，重点检查真实入口、跨 Phase 接口、consumer、生命周期、安全、
-失败路径和测试强度；该次审查携带当前验收标准全文。最终代码审查与功能
-验收分别记事实。审查和测试都不能用空 findings 或绿色命令代替逐 AC 结果。
+读取 contracts/build-code.md、contracts/verify-code.md、contracts/provider-protocol.md、
+review-instructions.md 中的当前审查重点，以及包内声明的 lens 技能全文。
+读取完整当前 Phase diff 和适用验收标准；根据具体问题追到包内消费者、测试和相关上下文。
+材料不足时说明未覆盖范围；不得到包外读取仓库、Git、网络或宿主文件，也不得自行派其他 agent。
 
-当前代码审查通过既有 public `review --action=record` 与 stage `run` 记录；
-Phase 结果由 `receipts.review` 消费，终末 worktree 结果由
-`receipts.quality_review` 消费。provider 的身份、原始 findings、失败和
-`unavailable` 原样保留。质量事实限制完成声明，不阻止同一任务继续修复。
+## 找什么
 
-`wh-review` 保留 make-decision、build-spec、build-plan 等其它审查面的既有
-用途；此文件不为代码审查提供第二条派发路径。正式代码质量判断来自各次
-OCR 的独立执行与现有 canonical review fact，主会话负责 finding 处置。
+- 需求是否在真实入口生效，生产者、消费者和接口两端是否一致。
+- 并发、取消、资源释放、权限、秘密保护、外部副作用和错误传播是否完整。
+- 当前改动是否引入无消费者的机制、重复控制、过度复杂度或隐藏兼容路径。
+- 测试是否走到真实分支和失败路径；模拟是否绕过待验证行为。
+- 命令成功是否被错误地当成用户结果成功，未执行或不可用是否被误报为通过。
 
-## 历史 integration 事实
+## 怎样报告
 
-既有 `build-code/integration` attempt、result、packet、receipt 和 findings
-作为只读历史原件保留，按它们记录的 task、scope、材料与 snapshot 解读。
-它们不构成当前最终 worktree OCR 审查，也不自动证明本次最终 aggregate、
-逐 AC 结果或完成状态。历史 provider 不可用时保留原失败事实；历史 finding
-仍可作为风险线索，由当前代码和测试重新核对，不生成新的 integration 审查。
+按根因合并重复问题，保留不同消费者或后果所需的具体证据。
+每条 finding 给出包内相对路径、真实行号、问题、后果和可执行建议；严重问题还必须给出
+root_cause、evidence_kind 和可核对的源码证据。不要猜锚点，也不要以缺少流程记录代替代码问题。
+只输出 provider-protocol 规定的一个 findings JSON，不输出 pass、stage 结论或完成许可。
+不可用≠空≠pass；空 findings 只表示本轮未提出具体问题，不能证明全部验收或交付完成。
+
+当前代码审查只含 Phase 审查和最终 worktree 审查，不新建 integration 审查步骤。
+发现由主会话逐条处理；后续修复只复验受影响行为，不为得到空 findings 重复同一审查。

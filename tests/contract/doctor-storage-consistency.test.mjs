@@ -1,13 +1,11 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { ArtifactDir } from "../../core/artifact-dir.mjs";
-import { createTask } from "../../runtime/task/task-handle.mjs";
-import { stageRuntimeMain } from "../../tools/cli/stage-runtime.mjs";
-import { writeCanonicalStageMaterials } from "../helpers/stage-outcome.mjs";
+import { ArtifactDir } from "../../runtime/evidence/artifact-dir.mjs";
+import { createTask, openTask } from "../../runtime/task/task-handle.mjs";
 
 const roots = [];
 
@@ -15,7 +13,7 @@ function git(cwd, args) {
   return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 }
 
-function fixture({ source = "env", writeResolutionSource, secondaryRoot = false, lowerPriorityConfig = false } = {}) {
+async function fixture({ source = "env", writeResolutionSource, secondaryRoot = false, lowerPriorityConfig = false, historical = false } = {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-doctor-storage-")));
   roots.push(root);
   const home = join(root, "home");
@@ -47,10 +45,10 @@ function fixture({ source = "env", writeResolutionSource, secondaryRoot = false,
     writeFileSync(join(configPath, "config.json"), JSON.stringify({ task_dir: configuredStorage }));
   }
 
-  const task = createTask({
+  let task = await createTask({
     storageRoot: storage,
     manifest: {
-      schema_version: "1.0.0",
+      schema_version: "1.0.0", activation_cohort: "post",
       execution_mode: "per_invocation",
       record_model: "vnext-single-write",
       project_name: "workflowhub",
@@ -64,7 +62,19 @@ function fixture({ source = "env", writeResolutionSource, secondaryRoot = false,
       ...(writeResolutionSource ? { write_resolution_source: writeResolutionSource } : {}),
     },
   });
-  writeCanonicalStageMaterials(ArtifactDir.open(worktree, task));
+  const artifacts = ArtifactDir.open(worktree, task);
+  for (const [name, bytes] of Object.entries({
+    "decision-log.md": "# Decision log\n",
+    "spec.md": "# Specification\n",
+    "phases/index.md": "# Phase index\n\n## Execution Index\n\n| phase | authority ref | semantic anchor | write set | dependency | consumer |\n| --- | --- | --- | --- | --- | --- |\n| `P1` | `phases/P1.md` | doctor | README.md | none | build-code |\n",
+    "phases/P1.md": "# Phase P1\n\n### T001 — Inspect ordinary storage facts\n",
+  })) await artifacts.writeAtomic(name, bytes);
+  if (historical) {
+    const legacy = { ...task.manifest }; delete legacy.activation_cohort;
+    // Install owned historical bytes; never ask the post-only writer to create history.
+    writeFileSync(join(task.taskPath, "task.json"), JSON.stringify(legacy, null, 2) + "\n");
+    task = openTask(task.taskPath, { projectName: "workflowhub", taskId: "doctor-storage" });
+  }
 
   if (secondaryRoot) {
     const oldRoot = join(root, "Hugh", "Knowledge");
@@ -75,23 +85,15 @@ function fixture({ source = "env", writeResolutionSource, secondaryRoot = false,
 }
 
 async function doctor(state, { envRoot = state.storage, configRoot = state.configHome } = {}) {
-  const previous = Object.fromEntries(["HOME", "XDG_CONFIG_HOME", "WORKFLOWHUB_TASK_DIR", "CODEX_SESSION_ID", "CODEX_THREAD_ID", "CODEX_ROLLOUT_PATH", "WORKFLOWHUB_CODEX_ROLLOUT_PATH"].map((key) => [key, process.env[key]]));
-  process.env.HOME = state.home;
-  process.env.XDG_CONFIG_HOME = configRoot;
-  if (envRoot === undefined || envRoot === null) delete process.env.WORKFLOWHUB_TASK_DIR;
-  else process.env.WORKFLOWHUB_TASK_DIR = envRoot;
-  delete process.env.CODEX_SESSION_ID;
-  delete process.env.CODEX_THREAD_ID;
-  delete process.env.CODEX_ROLLOUT_PATH;
-  delete process.env.WORKFLOWHUB_CODEX_ROLLOUT_PATH;
-  try {
-    return await stageRuntimeMain(["doctor", "--stage=build-code", "--project=workflowhub", "--task=doctor-storage"], { cwd: state.repo });
-  } finally {
-    for (const [key, value] of Object.entries(previous)) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
-  }
+  const before = readFileSync(join(state.task.taskPath, "task.json"));
+  const env = { PATH: "/usr/bin:/bin:/usr/sbin:/sbin", HOME: state.home, XDG_CONFIG_HOME: configRoot,
+    ...(envRoot === undefined || envRoot === null ? {} : { WORKFLOWHUB_TASK_DIR: envRoot }) };
+  const module = new URL("../../tools/cli/stage-runtime.mjs", import.meta.url).href;
+  const script = `import {stageRuntimeMain} from ${JSON.stringify(module)};const value=await stageRuntimeMain(["doctor","--stage=build-code","--project=workflowhub","--task=doctor-storage"],{cwd:process.argv[1]});console.log(JSON.stringify(value));`;
+  const raw = execFileSync(process.execPath, ["--input-type=module", "-e", script, state.worktree],
+    { env, encoding: "utf8", timeout: 10000, stdio: ["ignore", "pipe", "pipe"] });
+  expect(readFileSync(join(state.task.taskPath, "task.json"))).toEqual(before);
+  return JSON.parse(raw);
 }
 
 afterEach(() => {
@@ -100,7 +102,7 @@ afterEach(() => {
 
 describe("doctor storage consistency", () => {
   it.each(["env", "config", "home"])("reports the selected %s source and all resolution values", async (source) => {
-    const state = fixture({ source });
+    const state = await fixture({ source });
     const result = await doctor(state, { envRoot: source === "env" ? state.storage : null });
 
     expect(result.storage).toMatchObject({
@@ -117,7 +119,7 @@ describe("doctor storage consistency", () => {
   });
 
   it("reports writer-source drift without making doctor fail", async () => {
-    const state = fixture({ source: "env", writeResolutionSource: "home" });
+    const state = await fixture({ source: "env", writeResolutionSource: "home" });
     const result = await doctor(state);
 
     expect(result.storage.selected_source).toBe("env");
@@ -127,7 +129,7 @@ describe("doctor storage consistency", () => {
   });
 
   it("reports the configured candidate even when env overrides it", async () => {
-    const state = fixture({ source: "env", lowerPriorityConfig: true });
+    const state = await fixture({ source: "env", lowerPriorityConfig: true });
     const result = await doctor(state);
 
     expect(result.storage).toMatchObject({
@@ -142,7 +144,7 @@ describe("doctor storage consistency", () => {
   });
 
   it("reports a known secondary Knowledge root and keeps exit-success semantics", async () => {
-    const state = fixture({ source: "env", secondaryRoot: true });
+    const state = await fixture({ source: "env", secondaryRoot: true });
     const result = await doctor(state);
 
     expect(result.storage.suspected_secondary_roots).toContain(state.oldRoot);
@@ -152,7 +154,7 @@ describe("doctor storage consistency", () => {
   });
 
   it("shows unknown for a historical task without writer-source metadata", async () => {
-    const state = fixture({ source: "env" });
+    const state = await fixture({ source: "env", historical: true });
     const result = await doctor(state);
 
     expect(result.storage.write_resolution_source).toBe("unknown");

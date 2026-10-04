@@ -1,6 +1,28 @@
 stage: build-prd
 skills:
-  - { name: spec-prd, path: skills/spec-prd/SKILL.md, execution: independent, trigger: prd_outline_or_detail, bundle: skills/spec-prd/skill-bundle.json, owner: portable_workflow, consumer: { target: "build-prd#orchestrate", inputs: ["decision", "required_sources", "map_confirmation", "design_facts"], identity: ["task_id", "stage", "workspace_path"], result: "prd_draft_or_body" } }
+  - name: spec-prd
+    path: skills/spec-prd/SKILL.md
+    trigger: prd_outline_or_detail
+  - name: stage-handoff
+    path: skills/stage-handoff/SKILL.md
+    trigger: stage_end_human_handoff
+  - name: wh-review
+    path: skills/wh-review/SKILL.md
+    trigger: final_prd_document_review
 runtime_capabilities:
-  - { id: node, kind: cli, version_policy: ">=24", doctor: [node, --version], required_when: always, absence_semantics: diagnostic }
-external_capabilities: []
+  - id: node
+    kind: cli
+    version_policy: '>=24'
+    doctor:
+      - node
+      - '--version'
+    required_when: always
+    absence_semantics: diagnostic
+external_capabilities:
+  - id: wh-review-provider
+    kind: review
+    doctor:
+      - workflowhub-capability
+      - wh-review-provider
+    required_when: document_review
+    absence_semantics: diagnostic

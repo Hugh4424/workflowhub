@@ -10,13 +10,13 @@ import { updateOwnResult, configForCollector } from "../../metrics/collector.mjs
 export async function runMetricsWriter({ task, workspace, metricsLauncherConfig, verdict, executionId } = {}) {
   if (!executionId) throw new Error("executionId required — must come from verify-code recordSkeleton");
 
-  const cfg = configForCollector(
+  const cfg = await configForCollector(
     metricsLauncherConfig,
     { task, workspace }
   );
 
   if (verdict) {
-    updateOwnResult(executionId, { verdict }, cfg);
+    await updateOwnResult(executionId, { verdict }, cfg);
   }
 
   return { executionId };

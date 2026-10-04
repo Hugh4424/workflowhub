@@ -116,7 +116,9 @@ describe("intake-decision-review execution protocol", () => {
   test("is a pure blind direction lens owned by wh-review", () => {
     const content = readRequiredFile("skills", "intake-decision-review", "SKILL.md");
     assert.match(content, /pure review lens/i);
-    assert.match(content, /used only by the `wh-review` make-decision[\s\S]*direction track/i);
+    assert.match(content, /pure review lens for make-decision direction advice/i);
+    assert.match(content, /document-review executor `wh-review` owns[\s\S]*original result handling/i);
+    assert.match(content, /lens owns only the supplied problem\/framing\/scope\/feasibility questions/i);
     assert.match(content, /`wh-review` owns[\s\S]*provider invocation/i);
     assert.match(content, /never invokes a provider/i);
     assert.match(content, /never[\s\S]*asks the user a question[\s\S]*waits for[\s\S]*confirmation/i);

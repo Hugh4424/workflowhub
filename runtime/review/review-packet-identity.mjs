@@ -32,7 +32,7 @@ function stableJson(value) {
 }
 
 function materialBytes(value) {
-  if (Buffer.isBuffer(value)) return value;
+  if (Buffer.isBuffer(value) || value instanceof Uint8Array) return Buffer.from(value);
   if (typeof value === "string") return Buffer.from(value, "utf8");
   return Buffer.from(`${JSON.stringify(value)}\n`, "utf8");
 }

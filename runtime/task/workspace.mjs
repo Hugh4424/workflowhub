@@ -1,13 +1,10 @@
-import { createHash } from "node:crypto";
 import { existsSync, lstatSync, realpathSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, parse, relative, resolve, sep } from "node:path";
 import { assertTaskHandle } from "./task-capability.mjs";
-import { captureExecutionSnapshot, EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES } from "../task/git-worktree-snapshot.mjs";
+import { inspectWorkspace } from "../interface/workspace-check.mjs";
+const EXECUTION_SIDECAR_PREFIXES = Object.freeze(["evidence/", "quality/", ".multica/"]);
 
-const WORKSPACES = new WeakSet();
-const CANDIDATE_WORKSPACES = new WeakSet();
-const WORKSPACE_BINDINGS = new WeakMap();
 const KNOWN_IGNORED_GENERATED = Object.freeze([
   ".vite",
   ".venv",
@@ -25,9 +22,10 @@ const KNOWN_IGNORED_GENERATED = Object.freeze([
   "data/local-real-m08-v2",
 ]);
 
+function gitEnvironment() { const env = { ...process.env }; for (const key of Object.keys(env)) if (key.startsWith("GIT_")) delete env[key]; return env; }
 function gitValue(cwd, args, label) {
-  try { return String(execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })).trim(); }
-  catch (error) { throw new Error(`${label} validation failed: ${error.stderr?.toString().trim() || error.message}`); }
+  try { return String(execFileSync("git", args, { cwd, env: gitEnvironment(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })).trim(); }
+  catch (error) { throw new Error(`${label} validation failed: ${error.stderr?.toString().trim() || error.message}`, { cause: error }); }
 }
 
 function gitCommonDir(root) {
@@ -38,9 +36,17 @@ function gitCommonDir(root) {
 function realGitToplevel(path, label) {
   if (typeof path !== "string" || !isAbsolute(path)) throw new TypeError(`${label} must be an absolute path`);
   const requested = resolve(path);
-  const stat = lstatSync(requested);
-  if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error(`${label} must be a real directory: ${requested}`);
+  let cursor = parse(requested).root;
+  const ancestry = [];
+  for (const part of requested.slice(cursor.length).split(sep).filter(Boolean)) {
+    cursor = join(cursor, part);
+    const stat = lstatSync(cursor);
+    const alias = process.platform === "darwin" && ((cursor === "/tmp" && realpathSync(cursor) === "/private/tmp") || (cursor === "/var" && realpathSync(cursor) === "/private/var"));
+    if ((!alias && stat.isSymbolicLink()) || (!alias && !stat.isDirectory())) throw new Error(`${label} must have real directory ancestors: ${cursor}`);
+    ancestry.push({ path: cursor, dev: stat.dev, ino: stat.ino, real: realpathSync(cursor) });
+  }
   const real = realpathSync(requested);
+  for (const before of ancestry) if (lstatSync(before.path).dev !== before.dev || lstatSync(before.path).ino !== before.ino || realpathSync(before.path) !== before.real) throw new Error(`${label} directory ancestor changed`);
   if (realpathSync(gitValue(real, ["rev-parse", "--show-toplevel"], label)) !== real) throw new Error(`${label} must be a Git toplevel directory`);
   return real;
 }
@@ -60,7 +66,7 @@ function isKnownIgnoredGenerated(path) {
 }
 
 function isExecutionSidecar(path) {
-  return EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES.some((prefix) => path === prefix.slice(0, -1) || path.startsWith(prefix));
+  return EXECUTION_SIDECAR_PREFIXES.some((prefix) => path === prefix.slice(0, -1) || path.startsWith(prefix));
 }
 
 function cleanupError(scan) {
@@ -79,7 +85,7 @@ function cleanupError(scan) {
 export function inspectWorktreeCleanup(worktreeRoot) {
   const root = realGitToplevel(worktreeRoot, "task worktree cleanup scan");
   const raw = String(execFileSync("git", ["status", "--porcelain=v1", "--ignored", "--untracked-files=all", "-z"], {
-    cwd: root,
+    cwd: root, env: gitEnvironment(),
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
     maxBuffer: 32 * 1024 * 1024,
@@ -111,6 +117,17 @@ export function inspectWorktreeCleanup(worktreeRoot) {
   });
 }
 
+function cleanupParents(root, target) {
+  const rel = relative(root, dirname(target));
+  if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) throw new Error("cleanup parent escapes task workspace");
+  let cursor = root;
+  for (const part of rel.split(sep).filter(Boolean)) {
+    cursor = join(cursor, part);
+    const stat = lstatSync(cursor);
+    if (!stat.isDirectory() || stat.isSymbolicLink() || realpathSync(cursor) !== cursor) throw new Error("cleanup parent is an alias or non-directory");
+  }
+}
+
 function removeKnownIgnoredGenerated(root, entry) {
   if (!isKnownIgnoredGenerated(entry.path)) throw cleanupError({
     tracked: [], untracked: [], ignored_unknown: [entry], ignored_generated: [],
@@ -118,6 +135,7 @@ function removeKnownIgnoredGenerated(root, entry) {
   const target = resolve(root, entry.path);
   const rel = relative(root, target);
   if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) throw new Error("known ignored generated path escapes task worktree");
+  cleanupParents(root, target);
   let stat;
   try { stat = lstatSync(target); }
   catch (error) { if (error?.code === "ENOENT") return; throw error; }
@@ -138,6 +156,7 @@ function removeKnownExecutionSidecar(root, entry) {
   const target = resolve(root, entry.path);
   const rel = relative(root, target);
   if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) throw new Error("execution sidecar path escapes task worktree");
+  cleanupParents(root, target);
   let stat;
   try { stat = lstatSync(target); }
   catch (error) { if (error?.code === "ENOENT") return; throw error; }
@@ -153,429 +172,111 @@ function restoreTrackedExecutionSidecar(root, entry) {
     tracked: [], untracked: [], ignored_unknown: [entry], ignored_generated: [], execution_sidecars: [],
   });
   execFileSync("git", ["restore", "--worktree", "--", entry.path], {
-    cwd: root,
+    cwd: root, env: gitEnvironment(),
     stdio: ["ignore", "pipe", "pipe"],
   });
-}
-
-function deterministicWorkspace(task) {
-  const targetRepoRoot = realGitToplevel(task.manifest.target_repo_root, "target repository");
-  const branch = `task/${task.identity.projectName}/${task.identity.taskId}`;
-  const worktreeRoot = resolve(dirname(targetRepoRoot), `${basename(targetRepoRoot)}-${task.identity.taskId}`);
-  return { targetRepoRoot, branch, worktreeRoot, mode: "deterministic", requireBranch: true };
-}
-
-function inspectTargetStatus(targetRepoRoot) {
-  const head = gitValue(targetRepoRoot, ["rev-parse", "--verify", "HEAD^{commit}"], "target repository HEAD");
-  const branch = gitValue(targetRepoRoot, ["symbolic-ref", "--quiet", "--short", "HEAD"], "target repository branch");
-  const raw = String(execFileSync("git", ["status", "--porcelain=v1", "--ignored", "--untracked-files=all", "-z"], {
-    cwd: targetRepoRoot,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-    maxBuffer: 32 * 1024 * 1024,
-  }));
-  const entries = raw.split("\0").filter(Boolean).map((field) => {
-    const status = field.slice(0, 2);
-    const path = field.slice(3);
-    const category = status === "??"
-      ? "untracked"
-      : status === "!!"
-        ? "ignored"
-        : "tracked";
-    return Object.freeze({ status, path, category });
-  });
-  const staged = entries.filter(({ status, category }) => category === "tracked" && status[0] !== " ").length;
-  const unstaged = entries.filter(({ status, category }) => category === "tracked" && status[1] !== " ").length;
-  const counts = Object.freeze({
-    tracked: entries.filter(({ category }) => category === "tracked").length,
-    staged,
-    unstaged,
-    untracked: entries.filter(({ category }) => category === "untracked").length,
-    ignored: entries.filter(({ category }) => category === "ignored").length,
-  });
-  const recommendations = [];
-  if (counts.tracked > 0 || counts.staged > 0 || counts.unstaged > 0) {
-    recommendations.push("先查看已修改或已暂存内容，确认是否属于当前任务；不要自动提交或覆盖");
-  }
-  if (counts.untracked > 0) {
-    recommendations.push("先确认未跟踪文件是用户文件还是生成物；不要直接删除");
-  }
-  if (counts.ignored > 0) {
-    recommendations.push("先确认被忽略文件是否可重建；不要把 ignored 文件自动当成可清理对象");
-  }
-  if (recommendations.length === 0) recommendations.push("没有需要清理的 dirty 内容");
-  return Object.freeze({
-    ref: branch,
-    head,
-    dirty: entries.length > 0,
-    status_digest: createHash("sha256").update(raw).digest("hex"),
-    counts,
-    entries: Object.freeze(entries),
-    recommendations: Object.freeze(recommendations),
-    cleanup: "只在用户明确同意具体路径后使用现有 authorize cleanup",
-  });
-}
-
-function acceptedWorkspaceExpectation(task) {
-  return workspaceExpectation(task);
-}
-
-function workspaceForCreation(task) {
-  const expected = deterministicWorkspace(task);
-  const { targetRepoRoot } = expected;
-  const baselineCommit = gitValue(targetRepoRoot, ["rev-parse", "--verify", "HEAD^{commit}"], "target repository HEAD");
-  if (!/^[a-f0-9]{40}$/i.test(baselineCommit)) throw new Error("target repository HEAD must be a full Git commit OID");
-  return { ...expected, baselineCommit, targetStatus: inspectTargetStatus(targetRepoRoot) };
-}
-
-function registeredWorktree(targetRepoRoot, worktreeRoot) {
-  const entries = gitValue(targetRepoRoot, ["worktree", "list", "--porcelain"], "task worktree registration")
-    .split(/\n\s*\n/)
-    .map((entry) => Object.fromEntries(entry.split("\n").filter(Boolean).map((line) => {
-      const separator = line.indexOf(" ");
-      return separator === -1 ? [line, true] : [line.slice(0, separator), line.slice(separator + 1)];
-    })));
-  return entries.find((entry) => typeof entry.worktree === "string" && resolve(entry.worktree) === worktreeRoot);
-}
-
-function symbolicBranchOrNull(root, label) {
-  try {
-    return gitValue(root, ["symbolic-ref", "--quiet", "--short", "HEAD"], label);
-  } catch (error) {
-    if (/not a symbolic ref|detached HEAD|HEAD is detached/i.test(String(error?.message ?? ""))) return null;
-    throw error;
-  }
-}
-
-/**
- * Validate a user-supplied existing trusted worktree once, before it is
- * persisted in a new task manifest. The returned paths are real, registered
- * Git worktrees that share one common directory; no branch name is required.
- */
-export function validateExistingWorkspaceBinding({ targetRepoRoot, workspaceRoot } = {}) {
-  const target = realGitToplevel(targetRepoRoot, "target repository");
-  const worktree = realGitToplevel(workspaceRoot, "workspace root");
-  const dotGit = lstatSync(join(worktree, ".git"));
-  if (!dotGit.isFile() || dotGit.isSymbolicLink()) {
-    throw new Error("workspace root must be a registered linked Git worktree");
-  }
-  const registration = registeredWorktree(target, worktree);
-  if (!registration) throw new Error("workspace root is not registered in the target repository");
-  if (gitCommonDir(worktree) !== gitCommonDir(target)) {
-    throw new Error("workspace root and target repository must share a Git common directory");
-  }
-  return Object.freeze({
-    targetRepoRoot: target,
-    worktreeRoot: worktree,
-    branch: symbolicBranchOrNull(worktree, "workspace branch"),
-    mode: "existing",
-    requireBranch: false,
-  });
-}
-
-function existingLegacyWorkspace(task) {
-  const target = realGitToplevel(task.manifest.target_repo_root, "target repository");
-  try {
-    return validateExistingWorkspaceBinding({ targetRepoRoot: target, workspaceRoot: target });
-  } catch (error) {
-    // A normal repository has a .git directory and is therefore not an
-    // existing linked worktree. Preserve the deterministic creation default;
-    // surface all other validation errors when an explicit binding exists.
-    const dotGit = join(target, ".git");
-    let stat;
-    try { stat = lstatSync(dotGit); } catch { return null; }
-    if (stat.isDirectory() && !stat.isSymbolicLink()) return null;
-    if (stat.isFile() && !stat.isSymbolicLink()) throw error;
-    return null;
-  }
 }
 
 function workspaceExpectation(task) {
-  const manifest = task.manifest;
-  const hasExplicitBinding = Object.prototype.hasOwnProperty.call(manifest, "workspace_mode")
-    || Object.prototype.hasOwnProperty.call(manifest, "workspace_root");
-  if (hasExplicitBinding) {
-    return validateExistingWorkspaceBinding({ targetRepoRoot: manifest.target_repo_root, workspaceRoot: manifest.workspace_root });
-  }
-  return existingLegacyWorkspace(task) ?? deterministicWorkspace(task);
-}
-
-function assertWorktreeRegistration(expected, label) {
-  const registration = registeredWorktree(expected.targetRepoRoot, expected.worktreeRoot);
-  if (!registration) throw new Error(`${label} is not registered at the authenticated task worktree path`);
-  if (expected.requireBranch && registration.branch !== `refs/heads/${expected.branch}`) {
-    throw new Error(`${label} registration does not use deterministic branch ${expected.branch}`);
-  }
-}
-
-function branchExists(targetRepoRoot, branch) {
-  try {
-    execFileSync("git", ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`], {
-      cwd: targetRepoRoot,
-      stdio: "ignore",
-    });
-    return true;
-  } catch (error) {
-    if (error?.status === 1) return false;
-    throw new Error(`task worktree branch validation failed: ${error.stderr?.toString().trim() || error.message}`);
-  }
-}
-
-function validateCandidate(task, expected, facts = {
-  worktree_root: expected.worktreeRoot,
-  baseline_commit: expected.baselineCommit,
-}) {
-  if (typeof facts?.worktree_root !== "string" || resolve(facts.worktree_root) !== expected.worktreeRoot) {
-    throw new Error(`make-decision worktree_root does not match the authenticated task workspace: ${facts?.worktree_root}`);
-  }
-  const realWorktree = realGitToplevel(expected.worktreeRoot, "task worktree");
-  if (realWorktree !== expected.worktreeRoot) throw new Error("task worktree realpath changed");
-  assertWorktreeRegistration(expected, "task worktree");
-  if (gitCommonDir(realWorktree) !== gitCommonDir(expected.targetRepoRoot)) throw new Error("task worktree and target repo must share a Git common directory");
-  gitValue(expected.targetRepoRoot, ["cat-file", "-e", `${expected.baselineCommit}^{commit}`], "task baseline commit");
-  if (expected.requireBranch && gitValue(realWorktree, ["symbolic-ref", "--quiet", "--short", "HEAD"], "task worktree branch") !== expected.branch) {
-    throw new Error(`task worktree must use deterministic branch ${expected.branch}`);
-  }
-  if (expected.requireClean
-      && gitValue(realWorktree, ["status", "--porcelain", "--untracked-files=all"], "task worktree status") !== "") {
-    throw new Error("task worktree must remain clean");
-  }
-  const identity = lstatSync(realWorktree);
-  const validate = () => {
-    const current = lstatSync(realWorktree);
-    if (!current.isDirectory() || current.isSymbolicLink() || current.dev !== identity.dev || current.ino !== identity.ino || realpathSync(realWorktree) !== realWorktree) {
-      throw new Error(`CandidateWorkspace directory identity changed: ${realWorktree}`);
+  const targetRepoRoot = realGitToplevel(task.manifest.target_repo_root, "target repository");
+  let existing = task.manifest.workspace_mode === "existing";
+  let existingRoot = existing ? task.manifest.workspace_root : null;
+  if (!existing && task.manifest.workspace_mode === undefined) {
+    const dotGit = lstatSync(join(targetRepoRoot, ".git"));
+    if (dotGit.isFile() && !dotGit.isSymbolicLink() && dotGit.nlink === 1) {
+      if (!registeredWorktree(targetRepoRoot, targetRepoRoot)) throw new Error("target linked workspace is not registered");
+      existing = true;
+      existingRoot = targetRepoRoot;
+    } else if (!dotGit.isDirectory() || dotGit.isSymbolicLink()) {
+      throw new Error("target Git metadata must be a real directory or single-link worktree file");
     }
-    assertWorktreeRegistration(expected, "CandidateWorkspace");
-    if (gitCommonDir(realWorktree) !== gitCommonDir(expected.targetRepoRoot)) throw new Error("CandidateWorkspace Git common directory changed");
-    if (expected.requireBranch && gitValue(realWorktree, ["symbolic-ref", "--quiet", "--short", "HEAD"], "CandidateWorkspace branch") !== expected.branch) throw new Error("CandidateWorkspace branch changed");
-    if (expected.requireClean
-        && gitValue(realWorktree, ["status", "--porcelain", "--untracked-files=all"], "CandidateWorkspace status") !== "") {
-      throw new Error("CandidateWorkspace must remain clean");
-    }
-    return true;
-  };
-  const candidate = {
-    baselineCommit: expected.baselineCommit,
-    targetRepoRoot: expected.targetRepoRoot,
-    branch: expected.branch,
-    targetStatus: expected.targetStatus ?? (expected.mode === "deterministic" ? inspectTargetStatus(expected.targetRepoRoot) : null),
-  };
-  Object.defineProperty(candidate, "worktreeRoot", { enumerable: true, get() { validate(); return realWorktree; } });
-  Object.defineProperty(candidate, "assertValid", { enumerable: false, value: validate });
-  Object.defineProperty(candidate, "captureSnapshot", { enumerable: false, value: () => {
-    validate();
-    return captureExecutionSnapshot(realWorktree, task.identity.taskId, task.manifest.activation_cohort ?? "pre");
-  } });
-  CANDIDATE_WORKSPACES.add(candidate);
-  return Object.freeze(candidate);
+  }
+  const worktreeRoot = existing ? resolve(existingRoot) : resolve(dirname(targetRepoRoot), `${basename(targetRepoRoot)}-${task.identity.taskId}`);
+  return { targetRepoRoot, worktreeRoot, branch: existing ? null : `task/${task.identity.projectName}/${task.identity.taskId}`, mode: existing ? "existing" : "deterministic" };
 }
-
-export function assertWorkspace(value) {
-  if (!value || typeof value !== "object" || !WORKSPACES.has(value)) throw new TypeError("authentic Workspace capability required");
-  value.assertValid();
+function registeredWorktree(targetRepoRoot, worktreeRoot) {
+  const fields = gitValue(targetRepoRoot, ["worktree", "list", "--porcelain", "-z"], "task worktree registration").split("\0");
+  for (let index = 0; index < fields.length; index += 1) if (fields[index].startsWith("worktree ") && resolve(fields[index].slice(9)) === worktreeRoot) {
+    let branch = null;
+    for (const field of fields.slice(index + 1)) { if (!field) break; if (field.startsWith("branch ")) branch = field.slice(7); }
+    return { worktree: worktreeRoot, branch };
+  }
+  return null;
+}
+async function checkedWorkspace(expected, baseline = "HEAD") {
+  const target = realGitToplevel(expected.targetRepoRoot, "target repository"), worktree = realGitToplevel(expected.worktreeRoot, "task worktree");
+  const dotGit = lstatSync(join(worktree, ".git"));
+  if (!dotGit.isFile() || dotGit.isSymbolicLink() || dotGit.nlink !== 1) throw new Error("task requires a registered linked Git worktree");
+  const physical = await inspectWorkspace({ root: target, target: worktree, baseline, ...(expected.branch ? { expectBranch: expected.branch } : {}) });
+  if (gitCommonDir(worktree) !== gitCommonDir(target)) throw new Error("task workspace differs from target Git repository");
+  return Object.freeze({ worktreeRoot: worktree, targetRepoRoot: target, baselineCommit: baseline === "HEAD" ? physical.head : baseline, branch: physical.branch });
+}
+export async function validateExistingWorkspaceBinding({ targetRepoRoot, workspaceRoot } = {}) {
+  const workspace = await checkedWorkspace({ targetRepoRoot, worktreeRoot: workspaceRoot, branch: null });
+  return Object.freeze({ ...workspace, mode: "existing", requireBranch: false });
+}
+export async function assertWorkspace(value) {
+  if (!value || typeof value !== "object" || typeof value.baselineCommit !== "string") throw new TypeError("workspace metadata is required");
+  await checkedWorkspace({ targetRepoRoot: value.targetRepoRoot, worktreeRoot: value.worktreeRoot, branch: value.branch }, value.baselineCommit);
   return value;
 }
-
-function sharedReviewBaseline(sourceRoot, targetRepoRoot) {
-  const sourceHead = gitValue(sourceRoot, ["rev-parse", "HEAD"], "review Workspace HEAD");
-  const targetHead = gitValue(targetRepoRoot, ["rev-parse", "HEAD"], "review target repository HEAD");
-  const bases = gitValue(sourceRoot, ["merge-base", "--all", targetHead, sourceHead], "review Workspace baseline")
-    .split(/\s+/)
-    .filter(Boolean);
-  if (bases.length !== 1) {
-    throw new Error(`review Workspace requires exactly one shared baseline commit, got ${bases.length}`);
-  }
-  return bases[0];
+export async function openCurrentTaskWorkspace(taskHandle) {
+  const task = assertTaskHandle(taskHandle);
+  return checkedWorkspace(workspaceExpectation(task), task.manifest.baseline_commit ?? "HEAD");
 }
-
-/** Return the immutable repository binding carried by an authentic accepted Workspace. */
-export function reviewSourceForWorkspace(value) {
-  const workspace = assertWorkspace(value);
-  const binding = WORKSPACE_BINDINGS.get(workspace);
-  if (!binding) throw new TypeError("Workspace review binding is unavailable");
-  return Object.freeze({
-    worktreeRoot: workspace.worktreeRoot,
-    targetRepoRoot: binding.targetRepoRoot,
-    // Workspace.baselineCommit is the current execution baseline. A review
-    // must instead compare the task branch with its shared repository fork
-    // point, otherwise a committed task appears as an empty diff.
-    baselineCommit: sharedReviewBaseline(workspace.worktreeRoot, binding.targetRepoRoot),
+async function inspectTargetStatus(targetRepoRoot) {
+  const physical = await inspectWorkspace({ root: targetRepoRoot, target: targetRepoRoot, baseline: "HEAD" });
+  return Object.freeze({ ref: physical.branch, head: physical.head, dirty: physical.dirty > 0, counts: physical.counts, entries: physical.dirty_paths,
+    recommendations: Object.freeze(physical.dirty ? ["先确认已修改和未跟踪文件的归属；不要自动覆盖或删除"] : ["没有需要清理的 dirty 内容"]) });
+}
+export async function prepareTaskWorkspace(taskHandle) {
+  if (arguments.length !== 1) throw new TypeError("prepareTaskWorkspace accepts only task metadata");
+  const task = assertTaskHandle(taskHandle);
+  if (task.manifest.activation_cohort !== "post") throw new Error("pre/history workspace creation is read-only");
+  const expected = workspaceExpectation(task);
+  if (expected.mode === "existing") return checkedWorkspace(expected, task.manifest.baseline_commit ?? "HEAD");
+  const pathExists = existsSync(expected.worktreeRoot);
+  let branchExists;
+  try { gitValue(expected.targetRepoRoot, ["show-ref", "--verify", "--quiet", `refs/heads/${expected.branch}`], "task branch"); branchExists = true; }
+  catch (error) { if (error?.cause?.status !== 1) throw error; branchExists = false; }
+  if (pathExists !== branchExists) throw new Error("deterministic task worktree path/branch conflict");
+  await inspectTargetStatus(expected.targetRepoRoot);
+  if (!pathExists) gitValue(expected.targetRepoRoot, ["worktree", "add", "-b", expected.branch, expected.worktreeRoot, "HEAD"], "task worktree creation");
+  return checkedWorkspace(expected, task.manifest.baseline_commit ?? "HEAD");
+}
+export async function reviewSourceForWorkspace(value) {
+  const workspace = await assertWorkspace(value);
+  const bases = gitValue(workspace.worktreeRoot, ["merge-base", "--all", gitValue(workspace.targetRepoRoot, ["rev-parse", "HEAD"], "review target HEAD"), "HEAD"], "review baseline").split(/\s+/).filter(Boolean);
+  if (bases.length !== 1) throw new Error("review workspace requires exactly one shared Git baseline");
+  return Object.freeze({ worktreeRoot: workspace.worktreeRoot, targetRepoRoot: workspace.targetRepoRoot, baselineCommit: bases[0] });
+}
+/** Task-owned removal execution; human Git authorization belongs to interface/git-authorize. */
+export function createTaskWorktreeRemoval(taskHandle) {
+  if (arguments.length !== 1) throw new TypeError("worktree removal uses current task metadata, not accepted records");
+  const task = assertTaskHandle(taskHandle), expected = workspaceExpectation(task);
+  if (expected.mode === "existing") return Object.freeze({
+    probe: () => ({ satisfied: true, skipped: true, reason: "existing worktree is not task-owned", worktree_root: expected.worktreeRoot }),
+    execute: async () => {}, verify: async value => value?.satisfied === true && value?.skipped === true && value?.worktree_root === expected.worktreeRoot,
   });
-}
-
-export function assertCandidateWorkspace(value) {
-  if (!value || typeof value !== "object" || !CANDIDATE_WORKSPACES.has(value)) throw new TypeError("authentic CandidateWorkspace capability required");
-  value.assertValid();
-  return value;
-}
-
-/** Create or validate the one deterministic worktree for this task. */
-export function prepareTaskWorkspace(taskHandle) {
-  if (arguments.length !== 1) throw new TypeError("prepareTaskWorkspace accepts only a TaskHandle; caller-supplied workspace paths are forbidden");
-  const task = assertTaskHandle(taskHandle);
-  const deterministic = acceptedWorkspaceExpectation(task);
-  if (deterministic.mode === "existing") {
-    const baselineCommit = gitValue(deterministic.worktreeRoot, ["rev-parse", "--verify", "HEAD^{commit}"], "existing task workspace HEAD");
-    if (!/^[a-f0-9]{40}$/i.test(baselineCommit)) throw new Error("existing task workspace HEAD must be a full Git commit OID");
-    return validateCandidate(task, { ...deterministic, baselineCommit });
-  }
-  const pathExists = existsSync(deterministic.worktreeRoot);
-  const refExists = branchExists(deterministic.targetRepoRoot, deterministic.branch);
-  if (pathExists !== refExists) throw new Error("deterministic task worktree path/branch conflict; refusing fallback or automatic repair");
-  if (!pathExists) {
-    const expected = workspaceForCreation(task);
-    try {
-      execFileSync("git", ["worktree", "add", "-b", expected.branch, expected.worktreeRoot, expected.baselineCommit], {
-        cwd: expected.targetRepoRoot,
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-    } catch (error) {
-      throw new Error(`task worktree creation failed: ${error.stderr?.toString().trim() || error.message}`);
-    }
-    return validateCandidate(task, expected);
-  }
-  const targetStatus = inspectTargetStatus(deterministic.targetRepoRoot);
-  const baselineCommit = gitValue(deterministic.worktreeRoot, ["rev-parse", "--verify", "HEAD^{commit}"], "existing task worktree HEAD");
-  if (!/^[a-f0-9]{40}$/i.test(baselineCommit)) throw new Error("existing task worktree HEAD must be a full Git commit OID");
-  return validateCandidate(task, { ...deterministic, baselineCommit, targetStatus });
-}
-
-/** Revalidate attempt facts against the deterministic worktree before acceptance. */
-export function validateTaskWorkspaceAttempt(taskHandle, facts) {
-  if (arguments.length !== 2) throw new TypeError("validateTaskWorkspaceAttempt requires TaskHandle and attempt facts");
-  const task = assertTaskHandle(taskHandle);
-  if (typeof facts?.baseline_commit !== "string" || !/^[a-f0-9]{40}$/i.test(facts.baseline_commit)) throw new Error("make-decision attempt baseline_commit must be a full Git commit OID");
-  return validateCandidate(task, { ...acceptedWorkspaceExpectation(task), baselineCommit: facts.baseline_commit }, facts);
-}
-
-/** Open the Workspace named only by the accepted make-decision result. */
-export function openAcceptedWorkspace(taskHandle, accepted) {
-  if (arguments.length !== 2) throw new TypeError("openAcceptedWorkspace requires TaskHandle and accepted make-decision result");
-  const task = assertTaskHandle(taskHandle);
-  const facts = accepted?.facts;
-  if (!facts || typeof facts !== "object" || Array.isArray(facts)) throw new Error("make-decision accepted result must contain facts");
-  if (typeof facts.worktree_root !== "string" || !isAbsolute(facts.worktree_root)) throw new Error("make-decision accepted facts.worktree_root must be absolute");
-  if (typeof facts.baseline_commit !== "string" || !/^[a-f0-9]{40}$/i.test(facts.baseline_commit.trim())) throw new Error("make-decision accepted facts.baseline_commit must be a Git commit OID");
-  const expected = acceptedWorkspaceExpectation(task);
-  if (resolve(facts.worktree_root) !== expected.worktreeRoot) throw new Error("accepted worktree_root does not match the deterministic task worktree");
-  const worktreeRoot = realGitToplevel(expected.worktreeRoot, "accepted worktree_root");
-  const targetRepoRoot = expected.targetRepoRoot;
-  if (worktreeRoot !== expected.worktreeRoot) throw new Error("accepted task worktree realpath changed");
-  assertWorktreeRegistration(expected, "accepted Workspace");
-  if (gitCommonDir(worktreeRoot) !== gitCommonDir(targetRepoRoot)) throw new Error("accepted worktree and target repo must share a Git common directory");
-  if (expected.requireBranch && gitValue(worktreeRoot, ["symbolic-ref", "--quiet", "--short", "HEAD"], "accepted Workspace branch") !== expected.branch) {
-    throw new Error(`accepted Workspace must use deterministic branch ${expected.branch}`);
-  }
-  gitValue(worktreeRoot, ["cat-file", "-e", `${facts.baseline_commit.trim()}^{commit}`], "baseline commit");
-  const identityStat = lstatSync(worktreeRoot);
-  const validateWorkspace = () => {
-    const current = lstatSync(worktreeRoot);
-    if (!current.isDirectory() || current.isSymbolicLink() || current.dev !== identityStat.dev || current.ino !== identityStat.ino || realpathSync(worktreeRoot) !== worktreeRoot) {
-      throw new Error(`Workspace directory identity changed: ${worktreeRoot}`);
-    }
-    assertWorktreeRegistration(expected, "Workspace");
-    if (gitCommonDir(worktreeRoot) !== gitCommonDir(targetRepoRoot)) throw new Error("Workspace Git common directory changed");
-    if (expected.requireBranch && gitValue(worktreeRoot, ["symbolic-ref", "--quiet", "--short", "HEAD"], "Workspace branch") !== expected.branch) {
-      throw new Error(`Workspace branch changed from deterministic branch ${expected.branch}`);
-    }
-    return true;
-  };
-  const workspace = { baselineCommit: facts.baseline_commit.trim() };
-  Object.defineProperty(workspace, "worktreeRoot", { enumerable: true, get() { validateWorkspace(); return worktreeRoot; } });
-  Object.defineProperty(workspace, "assertValid", { enumerable: false, value: validateWorkspace });
-  WORKSPACES.add(workspace);
-  WORKSPACE_BINDINGS.set(workspace, Object.freeze({ task, targetRepoRoot, worktreeRoot }));
-  return Object.freeze(workspace);
-}
-
-/** Open the live task worktree without consulting lifecycle/audit records. */
-export function openCurrentTaskWorkspace(taskHandle) {
-  if (arguments.length !== 1) throw new TypeError("openCurrentTaskWorkspace accepts only a TaskHandle");
-  const task = assertTaskHandle(taskHandle);
-  // Migration lineage supplies only the current worktree location; it does
-  // not read or require an accepted stage result.
-  const expected = acceptedWorkspaceExpectation(task);
-  const worktreeRoot = realGitToplevel(expected.worktreeRoot, "current task worktree");
-  if (worktreeRoot !== expected.worktreeRoot) throw new Error("current task worktree realpath changed");
-  assertWorktreeRegistration(expected, "current task Workspace");
-  if (gitCommonDir(worktreeRoot) !== gitCommonDir(expected.targetRepoRoot)) {
-    throw new Error("current task Workspace and target repo must share a Git common directory");
-  }
-  if (expected.requireBranch && gitValue(worktreeRoot, ["symbolic-ref", "--quiet", "--short", "HEAD"], "current task Workspace branch") !== expected.branch) {
-    throw new Error(`current task Workspace must use deterministic branch ${expected.branch}`);
-  }
-  const identityStat = lstatSync(worktreeRoot);
-  const validateWorkspace = () => {
-    const current = lstatSync(worktreeRoot);
-    if (!current.isDirectory() || current.isSymbolicLink() || current.dev !== identityStat.dev || current.ino !== identityStat.ino || realpathSync(worktreeRoot) !== worktreeRoot) {
-      throw new Error(`Workspace directory identity changed: ${worktreeRoot}`);
-    }
-    assertWorktreeRegistration(expected, "current task Workspace");
-    if (gitCommonDir(worktreeRoot) !== gitCommonDir(expected.targetRepoRoot)) {
-      throw new Error("current task Workspace Git common directory changed");
-    }
-    if (expected.requireBranch && gitValue(worktreeRoot, ["symbolic-ref", "--quiet", "--short", "HEAD"], "current task Workspace branch") !== expected.branch) {
-      throw new Error(`current task Workspace branch changed from deterministic branch ${expected.branch}`);
-    }
-    return true;
-  };
-  const workspace = { baselineCommit: gitValue(worktreeRoot, ["rev-parse", "HEAD"], "current task worktree HEAD") };
-  Object.defineProperty(workspace, "worktreeRoot", { enumerable: true, get() { validateWorkspace(); return worktreeRoot; } });
-  Object.defineProperty(workspace, "assertValid", { enumerable: false, value: validateWorkspace });
-  WORKSPACES.add(workspace);
-  WORKSPACE_BINDINGS.set(workspace, Object.freeze({ task, targetRepoRoot: expected.targetRepoRoot, worktreeRoot }));
-  return Object.freeze(workspace);
-}
-
-/** Mint a restart-safe remove executor from authenticated accepted facts. */
-export function createTaskWorktreeRemoval(taskHandle, acceptedBinding) {
-  if (arguments.length !== 2) throw new TypeError("createTaskWorktreeRemoval requires TaskHandle and authenticated accepted binding");
-  const task = assertTaskHandle(taskHandle);
-  const expected = acceptedWorkspaceExpectation(task);
-  if (expected.mode === "existing") {
-    return Object.freeze({
-      probe: () => ({ satisfied: true, skipped: true, reason: "authenticated existing Workspace is not task-owned; task worktree directory is preserved", worktree_root: expected.worktreeRoot }),
-      execute: async () => {},
-      verify: async (value) => value?.satisfied === true && value?.skipped === true && value?.worktree_root === expected.worktreeRoot,
-    });
-  }
-  if (acceptedBinding?.taskId !== task.identity.taskId || acceptedBinding?.stage !== "make-decision") {
-    throw new Error("authenticated accepted make-decision identity mismatch for worktree removal");
-  }
-  if (resolve(acceptedBinding?.worktreeRoot ?? "") !== expected.worktreeRoot || typeof acceptedBinding?.baselineCommit !== "string" || !/^[a-f0-9]{40}$/i.test(acceptedBinding.baselineCommit)) {
-    throw new Error("accepted make-decision does not match the deterministic task worktree");
-  }
-  gitValue(expected.targetRepoRoot, ["cat-file", "-e", `${acceptedBinding.baselineCommit}^{commit}`], "accepted worktree baseline");
   const observe = () => {
-    const pathExists = existsSync(expected.worktreeRoot);
-    const registration = registeredWorktree(expected.targetRepoRoot, expected.worktreeRoot);
-    if (!pathExists && !registration) return { satisfied: true, worktree_root: expected.worktreeRoot };
-    if (pathExists !== Boolean(registration)) throw new Error("task worktree path/registration mismatch during removal");
-    if (registration.branch !== `refs/heads/${expected.branch}`) throw new Error(`task worktree registration changed from deterministic branch ${expected.branch}`);
-    const realWorktree = realGitToplevel(expected.worktreeRoot, "task worktree removal target");
-    if (realWorktree !== expected.worktreeRoot) throw new Error("task worktree removal target realpath changed");
-    if (gitCommonDir(realWorktree) !== gitCommonDir(expected.targetRepoRoot)) throw new Error("task worktree removal target Git common directory changed");
-    if (gitValue(realWorktree, ["symbolic-ref", "--quiet", "--short", "HEAD"], "task worktree removal branch") !== expected.branch) {
-      throw new Error(`task worktree removal target branch changed from ${expected.branch}`);
-    }
+    const exists = existsSync(expected.worktreeRoot), registered = registeredWorktree(expected.targetRepoRoot, expected.worktreeRoot);
+    if (!exists && !registered) return { satisfied: true, worktree_root: expected.worktreeRoot };
+    if (exists !== Boolean(registered)) throw new Error("task worktree path/registration mismatch during removal");
+    const root = realGitToplevel(expected.worktreeRoot, "worktree removal target");
+    if (root !== expected.worktreeRoot || gitCommonDir(root) !== gitCommonDir(expected.targetRepoRoot) || registered.branch !== `refs/heads/${expected.branch}` || gitValue(root, ["symbolic-ref", "--quiet", "--short", "HEAD"], "worktree removal branch") !== expected.branch) throw new Error("task worktree registration, repository or branch changed");
     return { satisfied: false, worktree_root: expected.worktreeRoot };
   };
-  return Object.freeze({
-    probe: observe,
+  return Object.freeze({ probe: observe,
     execute: async () => {
+      if (task.manifest.activation_cohort !== "post") throw new Error("pre/history worktree removal is read-only");
       if (observe().satisfied) return;
+      await checkedWorkspace(expected);
       const cleanup = inspectWorktreeCleanup(expected.worktreeRoot);
       if (!cleanup.safe) throw cleanupError(cleanup);
       for (const entry of cleanup.ignored_generated) removeKnownIgnoredGenerated(expected.worktreeRoot, entry);
-      for (const entry of cleanup.execution_sidecars) {
-        if (entry.status === "??" || entry.status === "!!") removeKnownExecutionSidecar(expected.worktreeRoot, entry);
-        else restoreTrackedExecutionSidecar(expected.worktreeRoot, entry);
-      }
-      const afterCleanup = inspectWorktreeCleanup(expected.worktreeRoot);
-      if (!afterCleanup.safe) throw cleanupError(afterCleanup);
-      execFileSync("git", ["worktree", "remove", "--", expected.worktreeRoot], { cwd: expected.targetRepoRoot, stdio: ["ignore", "pipe", "pipe"] });
-    },
-    verify: async (value) => value.satisfied === true && value.worktree_root === expected.worktreeRoot,
+      for (const entry of cleanup.execution_sidecars) { if (entry.status === "??" || entry.status === "!!") removeKnownExecutionSidecar(expected.worktreeRoot, entry); else restoreTrackedExecutionSidecar(expected.worktreeRoot, entry); }
+      const after = inspectWorktreeCleanup(expected.worktreeRoot); if (!after.safe) throw cleanupError(after);
+      observe(); gitValue(expected.targetRepoRoot, ["worktree", "remove", "--", expected.worktreeRoot], "task worktree removal");
+    }, verify: async value => value?.satisfied === true && value?.worktree_root === expected.worktreeRoot,
   });
 }

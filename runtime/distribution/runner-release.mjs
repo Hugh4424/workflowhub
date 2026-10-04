@@ -1,4 +1,3 @@
-import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -6,11 +5,6 @@ import { fileURLToPath } from "node:url";
 
 import { assertRunnerCompatibility, createRunnerContract } from "../interface/runner-contract.mjs";
 import { validateSkillBundleRelease } from "./skill-bundle-release.mjs";
-import { SHA256_HEX } from "../evidence/canonical-utils.mjs";
-
-function sha256(bytes) {
-  return crypto.createHash("sha256").update(bytes).digest("hex");
-}
 
 function filesUnder(root, relative, predicate = () => true) {
   const source = path.join(root, relative);
@@ -33,7 +27,7 @@ async function copy(root, destination, locator) {
   const target = path.join(destination, locator);
   await fs.promises.mkdir(path.dirname(target), { recursive: true });
   await fs.promises.writeFile(target, bytes, { flag: "wx" });
-  return { path: locator, sha256: sha256(bytes) };
+  return { path: locator };
 }
 
 function addStaticDependencies(root, locators) {
@@ -78,41 +72,12 @@ const RUNNER_ENTRYPOINTS = Object.freeze([
 // the list explicit: a source checkout may contain historical or private
 // schemas that are not Runner inputs.
 const RUNNER_SCHEMA_DEPENDENCIES = Object.freeze([
-  "runtime/review/schemas/ac-evidence-summary.schema.json",
-  "runtime/review/schemas/attempt.schema.json",
   "runtime/review/schemas/result.schema.json",
   "runtime/review/schemas/stage-materials.schema.json",
   "runtime/review/stage-materials.json",
-  "runtime/schemas/ambiguity-ledger.v1.json",
-  "runtime/schemas/ambiguity-ledger.v2.json",
-  "runtime/schemas/browser-qa-evidence.v1.json",
-  "runtime/schemas/decision-correction-appendix.v1.json",
-  "runtime/schemas/decision-coverage-audit.v1.json",
-  "runtime/schemas/decision-entry.v1.json",
-  "runtime/schemas/decision-log-contract.v1.json",
-  "runtime/schemas/decision-omission-acceptance.v1.json",
   "runtime/schemas/human-confirmation.v1.schema.json",
   "runtime/schemas/interaction-completion.v1.json",
-  "runtime/schemas/plan-task-contract.v1.json",
-  "runtime/schemas/plan-task-contract.v2.json",
-  "runtime/schemas/quality-fact.v1.json",
-  "runtime/schemas/repository-structure.v1.json",
-  "runtime/schemas/requirement-ledger.schema.json",
-  "runtime/schemas/requirements-coverage.schema.json",
-  "runtime/schemas/research-report.v1.json",
-  "runtime/schemas/review-bundle.schema.json",
   "runtime/schemas/risk-acceptance.v1.json",
-  "runtime/schemas/runner-release.schema.json",
-  "runtime/schemas/source-manifest.schema.json",
-  "runtime/schemas/stage-completion-facts.v1.json",
-  "runtime/schemas/stage-content-evidence.v1.json",
-  "runtime/schemas/stage-reflection.v1.json",
-  "runtime/schemas/stage-reflection.v2.json",
-  "runtime/schemas/stage-skill-deps.schema.json",
-  "runtime/schemas/steps.schema.json",
-  "runtime/schemas/task-fact.v1.json",
-  "runtime/schemas/task-index.v1.json",
-  "runtime/schemas/workflow-evolution.v1.json",
 ]);
 
 function collectRunnerReleaseFiles(root) {
@@ -121,10 +86,7 @@ function collectRunnerReleaseFiles(root) {
     "CONSTITUTION.md",
     "package.json",
     "package-lock.json",
-    // installRunnerRelease reads this schema after npm ci. Its declaration
-    // must be present even if both file and manifest entry were removed.
-    "runtime/schemas/runner-release.schema.json",
-    ...RUNNER_ENTRYPOINTS,
+      ...RUNNER_ENTRYPOINTS,
     ...RUNNER_SCHEMA_DEPENDENCIES,
     ...filesUnder(root, "contracts", (locator) => locator.endsWith(".json")),
     ...filesUnder(root, "config", (locator) => /\.(?:ya?ml|json)$/.test(locator)),
@@ -170,8 +132,8 @@ export function validateRunnerRelease({ releaseRoot, skillBundleManifest } = {})
   createRunnerContract({ major: manifest.runner_contract_major, minor: manifest.runner_contract_minor });
   const seen = new Set();
   for (const entry of manifest.files) {
-    if (!entry || typeof entry.path !== "string" || !SHA256_HEX.test(entry.sha256 ?? "")
-        || Object.keys(entry).some((key) => !new Set(["path", "sha256"]).has(key))
+    if (!entry || typeof entry.path !== "string"
+        || Object.keys(entry).some((key) => !new Set(["path"]).has(key))
         || path.isAbsolute(entry.path) || entry.path.split(/[\\/]/).includes("..") || seen.has(entry.path)) {
       throw new Error("runner release file manifest is invalid");
     }
@@ -180,10 +142,9 @@ export function validateRunnerRelease({ releaseRoot, skillBundleManifest } = {})
     if (!fs.existsSync(source) || !fs.lstatSync(source).isFile() || fs.lstatSync(source).isSymbolicLink()) {
       throw new Error(`runner release file is missing or unsafe: ${entry.path}`);
     }
-    if (sha256(fs.readFileSync(source)) !== entry.sha256) throw new Error(`runner release hash mismatch: ${entry.path}`);
   }
   // Reconstruct the same entrypoint/data/import closure in the release. A
-  // file sitting on disk but omitted from the hash-bound file set is not verified
+  // file sitting on disk but omitted from the declared file set is not included
   // input, and missing imports must fail here before npm or runtime dispatch.
   for (const locator of collectRunnerReleaseFiles(root)) {
     if (!seen.has(locator)) throw new Error(`runner release required file is undeclared: ${locator}`);
@@ -202,7 +163,7 @@ export function installRunnerRelease({ releaseRoot, skillBundleRoot, env, run = 
     const source = path.join(bundleRoot, entry.path);
     const target = path.join(root, entry.path);
     fs.mkdirSync(path.dirname(target), { recursive: true });
-    if (fs.existsSync(target) && sha256(fs.readFileSync(target)) !== entry.sha256) {
+    if (fs.existsSync(target) && !fs.readFileSync(target).equals(fs.readFileSync(source))) {
       throw new Error(`runner and Skill Bundle disagree on shared file: ${entry.path}`);
     }
     if (!fs.existsSync(target)) fs.copyFileSync(source, target, fs.constants.COPYFILE_EXCL);
@@ -216,14 +177,9 @@ export function installRunnerRelease({ releaseRoot, skillBundleRoot, env, run = 
   if (result.error || result.status !== 0) {
     throw new Error(`runner clean install failed: ${result.error?.message ?? result.stderr ?? `exit ${result.status}`}`);
   }
-  const schemaCheck = run("node", ["--input-type=module", "-e", [
-    "import fs from 'node:fs';",
-    "import Ajv2020 from 'ajv/dist/2020.js';",
-    "const schema=JSON.parse(fs.readFileSync('runtime/schemas/runner-release.schema.json','utf8'));",
-    "const value=JSON.parse(fs.readFileSync('runner-release.json','utf8'));",
-    "if(!new Ajv2020({strict:false}).compile(schema)(value)) process.exit(1);",
-  ].join("")], { cwd: root, encoding: "utf8", shell: false, ...(env === undefined ? {} : { env }) });
-  if (schemaCheck.error || schemaCheck.status !== 0) throw new Error("installed runner release failed schema validation");
+  // Recheck the current ordinary filename/compatibility contract after install;
+  // the retired hash-manifest AJV schema is not an installation dependency.
+  validateRunnerRelease({ releaseRoot: root, skillBundleManifest });
   fs.writeFileSync(path.join(root, ".gitignore"), "node_modules/\n", { flag: "wx" });
   const gitCommands = [
     ["init", "-q"],

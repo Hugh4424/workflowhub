@@ -1,19 +1,11 @@
+// Historical review projection only. New review facts use review-record-route.
 import { posix } from "node:path";
-import { Buffer } from "node:buffer";
-import { assertTaskHandle } from "../../../runtime/task/task-handle.mjs";
-import { createCanonicalReviewWriter } from "../../../runtime/evidence/canonical-receipt-writer.mjs";
+
 import { aggregateCanonicalProviderResults } from "../../../runtime/review/canonical-review-result.mjs";
 
 function safePart(value, label) {
   if (typeof value !== "string" || !/^[a-zA-Z0-9._-]+$/.test(value)) throw new TypeError(`${label} is invalid`);
   return value;
-}
-
-function providerFilePart(provider) {
-  if (typeof provider !== "string" || provider.length === 0) throw new TypeError("provider is invalid");
-  // Provider profile IDs intentionally use `adapter/profile`. Encode only the
-  // filename component: records keep the original profile ID for attribution.
-  return `p-${Buffer.from(provider, "utf8").toString("base64url")}`;
 }
 
 export function aggregateProviderResults(providerResults, minimumReviewers = 1, { profilePriority = [], requireIdentity = false, requireSourceId = false } = {}) {
@@ -27,9 +19,6 @@ const DISPOSITION_DECISIONS = new Set([
   "accept", "partial", "reject",
 ]);
 
-// A disposition is the smallest durable fact needed after a finding is
-// consumed. Replay bindings and re-review orchestration are retired and are
-// deliberately not part of this contract.
 export function validateReviewDisposition(value) {
   const errors = [];
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -63,36 +52,6 @@ export function reviewRefs({ attemptId, stage, reviewTrack, snapshotTree, root =
     resultRef: posix.join(reviewRoot, "results", resultName),
     reportRef: posix.join(reviewRoot, "reports", `${id}.md`),
   };
-}
-
-export function writeProviderOutput(task, directoryRef, provider, output, sequence = 1, provenance = {}) {
-  if (typeof output !== "string") return null;
-  const suffix = sequence === 1 ? "" : `-${sequence}`;
-  const ref = posix.join(directoryRef, `${providerFilePart(provider)}${suffix}.output.json`);
-  const safeTask = assertTaskHandle(task);
-  return createCanonicalReviewWriter({ task: safeTask, taskId: provenance.taskId, stage: provenance.stage }).writeProviderOutput(ref, output, {
-    provider,
-    ...(provenance.evidence_anchor_valid === undefined ? {} : { evidence_anchor_valid: provenance.evidence_anchor_valid }),
-  });
-}
-
-export function writeAttempt(task, ref, attempt) {
-  for (const providerAttempt of attempt?.provider_attempts ?? []) {
-    if (Object.hasOwn(providerAttempt, "session_artifact_path")) {
-      throw new TypeError("session_artifact_path is legacy-only and cannot be written by managed wh-review");
-    }
-    if (Object.hasOwn(providerAttempt?.execution ?? {}, "session_file_path") ||
-        Object.hasOwn(providerAttempt?.execution ?? {}, "raw_output_ref")) {
-      throw new TypeError("broker private session/output fields cannot be written by managed wh-review");
-    }
-  }
-  const safeTask = assertTaskHandle(task);
-  return createCanonicalReviewWriter({ task: safeTask, taskId: attempt?.task_id, stage: attempt?.stage }).writeAttempt(ref, attempt);
-}
-
-export function writeSemanticResult(task, ref, result) {
-  const safeTask = assertTaskHandle(task);
-  return createCanonicalReviewWriter({ task: safeTask, taskId: result?.task_id, stage: result?.stage }).writeResult(ref, result);
 }
 
 function markdown(value) { return String(value ?? "").replaceAll("|", "\\|").replaceAll("\n", " "); }
@@ -169,9 +128,6 @@ const FAILURE_CATEGORIES = Object.freeze({
   UNKNOWN: "unknown",
 });
 
-// These are transport/protocol facts, not semantic review findings. Keep them
-// distinct so a public-result safety failure is diagnosable instead of being
-// collapsed into UNKNOWN in the report.
 const ATTEMPT_CLASS_CODES = new Set([
   "OUTPUT_INVALID",
   "PROVIDER_OUTPUT_INVALID",
@@ -203,6 +159,7 @@ const PROCESS_OUTCOME_CLASSIFICATION = Object.freeze({
   timeout: "PROCESS_TIMEOUT",
   launch_failure: "BROKER_SPAWN_FAILED",
 });
+
 const PARSE_OUTCOME_CLASSIFICATION = Object.freeze({
   invalid: "PROVIDER_OUTPUT_INVALID",
   empty_output: "PROVIDER_NO_TERMINAL_RESULT",
@@ -383,7 +340,3 @@ export function renderReviewReport({ attempt, result = null }) {
   return `${lines.join("\n")}\n`;
 }
 
-export function writeReviewReport(task, ref, { attempt, result = null }) {
-  return createCanonicalReviewWriter({ task: assertTaskHandle(task), taskId: attempt.task_id, stage: attempt.stage })
-    .writeReport(ref, renderReviewReport({ attempt, result }));
-}

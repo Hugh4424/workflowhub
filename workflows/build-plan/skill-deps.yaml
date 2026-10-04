@@ -1,24 +1,108 @@
 stage: build-plan
 skills:
-  - { name: spec-research, path: skills/spec-research/SKILL.md, execution: independent, trigger: real_research_question, bundle: skills/spec-research/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#testFacts", inputs: ["receipts.research"], identity: ["task_id", "stage", "workspace_path"], result: "facts.research" } }
-  - { name: spec-clarify, path: skills/spec-clarify/SKILL.md, execution: inline, trigger: material_specification_ambiguity, bundle: skills/spec-clarify/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#clarifyFacts", inputs: ["receipts.clarify"], identity: ["task_id", "stage", "workspace_path"], result: "facts.clarify" } }
-  - { name: spec-specify, path: skills/spec-specify/SKILL.md, execution: inline, trigger: product_spec_authoring, bundle: skills/spec-specify/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#officialStageHandler(\"build-plan\")", inputs: ["artifacts.spec.md"], identity: ["task_id", "stage", "workspace_path"], result: "facts.spec_ref" } }
-  - { name: spec-plan, path: skills/spec-plan/SKILL.md, execution: inline, trigger: plan_design, bundle: skills/spec-plan/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#officialStageHandler(\"build-plan\")", inputs: ["artifacts.spec.md", "artifacts.phase_authorities"], identity: ["task_id", "stage", "workspace_path"], result: "facts.phase_refs" } }
-  - { name: simplicity-guard, path: skills/simplicity-guard/SKILL.md, execution: inline, trigger: simplicity_check, bundle: skills/simplicity-guard/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#safeReviewFacts", inputs: ["receipts.review"], identity: ["task_id", "stage", "workspace_path"], result: "facts.review" } }
-  - { name: plan-eng-review, path: skills/plan-eng-review/SKILL.md, execution: inline, trigger: engineering_plan_check, bundle: skills/plan-eng-review/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#safeReviewFacts", inputs: ["receipts.review"], identity: ["task_id", "stage", "workspace_path"], result: "facts.review" } }
-  - { name: testing-system-blueprint, path: skills/testing-system-blueprint/SKILL.md, execution: inline, trigger: phase_test_design, bundle: skills/testing-system-blueprint/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#officialStageHandler(\"build-plan\")", inputs: ["artifacts.spec.md", "artifacts.phase_authorities"], identity: ["task_id", "stage", "workspace_path"], result: "facts.test_strategy" } }
-  - { name: frontend-component-quality, path: skills/frontend-component-quality/SKILL.md, execution: inline, trigger: ui_scope, bundle: skills/frontend-component-quality/skill-bundle.json, owner: stage, consumer: { target: "stage-content-contracts#validateComponentQualityMap", inputs: ["contract_facts.component_quality_map"], identity: ["task_id", "stage", "workspace_path"], result: "facts.component_quality" } }
-  - { name: test-routing-advisor, path: skills/test-routing-advisor/SKILL.md, execution: independent, trigger: task_test_routing, bundle: skills/test-routing-advisor/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#officialStageHandler(\"build-plan\")", inputs: ["artifacts.spec.md", "artifacts.phase_authorities"], identity: ["task_id", "stage", "workspace_path"], result: "facts.test_routing" } }
-  - { name: spec-tasks, path: skills/spec-tasks/SKILL.md, execution: inline, trigger: task_design, bundle: skills/spec-tasks/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#officialStageHandler(\"build-plan\")", inputs: ["artifacts.phase_index"], identity: ["task_id", "stage", "workspace_path"], result: "facts.phase_index_ref" } }
-  - { name: spec-analyze, path: skills/spec-analyze/SKILL.md, execution: inline, trigger: stage_end_consistency, bundle: skills/spec-analyze/skill-bundle.json, owner: stage, consumer: { target: "stage-runner#validateStageSpecAnalyzeOutcome", inputs: ["artifacts.raw_requirement", "artifacts.decision-log.md", "artifacts.spec.md", "artifacts.phase_authorities", "artifacts.phase_index"], identity: ["task_id", "stage", "workspace_path"], result: "facts" } }
-  - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, trigger: review, bundle: skills/wh-review/skill-bundle.json, owner: stage, consumer: { target: "stage-handlers#safeReviewFacts", inputs: ["receipts.review"], identity: ["task_id", "stage", "workspace_path"], result: "facts.review" } }
-  - { name: stage-reflection, path: skills/stage-reflection/SKILL.md, execution: inline, trigger: on_stage_end, bundle: skills/stage-reflection/skill-bundle.json, owner: stage, consumer: { target: "stage-runner#runStageEndReflection", inputs: ["artifacts.decision-log.md", "artifacts.spec.md", "artifacts.phase_authorities", "artifacts.phase_index"], identity: ["task_id", "stage", "workspace_path"], result: "stage_reflection" } }
-  - { name: stage-handoff, path: skills/stage-handoff/SKILL.md, execution: inline, trigger: on_stage_end, bundle: skills/stage-handoff/skill-bundle.json, owner: stage, consumer: { target: "stage-runner#runStageEndReflection", inputs: ["artifacts.decision-log.md", "artifacts.spec.md", "artifacts.phase_authorities", "artifacts.phase_index"], identity: ["task_id", "stage", "workspace_path"], result: "stage_handoff" } }
+  - name: spec-research
+    path: skills/spec-research/SKILL.md
+    trigger: real_research_question
+  - name: spec-clarify
+    path: skills/spec-clarify/SKILL.md
+    trigger: material_specification_ambiguity
+  - name: spec-specify
+    path: skills/spec-specify/SKILL.md
+    trigger: product_spec_authoring
+  - name: spec-plan
+    path: skills/spec-plan/SKILL.md
+    trigger: plan_design
+  - name: simplicity-guard
+    path: skills/simplicity-guard/SKILL.md
+    trigger: simplicity_check
+  - name: plan-eng-review
+    path: skills/plan-eng-review/SKILL.md
+    trigger: engineering_plan_check
+  - name: testing-system-blueprint
+    path: skills/testing-system-blueprint/SKILL.md
+    trigger: phase_test_design
+  - name: frontend-component-quality
+    path: skills/frontend-component-quality/SKILL.md
+    trigger: ui_scope
+  - name: test-routing-advisor
+    path: skills/test-routing-advisor/SKILL.md
+    trigger: task_test_routing
+  - name: spec-tasks
+    path: skills/spec-tasks/SKILL.md
+    trigger: task_design
+  - name: spec-analyze
+    path: skills/spec-analyze/SKILL.md
+    trigger: stage_end_consistency
+  - name: wh-review
+    path: skills/wh-review/SKILL.md
+    trigger: review
+  - name: stage-handoff
+    path: skills/stage-handoff/SKILL.md
+    trigger: stage_end_human_handoff
+  - name: ui-project-init
+    path: skills/ui-project-init/SKILL.md
+    trigger: ui_scope_existing_project_baseline
+  - name: design-source-readiness
+    path: skills/design-source-readiness/SKILL.md
+    trigger: ui_scope_readable_design_sources
+  - name: frontend-prototype-render
+    path: skills/frontend-prototype-render/SKILL.md
+    trigger: ui_scope_actual_prototype_preview
+  - name: plan-design-review
+    path: skills/plan-design-review/SKILL.md
+    trigger: ui_scope_design_lens_in_merged_review
 runtime_capabilities:
-  - { id: node, kind: cli, version_policy: ">=24", doctor: [node, --version], required_when: always, absence_semantics: diagnostic }
-  - { id: shell, kind: cli, doctor: [sh, -c, "exit 0"], required_when: always, absence_semantics: diagnostic }
-  - { id: git, kind: cli, doctor: [git, --version], required_when: always, absence_semantics: diagnostic }
-  - { id: process, kind: cli, doctor: [ps, -p, "1"], required_when: research_or_review, absence_semantics: diagnostic }
+  - id: node
+    kind: cli
+    version_policy: '>=24'
+    doctor:
+      - node
+      - '--version'
+    required_when: always
+    absence_semantics: diagnostic
+  - id: shell
+    kind: cli
+    doctor:
+      - sh
+      - '-c'
+      - exit 0
+    required_when: always
+    absence_semantics: diagnostic
+  - id: git
+    kind: cli
+    doctor:
+      - git
+      - '--version'
+    required_when: always
+    absence_semantics: diagnostic
+  - id: process
+    kind: cli
+    doctor:
+      - ps
+      - '-p'
+      - '1'
+    required_when: research_or_review
+    absence_semantics: diagnostic
 external_capabilities:
-  - { id: host-subagent, kind: host, doctor: [host-capability, host-subagent], required_when: research_or_review, absence_semantics: diagnostic }
-  - { id: wh-review-provider, kind: review, doctor: [workflowhub-capability, wh-review-provider], required_when: review, absence_semantics: diagnostic }
+  - id: ocr-cli
+    kind: cli
+    version_policy: '>=1.12.9'
+    doctor:
+      - ocr
+      - '--version'
+    required_when: code_review
+    absence_semantics: diagnostic
+  - id: host-subagent
+    kind: host
+    doctor:
+      - host-capability
+      - host-subagent
+    required_when: research_or_review
+    absence_semantics: diagnostic
+  - id: wh-review-provider
+    kind: review
+    doctor:
+      - workflowhub-capability
+      - wh-review-provider
+    required_when: review
+    absence_semantics: diagnostic

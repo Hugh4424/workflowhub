@@ -1,66 +1,26 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
-import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
-import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
-import { ArtifactDir } from "../../core/artifact-dir.mjs";
-import { createSimpleReviewPacket, runSimpleReview } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
+import { join } from "node:path";
+import { createTask } from "../../runtime/task/task-handle.mjs";
+import { runSimpleReview } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 import { BROKER_HOST_PROVIDER, ReviewProviderClient } from "../../skills/wh-review/scripts/review-provider-client.mjs";
 import { recordSimpleReviewRequest } from "../../runtime/review/review-record-route.mjs";
 
 const sha = (value) => createHash("sha256").update(value).digest("hex");
 const evidence = { ref: "quality/reviews/material.json", sha256: sha("evidence") };
 const materials = { implementation: "managed review" };
-const packet = createSimpleReviewPacket({ stage: "verify-code", materials, authenticated_evidence: evidence });
-const materialId = packet.material_id;
-const evidenceHash = packet.authenticated_evidence_sha256;
+// Controlled ordinary broker-wire identifier, not a packet/snapshot certificate.
+const materialId = "owned-managed-material";
 const roots = [];
-const retryingCleanupRoots = new Set();
-const cleanupReadyRoots = new Set();
-const retryableCleanupErrors = new Set(["ENOTEMPTY", "EBUSY"]);
-function makeTemporaryDirectoriesRemovable(root) {
-  const stat = lstatSync(root);
-  if (!stat.isDirectory()) return;
-  const mode = stat.mode & 0o777;
-  if ((mode & 0o200) === 0) chmodSync(root, mode | 0o200);
-  for (const entry of readdirSync(root, { withFileTypes: true })) {
-    const child = join(root, entry.name);
-    if (lstatSync(child).isDirectory()) makeTemporaryDirectoriesRemovable(child);
-  }
-}
-async function removeTemporaryRootAfterRuntimeCleanup(root) {
-  for (let attempt = 0; ; attempt += 1) {
-    try {
-      rmSync(root, { recursive: true, force: true });
-      return;
-    } catch (error) {
-      if (!retryableCleanupErrors.has(error?.code) || attempt >= 7) throw error;
-      await new Promise((resolveDelay) => setTimeout(resolveDelay, 50));
-    }
-  }
-}
-afterEach(async () => {
-  vi.useRealTimers();
-  while (roots.length) {
-    const root = roots.pop();
-    if (retryingCleanupRoots.delete(root)) {
-      if (!cleanupReadyRoots.delete(root)) throw new Error(`refusing to remove managed-test root before terminal/client cleanup: ${root}`);
-      makeTemporaryDirectoriesRemovable(root);
-      await removeTemporaryRootAfterRuntimeCleanup(root);
-    } else rmSync(root, { recursive: true, force: true });
-  }
-});
+afterEach(() => { vi.useRealTimers(); while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
 
 function reviewResult(request, overrides = {}) {
   return {
     status: "unavailable",
     stage: request.stage,
-    material_id: materialId,
-    authenticated_evidence: evidence,
-    authenticated_evidence_sha256: evidenceHash,
     provider_results: [],
     findings: [],
     dispatch_state: "blocked_before_dispatch",
@@ -68,20 +28,20 @@ function reviewResult(request, overrides = {}) {
   };
 }
 
-function fixture() {
+async function fixture() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "managed-review-"))); roots.push(root);
   const repo = join(root, "repo"); mkdirSync(repo);
-  const git = (args) => execFileSync("git", args, { cwd: repo, encoding: "utf8" }).trim();
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) if (key.startsWith("GIT_")) delete env[key];
+  const git = (args) => execFileSync("git", args, { cwd: repo, env, encoding: "utf8" }).trim();
   git(["init", "-q", "-b", "main"]); git(["config", "user.name", "Managed review test"]); git(["config", "user.email", "managed-review@workflowhub.local"]);
   writeFileSync(join(repo, "README.md"), "managed review fixture\n"); git(["add", "."]); git(["commit", "-qm", "fixture"]);
-  const task = createTask({ storageRoot: root, manifest: {
+  const task = await createTask({ storageRoot: root, manifest: {
     schema_version: "1.0.0", project_name: "ManagedReview", task_id: randomUUID(),
-    created_at: "2026-09-09T00:00:00Z", target_repo_root: repo, issue_ids: [], inputs: {}, record_model: "vnext-single-write",
+    created_at: "2026-09-09T00:00:00Z", target_repo_root: repo, issue_ids: [], inputs: {},
+    activation_cohort: "post", execution_mode: "per_invocation", record_model: "vnext-single-write",
   } });
-  const workspace = prepareTaskWorkspace(task);
-  const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
-  const kernel = createTaskKernel(task, { candidateWorkspace: workspace, artifacts });
-  return { task, kernel, artifacts, workspace };
+  return { task, repo };
 }
 
 function request() {
@@ -261,55 +221,45 @@ function completedProviderResult() {
 }
 
 describe("managed review lifecycle boundary", () => {
-  it("blocks preflight without dispatching a provider and reuses the immutable request result", async () => {
-    const { task, kernel } = fixture();
-    let calls = 0;
-    const runRound = async (value) => { calls += 1; return reviewResult(value); };
-    const first = await recordSimpleReviewRequest({ task, kernel, request: request(), runRound, resolveRouteIdentity: () => { throw new Error("route unavailable"); } });
-    const second = await recordSimpleReviewRequest({ task, kernel, request: request(), runRound, resolveRouteIdentity: () => { throw new Error("route unavailable"); } });
-    expect(calls).toBe(0);
-    expect(first).toMatchObject({ status: "recorded", dispatch_state: "blocked_before_dispatch" });
-    expect(second.reused).not.toBe(true);
-    expect(second).toMatchObject({ status: "recorded", dispatch_state: "blocked_before_dispatch" });
+  it("rejects an invalid current phase subject before dispatch or result publication", async () => {
+    const { task } = await fixture();
+    const runRound = vi.fn(async (value) => reviewResult(value));
+    await expect(recordSimpleReviewRequest({ taskDir: task.taskPath, request: { ...request(), stage: "build-code", phase_id: "invalid" }, runRound })).rejects.toMatchObject({ code: "REVIEW_SUBJECT_INVALID" });
+    expect(runRound).not.toHaveBeenCalled();
+    expect(existsSync(join(task.taskPath, "quality"))).toBe(false);
   });
 
-  it("records an unavailable attempt when the authenticated source drifts and retains completed members", async () => {
-    const { task, kernel, artifacts } = fixture();
+  it("keeps submitted completed members and raw bytes when ordinary repository bytes change", async () => {
+    const { task, repo } = await fixture();
     const refs = await recordSimpleReviewRequest({
-      task, kernel, request: request(),
+      taskDir: task.taskPath, request: request(),
       runRound: async (value) => {
-        artifacts.writeAtomic("spec.md", "drifted specification\n");
-        return reviewResult(value, {
-          status: "available",
-          outcome: "completed",
-          dispatch_state: "dispatched",
-          runtime_id: managedRuntime,
-          provider_results: [completedProviderResult()],
-        });
+        writeFileSync(join(repo, "spec.md"), "changed ordinary specification\n");
+        return reviewResult(value, { status: "available", outcome: "completed", dispatch_state: "dispatched", runtime_id: managedRuntime, provider_results: [completedProviderResult()] });
       },
-      resolveRouteIdentity: () => ({ route_identity: sha("route") }),
     });
-    expect(refs).toMatchObject({ status: "recorded", dispatch_state: "dispatched", result_ref: null });
-    const attempt = JSON.parse(task.readRecord(refs.attempt_ref));
-    expect(attempt).toMatchObject({
-      terminal_status: "unavailable",
-      error: { code: "REVIEW_SOURCE_DRIFT" },
-      dispatch_state: "dispatched",
-    });
-    expect(attempt.provider_attempts).toHaveLength(1);
-    expect(attempt.provider_attempts[0]).toMatchObject({ provider: managedProvider, status: "completed" });
+    expect(refs).toMatchObject({ status: "available", authoritative: false });
+    const record = JSON.parse(task.readRecord(refs.result_ref));
+    expect(record).toMatchObject({ status: "available", outcome: "completed", runtime_id: managedRuntime, dispatch_state: "dispatched", authoritative: false });
+    expect(record.provider_results).toHaveLength(1);
+    expect(record.provider_results[0]).toMatchObject({ provider: managedProvider, status: "completed", identity: { source_id: "review/source", config_id: "review-config" } });
+    expect(readFileSync(record.provider_results[0].output_ref, "utf8")).toBe(JSON.stringify({ findings: [] }));
+    expect(record.error).toBeUndefined();
+    expect(record).not.toHaveProperty("snapshot_tree");
   });
 
-  it("keeps an interrupted managed runtime unavailable and does not republish it", async () => {
-    const { task, kernel } = fixture();
-    const runRound = async (value) => reviewResult(value, {
-      status: "unavailable", runtime_id: "runtime-managed", outcome: "unavailable",
-      dispatch_state: "dispatched", error: { code: "REVIEW_STATUS_UNAVAILABLE", message: "status unavailable" },
-    });
-    const first = await recordSimpleReviewRequest({ task, kernel, request: request(), runRound, resolveRouteIdentity: () => ({ route_identity: sha("route") }) });
-    const second = await recordSimpleReviewRequest({ task, kernel, request: request(), runRound, resolveRouteIdentity: () => ({ route_identity: sha("route") }) });
-    expect(first).toMatchObject({ status: "recorded", dispatch_state: "dispatched", result_ref: null });
-    expect(second).toMatchObject({ status: "recorded", reused: true, result_ref: null });
+  it("appends each interrupted attempt as an immutable unavailable ordinary result", async () => {
+    const { task } = await fixture();
+    const runRound = vi.fn(async (value) => reviewResult(value, { status: "unavailable", runtime_id: managedRuntime, outcome: "unavailable", dispatch_state: "dispatched", error: { code: "REVIEW_STATUS_UNAVAILABLE", message: "status unavailable" } }));
+    const first = await recordSimpleReviewRequest({ taskDir: task.taskPath, request: request(), runRound });
+    const firstBytes = task.readRecord(first.result_ref);
+    const second = await recordSimpleReviewRequest({ taskDir: task.taskPath, request: request(), runRound });
+    expect(runRound).toHaveBeenCalledTimes(2);
+    expect(first).toMatchObject({ status: "unavailable", authoritative: false });
+    expect(second).toMatchObject({ status: "unavailable", authoritative: false });
+    expect(second.result_ref).not.toBe(first.result_ref);
+    expect(task.readRecord(first.result_ref)).toBe(firstBytes);
+    for (const result of [first, second]) expect(JSON.parse(task.readRecord(result.result_ref))).toMatchObject({ status: "unavailable", runtime_id: managedRuntime, dispatch_state: "dispatched", error: { code: "REVIEW_STATUS_UNAVAILABLE" } });
   });
 
   it.each([
@@ -318,24 +268,22 @@ describe("managed review lifecycle boundary", () => {
     ["expired runtime", "REVIEW_RUNTIME_EXPIRED"],
     ["missing runtime", "REVIEW_RUNTIME_MISSING"],
   ])("preserves typed managed lifecycle error: %s", async (_label, code) => {
-    const { task, kernel } = fixture();
-    const result = await recordSimpleReviewRequest({
-      task, kernel, request: request(),
-      runRound: async (value) => reviewResult(value, { dispatch_state: code === "REVIEW_BROKER_START_FAILED" ? "blocked_before_dispatch" : "dispatched", runtime_id: code === "REVIEW_BROKER_START_FAILED" ? null : "runtime-managed", error: { code, message: code } }),
-      resolveRouteIdentity: () => ({ route_identity: sha("route") }),
-    });
-    expect(result.status).toBe("recorded");
-    expect(result.result_ref).toBeNull();
+    const { task } = await fixture();
+    const dispatch = code === "REVIEW_BROKER_START_FAILED" ? "blocked_before_dispatch" : "dispatched";
+    const runtime = code === "REVIEW_BROKER_START_FAILED" ? null : managedRuntime;
+    const result = await recordSimpleReviewRequest({ taskDir: task.taskPath, request: request(), runRound: async (value) => reviewResult(value, { dispatch_state: dispatch, runtime_id: runtime, error: { code, message: code } }) });
+    expect(result).toMatchObject({ status: "unavailable", authoritative: false });
+    expect(JSON.parse(task.readRecord(result.result_ref))).toMatchObject({ status: "unavailable", dispatch_state: dispatch, runtime_id: runtime, error: { code, message: code }, provider_results: [], findings: [] });
   });
 
-  it("does not treat a closure-external write as source drift", async () => {
-    const { task, kernel, workspace } = fixture();
-    const result = await recordSimpleReviewRequest({
-      task, kernel, request: request(),
-      runRound: async (value) => { writeFileSync(join(workspace.worktreeRoot, "external-note.log"), "outside closure"); return { ...reviewResult(value), authenticated_evidence_sha256: evidenceHash }; },
-      resolveRouteIdentity: () => ({ route_identity: sha("route") }),
-    });
-    expect(result.status).toBe("recorded");
+  it("does not turn a closure-external ordinary write into a review failure", async () => {
+    const { task, repo } = await fixture();
+    const result = await recordSimpleReviewRequest({ taskDir: task.taskPath, request: request(), runRound: async (value) => { writeFileSync(join(repo, "external-note.log"), "outside closure"); return reviewResult(value); } });
+    expect(result).toMatchObject({ status: "unavailable", authoritative: false });
+    const record = JSON.parse(task.readRecord(result.result_ref));
+    expect(record.dispatch_state).toBe("blocked_before_dispatch");
+    expect(record.error).toBeUndefined();
+    expect(readFileSync(join(repo, "external-note.log"), "utf8")).toBe("outside closure");
   });
 
   it("RED: cancels the managed runtime on source drift and only on that fact", async () => {
@@ -459,7 +407,7 @@ describe("managed review lifecycle boundary", () => {
     });
     expect(calls.map(({ command }) => command)).toEqual(["start", "status"]);
     expect(calls[0].requestId).toBe(calls[1].requestId);
-    expect(calls[0].requestId).toMatch(/^wh-review-[a-f0-9]{64}$/);
+    expect(calls[0].requestId).toMatch(/^wh-review-[A-Za-z0-9-]+$/);
     expect(calls[1].runtimeId).toBe(managedRuntime);
   });
 
@@ -824,248 +772,57 @@ describe("managed review lifecycle boundary", () => {
     expect(calls[1]).toMatchObject({ command: "status", runtimeId: managedRuntime });
   });
 
-  it("real candidate managed health reaches terminal", async () => {
-    const candidateRoot = process.env.WH_TEST_THIRD_REVIEW_ROOT;
-    if (!candidateRoot) throw new Error("WH_TEST_THIRD_REVIEW_ROOT must name the isolated 3rd-review candidate");
-    const cli = join(resolve(candidateRoot), "scripts", "3rd-review.mjs");
-    expect(existsSync(cli)).toBe(true);
-
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-real-managed-health-")));
-    roots.push(root);
-    retryingCleanupRoots.add(root);
-    const isolatedHome = join(root, "home");
-    const workflowhubConfigDir = join(isolatedHome, ".config", "workflowhub");
-    const packetRoot = join(root, "packets");
-    const runtimeRoot = join(root, "runtime");
-    const fakeProvider = join(root, "fake-kimi");
-    const startedMarker = join(root, "provider-started");
-    const releaseMarker = join(root, "provider-release");
-    const hostConfigPath = join(workflowhubConfigDir, "config.json");
-    const brokerConfigPath = join(root, "3rd-review.json");
-    mkdirSync(workflowhubConfigDir, { recursive: true });
-    mkdirSync(packetRoot);
-    mkdirSync(runtimeRoot);
-
-    const markerEnv = {
-      WH_TEST_MANAGED_PROVIDER_STARTED: startedMarker,
-      WH_TEST_MANAGED_PROVIDER_RELEASE: releaseMarker,
-    };
-    writeFileSync(fakeProvider, `#!/usr/bin/env node
-import { existsSync, writeFileSync } from "node:fs";
-import { setTimeout as delay } from "node:timers/promises";
-
-writeFileSync(process.env.WH_TEST_MANAGED_PROVIDER_STARTED, "started\\n");
-console.log(JSON.stringify({ role: "meta", type: "system.version", version: "0.40.1" }));
-console.log(JSON.stringify({ role: "assistant", content: "fake provider is working" }));
-while (!existsSync(process.env.WH_TEST_MANAGED_PROVIDER_RELEASE)) await delay(10);
-console.log(JSON.stringify({ role: "assistant", content: JSON.stringify({ findings: [] }) }));
-console.error("To resume this session: kimi -r fake-kimi-session");
+  it("observes pending health and terminal identity through owned child broker wire transport", async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-owned-managed-health-"))); roots.push(root);
+    const attachmentRoot = join(root, "packets"); mkdirSync(attachmentRoot);
+    const configPath = join(root, "owned-config.json"), cli = join(root, "owned-broker.mjs"), statePath = join(root, "state.json"), releasePath = join(root, "release"), tracePath = join(root, "trace.jsonl");
+    writeFileSync(configPath, JSON.stringify({ statePath, releasePath, tracePath }));
+    writeFileSync(cli, String.raw`import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+const command=process.argv[2];const args=Object.fromEntries(process.argv.slice(3).map(x=>{const i=x.indexOf("=");return [x.slice(2,i),x.slice(i+1)];}));
+const config=JSON.parse(readFileSync(args.config,"utf8"));
+let state;
+if(command==="start") {
+ const request=JSON.parse(readFileSync(args.request,"utf8"));const attachments=JSON.parse(readFileSync(args.attachments,"utf8"));
+ if(request.required_result_protocol!=="workflowhub-result.v3"||request.provider_allowlist[0]!==${JSON.stringify(managedProvider)}||!attachments.entries.length) throw new Error("owned submitted request/attachment protocol invalid");
+ state={request_id:args["request-id"],runtime_id:${JSON.stringify(managedRuntime)},material_id:attachments.bundle_id};writeFileSync(config.statePath,JSON.stringify(state));
+} else {state=JSON.parse(readFileSync(config.statePath,"utf8"));if(args["runtime-id"]!==state.runtime_id) throw new Error("owned runtime identity mismatch");}
+appendFileSync(config.tracePath,JSON.stringify({command,...state})+"\n");
+const terminal=command==="cancel"||command==="status"&&existsSync(config.releasePath);
+const envelope={version:"workflowhub-run.v1",...state,state:terminal?"terminal":"running"};
+if(terminal) {const member={"attempts":[{"attempt_id":"owned-attempt","completed_at_ms":20,"duration_ms":10,"error":null,"kind":"initial","provider_retry_count":0,"session_id":null,"started_at_ms":10,"status":"completed"}],"continuable":false,"deadline_ms":null,"error":null,"identity":{"adapter":"review","config_id":"review-config","model":"review-model","provider":"review/provider","source_id":"review/source"},"material":{"contract_hash":"unavailable","contract_id":"unavailable","material_id":"replaced","semantic_hash":"unavailable"},"output":"{\"findings\":[]}","provenance":{"raw_output_sha256":null,"raw_stderr_sha256":null,"runtime_id":"runtime-managed"},"recovery":{"fresh_execution_retry_count":0,"provider_internal_retry_count":0,"same_session_repair_count":0},"result_protocol":"workflowhub-result.v3","session_id":"session-managed","status":"completed","timing":{"completed_at_ms":20,"duration_ms":10,"started_at_ms":10},"usage":null};member.material.material_id=state.material_id;envelope.group={host_provider:${JSON.stringify('dsh')},material_id:state.material_id,outcome:"completed",providers:[member],round:1,runtime_id:state.runtime_id,selected_tier:null,version:"workflowhub-result.v3"};}
+else envelope.providers={${JSON.stringify(managedProvider)}:{provider:${JSON.stringify(managedProvider)},tier:0,status:"running",started_at_ms:10,completed_at_ms:null,process_alive_at_ms:20,last_progress_at_ms:20,duration_ms:10,retry_count:0,progress_events:1,error:null}};
+console.log(JSON.stringify(envelope));
 `);
-    chmodSync(fakeProvider, 0o700);
-
-    writeFileSync(brokerConfigPath, JSON.stringify({
-      version: 4,
-      tiers: [["kimi"]],
-      runtime: {
-        root: runtimeRoot,
-        ttl_hours: 24,
-        max_prompt_bytes: 100_000,
-        max_output_bytes: 100_000,
-        liveness_interval_ms: 25,
-        orphan_timeout_ms: 1_000,
-      },
-      attachment_roots: [{ root: packetRoot, sources: [".wh-review-packets"] }],
-      providers: {
-        kimi: {
-          enabled: true,
-          command: fakeProvider,
-          model: "fake-kimi-model",
-          effort: null,
-          thinking: null,
-          auth: { type: "env", env: Object.keys(markerEnv) },
-          env: [],
-        },
-      },
-    }));
-    writeFileSync(hostConfigPath, JSON.stringify({
-      third_review: {
-        command: [process.execPath, cli],
-        config: brokerConfigPath,
-        attachment_root: packetRoot,
-      },
-      wh_review: {
-        version: 2,
-        stages: {
-          "build-code": { initial: ["kimi"], mode: "full_only", minimum_heterologous: 1 },
-        },
-      },
-    }));
-
-    const previousHome = process.env.HOME;
-    const previousMarkerEnv = Object.fromEntries(Object.keys(markerEnv).map((key) => [key, process.env[key]]));
-    process.env.HOME = isolatedHome;
-    Object.assign(process.env, markerEnv);
-    const hostAbortController = new AbortController();
-
-    const client = new ReviewProviderClient({ command: [process.execPath, cli], config: brokerConfigPath, timeoutMs: null });
-    const actualStartManaged = client.startManaged.bind(client);
-    const actualStatusManaged = client.statusManaged.bind(client);
-    const actualCancelManaged = client.cancelManaged.bind(client);
-    let managedContext = null;
-    let startedLifecycle = null;
-    let runtimeId = null;
-    let observedHealth = null;
-    let observedTerminal = null;
-    const managedStatusObservations = [];
-    let terminalCleanupConfirmed = false;
-    client.startManaged = async (value) => {
-      managedContext = value;
-      try {
-        const started = await actualStartManaged(value);
-        startedLifecycle = started;
-        runtimeId = started.runtime_id;
-        return started;
-      } catch (error) {
-        runtimeId = error?.managed_observation?.runtime_id ?? null;
-        throw error;
-      }
-    };
-    client.statusManaged = async (value) => {
-      const status = await actualStatusManaged(value);
-      managedStatusObservations.push({
-        input: {
-          requestId: value.requestId,
-          runtimeId: value.runtimeId,
-          materialId: value.materials.materialId,
-        },
-        status,
-      });
-      if (status.state === "running" && status.providers?.kimi) observedHealth = status;
-      if (status.state === "terminal") {
-        observedTerminal = status;
-        terminalCleanupConfirmed = true;
-      }
-      return status;
-    };
-
-    let reviewPromise = null;
-    let primaryError = null;
+    const transport = new ReviewProviderClient({ command: [process.execPath, cli], config: configPath, timeoutMs: 2_000 });
+    // Use the existing private injected transport seam to exercise the broker
+    // wire consumer with a bounded owned process, never the native model route.
+    const client = new ReviewProviderClient({ invoke: transport.invoke });
+    const statusObservations = [];
+    const actualStatus = client.statusManaged.bind(client);
+    client.statusManaged = async (value) => { const wire = await actualStatus(value); statusObservations.push({ input: value, wire }); return wire; };
+    const controller = new AbortController();
+    let settled = false;
+    const promise = runSimpleReview({ stage: "verify-code", materials: { implementation: "owned managed lifecycle bytes" } }, {
+      loadConfig: () => ({ whReview: {}, config: configPath, attachmentRoot, command: [process.execPath, cli] }),
+      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: [managedProvider], provider_identities: { [managedProvider]: { source_id: "review/source", config_id: "review-config" } }, provider_models: { [managedProvider]: "review-model" } }),
+      client, signal: controller.signal, managedStatusPollMs: 10,
+    }).finally(() => { settled = true; });
     try {
-      reviewPromise = runSimpleReview({
-        stage: "build-code",
-        host_provider: "codex",
-        materials: { implementation: "managed health boundary fixture" },
-      }, { client, managedStatusPollMs: 20, signal: hostAbortController.signal });
-
-      await Promise.race([
-        vi.waitFor(() => {
-          expect(observedHealth).toMatchObject({
-            state: "running",
-            providers: {
-              kimi: { status: "running", last_progress_at_ms: expect.any(Number) },
-            },
-          });
-        }, { timeout: 10_000, interval: 20 }),
-        reviewPromise.then(() => { throw new Error("managed review reached terminal before health was observed"); }),
-      ]);
-
-      expect(observedHealth.providers.kimi.last_progress_at_ms).toBeGreaterThan(0);
-      expect(existsSync(startedMarker)).toBe(true);
-      writeFileSync(releaseMarker, "release\\n");
-
-      const result = await reviewPromise;
-      // Request/material originate in the start input; the broker returns the runtime identity.
-      const expectedManagedIdentity = {
-        requestId: managedContext.requestId,
-        runtimeId: startedLifecycle.runtime_id,
-        materialId: managedContext.materials.materialId,
-      };
-      expect(startedLifecycle).toMatchObject({
-        request_id: expectedManagedIdentity.requestId,
-        runtime_id: expectedManagedIdentity.runtimeId,
-        material_id: expectedManagedIdentity.materialId,
-      });
-      expect(managedStatusObservations.map(({ status }) => status.state)).toContain("running");
-      const terminalObservation = managedStatusObservations.find(({ status }) => status.state === "terminal");
-      expect(terminalObservation).toBeDefined();
-      for (const { input, status } of managedStatusObservations) {
-        expect(input).toEqual(expectedManagedIdentity);
-        expect(status).toMatchObject({
-          request_id: expectedManagedIdentity.requestId,
-          runtime_id: expectedManagedIdentity.runtimeId,
-          material_id: expectedManagedIdentity.materialId,
-        });
-      }
-      expect(terminalObservation.status.group).toMatchObject({ runtime_id: expectedManagedIdentity.runtimeId });
-      expect(observedTerminal).toMatchObject({
-        state: "terminal",
-        group: { outcome: "completed", providers: [{ status: "completed" }] },
-      });
-      expect(result).toMatchObject({
-        status: "available",
-        outcome: "completed",
-        runtime_id: terminalObservation.status.group.runtime_id,
-        material_id: terminalObservation.status.material_id,
-        provider_results: [{ provider: "kimi", status: "completed" }],
-      });
-    } catch (error) {
-      primaryError = error;
-      throw error;
-    } finally {
-      try {
-        if (runtimeId && managedContext && observedTerminal === null) {
-          const context = { ...managedContext, runtimeId };
-          try {
-            await actualCancelManaged(context);
-          } catch {
-            // A concurrent terminal transition can make cancellation unnecessary;
-            // the status loop below is the authoritative cleanup check.
-          }
-          const cleanupController = new AbortController();
-          const cleanupTimer = setTimeout(() => cleanupController.abort(new Error("test cleanup grace expired")), 10_000);
-          const cleanupContext = { ...context, signal: cleanupController.signal };
-          try {
-            while (!cleanupController.signal.aborted) {
-              let terminal;
-              try {
-                terminal = await actualStatusManaged(cleanupContext);
-              } catch (error) {
-                if (cleanupController.signal.aborted) break;
-                throw error;
-              }
-              if (terminal.state === "terminal") {
-                terminalCleanupConfirmed = true;
-                break;
-              }
-              await new Promise((resolveDelay) => setTimeout(resolveDelay, 25));
-            }
-          } finally {
-            clearTimeout(cleanupTimer);
-          }
-          if (!terminalCleanupConfirmed) {
-            hostAbortController.abort(new Error("managed test cleanup grace expired after explicit broker cancellation"));
-            if (reviewPromise) await reviewPromise.catch(() => {});
-            throw new Error("broker did not report terminal within the 10-second test cleanup grace after explicit cancellation; preserving the temporary root because the provider may still be active");
-          }
-        }
-        if (reviewPromise) await reviewPromise.catch(() => {});
-        if (!runtimeId || terminalCleanupConfirmed) cleanupReadyRoots.add(root);
-      } catch (cleanupError) {
-        if (!terminalCleanupConfirmed) {
-          hostAbortController.abort(new Error("managed test cleanup failed before terminal confirmation"));
-          if (reviewPromise) await reviewPromise.catch(() => {});
-        }
-        if (primaryError) throw new AggregateError([primaryError, cleanupError], "managed health test failed and cleanup did not reach terminal");
-        throw cleanupError;
-      } finally {
-        if (previousHome === undefined) delete process.env.HOME;
-        else process.env.HOME = previousHome;
-        for (const [key, value] of Object.entries(previousMarkerEnv)) {
-          if (value === undefined) delete process.env[key];
-          else process.env[key] = value;
-        }
-      }
-    }
+      await vi.waitFor(() => { expect(settled).toBe(false); expect(statusObservations.some(({ wire }) => wire.state === "running" && wire.providers?.[managedProvider]?.last_progress_at_ms > 0)).toBe(true); }, { timeout: 3_000, interval: 20 });
+      writeFileSync(releasePath, "owned release\n");
+      const result = await promise;
+      expect(result).toMatchObject({ status: "available", outcome: "completed", runtime_id: managedRuntime, provider_results: [{ provider: managedProvider, status: "completed", identity: { source_id: "review/source", config_id: "review-config" } }] });
+      const trace = readFileSync(tracePath, "utf8").trim().split("\n").map(line => JSON.parse(line));
+      expect(trace.filter(({command}) => command === "start")).toHaveLength(1);
+      expect(trace.filter(({command}) => command === "status").length).toBeGreaterThanOrEqual(2);
+      expect(trace.some(({command}) => command === "cancel")).toBe(false);
+      const start = trace[0]; expect(start.request_id).toMatch(/^wh-review-[A-Za-z0-9-]+$/);
+      for (const entry of trace) expect(entry).toMatchObject({ request_id: start.request_id, runtime_id: start.runtime_id, material_id: start.material_id });
+      expect(statusObservations.at(-1).wire).toMatchObject({ state: "terminal", runtime_id: start.runtime_id, material_id: start.material_id });
+      expect(result.material_id).toBe(start.material_id);
+      expect(result.provider_results[0].error).toBeNull();
+    } finally { controller.abort(new Error("owned lifecycle cleanup")); await promise; }
   });
 
   it("classifies plain-text managed stderr instead of leaking SyntaxError", async () => {
@@ -1111,28 +868,18 @@ console.error("To resume this session: kimi -r fake-kimi-session");
     expect(error.managed_observation).toBeUndefined();
   });
 
-  // End-to-end recording side of the observation repair: a review whose start
-  // request reached the broker but whose reply could not be parsed must be recorded
-  // as `sent_unparsed` with the runtime id and the provider inventory, not as
-  // `blocked_before_dispatch` with an empty attempt list.
-  it("records a transmitted-but-unparsed review as sent_unparsed with its provider inventory", async () => {
-    const { task, kernel } = fixture();
-    const result = await recordSimpleReviewRequest({
-      task, kernel, request: request(),
-      runRound: async (value) => reviewResult(value, {
-        dispatch_state: "sent_unparsed",
-        runtime_id: "runtime-managed",
-        provider_results: [{ provider: managedProvider, status: "running", error: null }],
-        error: { code: "PROTOCOL_INCOMPATIBLE", message: "3rd-review managed lifecycle envelope is invalid" },
-      }),
-      resolveRouteIdentity: () => ({ route_identity: sha("route") }),
-    });
-
-    expect(result).toMatchObject({ status: "recorded", dispatch_state: "sent_unparsed" });
-    const attempt = JSON.parse(task.readRecord(result.attempt_ref));
-    expect(attempt.dispatch_state).toBe("sent_unparsed");
-    expect(attempt.provider_attempts.map((item) => item.provider)).toEqual([managedProvider]);
-    expect(attempt.provider_attempts[0]).toMatchObject({ runtime_id: "runtime-managed" });
+  it("records a submitted sent_unparsed observation with its selected provider inventory", async () => {
+    const { task } = await fixture();
+    const result = await recordSimpleReviewRequest({ taskDir: task.taskPath, request: request(), runRound: async (value) => reviewResult(value, {
+      dispatch_state: "sent_unparsed", runtime_id: managedRuntime,
+      provider_results: [{ provider: managedProvider, runtime_id: managedRuntime, status: "running", error: null }],
+      error: { code: "PROTOCOL_INCOMPATIBLE", message: "3rd-review managed lifecycle envelope is invalid" },
+    }) });
+    expect(result).toMatchObject({ status: "unavailable", authoritative: false });
+    const record = JSON.parse(task.readRecord(result.result_ref));
+    expect(record).toMatchObject({ dispatch_state: "sent_unparsed", runtime_id: managedRuntime, error: { code: "PROTOCOL_INCOMPATIBLE" } });
+    expect(record.provider_results).toHaveLength(1);
+    expect(record.provider_results[0]).toMatchObject({ provider: managedProvider, runtime_id: managedRuntime, status: "running" });
   });
 
   it("reuses the same deterministic request and runtime identity after an interrupted start", async () => {
@@ -1346,7 +1093,12 @@ console.error("To resume this session: kimi -r fake-kimi-session");
     const result = await runSimpleReview({
       stage: "verify-code",
       host_provider: "codex",
-      materials: { "implementation-diff.patch": "x".repeat(200 * 1024) },
+      materials: {
+        changed_files: ["tests/review/review-managed-lifecycle.test.mjs"],
+        implementation_assessment: "x".repeat(200 * 1024),
+        test_context: "Owned transport fixture: a Node child reads the complete delivered assessment; the injected client then reports its token limit. No external model or product quality result is claimed.",
+        open_risks: "The controlled provider may reject the submitted input with INPUT_TOKEN_LIMIT; preserve that unavailable failure without a local size block.",
+      },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
       resolveRoute: () => ({ initial: [managedProvider], mode: "single_round", minimum_heterologous: 1 }),
@@ -1357,6 +1109,12 @@ console.error("To resume this session: kimi -r fake-kimi-session");
         async runGroup(value) {
           calls.push("runGroup");
           providerInput = value;
+          const submitted = value.materials.deliveryManifest.find(entry => entry.path.includes("implementation_assessment"));
+          expect(submitted?.bytes).toBe(200 * 1024);
+          const receivedBytes = execFileSync(process.execPath, ["--input-type=module", "-e",
+            "import{readFileSync}from'node:fs';process.stdout.write(readFileSync(process.argv[1]));",
+            join(value.materials.bundleRoot, submitted.path)], { maxBuffer: 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
+          expect(receivedBytes).toEqual(Buffer.from("x".repeat(200 * 1024)));
           throw Object.assign(new Error("input token limit exceeded"), { code: "INPUT_TOKEN_LIMIT" });
         },
       },
@@ -1364,14 +1122,14 @@ console.error("To resume this session: kimi -r fake-kimi-session");
 
     expect(result).toMatchObject({
       status: "unavailable",
-      dispatch_state: "dispatched",
+      dispatch_state: "unknown",
       provider_results: [],
       findings: [],
       error: { code: "REVIEW_INPUT_TOO_LARGE", cause_code: "INPUT_TOKEN_LIMIT" },
     });
     expect(calls).toEqual(["runGroup"]);
     expect(providerInput.materials.deliveryManifest).toEqual(expect.arrayContaining([
-      expect.objectContaining({ path: expect.stringContaining("implementation-diff.patch"), bytes: 200 * 1024 }),
+      expect.objectContaining({ path: expect.stringContaining("implementation_assessment"), bytes: 200 * 1024 }),
     ]));
   });
 });

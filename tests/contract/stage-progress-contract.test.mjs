@@ -1,211 +1,41 @@
-import { describe, expect, it } from "vitest";
-import {
-  deriveStageCompletion,
-  deriveStageProgress,
-} from "../../runtime/stage/completion-predicates.mjs";
-import {
-  derivePhaseProgressStatus,
-  phaseProgressTargetExists,
-  projectStageExecutionOutcome,
-} from "../../tools/cli/stage-runtime.mjs";
+import { describe, expect, it, test } from "vitest";
+import { derivePhaseProgressStatus, phaseProgressTargetExists } from "../../tools/cli/stage-runtime.mjs";
 
 const POST_PHASE_MATERIALS = {
-  "phases/index.md": [
-    "# Phase index",
-    "",
-    "## Execution Index",
-    "",
-    "| phase | authority ref | semantic anchor | write set | dependency | consumer |",
-    "| --- | --- | --- | --- | --- | --- |",
-    "| `P1` | `phases/P1.md` | `phase-p1` | `src/a.mjs` | `none` | `build-code` |",
-  ].join("\n"),
-  "phases/P1.md": [
-    "# Phase P1 — First phase",
-    "",
-    "## L1 — Tasks",
-    "",
-    "### T001 — First task",
-    "",
-    "### T002 — Second task",
-    "",
-    "## L2 — Notes",
-  ].join("\n"),
+  "phases/index.md": "# Phase index\n\n## Execution Index\n\n| phase | authority ref | semantic anchor | write set | dependency | consumer |\n| --- | --- | --- | --- | --- | --- |\n| `P1` | `phases/P1.md` | `phase-p1` | `src/a.mjs` | `none` | `build-code` |\n",
+  "phases/P1.md": "# Phase P1\n\n## L1 — Tasks\n\n### T001 — First task\n\n### T002 — Second task\n",
 };
 
-describe("WorkflowHub stage progress contract", () => {
-  it.each([
-    ["make-decision", {}, []],
-    ["build-spec", { "decision-log.md": "decision" }, ["decision-log.md"]],
-    ["build-plan", { "decision-log.md": "decision", "spec.md": "spec" }, ["decision-log.md", "spec.md"]],
-    ["build-code", {
-      "decision-log.md": "decision", "spec.md": "spec", "plan.md": "plan", "tasks.md": "tasks",
-    }, ["decision-log.md", "spec.md", "plan.md", "tasks.md"]],
-    ["verify-code", {
-      "decision-log.md": "decision", "spec.md": "spec", "plan.md": "plan", "tasks.md": "tasks",
-    }, ["decision-log.md", "spec.md", "plan.md", "tasks.md"]],
-  ])("lets %s start from materials that exist before the stage runs", (stage, materials, requiredMaterials) => {
-    const result = deriveStageProgress(stage, [], materials);
-    expect(result).toMatchObject({
-      work_status: "ready",
-      readiness_source: "current-material-presence",
-      required_materials: requiredMaterials,
-      missing_materials: [],
-    });
-    expect(result).not.toHaveProperty("status");
+describe("WorkflowHub current Git resume cursor contract", () => {
+  it("reads a current Git cursor without projecting completion or quality", () => {
+    const cursor = { phase_id: "P1", task_id: "T002", phases_head: "a".repeat(40), recorded_at: "2026-09-25T01:02:03.000Z" };
+    expect(derivePhaseProgressStatus({ cursor, currentPhasesHead: cursor.phases_head })).toEqual({ freshness: "current", cursor });
   });
-
-  it("derives only work readiness from material presence", () => {
-    const plan = [
-      "## WorkflowHub Stage Progress",
-      "| Stage | Status | Work / artifacts | Review / handoff | Next / deferred risk |",
-      "| --- | --- | --- | --- | --- |",
-      "| make-decision | completed | D1 | quality_status=incomplete; user_handoff=pending | build-spec |",
-      "",
-    ].join("\n");
-    const result = deriveStageProgress("make-decision", [], { "decision-log.md": "log", "spec.md": null, "plan.md": plan, "tasks.md": null });
-    expect(result).toMatchObject({
-      work_status: "ready",
-      readiness_source: "current-material-presence",
-      missing_materials: [],
-    });
-    expect(result).not.toHaveProperty("status");
+  it("labels a cursor stale when the material Git commit changes", () => {
+    const cursor = { phase_id: "P1", task_id: "T002", phases_head: "a".repeat(40), recorded_at: "2026-09-25T01:02:03.000Z" };
+    expect(derivePhaseProgressStatus({ cursor, currentPhasesHead: "b".repeat(40) })).toMatchObject({ freshness: "stale", reason: "phases_head_mismatch", cursor });
   });
-
-  it("lets a post-cohort build-plan start from decision-log before it authors spec", () => {
-    const result = deriveStageProgress(
-      "build-plan",
-      [],
-      { "decision-log.md": "decision", "spec.md": null, "plan.md": null, "tasks.md": null },
-      { activationCohort: "post" },
-    );
-    expect(result).toMatchObject({
-      work_status: "ready",
-      continuation_allowed: true,
-      required_materials: ["decision-log.md"],
-      missing_materials: [],
-    });
-  });
-
-  it("keeps spec as a pre-cohort build-plan prerequisite", () => {
-    const result = deriveStageProgress(
-      "build-plan",
-      [],
-      { "decision-log.md": "decision", "spec.md": null, "plan.md": null, "tasks.md": null },
-      { activationCohort: "pre" },
-    );
-    expect(result).toMatchObject({
-      work_status: "blocked_by_missing_material",
-      continuation_allowed: false,
-      required_materials: ["decision-log.md", "spec.md"],
-      missing_materials: ["spec.md"],
-    });
-  });
-
-  it("reads a current resume cursor without turning it into completion or work status", () => {
-    const cursor = {
-      phase_id: "P1",
-      task_id: "T002",
-      material_revision: `revision-${"a".repeat(64)}`,
-      recorded_at: "2026-09-25T01:02:03.000Z",
-    };
-
-    const result = derivePhaseProgressStatus({
-      cursor,
-      currentMaterialRevision: cursor.material_revision,
-      materials: POST_PHASE_MATERIALS,
-      activationCohort: "post",
-    });
-
-    expect(result).toEqual({ freshness: "current", cursor });
-    expect(deriveStageProgress("build-code", [], {
-      "decision-log.md": "decision",
-      "spec.md": "spec",
-      ...POST_PHASE_MATERIALS,
-    }, { activationCohort: "post" })).toMatchObject({ work_status: "ready" });
-    expect(deriveStageCompletion("build-code", [])).toMatchObject({ status: "in_progress" });
-  });
-
-  it("labels a cursor stale only when its material revision changed", () => {
-    const cursor = {
-      phase_id: "P1",
-      task_id: "T002",
-      material_revision: `revision-${"a".repeat(64)}`,
-      recorded_at: "2026-09-25T01:02:03.000Z",
-    };
-
-    expect(derivePhaseProgressStatus({
-      cursor,
-      currentMaterialRevision: `revision-${"b".repeat(64)}`,
-      materials: POST_PHASE_MATERIALS,
-      activationCohort: "post",
-    })).toMatchObject({ freshness: "stale", reason: "material_revision_mismatch", cursor });
-  });
-
-  it("validates cursor targets against the indexed physical Phase and its Task cards", () => {
+  it("validates targets against indexed physical Phase and Task cards", () => {
     const materials = { ...POST_PHASE_MATERIALS, "spec.md": "Current spec" };
     expect(phaseProgressTargetExists({ phase_id: "P1", task_id: "T002" }, materials)).toBe(true);
     expect(phaseProgressTargetExists({ phase_id: "P1", task_id: "T999" }, materials)).toBe(false);
     expect(phaseProgressTargetExists({ phase_id: "P2", task_id: "T002" }, materials)).toBe(false);
   });
-
-  it("does not project a cursor-only row as a stage-end execution outcome", () => {
-    const derived = {
-      "build-code": {
-        status: "unavailable",
-        blocking: false,
-        attempt_count: 1,
-        completed_attempt_count: 0,
-        refs: ["facts.jsonl"],
-      },
-    };
-
-    expect(projectStageExecutionOutcome("build-code", derived, [{
-      record_kind: "stage",
-      stage: "build-code",
-      source: "phase-progress-cursor",
-    }])).toMatchObject({
-      status: "unavailable",
-      attempt_count: 0,
-      completed_attempt_count: 0,
-      refs: [],
-      diagnostic: { code: "phase_progress_cursor_only" },
-    });
-
-    expect(projectStageExecutionOutcome("build-code", derived, [{
-      record_kind: "stage",
-      stage: "build-code",
-      source: "stage-end:build-code",
-    }])).toBe(derived["build-code"]);
-
-    expect(projectStageExecutionOutcome("build-code", derived, [
-      { record_kind: "stage", stage: "build-code", source: "phase-progress-cursor" },
-      { record_kind: "stage", stage: "build-code", source: "stage-end:build-code" },
-    ])).toBe(derived["build-code"]);
-  });
-
-  it("rejects completed plus incomplete fake green while keeping work ready", () => {
-    const readiness = deriveStageProgress("build-code", [], {
-      "decision-log.md": "decision",
-      "spec.md": "spec",
-      "plan.md": "plan",
-      "tasks.md": [
-        "## WorkflowHub Stage Progress",
-        "| Stage | Status | Execution / evidence | Handoff / next |",
-        "| --- | --- | --- | --- |",
-        "| build-code | completed | quality_status=incomplete | verify-code |",
-        "| verify-code | incomplete | quality_status=incomplete | close |",
-      ].join("\n"),
-    });
-
-    expect(readiness).toMatchObject({
-      work_status: "ready",
-      readiness_source: "current-material-presence",
-      missing_materials: [],
-    });
-    expect(readiness).not.toHaveProperty("status");
-    expect(deriveStageCompletion("build-code", [])).toMatchObject({
-      status: "in_progress",
-      missing: expect.arrayContaining(["integration_review"]),
-    });
-  });
 });
+
+// T022 independent behavioral oracles: actual public run -> JSONL -> status.
+import assert from 'node:assert/strict';import {execFileSync,spawnSync}from'node:child_process';import{mkdirSync,mkdtempSync,writeFileSync,readFileSync,rmSync,realpathSync}from'node:fs';import{join}from'node:path';import{tmpdir}from'node:os';
+import { fileURLToPath } from 'node:url';
+const WT=fileURLToPath(new URL('../../', import.meta.url)).replace(/\/$/,'');const CLI=WT+'/tools/cli/stage-runtime.mjs';const store=await import(WT+'/runtime/task/task-store.mjs');
+const empty = () => ({ value:null,reason:'owned historical fixture' });
+const historicalTemplate={record_kind:'stage',task_id:'overridden-by-fixture',stage:'make-decision',source:'owned-history',created_at:'2026-09-25T01:02:03.000Z',material_digest:empty(),snapshot_tree:empty(),review_origin:'not_run',review_result_ref:empty(),finding_dispositions:[],spec_analyze:empty(),evidence:empty(),layer_states:{implementation_completion:'incomplete',stage_quality:'incomplete',delivery:'unavailable',task_closure:'unavailable'},serious_issue_disposition:empty(),close_action:empty(),handoff:empty()};
+function fixture(){const root=realpathSync(mkdtempSync(join(tmpdir(),'t022-git-cursor-'))),repo=join(root,'repo'),storage=join(root,'storage'),taskId='cursor-oracle',taskPath=join(storage,'Projects','workflowhub','tasks',taskId);mkdirSync(repo);mkdirSync(taskPath,{recursive:true});const env={...process.env,WORKFLOWHUB_TASK_DIR:storage};for(const key of Object.keys(env))if(key.startsWith('GIT_'))delete env[key];const git=args=>execFileSync('/usr/bin/git',args,{cwd:repo,env,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();git(['init','-q','-b','main']);git(['config','user.name','Owned cursor oracle']);git(['config','user.email','cursor@example.invalid']);const materials=join(repo,'specs',taskId);mkdirSync(join(materials,'phases'),{recursive:true});writeFileSync(join(materials,'decision-log.md'),'# Decision\n');writeFileSync(join(materials,'spec.md'),'# Spec\n');writeFileSync(join(materials,'phases','index.md'),'# Phase index\n\n## Execution Index\n\n| phase | authority ref | semantic anchor | write set | dependency | consumer |\n| --- | --- | --- | --- | --- | --- |\n| `P1` | `phases/P1.md` | `phase-p1` | `src/a.mjs` | `none` | `build-code` |\n');writeFileSync(join(materials,'phases','P1.md'),'# Phase P1\n\n## L1 — Tasks\n\n### T001 — First task\n');writeFileSync(join(repo,'code.mjs'),'export const value=1;\n');git(['add','.']);git(['commit','-qm','materials baseline']);writeFileSync(join(taskPath,'task.json'),JSON.stringify({schema_version:'1.0.0',project_name:'workflowhub',task_id:taskId,activation_cohort:'post',record_model:'vnext-single-write',workspace_mode:'existing',workspace_root:repo,target_repo_root:repo}));writeFileSync(join(taskPath,'facts.jsonl'),'');writeFileSync(join(repo,'cursor-input.json'),JSON.stringify({phase_progress:{phase_id:'P1',task_id:'T001'}}));const invoke=(behavior,action,input)=>{const argv=[CLI,behavior,'--action='+action,'--stage=build-code','--project=workflowhub','--task='+taskId,'--task-path='+taskPath,...(input?['--input='+input]:[])];const result=spawnSync(process.execPath,argv,{cwd:repo,env,encoding:'utf8',timeout:15000,maxBuffer:4*1024*1024});return {exit:result.status,signal:result.signal,stdout:result.stdout,stderr:result.stderr,json:result.status===0?JSON.parse(result.stdout):null};};const run=()=>invoke('run','execute',join(repo,'cursor-input.json')),status=()=>invoke('status','begin');const history=(stage='make-decision')=>({...historicalTemplate,task_id:taskId,stage});return{root,repo,storage,taskId,taskPath,materials,git,run,status,invoke,history,cleanup:()=>rmSync(root,{recursive:true,force:true})};}
+const success=(r)=>{assert.equal(r.exit,0,r.stderr);assert.equal(r.signal,null);return r.json;};
+test('ORACLE-CURSOR-GIT: public run writes only current Git cursor and no retired row fields',async()=>{const f=fixture();try{await store.initializeTaskStore(f.taskPath,{taskId:f.taskId});const result=success(f.run()),head=f.git(['log','-1','--format=%H','--','specs/'+f.taskId+'/spec.md','specs/'+f.taskId+'/phases']);assert.equal(result.phase_progress.phases_head,head);assert.deepEqual(Object.keys(result.phase_progress).sort(),['phase_id','task_id','phases_head','recorded_at'].sort());const rows=store.readTaskFacts(f.taskPath);assert.equal(rows.length,1);assert.equal(rows[0].source,'phase-progress-cursor');assert.equal(rows[0].handoff.value,null);assert.equal(rows[0].spec_analyze.value,null);assert.equal(rows[0].evidence.value,null);for(const key of ['material_digest','snapshot_tree','layer_states'])assert.equal(Object.hasOwn(rows[0],key),false,key);const status=success(f.status());assert.equal(status.phase_progress.freshness,'current');assert.equal(status.quality_status,'unknown');assert.equal(status.work_status,'ready');assert.equal(Object.hasOwn(status,'implementation_completion'),false);assert.equal(Object.hasOwn(status,'status'),false);assert.equal(Object.hasOwn(status,'completed_attempt_count'),false);console.log(JSON.stringify({oracle:'new-row',head,result,status:{freshness:status.phase_progress.freshness,quality:status.quality_status,work:status.work_status}}));}finally{f.cleanup();}});
+test('ORACLE-CURSOR-GIT: material commit changes stale, pure code commit does not, uncommitted material remains current',()=>{const f=fixture();try{const first=success(f.run());writeFileSync(join(f.repo,'code.mjs'),'export const value=2;\n');f.git(['add','code.mjs']);f.git(['commit','-qm','code only']);assert.equal(success(f.status()).phase_progress.freshness,'current');writeFileSync(join(f.materials,'spec.md'),'# Spec\nUncommitted material\n');assert.equal(success(f.status()).phase_progress.freshness,'current','declared uncommitted-material loss retained');f.git(['add','specs/'+f.taskId+'/spec.md']);f.git(['commit','-qm','material commit']);const changed=success(f.status());assert.equal(changed.phase_progress.freshness,'stale');assert.notEqual(changed.phase_progress.cursor.phases_head,f.git(['log','-1','--format=%H','--','specs/'+f.taskId+'/spec.md','specs/'+f.taskId+'/phases']));console.log(JSON.stringify({oracle:'commits',first:first.phase_progress,material_status:changed.phase_progress}));}finally{f.cleanup();}});
+test('ORACLE-CURSOR-HISTORY: other row bytes and passive finding values remain verbatim on current cursor replacement',()=>{const f=fixture();try{const history={...f.history(),historical_extra:{owner:'original',value:17},finding_dispositions:[{original_finding:'kept passive'}]},oldCursor={...f.history('build-code'),source:'phase-progress-cursor',phase_progress:{phase_id:'P1',task_id:'T001',material_revision:'revision-'+'a'.repeat(64),recorded_at:'2026-09-25T01:02:03.000Z'}};const rawHistory='  '+JSON.stringify(history)+'  \n',raw=rawHistory+JSON.stringify(oldCursor)+'\n';writeFileSync(join(f.taskPath,'facts.jsonl'),raw);const before=success(f.status());assert.equal(before.phase_progress.freshness,'stale');const written=success(f.run());assert.equal(written.action,'replaced');const after=readFileSync(join(f.taskPath,'facts.jsonl'),'utf8');assert.equal(after.split('\n')[0]+'\n',rawHistory);const rows=store.readTaskFacts(f.taskPath);assert.deepEqual(rows[0].finding_dispositions,history.finding_dispositions);assert.equal(rows.length,2);for(const key of ['material_digest','snapshot_tree','layer_states'])assert.equal(Object.hasOwn(rows[1],key),false,key);assert.equal(success(f.status()).phase_progress.freshness,'current');console.log(JSON.stringify({oracle:'history',other_row_bytes:Buffer.byteLength(rawHistory),rows:rows.length,retired_fields_absent:true}));}finally{f.cleanup();}});
+test('ORACLE-CURSOR-ERROR: malformed JSON is loud through public status/run and leaves original bytes unchanged',()=>{const f=fixture();try{const broken='{"record_kind":"stage"\n';writeFileSync(join(f.taskPath,'facts.jsonl'),broken);for(const invoke of [f.status,f.run]){const result=invoke();assert.notEqual(result.exit,0);assert.match(result.stdout+result.stderr,/invalid JSON|JSON|Unexpected|unterminated/i);assert.equal(readFileSync(join(f.taskPath,'facts.jsonl'),'utf8'),broken);}console.log(JSON.stringify({oracle:'bad-json',byte_preserved:true}));}finally{f.cleanup();}});
+for(const scenario of ['missing-pointer','named-unavailable','origin-unavailable'])test('ORACLE-CURSOR-QUALITY: '+scenario+' cannot use historical completed layer as current quality',()=>{const f=fixture();try{const ref='quality/reviews/2026-10-03-001-controlled-unavailable.json';if(scenario==='named-unavailable'){mkdirSync(join(f.taskPath,'quality/reviews'),{recursive:true});writeFileSync(join(f.taskPath,ref),JSON.stringify({task_id:f.taskId,stage:'build-code',status:'unavailable'}));}const row={...f.history('build-code'),review_origin:scenario==='origin-unavailable'?'unavailable':'conducted',review_result_ref:scenario==='origin-unavailable'?{value:null,reason:'controlled unavailable origin'}:{value:scenario==='named-unavailable'?ref:'quality/reviews/missing.json'},layer_states:{implementation_completion:'completed',stage_quality:'completed',delivery:'completed',task_closure:'completed'}};writeFileSync(join(f.taskPath,'facts.jsonl'),JSON.stringify(row)+'\n');const status=success(f.status());assert.equal(status.quality_status,scenario==='missing-pointer'?'unknown':'unavailable');console.log(JSON.stringify({oracle:'quality-current-fact',scenario,status:status.quality_status}));}finally{f.cleanup();}});
+test('ORACLE-CURSOR-TARGET: unknown task and phase reject without altering facts bytes',()=>{const f=fixture();try{for(const target of [{phase_id:'P1',task_id:'T999'},{phase_id:'P2',task_id:'T001'}]){writeFileSync(join(f.repo,'cursor-input.json'),JSON.stringify({phase_progress:target}));const before=readFileSync(join(f.taskPath,'facts.jsonl'),'utf8'),result=f.run();assert.notEqual(result.exit,0);assert.match(result.stdout+result.stderr,/current indexed Phase|not in|target/i);assert.equal(readFileSync(join(f.taskPath,'facts.jsonl'),'utf8'),before);}console.log(JSON.stringify({oracle:'negative-target',mutations:0}));}finally{f.cleanup();}});
+
+test('ORACLE-CURSOR-READINESS: public status needs readable nonempty current materials, not completed prose',()=>{const f=fixture();try{writeFileSync(join(f.materials,'spec.md'),'# Spec\nLegacy prose: build-code completed; quality_status=incomplete\n');const ready=success(f.status());assert.equal(ready.work_status,'ready');assert.equal(ready.quality_status,'unknown');assert.equal(Object.hasOwn(ready,'status'),false);writeFileSync(join(f.materials,'spec.md'),'');const empty=success(f.status());assert.equal(empty.work_status,'not_ready');assert.ok(empty.missing_materials.includes('spec.md'));rmSync(join(f.materials,'spec.md'));const missing=success(f.status());assert.equal(missing.work_status,'not_ready');assert.ok(missing.missing_materials.includes('spec.md'));console.log(JSON.stringify({oracle:'material-readiness',ready:ready.work_status,empty:empty.work_status,missing:missing.work_status,quality:'unknown'}));}finally{f.cleanup();}});

@@ -1,124 +1,32 @@
 ---
 name: build-prd
-description: Orchestrate a portable task-group PRD workflow without owning formal stage execution or PRD prose.
+description: 从已确认方向形成可展示的规划 PRD 和任务地图，经审查后取得用户确认。
 version: 1.0.0
 ---
 
 # Build PRD
 
-## Responsibility and authority
+## 目标与作者边界
 
-`build-prd` is a portable workflow, not a sixth formal development stage. It
-binds an authenticated parent decision and the required sources, presents the
-planning outline and task map, coordinates real clarification or conditional
-UI-design work, and reports the facts returned by those existing capabilities.
+这是一条可搬运的规划工作流，不新增正式开发 stage。消费父任务已确认方向与真实来源，展示任务地图，协调规格澄清/条件 UI 设计、文档建议和最终确认。`skills/spec-prd/SKILL.md` 是唯一 PRD 正文作者，只写同一 `prd.md`；本工作流不另写 PRD 正文，不创建 spec/plan/tasks，也不授权物理交付。规划 PRD 供后续任务消费，不是第五份当前材料。
 
-The `spec-prd` skill is the only owner of formal PRD prose and the single
-`prd.md` write target. This workflow must not write the PRD body, invent product
-direction, create `spec.md`, `plan.md`, or `tasks.md`, or authorize Git or
-physical delivery actions. A planning PRD is an input for later tasks; it is
-not a fifth current material.
+## 方法
 
-For a planning request, the direction map must cover the **完整用户旅程** and
-show **需求覆盖** for every requirement through a responsible card or an
-explicit exclusion with a **明确排除理由**. A later **子任务** receives only its
-**最小读取集** and its own material. The **母任务** and **兄弟** material remain
-**只读**:
-the child does not write them, **不触发母任务close**, **不移动**, or **不删除**;
-any **边界偏离** is recorded with the original boundary, **实际偏离**, and
-**原因**. These are handoff facts, not a new stage or a new store.
+1. 读取当前父决策和必需来源，说明用户旅程、需求覆盖、非目标与未知项。来源或能力缺失写具体原因，不推断父确认或执行成功。
+2. 第一次调用 spec-prd 生成大纲与结果导向任务地图。每条需求分到负责卡或给明确排除理由，展示实际稿件，未获真实答复保持草稿。
+3. 主会话取得对已展示地图的真实答复；涉及 UI 时，使用现有 readiness/render 方法展示真实设计并说明来源与缺口，非 UI 写理由。用户针对旧稿、拒绝或未答时，不当成当前地图/设计已批准。依赖回复的后续内容先等答复；其它安全准备可以继续。
+4. 地图和适用设计得到实际答复后，第二次调用同一 spec-prd 作者扩展成完整 PRD。保持同一决策、来源和地图语义；未知或冲突仍明确列出，不增加第二作者或第三次内容调用。
+5. 展示第二次内容调用后的完整稿，借 wh-review 做文档建议并逐条处理发现。改稿后重新展示真正待确认的内容；保留审查来源、失败与限制。主会话用现有 confirm 取得对最终展示稿的真实答复，不以先前地图答复或 review 推断最终同意。版本指代不清、未展示、拒绝或未答保持 draft；不计算内容身份锁替用户做决定。
+6. 分开报告来源、实际问答、文档审查、未知项、验收范围和交付事实。主会话执行 stage-handoff，写材料现状、已做与未做、证据、风险及子任务下一步；没有执行过的 host/provider/发布/物理交付不能填成完成。
 
-## Portable invocation
+地图覆盖完整用户旅程和每条需求。子任务只接最小读取集及自身材料，父任务和兄弟材料只读；不能由子任务触发父 close、移动或删除父/兄弟材料。边界偏离记录原范围、实际偏离与原因，交原 owner 处理，不造第二套进度或许可对象。
 
-A host may discover this workflow through the `build-prd` portable registry
-entry and carry the three files in this directory plus their declared skill
-closure. The package is host-neutral: it does not assume a particular CLI,
-provider, browser, external host, or platform identity. A host must supply an
-explicit confirmed parent decision and readable required sources. If a source
-or capability is unavailable, report the concrete gap and preserve the
-incomplete or unavailable fact; do not infer confirmation or successful
-execution.
+## 使用技能与人为门、审查点
 
-## Ordered orchestration
+按 `skill-deps.yaml` 直接读 spec-prd、wh-review 及人读 handoff 方法；需要 UI 时读现有 UI 方法，而不是新建内容作者、dispatcher 或审查系统。问答和确认由主会话执行，内容与有边界的研究可按项目分工委派，独立文档建议不由实施者自判。
 
-1. Load the parent decision and required source references, retaining their
-   revisions and hashes where provided.
-2. Ask the existing `spec-prd` capability for the outline and result-oriented
-   task map. Keep this as a draft until the user reviews the displayed version.
-3. If the map contains UI work, route it through the existing readiness/render
-   path and bind every returned design fact to the displayed map revision. For
-   non-UI planning, record that design is not applicable.
-4. After a real map/design response, ask `spec-prd` to expand the same revision
-   into the complete PRD. `spec-prd` remains the sole formal content writer.
-5. Display that detailed draft and perform the non-content
-   `confirm-final-displayed-draft` step. Bind `decision_revision`,
-   `source_revision`, `map_revision`, `prd_revision`, `displayed_draft_hash`,
-   `display_before_reply=true`, and `human_approved=true`. A refusal,
-   unanswered response, wrong revision, false flag, or hash mismatch preserves
-   `draft` and reports the concrete gap; this is not a third content call.
-6. Report source, confirmation, review, missing, partial, unavailable, and
-   delivery facts separately. Never claim external host invocation, provider
-   success, user confirmation, publication, or physical delivery unless the
-   caller supplies that fact.
+confirm 用于 make-decision/build-plan/build-prd 收口，保存用户对实际展示内容的真实答复；此处的最终稿确认不是第三次内容调用。authorize 仅在不可逆 Git/交付动作前，通过 `runtime/interface/git-authorize.mjs` 核动作、分支和当前 HEAD；HEAD 不一致时拒绝消费旧记录，已有用户授权覆盖动作和范围时按当前 HEAD 重新记录并消费，未覆盖的新增动作或范围才需用户决定；阶段确认不授权 commit/push/merge/archive/cleanup。三必留审查点为 build-plan wh-review 合并、build-code 每 Phase OCR、verify-code 终末 OCR；本工作流文档建议仍由 wh-review 按分工执行。
 
-### `report-facts-and-handoff` save/read contract
+## 安全写入与收口
 
-The sixth step is the existing portable **report-facts-and-handoff** seam. It
-does not run a third content call, is **not a formal stage**, and does not
-produce close approval or an operation confirmation. The non-stage reflection
-is not a `stage-reflection` result and is not a formal stage identity.
-
-The step uses one small JSON payload with only these fields: **仅
-`task_id`、`workflow`、`material_refs`、`reply_text`、`step_results`、
-`reflection_facts`**. `material_refs` contains explicit current decision/PRD/
-attachment references and their **raw-byte SHA** hashes; `step_results` contains the actual
-portable workflow steps; `reflection_facts` contains the non-empty conclusion
-and the steps it cites. The caller does not add an accepted/rejected status,
-close plan, authorization, or a new completion enum.
-
-In one-line form the allowed payload is: **仅 task_id、workflow、material_refs、reply_text、step_results、reflection_facts**.
-
-The producer runs the same existing save/read seam in the current task kernel:
-
-```js
-const reportFactsAndHandoff = (payload, { task, kernel }) => {
-  if (payload.task_id !== task.identity.taskId || payload.workflow !== "build-prd"
-      || payload.reply_text.trim() === "" || !Array.isArray(payload.material_refs)
-      || !Array.isArray(payload.step_results) || !Array.isArray(payload.reflection_facts)) {
-    return { status: "unavailable", reason: "invalid or empty handoff payload" };
-  }
-  const raw = `${JSON.stringify(payload, null, 2)}\\n`;
-  const ref = `quality/evidence/portable-workflow-outcomes/build-prd/${sha256(raw)}.json`;
-  try { kernel.publishCanonicalRecord(ref, raw); }
-  catch (error) { return { status: "unavailable", reason: `write failed: ${error.message}` }; }
-  return readReflectionForReport({ task, ref, expectedRaw: raw });
-};
-
-const readReflectionForReport = ({ task, ref, expectedRaw }) => {
-  try {
-    const readback = task.readRecord(ref);
-    if (readback !== expectedRaw || sha256(readback) !== ref.split("/").at(-1).slice(0, -5)) {
-      return { status: "unavailable", reason: "readback hash mismatch" };
-    }
-    return { status: "recorded", ref, sha256: sha256(readback), payload: JSON.parse(readback) };
-  } catch (error) {
-    return { status: "unavailable", reason: `read failed: ${error.message}` };
-  }
-};
-```
-
-The report and handoff use the validated readback value, not the pre-save
-object. Empty text, wrong task/workflow, missing material or step references,
-write failure, read failure, or hash mismatch stays `unavailable` with the
-concrete reason. A valid save/read fact is not a formal stage reflection,
-close-plan confirmation, or delivery fact; those existing owners remain
-separate.
-
-## Boundaries
-
-- Do not add `build-prd` to the canonical five stages or their stage manifests.
-- Do not add `prd.md` to `CURRENT_MATERIAL_FILES`.
-- Do not dispatch this Markdown file through `core/dispatch-component.mjs`;
-  discovery and packaging are static portable-workflow concerns.
-- Do not add a second dispatcher, review system, content writer, store, gate,
-  or public command.
+对目标材料先核工作区和写集，写入使用现有安全原子写方法；共享记录冲突使用记录锁，失败和来源缺失如实保留，原始报告只存单份。展示稿与真实答复让人能理解“批准了什么”，不通过机器认证或内容寻址包装制造成功。主会话按 `skills/stage-handoff/SKILL.md` 写 `quality/evidence/handoff/build-prd.md`；缺交接只报告，不当工作门或物理 close 授权。可总结经验，不要求固定机器复盘或绑定交接。正式阶段/规划事实仍由现有 owner 与公共流程负责，本方法不增加公共命令、schema 或存储对象。

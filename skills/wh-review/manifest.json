@@ -9,10 +9,8 @@
   "runtime_review": {
     "stage_materials": "runtime/review/stage-materials.json",
     "schemas": {
-      "attempt": "runtime/review/schemas/attempt.schema.json",
       "result": "runtime/review/schemas/result.schema.json",
-      "stage_materials": "runtime/review/schemas/stage-materials.schema.json",
-      "ac_evidence_summary": "runtime/review/schemas/ac-evidence-summary.schema.json"
+      "stage_materials": "runtime/review/schemas/stage-materials.schema.json"
     }
   },
   "stage_skill_plan": "stage-skill-plan.json",
@@ -28,31 +26,48 @@
   "contracts": {
     "make-decision": {
       "path": "contracts/make-decision.md",
-      "review_tracks": ["direction", "detail"],
+      "review_tracks": [
+        "direction",
+        "detail"
+      ],
       "required_skills_by_track": {
-        "direction": ["intake-decision-review", "plan-ceo-review", "review"],
-        "detail": ["simplicity-guard", "plan-ceo-review", "review"]
+        "direction": [
+          "intake-decision-review",
+          "plan-ceo-review",
+          "review"
+        ],
+        "detail": [
+          "simplicity-guard",
+          "plan-ceo-review",
+          "review"
+        ]
       }
-    },
-    "build-spec": {
-      "path": "contracts/build-spec.md",
-      "required_skills": ["review"]
     },
     "build-plan": {
       "path": "contracts/build-plan.md",
-      "required_skills": ["review"]
+      "required_skills": [
+        "review"
+      ]
     },
     "build-code": {
       "path": "contracts/build-code.md",
-      "required_skills": ["simplicity-guard", "review"]
+      "required_skills": [
+        "simplicity-guard",
+        "review"
+      ]
     },
     "verify-code": {
       "path": "contracts/verify-code.md",
-      "required_skills": ["review"]
+      "required_skills": [
+        "review"
+      ]
     },
     "build-prd": {
       "path": "contracts/build-prd.md",
-      "required_skills": ["review", "simplicity-guard"]
+      "required_skills": [
+        "review",
+        "simplicity-guard"
+      ]
     }
   }
 }

@@ -43,53 +43,17 @@ version: 1.0.0
 - 给出 `confirmed`、`supported`、`disputed` 或 `unresolved`，并保留反例和未决项；
 - 结论必须说明它会改变哪个决策轴，不能只堆链接。
 
-## R4：落盘 research-report.v1
+## R4：保存普通研究报告
 
-报告写入当前任务质量证据区，不写仓库源码。使用内容寻址文件名：
-`quality/evidence/research/<sha256>.json`，文件名中的 sha256 必须等于报告原始 JSON
-字节的 SHA-256；写入后回读并校验 hash。生产接线把完整报告作为 make-decision
-`stage-runtime run --action=execute` 输入的 `research_report` 字段提交；runtime 通过现有
-canonical writer 发布后，只把返回的 ref 交给 stage handler，调用方不得自己写 ref 或同时提交
-`receipts.research`。
+把报告写到任务约定的 `quality/evidence/research/日期-主题.md`，使用安全写入并回读内容。返回实际文件路径；保留原始失败和旧报告，不用内容 hash 命名、run 认证或 receipt 作为 Talk 输入前提。
 
-报告至少包含：
+报告包含问题/决策轴、查询与工具实际使用、读过的来源及定位、关键证据、独立交叉核对、冲突和反例、未决项、适用范围、停止/饱和原因、独立复核事实与覆盖限制。无法量出的指标写 unknown/null 与原因；这些读数不判通过。
 
-```json
-{
-  "schema_version": "research-report.v1",
-  "question": "缺口问题",
-  "decision_axis": "决策轴",
-  "rounds": 1,
-  "sources": [{"url_or_ref":"...","source_tier":"primary|secondary|inferred","read_original":true}],
-  "evidence": [{"claim":"...","source_ref":"...","locator":"...","confidence":"high|medium|low"}],
-  "triangulation": {"status":"confirmed|supported|disputed|unresolved","conflicts":[]},
-  "open_items": [],
-  "coverage": {"dimensions":[],"first_party_ratio":null},
-  "saturation": {"status":"saturated|timeboxed|not_saturated","reason":"..."},
-  "candidates": [{"candidate_id":"C-1","plain_language_summary":"...","source_refs":["..."],"recommendation":"recommended|not_recommended","recommendation_reason":"..."}],
-  "tool_usage": [{"tool":"anysearch|web_fetch|subagent|glob|grep|read|git|ast-grep|none","question_id":"Q-1","queries":[],"attempts":[]}],
-  "review": {"status":"pending|completed|unavailable","evidence_ref":null},
-  "skip": null
-}
-```
-
-Every completed report declares `candidates`, using `[]` only when no
-user-visible alternative exists. When research presents alternatives that the
-user can choose between, declare each one in `candidates`. A declared candidate
-is delivered only when it has a plain-language summary, source refs that each
-occur in both `sources` and `evidence`, a recommendation (including
-`not_recommended`), and a reason. The runtime derives the content-addressed
-full-report ref; do not write a self-referential report ref into the JSON. A
-missing candidate-set declaration or candidate fields remains an explicit
-incomplete delivery fact rather than a successful research summary.
-
-`first_party_ratio`、收敛率、OPEN 数和工具使用记录是事实维度，不是通过条件。
-缺省值使用 `not_applicable` 或 `null` 并说明原因；报告不完整时保留
-`incomplete`/`unavailable`，不降级成空 findings 或通过。
+出现可供用户选择的候选时，逐项写候选摘要、与原需求关系、原始来源、推荐/不推荐及理由。没有候选写真实理由；缺字段、未读原文、失败或不可用保持 incomplete/unavailable，不用空报告冒充完成。报告没有用户决定或质量 verdict。
 
 ## R5 独立复核
 
-由独立上下文复核当前报告的来源绑定、原文阅读、三角测量、冲突和 hash。复核只给
+由独立上下文复核当前报告的来源与定位、原文阅读、三角测量、冲突和覆盖限制。复核只给
 建议和 findings，不给产品方向 verdict。复核不可用时报告
 `review.status: unavailable` 及错误类别；这不阻断 Talk，但也不能宣称研究已被独立
 复核通过。
@@ -118,6 +82,6 @@ incomplete delivery fact rather than a successful research summary.
 
 ## 消费与所有权
 
-`make-decision` 是唯一业务消费者和 owner；它只把报告的 path+hash 作为 Talk 输入，
+`make-decision` 是唯一业务消费者和 owner；它只把报告的实际路径 作为 Talk 输入，
 不复制研究正文。研究机制被正式替代且没有消费者后，才可按仓库治理规则删除本技能
 和对应登记；旧报告只读保留。

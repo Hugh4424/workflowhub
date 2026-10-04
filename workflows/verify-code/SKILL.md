@@ -1,226 +1,40 @@
 ---
 name: verify-code
-description: 对当前实现做一次高质量代码审查，检查真实消费者、生命周期、安全、失败边界和测试强度。
+description: 独立核对实际实现、真实消费者、失败边界和验收证据。
 version: 5.2.0
 ---
 
-# Verify Code：代码审查
+# Verify Code
 
-This verification creates no new stage, material, or gate; it is no gate for
-same-task repair and records quality
-facts and keeps same-task repair available.
+## 目标与边界
 
-## 统一回退协议
+对当前实现做一次终末代码审查，同时独立复核本次受影响验收结果。读取 decision-log、spec、物理 Phase 和实现，索引只导航。不要重演 Talk/Grill 或替上游重写规格；代码问题留同任务修，材料疑点交作者并保留风险，历史材料与审查只作背景，不启用 pre 工作流。
 
-五个正式 stage 共用 `runtime/stage/stage-content-contracts.mjs` 的
-`validateFallbackProtocol`。实现级问题留在当前 stage 修复；规格歧义在
-pre/history 回 `build-spec`，post 回 `build-plan` 的 `spec-clarify`；方向级问题回 `make-decision` 做增量决策；材料缺口回对应
-owner；环境不可用只记录 attempt。错配只让正式完成事实保持 `incomplete`，保留同 task 修复，禁止整阶段重跑；不新增 stage、public command、store 或 gate。
+## 方法
 
-## 阶段末遗漏披露
+1. 读真实入口、消费者、diff、完整 AC 和 build-code 的实际执行原件，区分已经执行、未执行、失败、不可用及覆盖限制。原始来源、服务、样本或 Phase 正文缺失保持 unknown/unavailable，不以文件存在、旧 review 或 exit0 代填通过。
+2. 发起一次终末独立代码审查，正常使用 OCR，能力与条件回退见下节。审查输入包含 verify-code 合同、provider 协议、stageReviewFocus、lens 正文、当前 diff、完整 AC 与可用执行原件；执行者检查真实消费者、生命周期、权限、数据泄漏、并发、取消、恢复、资源释放和测试强度。
+3. 保留每路 provider 的原始 findings、实际执行者、错误、取消与覆盖限制。已安装 OCR 的失败不由其它 route 漂白。外发材料核实际范围、路径安全和敏感信息脱敏，缺真实只读能力时明确不可用。
+4. 按金钱、隐私权限、不可逆后果、外部副作用、跨 Phase 旅程和失败恢复风险独立选样；逐项列已抽查与未抽查 case/AC 及理由。沿原始业务规则→真实入口→断言→实际效果核语义，代码质量、业务效果、测试充分性分别给证据；模拟结果不当外部效果，缺数据、权限或服务保持未知。
+5. 主会话逐条判断 finding，仅修影响当前交付的有效代码问题，不因材料偏好扩大范围。有效问题回原实施会话；严重未修风险列影响、证据、owner 与“修复或明确接受”的选择，用户未作真实选择不能假记 accepted_risk。
+6. 对新修复和真实疑点只做必要定向复验，事先列 file/case 集合，把实际 command/exit/raw 和恢复结果写在对应 finding 处置旁；无改动或疑点时说明无需复跑。不重派第二次正常代码审查，不重做全量上游测试。
+7. 保留原始审查与当前 fixed、rejected_invalid、accepted_risk、needs_human 处置。真实修复可报告 resolved，不能改写原 review 或用摘要覆盖失败。核对本次 actual/oracle、未执行事项和覆盖限制；材料问题交 owner，不另建恢复、继任或重绑定任务。
+8. 给人读结论并执行 stage-handoff：检查范围、代码修复、原发现和处置、必要验证、业务结果、未知项、上游材料风险及下一步。缺 review/执行原件/严重风险处置时保持 incomplete；继续同任务修复，但不宣称已完成验收或物理交付。
 
-阶段结束的大白话总结必须逐项列出本阶段所有未完成、失败、跳过、不适用、`unknown`、`unavailable` 或 `incomplete` 的 step 和 skill，并写真实原因与证据引用；没有遗漏就明确写“无遗漏”。执行事实由当前 WorkflowHub 会话通过正式 `run` 输入提交，不依赖宿主会话绑定、隐式选 task 或等待时限。
+UI 适用时从真实页面和 Component Quality Map 核消费者、状态 owner、typed ViewModel、CSS/token、story/test 更新及已实际产生的浏览器状态；Design.md 与 Experience.md 各自职责不混写。缺扫描、浏览器、fixture、viewport、截图或入口受阻保持 unknown/unavailable，不能把未观察当 N/A 或视觉通过。只有新疑点才重跑相应浏览器检查，先按 isolated-browser-qa 管理隔离、登录态与自建资源清理。
 
-阶段末逐项披露协议：主会话先读取本 stage 的 `workflows/<stage>/steps.json`
-manifest，再按声明顺序对齐当前阶段事实、产物和质量证据。verify-code 不等待或依赖外部 `stage_outcomes`；
-若某项没有当前事实，明确写真实原因。每一项分别读回并报告执行状态、产物存在性和完成判据是否齐备；
-产物存在不能替代完成判据。至少区分“未启动”“跳过”“产物缺失”“完成判据缺失”、
-`unknown` 与 `unavailable`。`executor_absent` 只能记为不可用，不能记为正常跳过；
-不得用一条阶段结论均摊到所有 step/skill。
+## OCR 能力与回退
 
-## 阶段末复盘（必须执行）
+先检查 `ocr` 命令和 `ocr --version`。仅命令不存在（ENOENT）或版本低于1.12.9，回退 wh-review 执行同一终末代码审查，保留检测、fallback 原因、原始输入、真实输出和限制。版本检测其它错误不推断未安装；OCR 已装而执行失败、超时或取消时不回退，按真实 unavailable/失败记录。依赖真实 OCR 的测试在未安装时显式 skip 并披露。不能把成功替代伪标成 OCR，也不把不可用写成空 findings。
 
-阶段结束时，当前主会话按 `stage-reflection` 产出 `stage-reflection.v2` judgment JSON，经现有 `run --action=reflect` 或 runner 的 `on_stage_end` 调度提交。`judgments[].evidence_refs` 必须引用本阶段当前可复核的质量事实、测试、review 或阶段行；不要求也不读取外部 Stage Agent、bridge、session 或 stage outcome。writer 直接核对当前 `identity` 的 task、worktree、branch、attempt、material_revision 和 snapshot_tree。缺 judgment 或 reflection executor 时保持 `unavailable(executor_absent)`，保留实际错误且不阻断 stage、repair 或 close，不借用旧复盘。
+## 人为门与审查点
 
-JSON 保留六个结构化区块：`what_helped`、`what_to_improve`、`blockers`、`intervention_reasons`、`what_to_simplify`、`simplifiable_now`，以及 `status_matrix`、`source_completeness`。条目写真实证据与 confidence；无发现写 `none_observed`，未知写 `unknown` 和原因，不适用写 `not_applicable` 和原因。
+confirm 在 make-decision、build-plan、build-prd 收口记录对实际展示材料的真实答复；本阶段不新增日常代码审查确认。确需真人观察的业务效果，复用已有验收确认：向授权业务验收者说明安全权限、数据、真实入口、操作、成功/失败恢复判据、应回传证据及残余风险。未答、未实测、服务缺失或证据冲突保持待确认，不推导业务通过，不要求重复已完成 Talk/Grill。
 
-消费实际返回的 `quality/stage-reflection/<stage>/<semantic-key>.json` 与原始 bytes 的 `sha256`；key 与 bytes hash 含义不同。同来源同判断重试复用首次 ref、时间和 bytes，来源或判断变化产生新原件；旧 `<stage>.json` 只作显式历史读取。复盘异常、lesson 合并失败和原 stage 错误分别保留，不覆盖原件，也不改变原 stage 失败。
+authorize 只在不可逆 Git/交付动作之前，通过 `runtime/interface/git-authorize.mjs` 核动作、分支和当前 HEAD，HEAD 不一致时拒绝消费旧记录，已有用户授权覆盖动作和范围时按当前 HEAD 重新记录并消费，仅未覆盖的新增动作或范围需用户决定；代码审查结论和验收答复不能代替 commit/push/merge/archive/cleanup 授权。三必留审查点为 build-plan wh-review 合并、build-code 每 Phase OCR、本阶段终末 OCR；不恢复全 Phase 集成审查。
 
-`validate-stage-reflection.mjs` 内部验证消费边：较早 output 与较晚 input 的同一引用才形成 edge；来源不完整保持 partial/unknown。`remove_candidate` 仍须既有完整零消费证明和人工介入条件，否则降为 `needs_evidence`。
+## 使用技能与安全收口
 
-## 职责
+按 `skill-deps.yaml` 直接读取方法；真实消费者检查、定向验证和独立审查按项目分工委派，主会话负责发现处置、用户选择与总结。技能与工具缺失如实说明，不能增加公共命令或新状态对象。原子写入、共享记录冲突保护与工作区核对分别使用现有窄工具，失败保持可见；历史原件只读。
 
-verify-code 审查当前实现，并在同一次常规独审中复核本次逐项验收结果、执行原件和冻结材料。上游材料的撰写与修订仍由原 stage 负责。
-
-当前 task 的 cohort 材料存在且可读，就直接开始或继续验收：
-pre/history 为 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md`；
-post 为 `decision-log.md`、含全局实现设计的 `spec.md`、
-`phases/index.md` 与其引用的每个物理 `phases/P<n>.md`。索引只提供指针，
-不能代替 Phase 正文。旧事实只作背景，不是工作许可证，也不能冻结同 task 修复。
-
-它检查当前实现是否有会影响交付的代码问题：
-
-- 真实入口、真实 consumer 和接口两端是否一致；
-- 状态机、生命周期、并发、取消、资源释放和错误传播是否正确；
-- 权限、安全边界、数据泄漏和失败恢复是否可靠；
-- 是否新增了重复控制面、无 consumer 的抽象或不必要的兼容分支；
-- 测试是否走真实入口、关键分支、外部状态和失败边界，而不是只让 mock 或绿色命令通过。
-
-当前 cohort 材料由上游 stage 撰写；本阶段读取当前内容以核对实现意图及验收输入，不重演 Talk/Grill 或上游材料生成。完成声明必须对应真实当前执行、逐项结果和审查绑定；缺失或错绑事实保持 incomplete，只有疑点才复跑受影响检查。
-
-材料问题应在发现它的 stage 由 `spec-analyze` 和该 stage 自己修复；verify-code 发现材料疑点时只报告“上游材料风险”，不把它变成最后阶段的代码门禁。
-
-verify-code 不改写作者材料。pre/history 的 `spec.md` → build-spec，
-`plan.md`/`tasks.md` → build-plan；post 的 `spec.md` 与
-`phases/P<n>.md` → build-plan。post `phases/index.md` 由 build-plan 从
-Phase 头部再生，执行事实只进入现有 task facts/quality evidence。
-
-## 原始需求到实际结果抽查
-
-在本次常规代码审查中，对交付范围逐项抽查母 PRD/原始需求 →
-`decision-log.md` 的已确认裁决 → `spec.md` 的 FR/AC →
-各物理 `phases/P<n>.md` 的任务与 oracle → 当前实现、测试/质量证据。
-抽查以受影响需求、真实消费者、失败/恢复与跨 Phase 接口为重点；记录
-可追溯、语义偏离或 `missing`，附源锚点及实际证据引用。缺任一原始来源、
-Phase 正文或当前证据时不得由索引行、绿灯命令或旧 review 代填为通过。
-这是当前审查的事实核对，不是重演 build-plan 的规格完整性裁决，也不是
-新的验收 gate；不重写上游材料，不重复运行已执行测试。代码问题在同一 task
-修复，上游材料缺口交回 owner，质量缺口如实降低完成声明。
-
-### 独立业务语义风险选样
-
-先为每个受影响 AC 读回 build-code 的应测与实测 case/测试身份、当前快照、
-原始 stdout、receipt/hash 和未执行原因。由 verify-code 执行者基于独立冻结证据，
-按金钱、隐私/权限、不可逆后果与恢复、外部副作用、跨 Phase 旅程、
-失败反例的风险选样；逐项列 **已抽查 case/AC ID 与理由**，以及
-**未抽查 case/AC ID 与理由**。未抽查项保留机器事实和覆盖限制，不写成已做
-独立语义复核。完成条件：每个受影响 ID 都归入两类之一并指向当前原件；
-缺原件的 ID 标 `unknown` 或 `unavailable` 与 owner。
-
-对已抽查样本，从原始需求和业务规则版本，经 case/AC、Phase/Task 追到
-真实入口、消费者、测试断言、实际业务效果及能推翻结论的反例。分别记录
-业务效果 `business_effect=observed_pass|observed_fail|unknown|unavailable|N/A(reason)`；
-测试语义充分性 `semantic_test_adequacy=adequate|inadequate|unknown`；
-代码审查 `code_review=clean|resolved|incomplete|failed`。核对代码 exit 0
-但业务效果错误的可能性，不从 review clean 推出业务通过。逐 AC 注明真实
-依赖与模拟 mock 的边界、供应商/外部服务的 API 与版本、环境权限及数据、
-超时/故障/回滚日志。模拟效果不充作真实外部效果；低置信假设与来源冲突、
-未盘点旧案例须写可反驳的独立证据和影响，不造统一置信度阈值。
-完成条件：三类结论各有自身证据；缺服务、来源或可观察结果保留
-`unknown`/`unavailable` 和 owner，不借代码审查结论补空。
-
-高风险样本写明影响面、负向拒绝与失败恢复 oracle，以及严重 finding 的
-修复复测、附证误报、明确接受具体风险或待裁定处置。P11 真实 UI 入口受阻
-仍记 `unknown`/`unavailable` 与责任人，不能按 N/A 或通过。完成条件：
-每个严重残余风险都有受影响 case/AC、证据、owner 和下一步处置。
-
-## Conditional UI consumer alignment
-
-For `ui_applicability=ui`, consume the existing
-`frontend-component-quality` Component Quality Map and the UI Contract through
-the real entrypoint. Check each real consumer, state owner, typed ViewModel,
-CSS/token owner, `story_or_test_update`, compatibility boundary, and the browser/state facts that were
-actually produced. A missing design source, consumer, browser, fixture,
-viewport, or screenshot is reported as `unknown`, `unavailable`, or `N/A +
-reason`; it is not silently treated as visual completion and is not a gate.
-
-`design-alignment.mjs` is the sole projection for this check. A design gap may
-return an `unknown` alignment with a recoverable handoff and
-`continuation_allowed=true`; verify-code does not create a UI stage, fifth
-material, review controller, or public command. Non-UI tasks retain the
-existing code-review path and record UI facts as not applicable.
-
-The alignment projection also checks the current `Design.md` and `Experience.md`
-source identities and any explicitly supplied `consumer-census.v1`, bound to
-the current implementation snapshot, against the real changed-file consumers.
-The caller must supply the actual scanner facts; the census validator does not
-perform a scan. Missing facts remain `unknown`/`missing` with the actual owner
-and evidence gap, and never imply zero consumers or completed alignment.
-A stale hash, missing explicit anchor, missing consumer, or
-unsupported CSS/data route is reported with its unknown reason and evidence;
-verify-code does not rewrite either project standard or invent a browser pass.
-
-## 审查依赖
-
-通过现有 public `review --action=record` 派发一次 OCR delegation 代码审查。OCR 选择认证 packet，host executor 输出 findings；保留真实 provider、model、session、transport、错误及 provenance。审查结束后不为得到空 findings 或补齐证据再次调用；`unavailable` 不改写为空 findings。如果 findings 在同一 task 已逐条修复，保留原 review 的快照身份，把当前阶段结果记为 `resolved`。
-
-review 结果只是质量事实，不是继续工作的许可证。缺质量事实只限制完成声明，不限制继续验收和修复；发现代码 finding 就回同一 task 修复，不新建任务。
-
-### AC-REVIEW-011：终末 OCR 工具不可用时的替代审查
-
-当前 WorkflowHub 主会话读取本次终末代码审查的 OCR canonical attempt：
-工具 `unavailable` 且零成功审查路时，在同一 verify-code 范围内恰好调用一次
-`skills/architect-code-review/SKILL.md`。执行者只需能读当前仓库；调用前核对真实
-输入范围和执行能力。将当前最终 diff、
-完整 AC、逐项验收原件、可读的 OCR packet 和原始失败原因作为输入。
-本分支由主会话显式读取技能，不增加固定审查轮次或旧 broker 依赖。
-执行能力不可确认时记替代 unavailable；reviewer 与实现者是否同源不构成阻塞。
-明确的人为取消只保留取消事实；已有成功 OCR 路时不追加替代调用。
-
-一次调用后保存 task/stage、材料版本和代码快照、OCR `attempt_ref`、执行者
-身份、实际 invocation/exit、原始输出、findings、覆盖、
-错误及原件 hash。替代完成时逐条处置真实 finding，并披露 OCR 缺口；
-替代也不可用时明确记 `unverified`，列出两路原因及未审维度，不重派、
-不写空 findings 假绿。旧 wh-review/broker 只读，不充当替代审查。
-
-替代输出经当前会话的 `recordDshCodeReviewResult` 写入现有 canonical
-wh-review attempt/result；原 OCR unavailable attempt 原样保留。
-`receipts.quality_review` 可消费已绑定当前 task/stage/snapshot/material、
-且同一范围内 OCR 无成功路的 Architect result_ref。该结果的 provider
-保持 `dsh-code-review`，不能标成 OCR。替代未完成或认证不通过时，
-`code_review` 保持 `incomplete/unverified`；单独的 `capture-evidence`
-附件或当前会话陈述不能冒充正式审查结果。
-AC-REVIEW-011 另按该终末 scope 的原始 OCR unavailable attempt、恰好一次
-真实替代调用与身份/原始输出/exit、缺口和披露判定：这些原件齐全
-即可单独记 achieved；替代也不可用时须有一次真实失败调用和 `unverified`
-披露。缺项记 incomplete。这不增加推进 gate，也不把替代输出写成 OCR result。
-
-## 按工作类型派子代理
-
-规则唯一权威见 `AGENTS.md`。真实入口与消费者调研、定向测试和独立审查/红队派子代理；实施修复回原实施子代理。主会话处置发现、呈现验证结论与取得用户确认；无实现变化时不派实施任务，纯材料任务不虚构运行时测试。
-子代理先落盘重产物，再回传引用。只回摘要与 ref，不回正文或长日志。按子问题增量落盘并回传，不攒到最后。
-
-## 固定流程：最多四个动作
-
-1. **OCR 代码审查一次**：以当前 diff、完整 AC 文本和真实入口发起 `review --action=record`；其 result 或 unavailable attempt 绑定当前代码快照与材料。若调用方另有已认证的 `reviewed_execution`，它只是可选的执行对照 provenance，不是 OCR 派发前置条件或 reviewer 资格条件。工具 unavailable 且零成功路时，按上述 AC-REVIEW-011 分支在当前会话调用一次替代。
-2. **主 Agent 修复一次**：只修复影响当前代码交付的有效 finding；每个 finding 记录 `fixed`、`rejected_invalid`、`accepted_risk` 或 `needs_human`。
-3. **必要定向复验**：只针对本次有效 finding 的修复和受影响行为运行检查，并保留 finding 处置与实际结果。
-4. **正式发布**：通过 `run` 的 `receipts.quality_review` 消费 OCR canonical result_ref、unavailable attempt_ref，或符合上述条件的 Architect canonical result_ref，读回 `code_review` 质量事实；替代调用记录单列证据和限制，正式绑定缺失时保持 `incomplete/unverified`。
-
-普通请求不依赖 `candidate_experiment`。adapter 在派发前准备当前材料及 snapshot，将真实 bytes 放入同一 provider bundle；宿主身份不是请求必填项，也不参与审查是否能够派发。该次审查形成 E2E binding，不补绑旧结果。
-
-直接 provider 不受 WorkflowHub 额外的固定 wall-clock deadline。provider 到达自己的终态或调用方明确取消前，host 保持其运行；健康/输出采样只作诊断，不触发取消。首个 provider 到终态后立即解析并通过增量结果回调交给调用方处理，剩余 provider 继续运行；后续 provider 到终态时，再把迟到 findings 交给同一回调决定合并、处置或保留，不能因首个结果取消 sibling。完整 round 返回值仍保留所有已到终态的 provider provenance；单路失败保留为该路事实，已有成功路保持 `available-with-failures`，全部失败才记 `unavailable`。Kimi 使用 packet-local、只开放 `Read` 的 agent profile，并禁用 user/project skill 自动发现；只有无法提供真实只读工具边界的 provider（当前 OpenCode direct CLI）才记 `OCR_PROVIDER_UNSUPPORTED`，不能只靠 prompt 继续派发。reviewed execution 的 stdout/stderr 按 `ref+hash` 去重，UTF-8 只传一次文本表示；provider packet 使用 evidence index、分片当前材料和按需 raw execution output。
-
-调用方把 review 返回的 canonical ref 作为 `receipts.quality_review` 交给现有 `stage-runtime run`；runtime 认证真实结果并由 `codeReviewFacts` 消费。`receipts.review` 仅用于跨 stage 的 build-code Phase 审查，不能充当 verify-code 的 advisory 第二次审查。验收确认沿已有 `confirm` 记录实际用户回复，在 review 之后通过 `receipts.confirmation` 交给 verify；不代答、不重复请求同一确认。`readCurrentE2eAcceptanceEvidence` 核对同次 review、confirmation 和 nested freshness。缺 review、确认或执行原件时保持 missing/incomplete，不推断验收或 release。旧 finding 已逐条修复时，后续 `run` 可提交 `code_review_repairs`；runtime 校验当前源码 hash、受影响通过测试和完整覆盖后标记为 `resolved`。
-
-当前 WorkflowHub session 发布绑定当前 task、stage、材料和快照的代码审查结果。真实修复可为 resolved，原 review 仍保留其旧身份；未修复 finding 或 unavailable 限制完成声明，保留同 task 修复。commit、push、merge、archive、cleanup 和 close 仍由已有独立授权流程处理。
-
-OCR 只负责确定性 packet/file 选择；host executor 负责 LLM findings，OCR 不生成 finding。普通 verify-code 请求必须带当前代码 diff 与完整 AC 文本； malformed 请求直接报错。
-
-## 范围边界
-
-build-spec、build-plan、build-code 各自负责自己的材料、计划、任务、阶段测试和阶段收尾。verify-code 不替它们兜底，也不把“最后发现”改写成 verify 的责任。
-
-build-code 的执行与测试原件作为本次复核输入，由既有 runtime 认证当前身份和 freshness。逐项结果、缺失项和 coverage limits 均保留；只复跑有疑点的受影响部分，不为 verify 重跑完整上游流程。代码质量、功能验收、product release 和 physical close 分别报告。
-
-发现真实代码 finding 就在同一 task 修复。发现上游材料问题就保留风险并交回对应 owner；不创建 successor、recovery、rebind 或 continuation task。
-
-## 结论
-
-- `passed`：当前代码 review 已完成，没有未处置的 actionable serious code finding；如果 finding 在同一 task 已修复，`resolved` 与无 finding 的 `clean` 具有同等完成含义；这不是“所有材料和证据都齐了”。
-- `incomplete`：代码 review unavailable，或仍有未处置的 actionable serious code finding；真实原因必须保留。
-- `failed`：代码本身有明确失败，回同一 task 修复。
-
-`incomplete` 只限制质量声明，不限制同一 task 继续修复。宿主推进使用 `work_status`/`continuation_allowed`，不能把 `status=in_progress` 或 `quality_status=incomplete` 当作工作冻结。
-当 `work_status=ready` 而质量事实为 `in_progress`、`incomplete` 或 `unavailable` 时，继续下一项安全复核或修复；不等待 provider 自行恢复。每个既有 review step 记录真实 advice 或失败事实后按 manifest 前移，后续修复或材料变化不自动回跳；只有该 review step 本身未真实完成或执行错误才按普通步骤修复重做。
-
-## Preflight self-check
-
-Before submission, optionally run `stage-runtime.mjs run --action=preflight --stage=verify-code --input=<payload.json>` as a local payload-shape self-check (not a quality gate), and fix any reported protocol errors first.
-
-## 阶段末交接
-
-用大白话说明：检查了哪些代码入口和 consumer、修了哪些代码问题、OCR review 有哪些 findings、每条 finding 如何处置、必要检查的真实结果、剩余代码风险和上游材料风险。审查绑定的旧快照只说明“当时看了什么”；修复、当前检查和阶段结果说明“现在交付什么”。
-
-机器测试与上述独立审查之后，把仍需真人观察的业务效果交给**既有最后授权确认**：
-向非实施者的授权业务验收者写出环境和安全权限、数据准备、精确真实入口与
-操作步骤、成功判据、失败拒绝与故障回滚判据、应回传的日志、截图、交易号、
-时间和原件引用，并列残余风险、责任人以及失败后的修复或明确接受路径。
-记录其真实接受、拒绝或延期答复与证据；无回复、未实测、服务不可用或
-证据冲突不得报业务通过。授权者不承担日常选测、跑测和逐例对账；这些
-仍由 build-code 的现有执行与事实链完成。完成条件：交接步骤可由授权者
-按真实环境操作，答复只经现有 `confirm` 和 `receipts.confirmation` 绑定；
-没有答复就保留待确认，不创建另一确认槽。
-
-不再要求用户重复 Talk/Grill 或重复确认，消费现有真实执行证据；用户确认仅沿上述既有验收确认语义，不重复确认代码审查结论。阶段交接只报告当前审查事实、质量状态和剩余风险；close 授权仍是独立动作。
-对上游材料本身，本阶段不重新裁决其完整性；按上文抽查原始需求到实际结果的链路并披露 `missing`，不重列全量 AC 结论。不要要求用户补交 verify-code 证据，不把交接确认当作代码 review 的证据门禁。
+阶段末主会话使用 `skills/stage-handoff/SKILL.md` 写 `quality/evidence/handoff/verify-code.md`，供用户交接材料现状、当前代码、真实检查、风险和下一步。交接执行不是门，缺失只披露；不要求固定机器复盘或交接认证。正式阶段事实仍由现有公共流程处理。实现、质量、业务验收、发布和物理 close 分别报告，不互相代填。

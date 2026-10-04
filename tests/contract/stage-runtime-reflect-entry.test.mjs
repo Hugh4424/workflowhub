@@ -1,150 +1,19 @@
-import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import {afterEach,describe,expect,it} from "vitest";
+import {execFileSync,spawnSync} from "node:child_process";
+import {mkdirSync,mkdtempSync,readFileSync,realpathSync,rmSync,writeFileSync,existsSync,readdirSync,symlinkSync,linkSync} from "node:fs";
+import {tmpdir} from "node:os";import{join}from"node:path";
+const roots=[];afterEach(()=>{while(roots.length)rmSync(roots.pop(),{recursive:true,force:true});});
+function env(){const e={...process.env};for(const k of Object.keys(e))if(k.startsWith("GIT_"))delete e[k];return e;}
+const git=(cwd,...args)=>execFileSync("git",args,{cwd,env:env(),encoding:"utf8",stdio:["ignore","pipe","pipe"]}).trim();
+function root(){const p=realpathSync(mkdtempSync(join(tmpdir(),"card06-ordinary-consumer-")));roots.push(p);return p;}
+function repository(p){mkdirSync(p);git(p,"init","-q","-b","main");git(p,"config","user.name","Owned ordinary test");git(p,"config","user.email","owned@test.invalid");writeFileSync(join(p,"README.md"),"owned baseline\n");git(p,"add",".");git(p,"commit","-qm","baseline");}
+import{bootstrapTask}from"../../tools/cli/task-bootstrap.mjs";
+const cli=new URL("../../tools/cli/stage-runtime.mjs",import.meta.url).href;
+async function fixture(){const r=root(),repo=join(r,"repo"),storage=join(r,"storage"),home=join(r,"home");repository(repo);mkdirSync(storage);mkdirSync(home);const boot=await bootstrapTask({project:"OwnedEntry",task:"current-entry", "target-repo":repo},{env:{HOME:home,WORKFLOWHUB_TASK_DIR:storage},home,cwd:repo});const wt=boot.workspace.worktree_root,material=join(wt,"specs/current-entry");mkdirSync(join(material,"phases"),{recursive:true});for(const[name,text]of Object.entries({"decision-log.md":"# Current decision\n\n## 任务身份\n- **任务类型**：普通任务\n", "spec.md":"# Current specification\n", "phases/index.md":"## Execution Index\n\n| phase | authority ref | semantic anchor | write set | dependency | consumer |\n| --- | --- | --- | --- | --- | --- |\n| `P1` | `phases/P1.md` | owned | README.md | none | build-code |\n", "phases/P1.md":"# Phase P1\n\n### T001 — Owned current task\n"}))writeFileSync(join(material,name),text);git(wt,"add","specs");git(wt,"commit","-qm","owned current materials");return{r,repo,storage,home,wt,material,taskPath:boot.task_path,n:0};}
+function call(f,behavior,action,{stage="build-code",input,extra=[],review=false}={}){const argv=[behavior,`--action=${action}`,`--stage=${stage}`,"--project=OwnedEntry","--task=current-entry",`--task-path=${f.taskPath}`,...extra];if(input!==undefined){const p=join(f.wt,`input-${++f.n}.json`);writeFileSync(p,JSON.stringify(input)+"\n");argv.push(`--input=${p}`);}const code=`import{stageRuntimeCliMain}from${JSON.stringify(cli)};try{const value=await stageRuntimeCliMain(JSON.parse(process.argv[1]),${review?'{services:{runReviewRound:async(request,options)=>{await options.onProviderOutput({provider:"owned/stub",output:Buffer.from([0xff,0x00,0x41])});return{status:"unavailable",dispatch_state:"unknown",findings:[],provider_results:[],error:{code:"OWNED_UNAVAILABLE",message:"controlled no-model review"}};}}}':'{}'});console.log(JSON.stringify({ok:true,value}));}catch(error){console.log(JSON.stringify({ok:false,error:{code:error.code??null,message:error.message}}));}`;const result=spawnSync(process.execPath,["--input-type=module","-e",code,JSON.stringify(argv)],{cwd:f.wt,env:{...env(),HOME:f.home,XDG_CONFIG_HOME:join(f.home,".config"),WORKFLOWHUB_TASK_DIR:f.storage},encoding:"utf8",timeout:15000,stdio:["ignore","pipe","pipe"]});expect(result.error).toBeUndefined();expect(result.status).toBe(0);return JSON.parse(result.stdout);}
+function originalFacts(f){return readFileSync(join(f.taskPath,"facts.jsonl"));}
 
-import { openTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
-import { readTaskFacts } from "../../runtime/task/task-store.mjs";
-import { openCurrentTaskWorkspace } from "../../runtime/task/workspace.mjs";
-import { stageRuntimeCliMain, stageRuntimeMain } from "../../tools/cli/stage-runtime.mjs";
-import { bootstrapTask } from "../../tools/cli/task-bootstrap.mjs";
-import { canonicalStageMaterials } from "../helpers/stage-outcome.mjs";
-
-const roots = [];
-const envKeys = ["HOME", "XDG_CONFIG_HOME", "WORKFLOWHUB_TASK_DIR", "WORKFLOWHUB_CUTOVER_EPOCH", "CODEX_SESSION_ID", "CODEX_THREAD_ID", "CODEX_ROLLOUT_PATH", "WORKFLOWHUB_CODEX_ROLLOUT_PATH"];
-const sha256 = (value) => createHash("sha256").update(value).digest("hex");
-
-function git(cwd, args) {
-  return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
-}
-
-async function withRuntimeEnvironment(root, action) {
-  const previous = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
-  const home = join(root, "home");
-  const storage = join(root, "storage");
-  mkdirSync(home, { recursive: true });
-  mkdirSync(storage, { recursive: true });
-  for (const key of envKeys) delete process.env[key];
-  process.env.HOME = home;
-  process.env.XDG_CONFIG_HOME = join(home, ".config");
-  process.env.WORKFLOWHUB_TASK_DIR = storage;
-  try {
-    return await action({ home, storage });
-  } finally {
-    for (const [key, value] of Object.entries(previous)) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
-  }
-}
-
-function executedJudgment({ task, workspace, kernel }) {
-  const outputHash = sha256("stage-runtime-reflect-entry");
-  const now = new Date("2026-09-21T00:00:00.000Z").toISOString();
-  const identity = {
-    task_id: task.identity.taskId,
-    worktree: workspace.worktreeRoot,
-    branch: git(workspace.worktreeRoot, ["symbolic-ref", "--short", "HEAD"]),
-    attempt: "reflect-entry-attempt",
-    snapshot_tree: kernel.currentVNextSnapshot().tree,
-    material_revision: kernel.currentVNextMaterialRevision(),
-  };
-  return {
-    schema_version: "stage-reflection.v2",
-    record_kind: "judgment",
-    task_id: task.identity.taskId,
-    stage: "build-spec",
-    stage_status: "completed",
-    generated_at: now,
-    status: "ok",
-    error: null,
-    judgments: [{
-      subject_id: "public-reflect-entry",
-      subject_kind: "step",
-      classification: "keep",
-      severity: "low",
-      reason: "The authenticated public reflect route wrote the current stage row.",
-      evidence_refs: [],
-      confidence: "medium",
-      next_review_trigger: "next build-spec execution",
-    }],
-    interventions: [],
-    lessons_added: [],
-    identity,
-    ...Object.fromEntries(["what_helped", "what_to_improve", "blockers", "intervention_reasons", "what_to_simplify", "simplifiable_now"]
-      .map((key) => [key, { state: "none_observed", items: [] }])),
-    status_matrix: Object.fromEntries(["code", "verify", "physical_close", "acceptance", "release"]
-      .map((key) => [key, { state: "not_applicable", evidence_refs: [] }])),
-    source_completeness: { compaction: false, truncation: false, visible_scope: "current task fixture", unknown_reasons: [] },
-    executor: {
-      source_id: "workflowhub-current-session",
-      attempt_id: identity.attempt,
-      started_at: "2026-09-20T23:59:00.000Z",
-      completed_at: now,
-      output_hash: outputHash,
-    },
-    output_hash: outputHash,
-  };
-}
-
-afterEach(() => {
-  while (roots.length) rmSync(roots.pop(), { recursive: true, force: true });
-});
-
-describe("stage-runtime public reflect and human-boundary entries", () => {
-  it("writes an executed judgment through the stage-end row transaction and keeps confirmation distinct from irreversible authorization", async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-reflect-entry-")));
-    roots.push(root);
-    await withRuntimeEnvironment(root, async ({ home }) => {
-      const repo = join(root, "repo");
-      mkdirSync(repo);
-      git(repo, ["init", "-q", "-b", "main"]);
-      git(repo, ["config", "user.name", "WorkflowHub Tests"]);
-      git(repo, ["config", "user.email", "tests@workflowhub.local"]);
-      writeFileSync(join(repo, "README.md"), "fixture\n");
-      git(repo, ["add", "."]);
-      git(repo, ["commit", "-qm", "baseline"]);
-      const bootstrapped = bootstrapTask({ project: "WorkflowHub", task: "reflect-entry", "target-repo": repo }, { env: process.env, home, cwd: repo });
-      const worktree = bootstrapped.workspace.worktree_root;
-      const stages = { "decision-log.md": "make-decision", "spec.md": "build-spec", "plan.md": "build-plan", "tasks.md": "build-plan" };
-      for (const [name, content] of Object.entries(canonicalStageMaterials())) {
-        const path = join(root, `${name}.input`);
-        writeFileSync(path, content);
-        await stageRuntimeMain(["artifact", `--stage=${stages[name]}`, "--project=WorkflowHub", "--task=reflect-entry", `--name=${name}`, `--input=${path}`], { cwd: worktree });
-      }
-      const task = openTask(bootstrapped.task_path, "WorkflowHub", "reflect-entry");
-      const workspace = openCurrentTaskWorkspace(task);
-      const kernel = createTaskKernel(task, { workspace });
-      const inputPath = join(root, "reflect-input.json");
-      writeFileSync(inputPath, `${JSON.stringify(executedJudgment({ task, workspace, kernel }))}\n`);
-
-      const result = await stageRuntimeCliMain([
-        "run", "--action=reflect", "--stage=build-spec", "--project=WorkflowHub", "--task=reflect-entry", `--input=${inputPath}`,
-      ], { cwd: worktree });
-
-      expect(result).toMatchObject({ reflection_status: "ok", persisted: true });
-      expect(result).not.toHaveProperty("stage_row_error");
-      const row = readTaskFacts(task.taskPath).find((value) => value.stage === "build-spec");
-      expect(row.spec_analyze.value).toMatchObject({ ref: result.ref, sha256: result.sha256, reflection_status: "ok" });
-      expect(row.evidence.value).toEqual(expect.arrayContaining([
-        expect.objectContaining({ command: "stage-handoff:build-spec" }),
-      ]));
-
-      await expect(stageRuntimeCliMain([
-        "authorize", "--action=commit", "--stage=build-plan", "--project=WorkflowHub", "--task=reflect-entry",
-        `--subject-ref=quality/confirmations/${"a".repeat(64)}.json`,
-      ], { cwd: worktree })).rejects.toThrow();
-      const confirmation = await stageRuntimeCliMain([
-        "confirm", "--action=decision", "--stage=build-plan", "--project=WorkflowHub", "--task=reflect-entry",
-        "--decision=accepted", "--attempt=fixture/build-plan", "--reply-text=Approve the current plan decision only.", "--step-slug=publish-plan-result",
-      ], { cwd: worktree });
-      const authorization = await stageRuntimeCliMain([
-        "authorize", "--action=commit", "--stage=build-plan", "--project=WorkflowHub", "--task=reflect-entry",
-        `--subject-ref=${confirmation.ref}`,
-      ], { cwd: worktree });
-      expect(authorization).toMatchObject({ value: { operation: "commit", subject_ref: confirmation.ref } });
-    });
-  });
+describe("ordinary public facts without a reflection completion writer",()=>{
+ it("rejects the removed reflect action and machine judgment before any task fact write",async()=>{const f=await fixture(),before=originalFacts(f),input={reflection_status:"ok",receipts:{review:"old"},snapshot_tree:"old-passive-data"};const removed=call(f,"run","reflect",{stage:"build-plan",input});expect(removed).toMatchObject({ok:false,error:{message:"unknown public runtime action"}});const wrong=call(f,"run","execute",{stage:"build-plan",input});expect(wrong.ok).toBe(false);expect(wrong.error.message).toMatch(/only records.*phase_progress/);expect(originalFacts(f)).toEqual(before);expect(existsSync(join(f.taskPath,"quality/stage-reflection"))).toBe(false);});
+ it("stores the legitimate cursor with unknown/null quality and keeps human confirmation separate",async()=>{const f=await fixture(),run=call(f,"run","execute",{input:{phase_progress:{phase_id:"P1",task_id:"T001"}}});expect(run.ok).toBe(true);const rows=JSON.parse(originalFacts(f).toString().trim());expect(rows).toMatchObject({record_kind:"stage",stage:"build-code",phase_progress:{phase_id:"P1",task_id:"T001"},review_origin:"not_run",spec_analyze:{value:null},evidence:{value:null}});const before=originalFacts(f),confirm=call(f,"confirm","decision",{stage:"build-plan",extra:["--decision=approved","--reply-text=Only approve this owned plan.","--material-ref=spec.md"]});expect(confirm.ok).toBe(true);expect(originalFacts(f)).toEqual(before);expect(call(f,"status","begin").value.quality_status).toBe("unknown");expect(existsSync(join(f.taskPath,"quality/evidence/git-authorizations"))).toBe(false);});
 });

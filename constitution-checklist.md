@@ -1,62 +1,30 @@
-# 设计宪法检查清单
+# 宪法逐条检查清单
 
-> 与 `CONSTITUTION.md` 逐条对应的可勾选检查清单，供每个里程碑设计/落地时对照。
-> 条目数严格等于宪法条目数（22）。每条勾选项后附判据，并回指宪法对应条款。
-> 用法：设计/落地时逐条核对，符合则勾 `[x]`。
+对本次实际变化逐项核对，不用文件计数、审计或历史结果替代质量判断。
 
-## 框架原则（F）
+- [ ] **F1 薄核心**：WorkflowHub 提供方法与必要窄工具；当前 AI 主会话和子代理执行工作，不建设阶段状态机或强制推进平台。 [条款](CONSTITUTION.md#f1-薄核心)
+- [ ] **F2 窄契约**：模块之间通过尽量窄、明确的接口通信，不暴露内部实现。 [条款](CONSTITUTION.md#f2-窄契约)
+- [ ] **F3 当前材料决定工作，写入与完成分别真实**：当前 cohort 的可读材料是工作依据：post 使用 decision-log、spec、独立 Phase 与纯指针 index；pre/history 的旧四材料和执行原件只读保留。辅助审查、历史收据或旧快照不是继续修复的许可证。 [条款](CONSTITUTION.md#f3-当前材料决定工作写入与完成分别真实)
+- [ ] **F4 质量靠异源审查与人，finding 不锁死修复**：质量保证依靠独立来源的审查加人工把关，不把 reviewer verdict 当阶段 pass gate。一般 finding、invalid、unavailable 或 timeout 只记录；已认证的 `actionable + major|blocking` 问题保留“先修复（推荐）或明确承担具体风险”的严重问题处置，但不得阻止继续修复同一任务。 [条款](CONSTITUTION.md#f4-质量靠异源审查与人finding-不锁死修复)
+- [ ] **F5 gate 谨慎添加、出事再补、无用则移除**：关卡只在确有必要时添加，出问题后再补，不预先堆砌，发现无用就移除。 [条款](CONSTITUTION.md#f5-gate-谨慎添加出事再补无用则移除)
+- [ ] **F6 统一外置事实，历史只读**：任务外置记录只承载 task.json、facts.jsonl、index.json、quality/reviews、quality/tests 与必要 evidence；原报告 immutable，事实必须对应实际发生的执行。 [条款](CONSTITUTION.md#f6-统一外置事实历史只读)
+- [ ] **F7 两道人为门与不可逆操作授权**：正常流程只保留 make-decision 的方向选择和 build-plan 的实施计划选择两道人为门；三审查点是质量工作，用户回复和不可逆 Git/归档/清理授权分别记录真实原话与范围。 [条款](CONSTITUTION.md#f7-两道人为门与不可逆操作授权)
+- [ ] **F8 简单优先**：选依赖少、当前消费者明确的方案；不为工具升级维护 replacement、rebind、恢复许可或第二套进度平台。 [条款](CONSTITUTION.md#f8-简单优先)
+- [ ] **F9 可证伪、不假绿**：实际失败时必须报失败；缺数据保持 unknown/unavailable/incomplete，不能用摘要、计数、健康采样或假来源制造通过。 [条款](CONSTITUTION.md#f9-可证伪不假绿)
+- [ ] **F10 自动化按真实收益添加，不为"机器可校验"本身堆基建**：机器自动化（CI、自动校验、机器可执行验收基建）只在它解决的真实问题大于它带来的开发与长期维护成本时才添加；不得为了"让一切可被机器自动校验"这个目标本身，预先堆砌自动化基建。能由人/AI 实际跑一遍验证的东西，优先用实跑验证，不为它单独造一套机器执行通道。 [条款](CONSTITUTION.md#f10-自动化按真实收益添加不为机器可校验本身堆基建)
+- [ ] **F11 正常执行优先、控制面受限**：WorkflowHub 的首要目标是让合法的普通任务顺畅执行并交付高质量结果。能阻塞工作、持久化状态、写入事实或改变 public 行为的控制面，只有在保护已证明的安全或质量边界时才允许存在；它必须复用现有 owner，拥有真实 consumer、完成 oracle、失败语义和退出条件。辅助事实缺失、review provider 不可用、历史记录缺失、catalog 投影漂移或 stage ready 未形成，不得单独阻止正常工作。 [条款](CONSTITUTION.md#f11-正常执行优先控制面受限)
+- [ ] **Q1 质量事实不作准入证，完成质量不降级**：质量事实自动采集并浮现，不作为开始或继续修复的许可证；但阶段必须真实完成其声明的测试、逐 AC 判断、独立审查（或真实 unavailable）和交接，缺项时不得宣称完成。已认证的 serious finding 按 F4 处置。 [条款](CONSTITUTION.md#q1-质量事实不作准入证完成质量不降级)
+- [ ] **Q2 工作依据、写入保护与完成结论分离**：当前材料回答做什么；受保护普通 I/O 与实际 Git 授权回答怎样安全写；实际交付、针对性验证、逐 AC 判断、独立审查事实与人读交接回答完成了什么。 [条款](CONSTITUTION.md#q2-工作依据写入保护与完成结论分离)
+- [ ] **Q3 异源审查加人工把关**：质量裁决必须由独立来源（异源审查者）在独立上下文中产出，禁止自审自判；执行身份认证是结构事实校验，不是质量裁决。 [条款](CONSTITUTION.md#q3-异源审查加人工把关)
+- [ ] **S1 能用外部就不造轮子**（原 S2 已并入）：通用能力优先复用成熟的外部技能，不自己重造；采用时把外部技能文件直接放进项目内、避免引入过重的框架。 [条款](CONSTITUTION.md#s1-能用外部就不造轮子)
+- [ ] **S2 外部技能可针对项目改造合宪**：采用的外部技能可按项目需要改造，使其符合本宪法。 [条款](CONSTITUTION.md#s2-外部技能可针对项目改造合宪)
+- [ ] **S3 迭代时保持最新并就地检查**：迭代时确认外部技能是否有更新、市场是否有更优方案，并保持最新；外部技能的来源路径写进技能文件以便就地检查。（软反馈消费挂在此迭代动作上，详见执行记录与评估相关里程碑。） [条款](CONSTITUTION.md#s3-迭代时保持最新并就地检查)
+- [ ] **S4 自定义技能保留必要指标事实**：自研技能按实际评估需要采集必要指标，复用统一事实底座；指标缺失如实未知，不为计量单独建设控制系统。 [条款](CONSTITUTION.md#s4-自定义技能保留必要指标事实)
+- [ ] **S5 自定义技能方便子代理调用、省主上下文**：自研技能应便于子代理在独立上下文中调用，减少主会话上下文占用。 [条款](CONSTITUTION.md#s5-自定义技能方便子代理调用省主上下文)
+- [ ] **S6 自定义技能参考市面方案、不闭门造车**：自研技能须参考市面成熟方案做优化，不闭门造车。 [条款](CONSTITUTION.md#s6-自定义技能参考市面方案不闭门造车)
+- [ ] **S7 一阶段一技能、一工作流一文件夹**：每个阶段对应一个独立技能，每个工作流对应一个独立文件夹，按目录约定组织。 [条款](CONSTITUTION.md#s7-一阶段一技能一工作流一文件夹)
+- [ ] **S8 自定义技能可独立调用、可搬运**：自研技能应能独立调用、可在不同宿主/项目间搬运，不绑死单一环境。 [条款](CONSTITUTION.md#s8-自定义技能可独立调用可搬运)
 
-- [ ] **F1 薄核心** — 判据：核心是否只做调度编排、重活下沉技能层（改动牵连面小）。→ [CONSTITUTION.md#f1-薄核心](CONSTITUTION.md#f1-薄核心)
-- [ ] **F2 窄契约** — 判据：模块间是否走窄而明确的接口、不暴露内部实现。→ [CONSTITUTION.md#f2-窄契约](CONSTITUTION.md#f2-窄契约)
-- [ ] **F3 当前材料决定推进正式发布保持结构真实** — 判据：pre/history `decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 与 post `decision-log.md`、`spec.md`、`phases/P<n>.md`、`phases/index.md` 是否各按 cohort 只决定进入/继续；task/worktree/runtime 写边界、顺序和核心 publication 错误是否在写成功前 fail-loud。→ [CONSTITUTION.md#f3-当前材料决定推进正式发布保持结构真实](CONSTITUTION.md#f3-当前材料决定推进正式发布保持结构真实)
-- [ ] **F4 质量靠异源审查与人，finding 不锁死修复** — 判据：review 是否不作阶段 pass gate；serious finding 是否保留 repair-or-risk 且不阻止同任务修复。→ [CONSTITUTION.md#f4-质量靠异源审查与人finding-不锁死修复](CONSTITUTION.md#f4-质量靠异源审查与人finding-不锁死修复)
-- [ ] **F5 gate 谨慎添加出事再补无用则移除** — 判据：关卡是否按需添加、无用即移除，未预先堆砌。→ [CONSTITUTION.md#f5-gate-谨慎添加出事再补无用则移除](CONSTITUTION.md#f5-gate-谨慎添加出事再补无用则移除)
-- [ ] **F6 统一外置执行记录** — 判据：正式写入是否认证当次干净已提交内容，且未把 runner 永久绑定任务或把旧身份记录当准入 gate。→ [CONSTITUTION.md#f6-统一外置执行记录](CONSTITUTION.md#f6-统一外置执行记录)
-- [ ] **F7 三处正常确认与 UI 限定设计确认；不可逆操作独立授权** — 判据：make-decision/build-plan/verify-code 是否各自确认且不作进入许可证；`ui_applicability=ui` 时 build-spec 是否展示原型并取得第四处限定确认（UI 设计确认事实须含 `display_before_reply` 与 `human_approved`）；规划对象是否由 build-prd/spec-prd 先展示并真实核对任务地图，再按适用性（`non_ui` 或 UI）复用同一设计版本绑定；第二次内容调用后的最终确认（展示稿）是否绑定 decision/source/map/PRD 同版且拒绝/未答/错版保持 draft；非 UI/build-code 是否不新增日常确认、不新增 gate 或第三次内容调用；commit/push/merge/archive/cleanup 是否另行授权。→ [CONSTITUTION.md#f7-三处正常确认与-ui-限定设计确认不可逆操作独立授权](CONSTITUTION.md#f7-三处正常确认与-ui-限定设计确认不可逆操作独立授权)
-- [ ] **F8 简单优先** — 判据：正常工具升级是否由每次调用认证解决，未继续复制 runner 或追加 replacement 链。→ [CONSTITUTION.md#f8-简单优先](CONSTITUTION.md#f8-简单优先)
-- [ ] **F9 可证伪不假绿** — 判据：推进资格、publication 真实性和完成判据是否分别证伪，dirty 内容是否拒绝伪装成 HEAD，缺质量工作是否保持进行中。→ [CONSTITUTION.md#f9-可证伪不假绿](CONSTITUTION.md#f9-可证伪不假绿)
-- [ ] **F10 自动化按真实收益添加，不为"机器可校验"本身堆基建** — 判据：自动化(CI/校验/机器基建)是否真实收益大于长期维护成本、不为"机器可校验"本身预堆基建、能实跑的优先实跑。→ [CONSTITUTION.md#f10-自动化按真实收益添加不为机器可校验本身堆基建](CONSTITUTION.md#f10-自动化按真实收益添加不为机器可校验本身堆基建)
-- [ ] **F11 正常执行优先、控制面受限** — 判据：合法普通任务是否能顺畅执行；会阻塞、持久化、写事实或改变 public 行为的控制面是否有已证明边界、唯一 owner、真实 consumer、完成 oracle 和失败语义；复杂度判断是否没有另造运行时计数器或 gate；辅助事实缺失是否未被擅自升级成工作阻塞。→ [CONSTITUTION.md#f11-正常执行优先控制面受限](CONSTITUTION.md#f11-正常执行优先控制面受限)
+## close 三义判据
 
-## 质量原则（Q）
-
-- [ ] **Q1 质量事实不作准入证完成质量不降级** — 判据：finding 是否不阻止继续修复；测试、逐 AC、独立 review/真实 unavailable 和交接缺失时是否禁止报完成。→ [CONSTITUTION.md#q1-质量事实不作准入证完成质量不降级](CONSTITUTION.md#q1-质量事实不作准入证完成质量不降级)
-- [ ] **Q2 推进资格发布结构与完成判据分离** — 判据：当前 cohort 材料（pre/history 为旧 `plan.md`/`tasks.md`，post 为 `spec.md` + `phases/P<n>.md` + `phases/index.md`）是否只证明可工作；结构错误是否拒绝 publication；完整质量工作是否才证明完成；不可逆操作是否独立授权。→ [CONSTITUTION.md#q2-推进资格发布结构与完成判据分离](CONSTITUTION.md#q2-推进资格发布结构与完成判据分离)
-- [ ] **Q3 异源审查加人工把关** — 判据：质量裁决是否异源独立；本地执行身份是否只证明结构事实、未冒充质量 verdict。→ [CONSTITUTION.md#q3-异源审查加人工把关](CONSTITUTION.md#q3-异源审查加人工把关)
-
-## 技能原则（S）
-
-- [ ] **S1 能用外部就不造轮子** — 判据：通用能力是否优先复用外部、文件直放项目内。（含原 S2"外部技能文件直接放项目内"，已并入本条作为落地手法。）→ [CONSTITUTION.md#s1-能用外部就不造轮子](CONSTITUTION.md#s1-能用外部就不造轮子)
-- [ ] **S2 外部技能可针对项目改造合宪** — 判据：采用的外部技能是否按需改造至合宪。→ [CONSTITUTION.md#s2-外部技能可针对项目改造合宪](CONSTITUTION.md#s2-外部技能可针对项目改造合宪)
-- [ ] **S3 迭代时保持最新并就地检查** — 判据：迭代时是否查更新/更优、来源路径写进技能文件。→ [CONSTITUTION.md#s3-迭代时保持最新并就地检查](CONSTITUTION.md#s3-迭代时保持最新并就地检查)
-- [ ] **S4 自定义技能必须有指标系统** — 判据：自研技能是否配套指标、纳入统一执行记录。→ [CONSTITUTION.md#s4-自定义技能必须有指标系统](CONSTITUTION.md#s4-自定义技能必须有指标系统)
-- [ ] **S5 自定义技能方便子代理调用省主上下文** — 判据：自研技能是否便于子代理调用、减少主上下文占用。→ [CONSTITUTION.md#s5-自定义技能方便子代理调用省主上下文](CONSTITUTION.md#s5-自定义技能方便子代理调用省主上下文)
-- [ ] **S6 自定义技能参考市面方案不闭门造车** — 判据：自研技能是否参考成熟方案优化。→ [CONSTITUTION.md#s6-自定义技能参考市面方案不闭门造车](CONSTITUTION.md#s6-自定义技能参考市面方案不闭门造车)
-- [ ] **S7 一阶段一技能一工作流一文件夹** — 判据：阶段/工作流是否一一对应独立、按目录约定、核心零改可加。→ [CONSTITUTION.md#s7-一阶段一技能一工作流一文件夹](CONSTITUTION.md#s7-一阶段一技能一工作流一文件夹)
-- [ ] **S8 自定义技能可独立调用可搬运** — 判据：自研技能是否可独立调用、可跨宿主搬运、不绑死环境。→ [CONSTITUTION.md#s8-自定义技能可独立调用可搬运](CONSTITUTION.md#s8-自定义技能可独立调用可搬运)
-
----
-
-**条目数**：22（框架 11 + 质量 3 + 技能 8），等于 `CONSTITUTION.md` 宪法条目数。
-**勾选说明**：`[ ]` 未核 / `[x]` 已核符合。每条须能跳回宪法对应条款。
-
-**治理同步记录（2026-08-03）**：本轮只同步执行边界和交接材料，未新增、改写、拆分或合并宪法条款；条目数和逐条映射保持不变。
-
-**治理同步记录（2026-08-25）**：新增 F11“正常执行优先、控制面受限”；F1-F10、Q1-Q3、S1-S8 原编号保持不变；条目数由 21 增至 22。
-
-**治理同步记录（2026-09-09）**：在既有 F7 内补充 build-prd/spec-prd 最终展示稿确认的同版绑定与 post-second-call 边界；拒绝、未答、错版保持 draft，不新增第三次内容调用、formal stage、non-UI 日常确认或 gate；条目数仍为 22，未新增条款。
-
-**治理同步记录（2026-09-14）**：同步 Version 1.9.0 的治理实施边界、负向条款、控制面分类和默认不新增 hash 原则；保留 F1-F11、Q1-Q3、S1-S8 共 22 条原编号，不新增 checklist 条目或 public 流程节点。
-
-**治理同步记录（2026-09-22）**：Version 1.9.1 将 F3/Q2 的固定四材料口径改为 cohort 当前材料；pre/history 旧四材料只读兼容，post 使用 spec 与独立 Phase 文件/纯指针索引。22 条编号与 gate 边界不变。
-
-**治理同步记录（2026-08-30）**：F7 修订为三处正常确认加第四处限定确认（UI 设计确认）：仅 `ui_applicability=ui` 由 build-spec 展示原型后取得 `display_before_reply` 与 `human_approved` 确认事实；非 UI 和 build-code 不增加日常确认。条目数仍为 22，未新增条款。
-
-## close 三义判据（非宪法新增条款，仅作可复核解释清单）
-
-以下四项判据不新增宪法条款，也不作为阶段推进或完成 gate；仅用于本次任务落地时复核宪法既有条款是否被正确解释。每条回指 `CONSTITUTION.md` 治理边界节中的"close 三义"解释。
-
-- **CLOSE-F9**：close 动作测试中不得伪造通过或把未完成状态漂白为完成；所有 GREEN 必须来自真实实现修复，completed.json 不写入 quality_status/product_release_status。
-- **CLOSE-Q1**：close 阶段收口只负责把物理交付事实落账，不把质量通过作为 close 前提；质量判定保留在 verify-code/quality facts 中。
-- **CLOSE-F7**：cleanup 等不可逆动作执行前必须有一次独立的人工确认绑定，确认范围覆盖本次 close 整批五个动作。
-- **CLOSE-F3**：写 close 完成记录前必须断言任务身份、runner 身份与当前 cwd 一致；cwd 不在任务 worktree 内时 fail-loud。
+工作实施、质量结论与物理交付分别读回。未测试/审查缺失保持 unknown/unavailable/incomplete；不可逆 Git/归档/清理只按真实授权执行。旧 reports/history 不改写，新的 Markdown 交接只解释当前结果和剩余限制，不充当许可或新进度权威。

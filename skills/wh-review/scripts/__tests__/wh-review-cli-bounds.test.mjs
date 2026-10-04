@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { expect, test } from "vitest";
-import { compactReviewDiff, compactVerifyCodeMaterials } from "../review-input-bounds.mjs";
+import { compactReviewDiff, compactVerifyCodeMaterials } from "../../../../runtime/review/review-input-bounds.mjs";
 
 function section(path, bytes) {
   return "diff --git a/" + path + " b/" + path + "\n"

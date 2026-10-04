@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { resolveLocalSkill, resolveSkillPackage, validateReviewBundleProjection, validateSkillBundle } from "../../runtime/adapters/local-skill-resolver.mjs";
+import { resolveLocalSkill, resolveSkillPackage, validateSkillBundle } from "../../runtime/adapters/local-skill-resolver.mjs";
 
 const roots = [];
 afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
@@ -96,12 +96,29 @@ describe("local skill resolver", () => {
     expect(() => resolveLocalSkill(root, "skills/demo/SKILL.md")).toThrow(/skills root must be a real directory/);
   });
 
-  it("accepts only a review projection contained by the common bundle", () => {
+  it("reads only declared contained assets through the active common bundle reader", () => {
     const root = fixture();
-    fs.writeFileSync(path.join(root, "skills/demo/review-bundle.json"), JSON.stringify({ schema_version: 1, skill: "demo", mode: "lens-only", delivery_mode: "file_only", entrypoint: "SKILL.md", files: ["SKILL.md"] }));
-    fs.writeFileSync(path.join(root, "skills/demo/skill-bundle.json"), JSON.stringify({ schema_version: 1, skill: "demo", files: ["SKILL.md", "review-bundle.json"] }));
-    expect(validateReviewBundleProjection(root, "skills/demo/review-bundle.json", "skills/demo/SKILL.md").projectionHash).toMatch(/^[a-f0-9]{64}$/);
-    fs.writeFileSync(path.join(root, "skills/demo/review-bundle.json"), JSON.stringify({ schema_version: 1, skill: "demo", mode: "lens-only", delivery_mode: "file_only", entrypoint: "missing.md", files: ["missing.md"] }));
-    expect(() => validateReviewBundleProjection(root, "skills/demo/review-bundle.json", "skills/demo/SKILL.md")).toThrow(/not in skill-bundle/);
+    fs.mkdirSync(path.join(root, "workflows/stage"), { recursive: true });
+    fs.writeFileSync(path.join(root, "workflows/stage/skill-deps.yaml"), "stage: stage\n");
+    fs.writeFileSync(path.join(root, "skills/demo/guide.md"), "owned guide\n");
+    fs.writeFileSync(path.join(root, "skills/demo/unlisted.md"), "unlisted\n");
+    fs.writeFileSync(path.join(root, "skills/demo/skill-bundle.json"), JSON.stringify({ schema_version: 1, skill: "demo", files: ["SKILL.md", "guide.md"] }));
+    const result = resolveSkillPackage({packageRoot:root,manifestPath:"workflows/stage/skill-deps.yaml",dependency:{name:"demo",path:"skills/demo/SKILL.md",bundle:"skills/demo/skill-bundle.json"}});
+    expect(result.resolved_bundle_paths).toEqual([path.join(root,"skills/demo/SKILL.md"),path.join(root,"skills/demo/guide.md")]);
+    expect(fs.readFileSync(result.resolved_bundle_paths[1],"utf8")).toBe("owned guide\n");
+    expect(result.resolved_bundle_paths).not.toContain(path.join(root,"skills/demo/unlisted.md"));
   });
+
+  it("rejects escaping, symlinked and hardlinked assets through the active common bundle reader", () => {
+    const root = fixture(), set = files => fs.writeFileSync(path.join(root,"skills/demo/skill-bundle.json"), JSON.stringify({schema_version:1,skill:"demo",files}));
+    const checked = () => validateSkillBundle(root,"skills/demo/skill-bundle.json","skills/demo/SKILL.md");
+    set(["SKILL.md", "/tmp/owned-missing-asset.md"]); expect(checked).toThrow(/relative/);
+    set(["SKILL.md", "../demo/SKILL.md"]); expect(checked).toThrow(/traverse/);
+    fs.writeFileSync(path.join(root,"outside.md"),"owned external asset");
+    fs.symlinkSync(path.join(root,"outside.md"),path.join(root,"skills/demo/link.md"));
+    set(["SKILL.md","link.md"]); expect(checked).toThrow(/non-symlink/);
+    fs.linkSync(path.join(root,"outside.md"),path.join(root,"skills/demo/hard.md"));
+    set(["SKILL.md","hard.md"]); expect(checked).toThrow(/hard-linked/);
+  });
+
 });

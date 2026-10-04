@@ -1,272 +1,40 @@
-import { isAbsolute, resolve } from "node:path";
-
-import { ArtifactDir } from "../../core/artifact-dir.mjs";
-import { resolveStorageRoot } from "../evidence/storage-root.mjs";
-import { assertRuntimeAuthority } from "../../core/runtime-mode.mjs";
-import { deriveTaskPath, validateProjectName, validateTaskId } from "../task/task-identity.mjs";
+import { ArtifactDir } from "../evidence/artifact-dir.mjs";
+import { resolveCanonicalTaskPath } from "../task/load-config.mjs";
 import { openTask } from "../task/task-handle.mjs";
-import { readActivationCohort } from "../task/task-topology.mjs";
-import { inspectMaterialWorkspace, materialFilesForCohort } from "../task/material-workspace.mjs";
-import { createTaskKernel } from "../task/task-kernel.mjs";
-import { authenticateWriteBoundary } from "../evidence/write-boundary-preflight.mjs";
-import {
-  assertWorkspace,
-  openCurrentTaskWorkspace,
-  prepareTaskWorkspace,
-  validateTaskWorkspaceAttempt,
-} from "../task/workspace.mjs";
+import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../task/workspace.mjs";
+import { inspectWorkspace } from "../interface/workspace-check.mjs";
 
-const STAGES = new Set([
-  "make-decision",
-  "build-spec",
-  "build-plan",
-  "build-code",
-  "verify-code",
-]);
+const STAGES = new Set(["make-decision", "build-plan", "build-code", "verify-code", "build-prd"]);
 export { assertWorkspace } from "../task/workspace.mjs";
 
-/**
- * Authenticate only when an official write is about to happen.
- */
-export function authenticateStageWriteBoundary(context, { runnerRoot, operation, sourceDigest, runId } = {}) {
-  if (!context || !STAGES.has(context.stage) || !context.task) {
-    throw new TypeError("authenticated StageContext is required");
-  }
-  // A post build-plan author may draft spec/Phase files incrementally, but an
-  // official stage execution consumes the complete authored material set.
-  if (context.stage === "build-plan" && operation === "run"
-      && readActivationCohort(context.task.manifest) === "post") {
-    assertCurrentTaskMaterials(context.artifacts, "post");
-  }
-  return authenticateWriteBoundary({
-    task: context.task,
-    runnerRoot,
-    stage: context.stage,
-    operation,
-    workspace: context.workspace ?? context.candidateWorkspace,
-    ...(sourceDigest === undefined ? {} : { sourceDigest }),
-    ...(runId === undefined ? {} : { runId }),
-  });
+async function bindWorkspace(context, workspace) {
+  const physical = await inspectWorkspace({ root: workspace.targetRepoRoot, target: workspace.worktreeRoot, baseline: workspace.baselineCommit });
+  const targetStatus = await inspectWorkspace({ root: workspace.targetRepoRoot, target: workspace.targetRepoRoot, baseline: "HEAD" });
+  return Object.freeze({ ...context, workspace, artifacts: ArtifactDir.open(workspace.worktreeRoot, context.task), physical, targetStatus });
 }
 
-function bindCandidateWorkspace(context, candidate) {
-  if (!context || context.stage !== "make-decision" || !context.task || context.candidateWorkspace) {
-    throw new TypeError("unprepared make-decision StageContext required");
-  }
-  const artifacts = ArtifactDir.open(candidate.worktreeRoot, context.task);
-  const kernel = createTaskKernel(context.task, { candidateWorkspace: candidate, artifacts });
-  return Object.freeze({
-    ...context,
-    kernel,
-    workflowRunId: kernel.deriveStageWorkflowRunId(context.stage),
-    candidateWorkspace: candidate,
-    artifacts,
-  });
-}
-
-/** Prepare only after the official invocation input has been loaded successfully. */
-export function prepareMakeDecisionWorkspace(context) {
-  const task = context?.task;
-  if (!task) throw new TypeError("unprepared make-decision StageContext required");
-  return bindCandidateWorkspace(context, prepareTaskWorkspace(task));
-}
-
-/** Revalidate the published attempt immediately before acceptance. */
-export function validateMakeDecisionWorkspaceAttempt(context, attemptRef) {
-  if (!context || context.stage !== "make-decision" || !context.task || context.candidateWorkspace) {
-    throw new TypeError("unprepared make-decision StageContext required");
-  }
-  if (typeof attemptRef !== "string" || !/^attempt-[0-9]{4}\.json$/.test(attemptRef)) throw new Error("valid make-decision attemptRef is required for workspace validation");
-  let attempt;
-  try { attempt = JSON.parse(context.task.readRecord(`results/make-decision/${attemptRef}`)); }
-  catch (error) { throw new Error(`invalid make-decision attempt for workspace validation: ${error.message}`); }
-  if (attempt?.task_id !== context.task.identity.taskId || attempt?.stage !== "make-decision") throw new Error("make-decision attempt identity mismatch during workspace validation");
-  return bindCandidateWorkspace(context, validateTaskWorkspaceAttempt(context.task, attempt.facts));
-}
-
-function validateStage(stage) {
+/** Ordinary task identity and current physical workspace; no execution/outcome object graph. */
+export async function bootstrapStage(stage, options = {}) {
   if (!STAGES.has(stage)) throw new TypeError(`unsupported stage: ${stage}`);
-  return stage;
-}
-
-function assertCurrentTaskMaterials(artifacts, activationCohort = "pre") {
-  if (activationCohort === "post") {
-    const inspection = inspectMaterialWorkspace(artifacts.root, { activationCohort });
-    if (inspection.status !== "working") {
-      throw new Error(`current task material missing or unreadable: ${[...inspection.missing, ...inspection.errors].join("; ")}`);
-    }
-    for (const name of materialFilesForCohort("post", inspection.files)) artifacts.read(name);
-    return;
-  }
-  const failures = [];
-  for (const name of ["decision-log.md", "spec.md", "plan.md", "tasks.md"]) {
-    try {
-      const content = artifacts.read(name);
-      if (String(content).trim() === "") failures.push(`${name}: empty`);
-    } catch (error) {
-      failures.push(`${name}: ${error.message}`);
-    }
-  }
-  if (failures.length) {
-    throw new Error(`current task material missing or unreadable: ${failures.join("; ")}`);
-  }
-}
-
-function launcherTaskPath({ projectName, taskId, taskPath, env, home }) {
-  const storageRoot = resolveStorageRoot({ env, home });
-  assertRuntimeAuthority(storageRoot, { home, expectedEpoch: env?.WORKFLOWHUB_CUTOVER_EPOCH });
-  const derived = deriveTaskPath(storageRoot, projectName, taskId);
-  if (taskPath !== undefined) {
-    if (typeof taskPath !== "string" || !isAbsolute(taskPath)) {
-      throw new TypeError("explicit taskPath must be absolute");
-    }
-    if (resolve(taskPath) !== derived) {
-      throw new Error(`explicit taskPath does not match launcher-derived taskPath: ${taskPath}`);
-    }
-  }
-  return derived;
-}
-
-/**
- * Build the only context a stage may consume.
- *
- * launcher mode resolves storage exactly once. sidecar mode never reads env or
- * derives a storage path; its absolute taskPath is supplied by the parent.
- */
-export function bootstrapStage(
-  stage,
-  options = {},
-) {
-  if (Object.prototype.hasOwnProperty.call(options, "readAccepted")) {
-    throw new TypeError("public readAccepted adapter is forbidden; TaskKernel owns accepted records");
-  }
-  if (Object.prototype.hasOwnProperty.call(options, "kernel")) {
-    throw new TypeError("caller-supplied TaskKernel is forbidden; bootstrap creates the authentic kernel");
-  }
-  if (Object.prototype.hasOwnProperty.call(options, "candidateWorkspace")) {
-    throw new TypeError("caller-supplied workspace paths are no longer supported; make-decision owns worktree preparation");
-  }
-  const {
-    mode = "launcher",
-    projectName,
-    taskId,
-    taskPath,
-    runnerRoot,
-    env,
-    home,
-    workspaceLifecycle,
-    attemptRef,
-    readOnly = false,
-  } = options;
-  const normalizedStage = validateStage(stage);
-  const project = validateProjectName(projectName);
-  const task = validateTaskId(taskId);
-
-  let resolvedTaskPath;
-  let storageRoot;
-  if (mode === "launcher") {
-    storageRoot = resolveStorageRoot({ env, home });
-    resolvedTaskPath = launcherTaskPath({ projectName: project, taskId: task, taskPath, env, home });
-  } else if (mode === "sidecar") {
-    if (typeof taskPath !== "string" || !isAbsolute(taskPath)) {
-      throw new TypeError("sidecar mode requires an absolute taskPath");
-    }
-    resolvedTaskPath = resolve(taskPath);
-  } else {
-    throw new TypeError(`unsupported bootstrap mode: ${mode}`);
-  }
-
-  const taskHandle = openTask(resolvedTaskPath, project, task);
-  if (workspaceLifecycle !== undefined && normalizedStage !== "make-decision") {
-    throw new TypeError("workspaceLifecycle is only valid for make-decision");
-  }
-  let candidate;
-  if (workspaceLifecycle === "prepare") {
-    candidate = prepareTaskWorkspace(taskHandle);
-  } else if (workspaceLifecycle === "validate-attempt") {
-    if (typeof attemptRef !== "string" || !/^attempt-[0-9]{4}\.json$/.test(attemptRef)) throw new Error("valid make-decision attemptRef is required for workspace validation");
-    let attempt;
-    try { attempt = JSON.parse(taskHandle.readRecord(`results/make-decision/${attemptRef}`)); }
-    catch (error) { throw new Error(`invalid make-decision attempt for workspace validation: ${error.message}`); }
-    if (attempt?.task_id !== taskHandle.identity.taskId || attempt?.stage !== "make-decision") throw new Error("make-decision attempt identity mismatch during workspace validation");
-    candidate = validateTaskWorkspaceAttempt(taskHandle, attempt.facts);
-  } else if (workspaceLifecycle !== undefined) {
-    throw new TypeError(`unsupported make-decision workspaceLifecycle: ${workspaceLifecycle}`);
-  }
-  const candidateArtifacts = candidate
-    ? ArtifactDir.open(candidate.worktreeRoot, taskHandle)
-    : undefined;
-  const kernel = createTaskKernel(taskHandle, {
-    ...(candidate ? { candidateWorkspace: candidate, artifacts: candidateArtifacts } : {}),
-  });
-  const base = {
-    stage: normalizedStage,
-    task: taskHandle,
-    identity: taskHandle.identity,
-    manifest: taskHandle.manifest,
-    kernel,
-    workflowRunId: kernel.deriveStageWorkflowRunId(normalizedStage),
-    ...(storageRoot ? { storageRoot } : {}),
-  };
-
-  if (normalizedStage === "make-decision") {
-    // Status is read-only, but it still needs the current Workspace snapshot
-    // to classify current quality facts. Never create a worktree on this
-    // path; a missing one remains an honest in-progress/unknown status.
-    if (readOnly && !candidate) {
-      try {
-        const workspace = openCurrentTaskWorkspace(taskHandle);
-        const artifacts = ArtifactDir.open(workspace.worktreeRoot, taskHandle);
-        const stageKernel = createTaskKernel(taskHandle, { workspace, artifacts });
-        return Object.freeze({
-          ...base,
-          kernel: stageKernel,
-          workflowRunId: stageKernel.deriveStageWorkflowRunId(normalizedStage),
-          workspace,
-          artifacts,
-        });
-      } catch (error) {
-        if (error?.code !== "ENOENT") throw error;
-      }
-    }
-    return Object.freeze({
-      ...base,
-      ...(candidate ? { candidateWorkspace: candidate, artifacts: candidateArtifacts } : {}),
-    });
-  }
+  const allowed = new Set(["projectName", "taskId", "taskPath", "env", "home", "readOnly"]);
+  if (Object.keys(options).some(key => !allowed.has(key))) throw new TypeError("unsupported stage context option");
+  const { projectName, taskId, taskPath, env, home, readOnly = false } = options;
+  if (typeof readOnly !== "boolean") throw new TypeError("readOnly must be boolean");
+  const resolution = resolveCanonicalTaskPath({ project: projectName, task: taskId, ...(taskPath === undefined ? {} : { taskPath }), env, home });
+  const task = openTask(resolution.taskPath, resolution.project, resolution.task);
+  if (!readOnly && task.manifest.activation_cohort !== "post") throw new Error("pre/history stage writes are read-only");
+  const context = Object.freeze({ stage, task, identity: task.identity, manifest: task.manifest });
   let workspace;
-  let workspaceDegrade = null;
-  try {
-    workspace = openCurrentTaskWorkspace(taskHandle);
-  } catch (error) {
-    // A read-only status projection must stay available for historical tasks
-    // whose target workspace no longer exists. Degrade to an honest
-    // workspace-less projection instead of failing the reader; every writing
-    // path still fails loudly.
-    if (!readOnly || error?.code !== "ENOENT") throw error;
-    // Keep the original failure observable: without it every downstream reader
-    // only sees a generic missing-capability TypeError and the missing path is
-    // unrecoverable from the error. This is a recorded degradation, not a
-    // rethrown failure, so the projection stays available.
-    workspaceDegrade = Object.freeze({
-      code: error.code,
-      message: error.message,
-      path: error.path ?? null,
-      cause: error,
-    });
+  try { workspace = await openCurrentTaskWorkspace(task); }
+  catch (error) {
+    if (!readOnly || error.code !== "ENOENT") throw error;
+    return Object.freeze({ ...context, workspace_unavailable: Object.freeze({ code: error.code, message: error.message, path: error.path ?? null, cause: error }) });
   }
-  if (!workspace) {
-    return Object.freeze({
-      ...base,
-      kernel,
-      workflowRunId: kernel.deriveStageWorkflowRunId(normalizedStage),
-      workspace_unavailable: workspaceDegrade,
-    });
-  }
-  const artifacts = ArtifactDir.open(workspace.worktreeRoot, taskHandle);
-  const stageKernel = createTaskKernel(taskHandle, { workspace, artifacts });
-  if (!readOnly && (normalizedStage === "build-code" || normalizedStage === "verify-code")) {
-    assertCurrentTaskMaterials(artifacts, readActivationCohort(taskHandle.manifest));
-  }
-  return Object.freeze({ ...base, kernel: stageKernel, workflowRunId: stageKernel.deriveStageWorkflowRunId(normalizedStage), workspace, artifacts });
+  return bindWorkspace(context, workspace);
+}
+
+/** Existing make-decision preparation creates only its ordinary physical workspace. */
+export async function prepareMakeDecisionWorkspace(context) {
+  if (!context || context.stage !== "make-decision" || !context.task) throw new TypeError("make-decision StageContext is required");
+  return bindWorkspace(context, await prepareTaskWorkspace(context.task));
 }

@@ -7,13 +7,9 @@ description: 审查方案是否走过四阶梯最小路径，识别范围膨胀�
 
 ## 定位
 
-这是一个放入 wh-review 冻结 packet 的只读 advisory lens/skill，不产 stage-result，不
-修改被审材料。它与 `plan-ceo-review` 共用同一 packet；provider 在同一 findings 输出中
-报告具体问题。它不是 stage-owned dispatcher 的输入，不生成 `*-facts`、invocation receipt、
-独立 runtime 或第二个 stage owner。
+这是供文档审查与代码审查读取的 advisory lens。调用方提供当前允许范围的材料或 diff；本技能只返回具体删减/复用建议，与同次独立审查共用 findings，不调用 provider 或写任务状态。文档面由 wh-review 执行，代码面按当前 workflow 的 OCR/缺失回退分工执行。
 
-lens 缺失、不可用或没有 finding 只记录为 review 事实，不阻止同一 task 继续工作；它没有
-独立调用、独立结果或继续工作的前置条件。
+没有可删内容是合法观察；缺失或不可用如实披露，不变成继续工作的许可证。
 
 审查目标不是把缺口变成更多要求，而是找出能删除、复用或缩小的内容。
 发现额外内容时必须明确建议删除；不得用“以后可能需要”替它保留位置。

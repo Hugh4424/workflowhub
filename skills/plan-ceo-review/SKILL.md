@@ -5,10 +5,8 @@ description: Report-only product-direction review lens for premise, scope, lever
 
 # plan-ceo-review
 
-Source: adapted from the project review baseline. Mode: `advisory`, file-only, and
-packet-local. `wh-review` includes this lens in the same frozen packet when it is
-applicable; it is not called separately and has no stage result, provider verdict,
-`*-facts`, invocation receipt, dispatcher, or independent runtime.
+Source: adapted from the project review baseline. Mode: `advisory`, file-only.
+Use this lens when supplied direction or detail material needs product-scope review. Its observations join the document review findings handled by wh-review; it does not invoke providers or issue a stage result.
 
 ## Check
 

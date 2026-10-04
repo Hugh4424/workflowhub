@@ -2,22 +2,22 @@ import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
-import { BROKER_HOST_PROVIDER, registerReviewSupplement, ReviewProviderClient } from "./review-provider-client.mjs";
-import { parseReviewerOutput } from "./review-output.mjs";
+import { BROKER_HOST_PROVIDER, registerReviewSupplement, ReviewProviderClient, validateDirectionFlow } from "./review-provider-client.mjs";
+import { parseReviewerOutput } from "../../../runtime/review/review-output.mjs";
 import {
   loadTrustedThirdReviewConfig,
   resolveTrustedReviewRoute,
   selectTrustedReviewProviderSelection,
 } from "./third-review-host-config.mjs";
-import { materialAllowlistForRule, materialForbiddenMessage, reviewInstructionsFor as canonicalReviewInstructionsFor,
+import { buildReviewMaterials, materialAllowlistForRule, materialForbiddenMessage, reviewInstructionsFor as canonicalReviewInstructionsFor,
   validateMaterialAllowlist } from "./review-materials.mjs";
 import { providerAdapter } from "../../../runtime/review/canonical-review-result.mjs";
 import { reviewIdentityFromInput, reviewRuleFor } from "../../../runtime/review/review-policy.mjs";
 import { AUTHENTICATED_EVIDENCE_PATH, providerMaterialEntries, providerMaterialPath, redactProviderHostPaths, reviewActivationCohort } from "../../../runtime/review/provider-material-projection.mjs";
 import { reviewPacketMaterialId, deliveredMaterialId, authenticatedEvidenceBytes as canonicalAuthenticatedEvidenceBytes } from "../../../runtime/review/review-packet-identity.mjs";
 import { resolveReviewRouteIdentity } from "../../../runtime/review/review-route-identity.mjs";
-import { compactVerifyCodeMaterials } from "./review-input-bounds.mjs";
-import { SHA256_HEX } from "../../../runtime/evidence/canonical-utils.mjs";
+import { compactVerifyCodeMaterials } from "../../../runtime/review/review-input-bounds.mjs";
+const SHA256_HEX = /^[a-f0-9]{64}$/;
 import stageMaterials from "../../../runtime/review/stage-materials.json" with { type: "json" };
 
 // Managed review ownership lives in 3rd-review. Keep polling the same managed
@@ -59,6 +59,22 @@ function isReviewAbortError(error) {
     || ["ABORT_ERR", "CANCELLED", "PROCESS_CANCELLED", "REVIEW_CANCELLED"].includes(error?.code);
 }
 
+function brokerFailureDispatchState(error) {
+  if(error?.diagnostic?.started===false || error?.code==="BROKER_SPAWN_FAILED") return "blocked_before_dispatch";
+  if(error?.diagnostic?.started===true) return "dispatched";
+  return error?.managed_observation?.dispatch_state ?? "unknown";
+}
+
+async function captureBrokerFailure(error,dependencies,pair=null) {
+  const diagnostic=error?.diagnostic;
+  if(!diagnostic || typeof dependencies.onProviderOutput!=="function") return {};
+  const refs={};
+  for(const [channel,key] of [["stdout","raw_stdout"],["stderr","raw_stderr"]]) {
+    if(typeof diagnostic[key]==="string" && diagnostic[key].length>0) refs[channel]=await dependencies.onProviderOutput({provider:"broker",role:pair?.role ?? null,channel,output:diagnostic[key]});
+  }
+  return {broker_raw_refs:refs,broker_process:{started:typeof diagnostic.started==="boolean" ? diagnostic.started : null,cancelled:diagnostic.cancelled===true,timed_out:diagnostic.timed_out===true,exit_code:diagnostic.exit_code ?? null,signal:diagnostic.signal ?? null}};
+}
+
 function waitForManagedPoll(delayMs, signal) {
   if (delayMs <= 0) return Promise.resolve();
   return new Promise((resolve, reject) => {
@@ -76,32 +92,7 @@ function waitForManagedPoll(delayMs, signal) {
   });
 }
 
-function redactHostPaths(value) {
-  if (typeof value !== "string") return value;
-  let redacted = "";
-  for (let index = 0; index < value.length;) {
-    const current = value[index];
-    const previous = value[index - 1] ?? "";
-    const unixStart = current === "/" && value[index + 1] !== "/"
-      && previous !== "/" && (index === 0 || !/[A-Za-z0-9_.-]/.test(previous));
-    const windowsStart = /[A-Za-z]/.test(current) && value[index + 1] === ":"
-      && (value[index + 2] === "\\" || value[index + 2] === "/");
-    const uncStart = current === "\\" && value[index + 1] === "\\";
-    if (!unixStart && !windowsStart && !uncStart) {
-      redacted += current;
-      index += 1;
-      continue;
-    }
-    const start = index;
-    if (windowsStart) index += 3;
-    else if (uncStart) index += 2;
-    else index += 1;
-    while (index < value.length && !/[\n"<>()[\]{};,]/.test(value[index])) index += 1;
-    redacted += "<host-path-redacted>";
-    if (start === index) index += 1;
-  }
-  return redacted;
-}
+function redactHostPaths(value) { return redactProviderHostPaths(value); }
 
 const RESULT_SAMPLE = `Example of a complete finding:\n{\n  "findings": [{\n    "severity": "major",\n    "path": "diff-shards/S-0024.diff",\n    "line": 42,\n    "issue": "FR-REV-002 requires a constitution clause citation, but the evidence field only contains the decision id; acceptance cannot verify clause-level traceability.",\n    "recommendation": "Add the constitution clause (e.g., F9, F4) to the 'evidence' field of FR-REV-002.",\n    "root_cause": "New FR was copied without the existing template's evidence field.",\n    "evidence_kind": "direct",\n    "evidence": "FR-REV-002 evidence field reads 'D-007' but lacks any '宪法' clause reference, unlike other FRs which cite specific clauses."\n  }]\n}\nExample of an empty result (no findings):\n{\n  "findings": []\n}\nOutput rules:\n- Emit exactly one JSON object shaped like the example above.\n- severity must be one of: blocking, major, minor.\n- evidence_kind must be one of: direct, machine, inferred.\n- path must be the manifest-relative path recorded in manifest.json, for example diff-shards/S-0024.diff.\n- Never prefix path with bundle/; never use an absolute path or a private/source path.\n- line must be an integer line number in that file, or omitted.\n- Do not output a verdict, summary, pass/fail, checklist, or a second JSON object.\n- Do not wrap the JSON in markdown code fences.\n`;
 
@@ -145,19 +136,10 @@ function stableValue(value) {
 // TTL; the managed public envelope and its exact key set remain unchanged.
 const MANAGED_REQUEST_ID_PROTOCOL_VERSION = "managed-request-id.v1";
 
-function managedRequestId(input, { materialId, providers, providerIdentities, minimumHeterologous, reviewMode, prompt }) {
-  const subject = {
-    stage: input.stage,
-    review_track: input.review_track ?? input.reviewTrack ?? null,
-    review_kind: input.review_kind ?? input.reviewKind ?? null,
-    review_scope: input.review_scope ?? input.reviewScope ?? null,
-    subject_kind: input.subject_kind ?? null,
-    phase_id: input.phase_id ?? null,
-    pair_id: input.pair_id ?? input.pairId ?? null,
-    role: input.role ?? null,
-  };
-  const identity = stableValue({ protocol_version: MANAGED_REQUEST_ID_PROTOCOL_VERSION, material_id: materialId, host_provider: BROKER_HOST_PROVIDER, providers, provider_identities: providerIdentities ?? null, minimum_heterologous: minimumHeterologous, review_mode: reviewMode, prompt, subject });
-  return "wh-review-" + hash(JSON.stringify(identity));
+function managedRequestId() {
+  // Each invocation is a new review fact. Broker identifiers do not select or
+  // reuse a WorkflowHub result by source/material hash.
+  return `wh-review-${randomUUID()}`;
 }
 
 function providerSelectionShape(selection) {
@@ -284,7 +266,7 @@ export function resolveSimpleReviewRouteIdentity(input, dependencies = {}) {
 
 export function reviewSubjectFields(input) {
   return Object.fromEntries([
-    ["subject_kind", input.subject_kind], ["phase_id", input.phase_id],
+    ["subject_kind", input.subject_kind], ["phase_id", input.phase_id], ["surface", input.surface],
     ["review_scope", input.review_scope ?? input.reviewScope],
   ].filter(([, value]) => value !== undefined));
 }
@@ -331,7 +313,7 @@ function instructions(input) {
 }
 
 function materialBytes(value) {
-  if (Buffer.isBuffer(value)) return value;
+  if (Buffer.isBuffer(value) || value instanceof Uint8Array) return Buffer.from(value);
   if (typeof value === "string") return Buffer.from(value, "utf8");
   return Buffer.from(`${JSON.stringify(value)}\n`, "utf8");
 }
@@ -346,13 +328,13 @@ function canonicalJson(value) {
 
 const PROVIDER_INPUT_TOP_LEVEL_KEYS = Object.freeze([
   "schema_version", "packet", "host_provider", "providers", "provider_identities",
-  "review_mode", "prompt", "subject_binding", "review_policy", "envelope_sha256",
+  "review_mode", "prompt", "subject_binding", "review_policy",
 ]);
 const SIMPLE_PACKET_KEYS = new Set([
-  "schema_version", "stage", "review_track", "review_scope", "review_kind", "material_id",
-  "materials", "activation_cohort", "authenticated_evidence", "authenticated_evidence_sha256",
+  "schema_version", "stage", "review_track", "review_scope", "review_kind",
+  "subject_kind", "phase_id", "surface", "materials", "activation_cohort", "authenticated_evidence",
 ]);
-const SERIALIZED_MATERIAL_KEYS = new Set(["key", "value_kind", "content_base64", "sha256"]);
+const SERIALIZED_MATERIAL_KEYS = new Set(["key", "value_kind", "content_base64"]);
 const REVIEW_MODES = new Set(["single_round", "adaptive", "full_only", "full_on_structural_rework", "legacy"]);
 
 function plainRecord(value) {
@@ -428,45 +410,27 @@ function decodeSerializedMaterials(packet) {
   for (const entry of packet.materials) {
     exactKeys(entry, SERIALIZED_MATERIAL_KEYS, "provider input material");
     if (typeof entry.key !== "string" || !new Set(["bytes", "text", "json"]).has(entry.value_kind)
-        || typeof entry.content_base64 !== "string" || !SHA256_HEX.test(entry.sha256 ?? "")
+        || typeof entry.content_base64 !== "string"
         || Object.hasOwn(materials, entry.key)) throw new TypeError("provider input material is invalid");
     let content;
     try {
       content = Buffer.from(entry.content_base64, "base64");
       if (content.toString("base64") !== entry.content_base64) throw new TypeError();
     } catch { throw new TypeError("provider input material encoding is invalid"); }
-    if (hash(content) !== entry.sha256) throw new TypeError("provider input material hash is invalid");
     if (entry.value_kind === "json") {
-      try { materials[entry.key] = JSON.parse(content.toString("utf8")); }
+      try { materials[entry.key] = JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(content)); }
       catch { throw new TypeError("provider input JSON material is invalid"); }
-    } else materials[entry.key] = entry.value_kind === "text" ? content.toString("utf8") : content;
+    } else materials[entry.key] = entry.value_kind === "text" ? new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(content) : redactProviderHostPaths(content);
   }
   return materials;
 }
 
 function rebuildSerializedPacket(packet) {
-  if (!plainRecord(packet) || packet.schema_version !== "wh-review-simple-packet.v1" || !Array.isArray(packet.materials)
-      || !SHA256_HEX.test(packet.material_id ?? "")) throw new TypeError("provider packet is invalid");
-  if (Object.keys(packet).some((key) => !SIMPLE_PACKET_KEYS.has(key))) throw new TypeError("provider packet has unsupported fields");
+  if (!plainRecord(packet) || packet.schema_version !== "wh-review-simple-packet.v1" || !Array.isArray(packet.materials)) throw new TypeError("provider packet is invalid");
+  if (Object.keys(packet).some(key => !SIMPLE_PACKET_KEYS.has(key))) throw new TypeError("provider packet has unsupported fields");
   const identity = reviewIdentityFromInput(packet);
-  const materials = decodeSerializedMaterials(packet);
-  const rebuilt = createSimpleReviewPacket({
-    stage: identity.stage,
-    review_track: identity.reviewTrack,
-    review_scope: identity.reviewScope,
-    review_kind: identity.reviewKind,
-    ...(packet.activation_cohort === undefined ? {} : { activation_cohort: packet.activation_cohort }),
-    materials,
-    ...(packet.authenticated_evidence === undefined ? {} : { authenticated_evidence: packet.authenticated_evidence }),
-  });
-  if (rebuilt.material_id !== packet.material_id
-      || canonicalJson(rebuilt.materials) !== canonicalJson(packet.materials)
-      || (rebuilt.authenticated_evidence_sha256 ?? null) !== (packet.authenticated_evidence_sha256 ?? null)
-      || (rebuilt.authenticated_evidence === undefined) !== (packet.authenticated_evidence === undefined)
-      || (rebuilt.authenticated_evidence !== undefined && canonicalJson(rebuilt.authenticated_evidence) !== canonicalJson(packet.authenticated_evidence))) {
-    throw new TypeError("provider input material identity is invalid");
-  }
-  return rebuilt;
+  return createSimpleReviewPacket({ ...packet, stage: identity.stage, review_track: identity.reviewTrack,
+    review_scope: identity.reviewScope, review_kind: identity.reviewKind, materials: decodeSerializedMaterials(packet) });
 }
 
 // Authenticated evidence has exactly one canonical byte form for the whole
@@ -478,7 +442,6 @@ function authenticatedEvidenceFields(input) {
   const bytes = canonicalAuthenticatedEvidenceBytes(input.authenticated_evidence);
   return {
     authenticated_evidence: JSON.parse(bytes.toString("utf8")),
-    authenticated_evidence_sha256: hash(bytes),
   };
 }
 
@@ -486,65 +449,11 @@ function authenticatedEvidenceBytes(value) {
   return canonicalAuthenticatedEvidenceBytes(value);
 }
 
-function buildBundle(attachmentRoot, input) {
-  const packetRoot = join(attachmentRoot, ".wh-review-packets");
-  mkdirSync(packetRoot, { recursive: true });
-  const bundleRoot = mkdtempSync(join(packetRoot, "simple-"));
-  const entries = [];
-  const write = (path, bytes) => {
-    const target = join(bundleRoot, ...path.split("/"));
-    mkdirSync(join(target, ".."), { recursive: true });
-    writeFileSync(target, bytes, { flag: "wx", mode: 0o600 });
-    entries.push({ path, bytes: bytes.length, sha256: hash(bytes) });
-  };
-  // The provider-visible bundle is a derived view of caller materials. Host
-  // absolute paths (from the original requirement text, review notes, or any
-  // JSON material) must never reach the provider; keep the bundle bytes and
-  // the material identity computed over the same redacted values.
-  write("review-instructions.md", Buffer.from(`${redactProviderHostPaths(instructions(input))}\n`, "utf8"));
-  let materialIndex = 0;
-  assertRedactableMaterials(input.materials);
-  providerMaterialEntries(input).forEach(([key, value]) => {
-    if (key === "review_instructions") return;
-    const redacted = redactProviderHostPaths(value);
-    write(providerMaterialPath(key, materialIndex, redacted), materialBytes(redacted));
-    materialIndex += 1;
-  });
-  if (input.authenticated_evidence !== undefined) {
-    write(AUTHENTICATED_EVIDENCE_PATH, authenticatedEvidenceBytes(input.authenticated_evidence));
-  }
-  const manifest = Buffer.from(`${JSON.stringify({ version: 1, surface: surface(input), files: entries }, null, 2)}\n`, "utf8");
-  write("manifest.json", manifest);
-  // Single material identity over the delivered bundle. reviewPacketMaterialId and
-  // deliveredMaterialId share one canonicalBundleEntries rule, so the declared
-  // identity and the written bytes hash identically by construction. The self-check
-  // below stays as a fail-closed guard: if a future redaction/path/omission rule ever
-  // drifts, it must block dispatch BEFORE a provider is spawned (a drifted bundle would
-  // only earn an opaque broker error after the provider had started).
-  const materialId = materialIdForInput(input);
-  const deliveredId = deliveredMaterialId(entries);
-  if (deliveredId !== materialId) {
-    rmSync(bundleRoot, { recursive: true, force: true });
-    throw Object.assign(
-      new Error(`MATERIAL_IDENTITY_MISMATCH: declared review material identity ${materialId} does not match the delivered bundle bytes ${deliveredId}`),
-      {
-        code: "MATERIAL_IDENTITY_MISMATCH",
-        diagnostic: {
-          declared_material_id: materialId,
-          delivered_material_id: deliveredId,
-          delivered_paths: entries.map((entry) => entry.path),
-        },
-      },
-    );
-  }
-  return {
-    bundleRoot,
-    attachmentRoot,
-    sourcePrefix: relative(attachmentRoot, bundleRoot).split(sep).join("/"),
-    materialId,
-    deliveryManifest: entries,
-    dispose() { rmSync(bundleRoot, { recursive: true, force: true }); },
-  };
+function buildBundle(attachmentRoot,input) {
+  return buildReviewMaterials({attachmentRoot,stage:input.stage,reviewTrack:input.review_track ?? input.reviewTrack ?? null,
+    reviewScope:input.review_scope ?? input.reviewScope ?? null,reviewKind:input.review_kind ?? input.reviewKind ?? null,
+    role:input.role ?? null,uiScope:input.ui_scope===true,activationCohort:reviewActivationCohort(input),materials:input.materials,surface:input.surface ?? null,phaseId:input.phase_id ?? null,
+    ...(input.authenticated_evidence===undefined ? {} : {authenticated_evidence:input.authenticated_evidence})});
 }
 
 async function waitForManagedTerminal({ lifecycle, client, requestId, providers, materials }, dependencies) {
@@ -637,19 +546,11 @@ export function simpleReviewProviderMaterialId(input) {
   return materialIdForInput(providerInput);
 }
 
-// The host-path redaction boundary is text/JSON-only: redactProviderHostPaths
-// returns Buffer values unchanged, while the bundle writer forwards their bytes
-// verbatim. A binary material could therefore carry an absolute host path to
-// the provider unredacted. Fail closed instead of shipping bytes the boundary
-// cannot inspect.
+// Inspect byte inputs with the same strict UTF-8 projector used by the writer.
+// Undecodable/opaque values fail before config resolution or provider dispatch.
 function assertRedactableMaterials(materials) {
   if (!materials || typeof materials !== "object" || Array.isArray(materials)) return;
-  for (const [key, value] of Object.entries(materials)) {
-    if (key === "review_instructions") continue;
-    if (Buffer.isBuffer(value) || value instanceof Uint8Array) {
-      throw new TypeError(`MATERIAL_FORBIDDEN: binary material ${key} cannot cross the host-path redaction boundary`);
-    }
-  }
+  for (const value of Object.values(materials)) redactProviderHostPaths(value);
 }
 
 export function createSimpleReviewPacket(input) {
@@ -657,44 +558,28 @@ export function createSimpleReviewPacket(input) {
   const identity = reviewIdentityFromInput(input);
   if (!input.materials || typeof input.materials !== "object" || Array.isArray(input.materials) || Object.keys(input.materials).length === 0) throw new TypeError("materials are required");
   validateDirectPacketMaterials(identity, input.materials);
-  assertRedactableMaterials(input.materials);
   providerMaterialEntries(input);
-  let packetMaterials = input.materials;
-  if (input.stage === "verify-code") {
-    try { packetMaterials = compactVerifyCodeMaterials(input.materials).materials; }
-    catch { packetMaterials = input.materials; }
-  }
-  const materials = Object.entries(packetMaterials).map(([key, value]) => {
-    const bytes = materialBytes(value);
-    return { key, value_kind: Buffer.isBuffer(value) ? "bytes" : typeof value === "string" ? "text" : "json", content_base64: bytes.toString("base64"), sha256: hash(bytes) };
+  const values = identity.stage === "verify-code" ? compactVerifyCodeMaterials(input.materials).materials : input.materials;
+  const materials = Object.entries(values).map(([key, value]) => {
+    const projected = redactProviderHostPaths(value);
+    const bytes = materialBytes(projected);
+    return Object.freeze({ key, value_kind: Buffer.isBuffer(projected) || projected instanceof Uint8Array ? "bytes" : typeof projected === "string" ? "text" : "json", content_base64: bytes.toString("base64") });
   });
-  const evidence = authenticatedEvidenceFields(input);
-  return Object.freeze({
-    schema_version: "wh-review-simple-packet.v1",
-    stage: identity.stage,
-    review_track: identity.reviewTrack,
-    review_scope: identity.reviewScope,
-    review_kind: identity.reviewKind,
-    material_id: materialIdForInput(input),
+  return Object.freeze({ schema_version: "wh-review-simple-packet.v1", stage: identity.stage,
+    review_track: identity.reviewTrack, review_scope: identity.reviewScope, review_kind: identity.reviewKind,
+    subject_kind: input.subject_kind ?? (identity.reviewScope === "phase" ? "phase" : null), phase_id: input.phase_id ?? null, surface: input.surface ?? null,
     ...(reviewActivationCohort(input) === "post" ? { activation_cohort: "post" } : {}),
-    materials: Object.freeze(materials.map(Object.freeze)),
-    ...evidence,
-  });
+    ...(input.authenticated_evidence === undefined ? {} : { authenticated_evidence: redactProviderHostPaths(input.authenticated_evidence) }),
+    materials: Object.freeze(materials) });
 }
 
 export function serializeProviderInput(input) {
   const packet = rebuildSerializedPacket(input?.packet);
-  const envelope = canonicalProviderEnvelopeFields({
-    host_provider: BROKER_HOST_PROVIDER,
-    providers: input?.providers,
+  const envelope = canonicalProviderEnvelopeFields({ host_provider: BROKER_HOST_PROVIDER, providers: input?.providers,
     provider_identities: input?.providerIdentities ?? input?.provider_identities ?? null,
-    review_mode: input?.reviewMode ?? input?.review_mode,
-    prompt: input?.prompt ?? RESULT_PROMPT,
-    subject_binding: input?.subjectBinding ?? input?.subject_binding ?? null,
-    review_policy: input?.reviewPolicy ?? input?.review_policy ?? null,
-  });
-  const value = { schema_version: "wh-review-provider-input.v1", packet, ...envelope };
-  return Buffer.from(`${JSON.stringify({ ...value, envelope_sha256: providerEnvelopeDigest(value) })}\n`, "utf8");
+    review_mode: input?.reviewMode ?? input?.review_mode, prompt: input?.prompt ?? RESULT_PROMPT,
+    subject_binding: input?.subjectBinding ?? input?.subject_binding ?? null, review_policy: input?.reviewPolicy ?? input?.review_policy ?? null });
+  return Buffer.from(`${JSON.stringify({ schema_version: "wh-review-provider-input.v1", packet, ...envelope })}\n`, "utf8");
 }
 
 export function rehydrateProviderInput(bytes, attachmentRoot) {
@@ -702,30 +587,11 @@ export function rehydrateProviderInput(bytes, attachmentRoot) {
   try { value = JSON.parse(Buffer.isBuffer(bytes) ? bytes.toString("utf8") : String(bytes)); }
   catch { throw new TypeError("provider input is invalid"); }
   exactKeys(value, PROVIDER_INPUT_TOP_LEVEL_KEYS, "provider input");
-    if (value.schema_version !== "wh-review-provider-input.v1" || typeof value.envelope_sha256 !== "string"
-        || !SHA256_HEX.test(value.envelope_sha256)) throw new TypeError("provider input is invalid");
-    const packet = rebuildSerializedPacket(value.packet);
-    const envelope = canonicalProviderEnvelopeFields(value);
-    const unsigned = { schema_version: "wh-review-provider-input.v1", packet, ...envelope };
-    if (providerEnvelopeDigest(unsigned) !== value.envelope_sha256) throw new TypeError("provider input envelope integrity is invalid");
-    const materials = decodeSerializedMaterials(value.packet);
-    const bundle = buildBundle(attachmentRoot, {
-      stage: packet.stage,
-      review_track: packet.review_track,
-      review_scope: packet.review_scope,
-      review_kind: packet.review_kind,
-      ...(packet.activation_cohort === undefined ? {} : { activation_cohort: packet.activation_cohort }),
-      materials,
-      ...(packet.authenticated_evidence === undefined ? {} : { authenticated_evidence: packet.authenticated_evidence }),
-    });
-    if (bundle.materialId !== packet.material_id) { bundle.dispose(); throw new TypeError("provider input bundle identity is invalid"); }
-  return Object.freeze({
-    schema_version: "wh-review-provider-input.v1",
-    packet,
-    ...envelope,
-    envelope_sha256: value.envelope_sha256,
-    materials: bundle,
-  });
+  if (value.schema_version !== "wh-review-provider-input.v1") throw new TypeError("provider input is invalid");
+  const packet = rebuildSerializedPacket(value.packet);
+  const envelope = canonicalProviderEnvelopeFields(value);
+  const bundle = buildBundle(attachmentRoot, { ...packet, materials: decodeSerializedMaterials(packet) });
+  return Object.freeze({ schema_version: "wh-review-provider-input.v1", packet, ...envelope, materials: bundle });
 }
 
 export async function dispatchFrozenProviderInput({ bytes, attachmentRoot, client }) {
@@ -738,6 +604,7 @@ export async function dispatchFrozenProviderInput({ bytes, attachmentRoot, clien
       materials: restored.materials,
       prompt: restored.prompt,
       reviewMode: restored.review_mode,
+      surface: restored.packet.surface ?? (["build-code", "verify-code"].includes(restored.packet.stage) ? "code" : "document"),
       minimumHeterologous: SIMPLE_REVIEW_QUORUM,
       strictProtocol: true,
     });
@@ -877,6 +744,23 @@ function staticReviewRule(input) {
   return stage === "build-plan" && reviewActivationCohort(input) === "post"
     ? stageMaterials.stages["build-plan"].profiles.post
     : reviewRuleFor(stage, track, scope);
+}
+
+/** Fix the existing direction protocol at the actual stage/track boundary. */
+function directionRequest(input) {
+  if (input.stage !== "make-decision" || input.review_track !== "direction") return input;
+  const fixedFlow = validateDirectionFlow();
+  for (const value of [input.review_flow, input.reviewFlow]) if (value != null) validateDirectionFlow(value);
+  const supplied = input.materials?.direction_flow;
+  if (supplied != null) {
+    const value = Buffer.isBuffer(supplied) || supplied instanceof Uint8Array
+      ? JSON.parse(Buffer.from(supplied).toString("utf8"))
+      : typeof supplied === "string" ? JSON.parse(supplied) : supplied;
+    validateDirectionFlow(value);
+  }
+  return { ...input, review_flow: fixedFlow,
+    ...(Object.hasOwn(input, "reviewFlow") ? { reviewFlow: fixedFlow } : {}),
+    materials: { ...input.materials, direction_flow: supplied ?? fixedFlow } };
 }
 
 function projectRunnerMaterials(input) {
@@ -1117,6 +1001,9 @@ function publicProviderResult(item, evidenceAnchors = undefined, pair = null) {
     timing: item.timing,
     usage: item.usage,
     ...(item.execution ? { execution: item.execution } : {}),
+    ...(item.raw_output_ref ? { raw_output_ref: item.raw_output_ref } : {}),
+    ...(Array.isArray(item.evidence_refs) ? { evidence_refs: item.evidence_refs } : {}),
+    ...(item.transport ? { transport: item.transport } : {}),
     ...(item.unavailable_diagnostics ? { unavailable_diagnostics: item.unavailable_diagnostics } : {}),
     ...(evidenceAnchors === undefined ? {} : { evidence_anchor_valid: evidenceAnchors }),
   };
@@ -1172,6 +1059,8 @@ function normalizeManagedGroup(lifecycle, selectedIdentities, selectedModels = n
     outcome: group.outcome,
     round: group.round,
     selectedTier: group.selected_tier,
+    ...(Object.hasOwn(group, "dispatch_state") ? { dispatch_state: group.dispatch_state } : {}),
+    ...(group.transport ? { transport: group.transport } : {}),
     ...(materialId === undefined ? {} : { material_id: materialId }),
     ...(Object.hasOwn(group, "initial_result_ref") ? { initial_result_ref: group.initial_result_ref } : {}),
     ...(group.publication ? { publication: group.publication } : {}),
@@ -1238,6 +1127,13 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
     review_kind: identity.reviewKind,
   };
   let materialDiscardedFacts = [];
+  try { canonicalInput = directionRequest(canonicalInput); }
+  catch (error) {
+    return blockedPreflight(canonicalInput, "MATERIAL_INCOMPLETE", error.message, preflightDiagnostic({
+      field: "review_flow/direction_flow", expected: "the fixed reconstruct -> reveal -> challenge protocol",
+      actual: "invalid or conflicting supplied direction flow", nextAction: "supply the existing fixed direction-review.v1 protocol or omit it",
+    }), pair, { material_id: null });
+  }
   try {
     const projected = projectRunnerMaterials(canonicalInput);
     canonicalInput = projected.input;
@@ -1341,10 +1237,39 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
     pair,
   );
   if (preflight?.status) return preflight;
-  const blockedProviderResults = preflight?.blocked_provider_results ?? [];
+  const blockedProviderResults = [...(preflight?.blocked_provider_results ?? [])];
   const selectedProviders = providerSelection.providers;
   const blockedProviderSet = new Set(blockedProviderResults.map((item) => item.provider));
+  // Default host transports dispatch only a provider with a demonstrated
+  // packet read root. Keep unsupported selected members as unavailable facts.
+  // Private injected transports retain their own execution responsibility;
+  // parser/fake fixtures do not demonstrate native filesystem isolation.
+  const nativeClient = dependencies.client ?? new ReviewProviderClient({ command: trusted.command, config: trusted.config });
+  for (const provider of selectedProviders) {
+    const adapter = providerAdapter(provider);
+    if (!(nativeClient instanceof ReviewProviderClient) || nativeClient.transportKind === "injected"
+        || nativeClient.supportsPacketBoundProvider(provider) || blockedProviderSet.has(provider)) continue;
+    blockedProviderSet.add(provider);
+    blockedProviderResults.push({ provider, status: "blocked",
+      identity: { provider, adapter, ...(providerSelection.provider_identities?.[provider] ?? {}),
+        model: providerSelection.provider_models?.[provider] ?? null },
+      timing: null, usage: null,
+      error: { code: "PROVIDER_PACKET_BOUNDARY_UNAVAILABLE",
+        message: adapter === "kimi"
+          ? "Kimi broker Read has no verified packet filesystem boundary; review is unavailable"
+          : "Selected native provider has no verified packet filesystem boundary; review is unavailable" },
+    });
+  }
   const dispatchProviders = selectedProviders.filter((provider) => !blockedProviderSet.has(provider));
+  if (dispatchProviders.length === 0) return unavailableResult(reviewInput, {
+    code: blockedProviderResults.find(item => item.error?.code === "NATIVE_DIRECTION_VISIBILITY_UNAVAILABLE")?.error.code ?? "PROVIDER_PACKET_BOUNDARY_UNAVAILABLE",
+    message: "Selected review providers have no verified packet or staged visibility boundary; no review was dispatched",
+  }, pair, { provider_selection: providerSelectionOutput(providerSelection),
+    provider_attempts: 0, dispatch_state: "blocked_before_dispatch",
+    provider_results: blockedProviderResults.map((item) => publicProviderResult({
+      ...item, status: "failed",
+    }, undefined, pair)),
+  });
   const minimum = SIMPLE_REVIEW_QUORUM;
   const selectedIdentities = providerSelection.provider_identities ?? null;
   const selectedModels = providerSelection.provider_models ?? null;
@@ -1366,7 +1291,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
     });
   }
   try {
-    const client = dependencies.client ?? new ReviewProviderClient({ command: trusted.command, config: trusted.config });
+    const client = nativeClient;
     const prompt = promptForPair(pair);
     let group;
     let reviewCancellation = null;
@@ -1385,7 +1310,8 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
           requestId, providers: dispatchProviders, materials: bundle, prompt,
           minimumHeterologous: minimum,
           reviewMode: route.mode,
-          reviewFlow: input.review_flow ?? input.reviewFlow ?? null,
+          reviewFlow: canonicalInput.review_flow ?? canonicalInput.reviewFlow ?? null,
+          surface: canonicalInput.surface ?? (["build-code", "verify-code"].includes(canonicalInput.stage) ? "code" : "document"),
           ...(signal === null ? {} : { signal }),
         });
         if (lifecycle.state !== "terminal") {
@@ -1447,10 +1373,11 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
             }, undefined, pair);
           });
         return unavailableResult(input, normalizeProviderError(error), pair, {
+          ...(await captureBrokerFailure(error, dependencies, pair)),
           // A transmitted request whose reply could not be parsed is neither
           // "dispatched" nor "blocked_before_dispatch"; keep the transport's own
           // classification when it reported one.
-          dispatch_state: observation?.dispatch_state ?? (lifecycle ? "dispatched" : "blocked_before_dispatch"),
+          dispatch_state: observation?.dispatch_state ?? (lifecycle ? "dispatched" : brokerFailureDispatchState(error)),
           request_id: requestId,
           runtime_id: lifecycle?.runtime_id ?? observation?.runtime_id ?? null,
           minimum_heterologous: minimum,
@@ -1470,17 +1397,19 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
           // contract: a direction review is one request carrying its ordered
           // reconstruct -> reveal -> challenge flow. Omitting it here would let
           // the unmanaged path silently downgrade the governed flow.
-          reviewFlow: input.review_flow ?? input.reviewFlow ?? null,
+          reviewFlow: canonicalInput.review_flow ?? canonicalInput.reviewFlow ?? null,
+          surface: canonicalInput.surface ?? (["build-code", "verify-code"].includes(canonicalInput.stage) ? "code" : "document"),
           strictProtocol: true,
           ...pairFields(pair),
           ...(signal === null ? {} : { signal }),
         });
       } catch (error) {
         return unavailableResult(input, normalizeProviderError(error), pair, {
+          ...(await captureBrokerFailure(error, dependencies, pair)),
           // The provider client was called. Preserve that transport boundary so
           // an external input-limit response cannot be mistaken for the
           // retired local byte-cap preflight.
-          dispatch_state: "dispatched",
+          dispatch_state: brokerFailureDispatchState(error),
           minimum_heterologous: minimum,
           provider_selection: providerSelectionOutput(providerSelection),
         });
@@ -1504,6 +1433,24 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
     const discardedFacts = [];
     const semanticModels = new Set();
     const receivedProviders = Array.isArray(group?.providers) ? group.providers : [];
+    if (typeof dependencies.onProviderOutput === "function") {
+      for (const item of receivedProviders) if (item) {
+        const provider = item.provider ?? item.identity?.provider;
+        const originals = Array.isArray(item.raw_outputs) && item.raw_outputs.length ? item.raw_outputs
+          : Buffer.isBuffer(item.raw_output?.stdout) && Buffer.isBuffer(item.raw_output?.stderr) ? [item.raw_output] : [];
+        if (originals.length) {
+          const refs = [];
+          for (const original of originals) for (const stream of ["stdout", "stderr"]) {
+            if (!Buffer.isBuffer(original[stream])) throw new TypeError("native provider original stream must be bytes");
+            refs.push(await dependencies.onProviderOutput({ provider, role: pair?.role ?? null, channel: original.step ? `${original.step}-${stream}` : stream, output: original[stream] }));
+          }
+          item.raw_output_ref = refs[0] ?? null;
+          item.evidence_refs = refs;
+        } else if (typeof item.output === "string") {
+          item.raw_output_ref = await dependencies.onProviderOutput({ provider, role: pair?.role ?? null, output: item.output });
+        }
+      }
+    }
     const seenProviders = new Set();
     const providers = receivedProviders.map((rawItem) => {
       const item = rawItem && typeof rawItem === "object"
@@ -1607,7 +1554,8 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
         ...item,
         status: "failed",
         error: {
-          code: "PROVIDER_HEALTH_FAILED",
+          code: ["PROVIDER_PACKET_BOUNDARY_UNAVAILABLE", "NATIVE_DIRECTION_VISIBILITY_UNAVAILABLE"].includes(sourceError.code)
+            ? sourceError.code : "PROVIDER_HEALTH_FAILED",
           message: sourceError.message ?? "provider preflight failed",
           ...(typeof sourceError.code === "string" && sourceError.code.trim() !== ""
             ? { cause_code: sourceError.code }
@@ -1652,7 +1600,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
       review_kind: reviewKind,
       material_id: observedMaterialId,
       ...pairFields(pair),
-      dispatch_state: "dispatched",
+      dispatch_state: group.transport === "codex-native" && semanticModels.size === 0 && group.dispatch_state === "dispatched" ? "sent_unparsed" : group.dispatch_state ?? "dispatched",
       provider_attempts: dispatchProviders.length,
       runtime_id: group.runtimeId,
       outcome: group.outcome,
@@ -1713,7 +1661,6 @@ function isPairedMakeDecisionInput(input) {
 function pairResultIncomplete(result, materialId) {
   return result.status !== "available"
     || result.outcome !== "completed"
-    || result.material_id !== materialId
     || result.provider_results.some((provider) => provider.status !== "completed");
 }
 
@@ -1743,13 +1690,13 @@ function combinePairedResults(input, pairId, roleResults) {
   const blue = byRole.blue;
   const materialIds = Object.fromEntries(roleResults.map((result) => [result.role, result.material_id]));
   const materialValues = roleResults.map((result) => result.material_id).filter((value) => typeof value === "string");
-  const materialConsistent = materialValues.length === 2 && new Set(materialValues).size === 1;
+  const materialConsistent = true; // Independent role packets are transport facts, not a shared advancement identity.
   const expectedMaterialId = materialConsistent ? materialValues[0] : null;
   const incomplete = Object.fromEntries(roleResults.map((result) => [result.role, pairResultIncomplete(result, expectedMaterialId)]));
   const anyAvailable = roleResults.some((result) => result.status === "available");
   const anyIncomplete = Object.values(incomplete).some(Boolean);
   const allIncomplete = roleResults.every((result) => incomplete[result.role]);
-  const status = !anyAvailable ? "unavailable" : (anyIncomplete || !materialConsistent ? "available-with-failures" : "available");
+  const status = !anyAvailable ? "unavailable" : (anyIncomplete ? "available-with-failures" : "available");
   const materialStatus = materialConsistent ? "consistent" : "partial";
   // FR-C4-004: the dispatch state belongs to the aggregate result itself, not
   // only to each role record. The pair was blocked before dispatch only when
@@ -1782,7 +1729,6 @@ function combinePairedResults(input, pairId, roleResults) {
         }
       : {}),
     material_ids: materialIds,
-    material_consistency: materialStatus,
     pair_status: status === "available" ? "complete" : "partial",
     runtime_id: null,
     outcome: status === "available" ? "completed" : "partial",
@@ -1793,7 +1739,6 @@ function combinePairedResults(input, pairId, roleResults) {
     role_results: { red, blue },
     ...(incomplete.red ? { red_incomplete: true } : {}),
     ...(incomplete.blue ? { blue_incomplete: true } : {}),
-    ...(materialConsistent ? {} : { error: { code: "PAIR_MATERIAL_MISMATCH", message: "red and blue review material_id values do not match" } }),
     ...(allIncomplete && materialConsistent ? { error: red.error ?? blue.error ?? { code: "REVIEW_NO_SEMANTIC_RESULT", message: "neither paired review produced a semantic result" } } : {}),
   };
 }

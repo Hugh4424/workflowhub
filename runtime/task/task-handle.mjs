@@ -1,1013 +1,128 @@
-import {
-  closeSync,
-  constants,
-  existsSync,
-  fstatSync,
-  fsyncSync,
-  lstatSync,
-  linkSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  readdirSync,
-  realpathSync,
-  renameSync,
-  rmSync,
-  unlinkSync,
-  writeFileSync,
-  writeSync,
-} from "node:fs";
-import { createHash, randomUUID } from "node:crypto";
-import { execFileSync } from "node:child_process";
-import { hostname, networkInterfaces } from "node:os";
-import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
+import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync } from "node:fs";
+import { dirname, isAbsolute, join, parse, relative, resolve, sep } from "node:path";
+import { deriveTaskPath, validateProjectName, validateTaskId } from "./task-identity.mjs";
+import { assertTaskHandle, brandTaskHandle } from "./task-capability.mjs";
+import { createFileOnce, writeFileAtomic } from "../interface/safe-write.mjs";
+import { withLock } from "../interface/record-lock.mjs";
+export { assertTaskHandle } from "./task-capability.mjs";
 
-import { deriveTaskPath, validateProjectName, validateTaskId } from "../task/task-identity.mjs";
-import { buildTaskKernel } from "./task-kernel-implementation.mjs";
-import {
-  assertTaskHandle,
-  assertTaskKernel,
-  brandTaskHandle,
-  brandTaskKernel,
-} from "./task-capability.mjs";
-export { assertTaskHandle, assertTaskKernel } from "./task-capability.mjs";
-
-const FORBIDDEN_MANIFEST_FIELDS = new Set([
-  "status", "stage_map", "updated_at", "lock", "worktree", "worktree_root",
-]);
-const NOFOLLOW = constants.O_NOFOLLOW ?? 0;
-const CANONICAL_RECORD_WRITERS = new WeakMap();
-const INVOCATION_IDENTITY_WRITERS = new WeakMap();
-const CREATE_CLAIM_MAX_AGE_MS = 15 * 60 * 1000;
-const RECORD_LOCK_WAIT_MS = 10_000;
-const CANONICAL_STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
-const LEGACY_RUNNER_MIGRATION_REF = /^identity\/migrations\/runner-root\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/;
-
-function assertPlainObject(value, label) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new TypeError(`${label} must be an object`);
+const plain = value => value && typeof value === "object" && !Array.isArray(value);
+const same = (a, b) => a.dev === b.dev && a.ino === b.ino;
+function wantedIdentity(expected, expectedTaskId) {
+  const projectName = typeof expected === "string" ? expected : expected?.projectName;
+  const taskId = typeof expected === "string" ? expectedTaskId : expected?.taskId;
+  return { projectName: validateProjectName(projectName), taskId: validateTaskId(taskId) };
+}
+function directories(path, create = false) {
+  let cursor = parse(path).root;
+  const names = [cursor];
+  for (const part of path.slice(cursor.length).split(sep).filter(Boolean)) { cursor = join(cursor, part); names.push(cursor); }
+  const snapshot = [];
+  for (const path of names) {
+    verifyDirectories(snapshot);
+    let stat;
+    try { stat = lstatSync(path); }
+    catch (error) { if (!create || error.code !== "ENOENT") throw error; mkdirSync(path, { mode: 0o700 }); stat = lstatSync(path); }
+    const alias = process.platform === "darwin" && ((path === "/tmp" && realpathSync(path) === "/private/tmp") || (path === "/var" && realpathSync(path) === "/private/var"));
+    if ((!alias && stat.isSymbolicLink()) || (!alias && !stat.isDirectory())) throw new Error("task storage ancestor must be a real directory");
+    snapshot.push({ path, dev: stat.dev, ino: stat.ino, real: realpathSync(path) });
+    verifyDirectories(snapshot);
+  }
+  verifyDirectories(snapshot);
+  return snapshot;
+}
+function verifyDirectories(snapshot) {
+  for (const before of snapshot) {
+    const current = lstatSync(before.path);
+    if (!same(current, before) || realpathSync(before.path) !== before.real) throw new Error("task storage ancestor changed during I/O");
   }
 }
-
-function validateManifest(manifest) {
-  assertPlainObject(manifest, "task manifest");
-  const projectName = validateProjectName(manifest.project_name);
-  const taskId = validateTaskId(manifest.task_id);
-  if (manifest.schema_version !== "1.0.0") throw new TypeError('task manifest schema_version must be "1.0.0"');
-  if (typeof manifest.created_at !== "string" || !Number.isFinite(Date.parse(manifest.created_at))) {
-    throw new TypeError("task manifest created_at must be an ISO-compatible timestamp");
-  }
-  if (typeof manifest.target_repo_root !== "string" || !isAbsolute(manifest.target_repo_root)) {
-    throw new TypeError("task manifest target_repo_root must be an absolute path");
-  }
-  const workspaceFields = ["workspace_mode", "workspace_root"];
-  const presentWorkspaceFields = workspaceFields.filter((field) => Object.prototype.hasOwnProperty.call(manifest, field));
-  if (presentWorkspaceFields.length > 0) {
-    if (presentWorkspaceFields.length !== workspaceFields.length) {
-      throw new TypeError("task manifest workspace_mode and workspace_root must be present together");
-    }
-    if (manifest.workspace_mode !== "existing") {
-      throw new TypeError('task manifest workspace_mode must be "existing" when present');
-    }
-    if (typeof manifest.workspace_root !== "string" || !isAbsolute(manifest.workspace_root)) {
-      throw new TypeError("task manifest workspace_root must be an absolute path");
-    }
-  }
-  if (!Array.isArray(manifest.issue_ids) || !manifest.issue_ids.every((id) => typeof id === "string" && id.trim() !== "")) {
-    throw new TypeError("task manifest issue_ids must be an array of non-empty strings");
-  }
-  assertPlainObject(manifest.inputs, "task manifest inputs");
-  if (manifest.execution_mode !== undefined && !new Set(["per_invocation", "legacy_pinned"]).has(manifest.execution_mode)) {
-    throw new TypeError('task manifest execution_mode must be "per_invocation" or "legacy_pinned" when present');
-  }
-  const legacyRunnerFields = ["runner_root", "runner_oid", "runner_root_migration"];
-  const presentLegacyRunnerFields = legacyRunnerFields.filter((field) => Object.prototype.hasOwnProperty.call(manifest, field));
-  if (presentLegacyRunnerFields.length > 0) {
-    if (manifest.execution_mode === "per_invocation") {
-      throw new TypeError("per_invocation task manifest must not contain legacy runner fields");
-    }
-    if (presentLegacyRunnerFields.length !== legacyRunnerFields.length) {
-      throw new TypeError("legacy runner_root, runner_oid, and runner_root_migration must be present together");
-    }
-    if (typeof manifest.runner_root !== "string" || !isAbsolute(manifest.runner_root)) {
-      throw new TypeError("legacy runner_root must be an absolute path");
-    }
-    if (!/^[a-f0-9]{40}$/.test(manifest.runner_oid)) {
-      throw new TypeError("legacy runner_oid must be a full Git commit OID");
-    }
-    assertPlainObject(manifest.runner_root_migration, "legacy runner_root_migration");
-    if (Object.keys(manifest.runner_root_migration).some((key) => key !== "ref")
-        || !LEGACY_RUNNER_MIGRATION_REF.test(manifest.runner_root_migration.ref ?? "")) {
-      throw new TypeError("legacy runner_root_migration must contain one safe migration ref");
-    }
-  }
-  if (manifest.record_model !== "vnext-single-write") {
-    throw new TypeError('task manifest record_model must be "vnext-single-write"');
-  }
-  if (manifest.write_resolution_source !== undefined
-      && !new Set(["env", "config", "home"]).has(manifest.write_resolution_source)) {
-    throw new TypeError("task manifest write_resolution_source must be env, config, or home when present");
-  }
-  for (const field of FORBIDDEN_MANIFEST_FIELDS) {
-    if (Object.prototype.hasOwnProperty.call(manifest, field)) throw new TypeError(`task manifest must not contain mutable field: ${field}`);
-  }
-  return { projectName, taskId };
-}
-
-function sha256(raw) { return createHash("sha256").update(raw).digest("hex"); }
-
-function gitValue(root, args, label) {
-  try { return String(execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })).trim(); }
-  catch (error) { throw new Error(`${label} validation failed: ${error.stderr?.toString().trim() || error.message}`); }
-}
-
-function gitCheckout(path, branch, label) {
-  const root = realDirectoryNoSymlink(resolve(path), label);
-  const top = realpathSync(gitValue(root, ["rev-parse", "--show-toplevel"], label));
-  if (top !== root) throw new Error(`${label} must be a Git toplevel directory`);
-  const commonRaw = gitValue(root, ["rev-parse", "--git-common-dir"], label);
-  const common = realpathSync(resolve(root, commonRaw));
-  const checkedOut = gitValue(root, ["symbolic-ref", "--quiet", "--short", "HEAD"], label);
-  if (checkedOut !== branch) throw new Error(`${label} must have target branch checked out`);
-  const head = gitValue(root, ["rev-parse", "--verify", "HEAD^{commit}"], label).toLowerCase();
-  if (!/^[a-f0-9]{40}$/.test(head)) throw new Error(`${label} HEAD must be a full Git commit OID`);
-  return { root, common, branch: checkedOut, head };
-}
-
-function gitRepository(path, label) {
-  const root = realDirectoryNoSymlink(resolve(path), label);
-  const top = realpathSync(gitValue(root, ["rev-parse", "--show-toplevel"], label));
-  if (top !== root) throw new Error(`${label} must be a Git toplevel directory`);
-  return { root, common: realpathSync(resolve(root, gitValue(root, ["rev-parse", "--git-common-dir"], label))) };
-}
-
-function expectedIdentity(expected = {}, expectedTaskId) {
-  if (typeof expected === "string") {
-    return { projectName: validateProjectName(expected), taskId: validateTaskId(expectedTaskId) };
-  }
-  return {
-    projectName: validateProjectName(expected.projectName ?? expected.project_name),
-    taskId: validateTaskId(expected.taskId ?? expected.task_id),
-  };
-}
-
-function deepFreeze(value) {
-  if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value)) deepFreeze(child);
-  return Object.freeze(value);
-}
-
-function assertInside(basePath, candidatePath, label = "path") {
-  const rel = relative(basePath, candidatePath);
-  if (rel === "" || (!rel.startsWith("..") && !isAbsolute(rel))) return;
-  throw new Error(`${label} escapes trusted root: ${candidatePath}`);
-}
-
-function assertTaskPathShape(taskPath, projectName, taskId) {
-  if (typeof taskPath !== "string" || !isAbsolute(taskPath)) throw new TypeError("taskPath must be absolute");
-  const path = resolve(taskPath);
-  const projectPath = basename(dirname(dirname(path)));
-  const pathSegmentMatches = (actual, expected) => actual === expected
-    || (process.platform === "darwin" && actual.toLowerCase() === expected.toLowerCase());
-  if (!pathSegmentMatches(basename(path), taskId) || !pathSegmentMatches(basename(dirname(path)), "tasks") ||
-      !pathSegmentMatches(projectPath, projectName) || !pathSegmentMatches(basename(dirname(dirname(dirname(path)))), "Projects")) {
-    throw new Error(`taskPath does not match Projects/${projectName}/tasks/${taskId}: ${path}`);
-  }
+function recordPath(root, ref) {
+  if (typeof ref !== "string" || !ref || isAbsolute(ref) || ref.includes("\\") || ref.includes("\0") || ref.split("/").some(part => !part || part === "." || part === "..")) throw new TypeError("record path must remain inside task storage");
+  const path = resolve(root, ref), rel = relative(root, path);
+  if (!rel || rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) throw new Error("record path escapes task storage");
   return path;
 }
-
-function realDirectoryNoSymlink(path, label) {
-  const stat = lstatSync(path);
-  if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error(`${label} must be a real directory: ${path}`);
-  return realpathSync(path);
-}
-
-function assertNoSymlinkChain(path, label) {
-  const absolute = resolve(path);
-  const parts = absolute.split("/").filter(Boolean);
-  let cursor = "/";
-  for (const part of parts) {
-    cursor = resolve(cursor, part);
-    const stat = lstatSync(cursor);
-    if (stat.isSymbolicLink()) {
-      // macOS exposes the system temporary directory as /tmp -> /private/tmp.
-      // Normalize that fixed platform alias without weakening the no-symlink
-      // rule for caller-controlled storage paths.
-      if (cursor === "/tmp" && realpathSync(cursor) === "/private/tmp") continue;
-      throw new Error(`${label} contains a symlink: ${cursor}`);
-    }
-  }
-}
-
-function ensureChildDirectories(root, segments) {
-  let cursor = root;
-  for (const segment of segments) {
-    cursor = resolve(cursor, segment);
-    assertInside(root, cursor);
-    if (existsSync(cursor)) realDirectoryNoSymlink(cursor, "trusted directory");
-    else {
-      try { mkdirSync(cursor); }
-      catch (error) { if (error?.code !== "EEXIST") throw error; }
-      realDirectoryNoSymlink(cursor, "trusted directory");
-    }
-    assertInside(root, realpathSync(cursor));
-  }
-  return cursor;
-}
-
-function fsyncDirectory(path) {
-  const fd = openSync(path, constants.O_RDONLY);
-  try { fsyncSync(fd); } finally { closeSync(fd); }
-}
-
-function assertOpenedPath(fd, path, trustedRoot, label) {
-  const opened = fstatSync(fd);
-  const pathStat = lstatSync(path);
-  if (pathStat.isSymbolicLink() || opened.dev !== pathStat.dev || opened.ino !== pathStat.ino) {
-    throw new Error(`${label} changed while opening: ${path}`);
-  }
-  assertInside(trustedRoot, realpathSync(path), label);
-}
-
-function readRegularFileNoFollow(path, label, trustedRoot = dirname(path)) {
-  const trustedRootReal = realpathSync(trustedRoot);
-  const fd = openSync(path, constants.O_RDONLY | NOFOLLOW);
+function readBytes(root, ref) {
+  if (!Number.isInteger(constants.O_NOFOLLOW)) throw new Error("O_NOFOLLOW is required for task reads");
+  const path = recordPath(root, ref), ancestry = directories(dirname(path));
+  const named = lstatSync(path);
+  if (named.isSymbolicLink() || !named.isFile() || named.nlink !== 1) throw new Error("task record must be a single-link regular file");
+  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
   try {
-    const stat = fstatSync(fd);
-    if (!stat.isFile()) throw new Error(`${label} must be a regular file: ${path}`);
-    assertOpenedPath(fd, path, trustedRootReal, label);
-    return readFileSync(fd, "utf8");
-  } finally {
-    closeSync(fd);
-  }
-}
-
-function readRegularFileBytesNoFollow(path, label, trustedRoot = dirname(path)) {
-  const trustedRootReal = realpathSync(trustedRoot);
-  const fd = openSync(path, constants.O_RDONLY | NOFOLLOW);
-  try {
-    const stat = fstatSync(fd);
-    if (!stat.isFile()) throw new Error(`${label} must be a regular file: ${path}`);
-    assertOpenedPath(fd, path, trustedRootReal, label);
-    return readFileSync(fd);
+    const opened = fstatSync(fd);
+    if (!opened.isFile() || opened.nlink !== 1 || !same(opened, named)) throw new Error("task record changed while opening");
+    verifyDirectories(ancestry);
+    const bytes = readFileSync(fd), after = lstatSync(path);
+    if (after.isSymbolicLink() || after.nlink !== 1 || !same(after, opened)) throw new Error("task record changed during read");
+    verifyDirectories(ancestry);
+    return bytes;
   } finally { closeSync(fd); }
 }
-
-function directorySnapshot(root, parent) {
-  const realRoot = realpathSync(root);
-  assertInside(realRoot, realpathSync(parent), "record parent");
-  const rel = relative(realRoot, parent);
-  const paths = [realRoot];
-  let cursor = realRoot;
-  for (const segment of rel.split("/").filter(Boolean)) {
-    cursor = resolve(cursor, segment);
-    paths.push(cursor);
+function manifestIdentity(manifest) {
+  if (!plain(manifest)) throw new TypeError("task manifest must be an object");
+  const identity = { projectName: validateProjectName(manifest.project_name), taskId: validateTaskId(manifest.task_id) };
+  if (manifest.schema_version !== "1.0.0" || typeof manifest.target_repo_root !== "string" || !isAbsolute(manifest.target_repo_root)) throw new TypeError("task manifest schema or repository path is invalid");
+  if (Object.hasOwn(manifest, "workspace_mode") || Object.hasOwn(manifest, "workspace_root")) {
+    if (manifest.workspace_mode !== "existing" || typeof manifest.workspace_root !== "string" || !isAbsolute(manifest.workspace_root)) throw new TypeError("task workspace metadata is invalid");
   }
-  return paths.map((path) => {
-    const stat = lstatSync(path);
-    if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error(`trusted ancestor must be a real directory: ${path}`);
-    return { path, dev: stat.dev, ino: stat.ino, real: realpathSync(path) };
-  });
+  return identity;
 }
-
-function verifyDirectorySnapshot(snapshot) {
-  for (const before of snapshot) {
-    const stat = lstatSync(before.path);
-    if (!stat.isDirectory() || stat.isSymbolicLink() || stat.dev !== before.dev || stat.ino !== before.ino || realpathSync(before.path) !== before.real) {
-      throw new Error(`trusted directory changed during operation: ${before.path}`);
-    }
-  }
+function deepFreeze(value) {
+  if (value && typeof value === "object") { for (const child of Object.values(value)) deepFreeze(child); Object.freeze(value); }
+  return value;
 }
-
-function verifyDirectoryIdentity(identity, label) {
-  const stat = lstatSync(identity.path);
-  if (!stat.isDirectory() || stat.isSymbolicLink() || stat.dev !== identity.dev || stat.ino !== identity.ino || realpathSync(identity.path) !== identity.real) {
-    throw new Error(`${label} directory identity changed: ${identity.path}`);
-  }
-}
-
-function processAlive(pid) {
-  if (!Number.isInteger(pid) || pid <= 0) return false;
-  try { process.kill(pid, 0); return true; }
-  catch (error) { return error?.code === "EPERM"; }
-}
-
-function clearStaleClaim(claimPath, taskPath, parent) {
-  if (!existsSync(claimPath) || existsSync(taskPath)) return false;
-  let claim;
-  try { claim = JSON.parse(readRegularFileNoFollow(claimPath, "task create claim", parent)); }
-  catch { return false; }
-  const age = Date.now() - Date.parse(claim.started_at);
-  const expired = Number.isFinite(age) && age > CREATE_CLAIM_MAX_AGE_MS;
-  const ownerDead = claim.host === hostname() && !processAlive(claim.pid);
-  if (!ownerDead && !expired) return false;
-  if (typeof claim.nonce !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(claim.nonce)) return false;
-  if (existsSync(taskPath)) return false;
-  const temporary = resolve(parent, `.${basename(taskPath)}.${claim.nonce}.tmp`);
-  assertInside(parent, temporary, "task create temporary");
-  if (existsSync(temporary)) {
-    const stat = lstatSync(temporary);
-    if (!stat.isDirectory() || stat.isSymbolicLink() || dirname(temporary) !== parent) return false;
-    rmSync(temporary, { recursive: true, force: true });
-  }
-  rmSync(claimPath, { force: true });
-  fsyncDirectory(parent);
-  return true;
-}
-
-/**
- * A macOS hostname can legitimately alternate between its short label and
- * the corresponding mDNS `.local` name across terminal hosts.  Treat only
- * that narrow pair as local; every other hostname remains remote and can
- * never be reclaimed by PID liveness alone.
- */
-export function sameLocalRecordLockHost(ownerHost, currentHost = hostname()) {
-  if (typeof ownerHost !== "string" || ownerHost.trim() === ""
-      || typeof currentHost !== "string" || currentHost.trim() === "") return false;
-  const owner = ownerHost.trim().toLowerCase();
-  const current = currentHost.trim().toLowerCase();
-  if (owner === current) return true;
-  const localAlias = (value) => {
-    if (value.endsWith(".local")) {
-      const shortName = value.slice(0, -".local".length);
-      return shortName !== "" && !shortName.includes(".")
-        ? { shortName, qualified: true }
-        : null;
-    }
-    return !value.includes(".") ? { shortName: value, qualified: false } : null;
-  };
-  const ownerAlias = localAlias(owner);
-  const currentAlias = localAlias(current);
-  return ownerAlias !== null && currentAlias !== null
-    && ownerAlias.shortName === currentAlias.shortName
-    && ownerAlias.qualified !== currentAlias.qualified;
-}
-
-const VOLATILE_INTERFACE = /^(?:lo\d*|utun\d*|awdl\d*|llw\d*|veth|docker|br-|virbr|gif\d*|stf\d*|anpi\d*|bridge\d*|tun\d*|tap\d*|wg\d*)/i;
-
-export function recordLockMachineId(interfaces = networkInterfaces()) {
-  const macs = Object.entries(interfaces ?? {})
-    .filter(([name]) => !VOLATILE_INTERFACE.test(name))
-    .flatMap(([, entries]) => Array.isArray(entries) ? entries : [])
-    .filter((entry) => entry?.internal !== true)
-    .map((entry) => typeof entry?.mac === "string" ? entry.mac.toLowerCase() : "")
-    .filter((mac) => /^[0-9a-f]{2}(?::[0-9a-f]{2}){5}$/.test(mac) && mac !== "00:00:00:00:00:00")
-    .sort();
-  return macs.length ? sha256(macs.join(",")) : null;
-}
-
-/**
- * PID liveness can cross a short-host/.local spelling only when the lock also
- * carries this machine's opaque network-instance digest. Older exact-host
- * records stay recoverable; an old alias record deliberately fails closed.
- */
-export function localRecordLockOwnerMatchesMachine(owner, {
-  currentHost = hostname(),
-  currentMachineId = recordLockMachineId(),
-} = {}) {
-  if (!owner || typeof owner !== "object" || Array.isArray(owner)
-      || typeof owner.host !== "string" || owner.host.trim() === ""
-      || typeof currentHost !== "string" || currentHost.trim() === "") return false;
-  const sameHost = owner.host.trim().toLowerCase() === currentHost.trim().toLowerCase();
-  // Preserve the prior exact-host recovery path. The fingerprint only
-  // narrows an alias crossing, where hostname text alone proves nothing on
-  // shared storage.
-  if (sameHost) return true;
-  const ownerMachineId = owner.machine_id;
-  if (ownerMachineId === undefined) return false;
-  if (!/^[a-f0-9]{64}$/.test(ownerMachineId) || !/^[a-f0-9]{64}$/.test(currentMachineId ?? "")) return false;
-  return (sameHost || sameLocalRecordLockHost(owner.host, currentHost))
-    && ownerMachineId === currentMachineId;
-}
-
-function lockOwnerDeadOrExpired(lockPath, taskRoot) {
-  let owner;
-  try { owner = JSON.parse(readRegularFileNoFollow(lockPath, "record lock", taskRoot)); }
-  catch { return false; }
-  const age = Date.now() - Date.parse(owner.started_at);
-  // PID liveness is authoritative only on this host. Never steal a live local
-  // lock by age, and never guess about a remote host without a lease service.
-  // A hostname alias alone is not a machine identity on shared storage. New
-  // alias records must carry the local machine digest; legacy records retain
-  // only their already-existing exact-host recovery behavior.
-  return localRecordLockOwnerMatchesMachine(owner) && !processAlive(owner.pid)
-    && Number.isFinite(age) && age >= 0;
-}
-
-function waitBriefly(milliseconds = 10) {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
-}
-
-function recordLockWaitMs(options) {
-  if (options === undefined) return RECORD_LOCK_WAIT_MS;
-  assertPlainObject(options, "record lock options");
-  if (Object.keys(options).some((key) => key !== "waitMs") || !Number.isSafeInteger(options.waitMs) || options.waitMs < 0) {
-    throw new TypeError("record lock waitMs must be a non-negative safe integer");
-  }
-  return options.waitMs;
-}
-
-function withRecordLockAt(taskRoot, relativePath, operation, options) {
-  if (typeof operation !== "function") throw new TypeError("record lock operation must be a function");
-  const waitMs = recordLockWaitMs(options);
-  const { candidate, parent } = resolveRecord(taskRoot, relativePath, { createParents: true });
-  const ancestorSnapshot = directorySnapshot(taskRoot, parent);
-  const nonce = randomUUID();
-  const machineId = recordLockMachineId();
-  const started = Date.now();
-  let fd;
-  let owned = false;
-  while (!owned) {
-    verifyDirectorySnapshot(ancestorSnapshot);
-    try {
-      fd = openSync(candidate, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NOFOLLOW, 0o600);
-      writeSync(fd, `${JSON.stringify({
-        pid: process.pid,
-        host: hostname(),
-        ...(machineId === null ? {} : { machine_id: machineId }),
-        started_at: new Date().toISOString(),
-        nonce,
-      })}\n`, null, "utf8");
-      fsyncSync(fd);
-      closeSync(fd); fd = undefined;
-      fsyncDirectory(parent);
-      owned = true;
-    } catch (error) {
-      if (fd !== undefined) { closeSync(fd); fd = undefined; }
-      if (error?.code !== "EEXIST") throw error;
-      if (lockOwnerDeadOrExpired(candidate, taskRoot)) {
-        // A lock owner never replaces its live claim. Recovery is restricted to
-        // a provably dead process on this host, then acquisition is retried.
-        try { unlinkSync(candidate); fsyncDirectory(parent); } catch (unlinkError) {
-          if (unlinkError?.code !== "ENOENT") throw unlinkError;
-        }
-        continue;
-      }
-      const elapsed = Date.now() - started;
-      if (elapsed >= waitMs) throw new Error(`timed out waiting for record lock: ${relativePath}`);
-      waitBriefly(Math.min(10, waitMs - elapsed));
-    }
-  }
-  const release = () => {
-    if (fd !== undefined) closeSync(fd);
-    if (owned) {
-      let owner;
-      try { owner = JSON.parse(readRegularFileNoFollow(candidate, "record lock", taskRoot)); } catch {}
-      if (owner?.nonce !== nonce) throw new Error(`record lock ownership changed: ${relativePath}`);
-      unlinkSync(candidate);
-      fsyncDirectory(parent);
-      verifyDirectorySnapshot(ancestorSnapshot);
-    }
-  };
-  try {
-    verifyDirectorySnapshot(ancestorSnapshot);
-    const result = operation();
-    if (result && typeof result.then === "function") return Promise.resolve(result).finally(release);
-    release();
-    return result;
-  } catch (error) {
-    release();
-    throw error;
-  }
-}
-
-function relativeSegments(relativePath, label) {
-  if (typeof relativePath !== "string" || relativePath.trim() === "") throw new TypeError(`${label} must be non-empty`);
-  if (isAbsolute(relativePath) || relativePath.includes("\\")) throw new TypeError(`${label} must be relative: ${relativePath}`);
-  const segments = relativePath.split("/");
-  if (segments.some((part) => part === "" || part === "." || part === "..")) {
-    throw new TypeError(`${label} contains an unsafe segment: ${relativePath}`);
-  }
-  return segments;
-}
-
-function assertPublicRecordWritable(relativePath) {
-  if (/^identity\//.test(relativePath)) throw new Error(`record is identity-owned and cannot be written through TaskHandle: ${relativePath}`);
-  if (/^runs\//.test(relativePath)) throw new Error(`record is kernel-owned and cannot be written through TaskHandle: ${relativePath}`);
-  if (relativePath === "task.json") {
-    throw new Error(`record is kernel-owned and cannot be written through TaskHandle: ${relativePath}`);
-  }
-  if (relativePath === "index.json") {
-    throw new Error(`record is kernel-owned and cannot be written through TaskHandle: ${relativePath}`);
-  }
-  if (relativePath.startsWith("results/")) throw new Error(`results records are kernel-owned and cannot be written through TaskHandle: ${relativePath}`);
-  if (/^(?:receipts|reviews|evidence)\//.test(relativePath)) throw new Error(`record is canonical-receipt-owned and cannot be written through TaskHandle: ${relativePath}`);
-  if (/^quality\/facts\//.test(relativePath)) throw new Error(`quality facts are kernel-owned and cannot be written through TaskHandle: ${relativePath}`);
-}
-
-function resolveRecord(taskRoot, relativePath, { createParents = false } = {}) {
-  const segments = relativeSegments(relativePath, "record path");
-  const parentSegments = segments.slice(0, -1);
-  const parent = createParents
-    ? ensureChildDirectories(taskRoot, parentSegments)
-    : parentSegments.reduce((cursor, segment) => realDirectoryNoSymlink(resolve(cursor, segment), "record parent"), taskRoot);
-  const candidate = resolve(parent, segments.at(-1));
-  assertInside(taskRoot, candidate, "record path");
-  if (existsSync(candidate) && lstatSync(candidate).isSymbolicLink()) throw new Error(`record must not be a symlink: ${candidate}`);
-  return { candidate, parent };
-}
-
-function displayRecordPath(taskRoot, relativePath) {
-  const segments = relativeSegments(relativePath, "record path");
-  const candidate = resolve(taskRoot, ...segments);
-  assertInside(taskRoot, candidate, "record path");
-  let cursor = candidate;
-  while (!existsSync(cursor)) cursor = dirname(cursor);
-  assertInside(taskRoot, realpathSync(cursor), "record path");
-  if (existsSync(candidate) && lstatSync(candidate).isSymbolicLink()) throw new Error(`record must not be a symlink: ${candidate}`);
-  return candidate;
-}
-
-function assertWriteSourceBytes(data, sourceBytes, encoding) {
-  if (sourceBytes === undefined) return;
-  const actual = Buffer.isBuffer(data) ? data : Buffer.from(data, encoding);
-  const authenticated = Buffer.isBuffer(sourceBytes) ? sourceBytes : Buffer.from(sourceBytes, encoding);
-  if (!actual.equals(authenticated)) throw new Error("write boundary source bytes mismatch");
-}
-
-function writeAtomicAt(taskRoot, relativePath, data, { encoding = "utf8", mode = 0o600, testHooks, validator, expectedPriorRaw, sourceBytes, authenticatedSourceBytes } = {}) {
-  assertWriteSourceBytes(data, authenticatedSourceBytes ?? sourceBytes, encoding);
-  const { candidate, parent } = resolveRecord(taskRoot, relativePath, { createParents: true });
-  const ancestorSnapshot = directorySnapshot(taskRoot, parent);
-  const temporary = resolve(parent, `.${randomUUID()}.tmp`);
-  let fd;
-  let openedTemporary;
-  try {
-    testHooks?.afterParentPrecheck?.();
-    verifyDirectorySnapshot(ancestorSnapshot);
-    fd = openSync(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NOFOLLOW, mode);
-    assertOpenedPath(fd, temporary, ancestorSnapshot[0].real, "record temporary");
-    openedTemporary = realpathSync(temporary);
-    writeFileSync(fd, data, { encoding });
-    testHooks?.afterTemporaryWrite?.();
-    testHooks?.beforeFileFsync?.();
-    fsyncSync(fd);
-    closeSync(fd); fd = undefined;
-    testHooks?.afterOpenBeforeRename?.();
-    verifyDirectorySnapshot(ancestorSnapshot);
-    if (validator !== undefined) {
-      if (typeof validator !== "function") throw new TypeError("atomic record validator must be a function");
-      if (typeof expectedPriorRaw !== "string") throw new TypeError("atomic record expectedPriorRaw must be a string");
-      validator("pre");
-      if (readRegularFileNoFollow(candidate, "atomic record compare-and-swap source", ancestorSnapshot[0].real) !== expectedPriorRaw) {
-        throw new Error("atomic record compare-and-swap source changed before replacement");
-      }
-      testHooks?.afterRevalidateBeforeRename?.();
-      verifyDirectorySnapshot(ancestorSnapshot);
-      if (readRegularFileNoFollow(candidate, "atomic record compare-and-swap source", ancestorSnapshot[0].real) !== expectedPriorRaw) {
-        throw new Error("atomic record compare-and-swap source changed before replacement");
-      }
-    }
-    renameSync(temporary, candidate);
-    if (validator !== undefined) {
-      validator("post");
-      if (readRegularFileNoFollow(candidate, "atomic record replacement", ancestorSnapshot[0].real) !== data) {
-        throw new Error("atomic record replacement changed after rename");
-      }
-    }
-    testHooks?.beforeDirectoryFsync?.();
-    fsyncDirectory(parent);
-    verifyDirectorySnapshot(ancestorSnapshot);
-  } finally {
-    if (fd !== undefined) closeSync(fd);
-    if (existsSync(temporary)) rmSync(temporary, { force: true });
-    if (openedTemporary && openedTemporary !== temporary && existsSync(openedTemporary)) rmSync(openedTemporary, { force: true });
-  }
-  return candidate;
-}
-
-function createOnlyAt(taskRoot, relativePath, data, { encoding = "utf8", mode = 0o600, testHooks, sourceBytes, authenticatedSourceBytes } = {}) {
-  assertWriteSourceBytes(data, authenticatedSourceBytes ?? sourceBytes, encoding);
-  const { candidate, parent } = resolveRecord(taskRoot, relativePath, { createParents: true });
-  const ancestorSnapshot = directorySnapshot(taskRoot, parent);
-  const temporary = resolve(parent, `.${randomUUID()}.tmp`);
-  let fd;
-  try {
-    fd = openSync(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NOFOLLOW, mode);
-    assertOpenedPath(fd, temporary, ancestorSnapshot[0].real, "create-only temporary");
-    writeFileSync(fd, data, { encoding });
-    testHooks?.afterTemporaryWrite?.();
-    testHooks?.beforeFileFsync?.();
-    fsyncSync(fd);
-    closeSync(fd); fd = undefined;
-    testHooks?.afterOpenBeforeRename?.();
-    verifyDirectorySnapshot(ancestorSnapshot);
-    linkSync(temporary, candidate);
-    testHooks?.beforeDirectoryFsync?.();
-    fsyncDirectory(parent);
-    verifyDirectorySnapshot(ancestorSnapshot);
-  } finally {
-    if (fd !== undefined) closeSync(fd);
-    if (existsSync(temporary)) unlinkSync(temporary);
-  }
-  return candidate;
-}
-
-function publishTaskDirectory(parent, taskPath, manifest, testHooks) {
-  const nonce = randomUUID();
-  const temporary = resolve(parent, `.${manifest.task_id}.${nonce}.tmp`);
-  const claimPath = resolve(parent, `.${manifest.task_id}.create.lock`);
-  let claimFd;
-  let claimed = false;
-  try {
-    try {
-      claimFd = openSync(claimPath, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NOFOLLOW, 0o600);
-    } catch (error) {
-      if (error?.code !== "EEXIST" || !clearStaleClaim(claimPath, taskPath, parent)) throw error;
-      claimFd = openSync(claimPath, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NOFOLLOW, 0o600);
-    }
-    claimed = true;
-    writeSync(claimFd, `${JSON.stringify({ pid: process.pid, host: hostname(), started_at: new Date().toISOString(), nonce })}\n`, null, "utf8");
-    fsyncSync(claimFd);
-    testHooks?.afterClaim?.();
-    if (existsSync(taskPath)) throw new Error(`task already exists: ${taskPath}`);
-    mkdirSync(temporary, { mode: 0o700 });
-    testHooks?.afterTemporary?.();
-    writeAtomicAt(temporary, "task.json", `${JSON.stringify(manifest, null, 2)}\n`);
-    fsyncDirectory(temporary);
-    if (existsSync(taskPath)) throw new Error(`task already exists: ${taskPath}`);
-    testHooks?.beforeRename?.();
-    renameSync(temporary, taskPath);
-    fsyncDirectory(parent);
-  } finally {
-    if (claimFd !== undefined) closeSync(claimFd);
-    if (existsSync(temporary)) rmSync(temporary, { recursive: true, force: true });
-    if (claimed && existsSync(claimPath)) rmSync(claimPath, { force: true });
-  }
-}
-
-function makeTaskHandle(taskPath, manifest) {
-  const realTaskPath = realpathSync(taskPath);
-  const taskRootIdentity = directorySnapshot(realTaskPath, realTaskPath)[0];
-  const manifestPath = resolve(realTaskPath, "task.json");
-  const manifestSnapshot = readRegularFileNoFollow(manifestPath, "task manifest", realTaskPath);
-  const verifyManifest = () => {
-    const current = readRegularFileNoFollow(manifestPath, "task manifest", realTaskPath);
-    if (current !== manifestSnapshot) throw new Error(`task manifest changed after TaskHandle bootstrap: ${manifestPath}`);
-  };
-  const identity = Object.freeze({ projectName: manifest.project_name, taskId: manifest.task_id });
-  const handle = {
-    taskPath: realTaskPath,
-    identity,
-    manifest: deepFreeze(structuredClone(manifest)),
-    // Display/diagnostic only. Runtime I/O must use the controlled methods below.
-    recordPath(relativePath) {
-      verifyDirectoryIdentity(taskRootIdentity, "task root");
-      verifyManifest();
-      return displayRecordPath(realTaskPath, relativePath);
-    },
-    readRecord(relativePath) {
-      verifyDirectoryIdentity(taskRootIdentity, "task root");
-      verifyManifest();
-      const { candidate } = resolveRecord(realTaskPath, relativePath);
-      const value = readRegularFileNoFollow(candidate, "record", taskRootIdentity.real);
-      verifyDirectoryIdentity(taskRootIdentity, "task root");
-      return value;
-    },
-    readRecordBytes(relativePath) {
-      verifyDirectoryIdentity(taskRootIdentity, "task root");
-      verifyManifest();
-      const { candidate } = resolveRecord(realTaskPath, relativePath);
-      const value = readRegularFileBytesNoFollow(candidate, "record", taskRootIdentity.real);
-      verifyDirectoryIdentity(taskRootIdentity, "task root");
-      return value;
-    },
-    /** Enumerate only canonical attempt envelopes in one trusted stage namespace. */
-    listStageAttemptRefs(stage) {
-      verifyDirectoryIdentity(taskRootIdentity, "task root");
-      verifyManifest();
-      if (!CANONICAL_STAGES.has(stage)) throw new TypeError(`unsupported stage: ${stage}`);
-      return Object.freeze([]);
-    },
-    /** Enumerate immutable stage-agent outcome envelopes for replay authentication. */
-    listCanonicalStageOutcomeRefs(stage) {
-      verifyDirectoryIdentity(taskRootIdentity, "task root");
-      verifyManifest();
-      if (!CANONICAL_STAGES.has(stage)) throw new TypeError(`unsupported stage: ${stage}`);
-      const qualityRoot = resolve(realTaskPath, "quality");
-      const outcomesRoot = resolve(qualityRoot, "evidence", "stage-outcomes", stage);
-      assertInside(realTaskPath, qualityRoot, "quality directory");
-      assertInside(realTaskPath, outcomesRoot, "stage outcomes directory");
-      if (!existsSync(outcomesRoot)) return Object.freeze([]);
-      const qualityIdentity = directorySnapshot(realTaskPath, qualityRoot);
-      const outcomesIdentity = directorySnapshot(realTaskPath, outcomesRoot);
-      const refs = readdirSync(outcomesRoot, { withFileTypes: true })
-        .filter((entry) => entry.isFile() && /^[a-f0-9]{64}\.json$/.test(entry.name))
-        .map((entry) => {
-          const candidate = resolve(outcomesRoot, entry.name);
-          const stat = lstatSync(candidate);
-          if (stat.isSymbolicLink() || !stat.isFile()) throw new Error(`stage outcome must be a regular non-symlink JSON file: ${entry.name}`);
-          return `quality/evidence/stage-outcomes/${stage}/${entry.name}`;
-        })
-        .sort((left, right) => left.localeCompare(right));
-      verifyDirectorySnapshot(outcomesIdentity);
-      verifyDirectorySnapshot(qualityIdentity);
-      verifyDirectoryIdentity(taskRootIdentity, "task root");
-      return Object.freeze(refs);
-    },
-    /** Enumerate only canonical wh-review result records. */
-    listCanonicalReviewResultRefs() {
-      verifyDirectoryIdentity(taskRootIdentity, "task root");
-      verifyManifest();
-      const reviewRootRef = "quality/reviews";
-      const reviewsRoot = resolve(realTaskPath, ...reviewRootRef.split("/"));
-      const resultsRoot = resolve(reviewsRoot, "results");
-      assertInside(realTaskPath, reviewsRoot, "reviews directory");
-      assertInside(realTaskPath, resultsRoot, "review results directory");
-      if (!existsSync(resultsRoot)) return [];
-      const reviewsIdentity = directorySnapshot(realTaskPath, reviewsRoot);
-      const resultsIdentity = directorySnapshot(realTaskPath, resultsRoot);
-      const refs = readdirSync(resultsRoot, { withFileTypes: true })
-        .filter((entry) => entry.name.endsWith(".json"))
-        .map((entry) => {
-          const candidate = resolve(resultsRoot, entry.name);
-          const stat = lstatSync(candidate);
-          if (!entry.isFile() || stat.isSymbolicLink() || !stat.isFile() || !/^[A-Za-z0-9][A-Za-z0-9._-]*\.json$/.test(entry.name)) {
-            throw new Error(`canonical review result must be a regular non-symlink JSON file: ${entry.name}`);
-          }
-          return `${reviewRootRef}/results/${entry.name}`;
-        })
-        .sort((left, right) => left.localeCompare(right));
-      verifyDirectorySnapshot(resultsIdentity);
-      verifyDirectorySnapshot(reviewsIdentity);
-      verifyDirectoryIdentity(taskRootIdentity, "task root");
-      return Object.freeze(refs);
-    },
-    /** Enumerate canonical test receipts so a later stage can reuse a valid full run. */
-    listCanonicalTestReceiptRefs() {
-      verifyDirectoryIdentity(taskRootIdentity, "task root");
-      verifyManifest();
-      const qualityRoot = resolve(realTaskPath, "quality");
-      const testsRoot = resolve(qualityRoot, "tests");
-      assertInside(realTaskPath, qualityRoot, "quality directory");
-      assertInside(realTaskPath, testsRoot, "quality tests directory");
-      if (!existsSync(testsRoot)) return Object.freeze([]);
-      const qualityIdentity = directorySnapshot(realTaskPath, qualityRoot);
-      const testsIdentity = directorySnapshot(realTaskPath, testsRoot);
-      const refs = readdirSync(testsRoot, { withFileTypes: true })
-        .filter((entry) => entry.isFile() && /^[A-Za-z0-9][A-Za-z0-9._-]*\.json$/.test(entry.name))
-        .map((entry) => {
-          const candidate = resolve(testsRoot, entry.name);
-          const stat = lstatSync(candidate);
-          if (stat.isSymbolicLink() || !stat.isFile()) {
-            throw new Error(`canonical test receipt must be a regular non-symlink JSON file: ${entry.name}`);
-          }
-          return `quality/tests/${entry.name}`;
-        })
-        .sort((left, right) => left.localeCompare(right));
-      verifyDirectorySnapshot(testsIdentity);
-      verifyDirectorySnapshot(qualityIdentity);
-      verifyDirectoryIdentity(taskRootIdentity, "task root");
-      return Object.freeze(refs);
-    },
-    /** Enumerate immutable content-addressed research reports. */
-    listCanonicalResearchReportRefs() {
-      verifyDirectoryIdentity(taskRootIdentity, "task root");
-      verifyManifest();
-      const qualityRoot = resolve(realTaskPath, "quality");
-      const researchRoot = resolve(qualityRoot, "evidence", "research");
-      assertInside(realTaskPath, qualityRoot, "quality directory");
-      assertInside(realTaskPath, researchRoot, "research evidence directory");
-      if (!existsSync(researchRoot)) return Object.freeze([]);
-      const qualityIdentity = directorySnapshot(realTaskPath, qualityRoot);
-      const researchIdentity = directorySnapshot(realTaskPath, researchRoot);
-      const refs = readdirSync(researchRoot, { withFileTypes: true })
-        .filter((entry) => entry.isFile() && /^[a-f0-9]{64}\.json$/.test(entry.name))
-        .map((entry) => {
-          const candidate = resolve(researchRoot, entry.name);
-          const stat = lstatSync(candidate);
-          if (stat.isSymbolicLink() || !stat.isFile()) throw new Error(`research report must be a regular non-symlink JSON file: ${entry.name}`);
-          return `quality/evidence/research/${entry.name}`;
-        })
-        .sort((left, right) => left.localeCompare(right));
-      verifyDirectorySnapshot(researchIdentity);
-      verifyDirectorySnapshot(qualityIdentity);
-      verifyDirectoryIdentity(taskRootIdentity, "task root");
-      return Object.freeze(refs);
-    },
-    /** Enumerate immutable vNext quality facts without exposing storage paths. */
-    listCanonicalQualityFactRefs() {
-      verifyDirectoryIdentity(taskRootIdentity, "task root");
-      verifyManifest();
-      const qualityRoot = resolve(realTaskPath, "quality");
-      const factsRoot = resolve(qualityRoot, "facts");
-      assertInside(realTaskPath, qualityRoot, "quality directory");
-      assertInside(realTaskPath, factsRoot, "quality facts directory");
-      if (!existsSync(factsRoot)) return Object.freeze([]);
-      const qualityIdentity = directorySnapshot(realTaskPath, qualityRoot);
-      const factsIdentity = directorySnapshot(realTaskPath, factsRoot);
-      const refs = readdirSync(factsRoot, { withFileTypes: true })
-        .filter((entry) => /^[a-f0-9]{64}\.json$/.test(entry.name))
-        .map((entry) => {
-          const candidate = resolve(factsRoot, entry.name);
-          const stat = lstatSync(candidate);
-          if (!entry.isFile() || stat.isSymbolicLink() || !stat.isFile()) {
-            throw new Error(`quality fact must be a regular non-symlink JSON file: ${entry.name}`);
-          }
-          return `quality/facts/${entry.name}`;
-        })
-        .sort((left, right) => left.localeCompare(right));
-      verifyDirectorySnapshot(factsIdentity);
-      verifyDirectorySnapshot(qualityIdentity);
-      verifyDirectoryIdentity(taskRootIdentity, "task root");
-      return Object.freeze(refs);
-    },
-    /** Enumerate mini-task quality intents; these are not vNext quality facts. */
-    listCanonicalMiniTaskQualityEvidenceRefs() {
-      verifyDirectoryIdentity(taskRootIdentity, "task root");
-      verifyManifest();
-      const qualityRoot = resolve(realTaskPath, "quality");
-      const evidenceRoot = resolve(qualityRoot, "evidence", "mini-task-quality");
-      assertInside(realTaskPath, qualityRoot, "quality directory");
-      assertInside(realTaskPath, evidenceRoot, "mini-task quality evidence directory");
-      if (!existsSync(evidenceRoot)) return Object.freeze([]);
-      const qualityIdentity = directorySnapshot(realTaskPath, qualityRoot);
-      const evidenceIdentity = directorySnapshot(realTaskPath, evidenceRoot);
-      const refs = readdirSync(evidenceRoot, { withFileTypes: true })
-        .filter((entry) => entry.isFile() && /^[a-f0-9]{64}\.json$/.test(entry.name))
-        .map((entry) => {
-          const candidate = resolve(evidenceRoot, entry.name);
-          const stat = lstatSync(candidate);
-          if (stat.isSymbolicLink() || !stat.isFile()) {
-            throw new Error(`mini-task quality evidence must be a regular non-symlink JSON file: ${entry.name}`);
-          }
-          return `quality/evidence/mini-task-quality/${entry.name}`;
-        })
-        .sort((left, right) => left.localeCompare(right));
-      verifyDirectorySnapshot(evidenceIdentity);
-      verifyDirectorySnapshot(qualityIdentity);
-      verifyDirectoryIdentity(taskRootIdentity, "task root");
-      return Object.freeze(refs);
-    },
-    /** Enumerate one-time irreversible authorizations; consumed markers are excluded. */
-    listCanonicalAuthorizationRefs() {
-      verifyDirectoryIdentity(taskRootIdentity, "task root");
-      verifyManifest();
-      const qualityRoot = resolve(realTaskPath, "quality");
-      const authorizationsRoot = resolve(qualityRoot, "authorizations");
-      assertInside(realTaskPath, qualityRoot, "quality directory");
-      assertInside(realTaskPath, authorizationsRoot, "authorizations directory");
-      if (!existsSync(authorizationsRoot)) return Object.freeze([]);
-      const qualityIdentity = directorySnapshot(realTaskPath, qualityRoot);
-      const authorizationsIdentity = directorySnapshot(realTaskPath, authorizationsRoot);
-      const refs = readdirSync(authorizationsRoot, { withFileTypes: true })
-        .filter((entry) => entry.isFile() && /^[a-f0-9]{64}\.json$/.test(entry.name))
-        .map((entry) => {
-          const candidate = resolve(authorizationsRoot, entry.name);
-          const stat = lstatSync(candidate);
-          if (stat.isSymbolicLink() || !stat.isFile()) {
-            throw new Error(`irreversible authorization must be a regular non-symlink JSON file: ${entry.name}`);
-          }
-          return `quality/authorizations/${entry.name}`;
-        })
-        .sort((left, right) => left.localeCompare(right));
-      verifyDirectorySnapshot(authorizationsIdentity);
-      verifyDirectorySnapshot(qualityIdentity);
-      verifyDirectoryIdentity(taskRootIdentity, "task root");
-      return Object.freeze(refs);
-    },
-    /** Enumerate only canonical wh-review attempt envelopes. */
-    listCanonicalReviewAttemptRefs() {
-      verifyDirectoryIdentity(taskRootIdentity, "task root");
-      verifyManifest();
-      const reviewRootRef = "quality/reviews";
-      const reviewsRoot = resolve(realTaskPath, ...reviewRootRef.split("/"));
-      const attemptsRoot = resolve(reviewsRoot, "attempts");
-      assertInside(realTaskPath, reviewsRoot, "reviews directory");
-      assertInside(realTaskPath, attemptsRoot, "review attempts directory");
-      if (!existsSync(attemptsRoot)) return [];
-      const reviewsIdentity = directorySnapshot(realTaskPath, reviewsRoot);
-      const attemptsIdentity = directorySnapshot(realTaskPath, attemptsRoot);
-      const attemptIdentities = [];
-      const refs = readdirSync(attemptsRoot, { withFileTypes: true })
-        .filter((entry) => (entry.isDirectory() || entry.isSymbolicLink()) && /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(entry.name))
-        .map((entry) => {
-          const attemptRoot = resolve(attemptsRoot, entry.name);
-          const stat = lstatSync(attemptRoot);
-          if (!entry.isDirectory() || stat.isSymbolicLink() || !stat.isDirectory()) {
-            throw new Error(`canonical review attempt must be a real directory: ${entry.name}`);
-          }
-          const identity = directorySnapshot(realTaskPath, attemptRoot);
-          attemptIdentities.push(identity);
-          const candidate = resolve(attemptRoot, "attempt.json");
-          const candidateStat = lstatSync(candidate);
-          if (candidateStat.isSymbolicLink() || !candidateStat.isFile()) {
-            throw new Error(`canonical review attempt must be a regular non-symlink JSON file: ${entry.name}/attempt.json`);
-          }
-          return `${reviewRootRef}/attempts/${entry.name}/attempt.json`;
-        })
-        .sort((left, right) => left.localeCompare(right));
-      for (const identity of attemptIdentities) verifyDirectorySnapshot(identity);
-      verifyDirectorySnapshot(attemptsIdentity);
-      verifyDirectorySnapshot(reviewsIdentity);
-      verifyDirectoryIdentity(taskRootIdentity, "task root");
-      return Object.freeze(refs);
-    },
-    writeRecordAtomic(relativePath, data, options) {
-      verifyDirectoryIdentity(taskRootIdentity, "task root");
-      verifyManifest();
-      assertPublicRecordWritable(relativePath);
-      const result = writeAtomicAt(realTaskPath, relativePath, data, options);
-      verifyDirectoryIdentity(taskRootIdentity, "task root");
-      return result;
-    },
-    createRecordAtomic(relativePath, data, options) {
-      verifyDirectoryIdentity(taskRootIdentity, "task root");
-      verifyManifest();
-      assertPublicRecordWritable(relativePath);
-      const result = createOnlyAt(realTaskPath, relativePath, data, options);
-      verifyDirectoryIdentity(taskRootIdentity, "task root");
-      return result;
-    },
-    createInvocationIdentityRecord(relativePath, data) {
-      const writer = INVOCATION_IDENTITY_WRITERS.get(handle);
-      if (typeof writer !== "function") throw new TypeError("authentic invocation identity writer required");
-      return writer(relativePath, data);
-    },
-    // Internal publication authority. Stage code receives TaskHandle but must
-    // publish canonical evidence only through TaskKernel.
-    withRecordLock(relativePath, operation, options) {
-      verifyDirectoryIdentity(taskRootIdentity, "task root");
-      verifyManifest();
-      const result = withRecordLockAt(realTaskPath, relativePath, operation, options);
-      verifyDirectoryIdentity(taskRootIdentity, "task root");
-      return result;
-    },
-  };
-  const frozen = Object.freeze(brandTaskHandle(handle));
-  CANONICAL_RECORD_WRITERS.set(frozen, (relativePath, data, options) => {
-    verifyDirectoryIdentity(taskRootIdentity, "task root");
-    verifyManifest();
-    if (!/^(?:(?:receipts|reviews|evidence|quality|publications)\/[a-zA-Z0-9][a-zA-Z0-9._/-]*|runs\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/run-[0-9]{4}\.json)$/.test(relativePath) || relativePath.includes("..")) throw new Error("kernel record path required");
-    const result = createOnlyAt(realTaskPath, relativePath, data, options);
-    verifyDirectoryIdentity(taskRootIdentity, "task root");
-    return result;
-  });
-  INVOCATION_IDENTITY_WRITERS.set(frozen, (relativePath, data) => {
-    if (!/^identity\/executions\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.json$/.test(relativePath ?? "")) {
-      throw new Error("invocation identity path is invalid");
-    }
-    if (typeof data !== "string" || data.length === 0) throw new TypeError("invocation identity data is required");
-    verifyDirectoryIdentity(taskRootIdentity, "task root");
-    verifyManifest();
-    return createOnlyAt(realTaskPath, relativePath, data);
-  });
-  return frozen;
-}
-
-/** Create and atomically publish a complete task directory under a trusted storage root. */
-export function createTask({ storageRoot, taskPath, manifest, testHooks } = {}) {
-  if (manifest && (Object.prototype.hasOwnProperty.call(manifest, "runner_root") || Object.prototype.hasOwnProperty.call(manifest, "runner_oid") || Object.prototype.hasOwnProperty.call(manifest, "runner_root_migration"))) {
-    throw new TypeError("createTask cannot pin legacy runner identity");
-  }
-  const normalizedManifest = manifest && typeof manifest === "object" && !Array.isArray(manifest)
-    ? { ...manifest, record_model: manifest.record_model ?? "vnext-single-write" }
-    : manifest;
-  const identity = validateManifest(normalizedManifest);
-  if (typeof storageRoot !== "string" || !isAbsolute(storageRoot)) throw new TypeError("storageRoot must be absolute");
-  assertNoSymlinkChain(storageRoot, "storageRoot");
-  const root = realDirectoryNoSymlink(resolve(storageRoot), "storageRoot");
-  const derived = deriveTaskPath(root, identity.projectName, identity.taskId);
-  if (taskPath !== undefined && resolve(taskPath) !== derived) throw new Error(`taskPath does not match trusted storageRoot: ${taskPath}`);
-  const parent = ensureChildDirectories(root, ["Projects", identity.projectName, "tasks"]);
-  if (existsSync(derived)) throw new Error(`task already exists: ${derived}`);
-  publishTaskDirectory(parent, derived, normalizedManifest, testHooks);
-  return openTask(derived, identity);
-}
-
-/** Open a task after path, expected identity, and manifest agree. */
+/** Current metadata and protected record I/O; no publication or completion capability. */
 export function openTask(taskPath, expected, expectedTaskId) {
-  const wanted = expectedIdentity(expected, expectedTaskId);
-  const normalized = assertTaskPathShape(taskPath, wanted.projectName, wanted.taskId);
-  const realTaskPath = realDirectoryNoSymlink(normalized, "taskPath");
-  assertTaskPathShape(realTaskPath, wanted.projectName, wanted.taskId);
-  let manifest;
-  let manifestRaw;
-  try {
-    manifestRaw = readRegularFileNoFollow(resolve(realTaskPath, "task.json"), "task manifest", realTaskPath);
-    manifest = JSON.parse(manifestRaw);
-  }
-  catch (error) { throw new Error(`invalid task manifest ${realTaskPath}/task.json: ${error.message}`); }
-  const actual = validateManifest(manifest);
-  if (actual.projectName !== wanted.projectName || actual.taskId !== wanted.taskId) {
-    throw new Error(`task identity mismatch: expected ${wanted.projectName}/${wanted.taskId}, manifest has ${actual.projectName}/${actual.taskId}`);
-  }
-  const handle = makeTaskHandle(realTaskPath, manifest);
-  return handle;
+  if (typeof taskPath !== "string" || !isAbsolute(taskPath)) throw new TypeError("taskPath must be absolute");
+  const wanted = wantedIdentity(expected, expectedTaskId), rawPath = resolve(taskPath);
+  const ancestry = directories(rawPath), root = realpathSync(rawPath);
+  const suffix = ["Projects", wanted.projectName, "tasks", wanted.taskId];
+  const segments = root.split(sep).slice(-suffix.length);
+  const pathSegmentEqual = (actual, expected) => process.platform === "darwin"
+    ? actual.toLowerCase() === expected.toLowerCase() : actual === expected;
+  if (segments.length !== suffix.length || !segments.every((actual, index) => pathSegmentEqual(actual, suffix[index]))) throw new Error("task storage path does not match project/task identity");
+  const manifestBytes = readBytes(root, "task.json"), manifest = JSON.parse(manifestBytes.toString("utf8")), actual = manifestIdentity(manifest);
+  if (actual.projectName !== wanted.projectName || actual.taskId !== wanted.taskId) throw new Error("task manifest identity mismatch");
+  const verify = () => { verifyDirectories(ancestry); if (!readBytes(root, "task.json").equals(manifestBytes)) throw new Error("task manifest changed after open"); };
+  const writable = () => { verify(); if (manifest.activation_cohort !== "post") throw new Error("pre/history task records are read-only"); };
+  const parents = ref => { recordPath(root, ref); directories(dirname(recordPath(root, ref)), true); verify(); };
+  const handle = {
+    taskPath: root, identity: Object.freeze(actual), manifest: deepFreeze(manifest),
+    recordPath(ref) { verify(); return recordPath(root, ref); },
+    readRecord(ref) { verify(); const value = readBytes(root, ref).toString("utf8"); verify(); return value; },
+    readRecordBytes(ref) { verify(); const value = readBytes(root, ref); verify(); return value; },
+    async createRecord(ref, bytes, options = {}) { writable(); if (Object.keys(options).length) throw new TypeError("record write options are retired"); parents(ref); const result = await createFileOnce(root, ref, bytes); verify(); return result; },
+    async writeRecordAtomic(ref, bytes, options = {}) { writable(); if (Object.keys(options).length) throw new TypeError("record write options are retired"); if (ref === "task.json") throw new Error("opened task metadata is immutable"); parents(ref); const result = await writeFileAtomic(root, ref, bytes); verify(); return result; },
+    async withRecordLock(name, fn, options = {}) { writable(); return withLock(root, name, fn, options); },
+    listCanonicalReviewResultRefs() {
+      verify(); const ref = "quality/reviews/results", path = recordPath(root, ref);
+      let ancestry; try { ancestry = directories(path); } catch (error) { if (error.code === "ENOENT") return Object.freeze([]); throw error; }
+      const refs = readdirSync(path).filter(name => name.endsWith(".json")).map(name => {
+        if (!/^[A-Za-z0-9][A-Za-z0-9._-]*\.json$/.test(name)) throw new Error("review result filename is unsafe");
+        const result = `${ref}/${name}`; readBytes(root, result); return result;
+      }).sort(); verifyDirectories(ancestry); verify(); return Object.freeze(refs);
+    },
+  };
+  brandTaskHandle(handle);
+  return Object.freeze(handle);
 }
 
-/** Create the only canonical publication capability for an authentic task. */
-export function createTaskKernel(taskHandle, options) {
-  const kernel = buildTaskKernel(taskHandle, options, Object.freeze({
-    assertTaskHandle,
-    openTask,
-    createKernelRecordFor(task) {
-      assertTaskHandle(task);
-      const writer = CANONICAL_RECORD_WRITERS.get(task);
-      if (typeof writer !== "function") throw new TypeError("authentic TaskHandle canonical writer required");
-      return writer;
-    },
-  }));
-  brandTaskKernel(kernel);
-  return Object.freeze(kernel);
+export async function createTask({ storageRoot, taskPath, manifest } = {}) {
+  if (typeof storageRoot !== "string" || !isAbsolute(storageRoot)) throw new TypeError("storageRoot must be absolute");
+  const identity = manifestIdentity(manifest);
+  if (manifest.activation_cohort !== "post") throw new TypeError("new task metadata requires post cohort");
+  const allowed = new Set(["schema_version", "project_name", "task_id", "created_at", "target_repo_root", "activation_cohort", "write_resolution_source", "baseline_commit", "workspace_mode", "workspace_root", "issue_ids", "inputs", "execution_mode", "record_model"]);
+  if (Object.keys(manifest).some(key => !allowed.has(key))) throw new TypeError("new task metadata contains retired or unknown fields");
+  if (manifest.record_model !== "vnext-single-write" || manifest.execution_mode !== "per_invocation") throw new TypeError("new task metadata requires the current record and execution model");
+  if (!Number.isFinite(Date.parse(manifest.created_at)) || !Array.isArray(manifest.issue_ids) || !manifest.issue_ids.every(value => typeof value === "string" && value.trim()) || !plain(manifest.inputs)) throw new TypeError("new task metadata inputs are invalid");
+  const storage = resolve(storageRoot); directories(storage);
+  const root = realpathSync(storage), derived = deriveTaskPath(root, identity.projectName, identity.taskId);
+  if (taskPath !== undefined && resolve(taskPath) !== derived) throw new Error("taskPath differs from storage-derived identity");
+  const parent = dirname(derived); directories(parent, true);
+  await withLock(parent, "task-create", async () => {
+    mkdirSync(derived, { mode: 0o700 });
+    await createFileOnce(derived, "task.json", JSON.stringify(manifest, null, 2) + "\n");
+  });
+  return openTask(derived, identity);
 }

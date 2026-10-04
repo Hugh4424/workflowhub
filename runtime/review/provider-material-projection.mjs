@@ -1,50 +1,7 @@
-/**
- * How caller review materials become provider-visible bundle materials.
- *
- * This module owns the two rules that the *declared* packet material identity and
- * the *delivered* bundle bytes must agree on. They are one module on purpose:
- * when these rules lived in two copies, the copies drifted and every managed
- * review failed with
- * `PROTOCOL_INCOMPATIBLE: 3rd-review managed lifecycle envelope is invalid`.
- *
- * Rule 1 — host-path redaction
- * ----------------------------
- * Absolute host paths must never reach a review provider. On 2026-09-19 the
- * runtime copy stopped only at whitespace and ASCII quoting characters, so a
- * host path followed by Chinese text swallowed the rest of the line, while the
- * skill-side copy stopped at CJK punctuation and fullwidth forms. WorkflowHub
- * therefore declared an identity computed over bytes it never delivered, and
- * the broker — which hashes the bytes it actually received — disagreed. The
- * concrete trigger was the Windows drive-letter branch matching the `s:/`
- * inside `https://…` and then consuming the Chinese sentence that followed.
- *
- * Do not reintroduce a second copy of this rule anywhere: import this module.
- *
- * Why the stop set is this wide
- * -----------------------------
- * `[^\s"'`<>()[\]{}]` alone consumes everything up to the next whitespace. In
- * Chinese review material a path is normally followed by punctuation and prose
- * with no space, for example `，取消理由：DEF-01；DEF-01`. Stopping only at
- * whitespace destroys reviewer-relevant prose and tokens. The extra exclusion
- * ranges below stop the match at CJK punctuation, CJK symbols and fullwidth
- * forms instead. That behaviour is a contract, pinned by
- * `skills/wh-review/scripts/__tests__/material-redaction.test.mjs`
- * ("preserves CJK prose and DEF-01 tokens after a redacted host path").
- * Widening these classes silently changes material identity; do not do it
- * without changing that test's intent.
- *
- * Rule 2 — provider material paths
- * --------------------------------
- * Ordinary materials are delivered as `materials/<NN>-<stem>.<ext>`. The
- * direction-review flow is the exception: the broker's managed direction
- * validation requires a delivered path whose last segment is exactly
- * `direction_flow.json`
- * (`3rd-review/lib/broker.mjs` `validateDirectionReviewMaterial`, which accepts
- * `direction_flow.json` or any `*​/direction_flow.json`). The numbered form
- * `materials/09-direction_flow.json` does NOT match, so every direction provider
- * failed with `MATERIAL_INCOMPLETE: direction-review.v1 material is missing
- * direction_flow.json` even though the file was present. Keep the flow at the
- * bundle root under its exact basename.
+/** Shared provider-visible text/JSON/UTF-8 byte projection.
+ * Preserve public provenance and line positions; remove known credentials and
+ * local host paths before serialization. This is not a universal secret detector.
+ * Direction flow keeps the broker-required direction_flow.json delivery path.
  */
 
 export const HOST_PATH_PLACEHOLDER = "<host-path-redacted>";
@@ -53,17 +10,85 @@ export const AUTHENTICATED_EVIDENCE_PATH = "authenticated-evidence.json";
 const DIRECTION_FLOW_MATERIAL_KEY = "direction_flow";
 const DIRECTION_FLOW_PATH = "direction_flow.json";
 
-const LOCAL_HOST_PATH = /\/(?:Users|home|private|tmp|var|etc|opt|mnt|Volumes|root|usr|bin|sbin|dev|proc|sys|Library)\/[^\s"'`<>()[\]{}\u2018-\u201f\u2026\u3000-\u303f\ufe30-\ufe4f\uff01-\uff0f\uff1a-\uff20\uff3b-\uff40\uff5b-\uff65]+|[A-Za-z]:[\\/][^\s"'`<>()[\]{}\u2018-\u201f\u2026\u3000-\u303f\ufe30-\ufe4f\uff01-\uff0f\uff1a-\uff20\uff3b-\uff40\uff5b-\uff65]+/g;
-
+// Keep the existing CJK stop set: path redaction must not eat the next
+// sentence or change line positions used by reviewer findings.
+const LOCAL_HOST_PATH = /\/(?:Users|home|private|tmp|var|etc|opt|mnt|Volumes|root|usr|bin|sbin|dev|proc|sys|Library)\/[^\s"'`<>()[\]{}\u2018-\u201f\u2026\u3000-\u303f\ufe30-\ufe4f\uff01-\uff0f\uff1a-\uff20\uff3b-\uff40\uff5b-\uff65]+|(?<![A-Za-z0-9])[A-Za-z]:[\\/][^\s"'`<>()[\]{}\u2018-\u201f\u2026\u3000-\u303f\ufe30-\ufe4f\uff01-\uff0f\uff1a-\uff20\uff3b-\uff40\uff5b-\uff65]+/g;
+const URL_TEXT = /\b(?:https?|file):\/\/[^\s"'`<>()[\]{}\u2018-\u201f\u2026\u3000-\u303f\ufe30-\ufe4f\uff01-\uff0f\uff1a-\uff20\uff3b-\uff40\uff5b-\uff65]+/gi;
+const SECRET_PLACEHOLDER = "<secret-redacted>";
+const SECRET_TOKEN = "[^\\s\\\"'`,;<>()[\\]{}\\u2018-\\u201f\\u2026\\u3000-\\u303f\\ufe30-\\ufe4f\\uff01-\\uff0f\\uff1a-\\uff20\\uff3b-\\uff40\\uff5b-\\uff65]+";
+const KEY_VALUE_SECRET = new RegExp(`(?<![A-Za-z0-9_.-])(["']?[A-Za-z0-9_.-]*(?:api[_-]?key|access[_-]?token|refresh[_-]?token|id[_-]?token|auth[_-]?token|bearer[_-]?token|client[_-]?secret|password|passwd|secret|authorization|credentials?)["']?[ \\t]*[:=][ \\t]*)(?:((?:Bearer|Basic)[ \\t]+${SECRET_TOKEN})|("[^"\\r\\n]*"|'[^'\\r\\n]*'|${SECRET_TOKEN}))`, "gi");
+const BEARER_SECRET = new RegExp(`\\b(Bearer[ \\t]+)${SECRET_TOKEN}`, "gi");
+function sensitiveKey(key, query = false) {
+  const normalized = key.replace(/[^a-z0-9]/gi, "").toLowerCase();
+  return /(?:apikey|accesstoken|refreshtoken|idtoken|authtoken|bearertoken|clientsecret|password|passwd|secret|authorization|credentials?)$/.test(normalized)
+    || (query && ["key", "token", "auth", "signature", "sig", "xamzsignature", "xamzsecuritytoken"].includes(normalized));
+}
+function redactUrl(url) {
+  if (/^file:/i.test(url)) return HOST_PATH_PLACEHOLDER;
+  // Edit only credentials and known secret query values. URL normalization
+  // would rewrite public provenance URLs, escapes and source line content.
+  return url.replace(/^(https?:\/\/)[^/?#]*@/i, "$1REDACTED@")
+    .replace(/([?&])([^=&#]+)=([^&#]*)/g, (whole, separator, key) => {
+      let decoded; try { decoded = decodeURIComponent(key); } catch { decoded = key; }
+      return sensitiveKey(decoded, true) ? `${separator}${key}=REDACTED` : whole;
+    });
+}
+function urlRanges(text) {
+  return [...text.matchAll(URL_TEXT)].map(match => [match.index, match.index + match[0].length]);
+}
+function insideUrl(ranges, offset) { return ranges.some(([start, end]) => offset >= start && offset < end); }
+function redactKnownSecrets(value) {
+  const ranges = urlRanges(value);
+  const text = value.replace(KEY_VALUE_SECRET, (whole, prefix, authorization, literal, offset) => {
+    // Query keys belong to redactUrl. Outside URLs, redact the complete known
+    // credential value even when its quoted text or Bearer token contains a URL.
+    if (insideUrl(ranges, offset)) return whole;
+    if (literal === '""' || literal === "''") return whole;
+    const quote = literal?.[0];
+    return prefix + (quote === '"' || quote === "'" ? `${quote}${SECRET_PLACEHOLDER}${quote}` : SECRET_PLACEHOLDER);
+  });
+  const remainingUrls = urlRanges(text);
+  return text.replace(BEARER_SECRET, (whole, prefix, offset) => insideUrl(remainingUrls, offset) ? whole : `${prefix}${SECRET_PLACEHOLDER}`);
+}
 export function redactHostPathText(value) {
-  return value.replace(LOCAL_HOST_PATH, HOST_PATH_PLACEHOLDER);
+  const text = redactKnownSecrets(value);
+  // /dev/null is Git's add/delete header sentinel, not a host input file.
+  // Preserve only exact header lines before a hunk; ordinary prose is redacted.
+  const gitNullOffsets = new Set();
+  let inGitHeader = false;
+  for (const match of text.matchAll(/^[^\n]*(?:\n|$)/gm)) {
+    const line = match[0].replace(/\r?\n$/, "");
+    if (line.startsWith("diff --git ")) inGitHeader = true;
+    else if (/^(?:@@ |GIT binary patch$|Binary files |```)/.test(line)) inGitHeader = false;
+    if (inGitHeader && /^(?:---|\+\+\+) \/dev\/null\r?$/.test(line)) gitNullOffsets.add(match.index + 4);
+  }
+  const redactLocal = (chunk, base) => chunk.replace(LOCAL_HOST_PATH, (path, offset) =>
+    path === "/dev/null" && gitNullOffsets.has(base + offset) ? path : HOST_PATH_PLACEHOLDER);
+  // Public URL chunks are handled before local paths, so /Users/ in a remote
+  // URL and the s:/ inside https:// cannot be mistaken for host paths.
+  let output = "", offset = 0;
+  for (const match of text.matchAll(URL_TEXT)) {
+    output += redactLocal(text.slice(offset, match.index), offset) + redactUrl(match[0]);
+    offset = match.index + match[0].length;
+  }
+  return output + redactLocal(text.slice(offset), offset);
 }
 
 export function redactProviderHostPaths(value) {
   if (typeof value === "string") return redactHostPathText(value);
+  if (Buffer.isBuffer(value) || value instanceof Uint8Array) {
+    let text;
+    try { text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(value); }
+    catch (cause) { throw Object.assign(new TypeError("MATERIAL_NOT_UTF8: provider material bytes must be UTF-8 text", { cause }), { code: "MATERIAL_NOT_UTF8" }); }
+    const bytes = Buffer.from(redactHostPathText(text), "utf8");
+    return Buffer.isBuffer(value) ? bytes : new Uint8Array(bytes);
+  }
   if (Array.isArray(value)) return value.map((item) => redactProviderHostPaths(item));
-  if (!value || typeof value !== "object" || Buffer.isBuffer(value)) return value;
-  return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, redactProviderHostPaths(child)]));
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value).map(([key, child]) => [key,
+    sensitiveKey(key) && child !== null && child !== undefined && child !== ""
+      ? (typeof child === "string" ? child.replace(/[^\r\n]+/g, SECRET_PLACEHOLDER) : SECRET_PLACEHOLDER)
+      : redactProviderHostPaths(child)]));
 }
 
 /**

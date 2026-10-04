@@ -11,6 +11,7 @@ import {
   runSimpleReview,
   serializeProviderInput,
 } from "../simple-review-runner.mjs";
+import { ReviewProviderClient } from "../review-provider-client.mjs";
 import { selectTrustedReviewProviderSelection } from "../third-review-host-config.mjs";
 
 const roots = [];
@@ -390,7 +391,7 @@ describe("simple material-only review", () => {
     const result = await runSimpleReview({
       stage: "verify-code", host_provider: "codex",
       materials: {
-        changed_files: "runtime/review/integration-review-subject.mjs",
+        changed_files: "runtime/review/review-output.mjs",
         implementation_assessment: "current implementation",
         test_context: "focused test passed",
         open_risks: "none",
@@ -1970,7 +1971,7 @@ describe("review flow static preflight", () => {
 function p4Finding(overrides = {}) {
   return {
     severity: "minor",
-    path: "materials/01-implementation.md",
+    path: "materials/01-approved_spec.md",
     line: 1,
     issue: "P4 format tolerance fixture",
     recommendation: "retain the semantic finding",
@@ -1982,7 +1983,8 @@ function p4Finding(overrides = {}) {
 }
 
 async function runP4Provider({ output = null, error = null, materials = {
-  implementation: "implementation line 1\nimplementation line 2\n",
+  ...buildCodePhaseMaterials(),
+  approved_spec: "implementation line 1\nimplementation line 2\n",
 } } = {}) {
   const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-p4-format-")));
   roots.push(attachmentRoot);
@@ -2446,5 +2448,45 @@ describe("direction review flow transport parity", () => {
 
     expect(materialIds).toHaveLength(2);
     expect(new Set(materialIds).size).toBe(1);
+  });
+});
+
+
+// These cases constrain only the real native broker boundary. All existing
+// injected fake transport parser/identity/failure cases remain unchanged.
+describe("native broker packet boundary", () => {
+  async function blockedNativeCase(clientKind) {
+    const attachmentRoot=realpathSync(mkdtempSync(join(tmpdir(),"card06-doc-native-blocked-")));roots.push(attachmentRoot);
+    const providers=["codex/luna","kimi/coding"],selection=providerSelectionFor(providers);
+    const {dependencies}=trustedDependencies(attachmentRoot,{route:{initial:providers,mode:"single_round",minimum_heterologous:2},selection});
+    let bundleCalls=0,invokeCalls=0;
+    dependencies.buildBundle=()=>{bundleCalls++;return preparedBundle(attachmentRoot);};
+    if(clientKind==="default") delete dependencies.client;
+    else if(clientKind==="null") dependencies.client=null;
+    else dependencies.client=new ReviewProviderClient({invoke:async()=>{invokeCalls++;throw new Error("owned native invoke sentinel");}});
+    // Old production is safe to probe: every actual broker entry method is
+    // replaced with an owned throwing sentinel, so no CLI/model is launched.
+    const start=vi.spyOn(ReviewProviderClient.prototype,"startManaged").mockImplementation(async()=>{throw new Error("owned native start sentinel");});
+    const group=vi.spyOn(ReviewProviderClient.prototype,"runGroup").mockImplementation(async()=>{throw new Error("owned native group sentinel");});
+    try {
+      const result=await runSimpleReview({stage:"build-code",host_provider:"codex",materials:buildCodePhaseMaterials()},dependencies);
+      expect(bundleCalls).toBe(0);expect(start).not.toHaveBeenCalled();expect(group).not.toHaveBeenCalled();expect(invokeCalls).toBe(0);
+      expect(result).toMatchObject({status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_attempts:0,error:{code:"PROVIDER_PACKET_BOUNDARY_UNAVAILABLE"}});
+      expect(result.findings).toEqual([]);
+      expect(result.provider_selection.providers).toEqual(providers);
+      expect(result.provider_results).toHaveLength(2);
+      for(const [index,member]of result.provider_results.entries()) {
+        const provider=providers[index];
+        expect(member).toMatchObject({provider,status:"failed",error:{code:"PROVIDER_PACKET_BOUNDARY_UNAVAILABLE"},identity:{provider,source_id:selection.provider_identities[provider].source_id,config_id:selection.provider_identities[provider].config_id,model:selection.provider_models[provider]}});
+        expect(member.error.message).toMatch(/boundary|boundaries/);
+      }
+      expect(existsSync(join(attachmentRoot,".wh-review-packets"))).toBe(false);
+    } finally {start.mockRestore();group.mockRestore();}
+  }
+  it("blocks default and null native clients before bundle construction or dispatch",async()=>{
+    await blockedNativeCase("default");await blockedNativeCase("null");
+  });
+  it("blocks an explicitly injected real native client before bundle construction or dispatch",async()=>{
+    await blockedNativeCase("instance");
   });
 });

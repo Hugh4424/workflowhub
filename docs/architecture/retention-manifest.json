@@ -1,86 +1,456 @@
 {
   "schema_version": "workflowhub-retention-manifest.v1",
-  "phase": "Phase 0",
-  "owner": "T002",
-  "frozen_at": "2026-08-03T09:47:00+08:00",
-  "policy": "历史 task 只读；质量、审查、测试、确认、授权和治理学习资料保留，不控制普通推进",
+  "phase": "CARD-06 P7 directory roles / P8 actual original archive readback",
+  "owner": "CARD-06 P7 / T026 / MT-5-050",
+  "policy": "只读资料保留说明；不是 registry、哈希认证、删除裁决、质量或推进许可。当前生产路径职责唯一以 move-map 为准。原历史 task、review、test、receipt、snapshot 与 M14–M17 原件只读保留／按已决定归档，不改名、不补造、不另写账本。",
   "retain": [
-    "specs/archive/",
-    "docs/architecture/legacy-task-inventory.json",
-    "docs/architecture/legacy-import-proof.json",
-    "runtime/evidence/",
-    "runtime/review/",
-    "evidence/",
-    "reviews/",
-    "tests/"
+    "docs/architecture/real-entry-inventory.md",
+    "docs/architecture/test-asset-governance-rules.md",
+    "docs/research/ai-cli-host-skill-distribution.md",
+    "docs/research/claude-code-plugin-system-research-2026-09-05.md",
+    "docs/research/design-md-executable-source-research-2026-08-22.md",
+    "docs/research/m18-skill-plugin-distribution-ecosystem-research-2026-09-03.md",
+    "docs/research/reviews/workflow-path-claude-code.json",
+    "docs/research/reviews/workflow-path-kimi.json",
+    "docs/research/reviews/workflow-path-opencode.json",
+    "docs/research/ui-delivery-contract-external-practices-2026-08-22.md",
+    "docs/research/ui-frontend-simple-workflow-design-2026-08-22.md",
+    "docs/research/workflow-path-architecture-blind-review.md",
+    "docs/research/workflowhub-batch-governance-inventory-20260825.md",
+    "docs/research/workflowhub-batch-governance-simplification-design-20260825.md",
+    "docs/research/workflowhub-branch-worktree-audit-20260825.md",
+    "docs/research/workflowhub-execution-first-redesign-20260825.md",
+    "docs/research/workflowhub-wh-review-material-identity-incident-20260825.md",
+    "runtime/review/schemas/attempt.schema.json"
   ],
-  "disposition_source": "docs/architecture/deletion-plan.json",
-  "frozen_sources": {
-    "deletion_plan": {
-      "ref": "docs/architecture/deletion-plan.json",
-      "content_hash": "3f78b935884589e9d290b4166a5ce91ce0c10cdd376ab2a9df7710caf7f8188d"
-    },
-    "history_inventory": {
-      "ref": "docs/architecture/history-inventory.json",
-      "content_hash": "943421545ebed7cf7fa0ab2331977a5ec38b50ed4bed7cbff5672ded23ab971a"
-    },
-    "move_map": {
-      "ref": "docs/architecture/move-map.json",
-      "content_hash": "44e874b06f0481a535babb6151e7a614b0a9f00f729e375cf14f7ff54edaeb45"
-    }
-  },
-  "history_verification": "tools/architecture/history-inventory.mjs verify-unchanged",
-  "keep_until_migration": [],
   "dispositions": [
     {
-      "path": "tools/architecture/inventory.mjs",
+      "path": "docs/architecture/real-entry-inventory.md",
       "disposition": "READ/KEEP",
-      "reason": "live inventory and deletion-proof oracle consumed by runtime checks and final verification"
+      "owner": "原只读资料 owner；CARD-06 P7/T026 仅更新登记",
+      "consumer": "人读历史／调研／既有测试规则；不进入普通推进或当前质量裁决",
+      "source": "MT-7-075",
+      "delete_condition": "现行决定保留；不因本清单产生执行或写入许可"
     },
     {
-      "path": "tools/architecture/complexity-report.mjs",
+      "path": "docs/architecture/test-asset-governance-rules.md",
       "disposition": "READ/KEEP",
-      "reason": "reproducible complexity and hard-gate diagnostic consumed by Phase 0, Phase 6, and final verification"
+      "owner": "原只读资料 owner；CARD-06 P7/T026 仅更新登记",
+      "consumer": "人读历史／调研／既有测试规则；不进入普通推进或当前质量裁决",
+      "source": "MT-7-076",
+      "delete_condition": "现行决定保留；不因本清单产生执行或写入许可"
     },
     {
-      "path": "tools/architecture/reference-audit.mjs",
+      "path": "docs/research/ai-cli-host-skill-distribution.md",
       "disposition": "READ/KEEP",
-      "reason": "permanent reference and closure oracle required by final verification"
+      "owner": "原只读资料 owner；CARD-06 P7/T026 仅更新登记",
+      "consumer": "人读历史／调研／既有测试规则；不进入普通推进或当前质量裁决",
+      "source": "MT-7-098",
+      "delete_condition": "现行决定保留；不因本清单产生执行或写入许可"
     },
     {
-      "path": "tools/architecture/history-inventory.mjs",
+      "path": "docs/research/claude-code-plugin-system-research-2026-09-05.md",
       "disposition": "READ/KEEP",
-      "reason": "permanent offline historical-bytes oracle required by final verification"
+      "owner": "原只读资料 owner；CARD-06 P7/T026 仅更新登记",
+      "consumer": "人读历史／调研／既有测试规则；不进入普通推进或当前质量裁决",
+      "source": "MT-7-099",
+      "delete_condition": "现行决定保留；不因本清单产生执行或写入许可"
     },
     {
-      "path": "tools/architecture/phase0-deletion-disposition.mjs",
-      "disposition": "KEEP",
-      "reason": "live governance contract test consumes the frozen deletion-plan and slice checks"
-    },
-    {
-      "path": "tools/architecture/retention-audit.mjs",
-      "disposition": "KEEP",
-      "reason": "live governance-learning contract test consumes the non-gating retention and learning audit"
-    },
-    {
-      "path": "tools/cli/check-task-record-paths.mjs",
-      "disposition": "KEEP",
-      "reason": "live npm check contract keeps the stage path boundary fail-loud"
-    },
-    {
-      "path": "tools/host/workflowhub-stage-agent-bridge.mjs",
-      "disposition": "KEEP-LEGACY-READONLY",
-      "reason": "historical stage-outcome provenance and compatibility tests only; current WorkflowHub runs do not call the bridge"
-    },
-    {
-      "path": "runtime/review/stage-review-disposition.mjs",
-      "disposition": "KEEP",
-      "reason": "vNext risk pause and acceptance API is a live production capability consumed by stage handlers and task kernel"
-    },
-    {
-      "path": "specs/archive/requirements-completeness-audit-20260804/",
+      "path": "docs/research/design-md-executable-source-research-2026-08-22.md",
       "disposition": "READ/KEEP",
-      "reason": "historical requirements archive is registered in the read-only history inventory"
+      "owner": "原只读资料 owner；CARD-06 P7/T026 仅更新登记",
+      "consumer": "人读历史／调研／既有测试规则；不进入普通推进或当前质量裁决",
+      "source": "MT-7-100",
+      "delete_condition": "现行决定保留；不因本清单产生执行或写入许可"
+    },
+    {
+      "path": "docs/research/m18-skill-plugin-distribution-ecosystem-research-2026-09-03.md",
+      "disposition": "READ/KEEP",
+      "owner": "原只读资料 owner；CARD-06 P7/T026 仅更新登记",
+      "consumer": "人读历史／调研／既有测试规则；不进入普通推进或当前质量裁决",
+      "source": "MT-7-101",
+      "delete_condition": "现行决定保留；不因本清单产生执行或写入许可"
+    },
+    {
+      "path": "docs/research/reviews/workflow-path-claude-code.json",
+      "disposition": "READ/KEEP",
+      "owner": "原只读资料 owner；CARD-06 P7/T026 仅更新登记",
+      "consumer": "人读历史／调研／既有测试规则；不进入普通推进或当前质量裁决",
+      "source": "MT-7-102",
+      "delete_condition": "现行决定保留；不因本清单产生执行或写入许可"
+    },
+    {
+      "path": "docs/research/reviews/workflow-path-kimi.json",
+      "disposition": "READ/KEEP",
+      "owner": "原只读资料 owner；CARD-06 P7/T026 仅更新登记",
+      "consumer": "人读历史／调研／既有测试规则；不进入普通推进或当前质量裁决",
+      "source": "MT-7-103",
+      "delete_condition": "现行决定保留；不因本清单产生执行或写入许可"
+    },
+    {
+      "path": "docs/research/reviews/workflow-path-opencode.json",
+      "disposition": "READ/KEEP",
+      "owner": "原只读资料 owner；CARD-06 P7/T026 仅更新登记",
+      "consumer": "人读历史／调研／既有测试规则；不进入普通推进或当前质量裁决",
+      "source": "MT-7-104",
+      "delete_condition": "现行决定保留；不因本清单产生执行或写入许可"
+    },
+    {
+      "path": "docs/research/ui-delivery-contract-external-practices-2026-08-22.md",
+      "disposition": "READ/KEEP",
+      "owner": "原只读资料 owner；CARD-06 P7/T026 仅更新登记",
+      "consumer": "人读历史／调研／既有测试规则；不进入普通推进或当前质量裁决",
+      "source": "MT-7-105",
+      "delete_condition": "现行决定保留；不因本清单产生执行或写入许可"
+    },
+    {
+      "path": "docs/research/ui-frontend-simple-workflow-design-2026-08-22.md",
+      "disposition": "READ/KEEP",
+      "owner": "原只读资料 owner；CARD-06 P7/T026 仅更新登记",
+      "consumer": "人读历史／调研／既有测试规则；不进入普通推进或当前质量裁决",
+      "source": "MT-7-106",
+      "delete_condition": "现行决定保留；不因本清单产生执行或写入许可"
+    },
+    {
+      "path": "docs/research/workflow-path-architecture-blind-review.md",
+      "disposition": "READ/KEEP",
+      "owner": "原只读资料 owner；CARD-06 P7/T026 仅更新登记",
+      "consumer": "人读历史／调研／既有测试规则；不进入普通推进或当前质量裁决",
+      "source": "MT-7-107",
+      "delete_condition": "现行决定保留；不因本清单产生执行或写入许可"
+    },
+    {
+      "path": "docs/research/workflowhub-batch-governance-inventory-20260825.md",
+      "disposition": "READ/KEEP",
+      "owner": "原只读资料 owner；CARD-06 P7/T026 仅更新登记",
+      "consumer": "人读历史／调研／既有测试规则；不进入普通推进或当前质量裁决",
+      "source": "MT-7-108",
+      "delete_condition": "现行决定保留；不因本清单产生执行或写入许可"
+    },
+    {
+      "path": "docs/research/workflowhub-batch-governance-simplification-design-20260825.md",
+      "disposition": "READ/KEEP",
+      "owner": "原只读资料 owner；CARD-06 P7/T026 仅更新登记",
+      "consumer": "人读历史／调研／既有测试规则；不进入普通推进或当前质量裁决",
+      "source": "MT-7-109",
+      "delete_condition": "现行决定保留；不因本清单产生执行或写入许可"
+    },
+    {
+      "path": "docs/research/workflowhub-branch-worktree-audit-20260825.md",
+      "disposition": "READ/KEEP",
+      "owner": "原只读资料 owner；CARD-06 P7/T026 仅更新登记",
+      "consumer": "人读历史／调研／既有测试规则；不进入普通推进或当前质量裁决",
+      "source": "MT-7-110",
+      "delete_condition": "现行决定保留；不因本清单产生执行或写入许可"
+    },
+    {
+      "path": "docs/research/workflowhub-execution-first-redesign-20260825.md",
+      "disposition": "READ/KEEP",
+      "owner": "原只读资料 owner；CARD-06 P7/T026 仅更新登记",
+      "consumer": "人读历史／调研／既有测试规则；不进入普通推进或当前质量裁决",
+      "source": "MT-7-111",
+      "delete_condition": "现行决定保留；不因本清单产生执行或写入许可"
+    },
+    {
+      "path": "docs/research/workflowhub-wh-review-material-identity-incident-20260825.md",
+      "disposition": "READ/KEEP",
+      "owner": "原只读资料 owner；CARD-06 P7/T026 仅更新登记",
+      "consumer": "人读历史／调研／既有测试规则；不进入普通推进或当前质量裁决",
+      "source": "MT-7-112",
+      "delete_condition": "现行决定保留；不因本清单产生执行或写入许可"
+    },
+    {
+      "path": "runtime/review/schemas/attempt.schema.json",
+      "disposition": "READ/KEEP",
+      "owner": "CARD-06 P5/T019 / MT-5-001",
+      "consumer": "查阅真正原历史 attempt 定义；无当前 registry、writer 或发布消费者",
+      "source": "spec.md 真正原 attempt 定义只读恢复段；原定义来自 backup/card-06-b4",
+      "delete_condition": "历史定义仍需查阅时保留；不恢复 active attempt graph"
     }
-  ]
+  ],
+  "archive_dispositions": [
+    {
+      "path": "docs/architecture/final-coverage-audit.md",
+      "destination": "docs/archive/final-coverage-audit.md",
+      "status": "archived",
+      "owner": "B7/P8",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/architecture/test-asset-inventory.md",
+      "destination": "docs/archive/test-asset-inventory.md",
+      "status": "archived",
+      "owner": "B7/P8",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/3rd-review-error-and-recovery.md",
+      "destination": "docs/archive/3rd-review-error-and-recovery.md",
+      "status": "archived",
+      "owner": "B7/P8",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/3rd-review-provider-contract.md",
+      "destination": "docs/archive/3rd-review-provider-contract.md",
+      "status": "archived",
+      "owner": "B7/P8",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/3rd-review-redesign-draft.md",
+      "destination": "docs/archive/3rd-review-redesign-draft.md",
+      "status": "archived",
+      "owner": "B7/P8",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/3rd-review-redesign-v2.md",
+      "destination": "docs/archive/3rd-review-redesign-v2.md",
+      "status": "archived",
+      "owner": "B7/P8",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/freeze-and-retire.md",
+      "destination": "docs/archive/freeze-and-retire.md",
+      "status": "archived",
+      "owner": "B7/P8",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/migration-and-fallback.md",
+      "destination": "docs/archive/migration-and-fallback.md",
+      "status": "archived",
+      "owner": "B7/P8",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/plain-language-mechanism-design.md",
+      "destination": "docs/archive/plain-language-mechanism-design.md",
+      "status": "archived",
+      "owner": "B7/P8",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/stage-atomic-step-inventory.md",
+      "destination": "docs/archive/stage-atomic-step-inventory.md",
+      "status": "archived",
+      "owner": "B7/P8",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/wh-review-e2e.md",
+      "destination": "docs/archive/wh-review-e2e.md",
+      "status": "archived",
+      "owner": "B7/P8",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/architecture/deletion-plan.json",
+      "destination": "docs/archive/deletion-plan.json",
+      "status": "archived",
+      "owner": "B6/P7",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/architecture/complexity-baseline.json",
+      "destination": "docs/archive/complexity-baseline.json",
+      "status": "archived",
+      "owner": "B6/P7",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/architecture/final-complexity-report.json",
+      "destination": "docs/archive/final-complexity-report.json",
+      "status": "archived",
+      "owner": "B6/P7",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/architecture/deletions-proof.json",
+      "destination": "docs/archive/deletions-proof.json",
+      "status": "archived",
+      "owner": "B6/P7",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/architecture/legacy-import-proof.json",
+      "destination": "docs/archive/legacy-import-proof.json",
+      "status": "archived",
+      "owner": "B6/P7",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/architecture/history-inventory.json",
+      "destination": "docs/archive/history-inventory.json",
+      "status": "archived",
+      "owner": "B6/P7",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/architecture/repository-inventory.tsv",
+      "destination": "docs/archive/repository-inventory.tsv",
+      "status": "archived",
+      "owner": "B6/P7",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/architecture/legacy-task-inventory.json",
+      "destination": "docs/archive/legacy-task-inventory.json",
+      "status": "archived",
+      "owner": "B6/P7",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/operations/claude-e2e-sample.md",
+      "destination": "docs/archive/claude-e2e-sample.md",
+      "status": "archived",
+      "owner": "B7/P8",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/operations/clean-install-archive.md",
+      "destination": "docs/archive/clean-install-archive.md",
+      "status": "archived",
+      "owner": "B7/P8",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/operations/codex-support-verification.md",
+      "destination": "docs/archive/codex-support-verification.md",
+      "status": "archived",
+      "owner": "B7/P8",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/operations/deferred-tasks-m17.md",
+      "destination": "docs/archive/deferred-tasks-m17.md",
+      "status": "archived",
+      "owner": "B7/P8",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/operations/old-tree-archive.md",
+      "destination": "docs/archive/old-tree-archive.md",
+      "status": "archived",
+      "owner": "B7/P8",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-07-12-wh-review-v4-implementation.md",
+      "destination": "docs/archive/2026-07-12-wh-review-v4-implementation.md",
+      "status": "archived",
+      "owner": "B7/P8",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-07-13-unstaged-review-snapshots.md",
+      "destination": "docs/archive/2026-07-13-unstaged-review-snapshots.md",
+      "status": "archived",
+      "owner": "B7/P8",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-07-13-wh-review-v4-design-gap-closure.md",
+      "destination": "docs/archive/2026-07-13-wh-review-v4-design-gap-closure.md",
+      "status": "archived",
+      "owner": "B7/P8",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-07-14-review-delivery-plan.md",
+      "destination": "docs/archive/2026-07-14-review-delivery-plan.md",
+      "status": "archived",
+      "owner": "B7/P8",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-07-15-wh-review-quality-repair.md",
+      "destination": "docs/archive/2026-07-15-wh-review-quality-repair.md",
+      "status": "archived",
+      "owner": "B7/P8",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-07-15-wh-review-sealed-contract-recovery.md",
+      "destination": "docs/archive/2026-07-15-wh-review-sealed-contract-recovery.md",
+      "status": "archived",
+      "owner": "B7/P8",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-07-15-wh-review-simple-reliable-plan.md",
+      "destination": "docs/archive/2026-07-15-wh-review-simple-reliable-plan.md",
+      "status": "archived",
+      "owner": "B7/P8",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-07-12-wh-review-v4-redesign-design.md",
+      "destination": "docs/archive/2026-07-12-wh-review-v4-redesign-design.md",
+      "status": "archived",
+      "owner": "B7/P8",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-07-14-local-skill-closure-design.md",
+      "destination": "docs/archive/2026-07-14-local-skill-closure-design.md",
+      "status": "archived",
+      "owner": "B7/P8",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-07-15-wh-review-simple-reliable-design.md",
+      "destination": "docs/archive/2026-07-15-wh-review-simple-reliable-design.md",
+      "status": "archived",
+      "owner": "B7/P8",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-07-15-wh-review-simple-reliable-review.md",
+      "destination": "docs/archive/2026-07-15-wh-review-simple-reliable-review.md",
+      "status": "archived",
+      "owner": "B7/P8",
+      "consumer": "只读历史查阅；不进入当前 runtime、普通推进或质量许可",
+      "original_bytes": "已单原件精确rename；实际P8回执证明同inode/同bytes，历史正文未改，原source不存在。"
+    }
+  ],
+  "coverage": "本清单登记原决定保留的18项只读资料及35项已实际单原件迁移到既定docs/archive目标的历史资料。生产职责覆盖由当前move-map承接；不是目录快照、hash认证或质量结论。旧core/artifact-dir.mjs与core/load-config.mjs在真实incoming归零后已移除，runtime目标保留。该事实不替代原literal gates或整个stage质量。外置124历史README由T028实际回执另行承接，不据本表宣称已写。",
+  "historical_policy_source": "原 Phase 0 retention 定义仅可通过既有 Git 历史 backup/card-06-b6:docs/architecture/retention-manifest.json 查阅；不以旧 frozen_sources/content_hash/history_verification 作当前认证。"
 }

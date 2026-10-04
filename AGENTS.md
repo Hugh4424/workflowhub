@@ -19,20 +19,20 @@
 - 不空转轮询：不以远小于任务耗时的固定超时重复空转调用；派发按工作类型，回传结论与清单，修复回原实施子代理同一会话。五阶段共用并发区间为 2–5，具体每个任务开几个并发在 build-plan 的当前并行方案里逐任务确定。
 - 跨 Phase 不做全量快照绑定：只核对本 Phase 声明写集；声明不实由独立审查用 `git diff --name-only` 与声明写集逐条比对发现，记为事实，不作门。
 
-### 测试硬规则（本任务后续执行）
+### 测试硬规则
 
 - 只跑受影响针对性测试；禁止全量回归：禁止无范围地跑全量 `vitest`、`npm test` 或 `test:safe`。
 - 例外只有用户或 CI 守卫明确要求；例外命令必须在执行证据中写清原因和范围。
 - 依据：[docs/standard-workflow.md](docs/standard-workflow.md) 的 build-code 测试与质量段；本条是执行纪律，不是新的 stage、gate 或质量结论。
 
-### 证据硬规则（本任务后续执行）
+### 证据硬规则
 
 - 每类事实只留一份原始件：原始测试输出、正式 review 回执、review 原件各存一份，禁止复制镜像到 `quality/evidence/`。
 - 禁止把整棵工作树或整个目录作为证据保存（禁止目录快照、整树 tar、`git archive` 产物、文件树清单）。
 - 需要证明改动范围时，只存本 Phase 实际改动文件的原始字节 + 路径 + hash。
 - 依据：[docs/standard-workflow.md](docs/standard-workflow.md) 的 `### 证据只留原始件` 段；本条是执行纪律，不是新的 stage、gate 或质量结论。
 
-### 卡住与升级（本任务后续执行）
+### 卡住与升级
 
 - 卡住时必须先把话说明白再停：用日常语言写清「现在卡在哪、为什么不能继续、有几条路、每条路的代价与风险」，并给出可以直接回复的选项。
 - 禁止把阶段缩写、AC 编号、内部取值或其它只有读过材料的人才懂的词，作为唯一的说明。
@@ -47,7 +47,7 @@
 - 术语表：[CONTEXT.md](CONTEXT.md)
 - 唯一进度来源：认证 worktree 的 `specs/<task-id>/` 当前材料与外置任务 task facts；`docs/archive/retired-root-progress/` 只读保留旧任务过程文件，不作为当前进度。
 
-## 当前目录职责（Phase 8）
+## 当前目录职责
 
 - `runtime/`：生产运行时；按 `interface/`、`stage/`、`task/`、`evidence/`、`review/`、`adapters/`、`distribution/`、`schemas/` 分区。
 - `tools/cli/`：人工或 CI 调用的命令行工具，不承载运行时状态。
@@ -65,11 +65,11 @@
 - 新机制或新控制面必须先登记职责、真实 consumer、owner、测试和删除/保留条件；没有当前消费者的重复控制面不新增。
 - 当前 WorkflowHub 会话直接执行并发布阶段事实；外部 Stage Agent、bridge、session 或 stage outcome 不是任务推进前置条件。旧 bridge/adapter 只读保留历史 provenance，不得重新成为 active run、reflection、handoff 或 close 的门。
 
-### 本任务新增控制面登记
+### 当前窄工具与事实职责登记
 
-- 结构化问答工具卡：owner=各交互 stage 主会话；consumer=stage outcome 交互校验；删除条件=结构化问答机制被经过审查的替代机制取代。
-- accepted_risk confirm 语义扩展：owner=build-spec 及相关 stage；consumer=处置校验与认证 receipt 绑定检查；删除条件=风险接收机制被经过审查的替代机制取代。
-- 退役登记表（`skills/decision-log/templates/decision-log-template.md` 的 `## 退役登记` 段）：owner=decision-log 技能（make-decision 主会话按模板写入本任务 `decision-log.md`）；consumer=人读交接与既有 `analyzeDecisionConvergence` 的拷贝（不新增机器 reader、不新增字段）；替代关系=取代「以后再说」式模糊延后（退役理由、决定人、原需求编号在既有决定表与未决项表里本就无处安放）；删除条件=退役信息被既有决定表与 `## 未决项` 完整承接，或该段被经过审查的替代登记取代。
+- 工作区/命令/普通记录/Git授权/锁/回复复用 runtime/interface/ 已有 owner；真实 consumer 见 docs/architecture/move-map.json。工具输出是事实，不是阶段许可证；被经独立审查的替代实现承接实际消费者后才退役。
+- 审查事实由 review-record-route 单一 producer保存；文档wh-review，代码OCR，未装OCR才fallback并保原原因。provider缺失/失败不制造质量通过，有效单源发现不丢弃。
+- 退役登记保既有决定与未决项的理由/决定人/来源，人读交接消费，不新增机器reader或字段。
 
 ## vNext 永久实施边界
 

@@ -1,70 +1,19 @@
 # Build Plan 审查合同
 
-provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读取宿主绝对路径。
+审查当前提交的材料。provider 只读取 bundle，不访问真实仓库、Git、一般 shell、网络或宿主路径。只有实际 host transport 已证明原生硬包根、工具及环境边界的 Codex，可用 cat、sed、rg 等只读文件查看命令读取该 packet 内声明的路径。这不是一般 shell 许可：仍禁止写入、Git、网络、父目录、宿主材料、Agent/subagent 和 wait/poll。原生权限的 minimal runtime 例外只用于工具运行，不属于审查材料。
 
-## 必需材料
+## 材料与问题
 
-- `review-instructions.md`：stage、审查问题和输出格式。
-- post（`activationCohort=post`）：原始需求、当前待审 `draft_spec`（产品规格与全局实现设计）、验收标准、`phase_index`，以及 `phase_authorities` 映射中的每个真实独立 `phases/P<n>.md` 文件。provider bundle 将各 Phase 作为各自的 `requirements/phases/P<n>.md` 交付，不拼成 `draft_plan` 或 `draft_tasks`。索引只交付 authority ref、语义锚点、写集、依赖和 consumer，不能成为第二份任务正文。
-- pre/history（`activationCohort=pre`）：原始需求、已批准 spec、验收标准、旧 `draft_plan` 与 `draft_tasks`；这些只读兼容输入不得冒充 post Phase 文件。
-- 每个 post Phase 至少说明 L0/L1/L2、精确写集、依赖、禁改边界和验证方式；缺索引引用的物理文件、空文件、错 ID 或未列入索引的文件均为 `MATERIAL_INCOMPLETE`，provider 不启动。
-- 可选的 `context_map` / `evidence_map` 优化；提供时仅交付 map 明确选择的模块边界、依赖、接口或测试约定片段。本阶段不得默认附带 diff 或完整当前文件，maps 缺失仍须调用 provider。
-- 与本次审查有关的 reviewer 技能文件。
-- `manifest.json`：列出 provider 可见的每个文件及其 byte size、SHA-256，并据此计算 `material_id`。
+post 使用原始需求、当前 `draft_spec`（产品规格与全局实现设计）、验收标准、独立 `phase_authorities` 与纯指针 `phase_index`。各 Phase 内容应完整可读，不拼成另一份 plan/tasks。pre/history 可提供旧 approved spec、draft_plan、draft_tasks 作为只读上下文，不能冒充 post 当前材料。
 
-同一 task 的同一普通审查面只记录一次 semantic advice result；runner 仍完整校验首轮
-材料。finding 处置或材料变化不自动产生新的 attempt，也不为追求空 findings 重审。
-如果首轮只有 `unavailable`，区分两种情况：pre-flight 失败（缺路由或必需材料导致 provider 未启动）意味着该步骤未真实完成，修复后按普通步骤重做；provider 已执行但返回 unavailable（超时、transport failure）则是已完成步骤的真实事实，记录后按 manifest 前移，不因后续材料补齐自动重派。
+先检查需求 → 实现 → 真实消费者 → 验证的因果链，再检查依赖、可并行边界、接口/状态交接、失败恢复与回滚、是否真的需要新增能力。关注计划是否能执行、验证能否在行为错误时失败、直接消费者是否遗漏、是否引入无需求的重复能力。Phase 字段、编号、索引或审查记录本身不是继续工作的许可证，不按统一顺序锁住工程正文。
 
-`context_map` 和 `evidence_map` 是可选优化。提供时每张 map 都必须有
-`state: complete|unknown`、简短 `summary` 和逐项 `entries`（`id`、`subject`、
-`rationale`、`disposition`）；map-level `unknown` 必须同时说明 `unknown_reason`，不能伪装成完整上下文。
-`complete` 条目必须有可验证 anchors（id、snapshot path、行区间、role、reason）；
-`not_applicable` 或 `unknown` 条目必须给出受限 `reason_code` 和理由，不能用自由文本
-`not_needed_reason` 绕过锚点；runner 仅交付 complete anchor 的片段，不按目录或文件全文
-扩张材料。缺失 maps 不返回 `MATERIAL_INCOMPLETE`，也不阻止 provider 调用。
+可选 context_map/evidence_map 用于指出直接依赖与可验证的相对路径/行范围。未提供或无法复核时说明限制，不补造依据，不默读整个仓库。required/optional reviewer skills 按当前 stage-skill-plan 选择；适用的 simplicity-guard 只是同一 packet 的只读 lens，不单独运行、生成 receipt 或新的 facts。
 
-缺少任一必需材料时，本次 attempt 返回 `unavailable`，并写入
-`quality/reviews/attempts/*` 作为不可变质量事实；它没有 findings，也不能写成
-“没有问题”。pre-flight 材料缺失意味着 provider 未启动、该步骤未真实完成；补齐后可重新调用。provider 已执行但返回 unavailable 的，是已完成步骤的真实事实，不自动重派。可选材料不存在时，
-`review-instructions.md` 必须说明未提供及原因。
+## 结果与处置
 
-首轮 findings 是质量事实，不是 stage gate。主 agent 应直接修复；普通修复不做二审。
-外置审计记录若存在，缺失或不能验证时明确为
-`unverified`，不得声称已修复或通过。首轮 advice 事实保留，不循环也不阻断 stage 推进。
-下游修改方向、验收、接口、schema、状态、安全、并发、拓扑、phase 顺序或测试策略时，继续后续 analyze/publish，不自动产生新的 review attempt。`accepted_risk` 仅记录，必须在本阶段的人类确认摘要中显式展示。
+manifest 的 byte size/checksum 只用于实际附件传输与来源核对，不能认证 WorkflowHub 阶段身份或许可。审查记录存于 `quality/reviews/` 的普通日期编号文件；旧结果保留只读，不用 hash/snapshot 判断能否复用或继续。
 
-每个 canonical/reportable finding（包括普通和严重）都必须有一个 disposition：`fixed`、
-`rejected_invalid`、`accepted_risk` 或 `needs_human`；没有可绑定 ledger 时显示
-`unverified`。`accepted_risk` 必须绑定当前 finding、review、snapshot 和真实用户风险确认。
-严重 finding 额外决定是否暂停正式完成，普通 finding 不能因此被丢掉。这描述处理事实，
-不把 provider findings 转成“审查通过”。
+只输出 provider-protocol 的一个 findings JSON。具体 finding 要能影响交付，保留来源、严重程度和可复核锚点。空 findings 不等于通过、完成、逐条覆盖或批准。无文本、坏 JSON、路径/协议错误、超时、取消及其他 provider 失败保留 unavailable/incomplete，未知处保留 unknown，不伪造成功。
 
-审查结果用于暴露问题和记录处置；阶段是否推进由正式 stage contract 与证据决定。
-
-## 处置边界
-
-build-plan 只消费可信异源 advice，不要求 provider `pass` 或 findings=[]。无最终文本、timeout、路径/协议错误、坏 JSON 和其他 transport failure 只能记录为 `unavailable`/`incomplete`，不能变成空 findings 或通过。首轮 semantic advice 已存在时，即使被审材料变化也不再发起普通 attempt；`unavailable` 只在修复缺失路由或材料后重试。
-
-## 审查重点
-
-- 每项需求是否落到 phase authority 中的可判断验证。
-- phase、依赖、写集和真实 consumer 顺序是否可执行，且 execution index 没有复制工程正文。
-- 接口、状态、失败路径、并发和回退是否遗漏。
-- 验证是否能在行为错误时失败，而不是只检查文件存在。
-- 是否引入 spec 未要求的抽象、兼容层或范围。
-- `simplicity-guard` 在适用时作为同一 wh-review packet 内的 advisory lens。它不单独
-  调用、不生成 `*-facts`、invocation receipt、dispatcher 或独立 runtime；lens 缺失只记录
-  为事实，不成为继续工作的前置条件。
-- scope creep、重复已有能力、没有故障证据的长期能力，或修订后仍无理由保留的旧内容，
-  报告具体删除或缩减 finding。
-
-审查顺序固定为：任务是否形成“需求 → 实现 → 真实消费者 → 验证”的因果链 → 依赖和
-顺序 → 接口/数据/状态的交接 → 失败、回滚和重试 → 是否真的需要新增能力。重点找计划
-无法落地、验证测不到行为、漏掉直接消费者、顺序导致半成品可被使用，以及为了审查或
-证据治理新增控制面的情况。不要因为任务卡字段、snapshot lineage 或流程痕迹不够漂亮
-而消耗审查预算。
-
-## 输出
-
-输出遵循 `provider-protocol.md` 的最小 reviewer JSON：只包含 `findings`。不要求 checklist、summary、verdict、skillResults、bundle hash、finding 生命周期或模型回显材料 hash。
+所有真实 finding（含普通 finding）都要有 fixed、rejected_invalid、accepted_risk 或 needs_human 处置及理由。accepted_risk 必须对应具体问题、后果和真实用户回复；普通授权不冒充风险接收，真实安全保护不作为可接受损失。缺回复仍待人决定。普通修复不为追求空 findings 重审；明确新问题或真实变更的必要审查由当前方法决定，不查旧快照许可对象。审查是质量事实，不替代既有人类确认。

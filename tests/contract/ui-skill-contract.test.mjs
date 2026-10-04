@@ -92,6 +92,20 @@ function loadBundle(skillName, bundlePath) {
   return bundle;
 }
 
+function assertNoQualityScore(content, skillName) {
+  const withoutExplicitNegation = content.replace(
+    /\b(?:no|not|never)\s+(?:\w+\s+){0,3}quality score\b|(?:不得|禁止|不打|不做|不设置|不生成|不提供)\s*quality score\b/gi,
+    "",
+  );
+  assert.doesNotMatch(withoutExplicitNegation, /quality score/i, `${skillName}: forbidden quality score`);
+}
+
+test("quality score remains forbidden except explicit negation", () => {
+  assertNoQualityScore("no quality score；不打 quality score。", "negative wording");
+  assert.throws(() => assertNoQualityScore("Generate a quality score.", "positive wording"), /forbidden quality score/);
+  assert.throws(() => assertNoQualityScore("不打 quality score，但实际生成 quality score。", "mixed wording"), /forbidden quality score/);
+});
+
 test("P1 skill contracts are explicit before implementation", () => {
   for (const [skillName, spec] of Object.entries(skillSpecs)) {
     assert.ok(exists(spec.path), `${skillName}: skill path is missing`);
@@ -101,7 +115,8 @@ test("P1 skill contracts are explicit before implementation", () => {
       assert.match(content, new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), `${skillName}: missing ${term}`);
     }
     for (const term of spec.forbidden) {
-      assert.doesNotMatch(content, new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), `${skillName}: forbidden ${term}`);
+      if (term === "quality score") assertNoQualityScore(content, skillName);
+      else assert.doesNotMatch(content, new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), `${skillName}: forbidden ${term}`);
     }
     loadBundle(skillName, spec.bundle);
   }
@@ -122,17 +137,23 @@ test("UI support skills declare their real stage consumers without a parallel UI
     assert.ok(typeof entry.update_policy === "string" && entry.update_policy.length > 0, `${skillName}: update policy missing`);
   }
 
-  const buildSpecDependencies = yaml.load(read("workflows/build-spec/skill-deps.yaml"));
-  for (const skillName of ["ui-project-init", "design-source-readiness"]) {
-    const entry = entries.get(skillName);
-    assert.deepEqual(entry.used_by_stages, ["build-spec"], `${skillName}: UI scope must declare build-spec as its consumer`);
-    const dependency = (buildSpecDependencies.skills ?? []).find((item) => item.name === skillName);
-    assert.ok(dependency, `${skillName}: build-spec dependency is missing`);
-    assert.equal(dependency.trigger, "ui_scope", `${skillName}: must only run for UI scope`);
+  const buildPlanDependencies = yaml.load(read("workflows/build-plan/skill-deps.yaml"));
+  assert.equal(buildPlanDependencies.stage, "build-plan");
+  for (const [skillName, trigger] of [
+    ["ui-project-init", "ui_scope_existing_project_baseline"],
+    ["design-source-readiness", "ui_scope_readable_design_sources"],
+    ["frontend-prototype-render", "ui_scope_actual_prototype_preview"],
+    ["frontend-component-quality", "ui_scope"],
+    ["plan-design-review", "ui_scope_design_lens_in_merged_review"],
+  ]) {
+    const dependency = (buildPlanDependencies.skills ?? []).find((item) => item.name === skillName);
+    assert.ok(dependency, `${skillName}: current build-plan dependency is missing`);
+    assert.equal(dependency.path, `skills/${skillName}/SKILL.md`);
+    assert.ok(exists(dependency.path), `${skillName}: actual method is missing`);
+    assert.equal(dependency.trigger, trigger, `${skillName}: must retain its actual UI scope trigger`);
   }
 
   const quality = entries.get("frontend-component-quality");
-  assert.deepEqual(quality.used_by_stages, ["build-plan", "build-code", "verify-code"]);
   assert.deepEqual(quality.upstream, [
     {
       github_url: "https://github.com/vercel-labs/agent-skills",

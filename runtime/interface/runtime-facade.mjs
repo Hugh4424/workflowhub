@@ -1,5 +1,3 @@
-import { assertRunnerCompatibility } from "./runner-contract.mjs";
-
 export const RUNTIME_BEHAVIORS = Object.freeze([
   "doctor",
   "status",
@@ -14,13 +12,11 @@ const BEHAVIOR_BY_INTERNAL_OPERATION = Object.freeze({
   doctor: "doctor",
   status: "status",
   artifact: "run",
-  "review-risk-pause": "review",
   "review-record": "review",
   "capture-tests": "verify",
   confirm: "confirm",
   "authorize-operation": "authorize",
   run: "run",
-  reflect: "run",
 });
 
 function behaviorForInternalOperation(operation) {
@@ -37,7 +33,6 @@ export function createRuntimeFacade({
   const target = Object.fromEntries(RUNTIME_BEHAVIORS.map((behavior) => [
     behavior,
     async (request) => {
-      assertRunnerCompatibility(skillBundleContract, runnerContract);
       const delegate = delegates[behavior];
       if (typeof delegate !== "function") {
         throw new Error(`runtime behavior delegate is unavailable: ${behavior}`);

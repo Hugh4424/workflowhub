@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { reviewIdentityFromInput } from "../../../runtime/review/review-policy.mjs";
-import { SHA256_HEX } from "../../../runtime/evidence/canonical-utils.mjs";
+const SHA256_HEX = /^[a-f0-9]{64}$/;
 
 export const PACKET_SOURCE_PREFIX = ".wh-review-packets";
 
@@ -35,7 +35,7 @@ function regularFile(path, label) {
   if (!isAbsolute(path)) throw new Error(`${label} must be an absolute path`);
   assertNoSymlinkChain(path, label);
   const stat = lstatSync(path);
-  if (stat.isSymbolicLink() || !stat.isFile()) throw new Error(`${label} must be a real regular file`);
+  if (stat.isSymbolicLink() || !stat.isFile() || stat.nlink !== 1) throw new Error(`${label} must be a real single-link regular file`);
   return realpathSync(path);
 }
 
