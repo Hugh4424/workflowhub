@@ -1027,14 +1027,9 @@ function ocrProviderPlan(provider, profile, { cwd = null } = {}) {
       { code: "OCR_PROVIDER_UNSUPPORTED" });
   }
   if (adapter === "antigravity") {
-    if (profile.allow_host_state !== true) {
-      throw Object.assign(new Error("Antigravity host state is not acknowledged in trusted configuration"), { code: "OCR_PROVIDER_HOST_STATE_UNACKNOWLEDGED" });
-    }
-    return {
-      adapter, executable,
-      args: ["--new-project", "--mode", "plan", "--sandbox",
-        "--disable-slash-commands", "--print-timeout=0", ...(model ? ["--model", model] : []), "-p", entry],
-    };
+    throw Object.assign(new Error("Antigravity native tools have no verified packet filesystem, tool and environment boundary; direct review is unavailable"), {
+      code: "OCR_PROVIDER_PACKET_BOUNDARY_UNAVAILABLE",
+    });
   }
   throw Object.assign(new Error("OCR has no direct host executor for " + adapter), { code: "OCR_PROVIDER_UNSUPPORTED" });
 }

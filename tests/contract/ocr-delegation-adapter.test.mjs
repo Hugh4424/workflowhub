@@ -243,7 +243,7 @@ if (args[0] !== "exec" || !args.includes("--json")
     || args[args.indexOf("-C")+1] !== process.cwd()
     || !entry.includes("Read review-prompt.md in this directory")
     || process.env.CODEX_APP_TOOLS_PIPE_PATH !== undefined
-    || !prompt.includes("Codex CLI only:")
+    || !prompt.includes("Codex CLI with verified native packet filesystem, tool and environment boundaries only:")
     || !prompt.includes("cat or sed -n")
     || !prompt.includes("All other providers must use a read tool only.")) process.exit(8);
 if (args.join(" ").includes("export const") || prompt.includes("export const")
@@ -375,26 +375,62 @@ if(adapter === "codex") {
     expect(calls).toBe(0);
   });
 
-  it("lets Antigravity use its print mode without a host provider deadline", async () => {
-    const root = mkdtempSync(join(tmpdir(), "workflowhub-ocr-agy-"));
+  it("blocks unverified Antigravity despite host-state claims and preserves Codex sibling outcomes", async () => {
+    const root = mkdtempSync(join(tmpdir(), "workflowhub-ocr-agy-boundary-"));
     roots.push(root);
-    const executable = join(root, "fake-agy");
-    writeFileSync(executable, `#!/usr/bin/env node
+    const executable = join(root, "owned-cli"), launches = join(root, "launches.jsonl"), failCodex = join(root, "fail-codex");
+    writeFileSync(executable, String.raw`#!/usr/bin/env node
 const fs = require("node:fs");
 const args = process.argv.slice(2);
-const prompt = fs.readFileSync("review-prompt.md", "utf8");
-if (!args.includes("--print-timeout=0") || !prompt.includes("verify-code")
-    || args.at(-1) !== "Read review-prompt.md in this directory, then use the packet indexes to inspect the implementation and evidence files needed for this review. Do not blindly dump every listed file; inspect all implementation and test changes relevant to findings, and read raw execution output only when a claim depends on it. Return only the requested JSON object."
-    || !prompt.includes("All other providers must use a read tool only.")) process.exit(8);
-process.stdout.write(JSON.stringify({findings:[]}));
-`, { mode: 0o700 });
-    const trustedContext = configuredContext(["antigravity/flash"], executable);
-    trustedContext.providerConfig.providers["antigravity/flash"].allow_host_state = true;
-    const result = await runConfiguredOcrHostReview({
-      request: { ...request, stage: "verify-code", review_scope: null, phase_id: null },
-      packet: configuredPacket(),
-    }, { trustedContext });
-    expect(result).toMatchObject({ status: "available", provider_results: [{ status: "completed" }] });
+const adapter = args[0] === "exec" ? "codex" : "antigravity";
+fs.appendFileSync(${JSON.stringify(launches)}, JSON.stringify({adapter}) + "\n");
+if (adapter !== "codex") process.exit(9);
+const cwd = args[args.indexOf("-C") + 1];
+if (!args.includes("--ignore-user-config") || !args.includes("--ignore-rules") || !args.includes("--strict-config")
+    || !args.includes('shell_environment_policy.inherit="none"')
+    || !args.some(arg => arg.startsWith("permissions.wh_ocr=") && arg.includes('\":root\"=\"deny\"') && arg.includes(JSON.stringify(cwd) + '=\"read\"'))) process.exit(8);
+if (fs.existsSync(${JSON.stringify(failCodex)})) { process.stderr.write("owned Codex failure\n"); process.exit(7); }
+process.stdout.write(JSON.stringify({type:"item.completed",item:{type:"agent_message",text:JSON.stringify({findings:[]})}}) + "\n");
+process.stdout.write(JSON.stringify({type:"turn.completed",usage:{input_tokens:3}}) + "\n");
+`, {mode:0o700});
+    const input = { ...request, stage:"verify-code", review_scope:null, phase_id:null };
+    let healthCalls = 0;
+    for (const acknowledged of [undefined, false, true]) {
+      const trustedContext = configuredContext(["antigravity/flash"], executable);
+      trustedContext.providerConfig.providers["antigravity/flash"].allow_host_state = acknowledged;
+      const alone = await runConfiguredOcrHostReview({request:input, packet:configuredPacket()}, {
+        trustedContext, onProviderHealth:() => { healthCalls++; },
+      });
+      expect(alone).toMatchObject({status:"unavailable", outcome:"failed", provider_results:[{
+        provider:"antigravity/flash", status:"failed", findings:[], raw_output_ref:null,
+        error:{code:"OCR_PROVIDER_PACKET_BOUNDARY_UNAVAILABLE"},
+      }]});
+      expect(existsSync(launches)).toBe(false);
+      expect(healthCalls).toBe(0);
+    }
+    const unknown = await runConfiguredOcrHostReview({request:input, packet:configuredPacket()}, {
+      trustedContext:configuredContext(["unknown/reviewer"], executable), onProviderHealth:() => { healthCalls++; },
+    });
+    expect(unknown).toMatchObject({status:"unavailable", provider_results:[{status:"failed", error:{code:"OCR_PROVIDER_UNSUPPORTED"}}]});
+    expect(existsSync(launches)).toBe(false);
+    expect(healthCalls).toBe(0);
+    const mixedContext = () => {
+      const value = configuredContext(["antigravity/flash", "codex/luna"], executable);
+      value.providerConfig.providers["antigravity/flash"].allow_host_state = true;
+      return value;
+    };
+    const mixed = await runConfiguredOcrHostReview({request:input, packet:configuredPacket()}, {trustedContext:mixedContext()});
+    expect(mixed.status).toBe("available-with-failures");
+    expect(mixed.provider_results[0]).toMatchObject({provider:"antigravity/flash", status:"failed", raw_output_ref:null, error:{code:"OCR_PROVIDER_PACKET_BOUNDARY_UNAVAILABLE"}});
+    expect(mixed.provider_results[1]).toMatchObject({provider:"codex/luna", status:"completed", findings:[], usage:{input_tokens:3}});
+    expect(readFileSync(launches,"utf8").trim().split("\n").map(line => JSON.parse(line))).toEqual([{adapter:"codex"}]);
+    writeFileSync(failCodex, "owned failure requested\n");
+    const failed = await runConfiguredOcrHostReview({request:input, packet:configuredPacket()}, {trustedContext:mixedContext()});
+    expect(failed).toMatchObject({status:"unavailable", provider_results:[
+      {provider:"antigravity/flash", status:"failed", error:{code:"OCR_PROVIDER_PACKET_BOUNDARY_UNAVAILABLE"}},
+      {provider:"codex/luna", status:"failed", error:{code:"OCR_PROVIDER_EXIT_NONZERO"}},
+    ]});
+    expect(readFileSync(launches,"utf8").trim().split("\n").map(line => JSON.parse(line))).toEqual([{adapter:"codex"},{adapter:"codex"}]);
   });
 
   it("reports live child liveness during silence and the last real output after progress", async () => {
