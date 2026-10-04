@@ -44,6 +44,80 @@ afterEach(() => {
   while (roots.length) rmSync(roots.pop(), { recursive: true, force: true });
 });
 
+// Owned CLI executes the real generated hook/MCP guard. Installed native capability
+// is evidenced separately; this test does not run models or claim OS isolation.
+function ownedPacketCli(root) {
+  const executable = join(root, "owned-packet-cli"), launches = join(root, "launches.jsonl");
+  const outside = join(root, "outside.txt"), skipGuard = join(root, "skip-guard"), hold = join(root, "hold"), failCodex = join(root, "fail-codex");
+  writeFileSync(outside, "OWNED_OUTSIDE_MUST_NOT_BE_READ\n");
+  writeFileSync(executable, String.raw`#!/usr/bin/env node
+const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),crypto=require('node:crypto');
+const {spawn,spawnSync}=require('node:child_process'),readline=require('node:readline');
+const root=${JSON.stringify(root)},outside=${JSON.stringify(outside)},launches=${JSON.stringify(launches)};
+const args=process.argv.slice(2),cwd=fs.realpathSync(process.cwd());
+const adapter=args[0]==='exec'?'codex':args.includes('--agent-file')?'kimi':'antigravity';
+const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
+const session=adapter==='kimi'?'owned-kimi-packet':'owned-ag-packet';
+const report={adapter,cwd,pid:process.pid,denied:[]};
+function finished(){fs.appendFileSync(launches,JSON.stringify(report)+'\n');
+ if(adapter==='kimi')process.stdout.write(JSON.stringify({role:'meta',type:'session.resume_hint',session_id:session})+'\n');
+ if(fs.existsSync(path.join(root,'hold'))){process.on('SIGTERM',()=>{});setInterval(()=>{},1000);return;}
+ if(adapter==='kimi')process.stdout.write(JSON.stringify({role:'assistant',content:JSON.stringify({findings:[]})})+'\n');
+ else{process.stdout.write(JSON.stringify({event:'init',conversation_id:session})+'\n');process.stdout.write(JSON.stringify({event:'result',result:{conversation_id:session,status:'SUCCESS',response:JSON.stringify({findings:[]}),usage:{input_tokens:3}}})+'\n');}}
+async function main(){
+ if(adapter==='codex'){
+  assert(args.includes('--ignore-user-config')&&args.includes('--ignore-rules')&&args.includes('--strict-config'));
+  assert(args.includes('shell_environment_policy.inherit="none"'));
+  assert(args.some(x=>x.startsWith('permissions.wh_ocr=')&&x.includes('\":root\"=\"deny\"')&&x.includes(JSON.stringify(cwd)+'=\"read\"')));
+  assert.equal(process.env.CODEX_APP_TOOLS_PIPE_PATH,undefined);
+  fs.appendFileSync(launches,JSON.stringify(report)+'\n');
+  if(fs.existsSync(path.join(root,'fail-codex'))){process.stderr.write('owned Codex failure\n');process.exitCode=7;return;}
+  process.stdout.write(JSON.stringify({type:'item.completed',item:{type:'agent_message',text:JSON.stringify({findings:[]})}})+'\n');process.stdout.write(JSON.stringify({type:'turn.completed',usage:{input_tokens:3}})+'\n');return;
+ }
+ if(fs.existsSync(path.join(root,'skip-guard'))){finished();return;}
+ const alias=path.join(cwd,'owned-unlisted-alias');fs.symlinkSync(outside,alias);
+ if(adapter==='antigravity'){
+  assert(args.includes('--new-project')&&args.includes('--disable-slash-commands'));
+  const config=JSON.parse(fs.readFileSync('.agents/hooks.json','utf8'))['workflowhub-packet-reader'];
+  assert.equal(config.PreToolUse[0].matcher,'*');assert.equal(config.PostToolUse[0].matcher,'*');
+  const hook=path.join(cwd,'.ocr-ag-guard/hook.cjs');
+  function call(phase,name,a){const child=spawnSync(process.execPath,[hook,phase],{input:JSON.stringify({conversationId:session,toolCall:{name,args:a}}),encoding:'utf8',timeout:3000});assert.equal(child.status,0,child.stderr);return JSON.parse(child.stdout);}
+  for(const file of ['review-prompt.md','src/reviewed.mjs']){const AbsolutePath=path.join(cwd,file);assert.equal(call('pre','view_file',{AbsolutePath}).decision,'allow');const bytes=fs.readFileSync(AbsolutePath);report[file]=hash(bytes);call('post','view_file',{AbsolutePath});}
+  for(const AbsolutePath of [outside,alias,path.join(cwd,'undeclared.txt')]){assert.equal(call('pre','view_file',{AbsolutePath}).decision,'deny');report.denied.push('view:'+AbsolutePath);}
+  for(const name of ['write_to_file','run_command','read_url_content','Agent','UnknownTool']){assert.equal(call('pre',name,{}).decision,'deny');report.denied.push(name);}
+  assert.equal(fs.existsSync(path.join(cwd,'write-canary.txt')),false);finished();return;
+ }
+ const agent=args[args.indexOf('--agent-file')+1],skills=args[args.indexOf('--skills-dir')+1];
+ assert.equal(agent,path.join(cwd,'.ocr-kimi-read/agent.md'));assert(fs.readFileSync(agent,'utf8').includes('tools: [mcp__card06_packet__Read]'));assert.deepEqual(fs.readdirSync(skills),[]);
+ const config=JSON.parse(fs.readFileSync('.kimi-code/mcp.json','utf8')).mcpServers.card06_packet;
+ const child=spawn(config.command,config.args,{cwd:config.cwd,stdio:['pipe','pipe','pipe']});report.mcp_pid=child.pid;
+ const waiting=new Map();let next=0,stderr='';child.stderr.on('data',b=>{stderr+=b;});
+ const closed=new Promise(resolve=>child.once('close',code=>{for(const waiter of waiting.values())waiter.reject(Error('MCP closed: '+stderr));resolve(code);}));
+ readline.createInterface({input:child.stdout}).on('line',line=>{const response=JSON.parse(line),waiter=waiting.get(response.id);if(waiter){waiting.delete(response.id);waiter.resolve(response);}});
+ function rpc(method,params){return new Promise((resolve,reject)=>{const id=++next;waiting.set(id,{resolve,reject});child.stdin.write(JSON.stringify({jsonrpc:'2.0',id,method,params})+'\n');});}
+ const read=async a=>(await rpc('tools/call',{name:'Read',arguments:a})).result;
+ try{
+  const init=await rpc('initialize',{protocolVersion:'2024-11-05'});assert(init.result.capabilities.tools);
+  const tools=(await rpc('tools/list',{})).result.tools;assert.deepEqual(tools.map(x=>x.name),['Read']);
+  for(const file of ['review-prompt.md','src/reviewed.mjs',...(fs.existsSync('diff-index.json')?['diff-index.json']:[])]){
+   const original=fs.readFileSync(file),chunks=[];let offset=0,pages=0;
+   do{const response=await read({path:file,offset});assert.equal(response.isError,false);const page=JSON.parse(response.content[0].text),bytes=Buffer.from(page.content);assert.equal(page.offset,offset);assert.equal(page.bytes_returned,bytes.length);assert(bytes.length<=16384);assert.equal(page.total_bytes,original.length);assert.equal(page.sha256,hash(original));assert.equal(page.unread_before.bytes,offset);chunks.push(bytes);pages++;if(!page.has_more){assert.equal(page.unread_after.bytes,0);break;}assert(page.next_offset>offset);assert.equal(page.next_offset,offset+bytes.length);offset=page.next_offset;}while(true);
+   const joined=Buffer.concat(chunks);assert(joined.equals(original));report[file]={bytes:joined.length,sha256:hash(joined),pages};
+  }
+  for(const input of [outside,'../outside.txt','owned-unlisted-alias','undeclared.txt']){const response=await read({path:input});assert.equal(response.isError,true);assert(!JSON.stringify(response).includes('OWNED_OUTSIDE_MUST_NOT_BE_READ'));report.denied.push(input);}
+  for(const a of [{path:'review-prompt.md',offset:-1},{path:'review-prompt.md',limit:65537}]){assert.equal((await read(a)).isError,true);report.denied.push('invalid-page');}
+  for(const name of ['Write','Shell','Web','Agent','UnknownTool']){assert.equal((await rpc('tools/call',{name,arguments:{path:'review-prompt.md'}})).result.isError,true);report.denied.push(name);}
+ }finally{child.stdin.end();assert.equal(await closed,0,stderr);}
+ const trustDir=path.join(process.env.KIMI_CODE_HOME,'workspace-trust');
+ const owned=fs.readdirSync(trustDir).filter(name=>{try{return JSON.parse(fs.readFileSync(path.join(trustDir,name),'utf8')).root===cwd;}catch{return false;}});assert.equal(owned.length,1);report.trustPath=path.join(trustDir,owned[0]);assert.equal(fs.statSync(report.trustPath).nlink,1);
+ finished();
+}
+main().catch(error=>{process.stderr.write(String(error.stack||error));process.exitCode=9;});
+`, { mode: 0o700 });
+  return { executable, launches, skipGuard, hold, failCodex, outside };
+}
+
+
 describe("configured OCR direct host execution", () => {
   it("dispatches configured reviewers without requiring a host identity", async () => {
     const root = mkdtempSync(join(tmpdir(), "workflowhub-ocr-shared-source-"));
@@ -313,36 +387,36 @@ process.stdout.write(JSON.stringify({type:"turn.completed",usage:{input_tokens:3
     });
   });
 
-  it("blocks unverified Kimi before spawning while retaining a successful Codex sibling", async () => {
-    const root = mkdtempSync(join(tmpdir(), "workflowhub-ocr-native-route-"));
-    roots.push(root);
-    const executable = join(root, "owned-cli"), launches = join(root, "launches.jsonl");
-    writeFileSync(executable, `#!/usr/bin/env node
-const fs = require("node:fs");
-const adapter = process.argv[2] === "exec" ? "codex" : "kimi";
-fs.appendFileSync(${JSON.stringify(launches)},JSON.stringify({adapter})+"\\n");
-if(adapter === "codex") {
-  process.stdout.write(JSON.stringify({type:"item.completed",item:{type:"agent_message",text:JSON.stringify({findings:[]})}})+"\\n");
-  process.stdout.write(JSON.stringify({type:"turn.completed",usage:{input_tokens:3}})+"\\n");
-} else process.stdout.write(JSON.stringify({role:"assistant",content:[{type:"text",text:JSON.stringify({findings:[]})}]})+"\\n");
-`, { mode: 0o700 });
-    // Local owned fake CLI proves argv/fail-closed behavior. Native packet
-    // containment is supported separately by actual Codex exec evidence.
-    const alone = await runConfiguredOcrHostReview({ request, packet: configuredPacket() }, {
-      trustedContext: configuredContext(["kimi/coding"], executable),
-    });
-    expect(alone).toMatchObject({status:"unavailable",outcome:"failed",provider_results:[{
-      provider:"kimi/coding",status:"failed",findings:[],error:{code:"OCR_PROVIDER_PACKET_BOUNDARY_UNAVAILABLE"},raw_output_ref:null,
-    }]});
-    expect(existsSync(launches)).toBe(false);
-    const mixed = await runConfiguredOcrHostReview({ request, packet: configuredPacket() }, {
-      trustedContext: configuredContext(["kimi/coding","codex/luna"], executable),
-    });
-    expect(mixed.status).toBe("available-with-failures");
-    expect(mixed.provider_results[0]).toMatchObject({provider:"kimi/coding",status:"failed",findings:[],error:{code:"OCR_PROVIDER_PACKET_BOUNDARY_UNAVAILABLE"},raw_output_ref:null});
-    expect(mixed.provider_results[1]).toMatchObject({provider:"codex/luna",status:"completed",findings:[],usage:{input_tokens:3}});
-    expect(readFileSync(launches,"utf8").trim().split("\n").map(line=>JSON.parse(line))).toEqual([{adapter:"codex"}]);
-  });
+  it("uses the generated Kimi MCP packet reader for exact paged reads and rejects default-denied tools while preserving a Codex sibling", async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-owned-kimi-"))); roots.push(root);
+    const nativeHome = join(root, "kimi-home"); mkdirSync(nativeHome); mkdirSync(join(nativeHome, "workspace-trust"));
+    const sentinel = join(nativeHome, "workspace-trust", "owned-preexisting"); writeFileSync(sentinel, "original trust bytes\n");
+    const cli = ownedPacketCli(root), previous = process.env.KIMI_CODE_HOME; process.env.KIMI_CODE_HOME = nativeHome;
+    mkdirSync(join(root,"quality","reviews"),{recursive:true});
+    const raw = new Map(), sink = async (_hint, bytes, metadata) => { const saved=await appendRecord(join(root,"quality","reviews"),metadata.provider.replaceAll("/","-")+"-"+metadata.stream,"output",bytes);raw.set(metadata.provider + ":" + metadata.stream,readFileSync(saved));return relative(root,saved).split("\\").join("/"); };
+    try {
+      const packet = configuredPacket(), large = Buffer.from(JSON.stringify({ fixture: "CJK三\n".repeat(80000) }));
+      writeFileSync(join(packet.root, "diff-index.json"), large); packet.preview.reviewable_files.push({path:"diff-index.json"});
+      packet.manifest.push({path:"diff-index.json",bytes:large.length,sha256:createHash("sha256").update(large).digest("hex")});
+      const alone = await runConfiguredOcrHostReview({request,packet},{trustedContext:configuredContext(["kimi/coding"],cli.executable),rawOutputSink:sink});
+      expect(alone).toMatchObject({status:"available",provider_results:[{provider:"kimi/coding",status:"completed",session_id:"owned-kimi-packet",findings:[],parse_outcome:"ok"}]});
+      const report = JSON.parse(readFileSync(cli.launches,"utf8").trim());
+      expect(report["diff-index.json"]).toMatchObject({bytes:large.length,sha256:createHash("sha256").update(large).digest("hex")});
+      expect(report["diff-index.json"].pages).toBeGreaterThan(1); expect(report.denied).toHaveLength(11);
+      expect(raw.get("kimi/coding:stdout").toString()).toContain('"session_id":"owned-kimi-packet"');
+      expect(existsSync(report.cwd)).toBe(false); expect(existsSync(report.trustPath)).toBe(false);
+      expect(() => process.kill(report.pid,0)).toThrow(); expect(() => process.kill(report.mcp_pid,0)).toThrow();
+      expect(readFileSync(sentinel,"utf8")).toBe("original trust bytes\n");
+      const mixed = await runConfiguredOcrHostReview({request,packet:configuredPacket()},{trustedContext:configuredContext(["kimi/coding","codex/luna"],cli.executable)});
+      expect(mixed.status,JSON.stringify(mixed.provider_results.map(x=>({provider:x.provider,error:x.error})))).toBe("available"); expect(mixed.provider_results.map(x=>x.status)).toEqual(["completed","completed"]);
+      expect(mixed.provider_results[1].usage).toEqual({input_tokens:3});
+      writeFileSync(cli.skipGuard,"skip");
+      const rejected = await runConfiguredOcrHostReview({request,packet:configuredPacket()},{trustedContext:configuredContext(["kimi/coding"],cli.executable)});
+      expect(rejected).toMatchObject({status:"unavailable",provider_results:[{status:"failed",error:{code:"OCR_PROVIDER_PACKET_GUARD_FAILED"}}]});
+      expect(readdirSync(join(nativeHome,"workspace-trust"))).toEqual(["owned-preexisting"]);
+    } finally {if(previous===undefined)delete process.env.KIMI_CODE_HOME;else process.env.KIMI_CODE_HOME=previous;}
+  },15000);
+
 
   it("dispatches every configured provider even when sources overlap", async () => {
     let calls = 0;
@@ -375,63 +449,53 @@ if(adapter === "codex") {
     expect(calls).toBe(0);
   });
 
-  it("blocks unverified Antigravity despite host-state claims and preserves Codex sibling outcomes", async () => {
-    const root = mkdtempSync(join(tmpdir(), "workflowhub-ocr-agy-boundary-"));
-    roots.push(root);
-    const executable = join(root, "owned-cli"), launches = join(root, "launches.jsonl"), failCodex = join(root, "fail-codex");
-    writeFileSync(executable, String.raw`#!/usr/bin/env node
-const fs = require("node:fs");
-const args = process.argv.slice(2);
-const adapter = args[0] === "exec" ? "codex" : "antigravity";
-fs.appendFileSync(${JSON.stringify(launches)}, JSON.stringify({adapter}) + "\n");
-if (adapter !== "codex") process.exit(9);
-const cwd = args[args.indexOf("-C") + 1];
-if (!args.includes("--ignore-user-config") || !args.includes("--ignore-rules") || !args.includes("--strict-config")
-    || !args.includes('shell_environment_policy.inherit="none"')
-    || !args.some(arg => arg.startsWith("permissions.wh_ocr=") && arg.includes('\":root\"=\"deny\"') && arg.includes(JSON.stringify(cwd) + '=\"read\"'))) process.exit(8);
-if (fs.existsSync(${JSON.stringify(failCodex)})) { process.stderr.write("owned Codex failure\n"); process.exit(7); }
-process.stdout.write(JSON.stringify({type:"item.completed",item:{type:"agent_message",text:JSON.stringify({findings:[]})}}) + "\n");
-process.stdout.write(JSON.stringify({type:"turn.completed",usage:{input_tokens:3}}) + "\n");
-`, {mode:0o700});
-    const input = { ...request, stage:"verify-code", review_scope:null, phase_id:null };
-    let healthCalls = 0;
-    for (const acknowledged of [undefined, false, true]) {
-      const trustedContext = configuredContext(["antigravity/flash"], executable);
-      trustedContext.providerConfig.providers["antigravity/flash"].allow_host_state = acknowledged;
-      const alone = await runConfiguredOcrHostReview({request:input, packet:configuredPacket()}, {
-        trustedContext, onProviderHealth:() => { healthCalls++; },
-      });
-      expect(alone).toMatchObject({status:"unavailable", outcome:"failed", provider_results:[{
-        provider:"antigravity/flash", status:"failed", findings:[], raw_output_ref:null,
-        error:{code:"OCR_PROVIDER_PACKET_BOUNDARY_UNAVAILABLE"},
-      }]});
-      expect(existsSync(launches)).toBe(false);
-      expect(healthCalls).toBe(0);
+  it("uses the generated Antigravity hook for positive packet reads and default-denied tools without weakening Codex sibling outcomes", async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-owned-ag-"))); roots.push(root);
+    const cli = ownedPacketCli(root), input = {...request,stage:"verify-code",review_scope:null,phase_id:null};
+    mkdirSync(join(root,"quality","reviews"),{recursive:true});
+    for(const acknowledged of [undefined,false,true]){
+      const context = configuredContext(["antigravity/flash"],cli.executable);context.providerConfig.providers["antigravity/flash"].allow_host_state=acknowledged;
+      const raw = new Map();
+      const result = await runConfiguredOcrHostReview({request:input,packet:configuredPacket()},{trustedContext:context,rawOutputSink:async(_hint,bytes,meta)=>{const saved=await appendRecord(join(root,"quality","reviews"),meta.stream,"output",bytes);raw.set(meta.stream,readFileSync(saved));return relative(root,saved).split("\\").join("/");}});
+      expect(result).toMatchObject({status:"available",provider_results:[{provider:"antigravity/flash",status:"completed",session_id:"owned-ag-packet",findings:[],parse_outcome:"ok"}]});
+      const report = JSON.parse(readFileSync(cli.launches,"utf8").trim().split("\n").at(-1));
+      expect(report.denied).toHaveLength(8); expect(raw.get("stdout").toString()).toContain('"conversation_id":"owned-ag-packet"');
+      expect(existsSync(report.cwd)).toBe(false);expect(()=>process.kill(report.pid,0)).toThrow();
     }
-    const unknown = await runConfiguredOcrHostReview({request:input, packet:configuredPacket()}, {
-      trustedContext:configuredContext(["unknown/reviewer"], executable), onProviderHealth:() => { healthCalls++; },
-    });
-    expect(unknown).toMatchObject({status:"unavailable", provider_results:[{status:"failed", error:{code:"OCR_PROVIDER_UNSUPPORTED"}}]});
-    expect(existsSync(launches)).toBe(false);
-    expect(healthCalls).toBe(0);
-    const mixedContext = () => {
-      const value = configuredContext(["antigravity/flash", "codex/luna"], executable);
-      value.providerConfig.providers["antigravity/flash"].allow_host_state = true;
-      return value;
-    };
-    const mixed = await runConfiguredOcrHostReview({request:input, packet:configuredPacket()}, {trustedContext:mixedContext()});
-    expect(mixed.status).toBe("available-with-failures");
-    expect(mixed.provider_results[0]).toMatchObject({provider:"antigravity/flash", status:"failed", raw_output_ref:null, error:{code:"OCR_PROVIDER_PACKET_BOUNDARY_UNAVAILABLE"}});
-    expect(mixed.provider_results[1]).toMatchObject({provider:"codex/luna", status:"completed", findings:[], usage:{input_tokens:3}});
-    expect(readFileSync(launches,"utf8").trim().split("\n").map(line => JSON.parse(line))).toEqual([{adapter:"codex"}]);
-    writeFileSync(failCodex, "owned failure requested\n");
-    const failed = await runConfiguredOcrHostReview({request:input, packet:configuredPacket()}, {trustedContext:mixedContext()});
-    expect(failed).toMatchObject({status:"unavailable", provider_results:[
-      {provider:"antigravity/flash", status:"failed", error:{code:"OCR_PROVIDER_PACKET_BOUNDARY_UNAVAILABLE"}},
-      {provider:"codex/luna", status:"failed", error:{code:"OCR_PROVIDER_EXIT_NONZERO"}},
-    ]});
-    expect(readFileSync(launches,"utf8").trim().split("\n").map(line => JSON.parse(line))).toEqual([{adapter:"codex"},{adapter:"codex"}]);
-  });
+    const before = readFileSync(cli.launches,"utf8");let unknownHealth=0;
+    const unknown = await runConfiguredOcrHostReview({request:input,packet:configuredPacket()},{trustedContext:configuredContext(["unknown/reviewer"],cli.executable),onProviderHealth:()=>{unknownHealth++;}});
+    expect(unknown).toMatchObject({status:"unavailable",provider_results:[{status:"failed",error:{code:"OCR_PROVIDER_UNSUPPORTED"}}]});
+    expect(readFileSync(cli.launches,"utf8")).toBe(before);expect(unknownHealth).toBe(0);
+    const mixed = await runConfiguredOcrHostReview({request:input,packet:configuredPacket()},{trustedContext:configuredContext(["antigravity/flash","codex/luna"],cli.executable)});
+    expect(mixed.status,JSON.stringify(mixed.provider_results.map(x=>({provider:x.provider,error:x.error})))).toBe("available");expect(mixed.provider_results[1]).toMatchObject({status:"completed",usage:{input_tokens:3}});
+    writeFileSync(cli.failCodex,"owned failure\n");
+    const failed = await runConfiguredOcrHostReview({request:input,packet:configuredPacket()},{trustedContext:configuredContext(["antigravity/flash","codex/luna"],cli.executable)});
+    expect(failed).toMatchObject({status:"available-with-failures",provider_results:[{status:"completed"},{status:"failed",error:{code:"OCR_PROVIDER_EXIT_NONZERO"}}]});
+    writeFileSync(cli.skipGuard,"skip");
+    const rejected = await runConfiguredOcrHostReview({request:input,packet:configuredPacket()},{trustedContext:configuredContext(["antigravity/flash"],cli.executable)});
+    expect(rejected).toMatchObject({status:"unavailable",provider_results:[{status:"failed",error:{code:"OCR_PROVIDER_PACKET_GUARD_FAILED"}}]});
+  },15000);
+
+  it.skipIf(process.platform === "win32")("reaps a Kimi owned native process, packet and only its external trust entry after owner loss", async () => {
+    const root=realpathSync(mkdtempSync(join(tmpdir(),"workflowhub-owned-kimi-loss-")));roots.push(root);
+    const nativeHome=join(root,"kimi-home");mkdirSync(nativeHome);mkdirSync(join(nativeHome,"workspace-trust"));
+    const sentinel=join(nativeHome,"workspace-trust","owned-preexisting");writeFileSync(sentinel,"original trust bytes\n");
+    const cli=ownedPacketCli(root);writeFileSync(cli.hold,"hold");
+    const driver=`import{runConfiguredOcrHostReview}from ${JSON.stringify(new URL("../../runtime/review/ocr-delegation-adapter.mjs",import.meta.url).href)};await runConfiguredOcrHostReview({request:${JSON.stringify(request)},packet:${JSON.stringify(configuredPacket())}},{trustedContext:${JSON.stringify(configuredContext(["kimi/coding"],cli.executable))}});`;
+    const owner=spawn(process.execPath,["--input-type=module","-e",driver],{env:{...process.env,KIMI_CODE_HOME:nativeHome},stdio:["ignore","ignore","pipe"]});let errors="",report=null;owner.stderr.on("data",b=>{errors+=b;});
+    const ownerClosed=new Promise(resolve=>owner.once("close",resolve));
+    const alive=pid=>{try{process.kill(pid,0);return true;}catch(error){if(error.code==="ESRCH")return false;throw error;}};
+    try{
+      for(let n=0;n<200&&!existsSync(cli.launches);n++)await new Promise(resolve=>setTimeout(resolve,25));
+      expect(existsSync(cli.launches),errors).toBe(true);report=JSON.parse(readFileSync(cli.launches,"utf8").trim());
+      expect(alive(report.pid)).toBe(true);expect(existsSync(report.cwd)).toBe(true);expect(existsSync(report.trustPath)).toBe(true);
+      expect(relative(report.cwd,report.trustPath)).toMatch(/^\.\./);
+      owner.kill("SIGKILL");await ownerClosed;
+      for(let n=0;n<240&&(alive(report.pid)||existsSync(report.cwd)||existsSync(report.trustPath));n++)await new Promise(resolve=>setTimeout(resolve,25));
+      expect(alive(report.pid)).toBe(false);expect(existsSync(report.cwd)).toBe(false);expect(existsSync(report.trustPath)).toBe(false);
+      expect(readFileSync(sentinel,"utf8")).toBe("original trust bytes\n");
+    }finally{if(owner.exitCode===null&&owner.signalCode===null){owner.kill("SIGKILL");await ownerClosed;}if(report&&alive(report.pid))process.kill(report.pid,"SIGKILL");}
+  },15000);
 
   it("reports live child liveness during silence and the last real output after progress", async () => {
     const root = mkdtempSync(join(tmpdir(), "workflowhub-ocr-health-"));
