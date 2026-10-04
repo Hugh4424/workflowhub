@@ -11,8 +11,6 @@ import { parseReviewerOutput } from "./review-output.mjs";
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const DEFAULT_EXECUTOR_CANCELLATION_GRACE_MS = 30_000;
 const GIT_OID = /^[a-f0-9]{40,64}$/;
-export const REVIEW_PROVIDER_HOST_DEADLINE_MS = 600_000;
-const OCR_PROVIDER_DEADLINE_MS = REVIEW_PROVIDER_HOST_DEADLINE_MS;
 const REQUIRED_AGENT_TOOL_PROHIBITION = "Do not invoke Agent, subagent, child-agent, or other agent tools.";
 const REQUIRED_WAIT_POLL_PROHIBITION = "Do not wait for or poll agents, sessions, or processes; do not invoke wait/poll tools.";
 /** Inspect the current PATH without dispatching a review or changing configuration. */
@@ -1404,27 +1402,16 @@ provider.once("close", (code, signal) => {
 });
 `;
 
-function nativeStopBeforeSpawn(signal, deadlineAt, getAbortObservedAt) {
-  if (deadlineAt === null) return signal?.aborted ? { status: "cancelled", output: null, timing: null, usage: null,
-    error: { code: "OCR_PROVIDER_CANCELLED", message: "native cancellation was observed before dispatch" } } : null;
-  const now = Date.now(), known = getAbortObservedAt?.();
-  const observed = Number.isSafeInteger(known) && known <= now ? known : now;
-  if (signal?.aborted && observed < deadlineAt) return { status: "cancelled", output: null, timing: null, usage: null,
-    error: { code: "OCR_PROVIDER_CANCELLED", message: "native cancellation was observed before its host deadline" } };
-  if (now >= deadlineAt) return { status: "failed", output: null, timing: null, usage: null,
-    error: { code: "OCR_PROVIDER_TIMEOUT", message: "provider exceeded the fixed600000 host deadline before native dispatch" } };
-  if (signal?.aborted) return { status: "cancelled", output: null, timing: null, usage: null,
+function nativeStopBeforeSpawn(signal) {
+  if (!signal?.aborted) return null;
+  return { status: "cancelled", output: null, timing: null, usage: null,
     error: { code: "OCR_PROVIDER_CANCELLED", message: "native cancellation was observed before dispatch" } };
-  return null;
 }
 
-function runOcrProviderProcess({ provider, profile, cwd, signal, onProviderHealth, healthPollMs = 5_000, guardianCleanup = null, hostStartedAt = null, getAbortObservedAt = null }) {
+function runOcrProviderProcess({ provider, profile, cwd, signal, onProviderHealth, healthPollMs = 5_000, guardianCleanup = null }) {
   const startedAt = Date.now();
-  // Direct code review follows the native terminal/caller/owner lifecycle.
-  // Only the existing document-flow caller supplies its shared host budget.
-  const deadlineStart = hostStartedAt;
-  if (deadlineStart !== null && (!Number.isSafeInteger(deadlineStart) || deadlineStart > startedAt)) throw new TypeError("native provider deadline start must be an observed past host timestamp");
-  const deadlineAt = deadlineStart === null ? null : deadlineStart + OCR_PROVIDER_DEADLINE_MS;
+  // A direct provider process waits for a terminal exit or an explicit
+  // cancellation. No WorkflowHub wall-clock bound is imposed on that wait.
   let plan;
   try { plan = ocrProviderPlan(provider, profile, { cwd }); }
   catch (error) {
@@ -1435,7 +1422,7 @@ function runOcrProviderProcess({ provider, profile, cwd, signal, onProviderHealt
       usage: null,
     });
   }
-  const stopped = nativeStopBeforeSpawn(signal, deadlineAt, getAbortObservedAt);
+  const stopped = nativeStopBeforeSpawn(signal);
   if (stopped) return Promise.resolve(stopped);
   return new Promise((resolveRun) => {
     let child;
@@ -1471,7 +1458,6 @@ function runOcrProviderProcess({ provider, profile, cwd, signal, onProviderHealt
     let spawnError = null;
     let killTimer = null;
     let healthTimer = null;
-    let deadlineTimer = null;
     let stopCause = null;
     let providerPid = null;
     let providerExit = null;
@@ -1514,26 +1500,12 @@ function runOcrProviderProcess({ provider, profile, cwd, signal, onProviderHealt
       terminate(kind);
     };
     const onAbort = () => {
-      // Preserve the first observed stop: an earlier explicit cancellation is
-      // not reclassified when its cleanup crosses the transport deadline.
-      const now = Date.now(), observed = getAbortObservedAt?.();
-      const abortedAt = Number.isSafeInteger(observed) && observed <= now ? observed : now;
-      stopCause ??= deadlineAt !== null && abortedAt >= deadlineAt ? "timeout" : "cancelled";
-      if (deadlineTimer) clearTimeout(deadlineTimer);
+      // Preserve the first observed stop: an explicit cancellation is not
+      // reclassified by anything observed after it.
+      stopCause ??= "cancelled";
       stopProvider("SIGTERM");
       if (process.platform === "win32") killTimer ??= setTimeout(() => terminate("SIGKILL"), 2_000);
     };
-    // Preserve only the existing document request's shared fixed budget.
-    // Direct code review has no additional WorkflowHub wall-clock termination.
-    if (deadlineAt !== null) {
-      deadlineTimer = setTimeout(() => {
-        if (settled || stopCause === "cancelled") return;
-        stopCause ??= "timeout";
-        stopProvider("SIGTERM");
-        killTimer ??= setTimeout(() => stopProvider("SIGKILL"), 2_000);
-      }, Math.max(0, deadlineAt - Date.now()));
-      deadlineTimer.unref?.();
-    }
     const capture = (stream, bytes) => {
       if (stream === "stdout") stdoutBytes += bytes.length;
       else stderrBytes += bytes.length;
@@ -1551,7 +1523,6 @@ function runOcrProviderProcess({ provider, profile, cwd, signal, onProviderHealt
       if (!overflow && stdoutBytes + stderrBytes > 16 * 1024 * 1024) {
         overflow = true;
         stopCause ??= "output_limit";
-        if (deadlineTimer) clearTimeout(deadlineTimer);
         terminate("SIGTERM");
         if (process.platform === "win32") killTimer ??= setTimeout(() => terminate("SIGKILL"), 2_000);
       }
@@ -1563,7 +1534,6 @@ function runOcrProviderProcess({ provider, profile, cwd, signal, onProviderHealt
       if (message?.ocr_provider_spawn_error) {
         spawnError = { code: message.ocr_provider_spawn_error };
         stopCause ??= "spawn_failed";
-        if (deadlineTimer) clearTimeout(deadlineTimer);
       }
       if (message?.ocr_provider_exit) providerExit = message.ocr_provider_exit;
       if (message?.ocr_provider_diagnostic) supervisorDiagnostics.push(message.ocr_provider_diagnostic);
@@ -1580,26 +1550,20 @@ function runOcrProviderProcess({ provider, profile, cwd, signal, onProviderHealt
     child.once("error", (error) => {
       spawnError = error;
       stopCause ??= "spawn_failed";
-      if (deadlineTimer) clearTimeout(deadlineTimer);
     });
     child.once("close", (exitCode, exitSignal) => {
       settled = true;
       if (killTimer) clearTimeout(killTimer);
       if (healthTimer) clearInterval(healthTimer);
-      if (deadlineTimer) clearTimeout(deadlineTimer);
       signal?.removeEventListener("abort", onAbort);
       const completedAt = Date.now();
-      // Only document-flow expiry remains subject to its shared host budget.
-      // A direct native terminal is not relabeled by elapsed host time.
-      if (deadlineAt !== null && stopCause === null && completedAt >= deadlineAt) stopCause = "timeout";
-      const deadlineExceeded = stopCause === "timeout";
       const stdout = Buffer.concat(stdoutChunks);
       const stderr = Buffer.concat(stderrChunks);
       const stderrText = stderr.toString("utf8");
       const printTimeout = plan.adapter === "antigravity" && /\bprint timeout\b/i.test(stderrText);
       const status = stopCause === "cancelled" ? "cancelled"
         : stopCause === null && exitCode === 0 && !overflow && !spawnError && !printTimeout && !healthObserverError ? "completed" : "failed";
-      const code = ({ timeout: "OCR_PROVIDER_TIMEOUT", cancelled: "OCR_PROVIDER_CANCELLED",
+      const code = ({ cancelled: "OCR_PROVIDER_CANCELLED",
         output_limit: "OCR_PROVIDER_OUTPUT_LIMIT", spawn_failed: "OCR_PROVIDER_SPAWN_FAILED" })[stopCause]
         ?? (overflow ? "OCR_PROVIDER_OUTPUT_LIMIT" : spawnError ? "OCR_PROVIDER_SPAWN_FAILED"
           : printTimeout ? "OCR_PROVIDER_TIMEOUT" : healthObserverError ? "OCR_HEALTH_OBSERVER_FAILED" : "OCR_PROVIDER_EXIT_NONZERO");
@@ -1613,15 +1577,11 @@ function runOcrProviderProcess({ provider, profile, cwd, signal, onProviderHealt
           cancelled: signal?.aborted === true, captured_output_limited: overflow,
           stdout_bytes: stdoutBytes, stderr_bytes: stderrBytes },
         process_diagnostics: supervisorDiagnostics,
-        process_outcome: spawnError ? "launch_failure" : deadlineExceeded || printTimeout ? "timeout"
+        process_outcome: spawnError ? "launch_failure" : printTimeout ? "timeout"
           : providerExit?.signal || exitSignal ? null
             : (providerExit ? providerExit.code : exitCode) === 0 ? "ok" : "exit_nonzero",
         error: status === "completed" ? null : { code, message: safeText(
-          deadlineExceeded ? ["provider exceeded the fixed 600000 ms host deadline",
-            healthObserverError ? `observed host health error: ${healthObserverError}` : null,
-            spawnError?.code ? `observed spawn error: ${spawnError.code}` : null,
-            stderrText.trim() ? `provider stderr: ${stderrText.trim()}` : null].filter(Boolean).join("; ")
-            : healthObserverError || spawnError?.code || stderrText.trim() || exitSignal || code) },
+          healthObserverError || spawnError?.code || stderrText.trim() || exitSignal || code) },
         timing: { started_at_ms: startedAt, completed_at_ms: completedAt, duration_ms: completedAt - startedAt },
         usage: null,
         retry: { count: 0, progress_events: progressEvents },
@@ -1634,19 +1594,15 @@ function runOcrProviderProcess({ provider, profile, cwd, signal, onProviderHealt
 }
 
 /** Dispatch each selected provider directly from the OCR packet; no review broker participates. */
-/** Existing bounded native process, reused by the wh-review document client. */
-export async function runPacketBoundCodexReview({ provider, profile, files, prompt, signal = null, hostStartedAt = null, getAbortObservedAt = null } = {}) {
+/** Existing unbounded native process, reused by the wh-review native packet fallback. */
+export async function runPacketBoundCodexReview({ provider, profile, files, prompt, signal = null } = {}) {
   if (typeof provider !== "string" || provider.split("/", 1)[0] !== "codex"
       || !Array.isArray(files) || files.length === 0 || typeof prompt !== "string" || !prompt) {
     throw new TypeError("Codex provider, complete packet files and review prompt are required");
   }
-  if (getAbortObservedAt !== null && typeof getAbortObservedAt !== "function") throw new TypeError("native abort observation must be an internal callback");
-  // Only document callers supply their observed shared request start.
-  // Code fallback, like direct OCR, has no extra WorkflowHub elapsed deadline.
-  const deadlineStart = hostStartedAt;
-  if (deadlineStart !== null && (!Number.isSafeInteger(deadlineStart) || deadlineStart > Date.now())) throw new TypeError("native provider deadline start must be an observed past host timestamp");
-  const deadlineAt = deadlineStart === null ? null : deadlineStart + OCR_PROVIDER_DEADLINE_MS;
-  const stopped = nativeStopBeforeSpawn(signal, deadlineAt, getAbortObservedAt);
+  // No WorkflowHub elapsed deadline: the native process ends on a terminal exit
+  // or on an explicit cancellation.
+  const stopped = nativeStopBeforeSpawn(signal);
   if (stopped) return stopped;
   const material = createOcrHostMaterials({ manifest: files.map(file => ({ path: file.path })) }, files);
   let guardianCleanup = null, member = null, preparationError = null;
@@ -1662,8 +1618,8 @@ export async function runPacketBoundCodexReview({ provider, profile, files, prom
       guardianCleanup = { root: material.bundleRoot, realRoot: realpathSync(material.bundleRoot),
         dev: stat.dev.toString(), ino: stat.ino.toString(), markerDev: markerStat.dev.toString(), markerIno: markerStat.ino.toString(), marker };
     }
-    const afterPreparation = nativeStopBeforeSpawn(signal, deadlineAt, getAbortObservedAt);
-    const result = afterPreparation ?? await runOcrProviderProcess({ provider, profile, cwd: material.bundleRoot, signal, guardianCleanup, hostStartedAt: deadlineStart, getAbortObservedAt });
+    const afterPreparation = nativeStopBeforeSpawn(signal);
+    const result = afterPreparation ?? await runOcrProviderProcess({ provider, profile, cwd: material.bundleRoot, signal, guardianCleanup });
     // Observed thread identity is provenance, independent of terminal success.
     member = { ...result, session_id: result.session_id ?? observedCodexSessionId(result.raw_output?.stdout) };
     if (result.status === "completed") try {

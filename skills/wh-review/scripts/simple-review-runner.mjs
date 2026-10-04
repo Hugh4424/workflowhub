@@ -1240,14 +1240,18 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
   const blockedProviderResults = [...(preflight?.blocked_provider_results ?? [])];
   const selectedProviders = providerSelection.providers;
   const blockedProviderSet = new Set(blockedProviderResults.map((item) => item.provider));
-  // Default host transports dispatch only a provider with a demonstrated
-  // packet read root. Keep unsupported selected members as unavailable facts.
+  // Only a declared native packet fallback dispatches from this host process,
+  // so only that route needs a demonstrated packet read root per provider.
+  // A document review is the 3rd-review broker's managed session: the broker
+  // owns provider dispatch, packet delivery and native filesystem isolation, so
+  // its selected members must never be blocked by a local boundary check.
   // Private injected transports retain their own execution responsibility;
   // parser/fake fixtures do not demonstrate native filesystem isolation.
   const nativeClient = dependencies.client ?? new ReviewProviderClient({ command: trusted.command, config: trusted.config });
   for (const provider of selectedProviders) {
     const adapter = providerAdapter(provider);
-    if (!(nativeClient instanceof ReviewProviderClient) || nativeClient.transportKind === "injected"
+    if (dependencies.nativePacketFallback !== true
+        || !(nativeClient instanceof ReviewProviderClient) || nativeClient.transportKind === "injected"
         || nativeClient.supportsPacketBoundProvider(provider) || blockedProviderSet.has(provider)) continue;
     blockedProviderSet.add(provider);
     blockedProviderResults.push({ provider, status: "blocked",
@@ -1312,6 +1316,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
           reviewMode: route.mode,
           reviewFlow: canonicalInput.review_flow ?? canonicalInput.reviewFlow ?? null,
           surface: canonicalInput.surface ?? (["build-code", "verify-code"].includes(canonicalInput.stage) ? "code" : "document"),
+          nativePacketFallback: dependencies.nativePacketFallback === true,
           ...(signal === null ? {} : { signal }),
         });
         if (lifecycle.state !== "terminal") {
@@ -1399,6 +1404,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
           // the unmanaged path silently downgrade the governed flow.
           reviewFlow: canonicalInput.review_flow ?? canonicalInput.reviewFlow ?? null,
           surface: canonicalInput.surface ?? (["build-code", "verify-code"].includes(canonicalInput.stage) ? "code" : "document"),
+          nativePacketFallback: dependencies.nativePacketFallback === true,
           strictProtocol: true,
           ...pairFields(pair),
           ...(signal === null ? {} : { signal }),

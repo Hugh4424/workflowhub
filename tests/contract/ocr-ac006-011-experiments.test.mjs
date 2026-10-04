@@ -85,6 +85,10 @@ setTimeout(()=>process.stdout.write(${JSON.stringify(output())}),250);
    pending=runSimpleReview({stage:'verify-code',...(managed?{surface:'code'}:{}),activation_cohort:'post',materials:{
     changed_files:['src/reviewed.mjs'],implementation_assessment:'Inspect the complete owned source.',test_context:'Owned terminal evidence.',open_risks:'None declared.',review_instructions:'Review owned code.'
    }},{client,signal:controller.signal,
+    // This case owns the declared local native fallback route (the only route
+    // allowed to run a provider process in this host); without the declaration
+    // the client would open a broker managed session instead.
+    nativePacketFallback:true,
     loadConfig:()=>({...n.trustedContext.trusted,attachmentRoot:p.root,command:[n.command]}),
     resolveRoute:()=>({initial:['codex/active'],mode:'single_round',minimum_heterologous:1}),
     buildBundle:()=>({bundleRoot:p.root,attachmentRoot:p.root,materialId:'owned-code-fallback',deliveryManifest:p.manifest,dispose(){}}),

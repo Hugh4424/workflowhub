@@ -914,8 +914,12 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       if(detection.status==="unavailable")return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:detection.error?.code ?? "OCR_DETECTION_UNAVAILABLE",message:detection.reason}};
       if(detection.status==="not_installed"){
         const fallback={from:"ocr",reason:detection.reason,detected_by:detection.detected_by};
-        const result=typeof services.runReviewRound==="function" ? await whReview(current,options)
-          : await whReview(current,{...options,buildBundle:()=>prepareTaskBoundBuildCodeReviewBundle(context,current)});
+        // The only route allowed to run providers inside this host process: it
+        // must declare that native packet fallback so wh-review keeps its packet
+        // boundary preflight and does not open a broker session for it.
+        const nativeFallback={...options,nativePacketFallback:true};
+        const result=typeof services.runReviewRound==="function" ? await whReview(current,nativeFallback)
+          : await whReview(current,{...nativeFallback,buildBundle:()=>prepareTaskBoundBuildCodeReviewBundle(context,current)});
         return {...result,executor:"wh-review",fallback};
       }
       const onProviderHealth=services.onOcrProviderHealth ?? writeOcrProviderHealthDiagnostic;
