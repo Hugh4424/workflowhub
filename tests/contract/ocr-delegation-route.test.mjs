@@ -594,16 +594,19 @@ describe("OCR delegation public review route", () => {
       executor: async ({ packet }) => {
         packetRoot = packet.root;
         const reviewable = packet.preview.reviewable_files.map(({ path }) => path);
-        expect(reviewable).toContain("diff-shards/S-0005.md");
-        expect(readFileSync(join(packet.root, "diff-shards", "S-0005.md"), "utf8"))
-          .toContain("OCR_DIFF_SHARD_MARKER");
-        expect(packet.manifest.map(({ path }) => path)).toContain("diff-shards/S-0005.md");
+        expect(reviewable).toContain("diff-shards/S-0005.diff");
+        const copied = readFileSync(join(packet.root, "diff-shards", "S-0005.diff"));
+        expect(copied.equals(Buffer.from(shard))).toBe(true);
+        const copiedEntry = packet.manifest.find(({ path }) => path === "diff-shards/S-0005.diff");
+        expect(copiedEntry.bytes).toBe(copied.length);
+        expect(copiedEntry.sha256).toBe(createHash("sha256").update(copied).digest("hex"));
+        expect(packet.manifest.map(({ path }) => path)).toContain("diff-shards/S-0005.diff");
         return resultFor(requestForOcrReview());
       },
     });
 
     expect(result.status).toBe("available");
-    expect(result.ocr.preview.reviewable_files.map(({ path }) => path)).toContain("diff-shards/S-0005.md");
+    expect(result.ocr.preview.reviewable_files.map(({ path }) => path)).toContain("diff-shards/S-0005.diff");
     expect(existsSync(packetRoot)).toBe(false);
   });
 

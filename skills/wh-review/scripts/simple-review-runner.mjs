@@ -604,6 +604,7 @@ export async function dispatchFrozenProviderInput({ bytes, attachmentRoot, clien
       materials: restored.materials,
       prompt: restored.prompt,
       reviewMode: restored.review_mode,
+      surface: restored.packet.surface ?? (["build-code", "verify-code"].includes(restored.packet.stage) ? "code" : "document"),
       minimumHeterologous: SIMPLE_REVIEW_QUORUM,
       strictProtocol: true,
     });
@@ -1310,6 +1311,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
           minimumHeterologous: minimum,
           reviewMode: route.mode,
           reviewFlow: canonicalInput.review_flow ?? canonicalInput.reviewFlow ?? null,
+          surface: canonicalInput.surface ?? (["build-code", "verify-code"].includes(canonicalInput.stage) ? "code" : "document"),
           ...(signal === null ? {} : { signal }),
         });
         if (lifecycle.state !== "terminal") {
@@ -1396,6 +1398,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
           // reconstruct -> reveal -> challenge flow. Omitting it here would let
           // the unmanaged path silently downgrade the governed flow.
           reviewFlow: canonicalInput.review_flow ?? canonicalInput.reviewFlow ?? null,
+          surface: canonicalInput.surface ?? (["build-code", "verify-code"].includes(canonicalInput.stage) ? "code" : "document"),
           strictProtocol: true,
           ...pairFields(pair),
           ...(signal === null ? {} : { signal }),

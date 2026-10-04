@@ -1432,9 +1432,12 @@ export async function runPacketBoundCodexReview({ provider, profile, files, prom
     throw new TypeError("Codex provider, complete packet files and review prompt are required");
   }
   if (getAbortObservedAt !== null && typeof getAbortObservedAt !== "function") throw new TypeError("native abort observation must be an internal callback");
-  const deadlineStart = hostStartedAt ?? Date.now();
-  if (!Number.isSafeInteger(deadlineStart) || deadlineStart > Date.now()) throw new TypeError("native provider deadline start must be an observed past host timestamp");
-  const stopped = nativeStopBeforeSpawn(signal, deadlineStart + OCR_PROVIDER_DEADLINE_MS, getAbortObservedAt);
+  // Only document callers supply their observed shared request start.
+  // Code fallback, like direct OCR, has no extra WorkflowHub elapsed deadline.
+  const deadlineStart = hostStartedAt;
+  if (deadlineStart !== null && (!Number.isSafeInteger(deadlineStart) || deadlineStart > Date.now())) throw new TypeError("native provider deadline start must be an observed past host timestamp");
+  const deadlineAt = deadlineStart === null ? null : deadlineStart + OCR_PROVIDER_DEADLINE_MS;
+  const stopped = nativeStopBeforeSpawn(signal, deadlineAt, getAbortObservedAt);
   if (stopped) return stopped;
   const material = createOcrHostMaterials({ manifest: files.map(file => ({ path: file.path })) }, files);
   let guardianCleanup = null, member = null, preparationError = null;
@@ -1450,7 +1453,7 @@ export async function runPacketBoundCodexReview({ provider, profile, files, prom
       guardianCleanup = { root: material.bundleRoot, realRoot: realpathSync(material.bundleRoot),
         dev: stat.dev.toString(), ino: stat.ino.toString(), markerDev: markerStat.dev.toString(), markerIno: markerStat.ino.toString(), marker };
     }
-    const afterPreparation = nativeStopBeforeSpawn(signal, deadlineStart + OCR_PROVIDER_DEADLINE_MS, getAbortObservedAt);
+    const afterPreparation = nativeStopBeforeSpawn(signal, deadlineAt, getAbortObservedAt);
     const result = afterPreparation ?? await runOcrProviderProcess({ provider, profile, cwd: material.bundleRoot, signal, guardianCleanup, hostStartedAt: deadlineStart, getAbortObservedAt });
     // Observed thread identity is provenance, independent of terminal success.
     member = { ...result, session_id: result.session_id ?? observedCodexSessionId(result.raw_output?.stdout) };
