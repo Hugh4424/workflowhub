@@ -90,14 +90,14 @@ skills:
     local_version: 1.0.0
     last_reviewed_at: "2026-09-10"
     status: native
-    metrics_enabled: true
-    purpose: 四个作者阶段 reflection 终态后的当前交接视图
-    design_idea: 复用 stage-end hook，以原子覆盖固定 handoff 路径并保留 stale/unavailable 边界
-    used_by_stages: [make-decision, build-spec, build-plan, build-code]
+    metrics_enabled: false
+    purpose: 当前材料与 task facts 的人读派生视图，各次原件留存
+    design_idea: 由当前 stage owner 用现有 safe-write 的 appendRecord 一次 create-only 发布 YYYY-MM-DD-NNN-<stage>-handoff.md 并回读实际不可变路径，按同 stage 日期与序号选择原件，保留 incomplete 与硬缺陷边界
+    used_by_stages: [make-decision, build-prd, build-plan, build-code, verify-code]
     upstream: []
-    local_changes: workflowhub 原生技能；只读当前四材料和正式原件指针，不建立历史 handoff 控制面
+    local_changes: workflowhub 原生技能；只读当前四材料和正式原件指针，不建立历史 handoff 控制面；不新增 writer、facts 字段、schema、公共命令或持久对象
     dependency_closure: [skills/stage-handoff]
-    update_policy: 随 stage-handoff renderer、TaskHandle 原子写入和四阶段挂载合同一并审查
+    update_policy: 随 stage-handoff 方法、safe-write appendRecord 发布与回读边界和五阶段挂载合同一并审查
   - name: anysearch
     path: skills/anysearch/SKILL.md
     local_version: 1.0.0
