@@ -53,7 +53,7 @@ UI governance records include an explicit owner, consumer, and delete condition.
 共同规则：所有路径都在 `skills/`；Stage-owned 组件通过 `skill-deps.yaml` 显式加载，portable workflow 也通过同一声明式依赖闭包加载；authoring review 的适用 lens 由 wh-review 放进 frozen packet，代码审查由 OCR delegation 处理；不注册到 Claude/Codex 全局目录；闭包由各目录 `skill-bundle.json` 定义。
 
 - `stage-reflection` — native；五个 authoring stage 的 stage-end 判断层复盘。只消费当前会话记忆、lessons 索引和本 stage outcome；由 runner 先追加 raw observation，再由技能产出 judgment 记录并调用确定性 validator；不生成质量分数或继续工作门禁。
-- `stage-handoff` — native；四个 authoring stage 的 reflection 后 current handoff。只写 `quality/evidence/handoff/<stage>.md` 固定当前视图，原子覆盖、读回绑定，失败保持 `unavailable`/stale 警告；不挂载 verify-code，不生成质量事实或推进门禁。
+- `stage-handoff` — native；当前材料与 task facts 的人读派生视图，各次原件留存。由当前 stage owner 用现有 `runtime/interface/safe-write.mjs` 的 `appendRecord` 一次 create-only 发布，路径为 `quality/evidence/handoff/YYYY-MM-DD-NNN-<stage>-handoff.md`（日期与当日序号由该工具分配，不写固定名或 current 副本），报告并回读该实际不可变绝对路径；make-decision、build-prd、build-plan、build-code、verify-code 均使用，build-code 与 verify-code 另按同一方法选择与回读实际交接；不新增 writer、facts 字段、schema、公共命令或持久对象，不生成质量事实或推进门禁。
 
 - `anysearch` — adopted；make-decision 条件检索。来源 [anysearch-ai/anysearch-skill@db3d76e](https://github.com/anysearch-ai/anysearch-skill/commit/db3d76e5597aec7261257be5322dd211c9d9bb87)，Apache-2.0。首次导入的核心文件已逐 blob 对上该 commit；仓内打包，不做全局安装。
 - `decision-log` — native；make-decision。结构化唯一权威需求记录。`upstream=[]`；随 stage 合同更新。
