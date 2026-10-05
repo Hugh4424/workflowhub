@@ -56,7 +56,7 @@
 
 ### 目标
 
-- 外仓代码迁入本仓并可改指，被本仓回归与检查覆盖；合入后人工改指完成后，本仓副本才是唯一运行副本。
+- 外仓代码迁入本仓并可改指，被本仓回归与检查覆盖；按 D-049 合入后自动改指完成后，本仓副本才是唯一运行副本。
 - 资源事实（文件数、字节数、进程数）与效率事实（调用、派发、等待、时间分账）有原件可复算。
 - 审查失败保留原始事实，补派只补缺，等待不误杀、不空转。
 
@@ -493,14 +493,20 @@ UI 维度全部 N/A（PFACT-017）。每 Task 的场景、夹具、命令、预�
 | F24 | minor | opus | runner 基线只有计数 | fixed | P2 T007 ④ 保存失败名单 `…-p2-runner-baseline.txt`；P2 Done 与 T008 按名比对 |
 | F25 | minor | opus | 共享写集「改/不改」混写 | fixed | `#共享写集分工` wh-review 行改写 |
 | F26 | minor | opus | 索引复制写集/消费者成双源 | rejected_invalid | 列格式是投影契约：`runtime/stage/stage-content-contracts.mjs:885-896` 要求 6 列，`:1045-1047` 要求 Phase 头写入集等于索引，`:1064-1066` 消费者相等；`skills/spec-tasks/SKILL.md:10` 同规定；`runtime/review/provider-material-projection.mjs:126-127` 要求 Execution Index |
-| F27 | minor | opus | 改指无 owner/证据，「唯一副本」提前 | fixed | `#合入后人工确认步骤` 加负责人与 doctor 证据路径；`## 2.` 目标改为改指完成后才唯一 |
+| F27 | minor | opus | 改指无 owner/证据，「唯一副本」提前 | fixed | `#合入后配置切换与仓外保留` 加负责人与 doctor 证据路径；`## 2.` 目标改为改指完成后才唯一 |
 | F28 | minor | opus | 成员可能不允许 `identity_authenticated` | rejected_invalid | `runtime/review/schemas/result.schema.json:600` provider_results 成员 `"additionalProperties": true`；`runtime/review/review-record-route.mjs:36` `providerFact` 以 `{...member}` 保留 |
 | F29 | minor | opus | AC-61 缩减实际阅读范围与真实完成时间 | fixed | AC-61 验证/失败、P2 T011 ④：完成时间取 `started_at`/`completed_at`，阅读范围取可观察项，否则 `inconclusive`（`prd.md:508`） |
 | F30 | major | codex | 修后在临时目录，不证四处下降 | fixed（G4） | 按主会话裁定 ③：AC-45、P1 T006 ⑤、RISK-005、OPEN-002；②③④ 由 packet/bundle 字节一致测试证明 |
 | F31 | major | codex | 同 F02 | fixed（G1） | 同 F02 |
 | F32 | major | codex | AC-62 同包前后配对未定义 | fixed（G3） | 同 F23；P1、P2 各作一个工作包 |
 
-计数：fixed 29 / rejected_invalid 2 / accepted_risk 1 / needs_human 0。草稿「需用户裁定」四项由主会话在既有决定内裁定：外仓归档（D-003，`#兼容性预留`、`#合入后人工确认步骤` 第 5 步）；AC-62 五字段缺即失败、运行度量取不到记 `inconclusive`（D-004、口径 B）；AC-45 修后样本只构建与预检不派发（D-039、D-046、D-048）；F13/F19 写集只扩 `skills/wh-review/SKILL.md:21`，两份 workflow `:15` 不扩。
+计数：fixed 29 / rejected_invalid 2 / accepted_risk 1 / needs_human 0。草稿「需用户裁定」四项由主会话在既有决定内裁定：外仓归档（D-003，`#兼容性预留`、`#合入后配置切换与仓外保留` 第 5 步）；AC-62 五字段缺即失败、运行度量取不到记 `inconclusive`（D-004、口径 B）；AC-45 修后样本只构建与预检不派发（D-039、D-046、D-048）；F13/F19 写集只扩 `skills/wh-review/SKILL.md:21`，两份 workflow `:15` 不扩。
+
+### 当前事实澄清（2026-10-05）
+
+旧 F13 的 `accepted_risk` 来源在有限原件核查内未证实：`<TASK_DIR>/quality/evidence/human-confirmations/2026-10-04-006-build-plan-card09-build-plan-approve.json`（sha256 `bae1b9540dfa22ed263a1624daeef44bab3b69067bd7deea5c62f6341ba9cf62`）只记录阶段批准，没有绑定 F13 残余风险的真实回复。旧表标签保留只读，当前不把它当作风险接受、质量通过或推进许可。本次按 D-049 明确 verify-code 方法首步对实际 worktree、branch、HEAD、write_set 与材料来源核对，并经已有 `run-command` 保存 `quality/tests/` 原件，不新增中间风险确认或 runtime gate。
+
+当前以实际核对支持：既存原件 `<TASK_DIR>/quality/tests/2026-10-05-087-card09-verify-initial-risk-samples-final.output`、`…/2026-10-05-101-card09-verify-final-prepublish-readback.output`、`…/2026-10-05-123-card09-delivered-final-source-readback.output`、`…/2026-10-05-128-card09-doc-findings-source-scope.output` 只证明各自记录时点及其范围的核对事实，不预填后续执行结果。AC-45/AC-51 资源结果继续按原件 `2026-10-04-014-card09-p1-t006-resource-inconclusive.output`、`2026-10-05-051-card09-build-code-spec-analyze.md`、`2026-10-05-062-card09-spec-analyze-actual-disposition.md`、`2026-10-05-085-card09-build-code-current-factual-addendum.md` 保持 `inconclusive`（均在 `<TASK_DIR>/quality/tests/`）；目录累计增量不能证明同负载下降。
 
 ## 12. 风险、未决与交接
 
@@ -533,7 +539,7 @@ UI 维度全部 N/A（PFACT-017）。每 Task 的场景、夹具、命令、预�
 
 负责人：CARD-09 主会话。D-049 的真实用户持续授权覆盖第 3 步既定路径切换，不新增中间确认；只最终 close 前统一确认。外仓与 GitHub archive 边界仍按第 5 步。
 
-1. 本卡合入 main 后，确认主仓稳定 checkout 存在 `skills/third-review/scripts/3rd-review.mjs`。
+1. 本卡合入 main 后，核对主仓稳定 checkout 的实际分支为 `main`、工作树干净、当前 HEAD 等于已核对的本卡交付提交，并确认该 checkout 实际存在 `skills/third-review/scripts/3rd-review.mjs`。
 2. 备份 `~/.config/workflowhub/config.json`。
 3. 按 D-049 的本次真实持续授权，自动把 `third_review.command[1]` 改为 `/Users/Hugh/Hugh/Project/workflowhub/skills/third-review/scripts/3rd-review.mjs`，不再逐次请求确认；只改该索引，保留其它配置。
 4. 跑一次 `node /Users/Hugh/Hugh/Project/workflowhub/skills/third-review/scripts/3rd-review.mjs doctor`，原始输出存任务 `quality/tests/<日期>-card09-third-review-doctor.txt`；失败即恢复备份。
