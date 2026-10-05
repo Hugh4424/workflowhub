@@ -58,8 +58,9 @@ root、允许 source prefix 和 broker 命令只来自宿主配置
 `3rd-review` 的唯一审查执行入口是其 V4 CLI `run --request`。workflowhub 只通过
 `BrokerClient` 以该入口调用它；broker 不选择 stage 合同、不解释业务技能、不校验
 业务 verdict，也不写 workflowhub 报告。通用 CLI 合同见
-`/Users/Hugh/Hugh/Project/3rd-review/docs/adr/0001-v4-cli-contract.md`，实现位于
-`/Users/Hugh/Hugh/Project/3rd-review/scripts/3rd-review.mjs`。
+`skills/third-review/docs/adr/0001-v4-cli-contract.md`，实现位于
+`skills/third-review/scripts/3rd-review.mjs`（主仓稳定 checkout）；合入后改指见
+`specs/workflowhub-thin-core-card-09-20260919/spec.md#合入后人工确认步骤`。
 
 Facade 先以 `doctor` 取得并冻结 broker-owned provider capability snapshot；调用方不能
 自报 provider capability 或附件投递方式。首轮向 broker 发送 V4 request 和附件三元组；

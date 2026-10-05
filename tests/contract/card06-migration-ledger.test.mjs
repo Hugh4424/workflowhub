@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const TABLE_REL = 'specs/workflowhub-thin-core-card-06-20260919/attachments/migration-table.md';
+const TABLE_REL = 'specs/archive/workflowhub-thin-core-card-06-20260919/attachments/migration-table.md';
 
 // 仓库根解析：沿 __dirname 上溯到含迁移表的根（在认证 worktree 内稳定，不依赖 cwd）。
 function findRepoRoot(start) {

@@ -103,8 +103,10 @@ CARD-05 承担 **review 派发面** 的 FR-57/AC-58：送审输入以纯文本�
   材料实测的 provider 最长耗时是 **432,004 ms**（RF-16）；③ 「45/60/65 s」仓内只有 **65 s**
   （`runtime/review/review-record-route.mjs:26` `DEFAULT_REVIEW_ROUND_TIMEOUT_MS = 65_000`），45 s／60 s 无对应常量；
   ④ 「留下孤儿进程」与本仓注释及 broker 设计**相反**——broker 在超时时**有意不取消**，遗留进程由
-  `cleanup(root, ttl_hours)` 回收（实现于第二个仓库 `/Users/Hugh/Hugh/Project/3rd-review/lib/broker.mjs:664,702,725`
-  ＋ `lib/runtime.mjs:96,135,155`，`orphan_timeout_ms` 默认 30000）。
+  `cleanup(root, ttl_hours)` 回收（实现于主仓 `skills/third-review/lib/broker.mjs:664,702,725`
+  ＋ `skills/third-review/lib/runtime.mjs:96,135,155`，`orphan_timeout_ms` 默认 30000）。
+  宿主入口为 `skills/third-review/scripts/3rd-review.mjs`（主仓稳定 checkout）；合入后改指见
+  `specs/workflowhub-thin-core-card-09-20260919/spec.md#合入后人工确认步骤`。
   实质关切保留：轮次超时 **65 s ≪ provider 实耗最长 432 s**，且 broker 不因墙钟取消。
   **当前语义更正（2026-09-23）**：此处 `DEFAULT_MANAGED_TERMINAL_WAIT_MS=1,200,000` 描述的是旧实现；依本 ADR 前述更新，当前 host 持续读取 managed health 到 provider 真实终态，不再使用 20 分钟停止等待界限。
 - `fail-closed` + 「一 phase 一次不重试」把一次基建抖动**永久固化**为该 phase 无法重审。

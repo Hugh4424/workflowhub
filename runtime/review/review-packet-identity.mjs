@@ -152,7 +152,7 @@ function canonicalBundleEntries(entries) {
 
 /**
  * Canonical identity of a delivered review bundle, mirroring the broker's
- * `canonicalWorkflowHubMaterialId(files)` in `3rd-review/lib/attachments.mjs`.
+ * `canonicalWorkflowHubMaterialId(files)` in `skills/third-review/lib/attachments.mjs`.
  *
  * This is the single implementation behind both the declared packet identity
  * (`reviewPacketMaterialId`) and the pre-dispatch self-check over the bytes that

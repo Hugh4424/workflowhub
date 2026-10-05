@@ -460,6 +460,16 @@ async function waitForManagedTerminal({ lifecycle, client, requestId, providers,
   const signal = assertReviewAbortSignal(dependencies.signal ?? null);
   const pollMs = dependencies.managedStatusPollMs ?? DEFAULT_MANAGED_STATUS_POLL_MS;
   if (!Number.isSafeInteger(pollMs) || pollMs < 0) throw new TypeError("managedStatusPollMs must be a non-negative safe integer");
+  const stallPolls = dependencies.stallPolls ?? 12, maxPollMs = dependencies.maxPollMs ?? 60000;
+  if (!Number.isSafeInteger(stallPolls) || stallPolls < 1 || !Number.isSafeInteger(maxPollMs) || maxPollMs < pollMs) throw new TypeError("managed stall polling limits are invalid");
+  if (dependencies.onManagedStall !== undefined && typeof dependencies.onManagedStall !== "function") throw new TypeError("onManagedStall must be a function");
+  const progressSignature = value => {
+    const source = value?.providers ?? value?.group?.providers ?? {};
+    const members = Array.isArray(source) ? source.map(item => [item?.provider ?? item?.identity?.provider, item]) : Object.entries(source);
+    return JSON.stringify(members.map(([provider, item]) => [provider, item?.status ?? null, item?.last_progress_at_ms ?? null]).sort((a,b)=>String(a[0]).localeCompare(String(b[0]))));
+  };
+  let signature = null, unchangedPolls = 0, unchangedSince = Date.now(), delayMs = pollMs, notified = false;
+
   let current = lifecycle;
   let lastObservation = lifecycle;
   const context = { requestId, providers, materials, runtimeId: lifecycle.runtime_id };
@@ -509,8 +519,19 @@ async function waitForManagedTerminal({ lifecycle, client, requestId, providers,
       throw error;
     }
     if (current.state === "terminal") return terminalResult(current);
+    const observed = progressSignature(current);
+    if (observed !== signature) {
+      signature = observed; unchangedPolls = 0; unchangedSince = Date.now(); delayMs = pollMs;
+    } else unchangedPolls++;
+    if (unchangedPolls >= stallPolls) {
+      delayMs = Math.min(maxPollMs, Math.max(1, delayMs * 2));
+      if (!notified) {
+        notified = true;
+        await dependencies.onManagedStall?.({ request_id: requestId, providers, unchanged_since_ms: unchangedSince });
+      }
+    }
     try {
-      await waitForManagedPoll(pollMs, cancellationRequested ? null : signal);
+      await waitForManagedPoll(delayMs, cancellationRequested ? null : signal);
     } catch (error) {
       if (!cancellationRequested && signal?.aborted && isReviewAbortError(error)) continue;
       if (error && typeof error === "object") error.managed_observation = lastObservation;
@@ -643,6 +664,25 @@ function unavailableResult(input, error, pair = null, extra = {}) {
   };
 }
 
+// Private supplement guard, owned here and consumed by this runner and stage review-record.
+// Retain while these two transports accept explicit supplements; no persistent selector or public action.
+export async function validateReviewSupplement(input,{providers,materialId,taskId,readRecord}={}) {
+ const provided=['only_providers','dispatch_reason','supplements'].some(key=>Object.hasOwn(input,key));
+ if(!provided)return [...providers];
+ const fail=message=>{throw Object.assign(new Error(message),{code:'ROUTE_UNAVAILABLE',dispatch_state:'blocked_before_dispatch',diagnostic:preflightDiagnostic({field:'only_providers',expected:'explicit configured non-completed members of one hash-bound same-subject record',actual:'invalid supplement',nextAction:'repair the original record binding, provider subset and dispatch reason before dispatch'})});};
+ const subset=input.only_providers,supp=input.supplements;
+ if(!Array.isArray(subset)||!subset.length||subset.some(p=>typeof p!=='string'||!providers.includes(p))||new Set(subset).size!==subset.length)fail('only_providers must be a non-empty unique trusted subset');
+ if(typeof input.dispatch_reason!=='string'||!input.dispatch_reason.trim())fail('dispatch_reason is required for an explicit supplement');
+ if(!supp||typeof supp!=='object'||Array.isArray(supp)||Object.keys(supp).sort().join(',')!=='record_ref,record_sha256'||typeof supp.record_ref!=='string'||!/^quality\/reviews\/[^/\\]+\.json$/.test(supp.record_ref)||supp.record_ref.includes('..')||!SHA256_HEX.test(supp.record_sha256))fail('supplements must name one ordinary task review JSON and exact sha256');
+ if(typeof readRecord!=='function'||typeof taskId!=='string'||!taskId)fail('supplement requires the existing task-bound record reader');
+ let bytes,record;try{bytes=await readRecord(supp);if(!(Buffer.isBuffer(bytes)||typeof bytes==='string'))fail('record reader returned no original bytes');if(createHash('sha256').update(bytes).digest('hex')!==supp.record_sha256)fail('supplement record checksum differs');record=JSON.parse(bytes.toString());}catch(error){if(error.code==='ROUTE_UNAVAILABLE')throw error;fail('supplement record could not be read and authenticated');}
+ if(record.task_id!==taskId||typeof record.request?.material_id!=='string'||record.request.material_id!==materialId)fail('supplement task or material identity differs from current submitted bytes');
+ const tuple=value=>{const identity=reviewIdentityFromInput(value);const scope=identity.stage==='build-code'&&identity.reviewKind===null?identity.reviewScope??'phase':identity.reviewScope;return [identity.stage,identity.reviewTrack,identity.reviewKind,scope,value.subject_kind??(scope==='phase'?'phase':'document'),value.phase_id??value.phaseId??null,value.surface??null];};
+ try{if(JSON.stringify(tuple(record.request))!==JSON.stringify(tuple(input)))fail('supplement subject differs from the original record');}catch(error){if(error.code==='ROUTE_UNAVAILABLE')throw error;fail('supplement subject is invalid');}
+ if(!Array.isArray(record.provider_results)||subset.some(p=>{const matches=record.provider_results.filter(m=>m.provider===p);return matches.length!==1||matches[0].status==='completed';}))fail('only_providers must exclude every originally completed member');
+ return [...subset];
+}
+
 function preflightMaterialPresent(value) {
   if (Buffer.isBuffer(value)) return value.length > 0;
   if (typeof value === "string") return value.trim() !== "";
@@ -721,6 +761,11 @@ function runMaterialAllowlistPreflight(input, rule, pair = null, { rejectGenerat
   return null;
 }
 
+// Private caller-material preflight reused by the existing code record consumer.
+export function validateReviewCallerMaterials(input) {
+  if(!input.materials||typeof input.materials!=="object"||Array.isArray(input.materials))return blockedPreflight(input,"MATERIAL_INCOMPLETE","caller materials must be an object",preflightDiagnostic({field:"materials",expected:"non-empty caller materials",actual:"invalid",nextAction:"supply the existing review materials"}));
+  return runMaterialAllowlistPreflight(input,staticReviewRule(input));
+}
 function validateDirectPacketMaterials(identity, materials) {
   if (identity.reviewKind !== "build_prd" && Object.prototype.hasOwnProperty.call(materials, "review_instructions")) {
     throw new TypeError("MATERIAL_FORBIDDEN: review_instructions is runner-generated");
@@ -986,10 +1031,40 @@ function bindReviewSupplementToSelection(supplement, { selectedSet, selectedIden
   };
 }
 
+async function preservedObservedFacts(source, { bundle, dependencies, pair, selectedIdentities, selectedModels, authenticated = false }) {
+  const entries = Array.isArray(source) ? source.map(item => [item?.provider ?? item?.identity?.provider, item])
+    : source && typeof source === "object" ? Object.entries(source) : [];
+  const names = entries.map(([provider]) => provider), unique = new Set(names).size === names.length;
+  const providers = [], findings = [];
+  for (const [provider, original] of entries) {
+    if (typeof provider !== "string" || !original || typeof original !== "object") continue;
+    const item = { ...original, provider: original.provider ?? provider };
+    if (!item.raw_output_ref && typeof item.output === "string" && typeof dependencies.onProviderOutput === "function") {
+      item.raw_output_ref = await dependencies.onProviderOutput({ provider: item.provider, role: pair?.role ?? null, output: item.output });
+    }
+    const identity = item.identity, expected = selectedIdentities?.[provider];
+    const bound = authenticated && unique && !!expected && identity?.provider === provider
+      && (identity.adapter === undefined || identity.adapter === providerAdapter(provider))
+      && identity.source_id === expected.source_id && identity.config_id === expected.config_id
+      && identity.model === selectedModels?.[provider];
+    const fact = publicProviderResult({ ...item, identity_authenticated: bound }, undefined, pair);
+    providers.push(fact);
+    if (bound && item.status === "completed" && !item.error && typeof item.output === "string") {
+      try {
+        const parsed = parseReviewerOutput(item.output, { requireEvidence: true });
+        const anchors = evidenceAnchorValidity(bundle.bundleRoot, parsed.findings, bundle.deliveryManifest);
+        findings.push(...parsed.findings.filter((_finding, index) => anchors[index]).map(finding => ({ ...finding, provider })));
+      } catch { /* Original bytes remain in raw_output_ref; invalid output is not a finding. */ }
+    }
+  }
+  return { provider_results: providers, findings };
+}
+
 function publicProviderResult(item, evidenceAnchors = undefined, pair = null) {
   return {
     provider: item.provider,
     status: item.status,
+    ...(Object.hasOwn(item, "identity_authenticated") ? { identity_authenticated: item.identity_authenticated === true } : {}),
     identity: item.identity,
     ...pairFields(pair),
     session_id: item.session_id ?? null,
@@ -1238,7 +1313,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
   );
   if (preflight?.status) return preflight;
   const blockedProviderResults = [...(preflight?.blocked_provider_results ?? [])];
-  const selectedProviders = providerSelection.providers;
+  let selectedProviders = providerSelection.providers;
   const blockedProviderSet = new Set(blockedProviderResults.map((item) => item.provider));
   // Only a declared native packet fallback dispatches from this host process,
   // so only that route needs a demonstrated packet read root per provider.
@@ -1264,7 +1339,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
           : "Selected native provider has no verified packet filesystem boundary; review is unavailable" },
     });
   }
-  const dispatchProviders = selectedProviders.filter((provider) => !blockedProviderSet.has(provider));
+  let dispatchProviders = selectedProviders.filter((provider) => !blockedProviderSet.has(provider));
   if (dispatchProviders.length === 0) return unavailableResult(reviewInput, {
     code: blockedProviderResults.find(item => item.error?.code === "NATIVE_DIRECTION_VISIBILITY_UNAVAILABLE")?.error.code ?? "PROVIDER_PACKET_BOUNDARY_UNAVAILABLE",
     message: "Selected review providers have no verified packet or staged visibility boundary; no review was dispatched",
@@ -1275,10 +1350,10 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
     }, undefined, pair)),
   });
   const minimum = SIMPLE_REVIEW_QUORUM;
-  const selectedIdentities = providerSelection.provider_identities ?? null;
-  const selectedModels = providerSelection.provider_models ?? null;
-  const selectedSet = new Set(selectedProviders);
-  const eligibleSet = new Set(providerSelection.eligible_profiles ?? selectedProviders);
+  let selectedIdentities = providerSelection.provider_identities ?? null;
+  let selectedModels = providerSelection.provider_models ?? null;
+  let selectedSet = new Set(selectedProviders);
+  let eligibleSet = new Set(providerSelection.eligible_profiles ?? selectedProviders);
   let bundle;
   try {
     bundle = typeof dependencies.buildBundle === "function"
@@ -1295,6 +1370,14 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
     });
   }
   try {
+    let subset;
+    try{subset=await validateReviewSupplement(input,{providers:selectedProviders,materialId:bundle.materialId,taskId:dependencies.taskId,readRecord:dependencies.readSupplementRecord});}
+    catch(error){return blockedPreflight(input,"ROUTE_UNAVAILABLE",error.message,error.diagnostic,pair);}
+    if(subset.length!==selectedProviders.length || input.only_providers!==undefined){
+      const set=new Set(subset),filterMap=map=>map?Object.fromEntries(Object.entries(map).filter(([key])=>set.has(key))):map;
+      providerSelection={...providerSelection,providers:subset,provider_identities:filterMap(providerSelection.provider_identities),provider_models:filterMap(providerSelection.provider_models),...(providerSelection.eligible_profiles?{eligible_profiles:providerSelection.eligible_profiles.filter(p=>set.has(p))}:{})};
+      selectedProviders=subset;dispatchProviders=dispatchProviders.filter(p=>set.has(p));selectedIdentities=providerSelection.provider_identities??null;selectedModels=providerSelection.provider_models??null;selectedSet=set;eligibleSet=new Set(providerSelection.eligible_profiles??subset);
+    }
     const client = nativeClient;
     const prompt = promptForPair(pair);
     let group;
@@ -1352,31 +1435,10 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
           }
         }
         const observation = error?.managed_observation;
-        const source = observation?.providers;
-        const entries = Array.isArray(source)
-          ? source.map((item) => [item?.provider ?? item?.identity?.provider, item])
-          : source && typeof source === "object" ? Object.entries(source) : [];
-        const providerResults = entries
-          .filter(([provider, item]) => typeof provider === "string" && item && typeof item === "object" && !Array.isArray(item))
-          .map(([provider, item]) => {
-            const expectedIdentity = selectedIdentities?.[provider];
-            const identity = expectedIdentity
-              ? { provider, adapter: providerAdapter(provider), ...expectedIdentity, model: selectedModels?.[provider] ?? null }
-              : item.identity;
-            const semantic = item.status === "completed" && (item.error === null || item.error === undefined);
-            return publicProviderResult({
-              ...item,
-              provider: item.provider ?? provider,
-              ...(identity ? { identity } : {}),
-              ...(semantic ? {
-                status: "failed",
-                error: {
-                  code: "PROVIDER_RESULT_INVALID",
-                  message: "managed review observation ended before a completed provider could be identity-authenticated",
-                },
-              } : {}),
-            }, undefined, pair);
-          });
+        const source = observation?.group?.providers ?? observation?.providers ?? lifecycle?.group?.providers ?? lifecycle?.providers;
+        const preserved = await preservedObservedFacts(source, { bundle, dependencies, pair, selectedIdentities, selectedModels,
+          authenticated: observation?.material_id === bundle.materialId && observation?.request_id === requestId
+            && observation?.runtime_id === lifecycle?.runtime_id });
         return unavailableResult(input, normalizeProviderError(error), pair, {
           ...(await captureBrokerFailure(error, dependencies, pair)),
           // A transmitted request whose reply could not be parsed is neither
@@ -1387,7 +1449,8 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
           runtime_id: lifecycle?.runtime_id ?? observation?.runtime_id ?? null,
           minimum_heterologous: minimum,
           provider_selection: providerSelectionOutput(providerSelection),
-          provider_results: providerResults,
+          ...preserved,
+          material_id: bundle.materialId,
         });
       }
     } else {
@@ -1425,10 +1488,12 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
       .filter((key) => Object.prototype.hasOwnProperty.call(group ?? {}, key))
       .map((key) => group[key]);
     if (brokerMaterialIds.some((materialId) => materialId !== bundle.materialId)) {
+      const preserved = await preservedObservedFacts(group?.providers, { bundle, dependencies, pair, selectedIdentities, selectedModels });
       return unavailableResult(canonicalInput, {
         code: "REVIEW_MATERIAL_IDENTITY_MISMATCH",
         message: "broker material identity does not match the submitted review bundle",
       }, pair, {
+        ...preserved, material_id: bundle.materialId,
         runtime_id: group?.runtimeId ?? group?.runtime_id ?? null,
         outcome: group?.outcome ?? "unavailable",
         minimum_heterologous: minimum,
@@ -1586,10 +1651,12 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
     if (providerNames.some((provider) => !selectedSet.has(provider))
         || new Set(providerNames).size !== providerNames.length
         || providerNames.length !== selectedProviders.length) {
+      const preserved = await preservedObservedFacts(receivedProviders, { bundle, dependencies, pair, selectedIdentities, selectedModels });
       return unavailableResult(input, {
         code: "PROVIDER_RESULT_INVALID",
         message: "broker provider results could not be bound uniquely to the trusted review selection",
       }, pair, {
+        ...preserved, material_id: bundle.materialId,
         minimum_heterologous: minimum,
         runtime_id: group.runtimeId,
         outcome: group.outcome,

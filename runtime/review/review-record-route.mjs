@@ -23,7 +23,15 @@ function readTask(taskDir) {
   } finally {closeSync(fd);}
 }
 function subject(request) {
-  const identity=reviewIdentityFromInput(request);
+  let identity;
+  try { identity=reviewIdentityFromInput(request); }
+  catch(error) {
+    // Existing record/CLI error consumer renders this diagnostic before dispatch.
+    throw Object.assign(error,{code:"REVIEW_IDENTITY_INVALID",preflight_protocol:true,diagnostic:{
+      field:"stage/review_track/review_kind/review_scope",expected:"one valid existing review lifecycle tuple",
+      actual:JSON.stringify({stage:request.stage,review_track:request.review_track??request.reviewTrack??null,review_kind:request.review_kind??request.reviewKind??null,review_scope:request.review_scope??request.reviewScope??null}),
+      next_action:"use the current stage's declared review track, kind and scope"}});
+  }
   if(request.surface!==undefined && request.surface!==null && !["document","code"].includes(request.surface))throw coded("REVIEW_SURFACE_INVALID","surface must describe document or code material");
   const phase=request.phase_id ?? request.phaseId ?? null;
   const scope=identity.stage==="build-code" && identity.reviewKind===null ? identity.reviewScope ?? "phase" : identity.reviewScope;
@@ -68,10 +76,11 @@ export async function recordSimpleReviewRequest({taskDir,request,runRound=runSim
     const started=new Date().toISOString(); let result;
     let rawCount=0;
     const onProviderOutput=async ({provider,role=null,output})=>{if(typeof output!=="string" && !Buffer.isBuffer(output) && !(output instanceof Uint8Array) || typeof provider!=="string")throw coded("PROVIDER_OUTPUT_INVALID","provider raw output must be named text or original bytes");const path=await appendRecord(dir,`${tuple.stage}-${tuple.review_scope ?? "document"}-provider-${++rawCount}`,"output",output);return relative(root,path).split("\\").join("/");};
-    try { result=await runRound({...request,...tuple,...structuredClone(submittedSubject)},{...(signal ? {signal} : {}),onProviderOutput}); }
-    catch(error) { result={status:"unavailable",outcome:"unavailable",dispatch_state:error.dispatch_state ?? "unknown",provider_results:[],findings:[],error:{code:error.code ?? "REVIEW_ERROR",message:redactProviderHostPaths(String(error.message ?? error))}}; }
+    try { result=await runRound({...request,...tuple,...structuredClone(submittedSubject)},{...(signal ? {signal} : {}),onProviderOutput,taskId:manifest.task_id}); }
+    catch(error) { result={status:"unavailable",outcome:"unavailable",dispatch_state:error.dispatch_state ?? "unknown",provider_results:Array.isArray(error.provider_results)?error.provider_results:[],findings:Array.isArray(error.findings)?error.findings:[],error:{code:error.code ?? "REVIEW_ERROR",message:redactProviderHostPaths(String(error.message ?? error))}}; }
     if(!result || typeof result!=="object" || !["available","available-with-failures","unavailable","incomplete"].includes(result.status)) throw coded("REVIEW_RESULT_INVALID","runner returned no observable result status");
     for(const key of ["stage","review_scope","review_track","review_kind","subject_kind","phase_id","surface"]) if(result[key]!==undefined && result[key]!==tuple[key]) throw coded("REVIEW_SUBJECT_MISMATCH",`runner result differs in ${key}`);
+    if (Array.isArray(result.findings) && Array.isArray(result.provider_results)) result={...result,findings:result.findings.filter(finding=>!result.provider_results.some(member=>member.provider===finding.provider && member.identity_authenticated===false))};
     let findings=[];
     const partialFindings=["unavailable","incomplete"].includes(result.status) && Array.isArray(result.findings) && result.findings.length>0;
     if(["available","available-with-failures"].includes(result.status) || partialFindings) {
@@ -89,7 +98,7 @@ export async function recordSimpleReviewRequest({taskDir,request,runRound=runSim
     const slug=`${tuple.stage}-${tuple.review_scope ?? tuple.review_track ?? "document"}${tuple.phase_id ? "-"+tuple.phase_id.toLowerCase() : ""}`;
     const {material_id,authenticated_evidence,authenticated_evidence_sha256,snapshot_tree,candidate_tree,base_tree,request_key,request_hash,closure_manifest,material_revision,source,...ordinary}=result;
     const record={version:"wh-review-result.v1",...ordinary,task_id:manifest.task_id,...tuple,started_at:started,completed_at:new Date().toISOString(),
-      request:{...tuple,...submittedSubject,material_keys:Object.keys(request.materials ?? {})},provider_results:providers,findings,
+      request:{...tuple,...submittedSubject,material_keys:Object.keys(request.materials ?? {}),...(typeof material_id==="string"?{material_id}:{}),...Object.fromEntries(["only_providers","dispatch_reason","supplements"].filter(key=>Object.hasOwn(request,key)).map(key=>[key,structuredClone(request[key])]))},provider_results:providers,findings,
       ...(signal?.aborted ? {status:"unavailable",error:{code:"REVIEW_CANCELLED",message:"review cancelled; settled provider facts retained"}} : {}),authoritative:false};
     const path=await appendRecord(dir,slug,"json",JSON.stringify(record,null,2)+"\n");
     const ref=relative(root,path).split("\\").join("/");return {status:record.status,result_ref:ref,path,stage:tuple.stage,review_scope:tuple.review_scope,subject_kind:tuple.subject_kind,phase_id:tuple.phase_id,authoritative:false};

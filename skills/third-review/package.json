@@ -1,0 +1,16 @@
+{
+  "name": "3rd-review",
+  "version": "4.0.0",
+  "description": "Small, CLI-first cross-provider reviewer broker",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "3rd-review": "scripts/3rd-review.mjs"
+  },
+  "scripts": {
+    "test": "vitest run test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

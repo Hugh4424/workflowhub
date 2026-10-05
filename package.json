@@ -16,7 +16,8 @@
     "test:root": "vitest run tests/*.test.mjs",
     "test:exclusive": "vitest run core/__tests__/check-anti-host.test.mjs --poolOptions.forks.singleFork --no-fileParallelism",
     "test:scripts": "vitest run scripts",
-    "test:runtime": "vitest run runtime"
+    "test:runtime": "vitest run runtime",
+    "test:third-review": "vitest run skills/third-review/test"
   },
   "dependencies": {
     "ajv": "8.17.1",

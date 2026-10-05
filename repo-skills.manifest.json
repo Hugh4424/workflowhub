@@ -626,6 +626,25 @@
         "verify-code"
       ],
       "metrics_enabled": true
+    },
+    {
+      "id": "third-review",
+      "path": "skills/third-review/SKILL.md",
+      "version": "4.0.0",
+      "origin_path": [
+        "3rd-review@97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+      ],
+      "origin_framework": [
+        "3rd-review v4.0.0"
+      ],
+      "local_changes": "来源：3rd-review v4.0.0，commit 97132960d7dab9145cbd0bdf610e09bf422e2ec0；仅测试框架和夹具位置适配",
+      "owner_stage": [
+        "make-decision",
+        "build-plan",
+        "build-code",
+        "verify-code"
+      ],
+      "metrics_enabled": false
     }
   ]
 }

@@ -1141,29 +1141,38 @@ describe("simple material-only review", () => {
   it("records a managed-observation identity gap as an unavailable failed member instead of crashing the recorder", async () => {
     const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-managed-observation-")));
     roots.push(attachmentRoot);
+    for(const hasFinding of [false,true]) {
+    let raw=JSON.stringify({findings:[{severity:"minor",path:"materials/01-implementation.md",line:1,issue:"An unbound observation must remain isolated.",recommendation:"Keep raw without authenticating it.",evidence_kind:"direct",evidence:"current bytes"}]});
+    const rawRef="owned-provider-"+Number(hasFinding)+".output",rawPath=join(attachmentRoot,rawRef);
     const result = await runSimpleReview({
       stage: "verify-code", host_provider: "codex", materials: { implementation: "current bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
       resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
       selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" }, provider_identities: { "model-a": { source_id: "trusted-source", config_id: "trusted-config" } } }),
+      onProviderOutput: async ({output}) => {writeFileSync(rawPath,output,{flag:"wx"});return rawRef;},
       client: {
-        async startManaged() {
+        async startManaged({materials}) {
+          const evidence=readFileSync(join(materials.bundleRoot,"review-instructions.md"),"utf8").split("\n")[0];
+          raw=JSON.stringify({findings:hasFinding?[{severity:"minor",path:"review-instructions.md",line:1,issue:"Unbound findings stay isolated.",recommendation:"Preserve raw only.",evidence_kind:"direct",evidence}]:[]});
           return { state: "running", runtime_id: "runtime-observation-gap", providers: [{
-            provider: "model-a", status: "completed", error: null, output: JSON.stringify({ findings: [] }), timing: null, usage: null,
+            provider: "model-a", status: "completed", error: null, output: raw, timing: null, usage: null,
           }] };
         },
         async statusManaged() { throw new Error("managed status transport failed"); },
       },
     });
     expect(result).toMatchObject({
-      status: "unavailable",
+      status: "unavailable", outcome:"unavailable", error:{code:"REVIEW_BROKER_EXIT_NONZERO",message:"managed status transport failed"},
       provider_results: [{
-        provider: "model-a", status: "failed",
-        identity: { provider: "model-a", adapter: "model-a", source_id: "trusted-source", config_id: "trusted-config" },
-        error: { code: "PROVIDER_RESULT_INVALID" },
+        provider: "model-a", status: "completed", error:null, identity_authenticated:false, raw_output_ref:rawRef,
       }],
     });
+    expect(result.provider_results[0].identity).toBeUndefined();
+    expect(result.findings).toEqual([]);
+    expect(readFileSync(rawPath,"utf8")).toBe(raw);
+    expect(createHash("sha256").update(readFileSync(rawPath)).digest("hex")).toBe(createHash("sha256").update(raw).digest("hex"));
+    }
   });
 
   it("keeps polling when one managed member failed but a running member can still satisfy quorum", async () => {

@@ -1,0 +1,103 @@
+{
+  "version": 4,
+  "runtime": {
+    "root": "/tmp/3rd-review",
+    "ttl_hours": 24,
+    "liveness_interval_ms": 1000,
+    "orphan_timeout_ms": 30000
+  },
+  "attachment_roots": [
+    {
+      "root": "/absolute/path/to/approved-packets",
+      "sources": [
+        "skills",
+        "review"
+      ]
+    }
+  ],
+  "tiers": [
+    [
+      "pi/k3",
+      "opencode/v4flash",
+      "antigravity/flash"
+    ],
+    [
+      "pi/coding"
+    ],
+    [
+      "pi/v4flash"
+    ],
+    [
+      "opencode/v4pro"
+    ]
+  ],
+  "providers": {
+    "pi/k3": {
+      "enabled": true,
+      "command": "/absolute/path/to/pi",
+      "model": "cc-switch-kimi-for-coding/k3-256k",
+      "effort": null,
+      "thinking": true,
+      "auth": {
+        "type": "native"
+      },
+      "env": []
+    },
+    "opencode/v4flash": {
+      "enabled": true,
+      "command": "/absolute/path/to/opencode",
+      "model": "opencode/deepseek-v4-flash",
+      "effort": "max",
+      "thinking": null,
+      "auth": {
+        "type": "native"
+      },
+      "env": []
+    },
+    "pi/coding": {
+      "enabled": true,
+      "command": "/absolute/path/to/pi",
+      "model": "cc-switch-kimi-for-coding/kimi-for-coding",
+      "effort": null,
+      "thinking": true,
+      "auth": {
+        "type": "native"
+      },
+      "env": []
+    },
+    "pi/v4flash": {
+      "enabled": true,
+      "command": "/absolute/path/to/pi",
+      "model": "cc-switch-deep-seek/deepseek-v4-flash",
+      "effort": "max",
+      "thinking": null,
+      "auth": {
+        "type": "native"
+      },
+      "env": []
+    },
+    "opencode/v4pro": {
+      "enabled": true,
+      "command": "/absolute/path/to/opencode",
+      "model": "opencode/deepseek-v4-pro",
+      "effort": "max",
+      "thinking": null,
+      "auth": {
+        "type": "native"
+      },
+      "env": []
+    },
+    "antigravity/flash": {
+      "enabled": true,
+      "allow_host_state": true,
+      "command": "/absolute/path/to/agy",
+      "model": "Gemini 3.6 Flash (High)",
+      "effort": null,
+      "thinking": null,
+      "auth": {
+        "type": "native"
+      },
+      "env": []
+    }
+  }
+}

@@ -22,7 +22,7 @@ WorkflowHub 的 wh-review / ReviewProviderClient 保留 reviewer group 的输入
 请求中配置的 profile 各自保留 attribution；不同配置不能无声丢弃，异源判断按实际 adapter/source。
 broker 附件传输按能力协商 file_only 或 always_embed；上述原生 transport 使用完整声明文件的受限 packet。必要合同、来源和内容不能截断，transport 差异不拆成新的公共审查。
 审查入口可等待同一次 managed 请求的真实终态；不能把仍 running 的成员当成 completed。
-公共结果的 identity、timing、usage、实际取消/清理、过程 outcome 与 provider 归属必须按实际 transport 校验。文档原生三段请求共用既有显式 600000 ms host 截止，内部步骤及 health/output 观测不得续期。OCR direct code provider 不额外设置 elapsed-time host kill，等待 provider 自身真实终态；显式调用方取消、ownerloss guardian、既有资源与失败边界及清理保持，health/output 只作诊断，不作为取消或继续的许可。首因、原始输出、已观察 session 与 usage 按真实过程保留，usage 不可得保持 null。
+公共结果的 identity、timing、usage、实际取消/清理、过程 outcome 与 provider 归属必须按实际 transport 校验。文档原生请求同样不设固定墙钟截止，以显式调用方取消与 ownerloss guardian 收场，health/output 只作诊断。OCR direct code provider 不额外设置 elapsed-time host kill，等待 provider 自身真实终态；显式调用方取消、ownerloss guardian、既有资源与失败边界及清理保持，health/output 只作诊断，不作为取消或继续的许可。首因、原始输出、已观察 session 与 usage 按真实过程保留，usage 不可得保持 null。
 传输层完整性和来源事实由实际 transport 保留，不作为 WorkflowHub 继续工作或质量通过的许可。
 未返回 usage 时保持 null，不用文件大小推算 token 或费用。
 
@@ -34,6 +34,7 @@ provider 或 broker 非零退出、取消、超时、无最终文本、坏 JSON�
 provider 不可用≠空 findings≠pass。
 
 WorkflowHub 不额外发起换 provider、格式纠正、continuation、同源兜底或重复审查。
+某来源启动失败或超时、调用方修复配置后只为该来源补派，属于补完同一次审查覆盖，不是复审、不计入复审次数；不自动触发；已返回语义结果原样保留、不重发。
 broker 内部实际重试只属于同一次请求的过程事实，次数、代价和最终失败如实记录。
 对 make-decision 方向面，同一次请求依次 reconstruct → reveal → challenge：先只读原始需求和
 客观事实独立重建问题，记录后才揭示当前方向并挑战。原生客户端为每个内部步骤提供不同的真实只读 packet，前一步终末记录后才创建后一步；只把全部材料放在同一个可读包并写顺序提示不满足盲审。内部重建/揭示输出保存为原始过程事实，只有最后挑战的 findings 是该请求的一个语义结果。不能用两次公共请求伪造一次完整过程。

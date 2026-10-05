@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const TABLE_REL = 'specs/workflowhub-thin-core-card-06-20260919/attachments/migration-table.md';
+const TABLE_REL = 'specs/archive/workflowhub-thin-core-card-06-20260919/attachments/migration-table.md';
 
 // 仓库根解析：沿 __dirname 上溯到含迁移表的根（在认证 worktree 内稳定，不依赖 cwd）。
 function findRepoRoot(start) {
@@ -78,7 +78,7 @@ const SCAN_EXCLUDED = [
   [/^docs\/research\//, 'docs/research 只读调研保留区'],
   [/^docs\/archive\//, 'docs/archive 只读归档区'],
   // 迁移表自身含全部 path 与模块名文本，必然命中。
-  ['specs/workflowhub-thin-core-card-06-20260919/attachments/migration-table.md', '台账数据源自身'],
+  ['specs/archive/workflowhub-thin-core-card-06-20260919/attachments/migration-table.md', '台账数据源自身'],
   // 本测试与同源台账测试在源码文本中引用被删模块 basename/path（预写测试的天性）。
   ['tests/contract/card06-migration-ledger.test.mjs', 'card06 台账测试自身'],
   [/^tests\/contract\/thin-core-residue.*\.test\.mjs$/, 'card06 残留测试自身'],
@@ -86,6 +86,10 @@ const SCAN_EXCLUDED = [
   [/decision-log\.md$/, '决策日志记载删除决定，非存活代码引用'],
 ];
 const isScanExcluded = (rel) => SCAN_EXCLUDED.some(([rule]) => (rule instanceof RegExp ? rule.test(rel) : rule === rel));
+// CARD-09 D-017: only the migrated broker's exact skill entry is exempt.
+const REVIVAL_EXEMPT = new Set(["skills/third-review/SKILL.md"]);
+const isRevivalCandidate = (rel, deleted) => rel !== deleted && !REVIVAL_EXEMPT.has(rel)
+  && moduleBaseName(rel) === moduleBaseName(deleted) && !isPreexistingPeer(rel, deleted);
 
 const MAX_FILE_BYTES = 1024 * 1024;
 function walkFiles(rootDirs, keep) {
@@ -288,6 +292,19 @@ const RESIDUE_PATTERNS = {
 // 纳入本测试模式清单（一个删除面只挂一处断言，防双登记）。
 
 describe('thin-core residue（AC-29）', () => {
+  it('CARD-09 exempts only the exact broker SKILL path and detects other same-basename new paths', () => {
+    const deleted = 'workflows/build-spec/SKILL.md';
+    expect(isRevivalCandidate('skills/third-review/SKILL.md', deleted)).toBe(false);
+    const fixtureRoot = fs.mkdtempSync(path.join(ROOT, 'skills/card09-revival-negative-'));
+    try {
+      fs.mkdirSync(path.join(fixtureRoot, 'nested'));
+      for (const candidate of ['SKILL.md', 'nested/SKILL.md']) {
+        const file = path.join(fixtureRoot, candidate);
+        fs.writeFileSync(file, '# Unregistered new same-basename module\n');
+        expect(isRevivalCandidate(path.relative(ROOT, file), deleted)).toBe(true);
+      }
+    } finally { fs.rmSync(fixtureRoot, { recursive: true, force: true }); }
+  });
   // 断言 1/2：换名复活 + 调用点，按批次分组（批次 ≤ current 的 DELETE 行）。
   for (const [index, label] of BATCH_LABELS.entries()) {
     if (index > CURRENT) break;
@@ -300,8 +317,7 @@ describe('thin-core residue（AC-29）', () => {
         // 新path/NEW、未来或未声明peer的字节改动、完整退休blob搬回仍是候选；部分语义拷贝需AC-29人工核对。
         it(`已删模块 ${r.path} 无同名新实现（换名复活）`, () => {
           const base = moduleBaseName(r.path);
-          const reborn = allSevenRootFiles().filter((rel) => rel !== r.path
-            && moduleBaseName(rel) === base && !isPreexistingPeer(rel, r.path));
+          const reborn = allSevenRootFiles().filter((rel) => isRevivalCandidate(rel, r.path));
           expect(reborn, `已删模块 ${base} 以新路径复活：${reborn.join(', ')}`).toEqual([]);
         });
         // 断言 2：调用点——存活生产代码不得出现 from "...<被删模块路径>" 或

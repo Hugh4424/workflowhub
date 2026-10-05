@@ -26,7 +26,7 @@ UI governance records include an explicit owner, consumer, and delete condition.
 | scope-triage | 外部改造适配 | AgentHub historical import | 已内联吸收，不保留 runtime skill |
 | decision-log | 外部改造适配 | AgentHub historical import | 现为 workflowhub native |
 | Worker-Mode | 外部依赖 | host subagent capability | 不属于 skill 闭包 |
-| 3rd-review | 外部依赖 | skills/wh-review | 已由 wh-review V4 替代 |
+| 3rd-review | 仓内原生 | skills/third-review | 已迁入 `skills/third-review`，由 wh-review 调用 |
 | TDD 件（capture.mjs） | 外部改造适配 | obra/superpowers + mattpocock/skills | 内联 RED/GREEN 证据合同 |
 | spec-specify | 外部改造适配 | github/spec-kit | 去宿主耦合 |
 | spec-clarify | 外部改造适配 | github/spec-kit | 去宿主耦合 |

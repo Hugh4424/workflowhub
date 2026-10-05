@@ -23,7 +23,7 @@ import { validateTaskId } from "../../runtime/task/task-identity.mjs";
 import { resolveStorageRoot, resolveStorageRootDetails } from "../../runtime/evidence/storage-root.mjs";
 import { AUTHENTICATED_EVIDENCE_PATH, redactProviderHostPaths } from "../../runtime/review/provider-material-projection.mjs";
 import { authenticatedEvidenceBytes } from "../../runtime/review/review-packet-identity.mjs";
-import { runSimpleReview } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
+import { runSimpleReview, validateReviewSupplement, validateReviewCallerMaterials } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 import { prepareConfiguredOcrHostContext, runConfiguredOcrHostReview, runOcrDelegationRound, detectOcr } from "../../runtime/review/ocr-delegation-adapter.mjs";
 import { compactReviewDiff, gitDiffPath } from "../../runtime/review/review-input-bounds.mjs";
 import { captureReviewSource } from "../../skills/wh-review/scripts/review-source.mjs";
@@ -388,7 +388,7 @@ function writeOcrCurrentMaterialProjection(bundleRoot, projected, evidence) {
   }
 }
 
-function projectOcrCodeReviewBundle(built, attachmentRoot, request, source) {
+function projectOcrCodeReviewBundle(built, attachmentRoot, request, source, nativePacketFallback = false) {
   const selected = built.manifest.filter(({ path }) => path !== "packet-plan.json" && path !== "manifest.json");
   const paths = new Set(selected.map(({ path }) => path));
   for (const path of ["contracts/build-code.md", "contracts/verify-code.md", "contracts/provider-protocol.md", "skills/simplicity-guard/SKILL.md", "skills/review/SKILL.md"]) {
@@ -414,7 +414,7 @@ function projectOcrCodeReviewBundle(built, attachmentRoot, request, source) {
       const destination = join(bundleRoot, entry.path);
       mkdirSync(dirname(destination), { recursive: true });
       const projectedBytes = entry.path === "review-instructions.md"
-        ? Buffer.from(ocrReviewInstructionsFor(request), "utf8") : bytes;
+        ? Buffer.from(bytes.toString("utf8").split("\n").filter((line,index)=>index<4 && !line.startsWith("Review stage ")).join("\n").replaceAll("`changes.diff`",nativePacketFallback ? "`changes.diff`" : "`diff/changes.md`")+"\n"+ocrReviewInstructionsFor(request), "utf8") : bytes;
       if (projectedBytes === bytes) copyFileSync(join(built.bundleRoot, entry.path), destination);
       else writeFileSync(destination, projectedBytes);
       projected.push({ path: entry.path, bytes: projectedBytes.length, sha256: sha256(projectedBytes) });
@@ -509,6 +509,8 @@ export function prepareTaskBoundBuildCodeReviewBundle(context, request, {
   loadConfig = loadTrustedThirdReviewConfig,
   captureSource = captureReviewSource,
   buildMaterials = buildReviewMaterials,
+  // Only the existing fallback closure sets this private transport target; it is never caller request metadata.
+  nativePacketFallback = false,
 } = {}) {
   if (!isTaskBoundBuildCodeReviewRequest(request)) throw new TypeError("task-bound build-code review request required");
   const reviewScope = request.review_scope ?? request.reviewScope;
@@ -555,7 +557,7 @@ export function prepareTaskBoundBuildCodeReviewBundle(context, request, {
     try {
       const manifest = built.deliveryManifest ?? built.manifest;
       packet = candidateExperiment && Array.isArray(manifest)
-        ? projectOcrCodeReviewBundle({ ...built, manifest }, trusted.attachmentRoot, request, selectedSource)
+        ? projectOcrCodeReviewBundle({ ...built, manifest }, trusted.attachmentRoot, request, selectedSource, nativePacketFallback)
         : built;
     } catch (error) {
       rmSync(built.bundleRoot, { recursive: true, force: true });
@@ -574,6 +576,11 @@ export function prepareTaskBoundBuildCodeReviewBundle(context, request, {
   } finally {
     source.dispose?.();
   }
+}
+
+export function writeManagedStallDiagnostic(event, { stderr = process.stderr, now = Date.now() } = {}) {
+  const minutes = Math.max(0, Math.floor((now - event.unchanged_since_ms) / 60000));
+  stderr.write("审查仍在运行，不是失败；已 " + minutes + " 分钟无新进展。可以继续等待，或按 Ctrl-C 停止等待并收场（已返回的发现会保留）。\n");
 }
 
 function parseArgs(argv) {
@@ -604,6 +611,82 @@ function readPlainInputFile(path,label) {
   const named=lstatSync(absolute);if(!named.isFile()||named.nlink!==1)throw Object.assign(new Error(`${label} must be a single-link regular file`),{code:"TASK_FILE_INVALID"});
   const fd=openSync(absolute,fsConstants.O_RDONLY|fsConstants.O_NOFOLLOW);
   try{const st=fstatSync(fd);if(st.dev!==named.dev||st.ino!==named.ino||!st.isFile()||st.nlink!==1)throw Object.assign(new Error(`${label} changed`),{code:"TASK_FILE_CHANGED"});return readFileSync(fd,"utf8");}finally{closeSync(fd);}
+}
+
+function resolveMaterialRefs(context, materials) {
+  if (!materials || typeof materials !== "object" || Array.isArray(materials)) return materials;
+  return Object.fromEntries(Object.entries(materials).map(([key, value]) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)
+        || (!Object.hasOwn(value, "ref") && !Object.hasOwn(value, "sha256"))) return [key, value];
+    try {
+      if (Object.keys(value).sort().join("\0") !== "ref\0sha256"
+          || typeof value.ref !== "string" || isAbsolute(value.ref)
+          || value.ref.includes("\\") || value.ref.includes("\0")
+          || value.ref.split("/").some(part => !part || part === "." || part === "..")
+          || typeof value.sha256 !== "string" || !/^[a-f0-9]{64}$/.test(value.sha256)) {
+        throw new Error("material reference requires a relative ref and sha256");
+      }
+      const root = /^quality\/(?:tests|evidence)\//.test(value.ref)
+        ? context.task.taskPath : context.workspace.worktreeRoot;
+      const path = resolve(root, value.ref);
+      const within = relative(resolve(root), path);
+      if (!within || isAbsolute(within) || within.split(/[\\/]/).includes("..")) throw new Error("material reference escapes its root");
+      // A private Node worker can bind each opened directory to its kernel cwd.
+      // Absolute path checks alone cannot prevent parent-directory ABA races.
+      const worker = `// CARD09_MATERIAL_CWD_READER
+import fs from "node:fs";
+import path from "node:path";
+import { createHash } from "node:crypto";
+const input = JSON.parse(fs.readFileSync(0, "utf8")), held = [];
+const same = (a, b) => a.dev === b.dev && a.ino === b.ino;
+const directoryFlags = fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW;
+function verifyCwd(expected, fd) {
+  const current = fs.statSync("."), opened = fs.fstatSync(fd);
+  if (!current.isDirectory() || !opened.isDirectory() || !same(current, opened)
+      || process.cwd() !== expected) throw new Error("material ancestor changed");
+}
+try {
+  if (!Number.isInteger(fs.constants.O_DIRECTORY) || !Number.isInteger(fs.constants.O_NOFOLLOW)) throw new Error("directory binding unsupported");
+  let expected = input.root, directory = 3;
+  verifyCwd(expected, directory);
+  const parts = input.ref.split("/"), leaf = parts.pop();
+  for (const part of parts) {
+    const next = fs.openSync(part, directoryFlags); held.push(next);
+    process.chdir(part); expected = path.join(expected, part);
+    verifyCwd(expected, next); directory = next;
+  }
+  verifyCwd(expected, directory);
+  const fd = fs.openSync(leaf, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK); held.push(fd);
+  const before = fs.fstatSync(fd);
+  if (!before.isFile() || before.nlink !== 1) throw new Error("material must be a single-link regular file");
+  const bytes = fs.readFileSync(fd), after = fs.fstatSync(fd);
+  if (!after.isFile() || after.nlink !== 1 || !same(before, after)) throw new Error("material file changed");
+  verifyCwd(expected, directory);
+  if (createHash("sha256").update(bytes).digest("hex") !== input.sha256) throw new Error("material reference sha256 mismatch");
+  if (!Buffer.from(bytes.toString("utf8"), "utf8").equals(bytes)) throw new Error("material must contain valid UTF-8");
+  process.stdout.write(bytes);
+} catch (error) { process.stderr.write(String(error.message)); process.exitCode = 2; }
+finally { for (const fd of held.reverse()) fs.closeSync(fd); }
+`;
+      const named = lstatSync(root);
+      if (!named.isDirectory() || named.isSymbolicLink() || realpathSync(root) !== root) throw new Error("material root alias");
+      const rootFd = openSync(root, fsConstants.O_RDONLY | fsConstants.O_DIRECTORY | fsConstants.O_NOFOLLOW);
+      try {
+        const opened = fstatSync(rootFd);
+        if (!opened.isDirectory() || opened.dev !== named.dev || opened.ino !== named.ino) throw new Error("material root changed");
+        const result = process.getBuiltinModule("node:child_process").spawnSync(process.execPath, ["--input-type=module", "-e", worker], {
+          cwd: root, env: {}, input: JSON.stringify({ root, ref: value.ref, sha256: value.sha256 }),
+          stdio: ["pipe", "pipe", "pipe", rootFd], maxBuffer: Infinity,
+        });
+        if (result.error) throw result.error;
+        if (result.status !== 0 || result.signal) throw new Error(String(result.stderr || "material reader failed"));
+        if (sha256(result.stdout) !== value.sha256) throw new Error("material reader output changed");
+        return [key, result.stdout.toString("utf8")];
+      } finally { closeSync(rootFd); }
+    } catch (cause) {
+      throw Object.assign(new Error(`material ${key}: ${cause.message}`, { cause }), { code: "TASK_FILE_INVALID" });
+    }
+  }));
 }
 
 
@@ -898,6 +981,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     const original=input.request;
     if(original.stage!==undefined && original.stage!==values.stage) throw new TypeError("review request stage differs from CLI stage");
     const request={...original,stage:values.stage,activation_cohort:context.manifest.activation_cohort ?? "pre"};
+    request.materials = resolveMaterialRefs(context, request.materials);
     const isPhase=values.stage==="build-code" && (request.review_kind ?? request.reviewKind ?? null)===null;
     if(isPhase) {
       request.review_scope=request.review_scope ?? request.reviewScope ?? "phase";
@@ -907,9 +991,18 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     const codeSurface=["build-code","verify-code"].includes(request.stage)
       && (request.review_kind ?? request.reviewKind ?? null)===null && request.surface!=="document";
     if(codeSurface)request.surface="code";
+    // Reader-only storage-root adaptation: the authenticated workspace is never mutated or published as this root.
+    // Reuses P1's unchanged stable reader; only this task's ordinary review JSON is admitted.
+    const readSupplementRecord=({record_ref,record_sha256})=>{
+      if(typeof record_ref!=="string"||!/^quality\/reviews\/[^/\\]+\.json$/.test(record_ref)||record_ref.includes(".."))throw Object.assign(new Error("supplement ref must name this task's ordinary review JSON"),{code:"TASK_FILE_INVALID"});
+      const storageContext={task:context.task,workspace:{worktreeRoot:context.task.taskPath}};
+      return Buffer.from(resolveMaterialRefs(storageContext,{record:{ref:record_ref,sha256:record_sha256}}).record,"utf8");
+    };
     const runner=async (current,options)=>{
       const whReview=typeof services.runReviewRound==="function" ? services.runReviewRound : runSimpleReview;
-      if(!codeSurface)return whReview(current,options);
+      if(!codeSurface)return whReview(current,{...options,readSupplementRecord,onManagedStall:services.onManagedStall ?? writeManagedStallDiagnostic});
+      const materialPreflight=validateReviewCallerMaterials(current);
+      if(materialPreflight)return {...materialPreflight,executor:"ocr"};
       const detection=detectOcr();
       if(detection.status==="unavailable")return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:detection.error?.code ?? "OCR_DETECTION_UNAVAILABLE",message:detection.reason}};
       if(detection.status==="not_installed"){
@@ -917,19 +1010,34 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
         // The only route allowed to run providers inside this host process: it
         // must declare that native packet fallback so wh-review keeps its packet
         // boundary preflight and does not open a broker session for it.
-        const nativeFallback={...options,nativePacketFallback:true};
-        const result=typeof services.runReviewRound==="function" ? await whReview(current,nativeFallback)
-          : await whReview(current,{...nativeFallback,buildBundle:()=>prepareTaskBoundBuildCodeReviewBundle(context,current)});
+        const nativeFallback={...options,nativePacketFallback:true,readSupplementRecord,
+          onManagedStall:services.onManagedStall ?? writeManagedStallDiagnostic,buildBundle:()=>{
+          const built=prepareTaskBoundBuildCodeReviewBundle(context,current,{nativePacketFallback:true});
+          // Reader-only transport shape adaptation: same manifest bytes and dispose, no packet rewrite.
+          return {...built,deliveryManifest:built.manifest};
+        }};
+        const result=await whReview(current,nativeFallback);
         return {...result,executor:"wh-review",fallback};
       }
       const onProviderHealth=services.onOcrProviderHealth ?? writeOcrProviderHealthDiagnostic;
       if(typeof onProviderHealth!=="function")throw new TypeError("OCR health observer must be a function");
       const ocrRunner=services.runOcrDelegationRound;
-      if(typeof ocrRunner==="function")return {...await ocrRunner(current,{...options,onProviderHealth}),executor:"ocr"};
       let bundle;
       try {
-        bundle=prepareTaskBoundBuildCodeReviewBundle(context,current);
-        const trustedContext=prepareConfiguredOcrHostContext(current);
+        try{bundle=prepareTaskBoundBuildCodeReviewBundle(context,current);}catch(error){return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:error.code??"ROUTE_UNAVAILABLE",message:redactProviderHostPaths(String(error.message)),diagnostic:{field:"materials/route",expected:"current task-bound materials and trusted route",actual:"invalid",next_action:"repair the reported input or route before dispatch"}}};}
+        let trustedContext;
+        try{trustedContext=prepareConfiguredOcrHostContext(current);}catch(error){
+          return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:error.code??"ROUTE_UNAVAILABLE",message:redactProviderHostPaths(String(error.message)),diagnostic:{field:"route/provider_selection",expected:"one current trusted code route and valid provider configuration",actual:"invalid",next_action:"repair current route/configuration before dispatch"}}};
+        }
+        let subset;
+        try{subset=await validateReviewSupplement(current,{providers:trustedContext.selection.providers,materialId:bundle.materialId,taskId:context.task.identity.taskId,readRecord:readSupplementRecord});}
+        catch(error){return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:error.code,message:error.message,diagnostic:error.diagnostic}};}
+        if(current.only_providers!==undefined){
+          const selected=new Set(subset),original=trustedContext.selection,filterMap=map=>map?Object.fromEntries(Object.entries(map).filter(([key])=>selected.has(key))):map;
+          // Only selection is narrowed. Preserve the full trusted configuration SHA and route identity drift checks.
+          trustedContext={...trustedContext,selection:{...original,providers:subset,eligibleProfiles:original.eligibleProfiles.filter(p=>selected.has(p)),requestedProfiles:original.requestedProfiles.filter(p=>selected.has(p)),requestedProfileSpecs:original.requestedProfileSpecs.filter(p=>selected.has(typeof p==="string"?p:p.provider??p.id)),provider_identities:filterMap(original.provider_identities),provider_models:filterMap(original.provider_models)}};
+        }
+        if(typeof ocrRunner==="function")return {...await ocrRunner(current,{...options,onProviderHealth,bundle,trustedContext}),executor:"ocr"};
         const result=await runOcrDelegationRound(current,{buildBundle:()=>bundle,signal:options.signal,
           executor:params=>runConfiguredOcrHostReview(params,{trustedContext,sourceBundle:bundle,onProviderHealth,
             rawOutputSink:async (hint,bytes,metadata={})=>options.onProviderOutput({provider:metadata.provider ?? "ocr",role:null,channel:metadata.stream ?? "raw-output",output:bytes})})});

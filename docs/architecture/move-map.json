@@ -4069,6 +4069,696 @@
       "consumer": "Vitest tests/**/*.test.mjs发现规则及有范围verify显式新路径；实际被测research-report.mjs普通validator/query/③publisher和TaskHandle受保护读取。不是生产入口或推进许可。",
       "content_change": "原 MT-6-191 DELETE 地址已单原件同目录 rename，当前 ordinary-only 14项测试字节不变；无 copy 双写、无退休 hash/schema/stage 认证复活。",
       "delete_condition": "真正report生产消费者退役，或普通义务经独立审读由真实当前测试完整承接后删除；不是仅文件名/计数绿色。"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/LICENSE@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/LICENSE",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/SKILL.md@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/SKILL.md",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/config.example.json@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/config.example.json",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/docs/2026-07-22-antigravity-pi-runtime-support-design.md@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/docs/2026-07-22-antigravity-pi-runtime-support-design.md",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/docs/2026-07-23-workflowhub-managed-session-design.md@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/docs/2026-07-23-workflowhub-managed-session-design.md",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/docs/adr/0001-v4-cli-contract.md@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/docs/adr/0001-v4-cli-contract.md",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/docs/archive/2026-07-12-v3-redesign-design.md@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/docs/archive/2026-07-12-v3-redesign-design.md",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/docs/cursor-adapter.md@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/docs/cursor-adapter.md",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/docs/exceptions.md@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/docs/exceptions.md",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/docs/workflowhub-result-v2.md@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/docs/workflowhub-result-v2.md",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/docs/workflowhub-result-v3.md@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/docs/workflowhub-result-v3.md",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/adapters/antigravity.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/lib/adapters/antigravity.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/adapters/claude-code.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/lib/adapters/claude-code.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/adapters/claude-supervised-cli.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/lib/adapters/claude-supervised-cli.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/adapters/codex-app-server-client.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/lib/adapters/codex-app-server-client.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/adapters/codex.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/lib/adapters/codex.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/adapters/cursor-bundle-mcp.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/lib/adapters/cursor-bundle-mcp.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/adapters/cursor.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/lib/adapters/cursor.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/adapters/dsh.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/lib/adapters/dsh.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/adapters/grok.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/lib/adapters/grok.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/adapters/index.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/lib/adapters/index.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/adapters/kimi.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/lib/adapters/kimi.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/adapters/opencode-supervised-cli.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/lib/adapters/opencode-supervised-cli.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/adapters/opencode.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/lib/adapters/opencode.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/adapters/pi-supervised-cli.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/lib/adapters/pi-supervised-cli.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/adapters/pi-workspace-guard.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/lib/adapters/pi-workspace-guard.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/adapters/pi.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/lib/adapters/pi.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/adapters/shared.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/lib/adapters/shared.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/attachments.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/lib/attachments.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/broker.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/lib/broker.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/config.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/lib/config.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/continuation-materials.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/lib/continuation-materials.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/errors.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/lib/errors.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/health-runner.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/lib/health-runner.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/managed-session-manager.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/lib/managed-session-manager.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/process.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/lib/process.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/provider-failure.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/lib/provider-failure.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/provider-ids.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/lib/provider-ids.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/recovery-policy.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/lib/recovery-policy.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/runtime-guardian.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/lib/runtime-guardian.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/runtime.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/lib/runtime.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/workflowhub-result-v3.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/lib/workflowhub-result-v3.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/package.json@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/package.json",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/scripts/3rd-review.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/scripts/3rd-review.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/3rd-review/scripts/cursor-real-smoke.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
+      "destination": "skills/third-review/scripts/cursor-real-smoke.mjs",
+      "status": "move",
+      "role": "production",
+      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "CARD-09 P1/T002 skill runtime subset",
+      "destination": "skills/third-review/skill-bundle.json",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "third-review独立技能运行文件清单",
+      "owner": "skills/third-review",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
+      "delete_condition": "宿主不再调用 third-review",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"
