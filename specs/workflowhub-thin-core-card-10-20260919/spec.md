@@ -433,14 +433,15 @@ node tests/acceptance/card-09-session-ledger.mjs --session <真实 session.jsonl
 
 ### 全局验证策略
 
-- **验证策略**：每条 AC 由 verify-code 用真实入口执行或只读核对验证；三个 oracle 单元单文件定向执行，主命令形态为 `npx vitest run tests/e2e/card-04-real-entry-chain-e2e.test.mjs`、`node tests/acceptance/card-09-session-ledger.mjs --session "$HOME/.dsh/sessions/$CARD10_PROJECT/session.jsonl"`（先把 `CARD10_PROJECT` 设为真实项目目录名；等价替代＝换成真实会话日志的字面路径）、`npx vitest run tests/e2e/stage-runtime-five-stage-e2e.test.mjs`；其余只做原件存在性核对与归档引用。执行记录必须含命令、exit code、output 落点。
+- **验证策略**：每条 AC 由 verify-code 用真实入口执行或只读核对验证；三个 oracle 单元单文件定向执行，主命令形态为 `npx vitest run tests/e2e/card-04-real-entry-chain-e2e.test.mjs`、`node tests/acceptance/card-09-session-ledger.mjs --session "$HOME/.dsh/sessions/$CARD10_PROJECT/session.jsonl" --since "$CARD10_SINCE_MS" --until "$CARD10_UNTIL_MS"`（先把 `CARD10_PROJECT` 设为真实项目目录名，并把 `CARD10_SINCE_MS` / `CARD10_UNTIL_MS` 设为具体真实毫秒窗口；等价替代＝换成真实会话日志字面路径与两个数值边界）、`npx vitest run tests/e2e/stage-runtime-five-stage-e2e.test.mjs`；其余只做原件存在性核对与归档引用。执行记录必须含命令、exit code、output 落点。
 - **RED/GREEN 设计**：本卡无产品行为变更，无新 RED→GREEN，走 G-2 豁免披露（ADR-003）：①写明「本卡无行为变更，故无新 RED→GREEN」②补一条可失败检查 ③复跑仓库现成 oracle ④引用 CARD-09 归档里的真实 RED→GREEN 原件作为历史事实。记录必须写明③是「独立复跑既有 oracle」，不是本卡新实现产生的 RED→GREEN。本卡**每个 Task 的门禁本身就是一条可失败的内联断言**（不新增 `tests/` 脚本、不在仓库内新增文件），其 RED＝该 Task 交付物错误时门禁非 0、GREEN＝交付物正确时门禁退出 0；该门禁是 G-2 的客观替代载体，不构成产品行为层的 RED→GREEN。
 - **最终聚合**：最终聚合是一次普通 Phase 任务（P1 / T008），不是新门禁；它把三条前置记录齐备性与披露项逐条在列作为判定对象。
+- **四条既有内联断言的限定加强**：T001（AC-C10-002）核九卡唯一明细/四判据与019具名source计数，并要求每卡末行stage=close；当前CARD-06末行verify-code须如实输入不足，独立Git动作不代替该判据；T005（AC-C10-006）按040 rename map与050独立字节核对校验单份合并raw的stdout/stderr标记、原失败字节、真实exit3与复验exit0；T006/T008（AC-C10-007..009、014）逐INTEG ID唯一合法终态，T008对三类已命名记录（T003/T004、T001/T006、T005/T007）及实际来源更正核引用、存在、非空与命令/退出字段。此为现有交付物测试断言，不新增oracle、产品测试、schema、控制面或stage许可；unverified、已批准failed处置及G-2覆盖限制不变。具体可执行唯一命令正文仍在P1，Task重复处逐字一致；源hash只核单原件测试参数，不做全树或跨Phase绑定。
 - **不能证明的内容**：①INTEG-1 的「各卡实际消费冻结蓝图」只能证到 1/4 张卡有行为级消费证据，其余三卡无消费证据；②INTEG-2 的「契约一致、互不覆盖」无共同步骤标识可对照，CARD-04 冻结接口②③在 HEAD 已无代码实现；③INTEG-3 的资源效率前后改善无对照基线（CARD-09 自记 `inconclusive`）；④E2E-1 的「宿主真实任务发起入口」入口面无原件；⑤被点名 oracle 的失效本身不能证明产品功能失败。以上五项都必须作为未验证项或缺口披露，不得写成通过。
 
 ## Appendix A — 验收判据（唯一权威）
 
-本节是 AC 条件、可测通过判据、失败条件与预期证据的唯一权威。叙事各节可指向 AC，但不复制本节正文。`证据：` 只声明预期证据类型或制品；执行事实由 verify-code 提供。本卡 AC 编号自铸 `AC-C10-{NNN}`；母 PRD 的 `AC-47..AC-50`（`prd.md:535-538`）只作来源 ID。
+本节是已接受决定的 AC 条件、可测通过判据、失败条件与预期证据的唯一权威，不覆盖或放宽 `decision-log.md` 已 accepted 的强输入定义。叙事各节可指向 AC，但不复制本节正文。`证据：` 只声明预期证据类型或制品；执行事实由 verify-code 提供。本卡 AC 编号自铸 `AC-C10-{NNN}`；母 PRD 的 `AC-47..AC-50`（`prd.md:535-538`）只作来源 ID。
 
 - [ ] **AC-C10-001**：总体集成验收套件以母 PRD 所载三部分主体成形，8 项条目齐备，每条含可观察用例、所需证据、承接负责人，无临时增删用例、无改写失败判据；关联 FR-C10-001；来源 FR-47、AC-47。
 验证：把本卡套件条目表与 `### 套件条目与执行映射` 下的逐条成功/失败条件清单，与 `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:551-607` 逐条对照，核对三部分齐备、每条五要素齐全、失败判据逐字一致。「五要素」在此处定义＝①编号 ②可观察用例（`prd.md` 的「可观察结果」）③成功条件 ④失败条件 ⑤承接负责人；第六项「证据类型」归入条目表的「证据落点」列与逐条清单的证据行，不单独计入五要素。
@@ -450,8 +451,8 @@ node tests/acceptance/card-09-session-ledger.mjs --session <真实 session.jsonl
 
 - [ ] **AC-C10-002**：CARD-01..09 全部 9 张卡的验收事实存在性核对记录齐备，每卡四判据逐条给出结果、计数与命中清单，且无任何把 `failed`/`unavailable`/`missing`/`unverified` 记为 `passed`/`succeeded` 的记录；关联 FR-C10-002；来源 `prd.md:555-557`、AC-47。
 验证：对每卡核 ①外置 `facts.jsonl` 末行是否 `stage=close` ②外置 `quality/` 下审查点原件是否存在（按该卡实际审查点数）③`quality/` 与 `facts.jsonl` 的终态字段检索与计数（逐卡给计数与命中清单）④定位通路能否实际打开原文；四判据均用只读命令，记录 exit code 与 output 落点。
-通过：9 张卡全部有核对记录；四判据逐条给出结果；漂白检索计数为 0 且命中清单为空；抽验通路可回读原文。
-失败：任一卡事实缺失或存在漂白；核对记录缺任一卡；四判据有未执行项而无 `unavailable` 标注。
+通过：9 张卡全部有核对记录；四判据逐条给出结果，且每卡外置 `facts.jsonl` 末行均为 `stage=close`（已确认决定的强输入条件，`decision-log.md:576`、`:1236`、`:1243`/`:1245`；与 FR-C10-002 和需求追踪负例一致）；漂白检索计数为 0 且命中清单为空；抽验通路可回读原文。
+失败：任一卡末行非 `stage=close`（输入资格不足，问句结果仍须如实记录，不能以记录了 false 代替资格为 true）；任一卡事实缺失或存在漂白；核对记录缺任一卡；四判据有未执行项而无 `unavailable` 标注。
 证据：逐卡核对记录 + 漂白检索计数与命中清单 + 定位通路说明，落 `<TASK_DIR>/quality/evidence/input-check/`。
 
 - [ ] **AC-C10-003**：用户抽验权通路存在且可用——能按路径规则定位任一卡的任一 AC 事实并回读原文，且不逐条复核 AC 内容；关联 FR-C10-003；来源 `prd.md:557`。
