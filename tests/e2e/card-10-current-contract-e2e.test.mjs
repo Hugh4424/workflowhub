@@ -39,7 +39,7 @@ async function fixture(type = "普通任务") {
   git(repo, "add", ".");
   git(repo, "commit", "-qm", "owned baseline");
   const env = { ...cleanEnv(), HOME: home, XDG_CONFIG_HOME: join(home, ".config"), WORKFLOWHUB_TASK_DIR: storage };
-  const boot = await bootstrapTask({ project: "CARD10Owned", task: "current-contract", "target-repo": repo }, { env, home, cwd: repo });
+  const boot = await bootstrapTask({ project: "CARD10Owned", task: "current-contract", "target-repo": repo }, { env, home });
   const worktree = boot.workspace.worktree_root;
   const taskPath = boot.task_path;
   const material = join(worktree, "specs/current-contract");
@@ -185,6 +185,42 @@ describe("current blueprint", () => {
     expect(result.error.code).toBe("TASK_FILE_INVALID");
     expect(readFileSync(source)).toEqual(sourceBytes);
     expect(readFileSync(join(f.taskPath, "facts.jsonl"))).toEqual(beforeFacts);
+  });
+
+  it.each(["普通任务", "missing", "duplicate", "conflicting"])(
+    "rejects %s task type before a build-prd draft can write prd.md", async type => {
+      const f = await fixture(type);
+      const base = "# Owned decision\n\n## 任务身份\n";
+      const decision = type === "missing" ? base
+        : type === "duplicate" ? base + "- **任务类型**：规划任务\n- **任务类型**：规划任务\n"
+          : type === "conflicting" ? base + "- **任务类型**：规划任务\n- **任务类型**：普通任务\n"
+            : base + "- **任务类型**：普通任务\n";
+      writeFileSync(join(f.material, "decision-log.md"), decision);
+      const draft = join(f.worktree, "owned-prd-draft.md");
+      writeFileSync(draft, "# Should not be written\n");
+      const beforeFacts = readFileSync(join(f.taskPath, "facts.jsonl"));
+      const result = cli(f, "run", "draft", {
+        stage: "build-prd",
+        extra: ["--name=prd.md", `--input=${draft}`],
+      });
+      expect(result.status).not.toBe(0);
+      expect(result.combined).toMatch(/explicit planning task type/);
+      expect(existsSync(join(f.material, "prd.md"))).toBe(false);
+      expect(readFileSync(join(f.taskPath, "facts.jsonl"))).toEqual(beforeFacts);
+    });
+
+  it("allows a planning task to draft prd.md through the same guarded artifact route", async () => {
+    const f = await fixture("规划任务");
+    const draft = join(f.worktree, "owned-prd-draft.md");
+    const bytes = "# Owned PRD\nacceptance: keep\n";
+    writeFileSync(draft, bytes);
+    const result = cli(f, "run", "draft", {
+      stage: "build-prd",
+      extra: ["--name=prd.md", `--input=${draft}`],
+    });
+    expect(result.status, result.combined).toBe(0);
+    expect(result.value.artifact_ref).toBe("specs/current-contract/prd.md");
+    expect(readFileSync(join(f.material, "prd.md"), "utf8")).toBe(bytes);
   });
 });
 
