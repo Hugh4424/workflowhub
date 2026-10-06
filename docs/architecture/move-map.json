@@ -4778,6 +4778,19 @@
       ],
       "delete_condition": "当前public/portable消费者退役且经独立验证替代承接后删除；目录登记只说明静态职责，不保存执行进度或计数",
       "retention_basis": "当前真实用户授权001；P2/T009定向八场景；测试保留服务实际CLI消费者，不建控制面"
+    },
+    {
+      "source": "tests/e2e/card-10-current-contract-e2e.test.mjs",
+      "destination": "tests/e2e/card-10-current-contract-e2e.test.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "当前七类阶段/材料义务的四卡角色完整消费与单作者/只读分析者同材料共存的有限真实CLI行为测试；语义判断由独立实际方法读回",
+      "owner": "CARD10/P4/T011–T012；同文件串行唯一实施owner；静态设计登记由当前材料owner维护",
+      "consumer": "预期由定向Vitest命令 npx vitest run tests/e2e/card-10-current-contract-e2e.test.mjs 消费；独立verify-code读真实执行原件；静态职责登记不证明功能验证",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "现行对应契约退役且经独立审查的替代已承接全部真实场景后删除；不因登记生成阶段许可",
+      "retention_basis": "当前U-019/R-C10-GAP-001/ADR-016设计方向；服务现行CLI/独立读回场景，保留不构成测试执行事实"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

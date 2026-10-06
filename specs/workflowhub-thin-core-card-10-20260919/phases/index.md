@@ -2,20 +2,12 @@
 
 ## Execution Index
 
-本表是纯指针索引：不是任务卡、不是 Phase 程序、不是进度账、不是完成权威。每个 Phase 恰好一行，权威正文分别在 `phases/P1.md` 和 `phases/P2.md`。
+纯指针索引；每Phase一行，正文是唯一执行合同。P1/P2旧范围保留；P3–P5当前设计增量仍草稿。Write set为各Phase实际文件边界，P5路径以已认证外置TASK_DIR为根，绝非worktree；只列一次driver，无仓库写面。
 
 | Phase | Authority ref | Semantic anchor | Write set | Dependency | Consumer |
 | --- | --- | --- | --- | --- | --- |
 | `P1` | `phases/P1.md` | `#l0--结果与变更` | `specs/workflowhub-thin-core-card-10-20260919/spec.md`；`specs/workflowhub-thin-core-card-10-20260919/phases/P1.md`；`specs/workflowhub-thin-core-card-10-20260919/phases/index.md` | none | verify-code 执行者（真实下游读取方，逐 Task 重放执行卡）；用户（按需抽验任一卡的任一 AC 事实） |
-
 | `P2` | `phases/P2.md` | `#t009-当前入口和当前等价oracle` | `tools/cli/stage-runtime.mjs`；`tests/e2e/stage-runtime-five-stage-e2e.test.mjs`；`tests/e2e/card-10-current-consumer-e2e.test.mjs`；`docs/architecture/move-map.json` | none（P1原件输入，不要求P1通过） | 当前公共CLI用户；独立verify-code消费者 |
-
-P2窄写集为下述原P1零改动限制的唯一当前授权例外；材料owner定点写D/S/P1/P2/index，D只追加授权，索引不写执行进度。
-
-上表 Write set 列只列**仓库写入面**（精确路径）：P1在仓库内的写入面就是这三份 `.md`，与 `phases/P1.md` 契约头的「写入集」逐条一致。
-
-仓库外证据落点不是仓库写入面，也不复制进仓库：`<TASK_DIR>/quality/tests/**`（测试与 oracle 执行原件）、`<TASK_DIR>/quality/reviews/**`（审查原件与受控演练原始字节）、`<TASK_DIR>/quality/evidence/**`（其余原件），按日期-序号-描述命名、append-only。
-
-本卡禁止写入面（零改动）：`tests/**`、`workflows/**`、`runtime/**`、`core/**`、`tools/**`、`skills/**`、`config/**`、`contracts/**`、`docs/**`、母 PRD `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md`、本卡 `specs/workflowhub-thin-core-card-10-20260919/decision-log.md`（唯一权威决定，只读不改）、`specs/archive/**`（ADR-005、ADR-006）。
-
-pre cohort 的旧任务卡只读保留，在本文件中没有有效行。
+| `P3` | `phases/P3.md` | `#l0--结果与变更` | `docs/contracts/card-01-stage-material-interface.md` | P2 | P4现行契约测试作者；主会话PRD展示消费者；独立verify-code消费者 |
+| `P4` | `phases/P4.md` | `#l0--结果与变更` | `tests/e2e/card-10-current-contract-e2e.test.mjs` | P3 | P5公平资源实验作者；独立verify-code消费者 |
+| `P5` | `phases/P5.md` | `#l0--结果与变更` | `quality/evidence/resource-experiment/card10-prospective-resource-driver.mjs` | P4 | 主会话资源展示消费者；独立verify-code消费者 |

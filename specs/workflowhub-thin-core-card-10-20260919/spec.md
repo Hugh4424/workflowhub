@@ -5,8 +5,8 @@
 > AC 的唯一定义在 `Appendix A`。叙事各节可以指向 AC，但不复制 AC 正文。`spec.md` 拥有产品行为与全局实现设计；`phases/P<n>.md` 拥有各 Phase 实现增量；`phases/index.md` 是纯指针。
 
 - **功能名**：CARD-10 总体集成验收收口（执行既定套件、不发明套件）
-- **来源**：母 PRD CARD-10 卡正文 `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:524-549`；总体集成验收套件 `prd.md:551-607`；本卡 `specs/workflowhub-thin-core-card-10-20260919/decision-log.md`（唯一权威，含 R-001..R-011、U-001..U-018、ADR-001..ADR-015、T-001..T-006）
-- **状态**：build-plan 起草完成，待独立审查与最终确认
+- **来源**：母 PRD CARD-10 卡正文 `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:524-549`；总体集成验收套件 `prd.md:551-607`；本卡 `specs/workflowhub-thin-core-card-10-20260919/decision-log.md`（唯一权威，保留原来源/决定；当前方向增量为U-019、R-C10-GAP-001、ADR-016，逐字来源见D对应节）
+- **状态**：当前增量草稿；一次独立审查原件已返回，处置后最后分析及完整计划实际确认尚待主会话完成
 
 ## 材料导航
 
@@ -58,7 +58,7 @@
 本卡的紧迫性来自三个已经发生的事实，而不是假设的风险：
 
 1. 母 PRD 的套件主体已经定稿，但其中三条跨卡集成用例（INTEG-1/2/3）的可观察结果在 HEAD 现实里无法完整闭合；若不在收口卡里如实判定并披露，它们会以「已列在 PRD 里」的形式被默认当成通过。
-2. 套件中被点名的两个 oracle 在 HEAD 已经失效或确定性失败（五阶段 e2e 3/3 失败；`tests/acceptance/card-01-current.mjs` 23/23 missing）。若不显式区分「套件内用例的失败判据」与「被点名 oracle 自身的失败事实」，这两种失败会被混为一谈。
+2. 原P1取证时被点名oracle已有失败/缺证（五阶段e2e原baseline 3/3失败，现P2具名修复原件另记；`tests/acceptance/card-01-current.mjs` 23/23 missing）。若不显式区分「套件内用例的失败判据」与「被点名 oracle 自身的失败事实」，这两种失败会被混为一谈。
 3. 母 PRD 多写了一个已经退役的审查节奏点（全 phase 结束集成审查），而四个现行 workflow 合同一致写明没有该审查点。只看 PRD 会得到错误读法。
 
 因此本卡要交付的不是新能力，而是一份**可核对的执行记录与判定**：套件成形 → 逐条真实入口执行 → 失败如实记录 → 关键失败路径核对 → 完成宣称判定与披露。
@@ -163,7 +163,7 @@ CARD-10 在任务地图里被指定为 Group 3 独占收口卡（`prd.md:129`、
 - PFACT-002 verified：同一文件用 `node --test tests/e2e/card-04-real-entry-chain-e2e.test.mjs` 实跑 exit 1（该文件 `import { describe, expect, it } from "vitest"`）。（取证报告 `[实跑]`）关联 FR-C10-011、AC-C10-011。（**执行者**＝本卡 build-plan 取证子代理 `[实跑]`；**原始 output 落点**＝本卡 build-plan 取证报告，**未落** `<TASK_DIR>/quality/tests/`；故本条不是 verify-code 的亲跑记录，与 `## 测试路线` 的「本阶段未运行任何新测试」不冲突。）
 - PFACT-003 verified：`node tests/acceptance/card-09-session-ledger.mjs` 裸跑 exit 1（缺 `--session`）；补 `--session <真实 session.jsonl|.zstd> [--since ms] [--until ms]` 后输出合法 JSON；退出码语义是自检通过，不是 AC 通过。真实 DSH session 日志在 `~/.dsh/sessions/<project>/`。（`decision-log.md` ADR-009 与取证报告 `[实跑]`）关联 FR-C10-011、AC-C10-011。（**执行者**＝本卡 build-plan 取证子代理 `[实跑]`；**原始 output 落点**＝本卡 build-plan 取证报告，**未落** `<TASK_DIR>/quality/tests/`；故本条不是 verify-code 的亲跑记录，与 `## 测试路线` 的「本阶段未运行任何新测试」不冲突。）
 - PFACT-004 verified：`npx vitest run tests/acceptance/card-09-session-ledger.test.mjs` 实跑 21 passed。（取证报告 `[实跑]`）关联 FR-C10-005、AC-C10-005。（**执行者**＝本卡 build-plan 取证子代理 `[实跑]`；**原始 output 落点**＝本卡 build-plan 取证报告，**未落** `<TASK_DIR>/quality/tests/`；故本条不是 verify-code 的亲跑记录，与 `## 测试路线` 的「本阶段未运行任何新测试」不冲突。）
-- PFACT-005 verified：`tests/e2e/stage-runtime-five-stage-e2e.test.mjs` 在 HEAD 确定性失败，`npx vitest run` 连跑 3 次结果一致（3/3）：`Test Files 1 failed (1) Tests 1 failed | 11 passed (12)`，失败用例 `routes review:risk before task lookup`，`Received: "{\"error\":\"unknown public runtime action\"…}"`；归因提交 `9350607c`（2026-10-02 19:44:31 +0800 `refactor: route public entries through narrow tools`）移除了 `review:risk` 路由。测试文件全文不含字符串 `review:risk`（实际为 `behavior="review"` + `--action=risk`）。（取证报告 `[实跑]`/`[实读]`）关联 FR-C10-011、AC-C10-011。（**执行者**＝本卡 build-plan 取证子代理 `[实跑]`；**原始 output 落点**＝本卡 build-plan 取证报告，**未落** `<TASK_DIR>/quality/tests/`；故本条不是 verify-code 的亲跑记录，与 `## 测试路线` 的「本阶段未运行任何新测试」不冲突。）
+- PFACT-005 verified：`tests/e2e/stage-runtime-five-stage-e2e.test.mjs` 在原P1 baseline确定性失败，`npx vitest run` 连跑 3 次结果一致（3/3）：`Test Files 1 failed (1) Tests 1 failed | 11 passed (12)`，失败用例 `routes review:risk before task lookup`，`Received: "{\"error\":\"unknown public runtime action\"…}"`；归因提交 `9350607c`（2026-10-02 19:44:31 +0800 `refactor: route public entries through narrow tools`）移除了 `review:risk` 路由。测试文件全文不含字符串 `review:risk`（实际为 `behavior="review"` + `--action=risk`）。（取证报告 `[实跑]`/`[实读]`）关联 FR-C10-011、AC-C10-011。（**执行者**＝本卡 build-plan 取证子代理 `[实跑]`；**原始 output 落点**＝本卡 build-plan 取证报告，**未落** `<TASK_DIR>/quality/tests/`；故本条不是 verify-code 的亲跑记录，与 `## 测试路线` 的「本阶段未运行任何新测试」不冲突。）
 - PFACT-006 verified：`tests/acceptance/` 下从未有过 card-04/05/06/08 的 oracle（`grep` 空 + `git log --diff-filter=D` 空）；HEAD 实存 10 个文件：`build-prd-current.mjs`、`card-01-current.mjs`、`card-02-current.mjs`、`card-02-current.test.mjs`、`card-03-current.mjs`、`card-03-current.test.mjs`、`card-07-current.mjs`、`card-09-session-ledger.mjs`、`card-09-session-ledger.test.mjs`、`workflowhub-research-handoff-hardening.acceptance.mjs`。（`decision-log.md` F-005、RISK-007；取证报告 `[实读]`）关联 FR-C10-002、FR-C10-012、AC-C10-002、AC-C10-012。
 - PFACT-007 verified：九卡外置 `quality/` 子目录形态不一——card-01/02/03/05/07 ＝ `authorizations confirmations evidence facts reviews stage-reflection tests`；card-04 多 `decisions` + `oracle`；card-06 无 `authorizations`；card-08 只 4 个；card-09 只 3 个（`evidence reviews tests`）。存在性核对必须逐卡实核，不得按统一目录清单套用。（`decision-log.md` F-004；取证报告 `[实读]`）关联 FR-C10-002、AC-C10-002。
 - PFACT-008 verified：规划任务 `facts.jsonl` 恰好 1 行且 `stage="make-decision"`，`quality/facts/` 62 份全为 `make-decision`，**无 build-prd 阶段事实行**；`build-prd` 是 portable workflow、本就不成为第六正式阶段，故这是符合而非缺陷。（`decision-log.md` F-013；取证报告 `[实读]`）关联 FR-C10-004、AC-C10-004。
@@ -208,14 +208,14 @@ CARD-10 在任务地图里被指定为 Group 3 独占收口卡（`prd.md:129`、
 ### 关键失败路径与执行纪律（C10-F）
 
 - **FR-C10-010**：对 SD-05 约定的三条关键失败路径逐条留核对记录——①真实测试失败被修复并复验（落 `<TASK_DIR>/quality/tests/`）②审查工具 unavailable 时独立替代或 `unverified` 披露（落 `<TASK_DIR>/quality/reviews/`，OCR 回退口径按 `workflows/build-code/SKILL.md:28-30`）③去阻断后历史失败事实未漂白（落 `<TASK_DIR>/quality/evidence/`）。路径②取证形态＝历史真实原件（CARD-05 26 份 `OCR_DELEGATION_UNAVAILABLE`、CARD-04 2 份 `OCR_ALL_PROVIDERS_FAILED`）+ 本轮受控演练两层并用，并同条写死三条边界：该演练是受控故障注入、不是自然故障；「独立替代审查真的顶班」在整个归档中从未发生过；本轮 `ocr` 实测在位（`open-code-review v1.12.12`，高于回退阈值 1.12.9）。**核对记录字段集（每条一份，AC-C10-010 的 `证据：` 据此）**：命令、exit code、output 落点、判定值，以及「引用 / 亲历」标注（写成 `引用-亲历: 引用` 或 `引用-亲历: 亲历`；缺该字段即视为不区分引用与亲历）。范围边界：缺任一路径核对记录整体不得声明完成；不冒称亲历；不人为制造假失败。依据：R-004、ADR-008、ADR-013。场景：SCN-004。验收：AC-C10-010。
-- **FR-C10-011**：修正并写死两处命令形态，使执行记录可复跑。范围边界：只改执行命令形态，不改任何断言、不改失败判据、不改 `tests/` 文件。依据：R-002、R-010、PFACT-002、PFACT-003、PFACT-005、PFACT-022。**命令形态口径**：本卡统一为 `npx vitest run tests/e2e/card-04-real-entry-chain-e2e.test.mjs` 与 `node tests/acceptance/card-09-session-ledger.mjs --session <真实日志> --since <ms> --until <ms>`；上游 `decision-log.md:628` 仍写 `node --test …`（错的，实跑 exit 1）——**`decision-log.md:628` 为被修正形态，以此处为准**。场景：SCN-003。验收：AC-C10-011。
-- **FR-C10-012**：执行广度只跑三个与套件直接相关的 oracle 单元——①`tests/acceptance/card-09-session-ledger.mjs`（会话账本 CLI）②`tests/e2e/card-04-real-entry-chain-e2e.test.mjs` ③`tests/e2e/stage-runtime-five-stage-e2e.test.mjs`；其余 CARD-01..09 只做原件存在性核对 + 归档引用。**三个 oracle 单元；`tests/acceptance/card-09-session-ledger.test.mjs` 是 ① 的 vitest 包装，若两者都执行只算同一个 oracle 单元，不是第四个 oracle。** 范围边界：不跑 `tests/acceptance` 下全部 oracle、不跑 `tests/` 下其他测试、不做无范围全量回归；某条用例的对应 oracle 缺失或不可执行时按失败事实如实记录并阻断完成宣称，不因广度受限降级为 `N/A`。依据：R-010、PFACT-006、PFACT-026、ADR-009。场景：SCN-001。验收：AC-C10-012。
-- **FR-C10-013**：原始证据全部落外置 `<TASK_DIR>/quality/`（`reviews/` 审查原件、`tests/` 测试执行原件、`evidence/` 其余原件），按日期+序号+描述命名、append-only；仓库内不复制任何原始件、不做目录快照或整树归档。范围边界：仓库内只留本卡 `specs/workflowhub-thin-core-card-10-20260919/` 的 `spec.md`/`phases/**` 与 verify-code 结论。依据：R-009、PFACT-021、ADR-005、ADR-006。场景：SCN-001。验收：AC-C10-013。
+- **FR-C10-011**：修正并写死两处命令形态，使执行记录可复跑。范围边界：原P1只改命令形态，不改其冻结评分；授权001的P2 test-change-request例外允许两具名测试/API接线，业务失败判据不降低；当前方向014允许计划中的新contract test，见AC011/012/013。依据：R-002、R-010、PFACT-002、PFACT-003、PFACT-005、PFACT-022。**命令形态口径**：本卡统一为 `npx vitest run tests/e2e/card-04-real-entry-chain-e2e.test.mjs` 与 `node tests/acceptance/card-09-session-ledger.mjs --session <真实日志> --since <ms> --until <ms>`；上游 `decision-log.md:628` 仍写 `node --test …`（错的，实跑 exit 1）——**`decision-log.md:628` 为被修正形态，以此处为准**。场景：SCN-003。验收：AC-C10-011。
+- **FR-C10-012**：执行广度只跑三个与套件直接相关的 oracle 单元——①`tests/acceptance/card-09-session-ledger.mjs`（会话账本 CLI）②`tests/e2e/card-04-real-entry-chain-e2e.test.mjs` ③`tests/e2e/stage-runtime-five-stage-e2e.test.mjs`；其余 CARD-01..09 只做原件存在性核对 + 归档引用。**三个 oracle 单元；`tests/acceptance/card-09-session-ledger.test.mjs` 是 ① 的 vitest 包装，若两者都执行只算同一个 oracle 单元，不是第四个 oracle。** 范围边界：原P1只三个oracle单元；授权001的P2两具名test、方向014的P4单新test和P5外置一次driver是精确例外，不跑无关测试或全量回归；某条用例的对应 oracle 缺失或不可执行时按失败事实如实记录并阻断完成宣称，不因广度受限降级为 `N/A`。依据：R-010、PFACT-006、PFACT-026、ADR-009。场景：SCN-001。验收：AC-C10-012。
+- **FR-C10-013**：原始证据全部落外置 `<TASK_DIR>/quality/`（`reviews/` 审查原件、`tests/` 测试执行原件、`evidence/` 其余原件），按日期+序号+描述命名、append-only；仓库内不复制任何原始件、不做目录快照或整树归档。范围边界：原P1仅本卡spec/Phase记录；授权001已允许P2的CLI/两test/map窄修，方向014只设计P3蓝图窄修/P4新test及当前map静态登记；精确路径与证据禁复制以AC-C10-013正文为准。依据：R-009、PFACT-021、ADR-005、ADR-006。场景：SCN-001。验收：AC-C10-013。
 
 ### 完成宣称与缺口（C10-C）
 
 - **FR-C10-014**：完成宣称只发生在真实入口联通实跑记录、约定成功条件达成记录、关键失败路径核对记录三者齐备之后；宣称与展示必须逐条包含三条 INTEG 的 `unverified` 结论与各自缺口去向/承接方、accepted_risk（DIR-D1-T10/finding #18）、未验证项与风险清单。范围边界：任一未验证项不得写成 pass 或「成功条件已达成」；三条 `unverified` 不阻断完成宣称（`prd.md:607` 的阻断条件是套件内用例**失败**），但必须显式披露；子任务状态相加不得充当整体完成。依据：R-005、R-011、ADR-012。场景：SCN-005。验收：AC-C10-014。
-- **FR-C10-015**：缺口在本卡如实登记并写明承接方；缺口修复交回原责任卡，本卡不做产品修复、不改母 PRD、不动母任务。范围边界：INTEG-1 缺口的承接方＝无（只在本卡记录）；五阶段 e2e oracle 缺口与 `card-01-current.mjs` oracle 缺口交回 CARD-06（推断，需对方确认）；INTEG-2 缺口交回 CARD-04/CARD-07 两侧。依据：R-005、R-009、ADR-014。场景：SCN-006。验收：AC-C10-015。
+- **FR-C10-015**：缺口在本卡如实登记并写明承接方；原P1缺口交回原责任卡；授权001已明确P2窄修例外，方向014只补当前设计，不改母PRD/母任务，超具名范围的产品改动另据真实失败修订scope。范围边界：INTEG-1 缺口的承接方＝无（只在本卡记录）；五阶段 e2e oracle 缺口与 `card-01-current.mjs` oracle 缺口交回 CARD-06（推断，需对方确认）；INTEG-2 缺口交回 CARD-04/CARD-07 两侧。依据：R-005、R-009、ADR-014。场景：SCN-006。验收：AC-C10-015。
 
 ## 6. 模块划分
 
@@ -363,7 +363,7 @@ node tests/acceptance/card-09-session-ledger.mjs --session <真实 session.jsonl
   - `tests/e2e/card-04-real-entry-chain-e2e.test.mjs`（8071 B，5 个 `it()`）：INTEG-2 定向 oracle，也是 E2E-3 受控注入的载体（内含 `verify execute` 的 `argv:[process.execPath,"-e",…]` 注入形态与 `services.runReviewRound` 的 `{status:"unavailable", error:{code:"OWNED_UNAVAILABLE"}}` 形态）。
   - `tests/acceptance/card-09-session-ledger.mjs`：会话账本 CLI，需 `--session <path> [--since ms] [--until ms]`；退出码语义是自检通过，不是 AC 通过。
   - `tests/acceptance/card-09-session-ledger.test.mjs`：21 passed。
-  - `tests/e2e/stage-runtime-five-stage-e2e.test.mjs`（42 行）：HEAD 确定性失败（3/3），失败用例 `routes review:risk before task lookup`。
+  - `tests/e2e/stage-runtime-five-stage-e2e.test.mjs`（42 行）：原P1 baseline确定性失败（3/3），现P2修复另记，失败用例 `routes review:risk before task lookup`。
   - `workflows/make-decision/steps.json`：**12 步**（第 11＝`stage-end-spec-analyze`、第 12＝`stage-handoff`），无「验收写入步」。
   - `runtime/task/task-store.mjs:84`：`facts.jsonl` 唯一 writer；唯一调用点 `tools/cli/stage-runtime.mjs:803`。
   - `docs/contracts/card-01-stage-material-interface.md`：HEAD 5 行 761 字节；46 行旧蓝图经 `git show 7c4a2444^:docs/contracts/card-01-stage-material-interface.md` 取得。
@@ -432,6 +432,11 @@ node tests/acceptance/card-09-session-ledger.mjs --session <真实 session.jsonl
 | CARD-10 / R-005、R-009、R-011 / `prd.md:533`、`:538`、`:549` 第③条、`:659`（真停机规则；`:658` 是「规划完成…Status=`final`」，属错引；本卡 `decision-log.md` 的 R-011 引用同源、亦写 `:658`，本卡以 `:659` 为准） / ADR-005、ADR-012、ADR-014 | 三前置齐备才宣称完成；展示含未验证项与风险；缺口交回原责任卡 | FR-C10-013 / AC-C10-013；FR-C10-014 / AC-C10-014；FR-C10-015 / AC-C10-015 | P1/T008 | 正例＝三条 INTEG `unverified` 逐条在列 + accepted_risk + 缺口具名承接方；负例＝缺任一前置、或把 `unverified` 写成 pass；oracle＝ORACLE-C10-CLOSURE；依赖＝T001..T007 |
 
 | CARD-10 / 当前授权001 / 单一TCR002及源码澄清017 | P2现CLI三个既有public消费者及原risk退休正负例；原八场景冻结语义，历史缺口不补造通过 | FR-C10-004 / AC-C10-004；FR-C10-005 / AC-C10-005；FR-C10-011 / AC-C10-011；FR-C10-012 / AC-C10-012；FR-C10-013 / AC-C10-013；FR-C10-015 / AC-C10-015 | P2/T009 | 正例/负例为P2已冻结八场景；oracle＝ORACLE-C10-E2E1（当前真实CLI辅助原旅程，不新增套件条目）；依赖＝none，P1原件输入不要求P1通过 |
+
+| R-C10-GAP-001 / ADR-016；PRD589–592、565 | 当前完整蓝图/批准来源不靠存在性或hash自证 | FR-C10-016 / AC-C10-016；FR-C10-019 / AC-C10-019 | P3/T010 | 正例=两run语义及逐delta真实批准来源；负例=portable当质量/旧reply冒当前全批；ORACLE-C10-CURRENT-BLUEPRINT；依赖P2 |
+| R-C10-GAP-001 / ADR-016；PRD589–592 | 七义务及四卡真实角色逐条同义消费 | FR-C10-016 / AC-C10-016 | P4/T011 | 正例=逐义务producer→行为→reader；负例=漏项/静默偏离；ORACLE-C10-CURRENT-BLUEPRINT；依赖P3 |
+| R-C10-GAP-001 / ADR-016；PRD594–597、CARD07 D035 | 单作者/独立只读者同材料保两侧语义 | FR-C10-017 / AC-C10-017 | P4/T012 | 正例=正常来源/候选/验收保留；负例=相反声明/覆盖必须具名发现；ORACLE-C10-CURRENT-COEXIST；依赖T011 |
+| R-C10-GAP-001 / ADR-016；PRD599–603、CARD09写入/计数/同负载验收 | 同payload资源向量公平比较且审查链可消费 | FR-C10-018 / AC-C10-018 | P5/T013 | 正例=请求bytes下降/其它确定性指标持平或降/隔离不变；负例=不同负载/unknown冒改善；ORACLE-C10-PROSPECTIVE-RESOURCE；依赖P4 |
 
 ### 全局验证策略
 
@@ -505,23 +510,23 @@ node tests/acceptance/card-09-session-ledger.mjs --session <真实 session.jsonl
 失败：缺任一条核对记录；不区分「引用」与「亲历」（判定方式＝每条记录必须带 `引用-亲历:` 标注字段，缺字段即视为不区分）；人为制造假失败；把「独立替代审查真的顶班」写成已发生。
 证据：三条核对记录（每条含命令、exit code、output 落点、判定值与 `引用-亲历:` 标注）+ 历史不可用原件引用 + 受控演练原始字节，落 `<TASK_DIR>/quality/tests/`、`quality/reviews/`、`quality/evidence/`。
 
-- [ ] **AC-C10-011**：两处命令形态已被修正并写死，使执行记录可复跑，且未改任何断言或失败判据；关联 FR-C10-011；来源 `decision-log.md:628`（**该行为被修正形态：`decision-log.md:628` 写 `node --test …`，实跑 exit 1；以 `## 测试标准` 的 `npx vitest run …` 为准**）、ADR-009。
-验证：对本卡规格内两条命令形态逐条实跑——`npx vitest run tests/e2e/card-04-real-entry-chain-e2e.test.mjs` 与 `node tests/acceptance/card-09-session-ledger.mjs --session <真实 session.jsonl|.zstd> --since <ms> --until <ms>`；同时实跑两条反例形态确认其失败。
-通过：正例实跑 `Tests 5 passed (5)` exit 0 与合法 JSON；反例 `node --test …` exit 1、裸跑 `card-09-session-ledger.mjs` exit 1；`tests/` 无任何文件被改动。
-失败：仍使用 `node --test` 形态作为执行命令；仍裸跑会话账本 CLI；改动了任何断言或失败判据；改动了 `tests/` 文件。
-证据：正例与反例的执行记录（命令 + exit code + output 落点）+ `git status --porcelain tests/` 空输出，落 `<TASK_DIR>/quality/tests/`。
+- [ ] **AC-C10-011**：两处正确命令形态与反例原件可复跑；原P1评分不改，授权001/P2 TCR及方向014的具名例外不降低业务失败判据；关联FR-C10-011。
+验证：读取已执行正反例的原命令/exit/raw；接续不为旧五阶段baseline失败重跑。P2仅`tests/e2e/stage-runtime-five-stage-e2e.test.mjs`和`tests/e2e/card-10-current-consumer-e2e.test.mjs`为授权TCR例外，P4仅NEW `tests/e2e/card-10-current-contract-e2e.test.mjs`；冻结旧评分/Node/gate保持字节。
+通过：原两正确命令及反例真实结果可读；P2/P4变更在精确许可内有独立处置，不把授权tests变动判失败；原失败/旧评分保留。
+失败：仍用node --test形态当Vitest成功、裸跑ledger当完整采集、未授权改评分/业务失败条件、tests超上述三具名路径；setup非目标RED。
+证据：正反例原件引用及定向执行命令/exit/raw；旧P1时点tests空输出只作历史原件，当前真实diff范围按AC013而非要求整个tests零变动。
 
-- [ ] **AC-C10-012**：执行广度限于三个与套件直接相关的 oracle 单元（①`tests/acceptance/card-09-session-ledger.mjs` ②`tests/e2e/card-04-real-entry-chain-e2e.test.mjs` ③`tests/e2e/stage-runtime-five-stage-e2e.test.mjs`），其余卡只做原件存在性核对与归档引用；**三个 oracle 单元；`tests/acceptance/card-09-session-ledger.test.mjs` 是 ① 的 vitest 包装，若两者都执行只算同一个 oracle 单元，不是第四个 oracle**；关联 FR-C10-012；来源 ADR-009。
-验证：核对执行记录集合——是否只含三个 oracle 单元（`card-09-session-ledger.mjs` 与其 vitest 包装同属一个单元、`card-04-real-entry-chain-e2e.test.mjs`、`stage-runtime-five-stage-e2e.test.mjs`）；核对是否存在全量回归记录。
-通过：执行记录只含三个 oracle 单元；其余卡只出现存在性核对与归档引用；无全量 `vitest`/`npm test`/`test:safe` 记录；某条用例对应 oracle 缺失或不可执行时按失败事实如实记录并阻断完成宣称。
-失败：执行广度扩张为全量跑 `tests/acceptance` 下所有 oracle；跑了 `tests/` 下其他测试；把广度受限降级为 `N/A`。
-证据：执行记录清单 + 命令清单，落 `<TASK_DIR>/quality/tests/`。
+- [ ] **AC-C10-012**：执行广度保持精确针对性；关联FR-C10-012。原P1三个oracle单元保留：card09-session-ledger与其Vitest wrapper算一单元、card04-real-entry-chain、stage-runtime-five-stage；例外来源授权001和方向014。
+验证：逐真实命令核P1原三个单元、P2仅current-consumer与five-stage两test、P4仅current-contract新test、P5仅外置一次offline driver；各Phase命令为唯一执行正文，原件不重复跑凑绿色。
+通过：上述具名范围/必要受影响case有实际命令/归因与覆盖限制；无全量vitest/npm test/test:safe，无其它卡内部oracle全跑；缺项真实failed/unverified不降N/A。
+失败：执行无范围全量回归或其它未声明测试，扩大评分/用例判据，无来源/收集失败冒目标RED；用静态登记冒执行。
+证据：各范围唯一命令/原raw/receipt清单引用；wrapper不算新增单元，不复制旧raw。
 
-- [ ] **AC-C10-013**：全部原始证据落外置 `<TASK_DIR>/quality/`，仓库内无原始件副本、无目录快照、无整树归档；关联 FR-C10-013；来源 ADR-005、ADR-006。
-验证：核对仓库改动范围（`git status --porcelain`）是否只含 `specs/workflowhub-thin-core-card-10-20260919/**`；核对外置证据目录文件数与命名是否按日期+序号+描述且 append-only。
-通过：仓库改动只含本卡 spec 目录；`tests/` 无新增；外置 `quality/` 下每类事实只有一份原始件；无目录快照或整树归档产物。
-失败：仓库内出现原始件副本；出现目录快照或整树 tar/`git archive` 产物；`tests/` 出现 CARD-10 文件。
-证据：仓库改动范围输出 + 外置证据目录清单，落 `<TASK_DIR>/quality/evidence/`。
+- [ ] **AC-C10-013**：原始证据只在外置TASK_DIR/quality，仓库仅已授权源码/测试/静态设计资料，不复制原始件或整树归档；关联FR-C10-013；来源ADR005/006、授权001、方向014。
+验证：按真实diff逐文件核：当前材料`specs/workflowhub-thin-core-card-10-20260919/decision-log.md`、`spec.md`、`phases/P1.md`、`phases/P2.md`、`phases/P3.md`、`phases/P4.md`、`phases/P5.md`、`phases/index.md`；授权001/P2的`tools/cli/stage-runtime.mjs`、`tests/e2e/stage-runtime-five-stage-e2e.test.mjs`、`tests/e2e/card-10-current-consumer-e2e.test.mjs`；当前静态`docs/architecture/move-map.json`；未来P3仅`docs/contracts/card-01-stage-material-interface.md`、P4仅NEW `tests/e2e/card-10-current-contract-e2e.test.mjs`。P5只外置task-relative driver/本次原件，无仓库写面。
+通过：变动限上述实际当前/未来scope，map各时段仅声明entry/字段；每类raw/receipt/review一份，历史immutable，母PRD/归档保护；授权新test不作为失败。
+失败：超声明文件/字段、仓库复制raw、目录快照/整树tar/git archive、把静态预登记或目录清单冒完成；不因为精确授权test存在而失败。
+证据：实际diffname/readback及单原件ref/hash；外置事实按实际唯一日期命名，范围证明仅本次changed files字节，不存whole-tree清单。
 
 - [ ] **AC-C10-014**：完成宣称只发生在三前置记录齐备之后，且宣称与展示逐条包含三条 INTEG 的 `unverified` 结论与各自缺口去向/承接方、accepted_risk、未验证项与风险清单；关联 FR-C10-014；来源 `prd.md:533`、`:538`、`:659`（真停机规则；`:658` 为错引，同源说明见 `### 需求到任务追踪` T008 行）、ADR-012、AC-50。
 验证：核对三前置记录（真实入口联通实跑记录、约定成功条件达成记录、关键失败路径核对记录）是否齐备；逐条核对宣称文本是否含 INTEG-1/2/3 的 `unverified`、缺口去向与承接方、accepted_risk（DIR-D1-T10/finding #18）、未验证项与风险清单。
@@ -529,11 +534,35 @@ node tests/acceptance/card-09-session-ledger.mjs --session <真实 session.jsonl
 失败：缺任一前置记录即宣称完成；任一条 `unverified` 未披露或被写成 pass；展示无未验证项披露；子任务状态相加被当成整体完成。
 证据：完成宣称文本 + 三前置记录引用 + 披露项清单，落 `<TASK_DIR>/quality/evidence/close/`。
 
-- [ ] **AC-C10-015**：缺口在本卡如实登记并写明承接方，缺口修复交回原责任卡，本卡未做产品修复、未改母 PRD、未动母任务；关联 FR-C10-015；来源 `prd.md:549` 第③条、ADR-014。
-验证：核对缺口清单是否逐条含根因、证据引用、承接方、交回动作与是否需对方确认；核对仓库改动范围是否不含 `prd.md` 与产品面路径。
-通过：缺口清单逐条含上述字段；INTEG-1 缺口承接方写明「无」；五阶段 e2e oracle 缺口与 `card-01-current.mjs` oracle 缺口交回 CARD-06 并标注「推断，需对方确认」；INTEG-2 缺口交回 CARD-04/CARD-07；母 PRD 与产品面零改动。
-失败：缺口无承接方；本卡自行修复产品代码；改动母 PRD 或母任务层面文件；把推断写成已确认。
-证据：缺口清单 + 仓库改动范围输出 + 母 PRD 哈希未变证明，落 `<TASK_DIR>/quality/evidence/close/`。
+- [ ] **AC-C10-015**：缺口有来源、承接方及当前处置，授权窄修与未承接旧缺证分列；关联FR-C10-015；来源原PRD549/ADR014、授权001及方向014。
+验证：缺口清单逐条核根因/证据/owner/交回或真实授权修复；P2当前五阶段/risk目标已修与CARD01旧23AC依赖缺证分开；当前P3–P5只补已确认等价设计。母PRD/母任务/归档不写。
+通过：授权001/P2只CLI、两test及map两既有entry字段，方向014只计划中蓝图/新test/静态map与外置driver；超窄范围缺口仍交回具名owner，不代其确认；旧三INTEG与CARD01缺证如实保留。
+失败：无来源修产品、超上述精确授权、改母PRD/母任务、把推断承接写confirmed或未证写passed；不因P2已经授权窄修就否定本AC。
+证据：逐缺口实际状态/授权source/原件引用、实际diff范围和母PRD未改读回，不重写历史或复制原review。
+
+- [ ] **AC-C10-016**：当前七类蓝图义务在CARD03/04/05/07的现行消费者上逐条同义成立；关联FR-C10-016，来源R-C10-GAP-001/ADR-016；oracle=ORACLE-C10-CURRENT-BLUEPRINT。
+验证：先用当前代码与旧蓝图七标题核对现行义务/已退役对象的映射，再对同一owned post task执行实际材料、审查记录、planning portable与普通cursor切片；独立消费者逐条读真实输入、出口、负例及原件。不能只把卡号贴到同一测试结果。
+通过：每一仍适用义务有具名producer/owner、真实reader、有效输入→行为→输出及可证伪反例；被退役对象有来源和现行等价解释；四卡角色的完整映射没有静默遗漏；当前蓝图明确普通cursor与规划portable两种run:execute语义及工具/宿主职责。
+失败：只用文件/ID存在证明消费、漏仍适用义务、引用已退役handler作当前consumer、错误/缺失被包装为完成、当前蓝图与实际两入口冲突。无法证明的条目保持unverified，不能本AC整体passed。
+证据：T010现行义务映射及G2读回原件引用；T011单文件定向CLI测试raw/receipt、逐义务/四角色读回及独立审查原件，外置quality/单原件；历史INTEG-1原结论另列不覆盖。
+
+- [ ] **AC-C10-017**：单一作者与独立只读分析者实际共同消费同版decision-log，方案发散和验收语义均保留且冲突可见；关联FR-C10-017，来源R-C10-GAP-001/ADR-016；oracle=ORACLE-C10-CURRENT-COEXIST。
+验证：owned真实post task中作者经run:draft写保留来源的候选/验收/问答正文；不同上下文实际调用现有spec-analyze方法，在确认前与step11核对正常、具名相反声明、覆盖遗漏三样本；自动CLI断言只核字节/副作用。重要方案/验收用户参与采用真实ask/reply或明确跳过来源。
+通过：正常样本两侧行为可读且原话/原验收保留；相反声明与覆盖样本均报告具体来源、冲突和影响；分析者不改材料/facts；修复保旧来源后重新只读核对；缺答复仍草稿。现行等价角色/step9和11明确，不冒旧同step双writer通过。
+失败：语义分析只是关键词/文件/hash、作者删除另一侧契约后仍称共存、分析者改材料、缺用户参与却称共同梳理、confirm记录被误作reject判定器或不可逆授权。未执行独立方法时保持incomplete。
+证据：T012实际CLI raw、same-material读回、独立方法调用/三样本发现原件、必要真实问答和宿主拒绝/等待无不可逆动作观察；旧INTEG-2仍独立unverified，不镜像旧件。
+
+- [ ] **AC-C10-018**：前瞻同payload资源对照有可复算局部结果和质量/隔离不回归证据；关联FR-C10-018，来源R-C10-GAP-001/ADR-016；oracle=ORACLE-C10-PROSPECTIVE-RESOURCE。
+验证：同一代码、post材料keys/contents/diff/AC/contracts及固定路由分别构造A-inline与B-{ref,sha256}，实际走CLI resolver并捕获resolved request，再调用既有buildReviewMaterials两次，逐项比最终provider只读输入/manifest，按A/B各自明确同负载采样窗复算完整确定性指标向量：主会话工具调用、子代理派发、主会话自行执行、人工询问/等待；无派发阶段边界ps进程数；限定execution-inputs请求、quality/tests、quality/reviews及provider只读bundle的文件数/bytes。会话项只用现ledger原件，进程/文件项用各自原件；wrapper不足归因标unknown不虚填0。固定正常/具名冲突/覆盖案例由独立消费者判读。A/B窗按P5同worker直接followup→实际wait raw event时间定位，额外事件完整计入；取消负控在窗外经实际captureCommand AbortSignal取得已输出双流/settled cancelled receipt，确认owned清理且sentinel不删。
+通过：A/B输入和最终projection/bundle字节同义且同byte，sha/path负例拒绝，实际取消receipt/双流原raw保留，隔离及dispose/owned清理有效，真实冗余请求bytes可测下降；其它原确定性指标有成对原件、下降或持平且说明原因，隔离副本保持原字节；无可合并真冗余、任一向量缺证或不满足下降/持平，记录inconclusive/failed，不满足本AC通过。当前CARD05审查链仍产出可消费结果，CARD09资源修订未删发现/失败或误删在途输入。任一向量缺证、setup不可比、业务/取消/cleanup失败均不能本ACpassed，不能以记录齐备或局部bytes代完整当前资源相容/收益。
+失败：payload/代码/route变动导致不可比仍报改善、只比较resolved层却称finalbundle等价、删只读隔离材料降bytes、丢失败/raw、cleanup误删在途材料，或把unknown/旧inconclusive写成收益。无实测下降不能声称本局部改善。
+证据：T013一次性外置driver/请求A/B、单份命令raw/receipt、resolved/final输入逐项比较和局部metric读回、独立质量样本原件；ledger只复算其支持的会话分账。live非必需，若调用另保配置集合/模型/effort/预算/取消事实；历史resource_benefit不回写。
+
+- [ ] **AC-C10-019**：当前PRD正文批准范围能通过原件/语义delta或新的实际全文展示与答复读回；关联FR-C10-019，来源R-C10-GAP-001/ADR-016；oracle=ORACLE-C10-CURRENT-PRD-BINDING。
+验证：对照展示139a、回填f055、d271793c版及后续e78c0e41/9ba93e11至当前deb2版，逐delta分类metadata、具名已批准来源、未证语义；缺当前全文批准依据时单独展示当前全文和delta并取得真实答复，以既有confirm保存原话/HEAD/material refs。
+通过：展示/回填设计分工被保留，后续每个改变批准范围的语义delta有实际批准来源；否则由用户对展示的当前全文/明确delta真实批准。拒绝/未答保持未批准，计划确认不代替PRD确认，历史记录不改。
+失败：仅hash不同就否定旧确认、只凭旧批准字符串/元数据推当前全部正文已批、遗漏未证语义delta、计划答复代替PRD答复、伪造/回写历史。拿不到实际答复或来源时本AC仍unverified。
+证据：T010具名版本/原件路径及delta分类读回；需要时当前全文展示/挑战通路/真实答复和已有confirmation原件引用，全部普通外置记录；不复制完整历史文件快照。
 
 ## 测试蓝图（testing-system-blueprint）
 
@@ -574,7 +603,7 @@ node tests/acceptance/card-09-session-ledger.mjs --session <真实 session.jsonl
 - **RISK-C10-007**（oracle 覆盖不齐）：受影响 ID＝AC-C10-012、PFACT-006；触发条件＝`tests/acceptance/` 无 card-04/05/06/08 oracle；后果＝这几条用例的对应 oracle 缺失；缓解或停止＝用单文件定向执行的可用 oracle + 原件存在性核对替代；**`N/A` + `reason` 只适用 FR-20 的机器产物路线（trace/JUnit/跳过计数）不适用时；oracle 缺失或不可执行一律按失败事实如实记录并阻断完成宣称，不得降级为 `N/A`**（与 FR-C10-012、AC-C10-012、`phases/P1.md` 的 STOP 一致）；处理阶段＝`build-plan`；验证＝执行记录清单。
 - **RISK-C10-008**（母 PRD 旧表述与现行合同并存）：受影响 ID＝AC-C10-005；触发条件＝读者只看母 PRD 不看 `decision-log.md` 退役登记；后果＝得到错误读法（以为存在全 phase 结束集成审查）；缓解或停止＝在 `decision-log.md` 退役登记与 Supersedes 显式登记新旧对应，本卡不改母 PRD；处理阶段＝`make-decision`（已发生）；验证＝退役登记四行与 Supersedes 四条存在。
 - **RISK-C10-009**（完成宣称被读作「全部成功条件达成」）：受影响 ID＝AC-C10-014；触发条件＝读者把「失败判据未触发」读成「成功条件已满足」；后果＝三条 INTEG 的 `unverified` 被静默当通过；缓解或停止＝accepted_risk（DIR-D1-T10/finding #18）作为显式条目，完成宣称必须逐字包含 INTEG-1 的可观察结果未完全满足与缺口去向，同时给出 `prd.md:590`/`:591` 原始判据与事实；处理阶段＝`verify-code`；验证＝宣称文本逐字包含。
-- **RISK-C10-010**（被点名 oracle 在 HEAD 确定性失败）：受影响 ID＝AC-C10-011、PFACT-005、PFACT-022；触发条件＝`tests/e2e/stage-runtime-five-stage-e2e.test.mjs` 的 `review:risk` 路由被移除且未修；后果＝该 oracle 无法作为通过证据；缓解或停止＝如实记为真实失败事实，但不作为套件内用例的失败判据；缺口交回责任卡（推断 CARD-06，需对方确认）；处理阶段＝`verify-code`；验证＝3/3 复现记录 + 缺口条目。
+- **RISK-C10-010**（原baseline五阶段oracle失败，现行窄目标已修）：关联AC-C10-011、PFACT005/022；原risk路由退役导致3/3失败的原件保留。授权001/P2的017新23case、018两文件36pass及修后028目标1pass/12skip分别读回，当前不再称整体五阶段尚未修；归因CARD06仍历史推断，CARD01旧23AC缺证由OPEN006另列。若现行具名目标出现真实新失败，再按同task精确scope处理，不重演原baseline或重写原件。
 - **RISK-C10-011**（CARD-01 自己的验收 oracle 已失效）：受影响 ID＝AC-C10-002、PFACT-020、PFACT-023；触发条件＝全wrapper11执行依赖中5个被退役删除，AC映射6的2缺失/4旧exacttitle失配；后果＝`tests/acceptance/card-01-current.mjs` 23/23 missing，不能作为通过证据；缓解或停止＝只核原件存在性与结论未漂白，oracle 失效如实登记为缺口交回 CARD-06；处理阶段＝`verify-code`；验证＝23/23 missing 记录 + 缺口条目。
 
 ### 未决
@@ -583,21 +612,21 @@ node tests/acceptance/card-09-session-ledger.mjs --session <真实 session.jsonl
 - **OPEN-C10-002**（E2E-1 六份 confirmation 原件的语义覆盖度）：受影响 ID＝AC-C10-004、RISK-C10-003；负责人＝CARD-10 owner（verify-code）；影响＝抽验时可能发现某份确认的语义不覆盖 `prd.md`；处理阶段＝`verify-code`；关闭条件或停止＝逐份读取六份原件并核对 `subject_ref` 与语义；发现不覆盖则按失败事实如实处理。
 - **OPEN-C10-003**（INTEG-2 缺口承接与权威冲突）：受影响 ID＝AC-C10-008、PFACT-014；负责人＝CARD-04/CARD-07 责任卡；影响＝「验收写入步」契约无共同步骤标识，无法完成「互不覆盖」对照；处理阶段＝`verify-code`；关闭条件或停止＝两侧任一交付 CARD-07 自陈的改造清单与冻结接口符号，或母层面重新指派 owner。
 - **OPEN-C10-004**（INTEG-1 缺口承接方）：受影响 ID＝AC-C10-007、ADR-014；负责人＝无（只在本卡如实记录）；影响＝母 PRD 的该要求长期停在「要求与实际对不上」的状态；处理阶段＝`verify-code`；关闭条件或停止＝后续有人主动跟进母任务层面；本卡不承接。
-- **OPEN-C10-005**（五阶段 e2e oracle 缺口承接）：受影响 ID＝AC-C10-011、RISK-C10-010；负责人＝CARD-06（推断，需对方确认）；影响＝该 oracle 长期失败；处理阶段＝`verify-code`；关闭条件或停止＝CARD-06 确认归因并修复 `review:risk` 路由或登记退役。
+- **OPEN-C10-005**（五阶段e2e旧缺口及P2处置）：受影响 ID＝AC-C10-011、RISK-C10-010；负责人＝当前P2已授权实施owner；原CARD06归因仍为历史推断；当前five-stage/risk目标已按017/018/028具名原件修复，原baseline失败保留。此项不再表示现行长期失败；CARD01旧23AC缺证属于OPEN006，不合并宣称全部修复。
 - **OPEN-C10-006**（`card-01-current.mjs` oracle 缺口承接）：受影响 ID＝AC-C10-002、RISK-C10-011；负责人＝CARD-06（推断，需对方确认）；影响＝CARD-01 的验收 oracle 无法重放；处理阶段＝`verify-code`；关闭条件或停止＝CARD-06 确认并补登连带依赖，或登记该 oracle 退役。
 
 ### 交接
 
 - 交给 verify-code：`phases/P1.md` 的逐 Task 执行卡；`<TASK_DIR>/quality/` 三个子目录约定；三个 oracle 的正确命令形态；三条 INTEG 的终态判定（均 `unverified`）。
-- 交给责任卡：OPEN-C10-003（CARD-04/CARD-07）、OPEN-C10-005 与 OPEN-C10-006（CARD-06，均待确认）。**交回动作＝缺口清单写具名承接方 + `待确认` 状态；本卡不代对方确认，也不把推断写成已确认**（承接方为「无」的 OPEN-C10-004 无需交回动作，只在本卡如实记录）。
+- 交给责任卡：OPEN-C10-003（CARD-04/CARD-07）、OPEN-C10-006（CARD-06，仍待确认）；OPEN-C10-005现行已修部分按P2原件读回。**交回动作＝缺口清单写具名承接方 + `待确认` 状态；本卡不代对方确认，也不把推断写成已确认**（承接方为「无」的 OPEN-C10-004 无需交回动作，只在本卡如实记录）。
 - 交回母任务：无（ADR-014 已把 INTEG-1 缺口承接方定为「无」）。
 - 跨卡延期项：无。
 
 ## 13. 业务影响与回归范围
 
-- **既有行为**：CARD-01..09 各自的验收结论与归档材料不变；母 PRD、`workflows/**`、`tests/**`、`runtime/**` 零改动。
-- **本需求影响**：本卡对仓库的写入面只有 `specs/workflowhub-thin-core-card-10-20260919/**`（`spec.md`、`phases/P1.md`、`phases/index.md`）；原始执行证据全落仓库外 `<TASK_DIR>/quality/**`。产品运行时零影响。
-- **回归路径**：不适用——本卡无产品代码改动，无需回归；`git status --porcelain tests/` 输出为空即证明 `tests/` 未被触碰。
+- **既有行为**：归档卡结论/母PRD/workflows/runtime模块只读；P2已授权CLI/两test窄修，当前P3/P4设计及map静态登记见AC013，旧P1 tests零改动仅历史范围。
+- **本需求影响**：当前/未来精确写集以AC013为准，当前资料不实施P3–P5；P2历史产品接线已产生限定影响，其真实验证单列；原始件全在外置TASK_DIR/quality。
+- **回归路径**：原P1无代码改动/tests空输出是该时点事实；授权001的P2两具名test与方向014的P4新test做定向检查，精确例外以Appendix A AC011–013/015为准，不能要求当前tests整体零变动。
 - **验收**：AC-C10-001..AC-C10-015。
 - **可能受冲击的业务规则**：无产品业务规则受影响；唯一可能被冲击的是「整体交付能否声明完成」这一判定口径——本卡通过把三条 INTEG 的 `unverified` 写进完成宣称来避免误读。
 - **明确无影响**：运行时行为、公共 CLI 命令面、stage 定义、持久对象 schema、`tests/` 测试资产、四个 workflow 合同的审查点表述、已归档卡材料。
@@ -684,13 +713,13 @@ node tests/acceptance/card-09-session-ledger.mjs --session <真实 session.jsonl
 
 **母任务 owner 事后裁定（共 4 条，已全部落实）**：①「门禁全 ASCII」口径确认为——结构标点必须 ASCII、无全角非 CJK 标点、无尖括号占位符、无裸 `|`、单行可直接粘贴；`grep` 字面量中的中文（`终态`、`原件: `、`入口面: unverified` 等）**合规**，不需替换。②每个门禁中的 1 个 `<` 来自 `done < "$f"` 重定向，属正常 shell 重定向、不是占位符，保留。③`### 需求到任务追踪` 表原为 6 列，超出 `skills/spec-specify/SKILL.md:112-115` 的「表格最多 5 列」硬约束；基线同为 6 列不构成豁免——已把 `FR` 与 `AC` 两列按逐条 1:1 配对合并为 `FR / AC` 列（8 行全覆盖，零信息丢失），`T004` 行并把主责写进 `Phase / Task` 列作 `P1/T004（主责 FR-C10-011/012）`。③补记：`phases/P1.md` 的 `### 测试策略` 表原把整条门禁命令塞进单元格，而命令内含未转义 `|`（`test -s "$f" || exit 1`、`"$((n+m))"`），实测这些行按 `|` 切分是 17–21 列、表头只有 5 列，任何 GFM 渲染器都会把表拆烂——已把第 4 列改为只写门禁标识与预期退出码（`GATE-T001` … `GATE-T008`），表后新增 ```bash 代码块逐条给出 8 条命令全文（每条以 `# GATE-T00n` 注释标识、独占一行、可直接复制粘贴）；表保持 5 列、单元格内不再出现任何 `|`；代码块里的命令与各 Task 卡 `**RED/GREEN 门禁命令**` 逐字一致（脚本断言 byte-identical），且与 16 次双跑 + 8 次补跑的实证所跑命令逐字一致。④`phases/P1.md` T001 的 `- **依赖**: none。` 去掉句末「。」，使 `validatePostPhaseContract` 的 `errors.length` 由 1 降为 0（原残留成因是该校验器的 `WITHOUT_PREDECESSOR` 正则不接受句末标点），本卡不再保留这一已知可修错误。
 
-### 处置后三份材料的版本
+### 2026-10-05那次处置后的历史版本读回
 
-> 下列数字是**本轮（build-plan 第 11 步一致性准备 spec-analyze，17 条处置）落盘后**的值。`phases/P1.md` 与 `phases/index.md` 在本轮修订后不再变动，故其哈希是最终值；`spec.md` 因本小节自指，只能记追加前实测值，最终值由读取方现算。
+> 下列数字只记录2026-10-05那次17条处置时点，不是当前最终版本；后续P2及本轮增量已修改相关文件。旧数字保留供历史定位，当前字节/hash由读取方现算，不以这些旧值认证现行材料。
 
 - `phases/P1.md`：**357 行 / 77115 字节 / sha256 `0396d8b4b878c29d025b0910109b3aea0821e89edabd391109609ee62737999b`**。
 - `phases/index.md`：**17 行 / 1679 字节 / sha256 `1ead1488041bf3fb26960dbd866de157c33c8aee9d407bad6ff4758c230fae56`**。
-- `spec.md`：**本小节（含 `### 一致性准备（spec-analyze）处置`）使 `spec.md` 的 sha256 自指**——正文无法写入自身最终的 sha256。可精确自洽给出的是**行数 690 行 / 字节数 124127 字节**（本小节内的数字替换已收敛到该值）；sha256 由读取方在读取时现算（`shasum -a 256 specs/workflowhub-thin-core-card-10-20260919/spec.md`），并已记录在本次修订的交付回报中。
+- `spec.md`：**本小节（含 `### 一致性准备（spec-analyze）处置`）使 `spec.md` 的 sha256 自指**——正文无法写入自身最终的 sha256。该历史时点读回为**行数690行/字节数124127字节**（保留旧数字，不当当前值）；sha256 由读取方在读取时现算（`shasum -a 256 specs/workflowhub-thin-core-card-10-20260919/spec.md`），并已记录在本次修订的交付回报中。
 
 ## 2026-10-06 本次修复范围和P2测试补充
 
@@ -698,10 +727,107 @@ node tests/acceptance/card-09-session-ledger.mjs --session <真实 session.jsonl
 
 全局设计：tools/cli/stage-runtime.mjs三个既有run:execute/status:begin/doctor:workspace的build-prd分支，复用runPortableWorkflow/loadPortableWorkflowManifest/projectPortableWorkflowStatus及readTaskTypeFromDecisionLog。明确规划type才写portable；普通/unknown/冲突拒planning写；非post沿现producer写拒、历史读被动。普通仅原build-code phasecursor。run原state/ref/terminal，failedexit1；status/doctor读failedexit0且投影仍failed，两者用单一portable_workflow字段，不把读成功写业务pass。无input沿现模块直接返回not-started/refnull/terminalnull且无写（manifest读取之前），不新增manifest门、不造成功；删除坏--now入口，不新增clock。
 
-精确生产/测试写集=tools/cli/stage-runtime.mjs、tests/e2e/stage-runtime-five-stage-e2e.test.mjs、tests/e2e/card-10-current-consumer-e2e.test.mjs；docs/architecture/move-map.json：card10_contract唯一map owner，仅新test现有职责entry（职责/consumer/owner/testretain与去尚未创建静态说明）及既有runtime/task/portable-workflow-run.mjs条目consumer/module_consumers两消费字段的真实CLI登记；保其余条目/字段/retention，不泛改map、不写测试进度计数。原runtime模块、ARCHIVE card01-current、母PRD/workflow/归档材料只读。八场景和owner/步骤见P2。受影响AC-C10-004/005/011..013/015（原P1范围限制仅本次窄例外）；001/002八条套件/九卡强close，007..009共存业务判据、014三前置/披露均不降低。完整23 retired-current映射只引用quality/evidence/2026-10-05-015-card10-current-oracle-ac-map.md，sha1b5ef27ccd83d5a347463b1d9049925e2b8bda9b00ccfd7f7b71afd5b26033d9；全wrapper执行依赖11unique（targeted10＋transport1）=5missing6present；其中23条AC映射6unique=2missing4presentNARROW，四present在457299b3均M且旧exacttitle全0，不是本次授权后恢复；当前来源=<TASK_DIR>/quality/evidence/2026-10-06-005-card10-p2-finding-source-audit.md（sha fd7d1fa4e679b19ee225304326f8d66348141a9b19f8bbfd5e0485f34011492c），006/008单原raw保留。两个集合不同，不用AC6的2缺失否定全执行11的5删除；旧23missing不是全部产品失败，也不能假称当前23全绿。
+精确生产/测试写集=tools/cli/stage-runtime.mjs、tests/e2e/stage-runtime-five-stage-e2e.test.mjs、tests/e2e/card-10-current-consumer-e2e.test.mjs；docs/architecture/move-map.json：card10_contract仅P2执行期间map两既有entry的唯一owner，仅新test现有职责entry（职责/consumer/owner/testretain与去尚未创建静态说明）及既有runtime/task/portable-workflow-run.mjs条目consumer/module_consumers两消费字段的真实CLI登记；保其余条目/字段/retention，不泛改map、不写测试进度计数。原runtime模块、ARCHIVE card01-current、母PRD/workflow/归档材料只读。八场景和owner/步骤见P2。受影响AC-C10-004/005/011..013/015（原P1范围限制仅本次窄例外）；001/002八条套件/九卡强close，007..009共存业务判据、014三前置/披露均不降低。完整23 retired-current映射只引用quality/evidence/2026-10-05-015-card10-current-oracle-ac-map.md，sha1b5ef27ccd83d5a347463b1d9049925e2b8bda9b00ccfd7f7b71afd5b26033d9；全wrapper执行依赖11unique（targeted10＋transport1）=5missing6present；其中23条AC映射6unique=2missing4presentNARROW，四present在457299b3均M且旧exacttitle全0，不是本次授权后恢复；当前来源=<TASK_DIR>/quality/evidence/2026-10-06-005-card10-p2-finding-source-audit.md（sha fd7d1fa4e679b19ee225304326f8d66348141a9b19f8bbfd5e0485f34011492c），006/008单原raw保留。两个集合不同，不用AC6的2缺失否定全执行11的5删除；旧23missing不是全部产品失败，也不能假称当前23全绿。
 
 T001当前新mapping=quality/evidence/input-check/2026-10-05-003-current-suite-mapping.md；104新source/105强guard0只核输入。零计数沿原限定扫描，不宣称全域未漂白。新host source只引用014-card10-host-integ1-source-excerpts（sha447d480c4e19d4b857a578b5732f4298f57972f6052c6053ce139ea7a64dc595），可另存新T003读回，不改旧unverified、不把当前PRD假同历史展示hash。新四卡seam不证全蓝图/G1；INTEG2无同step双consumer；INTEG3资源改善无同负载对照仍inconclusive。旧T006/T008 gate继续核旧记录，不是P2业务pass；新结果逐ID唯一、真实command/exit/output/source，独立按原成功条件读回，缺证仍unverified/failed。
 
 TCR唯一原件=quality/evidence/2026-10-06-002-card10-current-oracle-test-change-request.md；独立test-change-review前不实施产品/测试。P2先命名目标RED→同冻结断言GREEN并独立代码审查，G-2仅原P1无行为变更。对两个测试文件定向执行（新增tests/e2e/card-10-current-consumer-e2e.test.mjs，修改既有tests/e2e/stage-runtime-five-stage-e2e.test.mjs），不全量、不开旧23标题绿化或资源收益演练。此节只材料设计，不写执行进度。
 
 原单一TCR独立004 finding6的限定加强：P2原八场景第3项保unverified/blocked/unavailable/incomplete，并补producer已有in-progress/abandoned/直接failed三态；actual run与status/doctor portable_workflow.state逐态精确相等，failedrunexit1、其余已列诚实态runexit0，diagnostic读取成功exit0不表示业务通过。修改依据独立原finding，不新业务失败判据、不重派replacement review；代码PhaseOCR读取实际最终断言。
+
+
+## 2026-10-06 现行缺口补齐设计（草稿；全局权威增量）
+
+### 速读与版本适用范围
+
+新增当前方向来源为D的U-019/R-C10-GAP-001/ADR-016。用户需要在现行方法工具包上验证真实消费、共存和公平资源实验，先解释旧需求与现行对象的对应。完整计划尚待审查、最后只读分析和实际展示确认。本节、Appendix A新增AC016–019、P3–P5是本次当前增量；P1/P2冻结gate/评分与历史审查保持原字节；旧15AC的成功强度保留，其范围文字本轮按明确授权例外对齐。旧“不新增tests、不改docs、仅三个oracle、不承接产品修复”的P1范围，对本增量仅按下列窄写集例外；不扩大P1/P2历史结果，母PRD/归档仍只读。旧CL保持其已生效历史含义，新范围不能凭旧CL完成：新增AC全部满足才可按新范围讨论完成；原全部历史业务/资源强目标未满足时仍如实说明，最终close另有实际范围确认。
+
+本次015审查的source context_map将完整D内嵌成长行，provider只读查看器有长行读取上限；idx10是组包展示限制，不是本地D缺U019/ADR016或确认。direction014已由当前独立作者实读，D保逐字答复与真实来源。后续主会话按源line/byte有界chunks lossless拼接离线读回完整D，不改producer、不重新外发本轮review；该限制保留为审查覆盖事实。
+
+### 来源与决策映射
+
+| 来源 | 决定 | FR / AC | source_status / 场景 | Phase / Task |
+| --- | --- | --- | --- | --- |
+| R-C10-GAP-001；原PRD589–592 | ADR-016 | FR-C10-016 / AC-C10-016 | current / SCN-007 | P3/T010；P4/T011 |
+| R-C10-GAP-001；原PRD594–597；CARD07 D-035 | ADR-016 | FR-C10-017 / AC-C10-017 | current等价，历史保留 / SCN-008 | P4/T012 |
+| R-C10-GAP-001；原PRD599–603；CARD09 AC45/51 | ADR-016 | FR-C10-018 / AC-C10-018 | current前瞻，历史inconclusive / SCN-009 | P5/T013 |
+| R-C10-GAP-001；原PRD214–228/565 | ADR-016 | FR-C10-019 / AC-C10-019 | current / SCN-010 | P3/T010 |
+
+### 需求解释、验收流程与场景
+
+旧接口部分退役、历史行为和基线缺失，不能用今天演练证明过去。现行单作者生产材料、独立只读分析者报告缺口；七类工具保存实际文件/事实而不替人执行完整阶段。本增量先冻结完整现行对应，再验证实际切片，最后做不重复外发的公平局部实验。验收沿SCN→FR→Appendix A AC→Phase原件，由独立消费者核真实结果，不由文件计数或绿色测试名称倒推。
+
+- **SCN-007 — 四卡当前蓝图消费**：当前普通post任务的作者、执行/验收、审查、方法消费者，按完整义务图读取同组材料；缺Phase、review失败和错误引用保持可见，规划portable不进入代码stage。AC016。
+- **SCN-008 — 同材料共存**：作者保留发散候选、重要方案/验收真实问答；独立核对者读取同版日志，正常不改字节，相反声明和删除验收均返回具体缺口；拒绝/未答由宿主方法保持草稿。AC017。
+- **SCN-009 — 公平资源实验**：相同payload两种请求表示，实际resolver→provider只读bundle；引用错误拒绝，取消和cleanup保失败，在途材料不删除；局部bytes与其它未知指标分列。AC018。
+- **SCN-010 — 当前正文批准**：读历史展示、回填及后续增量；有未证语义delta时展示当前全文/差异给用户，真实答复单独保存，拒绝保持未批准。AC019。
+
+状态覆盖：默认SCN007/008/009；空或缺原件SCN007/010→unverified；错误/边界SCN008/009；取消SCN009；权限/路径/单链保护SCN007/009；竞态只覆盖owned写入/只读不改和cleanup在途保护，不扩并发平台。加载态N/A—无UI，无浏览器测试，不承诺宿主温度/风扇界面。
+
+### 当前产品事实（仅影响本增量）
+
+- **PFACT-029** verified：当前蓝图第3行run:execute仅游标表述与已接线planning portable不全一致。证据=2026-10-06 `cat docs/contracts/card-01-stage-material-interface.md` 与CLI:977–988实读；关联FR016/AC016。
+- **PFACT-030** verified：CARD07归档D:1193–1196单writer/decision-log、CARD04只消费，禁止aggregate/outline gate；当前steps:41–58有step8/9/10/11。证据=2026-10-06 `nl`实读两文件；关联FR017/AC017。
+- **PFACT-031** verified：spec-analyze为显式宿主只读方法，不写材料/不调provider，无直接模块consumer。证据=2026-10-06实读其SKILL:8–27、move-map:2514–2527；CLI:985–987拒绝official stage执行；关联FR017/AC017。
+- **PFACT-032** verified：CLI私有resolveMaterialRefs接受内嵌值与精确ref/sha256，review-record处实际调用；finalbundle由既有buildReviewMaterials输出，可dispose。证据=2026-10-06 `sed`实读CLI:617–634/995，review-materials:655–690；关联FR018/AC018。
+- **PFACT-033** unknown：当前全部语义delta是否有真实批准来源。owner=主会话/T010；影响FR019/AC019；OPEN-C10-007。展示139a/回填f055差异自身不是证明失效的原因。
+- **PFACT-034** unknown：本次A/B最终projection及局部bytes差值、完整资源指标结果尚无执行。owner=T013；影响FR018/AC018；OPEN-C10-008。不设固定降幅阈值，不承诺整体收益。
+- **PFACT-035** verified：旧CARD09 AC45规定offline同材料ref重建/隔离不变，AC51原要求确定性指标下降或持平；ledger不采CPU/温度/token/RAM。证据=2026-10-06 `sed`实读归档CARD09 spec:366–378与ledger:64–78；关联FR018/AC018。
+
+### 新增功能需求
+
+- **FR-C10-016**：完整现行蓝图义务定位四卡真实producer/owner/reader，逐项有行为与反例；仅修当前蓝图两入口文案，不恢复旧拓扑owner。依据ADR-016、PFACT029；SCN007；AC016。
+- **FR-C10-017**：单作者与独立只读分析者共同消费同一日志，两侧业务语义保留，冲突/覆盖可见，真实交互与确认不被机器记录替代。依据ADR-016、PFACT030/031；SCN008；AC017。
+- **FR-C10-018**：同代码/同payload比较请求表示的局部资源结果，验证最终只读输入及语义覆盖不回归，旧基线缺失继续inconclusive。依据ADR-016、PFACT032/034/035；SCN009；AC018。
+- **FR-C10-019**：对当前PRD批准范围逐delta来源读回，必要时单独真实全文展示确认；历史展示/回填保留各自语义。依据ADR-016、PFACT033；SCN010；AC019。
+
+### 实现设计：当前完整接口图与消费者
+
+完整映射分母是旧蓝图七标题（`git show d1097711:docs/contracts/card-01-stage-material-interface.md`:5/11/18/24/28/34/38）及当前蓝图实际正文，不从本spec自行缩小：任务类型；类型到旅程；portable身份；七态保真；材料/执行事实归属；安全继续与完成分开；人工边界/不自动重派。逐条登记当前适用/退役原因、owner、producer→材料/事实→consumer、正常/反例/原件。旧pre分支只读历史，不重启；现行正式阶段不恢复build-spec，planning portable只记录显式step结果，不证明业务成功。
+
+当前四卡角色：CARD03的工作包/写集边界由主会话与现有workspace/范围工具消费；CARD04的验收/失败真相由执行者、captureCommand及独立验收读者消费；CARD05由review-record-route单一producer和后续finding消费；CARD07由decision-log主会话作者、独立spec-analyze和后续build-plan材料消费者消费。角色映射不是四个旧模块均仍存在的断言。T011每个角色必须实际走对应输入/出口，不能只复用一份status文件贴四卡标签。
+
+现行共存链：真实需求/候选/问答/审查→作者写decision-log（step8与后续处置）→step9确认前只读准备→真实用户展示/选择（step10）→step11独立只读核对→主会话现有ordinary stage facts/人读handoff。只读报告不是第二writer；主会话修正文并保留旧来源。`confirm`只保存实际reply/HEAD/material_refs，不理解批准/拒绝、不执行不可逆动作；reject和未答的行为由真实宿主方法/独立观察证明，禁止造一套confirmation判定器。
+
+A/B资源链：同keys/contents/AC/contracts/diff；仅转换可接收string且已有落盘的顶层raw_requirement/draft_spec/phase_index，未独立落盘的acceptance_criteria保持同inline，context_map结构object/phase_authorities完整strings与其它非string结构两mode完全相同，nested refs不展开→A文本内嵌、B该有限文本集合相对ref+sha256→CLI真实resolveMaterialRefs→捕获services.runReviewRound的resolvedrequest（受控，不实际provider），先验证真实resolver/post profile可消费，setup/不可比非productionRED→同一buildReviewMaterials/build-plan post profile→providerMaterialEntries/reviewMaterialBytes→deliveryManifest及只读bundle原字节。比较移除随机bundleRoot/sourcePrefix等非payload位置后逐路径字节与可复算materialId；没有实际走finalprojection不能写等价。受控runner只证明resolver，不证明provider模型质量。固定正常/具名冲突/覆盖来源样本由独立消费者判读，不用随机findings相等证明质量等价。
+
+生命周期：仓内新test是现有Vitest消费的有限真实入口测试；map登记唯一consumer/owner/测试/删除条件。外置一次driver/两请求是本次实验owned资产，不入Runner/Skill Bundle/永久meter；raw、receipt、review各一份，临时bundle用返回dispose，ownedtemp/进程只清本次，旧失败/其它在途原件保留。无新增公共stage/action/schema/许可对象。
+
+### 有限受保护接口实读登记
+
+日期2026-10-06，工具exec_command；用`rg -n '^export'`和以下有限`sed`/`nl`段实读，未做全树快照：
+
+- `runtime/task/material-workspace.mjs`：`CURRENT_MATERIAL_FILES = Object.freeze(["decision-log.md", "spec.md", "phases/index.md"])`；`phaseFilesFromIndex(index)`；`materialFilesForCohort(activationCohort = "post", materials = {}, { stage } = {})`；`inspectMaterialWorkspace(root, { activationCohort = "post" } = {})`；`async replaceMaterialAtomic(root, file, content, options = {})`。
+- `runtime/stage/stage-content-contracts.mjs`:234–237：`readTaskTypeFromDecisionLog(decisionLogMarkdown)`。现存analyzeDecisionConvergence/Outline不是本设计新增的official执行器，不将保留函数当当前宿主语义自动调用。
+- `runtime/review/review-record-route.mjs`:59–65：`async recordSimpleReviewRequest({taskDir,request,runRound=runSimpleReview,signal=null,lockWaitMs=2000}={})`。
+- `runtime/task/portable-workflow-run.mjs`：`loadPortableWorkflowManifest({ worktreeRoot, read = readFileSync } = {})`；`async runPortableWorkflow({ task, worktreeRoot, input = undefined, now = () => new Date() } = {})`；`projectPortableWorkflowStatus({ task } = {})`。
+- `runtime/task/task-store.mjs`:8–14逐字键：`record_kind`、`task_id`、`stage`、`source`、`created_at`、`review_origin`、`review_result_ref`、`finding_dispositions`、`spec_analyze`、`evidence`、`serious_issue_disposition`、`close_action`、`handoff`；不把cursor当此列字段，不凭摘要宣称个数。
+- `runtime/interface/human-confirm.mjs`:304–324：`async recordConfirmation(fields, context = {})`，fields逐字`stage, decision, reply, materialRefs`；输出逐字`stage, decision, reply, material_refs, head, created_at`。不复制现有原话shape单测。
+- `skills/wh-review/scripts/review-materials.mjs`:596–597/655–690：`canonicalMaterialManifest(entries)`、`reviewMaterialBytes(key,value)`、`buildReviewMaterials({attachmentRoot,reviewDataRoot,stage,reviewTrack=null,reviewScope=null,reviewKind=null,materials,source=null,role=null,uiScope=false,activationCohort="pre",authenticated_evidence=undefined,surface=null,phaseId=null}={})`；返回`bundleRoot, attachmentRoot, sourcePrefix, materialId, deliveryManifest, discarded_facts, dispose()`。
+- `tests/e2e/card-10-current-consumer-e2e.test.mjs`:25–68/141–155：现有owned fixture/type拒写及23case受保护；`tests/e2e/card-04-real-entry-chain-e2e.test.mjs`:1–20现有Vitest/import/bootstrap/spawn字节测试；新test不复制其旧场景/评分逻辑。`tests/e2e/stage-runtime-five-stage-e2e.test.mjs`P2保护，现有risk路由正反不重写。
+
+
+- `tools/cli/stage-runtime.mjs`:899，`async stageRuntimeMain(argv = process.argv.slice(2), { services = {}, cwd = process.cwd() } = {})`是内部窄操作委托；1092–1099，`async stageRuntimeCliMain(argv = process.argv.slice(2), { delegate = stageRuntimeMain, services = {}, cwd = process.cwd(), skillBundleContract = LOCAL_SKILL_BUNDLE_CONTRACT, runnerContract = LOCAL_RUNNER_CONTRACT } = {})`是七public行为/action入口，1145–1177负责映射和signal接线。2026-10-06实读rg/sed。
+- `tools/cli/task-bootstrap.mjs`:69，`async bootstrapTask(values,{env=process.env,home}={})`是真实export，无cwd额外参数；现E2E current-consumer:25–68的fixture/call都是测试内私有函数，不可跨test import。新test只编写最小owned fixture，真实import bootstrapTask和使用public CLI，不改/复制旧23评分。2026-10-06实读rg/sed。
+- `runtime/interface/run-command.mjs`:202–243，`async captureCommand({ cwd, recordDir, slug, argv, shell, timeoutMs, signal } = {})`实际支持AbortSignal；取消receipt保存`cancelled`/`cancellation_reason`/`exit_code`/`output_ref`，真实ABORT_ERR在receipt落盘后抛出并携带`receipt_ref`/`output_ref`/`exitCode`。CLI:960通过services.commandSignal传入，不幻想public新增signal参数。2026-10-06实读sed。
+
+### 全局写集、归属与依赖
+
+未来NEW仓库路径：`tests/e2e/card-10-current-contract-e2e.test.mjs`，唯一P4 owner；T011/T012同file串行。职责=当前四角色完整契约与作者/只读者字节行为切片；consumer=Vitest定向执行及独立verify-code读者；retain=这些现行契约适用；delete=经独立审查的替代已承接这些真实场景且当前契约退役。未来MODIFY仅P3独占`docs/contracts/card-01-stage-material-interface.md`。当前build-plan静态设计资料已由唯一材料owner在`docs/architecture/move-map.json`预登记NEW test职责/预期真实定向Vitest消费者/owner/retain/delete；不记录执行进度，P4未来不再修改map。不先授权投机runtime修改；真实目标行为失败再以来源/具体失败修订同task精确scope。
+
+本轮设计资料写集为D/S/P1/P2/P3/P4/P5/index必要prose及map唯一新test条目，不授权实施。P5没有仓库NEW/MODIFY；仅外置`quality/evidence/resource-experiment/card10-prospective-resource-driver.mjs`和本次owned请求/原件，外置driver task-relative精确路径/CARD10_TASK_DIR定义及认证cwd见P5；不以脱敏宿主绝对路径作gate。禁止生产/runtime/workflows/skills/母PRD/归档/P1/P2及现有测试评分改动；本段有限实读接口是依赖保护，不建whole-treehash。当前材料作者独占D/S/P3/P4/P5/index，不让调查者同时写。设计依赖P2→P3→P4→P5；P2已实现两入口是P3文案事实前提，不重演完成作为工作permit；先freeze对应图，P4同file串行，最后采同一P4完成代码两模式。3–4独立上下文：唯一材料/实施owner、蓝图/资源只读调查（可并行）、独立审查；不按固定并发上限改provider，不新增控制面。
+
+### PRD版本绑定设计
+
+已定位d271793c回填121223B/f05577c30a74931f11bfea3b11d37fbf4bec602a49a92bf9bb7eb12761a9e8f9；当前140544B/deb2da5620e5fd97b52028d810b2ee6bcc1c6c090360d8696a7c2ede15257905。T010实算有限blob/hash，对e78c0e41/9ba93e11两commit57增32删按具体delta和授权来源分类，不把统计数量当批准。PRD214–228明确display139a50179fb0f85eba6dd92d9f66f28546b7b3f9bde14317ff19f2e2b0091c3d与final_file_sha256回填不同是设计语义。主要已定位delta包括CARD09增补R021/FR58–61、FR44退休、INTEG3变化注及metadata；每个仍需来源核对，未证不能一律标approved。没有当前全文批准，T010准备全文/差异展示供主会话取得单独答复；不在本task写母PRD或回填旧outcome。
+
+### 测试标准、归因与恢复
+
+P3静态文档G2可证伪读回，不造RED；P4只是补已有行为证据，命名目标原本绿色记existing，收集/setup失败独立列；只有真实production需要改变才冻结同oracle命名目标RED并修订精确写集，同一测试GREEN，合法评分变化经TCR独立审查。P5探索性offline比较不是production修复，不人为造红；不声称这轮设计已取得任何RED/GREEN或projection equality。
+
+资源mandatory为原CARD09写入/确定性计数/同负载原义完整向量：主会话工具调用、子代理派发、主会话自行执行、人工询问/等待（会话元数据/现ledger）；无派发边界进程数（ps原件）；请求execution-inputs、quality/tests、quality/reviews及provider只读bundle文件数/bytes（有限文件统计）。A/B各一次相同fixed workload、独立明确时间窗，同ledger口径；wrapper不足归因标unknown不填0。第一主结果是真冗余请求bytes可测下降，其它指标下降或持平并解释，隔离副本保持，不设固定降幅门。无同负载成对来源继续inconclusive；token/RAM/CPU/温度不属原指标，不由ledger推算也不追加必需目标。live默认不跑；具名投递疑点才一对AB，执行前实读固定完整configured集合N/模型/effort（不假定2或将旧5当当前），上限2*N调用、30分钟含取消，总预算未知不启动，沿既有AbortSignal取消owned进程并保所有error/raw。三对延迟采样只有用户另要时才设计。
+
+风险/开放项：**OPEN-C10-007** owner主会话/T010，AC019当前全文批准未知，来源核对或独立全文真实答复关闭，未答不close冒充；**OPEN-C10-008** ownerT013，AC018局部收益/最终bundle未知，实际公平对照关闭，缺历史基线不追认；**RISK-C10-012** AC016/017错把机器字节测试当宿主语义，独立方法未执行则incomplete；**RISK-C10-013** AC018拿requestbytes代整个资源目标，逐metric拆证、未证仍unknown。无已知产品bug前不改runtime。真实失败保存原件、修复回同owner；错误引用/临时包用本次owned恢复，不删除历史。最终独立回读新增四AC及原限制，代码质量独立审查不与业务验收合并，本草稿不发布stage fact。
+
+
+资源调度与采样的可执行补充：准备在性能窗外，同一worker/context执行A/B相同冷Node负载；主会话每mode只直接followup_task及实际wait_agent，根会话事件全集支持主自执行0而非wrapper分类猜0。各mode按raw followup开始→wait实际结果结束的[since,until)复算同ledger；所有额外事件计入，child receipt仅交叉佐证不混rootcounts。采样顺序build→bundle仍在时ps/四目录count+bytes→原raw冻结→dispose→sentinel读回；mode独立同结构root，样本raw/receipt在受测root外，避免B累计A或统计正在写自身receipt。取消负控在A/B窗外使用实际captureCommand AbortSignal与ready marker，读取settled ABORT_ERR的cancelled receipt/双流前缀/owned进程清理。任何向量项未知/取消未测/cleanup失败都不满足AC018，不新建ledger/永久meter或全局派发许可。

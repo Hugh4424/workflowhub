@@ -1,6 +1,6 @@
 # 决策日志（decision-log）
 
-> 本文件是 CARD-10（总体集成验收）任务在 make-decision 阶段的决策稿，按 `skills/decision-log/templates/decision-log-template.md`（327 行）的章节名与字段名书写。所有引用均为真实路径 + 行号。母 PRD 只读不改（ADR-007）；仓库内只落本卡 `specs/` 材料与 verify-code 结论，原始件全部落外置任务目录（ADR-005）。
+> 本文件是 CARD-10（总体集成验收）任务在 make-decision 阶段的决策稿，按 `skills/decision-log/templates/decision-log-template.md`（327 行）的章节名与字段名书写。所有引用均为真实路径 + 行号。母 PRD 只读不改（ADR-007）；原P1只落本卡specs记录；后续授权001/P2及当前方向014窄例外由spec Appendix A列明，原始件全部落外置任务目录（ADR-005）。
 
 ## 任务身份
 
@@ -1368,3 +1368,25 @@ Grill 第 1 批的三条选项选择（U-015..U-017，2026-10-05）同样**不�
 本节只追加，此前所有字节/ADR保留。ADR006/009/010/014的无实现、无新增测试、三个oracle、不承接缺口限制仍说明原P1；本次P2/T009仅允许三个具名代码/测试路径和move-map新test登记，具体见P2。冻结oracle改变先单一TCR独立审查；不恢复risk、official handler、cohort/reflection/kernel gate，不新增stage/action/持久控制对象。
 
 九卡末行stage=close强条件保持。CARD06例外仅用既有writeStageRow补真实已发生completed四close_action，旧三行15269B/原证据字节保真，补记时间与source原发生时间分开；101已实际补记，102/104/105是新读回，不重close。旧019/085失败保留，105exit0只证明当前输入合规。原三INTEG unverified、099/100 RED、CARD01 ARCHIVE原件均保留；新证据不补造历史，未执行/缺证不能pass。最终CARD10 close/归档/删除仍动作前停。
+
+
+## 2026-10-06 现行等价缺口设计方向（追加；完整计划仍为草稿）
+
+### U-019 / R-C10-GAP-001 — 用户本轮真实来源
+
+用户请求逐字：「好的，那就检查缺少的部分应该如何补充？设计完整方案」。主会话展示了退役双写与缺失历史资源基线的限制，用户通过选项选择逐字答复：「按现行等价目标设计（推荐）」。原件=`quality/evidence/2026-10-06-014-gap-design-direction.md`，sha256=`9f16f5be65f12979dd09cc97df0dd09b91108c2fbe5606d86975eeb5c89803d3`；该普通来源原件不认证实施、Git、阶段通过或close。原问题依据=`quality/evidence/2026-10-06-013-card10-original-goal-conditional-close-audit.md`，sha256=`4984401e4e9fff61090a098b423902837c25901c3f766a82be2379c46d68e7fa`。
+
+### ADR-016 — 新设计范围与历史分离
+
+方向已确认：同task设计当前四卡完整蓝图的真实消费、单一作者与只读分析者共同消费同一decision-log、同payload前瞻资源实验、当前PRD正文的批准来源核对。对应新增FR-C10-016..019、AC-C10-016..019、P3/T010、P4/T011/T012、P5/T013。旧INTEG-1/2/3的unverified、CARD09历史resource_benefit=inconclusive、原RED、旧审查覆盖及CL1..4均原样保留；新实验不追认过去。旧CARD07 D-035的单writer方向适用，旧官方stage执行器、桥、selector、aggregate/outline gate、并发上限及全Phase审查不恢复。
+
+本次只授权设计草稿，未取得对当前完整spec/Phase的实际计划确认，也未授权执行新实验/实施/close。P3–P5为未来范围，不能把草稿记成build-plan succeeded。旧CL是已生效历史限定收口，不自动满足用户本轮更强的close条件。未来展示并确认新计划后，新增当前AC逐条满足、独立质量事实与剩余限制真实披露，才可讨论按该新范围完成；最终close仍另展示实际交付/清理范围取得确认。不以新增记录、文件存在或byte减少推原所有目标已完成。
+
+资源方向仅确认公平新实验：mandatory offline按原CARD09写入/确定性计数/同负载原义固定同一post输入、resolved材料及最终只读bundle，A/B各一次同负载独立明确窗，比较请求JSONbytes及全部可观测确定性向量；live默认不跑。若真实投递/可消费性还有具名疑点，可在未来计划确认范围内最多一对AB、完整当前configured provider集合N、最多2*N次调用、30分钟总墙钟含取消。延迟研究三对样本不属mandatory，须另有用户请求。向量包括会话调用/派发/主执行/人工等待、边界进程数及四类有限目录文件数/bytes；会话从ledger、进程从ps、文件从文件统计各取原件，wrapper不足归因unknown不虚填0。局部bytes不替代完整向量；token/宿主RAM不属原指标，不凭本实验额外宣称收益。
+
+当前PRD完整确认与本task计划确认分别处理；hash差异先核展示/回填设计语义及后续delta，不自动判旧确认失效，不把新计划答复当作批准当前PRD全文。若原所有历史目标仍是最终close必需，缺历史同负载基线等条件不能通过本设计补造，必须明示未满足并待用户决定，不自行降低目标。
+
+
+### 2026-10-06 一次计划审查与处置适用范围
+
+正常wh-review一次原件=`quality/reviews/2026-10-06-015-build-plan-document.json`，sha256=`ee2d601b0ed3a6bf103b3a71322f436e4f22cda2b577a1a0b0f002490aae5a73`，5/5 completed、数组0..17 findings。主会话已裁定本轮有效项修当前材料prose：历史baseline/当前例外、map时段owner、P3真实P2前提、当前入口/外置路径、聚合oracle、完整资源采样/取消。idx2/12/16关于本地占位部分无效（实际本地路径被投递脱敏），可搬运展示问题有效并修；idx10是长行源包读取限制，direction014实际独立实读来源保留。本次不改原review/旧raw/冻结评分，不重派review。完整计划仍需最后当前分析与真实展示确认，处置不会把方向答复升级为计划接受。
