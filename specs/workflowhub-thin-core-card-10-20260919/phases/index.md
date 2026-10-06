@@ -2,13 +2,17 @@
 
 ## Execution Index
 
-本表是纯指针索引：不是任务卡、不是 Phase 程序、不是进度账、不是完成权威。每个 Phase 恰好一行，权威正文在 `phases/P1.md`。
+本表是纯指针索引：不是任务卡、不是 Phase 程序、不是进度账、不是完成权威。每个 Phase 恰好一行，权威正文分别在 `phases/P1.md` 和 `phases/P2.md`。
 
 | Phase | Authority ref | Semantic anchor | Write set | Dependency | Consumer |
 | --- | --- | --- | --- | --- | --- |
 | `P1` | `phases/P1.md` | `#l0--结果与变更` | `specs/workflowhub-thin-core-card-10-20260919/spec.md`；`specs/workflowhub-thin-core-card-10-20260919/phases/P1.md`；`specs/workflowhub-thin-core-card-10-20260919/phases/index.md` | none | verify-code 执行者（真实下游读取方，逐 Task 重放执行卡）；用户（按需抽验任一卡的任一 AC 事实） |
 
-上表 Write set 列只列**仓库写入面**（精确路径）：本卡在仓库内的写入面就是这三份 `.md`，与 `phases/P1.md` 契约头的「写入集」逐条一致。
+| `P2` | `phases/P2.md` | `#t009-当前入口和当前等价oracle` | `tools/cli/stage-runtime.mjs`；`tests/e2e/stage-runtime-five-stage-e2e.test.mjs`；`tests/e2e/card-10-current-consumer-e2e.test.mjs`；`docs/architecture/move-map.json` | none（P1原件输入，不要求P1通过） | 当前公共CLI用户；独立verify-code消费者 |
+
+P2窄写集为下述原P1零改动限制的唯一当前授权例外；材料owner定点写D/S/P1/P2/index，D只追加授权，索引不写执行进度。
+
+上表 Write set 列只列**仓库写入面**（精确路径）：P1在仓库内的写入面就是这三份 `.md`，与 `phases/P1.md` 契约头的「写入集」逐条一致。
 
 仓库外证据落点不是仓库写入面，也不复制进仓库：`<TASK_DIR>/quality/tests/**`（测试与 oracle 执行原件）、`<TASK_DIR>/quality/reviews/**`（审查原件与受控演练原始字节）、`<TASK_DIR>/quality/evidence/**`（其余原件），按日期-序号-描述命名、append-only。
 

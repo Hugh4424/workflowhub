@@ -1360,3 +1360,11 @@ Grill 第 1 批的三条选项选择（U-015..U-017，2026-10-05）同样**不�
 - **decision-log 本体无宿主绝对路径**：通过——`grep -n '\/Users\/' decision-log.md` **0 命中**（13 行宿主绝对路径已改为 `<card-10-worktree>` / `<target-repo>` / `<task-dir>` / `<wh-config>` / `<ocr-bin>` 占位或相对路径）。
 - **U-018/V-025 裁定落点（2026-10-05，CARD-10 make-decision 收口前）**：本轮新增 `## 需求变更记录` `### U-018` 与 `## 逐字声明层（verbatim）` `V-025`（选项选择逐字 `A 认可这个读法（推荐）`，经提问工具 `ask_user_question`，question_id `inte3-reading`），并在 `### ADR-001` 末尾追加「授权边界注（2026-10-05，U-018/V-025 后）」、在 `## 动态 Talk 批次` 新增 T-006；`## 最终确认` 待展示项一条（INTEG-3 解释性读法）已由「待裁」转为「已由用户真实裁定」，状态行当时为 `pending`、未改动（**历史表述**：该状态行已于 2026-10-05 改为 `accepted`，见 `## 最终确认` 确认原件）。同步后本文件计数：`## 需求变更记录` U-001..U-018、`## 逐字声明层（verbatim）` V-001..V-025、`## 决定` ADR-001..ADR-015、`## 动态 Talk 批次` T-001..T-006。（机械事实登记，不构成质量结论。）
 - **真实最终确认已落定（2026-10-05）**：`## 最终确认` 状态 `pending → accepted`；确认原件＝`<task-dir>/quality/evidence/human-confirmations/2026-10-05-001-make-decision-approve-decision.json`（`status: "recorded"`、`stage: "make-decision"`、`decision: "approve-decision"`）；`reply` 逐字 `A 确认收口（推荐）`；`material_refs: ["specs/workflowhub-thin-core-card-10-20260919/decision-log.md"]`；绑定 `head: be393a6ef10db7df919e01f194b47f8dd856d9b4`；`created_at: 2026-10-05T12:48:08.272Z`；答复形式＝**选项选择**（经提问工具 `ask_user_question`，question_id `final-confirmation`），**非自由文本口述**——用户已被明确告知「可直接打字给一句确认语，那样原文绑定更完整」，仍选择选项。（机械事实登记，不构成质量结论。）
+
+## 2026-10-06 当前授权追加：限定跨卡修复
+
+用户答复完整原话：“授权，你去修复吧”。对应选项全文：“授权调整计划、跨卡修复：保留原强验收标准，补齐缺口；改动和审查范围会扩大。”另一选项是“保留当前阻塞：保留现有修正与失败证据，整体任务仍未完成。”唯一来源=<task-dir>/quality/evidence/2026-10-06-001-crosscard-repair-authorization.md，sha256=51c9ba28063550a227f71b9010ad43efc7cd57497f1c5b2dfe49de17e7ab41ba。解释与原话分开：当前授权允许本卡定点调整计划、跨卡修复，原验收强度不降，无需重复确认该范围。
+
+本节只追加，此前所有字节/ADR保留。ADR006/009/010/014的无实现、无新增测试、三个oracle、不承接缺口限制仍说明原P1；本次P2/T009仅允许三个具名代码/测试路径和move-map新test登记，具体见P2。冻结oracle改变先单一TCR独立审查；不恢复risk、official handler、cohort/reflection/kernel gate，不新增stage/action/持久控制对象。
+
+九卡末行stage=close强条件保持。CARD06例外仅用既有writeStageRow补真实已发生completed四close_action，旧三行15269B/原证据字节保真，补记时间与source原发生时间分开；101已实际补记，102/104/105是新读回，不重close。旧019/085失败保留，105exit0只证明当前输入合规。原三INTEG unverified、099/100 RED、CARD01 ARCHIVE原件均保留；新证据不补造历史，未执行/缺证不能pass。最终CARD10 close/归档/删除仍动作前停。
