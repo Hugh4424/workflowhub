@@ -1052,10 +1052,11 @@
       "role": "production",
       "responsibility": "build-prd现有portable run/load/status projection单一producer；P2仅由CLI复用，不新增stage/action/控制对象",
       "owner": "B4/P5 / MT-1-076；CARD10/P2/T009仅CLI接线consumer owner runtime_route",
-      "consumer": "当前实际模块消费者：tests/contract/portable-workflow-run.test.mjs、tests/integration/card-01-dual-journey.test.mjs；CARD10/P2/T009授权将tools/cli/stage-runtime.mjs三个既有public分支接线，当前尚未实施，接线后更新真实module_consumers，不把计划当现有执行",
+      "consumer": "当前实际模块消费者：tests/contract/portable-workflow-run.test.mjs、tests/integration/card-01-dual-journey.test.mjs、tools/cli/stage-runtime.mjs；CLI既有run:execute build-prd调用runPortableWorkflow，status:begin/doctor:workspace build-prd读projectPortableWorkflowStatus，不新增公共action、stage、对象或actor",
       "module_consumers": [
         "tests/contract/portable-workflow-run.test.mjs",
-        "tests/integration/card-01-dual-journey.test.mjs"
+        "tests/integration/card-01-dual-journey.test.mjs",
+        "tools/cli/stage-runtime.mjs"
       ],
       "named_data_readers": [],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
@@ -4768,14 +4769,14 @@
       "destination": "tests/e2e/card-10-current-consumer-e2e.test.mjs",
       "status": "retain",
       "role": "test",
-      "responsibility": "P2授权预写真实公共CLI规划/普通八场景行为oracle；尚未创建/执行，不冒历史23AC通过",
+      "responsibility": "真实公共CLI规划/普通八场景行为oracle；测试文件在位，受控消费者断言不冒历史23AC通过",
       "owner": "CARD10/P2/T009 runtime_route；登记owner card10_contract",
-      "consumer": "实际预写测试consumer为tools/cli/stage-runtime.mjs的run/status/doctor及既有七public入口；同冻结RED→GREEN与独立verify-code消费原件",
+      "consumer": "真实CLI消费者测试：tools/cli/stage-runtime.mjs的run/status/doctor及既有七public入口；独立verify-code消费唯一执行原件，不以目录登记或测试结果作为阶段许可",
       "module_consumers": [],
       "named_data_readers": [
         "tools/cli/stage-runtime.mjs"
       ],
-      "delete_condition": "当前public/portable消费者退役且经独立验证替代承接后删除；未交付则不作为已执行事实",
+      "delete_condition": "当前public/portable消费者退役且经独立验证替代承接后删除；目录登记只说明静态职责，不保存执行进度或计数",
       "retention_basis": "当前真实用户授权001；P2/T009定向八场景；测试保留服务实际CLI消费者，不建控制面"
     }
   ],
