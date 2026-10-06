@@ -1050,13 +1050,17 @@
       "destination": "runtime/task/portable-workflow-run.mjs",
       "status": "retain",
       "role": "production",
-      "responsibility": "build-prd 可搬运规划旅程（本文件，NARROW 后）",
-      "owner": "B4/P5 / MT-1-076",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
+      "responsibility": "build-prd现有portable run/load/status projection单一producer；P2仅由CLI复用，不新增stage/action/控制对象",
+      "owner": "B4/P5 / MT-1-076；CARD10/P2/T009仅CLI接线consumer owner runtime_route",
+      "consumer": "当前实际模块消费者：tests/contract/portable-workflow-run.test.mjs、tests/integration/card-01-dual-journey.test.mjs、tools/cli/stage-runtime.mjs；CLI既有run:execute build-prd调用runPortableWorkflow，status:begin/doctor:workspace build-prd读projectPortableWorkflowStatus，不新增公共action、stage、对象或actor",
+      "module_consumers": [
+        "tests/contract/portable-workflow-run.test.mjs",
+        "tests/integration/card-01-dual-journey.test.mjs",
+        "tools/cli/stage-runtime.mjs"
+      ],
       "named_data_readers": [],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "MT-1-076 / NARROW"
+      "retention_basis": "MT-1-076 / NARROW；当前两个真实模块测试消费者，P2显式授权public接线"
     },
     {
       "source": "runtime/task/task-capability.mjs",
@@ -4759,6 +4763,34 @@
       ],
       "delete_condition": "宿主不再调用 third-review",
       "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    },
+    {
+      "source": "tests/e2e/card-10-current-consumer-e2e.test.mjs",
+      "destination": "tests/e2e/card-10-current-consumer-e2e.test.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "真实公共CLI规划/普通八场景行为oracle；测试文件在位，受控消费者断言不冒历史23AC通过",
+      "owner": "CARD10/P2/T009 runtime_route；登记owner card10_contract",
+      "consumer": "真实CLI消费者测试：tools/cli/stage-runtime.mjs的run/status/doctor及既有七public入口；独立verify-code消费唯一执行原件，不以目录登记或测试结果作为阶段许可",
+      "module_consumers": [],
+      "named_data_readers": [
+        "tools/cli/stage-runtime.mjs"
+      ],
+      "delete_condition": "当前public/portable消费者退役且经独立验证替代承接后删除；目录登记只说明静态职责，不保存执行进度或计数",
+      "retention_basis": "当前真实用户授权001；P2/T009定向八场景；测试保留服务实际CLI消费者，不建控制面"
+    },
+    {
+      "source": "tests/e2e/card-10-current-contract-e2e.test.mjs",
+      "destination": "tests/e2e/card-10-current-contract-e2e.test.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "当前七类阶段/材料义务的四卡角色完整消费与单作者/只读分析者同材料共存的有限真实CLI行为测试；语义判断由独立实际方法读回",
+      "owner": "CARD10/P4/T011–T012；同文件串行唯一实施owner；静态设计登记由当前材料owner维护",
+      "consumer": "预期由定向Vitest命令 npx vitest run tests/e2e/card-10-current-contract-e2e.test.mjs 消费；独立verify-code读真实执行原件；静态职责登记不证明功能验证",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "现行对应契约退役且经独立审查的替代已承接全部真实场景后删除；不因登记生成阶段许可",
+      "retention_basis": "当前U-019/R-C10-GAP-001/ADR-016设计方向；服务现行CLI/独立读回场景，保留不构成测试执行事实"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

@@ -13,7 +13,8 @@ import { bootstrapStage } from "../../runtime/stage/stage-context.mjs";
 import { openTask } from "../../runtime/task/task-handle.mjs";
 import { invokeRuntimeCommand, RUNTIME_BEHAVIORS } from "../../runtime/interface/runtime-facade.mjs";
 import { LOCAL_RUNNER_CONTRACT, LOCAL_SKILL_BUNDLE_CONTRACT } from "../../runtime/interface/runner-contract.mjs";
-import { validatePostPhaseContract } from "../../runtime/stage/stage-content-contracts.mjs";
+import { readTaskTypeFromDecisionLog, validatePostPhaseContract } from "../../runtime/stage/stage-content-contracts.mjs";
+import { projectPortableWorkflowStatus, runPortableWorkflow } from "../../runtime/task/portable-workflow-run.mjs";
 import { CURRENT_MATERIAL_FILES, materialFilesForCohort, phaseFilesFromIndex } from "../../runtime/task/material-workspace.mjs";
 import { readTaskFacts, STAGE_ROW_KEYS, writeStageRow } from "../../runtime/task/task-store.mjs";
 import { inspectWorkspace } from "../../runtime/interface/workspace-check.mjs";
@@ -905,13 +906,15 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     "authorize-operation": [...common, "operation", "subject-ref"], "review-record": [...common, "input"], run: [...common, "input"],
   };
   requireOptions(values, options[command] ?? [], command);
-  if (["artifact", "capture-tests", "review-record", "run"].includes(command) && !values.input) throw new TypeError(`${command} requires --input`);
+  if (["artifact", "capture-tests", "review-record", "run"].includes(command) && !values.input
+      && !(command === "run" && values.stage === PORTABLE_WORKFLOW_STAGE)) throw new TypeError(`${command} requires --input`);
   let context = await thinTaskContext(values, cwd, { readOnly: command === "doctor" || command === "status" });
   const input = values.input === undefined || command === "artifact" ? undefined : readTaskBoundInput(context, values.input);
   if (command === "doctor") return {
     stage: values.stage, task_id: context.task.identity.taskId, worktree_root: context.workspace.worktreeRoot,
     baseline_commit: context.workspace.baselineCommit, workspace: context.physical,
     storage: doctorStorage(context), materials: thinMaterials(context), ocr: detectOcr(), target_workspace: context.targetStatus,
+    ...(values.stage === PORTABLE_WORKFLOW_STAGE ? { portable_workflow: projectPortableWorkflowStatus({ task: context.task }) } : {}),
   };
   if (command === "status") {
     const rows = readTaskFacts(context.task.taskPath); // malformed JSON and permissions are real errors
@@ -930,11 +933,15 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       materials: Object.fromEntries(Object.entries(materials).map(([file, value]) => [file, value !== null])),
       ...(values.stage === "build-code" ? { phase_progress: derivePhaseProgressStatus({ cursor: currentCursor, currentPhasesHead: phasesHead }) } : {}),
       facts: rows, workspace: context.physical, target_workspace: context.targetStatus,
+      ...(values.stage === PORTABLE_WORKFLOW_STAGE ? { portable_workflow: projectPortableWorkflowStatus({ task: context.task }) } : {}),
     };
   }
   if (command === "artifact") {
     const prd = values.stage === "build-prd" && values.name === "prd.md";
     if (!prd && !isDesignArtifact(values.stage, values.name, context.manifest.activation_cohort ?? "pre")) throw new TypeError(`unsupported ${values.stage} artifact: ${values.name}`);
+    if (prd && readTaskTypeFromDecisionLog(context.artifacts.read("decision-log.md")) !== "规划任务") {
+      throw new TypeError("portable build-prd writes require an explicit planning task type in the current decision-log");
+    }
     const relativeName = values.name;
     await context.artifacts.writeAtomic(relativeName, readFileSync(values.input));
     return { artifact_ref: context.artifacts.reference(relativeName) };
@@ -971,6 +978,13 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     return { status: "recorded", ...JSON.parse(output) };
   }
   if (command === "run") {
+    if (values.stage === PORTABLE_WORKFLOW_STAGE) {
+      if (input !== undefined && readTaskTypeFromDecisionLog(context.artifacts.read("decision-log.md")) !== "规划任务") {
+        throw new TypeError("portable build-prd writes require an explicit planning task type in the current decision-log");
+      }
+      const result = await runPortableWorkflow({ task: context.task, worktreeRoot: context.workspace.worktreeRoot, input });
+      return { ...result, exit_code: result.state === "failed" ? 1 : 0 };
+    }
     if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).join("\0") !== "phase_progress" || values.stage !== "build-code") {
       throw new TypeError("run --action=execute only records the existing build-code phase_progress cursor; official stage execution is retired");
     }
@@ -1089,7 +1103,7 @@ export async function stageRuntimeCliMain(argv = process.argv.slice(2), {
   if (behavior === "--help" || behavior === "help") {
     return {
       behaviors: ["doctor", "status", "run", "review", "verify", "confirm", "authorize"],
-      run_execute: "build-code phase_progress cursor only; no official stage execution",
+      run_execute: "build-code: phase_progress cursor only; build-prd: supplied step outcomes require an explicit planning task type for writes; no input returns not-started/ref=null without writing; records do not certify business or quality success; no official stage execution",
       actions: {
         doctor: ["workspace"],
         status: ["begin", "repair"],
@@ -1117,8 +1131,6 @@ export async function stageRuntimeCliMain(argv = process.argv.slice(2), {
     };
     const allowedArguments = Object.hasOwn(writeActionArguments, action) ? writeActionArguments[action] : null;
     if (allowedArguments) {
-      const stageArgument = raw.filter((item) => item.startsWith("--stage=")).pop();
-      if (action === "execute" && stageArgument === `--stage=${PORTABLE_WORKFLOW_STAGE}`) allowedArguments.add("now");
       const unknownArgument = raw.find((item) => {
         const separator = item.indexOf("=");
         return !item.startsWith("--") || separator < 3 || !allowedArguments.has(item.slice(2, separator));
