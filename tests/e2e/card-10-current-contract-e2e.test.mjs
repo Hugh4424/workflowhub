@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -148,6 +148,8 @@ describe("current blueprint", () => {
     expect(review.value.status).toBe("unavailable");
     expect(existsSync(join(f.taskPath, review.value.result_ref))).toBe(true);
     expect(readFileSync(join(f.taskPath, review.value.result_ref), "utf8")).toContain("OWNED_UNAVAILABLE");
+    expect(readdirSync(join(f.taskPath, "quality", "reviews")).some(name => name.endsWith(".output")
+      && readFileSync(join(f.taskPath, "quality", "reviews", name), "utf8").includes("controlled unavailable raw"))).toBe(true);
     expect(readOnlyConsumer(f)).toHaveProperty("decision-log.md");
   });
 
@@ -159,6 +161,30 @@ describe("current blueprint", () => {
     expect(status.status, status.combined).toBe(0);
     expect(status.value.missing_materials).toContain("phases/P1.md");
     expect(readFileSync(join(f.taskPath, "facts.jsonl"))).toEqual(before);
+  });
+
+  it("rejects a bad material reference before review dispatch and preserves the source", async () => {
+    const f = await fixture("规划任务");
+    const source = join(f.worktree, "owned-review-source.md");
+    const sourceBytes = Buffer.from("owned review source\n");
+    writeFileSync(source, sourceBytes);
+    const requestPath = join(f.worktree, "bad-review-input.json");
+    writeFileSync(requestPath, JSON.stringify({ request: {
+      stage: "build-plan", subject_kind: "document", surface: "document",
+      materials: {
+        raw_requirement: "owned requirement",
+        draft_spec: { ref: "owned-review-source.md", sha256: "0".repeat(64) },
+        acceptance_criteria: "owned AC", phase_authorities: { "phases/P1.md": "# P1\n" },
+        phase_index: "| phase | authority ref |\n| --- | --- |\n| `P1` | `phases/P1.md` |\n",
+        review_instructions: "owned instructions",
+      },
+    } }) + "\n");
+    const beforeFacts = readFileSync(join(f.taskPath, "facts.jsonl"));
+    const result = reviewCli(f, requestPath);
+    expect(result.ok).toBe(false);
+    expect(result.error.code).toBe("TASK_FILE_INVALID");
+    expect(readFileSync(source)).toEqual(sourceBytes);
+    expect(readFileSync(join(f.taskPath, "facts.jsonl"))).toEqual(beforeFacts);
   });
 });
 
