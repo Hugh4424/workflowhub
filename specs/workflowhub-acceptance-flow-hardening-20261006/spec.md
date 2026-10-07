@@ -206,7 +206,7 @@ N/A — 不新增持久对象。`result.schema.json` 只在 verify-code 分支�
 
 ## 9. 迁移与兼容
 
-只改机制，历史任务与在跑任务不回填（ADR-008）。旧 review 回执在 schema 层继续有效，因为 `conclusion`/`coverage` 只在 verify-code 条件分支必填。
+只改机制，历史任务与在跑任务不回填（ADR-008）。既有 `wh-review-result.v1` 的旧 verify-code 回执在 `conclusion` 与 `coverage` 两项均缺时仍按原形状可读、不回填；任一宿主扩展出现时，两项必须成对并满足现有枚举、类型与计数约束；当前唯一 `review-record-route` 在 verify-code 始终派生两项，既有 `wh-review-attempt.v1` 的旧 `coverage` 不进入 result 宿主扩展分支。
 
 ## 10. 明确不做与默认必须成立
 

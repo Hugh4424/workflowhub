@@ -1184,10 +1184,26 @@
         "properties": {
           "stage": {
             "const": "verify-code"
+          },
+          "version": {
+            "const": "wh-review-result.v1"
           }
         },
         "required": [
-          "stage"
+          "stage",
+          "version"
+        ],
+        "anyOf": [
+          {
+            "required": [
+              "conclusion"
+            ]
+          },
+          {
+            "required": [
+              "coverage"
+            ]
+          }
         ]
       },
       "then": {
