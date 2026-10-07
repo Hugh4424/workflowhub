@@ -329,25 +329,90 @@ function markdownSections(document, level, prefix = "") {
   }));
 }
 
-function executionIndexRows(document) {
-  const section = markdownSections(document, 2).find(({ heading }) => /^(?:Execution Index|执行索引)$/i.test(heading));
-  if (!section) return null;
+function unsafeWritePath(path) {
+  return path.startsWith("/") || /^[A-Za-z]:/.test(path)
+    || /[\\\0*?\[\]{}]/.test(path)
+    || path.split("/").some((part) => !part || part === "." || part === "..");
+}
+
+function executionIndexRows(document, errors) {
+  const lines = document.split(/\r?\n/);
+  const start = lines.findIndex((line) => /^##\s+(?:Execution Index|执行索引)\s*$/i.test(line));
+  if (start < 0) return null;
   const rows = [];
-  for (const line of section.body.split(/\r?\n/)) {
-    if (!/^\s*\|/.test(line) || /^\s*\|\s*(?:---|phase\s*\||阶段\s*\|)/i.test(line)) continue;
-    const cells = line.split("|").slice(1, -1).map((cell) => cell.trim());
-    if (cells.length !== 6 || cells.every((cell) => /^-+$/.test(cell))) continue;
-    const plain = (value) => value.replace(/^`|`$/g, "").trim();
+  let position = 0;
+  const plain = (value) => value.replace(/^`|`$/g, "").trim();
+  for (let lineIndex = start + 1; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex];
+    if (/^##\s+/.test(line)) break;
+    if (!/^\s*\|/.test(line)) continue;
+    const cells = analyzeMarkdownTableCells(line);
+    if (/^(?:phase|阶段)$/i.test(plain(cells[0] ?? ""))
+        || cells.every((cell) => /^:?-+:?$/.test(cell))) continue;
+    position += 1;
+    const label = `phases/index.md:${lineIndex + 1} ${plain(cells[0] ?? "")} (${plain(cells[1] ?? "")})`;
+    const rowErrors = [];
+    if (![5, 6].includes(cells.length)) {
+      errors.push(`${label} requires 5 or 6 cells; found ${cells.length}`);
+      continue;
+    }
+    const phase = plain(cells[0]);
+    if (phase !== `P${position}`) rowErrors.push(`Phase index must declare contiguous P1..Pn; expected P${position}`);
+    if (plain(cells[1]) !== `phases/${phase}.md`) rowErrors.push(`authority ref must be phases/${phase}.md`);
+    if (!plain(cells[2])) rowErrors.push("semantic anchor is required");
+    const ownership = cells.length === 5 ? cells[4].split(/\s*(?:→|->)\s*/) : cells.slice(4);
+    if (ownership.length !== 2 || ownership.some((value) => !plain(value))) rowErrors.push("dependency → consumer must name both fields");
+    const paths = inlinePaths(cells[3]);
+    if (paths.length === 0) rowErrors.push("write set is empty");
+    for (const path of paths) if (unsafeWritePath(path)) rowErrors.push(`unsafe write set path: ${path}`);
+    if (rowErrors.length) {
+      errors.push(...rowErrors.map((error) => `${label} ${error}`));
+      continue;
+    }
     rows.push(Object.freeze({
-      phase: plain(cells[0]),
+      position,
+      phase,
       authority_ref: plain(cells[1]),
       semantic_anchor: plain(cells[2]),
-      write_set: Object.freeze(inlinePaths(cells[3])),
-      dependency: plain(cells[4]),
-      consumer: plain(cells[5]),
+      write_set: Object.freeze(paths),
+      dependency: plain(ownership[0]),
+      consumer: plain(ownership[1]),
     }));
   }
   return Object.freeze(rows);
+}
+
+function phaseWriteSet(body) {
+  // Phase declarations precede executable task cards and removable L2 reference.
+  const authority = body.split(/^##\s+L2\b|^###\s+T\d{3,}\b/m, 1)[0];
+  const declaredPaths = (value) => {
+    let quoted = false;
+    for (let index = 0; index < value.length; index += 1) {
+      if (value[index] === "`") quoted = !quoted;
+      if (!quoted && ["（", "("].includes(value[index])) return inlinePaths(value.slice(0, index));
+    }
+    return inlinePaths(value);
+  };
+  const lines = authority.split(/\r?\n/);
+  const bullet = lines.map((line) => fieldValue(line, "Write set")).find((value) => value !== null);
+  if (bullet !== undefined) return declaredPaths(bullet);
+  const labels = new Set(["Write set", ...(FIELD_LABEL_ALIASES["Write set"] ?? [])]);
+  for (const [index, line] of lines.entries()) {
+    if (/^\s*\|/.test(line)) {
+      const cells = analyzeMarkdownTableCells(line);
+      if (labels.has(cells[0]?.replaceAll("**", ""))) return declaredPaths(cells[1] ?? "");
+    }
+    if (!new RegExp(`^\\s*-\\s*\\*\\*(?:${labelAlternation("Write set")})\\*\\*.*[:：]\\s*$`).test(line)) continue;
+    const paths = [];
+    for (const row of lines.slice(index + 1)) {
+      if (!row.trim()) continue;
+      if (!/^\s*\|/.test(row)) break;
+      const cells = analyzeMarkdownTableCells(row);
+      if (/^[1-9][0-9]*$/.test(cells[0] ?? "")) paths.push(...declaredPaths(cells[1] ?? ""));
+    }
+    return [...new Set(paths)];
+  }
+  return [];
 }
 
 function identifiers(text, pattern) {
@@ -466,7 +531,7 @@ export function validatePostPhaseContract({ spec, index, phases } = {}) {
   if (!phases || typeof phases !== "object" || Array.isArray(phases)) errors.push("independent Phase files are required");
   if (errors.length) return Object.freeze({ ok: false, errors: Object.freeze(errors), facts: null });
 
-  const rows = executionIndexRows(index);
+  const rows = executionIndexRows(index, errors);
   if (!rows || rows.length === 0) errors.push("phases/index.md requires an Execution Index with Phase pointers");
   if (/^\s*[-*]\s*(?:\*\*)?(?:gate_cmd|expected_exit|oracle|evidence_path)\b/mi.test(index)) {
     errors.push("Phase index must remain pointer-only; command, oracle, and evidence belong to Phase files");
@@ -476,9 +541,9 @@ export function validatePostPhaseContract({ spec, index, phases } = {}) {
   const writeOwners = new Map();
   const taskOwners = new Map();
   const taskCards = [];
-  for (const [position, row] of (rows ?? []).entries()) {
-    const expectedId = `P${position + 1}`;
-    if (row.phase !== expectedId) errors.push(`Phase index must declare contiguous P1..Pn; expected ${expectedId}`);
+  for (const row of (rows ?? [])) {
+    const position = row.position - 1;
+    const expectedId = row.phase;
     const expectedPath = `phases/${expectedId}.md`;
     if (row.authority_ref !== expectedPath) errors.push(`${expectedId} authority ref must be ${expectedPath}`);
     if (!row.semantic_anchor) errors.push(`${expectedId} semantic anchor is required`);
@@ -490,13 +555,27 @@ export function validatePostPhaseContract({ spec, index, phases } = {}) {
       errors.push(`${expectedPath} is missing or empty`);
       continue;
     }
-    if (!new RegExp(`^#\\s+(?:Phase|阶段)\\s+${expectedId}\\b`, "m").test(body)) errors.push(`${expectedPath} must declare Phase ${expectedId}`);
+    let scopeValid = true;
+    if (!new RegExp(`^#\\s+(?:Phase|阶段)\\s+${expectedId}\\b`, "m").test(body)) {
+      errors.push(`${expectedPath} must declare Phase ${expectedId}`);
+      scopeValid = false;
+    }
     for (const heading of ["L0", "L1", "L2"]) {
       if (!new RegExp(`^##\\s+${heading}\\b`, "m").test(body)) errors.push(`${expectedPath} is missing ${heading}`);
     }
-    const declaredWriteSet = inlinePaths(fieldValue(body, "Write set") ?? "");
-    if (declaredWriteSet.length === 0) errors.push(`${expectedPath} Write set is missing`);
-    if (!sameIds(declaredWriteSet, row.write_set)) errors.push(`${expectedPath} write set differs from Phase index`);
+    const declaredWriteSet = phaseWriteSet(body);
+    if (declaredWriteSet.length === 0) {
+      errors.push(`${expectedPath} Write set is missing`);
+      scopeValid = false;
+    }
+    for (const path of declaredWriteSet) if (unsafeWritePath(path)) {
+      errors.push(`${expectedPath} unsafe Write set path: ${path}`);
+      scopeValid = false;
+    }
+    if (!sameIds(declaredWriteSet, row.write_set)) {
+      errors.push(`${expectedPath} write set differs from Phase index`);
+      scopeValid = false;
+    }
     for (const path of declaredWriteSet) {
       const owner = writeOwners.get(path);
       if (owner) errors.push(`${expectedPath} write set duplicates ${path} owned by ${owner}`);
@@ -648,7 +727,7 @@ export function validatePostPhaseContract({ spec, index, phases } = {}) {
       taskCards.push(Object.freeze({ id: taskId, phase: expectedId, frs: Object.freeze(cardFrs), acs: Object.freeze(cardAcs), oracle: fields["GREEN oracle"] ?? null, dependency: fields.Dependency ?? "" }));
     }
     const taskIds = cards.map(({ heading }) => heading.match(/^(T\d{3,})\b/)?.[1]).filter(Boolean);
-    phaseRows.push(Object.freeze({ id: expectedId, path: expectedPath, write_set: Object.freeze(declaredWriteSet), dependency, frs: Object.freeze(frs), acs: Object.freeze(acs), task_ids: Object.freeze(taskIds), command, oracle }));
+    phaseRows.push(Object.freeze({ id: expectedId, path: expectedPath, write_set: Object.freeze(scopeValid ? declaredWriteSet : []), dependency, frs: Object.freeze(frs), acs: Object.freeze(acs), task_ids: Object.freeze(taskIds), command, oracle }));
   }
   for (const path of Object.keys(phases)) {
     if (!indexedPaths.has(path)) errors.push(`unindexed Phase file: ${path}`);

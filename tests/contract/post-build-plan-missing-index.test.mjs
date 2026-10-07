@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { createTask } from '../../runtime/task/task-handle.mjs';
 import { initializeTaskStore } from '../../runtime/task/task-store.mjs';
 import { validatePostPhaseContract } from '../../runtime/stage/stage-content-contracts.mjs';
+import { prepareTaskBoundBuildCodeReviewBundle } from '../../tools/cli/stage-runtime.mjs';
 const roots=[],taskId='post-plan-missing-index',cliPath=fileURLToPath(new URL('../../tools/cli/stage-runtime.mjs',import.meta.url));
 const git=(cwd,args)=>execFileSync('git',args,{cwd,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
 afterEach(()=>{while(roots.length)rmSync(roots.pop(),{recursive:true,force:true});});
@@ -395,5 +396,135 @@ describe("post-cohort G-2 implementation review regressions", () => {
   });
 });
 
+
+});
+
+
+describe("current five-column Phase index review scope", () => {
+  const writeSets = [
+    ["extensions/readback-bridge/manifest.json", "extensions/readback-bridge/sw.js", "extensions/readback-bridge/cs.js", "extensions/readback-bridge/readback.js", "extensions/readback-bridge/README.md", "architecture/components.yaml", "tests/architecture/test_component_registry.py", "AGENTS.md"],
+    ["paperbuilder/contracts/live_platform.py", "paperbuilder/contracts/README.md", "frontend/src/live/platform-api.ts", "frontend/src/live/platform-api.test.ts", "tests/contracts/test_live_platform_contracts.py"],
+    ["paperbuilder/components/c2_storage/live_platform_readback_store.py", "paperbuilder/components/c2_storage/__init__.py", "paperbuilder/c2/__init__.py", "paperbuilder/application/live_platform_api.py", "paperbuilder/application/api.py", "scripts/serve_f6.py", "tests/components/test_c2_live_platform_readback_store.py", "tests/application/test_live_platform_api.py", "Makefile", "paperbuilder/components/c2_storage/README.md"],
+    ["paperbuilder/application/live_platform_judgement.py", "tests/application/test_live_platform_readback_health.py", "tests/application/test_live_platform_judgement.py"],
+    ["frontend/src/live-config.tsx", "frontend/src/live/store.ts", "frontend/src/live/store.test.ts", "frontend/src/live-pages.test.tsx", "frontend/src/live-config-locator.test.tsx", "frontend/src/live-config.test.tsx", "frontend/src/live/adapter-contract.md"],
+    ["tests/fixtures/live_platform_rest/readback_real_platform_shape.json", "tests/contracts/test_live_platform_compat_gates.py"],
+  ];
+  const fixture = (columns = 5, changeRow = row => row) => {
+    const phases = Object.fromEntries(writeSets.map((paths, i) => [`phases/P${i + 1}.md`, `# Phase P${i + 1}\n\n## L0 — Outcome\n\n## L1 — Contract\n\n- **Write set**: ${paths.map(p => "`" + p + "`").join("、")}\n\n## L2 — Reference\n`]));
+    const rows = writeSets.map((paths, i) => changeRow(["`P" + (i + 1) + "`", "`phases/P" + (i + 1) + ".md`", `T${String(i * 3 + 1).padStart(3, "0")}–T${String(i * 3 + 3).padStart(3, "0")}`, paths.map(p => "`" + p + "`").join("、"), ...(columns === 5 ? [`${i === 0 ? "none" : "P1"} → real-consumer`] : [i === 0 ? "none" : "P1", "real-consumer"])], i));
+    const index = `## Execution Index\n\n| phase | authority ref | Task range | write set | ${columns === 5 ? "dependency → consumer" : "dependency | consumer"} |\n| ${Array(columns).fill("---").join(" | ")} |\n${rows.map(cells => "| " + cells.join(" | ") + " |").join("\n")}\n`;
+    return { spec: "# Current spec\n", index, phases };
+  };
+  it("reads all six current Phase scopes without mixing P2 tests into P1", () => {
+    const result = validatePostPhaseContract(fixture());
+    expect(result.facts.phase_rows.map(row => [row.id, row.write_set])).toEqual(writeSets.map((paths, i) => [`P${i + 1}`, paths]));
+    expect(result.facts.phase_rows[0].write_set).not.toContain("tests/contracts/test_live_platform_contracts.py");
+    expect(result.ok).toBe(false); // Existing independent template checks are not waived by scope reading.
+  });
+  it("keeps the existing six-column index scopes unchanged", () => {
+    const legacy = validatePostPhaseContract(fixture(6));
+    expect(legacy.facts.phase_rows.map(row => [row.id, row.write_set])).toEqual(writeSets.map((paths, i) => [`P${i + 1}`, paths]));
+  });
+  it.each(["（精确路径，与索引一致）", ""])("reads the physical Phase write declaration in named header and numbered tables: %s", annotation => {
+    const input = fixture();
+    for (const n of [3, 4, 5]) {
+      input.phases[`phases/P${n}.md`] = `# Phase P${n}\n\n## L0\n\n## L1\n\n| field | value |\n| --- | --- |\n| **写入集** | ${writeSets[n - 1].map(path => "`" + path + "`").join("、")} |\n\n## L2\n`;
+    }
+    input.phases["phases/P3.md"] = `# Phase P3\n\n- **写入集**${annotation}：\n\n| # | 路径 | 性质 |\n| --- | --- | --- |\n${writeSets[2].map((path, index) => "| " + (index + 1) + " | `" + path + "` | MODIFY |").join("\n")}\n\n- **依赖**：P2\n\n## L0\n\n## L1\n\n## L2\n`;
+    input.phases["phases/P4.md"] = input.phases["phases/P4.md"].replace(" |\n\n## L2", "（3条；`paperbuilder/c2/__init__.py`移出，归P3） |\n\n## L2");
+    const result = validatePostPhaseContract(input);
+    expect(result.facts.phase_rows.map(row => [row.id, row.write_set])).toEqual(writeSets.map((paths, i) => [`P${i + 1}`, paths]));
+    expect(result.errors.join("; ")).not.toContain("Write set is missing");
+  });
+  it("does not substitute the index for a missing physical Phase declaration", () => {
+    const input = fixture();
+    input.phases["phases/P1.md"] = "# Phase P1\n\n## L0\n\n## L1\n\n## L2\n";
+    const result = validatePostPhaseContract(input);
+    expect(result.facts.phase_rows[0].write_set).toEqual([]);
+    expect(result.errors.join("; ")).toContain("Write set is missing");
+  });
+  it("keeps a physical table disagreement visible rather than replacing it with index paths", () => {
+    const input = fixture();
+    input.phases["phases/P1.md"] = "# Phase P1\n\n| field | value |\n| --- | --- |\n| **写入集** | `src/changed.py` |\n\n## L0\n\n## L1\n\n## L2\n";
+    const result = validatePostPhaseContract(input);
+    expect(result.facts.phase_rows[0].write_set).toEqual([]);
+    expect(result.errors.join("; ")).toContain("write set differs from Phase index");
+  });
+  it.each(["none real-consumer", "none →", "→ real-consumer", "none → consumer → extra"])("does not invent a scope from malformed dependency/consumer: %s", value => {
+    const result = validatePostPhaseContract(fixture(5, (cells, i) => i === 0 ? [...cells.slice(0, 4), value] : cells));
+    expect(result.facts.phase_rows.find(row => row.id === "P1")).toBeUndefined();
+    expect(result.ok).toBe(false);
+  });
+  it.each(["../outside.py", "/private/outside.py", "src/../outside.py", "src/*.py", "C:/outside.py", "src\\outside.py"])("does not admit an unsafe owned path: %s", path => {
+    const result = validatePostPhaseContract(fixture(5, (cells, i) => i === 0 ? [...cells.slice(0, 3), "`" + path + "`", cells[4]] : cells));
+    expect(result.facts.phase_rows.find(row => row.id === "P1")).toBeUndefined();
+    expect(result.ok).toBe(false);
+  });
+  it.each([1, 2])("keeps other scopes and original IDs when P%s has a malformed row", number => {
+    const result = validatePostPhaseContract(fixture(5, (cells, i) => i === number - 1 ? cells.slice(0, 4) : cells));
+    expect(result.facts.phase_rows.map(row => [row.id, row.write_set])).toEqual(writeSets.flatMap((paths, i) => i === number - 1 ? [] : [[`P${i + 1}`, paths]]));
+    expect(result.errors.join("; ")).toMatch(new RegExp(`phases/index\\.md:${number + 4}.*P${number}.*5 or 6`));
+  });
+  it.each([5, 6])("rejects an empty index write set with a row diagnostic (%s columns)", columns => {
+    const result = validatePostPhaseContract(fixture(columns, (cells, i) => i === 1 ? [...cells.slice(0, 3), "", ...cells.slice(4)] : cells));
+    expect(result.facts.phase_rows.find(row => row.id === "P2")).toBeUndefined();
+    expect(result.facts.phase_rows.find(row => row.id === "P1").write_set).toEqual(writeSets[0]);
+    expect(result.errors.join("; ")).toMatch(/phases\/index\.md:6.*P2.*write set.*empty/i);
+  });
+  it.each(["L2 table", "L2 bullet", "task card"])("does not borrow a physical declaration from %s", kind => {
+    const input = fixture();
+    const table = `| field | value |\n| --- | --- |\n| **Write set** | ${writeSets[0].map(path => "`" + path + "`").join("、")} |`;
+    const bullet = `- **Write set**: ${writeSets[0].map(path => "`" + path + "`").join("、")}`;
+    input.phases["phases/P1.md"] = `# Phase P1\n\n## L0\n\n## L1\n${kind === "task card" ? "### T001 — reference\n" + bullet : ""}\n## L2 — Removable reference\n${kind === "L2 table" ? table : kind === "L2 bullet" ? bullet : ""}\n`;
+    const result = validatePostPhaseContract(input);
+    expect(result.facts.phase_rows.find(row => row.id === "P1").write_set).toEqual([]);
+    expect(result.errors.join("; ")).toContain("phases/P1.md Write set is missing");
+    expect(result.facts.phase_rows.find(row => row.id === "P2").write_set).toEqual(writeSets[1]);
+  });
+  it.each(["../outside.py", "/private/outside.py", "src/../outside.py", "src/*.py", "C:/outside.py", "src\\outside.py", "src//outside.py", "src/./outside.py", "src/outside?.py"])("rejects unsafe physical declaration: %s", path => {
+    const input = fixture();
+    input.phases["phases/P1.md"] = input.phases["phases/P1.md"].replace(writeSets[0].map(path => "`" + path + "`").join("、"), "`" + path + "`");
+    const result = validatePostPhaseContract(input);
+    expect(result.facts.phase_rows.find(row => row.id === "P1").write_set).toEqual([]);
+    expect(result.errors.some(error => error.includes("phases/P1.md") && error.includes(path) && error.includes("unsafe"))).toBe(true);
+    expect(result.facts.phase_rows.find(row => row.id === "P2").write_set).toEqual(writeSets[1]);
+  });
+  it("gives unsafe index paths an exact row and path diagnostic while retaining valid scopes", () => {
+    const result = validatePostPhaseContract(fixture(6, (cells, i) => i === 1 ? [...cells.slice(0, 3), "`../outside.py`", ...cells.slice(4)] : cells));
+    expect(result.errors.join("; ")).toMatch(/phases\/index\.md:6.*P2.*unsafe.*\.\.\/outside\.py/);
+    expect(result.facts.phase_rows.find(row => row.id === "P2")).toBeUndefined();
+    expect(result.facts.phase_rows.find(row => row.id === "P1").write_set).toEqual(writeSets[0]);
+  });
+  it.each(["phase ID", "authority ref"])("does not publish a scope with a mismatched %s", kind => {
+    const result = validatePostPhaseContract(fixture(5, (cells, i) => i === 1 ? cells.map((value, position) => position === (kind === "phase ID" ? 0 : 1) ? (kind === "phase ID" ? "P1" : "phases/P1.md") : value) : cells));
+    expect(result.facts.phase_rows.filter(row => row.id === "P1")).toHaveLength(1);
+    expect(result.facts.phase_rows.find(row => row.id === "P2")?.write_set?.length ?? 0).toBe(0);
+    expect(result.facts.phase_rows.find(row => row.id === "P3").write_set).toEqual(writeSets[2]);
+    expect(result.errors.join("; ")).toMatch(/phases\/index\.md:6/);
+  });
+  it.each(["malformed P1", "malformed P2", "L2-only P1", "unsafe physical P1", "disagreeing physical P1"])("the actual review consumer excludes unusable scope and keeps the valid Phase: %s", kind => {
+    const input = fixture(5, (cells, i) => kind === `malformed P${i + 1}` ? cells.slice(0, 4) : cells);
+    if (kind === "L2-only P1") input.phases["phases/P1.md"] = input.phases["phases/P1.md"].replace("## L1 — Contract", "## L2 — Removable reference");
+    if (kind === "unsafe physical P1" || kind === "disagreeing physical P1") input.phases["phases/P1.md"] = input.phases["phases/P1.md"].replace(writeSets[0].map(path => "`" + path + "`").join("、"), kind === "unsafe physical P1" ? "`../outside.py`" : "`src/changed.py`");
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-phase-scope-consumer-")));
+    roots.push(root);
+    const sourcePath = join(root, "source.diff");
+    const paths = [writeSets[0][0], writeSets[1][0]];
+    writeFileSync(sourcePath, paths.map(path => `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1 +1 @@\n-old\n+new\n`).join(""));
+    const context = { manifest: { activation_cohort: "post" }, workspace: {}, task: { identity: { taskId: "scope-reader" } }, artifacts: { read: ref => ref === "phases/index.md" ? input.index : ref === "spec.md" ? input.spec : input.phases[ref] } };
+    let calls = 0;
+    const options = { loadConfig: () => ({ attachmentRoot: root }), captureSource: () => ({ diffPath: sourcePath }), buildMaterials: ({ source }) => { calls++; const bundleRoot = join(root, "bundle"); mkdirSync(bundleRoot); return { bundleRoot, diff: readFileSync(source.diffPath, "utf8") }; } };
+    const prepare = phaseId => prepareTaskBoundBuildCodeReviewBundle(context, { stage: "build-code", review_scope: "phase", subject_kind: "phase", surface: "document", phase_id: phaseId }, options);
+    const badId = kind === "malformed P2" ? "P2" : "P1";
+    expect(() => prepare(badId)).toThrow(/current Phase write set is unavailable/);
+    expect(calls).toBe(0);
+    const goodId = badId === "P1" ? "P2" : "P1";
+    const bundle = prepare(goodId);
+    try {
+      expect(calls).toBe(1);
+      expect(bundle.diff).toContain(paths[Number(goodId.slice(1)) - 1]);
+      expect(bundle.diff).not.toContain(paths[Number(badId.slice(1)) - 1]);
+    } finally { bundle.dispose(); }
+  });
 
 });
