@@ -41,6 +41,25 @@ describe("provider-visible material redaction", () => {
     expect(redactHostPathText("see /Users/x/y now")).toBe("see <host-path-redacted> now");
   });
 
+  it.each(["?", "."])("redacts Windows %s namespace drive paths without changing adjacent text", namespace => {
+    const slash = String.fromCharCode(92);
+    const path = slash.repeat(2) + namespace + slash + "C:" + slash + "Users" + slash + "fixture-user" + slash + "private.md";
+    const input = "open " + path + "，next sentence\n";
+    expect(redactHostPathText(input)).toBe("open <host-path-redacted>，next sentence\n");
+    expect(redactProviderHostPaths({ nested: [input] })).toEqual({ nested: ["open <host-path-redacted>，next sentence\n"] });
+    expect(redactProviderHostPaths(Buffer.from(input, "utf8")).toString("utf8")).toBe("open <host-path-redacted>，next sentence\n");
+  });
+
+  it.each(["?", "."])("redacts Windows %s namespace drive paths through the actual provider serializer", namespace => {
+    const slash = String.fromCharCode(92);
+    const path = slash.repeat(2) + namespace + slash + "C:" + slash + "Users" + slash + "fixture-user" + slash + "private.md";
+    const restored = providerBundle({ raw_requirement: "open " + path + "\n", context_map: { path } });
+    try {
+      expect(readFileSync(join(restored.materials.bundleRoot, "materials/01-raw_requirement.md"), "utf8")).toBe("open <host-path-redacted>\n");
+      expect(JSON.parse(readFileSync(join(restored.materials.bundleRoot, "materials/02-context_map.json"), "utf8"))).toEqual({ path: "<host-path-redacted>" });
+    } finally { restored.materials.dispose(); }
+  });
+
   it("preserves regex source through UTF-8 Buffer and Uint8Array projection", () => {
     const input = String.raw`/\d\d:\d\d/`;
     const buffer = redactProviderHostPaths(Buffer.from(input, "utf8"));

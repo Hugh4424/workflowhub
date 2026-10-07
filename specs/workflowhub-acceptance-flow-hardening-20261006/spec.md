@@ -5,14 +5,14 @@
 
 - **功能名**：workflowhub-acceptance-flow-hardening-20261006
 - **来源**：`specs/workflowhub-acceptance-flow-hardening-20261006/decision-log.md`（用户 m01493 确认；Append-only 更正 1–10）
-- **状态**：build-plan 草案，待独立审查
+- **材料现状**：已实施与验收，当前同任务修复审计发现；执行、质量和交付状态以 task facts 及实际原件为准，本行不作质量结论。
 
 ## 速读卡（30 秒）
 
 - 本任务把功能验收做成可执行、可判定、可复核、可回写的链路，同时保持薄核心：不新增 stage、gate、审查点、schema、校验器。
 - 交付分四个工作包：① 验收流程优化；② card-06 越权删除回收；③ 输出文档精炼；④ make-decision 步骤重构。另加一项配套清理：删除 OI YAML 解析死链。
 - 计划分 8 个 Phase。第一波 P1、P2、P3、P5、P6、P7 并发；第二波 P4（等 P1）；第三波 P8 端到端验收（等全部）。
-- 证据只绑具名路径，不用哈希或版本追踪质量（U-017）。只跑受影响的针对性测试（`npx --no-install vitest run <file>`）。
+- 证据只绑具名路径，不以哈希或版本相等追踪质量、绑定验收证据或限制推进（U-017）。已有 HEAD、工具版本与来源 hash 校核只记录普通执行/来源事实，不作为完成判据。只跑受影响的针对性测试（`npx --no-install vitest run <file>`）。
 - AC 判据的唯一权威是本文 `## Appendix A`；decision-log 的 `## 验收面` 只是交接索引（ADR-019）。AC-AFH-001…020 与日志 AC-01…AC-20 一一同号，AC-AFH-021、022 是 build-plan 新增。
 
 ## 来源与决策映射
@@ -288,7 +288,7 @@ N/A — 不新增持久对象。`result.schema.json` 只在 verify-code 分支�
   - 件二：`skills/wh-review/skill-bundle.json:18`；`tests/acceptance/card-03-current.mjs:26`、`:121`、`:131`、`:151`、`:162-163`、`:430`、`:463-475`、`:507`、`:580`、`:805-820`（`:583-584` 是通用展开，不删）；`tests/acceptance/card-03-current.test.mjs:84`、`:140`、`:231`、`:246`、`:381`、`:458`；`docs/architecture/move-map.json:1088`、`:1096`、`:3214-3222`。
   - 交接：`skills/stage-handoff/SKILL.md:14` 七值陈述。
   - phase 模板锁定文字：`skills/spec-plan/templates/phase-template.md:35`、`:43-45`、`:50`、`:54`、G-2 块 12 行（`tests/acceptance/card-03-current.mjs:278-291`、`:25`；`tests/contract/post-build-plan-missing-index.test.mjs:331-350`）。
-  - make-decision：`workflows/make-decision/steps.json:4-65`、`:45-49`；`workflows/make-decision/SKILL.md:15-26`、`:21`、`:23`；`workflows/make-decision/skill-deps.yaml:8`；消费者 `runtime/stage/stage-skill-runtime.mjs:84`、`tools/cli/smoke-local-skill-dispatch.mjs:22-27`。
+  - make-decision：`workflows/make-decision/steps.json:4-65`、`:45-49`；`workflows/make-decision/SKILL.md:15-26`、`:21`、`:23`；`workflows/make-decision/skill-deps.yaml:8`；steps.json 是声明式材料，由 make-decision 执行者人读；`runtime/stage/stage-skill-runtime.mjs:81` 的通用读取函数只有导出定义，未发现当前生产调用方。`tools/cli/smoke-local-skill-dispatch.mjs:18-19` 读取 skill manifest 并解析技能包；既有 portable executor（`runtime/task/portable-workflow-run.mjs:42-45`）只读取 build-prd 的 steps.json，不执行 make-decision 15 步。
   - 死链：`runtime/stage/stage-content-contracts.mjs:4`（js-yaml，仅 `:320` 使用）、`:10`、`:14`、`:301-370`、`:372`、`:534-645`、`:646`、`:1354-1364`；保留 `:173`、`:234`、`:1010`。
 - 读取顺序：先读本文 Appendix A，再读本 Phase 文件，再读上面的锚点。
 - 运行条件：Node ESM，vitest 2.1.9（`vitest.config.mjs`，forks 最多 2 个）；无新依赖。
@@ -297,7 +297,7 @@ N/A — 不新增持久对象。`result.schema.json` 只在 verify-code 分支�
 
 - 选择的架构方案：散文与声明字段承载验收机制；机器侧只在 review 回执加两个宿主侧字段，并删一条死链。
 - 模块职责：
-  - `runtime/review/canonical-review-result.mjs` 由 findings 与 provider 状态算 `conclusion`；`coverage` 记被审对象覆盖情况。
+  - `runtime/review/canonical-review-result.mjs` 由 findings 与 provider 状态算 `conclusion`；`coverage` 只记 `findings_state` 与 provider 完成/失败数量，不表示 user case 执行或被审对象完整覆盖。
   - `skills/wh-review/scripts/review-materials.mjs` 持有 `approved_direction` 逐字节校验与 direction 轨校验。
   - `skills/stage-handoff/SKILL.md` 定义 `succeeded` 前置条件，人读消费。
 - 接口与数据流：verify-code 审查材料 → provider findings → 宿主侧 `conclusion`（∈ `pass`、`pass_with_findings`、`needs_revision`、`reject`、`inconclusive`）与 `coverage` → 回执。
@@ -368,13 +368,13 @@ N/A — 不新增持久对象。`result.schema.json` 只在 verify-code 分支�
   - 错误/恢复：P1 direction 轨缺必填 key 抛 `MATERIAL_INCOMPLETE`（ORACLE-AFH-T002-MATERIAL-KEYS）；各卡 STOP / 恢复行；P8 driver 词表读不到时 exit 2 记 setup 失败（不算 RED）。取消不适用：本任务不改可取消的长任务。
   - 权限/安全：P2 脱敏（ORACLE-AFH-T003-REDACTION，宿主路径仍脱敏负例）；不改认证授权，Git 授权面只读。
   - 并发/原子性：不适用——不改锁、事务或并发写；同文件串行由 P1 T001→T002 顺序与 index 写集唯一 owner 保证。
-  - 跨模块 seam：P1 schema↔runner focus↔record-route（ORACLE-AFH-T001-REVIEW-CONCLUSION 与 `runner-clean-install` 基线）；P2 Runner 发布清单 `skill-bundle.json`（ORACLE-AFH-T004-RETIRE-SUMMARY）；P4←P1 字段名；P6 `step_id`↔`smoke-local-skill-dispatch` 断言（ORACLE-AFH-P6-STEP-ORDER）；P7 保留函数↔card-10 校验（ORACLE-AFH-P7-DEAD-CHAIN）。
+  - 跨模块 seam：P1 schema↔runner focus↔record-route（ORACLE-AFH-T001-REVIEW-CONCLUSION 与 `runner-clean-install` 基线）；P2 Runner 发布清单 `skill-bundle.json`（ORACLE-AFH-T004-RETIRE-SUMMARY）；P4←P1 字段名；P6 声明步骤顺序↔SKILL 方法顺序，以及 skill manifest↔包解析（ORACLE-AFH-P6-STEP-ORDER；不证明通用 steps 执行）；P7 保留函数↔card-10 校验（ORACLE-AFH-P7-DEAD-CHAIN）。
   - 可观测性/来源：每个 oracle 的 RED/GREEN 原始输出各存一份于 task store `quality/tests/`；P8 每条结论带证据路径；review 原件只由 review-record-route 保存。
   - UI：不适用——本任务无 UI 改动；P3 模板只写 UI 判据要求（AC-AFH-010），不产生加载、空、错误或可访问性状态。
 
 ## Appendix A — 验收判据（唯一权威）
 
-本节回答：每条 AC 怎样判定。`$REPO` 指仓库根，`$AFH_TASK_DIR` 指 task store。证据只绑具名路径，不用哈希或版本。
+本节回答：每条 AC 怎样判定。`$REPO` 指仓库根，`$AFH_TASK_DIR` 指 task store。证据只绑具名路径，不以哈希或版本相等判定质量或限制推进；已有工具版本、HEAD 与来源校核只是普通事实。
 
 - [ ] **AC-AFH-001**：decision-log 模板含 `## 验收面` 节并声明为交接索引；本任务 decision-log 的 `## 验收面` 20 条逐条六项非空。关联 FR-AFH-001；来源 R-001；对应日志 AC-01。
 验证：`bash -c 'grep -n "^## 验收面" skills/decision-log/templates/decision-log-template.md && sed -n "/^## 验收面/,/^## 风险/p" specs/workflowhub-acceptance-flow-hardening-20261006/decision-log.md'`（机器读回）

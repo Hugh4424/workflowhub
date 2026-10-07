@@ -15,7 +15,7 @@ version: 3.2.0
 1. `load-context`：先记录用户原话、痛点、任务类型、事实、假设、非目标和未决问题，含范围分诊：区分用户痛点、完整旅程、页面、数据状态和成功失败边界。任务类型不明或冲突时，只暂停依赖它的问题并澄清；不靠文件名或旧记录猜答案。规划任务只问会改变方向的问题，不在这十类里问：文件路径与文件面、函数名、字段名、算法、schema 形状、命令形态、入口参数形态、行号、代码片段、测试记录与实测记录；普通任务可问影响实现的细节。
    用户中途改变任务类型声明时，停止消费旧类型下的问题与产物，直到逐项按新类型重新处理。当前决策保留旧问题引用、重处理原因、新内容位置；只换 hash 或引用不算重处理。不为此新建 schema、控制面、类型状态或记录绑定。
    Record the requirement-to-decision coverage matrix so that every original requirement has a visible disposition; the matrix must cover the five dimensions: business goal, flow/surface, data/state, success/failure/acceptance, and constraints/non-goals/deferrals.
-   新日志使用 `skills/decision-log/templates/decision-log-template.md`：在同一日志写 `## 需求变更记录`、`## 原始需求索引`、`## 逐字声明层（verbatim）`。U 块用 `### U-00n` 与 `> ` 逐字引用；R 行引真实 U/V ID 与 D ID，V 行写 `用户` 并引原话。替换模板占位符，否则保留具体缺失来源诊断；不回填旧日志。
+   新日志使用 `skills/decision-log/templates/decision-log-template.md`：在同一日志写 `## 需求变更记录`、`## 原始需求索引`、`## 逐字声明层（verbatim）`。U 块用独立 `### U-001` 标题说明变更与来源，并引用 V 原文锚点；逐字原文只在 V 行保留一次，V 行写 `用户` 与真实来源；R 行引真实 U/V ID 与 ADR ID。替换模板占位符，否则保留具体缺失来源诊断；不回填旧日志。
 2. `outline-hypothesis-talk`：主会话通过真实 Talk 产出粗粒度大纲，含每块的「问题与边界」及「方向假设」。标明可修改假设和什么证据会推翻它；不作基线，不在此承诺范围或成本。模糊需求比较至少两个角度及有差异的候选，说明证据与取舍。
 3. `research-and-diverge`：围绕大纲每块会改变方向的未知开展内部与外部研究，输入保留「大纲是待验证假设」。make-decision 使用 `skills/deep-research/SKILL.md` 的 R0–R5 契约：R0 生成缺口、R1 读一手文本、R2 受限并行深读、R3 三角验证、R4 写 research-report、R5 独立审查。跳过或不可用写真实原因，研究不替用户决定。Every completed research report must explicitly declare `candidates`；每个候选写摘要、证据绑定来源 ref、推荐（含拒绝）及理由，无候选写真实原因。Talk 从唯一 canonical report 读取这些事实，不用摘要或报告引用冒充候选交付。
 4. `outline-revision-check`：研究结果逐块对照大纲假设，明确工作包清单或方向假设是否改变，判断保留、回改或推翻并写理由。产出修订后大纲；大部分假设被事实推翻时重新整理方案，保留旧判断和更改理由。
