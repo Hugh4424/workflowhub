@@ -11,16 +11,20 @@ version: 1.0.0
 ## 方法
 
 1. 先确定当前 task、stage 与对象范围。只对当前新流程任务执行下列写入动作；旧任务、未完成旧任务及历史对象保持只读，不修改或删除其文件，不产出新交接或兼容链。身份或范围无法确定时披露缺口，继续安全读取，不猜作当前任务。post 读取 decision-log、spec、相关独立 Phase 与指针 index，以及已发生的任务、测试、独立审查和 Git 事实；历史 plan/tasks 只读。尚未产生的下游材料写 not_applicable，应有却不可读的材料写具体失败，不借旧任务或旧交接补齐。
-2. 按下表定位四类信息，并给出有实际 source 指针的阶段工作陈述。仅使用 not-started、in-progress、succeeded、failed、blocked、unverified、abandoned 七值。missing、unavailable、incomplete 等质量缺口另述，不转成 succeeded、blocked 或第八状态；游标、ready 值或命令 exit0 不能推定阶段成功。succeeded 须按当前 stage 合同，由当前实际交付、适用质量和现有事实支持；有既定方向或计划确认步骤的 stage 还须引用该 stage 的真实确认。build-code、verify-code 在已确认方向和计划的授权范围内，依其当前合同核对实际交付、适用质量及无未处置严重问题等现有事实，不新增本阶段日常确认；上游确认不能单独推定当前 stage succeeded，工作完成陈述不代替人类业务验收或 Git 授权。依据不足时说明无法确定；源值非法则保留原值和来源作为问题，不采用它作合法阶段值，也不反写源 stage 状态。
+2. 按下表定位四类信息，并给出有实际 source 指针的阶段工作陈述。仅使用 not-started、in-progress、succeeded、failed、blocked、unverified、abandoned 七值。build-code、verify-code 的 `succeeded` 前置条件是 user case 全部执行完、宿主侧结论已算出、证据指针已写；验收 phase（Phase）未完成不得写 `succeeded`，未满足这些条件只能写 `unverified` 或 `blocked`，并说明具体原因；这约束完成陈述，不阻断同 task 修复。missing、unavailable、incomplete 等质量缺口另述，不转成 succeeded、blocked 或第八状态；游标、ready 值或命令 exit0 不能推定阶段成功。succeeded 须按当前 stage 合同，由当前实际交付、适用质量和现有事实支持；有既定方向或计划确认步骤的 stage 还须引用该 stage 的真实确认。build-code、verify-code 在已确认方向和计划的授权范围内，依其当前合同核对实际交付、适用质量及无未处置严重问题等现有事实，不新增本阶段日常确认；上游确认不能单独推定当前 stage succeeded，工作完成陈述不代替人类业务验收或 Git 授权。依据不足时说明无法确定；源值非法则保留原值和来源作为问题，不采用它作合法阶段值，也不反写源 stage 状态。
 3. 发布前，实际回读来源中的 task/stage、四类信息、阶段值和纯文本引用路径，按“回读结果”报告本次检查结果、输入范围、具体路径和原始错误。先用现有安全写入工具把原始检查输出保存为当前 task 的 quality/tests 唯一原件，确认它已存在且可读；失败观察也如实保存。已有实际命令输出只引用原件，不复制。检查结果不是继续工作的许可；检查输出无法保存时如实披露，不能声称本次检查原件已产生。
-4. 按本阶段信息需要组织正文，写当前可消费材料、四类 source、真实测试/审查与发现处置、风险、延期和具体未完事项。关键事实只引用已经存在且可读的发布前检查原件及其真实结果，不预填未来写后检查。四类信息确实无事项时明确“无”；缺失或读不到时明确 incomplete、影响和下一步，verify-code 同样如此。重要决策只放原决定指针；材料正文、原始测试/review 不在交接中复制。
+4. 按下方 13 区块人读内容合同组织正文，写当前可消费材料、四类 source、真实测试/审查与发现处置、风险、延期和具体未完事项。关键事实只引用已经存在且可读的发布前检查原件及其真实结果，不预填未来写后检查。四类信息确实无事项时明确“无”；缺失或读不到时明确 incomplete、影响和下一步，verify-code 同样如此。重要决策只放原决定指针；材料正文、原始测试/review 不在交接中复制。
 5. 当前 stage owner 按已有目录职责准备当前 task 的既存真实目录 handoffDir＝quality/evidence/handoff。调用一次现有 runtime/interface/safe-write.mjs 的 appendRecord(handoffDir, '<stage>-handoff', 'md', bytes)，使用 make-decision、build-prd、build-plan、build-code、verify-code 等既有名称。返回值是已经 create-only 发布的绝对路径 string，报告该实际路径，不再次 write/create 返回路径。UTC 日期、同目录当日三位序号与碰撞重试由现有工具分配；不另写固定名、current 副本或命名算法。
 6. 写后只读确认返回路径的本次字节、task 与 stage 是否对应刚才准备的正文，不把这次结果嵌回同一不可变 handoff。写入或确认失败时保留原始错误、目标绝对路径和旧件可能过时的影响；写入失败不声称生成新件，确认失败保留已经发布的原字节，结果进入既有质量事实或下一次普通记录，不回写本件。旧交接不能冒充本次成功；只准备正文未写入时明确未写。
 7. 新读者收到明确原件绝对路径时直接只读，核对 task/stage；仅给 task 入口时，从当前 facts 与材料定位实际 stage，再筛选 YYYY-MM-DD-NNN-<stage>-handoff.md，按同 stage 日期、序号选原件。旧固定名只读；选中最近名字不证明正文新鲜。按同一方法回读 source、四类与问题，说明状态、实际证据和具体下一步。已有任务授权的 build-code、verify-code 直接接续，含两技能规定的必要 Git 动作，不因新会话或读取交接重新确认；仅最终 close 前按实际结果与范围确认一次。方向与计划选择仍按对应上游阶段合同，不据交接改变方向或扩大范围。记录缺失、错 task 或读不到时披露具体问题，不用旧聊天或人工补答案假称已定位；继续能够定位的授权内工作，不因回读问题新增确认门。后续读取结果仍进入既有质量事实或下一次普通记录，不改所读原件。
 
 ## 信息来源
 
-布局按需，四类信息须可独立定位；source 使用原件纯文本路径及必要节锚点。
+正文按 13 区块组织：任务身份、背景与目标、当前阶段与进度、重要决策、核心方案、踩过的坑、重要参考调研、关键事实与数据状态、成功与失败边界、未决项与风险、下一步动作、待读文件清单、可自行判断与必须问用户的边界。区块内容确实不适用时写 `not_applicable` 与具体理由；应有却缺失的内容照实写质量缺口，不作不适用。此内容合同供人读，不新增机器校验或必填字段；四类信息仍须可独立定位。
+
+每条验收结论用具名证据路径加纯文本引用对应被验对象，不引入哈希或版本相等判定。降级项 `deferred`、`unavailable`、`incomplete` 逐条列出 user case、原因、风险承接人署名，并写清其身份及接受的缺口。新记录不得携带材料快照树、来源摘要、材料修订、新鲜度四类退役绑定。source 使用原件纯文本路径及必要节锚点。
+
+失败隔离：handoff 生成、写入或回读失败，保留原始失败与具体路径，不覆盖 reflection 或 stage result，不改写阶段事实；同 task 内安全工作继续。
 
 | 信息 | 来源与读取边界 |
 | --- | --- |
@@ -41,4 +45,4 @@ appendRecord 的 INVALID_SLUG、INVALID_EXTENSION、EEXIST 重试、RECORD_SEQUE
 
 下一会话能从实际交接路径定位当前材料、四类 source、未知/失败与一个可执行下一步；发布前检查原件、不可变 handoff、写后只读确认和必要非实现者消费均按实际情况报告，缺项不假称完成。五个 workflow 保存句使用本方法返回的实际绝对路径，build-code 与 verify-code 读取同一方法。
 
-正式阶段事实仍由既有任务流程记录，本技能不新增 facts 状态/evidence 字段、writer、schema、公共命令、解析器或持久对象；不写状态/质量 graph，不把测试 GREEN 当作人类接受、发布或物理交付。按需布局不要求13有序区块、reflection 终态、locks、snapshot/hash 或 skill-deps 认证发布。缺交接只披露，同任务继续修复不依赖它。
+正式阶段事实仍由既有任务流程记录，本技能不新增 facts 状态/evidence 字段、writer、schema、公共命令、解析器或持久对象；不写状态/质量 graph，不把测试 GREEN 当作人类接受、发布或物理交付。缺交接只披露，同任务继续修复不依赖它。

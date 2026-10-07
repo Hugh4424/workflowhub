@@ -5,62 +5,154 @@
     {
       "step_id": 1,
       "step_slug": "read-current-task-documents",
-      "observable_result": "当前spec、物理Phase、索引与事实确定下一任务；真实工作区、分支、状态和写集已核，历史不作许可证。"
+      "observable_result": "当前spec、物理Phase、索引与事实确定下一任务；真实工作区、分支、状态和写集已核，历史不作许可证。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
     },
     {
       "step_id": 2,
       "step_slug": "write-red-tests",
-      "observable_result": "冻结目标测试/RED被实际读取；补行为测试先实跑目标断言失败，纯材料有G-2检查或明确不适用理由。"
+      "observable_result": "冻结目标测试/RED被实际读取；补行为测试先实跑目标断言失败，纯材料有G-2检查或明确不适用理由。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        },
+        {
+          "kind": "test",
+          "uri_or_path": "quality/tests/"
+        }
+      ]
     },
     {
       "step_id": 3,
       "step_slug": "implement-change",
-      "observable_result": "允许范围内最小实现存在，错误明确暴露；计划/方向缺口交owner，未擅改作者材料或越界。"
+      "observable_result": "允许范围内最小实现存在，错误明确暴露；计划/方向缺口交owner，未擅改作者材料或越界。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
     },
     {
       "step_id": 4,
       "step_slug": "inspect-and-route-actual-tests",
-      "observable_result": "真实changed files与计划路线核对，选择适用concrete testing skill；变化和不适用的原因明确。"
+      "observable_result": "真实changed files与计划路线核对，选择适用concrete testing skill；变化和不适用的原因明确。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        },
+        {
+          "kind": "test",
+          "uri_or_path": "quality/tests/"
+        }
+      ]
     },
     {
       "step_id": 5,
       "step_slug": "run-tests",
-      "observable_result": "针对性命令保存实际cwd/argv/exit、超时取消、原输出与清理；真实场景对照oracle，失败不伪绿。"
+      "observable_result": "针对性命令保存实际cwd/argv/exit、超时取消、原输出与清理；真实场景对照oracle，失败不伪绿。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        },
+        {
+          "kind": "test",
+          "uri_or_path": "quality/tests/"
+        }
+      ]
     },
     {
       "step_id": 6,
       "step_slug": "inspect-acceptance-and-ui",
-      "observable_result": "每AC的实际效果/失败反例/未执行项可读；UI按真实消费者和隔离浏览器事实核对，模拟或缺失不冒充通过。"
+      "observable_result": "每AC的实际效果/失败反例/未执行项可读；UI按真实消费者和隔离浏览器事实核对，模拟或缺失不冒充通过。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
     },
     {
       "step_id": 7,
       "step_slug": "scan-diff",
-      "observable_result": "实际diff、写集、接口两端、生命周期、权限、并发和恢复边界核对，有疑点保留真实发现。"
+      "observable_result": "实际diff、写集、接口两端、生命周期、权限、并发和恢复边界核对，有疑点保留真实发现。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
     },
     {
       "step_id": 8,
       "step_slug": "review-change",
-      "observable_result": "每Phase一次独立OCR审查保存真实发现；仅OCR缺失/版本低时wh-review同面fallback，已装失败保持unavailable。"
+      "observable_result": "每Phase一次独立OCR审查保存真实发现；仅OCR缺失/版本低时wh-review同面fallback，已装失败保持unavailable。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        },
+        {
+          "kind": "review",
+          "uri_or_path": "quality/reviews/"
+        }
+      ]
     },
     {
       "step_id": 9,
       "step_slug": "analyze-review-findings",
-      "observable_result": "原finding逐条处置，修复回原实施者并只复测受影响集合；严重未修风险取得用户具体选择。"
+      "observable_result": "原finding逐条处置，修复回原实施者并只复测受影响集合；严重未修风险取得用户具体选择。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        },
+        {
+          "kind": "review",
+          "uri_or_path": "quality/reviews/"
+        }
+      ]
     },
     {
       "step_id": 10,
       "step_slug": "run-final-aggregate-and-ac-trace",
-      "observable_result": "实施结束后一次声明的最终聚合与逐AC对账完成；实际结果、业务限制和未覆盖保持可见，不代表review pass。"
+      "observable_result": "实施结束后一次声明的最终聚合与逐AC对账完成；实际结果、业务限制和未覆盖保持可见，不代表review pass。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
     },
     {
       "step_id": 11,
       "step_slug": "stage-end-spec-analyze",
-      "observable_result": "原需求、材料、实现、执行原件和发现处置对照；实施缺口同任务修，作者材料/方向问题仍交对应owner。"
+      "observable_result": "原需求、材料、实现、执行原件和发现处置对照；实施缺口同任务修，作者材料/方向问题仍交对应owner。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
     },
     {
       "step_id": 12,
       "step_slug": "stage-handoff",
-      "observable_result": "整个stage末写人读交接说明交付、验证、风险和verify-code下一步；Phase摘要不额外触发stage-end或固定复盘。"
+      "observable_result": "整个stage末写人读交接说明交付、验证、风险和verify-code下一步；Phase摘要不额外触发stage-end或固定复盘。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
     }
   ]
 }

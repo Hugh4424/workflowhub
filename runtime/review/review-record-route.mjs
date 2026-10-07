@@ -4,6 +4,7 @@ import { withLock } from "../interface/record-lock.mjs";
 import { appendRecord } from "../interface/safe-write.mjs";
 import { reviewIdentityFromInput } from "./review-policy.mjs";
 import { parseReviewerOutput } from "./review-output.mjs";
+import { deriveVerifyCodeConclusion } from "./canonical-review-result.mjs";
 import { redactProviderHostPaths } from "./provider-material-projection.mjs";
 import { runSimpleReview } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 
@@ -100,6 +101,10 @@ export async function recordSimpleReviewRequest({taskDir,request,runRound=runSim
     const record={version:"wh-review-result.v1",...ordinary,task_id:manifest.task_id,...tuple,started_at:started,completed_at:new Date().toISOString(),
       request:{...tuple,...submittedSubject,material_keys:Object.keys(request.materials ?? {}),...(typeof material_id==="string"?{material_id}:{}),...Object.fromEntries(["only_providers","dispatch_reason","supplements"].filter(key=>Object.hasOwn(request,key)).map(key=>[key,structuredClone(request[key])]))},provider_results:providers,findings,
       ...(signal?.aborted ? {status:"unavailable",error:{code:"REVIEW_CANCELLED",message:"review cancelled; settled provider facts retained"}} : {}),authoritative:false};
+    if(tuple.stage==="verify-code") {
+      const {conclusion,coverage}=deriveVerifyCodeConclusion({status:record.status,provider_results:providers,findings});
+      Object.assign(record,{conclusion,coverage});
+    }
     const path=await appendRecord(dir,slug,"json",JSON.stringify(record,null,2)+"\n");
     const ref=relative(root,path).split("\\").join("/");return {status:record.status,result_ref:ref,path,stage:tuple.stage,review_scope:tuple.review_scope,subject_kind:tuple.subject_kind,phase_id:tuple.phase_id,authoritative:false};
   },{waitMs:lockWaitMs});

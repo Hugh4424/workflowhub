@@ -224,6 +224,8 @@ Return a plain report with the actual routes/pages/scenarios, real component and
 
 For a declared acceptance scenario state the actual source/sample/scenario/tier; ordinary QA does not require that acceptance wrapper. No preview or fixture, unreadable evidence, cancellation, oracle/tool error or cleanup failure remains failed/blocked/unknown with its original reason. A component fixture is not the real page, and no observed screenshot means no visual pass.
 
+A blocked or unknown run may have zero screenshots, but must include a non-empty `failure_reason` and end with a non-zero test exit. Never convert a missing preview, missing fixture, or unavailable engine into a pass. If visual status is `not_observed`/`not_applicable`, or a11y status is `not_checked`/`not_applicable`, include a non-empty reason; a pass result never silently skips those checks.
+
 Cleanup is complete only after this run's owned browser session/PIDs/temp resources are handled and the user's app service remains running. Use the bundled session cleanup route; never kill an unrelated browser, live user profile or app service. Preserve partial cleanup and exit failures. For non-UI scope give not_applicable with the actual reason, not missing-evidence pass.
 
 Keep only one original output per fact. Use ordinary paths rather than {ref,sha256}/task snapshot/material/invocation certification. Never include cookie, token, password, Authorization, API key, secret or profile contents. Do not write QA outcomes back into Experience.md; send actual outcomes and limitations to the caller.

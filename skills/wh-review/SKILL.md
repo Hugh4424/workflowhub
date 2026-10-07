@@ -12,6 +12,12 @@ wh-review 是 make-decision 方向/细节、build-plan 合并审查及 build-prd
 
 stage-skill-plan.json 仍在本技能原路径提供 required_skills/optional_skills：文档组包读者和 OCR 合同/lens 适配读者复用这些声明。它是选材，不是另一个调度器或审查点；不会把它搬入 runtime/review。历史 build-spec 登记退出当前调用，旧集成审查不恢复为正常节点。
 
+## Input
+
+本节解释现有输入，不新增必填字段：`stage` 指本次审查阶段，`materials` 是本次允许审查的完整材料；make-decision 用 `review_track` 区分方向与细节，mini-task 用现有 `review_kind` 区分审查面。材料名按当前阶段合同选取，例如 `raw_requirement`、`approved_direction`、`draft_spec_or_acceptance`。`host_provider` 已不参与读取或 reviewer 选择，旧调用者传入也不能用它排除或阻断来源。
+
+普通首轮审查不传 `task_path`、`project_name`、`task_id`、Workspace、Git、snapshot、revision、provider allowlist 或 result-storage 字段；旧调用者的额外 task/workspace 字段不成为审查门。现有方法第5条的未完成来源补派仍按其声明使用 `only_providers`、`dispatch_reason` 和原记录引用；本节不新增路由或补派接口。
+
 ## 输入与方法
 
 1. 接收本次实际 stage/track、允许范围与完整材料。方向盲审只看原始要求、客观事实、约束和非目标；细节审查读当前方向与细节；PRD 读实际任务地图/正文；代码面读声明的真实 diff、合同、lens 和相关验收原件。缺必要材料如实报 MATERIAL_INCOMPLETE，不补猜或擅读范围外文件。
@@ -27,6 +33,19 @@ available 只表示实际收到可读建议，至少一个有效语义 sibling �
 保留 provider 原身份与失败类别：ROUTE_UNAVAILABLE/REVIEW_BROKER_START_FAILED 只用于路线/启动失败；timeout、cancelled、invalid output、material missing、RATE_LIMITED 等保留真实类别。必要脱敏、realpath范围、输入/输出体量与解析限制、配置原子写、并集聚合和信号/资源清理义务仍在；P5 才改生产链，不能把方法改文当这些行为已实测。
 
 原始私有 provider 文本仅留在原有安全诊断位置，公开报告用原始记录引用、脱敏信息和真实错误，不外泄 cookie/token/password/Authorization/API key 或宿主私有路径。材料、独立质量、用户选择、Git/发布分别记录，不由 review 输出授予继续工作权限。
+
+## Long-review host convention
+
+长审查走宿主现有后台执行与 wait/poll 收集路径；wh-review 仍只发一个同步 broker 请求，不新增异步对象、第二层 timeout 或进程生命周期。等待与恢复沿同一请求，按真实终态报告：
+
+| 实际结果 | 报告口径 |
+| --- | --- |
+| timeout | unavailable，保留原失败类别 |
+| partial | `available-with-failures`，有效来源与失败分别保留 |
+| `PUBLIC_RESULT_INVALID` 或宿主调用链失败 | unavailable，保留具体错误 |
+| 零字节或无效 JSON | 内部标记 `contract_failure`，不得当空 findings |
+
+partial 不表示通过。原始私有 provider 文本保持在既有安全诊断位置，公开边界保留脱敏错误和原记录引用；不由等待成功推导质量通过或操作授权。
 
 ## 现有接口
 

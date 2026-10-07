@@ -229,6 +229,30 @@ export function aggregateCanonicalProviderResults(providerResults, minimumReview
   return { status: "available", valid, findings, adjudication };
 }
 
+// Host-owned verify-code conclusion: findings-only provider output never supplies it.
+export function deriveVerifyCodeConclusion({ status, provider_results, findings } = {}) {
+  if (!["available", "available-with-failures", "unavailable", "incomplete"].includes(status)
+      || !Array.isArray(provider_results) || !Array.isArray(findings)
+      || provider_results.some((member) => !member || typeof member !== "object" || Array.isArray(member)
+        || typeof member.provider !== "string" || member.provider.trim() === ""
+        || typeof member.status !== "string" || member.status.trim() === "")
+      || findings.some((finding) => !finding || typeof finding !== "object" || Array.isArray(finding)
+        || !["blocking", "major", "minor"].includes(finding.severity))) {
+    throw new TypeError("REVIEW_EVIDENCE_INVALID: verify-code conclusion input is invalid");
+  }
+  const providers_completed = provider_results.filter((member) => member.status === "completed").length;
+  const providers_failed = provider_results.length - providers_completed;
+  const coverage = {
+    findings_state: findings.length === 0 ? "no_findings_returned" : "findings_returned",
+    providers_completed, providers_failed,
+  };
+  const conclusion = status !== "available" || providers_failed > 0 || providers_completed === 0 || findings.length === 0
+    ? "inconclusive"
+    : findings.some((finding) => finding.severity === "blocking") ? "reject"
+      : findings.some((finding) => finding.severity === "major") ? "needs_revision" : "pass_with_findings";
+  return { conclusion, coverage };
+}
+
 export function conservativelyAssessUnattestedAnchors(items) {
   return items.map((item) => ({
     ...item,

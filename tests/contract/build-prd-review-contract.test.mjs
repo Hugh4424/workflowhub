@@ -12,3 +12,31 @@ describe("build-prd ordinary report-only document review",()=>{
  it("preserves unavailable member facts and never manufactures a stage attempt",async()=>{const r=root();let calls=0;const result=await runSimpleReview({stage:"build-prd",review_kind:"build_prd",materials:materials()},dependencies(r,{runtimeId:"owned-runtime",outcome:"partial",providers:[member("failed",null,{code:"OWNED_UNAVAILABLE",message:"controlled unavailable"})]},()=>calls++));expect(calls).toBe(1);expect(result).toMatchObject({stage:"build-prd",review_kind:"build_prd",status:"unavailable",provider_results:[{status:"failed",error:{code:"OWNED_UNAVAILABLE"}}]});for(const key of["attempt_ref","result_ref","verdict","stage_completed"])expect(result).not.toHaveProperty(key);});
  it("records a completed readable suggestion as advisory rather than product approval",async()=>{const r=root();let calls=0;const result=await runSimpleReview({stage:"build-prd",review_kind:"build_prd",materials:materials()},dependencies(r,{runtimeId:"owned-runtime",outcome:"completed",providers:[member("completed",JSON.stringify({findings:[]}),null)]},()=>calls++));expect(calls).toBe(1);expect(result.status).toBe("available");expect(result.findings).toEqual([]);expect(result).not.toHaveProperty("passed");expect(result).not.toHaveProperty("result_ref");});
 });
+
+describe("planning-hardening portable reflection contracts", () => {
+  it("planning-hardening AC-REFLECT-001/AC-META-001 declares one save-read handoff with bound payload fields", () => {
+    const workflow = readFileSync(join(ROOT, "workflows/build-prd/SKILL.md"), "utf8");
+    expect(workflow).toContain("report-facts-and-handoff");
+    expect(workflow).toContain("reportFactsAndHandoff");
+    expect(workflow).toContain("readReflectionForReport");
+    expect(workflow).toContain("publishCanonicalRecord");
+    expect(workflow).toContain("raw");
+    expect(workflow).toContain("SHA");
+    expect(workflow).toContain("task_id");
+    expect(workflow).toContain("workflow");
+    expect(workflow).toContain("material_refs");
+    expect(workflow).toContain("reply_text");
+    expect(workflow).toContain("step_results");
+    expect(workflow).toContain("reflection_facts");
+    expect(workflow).toContain("仅 task_id、workflow、material_refs、reply_text、step_results、reflection_facts");
+
+  });
+
+  it("planning-hardening AC-CHECK-001/AC-CLOSE-002 keeps portable reflection separate from formal stage and close approval", () => {
+    const text = `${readFileSync(join(ROOT, "workflows/build-prd/SKILL.md"), "utf8")}\n${readFileSync(join(ROOT, "workflows/build-prd/steps.json"), "utf8")}`;
+    expect(text).toMatch(/不是正式stage|not a formal stage/);
+    expect(text).toMatch(/不.*(?:stage-reflection|正式stage).*(?:复盘|reflection)|reflection.*(?:not|不).*(?:formal stage|正式stage)/i);
+    expect(text).toMatch(/不.*(?:close|操作确认|approval)/i);
+    expect(text).toMatch(/不增加第三次.*内容调用|not.*third content call/i);
+  });
+});

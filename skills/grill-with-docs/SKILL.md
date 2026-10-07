@@ -46,7 +46,7 @@ Agent 生成、默认、旧回复或文档自报都不能替代 reply。用户�
 ID、hash、receipt、attempt、runner 等执行黑话，不得要求开放式填空。多个决策轴按
 依赖拆开，每次真实回答后重新核对剩余问题。
 
-主会话保留真实提问、等待和用户答复的会话来源，回答后重排；不用 round 事件或凭证认证替代实际对话。Grill 只是交互式思考，不调用 wh-review 或写 review verdict。
+主会话保留真实提问、等待和用户答复的会话来源。临时交互事实用 `ask`、`wait`、`reply`、`resume` 四个事件说明：`ask` 用正整数 `round` 区分当前批次；`wait` 暂停依赖该卡答案的步骤；`reply` 来自真实用户，绑定同一张卡与同一 `round`，允许部分答案；`resume` 使用同一张卡、同一 `round` 和同一回复后再重排。这里只描述当前会话 IO，不新增持久事件或机器校验；不用 round 事件或凭证认证替代实际对话。Grill 只是交互式思考，不调用 wh-review 或写 review verdict。
 
 **Failure contract**: skill 读取、代码核实或文档写入失败时，先自行诊断并做安全重试。
 只有仍缺少会改变方向的事实、且 Agent 无法自行核实时，才用大白话决策卡请用户决定。

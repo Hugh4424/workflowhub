@@ -12,14 +12,13 @@
       "semantic_fields": [
         "raw_requirement",
         "objective_facts",
-        "direction_constraints",
-        "current_selection",
-        "independent_reconstruction",
-        "direction_flow",
         "convergence_outline",
-        "ui_applicability",
-        "project_inventory",
-        "planned_or_changed_frontend_fact"
+        "current_selection",
+        "alternatives",
+        "selection_rationale",
+        "key_assumptions",
+        "independent_reconstruction",
+        "direction_flow"
       ]
     },
     "make-decision/detail": {
@@ -36,10 +35,8 @@
         "raw_requirement",
         "approved_direction",
         "draft_spec_or_acceptance",
-        "oi_terminal_records",
-        "confirmation_groups",
-        "ui_applicability",
-        "ui_contract"
+        "context_map",
+        "evidence_map"
       ]
     },
     "build-plan": {
@@ -242,8 +239,7 @@
           "required": [
             "raw_requirement",
             "objective_facts",
-            "convergence_outline",
-            "review_instructions"
+            "convergence_outline"
           ],
           "optional": [
             "current_selection",
@@ -271,8 +267,7 @@
           "required": [
             "raw_requirement",
             "approved_direction",
-            "draft_spec_or_acceptance",
-            "review_instructions"
+            "draft_spec_or_acceptance"
           ],
           "optional": [
             "context_map",
@@ -373,18 +368,17 @@
         "approved_spec",
         "architect_assessment",
         "context_map",
-        "acceptance_criteria"
-      ],
-      "generated": [
-        "review_instructions"
-      ],
-      "forbidden": [
+        "acceptance_criteria",
         "acceptance_evidence",
         "evidence_map",
         "final_test_summary",
         "quality_verify",
         "requirement_replay"
       ],
+      "generated": [
+        "review_instructions"
+      ],
+      "forbidden": [],
       "minimum_reviewers": 1
     }
   },

@@ -1085,7 +1085,7 @@
       "role": "production",
       "responsibility": "task.json 读写 + 记录层路径防护（本文件）",
       "owner": "B4/P5 / MT-1-078",
-      "consumer": "当前直接模块消费者：core/__tests__/invocation-identity.test.mjs, core/__tests__/workspace-manager.test.mjs, core/task-close.mjs, metrics/collector.mjs, runtime/evidence/workflow-evolution.mjs, runtime/stage/stage-context.mjs, skills/wh-review/scripts/__tests__/ac-evidence-summary.test.mjs, skills/wh-review/scripts/__tests__/review-writer-taskhandle.test.mjs, skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs, tests/close/close-authorization-outcome-ref-guard.test.mjs, tests/contract/build-code-change-scope.test.mjs, tests/contract/card03-review-orchestration.test.mjs, tests/contract/doctor-storage-consistency.test.mjs, tests/contract/ocr-delegation-route.test.mjs, tests/contract/ocr-production-cutover.test.mjs, tests/contract/ocr-review-contract-bundle.test.mjs, tests/contract/post-build-plan-missing-index.test.mjs, tests/contract/research-report-current.test.mjs, tests/contract/review-history-canonical-reader.test.mjs, tests/contract/stage-context-workspace-degrade.test.mjs, tests/contract/status-derivation.test.mjs, tests/contract/task-close-cli-resolution.test.mjs, tests/contract/task-handle.test.mjs, tests/contract/workspace-binding.test.mjs, tests/contract/zero-machine-gate-advancement.test.mjs, tests/integration/minimal-task-storage.test.mjs, tests/metrics-smoke.test.mjs, tests/metrics-taskhandle-v2.test.mjs, tests/review/dsh-code-review-publication.test.mjs, tests/review/ocr-ac002-007-experiments.test.mjs, tests/review/review-foreign-pair-history.test.mjs, tests/review/review-managed-lifecycle.test.mjs, tests/review/review-record-route.test.mjs, tools/cli/stage-runtime.mjs",
+      "consumer": "当前直接模块消费者：core/__tests__/invocation-identity.test.mjs, core/__tests__/workspace-manager.test.mjs, core/task-close.mjs, metrics/collector.mjs, runtime/evidence/workflow-evolution.mjs, runtime/stage/stage-context.mjs, skills/wh-review/scripts/__tests__/review-writer-taskhandle.test.mjs, skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs, tests/close/close-authorization-outcome-ref-guard.test.mjs, tests/contract/build-code-change-scope.test.mjs, tests/contract/card03-review-orchestration.test.mjs, tests/contract/doctor-storage-consistency.test.mjs, tests/contract/ocr-delegation-route.test.mjs, tests/contract/ocr-production-cutover.test.mjs, tests/contract/ocr-review-contract-bundle.test.mjs, tests/contract/post-build-plan-missing-index.test.mjs, tests/contract/research-report-current.test.mjs, tests/contract/review-history-canonical-reader.test.mjs, tests/contract/stage-context-workspace-degrade.test.mjs, tests/contract/status-derivation.test.mjs, tests/contract/task-close-cli-resolution.test.mjs, tests/contract/task-handle.test.mjs, tests/contract/workspace-binding.test.mjs, tests/contract/zero-machine-gate-advancement.test.mjs, tests/integration/minimal-task-storage.test.mjs, tests/metrics-smoke.test.mjs, tests/metrics-taskhandle-v2.test.mjs, tests/review/dsh-code-review-publication.test.mjs, tests/review/ocr-ac002-007-experiments.test.mjs, tests/review/review-foreign-pair-history.test.mjs, tests/review/review-managed-lifecycle.test.mjs, tests/review/review-record-route.test.mjs, tools/cli/stage-runtime.mjs",
       "module_consumers": [
         "core/__tests__/invocation-identity.test.mjs",
         "core/__tests__/workspace-manager.test.mjs",
@@ -1093,7 +1093,6 @@
         "metrics/collector.mjs",
         "runtime/evidence/workflow-evolution.mjs",
         "runtime/stage/stage-context.mjs",
-        "skills/wh-review/scripts/__tests__/ac-evidence-summary.test.mjs",
         "skills/wh-review/scripts/__tests__/review-writer-taskhandle.test.mjs",
         "skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs",
         "tests/close/close-authorization-outcome-ref-guard.test.mjs",
@@ -3209,21 +3208,6 @@
       "named_data_readers": [],
       "delete_condition": "remove build-prd contract/profile registration when its consumer is retired",
       "retention_basis": "MT-3-068 / NARROW"
-    },
-    {
-      "source": "skills/wh-review/scripts/ac-evidence-summary.mjs",
-      "destination": "skills/wh-review/scripts/ac-evidence-summary.mjs",
-      "status": "retain",
-      "role": "production",
-      "responsibility": "verify-code OCR 的 AC 摘要校验",
-      "owner": "B4/P5 / MT-3-083",
-      "consumer": "当前直接模块消费者：skills/wh-review/scripts/__tests__/ac-evidence-summary.test.mjs",
-      "module_consumers": [
-        "skills/wh-review/scripts/__tests__/ac-evidence-summary.test.mjs"
-      ],
-      "named_data_readers": [],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "MT-3-083 / NARROW"
     },
     {
       "source": "skills/wh-review/scripts/review-materials.mjs",

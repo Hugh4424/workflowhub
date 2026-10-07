@@ -15,7 +15,6 @@
     "contracts/workflowhub-result.v2.json",
     "contracts/workflowhub-result.v3.json",
     "manifest.json",
-    "scripts/ac-evidence-summary.mjs",
     "scripts/review-materials.mjs",
     "scripts/review-provider-client.mjs",
     "scripts/review-result.mjs",

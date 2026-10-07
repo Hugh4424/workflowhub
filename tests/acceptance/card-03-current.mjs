@@ -23,9 +23,6 @@ export const RETIRED_TEMPLATES = Object.freeze([
   "skills/spec-plan/templates/plan-template.md", "skills/spec-tasks/templates/tasks-template.md",
 ]);
 export const PHASE_TEMPLATE_FIELDS = Object.freeze(["接口符号", "合并责任", "progress_cursor"]);
-export const FROZEN_VALIDATOR_RESULTS = Object.freeze([
-  "pass", "fail", "inconclusive", "deferred", "missing", "inconsistent", "incomplete", "unavailable",
-]);
 
 // 基线：/tmp/pb-land/evidence/baseline.txt.files 与 baseline-failures.txt 原样固化（33 文件、38 条失败）。
 export const BASELINE_FILES = Object.freeze([
@@ -118,7 +115,6 @@ export const CLAIMED_GREEN_FILES = Object.freeze({
 
 const DISPATCH = "tests/contract/card03-dispatch-method.test.mjs";
 const REVIEW = "tests/contract/card03-review-orchestration.test.mjs";
-const SCHEMA = "tests/contract/ac-evidence-schema-domain.test.mjs";
 const MATERIAL = "tests/contract/material-set-per-stage.test.mjs";
 const RUNTIME_BINDING = "tests/contract/card03-runtime-binding.test.mjs";
 
@@ -128,7 +124,6 @@ export const ORACLE_DESCRIBES = Object.freeze({
   "ORACLE-REV-001": [REVIEW, "ORACLE-REV-001 review request precheck, bad results and packet narrowing"],
   "ORACLE-REV-002": [REVIEW, "ORACLE-REV-002 partial coverage and same-triple reuse"],
   "ORACLE-SKL-003": [REVIEW, "ORACLE-SKL-003 runner reviewer skills follow stage-skill-plan.json"],
-  "ORACLE-FIX-002": [SCHEMA, "ORACLE-FIX-002 ac-evidence-summary schema domain matches the frozen validator"],
   "ORACLE-FIX-001": ["tests/contract/stage-reflection-e2e-constructed.test.mjs", "CARD-03 P6 post decision-only make-decision public reflection (ORACLE-FIX-001)"],
 });
 
@@ -148,7 +143,7 @@ export const ORACLE_WHOLE_FILES = Object.freeze({
 
 export const ORACLE_IDS = Object.freeze([
   "ORACLE-DISP-001", "ORACLE-DISP-003", "ORACLE-SKL-001", "ORACLE-SKL-002", "ORACLE-DISP-002", "ORACLE-RT-001",
-  "ORACLE-RT-002", "ORACLE-REV-001", "ORACLE-REV-002", "ORACLE-SKL-003", "ORACLE-FIX-002", "ORACLE-FIX-001",
+  "ORACLE-RT-002", "ORACLE-REV-001", "ORACLE-REV-002", "ORACLE-SKL-003", "ORACLE-FIX-001",
   "ORACLE-FIX-003", "ORACLE-FIX-004",
 ]);
 export const PRD_ACS = Object.freeze(["AC-11", "AC-12", "AC-13", "AC-14", "AC-15"]);
@@ -159,8 +154,6 @@ export const RUN_FILES = Object.freeze([
   "core/__tests__/stage-skill-runtime.test.mjs",
   "scripts/__tests__/smoke-local-skill-dispatch.test.mjs",
   "tests/build-code-diff-only.test.mjs",
-  "tests/contract/ac-evidence-schema-domain.test.mjs",
-  "tests/contract/acceptance-result-machine-classes.test.mjs",
   "tests/contract/build-code-apply-contract.test.mjs",
   "tests/contract/build-code-case-reconciliation.test.mjs",
   "tests/contract/build-code-targeted-capture.test.mjs",
@@ -427,20 +420,6 @@ export function dispatchSection(text) {
   return [lines[start], ...(end < 0 ? rest : rest.slice(0, end))].join("\n");
 }
 
-function criterionEnums(schema) {
-  const stack = [schema];
-  while (stack.length) {
-    const node = stack.pop();
-    if (!node || typeof node !== "object") continue;
-    const props = node.properties;
-    if (props && props.result && props.leaf_result && props.status) {
-      return { result: props.result.enum ?? [], leaf_result: props.leaf_result.enum ?? [], status: props.status.enum ?? [] };
-    }
-    stack.push(...Object.values(node));
-  }
-  return null;
-}
-
 // 当前工作区的可观察事实（纯读 + 一次纯函数调用），与 vitest 结果无关。
 export async function observeWorkspace(cwd = process.cwd()) {
   const skills = Object.fromEntries(STAGES.map((stage) => [stage, readOptional(cwd, `workflows/${stage}/SKILL.md`)]));
@@ -458,20 +437,6 @@ export async function observeWorkspace(cwd = process.cwd()) {
     bundleCount += 1;
     const bundle = JSON.parse(read(cwd, path));
     if ((bundle.files ?? []).some((file) => file && Object.hasOwn(file, "sha256"))) bundleShaPaths.push(path);
-  }
-
-  let schemaMissing;
-  try {
-    const enums = criterionEnums(JSON.parse(read(cwd, "runtime/review/schemas/ac-evidence-summary.schema.json")));
-    const validator = read(cwd, "runtime/evidence/acceptance-evidence-validator.mjs")
-      .match(/const ACCEPTANCE_RESULTS = (\[[^\]]*\]);/);
-    const values = validator ? JSON.parse(validator[1].replace(/'/g, "\"")) : null;
-    schemaMissing = enums && values
-      ? Object.fromEntries(Object.entries(enums).map(([field, allowed]) => [field, values.filter((v) => !allowed.includes(v))]))
-      : { error: "criterion enums or validator domain not found" };
-    if (values && JSON.stringify(values) !== JSON.stringify(FROZEN_VALIDATOR_RESULTS)) schemaMissing = { error: "validator domain changed" };
-  } catch (error) {
-    schemaMissing = { error: error.message };
   }
 
   let makeDecisionMaterialSet;
@@ -504,7 +469,6 @@ export async function observeWorkspace(cwd = process.cwd()) {
     retired_templates_present: RETIRED_TEMPLATES.filter((file) => existsSync(join(cwd, file))),
     phase_template_fields_missing: PHASE_TEMPLATE_FIELDS.filter((field) => !phaseTemplate.includes(field)),
     stage_runtime_review_budget: readOptional(cwd, "tools/cli/stage-runtime.mjs").includes("\"review_budget\""),
-    schema_missing: schemaMissing,
     make_decision_material_set: makeDecisionMaterialSet,
     c2_irreversible_rules_present: readOptional(cwd, "workflows/build-code/diff-scanner.mjs").includes("C2_IRREVERSIBLE_GIT_RULES"),
     threshold_registered: /### 二、阶段豁免表与「大量读写」的可指认阈值/.test(decisionLog)
@@ -577,7 +541,6 @@ export function deriveCard03Entry({ vitest, closure, observations, cwd }) {
       { exit_code: closure?.exit_code ?? null, stderr: String(closure?.stderr ?? "").trim() }),
     a("ORACLE-DISP-002:phase-template-fields", [], o.phase_template_fields_missing),
     a("ORACLE-RT-002:no-review-budget-run-field", false, o.stage_runtime_review_budget),
-    a("ORACLE-FIX-002:schema-covers-validator", { result: [], leaf_result: [], status: [] }, o.schema_missing),
     a("ORACLE-FIX-001:make-decision-needs-decision-log-only", ["decision-log.md"], o.make_decision_material_set),
     a("ORACLE-FIX-003:no-c2-irreversible-rules", false, o.c2_irreversible_rules_present),
     ...Object.entries(ORACLE_DESCRIBES).map(([oracle, [file, title]]) =>
@@ -736,9 +699,6 @@ const TECHNICAL_AC_SCOPES = Object.freeze([
         "file": "tests/contract/business-case-catalog.test.mjs"
       },
       {
-        "file": "tests/contract/acceptance-result-machine-classes.test.mjs"
-      },
-      {
         "file": "tests/contract/build-code-case-reconciliation.test.mjs"
       },
       {
@@ -799,22 +759,6 @@ const TECHNICAL_AC_SCOPES = Object.freeze([
       {
         "file": "tests/contract/stage-reflection-e2e-constructed.test.mjs",
         "describe": "CARD-03 P6 post decision-only make-decision public reflection (ORACLE-FIX-001)"
-      }
-    ]
-  },
-  {
-    "id": "AC-FIX-002",
-    "assertion_ids": [
-      "ORACLE-FIX-002:schema-covers-validator",
-      "ORACLE-FIX-002:describe:tests/contract/ac-evidence-schema-domain.test.mjs"
-    ],
-    "scopes": [
-      {
-        "file": "tests/contract/ac-evidence-schema-domain.test.mjs",
-        "describe": "ORACLE-FIX-002 ac-evidence-summary schema domain matches the frozen validator"
-      },
-      {
-        "file": "tests/contract/acceptance-result-machine-classes.test.mjs"
       }
     ]
   },

@@ -81,7 +81,6 @@ const TARGET_OBSERVATIONS = Object.freeze({
   retired_templates_present: [],
   phase_template_fields_missing: [],
   stage_runtime_review_budget: false,
-  schema_missing: { result: [], leaf_result: [], status: [] },
   make_decision_material_set: ["decision-log.md"],
   c2_irreversible_rules_present: false,
   threshold_registered: true,
@@ -137,7 +136,7 @@ describe("CARD-03 current acceptance producer (ORACLE-ACC-001)", () => {
     expect(RUN_FILES).not.toContain("tests/acceptance/card-03-current.test.mjs");
     expect(RUN_FILES.every((file) => (file.startsWith("tests/") || file.startsWith("core/__tests__/")
       || file.startsWith("scripts/__tests__/")) && file.endsWith(".test.mjs"))).toBe(true);
-    expect(ORACLE_IDS).toHaveLength(14);
+    expect(ORACLE_IDS).toHaveLength(13);
   });
 
   it("returns exactly one runner-readable entry and achieves it only when every observable matches", () => {
@@ -228,7 +227,6 @@ describe("CARD-03 current workspace reaches the target observables (ORACLE-ACC-0
   it("runtime and schema fixes are observable in current code", async () => {
     const o = await observeWorkspace(cwd);
     expect(o.stage_runtime_review_budget).toBe(false);
-    expect(o.schema_missing).toEqual({ result: [], leaf_result: [], status: [] });
     expect(o.make_decision_material_set).toEqual(["decision-log.md"]);
     expect(o.c2_irreversible_rules_present).toBe(false);
   });
@@ -242,8 +240,8 @@ describe("CARD-03 current workspace reaches the target observables (ORACLE-ACC-0
 
 // Controlled unit facts only: no actual acceptance aggregate or Task publication.
 describe("CARD-03 P6 current producer target boundaries (ORACLE-ACC-001)", () => {
-  it("includes all 56 declared logical consumers and eight whole claimed files", () => {
-    expect(RUN_FILES).toHaveLength(56);
+  it("includes all 54 declared logical consumers and eight whole claimed files", () => {
+    expect(RUN_FILES).toHaveLength(54);
     expect(Object.keys(CLAIMED_GREEN_FILES)).toHaveLength(8);
     expect(RUN_FILES).toEqual(expect.arrayContaining([
       "core/__tests__/stage-skill-runtime.test.mjs", "scripts/__tests__/smoke-local-skill-dispatch.test.mjs",
@@ -327,10 +325,17 @@ describe("CARD-03 P6 current producer target boundaries (ORACLE-ACC-001)", () =>
 
 
 describe("CARD-03 P6 authenticated source and raw persistence (ORACLE-ACC-001)", () => {
-  it("pins the complete 56-path set rather than accepting a count plus a few examples", () => {
+  it("pins the complete 54-path set rather than accepting a count plus a few examples", () => {
     const identity = resolveWorkflowHubIdentity({}, cwd);
     const source = JSON.parse(readFileSync(resolve(identity.taskPath, "quality/evidence/card03/P6/test-scope-union-audit.json")));
-    expect([...RUN_FILES].sort()).toEqual([...source.full_union_paths, "tests/contract/verify-code-binding-derivation.test.mjs"].sort());
+    const retiredPaths = new Set([
+      "tests/contract/ac-evidence-schema-domain.test.mjs",
+      "tests/contract/acceptance-result-machine-classes.test.mjs",
+    ]);
+    expect([...RUN_FILES].sort()).toEqual([
+      ...source.full_union_paths.filter((file) => !retiredPaths.has(file)),
+      "tests/contract/verify-code-binding-derivation.test.mjs",
+    ].sort());
     expect(RUN_FILES.every((file) => file.endsWith(".test.mjs"))).toBe(true);
   });
 
@@ -378,7 +383,7 @@ describe("CARD-03 P6 authenticated source and raw persistence (ORACLE-ACC-001)",
 
 // New native mapping contract: controlled children only, never real aggregate.
 const NATIVE_AC_IDS = ["AC-DISP-001", "AC-DISP-002", "AC-DISP-003", "AC-SKL-001", "AC-SKL-002", "AC-SKL-003",
-  "AC-RT-001", "AC-RT-002", "AC-REV-001", "AC-REV-002", "AC-FIX-001", "AC-FIX-002", "AC-FIX-003", "AC-FIX-004", "AC-ACC-001"];
+  "AC-RT-001", "AC-RT-002", "AC-REV-001", "AC-REV-002", "AC-FIX-001", "AC-FIX-003", "AC-FIX-004", "AC-ACC-001"];
 const BINDING_CONSUMER = "tests/contract/verify-code-binding-derivation.test.mjs";
 function mappedControlledRun({ fault = null } = {}) {
   return (command, args) => {

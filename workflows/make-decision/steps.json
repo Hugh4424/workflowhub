@@ -5,62 +5,183 @@
     {
       "step_id": 1,
       "step_slug": "load-context",
-      "observable_result": "原始需求、任务类型、事实、假设、非目标和未决问题在同一决策日志可读；缺失和冲突有具体说明。"
+      "observable_result": "原始需求、任务类型、事实、假设、非目标和未决问题在同一决策日志可读；缺失和冲突有具体说明。用户痛点、完整旅程和成功失败边界得到区分；模糊需求有多个候选角度和可推翻依据。 Record the requirement-to-decision coverage matrix so that every original requirement has a visible disposition; the matrix must cover the five dimensions: business goal, flow/surface, data/state, success/failure/acceptance, and constraints/non-goals/deferrals.",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
     },
     {
       "step_id": 2,
-      "step_slug": "triage-scope",
-      "observable_result": "用户痛点、完整旅程和成功失败边界得到区分；模糊需求有多个候选角度和可推翻依据。"
+      "step_slug": "outline-hypothesis-talk",
+      "observable_result": "主会话产出问题与边界、各模块方向假设组成的大纲，显式标为可修改假设并写明推翻证据；不作基线，不承诺范围或成本。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
     },
     {
       "step_id": 3,
       "step_slug": "research-and-diverge",
-      "observable_result": "会改变方向的未知问题有一手来源、候选和取舍；跳过或不可用有真实原因，失败假设推动重新整理。"
+      "observable_result": "会改变方向的未知问题有一手来源、候选和取舍；跳过或不可用有真实原因，失败假设推动重新整理。每份完成报告显式声明 candidates，逐候选写摘要、证据绑定来源 ref、推荐或拒绝、理由；无候选写真实原因，后续使用唯一 canonical report。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        },
+        {
+          "kind": "quality_facts",
+          "uri_or_path": "quality/evidence/"
+        }
+      ]
     },
     {
       "step_id": 4,
-      "step_slug": "direction-advice",
-      "observable_result": "wh-review 独立方向建议及原始发现、真实执行者、失败和覆盖限制保存；建议不替用户选方向。"
+      "step_slug": "outline-revision-check",
+      "observable_result": "逐块对照研究结果与大纲假设，判断工作包或方向假设保留、回改或推翻；产出修订后大纲，维持不变也写具体理由。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
     },
     {
       "step_id": 5,
       "step_slug": "outline-talk",
-      "observable_result": "主会话对重要方向问题取得真实答复或明确待答；独立问题合问，有依赖的问题按回复重排。"
+      "observable_result": "主会话对重要方向问题取得真实答复或明确待答；独立问题合问，有依赖的问题按回复重排。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
     },
     {
       "step_id": 6,
-      "step_slug": "grill-with-docs",
-      "observable_result": "已选方向与当前事实经过真实交互挑战；必要更新写入决策日志，Grill不伪作独立审查。"
+      "step_slug": "adversarial-direction-check",
+      "observable_result": "对方向过早锁定、隐藏前提与更小路径作轻量对抗性检查；不设否决权，只产出有来源的风险清单。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
     },
     {
       "step_id": 7,
-      "step_slug": "module-convergence",
-      "observable_result": "各重要未决项有方案、替代、验收、后果与风险；普通假设公开，方向/验收分歧交用户，零问题合法。"
+      "step_slug": "direction-advice",
+      "observable_result": "wh-review 独立方向建议及原始发现、真实执行者、失败和覆盖限制保存；建议不替用户选方向。审查方向与修订后大纲，不审细节；Kill 建议用于目标无效或方向违反硬约束，停止决定由用户作出；Recycle 建议用于可修补假设或证据缺口，回对应调研或方向 talk。两项权限与判据缺失时不记审查通过，审查事实不作机器门。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        },
+        {
+          "kind": "review",
+          "uri_or_path": "quality/reviews/"
+        }
+      ]
     },
     {
       "step_id": 8,
-      "step_slug": "write-decision-draft",
-      "observable_result": "决策草稿保留原话、来源、派生判断、需求处置、风险和延期负责人；更改理由可读，历史原文保留。"
+      "step_slug": "module-breadth-confirm",
+      "observable_result": "全部模块各有命名、一到三句范围说明、风险及优先级排序；主会话取得粗粒度真实确认，确定细化顺序，不提前进入细节。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
     },
     {
       "step_id": 9,
-      "step_slug": "detail-advice",
-      "observable_result": "草稿与Grill之后的wh-review细节建议及逐项处置可读；确认前一致性准备与必要修复已完成，方向变化不由agent代选。"
+      "step_slug": "module-convergence",
+      "observable_result": "各重要未决项有方案、替代、验收、后果与风险；普通假设公开，方向/验收分歧交用户，零问题合法。记录每模块重开条件（metric、date、event、release）；中途新增需求在同一决策日志新增大纲模块，补齐调研、决策、方案与验收标准，不新增步骤。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
     },
     {
       "step_id": 10,
-      "step_slug": "approve-decision",
-      "observable_result": "一致性准备完成后的方向、范围、风险和验收展示给用户并取得真实确认；拒绝或未答仍为草稿，不推断授权。"
+      "step_slug": "detail-advice",
+      "observable_result": "逐模块确认后，对整体做一次 wh-review 细节审查，逐项处置并完成确认前一致性准备与必要修复；Kill 建议用于整体目标或范围无法成立，由用户决定停止；Recycle 建议用于可修补的模块间缺口，回对应模块收敛。两项权限与判据缺失时不记审查通过，不拆模块审加整体审两级。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        },
+        {
+          "kind": "review",
+          "uri_or_path": "quality/reviews/"
+        }
+      ]
     },
     {
       "step_id": 11,
-      "step_slug": "stage-end-spec-analyze",
-      "observable_result": "spec-analyze对最终决策、真实问答/审查与本次实际确认作只读一致性核对；缺口保持可见，改变决定的修复先准备可审稿再重新确认，不新增审批或机器门。"
+      "step_slug": "grill-with-docs",
+      "observable_result": "grill 开头产出计划草案骨架，以细节决策加计划草案骨架为输入作真实交互挑战；必要更新写入决策日志，Grill不伪作独立审查，其后仍写草稿、确认、核对与交接。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
     },
     {
       "step_id": 12,
+      "step_slug": "write-decision-draft",
+      "observable_result": "决策草稿保留原话、来源、派生判断、需求处置、风险和延期负责人；更改理由可读，历史原文保留。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
+    },
+    {
+      "step_id": 13,
+      "step_slug": "approve-decision",
+      "observable_result": "一致性准备完成后的方向、范围、风险和验收展示给用户并取得真实确认；拒绝或未答仍为草稿，不推断授权。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
+    },
+    {
+      "step_id": 14,
+      "step_slug": "stage-end-spec-analyze",
+      "observable_result": "spec-analyze对最终决策、真实问答/审查与本次实际确认作只读一致性核对；缺口保持可见，改变决定的修复先准备可审稿再重新确认，不新增审批或机器门。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        },
+        {
+          "kind": "quality_facts",
+          "uri_or_path": "quality/evidence/"
+        }
+      ]
+    },
+    {
+      "step_id": 15,
       "step_slug": "stage-handoff",
-      "observable_result": "主会话写人读交接，列材料现状、已做/未做、证据、风险和下游下一步；缺失如实披露，不是工作门。"
+      "observable_result": "主会话写人读交接，列材料现状、已做/未做、证据、风险和下游下一步；缺失如实披露，不是工作门。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
     }
   ]
 }

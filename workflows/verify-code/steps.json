@@ -5,42 +5,102 @@
     {
       "step_id": 1,
       "step_slug": "read-current-materials-and-code",
-      "observable_result": "当前意图、实际代码入口、消费者、完整AC及执行原件可读；历史只作背景，缺失如实说明。"
+      "observable_result": "当前意图、实际代码入口、消费者、完整AC及执行原件可读；历史只作背景，缺失如实说明。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
     },
     {
       "step_id": 2,
       "step_slug": "ocr-code-review",
-      "observable_result": "一次终末独立代码审查含当前diff、完整AC、合同/protocol/lens与原件；条件fallback和实际失败分别记录。"
+      "observable_result": "一次终末独立代码审查含当前diff、完整AC、合同/protocol/lens与原件；条件fallback和实际失败分别记录。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        },
+        {
+          "kind": "review",
+          "uri_or_path": "quality/reviews/"
+        }
+      ]
     },
     {
       "step_id": 3,
       "step_slug": "preserve-review-facts",
-      "observable_result": "每路provider的原始发现、真实执行者、错误、取消和覆盖保留，外发范围/脱敏/只读边界明确。"
+      "observable_result": "每路provider的原始发现、真实执行者、错误、取消和覆盖保留，外发范围/脱敏/只读边界明确。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        },
+        {
+          "kind": "review",
+          "uri_or_path": "quality/reviews/"
+        }
+      ]
     },
     {
       "step_id": 4,
       "step_slug": "inspect-real-entry-and-tests",
-      "observable_result": "高风险业务样本沿规则、入口、断言与实际效果独立核对；已抽查/未抽查理由及UI/服务缺口可读。"
+      "observable_result": "高风险业务样本沿规则、入口、断言与实际效果独立核对；已抽查/未抽查理由及UI/服务缺口可读。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        },
+        {
+          "kind": "test",
+          "uri_or_path": "quality/tests/"
+        }
+      ]
     },
     {
       "step_id": 5,
       "step_slug": "repair-and-targeted-recheck",
-      "observable_result": "有效代码发现回原实施者修，只复测受影响file/case；没有新疑点不重跑全量或第二次常规审查。"
+      "observable_result": "有效代码发现回原实施者修，只复测受影响file/case；没有新疑点不重跑全量或第二次常规审查。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
     },
     {
       "step_id": 6,
       "step_slug": "record-finding-dispositions",
-      "observable_result": "每条原发现有fixed/rejected_invalid/accepted_risk/needs_human处置，严重风险不假记接受，原review不被重写。"
+      "observable_result": "每条原发现有fixed/rejected_invalid/accepted_risk/needs_human处置，严重风险不假记接受，原review不被重写。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
     },
     {
       "step_id": 7,
       "step_slug": "report-verification-result",
-      "observable_result": "代码质量、业务效果、测试充分性与物理交付分开报告；需真人观察的效果复用既有验收答复，未答保持待确认。"
+      "observable_result": "代码质量、业务效果、测试充分性与物理交付分开报告；需真人观察的效果复用既有验收答复，未答保持待确认。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
     },
     {
       "step_id": 8,
       "step_slug": "stage-handoff",
-      "observable_result": "阶段主会话写人读交接，列代码入口、修复、审查、验证限制、材料风险及下一步；缺事实保持incomplete而不冻结修复。"
+      "observable_result": "阶段主会话写人读交接，列代码入口、修复、审查、验证限制、材料风险及下一步；缺事实保持incomplete而不冻结修复。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
     }
   ]
 }

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createSimpleReviewPacket, rehydrateProviderInput, serializeProviderInput } from "../simple-review-runner.mjs";
 import { redactProviderHostPaths } from "../review-materials.mjs";
-import { providerMaterialPath } from "../../../../runtime/review/provider-material-projection.mjs";
+import { providerMaterialPath, redactHostPathText } from "../../../../runtime/review/provider-material-projection.mjs";
 
 const roots = [];
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
@@ -16,6 +16,40 @@ function providerBundle(materials) {
 }
 
 describe("provider-visible material redaction", () => {
+  it("preserves digit regex literals instead of treating their d: as a drive", () => {
+    const input = String.raw`const time = /\d\d:\d\d/;`;
+    expect(redactHostPathText(input)).toBe(input);
+    expect(redactProviderHostPaths(input)).toBe(input);
+  });
+
+  it("preserves escaped regex source passed to RegExp", () => {
+    const input = String.raw`new RegExp("\\d\\d:\\d\\d")`;
+    expect(redactHostPathText(input)).toBe(input);
+  });
+
+  it("preserves word-to-digit regex literals", () => {
+    const input = String.raw`const pair = /\w:\d+/;`;
+    expect(redactHostPathText(input)).toBe(input);
+  });
+
+  it("preserves ordinary time literals", () => {
+    expect(redactHostPathText("meeting at 10:30 ok")).toBe("meeting at 10:30 ok");
+  });
+
+  it("still redacts actual Windows drive paths and Unix host paths", () => {
+    expect(redactHostPathText(String.raw`open C:\Users\x\file.txt`)).toBe("open <host-path-redacted>");
+    expect(redactHostPathText("see /Users/x/y now")).toBe("see <host-path-redacted> now");
+  });
+
+  it("preserves regex source through UTF-8 Buffer and Uint8Array projection", () => {
+    const input = String.raw`/\d\d:\d\d/`;
+    const buffer = redactProviderHostPaths(Buffer.from(input, "utf8"));
+    const uint8 = redactProviderHostPaths(new Uint8Array(Buffer.from(input, "utf8")));
+    expect(Buffer.isBuffer(buffer)).toBe(true);
+    expect(buffer.toString("utf8")).toBe(input);
+    expect(uint8).toBeInstanceOf(Uint8Array);
+    expect(Buffer.from(uint8).toString("utf8")).toBe(input);
+  });
   it("preserves the real pinned public source URL and reviewer line positions", () => {
     const skill = readFileSync(new URL("../../../grill-with-docs/SKILL.md", import.meta.url), "utf8");
     const url = skill.match(/https:\/\/github\.com\/mattpocock\/skills\/blob\/[a-f0-9]{40}\/[^>\s]+/)[0];

@@ -5,62 +5,146 @@
     {
       "step_id": 1,
       "step_slug": "read-current-materials",
-      "observable_result": "当前决策、真实来源和已存在材料可读；需求、风险、非目标及已接受不做事项均有可追溯去向。"
+      "observable_result": "当前决策、真实来源和已存在材料可读；需求、风险、非目标及已接受不做事项均有可追溯去向。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
     },
     {
       "step_id": 2,
       "step_slug": "conditional-spec-research",
-      "observable_result": "影响实现的消费者、接口、状态和失败边界有真实依据；研究跳过或不可用的原因可读。"
+      "observable_result": "影响实现的消费者、接口、状态和失败边界有真实依据；研究跳过或不可用的原因可读。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
     },
     {
       "step_id": 3,
       "step_slug": "spec-clarify",
-      "observable_result": "影响结果的规格歧义有真实问题/答复或待答说明；方向变化交make-decision，不猜用户决定。"
+      "observable_result": "影响结果的规格歧义有真实问题/答复或待答说明；方向变化交make-decision，不猜用户决定。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
     },
     {
       "step_id": 4,
       "step_slug": "spec-specify",
-      "observable_result": "同一spec.md描述产品旅程、状态、异常、FR及唯一AC，逐条给场景、结果和通过/失败条件。"
+      "observable_result": "同一spec.md描述产品旅程、状态、异常、FR及唯一AC，逐条给场景、结果和通过/失败条件。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
     },
     {
       "step_id": 5,
       "step_slug": "conditional-ui-readiness",
-      "observable_result": "适用UI的真实设计来源、原型/预览和消费者可读；非UI有理由，缺失或冲突保持unknown。"
+      "observable_result": "适用UI的真实设计来源、原型/预览和消费者可读；非UI有理由，缺失或冲突保持unknown。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
     },
     {
       "step_id": 6,
       "step_slug": "spec-plan",
-      "observable_result": "同一spec写全局实现设计，独立Phase写实际写集、接口、任务、失败与回退边界；共享写集分工清晰。"
+      "observable_result": "同一spec写全局实现设计，独立Phase写实际写集、接口、任务、失败与回退边界；共享写集分工清晰。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
     },
     {
       "step_id": 7,
       "step_slug": "testing-system-blueprint",
-      "observable_result": "每Task有风险、场景、oracle、针对性命令、原始证据位置和覆盖限制；行为RED只认目标断言真实失败。"
+      "observable_result": "每Task有风险、场景、oracle、针对性命令、原始证据位置和覆盖限制；行为RED只认目标断言真实失败。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        },
+        {
+          "kind": "test",
+          "uri_or_path": "quality/tests/"
+        }
+      ]
     },
     {
       "step_id": 8,
       "step_slug": "test-routing-advisor",
-      "observable_result": "实际行为风险对应一条具体测试路线；纯方法G-2读回或不适用原因明确，未运行不称RED。"
+      "observable_result": "实际行为风险对应一条具体测试路线；纯方法G-2读回或不适用原因明确，未运行不称RED。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        },
+        {
+          "kind": "test",
+          "uri_or_path": "quality/tests/"
+        }
+      ]
     },
     {
       "step_id": 9,
       "step_slug": "merged-review",
-      "observable_result": "wh-review在独立上下文对同一规格/Phase做合并建议，原始发现、provider失败和覆盖限制可读。"
+      "observable_result": "wh-review在独立上下文对同一规格/Phase做合并建议，原始发现、provider失败和覆盖限制可读。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        },
+        {
+          "kind": "review",
+          "uri_or_path": "quality/reviews/"
+        }
+      ]
     },
     {
       "step_id": 10,
       "step_slug": "main-agent-disposes-findings",
-      "observable_result": "每条发现有修复、附证误报、用户明确风险选择或待决处置，严重问题的影响和负责人可读。"
+      "observable_result": "每条发现有修复、附证误报、用户明确风险选择或待决处置，严重问题的影响和负责人可读。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
     },
     {
       "step_id": 11,
       "step_slug": "final-spec-analyze",
-      "observable_result": "原需求、决策、spec、每Phase与索引的语义、边界和测试充分性核对，缺口不由绿灯或文件存在代填。"
+      "observable_result": "原需求、决策、spec、每Phase与索引的语义、边界和测试充分性核对，缺口不由绿灯或文件存在代填。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
     },
     {
       "step_id": 12,
       "step_slug": "confirm-plan-and-handoff",
-      "observable_result": "主会话展示当前计划并保存真实确认，未答保留草稿；写人读交接说明风险、证据和build-code下一步。"
+      "observable_result": "主会话展示当前计划并保存真实确认，未答保留草稿；写人读交接说明风险、证据和build-code下一步。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
     }
   ]
 }

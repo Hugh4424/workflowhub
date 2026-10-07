@@ -1,72 +1,73 @@
 # 决策日志（decision-log）
 
+读者：make-decision 主会话、用户与下游 build-plan 作者。
+读完要能：定位已选方向、原始来源、工作包写集、验收索引与仍未解决的风险。
+
+这是写作指引，不是质量门。结论在前，一段一主题，用动作写决定；允许的例外：机器读取的标题、标签与原始逐字声明照原样保留。本文只记录方向与依据；实现细节归 spec，执行事实归 task facts。
+
 ## 任务身份
 
-在首次正式需求提问前填写一次；固定标签只能出现一条。
+本节回答：本任务采用哪一类问答与产物粒度。首次正式需求提问前只填写一次。
 
 - **任务类型**：<规划任务|普通任务>
 
-`规划任务`只问方向层问题；`普通任务`保持既有提问与产物粒度。缺失、重复、冲突或其他值由
-`readTaskTypeFromDecisionLog(markdown)` 返回 `unknown`，不得猜测。
+缺失、重复、冲突或其他值由 `readTaskTypeFromDecisionLog(markdown)` 返回 `unknown`，不按路径或历史猜测。
+
+## 大纲地图
+
+本节回答：哪些工作包共同交付当前目标。写 6–10 行，每行一个工作包与一句结果；行数是写作参考，不是质量门。
+
+- 工作包 ①：[结果与消费者]
+- 工作包 ②：[结果与消费者]
+- 工作包 ③：[结果与消费者]
+- 工作包 ④：[结果与消费者]
+- 工作包 ⑤：[结果与消费者]
+- 工作包 ⑥：[结果与消费者]
 
 ## 原始需求
 
-本节保留原有的人读摘要；下方三节记录逐字来源与可解析索引。新卡落笔时把占位文本替换成真实原话和来源，不得把模板占位符当成已取得的用户证据。
+本节回答：需求来自哪里、影响哪个决定。用摘要与引用索引真实来源；占位符不能当作用户证据。
 
-| source_id | 原始需求/约束 | 来源引用/原文摘录 | 关联 D/处理状态 |
+| source_id | 原始需求/约束 | 来源引用 | 关联 ADR/处理状态 |
 | --- | --- | --- | --- |
-| R-001 |  |  |  |
+| R-001 | [原义行为与强度] | U-001 / V-001 | ADR-001 / [处置] |
 
 ## 需求变更记录
 
-每条新增或改动的用户需求用独立 `### U-00n` 块；`>` 行写用户逐字原文，后面写消息/访谈定位。若一条 U 拆成多项，用 `| U-001-01 | <原子要求> |` 行，并让索引引用每项。没有真实逐字来源时保留缺口，不把改写摘要填进引文。
+本节回答：哪次真实答复改变了什么。每条 U 保留独立标题、来源与处置；引用 V 原文，不在此重抄。
 
-### U-001 — <需求主题>
+### U-001 — [需求主题]
 
-> <用户逐字原文；新卡必须替换此占位符>
-
-- 来源：<消息或访谈定位；新卡必须替换>
-- 变更与处置：<新增/修改/撤回，以及影响的 D 编号>
+- 原文锚点：V-001；来源：[消息或访谈定位]
+- 变更与处置：[新增/修改/撤回及受影响 ADR]
 
 ## 原始需求索引
 
-一行一条 R 编号，第二列引用上面的 U/V 原文 ID，第三列写对应 D 编号；来源缺失时标明并补齐，不靠空分母宣称覆盖。
+本节回答：每条原子来源对应哪个决定。不同来源不合并；没有来源就保留缺口，不用空分母报覆盖。
 
 | R 编号 | U/V 原文锚点 | 决策 | 落点 |
 | --- | --- | --- | --- |
-| R-001 | U-001、V-001 | D-001 | <对应决定/规格落点；新卡必须替换> |
+| R-001 | U-001、V-001 | ADR-001 | [规格落点或排除理由] |
 
 ## 逐字声明层（verbatim）
 
-每条 V 行精确保留说话人“用户”、上下文和逐字文本。V 与 U 若为同一句话的引用片段，索引仍逐一指向，普查器会辨别精确别名；不同来源不可擅自合并。
+本节回答：用户实际说了什么。逐字只在 V 行保留一次，其他节引用 V 编号；说话人、上下文和原文必须有真实来源。
 
 | V 编号 | 说话人 | 上下文/来源 | 逐字文本 |
 | --- | --- | --- | --- |
-| V-001 | 用户 | <消息/时间；新卡必须替换> | <用户逐字文本；新卡必须替换> |
-
-## 原始声明层
-
-原始用户声明、调研原文和已确认事实只在此处保留可回读引用；后续 ADR 只引用它们，
-不得用摘要替换原文，也不得复制成第二份方向正文。
+| V-001 | 用户 | [消息/时间] | [用户逐字文本] |
 
 ## 三级追溯链
 
-`原始用户故事/初始需求 → 原始需求或调研 → ADR 决定`。每个 ADR 都必须能沿此链回读。
+本节回答：原始需求如何成为有依据的决定。按 `原始故事/需求 → 来源或调研 → ADR` 回读，不复制 spec。
 
-### 需求框架（先选一类，再逐步回填）
+### 需求框架
 
-- **framework（框架）**：`functional`（背景→问题→目标→方案→验收→扩展） / `research`（问题→论断→证据→裁决）
-- **选择理由**：
-- **回填规则**：调研、Talk、审查、Grill 只能扩展已有节点；混合任务以 `functional` 为外层，在受影响节点下挂 `research` 子树。
-
-| node_id | 节点 | status | evidence_status | evidence_owner | next_review_trigger |
-| --- | --- | --- | --- | --- | --- |
-| N-001 | 背景 / 问题 | open | pending |  |  |
-| N-002 | 目标 / 论断 | open | pending |  |  |
-| N-003 | 方案 / 证据 / 裁决 | open | pending |  |  |
- | N-004 | 验收 / 扩展 | open | pending |  |  |
+本节回答：用哪一种最小框架解释任务。功能用背景→问题→目标→方案→验收→扩展；研究用问题→论断→证据→裁决，混合任务在功能框架下挂研究子项。
 
 ### 唯一 OI 大纲（current authority）
+
+本节回答：当前未决问题、来源和处置如何集中在一个可读大纲里。
 
 大纲只存在于本份 `decision-log.md`；不得另建需求账本、状态机或第五份材料。
 在调研前先建立下表，之后只在这里回填 OI。每个 framework node 和固定类别
@@ -74,6 +75,8 @@
 改名掩盖缺口，也不能只写 `none`。
 
 #### 框架节点
+
+本节回答：六节点各有哪些OI或真实不适用理由。
 
 | node_id | framework_node | oi_ids | empty | reason |
 | --- | --- | --- | --- | --- |
@@ -86,6 +89,8 @@
 
 #### 固定类别
 
+本节回答：六个回退类别分别有哪些OI或真实空项理由。
+
 | category | oi_ids | empty | reason |
 | --- | --- | --- | --- |
 | complete_user_flow |  | false |  |
@@ -96,6 +101,8 @@
 | deferred |  | false |  |
 
 #### OI 记录与消费者
+
+本节回答：当前问题与终态处置如何供不同读者使用。
 
 每个 OI 是一个可独立处置的收敛项，字段如下；`status` 只能是
 `open|confirmed|deferred|not_applicable`。终态才填写终态字段，核心确认项还要
@@ -128,8 +135,7 @@ ID、类别、问题/未知、来源和 `task_id`/`outline_version`，展示状�
 
 ## 发散候选与可证伪大纲
 
-模糊需求在用户收敛前填写。表格是给用户读的形态；JSON 只把同一份表格与来源绑定给
-现有 reader，不创建候选库或完成门。
+本节回答：候选为什么不同，什么事实会推翻假设。模糊需求在用户收敛前填写；表格只记录真实讨论，不创建候选库或完成门。
 
 | 角度 ID | 角度 | 来源 | 强度 |
 | --- | --- | --- | --- |
@@ -145,183 +151,136 @@ ID、类别、问题/未知、来源和 `task_id`/`outline_version`，展示状�
 | --- | --- | --- | --- |
 | H-001 | r0 |  | supported/falsified/unresolved |
 
-```json
-{
-  "schema_version": "workflowhub-decision-divergence.v1",
-  "oi_outline_version": "<current outline version>",
-  "intake": {
-    "raw_requirement": {"text":"<user wording>","attribution":"user_verbatim","source_id":"U-001"},
-    "pain_point": {"text":"<user wording>","attribution":"user_verbatim","source_id":"U-002"}
-  },
-  "angles": [
-    {"angle_id":"A-001","plain_language_angle":"","source":"internal analysis","strength":"medium"},
-    {"angle_id":"A-002","plain_language_angle":"","source":"research R-001","strength":"high"}
-  ],
-  "original_candidates": [
-    {"candidate_id":"U-001","text":"","source_id":"U-001","semantic_basis":{"problem_axis":"","mechanism":"","target":"","outcome":""}}
-  ],
-  "candidates": [
-    {"candidate_id":"U-001","text":"","origin":"user","source_ids":["U-001"],"strength":"direct","semantic_basis":{"problem_axis":"","mechanism":"","target":"","outcome":""}},
-    {"candidate_id":"N-001","text":"","origin":"internal","angle_id":"A-001","source_ids":["A-001"],"novelty_against":["U-001"],"changed_dimensions":["mechanism"],"strength":"medium","semantic_basis":{"problem_axis":"","mechanism":"","target":"","outcome":""}}
-  ],
-  "outlines": [
-    {"outline_version":"r0","status":"active","hypotheses":[{"hypothesis_id":"H-001","statement":"","status":"unresolved","falsifier":"","evidence_refs":["R-001"]}]}
-  ]
-}
-```
+大部分假设被事实推翻时作废该版大纲，写一条重画记录、指向被作废的那一版；`redraw_of` 只作纯文本引用，不要求 hash 或版本相等。记录造成重画的假设与来源，不设假设数量下界。
 
-## 目标
+## 工作包 ① — [一个可观察结果]
 
-- 目标：
+本节回答：本工作包交付什么、为什么选择它、失败如何收回。每个工作包重复下面三段；已收敛内容写进 ADR。
 
-## 成功/失败边界
+### 要交付什么
 
-- 成功边界：
-- 失败边界：
+[结果、消费者、原需求引用；完整用户流程与验收影响只作索引，细节进入 spec。]
 
-## 范围
+### 决定
 
-- 当前范围：
-- 用户流程/结果只记索引和验收影响，细节进入 spec：
+按因果顺序逐条记录 ADR；跨模块引用先前决定。这里示范信息类别，不是必填 schema。
 
-## 非目标
+#### ADR-001 — [选择]
 
--
+- 决定：[已选方向与真实确认来源]
+- 为什么：[事实、约束、source → constraint → choice → result]
+- 否掉了什么：[备选与拒绝理由]
+- 影响面：[精确路径、行为、消费者、后果与风险]
 
-## 决定
+### 失败了怎么退
 
-决定区按需求框架的方案或裁决模块使用 `### <module>` 分组；每组内按
-`需求 → 事实/约束 → 选项 → 决定 → 功能/消费者 → 验收`
-链序排列。跨模块依赖必须写 `D-ID + derived_from`，根决定写
-`derived_from: []`。以下四个字段只属于文本层链记录，不改
-`decision-entry.v1`：
+[触发条件、实际损失、最小恢复路径、风险承接人、还需谁决定；不把缺口写成成功。]
 
-```text
-module: <module-name>
-requirement_ids: [R-001]
-derived_from: [D-001]
-artifacts: [spec.md#FR-001]
-```
+## 要改哪些文件
 
-节点缺证据时保留 `status: open|deferred`、`evidence_status: pending`、
-`evidence_owner` 和 `next_review_trigger`，不得静默写成 confirmed。
+本节回答：全部工作包具体影响哪些文件。锚点与改动描述同行写；影响面用精确路径，不写目录或 glob。
 
-每个决定都使用唯一的 `decision-entry.v1` 字段；每个字段只写决策所需的
-一句话或一个来源引用，不复制 spec：
+| 文件 | 改/只读 | 现状锚点（文件:行） | 改什么 | 行为/文档 | RED 载体 | 工作包 | 决定 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| [精确路径] | 改 / 只读 | [已实读锚点] | [锚点处改动] | 行为 / 文档 | [目标 RED 原件或 G-2 理由] | [唯一 owner 工作包 + 承接项] | ADR-001 |
 
-```text
-### ADR-001
-- **source**：[填写：原始声明或调研引用]
-- **decision**：[填写：已确认的选择]
-- **rationale**：[填写：事实、约束和取舍]
-- **consequence**：[填写：影响、风险和后果]
-- **supersedes**：[填写：被替代 ADR / N/A]
-- **原始声明层**：[填写：R-/事实锚点，不复制原文]
-- **三级追溯**：[填写：story/requirement → research → ADR]
-- **三档结论**：`confirmed` / `deferred` / `rejected`
-- **approval_binding**：[填写：真实用户确认或 N/A]
-- **owner/next_action**：[填写：延期或未决的 owner 与触发条件]
-module:
-requirement_ids: []
-derived_from: []
-artifacts: []
-```
+共 N 个，改 M、只读 K。按真实表行自校；同一文件被多个工作包改时写唯一 owner 工作包与承接项。
+退役行同时写反向引用扫描结果（含级联测试）及 move-map、bundle 清单登记面同步；理由、决定人、真实来源和原需求去向写进 ADR，不另建退役权威。
 
-## 动态 Talk 批次
+## 范围与非目标
 
-| batch_id / OI version | 问题/选项 | 后果/风险 | 用户选择/原文 | 队列变化 | source/evidence |
-| --- | --- | --- | --- | --- | --- |
-| T-001 |  |  |  |  |  |
+本节回答：哪些结果本次交付，哪些明确不选。
+
+### 目标
+
+[一句可观察的当前目标。]
+
+### 范围
+
+[当前交付范围及来源；相邻事项只引用，不扩写。]
+
+### 非目标
+
+[不选的事项、理由、决定人及下游去向。]
+
+## UI 判定
+
+本节回答：本任务是否改变页面、交互或前端组件。一行写适用性、理由与三来源事实或缺口：`raw_requirement`、`project_inventory`、`planned_or_changed_frontend_fact`；具体方法见 make-decision 与 ui-project-init。来源不足或冲突保持 `unknown`，不得静默降为 `non_ui`。这是人读提示，不要求 JSON、runtime classifier/schema/proof；占位与引用存在不证明事实已核实。
+
+## 验收面
+
+本节回答：build-plan 应承接哪些验收承诺。本节只是 make-decision 到 build-plan 的交接索引；判据唯一权威在 spec 的 `## Appendix A`，两处 AC 编号同号，不双写完整判据。
+
+### 验收标准
+
+| AC 编号 | 用户结果与失败边界 | 判定方式（机器/人读） | 承接负责人 | spec 判据位置 |
+| --- | --- | --- | --- | --- |
+| AC-001 | [成功与失败边界] | [机器：可执行命令；人读：对象与判法] | [owner] | spec.md#Appendix-A / AC-001 |
 
 ## 调研
 
-| research_id/source | 调研重点 | 关键事实 | 处理状态 | 关联 D |
-| --- | --- | --- | --- | --- |
-| F-001 |  |  |  |  |
+本节回答：哪些事实改变了决定。只写 research_id、一句关键事实与报告路径；报告全文不复制到主文。
+
+| research_id | 一句关键事实 | 报告原始件路径 | 关联 ADR |
+| --- | --- | --- | --- |
+| F-001 | [事实与限制] | quality/evidence/research/[报告] | ADR-001 |
 
 ## 调研候选交付
 
-有真实研究候选时填写；全文只按普通文件路径读取一次，不复制到主文。没有候选写理由；研究未完成则保留实际缺口。
+本节回答：报告给了哪些可选方向。只有真实候选才列摘要、建议、理由和全文引用；没有候选写原因，未完成研究留具体缺口。
 
-完整报告：`quality/evidence/research/日期-主题.md`
+| 候选 | 摘要 | 建议与理由 | 出处与全文 |
+| --- | --- | --- | --- |
+| C-001 | [结果] | [采用或拒绝及原因] | [原始来源与报告路径] |
 
-| 候选 ID | 大白话摘要 | 推荐/不推荐 | 理由 | 出处与全文 |
-| --- | --- | --- | --- | --- |
-| C-001 |  | recommended/not_recommended |  | 原始来源定位；报告实际路径 |
+## 动态 Talk 批次
+
+本节回答：这批问答产生什么选择。只写 batch_id、结论、用户选择与来源，不复述选项全文与后果或风险；队列变化未提供时标明。
+
+| batch_id | 结论 | 用户选择/来源 | 队列变化 |
+| --- | --- | --- | --- |
+| T-001 | [结论与 OI 引用] | [真实答复来源] | [变化或 not supplied] |
 
 ## grill（质询）
 
-| grill_id | CONTEXT/冲突 | 结论 | ADR/四项退出 | source/evidence |
-| --- | --- | --- | --- | --- |
-| G-001 |  |  |  |  |
+本节回答：哪些假设被挑战，术语与 ADR 如何处理。引用原始 Grill 结果；写 CONTEXT changed/no-change、ADR created/not-needed 及理由，三条 ADR 取舍判据与四项退出检查结果。
 
 ## 审查处置
 
-| finding_id | 原始事实/来源 | 后果 | status | next_action/evidence_ref | owner/consumer/retain_or_delete |
-| --- | --- | --- | --- | --- | --- |
-| FND-001 |  |  | fixed/rejected_invalid/accepted_risk/needs_human |  |  |
-
-## 最终确认
-
-- 状态：accepted/pending/unknown
-- 用户原文与 host-visible 绑定：
-- 未确认内容：
-
-## 拒绝方案
-
-| 选项 | 拒绝理由 | 关联 D |
-| --- | --- | --- |
-|  |  |  |
+本节回答：每条原始 finding 如何处置。保留来源、原事实、后果、状态、owner、consumer、下一步与证据指针；fixed/rejected_invalid/accepted_risk/needs_human 按真实处理记录。
 
 ## 风险与延期交接
 
-| risk/deferred_id | 风险或延期内容 | 触发/后果 | 处理阶段/owner |
-| --- | --- | --- | --- |
-| RISK-001 |  |  |  |
+本节回答：哪些缺口仍由谁承担。每项写触发、后果、处理阶段、owner 与来源；未决项只列仍开着的，已收敛的写进 ADR。
 
 ### 质量边界
 
-- 质量事实：
-- 推进资格：
-- 完成判据：
-- 不可逆授权边界：
+本节回答：哪些是质量事实、完成判据与不可逆授权边界。普通执行不增设推进许可。
 
-## 未决项
+只在用户明确声明或现有三输入推导确立高风险用户可见事实时写单行：
+- **high_risk_fact**：{"classification":"high_risk_user_visible","basis":"user_declaration"}
+唯一替代 basis 为 `three_inputs`；这是 later acceptance card 唯一可引用事实，不得用 policy ID、task prose 或 provider identity 代替。未确立不伪造。
 
-| item_id | 未决内容 | 原因 | 谁在何时解决 |
-| --- | --- | --- | --- |
-| OPEN-001 |  |  |  |
+## 最终确认
 
-## 退役登记（retirement）
-
-退役是一次**决定**，不是进度：不写百分比、不写状态机。被取消、删除或永久退出的对象（需求、
-Phase、Task、材料、机制）在这里各占一行；没有退役对象时保留表头并写一行「本卡无退役对象」。
-
-| 日期 | 哪张（R/FR/AC/Phase/Task/材料 编号或 ID） | 为什么退役 | 谁决定 | 原来的需求编号 |
-| --- | --- | --- | --- | --- |
-|  |  |  |  |  |
-
-「原来的需求编号」写这张对象原本承接的 R/FR 编号；找不到承接编号时写 `unknown` 和原因，不猜。
-退役不用「以后再说」这类模糊说法：要么在本行写明日期、对象、理由和决定人，要么留在
-`## 未决项` 里带 owner 与触发条件。
-
-## Supersedes（被替代记录）
+本节回答：用户对实际展示稿作了什么真实选择。写展示对象、答复与来源；未答、拒绝、取消或确认另一稿保持待决。
 
 ## Append-only 更正（只追加）
 
-只追加更正记录；不得重写已确认 ADR。每条更正引用被替代 ADR、原因和新的 ADR。
+本节回答：哪个旧决定为什么被新决定替代。引用旧 ADR、新 ADR 与理由，保留已确认原文。
 
 ## 文档结果
 
-- CONTEXT.md：changed/no-change，原因和文件引用：
-- ADR：created/not-needed，原因和文件引用：
-- ADR 判据：hard to reverse / surprising without context / genuine trade-off（难以逆转 / 无上下文会意外 / 真实取舍）：
-- 术语/ADR 冲突及处理：
-- 不复制 spec 的边界：
+本节回答：领域术语与决定文档有没有变化。写 CONTEXT/ADR 路径、changed/no-change 或 created/not-needed、理由、术语冲突处理和四项退出检查；缺信息保持缺口。
 
-### Exit checks（退出检查）
+## 短名对照
 
-- 上下文一致：
-- owner/接口一致：
-- 失败语义明确：
-- 范围与延期明确：
+本节回答：读者如何找到被引用的材料。
+
+| 短名 | 精确路径/节 | 用途 |
+| --- | --- | --- |
+| [短名] | [实际读过的原件] | [用途] |
+
+## 补充材料
+
+本节回答：哪些推导、原始输出与被否方案只供查证。过程件在 quality/evidence/；正文用具名路径与节锚点引用，不复制原始全文。

@@ -17,7 +17,7 @@ version: 1.0.0
 3. 主会话取得对已展示地图的真实答复；涉及 UI 时，使用现有 readiness/render 方法展示真实设计并说明来源与缺口，非 UI 写理由。用户针对旧稿、拒绝或未答时，不当成当前地图/设计已批准。依赖回复的后续内容先等答复；其它安全准备可以继续。
 4. 地图和适用设计得到实际答复后，第二次调用同一 spec-prd 作者扩展成完整 PRD。保持同一决策、来源和地图语义；未知或冲突仍明确列出，不增加第二作者或第三次内容调用。
 5. 展示第二次内容调用后的完整稿，借 wh-review 做文档建议并逐条处理发现。改稿后重新展示真正待确认的内容；保留审查来源、失败与限制。主会话用现有 confirm 取得对最终展示稿的真实答复，不以先前地图答复或 review 推断最终同意。版本指代不清、未展示、拒绝或未答保持 draft；不计算内容身份锁替用户做决定。
-6. 分开报告来源、实际问答、文档审查、未知项、验收范围和交付事实。主会话执行 stage-handoff，写材料现状、已做与未做、证据、风险及子任务下一步；没有执行过的 host/provider/发布/物理交付不能填成完成。
+6. 分开报告来源、实际问答、文档审查、未知项、验收范围和交付事实。主会话执行 stage-handoff，写材料现状、已做与未做、证据、风险及子任务下一步；没有执行过的 host/provider/发布/物理交付不能填成完成。 `report-facts-and-handoff` 的人读交接仅 task_id、workflow、material_refs、reply_text、step_results、reflection_facts 六类信息：material_refs 列当前决策/PRD/附件的具名引用，reply_text 保留实际用户答复，step_results 与 reflection_facts 只列真实步骤结果与其引用。将普通 raw 原字节按任务指定具名路径保存并回读，写入或读回失败如实 unavailable；使用现有安全写入/记录窄工具，不另造 writer。旧契约职责标记 `reportFactsAndHandoff` 表示保存并交接、`readReflectionForReport` 表示读取实际复盘事实、`publishCanonicalRecord` 表示保存原件职责；这些名字不是当前可调用的 TaskKernel 函数，不恢复旧 kernel 或 fixture，不使用 SHA 内容寻址、材料质量绑定或相等门。本次 reflection 不是正式stage 复盘，不产生 close approval 或操作确认，不增加第三次内容调用。
 
 地图覆盖完整用户旅程和每条需求。子任务只接最小读取集及自身材料，父任务和兄弟材料只读；不能由子任务触发父 close、移动或删除父/兄弟材料。边界偏离记录原范围、实际偏离与原因，交原 owner 处理，不造第二套进度或许可对象。
 

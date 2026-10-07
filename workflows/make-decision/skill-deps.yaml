@@ -5,7 +5,7 @@ skills:
     trigger: dynamic_oi_driven_talk_batches
   - name: grill-with-docs
     path: skills/grill-with-docs/SKILL.md
-    trigger: after_outline_talk
+    trigger: after_detail_advice
   - name: decision-log
     path: skills/decision-log/SKILL.md
     trigger: decision_record

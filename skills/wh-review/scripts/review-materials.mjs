@@ -241,6 +241,29 @@ export function validateDetailReviewInput({ materials, currentDecisionLog = null
   return true;
 }
 
+/** Validate direction inputs before creating a packet; no decision-log comparison. */
+export function validateDirectionReviewInput({ materials } = {}) {
+  assertPlainMaterials(materials);
+  const rule = reviewRuleFor("make-decision", "direction");
+  const allowlist = materialAllowlistForRule(rule, { includeGenerated: false });
+  const errors = [];
+  for (const key of allowlist.required.filter((key) => !allowlist.generated.includes(key))) {
+    if (!Object.hasOwn(materials, key)) errors.push("missing " + key);
+    else if (!materialPresent(materials[key])
+        || (typeof materials[key] === "object" && Object.keys(materials[key]).length === 0)) {
+      errors.push("empty " + key);
+    }
+  }
+  const forbidden = Object.keys(materials).filter((key) => !allowlist.legal.includes(key));
+  if (forbidden.length) errors.push("forbidden " + forbidden.join(", ") + "; legal material keys: " + allowlist.legal.join(", "));
+  if (errors.length) {
+    const error = new Error("MATERIAL_INCOMPLETE: direction input " + errors.join("; "));
+    error.code = "MATERIAL_INCOMPLETE";
+    throw error;
+  }
+  return true;
+}
+
 export function validateVerifyAcceptanceSummary(value, { expectedCriterionIds = null } = {}) {
   const raw = Buffer.isBuffer(value) ? value.toString("utf8") : typeof value === "string" ? value : JSON.stringify(value);
   if (typeof raw !== "string" || raw.trim() === "") throw new Error("MATERIAL_INCOMPLETE: verify-code acceptance_criteria is empty");
@@ -656,6 +679,7 @@ export function buildReviewMaterials({attachmentRoot,reviewDataRoot,stage,review
   const identity=reviewIdentityFromInput({stage,review_track:reviewTrack,review_scope:reviewScope,review_kind:reviewKind});
   const rule=identity.stage==="build-plan"&&activationCohort==="post" ? stageMaterials.stages["build-plan"].profiles.post : ruleForIdentity(identity.stage,identity.reviewTrack,identity.reviewScope,identity.reviewKind);
   assertPlainMaterials(materials);const filtered=validateMaterialAllowlist(rule,materials);
+  if(stage==="make-decision" && reviewTrack==="direction") validateDirectionReviewInput({materials});
   const generated=new Set(rule.generated ?? []);const missing=(rule.required ?? []).filter(key=>!generated.has(key)&&!materialPresent(filtered.materials[key]));
   const base=resolve(attachmentRoot ?? reviewDataRoot);if(realpathSync(base)!==base||!lstatSync(base).isDirectory())throw new Error("MATERIAL_INCOMPLETE: attachment root must be a real directory");
   const packetParent=join(base,".wh-review-packets");mkdirSync(packetParent,{recursive:true});if(realpathSync(packetParent)!==packetParent)throw new Error("MATERIAL_INCOMPLETE: packet path alias");

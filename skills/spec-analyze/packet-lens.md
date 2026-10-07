@@ -9,4 +9,8 @@
 | build-code | 当前材料、实现、实际测试和验收原件 | 实际结果、材料与实现缺口及覆盖限制 |
 | build-prd | 已确认方向、实际 PRD/地图/展示与答复 | 已产规划材料的范围与真实选择 |
 
+## 语义检查维度
+
+post build-plan 的独立合并审查逐项检查 requirement omissions（原需求遗漏）、quantifiers（数量与范围限定）、negation（否定与禁止）、order（顺序与依赖）、artifact form（产物形态）及 failure behavior（失败行为）。分析报告只交回结构与引用事实，语义结论由该独立审查提供。present ID 或 `reported` 不证明 source coverage 或 behavioral equivalence。
+
 历史 pre 的 plan/tasks 或旧 packet 仅只读背景。实际当前必要材料不可读时是 material_incomplete；不要求 packet hash、快照绑定、旧认证结果或 quality/facts readback 才能分析。资料缺失、不一致和未执行如实交回主会话同任务修，不补猜、不自己改材料或调用 provider。

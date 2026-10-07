@@ -20,6 +20,24 @@ version: 1.0.0
 4. 已有视觉规则直接引用；页面/交互/长期场景变更由 Experience 的明确作者处理，视觉规则变更由 Design 的明确作者处理。按当前任务已授权写集写入：build-plan 本技能只读整理；实际项目规范实现由 build-code 承接，不默默改规范。
 5. 返回模式、两份来源及版本、范围、组件/样式边界、fixture、viewport、Preview、真实盘点、假设、缺项及用户实际选择。无 Preview 就没有视觉通过；输出能定位真实源和具体下一步即可，不要求 runtime classifier/schema/proof 包装。
 
+## legacy 盘点说明
+
+以下名称解释 `legacy_inventory` 的盘点方面，供按真实范围整理，不是必填字段或额外校验要求；未读、未知和不适用分别说明原因。
+
+| 子项 | 盘点说明 |
+| --- | --- |
+| `technology_stack` | 当前技术栈及版本、构建方式 |
+| `routes` | 页面路由、入口与实际范围 |
+| `css_side_effects` | 全局样式及可能影响其它页面的副作用 |
+| `data_entrypoints` | 数据入口、读写与来源 |
+| `component_candidates` | 可复用或需整理的组件候选 |
+| `testing_capability` | 可执行的测试与浏览器验证能力、缺项 |
+| `baseline` | 当前可观察页面、行为与视觉基线 |
+| `legacy_exceptions` | 历史例外及保留理由、影响 |
+| `first_page_candidates` | 能限界的首个页面或区域候选 |
+| `coupling_risks` | 与样式、数据、组件和其它页面的耦合风险 |
+| `minimal_scope_reduction` | 缺少低耦合候选时的最小缩小方案 |
+
 ## 完成边界
 
 全部适用输入均有实际来源或明确缺项、责任与影响；有 legacy_inventory 时逐项说明扫描/人读范围及 unknown，不把人工判断覆盖原始机器事实。不得宣称未读代码、未运行 Preview 或未测页面已经通过。浏览器验证由 `skills/isolated-browser-qa/SKILL.md` 的隔离路线执行。

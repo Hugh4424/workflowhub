@@ -5,13 +5,17 @@ description: Draft the post-cohort product specification and global implementati
 
 # Spec Specify
 
+读者：build-plan 的产品规格作者。
+读完要能：定位本文件的责任、写作动作、来源与失败边界。
+
 ## Post-cohort specification contract
+
+本节回答：What the current spec owns and how build-plan authors it.
 
 For post-cohort authoring, `build-plan` invokes this skill. The output has a
 readable narrative spine and one `Appendix A` contract appendix. Appendix A is
 the exclusive authority for AC condition, behavior, measurable pass criterion,
-failure condition, and expected evidence; the narrative may point to it but
-must not duplicate those criteria. The four discoverable translations are
+failure condition, and expected evidence. The narrative follows the single-authority writing rules below. The four discoverable translations are
 requirement explanation, acceptance flow, test standard, and architecture
 boundary. This changes no pre-cohort material reader. For post-cohort work,
 `spec.md` is also the single global implementation design authority. The
@@ -21,7 +25,7 @@ solution, global dependencies, file boundaries, and verification strategy to
 that same file before writing the independent Phase deltas. Neither step
 replaces the PRD or `decision-log.md` as the product-goal authority.
 
-Input is the current decision/scope and named source material supplied by build-plan. Use only the authorized spec.md write target; historical pre-cohort records remain read-only. Missing input or an unsafe target is a real error.
+Input is the current decision/scope and named source material supplied by build-plan. This skill does not receive task identity or workspace paths; unknown `content_profile` must not be silently accepted. Report the unsupported input explicitly; do not add a schema or runtime gate. Use only the authorized spec.md write target; historical pre-cohort records remain read-only. Missing input or an unsafe target is a real error.
 
 Read the caller-supplied current decision and necessary source material. Supplied packets are convenient reading subsets, not snapshot/hash authorization. Missing load-bearing source is unavailable with the specific gap; do not invent direction. New spec.md includes a regenerable non-authoritative 材料导航 with section/summary/read timing pointers.
 
@@ -47,6 +51,8 @@ expected evidence type or artifact only; verify-code supplies execution facts.
 
 ## Artifact responsibility
 
+本节回答：Which file owns each product, design and execution fact.
+
 For post-cohort work, `spec.md` owns product behavior **and global
 implementation design**: problem, scope, scenarios, PFACT, FR, AC,
 architecture solution, verified code anchors, interfaces, global write
@@ -57,7 +63,7 @@ accepted choices. `phases/P<n>.md` owns each Phase's implementation delta;
 historical read-only material, not post-cohort output.
 
 Give every scenario, PFACT, FR, AC, risk, and open question a stable ID. New
-requirements use `FR-{DOMAIN}-{NNN}`; accept `FR-{NNN}` only when reading legacy
+requirements use `FR-{DOMAIN}-{NNN}`; DOMAIN is one uppercase segment `[A-Z][A-Z0-9]*` and NNN is exactly three digits (the same rule applies to new AC IDs); accept `FR-{NNN}` only when reading legacy
 material. Every FR links to at least one PFACT, scenario, and AC. Every AC names
 its FR, verification method, pass condition, failure condition, and evidence
 type. Consider default, empty, error, loading, cancellation, boundary,
@@ -79,19 +85,17 @@ Keep product behavior, global engineering decisions, and their source bindings
 in distinct sections of `spec.md`. The global design section records verified
 code paths/symbols, alternatives and chosen architecture, interfaces, state
 and failure behavior, global dependencies, exact NEW/MODIFY/DO NOT TOUCH
-boundary, and source → FR → AC → Phase/task → oracle trace. It does not copy
-Phase procedures, commands, test evidence, or execution status. Keep explicit
-exclusions in one authoritative section and inherit each accepted upstream
-exclusion exactly once. Phase files own exact gate commands and local STOP.
+boundary, and source → FR → AC → Phase/task → oracle trace. Apply the single-authority writing rules below. Phase files own exact gate commands and local STOP.
 
 ## Decision-log mapping and scope revision
 
+本节回答：How each changed requirement stays bound to its confirmed source.
+
 For every new or changed FR/AC, preserve a compact source binding to the
-current `decision-log.md`: `R*`, report requirement ID, or `INC-*` as the
-original source, and the load-bearing `D*` decision that explains the choice.
+current `decision-log.md`: only R-, U-, PRD-, or CARD- source IDs as the
+original source, and the load-bearing `ADR-` decision that explains the choice. New bindings use the current decision-log producer IDs; `D-` IDs in pre/history records remain read-only provenance and are not rewritten into new ADR decisions.
 The binding records `source_status` (`current`, `deferred`, `non-goal`, or
-`unknown`) and affected user journey/state/acceptance IDs. It does not copy the
-decision-log prose into `spec.md`, and an FR without a source binding is a new
+`unknown`) and affected user journey/state/acceptance IDs. Use compact source pointers as described in the single-authority writing rules below; an FR without a source binding is a new
 requirement that must return to `make-decision`.
 
 When make-decision authorizes a scope revision that changes product behavior,
@@ -109,11 +113,24 @@ consequence, mitigation or STOP, handling stage, and verification. Open
 questions name affected IDs, owner, impact, handling stage, and close condition
 or STOP. Ambiguity is marked; it is not guessed.
 
-Before writing, remove authoring comments, placeholders, empty headings, empty
-tables, and filler. Use at most five columns in a table and keep prose out of
-table cells. Do not duplicate scenario prose in FRs, assumptions outside PFACT,
-or exclusions in multiple sections.
+Before writing, remove authoring comments, placeholders, empty headings, empty tables, and filler. Use at most five columns in a table and keep prose out of table cells. Apply the single-authority rules below.
 
 Write only the named artifact `spec.md`. Return requirement count, ambiguity
 count, and a short checklist as structured output. Do not run Git commands or
 discover files. Missing input/callback fails loud.
+
+## Single-authority writing rules
+
+本节回答：How to write a readable spec without losing source meaning. 这是写作指引，不是质量门。
+
+1. Write the conclusion before evidence and exceptions; keep one topic per paragraph and name actions directly.
+2. Keep AC criteria only in Appendix A; point to them from the narrative and the decision-log handoff index.
+3. Reference decision-log reasoning by source ID and anchor; do not repeat it as specification prose.
+4. Keep each scenario, assumption, and exclusion in its own authority: scenario cards, PFACT, and the exclusions section; FRs reference them.
+5. Keep Phase procedures, exact commands, test evidence and execution status in their existing Phase/task owners; global design records interfaces and global choices.
+6. Use original evidence paths instead of full output. Keep terminology consistent; preserve quantifiers, failure strength, order, and conditions.
+7. Preserve locked wording, machine-read headings/labels and literal source declarations as allowed exceptions; compact writing never replaces actual content quality.
+
+## 补充材料
+
+本节回答：Where to locate source reasoning and examples. Use the supplied current decision-log, source anchors and existing template; preserve historical material read-only.
