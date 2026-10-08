@@ -158,6 +158,8 @@ PR既有签名prepareDeliveryClosePlan({taskDir,delivery={}})窄扩可选deliver
 
 P1 R历史登记；P2 A1夹具/禁区；P3 A2′三正文；P4 A3真实比较；P5 B1审查正文；P6 B2规划正文/索引附件；P7 B3对话领域/诊断；P8 B4实际接线/剩余叶子/复盘/编排；P9 B6治理读者一致；P10 B6 PR运行与终末聚合。串行P1→P10；每Phase exact NEW/MODIFY/DELETE路径与owner以其契约头声明、index逐条一致，下游写集必须subset。生产新增精确路径：skills/spec-plan/templates/index-template.md（迁移）、skills/grill-with-docs/GLOSSARY-FORMAT.md（迁移）、GLOSSARY.md（迁移）、Improvements.md、tools/cli/check-skill-consistency.mjs；其它精确MODIFY/DELETE列各Phase，不目录授权。外置A1/A3执行工件写T quality/tests，不是repo NEW；索引列路径使用task-relative质量路径并明确外置解析，不能被实施者写进W。
 
+目录预登记的窄时序修正：`docs/architecture/move-map.json`仍只有P8/T016原维护者持笔；他在各已授权新增文件创建前，以普通目录责任声明分次登记真实consumer、该文件Phase owner、测试、替代关系与删除/保留条件。P6/T010创建新索引模板前仅登记`skills/spec-tasks/templates/index-template.md`→`skills/spec-plan/templates/index-template.md`，consumer为spec-plan索引渲染方法及其bundle附件闭包，文件owner=P6-single-writer；旧附件/调用保至P8具名0悬空后删。P7/T011改名附件前由同一map维护者登记`skills/grill-with-docs/CONTEXT-FORMAT.md`→`skills/grill-with-docs/GLOSSARY-FORMAT.md`及真实正文/bundle/test读者，文件owner=P7-single-writer，保旧来源、迁完读者仅留新格式；P8的`Improvements.md`与新checker、P9根`GLOSSARY.md`分别仍在创建前由该map唯一维护者登记，不假称已存在或已迁接。职责有替代承接且无当前consumer时由对应文件owner删除，历史来源只读保留。此步骤只修唯一目录事实维护责任的时序，不是提前实施P8接线/清manifest/删除，不新增Task、Phase、控制面、进度账本或gate，不证明任何Phase交付。P6/P7/P9只消费现spec声明与该普通登记，不获得map写权；各Phase的实现写集/依赖仍原序，010两workflow例外不增第三路径。
+
 ### 全局精确文件操作与Phase owner
 
 | 操作 | 精确路径 | Phase owner |
@@ -197,6 +199,7 @@ P1 R历史登记；P2 A1夹具/禁区；P3 A2′三正文；P4 A3真实比较；
 | DELETE（consumer已迁后） | `skills/grill-with-docs/CONTEXT-FORMAT.md` | P7 |
 | NEW | `skills/grill-with-docs/GLOSSARY-FORMAT.md` | P7 |
 | MODIFY | `skills/grill-with-docs/skill-bundle.json` | P7 |
+| MODIFY（具体test change request独立批准后，仅附件filename assertion） | `tests/moat-skills-phase1.test.mjs` | P7/T011 |
 | MODIFY | `skills/diagnosing-bugs/SKILL.md` | P7 |
 | MODIFY | `skills/diagnosing-bugs/skill-bundle.json` | P7 |
 | MODIFY | `skills/test-routing-advisor/SKILL.md` | P8 |
@@ -234,7 +237,7 @@ P1 R历史登记；P2 A1夹具/禁区；P3 A2′三正文；P4 A3真实比较；
 | MODIFY | `workflows/build-prd/steps.json` | P8 |
 | MODIFY | `skills/wh-review/manifest.json` | P8 |
 | MODIFY | `skills/wh-review/stage-skill-plan.json` | P8 |
-| MODIFY | `docs/architecture/move-map.json` | P8 |
+| MODIFY | `docs/architecture/move-map.json` | P8/T016唯一原维护者；普通预登记时序见上，不授其它Phase写权 |
 | MODIFY | `tools/cli/run-checks.mjs` | P8 |
 | NEW | `tools/cli/check-skill-consistency.mjs` | P8 |
 | DELETE（consumer已迁后） | `skills/spec-tasks/SKILL.md` | P8 |
@@ -402,6 +405,8 @@ self-check with `simplicity-guard`'s core questions (has this layer earned its p
 ~~~
 
 DO NOT TOUCH精确路径：runtime/task/material-workspace.mjs、runtime/interface/safe-write.mjs、runtime/evidence/skill-static-deps.mjs、tests/acceptance/card-03-current.mjs、constitution-checklist.md、package.json。checklist本轮read22原则与close三义未包含wh-review/architect回退目标枚举，P9只改宪法治理实施边界而不改22标题/定义映射，因此无checklist同步consumer改动。task-store仅CLOSE_ACTIONS变，STAGE_ROW_KEYS/REVIEW_ORIGINS保护；宪法仅回退条款改，22原则/七公共类保。static deps:68不存在Markdown不报missing，:75存在未声明附件才报，不扩它。verify-architect旧wh-review精确fallback literal与新方向冲突，P9 test change request独立批准后改，旧字节git/raw留；Long-review三bullet/17串仍保。五ADR全文已直接read，标题后批注外所有正文和旧行号保护。
+
+P7/T011真实filename consumer的窄测试合同：本轮直接read `tests/moat-skills-phase1.test.mjs:75`为`assert.ok(existsSync(filePath("skills", "grill-with-docs", "CONTEXT-FORMAT.md")));`，它在删除旧格式后必然失败，并非新方法效果失败。仅允许经具体test change request与独立非作者批准，将该附件存在性断言的精确filename改为`GLOSSARY-FORMAT.md`，保持`assert.ok(existsSync(filePath(...)))`存在性强度和其它assert/scorer/gold不变；不得删assert、skip、允许old-or-new或复制旧附件凑绿。请求保存原/新assert、旧源码字节/hash、已有oldraw原ref、改名理由与影响；若新执行失败则单份保存真实raw，不造已跑RED。未来测试修改单独diff/commit/验收/回退，不混方法正文、不借G2，批准者独立于正文与测试修改作者；本次材料作者不批准亦不修改测试。九外置冻结源码与核心字面保护不变。
 
 外置已冻结DO NOT TOUCH：T/quality/tests/skill-modernization-classification.test.mjs（e73e867e50c308c418890a0f2543a7b477b5831586515fcfccc521f45ff18296）；historical-attribution.test.mjs（264b30fb82677f9dd1b437b221cd3a349cd8651a65edde8bb6fa7931cccea84f）；pr-close.test.mjs（6d57582f7bf210e261977d0ea893241793e636ed6e610b65610d38a68ea08b78）；catalog.test.mjs（a57174233faeb5612d42029bcf0522a6e8e98d0e330d68788c0528c3797d7f4d）。四名前均加skill-modernization-，只有这些actual路径，不造副本；owner a46，consumer各对应Phase与独立复验。facts010/012提供完整command/raw/hash，修改scorer先独立test change request。
 
