@@ -5,9 +5,6 @@ description: Convert supplied decision material into a structured downstream rec
 
 # Decision Log
 
-读者：make-decision 作者与下游材料读者。
-读完要能：定位本文件的责任、写作动作、来源与失败边界。
-
 把当前真实输入整理为一份 `decision-log.md`，供 make-decision 主会话和下游读取。使用 [decision-log-template.md](templates/decision-log-template.md)；模板只安排正文，不认证身份或授权。主会话负责方向问答和最终确认，本技能不代答。
 
 ## 写作步骤
@@ -16,7 +13,7 @@ description: Convert supplied decision material into a structured downstream rec
 
 1. 读取原始需求、已确认答复、约束、调研/Grill/独立发现的真实来源。记录任务类型（规划任务/普通任务）；缺失或矛盾写 unknown，不按路径或旧任务猜类型。
 2. 选择最小需求框架：功能用背景→问题→目标→方案→验收→扩展；研究用问题→论断→证据→裁决。混合任务只在既有节点挂研究子项，不另建需求账本。
-3. 在同一正文保留用户逐字声明、可定位来源与原始需求索引。逐条记录 U/V/R 关系；来源别名可引用原文，实际不同的来源不得合并。缺来源保留缺口，不编引文、不以空分母自报覆盖。
+3. 用户逐字声明与需求索引明细外置到任务库根 `quality/evidence/decision-log-refs/`，主文档只留来源指针与 U/V/R 关系。不同来源分别记录；来源缺失写具体缺口。
 4. 当前未决问题只在本日志维护：目标、完整旅程、页面范围、数据状态、成功失败/取消/权限、非目标与延期均有明确处理或不适用理由。每项写问题、来源、影响、真实处置和需谁决定；open/confirmed/deferred/not_applicable 分开。按真实回复重排，零问题合法。
 5. 模糊需求至少比较两个有差异的角度；保留用户候选、来源、与其它候选的差异、关键假设和可推翻条件。多数关键假设被事实推翻时，保留旧判断和更改理由，再整理候选。该讨论不新建候选对象或版本许可证。
 6. 每个重要决定独立写清问题和选择、推荐与理由、真实来源和原话、事实/约束、source→constraint→choice→result 推理、受影响范围、后果和风险、拒绝的替代、未决与延期负责人。按模块保持因果顺序，引用上游决定、FR/AC 与产物，不复制规格、API 或测试正文。中途新增需求时，在同一决策日志新增一个大纲模块，模块内补齐调研、决策、方案与验收标准，不新增步骤。
@@ -29,7 +26,10 @@ description: Convert supplied decision material into a structured downstream rec
 
 本节回答：哪些内容由日志保存，哪些只引用原件。
 
-- 保留原始需求、候选、Talk、Grill、决定推理、成功/失败边界、审查处置、风险/延期、真实确认和阶段末总结；具体去重写法见下方编号写作规则。
+- 主文保留需求摘要、决定推理、成功/失败边界及风险/延期交接；候选讨论、Talk、Grill、审查处置与真实确认只留原件指针。具体写法见下方编号写作规则。
+- 用「这一节去掉之后，下游会不会做错事？」判定顶层节：会，则保留必要内容；修改日志、参考、证据、过程记录四类只作指针行。
+- 分支测试：每个任务都要的留主文档，只有部分任务用到的放指针后。主文档六类是任务身份、大纲地图、工作包与决定、要改哪些文件、验收面、范围与非目标。
+- 指针后九类是原始需求全文与索引、需求变更记录全文、逐字声明层、Talk 批次、grill 记录、调研登记、审查处置明细、Supersedes 明细、未决项明细；主文对应节保留交接所需的摘要、行级记录与原件定位。
 - 阶段末一致性准备与确认后核对遵循 `workflows/make-decision/SKILL.md`。方向审查读取问题与客观事实，不混入候选/答案；细节审查读取当前决定与真实处置。本文不把已确认选择当盲审材料。
 - CONTEXT.md 仅记录领域术语变化；ADR 仅在难以反转、无背景会意外、有真实取舍同时成立时记录已决定方向。已有决定不重问；新方向争议才向用户提问。
 - 模板的 ADR 与写集表保留退役内容、理由、决定人/真实决定来源、原需求和去向；没有实际授权不声称已批准删除。
@@ -39,27 +39,21 @@ description: Convert supplied decision material into a structured downstream rec
 
 本节回答：如何保留原义、唯一 OI 与完整覆盖，不把写作说明变成必填 schema。
 
-功能框架六节点为 `background`、`problem`、`goal`、`solution`、`acceptance`、`extension`；固定回退类别为 `complete_user_flow`、`page_scope`、`data_state`、`success_failure_boundary`、`non_goals`、`deferred`。每节点/类别引用 OI，或用 empty 与具体 reason 解释当前为何无问题；裸 `none`、漏行、重复权威、改名掩盖缺口均不能算已处理。
+OI 写在 `## 未决项`，一张表、一条一行；列出问题与来源、状态与真实处置、解决者及下一步。open/confirmed/deferred/not_applicable 分开；缺证据标出具体缺口与承接人，零问题写无。方向审查只看问题与事实，细节审查读真实处置；两者使用同一份当前未决项。
 
-OI 散文说明问题所属 task 与大纲、oi_id、category、source、question 与 status（open/confirmed/deferred/not_applicable）；终态补 selected_disposition、impact_dimensions 与 requires_user_decision；用户可见分组用 visible_group_id 或 batch_id。缺证据保留 pending、evidence_owner 与 next_review_trigger。只有一份当前 OI 权威；方向审查只看问题与事实，细节审查读真实处置，不能互相替代。
+U 在 `## 需求变更记录` 用独立 `### U-001` 标题记录行级变更与来源；V 原文与 U/V/R 索引明细在任务库根 `quality/evidence/decision-log-refs/` 原件保存一次。主文的 `## 原始需求` 引来源与 ADR，其他引用用编号和原件定位；缺来源写 unavailable。
 
-U/V/R 行格式沿模板：U 用独立 `### U-001` 标题说明变更与来源；V 用 `| V-001 | 用户 | context | exact quotation |` 保留一次原文；R 用 `| R-001 | U-001 / V-001 | ADR-001 | 落点 |` 索引原义与决定。已写在 V 行的原文在其他节引用编号；缺来源写 unavailable，不编原话、不合并不同来源。
-
-一条 decision entry 按实际决定说明问题与选项、建议、含义、所选方向、真实来源与确认、事实/约束和推理、为什么选、影响、后果/风险、拒绝备选、未决负责人及旧决定引用。这是信息类别说明，不是十四必填字段或版本化 schema。
+一条 decision entry 按模板的五字段顺序写：决定、为什么、否掉了什么、后果与风险、影响面。决定引用真实来源与确认；为什么说明事实、约束与推理；影响面写具体路径、行为与消费者。未决负责人、旧决定与详细选项用相邻交接行或原件指针承接。
 
 做 coverage audit：逐项对照原始需求、真实回答、采用的 Grill/调研/审查结论与决定；每项在主文有一个落点，或通过 omission-acceptance 留下用户真实选择的排除理由、影响与去向。缺项可见，不用 review 风险记录替代排除选择，不建机器账本或推进门。
 
 ## 编号写作规则
 
-本节回答：怎样压缩重复而保留条件、原义与真实来源。这是写作指引，不是质量门。
+本节回答：怎样压缩重复而保留条件、原义与真实来源。
 
 1. 先写决定，再给依据，最后写例外与风险；一段一主题，主动说明谁做什么。
-2. 在 `## 调研` 只写 research_id、一句关键事实与报告路径；全文不复制。
-3. 在 `## 动态 Talk 批次` 只写 batch_id、结论、用户选择及来源，不复述选项全文与后果/风险。
-4. 在 `## 逐字声明层` 只保留一次 V 原文，其他节用编号与 anchor 引用；共享定义也只写一次。
+2. 调研在任务库根 `quality/evidence/decision-log-refs/` 引用唯一报告原件；`## 外置事实索引` 写 research_id、报告定位与取用条件。
+3. Talk 批次在任务库根 `quality/evidence/decision-log-refs/` 保存一次，主文只留 batch_id、结论与真实答复原件指针。
+4. V 逐字原文在任务库根 `quality/evidence/decision-log-refs/` 保存一次，主文用编号与原件锚点引用；共享定义保持单一来源。
 5. 用同一术语表达同一含义，不为缩短省略条件、否定、因果或必要解释。
 6. 保留机器读取的标题与标签、原始逐字声明及被锁定文字；这些是允许的例外，不能改写去凑短。
-
-## 补充材料
-
-本节回答：哪些资料需要按原件查证。使用模板中的短名对照与普通文件路径；原始研究、Grill 与 review 只保存一次，不复制为新权威。

@@ -210,6 +210,10 @@ function isPreexistingPeer(rel, retired) {
   const retiredBlob = frozenBlob(retired);
   if (retiredBlob?.bytes > 0 && retiredBlob.oid === currentOid) return false; // Whole retired implementation copied back.
   const phase = owner ? batchIndex(owner.batch) : -1;
+  if (rel === 'runtime/review/review-output.mjs'
+      && retired === 'skills/wh-review/scripts/review-output.mjs'
+      && owner?.id === 'MT-1-050' && owner.disposition === 'SURVIVOR'
+      && owner.batch === 'B4/P5' && phase >= 0 && phase <= CURRENT && original) return true;
   // MT-1-049 was already this runtime peer. Its one existing Git-path parser
   // export is the coupled MT-3-086 cutover; no other SURVIVOR change is waived.
   if (rel === 'runtime/review/review-input-bounds.mjs'

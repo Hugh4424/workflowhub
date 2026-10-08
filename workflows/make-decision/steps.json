@@ -5,7 +5,7 @@
     {
       "step_id": 1,
       "step_slug": "load-context",
-      "observable_result": "原始需求、任务类型、事实、假设、非目标和未决问题在同一决策日志可读；缺失和冲突有具体说明。用户痛点、完整旅程和成功失败边界得到区分；模糊需求有多个候选角度和可推翻依据。 Record the requirement-to-decision coverage matrix so that every original requirement has a visible disposition; the matrix must cover the five dimensions: business goal, flow/surface, data/state, success/failure/acceptance, and constraints/non-goals/deferrals.",
+      "observable_result": "原始需求、任务类型、事实、假设、非目标和未决问题在同一决策日志可读；缺失和冲突有具体说明。用户痛点、完整旅程和成功失败边界得到区分；模糊需求有多个候选角度和可推翻依据。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -101,7 +101,7 @@
     {
       "step_id": 9,
       "step_slug": "module-convergence",
-      "observable_result": "各重要未决项有方案、替代、验收、后果与风险；普通假设公开，方向/验收分歧交用户，零问题合法。记录每模块重开条件（metric、date、event、release）；中途新增需求在同一决策日志新增大纲模块，补齐调研、决策、方案与验收标准，不新增步骤。",
+      "observable_result": "各重要未决项有方案、替代、验收、后果与风险；普通假设公开，方向/验收分歧交用户，零问题合法。中途新增需求在同一决策日志新增大纲模块，补齐调研、决策、方案与验收标准，不新增步骤。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
