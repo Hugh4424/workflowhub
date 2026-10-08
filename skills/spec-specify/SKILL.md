@@ -25,9 +25,9 @@ solution, global dependencies, file boundaries, and verification strategy to
 that same file before writing the independent Phase deltas. Neither step
 replaces the PRD or `decision-log.md` as the product-goal authority.
 
-Input is the current decision/scope and named source material supplied by build-plan. This skill does not receive task identity or workspace paths; unknown `content_profile` must not be silently accepted. Report the unsupported input explicitly; do not add a schema or runtime gate. Use only the authorized spec.md write target; historical pre-cohort records remain read-only. Missing input or an unsafe target is a real error.
+Input is the current decision/scope and named source material supplied by build-plan. The caller supplies material contents and the authorized write target, not an implicit task identity or workspace discovery contract. Report an unknown `content_profile` explicitly as unsupported input; this is a content error, not a new schema or runtime gate. Use only the authorized spec.md write target; historical pre-cohort records remain read-only. Missing input or an unsafe target is a real error.
 
-Read the caller-supplied current decision and necessary source material. Supplied packets are convenient reading subsets, not snapshot/hash authorization. Missing load-bearing source is unavailable with the specific gap; do not invent direction. New spec.md includes a regenerable non-authoritative 材料导航 with section/summary/read timing pointers.
+Read the caller-supplied current decision and necessary source material. Supplied packets are convenient reading subsets, not snapshot/hash authorization. Missing load-bearing source is unavailable with the specific gap; retain only source-supported direction. New spec.md includes a regenerable non-authoritative 材料导航 with section/summary/read timing pointers.
 
 Use `templates/spec-template.md`. Produce a testable, readable specification
 covering user outcomes, urgency, scope, scenarios, edge states, requirements,
@@ -36,7 +36,7 @@ exclusions, and the global implementation-design section. Keep the quick-read
 section short; put narrative before trace fields. Translate source requirements
 into four discoverable surfaces: requirement explanation, acceptance flow,
 test standard, and architecture boundary. Link each to source/decision IDs;
-do not rewrite the PRD goal or decision rationale. Before choosing or retaining a solution shape, self-check with `simplicity-guard`'s core questions (has this layer earned its place; can an existing capability carry it instead) and write the conclusion into the existing solution trade-off and 非目标 text, not into a new artifact.
+Reference the PRD goal and decision rationale in their original owners. Before choosing or retaining a solution shape, self-check with `simplicity-guard`'s core questions (has this layer earned its place; can an existing capability carry it instead) and write the conclusion into the existing solution trade-off and 非目标 text, not into a new artifact.
 
 The template is the same content contract consumed by stage-end
 `spec-analyze`. Generate canonical `PFACT-{NNN}` and `AC-{DOMAIN}-{NNN}`
@@ -48,6 +48,12 @@ For every new AC, use four plain, unindented labels in this exact order:
 do not use bullet/bold legacy labels such as `- **验证方法**`. A line whose
 entire content is `TBD`, `TODO`, or `待填写` is invalid. `证据：` declares the
 expected evidence type or artifact only; verify-code supplies execution facts.
+
+## 叙事写作与读回
+
+从已确认来源合成，不重新访谈或替用户选择方向。先说明真实角色面临的问题、目标与结果，再连起场景、机制、取舍、失败和显式非目标；追踪字段跟在叙事后，不以 ID 清单代替行为解释。User Stories 的详细格式由产品需求 owner 承接，本步骤保现 PRD/decision 的目标权威。
+
+写作完成时，按原来源→场景/状态→FR/PFACT→唯一 Appendix A 读回：每个适用用户结果与失败都有落点，四个翻译表面可发现，全局实现设计 scaffold 为后续 spec-plan 留在同一 spec；缺口带 owner、影响与下一动作，不把草稿或可读文件说成已验通过。所有正文整理使用下节唯一规范；条件、顺序、权限和失败强度先保全，再修表达。
 
 ## Artifact responsibility
 
@@ -113,7 +119,7 @@ consequence, mitigation or STOP, handling stage, and verification. Open
 questions name affected IDs, owner, impact, handling stage, and close condition
 or STOP. Ambiguity is marked; it is not guessed.
 
-Before writing, remove authoring comments, placeholders, empty headings, empty tables, and filler. Use at most five columns in a table and keep prose out of table cells. Apply the single-authority rules below.
+Before writing, remove authoring comments, placeholders, empty headings, empty tables, and filler. Use at most five columns in a table and keep prose out of table cells. Apply the single-authority rules and 「技能写作规范（WR001）」 below.
 
 Write only the named artifact `spec.md`. Return requirement count, ambiguity
 count, and a short checklist as structured output. Do not run Git commands or
@@ -130,6 +136,29 @@ discover files. Missing input/callback fails loud.
 5. Keep Phase procedures, exact commands, test evidence and execution status in their existing Phase/task owners; global design records interfaces and global choices.
 6. Use original evidence paths instead of full output. Keep terminology consistent; preserve quantifiers, failure strength, order, and conditions.
 7. Preserve locked wording, machine-read headings/labels and literal source declarations as allowed exceptions; compact writing never replaces actual content quality.
+
+## 技能写作规范（WR001）
+
+本节是 agent 文档写作的唯一规范层；本技能的 single-authority 规则是 spec 的具体落点，其它技能按「创建或改写 agent 方法」分支指向这里，不复制本节或新建第四规范对象。规范指引写法，不产生质量 gate。检核以下 Q01–Q12，逐条给出真实范围、依据与未观测；原步骤与条件的保全表和实际方法消费分别记录，字面禁区按真实 source 正负断言/guard 原样保留。
+
+1. **Q01 — Load**：逐行区分 context load（description/常驻指针）与 cognitive load（人记材料/触发条件），说明该行为何值得；人作选择所需认知成本不是一概消除的目标。description 是常驻 context pointer：引领词前置，每真实分支一个触发，去身份复述；model-invoked 保可发现 description，只有确实仅人触发才用 user-invoked，router 只能提示其它 user-invoked，不能代调用。
+2. **Q02 — Disclosure**：每分支都要的步骤内联，仅部分分支所需参考置于条件指针后。指针同时说明材料和到达条件；必需材料触发弱时先锐化指针再考虑内联。档内步骤、档内参考、外链参考按需分层，不把 live 步骤藏到无人会读的链接。
+3. **Q03 — Co-location**：同概念的定义、规则和例外放同一标题下；每段一个主题。散落与重复分开处理，不因把片段搬近就声称去重。
+4. **Q04 — Done**：每步骤给既清晰可判又穷尽的完成判据，强度落在所有受影响项而非只产一份列表。先锐化边界；只有本质模糊且已观察到抢跑才按序列拆到真实 handoff/子代理上下文，内联调用不声称清空后续步骤。
+5. **Q05 — Leading word**：同一组三连条件反复出现时，以已定义、预训练中有行为含义的引领词承接；重复词，不重复整段意思。新词须定义，弱到不改变默认的词按 Q10 处理，不凭短词数量宣称效果。
+6. **Q06 — Positive**：每条否定在字面禁区外检核能否改成正面行为目标，能改就改；保原条件、量词、次序、权限和失败强度。禁区原否定逐字保，不能为转正删冻结约束。
+7. **Q07 — Guardrail**：确实无法正面表达的硬护栏保留，并邻接正面目标。区分实际安全边界与普通解释；护栏不会因正文缩短而消失，也不被解释扩成新许可链。
+8. **Q08 — Single authority**：每个意思只在其 owner 处权威表述，其它位置用条件指针；spec 的 AC 在 Appendix A，场景/PFACT/非目标/Phase 程序仍各归原处。引领词的重复不成为第二权威。
+9. **Q09 — Environment**：可从一个真实文件或命令发现的脚本/配置/目录事实留给环境；只缓存无法直接发现的约定、理由或坑。被锁字面、机器标题/标签及受保护依赖的实读声明是例外，保其真实来源，不把路径存在当完成。
+10. **Q10 — No-op**：逐句问删除后相对当前模型默认行为会否变化。真正 no-op 删除整句而非修词，记录删除理由与含义保全落点；模型默认有争议就保留待相关真实 case 有/无句消费验证，不凭全文相似、行数或主观风格裁定。弱引领词先换更强且有行为锚的词。
+11. **Q11 — Sediment**：核每句与当前行为相关性，清已过时、被替代或从未相关的层；来源、决定与失败原件留历史原ref，不覆写过去或把未知写已解决。
+12. **Q12 — Sprawl**：即使每行活且唯一仍过长时，按真实分支/序列渐进披露，保执行链与到达条件。没有行数配额，也没有靠长度证明质量的自动 eval；手跑文档并用 duplication/sediment/no-op/sprawl/premature completion 词表定位失败。字符/句长预算只有具源依据才采用，无依据保 unknown；表达整理逐核心保全与有限无回归，新行为用对应目标 case，不强求赢家。未测行为/真人量如实未观测，不采集或估算输出用量。
+
+## 固定来源与本地偏离
+
+参考 [mattpocock/skills](https://github.com/mattpocock/skills) 固定 commit `b0618bc436ad893b3c5e84e55fba86586d34a404` 的 `skills/productivity/writing-for-agents/SKILL.md`、`SKILL-MECHANICS.md` 与 docs，提炼为 WR001 Q01–Q12；叙事参考 `skills/engineering/to-spec/SKILL.md`。本地保留当前完整 spec 模板、Appendix A 独占验收、canonical IDs、PFACT 四状态互斥、FR 来源映射、十维状态与全局设计/Phase 职责。来源是判据，不是已经改善的证据。
+
+本地不采用外部 tracker、ready-for-agent 标签、setup/宿主 Skill 依赖或另根材料；上游「不写具体路径」不覆盖本地经实读的工程锚/精确写集，User Stories 细节仍由产品需求 owner 负责。方法接收调用者材料与允许写目标，缺源/不安全目标/未知 profile 明确报错，不绑定任务路径或账号。迭代时核这些固定子文件的更新与更优候选，写源差与本地偏离后决定采用，不自动追 HEAD。
 
 ## 补充材料
 
