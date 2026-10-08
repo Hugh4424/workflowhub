@@ -375,6 +375,17 @@ Task 卡字段扩展若被现有测试判为非法，先保留原字段并只在
 
 **证据原件**：任务库根 `quality/evidence/human-confirmations/2026-10-08-001-make-decision-close-commit.txt`（sha256 `5dff70e2349b797a3fb78123438a176269a081703d2997fa79883163e7c3ed05`）；授权记录任务库根 `quality/evidence/git-authorizations/2026-10-08-001-authorize-commit.json` 与已消费的 `2026-10-08-002-consumed-commit.json`。
 
+### U-005 — 收口后二次补正（交接更正件 + 五条 POST 发现）
+
+- 原文锚点：无新用户消息；来源为 `stage-handoff` 子代理与交接更正件子代理**如实报出的不一致**，以及本会话自查。
+- 变更与处置（五条，全部已修，均在 `facts.jsonl` 记为 POST-1..POST-5）：
+  1. POST-1 两份审查报告缺唯一原件 → 已落盘 `quality/evidence/reviews/`（对抗性方向检查 sha256 `7ff88ae5…`、细节一致性审查 `ec72ada8…`）。
+  2. POST-2 写件前检查无独立原件 → 已落盘 `quality/tests/2026-10-08-001-make-decision-close-prewrite-check.json`（sha256 `6455eb78…`）。
+  3. POST-3 子代理派发清单缺锚点且**自报 total=12 与 dispatches 13 条自相矛盾** → 已在原位更正为 **13**（更正后 sha256 `a194cf47…`），并在 `honest_limits` 保留该自相矛盾事实。
+  4. POST-4 **我误将"797 行"记为原交接的错误** → 实测原交接写的是 812 行（其写件时点真实读数），797 出自我自己的日志；已由独立复核澄清并在本文件更正。
+  5. POST-5 "3 次独立审查"未写口径 → 已澄清为方向盲审 / 对抗性方向检查 / 细节一致性审查三者，分组口径不同而**数量一致**。
+- **交接**：原交接为不可变原件（`quality/evidence/handoff/2026-10-08-001-make-decision-handoff.md`，sha256 `985cddc4…`，26641 字节），**一字未改**；更正件为新写的第二份：`quality/evidence/handoff/2026-10-08-002-make-decision-handoff-correction.md`（sha256 `be73d368dcf9dd980a378652d75109e70102a47b205a8e8e82aaee9e970c0aef`，10975 字节）。
+
 ### U-004 — 收口后自查补正三处（原件与数字）
 
 - 原文锚点：无新用户消息；来源为 `stage-handoff` 子代理在交接时如实报出的 6 处不一致，以及本会话的自查。
@@ -383,7 +394,9 @@ Task 卡字段扩展若被现有测试判为非法，先保留原字段并只在
   2. **补上写件前检查的唯一原件**：`quality/tests/2026-10-08-001-make-decision-close-prewrite-check.json`（含 HEAD、worktree 干净度、决策日志 sha256、四项检查的实际退出码）。此前交接正文如实记为 unavailable。
   3. **补上子代理派发清单**：`quality/evidence/2026-10-08-001-make-decision-subagent-dispatch.json`。
 - **数字更正**：此前的材料写"12 个子代理"。实际派发 **13 次**（5 个首轮调研 + 2 个独立审查 + 3 个第二轮补缺口 + 1 个细节审查 + 1 个交接撰写；另有 1 条为批次记法遗留不构成独立派发）。以子代理清单为准。
-- **数字更正**：决策日志实测 **812 行**（此前多处写 797/783/765，均为不同时点的读数）；make-decision 在本分支实际有 **4 笔提交**（`4219ed7d` → `5de5a7d8` → `50baf515` → `cf047cd6`，当前 HEAD）。
+- **数字更正（含一处自我纠正）**：决策日志行数随提交变化，**逐 commit 实测**：`4219ed7d`=783 → `5de5a7d8`=797 → `50baf515`=813 → `cf047cd6`=812 → `16414dfb`=823（当前）。**注意**：我起初把"797 行"记为"原交接写错"，实测**原交接第 8 节写的是 812 行 / 111120 字节（其写件时点的真实读数）**，真正写 797 的是**本文件自己**在修正之前的读数。该主张系我的误读，已在 `quality/evidence/handoff/2026-10-08-002-make-decision-handoff-correction.md` 中由独立复核澄清。
+- **数字更正（提交数）**：make-decision 在本分支实际有 **5 笔提交**（`4219ed7d` → `5de5a7d8` → `50baf515` → `cf047cd6` → `16414dfb`，当前 HEAD = `16414dfbe7747fb8cb53bf108855f9df7c045c53`）。此前写的"4 笔 / 当前 HEAD=cf047cd6"已过期。
+- **口径澄清（独立审查计数）**：本阶段共 **3 个独立上下文审查**——方向盲审（`ad02a925`，questions-only 投影）、对抗性方向检查（`5a801c7c`）、细节一致性审查（`61741b31`）。此前的分组写法"2 独立审查 + 1 细节审查"与"3 次独立审查"只是分组口径不同，**数量一致**；此前因未写口径而使方向盲审看起来不落在任何一类。
 - **目录创建说明**：`quality/evidence/handoff/`、`quality/evidence/reviews/` 为写入前不存在、由本次创建的真实目录；`appendRecord` 要求父目录真实存在且不自建。
 
 ## 未决项
