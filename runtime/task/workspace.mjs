@@ -99,10 +99,10 @@ export function inspectWorktreeCleanup(worktreeRoot) {
     const status = field.slice(0, 2);
     const path = relativeWorktreePath(field.slice(3), "task worktree cleanup scan");
     const entry = Object.freeze({ status, path });
-    if (isExecutionSidecar(path)) execution_sidecars.push(entry);
-    else if (status === "??") untracked.push(entry);
+    // Sidecar names do not establish ownership of their unique bytes.
+    if (status === "??") untracked.push(entry);
     else if (status === "!!") {
-      (isKnownIgnoredGenerated(path) ? ignored_generated : ignored_unknown).push(entry);
+      (!isExecutionSidecar(path) && isKnownIgnoredGenerated(path) ? ignored_generated : ignored_unknown).push(entry);
     } else tracked.push(entry);
   }
   return Object.freeze({

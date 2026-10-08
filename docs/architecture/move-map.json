@@ -1174,7 +1174,7 @@
       "role": "production",
       "responsibility": "① 范围核对 + worktree 清理执行器（本文件与 runtime/interface/workspace-check.mjs 分工）",
       "owner": "B4/P5 / MT-1-085",
-      "consumer": "当前直接模块消费者：core/__tests__/workspace-manager.test.mjs, metrics/collector.mjs, runtime/stage/stage-context.mjs, skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs, tests/close/close-authorization-outcome-ref-guard.test.mjs, tests/contract/build-code-change-scope.test.mjs, tests/contract/card03-review-orchestration.test.mjs, tests/contract/ocr-delegation-route.test.mjs, tests/contract/ocr-production-cutover.test.mjs, tests/contract/ocr-review-contract-bundle.test.mjs, tests/contract/workspace-binding.test.mjs, tests/contract/workspace-cleanup.test.mjs, tests/contract/zero-machine-gate-advancement.test.mjs, workflows/build-code/change-scope.mjs",
+      "consumer": "当前直接模块消费者：core/__tests__/workspace-manager.test.mjs, metrics/collector.mjs, runtime/stage/stage-context.mjs, skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs, tests/close/close-authorization-outcome-ref-guard.test.mjs, tests/contract/build-code-change-scope.test.mjs, tests/contract/card03-review-orchestration.test.mjs, tests/contract/ocr-delegation-route.test.mjs, tests/contract/ocr-production-cutover.test.mjs, tests/contract/ocr-review-contract-bundle.test.mjs, tests/contract/workspace-binding.test.mjs, tests/contract/workspace-cleanup.test.mjs, tests/contract/zero-machine-gate-advancement.test.mjs, workflows/build-code/change-scope.mjs；当前人读方法消费者：docs/standard-workflow.md 的默认安全收口直接调用 inspectWorktreeCleanup/createTaskWorktreeRemoval，workflows/verify-code/SKILL.md 与 skills/stage-handoff/SKILL.md 在最终 close/保留事项触发读取该方法；不恢复旧 close graph 或自动分支事务",
       "module_consumers": [
         "core/__tests__/workspace-manager.test.mjs",
         "metrics/collector.mjs",
@@ -1192,7 +1192,7 @@
         "workflows/build-code/change-scope.mjs"
       ],
       "named_data_readers": [],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
+      "delete_condition": "原保留职责已退役且全部当前真实模块与默认安全收口方法消费者改接后删除；保护未交付、未知或独有 sidecar 字节，目录名不证明可删；分支删除保持主会话普通 Git，不由 helper 自动执行，不因本表产生许可或未来消费",
       "retention_basis": "MT-1-085 / NARROW"
     },
     {

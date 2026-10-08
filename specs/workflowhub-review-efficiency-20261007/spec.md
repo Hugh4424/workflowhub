@@ -560,3 +560,26 @@ H1–H8 去向：
 ## 补充材料
 
 决策权威 `decision-log.md`（S 根）；编号与写集权威 骨架件（任务库根，sha256 d506ffdd…）；派发任务书 `quality/evidence/dispatch/2026-10-07-005-build-plan-authoring-brief.md`（任务库根，sha256 9a35b865…）；各 Phase 的实读记录在 `phases/P<n>.md`「交接知识」。
+
+## 008 真实新增范围：close 默认安全清理
+
+来源为 T 根 `quality/evidence/human-confirmations/2026-10-08-008-close-default-cleanup-request.json:5`（用户原话；第 6 行为主会话解释），U-018 / V-021 → `decision-log.md` MOD-9 / ADR-075 → 本增量 → `phases/P10.md` 原 T025 外续节。此为同 task 新范围的明确材料授权，不改上文旧冻结写集、FR/AC 编号与 32 条评分，不新增 Phase、任务图、公共命令、schema 或进度权威。008 不等于当前 task 最终 close 确认，不解除 004 packet TTL / load 删除延期。
+
+### 精确写集与现消费者
+
+| 当前职责 | 本次授权现有路径（W 根） | 实际 owner / consumer |
+| --- | --- | --- |
+| 当前方法 | `docs/standard-workflow.md`；`workflows/verify-code/SKILL.md`；`skills/stage-handoff/SKILL.md` | 实施 owner 98；主会话普通最终确认/交付/清理及交接读者；唯一默认原则由标准承载，verify/handoff 消费，不改 `steps.json` 或 `skill-deps.yaml` |
+| 清理保护 | `runtime/task/workspace.mjs`；`tests/contract/workspace-cleanup.test.mjs` | 实施 owner 98、独立测试变更/复验 f6；已有 `inspectWorktreeCleanup` / `createTaskWorktreeRemoval` owner，sidecar 名称不等于唯一 raw 可删除证明 |
+| 必要职责登记 | `docs/architecture/move-map.json` | 98 仅按现 workspace owner/真实消费者保护变化窄更，不能登记未发生的新能力 |
+| 当前材料 | `specs/workflowhub-review-efficiency-20261007/decision-log.md`；`specs/workflowhub-review-efficiency-20261007/spec.md`；`specs/workflowhub-review-efficiency-20261007/phases/P10.md` | 主会话授权唯一材料持笔；独立材料 after 由原 73 消费。本次不改变 Phase 契约头写集，index 只导航，无需同步新增机器范围 |
+
+这些路径即本次增量范围；原 P4 对标准/handoff关联、P9 task 工具等旧 Phase owner 不同时写本增量，由本次主会话稳定 owner 明确承接。阶段陈述、既有原件与旧失败保持，只记录实际新增实施/验证，不将拟结果预写为已完成。
+
+### 人读用例与保护反例（不扩原 AC 数量）
+
+- **UC-CLOSE-DEFAULT**：用户未选择保留时，最终一次范围确认默认列本 task 材料归档、已交付 task-owned worktree 正常 remove、本地 task branch 正常 `-d`；精确远端 task ref 存在且已交付时正常删除。方法指向普通 Git 与现有授权/采集工具，各动作真实结果分别读回，close 前不执行这些删除。
+- **UC-CLOSE-PROTECT**：未确认、未交付 commit、tracked dirty、未知 untracked/ignored、符号路径、main/用户既有非 task-owned workspace 或唯一原始证据不可丢时保持该安全边界；不能凭 sidecar 名字删除唯一 raw、使用 force/`-D` 或旧 close plan 绕过。先给具名可解阻碍的保管/明确丢弃路线，不把一次未知 memo 状态永久泛化为默认保留。
+- **UC-CLOSE-MEMO**：未来 task-owned 会话备忘从创建时在既有外置 T 的普通具名位置存，不创建第二 facts/metadata 账本或镜像证据。本次四份旧 memo 仍需最终确认展示是否可丢，不预报迁移/备份/删除已完成。
+
+受影响定向 RED/GREEN、具体 fixture、来源/失败与恢复结果由 f6 的真实批准和唯一输出支持，本材料不猜未来命令退出或自判质量。新增决定不能补造 AC003 真实停滞样本；本日志旧 H2“证据索引”保留，AC012 仍 incomplete、不只验新模块换分母；AC019 延期及原 T007 fail 保原，worktree cleanup 不等于 packet TTL。原六 nonpass、历史格式许可与整体 unverified 边界不改。

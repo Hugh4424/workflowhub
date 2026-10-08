@@ -30,6 +30,7 @@
 - 工作模块（MOD-1、MOD-2、MOD-3、MOD-4、MOD-5、MOD-6、MOD-2 续、MOD-7、MOD-8、MOD-7 续、MOD-8 续）
 - MOD-7（续）承载 ADR-061…ADR-068（派发机制缺口）
 - MOD-8（续）承载 ADR-069…ADR-074（产出文档瘦身落点）
+- MOD-9 承载 ADR-075（008 真实新增：close 默认安全清理）
 - 要改哪些文件
 - 验收面
 - 范围与非目标
@@ -64,6 +65,10 @@
 编号连续性事实登记：U-001…U-005 与 U-016/U-017 为本件实际使用的编号，
 U-006…U-015 在本任务 worktree 与任务库中均未使用（F-027 实测零命中），
 故本件编号从 U-005 直接跳到 U-016。
+
+### U-018 — close 默认安全清理（新增真实范围）
+
+2026-10-08 真实新增：用户要求检查并修正 close 每次建议保留工作区/分支的默认策略。原话唯一来源为任务库根 `quality/evidence/human-confirmations/2026-10-08-008-close-default-cleanup-request.json:5`；该件第 6 行是主会话范围解释，不冒用户逐字。V-021 仅导航此原件，处置见 MOD-9 / ADR-075；本次不执行最终 close，不解除 004 packet TTL 延期。
 ## 原始需求索引
 
 本节负责登记反转权威表得不到的事实，不复制 R / U / V 与 ADR 的对应关系；
@@ -155,6 +160,7 @@ ADR-001…ADR-074 服务的 R / U / V 编号；无需求依据的写「无需求
 | ADR-072 | R-018 | 本件 `## 工作模块 MOD-8（续）` |
 | ADR-073 | R-018 | 本件 `## 工作模块 MOD-8（续）` |
 | ADR-074 | R-017、R-018 | 本件 `## 工作模块 MOD-8（续）` |
+| ADR-075 | U-018 | V-021；任务库根 `quality/evidence/human-confirmations/2026-10-08-008-close-default-cleanup-request.json:5` |
 
 R-006 的承载者是 ADR-014、ADR-015（**反转本表得不到**：本表 ADR-014 / ADR-015
 两行只登记了 R-002、R-007、R-009，未登记 R-006）；R-008 无 ADR 落点，
@@ -166,6 +172,9 @@ R-006 的承载者是 ADR-014、ADR-015（**反转本表得不到**：本表 ADR
 `quality/evidence/decision-log-refs/log-ref-verbatim-layer.md`。
 本节承担的唯一职责：其它节提到 V 编号时，逐字原文与取证状态以该
 参考件为准。
+
+V-021 是新增 U-018 的导航别名，逐字原文只读任务库根
+`quality/evidence/human-confirmations/2026-10-08-008-close-default-cleanup-request.json:5`，不复制到旧 V-001…V-020 参考件。
 
 ## 工作模块 MOD-1 — 审查定位与职责边界
 
@@ -1701,6 +1710,18 @@ PaperBuilder 58 份中位 474 行）。
 - 影响面：主会话派发纪律 + 任务书模板（ADR-061 的①节）；
   与 ADR-062、ADR-068、ADR-066 互为前提。
 
+## 工作模块 MOD-9 — 008 真实新增：close 默认安全清理
+
+来源与研究只定位原件：U-018 / V-021；任务库根 `quality/tests/2026-10-08-231-close-default-cleanup-readonly-audit.md:5-22`、`quality/tests/2026-10-08-232-close-default-new-decision-material-audit.md:5-23`。当前宪法与方法没有默认永久保留 task-owned 工作区/分支的决定；本次 210 候选因未知独有备忘暂保现场，不推成每任务默认。旧 ADR-001…074、004 TTL 选择及原交接均保正文；本条新增当前方法缺口的决定，不虚构旧 ADR 被 supersede。
+
+### ADR-075 — close 最后默认安全清理已交付任务工作区与分支
+
+- 决定：沿 U-018 的真实用户选择，将当前普通 close 方法明确为：最终一次展示结果、质量限制、已交付证明与精确动作范围并取得确认后，默认归档当前 task 材料，正常移除 task-owned 工作区、删除已交付本地任务分支；精确远端任务 ref 存在且已交付时正常删除。主仓 main 与用户既有非 task-owned 工作区保留。先处理具名未交付提交、未知私料与唯一原件；范围未确认或安全条件未满足时保现场并如实报告具体未完成动作。未来会话备忘从创建时使用既有外置任务目录的普通具名件；本次四份旧备忘是否可丢仍在最终一次范围确认中展示，不假称已外置保管。仅按目录名识别 sidecar 不足以授权删除唯一 raw，既有清理消费者须保这一反例。此条是拟方法/实现范围，不是已完成或立即删除授权。
+- 为什么：008 原话希望任务最终 close 默认清理；当前方法只写最终确认边界而缺正常收尾清单，210 对独有 ignored 内容的本次保护被误泛化为一般保留建议。231 独立审计区分方法空白、安全阻碍与本次例外；默认清理和唯一来源保护应同时到真实消费者，不靠反复推荐保留解决。
+- 否掉了什么：把 task-owned 工作区/分支永久保留作为通用默认；忽略 ignored/untracked 或只凭目录名强删；默认删除 main/用户既有工作区；用 force、`-D`、新公共 close 命令、旧 plan/对象图、质量 gate 或重复 metadata 账本完成收尾；把本次 close 清理偷换成 004 明确延期的 packet TTL / load 删除。
+- 后果与风险：最终范围确认必须列精确 archive/worktree/local/remote 路径、tip、已交付关系与私料/唯一原件保管或明确丢弃选择，随后即时按实际 cwd/branch/HEAD record/consume 并分别保存动作原件。先消除可解决的阻碍，而不是把可丢 task memo 变成永久保留要求；无法证明内容可丢、仍有未交付提交或权限错误时不强删，只保相应现场与失败事实。独立受影响复验尚待实际执行；实际 task close、旧 memo 丢弃与 packet TTL 均未发生。本次新增真实决定不重排旧日志四类 H2，AC-REV-012 仍 incomplete，不用本模块单独通过替整件日志判据。
+- 影响面：认证 worktree 根 `docs/standard-workflow.md`、`workflows/verify-code/SKILL.md`、`skills/stage-handoff/SKILL.md` 三现有方法；现有清理 owner `runtime/task/workspace.mjs` 与 `tests/contract/workspace-cleanup.test.mjs`，必要既有职责登记 `docs/architecture/move-map.json` 由实施 owner 据真实 consumer 修。材料唯一持笔仅本 `decision-log.md`、`spec.md` 末尾 008 增量、`phases/P10.md` 原 T025 外续节；不增 Phase/公共命令/schema/文件框架，不改原 32AC、oracle、历史原件。普通主会话依最终确认消费标准方法，具体 `git worktree remove` / `git branch -d` / 远端精确 ref 正常删除范围由实际安全检查确定，未执行不填成功。
+
 ## 要改哪些文件
 
 本表由各 ADR 的「影响面」字段汇总派生；只列日志中 ADR 已要求的改动，
@@ -1743,6 +1764,8 @@ PaperBuilder 58 份中位 474 行）。
 | `tools/cli/stage-runtime.mjs` | 传 `onProviderResult`、verify-code 材料装配 | ADR-025、ADR-004 |
 | `docs/standard-workflow.md` | 更正 OCR 路径措辞 | ADR-023 |
 
+008 / ADR-075 的新增授权路径与当前 consumer 只读 `spec.md#008-真实新增范围close-默认安全清理`「精确写集与现消费者」；此处保原文件表，不把新方法/cleanup 范围冒作旧 ADR 已交付。
+
 ## 验收面
 
 判定方式都是可复算的命令或字段；本表不设阈值、不做跨任务基线。
@@ -1768,6 +1791,8 @@ PaperBuilder 58 份中位 474 行）。
 不设阈值，也不做跨任务基线：这是本任务验收口径的一部分（V-015）。
 本轮已知缺口如实保留：记录 6/6 `usage=null`，
 故 A-09 的实现侧并列事实当前无法产出（ADR-039 已登记）。
+
+008 新增的 UC-CLOSE-DEFAULT / PROTECT / MEMO 只读 `spec.md#008-真实新增范围close-默认安全清理` 与 `phases/P10.md` 原 T025 外续节，不加入本旧 A-01…A-14 表或改变原 32AC 的计数/评分。真实 RED/GREEN 与最终动作各据其独立原件，本日志不预判通过。
 
 ## Supersedes（被替代记录）
 

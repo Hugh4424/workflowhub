@@ -6,7 +6,7 @@
 
 方向与计划两道人为选择按真实答复执行；已有授权继续有效。主会话组织必要交互，重活按工作类型派给独立上下文，修复回原实施者；不整份继承父上下文。独立审查与人把关不由实现者自判，普通小修不重复全范围审查。
 
-进入已授权任务的 build-code、verify-code 后，自动完成实施、验证、审查、修复及交付必要的 commit/push/merge；阶段切换、新会话与 handoff 不重置授权，不再次申请本地提交、日常技术验收或风险承担确认。authorize 复用真实授权来源，实际操作前核范围、分支、当前 HEAD 并 record/consume。仅最终 close 含归档、任务分支/工作区删除和交付清理前，展示当前结果、质量限制及动作范围，确认一次。无法修复或验证的事项如实保留并继续可执行部分，不能自行 accepted_risk 或伪造通过。
+进入已授权任务的 build-code、verify-code 后，自动完成实施、验证、审查、修复及交付必要的 commit/push/merge；阶段切换、新会话与 handoff 不重置授权，不再次申请本地提交、日常技术验收或风险承担确认。authorize 复用真实授权来源，实际操作前核范围、分支、当前 HEAD 并 record/consume。最终 close 默认收口已交付的任务材料、task-owned worktree 和任务分支：先展示实际交付结果、质量限制、待归档路径、待删除 worktree/本地分支及存在的同名远端分支，列出具名安全例外，取得一次最终范围确认；质量声明与清理授权分别保真。确认后归档已交付材料，复用 `runtime/task/workspace.mjs` 的 `inspectWorktreeCleanup`、`createTaskWorktreeRemoval` probe/execute/verify 与现有 authorize/run-command，普通移除已合入目标分支且无未交付或未知独有字节的 task-owned worktree，再用 `git branch -d` 删除本地任务分支；远端同名任务分支实际存在且已交付时才普通删除。main 与 existing workspace 保留；未知、私有、未交付资料逐件写明路径、原因、保管位置或最终明确可弃的范围，保护这些具体例外，不以惯例保留整个已安全交付 worktree。执行备忘从创建起用现有 appendRecord 外置到任务库，仅记必要上下文；旧 worktree 备忘逐件核已有唯一原件保管位置或最终明确舍弃，不能按目录名当可丢缓存。禁止 `--force`、`-D` 或强推；默认策略变更本身不是当前任务的删除确认，不解除另有来源的 packet TTL 延期。无法修复或验证的事项如实保留并继续可执行部分，不能自行 accepted_risk 或伪造通过。
 
 ## build-code 测试与质量
 
@@ -24,6 +24,6 @@ raw 测试输出、正式回执和审查原件各一份；必要证据区只保�
 
 ### stage 结束
 
-主会话按实际已有记录接口和安全写入保普通 stage facts，不恢复 run:execute 完整官方执行门。实施、质量、Git交付与物理清理分别读回；局部GREEN不说明全任务完成。逐AC只由实际交付和对应证据判断，缺项如实保留；新唯一人读handoff MD给绝对ref和实际下一阶段，旧原件immutable。
+主会话按实际已有记录接口和安全写入保普通 stage facts，不恢复 run:execute 完整官方执行门。实施、质量、Git交付与物理清理分别读回；局部GREEN不说明全任务完成。逐AC只由实际交付和对应证据判断，缺项如实保留；新唯一人读handoff MD给绝对ref和实际下一阶段，旧原件immutable。最终 close 按上文默认安全收口执行并回读归档、worktree、本地及远端任务分支的实际结果；未知或未执行项给具体例外，不把质量 incomplete 改写为完成，也不把它单独当清理许可或阻断条件。
 
 卡住先说明现在卡在哪、原因、可行路线和代价；只有真实方向改变需用户选择，避免用内部编号作为唯一说明。同一尝试没有新事实则停止重复，不自动续跑空转。未取得的答复、provider失败或许可不能靠时间流逝当同意。
