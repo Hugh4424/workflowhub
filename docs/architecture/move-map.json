@@ -2790,6 +2790,23 @@
     },
     {
       "source": "skills/spec-tasks/templates/index-template.md",
+      "destination": "skills/spec-plan/templates/index-template.md",
+      "status": "move",
+      "role": "production",
+      "responsibility": "futurepending：P6/T010 将旧索引附件同形迁至 spec-plan，用于 phases/index.md 纯指针渲染；本条仅创建前职责预登记，不证明附件存在、bundle 登记、调用迁移或交付完成，不提前实施 P8/T016。",
+      "owner": "P6/T010 / P6-single-writer（附件与 bundle 文件 owner；move-map 仍由 P8/T016 原维护者唯一持笔）",
+      "consumer": "现 skills/spec-plan/SKILL.md:67 条件索引渲染：新附件实际存在且 skills/spec-plan/skill-bundle.json 的 files 已登记才使用，否则继续读旧附件；P6/T010 承接新附件与 bundle，runtime/adapters/local-skill-resolver.mjs 的 validateSkillBundle 消费附件闭包。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/spec-plan/SKILL.md",
+        "skills/spec-plan/skill-bundle.json",
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "delete_condition": "旧附件仅在 P6/T010 新附件及 bundle 真实承接、全部旧当前调用已迁且 P8/T016 定向核实零悬空后由 P8/T016 删除；本预登记不删除或改写旧 self-pair 记录。新附件职责被审查后的替代承接且无当前 consumer 时由该文件 owner 删除，历史来源只读保留。",
+      "retention_basis": "futurepending 原件未迁／不得当前 complete；原来源 MT-3-053 / NARROW（旧 self-pair owner=B3/P4 / MT-3-053、consumer 与原理由均原样保留）；当前 spec.md:161、P6.md:T010、P8.md:23/:190 的普通目录责任时序，修正源26fd3aca（102作者/103独立），本次985bf5c1e23a51df93dc88a801ce12a4056d228d读回。测试 consumer 为外置 quality/tests/skill-modernization-thin-merge.test.mjs 与 validateSkillBundle 附件闭包；本次不运行、不改测试，不作新 gate 或质量通过。"
+    },
+    {
+      "source": "skills/spec-tasks/templates/index-template.md",
       "destination": "skills/spec-tasks/templates/index-template.md",
       "status": "retain",
       "role": "production",
