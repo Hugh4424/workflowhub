@@ -23,9 +23,13 @@ projects:
     reviewed_at: '2026-07-14'
     review_outcome: accepted
   matt-skills:
+    # Current fixed source: specs/workflowhub-skill-modernization-20261008/decision-log.md ADR-001 / D-008.
+    # Historical absence, not current adoption: pr / retro / implement-spec did not exist
+    # at 66898f60e8c744e269f8ce06c2b2b99ce7660d5f; they exist at b0618bc436ad893b3c5e84e55fba86586d34a404.
+    # Original two-commit directory observation: /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-skill-modernization-20261008/quality/evidence/decision-log-refs/research-report-make-decision.md §8.1.
     github_url: https://github.com/mattpocock/skills
-    commit: 66898f60e8c744e269f8ce06c2b2b99ce7660d5f
-    commit_url: https://github.com/mattpocock/skills/commit/66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+    commit: b0618bc436ad893b3c5e84e55fba86586d34a404
+    commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
     license: MIT
     reviewed_at: '2026-07-14'
     review_outcome: accepted
@@ -64,6 +68,498 @@ projects:
     license: MIT
     reviewed_at: '2026-07-14'
     review_outcome: accepted
+# Historical registration only: original ordered 44 × 8 fields; never active dispatch.
+# Original source: 7ad39ae852cb7ee4ce4630c54d7502b8e2cf4e59:repo-skills.manifest.json
+# Original bytes sha256: 9985f930d31dcee0fdcc8ad6e6822ed1cf3ebb0a1ff1aaa927822a69bf83714a
+# Owner: P1/T001; consumers: human migration/retirement maintenance and this task independent preservation replay.
+# Migration choice: /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-skill-modernization-20261008/quality/evidence/2026-10-08-005-build-plan-clarify-answer.json; D-027 / ADR-011.
+# Empty owner_stage and retired build-spec values below are preserved historical facts.
+# Current path absence does not activate a record or authorize deletion; reasons stay with the original local_changes and decision source.
+# dsh-code-review: historical name/path; current registration is architect-code-review (ADR-006 / D-011).
+# stage-step-receipts / audit-summary-carrier / test-strategy / review-response: original records describe absorption; original values remain unchanged.
+# requirement-lineage: historical canonical-requirements declaration, no current skill path; preserve provenance only (D-027 / ADR-011).
+# spec-tasks / spec-research / debate: see current retired registrations and their source reasons; physical deletion belongs to P8/T016.
+legacy_registration_history:
+  - id: "stage-reflection"
+    path: "skills/stage-reflection/SKILL.md"
+    version: "1.0.0"
+    origin_path: []
+    origin_framework: []
+    local_changes: "workflowhub 原生技能；由各 authoring stage 显式挂载；仅写当前 task 复盘与仓外 lessons，不建立第二控制面"
+    owner_stage:
+      - "make-decision"
+      - "build-spec"
+      - "build-plan"
+      - "build-code"
+      - "verify-code"
+    metrics_enabled: true
+  - id: "stage-handoff"
+    path: "skills/stage-handoff/SKILL.md"
+    version: "1.0.0"
+    origin_path: []
+    origin_framework: []
+    local_changes: "workflowhub 原生技能；只读当前四材料和正式原件指针，不建立历史 handoff 控制面；由当前 stage owner 用现有 safe-write 的 appendRecord 一次 create-only 发布并按同 stage 日期与序号回读实际不可变路径；不新增 writer、facts 字段、schema、公共命令或持久对象"
+    owner_stage:
+      - "make-decision"
+      - "build-prd"
+      - "build-plan"
+      - "build-code"
+      - "verify-code"
+    metrics_enabled: false
+  - id: "anysearch"
+    path: "skills/anysearch/SKILL.md"
+    version: "1.0.0"
+    origin_path:
+      - "SKILL.md"
+    origin_framework:
+      - "anysearch-ai/anysearch-skill"
+    local_changes: "仓内打包；通过 stage manifest 按需加载；不做全局安装"
+    owner_stage: []
+    metrics_enabled: false
+  - id: "decision-log"
+    path: "skills/decision-log/SKILL.md"
+    version: "1.0.0"
+    origin_path: []
+    origin_framework: []
+    local_changes: "workflowhub 原生实现；interaction aggregate 的唯一当前 consumer 是 make-decision detail-review/quality-fact contract，owner 是 make-decision，测试是 tests/stage-interaction-contract.test.mjs；consumer 被移除或替换且无其他引用时可删除该事实，不新增独立 runtime"
+    owner_stage:
+      - "make-decision"
+    metrics_enabled: true
+  - id: "deep-research"
+    path: "skills/deep-research/SKILL.md"
+    version: "1.0.0"
+    origin_path: []
+    origin_framework: []
+    local_changes: "workflowhub 原生技能；make-decision 唯一 consumer/owner；研究报告只以 path+hash 进入 Talk，不复制正文；无工具时保留不合格事实，不新增 gate"
+    owner_stage:
+      - "make-decision"
+    metrics_enabled: true
+  - id: "grill-with-docs"
+    path: "skills/grill-with-docs/SKILL.md"
+    version: "1.0.0"
+    origin_path:
+      - "skills/engineering/grill-with-docs/SKILL.md"
+      - "skills/engineering/domain-modeling/SKILL.md"
+      - "skills/productivity/grilling/SKILL.md"
+    origin_framework:
+      - "mattpocock/skills"
+      - "mattpocock/skills"
+      - "mattpocock/skills"
+    local_changes: "保留四项退出记录和可批量的大白话问题卡；先自行诊断和安全重试，只把方向问题交给用户，未完成不得跳过"
+    owner_stage:
+      - "make-decision"
+    metrics_enabled: true
+  - id: "intake-decision-review"
+    path: "skills/intake-decision-review/SKILL.md"
+    version: "1.0.0"
+    origin_path: []
+    origin_framework: []
+    local_changes: "裁为 wh-review direction 纯 lens；禁止候选方案、交互确认和第二 provider 路径"
+    owner_stage:
+      - "make-decision"
+    metrics_enabled: true
+  - id: "simplicity-guard"
+    path: "skills/simplicity-guard/SKILL.md"
+    version: "1.0.0"
+    origin_path: []
+    origin_framework: []
+    local_changes: "workflowhub 原生 review-only lens；不参与 stage 生成"
+    owner_stage:
+      - "make-decision"
+      - "build-spec"
+      - "build-plan"
+      - "build-code"
+    metrics_enabled: true
+  - id: "talk-with-zhipeng"
+    path: "skills/talk-with-zhipeng/SKILL.md"
+    version: "1.0.0"
+    origin_path: []
+    origin_framework: []
+    local_changes: "workflowhub 原生实现；问题卡支持一组独立问题、编号选项、后果和风险，用户可部分回答后重新排序"
+    owner_stage:
+      - "make-decision"
+    metrics_enabled: true
+  - id: "spec-prd"
+    path: "skills/spec-prd/SKILL.md"
+    version: "1.0.0"
+    origin_path: []
+    origin_framework: []
+    local_changes: "workflowhub 原生可搬运内容技能；只写显式提供的单一 PRD 目标，不伪造平台、确认或交付事实"
+    owner_stage: []
+    metrics_enabled: true
+  - id: "spec-research"
+    path: "skills/spec-research/SKILL.md"
+    version: "1.0.0"
+    origin_path: []
+    origin_framework: []
+    local_changes: "workflowhub 原生实现"
+    owner_stage:
+      - "build-spec"
+      - "build-plan"
+    metrics_enabled: true
+  - id: "spec-specify"
+    path: "skills/spec-specify/SKILL.md"
+    version: "1.2.0"
+    origin_path:
+      - "templates/commands/specify.md"
+    origin_framework:
+      - "github/spec-kit"
+    local_changes: "恢复为可搬运的内容合同和模板；编排仍由 build-spec 负责，不新增第二 runtime"
+    owner_stage:
+      - "build-spec"
+    metrics_enabled: true
+  - id: "spec-clarify"
+    path: "skills/spec-clarify/SKILL.md"
+    version: "1.1.0"
+    origin_path:
+      - "templates/commands/clarify.md"
+    origin_framework:
+      - "github/spec-kit"
+    local_changes: "保留可独立搬运的十维歧义扫描合同和批量问题卡；由 build-spec 唯一消费，不能在 make-decision 再接入第二套 Clarify；closure test 校验唯一归属"
+    owner_stage:
+      - "build-spec"
+    metrics_enabled: true
+  - id: "spec-plan"
+    path: "skills/spec-plan/SKILL.md"
+    version: "1.3.0"
+    origin_path:
+      - "templates/commands/plan.md"
+      - "skills/writing-plans/SKILL.md"
+    origin_framework:
+      - "github/spec-kit"
+      - "obra/superpowers"
+    local_changes: "恢复速读卡、技术锚点、reuse-extend-new、阶段交接、RED/GREEN、追溯映射和 F10 约束；不新增运行时状态或宿主交接字段；plan 字节幂等由 ArtifactDir.writeAtomic 和 core/__tests__/artifact-dir.test.mjs 负责，不恢复 retry_contract；若正式 writer 与该测试都移除时一并删除本说明"
+    owner_stage:
+      - "build-plan"
+    metrics_enabled: true
+  - id: "spec-tasks"
+    path: "skills/spec-tasks/SKILL.md"
+    version: "2.2.0"
+    origin_path:
+      - "templates/commands/tasks.md"
+      - "skills/writing-plans/SKILL.md"
+    origin_framework:
+      - "github/spec-kit"
+      - "obra/superpowers"
+    local_changes: "恢复任务卡、阶段 Goal/Files/STOP/Done、RED/GREEN、最终聚合卡和双向追溯；状态仍只是 tasks.md 描述事实，不承载 runtime 状态机"
+    owner_stage:
+      - "build-plan"
+    metrics_enabled: true
+  - id: "spec-analyze"
+    path: "skills/spec-analyze/SKILL.md"
+    version: "1.0.0"
+    origin_path: []
+    origin_framework: []
+    local_changes: "workflowhub 原生 report-only validator/lens；spec-analyze 是前四个产物 stage 收尾唯一的 stage-end 语义检查与质量事实契约 owner，verify-code 改用 dsh-code-review；现有 stage publication 是唯一写入路径，原子写入 quality/facts 与 acceptance evidence；当前 build-plan consumer 仍使用 planning_artifacts packet projection 和 contract tests，runtime 在既有 stage outcome 中认证 packet/result 与当前快照、材料、analyzer step、spec-analyze skill 的绑定；检查实际语义、场景、oracle、产物和 fresh evidence，不把编号或文件存在当作证明；结果复用既有 quality-fact 路径；DEFER/OPEN 按条目上下文检查 handoff；不直接改四份材料、不创建第二 store、projection 或门禁；six-part summary 随现有 stage outcome 交接；finding 先在当前 stage 修复并重跑；unavailable 不等于 pass；没有 runtime work gate、provider pass predicate 或新质量 gate，但缺失或不一致会如实降低当前 stage quality；当现有 consumer 移除且无历史材料引用时删除"
+    owner_stage:
+      - "make-decision"
+      - "build-spec"
+      - "build-plan"
+      - "build-code"
+    metrics_enabled: true
+  - id: "dsh-code-review"
+    path: "skills/dsh-code-review/SKILL.md"
+    version: "1.1.0"
+    origin_path:
+      - ".agents/skills/dsh-code-review/SKILL.md"
+      - ".agents/skills/dsh-find-simplifications/SKILL.md"
+      - ".agents/skills/dsh-doc-standards/SKILL.md"
+      - ".agents/skills/dsh-prose-standard/SKILL.md"
+      - ".agents/skills/dsh-trim-cot-leakage/SKILL.md"
+    origin_framework:
+      - "deepseek-ai/deepseek-harness"
+      - "deepseek-ai/deepseek-harness"
+      - "deepseek-ai/deepseek-harness"
+      - "deepseek-ai/deepseek-harness"
+      - "deepseek-ai/deepseek-harness"
+    local_changes: "将代码审查、简化、文档、prose 和过程叙述检查合并进一次 dsh-code-review 调用；删除宿主绑定，不新增 dispatch/provider/receipt/control-plane；不检查材料、AC、receipt 或证据完整性"
+    owner_stage:
+      - "verify-code"
+    metrics_enabled: true
+  - id: "stage-step-receipts"
+    path: "skills/stage-step-receipts/SKILL.md"
+    version: "1.0.0"
+    origin_path: []
+    origin_framework: []
+    local_changes: "仅保留历史合同 provenance；当前阶段不依赖该 absorbed skill，不恢复独立 receipt runtime；closure test 只确认它没有被重新接入；当历史审计与 provenance 不再需要该条目时移除"
+    owner_stage: []
+    metrics_enabled: false
+  - id: "audit-summary-carrier"
+    path: "skills/audit-summary-carrier/SKILL.md"
+    version: "1.0.0"
+    origin_path: []
+    origin_framework: []
+    local_changes: "已吸收到 runtime evidence facts；当前没有阶段 consumer，不保留独立 runtime skill；catalog 与 closure test 只保留其历史 provenance；当历史审计与 provenance 不再需要该条目时移除"
+    owner_stage: []
+    metrics_enabled: false
+  - id: "requirement-lineage"
+    path: "skills/requirement-lineage/SKILL.md"
+    version: "1.0.0"
+    origin_path: []
+    origin_framework: []
+    local_changes: "make-decision audit P0 原生合同；由 canonical requirements artifacts 消费"
+    owner_stage: []
+    metrics_enabled: false
+  - id: "workflowhub-host-protocol"
+    path: "skills/workflowhub-host-protocol/SKILL.md"
+    version: "0.1.1"
+    origin_path: []
+    origin_framework: []
+    local_changes: "宿主直接调度五阶段 portable package；删除 host bridge、receipt 门禁和评论状态机，保留 worktree 隔离与真实通知"
+    owner_stage: []
+    metrics_enabled: false
+  - id: "workflowhub-multica-sync"
+    path: "skills/workflowhub-multica-sync/SKILL.md"
+    version: "1.3.0"
+    origin_path: []
+    origin_framework: []
+    local_changes: "只读审计和显式确认后的 Multica CLI 同步；阶段只认 SKILL.md、skill-deps.yaml、steps.json；不改运行时"
+    owner_stage: []
+    metrics_enabled: false
+  - id: "wh-review"
+    path: "skills/wh-review/SKILL.md"
+    version: "4.1.0"
+    origin_path: []
+    origin_framework: []
+    local_changes: "只冻结材料并调用一次新的 3rd-review 公共 run；不发起 continuation/session 恢复，删除 scope_revision、本地协调锁、provider polling 和第二 timeout，保留路径安全与 broker 返回的原始 provenance"
+    owner_stage:
+      - "make-decision"
+      - "build-spec"
+      - "build-plan"
+      - "build-code"
+      - "verify-code"
+    metrics_enabled: true
+  - id: "mini-task"
+    path: "skills/mini-task/SKILL.md"
+    version: "1.0.0"
+    origin_path: []
+    origin_framework: []
+    local_changes: "薄 runner；不新增第六 stage、第五材料、关系对象或公共 runtime；mini-task Git close 复用 task-close，A 恢复使用认证 workspace 和普通 merge"
+    owner_stage: []
+    metrics_enabled: false
+  - id: "plan-ceo-review"
+    path: "skills/plan-ceo-review/SKILL.md"
+    version: "1.0.0"
+    origin_path:
+      - "plan-ceo-review"
+    origin_framework:
+      - "garrytan/gstack"
+    local_changes: "裁为 report-only lens；去 runtime/gbrain/telemetry"
+    owner_stage:
+      - "make-decision"
+      - "build-spec"
+    metrics_enabled: true
+  - id: "plan-design-review"
+    path: "skills/plan-design-review/SKILL.md"
+    version: "1.0.0"
+    origin_path:
+      - "plan-design-review"
+    origin_framework:
+      - "garrytan/gstack"
+    local_changes: "裁为 report-only lens；去浏览器 daemon 和宿主命令"
+    owner_stage:
+      - "build-spec"
+    metrics_enabled: true
+  - id: "plan-eng-review"
+    path: "skills/plan-eng-review/SKILL.md"
+    version: "1.0.0"
+    origin_path:
+      - "plan-eng-review"
+    origin_framework:
+      - "garrytan/gstack"
+    local_changes: "裁为 report-only lens；去 gstack 编排依赖"
+    owner_stage:
+      - "build-plan"
+    metrics_enabled: true
+  - id: "review"
+    path: "skills/review/SKILL.md"
+    version: "1.0.0"
+    origin_path:
+      - "review"
+    origin_framework:
+      - "garrytan/gstack"
+    local_changes: "裁为 wh-review lens；禁止自动修复和第二 review flow"
+    owner_stage:
+      - "make-decision"
+      - "build-spec"
+      - "build-plan"
+      - "build-code"
+      - "verify-code"
+    metrics_enabled: true
+  - id: "resolving-merge-conflicts"
+    path: "skills/resolving-merge-conflicts/SKILL.md"
+    version: "1.0.0"
+    origin_path: []
+    origin_framework: []
+    local_changes: "WorkflowHub close 冲突恢复约束；唯一消费者=core/task-close.mjs:1411 合并冲突报错路径"
+    owner_stage: []
+    metrics_enabled: false
+  - id: "test-strategy"
+    path: "skills/test-strategy/SKILL.md"
+    version: "1.0.0"
+    origin_path:
+      - "skills/engineering/tdd/SKILL.md"
+      - "skills/test-driven-development/testing-anti-patterns.md"
+    origin_framework:
+      - "mattpocock/skills"
+      - "obra/superpowers"
+    local_changes: "已吸收到 build-code/verify-code 当前测试与 fresh-evidence 合同；保留 provenance，不保留独立 runtime skill"
+    owner_stage: []
+    metrics_enabled: false
+  - id: "debate"
+    path: "skills/debate/SKILL.md"
+    version: "1.0.0"
+    origin_path:
+      - "SKILL.md"
+    origin_framework:
+      - "Hugh4424/debate"
+    local_changes: "保留仓内 provenance；仅作可选诊断，不进入核心 Bundle 或生产扫描；测试文件不纳入可分发 bundle；local_bundle_hash 使用 resolver canonical file-closure hash，inventory 最后一列记录 manifest 文件自身 sha256"
+    owner_stage: []
+    metrics_enabled: false
+  - id: "diagnosing-bugs"
+    path: "skills/diagnosing-bugs/SKILL.md"
+    version: "1.0.0"
+    origin_path:
+      - "skills/engineering/diagnosing-bugs"
+      - "skills/systematic-debugging"
+      - "investigate"
+    origin_framework:
+      - "mattpocock/skills"
+      - "obra/superpowers"
+      - "garrytan/gstack"
+    local_changes: "保留仓内 provenance；根因事实由当前 build-code 直接记录，不进入核心 Bundle 或生产扫描"
+    owner_stage: []
+    metrics_enabled: false
+  - id: "review-response"
+    path: "skills/review-response/SKILL.md"
+    version: "1.0.0"
+    origin_path:
+      - "skills/receiving-code-review"
+    origin_framework:
+      - "obra/superpowers"
+    local_changes: "最小 disposition fact 已合并到 wh-review；删除独立 flow/resolution validator"
+    owner_stage: []
+    metrics_enabled: false
+  - id: "test-routing-advisor"
+    path: "skills/test-routing-advisor/SKILL.md"
+    version: "1.0.0"
+    origin_path:
+      - "packages/core/agenthub/skills/test-routing-advisor/SKILL.md"
+    origin_framework:
+      - "Hugh4424/AgentHub"
+    local_changes: "保留三档路由判断；build-plan 写入预判，build-code 按真实 changed files 必要时重判"
+    owner_stage:
+      - "build-plan"
+      - "build-code"
+    metrics_enabled: true
+  - id: "testing-system-blueprint"
+    path: "skills/testing-system-blueprint/SKILL.md"
+    version: "1.0.0"
+    origin_path:
+      - "packages/core/agenthub/skills/testing-system-blueprint/SKILL.md"
+    origin_framework:
+      - "Hugh4424/AgentHub"
+    local_changes: "作为 build-plan 的 advisory 测试设计输入，并由 build-code 消费；不新增 AgentHub release gate 或执行器控制面"
+    owner_stage:
+      - "build-plan"
+    metrics_enabled: true
+  - id: "backend-testing"
+    path: "skills/backend-testing/SKILL.md"
+    version: "1.0.0"
+    origin_path:
+      - "packages/core/agenthub/skills/backend-testing/SKILL.md"
+    origin_framework:
+      - "Hugh4424/AgentHub"
+    local_changes: "只保留测试方法和证据字段；失败是质量事实，不是推进 gate"
+    owner_stage:
+      - "build-code"
+    metrics_enabled: true
+  - id: "frontend-testing"
+    path: "skills/frontend-testing/SKILL.md"
+    version: "1.0.0"
+    origin_path:
+      - "packages/core/agenthub/skills/frontend-testing/SKILL.md"
+    origin_framework:
+      - "Hugh4424/AgentHub"
+    local_changes: "保留状态/交互维度、UI phase/task 字段和失败证据；owner 是 build-code 前端测试路由，consumer 是真实 UI changed files；适用 UI attempt 经官方 build-code seam 一次调用 isolated-browser-qa，绑定 Design/Experience、service/API/DTO identity 和 cleanup；截图或 browser pass 不变成普遍 gate；不新增 Runner；delete-condition 为 frontend-testing 退役且无阶段引用"
+    owner_stage:
+      - "build-code"
+    metrics_enabled: true
+  - id: "fullstack-slice-testing"
+    path: "skills/fullstack-slice-testing/SKILL.md"
+    version: "1.0.0"
+    origin_path:
+      - "packages/core/agenthub/skills/fullstack-slice-testing/SKILL.md"
+    origin_framework:
+      - "Hugh4424/AgentHub"
+    local_changes: "适配为风险证据技能；不恢复强制 commit/worktree/release gate"
+    owner_stage:
+      - "build-code"
+    metrics_enabled: true
+  - id: "isolated-browser-qa"
+    path: "skills/isolated-browser-qa/SKILL.md"
+    version: "1.0.0"
+    origin_path:
+      - "isolated-browser-qa"
+    origin_framework:
+      - "workflowhub"
+    local_changes: "搬入完整闭包；去个人绝对路径；owner 是 isolated browser QA，consumer 是官方 build-code controlled QA seam 与 verify-code；一次 invocation 绑定 task/material/snapshot/Design/Experience/service/API/DTO identity，blocked/unknown 保留 failure_reason，取消和 cleanup 必须可见；不新增 Runner；delete-condition 为 browser QA 路由退役或被唯一替代"
+    owner_stage: []
+    metrics_enabled: false
+  - id: "ui-project-init"
+    path: "skills/ui-project-init/SKILL.md"
+    version: "1.0.0"
+    origin_path: []
+    origin_framework: []
+    local_changes: "WorkflowHub 原生可搬运入口；owner 是 UI 交付合同，consumer 是 build-spec 的 UI 分支；delete-condition 所有 UI consumer 迁移后"
+    owner_stage:
+      - "build-spec"
+    metrics_enabled: true
+  - id: "design-source-readiness"
+    path: "skills/design-source-readiness/SKILL.md"
+    version: "1.0.0"
+    origin_path: []
+    origin_framework: []
+    local_changes: "WorkflowHub 原生只读 lens；owner 是 UI 交付合同，consumer 是 build-spec 的现有 plan-design-review；delete-condition consumer 迁移后"
+    owner_stage:
+      - "build-spec"
+    metrics_enabled: true
+  - id: "frontend-prototype-render"
+    path: "skills/frontend-prototype-render/SKILL.md"
+    version: "1.0.0"
+    origin_path: []
+    origin_framework: []
+    local_changes: "WorkflowHub 原生渲染入口；owner 是 build-spec，唯一 consumer 是 build-spec UI path；test=tests/contract/frontend-prototype-render-skill.test.mjs；不改产品源码；delete-condition build-spec UI consumer 迁移后"
+    owner_stage:
+      - "build-spec"
+    metrics_enabled: true
+  - id: "frontend-component-quality"
+    path: "skills/frontend-component-quality/SKILL.md"
+    version: "1.0.0"
+    origin_path:
+      - "skills/react-best-practices/AGENTS.md"
+    origin_framework:
+      - "vercel-labs/agent-skills"
+    local_changes: "公开唯一组件质量入口；Vercel 只读为 React/Next 内部 lens；owner 是 UI 交付合同；delete-condition consumer 迁移后"
+    owner_stage:
+      - "build-plan"
+      - "build-code"
+      - "verify-code"
+    metrics_enabled: true
+  - id: "third-review"
+    path: "skills/third-review/SKILL.md"
+    version: "4.0.0"
+    origin_path:
+      - "3rd-review@97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+    origin_framework:
+      - "3rd-review v4.0.0"
+    local_changes: "来源：3rd-review v4.0.0，commit 97132960d7dab9145cbd0bdf610e09bf422e2ec0；仅测试框架和夹具位置适配"
+    owner_stage:
+      - "make-decision"
+      - "build-plan"
+      - "build-code"
+      - "verify-code"
+    metrics_enabled: false
 skills:
   - name: stage-reflection
     path: skills/stage-reflection/SKILL.md
@@ -76,7 +572,6 @@ skills:
     design_idea: 用当前会话记忆、lessons 与本 stage outcome 生成可追溯判断，不制造质量分数或推进门禁
     used_by_stages:
       - make-decision
-      - build-spec
       - build-plan
       - build-code
       - verify-code
@@ -163,29 +658,29 @@ skills:
       - make-decision
     upstream:
       - github_url: https://github.com/mattpocock/skills
-        commit: 66898f60e8c744e269f8ce06c2b2b99ce7660d5f
-        commit_url: https://github.com/mattpocock/skills/commit/66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        commit: b0618bc436ad893b3c5e84e55fba86586d34a404
+        commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
         license: MIT
         reviewed_at: '2026-07-14'
         review_outcome: accepted
         path: skills/engineering/grill-with-docs/SKILL.md
-        skill_url: https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/grill-with-docs/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/grill-with-docs/SKILL.md
       - github_url: https://github.com/mattpocock/skills
-        commit: 66898f60e8c744e269f8ce06c2b2b99ce7660d5f
-        commit_url: https://github.com/mattpocock/skills/commit/66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        commit: b0618bc436ad893b3c5e84e55fba86586d34a404
+        commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
         license: MIT
         reviewed_at: '2026-07-14'
         review_outcome: accepted
         path: skills/engineering/domain-modeling/SKILL.md
-        skill_url: https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/domain-modeling/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/domain-modeling/SKILL.md
       - github_url: https://github.com/mattpocock/skills
-        commit: 66898f60e8c744e269f8ce06c2b2b99ce7660d5f
-        commit_url: https://github.com/mattpocock/skills/commit/66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        commit: b0618bc436ad893b3c5e84e55fba86586d34a404
+        commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
         license: MIT
         reviewed_at: '2026-07-14'
         review_outcome: accepted
         path: skills/productivity/grilling/SKILL.md
-        skill_url: https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/productivity/grilling/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/productivity/grilling/SKILL.md
     local_changes: 保留四项退出记录和可批量的大白话问题卡；先自行诊断和安全重试，只把方向问题交给用户，未完成不得跳过
     dependency_closure:
       - skills/grill-with-docs
@@ -215,7 +710,6 @@ skills:
     design_idea: 只读 lens 识别范围膨胀并优先删除或复用
     used_by_stages:
       - make-decision
-      - build-spec
       - build-plan
       - build-code
     upstream: []
@@ -257,13 +751,14 @@ skills:
     path: skills/spec-research/SKILL.md
     local_version: 1.0.0
     last_reviewed_at: '2026-07-14'
-    status: native
+    status: retired
+    # Retired by D-013 / ADR-004: light research responsibility moves to deep-research; call-site migration and physical deletion belong to P8/T016.
+    # Decision source: specs/workflowhub-skill-modernization-20261008/decision-log.md (D-013 / D-010; ADR-004 / ADR-012).
+    # local_changes below remains the prior local adaptation record, not migration completion.
     metrics_enabled: true
     purpose: 规划前形成内存研究材料
     design_idea: 冻结输入、内存交接、不新增正式产物
-    used_by_stages:
-      - build-plan
-      - build-plan
+    used_by_stages: []
     upstream: []
     local_changes: workflowhub 原生实现
     dependency_closure:
@@ -279,7 +774,6 @@ skills:
     design_idea: post spec 同时承载四件需求翻译和全局工程方案，Phase 只承载差异
     standalone: true
     used_by_stages:
-      - build-spec
       - build-plan
     upstream:
       - github_url: https://github.com/github/spec-kit
@@ -351,13 +845,15 @@ skills:
     path: skills/spec-tasks/SKILL.md
     local_version: 2.2.0
     last_reviewed_at: '2026-07-14'
-    status: adapted
+    status: retired
+    # Retired by D-013 / ADR-004: pointer-index responsibility moves to spec-plan; attachment/call-site migration and physical deletion belong to P8/T016.
+    # Decision source: specs/workflowhub-skill-modernization-20261008/decision-log.md (D-013 / D-010; ADR-004 / ADR-012).
+    # local_changes below remains the prior local adaptation record, not migration completion.
     metrics_enabled: true
     purpose: 从独立 Phase 文件生成纯指针索引
     design_idea: 索引只含路径、锚点、写集、依赖和 consumer
     standalone: true
-    used_by_stages:
-      - build-plan
+    used_by_stages: []
     upstream:
       - github_url: https://github.com/github/spec-kit
         commit: b7e67f55bf7a937aaa57dbe0a8198774e285de3a
@@ -388,7 +884,6 @@ skills:
     design_idea: report-only packet lens with existing atomic quality publication
     used_by_stages:
       - make-decision
-      - build-spec
       - build-plan
       - build-code
     upstream: []
@@ -490,7 +985,6 @@ skills:
     design_idea: frozen materials、一次新的 3rd-review public run、attempt/result、verify-final
     used_by_stages:
       - make-decision
-      - build-spec
       - build-plan
     upstream: []
     local_changes: authoring review 保留既有 public run；正常 build-code 每 Phase 一次 OCR，最终 aggregate 与逐 AC 结果后由 verify-code 对最终 worktree 做一次 OCR；历史 integration 事实只读；两次代码审查由现有 review/run receipt 消费；保留路径安全与原始 provenance
@@ -522,7 +1016,6 @@ skills:
     design_idea: premise、scope、leverage、alternatives、delivery risk
     used_by_stages:
       - make-decision
-      - build-spec
     upstream:
       - github_url: https://github.com/garrytan/gstack
         commit: 7c9df1c568a9ea745508f679a329332b2c338063
@@ -544,8 +1037,7 @@ skills:
     metrics_enabled: true
     purpose: UI 信息架构、状态、可访问性和响应式审查 lens
     design_idea: 只在 UI scope 时审查设计风险
-    used_by_stages:
-      - build-spec
+    used_by_stages: []
     upstream:
       - github_url: https://github.com/garrytan/gstack
         commit: 7c9df1c568a9ea745508f679a329332b2c338063
@@ -592,7 +1084,6 @@ skills:
     design_idea: 独立 report-only review
     used_by_stages:
       - make-decision
-      - build-spec
       - build-plan
       - build-code
       - verify-code
@@ -629,7 +1120,10 @@ skills:
     path: skills/debate/SKILL.md
     local_version: 1.0.0
     last_reviewed_at: '2026-07-14'
-    status: adopted
+    status: retired
+    # Retired by D-010 / ADR-012: no stage-deps or wh-review consumer in the decision source; P8/T016 must retain its actual scan before physical deletion.
+    # Decision source: specs/workflowhub-skill-modernization-20261008/decision-log.md (D-013 / D-010; ADR-004 / ADR-012).
+    # local_changes below remains the prior local adaptation record, not migration completion.
     metrics_enabled: false
     purpose: 对方向级分歧执行可选对抗审查
     design_idea: 四队独立上下文对等陈述，judge 不参与倡议，最多两轮
@@ -659,13 +1153,13 @@ skills:
     used_by_stages: []
     upstream:
       - github_url: https://github.com/mattpocock/skills
-        commit: 66898f60e8c744e269f8ce06c2b2b99ce7660d5f
-        commit_url: https://github.com/mattpocock/skills/commit/66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        commit: b0618bc436ad893b3c5e84e55fba86586d34a404
+        commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
         license: MIT
         reviewed_at: '2026-07-14'
         review_outcome: accepted
         path: skills/engineering/diagnosing-bugs
-        skill_url: https://github.com/mattpocock/skills/tree/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/diagnosing-bugs
+        skill_url: https://github.com/mattpocock/skills/tree/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/diagnosing-bugs
       - github_url: https://github.com/obra/superpowers
         commit: d884ae04edebef577e82ff7c4e143debd0bbec99
         commit_url: https://github.com/obra/superpowers/commit/d884ae04edebef577e82ff7c4e143debd0bbec99
@@ -831,8 +1325,7 @@ skills:
     purpose: 为新项目和历史项目建立最小 UI 设计/组件基线
     design_idea: new/legacy 只读盘点、首个页面限界和可回放 fixture
     standalone: true
-    used_by_stages:
-      - build-spec
+    used_by_stages: []
     upstream: []
     local_changes: WorkflowHub 原生可搬运入口；owner 是 UI 交付合同，consumer 是 build-spec 的 UI 分支；delete-condition 所有 UI consumer 迁移后
     dependency_closure:
@@ -847,8 +1340,7 @@ skills:
     purpose: 从项目级 Design.md 派生可读 Screen Read Map
     design_idea: bindable/not_bindable/unknown 与缺项可见，不打分不设 gate
     standalone: true
-    used_by_stages:
-      - build-spec
+    used_by_stages: []
     upstream: []
     local_changes: WorkflowHub 原生只读 lens；owner 是 UI 交付合同，consumer 是 build-spec 的现有 plan-design-review；delete-condition consumer 迁移后
     dependency_closure:
@@ -924,7 +1416,6 @@ capability_decisions:
     design_idea: in-scope/out-of-scope 与风险词分档内联到现有 stage
     used_by_stages:
       - make-decision
-      - build-spec
     local_path: workflows/make-decision/SKILL.md; workflows/build-spec/SKILL.md
     upstream:
       - github_url: https://github.com/Hugh4424/AgentHub
@@ -955,13 +1446,13 @@ capability_decisions:
         path: skills/test-driven-development
         skill_url: https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/test-driven-development
       - github_url: https://github.com/mattpocock/skills
-        commit: 66898f60e8c744e269f8ce06c2b2b99ce7660d5f
-        commit_url: https://github.com/mattpocock/skills/commit/66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        commit: b0618bc436ad893b3c5e84e55fba86586d34a404
+        commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
         license: MIT
         reviewed_at: '2026-07-14'
         review_outcome: accepted
-        path: skills/tdd
-        skill_url: https://github.com/mattpocock/skills/tree/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/tdd
+        path: skills/engineering/tdd
+        skill_url: https://github.com/mattpocock/skills/tree/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/tdd
     local_changes: 内联核心门禁，不复制第二套 TDD 编排器
     dependency_closure: []
     update_policy: 只吸收测试设计和 anti-pattern，不增加重复 TDD 回合
@@ -1046,7 +1537,7 @@ capability_decisions:
     design_idea: right-sized tasks、明确 files/verify/stop
     used_by_stages:
       - build-plan
-    local_path: skills/spec-plan; skills/spec-tasks
+    local_path: skills/spec-plan
     upstream:
       - github_url: https://github.com/obra/superpowers
         commit: d884ae04edebef577e82ff7c4e143debd0bbec99
@@ -1065,7 +1556,6 @@ capability_decisions:
     design_idea: 用短摘要交接阶段结果
     used_by_stages:
       - make-decision
-      - build-spec
       - build-plan
       - build-code
       - verify-code
@@ -1088,7 +1578,6 @@ capability_decisions:
     design_idea: 统一 [FRICTION] 事件进入 task execution record
     used_by_stages:
       - make-decision
-      - build-spec
       - build-plan
       - build-code
       - verify-code
@@ -1221,13 +1710,13 @@ capability_decisions:
     local_path: null
     upstream:
       - github_url: https://github.com/mattpocock/skills
-        commit: 66898f60e8c744e269f8ce06c2b2b99ce7660d5f
-        commit_url: https://github.com/mattpocock/skills/commit/66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        commit: b0618bc436ad893b3c5e84e55fba86586d34a404
+        commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
         license: MIT
         reviewed_at: '2026-07-14'
         review_outcome: accepted
         path: skills/engineering/domain-modeling/SKILL.md
-        skill_url: https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/domain-modeling/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/domain-modeling/SKILL.md
     local_changes: 部分思路已进入 grill-with-docs；暂无独立触发合同
     dependency_closure: []
     update_policy: 有 stage 触发、消费点和验证合同后再升级
@@ -1239,13 +1728,13 @@ capability_decisions:
     local_path: null
     upstream:
       - github_url: https://github.com/mattpocock/skills
-        commit: 66898f60e8c744e269f8ce06c2b2b99ce7660d5f
-        commit_url: https://github.com/mattpocock/skills/commit/66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        commit: b0618bc436ad893b3c5e84e55fba86586d34a404
+        commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
         license: MIT
         reviewed_at: '2026-07-14'
         review_outcome: accepted
         path: skills/engineering/codebase-design/SKILL.md
-        skill_url: https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/codebase-design/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/codebase-design/SKILL.md
     local_changes: 未进入运行闭包
     dependency_closure: []
     update_policy: 有明确 stage 合同后再评估
@@ -1255,16 +1744,16 @@ capability_decisions:
     design_idea: 先问题分解，再证据收集和结论
     used_by_stages:
       - build-plan
-    local_path: skills/spec-research
+    local_path: skills/deep-research
     upstream:
       - github_url: https://github.com/mattpocock/skills
-        commit: 66898f60e8c744e269f8ce06c2b2b99ce7660d5f
-        commit_url: https://github.com/mattpocock/skills/commit/66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        commit: b0618bc436ad893b3c5e84e55fba86586d34a404
+        commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
         license: MIT
         reviewed_at: '2026-07-14'
         review_outcome: accepted
         path: skills/engineering/research/SKILL.md
-        skill_url: https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/research/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/research/SKILL.md
     local_changes: 吸收 primary-source、逐事实 citation 和推断分离纪律，不替换 workflowhub 原生产物合同
     dependency_closure: []
     update_policy: 人工比较来源纪律，不引入其宿主编排
@@ -1274,18 +1763,17 @@ capability_decisions:
     design_idea: 工程规范合规和需求实现完整性必须分别裁决
     used_by_stages:
       - make-decision
-      - build-spec
       - build-plan
     local_path: skills/review/SKILL.md
     upstream:
       - github_url: https://github.com/mattpocock/skills
-        commit: 66898f60e8c744e269f8ce06c2b2b99ce7660d5f
-        commit_url: https://github.com/mattpocock/skills/commit/66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        commit: b0618bc436ad893b3c5e84e55fba86586d34a404
+        commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
         license: MIT
         reviewed_at: '2026-07-14'
         review_outcome: accepted
         path: skills/engineering/code-review/SKILL.md
-        skill_url: https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/code-review/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/code-review/SKILL.md
     local_changes: 只吸收双轴 lens，保持 wh-review 唯一调度路径
     dependency_closure: []
     update_policy: 人工比较 review 维度，不复制执行编排
@@ -1295,16 +1783,16 @@ capability_decisions:
     design_idea: 任务依赖不能只靠顺序暗示，纵向验证链必须可追踪
     used_by_stages:
       - build-plan
-    local_path: skills/spec-tasks/SKILL.md
+    local_path: skills/spec-plan/SKILL.md
     upstream:
       - github_url: https://github.com/mattpocock/skills
-        commit: 66898f60e8c744e269f8ce06c2b2b99ce7660d5f
-        commit_url: https://github.com/mattpocock/skills/commit/66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        commit: b0618bc436ad893b3c5e84e55fba86586d34a404
+        commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
         license: MIT
         reviewed_at: '2026-07-14'
         review_outcome: accepted
         path: skills/engineering/to-tickets/SKILL.md
-        skill_url: https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/to-tickets/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/to-tickets/SKILL.md
     local_changes: 吸收 blocked_by 和 tracer bullet，不引入 issue tracker
     dependency_closure: []
     update_policy: 人工比较任务图规则
@@ -1316,13 +1804,13 @@ capability_decisions:
     local_path: null
     upstream:
       - github_url: https://github.com/mattpocock/skills
-        commit: 66898f60e8c744e269f8ce06c2b2b99ce7660d5f
-        commit_url: https://github.com/mattpocock/skills/commit/66898f60e8c744e269f8ce06c2b2b99ce7660d5f
+        commit: b0618bc436ad893b3c5e84e55fba86586d34a404
+        commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
         license: MIT
         reviewed_at: '2026-07-14'
         review_outcome: accepted
         path: skills/engineering/prototype/SKILL.md
-        skill_url: https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/prototype/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/prototype/SKILL.md
     local_changes: 当前五阶段没有独立触发和消费合同
     dependency_closure: []
     update_policy: 出现真实高不确定触发合同后再评估
@@ -1332,6 +1820,9 @@ capability_decisions:
     design_idea: 从计划直接驱动实现循环
     used_by_stages: []
     local_path: workflows/build-code/SKILL.md
+    # Historical exception: rejected at 66898f60e8c744e269f8ce06c2b2b99ce7660d5f;
+    # this is the original rejection source, not a current-source existence claim.
+    # Decision source: specs/workflowhub-skill-modernization-20261008/decision-log.md ADR-001; current source is projects.matt-skills.
     upstream:
       - github_url: https://github.com/mattpocock/skills
         commit: 66898f60e8c744e269f8ce06c2b2b99ce7660d5f
@@ -1350,6 +1841,9 @@ capability_decisions:
     design_idea: 安装宿主配置或未稳定技能集
     used_by_stages: []
     local_path: null
+    # Historical exception: rejected at 66898f60e8c744e269f8ce06c2b2b99ce7660d5f;
+    # this is the original rejection source, not a current-source existence claim.
+    # Decision source: specs/workflowhub-skill-modernization-20261008/decision-log.md ADR-001; current source is projects.matt-skills.
     upstream:
       - github_url: https://github.com/mattpocock/skills
         commit: 66898f60e8c744e269f8ce06c2b2b99ce7660d5f
@@ -1368,7 +1862,6 @@ capability_decisions:
     design_idea: 区分 DIFF-VERIFIABLE、CROSS-REPO、EXTERNAL-STATE、CONTENT-SHAPE
     used_by_stages:
       - make-decision
-      - build-spec
       - build-plan
     local_path: skills/review/SKILL.md
     upstream:
