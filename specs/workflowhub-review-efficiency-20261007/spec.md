@@ -230,7 +230,7 @@ FR-REV-001…023 列出的行为；文件边界见「全局文件边界与依赖
 验证：`node "$T/quality/tests/rev-acceptance.mjs" --task=T025 --root="$W"`
 通过：exit 0；无「整体重写 / 全文对齐 / 覆盖全部 N 组」，每个锚点 `grep -n` 恰命中 1 处（排除引述行）。
 失败：任一原件出现上述字样或锚点 0 / 多处命中。
-证据：P10 原件；判定对象为空集时记 `incomplete` 并列入 P10 的已声明缺口清单。当前原通过／失败判法不变；用户真实选择仅允许任务库 `quality/tests/2026-10-08-124-p10-fixed-loss-full-mapping.json` 中本项已发生具名原件的格式损失保留 `fail`，其余工作完成后如实有损收尾（见 P10「有限既发生派发格式损失」）。只对该固定 path/hash/全部违规签名生效，后新增或新增违规不豁免，不转 `pass`／`incomplete`，不免产品测试或逐 Phase 审查，不表示整体通过。
+证据：P10 原件；判定对象为空集时记 `incomplete` 并列入 P10 的已声明缺口清单。当前原通过／失败判法不变；用户真实选择仅允许任务库 `quality/tests/2026-10-08-124-p10-fixed-loss-full-mapping.json` 中本项已发生具名原件的格式损失保留 `fail`，其余工作完成后如实有损收尾（见 P10「有限既发生派发格式损失」）。只对该固定 path/hash/全部违规签名生效，后新增或新增违规不豁免，不转 `pass`／`incomplete`，不免产品测试或逐 Phase 审查，不表示整体通过。 本次另有[006真实两条选择](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-review-efficiency-20261007/quality/evidence/human-confirmations/2026-10-08-006-two-historical-format-failures-limited-delivery.json>)明确“允许仅这两条保留失败并如实收口”，仅本项一个不可变原件path/hash/完整signature（见P10追加边界）；旧003/124范围不改、AC013不扩。仅授权历史组织损失保留fail，新classifier另需独立TCR批准/after核，不预报GREEN/Done，不免业务验证或生产风险/close。
 - [ ] **AC-REV-011**：（A-11）四个模板照抄不被拒。关联 FR-REV-013、FR-REV-015。
 验证：`node "$T/quality/tests/rev-p5-oracle.mjs" --task=T013`；`node "$T/quality/tests/rev-p6-oracle.mjs" --task=T015`（同法 T016、T017）
 通过：四条 exit 0；C24 包装式判法下 `requires concrete` 为 0，spec / phase 模板 `[填写：` 为 0。
@@ -250,7 +250,7 @@ FR-REV-001…023 列出的行为；文件边界见「全局文件边界与依赖
 验证：`node "$T/quality/tests/rev-acceptance.mjs" --task=T025 --root="$W"`
 通过：exit 0；研究结论以 ref + sha256 + ≤500 字摘要出现；摘要字数＝引用研究原件的那一行起、到空行为止的连续段落，去掉反引号路径、≥16 位十六进制串与全部空白后的字符数，500 字通过、501 字失败。
 失败：出现整段研究原文（≥15 行连续原文）、引用研究原件但缺 `sha256`，或引述摘要超过 500 字。
-证据：P10 原件；判定对象为空集时记 `incomplete` 并列入 P10 的已声明缺口清单。当前原通过／失败判法不变；用户真实选择仅允许任务库 `quality/tests/2026-10-08-124-p10-fixed-loss-full-mapping.json` 中本项已发生具名原件的格式损失保留 `fail`，其余工作完成后如实有损收尾（见 P10「有限既发生派发格式损失」）。只对该固定 path/hash/全部违规签名生效，后新增或新增违规不豁免，不转 `pass`／`incomplete`，不免产品测试或逐 Phase 审查，不表示整体通过。
+证据：P10 原件；判定对象为空集时记 `incomplete` 并列入 P10 的已声明缺口清单。当前原通过／失败判法不变；用户真实选择仅允许任务库 `quality/tests/2026-10-08-124-p10-fixed-loss-full-mapping.json` 中本项已发生具名原件的格式损失保留 `fail`，其余工作完成后如实有损收尾（见 P10「有限既发生派发格式损失」）。只对该固定 path/hash/全部违规签名生效，后新增或新增违规不豁免，不转 `pass`／`incomplete`，不免产品测试或逐 Phase 审查，不表示整体通过。 本次另有[006真实两条选择](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-review-efficiency-20261007/quality/evidence/human-confirmations/2026-10-08-006-two-historical-format-failures-limited-delivery.json>)明确“允许仅这两条保留失败并如实收口”，仅本项一个不可变原件path/hash/完整signature（见P10追加边界）；旧003/124范围不改、AC013不扩。仅授权历史组织损失保留fail，新classifier另需独立TCR批准/after核，不预报GREEN/Done，不免业务验证或生产风险/close。
 - [ ] **AC-REV-015**：解析上限 16 MiB。关联 FR-REV-001。
 验证：`node "$T/quality/tests/rev-p1-oracle.mjs" --task=T001`
 通过：exit 0；2,010,784 B 合法输出可解析，超限输入抛 `OUTPUT_INVALID`。
