@@ -256,10 +256,10 @@ FR-REV-001…023 列出的行为；文件边界见「全局文件边界与依赖
 通过：exit 0；2,010,784 B 合法输出可解析，超限输入抛 `OUTPUT_INVALID`。
 失败：上限仍为 128 KiB 或超限被接受。
 证据：P1 原件。
-- [ ] **AC-REV-016**：`minimum_reviewers` 与零消费者访问器全仓零命中。关联 FR-REV-003。
+- [ ] **AC-REV-016**：`minimum_reviewers` 与零消费者访问器的生产、配置、调用与导出残余为零；保持全仓原扫描范围及排除集，只允许两处指定人读退役说明保留原名。关联 FR-REV-003。
 验证：`node "$T/quality/tests/rev-p2-oracle.mjs" --task=T003`
-通过：exit 0；真实矩阵仍过 schema。
-失败：任一命中残留。
+通过：exit 0；真实矩阵仍过 schema；原全仓命中仅可位于 `docs/architecture/move-map.json` 中 owner 为 `B4/P5 / MT-1-052`、destination 为 `runtime/review/review-policy.mjs`，或 owner 为 `B4/P5 / MT-3-087`、destination 为 `skills/wh-review/scripts/review-materials.mjs` 两个指定条目的 `delete_condition` 字段内，且仅在精确人读段「退役登记（ADR-008）：minimumReviewersFor 已删，派发人数唯一由宿主配置 wh_review.stages.*.initial 决定」中的原名。实际两处只在该字段，不将 `consumer` 纳入例外；每条至多该精确段一次。不排整个 docs、整个映射文件或整个命中行。
+失败：除上述两处精确段内的原名外任一命中残留；`minimum_reviewers` 无例外，同符号在生产源码、配置、调用、导出、`module_consumers`、`destination`、`consumer`、任何其他字段／段／条目或其他 docs 出现仍失败。
 证据：P2 原件。
 - [ ] **AC-REV-017**：逐字节绑定死代码与其测试删除，合同措辞同步。关联 FR-REV-004。
 验证：`node "$T/quality/tests/rev-p2-oracle.mjs" --task=T004`
