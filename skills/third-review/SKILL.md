@@ -53,13 +53,13 @@ node {skill-root}/scripts/3rd-review.mjs run \
 - `file_only` 不依赖系统级 wrapper 或 root policy。broker 校验来源路径、普通单链接文件、size 与 SHA-256，把材料复制到 provider-private workspace，锁定副本，并在首次运行和续跑前重新验证冻结材料。
 - 私有 workspace 是材料投递边界，不宣称是操作系统安全边界。adapter 自带的只读模式仍会启用；如部署环境额外提供 sandbox，可在 broker 外叠加，但缺少 sandbox 不会移除 `file_only` capability。
 - `pi` 使用受控 JSONL wrapper：prompt 经 stdin 传递，支持 `file_only`、`always_embed` 与 native session 续跑；wrapper 丢弃重复 thinking delta，只保留 session、progress、最终 assistant 文本和 settled 证据，避免原生 JSONL 撞 output cap。默认示例模型是 `cc-switch-deep-seek/deepseek-v4-flash`。
-- `antigravity` 调用 `agy` 的 plan/sandbox print 模式，首版只支持单轮 `file_only`，不支持 `always_embed` 或续跑。它为 headless 文件读取使用 `--dangerously-skip-permissions`；这不是 OS sandbox，且 AGY 会写本机 native profile，所以启用前必须显式配置 `allow_host_state: true` 并只处理可信材料。模型必须使用显示名 `Gemini 3.5 Flash (Low)`，不能使用会在本机 1.1.5 映射到 Medium 的 slug。
+- `antigravity` 调用 `agy` 的 plan/sandbox 模式，使用 `--output-format stream-json`，`step_update` 作去重进展游标、`result` 作终态；首版只支持单轮 `file_only`，不支持 `always_embed` 或续跑。它为 headless 文件读取使用 `--dangerously-skip-permissions`；这不是 OS sandbox，且 AGY 会写本机 native profile，所以启用前必须显式配置 `allow_host_state: true` 并只处理可信材料。模型必须使用显示名 `Gemini 3.5 Flash (Low)`，不能使用会在本机 1.1.5 映射到 Medium 的 slug。
 - `always_embed` 只在 provider 明确支持时使用：broker 渲染完整最终 prompt 后一次计算 UTF-8 总量；超过 512KB 返回 `MATERIAL_TOO_LARGE`，不产生 session 或可续跑结果。不得用 diff chunk 绕过该上限。
 - 续跑不重传附件；broker 会重新验证首轮冻结副本的 size/hash/身份。
 - `status` 是公开投影，不返回 session、review output、raw output ref 或绝对路径。
 - 首轮结果含 `selected_tier`；续跑为 `null`。`cancelled` 是独立状态，不是 provider 失败。
 - 临时状态在 `/tmp/3rd-review`，每次命令自动清理超过 24 小时且没有活跃进程的状态。
-- `status` 查看活跃进程；只有 `cancel` 或明确终态失败会终止进程。初始执行没有默认 120/180 秒限制；仅同 session 终态恢复有独立的 bounded recovery window。
+- `status` 查看活跃进程；只有 `cancel` 或明确终态失败会终止进程。初始执行没有默认 120/180 秒限制；仅同 session 终态恢复有独立的 bounded recovery window。连续 5 个健康检查间隔无新进展的 provider 以 `PROCESS_STALLED` 终态失败结束并回收进程组，antigravity 以去重的 stream-json 事件计进展；有进展即清零，总时长不设上限。
 - `doctor` 只验证 CLI executable，不能证明登录、认证或真实模型调用。
 
 查看完整异常语义与维护约束：[`docs/exceptions.md`](docs/exceptions.md)。

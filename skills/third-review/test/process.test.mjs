@@ -6,6 +6,7 @@ import path from "node:path";
 import { test } from "vitest";
 import { execute } from "../lib/process.mjs";
 import { jsonProgress } from "../lib/adapters/shared.mjs";
+import antigravity from "../lib/adapters/antigravity.mjs";
 import { terminateProcess } from "../lib/runtime.mjs";
 
 const silent = migratedFilePath(new URL("../test/silent-cli.mjs", import.meta.url));
@@ -15,6 +16,12 @@ const slow = migratedFilePath(new URL("../test/slow-cli.mjs", import.meta.url));
 const duplicate = migratedFilePath(new URL("../test/duplicate-progress-cli.mjs", import.meta.url));
 const providerFailure = migratedFilePath(new URL("../test/provider-failure-cli.mjs", import.meta.url));
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+async function assertProcessGroupReaped(pid) {
+  const alive = () => { try { process.kill(process.platform === "win32" ? pid : -pid, 0); return true; } catch (error) { return error.code === "EPERM"; } };
+  const deadline = Date.now() + 2_000;
+  while (alive() && Date.now() < deadline) await delay(10);
+  assert.equal(alive(), false, "provider process group must be reclaimed");
+}
 function plan(command, env = {}) { return { command, argv: [], cwd: fs.mkdtempSync(path.join(os.tmpdir(), "3rd-review-process-test-")), input: null, env: { ...process.env, ...env }, redact: [] }; }
 
 test("silent live process emits liveness without activity", async () => {
@@ -38,12 +45,14 @@ test("health completion terminates a hanging wrapper without a wall-clock race",
   assert.equal(result.ok, true); assert.equal(result.health_harvested, true); assert.equal(result.stdout, raw);
 });
 
-test("health busy without progress does not terminate a live process", async () => {
+test("health busy without progress terminates a live process as PROCESS_STALLED", async () => {
+  let pid;
   const result = await execute({ ...plan(silent, { THIRD_REVIEW_TEST_DURATION_MS: "500" }), probeSession: async () => ({ status: "busy", session_id: "s", cursor: "same", raw: null, error: null, evidence: "busy" }) }, {
-    maxOutputBytes: 4096, healthCheckIntervalMs: 10, terminationGraceMs: 10,
+    maxOutputBytes: 4096, healthCheckIntervalMs: 10, terminationGraceMs: 10, onStart: (value) => { pid = value; },
   });
-  assert.equal(result.ok, true);
-  assert.ok(result.duration_ms >= 400);
+  assert.equal(result.ok, false);
+  assert.equal(result.error.code, "PROCESS_STALLED");
+  await assertProcessGroupReaped(pid);
 });
 
 test("PID liveness remains diagnostic for a stream-only provider", async () => {
@@ -68,9 +77,9 @@ test("an injected diagnostic health probe does not override process completion",
   assert.equal(result.ok, true); assert.ok(injectedCalls > 0); assert.equal(planCalls, 0);
 });
 
-test("PID liveness with unchanged health remains non-terminal", async () => {
+test("PID liveness does not prevent unchanged health from ending as PROCESS_STALLED", async () => {
   const liveness = []; const result = await execute({ ...plan(silent, { THIRD_REVIEW_TEST_DURATION_MS: "200" }), probeSession: async () => ({ status: "busy", session_id: "s", cursor: "same", raw: null, error: null, evidence: "unchanged" }) }, { maxOutputBytes: 4096, healthCheckIntervalMs: 10, livenessIntervalMs: 2, onLiveness: (value) => liveness.push(value) });
-  assert.ok(liveness.length > 5); assert.equal(result.ok, true);
+  assert.ok(liveness.length > 5); assert.equal(result.ok, false); assert.equal(result.error.code, "PROCESS_STALLED");
 });
 
 test("completed health raw is harvested and a hanging wrapper is internally terminated", async () => {
@@ -167,4 +176,37 @@ test("an adapter can write follow-up stdin after observing provider output", asy
   }, { maxOutputBytes: 4096 });
   assert.equal(result.ok, true);
   assert.match(result.stdout, /done/);
+});
+
+test("a silent streamProgress provider ends as PROCESS_STALLED and its group is reaped", async () => {
+  let pid;
+  const source = "process.stdout.write(JSON.stringify({event:'step_update',step_update:{step_index:1,state:'ACTIVE'}})+'\\n'); setTimeout(()=>process.exit(0),3000);";
+  const result = await execute({ command: process.execPath, argv: ["-e", source], cwd: os.tmpdir(), env: process.env, input: null, redact: [], observeLine: antigravity.observeLine, streamProgress: true }, { maxOutputBytes: 4096, healthCheckIntervalMs: 20, terminationGraceMs: 20, onStart: (value) => { pid = value; } });
+  assert.equal(result.ok, false); assert.equal(result.error.code, "PROCESS_STALLED"); await assertProcessGroupReaped(pid);
+});
+
+test("repeated step and init events are liveness but cannot keep a stalled stream alive", async () => {
+  let pid;
+  const source = "setTimeout(()=>process.exit(0),3000);setInterval(()=>{process.stdout.write(JSON.stringify({event:'init'})+'\\n');process.stdout.write(JSON.stringify({event:'step_update',step_update:{step_index:1,state:'ACTIVE'}})+'\\n');},5);";
+  const result = await execute({ command: process.execPath, argv: ["-e", source], cwd: os.tmpdir(), env: process.env, input: null, redact: [], observeLine: antigravity.observeLine, streamProgress: true }, { maxOutputBytes: 65536, healthCheckIntervalMs: 20, terminationGraceMs: 20, onStart: (value) => { pid = value; } });
+  assert.equal(result.ok, false); assert.equal(result.error.code, "PROCESS_STALLED"); assert.equal(result.progress_events, 1); await assertProcessGroupReaped(pid);
+});
+
+test("a steadily progressing streamProgress provider finishes without a total time limit", async () => {
+  const source = "let i=0;const t=setInterval(()=>{process.stdout.write(JSON.stringify({event:'step_update',step_update:{step_index:++i,state:'DONE'}})+'\\n');if(i===40){clearInterval(t);process.stdout.write(JSON.stringify({event:'result',result:{status:'SUCCESS',response:'steady'}})+'\\n');}},5);";
+  const result = await execute({ command: process.execPath, argv: ["-e", source], cwd: os.tmpdir(), env: process.env, input: null, redact: [], observeLine: antigravity.observeLine, streamProgress: true }, { maxOutputBytes: 65536, healthCheckIntervalMs: 20, terminationGraceMs: 20 });
+  assert.equal(result.ok, true); assert.equal(result.progress_events, 40); assert.equal(antigravity.parse(result.stdout).text, "steady");
+});
+
+test("a successful Antigravity result completes and reaps a lingering process without stalling", async () => {
+  let pid;
+  // The fixture ignores SIGTERM so successful cleanup must retain the existing
+  // SIGKILL grace path. Its eventual exit only prevents a broken test leaking.
+  const source = "process.on('SIGTERM',()=>{});process.stdout.write(JSON.stringify({event:'result',result:{status:'SUCCESS',response:'terminal-before-close'}})+'\\n');setTimeout(()=>process.exit(0),1500);";
+  const result = await execute({ command: process.execPath, argv: ["-e", source], cwd: os.tmpdir(), env: process.env, input: null, redact: [], observeLine: antigravity.observeLine, streamProgress: true }, { maxOutputBytes: 4096, healthCheckIntervalMs: 20, terminationGraceMs: 20, onStart: (value) => { pid = value; } });
+  try {
+    assert.equal(result.ok, true, `successful result must remain successful, not ${result.error?.code}`);
+    assert.equal(result.error, undefined);
+    assert.deepEqual(antigravity.parse(result.stdout), { ok: true, text: "terminal-before-close", session_id: null, usage: null });
+  } finally { await assertProcessGroupReaped(pid); }
 });

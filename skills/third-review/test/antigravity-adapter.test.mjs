@@ -21,6 +21,8 @@ test("Antigravity uses the supported noninteractive plan-mode contract", async (
   assert.ok(execution.argv.includes("--sandbox"));
   assert.ok(execution.argv.includes("--dangerously-skip-permissions"));
   assert.equal(execution.argv[execution.argv.indexOf("-p") + 1], "review");
+  assert.equal(execution.argv[execution.argv.indexOf("--output-format") + 1], "stream-json");
+  assert.equal(execution.streamProgress, true);
   const result = await execute(execution, { maxOutputBytes: 100_000, healthCheckIntervalMs: 10_000 });
   assert.equal(result.ok, true);
   assert.deepEqual(antigravity.parse(result.stdout), { ok: true, text: "AGY_FINAL:review", session_id: null, usage: null });
@@ -32,10 +34,20 @@ test("Antigravity rejects unsupported generic effort but preserves large prompts
   assert.equal(antigravity.start(provider(), temp(), "x".repeat(64 * 1024 + 1)).argv.at(-1).length, 64 * 1024 + 1);
 });
 
-test("Antigravity only accepts non-empty plain-text results and never resumes", () => {
-  assert.equal(antigravity.parse("\n").ok, false);
-  assert.deepEqual(antigravity.observeLine("stdout", "final"), { liveness: true, progress: true, event: "text" });
+test("Antigravity accepts successful stream-json results and never resumes", () => {
+  assert.equal(antigravity.parse("\n").parse_outcome, "empty_output");
+  const step = JSON.stringify({ event: "step_update", step_update: { conversation_id: "not-a-native-session", step_index: 7, state: "ACTIVE" } });
+  assert.deepEqual(antigravity.observeLine("stdout", step), { liveness: true, progress: true, cursor: "7:ACTIVE", progress_key: "7:ACTIVE", event: "step_update" });
+  assert.deepEqual(antigravity.observeLine("stdout", "final"), { liveness: true, progress: false, event: "text" });
+  assert.equal(antigravity.observeLine("stdout", JSON.stringify({ event: "init" })).progress, false);
+  assert.equal(antigravity.observeLine("stdout", JSON.stringify({ event: "step_update", step_update: {} })).progress, false);
   assert.deepEqual(antigravity.observeLine("stderr", "warning"), { liveness: true, progress: false, event: "stderr" });
   assert.equal(antigravity.observeLine("stdout", "  ").progress, false);
+  const result = (status, response) => JSON.stringify({ event: "result", result: { status, response } });
+  assert.deepEqual(antigravity.observeLine("stdout", result("SUCCESS", "done")).terminal, { state: "completed", wait_for_close: true });
+  assert.equal(antigravity.observeLine("stdout", result("ERROR", "")).terminal.error.code, "PROVIDER_HEALTH_FAILED");
+  assert.deepEqual(antigravity.parse([step, result("SUCCESS", "first"), result("SUCCESS", "last")].join("\n")), { ok: true, text: "last", session_id: null, usage: null });
+  for (const text of [step, "plain text", result("SUCCESS", " "), result("SUCCESS", 42), [result("SUCCESS", "first"), result("ERROR", "")].join("\n")]) assert.equal(antigravity.parse(text).error.code, "PROVIDER_OUTPUT_INVALID");
+  assert.equal(antigravity.parse("", "print timeout").error.code, "PROCESS_TIMEOUT");
   assert.throws(() => antigravity.resume(provider(), temp(), "session", "continue"), { code: "PROVIDER_OPTION_UNSUPPORTED" });
 });

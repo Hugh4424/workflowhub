@@ -45,7 +45,7 @@ export function execute(plan, { maxOutputBytes, maxPendingLineBytes = 1_048_576,
       if (!terminalClaim || settled) return;
       const value = snapshot();
       if (terminalClaim.kind === "failed") finish({ ok: false, error: terminalClaim.error, ...value }, { detachOutput: true, keepKillTimer: true });
-      else finish({ ok: true, ...value, stdout: terminalClaim.harvest.raw.stdout, stderr: terminalClaim.harvest.raw.stderr, health_harvested: true }, { detachOutput: true });
+      else finish({ ok: true, ...value, stdout: terminalClaim.harvest.raw.stdout, stderr: terminalClaim.harvest.raw.stderr, health_harvested: true }, { detachOutput: true, keepKillTimer: true });
     };
     const claimFailure = (code, message) => { if (settled || terminalClaim) return false; terminalClaim = { kind: "failed", error: { code, message } }; terminateClaimedProcess(); return true; };
     const claimCompleted = (harvest) => { if (settled || terminalClaim) return false; terminalClaim = { kind: "completed", harvest }; terminateClaimedProcess(); return true; };
@@ -69,7 +69,7 @@ export function execute(plan, { maxOutputBytes, maxPendingLineBytes = 1_048_576,
       }
       livenessTimer = setInterval(observeProcessLiveness, livenessIntervalMs); livenessTimer.unref();
       const healthProbe = probeSession ?? plan.probeSession;
-      healthRunner = createHealthRunner({ intervalMs: healthCheckIntervalMs, probeDeadlineMs, isCancelled, validateCompleted, probeSession: healthProbe ? (ctx) => healthProbe({ ...ctx, pid: child.pid, cwd: plan.cwd }) : null, onProgress: ({ at_ms, session_id: healthSession, cursor: healthCursor }) => { if (healthSession) session_id = healthSession; if (healthCursor !== null && healthCursor !== undefined) cursor = healthCursor; onProgress?.({ at_ms, session_id, cursor, event: "health" }); }, onDecision: (decision) => {
+      healthRunner = createHealthRunner({ streamProgress: plan.streamProgress === true, intervalMs: healthCheckIntervalMs, probeDeadlineMs, isCancelled, validateCompleted, probeSession: healthProbe ? (ctx) => healthProbe({ ...ctx, pid: child.pid, cwd: plan.cwd }) : null, onProgress: ({ at_ms, session_id: healthSession, cursor: healthCursor }) => { if (healthSession) session_id = healthSession; if (healthCursor !== null && healthCursor !== undefined) cursor = healthCursor; onProgress?.({ at_ms, session_id, cursor, event: "health" }); }, onDecision: (decision) => {
         if (decision.session_id) session_id = decision.session_id; if (decision.cursor !== null && decision.cursor !== undefined) cursor = decision.cursor;
         if (decision.status === "completed") { if (claimCompleted(decision)) settleClaim(); return; }
         if (claimFailure(decision.error.code, decision.error.message)) settleClaim();
@@ -101,7 +101,10 @@ export function execute(plan, { maxOutputBytes, maxPendingLineBytes = 1_048_576,
         if (!terminal || !["completed", "failed"].includes(terminal.state)) { claimFailure("HEALTH_INVALID", "provider emitted an invalid terminal observation"); return; }
         if (isCancelled()) { claimFailure("CANCELLED", "health supervision was cancelled"); return; }
         if (terminal.state === "completed") {
-          if (terminal.wait_for_close === true) { if (!terminalClaim && child.stdin && !child.stdin.destroyed) child.stdin.end(); }
+          // A declared progress stream carries its completed result in this
+          // terminal event; a lingering wrapper cannot turn it into a stall.
+          // Other protocols may still need process close to finish their output.
+          if (terminal.wait_for_close === true && plan.streamProgress !== true) { if (!terminalClaim && child.stdin && !child.stdin.destroyed) child.stdin.end(); }
           else {
             if (claimCompleted({ raw: { stdout: redact(stdout, plan.redact), stderr: redact(stderr, plan.redact) }, session_id: terminal.session_id ?? null, cursor: terminal.cursor ?? null })) settleClaim();
           }
@@ -139,11 +142,10 @@ export function execute(plan, { maxOutputBytes, maxPendingLineBytes = 1_048_576,
     child.stdout.on("data", collect("stdout")); child.stderr.on("data", collect("stderr"));
     child.once("close", (code, signal) => {
       if (settled) {
-        // A failed claim keeps the grace timer only while a descendant still
-        // owns the detached process group. If the leader's close confirms the
-        // group is already gone, release the timer immediately instead of
-        // making every timeout wait the full termination grace period.
-        if (killTimer && (terminalClaim?.kind !== "failed" || !isProcessGroupAlive(child?.pid))) {
+        // Terminal claims keep the grace timer while any descendant still
+        // owns the detached process group, including after successful output.
+        // Release it early only when close confirms the whole group is gone.
+        if (killTimer && !isProcessGroupAlive(child?.pid)) {
           clearTimeout(killTimer); killTimer = null;
         }
         return;

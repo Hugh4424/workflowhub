@@ -110,7 +110,7 @@ test("Codex probe stays non-terminal for a turn in flight and never ages silence
   } finally { await stopBridge(bridge); }
 });
 
-test("Codex health supervision over a stalled-but-live turn produces diagnostics and no terminal decision", async () => {
+test("Codex health supervision over a stalled-but-live turn ends as PROCESS_STALLED", async () => {
   const bridge = startBridge("HOLD_TURN");
   try {
     await waitForStatus(bridge.url, (state) => state.provider?.last_turn?.status === "inProgress");
@@ -126,8 +126,9 @@ test("Codex health supervision over a stalled-but-live turn produces diagnostics
     await new Promise((resolve) => setTimeout(resolve, 400));
     runner.stop();
     assert.equal(calls >= 3, true, `expected repeated probes, saw ${calls}`);
-    assert.deepEqual(decisions, []);
-    assert.equal(diagnostics.some((value) => value.code === "PROCESS_STALLED"), true);
+    assert.equal(decisions.length, 1);
+    assert.equal(decisions[0].status, "failed");
+    assert.equal(decisions[0].error.code, "PROCESS_STALLED");
     assert.deepEqual(diagnostics.filter((value) => value.code === "HEALTH_INVALID"), []);
     const result = await probe({ session_id: "codex-thread", cursor: null, signal: AbortSignal.timeout(4_000) });
     assert.notEqual(result.terminal, true);
