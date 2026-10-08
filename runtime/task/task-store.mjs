@@ -7,7 +7,7 @@ const STAGES = new Set(["make-decision", "build-plan", "build-code", "verify-cod
 export const TASK_RECORD_KINDS = Object.freeze(["stage", "close_action"]);
 export const STAGE_ROW_KEYS = Object.freeze([
   "record_kind", "task_id", "stage", "source", "created_at", "review_origin", "review_result_ref",
-  "finding_dispositions", "spec_analyze", "evidence", "serious_issue_disposition", "close_action", "handoff",
+  "finding_dispositions", "spec_analyze", "evidence", "serious_issue_disposition", "close_action", "handoff", "material_bytes",
 ]);
 export const REVIEW_ORIGINS = Object.freeze(["conducted", "unavailable", "not_run", "same_source_degraded", "dispatched_uncollected"]);
 export const CLOSE_ACTIONS = Object.freeze(["delivery_committed", "archive", "merge", "push", "worktree_cleanup"]);
@@ -59,7 +59,7 @@ function condition(value,label) {
   return value;
 }
 function validateCursor(value) {
-  if(!plain(value)||Object.keys(value).sort().join("\0")!==["phase_id","task_id","phases_head","recorded_at"].sort().join("\0")||!/^P[1-9][0-9]*$/.test(value.phase_id??"")||!/^T[0-9]{3,}$/.test(value.task_id??"")||!/^[a-f0-9]{40,64}$/.test(value.phases_head??"")||!Number.isFinite(Date.parse(value.recorded_at)))throw new TypeError("phase_progress is invalid");
+  if(!plain(value)||Object.keys(value).sort().join("\0")!==["phase_id","task_id","phases_head","base_head","recorded_at"].sort().join("\0")||!/^P[1-9][0-9]*$/.test(value.phase_id??"")||!/^T[0-9]{3,}$/.test(value.task_id??"")||typeof value.phases_head!=="string"||!/^[a-f0-9]{40,64}$/.test(value.phases_head)||typeof value.base_head!=="string"||!/^[a-f0-9]{40,64}$/.test(value.base_head)||!Number.isFinite(Date.parse(value.recorded_at)))throw new TypeError("phase_progress is invalid");
 }
 function currentRow(input,identity,now) {
   if(!plain(input)||Object.keys(input).some(key=>![...STAGE_ROW_KEYS,"phase_progress"].includes(key)))throw new TypeError("task row contains unsupported fields");
@@ -68,7 +68,7 @@ function currentRow(input,identity,now) {
   const row={record_kind:input.record_kind??"stage",task_id:identity.taskId,stage:input.stage,source:input.source,created_at:input.created_at??now,
     review_origin:input.review_origin??"not_run",review_result_ref:input.review_result_ref??empty("no review result recorded"),finding_dispositions:input.finding_dispositions??[],
     spec_analyze:input.spec_analyze??empty("spec analysis not run"),evidence:input.evidence??empty("no executed command evidence"),
-    serious_issue_disposition:input.serious_issue_disposition??empty("no serious issue disposition"),close_action:input.close_action??empty("this row carries no close action"),handoff:input.handoff??empty("no handoff recorded")};
+    serious_issue_disposition:input.serious_issue_disposition??empty("no serious issue disposition"),close_action:input.close_action??empty("this row carries no close action"),handoff:input.handoff??empty("no handoff recorded"),material_bytes:Object.hasOwn(input,"material_bytes")?input.material_bytes:empty("no material size baseline recorded")};
   if(!TASK_RECORD_KINDS.includes(row.record_kind)||!text(row.source)||!Number.isFinite(Date.parse(row.created_at)))throw new TypeError("task row identity or time is invalid");
   if(row.record_kind==="stage"){if(!STAGES.has(row.stage))throw new TypeError("task row stage is invalid");condition(row.close_action,"close_action");if(row.close_action.value!==null)throw new TypeError("stage rows cannot carry close actions");}
   else if(row.stage!=="close"||!plain(row.close_action)||!CLOSE_ACTIONS.includes(row.close_action.action)||!text(row.close_action.result))throw new TypeError("close action row is invalid");
@@ -77,6 +77,13 @@ function currentRow(input,identity,now) {
   else{condition(row.review_result_ref,"review_result_ref");if(row.review_result_ref.value!==null)throw new TypeError("unconducted review must carry empty reference");}
   if(!Array.isArray(row.finding_dispositions))throw new TypeError("finding_dispositions must be an array of passive facts");
   for(const key of ["spec_analyze","evidence","serious_issue_disposition","handoff"])condition(row[key],key);
+  condition(row.material_bytes,"material_bytes");
+  if(row.material_bytes.value!==null){
+    const baseline=row.material_bytes.value;
+    const valid=plain(baseline)&&Object.keys(baseline).sort().join("\0")===["total_bytes","files"].sort().join("\0")&&Number.isSafeInteger(baseline.total_bytes)&&baseline.total_bytes>=0&&plain(baseline.files)&&Object.entries(baseline.files).every(([key,value])=>text(key)&&Number.isSafeInteger(value)&&value>=0);
+    const total=valid?Object.values(baseline.files).reduce((sum,value)=>sum+value,0):null;
+    if(!valid||!Number.isSafeInteger(total)||total!==baseline.total_bytes)throw new TypeError("material_bytes baseline is not recomputable");
+  }
   if(row.evidence.value!==null){if(!Array.isArray(row.evidence.value)||!row.evidence.value.length||row.evidence.value.some(entry=>!plain(entry)||!text(entry.command)||!Number.isInteger(entry.exit_code)||!text(entry.failure_signature)))throw new TypeError("evidence must carry actual command, exit_code, failure_signature");}
   if(Object.hasOwn(input,"phase_progress")){if(row.record_kind!=="stage"||row.stage!=="build-code")throw new TypeError("phase_progress is only a build-code cursor");validateCursor(input.phase_progress);row.phase_progress=input.phase_progress;}
   return row;

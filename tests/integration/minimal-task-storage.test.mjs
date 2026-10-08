@@ -6,7 +6,7 @@ import { join, relative } from "node:path";
 import { createTask } from "../../runtime/task/task-handle.mjs";
 import { initializeTaskStore, readTaskFacts, STAGE_ROW_KEYS, writeStageRow } from "../../runtime/task/task-store.mjs";
 import { appendRecord } from "../../runtime/interface/safe-write.mjs";
-const EXPECTED_STAGE_KEYS=["record_kind","task_id","stage","source","created_at","review_origin","review_result_ref","finding_dispositions","spec_analyze","evidence","serious_issue_disposition","close_action","handoff"];
+const EXPECTED_STAGE_KEYS=["record_kind","task_id","stage","source","created_at","review_origin","review_result_ref","finding_dispositions","spec_analyze","evidence","serious_issue_disposition","close_action","handoff","material_bytes"];
 const roots=[];
 async function fixture(){
  const storage=realpathSync(mkdtempSync(join(tmpdir(),"workflowhub-minimal-store-")));roots.push(storage);
@@ -27,9 +27,31 @@ describe("minimal current task storage",()=>{
   const rows=readTaskFacts(root);expect(rows).toHaveLength(2);expect(rows.map(value=>value.stage)).toEqual(["build-code","build-plan"]);expect(rows[0].review_origin).toBe("unavailable");expect(JSON.stringify(rows)).not.toMatch(/parent|previous|generation|selector|successor/);
  });
  it("keeps exactly one current cursor with an owned Git ID and retains it when a later same-row write omits it",async()=>{
-  const{root,head}=await fixture(),cursor={phase_id:"P2",task_id:"T004",phases_head:head,recorded_at:"2026-10-03T01:02:03Z"};
+  const{root,head}=await fixture(),cursor={phase_id:"P2",task_id:"T004",phases_head:head,base_head:head,recorded_at:"2026-10-03T01:02:03Z"};
   await writeStageRow(root,{...row(),source:"phase-progress-cursor",phase_progress:cursor});expect(readTaskFacts(root)[0].phase_progress).toEqual(cursor);expect([...STAGE_ROW_KEYS].sort()).toEqual([...EXPECTED_STAGE_KEYS].sort());expect(Object.keys(readTaskFacts(root)[0]).sort()).toEqual([...EXPECTED_STAGE_KEYS,"phase_progress"].sort());
   await writeStageRow(root,{...row(),source:"later-ordinary-stage-fact"});const rows=readTaskFacts(root);expect(rows).toHaveLength(1);expect(rows[0].phase_progress).toEqual(cursor);expect(rows[0].review_origin).toBe("not_run");expect(rows[0].evidence.value).toBeNull();expect(rows[0]).not.toHaveProperty("completed");
+ });
+ it("overwrites one base_head and rejects historical or malformed cursor shapes without changing bytes",async()=>{
+  const{root,head}=await fixture(),path=join(root,"facts.jsonl"),cursor={phase_id:"P9",task_id:"T023",phases_head:head,base_head:head,recorded_at:"2026-10-08T00:00:00Z"};
+  await writeStageRow(root,{...row(),phase_progress:cursor});
+  const next={...cursor,task_id:"T024",base_head:"b".repeat(40)};await writeStageRow(root,{...row(),phase_progress:next});
+  expect(readTaskFacts(root)).toHaveLength(1);expect(readTaskFacts(root)[0].phase_progress).toEqual(next);
+  expect(Object.keys(next).sort()).toEqual(["phase_id","task_id","phases_head","base_head","recorded_at"].sort());
+  const{base_head,...missingBase}=cursor,before=readFileSync(path);
+  for(const bad of[missingBase,{...cursor,base_heads:[head]},{...cursor,per_phase_bases:{P9:head}},{...cursor,base_head:[head]},{...cursor,base_head:{value:head}},{...cursor,base_head:123},{...cursor,base_head:"invalid"}]){
+   await expect(writeStageRow(root,{...row(),phase_progress:bad})).rejects.toThrow(/phase_progress/);expect(readFileSync(path)).toEqual(before);
+  }
+ });
+ it("records recomputable material bytes and rejects invalid baselines without changing bytes",async()=>{
+  const{root}=await fixture(),path=join(root,"facts.jsonl"),value={total_bytes:7,files:{"spec.md":5,"phases/P9.md":2}};
+  await writeStageRow(root,{...row(),material_bytes:{value}});expect(readTaskFacts(root)[0].material_bytes).toEqual({value});const before=readFileSync(path);
+  for(const material_bytes of[{value:5},{value:{total_bytes:8,files:{"spec.md":5,"phases/P9.md":2}}},{value:{total_bytes:5}},{value:{total_bytes:5,files:{"spec.md":"5"}}},{value:{total_bytes:0,files:{"":0}}},{value:{total_bytes:-1,files:{"spec.md":-1}}},{value:{total_bytes:Number.MAX_SAFE_INTEGER+1,files:{"spec.md":Number.MAX_SAFE_INTEGER+1}}},{value:{total_bytes:0,files:[]}}, {value:null}]){
+   await expect(writeStageRow(root,{...row(),material_bytes})).rejects.toThrow(/material_bytes/);expect(readFileSync(path)).toEqual(before);
+  }
+ });
+ it("carries a passive default material baseline on ordinary stage rows",async()=>{
+  const{root}=await fixture();await writeStageRow(root,row());const baseline=readTaskFacts(root)[0].material_bytes;
+  expect(baseline.value).toBeNull();expect(baseline.reason).toBe("no material size baseline recorded");
  });
  it("reads original historical fields passively and keeps their line byte-for-byte during a different current stage write",async()=>{
   const{root}=await fixture(),path=join(root,"facts.jsonl"),old={...row("build-spec"),task_id:"minimal-task",created_at:"2026-08-30T00:00:00Z",review_result_ref:{value:null,reason:"old"},spec_analyze:{value:null,reason:"old"},evidence:{value:null,reason:"old"},serious_issue_disposition:{value:null,reason:"old"},close_action:{value:null,reason:"old"},handoff:{value:null,reason:"old"},snapshot_tree:"historical-source",material_digest:{value:"historical-source"},layer_states:{implementation_completion:"completed"}};

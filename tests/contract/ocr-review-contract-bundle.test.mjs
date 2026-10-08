@@ -209,6 +209,53 @@ describe("OCR code review packet carries the reviewer contract bodies (T020)", (
     }
   });
 
+  it("limits camelCase reviewScope phase bundles to the current Phase write set and cursor base", async () => {
+    const state = fixture();
+    const taskBaseline = git(state.worktreeRoot, ["rev-parse", "--verify", "HEAD^{commit}"]);
+    writeFileSync(join(state.worktreeRoot, "prior-two.md"), "previous Phase committed source\n");
+    git(state.worktreeRoot, ["add", "prior-two.md"]);
+    git(state.worktreeRoot, ["commit", "-qm", "previous Phase source"]);
+    const phaseBase = git(state.worktreeRoot, ["rev-parse", "--verify", "HEAD^{commit}"]);
+    writeFileSync(join(state.worktreeRoot, "README.md"), "current Phase owned source\n");
+    writeFileSync(join(state.worktreeRoot, "prior-one.md"), "unrelated source after Phase start\n");
+    git(state.worktreeRoot, ["add", "README.md", "prior-one.md"]);
+    git(state.worktreeRoot, ["commit", "-qm", "current Phase and unrelated source"]);
+    writeFileSync(join(state.taskDir, "facts.jsonl"), JSON.stringify({
+      record_kind:"stage", task_id:state.taskId, stage:"build-code", source:"owned Phase scope fixture",
+      phase_progress:{phase_id:"P3", task_id:"T003", phases_head:phaseBase, base_head:phaseBase, recorded_at:"2026-10-08T00:00:00Z"},
+    }) + "\n");
+    const originalContext = await contextFor(state);
+    const context = {...originalContext, workspace:{...originalContext.workspace, baselineCommit:taskBaseline}};
+    const attachmentRoot = join(state.root, "review-data");
+    mkdirSync(attachmentRoot);
+    for (const scope of [{review_scope:"phase"}, {reviewScope:"phase"}]) {
+      let capturedBase;
+      const bundle = prepareTaskBoundBuildCodeReviewBundle(context, {
+        stage:"build-code", ...scope, subject_kind:"phase", phase_id:"P3",
+        materials:{approved_spec:"Inspect only the current Phase owned README source.", acceptance_criteria:"AC-1: exclude earlier and unrelated Phase sources."},
+      }, {
+        loadConfig:()=>({attachmentRoot}),
+        captureSource:options=>{
+          const source = captureReviewSource(options);
+          capturedBase = source.baseCommit;
+          return source;
+        },
+      });
+      try {
+        expect(capturedBase).toBe(phaseBase);
+        expect(capturedBase).not.toBe(taskBaseline);
+        const diff = readFileSync(join(bundle.bundleRoot, "changes.diff"), "utf8");
+        expect(diff).toContain("diff --git a/README.md b/README.md");
+        expect(diff).not.toContain("prior-one.md");
+        expect(diff).not.toContain("prior-two.md");
+        expect(bundlePaths(bundle)).toContain("README.md");
+        expect(bundlePaths(bundle)).not.toContain("prior-one.md");
+        expect(bundlePaths(bundle)).not.toContain("prior-two.md");
+      } finally { bundle.dispose(); }
+    }
+    expect(readdirSync(attachmentRoot).filter(name=>name.startsWith(".ocr-code-review-") || name.startsWith("review-"))).toEqual([]);
+  });
+
   it("ships contracts, provider protocol, review focus, and lens bodies in the verify-code final packet", async () => {
     const state = fixture();
     writeFileSync(join(state.worktreeRoot, "README.md"), "final implementation under review\n");
@@ -296,15 +343,20 @@ describe("changed reviewer source and packet control paths", () => {
     writeFileSync(join(state.worktreeRoot, path), "# Previous owned reviewer source\n");
     git(state.worktreeRoot, ["add", path]);
     git(state.worktreeRoot, ["commit", "-qm", "owned previous lens source"]);
+    const baselineCommit = git(state.worktreeRoot, ["rev-parse", "--verify", "HEAD^{commit}"]);
     const bytes = lensSkillBytes(name);
     writeFileSync(join(state.worktreeRoot, path), bytes);
-    return {path, bytes};
+    git(state.worktreeRoot, ["add", path]);
+    git(state.worktreeRoot, ["commit", "-qm", "owned current lens source"]);
+    return {path, bytes, baselineCommit};
   }
   it.each(["simplicity-guard", "review"])("keeps changed %s source and identical fixed lens as one complete manifest entry", async name => {
-    const state = fixture(), {path, bytes} = changedLens(state, name);
+    const state = fixture(), {path, bytes, baselineCommit} = changedLens(state, name);
     const attachmentRoot = join(state.root, "review-data");
     mkdirSync(attachmentRoot);
-    const bundle = prepareTaskBoundBuildCodeReviewBundle(await contextFor(state), request(path), {loadConfig:()=>({attachmentRoot})});
+    const originalContext = await contextFor(state);
+    const context = {...originalContext, workspace:{...originalContext.workspace, baselineCommit}};
+    const bundle = prepareTaskBoundBuildCodeReviewBundle(context, request(path), {loadConfig:()=>({attachmentRoot})});
     try {
       expectContractBodies(bundle);
       expectLensBodies(bundle);
@@ -322,10 +374,11 @@ describe("changed reviewer source and packet control paths", () => {
     expect(readdirSync(attachmentRoot).filter(name => name.startsWith(".ocr-code-review-") || name.startsWith("review-"))).toEqual([]);
   });
   it("rejects differing source/control bytes without overwriting the changed source or leaving a packet", async () => {
-    const state = fixture(), {path, bytes} = changedLens(state, "simplicity-guard");
+    const state = fixture(), {path, bytes, baselineCommit} = changedLens(state, "simplicity-guard");
     const attachmentRoot = join(state.root, "review-data");
     mkdirSync(attachmentRoot);
-    const context = await contextFor(state);
+    const originalContext = await contextFor(state);
+    const context = {...originalContext, workspace:{...originalContext.workspace, baselineCommit}};
     let controlBytes;
     expect(() => prepareTaskBoundBuildCodeReviewBundle(context, request(path), {
       loadConfig:()=>({attachmentRoot}),

@@ -26,7 +26,7 @@ import { AUTHENTICATED_EVIDENCE_PATH, redactProviderHostPaths } from "../../runt
 import { authenticatedEvidenceBytes } from "../../runtime/review/review-packet-identity.mjs";
 import { runSimpleReview, validateReviewSupplement, validateReviewCallerMaterials } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 import { prepareConfiguredOcrHostContext, runConfiguredOcrHostReview, runOcrDelegationRound, detectOcr } from "../../runtime/review/ocr-delegation-adapter.mjs";
-import { compactReviewDiff, gitDiffPath } from "../../runtime/review/review-input-bounds.mjs";
+import { compactReviewDiff, compactVerifyCodeMaterials, gitDiffPath, verifyCodeChangedPaths } from "../../runtime/review/review-input-bounds.mjs";
 import { captureReviewSource } from "../../skills/wh-review/scripts/review-source.mjs";
 import { buildReviewMaterials, canonicalMaterialManifest, reviewMaterialBytes, reviewInstructionsFor, validateVerifyAcceptanceSummary } from "../../skills/wh-review/scripts/review-materials.mjs";
 import { loadTrustedThirdReviewConfig } from "../../skills/wh-review/scripts/third-review-host-config.mjs";
@@ -493,7 +493,7 @@ function projectOcrCodeReviewBundle(built, attachmentRoot, request, source, nati
 }
 
 function phaseReviewSourceProjection(context, request, source, attachmentRoot) {
-  if (request.stage !== "build-code" || request.review_scope !== "phase"
+  if (request.stage !== "build-code" || (request.review_scope ?? request.reviewScope) !== "phase"
       || context.manifest?.activation_cohort !== "post") return source;
   const index = context.artifacts.read("phases/index.md");
   const phases = Object.fromEntries(phaseFilesFromIndex(index).map((ref) => [ref, context.artifacts.read(ref)]));
@@ -504,6 +504,17 @@ function phaseReviewSourceProjection(context, request, source, attachmentRoot) {
   const diffPath = join(dirname(source.diffPath), `phase-${request.phase_id}.diff`);
   writeFileSync(diffPath, selected, { flag: "wx", mode: 0o600 });
   return Object.freeze({ ...source, diffPath, diffBytes: Buffer.byteLength(selected, "utf8") });
+}
+
+function phaseReviewDiffBase(context, request) {
+  if (request.stage !== "build-code" || (request.review_scope ?? request.reviewScope) !== "phase") return null;
+  const taskPath = context?.task?.taskPath;
+  if (typeof taskPath !== "string") return null;
+  try { lstatSync(join(taskPath, "facts.jsonl")); }
+  catch (error) { if (error.code === "ENOENT") return null; throw error; }
+  const cursor = readTaskFacts(taskPath).find(row => row?.record_kind === "stage" && row.stage === "build-code")?.phase_progress;
+  return cursor && cursor.phase_id === request.phase_id && typeof cursor.base_head === "string" && GIT_OID.test(cursor.base_head)
+    ? cursor.base_head : null;
 }
 
 export function prepareTaskBoundBuildCodeReviewBundle(context, request, {
@@ -521,8 +532,15 @@ export function prepareTaskBoundBuildCodeReviewBundle(context, request, {
   }
   const trusted = loadConfig({ requestedStage: request.stage, requestedTrack: request.review_track ?? request.reviewTrack ?? null,
     requestedReviewKind: request.review_kind ?? request.reviewKind ?? null });
+  const cursorDiffBase = phaseReviewDiffBase(context, request);
+  const changedPaths = request.stage === "verify-code" ? verifyCodeChangedPaths(execFileSync("git", [
+    "diff", "--name-only", `${context.workspace.baselineCommit}...HEAD`,
+  ], { cwd: context.workspace.worktreeRoot, env: gitMetadataEnvironment(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })) : undefined;
+  const compacted = compactVerifyCodeMaterials(request.materials, { changedPaths });
   const source = captureSource({ workspace: context.workspace, reviewDataRoot: trusted.attachmentRoot,
-    includeDiff: true, taskId: context.task.identity.taskId });
+    includeDiff: true, taskId: context.task.identity.taskId,
+    ...(cursorDiffBase === null ? {} : { baselineCommit: cursorDiffBase }),
+    ...(changedPaths === undefined ? {} : { writeSet: changedPaths }) });
   try {
     const selectedSource = phaseReviewSourceProjection(context, request, source, trusted.attachmentRoot);
     const built = buildMaterials({
@@ -536,8 +554,9 @@ export function prepareTaskBoundBuildCodeReviewBundle(context, request, {
       reviewTrack: request.review_track ?? request.reviewTrack ?? null,
       reviewScope,
       reviewKind: request.review_kind ?? request.reviewKind ?? null,
+      ...(changedPaths === undefined ? {} : { changed_paths: compacted.changed_paths, dropped_materials: compacted.dropped_materials }),
       materials: {
-        ...(request.materials ?? {}),
+        ...(compacted.materials ?? {}),
         // The fixed instruction is a runner-owned control file. Keep it out
         // of caller packet identity and inject it only after the authenticated
         // current-worktree bundle has been selected.
@@ -706,6 +725,7 @@ export function derivePhaseProgressStatus({ cursor = null, currentPhasesHead = n
     cursor: Object.freeze({
       phase_id: cursor.phase_id, task_id: cursor.task_id,
       ...(cursor.phases_head === undefined ? {} : { phases_head: cursor.phases_head }),
+      ...(cursor.base_head === undefined ? {} : { base_head: cursor.base_head }),
       recorded_at: cursor.recorded_at,
     }),
     ...(current ? {} : { reason: "phases_head_mismatch" }),
@@ -776,14 +796,25 @@ async function writeBuildCodePhaseProgressCursor(context, inputCursor) {
   if (!phaseProgressTargetExists(inputCursor, materials)) {
     throw new TypeError(`phase_progress target ${inputCursor.phase_id}/${inputCursor.task_id} is not in the current indexed Phase files`);
   }
+  const currentRow = readTaskFacts(context.task.taskPath).find((row) =>
+    row?.record_kind === "stage" && row.stage === "build-code") ?? null;
+  const cursor = currentRow?.phase_progress;
+  const samePhaseBase = cursor?.phase_id === inputCursor.phase_id && typeof cursor.base_head === "string" && GIT_OID.test(cursor.base_head)
+    ? cursor.base_head : null;
+  const baseHead = samePhaseBase ?? execFileSync("git", ["rev-parse", "--verify", "HEAD^{commit}"], {
+    cwd: context.workspace.worktreeRoot, env: gitMetadataEnvironment(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+  }).trim();
+  if (!GIT_OID.test(baseHead)) throw new TypeError("phase_progress requires a real Phase start Git commit");
   const phaseProgress = Object.freeze({
     phase_id: inputCursor.phase_id,
     task_id: inputCursor.task_id,
     phases_head: phasesHead,
+    base_head: baseHead,
     recorded_at: new Date().toISOString(),
   });
-  const currentRow = readTaskFacts(context.task.taskPath).find((row) =>
-    row?.record_kind === "stage" && row.stage === "build-code") ?? null;
+  const files = Object.fromEntries(Object.entries(materials).map(([file, content]) => [file, Buffer.byteLength(content, "utf8")]));
+  const materialBaseline = Object.keys(files).length ? { value: { total_bytes: Object.values(files).reduce((sum, bytes) => sum + bytes, 0), files } }
+    : { value: null, reason: "no current post material sizes available" };
   const rowInput = currentRow
     ? { ...Object.fromEntries(STAGE_ROW_KEYS.filter(key => Object.hasOwn(currentRow, key)).map(key => [key, currentRow[key]])), phase_progress: phaseProgress }
     : {
@@ -801,7 +832,7 @@ async function writeBuildCodePhaseProgressCursor(context, inputCursor) {
       close_action: { value: null, reason: "a resume cursor carries no close action" },
       handoff: { value: null, reason: "a resume cursor publishes no handoff" },
     };
-  const written = await writeStageRow(context.task.taskPath, rowInput);
+  const written = await writeStageRow(context.task.taskPath, { ...rowInput, material_bytes: materialBaseline });
   return Object.freeze({
     status: "recorded",
     stage: "build-code",
@@ -1053,7 +1084,13 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
         }
         if(typeof ocrRunner==="function")return {...await ocrRunner(current,{...options,onProviderHealth,bundle,trustedContext}),executor:"ocr"};
         const result=await runOcrDelegationRound(current,{buildBundle:()=>bundle,signal:options.signal,
+          onProviderResult: async ({ result: providerResult }) => {
+            // The host has already persisted each original stream before settling.
+            // Reuse its references; the projected result contains no raw bytes.
+            return providerResult?.raw_output_ref ?? providerResult?.evidence_refs?.[0] ?? null;
+          },
           executor:params=>runConfiguredOcrHostReview(params,{trustedContext,sourceBundle:bundle,onProviderHealth,
+            onProviderResult:params.onProviderResult,
             rawOutputSink:async (hint,bytes,metadata={})=>options.onProviderOutput({provider:metadata.provider ?? "ocr",role:null,channel:metadata.stream ?? "raw-output",output:bytes})})});
         return {...result,executor:"ocr"};
       } finally {bundle?.dispose();}

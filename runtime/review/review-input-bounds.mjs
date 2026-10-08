@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
 
-export function gitDiffPath(token) {
+function gitQuotedPath(token) {
+  if (typeof token !== "string") throw new TypeError("Git path must be text");
   let path = token;
   if (token.startsWith('"')) {
+    if (!token.endsWith('"') || token.length < 2) throw new TypeError("Git path quote is incomplete");
     const bytes = [];
     const text = token.slice(1, -1);
     const escapes = { n: "\n", r: "\r", t: "\t", b: "\b", f: "\f", v: "\v", '\\': '\\', '"': '"' };
@@ -26,6 +28,11 @@ export function gitDiffPath(token) {
     }
     path = Buffer.from(bytes).toString("utf8");
   }
+  return path;
+}
+
+export function gitDiffPath(token) {
+  const path = gitQuotedPath(token);
   if (!path.startsWith("a/") && !path.startsWith("b/")) {
     throw new TypeError("review diff contains an invalid Git path header prefix");
   }
@@ -56,10 +63,25 @@ export function compactReviewDiff(diff, { writeSet } = {}) {
   };
 }
 
-/**
- * Preserve the complete caller material. This compatibility seam keeps its
- * return shape, but no longer rewrites or rejects material by local size.
- */
-export function compactVerifyCodeMaterials(materials) {
-  return { materials, diff: null };
+/** Decode the committed task changed set without requiring diff-header prefixes. */
+export function verifyCodeChangedPaths(nameOnlyText) {
+  if (typeof nameOnlyText !== "string") throw new TypeError("name-only Git diff must be text");
+  const paths = nameOnlyText.split("\n").filter(line => line !== "").map(gitQuotedPath);
+  if (paths.some(path => !path || path.startsWith("/") || /^[A-Za-z]:[\\/]/.test(path) || path.split("/").some(part => part === ".." || part === "." || part === ""))) {
+    throw new TypeError("name-only Git diff must contain repository-relative paths");
+  }
+  return [...new Set(paths)];
+}
+
+export function compactVerifyCodeMaterials(materials, { changedPaths } = {}) {
+  if (changedPaths === undefined) return { materials, diff: null };
+  if (!Array.isArray(changedPaths) || changedPaths.some(path => typeof path !== "string" || !path.trim())) {
+    throw new TypeError("changedPaths must be an array of nonempty paths");
+  }
+  const selected = new Set(changedPaths), kept = {}, dropped = [];
+  for (const [key, value] of Object.entries(materials ?? {})) {
+    if (key.includes("/") && !selected.has(key)) dropped.push({ dropped_key: key, reason: "outside_task_changed_paths" });
+    else Object.defineProperty(kept, key, { value, enumerable: true, writable: true, configurable: true });
+  }
+  return { materials: kept, diff: null, changed_paths: [...changedPaths], dropped_materials: dropped };
 }
