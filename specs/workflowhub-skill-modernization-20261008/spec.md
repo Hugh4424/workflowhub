@@ -189,6 +189,7 @@ P1 R历史登记；P2 A1夹具/禁区；P3 A2′三正文；P4 A3真实比较；
 | MODIFY | `skills/decision-log/SKILL.md` | P6 |
 | MODIFY | `skills/spec-prd/SKILL.md` | P6 |
 | MODIFY | `skills/spec-analyze/SKILL.md` | P6 |
+| MODIFY（已注册lens入口薄导航同步） | `skills/spec-analyze/packet-lens.md` | P6/T009 |
 | MODIFY | `skills/spec-clarify/SKILL.md` | P6 |
 | MODIFY | `skills/deep-research/SKILL.md` | P6 |
 | MODIFY | `skills/spec-plan/templates/phase-template.md` | P6 |
@@ -239,6 +240,8 @@ P1 R历史登记；P2 A1夹具/禁区；P3 A2′三正文；P4 A3真实比较；
 | MODIFY | `skills/wh-review/stage-skill-plan.json` | P8 |
 | MODIFY | `docs/architecture/move-map.json` | P8/T016唯一原维护者；普通预登记时序见上，不授其它Phase写权 |
 | MODIFY | `tools/cli/run-checks.mjs` | P8 |
+| MODIFY（仅resolveSkillPackage消费既有name/path/trigger合同） | `runtime/adapters/local-skill-resolver.mjs` | P8/T016 |
+| MODIFY（具体test change request独立批准后，保原cases并新增定向case） | `core/__tests__/local-skill-resolver.test.mjs` | P8/T016 |
 | NEW | `tools/cli/check-skill-consistency.mjs` | P8 |
 | DELETE（consumer已迁后） | `skills/spec-tasks/SKILL.md` | P8 |
 | DELETE（consumer已迁后） | `skills/spec-tasks/skill-bundle.json` | P8 |
