@@ -40,11 +40,50 @@ function subject(request) {
   return {stage:identity.stage,review_track:identity.reviewTrack,review_kind:identity.reviewKind,review_scope:scope,
     subject_kind:scope==="phase" ? "phase" : request.subject_kind ?? "document",phase_id:phase,surface:request.surface ?? null};
 }
-async function providerFact(member,dir,slug,root) {
+function reportedUsage(value) {
+  return value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length > 0 ? value : null;
+}
+function materialBytes(materials) {
+  const values = Object.values(materials ?? {});
+  if (values.length === 0) return null;
+  return values.reduce((total, value) => {
+    if (Buffer.isBuffer(value) || value instanceof Uint8Array) return total + value.byteLength;
+    return total + Buffer.byteLength(typeof value === "string" ? value : JSON.stringify(value), "utf8");
+  }, 0);
+}
+function priorMaterialReview(dir, materialId) {
+  if (materialId === null) return { hit: false, record_ref: null };
+  for (const name of readdirSync(dir).filter(name => name.endsWith(".json")).sort().reverse()) {
+    try {
+      const previous = JSON.parse(readFileSync(checkedPath(join(dir, name)), "utf8"));
+      if (previous.request?.material_id === materialId) return { hit: true, record_ref: `quality/reviews/${name}` };
+    } catch { /* Foreign or damaged history stays passive, never a dispatch gate. */ }
+  }
+  return { hit: false, record_ref: null };
+}
+function providerCoverage(member, materialKeys) {
+  const coverage = member.material_coverage;
+  const valid = coverage && coverage.provider === member.provider
+    && ["read", "unread", "undetermined"].every(key => Array.isArray(coverage[key])
+      && coverage[key].every(value => typeof value === "string" && value.length > 0));
+  const fact = valid ? { provider: member.provider, read: [...coverage.read], unread: [...coverage.unread], undetermined: [...coverage.undetermined] }
+    : { provider: member.provider, read: [], unread: [], undetermined: [...materialKeys] };
+  if (member.status !== "completed" || (member.parse_outcome ?? member.execution?.parse_outcome) !== "ok") {
+    fact.undetermined = [...new Set([...fact.undetermined, ...fact.read])];
+    fact.read = [];
+  }
+  return fact;
+}
+async function providerFact(member,dir,slug,root,discardedFacts) {
   if(!member || typeof member.provider!=="string" || !member.provider) throw coded("PROVIDER_RESULT_INVALID","provider name is missing");
   const fact={...member};
   // Raw output is one immutable local original, never copied into the result.
   for(const key of ["output","raw_output"]) if(typeof fact[key]==="string") {
+    if (Buffer.byteLength(fact[key], "utf8") === 0) {
+      discardedFacts.push({ fact_kind: "provider_output_not_persisted", dropped_key: `${member.provider}:${key}`, reason: "zero_bytes" });
+      delete fact[key];
+      continue;
+    }
     const path=await appendRecord(dir,slug+"-"+key.replaceAll("_","-"),"output",fact[key]);
     if(key==="raw_output") {
       const ref=relative(root,path).split("\\").join("/");
@@ -76,7 +115,16 @@ export async function recordSimpleReviewRequest({taskDir,request,runRound=runSim
     if(signal?.aborted) throw coded("REVIEW_CANCELLED","review cancelled before dispatch");
     const started=new Date().toISOString(); let result;
     let rawCount=0;
-    const onProviderOutput=async ({provider,role=null,output})=>{if(typeof output!=="string" && !Buffer.isBuffer(output) && !(output instanceof Uint8Array) || typeof provider!=="string")throw coded("PROVIDER_OUTPUT_INVALID","provider raw output must be named text or original bytes");const path=await appendRecord(dir,`${tuple.stage}-${tuple.review_scope ?? "document"}-provider-${++rawCount}`,"output",output);return relative(root,path).split("\\").join("/");};
+    const discardedFacts=[];
+    const onProviderOutput=async ({provider,role=null,output})=>{
+      if(typeof output!=="string" && !Buffer.isBuffer(output) && !(output instanceof Uint8Array) || typeof provider!=="string")throw coded("PROVIDER_OUTPUT_INVALID","provider raw output must be named text or original bytes");
+      if ((typeof output === "string" ? Buffer.byteLength(output, "utf8") : output.byteLength) === 0) {
+        discardedFacts.push({ fact_kind: "provider_output_not_persisted", dropped_key: `provider-output:${provider}`, reason: "zero_bytes" });
+        return null;
+      }
+      const path=await appendRecord(dir,`${tuple.stage}-${tuple.review_scope ?? "document"}-provider-${++rawCount}`,"output",output);
+      return relative(root,path).split("\\").join("/");
+    };
     try { result=await runRound({...request,...tuple,...structuredClone(submittedSubject)},{...(signal ? {signal} : {}),onProviderOutput,taskId:manifest.task_id}); }
     catch(error) { result={status:"unavailable",outcome:"unavailable",dispatch_state:error.dispatch_state ?? "unknown",provider_results:Array.isArray(error.provider_results)?error.provider_results:[],findings:Array.isArray(error.findings)?error.findings:[],error:{code:error.code ?? "REVIEW_ERROR",message:redactProviderHostPaths(String(error.message ?? error))}}; }
     if(!result || typeof result!=="object" || !["available","available-with-failures","unavailable","incomplete"].includes(result.status)) throw coded("REVIEW_RESULT_INVALID","runner returned no observable result status");
@@ -95,11 +143,27 @@ export async function recordSimpleReviewRequest({taskDir,request,runRound=runSim
       result={...result,discarded_facts:[...(result.discarded_facts ?? []),...(parsed.discarded_facts ?? [])]};
     }
     const providers=[];
-    for(const [index,member] of (result.provider_results ?? []).entries()) providers.push(await providerFact(member,dir,`${tuple.stage}-${tuple.review_scope ?? "document"}-provider-${index+1}`,root));
+    for(const [index,member] of (result.provider_results ?? []).entries()) providers.push(await providerFact(member,dir,`${tuple.stage}-${tuple.review_scope ?? "document"}-provider-${index+1}`,root,discardedFacts));
     const slug=`${tuple.stage}-${tuple.review_scope ?? tuple.review_track ?? "document"}${tuple.phase_id ? "-"+tuple.phase_id.toLowerCase() : ""}`;
     const {material_id,authenticated_evidence,authenticated_evidence_sha256,snapshot_tree,candidate_tree,base_tree,request_key,request_hash,closure_manifest,material_revision,source,...ordinary}=result;
-    const record={version:"wh-review-result.v1",...ordinary,task_id:manifest.task_id,...tuple,started_at:started,completed_at:new Date().toISOString(),
-      request:{...tuple,...submittedSubject,material_keys:Object.keys(request.materials ?? {}),...(typeof material_id==="string"?{material_id}:{}),...Object.fromEntries(["only_providers","dispatch_reason","supplements"].filter(key=>Object.hasOwn(request,key)).map(key=>[key,structuredClone(request[key])]))},provider_results:providers,findings,
+    const completed=new Date().toISOString();
+    const materialId=typeof material_id === "string" ? material_id : null;
+    const materialKeys=Object.keys(request.materials ?? {});
+    const providerFacts=providers.map(member=>{
+      const usage=reportedUsage(member.usage ?? member.execution?.usage ?? null);
+      return { provider:member.provider, status:member.status,
+        opinion_returned:member.status === "completed" && (member.parse_outcome ?? member.execution?.parse_outcome) === "ok",
+        findings_count:findings.filter(finding=>finding.provider === member.provider).length,
+        duration_ms:member.timing?.duration_ms ?? member.execution?.timing?.duration_ms ?? null,
+        usage, usage_status:usage === null ? "not_reported" : "reported" };
+    });
+    const record={version:"wh-review-result.v1",...ordinary,task_id:manifest.task_id,...tuple,started_at:started,completed_at:completed,
+      request:{...tuple,...submittedSubject,material_keys:materialKeys,material_id:materialId,...Object.fromEntries(["only_providers","dispatch_reason","supplements"].filter(key=>Object.hasOwn(request,key)).map(key=>[key,structuredClone(request[key])]))},provider_results:providers,findings,
+      review_facts:{providers:providerFacts,material_bytes:materialBytes(request.materials),wall_clock_ms:Date.parse(completed)-Date.parse(started),
+        usage_coverage:{reported:providerFacts.filter(member=>member.usage_status === "reported").length,total:providers.length},
+        already_reviewed:priorMaterialReview(dir,materialId)},
+      material_coverage:providers.map(member=>providerCoverage(member,materialKeys)),
+      ...((result.discarded_facts?.length || discardedFacts.length) ? {discarded_facts:[...(result.discarded_facts ?? []),...discardedFacts]} : {}),
       ...(signal?.aborted ? {status:"unavailable",error:{code:"REVIEW_CANCELLED",message:"review cancelled; settled provider facts retained"}} : {}),authoritative:false};
     if(tuple.stage==="verify-code") {
       const {conclusion,coverage}=deriveVerifyCodeConclusion({status:record.status,provider_results:providers,findings});

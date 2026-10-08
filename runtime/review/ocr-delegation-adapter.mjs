@@ -983,21 +983,17 @@ function createOcrSourceAnchorResolver({ sourceBundle, packetFiles }) {
   };
 }
 
-function ocrFindingAnchorValid(finding, content, { diffPatch = false } = {}) {
+function ocrFindingAnchorValid(finding, content) {
   if (typeof content !== "string" || !Number.isSafeInteger(finding.line) || finding.line < 1) return false;
-  const lines = content.split(/\r?\n/);
-  if (finding.line > lines.length) return false;
-  if (finding.severity === "minor") return true;
-  if (typeof finding.evidence !== "string") return false;
-  const quoted = [...finding.evidence.matchAll(/`([^`]+)`/g)]
-    .map((match) => match[1].replace(/\s+/g, " ").trim())
-    .filter((value) => value.length >= 4)
-    .flatMap((value) => diffPatch
-      ? [value, value.split(/\r?\n/).map((line) => /^[ +\-]/.test(line) ? line.slice(1) : line).join(" ").replace(/\s+/g, " ").trim()]
-      : [value]);
-  if (quoted.length === 0) return false;
-  const excerpt = lines.slice(finding.line - 1, Math.min(lines.length, finding.line + 2)).join(" ").replace(/\s+/g, " ");
-  return quoted.some((value) => excerpt.includes(value));
+  return finding.line <= content.split(/\r?\n/).length;
+}
+
+function normalizeOcrUsage(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).length === 0) return null;
+  const aliases = { input: "input_tokens", output: "output_tokens", totalTokens: "total_tokens",
+    cacheRead: "cache_read_tokens", cacheWrite: "cache_write_tokens", reasoning: "reasoning_tokens" };
+  return Object.fromEntries(Object.entries(value).map(([key, amount]) => [aliases[key] ?? key,
+    aliases[key] && Object.hasOwn(value, aliases[key]) ? value[aliases[key]] : amount]));
 }
 
 // Private AG packet transport. Owner/consumer: this native host executor.
@@ -1814,6 +1810,10 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
           const saved = new Set();
           const saveErrors = [];
           for (const stream of ["stdout", "stderr"]) {
+            if (raw[stream].length === 0) {
+              diagnostics.push(`${stream}_bytes=0 not persisted`);
+              continue;
+            }
             const digest = hashes[`${stream}_sha256`];
             if (saved.has(digest)) continue;
             const hint = `quality/reviews/ocr-${stage}-${provider.replace(/[^a-z0-9-]/gi,"-")}-${stream}.output`;
@@ -1868,10 +1868,17 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
         ...(mappedAnchors[findingIndex] ? { path: mappedAnchors[findingIndex].path, line: mappedAnchors[findingIndex].line } : {}),
       }));
       const timing = member?.timing ?? { started_at_ms: null, completed_at_ms: null, duration_ms: null };
+      usage = normalizeOcrUsage(usage);
+      const usageStatus = usage === null ? "not_reported" : "reported";
+      const selectedFiles = files.map(file => file.path);
+      const readConfirmed = identity.adapter === "antigravity" && typeof member?.packet_coverage?.read_confirmed === "boolean"
+        ? member.packet_coverage.read_confirmed : null;
+      const materialCoverage = { provider, read: readConfirmed === true ? [...selectedFiles] : [],
+        unread: [], undetermined: readConfirmed === true ? [] : [...selectedFiles] };
       return {
         provider, status, identity, error: status === "completed" ? null : error,
         session_id: member?.session_id ?? null,
-        timing, usage, findings,
+        timing, usage, usage_status: usageStatus, material_coverage: materialCoverage, findings,
         raw_output_ref: rawOutputRef,
         ...(rawEvidenceRefs.length ? {evidence_refs:rawEvidenceRefs} : {}),
         process_outcome: member?.process_outcome ?? (member?.status === "completed" ? "ok" : null),
@@ -1883,11 +1890,10 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
         ...(parsed?.discarded_facts?.length ? { discarded_facts: parsed.discarded_facts } : {}),
         evidence_anchor_valid: rawFindings.map((finding, findingIndex) => {
           const mapped = mappedAnchors[findingIndex];
-          return mapped ? ocrFindingAnchorValid({ ...finding, path: mapped.path, line: mapped.line },
-            mapped.content, { diffPatch: mapped.diffPatch }) : false;
+          return mapped ? ocrFindingAnchorValid({ ...finding, path: mapped.path, line: mapped.line }, mapped.content) : false;
         }),
-        coverage: { selected_files: files.map((file) => file.path), read_confirmed: member?.packet_coverage?.read_confirmed === true },
-        execution: { adapter: identity.adapter, model: identity.model, effort:null, thinking:null, timing, usage,
+        coverage: { selected_files: selectedFiles, read_confirmed: readConfirmed },
+        execution: { adapter: identity.adapter, model: identity.model, effort:null, thinking:null, timing, usage, usage_status: usageStatus,
           retry: member?.retry ?? { count: 0, progress_events: 0 },
           ...(member?.health ? { health: member.health } : {}),
           runtime_id: runtimeId },

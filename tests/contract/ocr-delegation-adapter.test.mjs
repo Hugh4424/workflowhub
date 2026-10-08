@@ -341,13 +341,51 @@ process.stdout.write(JSON.stringify({type:"turn.completed",usage:{input_tokens:3
     }
     expect(result).toMatchObject({
       status: "available", outcome: "completed", dispatch_state: "dispatched",
-      provider_results: [{ status: "completed", findings: [], coverage: { read_confirmed: false } }],
+      provider_results: [{ status: "completed", findings: [], coverage: { read_confirmed: null } }],
     });
     expect(result.provider_results[0].coverage.selected_files).toEqual(["src/reviewed.mjs"]);
     expect(result.provider_results[0].usage).toEqual({ input_tokens: 3 });
     expect(readdirSync(tmpdir()).filter((name) => name.startsWith("workflowhub-ocr-host-")
       && !name.startsWith("workflowhub-ocr-host-test-")
       && !priorHostDirs.has(name))).toEqual([]);
+  });
+
+  it("normalizes reported usage while keeping unknown reads and unreported usage genuinely null", async () => {
+    const result = await runConfiguredOcrHostReview({ request, packet: configuredPacket() }, {
+      trustedContext: configuredContext(["codex/luna", "kimi/coding"], "/unused/provider"),
+      providerExecutor: async ({ provider }) => ({ status: "completed", output: directProviderOutput(provider, []),
+        ...(provider === "codex/luna" ? { usage: { input: 5, output: 2, totalTokens: 7, cacheRead: 1, cacheWrite: 2, reasoning: 3, cost: 0.1 } } : {}) }),
+    });
+    const [reported, absent] = result.provider_results;
+    const usage = { input_tokens: 5, output_tokens: 2, total_tokens: 7, cache_read_tokens: 1, cache_write_tokens: 2, reasoning_tokens: 3, cost: 0.1 };
+    expect(reported.usage).toEqual(usage);
+    expect(reported.execution).toMatchObject({ usage, usage_status: "reported" });
+    expect(reported.usage_status).toBe("reported");
+    expect(absent).toMatchObject({ usage: null, usage_status: "not_reported", execution: { usage: null, usage_status: "not_reported" } });
+    for (const member of result.provider_results) {
+      expect(member.coverage).toEqual({ selected_files: ["src/reviewed.mjs"], read_confirmed: null });
+      expect(member.material_coverage).toEqual({ provider: member.provider, read: [], unread: [], undetermined: ["src/reviewed.mjs"] });
+    }
+  });
+
+  it.each([null, {}, [], "unreported"])("keeps absent or invalid usage %j null without zero substitution", async (usage) => {
+    const result = await runConfiguredOcrHostReview({ request, packet: configuredPacket() }, {
+      trustedContext: configuredContext(["codex/luna"], "/unused/provider"),
+      providerExecutor: async () => ({ status: "completed", output: directProviderOutput("codex/luna", []), usage }),
+    });
+    expect(result.provider_results[0]).toMatchObject({ usage: null, usage_status: "not_reported", execution: { usage: null, usage_status: "not_reported" } });
+  });
+
+  it("skips only empty original streams before the sink without turning a completed provider into a save failure", async () => {
+    const output = directProviderOutput("codex/luna", []), sizes = [];
+    const result = await runConfiguredOcrHostReview({ request, packet: configuredPacket() }, {
+      trustedContext: configuredContext(["codex/luna"], "/unused/provider"),
+      providerExecutor: async () => ({ status: "completed", output, raw_output: { stdout: Buffer.from(output), stderr: Buffer.alloc(0), exit_code: 0 } }),
+      rawOutputSink: async (_hint, bytes) => { sizes.push(bytes.length); return bytes.length ? "quality/reviews/2026-10-08-001-owned.output" : null; },
+    });
+    expect(sizes).toEqual([Buffer.byteLength(output)]);
+    expect(result.provider_results[0]).toMatchObject({ status: "completed", parse_outcome: "ok", raw_output_ref: "quality/reviews/2026-10-08-001-owned.output" });
+    expect(result.provider_results[0].evidence_refs).toEqual(["quality/reviews/2026-10-08-001-owned.output"]);
   });
 
   it("retains the successful provider and the failed provider separately", async () => {
@@ -1317,10 +1355,12 @@ if(model==="bad") {
     const result = await runConfiguredOcrHostReview({ request, packet: configuredPacket() }, state);
     const member = result.provider_results[0];
     expect(member).toMatchObject({ status: "failed", process_outcome: "launch_failure", parse_outcome: null, error: { code: "OCR_PROVIDER_SPAWN_FAILED" } });
-    expect(rawBytes(state, member, "stdout")).toEqual(Buffer.alloc(0));
-    expect(rawBytes(state, member, "stderr")).toEqual(Buffer.alloc(0));
+    expect(member.raw_output_ref).toBeNull();
+    expect(member).not.toHaveProperty("evidence_refs");
     expect(member.unavailable_diagnostics.message).toContain("supervisor_diagnostics=ENOENT: OCR provider spawn failed");
-    expect(state.saved.size).toBe(1); // stdout and stderr are the same empty bytes
+    expect(member.unavailable_diagnostics.message).toContain("stdout_bytes=0 not persisted");
+    expect(member.unavailable_diagnostics.message).toContain("stderr_bytes=0 not persisted");
+    expect(state.saved.size).toBe(0);
   });
 
   it("records absent raw bytes as unavailable instead of reconstructing them from text", async () => {

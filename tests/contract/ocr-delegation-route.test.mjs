@@ -239,6 +239,32 @@ describe("OCR delegation public review route", () => {
   // cannot prove that seventh retained surface's dispatch choice.
   it.skip("ORACLE-P3-ROUTE: non_stage/build_prd remains on its report-only entrypoint");
 
+  it("accepts major source anchors by delivered path and line without backticks, but rejects out-of-range and undelivered anchors", async () => {
+    const { root, repo } = await fixture();
+    const bytes = Buffer.from("export const answer = 42;\n");
+    const snapshotTree = commitSnapshotFile(repo, "src/reviewed.mjs", bytes);
+    const sourceBundle = createOcrSourceBundle(root, snapshotTree, { "src/reviewed.mjs": bytes });
+    const packetRoot = join(root, "ocr-path-line-packet");
+    mkdirSync(join(packetRoot, "src"), { recursive: true });
+    writeFileSync(join(packetRoot, "src", "reviewed.mjs"), bytes);
+    const base = { severity: "major", path: "src/reviewed.mjs", line: 1, issue: "Fixed answer",
+      root_cause: "Hard-coded result", recommendation: "Derive the answer", evidence_kind: "direct", evidence: "The first delivered line fixes the answer." };
+    const provider = "kimi/coding";
+    const result = await runConfiguredOcrHostReview({
+      request: { stage: "build-code", review_scope: "phase", subject_kind: "phase", phase_id: "P7" },
+      packet: { root: packetRoot, material_id: materialId, preview: { reviewable_files: [{ path: base.path }] }, rules: { rules: [] },
+        manifest: [{ path: base.path, bytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") }] },
+    }, { trustedContext: trustedOcrContext(root), sourceBundle,
+      providerExecutor: async () => ({ status: "completed", output: directProviderOutput(provider, [
+        base, { ...base, line: 99, issue: "Out of range" }, { ...base, path: "src/absent.mjs", issue: "Not delivered" },
+        { ...base, issue: "Quoted", evidence: "The source says `export const answer = 42;`." },
+      ]) }),
+    });
+    expect(result.provider_results[0]).toMatchObject({ status: "completed", parse_outcome: "ok", evidence_anchor_valid: [true, false, false, true] });
+    expect(result.provider_results[0].coverage.read_confirmed).toBeNull();
+    expect(result.provider_results[0].material_coverage).toEqual({ provider, read: [], unread: [], undetermined: [base.path] });
+  });
+
   it("redacts host paths from provider materials without shifting lines or losing packet identity", async () => {
     const { root, repo } = await fixture();
     const packetRoot = join(root, "ocr-path-projection-packet");
@@ -256,7 +282,7 @@ describe("OCR delegation public review route", () => {
       severity: "major", path: "src/reviewed.mjs", line: 2,
       issue: "The return value is fixed.", root_cause: "The implementation hard-codes its result.",
       recommendation: "Derive the result from its inputs.", evidence_kind: "direct",
-      evidence: "The source says `export const answer = 42;`.",
+      evidence: "The delivered second source line fixes the answer, without a quoted excerpt.",
     };
     let directInvocation = null;
     let receivedBytes = null;
