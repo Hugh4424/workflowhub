@@ -375,7 +375,6 @@ Task 卡字段扩展若被现有测试判为非法，先保留原字段并只在
 
 **证据原件**：任务库根 `quality/evidence/human-confirmations/2026-10-08-001-make-decision-close-commit.txt`（sha256 `5dff70e2349b797a3fb78123438a176269a081703d2997fa79883163e7c3ed05`）；授权记录任务库根 `quality/evidence/git-authorizations/2026-10-08-001-authorize-commit.json` 与已消费的 `2026-10-08-002-consumed-commit.json`。
 
-
 ## 未决项
 
 | OI 编号 | 问题与来源 | 状态与处置 | 解决者与下一步 |
