@@ -73,6 +73,11 @@
         "incomplete"
       ]
     },
+    "material_coverage": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/materialCoverage" }
+    },
+    "review_facts": { "$ref": "#/$defs/reviewFacts" },
     "provider_results": {
       "type": "array",
       "items": {
@@ -155,6 +160,8 @@
               null
             ]
           },
+          "material_coverage": { "$ref": "#/$defs/materialCoverage" },
+          "usage_status": { "enum": ["reported", "not_reported"] },
           "session_id": {
             "type": [
               "string",
@@ -251,6 +258,7 @@
                       "null"
                     ]
                   },
+                  "usage_status": { "enum": ["reported", "not_reported"] },
                   "health": {
                     "type": "object",
                     "required": [
@@ -689,6 +697,61 @@
     }
   },
   "$defs": {
+    "materialCoverage": {
+      "type": "object",
+      "required": ["provider", "read", "unread", "undetermined"],
+      "properties": {
+        "provider": { "type": "string", "minLength": 1 },
+        "read": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "unread": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "undetermined": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      },
+      "additionalProperties": false
+    },
+    "reviewFacts": {
+      "type": "object",
+      "required": ["providers", "material_bytes", "wall_clock_ms", "usage_coverage", "already_reviewed"],
+      "properties": {
+        "providers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["provider", "status", "opinion_returned", "findings_count", "duration_ms", "usage", "usage_status"],
+            "properties": {
+              "provider": { "type": "string" },
+              "status": { "enum": ["running", "completed", "failed", "cancelled"] },
+              "opinion_returned": { "type": "boolean" },
+              "findings_count": { "type": "integer", "minimum": 0 },
+              "duration_ms": { "type": ["integer", "null"], "minimum": 0 },
+              "usage": { "type": ["object", "null"] },
+              "usage_status": { "enum": ["reported", "not_reported"] }
+            },
+            "additionalProperties": false
+          }
+        },
+        "material_bytes": { "type": ["integer", "null"], "minimum": 0 },
+        "wall_clock_ms": { "type": ["integer", "null"], "minimum": 0 },
+        "usage_coverage": {
+          "type": "object",
+          "required": ["reported", "total"],
+          "properties": {
+            "reported": { "type": "integer", "minimum": 0 },
+            "total": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": false
+        },
+        "already_reviewed": {
+          "type": "object",
+          "required": ["hit", "record_ref"],
+          "properties": {
+            "hit": { "type": "boolean" },
+            "record_ref": { "type": ["string", "null"], "minLength": 1 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "providerOutput": {
       "type": "object",
       "required": [

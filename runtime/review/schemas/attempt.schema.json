@@ -1,6 +1,19 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "wh-review attempt",
+  "$defs": {
+    "materialCoverage": {
+      "type": "object",
+      "required": ["provider", "read", "unread", "undetermined"],
+      "properties": {
+        "provider": { "type": "string", "minLength": 1 },
+        "read": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "unread": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "undetermined": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      },
+      "additionalProperties": false
+    }
+  },
   "type": "object",
   "required": ["version", "attempt_id", "task_id", "stage", "review_track", "source", "snapshot_tree", "material_id", "provider_attempts", "terminal_status", "error"],
           "properties": {
@@ -236,6 +249,7 @@
           "status": { "enum": ["running", "completed", "failed", "cancelled"] },
           "process_outcome": { "type": ["string", "null"], "enum": ["ok", "exit_nonzero", "timeout", "launch_failure", null] },
           "parse_outcome": { "type": ["string", "null"], "enum": ["ok", "invalid", "empty_output", null] },
+          "material_coverage": { "$ref": "#/$defs/materialCoverage" },
           "session_id": { "type": ["string", "null"] },
           "runtime_id": { "type": ["string", "null"] },
           "session_artifact_path": { "type": ["string", "null"] },
@@ -261,6 +275,7 @@
                     "additionalProperties": false
                   },
                   "usage": { "type": ["object", "null"] },
+                  "usage_status": { "enum": ["reported", "not_reported"] },
                   "health": {
                     "type": "object",
                     "required": ["provider", "status", "liveness", "last_liveness_at_ms", "last_output_at_ms", "progress_events", "stdout_bytes", "stderr_bytes"],

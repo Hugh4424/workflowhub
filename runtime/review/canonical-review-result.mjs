@@ -240,7 +240,8 @@ export function deriveVerifyCodeConclusion({ status, provider_results, findings 
         || !["blocking", "major", "minor"].includes(finding.severity))) {
     throw new TypeError("REVIEW_EVIDENCE_INVALID: verify-code conclusion input is invalid");
   }
-  const providers_completed = provider_results.filter((member) => member.status === "completed").length;
+  const providers_completed = provider_results.filter((member) => member.status === "completed"
+    && (member.parse_outcome ?? member.execution?.parse_outcome ?? null) === "ok").length;
   const providers_failed = provider_results.length - providers_completed;
   const coverage = {
     findings_state: findings.length === 0 ? "no_findings_returned" : "findings_returned",

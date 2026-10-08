@@ -4,7 +4,7 @@ const severityAliases = new Map([
   ["minor", "minor"], ["nit", "minor"], ["trivial", "minor"], ["suggestion", "minor"], ["info", "minor"], ["note", "minor"],
 ]);
 const evidenceKinds = new Set(["direct", "inferred", "machine"]);
-export const MAX_REVIEWER_OUTPUT_BYTES = 128 * 1024;
+export const MAX_REVIEWER_OUTPUT_BYTES = 16 * 1024 * 1024;
 
 function safeParseError(value) {
   const message = typeof value === "string" ? value : value?.message;
@@ -82,45 +82,6 @@ function validate(value, options) {
   return freezeReview(findings, discardedFacts);
 }
 
-function jsonObjectStart(source, start) {
-  let index = start + 1;
-  while (index < source.length && " \t\n\r".includes(source[index])) index += 1;
-  return source[index] === '"' || source[index] === "}";
-}
-
-function objectSpans(source) {
-  const spans = []; const open = [];
-  let quoted = false; let escaped = false;
-  for (let index = 0; index < source.length; index += 1) {
-    const char = source[index];
-    if (open.length === 0) {
-      if (char === "{") open.push({ start: index, parentStart: null, jsonAware: jsonObjectStart(source, index) });
-      continue;
-    }
-    const current = open.at(-1);
-    if (!current.jsonAware) {
-      if (char === "{") open.push({ start: index, parentStart: current.start, jsonAware: jsonObjectStart(source, index) });
-      else if (char === "}") { const frame = open.pop(); spans.push({ start: frame.start, end: index + 1, parentStart: frame.parentStart }); }
-      continue;
-    }
-    if (quoted) {
-      if (escaped) escaped = false;
-      else if (char === "\\") escaped = true;
-      else if (char === '"') quoted = false;
-      continue;
-    }
-    if (char === '"') quoted = true;
-    else if (char === "{") open.push({ start: index, parentStart: current.start, jsonAware: jsonObjectStart(source, index) });
-    else if (char === "}") { const frame = open.pop(); spans.push({ start: frame.start, end: index + 1, parentStart: frame.parentStart }); }
-  }
-  const starts = new Set(spans.map(({ start }) => start));
-  return { roots: spans.filter(({ parentStart }) => !starts.has(parentStart)), unclosed: open.map(({ start }) => start) };
-}
-
-function parseObject(source, { start, end }) {
-  try { return JSON.parse(source.slice(start, end)); } catch { return null; }
-}
-
 function rememberParseError(errors, message) {
   if (errors.length < 8) errors.push(safeParseError(message));
 }
@@ -167,34 +128,22 @@ function parseUniqueFence(raw, options, errors) {
   return valid.length === 1 ? valid[0] : null;
 }
 
-function firstJsonCandidate(raw, options, errors) {
-  const { roots } = objectSpans(raw);
-  for (const span of roots.sort((left, right) => left.start - right.start)) {
-    if (span.start === 0 && raw.slice(span.end).trim()) {
-      rememberParseError(errors, "JSON candidate has trailing non-JSON text");
-      continue;
-    }
-    const value = parseObject(raw, span);
-    if (value === null) {
-      rememberParseError(errors, "JSON candidate is not valid JSON");
-      continue;
-    }
-    const parsed = validateCandidate(value, options, errors, "JSON candidate");
-    if (parsed) return parsed;
-  }
-  return null;
-}
-
 export function parseReviewerOutput(raw, { requireEvidence = false } = {}) {
   if (typeof raw !== "string" || !raw.trim()) invalid("provider returned no text");
   if (Buffer.byteLength(raw, "utf8") > MAX_REVIEWER_OUTPUT_BYTES) invalid(`provider output exceeds ${MAX_REVIEWER_OUTPUT_BYTES} bytes`);
   const options = { requireEvidence };
   const errors = [];
+  let whole;
+  try { whole = JSON.parse(raw.trim()); } catch {
+    rememberParseError(errors, "whole output is not JSON");
+  }
+  if (whole !== undefined) {
+    const parsed = validateCandidate(whole, options, errors, "whole JSON");
+    if (parsed) return parsed;
+  }
   const jsonl = parseJsonl(raw, options, errors);
   if (jsonl) return jsonl;
   const fenced = parseUniqueFence(raw, options, errors);
   if (fenced) return fenced;
-  const candidate = firstJsonCandidate(raw, options, errors);
-  if (candidate) return candidate;
   invalid("no valid JSON/fence findings candidate", errors.join("; ") || "no parseable JSON candidate");
 }

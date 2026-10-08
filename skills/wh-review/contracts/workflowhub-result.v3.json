@@ -18,6 +18,17 @@
   },
   "additionalProperties": false,
   "$defs": {
+    "materialCoverage": {
+      "type": "object",
+      "required": ["provider", "read", "unread", "undetermined"],
+      "properties": {
+        "provider": { "type": "string", "minLength": 1 },
+        "read": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "unread": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "undetermined": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      },
+      "additionalProperties": false
+    },
     "error": {
       "type": ["object", "null"],
       "required": ["code", "message"],
@@ -92,7 +103,11 @@
           },
           "additionalProperties": false
         },
-        "usage": { "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/usage" }] }
+        "usage": { "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/usage" }] },
+        "parse_outcome": { "enum": ["ok", "invalid", "empty_output", null] },
+        "process_outcome": { "enum": ["ok", "exit_nonzero", "timeout", "launch_failure", null] },
+        "material_coverage": { "$ref": "#/$defs/materialCoverage" },
+        "usage_status": { "enum": ["reported", "not_reported"] }
       },
       "additionalProperties": false
     },
@@ -147,7 +162,7 @@
               "properties": {
                 "starts_at": { "type": "integer", "minimum": 0 },
                 "ends_at": { "type": "integer", "minimum": 0 },
-                "duration_ms": { "const": 600000 }
+                "duration_ms": { "type": "integer", "minimum": 0 }
               },
               "additionalProperties": false
             }

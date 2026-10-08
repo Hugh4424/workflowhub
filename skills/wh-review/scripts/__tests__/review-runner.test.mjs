@@ -10,6 +10,18 @@ function root(){const p=realpathSync(mkdtempSync(join(tmpdir(),"wh-review-query-
 const finding={severity:"major",path:"src/app.mjs",line:1,issue:"Unsafe mutation",recommendation:"Guard the real mutation",root_cause:"Missing guard",evidence_kind:"direct",evidence:"src/app.mjs:1",disposition:"actionable"};
 const semantic=()=>({status:"available",stage:"build-code",review_scope:"phase",subject_kind:"phase",phase_id:"P5",task_id:"fixture",provider_results:[{provider:"fixture/model",status:"completed",identity:{provider:"fixture/model",source_id:"fixture-source",config_id:"fixture-config"}}],findings:[{...finding,provider:"fixture/model"}]});
 describe("current wh-review query, parser and disposition",()=>{
+ it("rejects prose-inline empty and nonempty JSON findings",()=>{
+  expect(()=>parseReviewerOutput('我没有输出 `{"findings": []}`。没读到')).toThrow(/OUTPUT_INVALID/);
+  expect(()=>parseReviewerOutput(`provider prose: ${JSON.stringify({findings:[finding]})} then refusal`,{requireEvidence:true})).toThrow(/OUTPUT_INVALID/);
+ });
+ it("accepts pretty-printed whole JSON and the largest observed output under 16 MiB",()=>{
+  const empty=JSON.stringify({findings:[]});
+  expect(MAX_REVIEWER_OUTPUT_BYTES).toBe(16*1024*1024);
+  expect(parseReviewerOutput(JSON.stringify({findings:[finding]},null,2),{requireEvidence:true}).findings).toHaveLength(1);
+  const observed=empty+" ".repeat(2010784-Buffer.byteLength(empty));
+  expect(Buffer.byteLength(observed)).toBe(2010784);
+  expect(parseReviewerOutput(observed)).toEqual({findings:[]});
+ });
  it("accepts one JSON object and rejects malformed or oversized reviewer output",()=>{const empty=JSON.stringify({findings:[]});expect(parseReviewerOutput(empty)).toEqual({findings:[]});expect(parseReviewerOutput(`note\n\`\`\`json\n${empty}\n\`\`\``)).toEqual({findings:[]});expect(()=>parseReviewerOutput("not json")).toThrow(/OUTPUT_INVALID/);const exact=empty+" ".repeat(MAX_REVIEWER_OUTPUT_BYTES-Buffer.byteLength(empty));expect(parseReviewerOutput(exact)).toEqual({findings:[]});expect(()=>parseReviewerOutput(exact+"x")).toThrow(/exceeds/);});
  it("retains unknown severity as discarded facts and rejects unsafe anchors or absent serious evidence",()=>{expect(parseReviewerOutput(JSON.stringify({findings:[{...finding,severity:"unexpected"}]})).discarded_facts).toHaveLength(1);expect(()=>parseReviewerOutput(JSON.stringify({findings:[{...finding,path:"/Users/private.mjs"}]}),{requireEvidence:true})).toThrow(/OUTPUT_INVALID/);expect(()=>parseReviewerOutput(JSON.stringify({findings:[{...finding,root_cause:undefined}]}),{requireEvidence:true})).toThrow(/OUTPUT_INVALID/);});
  it("unions providers and roles without requiring consensus",()=>{const result=aggregateCanonicalProviderResults([{provider:"kimi",role:"red",review:{findings:[finding]},evidenceAnchors:[true]},{provider:"claude",role:"blue",review:{findings:[]}}],1);expect(result.findings).toHaveLength(1);expect(result.adjudication.clusters[0]).toMatchObject({providers:["kimi"],roles:["blue","red"],consensus:false});});
