@@ -1795,6 +1795,7 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
       let parsed = null;
       let parseOutcome = null;
       let rawOutputRef = null;
+      let firstSavedDigest = null;
       const rawEvidenceRefs=[];
       let diagnosticCode = null;
       const diagnostics = [];
@@ -1819,6 +1820,7 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
             const hint = `quality/reviews/ocr-${stage}-${provider.replace(/[^a-z0-9-]/gi,"-")}-${stream}.output`;
             try { const ref=await rawOutputSink(hint, raw[stream], {provider,stream});
               if(typeof ref!=="string" || !/^quality\/reviews\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(ref))throw new Error("raw output sink returned no safe task-relative original reference");
+              if (rawEvidenceRefs.length === 0) firstSavedDigest = digest;
               rawEvidenceRefs.push(ref); saved.add(digest); }
             catch (saveError) {
               saveErrors.push(`${stream}: ${safeText(saveError?.message ?? saveError, 1024)}`);
@@ -1880,6 +1882,7 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
         session_id: member?.session_id ?? null,
         timing, usage, usage_status: usageStatus, material_coverage: materialCoverage, findings,
         raw_output_ref: rawOutputRef,
+        ...(rawOutputRef !== null ? { raw_output_sha256: firstSavedDigest } : {}),
         ...(rawEvidenceRefs.length ? {evidence_refs:rawEvidenceRefs} : {}),
         process_outcome: member?.process_outcome ?? (member?.status === "completed" ? "ok" : null),
         parse_outcome: parseOutcome,

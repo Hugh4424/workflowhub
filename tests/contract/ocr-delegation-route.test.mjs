@@ -845,15 +845,16 @@ describe("OCR delegation public review route", () => {
   });
 
   it("injects the current canonical byte sink and keeps original failed-member parse diagnostics alongside its successful sibling",async()=>{
-    const state=await fixture(),path=join(state.root,"raw-review.json"),providers=["codex/good","antigravity/bad"];
-    writeFileSync(path,JSON.stringify({request:{stage:"verify-code",subject_kind:"worktree",materials:{acceptance_criteria:"AC-1: retain real original bytes and parse failure."}}}));
-    const stdout={"codex/good":Buffer.from(directProviderOutput("codex/good",[])),"antigravity/bad":Buffer.from('{"findings":')};const stderr=Buffer.from([0xff,0x00,0x61]);let called=0;
+    const state=await fixture(),path=join(state.root,"raw-review.json"),providers=["codex/good","codex/bad"],observed=[];
+    writeFileSync(path,JSON.stringify({request:{stage:"verify-code",subject_kind:"worktree",materials:{acceptance_criteria:"AC-1: retain real original bytes and parse failure.",changed_files:"README.md",implementation_assessment:"Inspect the owned current README implementation and preserve provider facts.",test_context:"Owned canonical byte-sink fixture; no external model invocation.",open_risks:"Owned provider stream includes an intentionally malformed sibling output; preserve that failure."}}}));
+    const stdout={"codex/good":Buffer.from(directProviderOutput("codex/good",[])),"codex/bad":Buffer.from('{"findings":')};const stderr=Buffer.from([0xff,0x00,0x61]);let called=0;
     const recorded=await withOwnedOcr(state,()=>stageRuntimeCliMain(["review","--action=record","--stage=verify-code","--project=workflowhub",`--task=${state.taskId}`,`--task-path=${state.taskDir}`,`--input=${path}`],{cwd:state.worktreeRoot,services:{
       runReviewRound:async()=>{throw new Error("unexpected fallback");},runOcrDelegationRound:async(request,options)=>{
         called++;const packetRoot=join(state.root,"raw-packet");mkdirSync(packetRoot);const bytes=Buffer.from("export const current = true;\n");writeFileSync(join(packetRoot,"source.mjs"),bytes);
         return runConfiguredOcrHostReview({request,packet:{root:packetRoot,material_id:materialId,preview:{reviewable_files:[{path:"source.mjs"}]},rules:{rules:[]},manifest:[{path:"source.mjs",bytes:bytes.length,sha256:createHash("sha256").update(bytes).digest("hex")}] }},{
           trustedContext:trustedOcrContext(state.root,providers),providerExecutor:async({provider})=>({status:"completed",output:stdout[provider].toString("utf8"),raw_output:{stdout:stdout[provider],stderr,exit_code:0,cancelled:false,captured_output_limited:false}}),
           rawOutputSink:async(_hint,bytes,metadata)=>options.onProviderOutput({provider:metadata.provider,output:bytes}),
+          onProviderResult:({result})=>observed.push(result),
         });
       }
     }}));
@@ -861,8 +862,16 @@ describe("OCR delegation public review route", () => {
     for(const member of canonical.provider_results){expect(member.evidence_refs).toHaveLength(2);for(const[index,stream]of["stdout","stderr"].entries()){
       const bytes=stream==="stdout"?stdout[member.provider]:stderr;const saved=state.task.readRecordBytes(member.evidence_refs[index]);expect(saved).toEqual(bytes);expect(createHash("sha256").update(saved).digest("hex")).toBe(createHash("sha256").update(bytes).digest("hex"));expect(member.raw_output_ref).toBe(member.evidence_refs[0]);
     }}
+    expect(observed).toHaveLength(2);
+    for(const member of canonical.provider_results){
+      const saved=state.task.readRecordBytes(member.raw_output_ref);
+      expect(member.raw_output_sha256).toBe(createHash("sha256").update(saved).digest("hex"));
+      expect(member.raw_output_sha256).toBe(createHash("sha256").update(stdout[member.provider]).digest("hex"));
+      expect(member.raw_output_sha256).not.toBe(createHash("sha256").update(stderr).digest("hex"));
+      expect(observed.find(result=>result.provider===member.provider)).toMatchObject({raw_output_ref:member.raw_output_ref,raw_output_sha256:member.raw_output_sha256});
+    }
     expect(canonical.provider_results[0]).toMatchObject({provider:"codex/good",status:"completed",process_outcome:"ok",parse_outcome:"ok"});
-    expect(canonical.provider_results[1]).toMatchObject({provider:"antigravity/bad",status:"failed",process_outcome:"ok",parse_outcome:"invalid"});
+    expect(canonical.provider_results[1]).toMatchObject({provider:"codex/bad",status:"failed",process_outcome:"ok",parse_outcome:"invalid"});
     expect(canonical.provider_results[1].unavailable_diagnostics.message).toContain("parse_error=");
     const outputs=readdirSync(join(state.taskDir,"quality","reviews")).filter(x=>x.endsWith(".output"));expect(outputs).toHaveLength(4); // each provider owns both original streams, no cross-provider hash-dedupe authority
     expect(state.task.readRecord("facts.jsonl")).toBe("");

@@ -1219,6 +1219,83 @@ describe("OCR original provider bytes", () => {
     return original;
   }
 
+  it("binds a persisted OCR raw output digest to the chosen original without inventing hashes for missing refs", async () => {
+    const provider = "codex/good";
+    const output = directProviderOutput(provider, []);
+    const stdout = Buffer.from(output);
+    const stderr = Buffer.from([0xff, 0x00, 0x61]);
+    const scenarios = [
+      { name: "distinct streams", stdout, stderr, streams: ["stdout", "stderr"], chosen: "stdout", originals: 2 },
+      { name: "stderr only", stdout: Buffer.alloc(0), stderr, streams: ["stderr"], chosen: "stderr", originals: 1 },
+      { name: "identical streams", stdout, stderr: stdout, streams: ["stdout"], chosen: "stdout", originals: 1 },
+      { name: "stdout save failure", stdout, stderr, streams: ["stdout", "stderr"], failStdout: true, originals: 1 },
+      { name: "null sink refs", stdout, stderr, streams: ["stdout", "stderr"], nullRefs: true, originals: 0 },
+      { name: "empty streams", stdout: Buffer.alloc(0), stderr: Buffer.alloc(0), streams: [], originals: 0 },
+    ];
+    for (const scenario of scenarios) {
+      const state = rawFixture([provider], "");
+      try {
+        const streams = [], observed = [];
+        const result = await runConfiguredOcrHostReview({ request, packet: configuredPacket() }, {
+          trustedContext: state.trustedContext,
+          providerExecutor: async () => ({ status: "completed", output,
+            raw_output: { stdout: scenario.stdout, stderr: scenario.stderr, exit_code: 0 } }),
+          rawOutputSink: async (hint, bytes, metadata) => {
+            streams.push(metadata.stream);
+            if (scenario.failStdout && metadata.stream === "stdout") throw new Error("fixture stdout save failed");
+            if (scenario.nullRefs) return null;
+            return state.rawOutputSink(hint, bytes, metadata);
+          },
+          onProviderResult: (value) => observed.push(value),
+        });
+        const member = result.provider_results[0];
+        expect(streams, scenario.name).toEqual(scenario.streams);
+        expect(state.saved.size, scenario.name).toBe(scenario.originals);
+        expect(observed, scenario.name).toHaveLength(1);
+        expect(observed[0].pending_providers, scenario.name).toEqual([]);
+        expect(observed[0].settled_results, scenario.name).toHaveLength(1);
+        expect(member, scenario.name).toMatchObject({ parse_outcome: "ok", process_outcome: "ok", usage: null, usage_status: "not_reported" });
+        if (scenario.failStdout || scenario.nullRefs) {
+          expect(member, scenario.name).toMatchObject({ status: "failed", error: { code: "OCR_PROVIDER_OUTPUT_SAVE_FAILED" } });
+        } else expect(member.status, scenario.name).toBe("completed");
+        if (scenario.failStdout) {
+          const ref = state.returnedRefs.get(`${provider}\0stderr`);
+          expect(member.evidence_refs, scenario.name).toEqual([ref]);
+          expect(readFileSync(join(state.root, ref)), scenario.name).toEqual(stderr);
+          expect(member.unavailable_diagnostics.message).toContain("stdout: fixture stdout save failed");
+        }
+        for (const projected of [observed[0].result, observed[0].settled_results[0], member]) {
+          expect(projected.raw_output_ref, scenario.name).toBe(member.raw_output_ref);
+          if (scenario.chosen) {
+            const ref = state.returnedRefs.get(`${provider}\0${scenario.chosen}`);
+            expect(projected.raw_output_ref, scenario.name).toBe(ref);
+            expect(projected.raw_output_ref, scenario.name).toBe(projected.evidence_refs[0]);
+            expect(projected.evidence_refs, scenario.name).toHaveLength(scenario.originals);
+            const original = readFileSync(join(state.root, ref));
+            expect(original, scenario.name).toEqual(scenario[scenario.chosen]);
+            const digest = createHash("sha256").update(original).digest("hex");
+            expect(projected.raw_output_sha256, scenario.name).toBe(digest);
+            if (scenario.name === "distinct streams") {
+              expect(projected.raw_output_sha256).not.toBe(createHash("sha256").update(stderr).digest("hex"));
+            }
+            if (scenario.chosen === "stderr") {
+              expect(projected.raw_output_sha256).not.toBe(createHash("sha256").update(stdout).digest("hex"));
+            }
+          } else {
+            expect(projected.raw_output_ref, scenario.name).toBeNull();
+            expect(projected, scenario.name).not.toHaveProperty("raw_output_sha256");
+            if (scenario.originals === 0) expect(projected, scenario.name).not.toHaveProperty("evidence_refs");
+          }
+        }
+      } finally {
+        // Only this case's existing rawFixture-owned temporary root is removed.
+        expect(realpathSync(state.root)).toBe(state.root);
+        expect(state.root.startsWith(join(realpathSync(tmpdir()), "workflowhub-ocr-raw-"))).toBe(true);
+        rmSync(state.root, { recursive: true, force: true });
+      }
+    }
+  });
+
   it("saves stdout/stderr before parse failure and keeps the later successful sibling", async () => {
     // Broken final review JSON lives inside a valid Codex event envelope.
     const invalid = JSON.stringify({ type: "item.completed", item: { type: "agent_message", text: '{"findings":' } }) + "\n" + JSON.stringify({ type: "turn.completed" }) + "\n";
