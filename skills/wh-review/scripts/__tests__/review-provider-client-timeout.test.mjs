@@ -2,6 +2,7 @@ import { expect, test } from "vitest";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { execFileSync } from "node:child_process";
 import { ReviewProviderClient } from "../review-provider-client.mjs";
 
 const materials = {
@@ -15,6 +16,14 @@ const materials = {
 test("managed broker CLI has no implicit local deadline", () => {
   const client = new ReviewProviderClient({ command: [process.execPath], config: "fixture-config" });
   expect(client.timeoutMs).toBeNull();
+});
+
+test("broker timeout environment does not create a default deadline", () => {
+  const url = new URL("../review-provider-client.mjs", import.meta.url).href;
+  const result = execFileSync(process.execPath, ["--input-type=module", "-e", `const {ReviewProviderClient} = await import(${JSON.stringify(url)}); process.stdout.write(JSON.stringify(new ReviewProviderClient({invoke:async()=>{}}).timeoutMs));`], {
+    env: { ...process.env, WH_REVIEW_BROKER_TIMEOUT_MS: "25" }, encoding: "utf8",
+  });
+  expect(JSON.parse(result)).toBeNull();
 });
 
 test("client bounds a hanging broker and returns a typed timeout", async () => {

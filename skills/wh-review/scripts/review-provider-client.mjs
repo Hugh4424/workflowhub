@@ -10,16 +10,6 @@ import { selectTrustedReviewProviderSelection } from "./third-review-host-config
 
 const protocol = "workflowhub-result.v3";
 const reviewModes = new Set(["single_round", "adaptive", "full_only", "full_on_structural_rework", "legacy"]);
-// Injected broker-wire callers retain their configured timeout semantics.
-// Every native wait ends on a terminal provider exit or an explicit
-// cancellation; neither health nor output observation creates or renews a
-// WorkflowHub wall-clock bound.
-const REVIEW_BROKER_TIMEOUT_FROM_ENV = (() => {
-  const raw = process.env.WH_REVIEW_BROKER_TIMEOUT_MS;
-  if (raw === undefined) return null;
-  const parsed = Number(raw);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
-})();
 
 // The external 3rd-review broker (3rd-review/lib/broker.mjs:678) still requires
 // a supported host_provider on every request. WorkflowHub no longer reads a
@@ -262,7 +252,6 @@ const v3PublicationStates = new Set(["not_published", "initial_published", "late
 const v3ExtendedGroupFields = [...v3GroupFields, "initial_result_ref", "publication", "supplements"];
 const v3SupplementFields = ["arrival_at", "arrival_elapsed_ms", "findings", "initial_result_ref", "provider", "supplement_id", "window_status"];
 const v3SupplementFieldsWithIdentity = [...v3SupplementFields, "identity"];
-const LATE_SUPPLEMENT_WINDOW_MS = 600000;
 const managedStates = new Set(["starting", "running", "terminal"]);
 const managedGroupFields = ["host_provider", "outcome", "providers", "round", "runtime_id", "selected_tier", "version"];
 const managedMemberFields = ["adapter", "continuable", "effort", "error", "material_id", "model", "output", "provider", "raw_output_ref", "result_protocol", "retry", "runtime_id", "session_file_path", "session_id", "status", "thinking", "timing", "unavailable_diagnostics", "usage"];
@@ -335,10 +324,9 @@ function validateV3Publication(value, label = "v3 publication") {
   exactKeys(value.append_window, ["duration_ms", "ends_at", "starts_at"], `${label}.append_window`);
   const window = value.append_window;
   if (![window.starts_at, window.ends_at, window.duration_ms].every((item) => Number.isSafeInteger(item) && item >= 0)
-      || window.duration_ms !== LATE_SUPPLEMENT_WINDOW_MS
       || value.published_at === null
       || window.starts_at !== value.published_at
-      || window.ends_at !== window.starts_at + LATE_SUPPLEMENT_WINDOW_MS) {
+      || window.ends_at !== window.starts_at + window.duration_ms) {
     throw failure("PROTOCOL_INCOMPATIBLE", `${label}.append_window is invalid`);
   }
   return Object.freeze({ ...value, append_window: Object.freeze({ ...window }) });
@@ -359,8 +347,6 @@ function validateV3Supplement(value, publication, label = "v3 supplement") {
       && value.arrival_elapsed_ms !== value.arrival_at - publication.published_at) {
     throw failure("PROTOCOL_INCOMPATIBLE", `${label}.arrival_elapsed_ms is not bound to published_at`);
   }
-  const expectedWindowStatus = value.arrival_elapsed_ms < LATE_SUPPLEMENT_WINDOW_MS ? "in_window" : "over_window_unjudged";
-  if (value.window_status !== expectedWindowStatus) throw failure("PROTOCOL_INCOMPATIBLE", `${label}.window_status is invalid`);
   try {
     // A supplement is another provider output, not an opaque metadata array.
     // Validate its findings through the same findings-only parser used for the
@@ -879,12 +865,8 @@ export function registerReviewSupplement(initialResult, supplement) {
     throw failure("SUPPLEMENT_INVALID", `supplement findings are invalid: ${error.message}`);
   }
   const arrivalElapsedMs = supplement.arrival_at - publishedAt;
-  const windowStatus = arrivalElapsedMs < LATE_SUPPLEMENT_WINDOW_MS ? "in_window" : "over_window_unjudged";
   if (supplement.arrival_elapsed_ms !== undefined && supplement.arrival_elapsed_ms !== arrivalElapsedMs) {
     throw failure("SUPPLEMENT_INVALID", "supplement arrival_elapsed_ms is invalid");
-  }
-  if (supplement.window_status !== undefined && supplement.window_status !== windowStatus) {
-    throw failure("SUPPLEMENT_INVALID", "supplement window_status is invalid");
   }
   const existing = initialResult.supplements ?? [];
   if (!Array.isArray(existing)) throw failure("SUPPLEMENT_INVALID", "initial result supplements must be an array");
@@ -903,14 +885,11 @@ export function registerReviewSupplement(initialResult, supplement) {
     provider: supplement.provider,
     arrival_at: supplement.arrival_at,
     arrival_elapsed_ms: arrivalElapsedMs,
-    window_status: windowStatus,
     ...(supplement.identity ? { identity: Object.freeze(structuredClone(supplement.identity)) } : {}),
     findings: Object.freeze(structuredClone(normalizedFindings)),
   });
   const findings = Array.isArray(initialResult.findings) ? [...initialResult.findings] : [];
-  if (windowStatus === "in_window") {
-    findings.push(...structuredClone(normalizedFindings));
-  }
+  findings.push(...structuredClone(normalizedFindings));
   return Object.freeze({
     ...initialResult,
     initial_result_ref: initialResultRef,
@@ -949,7 +928,7 @@ function nativePacketFiles(materials) {
 
 export class ReviewProviderClient {
   #nativeTransport;
-  constructor({ command = null, config = null, invoke = null, timeoutMs = REVIEW_BROKER_TIMEOUT_FROM_ENV } = {}) {
+  constructor({ command = null, config = null, invoke = null, timeoutMs = null } = {}) {
     if (!invoke && (!command || !config)) throw new TypeError("command and config are required without an injected invoke function");
     if (timeoutMs !== null && (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0)) throw new TypeError("timeoutMs must be null or a positive safe integer");
     this.command = Array.isArray(command) ? command : command ? [command] : null; this.config = config; this.invoke = invoke ?? ((value) => this.#invokeCli(value));

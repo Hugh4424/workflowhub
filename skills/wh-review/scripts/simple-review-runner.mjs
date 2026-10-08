@@ -96,7 +96,7 @@ function redactHostPaths(value) { return redactProviderHostPaths(value); }
 
 const RESULT_SAMPLE = `Example of a complete finding:\n{\n  "findings": [{\n    "severity": "major",\n    "path": "diff-shards/S-0024.diff",\n    "line": 42,\n    "issue": "FR-REV-002 requires a constitution clause citation, but the evidence field only contains the decision id; acceptance cannot verify clause-level traceability.",\n    "recommendation": "Add the constitution clause (e.g., F9, F4) to the 'evidence' field of FR-REV-002.",\n    "root_cause": "New FR was copied without the existing template's evidence field.",\n    "evidence_kind": "direct",\n    "evidence": "FR-REV-002 evidence field reads 'D-007' but lacks any '宪法' clause reference, unlike other FRs which cite specific clauses."\n  }]\n}\nExample of an empty result (no findings):\n{\n  "findings": []\n}\nOutput rules:\n- Emit exactly one JSON object shaped like the example above.\n- severity must be one of: blocking, major, minor.\n- evidence_kind must be one of: direct, machine, inferred.\n- path must be the manifest-relative path recorded in manifest.json, for example diff-shards/S-0024.diff.\n- Never prefix path with bundle/; never use an absolute path or a private/source path.\n- line must be an integer line number in that file, or omitted.\n- Do not output a verdict, summary, pass/fail, checklist, or a second JSON object.\n- Do not wrap the JSON in markdown code fences.\n`;
 
-const RESULT_PROMPT = `Read bundle/review-instructions.md and bundle/manifest.json, then every submitted material listed in the manifest. Review only those bytes. Return exactly one JSON object shaped as shown in the sample below.\n\n${RESULT_SAMPLE}`;
+const RESULT_PROMPT = `Locate review-instructions.md and manifest.json in the delivered packet: a broker may use a bundle/ delivery prefix, while native transport presents them directly at the packet root. Read those files, then every submitted material listed in the manifest. Review only those bytes. Return exactly one JSON object shaped as shown in the sample below.\n\n${RESULT_SAMPLE}`;
 
 function promptForPair(pair) {
   if (!pair) return RESULT_PROMPT;
@@ -144,7 +144,7 @@ function managedRequestId() {
 
 function providerSelectionShape(selection) {
   const providers = Array.isArray(selection) ? [...selection] : selection?.providers;
-  if (!Array.isArray(providers) || providers.length === 0) {
+  if (!Array.isArray(providers)) {
     throw new TypeError("PROVIDER_SELECTION_INVALID: trusted provider selection is empty");
   }
   if (providers.some((provider) => typeof provider !== "string" || provider.trim() === "")) {
@@ -157,12 +157,27 @@ function providerSelectionShape(selection) {
   const models = Array.isArray(selection) ? undefined : (selection?.provider_models ?? selection?.providerModels);
   const rawEligible = Array.isArray(selection) ? undefined : (selection?.eligible_profiles ?? selection?.eligibleProfiles);
   const eligible = rawEligible === undefined || rawEligible === null ? [...providers] : [...rawEligible];
-  if (!Array.isArray(eligible) || eligible.length === 0
+  if (!Array.isArray(eligible) || (providers.length > 0 && eligible.length === 0)
       || eligible.some((provider) => typeof provider !== "string" || !providers.includes(provider))
       || new Set(eligible).size !== eligible.length) {
     throw new TypeError("PROVIDER_SELECTION_INVALID: eligible provider profiles are invalid");
   }
   const shaped = { providers, eligible_profiles: eligible };
+  const skipped = Array.isArray(selection) ? undefined : (selection?.skipped_providers ?? selection?.skippedProviders);
+  if (skipped !== undefined) {
+    if (!Array.isArray(skipped) || skipped.some(item => !plainRecord(item)
+        || typeof item.provider !== "string" || item.provider.trim() === "" || item.status !== "failed"
+        || !plainRecord(item.error) || typeof item.error.code !== "string" || item.error.code.trim() === ""
+        || typeof item.error.message !== "string" || item.error.message.trim() === "")) {
+      throw new TypeError("PROVIDER_SELECTION_INVALID: skipped provider facts are invalid");
+    }
+    if (skipped.length) shaped.skipped_providers = skipped.map(item => ({
+      provider: item.provider, status: "failed", error: { code: item.error.code, message: item.error.message },
+    }));
+  }
+  if (providers.length === 0 && (!plainRecord(selection) || !shaped.skipped_providers?.length)) {
+    throw new TypeError("PROVIDER_SELECTION_INVALID: trusted provider selection is empty");
+  }
   if (models !== undefined && models !== null) {
     if (!plainRecord(models)) throw new TypeError("PROVIDER_SELECTION_INVALID: provider models are invalid");
     const modelKeys = Object.keys(models).sort();
@@ -210,6 +225,7 @@ function providerSelectionOutput(selection) {
     provider_identities: selection.provider_identities ?? null,
     ...(selection.eligible_profiles ? { eligible_profiles: [...selection.eligible_profiles] } : {}),
     ...(selection.provider_models ? { provider_models: { ...selection.provider_models } } : {}),
+    ...(selection.skipped_providers ? { skipped_providers: selection.skipped_providers } : {}),
   };
 }
 
@@ -1040,22 +1056,39 @@ async function preservedObservedFacts(source, { bundle, dependencies, pair, sele
     if (typeof provider !== "string" || !original || typeof original !== "object") continue;
     const item = { ...original, provider: original.provider ?? provider };
     if (!item.raw_output_ref && typeof item.output === "string" && typeof dependencies.onProviderOutput === "function") {
-      item.raw_output_ref = await dependencies.onProviderOutput({ provider: item.provider, role: pair?.role ?? null, output: item.output });
+      const ref = await dependencies.onProviderOutput({ provider: item.provider, role: pair?.role ?? null, output: item.output });
+      if (typeof ref === "string" && ref.trim() !== "") {
+        item.raw_output_ref = ref;
+        item.raw_output_sha256 = hash(Buffer.from(item.output));
+      }
     }
     const identity = item.identity, expected = selectedIdentities?.[provider];
     const bound = authenticated && unique && !!expected && identity?.provider === provider
       && (identity.adapter === undefined || identity.adapter === providerAdapter(provider))
       && identity.source_id === expected.source_id && identity.config_id === expected.config_id
       && identity.model === selectedModels?.[provider];
-    const fact = publicProviderResult({ ...item, identity_authenticated: bound }, undefined, pair);
-    providers.push(fact);
-    if (bound && item.status === "completed" && !item.error && typeof item.output === "string") {
-      try {
-        const parsed = parseReviewerOutput(item.output, { requireEvidence: true });
-        const anchors = evidenceAnchorValidity(bundle.bundleRoot, parsed.findings, bundle.deliveryManifest);
-        findings.push(...parsed.findings.filter((_finding, index) => anchors[index]).map(finding => ({ ...finding, provider })));
-      } catch { /* Original bytes remain in raw_output_ref; invalid output is not a finding. */ }
+    if (item.status === "completed" && !item.error) {
+      if (typeof item.output !== "string" || item.output.trim() === "") {
+        item.status = "failed";
+        item.parse_outcome = "empty_output";
+        item.error = { code: "OUTPUT_INVALID", message: "provider completed without a findings output" };
+      } else {
+        let parsed;
+        try {
+          parsed = parseReviewerOutput(item.output, { requireEvidence: true });
+          item.parse_outcome = "ok";
+        } catch {
+          item.status = "failed";
+          item.parse_outcome = "invalid";
+          item.error = { code: "OUTPUT_INVALID", message: "provider output is not valid findings JSON" };
+        }
+        if (bound && parsed) {
+          const anchors = evidenceAnchorValidity(bundle.bundleRoot, parsed.findings, bundle.deliveryManifest);
+          findings.push(...parsed.findings.filter((_finding, index) => anchors[index]).map(finding => ({ ...finding, provider })));
+        }
+      }
     }
+    providers.push(publicProviderResult({ ...item, identity_authenticated: bound }, undefined, pair));
   }
   return { provider_results: providers, findings };
 }
@@ -1075,9 +1108,12 @@ function publicProviderResult(item, evidenceAnchors = undefined, pair = null) {
     error: item.error === null || item.error === undefined ? null : normalizeProviderError(item.error, { preserveCode: true }),
     timing: item.timing,
     usage: item.usage,
+    usage_status: item.usage && typeof item.usage === "object" && !Array.isArray(item.usage) ? "reported" : "not_reported",
+    ...(item.parse_outcome === undefined ? {} : { parse_outcome: item.parse_outcome }),
     ...(item.execution ? { execution: item.execution } : {}),
-    ...(item.raw_output_ref ? { raw_output_ref: item.raw_output_ref } : {}),
-    ...(Array.isArray(item.evidence_refs) ? { evidence_refs: item.evidence_refs } : {}),
+    ...(typeof item.raw_output_ref === "string" && item.raw_output_ref.trim() !== "" ? { raw_output_ref: item.raw_output_ref } : {}),
+    ...(item.raw_output_sha256 ? { raw_output_sha256: item.raw_output_sha256 } : {}),
+    ...(Array.isArray(item.evidence_refs) ? { evidence_refs: item.evidence_refs.filter(ref => typeof ref === "string" && ref.trim() !== "") } : {}),
     ...(item.transport ? { transport: item.transport } : {}),
     ...(item.unavailable_diagnostics ? { unavailable_diagnostics: item.unavailable_diagnostics } : {}),
     ...(evidenceAnchors === undefined ? {} : { evidence_anchor_valid: evidenceAnchors }),
@@ -1283,13 +1319,20 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
   try {
     selection = selectProviders(trusted.config, route);
   } catch (error) {
-    const source = String(error?.message ?? error);
-    return blockedPreflight(input, "ROUTE_UNAVAILABLE", source, preflightDiagnostic({
-      field: "provider_selection",
-      expected: "enabled provider selection",
-      actual: "unavailable",
-      nextAction: "repair the provider route and retry",
-    }), pair);
+    // The trusted selector reports an all-skipped route by throwing its
+    // original per-provider facts. Validate them through the same shape path
+    // as a returned selection; they do not describe executed attempts.
+    if (Array.isArray(error?.skipped_providers) && error.skipped_providers.length > 0) {
+      selection = { providers: [], eligible_profiles: [], skipped_providers: error.skipped_providers };
+    } else {
+      const source = String(error?.message ?? error);
+      return blockedPreflight(input, "ROUTE_UNAVAILABLE", source, preflightDiagnostic({
+        field: "provider_selection",
+        expected: "enabled provider selection",
+        actual: "unavailable",
+        nextAction: "repair the provider route and retry",
+      }), pair);
+    }
   }
   let providerSelection;
   try { providerSelection = providerSelectionShape(selection); }
@@ -1300,6 +1343,12 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
       actual: "invalid",
       nextAction: "repair the provider route and retry",
     }), pair);
+  }
+  if (providerSelection.providers.length === 0) {
+    return unavailableResult(canonicalInput, { ...providerSelection.skipped_providers[0].error }, pair, {
+      provider_selection: providerSelectionOutput(providerSelection),
+      provider_attempts: 0, dispatch_state: "blocked_before_dispatch",
+    });
   }
   const preflight = await runStaticPreflight(
     callerOwnedPreflightInput(canonicalInput),
@@ -1507,18 +1556,29 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
     if (typeof dependencies.onProviderOutput === "function") {
       for (const item of receivedProviders) if (item) {
         const provider = item.provider ?? item.identity?.provider;
+        // A settled callback may already have saved these originals. Reuse its
+        // ref/hash pair instead of writing the same bytes a second time.
+        if (typeof item.raw_output_ref === "string" && item.raw_output_ref.trim() !== "") continue;
         const originals = Array.isArray(item.raw_outputs) && item.raw_outputs.length ? item.raw_outputs
           : Buffer.isBuffer(item.raw_output?.stdout) && Buffer.isBuffer(item.raw_output?.stderr) ? [item.raw_output] : [];
         if (originals.length) {
           const refs = [];
           for (const original of originals) for (const stream of ["stdout", "stderr"]) {
             if (!Buffer.isBuffer(original[stream])) throw new TypeError("native provider original stream must be bytes");
-            refs.push(await dependencies.onProviderOutput({ provider, role: pair?.role ?? null, channel: original.step ? `${original.step}-${stream}` : stream, output: original[stream] }));
+            const ref = await dependencies.onProviderOutput({ provider, role: pair?.role ?? null, channel: original.step ? `${original.step}-${stream}` : stream, output: original[stream] });
+            if (typeof ref === "string" && ref.trim() !== "") {
+              if (refs.length === 0) item.raw_output_sha256 = hash(original[stream]);
+              refs.push(ref);
+            }
           }
           item.raw_output_ref = refs[0] ?? null;
           item.evidence_refs = refs;
         } else if (typeof item.output === "string") {
-          item.raw_output_ref = await dependencies.onProviderOutput({ provider, role: pair?.role ?? null, output: item.output });
+          const ref = await dependencies.onProviderOutput({ provider, role: pair?.role ?? null, output: item.output });
+          if (typeof ref === "string" && ref.trim() !== "") {
+            item.raw_output_ref = ref;
+            item.raw_output_sha256 = hash(Buffer.from(item.output));
+          }
         }
       }
     }
@@ -1563,7 +1623,13 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
           },
         };
       }
-      if (item.status === "completed" && typeof item.output === "string" && item.error === null) {
+      if (item.status === "completed" && item.error === null) {
+        if (typeof item.output !== "string" || item.output.trim() === "") {
+          return {
+            ...publicProviderResult(item, undefined, pair), status: "failed", parse_outcome: "empty_output",
+            error: { code: "OUTPUT_INVALID", message: "provider completed without a findings output" },
+          };
+        }
         let parsed;
         try {
           parsed = parseReviewerOutput(item.output, { requireEvidence: true });
@@ -1574,6 +1640,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
           return {
             ...publicProviderResult(item, undefined, pair),
             status: "failed",
+            parse_outcome: "invalid",
             error: {
               code: "OUTPUT_INVALID",
               message: "provider output is not valid findings JSON",
@@ -1598,7 +1665,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
         });
         if (eligibleSet.has(item.provider)) semanticModels.add(item.identity.model);
         for (const finding of anchoredFindings) findings.push({ ...finding, provider: item.provider });
-        const providerResult = publicProviderResult(item, anchoredEvidence, pair);
+        const providerResult = publicProviderResult({ ...item, parse_outcome: "ok" }, anchoredEvidence, pair);
         return providerDiscardedFacts.length > 0
           ? { ...providerResult, discarded_facts: providerDiscardedFacts }
           : providerResult;

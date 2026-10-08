@@ -2016,6 +2016,157 @@ async function runP4Provider({ output = null, error = null, materials = {
   return runSimpleReview({ stage: "build-code", host_provider: "codex", materials }, dependencies);
 }
 
+describe("P8 runner failure and accounting seams", () => {
+  const root = realpathSync(new URL("../../../../", import.meta.url).pathname);
+  const materialId = "c".repeat(64);
+  const providers = ["fixture/a", "fixture/b"];
+  const identity = provider => ({ provider, source_id: `${provider}-source`, config_id: `${provider}-config`, model: `${provider}-model` });
+  const member = (provider, extra = {}) => ({ provider, identity: identity(provider), status: "completed", error: null, output: '{"findings":[]}', timing: { duration_ms: 10 }, usage: null, ...extra });
+  function dependencies(members, extra = {}) {
+    return {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot: root }),
+      resolveRoute: () => ({ initial: providers, mode: "full_only" }),
+      selectProviders: () => ({ providers, eligibleProfiles: providers, provider_identities: Object.fromEntries(providers.map(p => [p, { source_id: `${p}-source`, config_id: `${p}-config` }])), provider_models: Object.fromEntries(providers.map(p => [p, `${p}-model`])) }),
+      buildBundle: () => ({ bundleRoot: root, materialId, deliveryManifest: [{ path: "CONSTITUTION.md" }], dispose() {} }),
+      client: { async runGroup() { return { material_id: materialId, runtime_id: "p8-fixture", outcome: "completed", providers: members }; } },
+      ...extra,
+    };
+  }
+  const input = { stage: "build-code", phase_id: "P8", materials: { implementation: "fixture" } };
+  const finding = { severity: "major", path: "CONSTITUTION.md", line: 1, issue: "anchored issue", recommendation: "fix", root_cause: "cause", evidence_kind: "direct", evidence: "paraphrase" };
+
+  it("uses layout-neutral prompts and keeps valid anchored findings", async () => {
+    let prompt;
+    const result = await runSimpleReview(input, dependencies([], { client: { async runGroup(request) {
+      prompt = request.prompt;
+      return { material_id: materialId, outcome: "completed", providers: [member(providers[0], { output: JSON.stringify({ findings: [finding] }) }), member(providers[1])] };
+    } } }));
+    expect(prompt).toContain("review-instructions.md"); expect(prompt).toContain("manifest.json");
+    expect(prompt).not.toContain("bundle/review-instructions.md"); expect(prompt).not.toContain("bundle/manifest.json");
+    expect(result.findings).toEqual([{ ...finding, provider: providers[0] }]);
+    expect(result.provider_results.every(p => p.parse_outcome === "ok")).toBe(true);
+  });
+  it.each([null, "", "   "])("records empty completed output %j as a failure", async output => {
+    const result = await runSimpleReview(input, dependencies(providers.map(p => member(p, { output }))));
+    expect(result.status).toBe("unavailable"); expect(result.findings).toEqual([]);
+    for (const fact of result.provider_results) expect(fact).toMatchObject({ status: "failed", parse_outcome: "empty_output", error: { code: "OUTPUT_INVALID" } });
+  });
+  it.each(["not json at all", 'provider prose: {"findings":[]}'])("records invalid output %j without erasing a healthy sibling", async output => {
+    const result = await runSimpleReview(input, dependencies([member(providers[0], { output }), member(providers[1])]));
+    expect(result.status).toBe("available"); expect(result.findings).toEqual([]);
+    expect(result.provider_results[0]).toMatchObject({ status: "failed", parse_outcome: "invalid", error: { code: "OUTPUT_INVALID" } });
+    expect(result.provider_results[1]).toMatchObject({ status: "completed", parse_outcome: "ok" });
+  });
+  it("preserves parse failures and original broker errors on an invalid managed envelope", async () => {
+    const result = await runSimpleReview(input, dependencies([], {
+      client: { async startManaged(request) { return { state: "running", request_id: request.requestId, runtime_id: "rt", material_id: materialId }; } },
+      onManagedTerminal: async () => { throw Object.assign(new Error("invalid envelope"), { code: "PROTOCOL_INCOMPATIBLE", managed_observation: { group: { providers: [member(providers[0], { output: "not json" }), member(providers[1], { status: "failed", output: "diagnostic", error: { code: "PROCESS_STALLED", message: "stalled" } })] } } }); },
+      onProviderOutput: async ({ output }) => output.length ? "quality/reviews/p8-preserved.output" : null,
+    }));
+    expect(result.findings).toEqual([]);
+    expect(result.provider_results[0]).toMatchObject({ status: "failed", parse_outcome: "invalid", error: { code: "OUTPUT_INVALID" }, raw_output_sha256: createHash("sha256").update("not json").digest("hex") });
+    expect(result.provider_results[1]).toMatchObject({ status: "failed", error: { code: "PROCESS_STALLED" } });
+  });
+  it("preserves launch failure with two empty originals and null sinks without harming a healthy sibling", async () => {
+    const launchError = { code: "PROCESS_SPAWN_FAILED", message: "provider executable could not start" };
+    const sink = vi.fn(async ({ output }) => Buffer.byteLength(output) === 0 ? null : "quality/reviews/p8-healthy.output");
+    const result = await runSimpleReview(input, dependencies([
+      member(providers[0], { status: "failed", error: launchError, output: null, parse_outcome: "empty_output", raw_output: { stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) } }),
+      member(providers[1], { output: JSON.stringify({ findings: [finding] }) }),
+    ], { onProviderOutput: sink }));
+    expect(sink).toHaveBeenCalledTimes(3);
+    const emptyCalls = sink.mock.calls.map(([call]) => call).filter(call => call.provider === providers[0]);
+    expect(emptyCalls.map(call => call.channel)).toEqual(["stdout", "stderr"]);
+    expect(emptyCalls.every(call => Buffer.isBuffer(call.output) && call.output.length === 0)).toBe(true);
+    expect(await sink.mock.results[0].value).toBeNull();
+    expect(await sink.mock.results[1].value).toBeNull();
+    const failed = result.provider_results[0];
+    expect(failed).toMatchObject({ status: "failed", error: launchError, parse_outcome: "empty_output", evidence_refs: [], usage: null, usage_status: "not_reported" });
+    expect(failed.evidence_refs).not.toContain(null);
+    expect(failed).not.toHaveProperty("raw_output_ref");
+    expect(failed).not.toHaveProperty("raw_output_sha256");
+    expect(result.status).toBe("available");
+    expect(result.provider_results[1]).toMatchObject({ status: "completed", parse_outcome: "ok", raw_output_ref: "quality/reviews/p8-healthy.output" });
+    expect(result.findings).toEqual([{ ...finding, provider: providers[1] }]);
+  });
+  it("pairs the first non-null original ref with its exact bytes and retains usage/timing", async () => {
+    const stderr = Buffer.from("diagnostic\n"); let writes = 0;
+    const result = await runSimpleReview(input, dependencies([
+      member(providers[0], { raw_output: { stdout: Buffer.alloc(0), stderr }, usage: { input_tokens: 10 } }), member(providers[1]),
+    ], { onProviderOutput: async ({ output }) => { writes++; return Buffer.byteLength(output) ? `quality/reviews/p8-${writes}.output` : null; } }));
+    expect(result.provider_results[0]).toMatchObject({ raw_output_ref: "quality/reviews/p8-2.output", evidence_refs: ["quality/reviews/p8-2.output"], raw_output_sha256: createHash("sha256").update(stderr).digest("hex"), usage_status: "reported", usage: { input_tokens: 10 }, timing: { duration_ms: 10 } });
+    expect(result.provider_results[1]).toMatchObject({ usage_status: "not_reported", usage: null, raw_output_sha256: createHash("sha256").update('{"findings":[]}').digest("hex") });
+  });
+  it("does not repersist settled originals and does not invent references for a null sink", async () => {
+    const sink = vi.fn(async () => null);
+    const settled = member(providers[0], { raw_output_ref: "quality/reviews/settled.output", raw_output_sha256: "a".repeat(64), evidence_refs: ["quality/reviews/settled.output"] });
+    const result = await runSimpleReview(input, dependencies([settled, member(providers[1])], { onProviderOutput: sink }));
+    expect(sink).toHaveBeenCalledTimes(1);
+    expect(result.provider_results[0]).toMatchObject({ raw_output_ref: settled.raw_output_ref, raw_output_sha256: settled.raw_output_sha256 });
+    expect(result.provider_results[1]).not.toHaveProperty("raw_output_ref");
+    expect(result.provider_results[1]).not.toHaveProperty("raw_output_sha256");
+  });
+  it("preserves all-skipped selection and thrown failure facts without dispatch", async () => {
+    const skipped = [
+      { provider: "grok", status: "failed", error: { code: "PROVIDER_DISABLED", message: "grok is disabled" } },
+      { provider: "missing", status: "failed", error: { code: "PROVIDER_NOT_CONFIGURED", message: "missing has no configured provider" } },
+    ];
+    for (const mode of ["returned", "thrown"]) {
+      const buildBundle = vi.fn(() => { throw new Error("must not build a packet"); });
+      const runGroup = vi.fn(async () => { throw new Error("must not dispatch"); });
+      const result = await runSimpleReview(input, dependencies([], {
+        selectProviders: () => {
+          if (mode === "thrown") throw Object.assign(new Error("wh_review route has no enabled provider"), { skipped_providers: skipped });
+          return { providers: [], eligible_profiles: [], provider_models: {}, provider_identities: {}, skipped_providers: skipped };
+        },
+        buildBundle, client: { runGroup },
+      }));
+      expect(result).toMatchObject({ status: "unavailable", dispatch_state: "blocked_before_dispatch", provider_attempts: 0 });
+      expect(result.provider_selection).toMatchObject({ providers: [], eligible_profiles: [], skipped_providers: skipped });
+      expect(result.error).toMatchObject(skipped[0].error);
+      expect(result.findings).toEqual([]);
+      expect(result.provider_results ?? []).toEqual([]);
+      expect(buildBundle).not.toHaveBeenCalled(); expect(runGroup).not.toHaveBeenCalled();
+    }
+  });
+  it("rejects empty selections and malformed all-skipped facts before dispatch", async () => {
+    const valid = { provider: "grok", status: "failed", error: { code: "PROVIDER_DISABLED", message: "disabled" } };
+    for (const bad of [
+      undefined, [], [{ ...valid, provider: "" }], [{ ...valid, status: "completed" }],
+      [{ ...valid, error: { message: "missing code" } }], [{ ...valid, error: { code: "PROVIDER_DISABLED", message: "" } }],
+    ]) {
+      const buildBundle = vi.fn(); const runGroup = vi.fn();
+      const result = await runSimpleReview(input, dependencies([], {
+        selectProviders: () => ({ providers: [], eligible_profiles: [], ...(bad === undefined ? {} : { skipped_providers: bad }) }),
+        buildBundle, client: { runGroup },
+      }));
+      expect(result).toMatchObject({ status: "unavailable", dispatch_state: "blocked_before_dispatch", provider_attempts: 0 });
+      expect(result.provider_selection?.skipped_providers).toBeUndefined();
+      expect(result.error.code).not.toBe("PROVIDER_DISABLED");
+      expect(buildBundle).not.toHaveBeenCalled(); expect(runGroup).not.toHaveBeenCalled();
+    }
+    const invalidKeys = await runSimpleReview(input, dependencies([], {
+      selectProviders: () => ({ providers: [], eligible_profiles: [], provider_models: { stray: "model" }, skipped_providers: [valid] }),
+    }));
+    expect(invalidKeys.status).toBe("unavailable");
+    expect(invalidKeys.provider_selection?.skipped_providers).toBeUndefined();
+  });
+  it("carries validated skipped facts without adding them to dispatched providers", async () => {
+    const deps = dependencies(providers.map(p => member(p))); const select = deps.selectProviders;
+    const skipped = [{ provider: "grok", status: "failed", error: { code: "PROVIDER_DISABLED", message: "disabled" } }];
+    deps.selectProviders = () => ({ ...select(), skipped_providers: skipped });
+    const result = await runSimpleReview(input, deps);
+    expect(result.provider_selection.skipped_providers).toEqual(skipped);
+    expect(result.provider_selection.providers).toEqual(providers); expect(result.provider_results).toHaveLength(2);
+    const plain = await runSimpleReview(input, dependencies(providers.map(p => member(p))));
+    expect(plain.provider_selection).not.toHaveProperty("skipped_providers");
+    deps.selectProviders = () => ({ ...select(), skipped_providers: [{ provider: "grok", status: "failed", error: { message: "missing code" } }] });
+    const bad = await runSimpleReview(input, deps);
+    expect(bad.status).toBe("unavailable");
+    expect(bad.dispatch_state).toBe("blocked_before_dispatch");
+  });
+});
+
 describe("T007 P4 format tolerance", () => {
   // AC-FORMAT-003 / OPEN-003: JSONL has precedence and contributes every
   // parseable findings row instead of falling through to one JSON candidate.
@@ -2093,9 +2244,10 @@ describe("T007 P4 format tolerance", () => {
       output: `provider prose: ${JSON.stringify({ findings: [first] })} then ${JSON.stringify({ findings: [later] })}`,
     });
 
-    expect(result.findings).toHaveLength(1);
-    expect(result.findings[0]).toMatchObject({ issue: "first candidate", provider: "other/model" });
-    expect(result.provider_results[0]).toMatchObject({ status: "completed", evidence_anchor_valid: [true] });
+    expect(result.findings).toEqual([]);
+    expect(result.provider_results[0]).toMatchObject({
+      status: "failed", error: { code: "OUTPUT_INVALID" }, parse_outcome: "invalid",
+    });
   });
 
   it.each([

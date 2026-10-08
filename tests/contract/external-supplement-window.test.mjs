@@ -157,7 +157,6 @@ describe("external review publication and supplement window", () => {
         supplement_id: "late-in-window",
         initial_result_ref: "initial-1",
         arrival_elapsed_ms: 599999,
-        window_status: "in_window",
       }],
     });
 
@@ -170,9 +169,10 @@ describe("external review publication and supplement window", () => {
     });
     expect(overWindow.supplements[1]).toMatchObject({
       arrival_elapsed_ms: 600000,
-      window_status: "over_window_unjudged",
     });
-    expect(overWindow.findings).toEqual(inWindow.findings);
+    expect(inWindow.supplements[0]).not.toHaveProperty("window_status");
+    expect(overWindow.supplements[1]).not.toHaveProperty("window_status");
+    expect(overWindow.findings).toEqual([...inWindow.findings, finding("over-window finding")]);
     expect(register(overWindow, {
       supplement_id: "late-over-window",
       initial_result_ref: "initial-1",
@@ -222,7 +222,6 @@ describe("external review publication and supplement window", () => {
       initial_result_ref: "initial-1",
       publication: publication(),
       supplements: [{
-        window_status: "in_window",
         arrival_elapsed_ms: 599999,
       }],
     });
