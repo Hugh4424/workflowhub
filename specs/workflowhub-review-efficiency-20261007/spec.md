@@ -583,3 +583,13 @@ H1–H8 去向：
 - **UC-CLOSE-MEMO**：未来 task-owned 会话备忘从创建时在既有外置 T 的普通具名位置存，不创建第二 facts/metadata 账本或镜像证据。本次四份旧 memo 仍需最终确认展示是否可丢，不预报迁移/备份/删除已完成。
 
 受影响定向 RED/GREEN、具体 fixture、来源/失败与恢复结果由 f6 的真实批准和唯一输出支持，本材料不猜未来命令退出或自判质量。新增决定不能补造 AC003 真实停滞样本；本日志旧 H2“证据索引”保留，AC012 仍 incomplete、不只验新模块换分母；AC019 延期及原 T007 fail 保原，worktree cleanup 不等于 packet TTL。原六 nonpass、历史格式许可与整体 unverified 边界不改。
+
+## 010 当前整件日志迁移与新增对象边界
+
+来源为任务库根 T 的[010 真实原话第 5 行](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-review-efficiency-20261007/quality/evidence/human-confirmations/2026-10-08-010-log-migration-packet-cleanup-final-close.json#L5>)；第 6 行是主会话解释，范围与候选判据见[247 独立范围原件](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-review-efficiency-20261007/quality/tests/2026-10-08-247-010-wholelog-migration-scope-oracle.md>)。010 允许本 task 当前真实日志结构整理，覆盖原 P5“不回填”及当前材料只读冻结的这一具名例外；其它历史任务、75 ADR 原决定、FR/AC、runtime/schema/reader 与 `rev-acceptance.mjs` 不变。
+
+当前材料唯一持笔为主会话明确授权的稳定实施会话 98，仅 S 根当前 `decision-log.md`、本 spec 末010续节、P10 原 T025 块外续节。日志移除旧逐字声明层、最终确认过程与证据索引三个独立 H2，将原件导航合已有需求/范围：逐字、research/review、dispatch 沿已有外 T 原件；两确认沿原 JSON；完整157行确认更正沿主仓 Git `17f71af780c975921d28f8f25808a50b3636532f:specs/workflowhub-review-efficiency-20261007/decision-log.md` 原1854–2010人读，不复制第二日志。当前确认摘要保 material_refs[]、旧确认过期、轮三未取证与非Git授权边界。历史Git路径不因未来归档改变，实际读取命令见当前日志「范围与非目标」当前确认边界。
+
+**当前whole新对象的验收职责**：非作者73在写集静止后完整读取实际唯一日志，按原AC-REV-012:239–243/ADR-070判断四类只指针、没有别名H2或H3隐藏过程全文，并在内存对旧Git来源核75ADR/RUV/身份/14验收/禁项/未决保全、实际回读原件指针。结果单独保存真实新对象来源、范围与判断；本实施者不预判observed_pass/adequate。原239–243通过/失败标准不改，模板T013已发生证据沿原件，不为此重跑聚合/正常审查或增加post机器consumer/评分。上节008对旧整件AC012 incomplete的陈述属于当时时点；旧179/fixed-post/DECLARED_GAPS与全部raw保持历史档位，010后的当前whole实际结果另述，不能倒写旧pass。
+
+010 同时给出具名packet历史派生清理与一起close/四memo可弃范围，具体执行与保护结果由主会话另记录。本续节未执行packet/Git/归档/工作区或分支删除；load自动TTL延期、真实停滞样本未知及原六nonpass历史不因此改pass，也不预填Done。

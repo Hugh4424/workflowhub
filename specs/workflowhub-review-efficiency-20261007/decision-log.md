@@ -24,9 +24,8 @@
 本文档的节目录（按出现顺序）：
 
 - 任务身份 / 大纲地图
-- 需求-决策覆盖矩阵 / 需求变更记录
+- 需求-决策覆盖矩阵 / 需求变更记录（U-019：010 当前日志迁移；确认边界见范围与非目标）
 - 原始需求索引 / 决策→需求回指
-- 逐字声明层
 - 工作模块（MOD-1、MOD-2、MOD-3、MOD-4、MOD-5、MOD-6、MOD-2 续、MOD-7、MOD-8、MOD-7 续、MOD-8 续）
 - MOD-7（续）承载 ADR-061…ADR-068（派发机制缺口）
 - MOD-8（续）承载 ADR-069…ADR-074（产出文档瘦身落点）
@@ -36,8 +35,6 @@
 - 范围与非目标
 - Supersedes（被替代记录）
 - 未决项
-- 最终确认
-- 证据索引
 
 ## 需求-决策覆盖矩阵
 
@@ -69,12 +66,20 @@ U-006…U-015 在本任务 worktree 与任务库中均未使用（F-027 实测�
 ### U-018 — close 默认安全清理（新增真实范围）
 
 2026-10-08 真实新增：用户要求检查并修正 close 每次建议保留工作区/分支的默认策略。原话唯一来源为任务库根 `quality/evidence/human-confirmations/2026-10-08-008-close-default-cleanup-request.json:5`；该件第 6 行是主会话范围解释，不冒用户逐字。V-021 仅导航此原件，处置见 MOD-9 / ADR-075；本次不执行最终 close，不解除 004 packet TTL 延期。
+
+### U-019 — 010 当前日志过程内容迁移（本任务新增范围）
+
+原话只读[010 确认原件第 5 行](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-review-efficiency-20261007/quality/evidence/human-confirmations/2026-10-08-010-log-migration-packet-cleanup-final-close.json#L5>)，V-022 仅导航此来源，第 6 行是主会话解释。本次允许整理当前真实整件日志的四类过程内容为原件指针，保全部决定与来源；仅在本 task 覆盖旧“不回填当前日志”的范围冻结，不改变历史 ADR 的原义或另立产品方向。packet 与四 memo/最终 close 的具名授权边界见「范围与非目标」当前确认边界；授权不是已执行结果。
+
 ## 原始需求索引
 
 本节负责登记反转权威表得不到的事实，不复制 R / U / V 与 ADR 的对应关系；
 该关系只留一张权威表，在 `## 决策→需求回指`。逐条事实（R 编号连续性、
 R-006 / R-007 / R-008 / R-009 的承载者、两表合并前的对账与删除前原表逐字）见任务库
 `quality/evidence/decision-log-refs/log-ref-requirement-index-pointer.md`。
+
+V-001…V-020 原始需求与 Talk 逐字及未取证状态，只读[逐字原件](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-review-efficiency-20261007/quality/evidence/decision-log-refs/log-ref-verbatim-layer.md>)；其它节引用 V 编号时以该原件为准。V-021 只导航 U-018 所引 008 第 5 行，V-022 只导航 U-019 所引 010 第 5 行，不复制进旧逐字原件。
+全部研究/审查原件及覆盖关联，只读[现有外置索引](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-review-efficiency-20261007/quality/evidence/decision-log-refs/log-ref-evidence-index.md>)；MOD-8（续）ADR-069…074 的 H-001/H-002 与复算来源只读[现有 MOD-8 指针件](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-review-efficiency-20261007/quality/evidence/decision-log-refs/log-ref-mod8-doc-slimming.md>)。派发原件与回执分别只读[003 原任务书](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-review-efficiency-20261007/quality/evidence/dispatch/2026-10-07-003-review-efficiency-mod8-dispatch-brief.md>)、[004 原回执](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-review-efficiency-20261007/quality/evidence/dispatch/2026-10-07-004-review-efficiency-mod8-dispatch-receipt.md>)。
 
 ## 决策→需求回指
 
@@ -166,16 +171,6 @@ R-006 的承载者是 ADR-014、ADR-015（**反转本表得不到**：本表 ADR
 两行只登记了 R-002、R-007、R-009，未登记 R-006）；R-008 无 ADR 落点，
 其权威是 `## 需求-决策覆盖矩阵`。逐条说明见任务库
 `quality/evidence/decision-log-refs/log-ref-requirement-index-pointer.md`。
-## 逐字声明层
-
-全文（V-001…V-020 原始需求与 Talk 逐字，含未取证披露）见任务库
-`quality/evidence/decision-log-refs/log-ref-verbatim-layer.md`。
-本节承担的唯一职责：其它节提到 V 编号时，逐字原文与取证状态以该
-参考件为准。
-
-V-021 是新增 U-018 的导航别名，逐字原文只读任务库根
-`quality/evidence/human-confirmations/2026-10-08-008-close-default-cleanup-request.json:5`，不复制到旧 V-001…V-020 参考件。
-
 ## 工作模块 MOD-1 — 审查定位与职责边界
 
 审查只做异源静态建议；运行期缺陷归现场测试。
@@ -1835,6 +1830,15 @@ PaperBuilder 58 份中位 474 行）。
 本件只记方向与依据：实现细节归 spec，执行事实归 task facts。
 本件不新增闸门、校验器或指标（见 ADR-032 与 ADR-056）。
 
+### 当前确认边界
+
+- 方向依据仍是当时实际 make-decision 展示稿确认，以及后来的 U-018 / U-019。两份历史确认直接读[001 原件](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-review-efficiency-20261007/quality/evidence/human-confirmations/2026-10-07-001-make-decision-make-decision-final.json#L4-L7>)、[002 原件](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-review-efficiency-20261007/quality/evidence/human-confirmations/2026-10-07-002-make-decision-make-decision-final-r2.json#L4-L7>)；两者 `material_refs` 均为 `[]`，只证明所见稿的真实答复，不回证当前字节。首次确认已被后次展示确认取代；历史轮三及当时缺失来源仍未取证，不编补。make-decision 确认不是 Git 或 close 授权，历史更正、001/002 检查与阶段值不倒写。
+- 完整历史确认及更正保在 Git 原始字节，不复制成第二日志。人类在主仓执行下列只读命令，再按原行 169–178（逐字层指针）、1854–2010（157 行确认/更正全过程）、2011–2022（原索引）定位；ADR-065/067 中原「最终确认」更正引用也沿此历史范围读取。这个 commit/path 是 Git 来源，不是可直接 read 的本地文件 URL，未来归档不改该历史路径。
+
+  `git -C /Users/Hugh/Hugh/Project/workflowhub show 17f71af780c975921d28f8f25808a50b3636532f:specs/workflowhub-review-efficiency-20261007/decision-log.md`
+
+- 010 第 5 行真实新增本次结构整理、保护范围内 packet 历史派生目录清理、一起 close 与四份会话备忘可丢弃的范围。仅本 task 当前材料按 U-019 迁移，75 条 ADR 与原需求/验收/禁项/未决完整保留；当前整件结构结论待非作者 73 实际 after，不凭授权、节数或 hash 自判。packet 清理保护四直属普通文件、符号链接、活跃/无法确认安全包与外置唯一原件；这不是恢复 load 自动 TTL，也不把 AC019 持续功能记通过。具体 Git/归档/删除结果由主会话按真实具名范围另行执行与读回，本材料不预填已完成。
+
 ## 未决项
 
 逐条给出编号、一句话与 owner / 完成条件；完整说明与来源见任务库
@@ -1850,173 +1854,3 @@ PaperBuilder 58 份中位 474 行）。
 | H6 | V-007…V-015 的原会话 Talk 文本 | 本任务不补取证；日后只能回到报告转引层 |
 | H7 | `tools/cli/check-decision-log-chain.mjs` 怎么处置 | 待裁；两条路见参考件，本件不定论 |
 | H8 | MOD-7 三条 ADR 的遗留（已关闭） | 无遗留；ADR-043 的停用已由用户完成 |
-
-## 最终确认
-
-- 状态：**accepted**（用户对实际展示稿的真实答复）
-- 展示对象：本次 make-decision Talk 第 13 步展示稿——
-  8 个模块（MOD-1…MOD-8）、60 条 ADR、12 项「不做」、
-  验收口径（可复算事实 + 不设阈值）、6 条风险、
-  两轮审查处置（direction 39 条 / detail 25 条）、
-  未决项 H1–H8，以及 MOD-7 三条 ADR 的修订结果。
-- 逐字答复与来源：`A 确认，继续第 14–15 步（推荐）`，
-  来源为本次 make-decision Talk；
-  这是用户本人对上述展示内容的确认，不是推断，也不是默认。
-- 同轮两处改判（同属本次确认）：
-  ① MOD-7：7 个工具由 `billion-context` 插件带来、
-  用户已彻底卸载该插件，其余问题（别让主会话长时间挂机、
-  减少 compaction 触发、真正并行派发、同范围审查只跑一次）
-  仍要解决——落 ADR-043、ADR-044、ADR-045；
-  ② `dsh-context@0.64.0` 不处理、开新会话即可——
-  落 ADR-044 的裁定记录，并关闭 H8。
-- 未闭合缺口（按第 14 步要求保持可见）：
-  见「未决项」H1、H4、H6；
-  ADR-041 的派发原件未落盘另见该条覆盖限制。
-- 推进资格：已取得确认，可进入第 14 步
-  （stage-end-spec-analyze）与第 15 步（stage-handoff）。
-- 本次确认不构成 Git 授权。
-
-### 更正（append-only，不改上文，2026-10-07 追加）
-
-本段不修改上面任何一行；它只补登记上面那句确认**在协议上真正证明了什么**。
-登记依据＝确认原件与盘上文件的实测值，不是推断。
-
-- **事实一：确认原件不绑材料。** 原件
-  `quality/evidence/human-confirmations/2026-10-07-001-make-decision-make-decision-final.json`
-  的 `material_refs` 字段取值是**空数组 `[]`**，
-  即这次确认没有绑定任何材料、没有绑定任何字节版本或哈希。
-  同原件另有 `head: 4dd348dcf840f9323db435200460317fd12ba853`，
-  那是任务基线 commit，不是 decision-log 的内容哈希。
-- **事实二：`created_at` 早于日志 mtime。** 原件的
-  `created_at = 2026-10-07T11:40:22.446Z`（本地 19:40:22，UTC+8）；
-  同一时点盘上 decision-log 的 mtime 是 19:41:50（本地），
-  即**末次写入晚于确认 88 秒**（F-027 实测）。
-  确认落盘在先、日志定稿在后。
-- **事实三：其后本日志经历多轮编辑。** 逐轮实测值如下
-  （「净变化量」是相对上一轮的行数 / 字节差）：
-
-  | 轮次 | 行数 | 字节 | 净变化量 | sha256 | 来源 |
-  | --- | --- | --- | --- | --- | --- |
-  | 轮一 | 807 | 43,399 | — | `48867f36625b5b4daac86f421b6364bafb00045efa85bcd3f4d279568775f002` | `X-002-detail-draft-acceptance.md:4`、`Y-002-detail-findings-disposition.md:7,140` |
-  | 轮二 | 900 | 48,939 | +93 / +5,540 | `9343eee6…`（原件只给前 8 位） | `F-024-decision-log-template-shape.md:256,451` |
-  | 轮三 | — | — | **无原件可证** | **无** | 无 |
-  | 轮四 | 1,458 | 80,269 | — | `47d39467b04e64aa3497357ffe584762f694e21cd38cc8b74ffb655c7cec69fa` | `F-027-make-decision-stage-end-consistency.md:16-17`；与 `/tmp/decision-log.bak.md` 本次实测一致 |
-  | 轮五 | 1,455 | 80,007 | −3 / −262 | `cc1d9dd79035c997d05eaa1c784e2f41119aa80bc1b70dff357c2c214b01f208` | 本段落笔前的盘上版本，本次实测 |
-
-  轮三在派发信里被记为「1,392 行」，但**全任务库、全 worktree、
-  近期会话记录中都没有这一版的原件或哈希**（本次实测零命中），
-  故本表不给它的值——不可复算的数字不进结论。
-  轮一、轮二两轮相对确认时点的先后同样**无原件可证**
-  （没有保留 mtime）；有原件可证在确认之后的只有轮四与轮五。
-- **结论（协议口径）：** 因为 `material_refs` 为空、且其后至少又发生过
-  两次写入，**本次确认在协议上只证明「用户对当时展示稿说了 A」，
-  不证明用户确认了当前这一版字节**。若日后有人质疑某一被确认条目的
-  措辞，没有哈希可回证；要回证须靠本段登记的三个哈希 + 各自的来源报告。
-- 本段的处置边界：确认原件是**不可变原件，未改**（白名单不含它）；
-  本段也不重述或改写上文的确认内容，只做追加登记。
-  本段自身引起的字节变化记录在本次派发回执原件
-  `quality/evidence/dispatch/2026-10-07-002-*.md` 里——
-  文件无法包含自己的最终哈希，故最终 sha256 记在该回执而非本段。
-
-### 更正二（append-only，不改上文，2026-10-07 追加）
-
-本段同样不修改上面任何一行；它追加登记在本段落笔时点之前发生的**最新一次用户确认**，
-以及它使上面那句旧确认处于什么状态。
-登记依据＝本次会话用户答复与盘上文件的实测值，不是推断。
-
-- **逐字答复：** `A 确认，出交接件（推荐）`。
-  它针对的是本次 make-decision 第 13 步展示稿；这是用户本人对展示内容的答复，
-  不是推断，也不是默认。
-- **本次确认针对的版本（本段落笔前的盘上版本）：**
-  1,907 行 / 112,318 字节；ADR-001…ADR-074 共 **74 条**，连续无缺号；
-  顶层节 25 个；`## 范围与非目标` 的「已否决」记 **13 项**；
-  `readTaskTypeFromDecisionLog` 实跑返回 `普通任务`；
-  sha256 `3c211a6fae6ed00f9b85296ff75b07d9e4d37b8b200c42796f0b41af01b8fc03`（本次实测）。
-  该展示稿内容含：8 个模块（MOD-1…MOD-8）、74 条 ADR、13 项「不做」、
-  验收口径（`## 验收面` 的 A-01…A-14）、风险与未决项（H1–H8）。
-- **旧确认已过期：** 本节上文登记的那次确认
-  （逐字 `A 确认，继续第 14–15 步（推荐）`）针对的是
-  **1,458 行 / 80,269 字节 / 60 条 ADR** 那一版
-  （该版 sha256 `47d39467b04e64aa3497357ffe584762f694e21cd38cc8b74ffb655c7cec69fa`，
-  即本节轮四那一行）。
-  自那以后本日志至少又经过轮五与本次改动，且在本次确认之前其 ADR 已由 60 条增至 74 条，
-  **故那次确认对当前版本不再成立，已过期**。
-  本节上文那一段保持原样，只由本段声明其时效状态，不改写其任何一行。
-- **本次确认不构成 Git 授权。**
-- **缺口（如实登记）：** 任务库 `quality/evidence/human-confirmations/` 下当前只有一份确认原件
-  `2026-10-07-001-make-decision-make-decision-final.json`，
-  其 `reply` 是上面那句**旧**答复、`material_refs` 为空数组；
-  **本次答复 `A 确认，出交接件（推荐）` 尚无对应的确认原件落盘**，
-  故本段登记的是答复原文与其来源，不是一份可回证的原件。
-- 本段自身引起的字节变化记录在本次 make-decision 交接件与发布前检查原件里——
-  文件无法包含自己的最终哈希，故本段落笔后的最终 sha256 记在该交接件而非本段。
-
-### 更正三（append-only，不改上文，2026-10-07 追加）
-
-本段不修改上面任何一行；它追加登记三件已经发生的事实：
-技能要求的「非实现者上下文消费」已经执行完毕、阶段值因此改判、
-以及本阶段第 002 份人读交接件的发布。
-
-- **事实一：非实现者上下文消费已执行，结论是「001 检查原件站得住」。**
-  上面「更正二」与 001 交接件登记的降级项 D-2（「非实现者上下文消费未执行」）
-  的**唯一理由已经消失**：`skills/stage-handoff/SKILL.md:40` 要求的
-  「由非实现者上下文消费实际检查原件」已由**独立上下文**执行完毕。
-  被消费的原件是 001 的发布前检查原件
-  `quality/tests/2026-10-07-make-decision-handoff-precheck.raw.log`
-  （142 行 / 8,328 字节 / sha256
-  `f64cc7239168d28cea3d7f0d300186adb42093b361cff50651c8a7339286c595`；本段落笔前复核未变）。
-  该独立上下文实测并复算的事实（来源是它自己的回执，不是本段的推断）：
-  独立核对 **38 条不同路径（39 次检查）**、**0 处不存在/不可读**；
-  13 区块齐全、无空块、无占位；
-  `readTaskTypeFromDecisionLog(文本)` = `"普通任务"`、`(路径)` = `"unknown"`；
-  `git status` 仅未跟踪目录、HEAD = `4dd348dcf840f9323db435200460317fd12ba853`；
-  真实 failed 观察 6 条（FAILED-1…FAILED-6）；
-  独立复现 append-only 证明——`sed '1896,1928d'` 剔除「更正二」子节后得
-  1,907 行 / 112,318 字节 / sha256
-  `3c211a6fae6ed00f9b85296ff75b07d9e4d37b8b200c42796f0b41af01b8fc03`，
-  与 001 声明的期望值**逐字节一致**。
-  **结论：001 的检查原件站得住。** 该项由 `unavailable` 变为已完成，
-  其原始输出不改写、不复制（原件不可变）。
-- **事实二：阶段值由 `in-progress` 改判为 `succeeded`。**
-  001 交接件自陈「仍写 `in-progress` 而非 `succeeded` 的**唯一原因**」就是 D-2 未执行；
-  该原因已随事实一消失，故 make-decision 的阶段值按同一技能口径**改判 `succeeded`**。
-  支撑改判的现有事实（均为落笔前实测，不是推断）：
-  ① 本阶段实际交付＝`decision-log.md` 定稿（74 条 ADR、25 个顶层节、无缺号）；
-  ② 该 stage 的真实确认原件已落盘
-  `quality/evidence/human-confirmations/2026-10-07-002-make-decision-make-decision-final-r2.json`
-  （242 字节，`created_at` `2026-10-07T14:53:08.726Z`，
-  `reply` 逐字 `A 确认，出交接件（推荐）`，
-  `head` = `4dd348dcf840f9323db435200460317fd12ba853`）；
-  ③ 非实现者独立消费已完成（事实一）。
-  **本条不改写上面任何一段确认内容，只登记其后果。**
-- **事实三：本阶段第 002 份人读交接件的发布。**
-  本次三件事顺序固定：本更正 → 发布前回读检查 → 发布 002。
-  002 与 001 同目录、同 slug，由
-  `appendRecord(handoffDir, 'make-decision-handoff', 'md', bytes)`
-  create-only 一次发布，UTC 日期与同目录当日序号由该工具分配
-  （001 已占当日 `-001-` 槽位）。本段落笔时工具尚未返回 002 的绝对路径；
-  文件无法包含自己的路径与最终哈希，故 002 的**实际绝对路径、行数与字节
-  以该工具返回值为准**，并记入 002 自身「发布信息」节与本次派发回执。
-  自本轮起，本阶段的交接件不再只有 001 一件，而是 001（不可变原件）与 002 并存。
-- **保留的告诫（不因改判而消失）：`material_refs` 仍是空数组 `[]`。**
-  事实二②那份确认原件的 `material_refs` 取值仍是**空数组 `[]`**
-  ⇒ **「有确认原件」不等于「确认绑定了当前材料字节」**。
-  001 交接件 D-1 登记的这一条**继续有效**：本次确认在协议上只证明
-  「用户对当时展示稿说了 A」，仍**不回证**用户确认了当前这一版字节。
-  该缺口不被本段关闭，也不因阶段值改判而消失。
-- **本段不构成 Git 授权。**
-- 本段自身引起的字节变化：本段落笔后 decision-log 的最终行数、字节与 sha256
-  记在本次发布前检查原件与 002 交接件里——文件无法包含自己的最终哈希。
-
-## 证据索引
-
-全部报告、原件清单、覆盖面与关联 ADR 见任务库
-`quality/evidence/decision-log-refs/log-ref-evidence-index.md`。
-本节承担的唯一职责：指明本件所引事实的唯一权威原件位置，不复述报告正文。
-
-MOD-8（续）新引事实（ADR-069…ADR-074）的唯一汇总位置：
-`quality/evidence/decision-log-refs/log-ref-mod8-doc-slimming.md`
-（含 H-001 / H-002 的 sha256、逐类行数与本节全部复算命令）。
-本轮的派发原件与回执同样各一份，落任务库：
-`quality/evidence/dispatch/2026-10-07-003-review-efficiency-mod8-dispatch-brief.md`、
-`quality/evidence/dispatch/2026-10-07-004-review-efficiency-mod8-dispatch-receipt.md`。
