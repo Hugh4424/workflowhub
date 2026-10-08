@@ -1426,7 +1426,7 @@ describe("simple material-only review", () => {
 
     try {
       const result = await runSimpleReview({
-        stage: "build-code", host_provider: "codex", materials: { implementation: "const reviewed = true;\n" },
+        stage: "build-code", host_provider: "codex", materials: buildCodePhaseMaterials(),
       }, {
         signal: controller.signal,
         loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
@@ -1440,6 +1440,10 @@ describe("simple material-only review", () => {
             calls.push("start");
             requestId = value.requestId;
             materialId = value.materials.materialId;
+            expect(value.materials.deliveryManifest).toEqual(expect.arrayContaining([
+              expect.objectContaining({ path: "materials/01-approved_spec.md" }),
+            ]));
+            expect(readFileSync(join(value.materials.bundleRoot, "materials/01-approved_spec.md"), "utf8")).toBe("approved spec");
             return lifecycle("running");
           },
           async cancelManaged(value) {
@@ -1473,7 +1477,7 @@ describe("simple material-only review", () => {
                   error: null,
                   output: JSON.stringify({ findings: [{
                     severity: "minor",
-                    path: "materials/01-implementation.md",
+                    path: "materials/01-approved_spec.md",
                     line: 1,
                     issue: "completed before cancellation",
                     recommendation: "retain this finding",
