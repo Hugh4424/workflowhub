@@ -375,6 +375,17 @@ Task 卡字段扩展若被现有测试判为非法，先保留原字段并只在
 
 **证据原件**：任务库根 `quality/evidence/human-confirmations/2026-10-08-001-make-decision-close-commit.txt`（sha256 `5dff70e2349b797a3fb78123438a176269a081703d2997fa79883163e7c3ed05`）；授权记录任务库根 `quality/evidence/git-authorizations/2026-10-08-001-authorize-commit.json` 与已消费的 `2026-10-08-002-consumed-commit.json`。
 
+### U-004 — 收口后自查补正三处（原件与数字）
+
+- 原文锚点：无新用户消息；来源为 `stage-handoff` 子代理在交接时如实报出的 6 处不一致，以及本会话的自查。
+- 变更与处置：
+  1. **补上两份审查的唯一原件**：`quality/evidence/reviews/2026-10-08-001-adversarial-direction-check.md`（对抗性方向检查，sha256 `7ff88ae5ea3690cbcdf0b634294509eae572874e91e30fcf44e33bd5d289008b`）与 `quality/evidence/reviews/2026-10-08-002-detail-consistency-review.md`（细节一致性审查，sha256 `ec72ada8e58fbe99fb3a7ba5ad7abf5f345c3472bdde1d34e7f726b1073346e9`）。**此前 `facts.jsonl` 与本文的处置表引用了这两份报告，但它们当时没有原件** —— 即"引用了不存在的原件"，现补正。
+  2. **补上写件前检查的唯一原件**：`quality/tests/2026-10-08-001-make-decision-close-prewrite-check.json`（含 HEAD、worktree 干净度、决策日志 sha256、四项检查的实际退出码）。此前交接正文如实记为 unavailable。
+  3. **补上子代理派发清单**：`quality/evidence/2026-10-08-001-make-decision-subagent-dispatch.json`。
+- **数字更正**：此前的材料写"12 个子代理"。实际派发 **13 次**（5 个首轮调研 + 2 个独立审查 + 3 个第二轮补缺口 + 1 个细节审查 + 1 个交接撰写；另有 1 条为批次记法遗留不构成独立派发）。以子代理清单为准。
+- **数字更正**：决策日志实测 **812 行**（此前多处写 797/783/765，均为不同时点的读数）；make-decision 在本分支实际有 **4 笔提交**（`4219ed7d` → `5de5a7d8` → `50baf515` → `cf047cd6`，当前 HEAD）。
+- **目录创建说明**：`quality/evidence/handoff/`、`quality/evidence/reviews/` 为写入前不存在、由本次创建的真实目录；`appendRecord` 要求父目录真实存在且不自建。
+
 ## 未决项
 
 | OI 编号 | 问题与来源 | 状态与处置 | 解决者与下一步 |
