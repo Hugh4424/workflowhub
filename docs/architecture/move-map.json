@@ -1970,6 +1970,23 @@
     },
     {
       "source": "skills/grill-with-docs/CONTEXT-FORMAT.md",
+      "destination": "skills/grill-with-docs/GLOSSARY-FORMAT.md",
+      "status": "move",
+      "role": "production",
+      "responsibility": "futurepending：P7/T011 承接 CONTEXT-FORMAT.md → GLOSSARY-FORMAT.md 唯一领域格式附件改名，保原 Relationships / Example dialogue / Flagged ambiguities 及适用 Rules / Single vs multi-context 内容；仅创建前职责预登记，不证明附件改名、正文/bundle/test 迁移或 P7 完成，不改 ADR-FORMAT.md 或追加 ADR 判据。",
+      "owner": "P7/T011 / P7-single-writer（附件、正文、bundle 与经批准的精确测试迁移 owner；move-map 仍由 P8/T016 原维护者唯一持笔）",
+      "consumer": "现 skills/grill-with-docs/SKILL.md:189 解析领域格式附件，skills/grill-with-docs/skill-bundle.json 的 files:7 提供附件闭包，tests/moat-skills-phase1.test.mjs:75 同步 existsSync 精确附件存在性断言；当前仍消费旧名，P7/T011 按既有范围迁新名，CR273 / 独立157仅批准测试scope，实际diff尚未执行/批准。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/grill-with-docs/SKILL.md",
+        "skills/grill-with-docs/skill-bundle.json",
+        "tests/moat-skills-phase1.test.mjs"
+      ],
+      "delete_condition": "由 P7/T011 在新格式实际承接且正文/bundle/经批准的精确测试 reader 全部迁新名后完成唯一附件 rename，仅保留新格式；不得保旧附件或 old-or-new 断言凑绿。新附件职责被经审查的替代承接且无当前 consumer 时由对应文件 owner 删除。旧 self-pair、来源与历史理由本次不改，历史原件只读保留；本条不授权现在 rename 或删除。",
+      "retention_basis": "futurepending 原件未迁／不得当前 complete；原 CONTEXT-FORMAT self-pair owner、consumer、delete_condition 与 retention_basis 逐字保留；当前 spec.md:161、P7.md:T011/:87/:103、P8.md:23 普通目录责任时序，非第三跨 Phase 正文 owner、Task 或 gate。测试为既有 moat-skills-phase1.test.mjs:75 精确filename迁移，CR273 原ref + 独立157 approved_scope_only / actual_test_diff_approved=false；本次不运行或修改测试。ADR-FORMAT.md 及正文原 all-three（Hard to reverse / Surprising without context / real trade-off）均未改，本条只登记领域格式rename。"
+    },
+    {
+      "source": "skills/grill-with-docs/CONTEXT-FORMAT.md",
       "destination": "skills/grill-with-docs/CONTEXT-FORMAT.md",
       "status": "retain",
       "role": "production",
