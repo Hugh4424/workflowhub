@@ -7,7 +7,7 @@ kind: sub-skill
 # plan-eng-review
 
 Source: adapted from the project engineering review baseline. Mode: `advisory`, file-only.
-Read the engineering draft during build-plan and return anchored observations for the existing wh-review merged document review. This lens is not a runner, provider invocation or work permit.
+Read the engineering draft during build-plan and return anchored observations for the existing wh-review merged document review. The caller supplies the allowed materials; this lens is read in that review, not a runner, separate provider invocation or work permit. Its presence does not establish that a stage consumer has loaded it.
 
 ## Required material
 
@@ -76,5 +76,15 @@ Review the current accepted specification, its global implementation design, all
 ## Result
 
 Return anchored findings, affected FR/AC/task IDs, engineering consequence, and
-the smallest corrective action to `wh-review`. Never emit a separate pass,
-revise decision, provider call, or stage result.
+the smallest corrective action to `wh-review`. Put IDs, consequences, corrective
+actions and deletion-class labels in genuine finding prose; return only the
+existing provider-protocol fields in one findings JSON. The host derives the
+deleting / non-deleting finding totals from that JSON and reports both in its
+existing presentation, including 0 / 0 for an empty findings array. Preserve
+Check 10’s deletion categories; create neither extra protocol fields, invented
+findings nor a separate count artifact. Never emit a separate pass, revise
+decision, provider call, or stage result.
+
+## 写作
+
+创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；保原步骤、条件、权限、失败强度和受保护字面，缺源如实 unavailable，不复制规范。

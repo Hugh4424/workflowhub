@@ -1,6 +1,6 @@
 ---
 name: architect-code-review
-description: Optional standalone code review of a WorkflowHub implementation diff, covering correctness, lifecycle, security, real consumers, simplification, documentation and test strength.
+description: Review an implementation diff for correctness, lifecycle, security, consumers and test strength; provide same-source supplemental lenses when the host explicitly dispatches them.
 ---
 
 # Architect-Code-Review
@@ -13,10 +13,7 @@ description: Optional standalone code review of a WorkflowHub implementation dif
 - `dsh-prose-standard`：检查改动的注释、错误文本、提示词和说明是否完整、准确、放置合理；
 - `dsh-trim-cot-leakage`：删除设计过程、PR 编排和审查过程泄漏到产品文本中的叙述。
 
-四项 lens 合并为一次独立调用。本技能用于显式诊断、历史结果解读及 verify-code 的
-AC-REVIEW-011 替代审查。正常流程由
-build-code 对每个 Phase 发起一次 OCR 审查，随后完成最终聚合测试与逐 AC 判断；verify-code
-对最终 worktree 发起一次 OCR 独立审查。
+四项 lens 在同一次审查中读取，不各发一次 provider 调用。本技能用于显式诊断、历史结果解读和宿主显式派发的同源补充。正常流程由 build-code 对每个 Phase 发起一次 OCR 审查，随后完成最终聚合测试与逐 AC 判断；verify-code 对最终 worktree 发起一次 OCR 独立审查。补充不是终末 OCR 的替代，也不增加正常 OCR 轮次。
 
 ## 边界
 
@@ -57,8 +54,13 @@ build-code 对每个 Phase 发起一次 OCR 审查，随后完成最终聚合测
 
 主 Agent 负责修复和处置，每条 finding 只能是 `fixed`、`rejected_invalid`、`accepted_risk` 或 `needs_human`；原始 finding 必须保留，不把审查失败改写为空 findings，也不要求第二次 review 来证明材料完整。
 
-普通 verify-code 的 OCR 审查与定向复验遵守该 workflow 的一次审查合同；AC-REVIEW-011
-仅在该次终末 OCR unavailable 且零成功路时执行一次替代，不追加 OCR 轮次。
+普通 verify-code 的 OCR 审查与定向复验遵守当前 workflow 的一次审查合同。已装 OCR 失败、超时或取消时仍可处理宿主明确派发的安全同源补充，但保留原失败/unavailable；补充不改 OCR 身份、不替其结果、不计异源 quorum，也不追加 OCR 轮次。正式回退的条件与目标只取上述当前 workflow。
+
+## 同源补充的镜头与记录
+
+宿主需要 Standards/Spec 补充时，读取 `skills/review/SKILL.md` 的「双轴消费与宿主分派」及完整 Fowler baseline，给两独立上下文同一允许 diff、完整 AC、实际输出原ref、合同/协议/重点/lens 与仓库规范。规范优先，工具已强制项跳过；按真实 hunk 判断，不以十二个名称的出现冒十二种行为已验。各镜头仍用本文件唯一 JSON 契约返回原始发现；宿主分栏展示、不合并或跨轴排名，执行者不自写原件或镜像。
+
+补充明确 same_source_degraded。主会话用现有 appendRecord 单份保存补充原文，引用放普通 evidence/说明，不覆盖真实 OCR 的 review_origin/review_result_ref；单独记录 degraded 时 review_result_ref.value 为 null 且有 reason。缺失、失败、取消、迟到发现与覆盖限制分别保留，空 findings 不代表未执行或质量通过。
 
 ## 其他 Harness skill 的边界
 
@@ -69,4 +71,8 @@ build-code 对每个 Phase 发起一次 OCR 审查，随后完成最终聚合测
 - `dsh-archive-agent-notes`：只处理 Agent Notes 归档；不参与代码质量裁决。
 - `record-browser-gif`：只有用户明确要求 UI 交互录制时才执行；GIF 不是 verify-code 交付证据或通过条件。
 
-该适配保留上游代码审查、简化、文档和 prose 规则，供独立调用与历史解读；当前 stage 的正式 review publication 以 OCR 路径的真实结果为准。
+该适配保留上游代码审查、简化、文档和 prose 规则，供独立调用与历史解读；正式 review publication 只取当前 workflow 分工下真实执行路径的原结果，补充不冒正式 OCR。需要迭代这些 lens 时核其固定来源、本地偏离与更新，不自动追上游 HEAD。
+
+## 写作
+
+创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；保原步骤、条件、权限、失败强度和受保护字面，缺源如实 unavailable，不复制规范。
