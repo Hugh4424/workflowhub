@@ -74,11 +74,11 @@
 
 | 材料 / 锚点 | 本 Phase 用它做什么 | 读取时机 |
 | --- | --- | --- |
-| `spec.md#[填写：本 Phase 认领的全局目标或 FR/AC 锚点]` | [填写：本 Phase 要满足的具体行为、状态与判据] | M 开工前；S 按 Task 派生前 |
-| `decision-log.md#[填写：本 Phase 依据的决定条目锚点]` | [填写：方向、范围与非目标中与本 Phase 有关的条目] | M 写卡片前 |
-| `phases/P<n-1>.md` 的「交接知识」（有上游时） | [填写：上游留给本 Phase 的已核实事实] | M 开工前 |
+| `spec.md#需求到任务追踪` | P3/T008 将无进展成员记为 PROCESS_STALLED 终态失败 | M 开工前；S 按 Task 派生前 |
+| `decision-log.md#ADR-006` | 读取流进展信号；持续进展者等自身终态，不设总时长上限 | M 写卡片前 |
+| `phases/P<n-1>.md` 的「交接知识」（有上游时） | 上游交付的字段与失败语义按该节具名来源读回；无上游时删除本行 | M 开工前 |
 
-[填写：一句话兜底——没列进本表的材料不要凭印象引用；列进来的每条锚点在写卡片时都要实际打开过。]
+没列进本表的材料不要凭印象引用；列进来的每条锚点在写卡片时都要实际打开过。
 
 ## L0 — 结果与变更
 
@@ -112,10 +112,12 @@
 
 本节回答：测试策略要写什么、依据和例外是什么。
 
+下表两行仅示范同一判定器的 RED/GREEN 形状，不是本 Task 的命令或执行事实。派生 Phase 时，将全部 P3/T008 示例值（含材料导航）、Task 编号、命令、oracle 与证据路径替换为真实本 Task 的值；RED 未采集时写 `unavailable — 原因`，取得原件后再引用真实路径。
+
 | 目标 | Task | 角色 | gate_cmd / 预期退出码 | 判据 / 证据路径 |
 | --- | --- | --- | --- | --- |
-| [填写：本 Phase 要保护的行为] | T001 | RED | [填写：同一命令] / `[填写：非零退出码]` | [填写：同一个判定器编号] / — |
-| [填写：同一行为] | T001 | GREEN | [填写：同一命令] / `0` | [填写：同一个判定器编号] / `[填写：证据路径]` |
+| 无流进展时成员以 PROCESS_STALLED 结束 | T008 | RED | `node quality/tests/rev-p3-oracle.mjs --task=T008` / `1` | ORACLE-REV-T008 / unavailable — 本示例未执行，尚无本 Task 的真实 RED 原件 |
+| 无流进展时成员以 PROCESS_STALLED 结束 | T008 | GREEN | `node quality/tests/rev-p3-oracle.mjs --task=T008` / `0` | ORACLE-REV-T008 / `quality/tests/example-p3-green.log`（示例路径，不表示已执行） |
 
 [跨 Task 的行为、状态、错误、权限、并发与接缝风险；每个不相关的维度都要写 `N/A — 理由`。写上测试层级与所选的具体测试技能、场景、夹具或服务。RED 必须来自真实执行记录；取不到就诚实写 `unavailable — 理由`，不得把草稿说成 RED。]
 
@@ -152,7 +154,7 @@
 
 本节回答：交接知识要写什么、依据和例外是什么。
 
-- [填写：下游 Phase 开工前必须知道的已核实事实，每条带来源——`文件路径:行号` 或 `实际命令 + 退出码`；只写核实过的事实，不写执行状态与进度]
+- 示例：`tests/contract/post-build-plan-missing-index.test.mjs:334` 按 G-2 标题与示例标题切分，再读12个字段的首行；改动时保留字段首行。
 - 没有可交接的已核实事实时写 `N/A — 理由`。
 
 ### 字段说明（人读；runtime 不解析本节，也不产生任何质量结论）
@@ -267,30 +269,6 @@
 - **证据**: 计划证据路径与实际执行记录须区分；替代未执行，不能当 GREEN。
 - **覆盖上限**: 不证明完整生产阶段；原 lint false 等失败须如实披露，不生成假通过。
 - **完成**: 替代实际重放、反例、证据读回与独立审查齐备才可报对应结果；结构接纳不等于质量成功或人类确认。
-
-#### 示例：一张填满的 T001 卡片（人读，只示范结构；内容与你的仓库无关，照抄形状、不要照抄文字）
-
-- **来源 / FR / AC**: R-001 / FR-CONFIG-001 / AC-CONFIG-001「配置读取失败必须给出可定位的错误，而不是默认值」；来源 `decision-log.md` 的 2026-03-02 决定条目与上游 PRD 引用，保留「必须报错、不得回退默认值」的否定强度。
-- **输入**: `spec.md` 的配置章节引用；T000 已产出的 `config.schema.json`；`tests/fixtures/config/broken.json`。
-- **文件 / 符号**: 修改本 Phase 写入集内的 `src/config/load.ts` 与 `src/cli/main.ts`；符号为 `loadConfig()`、同文件错误类型 `ConfigParseError` 与 CLI 顶层入口。
-- **动作**: 先在第一处改动——`loadConfig()` 的 `catch` 分支——去掉回退默认值的路径，改为抛出携带 `file:line` 的 `ConfigParseError`；再让 `src/cli/main.ts` 在顶层捕获并打印该错误、以退出码 `2` 结束；不得改动 schema 字段名。
-- **输出 / 失败**: 合法配置返回完整对象；解析失败抛出 `ConfigParseError` 且 `message` 含 `file:line`；进程退出码 `2`；不写任何部分结果到磁盘。
-- **边界 / 禁止改动**: 不许改 `config.schema.json` 的字段名与 `src/config/defaults.ts`；因为它们被 P1 的冻结契约引用。
-- **依赖**: 无
-- **测试层级 / 技能**: `feature`；`vitest`。
-- **场景 / 夹具或服务**: 正常用例 `tests/fixtures/config/ok.json`；反向用例 `broken.json`（第 7 行缺少 `name`）；无外部服务；用例后清理临时目录。
-- **预写测试**: `tests/config/load.test.mjs`（本 Task 独占），断言「抛出 `ConfigParseError` 且 `message` 含 `broken.json:7`」；由作者在实现前写好。
-- **可观察接缝**: 既有产出方 `loadConfig()` → 已持久化产物 `config.schema.json` → 真实读取方 `src/cli/main.ts`；来源分母为 2 个夹具；缺失语义＝文件不存在时抛 `ENOENT` 包装后的同类错误。**我是怎么知道的**：产出方读 `src/config/load.ts:41`、产物读 `config/config.schema.json:1-18`、读取方以 `rg 'loadConfig\(' src/cli/main.ts` 命中 `src/cli/main.ts:12`。
-- **RED/GREEN 门禁命令**: `npx vitest run tests/config/load.test.mjs`（RED 与 GREEN 共用同一条）。
-- **预期退出码**: RED：`1`（断言失败）；GREEN：`0`。
-- **RED 目标失败**: 判定器 `ORACLE-P3-CONFIG-ERROR`；改动前必须失败的确切断言＝`expect(() => loadConfig(broken)).toThrow(ConfigParseError)`。
-- **RED 证据**: `quality/evidence/<task-id>/P3-config-red.json`（真实命令、退出码、失败断言与输出引用）；尚未执行时写 `unavailable — 尚未取得真实 RED`。
-- **GREEN 判定器**: ORACLE-P3-CONFIG-ERROR；通过信号＝上述命令退出码 `0`；反向行为＝`ok.json` 仍能加载且字段不变。
-- **证据**: `quality/evidence/<task-id>/P3-config-green.json`；真实结果属于任务事实库。
-- **覆盖上限**: 不覆盖并发写入与 Windows 路径分隔符；这两项留给 P4。
-- **停止 / 恢复**: 若 `broken.json` 的失败信号不稳定，停止并交给配置模块作者用 `config.schema.json` 复核；不得放宽断言换绿。
-- **测试变更请求**: `none`。
-- **完成**: `AC-CONFIG-001` 的正反用例都通过、RED 与 GREEN 证据可回读、`load.ts` 与 `main.ts` 的改动已由独立审查确认。
 
 ### 编号与交接
 
