@@ -144,7 +144,7 @@ FR-REV-001…023 列出的行为；文件边界见「全局文件边界与依赖
 - **FR-REV-004**：删除 `validateDetailReviewInput` 与 `detail-minimum-input.test.mjs`；`make-decision.md` 合同改成人守口径。依据 ADR-013、ADR-010；验收 AC-REV-017。
 - **FR-REV-005**：detail 审查 required 只含 `raw_requirement`、`approved_direction`；manifest 文件条目带 `derivation` 声明替换处数、字节差与派生件哈希。依据 ADR-041、ADR-042、C23；验收 AC-REV-008。
 - **FR-REV-006**：route 引用未配置 / disabled / 无模型 provider 时记失败并跳过；全被跳过时整组失败。依据 ADR-028、C9；场景 SCN-004；验收 AC-REV-018。
-- **FR-REV-007**：按阶段加载配置时，清理 `.wh-review-packets` 直属条目中超过 `ttl_hours` 的条目；`quality/reviews/` 与符号链接不动。依据 ADR-036、C20；验收 AC-REV-019。
+- **FR-REV-007**：按阶段加载配置时，清理 `.wh-review-packets` 直属条目中超过 `ttl_hours` 的条目；`quality/reviews/` 与符号链接不动。依据 ADR-036、C20；验收 AC-REV-019。 本次当前覆盖：当前用户真实选择“禁止加载时自动删除，本轮清理延期（推荐）”（任务库004真实选择与079范围）：本轮不交付自动TTL清理，普通load无删除、无合法consumer的prune不保留；FR007/AC019未达成。原T007 A3/A5/A8目标真fail与原始输出保，其他target/guard/回归与AC018不豁免，不把rawfail转pass。
 - **FR-REV-008**：antigravity 走 stream-json；连续 5 个检查间隔无进展判 `PROCESS_STALLED` 终态失败，有进展即清零，总时长无上限。依据 ADR-005、006、C11；场景 SCN-002；验收 AC-REV-003。
 - **FR-REV-009**：`provider-protocol.md` 与 third-review `SKILL.md` 写明停滞是终态失败与真实收场机制，不写未实现的 ownerloss guardian。依据 ADR-001、005、006；验收 AC-REV-020。
 - **FR-REV-010**：删除零消费者 `readUiApplicabilityFromDecisionLog` 及其 4 个测试。依据 ADR-016；验收 AC-REV-021。
@@ -230,7 +230,7 @@ FR-REV-001…023 列出的行为；文件边界见「全局文件边界与依赖
 验证：`node "$T/quality/tests/rev-acceptance.mjs" --task=T025 --root="$W"`
 通过：exit 0；无「整体重写 / 全文对齐 / 覆盖全部 N 组」，每个锚点 `grep -n` 恰命中 1 处（排除引述行）。
 失败：任一原件出现上述字样或锚点 0 / 多处命中。
-证据：P10 原件；判定对象为空集时记 `incomplete` 并列入 P10 的已声明缺口清单。
+证据：P10 原件；判定对象为空集时记 `incomplete` 并列入 P10 的已声明缺口清单。当前原通过／失败判法不变；用户真实选择仅允许任务库 `quality/tests/2026-10-08-124-p10-fixed-loss-full-mapping.json` 中本项已发生具名原件的格式损失保留 `fail`，其余工作完成后如实有损收尾（见 P10「有限既发生派发格式损失」）。只对该固定 path/hash/全部违规签名生效，后新增或新增违规不豁免，不转 `pass`／`incomplete`，不免产品测试或逐 Phase 审查，不表示整体通过。
 - [ ] **AC-REV-011**：（A-11）四个模板照抄不被拒。关联 FR-REV-013、FR-REV-015。
 验证：`node "$T/quality/tests/rev-p5-oracle.mjs" --task=T013`；`node "$T/quality/tests/rev-p6-oracle.mjs" --task=T015`（同法 T016、T017）
 通过：四条 exit 0；C24 包装式判法下 `requires concrete` 为 0，spec / phase 模板 `[填写：` 为 0。
@@ -245,12 +245,12 @@ FR-REV-001…023 列出的行为；文件边界见「全局文件边界与依赖
 验证：`node "$T/quality/tests/rev-acceptance.mjs" --task=T025 --root="$W"`
 通过：exit 0；**每一条路径锚点（相对与绝对一律计入，判定规则与 A-10 的锚点集合相同）**同行或紧邻行有「认证 worktree 根」或「任务库根」。
 失败：任一锚点未写明。
-证据：P10 原件；判定对象为空集时记 `incomplete` 并列入 P10 的已声明缺口清单。
+证据：P10 原件；判定对象为空集时记 `incomplete` 并列入 P10 的已声明缺口清单。当前原通过／失败判法不变；用户真实选择仅允许任务库 `quality/tests/2026-10-08-124-p10-fixed-loss-full-mapping.json` 中本项已发生具名原件的格式损失保留 `fail`，其余工作完成后如实有损收尾（见 P10「有限既发生派发格式损失」）。只对该固定 path/hash/全部违规签名生效，后新增或新增违规不豁免，不转 `pass`／`incomplete`，不免产品测试或逐 Phase 审查，不表示整体通过。
 - [ ] **AC-REV-014**：（A-14）研究结论不内联进任务书。关联 FR-REV-023。
 验证：`node "$T/quality/tests/rev-acceptance.mjs" --task=T025 --root="$W"`
 通过：exit 0；研究结论以 ref + sha256 + ≤500 字摘要出现；摘要字数＝引用研究原件的那一行起、到空行为止的连续段落，去掉反引号路径、≥16 位十六进制串与全部空白后的字符数，500 字通过、501 字失败。
 失败：出现整段研究原文（≥15 行连续原文）、引用研究原件但缺 `sha256`，或引述摘要超过 500 字。
-证据：P10 原件；判定对象为空集时记 `incomplete` 并列入 P10 的已声明缺口清单。
+证据：P10 原件；判定对象为空集时记 `incomplete` 并列入 P10 的已声明缺口清单。当前原通过／失败判法不变；用户真实选择仅允许任务库 `quality/tests/2026-10-08-124-p10-fixed-loss-full-mapping.json` 中本项已发生具名原件的格式损失保留 `fail`，其余工作完成后如实有损收尾（见 P10「有限既发生派发格式损失」）。只对该固定 path/hash/全部违规签名生效，后新增或新增违规不豁免，不转 `pass`／`incomplete`，不免产品测试或逐 Phase 审查，不表示整体通过。
 - [ ] **AC-REV-015**：解析上限 16 MiB。关联 FR-REV-001。
 验证：`node "$T/quality/tests/rev-p1-oracle.mjs" --task=T001`
 通过：exit 0；2,010,784 B 合法输出可解析，超限输入抛 `OUTPUT_INVALID`。
@@ -275,7 +275,7 @@ FR-REV-001…023 列出的行为；文件边界见「全局文件边界与依赖
 验证：`node "$T/quality/tests/rev-p2-oracle.mjs" --task=T007`
 通过：exit 0；夹具中过期条目删除、未过期 / 符号链接 / `quality/reviews` 保留；doctor 路径不删。
 失败：删出边界或 doctor 路径触发删除。
-证据：P2 原件；真实首次删除另需用户确认记录，未取得前记 `incomplete` 并列入 P10 的已声明缺口清单（不阻塞门禁，最终对账在 verify-code stage-handoff 一节）。
+证据：P2 原件；真实首次删除另需用户确认记录，未取得前记 `incomplete` 并列入 P10 的已声明缺口清单（不阻塞门禁，最终对账在 verify-code stage-handoff 一节）。 本次当前覆盖：当前用户真实选择“禁止加载时自动删除，本轮清理延期（推荐）”（任务库004真实选择与079范围）：本轮不交付自动TTL清理，普通load无删除、无合法consumer的prune不保留；FR007/AC019未达成。原T007 A3/A5/A8目标真fail与原始输出保，其他target/guard/回归与AC018不豁免，不把rawfail转pass。
 - [ ] **AC-REV-020**：provider-protocol 与 third-review SKILL 停滞措辞一致。关联 FR-REV-009。
 验证：`node "$T/quality/tests/rev-p3-oracle.mjs" --task=T009`
 通过：exit 0；保留「health/output 不作取消或继续的许可」语义。
@@ -372,13 +372,13 @@ FR-REV-001…023 列出的行为；文件边界见「全局文件边界与依赖
   - runner 产出成员 `parse_outcome`（`ok` / `invalid` / `empty_output`）、`usage_status`（`reported` / `not_reported`）、`raw_output_ref`、`raw_output_sha256`。
   - health runner 产出 `PROCESS_STALLED` 终态；broker 照既有路径记成员 `status:"failed"`。
   - task-store 只保存一行当前游标；P10 只读汇总，不写记录。
-- **接口与数据流**：provider 原始字节 → 既有 `quality/reviews/*-provider-N.output` sink（0 字节跳过）→ 解析 → 成员事实 → route 组装正式记录一次写盘（ADR-025）；早到成员经 `onProviderResult` 作部分结果（P9 接线）。verify-code 材料＝`git diff --name-only <baseline_commit>...HEAD` 的文件（C6）。packet 清理在 `loadTrustedThirdReviewConfig` 带 `requestedStage` 时执行，返回 `packetRetention` 事实。
+- **接口与数据流**：provider 原始字节 → 既有 `quality/reviews/*-provider-N.output` sink（0 字节跳过）→ 解析 → 成员事实 → route 组装正式记录一次写盘（ADR-025）；早到成员经 `onProviderResult` 作部分结果（P9 接线）。verify-code 材料＝`git diff --name-only <baseline_commit>...HEAD` 的文件（C6）。原计划为带 `requestedStage` 的 `loadTrustedThirdReviewConfig` 清理 packet 并返回 `packetRetention`；该计划已被用户004/范围079的本轮延期选择覆盖，当前实际普通 load 不删 packet、无清理执行/retention 返回事实，FR-REV-007/AC-REV-019未达成（见本条证据覆盖），不把原计划当已交付。
 - **失败语义**：
   - 散文 JSON、超 16 MiB、无候选：`OUTPUT_INVALID`，成员 failed，不计覆盖，不补派（ADR-031）。
   - 停滞：`PROCESS_STALLED` 终态失败；`process_outcome` 保持 broker 既有取值（多为 `exit_nonzero`），A-03 只用 `status` + `error.code` 判（C12 修订）。
   - provider 不可用：`PROVIDER_NOT_CONFIGURED` / `PROVIDER_DISABLED` / `PROVIDER_MODEL_UNKNOWN` 进 `skipped_providers`；全跳过时整组抛错并挂事实。
   - `material_id` 拿不到写 null，保留原失败事实（C7）；复用查表遇坏文件只跳过。
-  - packet 单条删除失败只进 `errors`，不阻断审查；doctor 路径不清理。
+  - 原 packet 单条删除失败进 `errors` 的语义属于延期前计划；用户004/079禁止加载时自动删除并延期本轮清理，当前 load/doctor 均不清理，不产生删除成功或失败的 `packetRetention` 执行事实。未来清理需明确真实 consumer 与范围另设计，当前T007原目标失败如实保留，不宣称已实现。
   - 未上报用量：`usage:null` + `usage_status:"not_reported"`，任何路径不补 0。
 - **新增控制面**：N/A — 只在既有记录 / schema / 游标上加字段；退役登记写进 move-map 既有条目（C21）。
 
@@ -400,7 +400,7 @@ FR-REV-001…023 列出的行为；文件边界见「全局文件边界与依赖
 - **与日志文件表的差异**：`## 要改哪些文件` 列了 `skills/third-review/lib/broker.mjs`（ADR-009）与 `skills/third-review/lib/config.mjs`（ADR-036），实读两者已满足（`:771`、`:1244` 无墙钟；`:40` 有 `ttl_hours`），故不进写集。写集多出的 adapter、process、schema、move-map 与测试文件由 C11、C21 与 Phase 作者实读加入。
 - **全局依赖**：P4←P2（访问器先删再登记）；P7←P1（schema 键与解析）；P8←P1、P2、P3、P7（解析、runner 导入方、停滞终态；P7 改 route 回调协议后返回 `null`，runner 侧必须先有 P8 的 `onProviderOutput` 防御过滤，否则 P7 落地会带红 P8 写入集外的 runner 测试）；P9←P7、P8（记录事实与回调形状）；P10←P1…P9。波次：①P1、P2、P3、P5、P6；②P4、P7；③P8；④P9；⑤P10（P8 不与 P7 同波次，避免上述竞态）。
 - **文件归属**：每个路径只属一个 Phase（`validatePostPhaseContract` 查重）；同文件 Task 在 Phase 内串行。
-- **回滚与恢复**：每 Phase 单独提交（ADR-018），回滚＝revert 该 Phase 提交。P2/T007 的真实删除不可回滚，见风险 RISK-01。
+- **回滚与恢复**：每 Phase 单独提交（ADR-018），回滚＝revert 该 Phase 提交。P2/T007 真实删除不可回滚是延期前计划的风险 RISK-01，本轮已按用户004/079禁止加载删除并延期，当前未执行真实 packet 删除；未来只有明确真实 consumer 与范围另设计后才涉及该不可回滚后果，不以当前交付授权推定未来删除许可。
 
 ### 当前并行方案（计划分工，尚未派发或实施）
 
@@ -484,7 +484,7 @@ FR-REV-001…023 列出的行为；文件边界见「全局文件边界与依赖
   - P8：`node "$T/quality/tests/rev-p8-oracle.mjs" --task=T020`（T021、T022 同）；RED `quality/tests/2026-10-08-004-rev-p8-red.log`（8f481c61…；旧原件 `-009-`、`-013-`、`-016-` 保留）
   - P9：`node "$T/quality/tests/rev-p9-oracle.mjs" --task=T023 --root="$W"`、`node "$T/quality/tests/rev-p9-oracle.mjs" --task=T024 --root="$W"`（oracle 由 build-plan 写定后冻结，实施者不改）；RED `quality/tests/2026-10-08-005-rev-p9-red.log`（sha256 a6aee2ef…，45 行 / 5,203 B；这是本卡现行 P9 RED 原件，旧 `2026-10-07-019-rev-p9-red.log` 只读保留，旧编号 `-017-` 在任务库中不存在）
   - P10：`node "$T/quality/tests/rev-acceptance.mjs" --task=T025 --root="$W"`（oracle 由 build-plan 写定后冻结，实施者不改档位口径与已声明缺口清单）；RED `quality/tests/2026-10-08-006-rev-acceptance-red.log`（sha256 f78101d2…，42 行 / 32,820 B；旧原件 `quality/tests/2026-10-08-001-rev-acceptance-red.log` 与 `quality/tests/2026-10-07-020-rev-acceptance-red.log` 保留不改）
-- **最终聚合**：P10 逐条输出 AC-REV-001…032 各一行档位与证据路径；**门禁语义：exit 0 ⟺ 32 行逐条都有真实档位与具名证据指针、无 `fail`、无 `unavailable`、且所有 `incomplete` 都在 P10 契约头冻结的「已声明缺口清单」内；exit 0 不等于 32 条 AC 全部达成（整体通过只在 32 行全 `pass` 时可报），`pass` 之外的档位一律不折成通过**。材料自检用 `validatePostPhaseContract` 读 spec、index 与全部 Phase。收尾汇总按 C22 放进 verify-code stage-handoff 一节，不新增文件。
+- **最终聚合**：P10 逐条输出 AC-REV-001…032 各一行档位与证据路径；**门禁语义：exit 0 ⟺ 32 行逐条都有真实档位与具名证据指针、无 `fail`、无 `unavailable`、且所有 `incomplete` 都在 P10 契约头冻结的「已声明缺口清单」内；exit 0 不等于 32 条 AC 全部达成（整体通过只在 32 行全 `pass` 时可报），`pass` 之外的档位一律不折成通过**。材料自检用 `validatePostPhaseContract` 读 spec、index 与全部 Phase。收尾汇总按 C22 放进 verify-code stage-handoff 一节，不新增文件。上述为默认口径；本次仅003真实选择、073完整范围、124固定30条已发生格式损失及128引用错误披露所限的旧违规可保 `fail` 有损收尾（P10有限说明），新增/其他 `fail` 仍阻完成；清理按004真实选择/079范围本轮延期，FR007/AC019未达成，不把延期记功能通过，也不扩大旧格式损失例外。
 - **不能证明的内容**：真实 provider 轮次下的停滞判定（合并后取，AC-REV-003，P10 记 `incomplete` 并列入已声明缺口）；真实 token 数值（usage=null）；实现侧与审查侧并列成本的**实现侧数字**（A-09 实现侧缺口；AC-REV-009 按 pass-with-recorded-gap 口径记 `pass` 并在回写区如实登记缺口）；`quality/**` 不进 worktree diff（ADR-019），Phase 代码审查包须另附 oracle 路径 + sha256。
 
 ## 执行纪律（MOD-7 指针）
