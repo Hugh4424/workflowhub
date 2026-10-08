@@ -834,3 +834,26 @@ Task 卡字段扩展若被现有测试判为非法，先保留原字段并只在
   `skills/plan-eng-review/SKILL.md`、`skills/spec-specify/templates/spec-template.md`），**本身即"技能质量不达标"的既有实例**。
   ⇒ **AC-012 的口径固定为**：`verify-structure.mjs` 单独跑 PASS；`npm run check` 整体 exit=1 且**与基线一致（零新增）**；
   **不得声称 `npm run check` 通过**。
+
+### D-066 最新用户纠正：取消token用量要求
+
+- module: workflowhub-skill-modernization-20261008
+- requirement_ids: [R-021]
+- derived_from: [D-031, D-037]
+- 来源：本轮用户直接纠正原话，由当前主会话转交原计划作者：**“我没有token用量的要求，请彻底去掉。比较仍不能可靠区分两版方法的效果的解决办法是什么？”**
+- 生效范围与优先级：本任务当前规划、后续实施比较、验收和阶段收口中，输出token／用量不再是要求，不采集、不估算、不延期，不作预算、通过条件、unknown缺量或收口阻塞。此最新纠正覆盖D-031及原AC-018等历史来源中的该一项；历史原文保留只作出处，不继续约束当前。
+- 当前有效客观量仅四项：工件齐全度、硬约束违反数、耗时、真人重问次数。其它要求未取消；字符／句长独立写作约束不因本条消失，CSS／设计token及语法token术语不属用量，不误删。
+- D-037版本差异必须可靠可辨／同版噪声要求未被取消；用户问解决办法不等于已选新方案、接受风险或接受当前修订计划。真实试跑失败／真人重问未观测不因取消用量自动通过。
+- 原测试、gold、输出、review、交接原件不覆写；旧scorer中用量未知／零捏造条件为历史事实，不再控制当前。需要新的测试合同，由独立测试owner经具体test change request处置；本作者不改冻结源码／断言。
+
+### D-067 用户接受并执行分型比较判据
+
+- module: workflowhub-skill-modernization-20261008
+- requirement_ids: [R-021]
+- derived_from: [D-031, D-037, D-044, D-045, D-066]
+- 用户真实原话：**“按这个方案修正比较判据并执行”**；正式recordConfirmation：[amend-comparison](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-skill-modernization-20261008/quality/evidence/human-confirmations/2026-10-08-002-build-plan-amend-comparison.json)（只此比较修正，不是完整计划/Git接受）；实际接受原件：[059](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-skill-modernization-20261008/quality/evidence/2026-10-08-059-build-plan-comparison-amendment-accepted.json)，sha256 971d4a19493e8aa97214e4894075386ea98bc2cd8c7fe1eaaaa5cdd1065602c3；所接受方案：[058](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-skill-modernization-20261008/quality/evidence/2026-10-08-058-build-plan-method-comparison-proposal.json)。058原件发布时仍proposal不覆历史，059记录本次真实接受。
+- 当前生效优先：保原D-037/AC-018历史正文，仅其比较解释及当前spec/Phase按本条更新。先判真实改动类型：行为改动以对应用户可观察结果与真实约束测效果；表达整理以每项核心步骤/条件/保护逐条保全，加有限无回归证据验证，不强求某版赢家或输出必须不同。混合改动逐项分型，新增行为不能靠文字保全免验。
+- 比较器先用具来源正确输出及已知错误对照校准，按实际证据分别返回正确／错误／未观测；缺证据不自动失败，输出相似不自动说明夹具坏；未观测不当已测通过，不宣统计等价或改善。根因符号/合理行范围可定位，不强制单行数字/JSON字段数/假设数或字节长。
+- 输入不提前规定方法步骤，实际source/must_steps在结果前锁定，真实许可/route及计时范围照实。现八fresh真实输出可按接受后的新合同重评，不仪式重跑；仅真正新增行为未覆盖case追加针对性试跑，不跑全39。新oracle使用前由独立测试owner具体test change request及独立来源审查；旧九codefreeze/oldscorer/输入/gold/raw/review均DNT。
+- 四项客观量继续具真实scope：工件齐全度、硬约束违反数、耗时、真人问答质量／重问。无人case明确not_observed/no participant，不填0；该不适用/不可观测本身不作所有方法case必须真人重演的阻塞，涉及真实问答的新行为才测该对应场景。
+- D-066取消输出token／用量要求继续完全有效，不重新加入。只授权规划/证据/比较合同修正与有限执行，不授权生产/Git、不代替完整修订计划接受、不自动stage succeeded；既定相序与先验后用不变。
