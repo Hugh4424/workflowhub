@@ -8,7 +8,8 @@ skills:
     trigger: stage_end_human_handoff
   - name: wh-review
     path: skills/wh-review/SKILL.md
-    trigger: ocr_missing_or_version_below_1_12_9_same_code_scope
+    # 每次代码审查先读 Long-review host convention；正常仍由 OCR 执行，只有既有缺失/低版本条件才由 wh-review 回退。
+    trigger: every_code_review_invocation_method_only_or_existing_ocr_fallback
   - name: spec-analyze
     path: skills/spec-analyze/SKILL.md
     trigger: upstream_material_risk_read_only

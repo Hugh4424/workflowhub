@@ -36,7 +36,9 @@ available 只表示实际收到可读建议，至少一个有效语义 sibling �
 
 ## Long-review host convention
 
-长审查走宿主现有后台执行与 wait/poll 收集路径；wh-review 仍只发一个同步 broker 请求，不新增异步对象、第二层 timeout 或进程生命周期。等待与恢复沿同一请求，按真实终态报告：
+- 正常代码审查仍由 OCR 执行，本节仅调用等待方法；由专用审查子代理在一个连续 activation 承接一个同步请求，守到整轮 settled：全部真实 provider 终态且正常已启动请求的正式记录可读，才 final 交付。单来源完成不算整轮完成；失败/取消也算终态。
+- 宿主返回 running 时沿同一 job 使用宿主既有长等待，保持 owner 活动；不 final、重启请求或短轮询，不留待下次 activation 收尾。跨 activation 所有权持久性未经验证时保持同步 owner；不新增 tracker、状态、timeout、API 或进度对象。
+- 启动失败或未知 job 使正式记录无法取得时，按真实失败/unavailable 交付；显式取消沿既有信号回收并保留 settled 来源事实，未知保持未知。既有第5条的人显式补派边界不变；调用完成职责不改审查次数、质量或授权。
 
 | 实际结果 | 报告口径 |
 | --- | --- |
