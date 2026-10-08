@@ -590,7 +590,7 @@
         "skills/wh-review/scripts/simple-review-runner.mjs"
       ],
       "named_data_readers": [],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
+      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费；退役登记（ADR-037，澄清 C13）：authenticateCanonicalReviewResult 零调用方",
       "retention_basis": "MT-1-045 / NARROW"
     },
     {
@@ -721,7 +721,7 @@
         "skills/wh-review/scripts/wh-review-cli.mjs"
       ],
       "named_data_readers": [],
-      "delete_condition": "remove build_prd policy branch when review consumer is retired",
+      "delete_condition": "remove build_prd policy branch when review consumer is retired；退役登记（ADR-008）：minimumReviewersFor 已删，派发人数唯一由宿主配置 wh_review.stages.*.initial 决定",
       "retention_basis": "MT-1-052 / NARROW"
     },
     {
@@ -883,7 +883,7 @@
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
       "named_data_readers": [],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
+      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费；退役登记（ADR-037）：7 个导出 isActionableSeriousFinding、canonicalReviewFindings、validateReportableFindingDispositions、deriveSeriousReviewPause、buildRiskAcceptance、validateRiskAcceptance、validateRiskAcceptanceSet 零非测试消费者（唯一测试消费者 tests/stage-risk-acceptance.test.mjs；717/720 disposition 为 null，F-003；F-006 判活有冲突），owner 确认前不删，删时同删该测试",
       "retention_basis": "MT-1-057 / NARROW"
     },
     {
@@ -973,7 +973,7 @@
         "workflows/verify-code/design-alignment.mjs"
       ],
       "named_data_readers": [],
-      "delete_condition": "revert only when authenticated requirement messages carry their own class from the host",
+      "delete_condition": "revert only when authenticated requirement messages carry their own class from the host；退役登记（ADR-016）：readUiApplicabilityFromDecisionLog、validateUiApplicability 及其 4 个测试已删，零生产调用方；退役登记（ADR-037）：analyzeDecisionConvergence、analyzeDecisionOutline、meaningfulSectionBody、structuredConvergenceFacts 已于 a74a9f2d 删除，残留引用只在只读历史区，不改写",
       "retention_basis": "MT-1-063 / NARROW"
     },
     {
@@ -1164,7 +1164,7 @@
         "tools/cli/task-bootstrap.mjs"
       ],
       "named_data_readers": [],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
+      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费；退役登记（ADR-021）：entry_release_commit 与 finding_dispositions[].repair_commit 零 reader/writer，当前代码零命中，历史 task.json 值只读保留",
       "retention_basis": "MT-1-082 / NARROW"
     },
     {
@@ -3216,9 +3216,8 @@
       "role": "production",
       "responsibility": "文档面 + OCR packet 组装",
       "owner": "B4/P5 / MT-3-087",
-      "consumer": "当前直接模块消费者：skills/wh-review/scripts/__tests__/detail-minimum-input.test.mjs, skills/wh-review/scripts/__tests__/material-redaction.test.mjs, skills/wh-review/scripts/simple-review-runner.mjs, tests/contract/card03-review-orchestration.test.mjs, tests/contract/ocr-delegation-route.test.mjs, tests/contract/review-materials-contract.test.mjs, tools/cli/stage-runtime.mjs",
+      "consumer": "当前直接模块消费者：skills/wh-review/scripts/__tests__/material-redaction.test.mjs, skills/wh-review/scripts/simple-review-runner.mjs, tests/contract/card03-review-orchestration.test.mjs, tests/contract/ocr-delegation-route.test.mjs, tests/contract/review-materials-contract.test.mjs, tools/cli/stage-runtime.mjs",
       "module_consumers": [
-        "skills/wh-review/scripts/__tests__/detail-minimum-input.test.mjs",
         "skills/wh-review/scripts/__tests__/material-redaction.test.mjs",
         "skills/wh-review/scripts/simple-review-runner.mjs",
         "tests/contract/card03-review-orchestration.test.mjs",
@@ -3227,7 +3226,7 @@
         "tools/cli/stage-runtime.mjs"
       ],
       "named_data_readers": [],
-      "delete_condition": "remove the re-export when no skill-local caller imports redactProviderHostPaths",
+      "delete_condition": "remove the re-export when no skill-local caller imports redactProviderHostPaths；退役登记（ADR-008）：minimumReviewersFor 已删，派发人数唯一由宿主配置 wh_review.stages.*.initial 决定；退役登记（ADR-013）：validateDetailReviewInput 及 detail-minimum-input.test.mjs 已删，零生产调用方，决定来源 U-005",
       "retention_basis": "MT-3-087 / NARROW"
     },
     {
@@ -3324,11 +3323,10 @@
       "role": "production",
       "responsibility": "文档审查面执行者（ADR-018）",
       "owner": "B4/P5 / MT-3-095",
-      "consumer": "当前直接模块消费者：runtime/review/review-record-route.mjs, skills/wh-review/scripts/__tests__/channel-fixtures.test.mjs, skills/wh-review/scripts/__tests__/detail-minimum-input.test.mjs, skills/wh-review/scripts/__tests__/material-redaction.test.mjs, skills/wh-review/scripts/__tests__/provider-output-contract.test.mjs, skills/wh-review/scripts/__tests__/review-runner.test.mjs, skills/wh-review/scripts/__tests__/simple-contracts.test.mjs, skills/wh-review/scripts/__tests__/simple-e2e-faults.test.mjs, skills/wh-review/scripts/__tests__/simple-review-runner.test.mjs, skills/wh-review/scripts/__tests__/third-review-host-config.test.mjs, skills/wh-review/scripts/wh-review-cli.mjs, tests/contract/card03-review-orchestration.test.mjs, tests/contract/external-supplement-window.test.mjs, tests/contract/external-threshold-contract.test.mjs, tests/left-shift/left-shift-suite.test.mjs, tests/review/ocr-ac002-007-experiments.test.mjs, tests/review/review-managed-lifecycle.test.mjs, tools/cli/stage-runtime.mjs",
+      "consumer": "当前直接模块消费者：runtime/review/review-record-route.mjs, skills/wh-review/scripts/__tests__/channel-fixtures.test.mjs, skills/wh-review/scripts/__tests__/material-redaction.test.mjs, skills/wh-review/scripts/__tests__/provider-output-contract.test.mjs, skills/wh-review/scripts/__tests__/review-runner.test.mjs, skills/wh-review/scripts/__tests__/simple-contracts.test.mjs, skills/wh-review/scripts/__tests__/simple-e2e-faults.test.mjs, skills/wh-review/scripts/__tests__/simple-review-runner.test.mjs, skills/wh-review/scripts/__tests__/third-review-host-config.test.mjs, skills/wh-review/scripts/wh-review-cli.mjs, tests/contract/card03-review-orchestration.test.mjs, tests/contract/external-supplement-window.test.mjs, tests/contract/external-threshold-contract.test.mjs, tests/left-shift/left-shift-suite.test.mjs, tests/review/ocr-ac002-007-experiments.test.mjs, tests/review/review-managed-lifecycle.test.mjs, tools/cli/stage-runtime.mjs",
       "module_consumers": [
         "runtime/review/review-record-route.mjs",
         "skills/wh-review/scripts/__tests__/channel-fixtures.test.mjs",
-        "skills/wh-review/scripts/__tests__/detail-minimum-input.test.mjs",
         "skills/wh-review/scripts/__tests__/material-redaction.test.mjs",
         "skills/wh-review/scripts/__tests__/provider-output-contract.test.mjs",
         "skills/wh-review/scripts/__tests__/review-runner.test.mjs",

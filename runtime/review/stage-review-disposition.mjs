@@ -1,3 +1,4 @@
+// 退役登记见 docs/architecture/move-map.json 本文件条目（ADR-037）：零非测试消费者，owner 确认前不删。
 const STAGES=new Set(["make-decision","build-plan","build-code","verify-code","build-prd"]);
 const STATUSES=new Set(["fixed","rejected_invalid","accepted_risk","needs_human","user_decided"]);
 function object(value,label){if(!value||typeof value!=="object"||Array.isArray(value))throw new TypeError(`${label} must be an object`);return value;}
