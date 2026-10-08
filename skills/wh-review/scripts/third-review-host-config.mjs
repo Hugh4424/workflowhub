@@ -700,34 +700,39 @@ export function selectTrustedReviewProviderSelection(configuredPath, ...args) {
   const candidates = configuredRoute ? [rankRouteProfiles(configuredRoute, profileSet)] : config.tiers;
   for (const tier of candidates) {
     if (!Array.isArray(tier)) throw new Error("3rd-review config tier must be an array");
+    const skippedProviders = [];
     for (const provider of tier) {
-      if (!config.providers[provider]) {
-        throw new Error(configuredRoute
-          ? "wh_review route references unknown 3rd-review provider " + provider
-          : "3rd-review config tier references unknown provider " + provider);
+      const configured = config.providers[provider];
+      if (!configuredRoute) {
+        if (!configured) throw new Error("3rd-review config tier references unknown provider " + provider);
+        continue;
       }
-      // A disabled fallback provider is intentionally skipped: the next
-      // configured default tier remains the 3rd-review fallback contract.
-      if (configuredRoute && config.providers[provider].enabled !== true) {
-        throw new Error("wh_review route references disabled 3rd-review provider " + provider);
-      }
+      const code = !configured ? "PROVIDER_NOT_CONFIGURED"
+        : configured.enabled !== true ? "PROVIDER_DISABLED"
+        : brokerModelIdentity(config, provider) === null ? "PROVIDER_MODEL_UNKNOWN" : null;
+      if (code !== null) skippedProviders.push({ provider, status: "failed", error: {
+        code, message: `${code}: wh_review route provider ${provider} is unavailable`,
+      } });
     }
-    const enabled = tier.filter((provider) => config.providers[provider]?.enabled === true);
+    const skipped = new Set(skippedProviders.map(({ provider }) => provider));
+    const enabled = tier.filter((provider) => config.providers[provider]?.enabled === true && !skipped.has(provider));
+    if (configuredRoute && enabled.length === 0) {
+      const error = new Error(`wh_review route has no enabled provider: ${skippedProviders.map(({ error }) => error.code).join(", ")}`);
+      error.skipped_providers = skippedProviders;
+      throw error;
+    }
     // An explicit WorkflowHub route is an operator decision: dispatch every
     // configured profile. Adapter-level deduplication is only retained for
     // the legacy fallback tier, never for a declared review surface.
     const selected = configuredRoute ? enabled : highestPriorityProfilesByAdapter(enabled);
-    const dispatchProfiles = configuredRoute ? [...tier] : selected;
+    const dispatchProfiles = selected;
     const providerModels = Object.fromEntries(dispatchProfiles.map((provider) => [provider, brokerModelIdentity(config, provider)]));
-    const selectedModels = selected.map((provider) => providerModels[provider]).filter((model) => typeof model === "string" && model.length > 0);
-    if (configuredRoute && selectedModels.length !== selected.length) {
-      throw new Error("wh_review route has provider(s) without an underlying model identity");
-    }
     if (selected.length > 0) return {
       providers: dispatchProfiles,
       eligibleProfiles: selected,
       requestedProfiles: dispatchProfiles,
-      requestedProfileSpecs: tier.flatMap((provider) => configuredRoute?.profile_specs?.[provider] ? [configuredRoute.profile_specs[provider]] : []),
+      requestedProfileSpecs: dispatchProfiles.flatMap((provider) => configuredRoute?.profile_specs?.[provider] ? [configuredRoute.profile_specs[provider]] : []),
+      ...(configuredRoute ? { skipped_providers: skippedProviders } : {}),
       provider_identities: Object.freeze(Object.fromEntries(dispatchProfiles.map((provider) => [provider, Object.freeze({
         source_id: brokerSourceId(provider, config.providers[provider]),
         config_id: brokerConfigId(provider, config.providers[provider]),

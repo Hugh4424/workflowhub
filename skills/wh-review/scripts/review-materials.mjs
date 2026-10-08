@@ -200,47 +200,6 @@ function assertPlainMaterials(materials) {
   }
 }
 
-/**
- * Validate the public make-decision detail input before runner-owned fields
- * are generated.  The caller supplies the current decision log bytes; the
- * runner supplies the authenticated material revision.  Keeping this check
- * at the public boundary prevents callers from guessing packet metadata or
- * silently replacing the current decision with a summary.
- */
-export function validateDetailReviewInput({ materials, currentDecisionLog = null, currentMaterialRevision = null } = {}) {
-  const errors = [];
-  if (!materials || typeof materials !== "object" || Array.isArray(materials)) {
-    throw new TypeError("MATERIAL_INCOMPLETE: detail materials must be an object");
-  }
-  const rule = reviewRuleFor("make-decision", "detail");
-  const allowlist = materialAllowlistForRule(rule, { includeGenerated: false });
-  const required = allowlist.required.filter((key) => !allowlist.generated.includes(key));
-  for (const key of required) {
-    if (!Object.prototype.hasOwnProperty.call(materials, key)) {
-      errors.push(`missing ${key}`);
-      continue;
-    }
-    if (typeof materials[key] !== "string") {
-      errors.push(`type ${key} must be text`);
-      continue;
-    }
-    if (materials[key].trim() === "") errors.push(`empty ${key}`);
-  }
-  const forbidden = Object.keys(materials).filter((key) => !allowlist.legal.includes(key));
-  if (forbidden.length) errors.push(`forbidden ${forbidden.join(", ")}; legal material keys: ${allowlist.legal.join(", ")}`);
-  if (typeof currentDecisionLog !== "string" || currentDecisionLog.length === 0) {
-    errors.push("current decision-log.md bytes are unavailable");
-  } else if (typeof materials.approved_direction === "string" && materials.approved_direction !== currentDecisionLog) {
-    errors.push("approved_direction must match current decision-log.md bytes");
-  }
-  if (errors.length) {
-    const error = new Error(`MATERIAL_INCOMPLETE: detail input ${errors.join("; ")}`);
-    error.code = "MATERIAL_INCOMPLETE";
-    throw error;
-  }
-  return true;
-}
-
 /** Validate direction inputs before creating a packet; no decision-log comparison. */
 export function validateDirectionReviewInput({ materials } = {}) {
   assertPlainMaterials(materials);
@@ -606,8 +565,6 @@ export function reviewInstructionsFor(stage, track = null, uiScope = false, revi
   return nav.map(line=>line+"\n").join("")+`Review stage ${scope}. Read the manifest-listed relative packet paths only; begin with review-instructions.md. A broker may present the packet with a bundle/ delivery prefix; native transport presents these paths directly at its packet root. Do not add that transport prefix to findings anchors. Read contracts/ and ${skillInstruction} The manifest lists the supplied provider files. Do not fetch excluded raw logs or treat receipts and checksums as workflow permission. ${subjectReading} Use context/ only for map-selected dependencies. ${stageFocus} ${verifyBound} ${roleBoundary} ${adviceBoundary} ${buildCodeBoundary} ${miniImplementationBoundary} ${findingBudget} Return only one JSON object with findings using the requested findings-only reviewer schema; findings may be empty. Do not output verdict, pass/fail status, summary, checklist, skill execution receipts, or a second JSON object. Do not access the repository, parent directories, Git, general shell, network, or host paths. ${PACKET_BOUND_CODEX_READ_EXCEPTION}${candidateOcrToolBoundaries}\n`;
 }
 
-export function minimumReviewersFor(stage, track = null, reviewScope = null) { return ruleFor(stage, track, reviewScope).minimum_reviewers; }
-
 function readRegisteredFile(path,label) {
   const absolute=resolve(path);let cursor="/";
   for(const part of absolute.split("/").filter(Boolean)){cursor=join(cursor,part);const st=lstatSync(cursor);if(st.isSymbolicLink()||realpathSync(cursor)!==cursor)throw new Error(`MATERIAL_INCOMPLETE: ${label} path alias ${cursor}`);}
@@ -620,21 +577,36 @@ export function canonicalMaterialManifest(entries){return JSON.stringify([...ent
 export function reviewMaterialBytes(key,value){return materialBytes(redactProviderHostPaths(value));}
 export function requirementIds(value){return [...new Set([...String(value).matchAll(ACCEPTANCE_IDS)].map(([id])=>id))];}
 
+function materialDerivation(sourceBytes, deliveredBytes) {
+  const replacements = bytes => (bytes.toString("utf8").match(/<host-path-redacted>/g) ?? []).length;
+  return { source_bytes: sourceBytes.length,
+    host_path_replacements: replacements(deliveredBytes) - replacements(sourceBytes),
+    byte_delta: deliveredBytes.length - sourceBytes.length };
+}
+
+function diffLines(text) {
+  return text.match(/[^\n]*(?:\n|$)/g)?.filter(line => line.length > 0) ?? [];
+}
+
 // Presentation only: all selected patch bytes survive in declared file shards.
 // The inline threshold changes neither scope nor provider/quality eligibility.
 function writeReviewDiff(write, raw) {
   const bytes = reviewMaterialBytes("changes.diff", raw);
   if (bytes.length <= PHASE_DIFF_INLINE_LIMIT_BYTES) {
-    write("changes.diff", bytes);
+    write("changes.diff", raw);
     return;
   }
   const text = bytes.toString("utf8");
+  const sourceLines = diffLines(raw.toString("utf8")), deliveredLines = diffLines(text);
+  if (sourceLines.length !== deliveredLines.length || !Buffer.from(sourceLines.join(""), "utf8").equals(raw)) {
+    throw new Error("MATERIAL_INCOMPLETE: cannot pair original and delivered diff lines");
+  }
   const sections = text.match(/^diff --git [\s\S]*?(?=^diff --git |$(?![\s\S]))/gm) ?? [];
   if (sections.length === 0 || sections.join("") !== text) {
     throw new Error("MATERIAL_INCOMPLETE: cannot split the complete diff without losing bytes");
   }
   const changes = [];
-  let diffOffset = 0;
+  let diffOffset = 0, sourceLineOffset = 0;
   for (const [ordinal, section] of sections.entries()) {
     const tokens = section.split("\n", 1)[0].slice("diff --git ".length).match(/"(?:\\.|[^"\\])*"|\S+/g);
     if (tokens?.length !== 2) throw new Error("MATERIAL_INCOMPLETE: invalid diff section header");
@@ -649,22 +621,29 @@ function writeReviewDiff(write, raw) {
       : /^new file mode /m.test(section) ? "added"
       : /^rename from /m.test(section) || oldPath !== path ? "renamed" : "modified";
     const stem = path.replace(/[^A-Za-z0-9_-]/g, "_").slice(-72);
-    let offset = 0;
-    while (offset < patch.length) {
-      let end = Math.min(offset + PHASE_DIFF_SHARD_TARGET_BYTES, patch.length);
-      if (end < patch.length) {
-        const newline = patch.lastIndexOf(0x0a, end - 1);
-        if (newline >= offset) end = newline + 1;
-        else while (end > offset && (patch[end] & 0xc0) === 0x80) end--;
-      }
-      if (end <= offset) throw new Error("MATERIAL_INCOMPLETE: invalid diff shard boundary");
-      const part = patch.subarray(offset, end);
+    const sectionLines = diffLines(section);
+    let offset = 0, lineOffset = 0;
+    while (lineOffset < sectionLines.length) {
+      const sourceParts = [], deliveredParts = [];
+      let partBytes = 0;
+      do {
+        const delivered = Buffer.from(sectionLines[lineOffset], "utf8");
+        if (partBytes > 0 && partBytes + delivered.length > PHASE_DIFF_SHARD_TARGET_BYTES) break;
+        sourceParts.push(Buffer.from(sourceLines[sourceLineOffset + lineOffset], "utf8"));
+        deliveredParts.push(delivered);
+        partBytes += delivered.length;
+        lineOffset += 1;
+        // A complete long line may exceed the presentation target. Never
+        // split its replacement or guess the corresponding source byte offset.
+      } while (lineOffset < sectionLines.length && partBytes < PHASE_DIFF_SHARD_TARGET_BYTES);
+      const part = Buffer.concat(deliveredParts), original = Buffer.concat(sourceParts);
       const shardId = `S-${String(ordinal + 1).padStart(5, "0")}-${stem}-P${String(shards.length + 1).padStart(4, "0")}`;
       const ref = `diff-shards/${shardId}.diff`;
-      write(ref, part);
+      write(ref, part, materialDerivation(original, part));
       shards.push({shard_id:shardId, ref, delivery:"included", offset, bytes:part.length, sha256:sha256(part)});
-      offset = end;
+      offset += part.length;
     }
+    sourceLineOffset += sectionLines.length;
     changes.push({path, old_path:oldPath, status, binary:/^GIT binary patch$|^Binary files /m.test(section),
       diff_offset:diffOffset, bytes:patch.length, line_count:(section.match(/\n/g) ?? []).length + (section.endsWith("\n") ? 0 : 1),
       sha256:sha256(patch), shards});
@@ -684,7 +663,14 @@ export function buildReviewMaterials({attachmentRoot,reviewDataRoot,stage,review
   const base=resolve(attachmentRoot ?? reviewDataRoot);if(realpathSync(base)!==base||!lstatSync(base).isDirectory())throw new Error("MATERIAL_INCOMPLETE: attachment root must be a real directory");
   const packetParent=join(base,".wh-review-packets");mkdirSync(packetParent,{recursive:true});if(realpathSync(packetParent)!==packetParent)throw new Error("MATERIAL_INCOMPLETE: packet path alias");
   const bundleRoot=mkdtempSync(join(packetParent,"review-"));const entries=[];
-  const write=(path,value)=>{if(isAbsolute(path)||path.split("/").some(x=>!x||x===".."||x==="."))throw new Error("MATERIAL_INCOMPLETE: unsafe bundle path");const bytes=materialBytes(redactProviderHostPaths(value));const target=join(bundleRoot,path);mkdirSync(dirname(target),{recursive:true});writeFileSync(target,bytes,{flag:"wx",mode:0o600});entries.push({path,bytes:bytes.length,sha256:sha256(bytes)});};
+  const write=(path,value,projectedDerivation=null)=>{
+    if(isAbsolute(path)||path.split("/").some(x=>!x||x===".."||x==="."))throw new Error("MATERIAL_INCOMPLETE: unsafe bundle path");
+    // Only writeReviewDiff supplies an override, with bytes already projected
+    // as part of the complete diff (including its Git header context).
+    const sourceBytes=materialBytes(value),bytes=projectedDerivation===null ? materialBytes(redactProviderHostPaths(value)) : sourceBytes;
+    const derivation=projectedDerivation ?? materialDerivation(sourceBytes,bytes);
+    const target=join(bundleRoot,path);mkdirSync(dirname(target),{recursive:true});writeFileSync(target,bytes,{flag:"wx",mode:0o600});entries.push({path,bytes:bytes.length,sha256:sha256(bytes),derivation});
+  };
   try {
     const documentFace=surface==="document"&&stage==="build-code";
     const codePacket=["build-code","verify-code"].includes(stage)&&!documentFace;
@@ -708,6 +694,6 @@ export function buildReviewMaterials({attachmentRoot,reviewDataRoot,stage,review
     if(source?.diffPath)writeReviewDiff(write,readRegisteredFile(source.diffPath,"supplied diff"));
     if(authenticated_evidence!==undefined)write("authenticated-evidence.json",authenticated_evidence);
     const manifest={version:1,stage,review_scope:reviewScope,subject_kind:reviewScope==="phase" ? "phase" : "document",phase_id:phaseId,surface:surface ?? reviewKind ?? stage,files:[...entries]};write("manifest.json",JSON.stringify(manifest,null,2)+"\n");
-    return {bundleRoot,attachmentRoot:base,sourcePrefix:relative(base,bundleRoot).split("\\").join("/"),materialId:deliveredMaterialId(entries),deliveryManifest:entries,discarded_facts:filtered.discarded_facts,dispose(){rmSync(bundleRoot,{recursive:true,force:true});}};
+    return {bundleRoot,attachmentRoot:base,sourcePrefix:relative(base,bundleRoot).split("\\").join("/"),materialId:deliveredMaterialId(entries),deliveryManifest:entries.map(({path,bytes,sha256})=>({path,bytes,sha256})),discarded_facts:filtered.discarded_facts,dispose(){rmSync(bundleRoot,{recursive:true,force:true});}};
   } catch(error){rmSync(bundleRoot,{recursive:true,force:true});throw error;}
 }

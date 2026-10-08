@@ -169,8 +169,7 @@
         "required",
         "optional",
         "generated",
-        "forbidden",
-        "minimum_reviewers"
+        "forbidden"
       ],
       "properties": {
         "source_bundle": {
@@ -210,10 +209,6 @@
             "type": "string",
             "minLength": 1
           }
-        },
-        "minimum_reviewers": {
-          "type": "integer",
-          "minimum": 1
         }
       },
       "additionalProperties": false
@@ -226,7 +221,6 @@
         "optional",
         "generated",
         "forbidden",
-        "minimum_reviewers",
         "profiles"
       ],
       "properties": {
@@ -285,10 +279,6 @@
             "type": "string",
             "minLength": 1
           }
-        },
-        "minimum_reviewers": {
-          "type": "integer",
-          "minimum": 1
         },
         "profiles": {
           "type": "object",

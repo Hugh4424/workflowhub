@@ -8,11 +8,11 @@ direction 轨输入由 `skills/wh-review/scripts/review-materials.mjs` 的 `vali
 
 每个请求保留 broker-owned direction-review.v1 内部顺序：reconstruct 只读原始需求、客观事实、硬约束、非目标、问题与未知；到 reveal 才读当前选择、备选方案、理由和独立重建；challenge 检查选择、失败后果及更小可逆路径。不能用第二次 public request 假装同一请求中的 reveal 边界。安全原生 transport 也由现客户端在同一次请求内真实分段：重建包不交付已定材料，只有收到有效重建才创建揭示包，之后才创建挑战包。内部会话、取消、失败与 stdout/stderr 如实保留；不新增会话推进许可或持久进度对象。
 
-questions-only 提供真实未决问题及来源，不能漏关键问题或用大概结论冒充覆盖。reconstruct 阶段不交付 OI 答案、方案结论、确认回复、decision log、detail 结果、spec、plan、代码或测试。答案与选择只能在 reveal 后可见。不要伪造未知问题的回答，也不要求 outline 版本/hash 成为继续工作或问题身份的许可。
+questions-only 提供真实未决问题及来源，不能漏关键问题或用大概结论冒充覆盖。reconstruct 阶段不交付 OI 答案、方案结论、确认回复、decision log、detail 结果、spec、plan、代码或测试。答案与选择只能在 reveal 后可见。不要伪造未知问题的回答，也不要求 outline 版本/hash 成为继续工作或问题身份的许可。questions-only 投影接受人守：是否漏关键问题由主会话与用户人工核对，不设机器 producer 或校验器。
 
 ## detail：核对完整方案与真实回答
 
-`approved_direction` 必须逐字节等于当前 decision-log；这项硬校验由 `skills/wh-review/scripts/review-materials.mjs` 的 `validateDetailReviewInput` 负责。`draft_spec_or_acceptance` 的合法内容来源是基于已确认方向形成的当前待审规格或验收草案，保留原始需求、真实用户回答与取舍来源；不能用 direction questions-only、旧审查摘要或虚构回答替代。
+`approved_direction` 是完整当前 decision-log。`draft_spec_or_acceptance` 可选；提供时是基于已确认方向的待审规格或验收草案，保留原始需求、真实用户回答与取舍来源；不能用 direction questions-only、旧审查摘要或虚构回答替代。
 
 读取原始需求、完整当前 approved_direction（decision-log 与 grill 判断）、待审规格或验收草案。核对问题/成功标准与调研、方向/范围/取舍与风险、盲审发现/假设与剩余风险是否有真实内容；关键决定须说明来源、事实与约束、理由、后果、被拒方案及未决项。真实回答、分组确认与风险接收不能被摘要、direction questions-only 或空 findings 代替。
 

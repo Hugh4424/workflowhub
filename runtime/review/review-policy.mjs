@@ -97,7 +97,3 @@ export function reviewRuleFor(stage, track = null, reviewScope = null) {
   if (track !== null && track !== undefined) throw new Error(`MATERIAL_INCOMPLETE: ${stage} does not use a review track`);
   return stageRule;
 }
-
-export function minimumReviewersFor(stage, track = null, reviewScope = null) {
-  return reviewRuleFor(stage, track, reviewScope).minimum_reviewers;
-}
