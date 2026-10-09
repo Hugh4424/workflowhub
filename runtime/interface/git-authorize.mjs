@@ -550,7 +550,7 @@ export async function record({ operation, confirmationRef, dir = join(process.cw
   });
 }
 
-export async function consume({ operation, stepId, dir = join(process.cwd(), "quality", "authorizations") } = {}) {
+export async function consume({ operation, stepId, authorizationRef, dir = join(process.cwd(), "quality", "authorizations") } = {}) {
   requireOperation(operation);
   requiredText(stepId, "AUTHORIZATION_STEP_REQUIRED", "stepId");
   requiredText(dir, "INVALID_DIRECTORY", "authorization directory");
@@ -559,22 +559,54 @@ export async function consume({ operation, stepId, dir = join(process.cwd(), "qu
   return withLock(storage, "git-authorize", async () => {
     assertTaskRepositoryScope(storage, cwd);
     const { authorizations, consumptions } = records(storage, operation);
+    let selected;
+    let verifySelected = () => {};
+    if (authorizationRef !== undefined) {
+      requiredText(authorizationRef, "AUTHORIZATION_REFERENCE_REQUIRED", "authorizationRef");
+      if (!isAbsolute(authorizationRef) || resolve(authorizationRef) !== authorizationRef || dirname(authorizationRef) !== storage) throw failure("AUTH_SCOPE", "exact authorization reference must be canonical within this authorization directory");
+      selected = authorizations.find(item => item.path === authorizationRef);
+      if (!selected) throw failure("AUTH_SCOPE", "exact authorization reference is not an original grant for this operation");
+      const target = destination(storage, basename(selected.path)), original = targetStat(target.path);
+      if (!original || original.nlink !== 1) throw failure("AUTH_SCOPE", "exact authorization grant must be a singly linked original file");
+      const fd = openSync(target.path, constants.O_RDONLY | constants.O_NOFOLLOW);
+      let bytes;
+      try {
+        verifyDirectories(target.snapshot);
+        const before = verifyOpen(fd, target.path, storage);
+        if (!sameStorageFile(before, original) || before.nlink !== 1) throw failure("AUTH_SCOPE", "exact authorization grant identity or link count changed");
+        bytes = readFileSync(fd);
+        const after = verifyOpen(fd, target.path, storage);
+        if (!sameStorageFile(after, before) || after.nlink !== 1) throw failure("AUTH_SCOPE", "exact authorization grant changed during read");
+        verifyDirectories(target.snapshot);
+      } finally { closeSync(fd); }
+      if (JSON.stringify(JSON.parse(bytes.toString("utf8"))) !== JSON.stringify(selected.value)) throw failure("AUTH_SCOPE", "exact authorization grant bytes changed after selection");
+      verifySelected = () => {
+        verifyDirectories(target.snapshot);
+        const current = targetStat(target.path);
+        if (!current || !sameStorageFile(current, original) || current.nlink !== 1 || !readTarget(target).equals(bytes)) throw failure("AUTH_SCOPE", "exact authorization grant changed before consumption");
+      };
+    }
     const retry = consumptions.find((item) => item.value.step_id === stepId);
     if (retry) {
+      if (selected && retry.value.authorization_ref !== selected.path) throw failure("AUTH_SCOPE", "retry is bound to a different original authorization reference");
       const grant = authorizations.find((item) => item.path === retry.value.authorization_ref);
       const current = gitIdentity(cwd);
       if (!grant || grant.value.operation !== operation || grant.value.branch !== current.branch) throw failure("AUTH_SCOPE", "current Git branch does not cover the previously consumed authorization");
       // This is an immutable receipt for an action already consumed, not a
       // fresh grant. Its original HEAD remains historical after that action
       // commits/merges; do not reject a same-branch retry for that legal move.
+      verifySelected();
       return { ...retry.value, path: retry.path };
     }
     const used = new Set(consumptions.map((item) => item.value.authorization_ref));
-    const grant = authorizations.filter((item) => !used.has(item.path)).at(-1);
+    if (selected && used.has(selected.path)) throw failure("AUTHORIZATION_ALREADY_CONSUMED", "exact authorization was already consumed by another step");
+    const grant = selected ?? authorizations.filter((item) => !used.has(item.path)).at(-1);
     if (!grant) throw failure(authorizations.length ? "AUTHORIZATION_ALREADY_CONSUMED" : "IRREVERSIBLE_AUTHORIZATION_REQUIRED",
       `no unused authorization for ${operation}`);
     const current = gitIdentity(cwd);
+    if (selected && current.branch !== grant.value.branch) throw failure("AUTH_SCOPE", "exact authorization branch differs from the current Git branch");
     if (current.head !== grant.value.head) throw failure("AUTHORIZATION_HEAD_MISMATCH", `HEAD changed since authorization: ${grant.path}`);
+    verifySelected();
     const path = await appendRecord(storage, `consumed-${operation}`, "json", `${JSON.stringify({
       operation, step_id: stepId, authorization_ref: grant.path, consumed_at: new Date().toISOString(),
     }, null, 2)}\n`);
@@ -592,15 +624,15 @@ async function main(argv) {
   const options = {};
   for (let index = 0; index < argv.length; index += 2) {
     const key = argv[index], value = argv[index + 1];
-    if (!["--operation", "--confirmation-ref", "--step-id", "--dir"].includes(key) || !value || value.startsWith("--") || options[key] !== undefined) {
+    if (!["--operation", "--confirmation-ref", "--step-id", "--authorization-ref", "--dir"].includes(key) || !value || value.startsWith("--") || options[key] !== undefined) {
       throw failure("INVALID_ARGUMENT", `invalid authorization option: ${key}`);
     }
     options[key] = value;
   }
-  if (!options["--operation"] || (action === "record" && (options["--step-id"] || !options["--confirmation-ref"]))
+  if (!options["--operation"] || (action === "record" && (options["--step-id"] || options["--authorization-ref"] || !options["--confirmation-ref"]))
     || (action === "consume" && (options["--confirmation-ref"] || !options["--step-id"]))) throw failure("INVALID_ARGUMENT", "action requires its operation and confirmation-ref or step-id");
   const input = { operation: options["--operation"], ...(options["--dir"] ? { dir: options["--dir"] } : {}) };
-  const result = action === "record" ? await record({ ...input, confirmationRef: options["--confirmation-ref"] }) : await consume({ ...input, stepId: options["--step-id"] });
+  const result = action === "record" ? await record({ ...input, confirmationRef: options["--confirmation-ref"] }) : await consume({ ...input, stepId: options["--step-id"], ...(options["--authorization-ref"] ? { authorizationRef: options["--authorization-ref"] } : {}) });
   const path = action === "record" ? result : result.path;
   process.stdout.write(`${JSON.stringify({ path })}\n`);
 }

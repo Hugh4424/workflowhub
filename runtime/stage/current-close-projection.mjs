@@ -29,6 +29,8 @@ export const PHYSICAL_DELIVERY_FACTS = Object.freeze([
   "formal_cleanup_safe",
   "branch_cleanup",
   "remote_branch_cleanup",
+  "task_branch_pushed",
+  "pull_request_opened",
 ]);
 
 const FAILED_STEP_STATUSES = new Set(["failed", "error", "record_failed"]);
@@ -164,8 +166,10 @@ export function derivePhysicalDeliveryStatus(input = {}) {
   // The remote branch fact was added after the original close projection.
   // Historical callers without that field remain readable; current close
   // readbacks always declare it and therefore cannot silently omit it.
+  const currentSeven = Array.isArray(plan.steps) && JSON.stringify(plan.steps) === JSON.stringify(["commit", "push-task", "pr", "merge", "archive", "push", "cleanup"]);
   const missingFacts = PHYSICAL_DELIVERY_FACTS
-    .filter((name) => name !== "remote_branch_cleanup" || Object.prototype.hasOwnProperty.call(facts, name))
+    .filter((name) => currentSeven || !["task_branch_pushed", "pull_request_opened"].includes(name))
+    .filter((name) => currentSeven || name !== "remote_branch_cleanup" || Object.prototype.hasOwnProperty.call(facts, name))
     .filter((name) => facts[name] !== true);
   const cleanupRemoved = cleanup?.flags?.includes("removed");
 
@@ -173,7 +177,15 @@ export function derivePhysicalDeliveryStatus(input = {}) {
   // later readback proves that the physical state is now complete.  Current
   // state must follow the readback; the old failure remains visible in the
   // separate close.step_records view.
-  if (missingFacts.length === 0 && cleanupRemoved && completions.length === 1) {
+  const oid = value => typeof value === "string" && /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(value);
+  let actionIndex = -1;
+  const missingActions = currentSeven ? plan.steps.filter(operation => {
+    const index = steps.findIndex((step, index) => index > actionIndex && step.operation === operation && step.status === "completed" && oid(step.source_head) && oid(step.target_head));
+    if (index < 0) return true;
+    actionIndex = index; return false;
+  }) : [];
+  if (currentSeven && missingFacts.length === 0 && missingActions.length === 0 && cleanupRemoved) return result("removed");
+  if (!currentSeven && missingFacts.length === 0 && cleanupRemoved && completions.length === 1) {
     return result("removed", {
       plan_hash: planHash,
       completed_count: 1,
@@ -196,6 +208,7 @@ export function derivePhysicalDeliveryStatus(input = {}) {
     });
   }
 
+  if (currentSeven) return result("incomplete", { missing_facts: missingFacts, missing_actions: missingActions });
   if (missingFacts.length === 0 && cleanupRemoved) {
     return result("incomplete", {
       plan_hash: planHash,
