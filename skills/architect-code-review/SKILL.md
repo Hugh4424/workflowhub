@@ -58,7 +58,7 @@ description: Review an implementation diff for correctness, lifecycle, security,
 
 ## 同源补充的镜头与记录
 
-宿主需要 Standards/Spec 补充时，读取 `skills/review/SKILL.md` 的「双轴消费与宿主分派」及完整 Fowler baseline，给两独立上下文同一允许 diff、完整 AC、实际输出原ref、合同/协议/重点/lens 与仓库规范。规范优先，工具已强制项跳过；按真实 hunk 判断，不以十二个名称的出现冒十二种行为已验。各镜头仍用本文件唯一 JSON 契约返回原始发现；宿主分栏展示、不合并或跨轴排名，执行者不自写原件或镜像。
+宿主需要 Standards/Spec 补充时，读取 `skills/review/SKILL.md` 的「双轴消费与宿主分派」及完整 Fowler baseline，给两独立上下文同一允许 diff、完整 AC、实际输出原ref、合同/协议/重点/lens 与仓库规范。共同完整材料可读，判据分别使用：Standards 依仓库规范与 Fowler baseline 判断，仓库规范优先，工具已强制项跳过；Spec 只按具名需求判断缺失、范围外或实现错误，每条 finding 引需求来源，规范仅在需求明确引用时作为需求，不独立报告风格偏差。按真实 hunk 判断，不以十二个名称的出现冒十二种行为已验。各镜头仍用本文件唯一 JSON 契约返回原始发现；宿主分栏展示、不合并或跨轴排名，执行者不自写原件或镜像。
 
 补充明确 same_source_degraded。主会话用现有 appendRecord 单份保存补充原文，引用放普通 evidence/说明，不覆盖真实 OCR 的 review_origin/review_result_ref；单独记录 degraded 时 review_result_ref.value 为 null 且有 reason。缺失、失败、取消、迟到发现与覆盖限制分别保留，空 findings 不代表未执行或质量通过。
 
