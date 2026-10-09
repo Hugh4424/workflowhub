@@ -1,4 +1,5 @@
 {
+  "$comment": "P9/T019 / D-029: retain the existing build-spec enum value, order and historical fields for old-record reading. This schema value does not authorize an active retired-stage invocation; current stage/review refusal stays unchanged. Physical enum deletion is deferred until a later complete real-task observation confirms unchanged historical attribution and retired-review refusal and the original producer/reader scope is reviewed. That cycle is not complete in this task. Owner: P9/T019; no new runtime history branch or completion field.",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "required": ["schema_version", "task_id", "stage", "attempt_ref", "decision", "confirmed_at"],

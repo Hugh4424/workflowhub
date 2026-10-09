@@ -3,6 +3,10 @@ import { createHash } from "node:crypto";
 import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, parse, relative, resolve, sep } from "node:path";
 import { openTask } from "../task/task-handle.mjs";
+// P9/T019 (D-029): keep the ordered historical build-spec value and attribution regex unchanged.
+// Removing either would change upstream_omission:build-spec from attributed to unknown.
+// Retain them until a later complete real-task observation confirms unchanged historical attribution
+// and retired-review refusal; that observation is not complete in this task. Owner: P9/T019.
 const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const STAGE_INDEX = new Map(STAGES.map((value, index) => [value, index]));
 const WINDOW_MS = 30 * 24 * 60 * 60 * 1000;

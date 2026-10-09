@@ -3,6 +3,10 @@ import { createHash } from "node:crypto";
 import { AUTHENTICATED_EVIDENCE_PATH, providerMaterialEntries, providerMaterialPath, redactProviderHostPaths } from "./provider-material-projection.mjs";
 import { compactVerifyCodeMaterials } from "./review-input-bounds.mjs";
 import { reviewIdentityFromInput } from "./review-policy.mjs";
+// P9/T019 (D-029): the build-spec focus text remains historical data, not an active review identity.
+// reviewIdentityFromInput already rejects retired build-spec requests; keep that refusal unchanged.
+// Retain the old value until a later complete real-task observation confirms historical attribution
+// and retired-review refusal before considering deletion. No completed cycle is claimed. Owner: P9/T019.
 const REVIEW_FOCUS = Object.freeze({
   "make-decision/direction": "Challenge whether the proposed direction solves the stated problem with the smallest useful scope. Check assumptions, constraints, failure consequences, and rejected alternatives.",
   "make-decision/detail": "Check scope, complete user flow, pages, data states, success and failure boundaries, acceptance, non-goals, deferred work, risks, and unnecessary complexity.",

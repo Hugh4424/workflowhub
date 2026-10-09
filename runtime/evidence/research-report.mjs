@@ -3,6 +3,11 @@ import { basename, dirname, isAbsolute } from "node:path";
 import { appendRecord } from "../interface/safe-write.mjs";
 
 const REPORT_REF = /^quality\/evidence\/research\/([A-Za-z0-9-]+)\.json$/;
+// P9/T019 (D-029): build-spec is retained for historical report validation/read semantics.
+// This set is also used by the existing private publisher; retention neither adds a current
+// stage consumer nor asserts that every private publisher rejects the retired stage.
+// Keep values unchanged pending a later complete real-task observation and source-consumer
+// review before deletion. No new history branch or publication behavior. Owner: P9/T019.
 const STAGES = new Set(["make-decision", "build-spec", "build-plan"]);
 const ATTEMPT_STATUSES = new Set(["ok", "usage_error", "auth_error", "http_error", "timeout", "tls_unreachable", "quota"]);
 
