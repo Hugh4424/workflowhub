@@ -4612,9 +4612,9 @@
       "destination": "GLOSSARY.md",
       "status": "move",
       "role": "production",
-      "responsibility": "futurepending：P9/T017 将根现术语唯一rename至GLOSSARY，保持旧来源与历史只读；本条仅创建前职责预登记，不改变当前CONTEXT文件/reader，不提前P9实施。",
+      "responsibility": "P9/T017 原 ca9 owner 已将根当前术语唯一 rename 至 GLOSSARY.md，并同步实际 reader；旧 CONTEXT.md 来源与历史只读保留，不留第二根术语载体。本条只维护已交付源码的当前职责，128创建前 futurepending 是历史时点，不回写128或替代独立质量判断。",
       "owner": "P9/T017 / P9-single-writer（原ca9文件owner；map仍P8/T016原唯一维护者）",
-      "consumer": "当前 tools/cli/verify-structure.mjs:94–102 读根CONTEXT五段术语；workflows/build-code/case-selection.mjs:28–31 将旧根分类supporting；AGENTS.md:48 / CLAUDE.md:30 人读术语入口。P9/T017同步迁根新名与真实readers，旧CONTEXT分类control仍保，不留第二术语文件。",
+      "consumer": "当前 tools/cli/verify-structure.mjs:94–102 已读根 GLOSSARY.md 五段术语；workflows/build-code/case-selection.mjs:28–31 将 GLOSSARY.md 分类 supporting，仍保 CONTEXT.md 历史分类 control 而不保旧根 payload；AGENTS.md:48 / CLAUDE.md:30 人读术语入口已指新根。以上四 reader 已定向实读，不声称全仓旧引用零命中；历史 ADR 原正文旧名只读，非当前术语载体。",
       "module_consumers": [],
       "named_data_readers": [
         "tools/cli/verify-structure.mjs",
@@ -4623,7 +4623,7 @@
         "CLAUDE.md"
       ],
       "delete_condition": "P9/T017仅在真实新唯一术语载体及上述reader承接后完成rename，历史ADR正文只读/仅授权文首批注；新职责被原owner的经审查替代承接且无当前consumer时按spec:161删除，不授本Task提前删根文件。",
-      "retention_basis": "futurepending 未rename/不得当前complete；source=P9/T017:86–99、spec:161、当前rootCONTEXT27行及上述reader；冻结classification仅函数行和control，另rename/ADR/verify-structure行为待独立源核，不新增gate/第三writer。"
+      "retention_basis": "当前唯一根术语已由 P9/T017 真实迁名，source146交付、169实际提交/3f048来源与当前四 reader 可读；父会话回传398 classification3与 verify-structure PASS 只证明各自有限检查，不冒整体P9质量。后续 T018 原171合法政策源只更改当前 GLOSSARY.md:22 的严格 OCR/architect 回退语义，其余术语与该目录职责保持，当前 root27行已实读；source=P9/T017:86–99、spec:161，原128 prereg未rename语句仅当时状态，历史原件不改。旧 CONTEXT.md 根载体已 absent，旧分类 control 与历史 ADR 旧名不激活旧载体；全仓当前旧pin扫描另由独立owner验证，本条未作该扫描，不新增gate/第三writer/清理许可。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"
