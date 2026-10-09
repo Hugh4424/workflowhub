@@ -200,7 +200,7 @@ P1 R历史登记；P2 A1夹具/禁区；P3 A2′三正文；P4 A3真实比较；
 | DELETE（consumer已迁后） | `skills/grill-with-docs/CONTEXT-FORMAT.md` | P7 |
 | NEW | `skills/grill-with-docs/GLOSSARY-FORMAT.md` | P7 |
 | MODIFY | `skills/grill-with-docs/skill-bundle.json` | P7 |
-| MODIFY（具体test change request独立批准后，仅附件filename assertion） | `tests/moat-skills-phase1.test.mjs` | P7/T011 |
+| MODIFY（具体test change request独立批准后，仅:75附件filename与:79同regexp名称迁移） | `tests/moat-skills-phase1.test.mjs` | P7/T011 |
 | MODIFY | `skills/diagnosing-bugs/SKILL.md` | P7 |
 | MODIFY | `skills/diagnosing-bugs/skill-bundle.json` | P7 |
 | MODIFY | `skills/test-routing-advisor/SKILL.md` | P8 |
@@ -409,7 +409,7 @@ self-check with `simplicity-guard`'s core questions (has this layer earned its p
 
 DO NOT TOUCH精确路径：runtime/task/material-workspace.mjs、runtime/interface/safe-write.mjs、runtime/evidence/skill-static-deps.mjs、tests/acceptance/card-03-current.mjs、constitution-checklist.md、package.json。checklist本轮read22原则与close三义未包含wh-review/architect回退目标枚举，P9只改宪法治理实施边界而不改22标题/定义映射，因此无checklist同步consumer改动。task-store仅CLOSE_ACTIONS变，STAGE_ROW_KEYS/REVIEW_ORIGINS保护；宪法仅回退条款改，22原则/七公共类保。static deps:68不存在Markdown不报missing，:75存在未声明附件才报，不扩它。verify-architect旧wh-review精确fallback literal与新方向冲突，P9 test change request独立批准后改，旧字节git/raw留；Long-review三bullet/17串仍保。五ADR全文已直接read，标题后批注外所有正文和旧行号保护。
 
-P7/T011真实filename consumer的窄测试合同：本轮直接read `tests/moat-skills-phase1.test.mjs:75`为`assert.ok(existsSync(filePath("skills", "grill-with-docs", "CONTEXT-FORMAT.md")));`，它在删除旧格式后必然失败，并非新方法效果失败。仅允许经具体test change request与独立非作者批准，将该附件存在性断言的精确filename改为`GLOSSARY-FORMAT.md`，保持`assert.ok(existsSync(filePath(...)))`存在性强度和其它assert/scorer/gold不变；不得删assert、skip、允许old-or-new或复制旧附件凑绿。请求保存原/新assert、旧源码字节/hash、已有oldraw原ref、改名理由与影响；若新执行失败则单份保存真实raw，不造已跑RED。未来测试修改单独diff/commit/验收/回退，不混方法正文、不借G2，批准者独立于正文与测试修改作者；本次材料作者不批准亦不修改测试。九外置冻结源码与核心字面保护不变。
+P7/T011真实filename consumer的窄测试合同：本轮直接read `tests/moat-skills-phase1.test.mjs:75`为`assert.ok(existsSync(filePath("skills", "grill-with-docs", "CONTEXT-FORMAT.md")));`，它在删除旧格式后必然失败，并非新方法效果失败。仅允许经具体test change request与独立非作者批准，将该附件存在性断言的精确filename改为`GLOSSARY-FORMAT.md`，保持`assert.ok(existsSync(filePath(...)))`存在性强度；另经具体CR230与独立104源scope认可，仅:79原`/输出|Update CONTEXT\.md|ADR/`→新`/输出|Update GLOSSARY\.md|ADR/`，保同assert.match predicate、转义点、输出/ADR分支、顺序、message及除该名称外全部字节。其余assert/scorer/gold不变；不得删assert、skip、允许old-or-new或复制旧附件凑绿。请求保存原/新assert、旧源码字节/hash、已有oldraw原ref、改名理由与影响；若新执行失败则单份保存真实raw，不造已跑RED。未来测试修改单独diff/commit/验收/回退，不混方法正文、不借G2，批准者独立于正文与测试修改作者；本次材料作者不批准亦不修改测试。:79原整文件9pass不等于GLOSSARY词支专测、独立104仅源scope认可不等实际diff批准；材料扩该精确名称后实际test diff须另独立核、单独测试commit/验收/回退，仅恢复:79不撤已交付:75。旧273/157/230与formal012及原raw/hash不可变，本材料修正不宣测试已运行或Phase GREEN。九外置冻结源码与核心字面保护不变。
 
 外置已冻结DO NOT TOUCH：T/quality/tests/skill-modernization-classification.test.mjs（e73e867e50c308c418890a0f2543a7b477b5831586515fcfccc521f45ff18296）；historical-attribution.test.mjs（264b30fb82677f9dd1b437b221cd3a349cd8651a65edde8bb6fa7931cccea84f）；pr-close.test.mjs（6d57582f7bf210e261977d0ea893241793e636ed6e610b65610d38a68ea08b78）；catalog.test.mjs（a57174233faeb5612d42029bcf0522a6e8e98d0e330d68788c0528c3797d7f4d）。四名前均加skill-modernization-，只有这些actual路径，不造副本；owner a46，consumer各对应Phase与独立复验。facts010/012提供完整command/raw/hash，修改scorer先独立test change request。
 
