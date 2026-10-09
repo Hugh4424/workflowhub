@@ -24,7 +24,7 @@ npm install
 | build-code | 当前 Phase 实施、受影响测试和独立审查 |
 | verify-code | 当前交付终末独立核对和逐 AC 判断 |
 
-post 日常路线 make-decision → build-plan → build-code → verify-code。两道人为门是方向与计划选择；三审查点为 build-plan 合并、build-code 每 Phase、verify-code 终末。文档审查 wh-review，代码审查 OCR，仅 OCR 未安装才回退 wh-review。独立数量不足、provider 失败或质量缺失如实披露，不丢有效发现、不冒通过。
+post 日常路线 make-decision → build-plan → build-code → verify-code。两道人为门是方向与计划选择；三审查点为 build-plan 合并、build-code 每 Phase、verify-code 终末。文档审查 wh-review，代码审查 OCR，只有 OCR 命令不存在（ENOENT）或版本低于1.12.9，才回退 architect-code-review 执行同一代码审查，保留检测输出、原因、真实执行者和覆盖限制。版本检测其它错误保持 unknown/unavailable，不推断未安装；OCR 已装而执行失败、超时、取消、无效输出、零成功路或空 findings 均不触发回退，原始事实保留。独立数量不足、provider 失败或质量缺失如实披露，不丢有效发现、不冒通过。
 
 ## 七类公共工具
 

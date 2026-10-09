@@ -169,7 +169,7 @@ Version: 1.9.2
 
 ## 治理实施边界（不新增宪法条款）
 
-当前主会话执行阶段，外部 Stage Agent、session、bridge 或 stage outcome 不作前置条件。公共入口只有 doctor/status/run/review/verify/confirm/authorize 七类；其它实现可以私有复用，不能变成公共流程节点。post 材料与 task facts 为当前依据；pre/history 四材料、旧记录和报告只读。三审查点是 build-plan 合并、build-code 每 Phase、verify-code 终末；文档由 wh-review 执行，代码由 OCR，只有 OCR 未安装才回退 wh-review 并记录事实。
+当前主会话执行阶段，外部 Stage Agent、session、bridge 或 stage outcome 不作前置条件。公共入口只有 doctor/status/run/review/verify/confirm/authorize 七类；其它实现可以私有复用，不能变成公共流程节点。post 材料与 task facts 为当前依据；pre/history 四材料、旧记录和报告只读。三审查点是 build-plan 合并、build-code 每 Phase、verify-code 终末；文档由 wh-review 执行，代码由 OCR；只有 OCR 命令不存在（ENOENT）或版本低于1.12.9，才回退 architect-code-review 执行同一代码审查并保留检测输出、原因、真实执行者和覆盖限制。版本检测其它错误保持 unknown/unavailable，不推断未安装；OCR 已装而执行失败、超时、取消、无效输出、零成功路或空 findings 均不触发回退，保留原始事实。
 
 报告只留原始件，不保存整棵目录/工作树快照或镜像。当前 build-code stage row 可保存一个 phase_progress 游标，只定位位置、不证明完成、不形成历史序列；材料提交变化时 stale，纯代码提交不使它 stale。严重 finding 先修复或由人明确承担具体风险；风险选择不改写原 review 事实。stage-handoff 是新唯一的人读 Markdown，不是身份对象图或写入许可。
 

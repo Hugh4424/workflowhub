@@ -41,7 +41,7 @@ Phase 内的 Task 是 task graph，不是可任意跳过依赖的步骤表。只
 
 ## OCR 能力与回退
 
-检查 `ocr` 命令及 `ocr --version`。只有命令不存在（ENOENT）或版本低于1.12.9，才由 wh-review 执行同一 Phase 代码审查，记录检测输出、fallback 原因、真实执行者、发现和覆盖限制。版本检测的其它错误不能猜成未安装。OCR 已安装但审查失败、超时或被取消时，不回退 wh-review，保留原失败/unavailable；不造空 findings 或自动用其它 reviewer 覆盖它。依赖真实 OCR 的测试在未安装时明确 skip 并报告。
+检查 `ocr` 命令及 `ocr --version`。只有命令不存在（ENOENT）或版本低于1.12.9，才由 architect-code-review 执行同一 Phase 代码审查，记录检测输出、fallback 原因、真实执行者、发现和覆盖限制。版本检测的其它错误不能猜成未安装。OCR 已安装但审查失败、超时或被取消时，不回退 architect-code-review，保留原失败/unavailable；不造空 findings 或自动用其它 reviewer 覆盖它。依赖真实 OCR 的测试在未安装时明确 skip 并报告。
 
 代码审查输入保留 build-code 合同、provider 协议、stageReviewFocus 与所需 lens 正文、当前 diff、完整 AC 及实际执行原件；只搬方法合同，不能重建旧执行流程。材料外发前核范围、路径边界并脱敏私有路径/secret；没有真实只读边界的执行者记不可用。取消、单路失败、迟到 findings 与其它成功路的 provenance 分别保留，不能由首个结果取消其它路或把失败写成通过。
 

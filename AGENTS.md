@@ -69,7 +69,7 @@
 ### 当前窄工具与事实职责登记
 
 - 工作区/命令/普通记录/Git授权/锁/回复复用 runtime/interface/ 已有 owner；真实 consumer 见 docs/architecture/move-map.json。工具输出是事实，不是阶段许可证；被经独立审查的替代实现承接实际消费者后才退役。
-- 审查事实由 review-record-route 单一 producer保存；文档wh-review，代码OCR，未装OCR才fallback并保原原因。provider缺失/失败不制造质量通过，有效单源发现不丢弃。
+- 审查事实由 review-record-route 单一 producer保存；文档 wh-review，代码 OCR；只有 OCR 命令不存在（ENOENT）或版本低于1.12.9，才回退 architect-code-review 执行同一代码审查，保留检测输出、原因、真实执行者和覆盖限制。版本检测其它错误保持 unknown/unavailable，不推断未安装；OCR 已装而执行失败、超时、取消、无效输出、零成功路或空 findings 均不触发回退，原始事实保留。provider缺失/失败不制造质量通过，有效单源发现不丢弃。
 - 退役登记保既有决定与未决项的理由/决定人/来源，人读交接消费，不新增机器reader或字段。
 
 ## vNext 永久实施边界

@@ -19,7 +19,7 @@ post 日常路线是 make-decision → build-plan → build-code → verify-code
 - phase_progress：facts.jsonl 的一个当前导航游标；不证明完成，不另存序列。材料提交变更后 stale，纯代码变更不使它 stale。
 - 质量事实：真实测试、审查和来源；缺失为 unknown/unavailable/incomplete，不阻止修复，也不能冒完成。
 - finding：带原始来源与证据的发现；有效单源发现不能因独立数量不足被丢弃。严重问题先修复或由人承担具体风险。
-- 三审查点：build-plan 合并、build-code 每 Phase、verify-code 终末。文档 wh-review，代码 OCR；仅 OCR 未安装时回退 wh-review 并保存实际 fallback。
+- 三审查点：build-plan 合并、build-code 每 Phase、verify-code 终末。文档 wh-review，代码 OCR；只有 OCR 命令不存在（ENOENT）或版本低于1.12.9，才回退 architect-code-review 执行同一代码审查，并保存检测输出、原因、真实执行者和覆盖限制。版本检测其它错误保持 unknown/unavailable，不推断未安装；OCR 已装而执行失败、超时、取消、无效输出、零成功路或空 findings 均不触发回退，原始事实保留。
 - 两道人为门：方向选择与计划选择。已有授权持续有效；真正方向未决才交用户。
 - 人读交接：唯一新的 Markdown，解释结果、风险和下一步；旧交接原件不覆盖，不产生机器状态。
 - 窄工具：工作区检查、命令采集、普通原子记录、Git 操作授权、锁、人类回复。工具事实不成为阶段许可。
