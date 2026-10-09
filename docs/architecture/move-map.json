@@ -6,6 +6,21 @@
   "generated_from": "当前迁移表保留分类、已改接真实相对模块 consumer 与显式数据 reader；不保存整树快照或 hash 清单",
   "entries": [
     {
+      "source": "Improvements.md",
+      "destination": "Improvements.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "futurepending：P8/T014 创建项目根未解决人判断待办清单，头说明不是规范或知识库；仅保真实复盘候选经用户选择、确需人判断且尚未解决的项。机械重复优先 architecture → types → test；本条只创建前职责预登记，不代表已创建、已采用候选、方法改写或测试/质量通过，不形成第二进度来源。",
+      "owner": "P8/T014 / stage-reflection 与 Improvements.md 原文件 writer（当前派发68c）；move-map 仍由原 P8/T016 维护者唯一持笔",
+      "consumer": "既有 skills/stage-reflection/SKILL.md:13–16 的可见会话观察→有依据建议→主会话链，由 accepted P8/T014:139–147 与 ADR-009 / D-004 承接用户挑选后的根待办；主会话、用户及后继任务发起者按真实未解项人读参考。当前方法未直接引用 Improvements.md，新根文件尚未存在；未来 T014 在其原scope连接该消费者，不伪称已有机器 reader 或真实执行。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/stage-reflection/SKILL.md"
+      ],
+      "delete_condition": "按 ADR-009 / D-004 与 P8/T014，只由人对真实已解决项 prune；未答候选不得自动 adopt，未知不得当已解决自动清空。全部项解决时条目可由人删尽，不由本预登记推导整文件删除许可；职责被审查后的替代承接且无当前 consumer 时才由对应文件 owner 按 spec:161 删除载体，历史来源与原始候选证据只读保留。",
+      "retention_basis": "futurepending：新根文件未创建／未接线／不得当前 complete；原职责 source=P8.md:139–147/:154、spec.md:31/:161、decision-log.md ADR-009:243–247 / D-004:443。替代重复 lessons/规则账本，不复制原始会话、raw候选或审查事实，不自动清理、不新增 schema/machine gate/Task/事实游标。测试仅既有外置 quality/tests/skill-modernization-reflection.test.mjs（P8:148同命令，T014独立测试owner消费）；旧3pass是有限方法report/负控回放，不证明新正文/根文件写入、真实用户选择、prune或下一任务消费，本次测试0。"
+    },
+    {
       "source": "config/workflowhub.yaml",
       "destination": "config/workflowhub.yaml",
       "status": "retain",
@@ -3580,6 +3595,21 @@
       "named_data_readers": [],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
       "retention_basis": "MT-2-009 / SURVIVOR"
+    },
+    {
+      "source": "tools/cli/check-skill-consistency.mjs",
+      "destination": "tools/cli/check-skill-consistency.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "futurepending：P8/T016 的窄只读 CLI --root W，定向核当前五 stage skill-deps.yaml、wh-review manifest/stage-skill-plan、catalog 当前唯一 name/path 登记及真实磁盘/bundle闭包；历史44/provenance不 active，used_by_stages差异单独事实报告不作硬等价dispatch。缺失/重复/路径错配/mandatory清单不一致/实际active引用retired及坏安全闭包显式非零；不变成 Runner、技能派发器、公共阶段或推进 gate。",
+      "owner": "P8/T016 原唯一接线/map/checker实施维护者（本会话）；既有 tools/cli/run-checks.mjs 聚合 owner不新增",
+      "consumer": "唯一未来生产调用方为既有 tools/cli/run-checks.mjs 的 runChecker/runAggregate；现 runChecker:44–55 已提供同目录脚本spawn与argv/输出/exit聚合接缝，T016将在原文件scope接入本CLI。另消费者是变更维护者及T016原独立测试owner定向 --root fixture执行。当前CLI尚不存在、run-checks尚未接入；不登记假runtime模块reader。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "tools/cli/run-checks.mjs"
+      ],
+      "delete_condition": "保持只读且只服务该有限对账；若现职责已由经独立审读的原实现承接且 run-checks及其它真实当前consumer为零，或维护成本高于已证损失，原T016维护owner按spec:161/:570收缩/退役。登记不授当前任意文件/历史删除许可；历史清理仍须真实用户范围与原source保留，不以本checker或计数授权退役18。",
+      "retention_basis": "futurepending：新CLI未创建／run-checks未接线／不得当前complete。职责源=spec.md:155/:161/:570、P8/T016:190/:196–202；替代旧manifest当前对账/手工5deps+wh映射遗漏核。复用现runChecker及loadStageSkillManifest/validateSkillBundle已覆盖语法/包安全，但它们不核两wh清单与catalog/current映射，static-deps也不覆盖缺失Markdown；独立 --root finite fixture需单CLI，非为机器可验新建平台。新task外置targeted CLI测试源码由原测试作者fd814预写/冻结，actual ref未返回前unknown；保旧skill-modernization-consistency.test.mjs三P2P，不冒新CLI故障负控或真实调用GREEN。本次仅普通目录责任预登记，未实施、未测试，不新增schema/永久machinewriter/gate。"
     },
     {
       "source": "tools/cli/run-checks.mjs",
