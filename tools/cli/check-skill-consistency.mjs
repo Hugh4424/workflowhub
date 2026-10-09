@@ -106,7 +106,8 @@ export function checkSkillConsistency(root) {
     compare("build-prd", null, manifest.contracts?.["build-prd"]?.required_skills,
       plan.non_stage?.build_prd?.required_skills);
   }
-  for (const [name, stages] of actualStages) {
+  for (const name of registrations.keys()) {
+    const stages = actualStages.get(name) ?? new Set();
     const source = registrations.get(name)?.used_by_stages;
     const current = [...stages].sort();
     if (!Array.isArray(source) || JSON.stringify([...new Set(source)].sort()) !== JSON.stringify(current)) {
