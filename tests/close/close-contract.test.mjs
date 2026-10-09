@@ -182,3 +182,102 @@ it("P10 native task-owned retry rejects foreign repository at the same branch an
   for(const key of Object.keys(process.env))if(!(key in saved))delete process.env[key];Object.assign(process.env,saved);expect(realpathSync(root)).toBe(root);expect(dirname(root)).toBe(parent);expect(basename(root).startsWith("workflowhub-native-foreign-")).toBe(true);const current=lstatSync(root);expect({dev:current.dev,ino:current.ino}).toEqual({dev:identity.dev,ino:identity.ino});rmSync(root,{recursive:true,force:true});
  }
 });
+
+// Source CR744, independently scope-approved: optional exact original grant selection.
+it("P10 native exact authorization reference consumes A without spending later confirmation B", async () => {
+ const {dirname,basename,resolve}=await import("node:path"),{lstatSync,readdirSync}=await import("node:fs"),{fileURLToPath}=await import("node:url"),{spawnSync}=await import("node:child_process");
+ const {bootstrapTask}=await import("../../tools/cli/task-bootstrap.mjs"),{stageRuntimeCliMain}=await import("../../tools/cli/stage-runtime.mjs");
+ const authCli=fileURLToPath(new URL("../../runtime/interface/git-authorize.mjs",import.meta.url));
+ const parent=realpathSync(tmpdir()),root=realpathSync(mkdtempSync(join(parent,"workflowhub-native-exact-"))),identity=lstatSync(root),saved={...process.env};
+ const repo=join(root,"repo"),home=join(root,"home"),storage=join(root,"storage"),taskId="native-exact",branch=`task/workflowhub/${taskId}`;
+ const owned=path=>{const actual=realpathSync(path);expect(actual).toBe(resolve(path));expect(actual.startsWith(`${root}/`)).toBe(true);return actual;};
+ try {
+  expect(dirname(root)).toBe(parent);expect(basename(root).startsWith("workflowhub-native-exact-")).toBe(true);for(const path of[repo,home,storage])mkdirSync(path);
+  for(const key of Object.keys(process.env))if(key.startsWith("GIT_")||key==="WORKFLOWHUB_TASK_DIR")delete process.env[key];Object.assign(process.env,{HOME:home,XDG_CONFIG_HOME:join(home,".config"),WORKFLOWHUB_TASK_DIR:storage});
+  const realGit=execFileSync("/usr/bin/which",["git"],{encoding:"utf8"}).trim(),localGit=(cwd,args)=>{owned(cwd);return execFileSync(realGit,args,{cwd,env:process.env,encoding:"utf8",stdio:["ignore","pipe","pipe"]}).trim();};
+  localGit(repo,["init","-q","-b","main"]);localGit(repo,["config","user.name","Owned exact grants"]);localGit(repo,["config","user.email","fixture@local.invalid"]);localGit(repo,["config","commit.gpgsign","false"]);
+  const hooks=join(root,"hooks");mkdirSync(hooks);localGit(repo,["config","core.hooksPath",hooks]);writeFileSync(join(repo,"README.md"),"owned exact grant baseline\n");localGit(repo,["add","README.md"]);localGit(repo,["commit","-qm","base"]);
+  const boot=await bootstrapTask({project:"workflowhub",task:taskId,"target-repo":repo},{env:process.env,home}),taskDir=boot.task_path,wt=boot.workspace.worktree_root;owned(taskDir);owned(wt);
+  const head=localGit(wt,["rev-parse","HEAD"]);expect(localGit(wt,["branch","--show-current"])).toBe(branch);
+  const evidence=join(taskDir,"quality","evidence");mkdirSync(evidence,{recursive:true});const scopeRef=join(evidence,"native-exact-scope.md");writeFileSync(scopeRef,"Owned TASK native A selection only; B separate consent must remain unused. No Git push.\n");
+  const common=["--stage=verify-code","--project=workflowhub",`--task=${taskId}`],authDir=join(evidence,"git-authorizations");
+  const makeGrant=async(label)=>{const confirmation=await stageRuntimeCliMain(["confirm","--action=decision",...common,"--decision=confirmed",`--reply-text=Owned fixture ${label} consent only.`,`--material-ref=${scopeRef}`],{cwd:wt});owned(confirmation.path);const grant=await stageRuntimeCliMain(["authorize","--action=push",...common,`--subject-ref=${confirmation.path}`],{cwd:wt});owned(grant.path);return{confirmation,grant,bytes:readFileSync(grant.path)};};
+  const a=await makeGrant("A"),b=await makeGrant("B");expect(a.confirmation.path).not.toBe(b.confirmation.path);expect(a.grant.path).not.toBe(b.grant.path);
+  expect(JSON.parse(a.bytes)).toMatchObject({operation:"push",branch,head,confirmation_ref:a.confirmation.path});expect(JSON.parse(b.bytes)).toMatchObject({operation:"push",branch,head,confirmation_ref:b.confirmation.path});
+  const initialNames=readdirSync(authDir).sort(),stepId=`${scopeRef}:push-task`,refs=localGit(repo,["for-each-ref","--format=%(refname):%(objectname)"]);
+  const consume=()=>spawnSync(process.execPath,[authCli,"consume","--operation","push","--dir",authDir,"--step-id",stepId,"--authorization-ref",a.grant.path],{cwd:wt,env:process.env,encoding:"utf8",stdio:["ignore","pipe","pipe"]});
+  const selected=consume();expect(selected.error).toBeUndefined();expect(selected.signal).toBeNull();
+  // New approved feature may first fail as unsupported CLI flag; not a dynamic core race claim.
+  expect(selected.status).toBe(0);
+  const receiptPath=JSON.parse(selected.stdout).path;owned(receiptPath);expect(dirname(receiptPath)).toBe(authDir);const receiptBytes=readFileSync(receiptPath);
+  expect(JSON.parse(receiptBytes)).toMatchObject({operation:"push",step_id:stepId,authorization_ref:a.grant.path});
+  const consumptionRows=()=>readdirSync(authDir).filter(name=>/^\d{4}-\d{2}-\d{2}-\d{3}-consumed-push\.json$/.test(name)).sort().map(name=>JSON.parse(readFileSync(join(authDir,name),"utf8")));
+  expect(consumptionRows().map(row=>row.authorization_ref)).toEqual([a.grant.path]);expect(consumptionRows().some(row=>row.authorization_ref===b.grant.path)).toBe(false);
+  expect(readFileSync(a.grant.path)).toEqual(a.bytes);expect(readFileSync(b.grant.path)).toEqual(b.bytes);
+  const afterNames=readdirSync(authDir).sort();expect(afterNames.length).toBe(initialNames.length+1);const same=consume();expect(same.status).toBe(0);expect(JSON.parse(same.stdout).path).toBe(receiptPath);expect(readdirSync(authDir).sort()).toEqual(afterNames);expect(readFileSync(receiptPath)).toEqual(receiptBytes);
+  expect(localGit(wt,["rev-parse","HEAD"])).toBe(head);expect(localGit(repo,["for-each-ref","--format=%(refname):%(objectname)"])).toBe(refs);
+ } finally {
+  for(const key of Object.keys(process.env))if(!(key in saved))delete process.env[key];Object.assign(process.env,saved);expect(realpathSync(root)).toBe(root);expect(dirname(root)).toBe(parent);expect(basename(root).startsWith("workflowhub-native-exact-")).toBe(true);const current=lstatSync(root);expect({dev:current.dev,ino:current.ino}).toEqual({dev:identity.dev,ino:identity.ino});rmSync(root,{recursive:true,force:true});
+ }
+});
+
+// Source-approved F-P10-EXACT-01: exact original grant must be singly linked.
+it("P10 native exact authorization rejects a hard-linked original task grant", async () => {
+ const {dirname,basename,resolve}=await import("node:path"),{lstatSync,readdirSync,linkSync}=await import("node:fs"),{fileURLToPath}=await import("node:url"),{spawnSync}=await import("node:child_process");
+ const {bootstrapTask}=await import("../../tools/cli/task-bootstrap.mjs"),{stageRuntimeCliMain}=await import("../../tools/cli/stage-runtime.mjs");
+ const authCli=fileURLToPath(new URL("../../runtime/interface/git-authorize.mjs",import.meta.url));
+ const parent=realpathSync(tmpdir()),root=realpathSync(mkdtempSync(join(parent,"workflowhub-native-hardlink-"))),identity=lstatSync(root),saved={...process.env};
+ const repo=join(root,"repo"),home=join(root,"home"),storage=join(root,"storage"),taskId="native-hardlink";
+ const owned=path=>{const actual=realpathSync(path);expect(actual).toBe(resolve(path));expect(actual.startsWith(`${root}/`)).toBe(true);return actual;};
+ try {
+  expect(dirname(root)).toBe(parent);expect(basename(root).startsWith("workflowhub-native-hardlink-")).toBe(true);for(const path of[repo,home,storage])mkdirSync(path);
+  for(const key of Object.keys(process.env))if(key.startsWith("GIT_")||key==="WORKFLOWHUB_TASK_DIR")delete process.env[key];Object.assign(process.env,{HOME:home,XDG_CONFIG_HOME:join(home,".config"),WORKFLOWHUB_TASK_DIR:storage});
+  const realGit=execFileSync("/usr/bin/which",["git"],{encoding:"utf8"}).trim(),localGit=(cwd,args)=>{owned(cwd);return execFileSync(realGit,args,{cwd,env:process.env,encoding:"utf8",stdio:["ignore","pipe","pipe"]}).trim();};
+  localGit(repo,["init","-q","-b","main"]);localGit(repo,["config","user.name","Owned hardlink grants"]);localGit(repo,["config","user.email","fixture@local.invalid"]);localGit(repo,["config","commit.gpgsign","false"]);const hooks=join(root,"hooks");mkdirSync(hooks);localGit(repo,["config","core.hooksPath",hooks]);writeFileSync(join(repo,"README.md"),"owned hardlink baseline\n");localGit(repo,["add","README.md"]);localGit(repo,["commit","-qm","base"]);
+  const boot=await bootstrapTask({project:"workflowhub",task:taskId,"target-repo":repo},{env:process.env,home}),taskDir=boot.task_path,wt=boot.workspace.worktree_root;owned(taskDir);owned(wt);
+  const head=localGit(wt,["rev-parse","HEAD"]),evidence=join(taskDir,"quality","evidence");mkdirSync(evidence,{recursive:true});const scopeRef=join(evidence,"native-hardlink-scope.md");writeFileSync(scopeRef,"Owned singly linked original TASK grant only; no Git push.\n");
+  const common=["--stage=verify-code","--project=workflowhub",`--task=${taskId}`],confirmation=await stageRuntimeCliMain(["confirm","--action=decision",...common,"--decision=confirmed","--reply-text=Owned fixture single-link grant scope only.",`--material-ref=${scopeRef}`],{cwd:wt});owned(confirmation.path);
+  const grant=await stageRuntimeCliMain(["authorize","--action=push",...common,`--subject-ref=${confirmation.path}`],{cwd:wt});owned(grant.path);const grantBytes=readFileSync(grant.path),original=lstatSync(grant.path);expect(original.isFile()).toBe(true);expect(original.isSymbolicLink()).toBe(false);expect(original.nlink).toBe(1);
+  const alias=join(root,"owned-grant-hardlink.json");expect(dirname(resolve(alias))).toBe(root);linkSync(grant.path,alias);owned(alias);
+  const linked=lstatSync(grant.path),aliasStat=lstatSync(alias);expect(linked.nlink).toBe(2);expect(aliasStat.nlink).toBe(2);expect({dev:aliasStat.dev,ino:aliasStat.ino}).toEqual({dev:original.dev,ino:original.ino});expect(readFileSync(alias)).toEqual(grantBytes);
+  const authDir=join(evidence,"git-authorizations"),names=readdirSync(authDir).sort(),refs=localGit(repo,["for-each-ref","--format=%(refname):%(objectname)"]);
+  const denied=spawnSync(process.execPath,[authCli,"consume","--operation","push","--dir",authDir,"--step-id",`${scopeRef}:push-task`,"--authorization-ref",grant.path],{cwd:wt,env:process.env,encoding:"utf8",stdio:["ignore","pipe","pipe"]});expect(denied.error).toBeUndefined();expect(denied.signal).toBeNull();
+  // Target begins only after actual nlink2/same-inode setup succeeded.
+  expect(denied.status).not.toBe(0);expect(denied.stderr.trim()).not.toBe("");expect(denied.stdout.trim()).toBe("");
+  expect(readdirSync(authDir).sort()).toEqual(names);expect(readdirSync(authDir).filter(name=>name.includes("-consumed-"))).toEqual([]);expect(readFileSync(grant.path)).toEqual(grantBytes);expect(readFileSync(alias)).toEqual(grantBytes);
+  expect(localGit(wt,["rev-parse","HEAD"])).toBe(head);expect(localGit(repo,["for-each-ref","--format=%(refname):%(objectname)"])).toBe(refs);
+ } finally {
+  for(const key of Object.keys(process.env))if(!(key in saved))delete process.env[key];Object.assign(process.env,saved);expect(realpathSync(root)).toBe(root);expect(dirname(root)).toBe(parent);expect(basename(root).startsWith("workflowhub-native-hardlink-")).toBe(true);const current=lstatSync(root);expect({dev:current.dev,ino:current.ino}).toEqual({dev:identity.dev,ino:identity.ino});rmSync(root,{recursive:true,force:true});
+ }
+});
+
+// Source-approved pre-cancel P2P control; NOT mid-operation cancel or resume coverage.
+it("P10 pre-aborted confirmed close leaves native grants unconsumed and publishes nothing", async () => {
+ const {dirname,basename,resolve}=await import("node:path"),{lstatSync,readdirSync}=await import("node:fs");
+ const saved={...process.env};let s,identity;
+ try {
+  for(const key of Object.keys(process.env))if(key.startsWith("GIT_"))delete process.env[key];
+  s=fixture();identity=lstatSync(s.base);
+  const parent=realpathSync(tmpdir());expect(dirname(s.base)).toBe(parent);expect(basename(s.base).startsWith("workflowhub-close-narrow-")).toBe(true);
+  const home=join(s.base,"home");mkdirSync(home);Object.assign(process.env,{HOME:home,XDG_CONFIG_HOME:join(home,".config"),WORKFLOWHUB_TASK_DIR:join(s.base,"storage")});
+  expect(git(s.worktree,["remote","get-url","origin"])).toBe(s.bare);
+  const p=await prepare(s);expect(p.plan.steps).toEqual(["commit","merge","archive","push","cleanup"]);
+  const c=await confirm(s,p,"confirmed","Owned fixture: authorize this displayed local-bare close, cancelled before execution.");await authorizeClosePlan({taskDir:s.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref});
+  const authDir=join(s.taskDir,"quality","evidence","git-authorizations"),names=readdirSync(authDir).sort();expect(names.filter(name=>name.includes("-consumed-"))).toEqual([]);
+  const grants=names.filter(name=>name.includes("-authorize-"));expect(grants).toHaveLength(5);const grantBytes=grants.map(name=>[name,readFileSync(join(authDir,name))]);
+  const before=await inspectDeliveryCloseState({taskDir:s.taskDir,planRef:p.plan_ref});expect(before.step_records).toEqual([]);
+  const planBytes=readFileSync(p.plan_ref),taskHead=git(s.worktree,["rev-parse","HEAD"]),mainHead=git(s.repo,["rev-parse","HEAD"]),remoteRefs=git(s.bare,["for-each-ref","--format=%(refname):%(objectname)"]);
+  // Wrap only the external Git process to observe publications; native modules stay real.
+  const realGit=execFileSync("/usr/bin/which",["git"],{encoding:"utf8"}).trim(),bin=join(s.base,"bin"),log=join(s.base,"preabort-processes.jsonl");mkdirSync(bin);writeFileSync(log,"");
+  writeFileSync(join(bin,"git"),`#!${process.execPath}\nconst fs=require('node:fs'),cp=require('node:child_process');const args=process.argv.slice(2),cwd=process.cwd();if(!cwd.startsWith(${JSON.stringify(s.base+'/')})){process.stderr.write('OUTSIDE_OWNED_FIXTURE');process.exit(95);}fs.appendFileSync(${JSON.stringify(log)},JSON.stringify({tool:'git',cwd,args})+'\\n');if(args.some(x=>['push','fetch','pull','clone'].includes(x))){process.stderr.write('PUBLICATION_FORBIDDEN_AFTER_PREABORT');process.exit(96);}const r=cp.spawnSync(${JSON.stringify(realGit)},args,{cwd,env:process.env,encoding:'utf8'});process.stdout.write(r.stdout||'');process.stderr.write(r.stderr||'');process.exit(r.status===null?97:r.status);\n`,{mode:0o700});
+  process.env.PATH=`${bin}:${saved.PATH}`;
+  const controller=new AbortController();controller.abort();const out=await executeClosePlan({taskDir:s.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref,signal:controller.signal});
+  expect(out.status).toBe("cancelled");expect(out.records).toEqual([]);expect(out.physical.step_records).toEqual([]);
+  const requests=readFileSync(log,"utf8").split("\n").filter(Boolean).map(JSON.parse);expect(requests.filter(row=>row.args.some(x=>["push","fetch","pull","clone","commit","merge","mv"].includes(x)))).toEqual([]);
+  expect(readFileSync(p.plan_ref)).toEqual(planBytes);expect(readdirSync(authDir).sort()).toEqual(names);for(const[name,bytes]of grantBytes)expect(readFileSync(join(authDir,name))).toEqual(bytes);
+  expect(git(s.worktree,["rev-parse","HEAD"])).toBe(taskHead);expect(git(s.repo,["rev-parse","HEAD"])).toBe(mainHead);expect(git(s.bare,["for-each-ref","--format=%(refname):%(objectname)"])).toBe(remoteRefs);expect(existsSync(s.worktree)).toBe(true);
+ } finally {
+  for(const key of Object.keys(process.env))if(!(key in saved))delete process.env[key];Object.assign(process.env,saved);
+  if(s){expect(realpathSync(s.base)).toBe(resolve(s.base));expect(dirname(s.base)).toBe(realpathSync(tmpdir()));expect(basename(s.base).startsWith("workflowhub-close-narrow-")).toBe(true);const current=lstatSync(s.base);expect({dev:current.dev,ino:current.ino}).toEqual({dev:identity.dev,ino:identity.ino});const at=roots.indexOf(s.base);expect(at).not.toBe(-1);roots.splice(at,1);rmSync(s.base,{recursive:true,force:true});}
+ }
+});

@@ -3,3 +3,44 @@ const roots=[];afterEach(()=>{for(const r of roots.splice(0))rmSync(r,{recursive
 async function fixture(existing=false){const root=realpathSync(mkdtempSync(join(tmpdir(),"owned-current-close-")));roots.push(root);const repo=join(root,"repo"),bare=join(root,"origin.git"),storage=join(root,"storage"),home=join(root,"home");for(const d of[repo,bare,storage,home])mkdirSync(d);const env={...process.env,HOME:home,WORKFLOWHUB_TASK_DIR:storage};for(const k of Object.keys(env))if(k.startsWith("GIT_"))delete env[k];const git=(cwd,args)=>execFileSync("git",args,{cwd,env,encoding:"utf8",stdio:["ignore","pipe","pipe"]}).trim();git(repo,["init","-q","-b","main"]);git(repo,["config","user.name","Owned close"]);git(repo,["config","user.email","owned@test.invalid"]);writeFileSync(join(repo,"README.md"),"owned base\n");git(repo,["add","README.md"]);git(repo,["commit","-qm","base"]);git(bare,["init","--bare","-q"]);git(repo,["remote","add","origin",bare]);git(repo,["push","-q","origin","main"]);const taskId="owned-close";let target=repo;if(existing){target=join(root,"existing");git(repo,["worktree","add","-q","-b",`task/workflowhub/${taskId}`,target,"main"]);}const boot=await bootstrapTask({project:"workflowhub",task:taskId,"target-repo":target},{env,home}),wt=boot.workspace.worktree_root,taskDir=boot.task_path;const materials=join(wt,"specs",taskId);mkdirSync(materials,{recursive:true});writeFileSync(join(materials,"decision-log.md"),"# Current decision\n## 任务身份\n- **任务类型**：普通任务\n");writeFileSync(join(materials,"spec.md"),"# Owned actual delivery\n");return{root,repo,bare,wt,taskDir,taskId,git};}
 it("reads actual close planning/Git observations without old completion or quality projection",async()=>{const f=await fixture(),p=await prepareDeliveryClosePlan({taskDir:f.taskDir}),bytes=readFileSync(p.plan_ref),head=f.git(f.repo,["rev-parse","HEAD"]),r=await inspectDeliveryCloseState({taskDir:f.taskDir,planRef:p.plan_ref});expect(r.quality_status).toBe("unknown");expect(r.step_records).toEqual([]);expect(r.facts.delivery_committed).toBe(false);expect(r.facts.archive).toBe(false);expect(r.facts.worktree_cleanup).toBe(false);expect(r.facts.push).toBe(true);expect(r).not.toHaveProperty("status_groups");expect(r).not.toHaveProperty("completed");expect(readFileSync(p.plan_ref)).toEqual(bytes);expect(f.git(f.repo,["rev-parse","HEAD"])).toBe(head);});
 it("exposes malformed explicit plan bytes without rewriting them",async()=>{const f=await fixture(),p=await prepareDeliveryClosePlan({taskDir:f.taskDir});writeFileSync(p.plan_ref,"{bad JSON}\n");await expect(inspectDeliveryCloseState({taskDir:f.taskDir,planRef:p.plan_ref})).rejects.toBeInstanceOf(SyntaxError);expect(readFileSync(p.plan_ref,"utf8")).toBe("{bad JSON}\n");});
+
+it("propagates an unavailable required remote read through public inspect without mutating plan or actions",async()=>{
+  const f=await fixture();
+  const p=await prepareDeliveryClosePlan({taskDir:f.taskDir});
+  const planBytes=readFileSync(p.plan_ref);
+  const sourceHead=f.git(f.wt,["rev-parse","HEAD"]);
+  const targetHead=f.git(f.repo,["rev-parse","HEAD"]);
+  const initial=await inspectDeliveryCloseState({taskDir:f.taskDir,planRef:p.plan_ref});
+  expect(initial.remote.status).toBe("available");
+  expect(initial.step_records).toEqual([]);
+  const {lstatSync,renameSync}=await import("node:fs");
+  const moved=join(f.root,"owned-unavailable-origin.git");
+  const original=realpathSync(f.bare);
+  const identity=lstatSync(original);
+  expect(original).toBe(join(f.root,"origin.git"));
+  expect(identity.isDirectory()&&!identity.isSymbolicLink()).toBe(true);
+  expect(existsSync(moved)).toBe(false);
+  renameSync(original,moved);
+  try{
+    const current=lstatSync(moved);
+    expect(realpathSync(moved)).toBe(moved);
+    expect(current.dev).toBe(identity.dev);expect(current.ino).toBe(identity.ino);
+    const r=await inspectDeliveryCloseState({taskDir:f.taskDir,planRef:p.plan_ref});
+    expect(r.remote.status).toBe("unavailable");
+    expect(r.remote.reason).toEqual(expect.any(String));expect(r.remote.reason).not.toBe("");
+    expect(r.physical_delivery_status).toBe("unavailable");
+    expect(r.quality_status).toBe("unknown");
+    expect(r.step_records).toEqual(initial.step_records);
+    expect(r).not.toHaveProperty("completed");expect(r).not.toHaveProperty("status_groups");
+    expect(readFileSync(p.plan_ref)).toEqual(planBytes);
+    expect(f.git(f.wt,["rev-parse","HEAD"])).toBe(sourceHead);
+    expect(f.git(f.repo,["rev-parse","HEAD"])).toBe(targetHead);
+  }finally{
+    const current=lstatSync(moved);
+    expect(realpathSync(moved)).toBe(moved);
+    expect(current.isDirectory()&&!current.isSymbolicLink()).toBe(true);
+    expect(current.dev).toBe(identity.dev);expect(current.ino).toBe(identity.ino);
+    expect(existsSync(original)).toBe(false);
+    renameSync(moved,original);
+  }
+});
