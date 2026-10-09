@@ -1000,7 +1000,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     return { status: "recorded", ...(await recordConfirmation({ ...fields, stage: values.stage }, { cwd: context.workspace.worktreeRoot, dir: join(context.task.taskPath, "quality", "evidence", "human-confirmations") })) };
   }
   if (command === "authorize-operation") {
-    if (!["commit", "push", "merge", "archive", "cleanup"].includes(values.operation) || !values["subject-ref"]) throw new TypeError("authorize requires a supported operation and --subject-ref");
+    if (!["commit", "push", "merge", "archive", "cleanup", "pr"].includes(values.operation) || !values["subject-ref"]) throw new TypeError("authorize requires a supported operation and --subject-ref");
     // The native authorization API intentionally binds process.cwd(). Invoke
     // its existing CLI in the real worktree; never mutate this process cwd.
     const output = execFileSync(process.execPath, [fileURLToPath(new URL("../../runtime/interface/git-authorize.mjs", import.meta.url)), "record",
@@ -1148,7 +1148,7 @@ export async function stageRuntimeCliMain(argv = process.argv.slice(2), {
         review: ["record"],
         verify: ["execute"],
         confirm: ["decision"],
-        authorize: ["commit", "push", "merge", "archive", "cleanup"],
+        authorize: ["commit", "push", "merge", "archive", "cleanup", "pr"],
       },
     };
   }
@@ -1196,6 +1196,7 @@ export async function stageRuntimeCliMain(argv = process.argv.slice(2), {
     "authorize:merge": "authorize-operation",
     "authorize:archive": "authorize-operation",
     "authorize:cleanup": "authorize-operation",
+    "authorize:pr": "authorize-operation",
   })[publicRoute];
   if (!internalOperation) throw new Error("unknown public runtime action");
   const delegatedArgv = [

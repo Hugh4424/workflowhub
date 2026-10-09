@@ -420,7 +420,7 @@ async function appendRecord(dir, slug, ext, bytes) {
 }
 
 
-const OPERATIONS = new Set(["commit", "push", "merge", "archive", "cleanup"]);
+const OPERATIONS = new Set(["commit", "push", "merge", "archive", "cleanup", "pr"]);
 
 function requireOperation(operation) {
   if (!OPERATIONS.has(operation)) throw failure("UNSUPPORTED_OPERATION", `unsupported Git operation: ${operation}`);
@@ -467,10 +467,45 @@ function gitIdentity(cwd) {
   return { head, branch };
 }
 
+function assertTaskRepositoryScope(dir, cwd) {
+  // This is the existing task-owned producer endpoint, not the generic
+  // historical quality/authorizations directory. A broken manifest here
+  // must fail closed rather than silently switching to the generic contract.
+  const endpoint = resolve(dir);
+  if (basename(endpoint) !== "git-authorizations" || basename(dirname(endpoint)) !== "evidence" || basename(dirname(dirname(endpoint))) !== "quality") return;
+  const taskRoot = rootPath(dirname(dirname(dirname(endpoint))));
+  const target = destination(taskRoot, "task.json");
+  if (lstatSync(target.path).nlink !== 1) throw failure("AUTH_SCOPE", "task authorization manifest must be a single-link file");
+  const manifestBytes = readTarget(target), manifest = JSON.parse(manifestBytes.toString("utf8"));
+  const parts = taskRoot.split(sep).slice(-4);
+  if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)
+    || manifest.schema_version !== "1.0.0" || typeof manifest.project_name !== "string" || typeof manifest.task_id !== "string"
+    || parts.join("/") !== `Projects/${manifest.project_name}/tasks/${manifest.task_id}`
+    || typeof manifest.target_repo_root !== "string" || !isAbsolute(manifest.target_repo_root)) throw failure("AUTH_SCOPE", "task authorization directory and manifest identity differ");
+  const env = { ...process.env }; for (const key of Object.keys(env)) if (key.startsWith("GIT_")) delete env[key]; env.GIT_OPTIONAL_LOCKS = "0";
+  const read = (root, args) => {
+    try { return execFileSync("git", args, { cwd: root, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trimEnd(); }
+    catch (cause) { throw Object.assign(failure("GIT_IDENTITY_UNAVAILABLE", "cannot read task authorization repository scope"), { cause }); }
+  };
+  const repository = rootPath(manifest.target_repo_root), actual = rootPath(cwd);
+  if (rootPath(read(repository, ["rev-parse", "--show-toplevel"])) !== repository || rootPath(read(actual, ["rev-parse", "--show-toplevel"])) !== actual) throw failure("AUTH_SCOPE", "authorization requires an actual repository worktree root");
+  const common = rootPath(resolve(repository, read(repository, ["rev-parse", "--git-common-dir"])));
+  if (rootPath(resolve(actual, read(actual, ["rev-parse", "--git-common-dir"]))) !== common) throw failure("AUTH_SCOPE", "current repository differs from the task-owned authorization repository");
+  const registered = read(repository, ["worktree", "list", "--porcelain", "-z"]).split("\0").filter(line => line.startsWith("worktree ")).map(line => line.slice(9));
+  if (!registered.includes(actual)) throw failure("AUTH_SCOPE", "authorization cwd is not a registered task repository worktree");
+  if (manifest.workspace_mode !== undefined || manifest.workspace_root !== undefined) {
+    if (manifest.workspace_mode !== "existing" || typeof manifest.workspace_root !== "string" || !isAbsolute(manifest.workspace_root)) throw failure("AUTH_SCOPE", "task workspace scope is invalid");
+    const workspace = rootPath(manifest.workspace_root);
+    if (!registered.includes(workspace) || rootPath(read(workspace, ["rev-parse", "--show-toplevel"])) !== workspace || rootPath(resolve(workspace, read(workspace, ["rev-parse", "--git-common-dir"]))) !== common) throw failure("AUTH_SCOPE", "declared task workspace differs from its repository scope");
+  }
+  verifyDirectories(target.snapshot);
+  if (!readTarget(target).equals(manifestBytes)) throw failure("ANCESTOR_REPLACED", "task authorization manifest changed during repository scope reads");
+}
+
 function records(dir, operation) {
   const result = { authorizations: [], consumptions: [] };
   for (const name of readdirSync(dir).sort()) {
-    const match = name.match(/^\d{4}-\d{2}-\d{2}-\d{3}-(authorize|consumed)-(commit|push|merge|archive|cleanup)\.json$/);
+    const match = name.match(/^\d{4}-\d{2}-\d{2}-\d{3}-(authorize|consumed)-(commit|push|merge|archive|cleanup|pr)\.json$/);
     if (!match || match[2] !== operation) continue;
     const path = join(dir, name);
     const raw = readTarget(destination(dir, name));
@@ -522,9 +557,18 @@ export async function consume({ operation, stepId, dir = join(process.cwd(), "qu
   const cwd = process.cwd();
   const storage = recordDirectory(dir);
   return withLock(storage, "git-authorize", async () => {
+    assertTaskRepositoryScope(storage, cwd);
     const { authorizations, consumptions } = records(storage, operation);
     const retry = consumptions.find((item) => item.value.step_id === stepId);
-    if (retry) return { ...retry.value, path: retry.path };
+    if (retry) {
+      const grant = authorizations.find((item) => item.path === retry.value.authorization_ref);
+      const current = gitIdentity(cwd);
+      if (!grant || grant.value.operation !== operation || grant.value.branch !== current.branch) throw failure("AUTH_SCOPE", "current Git branch does not cover the previously consumed authorization");
+      // This is an immutable receipt for an action already consumed, not a
+      // fresh grant. Its original HEAD remains historical after that action
+      // commits/merges; do not reject a same-branch retry for that legal move.
+      return { ...retry.value, path: retry.path };
+    }
     const used = new Set(consumptions.map((item) => item.value.authorization_ref));
     const grant = authorizations.filter((item) => !used.has(item.path)).at(-1);
     if (!grant) throw failure(authorizations.length ? "AUTHORIZATION_ALREADY_CONSUMED" : "IRREVERSIBLE_AUTHORIZATION_REQUIRED",

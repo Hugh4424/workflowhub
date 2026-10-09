@@ -10,7 +10,7 @@ export const STAGE_ROW_KEYS = Object.freeze([
   "finding_dispositions", "spec_analyze", "evidence", "serious_issue_disposition", "close_action", "handoff", "material_bytes",
 ]);
 export const REVIEW_ORIGINS = Object.freeze(["conducted", "unavailable", "not_run", "same_source_degraded", "dispatched_uncollected"]);
-export const CLOSE_ACTIONS = Object.freeze(["delivery_committed", "archive", "merge", "push", "worktree_cleanup"]);
+export const CLOSE_ACTIONS = Object.freeze(["delivery_committed", "archive", "merge", "push", "worktree_cleanup", "task_branch_pushed", "pull_request_opened"]);
 
 function plain(value) { return value !== null && typeof value === "object" && !Array.isArray(value); }
 function text(value) { return typeof value === "string" && value.trim() !== ""; }
