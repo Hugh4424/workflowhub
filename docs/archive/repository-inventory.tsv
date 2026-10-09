@@ -6,7 +6,7 @@ path	disposition	reason	sha256
 AGENTS.md	keep	no approved deletion or move proof in Phase 0	996b7710c6849c340ee8e7e357f8f24ee7e60142f9aa1577dc05f97926ea77d6
 CLAUDE.md	keep	no approved deletion or move proof in Phase 0	a3293059aa29a1fdb5909bfd5d24625990590f116a3a95dae505b1391e2ac685
 CONSTITUTION.md	keep	no approved deletion or move proof in Phase 0	d17c85373e30c4733a77b19dc260373268fca6dd29b8ac3574c8a35b4da6ebd5
-CONTEXT.md	keep	UI delivery vocabulary owner/consumer retained; remove only with approved replacement terminology source	aee0edb4b262456ed2b389207a6fa15fce220193b0bcf129fd7c1fa87b89a620
+GLOSSARY.md	keep	P9/T017 current unique terminology source; renamed from CONTEXT.md with original 27-line bytes preserved; Phase 0 historical CONTEXT hash=aee0edb4b262456ed2b389207a6fa15fce220193b0bcf129fd7c1fa87b89a620	c913dd8a08ec0e3a34650a13d4a8d78dd558ef67c521d3daabd03b563242edd4
 LICENSE	keep	no approved deletion or move proof in Phase 0	9c6d0b3140f86155c5f37dff4f97ca046e4420d742dfc1fea5c6b988843eed32
 README.md	keep	no approved deletion or move proof in Phase 0	bf06a03560cf75559548f4e093db8675747ad33bba919e61707ee52769639cb4
 THIRD_PARTY_NOTICES.md	keep	UI delivery governance provenance notice retained for release review	73378623e5ae6a4a3666afb5ad90d53dde0dfbe1b5f6e0fc8f9100051b33a820
@@ -425,7 +425,7 @@ skills/frontend-testing/skill-bundle.json	keep	no approved deletion or move proo
 skills/fullstack-slice-testing/SKILL.md	keep	no approved deletion or move proof in Phase 0	7787ca078e067c88b77e83474a9cc6a7d404edad045fa2f997140f3b94a313e1
 skills/fullstack-slice-testing/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	7c2246fca699e5a6f1579117c7b4ff385acf13ea1b56ab911731d142dc5a3868
 skills/grill-with-docs/ADR-FORMAT.md	keep	no approved deletion or move proof in Phase 0	f1f36cd3f8d3b6474ddd5855da4e233bfc4ae1a1c5024909ccf11871819a41b2
-skills/grill-with-docs/CONTEXT-FORMAT.md	keep	no approved deletion or move proof in Phase 0	8f6baaa3b1c91644bd7c600196b1aee781d5f525c7c345db8cdfbfb368329a05
+skills/grill-with-docs/GLOSSARY-FORMAT.md	keep	P7/T011 delivered format consumed by grill body/bundle; replaces CONTEXT-FORMAT.md; Phase 0 historical hash=8f6baaa3b1c91644bd7c600196b1aee781d5f525c7c345db8cdfbfb368329a05	9f69e0f12a196033dab361e4f0fe5bf1b2c2ec868e690dc35bd4cc0622a1982e
 skills/grill-with-docs/SKILL.md	keep	no approved deletion or move proof in Phase 0	75e774ab6ecefc8c9d93f59b3e4785ada7a7cb99f422fd6b10ab380bdb4d7728
 skills/grill-with-docs/skill-bundle.json	keep	no approved deletion or move proof in Phase 0	e0998d3638e47a3306d0c70e2b138cf8b73707546b1b83de747940f009490bdf
 skills/intake-decision-review/SKILL.md	keep	no approved deletion or move proof in Phase 0	fbe3fc0b8e097a036c7e7be72403b101587706efffb7db275477ad09bca7c72f

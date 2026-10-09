@@ -27,4 +27,4 @@ workflowhub 是一个面向 AI 开发工作流的编排工具项目，按一套�
 
 ## 术语
 
-项目术语见 [CONTEXT.md](CONTEXT.md)。
+项目术语见 [GLOSSARY.md](GLOSSARY.md)。

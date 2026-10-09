@@ -40,4 +40,4 @@ post 日常路线 make-decision → build-plan → build-code → verify-code。
 
 旧 Stage Agent/bridge/session/outcome 不是推进前置。unknown/unavailable/incomplete 不阻止修复；局部 GREEN 不等于整项交付完成。当前 handoff 是唯一人读 Markdown，下一步与限制由主会话说明。
 
-设计依据见 CONSTITUTION.md；逐条核对见 constitution-checklist.md。历史说明归档在 docs/archive/，实际旧任务原件不改写。
+当前术语唯一入口见 [GLOSSARY.md](GLOSSARY.md)。设计依据见 CONSTITUTION.md；逐条核对见 constitution-checklist.md。历史说明归档在 docs/archive/，实际旧任务原件不改写。

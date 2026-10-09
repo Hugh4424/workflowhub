@@ -90,16 +90,16 @@ else ["是什么", "怎么装", "五段流程"].forEach((s) => {
   if (!new RegExp("^## .*" + s, "m").test(rm)) fail(`README 缺段「${s}」`);
 });
 
-// ── AC-6: CLAUDE/AGENTS/CONTEXT 非空；CONTEXT 含五段术语、不含 denylist ──
-["CLAUDE.md","AGENTS.md","CONTEXT.md"].forEach((f) => {
+// ── AC-6: CLAUDE/AGENTS/GLOSSARY 非空；GLOSSARY 含五段术语、不含 denylist ──
+["CLAUDE.md","AGENTS.md","GLOSSARY.md"].forEach((f) => {
   const c = read(f);
   if (!c || c.trim().length < 10) fail(`${f} 缺/空`);
 });
-const ctx = read("CONTEXT.md") || "";
-FIVE_STAGES.forEach((s) => { if (!ctx.includes(s)) fail(`CONTEXT.md 缺五段术语「${s}」`); });
+const ctx = read("GLOSSARY.md") || "";
+FIVE_STAGES.forEach((s) => { if (!ctx.includes(s)) fail(`GLOSSARY.md 缺五段术语「${s}」`); });
 DENYLIST.forEach((d) => {
   if (new RegExp("\\b" + d.replace(/[-]/g, "\\-") + "\\b").test(ctx))
-    fail(`CONTEXT.md 含排除术语「${d}」`);
+    fail(`GLOSSARY.md 含排除术语「${d}」`);
 });
 
 if (errors.length) {
@@ -107,4 +107,4 @@ if (errors.length) {
   errors.forEach((e) => console.error("  - " + e));
   process.exit(1);
 }
-console.log(`结构验收 PASS：宪法 ${EXPECTED_ARTICLES} 条 + checklist 锚点全可达 + README 三段 + 文档三件 + CONTEXT 术语/denylist 合规`);
+console.log(`结构验收 PASS：宪法 ${EXPECTED_ARTICLES} 条 + checklist 锚点全可达 + README 三段 + 文档三件 + GLOSSARY 术语/denylist 合规`);

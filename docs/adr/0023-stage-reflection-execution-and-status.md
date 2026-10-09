@@ -1,5 +1,7 @@
 # ADR 0023：stage-reflection 执行闭环、诚实状态与一次性历史导入
 
+> 改名批注（2026-10-09，P9/T017）：本文原引用的根 `CONTEXT.md` 已改名为当前唯一术语路径 `GLOSSARY.md`；旧术语文件的原行号锚点已失效。除本批注外原正文及其中历史路径、引用行号数字逐字保留；文首插入批注使本文件后续物理行号顺移，不代表历史锚已重新定位。
+
 ## 状态
 
 Draft（workflowhub-stage-reflection-usability-20260901 make-decision 阶段，待用户确认后 Accepted）

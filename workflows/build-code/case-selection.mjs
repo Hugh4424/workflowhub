@@ -26,7 +26,7 @@ const HISTORICAL_PATH_RULE = Object.freeze({
   prefix: "specs/archive/", classification: "out_of_scope", reason: "historical_material",
 });
 const SUPPORTING_ROOT_FILES = new Set([
-  "AGENTS.md", "CONTEXT.md", "CONSTITUTION.md", "README.md", "vitest.config.mjs",
+  "AGENTS.md", "CONTEXT.md", "GLOSSARY.md", "CONSTITUTION.md", "README.md", "vitest.config.mjs",
   "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock", ".nvmrc",
 ]);
 

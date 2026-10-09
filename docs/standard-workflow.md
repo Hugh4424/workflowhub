@@ -2,6 +2,8 @@
 
 ## 当前路线
 
+领域术语读取根 [GLOSSARY.md](../GLOSSARY.md)；旧术语来源与历史 ADR 引用只读保留。
+
 当前 WorkflowHub 主会话按认证工作区的当前材料执行。post 材料为 decision-log.md、spec.md、独立 phases/P<n>.md 与纯指针 index；旧四材料与旧执行记录只读保留。七类公共工具是 doctor/status/run/review/verify/confirm/authorize；run:execute 只更新导航游标，不恢复旧官方 stage pipeline。质量缺失如实 unknown/unavailable/incomplete，不锁修复，也不证明完成。
 
 方向与计划两道人为选择按真实答复执行；已有授权继续有效。主会话组织必要交互，重活按工作类型派给独立上下文，修复回原实施者；不整份继承父上下文。独立审查与人把关不由实现者自判，普通小修不重复全范围审查。

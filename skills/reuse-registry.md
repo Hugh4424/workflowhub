@@ -2,7 +2,7 @@
 
 UI governance records include an explicit owner, consumer, and delete condition.
 
-机器真相：[`catalog.yaml`](catalog.yaml)。本文件是人读投影。固定版本、完整 `upstream`、依赖闭包和更新策略以 catalog 为准；禁止用 `main/latest` 代替固定 commit。`unresolved-*-snapshot` 表示历史导入未保存 commit，更新前必须先补齐，不能假装已固定。
+实际调用以各阶段 `skill-deps.yaml` 与 wh-review 两清单为准；[`catalog.yaml`](catalog.yaml) 是唯一来源、许可与历史归属登记。本文件是人读投影。固定版本、完整 `upstream` 与更新策略以 catalog 为准；禁止用 `main/latest` 代替固定 commit。`unresolved-*-snapshot` 表示历史导入未保存 commit，更新前必须先补齐，不能假装已固定。
 
 ## 状态词表与 M17 审计
 
@@ -14,7 +14,7 @@ UI governance records include an explicit owner, consumer, and delete condition.
 
 ## 兼容索引
 
-下表保留旧合同依赖的三列格式；不作为完整 provenance 真相。
+下表保留旧合同依赖的三列格式和历史路径，不作为当前派发或完整 provenance 真相。
 
 | skill 名 | 复用类别 | 来源路径 | upstream_delta |
 |---|---|---|---|
@@ -50,6 +50,8 @@ UI governance records include an explicit owner, consumer, and delete condition.
 
 ## 仓内运行技能
 
+以下条目保留各自来源与历史改造说明；旧 build-spec、spec-research、spec-tasks、debate 及旧 receipts/runner 描述不恢复为当前调用。当前接线与退役按上述实际清单读取。Matt 当前固定来源为 `b0618bc436ad893b3c5e84e55fba86586d34a404`；原固定版本缺 pr、retro、implement-spec 的事实仍由任务 decision-log 的 AC-017/源研究 §8.1 保留，不改成旧版本已存在。
+
 共同规则：所有路径都在 `skills/`；Stage-owned 组件通过 `skill-deps.yaml` 显式加载，portable workflow 也通过同一声明式依赖闭包加载；authoring review 的适用 lens 由 wh-review 放进 frozen packet，代码审查由 OCR delegation 处理；不注册到 Claude/Codex 全局目录；闭包由各目录 `skill-bundle.json` 定义。
 
 - `stage-reflection` — native；五个 authoring stage 的 stage-end 判断层复盘。只消费当前会话记忆、lessons 索引和本 stage outcome；由 runner 先追加 raw observation，再由技能产出 judgment 记录并调用确定性 validator；不生成质量分数或继续工作门禁。
@@ -58,7 +60,7 @@ UI governance records include an explicit owner, consumer, and delete condition.
 - `anysearch` — adopted；make-decision 条件检索。来源 [anysearch-ai/anysearch-skill@db3d76e](https://github.com/anysearch-ai/anysearch-skill/commit/db3d76e5597aec7261257be5322dd211c9d9bb87)，Apache-2.0。首次导入的核心文件已逐 blob 对上该 commit；仓内打包，不做全局安装。
 - `decision-log` — native；make-decision。结构化唯一权威需求记录。`upstream=[]`；随 stage 合同更新。
 - `deep-research` — native；make-decision 深度调研。R0-R5、原文证据、三角测量、content-addressed `research-report.v1` 和独立复核；研究只作为 Talk 输入，不是 review 或推进 gate。`upstream=[]`。
-- `grill-with-docs` — `skills/grill-with-docs/`；adapted；make-decision。来源 Matt Pocock [`grilling`](https://github.com/mattpocock/skills/tree/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/grilling) 与 [`domain-modeling`](https://github.com/mattpocock/skills/tree/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/domain-modeling)，MIT。保留完整交互、代码核实、CONTEXT/ADR 写入和四项退出合同；不使用 lite 或只读变体，真实阻塞才转人工。
+- `grill-with-docs` — `skills/grill-with-docs/`；adapted；make-decision。来源 Matt Pocock [`grilling`](https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/productivity/grilling/SKILL.md) 与 [`domain-modeling`](https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/domain-modeling/SKILL.md)，MIT。保留完整交互、代码核实、GLOSSARY/ADR 写入和四项退出合同；不使用 lite 或只读变体，真实阻塞才转人工。
 - `intake-decision-review` — `skills/intake-decision-review/`；native；make-decision direction 纯盲审 lens。只读 wh-review 冻结材料，不问用户、不调用 provider；wh-review 是唯一 provider owner。`upstream=[]`；随 wh-review 合同更新。
 - `simplicity-guard` — native；wh-review packet 内的 advisory lens。四阶梯最小路径审查；不生成 `*-facts`、invocation receipt、dispatcher 或独立 runtime，不成为继续工作的前置条件。`upstream=[]`；随宪法更新。
 - `talk-with-zhipeng` — `skills/talk-with-zhipeng/`；native；make-decision。独立问题成批、依赖问题拆批、动态重排、阈值收敛。`upstream=[]`。
@@ -79,7 +81,7 @@ UI governance records include an explicit owner, consumer, and delete condition.
 - `resolving-merge-conflicts` — native；verify-code close 冲突恢复。只在 task 分支解决冲突，不接管 target 合并、推送或清理。
 - `test-strategy` — adapted；verify-code。来源 AgentHub 固定快照，MIT。适配 workflowhub AC-to-test-route 和 L2/L3 证据合同。
 - `debate` — adopted；make-decision 条件增强。来源 [Hugh4424/debate@af121a1](https://github.com/Hugh4424/debate/blob/af121a1e24ae3af48f5e132d3de1342d16eccf31/SKILL.md)，MIT。仓内路径；失败记录 diagnostic 后继续。
-- `diagnosing-bugs` — adapted；build-code。来源 Matt Pocock [`diagnosing-bugs`](https://github.com/mattpocock/skills/tree/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/diagnosing-bugs)、Superpowers [`systematic-debugging`](https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/systematic-debugging)、gstack [`investigate`](https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/investigate)，MIT。合并为结构化根因证据合同。
+- `diagnosing-bugs` — adapted；build-code。来源 Matt Pocock [`diagnosing-bugs`](https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/diagnosing-bugs/SKILL.md)、Superpowers [`systematic-debugging`](https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/systematic-debugging)、gstack [`investigate`](https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/investigate)，MIT。合并为结构化根因证据合同。
 - `review-response` — adapted；build-code finding disposition。来源 Superpowers [`receiving-code-review`](https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/receiving-code-review)，MIT。适配 wh-review finding response flow。
 - `test-routing-advisor` — adapted；build-plan 预判、build-code 真实范围变化时重判。来源 [AgentHub 固定快照](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/test-routing-advisor)，MIT。删除跨仓执行器，输出三档 JSON 并保留预判/重判事实。
 - `testing-system-blueprint` — adapted；build-plan 的 advisory 测试设计输入，供 build-code 按真实改动消费；不承担执行器、交付 gate 或第二控制面。来源 [AgentHub 固定快照](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/testing-system-blueprint)，MIT。

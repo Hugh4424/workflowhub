@@ -5,7 +5,7 @@ workflowhub 包含或改编下列第三方项目的部分技能文字、规则�
 ## MIT-licensed sources
 
 - **Superpowers**, copyright © 2025 Jesse Vincent. Source: [obra/superpowers@d884ae0](https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99).
-- **Matt Pocock Skills**, copyright © 2026 Matt Pocock. Source: [mattpocock/skills@66898f6](https://github.com/mattpocock/skills/tree/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills).
+- **Matt Pocock Skills**, copyright © 2026 Matt Pocock. Source: [mattpocock/skills@b0618bc](https://github.com/mattpocock/skills/tree/b0618bc436ad893b3c5e84e55fba86586d34a404/skills).
 - **gstack**, copyright © 2026 Garry Tan. Source: [garrytan/gstack@7c9df1c](https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063).
 - **debate**, copyright © 2026 Zhipeng. Source: [Hugh4424/debate@af121a1](https://github.com/Hugh4424/debate/tree/af121a1e24ae3af48f5e132d3de1342d16eccf31).
 - **AgentHub**, source: [Hugh4424/AgentHub@258f5a2](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9).

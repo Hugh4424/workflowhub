@@ -45,7 +45,7 @@
 - 项目说明：[README.md](README.md)
 - 设计宪法：[CONSTITUTION.md](CONSTITUTION.md)
 - 检查清单：[constitution-checklist.md](constitution-checklist.md)
-- 术语表：[CONTEXT.md](CONTEXT.md)
+- 术语表：[GLOSSARY.md](GLOSSARY.md)
 - 唯一进度来源：认证 worktree 的 `specs/<task-id>/` 当前材料与外置任务 task facts；`docs/archive/retired-root-progress/` 只读保留旧任务过程文件，不作为当前进度。
 
 ## 当前目录职责
