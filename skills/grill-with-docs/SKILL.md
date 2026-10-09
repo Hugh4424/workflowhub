@@ -177,7 +177,7 @@ When the user states how something works, check whether the code agrees. If you 
 
 ### Update GLOSSARY.md inline
 
-When a term is resolved, update `GLOSSARY.md` right there. Don't batch these up — capture them as they happen. Use the format in [GLOSSARY-FORMAT.md](./GLOSSARY-FORMAT.md).
+When a term is resolved, update `GLOSSARY.md` right there. Don't batch these up — capture them as they happen. Use the format in [GLOSSARY-FORMAT.md](./GLOSSARY-FORMAT.md). 本领域方法也供调用方在 Talk、研究、写稿和确认中消费：按实际来源定位唯一上下文 owner，确有含义或边界变化才最小写入并读回；已有定义一致则返回 no change 及依据，未解含义或归属等待真实答复。逐本次已解决项返回实际变化引用或 no change 理由，沿用前文结束事实，不新建术语台账。
 
 Don't couple `GLOSSARY.md` to implementation details. Only include terms that are meaningful to domain experts.
 

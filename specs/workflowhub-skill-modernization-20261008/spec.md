@@ -170,6 +170,16 @@ P8/T016唯一生产writer74974d30维护两清单与现组包/恢复消费者：r
 
 架构机会353原件已实际发生且覆盖有限五面，重复只引用其范围/未查；本轮可审未覆盖的真实改动seam及其规范/功能合规，不能重新产机会、接口设计或未经用户选择的优化。安全修复可继续，未知不作工作许可门；当前质量终判另依独立事实，不作者自审三材料。保持原FR/Appendix A/决定/Phase/Task，相同外置原报告只读，不新schema、公共节点、进度对象、统计或第二正常审查。最终close/归档/删除尚无授权。
 
+### 术语维护与入口mini适用性追加范围（533）
+
+新来源仅引用[用户原话533](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-skill-modernization-20261008/quality/evidence/2026-10-09-533-glossary-maintenance-mini-entry-user-scope.json)，读时基准4d549ce7。本追加不撤回530/531原六组有限验收，不更改旧FR/AC/Appendix或新增Phase、公共类型/状态、schema、进度门。
+
+领域方法原grill:156/180已明确真实resolved后inline更新及无变化理由；make-decision:39只在Grill窗口调用，后草稿/确认仍可能解决术语而:42末端未逐已解决术语核写回。修复方法消费者和完成界限，不假称缺少runtime术语writer。唯一领域载体GLOSSARY.md只收WorkflowHub领域概念、关系/边界/实际场景，现已接受规范与领域研究具名来源支持才纳；源不足/含义冲突保持未决。每个真实resolved窗口即时写唯一owner，末端只对已resolved项实际读回或说明已有同义定义/no_change；不是每次强写或批量替用户定义，不双建CONTEXT/map/ADR，不把代码结构/接口/临时进度塞术语表。
+
+入口mini适用性与普通/规划任务性质为两个维度：ordinary目的才按边界清楚、单一结果、有限影响和重大架构/迁移/权限/安全事实判断精简交付建议，保真实来源与未知；规划性质问题沿原方向边界，不新增第三互斥任务类型，不自动bootstrap/转换。现evaluateMiniTaskScope:91–119默认补true/false导致{}或仅user_requested被判适合、别名冲突可能被判suitable_with_risk。只改该函数读事实，不扩runner审查/close/resume：七事实各有明确boolean且别名一致才评已知适合；missing/null/nonboolean/别名冲突保原三个status内paused并明确原因/待核项，user_requested不能补事实。已知正向不成立而用户仍选mini保既有suitable_with_risk边界；已知扩大风险true持续paused和真实路线选择。flags仍boolean，不新增状态/schema/公开类型。
+
+精确写面归现P9/T018窄追加：GLOSSARY.md（a680领域具名来源、749唯一方法持笔），workflows/make-decision/SKILL.md及skill-deps.yaml（新入口mini conditional consumer、grill覆盖所有真实resolved窗口），skills/grill-with-docs/SKILL.md（唯一领域维护过程锐化），skills/mini-task/SKILL.md（正交适用性pointer），以上方法同749；skills/mini-task/scripts/mini-task-runner.mjs仅evaluate函数由d49原runtime writer。仅tests/integration/mini-task-delivery.test.mjs由a2测试writer实施已由c7批准的:6尾夹具补其余六明确资格boolean，保boundary_clear=false/user_requested=true与suitable_with_risk原语义/风险循环；在同现文件补纯evaluate资格回归，审查/交付其它字节不动，mini-task-a-resume.test.mjs全部不动。本任务decision-log.md身份:5现尾注导致readTaskTypeFromDecisionLog:74严格两类型reader返回unknown；仅材料原owner198改任务类型值为exact普通任务、尾注移独立任务说明行，原决定/说明含义保，不放宽parser或增第三type。新回归文件须a2先提确切路径、oracle及职责/consumer登记，未提不授tests目录或猜模板。a2先实目标RED/冻结并同源GREEN与已知正负条件；方法以有源resolved/no_change/未答保护和入口两维真实场景独立验证，c7/a680分别源/领域核，材料作者不自判。其它运行时类型reader、规范、公共命令和review协议不授写；仅必要技术修不新增用户日常确认或覆盖最终close授权边界。
+
 ### 已核接口与选择
 
 复用既有safe-write/task facts/review single producer；规范A1复用WR001，A2′spec-specify唯一规范正文节，其余指针消费不新增第四规范对象。B2仅新索引模板与正文合并，旧薄文件删除归B4单owner，避免逆向依赖。B6治理单结果“当前术语/审查政策及其读者一致”，rename Task与七文本纯修宪Task独立diff/commit/验收/回退；修宪代码测试变更另commit不混七文本。PR实现另Phase，避免两高风险面互掩。
@@ -222,7 +232,7 @@ P1 R历史登记；P2 A1夹具/禁区；P3 A2′三正文；P4 A3真实比较；
 | NEW | `skills/spec-plan/templates/index-template.md` | P6 |
 | MODIFY | `skills/spec-plan/skill-bundle.json` | P6 |
 | MODIFY | `skills/talk-with-zhipeng/SKILL.md` | P7 |
-| MODIFY | `skills/grill-with-docs/SKILL.md` | P7 |
+| MODIFY | `skills/grill-with-docs/SKILL.md` | P7；新533维护边界P9/T018串行single-writer749 |
 | DELETE（consumer已迁后） | `skills/grill-with-docs/CONTEXT-FORMAT.md` | P7 |
 | NEW | `skills/grill-with-docs/GLOSSARY-FORMAT.md` | P7 |
 | MODIFY | `skills/grill-with-docs/skill-bundle.json` | P7 |
@@ -250,11 +260,11 @@ P1 R历史登记；P2 A1夹具/禁区；P3 A2′三正文；P4 A3真实比较；
 | MODIFY（仅原321风险处理阶段active build-spec指针，保模板其它正文） | `skills/spec-specify/templates/spec-template.md` | P8/T013具名引用附件源纠偏；single-writer74974d30 |
 | MODIFY | `skills/stage-reflection/SKILL.md` | P8 |
 | NEW | `Improvements.md` | P8 |
-| MODIFY | `workflows/make-decision/SKILL.md` | P8 |
+| MODIFY | `workflows/make-decision/SKILL.md` | P8；新533术语/入口P9/T018串行single-writer749 |
 | MODIFY | `workflows/build-plan/SKILL.md` | P8 |
 | MODIFY | `workflows/verify-code/SKILL.md` | P8→P9（010两workflow串行原持笔例外） |
 | MODIFY | `workflows/build-prd/SKILL.md` | P8 |
-| MODIFY | `workflows/make-decision/skill-deps.yaml` | P8 |
+| MODIFY | `workflows/make-decision/skill-deps.yaml` | P8；新533mini条件触发/grill领域窗口P9/T018串行single-writer749 |
 | MODIFY | `workflows/make-decision/steps.json` | P8 |
 | MODIFY | `workflows/build-plan/skill-deps.yaml` | P8 |
 | MODIFY | `workflows/build-plan/steps.json` | P8 |
@@ -313,7 +323,8 @@ P1 R历史登记；P2 A1夹具/禁区；P3 A2′三正文；P4 A3真实比较；
 | MODIFY | `skills/mini-task/SKILL.md` | P9 |
 | MODIFY（默认implementation真实代码审查私有接线，design保文审） | `skills/mini-task/scripts/mini-task-runner.mjs` | P9/T018；代码single-writer d49d2a01 |
 | MODIFY（仅真实mini implementation/build-code/phase trusted route，普通路由/设计保） | `runtime/review/ocr-delegation-adapter.mjs` | P9/T018；原代码single-writer d49d2a01 |
-| MODIFY（必要默认consumer case，具体独立CR后） | `tests/integration/mini-task-delivery.test.mjs` | P9/T018；代码single-writer d49d2a01，独立oracle/执行a2、CR c7 |
+| MODIFY（原mini默认consumer范围保；新533仅:6风险夹具事实补全及纯evaluate资格回归） | `tests/integration/mini-task-delivery.test.mjs` | P9/T018；新测试single-writer a2，独立CR c7；runtime单writer d49不写测试 |
+| MODIFY（新533仅任务类型exact普通任务及原尾注移说明行，原决定保） | `specs/workflowhub-skill-modernization-20261008/decision-log.md` | P9/T018；材料原single-writer198 |
 | MODIFY | `skills/workflowhub-host-protocol/SKILL.md` | P9 |
 | MODIFY | `skills/wh-review/contracts/verify-code.md` | P9 |
 | MODIFY | `tests/contract/verify-architect-acceptance.test.mjs` | P9 |

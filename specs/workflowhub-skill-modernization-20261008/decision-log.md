@@ -2,7 +2,8 @@
 
 ## 任务身份
 
-- **任务类型**：普通任务（在 workflowhub 仓库内实现技能与流程改造；本任务自身走 post 五阶段路线）。
+- **任务类型**：普通任务
+- **任务说明**：在 workflowhub 仓库内实现技能与流程改造；本任务自身走 post 五阶段路线。
 - **任务 id**：`workflowhub-skill-modernization-20261008`
 - **认证工作区**：`/Users/Hugh/Hugh/Project/workflowhub-workflowhub-skill-modernization-20261008`，分支 `task/workflowhub/workflowhub-skill-modernization-20261008`，baseline `7ad39ae852cb7ee4ce4630c54d7502b8e2cf4e59`。
 - **材料位置**：post cohort；本阶段材料为 `specs/workflowhub-skill-modernization-20261008/decision-log.md`。

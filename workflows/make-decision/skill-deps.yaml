@@ -5,7 +5,10 @@ skills:
     trigger: dynamic_oi_driven_talk_batches
   - name: grill-with-docs
     path: skills/grill-with-docs/SKILL.md
-    trigger: after_detail_advice
+    trigger: after_detail_advice_or_resolved_domain_term_change_during_decision
+  - name: mini-task
+    path: skills/mini-task/SKILL.md
+    trigger: ordinary_task_execution_goal_entry_eligibility_advice
   - name: decision-log
     path: skills/decision-log/SKILL.md
     trigger: decision_record
