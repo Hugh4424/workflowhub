@@ -72,7 +72,7 @@ describe("Stage 1 moat skill files", () => {
   test("grill-with-docs full file set exists with required frontmatter", () => {
     const skill = readRequiredFile("skills", "grill-with-docs", "SKILL.md");
     assertNonEmptyFrontmatterName(skill, "skills/grill-with-docs/SKILL.md");
-    assert.ok(existsSync(filePath("skills", "grill-with-docs", "CONTEXT-FORMAT.md")));
+    assert.ok(existsSync(filePath("skills", "grill-with-docs", "GLOSSARY-FORMAT.md")));
     assert.ok(existsSync(filePath("skills", "grill-with-docs", "ADR-FORMAT.md")));
     assert.match(skill, /输入|Input|what-to-do|supporting-info/, "grill skill must describe inputs or usage context");
     assert.match(skill, /步骤|During the session|执行协议/, "grill skill must describe steps or session protocol");
