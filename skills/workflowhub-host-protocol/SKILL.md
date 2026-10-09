@@ -13,7 +13,7 @@ description: 规定当前 WorkflowHub 会话如何直接执行五阶段，并把
 2. make-decision澄清真实方向并写decision-log；build-plan写产品/全局实现设计和Phase；build-code在声明范围实施/针对性验证；verify-code独立核真实实现/失败/验收；build-prd协调实际规划材料与展示，不代spec-prd写正文。
 3. 使用已有窄工具核工作区/写边界①、采真实命令②、安全原子写文件③、不可逆Git授权④、共享记录锁⑤。工具各自处理实际安全职责，不建立快照/hash/receipt推进许可证。
 4. 两道人为门：confirm只接受已展示可审稿的真实答复；authorize只约束不可逆Git动作。已有授权覆盖当前动作/范围时按当前HEAD重新记录消费，漂移拒旧记录；新增范围才需用户选择，普通修复不重复问。
-5. 文档建议由wh-review；代码Phase/终末由OCR；OCR缺失或低于1.12.9才允许wh-review回退，已装失败保留unavailable。独立质量由独立来源产出，原始provider输出与失败只存一次；实施者不自判质量。
+5. 文档建议由wh-review；代码Phase/终末由OCR；只有 OCR 命令不存在（ENOENT）或版本低于1.12.9，才允许 architect-code-review 回退执行同一代码审查，保留检测输出、原因、真实执行者和覆盖限制。版本检测其它错误保持 unknown/unavailable，不推断未安装；已装失败、超时、取消、无效输出、零成功路或空 findings 均不回退，原失败保留 unavailable。独立质量由独立来源产出，原始provider输出与失败只存一次；实施者不自判质量。
 6. 任务执行与阶段事实通过现有公共run记录，review/test/evidence只是事实。缺测试、未修严重发现或质量未知不能宣称完成，但同任务可继续安全修复；不创建新public动作、外部Stage Agent/session/bridge前置。
 7. 每stage末写人读stage-handoff，列实际绝对材料/证据路径、已做/未做、风险和下一步。reflection可选普通md，不认证材料，不由交接或复盘推出阶段成功。
 

@@ -18,8 +18,8 @@
 ## 执行方式与失败
 
 优先由已安装且符合 ADR-021 最低版本 1.12.9 的 OCR 执行同一代码审查面。
-OCR 未安装或低于该版本时，wh-review 按本合同执行同一审查面。
-已安装的合格 OCR 执行失败、取消或没有可解析结果时，保留 unavailable/incomplete；
+只有 OCR 命令不存在（ENOENT）或版本低于1.12.9，才由 architect-code-review 按本合同执行同一审查面，保留检测输出、原因、真实执行者和覆盖限制。
+版本检测其它错误保持 unknown/unavailable，不推断未安装；已安装的合格 OCR 执行失败、超时、取消、无效输出、零成功路或空 findings 均不触发回退，保留 unavailable/incomplete；
 不能假装未安装而追加 fallback，也不能把失败改写为空 findings。
 
 ## 输出与处置
