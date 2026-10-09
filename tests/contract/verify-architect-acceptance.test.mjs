@@ -56,7 +56,7 @@ function fallbackSourceStatus(section) {
   });
   if (allows.length !== 1) return "unknown";
   const allow = allows[0];
-  if (!/命令不存在(?:（ENOENT）)?/.test(allow)
+  if (!/\bOCR\s*命令不存在(?:（ENOENT）)?/i.test(allow)
     || !/版本低于\s*1\.12\.9(?:[，,；;\s]|$)/.test(allow)
     || !/architect-code-review/.test(allow) || /wh-review/.test(allow)
     || /执行失败|审查失败|超时|取消|无效输出|零成功路|空 findings|无关|其它文件/.test(allow)) return "reject";
@@ -92,6 +92,7 @@ it("checks each workflow OCR policy with same-sentence conditions and rejects so
   for(const bad of [
     normal.replace("architect-code-review","wh-review"),
     normal.replace("命令不存在（ENOENT）","其它文件 ENOENT"),
+    normal.replace("OCR 命令不存在","git 命令不存在"),
     normal.replace("版本低于1.12.9","版本低于1x12x9"),
     normal.replace("或版本低于1.12.9",""),
     normal.replace("OCR 命令不存在（ENOENT）或",""),
