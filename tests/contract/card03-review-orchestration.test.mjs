@@ -162,12 +162,14 @@ describe("ORACLE-SKL-003 runner reviewer skills follow stage-skill-plan.json", (
       const required = plan.stages[stage].required_skills;
       const text = reviewInstructionsFor(stage);
       for (const name of required) expect(text).toContain(`skills/${name}/SKILL.md`);
-      expect(text).not.toContain("skills/plan-eng-review/SKILL.md");
+      if (stage === "build-plan")
+        expect(required).toEqual(["review", "simplicity-guard", "plan-eng-review"]);
+      else expect(text).not.toContain("skills/plan-eng-review/SKILL.md");
     });
   }
 
-  it("keeps the frozen build-plan plan entry unchanged", () => {
-    expect(plan.stages["build-plan"].required_skills).toEqual(["review"]);
+  it("keeps the source-defined build-plan default reviewer lenses", () => {
+    expect(plan.stages["build-plan"].required_skills).toEqual(["review", "simplicity-guard", "plan-eng-review"]);
   });
 });
 

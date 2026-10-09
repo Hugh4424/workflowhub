@@ -436,6 +436,70 @@ function stagePlanFor(stage, track, reviewKind = null) {
   return stage === "make-decision" ? stagePlan?.tracks?.[track] : stagePlan;
 }
 
+// UI facts are optional packet content, not a caller flag or a quality gate.
+// Read only own data descriptors: references never resolve host paths or invoke getters.
+function ownMaterialData(value, key) {
+  if (!value || typeof value !== "object"
+      || (!Array.isArray(value) && Object.getPrototypeOf(value) !== Object.prototype)) return undefined;
+  if (Array.isArray(value) && !/^(?:0|[1-9][0-9]*)$/.test(key)) return undefined;
+  const descriptor = Object.getOwnPropertyDescriptor(value, key);
+  return descriptor && Object.hasOwn(descriptor, "value") ? descriptor.value : undefined;
+}
+
+function packetSourceTarget(materials, reference, fact) {
+  if (typeof reference !== "string" || reference.trim() !== reference || !reference) return undefined;
+  const parts = reference.split("#");
+  if (parts.length > 2) return undefined;
+  const [key, pointer] = parts;
+  if (fact === "raw_requirement" && key !== "raw_requirement") return undefined;
+  if (fact === "project_inventory" && (key !== "context_map" || !pointer?.startsWith("/project_inventory"))) return undefined;
+  if (fact === "planned_or_changed_frontend_fact" && !["draft_spec", "approved_spec", "phase_authorities"].includes(key)) return undefined;
+  let target = ownMaterialData(materials, key);
+  if (pointer !== undefined) {
+    if (!pointer.startsWith("/")) return undefined;
+    const tokens = pointer.slice(1).split("/");
+    for (const [index, token] of tokens.entries()) {
+      if (/~(?:[^01]|$)/.test(token)) return undefined;
+      const name = token.replace(/~1/g, "/").replace(/~0/g, "~");
+      if (fact === "project_inventory" && index === 0 && name !== "project_inventory") return undefined;
+      target = ownMaterialData(target, name);
+      if (target === undefined) return undefined;
+    }
+  }
+  return target === null || (typeof target === "string" && !target.trim()) ? undefined : target;
+}
+
+function buildPlanUiFacts(materials) {
+  const facts = ownMaterialData(ownMaterialData(materials, "context_map"), "ui_applicability");
+  const names = ["raw_requirement", "project_inventory", "planned_or_changed_frontend_fact"];
+  const gaps = [], scopes = [];
+  for (const name of names) {
+    const record = ownMaterialData(facts, name);
+    if (!record || typeof record !== "object" || Array.isArray(record) || Object.getPrototypeOf(record) !== Object.prototype) {
+      gaps.push(`${name}: missing or malformed UI fact`);
+      continue;
+    }
+    const scope = ownMaterialData(record, "ui_scope");
+    const reason = ownMaterialData(record, "reason");
+    const reference = ownMaterialData(record, "source_ref");
+    if (scope !== true && scope !== false) gaps.push(`${name}: unknown/null or missing UI fact`);
+    else if (typeof reason !== "string" || !reason.trim()) gaps.push(`${name}: missing source reason`);
+    else if (packetSourceTarget(materials, reference, name) === undefined) gaps.push(`${name}: source_ref unavailable in supplied materials`);
+    scopes.push(scope);
+  }
+  return gaps.length ? { applicability: "unknown", gaps } : { applicability: scopes.some(value => value === true) ? "ui" : "non_ui", gaps };
+}
+
+function selectReviewerSkills(stage, track, reviewKind, uiScope, materials, codePacket = false) {
+  const plan = stagePlanFor(stage, track, reviewKind);
+  if (!plan) throw new Error(`MATERIAL_INCOMPLETE: no review skill plan for ${stage}/${track ?? "default"}`);
+  const ui = stage === "build-plan" && reviewKind === null ? buildPlanUiFacts(materials) : null;
+  const includeUi = ui ? ui.applicability === "ui" : uiScope === true;
+  const plans = codePacket ? [plan, stagePlanFor("build-code", null), stagePlanFor("verify-code", null)] : [plan];
+  const skills = [...new Set(plans.flatMap(value => [...(value.required_skills ?? []), ...(includeUi ? (value.optional_skills ?? []).filter(({ when }) => when === "ui").map(({ name }) => name) : [])]))];
+  return { skills, ui };
+}
+
 function reviewSurfaceFor(stage, track, reviewScope, reviewKind) {
   if (reviewKind === "build_prd") return "build-prd";
   if (reviewKind === "mini_task.design" || reviewKind === "mini_task.implementation") return `mini-task/${reviewKind.split(".")[1]}`;
@@ -496,12 +560,18 @@ function stageReviewFocus(stage, track, reviewScope, reviewKind = null, directio
 const PACKET_BOUND_CODEX_READ_EXCEPTION = "Codex only when the host transport has demonstrated native hard packet filesystem, tool and environment boundaries: read-only file-view commands such as cat, sed or rg may read manifest-listed paths in this packet. This is not general shell permission. Writes, Git, network, parent/host materials, Agent/subagent and wait/poll remain prohibited. Minimal runtime read exceptions exist only to run the tools, never as review materials.";
 
 export function reviewInstructionsFor(stage, track = null, uiScope = false, reviewScope = null, reviewKind = null, directionMode = "full", role = null, candidateExperiment = false, navigation = null) {
+  const selection = selectReviewerSkills(stage, track, reviewKind, uiScope, undefined);
+  return renderReviewInstructionsFor(stage, track, uiScope, reviewScope, reviewKind, directionMode, role, candidateExperiment, navigation, selection);
+}
+
+function renderReviewInstructionsFor(stage, track, uiScope, reviewScope, reviewKind, directionMode, role, candidateExperiment, navigation, selection) {
   assertReviewIdentity({ stage, reviewTrack: track, reviewScope, reviewKind });
   if (role !== null && !["red", "blue"].includes(role)) throw new Error(`MATERIAL_INCOMPLETE: invalid review role ${role}`);
   const rule = ruleForIdentity(stage, track, reviewScope, reviewKind);
-  const plan = stagePlanFor(stage, track, reviewKind);
-  if (!plan) throw new Error(`MATERIAL_INCOMPLETE: no review skill plan for ${stage}/${track ?? "default"}`);
-  const selectedSkills = [...new Set([...(plan.required_skills ?? []), ...(uiScope === true ? (plan.optional_skills ?? []).filter(({ when }) => when === "ui").map(({ name }) => name) : [])])];
+  const selectedSkills = selection.skills;
+  const uiNote = selection.ui?.applicability === "unknown"
+    ? `UI applicability unknown: ${selection.ui.gaps.join("; ")}. Keep the default reviewer lenses; these source gaps are not non-UI/N/A, a quality pass, or a review admission gate. Review supplied facts for scope and semantic consistency.`
+    : selection.ui ? `UI applicability: ${selection.ui.applicability}, based on all three supplied source facts. Source references locate content, not certify semantic truth.` : "";
   if (["build-code", "verify-code"].includes(stage) && selectedSkills.length === 0) throw new Error(`MATERIAL_INCOMPLETE: ${stage} requires explicit reviewer skills`);
   const scope = reviewKind ?? (stage === "make-decision" ? `${stage}/${track}` : stage === "build-code" ? `${stage}/${reviewScope ?? "phase"}` : stage);
   const blind = stage === "make-decision" && track === "direction" && directionMode === "reconstruct"
@@ -562,7 +632,7 @@ export function reviewInstructionsFor(stage, track = null, uiScope = false, revi
     if(navigation.diffBytes!==null)nav.push("完整变更：\x60"+(navigation.diffBytes>PHASE_DIFF_INLINE_LIMIT_BYTES?"diff-index.json":"changes.diff")+"\x60（索引所列分片完整保留字节）。");
     nav.push("以上仅为导航；按完整合同核对正文和失败边界。");
   }
-  return nav.map(line=>line+"\n").join("")+`Review stage ${scope}. Read the manifest-listed relative packet paths only; begin with review-instructions.md. A broker may present the packet with a bundle/ delivery prefix; native transport presents these paths directly at its packet root. Do not add that transport prefix to findings anchors. Read contracts/ and ${skillInstruction} The manifest lists the supplied provider files. Do not fetch excluded raw logs or treat receipts and checksums as workflow permission. ${subjectReading} Use context/ only for map-selected dependencies. ${stageFocus} ${verifyBound} ${roleBoundary} ${adviceBoundary} ${buildCodeBoundary} ${miniImplementationBoundary} ${findingBudget} Return only one JSON object with findings using the requested findings-only reviewer schema; findings may be empty. Do not output verdict, pass/fail status, summary, checklist, skill execution receipts, or a second JSON object. Do not access the repository, parent directories, Git, general shell, network, or host paths. ${PACKET_BOUND_CODEX_READ_EXCEPTION}${candidateOcrToolBoundaries}\n`;
+  return nav.map(line=>line+"\n").join("")+`Review stage ${scope}. Read the manifest-listed relative packet paths only; begin with review-instructions.md. A broker may present the packet with a bundle/ delivery prefix; native transport presents these paths directly at its packet root. Do not add that transport prefix to findings anchors. Read contracts/ and ${skillInstruction} The manifest lists the supplied provider files. Do not fetch excluded raw logs or treat receipts and checksums as workflow permission. ${subjectReading} Use context/ only for map-selected dependencies. ${stageFocus} ${uiNote} ${verifyBound} ${roleBoundary} ${adviceBoundary} ${buildCodeBoundary} ${miniImplementationBoundary} ${findingBudget} Return only one JSON object with findings using the requested findings-only reviewer schema; findings may be empty. Do not output verdict, pass/fail status, summary, checklist, skill execution receipts, or a second JSON object. Do not access the repository, parent directories, Git, general shell, network, or host paths. ${PACKET_BOUND_CODEX_READ_EXCEPTION}${candidateOcrToolBoundaries}\n`;
 }
 
 function readRegisteredFile(path,label) {
@@ -674,18 +744,17 @@ export function buildReviewMaterials({attachmentRoot,reviewDataRoot,stage,review
   try {
     const documentFace=surface==="document"&&stage==="build-code";
     const codePacket=["build-code","verify-code"].includes(stage)&&!documentFace;
+    const selection=selectReviewerSkills(stage,reviewTrack,reviewKind,uiScope,filtered.materials,codePacket);
     const instruction=documentFace
       ? `Review stage build-code; subject_kind=phase; review_scope=phase; phase_id=${phaseId ?? "not supplied"}; surface=document. This is the current Phase's document review, not a build-plan stage result or an OCR code review. Read the complete submitted specification, Phase material, method/contract documents and metadata. Apply contracts/build-plan.md as the existing document review lens: requirement-to-implementation-to-consumer-to-verification, dependencies, boundary, recovery and necessity. The actual stage remains build-code. Do not evaluate unsubmitted code or demand snapshot/hash/receipt/lineage permits. Read manifest-declared reviewer skills and contracts/provider-protocol.md. Report only concrete delivery findings with relative file/line anchors and genuine serious evidence. Findings, including empty findings, are advice only; missing quality stays unknown and provider/transport/parse failure remains unavailable/incomplete. Do not access repository files, Git, general shell, network or host paths. ${PACKET_BOUND_CODEX_READ_EXCEPTION} Return exactly one findings JSON.\n`
-      : reviewInstructionsFor(stage,reviewTrack,uiScope,reviewScope,reviewKind,stage==="make-decision"&&reviewTrack==="direction"?"combined":"full",role,false,{entries:providerMaterialEntries({stage,review_track:reviewTrack,review_scope:reviewScope,review_kind:reviewKind,activation_cohort:activationCohort,materials:filtered.materials}),codePacket,diffBytes:source?.diffPath ? reviewMaterialBytes("changes.diff",readRegisteredFile(source.diffPath,"supplied diff")).length : null});
+      : renderReviewInstructionsFor(stage,reviewTrack,uiScope,reviewScope,reviewKind,stage==="make-decision"&&reviewTrack==="direction"?"combined":"full",role,false,{entries:providerMaterialEntries({stage,review_track:reviewTrack,review_scope:reviewScope,review_kind:reviewKind,activation_cohort:activationCohort,materials:filtered.materials}),codePacket,diffBytes:source?.diffPath ? reviewMaterialBytes("changes.diff",readRegisteredFile(source.diffPath,"supplied diff")).length : null},selection);
     write("review-instructions.md",instruction+(missing.length ? `\nSupplied material is incomplete: ${missing.join(", ")}. Missing quality is unknown, not a pass.\n` : ""));
-    const plan=stagePlanFor(stage,reviewTrack,reviewKind);if(!plan)throw new Error(`MATERIAL_INCOMPLETE: no skill plan for ${stage}`);
     const surfaceName=surface==="document"&&stage==="build-code" ? "build-plan" : reviewSurfaceFor(stage,reviewTrack,reviewScope,reviewKind);const contract=stageMaterials.surfaces?.[surfaceName]?.contract;
     if(typeof contract!=="string" || !/^contracts\/[a-z0-9-]+\.md$/.test(contract))throw new Error(`MATERIAL_INCOMPLETE: missing contract for ${surfaceName}`);
     write(contract,readRegisteredFile(resolve(here,"..",contract),contract));
     write("contracts/provider-protocol.md",readRegisteredFile(resolve(here,"..","contracts","provider-protocol.md"),"provider-protocol.md"));
     if(codePacket)for(const name of ["build-code.md","verify-code.md"]){const path=`contracts/${name}`;if(!entries.some(entry=>entry.path===path))write(path,readRegisteredFile(resolve(here,"..","contracts",name),path));}
-    const lensPlans=codePacket ? [plan,stagePlanFor("build-code",null),stagePlanFor("verify-code",null)] : [plan];
-    for(const name of [...new Set(lensPlans.flatMap(p=>[...(p.required_skills ?? []),...(uiScope ? (p.optional_skills ?? []).filter(x=>x.when==="ui").map(x=>x.name) : [])]))]) {
+    for(const name of selection.skills) {
       if(typeof name!=="string" || !/^[a-z0-9][a-z0-9-]*$/.test(name))throw new Error("MATERIAL_INCOMPLETE: unsafe skill name");
       write(`skills/${name}/SKILL.md`,readRegisteredFile(resolve(workflowhubSkills,name,"SKILL.md"),name));
     }

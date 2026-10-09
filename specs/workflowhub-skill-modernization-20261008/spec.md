@@ -150,6 +150,14 @@ make-decision使用者输入raw与研究，五段map/fog记录在现decision-log
 
 仅将精确consumer test路径skills/wh-review/scripts/__tests__/simple-contracts.test.mjs纳P8/T016：唯一test实施owner74974d30，独立非作者source批准及同命令GREEN ownerc7edbb8f。按CR399只改该case与其必要本地oracle，保全部其它case/import/fixture及required/existence断言；将原条件强度迁到真实workflow政策节，并负控wh两指针、缺失/低版唯一architect、检测其它错及installed失败不fallback/invalid-output失败、Long-review真实终态边界。restore旧wh字面会重复政策权威并退回已接受方法，不能为消RED回填；不得删除断言/泛mentions换绿。先独立核实际test diff再同984 -t命令GREEN；本材料只确认当前写集与来源，CR尚待独立批准、修改/GREEN不冒已完成。九外置冻结oracle/scorer/gold、原raw/review、生产provider/公共入口均不改，不新增Task/Phase/gate。
 
+### 当前scope修正 — build-plan审查真实lens消费
+
+来源：[用户实际批准466](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-skill-modernization-20261008/quality/evidence/2026-10-09-466-build-plan-lens-fix-user-scope.json)，原话「好的，按计划进行吧，直到所有任务彻底完成为止」；基准6dbcc53db3e2c0588ccf4f76ebe73ba4c0a02171。[029目标原件](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-skill-modernization-20261008/quality/tests/verify-code-20261009/2026-10-09-029-build-plan-lens-selection-probe.json)实默认只review，未交付workflows/build-plan/SKILL.md:23要求的工程/简化lens。此修既定方法的实际consumer，不改FR/Appendix A、Phase/Task或方向，不重审旧任务、不执行最终close。
+
+P8/T016唯一生产writer74974d30维护两清单与现组包/恢复消费者：required为review、simplicity-guard、plan-eng-review，plan-design-review按真实UI材料条件；规则正文继续归原lens，不复制大清单或加轮次。既有build-plan material allowlist只接raw/spec/AC/Phase/index及context_map/evidence_map；UI三来源事实可在现context_map内普通ui_applicability内容保存raw_requirement、project_inventory、planned_or_changed_frontend_fact及具源source_reasons，不增加顶层材料key、public必填字段/schema或持久对象。唯一现私有选材owner从同份已过滤材料解释该可选事实：先核三来源事实完整可定位且ui_scope非null：任一缺失、畸形、不可定位、null或producer显式同来源矛盾均为unknown，仍交默认三lens并在instruction明示UI材料缺口，不报nonUI/N/A或UI已审；三项均有效且非null时，任一true选design，全部false才省。reason仅核存在供lens核语义，不词匹配或真值认证；额外conclusion不覆盖三事实。其它来源没有UI不天然否定具源已接受UI计划；真实范围取舍尚冲突时由事实producer写unknown，程序不替人裁决。调用者ui_scope不单独决定，恢复沿同material重新选；不关键词扫Markdown/文件名猜非UI、不访问packet外补库存。旧无事实包仍合法可审，unknown不变流程门；该普通内容不是新机器认证合同。workflows/build-plan/SKILL.md仅必要条件指针澄清，原步骤/人确认/一次审查不变。
+
+精确新增写集仅skills/wh-review/scripts/review-materials.mjs、skills/wh-review/scripts/simple-review-runner.mjs现私有组包/重建接缝及tests/contract/card03-review-orchestration.test.mjs两相关assert；两清单及build-plan正文原已P8授权但本次仅相关条件。review-materials-contract/simple-contracts无需本次改写，新外置独立七case覆盖真实packet seam，不为覆盖增加等价测试。独立test writer a2c9，具体旧review-only冻结assert变更必须c7edbb8f非作者CR批准后窄改；新oracle先冻结/目标RED，旧P2及外置980/987/010/012/014/历史原raw不改。验证默认三lens、具源UI第四lens、显式非UI、缺/冲突unknown、callerflag不能覆实事实、直接与serialize/rehydrate同正文，负控缺工程/简化或恢复丢UI应实际失败；必要命令由独立test owner按真实环境定，不全suite/新provider。此处写集/source授权不自判GREEN，独立c7核scope/source、a2实际复验，Git另原owner真实record/consume。
+
 ### 已核接口与选择
 
 复用既有safe-write/task facts/review single producer；规范A1复用WR001，A2′spec-specify唯一规范正文节，其余指针消费不新增第四规范对象。B2仅新索引模板与正文合并，旧薄文件删除归B4单owner，避免逆向依赖。B6治理单结果“当前术语/审查政策及其读者一致”，rename Task与七文本纯修宪Task独立diff/commit/验收/回退；修宪代码测试变更另commit不混七文本。PR实现另Phase，避免两高风险面互掩。
@@ -244,6 +252,9 @@ P1 R历史登记；P2 A1夹具/禁区；P3 A2′三正文；P4 A3真实比较；
 | MODIFY | `workflows/build-prd/steps.json` | P8 |
 | MODIFY | `skills/wh-review/manifest.json` | P8 |
 | MODIFY | `skills/wh-review/stage-skill-plan.json` | P8 |
+| MODIFY（build-plan同材料lens选择与UI证据解释私有接缝） | `skills/wh-review/scripts/review-materials.mjs` | P8/T016；生产single-writer74974d30 |
+| MODIFY（仅现packet直接/serialize恢复同材料选材消费者） | `skills/wh-review/scripts/simple-review-runner.mjs` | P8/T016；生产single-writer74974d30 |
+| MODIFY（具体VC-BP-LENS-CR01独立c7批准后，仅原161–171两build-plan相关assert） | `tests/contract/card03-review-orchestration.test.mjs` | P8/T016；旧consumer窄改74974d30，新外置oracle独立a2c9 |
 | MODIFY | `docs/architecture/move-map.json` | P8/T016唯一原维护者；普通预登记时序见上，不授其它Phase写权 |
 | MODIFY | `tools/cli/run-checks.mjs` | P8 |
 | MODIFY（仅resolveSkillPackage消费既有name/path/trigger合同） | `runtime/adapters/local-skill-resolver.mjs` | P8/T016 |

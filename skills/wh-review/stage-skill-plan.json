@@ -32,7 +32,12 @@
     "build-plan": {
       "logical_skill_id": "wh-review/build-plan",
       "required_skills": [
-        "review"
+        "review",
+        "simplicity-guard",
+        "plan-eng-review"
+      ],
+      "optional_skills": [
+        { "name": "plan-design-review", "when": "ui" }
       ],
       "review_mode": "lens-only",
       "lens_owner": "wh-review",

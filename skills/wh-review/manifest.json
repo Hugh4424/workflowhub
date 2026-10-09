@@ -46,7 +46,12 @@
     "build-plan": {
       "path": "contracts/build-plan.md",
       "required_skills": [
-        "review"
+        "review",
+        "simplicity-guard",
+        "plan-eng-review"
+      ],
+      "optional_skills": [
+        { "name": "plan-design-review", "when": "ui" }
       ]
     },
     "build-code": {
