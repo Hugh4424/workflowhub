@@ -72,8 +72,8 @@ Use the actual domain boundaries, not the number of directories or instances, to
 
 The skill infers which structure applies:
 
-- If `GLOSSARY-MAP.md` exists, read it to find contexts
-- If only a root `GLOSSARY.md` exists, single context
-- If neither exists, create a root `GLOSSARY.md` lazily when the first term is resolved
+- Determine the number of contexts from confirmed domain boundaries first; an existing root glossary or an absent map does not establish a single context.
+- For a confirmed single context, update the root `GLOSSARY.md`, or create it lazily only when the first real term is resolved and there is content to write.
+- For confirmed multiple contexts, read an existing `GLOSSARY-MAP.md` to locate the relevant glossary and verify each context's unique location, ownership and relationships. If no map exists, confirm those locations first; create the unique map lazily only when there is real content.
 
-When multiple contexts exist, infer which context owns the current topic and how it relates to the others. If unclear, ask before writing. With no resolved term, leave the glossary absent rather than creating an empty file.
+When the topic's context, owner or glossary location is unclear, ask the real owner and pause the dependent write until a real answer resolves it. File existence locates confirmed documentation; it never determines the number of contexts or justifies a fallback root glossary. With no resolved term, leave the glossary absent rather than creating an empty file.
