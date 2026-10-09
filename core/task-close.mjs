@@ -165,14 +165,21 @@ function within(root, path) { const r = relative(root, path); return r !== "" &&
 function prCommand(root, argv) {
   return spawnSync("gh", argv, { cwd: root, env: { ...gitEnv(), GH_PROMPT_DISABLED: "1" }, encoding: "utf8", timeout: 15000, maxBuffer: 1024 * 1024 });
 }
-function probePrSupport(c, { remote, head, base, baseline, sourceHead }) {
+function prRepository(c, remote) {
+  const root = existsSync(c.worktree) ? c.worktree : c.root;
+  const url = git(root, ["remote", "get-url", remote]);
+  const repository = url.match(/^(?:https:\/\/github\.com\/|git@github\.com:|ssh:\/\/git@github\.com\/)([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+?)(?:\.git)?$/)?.[1];
+  if (!repository) throw failure("GIT_COMMAND_FAILED", "PR remote is not an identified GitHub repository");
+  return repository;
+}
+function probePrSupport(c, { remote, head, base, baseline, sourceHead, pendingChanges }) {
   const unavailable = (reason) => ({ status: "unavailable", reason });
   const url = git(c.worktree, ["remote", "get-url", remote]);
   const match = url.match(/^(?:https:\/\/github\.com\/|git@github\.com:|ssh:\/\/git@github\.com\/)([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+?)(?:\.git)?$/);
   if (!match) return unavailable("PR creation is unsupported for this remote: a GitHub repository remote is required");
   if (head === base) return unavailable("PR head and base are the same branch");
   const ahead = git(c.worktree, ["rev-list", "--count", `${baseline}..${sourceHead}`]);
-  if (!/^\d+$/.test(ahead) || Number(ahead) === 0) return unavailable("task HEAD has no commits ahead of the PR base");
+  if (!/^\d+$/.test(ahead) || Number(ahead) === 0 && !pendingChanges?.length) return unavailable("task HEAD has no commits ahead of the PR base");
   const checked = (argv, label) => {
     const result = prCommand(c.worktree, argv);
     // Do not copy authentication stderr, tokens, or credential configuration
@@ -219,7 +226,7 @@ function preparePr(c, input, fields) {
   if (input?.enabled === false) return null;
   if (input?.body !== undefined) validatePrDescription(input.body);
   const defaults = input?.title !== undefined && input?.body !== undefined ? null : buildDefaultPrDescription(c, fields);
-  return { ...probePrSupport(c, { ...fields, sourceHead: fields.source.head }), head: fields.head, base: fields.base, title: input?.title ?? defaults.title, body: input?.body ?? defaults.body };
+  return { ...probePrSupport(c, { ...fields, sourceHead: fields.source.head, pendingChanges: fields.source.changes }), head: fields.head, base: fields.base, title: input?.title ?? defaults.title, body: input?.body ?? defaults.body };
 }
 function validatePlan(plan, c) {
   if (!plan || typeof plan !== "object" || plan.task_id !== c.manifest.task_id || plan.project_name !== c.manifest.project_name || plan.target_repo_root !== c.root) throw failure("CLOSE_PLAN_IDENTITY", "close plan identity mismatch");
@@ -355,24 +362,22 @@ export async function authorizeClosePlan({ taskDir, planRef, confirmationRef, op
   });
 }
 const PR_READ_FIELDS = "headRefName,baseRefName,headRefOid,url,number";
-function readPrCommand(c, args) {
-  const result = prCommand(existsSync(c.worktree) ? c.worktree : c.root, args);
+function readPrCommand(c, plan, args) {
+  const result = prCommand(existsSync(c.worktree) ? c.worktree : c.root, [...args, "--repo", prRepository(c, plan.remote)]);
   if (result.error || result.status !== 0) throw failure("GIT_COMMAND_FAILED", `gh ${args.slice(0, 2).join(" ")} read failed: ${result.error?.code ?? `exit ${result.status ?? "unknown"}`}`);
   try { return JSON.parse(result.stdout); }
   catch { throw failure("GIT_COMMAND_FAILED", "GitHub PR read returned invalid JSON"); }
 }
 function matchingPr(c, plan, sourceHead, url) {
-  const remote = git(existsSync(c.worktree) ? c.worktree : c.root, ["remote", "get-url", plan.remote]);
-  const repository = remote.match(/^(?:https:\/\/github\.com\/|git@github\.com:|ssh:\/\/git@github\.com\/)([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+?)(?:\.git)?$/)?.[1];
-  if (!repository) throw failure("GIT_COMMAND_FAILED", "PR readback remote is not an identified GitHub repository");
+  const repository = prRepository(c, plan.remote);
   const identifyUrl = value => {
     const match = typeof value === "string" ? value.match(/^https:\/\/github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)\/pull\/([1-9]\d*)$/) : null;
     if (!match || match[1].toLowerCase() !== repository.toLowerCase()) throw failure("GIT_COMMAND_FAILED", "PR URL differs from the actual remote repository");
     return Number(match[2]);
   };
   if (url !== undefined) identifyUrl(url);
-  const listed = url ? [readPrCommand(c, ["pr", "view", url, "--json", PR_READ_FIELDS])]
-    : readPrCommand(c, ["pr", "list", "--head", plan.pr.head, "--base", plan.pr.base, "--state", "all", "--json", PR_READ_FIELDS]);
+  const listed = url ? [readPrCommand(c, plan, ["pr", "view", url, "--json", PR_READ_FIELDS])]
+    : readPrCommand(c, plan, ["pr", "list", "--head", plan.pr.head, "--base", plan.pr.base, "--state", "all", "--json", PR_READ_FIELDS]);
   if (!Array.isArray(listed)) throw failure("GIT_COMMAND_FAILED", "GitHub PR list returned an invalid shape");
   const matching = listed.filter(row => row?.headRefName === plan.pr.head && row?.baseRefName === plan.pr.base);
   if (matching.length > 1) throw failure("GIT_COMMAND_FAILED", "multiple PRs match the planned head/base; inspect before retry");
@@ -380,6 +385,19 @@ function matchingPr(c, plan, sourceHead, url) {
   const row = matching[0];
   if (row.headRefOid !== sourceHead || !Number.isSafeInteger(row.number) || row.number < 1 || identifyUrl(row.url) !== row.number || url !== undefined && row.url !== url) throw failure("GIT_COMMAND_FAILED", "PR head/base/OID/requested URL readback differs from the delivered task");
   return { head: row.headRefName, base: row.baseRefName, url: row.url };
+}
+function cleanupWasSent(c, plan, planRef, targetHead) {
+  if (!actionFacts(c, planRef).some(row => row.operation === "cleanup" && row.status === "failed")) return false;
+  const dir = realDirectory(join(c.taskDir, "quality", "evidence", "git-authorizations"));
+  return readdirSync(dir).filter(name => /^\d{4}-\d{2}-\d{2}-\d{3}-consumed-cleanup\.json$/.test(name)).some(name => {
+    const consumed = JSON.parse(readFile(dir, name));
+    if (consumed.operation !== "cleanup" || consumed.step_id !== `${planRef}:cleanup`) return false;
+    if (dirname(consumed.authorization_ref) !== dir) throw failure("AUTH_SCOPE_CONSUMPTION", "cleanup consumption grant is outside this task");
+    const grant = JSON.parse(readFile(dir, basename(consumed.authorization_ref)));
+    if (grant.operation !== "cleanup" || grant.branch !== plan.target_branch || grant.head !== targetHead) return false;
+    acceptedConfirmation(c, planRef, grant.confirmation_ref);
+    return true;
+  });
 }
 export async function inspectDeliveryCloseState({ taskDir, planRef } = {}) {
   const c = planRef ? contextForPlan(taskDir, planRef) : context(taskDir, { worktreeRequired: false });
@@ -407,7 +425,7 @@ export async function inspectDeliveryCloseState({ taskDir, planRef } = {}) {
   let sourceAnchor = task ?? (remoteTask.status === "available" ? remoteTask.oid : null);
   if (plan.steps.includes("pr") && !sourceAnchor) {
     try {
-      const listed = readPrCommand(c, ["pr", "list", "--head", plan.pr.head, "--base", plan.pr.base, "--state", "all", "--json", PR_READ_FIELDS]);
+      const listed = readPrCommand(c, plan, ["pr", "list", "--head", plan.pr.head, "--base", plan.pr.base, "--state", "all", "--json", PR_READ_FIELDS]);
       if (!Array.isArray(listed)) throw failure("GIT_COMMAND_FAILED", "PR source anchor list has invalid shape");
       const matching = listed.filter(row => row?.headRefName === plan.pr.head && row?.baseRefName === plan.pr.base);
       if (matching.length > 1) throw failure("GIT_COMMAND_FAILED", "PR source anchor is ambiguous");
@@ -435,8 +453,13 @@ export async function inspectDeliveryCloseState({ taskDir, planRef } = {}) {
   let pr;
   if (plan.steps.includes("pr")) {
     const pushed = actions.filter(row => row.operation === "push-task" && row.status === "completed").at(-1);
+    let partialCleanup = false;
+    if (remoteTask.status === "absent" && !facts.cleanup?.removed && merged && archive && facts.push && facts.formal_cleanup_safe) {
+      try { partialCleanup = cleanupWasSent(c, plan, planRef, target); }
+      catch (error) { readErrors.push(error.message); }
+    }
     facts.task_branch_pushed = remoteTask.status === "unavailable" ? null : Boolean(pushed && pushed.source_head === sourceCommit
-      && (remoteTask.oid === sourceCommit || remoteTask.status === "absent" && facts.cleanup?.removed && merged && facts.push));
+      && (remoteTask.oid === sourceCommit || remoteTask.status === "absent" && (facts.cleanup?.removed || partialCleanup) && merged && facts.push));
     const opened = actions.filter(row => row.operation === "pr" && row.status === "completed" && row.pr?.url).at(-1);
     try {
       const actual = matchingPr(c, plan, sourceCommit, opened?.pr.url);
@@ -502,7 +525,9 @@ export async function inspectDeliveryCloseState({ taskDir, planRef } = {}) {
 export async function executeClosePlan({ taskDir, planRef, confirmationRef, signal } = {}) {
   assertPostWriter(taskDir);
   const c = contextForPlan(taskDir, planRef); const plan = readPlan(c, planRef);
-  if (plan.mode === "post-cleanup-archive") c.worktree = c.root; else realDirectory(c.worktree);
+  if (plan.mode === "post-cleanup-archive") c.worktree = c.root;
+  else if (existsSync(c.worktree)) realDirectory(c.worktree);
+  else if (plan.preserve_existing_workspace || !cleanupWasSent(c, plan, planRef, branchOid(c.root, plan.target_branch))) throw failure("CLEANUP_UNSAFE", "missing task worktree is not covered by a prior authorized cleanup");
   acceptedConfirmation(c, planRef, confirmationRef);
   const directory = evidenceDirectory(c.taskDir);
   return withLock(dirname(directory), "close.execution", async () => {
@@ -523,7 +548,7 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
         const picked = candidates.find(({ row }) => {
           if (!actualSource || row.source_head !== actualSource || !validOid(row.target_head) || !ancestor(plan.source.head, actualSource)) return false;
           if (operation === "commit") {
-            if (row.target_head !== plan.target_head || !physical.facts.delivery_committed || entries(c.worktree).length || plan.source.changes.length && actualSource === plan.source.head) return false;
+            if (row.target_head !== plan.target_head || !physical.facts.delivery_committed || existsSync(c.worktree) && entries(c.worktree).length || plan.source.changes.length && actualSource === plan.source.head) return false;
             return plan.source.changes.every(change => {
               if (change.sha256 === null) return git(c.root, ["ls-tree", "--name-only", actualSource, "--", change.path]).trim() === "";
               const blob = spawnSync("git", ["show", `${actualSource}:${change.path}`], { cwd: c.root, env: gitEnv(), maxBuffer: 32 * 1024 * 1024 });
@@ -569,6 +594,15 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
       if (consumed.authorization_ref !== fresh.path || consumed.operation !== operation || consumed.step_id !== `${planRef}:${action}`) throw failure("AUTH_SCOPE_CONSUMPTION", "native consumer selected another grant; no action performed");
       return consumed;
     };
+    const previouslySent = action => {
+      if (!priorActions.some(row => row.operation === action && row.status === "failed")) return false;
+      const operation = closeActionScope(c, action).operation, dir = authorizationDirectory(c.taskDir);
+      return readdirSync(dir).filter(name => new RegExp(`^\\d{4}-\\d{2}-\\d{2}-\\d{3}-consumed-${operation}\\.json$`).test(name))
+        .some(name => {
+          const row = JSON.parse(readFile(dir, name));
+          return row.operation === operation && row.step_id === `${planRef}:${action}`;
+        });
+    };
     for (const operation of plan.steps) {
       if (signal?.aborted) return { status: "cancelled", records, physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
       if (records.some(row => row.operation === operation && row.status === "completed")) continue;
@@ -593,9 +627,12 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
         } else if (operation === "push-task") {
           const remoteTask = remoteOid(c.root, plan.remote, plan.task_branch);
           if (remoteTask.status === "unavailable") throw failure("REMOTE_UNAVAILABLE", remoteTask.reason);
-          if (remoteTask.oid !== plan.remote_task_head) throw failure("REMOTE_TASK_DRIFT", "remote task branch changed before task publication");
+          const alreadyPublished = remoteTask.oid === sourceHead && previouslySent("push-task");
+          if (remoteTask.oid !== plan.remote_task_head && !alreadyPublished) throw failure("REMOTE_TASK_DRIFT", "remote task branch changed before task publication");
+          // Revalidate the original plan consumption even when the prior send
+          // lost its response. Observe its exact postcondition, never resend.
           consume("push-task");
-          git(c.worktree, ["push", plan.remote, `${plan.task_branch}:${plan.task_branch}`]);
+          if (!alreadyPublished) git(c.worktree, ["push", plan.remote, `${plan.task_branch}:${plan.task_branch}`]);
           if (remoteOid(c.root, plan.remote, plan.task_branch).oid !== sourceHead) throw failure("PUSH_READBACK", "remote task differs after task push");
         } else if (operation === "pr") {
           validatePrDescription(plan.pr.body);
@@ -604,7 +641,7 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
           consume("pr");
           let actual = matchingPr(c, plan, sourceHead);
           if (!actual) {
-            const result = prCommand(c.worktree, ["pr", "create", "--head", plan.pr.head, "--base", plan.pr.base, "--title", plan.pr.title, "--body", plan.pr.body]);
+            const result = prCommand(c.worktree, ["pr", "create", "--head", plan.pr.head, "--base", plan.pr.base, "--title", plan.pr.title, "--body", plan.pr.body, "--repo", prRepository(c, plan.remote)]);
             if (result.error || result.status !== 0) {
               // Inspect once after a potentially successful external send, but
               // retain the command failure. A later invocation must inspect
@@ -643,30 +680,41 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
         } else if (operation === "push") {
           await assertCleanTarget({ root: c.root, target: c.root, baseline: targetHead, expectBranch: plan.target_branch });
           const remote = remoteOid(c.root, plan.remote, plan.target_branch);
-          if (remote.status !== "available" || remote.oid !== plan.remote_target_head) throw failure("REMOTE_HEAD_DRIFT", "remote target changed since close planning");
+          const alreadyPublished = remote.status === "available" && remote.oid === targetHead && previouslySent("push");
+          if (remote.status !== "available" || remote.oid !== plan.remote_target_head && !alreadyPublished) throw failure("REMOTE_HEAD_DRIFT", "remote target changed since close planning");
           consume("push");
-          git(c.root, ["push", plan.remote, `${plan.target_branch}:${plan.target_branch}`]);
+          if (!alreadyPublished) git(c.root, ["push", plan.remote, `${plan.target_branch}:${plan.target_branch}`]);
           if (remoteOid(c.root, plan.remote, plan.target_branch).oid !== targetHead) throw failure("PUSH_READBACK", "remote target differs after push");
         } else if (operation === "cleanup") {
           if (plan.preserve_existing_workspace) {
             records.push({ operation, status: "skipped", reason: "existing workspace is not task-owned" }); continue;
           }
           await assertCleanTarget({ root: c.root, target: c.root, baseline: targetHead, expectBranch: plan.target_branch });
-          assertNoSidecars(c.worktree, plan.task_id);
-          if (entries(c.worktree).length) throw failure("CLEANUP_UNSAFE", "task worktree has uncommitted files");
-          const ignored = git(c.worktree, ["ls-files", "--others", "--ignored", "--exclude-standard", "-z"]).split("\0").filter(Boolean);
-          if (ignored.length) throw failure("CLEANUP_UNSAFE", `ignored files must be preserved before removal: ${ignored.join(", ")}`);
+          const sourceExists = existsSync(c.worktree);
+          if (sourceExists) {
+            assertNoSidecars(c.worktree, plan.task_id);
+            if (entries(c.worktree).length) throw failure("CLEANUP_UNSAFE", "task worktree has uncommitted files");
+            const ignored = git(c.worktree, ["ls-files", "--others", "--ignored", "--exclude-standard", "-z"]).split("\0").filter(Boolean);
+            if (ignored.length) throw failure("CLEANUP_UNSAFE", `ignored files must be preserved before removal: ${ignored.join(", ")}`);
+          }
+          const cleanupRetry = cleanupWasSent(c, plan, planRef, targetHead);
+          if (!sourceExists && !cleanupRetry) throw failure("CLEANUP_UNSAFE", "task worktree is absent without a prior authorized cleanup");
           if (branchOid(c.root, plan.task_branch) !== sourceHead) throw failure("SOURCE_HEAD_DRIFT", "task branch moved before cleanup");
+          if (git(c.root, ["merge-base", "--is-ancestor", sourceHead, targetHead], { optional: true }).status !== 0) throw failure("CLEANUP_UNSAFE", "task branch is not merged into the delivered target");
+          const delivered = remoteOid(c.root, plan.remote, plan.target_branch);
+          if (delivered.status !== "available" || delivered.oid !== targetHead) throw failure("PUSH_READBACK", "delivered target differs before cleanup");
           const remoteTask = remoteOid(c.root, plan.remote, plan.task_branch);
           if (remoteTask.status === "unavailable") throw failure("REMOTE_UNAVAILABLE", remoteTask.reason);
           const pushedTask = records.filter(row => row.operation === "push-task" && row.status === "completed").at(-1);
-          if (remoteTask.oid !== (pushedTask?.source_head ?? plan.remote_task_head)) throw failure("REMOTE_TASK_DRIFT", "remote task branch differs from the actual planned publication");
+          if (remoteTask.oid !== (pushedTask?.source_head ?? plan.remote_task_head) && !(remoteTask.status === "absent" && cleanupRetry)) throw failure("REMOTE_TASK_DRIFT", "remote task branch differs from the actual planned publication");
           if (remoteTask.oid && (git(c.root, ["cat-file", "-e", `${remoteTask.oid}^{commit}`], { optional: true }).status !== 0 || git(c.root, ["merge-base", "--is-ancestor", remoteTask.oid, sourceHead], { optional: true }).status !== 0 || git(c.root, ["merge-base", "--is-ancestor", remoteTask.oid, targetHead], { optional: true }).status !== 0)) throw failure("REMOTE_TASK_UNMERGED", "remote task tip is unavailable or contains work not merged into the delivered source/target; refusing deletion");
           consume("cleanup");
           if (remoteTask.oid) git(c.root, ["push", plan.remote, "--delete", plan.task_branch]);
-          assertNoSidecars(c.worktree, plan.task_id);
-          if (entries(c.worktree).length || git(c.worktree, ["ls-files", "--others", "--ignored", "--exclude-standard", "-z"]).length) throw failure("CLEANUP_UNSAFE", "task worktree changed immediately before removal");
-          git(c.root, ["worktree", "remove", "--", c.worktree]);
+          if (sourceExists) {
+            assertNoSidecars(c.worktree, plan.task_id);
+            if (entries(c.worktree).length || git(c.worktree, ["ls-files", "--others", "--ignored", "--exclude-standard", "-z"]).length) throw failure("CLEANUP_UNSAFE", "task worktree changed immediately before removal");
+            git(c.root, ["worktree", "remove", "--", c.worktree]);
+          }
           git(c.root, ["branch", "-d", "--", plan.task_branch]);
         }
         const record = { operation, status: "completed", source_head: sourceHead, target_head: targetHead, ...(prResult ? { pr: prResult } : {}), recorded_at: new Date().toISOString() };

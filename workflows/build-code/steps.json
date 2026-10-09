@@ -94,7 +94,7 @@
     {
       "step_id": 8,
       "step_slug": "review-change",
-      "observable_result": "每Phase一次独立OCR审查保存真实发现；仅OCR缺失/版本低时wh-review同面fallback，已装失败保持unavailable。 条件回退读取当前 workflows/build-code/SKILL.md 的「## OCR 能力与回退」，P9 政策实际选择 architect-code-review 后才启用该缺失/低版本 facet；已装失败、超时、取消保原 unavailable，不回退。每 Phase 同时一次独立上下文同源补充轴，消费当前真实 diff、完整 AC、实际输出原ref与仓库规范，Standards/Spec 两镜头及 OCR/补充两轴并排、不合并排名；same_source_degraded 不计异源 quorum、不覆盖 OCR identity 或 review_result_ref，补充执行者返回原文由主会话 appendRecord 仅存一次，后续引用既有 evidence；各路失败、取消、迟到发现分开保留，不增步骤或 gate。",
+      "observable_result": "每Phase一次独立OCR审查保存真实发现；仅OCR缺失/版本低时architect-code-review同面fallback，已装失败保持unavailable。 条件回退读取当前 workflows/build-code/SKILL.md 的「## OCR 能力与回退」，P9 政策实际选择 architect-code-review 后才启用该缺失/低版本 facet；已装失败、超时、取消保原 unavailable，不回退。每 Phase 同时一次独立上下文同源补充轴，消费当前真实 diff、完整 AC、实际输出原ref与仓库规范，Standards/Spec 两镜头及 OCR/补充两轴并排、不合并排名；same_source_degraded 不计异源 quorum、不覆盖 OCR identity 或 review_result_ref，补充执行者返回原文由主会话 appendRecord 仅存一次，后续引用既有 evidence；各路失败、取消、迟到发现分开保留，不增步骤或 gate。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",

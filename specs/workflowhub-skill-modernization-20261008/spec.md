@@ -132,7 +132,7 @@ make-decision使用者输入raw与研究，五段map/fog记录在现decision-log
 
 ## 5. 模块、实体、生命周期与兼容
 
-方法正文负责动作；catalog负责唯一历史出处/归属许可登记；deps和wh两清单是真实接线；close owner负责PR已有计划/动作，task-store/review-route只记事实。catalog顶层legacy_registration_history保存原44有序完整八字段[id,path,version,origin_path,origin_framework,local_changes,owner_stage,metrics_enabled]，不覆盖当前skills.local_changes、不参与runtime active派发。唯一consumer人读迁移/退役与本任务独立保全重放，ownerR同时负责当前新commit/activebuild-spec/已定退役登记迁移，legacy原44行不动。只有被新具名历史载体承接、无读者且保留来源决定后可退役，不新增机器reader。A/B只git单文件A原字节与B当前字节，输出原件single，评分从原约束/需求独立冻结；迟到/失败不覆盖、cleanup不清证据。旧无pr五步/规划四步计划保持读和执行兼容；历史stage枚举仅保来源，不复活writer。
+方法正文负责动作；catalog负责唯一历史出处/归属许可登记；deps和wh两清单是真实接线；close owner负责PR已有计划/动作，task-store/review-route只记事实。catalog顶层legacy_registration_history保存原44有序完整八字段[id,path,version,origin_path,origin_framework,local_changes,owner_stage,metrics_enabled]，历史复制不覆盖当前skills.local_changes、不参与runtime active派发。verify-code当前登记叙述窄修仅由P1/T001登记owner实施：stage-reflection、deep-research、anysearch、architect-code-review、diagnosing-bugs中确经现正文/消费者证明过时的purpose、design_idea、local_changes、upstream、update_policy可作对应语义更正；upstream未知固定来源明确unknown，不伪pin。legacy完整八字段/顺序/空值一字不动；不自动消used_by_stages report-only差异，不把当前叙述变为派发权威。唯一consumer人读迁移/退役与本任务独立保全重放，ownerR同时负责当前新commit/activebuild-spec/已定退役登记迁移，legacy原44行不动。只有被新具名历史载体承接、无读者且保留来源决定后可退役，不新增机器reader。A/B只git单文件A原字节与B当前字节，输出原件single，评分从原约束/需求独立冻结；迟到/失败不覆盖、cleanup不清证据。旧无pr五步/规划四步计划保持读和执行兼容；历史stage枚举仅保来源，不复活writer。
 
 ## 6. 非目标（唯一权威）
 
@@ -143,6 +143,12 @@ make-decision使用者输入raw与研究，五段map/fog记录在现decision-log
 场景→FR→Appendix A→物理Phase Task→frozen同oracle→actual单份原件。每Task正负例/tier/具体skill/同命令/归因/coverage/STOP；纯owned .md无新运行行为才G-2，JSON/代码/混合不借G-2。比较不造仪式RED，already-pass是P2P保护非新RED；缺环境不是目标RED。
 
 ## 实现设计（全局权威）
+
+### 当前source/scope correction — verify-code WH-LITERAL-01
+
+来源：[独立详核402](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-skill-modernization-20261008/quality/evidence/2026-10-09-402-verify-original-requirements-independent-audit.md)、[具体CR399](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-skill-modernization-20261008/quality/evidence/2026-10-09-399-wh-literal437-specific-test-cr.json)、[原目标RED984](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-skill-modernization-20261008/quality/tests/2026-10-09-984-wh-literal437-target-red.json)与其唯一raw。父主会话明确转交本材料owner窄修范围，不改R/决定/FR/Appendix A、相序或进度声明。当前wh-review:11已把回退政策单一权威交两workflow「OCR 能力与回退」，自身执行文档审查与Long-review等待；simple-contracts原:437却仍向wh正文找ENOENT/低版字面，原source SHA256 9238cba8fba6833b1b2b49df7fb2ce4632b783c73bde8d0598b0b540d2aaee20，wh SHA256 a21d6611fc0bd096e8766e96278835c22bf35e8c4d3da17c54da4269241032b5。984实跑exit1、selected1fail/24filtered，首ENOENT断言失败，后两旧断言未到，不是环境RED。
+
+仅将精确consumer test路径skills/wh-review/scripts/__tests__/simple-contracts.test.mjs纳P8/T016：唯一test实施owner74974d30，独立非作者source批准及同命令GREEN ownerc7edbb8f。按CR399只改该case与其必要本地oracle，保全部其它case/import/fixture及required/existence断言；将原条件强度迁到真实workflow政策节，并负控wh两指针、缺失/低版唯一architect、检测其它错及installed失败不fallback/invalid-output失败、Long-review真实终态边界。restore旧wh字面会重复政策权威并退回已接受方法，不能为消RED回填；不得删除断言/泛mentions换绿。先独立核实际test diff再同984 -t命令GREEN；本材料只确认当前写集与来源，CR尚待独立批准、修改/GREEN不冒已完成。九外置冻结oracle/scorer/gold、原raw/review、生产provider/公共入口均不改，不新增Task/Phase/gate。
 
 ### 已核接口与选择
 
@@ -242,6 +248,7 @@ P1 R历史登记；P2 A1夹具/禁区；P3 A2′三正文；P4 A3真实比较；
 | MODIFY | `tools/cli/run-checks.mjs` | P8 |
 | MODIFY（仅resolveSkillPackage消费既有name/path/trigger合同） | `runtime/adapters/local-skill-resolver.mjs` | P8/T016 |
 | MODIFY（具体test change request独立批准后，保原cases并新增定向case） | `core/__tests__/local-skill-resolver.test.mjs` | P8/T016 |
+| MODIFY（仅当前OCR回退consumer case，CR399及独立批准后） | `skills/wh-review/scripts/__tests__/simple-contracts.test.mjs` | P8/T016；test唯一实施owner74974d30，独立批准/GREEN ownerc7edbb8f |
 | NEW | `tools/cli/check-skill-consistency.mjs` | P8 |
 | DELETE（consumer已迁后） | `skills/spec-tasks/SKILL.md` | P8 |
 | DELETE（consumer已迁后） | `skills/spec-tasks/skill-bundle.json` | P8 |

@@ -568,18 +568,18 @@ skills:
     last_reviewed_at: '2026-07-14'
     status: native
     metrics_enabled: true
-    purpose: 每个 authoring stage 结束时产出轻量判断层复盘
-    design_idea: 用当前会话记忆、lessons 与本 stage outcome 生成可追溯判断，不制造质量分数或推进门禁
+    purpose: 真实阶段末有过程问题时可选提出有源候选，供用户选择检查、判断待办或无操作
+    design_idea: 只读可见会话与现材料/执行原件；用户选机械候选后优先结构、类型、测试，人判断项只留未解 Improvements，不生成质量裁决或推进门
     used_by_stages:
       - make-decision
       - build-plan
       - build-code
       - verify-code
     upstream: []
-    local_changes: workflowhub 原生技能；由各 authoring stage 显式挂载；仅写当前 task 复盘与仓外 lessons，不建立第二控制面
+    local_changes: workflowhub 原生方法吸收 Matt retro 与 pstack correct/principle 的适用纪律；候选经用户真选，检查须败于真实历史错，判断未解项归目标项目 Improvements、人确认解决才 prune；普通复盘原件不另建 lessons writer、validator 或第二控制面
     dependency_closure:
       - skills/stage-reflection
-    update_policy: 随 stage-reflection schema、validator 与五阶段挂载合同一并审查
+    update_policy: 迭代时核正文三个具名固定子文件与本地偏离、用户选择/check/prune消费者；pstack各文件内容pin不推原采集commit/时间或全仓基线，不自动追HEAD或以来源登记冒效果
   - name: stage-handoff
     path: skills/stage-handoff/SKILL.md
     local_version: 1.0.0
@@ -637,15 +637,15 @@ skills:
     last_reviewed_at: "2026-09-22"
     status: native
     metrics_enabled: true
-    purpose: 为 make-decision 提供可复核的深度调研输入
-    design_idea: R0-R5 有界调研、原文证据、三角测量、content-addressed 报告与独立复核
+    purpose: 为 make-decision 方向问题提供深研究报告，为 build-plan 或后续已收敛方向的点状问题返回轻研究内存结果
+    design_idea: 按真实问题选 R0-R5 有界普通报告/独立复核或轻研究证据、备选、取舍与未决；两分支不重复，不以报告hash认证为Talk前提
     used_by_stages:
       - make-decision
     upstream: []
-    local_changes: workflowhub 原生技能；make-decision 唯一 consumer/owner；研究报告只以 path+hash 进入 Talk，不复制正文；候选交付从同一份报告派生并逐项要求摘要、来源、建议和理由；无工具或交付不全保留事实，不新增 gate
+    local_changes: workflowhub 原生方法；方向问题供 make-decision Talk，深报告写任务约定普通研究原件；轻研究承接 spec-research 点状规划职责，仅返回既有内存 spec-research-result.v1，不强制深报告或另写文件；母方向变化交回调用者，缺工具/来源/失败/取消保真实限制，不新增 gate
     dependency_closure:
       - skills/deep-research
-    update_policy: 随 make-decision 调研契约、research-report.v1 与工具路由变更审查
+    update_policy: 随深研究普通报告与轻研究内存结果的真实消费者、来源/工具边界及方向交回合同变更审查
   - name: grill-with-docs
     path: skills/grill-with-docs/SKILL.md
     local_version: 1.0.0
