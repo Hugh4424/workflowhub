@@ -102,6 +102,7 @@ function checkSkillStaticDependencies() {
   const entries=Array.isArray(catalog?.skills)?catalog.skills:[];
   const failures=[];
   for(const entry of entries) {
+    if(entry.status==="retired") continue;
     if(typeof entry.path!=="string" || !entry.path.startsWith("skills/")) continue;
     const skillDir=dirname(resolve(repoRoot,entry.path));
     const checked=validateSkillBundle(repoRoot,`${entry.path.slice(0,-"SKILL.md".length)}skill-bundle.json`,entry.path);
@@ -127,6 +128,10 @@ function runAggregate() {
   console.log("[run-checks] running skill-static-deps ...");
   const skillDepsCode=runChecker("skill-static-deps",[],checkSkillStaticDependencies);
   if(skillDepsCode!==0)failures.push({name:"skill-static-deps",code:skillDepsCode});
+
+  console.log("[run-checks] running check-skill-consistency ...");
+  const consistencyCode=runChecker("check-skill-consistency",["--root",repoRoot]);
+  if(consistencyCode!==0)failures.push({name:"check-skill-consistency",code:consistencyCode});
 
   // 2. check-stage-quality (M5 FR-GATE-001/002 — quality-class blocking gates = 0)
   console.log("[run-checks] running check-stage-quality ...");

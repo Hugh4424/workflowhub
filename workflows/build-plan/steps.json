@@ -15,8 +15,8 @@
     },
     {
       "step_id": 2,
-      "step_slug": "conditional-spec-research",
-      "observable_result": "影响实现的消费者、接口、状态和失败边界有真实依据；研究跳过或不可用的原因可读。",
+      "step_slug": "conditional-light-research",
+      "observable_result": "影响实现的消费者、接口、状态和失败边界有真实依据；研究跳过或不可用的原因可读。 deep-research 轻研究分支返回真实内存结果，不冒深正式报告；spec-plan 生成唯一纯指针索引并按真实附件与 bundle 登记取模板。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -138,7 +138,7 @@
     {
       "step_id": 12,
       "step_slug": "confirm-plan-and-handoff",
-      "observable_result": "主会话展示当前计划并保存真实确认，未答保留草稿；写人读交接说明风险、证据和build-code下一步。",
+      "observable_result": "主会话展示当前计划并保存真实确认，未答保留草稿；写人读交接说明风险、证据和build-code下一步。 真实 stage 末过程问题可按 stage-reflection 提有源候选，用户真选后才分确定检查或人判断未解 Improvements；未答不采用、已解由人 prune，不新增规范/知识库/机器进度或每 Phase 固定复盘。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",

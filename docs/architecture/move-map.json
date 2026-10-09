@@ -10,15 +10,15 @@
       "destination": "Improvements.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "futurepending：P8/T014 创建项目根未解决人判断待办清单，头说明不是规范或知识库；仅保真实复盘候选经用户选择、确需人判断且尚未解决的项。机械重复优先 architecture → types → test；本条只创建前职责预登记，不代表已创建、已采用候选、方法改写或测试/质量通过，不形成第二进度来源。",
+      "responsibility": "P8/T014 原owner已创建源文件（真实无人选/方法效果限制按原事实）：P8/T014 创建项目根未解决人判断待办清单，头说明不是规范或知识库；仅保真实复盘候选经用户选择、确需人判断且尚未解决的项。机械重复优先 architecture → types → test；根载体与原 T014 方法正文已实际创建；当前没有真实用户已选问题条目，未观测人工 prune 或后继消费，不代表候选采用或测试/质量通过，不形成第二进度来源。",
       "owner": "P8/T014 / stage-reflection 与 Improvements.md 原文件 writer（当前派发68c）；move-map 仍由原 P8/T016 维护者唯一持笔",
-      "consumer": "既有 skills/stage-reflection/SKILL.md:13–16 的可见会话观察→有依据建议→主会话链，由 accepted P8/T014:139–147 与 ADR-009 / D-004 承接用户挑选后的根待办；主会话、用户及后继任务发起者按真实未解项人读参考。当前方法未直接引用 Improvements.md，新根文件尚未存在；未来 T014 在其原scope连接该消费者，不伪称已有机器 reader 或真实执行。",
+      "consumer": "既有 skills/stage-reflection/SKILL.md:13–16 的可见会话观察→有依据建议→主会话链，由 accepted P8/T014:139–147 与 ADR-009 / D-004 承接用户挑选后的根待办；主会话、用户及后继任务发起者按真实未解项人读参考。实际 T014 根文件/method已交付；候选是否真选、prune及后继消费仍按原T014执行事实，不伪称已有机器 reader 或真实执行。",
       "module_consumers": [],
       "named_data_readers": [
         "skills/stage-reflection/SKILL.md"
       ],
       "delete_condition": "按 ADR-009 / D-004 与 P8/T014，只由人对真实已解决项 prune；未答候选不得自动 adopt，未知不得当已解决自动清空。全部项解决时条目可由人删尽，不由本预登记推导整文件删除许可；职责被审查后的替代承接且无当前 consumer 时才由对应文件 owner 按 spec:161 删除载体，历史来源与原始候选证据只读保留。",
-      "retention_basis": "futurepending：新根文件未创建／未接线／不得当前 complete；原职责 source=P8.md:139–147/:154、spec.md:31/:161、decision-log.md ADR-009:243–247 / D-004:443。替代重复 lessons/规则账本，不复制原始会话、raw候选或审查事实，不自动清理、不新增 schema/machine gate/Task/事实游标。测试仅既有外置 quality/tests/skill-modernization-reflection.test.mjs（P8:148同命令，T014独立测试owner消费）；旧3pass是有限方法report/负控回放，不证明新正文/根文件写入、真实用户选择、prune或下一任务消费，本次测试0。"
+      "retention_basis": "当前根载体与 T014 方法已存在；真实选择、prune 与后继消费未观测，不宣称方法效果或完整质量通过。旧058创建前预登记及其未创建状态仅是该历史时点原件，不作当前状态；原职责 source=P8.md:139–147/:154、spec.md:31/:161、decision-log.md ADR-009:243–247 / D-004:443。替代重复 lessons/规则账本，不复制原始会话、raw候选或审查事实，不自动清理、不新增 schema/machine gate/Task/事实游标。测试仅既有外置 quality/tests/skill-modernization-reflection.test.mjs（P8:148同命令，T014独立测试owner消费）；旧3pass是有限方法report/负控回放，不证明新正文/根文件写入、真实用户选择、prune或下一任务消费，本次测试0。"
     },
     {
       "source": "config/workflowhub.yaml",
@@ -1272,7 +1272,6 @@
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
       "named_data_readers": [
-        "repo-skills.manifest.json",
         "skills/catalog.yaml",
         "tests/moat-skills-phase2.test.mjs"
       ],
@@ -1434,7 +1433,6 @@
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
       "named_data_readers": [
-        "repo-skills.manifest.json",
         "skills/backend-testing/skill-bundle.json",
         "skills/catalog.yaml",
         "workflows/build-code/skill-deps.yaml"
@@ -1479,7 +1477,6 @@
         ".planning/2026-09-19-workflowhub-deferred-closeout/p3-test-strategy.md",
         ".planning/2026-09-19-workflowhub-deferred-closeout/verify-code-review-current.json",
         "THIRD_PARTY_NOTICES.md",
-        "repo-skills.manifest.json",
         "skills/wh-review/scripts/review-materials.mjs",
         "skills/workflowhub-multica-sync/SKILL.md",
         "skills/workflowhub-multica-sync/scripts/multica-skill-sync.mjs",
@@ -1490,129 +1487,6 @@
       ],
       "delete_condition": "revert only when the T18 bundle metadata is removed",
       "retention_basis": "MT-3-001 / NARROW"
-    },
-    {
-      "source": "skills/debate/SKILL.md",
-      "destination": "skills/debate/SKILL.md",
-      "status": "retain",
-      "role": "production",
-      "responsibility": "既有模块／资源职责；不从登记新增能力",
-      "owner": "原路径维护 owner；P7 仅登记现职责",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
-      "named_data_readers": [
-        "repo-skills.manifest.json",
-        "skills/catalog.yaml"
-      ],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "既有保留生产路径；本次仅归位说明"
-    },
-    {
-      "source": "skills/debate/examples/sample-input.md",
-      "destination": "skills/debate/examples/sample-input.md",
-      "status": "retain",
-      "role": "production",
-      "responsibility": "既有模块／资源职责；不从登记新增能力",
-      "owner": "原路径维护 owner；P7 仅登记现职责",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
-      "named_data_readers": [],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "既有保留生产路径；本次仅归位说明"
-    },
-    {
-      "source": "skills/debate/examples/sample-verdict.md",
-      "destination": "skills/debate/examples/sample-verdict.md",
-      "status": "retain",
-      "role": "production",
-      "responsibility": "既有模块／资源职责；不从登记新增能力",
-      "owner": "原路径维护 owner；P7 仅登记现职责",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
-      "named_data_readers": [],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "既有保留生产路径；本次仅归位说明"
-    },
-    {
-      "source": "skills/debate/pk-rules.ts",
-      "destination": "skills/debate/pk-rules.ts",
-      "status": "retain",
-      "role": "production",
-      "responsibility": "既有模块／资源职责；不从登记新增能力",
-      "owner": "原路径维护 owner；P7 仅登记现职责",
-      "consumer": "当前直接模块消费者：skills/debate/__tests__/skill-contract.test.mjs, skills/debate/pk-rules.test.ts",
-      "module_consumers": [
-        "skills/debate/__tests__/skill-contract.test.mjs",
-        "skills/debate/pk-rules.test.ts"
-      ],
-      "named_data_readers": [],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "既有保留生产路径；本次仅归位说明"
-    },
-    {
-      "source": "skills/debate/references/anti-bias-guardrails.md",
-      "destination": "skills/debate/references/anti-bias-guardrails.md",
-      "status": "retain",
-      "role": "production",
-      "responsibility": "既有模块／资源职责；不从登记新增能力",
-      "owner": "原路径维护 owner；P7 仅登记现职责",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
-      "named_data_readers": [],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "既有保留生产路径；本次仅归位说明"
-    },
-    {
-      "source": "skills/debate/references/arbitration-protocol.md",
-      "destination": "skills/debate/references/arbitration-protocol.md",
-      "status": "retain",
-      "role": "production",
-      "responsibility": "既有模块／资源职责；不从登记新增能力",
-      "owner": "原路径维护 owner；P7 仅登记现职责",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
-      "named_data_readers": [],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "既有保留生产路径；本次仅归位说明"
-    },
-    {
-      "source": "skills/debate/references/output-template.md",
-      "destination": "skills/debate/references/output-template.md",
-      "status": "retain",
-      "role": "production",
-      "responsibility": "既有模块／资源职责；不从登记新增能力",
-      "owner": "原路径维护 owner；P7 仅登记现职责",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
-      "named_data_readers": [],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "既有保留生产路径；本次仅归位说明"
-    },
-    {
-      "source": "skills/debate/references/role-spawn-templates.md",
-      "destination": "skills/debate/references/role-spawn-templates.md",
-      "status": "retain",
-      "role": "production",
-      "responsibility": "既有模块／资源职责；不从登记新增能力",
-      "owner": "原路径维护 owner；P7 仅登记现职责",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
-      "named_data_readers": [],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "既有保留生产路径；本次仅归位说明"
-    },
-    {
-      "source": "skills/debate/skill-bundle.json",
-      "destination": "skills/debate/skill-bundle.json",
-      "status": "retain",
-      "role": "production",
-      "responsibility": "技能加载",
-      "owner": "B5/P6 / MT-3-008",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
-      "named_data_readers": [],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "MT-3-008 / NARROW"
     },
     {
       "source": "skills/decision-log/SKILL.md",
@@ -1630,7 +1504,6 @@
         ".planning/2026-09-09-build-spec-and-build-plan/verify-code-review-input.json",
         ".planning/2026-09-09-build-spec-and-build-plan/verify-code-review-request-2.json",
         ".planning/2026-09-09-build-spec-and-build-plan/verify-code-review-request.json",
-        "repo-skills.manifest.json",
         "skills/catalog.yaml",
         "workflows/make-decision/skill-deps.yaml"
       ],
@@ -1688,7 +1561,6 @@
       "module_consumers": [],
       "named_data_readers": [
         "CONTEXT.md",
-        "repo-skills.manifest.json",
         "skills/catalog.yaml",
         "tests/contract/research-report-current.test.mjs",
         "workflows/make-decision/skill-deps.yaml"
@@ -1719,7 +1591,6 @@
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
       "named_data_readers": [
-        "repo-skills.manifest.json",
         "skills/catalog.yaml",
         "skills/reuse-registry.md",
         "tests/contract/ui-skill-contract.test.mjs",
@@ -1753,7 +1624,6 @@
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
       "named_data_readers": [
-        "repo-skills.manifest.json",
         "skills/catalog.yaml"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
@@ -1810,7 +1680,6 @@
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
       "named_data_readers": [
-        "repo-skills.manifest.json",
         "skills/catalog.yaml",
         "skills/reuse-registry.md",
         "tests/contract/ui-skill-contract.test.mjs",
@@ -1887,7 +1756,6 @@
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
       "named_data_readers": [
-        "repo-skills.manifest.json",
         "skills/catalog.yaml",
         "skills/reuse-registry.md",
         "workflows/build-plan/skill-deps.yaml"
@@ -1918,7 +1786,6 @@
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
       "named_data_readers": [
-        "repo-skills.manifest.json",
         "skills/catalog.yaml",
         "skills/frontend-testing/skill-bundle.json",
         "workflows/build-code/skill-deps.yaml"
@@ -1949,7 +1816,6 @@
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
       "named_data_readers": [
-        "repo-skills.manifest.json",
         "skills/catalog.yaml",
         "skills/fullstack-slice-testing/skill-bundle.json",
         "workflows/build-code/skill-deps.yaml"
@@ -1988,17 +1854,17 @@
       "destination": "skills/grill-with-docs/GLOSSARY-FORMAT.md",
       "status": "move",
       "role": "production",
-      "responsibility": "futurepending：P7/T011 承接 CONTEXT-FORMAT.md → GLOSSARY-FORMAT.md 唯一领域格式附件改名，保原 Relationships / Example dialogue / Flagged ambiguities 及适用 Rules / Single vs multi-context 内容；仅创建前职责预登记，不证明附件改名、正文/bundle/test 迁移或 P7 完成，不改 ADR-FORMAT.md 或追加 ADR 判据。",
+      "responsibility": "P7/T011 已由原owner改名的唯一领域格式附件，正文、bundle及精确测试均由P7原scope承接；本表只维护真实路径职责，不覆盖其文件owner/质量原件。",
       "owner": "P7/T011 / P7-single-writer（附件、正文、bundle 与经批准的精确测试迁移 owner；move-map 仍由 P8/T016 原维护者唯一持笔）",
-      "consumer": "现 skills/grill-with-docs/SKILL.md:189 解析领域格式附件，skills/grill-with-docs/skill-bundle.json 的 files:7 提供附件闭包，tests/moat-skills-phase1.test.mjs:75 同步 existsSync 精确附件存在性断言；当前仍消费旧名，P7/T011 按既有范围迁新名，CR273 / 独立157仅批准测试scope，实际diff尚未执行/批准。",
+      "consumer": "当前 skills/grill-with-docs/SKILL.md:180 已读取新 GLOSSARY-FORMAT.md；skills/grill-with-docs/skill-bundle.json:7 已登记该附件；tests/moat-skills-phase1.test.mjs:75 精确新附件 existsSync，:79 精确 Update GLOSSARY.md 输出词已由原 P7 授权 scope 承接，当前源 e6cd / 已存计划 f9e4 可读。CR273 / 独立157 scope-only、actual_test_diff_approved=false 仅是创建前预登记历史时点，不覆盖后续实际来源；以上是有限真实接线，不是全局 Stage/inventory 认证。",
       "module_consumers": [],
       "named_data_readers": [
         "skills/grill-with-docs/SKILL.md",
         "skills/grill-with-docs/skill-bundle.json",
         "tests/moat-skills-phase1.test.mjs"
       ],
-      "delete_condition": "由 P7/T011 在新格式实际承接且正文/bundle/经批准的精确测试 reader 全部迁新名后完成唯一附件 rename，仅保留新格式；不得保旧附件或 old-or-new 断言凑绿。新附件职责被经审查的替代承接且无当前 consumer 时由对应文件 owner 删除。旧 self-pair、来源与历史理由本次不改，历史原件只读保留；本条不授权现在 rename 或删除。",
-      "retention_basis": "futurepending 原件未迁／不得当前 complete；原 CONTEXT-FORMAT self-pair owner、consumer、delete_condition 与 retention_basis 逐字保留；当前 spec.md:161、P7.md:T011/:87/:103、P8.md:23 普通目录责任时序，非第三跨 Phase 正文 owner、Task 或 gate。测试为既有 moat-skills-phase1.test.mjs:75 精确filename迁移，CR273 原ref + 独立157 approved_scope_only / actual_test_diff_approved=false；本次不运行或修改测试。ADR-FORMAT.md 及正文原 all-three（Hard to reverse / Surprising without context / real trade-off）均未改，本条只登记领域格式rename。"
+      "delete_condition": "由 P7/T011 在新格式实际承接且正文/bundle/经批准的精确测试 reader 全部迁新名后完成唯一附件 rename，仅保留新格式；不得保旧附件或 old-or-new 断言凑绿。新附件职责被经审查的替代承接且无当前 consumer 时由对应文件 owner 删除。已交付 rename 的旧 self-pair、来源与历史理由按原 Git 来源只读保留，不表示当前旧载体仍存在；本条不授权再次 rename 或额外删除。",
+      "retention_basis": "当前原 P7 owner 已完成唯一附件迁名与正文/bundle/上述精确测试 reader 承接；184预登记的未迁状态、CR273/157 scope-only 为历史时点原ref，不再描述当前。原 CONTEXT-FORMAT self-pair 与其完整原字段通过原 Git 来源只读保留，不声称当前旧附件存在；当前 spec.md:161、P7.md:T011/:87/:103、P8.md:23 普通目录责任时序，非第三跨 Phase 正文 owner、Task 或 gate。测试为既有 moat-skills-phase1.test.mjs:75 精确filename迁移，CR273 原ref + 独立157 approved_scope_only / actual_test_diff_approved=false；本次不运行或修改测试。ADR-FORMAT.md 及正文原 all-three（Hard to reverse / Surprising without context / real trade-off）均未改，本条只登记领域格式rename。"
     },
     {
       "source": "skills/grill-with-docs/CONTEXT-FORMAT.md",
@@ -2023,7 +1889,6 @@
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
       "named_data_readers": [
-        "repo-skills.manifest.json",
         "skills/catalog.yaml",
         "tests/moat-skills-phase1.test.mjs",
         "workflows/make-decision/skill-deps.yaml"
@@ -2054,7 +1919,6 @@
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
       "named_data_readers": [
-        "repo-skills.manifest.json",
         "skills/catalog.yaml",
         "tests/contract/review-materials-contract.test.mjs",
         "tests/moat-skills-phase1.test.mjs"
@@ -2085,7 +1949,6 @@
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
       "named_data_readers": [
-        "repo-skills.manifest.json",
         "skills/catalog.yaml",
         "skills/frontend-prototype-render/SKILL.md",
         "skills/ui-project-init/SKILL.md"
@@ -2233,7 +2096,6 @@
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
       "named_data_readers": [
-        "repo-skills.manifest.json",
         "skills/catalog.yaml"
       ],
       "delete_condition": "remove when mini-task has no supported consumer",
@@ -2275,7 +2137,6 @@
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
       "named_data_readers": [
-        "repo-skills.manifest.json",
         "skills/catalog.yaml"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
@@ -2317,7 +2178,6 @@
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
       "named_data_readers": [
-        "repo-skills.manifest.json",
         "skills/catalog.yaml",
         "workflows/build-plan/skill-deps.yaml"
       ],
@@ -2360,7 +2220,6 @@
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
       "named_data_readers": [
-        "repo-skills.manifest.json",
         "skills/catalog.yaml",
         "tests/contract/card03-review-orchestration.test.mjs",
         "workflows/build-plan/skill-deps.yaml"
@@ -2404,7 +2263,6 @@
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
       "named_data_readers": [
-        "repo-skills.manifest.json",
         "skills/catalog.yaml"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
@@ -2453,7 +2311,6 @@
         ".planning/2026-09-16-build-code-mechanism-waste-reduction/p1-phase-review-input.json",
         ".planning/2026-09-16-build-code-mechanism-waste-reduction/p6-phase-review-input.json",
         ".planning/2026-09-16-build-code-mechanism-waste-reduction/p7-phase-review-input.json",
-        "repo-skills.manifest.json",
         "skills/catalog.yaml",
         "tests/contract/build-prd-review-contract.test.mjs",
         "tests/contract/ocr-review-contract-bundle.test.mjs",
@@ -2502,7 +2359,6 @@
         ".planning/2026-09-16-build-code-mechanism-waste-reduction/p1-phase-review-input.json",
         ".planning/2026-09-16-build-code-mechanism-waste-reduction/p6-phase-review-input.json",
         ".planning/2026-09-16-build-code-mechanism-waste-reduction/p7-phase-review-input.json",
-        "repo-skills.manifest.json",
         "skills/catalog.yaml",
         "tests/contract/ocr-review-contract-bundle.test.mjs",
         "tools/cli/stage-runtime.mjs",
@@ -2547,7 +2403,6 @@
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
       "named_data_readers": [
-        "repo-skills.manifest.json",
         "skills/catalog.yaml",
         "workflows/build-code/skill-deps.yaml",
         "workflows/build-plan/skill-deps.yaml",
@@ -2606,7 +2461,6 @@
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
       "named_data_readers": [
-        "repo-skills.manifest.json",
         "skills/catalog.yaml",
         "workflows/build-plan/skill-deps.yaml"
       ],
@@ -2636,7 +2490,6 @@
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
       "named_data_readers": [
-        "repo-skills.manifest.json",
         "skills/catalog.yaml",
         "workflows/build-plan/skill-deps.yaml"
       ],
@@ -2681,7 +2534,6 @@
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
       "named_data_readers": [
-        "repo-skills.manifest.json",
         "skills/catalog.yaml",
         "workflows/build-prd/SKILL.md",
         "workflows/build-prd/skill-deps.yaml"
@@ -2716,36 +2568,6 @@
       "retention_basis": "MT-3-046 / NARROW"
     },
     {
-      "source": "skills/spec-research/SKILL.md",
-      "destination": "skills/spec-research/SKILL.md",
-      "status": "retain",
-      "role": "production",
-      "responsibility": "既有模块／资源职责；不从登记新增能力",
-      "owner": "原路径维护 owner；P7 仅登记现职责",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
-      "named_data_readers": [
-        "repo-skills.manifest.json",
-        "skills/catalog.yaml",
-        "workflows/build-plan/skill-deps.yaml"
-      ],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "既有保留生产路径；本次仅归位说明"
-    },
-    {
-      "source": "skills/spec-research/skill-bundle.json",
-      "destination": "skills/spec-research/skill-bundle.json",
-      "status": "retain",
-      "role": "production",
-      "responsibility": "技能加载",
-      "owner": "B5/P6 / MT-3-048",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
-      "named_data_readers": [],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "MT-3-048 / NARROW"
-    },
-    {
       "source": "skills/spec-specify/SKILL.md",
       "destination": "skills/spec-specify/SKILL.md",
       "status": "retain",
@@ -2755,7 +2577,6 @@
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
       "named_data_readers": [
-        "repo-skills.manifest.json",
         "skills/catalog.yaml",
         "workflows/build-plan/skill-deps.yaml"
       ],
@@ -2791,41 +2612,11 @@
       "retention_basis": "MT-3-050 / NARROW"
     },
     {
-      "source": "skills/spec-tasks/SKILL.md",
-      "destination": "skills/spec-tasks/SKILL.md",
-      "status": "retain",
-      "role": "production",
-      "responsibility": "既有模块／资源职责；不从登记新增能力",
-      "owner": "原路径维护 owner；P7 仅登记现职责",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
-      "named_data_readers": [
-        "repo-skills.manifest.json",
-        "skills/catalog.yaml",
-        "workflows/build-plan/skill-deps.yaml"
-      ],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "既有保留生产路径；本次仅归位说明"
-    },
-    {
-      "source": "skills/spec-tasks/skill-bundle.json",
-      "destination": "skills/spec-tasks/skill-bundle.json",
-      "status": "retain",
-      "role": "production",
-      "responsibility": "技能加载",
-      "owner": "B5/P6 / MT-3-054",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
-      "named_data_readers": [],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "MT-3-054 / NARROW"
-    },
-    {
       "source": "skills/spec-tasks/templates/index-template.md",
       "destination": "skills/spec-plan/templates/index-template.md",
       "status": "move",
       "role": "production",
-      "responsibility": "futurepending：P6/T010 将旧索引附件同形迁至 spec-plan，用于 phases/index.md 纯指针渲染；本条仅创建前职责预登记，不证明附件存在、bundle 登记、调用迁移或交付完成，不提前实施 P8/T016。",
+      "responsibility": "P6/T010 已同形迁入且 spec-plan bundle.files 登记的 phases/index.md 纯指针附件；当前条件渲染使用新附件，原薄调用于P8/T016迁移。质量来源仍由原P6事实证明，本表不代验收。",
       "owner": "P6/T010 / P6-single-writer（附件与 bundle 文件 owner；move-map 仍由 P8/T016 原维护者唯一持笔）",
       "consumer": "现 skills/spec-plan/SKILL.md:67 条件索引渲染：新附件实际存在且 skills/spec-plan/skill-bundle.json 的 files 已登记才使用，否则继续读旧附件；P6/T010 承接新附件与 bundle，runtime/adapters/local-skill-resolver.mjs 的 validateSkillBundle 消费附件闭包。",
       "module_consumers": [],
@@ -2834,21 +2625,8 @@
         "skills/spec-plan/skill-bundle.json",
         "runtime/adapters/local-skill-resolver.mjs"
       ],
-      "delete_condition": "旧附件仅在 P6/T010 新附件及 bundle 真实承接、全部旧当前调用已迁且 P8/T016 定向核实零悬空后由 P8/T016 删除；本预登记不删除或改写旧 self-pair 记录。新附件职责被审查后的替代承接且无当前 consumer 时由该文件 owner 删除，历史来源只读保留。",
-      "retention_basis": "futurepending 原件未迁／不得当前 complete；原来源 MT-3-053 / NARROW（旧 self-pair owner=B3/P4 / MT-3-053、consumer 与原理由均原样保留）；当前 spec.md:161、P6.md:T010、P8.md:23/:190 的普通目录责任时序，修正源26fd3aca（102作者/103独立），本次985bf5c1e23a51df93dc88a801ce12a4056d228d读回。测试 consumer 为外置 quality/tests/skill-modernization-thin-merge.test.mjs 与 validateSkillBundle 附件闭包；本次不运行、不改测试，不作新 gate 或质量通过。"
-    },
-    {
-      "source": "skills/spec-tasks/templates/index-template.md",
-      "destination": "skills/spec-tasks/templates/index-template.md",
-      "status": "retain",
-      "role": "production",
-      "responsibility": "同左（phases/index.md 指针索引）",
-      "owner": "B3/P4 / MT-3-053",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
-      "named_data_readers": [],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "MT-3-053 / NARROW"
+      "delete_condition": "旧附件仅在 P6/T010 新附件及 bundle 真实承接、全部旧当前调用已迁且 P8/T016 定向核实零悬空后由 P8/T016 删除；本次 T016 已满足真实承接与定向核查条件后精确退役旧附件及旧 self-pair；完整原字段按128的 immutable selector/hash 保留，不改写历史原件。新附件职责被审查后的替代承接且无当前 consumer 时由该文件 owner 删除，历史来源只读保留。",
+      "retention_basis": "当前新附件已同形承接且 bundle 登记、旧调用已迁；旧附件和旧 self-pair 已于本次 T016 精确退役。原来源 MT-3-053 / NARROW、旧 owner=B3/P4 / MT-3-053、consumer、理由及全部字段由外置 quality/evidence/2026-10-09-128-t016-wiring-retirement-source-delta.json 的 removed_current_map_rows immutable selector/hash 与原 Git 来源保留，不表示当前旧记录仍存在；160创建前及102/103修正、985bf5c读回的未迁状态仅是历史时点；当前 spec.md:161、P6.md:T010、P8.md:23/:190 的普通目录责任时序，修正源26fd3aca（102作者/103独立），本次985bf5c1e23a51df93dc88a801ce12a4056d228d读回。测试 consumer 为外置 quality/tests/skill-modernization-thin-merge.test.mjs 与 validateSkillBundle 附件闭包；本次不运行、不改测试，不作新 gate 或质量通过。"
     },
     {
       "source": "skills/stage-handoff/SKILL.md",
@@ -2860,7 +2638,6 @@
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
       "named_data_readers": [
-        "repo-skills.manifest.json",
         "skills/catalog.yaml",
         "workflows/build-code/SKILL.md",
         "workflows/build-code/skill-deps.yaml",
@@ -2899,7 +2676,6 @@
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
       "named_data_readers": [
-        "repo-skills.manifest.json",
         "skills/catalog.yaml"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
@@ -2928,7 +2704,6 @@
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
       "named_data_readers": [
-        "repo-skills.manifest.json",
         "skills/catalog.yaml",
         "tests/moat-skills-phase1.test.mjs",
         "workflows/make-decision/skill-deps.yaml"
@@ -2959,7 +2734,6 @@
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
       "named_data_readers": [
-        "repo-skills.manifest.json",
         "skills/catalog.yaml",
         "skills/test-routing-advisor/skill-bundle.json",
         "workflows/build-code/skill-deps.yaml",
@@ -3006,7 +2780,6 @@
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
       "named_data_readers": [
-        "repo-skills.manifest.json",
         "skills/catalog.yaml",
         "skills/testing-system-blueprint/skill-bundle.json",
         "workflows/build-plan/skill-deps.yaml"
@@ -3037,7 +2810,6 @@
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
       "named_data_readers": [
-        "repo-skills.manifest.json",
         "skills/catalog.yaml",
         "skills/reuse-registry.md",
         "tests/contract/ui-skill-contract.test.mjs",
@@ -3076,7 +2848,6 @@
         ".planning/2026-09-09-build-spec-and-build-plan/verify-code-review-input.json",
         ".planning/2026-09-09-build-spec-and-build-plan/verify-code-review-request-2.json",
         ".planning/2026-09-09-build-spec-and-build-plan/verify-code-review-request.json",
-        "repo-skills.manifest.json",
         "skills/catalog.yaml",
         "skills/wh-review/scripts/review-materials.mjs",
         "workflows/build-code/skill-deps.yaml",
@@ -3491,7 +3262,6 @@
       "named_data_readers": [
         ".planning/2026-09-16-eliminate-external-stage-agent/findings.md",
         "README.md",
-        "repo-skills.manifest.json",
         "skills/catalog.yaml"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
@@ -3520,7 +3290,6 @@
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
       "named_data_readers": [
-        "repo-skills.manifest.json",
         "skills/catalog.yaml",
         "skills/reuse-registry.md"
       ],
@@ -3601,9 +3370,9 @@
       "destination": "tools/cli/check-skill-consistency.mjs",
       "status": "retain",
       "role": "production",
-      "responsibility": "futurepending：P8/T016 的窄只读 CLI --root W，定向核当前五 stage skill-deps.yaml、wh-review manifest/stage-skill-plan、catalog 当前唯一 name/path 登记及真实磁盘/bundle闭包；历史44/provenance不 active，used_by_stages差异单独事实报告不作硬等价dispatch。缺失/重复/路径错配/mandatory清单不一致/实际active引用retired及坏安全闭包显式非零；不变成 Runner、技能派发器、公共阶段或推进 gate。",
+      "responsibility": "已实施源码（尚待独立针对性验证）：P8/T016 的窄只读 CLI --root W，定向核当前五 stage skill-deps.yaml、wh-review manifest/stage-skill-plan、catalog 当前唯一 name/path 登记及真实磁盘/bundle闭包；历史44/provenance不 active，used_by_stages差异单独事实报告不作硬等价dispatch。缺失/重复/路径错配/mandatory清单不一致/实际active引用retired及坏安全闭包显式非零；不变成 Runner、技能派发器、公共阶段或推进 gate。",
       "owner": "P8/T016 原唯一接线/map/checker实施维护者（本会话）；既有 tools/cli/run-checks.mjs 聚合 owner不新增",
-      "consumer": "唯一未来生产调用方为既有 tools/cli/run-checks.mjs 的 runChecker/runAggregate；现 runChecker:44–55 已提供同目录脚本spawn与argv/输出/exit聚合接缝，T016将在原文件scope接入本CLI。另消费者是变更维护者及T016原独立测试owner定向 --root fixture执行。当前CLI尚不存在、run-checks尚未接入；不登记假runtime模块reader。",
+      "consumer": "唯一生产调用方为既有 tools/cli/run-checks.mjs 的 runChecker/runAggregate；现 runChecker:44–55 已提供同目录脚本spawn与argv/输出/exit聚合接缝，T016将在原文件scope接入本CLI。另消费者是变更维护者及T016原独立测试owner定向 --root fixture执行。当前CLI已创建、run-checks已接入；执行结果尚待独立针对性验证；不登记假runtime模块reader。",
       "module_consumers": [],
       "named_data_readers": [
         "tools/cli/run-checks.mjs"
@@ -4837,6 +4606,24 @@
       "named_data_readers": [],
       "delete_condition": "现行对应契约退役且经独立审查的替代已承接全部真实场景后删除；不因登记生成阶段许可",
       "retention_basis": "当前U-019/R-C10-GAP-001/ADR-016设计方向；服务现行CLI/独立读回场景，保留不构成测试执行事实"
+    },
+    {
+      "source": "CONTEXT.md",
+      "destination": "GLOSSARY.md",
+      "status": "move",
+      "role": "production",
+      "responsibility": "futurepending：P9/T017 将根现术语唯一rename至GLOSSARY，保持旧来源与历史只读；本条仅创建前职责预登记，不改变当前CONTEXT文件/reader，不提前P9实施。",
+      "owner": "P9/T017 / P9-single-writer（原ca9文件owner；map仍P8/T016原唯一维护者）",
+      "consumer": "当前 tools/cli/verify-structure.mjs:94–102 读根CONTEXT五段术语；workflows/build-code/case-selection.mjs:28–31 将旧根分类supporting；AGENTS.md:48 / CLAUDE.md:30 人读术语入口。P9/T017同步迁根新名与真实readers，旧CONTEXT分类control仍保，不留第二术语文件。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "tools/cli/verify-structure.mjs",
+        "workflows/build-code/case-selection.mjs",
+        "AGENTS.md",
+        "CLAUDE.md"
+      ],
+      "delete_condition": "P9/T017仅在真实新唯一术语载体及上述reader承接后完成rename，历史ADR正文只读/仅授权文首批注；新职责被原owner的经审查替代承接且无当前consumer时按spec:161删除，不授本Task提前删根文件。",
+      "retention_basis": "futurepending 未rename/不得当前complete；source=P9/T017:86–99、spec:161、当前rootCONTEXT27行及上述reader；冻结classification仅函数行和control，另rename/ADR/verify-structure行为待独立源核，不新增gate/第三writer。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

@@ -1,7 +1,7 @@
 stage: build-plan
 skills:
-  - name: spec-research
-    path: skills/spec-research/SKILL.md
+  - name: deep-research
+    path: skills/deep-research/SKILL.md
     trigger: real_research_question
   - name: spec-clarify
     path: skills/spec-clarify/SKILL.md
@@ -11,7 +11,7 @@ skills:
     trigger: product_spec_authoring
   - name: spec-plan
     path: skills/spec-plan/SKILL.md
-    trigger: plan_design
+    trigger: plan_design_and_pure_pointer_index
   - name: simplicity-guard
     path: skills/simplicity-guard/SKILL.md
     trigger: simplicity_check
@@ -27,9 +27,6 @@ skills:
   - name: test-routing-advisor
     path: skills/test-routing-advisor/SKILL.md
     trigger: task_test_routing
-  - name: spec-tasks
-    path: skills/spec-tasks/SKILL.md
-    trigger: task_design
   - name: spec-analyze
     path: skills/spec-analyze/SKILL.md
     trigger: stage_end_consistency
@@ -51,6 +48,9 @@ skills:
   - name: plan-design-review
     path: skills/plan-design-review/SKILL.md
     trigger: ui_scope_design_lens_in_merged_review
+  - name: stage-reflection
+    path: skills/stage-reflection/SKILL.md
+    trigger: actual_stage_end_process_issue_optional
 runtime_capabilities:
   - id: node
     kind: cli

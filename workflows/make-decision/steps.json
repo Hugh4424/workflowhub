@@ -27,7 +27,7 @@
     {
       "step_id": 3,
       "step_slug": "research-and-diverge",
-      "observable_result": "会改变方向的未知问题有一手来源、候选和取舍；跳过或不可用有真实原因，失败假设推动重新整理。每份完成报告显式声明 candidates，逐候选写摘要、证据绑定来源 ref、推荐或拒绝、理由；无候选写真实原因，后续使用唯一 canonical report。",
+      "observable_result": "会改变方向的未知问题有一手来源、候选和取舍；跳过或不可用有真实原因，失败假设推动重新整理。每份完成报告显式声明 candidates，逐候选写摘要、证据绑定来源 ref、推荐或拒绝、理由；无候选写真实原因，后续使用唯一 canonical report。 deep-research 对已批准的外部发现按 anysearch 方法执行，工具能力与技能同名职责分开；调用未执行或不可用保持原事实。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -175,7 +175,7 @@
     {
       "step_id": 15,
       "step_slug": "stage-handoff",
-      "observable_result": "主会话写人读交接，列材料现状、已做/未做、证据、风险和下游下一步；缺失如实披露，不是工作门。",
+      "observable_result": "主会话写人读交接，列材料现状、已做/未做、证据、风险和下游下一步；缺失如实披露，不是工作门。 真实 stage 末过程问题可按 stage-reflection 提有源候选，用户真选后才分确定检查或人判断未解 Improvements；未答不采用、已解由人 prune，不新增规范/知识库/机器进度或每 Phase 固定复盘。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",

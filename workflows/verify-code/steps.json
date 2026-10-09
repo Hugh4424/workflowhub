@@ -16,7 +16,7 @@
     {
       "step_id": 2,
       "step_slug": "ocr-code-review",
-      "observable_result": "一次终末独立代码审查含当前diff、完整AC、合同/protocol/lens与原件；条件fallback和实际失败分别记录。",
+      "observable_result": "一次终末独立代码审查含当前diff、完整AC、合同/protocol/lens与原件；条件fallback和实际失败分别记录。 条件回退读取当前 workflows/verify-code/SKILL.md 的「## OCR 能力与回退」；architect 缺失/低版本 facet 仅在 P9 当前政策目标实际切换后生效，已装失败、超时或取消不回退；每次调用先读 wh-review Long-review 方法。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -94,7 +94,7 @@
     {
       "step_id": 8,
       "step_slug": "stage-handoff",
-      "observable_result": "阶段主会话写人读交接，列代码入口、修复、审查、验证限制、材料风险及下一步；缺事实保持incomplete而不冻结修复。",
+      "observable_result": "阶段主会话写人读交接，列代码入口、修复、审查、验证限制、材料风险及下一步；缺事实保持incomplete而不冻结修复。 真实 stage 末过程问题可按 stage-reflection 提有源候选，用户真选后才分确定检查或人判断未解 Improvements；未答不采用、已解由人 prune，不新增规范/知识库/机器进度或每 Phase 固定复盘。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",

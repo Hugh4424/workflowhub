@@ -8,11 +8,17 @@ skills:
     trigger: stage_end_human_handoff
   - name: wh-review
     path: skills/wh-review/SKILL.md
-    # 每次代码审查先读 Long-review host convention；正常仍由 OCR 执行，只有既有缺失/低版本条件才由 wh-review 回退。
-    trigger: every_code_review_invocation_method_only_or_existing_ocr_fallback
+    # 每次代码审查先读 Long-review host convention；正常仍由 OCR 执行。architect 条目的条件回退仅按当前 workflows/verify-code/SKILL.md 的「## OCR 能力与回退」执行；该节目标经 P9 改为 architect-code-review 后才生效；已装失败、超时或取消均不回退。
+    trigger: every_code_review_invocation_method_only
   - name: spec-analyze
     path: skills/spec-analyze/SKILL.md
     trigger: upstream_material_risk_read_only
+  - name: architect-code-review
+    path: skills/architect-code-review/SKILL.md
+    trigger: '((ocr command does not exist (ENOENT) OR ocr version is below 1.12.9) AND current workflows/verify-code/SKILL.md section "## OCR 能力与回退" explicitly selects architect-code-review)'
+  - name: stage-reflection
+    path: skills/stage-reflection/SKILL.md
+    trigger: actual_stage_end_process_issue_optional
 runtime_capabilities:
   - id: node
     kind: cli

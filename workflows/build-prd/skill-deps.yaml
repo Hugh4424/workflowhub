@@ -9,6 +9,9 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     trigger: final_prd_document_review
+  - name: stage-reflection
+    path: skills/stage-reflection/SKILL.md
+    trigger: actual_stage_end_process_issue_optional
 runtime_capabilities:
   - id: node
     kind: cli

@@ -107,7 +107,10 @@ export function validateSkillBundle(packageRoot, bundlePath, expectedSkillPath) 
 export function resolveSkillPackage({ packageRoot, manifestPath, dependency }) {
   const skill = dependency?.name;
   try {
-    if (!skill || !dependency.path || !dependency.bundle) throw new Error("skill dependency is incomplete");
+    const bundle = dependency?.bundle === undefined ? `skills/${skill}/skill-bundle.json` : dependency.bundle;
+    if (!skill || !dependency.path || !bundle) throw new Error("skill dependency is incomplete");
+    if (bundle !== `skills/${skill}/skill-bundle.json`)
+      throw new Error(`skill dependency bundle does not match its declared name: ${skill}`);
     if (dependency.path !== `skills/${skill}/SKILL.md`)
       throw new Error(`skill dependency path does not match its declared name: ${skill}`);
     const root = fs.realpathSync(packageRoot);
@@ -115,7 +118,7 @@ export function resolveSkillPackage({ packageRoot, manifestPath, dependency }) {
     const manifest = path.resolve(root, manifestPath);
     assertRegularContainedFile(root, root, manifest, `source manifest ${manifestPath}`);
     const skillPath = resolveLocalSkill(root, dependency.path);
-    const checked = validateSkillBundle(root, dependency.bundle, dependency.path);
+    const checked = validateSkillBundle(root, bundle, dependency.path);
     return {
       name: skill,
       resolved_skill_path: skillPath,

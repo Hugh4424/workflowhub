@@ -64,7 +64,7 @@
     {
       "step_id": 6,
       "step_slug": "stage-handoff",
-      "observable_result": "主会话分开报告来源、问答、审查、未知项和交付事实，并写供子任务的人读交接；不声称未发生的host/发布/close。",
+      "observable_result": "主会话分开报告来源、问答、审查、未知项和交付事实，并写供子任务的人读交接；不声称未发生的host/发布/close。 真实 stage 末过程问题可按 stage-reflection 提有源候选，用户真选后才分确定检查或人判断未解 Improvements；未答不采用、已解由人 prune，不新增规范/知识库/机器进度或每 Phase 固定复盘。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",

@@ -12,6 +12,9 @@ skills:
   - name: deep-research
     path: skills/deep-research/SKILL.md
     trigger: proportionate_research
+  - name: anysearch
+    path: skills/anysearch/SKILL.md
+    trigger: approved_external_discovery_by_deep_research
   - name: wh-review
     path: skills/wh-review/SKILL.md
     trigger: review
@@ -21,6 +24,9 @@ skills:
   - name: stage-handoff
     path: skills/stage-handoff/SKILL.md
     trigger: stage_end_human_handoff
+  - name: stage-reflection
+    path: skills/stage-reflection/SKILL.md
+    trigger: actual_stage_end_process_issue_optional
 runtime_capabilities:
   - id: node
     kind: cli
