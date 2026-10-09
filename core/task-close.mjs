@@ -162,8 +162,22 @@ function remoteOid(root, remote, branch) {
   return { status: r.stdout.trim() ? "available" : "absent", reason: r.stdout.trim() ? null : "remote target ref is absent", oid: r.stdout.trim().split(/\s/)[0] || null };
 }
 function within(root, path) { const r = relative(root, path); return r !== "" && !r.startsWith(`..${sep}`) && r !== ".." && !isAbsolute(r); }
-function prCommand(root, argv) {
-  return spawnSync("gh", argv, { cwd: root, env: { ...gitEnv(), GH_PROMPT_DISABLED: "1" }, encoding: "utf8", timeout: 15000, maxBuffer: 1024 * 1024 });
+function prCommand(root, argv, input) {
+  return spawnSync("gh", argv, { cwd: root, env: { ...gitEnv(), GH_PROMPT_DISABLED: "1" }, encoding: "utf8", timeout: 15000, maxBuffer: 1024 * 1024, ...(input === undefined ? {} : { input }) });
+}
+function validateRemoteIdentity(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).sort().join("\0") !== ["fetch_urls", "push_urls"].sort().join("\0")
+      || [value.fetch_urls, value.push_urls].some(urls => !Array.isArray(urls) || !urls.length || urls.some(url => typeof url !== "string" || !url || /[\r\n\0]/.test(url)))) throw failure("REMOTE_IDENTITY_UNAVAILABLE", "remote scope must identify every fetch and push destination in order");
+  return value;
+}
+function remoteIdentity(c, remote) {
+  const root = existsSync(c.worktree) ? c.worktree : c.root;
+  const urls = args => {
+    const values = git(root, ["remote", "get-url", ...args, "--all", remote]).split("\n");
+    if (!values.length || values.some(value => !value || value.includes("\0"))) throw failure("REMOTE_IDENTITY_UNAVAILABLE", "actual remote destinations could not be read");
+    return values;
+  };
+  return validateRemoteIdentity({ fetch_urls: urls([]), push_urls: urls(["--push"]) });
 }
 function prRepository(c, remote) {
   const root = existsSync(c.worktree) ? c.worktree : c.root;
@@ -200,11 +214,30 @@ function probePrSupport(c, { remote, head, base, baseline, sourceHead, pendingCh
   if (repository.viewerPermission !== undefined && !["ADMIN", "MAINTAIN", "WRITE"].includes(repository.viewerPermission)) return unavailable(`GitHub repository permission does not allow PR delivery: ${repository.viewerPermission}`);
   return { status: "available", reason: null };
 }
+// Conservative client policy below publicly reported GitHub character ceilings.
+// UTF-8 byte bounds are not a claim about the service's Unicode counting unit.
+const PR_BODY_BYTES = 65535, PR_TITLE_BYTES = 255;
+function utf8Prefix(text, limit) {
+  let result = "", bytes = 0;
+  for (const character of text) {
+    const size = Buffer.byteLength(character, "utf8");
+    if (bytes + size > limit) break;
+    result += character; bytes += size;
+  }
+  return result;
+}
+function prExcerpt(text, limit) {
+  const bytes = Buffer.byteLength(text, "utf8");
+  if (bytes <= limit) return text;
+  const marker = "\n[preview excerpt; omitted content — use the full source command below]";
+  return utf8Prefix(text, Math.max(0, limit - Buffer.byteLength(marker, "utf8"))) + marker;
+}
 function buildDefaultPrDescription(c, { baseline, source, head, base }) {
   const spec = readFile(c.worktree, `specs/${c.manifest.task_id}/spec.md`).toString("utf8");
   if (!spec.trim()) throw failure("PR_DESCRIPTION_INCOMPLETE", "task spec is empty; a source-defined PR description is unavailable");
   const titles = git(c.worktree, ["log", "--format=%s", `${baseline}..${source.head}`]).split("\n").filter(Boolean);
-  const title = titles[0] ?? `Deliver ${c.manifest.task_id}`;
+  const originalTitle = titles[0] ?? `Deliver ${c.manifest.task_id}`;
+  const title = Buffer.byteLength(originalTitle, "utf8") <= PR_TITLE_BYTES ? originalTitle : `${utf8Prefix(originalTitle, PR_TITLE_BYTES - 3)}...`;
   const changes = git(c.worktree, ["diff", "--no-ext-diff", "--no-textconv", "--name-status", baseline, "--"]);
   const patch = git(c.worktree, ["diff", "--no-ext-diff", "--no-textconv", "--unified=3", baseline, "--"]);
   const summary = spec.split(/\r?\n/).find(line => /^#\s+\S/.test(line))?.replace(/^#\s+/, "") ?? c.manifest.task_id;
@@ -214,10 +247,26 @@ function buildDefaultPrDescription(c, { baseline, source, head, base }) {
   const evidence = tests.length ? tests.map(row => `- ${JSON.stringify(row.command)}: exit ${row.exit_code}; ${JSON.stringify(row.failure_signature)}`).join("\n")
     : "Tests: unavailable — no executed command evidence is recorded in task facts.";
   const pending = source.changes.length ? `\nPending source paths: ${source.changes.map(row => row.path).join(", ")}.` : "";
-  const body = `## Summary\n${summary}\nTask: ${c.manifest.task_id}.\n${titles.map(value => `- ${value}`).join("\n")}\n\n## Evidence\nBefore (${baseline}):\n${before || "unavailable — no removed text in the actual diff"}\nAfter (${source.head} plus current worktree):\n${after || "unavailable — no added text in the actual diff"}\n${evidence}${pending}\n\n## Merge Danger\nDoor: publish ${head} and open a PR into ${base} before the displayed merge/archive/push/owned-cleanup actions; each irreversible action still requires native authorization.\nBlast Radius: actual changed paths below; runtime/remote effects outside this diff remain unverified.\n${changes || "unavailable — no tracked changes against the actual base"}\n`;
+  const fullSource = `\nFull source: task specs/${c.manifest.task_id}/spec.md; tests and failures in the existing task facts.jsonl evidence references.\nExact committed diff: git diff --no-ext-diff --no-textconv --binary ${baseline} ${source.head} --\n${source.changes.length ? `Pending source at preparation (not a committed snapshot): git diff --no-ext-diff --no-textconv --binary ${baseline} --\nPending paths are declared in this displayed plan; untracked bytes require those original paths.\n` : ""}Previews below are source excerpts, not complete functional acceptance.\n`;
+  const parts = [summary, titles.map(value => `- ${value}`).join("\n"), before || "unavailable — no removed text in the actual diff",
+    after || "unavailable — no added text in the actual diff", evidence, pending, changes || "unavailable — no tracked changes against the actual base"];
+  const render = values => `## Summary\n${values[0]}\nTask: ${c.manifest.task_id}.\n${values[1]}\n\n## Evidence\nBefore (${baseline}):\n${values[2]}\nAfter (${source.head} plus current worktree):\n${values[3]}\n${values[4]}${values[5]}\n${fullSource}\n## Merge Danger\nDoor: publish ${head} and open a PR into ${base} before the displayed merge/archive/push/owned-cleanup actions; each irreversible action still requires native authorization.\nBlast Radius: actual changed paths below; runtime/remote effects outside this diff remain unverified.\n${values[6]}\n`;
+  let body = render(parts);
+  if (Buffer.byteLength(body, "utf8") > PR_BODY_BYTES) {
+    const fixed = Buffer.byteLength(render(parts.map(() => "")), "utf8");
+    const allowance = Math.floor((PR_BODY_BYTES - fixed) / parts.length);
+    if (allowance <= Buffer.byteLength("\n[preview excerpt; omitted content — use the full source command below]", "utf8")) throw failure("PR_DESCRIPTION_TOO_LARGE", "required source and operation scope cannot fit the conservative PR body policy");
+    body = render(parts.map(text => prExcerpt(text, allowance)));
+  }
+  validatePrDescription(body); validatePrTitle(title);
   return { title, body };
 }
+function validatePrTitle(title) {
+  if (typeof title !== "string" || !title.trim()) throw failure("PR_DESCRIPTION_INCOMPLETE", "PR title must be nonempty text");
+  if (Buffer.byteLength(title, "utf8") > PR_TITLE_BYTES) throw failure("PR_DESCRIPTION_TOO_LARGE", "PR title exceeds the conservative 255 UTF-8 byte policy; supply a shorter title");
+}
 function validatePrDescription(body) {
+  if (typeof body === "string" && Buffer.byteLength(body, "utf8") > PR_BODY_BYTES) throw failure("PR_DESCRIPTION_TOO_LARGE", "PR body exceeds the conservative 65535 UTF-8 byte policy; supply a shorter description");
   if (typeof body !== "string" || !/^[ \t]*(?:\*\*)?Door(?:\*\*)?[ \t]*:[ \t]*[^ \t\r\n][^\r\n]*$/mi.test(body) || !/^[ \t]*(?:\*\*)?Blast Radius(?:\*\*)?[ \t]*:[ \t]*[^ \t\r\n][^\r\n]*$/mi.test(body)) throw failure("PR_DESCRIPTION_INCOMPLETE", "explicit PR body requires separate nonempty Door and Blast Radius fields");
 }
 function preparePr(c, input, fields) {
@@ -225,6 +274,7 @@ function preparePr(c, input, fields) {
     || input.enabled !== undefined && typeof input.enabled !== "boolean" || input.title !== undefined && (typeof input.title !== "string" || !input.title.trim()) || input.body !== undefined && typeof input.body !== "string")) throw failure("PR_DESCRIPTION_INCOMPLETE", "delivery.pr must contain only optional enabled, nonempty title and text body");
   if (input?.enabled === false) return null;
   if (input?.body !== undefined) validatePrDescription(input.body);
+  if (input?.title !== undefined) validatePrTitle(input.title);
   const defaults = input?.title !== undefined && input?.body !== undefined ? null : buildDefaultPrDescription(c, fields);
   return { ...probePrSupport(c, { ...fields, sourceHead: fields.source.head, pendingChanges: fields.source.changes }), head: fields.head, base: fields.base, title: input?.title ?? defaults.title, body: input?.body ?? defaults.body };
 }
@@ -234,16 +284,22 @@ function validatePlan(plan, c) {
     : plan.mode === "ordinary" && plan.pr?.status === "available" ? ["commit", "push-task", "pr", "merge", "archive", "push", "cleanup"] : ["commit", "merge", "archive", "push", "cleanup"];
   if (!same(plan.steps, expected)) throw failure("CLOSE_PLAN_ACTIONS", "close action set was changed");
   if (!/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(plan.task_branch) || !/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(plan.target_branch) || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(plan.remote)) throw failure("CLOSE_PLAN_REFS", "unsafe branch or remote");
-  if (plan.worktree_root !== (plan.mode === "post-cleanup-archive" ? c.root : c.worktree) && existsSync(plan.worktree_root)) throw failure("CLOSE_PLAN_WORKTREE", "close plan worktree differs from the registered task");
+  if (plan.worktree_root !== (plan.mode === "post-cleanup-archive" ? c.root : c.worktree)) throw failure("CLOSE_PLAN_WORKTREE", "close plan worktree differs from the registered task");
+  if (plan.source?.remote_identity !== undefined) validateRemoteIdentity(plan.source.remote_identity);
+  if (plan.source?.branch !== plan.task_branch || !c.explicit && plan.mode !== "post-cleanup-archive" && plan.task_branch !== `task/${c.manifest.project_name}/${c.manifest.task_id}`) throw failure("CLOSE_PLAN_REFS", "close source branch differs from the actual task scope");
+  if (plan.pr?.status === "available" && (plan.pr.head !== plan.task_branch || plan.pr.base !== plan.target_branch)) throw failure("CLOSE_PLAN_REFS", "PR head/base differs from the planned task/target scope");
   safeRelative(plan.spec_source_path, "source"); safeRelative(plan.spec_archive_path, "archive");
   if (plan.spec_source_path !== `specs/${plan.task_id}` || plan.spec_archive_path !== `specs/archive/${plan.task_id}`) throw failure("ARCHIVE_SCOPE", "archive scope must be this task's materials");
   return plan;
 }
-function readPlan(c, planRef) {
-  const absolute = resolve(planRef);
+function planBytes(c, planRef) {
+  if (typeof planRef !== "string" || !isAbsolute(planRef) || planRef.includes("#") || resolve(planRef) !== planRef) throw failure("CLOSE_PLAN_REFERENCE", "a canonical plain close plan path without fragments is required");
   const base = closeEvidencePath(c.taskDir);
-  if (dirname(absolute) !== base || !/^\d{4}-\d{2}-\d{2}-\d{3}-close-plan\.json$/.test(absolute.slice(base.length + 1))) throw failure("CLOSE_PLAN_REFERENCE", "an explicit ordinary close plan evidence reference is required");
-  return validatePlan(JSON.parse(readFile(base, absolute.slice(base.length + 1))), c);
+  if (dirname(planRef) !== base || !/^\d{4}-\d{2}-\d{2}-\d{3}-close-plan\.json$/.test(basename(planRef))) throw failure("CLOSE_PLAN_REFERENCE", "an explicit ordinary close plan evidence reference is required");
+  return readFile(base, basename(planRef));
+}
+function readPlan(c, planRef) {
+  return validatePlan(JSON.parse(planBytes(c, planRef)), c);
 }
 async function writeEvidence(c, slug, value) { return appendRecord(evidenceDirectory(c.taskDir), slug, "json", `${JSON.stringify(value, null, 2)}\n`); }
 function closeActionScope(c, action) {
@@ -294,7 +350,7 @@ export async function prepareDeliveryClosePlan({ taskDir, delivery = {}, closeMo
     await assertCleanTarget({ root: c.root, target: c.root, baseline: head, expectBranch: prior.target_branch });
     realDirectory(join(c.root, prior.spec_source_path));
     if (existsSync(join(c.root, prior.spec_archive_path))) throw failure("ARCHIVE_SCOPE", "archive target already exists");
-    const source = sourceState(c.root, prior.task_id);
+    const source = { ...sourceState(c.root, prior.task_id), remote_identity: remoteIdentity(c, prior.remote) };
     const plan = { ...prior, mode: "post-cleanup-archive", worktree_root: c.root, task_branch: prior.target_branch, target_head: head,
       remote_target_head: remoteOid(c.root, prior.remote, prior.target_branch).oid, remote_task_head: null,
       source, preserve_existing_workspace: true, steps: ["archive", "push"], archive_declaration_ref: archiveDeclarationRef, created_at: new Date().toISOString() };
@@ -308,6 +364,7 @@ export async function prepareDeliveryClosePlan({ taskDir, delivery = {}, closeMo
   const mode = taskType === "规划任务" ? "planning" : closeMode ?? delivery.close_mode ?? "ordinary";
   if (!["ordinary", "mini-task", "planning"].includes(mode)) throw failure("CLOSE_MODE", "unsupported close mode");
   const taskBranch = git(c.worktree, ["branch", "--show-current"]), targetBranch = delivery.target_branch ?? "main", remote = delivery.remote ?? "origin";
+  source.remote_identity = remoteIdentity(c, remote);
   if (delivery.task_branch !== undefined && delivery.task_branch !== taskBranch) throw failure("CLOSE_TASK_BRANCH", "declared task branch differs from actual Git");
   const baseline = branchOid(c.root, targetBranch); if (!baseline) throw failure("TARGET_UNAVAILABLE", "target branch is absent");
   const remoteTarget = remoteOid(c.root, remote, targetBranch);
@@ -337,27 +394,48 @@ export async function confirmClosePlan({ taskDir, planRef, outcome = "confirmed"
     if (replyText !== undefined && replyText !== "") throw failure("CONFIRMATION_REPLY", "timeout must not invent a human reply");
     return { status: "blocked", outcome, confirmation_ref: await writeEvidence(c, "close-timeout", { plan_ref: planRef, outcome, recorded_at: new Date().toISOString() }) };
   }
-  const value = await recordConfirmation({ stage: "verify-code", decision: outcome, reply: replyText, materialRefs: [planRef] }, { cwd: c.worktree, dir: join(c.taskDir, "quality", "evidence", "human-confirmations") });
+  const bytes = planBytes(c, planRef);
+  if (!same(validatePlan(JSON.parse(bytes), c), plan)) throw failure("CLOSE_PLAN_CHANGED", "close plan changed while its confirmation was prepared");
+  const remote = remoteIdentity(c, plan.remote);
+  if (plan.source.remote_identity !== undefined && !same(remote, plan.source.remote_identity)) throw failure("REMOTE_SCOPE_CHANGED", "actual remote destinations differ from the displayed plan source");
+  const value = await recordConfirmation({ stage: "verify-code", decision: outcome, reply: replyText, materialRefs: [planRef, `${planRef}#sha256=${digest(bytes)}`, `${planRef}#remote=${encodeURIComponent(JSON.stringify(remote))}`] }, { cwd: c.worktree, dir: join(c.taskDir, "quality", "evidence", "human-confirmations") });
+  if (!same(remoteIdentity(c, plan.remote), remote)) throw failure("REMOTE_SCOPE_CHANGED", "remote destinations changed while their confirmation was recorded; original reply remains unchanged");
+  if (!planBytes(c, planRef).equals(bytes)) throw failure("CLOSE_PLAN_CHANGED", "close plan changed while its confirmation was recorded; original reply remains unchanged");
   return { status: outcome === "confirmed" ? "confirmed" : "blocked", outcome, confirmation_ref: value.path, record: value };
 }
-function acceptedConfirmation(c, planRef, confirmationRef) {
+function acceptedConfirmation(c, planRef, confirmationRef, expectedPlan) {
   const root = dirname(resolve(confirmationRef));
   const roots = [join(c.taskDir, "quality", "evidence", "human-confirmations"), join(c.taskDir, "quality", "confirmations")];
   if (!roots.includes(root)) throw failure("CONFIRMATION_REFERENCE", "confirmation must be this task's explicit native record");
   // Old confirmation originals are read in place; new writes use evidence only.
   const value = JSON.parse(readFile(root, resolve(confirmationRef).slice(root.length + 1)));
-  if (value.decision !== "confirmed" || value.stage !== "verify-code" || !value.reply || !value.material_refs?.includes(planRef)) throw failure("CONFIRMATION_REJECTED", "confirmed verbatim user reply for this plan is required");
+  if (value.decision !== "confirmed" || value.stage !== "verify-code" || !value.reply || !Array.isArray(value.material_refs) || !value.material_refs.includes(planRef)) throw failure("CONFIRMATION_REJECTED", "confirmed verbatim user reply for this plan is required");
+  const fragments = value.material_refs.filter(ref => typeof ref === "string" && ref.startsWith(`${planRef}#`));
+  const bindings = fragments.filter(ref => ref.startsWith(`${planRef}#sha256=`));
+  const remotes = fragments.filter(ref => ref.startsWith(`${planRef}#remote=`));
+  if (bindings.length !== 1 || !/^sha256=[a-f0-9]{64}$/.test(bindings[0].slice(planRef.length + 1))) throw failure("CONFIRMATION_CONTENT_UNKNOWN", "the original reply does not identify exact close plan bytes; display the current plan for an actual confirmation before new actions");
+  if (remotes.length !== 1 || fragments.length !== 2) throw failure("CONFIRMATION_REMOTE_UNKNOWN", "the original reply does not identify exact remote destinations; display the actual remote scope for confirmation before new actions");
+  const bytes = planBytes(c, planRef);
+  if (bindings[0] !== `${planRef}#sha256=${digest(bytes)}`) throw failure("CONFIRMATION_PLAN_CHANGED", "close plan bytes differ from the original confirmed material");
+  const current = validatePlan(JSON.parse(bytes), c);
+  let confirmedRemote;
+  try { confirmedRemote = validateRemoteIdentity(JSON.parse(decodeURIComponent(remotes[0].slice(`${planRef}#remote=`.length)))); }
+  catch { throw failure("CONFIRMATION_REMOTE_UNKNOWN", "confirmed remote material reference is malformed"); }
+  if (remotes[0] !== `${planRef}#remote=${encodeURIComponent(JSON.stringify(confirmedRemote))}` || current.source.remote_identity !== undefined && !same(confirmedRemote, current.source.remote_identity)
+      || !same(remoteIdentity(c, current.remote), confirmedRemote)) throw failure("REMOTE_SCOPE_CHANGED", "actual remote destinations differ from the original confirmed scope");
+  if (expectedPlan && !same(current, expectedPlan)) throw failure("CLOSE_PLAN_CHANGED", "executing close plan differs from the confirmed current material");
   return value;
 }
 export async function authorizeClosePlan({ taskDir, planRef, confirmationRef, operations } = {}) {
   assertPostWriter(taskDir);
   const c = contextForPlan(taskDir, planRef); const plan = readPlan(c, planRef);
   if (plan.mode === "post-cleanup-archive") c.worktree = c.root; else realDirectory(c.worktree);
-  acceptedConfirmation(c, planRef, confirmationRef);
+  acceptedConfirmation(c, planRef, confirmationRef, plan);
   const chosen = operations ?? plan.steps;
   if (!Array.isArray(chosen) || chosen.some((op) => !plan.steps.includes(op))) throw failure("AUTH_SCOPE", "authorization exceeds the displayed close plan");
   return [...new Set(chosen)].map((action) => {
     const { operation, cwd } = closeActionScope(c, action);
+    acceptedConfirmation(c, planRef, confirmationRef, plan);
     return authorize(c, operation, "record", { confirmationRef, targetArchive: true, cwd });
   });
 }
@@ -395,7 +473,7 @@ function cleanupWasSent(c, plan, planRef, targetHead) {
     if (dirname(consumed.authorization_ref) !== dir) throw failure("AUTH_SCOPE_CONSUMPTION", "cleanup consumption grant is outside this task");
     const grant = JSON.parse(readFile(dir, basename(consumed.authorization_ref)));
     if (grant.operation !== "cleanup" || grant.branch !== plan.target_branch || grant.head !== targetHead) return false;
-    acceptedConfirmation(c, planRef, grant.confirmation_ref);
+    acceptedConfirmation(c, planRef, grant.confirmation_ref, plan);
     return true;
   });
 }
@@ -528,7 +606,7 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
   if (plan.mode === "post-cleanup-archive") c.worktree = c.root;
   else if (existsSync(c.worktree)) realDirectory(c.worktree);
   else if (plan.preserve_existing_workspace || !cleanupWasSent(c, plan, planRef, branchOid(c.root, plan.target_branch))) throw failure("CLEANUP_UNSAFE", "missing task worktree is not covered by a prior authorized cleanup");
-  acceptedConfirmation(c, planRef, confirmationRef);
+  acceptedConfirmation(c, planRef, confirmationRef, plan);
   const directory = evidenceDirectory(c.taskDir);
   return withLock(dirname(directory), "close.execution", async () => {
     let sourceHead = plan.source.head, targetHead = plan.target_head;
@@ -568,6 +646,7 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
     }
     await assertCleanTarget({ root: c.root, target: c.root, baseline: targetHead, expectBranch: plan.target_branch });
     const consume = (action, targetArchive = false) => {
+      acceptedConfirmation(c, planRef, confirmationRef, plan);
       const { operation, cwd } = closeActionScope(c, action), taskAction = cwd === c.worktree && ["commit", "push-task", "pr"].includes(action);
       const branch = git(cwd, ["branch", "--show-current"]), expectedBranch = taskAction ? plan.task_branch : plan.target_branch;
       const current = git(cwd, ["rev-parse", "HEAD"]), expectedCurrent = taskAction ? sourceHead : targetHead;
@@ -583,7 +662,9 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
         if (dirname(retry.authorization_ref) !== authorizationDirectory(c.taskDir)) throw failure("AUTH_SCOPE_CONSUMPTION", "prior consume grant is outside this task");
         const original = JSON.parse(readFile(authorizationDirectory(c.taskDir), basename(retry.authorization_ref)));
         if (original.operation !== operation || original.confirmation_ref !== confirmationRef || original.branch !== branch || !knownHeads.includes(original.head)) throw failure("AUTH_SCOPE_CONSUMPTION", "prior consumed grant differs from the verified plan scope");
-        return authorize(c, operation, "consume", { stepId: `${planRef}:${action}`, authorizationRef: retry.authorization_ref, targetArchive, cwd });
+        const consumed = authorize(c, operation, "consume", { stepId: `${planRef}:${action}`, authorizationRef: retry.authorization_ref, targetArchive, cwd });
+        acceptedConfirmation(c, planRef, confirmationRef, plan);
+        return consumed;
       }
       // A scope grant must already exist. Record its fresh actual action HEAD
       // immediately before native consume, never manufacture missing consent.
@@ -592,6 +673,7 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
       if (actual.operation !== operation || actual.confirmation_ref !== confirmationRef || actual.head !== current || actual.branch !== branch) throw failure("AUTH_SCOPE", "fresh native grant differs from the verified action identity");
       const consumed = authorize(c, operation, "consume", { stepId: `${planRef}:${action}`, authorizationRef: fresh.path, targetArchive, cwd });
       if (consumed.authorization_ref !== fresh.path || consumed.operation !== operation || consumed.step_id !== `${planRef}:${action}`) throw failure("AUTH_SCOPE_CONSUMPTION", "native consumer selected another grant; no action performed");
+      acceptedConfirmation(c, planRef, confirmationRef, plan);
       return consumed;
     };
     const previouslySent = action => {
@@ -607,6 +689,7 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
       if (signal?.aborted) return { status: "cancelled", records, physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
       if (records.some(row => row.operation === operation && row.status === "completed")) continue;
       try {
+        acceptedConfirmation(c, planRef, confirmationRef, plan);
         let prResult;
         closeActionScope(c, operation);
         if (existsSync(plan.worktree_root)) {
@@ -615,7 +698,9 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
         }
         if (git(c.root, ["branch", "--show-current"]) !== plan.target_branch || branchOid(c.root, plan.target_branch) !== targetHead) throw failure("TARGET_HEAD_DRIFT", "target branch or HEAD changed after close planning");
         if (operation === "commit") {
-          if (!same(sourceState(c.worktree, plan.task_id), plan.source)) throw failure("SOURCE_BYTES_DRIFT", "task source bytes changed after close planning");
+          const actualSource = sourceState(c.worktree, plan.task_id);
+          if (plan.source.remote_identity !== undefined) actualSource.remote_identity = remoteIdentity(c, plan.remote);
+          if (!same(actualSource, plan.source)) throw failure("SOURCE_BYTES_DRIFT", "task source bytes or remote destinations changed after close planning");
           consume("commit");
           if (plan.source.changes.length) {
             const paths = [...new Set(plan.source.changes.flatMap((row) => [row.path, ...(row.source_path ? [row.source_path] : [])]))];
@@ -635,13 +720,14 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
           if (!alreadyPublished) git(c.worktree, ["push", plan.remote, `${plan.task_branch}:${plan.task_branch}`]);
           if (remoteOid(c.root, plan.remote, plan.task_branch).oid !== sourceHead) throw failure("PUSH_READBACK", "remote task differs after task push");
         } else if (operation === "pr") {
-          validatePrDescription(plan.pr.body);
+          validatePrDescription(plan.pr.body); validatePrTitle(plan.pr.title);
           const remoteTask = remoteOid(c.root, plan.remote, plan.task_branch);
           if (remoteTask.status !== "available" || remoteTask.oid !== sourceHead) throw failure("PUSH_READBACK", "actual task HEAD must be published before PR creation");
           consume("pr");
           let actual = matchingPr(c, plan, sourceHead);
           if (!actual) {
-            const result = prCommand(c.worktree, ["pr", "create", "--head", plan.pr.head, "--base", plan.pr.base, "--title", plan.pr.title, "--body", plan.pr.body, "--repo", prRepository(c, plan.remote)]);
+            acceptedConfirmation(c, planRef, confirmationRef, plan);
+            const result = prCommand(c.worktree, ["pr", "create", "--head", plan.pr.head, "--base", plan.pr.base, "--title", plan.pr.title, "--body-file", "-", "--repo", prRepository(c, plan.remote)], plan.pr.body);
             if (result.error || result.status !== 0) {
               // Inspect once after a potentially successful external send, but
               // retain the command failure. A later invocation must inspect

@@ -20,6 +20,7 @@ import { readTaskFacts, STAGE_ROW_KEYS, writeStageRow } from "../../runtime/task
 import { inspectWorkspace } from "../../runtime/interface/workspace-check.mjs";
 import { captureCommand } from "../../runtime/interface/run-command.mjs";
 import { recordConfirmation } from "../../runtime/interface/human-confirm.mjs";
+import { confirmClosePlan } from "../../core/task-close.mjs";
 import { validateTaskId } from "../../runtime/task/task-identity.mjs";
 import { resolveStorageRoot, resolveStorageRootDetails } from "../../runtime/evidence/storage-root.mjs";
 import { AUTHENTICATED_EVIDENCE_PATH, redactProviderHostPaths } from "../../runtime/review/provider-material-projection.mjs";
@@ -997,6 +998,15 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
   if (command === "confirm") {
     const fields = input ?? { stage: values.stage, decision: values.decision, reply: values["reply-text"], materialRefs: values["material-ref"] === undefined ? [] : [values["material-ref"]] };
     if (fields.stage !== undefined && fields.stage !== values.stage) throw new TypeError("confirmation stage differs from CLI stage");
+    const refs = fields.materialRefs;
+    const closeDir = join(context.task.taskPath, "quality", "evidence", "close");
+    if (values.stage === "verify-code" && Array.isArray(refs) && refs.length === 1 && typeof refs[0] === "string"
+        && dirname(refs[0]) === closeDir && /^\d{4}-\d{2}-\d{2}-\d{3}-close-plan\.json(?:#.*)?$/.test(basename(refs[0]))) {
+      if (refs[0].includes("#") || !isAbsolute(refs[0]) || resolve(refs[0]) !== refs[0]) throw new TypeError("close confirmation requires a canonical plain plan path without fragments");
+      if (Object.keys(fields).some(key => !["stage", "decision", "reply", "materialRefs"].includes(key))) throw new TypeError("close confirmation contains unsupported fields");
+      const confirmed = await confirmClosePlan({ taskDir: context.task.taskPath, planRef: refs[0], outcome: fields.decision, replyText: fields.reply });
+      return { status: "recorded", path: confirmed.confirmation_ref, ...confirmed.record };
+    }
     return { status: "recorded", ...(await recordConfirmation({ ...fields, stage: values.stage }, { cwd: context.workspace.worktreeRoot, dir: join(context.task.taskPath, "quality", "evidence", "human-confirmations") })) };
   }
   if (command === "authorize-operation") {
