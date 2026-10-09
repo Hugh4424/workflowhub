@@ -4,24 +4,24 @@
   "files": [
     "SKILL.md",
     "ADR-FORMAT.md",
-    "CONTEXT-FORMAT.md"
+    "GLOSSARY-FORMAT.md"
   ],
   "sources": [
     {
       "url": "https://github.com/mattpocock/skills",
-      "commit": "66898f60e8c744e269f8ce06c2b2b99ce7660d5f",
+      "commit": "b0618bc436ad893b3c5e84e55fba86586d34a404",
       "path": "skills/engineering/grill-with-docs/SKILL.md",
       "license": "MIT"
     },
     {
       "url": "https://github.com/mattpocock/skills",
-      "commit": "66898f60e8c744e269f8ce06c2b2b99ce7660d5f",
+      "commit": "b0618bc436ad893b3c5e84e55fba86586d34a404",
       "path": "skills/engineering/domain-modeling/SKILL.md",
       "license": "MIT"
     },
     {
       "url": "https://github.com/mattpocock/skills",
-      "commit": "66898f60e8c744e269f8ce06c2b2b99ce7660d5f",
+      "commit": "b0618bc436ad893b3c5e84e55fba86586d34a404",
       "path": "skills/productivity/grilling/SKILL.md",
       "license": "MIT"
     }

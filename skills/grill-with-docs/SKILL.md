@@ -1,6 +1,6 @@
 ---
 name: grill-with-docs
-description: Grilling session that challenges your plan against the existing domain model, sharpens terminology, and updates documentation (CONTEXT.md, ADRs) inline as decisions crystallise. Use when user wants to stress-test a plan against their project's language and documented decisions.
+description: 挑战方案方向或领域用词时，核对现有代码、术语与决定，合问独立问题并等待真实回答；术语解决后按唯一格式就地更新 GLOSSARY，满足三项判据才记录 ADR。
 ---
 
 <what-to-do>
@@ -8,14 +8,7 @@ description: Grilling session that challenges your plan against the existing dom
 先核实，再提问。沿设计依赖逐项检查计划，但不要把能从代码、文档或已确认事实得到的
 答案重新问用户。只有仍会改变方向的关键问题才进入对话。
 
-Grill follows the upstream round/frontier contract: batch all independent questions, use one axis per question, defer dependent questions to later rounds, and wait for real replies before moving to the next round.
-
-Ask one batch only when the remaining frontier questions are independent. Each
-question in that batch must be answerable without the answer to another question;
-dependent questions stay out of the batch and are re-ranked after the reply.
-
-同一张卡可以包含多个互相独立的问题；不要把独立问题退化成逐个单题发送。每题仍只问一个
-决策轴，有依赖的问题必须等真实回答后再拆到下一批。
+**Frontier**：把当前所有互相独立的问题放进同一批，每题一个决策轴；每题无需其它题的答案即可回答。有依赖的问题留到真实回答后的下一批，先重排再问。
 
 ### 问答工具 IO 契约
 
@@ -30,17 +23,15 @@ dependent questions stay out of the batch and are re-ranked after the reply.
 其中一部分，未回答项必须保留并重新排序，直接回答选项 ID；Grill 仍然只记录方向挑战，
 不产生 review 结论。
 
-If a question can be answered by exploring the codebase, explore the codebase instead.
-
 发现会改变目标、方向、范围、方案、风险或长期规则的决策轴时，必须执行
 `ask → wait/pause → real reply → resume → re-rank`：发布一个独立 frontier 问题批次后
-当前调用立即暂停，只有宿主返回与该批次绑定的真实回复才可恢复并重排剩余问题。
+当前调用立即暂停并把控制权交还用户，只有宿主返回与该批次绑定的真实回复才可恢复并重排剩余问题。取消或中断时返回已答部分、未答项和暂停原因，保留未完成；恢复只消费本批次真实回复，不从默认选项续答。
 Agent 生成、默认、旧回复或文档自报都不能替代 reply。用户只回答部分问题时保留已答
 部分，并把未答 frontier 重新排序。纯事实核实或机械文档修正可以零问题，但必须记录
 “不提问”的事实理由。
 
 需要用户决定时使用大白话 frontier 批次卡：每个问题仍只问一个决策轴，但同一张卡只
-允许放互相独立的问题；写清当前状态（`grill-with-docs`、问题序号和当前总数）、问题、
+允许放互相独立的问题；用日常语言说明本轮用途、问题序号和当前真实总数、问题、
 影响范围、2～3 个互斥选项、推荐项与理由，以及每项的直接后果和主要风险。不得添加
 “刚完成”“下一步”“需要你处理吗”等重复段落，不得展示内部
 ID、hash、receipt、attempt、runner 等执行黑话，不得要求开放式填空。多个决策轴按
@@ -79,7 +70,7 @@ ID、hash、receipt、attempt、runner 等执行黑话，不得要求开放式�
 **结束记录**：四项退出检查完成后，必须把以下事实返回调用方，供完成卡和
 decision-log 使用：
 
-1. `CONTEXT.md`：`changed` 或 `no change`、理由、实际文件引用；
+1. `GLOSSARY.md`：`changed` 或 `no change`、理由、实际文件引用；
 2. ADR：`created` 或 `not needed`、理由、实际文件引用；
 3. ADR 三项判据分别为真或假：难以反转、无背景会意外、存在真实取舍；
 4. 与现有术语或 ADR 的冲突，以及处理结果；
@@ -110,16 +101,16 @@ grill_summary:
 候选队列、问题卡、ask/reply/resume/re-rank、完整问答和 Grill 历史只在当前会话内使用，不形成
 run、revision、latest、ledger 或独立持久记录。本技能不填写 task、stage、snapshot、
 机器身份认证，也不代写任务状态。当前主会话 只把
-`decision_updates` 和必要的 CONTEXT/ADR 结果写进 `decision-log.md`；当前
+`decision_updates` 和必要的 GLOSSARY/ADR 结果写进 `decision-log.md`；当前
 普通决策记录不复制 Grill 历史，Grill 事实也不向下游重复传递。
 不得返回或持久化完整问题卡原文或 secret、token、password、credential、cookie 等秘密。
 
-`CONTEXT.md` 只在领域术语、含义或边界确有变化时最小更新。ADR 只有三项判据全部为
+`GLOSSARY.md` 只在领域术语、含义或边界确有变化时最小更新。ADR 只有三项判据全部为
 真时才创建。即使没有文件变化，也必须记录 `no change` / `not needed` 及理由；不能只写
 “已检查”。
 
 完成后必须向调用方返回一份可直接面向用户呈现的简短总结：检查了什么、最重要的
-结论、仍存风险、`CONTEXT.md` 是否变化、ADR 是否需要及理由、下一步。完整技术事实
+结论、仍存风险、`GLOSSARY.md` 是否变化、ADR 是否需要及理由、下一步。完整技术事实
 继续留在正式记录，不把内部引用或日志塞进总结。
 
 **Plain language mandatory**：面向非工程背景的人提问和汇报时用大白话，不堆专业术语；给选项时逐条说明含义、可选理由、后果和风险，不能只列名词让人自己猜。
@@ -134,11 +125,11 @@ During codebase exploration, also look for existing documentation:
 
 ### File structure
 
-Most repos have a single context:
+本约定适用于 WorkflowHub 自身与所有目标项目，由本技能及 [GLOSSARY-FORMAT.md](./GLOSSARY-FORMAT.md) 承接唯一领域格式，不另建领域建模技能或第二份术语真相。多数项目只有一个领域上下文：
 
 ```text
 /
-├── CONTEXT.md
+├── GLOSSARY.md
 ├── docs/
 │   └── adr/
 │       ├── 0001-event-sourced-orders.md
@@ -146,35 +137,35 @@ Most repos have a single context:
 └── src/
 ```
 
-If a `CONTEXT-MAP.md` exists at the root, the repo has multiple contexts. The map points to where each one lives:
+先读已有 `GLOSSARY-MAP.md` 核实真实上下文及其术语表位置。仅当项目确有多个领域上下文时，才用这个可选 map 说明各自位置、关系和主要负责上下文；目录数或一个术语有多个实例不证明多个上下文：
 
 ```text
 /
-├── CONTEXT-MAP.md
+├── GLOSSARY-MAP.md
 ├── docs/
 │   └── adr/                          ← system-wide decisions
 ├── src/
 │   ├── ordering/
-│   │   ├── CONTEXT.md
+│   │   ├── GLOSSARY.md
 │   │   └── docs/adr/                 ← context-specific decisions
 │   └── billing/
-│       ├── CONTEXT.md
+│       ├── GLOSSARY.md
 │       └── docs/adr/
 ```
 
-Create files lazily — only when you have something to write. If no `CONTEXT.md` exists, create one when the first term is resolved. If no `docs/adr/` exists, create it when the first ADR is needed.
+**Lazy**：只有第一个真实领域术语已解决、确有内容时才创建 `GLOSSARY.md`；没有术语变化就返回 no change 及理由，不建空文件。已有单上下文术语表就最小更新；真实多上下文先读已有 map 找本题所属的唯一术语 owner；没有 map 时，先核实上下文、位置与关系，有真实内容才懒建唯一 map。归属不清先问，不把同一含义写成双真相。首次确需 ADR 才创建 `docs/adr/`。
 
 ## During the session
 
 ### Challenge against the glossary
 
-When the user uses a term that conflicts with the existing language in `CONTEXT.md`, call it out immediately. "Your glossary defines 'cancellation' as X, but you seem to mean Y — which is it?"
+When the user uses a term that conflicts with the existing language in `GLOSSARY.md`, call it out immediately. "Your glossary defines 'cancellation' as X, but you seem to mean Y — which is it?"
 
 ### Sharpen fuzzy language
 
 When the user uses vague or overloaded terms, propose a precise canonical term. "You're saying 'account' — do you mean the Customer or the User? Those are different things."
 
-区分领域语言与实现语言：`CONTEXT.md` 只收录领域专家会使用的概念、含义、边界和避免同义词；不收录 class/module/API 等实现细节，不把它当 spec 或 scratchpad。
+区分领域语言与实现语言：`GLOSSARY.md` 只收录领域专家会使用的概念、含义、边界和避免同义词；不收录 class/module/API 等实现细节，不把它当 spec 或 scratchpad。
 
 ### Discuss concrete scenarios
 
@@ -184,11 +175,11 @@ When domain relationships are being discussed, stress-test them with specific sc
 
 When the user states how something works, check whether the code agrees. If you find a contradiction, surface it: "Your code cancels entire Orders, but you just said partial cancellation is possible — which is right?"
 
-### Update CONTEXT.md inline
+### Update GLOSSARY.md inline
 
-When a term is resolved, update `CONTEXT.md` right there. Don't batch these up — capture them as they happen. Use the format in [CONTEXT-FORMAT.md](./CONTEXT-FORMAT.md).
+When a term is resolved, update `GLOSSARY.md` right there. Don't batch these up — capture them as they happen. Use the format in [GLOSSARY-FORMAT.md](./GLOSSARY-FORMAT.md).
 
-Don't couple `CONTEXT.md` to implementation details. Only include terms that are meaningful to domain experts.
+Don't couple `GLOSSARY.md` to implementation details. Only include terms that are meaningful to domain experts.
 
 ### Offer ADRs sparingly
 
@@ -206,17 +197,12 @@ If any of the three is missing, skip the ADR. Use the format in [ADR-FORMAT.md](
 
 ## Sources
 
-- Matt Pocock `grilling`: <https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/productivity/grilling/SKILL.md>
-- Matt Pocock `grill-with-docs`: <https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/grill-with-docs/SKILL.md>
-- Matt Pocock `domain-modeling`: <https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/domain-modeling/SKILL.md>
+参考 [mattpocock/skills](https://github.com/mattpocock/skills)，固定 commit `b0618bc436ad893b3c5e84e55fba86586d34a404`：
 
-All three upstream files are MIT licensed. Domain-modeling ideas are absorbed here; this skill does not invoke or require a separate domain-modeling skill.
+- `skills/productivity/grilling/SKILL.md`：独立 frontier 批次与真实回答。
+- `skills/engineering/domain-modeling/SKILL.md` 及同目录 `GLOSSARY-FORMAT.md`、`ADR-FORMAT.md`：领域用词、懒创建、单/多上下文和 ADR 三项判据。
+- `skills/engineering/grill-with-docs/SKILL.md`：新固定版仅为组合入口，不当本地融合正文或格式附件的来源 owner。
 
-- 更新检查：2026-07-26。上游 repository HEAD 已前进到
-  `ed37663cc5fbef691ddfecd080dff42f7e7e350d`，但上述三个文件与固定 commit
-  `66898f60e8c744e269f8ce06c2b2b99ce7660d5f` 的 bytes 分别完全一致，因此不升级
-  pinned source。
-- 替代候选：AgentHub `grill-with-docs-lite`（检查时 repository HEAD
-  `fabc82100b3dde2678a5fb81484bab3149c1e72d`）。拒绝替换：lite 版本缺少当前完整
-  Skill 的 CONTEXT/ADR 判据、术语冲突处理、四项客观退出检查和真实方向问答边界；
-  采用它会重新产生“读完文档就自报完成”的缺口。
+上述来源为 MIT。本地融合这些方法，不调用或要求独立 domain-modeling 技能；保留全需求覆盖、四项客观退出检查、大白话卡、失败自行诊断与真实问答边界。格式以本地 Relationships / Example dialogue / Flagged ambiguities 为主，吸收新固定版 Rules / Single vs multi-context repos；ADR 原三项全部成立才创建，不把格式迁名当新决定。
+
+历史 2026-07-26 对旧固定源的 bytes 相同／不升级结论只适用于当时版本，不能说明本次新源无差异。新固定版术语为 GLOSSARY，格式附件属于 domain-modeling；本地承接于本技能，拒绝用缺完整领域/ADR、退出与问答合同的 lite 版本替换。迭代时核上述子文件的真实更新与更优候选，记录源差与本地偏离后决定采用，不自动追 HEAD。创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」，不复制规范。

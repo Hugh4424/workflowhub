@@ -10,7 +10,7 @@
   "sources": [
     {
       "url": "https://github.com/mattpocock/skills",
-      "commit": "66898f60e8c744e269f8ce06c2b2b99ce7660d5f",
+      "commit": "b0618bc436ad893b3c5e84e55fba86586d34a404",
       "path": "skills/engineering/diagnosing-bugs",
       "license": "MIT"
     },
