@@ -108,6 +108,8 @@ export function resolveSkillPackage({ packageRoot, manifestPath, dependency }) {
   const skill = dependency?.name;
   try {
     if (!skill || !dependency.path || !dependency.bundle) throw new Error("skill dependency is incomplete");
+    if (dependency.path !== `skills/${skill}/SKILL.md`)
+      throw new Error(`skill dependency path does not match its declared name: ${skill}`);
     const root = fs.realpathSync(packageRoot);
     assertRelative(manifestPath);
     const manifest = path.resolve(root, manifestPath);
