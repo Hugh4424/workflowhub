@@ -619,3 +619,232 @@ setInterval(()=>{},100);
     expect(()=>process.kill(observed.owned_pid,0)).toThrow();
   }
 },15000);
+
+// Proposed narrow ZIP cases only; existing frozen assertions above are unchanged.
+import nativeBinaryAssert from "node:assert/strict";
+describe("native opaque ZIP packet contract (proposed, no provider review)",()=>{
+  const nativeBinaryTest=it;
+
+const nativeBinaryHash = bytes => createHash("sha256").update(bytes).digest("hex");
+function nativeBinaryGit(cwd, args) {
+  const env = {...process.env};
+  for (const name of Object.keys(env)) if (name.startsWith("GIT_")) delete env[name];
+  env.GIT_OPTIONAL_LOCKS = "0";
+  return execFileSync("git", args, {cwd, env, encoding:"utf8", stdio:["ignore","pipe","pipe"], maxBuffer:32*1024*1024}).trim();
+}
+function nativeBinaryZip(size, seed) {
+  // Real single-entry ZIP, stored method, correct local/central headers and CRC.
+  const payload=Buffer.alloc(size);
+  let state=seed;
+  for(let i=0;i<size;i++){state^=state<<13;state^=state>>>17;state^=state<<5;payload[i]=state&255;}
+  let crc=0xffffffff;
+  for(const byte of payload){crc^=byte;for(let bit=0;bit<8;bit++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}
+  crc=(crc^0xffffffff)>>>0;
+  const name=Buffer.from("payload.bin"),local=Buffer.alloc(30),central=Buffer.alloc(46),end=Buffer.alloc(22);
+  local.writeUInt32LE(0x04034b50);local.writeUInt16LE(20,4);local.writeUInt32LE(crc,14);
+  local.writeUInt32LE(size,18);local.writeUInt32LE(size,22);local.writeUInt16LE(name.length,26);
+  central.writeUInt32LE(0x02014b50);central.writeUInt16LE(20,4);central.writeUInt16LE(20,6);
+  central.writeUInt32LE(crc,16);central.writeUInt32LE(size,20);central.writeUInt32LE(size,24);central.writeUInt16LE(name.length,28);
+  end.writeUInt32LE(0x06054b50);end.writeUInt16LE(1,8);end.writeUInt16LE(1,10);
+  end.writeUInt32LE(central.length+name.length,12);end.writeUInt32LE(local.length+name.length+size,16);
+  return Buffer.concat([local,name,payload,central,name,end]);
+}
+function nativeBinaryFixture(kind, large=false) {
+  const root=fs.realpathSync(fs.mkdtempSync(join(fs.realpathSync(process.env.TMPDIR || "/tmp"),"ocr-native-zip-owned-")));
+  const repo=join(root,"repo"),attachments=join(root,"attachments"),taskPath=join(root,"task");
+  fs.mkdirSync(repo);fs.mkdirSync(attachments);fs.mkdirSync(taskPath);fs.mkdirSync(join(repo,"src"));
+  nativeBinaryGit(repo,["init","-q","-b","main"]);
+  nativeBinaryGit(repo,["config","user.name","Owned native ZIP diagnostic"]);
+  nativeBinaryGit(repo,["config","user.email","owned-native-zip@workflowhub.local"]);
+  const path=kind==="text" ? null : "src/" + (kind.startsWith("zip") ? "artifact.zip" : kind==="bad-mjs" ? "bad.mjs" : "bad.dat");
+  fs.writeFileSync(join(repo,"src/current.mjs"),"export const previous = true;\n");
+  if(path)fs.writeFileSync(join(repo,path),kind.startsWith("zip")?nativeBinaryZip(32,7):Buffer.from([0,255,128,1]));
+  nativeBinaryGit(repo,["add","."]);nativeBinaryGit(repo,["commit","-qm","owned diagnostic baseline"]);
+  const baseline=nativeBinaryGit(repo,["rev-parse","HEAD"]);
+  const currentText=Array.from({length:large?6000:20},(_,i)=>"export const value"+i+' = "完整 current source '+i+'";\n').join("")+"// COMPLETE_CURRENT_TAIL\n";
+  fs.writeFileSync(join(repo,"src/current.mjs"),currentText);
+  if(path)fs.writeFileSync(join(repo,path),kind.startsWith("zip")?nativeBinaryZip(large?360*1024:1024,23):Buffer.from([0,255,128,2]));
+  if(kind.startsWith("zip")) {
+    const validation=execFileSync("/usr/bin/unzip",["-t",join(repo,path)],{encoding:"utf8"});
+    nativeBinaryAssert.match(validation,/No errors detected/);
+  }
+  nativeBinaryGit(repo,["add","."]);nativeBinaryGit(repo,["commit","-qm","owned diagnostic current bytes"]);
+  return {root,repo,attachments,taskPath,path,baseline,currentText,large,kind};
+}
+function nativeBinaryVerifiedPacket(bundle) {
+  const unique=new Set();
+  for(const entry of bundle.manifest) {
+    nativeBinaryAssert.ok(!unique.has(entry.path),"duplicate packet manifest path: "+entry.path);unique.add(entry.path);
+    const bytes=fs.readFileSync(join(bundle.bundleRoot,entry.path));
+    nativeBinaryAssert.equal(bytes.length,entry.bytes,entry.path+" manifest bytes");
+    nativeBinaryAssert.equal(nativeBinaryHash(bytes),entry.sha256,entry.path+" manifest sha256");
+  }
+  nativeBinaryAssert.deepEqual(JSON.parse(fs.readFileSync(join(bundle.bundleRoot,"manifest.json"),"utf8")),[...bundle.manifest].sort((a,b)=>Buffer.compare(Buffer.from(a.path),Buffer.from(b.path))));
+}
+function nativeBinaryRebuiltDiff(bundle, original, zipPath, large) {
+  if(!large) {
+    const full=fs.readFileSync(join(bundle.bundleRoot,"changes.diff"));
+    nativeBinaryAssert.deepEqual(full,original,"small complete Git binary diff bytes");
+    return {mode:"inline",shards:0,bytes:full.length,sha256:nativeBinaryHash(full)};
+  }
+  const index=JSON.parse(fs.readFileSync(join(bundle.bundleRoot,"diff-index.json"),"utf8")),parts=[];
+  let diffOffset=0;
+  for(const change of index.changes) {
+    nativeBinaryAssert.equal(change.diff_offset,diffOffset);
+    const sectionParts=[];let offset=0;
+    for(const shard of change.shards) {
+      nativeBinaryAssert.equal(shard.delivery,"included");nativeBinaryAssert.equal(shard.offset,offset);
+      const part=fs.readFileSync(join(bundle.bundleRoot,shard.ref));
+      nativeBinaryAssert.equal(part.length,shard.bytes);nativeBinaryAssert.equal(nativeBinaryHash(part),shard.sha256);
+      nativeBinaryAssert.ok(part.length<=96*1024);
+      nativeBinaryAssert.deepEqual(bundle.manifest.find(entry=>entry.path===shard.ref),{path:shard.ref,bytes:part.length,sha256:nativeBinaryHash(part)});
+      sectionParts.push(part);offset+=part.length;
+    }
+    const section=Buffer.concat(sectionParts);
+    nativeBinaryAssert.equal(section.length,change.bytes);nativeBinaryAssert.equal(nativeBinaryHash(section),change.sha256);
+    parts.push(section);diffOffset+=section.length;
+  }
+  const full=Buffer.concat(parts);
+  nativeBinaryAssert.deepEqual(full,original,"all complete Git binary diff shard bytes");
+  nativeBinaryAssert.equal(index.full_diff_bytes,original.length);
+  nativeBinaryAssert.equal(index.full_diff_sha256,nativeBinaryHash(original));
+  nativeBinaryAssert.equal(index.captured_diff_bytes,original.length);
+  nativeBinaryAssert.equal(index.captured_diff_sha256,nativeBinaryHash(original));
+  const zip=index.changes.find(change=>change.path===zipPath);
+  nativeBinaryAssert.equal(zip.binary,true);nativeBinaryAssert.equal(zip.current_source_listed,false);
+  nativeBinaryAssert.equal(zip.current_source_ref,null);nativeBinaryAssert.ok(zip.shards.length>1,"ZIP itself spans shards");
+  const text=index.changes.find(change=>change.path==="src/current.mjs");
+  nativeBinaryAssert.equal(text.current_source_listed,true);nativeBinaryAssert.equal(text.current_source_ref,"src/current.mjs");
+  return {mode:"sharded",shards:index.changes.reduce((count,change)=>count+change.shards.length,0),zip_shards:zip.shards.length,bytes:full.length,sha256:nativeBinaryHash(full)};
+}
+function nativeBinaryCase(kind, large=false) {
+  const state=nativeBinaryFixture(kind,large);
+  let bundle,original;
+  try {
+    const context={workspace:{worktreeRoot:state.repo,baselineCommit:state.baseline},task:{taskPath:state.taskPath,identity:{taskId:"owned-native-binary-diagnostic"}}};
+    const request={stage:"verify-code",subject_kind:"worktree",materials:{
+      changed_files:state.path?[state.path,"src/current.mjs"]:["src/current.mjs"],
+      acceptance_criteria:"AC-1: preserve complete source and all binary patch bytes; expose opaque ZIP metadata; retain strict source and alias rejection.",
+      implementation_assessment:"Owned diagnostic fixture only; no task quality conclusion.",
+      test_context:"Real ZIP headers/CRC checked by unzip; current UTF8 source and complete original Git diff validated byte-for-byte.",
+      open_risks:"ZIP body remains opaque; no archive member or pixel interpretation or provider review.",
+    }};
+    const assemble=()=>prepareTaskBoundBuildCodeReviewBundle(context,request,{
+      loadConfig:()=>({attachmentRoot:state.attachments}),
+      captureSource:()=>{
+        const source=captureReviewSource({sourceRoot:state.repo,baselineCommit:state.baseline,reviewDataRoot:state.attachments});
+        original=fs.readFileSync(source.diffPath);
+        if(state.path)nativeBinaryAssert.match(original.toString("utf8"),/GIT binary patch/,"real Git binary patch required");
+        if(large)nativeBinaryAssert.ok(original.length>288*1024,"real sharding threshold exceeded");
+        if(kind==="zip-symlink"||kind==="zip-hardlink"){
+          const full=join(state.repo,state.path),target=join(state.root,"owned-original.zip");
+          fs.renameSync(full,target);
+          if(kind==="zip-symlink")fs.symlinkSync(target,full);
+          else fs.linkSync(target,full);
+        }
+        process.stdout.write(JSON.stringify({case:kind+(large?"-large":""),original_diff_bytes:original.length,original_diff_sha256:nativeBinaryHash(original),has_git_binary_patch:/^GIT binary patch$/m.test(original.toString("utf8")),provider_dispatched:false})+"\n");
+        return source;
+      },
+    });
+    if(kind==="zip-symlink"||kind==="zip-hardlink"||kind.startsWith("bad-")){
+      let rejection;
+      nativeBinaryAssert.throws(()=>{try{bundle=assemble();}catch(error){rejection={code:error.code||null,message:error.message};throw error;}},kind==="zip-symlink"?/source path alias/:kind==="zip-hardlink"?/single-link regular file/:/MATERIAL_NOT_UTF8/);
+      process.stdout.write(JSON.stringify({case:kind,result:"PASS_EXPECTED_REJECTION",rejection,scope:"proposal contract diagnostic only"})+"\n");
+      return;
+    }
+    try {bundle=assemble();} catch(error) {
+      process.stdout.write(JSON.stringify({case:kind+(large?"-large":""),result:"RED_NEW_PROPOSED_CONTRACT_UNIMPLEMENTED",code:error.code||null,message:error.message,scope:"not CARD-04 business RED; no provider review"})+"\n");
+      throw error;
+    }
+    nativeBinaryVerifiedPacket(bundle);
+    nativeBinaryAssert.deepEqual(fs.readFileSync(join(bundle.bundleRoot,"src/current.mjs")),Buffer.from(state.currentText),"complete current UTF8 source including tail");
+    const currentEntry=bundle.manifest.find(entry=>entry.path==="src/current.mjs");
+    nativeBinaryAssert.equal(currentEntry.bytes,Buffer.byteLength(state.currentText));
+    nativeBinaryAssert.equal(currentEntry.sha256,nativeBinaryHash(state.currentText));
+    const diff=nativeBinaryRebuiltDiff(bundle,original,state.path,large);
+    if(state.path) {
+      const raw=fs.readFileSync(join(state.repo,state.path)),identity=JSON.parse(fs.readFileSync(join(bundle.bundleRoot,"source.json"),"utf8"));
+      const opaque=identity.non_text_archives?.find(item=>item.path===state.path);
+      nativeBinaryAssert.ok(opaque,"explicit source.json opaque metadata required");
+      nativeBinaryAssert.equal(opaque.source_bytes,raw.length);nativeBinaryAssert.equal(opaque.source_sha256,nativeBinaryHash(raw));
+      nativeBinaryAssert.equal(opaque.current_source_listed,false);nativeBinaryAssert.equal(opaque.current_source_ref,null);
+      nativeBinaryAssert.equal(opaque.full_git_binary_diff_available,true);
+      nativeBinaryAssert.match(opaque.limitation,/no archive contents or pixel interpretation was performed/);
+      nativeBinaryAssert.ok(!bundle.manifest.some(entry=>entry.path===state.path));
+      nativeBinaryAssert.ok(!bundle.files.includes(state.path));
+      nativeBinaryAssert.ok(!fs.existsSync(join(bundle.bundleRoot,state.path)),"ZIP not provider-readable as text");
+    }
+    process.stdout.write(JSON.stringify({case:kind+(large?"-large":""),result:"PASS_ACTUAL_PACKET_BYTES",current_source_bytes:currentEntry.bytes,current_source_sha256:currentEntry.sha256,manifest_files:bundle.manifest.length,diff,archive_semantic_acceptance:false,provider_dispatched:false})+"\n");
+  } finally {
+    try {
+      bundle?.dispose();
+      const remaining=fs.readdirSync(state.attachments);
+      nativeBinaryAssert.ok(remaining.every(name=>name===".wh-review-packets"),"no assembly artifacts retained");
+      if(remaining.includes(".wh-review-packets"))nativeBinaryAssert.deepEqual(fs.readdirSync(join(state.attachments,".wh-review-packets")),[],"empty packet container only");
+    } finally {
+      fs.rmSync(state.root,{recursive:true,force:true});
+      nativeBinaryAssert.equal(fs.existsSync(state.root),false);
+      process.stdout.write(JSON.stringify({case:kind+(large?"-large":""),owned_fixture_root:state.root,cleanup:"removed only self-created fixture",fixture_absent:true})+"\n");
+    }
+  }
+}
+nativeBinaryTest("preserves small real ZIP as opaque metadata with complete inline Git binary diff",()=>nativeBinaryCase("zip"));
+nativeBinaryTest("preserves large real ZIP as opaque metadata with every binary diff shard",()=>nativeBinaryCase("zip",true));
+nativeBinaryTest("rejects real ZIP symlink source alias before opaque handling",()=>nativeBinaryCase("zip-symlink"));
+nativeBinaryTest("rejects real ZIP hardlink source alias before opaque handling",()=>nativeBinaryCase("zip-hardlink"));
+nativeBinaryTest("retains bad UTF8 executable source rejection",()=>nativeBinaryCase("bad-mjs"));
+nativeBinaryTest("retains frozen-style bad UTF8 dat source rejection",()=>nativeBinaryCase("bad-dat"));
+nativeBinaryTest("verifies complete current text and packet manifest on current implementation",()=>nativeBinaryCase("text"));
+
+function nativeBinaryGuardRejection(mode) {
+  const state=nativeBinaryFixture("zip"),archive=fs.readFileSync(join(state.repo,state.path));
+  let controlDeclared=false,rejection,deliveredDiff;
+  const request={stage:"verify-code",subject_kind:"worktree",materials:{
+    changed_files:[state.path,"src/current.mjs"],acceptance_criteria:"AC-1: only explicit Git binary ZIPs without packet-control conflict may be opaque.",
+    implementation_assessment:"Owned exception-guard negative case only.",test_context:"Real current ZIP bytes; controlled diff/control projection at existing injection seams.",
+    open_risks:"No provider, archive semantics, or business acceptance.",
+  }};
+  try {
+    nativeBinaryAssert.throws(()=>prepareTaskBoundBuildCodeReviewBundle({
+      workspace:{worktreeRoot:state.repo,baselineCommit:state.baseline},task:{taskPath:state.taskPath,identity:{taskId:"owned-native-binary-guard"}},
+    },request,{
+      loadConfig:()=>({attachmentRoot:state.attachments}),
+      captureSource:()=>{
+        const source=captureReviewSource({sourceRoot:state.repo,baselineCommit:state.baseline,reviewDataRoot:state.attachments});
+        const realDiff=fs.readFileSync(source.diffPath,"utf8");
+        const section=realDiff.match(/^diff --git a\/src\/artifact\.zip b\/src\/artifact\.zip[\s\S]*?(?=^diff --git |$(?![\s\S]))/m)?.[0];
+        nativeBinaryAssert.ok(section);nativeBinaryAssert.match(section,/^GIT binary patch$/m);
+        deliveredDiff=mode==="no-binary-tag" ? realDiff.replace(section,"diff --git a/src/artifact.zip b/src/artifact.zip\n--- a/src/artifact.zip\n+++ b/src/artifact.zip\n@@ -1 +1 @@\n-owned text before\n+owned text after\n") : realDiff;
+        nativeBinaryAssert.equal(/^GIT binary patch$/m.test(deliveredDiff),mode!=="no-binary-tag");
+        fs.writeFileSync(source.diffPath,deliveredDiff);return source;
+      },
+      buildMaterials:input=>{
+        const built=buildReviewMaterials(input);
+        if(mode==="control-conflict") {
+          const control=Buffer.from("# Owned packet-control text at the changed ZIP path\n");
+          nativeBinaryAssert.ok(!built.deliveryManifest.some(entry=>entry.path===state.path));
+          fs.mkdirSync(dirname(join(built.bundleRoot,state.path)),{recursive:true});
+          fs.writeFileSync(join(built.bundleRoot,state.path),control,{flag:"wx"});
+          built.deliveryManifest.push({path:state.path,bytes:control.length,sha256:nativeBinaryHash(control)});
+          const declared=built.deliveryManifest.find(entry=>entry.path===state.path);
+          nativeBinaryAssert.equal(declared.bytes,control.length);nativeBinaryAssert.equal(declared.sha256,nativeBinaryHash(fs.readFileSync(join(built.bundleRoot,state.path))));
+          controlDeclared=true;
+        }
+        return built;
+      },
+    }),error=>{rejection={code:error.code||null,message:error.message};return error.code==="MATERIAL_NOT_UTF8";});
+    nativeBinaryAssert.equal(controlDeclared,mode==="control-conflict");
+    nativeBinaryAssert.deepEqual(fs.readFileSync(join(state.repo,state.path)),archive,"source ZIP bytes preserved on rejection");
+    const remaining=fs.readdirSync(state.attachments);
+    nativeBinaryAssert.ok(remaining.every(name=>name===".wh-review-packets"),"rejected packet and captured source cleaned");
+    if(remaining.includes(".wh-review-packets"))nativeBinaryAssert.deepEqual(fs.readdirSync(join(state.attachments,".wh-review-packets")),[]);
+    process.stdout.write(JSON.stringify({case:mode,result:"PASS_EXPECTED_ZIP_GUARD_REJECTION",rejection,has_git_binary_patch:/^GIT binary patch$/m.test(deliveredDiff),packet_control_declared:controlDeclared,source_bytes:archive.length,source_sha256:nativeBinaryHash(archive),source_preserved:true,packet_artifacts_removed:true,provider_dispatched:false})+"\n");
+  } finally {
+    fs.rmSync(state.root,{recursive:true,force:true});nativeBinaryAssert.equal(fs.existsSync(state.root),false);
+    process.stdout.write(JSON.stringify({case:mode,owned_fixture_root:state.root,fixture_absent:true})+"\n");
+  }
+}
+nativeBinaryTest("rejects real ZIP when its supplied diff lacks a GIT binary patch tag",()=>nativeBinaryGuardRejection("no-binary-tag"));
+nativeBinaryTest("rejects real ZIP when its source path conflicts with a declared packet control",()=>nativeBinaryGuardRejection("control-conflict"));
+
+});

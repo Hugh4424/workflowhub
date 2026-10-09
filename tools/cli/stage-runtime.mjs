@@ -423,14 +423,16 @@ function projectOcrCodeReviewBundle(built, attachmentRoot, request, source, nati
     // Capture only this selected diff's physical source files, never a tree.
     // Their submitted bytes, not a private Git snapshot, support reviewer lines.
     const diffText=readFileSync(source.diffPath,"utf8");
-    const sourcePaths=new Set();
-    for(const line of diffText.split("\n"))if(line.startsWith("diff --git ")){
+    const sourcePaths=new Set(), binarySourcePaths=new Set();
+    for(const section of diffText.match(/^diff --git [\s\S]*?(?=^diff --git |$(?![\s\S]))/gm) ?? []){
+      const line=section.split("\n",1)[0];
       const tokens=line.slice(11).match(/"(?:\\.|[^"\\])*"|\S+/g);
       if(tokens?.length!==2)throw new Error("OCR code diff contains an invalid Git header");
-      sourcePaths.add(gitDiffPath(tokens[1]));
+      const path=gitDiffPath(tokens[1]);sourcePaths.add(path);
+      if(/^GIT binary patch$/m.test(section))binarySourcePaths.add(path);
     }
     const sourceRoot=realpathSync(source.sourceRoot);
-    const includedSources=new Set();
+    const includedSources=new Set(), nonTextArchives=[];
     for(const path of sourcePaths){
       if(isAbsolute(path)||path.split("/").some(x=>!x||x==="."||x===".."))throw new Error("OCR source path is unsafe");
       const target=join(sourceRoot,path);let named;
@@ -439,7 +441,18 @@ function projectOcrCodeReviewBundle(built, attachmentRoot, request, source, nati
       if(!named.isFile()||named.nlink!==1)throw new Error(`OCR source is not a single-link regular file: ${path}`);
       const fd=openSync(target,fsConstants.O_RDONLY|fsConstants.O_NOFOLLOW);let raw;
       try{const st=fstatSync(fd);if(st.dev!==named.dev||st.ino!==named.ino||!st.isFile()||st.nlink!==1)throw new Error(`OCR source changed: ${path}`);raw=readFileSync(fd);}finally{closeSync(fd);}
-      const bytes=reviewMaterialBytes(path,raw);
+      let bytes;
+      try{bytes=reviewMaterialBytes(path,raw);}
+      catch(error){
+        // A binary archive is not a text source body. Its complete Git binary
+        // patch remains supplied; expose the missing text interpretation.
+        if(error.code!=="MATERIAL_NOT_UTF8" || !/\.zip$/i.test(path)
+            || !binarySourcePaths.has(path) || projected.some(entry=>entry.path===path))throw error;
+        nonTextArchives.push({path,source_bytes:raw.length,source_sha256:sha256(raw),
+          current_source_listed:false,current_source_ref:null,full_git_binary_diff_available:true,
+          limitation:"non-UTF8 archive body is not a packet text source; no archive contents or pixel interpretation was performed"});
+        continue;
+      }
       includedSources.add(path);
       const existing=projected.find(entry=>entry.path===path);
       if(existing){
@@ -449,6 +462,14 @@ function projectOcrCodeReviewBundle(built, attachmentRoot, request, source, nati
         continue;
       }
       const destination=join(bundleRoot,path);mkdirSync(dirname(destination),{recursive:true});writeFileSync(destination,bytes,{flag:"wx",mode:0o600});projected.push({path,bytes:bytes.length,sha256:sha256(bytes)});
+    }
+    if(nonTextArchives.length){
+      const entry=projected.find(item=>item.path==="source.json");
+      if(!entry)throw new Error("OCR packet source identity is unavailable");
+      const path=join(bundleRoot,"source.json"),identity=JSON.parse(readFileSync(path,"utf8"));
+      identity.non_text_archives=nonTextArchives;
+      const bytes=reviewMaterialBytes("source.json",identity);
+      writeFileSync(path,bytes);entry.bytes=bytes.length;entry.sha256=sha256(bytes);
     }
     const diffIndexEntry=projected.find(entry=>entry.path==="diff-index.json");
     if(diffIndexEntry){
