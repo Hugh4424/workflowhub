@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { resolveLocalSkill, resolveSkillPackage, validateSkillBundle } from "../../runtime/adapters/local-skill-resolver.mjs";
+import { loadStageSkillManifest } from "../../runtime/stage/stage-skill-runtime.mjs";
 
 const roots = [];
 afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
@@ -140,6 +141,188 @@ describe("local skill resolver", () => {
         manifestPath: "workflows/stage/skill-deps.yaml",
         dependency: { name: "other", path: "skills/demo/SKILL.md", bundle: "skills/demo/skill-bundle.json" },
       });
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure.diagnostic).toMatchObject(sourceLiteral);
+    expect(failure.message).toEqual(expect.any(String));
+    expect(failure.message).not.toBe("");
+    expect(failure.diagnostic.message).toBe(failure.message);
+  });
+
+  it("resolves a native name/path/trigger dependency with its conventional sibling bundle", () => {
+    const root = fs.realpathSync(fixture());
+    const manifestLiteral = "stage: stage\nskills:\n  - name: demo\n    path: skills/demo/SKILL.md\n    trigger: owned_case\n";
+    const bundleLiteral = { schema_version: 1, skill: "demo", files: ["SKILL.md", "guide.md"] };
+    fs.mkdirSync(path.join(root, "workflows/stage"), { recursive: true });
+    fs.writeFileSync(path.join(root, "workflows/stage/skill-deps.yaml"), manifestLiteral);
+    fs.writeFileSync(path.join(root, "skills/demo/guide.md"), "owned guide\n");
+    fs.writeFileSync(path.join(root, "skills/demo/unlisted.md"), "unlisted\n");
+    fs.writeFileSync(path.join(root, "skills/demo/skill-bundle.json"), JSON.stringify(bundleLiteral));
+    expect(fs.readFileSync(path.join(root, "workflows/stage/skill-deps.yaml"), "utf8")).toBe(manifestLiteral);
+    expect(fs.readFileSync(path.join(root, "skills/demo/SKILL.md"), "utf8")).toBe("# demo\n");
+    expect(fs.readFileSync(path.join(root, "skills/demo/guide.md"), "utf8")).toBe("owned guide\n");
+    expect(fs.readFileSync(path.join(root, "skills/demo/unlisted.md"), "utf8")).toBe("unlisted\n");
+    expect(JSON.parse(fs.readFileSync(path.join(root, "skills/demo/skill-bundle.json"), "utf8"))).toEqual(bundleLiteral);
+    const nativeDependency = loadStageSkillManifest(root, "stage").manifest.skills[0];
+    expect(nativeDependency).toEqual({ name: "demo", path: "skills/demo/SKILL.md", trigger: "owned_case" });
+    expect(Object.hasOwn(nativeDependency, "bundle")).toBe(false);
+    const sourceLiteral = {
+      name: "demo",
+      resolved_skill_path: path.join(root, "skills/demo/SKILL.md"),
+      resolved_bundle_paths: [path.join(root, "skills/demo/SKILL.md"), path.join(root, "skills/demo/guide.md")],
+      source_manifest: path.join(root, "workflows/stage/skill-deps.yaml"),
+      package_root: root,
+      diagnostic: {
+        schema_version: "workflowhub-skill-diagnostic.v1",
+        source: "resolver",
+        skill: "demo",
+        status: "available",
+        code: "SKILL_RESOLVED",
+        message: null,
+        enforcement: "fail_loud",
+      },
+    };
+    expect(resolveSkillPackage({
+      packageRoot: root,
+      manifestPath: "workflows/stage/skill-deps.yaml",
+      dependency: nativeDependency,
+    })).toEqual(sourceLiteral);
+  });
+
+  it("rejects an explicitly wrong same-directory bundle filename instead of ignoring it", () => {
+    const root = fs.realpathSync(fixture());
+    const bundleLiteral = { schema_version: 1, skill: "demo", files: ["SKILL.md", "guide.md"] };
+    fs.mkdirSync(path.join(root, "workflows/stage"), { recursive: true });
+    fs.writeFileSync(path.join(root, "workflows/stage/skill-deps.yaml"), "stage: stage\n");
+    fs.writeFileSync(path.join(root, "skills/demo/guide.md"), "owned guide\n");
+    fs.writeFileSync(path.join(root, "skills/demo/skill-bundle.json"), JSON.stringify(bundleLiteral));
+    fs.writeFileSync(path.join(root, "skills/demo/alternate-bundle.json"), JSON.stringify(bundleLiteral));
+    expect(fs.readFileSync(path.join(root, "skills/demo/alternate-bundle.json"), "utf8")).toBe(JSON.stringify(bundleLiteral));
+    expect(fs.readFileSync(path.join(root, "skills/demo/skill-bundle.json"), "utf8")).toBe(JSON.stringify(bundleLiteral));
+    expect(fs.readFileSync(path.join(root, "skills/demo/SKILL.md"), "utf8")).toBe("# demo\n");
+    expect(fs.readFileSync(path.join(root, "skills/demo/guide.md"), "utf8")).toBe("owned guide\n");
+    expect(fs.readFileSync(path.join(root, "workflows/stage/skill-deps.yaml"), "utf8")).toBe("stage: stage\n");
+    const sourceLiteral = {
+      schema_version: "workflowhub-skill-diagnostic.v1",
+      source: "resolver",
+      skill: "demo",
+      status: "blocked",
+      code: "SKILL_RESOLUTION_FAILED",
+      enforcement: "fail_loud",
+    };
+    let failure;
+    try {
+      resolveSkillPackage({
+        packageRoot: root,
+        manifestPath: "workflows/stage/skill-deps.yaml",
+        dependency: { name: "demo", path: "skills/demo/SKILL.md", bundle: "skills/demo/alternate-bundle.json" },
+      });
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure.diagnostic).toMatchObject(sourceLiteral);
+    expect(failure.message).toEqual(expect.any(String));
+    expect(failure.message).not.toBe("");
+    expect(failure.diagnostic.message).toBe(failure.message);
+  });
+
+  it("preserves native missing-bundle compatibility for an own undefined bundle", () => {
+    const root = fs.realpathSync(fixture());
+    const manifestLiteral = "stage: stage\nskills:\n  - name: demo\n    path: skills/demo/SKILL.md\n    trigger: owned_case\n";
+    const bundleLiteral = { schema_version: 1, skill: "demo", files: ["SKILL.md", "guide.md"] };
+    fs.mkdirSync(path.join(root, "workflows/stage"), { recursive: true });
+    fs.writeFileSync(path.join(root, "workflows/stage/skill-deps.yaml"), manifestLiteral);
+    fs.writeFileSync(path.join(root, "skills/demo/guide.md"), "owned guide\n");
+    fs.writeFileSync(path.join(root, "skills/demo/unlisted.md"), "unlisted\n");
+    fs.writeFileSync(path.join(root, "skills/demo/skill-bundle.json"), JSON.stringify(bundleLiteral));
+    expect(fs.readFileSync(path.join(root, "workflows/stage/skill-deps.yaml"), "utf8")).toBe(manifestLiteral);
+    expect(JSON.parse(fs.readFileSync(path.join(root, "skills/demo/skill-bundle.json"), "utf8"))).toEqual(bundleLiteral);
+    expect(fs.readFileSync(path.join(root, "skills/demo/SKILL.md"), "utf8")).toBe("# demo\n");
+    expect(fs.readFileSync(path.join(root, "skills/demo/guide.md"), "utf8")).toBe("owned guide\n");
+    expect(fs.readFileSync(path.join(root, "skills/demo/unlisted.md"), "utf8")).toBe("unlisted\n");
+    const nativeDependency = loadStageSkillManifest(root, "stage").manifest.skills[0];
+    expect(nativeDependency).toEqual({ name: "demo", path: "skills/demo/SKILL.md", trigger: "owned_case" });
+    const dependency = { ...nativeDependency, bundle: undefined };
+    expect(Object.hasOwn(dependency, "bundle")).toBe(true);
+    expect(dependency.bundle).toBeUndefined();
+    const sourceLiteral = {
+      name: "demo",
+      resolved_skill_path: path.join(root, "skills/demo/SKILL.md"),
+      resolved_bundle_paths: [path.join(root, "skills/demo/SKILL.md"), path.join(root, "skills/demo/guide.md")],
+      source_manifest: path.join(root, "workflows/stage/skill-deps.yaml"),
+      package_root: root,
+      diagnostic: {
+        schema_version: "workflowhub-skill-diagnostic.v1",
+        source: "resolver",
+        skill: "demo",
+        status: "available",
+        code: "SKILL_RESOLVED",
+        message: null,
+        enforcement: "fail_loud",
+      },
+    };
+    expect(resolveSkillPackage({
+      packageRoot: root,
+      manifestPath: "workflows/stage/skill-deps.yaml",
+      dependency,
+    })).toEqual(sourceLiteral);
+  });
+
+  it("rejects an explicitly null bundle instead of deriving a sibling", () => {
+    const root = fs.realpathSync(fixture());
+    fs.mkdirSync(path.join(root, "workflows/stage"), { recursive: true });
+    fs.writeFileSync(path.join(root, "workflows/stage/skill-deps.yaml"), "stage: stage\n");
+    const dependency = { name: "demo", path: "skills/demo/SKILL.md", trigger: "owned_case", bundle: null };
+    expect(Object.hasOwn(dependency, "bundle")).toBe(true);
+    expect(dependency.bundle).toBe(null);
+    expect(fs.readFileSync(path.join(root, "workflows/stage/skill-deps.yaml"), "utf8")).toBe("stage: stage\n");
+    expect(fs.readFileSync(path.join(root, "skills/demo/SKILL.md"), "utf8")).toBe("# demo\n");
+    expect(JSON.parse(fs.readFileSync(path.join(root, "skills/demo/skill-bundle.json"), "utf8"))).toEqual({ schema_version: 1, skill: "demo", files: ["SKILL.md"] });
+    const sourceLiteral = {
+      schema_version: "workflowhub-skill-diagnostic.v1",
+      source: "resolver",
+      skill: "demo",
+      status: "blocked",
+      code: "SKILL_RESOLUTION_FAILED",
+      enforcement: "fail_loud",
+    };
+    let failure;
+    try {
+      resolveSkillPackage({ packageRoot: root, manifestPath: "workflows/stage/skill-deps.yaml", dependency });
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure.diagnostic).toMatchObject(sourceLiteral);
+    expect(failure.message).toEqual(expect.any(String));
+    expect(failure.message).not.toBe("");
+    expect(failure.diagnostic.message).toBe(failure.message);
+  });
+
+  it("rejects an explicitly empty bundle instead of deriving a sibling", () => {
+    const root = fs.realpathSync(fixture());
+    fs.mkdirSync(path.join(root, "workflows/stage"), { recursive: true });
+    fs.writeFileSync(path.join(root, "workflows/stage/skill-deps.yaml"), "stage: stage\n");
+    const dependency = { name: "demo", path: "skills/demo/SKILL.md", trigger: "owned_case", bundle: "" };
+    expect(Object.hasOwn(dependency, "bundle")).toBe(true);
+    expect(dependency.bundle).toBe("");
+    expect(fs.readFileSync(path.join(root, "workflows/stage/skill-deps.yaml"), "utf8")).toBe("stage: stage\n");
+    expect(fs.readFileSync(path.join(root, "skills/demo/SKILL.md"), "utf8")).toBe("# demo\n");
+    expect(JSON.parse(fs.readFileSync(path.join(root, "skills/demo/skill-bundle.json"), "utf8"))).toEqual({ schema_version: 1, skill: "demo", files: ["SKILL.md"] });
+    const sourceLiteral = {
+      schema_version: "workflowhub-skill-diagnostic.v1",
+      source: "resolver",
+      skill: "demo",
+      status: "blocked",
+      code: "SKILL_RESOLUTION_FAILED",
+      enforcement: "fail_loud",
+    };
+    let failure;
+    try {
+      resolveSkillPackage({ packageRoot: root, manifestPath: "workflows/stage/skill-deps.yaml", dependency });
     } catch (error) {
       failure = error;
     }
