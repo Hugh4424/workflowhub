@@ -3378,7 +3378,7 @@
         "tools/cli/run-checks.mjs"
       ],
       "delete_condition": "保持只读且只服务该有限对账；若现职责已由经独立审读的原实现承接且 run-checks及其它真实当前consumer为零，或维护成本高于已证损失，原T016维护owner按spec:161/:570收缩/退役。登记不授当前任意文件/历史删除许可；历史清理仍须真实用户范围与原source保留，不以本checker或计数授权退役18。",
-      "retention_basis": "futurepending：新CLI未创建／run-checks未接线／不得当前complete。职责源=spec.md:155/:161/:570、P8/T016:190/:196–202；替代旧manifest当前对账/手工5deps+wh映射遗漏核。复用现runChecker及loadStageSkillManifest/validateSkillBundle已覆盖语法/包安全，但它们不核两wh清单与catalog/current映射，static-deps也不覆盖缺失Markdown；独立 --root finite fixture需单CLI，非为机器可验新建平台。新task外置targeted CLI测试源码由原测试作者fd814预写/冻结，actual ref未返回前unknown；保旧skill-modernization-consistency.test.mjs三P2P，不冒新CLI故障负控或真实调用GREEN。本次仅普通目录责任预登记，未实施、未测试，不新增schema/永久machinewriter/gate。"
+      "retention_basis": "当前 CLI 已创建并在 tools/cli/run-checks.mjs:132–134 真实接入既有 runChecker 聚合，仍仅为有限只读开发事实工具，不作 Runner/dispatch/阶段许可；061创建前预登记及其未创建、未接线、未实施测试状态仅为该历史时点原件，不修改061。职责源=spec.md:155/:161/:570、P8/T016:190/:196–202；替代旧manifest当前对账/手工5deps+wh映射遗漏核。复用现runChecker及loadStageSkillManifest/validateSkillBundle语法/包安全，不复制安全helper；两wh清单与catalog/current映射由 finite --root CLI核。原测试作者fd814预写冻结的既有25例：父会话回传独立N1/W1实际通过，以及372实际25pass另2选中重复；既有consistency与thin各3例、当前root CLI退出0且差异report-only只证明各自有限覆盖，不当完整Phase质量通过。新发现unreferenced current catalog name/path未覆盖的有效gap已确认，原25例不证明该新负控；待独立预写、批准及真实RED后原owner最小修，未称全current登记验证完成。保旧P2P历史原ref，不把新CLI实际结果覆写为原P2P覆盖。本条只维护真实当前目录职责，不新增schema/永久machinewriter/gate或清理许可。"
     },
     {
       "source": "tools/cli/run-checks.mjs",
