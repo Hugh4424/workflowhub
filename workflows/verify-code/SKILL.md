@@ -35,7 +35,7 @@ UI 适用时从真实页面和 Component Quality Map 核消费者、状态 owner
 
 ## OCR 能力与回退
 
-先检查 `ocr` 命令和 `ocr --version`。仅命令不存在（ENOENT）或版本低于1.12.9，回退 architect-code-review 执行同一终末代码审查，保留检测、fallback 原因、原始输入、真实输出和限制。版本检测其它错误不推断未安装；OCR 已装而执行失败、超时或取消时不回退，按真实 unavailable/失败记录。依赖真实 OCR 的测试在未安装时显式 skip 并披露。不能把成功替代伪标成 OCR，也不把不可用写成空 findings。
+先检查 `ocr` 命令和 `ocr --version`。仅 ocr 命令不存在（ENOENT）或版本低于1.12.9，回退 architect-code-review 执行同一终末代码审查，保留检测、fallback 原因、原始输入、真实输出和限制。版本检测其它错误不推断未安装；OCR 已装而执行失败、超时或取消时不回退，按真实 unavailable/失败记录。依赖真实 OCR 的测试在未安装时显式 skip 并披露。不能把成功替代伪标成 OCR，也不把不可用写成空 findings。
 
 ## 人为门与审查点
 
