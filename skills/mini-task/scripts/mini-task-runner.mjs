@@ -183,8 +183,12 @@ export async function resumeTaskA({taskDir,planRef,confirmationRef,signal}={}) {
     return evidence(c,"mini-resume-result",{status:"completed",plan_ref:planRef,head:currentHead,next_action:"rerun_original_stage",recorded_at:new Date().toISOString()});
   });
 }
-async function runReview({taskDir,request,reviewRunner}={},kind){
+async function runReview({taskDir,request,reviewRunner,services={},cwd,signal}={},kind){
   const c=context(taskDir);
+  if (reviewRunner === undefined && kind === "mini_task.implementation") {
+    const { runMiniTaskCodeReview } = await import("../../../tools/cli/stage-runtime.mjs");
+    return runMiniTaskCodeReview({taskDir,request,services,cwd:cwd ?? c.worktree,signal});
+  }
   const runner=reviewRunner??(await import("../../wh-review/scripts/wh-review-cli.mjs")).runReviewRecovery;
   if(typeof runner!=="function")throw new TypeError("review runner is unavailable");
   let outcome;
@@ -193,6 +197,6 @@ async function runReview({taskDir,request,reviewRunner}={},kind){
 }
 export async function runMiniTaskDesignReview(input={}){return runReview(input,"mini_task.design");}
 export async function runMiniTaskImplementationReview(input={}){return runReview(input,"mini_task.implementation");}
-export function createMiniTaskRunner({taskDir}={}){
-  return Object.freeze({evaluateScope:evaluateMiniTaskScope,runDesignReview:input=>runMiniTaskDesignReview({...input,taskDir}),runImplementationReview:input=>runMiniTaskImplementationReview({...input,taskDir}),prepareDelivery:input=>prepareMiniTaskDelivery({...input,taskDir}),confirmDelivery:input=>confirmMiniTaskDelivery({...input,taskDir}),authorizeDelivery:input=>authorizeMiniTaskDelivery({...input,taskDir}),executeDelivery:input=>executeMiniTaskDelivery({...input,taskDir}),prepareAResume:input=>prepareAResumePlan({...input,taskDir}),confirmAResume:input=>confirmAResumePlan({...input,taskDir}),authorizeAResume:input=>authorizeAResumePlan({...input,taskDir}),resumeA:input=>resumeTaskA({...input,taskDir})});
+export function createMiniTaskRunner({taskDir,services={}}={}){
+  return Object.freeze({evaluateScope:evaluateMiniTaskScope,runDesignReview:input=>runMiniTaskDesignReview({services,...input,taskDir}),runImplementationReview:input=>runMiniTaskImplementationReview({services,...input,taskDir}),prepareDelivery:input=>prepareMiniTaskDelivery({...input,taskDir}),confirmDelivery:input=>confirmMiniTaskDelivery({...input,taskDir}),authorizeDelivery:input=>authorizeMiniTaskDelivery({...input,taskDir}),executeDelivery:input=>executeMiniTaskDelivery({...input,taskDir}),prepareAResume:input=>prepareAResumePlan({...input,taskDir}),confirmAResume:input=>confirmAResumePlan({...input,taskDir}),authorizeAResume:input=>authorizeAResumePlan({...input,taskDir}),resumeA:input=>resumeTaskA({...input,taskDir})});
 }

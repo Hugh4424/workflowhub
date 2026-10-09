@@ -574,17 +574,18 @@ function loadTrustedOcrConfig({ requestedStage = null } = {}) {
 }
 
 function resolveTrustedOcrRoute(whReview, stage, reviewTrack, reviewKind, reviewScope) {
-  if (!whReview || reviewKind !== null || reviewTrack !== null
+  const miniImplementation = reviewKind === "mini_task.implementation" && stage === "build-code" && reviewScope === "phase";
+  if (!whReview || reviewTrack !== null || (!miniImplementation && (reviewKind !== null
       || (stage === "build-code" && reviewScope !== "phase" && reviewScope !== "integration")
-      || (stage !== "build-code" && (stage !== "verify-code" || reviewScope !== null))) return null;
-  const configured = whReview.stages[stage];
+      || (stage !== "build-code" && (stage !== "verify-code" || reviewScope !== null))))) return null;
+  const configured = miniImplementation ? whReview.mini_task?.implementation : whReview.stages[stage];
   if (!configured) return null;
-  const label = `workflowhub host wh_review.stages.${stage}`;
+  const label = miniImplementation ? "workflowhub host wh_review.mini_task.implementation" : `workflowhub host wh_review.stages.${stage}`;
   if (typeof configured !== "object" || Array.isArray(configured)
       || Object.keys(configured).some((key) => !["initial", "closure", "mode", "minimum_heterologous"].includes(key))) {
     throw new Error(`${label} is invalid`);
   }
-  const requiredMode = stage === "build-code" ? "full_only" : "single_round";
+  const requiredMode = !miniImplementation && stage === "build-code" ? "full_only" : "single_round";
   if ((configured.mode ?? "adaptive") !== requiredMode || configured.closure !== undefined) {
     throw new Error(`${label}.mode must be ${requiredMode}`);
   }

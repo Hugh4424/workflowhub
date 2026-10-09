@@ -14,7 +14,7 @@ disable-model-invocation: true
 
 先确认：
 
-- 当前仓库是 `/Users/Hugh/Hugh/Project/workflowhub`，或用户明确给出另一个仓库。
+- 使用用户明确给出的目标仓库；未给出时，先在当前工作区用 `git rev-parse --show-toplevel` 定位并核对实际目标，将已核仓库绝对路径记为 `REPO`，后续审计与执行都显式使用它。
 - 比较对象是 Git 的 `main`，不是当前工作树里的未提交文件。
 - Multica 使用正式 profile 和 workspace：优先读取用户提供的参数；没有参数时使用 `desktop-api.multica.ai`，并要求明确的 `--workspace-id`。
 - 所有 Multica 操作只能通过 `multica` CLI。
@@ -23,7 +23,7 @@ disable-model-invocation: true
 
 ```bash
 node skills/workflowhub-multica-sync/scripts/multica-skill-sync.mjs audit \
-  --repo=/Users/Hugh/Hugh/Project/workflowhub \
+  --repo="${REPO:?先设置并核对目标仓库}" \
   --profile=desktop-api.multica.ai \
   --workspace-id=<workspace-id> \
   --format=text

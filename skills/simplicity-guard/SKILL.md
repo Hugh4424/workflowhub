@@ -104,6 +104,6 @@ review 的删除类 finding 措辞；不新建字段、模板、文件或第二�
 
 - ponytail 七阶梯 YAGNI 法（压缩为四阶梯）
 - andrej-karpathy-skills 三条纪律（并入 P3 写法纪律）
-- 需要核四阶梯术语时，读取根领域术语载体的四阶梯定义：改名已完成用 `GLOSSARY.md`；尚未改名则按实际现存 `CONTEXT.md` 读取，不猜新路径已存在或建立第二份定义。
+- 需要核四阶梯术语时，读取本文件「四阶梯决策树」的 P0–P3 唯一定义。
 
 创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；本 lens 保留原四阶梯、保护例外与 findings 合同，不另建规范。

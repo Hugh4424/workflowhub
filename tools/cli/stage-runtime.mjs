@@ -326,14 +326,14 @@ function isNormalOcrCodeReviewRequest(request) {
   const scope = request?.review_scope ?? request?.reviewScope ?? null;
   const kind = request?.review_kind ?? request?.reviewKind ?? null;
   const track = request?.review_track ?? request?.reviewTrack ?? null;
-  return kind === null && track === null && (
+  return track === null && ((kind === "mini_task.implementation" && request?.stage === "build-code" && scope === "phase") || kind === null && (
     (request?.stage === "build-code" && (scope === "phase" || scope === "integration"))
-    || (request?.stage === "verify-code" && scope === null));
+    || (request?.stage === "verify-code" && scope === null)));
 }
 
 function ocrReviewInstructionsFor(request) {
   const focus = reviewInstructionsFor(request.stage, null, false,
-    request.review_scope ?? request.reviewScope ?? null, null, "full", null, true);
+    request.review_scope ?? request.reviewScope ?? null, request.review_kind ?? request.reviewKind ?? null, "full", null, true);
   return [
     `OCR code review: ${request.stage}/${request.phase_id ?? request.phaseId ?? "worktree"}.`,
     "Read the complete contracts/build-code.md, contracts/verify-code.md, contracts/provider-protocol.md and manifest-declared lens skill bodies. Apply the actual stage's reviewer contract and the review focus below; the other code contract supplies the adjacent review boundary.",
@@ -391,13 +391,14 @@ function writeOcrCurrentMaterialProjection(bundleRoot, projected, evidence) {
 }
 
 function projectOcrCodeReviewBundle(built, attachmentRoot, request, source, nativePacketFallback = false) {
+  const miniImplementation = request.stage === "build-code" && (request.review_kind ?? request.reviewKind) === "mini_task.implementation";
   const selected = built.manifest.filter(({ path }) => path !== "packet-plan.json" && path !== "manifest.json");
   const paths = new Set(selected.map(({ path }) => path));
   for (const path of ["contracts/build-code.md", "contracts/verify-code.md", "contracts/provider-protocol.md", "skills/simplicity-guard/SKILL.md", "skills/review/SKILL.md"]) {
     if (!paths.has(path)) throw new Error(`OCR packet is missing its required reviewer body: ${path}`);
   }
   if (!paths.has("review-instructions.md") || !paths.has("source.json")
-      || ![...paths].some((path) => /^requirements\/acceptance_criteria\.(?:md|json)$/.test(path))
+      || (!miniImplementation && ![...paths].some((path) => /^requirements\/acceptance_criteria\.(?:md|json)$/.test(path)))
       || ![...paths].some((path) => path === "changes.diff" || /^diff-shards\/[^/]+\.diff$/.test(path))) {
     throw new Error("OCR packet is missing its instructions, current diff, or full acceptance criteria");
   }
@@ -420,6 +421,36 @@ function projectOcrCodeReviewBundle(built, attachmentRoot, request, source, nati
       if (projectedBytes === bytes) copyFileSync(join(built.bundleRoot, entry.path), destination);
       else writeFileSync(destination, projectedBytes);
       projected.push({ path: entry.path, bytes: projectedBytes.length, sha256: sha256(projectedBytes) });
+    }
+    if (miniImplementation) {
+      const specEntries = selected.filter(entry => /^materials\/\d+-spec\.(?:md|json)$/.test(entry.path));
+      if (specEntries.length !== 1) throw new Error("mini implementation packet requires one complete current spec source");
+      const spec = specEntries[0];
+      const bytes = readFileSync(join(bundleRoot, spec.path));
+      if (!bytes.length || bytes.length !== spec.bytes || sha256(bytes) !== spec.sha256) throw new Error("mini implementation spec source is empty or changed");
+      const path = `requirements/acceptance_criteria.${spec.path.endsWith(".json") ? "json" : "md"}`;
+      if (projected.some(entry => entry.path === path)) throw new Error("mini implementation acceptance projection conflicts with an existing source");
+      mkdirSync(dirname(join(bundleRoot, path)), { recursive: true }); writeFileSync(join(bundleRoot, path), bytes, { flag: "wx", mode: 0o600 });
+      projected.push({ path, bytes: bytes.length, sha256: sha256(bytes) });
+      const instructions = join(bundleRoot, "review-instructions.md");
+      const updated = Buffer.concat([readFileSync(instructions), Buffer.from(`\n${path} contains the complete supplied mini-task spec bytes from ${spec.path}, not an extracted AC summary. Read that complete authority for acceptance together with the supplied AC trace, actual user result, tests, and coverage limits.\n`)]);
+      writeFileSync(instructions, updated);
+      Object.assign(projected.find(entry => entry.path === "review-instructions.md"), { bytes: updated.length, sha256: sha256(updated) });
+    }
+    if (nativePacketFallback) {
+      const path = "skills/architect-code-review/SKILL.md";
+      const bytes = reviewMaterialBytes(path, readPlainInputFile(fileURLToPath(new URL(`../../${path}`, import.meta.url)), "architect fallback body"));
+      const destination = join(bundleRoot, path);
+      if (projected.some(entry => entry.path === path)) {
+        if (!readFileSync(destination).equals(bytes)) throw new Error("architect fallback body conflicts with the existing packet source");
+      } else {
+        mkdirSync(dirname(destination), { recursive: true }); writeFileSync(destination, bytes, { flag: "wx", mode: 0o600 });
+        projected.push({ path, bytes: bytes.length, sha256: sha256(bytes) });
+      }
+      const instructions = join(bundleRoot, "review-instructions.md");
+      const updated = Buffer.concat([readFileSync(instructions), Buffer.from("\nOCR is absent or below the supported version. Apply the complete skills/architect-code-review/SKILL.md lens to this same code-review packet in your current reviewer role; the provider protocol and existing no-child-agent/tool restrictions take precedence over any method-internal delegation directions. This native wh-review transport is not an OCR execution. Preserve the original review identity, unavailable execution facts, and coverage limits.\n")]);
+      writeFileSync(instructions, updated);
+      Object.assign(projected.find(entry => entry.path === "review-instructions.md"), { bytes: updated.length, sha256: sha256(updated) });
     }
     // Capture only this selected diff's physical source files, never a tree.
     // Their submitted bytes, not a private Git snapshot, support reviewer lines.
@@ -515,7 +546,7 @@ function projectOcrCodeReviewBundle(built, attachmentRoot, request, source, nati
 }
 
 function phaseReviewSourceProjection(context, request, source, attachmentRoot) {
-  if (request.stage !== "build-code" || (request.review_scope ?? request.reviewScope) !== "phase"
+  if (request.stage !== "build-code" || (request.review_kind ?? request.reviewKind ?? null) !== null || (request.review_scope ?? request.reviewScope) !== "phase"
       || context.manifest?.activation_cohort !== "post") return source;
   const index = context.artifacts.read("phases/index.md");
   const phases = Object.fromEntries(phaseFilesFromIndex(index).map((ref) => [ref, context.artifacts.read(ref)]));
@@ -529,7 +560,7 @@ function phaseReviewSourceProjection(context, request, source, attachmentRoot) {
 }
 
 function phaseReviewDiffBase(context, request) {
-  if (request.stage !== "build-code" || (request.review_scope ?? request.reviewScope) !== "phase") return null;
+  if (request.stage !== "build-code" || (request.review_kind ?? request.reviewKind ?? null) !== null || (request.review_scope ?? request.reviewScope) !== "phase") return null;
   const taskPath = context?.task?.taskPath;
   if (typeof taskPath !== "string") return null;
   try { lstatSync(join(taskPath, "facts.jsonl")); }
@@ -949,6 +980,93 @@ function requireOptions(values, names, operation) {
   if (unknown.length) throw new TypeError(`${operation} has unknown options: ${unknown.join(", ")}`);
 }
 
+async function recordTaskReview(context, input, values, services = {}) {
+    if(!input || typeof input!=="object" || Array.isArray(input) || !input.request || input.result!==undefined) throw new TypeError("review --action=record requires a request; importing caller-authored results is retired");
+    const original=input.request;
+    if(original.stage!==undefined && original.stage!==values.stage) throw new TypeError("review request stage differs from CLI stage");
+    const request={...original,stage:values.stage,activation_cohort:context.manifest.activation_cohort ?? "pre"};
+    request.materials = resolveMaterialRefs(context, request.materials);
+    const isPhase=values.stage==="build-code" && (request.review_kind ?? request.reviewKind ?? null)===null;
+    if(isPhase) {
+      request.review_scope=request.review_scope ?? request.reviewScope ?? "phase";
+      request.phase_id=request.phase_id ?? request.phaseId ?? values["phase-id"] ?? null;
+      request.subject_kind=request.subject_kind ?? "phase";
+    }
+    const miniImplementation = request.stage === "build-code" && (request.review_kind ?? request.reviewKind ?? null) === "mini_task.implementation";
+    if (miniImplementation) request.review_scope = request.review_scope ?? request.reviewScope ?? "phase";
+    const codeSurface=miniImplementation || ["build-code","verify-code"].includes(request.stage)
+      && (request.review_kind ?? request.reviewKind ?? null)===null && request.surface!=="document";
+    if(codeSurface)request.surface="code";
+    // Reader-only storage-root adaptation: the authenticated workspace is never mutated or published as this root.
+    // Reuses P1's unchanged stable reader; only this task's ordinary review JSON is admitted.
+    const readSupplementRecord=({record_ref,record_sha256})=>{
+      if(typeof record_ref!=="string"||!/^quality\/reviews\/[^/\\]+\.json$/.test(record_ref)||record_ref.includes(".."))throw Object.assign(new Error("supplement ref must name this task's ordinary review JSON"),{code:"TASK_FILE_INVALID"});
+      const storageContext={task:context.task,workspace:{worktreeRoot:context.task.taskPath}};
+      return Buffer.from(resolveMaterialRefs(storageContext,{record:{ref:record_ref,sha256:record_sha256}}).record,"utf8");
+    };
+    const runner=async (current,options)=>{
+      const whReview=typeof services.runReviewRound==="function" ? services.runReviewRound : runSimpleReview;
+      if(!codeSurface)return whReview(current,{...options,readSupplementRecord,onManagedStall:services.onManagedStall ?? writeManagedStallDiagnostic});
+      const materialPreflight=validateReviewCallerMaterials(current);
+      if(materialPreflight)return {...materialPreflight,executor:"ocr"};
+      const detection=detectOcr();
+      if(detection.status==="unavailable")return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:detection.error?.code ?? "OCR_DETECTION_UNAVAILABLE",message:detection.reason}};
+      if(detection.status==="not_installed"){
+        const fallback={from:"ocr",reason:detection.reason,detected_by:detection.detected_by};
+        // The only route allowed to run providers inside this host process: it
+        // must declare that native packet fallback so wh-review keeps its packet
+        // boundary preflight and does not open a broker session for it.
+        const nativeFallback={...options,nativePacketFallback:true,readSupplementRecord,
+          onManagedStall:services.onManagedStall ?? writeManagedStallDiagnostic,buildBundle:()=>{
+          const built=prepareTaskBoundBuildCodeReviewBundle(context,current,{nativePacketFallback:true});
+          // Reader-only transport shape adaptation: same manifest bytes and dispose, no packet rewrite.
+          return {...built,deliveryManifest:built.manifest};
+        }};
+        const result=await whReview(current,nativeFallback);
+        return {...result,executor:"wh-review",fallback};
+      }
+      const onProviderHealth=services.onOcrProviderHealth ?? writeOcrProviderHealthDiagnostic;
+      if(typeof onProviderHealth!=="function")throw new TypeError("OCR health observer must be a function");
+      const ocrRunner=services.runOcrDelegationRound;
+      let bundle;
+      try {
+        try{bundle=prepareTaskBoundBuildCodeReviewBundle(context,current);}catch(error){return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:error.code??"ROUTE_UNAVAILABLE",message:redactProviderHostPaths(String(error.message)),diagnostic:{field:"materials/route",expected:"current task-bound materials and trusted route",actual:"invalid",next_action:"repair the reported input or route before dispatch"}}};}
+        let trustedContext;
+        try{trustedContext=prepareConfiguredOcrHostContext(current);}catch(error){
+          return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:error.code??"ROUTE_UNAVAILABLE",message:redactProviderHostPaths(String(error.message)),diagnostic:{field:"route/provider_selection",expected:"one current trusted code route and valid provider configuration",actual:"invalid",next_action:"repair current route/configuration before dispatch"}}};
+        }
+        let subset;
+        try{subset=await validateReviewSupplement(current,{providers:trustedContext.selection.providers,materialId:bundle.materialId,taskId:context.task.identity.taskId,readRecord:readSupplementRecord});}
+        catch(error){return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:error.code,message:error.message,diagnostic:error.diagnostic}};}
+        if(current.only_providers!==undefined){
+          const selected=new Set(subset),original=trustedContext.selection,filterMap=map=>map?Object.fromEntries(Object.entries(map).filter(([key])=>selected.has(key))):map;
+          // Only selection is narrowed. Preserve the full trusted configuration SHA and route identity drift checks.
+          trustedContext={...trustedContext,selection:{...original,providers:subset,eligibleProfiles:original.eligibleProfiles.filter(p=>selected.has(p)),requestedProfiles:original.requestedProfiles.filter(p=>selected.has(p)),requestedProfileSpecs:original.requestedProfileSpecs.filter(p=>selected.has(typeof p==="string"?p:p.provider??p.id)),provider_identities:filterMap(original.provider_identities),provider_models:filterMap(original.provider_models)}};
+        }
+        if(typeof ocrRunner==="function")return {...await ocrRunner(current,{...options,onProviderHealth,bundle,trustedContext}),executor:"ocr"};
+        const result=await runOcrDelegationRound(current,{buildBundle:()=>bundle,signal:options.signal,
+          onProviderResult: async ({ result: providerResult }) => {
+            // The host has already persisted each original stream before settling.
+            // Reuse its references; the projected result contains no raw bytes.
+            return providerResult?.raw_output_ref ?? providerResult?.evidence_refs?.[0] ?? null;
+          },
+          executor:params=>runConfiguredOcrHostReview(params,{trustedContext,sourceBundle:bundle,onProviderHealth,
+            onProviderResult:params.onProviderResult,
+            rawOutputSink:async (hint,bytes,metadata={})=>options.onProviderOutput({provider:metadata.provider ?? "ocr",role:null,channel:metadata.stream ?? "raw-output",output:bytes})})});
+        return {...result,executor:"ocr"};
+      } finally {bundle?.dispose();}
+    };
+    return recordSimpleReviewRequest({taskDir:context.task.taskPath,request,runRound:runner,signal:services.reviewSignal ?? null});
+}
+
+export async function runMiniTaskCodeReview({ taskDir, request, services = {}, cwd = process.cwd(), signal } = {}) {
+  if (request?.stage !== "build-code" || (request.review_kind ?? request.reviewKind) !== "mini_task.implementation") throw new TypeError("mini implementation code review identity required");
+  const manifest = JSON.parse(readPlainInputFile(join(taskDir, "task.json"), "task manifest"));
+  const values = { stage: "build-code", project: manifest.project_name, task: manifest.task_id, "task-path": taskDir };
+  const context = await thinTaskContext(values, cwd);
+  return recordTaskReview(context, { request }, values, { ...services, ...(signal === undefined ? {} : { reviewSignal: signal }) });
+}
+
 export async function stageRuntimeMain(argv = process.argv.slice(2), { services = {}, cwd = process.cwd() } = {}) {
   const { command, values } = parseArgs(argv);
   if (!["make-decision", "build-plan", "build-code", "verify-code", "build-prd"].includes(values.stage)) throw new TypeError("a current five-stage --stage is required");
@@ -1052,82 +1170,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     }
     return writeBuildCodePhaseProgressCursor(context, input.phase_progress);
   }
-  if (command === "review-record") {
-    if(!input || typeof input!=="object" || Array.isArray(input) || !input.request || input.result!==undefined) throw new TypeError("review --action=record requires a request; importing caller-authored results is retired");
-    const original=input.request;
-    if(original.stage!==undefined && original.stage!==values.stage) throw new TypeError("review request stage differs from CLI stage");
-    const request={...original,stage:values.stage,activation_cohort:context.manifest.activation_cohort ?? "pre"};
-    request.materials = resolveMaterialRefs(context, request.materials);
-    const isPhase=values.stage==="build-code" && (request.review_kind ?? request.reviewKind ?? null)===null;
-    if(isPhase) {
-      request.review_scope=request.review_scope ?? request.reviewScope ?? "phase";
-      request.phase_id=request.phase_id ?? request.phaseId ?? values["phase-id"] ?? null;
-      request.subject_kind=request.subject_kind ?? "phase";
-    }
-    const codeSurface=["build-code","verify-code"].includes(request.stage)
-      && (request.review_kind ?? request.reviewKind ?? null)===null && request.surface!=="document";
-    if(codeSurface)request.surface="code";
-    // Reader-only storage-root adaptation: the authenticated workspace is never mutated or published as this root.
-    // Reuses P1's unchanged stable reader; only this task's ordinary review JSON is admitted.
-    const readSupplementRecord=({record_ref,record_sha256})=>{
-      if(typeof record_ref!=="string"||!/^quality\/reviews\/[^/\\]+\.json$/.test(record_ref)||record_ref.includes(".."))throw Object.assign(new Error("supplement ref must name this task's ordinary review JSON"),{code:"TASK_FILE_INVALID"});
-      const storageContext={task:context.task,workspace:{worktreeRoot:context.task.taskPath}};
-      return Buffer.from(resolveMaterialRefs(storageContext,{record:{ref:record_ref,sha256:record_sha256}}).record,"utf8");
-    };
-    const runner=async (current,options)=>{
-      const whReview=typeof services.runReviewRound==="function" ? services.runReviewRound : runSimpleReview;
-      if(!codeSurface)return whReview(current,{...options,readSupplementRecord,onManagedStall:services.onManagedStall ?? writeManagedStallDiagnostic});
-      const materialPreflight=validateReviewCallerMaterials(current);
-      if(materialPreflight)return {...materialPreflight,executor:"ocr"};
-      const detection=detectOcr();
-      if(detection.status==="unavailable")return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:detection.error?.code ?? "OCR_DETECTION_UNAVAILABLE",message:detection.reason}};
-      if(detection.status==="not_installed"){
-        const fallback={from:"ocr",reason:detection.reason,detected_by:detection.detected_by};
-        // The only route allowed to run providers inside this host process: it
-        // must declare that native packet fallback so wh-review keeps its packet
-        // boundary preflight and does not open a broker session for it.
-        const nativeFallback={...options,nativePacketFallback:true,readSupplementRecord,
-          onManagedStall:services.onManagedStall ?? writeManagedStallDiagnostic,buildBundle:()=>{
-          const built=prepareTaskBoundBuildCodeReviewBundle(context,current,{nativePacketFallback:true});
-          // Reader-only transport shape adaptation: same manifest bytes and dispose, no packet rewrite.
-          return {...built,deliveryManifest:built.manifest};
-        }};
-        const result=await whReview(current,nativeFallback);
-        return {...result,executor:"wh-review",fallback};
-      }
-      const onProviderHealth=services.onOcrProviderHealth ?? writeOcrProviderHealthDiagnostic;
-      if(typeof onProviderHealth!=="function")throw new TypeError("OCR health observer must be a function");
-      const ocrRunner=services.runOcrDelegationRound;
-      let bundle;
-      try {
-        try{bundle=prepareTaskBoundBuildCodeReviewBundle(context,current);}catch(error){return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:error.code??"ROUTE_UNAVAILABLE",message:redactProviderHostPaths(String(error.message)),diagnostic:{field:"materials/route",expected:"current task-bound materials and trusted route",actual:"invalid",next_action:"repair the reported input or route before dispatch"}}};}
-        let trustedContext;
-        try{trustedContext=prepareConfiguredOcrHostContext(current);}catch(error){
-          return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:error.code??"ROUTE_UNAVAILABLE",message:redactProviderHostPaths(String(error.message)),diagnostic:{field:"route/provider_selection",expected:"one current trusted code route and valid provider configuration",actual:"invalid",next_action:"repair current route/configuration before dispatch"}}};
-        }
-        let subset;
-        try{subset=await validateReviewSupplement(current,{providers:trustedContext.selection.providers,materialId:bundle.materialId,taskId:context.task.identity.taskId,readRecord:readSupplementRecord});}
-        catch(error){return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:error.code,message:error.message,diagnostic:error.diagnostic}};}
-        if(current.only_providers!==undefined){
-          const selected=new Set(subset),original=trustedContext.selection,filterMap=map=>map?Object.fromEntries(Object.entries(map).filter(([key])=>selected.has(key))):map;
-          // Only selection is narrowed. Preserve the full trusted configuration SHA and route identity drift checks.
-          trustedContext={...trustedContext,selection:{...original,providers:subset,eligibleProfiles:original.eligibleProfiles.filter(p=>selected.has(p)),requestedProfiles:original.requestedProfiles.filter(p=>selected.has(p)),requestedProfileSpecs:original.requestedProfileSpecs.filter(p=>selected.has(typeof p==="string"?p:p.provider??p.id)),provider_identities:filterMap(original.provider_identities),provider_models:filterMap(original.provider_models)}};
-        }
-        if(typeof ocrRunner==="function")return {...await ocrRunner(current,{...options,onProviderHealth,bundle,trustedContext}),executor:"ocr"};
-        const result=await runOcrDelegationRound(current,{buildBundle:()=>bundle,signal:options.signal,
-          onProviderResult: async ({ result: providerResult }) => {
-            // The host has already persisted each original stream before settling.
-            // Reuse its references; the projected result contains no raw bytes.
-            return providerResult?.raw_output_ref ?? providerResult?.evidence_refs?.[0] ?? null;
-          },
-          executor:params=>runConfiguredOcrHostReview(params,{trustedContext,sourceBundle:bundle,onProviderHealth,
-            onProviderResult:params.onProviderResult,
-            rawOutputSink:async (hint,bytes,metadata={})=>options.onProviderOutput({provider:metadata.provider ?? "ocr",role:null,channel:metadata.stream ?? "raw-output",output:bytes})})});
-        return {...result,executor:"ocr"};
-      } finally {bundle?.dispose();}
-    };
-    return recordSimpleReviewRequest({taskDir:context.task.taskPath,request,runRound:runner,signal:services.reviewSignal ?? null});
-  }
+  if (command === "review-record") return recordTaskReview(context, input, values, services);
 
   throw new Error(`unknown internal runtime operation: ${command}`);
 }

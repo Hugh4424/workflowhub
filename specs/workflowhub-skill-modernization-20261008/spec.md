@@ -158,6 +158,18 @@ P8/T016唯一生产writer74974d30维护两清单与现组包/恢复消费者：r
 
 精确新增写集仅skills/wh-review/scripts/review-materials.mjs、skills/wh-review/scripts/simple-review-runner.mjs现私有组包/重建接缝及tests/contract/card03-review-orchestration.test.mjs两相关assert；两清单及build-plan正文原已P8授权但本次仅相关条件。review-materials-contract/simple-contracts无需本次改写，新外置独立七case覆盖真实packet seam，不为覆盖增加等价测试。独立test writer a2c9，具体旧review-only冻结assert变更必须c7edbb8f非作者CR批准后窄改；新oracle先冻结/目标RED，旧P2及外置980/987/010/012/014/历史原raw不改。验证默认三lens、具源UI第四lens、显式非UI、缺/冲突unknown、callerflag不能覆实事实、直接与serialize/rehydrate同正文，负控缺工程/简化或恢复丢UI应实际失败；必要命令由独立test owner按真实环境定，不全suite/新provider。此处写集/source授权不自判GREEN，独立c7核scope/source、a2实际复验，Git另原owner真实record/consume。
 
+### 当前六组要求补齐范围（不改变已确认取舍）
+
+来源：[新用户授权487](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-skill-modernization-20261008/quality/evidence/2026-10-09-487-six-requirements-completion-user-scope.json)，原话「好的，按计划执行吧，直到所有原始需求完成，整个任务彻底没有遗漏为止」，基准77f81ed3d498ae2eef1419f3652b8f35ecb7dfcf。六组仍按原始需求与已接受方向验收，不要求逐字导入所有外部技能，不改变独立Phase、环境自适应PR、架构机会须用户先选等取舍。每有效子项核方法正文、真实可达consumer、源定义有限case及失败；登记/文件/退出0不替效果，历史每Phase审查、跨项目真人或外部服务未发生的部分如实保未知，不倒填或强造选择。
+
+已确认五处窄修由原single-writer74974d30实施：mini-task仅退役不存在runner/P5未来导航，保当前材料/OCR/授权/取消；Multica正文仅去个人路径假设，改调用方真实repo的可搬运例，保main只读/CLI/workspace/确认与外部回读；build-code仅真实stage末有问题时读取同一reflection方法一次或显式不可用/跳过理由，不固定每Phase新增轮次；stage-reflection仅用户已选机械候选先核现结构/types/tests/CI检查和consumer、复用/窄扩后才有源新增，未答不采纳；resolving-merge-conflicts仅逐冲突明确双方预期结果及受影响检查/读回完成条件，保任务分支/目标只读/不全局ours-theirs/abort/原授权。新增精确方法路径仅skills/resolving-merge-conflicts/SKILL.md归P8/T013；mini-task归P9、build-code沿P3→P9原串行持笔，P8/T015只记录本次方法协作范围，不并发第二writer。core/task-close.mjs不在此增量，当前未证运行时merge错误，不新增validator或核心修复。mini默认代码consumer独立实追另确认运行时遗漏：bundle交付skills/mini-task/scripts/mini-task-runner.mjs，factory.runImplementationReview经默认runReviewRecovery仍进入wh文档面；原integration只注入handler，不证明默认路由。用户487覆盖此原审查功能修复，唯一代码writer d49d2a01改该mini脚本与tools/cli/stage-runtime.mjs现review-record私有CodeDispatcher适配，另精确修runtime/review/ocr-delegation-adapter.mjs的resolveTrustedOcrRoute消费者；749仅方法不碰runner。mini implementation保原kind/subject而明确code face/scope，不能改成普通Phase/null伪身份；设计文审保wh。复用现1055–1129单一review-record producer/dispatcher闭包提为共享私有函数，内部窄export接mini implementation的{taskDir,request,services,cwd}，沿thinTaskContext核身份及材料，无临时请求文件/新public动作。factory原services底层执行/取消依赖可透传，design与显式reviewRunner现兼容保；formalPhase投影仍kindnull，mini kind/subject不丢。后续实读确认适配器576–579对reviewKind非null直接return null，配置接受mini不等实际trusted route支持；原500/501/513读时的适配器已支持推论撤回但原件保。只补mini_task.implementation且stage=build-code、scope=phase、track=null，沿whReview.mini_task.implementation现single_round配置和既有provider/安全校验；不丢kind冒普通身份、不开放design/其它kind，不新增enum/公共字段/protocol。原ordinary路由、模式、检测/执行失败与取消事实保。mini合法材料合同只有spec承载完整AC权威，现packet projection固定找acceptance_criteria不适配；本次在上述已授权代码路径内部固定以mini的完整spec正文投影包验收并保持原指令/current diff/manifest校验，不要求mini新公共材料键，不按Phase摘剪，普通阶段acceptance_criteria来源与强度不变。此精确技术修归P9/T018同d49、原a2合法配置目标oracle与c7独立源码审消费，不给整目录写权。本次在只有ENOENT或低版的nativeFallback路径补入完整architect正文与指令/manifest，用真实wh-review执行并保其标识，不标签冒architect；已装失败/取消/其它检测错误原件保，不新增公共命令、身份schema、producer或平台。现tests/integration/mini-task-delivery.test.mjs只在具体独立CR后可新增必要默认consumer case；a2现公共factory到可控transport/命令的真实派发probe先写目标RED，不以injectedreviewRunner标签自证。另test路径待原owner实查后精确登记，不目录授权。
+
+当前全方法实读又确认五处同类source缺口，仍由749同一持笔者串行修：plan-eng-review仅把未来GREEN写为可执行计划/实际RED诚实分型，not_checked交host限界而非凭未查虚造finding或扩findings JSON；anysearch仅区分真实可用匿名/有key能力，无key本身不等unavailable，外发范围/批准/失败边界保；third-review仅SKILL:52/57去过时512KB拒绝承诺，现attachments:110–143不按字节数拒绝且exceptions:13正确，不改runtime或docs来新增gate；:58按broker:1029–1065真实同session续跑规则区分独立delta附件同delivery校验与显式reuse_frozen_material且首轮完整冻结的复用，不再绝对说不重传附件，不新增字段；spec-specify现模板:321只去active build-spec或显历史适用性；simplicity-guard:107核四阶梯回本文件原16–42唯一正文，不向无定义的根GLOSSARY新增复制。原P5两lens仍原owner，P8只记录同writer本次原位纠偏；模板附件新精确纳P8/T013源指针修，不授整目录或另一spec作者。
+
+六组结果面：方向map/fog/HITL、内部一手研究与领域语言；支持环境的真实PR和描述（收尾不提前开PR）；来源叙事/唯一验收、纵切Task图与已确认seam/独立期望/TDD；真实实施/诊断/同源补充分轴；完整改动范围的Standards/Spec核对；实际问题复盘、真实选择后的检查或未解项与prune；当前active方法核心保全/可搬运性/适用来源。新行为只追加未覆盖真实case，表达修正用保核心的可证伪G2应用；a2独立oracle/source_knownbad先冻结，c7独立语义/具体旧testCR复核。可用现允许材料一次最小consumer补原待验，不把D053延期当已实现，也不编真人/外效果。此处不给全部旅程或所有未来场景通过结论。
+
+架构机会353原件已实际发生且覆盖有限五面，重复只引用其范围/未查；本轮可审未覆盖的真实改动seam及其规范/功能合规，不能重新产机会、接口设计或未经用户选择的优化。安全修复可继续，未知不作工作许可门；当前质量终判另依独立事实，不作者自审三材料。保持原FR/Appendix A/决定/Phase/Task，相同外置原报告只读，不新schema、公共节点、进度对象、统计或第二正常审查。最终close/归档/删除尚无授权。
+
 ### 已核接口与选择
 
 复用既有safe-write/task facts/review single producer；规范A1复用WR001，A2′spec-specify唯一规范正文节，其余指针消费不新增第四规范对象。B2仅新索引模板与正文合并，旧薄文件删除归B4单owner，避免逆向依赖。B6治理单结果“当前术语/审查政策及其读者一致”，rename Task与七文本纯修宪Task独立diff/commit/验收/回退；修宪代码测试变更另commit不混七文本。PR实现另Phase，避免两高风险面互掩。
@@ -234,6 +246,8 @@ P1 R历史登记；P2 A1夹具/禁区；P3 A2′三正文；P4 A3真实比较；
 | MODIFY | `skills/third-review/SKILL.md` | P8 |
 | MODIFY | `skills/ui-project-init/SKILL.md` | P8 |
 | MODIFY | `skills/workflowhub-multica-sync/SKILL.md` | P8 |
+| MODIFY（逐冲突双方行为与可观察完成条件，非新增merge代码校验器） | `skills/resolving-merge-conflicts/SKILL.md` | P8/T013；single-writer74974d30 |
+| MODIFY（仅原321风险处理阶段active build-spec指针，保模板其它正文） | `skills/spec-specify/templates/spec-template.md` | P8/T013具名引用附件源纠偏；single-writer74974d30 |
 | MODIFY | `skills/stage-reflection/SKILL.md` | P8 |
 | NEW | `Improvements.md` | P8 |
 | MODIFY | `workflows/make-decision/SKILL.md` | P8 |
@@ -297,6 +311,9 @@ P1 R历史登记；P2 A1夹具/禁区；P3 A2′三正文；P4 A3真实比较；
 | MODIFY | `docs/adr/0034-subagent-dispatch-and-parallel-rules.md` | P9 |
 | MODIFY | `CONSTITUTION.md` | P9 |
 | MODIFY | `skills/mini-task/SKILL.md` | P9 |
+| MODIFY（默认implementation真实代码审查私有接线，design保文审） | `skills/mini-task/scripts/mini-task-runner.mjs` | P9/T018；代码single-writer d49d2a01 |
+| MODIFY（仅真实mini implementation/build-code/phase trusted route，普通路由/设计保） | `runtime/review/ocr-delegation-adapter.mjs` | P9/T018；原代码single-writer d49d2a01 |
+| MODIFY（必要默认consumer case，具体独立CR后） | `tests/integration/mini-task-delivery.test.mjs` | P9/T018；代码single-writer d49d2a01，独立oracle/执行a2、CR c7 |
 | MODIFY | `skills/workflowhub-host-protocol/SKILL.md` | P9 |
 | MODIFY | `skills/wh-review/contracts/verify-code.md` | P9 |
 | MODIFY | `tests/contract/verify-architect-acceptance.test.mjs` | P9 |
@@ -311,7 +328,7 @@ P1 R历史登记；P2 A1夹具/禁区；P3 A2′三正文；P4 A3真实比较；
 | MODIFY | `runtime/interface/git-authorize.mjs` | P10 |
 | MODIFY | `runtime/task/task-store.mjs` | P10 |
 | MODIFY | `runtime/stage/current-close-projection.mjs` | P10 |
-| MODIFY | `tools/cli/stage-runtime.mjs` | P10 |
+| MODIFY（原P10 close保；新增mini implementation代码面现review-record私有消费者精确串行例外，不新增public动作） | `tools/cli/stage-runtime.mjs` | P10→P9/T018现single-writer d49d2a01 |
 | MODIFY | `tests/close/close-contract.test.mjs` | P10 |
 | MODIFY | `tests/contract/four-domain-close-status.test.mjs` | P10 |
 | MODIFY | `tests/contract/current-close-projection-readback.test.mjs` | P10 |
