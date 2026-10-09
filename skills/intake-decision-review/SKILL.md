@@ -27,7 +27,7 @@ the user to supply it.
 
 ## Review method
 
-Independently inspect all four angles:
+**Blind review**: independently inspect all four angles:
 
 - `direction`: whether the stated work addresses the real user problem;
 - `framing`: whether the requirement mistakes a tool or implementation for the
@@ -56,3 +56,7 @@ Missing required material, forbidden material, or unreadable supplied material
 is `unavailable`, never `pass`. A material disagreement is a finding, not a
 prompt for interactive clarification. The parent make-decision flow decides
 whether a finding becomes a round-3 question or remains a visible fact.
+
+## 写作规范
+
+创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；此处不复制规范。

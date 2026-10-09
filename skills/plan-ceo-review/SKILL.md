@@ -12,10 +12,9 @@ Use this lens when supplied direction or detail material needs product-scope rev
 
 1. State the user problem and evidence separately from derived assumptions.
 2. Challenge the narrowest viable scope and identify existing leverage.
-3. On a detail review with a supplied direction, compare that direction with at
-   least one credible alternative. On a blind direction review, reconstruct
-   the plausible alternatives and the missing choice criteria from the raw
-   requirement, but do not invent or judge a proposed solution.
+3. Branch on the supplied material:
+   - On a detail review with a supplied direction, compare that direction with at least one credible alternative.
+   - On a blind direction review, reconstruct the plausible alternatives and the missing choice criteria from the raw requirement, but do not invent or judge a proposed solution.
 4. Identify a premise whose failure would invalidate the direction or make the
    decision not ready.
 5. State timing, impact radius, and the smallest missing clarification or
@@ -26,3 +25,7 @@ Use this lens when supplied direction or detail material needs product-scope rev
 
 Return observations with concrete packet evidence inside the same provider findings stream. This
 lens only evaluates supplied material; its absence or lack of findings does not block same-task work.
+
+## 写作规范
+
+创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；此处不复制规范。

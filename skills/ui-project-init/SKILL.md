@@ -15,8 +15,8 @@ version: 1.0.0
 ## 方法
 
 1. 从原始需求和当前代码核实 ui/non_ui/backend/fullstack；来源不足写 unknown，不用调用者标签绕过实际 UI 范围。
-2. new：只为首个真实界面整理两份规范、页面/组件与 CSS owner、fixture 数据形状、viewport 和 Preview 计划。未知与不适用分别写 unknown / N/A + reason。
-3. legacy：只读盘点技术栈、路由、CSS 副作用、数据入口、组件候选、测试能力、可限界首个页面、例外和耦合风险。用户决定后选择低耦合范围；没有候选报告 not_ready 和缩小方案，不自动全仓组件化或 reset CSS。
+2. **new — 首个真实界面**：只为首个真实界面整理两份规范、页面/组件与 CSS owner、fixture 数据形状、viewport 和 Preview 计划。未知与不适用分别写 unknown / N/A + reason。
+3. **legacy — 只读盘点**：只读盘点技术栈、路由、CSS 副作用、数据入口、组件候选、测试能力、可限界首个页面、例外和耦合风险。用户决定后选择低耦合范围；没有候选报告 not_ready 和缩小方案，不自动全仓组件化或 reset CSS。
 4. 已有视觉规则直接引用；页面/交互/长期场景变更由 Experience 的明确作者处理，视觉规则变更由 Design 的明确作者处理。按当前任务已授权写集写入：build-plan 本技能只读整理；实际项目规范实现由 build-code 承接，不默默改规范。
 5. 返回模式、两份来源及版本、范围、组件/样式边界、fixture、viewport、Preview、真实盘点、假设、缺项及用户实际选择。无 Preview 就没有视觉通过；输出能定位真实源和具体下一步即可，不要求 runtime classifier/schema/proof 包装。
 
@@ -41,3 +41,7 @@ version: 1.0.0
 ## 完成边界
 
 全部适用输入均有实际来源或明确缺项、责任与影响；有 legacy_inventory 时逐项说明扫描/人读范围及 unknown，不把人工判断覆盖原始机器事实。不得宣称未读代码、未运行 Preview 或未测页面已经通过。浏览器验证由 `skills/isolated-browser-qa/SKILL.md` 的隔离路线执行。
+
+## 写作规范
+
+创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；此处不复制规范。

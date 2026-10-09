@@ -5,7 +5,11 @@ description: 在 build-plan 预判并在 build-code 必要时重判 simple、fea
 
 # Test Routing Advisor
 
-独立读取调用方传入的 `changed_files`、`phase_count`、`test_command` 和阶段标识。禁止读取全局同名 skill，禁止执行测试，禁止修改仓库。post build-plan 的预判写入所属 `phases/P<n>.md` 逐 Task 卡，pre/history 保留原 `tasks.md`；build-code 的重判写入 task facts，并同时保留原预判、实际改动和重判理由。
+## 输入与职责
+
+独立读取调用方传入的 `changed_files`、`phase_count`、`test_command` 和阶段标识。禁止读取全局同名 skill，禁止执行测试，禁止修改仓库。
+
+预判与重判分开保存：post build-plan 的预判写入所属 `phases/P<n>.md` 逐 Task 卡，pre/history 保留原 `tasks.md`；build-code 的重判写入 task facts，并同时保留原预判、实际改动和重判理由。
 
 ## 判类
 
@@ -35,3 +39,7 @@ description: 在 build-plan 预判并在 build-code 必要时重判 simple、fea
 - `result` 正常判类为 `pass`；输入缺失、路径无法解析、输出无法满足合同为 `fail`。
 - `ts` 必须是 UTC ISO-8601 时间。
 - `result: fail` 时仍给出最保守可判定 tier；完全无法判定时用 `fullstack`。
+
+## 写作规范
+
+创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；此处不复制规范。

@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 当前脚本的真实 dirty_worktree、main_origin_mismatch、用户确认的audit snapshot、I_CONFIRM与每次外部写入回读保护保留。PRD Builder负责build-prd，Plan Builder负责build-plan；缺真实agent是cannot_confirm，不代改远端身份。P4～P6 catalog/bundle 中间失配按实际文件差异报告，不宣称旧 closure 校验已经通过。脚本已去旧 closure caller/fields/gate；它的同步判据是实际 main 内容、已确认动作计划与真实外部读回，目录/bundle 只作声明文件来源，不能重新成为机器许可。
 
-这是一个“先审计、生成唯一计划、一次确认、一次执行”的技能。默认只读；用户确认后，按计划自动完成所有安全动作，不再逐项询问。不能修改运行时或本地 main。
+**审计→计划→确认→执行**：先审计、生成唯一计划、一次确认、一次执行。默认只读；用户确认后，按计划自动完成所有安全动作，不再逐项询问。不能修改运行时或本地 main。
 
 ## 入口
 
@@ -120,3 +120,7 @@ Multica CLI 无法连接、workspace 不明确、读取超时或配套文件读�
 ## 依赖
 
 脚本使用 WorkflowHub 已声明的 `js-yaml@4.1.0`。`skill-bundle.json` 必须保留这项运行依赖；独立搬运时先安装或提供同版本依赖，不能静默改用其他 YAML 解析器。Multica 服务超时可通过 `MULTICA_HTTP_TIMEOUT` 放宽，但仍必须同时保留脚本级 `--timeout-ms`。
+
+## 写作规范
+
+创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；此处不复制规范。

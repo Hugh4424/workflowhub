@@ -17,6 +17,8 @@ AnySearch is a unified real-time search service supporting general web search, v
 
 ## Trigger
 
+WorkflowHub 调用时，外发前读取调用者真实批准的查询/来源范围、调用次数与时间盒；只在该范围和实际可用能力内执行，匿名访问不替代外发批准。方向研究的 R0–R5、检索轮数/饱和、原文、独立复核与报告 owner 由 `skills/deep-research/SKILL.md` 承接；本技能只提供搜索方法，不重写那套研究步骤。方法名不证明同名宿主工具可用；无真实能力、拒绝外发或取消时保 unavailable/unknown 和已取得的部分来源，不自动用 mock/默认知识补成功。
+
 This skill SHOULD be activated when the AI agent needs to perform any of the following:
 
 1. **Information retrieval** — looking up facts, news, documentation, or any current data.
@@ -187,3 +189,11 @@ Once the active CLI is determined, all tool calls use the same subcommand syntax
 
 - If the selected CLI fails with a runtime error (missing dependency, version too old, etc.), fall through to the next runtime in priority order.
 - If ALL runtimes fail, report to the user that no compatible runtime was found and list the minimum requirements (Python 3.6+ via `python` or `python3` with `requests`, or Node.js 12+, or PowerShell 5.1+, or bash 4+).
+
+## Fixed source and local adaptation
+
+来源：[anysearch-ai/anysearch-skill](https://github.com/anysearch-ai/anysearch-skill)，固定 commit `db3d76e5597aec7261257be5322dd211c9d9bb87` 的 `SKILL.md`（Apache-2.0）。本地保原 CLI、vertical/required params、匿名与保存 key 确认，补当前调用者批准范围和实际能力边界；不把供应方隐私声称当独立验证。迭代时核固定正文和 bundled CLI 的真实更新与本地偏离，不自动追 main/latest。
+
+## 写作规范
+
+创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；此处不复制规范。

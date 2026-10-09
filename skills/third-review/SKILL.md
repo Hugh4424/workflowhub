@@ -63,3 +63,7 @@ node {skill-root}/scripts/3rd-review.mjs run \
 - `doctor` 只验证 CLI executable，不能证明登录、认证或真实模型调用。
 
 查看完整异常语义与维护约束：[`docs/exceptions.md`](docs/exceptions.md)。
+
+## 写作规范
+
+创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；此处不复制规范。

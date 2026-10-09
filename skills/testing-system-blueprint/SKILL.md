@@ -21,8 +21,12 @@ oracle、证据路径和覆盖限制折叠进 post cohort 的 `spec.md` 全局�
 `simple|feature|fullstack`，不依赖 plan 预先贴的标签。
 
 输出至少包含：scope、风险维度、测试层级、场景、命令、预期 oracle、fixture/service、
-适用执行器、证据路径、覆盖限制和 snapshot 绑定。每个行为 Task 有自身正常/负例、
+适用执行器、证据路径、覆盖限制和所依实际材料/代码来源。post 只声明本 Phase 写集及受影响来源，不设计跨 Phase snapshot 绑定；pre/history 原 snapshot 只读保留。每个行为 Task 有自身正常/负例、
 同一 `gate_cmd` 的目标 RED 与 GREEN、预期失败断言、STOP/恢复；Phase 级摘要不能
 代替逐 Task 设计。build-code 在 task facts 中写实际结果、跳过原因和 evidence refs，
 不回写 authored Phase 正文。报告是质量事实；缺失写
 `unknown/incomplete`，不能伪造 pass，也不重复要求无关全量回归。
+
+## 写作规范
+
+创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；此处不复制规范。

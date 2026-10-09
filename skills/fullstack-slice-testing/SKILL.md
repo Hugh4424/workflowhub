@@ -14,6 +14,10 @@ version: 1.0.0
 这条 slice。
 
 策略必须绑定 FR/AC 和场景/oracle，记录每条命令、expected exit、fixture/service、
-截图（如适用）、snapshot、coverage limits 和未覆盖 seam；build-code 再补 exit code、
+截图（如适用）、本次实际代码/材料来源、coverage limits 和未覆盖 seam；post 读取当前 spec、所属 Phase 的当前 Task/预判及实际 task facts，只记录本 Phase 改动和命令实际来源；pre/history 旧 tasks/snapshot 只读保留，不重新绑定；build-code 再补 exit code、
 输出 hash、实际结果和失败事实。它是风险证据，不成为 `pass` gate，也不要求每个 Phase
 重跑无关的全量测试。
+
+## 写作规范
+
+创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；此处不复制规范。

@@ -46,3 +46,7 @@ appendRecord 的 INVALID_SLUG、INVALID_EXTENSION、EEXIST 重试、RECORD_SEQUE
 下一会话能从实际交接路径定位当前材料、四类 source、未知/失败与一个可执行下一步；发布前检查原件、不可变 handoff、写后只读确认和必要非实现者消费均按实际情况报告，缺项不假称完成。五个 workflow 保存句使用本方法返回的实际绝对路径，build-code 与 verify-code 读取同一方法。
 
 正式阶段事实仍由既有任务流程记录，本技能不新增 facts 状态/evidence 字段、writer、schema、公共命令、解析器或持久对象；不写状态/质量 graph，不把测试 GREEN 当作人类接受、发布或物理交付。缺交接只披露，同任务继续修复不依赖它。
+
+## 写作规范
+
+创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；此处不复制规范。

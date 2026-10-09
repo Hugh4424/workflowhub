@@ -23,7 +23,7 @@ version: 1.0.0
 悄悄当成“零消费者”或删除依据。全局样式、跨 feature 覆盖或 `!important` 必须写理由
 和消费者。缺字段用 `unknown`、`unavailable` 或 `N/A + reason`，不能把字段名字当作质量通过。
 
-消费者盘点必须是可重放的 `consumer-census.v1`：输入包含 scanner version、源码 snapshot、
+消费者盘点必须是可重放的 `consumer-census.v1`：输入包含 scanner version、扫描实际读取的源码 snapshot、
 scan config 和 route/import/lazy/CSS/data 的逐项 support matrix；输出按稳定 `consumer_id`
 排序。动态加载、生成代码、未支持框架、扫描失败和语义不确定必须带枚举 `unknown_reason`。
 人工体验/视觉语义只追加 `source=human`，不能覆盖扫描原始项；没有真实 consumer 时保留
@@ -59,3 +59,11 @@ JSON：
 ## 边界
 
 本技能不重新设计视觉、不调用浏览器、不把 Design.md 改成任务状态。build-plan 只设计地图，build-code 按真实 diff 回填并调用具体 testing skill，verify-code 检查真实 consumer、兼容性和 CSS/token 泄漏。
+
+## 固定来源与偏离
+
+React/Next lens 来源为 [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills)，固定 commit `dd089a8c752c966dee8bf0f27cb625ba193ffd9e` 的 `skills/react-best-practices/AGENTS.md`（MIT）。本地 Component Quality Map、真实 consumer census 与静态 CSS 检查仍归本技能；上游性能建议不替代浏览器验证。迭代按本节固定子文件核更新，保随包 LICENSE/UPSTREAM 并经人工比较，不自动追 HEAD。
+
+## 写作规范
+
+创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；此处不复制规范。

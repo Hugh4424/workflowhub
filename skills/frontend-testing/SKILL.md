@@ -12,7 +12,7 @@ version: 1.0.0
 isolated browser QA 路由执行，截图和清理事实必须保留。
 
 执行事实必须绑定 FR/AC、场景/oracle、命令和 expected exit、截图/证据路径、changed files、
-snapshot、coverage limits 和不适用理由。build-code 只做真实流程执行；只做组件快照
+本次实际代码/材料来源、coverage limits 和不适用理由。post 按当前 spec、所属 Phase 与实际 task facts 定位，只记录本 Phase 改动和命令实际来源；pre/history 的旧 snapshot 只读保留，不重绑历史。build-code 只做真实流程执行；只做组件快照
 不能冒充完整用户流程验收。
 
 ## UI 交付合同
@@ -27,13 +27,15 @@ screenshot 和 coverage limits。没有可执行 route 时写 `N/A — reason`�
 就 extract-shared、缺 state owner、CSS 泄漏、global override 和 `!important`；这些是失败事实，
 不是推进 gate。失败、blocked、unknown 均保留 failure reason 和截图数量事实。
 
-## build-code 正式接线
+## build-code 实际消费
 
-只有 build-code 的官方 handler 才把本技能的结果接入当前阶段。它按真实 changed files 选择一次
-具体测试路径，并把 UI 适用性、Design.md/Experience.md identity、consumer census 和 AC 绑定到
-同一份证据。Skill 被声明或被解析不等于执行；未触发、已触发但未执行和已执行必须分别记录。
+build-code 当前主会话按真实 changed files 选择一次具体测试路径，并把 UI 适用性、Design.md/Experience.md identity、consumer census 和 AC 绑定到同一份证据。现有 handler 的执行原件如实消费；不把尚未运行的官方 handler 当作主会话工作的前置条件。Skill 被声明或被解析不等于执行；未触发、已触发但未执行和已执行必须分别记录。
 
-需要真实页面时，handler 通过既有 isolated-browser-qa 的受控执行链调用一次。证据必须带当前
+需要真实页面时，当前执行者通过既有 isolated-browser-qa 的受控执行链调用一次。证据必须带当前
 service instance、API/DTO contract、隔离 profile、invocation、viewport、console/network/focus/overflow
 观察、视觉/a11y/performance oracle 和 cleanup。fixture-only 只能证明组件，不得冒充页面通过；服务
 身份不匹配、取消、浏览器失败或 cleanup 失败保持 `failed`/`blocked`/`unknown`，不能被默认值改成绿灯。
+
+## 写作规范
+
+创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；此处不复制规范。
