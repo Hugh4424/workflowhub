@@ -1,6 +1,6 @@
 # 功能规格：WorkflowHub技能与流程现代化
 
-状态：完整计划已用户接受，build-plan按真实确认收口；build-code/verify-code尚未启动，暂不进入实施。[正式确认003](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-skill-modernization-20261008/quality/evidence/human-confirmations/2026-10-08-003-build-plan-accepted.json)。作者只同步确认标签，不执行测试、review、生产改动或Git写。
+状态：完整计划已用户接受，build-plan按真实确认收口；003收口历史时点的build-code/verify-code尚未启动与暂不进入实施保留为原暂停事实，非当前实施状态。用户后续已由[恢复实施072](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-skill-modernization-20261008/quality/evidence/2026-10-08-072-build-code-user-resume.json)恢复build-code；当前定位与完成度只读外置facts.jsonl及实际执行原件，不由本材料标签证明完成。[正式确认003](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-skill-modernization-20261008/quality/evidence/human-confirmations/2026-10-08-003-build-plan-accepted.json)。作者只同步确认标签，不执行测试、review、生产改动或Git写。
 
 当前要求优先级：D-066用户纠正已彻底取消输出token／用量的采集、预算、验收与收口条件，不延期、不估算、不作unknown阻塞。当前四项客观量仅工件齐全度、硬约束违反数、耗时、真人重问次数。历史D-031/原AC018、WR001及093/099中的该项只保出处，当前不采用；其余有效比较解释依最新D-067：行为效果／表达保全分型，不强求赢家，相似与未观测不自动失败。
 
@@ -371,7 +371,7 @@ findUndeclaredStaticDependencies({ skillDir, fileEntries })
 Version: 1.9.2
 ~~~
 
-- CONSTITUTION.md:172逐字：
+- CONSTITUTION.md:172逐字（P9前规划实读来源时点，保下列原quote，不代表P9后当前政策）：
 
 ~~~text
 代码由 OCR，只有 OCR 未安装才回退 wh-review 并记录事实。
@@ -614,11 +614,11 @@ supplemental流程另 [2026-10-08-045-supplemental-method-case.json](/Users/Hugh
 
 [真实接受059](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-skill-modernization-20261008/quality/evidence/2026-10-08-059-build-plan-comparison-amendment-accepted.json) sha256 971d4a19493e8aa97214e4894075386ea98bc2cd8c7fe1eaaaa5cdd1065602c3消费[原提案058](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-skill-modernization-20261008/quality/evidence/2026-10-08-058-build-plan-method-comparison-proposal.json)；D-067已由真实用户接受：先按source_delta分型，行为改动测source-defined outcome与硬约束，表达整理做逐条核心保全＋有限无回归，不强求赢家。grader必须先用具源正确／已知错误／未观测三类对照校准，不预设结论，不以相似/unknown自动fail。仅新增且未覆盖行为追加targeted场景；当前诊断主要表达整理，现八fresh原件可重评而不新trial。不得称统计等价/改善。无人case的真人问答not_observed不填0、不普遍阻塞，其真实行为变化另测。新评分源码/合同由11d7c0d3，独立95c7按source核/具体change request批准后使用，独立批准与当前finite重评分原件已产，实际支持范围见末节，不以futureowner自证完成；旧九freeze及旧099历史报错完整保留。
 
-本阶段比较合同修正、独立批准、有限校准与现输出重评已实际产出；仅声明其有限准备范围，不预填未来实现pass。行为新增producer/双轴触发等仍归既定P3/P8/P10对应真实场景，当前表达整理结果不冒它们实施GREEN。当前完整计划已由用户真实接受并要求收口build-plan，来源[003正式确认](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-skill-modernization-20261008/quality/evidence/human-confirmations/2026-10-08-003-build-plan-accepted.json)，原话“确认当前完整计划，收口 build-plan，暂不进入实施”。本次只同步确认时态，build-code/verify-code均not-started，生产/Git暂不执行；计划接受不是全部产品验收GREEN，一次正式review原partial及历史失败/有限unknown原件不改。
+本阶段比较合同修正、独立批准、有限校准与现输出重评已实际产出；仅声明其有限准备范围，不预填未来实现pass。行为新增producer/双轴触发等仍归既定P3/P8/P10对应真实场景，当前表达整理结果不冒它们实施GREEN。当前完整计划已由用户真实接受并要求收口build-plan，来源[003正式确认](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-skill-modernization-20261008/quality/evidence/human-confirmations/2026-10-08-003-build-plan-accepted.json)，原话“确认当前完整计划，收口 build-plan，暂不进入实施”。此为003收口历史时点：当时仅同步确认时态，build-code/verify-code均not-started，生产/Git暂不执行；后续072已恢复build-code，当前定位与完成度读外置facts.jsonl和实际执行原件，不回写原暂停或有限V3证据；计划接受不是全部产品验收GREEN，一次正式review原partial及历史失败/有限unknown原件不改。
 
 ### V3当前外置合同写集补充
 
-109实际具体请求仅三精确P2路径，source/test/privatehelper均writer11d7c0d3、独立95c7核source，create-only不覆旧source；唯一consumer=P2/T003新grader校准/现八输出重评，P4只消费原则及自身真实差异case，不以当前诊断单case涵盖未来三正文behavior。精确正常/错误/未观测与源码目的归P2 Task程序；spec Appendix A仍唯一产品验收权威。正式amend-comparison原件已列D067，不新确认节点。当前独立approval及actualresultref已产，具名有限校准/表达范围有实际支持，该V3结果本身不代表完整计划接受或生产完成；完整计划接受另由真实003提供，生产仍未开始；gate命令为 `WORKFLOWHUB_WORKTREE=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-skill-modernization-20261008 node --test --test-reporter=tap /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-skill-modernization-20261008/quality/tests/skill-modernization-comparison-v3.test.mjs`，仅现taskexternal，不生产platform。
+109实际具体请求仅三精确P2路径，source/test/privatehelper均writer11d7c0d3、独立95c7核source，create-only不覆旧source；唯一consumer=P2/T003新grader校准/现八输出重评，P4只消费原则及自身真实差异case，不以当前诊断单case涵盖未来三正文behavior。精确正常/错误/未观测与源码目的归P2 Task程序；spec Appendix A仍唯一产品验收权威。正式amend-comparison原件已列D067，不新确认节点。当前独立approval及actualresultref已产，具名有限校准/表达范围有实际支持，该V3结果本身不代表完整计划接受或生产完成；完整计划接受另由真实003提供，“生产仍未开始”仅003收口历史时点；后续072已恢复build-code，当前定位与完成度读外置facts.jsonl和实际执行原件，该有限V3不代表当前实施完成；gate命令为 `WORKFLOWHUB_WORKTREE=/Users/Hugh/Hugh/Project/workflowhub-workflowhub-skill-modernization-20261008 node --test --test-reporter=tap /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-skill-modernization-20261008/quality/tests/skill-modernization-comparison-v3.test.mjs`，仅现taskexternal，不生产platform。
 
 ### V3实际完成与当前阶段边界
 
@@ -634,4 +634,4 @@ supplemental流程另 [2026-10-08-045-supplemental-method-case.json](/Users/Hugh
 - DO NOT TOUCH `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-skill-modernization-20261008/quality/tests/skill-modernization-comparison-v3.test.mjs` sha256 9582830c35e26b51582628dcf6faff71382ac3c620b21756f6f0ed0829c4ff36；修改先具体独立请求，不覆旧source。
 - DO NOT TOUCH `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-skill-modernization-20261008/quality/tests/skill-modernization-comparison-contract-v3.json` sha256 ef8116d47509a4b6a5042072a76865140860fb78e70e0965e2455307d18bc39d；修改先具体独立请求，不覆旧source。
 
-当前规划输入、源保全/校准与有限case执行的补缺已具原件；当前完整计划已由用户真实接受并要求收口build-plan，来源[003正式确认](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-skill-modernization-20261008/quality/evidence/human-confirmations/2026-10-08-003-build-plan-accepted.json)，原话“确认当前完整计划，收口 build-plan，暂不进入实施”。本次只同步确认时态，build-code/verify-code均not-started，生产/Git暂不执行；计划接受不是全部产品验收GREEN，一次正式review原partial及历史失败/有限unknown原件不改。本任务21Task/10Phase既定scope不扩，futureA1/A3/GH/完整Grill/真实取消等按原Task下游适用验证，不借future尚未实施把本阶段无限延长。D066用量完全取消，未观测不捏0或冒已测。一次正式异源review原partial和19处置仍原件保留，不二次fullreview/不自审通过。
+当前规划输入、源保全/校准与有限case执行的补缺已具原件；当前完整计划已由用户真实接受并要求收口build-plan，来源[003正式确认](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-skill-modernization-20261008/quality/evidence/human-confirmations/2026-10-08-003-build-plan-accepted.json)，原话“确认当前完整计划，收口 build-plan，暂不进入实施”。此为003收口历史时点：当时仅同步确认时态，build-code/verify-code均not-started，生产/Git暂不执行；后续072已恢复build-code，当前定位与完成度读外置facts.jsonl和实际执行原件，不回写原暂停或有限V3证据；计划接受不是全部产品验收GREEN，一次正式review原partial及历史失败/有限unknown原件不改。本任务21Task/10Phase既定scope不扩，futureA1/A3/GH/完整Grill/真实取消等按原Task下游适用验证，不借future尚未实施把本阶段无限延长。D066用量完全取消，未观测不捏0或冒已测。一次正式异源review原partial和19处置仍原件保留，不二次fullreview/不自审通过。
