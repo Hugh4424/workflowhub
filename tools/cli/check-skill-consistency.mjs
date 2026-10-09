@@ -34,6 +34,8 @@ export function checkSkillConsistency(root) {
     if (!entry || typeof entry.name !== "string" || !entry.name) {
       fail(CATALOG, "current registration requires name"); continue;
     }
+    if (!/^[a-z][a-z0-9-]*$/.test(entry.name) || entry.path !== `skills/${entry.name}/SKILL.md`)
+      fail(CATALOG, `name/path mismatch ${entry.name}: ${entry.path}; expected skills/${entry.name}/SKILL.md`);
     if (registrations.has(entry.name)) fail(CATALOG, `duplicate current registration ${entry.name}`);
     registrations.set(entry.name, entry);
     if (typeof entry.path !== "string" || paths.has(entry.path)) fail(CATALOG, `duplicate/invalid current path ${entry.name}: ${entry.path}`);
