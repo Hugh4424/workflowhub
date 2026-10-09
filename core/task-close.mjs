@@ -161,9 +161,69 @@ function remoteOid(root, remote, branch) {
   return { status: r.stdout.trim() ? "available" : "absent", reason: r.stdout.trim() ? null : "remote target ref is absent", oid: r.stdout.trim().split(/\s/)[0] || null };
 }
 function within(root, path) { const r = relative(root, path); return r !== "" && !r.startsWith(`..${sep}`) && r !== ".." && !isAbsolute(r); }
+function prCommand(root, argv) {
+  return spawnSync("gh", argv, { cwd: root, env: { ...gitEnv(), GH_PROMPT_DISABLED: "1" }, encoding: "utf8", timeout: 15000, maxBuffer: 1024 * 1024 });
+}
+function probePrSupport(c, { remote, head, base, baseline, sourceHead }) {
+  const unavailable = (reason) => ({ status: "unavailable", reason });
+  const url = git(c.worktree, ["remote", "get-url", remote]);
+  const match = url.match(/^(?:https:\/\/github\.com\/|git@github\.com:|ssh:\/\/git@github\.com\/)([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+?)(?:\.git)?$/);
+  if (!match) return unavailable("PR creation is unsupported for this remote: a GitHub repository remote is required");
+  if (head === base) return unavailable("PR head and base are the same branch");
+  const ahead = git(c.worktree, ["rev-list", "--count", `${baseline}..${sourceHead}`]);
+  if (!/^\d+$/.test(ahead) || Number(ahead) === 0) return unavailable("task HEAD has no commits ahead of the PR base");
+  const checked = (argv, label) => {
+    const result = prCommand(c.worktree, argv);
+    // Do not copy authentication stderr, tokens, or credential configuration
+    // into a plan. Preserve the actual failure kind/exit/signal instead.
+    const reason = result.error ? `${label}: ${result.error.code ?? "process error"}`
+      : result.status !== 0 ? `${label}: exit ${result.status ?? "unknown"}${result.signal ? ` (${result.signal})` : ""}` : null;
+    return { result, reason };
+  };
+  for (const [argv, label] of [[["--version"], "gh is unavailable"], [["auth", "status", "--hostname", "github.com"], "GitHub authentication probe failed"]]) {
+    const { reason } = checked(argv, label); if (reason) return unavailable(reason);
+  }
+  const { result, reason } = checked(["repo", "view", match[1], "--json", "nameWithOwner,defaultBranchRef,viewerPermission"], "GitHub repository probe failed");
+  if (reason) return unavailable(reason);
+  let repository;
+  try { repository = JSON.parse(result.stdout); }
+  catch { return unavailable("GitHub repository probe returned invalid JSON"); }
+  if (!repository || repository.nameWithOwner?.toLowerCase() !== match[1].toLowerCase() || !repository.defaultBranchRef?.name) return unavailable("GitHub repository identity or default branch could not be read");
+  if (repository.viewerPermission !== undefined && !["ADMIN", "MAINTAIN", "WRITE"].includes(repository.viewerPermission)) return unavailable(`GitHub repository permission does not allow PR delivery: ${repository.viewerPermission}`);
+  return { status: "available", reason: null };
+}
+function buildDefaultPrDescription(c, { baseline, source, head, base }) {
+  const spec = readFile(c.worktree, `specs/${c.manifest.task_id}/spec.md`).toString("utf8");
+  if (!spec.trim()) throw failure("PR_DESCRIPTION_INCOMPLETE", "task spec is empty; a source-defined PR description is unavailable");
+  const titles = git(c.worktree, ["log", "--format=%s", `${baseline}..${source.head}`]).split("\n").filter(Boolean);
+  const title = titles[0] ?? `Deliver ${c.manifest.task_id}`;
+  const changes = git(c.worktree, ["diff", "--no-ext-diff", "--no-textconv", "--name-status", baseline, "--"]);
+  const patch = git(c.worktree, ["diff", "--no-ext-diff", "--no-textconv", "--unified=3", baseline, "--"]);
+  const summary = spec.split(/\r?\n/).find(line => /^#\s+\S/.test(line))?.replace(/^#\s+/, "") ?? c.manifest.task_id;
+  const before = patch.split("\n").filter(line => line.startsWith("-") && !line.startsWith("---")).join("\n");
+  const after = patch.split("\n").filter(line => line.startsWith("+") && !line.startsWith("+++")).join("\n");
+  const tests = c.facts.flatMap(row => Array.isArray(row.evidence?.value) ? row.evidence.value : []);
+  const evidence = tests.length ? tests.map(row => `- ${JSON.stringify(row.command)}: exit ${row.exit_code}; ${JSON.stringify(row.failure_signature)}`).join("\n")
+    : "Tests: unavailable — no executed command evidence is recorded in task facts.";
+  const pending = source.changes.length ? `\nPending source paths: ${source.changes.map(row => row.path).join(", ")}.` : "";
+  const body = `## Summary\n${summary}\nTask: ${c.manifest.task_id}.\n${titles.map(value => `- ${value}`).join("\n")}\n\n## Evidence\nBefore (${baseline}):\n${before || "unavailable — no removed text in the actual diff"}\nAfter (${source.head} plus current worktree):\n${after || "unavailable — no added text in the actual diff"}\n${evidence}${pending}\n\n## Merge Danger\nDoor: publish ${head} and open a PR into ${base} before the displayed merge/archive/push/owned-cleanup actions; each irreversible action still requires native authorization.\nBlast Radius: actual changed paths below; runtime/remote effects outside this diff remain unverified.\n${changes || "unavailable — no tracked changes against the actual base"}\n`;
+  return { title, body };
+}
+function validatePrDescription(body) {
+  if (typeof body !== "string" || !/^[ \t]*(?:\*\*)?Door(?:\*\*)?[ \t]*:[ \t]*[^ \t\r\n][^\r\n]*$/mi.test(body) || !/^[ \t]*(?:\*\*)?Blast Radius(?:\*\*)?[ \t]*:[ \t]*[^ \t\r\n][^\r\n]*$/mi.test(body)) throw failure("PR_DESCRIPTION_INCOMPLETE", "explicit PR body requires separate nonempty Door and Blast Radius fields");
+}
+function preparePr(c, input, fields) {
+  if (input !== undefined && (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).some(key => !["enabled", "title", "body"].includes(key))
+    || input.enabled !== undefined && typeof input.enabled !== "boolean" || input.title !== undefined && (typeof input.title !== "string" || !input.title.trim()) || input.body !== undefined && typeof input.body !== "string")) throw failure("PR_DESCRIPTION_INCOMPLETE", "delivery.pr must contain only optional enabled, nonempty title and text body");
+  if (input?.enabled === false) return null;
+  if (input?.body !== undefined) validatePrDescription(input.body);
+  const defaults = input?.title !== undefined && input?.body !== undefined ? null : buildDefaultPrDescription(c, fields);
+  return { ...probePrSupport(c, { ...fields, sourceHead: fields.source.head }), head: fields.head, base: fields.base, title: input?.title ?? defaults.title, body: input?.body ?? defaults.body };
+}
 function validatePlan(plan, c) {
   if (!plan || typeof plan !== "object" || plan.task_id !== c.manifest.task_id || plan.project_name !== c.manifest.project_name || plan.target_repo_root !== c.root) throw failure("CLOSE_PLAN_IDENTITY", "close plan identity mismatch");
-  const expected = plan.mode === "planning" ? ["commit", "merge", "push", "cleanup"] : plan.mode === "post-cleanup-archive" ? ["archive", "push"] : ["commit", "merge", "archive", "push", "cleanup"];
+  const expected = plan.mode === "planning" ? ["commit", "merge", "push", "cleanup"] : plan.mode === "post-cleanup-archive" ? ["archive", "push"]
+    : plan.mode === "ordinary" && plan.pr?.status === "available" ? ["commit", "push-task", "pr", "merge", "archive", "push", "cleanup"] : ["commit", "merge", "archive", "push", "cleanup"];
   if (!same(plan.steps, expected)) throw failure("CLOSE_PLAN_ACTIONS", "close action set was changed");
   if (!/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(plan.task_branch) || !/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(plan.target_branch) || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(plan.remote)) throw failure("CLOSE_PLAN_REFS", "unsafe branch or remote");
   if (plan.worktree_root !== (plan.mode === "post-cleanup-archive" ? c.root : c.worktree) && existsSync(plan.worktree_root)) throw failure("CLOSE_PLAN_WORKTREE", "close plan worktree differs from the registered task");
@@ -240,12 +300,14 @@ export async function prepareDeliveryClosePlan({ taskDir, delivery = {}, closeMo
   if (remoteTarget.status !== "available") throw failure("REMOTE_TARGET_UNAVAILABLE", remoteTarget.reason);
   if (remoteTarget.oid !== baseline) throw failure("TARGET_REMOTE_HEAD_MISMATCH", "target branch differs from its remote before planning");
   await assertCleanTarget({ root: c.root, target: c.root, baseline, expectBranch: targetBranch });
+  const pr = mode === "ordinary" ? preparePr(c, delivery.pr, { baseline, source, head: taskBranch, base: targetBranch, remote }) : null;
   const plan = { task_id: c.manifest.task_id, project_name: c.manifest.project_name, mode, target_repo_root: c.root,
     worktree_root: c.worktree, task_branch: taskBranch, target_branch: targetBranch, target_head: baseline,
     remote, remote_target_head: remoteTarget.oid, remote_task_head: remoteOid(c.root, remote, taskBranch).oid,
     spec_source_path: delivery.spec_source_path ?? `specs/${c.manifest.task_id}`, spec_archive_path: delivery.spec_archive_path ?? `specs/archive/${c.manifest.task_id}`,
-    preserve_existing_workspace: c.explicit, source, steps: mode === "planning" ? ["commit", "merge", "push", "cleanup"] : ["commit", "merge", "archive", "push", "cleanup"],
-    known_gaps: delivery.known_gaps ?? [], created_at: new Date().toISOString() };
+    preserve_existing_workspace: c.explicit, source, steps: mode === "planning" ? ["commit", "merge", "push", "cleanup"]
+      : pr?.status === "available" ? ["commit", "push-task", "pr", "merge", "archive", "push", "cleanup"] : ["commit", "merge", "archive", "push", "cleanup"],
+    ...(pr ? { pr } : {}), known_gaps: delivery.known_gaps ?? [], created_at: new Date().toISOString() };
   validatePlan(plan, c);
   realDirectory(join(c.worktree, plan.spec_source_path));
   const planRef = await writeEvidence(c, "close-plan", plan);
