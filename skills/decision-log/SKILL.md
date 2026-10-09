@@ -20,7 +20,7 @@ description: Convert supplied decision material into a structured downstream rec
 7. 确认只写用户实际给出的答复及其展示内容/消息定位；未答、取消、拒绝和推测不是同意。当前确认覆盖的范围可继续使用；若改变已确认决定，先准备可审查更改再取得真实选择，不为普通补字反复询问。
 8. 保留原始 finding 及 fixed/rejected_invalid/accepted_risk/needs_human 的具体理由、影响和下一步。严重问题未修必须展示实际损失并取得该问题的风险选择，review 不能替用户作决定。
 9. 逐项对照原始需求、回答、采用的调研/Grill/发现和决定：每项有落点，或有用户明确选择的排除理由与去向。缺口留在本任务修；决定更正追加新条目，引用被替代条目并保留旧正文，不改写历史事实。
-10. 返回简短人读摘要：决定、来源类型、理由、范围、后果/风险、非目标、未决、CONTEXT/ADR 结果与下游边界。写了文件就返回实际路径；仅生成正文就如实说明尚未写入。
+10. 返回简短人读摘要：决定、来源类型、理由、范围、后果/风险、非目标、未决、领域术语/ADR 结果与下游边界。写了文件就返回实际路径；仅生成正文就如实说明尚未写入。
 
 ## 内容边界
 
@@ -31,7 +31,7 @@ description: Convert supplied decision material into a structured downstream rec
 - 分支测试：每个任务都要的留主文档，只有部分任务用到的放指针后。主文档六类是任务身份、大纲地图、工作包与决定、要改哪些文件、验收面、范围与非目标。
 - 指针后九类是原始需求全文与索引、需求变更记录全文、逐字声明层、Talk 批次、grill 记录、调研登记、审查处置明细、Supersedes 明细、未决项明细；主文对应节保留交接所需的摘要、行级记录与原件定位。
 - 阶段末一致性准备与确认后核对遵循 `workflows/make-decision/SKILL.md`。方向审查读取问题与客观事实，不混入候选/答案；细节审查读取当前决定与真实处置。本文不把已确认选择当盲审材料。
-- CONTEXT.md 仅记录领域术语变化；ADR 仅在难以反转、无背景会意外、有真实取舍同时成立时记录已决定方向。已有决定不重问；新方向争议才向用户提问。
+- 领域术语与 ADR 方法读取 `skills/grill-with-docs/SKILL.md` 的唯一领域 owner：首个真实术语确定后才懒建目标项目 `GLOSSARY.md`，真实多上下文按该 owner 的 map/格式处理；术语载体只记录领域语言，不承载实现设计；尚未迁名的现材料只读作来源，不另建术语真相。ADR 仅在难以反转、无背景会意外、有真实取舍三项同时成立时记录已决定方向，任一缺失跳过。已有决定不重问；新方向争议才向用户提问。
 - 模板的 ADR 与写集表保留退役内容、理由、决定人/真实决定来源、原需求和去向；没有实际授权不声称已批准删除。
 - 材料、实现、测试、独立质量、Git/物理交付分别报告。来源引用可回读，不依赖 report_sha256、decision hash、固定 schema 或机器 coverage 认证决定能否工作。
 
@@ -45,7 +45,7 @@ U 在 `## 需求变更记录` 用独立 `### U-001` 标题记录行级变更与�
 
 一条 decision entry 按模板的五字段顺序写：决定、为什么、否掉了什么、后果与风险、影响面。决定引用真实来源与确认；为什么说明事实、约束与推理；影响面写具体路径、行为与消费者。未决负责人、旧决定与详细选项用相邻交接行或原件指针承接。
 
-做 coverage audit：逐项对照原始需求、真实回答、采用的 Grill/调研/审查结论与决定；每项在主文有一个落点，或通过 omission-acceptance 留下用户真实选择的排除理由、影响与去向。缺项可见，不用 review 风险记录替代排除选择，不建机器账本或推进门。
+做 coverage audit：逐项对照原始需求、真实回答、采用的 Grill/调研/审查结论与决定；每项在主文有一个落点，或通过 omission-acceptance 留下用户真实选择的排除理由、影响与去向。缺项可见，不用 review 风险记录替代排除选择，不建机器账本或推进门。The main document and every accepted omission use the same source coverage audit: original requirements, real replies, adopted research/Grill, each load-bearing review finding, and load-bearing decision.
 
 ## 编号写作规则
 
@@ -57,3 +57,5 @@ U 在 `## 需求变更记录` 用独立 `### U-001` 标题记录行级变更与�
 4. V 逐字原文在任务库根 `quality/evidence/decision-log-refs/` 保存一次，主文用编号与原件锚点引用；共享定义保持单一来源。
 5. 用同一术语表达同一含义，不为缩短省略条件、否定、因果或必要解释。
 6. 保留机器读取的标题与标签、原始逐字声明及被锁定文字；这些是允许的例外，不能改写去凑短。
+
+创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；保原步骤、条件、权限、失败强度和受保护字面，缺源如实 unavailable，不复制规范。

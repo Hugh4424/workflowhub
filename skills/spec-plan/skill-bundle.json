@@ -3,7 +3,8 @@
   "skill": "spec-plan",
   "files": [
     "SKILL.md",
-    "templates/phase-template.md"
+    "templates/phase-template.md",
+    "templates/index-template.md"
   ],
   "sources": [
     {
