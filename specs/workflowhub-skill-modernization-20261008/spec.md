@@ -284,6 +284,7 @@ P1 R历史登记；P2 A1夹具/禁区；P3 A2′三正文；P4 A3真实比较；
 | MODIFY | `tests/contract/verify-architect-acceptance.test.mjs` | P9 |
 | MODIFY | `runtime/evidence/workflow-evolution.mjs` | P9 |
 | MODIFY | `runtime/evidence/research-report.mjs` | P9 |
+| MODIFY（T019 publisher定向case具体CR独立批准后，保历史/原cases） | `tests/contract/research-report-current.test.mjs` | P9/T019 |
 | MODIFY | `runtime/review/review-packet-identity.mjs` | P9 |
 | MODIFY | `runtime/schemas/risk-acceptance.v1.json` | P9 |
 | MODIFY | `runtime/schemas/human-confirmation.v1.schema.json` | P9 |
