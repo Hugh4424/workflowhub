@@ -76,7 +76,7 @@ describe("Stage 1 moat skill files", () => {
     assert.ok(existsSync(filePath("skills", "grill-with-docs", "ADR-FORMAT.md")));
     assert.match(skill, /输入|Input|what-to-do|supporting-info/, "grill skill must describe inputs or usage context");
     assert.match(skill, /步骤|During the session|执行协议/, "grill skill must describe steps or session protocol");
-    assert.match(skill, /输出|Update CONTEXT\.md|ADR/, "grill skill must describe outputs");
+    assert.match(skill, /输出|Update GLOSSARY\.md|ADR/, "grill skill must describe outputs");
     assert.match(skill, /grill/i, "grill skill must retain the grill keyword");
   });
 
