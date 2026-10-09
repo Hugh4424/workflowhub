@@ -167,6 +167,35 @@ describe("T001 research report contract", () => {
   });
 
   it("publishes one immutable ordinary report and does not create a receipt wrapper",async()=>{const f=await storage(),r=await publishResearchReport({recordDir:f.recordDir,slug:"ordinary-report",report:report("skipped"),...expectedIdentity});expect(r.ref).toMatch(/^quality\/evidence\/research\/\d{4}-\d{2}-\d{2}-\d{3}-ordinary-report\.json$/);expect(r.ref).not.toContain("quality/tests");expect(r.value.status).toBe("skipped");const original=readFileSync(r.path),next=await publishResearchReport({recordDir:f.recordDir,slug:"ordinary-report",report:report("unavailable"),...expectedIdentity});expect(next.path).not.toBe(r.path);expect(readFileSync(r.path)).toEqual(original);expect(existsSync(join(f.task.taskPath,"quality","verify.v1"))).toBe(false);});
+  it("rejects new retired build-spec publication while retaining history and active build-plan", async () => {
+    const { readdirSync } = await import("node:fs");
+    const f = await storage();
+    const active = report("skipped", { stage: "build-plan" });
+    const positive = await publishResearchReport({ recordDir: f.recordDir, slug: "active-build-plan", report: active, taskId: identity.task_id, stage: "build-plan" });
+    expect(positive.value).toEqual(active);
+    expect(JSON.parse(readFileSync(positive.path, "utf8"))).toEqual(active);
+    const original = readFileSync(positive.path);
+    const originalNames = readdirSync(f.recordDir).sort();
+    const retired = report("skipped", { stage: "build-spec" });
+    const raw = JSON.stringify(retired, null, 2) + "\r\n";
+    const historyRef = "quality/evidence/research/2026-10-03-001-owned-retired-report.json";
+    const expected = { taskId: identity.task_id, stage: "build-spec" };
+    expect(parseResearchReport(raw, expected)).toEqual(retired);
+    const history = readResearchReport({ read: ref => {
+      expect(ref).toBe(historyRef);
+      return raw;
+    }, ref: historyRef, ...expected });
+    expect(history.raw).toBe(raw);
+    expect(history.value).toEqual(retired);
+    // No caller stage: the publisher must check the actual parsed raw value.
+    await expect(publishResearchReport({ recordDir: f.recordDir, slug: "retired-raw", raw, report: active, taskId: identity.task_id })).rejects.toThrow(/retired.*build-spec|build-spec.*retired/);
+    expect(readdirSync(f.recordDir).sort()).toEqual(originalNames);
+    expect(readFileSync(positive.path)).toEqual(original);
+    await expect(publishResearchReport({ recordDir: f.recordDir, slug: "retired-report", report: retired, taskId: identity.task_id })).rejects.toThrow(/retired.*build-spec|build-spec.*retired/);
+    expect(readdirSync(f.recordDir).sort()).toEqual(originalNames);
+    expect(readFileSync(positive.path)).toEqual(original);
+    expect(readResearchReport({ read: () => raw, ref: historyRef, ...expected })).toMatchObject({ raw, value: retired });
+  });
   it("retains explicit report time and selects unique later terminal facts, with ties visibly ambiguous",async()=>{const f=await storage(),base={recordDir:f.recordDir,...expectedIdentity};const earlier=await publishResearchReport({...base,report:report("unavailable"),recordedAt:"2026-09-10T00:00:00.000Z"});const later=await publishResearchReport({...base,report:report("completed"),recordedAt:"2026-09-10T00:00:01.000Z"});expect(earlier.value.recorded_at).toBe("2026-09-10T00:00:00.000Z");expect(deriveResearchStatus([earlier,later])).toMatchObject({status:"completed",report_ref:later.ref});const tied=await publishResearchReport({...base,report:report("skipped"),recordedAt:later.value.recorded_at});expect(deriveResearchStatus([later,tied])).toMatchObject({status:"unavailable",reason:"research_record_ambiguous"});expect(()=>parseResearchReport(JSON.stringify({...report(),recorded_at:"not-a-time"}),expectedIdentity)).toThrow(/recorded_at/);});
 
   it("enforces attempt count per question and the aggregate active budget", () => {

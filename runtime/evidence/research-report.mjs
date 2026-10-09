@@ -384,6 +384,7 @@ export async function publishResearchReport({ recordDir, slug = "research", repo
   const reportWithTimestamp = raw === null && recordedAt !== undefined ? { ...report, recorded_at: recordedAt } : report;
   const bytes = raw === null ? `${JSON.stringify(reportWithTimestamp, null, 2)}\n` : (Buffer.isBuffer(raw) ? raw : String(raw));
   const value = parseResearchReport(bytes, { taskId, stage });
+  if (value.stage === "build-spec") throw new Error("retired research stage build-spec is read-only and cannot be published as a new report");
   if (["snapshot_tree", "material_scope_revision"].some(key => Object.hasOwn(value, key))) throw new Error("retired research bindings are read-only and cannot be published as a new report");
   const path = await appendRecord(recordDir, slug, "json", bytes);
   return Object.freeze({ ref: `quality/evidence/research/${basename(path)}`, path, value });
