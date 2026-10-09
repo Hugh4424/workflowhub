@@ -121,4 +121,33 @@ describe("local skill resolver", () => {
     set(["SKILL.md","hard.md"]); expect(checked).toThrow(/hard-linked/);
   });
 
+  it("rejects a dependency whose declared name does not match its standard skill directory", () => {
+    const root = fs.realpathSync(fixture());
+    fs.mkdirSync(path.join(root, "workflows/stage"), { recursive: true });
+    fs.writeFileSync(path.join(root, "workflows/stage/skill-deps.yaml"), "stage: stage\n");
+    const sourceLiteral = {
+      schema_version: "workflowhub-skill-diagnostic.v1",
+      source: "resolver",
+      skill: "other",
+      status: "blocked",
+      code: "SKILL_RESOLUTION_FAILED",
+      enforcement: "fail_loud",
+    };
+    let failure;
+    try {
+      resolveSkillPackage({
+        packageRoot: root,
+        manifestPath: "workflows/stage/skill-deps.yaml",
+        dependency: { name: "other", path: "skills/demo/SKILL.md", bundle: "skills/demo/skill-bundle.json" },
+      });
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure.diagnostic).toMatchObject(sourceLiteral);
+    expect(failure.message).toEqual(expect.any(String));
+    expect(failure.message).not.toBe("");
+    expect(failure.diagnostic.message).toBe(failure.message);
+  });
+
 });
