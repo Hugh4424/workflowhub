@@ -237,7 +237,7 @@
   - **依据**：`ADR-007`、`U-003` 第 2 条、`U-005`、`F1 §4`、`PFACT-006`
   - **场景**：SCN-003
   - **验收**：AC-003、AC-005c
-- **FR-QUAL-002**：runtime 与接线删除换执行者路径：`tools/cli/stage-runtime.mjs` 删 fallback 闭包与 `executor:"wh-review"`（改后如实返回 `unavailable`）；`runtime/review/ocr-delegation-adapter.mjs:291` 措辞改为「no substituted executor was used」；`workflows/verify-code/skill-deps.yaml:18` 的 architect 条目改为按同源补充轴触发；`workflows/{build-code,verify-code}/steps.json` 删回退句
+- **FR-QUAL-002**：runtime 与接线删除换执行者路径：`tools/cli/stage-runtime.mjs` 删 fallback 闭包与 `executor:"wh-review"`（改后如实返回 `unavailable`）；`runtime/review/ocr-delegation-adapter.mjs:291` 措辞改为「no substituted executor was used」；`workflows/verify-code/skill-deps.yaml:18` 的 architect 条目改为按同源补充轴触发；`workflows/{build-code,verify-code}/steps.json` 删回退句；当前 OCR013 minor 的两 YAML `wh-review-provider.required_when` 仅校准为已有 `document_review` 标签，保持其余 capability 元数据/路由不变；冻结 contract test `:15` 与现 P1 oracle `:497` T002 TARGET／`:550-562` T003 GUARD 只校准同一具名 metadata 的预期/解释/诊断，保精确断言及其它全部保护；由独立 TCR087原件承接提案074，不新增字段或机制
   - **范围边界**：删前先确认 `nativePacketFallback` 是否被同源补充轴复用；只改既有判定面，不新增字段
   - **依据**：`ADR-007`、`U-005` 第 4 项、`OI-013`、`PFACT-004`
   - **场景**：SCN-003
