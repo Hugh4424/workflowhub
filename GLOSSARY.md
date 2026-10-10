@@ -90,7 +90,7 @@ _Avoid_: 工作许可证、摘要替原件、镜像数量证明质量；保留�
 _Avoid_: 用代码审查结论或测试数量代替业务验收；职责见[verify-code](<workflows/verify-code/SKILL.md#L18-L22>)。
 
 **独立审查与三审查点**：独立审查是由独立来源和上下文观察交付质量的工作；开发的三个保留审查点是计划合并、每 Phase 代码审查和终末代码审查。
-_Avoid_: 实施者自判、同源补充冒异源、review pass 充操作授权；执行分工及 OCR 能力回退见[build-code](<workflows/build-code/SKILL.md#L42-L54>)和[verify-code](<workflows/verify-code/SKILL.md#L44>)。
+_Avoid_: 实施者自判、同源补充冒异源、review pass 充操作授权；执行分工见[build-code](<workflows/build-code/SKILL.md#L42-L54>)和[verify-code](<workflows/verify-code/SKILL.md#L44>)。
 
 **finding（发现）**：有原始来源、具体依据和影响的审查发现；有效单源问题不会因独立来源数量不足而失去意义。
 _Avoid_: 覆盖未知伪造问题、空 findings 证明全部正确。
