@@ -25,10 +25,10 @@
 
 本节回答原决定为何失去可发现性、当前补做落在哪里。
 
-2026-10-08，commit `de5fec9a` 删除 decision-log 模板的 `## 调研`、`## 动态 Talk 批次`、`## 逐字声明层` 三节，反向推翻前一天 ADR-023 在这些节的落地，当时没有记录说明原因。该决定只存在于已归档任务材料，未进入 `docs/adr/`，后来作者无法从领域 ADR 发现它。来源是本次 decision-log 的 U-017 第 4–6 项；不改写原历史记录。
+2026-10-08，commit `de5fec9a` 删除的 decision-log 模板节包括 `## 调研`、`## 动态 Talk 批次`、`## 逐字声明层`，以及原 ADR-023 强制的 `## 补充材料` 尾节；前三节不是完整删除清单。这些删除反向推翻前一天 ADR-023 在对应节的落地，当时没有记录说明原因。删除事实由本任务 Z1 原件「对简报三处症状的更正（有证据）」与 `git show de5fec9a -- skills/decision-log/templates/decision-log-template.md` 交叉读回。原决定只存在于已归档任务材料、未进入 `docs/adr/` 的事实见本次 decision-log 的 U-017 第 4–6 项；不改写原历史记录。
 
 2026-10-10 实读确认，spec 系列六个活文件已有 `读者：` / `读完要能：` 骨架：`skills/spec-specify/SKILL.md`、`skills/spec-specify/templates/spec-template.md`、`skills/spec-prd/SKILL.md`、`skills/spec-prd/templates/prd-template.md`、`skills/spec-plan/SKILL.md`、`skills/spec-plan/templates/phase-template.md`。
 
-P4/T011 在 `skills/decision-log/templates/decision-log-template.md` 补读者骨架，按下游消费固定十二节；`## 工作包与决定` 承接唯一 ADR 五字段，`## 验收面` 承接覆盖结论，`## 外置事实索引` 以绝对路径基准和十二个具名条件指针承接过程原件。P4/T012 在 `skills/decision-log/SKILL.md` 补骨架、编号第 7/8 条及「不是质量门」声明。当前模板按 D1 / U-015 / U-016 外置原始输出和推导，不重新增加原决定曾要求的 `## 补充材料` 或被删除的三个过程节；本节保留原落地形态作为历史决定，当前十二节由 FR-QUAL-007 唯一决定。
+P4/T011 在 `skills/decision-log/templates/decision-log-template.md` 补读者骨架，按下游消费固定十二节；`## 工作包与决定` 承接唯一 ADR 五字段，`## 验收面` 承接覆盖结论，`## 外置事实索引` 以绝对路径基准和十二个具名条件指针承接过程原件。P4/T012 在 `skills/decision-log/SKILL.md` 补骨架、编号第 7/8 条及「不是质量门」声明。当前模板按 D1 / U-015 / U-016 外置原始输出和推导，本次不恢复已被 `de5fec9a` 删除的 `## 补充材料` 尾节及上述三个过程节；本节保留原落地形态作为历史决定，当前十二节由 FR-QUAL-007 唯一决定。
 
 本次只证明模板与方法文字落地，以及原决定可被发现；后续作者是否按条件指针读取真实原件、日志是否真的变薄，由用户后续实跑读回。缺测试或独立审查保留具体缺口，不以该归档件证明质量通过。
