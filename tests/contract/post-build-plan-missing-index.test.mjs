@@ -405,6 +405,8 @@ describe("governance exemption and serialized Phase sharing", () => {
   it("accepts a governance path shared by two serially dependent Phases", () => {
     const result = validatePostPhaseContract(sharedFixture("README.md", "P1"));
     expect(result.ok, result.errors.join("; ")).toBe(true);
+    const nonSerial = validatePostPhaseContract(sharedFixture("README.md", "none"));
+    expect(nonSerial.ok, nonSerial.errors.join("; ")).toBe(true);
   });
   it("still rejects a shared implementation path when neither Phase depends on the other", () => {
     const result = validatePostPhaseContract(sharedFixture("src/shared.mjs", "none"));
