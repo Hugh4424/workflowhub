@@ -35,7 +35,6 @@ const FULL_PHASE_DIFF_PREFIXES = [
   "skills/plan-eng-review/",
   "skills/simplicity-guard/",
   "skills/spec-analyze/",
-  "skills/spec-tasks/",
   "skills/test-routing-advisor/",
   "tools/cli/",
 ];
