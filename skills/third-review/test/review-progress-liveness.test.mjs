@@ -56,6 +56,59 @@ test("a heartbeat-only stream stops on the bounded semantic window", async () =>
   assert.match(result.error.message, new RegExp(`no semantic progress for ${SEMANTIC_STALL_INTERVALS} health intervals`));
 });
 
+test.each(["unverifiable", "dead"])("actual repeated heartbeats remain bounded when the probe is advisory %s", async status => {
+  const intervalMs = 20;
+  const result = await execute(plan(heartbeatSource(intervalMs * (SEMANTIC_STALL_INTERVALS + 10)), {
+    probeSession: async () => ({ status, error: null, evidence: "Probe cannot verify progress" }),
+  }), options(intervalMs));
+  assert.equal(result.ok, false, "received heartbeat frames must not bypass the semantic window when the probe cannot verify progress");
+  assert.equal(result.error.code, "PROCESS_STALLED");
+  assert.match(result.error.message, new RegExp(`no semantic progress for ${SEMANTIC_STALL_INTERVALS} health intervals`));
+  assert.equal(result.progress_events, 1);
+});
+
+test.each(["unverifiable", "dead"])("an advisory %s probe alone cannot stop a child with no observable output", async status => {
+  const intervalMs = 20;
+  const result = await execute(plan(`setTimeout(() => process.exit(0), ${intervalMs * (SEMANTIC_STALL_INTERVALS + 6)});`, {
+    probeSession: async () => ({ status, error: null, evidence: "Probe cannot verify the child" }),
+  }), options(intervalMs));
+  assert.equal(result.ok, true, "an advisory probe value alone is not a stop reason");
+  assert.equal(result.progress_events, 0);
+  assert.ok(result.duration_ms > intervalMs * SEMANTIC_STALL_INTERVALS);
+});
+
+test("actual repeated heartbeats remain bounded when the probe does not return", async () => {
+  const intervalMs = 20;
+  const result = await execute(plan(heartbeatSource(intervalMs * (SEMANTIC_STALL_INTERVALS + 10)), {
+    probeSession: () => new Promise(() => {}),
+  }), { ...options(intervalMs), probeDeadlineMs: 2000 });
+  assert.equal(result.ok, false, "the liveness stream's semantic window must not await a probe response");
+  assert.equal(result.error.code, "PROCESS_STALLED");
+  assert.match(result.error.message, new RegExp(`no semantic progress for ${SEMANTIC_STALL_INTERVALS} health intervals`));
+});
+
+test("sparse repeated heartbeats count elapsed health intervals rather than heartbeat frames", async () => {
+  const intervalMs = 20;
+  const source = heartbeatSource(intervalMs * (SEMANTIC_STALL_INTERVALS + 10)).replace(",2);", `,${intervalMs * 3});`);
+  const result = await execute(plan(source, {
+    probeSession: async () => ({ status: "unverifiable", error: null, evidence: "Probe cannot verify progress" }),
+  }), options(intervalMs));
+  assert.equal(result.ok, false, "three health intervals between frames must not stretch the semantic window into thirty-six intervals");
+  assert.equal(result.error.code, "PROCESS_STALLED");
+  assert.match(result.error.message, new RegExp(`no semantic progress for ${SEMANTIC_STALL_INTERVALS} health intervals`));
+});
+
+test("verified probe leaf progress survives beyond the semantic window despite advisory intervals", async () => {
+  const intervalMs = 20; let checks = 0;
+  const result = await execute(plan(heartbeatSource(intervalMs * (SEMANTIC_STALL_INTERVALS + 8)), {
+    probeSession: async () => ++checks % 3 === 0
+      ? { status: "busy", cursor: `leaf-${checks}`, session_id: "advancing-session" }
+      : { status: "unverifiable", error: null, evidence: "Intermittent probe uncertainty" },
+  }), options(intervalMs));
+  assert.equal(result.ok, true, `verified leaf changes must reset the semantic window: ${result.error?.code}`);
+  assert.ok(result.duration_ms > intervalMs * SEMANTIC_STALL_INTERVALS);
+});
+
 test("true silence still stops on the existing five-interval window", async () => {
   const result = await execute(plan("setTimeout(() => process.exit(0), 3000);"), options(20));
   assert.equal(result.ok, false);
