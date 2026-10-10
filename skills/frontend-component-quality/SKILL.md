@@ -6,7 +6,7 @@ version: 1.0.0
 
 # Frontend Component Quality
 
-公开入口只有本技能。它输出 **Component Quality Map**，并消费 `buildConsumerCensus` 的真实消费者；不替代 frontend-testing，不创建新 stage、第二 workflow、第二 entrypoint、独立 evidence store 或质量 gate；它是 no stage、no gate 的质量 lens。
+公开入口只有本技能。它输出 **Component Quality Map**，并核对目标项目当前源码中的真实消费者；真实盘点缺失时明确记 unknown/unavailable；不替代 frontend-testing，不创建新 stage、第二 workflow、第二 entrypoint、独立 evidence store 或质量 gate；它是 no stage、no gate 的质量 lens。
 
 ## Component Quality Map
 

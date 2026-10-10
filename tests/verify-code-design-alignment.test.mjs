@@ -8,11 +8,14 @@ import { fileURLToPath } from "node:url";
 // they do not claim equivalent coverage for the former functions.
 const root = fileURLToPath(new URL("..", import.meta.url));
 const retired = ["design", "alignment"].join("-");
-const symbol = ["align", "Ui", "Design", "Evidence"].join("");
+const symbols = [
+  ["align", "Ui", "Design", "Evidence"], ["create", "Task", "Projection"],
+  ["align", "Current", "Evidence"], ["build", "Consumer", "Census"],
+  ["validate", "Project", "Standard", "Sources"],
+].map((parts) => parts.join(""));
 const modulePath = join(root, "workflows", "verify-code", retired + ".mjs");
 const mapPath = join(root, "docs", "architecture", "move-map.json");
 const excluded = [".git", "node_modules", "specs", "docs/archive", "docs/research"];
-const sourceExtension = /\.(mjs|js|cjs|json|yaml|yml)$/;
 
 function danglingReferences(dir) {
   const hits = [];
@@ -21,9 +24,9 @@ function danglingReferences(dir) {
     const rel = relative(root, absolute).split("\\").join("/");
     if (excluded.some((path) => rel === path || rel.startsWith(path + "/"))) continue;
     if (entry.isDirectory()) hits.push(...danglingReferences(absolute));
-    else if (entry.isFile() && sourceExtension.test(entry.name)) {
-      const text = readFileSync(absolute, "utf8");
-      if (text.includes(retired) || text.includes(symbol)) hits.push(rel);
+    else if (entry.isFile()) {
+      const bytes = readFileSync(absolute);
+      if (bytes.includes(retired) || symbols.some((symbol) => bytes.includes(symbol))) hits.push(rel);
     }
   }
   return hits;
@@ -34,7 +37,7 @@ describe("verify-code retired module cleanup", () => {
     expect(existsSync(modulePath)).toBe(false);
   });
 
-  it("keeps current code and data free of dangling name and symbol references", () => {
+  it("keeps current repository files free of dangling name and symbol references", () => {
     expect(danglingReferences(root)).toEqual([]);
   });
 
