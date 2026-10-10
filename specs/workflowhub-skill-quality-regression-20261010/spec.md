@@ -309,7 +309,7 @@
   - **场景**：SCN-004
   - **验收**：AC-003、AC-004
 - **FR-QUAL-013**：逐 AC 事实汇总与如实披露：审计口径落在 `R5`（16 个改动文件）与 `R6`（36 项技能 + `S-01`–`S-18`）的既有结论上，不另做逐文件复述；每条发现至少一条事实证据（diff 行号或会话事件索引）；汇总里**不出现「已修好」结论**，`incomplete`／`unavailable` 保持可见；字节只作 `AC-005a` 的事实
-  - **范围边界**：本次不做验收判断；`AC-006` 由用户在新任务上实跑读回，缺失保持 `unavailable`。P9采用125选择A与独立129的条件：原builder T024固定 `appendRecord(T + '/quality/evidence/execution-memo', 'p9-current-facts', 'md', bytes)` 只产一份ordinary不可变聚合报告，卡只留实际返回ref、不双写当前状态；生成前不填假path，生成后材料owner补唯一actual指针/header/index，最终formal review前完成。P9 builder在W不写生产/材料，现可写仅外置oracle；旧009/index只读，不授整目录。
+  - **范围边界**：本次不做验收判断；`AC-006` 由用户在新任务上实跑读回，缺失保持 `unavailable`。P9采用125选择A与独立129的条件：原builder T024固定 `appendRecord(T + '/quality/evidence/execution-memo', 'p9-current-facts', 'md', bytes)` 只产一份ordinary不可变聚合报告，卡只留实际返回ref、不双写当前状态；生成前不填假path，生成后材料owner补唯一actual指针/header/index，最终formal review前完成。P9 builder在W不写生产/材料，实际scope仅外置oracle与T024返回的唯一普通报告 `quality/evidence/execution-memo/2026-10-10-141-p9-current-facts.md`（发布后immutable只读；当前事实仅从该原件读取）；旧009/index只读，不授整目录。
   - **依据**：`R-010`、`U-001`、`U-011` 第 2 项、隐藏前提 B（`decision-log.md:494`）、`AC-001`、`AC-002`、`PFACT-001`、`PFACT-012`
   - **场景**：SCN-004
   - **验收**：AC-001、AC-002、AC-004、AC-005a
