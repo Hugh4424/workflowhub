@@ -29,7 +29,7 @@ version: 3.2.0
 1. `load-context`：先记录用户原话、痛点、任务类型、事实、假设、非目标和未决问题，含范围分诊：区分用户痛点、完整旅程、页面、数据状态和成功失败边界。任务类型不明或冲突时，只暂停依赖它的问题并澄清；不靠文件名或旧记录猜答案。规划任务只问会改变方向的问题，不在这十类里问：文件路径与文件面、函数名、字段名、算法、schema 形状、命令形态、入口参数形态、行号、代码片段、测试记录与实测记录；普通任务可问影响实现的细节。
    普通/规划是任务性质，mini-task 是独立的交付规模与风险判断。普通任务有实际执行目标时，入口读取 `skills/mini-task/SKILL.md` 评估 mini 候选：从真实目标、范围、影响与重大架构/迁移/权限/安全风险判断，保留依据和未决项；规划任务仍做方向规划。缺事实只澄清相关问题，用户显式提出 mini 也不能把未知补成适合；建议与真实路线选择写进原日志，不自动转换任务。
    用户中途改变任务类型声明时，停止消费旧类型下的问题与产物，直到逐项按新类型重新处理。当前决策保留旧问题引用、重处理原因、新内容位置；只换 hash 或引用不算重处理。不为此新建 schema、控制面、类型状态或记录绑定。
-   新日志使用 `skills/decision-log/templates/decision-log-template.md`；照抄形状，按当前真实来源写内容。逐字原文、需求索引明细、Talk 批次、grill、调研与审查处置明细外置到任务库根 `quality/evidence/decision-log-refs/`，已保存的原件引用原路径，主文档只留指针。U 块在 `## 需求变更记录` 用独立 `### U-001` 标题说明变更、来源及 V 原件定位；`## 原始需求` 引 U/V 与 ADR。每类事实只留一份原始件，缺来源写具体诊断；历史日志保持原文。
+   新日志使用 `skills/decision-log/templates/decision-log-template.md`；照抄形状，按当前真实来源写内容。逐字原文、需求索引明细、Talk 批次、grill、调研与审查处置明细外置到任务库根 `quality/evidence/decision-log-refs/`，已保存的原件引用原路径，主文档只留指针。发生需求变更并写 `## 需求变更记录` 时，读取并执行 `skills/decision-log/SKILL.md` 的「来源与未决问题写法」；U/V 的形状和来源定位按该唯一 owner，本入口不复述。每类事实只留一份原始件，缺来源写具体诊断；历史日志保持原文。
 2. `outline-hypothesis-talk`：主会话通过真实 Talk 产出粗粒度大纲，含每块的「问题与边界」及「方向假设」。标明可修改假设和什么证据会推翻它；不作基线，不在此承诺范围或成本。模糊需求比较至少两个角度及有差异的候选，说明证据与取舍。
 3. `research-and-diverge`：围绕大纲每块会改变方向的未知开展内部与外部研究，输入保留「大纲是待验证假设」。make-decision 使用 `skills/deep-research/SKILL.md` 的 R0–R5 契约：R0 生成缺口、R1 读一手文本、R2 受限并行深读、R3 三角验证、R4 写 research-report、R5 独立审查。跳过或不可用写真实原因，研究不替用户决定。Every completed research report must explicitly declare `candidates`；每个候选写摘要、证据绑定来源 ref、推荐（含拒绝）及理由，无候选写真实原因。Talk 从唯一 canonical report 读取这些事实，不用摘要或报告引用冒充候选交付。
 4. `outline-revision-check`：研究结果逐块对照大纲假设，明确工作包清单或方向假设是否改变，判断保留、回改或推翻并写理由。产出修订后大纲；大部分假设被事实推翻时重新整理方案，保留旧判断和更改理由。
@@ -59,7 +59,7 @@ version: 3.2.0
 
 改动前用工作区/范围核对工具确认目标；需要写文件时使用安全原子写入，有共享记录冲突时使用记录锁。失败明确暴露，保留原始来源，不覆盖历史原件。当前材料说明做什么，实际执行写既有任务事实与质量记录，二者不互相代填。交接使用 `skills/stage-handoff/SKILL.md`，保存并报告该方法返回的实际不可变绝对路径；执行不是门，不要求固定复盘表或每步机器认证。正式阶段事实由现有公共流程负责，本方法不增加 writer、公共命令或生命周期对象。
 
-真实 stage 末有过程问题时，主会话可读取并调用 `skills/stage-reflection/SKILL.md` 一次，消费有源候选、真实用户选择与未解项的方法；局部 Phase 摘要不触发 stage-end。复盘可跳过并说明原因，取消、缺会话源或不可用保原事实，既有持续授权不代候选采纳。stage-handoff 独立按其方法保存一份交接并定位已决定、已完成且验证、未完成、证据位置四类 source；不以复盘或交接成为继续工作的许可证，不重复每 Phase handoff 或建立机器复盘。
+真实 stage 末有过程问题时，读取 skills/stage-reflection/SKILL.md 的「方法」与「用户选择后的归口」两节一次；局部 Phase 摘要不触发 stage-end。交接类信息按 skills/stage-handoff/SKILL.md:31-34 的四类表读回。
 
 ## 写作与固定来源
 
@@ -67,4 +67,5 @@ version: 3.2.0
 
 参考 [mattpocock/skills](https://github.com/mattpocock/skills) 固定 commit `b0618bc436ad893b3c5e84e55fba86586d34a404` 的 `skills/engineering/wayfinder/SKILL.md`（五段地图/fog）与 `skills/engineering/domain-modeling/SKILL.md`（领域方法归 grill owner）；写作来源为 `skills/productivity/writing-for-agents/SKILL.md`、`SKILL-MECHANICS.md` 与 docs。固定来源是方法依据，不证明本次已获得行为效果。
 
-本地保当前材料 owner、原步骤、真实用户回复、原失败与独立审查；只吸收适用方法，拒绝外置 tracker、GitHub ticket API、宿主 setup/Skill 硬依赖和第二进度权威。旧 bridge/外部 session 只读保历史 provenance，不作 active 执行、复盘、交接或 close 的门。方法接收真实项目材料、允许路径与宿主已批准的能力，缺源或能力如实报错，不绑定任务绝对路径或账号。迭代时核上述具名子文件的更新及更优候选，说明真实源差、本地偏离与采用理由，不自动追 HEAD。
+本地保当前材料 owner、原步骤、真实用户回复、原失败与独立审查；只吸收适用方法，拒绝外置 tracker、GitHub ticket API、宿主 setup/Skill 硬依赖和第二进度权威。旧 bridge/外部 session 只读保历史 provenance，不作 active 执行、复盘、交接或 close 的门。方法接收真实项目材料、允许路径与宿主已批准的能力，缺源或能力如实报错，不绑定任务绝对路径或账号。
+迭代本文件的固定来源时，读取 skills/stage-reflection/SKILL.md 的「固定来源、本地偏离与更新入口」节；只在核到真实上游更新或更优候选时才决定采用，不自动追 HEAD。

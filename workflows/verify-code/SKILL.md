@@ -49,7 +49,7 @@ authorize 是已有授权的记录与消费工具，不是提问按钮。每次�
 
 阶段末主会话使用 `skills/stage-handoff/SKILL.md` 保存交接，报告该方法返回的实际不可变绝对路径，供用户交接材料现状、当前代码、真实检查、风险和下一步。交接执行不是门，缺失只披露；不要求固定机器复盘或交接认证。正式阶段事实仍由现有公共流程处理。实现、质量、业务验收、发布和物理 close 分别报告，不互相代填。交接列出默认安全收口的实际目标路径、任务分支、待最终确认动作与具名保留原因；确认后逐项回读普通执行结果，保留旧 raw/审查原件，不恢复旧 close plan 或新增公共流程节点。
 
-真实 stage 末有过程问题时，主会话可读取并调用 `skills/stage-reflection/SKILL.md` 一次，消费有源候选、真实用户选择与未解项的方法；局部 Phase 摘要不触发 stage-end。复盘可跳过并说明原因，取消、缺会话源或不可用保原事实，既有持续授权不代候选采纳。stage-handoff 独立按其方法保存一份交接并定位已决定、已完成且验证、未完成、证据位置四类 source；不以复盘或交接成为继续工作的许可证，不重复每 Phase handoff 或建立机器复盘。
+真实 stage 末有过程问题时，读取 skills/stage-reflection/SKILL.md 的「方法」与「用户选择后的归口」两节一次；局部 Phase 摘要不触发 stage-end。交接类信息按 skills/stage-handoff/SKILL.md:31-34 的四类表读回。
 
 ## 写作与固定来源
 
@@ -57,4 +57,5 @@ authorize 是已有授权的记录与消费工具，不是提问按钮。每次�
 
 参考 [mattpocock/skills](https://github.com/mattpocock/skills) 固定 commit `b0618bc436ad893b3c5e84e55fba86586d34a404` 的 `skills/engineering/improve-codebase-architecture/SKILL.md`（scope、deletion test、先机会后设计）与 `skills/engineering/codebase-design/SKILL.md`（架构词表）；写作来源为 `skills/productivity/writing-for-agents/SKILL.md`、`SKILL-MECHANICS.md` 与 docs。固定来源是方法依据，不证明本次已获得行为效果。
 
-本地保当前材料 owner、原步骤、真实用户回复、原失败与独立审查；只吸收适用方法，拒绝外置 tracker、GitHub ticket API、宿主 setup/Skill 硬依赖和第二进度权威。旧 bridge/外部 session 只读保历史 provenance，不作 active 执行、复盘、交接或 close 的门。方法接收真实项目材料、允许路径与宿主已批准的能力，缺源或能力如实报错，不绑定任务绝对路径或账号。迭代时核上述具名子文件的更新及更优候选，说明真实源差、本地偏离与采用理由，不自动追 HEAD。
+本地保当前材料 owner、原步骤、真实用户回复、原失败与独立审查；只吸收适用方法，拒绝外置 tracker、GitHub ticket API、宿主 setup/Skill 硬依赖和第二进度权威。旧 bridge/外部 session 只读保历史 provenance，不作 active 执行、复盘、交接或 close 的门。方法接收真实项目材料、允许路径与宿主已批准的能力，缺源或能力如实报错，不绑定任务绝对路径或账号。
+迭代本文件的固定来源时，读取 skills/stage-reflection/SKILL.md 的「固定来源、本地偏离与更新入口」节；只在核到真实上游更新或更优候选时才决定采用，不自动追 HEAD。

@@ -31,7 +31,7 @@ confirm 用于 make-decision/build-plan/build-prd 收口，保存用户对实际
 
 对目标材料先核工作区和写集，写入使用现有安全原子写方法；共享记录冲突使用记录锁，失败和来源缺失如实保留，原始报告只存单份。展示稿与真实答复让人能理解“批准了什么”，不通过机器认证或内容寻址包装制造成功。主会话按 `skills/stage-handoff/SKILL.md` 保存交接，报告该方法返回的实际不可变绝对路径；缺交接只报告，不当工作门或物理 close 授权。可总结经验，不要求固定机器复盘或绑定交接。正式阶段/规划事实仍由现有 owner 与公共流程负责，本方法不增加公共命令、schema 或存储对象。
 
-真实 stage 末有过程问题时，主会话可读取并调用 `skills/stage-reflection/SKILL.md` 一次，消费有源候选、真实用户选择与未解项的方法；局部 Phase 摘要不触发 stage-end。复盘可跳过并说明原因，取消、缺会话源或不可用保原事实，既有持续授权不代候选采纳。stage-handoff 独立按其方法保存一份交接并定位已决定、已完成且验证、未完成、证据位置四类 source；不以复盘或交接成为继续工作的许可证，不重复每 Phase handoff 或建立机器复盘。
+真实 stage 末有过程问题时，读取 skills/stage-reflection/SKILL.md 的「方法」与「用户选择后的归口」两节一次；局部 Phase 摘要不触发 stage-end。交接类信息按 skills/stage-handoff/SKILL.md:31-34 的四类表读回。
 
 ## 写作与固定来源
 
@@ -39,4 +39,5 @@ confirm 用于 make-decision/build-plan/build-prd 收口，保存用户对实际
 
 参考 [mattpocock/skills](https://github.com/mattpocock/skills) 固定 commit `b0618bc436ad893b3c5e84e55fba86586d34a404` 的 `skills/engineering/to-spec/SKILL.md`（叙事与故事，由 spec-prd 唯一作者承接）；写作来源为 `skills/productivity/writing-for-agents/SKILL.md`、`SKILL-MECHANICS.md` 与 docs。固定来源是方法依据，不证明本次已获得行为效果。
 
-本地保当前材料 owner、原步骤、真实用户回复、原失败与独立审查；只吸收适用方法，拒绝外置 tracker、GitHub ticket API、宿主 setup/Skill 硬依赖和第二进度权威。旧 bridge/外部 session 只读保历史 provenance，不作 active 执行、复盘、交接或 close 的门。方法接收真实项目材料、允许路径与宿主已批准的能力，缺源或能力如实报错，不绑定任务绝对路径或账号。迭代时核上述具名子文件的更新及更优候选，说明真实源差、本地偏离与采用理由，不自动追 HEAD。
+本地保当前材料 owner、原步骤、真实用户回复、原失败与独立审查；只吸收适用方法，拒绝外置 tracker、GitHub ticket API、宿主 setup/Skill 硬依赖和第二进度权威。旧 bridge/外部 session 只读保历史 provenance，不作 active 执行、复盘、交接或 close 的门。方法接收真实项目材料、允许路径与宿主已批准的能力，缺源或能力如实报错，不绑定任务绝对路径或账号。
+迭代本文件的固定来源时，读取 skills/stage-reflection/SKILL.md 的「固定来源、本地偏离与更新入口」节；只在核到真实上游更新或更优候选时才决定采用，不自动追 HEAD。
