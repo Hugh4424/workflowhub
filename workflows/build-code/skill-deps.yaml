@@ -94,5 +94,5 @@ external_capabilities:
     doctor:
       - workflowhub-capability
       - wh-review-provider
-    required_when: ocr_missing_or_version_below_1_12_9_fallback
+    required_when: document_review
     absence_semantics: diagnostic

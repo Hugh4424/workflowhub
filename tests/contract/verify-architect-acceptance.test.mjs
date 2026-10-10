@@ -12,7 +12,7 @@ it("keeps one review owner active through settled providers and the formal recor
     const dependency=manifest.skills.find(entry=>entry.name==="wh-review");
     expect(dependency).toEqual({name:"wh-review",path:"skills/wh-review/SKILL.md",trigger:"every_code_review_invocation_method_only"});
     expect(manifest.skills.find(entry=>entry.name==="architect-code-review").trigger).toBe(stage==="build-code" ? "every_phase_supplemental_review_not_heterologous" : "every_terminal_code_review_same_source_supplemental_axis");
-    expect(manifest.external_capabilities.find(entry=>entry.id==="wh-review-provider").required_when).toBe("ocr_missing_or_version_below_1_12_9_fallback");
+    expect(manifest.external_capabilities.find(entry=>entry.id==="wh-review-provider").required_when).toBe("document_review");
     expect(manifest.external_capabilities.find(entry=>entry.id==="ocr-cli")).toMatchObject({required_when:"code_review",version_policy:">=1.12.9"});
   }
 });
