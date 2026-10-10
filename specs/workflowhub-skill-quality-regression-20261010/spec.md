@@ -453,7 +453,7 @@
 本节回答：哪些产品不变量不用用户重复提出。
 
 - `node tools/cli/run-checks.mjs` 在每次改动的实际执行点上 exit 0（HEAD 基线实测 0）；关联 FR-QUAL-012。
-- 只跑受影响针对性测试与当前计划明确的最终检查；禁止无范围全量 `vitest`／`npm test`／`test:safe`，例外只能来自用户或 CI 守卫（`AGENTS.md:26` 原样保留）；关联 FR-QUAL-010。
+- 只跑受影响针对性测试；禁止无范围全量 `vitest`／`npm test`／`test:safe`，最终检查也仅限用户或 CI 守卫明确授权的范围，计划列出检查本身不产生例外授权（`AGENTS.md:26` 原样保留）；关联 FR-QUAL-010。
 - 每类事实只留一份原始件；不复制镜像、不做目录快照、不用 `git archive`（证据硬规则）；关联 FR-QUAL-013。
 - 写集里每个路径在当前执行时刻只有一个持有者，跨 Phase 重复必须是真实串行；关联 FR-QUAL-012。
 
@@ -583,7 +583,7 @@
 证据：`R2`–`R4`、`F1`–`F5` 原件；P9 判定器的归类核对结果
 
 - [ ] **AC-003**：每条修复绑定它针对的发现编号，有 before/after 文本对照，修复集内部无自相矛盾的规则；关联 FR-QUAL-001–013
-验证：逐 Phase 判定器（`sqr-p1`–`sqr-p8`）在 HEAD 上 `[TARGET]` 失败、实施后退出 0；每个 Phase 卡片写「来源 / FR / AC」逐字来源编号；`git diff --name-only` 与声明写集逐条比对；`run-checks` exit 0
+验证：逐 Phase 判定器（`sqr-p1`–`sqr-p8`）在 HEAD 上 `[TARGET]` 失败、实施后退出 0；每个 Phase 卡片写「来源 / FR / AC」逐字来源编号；`git diff --name-only` 与声明写集逐条比对；`run-checks` exit 0；测试与最终检查只覆盖用户或 CI 守卫明确授权的受影响范围，计划自身不授权无范围全量回归
 通过：十个 Phase 的判定器 GREEN、写集比对无越界、`run-checks` exit 0；每条改动能找到对应发现编号或 `F`／`W`／`S` 条目
 失败：修复与发现不对应；新规则与旧规则冲突（例如「回退」概念在任一处残留，或「不换执行者」与 skill-deps 触发条件互相矛盾）；出现越界写集
 证据：各 `quality/tests/2026-10-10-N-sqr-pN-red.log`（`N` 为一位或多位当日序号） 与 build-code 发布的 GREEN 原件；`git diff --name-only` 输出；`node tools/cli/run-checks.mjs` 输出
