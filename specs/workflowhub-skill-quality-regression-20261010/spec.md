@@ -46,7 +46,7 @@
 | `U-005`、`U-006`、`U-007`、`U-020` 第 2 项 | `ADR-007` | `FR-QUAL-003` / `AC-003` | `current`；冻结测试改而不删、受影响清单 | P1/T003 |
 | `U-002`、`OI-006`、`U-007` | `ADR-002`、`ADR-008` | `FR-QUAL-005` / `AC-003` | `current`；`runtime/stage/stage-content-contracts.mjs` | P2/T005–T007 |
 | `U-007`、`U-009`、`U-020` 第 1 项 | `ADR-005` | `FR-QUAL-006` / `AC-005a`、`AC-005b`、`AC-005c` | `current`；5 份 `SKILL.md`、`skills/catalog.yaml` | P3/T008–T010 |
-| `R-015`、`R-016`、`U-014`、`U-015`、`U-016`、`U-017` | `ADR-005`、`ADR-006` | `FR-QUAL-007` / `AC-003`、`AC-005c` | `current`；`skills/decision-log/**`、`docs/adr/0037` | P4/T011–T013 |
+| `R-015`、`R-016`、`U-014`、`U-015`、`U-016`、`U-017` | `ADR-005`、`ADR-006` | `FR-QUAL-007` / `AC-003`、`AC-005c` | `current`；`skills/decision-log/**`、`docs/adr/0037`；入口消费者旧 U 句 | P4/T011–T013；P3/T008（仅入口该句） |
 | `U-014`、`U-018` 第 2 项、`R-005`、`R-014` | `ADR-003`、`ADR-006` | `FR-QUAL-008` / `AC-003`、`AC-005c` | `current`；九类矛盾与登记 | P5/T014–T017 |
 | `R-012`、`R-013`、`R-017`、`U-008`、`U-010`、`U-013`、`U-019` | `ADR-011` | `FR-QUAL-009` / `AC-006`、`AC-003` | `current`；5 个 workflow 共 17 处（`R-013`「全程领域维护零触发」落在 P6 单元 #4＝`make-decision:27`） | P6/T018–T020 |
 | `R-011`、`U-006`、`U-018` 第 3 项 | `ADR-010` | `FR-QUAL-010` / `AC-003` | `current`；`docs/standard-workflow.md:15` | P7/T021 |
@@ -268,7 +268,7 @@
   - **依据**：`ADR-005`（经 `U-007`／`U-009`／`U-020` 三次修订）、`PFACT-002`、`PFACT-007`、用户 `V-007`
   - **场景**：SCN-001、SCN-004
   - **验收**：AC-005a、AC-005b、AC-005c
-- **FR-QUAL-007**：decision-log 模板按下游消费重设计：`## 大纲地图` 保留并逐行对应正文顶层节；新增 `## 退役登记`（五列：日期｜哪张｜为什么退役｜谁决定｜原来的需求编号，无退役对象写「本任务无退役对象」）；`## 需求变更记录` 改一行一条索引；12 项过程内容**一次外置**到任务库 `quality/evidence/decision-log-refs/` 下的同名节文件；`## 外置事实索引` 加「基准目录＝绝对路径」必填行；`## 验收面` 加覆盖矩阵。`skills/decision-log/SKILL.md` 为唯一写主（补骨架与「这是写作指引，不是质量门」，改 `:19`／`:22`／`:32`／`:58`，修 `:32`／`:34`／`:40` 的悬空引用）；ADR-023 归档为 `docs/adr/0037-adopt-cross-language-writing-rules.md`（避开已占用的 `0023`）
+- **FR-QUAL-007**：decision-log 模板按下游消费重设计：`## 大纲地图` 保留并逐行对应正文顶层节；新增 `## 退役登记`（五列：日期｜哪张｜为什么退役｜谁决定｜原来的需求编号，无退役对象写「本任务无退役对象」）；`## 需求变更记录` 改一行一条索引；12 项过程内容**一次外置**到任务库 `quality/evidence/decision-log-refs/` 下的同名节文件；`## 外置事实索引` 加「基准目录＝绝对路径」必填行；`## 验收面` 加覆盖矩阵。`skills/decision-log/SKILL.md` 为唯一写主（补骨架与「这是写作指引，不是质量门」，改 `:19`／`:22`／`:32`／`:58`，修 `:32`／`:34`／`:40` 的悬空引用）；ADR-023 归档为 `docs/adr/0037-adopt-cross-language-writing-rules.md`（避开已占用的 `0023`）；真实入口 `workflows/make-decision/SKILL.md` 方法第 1 步的旧 U 块句由 P3/T008 同行改为发生需求变更并写该节时读取 decision-log 唯一 owner 的条件指针，承接 P4 后的 U 索引形状，保留该行其它句与净行 0
   - **范围边界**：外置件落在任务库、下游 cwd 强制是认证 worktree，因此**只能靠绝对路径**取用；不改 `workflows/make-decision/SKILL.md` 的方向 Talk／grill 本体
   - **依据**：`D1`、`D2`、`U-014`–`U-017`、`ADR-005`、`ADR-006`、`PFACT-008`
   - **场景**：SCN-001
@@ -496,7 +496,7 @@
 
 | 文件 | 触改顺序（Phase） | 依据 |
 | --- | --- | --- |
-| `workflows/make-decision/SKILL.md` | P3 → P6 | `M1` 先删重复段，`M7` 后改判据 |
+| `workflows/make-decision/SKILL.md` | P3 → P6 | `M1` 先删重复段；P3/T008 在 P4/T011、T012 后只把方法第 1 步旧 U 块句同行改成 decision-log owner 条件指针（来源 quality/evidence/execution-memo/2026-10-10-018-p4-standards-supplement.json，FR-QUAL-007/AC-003/005c）；`M7` 后改既定判据，不承接或扩大该句 |
 | `workflows/build-plan/SKILL.md` | P3 → P5（`:20`） → P6 | `ADR-005` 归属表；`build-plan:20` 唯一写权归 M3c |
 | `workflows/build-code/SKILL.md` | P1（`## OCR 能力与回退` 节） → P3 → P6 | `ADR-007` 与 `ADR-011` 同文件串行 |
 | `workflows/verify-code/SKILL.md` | P1 → P3 → P6 | 同上 |
@@ -535,7 +535,7 @@
 | `U-005`、`U-020` 第 2 项 | 改宪配套三件落地，改宪为不可逆动作 | FR-QUAL-004 / AC-004 | P1/T004 | ORACLE-SQR-P1：`constitution-checklist.md` 有逐条对照；`CONSTITUTION.md` 版本为 `1.9.3`；`docs/adr/0035-*.md` 存在 | T001–T003；`current` |
 | `OI-006`、`ADR-008` | 写集校验区分治理文件与实现文件，串行可共享 | FR-QUAL-005 / AC-003 | P2/T005–T007 | ORACLE-SQR-P2：治理文件共享 `ok:true`；串行对共享 `ok:true`；**非串行同改 `ok:false`**；`docs/adr/0036-*.md` 存在 | none；`current` |
 | `U-007`、`U-009`、`U-020` 第 1 项 | 只删真 no-op 与真重复；13 项验收原地保留 | FR-QUAL-006 / AC-005a、AC-005b、AC-005c | P3/T008–T010 | ORACLE-SQR-P3：复盘段与同 sha 句各 1 处且带触发分支；`phase-template.md` 的 `git diff` 为空；`:228` 逐字保留；44 条 legacy 登记 0 条；YAML 仍可解析 | none；`current` |
-| `U-014`–`U-017`、`ADR-005` | 模板按下游消费重设计；ADR-023 补归档 | FR-QUAL-007 / AC-003、AC-005c | P4/T011–T013 | ORACLE-SQR-P4：模板节序与「退役登记」五列齐备；外置索引有绝对路径必填行；`decision-log/SKILL.md` 有骨架与「不是质量门」；`docs/adr/0037-*.md` 存在且不与 `0023` 撞号 | none；`current` |
+| `U-014`–`U-017`、`ADR-005` | 模板按下游消费重设计；ADR-023 补归档 | FR-QUAL-007 / AC-003、AC-005c | P4/T011–T013；P3/T008（仅入口旧 U 句） | ORACLE-SQR-P4：模板节序与「退役登记」五列齐备；外置索引有绝对路径必填行；`decision-log/SKILL.md` 有骨架与「不是质量门」；`docs/adr/0037-*.md` 存在且不与 `0023` 撞号；P3/T008 补充读回入口条件指针与该 owner/模板一致，make-decision 净行 0 | P4 none；入口补修依 P4/T011、T012；`current` |
 | `Z1`、`R5`、`R6`、`F3` | 九类矛盾与登记修正，每条独立可验证 | FR-QUAL-008 / AC-003、AC-005c | P5/T014–T017 | ORACLE-SQR-P5：各新串 `grep -c` = 1；`changed|no-change` 一致；`check-decision-log-chain.mjs` 认现行 `ADR-NNN`+5 字段；漂移普查输出与落地逐条对应 | P1、P3；`current` |
 | `ADR-011`、`R-017`、`U-013` | 5 个 workflow 17 处判据改写，净行 0 | FR-QUAL-009 / AC-006、AC-003 | P6/T018–T020 | ORACLE-SQR-P6：17 处锚文本逐一匹配目标串；`git diff --numstat` 每文件 add == del；第 10 步穷尽判据串存在；两个措辞锁测试同批改 | P3、P5；`current` |
 | `ADR-010`、`U-018` 第 3 项 | 删宽口径 12 字，`AGENTS.md:26` 保持原样 | FR-QUAL-010 / AC-003 | P7/T021 | ORACLE-SQR-P7：`docs/standard-workflow.md` 无该 12 字；`AGENTS.md:26` 逐字含「例外只有用户或 CI 守卫明确要求」 | P1；`current` |
