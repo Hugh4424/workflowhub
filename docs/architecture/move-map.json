@@ -331,10 +331,9 @@
       "role": "production",
       "responsibility": "幸存者最小集：runtime/review/**、runtime/task/**、tools/cli/**",
       "owner": "B4/P5 / MT-1-022",
-      "consumer": "当前直接模块消费者：runtime/evidence/acceptance-evidence-validator.mjs, workflows/verify-code/design-alignment.mjs",
+      "consumer": "当前直接模块消费者：runtime/evidence/acceptance-evidence-validator.mjs",
       "module_consumers": [
-        "runtime/evidence/acceptance-evidence-validator.mjs",
-        "workflows/verify-code/design-alignment.mjs"
+        "runtime/evidence/acceptance-evidence-validator.mjs"
       ],
       "named_data_readers": [],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
@@ -981,11 +980,10 @@
       "role": "production",
       "responsibility": "现行合同面（本文件，拆分后保留 post phase/decision/交互 IO 合同文本）",
       "owner": "B4/P5 / MT-1-063",
-      "consumer": "当前直接模块消费者：tests/acceptance/card-02-current.mjs, tools/cli/stage-runtime.mjs, workflows/verify-code/design-alignment.mjs",
+      "consumer": "当前直接模块消费者：tests/acceptance/card-02-current.mjs, tools/cli/stage-runtime.mjs",
       "module_consumers": [
         "tests/acceptance/card-02-current.mjs",
-        "tools/cli/stage-runtime.mjs",
-        "workflows/verify-code/design-alignment.mjs"
+        "tools/cli/stage-runtime.mjs"
       ],
       "named_data_readers": [],
       "delete_condition": "revert only when authenticated requirement messages carry their own class from the host；退役登记（ADR-016）：readUiApplicabilityFromDecisionLog、validateUiApplicability 及其 4 个测试已删，零生产调用方；退役登记（ADR-037）：analyzeDecisionConvergence、analyzeDecisionOutline、meaningfulSectionBody、structuredConvergenceFacts 已于 a74a9f2d 删除，残留引用只在只读历史区，不改写",
@@ -3789,21 +3787,6 @@
       "named_data_readers": [],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
       "retention_basis": "MT-3-149 / NARROW"
-    },
-    {
-      "source": "workflows/verify-code/design-alignment.mjs",
-      "destination": "workflows/verify-code/design-alignment.mjs",
-      "status": "retain",
-      "role": "production",
-      "responsibility": "同左（UI 组）",
-      "owner": "B4/P5 / MT-3-153",
-      "consumer": "当前直接模块消费者：tests/verify-code-design-alignment.test.mjs",
-      "module_consumers": [
-        "tests/verify-code-design-alignment.test.mjs"
-      ],
-      "named_data_readers": [],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "MT-3-153 / NARROW"
     },
     {
       "source": "workflows/verify-code/isolated-browser-qa.md",
