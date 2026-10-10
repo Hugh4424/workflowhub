@@ -16,7 +16,7 @@ Read the confirmed `decision-log.md`, current `spec.md`, and verified current co
 
 This skill is the sole Phase engineering author. Write one independent `phases/P<n>.md` file per Phase using `templates/phase-template.md`. A Phase contains only its implementation delta and a stable pointer to the global goal in `spec.md`, not a copy of the global design or another Phase.
 
-A superseded full-text body does not stay in this file either; the superseded text is carried by git and the existing archives, not by rewriting the live file in place. This skill also renders the pure pointer index after authoring the independent Phases; use the index method below. Existing callers of `spec-tasks` remain readable until their owning migration moves them; this responsibility absorption alone does not authorize their deletion. No post-cohort `plan.md` or `tasks.md` writer exists; pre-cohort and archived files are read-only.
+A superseded full-text body does not stay in this file either; the superseded text is carried by git and the existing archives, not by rewriting the live file in place. This skill also renders the pure pointer index after authoring the independent Phases; use the index method below. No post-cohort `plan.md` or `tasks.md` writer exists; pre-cohort and archived files are read-only.
 
 Each Phase owns L0 outcome, executable human-readable L1 contract, removable L2 reference, exact write set, dependency, test design and oracle, coverage limit, STOP condition, done evidence, and rollback.
 
@@ -64,7 +64,7 @@ Return the actual spec/Phase paths and the design/verification limits. Read curr
 
 ## Pure pointer index
 
-独立 Phase 写完后，读取当前 decision-log、spec 与每个 `phases/P<n>.md` 的实际契约头，渲染 `phases/index.md`。模板使用一次预置的条件指针：`templates/index-template.md` 已实际存在且已登记在本技能 `skill-bundle.json` 时使用该附件；否则读取现有 `skills/spec-tasks/templates/index-template.md` 的形状。迁移后自然走前一分支，不需再改本正文。两附件均不可读时报告 unavailable、具名 owner 与下一动作，不凭未来路径捏模板。
+独立 Phase 写完后，读取当前 decision-log、spec 与每个 `phases/P<n>.md` 的实际契约头，渲染 `phases/index.md`。模板使用一次预置的条件指针：`templates/index-template.md` 已实际存在且已登记在本技能 `skill-bundle.json` 时使用该附件；附件不满足条件时如实报告具体缺口。所需附件不可读时报告 unavailable、具名 owner 与下一动作，不凭未来路径捏模板。
 
 每个连续有序的 Phase 恰一行；保 `## Execution Index` 与现行 `阶段` / `权威引用` 列，引用形如 `P1` → `phases/P1.md`。每行只从契约头取 stable authority path、semantic anchor、exact write set、Phase dependency 与真实 downstream consumer，并与物理 Phase 对齐。它是可再生导航，不承载 L0/L1/L2、命令、oracle、证据路径、Task 程序、执行状态或完成权威；这些留原 owner。
 

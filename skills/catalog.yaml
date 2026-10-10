@@ -26,7 +26,7 @@ projects:
     # Current fixed source: specs/workflowhub-skill-modernization-20261008/decision-log.md ADR-001 / D-008.
     # Historical absence, not current adoption: pr / retro / implement-spec did not exist
     # at 66898f60e8c744e269f8ce06c2b2b99ce7660d5f; they exist at b0618bc436ad893b3c5e84e55fba86586d34a404.
-    # Original two-commit directory observation: /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-skill-modernization-20261008/quality/evidence/decision-log-refs/research-report-make-decision.md §8.1.
+    # Original two-commit directory observation: tasks/workflowhub-skill-modernization-20261008/quality/evidence/decision-log-refs/research-report-make-decision.md §8.1.
     github_url: https://github.com/mattpocock/skills
     commit: b0618bc436ad893b3c5e84e55fba86586d34a404
     commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
@@ -72,7 +72,7 @@ projects:
 # Original source: 7ad39ae852cb7ee4ce4630c54d7502b8e2cf4e59:repo-skills.manifest.json
 # Original bytes sha256: 9985f930d31dcee0fdcc8ad6e6822ed1cf3ebb0a1ff1aaa927822a69bf83714a
 # Owner: P1/T001; consumers: human migration/retirement maintenance and this task independent preservation replay.
-# Migration choice: /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-skill-modernization-20261008/quality/evidence/2026-10-08-005-build-plan-clarify-answer.json; D-027 / ADR-011.
+# Migration choice: tasks/workflowhub-skill-modernization-20261008/quality/evidence/2026-10-08-005-build-plan-clarify-answer.json; D-027 / ADR-011.
 # Empty owner_stage and retired build-spec values below are preserved historical facts.
 # Current path absence does not activate a record or authorize deletion; reasons stay with the original local_changes and decision source.
 # dsh-code-review: historical name/path; current registration is architect-code-review (ADR-006 / D-011).
@@ -89,11 +89,7 @@ skills:
     metrics_enabled: true
     purpose: 真实阶段末有过程问题时可选提出有源候选，供用户选择检查、判断待办或无操作
     design_idea: 只读可见会话与现材料/执行原件；用户选机械候选后优先结构、类型、测试，人判断项只留未解 Improvements，不生成质量裁决或推进门
-    used_by_stages:
-      - make-decision
-      - build-plan
-      - build-code
-      - verify-code
+    used_by_stages: [build-code, build-plan, build-prd, make-decision, verify-code]
     upstream: []
     local_changes: workflowhub 原生方法吸收 Matt retro 与 pstack correct/principle 的适用纪律；候选经用户真选，检查须败于真实历史错，判断未解项归目标项目 Improvements、人确认解决才 prune；普通复盘原件不另建 lessons writer、validator 或第二控制面
     dependency_closure:
@@ -121,7 +117,7 @@ skills:
     purpose: 经用户批准的外部实时检索
     design_idea: 统一搜索、垂直搜索和 URL 抽取入口
     standalone: true
-    used_by_stages: []
+    used_by_stages: [make-decision]
     upstream:
       - github_url: https://github.com/anysearch-ai/anysearch-skill
         commit: db3d76e5597aec7261257be5322dd211c9d9bb87
@@ -158,8 +154,7 @@ skills:
     metrics_enabled: true
     purpose: 为 make-decision 方向问题提供深研究报告，为 build-plan 或后续已收敛方向的点状问题返回轻研究内存结果
     design_idea: 按真实问题选 R0-R5 有界普通报告/独立复核或轻研究证据、备选、取舍与未决；两分支不重复，不以报告hash认证为Talk前提
-    used_by_stages:
-      - make-decision
+    used_by_stages: [build-plan, make-decision]
     upstream: []
     local_changes: workflowhub 原生方法；方向问题供 make-decision Talk，深报告写任务约定普通研究原件；轻研究承接 spec-research 点状规划职责，仅返回既有内存 spec-research-result.v1，不强制深报告或另写文件；母方向变化交回调用者，缺工具/来源/失败/取消保真实限制，不新增 gate
     dependency_closure:
@@ -212,8 +207,7 @@ skills:
     metrics_enabled: true
     purpose: 对 intake direction 冻结材料执行四角度纯盲审
     design_idea: wh-review 唯一 provider owner；lens 不提问、不持有 transport
-    used_by_stages:
-      - make-decision
+    used_by_stages: []
     upstream: []
     local_changes: 裁为 wh-review direction 纯 lens；禁止候选方案、交互确认和第二 provider 路径
     dependency_closure:
@@ -227,10 +221,7 @@ skills:
     metrics_enabled: true
     purpose: 审查方案是否遵守四阶梯最小路径
     design_idea: 只读 lens 识别范围膨胀并优先删除或复用
-    used_by_stages:
-      - make-decision
-      - build-plan
-      - build-code
+    used_by_stages: [build-plan]
     upstream: []
     local_changes: workflowhub 原生 review-only lens；不参与 stage 生成
     dependency_closure:
@@ -260,7 +251,7 @@ skills:
     purpose: build-prd 唯一正式 PRD 内容 owner
     design_idea: 同一版本先产大纲/任务地图，再经真实核对展开单一 PRD 正文
     standalone: true
-    used_by_stages: []
+    used_by_stages: [build-prd]
     upstream: []
     local_changes: workflowhub 原生可搬运内容技能；只写显式提供的单一 PRD 目标，不伪造平台、确认或交付事实
     dependency_closure:
@@ -401,10 +392,7 @@ skills:
     metrics_enabled: true
     purpose: 前四 stage 的收尾检查与质量事实契约；post build-plan 仅结构报告，语义由现有 merged review 和 finding dispositions 负责
     design_idea: report-only packet lens with existing atomic quality publication
-    used_by_stages:
-      - make-decision
-      - build-plan
-      - build-code
+    used_by_stages: [build-code, build-plan, make-decision, verify-code]
     upstream: []
     local_changes: workflowhub 原生 report-only validator/lens；make-decision、build-spec（pre）、build-code 和 pre build-plan 保持既有 stage-end 语义检查与质量事实契约；post build-plan 仅报告材料结构，语义由现有 merged review 和 finding dispositions 负责；verify-code 的代码审查由 OCR delegation 执行；现有 stage publication 是唯一写入路径，原子写入 quality/facts 与 acceptance evidence；当前 build-plan consumer 仍使用 planning_artifacts packet projection 和 contract tests，runtime 在既有 stage outcome 中认证 packet/result 与当前快照、材料、analyzer step、spec-analyze skill 的绑定；检查实际语义、场景、oracle、产物和 fresh evidence，不把编号或文件存在当作证明；结果复用既有 quality-fact 路径；DEFER/OPEN 按条目上下文检查 handoff；不直接改四份材料、不创建第二 store、projection 或门禁；six-part summary 随现有 stage outcome 交接；finding 先在当前 stage 修复并重跑；unavailable 不等于 pass；没有 runtime work gate、provider pass predicate 或新质量 gate，但缺失或不一致会如实降低当前 stage quality；当现有 consumer 移除且无历史材料引用时删除
     dependency_closure:
@@ -419,7 +407,7 @@ skills:
     purpose: 可选的独立代码 diff 诊断与历史 Architect 审查解读；普通 build-code/verify-code 审查由 OCR delegation 执行
     design_idea: correctness、lifecycle、security、consumer fit 和真实测试强度
     standalone: true
-    used_by_stages: []
+    used_by_stages: [build-code, verify-code]
     upstream:
       - github_url: https://github.com/deepseek-ai/deepseek-harness
         commit: 99f6f02fecdb7dff40c3fbc9470f5907c29f74ca
@@ -461,7 +449,7 @@ skills:
         review_outcome: accepted
         path: .agents/skills/dsh-trim-cot-leakage/SKILL.md
         skill_url: https://github.com/deepseek-ai/deepseek-harness/tree/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca/.agents/skills/dsh-trim-cot-leakage
-    local_changes: 保留合并代码审查、简化、文档、prose 和过程叙述的独立 skill；正常 build-code 每 Phase 一次 OCR，最终 aggregate 与逐 AC 结果后由 verify-code 对最终 worktree 做一次 OCR；verify-code AC-REVIEW-011 在本次终末 OCR unavailable 且零成功路时调用一次 Architect 替代，当前会话经既有 recordDshCodeReviewResult 发布、receipts.quality_review 消费符合当前身份与 fallback 条件的 canonical result，provider 保持 dsh-code-review，原 OCR attempt 保留；显式诊断输出仅作诊断事实，不新增 dispatch/provider/控制面
+    local_changes: 保留合并代码审查、简化、文档、prose 和过程叙述的独立 skill；历史 AC-REVIEW-011 已归档于 specs/archive/workflowhub-thin-core-card-05-20260919/spec.md:30/:78/:94；该历史任务的 Architect 替代、recordDshCodeReviewResult、receipts.quality_review、dsh-code-review provider 与原 OCR attempt 为旧审查来源，不据此声明当前执行者或验收通过；当前 architect-code-review 是与 OCR 可用性无关的独立同源补充轴，实际范围按当前 workflow；显式诊断仅作诊断事实，不新增 dispatch/provider/控制面
     dependency_closure:
       - skills/architect-code-review
     update_policy: 上游代码审查规则变更时人工复核，不恢复材料门禁
@@ -502,9 +490,7 @@ skills:
     metrics_enabled: true
     purpose: make-decision/build-spec/build-plan 的 authoring review；普通 build-code/verify-code 代码审查由 OCR delegation 执行
     design_idea: frozen materials、一次新的 3rd-review public run、attempt/result、verify-final
-    used_by_stages:
-      - make-decision
-      - build-plan
+    used_by_stages: [build-code, build-plan, build-prd, make-decision, verify-code]
     upstream: []
     local_changes: authoring review 保留既有 public run；正常 build-code 每 Phase 一次 OCR，最终 aggregate 与逐 AC 结果后由 verify-code 对最终 worktree 做一次 OCR；历史 integration 事实只读；两次代码审查由现有 review/run receipt 消费；保留路径安全与原始 provenance
     dependency_closure:
@@ -519,7 +505,7 @@ skills:
     purpose: 在独立 task 中紧凑交付小功能并恢复被阻塞的 A
     design_idea: 复用四材料、两类专用审查、真实结果和唯一 task-close
     standalone: true
-    used_by_stages: []
+    used_by_stages: [make-decision]
     upstream: []
     local_changes: 薄 runner；不新增第六 stage、第五材料、关系对象或公共 runtime；mini-task Git close 复用 task-close，A 恢复使用认证 workspace 和普通 merge
     dependency_closure:
@@ -533,8 +519,7 @@ skills:
     metrics_enabled: true
     purpose: 产品方向审查 lens
     design_idea: premise、scope、leverage、alternatives、delivery risk
-    used_by_stages:
-      - make-decision
+    used_by_stages: []
     upstream:
       - github_url: https://github.com/garrytan/gstack
         commit: 7c9df1c568a9ea745508f679a329332b2c338063
@@ -556,7 +541,7 @@ skills:
     metrics_enabled: true
     purpose: UI 信息架构、状态、可访问性和响应式审查 lens
     design_idea: 只在 UI scope 时审查设计风险
-    used_by_stages: []
+    used_by_stages: [build-plan]
     upstream:
       - github_url: https://github.com/garrytan/gstack
         commit: 7c9df1c568a9ea745508f679a329332b2c338063
@@ -601,11 +586,7 @@ skills:
     metrics_enabled: true
     purpose: 正确性、范围、证据和未决风险通用 lens
     design_idea: 独立 report-only review
-    used_by_stages:
-      - make-decision
-      - build-plan
-      - build-code
-      - verify-code
+    used_by_stages: []
     upstream:
       - github_url: https://github.com/garrytan/gstack
         commit: 7c9df1c568a9ea745508f679a329332b2c338063
@@ -669,7 +650,7 @@ skills:
     purpose: 用可重复证据定位根因后单点修复
     design_idea: 快反馈、缩小复现、竞争假设、探针验证、三次失败停止
     standalone: true
-    used_by_stages: []
+    used_by_stages: [build-code]
     upstream:
       - github_url: https://github.com/mattpocock/skills
         commit: b0618bc436ad893b3c5e84e55fba86586d34a404
@@ -844,7 +825,7 @@ skills:
     purpose: 为新项目和历史项目建立最小 UI 设计/组件基线
     design_idea: new/legacy 只读盘点、首个页面限界和可回放 fixture
     standalone: true
-    used_by_stages: []
+    used_by_stages: [build-plan]
     upstream: []
     local_changes: WorkflowHub 原生可搬运入口；owner 是 UI 交付合同，consumer 是 build-spec 的 UI 分支；delete-condition 所有 UI consumer 迁移后
     dependency_closure:
@@ -859,7 +840,7 @@ skills:
     purpose: 从项目级 Design.md 派生可读 Screen Read Map
     design_idea: bindable/not_bindable/unknown 与缺项可见，不打分不设 gate
     standalone: true
-    used_by_stages: []
+    used_by_stages: [build-plan]
     upstream: []
     local_changes: WorkflowHub 原生只读 lens；owner 是 UI 交付合同，consumer 是 build-spec 的现有 plan-design-review；delete-condition consumer 迁移后
     dependency_closure:
@@ -874,9 +855,7 @@ skills:
     purpose: 为 build-plan UI 分支与 build-prd 条件设计分支生成真实组件预览和截图证据
     design_idea: 真实组件输入、可运行本地渲染和用户授权降级
     standalone: true
-    used_by_stages:
-      - build-plan
-      - build-prd
+    used_by_stages: [build-plan]
     upstream: []
     local_changes: WorkflowHub 原生渲染入口；owner 是 UI 方法当前调用主会话，consumer 是 workflows/build-plan/SKILL.md:19 与 frontend-prototype-render/SKILL.md:9 的 build-prd 条件设计分支；test=tests/contract/ui-skill-contract.test.mjs；不改产品源码；delete-condition 两个当前方法 consumer 退役或由已审替代方法承接后
     dependency_closure:
@@ -917,11 +896,7 @@ skills:
     standalone: true
     purpose: 通用异源 CLI broker，由 wh-review 的 provider client 调用
     design_idea: 迁入既有 V4 broker，运行逻辑和配置路径保持原样
-    used_by_stages:
-      - make-decision
-      - build-plan
-      - build-code
-      - verify-code
+    used_by_stages: []
     upstream: []
     local_changes: 来源：3rd-review v4.0.0，commit 97132960d7dab9145cbd0bdf610e09bf422e2ec0；仅测试框架和夹具位置适配
     dependency_closure:

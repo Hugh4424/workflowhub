@@ -1,6 +1,6 @@
 ---
 name: spec-specify
-description: Draft the post-cohort product specification and global implementation-design scaffold in spec.md from confirmed decisions.
+description: Draft the post-cohort product specification and global implementation-design scaffold in spec.md from confirmed decisions. Also the single authority for writing agent methods.
 ---
 
 # Spec Specify
@@ -132,7 +132,7 @@ discover files. Missing input/callback fails loud.
 1. Write the conclusion before evidence and exceptions; keep one topic per paragraph and name actions directly.
 2. Keep AC criteria only in Appendix A; point to them from the narrative and the decision-log handoff index.
 3. Reference decision-log reasoning by source ID and anchor; do not repeat it as specification prose.
-4. Keep each scenario, assumption, and exclusion in its own authority: scenario cards, PFACT, and the exclusions section; FRs reference them.
+4. Keep each scenario, assumption, and exclusion in its own authority: scenario cards, PFACT, and the exclusions section; FRs reference them；上游已接受的 exclusion 继承一次，不重复。
 5. Keep Phase procedures, exact commands, test evidence and execution status in their existing Phase/task owners; global design records interfaces and global choices.
 6. Use original evidence paths instead of full output. Keep terminology consistent; preserve quantifiers, failure strength, order, and conditions.
 7. Preserve locked wording, machine-read headings/labels and literal source declarations as allowed exceptions; compact writing never replaces actual content quality.

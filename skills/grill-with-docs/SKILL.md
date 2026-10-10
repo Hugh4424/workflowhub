@@ -70,8 +70,8 @@ ID、hash、receipt、attempt、runner 等执行黑话，不得要求开放式�
 **结束记录**：四项退出检查完成后，必须把以下事实返回调用方，供完成卡和
 decision-log 使用：
 
-1. `GLOSSARY.md`：`changed` 或 `no change`、理由、实际文件引用；
-2. ADR：`created` 或 `not needed`、理由、实际文件引用；
+1. `GLOSSARY.md`：`changed` 或 `no-change`、理由、实际文件引用；
+2. ADR：`created` 或 `not-needed`、理由、实际文件引用；
 3. ADR 三项判据分别为真或假：难以反转、无背景会意外、存在真实取舍；
 4. 与现有术语或 ADR 的冲突，以及处理结果；
 5. 四项退出检查逐项的 `pass` 或未解决结果及事实依据。
@@ -106,7 +106,7 @@ run、revision、latest、ledger 或独立持久记录。本技能不填写 task
 不得返回或持久化完整问题卡原文或 secret、token、password、credential、cookie 等秘密。
 
 `GLOSSARY.md` 只在领域术语、含义或边界确有变化时最小更新。ADR 只有三项判据全部为
-真时才创建。即使没有文件变化，也必须记录 `no change` / `not needed` 及理由；不能只写
+真时才创建。即使没有文件变化，也必须记录 `no-change` / `not-needed` 及理由；不能只写
 “已检查”。
 
 完成后必须向调用方返回一份可直接面向用户呈现的简短总结：检查了什么、最重要的

@@ -5,18 +5,18 @@ description: Report-only independent review lens for correctness, scope, evidenc
 
 # review
 
-Source: adapted from the project review baseline. Mode: `lens-only`. Standards/Spec 与 Fowler baseline 吸收 mattpocock/skills 固定 commit `b0618bc436ad893b3c5e84e55fba86586d34a404` 的 `skills/engineering/code-review/SKILL.md`。本地以调用者提供的当前材料替代 tracker/setup 和自主 Git/网络取材，host 分派不进入 provider packet。迭代时核固定子文件的更新/更优候选与本地偏离，不自动追 HEAD。
+Source: adapted from the project review baseline. Mode: `lens-only`. Standards/Spec 与 Fowler baseline 吸收 mattpocock/skills 固定 commit `b0618bc436ad893b3c5e84e55fba86586d34a404` 的 `skills/engineering/code-review/SKILL.md`。本地以调用者提供的当前材料替代 tracker/setup 和自主 Git/网络取材，host 分派指令不作为 provider 的执行控制要求。迭代时核固定子文件的更新/更优候选与本地偏离，不自动追 HEAD。
 
 ## 双轴消费与宿主分派
 
 代码面先定位调用者提供的同一当前 diff、基线、完整 AC、执行原件、阶段合同、provider 协议、审查重点及所需 lens 正文；材料不完整时披露缺口，不从摘要猜源码。文档面仍按当前文档合同应用下节检查，不凭代码 smell 强造文档缺陷。
 
-- **Standards**：读取本次提供的仓库编码规范（适用的 CODING_STANDARDS/CONTRIBUTING 也在范围内）及下节 Fowler baseline；发现引用规范和实际 hunk，区分规范违背与 heuristic。
+- **Standards**：读取本次提供的仓库编码规范（适用的 CODING_STANDARDS/CONTRIBUTING 也在范围内）及下节 Fowler baseline；发现引用规范和实际 hunk，区分规范违背与 heuristic。provider 只需两镜头与 finding 协议；宿主读仓库规范、Agent 分派、等待/轮询与同源补充的执行控制指令不适用于 provider，源方法文件作为被审材料仍可能完整入包。
 - **Spec**：读取本次具名原始需求/spec，逐项检查缺失或部分实现、未要求的行为和看似实现却错误的行为；每条发现引用相应需求。没有 spec 时明确 no spec available，跳过该镜头，不补造需求。
 
 宿主执行同源补充时，向两个互不继承对方上下文的独立执行者同时提供上述共同材料，并分别给 Standards 规范/baseline 或 Spec 来源。执行者只返回原文，不写文件；宿主按当前 workflow 保存单份原件，在 Standards / Spec 两栏分别展示发现、范围和不可用原因，只汇总各栏数量及各栏最严重问题，不合并、不重排名、不选跨轴赢家。同源补充标为 same_source_degraded，不替代 OCR、不计异源 quorum；OCR 与补充也并排保留，各路失败、取消与迟到有效发现不被成功路覆盖。
 
-正式 provider 在其只读 packet 内应用两镜头，按下节和既有 provider 协议返回一个 findings JSON；这是镜头阅读，不是 host 分派许可。provider 不调用 Agent/subagent，不增 axis 或第二结果协议。正式 provider 内的重复 finding 仍按既有协议处理，不把该聚合跨到宿主分开的两轴。
+正式 provider 在其只读 packet 内应用两镜头，按下节和既有 provider 协议返回一个 findings JSON；这是镜头阅读，不是 host 分派许可。宿主分派、等待、sleep/poll 等只由宿主执行，不作为 provider 的执行控制指令；文件被提交作审查材料不代表已从 packet 剔除这些原文字节。provider 不调用 Agent/subagent，不增 axis 或第二结果协议。正式 provider 内的重复 finding 仍按既有协议处理，不把该聚合跨到宿主分开的两轴。
 
 ## Fowler smell baseline — what → fix
 

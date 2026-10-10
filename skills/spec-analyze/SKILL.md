@@ -30,12 +30,12 @@ post build-plan 报告来源到当前材料的具体对应与差异事实，包�
 
 报告以以下六类说明当前事实，名称只供解释，不新增必填字段或机器绑定：
 
-1. `stage_work`：当前阶段实际做了什么。
-2. `requirement_coverage`：当前来源→FR/AC→设计或实际实现的落点、差异、核对范围与未覆盖项；需求语义覆盖与质量结论引用独立审查。
-3. `upstream_alignment`：上游原文、真实答复与当前结果的对齐依据及具体来源缺口；语义裁定引用独立审查。
-4. `current_stage_repairs`：当前阶段当场修复了什么。
-5. `remaining_risks`：剩余风险、未决与延期。
-6. `next_stage_boundary`：下游可直接消费什么、不能自行猜什么。
+1. `stage_work`：当前阶段实际做了什么。落点／owner：本阶段材料与 task facts；owner＝当前 stage 主会话。
+2. `requirement_coverage`：当前来源→FR/AC→设计或实际实现的落点、差异、核对范围与未覆盖项；需求语义覆盖与质量结论引用独立审查。落点／owner：spec.md 的 AC 表与 decision-log.md 的验收面；owner＝规格作者。
+3. `upstream_alignment`：上游原文、真实答复与当前结果的对齐依据及具体来源缺口；语义裁定引用独立审查。落点／owner：decision-log.md 的 ## 原始需求；owner＝决策作者。
+4. `current_stage_repairs`：当前阶段当场修复了什么。落点／owner：本阶段 findings 处置行；owner＝当前 stage。
+5. `remaining_risks`：剩余风险、未决与延期。落点／owner：decision-log.md 的风险与延期交接表；owner＝决策作者。
+6. `next_stage_boundary`：下游可直接消费什么、不能自行猜什么。落点／owner：skills/stage-handoff/SKILL.md 的 13 区块交接；owner＝当前 stage。
 
 只在实际检查范围内报告“未发现对应差异”，并列出读过的来源、材料/代码和未检查范围；需求语义及质量结论见独立审查。缺材料、不可用、不一致、严重未修事项都保持可见，不从普通报告推断质量通过、发布或 Git 交付。
 

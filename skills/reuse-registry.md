@@ -39,9 +39,9 @@ UI governance records include an explicit owner, consumer, and delete condition.
 | grill-with-docs | 外部改造适配 | mattpocock/skills | 吸收 grilling/domain-modeling |
 | intake-decision-review | 外部改造适配 | AgentHub historical import | 现为 workflowhub native |
 | test-routing-advisor | 外部改造适配 | Hugh4424/AgentHub | 裁为纯路由 JSON |
-| stage-step-receipts | 自研 | skills/stage-step-receipts/SKILL.md | P0 canonical receipt contract；审计任务保留 |
-| audit-summary-carrier | 自研 | skills/audit-summary-carrier/SKILL.md | P0 bounded audit-summary contract；审计任务保留 |
-| requirement-lineage | 自研 | skills/requirement-lineage/SKILL.md | P0 requirement evidence contract；审计任务保留 |
+| stage-step-receipts | 自研 | 已退役，无当前路径 | P0 canonical receipt contract；审计任务保留 |
+| audit-summary-carrier | 自研 | 已退役，无当前路径 | P0 bounded audit-summary contract；审计任务保留 |
+| requirement-lineage | 自研 | 已退役，无当前路径 | P0 requirement evidence contract；审计任务保留 |
 | workflowhub-multica-sync | 自研 | skills/workflowhub-multica-sync/SKILL.md | 固定 main 快照并做 Git 连通性预检，按阶段三件套审计 Multica 技能、依赖绑定和 agent 提示词；确认后才同步 |
 | ui-project-init | 自研 | skills/ui-project-init/SKILL.md | new/legacy 最小 UI 基线；owner/consumer/deletion 条件见 catalog |
 | design-source-readiness | 自研 | skills/design-source-readiness/SKILL.md | Design.md → Screen Read Map；不打分、不设 gate |

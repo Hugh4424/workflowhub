@@ -1867,19 +1867,6 @@
       "retention_basis": "当前原 P7 owner 已完成唯一附件迁名与正文/bundle/上述精确测试 reader 承接；184预登记的未迁状态、CR273/157 scope-only 为历史时点原ref，不再描述当前。原 CONTEXT-FORMAT self-pair 与其完整原字段通过原 Git 来源只读保留，不声称当前旧附件存在；当前 spec.md:161、P7.md:T011/:87/:103、P8.md:23 普通目录责任时序，非第三跨 Phase 正文 owner、Task 或 gate。测试为既有 moat-skills-phase1.test.mjs:75 精确filename迁移，CR273 原ref + 独立157 approved_scope_only / actual_test_diff_approved=false；本次不运行或修改测试。ADR-FORMAT.md 及正文原 all-three（Hard to reverse / Surprising without context / real trade-off）均未改，本条只登记领域格式rename。"
     },
     {
-      "source": "skills/grill-with-docs/CONTEXT-FORMAT.md",
-      "destination": "skills/grill-with-docs/CONTEXT-FORMAT.md",
-      "status": "retain",
-      "role": "production",
-      "responsibility": "既有模块／资源职责；不从登记新增能力",
-      "owner": "原路径维护 owner；P7 仅登记现职责",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
-      "named_data_readers": [],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "既有保留生产路径；本次仅归位说明"
-    },
-    {
       "source": "skills/grill-with-docs/SKILL.md",
       "destination": "skills/grill-with-docs/SKILL.md",
       "status": "retain",

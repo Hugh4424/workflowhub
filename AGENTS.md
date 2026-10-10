@@ -55,7 +55,6 @@
 - `skills/`：可搬运技能；`workflows/`：五阶段入口；`config/`：配置；`tests/`：跨模块和集成测试。
 - `core/`、`scripts/`、顶层 `schemas/`：历史兼容区。未列入 move-map 的文件保持原位，未经证明不得新增能力。
 - `docs/architecture/move-map.json` 是本次目录迁移的唯一事实；新增文件必须先登记职责和消费者。
-- `tools/architecture/`：只读架构诊断与最终证据校验，不进入 Runner/Skill Bundle，也不作为普通推进许可证。
 - `node_modules/` 仅为本地/CI 安装产物，不提交、不作为运行时来源。
 
 ## 当前治理边界

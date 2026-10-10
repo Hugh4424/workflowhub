@@ -12,8 +12,9 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const CHAIN_FIELDS = ["module", "requirement_ids", "derived_from", "artifacts"];
-const DECISION_ID = /^D-\d+$/;
+const CHAIN_FIELDS = ["决定", "为什么", "否掉了什么", "后果与风险", "影响面"];
+const LEGACY_CHAIN_FIELDS = ["module", "requirement_ids", "derived_from", "artifacts"];
+const DECISION_ID = /^(?:ADR|D)-\d+$/;
 const REQUIREMENT_ID = /^R-\d+$/;
 
 function parseList(value) {
@@ -39,7 +40,7 @@ function decisionSections(markdown) {
       continue;
     }
     if (!inFence) {
-      const match = /^#{3,4}\s+(D-\d+)\b[^\n]*$/.exec(line);
+      const match = /^#{3,4}\s+((?:ADR|D)-\d+)\b[^\n]*$/.exec(line);
       if (match) sections.push({ decision_id: match[1], heading_start: offset, body_start: offset + line.length + 1 });
     }
     offset += line.length + 1;
@@ -76,13 +77,16 @@ export function checkDecisionLogChain({ markdown, source_ref = "decision-log.md"
   }
 
   for (const { decision_id, body } of sections) {
-    const values = Object.fromEntries(CHAIN_FIELDS.map((field) => {
-      const match = body.match(new RegExp(`^\\s*(?:[-*+]\\s+)?${field}\\s*[:：]\\s*(.+?)\\s*$`, "m"));
+    const requiredFields = decision_id.startsWith("ADR-") ? CHAIN_FIELDS : LEGACY_CHAIN_FIELDS;
+    const fields = [...new Set([...requiredFields, ...LEGACY_CHAIN_FIELDS])];
+    const values = Object.fromEntries(fields.map((field) => {
+      const label = field === "决定" ? "(?:原)?决定" : field;
+      const match = body.match(new RegExp(`^\\s*(?:[-*+]\\s+)?(?:\\*\\*)?${label}(?:（[^）\\n]*）)?(?:\\*\\*)?\\s*[:：]\\s*(.+?)\\s*$`, "m"));
       if (match) recognizedFields += 1;
       return [field, match?.[1]?.trim() ?? null];
     }));
 
-    for (const field of CHAIN_FIELDS) {
+    for (const field of requiredFields) {
       if (values[field] === null) {
         warnings.push(warning("missing_chain_field", decision_id, field, `${decision_id} is missing ${field}`));
       }
