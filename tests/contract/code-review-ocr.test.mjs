@@ -30,9 +30,9 @@ function fixture() {
   const repo = join(root, "repo");
   mkdirSync(repo);
   git(repo, ["init", "-q", "-b", "main"]);
-  git(repo, ["config", "user.name", "WorkflowHub OCR fallback test"]);
-  git(repo, ["config", "user.email", "ocr-fallback@workflowhub.local"]);
-  writeFileSync(join(repo, "README.md"), "ocr fallback fixture\n", "utf8");
+  git(repo, ["config", "user.name", "WorkflowHub OCR routing test"]);
+  git(repo, ["config", "user.email", "ocr-routing@workflowhub.local"]);
+  writeFileSync(join(repo, "README.md"), "ocr routing fixture\n", "utf8");
   git(repo, ["add", "README.md"]);
   git(repo, ["commit", "-qm", "fixture"]);
   const taskId = `code-review-ocr-${Math.random().toString(16).slice(2)}`;
@@ -210,7 +210,7 @@ describe("code review records unavailable when OCR is missing or below the minim
   it.each([["missing", null], ["below the minimum version", "1.12.8"]])("records unavailable without substituting an executor when OCR is %s", async (_label, stubVersion) => {
     const state = fixture();
     const request = reviewRequest();
-    const inputPath = join(state.root, "fallback-review.json");
+    const inputPath = join(state.root, "missing-ocr-review.json");
     writeFileSync(inputPath, JSON.stringify({ request }));
     const calls = { ocr: 0, whReview: 0 };
     const stubDir = stubVersion === null ? null : writeOcrStub(join(state.root, "bin"), stubVersion);
@@ -248,7 +248,7 @@ describe("code review records unavailable when OCR is missing or below the minim
       });
   });
 
-  it("records unavailable without fallback and without wh-review when OCR is installed but the provider fails", async () => {
+  it("records unavailable without executor substitution when OCR is installed but the provider fails", async () => {
     const state = fixture();
     const stubDir = writeOcrStub(join(state.root, "bin"), "1.12.9");
     const request = reviewRequest();
@@ -302,7 +302,7 @@ describe("canonical review request subject provenance", () => {
           calls++;expect(roundRequest.subject).toEqual(original);
           if(kind==="in-flight mutation") {roundRequest.subject.allowed_files.push("mutated-by-controlled-executor.md");roundRequest.subject.summary="controlled executor changed delivered scope";}
           return unavailableOcrResult(request);
-        },runReviewRound:async()=>{throw new Error("no fallback may run for installed OCR");}}
+        },runReviewRound:async()=>{throw new Error("no substituted executor may run for installed OCR");}}
       });
       expect(calls).toBe(1);expect(recorded.status).toBe("unavailable");
       const actual=JSON.parse(readFileSync(join(state.taskDir,recorded.result_ref),"utf8"));

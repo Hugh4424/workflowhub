@@ -33,7 +33,7 @@ post 日常路线 make-decision → build-plan → build-code → verify-code。
 | doctor | 当前环境/工作区/存储与 OCR 可用性事实 |
 | status | 材料、普通 task facts、质量事实及当前游标 |
 | run | 普通 draft 写入或当前 phase_progress 游标；不执行旧完整 stage pipeline |
-| review | 按上述分工执行并保存真实审查与 失败事实 |
+| review | 按上述分工执行并保存真实审查与失败事实 |
 | verify | 显式有范围命令采集，保存 raw/exit/timeout 等真实结果 |
 | confirm | 记录用户原话与材料引用 |
 | authorize | 当前 Git HEAD 对应的不可逆操作授权 |

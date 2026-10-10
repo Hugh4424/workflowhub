@@ -1,7 +1,7 @@
 import{readFileSync}from"node:fs";import{expect,it}from"vitest";import{runSimpleReview}from"../../skills/wh-review/scripts/simple-review-runner.mjs";
 import { loadStageSkillManifest } from "../../runtime/stage/stage-skill-runtime.mjs";
 const read=p=>readFileSync(p,"utf8");
-it("keeps one review owner active through settled providers and the formal record across normal OCR and fallback",()=>{
+it("keeps one review owner active through settled providers and the formal record across normal OCR and unavailable detection",()=>{
   const skill=read("skills/wh-review/SKILL.md"),section=skill.split("## Long-review host convention\n")[1]?.split("\n## ")[0];
   expect(section).toBeDefined();
   expect(section.split("\n").filter(line=>line.startsWith("- "))).toHaveLength(3);
