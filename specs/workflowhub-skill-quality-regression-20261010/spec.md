@@ -309,7 +309,7 @@
   - **场景**：SCN-004
   - **验收**：AC-003、AC-004
 - **FR-QUAL-013**：逐 AC 事实汇总与如实披露：审计口径落在 `R5`（16 个改动文件）与 `R6`（36 项技能 + `S-01`–`S-18`）的既有结论上，不另做逐文件复述；每条发现至少一条事实证据（diff 行号或会话事件索引）；汇总里**不出现「已修好」结论**，`incomplete`／`unavailable` 保持可见；字节只作 `AC-005a` 的事实
-  - **范围边界**：本次不做验收判断；`AC-006` 由用户在新任务上实跑读回，缺失保持 `unavailable`
+  - **范围边界**：本次不做验收判断；`AC-006` 由用户在新任务上实跑读回，缺失保持 `unavailable`。P9采用125选择A与独立129的条件：原builder T024固定 `appendRecord(T + '/quality/evidence/execution-memo', 'p9-current-facts', 'md', bytes)` 只产一份ordinary不可变聚合报告，卡只留实际返回ref、不双写当前状态；生成前不填假path，生成后材料owner补唯一actual指针/header/index，最终formal review前完成。P9 builder在W不写生产/材料，现可写仅外置oracle；旧009/index只读，不授整目录。
   - **依据**：`R-010`、`U-001`、`U-011` 第 2 项、隐藏前提 B（`decision-log.md:494`）、`AC-001`、`AC-002`、`PFACT-001`、`PFACT-012`
   - **场景**：SCN-004
   - **验收**：AC-001、AC-002、AC-004、AC-005a
@@ -541,8 +541,8 @@
 | `ADR-011`、`R-017`、`U-013` | 5 个 workflow 17 处判据改写，净行 0 | FR-QUAL-009 / AC-006、AC-003 | P6/T018–T020 | ORACLE-SQR-P6：17 处锚文本逐一匹配目标串；`git diff --numstat` 每文件 add == del；第 10 步穷尽判据串存在；两个措辞锁测试同批改 | P3、P5；`current` |
 | `ADR-010`、`U-018` 第 3 项 | 删宽口径 12 字，`AGENTS.md:26` 保持原样 | FR-QUAL-010 / AC-003 | P7/T021 | ORACLE-SQR-P7：`docs/standard-workflow.md` 无该 12 字；`AGENTS.md:26` 逐字含「例外只有用户或 CI 守卫明确要求」 | P1；`current` |
 | `Z1`、`U-020` 第 3 项 | `steps.json` 内容不删、只空白归一；6 条坏引用处置 | FR-QUAL-011 / AC-003、AC-004 | P8/T022–T023 | ORACLE-SQR-P8：5 份 `steps.json` `git diff -w` 为空且 JSON 可解析；`completion_evidence` 条数不变；6 条坏引用逐条有结论 | P1、P6；`current` |
-| `R-010`、`U-001`、隐藏前提 B | 不宣告已修好；字节只作事实 | FR-QUAL-012／013 / AC-001、AC-002、AC-004、AC-005a | P8/T023、P9/T024–T025 | ORACLE-SQR-P9：逐 AC 行数 = AC 条数；字节实测行存在且带命令；无「已修好」字样；`AC-006` 记 `unavailable` | P1–P8；`current` |
-| `R5`／`R6` 原件 | 逐文件审计结论与 `S-01`–`S-18` 落点 | FR-QUAL-013 / AC-001、AC-002 | P9/T024 | ORACLE-SQR-P9：审计口径指向 `R5`（16 个改动文件）与 `R6`（36 项）；每条发现带事实证据引用 | P1–P8；`current` |
+| `R-010`、`U-001`、隐藏前提 B | 不宣告已修好；字节只作事实 | FR-QUAL-012／013 / AC-001、AC-002、AC-004、AC-005a | P8/T023、P9/T024–T025 | ORACLE-SQR-P9：逐 AC 行数 = AC 条数；字节实测行存在且带命令；无「已修好」字样；`AC-006` 记 `unavailable` | P1–P8、P10、P11；`current` |
+| `R5`／`R6` 原件 | 逐文件审计结论与 `S-01`–`S-18` 落点 | FR-QUAL-013 / AC-001、AC-002 | P9/T024 | ORACLE-SQR-P9：审计口径指向 `R5`（16 个改动文件）与 `R6`（36 项）；每条发现带事实证据引用 | P1–P8、P10、P11；`current` |
 | 用户 2026-10-10 授权（`OPEN-13`） | 审查管道的三条失败根因各有一条可证伪修法；失败不被改写成通过 | FR-QUAL-014／015 / AC-007 | P10/T026–T028 | ORACLE-SQR-P10：散文+唯一 JSON 被接受而歧义/坏 JSON/纯散文仍 `invalid`；重复心跳不误停、真静默必停；既有三路解析回归；无新 schema 字段与状态文件 |
 | 用户 2026-10-10 授权（`OPEN-05`） | 断链按最小改法处置，不引入替代实现 | FR-QUAL-016 / AC-008 | P11/T029–T030 | ORACLE-SQR-P11：模块导入期不再失败或已删除；悬空引用 `grep` 计数 0；`move-map.json` 无残留；`run-checks` exit 0 | P5（`move-map.json` 串行）；用户授权 |
 
@@ -550,7 +550,7 @@
 
 - **验证策略**：每个 Phase 一份判定器 `quality/tests/sqr-pN-oracle.mjs`，用 `--task=TNNN` 选断言集；行为面（P1、P2）走真实导出调用，其余按 `G-2` 用结构/字节判定器并对「不覆盖运行时行为」如实声明。
 - **RED/GREEN 设计**：同一个判定器在 HEAD 上跑出 `[TARGET]` 失败（exit 1）即为 RED；实施后同命令 exit 0 即为 GREEN；`[GUARD]` 在两侧都必须通过。未执行不宣称 RED/GREEN。
-- **最终聚合**：P9 消费 P1–P8 的判定器输出与 `run-checks`，产出逐 AC 一行的事实汇总；**它不是验收 Phase**，不填 `phase-template.md` 的 13 项验收固定小节，不宣告通过。
+- **最终聚合**：P9消费P1–P8、P10、P11的真实验证/review处置原件与run-checks，T024在唯一普通报告保原10AC逐行事实/8词表/真实证据、披露及真实当前最终HEAD与task代码字节；c28e2fb1=296850只作historical baseline，不冒当前。T025只读同一actual ref，卡不双写当前状态。P9自身新增/修改/删除与声明按既有Phase差异/原件/只读Git独立逐条比对，保实际appendRecord返回ref与原任务baseline允许路径；clean合法，错误明确显露，不以其它Phase dirty作归因或门、不筛allowlist抹undeclared写面。**它不是验收Phase**，保原template pin/13项、AC006 unavailable/no-pass及全部GUARD，不宣告通过；原009/121/125/129只读。
 - **不能证明的内容**：不证明真实效果（`AC-006` 由用户实跑读回）；不证明模板重设计后日志真的变薄；不证明宿主要不要 `steps.json` 的 `completion_evidence`（`OI-024`）；不证明三个新 ADR 的长期有效性；`tests/contract/ocr-delegation-adapter.test.mjs` 在 HEAD 已有 **3 条与本次无关的既有失败**（单文件实测 `3 failed | 50 passed`，集中在宿主 hook／permissions 与 sibling 聚合用例），本次不修、也不以该整文件作为 P1 的门；该文件的 `:992` 措辞锁由 P1 判定器单独覆盖。
 
 每个 `phases/P<n>.md` 指向本节和全局目标的稳定锚点，不复制全局设计；每个 Task 再写自己的第一步动作、同命令 RED/GREEN 与失败 oracle。
