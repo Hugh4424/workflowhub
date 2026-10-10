@@ -1,6 +1,6 @@
 ---
 name: wh-review
-description: 文档审查保留真实发现与失败；代码调用读取 Long-review 等待方法，回退执行按当前 workflow 的条件分工。
+description: 文档审查保留真实发现与失败；代码调用读取 Long-review 等待方法，OCR 不可用如实记录，同源补充轴独立执行。
 version: 4.1.0
 ---
 
@@ -8,7 +8,7 @@ version: 4.1.0
 
 ## 分工与真实消费者
 
-wh-review 执行 make-decision 方向/细节、build-plan 合并及 build-prd 文档审查。代码审查正常由 OCR 执行：build-code 每 Phase 一次、verify-code 终末一次；每次代码调用读取本文件 Long-review 等待方法，不因此改用 wh-review 执行。需要判断回退时，读取当前 `workflows/build-code/SKILL.md` 或 `workflows/verify-code/SKILL.md` 的「OCR 能力与回退」，按该 workflow 当下的条件与目标执行同一代码面，记录检测、原因、实际执行者和限制。已安装 OCR 的失败、超时、取消或输出无效保留原失败/unavailable，不转成回退通过。
+wh-review 执行 make-decision 方向/细节、build-plan 合并及 build-prd 文档审查。代码审查正常由 OCR 执行：build-code 每 Phase 一次、verify-code 终末一次；每次代码调用读取本文件 Long-review 等待方法，不因此改用 wh-review 执行。OCR 不可用（命令不存在（ENOENT）或版本低于1.12.9）如实记 unavailable/unknown，不换执行者，保留检测输出与原始失败；版本检测其它错误不推断未安装。architect-code-review 是同源补充轴，独立执行，与 OCR 可用性无关；已装 OCR 失败、超时、取消、无效输出、零成功路或空 findings 均保留原始事实。具体 Phase/终末审查范围与补充派发读取当前 `workflows/build-code/SKILL.md` 或 `workflows/verify-code/SKILL.md`。
 
 stage-skill-plan.json 仍在本技能原路径提供 required_skills/optional_skills：文档组包读者和 OCR 合同/lens 适配读者复用这些声明。它是选材，不是另一个调度器或审查点；不会把它搬入 runtime/review。历史 build-spec 登记退出当前调用，旧集成审查不恢复为正常节点。
 

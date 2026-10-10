@@ -30,7 +30,7 @@ Phase 内的 Task 是 task graph，不是可任意跳过依赖的步骤表。只
 6. 对声明的 command/service 验收执行真实场景，逐项对照 oracle、可观察效果与失败反例。记录每条 AC 的实际结果、原始输出、输入/环境和覆盖限制；真实服务缺失、未执行、部分或不可用保持原样，模拟效果不冒充外部效果。
    验收证据人读词表为 pass/fail/inconclusive/deferred/missing/inconsistent/incomplete/unavailable，来源 `runtime/evidence/acceptance-evidence-validator.mjs:6`；本词表只约束人读措辞，不改变现有 writer。未达成如实记为未达成并进失败事实清单，这一条不新增任何推进前置。
 7. 检查实际 diff 与声明写集、真实消费者、接口两端、状态、错误传播、并发原子性和资源释放。UI 按组件质量地图与真实页面验证状态和 DTO→ViewModel，浏览器 QA 先用 isolated-browser-qa，保留隔离、取消和自建资源清理事实。来源、样本、场景、浏览器或截图缺失不宣称 UI 完成。
-8. 每个 Phase 对当前 diff、完整 AC、实际执行原件和审查重点发起一次独立代码审查。正常使用 OCR；未安装条件和回退见下节。同时显式派一次独立上下文的同源补充审查，方法见「同源补充轴」。各轴真实终态、原件与覆盖限制可定位才算完成本次审查工作；没有额外全 Phase 集成审查点，不为追空 findings 重派未变范围。
+8. 每个 Phase 对当前 diff、完整 AC、实际执行原件和审查重点发起一次独立代码审查。正常使用 OCR；不可用时的记录口径见下节。同时显式派一次独立上下文的同源补充审查，方法见「同源补充轴」。各轴真实终态、原件与覆盖限制可定位才算完成本次审查工作；没有额外全 Phase 集成审查点，不为追空 findings 重派未变范围。
 9. 主会话保留每条 finding 原文和真实处置。有效问题回原实施会话自动修复，先列受影响 file/case，再只跑该集合并写实际结果；严重问题优先修复，不以请求用户承担风险代替修复。确实无法在当前任务范围内解决时，写清影响、证据、原因和剩余选项，继续不受影响的工作；未处理保持 incomplete。只有已有绑定该 finding 的用户真实决定才可记 accepted_risk，不能自行接受风险或伪造通过。
    重试前自述一行并写进本 Phase 的 task facts：「自上次以来我改了什么：<一句话>；失败信号：与上次相同／已变」。
 10. 所有实施任务结束后，按计划执行一次最终聚合，逐 AC 对账实现、真实效果、测试和未覆盖项；没有新改动、失败或疑点时不重复运行。最终聚合不证明 review pass，也不替代独立审查。
@@ -39,9 +39,9 @@ Phase 内的 Task 是 task graph，不是可任意跳过依赖的步骤表。只
 12. 阶段末执行 stage-handoff，写清交付行为、测试和 AC 限制、原始发现与处置、风险及 verify-code 下一步。Phase 的局部交付摘要不触发每 Phase 一次 stage-end/复盘；只在整个 stage 收口时写阶段人读交接。
     人读结论用三词：**达成／未达成（写明下一步）／退役**——退役＝这一条不再做、已由决定退出，不用「以后再说」这类模糊说法。
 
-## OCR 能力与回退
+## OCR 能力与缺省记录
 
-检查 `ocr` 命令及 `ocr --version`。只有 ocr 命令不存在（ENOENT）或版本低于1.12.9，才由 architect-code-review 执行同一 Phase 代码审查，记录检测输出、fallback 原因、真实执行者、发现和覆盖限制。版本检测的其它错误不能猜成未安装。OCR 已安装但审查失败、超时或被取消时，不回退 architect-code-review，保留原失败/unavailable；不造空 findings 或自动用其它 reviewer 覆盖它。依赖真实 OCR 的测试在未安装时明确 skip 并报告。
+先检查 `ocr` 命令与 `ocr --version`。OCR 不可用（命令不存在（ENOENT）或版本低于1.12.9）如实记 unavailable/unknown，不换执行者，保留检测输出与原始失败；版本检测其它错误不推断未安装。architect-code-review 是同源补充轴，独立执行，与 OCR 可用性无关；已装 OCR 失败、超时、取消、无效输出、零成功路或空 findings 均保留原始事实。依赖真实 OCR 的测试在未安装时显式 skip 并披露；不把不可用写成空 findings。
 
 代码审查输入保留 build-code 合同、provider 协议、stageReviewFocus 与所需 lens 正文、当前 diff、完整 AC 及实际执行原件；只搬方法合同，不能重建旧执行流程。材料外发前核范围、路径边界并脱敏私有路径/secret；没有真实只读边界的执行者记不可用。取消、单路失败、迟到 findings 与其它成功路的 provenance 分别保留，不能由首个结果取消其它路或把失败写成通过。
 

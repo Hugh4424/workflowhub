@@ -456,9 +456,8 @@ describe("simple wh-review contracts", () => {
       expect(text).toContain("每次代码调用读取本文件 Long-review 等待方法，不因此改用 wh-review 执行");
       for (const stage of ["build-code", "verify-code"])
         expect(text).toContain(`workflows/${stage}/SKILL.md`);
-      expect(text).toContain("OCR 能力与回退");
-      expect(text).toContain("执行同一代码面，记录检测、原因、实际执行者和限制");
-      expect(text).toContain("已安装 OCR 的失败、超时、取消或输出无效保留原失败/unavailable，不转成回退通过");
+      for (const wording of ["不换执行者", "同源补充轴", "独立执行", "与 OCR 可用性无关", "保留检测输出与原始失败"])
+        expect(text).toContain(wording);
       const waiting = section(text, "Long-review host convention");
       expect(waiting).toContain("一个连续 activation 承接一个同步请求");
       expect(waiting).toContain("全部真实 provider 终态且正常已启动请求的正式记录可读，才 final 交付");
@@ -467,40 +466,32 @@ describe("simple wh-review contracts", () => {
     };
     const assertPolicy = (policy) => {
       expect(typeof policy).toBe("string");
-      expect(policy).toMatch(/(?:只有|仅) ocr 命令不存在（ENOENT）或版本低于1\.12\.9[，、]/);
-      expect(policy).toMatch(/(?:才由|回退) architect-code-review 执行同一(?: Phase |终末)代码审查/);
-      expect(policy).not.toMatch(/(?:才由|回退) wh-review/);
-      expect(policy).toMatch(/(?:记录|保留)检测/);
-      expect(policy).toContain("fallback 原因");
-      expect(policy).toMatch(/(?:真实执行者|真实输出)/);
-      expect(policy).toContain("限制");
-      expect(policy).toMatch(/版本检测(?:的)?其它错误(?:不能猜成|不推断)未安装/);
-      expect(policy).toMatch(/OCR 已(?:安装但审查失败、超时或被取消时，不回退 architect-code-review|装而执行失败、超时或取消时不回退)/);
-      expect(policy).toMatch(/(?:保留原失败\/unavailable|按真实 unavailable\/失败记录)/);
-      expect(policy).toMatch(/(?:不造空 findings|不把不可用写成空 findings)/);
+      for (const wording of ["命令不存在（ENOENT）或版本低于1.12.9", "不换执行者", "同源补充轴", "独立执行", "与 OCR 可用性无关", "unavailable/unknown", "保留检测输出与原始失败", "版本检测其它错误不推断未安装", "已装 OCR 失败、超时、取消", "不把不可用写成空 findings"])
+        expect(policy).toContain(wording);
+      expect(policy).not.toMatch(/才由|才用|才允许|回退/);
     };
     const wh = readFileSync(join(root, "wh-review/SKILL.md"), "utf8");
     assertWh(wh);
     for (const stage of ["build-code", "verify-code"]) {
       const workflow = readFileSync(join(projectRoot, "workflows", stage, "SKILL.md"), "utf8");
-      const policy = section(workflow, "OCR 能力与回退");
+      const policy = section(workflow, "OCR 能力与缺省记录");
       assertPolicy(policy);
       for (const [label, bad] of [
         ["missing ENOENT", policy.replace("（ENOENT）", "")],
         ["missing low version", policy.replace("或版本低于1.12.9", "")],
-        ["wrong executor", policy.replaceAll("architect-code-review", "wh-review")],
-        ["not exclusive causes", policy.replace(/(?:只有|仅) ocr/, "ocr")],
-        ["installed failure falls back", policy.replaceAll("不回退", "回退")],
+        ["substituted executor", policy.replaceAll("不换执行者", "改用 wh-review 执行")],
+        ["supplement tied to OCR availability", policy.replace("与 OCR 可用性无关", "仅 OCR 缺失时执行")],
+        ["installed failure loses original facts", policy.replace("已装 OCR 失败、超时、取消", "仅保成功结果")],
         ["other detection error inferred missing", policy.replace(/版本检测(?:的)?其它错误(?:不能猜成|不推断)未安装/, "版本检测其它错误推断未安装")]
       ]) {
         expect(bad, `${stage}: ${label}`).not.toBe(policy);
         expect(() => assertPolicy(bad), `${stage}: ${label}`).toThrow();
       }
-      expect(() => section(workflow.replace("## OCR 能力与回退\n", "## Other\n"), "OCR 能力与回退")).toThrow();
+      expect(() => section(workflow.replace("## OCR 能力与缺省记录\n", "## Other\n"), "OCR 能力与缺省记录")).toThrow();
     }
     for (const stage of ["build-code", "verify-code"])
       expect(() => assertWh(wh.replace(`workflows/${stage}/SKILL.md`, "missing-pointer"))).toThrow();
-    expect(() => assertWh(wh.replace("输出无效保留原失败/unavailable，不转成回退通过", "输出无效转成回退通过"))).toThrow();
+    expect(() => assertWh(wh.replace("保留检测输出与原始失败", "只保留成功输出"))).toThrow();
     expect(() => assertPolicy(undefined)).toThrow();
   });
 

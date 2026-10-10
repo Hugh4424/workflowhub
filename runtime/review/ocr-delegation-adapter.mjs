@@ -288,7 +288,7 @@ export async function runOcrDelegationRound(request, {
   if (typeof executor !== "function") {
     rmSync(packet.packetRoot, { recursive: true, force: true });
     rmSync(packet.ruleRoot, { recursive: true, force: true });
-    return unavailable(request, materialId, "OCR_DELEGATION_UNAVAILABLE", "host OCR delegation executor is unavailable; no legacy review fallback was used", {
+    return unavailable(request, materialId, "OCR_DELEGATION_UNAVAILABLE", "host OCR delegation executor is unavailable; no substituted executor was used", {
       ocr: { version: packet.version, preview: packet.preview, rules: packet.rules, manifest: packet.manifest },
     });
   }

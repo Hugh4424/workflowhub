@@ -24,7 +24,7 @@ npm install
 | build-code | 当前 Phase 实施、受影响测试和独立审查 |
 | verify-code | 当前交付终末独立核对和逐 AC 判断 |
 
-post 日常路线 make-decision → build-plan → build-code → verify-code。两道人为门是方向与计划选择；三审查点为 build-plan 合并、build-code 每 Phase、verify-code 终末。文档审查 wh-review，代码审查 OCR，只有 OCR 命令不存在（ENOENT）或版本低于1.12.9，才回退 architect-code-review 执行同一代码审查，保留检测输出、原因、真实执行者和覆盖限制。版本检测其它错误保持 unknown/unavailable，不推断未安装；OCR 已装而执行失败、超时、取消、无效输出、零成功路或空 findings 均不触发回退，原始事实保留。独立数量不足、provider 失败或质量缺失如实披露，不丢有效发现、不冒通过。
+post 日常路线 make-decision → build-plan → build-code → verify-code。两道人为门是方向与计划选择；三审查点为 build-plan 合并、build-code 每 Phase、verify-code 终末。文档审查 wh-review，代码审查 OCR，OCR 不可用（命令不存在（ENOENT）或版本低于1.12.9）如实记 unavailable/unknown，不换执行者，保留检测输出与原始失败；版本检测其它错误不推断未安装。architect-code-review 是同源补充轴，独立执行，与 OCR 可用性无关；已装 OCR 失败、超时、取消、无效输出、零成功路或空 findings 均保留原始事实。独立数量不足、provider 失败或质量缺失如实披露，不丢有效发现、不冒通过。
 
 ## 七类公共工具
 
@@ -33,7 +33,7 @@ post 日常路线 make-decision → build-plan → build-code → verify-code。
 | doctor | 当前环境/工作区/存储与 OCR 可用性事实 |
 | status | 材料、普通 task facts、质量事实及当前游标 |
 | run | 普通 draft 写入或当前 phase_progress 游标；不执行旧完整 stage pipeline |
-| review | 按上述分工执行并保存真实审查与 fallback/失败事实 |
+| review | 按上述分工执行并保存真实审查与 失败事实 |
 | verify | 显式有范围命令采集，保存 raw/exit/timeout 等真实结果 |
 | confirm | 记录用户原话与材料引用 |
 | authorize | 当前 Git HEAD 对应的不可逆操作授权 |

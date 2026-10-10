@@ -989,7 +989,7 @@ describe("OCR delegation adapter", () => {
 
     expect(result).toMatchObject({
       status: "unavailable", dispatch_state: "blocked_before_dispatch",
-      error: { code: "OCR_DELEGATION_UNAVAILABLE", message: "host OCR delegation executor is unavailable; no legacy review fallback was used" },
+      error: { code: "OCR_DELEGATION_UNAVAILABLE", message: "host OCR delegation executor is unavailable; no substituted executor was used" },
       provider_results: [], findings: [],
     });
     expect(result.authenticated_evidence).toEqual({

@@ -16,7 +16,7 @@
     {
       "step_id": 2,
       "step_slug": "ocr-code-review",
-      "observable_result": "一次终末独立代码审查含当前diff、完整AC、合同/protocol/lens与原件；条件fallback和实际失败分别记录。 条件回退读取当前 workflows/verify-code/SKILL.md 的「## OCR 能力与回退」；architect 缺失/低版本 facet 仅在 P9 当前政策目标实际切换后生效，已装失败、超时或取消不回退；每次调用先读 wh-review Long-review 方法。",
+      "observable_result": "一次终末独立代码审查含当前diff、完整AC、合同/protocol/lens与原件；OCR 不可用如实记 unavailable/unknown，不换执行者，保留检测输出与原始失败；同源补充轴独立执行，与 OCR 可用性无关；每次调用先读 wh-review Long-review 方法。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",

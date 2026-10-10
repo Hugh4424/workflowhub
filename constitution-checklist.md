@@ -28,3 +28,32 @@
 ## close 三义判据
 
 工作实施、质量结论与物理交付分别读回。未测试/审查缺失保持 unknown/unavailable/incomplete；不可逆 Git/归档/清理只按真实授权执行。旧 reports/history 不改写，新的 Markdown 交接只解释当前结果和剩余限制，不充当许可或新进度权威。
+
+## 本次改宪对照记录（CONSTITUTION 1.9.2 → 1.9.3；docs/adr/0035）
+
+授权来源：当前 decision-log.md 的 U-005、U-020 第 2 项与 ADR-007；领域决定见 [0035](docs/adr/0035-remove-ocr-executor-fallback-and-amend-constitution.md)。治理实施边界改为 OCR 不可用如实记 unavailable/unknown，不换执行者；architect-code-review 是独立执行且与 OCR 可用性无关的同源补充轴。原 22 条条款正文与复选项保留。
+
+| 条款 | 本次实际变化 | 核对结论 |
+| --- | --- | --- |
+| F1 | 删除 runtime 的替代执行者闭包及 nativePacketFallback 参数链 | 复用既有 review writer，未建新控制面 |
+| F2 | 审查检测分支保留既有 unavailable 结果接口 | 导出名称及三项实际依赖选项保留；不新增跨模块接口 |
+| F3 | 按当前 spec/P1 处理治理与运行时口径 | 历史报告与任务材料未重写 |
+| F4 | OCR 缺失也不换执行者，同源补充独立执行 | 原失败保留，质量缺失不阻止安全修复 |
+| F5 | 本次无变化 | 未新增 stage 或推进 gate |
+| F6 | 检测失败由既有 review-record-route 保存 | 不复制原件，不新增持久对象 |
+| F7 | 本次无变化 | 交付必要的 commit/push/merge 授权原句逐字保留；本实施者 0 次 push，条款未要求必须 push |
+| F8 | 删除失去唯一消费者的 nativePacketFallback 参数链 | 没有增加兼容执行者或替代平台 |
+| F9 | not_installed 如实返回 unavailable 与检测原因 | 不把缺安装转成 wh-review 成功 |
+| F10 | 本次无变化 | 只消费已冻结针对性 oracle 与行为测试，无自动化新体系 |
+| F11 | 删除 OCR 缺失时额外执行路径 | 继续工作与完成质量分开，未新增许可链 |
+| Q1 | 保留声明测试、同源补充和独立审查要求 | 缺质量仍如实 unavailable/incomplete |
+| Q2 | 治理、接线、冻结测试同批对齐 | 当前实现与测试事实分别说明，不以文字证明效果 |
+| Q3 | architect-code-review 明确回到同源补充轴 | 不计异源 quorum，不覆盖真实 OCR 身份 |
+| S1 | 本次无变化 | 沿用 OCR 与已有技能，不造新审查工具 |
+| S2 | 本次无变化 | 仅按已确认方向改本地审查分工 |
+| S3 | 本次无变化 | 没有升级外部技能或追上游 HEAD |
+| S4 | 本次无变化 | 必要检测与失败由既有事实工具记录 |
+| S5 | 同源补充继续独立上下文执行 | 原同源补充轴正文保持，主会话收原件引用 |
+| S6 | 本次无变化 | 本次不改变既有外部来源与 lens |
+| S7 | 本次无变化 | 阶段入口目录与技能归属保持 |
+| S8 | 本次无变化 | 方法未写入当前任务绝对路径或宿主专属要求 |

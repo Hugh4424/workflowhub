@@ -17,9 +17,9 @@ description: Review an implementation diff for correctness, lifecycle, security,
 
 ## 边界
 
-本技能读取调用方指定的当前 diff、真实消费者与验收原件，返回独立审查发现。正常代码审查与 OCR 缺失/版本不足时的回退按 `workflows/verify-code/SKILL.md`、`workflows/build-code/SKILL.md` 执行；文档审查仍由 wh-review 负责。
+本技能读取调用方指定的当前 diff、真实消费者与验收原件，返回独立审查发现。本技能作为同源补充轴独立执行，与 OCR 可用性无关；正常代码审查按 `workflows/verify-code/SKILL.md`、`workflows/build-code/SKILL.md` 执行；文档审查仍由 wh-review 负责。
 
-历史 integration/OCR 结果只读保留，不能冒充当前审查。缺少旧 receipt 不妨碍检查当前代码，但未执行、取消或不可用不能写成空 findings。OCR 已安装但运行失败时保留 unavailable 原因，不自动切换回退。push、merge 与发布按实际授权独立处理。
+历史 integration/OCR 结果只读保留，不能冒充当前审查。缺少旧 receipt 不妨碍检查当前代码，但未执行、取消或不可用不能写成空 findings。OCR 已安装但运行失败时保留 unavailable 原因，不换执行者。push、merge 与发布按实际授权独立处理。
 
 ## 审查顺序
 
@@ -54,7 +54,7 @@ description: Review an implementation diff for correctness, lifecycle, security,
 
 主 Agent 负责修复和处置，每条 finding 只能是 `fixed`、`rejected_invalid`、`accepted_risk` 或 `needs_human`；原始 finding 必须保留，不把审查失败改写为空 findings，也不要求第二次 review 来证明材料完整。
 
-普通 verify-code 的 OCR 审查与定向复验遵守当前 workflow 的一次审查合同。已装 OCR 失败、超时或取消时仍可处理宿主明确派发的安全同源补充，但保留原失败/unavailable；补充不改 OCR 身份、不替其结果、不计异源 quorum，也不追加 OCR 轮次。正式回退的条件与目标只取上述当前 workflow。
+普通 verify-code 的 OCR 审查与定向复验遵守当前 workflow 的一次审查合同。已装 OCR 失败、超时或取消时仍可处理宿主明确派发的安全同源补充，但保留原失败/unavailable；补充不改 OCR 身份、不替其结果、不计异源 quorum，也不追加 OCR 轮次。同源补充轴的范围与目标只取上述当前 workflow。
 
 ## 同源补充的镜头与记录
 

@@ -13,7 +13,7 @@ version: 5.2.0
 ## 方法
 
 1. 开工首步核真实 worktree、branch、当前 HEAD、允许写集及其来源，把实际核对命令和结果用已有 `runtime/interface/run-command.mjs` 保存为当前 `quality/tests/` 原件；不一致先定位纠正，不猜任务，不把核对变成人类确认或新的 runtime gate，无法完成时如实保留缺口。接续时读取 `skills/stage-handoff/SKILL.md`，按其路径选择与回读方法消费实际交接、当前材料和 task facts，定位有来源的阶段工作陈述、四类信息、证据与具体未完事项；材料疑点仍交原作者 owner。新会话据此核对当前范围并直接续跑，沿用已有任务授权；缺失或错 task 如实披露，旧对象只读，能够定位的同 task 工作按共享方法继续。读真实入口、消费者、diff、完整 AC 和 build-code 的实际执行原件，区分已经执行、未执行、失败、不可用及覆盖限制。原始来源、服务、样本或 Phase 正文缺失保持 unknown/unavailable，不以文件存在、旧 review 或 exit0 代填通过。 在本次常规代码审查中，对交付范围逐项抽查母 PRD/原始需求 → decision-log.md 的已确认裁决 → spec.md 的 FR/AC → 各物理 phases/P<n>.md 的任务与 oracle → 当前实现、测试/质量证据。准备终末审查对象前，按下节「一次架构机会」先核已有评估原件；用户采纳的范围内优化及受影响复验完成后，才将实际当前对象交方法第2步，不为优化另加第二次正常审查。
-2. 发起一次终末独立代码审查，正常使用 OCR，能力与条件回退见下节。审查输入包含 verify-code 合同、provider 协议、stageReviewFocus、lens 正文、当前 diff、完整 AC 与可用执行原件；执行者检查真实消费者、生命周期、权限、数据泄漏、并发、取消、恢复、资源释放和测试强度。
+2. 发起一次终末独立代码审查，正常使用 OCR，不可用时的记录口径见下节。审查输入包含 verify-code 合同、provider 协议、stageReviewFocus、lens 正文、当前 diff、完整 AC 与可用执行原件；执行者检查真实消费者、生命周期、权限、数据泄漏、并发、取消、恢复、资源释放和测试强度。
 3. 保留每路 provider 的原始 findings、实际执行者、错误、取消与覆盖限制。已安装 OCR 的失败不由其它 route 漂白。外发材料核实际范围、路径安全和敏感信息脱敏，缺真实只读能力时明确不可用。 首个 provider 到终态后立即处理并把迟到 findings 交给同一回调，剩余 provider 继续运行；不能因首个结果取消 sibling。跨 stage 的 build-code Phase 审查结果不得充当 verify-code 的第二次独立审查。
 4. 按金钱、隐私权限、不可逆后果、外部副作用、跨 Phase 旅程和失败恢复风险独立选样；逐项列已抽查与未抽查 case/AC 及理由。沿原始业务规则→真实入口→断言→实际效果核语义，代码质量、业务效果、测试充分性分别给证据；模拟结果不当外部效果，缺数据、权限或服务保持未知。 三类证据分别记 `business_effect=observed_pass|observed_fail|unknown|unavailable|N/A(reason)`、`semantic_test_adequacy=adequate|inadequate|unknown`、`code_review=clean|resolved|incomplete|failed`。功能验收记录与终末代码审查回执分开成件：功能验收记录独立成件，不得由代码审查回执替代或冒充。审查回执内的宿主侧 `conclusion` 与 `coverage` 由 provider 状态与 findings 推导，只记代码审查观察和覆盖事实；覆盖只说明是否返回 findings 及 provider 完成/失败数量，不代表 user case 执行或被审对象完整覆盖，不是功能验收结论。功能验收记录及独立人读判断分别成件，功能判断的判定来源件是功能验收记录；各给实际路径，验收记录逐条给 AC 结论与独立证据指针。按当前验收 Phase 正文的具名引用读取实际输出、执行/复验/分诊与独立走查原件，来源核对复用 stage-handoff 的路径回读方法；不以审查字段或 findings 代替业务效果，不新增同名功能机器字段、第二 writer 或质量对象图。
 5. 主会话逐条判断 finding，仅修影响当前交付的有效代码问题，不因材料偏好扩大范围。有效问题回原实施会话自动修复，严重问题优先修复，不以请求用户承担风险代替修复。确实无法在当前任务范围内解决时，列影响、证据、owner、原因和剩余选项，继续不受影响的工作，严重未修风险保持 incomplete；只有已有绑定该 finding 的用户真实决定才可记 accepted_risk，不能自行接受风险或伪造通过。
@@ -33,9 +33,9 @@ UI 适用时从真实页面和 Component Quality Map 核消费者、状态 owner
 
 用户真实选中机会后，才按当前 task 允许写集与原 owner 设计窄 interface 并实施优化；未答、拒选或旧答不当采纳，保原实现。超出已授权方向/范围时交原方向或规划 owner，不自动生成票、扩大任务或让 reviewer 选。改后列受影响 file/case 并做定向复验，原对象、实际新 diff、命令与结果各可定位；只说方法已写不能声称已评估、采纳、优化或验过。复验失败优先回原实施会话修，安全部分继续，未知保持未知。
 
-## OCR 能力与回退
+## OCR 能力与缺省记录
 
-先检查 `ocr` 命令和 `ocr --version`。仅 ocr 命令不存在（ENOENT）或版本低于1.12.9，回退 architect-code-review 执行同一终末代码审查，保留检测、fallback 原因、原始输入、真实输出和限制。版本检测其它错误不推断未安装；OCR 已装而执行失败、超时或取消时不回退，按真实 unavailable/失败记录。依赖真实 OCR 的测试在未安装时显式 skip 并披露。不能把成功替代伪标成 OCR，也不把不可用写成空 findings。
+先检查 `ocr` 命令与 `ocr --version`。OCR 不可用（命令不存在（ENOENT）或版本低于1.12.9）如实记 unavailable/unknown，不换执行者，保留检测输出与原始失败；版本检测其它错误不推断未安装。architect-code-review 是同源补充轴，独立执行，与 OCR 可用性无关；已装 OCR 失败、超时、取消、无效输出、零成功路或空 findings 均保留原始事实。依赖真实 OCR 的测试在未安装时显式 skip 并披露；不把不可用写成空 findings。
 
 ## 人为门与审查点
 

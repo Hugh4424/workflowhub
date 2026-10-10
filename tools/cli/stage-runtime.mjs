@@ -390,7 +390,7 @@ function writeOcrCurrentMaterialProjection(bundleRoot, projected, evidence) {
   }
 }
 
-function projectOcrCodeReviewBundle(built, attachmentRoot, request, source, nativePacketFallback = false) {
+function projectOcrCodeReviewBundle(built, attachmentRoot, request, source) {
   const miniImplementation = request.stage === "build-code" && (request.review_kind ?? request.reviewKind) === "mini_task.implementation";
   const selected = built.manifest.filter(({ path }) => path !== "packet-plan.json" && path !== "manifest.json");
   const paths = new Set(selected.map(({ path }) => path));
@@ -417,7 +417,7 @@ function projectOcrCodeReviewBundle(built, attachmentRoot, request, source, nati
       const destination = join(bundleRoot, entry.path);
       mkdirSync(dirname(destination), { recursive: true });
       const projectedBytes = entry.path === "review-instructions.md"
-        ? Buffer.from(bytes.toString("utf8").split("\n").filter((line,index)=>index<4 && !line.startsWith("Review stage ")).join("\n").replaceAll("`changes.diff`",nativePacketFallback ? "`changes.diff`" : "`diff/changes.md`")+"\n"+ocrReviewInstructionsFor(request), "utf8") : bytes;
+        ? Buffer.from(bytes.toString("utf8").split("\n").filter((line,index)=>index<4 && !line.startsWith("Review stage ")).join("\n").replaceAll("`changes.diff`","`diff/changes.md`")+"\n"+ocrReviewInstructionsFor(request), "utf8") : bytes;
       if (projectedBytes === bytes) copyFileSync(join(built.bundleRoot, entry.path), destination);
       else writeFileSync(destination, projectedBytes);
       projected.push({ path: entry.path, bytes: projectedBytes.length, sha256: sha256(projectedBytes) });
@@ -434,21 +434,6 @@ function projectOcrCodeReviewBundle(built, attachmentRoot, request, source, nati
       projected.push({ path, bytes: bytes.length, sha256: sha256(bytes) });
       const instructions = join(bundleRoot, "review-instructions.md");
       const updated = Buffer.concat([readFileSync(instructions), Buffer.from(`\n${path} contains the complete supplied mini-task spec bytes from ${spec.path}, not an extracted AC summary. Read that complete authority for acceptance together with the supplied AC trace, actual user result, tests, and coverage limits.\n`)]);
-      writeFileSync(instructions, updated);
-      Object.assign(projected.find(entry => entry.path === "review-instructions.md"), { bytes: updated.length, sha256: sha256(updated) });
-    }
-    if (nativePacketFallback) {
-      const path = "skills/architect-code-review/SKILL.md";
-      const bytes = reviewMaterialBytes(path, readPlainInputFile(fileURLToPath(new URL(`../../${path}`, import.meta.url)), "architect fallback body"));
-      const destination = join(bundleRoot, path);
-      if (projected.some(entry => entry.path === path)) {
-        if (!readFileSync(destination).equals(bytes)) throw new Error("architect fallback body conflicts with the existing packet source");
-      } else {
-        mkdirSync(dirname(destination), { recursive: true }); writeFileSync(destination, bytes, { flag: "wx", mode: 0o600 });
-        projected.push({ path, bytes: bytes.length, sha256: sha256(bytes) });
-      }
-      const instructions = join(bundleRoot, "review-instructions.md");
-      const updated = Buffer.concat([readFileSync(instructions), Buffer.from("\nOCR is absent or below the supported version. Apply the complete skills/architect-code-review/SKILL.md lens to this same code-review packet in your current reviewer role; the provider protocol and existing no-child-agent/tool restrictions take precedence over any method-internal delegation directions. This native wh-review transport is not an OCR execution. Preserve the original review identity, unavailable execution facts, and coverage limits.\n")]);
       writeFileSync(instructions, updated);
       Object.assign(projected.find(entry => entry.path === "review-instructions.md"), { bytes: updated.length, sha256: sha256(updated) });
     }
@@ -574,8 +559,6 @@ export function prepareTaskBoundBuildCodeReviewBundle(context, request, {
   loadConfig = loadTrustedThirdReviewConfig,
   captureSource = captureReviewSource,
   buildMaterials = buildReviewMaterials,
-  // Only the existing fallback closure sets this private transport target; it is never caller request metadata.
-  nativePacketFallback = false,
 } = {}) {
   if (!isTaskBoundBuildCodeReviewRequest(request)) throw new TypeError("task-bound build-code review request required");
   const reviewScope = request.review_scope ?? request.reviewScope;
@@ -630,7 +613,7 @@ export function prepareTaskBoundBuildCodeReviewBundle(context, request, {
     try {
       const manifest = built.deliveryManifest ?? built.manifest;
       packet = candidateExperiment && Array.isArray(manifest)
-        ? projectOcrCodeReviewBundle({ ...built, manifest }, trusted.attachmentRoot, request, selectedSource, nativePacketFallback)
+        ? projectOcrCodeReviewBundle({ ...built, manifest }, trusted.attachmentRoot, request, selectedSource)
         : built;
     } catch (error) {
       rmSync(built.bundleRoot, { recursive: true, force: true });
@@ -1011,20 +994,7 @@ async function recordTaskReview(context, input, values, services = {}) {
       if(materialPreflight)return {...materialPreflight,executor:"ocr"};
       const detection=detectOcr();
       if(detection.status==="unavailable")return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:detection.error?.code ?? "OCR_DETECTION_UNAVAILABLE",message:detection.reason}};
-      if(detection.status==="not_installed"){
-        const fallback={from:"ocr",reason:detection.reason,detected_by:detection.detected_by};
-        // The only route allowed to run providers inside this host process: it
-        // must declare that native packet fallback so wh-review keeps its packet
-        // boundary preflight and does not open a broker session for it.
-        const nativeFallback={...options,nativePacketFallback:true,readSupplementRecord,
-          onManagedStall:services.onManagedStall ?? writeManagedStallDiagnostic,buildBundle:()=>{
-          const built=prepareTaskBoundBuildCodeReviewBundle(context,current,{nativePacketFallback:true});
-          // Reader-only transport shape adaptation: same manifest bytes and dispose, no packet rewrite.
-          return {...built,deliveryManifest:built.manifest};
-        }};
-        const result=await whReview(current,nativeFallback);
-        return {...result,executor:"wh-review",fallback};
-      }
+      if(detection.status==="not_installed")return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:"OCR_NOT_INSTALLED",message:detection.reason}};
       const onProviderHealth=services.onOcrProviderHealth ?? writeOcrProviderHealthDiagnostic;
       if(typeof onProviderHealth!=="function")throw new TypeError("OCR health observer must be a function");
       const ocrRunner=services.runOcrDelegationRound;

@@ -1,13 +1,8 @@
 // build-plan 预写测试（冻结）：断言变更须走 test change request + 独立审查
 //
-// T021 / ADR-021 目标契约（现行实现下必 RED）：
-// - doctor 输出含 OCR 可用性项（ocr 项：installed / not_installed），
-//   检测以调用时 PATH 为准（ocr 缺失或 ocr --version < 1.12.9 → not_installed）。
-// - 代码面审查路由：OCR 未安装 → 由 wh-review 执行同一审查面，审查记录
-//   （唯一普通 result 原件）带 fallback 字段 {from:"ocr", reason, detected_by}
-//   写明 OCR 未安装事实，且记录的执行者（provider）为 wh-review。
-// - OCR 已安装但 provider 调用失败 → 记录 evaluation 为 unavailable，
-//   无 fallback 字段、不走 wh-review。
+// FR-QUAL-001/002/003: doctor preserves availability facts; code review records
+// missing/low-version OCR as unavailable without dispatching a substitute.
+// Installed provider failure and original subject provenance remain covered.
 
 import { execFileSync } from "node:child_process";
 import { accessSync, constants as fsConstants, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
@@ -30,7 +25,7 @@ function git(cwd, args) {
 }
 
 function fixture() {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), "code-review-ocr-fallback-")));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "code-review-ocr-")));
   roots.push(root);
   const repo = join(root, "repo");
   mkdirSync(repo);
@@ -40,7 +35,7 @@ function fixture() {
   writeFileSync(join(repo, "README.md"), "ocr fallback fixture\n", "utf8");
   git(repo, ["add", "README.md"]);
   git(repo, ["commit", "-qm", "fixture"]);
-  const taskId = `code-review-ocr-fallback-${Math.random().toString(16).slice(2)}`;
+  const taskId = `code-review-ocr-${Math.random().toString(16).slice(2)}`;
   const worktreeRoot = join(root, "worktree");
   git(repo, ["worktree", "add", "-q", "-b", `task/workflowhub/${taskId}`, worktreeRoot, "main"]);
   const taskDir = join(root, "Projects", "workflowhub", "tasks", taskId);
@@ -55,14 +50,14 @@ function fixture() {
   const materialRoot = join(worktreeRoot, "specs", taskId);
   mkdirSync(join(materialRoot, "phases"), { recursive: true });
   writeFileSync(join(materialRoot, "decision-log.md"), "# Decision log\n\n## 任务身份\n\n- **任务类型**：普通任务\n");
-  const gate = "npx --no-install vitest run tests/contract/code-review-ocr-fallback.test.mjs --reporter=dot";
+  const gate = "npx --no-install vitest run tests/contract/code-review-ocr.test.mjs --reporter=dot";
   const paths = ["prior-one.md", "prior-two.md", "README.md"];
-  const trace = paths.map((_file, i) => `| R-001 | FR-1 | AC-1 | P${i + 1}/T00${i + 1} | ORACLE-OCR-FALLBACK |`);
+  const trace = paths.map((_file, i) => `| R-001 | FR-1 | AC-1 | P${i + 1}/T00${i + 1} | ORACLE-OCR-ROUTING |`);
   writeFileSync(join(materialRoot, "spec.md"), [
-    "# Owned OCR routing fixture", "- **FR-1**：OCR availability and same-surface fallback.",
+    "# Owned OCR routing fixture", "- **FR-1**：OCR availability and no executor substitution.",
     "- [ ] **AC-1 — OCR routing**", "  - **需求**：FR-1",
-    "  - **验证方法**：actual assertions in this frozen fallback test.",
-    "  - **通过条件**：actual routing and failure assertions pass.", "  - **失败条件**：wrong route or false fallback.",
+    "  - **验证方法**：actual assertions in this frozen OCR routing test.",
+    "  - **通过条件**：actual routing and failure assertions pass.", "  - **失败条件**：wrong route or false availability.",
     "## 实现设计（全局权威）", "### Code Anchors", "The owned source is `README.md`.",
     "### Interfaces and Failure Semantics", "Preserve current code surface and unavailable provider errors.",
     "### Requirement-to-Task Trace", "| source | FR | AC | task | oracle |", "| --- | --- | --- | --- | --- |", ...trace,
@@ -79,7 +74,7 @@ function fixture() {
       `# Phase P${n} — owned fixture`, "- **Global spec**：`spec.md`", `- **Write set**：\`${file}\``,
       `- **Dependency**：${i === 0 ? "none" : `P${i}`}`, "- **Consumer**：OCR routing fixture", "## L0",
       `- **gate_cmd**：\`${gate}\``, "- **expected_exit**：0 only after actual assertions pass",
-      "- **oracle**：ORACLE-OCR-FALLBACK", "- **evidence_path**：quality/tests/output/owned-fixture.output",
+      "- **oracle**：ORACLE-OCR-ROUTING", "- **evidence_path**：quality/tests/output/owned-fixture.output",
       "- **STOP**：preserve an actual routing failure", "- **Done**：actual assertions only, not production quality", "## L1",
       `### T00${n} — owned routing fixture`, "- **Source / FR / AC**：R-001 / FR-1 / AC-1",
       `- **Files / symbols**：\`${file}\` (symbol: N/A — fixture source text)`, "- **Action**：read the actual routing fixture",
@@ -87,13 +82,13 @@ function fixture() {
       "- **Boundary / DO NOT TOUCH**：no production or user repositories", `- **Dependency**：${i === 0 ? "none" : `T00${i}`}`,
       "- **Test tier / skill**：feature / backend-testing", "- **Scenario / fixture or service**：owned CLI and injected reviewer result",
       `- **RED/GREEN gate_cmd**：\`${gate}\``, "- **expected_exit**：RED nonzero; GREEN 0",
-      "- **RED target failure**：ORACLE-OCR-FALLBACK wrong routing assertion fails", "- **GREEN oracle**：ORACLE-OCR-FALLBACK actual assertions",
+      "- **RED target failure**：ORACLE-OCR-ROUTING wrong routing assertion fails", "- **GREEN oracle**：ORACLE-OCR-ROUTING actual assertions",
       "- **Evidence**：quality/tests/output/owned-fixture.output", "- **STOP / recovery**：no claimed provider call without one",
       "- **Coverage limit**：no external provider quality", "- **Done**：actual targeted assertions only", "## L2",
       "Owned fixture data, not a WorkflowHub execution permit.", "",
     ].join("\n"));
   }
-  writeFileSync(join(worktreeRoot, "README.md"), "fallback implementation under review\n");
+  writeFileSync(join(worktreeRoot, "README.md"), "OCR implementation under review\n");
 
   // host config：third_review/wh_review 可解析，但 provider 命令指向不存在路径
   // （「config 无可用 provider」）。
@@ -166,23 +161,7 @@ function reviewRequest() {
   return {
     stage: "build-code", review_scope: "phase", subject_kind: "phase", phase_id: "P3", surface: "code",
     host_provider: "codex/luna",
-    materials: { acceptance_criteria: "AC-1: the fallback review records the OCR availability fact." },
-  };
-}
-
-function whReviewCompletedResult(request) {
-  return {
-    status: "available", stage: request.stage, review_track: null, review_kind: null,
-    subject_kind: request.subject_kind, phase_id: request.phase_id ?? null,
-    review_scope: request.review_scope ?? null,
-    runtime_id: "wh-review-fallback-fixture", outcome: "completed",
-    provider_results: [{
-      provider: "wh-review", status: "completed", process_outcome: "ok", parse_outcome: "ok",
-      identity: { provider: "wh-review", adapter: "wh-review", source_id: "wh-review", config_id: "fixture-config", model: "wh-review-runner" },
-      error: null, timing: { started_at_ms: 1, completed_at_ms: 2, duration_ms: 1 }, usage: null,
-      evidence_anchor_valid: [],
-    }],
-    findings: [],
+    materials: { approved_spec:"Current OCR availability and unavailable routing.", phase_map:"README.md is the owned code consumer.", test_evidence:"Controlled routing and original provider failure.", acceptance_criteria: "AC-1: the review records the OCR availability fact without substitution." },
   };
 }
 
@@ -227,14 +206,13 @@ describe("doctor reports OCR availability (T021)", () => {
   });
 });
 
-describe("code review falls back to wh-review only when OCR is not installed (T021)", () => {
-  it.each([["missing", null], ["below the minimum version", "1.12.8"]])("executes the same review surface through wh-review and records fallback when OCR is %s", async (_label, stubVersion) => {
+describe("code review records unavailable when OCR is missing or below the minimum version", () => {
+  it.each([["missing", null], ["below the minimum version", "1.12.8"]])("records unavailable without substituting an executor when OCR is %s", async (_label, stubVersion) => {
     const state = fixture();
     const request = reviewRequest();
     const inputPath = join(state.root, "fallback-review.json");
     writeFileSync(inputPath, JSON.stringify({ request }));
     const calls = { ocr: 0, whReview: 0 };
-    let whReviewRequest = null;
     const stubDir = stubVersion === null ? null : writeOcrStub(join(state.root, "bin"), stubVersion);
     const path = stubDir === null ? pathWithoutOcr() : `${stubDir}:${pathWithoutOcr()}`;
     await withRuntimeEnvironment(
@@ -252,29 +230,21 @@ describe("code review falls back to wh-review only when OCR is not installed (T0
             },
             runReviewRound: async (roundRequest) => {
               calls.whReview += 1;
-              whReviewRequest = roundRequest;
-              return whReviewCompletedResult(roundRequest);
+              throw new Error("substitute executor must never run");
             },
           },
         });
 
-        // 回退：同一审查面由 wh-review 执行，OCR 路由未走。
-        expect(calls).toEqual({ ocr: 0, whReview: 1 });
-        expect(whReviewRequest).toMatchObject({
-          stage: "build-code", review_scope: "phase", subject_kind: "phase", phase_id: "P3", surface: "code",
-        });
-        expect(whReviewRequest.materials).toEqual(request.materials);
-        expect(recorded.status).toBe("available");
+        expect(calls).toEqual({ ocr: 0, whReview: 0 });
+        expect(recorded.status).toBe("unavailable");
         expect(recorded.result_ref).toMatch(/^quality\/reviews\/\d{4}-\d{2}-\d{2}-\d{3}-build-code-phase-p3\.json$/);
         const review = JSON.parse(readFileSync(join(state.taskDir, recorded.result_ref), "utf8"));
-        expect(review).toMatchObject({ task_id: state.taskId, stage: "build-code", review_scope: "phase", subject_kind: "phase", phase_id: "P3", surface: "code", status: "available", authoritative: false });
-        expect(review.provider_results).toHaveLength(1);
-        expect(review.provider_results[0]).toMatchObject({ provider: "wh-review", status: "completed", process_outcome: "ok", parse_outcome: "ok", error: null });
-        expect(review.fallback).toBeDefined();
-        expect(review.fallback.from).toBe("ocr");
-        expect(String(review.fallback.reason)).toMatch(NOT_INSTALLED_FACT);
-        expect(typeof review.fallback.detected_by).toBe("string");
-        expect(review.fallback.detected_by.length).toBeGreaterThan(0);
+        expect(review).toMatchObject({ task_id: state.taskId, stage: "build-code", review_scope: "phase", subject_kind: "phase", phase_id: "P3", surface: "code", status: "unavailable", executor: "ocr", error: { code: "OCR_NOT_INSTALLED" } });
+        expect(review.provider_results).toEqual([]);
+        expect(review.provider_results.some(member => member.provider === "wh-review")).toBe(false);
+        expect(review).not.toHaveProperty("fallback");
+        expect(String(review.error.message)).toMatch(NOT_INSTALLED_FACT);
+        expect(() => validateSchema("result", review)).not.toThrow();
       });
   });
 
@@ -300,7 +270,7 @@ describe("code review falls back to wh-review only when OCR is not installed (T0
             },
             runReviewRound: async (roundRequest) => {
               calls.whReview += 1;
-              return whReviewCompletedResult(roundRequest);
+              throw new Error("substitute executor must never run");
             },
           },
         });
@@ -344,6 +314,33 @@ describe("canonical review request subject provenance", () => {
       expect(actual.request.material_keys).toContain("acceptance_criteria");
       expect(actual.request).not.toHaveProperty("material_digest");expect(actual.request).not.toHaveProperty("snapshot_tree");
       expect(()=>validateSchema("result",actual)).not.toThrow();
+    });
+  });
+});
+
+
+describe("OCR version detection failure stays unavailable", () => {
+  it.each(["nonzero", "ambiguous"])("does not infer missing installation from %s version detection", async mode => {
+    const state = fixture(), request = reviewRequest(), bin = join(state.root, "broken-bin");
+    mkdirSync(bin);
+    writeFileSync(join(bin, "ocr"), mode === "nonzero"
+      ? "#!/bin/sh\nexit 3\n"
+      : "#!/bin/sh\nprintf 'ocr 1.12.9\\nocr 1.13.0\\n'\n", {mode: 0o700});
+    const inputPath = join(state.root, "detection-review.json");
+    writeFileSync(inputPath, JSON.stringify({request}));
+    const calls = {ocr: 0, whReview: 0};
+    await withRuntimeEnvironment({HOME:state.home,WORKFLOWHUB_TASK_DIR:state.root,PATH:`${bin}:${pathWithoutOcr()}`}, async () => {
+      const doctor = await stageRuntimeMain(["doctor", "--stage=build-code", "--project=workflowhub", `--task=${state.taskId}`], {cwd:state.worktreeRoot});
+      expect(doctor.ocr.status).toBe("unavailable");
+      const recorded = await stageRuntimeCliMain(["review", "--action=record", "--stage=build-code", "--project=workflowhub", `--task=${state.taskId}`, `--input=${inputPath}`], {
+        cwd:state.worktreeRoot,services:{runOcrDelegationRound:async()=>{calls.ocr++;throw Error("unexpected OCR dispatch");},runReviewRound:async()=>{calls.whReview++;throw Error("unexpected substitution");}}
+      });
+      const review = JSON.parse(readFileSync(join(state.taskDir, recorded.result_ref), "utf8"));
+      expect(calls).toEqual({ocr:0,whReview:0});
+      expect(review).toMatchObject({status:"unavailable",executor:"ocr",dispatch_state:"blocked_before_dispatch",error:{code:doctor.ocr.error.code,message:doctor.ocr.reason}});
+      expect(review.error.code).not.toBe("OCR_NOT_INSTALLED");
+      expect(review.provider_results).toEqual([]);
+      expect(review).not.toHaveProperty("fallback");
     });
   });
 });
