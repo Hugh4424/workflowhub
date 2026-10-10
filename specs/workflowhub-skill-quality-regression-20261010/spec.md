@@ -318,7 +318,7 @@
 
 - **FR-QUAL-014**：让独立审查的**可用来源不再被静默丢掉**，且「活着在流」不被误判成「停滞」：
   - ① 结果解析：在既有「整份 JSON／JSONL 行／唯一围栏 JSON」之外，接受**唯一嵌入的裸 JSON 对象**——必须只有一个候选且通过同一套 findings 校验；出现多个候选、校验失败、或只有散文，都仍判 `invalid`。提取本身记为事实，不得改写为通过。
-  - ② 进度核算：区分 `liveness`（收到帧）与 `progress`（有语义进展）。重复的无载荷心跳只刷 liveness、不再被当作「新进展」；适配器已能提供的会话推进信号（如 pi 的 session leaf 前移）参与判定。只有心跳、长期无语义进展时**有界**停下，真正静默仍必须停下。
+  - ② 进度核算：区分 `liveness`（收到帧）与 `progress`（有语义进展）。支持域中 `streamLiveness:true` 必须有 callable effective probe：`typeof (probeSession ?? plan.probeSession) === "function"`；任意 `streamLiveness:true + streamProgress:true`，以及无 callable effective probe 且 `streamProgress:false`，均为 unsupported input，必须在 spawn 前同步抛出 `TypeError` 且不得调用 `beforeSpawn`。普通 `streamLiveness:false` 的 no-probe 行为保持不变，包括 no-probe + `streamProgress:true` 的既有五 health interval 静默停止。对支持域，重复的无载荷心跳只刷 liveness、不再被当作「新进展」；适配器已能提供的会话推进信号（如 pi 的 session leaf 前移）参与判定。每个 `observation.liveness === true` 帧（纯 liveness、首个/重复 progress、terminal-bearing）使 process-owned `livenessGeneration` 单调递增；不得调用 protected `healthRunner.noteProgress`，不得合成 cursor/session，不引入总 wall-clock timeout、schema、status、ledger 或 provider state。health probe 以当前 generation 与上一 health tick/上一 probe 结束 generation 比较：首 tick baseline 为 `0`，完成当前结果分类/投影后再更新 baseline；只有 generation advanced 的非 terminal `busy` 才仅为 health diagnostics 投影为 `progressing`，保留原 cursor/session/error/evidence；停帧回到原始 `busy`，沿既有五 interval 静默路径停止；probe 间 heartbeat 与下一 tick 前到达的帧同样计入。verified non-terminal cursor/session 前移才重置 12-interval semantic window；valid `completed` 仅在尚无 `terminalClaim`/`PROCESS_STALLED` claim 时 authoritative 并保留 raw/session/cursor/`health_harvested`，已 stalled 不可复活；old-round 由 adapter baseline/`validateCompleted` 判定，不能由 generation 猜测。只有心跳、长期无语义进展时**有界**停下，真正静默仍必须停下。
   - ③ 失败回读义务：对 `OUTPUT_INVALID` 且有原始输出的失败来源，操作者必须**只读回读一次**并记录「原始件里是否存在唯一可解析的 findings JSON」；允许据此救回发现，**禁止**把失败改写成通过或空 findings。
   - **范围边界**：不改 findings schema、不加必填字段、不新增状态文件或常驻账本；不改「总耗时永不是上限」的既有取舍；不实现 `OPEN-13` 的分片审查（C 只登记职责、consumer、owner、测试与删除条件）。
   - **依据**：`PFACT-017`、`OPEN-13`、用户 2026-10-10 授权
@@ -621,9 +621,9 @@
 
 - [ ] **AC-007**：审查管道修复的可证伪判据——①「118 字节散文 + 一个合法 findings JSON」的输入被解析为**该 provider 的发现**（不再是 `OUTPUT_INVALID`），而「散文 + 两个候选 JSON」「散文 + 坏 JSON」「只有散文」三种输入仍然判 `invalid`；②重复的无载荷心跳不再把活跃流判成 `PROCESS_STALLED`，而真正静默的流仍然会停；③对 `OUTPUT_INVALID` 且保留原始输出的失败来源，存在一条只读回读记录（是否可救回唯一 findings JSON）；④既有三路解析（整份 JSON／JSONL／唯一围栏）行为不变；⑤没有新增 findings schema 字段、没有新增状态文件或常驻账本、没有引入总墙钟上限
 验证：P10 的判定器（`quality/tests/sqr-p10-oracle.mjs`）＋ `skills/wh-review/scripts/__tests__/` 与 `skills/third-review/test/` 下新增的针对性单测
-通过：上述 5 条全部有具名断言且逐条可重放；`run-checks` 保持 exit 0
+通过：上述 5 条全部有具名断言且逐条可重放；`run-checks` 保持 exit 0。P10 T027 另以 A-L 具名断言固定 supported/unsupported 边界：A 无 callable probe 的 `streamLiveness` 在 spawn 前拒绝；B `streamLiveness + streamProgress` 在 spawn 前拒绝；C 普通 no-probe `streamProgress` 五 interval 静默停止；D 有 probe 真静默五 interval 停止；E 心跳仅在 12 interval semantic window 内有界；F 心跳停止后回到五 interval 静默；G generation advanced 只产生 diagnostic-only `HEALTH_PROGRESSING` 投影并保留原 probe evidence，含 probe 间 heartbeat；H 停帧保留 `HEALTH_BUSY` 并五 interval 停止；I delayed verified cursor/session 重置 semantic window；J 未 stalled 前 valid completed 保留 `health_harvested`、raw、session、cursor；K stalled 后 completed 不得复活；L liveness-only observeLine 分支不调用 `noteProgress`。unsupported rejection 本身不是 AC pass；支持域外输入保持披露。
 失败：任一条只能靠人工目视、或修复把失败改写成了通过／空 findings
-证据：`PFACT-017`、P10 的 RED/GREEN 原件与 `OPEN-13` 的处置记录
+证据：`PFACT-017`、P10 的 RED/GREEN 原件与 `OPEN-13` 的处置记录；旧 T027/169/168、052、002 原始件只读保留，不重写。
 - [ ] **AC-008**：`OPEN-05` 断链处置的判据——①`workflows/verify-code/design-alignment.mjs` 不再在导入期失败（模块被删除，或不再导入不存在的符号）；②全仓当前文件不再有指向它、或指向被删符号的悬空引用（只排除既有 `.git/**`、`node_modules/**`、`specs/**`、`docs/archive/**`、`docs/research/**`；其余全体文件原字节均核，不按扩展名或文件类别缩范围，含当前代码、数据、agent 方法及无扩展名文件；读取失败明确报错，活 `.md` 消费义务不得以名词解释放行；悬空引用计数为 0）；③`docs/architecture/move-map.json` 无残留登记；④`tests/verify-code-design-alignment.test.mjs` 按卡片写明的选择被一并清理或改为断言「不再存在且无悬空引用」；⑤`run-checks` 保持 exit 0
 验证：P11 的判定器（`quality/tests/sqr-p11-oracle.mjs`）与同一 3 个负向例；扫描加强及必要 oracle 校准须另经独立 TCR，保全部 TARGET/GUARD 身份、数量和失败强度，材料登记不代批准；历史066、039及 RED 原件只读保留
 通过：上述 5 条全部有具名断言；两条命令可重放（悬空引用 `grep` ＋ `run-checks`）

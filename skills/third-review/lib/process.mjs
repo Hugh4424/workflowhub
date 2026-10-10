@@ -16,12 +16,16 @@ function isProcessGroupAlive(pid) {
   catch (error) { return error?.code === "EPERM"; }
 }
 export function execute(plan, { maxOutputBytes, maxPendingLineBytes = 1_048_576, terminationGraceMs = 5_000, terminateProcess = terminateProcessTree, livenessIntervalMs = 1000, healthCheckIntervalMs = 60_000, probeDeadlineMs = 5_000, probeSession = null, isProcessAlive = isAlive, isCancelled = () => false, validateCompleted = () => true, acceptSemanticOutputAfterStdinClose = false, executionTimeoutMs = null, onStart, onLiveness, onProgress, onActivity, onOutput }) {
+  const effectiveProbe = probeSession ?? plan.probeSession;
+  if (plan.streamLiveness === true && (plan.streamProgress === true || typeof effectiveProbe !== "function")) {
+    throw new TypeError("streamLiveness requires a callable probeSession and cannot combine with streamProgress");
+  }
   if (executionTimeoutMs !== null && (!Number.isSafeInteger(executionTimeoutMs) || executionTimeoutMs < 1)) throw new TypeError("executionTimeoutMs must be a positive safe integer or null");
   if (!Number.isSafeInteger(maxPendingLineBytes) || maxPendingLineBytes < 1) throw new TypeError("maxPendingLineBytes must be a positive safe integer");
   return new Promise((resolve) => {
     const started = Date.now(); let child; let stdout = ""; let stderr = ""; let bytes = 0; let stdoutTruncated = false; let stderrTruncated = false; let settled = false; let terminalClaim = null; let healthRunner = null; let livenessTimer = null; let killTimer = null; let executionTimer = null; let lastProgressMs = null; let stdinError = null; let session_id = null; let cursor = null; const progressKeys = new Set(); let progressEvents = 0; let retryCount = 0; const lineBuffers = { stdout: "", stderr: "" };
     const livenessFrames = plan.streamLiveness === true;
-    let livenessRefresh = 0; let activityGeneration = 0; let probeCursor = null; let probeSessionId = null; let semanticIdleIntervals = 0; let semanticIntervalAt = null;
+    let livenessGeneration = 0; let probeGenerationBaseline = 0; let lastLivenessAt = null; let activityGeneration = 0; let probeCursor = null; let probeSessionId = null; let semanticIdleIntervals = 0; let semanticIntervalAt = null;
     const cleanup = ({ detachOutput = false, keepKillTimer = false } = {}) => {
       if (livenessTimer) clearInterval(livenessTimer); if (killTimer && !keepKillTimer) clearTimeout(killTimer); if (executionTimer) clearTimeout(executionTimer); healthRunner?.stop(); if (child?.stdin && !child.stdin.destroyed) child.stdin.end();
       // A provider terminal event is authoritative.  Its wrapper can leave
@@ -55,9 +59,6 @@ export function execute(plan, { maxOutputBytes, maxPendingLineBytes = 1_048_576,
     const claimCompleted = (harvest) => { if (settled || terminalClaim) return false; terminalClaim = { kind: "completed", harvest }; terminateClaimedProcess(); return true; };
     const resetSemanticWindow = () => { semanticIdleIntervals = 0; semanticIntervalAt = Date.now(); };
     const refreshLivenessWindow = () => {
-      livenessRefresh += 1;
-      try { healthRunner?.noteProgress({}); }
-      finally { livenessRefresh -= 1; }
       // Only actual liveness frames advance this interval window. Probe failure
       // values remain diagnostic, and a stalled probe cannot suspend the count.
       const now = Date.now();
@@ -82,6 +83,7 @@ export function execute(plan, { maxOutputBytes, maxPendingLineBytes = 1_048_576,
       if (cursorChanged || sessionChanged) resetSemanticWindow();
     };
     const recordLiveness = () => { const at_ms = Date.now(); onLiveness?.({ at_ms }); return at_ms; };
+    const recordLivenessFrame = () => { const at_ms = recordLiveness(); livenessGeneration += 1; lastLivenessAt = at_ms; return at_ms; };
     const observeProcessLiveness = () => { if (!settled && child?.pid && isProcessAlive(child.pid)) { recordLiveness(); return true; } return false; };
     try { plan.beforeSpawn?.(); child = spawn(plan.command, plan.argv, { cwd: plan.cwd, env: plan.env, stdio: ["pipe", "pipe", "pipe"], detached: true }); }
     catch (error) { finish({ ok: false, error: { code: error?.code ?? "PROCESS_START_FAILED", message: error.message }, duration_ms: Date.now() - started, stdout: "", stderr: "" }); return; }
@@ -102,6 +104,7 @@ export function execute(plan, { maxOutputBytes, maxPendingLineBytes = 1_048_576,
       livenessTimer = setInterval(observeProcessLiveness, livenessIntervalMs); livenessTimer.unref();
       const healthProbe = probeSession ?? plan.probeSession;
       const observedProbe = healthProbe ? async (ctx) => {
+        const priorBaseline = probeGenerationBaseline;
         const observationGeneration = activityGeneration;
         const result = await healthProbe({ ...ctx, activity_generation: observationGeneration, pid: child.pid, cwd: plan.cwd });
         const stale = activityGeneration !== observationGeneration;
@@ -111,9 +114,16 @@ export function execute(plan, { maxOutputBytes, maxPendingLineBytes = 1_048_576,
           if (claimFailure(result.error?.code ?? "PROVIDER_HEALTH_FAILED", result.error?.message ?? "provider emitted a failed terminal event")) settleClaim();
         }
         if (livenessFrames && !stale) observeSemanticProgress(result);
-        return result;
+        const projected = livenessFrames && result?.status === "busy" && livenessGeneration > priorBaseline
+          ? { ...result, status: "progressing" }
+          : result;
+        if (!settled && livenessFrames && result?.status === "busy" && projected.status === "busy") {
+          plan.onHealthDiagnostic?.({ code: "HEALTH_BUSY", error_code: result.error?.code ?? null, session_id: result.session_id ?? null, cursor: result.cursor ?? null, evidence: result.evidence ?? null, at_ms: Date.now() });
+        }
+        probeGenerationBaseline = livenessGeneration;
+        return projected;
       } : null;
-      healthRunner = createHealthRunner({ streamProgress: plan.streamProgress === true, intervalMs: healthCheckIntervalMs, probeDeadlineMs, isCancelled, validateCompleted, probeSession: observedProbe, onProgress: ({ at_ms, session_id: healthSession, cursor: healthCursor }) => { activityGeneration += 1; if (healthSession) session_id = healthSession; if (healthCursor !== null && healthCursor !== undefined) cursor = healthCursor; if (livenessRefresh === 0) onProgress?.({ at_ms, session_id, cursor, event: "health" }); }, onDecision: (decision) => {
+      healthRunner = createHealthRunner({ streamProgress: plan.streamProgress === true, intervalMs: healthCheckIntervalMs, probeDeadlineMs, isCancelled, validateCompleted, probeSession: observedProbe, onProgress: ({ at_ms, session_id: healthSession, cursor: healthCursor }) => { activityGeneration += 1; if (healthSession) session_id = healthSession; if (healthCursor !== null && healthCursor !== undefined) cursor = healthCursor; onProgress?.({ at_ms, session_id, cursor, event: "health" }); }, onDecision: (decision) => {
         if (decision.session_id) session_id = decision.session_id; if (decision.cursor !== null && decision.cursor !== undefined) cursor = decision.cursor;
         if (decision.status === "completed") { if (claimCompleted(decision)) settleClaim(); return; }
         if (claimFailure(decision.error.code, decision.error.message)) settleClaim();
@@ -132,7 +142,7 @@ export function execute(plan, { maxOutputBytes, maxPendingLineBytes = 1_048_576,
       if (observation.session_id) session_id = observation.session_id;
       if (observation.cursor !== null && observation.cursor !== undefined) cursor = observation.cursor;
       retryCount += Number.isSafeInteger(observation.retry_count) ? observation.retry_count : 0;
-      if (observation.liveness === true) recordLiveness();
+      if (observation.liveness === true) recordLivenessFrame();
       if (Object.hasOwn(observation, "stdin_write")) {
         if (typeof observation.stdin_write !== "string" || observation.stdin_write.length === 0) { claimFailure("PROCESS_STDIN_INVALID", "provider requested an invalid stdin write"); return; }
         if (!child.stdin || child.stdin.destroyed || !child.stdin.writable) { claimFailure("PROCESS_STDIN_FAILED", "provider requested stdin after the channel closed"); return; }
@@ -158,7 +168,9 @@ export function execute(plan, { maxOutputBytes, maxPendingLineBytes = 1_048_576,
       const progressKey = observation.progress_key ?? `${name}\0${line}`;
       if (progressKeys.has(progressKey)) { if (livenessFrames && observation.liveness === true) refreshLivenessWindow(); return; }
       if (livenessFrames && observation.liveness === true) refreshLivenessWindow();
-      progressKeys.add(progressKey); lastProgressMs = Date.now(); progressEvents += 1; healthRunner?.noteProgress({ cursor: observation.cursor, session_id: observation.session_id }); onProgress?.({ at_ms: lastProgressMs, cursor, session_id, event: observation.event ?? null });
+      progressKeys.add(progressKey); lastProgressMs = Date.now(); progressEvents += 1;
+      if (!livenessFrames || observation.liveness !== true) healthRunner?.noteProgress({ cursor: observation.cursor, session_id: observation.session_id });
+      onProgress?.({ at_ms: lastProgressMs, cursor, session_id, event: observation.event ?? null });
     };
     const collect = (name) => (chunk) => {
       if (settled) return;

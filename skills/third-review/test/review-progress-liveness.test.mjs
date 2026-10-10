@@ -24,9 +24,19 @@ const provider = (overrides = {}) => ({ id: "pi", command: fake, model: "deepsee
 const streamingProbe = async () => ({ status: "busy", session_id: "pi-liveness-session", cursor: "same-leaf", raw: null, error: null, evidence: "Pi session is streaming" });
 const movingProbe = () => { let leaf = 0; return async () => ({ status: "busy", session_id: "pi-liveness-session", cursor: `leaf-${++leaf}`, raw: null, error: null, evidence: "Pi session leaf advanced" }); };
 const heartbeatSource = (durationMs) => `const line=JSON.stringify({type:"pi.progress",event:"thinking_delta"});const timer=setInterval(()=>process.stdout.write(line+"\\n"),2);setTimeout(()=>{clearInterval(timer);process.exit(0);},${durationMs});`;
+const heartbeatThenSilenceSource = (heartbeatMs, totalMs) => `const line=JSON.stringify({type:"pi.progress",event:"thinking_delta"});const timer=setInterval(()=>process.stdout.write(line+"\\n"),2);setTimeout(()=>clearInterval(timer),${heartbeatMs});setTimeout(()=>process.exit(0),${totalMs});`;
 const alternatingProgressSource = (durationMs) => `let index=0;const timer=setInterval(()=>{const event=index++%2===0?"thinking_delta_a":"thinking_delta_b";process.stdout.write(JSON.stringify({type:"pi.progress",event,delta:"harmless-"+index})+"\\n");},2);setTimeout(()=>{clearInterval(timer);process.exit(0);},${durationMs});`;
 const plan = (source, overrides = {}) => ({ command: process.execPath, argv: ["-e", source], cwd: os.tmpdir(), env: process.env, input: null, redact: [], observeLine: pi.observeLine, streamLiveness: true, probeSession: streamingProbe, ...overrides });
 const options = (intervalMs) => ({ maxOutputBytes: 65536, healthCheckIntervalMs: intervalMs, terminationGraceMs: 20 });
+const validHarvest = `${JSON.stringify({ type: "session.completed", session_id: "harvest-session", text: "done" })}\n`;
+
+test("unsupported liveness plans reject before spawning", () => {
+  for (const invalid of [{ streamLiveness: true, streamProgress: true, probeSession: streamingProbe }, { streamLiveness: true, streamProgress: false, probeSession: null }]) {
+    let beforeSpawn = 0;
+    assert.throws(() => execute(plan("process.exit(0)", invalid), { ...options(20), onStart: () => { beforeSpawn += 1; } }), TypeError);
+    assert.equal(beforeSpawn, 0);
+  }
+});
 
 test("the pi adapter declares stream liveness without changing its observation contract", () => {
   const runtime = temp(); const cwd = path.join(runtime, "work"); fs.mkdirSync(cwd, { recursive: true });
@@ -86,19 +96,58 @@ test("an invalid completed probe result cannot reset the semantic stall window",
   assert.match(result.error.message, new RegExp(`no semantic progress for ${SEMANTIC_STALL_INTERVALS} health intervals`));
 });
 
-test("a delayed changing probe result becomes stale after liveness activity and cannot reset the semantic window", async () => {
+test("a delayed changing probe result accepts verified semantic progress after liveness activity", async () => {
   const intervalMs = 20; let probes = 0;
-  const result = await execute(plan(heartbeatSource(intervalMs * (SEMANTIC_STALL_INTERVALS + 10)), {
+  const result = await execute(plan(heartbeatSource(intervalMs * 9), {
     probeSession: async () => {
       const cursor = `late-leaf-${++probes}`;
       await new Promise(resolve => setTimeout(resolve, intervalMs * 2));
       return { status: "busy", session_id: "pi-liveness-session", cursor, raw: null, error: null, evidence: "late changing probe fixture" };
     },
   }), { ...options(intervalMs), probeDeadlineMs: intervalMs * 4 });
-  assert.equal(result.ok, false, "a changed cursor from a stale probe must not count as semantic progress");
-  assert.equal(result.error.code, "PROCESS_STALLED");
-  assert.match(result.error.message, new RegExp(`no semantic progress for ${SEMANTIC_STALL_INTERVALS} health intervals`));
+  assert.equal(result.ok, true, `verified delayed progress must not be discarded: ${result.error?.code}`);
   assert.ok(probes >= 1, "the delayed probe fixture must be exercised");
+});
+
+test("continuous frames between probe ticks project busy as diagnostic progressing", async () => {
+  const intervalMs = 20; const diagnostics = [];
+  const result = await execute(plan(heartbeatSource(intervalMs * 8), {
+    probeSession: async () => ({ status: "busy", session_id: "diagnostic-session", cursor: "same-leaf", raw: null, error: null, evidence: "original busy evidence" }),
+    onHealthDiagnostic: value => diagnostics.push(value),
+  }), options(intervalMs));
+  assert.equal(result.ok, true, `continuous liveness should not be stopped by unchanged busy: ${result.error?.code}`);
+  assert.ok(diagnostics.some(value => value.code === "HEALTH_PROGRESSING"), "generation-advanced busy must project HEALTH_PROGRESSING");
+  assert.equal(diagnostics.find(value => value.code === "HEALTH_PROGRESSING")?.evidence, "original busy evidence");
+});
+
+test("liveness-only pure, first, and duplicate frames do not advance health progress generation", async () => {
+  const generations = [];
+  const source = `const rows=[{kind:"pure"},{kind:"first"},{kind:"duplicate"}];let i=0;const timer=setInterval(()=>{const row=rows[i++%rows.length];process.stdout.write(JSON.stringify(row)+"\\n");},2);setTimeout(()=>{clearInterval(timer);process.exit(0);},180);`;
+  const result = await execute(plan(source, {
+    observeLine: (_stream, line) => {
+      const { kind } = JSON.parse(line);
+      if (kind === "pure") return { liveness: true, progress: false, event: kind };
+      return { liveness: true, progress: true, progress_key: kind === "duplicate" ? "first" : kind, event: kind };
+    },
+    probeSession: async ({ activity_generation }) => {
+      generations.push(activity_generation);
+      return { status: "busy", session_id: null, cursor: null, raw: null, error: null, evidence: "generation probe" };
+    },
+  }), options(20));
+  assert.equal(result.ok, true, `liveness-only frame branches should remain healthy: ${result.error?.code}`);
+  assert.ok(generations.length > 0);
+  assert.ok(generations.every(value => value === 0), "liveness-only frames must not call healthRunner.noteProgress");
+});
+
+test("stopped liveness frames keep health busy and eventually stall", async () => {
+  const diagnostics = [];
+  const result = await execute(plan(heartbeatThenSilenceSource(35, 3000), {
+    onHealthDiagnostic: value => diagnostics.push(value),
+  }), options(20));
+  assert.equal(result.ok, false);
+  assert.equal(result.error.code, "PROCESS_STALLED");
+  assert.ok(diagnostics.some(value => value.code === "HEALTH_PROGRESSING"), "frames between ticks may project progressing");
+  assert.ok(diagnostics.some(value => value.code === "HEALTH_BUSY"), "after frames stop unchanged busy must remain HEALTH_BUSY");
 });
 
 test("a delayed terminal probe failure remains authoritative despite liveness activity", async () => {
@@ -122,6 +171,33 @@ test.each(["unverifiable", "dead"])("actual repeated heartbeats remain bounded w
   assert.equal(result.error.code, "PROCESS_STALLED");
   assert.match(result.error.message, new RegExp(`no semantic progress for ${SEMANTIC_STALL_INTERVALS} health intervals`));
   assert.equal(result.progress_events, 1);
+});
+
+test("a delayed valid completed probe is harvested before a semantic stall claim", async () => {
+  const intervalMs = 20;
+  const result = await execute(plan(heartbeatSource(intervalMs * 8), {
+    probeSession: async () => {
+      await new Promise(resolve => setTimeout(resolve, intervalMs * 2));
+      return { status: "completed", session_id: "harvest-session", cursor: "done", raw: { stdout: validHarvest, stderr: "" }, error: null, evidence: "delayed completion" };
+    },
+  }), { ...options(intervalMs), validateCompleted: raw => raw.stdout === validHarvest, probeDeadlineMs: intervalMs * 4 });
+  assert.equal(result.ok, true);
+  assert.equal(result.health_harvested, true);
+  assert.equal(result.stdout, validHarvest);
+  assert.equal(result.session_id, "harvest-session");
+  assert.equal(result.cursor, "done");
+});
+
+test("a completed probe after PROCESS_STALLED cannot resurrect the terminal claim", async () => {
+  const intervalMs = 20;
+  const result = await execute(plan(heartbeatSource(intervalMs * (SEMANTIC_STALL_INTERVALS + 10)), {
+    probeSession: async () => {
+      await new Promise(resolve => setTimeout(resolve, intervalMs * 20));
+      return { status: "completed", session_id: "late-session", cursor: "late", raw: { stdout: validHarvest, stderr: "" }, error: null, evidence: "too late" };
+    },
+  }), { ...options(intervalMs), validateCompleted: raw => raw.stdout === validHarvest, probeDeadlineMs: intervalMs * 40 });
+  assert.equal(result.ok, false);
+  assert.equal(result.error.code, "PROCESS_STALLED");
 });
 
 test.each(["unverifiable", "dead"])("an advisory %s probe alone cannot stop a child with no observable output", async status => {
@@ -167,7 +243,14 @@ test("verified probe leaf progress survives beyond the semantic window despite a
 });
 
 test("true silence still stops on the existing five-interval window", async () => {
-  const result = await execute(plan("setTimeout(() => process.exit(0), 3000);"), options(20));
+  const result = await execute(plan("setTimeout(() => process.exit(0), 3000);"), { ...options(20), streamLiveness: false, probeSession: null });
+  assert.equal(result.ok, false);
+  assert.equal(result.error.code, "PROCESS_STALLED");
+  assert.match(result.error.message, /no progress for 5 health intervals/);
+});
+
+test("heartbeat stop falls back to the five-interval silence rule", async () => {
+  const result = await execute(plan(heartbeatThenSilenceSource(30, 3000), { streamLiveness: false, streamProgress: true, probeSession: null }), options(20));
   assert.equal(result.ok, false);
   assert.equal(result.error.code, "PROCESS_STALLED");
   assert.match(result.error.message, /no progress for 5 health intervals/);
