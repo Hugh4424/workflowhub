@@ -54,14 +54,15 @@ function findNestedFindings(value, seen = new Set()) {
   return MISSING_FINDINGS;
 }
 
-function freezeReview(findings, discardedFacts = []) {
+function freezeReview(findings, discardedFacts = [], parseRoute = null) {
   return Object.freeze({
     findings: Object.freeze(findings),
+    ...(parseRoute ? { parse_route: parseRoute } : {}),
     ...(discardedFacts.length > 0 ? { discarded_facts: Object.freeze(discardedFacts) } : {}),
   });
 }
 
-function validate(value, options) {
+function validate(value, options, parseRoute = null) {
   if (!value || typeof value !== "object" || Array.isArray(value)) invalid("provider output must be an object");
   const findingsValue = findNestedFindings(value);
   if (findingsValue === MISSING_FINDINGS) invalid("provider output must contain findings");
@@ -79,15 +80,15 @@ function validate(value, options) {
     const normalized = validateFinding(finding, index, options);
     if (normalized) findings.push(normalized);
   });
-  return freezeReview(findings, discardedFacts);
+  return freezeReview(findings, discardedFacts, parseRoute);
 }
 
 function rememberParseError(errors, message) {
   if (errors.length < 8) errors.push(safeParseError(message));
 }
 
-function validateCandidate(value, options, errors, label) {
-  try { return validate(value, options); } catch (error) {
+function validateCandidate(value, options, errors, label, parseRoute = null) {
+  try { return validate(value, options, parseRoute); } catch (error) {
     if (error?.code !== "OUTPUT_INVALID") throw error;
     rememberParseError(errors, `${label}: ${error.parse_error}`);
     return null;
@@ -128,6 +129,47 @@ function parseUniqueFence(raw, options, errors) {
   return valid.length === 1 ? valid[0] : null;
 }
 
+function embeddedObjectCandidates(raw) {
+  const candidates = [];
+  for (let start = 0; start < raw.length; start += 1) {
+    if (raw[start] !== "{") continue;
+    let depth = 0; let quoted = false; let escaped = false; let end = start;
+    for (; end < raw.length; end += 1) {
+      const character = raw[end];
+      if (quoted) {
+        if (escaped) escaped = false;
+        else if (character === "\\") escaped = true;
+        else if (character === '"') quoted = false;
+      } else if (character === '"') quoted = true;
+      else if (character === "{") depth += 1;
+      else if (character === "}" && --depth === 0) break;
+    }
+    const closed = end < raw.length;
+    candidates.push({ text: raw.slice(start, end + 1), start, end, closed });
+    start = end;
+  }
+  return candidates;
+}
+
+function parseUniqueEmbeddedObject(raw, options, errors) {
+  const candidates = embeddedObjectCandidates(raw);
+  if (candidates.length === 0) return null;
+  if (candidates.length > 1) {
+    rememberParseError(errors, `embedded JSON object: ${candidates.length} candidates are ambiguous`);
+    return null;
+  }
+  const candidate = candidates[0];
+  let reason;
+  if (!candidate.closed) reason = "is not a closed JSON object";
+  else if (candidate.start === 0 || /\s$/.test(raw.slice(0, candidate.start))) reason = "is not glued to a prose prefix";
+  else if (raw.slice(candidate.end + 1).trim()) reason = "is not the final content";
+  if (reason) { rememberParseError(errors, `embedded JSON object ${reason}`); return null; }
+  let value;
+  try { value = JSON.parse(candidate.text); }
+  catch { rememberParseError(errors, "embedded JSON object is not valid JSON"); return null; }
+  return validateCandidate(value, options, errors, "embedded JSON object", "embedded_json");
+}
+
 export function parseReviewerOutput(raw, { requireEvidence = false } = {}) {
   if (typeof raw !== "string" || !raw.trim()) invalid("provider returned no text");
   if (Buffer.byteLength(raw, "utf8") > MAX_REVIEWER_OUTPUT_BYTES) invalid(`provider output exceeds ${MAX_REVIEWER_OUTPUT_BYTES} bytes`);
@@ -145,5 +187,7 @@ export function parseReviewerOutput(raw, { requireEvidence = false } = {}) {
   if (jsonl) return jsonl;
   const fenced = parseUniqueFence(raw, options, errors);
   if (fenced) return fenced;
-  invalid("no valid JSON/fence findings candidate", errors.join("; ") || "no parseable JSON candidate");
+  const embedded = parseUniqueEmbeddedObject(raw, options, errors);
+  if (embedded) return embedded;
+  invalid("no valid JSON/fence/embedded findings candidate", errors.join("; ") || "no parseable JSON candidate");
 }

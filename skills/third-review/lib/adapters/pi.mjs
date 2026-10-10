@@ -165,6 +165,8 @@ function executionPlan(provider, cwd, prompt, runtime, session = null) {
   const input = `${JSON.stringify({ id: "prompt-1", type: "prompt", message: prompt })}\n`;
   return {
     ...plan({ ...provider, command: process.execPath }, cwd, [controller, specification], input),
+    // Repeated RPC frames prove liveness; probe leaf changes prove progress.
+    streamLiveness: true,
     keepStdinOpen: true, clientArgv, expectedSession, observeLine,
     healthServer: { url, bind: { hostname: "127.0.0.1", port } },
     probeSession: createPiProbe({ url, expectedSession }),

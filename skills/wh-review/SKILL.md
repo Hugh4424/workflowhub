@@ -26,9 +26,13 @@ stage-skill-plan.json 仍在本技能原路径提供 required_skills/optional_sk
 4. 主会话保留一份真实 review 原件及执行回执，处置 fixed、rejected_invalid、accepted_risk 或 needs_human。finding 要有能回读的问题/根因/建议/证据；无效锚点标记留原件，内容仍由独立事实判断，不能自动删真实问题。build-code、verify-code 内严重问题自动优先修复，无法解决保留 incomplete 并继续可执行部分，最终 close 前展示实际损失和风险，不新增中间确认；其它阶段按其真实选择合同处理。仅已有绑定该 finding 的真实用户风险决定才可记 accepted_risk，持续实施授权不能代填风险接受。
 5. 请求只要已经返回语义建议，就不因修复或想追空 findings 重派同 scope 轮次。无语义结果且具体传输/材料问题已改变时，按原调用范围处理安全重试。恢复/长等待沿同一个实际请求，取消按现信号路径执行；本技能不新建异步对象或第二层生命周期。 明确补派仅用于原记录未 completed 的来源：提交非空 `only_providers`、`dispatch_reason` 和带 sha256 的 `supplements` 原记录引用；绑定相同材料与 subject，不重发已成功来源，不因空 findings 追派。补派只由人显式发起，不自动补派；按失败率自动降权同样不做（ADR-029、ADR-031）。
 
+派发卫生：派发前用已有的 broker 探针筛掉确定性不可用的路线；在满足「至少一条异源建议」的前提下把路线数收到 3 条；账号配额窗口内不使用对应的 provider；大包全文审查不使用会打转的路线。探针只读，筛除与配额事实照实记录；本条不新增公共命令、调度状态或重试状态。
+
 ## 输出和失败边界
 
 available 只表示实际收到可读建议，至少一个有效语义 sibling 可以与其它失败并存；partial/available-with-failures 不等于通过。空 findings 只表示本次完成阅读后未提出问题；未执行、不可用、取消、无效 JSON 或缺材料都不是空 findings，也不是用户同意或交付完成。
+
+对 `OUTPUT_INVALID` 且保留了原始输出的失败来源，操作者必须只读回读该原始输出一次，并记录「其中是否存在唯一可解析的 findings JSON」这一事实；只允许据此救回真实发现，禁止把失败改写成通过或空 findings。
 
 保留 provider 原身份与失败类别：ROUTE_UNAVAILABLE/REVIEW_BROKER_START_FAILED 只用于路线/启动失败；timeout、cancelled、invalid output、material missing、RATE_LIMITED 等保留真实类别。必要脱敏、realpath范围、输入/输出体量与解析限制、配置原子写、并集聚合和信号/资源清理义务仍由现有生产 owner 承接；方法改文不证明这些行为已实测。
 
