@@ -14,6 +14,7 @@ import {openTask} from "../../runtime/task/task-handle.mjs";
 import {openCurrentTaskWorkspace} from "../../runtime/task/workspace.mjs";
 import {ArtifactDir} from "../../runtime/evidence/artifact-dir.mjs";
 const roots=[];afterEach(()=>{vi.unstubAllEnvs();for(const root of roots.splice(0))rmSync(root,{recursive:true,force:true});});
+const realOcrMissing=(()=>{try{execFileSync("ocr",["--version"],{stdio:"pipe"});return false;}catch(error){return error.code==="ENOENT";}})();
 const sha=b=>createHash("sha256").update(b).digest("hex"),providers=["review/a","review/b","review/c"];
 const finding={severity:"minor",path:"materials/01-approved_spec.md",line:1,issue:"C's original finding.",recommendation:"Keep this original unchanged.",evidence_kind:"direct",evidence:"owned current specification"};
 const request=()=>({stage:"build-code",review_scope:"phase",subject_kind:"phase",phase_id:"P2",surface:"document",materials:{approved_spec:"owned current specification",acceptance_criteria:"AC-60: only retry A and preserve B/C.",test_evidence:"owned test"}});
@@ -174,7 +175,7 @@ test.each([false,true])("public code supplement selects only failed A and final 
 
 // Public installed OCR writer preserves supplement binding and health callback transfer.
 // Provider output is controlled; this does not prove live model quality.
-test.each(["supplement","callback"])('installed OCR preserves explicit supplement binding and health callback transfer (%s)',async mode=>{
+test.skipIf(realOcrMissing).each(["supplement","callback"])('installed OCR preserves explicit supplement binding and health callback transfer (%s)',async mode=>{
  const f=nativeFixture();vi.stubEnv("HOME",f.home);vi.stubEnv("WORKFLOWHUB_TASK_DIR",f.root);
  const context=await contextFor(f),request={stage:"build-code",review_scope:"phase",subject_kind:"phase",phase_id:"P3",surface:"code",materials:{approved_spec:"Current accepted scope.",phase_map:"README.md current consumer.",acceptance_criteria:"AC-1: keep the original C and repair only A.",test_evidence:"owned installed OCR transport simulation"}};
  const trusted=prepareConfiguredOcrHostContext(request),configSha=trusted.provider_config_sha256;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { parseReviewerOutput } from "../../../../runtime/review/review-output.mjs";
+import { MAX_REVIEWER_OUTPUT_BYTES, parseReviewerOutput } from "../../../../runtime/review/review-output.mjs";
 
 // T026 / FR-QUAL-014① — the fourth route accepts the shape the independent
 // review actually produced (PFACT-017): `quality/reviews/2026-10-10-002-build-plan-document-provider-1.output`
@@ -32,6 +32,21 @@ describe("embedded findings object route", () => {
     const error = rejection(`prose${findings}between${findings}`);
     expect(error.code).toBe("OUTPUT_INVALID");
     expect(error.parse_error).toMatch(/embedded JSON object: 2 candidates are ambiguous/);
+  });
+
+  it("bounds candidate retention for many tiny objects near the output limit", () => {
+    const tinyObject = "{}";
+    const prefix = "prose";
+    const tinyCount = Math.floor((MAX_REVIEWER_OUTPUT_BYTES - Buffer.byteLength(prefix)) / Buffer.byteLength(tinyObject));
+    const raw = `${prefix}${tinyObject.repeat(tinyCount)}`;
+    expect(Buffer.byteLength(raw)).toBeGreaterThan(MAX_REVIEWER_OUTPUT_BYTES - 16);
+    expect(Buffer.byteLength(raw)).toBeLessThanOrEqual(MAX_REVIEWER_OUTPUT_BYTES);
+    const started = performance.now();
+    const error = rejection(raw);
+    const elapsed = performance.now() - started;
+    expect(error.code).toBe("OUTPUT_INVALID");
+    expect(error.parse_error).toMatch(/embedded JSON object: 2 candidates are ambiguous/);
+    expect(elapsed).toBeLessThan(1000);
   });
 
   it("rejects a glued object that is not valid JSON", () => {

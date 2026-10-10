@@ -130,9 +130,10 @@ function parseUniqueFence(raw, options, errors) {
 }
 
 function embeddedObjectCandidates(raw) {
-  const candidates = [];
+  let firstCandidate = null;
   for (let start = 0; start < raw.length; start += 1) {
     if (raw[start] !== "{") continue;
+    if (firstCandidate) return { candidate: firstCandidate, ambiguous: true };
     let depth = 0; let quoted = false; let escaped = false; let end = start;
     for (; end < raw.length; end += 1) {
       const character = raw[end];
@@ -145,27 +146,26 @@ function embeddedObjectCandidates(raw) {
       else if (character === "}" && --depth === 0) break;
     }
     const closed = end < raw.length;
-    candidates.push({ text: raw.slice(start, end + 1), start, end, closed });
+    firstCandidate = { start, end, closed };
     start = end;
   }
-  return candidates;
+  return { candidate: firstCandidate, ambiguous: false };
 }
 
 function parseUniqueEmbeddedObject(raw, options, errors) {
-  const candidates = embeddedObjectCandidates(raw);
-  if (candidates.length === 0) return null;
-  if (candidates.length > 1) {
-    rememberParseError(errors, `embedded JSON object: ${candidates.length} candidates are ambiguous`);
+  const { candidate, ambiguous } = embeddedObjectCandidates(raw);
+  if (!candidate) return null;
+  if (ambiguous) {
+    rememberParseError(errors, "embedded JSON object: 2 candidates are ambiguous");
     return null;
   }
-  const candidate = candidates[0];
   let reason;
   if (!candidate.closed) reason = "is not a closed JSON object";
   else if (candidate.start === 0 || /\s$/.test(raw.slice(0, candidate.start))) reason = "is not glued to a prose prefix";
   else if (raw.slice(candidate.end + 1).trim()) reason = "is not the final content";
   if (reason) { rememberParseError(errors, `embedded JSON object ${reason}`); return null; }
   let value;
-  try { value = JSON.parse(candidate.text); }
+  try { value = JSON.parse(raw.slice(candidate.start, candidate.end + 1)); }
   catch { rememberParseError(errors, "embedded JSON object is not valid JSON"); return null; }
   return validateCandidate(value, options, errors, "embedded JSON object", "embedded_json");
 }

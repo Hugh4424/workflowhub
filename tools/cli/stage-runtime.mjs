@@ -993,8 +993,8 @@ async function recordTaskReview(context, input, values, services = {}) {
       const materialPreflight=validateReviewCallerMaterials(current);
       if(materialPreflight)return {...materialPreflight,executor:"ocr"};
       const detection=detectOcr();
-      if(detection.status==="unavailable")return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:detection.error?.code ?? "OCR_DETECTION_UNAVAILABLE",message:detection.reason}};
-      if(detection.status==="not_installed")return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:"OCR_NOT_INSTALLED",message:detection.reason}};
+      if(detection.status==="unavailable")return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:detection.error?.code ?? "OCR_DETECTION_UNAVAILABLE",message:detection.reason,detected_by:detection.detected_by}};
+      if(detection.status==="not_installed")return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:"OCR_NOT_INSTALLED",message:detection.reason,detected_by:detection.detected_by}};
       const onProviderHealth=services.onOcrProviderHealth ?? writeOcrProviderHealthDiagnostic;
       if(typeof onProviderHealth!=="function")throw new TypeError("OCR health observer must be a function");
       const ocrRunner=services.runOcrDelegationRound;

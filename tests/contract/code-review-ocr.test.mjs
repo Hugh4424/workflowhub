@@ -239,7 +239,7 @@ describe("code review records unavailable when OCR is missing or below the minim
         expect(recorded.status).toBe("unavailable");
         expect(recorded.result_ref).toMatch(/^quality\/reviews\/\d{4}-\d{2}-\d{2}-\d{3}-build-code-phase-p3\.json$/);
         const review = JSON.parse(readFileSync(join(state.taskDir, recorded.result_ref), "utf8"));
-        expect(review).toMatchObject({ task_id: state.taskId, stage: "build-code", review_scope: "phase", subject_kind: "phase", phase_id: "P3", surface: "code", status: "unavailable", executor: "ocr", error: { code: "OCR_NOT_INSTALLED" } });
+        expect(review).toMatchObject({ task_id: state.taskId, stage: "build-code", review_scope: "phase", subject_kind: "phase", phase_id: "P3", surface: "code", status: "unavailable", executor: "ocr", error: { code: "OCR_NOT_INSTALLED", detected_by: "ocr --version (current PATH)" } });
         expect(review.provider_results).toEqual([]);
         expect(review.provider_results.some(member => member.provider === "wh-review")).toBe(false);
         expect(review).not.toHaveProperty("fallback");
@@ -337,7 +337,7 @@ describe("OCR version detection failure stays unavailable", () => {
       });
       const review = JSON.parse(readFileSync(join(state.taskDir, recorded.result_ref), "utf8"));
       expect(calls).toEqual({ocr:0,whReview:0});
-      expect(review).toMatchObject({status:"unavailable",executor:"ocr",dispatch_state:"blocked_before_dispatch",error:{code:doctor.ocr.error.code,message:doctor.ocr.reason}});
+      expect(review).toMatchObject({status:"unavailable",executor:"ocr",dispatch_state:"blocked_before_dispatch",error:{code:doctor.ocr.error.code,message:doctor.ocr.reason,detected_by:"ocr --version (current PATH)"}});
       expect(review.error.code).not.toBe("OCR_NOT_INSTALLED");
       expect(review.provider_results).toEqual([]);
       expect(review).not.toHaveProperty("fallback");

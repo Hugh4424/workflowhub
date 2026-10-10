@@ -24,6 +24,7 @@ const provider = (overrides = {}) => ({ id: "pi", command: fake, model: "deepsee
 const streamingProbe = async () => ({ status: "busy", session_id: "pi-liveness-session", cursor: "same-leaf", raw: null, error: null, evidence: "Pi session is streaming" });
 const movingProbe = () => { let leaf = 0; return async () => ({ status: "busy", session_id: "pi-liveness-session", cursor: `leaf-${++leaf}`, raw: null, error: null, evidence: "Pi session leaf advanced" }); };
 const heartbeatSource = (durationMs) => `const line=JSON.stringify({type:"pi.progress",event:"thinking_delta"});const timer=setInterval(()=>process.stdout.write(line+"\\n"),2);setTimeout(()=>{clearInterval(timer);process.exit(0);},${durationMs});`;
+const alternatingProgressSource = (durationMs) => `let index=0;const timer=setInterval(()=>{const event=index++%2===0?"thinking_delta_a":"thinking_delta_b";process.stdout.write(JSON.stringify({type:"pi.progress",event,delta:"harmless-"+index})+"\\n");},2);setTimeout(()=>{clearInterval(timer);process.exit(0);},${durationMs});`;
 const plan = (source, overrides = {}) => ({ command: process.execPath, argv: ["-e", source], cwd: os.tmpdir(), env: process.env, input: null, redact: [], observeLine: pi.observeLine, streamLiveness: true, probeSession: streamingProbe, ...overrides });
 const options = (intervalMs) => ({ maxOutputBytes: 65536, healthCheckIntervalMs: intervalMs, terminationGraceMs: 20 });
 
@@ -54,6 +55,62 @@ test("a heartbeat-only stream stops on the bounded semantic window", async () =>
   assert.equal(result.ok, false);
   assert.equal(result.error.code, "PROCESS_STALLED");
   assert.match(result.error.message, new RegExp(`no semantic progress for ${SEMANTIC_STALL_INTERVALS} health intervals`));
+});
+
+test("alternating unique pi progress payloads cannot evade the semantic stall window", async () => {
+  const intervalMs = 20;
+  const result = await execute(plan(alternatingProgressSource(intervalMs * (SEMANTIC_STALL_INTERVALS + 10))), options(intervalMs));
+  assert.equal(result.ok, false, "syntactically unique liveness payloads must not count as semantic progress");
+  assert.equal(result.error.code, "PROCESS_STALLED");
+  assert.match(result.error.message, new RegExp(`no semantic progress for ${SEMANTIC_STALL_INTERVALS} health intervals`));
+  assert.ok(result.progress_events >= SEMANTIC_STALL_INTERVALS, `the fixture must emit unique payloads before stalling, saw ${result.progress_events}`);
+});
+
+test.each(["progressing", "retry"])("unchanged %s probe status cannot reset the semantic stall window", async status => {
+  const intervalMs = 20;
+  const result = await execute(plan(heartbeatSource(intervalMs * (SEMANTIC_STALL_INTERVALS + 10)), {
+    probeSession: async () => ({ status, session_id: "pi-liveness-session", cursor: "same-leaf", raw: null, error: null, evidence: `unchanged ${status}` }),
+  }), options(intervalMs));
+  assert.equal(result.ok, false, `unchanged ${status} must not count as semantic progress`);
+  assert.equal(result.error.code, "PROCESS_STALLED");
+  assert.match(result.error.message, new RegExp(`no semantic progress for ${SEMANTIC_STALL_INTERVALS} health intervals`));
+});
+
+test("an invalid completed probe result cannot reset the semantic stall window", async () => {
+  const intervalMs = 20;
+  const result = await execute(plan(heartbeatSource(intervalMs * (SEMANTIC_STALL_INTERVALS + 10)), {
+    probeSession: async () => ({ status: "completed", session_id: "pi-liveness-session", cursor: "same-leaf", raw: { stdout: "PARTIAL", stderr: "" }, error: null, evidence: "invalid completed fixture" }),
+  }), { ...options(intervalMs), validateCompleted: () => false });
+  assert.equal(result.ok, false, "an invalid completed result must remain advisory and stall without semantic progress");
+  assert.equal(result.error.code, "PROCESS_STALLED");
+  assert.match(result.error.message, new RegExp(`no semantic progress for ${SEMANTIC_STALL_INTERVALS} health intervals`));
+});
+
+test("a delayed changing probe result becomes stale after liveness activity and cannot reset the semantic window", async () => {
+  const intervalMs = 20; let probes = 0;
+  const result = await execute(plan(heartbeatSource(intervalMs * (SEMANTIC_STALL_INTERVALS + 10)), {
+    probeSession: async () => {
+      const cursor = `late-leaf-${++probes}`;
+      await new Promise(resolve => setTimeout(resolve, intervalMs * 2));
+      return { status: "busy", session_id: "pi-liveness-session", cursor, raw: null, error: null, evidence: "late changing probe fixture" };
+    },
+  }), { ...options(intervalMs), probeDeadlineMs: intervalMs * 4 });
+  assert.equal(result.ok, false, "a changed cursor from a stale probe must not count as semantic progress");
+  assert.equal(result.error.code, "PROCESS_STALLED");
+  assert.match(result.error.message, new RegExp(`no semantic progress for ${SEMANTIC_STALL_INTERVALS} health intervals`));
+  assert.ok(probes >= 1, "the delayed probe fixture must be exercised");
+});
+
+test("a delayed terminal probe failure remains authoritative despite liveness activity", async () => {
+  const intervalMs = 20;
+  const result = await execute(plan(heartbeatSource(intervalMs * (SEMANTIC_STALL_INTERVALS + 10)), {
+    probeSession: async () => {
+      await new Promise(resolve => setTimeout(resolve, intervalMs * 2));
+      return { status: "failed", terminal: true, session_id: "pi-liveness-session", cursor: "failed-leaf", raw: null, error: { code: "PROVIDER_PERMISSION_DENIED", message: "provider permission was denied" }, evidence: "delayed terminal failure fixture" };
+    },
+  }), { ...options(intervalMs), probeDeadlineMs: intervalMs * 4 });
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.error, { code: "PROVIDER_PERMISSION_DENIED", message: "provider permission was denied" });
 });
 
 test.each(["unverifiable", "dead"])("actual repeated heartbeats remain bounded when the probe is advisory %s", async status => {

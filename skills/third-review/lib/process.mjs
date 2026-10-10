@@ -21,7 +21,7 @@ export function execute(plan, { maxOutputBytes, maxPendingLineBytes = 1_048_576,
   return new Promise((resolve) => {
     const started = Date.now(); let child; let stdout = ""; let stderr = ""; let bytes = 0; let stdoutTruncated = false; let stderrTruncated = false; let settled = false; let terminalClaim = null; let healthRunner = null; let livenessTimer = null; let killTimer = null; let executionTimer = null; let lastProgressMs = null; let stdinError = null; let session_id = null; let cursor = null; const progressKeys = new Set(); let progressEvents = 0; let retryCount = 0; const lineBuffers = { stdout: "", stderr: "" };
     const livenessFrames = plan.streamLiveness === true;
-    let livenessRefresh = 0; let probeCursor = null; let probeSessionId = null; let semanticIdleIntervals = 0; let semanticIntervalAt = null;
+    let livenessRefresh = 0; let activityGeneration = 0; let probeCursor = null; let probeSessionId = null; let semanticIdleIntervals = 0; let semanticIntervalAt = null;
     const cleanup = ({ detachOutput = false, keepKillTimer = false } = {}) => {
       if (livenessTimer) clearInterval(livenessTimer); if (killTimer && !keepKillTimer) clearTimeout(killTimer); if (executionTimer) clearTimeout(executionTimer); healthRunner?.stop(); if (child?.stdin && !child.stdin.destroyed) child.stdin.end();
       // A provider terminal event is authoritative.  Its wrapper can leave
@@ -53,6 +53,7 @@ export function execute(plan, { maxOutputBytes, maxPendingLineBytes = 1_048_576,
     };
     const claimFailure = (code, message) => { if (settled || terminalClaim) return false; terminalClaim = { kind: "failed", error: { code, message } }; terminateClaimedProcess(); return true; };
     const claimCompleted = (harvest) => { if (settled || terminalClaim) return false; terminalClaim = { kind: "completed", harvest }; terminateClaimedProcess(); return true; };
+    const resetSemanticWindow = () => { semanticIdleIntervals = 0; semanticIntervalAt = Date.now(); };
     const refreshLivenessWindow = () => {
       livenessRefresh += 1;
       try { healthRunner?.noteProgress({}); }
@@ -69,15 +70,16 @@ export function execute(plan, { maxOutputBytes, maxPendingLineBytes = 1_048_576,
           && claimFailure("PROCESS_STALLED", `provider streamed liveness frames but made no semantic progress for ${SEMANTIC_STALL_INTERVALS} health intervals`)) settleClaim();
     };
     const observeSemanticProgress = (result) => {
-      if (!result || ["unverifiable", "dead"].includes(result.status)) return;
+      // A probe result is semantic evidence only while the session is still
+      // non-terminal. Completed results must first pass health-runner's raw
+      // validation; failed, dead, unverifiable, and unknown values are only
+      // diagnostic and must not move the semantic baseline.
+      if (!result || result.terminal === true || !["busy", "progressing", "retry"].includes(result.status)) return;
       const cursorChanged = result.cursor !== null && result.cursor !== undefined && result.cursor !== probeCursor;
       const sessionChanged = Boolean(result.session_id) && result.session_id !== probeSessionId;
       if (result.cursor !== null && result.cursor !== undefined) probeCursor = result.cursor;
       if (result.session_id) probeSessionId = result.session_id;
-      if (["completed", "progressing", "retry"].includes(result.status) || result.terminal === true || cursorChanged || sessionChanged) {
-        semanticIdleIntervals = 0;
-        semanticIntervalAt = Date.now();
-      }
+      if (cursorChanged || sessionChanged) resetSemanticWindow();
     };
     const recordLiveness = () => { const at_ms = Date.now(); onLiveness?.({ at_ms }); return at_ms; };
     const observeProcessLiveness = () => { if (!settled && child?.pid && isProcessAlive(child.pid)) { recordLiveness(); return true; } return false; };
@@ -100,11 +102,18 @@ export function execute(plan, { maxOutputBytes, maxPendingLineBytes = 1_048_576,
       livenessTimer = setInterval(observeProcessLiveness, livenessIntervalMs); livenessTimer.unref();
       const healthProbe = probeSession ?? plan.probeSession;
       const observedProbe = healthProbe ? async (ctx) => {
-        const result = await healthProbe({ ...ctx, pid: child.pid, cwd: plan.cwd });
-        if (livenessFrames) observeSemanticProgress(result);
+        const observationGeneration = activityGeneration;
+        const result = await healthProbe({ ...ctx, activity_generation: observationGeneration, pid: child.pid, cwd: plan.cwd });
+        const stale = activityGeneration !== observationGeneration;
+        if (livenessFrames && stale && result?.terminal === true && result.status === "failed") {
+          if (result.session_id) session_id = result.session_id;
+          if (result.cursor !== null && result.cursor !== undefined) cursor = result.cursor;
+          if (claimFailure(result.error?.code ?? "PROVIDER_HEALTH_FAILED", result.error?.message ?? "provider emitted a failed terminal event")) settleClaim();
+        }
+        if (livenessFrames && !stale) observeSemanticProgress(result);
         return result;
       } : null;
-      healthRunner = createHealthRunner({ streamProgress: plan.streamProgress === true, intervalMs: healthCheckIntervalMs, probeDeadlineMs, isCancelled, validateCompleted, probeSession: observedProbe, onProgress: ({ at_ms, session_id: healthSession, cursor: healthCursor }) => { if (healthSession) session_id = healthSession; if (healthCursor !== null && healthCursor !== undefined) cursor = healthCursor; if (livenessRefresh === 0) onProgress?.({ at_ms, session_id, cursor, event: "health" }); }, onDecision: (decision) => {
+      healthRunner = createHealthRunner({ streamProgress: plan.streamProgress === true, intervalMs: healthCheckIntervalMs, probeDeadlineMs, isCancelled, validateCompleted, probeSession: observedProbe, onProgress: ({ at_ms, session_id: healthSession, cursor: healthCursor }) => { activityGeneration += 1; if (healthSession) session_id = healthSession; if (healthCursor !== null && healthCursor !== undefined) cursor = healthCursor; if (livenessRefresh === 0) onProgress?.({ at_ms, session_id, cursor, event: "health" }); }, onDecision: (decision) => {
         if (decision.session_id) session_id = decision.session_id; if (decision.cursor !== null && decision.cursor !== undefined) cursor = decision.cursor;
         if (decision.status === "completed") { if (claimCompleted(decision)) settleClaim(); return; }
         if (claimFailure(decision.error.code, decision.error.message)) settleClaim();
@@ -148,7 +157,7 @@ export function execute(plan, { maxOutputBytes, maxPendingLineBytes = 1_048_576,
       if (observation.progress !== true) { if (livenessFrames && observation.liveness === true) refreshLivenessWindow(); return; }
       const progressKey = observation.progress_key ?? `${name}\0${line}`;
       if (progressKeys.has(progressKey)) { if (livenessFrames && observation.liveness === true) refreshLivenessWindow(); return; }
-      if (livenessFrames) { semanticIdleIntervals = 0; semanticIntervalAt = Date.now(); }
+      if (livenessFrames && observation.liveness === true) refreshLivenessWindow();
       progressKeys.add(progressKey); lastProgressMs = Date.now(); progressEvents += 1; healthRunner?.noteProgress({ cursor: observation.cursor, session_id: observation.session_id }); onProgress?.({ at_ms: lastProgressMs, cursor, session_id, event: observation.event ?? null });
     };
     const collect = (name) => (chunk) => {
