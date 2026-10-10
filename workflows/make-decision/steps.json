@@ -160,7 +160,7 @@
     {
       "step_id": 14,
       "step_slug": "stage-end-spec-analyze",
-      "observable_result": "spec-analyze对最终决策、真实问答/审查与本次实际确认作只读一致性核对；缺口保持可见，改变决定的修复先准备可审稿再重新确认，不新增审批或机器门。",
+      "observable_result": "spec-analyze对最终决策、真实问答/审查与本次实际确认作只读一致性核对；缺口保持可见，改变决定的修复先准备可审稿再重新确认，不新增审批或机器门。同时核对本次已解决术语的写入读回或 no change 理由。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
