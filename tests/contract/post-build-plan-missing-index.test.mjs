@@ -396,6 +396,22 @@ describe("post-cohort G-2 implementation review regressions", () => {
   });
 });
 
+describe("governance exemption and serialized Phase sharing", () => {
+  const sharedFixture = (file, dependency) => ({
+    spec,
+    index: index.replaceAll("src/first.mjs", file).replaceAll("src/second.mjs", file).replace("`P1` | build-code", `\`${dependency}\` | build-code`),
+    phases: { "phases/P1.md": phase("P1", "none", file, "FR-001", "AC-001"), "phases/P2.md": phase("P2", dependency, file, "FR-002", "AC-002") },
+  });
+  it("accepts a governance path shared by two serially dependent Phases", () => {
+    const result = validatePostPhaseContract(sharedFixture("README.md", "P1"));
+    expect(result.ok, result.errors.join("; ")).toBe(true);
+  });
+  it("still rejects a shared implementation path when neither Phase depends on the other", () => {
+    const result = validatePostPhaseContract(sharedFixture("src/shared.mjs", "none"));
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("; ")).toMatch(/write set duplicates/);
+  });
+});
 
 });
 

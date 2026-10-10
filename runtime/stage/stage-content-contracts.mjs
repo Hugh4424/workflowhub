@@ -169,6 +169,9 @@ function unsafeWritePath(path) {
     || path.split("/").some((part) => !part || part === "." || part === "..");
 }
 
+const SHARED_GOVERNANCE_PATH = /(?:^|\/)(?:README|AGENTS|CLAUDE|CONTEXT|CONSTITUTION|GLOSSARY)\.md$/i;
+function isSharedGovernancePath(path) { return SHARED_GOVERNANCE_PATH.test(path) || /(?:^|\/)architecture\/components\.ya?ml$/i.test(path); }
+
 function executionIndexRows(document, errors) {
   const lines = document.split(/\r?\n/);
   const start = lines.findIndex((line) => /^##\s+(?:Execution Index|执行索引)\s*$/i.test(line));
@@ -373,6 +376,15 @@ export function validatePostPhaseContract({ spec, index, phases } = {}) {
   const phaseRows = [];
   const indexedPaths = new Set();
   const writeOwners = new Map();
+  const phaseAncestors = new Map();
+  for (const row of (rows ?? [])) {
+    const dependencies = WITHOUT_PREDECESSOR.test(row.dependency ?? "") ? [] : identifiers(row.dependency ?? "", /\bP\d+\b/g);
+    phaseAncestors.set(row.authority_ref, new Set(dependencies.flatMap((id) => {
+      const ref = `phases/${id}.md`;
+      return [ref, ...(phaseAncestors.get(ref) ?? [])];
+    })));
+  }
+  const serializedPair = (ownerRef, currentRef) => phaseAncestors.get(currentRef)?.has(ownerRef) === true;
   const taskOwners = new Map();
   const taskCards = [];
   for (const row of (rows ?? [])) {
@@ -411,9 +423,11 @@ export function validatePostPhaseContract({ spec, index, phases } = {}) {
       scopeValid = false;
     }
     for (const path of declaredWriteSet) {
-      const owner = writeOwners.get(path);
+      if (isSharedGovernancePath(path)) continue;
+      const owners = writeOwners.get(path) ?? [];
+      const owner = owners.find((ref) => !serializedPair(ref, expectedPath));
       if (owner) errors.push(`${expectedPath} write set duplicates ${path} owned by ${owner}`);
-      else writeOwners.set(path, expectedPath);
+      writeOwners.set(path, [...owners, expectedPath]);
     }
     const dependencyText = fieldValue(body, "Dependency");
     const dependency = dependencyText?.match(/`([^`]+)`/)?.[1] ?? dependencyText ?? null;
