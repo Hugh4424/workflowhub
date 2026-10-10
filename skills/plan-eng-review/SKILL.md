@@ -40,7 +40,7 @@ Review the current accepted specification, its global implementation design, all
 8. Check implementation effect: the planned consumer must actually use the new
    contract; schema parsing or file presence alone is not proof.
 
-9. Omission-class sweep: 逐条显式回答每个类：anchored evidence 或 none_observed（写明比对范围）；确实未检的类进宿主覆盖说明，不制造 finding。只用允许材料报告有锚点的实际交付风险，缺范围或未知覆盖留宿主说明，不新增 provider 输出字段：
+9. Omission-class sweep: 逐条显式回答每个类：anchored evidence 或 none_observed（写明比对范围）；确实未检的类进宿主覆盖说明，不制造 finding。逐类显式回答与比对范围均记入既有宿主覆盖说明；provider 应用九类镜头后仍仅返回真实 findings，不为无缺陷类制造 finding、添加字段或第二结果。只用允许材料报告有锚点的实际交付风险，缺范围或未知覆盖留宿主说明，不新增 provider 输出字段：
    (a) 真实来源/生产者未核实 — every requirement row cites a real
        source; a requirement with no real source is a finding.
    (b) 真实消费者/入口不存在 — every named consumer/entry point is verified to
