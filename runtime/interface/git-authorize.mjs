@@ -467,12 +467,17 @@ function gitIdentity(cwd) {
   return { head, branch };
 }
 
+function isTaskAuthorizationEndpoint(dir) {
+  return basename(dir) === "git-authorizations" && basename(dirname(dir)) === "evidence"
+    && basename(dirname(dirname(dir))) === "quality";
+}
+
 function assertTaskRepositoryScope(dir, cwd) {
   // This is the existing task-owned producer endpoint, not the generic
   // historical quality/authorizations directory. A broken manifest here
   // must fail closed rather than silently switching to the generic contract.
   const endpoint = resolve(dir);
-  if (basename(endpoint) !== "git-authorizations" || basename(dirname(endpoint)) !== "evidence" || basename(dirname(dirname(endpoint))) !== "quality") return;
+  if (!isTaskAuthorizationEndpoint(endpoint)) return;
   const taskRoot = rootPath(dirname(dirname(dirname(endpoint))));
   const target = destination(taskRoot, "task.json");
   if (lstatSync(target.path).nlink !== 1) throw failure("AUTH_SCOPE", "task authorization manifest must be a single-link file");
@@ -500,6 +505,20 @@ function assertTaskRepositoryScope(dir, cwd) {
   }
   verifyDirectories(target.snapshot);
   if (!readTarget(target).equals(manifestBytes)) throw failure("ANCESTOR_REPLACED", "task authorization manifest changed during repository scope reads");
+  // record/consume own this flat provenance on the existing scoped grant.
+  // Values come from the authenticated manifest and canonical identity reads.
+  return { project_name: manifest.project_name, task_id: manifest.task_id,
+    task_ref: target.path, target_repo_root: repository };
+}
+
+function assertScopedGrant(grant, taskScope, phase) {
+  if (taskScope && Object.keys(taskScope).some(key => typeof grant[key] !== "string" || !grant[key])) {
+    throw failure("AUTH_SCOPE", "scoped authorization lacks authenticated creation-task binding");
+  }
+  if (phase !== grant.phase || !taskScope
+    || Object.keys(taskScope).some(key => grant[key] !== taskScope[key])) {
+    throw failure("AUTH_SCOPE", "consumer task identity or stage does not cover the reusable authorization");
+  }
 }
 
 function records(dir, operation) {
@@ -516,6 +535,9 @@ function records(dir, operation) {
     if (!value || value.operation !== operation || typeof timestamp !== "string" || !Number.isFinite(Date.parse(timestamp))) {
       throw failure("AUTHORIZATION_RECORD_INVALID", `invalid authorization fields: ${path}`);
     }
+    if (Object.hasOwn(value, "phase") && (operation !== "commit" || value.phase !== "build-code")) {
+      throw failure("AUTHORIZATION_RECORD_INVALID", `invalid authorization stage scope: ${path}`);
+    }
     if (match[1] === "authorize") {
       if (typeof value.branch !== "string" || !value.branch || typeof value.head !== "string" || !/^[a-f0-9]{40,64}$/.test(value.head)
         || typeof value.confirmation_ref !== "string" || !value.confirmation_ref.trim()) {
@@ -525,6 +547,10 @@ function records(dir, operation) {
     } else {
       if (typeof value.step_id !== "string" || !value.step_id.trim() || typeof value.authorization_ref !== "string" || !value.authorization_ref) {
         throw failure("AUTHORIZATION_RECORD_INVALID", `invalid consumption fields: ${path}`);
+      }
+      if (value.phase !== undefined && (typeof value.branch !== "string" || !value.branch
+        || typeof value.head !== "string" || !/^[a-f0-9]{40,64}$/.test(value.head))) {
+        throw failure("AUTHORIZATION_RECORD_INVALID", `invalid scoped consumption identity: ${path}`);
       }
       result.consumptions.push({ path, value });
     }
@@ -536,28 +562,33 @@ function records(dir, operation) {
   return result;
 }
 
-export async function record({ operation, confirmationRef, dir = join(process.cwd(), "quality", "authorizations") } = {}) {
+export async function record({ operation, confirmationRef, phase, dir = join(process.cwd(), "quality", "authorizations") } = {}) {
   requireOperation(operation);
+  if (phase !== undefined && (operation !== "commit" || phase !== "build-code")) throw failure("AUTH_SCOPE", "reusable authorization requires explicit build-code commit scope");
   requiredText(confirmationRef, "CONFIRMATION_REFERENCE_REQUIRED", "confirmationRef");
   requiredText(dir, "INVALID_DIRECTORY", "authorization directory");
   const cwd = process.cwd();
   const storage = recordDirectory(dir);
   return withLock(storage, "git-authorize", () => {
+    const taskScope = phase !== undefined ? assertTaskRepositoryScope(storage, cwd) : undefined;
+    if (phase !== undefined && !taskScope) throw failure("AUTH_SCOPE", "reusable authorization requires the task-owned authorization endpoint");
     const { branch, head } = gitIdentity(cwd);
     return appendRecord(storage, `authorize-${operation}`, "json", `${JSON.stringify({
       operation, branch, head, confirmation_ref: confirmationRef, created_at: new Date().toISOString(),
+      ...(phase !== undefined ? { phase, ...taskScope } : {}),
     }, null, 2)}\n`);
   });
 }
 
-export async function consume({ operation, stepId, authorizationRef, dir = join(process.cwd(), "quality", "authorizations") } = {}) {
+export async function consume({ operation, stepId, authorizationRef, phase, dir = join(process.cwd(), "quality", "authorizations") } = {}) {
   requireOperation(operation);
+  if (phase !== undefined && (operation !== "commit" || phase !== "build-code")) throw failure("AUTH_SCOPE", "reusable authorization requires explicit build-code commit scope");
   requiredText(stepId, "AUTHORIZATION_STEP_REQUIRED", "stepId");
   requiredText(dir, "INVALID_DIRECTORY", "authorization directory");
   const cwd = process.cwd();
   const storage = recordDirectory(dir);
   return withLock(storage, "git-authorize", async () => {
-    assertTaskRepositoryScope(storage, cwd);
+    const taskScope = assertTaskRepositoryScope(storage, cwd);
     const { authorizations, consumptions } = records(storage, operation);
     let selected;
     let verifySelected = () => {};
@@ -590,6 +621,7 @@ export async function consume({ operation, stepId, authorizationRef, dir = join(
     if (retry) {
       if (selected && retry.value.authorization_ref !== selected.path) throw failure("AUTH_SCOPE", "retry is bound to a different original authorization reference");
       const grant = authorizations.find((item) => item.path === retry.value.authorization_ref);
+      if (grant?.value.phase !== undefined) assertScopedGrant(grant.value, taskScope, phase);
       const current = gitIdentity(cwd);
       if (!grant || grant.value.operation !== operation || grant.value.branch !== current.branch) throw failure("AUTH_SCOPE", "current Git branch does not cover the previously consumed authorization");
       // This is an immutable receipt for an action already consumed, not a
@@ -599,16 +631,21 @@ export async function consume({ operation, stepId, authorizationRef, dir = join(
       return { ...retry.value, path: retry.path };
     }
     const used = new Set(consumptions.map((item) => item.value.authorization_ref));
-    if (selected && used.has(selected.path)) throw failure("AUTHORIZATION_ALREADY_CONSUMED", "exact authorization was already consumed by another step");
-    const grant = selected ?? authorizations.filter((item) => !used.has(item.path)).at(-1);
+    if (selected && selected.value.phase === undefined && used.has(selected.path)) throw failure("AUTHORIZATION_ALREADY_CONSUMED", "exact authorization was already consumed by another step");
+    const candidates = authorizations.filter((item) => item.value.phase !== undefined || !used.has(item.path));
+    if (!selected && phase !== undefined && candidates.some(item => item.value.phase !== undefined)
+      && candidates.some(item => item.value.phase === undefined)) throw failure("AUTH_SCOPE", "mixed scoped and legacy authorizations require an exact authorizationRef");
+    const grant = selected ?? candidates.at(-1);
     if (!grant) throw failure(authorizations.length ? "AUTHORIZATION_ALREADY_CONSUMED" : "IRREVERSIBLE_AUTHORIZATION_REQUIRED",
       `no unused authorization for ${operation}`);
     const current = gitIdentity(cwd);
-    if (selected && current.branch !== grant.value.branch) throw failure("AUTH_SCOPE", "exact authorization branch differs from the current Git branch");
-    if (current.head !== grant.value.head) throw failure("AUTHORIZATION_HEAD_MISMATCH", `HEAD changed since authorization: ${grant.path}`);
+    if (grant.value.phase !== undefined) assertScopedGrant(grant.value, taskScope, phase);
+    if ((selected || grant.value.phase !== undefined) && current.branch !== grant.value.branch) throw failure("AUTH_SCOPE", "authorization branch differs from the current Git branch");
+    if (grant.value.phase === undefined && current.head !== grant.value.head) throw failure("AUTHORIZATION_HEAD_MISMATCH", `HEAD changed since authorization: ${grant.path}`);
     verifySelected();
     const path = await appendRecord(storage, `consumed-${operation}`, "json", `${JSON.stringify({
       operation, step_id: stepId, authorization_ref: grant.path, consumed_at: new Date().toISOString(),
+      ...(grant.value.phase !== undefined ? { phase, branch: current.branch, head: current.head } : {}),
     }, null, 2)}\n`);
     const value = JSON.parse(readTarget(destination(storage, basename(path))).toString("utf8"));
     return { ...value, path };
@@ -620,18 +657,18 @@ export { record as recordAuthorization, consume as consumeAuthorization };
 
 async function main(argv) {
   const action = argv.shift();
-  if (!["record", "consume"].includes(action)) throw failure("INVALID_ARGUMENT", "usage: record|consume --operation OP --confirmation-ref REF|--step-id ID [--dir DIR]");
+  if (!["record", "consume"].includes(action)) throw failure("INVALID_ARGUMENT", "usage: record|consume --operation OP --confirmation-ref REF|--step-id ID [--dir DIR] [--phase PHASE]");
   const options = {};
   for (let index = 0; index < argv.length; index += 2) {
     const key = argv[index], value = argv[index + 1];
-    if (!["--operation", "--confirmation-ref", "--step-id", "--authorization-ref", "--dir"].includes(key) || !value || value.startsWith("--") || options[key] !== undefined) {
+    if (!["--operation", "--confirmation-ref", "--step-id", "--authorization-ref", "--phase", "--dir"].includes(key) || !value || value.startsWith("--") || options[key] !== undefined) {
       throw failure("INVALID_ARGUMENT", `invalid authorization option: ${key}`);
     }
     options[key] = value;
   }
   if (!options["--operation"] || (action === "record" && (options["--step-id"] || options["--authorization-ref"] || !options["--confirmation-ref"]))
     || (action === "consume" && (options["--confirmation-ref"] || !options["--step-id"]))) throw failure("INVALID_ARGUMENT", "action requires its operation and confirmation-ref or step-id");
-  const input = { operation: options["--operation"], ...(options["--dir"] ? { dir: options["--dir"] } : {}) };
+  const input = { operation: options["--operation"], ...(options["--phase"] ? { phase: options["--phase"] } : {}), ...(options["--dir"] ? { dir: options["--dir"] } : {}) };
   const result = action === "record" ? await record({ ...input, confirmationRef: options["--confirmation-ref"] }) : await consume({ ...input, stepId: options["--step-id"], ...(options["--authorization-ref"] ? { authorizationRef: options["--authorization-ref"] } : {}) });
   const path = action === "record" ? result : result.path;
   process.stdout.write(`${JSON.stringify({ path })}\n`);
