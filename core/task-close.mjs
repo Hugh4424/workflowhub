@@ -3,6 +3,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { setImmediate as yieldToEvents } from "node:timers/promises";
 import { inspectWorkspace, assertCleanTarget } from "../runtime/interface/workspace-check.mjs";
 import { withLock } from "../runtime/interface/record-lock.mjs";
 import { appendRecord } from "../runtime/interface/safe-write.mjs";
@@ -600,9 +601,10 @@ export async function inspectDeliveryCloseState({ taskDir, planRef } = {}) {
     ...(readErrors.length ? { read_error: readErrors.join("; ") } : {}) });
   return { task_id: plan.task_id, plan_ref: planRef, facts, remote, step_records: actions, quality_status: "unknown", known_gaps: plan.known_gaps, ...(pr ? { pr } : {}), physical_delivery_status: physical.status };
 }
-export async function executeClosePlan({ taskDir, planRef, confirmationRef, signal } = {}) {
+export async function executeClosePlan({ taskDir, planRef, confirmationRef, signal, until } = {}) {
   assertPostWriter(taskDir);
   const c = contextForPlan(taskDir, planRef); const plan = readPlan(c, planRef);
+  if (until !== undefined && !plan.steps.includes(until)) throw failure("AUTH_SCOPE", "close cutoff must be an action in the confirmed plan");
   if (plan.mode === "post-cleanup-archive") c.worktree = c.root;
   else if (existsSync(c.worktree)) realDirectory(c.worktree);
   else if (plan.preserve_existing_workspace || !cleanupWasSent(c, plan, planRef, branchOid(c.root, plan.target_branch))) throw failure("CLEANUP_UNSAFE", "missing task worktree is not covered by a prior authorized cleanup");
@@ -687,7 +689,10 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
     };
     for (const operation of plan.steps) {
       if (signal?.aborted) return { status: "cancelled", records, physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
-      if (records.some(row => row.operation === operation && row.status === "completed")) continue;
+      if (records.some(row => row.operation === operation && row.status === "completed")) {
+        if (operation === until) return { status: "partial", stopped_at: operation, records, physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
+        continue;
+      }
       try {
         acceptedConfirmation(c, planRef, confirmationRef, plan);
         let prResult;
@@ -805,6 +810,14 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
         }
         const record = { operation, status: "completed", source_head: sourceHead, target_head: targetHead, ...(prResult ? { pr: prResult } : {}), recorded_at: new Date().toISOString() };
         record.ref = await writeEvidence(c, "close-action", { ...record, plan_ref: planRef }); records.push(record);
+        // Synchronous Git/gh calls queue OS signal callbacks. Let the existing
+        // controller observe them after recording the effect, before cutoff
+        // or another action can report completion or send more work.
+        if (signal) {
+          await yieldToEvents();
+          if (signal.aborted) return { status: "cancelled", records, physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
+        }
+        if (operation === until) return { status: "partial", stopped_at: operation, records, physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
       } catch (error) {
         const ref = await writeEvidence(c, "close-action", { operation, status: "failed", plan_ref: planRef, error: { code: error.code ?? null, message: error.message }, recorded_at: new Date().toISOString() });
         return { status: "failed", operation, error: { code: error.code ?? null, message: error.message }, failure_ref: ref, records, physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
