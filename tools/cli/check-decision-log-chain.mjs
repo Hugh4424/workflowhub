@@ -4,8 +4,8 @@
  * Text-only decision-log chain hygiene warnings.
  *
  * This checker deliberately never becomes a gate: malformed or stale chain
- * fields are printed as advisory facts and the process exits 0. The runtime
- * decision-entry.v1 schema remains the machine contract.
+ * fields are printed as advisory facts and the process exits 0.
+ * Only local text structure and explicit current references are inspected.
  */
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -13,6 +13,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const CHAIN_FIELDS = ["决定", "为什么", "否掉了什么", "后果与风险", "影响面"];
+const CURRENT_FIELDS = ["做什么", "不做什么", "风险", "改动"];
 const LEGACY_CHAIN_FIELDS = ["module", "requirement_ids", "derived_from", "artifacts"];
 const DECISION_ID = /^(?:ADR|D)-\d+$/;
 const REQUIREMENT_ID = /^R-\d+$/;
@@ -31,24 +32,39 @@ function warning(code, decision_id, field, message) {
 function decisionSections(markdown) {
   const lines = markdown.split("\n");
   const sections = [];
+  const headings = new Set();
+  const sourceIds = new Set();
   let inFence = false;
-  let offset = 0;
-  for (const line of lines) {
+  let current = null;
+  let headingLevel = 0;
+  for (const [index, line] of lines.entries()) {
     if (/^\s*```/.test(line)) {
       inFence = !inFence;
-      offset += line.length + 1;
       continue;
     }
-    if (!inFence) {
-      const match = /^#{3,4}\s+((?:ADR|D)-\d+)\b[^\n]*$/.exec(line);
-      if (match) sections.push({ decision_id: match[1], heading_start: offset, body_start: offset + line.length + 1 });
+    if (inFence) continue;
+    const heading = /^(#{1,6})\s+(.+?)(?:\s+#+)?\s*$/.exec(line);
+    if (heading) {
+      headingLevel = heading[1].length;
+      headings.add(heading[2]);
+      const match = /^((?:N\d+|(?:ADR|D)-\d+))(?=\s|[—–-]|$)/.exec(heading[2]);
+      const decision = match && (heading[1].length === 3 || heading[1].length === 4);
+      if (current && (decision || heading[1].length <= current.level)) current = null;
+      if (decision) {
+        current = { decision_id: match[1], level: heading[1].length, lines: [] };
+        sections.push(current);
+      }
     }
-    offset += line.length + 1;
+    // Only declarations in local headings, index rows or list entries are
+    // sources. A number merely mentioned by a reference cannot declare itself.
+    if ((heading && /^(?:\*\*)?[RU]-\d+\b/.test(heading[2])) || /^\|\s*(?:\*\*)?[RU]-\d+\b/.test(line)
+      || /^[-*+]\s+(?:\*\*)?[RU]-\d+\b/.test(line)) {
+      const id = /[RU]-\d+\b/.exec(heading?.[2] ?? (line.startsWith("|") ? line.split("|")[1] : line));
+      sourceIds.add(id[0]);
+    }
+    if (current && !heading) current.lines.push({ text: line, line: index + 1, parent: headingLevel === current.level });
   }
-  return sections.map((section, index) => ({
-    decision_id: section.decision_id,
-    body: markdown.slice(section.body_start, sections[index + 1]?.heading_start ?? markdown.length),
-  }));
+  return { sections, headings, sourceIds };
 }
 
 export function checkDecisionLogChain({ markdown, source_ref = "decision-log.md" } = {}) {
@@ -62,7 +78,7 @@ export function checkDecisionLogChain({ markdown, source_ref = "decision-log.md"
     };
   }
 
-  const sections = decisionSections(markdown);
+  const { sections, headings, sourceIds } = decisionSections(markdown);
   const knownDecisions = new Set(sections.map(({ decision_id }) => decision_id));
   const warnings = [];
   let recognizedFields = 0;
@@ -76,14 +92,47 @@ export function checkDecisionLogChain({ markdown, source_ref = "decision-log.md"
     ));
   }
 
-  for (const { decision_id, body } of sections) {
-    const requiredFields = decision_id.startsWith("ADR-") ? CHAIN_FIELDS : LEGACY_CHAIN_FIELDS;
-    const fields = [...new Set([...requiredFields, ...LEGACY_CHAIN_FIELDS])];
+  for (const { decision_id, lines } of sections) {
+    const body = lines.filter(({ parent }) => parent).map(({ text }) => text).join("\n");
+    const parents = lines.flatMap(({ text, line, parent }) => {
+      // Indented children do not supply parent fields. Legacy ADRs also used
+      // semicolon-separated labels on one parent line; retain that spelling.
+      if (!parent || /^\s/.test(text)) return [];
+      const parts = text.split(/[;；]\s*(?=(?:\*\*)?(?:原)?(?:决定|为什么|否掉了什么|后果与风险|影响面)(?:\*\*)?\s*[:：])/);
+      return parts.flatMap((part) => {
+        const match = /^(?:[-*+]\s+)?(?:\*\*)?([^:*：\n]+?)(?:\*\*)?\s*[:：]\s*(.*?)\s*$/.exec(part);
+        if (!match) return [];
+        const field = match[1].replace(/（[^）]*）$/, "").replace(/^原决定$/, "决定").trim();
+        if (!/^(?:[-*+]\s+|\*\*)/.test(part)
+          && ![...CURRENT_FIELDS, ...CHAIN_FIELDS, ...LEGACY_CHAIN_FIELDS].includes(field)) return [];
+        return [{ field, value: match[2], line }];
+      });
+    });
+    const isLegacyD = decision_id.startsWith("D-");
+    const hasCurrent = parents.some(({ field }) => CURRENT_FIELDS.includes(field));
+    const hasOld = parents.some(({ field }) => CHAIN_FIELDS.includes(field));
+    const isCurrent = decision_id.startsWith("N") || (!isLegacyD && hasCurrent);
+    const requiredFields = isLegacyD ? LEGACY_CHAIN_FIELDS : isCurrent ? CURRENT_FIELDS : hasOld ? CHAIN_FIELDS : [];
+    if (!isLegacyD && !isCurrent && !hasOld) {
+      warnings.push(warning("unknown_decision_shape", decision_id, "decision_fields", `${decision_id} has no recognized current or historical parent labels; field coverage is unknown`));
+    }
+    if (isCurrent) {
+      for (const [index, parent] of parents.entries()) {
+        if (parents.slice(0, index).some(({ field }) => field === parent.field)) {
+          warnings.push(warning("duplicate_chain_field", decision_id, parent.field, `${decision_id} repeats parent ${parent.field} at line ${parent.line}`));
+        }
+        if (!CURRENT_FIELDS.includes(parent.field)) {
+          warnings.push(warning("conflicting_chain_field", decision_id, parent.field, `${decision_id} has unexpected parent ${parent.field} at line ${parent.line}`));
+        }
+      }
+    }
+    const fields = isLegacyD ? LEGACY_CHAIN_FIELDS : [...new Set([...CURRENT_FIELDS, ...CHAIN_FIELDS, ...LEGACY_CHAIN_FIELDS])];
     const values = Object.fromEntries(fields.map((field) => {
       const label = field === "决定" ? "(?:原)?决定" : field;
-      const match = body.match(new RegExp(`^\\s*(?:[-*+]\\s+)?(?:\\*\\*)?${label}(?:（[^）\\n]*）)?(?:\\*\\*)?\\s*[:：]\\s*(.+?)\\s*$`, "m"));
-      if (match) recognizedFields += 1;
-      return [field, match?.[1]?.trim() ?? null];
+      const match = isLegacyD ? body.match(new RegExp(`^[\\t ]*(?:[-*+][\\t ]+)?(?:\\*\\*)?${label}(?:（[^）\\n]*）)?(?:\\*\\*)?[\\t ]*[:：][\\t ]*(.+?)[\\t ]*$`, "m")) : null;
+      const value = isLegacyD ? match?.[1]?.trim() : parents.find((parent) => parent.field === field && parent.value.trim())?.value.trim();
+      if (value) recognizedFields += 1;
+      return [field, value || null];
     }));
 
     for (const field of requiredFields) {
@@ -117,6 +166,45 @@ export function checkDecisionLogChain({ markdown, source_ref = "decision-log.md"
       }
       if (field === "artifacts" && list.some((item) => item.length === 0)) {
         warnings.push(warning("invalid_chain_field", decision_id, field, `${decision_id} contains an empty artifact reference`));
+      }
+    }
+
+    if (isCurrent) {
+      for (const { text } of lines) {
+        for (const sentence of text.split(/[。！？]/)) {
+          // Scope each explicit reference by its own preceding clause. A
+          // history path elsewhere in this sentence cannot hide current refs.
+          const externalDomain = /历史|旧(?:编号|决定|文|记录|来源)|另一(?:个)?文件|其他文件|外部|external|archive\/|[\w./-]+\.md\b/i;
+          const isCurrentReference = (index, end) => {
+            const prefix = sentence.slice(0, index).split(/[，,；;]/).at(-1);
+            if (/本当前文|本块|本文件|当前(?:文|决定|块)?/.test(prefix)) return true;
+            const qualifier = /^\s*[（(]([^）)]*)[）)]/.exec(sentence.slice(end));
+            return !externalDomain.test(`${prefix} ${qualifier?.[1] ?? ""}`);
+          };
+          for (const sectionRef of sentence.matchAll(/(?:引用|参见|指向)\s+#{1,6}\s+([^，,；;]+?)(?=[，,；;]|$)/g)) {
+            let title = sectionRef[1].trim().replace(/^[`「“'"]|[`」”'"]$/g, "");
+            let end = sectionRef.index + sectionRef[0].length;
+            const qualifier = /[（(]([^（）()]*)[）)]$/.exec(title);
+            // Preserve declared literal headings and ordinary title brackets.
+            // Only an identifiable attached source belongs to reference scope.
+            if (qualifier && !headings.has(title) && externalDomain.test(qualifier[1])) {
+              end = sectionRef.index + sectionRef[0].lastIndexOf(qualifier[0]);
+              title = title.slice(0, qualifier.index).trim();
+            }
+            if (!isCurrentReference(sectionRef.index, end)) continue;
+            if (!headings.has(title)) warnings.push(warning("missing_section_reference", decision_id, "references", `${decision_id} references missing current section ${title}`));
+          }
+          for (const reference of sentence.matchAll(/(?:引用|依赖|参见|指向|关联)[\s`：:]*((?:N\d+|(?:ADR|D)-\d+|[RU]-\d+)\b(?:[\s`、,，与和及]+(?:N\d+|(?:ADR|D)-\d+|[RU]-\d+)\b)*)/g)) {
+            if (!isCurrentReference(reference.index, reference.index + reference[0].length)) continue;
+            for (const [id] of reference[1].matchAll(/(?:N\d+|(?:ADR|D)-\d+|[RU]-\d+)\b/g)) {
+              if (!/^[RU]-/.test(id) && !knownDecisions.has(id)) {
+                warnings.push(warning("missing_decision_reference", decision_id, "references", `${decision_id} references missing current ${id}`));
+              } else if (/^[RU]-/.test(id) && !sourceIds.has(id)) {
+                warnings.push(warning("unknown_source_reference", decision_id, "references", `${decision_id} references ${id}, whose source is unavailable in the current text`));
+              }
+            }
+          }
+        }
       }
     }
   }
