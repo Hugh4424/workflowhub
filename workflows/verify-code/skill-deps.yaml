@@ -1,5 +1,8 @@
 stage: verify-code
 skills:
+  - name: isolated-browser-qa
+    path: skills/isolated-browser-qa/SKILL.md
+    trigger: browser_visible_acceptance
   - name: frontend-component-quality
     path: skills/frontend-component-quality/SKILL.md
     trigger: ui_acceptance
