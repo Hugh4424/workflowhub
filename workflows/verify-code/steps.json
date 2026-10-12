@@ -46,7 +46,7 @@
     {
       "step_id": 4,
       "step_slug": "inspect-real-entry-and-tests",
-      "observable_result": "高风险业务样本沿规则、入口、断言与实际效果独立核对；已抽查/未抽查理由及UI/服务缺口可读。",
+      "observable_result": "每 Phase 一行逐面核声明、实际原件path/cwd/argv/exit/raw及未跑理由、条件与owner；缺行或缺面保持incomplete，semantic_test_adequacy取核对表而非provider coverage。高风险业务样本另沿规则、入口、断言与实际效果独立抽查；已抽查/未抽查理由及UI/服务缺口可读，不重做全量上游测试。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",

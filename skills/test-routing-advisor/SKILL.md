@@ -9,6 +9,8 @@ description: 在 build-plan 预判并在 build-code 必要时重判 simple、fea
 
 独立读取调用方传入的 `changed_files`、`phase_count`、`test_command` 和阶段标识。禁止读取全局同名 skill，禁止执行测试，禁止修改仓库。
 
+项目在任务与 Phase 自行声明测试面、逐面测或不测的理由和要测面的可执行命令；面可多选，本技能不提供或检查面清单。下列档位只用于人读技术路线预判与选择一个主测试技能，不替代项目的面，也不新增机器消费者、字段或枚举。
+
 预判与重判分开保存：post build-plan 的预判写入所属 `phases/P<n>.md` 逐 Task 卡，pre/history 保留原 `tasks.md`；build-code 的重判写入 task facts，并同时保留原预判、实际改动和重判理由。
 
 ## 判类

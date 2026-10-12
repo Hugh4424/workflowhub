@@ -14,7 +14,7 @@ description: Author implementation design in spec.md and independent Phase files
 
 Read the confirmed `decision-log.md`, current `spec.md`, and verified current code facts. `spec.md` owns the global product contract **and implementation design**: code anchors, chosen solution, interfaces, global file boundary, dependency graph, source → FR → AC → Phase → oracle trace, risks, rollback, and testing strategy. Extend its implementation design section in place; preserve its product narrative and acceptance criteria.
 
-This skill is the sole Phase engineering author. Write one independent `phases/P<n>.md` file per Phase using `templates/phase-template.md`. A Phase contains only its implementation delta and a stable pointer to the global goal in `spec.md`, not a copy of the global design or another Phase.
+This skill is the sole Phase engineering author. Write one independent `phases/P<n>-<结果短名>.md` file per Phase using `templates/phase-template.md`. Choose an independently deliverable and verifiable outcome, not a module count; explain any split beyond the work packages in the global spec. Historical bare `P<n>.md` files remain read-only compatible input. A Phase contains only its implementation delta and a stable pointer to the global goal in `spec.md`, not a copy of the global design or another Phase.
 
 A superseded full-text body does not stay in this file either; the superseded text is carried by git and the existing archives, not by rewriting the live file in place. This skill also renders the pure pointer index after authoring the independent Phases; use the index method below. No post-cohort `plan.md` or `tasks.md` writer exists; pre-cohort and archived files are read-only.
 
@@ -52,9 +52,9 @@ Trace every current source requirement, FR, and AC to a Phase, Task, and objecti
 
 For each applicable behavior change, build-plan authors a real executable test before implementation, runs its scoped `gate_cmd`, and preserves actual RED evidence. RED is valid only when the named target assertion fails, not setup/environment/configuration; a planned command or unrelated nonzero is not RED. Freeze that test and any scoring logic in DO NOT TOUCH. A later test change needs an explicit change request, reason, previous evidence, and independent review; build-code changes implementation to make the same test/oracle GREEN without silently relaxing assertions.
 
-Every behavior Task records tier, concrete testing skill, scenario/input, fixture or service, command, expected exit, oracle, test path, actual RED ref or honest unavailable, GREEN evidence path, coverage limit, and STOP.
+Every behavior Task records project-declared testing surfaces, a reason for testing or excluding each surface, one executable Phase command for every tested surface and covered AC, a main concrete testing skill, scenario/input, fixture or service, expected exit, oracle, test path, actual RED ref or honest unavailable, GREEN evidence path, coverage limit, and STOP. Surfaces may be multiple; routing tiers are only a technical forecast, not the project's surface list. A browser-visible surface without browser end-to-end testing needs a named reason.
 
-G-2 for pure documentation or exploratory work permits N/A only with a concrete reason, risk, objective alternative (prefer a falsifiable check), and acceptance disclosure; do not manufacture a failure. The final aggregate is an ordinary Phase task, not a new gate.
+G-2 for pure documentation or exploratory work permits N/A only with a concrete reason, risk, objective alternative (prefer a falsifiable check), and acceptance disclosure; do not manufacture a failure. For an executable artifact, plan exactly one final acceptance Phase covering all task ACs, using the existing acceptance section in `templates/phase-template.md`. Its inputs are earlier Phase originals; it consumes them once and executes only necessary unresolved cases. A pure-document task may exempt this final acceptance Phase only by declaring the exemption and a named reason in an actual Phase’s existing contract or testing-strategy section, with a pointer to the risk and falsifiable alternative in the global testing design; mixed or executable-artifact tasks remain outside this exemption. This is an output obligation, not a runtime gate; missing or incomplete facts do not freeze same-task repair.
 
 计划里每一条红测都必须同时写下归因：目标行为失败 / 夹具或环境失败 / 本来就通过；只写命令与期望退出码不算写完。
 
@@ -64,11 +64,11 @@ Return the actual spec/Phase paths and the design/verification limits. Read curr
 
 ## Pure pointer index
 
-独立 Phase 写完后，读取当前 decision-log、spec 与每个 `phases/P<n>.md` 的实际契约头，渲染 `phases/index.md`。模板使用一次预置的条件指针：`templates/index-template.md` 已实际存在且已登记在本技能 `skill-bundle.json` 时使用该附件；附件不满足条件时如实报告具体缺口。所需附件不可读时报告 unavailable、具名 owner 与下一动作，不凭未来路径捏模板。
+独立 Phase 写完后，读取当前 decision-log、spec 与每个实际具名 `phases/P<n>-<结果短名>.md` 的契约头，渲染 `phases/index.md`。模板使用一次预置的条件指针：`templates/index-template.md` 已实际存在且已登记在本技能 `skill-bundle.json` 时使用该附件；附件不满足条件时如实报告具体缺口。所需附件不可读时报告 unavailable、具名 owner 与下一动作，不凭未来路径捏模板。
 
-每个连续有序的 Phase 恰一行；保 `## Execution Index` 与现行 `阶段` / `权威引用` 列，引用形如 `P1` → `phases/P1.md`。每行只从契约头取 stable authority path、semantic anchor、exact write set、Phase dependency 与真实 downstream consumer，并与物理 Phase 对齐。它是可再生导航，不承载 L0/L1/L2、命令、oracle、证据路径、Task 程序、执行状态或完成权威；这些留原 owner。
+每个连续有序的 Phase 恰一行；保 `## Execution Index` 与现行 `阶段` / `权威引用` 列，引用形如 `P1` → `phases/P1-配置错误定位.md`，指向实际文件；旧裸 P 路径只作兼容读入。每行只从契约头取 stable authority path、semantic anchor、exact write set、Phase dependency 与真实 downstream consumer，并与物理 Phase 对齐。它是可再生导航，不承载 L0/L1/L2、命令、oracle、证据路径、Task 程序、执行状态或完成权威；这些留原 owner。
 
-完成时核 index 与独立 Phase 一一对应、连续顺序、依赖可解析无环、各写集与其头一致，并返回行数和缺权威清单。缺失或歧义报 unavailable 与原 Phase owner，保现历史 pre/tasks 只读；不生成 fallback 正文或双写 tasks.md。
+完成时核 index 与独立 Phase 一一对应、连续顺序、依赖可解析无环、各写集与其头一致，并返回行数和缺权威清单。可执行产物的末行指向「Test design and quality」所定唯一全 AC 验收 Phase；缺失时如实说明，纯文档按该节具名豁免。索引只引用实际 Phase，不承载验收正文，不把此义务写入校验器。缺失或歧义报 unavailable 与原 Phase owner，保现历史 pre/tasks 只读；不生成 fallback 正文或双写 tasks.md。
 
 ## Writing rules
 
