@@ -5,6 +5,8 @@
 
 ## Phase 契约头
 
+- **规则锚**: spec.md「### 接口与失败语义」；spec.md「## 测试标准」；decision-log.md「### N1 把已算出却被丢掉的校验结果接到边界，并让 Phase 声明的命令真跑」；decision-log.md「### N9 让 build-code 按声明的面真跑，并堵住两个逃逸口」；decision-log.md「### N11 补回提交粒度的正面条款，并把授权粒度改成绑分支加阶段」；decision-log.md「### N14 动手前读项目自己声明的受保护类别，越界即停」；decision-log.md「### N17 让 phase 文件名带工作包名，并让 phase 数量按可交付物划」。仅绑定上列实际依赖段落；无关段落变化不使本Phase实施事实失效。
+- **材料变更影响**: 本次实施注记仅在本Phase「## Phase 契约头」补本两行；spec、方向、Task正文、AC、写集、依赖与其它Phase正文不改。本两行不构成机器门或完成依据。
 - **全局规格**: `spec.md#实现设计全局权威`
 - **写入集**: `workflows/build-code/SKILL.md`；`docs/standard-workflow.md`；`tools/cli/stage-runtime.mjs`；`skills/wh-review/scripts/simple-review-runner.mjs`；`workflows/build-code/skill-deps.yaml`；`workflows/verify-code/skill-deps.yaml`；`skills/catalog.yaml`；`workflows/build-code/steps.json`；`runtime/stage/stage-content-contracts.mjs`；`runtime/task/material-workspace.mjs`；`skills/wh-review/scripts/review-materials.mjs`；`runtime/review/provider-material-projection.mjs`
 - **依赖**: P1、P2
