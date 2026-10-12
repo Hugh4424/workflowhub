@@ -32,6 +32,14 @@
     "skills/spec-clarify/SKILL.md",
     "skills/spec-research/SKILL.md",
     "skills/third-review/docs/workflowhub-result-v2.md",
-    "skills/third-review/docs/workflowhub-result-v3.md"
+    "skills/third-review/docs/workflowhub-result-v3.md",
+    ".planning/2026-09-16-build-code-mechanism-waste-reduction/task_plan.md",
+    ".planning/2026-09-17-build-plan-cost-baseline-20260917/build-code-P4-phase-card.md",
+    ".planning/2026-09-17-build-plan-cost-baseline-20260917/findings.md",
+    ".planning/2026-09-17-build-plan-cost-baseline-20260917/progress.md",
+    ".planning/2026-09-17-build-plan-cost-baseline-20260917/task_plan.md",
+    ".planning/build-spec-build-plan/task_plan.md",
+    "specs/workflowhub-thin-core-rebuild-planning-20260919/decision-log.md",
+    "specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md"
   ]
 }
