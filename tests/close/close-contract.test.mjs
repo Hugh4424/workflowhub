@@ -2,7 +2,8 @@ import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync, readdirSync, lstatSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname, basename } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import * as workspaceCheck from "../../runtime/interface/workspace-check.mjs";
 import { prepareDeliveryClosePlan, confirmClosePlan, authorizeClosePlan, executeClosePlan, inspectDeliveryCloseState, closeDelivery } from "../../core/task-close.mjs";
 const roots=[];let counter=0;
 afterEach(()=>{while(roots.length)rmSync(roots.pop(),{recursive:true,force:true});});
@@ -26,6 +27,54 @@ async function prepare(s,mode){return prepareDeliveryClosePlan({taskDir:s.taskDi
 async function confirm(s,p,outcome="confirmed",replyText="Owned fixture explicit reply"){return confirmClosePlan({taskDir:s.taskDir,planRef:p.plan_ref,outcome,replyText});}
 async function authorized(s,p){const c=await confirm(s,p);await authorizeClosePlan({taskDir:s.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref});return c;}
 async function execute(s,p,c){return executeClosePlan({taskDir:s.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref});}
+
+it.each(["merge", "archive", "push", "cleanup"])("N12 cancellation during %s async preflight leaves the action unsent and resumes the original plan", async (operation) => {
+ const saved={...process.env},s=fixture(),bin=join(s.base,"bin"),calls=join(s.base,"preflight-calls.jsonl"),state=join(s.base,"preflight-pr.json"),identity=lstatSync(s.base);
+ const realGit=execFileSync("/usr/bin/which",["git"],{encoding:"utf8"}).trim();let spy,running,release;
+ try {
+  mkdirSync(bin);writeFileSync(calls,"");git(s.repo,["remote","set-url","origin","https://github.com/owned/p4-preflight.git"]);
+  // The Git and GH command seams stay local: every transport command goes to
+  // this fixture's bare repo; the fake GH command only reads/writes local JSON.
+  writeFileSync(join(bin,"git"),`#!${process.execPath}\nconst fs=require('node:fs'),cp=require('node:child_process');let args=process.argv.slice(2);if(!process.cwd().startsWith(${JSON.stringify(s.base+'/')}))process.exit(95);fs.appendFileSync(${JSON.stringify(calls)},JSON.stringify({tool:'git',args})+'\\n');if(['push','fetch','ls-remote'].includes(args[0])){args=args.map(x=>x==='origin'?${JSON.stringify(s.bare)}:x);if(args.some(x=>/^https?:|^git@/.test(x)))process.exit(96);}const r=cp.spawnSync(${JSON.stringify(realGit)},args,{cwd:process.cwd(),env:process.env,encoding:'utf8'});process.stdout.write(r.stdout||'');process.stderr.write(r.stderr||'');process.exit(r.status??97);\n`,{mode:0o700});
+  writeFileSync(join(bin,"gh"),`#!${process.execPath}\nconst fs=require('node:fs'),cp=require('node:child_process'),args=process.argv.slice(2);if(!process.cwd().startsWith(${JSON.stringify(s.base+'/')}))process.exit(95);fs.appendFileSync(${JSON.stringify(calls)},JSON.stringify({tool:'gh',args})+'\\n');if(args[0]==='--version'){console.log('owned local gh transport');}else if(args[0]==='auth'){process.exit(0);}else if(args[0]==='repo'){console.log(JSON.stringify({nameWithOwner:'owned/p4-preflight',defaultBranchRef:{name:'main'},viewerPermission:'WRITE'}));}else if(args[0]==='pr'&&args[1]==='create'){const oid=cp.execFileSync(${JSON.stringify(realGit)},['rev-parse','HEAD'],{encoding:'utf8'}).trim();fs.writeFileSync(${JSON.stringify(state)},JSON.stringify({headRefName:${JSON.stringify(s.branch)},baseRefName:'main',headRefOid:oid,url:'https://github.com/owned/p4-preflight/pull/1',number:1}));console.log('https://github.com/owned/p4-preflight/pull/1');}else if(args[0]==='pr'&&(args[1]==='view'||args[1]==='list')){console.log(JSON.stringify(fs.existsSync(${JSON.stringify(state)})?(args[1]==='view'?JSON.parse(fs.readFileSync(${JSON.stringify(state)})):[JSON.parse(fs.readFileSync(${JSON.stringify(state)}))]):[]));}else process.exit(98);\n`,{mode:0o700});
+  Object.assign(process.env,{PATH:bin+':'+saved.PATH,WORKFLOWHUB_TASK_DIR:join(s.base,'storage')});
+  const p=await prepare(s),c=await authorized(s,p),controller=new AbortController();
+  expect(p.plan.steps).toEqual(["commit","push-task","pr","merge","archive","push","cleanup"]);
+  const confirmation=readFileSync(c.confirmation_ref),authDir=join(s.taskDir,"quality/evidence/git-authorizations");
+  const consumes=()=>readdirSync(authDir).filter(name=>name.includes("-consumed-")).sort().map(name=>({name,bytes:readFileSync(join(authDir,name),"utf8")}));
+  const physical=()=>({target:git(s.repo,["rev-parse","HEAD"]),source:git(s.worktree,["rev-parse","HEAD"]),localRefs:git(s.repo,["for-each-ref","--format=%(refname):%(objectname)"]),remoteRefs:git(s.bare,["for-each-ref","--format=%(refname):%(objectname)"]),sourceMaterials:existsSync(join(s.repo,s.source)),archive:existsSync(join(s.repo,`specs/archive/${s.id}`)),worktree:existsSync(s.worktree)});
+  let enteredResolve,checks=0;const entered=new Promise(resolve=>enteredResolve=resolve),gate=new Promise(resolve=>release=resolve),original=workspaceCheck.assertCleanTarget;
+  const pauseAt=2+["merge","archive","push","cleanup"].indexOf(operation);
+  spy=vi.spyOn(workspaceCheck,"assertCleanTarget").mockImplementation(async options=>{
+   await original(options);
+   if(++checks===pauseAt){enteredResolve();await gate;}
+  });
+  running=executeClosePlan({taskDir:s.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref,signal:controller.signal});
+  await Promise.race([entered,running.then(()=>{throw Error("async preflight was not reached");})]);
+  const before=physical(),beforeConsumes=consumes(),beforeActions=(await inspectDeliveryCloseState({taskDir:s.taskDir,planRef:p.plan_ref})).step_records;
+  const expected=p.plan.steps.slice(0,p.plan.steps.indexOf(operation));
+  expect(beforeActions.map(row=>row.operation)).toEqual(expected);
+  expect(beforeConsumes.some(row=>JSON.parse(row.bytes).step_id===`${p.plan_ref}:${operation}`)).toBe(false);
+  controller.abort("owned async preflight cancellation");release();const cancelled=await running;
+  expect(cancelled.status).toBe("cancelled");expect(cancelled.records.map(row=>row.operation)).toEqual(expected);
+  expect(cancelled.physical.step_records).toEqual(beforeActions);
+  expect(consumes()).toEqual(beforeConsumes);expect(physical()).toEqual(before);
+  spy.mockRestore();spy=undefined;
+  const resumed=await execute(s,p,c);
+  expect(resumed.status).toBe("completed");expect(resumed.records.map(row=>row.operation)).toEqual(p.plan.steps);
+  expect(resumed.physical.step_records.filter(row=>row.status==="completed").map(row=>row.operation)).toEqual(p.plan.steps);
+  expect(readFileSync(c.confirmation_ref)).toEqual(confirmation);
+  expect(existsSync(s.worktree)).toBe(false);
+  expect(git(s.repo,["cat-file","-e",`main:specs/archive/${s.id}/spec.md`])).toBe("");
+  const requests=readFileSync(calls,"utf8").trim().split("\n").map(JSON.parse);
+  expect(requests.filter(row=>row.tool==="gh"&&row.args[0]==="pr"&&row.args[1]==="create")).toHaveLength(1);
+ } finally {
+  release?.();spy?.mockRestore();if(running)await running;
+  for(const key of Object.keys(process.env))if(!(key in saved))delete process.env[key];Object.assign(process.env,saved);
+  const current=lstatSync(s.base);expect({dev:current.dev,ino:current.ino}).toEqual({dev:identity.dev,ino:identity.ino});
+  expect(realpathSync(s.base)).toBe(s.base);rmSync(s.base,{recursive:true,force:true});expect(existsSync(s.base)).toBe(false);
+ }
+}, 30000);
 
 it("N12 invalid cutoff is rejected before any authorized action", async()=>{
  const s=fixture(),p=await prepare(s),c=await authorized(s,p);

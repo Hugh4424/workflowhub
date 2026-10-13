@@ -748,6 +748,7 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
           prResult = actual;
         } else if (operation === "merge") {
           await assertCleanTarget({ root: c.root, target: c.root, baseline: targetHead, expectBranch: plan.target_branch });
+          if (signal?.aborted) return { status: "cancelled", records, physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
           if (entries(c.worktree).length) throw failure("SOURCE_DIRTY_AFTER_COMMIT", "source must be clean before merge");
           consume("merge");
           try { git(c.root, ["merge", "--no-ff", "--no-edit", plan.task_branch]); }
@@ -761,6 +762,7 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
           targetHead = branchOid(c.root, plan.target_branch);
         } else if (operation === "archive") {
           await assertCleanTarget({ root: c.root, target: c.root, baseline: targetHead, expectBranch: plan.target_branch });
+          if (signal?.aborted) return { status: "cancelled", records, physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
           if (!within(c.root, join(c.root, plan.spec_source_path)) || existsSync(join(c.root, plan.spec_archive_path))) throw failure("ARCHIVE_SCOPE", "archive source/target is unsafe");
           realDirectory(join(c.root, plan.spec_source_path));
           consume("archive", true);
@@ -770,6 +772,7 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
           if (plan.mode === "post-cleanup-archive") sourceHead = targetHead;
         } else if (operation === "push") {
           await assertCleanTarget({ root: c.root, target: c.root, baseline: targetHead, expectBranch: plan.target_branch });
+          if (signal?.aborted) return { status: "cancelled", records, physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
           const remote = remoteOid(c.root, plan.remote, plan.target_branch);
           const alreadyPublished = remote.status === "available" && remote.oid === targetHead && previouslySent("push");
           if (remote.status !== "available" || remote.oid !== plan.remote_target_head && !alreadyPublished) throw failure("REMOTE_HEAD_DRIFT", "remote target changed since close planning");
@@ -781,6 +784,7 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
             records.push({ operation, status: "skipped", reason: "existing workspace is not task-owned" }); continue;
           }
           await assertCleanTarget({ root: c.root, target: c.root, baseline: targetHead, expectBranch: plan.target_branch });
+          if (signal?.aborted) return { status: "cancelled", records, physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
           const sourceExists = existsSync(c.worktree);
           if (sourceExists) {
             assertNoSidecars(c.worktree, plan.task_id);

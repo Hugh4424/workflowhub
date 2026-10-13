@@ -834,11 +834,11 @@ async function recordBuildCodeCommandEvidence(context, receipt) {
       evidence.push({ command: JSON.stringify(receipt.argv), exit_code: receipt.exit_code,
         failure_signature: receipt.cancelled ? `cancelled: ${receipt.cancellation_reason ?? receipt.signal ?? "reason unavailable"}`
           : receipt.timed_out ? "timed out" : receipt.error ? `${receipt.error.code}: ${receipt.error.message}`
-            : receipt.exit_code === 0 ? "exit 0; no failing assertion" : `exit ${receipt.exit_code}; output: ${receipt.output_ref}`,
-        receipt_ref: receipt.receipt_ref, output_ref: receipt.output_ref });
+            : receipt.exit_code === 0 ? "exit 0; no failing assertion" : `exit ${receipt.exit_code}; output: ${receipt.output_ref}` });
     }
     await writeStageRow(context.task.taskPath, { ...prior, record_kind: "stage", task_id: context.identity.taskId, stage: "build-code",
-      source: Number.isInteger(receipt.exit_code) ? current?.source ?? receipt.receipt_ref : `${current?.source ?? "command capture unavailable"}; receipt: ${receipt.receipt_ref}; ${receipt.error?.message ?? "no integer exit"}`,
+      source: Number.isInteger(receipt.exit_code) ? `${current?.source ?? "command capture"}; receipt: ${receipt.receipt_ref}; output: ${receipt.output_ref}`
+        : `${current?.source ?? "command capture unavailable"}; receipt: ${receipt.receipt_ref}; output: ${receipt.output_ref}; ${receipt.error?.message ?? "no integer exit"}`,
       evidence: evidence.length ? { value: evidence } : { value: null, reason: `no integer command exit; receipt: ${receipt.receipt_ref}` } });
   });
 }
