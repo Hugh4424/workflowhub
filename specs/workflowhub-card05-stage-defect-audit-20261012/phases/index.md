@@ -16,3 +16,13 @@
 | `P8` | `phases/P8-整任务证据核对.md` | `L0 — 结果与变更` | none（只读聚合，执行原件在外置任务根，不改材料正文） | P1、P2、P3、P4、P5、P6、P7 | verify-code独立审查者与用户 |
 
 pre cohort 的旧任务卡只读保留，在本文件中没有有效行。
+
+<!-- 新表头采用GFM无外侧竖线，避免现reader把重复表头误读为Phase；数据行保原可消费形状。仅此表豁免管线风格一致性。 -->
+<!-- markdownlint-disable MD055 -->
+阶段 | 权威引用 | 语义锚点 | 写入集 | 依赖 | 消费者
+--- | --- | --- | --- | --- | ---
+| `P9` | `phases/P9-验收输入可执行.md` | `L0 — 结果与变更` | `skills/spec-plan/SKILL.md`；`skills/spec-plan/templates/phase-template.md`；`skills/spec-specify/templates/spec-template.md`；`workflows/build-plan/SKILL.md` | P8 | build-plan作者与完整材料测试读取者 |
+| `P10` | `phases/P10-审查事实可定位.md` | `L0 — 结果与变更` | `workflows/verify-code/SKILL.md`；`runtime/review/ocr-delegation-adapter.mjs`；`tests/contract/card05-native-observation-target.test.mjs` | P9 | verify-code回复者与现review原件读取者 |
+| `P11` | `phases/P11-关键接缝永久可验.md` | `L0 — 结果与变更` | `tests/contract/stage-evidence-contract.test.mjs`；`tests/contract/card05-author-material-consumer.test.mjs`；`docs/architecture/move-map.json` | P10 | 后续定向回归执行者与本轮独立验收者 |
+
+<!-- markdownlint-enable MD055 -->

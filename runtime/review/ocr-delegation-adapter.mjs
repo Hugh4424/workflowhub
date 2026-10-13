@@ -1,6 +1,6 @@
 import { execFileSync, spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { closeSync, constants, cpSync, existsSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, realpathSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { homedir, tmpdir } from "node:os";
 import { redactHostPathText, redactProviderHostPaths } from "./provider-material-projection.mjs";
@@ -383,6 +383,9 @@ export async function runOcrDelegationRound(request, {
       const message=settled.settled && !cancellationError ? "OCR executor terminated after cancellation" : "OCR executor termination was not confirmed before the cancellation deadline";
       return unavailable(request,materialId,code,message,{
         ...(observed ?? {}),
+        ...(Array.isArray(settled.error?.provider_results) ? {provider_results:settled.error.provider_results} : {}),
+        ...(Array.isArray(settled.error?.findings) ? {findings:settled.error.findings} : {}),
+        ...(settled.error ? {executor_error:safeText(settled.error.code ?? settled.error.message ?? settled.error)} : {}),
         status:"unavailable",outcome:"unavailable",
         // A settled provider group is a real source even when this outer
         // request was cancelled; retain every member and its original facts.
@@ -429,6 +432,8 @@ export async function runOcrDelegationRound(request, {
       "host OCR delegation executor failed", {
       dispatch_state: error?.dispatch_state === "blocked_before_dispatch" ? "blocked_before_dispatch" : "sent_unparsed",
       executor_error: safeText(error?.code ?? error?.message ?? error),
+      ...(Array.isArray(error?.provider_results) ? {provider_results:error.provider_results} : {}),
+      ...(Array.isArray(error?.findings) ? {findings:error.findings} : {}),
     });
   } finally {
     signal?.removeEventListener("abort", forwardAbort);
@@ -997,6 +1002,24 @@ function normalizeOcrUsage(value) {
     aliases[key] && Object.hasOwn(value, aliases[key]) ? value[aliases[key]] : amount]));
 }
 
+
+function readOcrNativeAudit(path) {
+  let fd;
+  try { fd = openSync(path, constants.O_RDONLY | (constants.O_NOFOLLOW || 0)); }
+  catch (error) { if (error.code === "ENOENT") return null; throw error; }
+  try {
+    const opened = fstatSync(fd);
+    if (!opened.isFile() || opened.nlink !== 1) throw new Error("native audit is not an owned regular file");
+    const bytes = readFileSync(fd);
+    const named = lstatSync(path);
+    if (named.isSymbolicLink() || named.dev !== opened.dev || named.ino !== opened.ino
+        || named.nlink !== 1 || realpathSync(path) !== resolve(path)) {
+      throw new Error("native audit identity changed");
+    }
+    return bytes;
+  } finally { closeSync(fd); }
+}
+
 // Private AG packet transport. Owner/consumer: this native host executor.
 // Replaces only the unsupported-AG guard; all files die with host materials.
 // Native PreToolUse is the boundary, not plan mode or skip-permissions.
@@ -1007,12 +1030,12 @@ process.stdin.setEncoding("utf8");
 process.stdin.on("data", chunk => { input += chunk; });
 process.stdin.on("end", () => {
   const phase = process.argv[2];
-  let decision = "deny", relative = null, payload = null, hookError = null;
+  let decision = "deny", relative = null, payload = null, hookError = null, observedHash = null;
   try {
     payload = JSON.parse(input);
     const call = payload.toolCall, args = call?.args;
     if (typeof payload.conversationId !== "string" || !call || typeof call.name !== "string" || !args || typeof args !== "object") throw new Error("invalid tool hook payload");
-    if (phase === "pre" && call.name === "view_file") {
+    if ((phase === "pre" || phase === "post") && call.name === "view_file") {
       const raw = args.AbsolutePath;
       if (typeof raw === "string" && path.isAbsolute(raw) && path.normalize(raw) === raw
           && !raw.split(path.sep).includes("..")) {
@@ -1028,18 +1051,21 @@ process.stdin.on("end", () => {
           const expected = config.files[rel.replaceAll(path.sep, "/")];
           if (fs.realpathSync(raw) !== raw || !info.isFile() || info.nlink !== 1
               || info.size !== expected.bytes || crypto.createHash("sha256").update(fs.readFileSync(raw)).digest("hex") !== expected.sha256) throw new Error("packet bytes changed");
-          decision = "allow"; relative = rel.replaceAll(path.sep, "/");
+          decision = "allow"; relative = rel.replaceAll(path.sep, "/"); observedHash = expected.sha256;
         }
       }
-    } else if (phase === "post" && call.name === "view_file") {
-      const raw = args.AbsolutePath;
-      if (typeof raw === "string") relative = path.relative(config.root, raw).replaceAll(path.sep, "/");
     }
   } catch (error) { hookError = String(error.message); }
   try {
     const fd = fs.openSync(config.events, fs.constants.O_WRONLY | fs.constants.O_APPEND | fs.constants.O_CREAT | (fs.constants.O_NOFOLLOW || 0), 0o600);
     try { fs.writeSync(fd, JSON.stringify({phase, conversation_id:payload?.conversationId ?? null,
       tool:payload?.toolCall?.name ?? null, path:relative, decision:phase === "pre" ? decision : null,
+      sha256:observedHash,
+      range_requested:Boolean(payload?.toolCall?.args && (Object.hasOwn(payload.toolCall.args,"StartLine") || Object.hasOwn(payload.toolCall.args,"EndLine"))),
+      StartLine:Number.isSafeInteger(payload?.toolCall?.args?.StartLine) ? payload.toolCall.args.StartLine : null,
+      EndLine:Number.isSafeInteger(payload?.toolCall?.args?.EndLine) ? payload.toolCall.args.EndLine : null,
+      full_file_result:phase === "post" && typeof payload?.toolResult?.content === "string" && observedHash
+        ? crypto.createHash("sha256").update(payload.toolResult.content).digest("hex") === observedHash : null,
       error:hookError ?? (phase === "post" ? payload?.error || null : null)}) + "\n"); }
     finally { fs.closeSync(fd); }
   } catch (error) { decision = "deny"; hookError = "packet guard log failed"; }
@@ -1076,16 +1102,32 @@ function installAgPacketGuard(materials) {
         throw Object.assign(new Error("AG packet hook/config changed"), {code:"OCR_PROVIDER_PACKET_GUARD_FAILED"});
       }
     },
-    inspect(sessionId) {
+    readAudit() { return readOcrNativeAudit(events); },
+    inspect(sessionId, auditBytes = this.readAudit()) {
       this.assertIntact();
-      if (typeof sessionId !== "string" || !existsSync(events) || lstatSync(events).isSymbolicLink()) throw new Error("AG packet hook did not establish a native read session");
-      const rows = readFileSync(events,"utf8").trim().split(/\r?\n/).filter(Boolean).map(line=>JSON.parse(line));
+      if (typeof sessionId !== "string" || !Buffer.isBuffer(auditBytes)) throw new Error("AG packet hook did not establish a native read session");
+      const rows = auditBytes.toString("utf8").trim().split(/\r?\n/).filter(Boolean).map(line=>JSON.parse(line));
       const own = rows.filter(row=>row.conversation_id === sessionId);
       if (own.length === 0 || own.some(row=>row.error && row.phase === "pre")) throw new Error("AG packet hook payload/handler failed");
-      const permitted = new Set(own.filter(row=>row.phase === "pre" && row.decision === "allow" && row.tool === "view_file").map(row=>row.path));
-      const read = new Set(own.filter(row=>row.phase === "post" && row.tool === "view_file" && !row.error && permitted.has(row.path)).map(row=>row.path));
-      if (!read.has("review-prompt.md")) throw new Error("AG native packet prompt read was not confirmed");
-      return {read_confirmed:materials.deliveryManifest.every(entry=>read.has(entry.path))};
+      const permitted = new Map();
+      const complete = new Set();
+      for (const row of own) {
+        const expected = files[row.path];
+        if (row.tool !== "view_file" || row.error || !expected || row.sha256 !== expected.sha256) continue;
+        const range = JSON.stringify([row.range_requested, row.StartLine, row.EndLine]);
+        if (row.phase === "pre" && row.decision === "allow") {
+          permitted.set(row.path, range);
+        } else if (row.phase === "post" && permitted.get(row.path) === range) {
+          // A ranged result is complete only when the actual returned content
+          // matches the frozen file. Integrity reads by the hook are not reads
+          // by the provider; partial/unknown tool ranges stay undetermined.
+          if (row.full_file_result === true) complete.add(row.path);
+          permitted.delete(row.path);
+        }
+      }
+      if (!complete.has("review-prompt.md")) throw new Error("AG native packet prompt read was not confirmed");
+      return {read_confirmed:materials.deliveryManifest.every(entry=>complete.has(entry.path)),
+        read:materials.deliveryManifest.filter(entry=>complete.has(entry.path)).map(entry=>entry.path)};
     },
   };
 }
@@ -1127,7 +1169,7 @@ function installKimiPacketReader(materials) {
   const policy={root,dev:rootStat.dev,ino:rootStat.ino,audit,files:names.map(path=>{
     const file=packetPathWithin(root,path),stat=lstatSync(file);
     if(!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || realpathSync(file) !== file) throw new Error("Kimi packet path alias");
-    return {path,dev:stat.dev,ino:stat.ino,sha256:sha256(readFileSync(file))};
+    return {path,dev:stat.dev,ino:stat.ino,bytes:stat.size,sha256:sha256(readFileSync(file))};
   })};
   mkdirSync(privateRoot,{mode:0o700});mkdirSync(skills,{mode:0o700});mkdirSync(nativeRoot,{mode:0o700});
   writeFileSync(server,OCR_KIMI_PACKET_SERVER,{flag:"wx",mode:0o600});
@@ -1158,12 +1200,34 @@ function installKimiPacketReader(materials) {
   return {owned,agent,skills,assertIntact(){
     if(bindings.some(entry=>lstatSync(entry.path).isSymbolicLink() || sha256(readFileSync(entry.path)) !== entry.sha256)
         || sha256(readFileSync(owned.path)) !== owned.sha256) throw Object.assign(new Error("Kimi packet transport changed"),{code:"OCR_PROVIDER_PACKET_GUARD_FAILED"});
-  },inspect(){
+  },readAudit(){return readOcrNativeAudit(audit);},inspect(auditBytes=this.readAudit()){
     this.assertIntact();
-    if(!existsSync(audit) || lstatSync(audit).isSymbolicLink())throw new Error("Kimi private packet reader did not respond");
-    const rows=readFileSync(audit,"utf8").trim().split(/\r?\n/).filter(Boolean).map(line=>JSON.parse(line));
+    if(!Buffer.isBuffer(auditBytes))throw new Error("Kimi private packet reader did not respond");
+    const rows=auditBytes.toString("utf8").trim().split(/\r?\n/).filter(Boolean).map(line=>JSON.parse(line));
     const prompt=policy.files.find(entry=>entry.path === "review-prompt.md");
-    if(!rows.some(row=>row.allowed === true && row.path === prompt.path && row.sha256 === prompt.sha256))throw new Error("Kimi native packet prompt read was not confirmed");
+    const promptRows=rows.filter(row=>row.path === prompt.path);
+    // Reachability follows audit order: each edge must extend an already
+    // observed contiguous prefix. Repeated pages do not invalidate a proof,
+    // but no edge can bridge an unread gap or contribute fabricated bytes.
+    const promptOffsets=new Set([0]);
+    let promptComplete=false;
+    for(const row of promptRows){
+      if(row.allowed !== true || row.sha256 !== prompt.sha256 || row.bytes !== prompt.bytes
+          || !Number.isSafeInteger(row.offset) || row.offset<0 || !promptOffsets.has(row.offset)
+          || !Number.isSafeInteger(row.bytes_returned) || row.bytes_returned<1
+          || row.bytes_returned>prompt.bytes-row.offset)continue;
+      const nextOffset=row.offset+row.bytes_returned;
+      if(row.has_more !== (nextOffset<prompt.bytes))continue;
+      promptOffsets.add(nextOffset);
+      if(nextOffset === prompt.bytes)promptComplete=true;
+    }
+    if(!promptComplete)throw new Error("Kimi native packet prompt read was not confirmed");
+    // No page-union inference: a duplicate prefix plus a last page can still
+    // leave a hole. Only an exact whole-file response establishes full reading.
+    const read=materials.deliveryManifest.filter(entry=>rows.some(row=>row.allowed === true
+      && row.path === entry.path && row.sha256 === entry.sha256 && row.bytes === entry.bytes
+      && row.offset === 0 && row.bytes_returned === entry.bytes && row.has_more === false)).map(entry=>entry.path);
+    return {read};
   }};
 }
 
@@ -1696,6 +1760,7 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
   const runtimeId = "ocr-host-" + randomUUID();
   let runs = [];
   let settled = false;
+  const providerResults = new Array(providers.length);
   try {
     const prompt = ocrHostPrompt(request, packet, files);
     writeFileSync(join(materials.bundleRoot, "review-prompt.md"), prompt + "\n", { flag: "wx", mode: 0o600 });
@@ -1757,14 +1822,29 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
         healthPollMs,
         guardianCleanup: guardianCleanup.get(provider) ?? null,
       }); }).then(member=>{
-        if(provider.split("/",1)[0] !== "antigravity" || member?.status !== "completed") return member;
-        try { return {...member, packet_coverage:agGuard.inspect(member.session_id)}; }
-        catch(error) { return {...member,status:"failed",output:null,
-          error:{code:"OCR_PROVIDER_PACKET_GUARD_FAILED",message:safeText(error.message)}}; }
-      }).then(member=>{
-        if(provider.split("/",1)[0] !== "kimi" || !kimiReader || member?.status !== "completed")return member;
-        try{kimiReader.inspect();return member;}
-        catch(error){return {...member,status:"failed",output:null,error:{code:"OCR_PROVIDER_PACKET_GUARD_FAILED",message:safeText(error.message)}};}
+        const adapter=provider.split("/",1)[0];
+        const guard=adapter === "antigravity" ? agGuard : adapter === "kimi" ? kimiReader : null;
+        if(!guard)return member;
+        let audit=null, auditError=null;
+        try{audit=guard.readAudit();}
+        catch(error){auditError=safeText(error.message,1024);}
+        const observed={...member,...(Buffer.isBuffer(audit)?{native_audit:audit}:{}),
+          ...(auditError?{native_audit_error:auditError}:{})};
+        // Failure/cancellation still owns its original audit. It supplies no
+        // completed read coverage, but its bytes must reach the existing sink.
+        if(member?.status !== "completed")return observed;
+        try {
+          if(auditError)throw new Error(auditError);
+          const coverage=adapter === "antigravity" ? guard.inspect(member.session_id,audit) : guard.inspect(audit);
+          // The Kimi audit has no per-profile session field. Shared readers
+          // cannot attribute a sibling's reads to this member.
+          if(adapter === "kimi" && (typeof member.session_id !== "string"
+              || providers.filter(name=>name.split("/",1)[0] === "kimi").length !== 1))coverage.read=[];
+          return {...observed,packet_coverage:coverage};
+        } catch(error) {
+          return {...observed,status:"failed",output:null,
+            error:{code:"OCR_PROVIDER_PACKET_GUARD_FAILED",message:safeText(error.message)}};
+        }
       }).catch((error) => ({
         status: "failed", output: null,
         error: { code: error?.code ?? "OCR_PROVIDER_EXECUTOR_FAILED", message: safeText(error?.message ?? error) },
@@ -1781,7 +1861,6 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
     // reaches a terminal state. Sibling providers keep running, and their
     // later findings arrive through the same callback for incremental
     // disposition. The final return still contains the complete round.
-    const providerResults = new Array(providers.length);
     const projectProviderResult = async (provider, index, member) => {
       const profile = config.providers?.[provider] ?? {};
       const selectedIdentity = selection.provider_identities?.[provider] ?? {};
@@ -1798,9 +1877,11 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
       let rawOutputRef = null;
       let firstSavedDigest = null;
       const rawEvidenceRefs=[];
+      let nativeAuditSaved=false;
       let diagnosticCode = null;
       const diagnostics = [];
       const raw = member?.raw_output;
+      if(member?.native_audit_error)diagnostics.push("native_audit_read_error="+member.native_audit_error);
       if (member?.error) diagnostics.push(`process_error=${safeText(member.error.code)}: ${safeText(member.error.message, 1024)}`);
       if (member?.process_diagnostics?.length) {
         diagnostics.push(`supervisor_diagnostics=${member.process_diagnostics.map((item) => `${item.code}: ${item.message}`).join("; ")}`);
@@ -1808,21 +1889,23 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
       if (Buffer.isBuffer(raw?.stdout) && Buffer.isBuffer(raw?.stderr)) {
         diagnostics.push(`exit_code=${raw.exit_code ?? "unknown"}; exit_signal=${raw.exit_signal ?? "none"}; cancelled=${raw.cancelled === true}; captured_output_limited=${raw.captured_output_limited === true}; stdout_bytes=${raw.stdout_bytes ?? raw.stdout.length}; stderr_bytes=${raw.stderr_bytes ?? raw.stderr.length}; captured_stdout_bytes=${raw.stdout.length}; captured_stderr_bytes=${raw.stderr.length}`);
         if (rawOutputSink) {
-          const hashes = { stdout_sha256: sha256(raw.stdout), stderr_sha256: sha256(raw.stderr) };
+          const streams=[["stdout",raw.stdout],["stderr",raw.stderr]];
+          if(Buffer.isBuffer(member?.native_audit))streams.push(["native-audit",member.native_audit]);
           const saved = new Set();
           const saveErrors = [];
-          for (const stream of ["stdout", "stderr"]) {
-            if (raw[stream].length === 0) {
+          for (const [stream,bytes] of streams) {
+            if (bytes.length === 0) {
               diagnostics.push(`${stream}_bytes=0 not persisted`);
               continue;
             }
-            const digest = hashes[`${stream}_sha256`];
-            if (saved.has(digest)) continue;
+            const digest = sha256(bytes);
+            if (saved.has(digest)) { if(stream === "native-audit")nativeAuditSaved=true; continue; }
             const hint = `quality/reviews/ocr-${stage}-${provider.replace(/[^a-z0-9-]/gi,"-")}-${stream}.output`;
-            try { const ref=await rawOutputSink(hint, raw[stream], {provider,stream});
+            try { const ref=await rawOutputSink(hint, bytes, {provider,stream});
               if(typeof ref!=="string" || !/^quality\/reviews\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(ref))throw new Error("raw output sink returned no safe task-relative original reference");
               if (rawEvidenceRefs.length === 0) firstSavedDigest = digest;
-              rawEvidenceRefs.push(ref); saved.add(digest); }
+              rawEvidenceRefs.push(ref); saved.add(digest);
+              if(stream === "native-audit")nativeAuditSaved=true; }
             catch (saveError) {
               saveErrors.push(`${stream}: ${safeText(saveError?.message ?? saveError, 1024)}`);
             }
@@ -1840,6 +1923,48 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
       } else {
         diagnosticCode = "OCR_PROVIDER_RAW_OUTPUT_UNAVAILABLE";
         diagnostics.push("original provider bytes unavailable: executor did not return stdout/stderr Buffers; text was not reconstructed as original bytes");
+        if(Buffer.isBuffer(member?.native_audit)){
+          const bytes=member.native_audit;
+          if(!rawOutputSink)diagnostics.push("native-audit original bytes not persisted: raw output sink is absent");
+          else if(bytes.length === 0)diagnostics.push("native-audit_bytes=0 not persisted");
+          else {
+            const hint=`quality/reviews/ocr-${stage}-${provider.replace(/[^a-z0-9-]/gi,"-")}-native-audit.output`;
+            try {
+              const ref=await rawOutputSink(hint,bytes,{provider,stream:"native-audit"});
+              if(typeof ref!=="string" || !/^quality\/reviews\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(ref))throw new Error("raw output sink returned no safe task-relative original reference");
+              rawEvidenceRefs.push(ref);rawOutputRef=ref;firstSavedDigest=sha256(bytes);nativeAuditSaved=true;
+            } catch(saveError){
+              status="failed";diagnosticCode="OCR_PROVIDER_OUTPUT_SAVE_FAILED";
+              error={code:diagnosticCode,message:"original provider output could not be saved"};
+              diagnostics.unshift(`raw_output_save_error=native-audit: ${safeText(saveError?.message ?? saveError,1024)}`);
+            }
+          }
+        }
+      }
+      let recovery=null;
+      if(identity.adapter === "kimi" && providerExecutor === runOcrProviderProcess) {
+        let reason="no complete reliable native retry event sequence";
+        if(raw?.captured_output_limited === true)reason="native output was truncated";
+        else if(raw?.cancelled === true || member?.status === "cancelled")reason="native execution was cancelled";
+        else if(Buffer.isBuffer(raw?.stdout) && typeof member?.session_id === "string") {
+          const events=[];
+          let malformed=false;
+          for(const line of raw.stdout.toString("utf8").split(/\r?\n/)) {
+            try {
+              const event=JSON.parse(line);
+              if(event?.role === "meta" && event.type === "turn.step.retrying")events.push(event);
+            } catch {
+              if(line.includes("turn.step.retrying"))malformed=true;
+            }
+          }
+          const reliable=events.length>0 && !malformed && events.every((event,index)=>
+            Number.isSafeInteger(event.failed_attempt) && event.failed_attempt === index+1
+            && Number.isSafeInteger(event.next_attempt) && event.next_attempt === index+2
+            && Number.isSafeInteger(event.max_attempts) && event.max_attempts === events[0].max_attempts
+            && event.max_attempts >= event.next_attempt);
+          if(reliable)recovery={fresh_execution_retry_count:0,provider_internal_retry_count:events.length,same_session_repair_count:0};
+        }
+        if(recovery === null)diagnostics.push("native retry count unknown: "+reason);
       }
       let usage = member?.usage ?? null;
       // Persistence and parsing are independent facts. A failed sink must not
@@ -1874,10 +1999,12 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
       usage = normalizeOcrUsage(usage);
       const usageStatus = usage === null ? "not_reported" : "reported";
       const selectedFiles = files.map(file => file.path);
+      const reliableReads=status === "completed" && parseOutcome === "ok" && nativeAuditSaved && Array.isArray(member?.packet_coverage?.read)
+        ? selectedFiles.filter(path=>member.packet_coverage.read.includes(path)) : [];
       const readConfirmed = identity.adapter === "antigravity" && typeof member?.packet_coverage?.read_confirmed === "boolean"
-        ? member.packet_coverage.read_confirmed : null;
-      const materialCoverage = { provider, read: readConfirmed === true ? [...selectedFiles] : [],
-        unread: [], undetermined: readConfirmed === true ? [] : [...selectedFiles] };
+        ? reliableReads.length === selectedFiles.length : null;
+      const materialCoverage = { provider, read: reliableReads, unread: [],
+        undetermined: selectedFiles.filter(path=>!reliableReads.includes(path)) };
       return {
         provider, status, identity, error: status === "completed" ? null : error,
         session_id: member?.session_id ?? null,
@@ -1887,7 +2014,8 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
         ...(rawEvidenceRefs.length ? {evidence_refs:rawEvidenceRefs} : {}),
         process_outcome: member?.process_outcome ?? (member?.status === "completed" ? "ok" : null),
         parse_outcome: parseOutcome,
-        ...(diagnostics.length && (status !== "completed" || diagnosticCode || member?.process_diagnostics?.length) ? { unavailable_diagnostics: {
+        ...(diagnostics.length && (status !== "completed" || diagnosticCode || member?.process_diagnostics?.length
+          || identity.adapter === "kimi" && recovery === null && providerExecutor === runOcrProviderProcess) ? { unavailable_diagnostics: {
           code: diagnosticCode ?? error?.code ?? "OCR_PROVIDER_PROCESS_DIAGNOSTICS",
           message: safeText(diagnostics.join("; "), 4096),
         } } : {}),
@@ -1899,6 +2027,7 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
         coverage: { selected_files: selectedFiles, read_confirmed: readConfirmed },
         execution: { adapter: identity.adapter, model: identity.model, effort:null, thinking:null, timing, usage, usage_status: usageStatus,
           retry: member?.retry ?? { count: 0, progress_events: 0 },
+          ...(identity.adapter === "kimi" ? {recovery} : {}),
           ...(member?.health ? { health: member.health } : {}),
           runtime_id: runtimeId },
       };
@@ -1944,7 +2073,15 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
     };
   } finally {
     signal?.removeEventListener("abort", forwardAbort);
-    if (settled || runs.length === 0) materials.dispose();
-    else void Promise.allSettled(runs).then(() => materials.dispose());
+    const dispose=()=>{
+      try{materials.dispose();}
+      catch(error){
+        const originals=providerResults.filter(Boolean);
+        throw Object.assign(error,{provider_results:originals,
+          findings:originals.filter(item=>item.status === "completed").flatMap(item=>item.findings)});
+      }
+    };
+    if (settled || runs.length === 0) dispose();
+    else void Promise.allSettled(runs).then(dispose);
   }
 }
