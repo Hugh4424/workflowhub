@@ -55,6 +55,21 @@ async function main(){
   output({type:'turn.completed'});return;
  }
  if(adapter==='antigravity'){
+  if(scenario.mode==='ag-prompt-partial'){
+   const hook=path.join(cwd,'.ocr-ag-guard/hook.cjs');
+   for(const file of ['review-prompt.md','src/read.mjs','src/unread.mjs']){
+    const AbsolutePath=path.join(cwd,file),partial=file==='review-prompt.md';
+    const toolArgs={AbsolutePath,...(partial?{StartLine:1,EndLine:1}:{})};
+    const pre=spawnSync(process.execPath,[hook,'pre'],{input:JSON.stringify({conversationId:session,toolCall:{name:'view_file',args:toolArgs}}),encoding:'utf8',timeout:3000});
+    assert.equal(pre.status,0,pre.stderr);assert.equal(JSON.parse(pre.stdout).decision,'allow');
+    const whole=fs.readFileSync(AbsolutePath,'utf8'),toolResult=partial?whole.split('\n')[0]+'\n':whole;
+    if(partial)assert(Buffer.byteLength(toolResult)<Buffer.byteLength(whole));
+    const post=spawnSync(process.execPath,[hook,'post'],{input:JSON.stringify({conversationId:session,toolCall:{name:'view_file',args:toolArgs},toolResult:{content:toolResult}}),encoding:'utf8',timeout:3000});
+    assert.equal(post.status,0,post.stderr);
+    if(partial)output({event:'owned.prompt-partial',path:file,StartLine:1,EndLine:1,visible:toolResult,total_bytes:Buffer.byteLength(whole)});
+   }
+   finished();return;
+  }
   if(scenario.mode==='ag-partial-lines'){
    const hook=path.join(cwd,'.ocr-ag-guard/hook.cjs');
    for(const file of ['review-prompt.md','src/read.mjs','src/unread.mjs']){
@@ -76,8 +91,8 @@ async function main(){
    const AbsolutePath=path.join(cwd,file);
    const pre=spawnSync(process.execPath,[hook,'pre'],{input:JSON.stringify({conversationId:session,toolCall:{name:'view_file',args:{AbsolutePath}}}),encoding:'utf8',timeout:3000});
    assert.equal(pre.status,0,pre.stderr);assert.equal(JSON.parse(pre.stdout).decision,'allow');
-   fs.readFileSync(AbsolutePath);
-   const post=spawnSync(process.execPath,[hook,'post'],{input:JSON.stringify({conversationId:scenario.mode==='bad-session'?'wrong-session':session,toolCall:{name:'view_file',args:{AbsolutePath}}}),encoding:'utf8',timeout:3000});
+   const toolResult=fs.readFileSync(AbsolutePath,'utf8');
+   const post=spawnSync(process.execPath,[hook,'post'],{input:JSON.stringify({conversationId:scenario.mode==='bad-session'?'wrong-session':session,toolCall:{name:'view_file',args:{AbsolutePath}},toolResult:{content:toolResult}}),encoding:'utf8',timeout:3000});
    assert.equal(post.status,0,post.stderr);
   }
   finished();return;
@@ -92,6 +107,21 @@ async function main(){
  const read=async(file,offset=0,limit)=>{const response=(await rpc('tools/call',{name:'Read',arguments:{path:file,offset,...(limit?{limit}:{})}})).result;assert.equal(response.isError,false);return JSON.parse(response.content[0].text);};
  try{
   await rpc('initialize',{protocolVersion:'2024-11-05'});
+  if(['kimi-prompt-partial','kimi-prompt-hole','kimi-prompt-pages'].includes(scenario.mode)){
+   const pages=[];
+   if(scenario.mode==='kimi-prompt-pages'){
+    let page,offset=0;do{page=await read('review-prompt.md',offset,32);pages.push(page);offset=page.next_offset;}while(page.has_more);
+   }else{
+    const first=await read('review-prompt.md',0,32);pages.push(first);
+    assert(first.total_bytes>96);assert.equal(first.has_more,true);assert.equal(first.bytes_returned,32);
+    if(scenario.mode==='kimi-prompt-hole'){
+     pages.push(await read('review-prompt.md',0,32));
+     pages.push(await read('review-prompt.md',first.total_bytes-32,32));
+    }
+   }
+   output({role:'meta',type:'owned.prompt-pages',path:'review-prompt.md',pages:pages.map(page=>({offset:page.offset,bytes_returned:page.bytes_returned,total_bytes:page.total_bytes,has_more:page.has_more,sha256:page.sha256,content_bytes:Buffer.byteLength(page.content)}))});
+   let page,offset=0;do{page=await read('src/read.mjs',offset);offset=page.next_offset;}while(page.has_more);
+  }else
   for(const file of ['review-prompt.md','src/read.mjs']){let page,offset=0;do{page=await read(file,offset);offset=page.next_offset;}while(page.has_more);}
   if(scenario.mode==='kimi-page-hole'){
    const pages=[await read('src/unread.mjs',0,128),await read('src/unread.mjs',0,128),await read('src/unread.mjs',224,64)];
@@ -316,4 +346,197 @@ test('ORACLE-P10-KIMI-PAGE-HOLE duplicate bytes and a last page do not fill an u
  expect(s.auditCallbacks).toHaveLength(1);expect(s.launches()).toHaveLength(1);
  expect(existsSync(s.launches()[0].cwd)).toBe(false);
  expect(readFileSync(join(s.root,audit.ref)).equals(audit.bytes)).toBe(true);
+},15_000);
+
+// TCR112: append-only configured-host -> round -> canonical review-writer regression.
+import { runOcrDelegationRound } from '../../runtime/review/ocr-delegation-adapter.mjs';
+import { recordSimpleReviewRequest } from '../../runtime/review/review-record-route.mjs';
+
+async function runCleanupThroughWriter(cancelDuringFinalization){
+ const s=fixture(['kimi/owned','codex/good'],'cleanup-failure');
+ const providers=['kimi/owned','codex/good'],executable=join(s.root,'owned-cli');
+ writeFileSync(join(s.root,'task.json'),JSON.stringify({task_id:'owned-round-writer-cleanup',activation_cohort:'post'}));
+ const instructions='Do not invoke Agent, subagent, child-agent, or other agent tools.\nDo not wait for or poll agents, sessions, or processes; do not invoke wait/poll tools.\nInspect only this supplied packet.\n';
+ writeFileSync(join(s.packet.root,'review-instructions.md'),instructions);
+ const manifest=[...s.packet.manifest,{path:'review-instructions.md',bytes:Buffer.byteLength(instructions),sha256:hash(instructions)}];
+ const bundle={bundleRoot:s.packet.root,materialId:s.packet.material_id,manifest};
+ const materials=Object.fromEntries(manifest.map(({path})=>[path,readFileSync(join(s.packet.root,path),'utf8')]));
+ const trustedContext={trusted:{},route:{mode:'single_round',minimum_heterologous:1},selection:{providers,provider_identities:Object.fromEntries(providers.map(provider=>[provider,{source_id:provider+'-source',config_id:provider+'-config'}]))},providerConfig:{providers:Object.fromEntries(providers.map(provider=>[provider,{enabled:true,command:executable,model:'owned-test'}]))}};
+ const observed=[],originals=[],controller=new AbortController();
+ let dispatched=false,hostRejection=null,watchdogFired=false,receipt;
+ const previousHome=process.env.KIMI_CODE_HOME;process.env.KIMI_CODE_HOME=join(s.root,'kimi-home');
+ const watchdog=setTimeout(()=>{watchdogFired=true;controller.abort('owned round-writer watchdog');},20_000);
+ try{
+  receipt=await recordSimpleReviewRequest({taskDir:s.root,request:{...request,materials},signal:controller.signal,
+   runRound:(roundRequest,{signal,onProviderOutput})=>runOcrDelegationRound(roundRequest,{
+    signal,buildBundle:()=>bundle,
+    onProviderResult:event=>{
+     observed.push(event.result);
+     if(cancelDuringFinalization&&observed.length===2&&observed.every(member=>['completed','failed','cancelled'].includes(member.status))
+      &&observed.some(member=>member.provider==='codex/good'&&member.status==='completed'&&member.findings.some(finding=>finding.issue==='Owned sibling finding survives another provider failure'))){
+      controller.abort('owned cancellation during terminal group finalization');
+     }
+    },
+    executor:async context=>{
+     dispatched=true;
+     try{return await runConfiguredOcrHostReview(context,{trustedContext,healthPollMs:20,onProviderResult:context.onProviderResult,
+      rawOutputSink:async(_hint,bytes,metadata)=>{
+       expect(Buffer.isBuffer(bytes),'fixture sink receives real original bytes').toBe(true);
+       const kind=s.auditKind(bytes);
+       if(kind){
+        const launch=s.launches().find(item=>item.adapter==='kimi');
+        expect(launch,'setup: actual Kimi CLI reached terminal output').toBeDefined();
+        expect(existsSync(launch.cwd),'setup: native audit captured before packet disposal').toBe(true);
+        expect(readFileSync(join(launch.cwd,'.ocr-kimi-read/audit.jsonl')),'real native audit source equals writer input').toEqual(bytes);
+       }
+       const ref=await onProviderOutput({provider:metadata.provider,role:metadata.stream,output:bytes});
+       originals.push({provider:metadata.provider,stream:metadata.stream,kind,ref,bytes:Buffer.from(bytes)});
+       return ref;
+      },
+     });}catch(error){hostRejection=error;throw error;}
+    },
+   }),
+  });
+ }finally{
+  clearTimeout(watchdog);
+  if(previousHome===undefined)delete process.env.KIMI_CODE_HOME;else process.env.KIMI_CODE_HOME=previousHome;
+ }
+ const record=JSON.parse(readFileSync(receipt.path,'utf8'));
+ expect(watchdogFired,'setup: watchdog is not the requested cancellation trigger').toBe(false);
+ expect(dispatched,'setup: installed OCR packet preparation must reach the real executor').toBe(true);
+ expect(observed.map(member=>member.provider).sort(),'setup: both real member terminal callbacks occurred').toEqual(['codex/good','kimi/owned']);
+ expect(observed.every(member=>['completed','failed','cancelled'].includes(member.status)),'setup: no unknown member terminal state').toBe(true);
+ const observedGood=observed.find(member=>member.provider==='codex/good');
+ expect(observedGood.status,'fixed sibling positive control').toBe('completed');
+ expect(observedGood.findings).toEqual(expect.arrayContaining([expect.objectContaining({provider:'codex/good',severity:'major',path:'src/read.mjs',line:1,issue:'Owned sibling finding survives another provider failure',evidence:'export const read = true;'})]));
+ expect(hostRejection?.code,'setup: real trust cleanup failed, not a synthetic executor error').toBe('OCR_PROVIDER_TRUST_CLEANUP_FAILED');
+ for(const original of originals)expect(original.bytes.toString('utf8'),'setup: owned CLI completed without fixture failure').not.toContain('FIXTURE_FAILURE:');
+ expect(originals.some(item=>item.provider==='kimi/owned'&&item.kind==='kimi'),'setup: real Kimi audit reached the writer sink').toBe(true);
+ expect(originals.some(item=>item.provider==='codex/good'&&item.stream==='stdout'&&item.bytes.length>0),'setup: real Codex output reached the writer sink').toBe(true);
+ console.log(`ORACLE-P10-ROUND-WRITER-${cancelDuringFinalization?'CANCEL-CLEANUP':'CLEANUP'} reached: real configured host, two terminal observations, literal sibling finding, genuine trust-cleanup rejection, persisted writer JSON; watchdog=false; terminal-finalization cancellation=${controller.signal.aborted}`);
+ expect(record.provider_results.map(member=>member.provider).sort(),'ORACLE-P10-ROUND-WRITER real members survive persisted round conversion').toEqual(['codex/good','kimi/owned']);
+ for(const member of observed){
+  const persisted=record.provider_results.find(item=>item.provider===member.provider);
+  for(const key of ['status','identity','raw_output_ref','evidence_refs','raw_output_sha256','material_coverage','coverage','execution','parse_outcome','process_outcome']){
+   expect(persisted[key],`${member.provider} retains observed ${key}`).toEqual(member[key]);
+  }
+  expect(persisted.identity).toMatchObject({provider:member.provider,source_id:member.provider+'-source',config_id:member.provider+'-config',model:'owned-test'});
+ }
+ expect(record.provider_results.find(member=>member.provider==='codex/good').status).toBe('completed');
+ expect(record.findings).toEqual(expect.arrayContaining([expect.objectContaining({provider:'codex/good',severity:'major',path:'src/read.mjs',line:1,issue:'Owned sibling finding survives another provider failure',recommendation:'Preserve the owned finding',evidence_kind:'direct',evidence:'export const read = true;',root_cause:'Deterministic sibling fixture'})]));
+ for(const original of originals.filter(item=>item.ref)){
+  const member=record.provider_results.find(item=>item.provider===original.provider);
+  expect([member.raw_output_ref,...(member.evidence_refs??[])],`${original.provider} retains its own original reference`).toContain(original.ref);
+  const reread=readFileSync(join(s.root,original.ref));
+  expect(reread,'persisted reference reads exact original bytes').toEqual(original.bytes);
+  expect(hash(reread)).toBe(hash(original.bytes));
+  if(member.raw_output_ref===original.ref)expect(member.raw_output_sha256).toBe(hash(original.bytes));
+ }
+ expect(record.status,'cleanup failure remains unavailable despite surviving facts').toBe('unavailable');
+ expect(controller.signal.aborted).toBe(cancelDuringFinalization);
+ if(cancelDuringFinalization){
+  expect(record.error.code).toBe('REVIEW_CANCELLED');
+  expect(record.cancellation.termination_confirmed).toBe(true);
+  expect(record.executor_error,'cancellation retains actual cleanup diagnostic').toContain('OCR_PROVIDER_TRUST_CLEANUP_FAILED');
+ }else expect(record.error.code).toBe('OCR_PROVIDER_TRUST_CLEANUP_FAILED');
+ expect(process.env.KIMI_CODE_HOME).toBe(previousHome);
+ for(const launch of s.launches())expect(existsSync(launch.cwd),'round packet disposed after retaining originals').toBe(false);
+ return record;
+}
+
+test('ORACLE-P10-ROUND-WRITER-CLEANUP real cleanup failure retains provider facts and originals in persisted review',async()=>{
+ await runCleanupThroughWriter(false);
+},30_000);
+
+test('ORACLE-P10-ROUND-WRITER-CANCEL-CLEANUP terminal-finalization cancellation retains cleanup failure and sibling in persisted review',async()=>{
+ await runCleanupThroughWriter(true);
+},30_000);
+
+
+// E135/E138/E140: real native prompt completeness and custom-executor audit ownership.
+import { execFileSync } from 'node:child_process';
+
+test.each([
+ ['kimi-prompt-partial','failed'],
+ ['kimi-prompt-hole','failed'],
+ ['kimi-prompt-pages','completed'],
+])('ORACLE-P10-PROMPT-CHAIN %s uses actual MCP page proof',async(mode,status)=>{
+ const s=fixture(['kimi/owned'],mode),result=await s.run(),member=result.provider_results[0];
+ const stdout=s.saved.find(item=>item.provider==='kimi/owned'&&item.stream==='stdout');
+ expect(stdout,'setup: actual Kimi stdout is persisted').toBeDefined();
+ expect(stdout.bytes.toString('utf8'),'setup: no fixture protocol failure').not.toContain('FIXTURE_FAILURE:');
+ const observed=stdout.bytes.toString('utf8').trim().split('\n').map(JSON.parse).find(row=>row.type==='owned.prompt-pages');
+ expect(observed,'setup: real MCP prompt pages observed').toBeDefined();
+ const pages=observed.pages,total=pages[0].total_bytes;
+ expect(total).toBeGreaterThan(96);
+ for(const page of pages){expect(page.total_bytes).toBe(total);expect(page.content_bytes).toBe(page.bytes_returned);expect(page.sha256).toBe(pages[0].sha256);expect(page.sha256).toMatch(/^[a-f0-9]{64}$/);}
+ if(mode==='kimi-prompt-partial')expect(pages.map(({offset,bytes_returned,has_more})=>({offset,bytes_returned,has_more}))).toEqual([{offset:0,bytes_returned:32,has_more:true}]);
+ else if(mode==='kimi-prompt-hole'){
+  expect(pages.map(({offset,bytes_returned,has_more})=>({offset,bytes_returned,has_more}))).toEqual([
+   {offset:0,bytes_returned:32,has_more:true},{offset:0,bytes_returned:32,has_more:true},{offset:total-32,bytes_returned:32,has_more:false},
+  ]);
+  expect(total-64,'setup: genuine nonzero unread middle remains').toBeGreaterThan(32);
+ }else{
+  expect(pages.length).toBeGreaterThan(1);let next=0;
+  for(const page of pages){expect(page.offset).toBe(next);next+=page.bytes_returned;expect(page.has_more).toBe(next<total);}
+  expect(next).toBe(total);expect(pages.at(-1).has_more).toBe(false);
+ }
+ expect(member.status,'ORACLE-P10-PROMPT-CHAIN full prompt proof determines acceptance').toBe(status);
+ if(status==='failed'){expect(member.error.code).toBe('OCR_PROVIDER_PACKET_GUARD_FAILED');expect(member.error.message).toMatch(/prompt read was not confirmed/);expect(member.material_coverage.read).toEqual([]);}
+ else expect(member.material_coverage.read).toContain('src/read.mjs');
+ const audit=persistedAudit(s,member),rows=audit.bytes.toString('utf8').trim().split('\n').map(JSON.parse).filter(row=>row.path==='review-prompt.md');
+ expect(rows.map(row=>({allowed:row.allowed,offset:row.offset,bytes_returned:row.bytes_returned,bytes:row.bytes,has_more:row.has_more,sha256:row.sha256}))).toEqual(pages.map(page=>({allowed:true,offset:page.offset,bytes_returned:page.bytes_returned,bytes:page.total_bytes,has_more:page.has_more,sha256:page.sha256})));
+ expect(s.auditCallbacks).toHaveLength(1);expect(existsSync(s.launches()[0].cwd)).toBe(false);
+ expect(hash(readFileSync(join(s.root,audit.ref)))).toBe(hash(audit.bytes));
+},15_000);
+
+test('ORACLE-P10-AG-PROMPT-PARTIAL actual one-line prompt result fails despite valid full packet file reads',async()=>{
+ const s=fixture(['antigravity/owned'],'ag-prompt-partial'),result=await s.run(),member=result.provider_results[0];
+ const stdout=s.saved.find(item=>item.stream==='stdout');expect(stdout).toBeDefined();
+ expect(stdout.bytes.toString('utf8'),'setup: actual CLI has no protocol failure').not.toContain('FIXTURE_FAILURE:');
+ const observed=stdout.bytes.toString('utf8').trim().split('\n').map(JSON.parse).find(row=>row.event==='owned.prompt-partial');
+ expect(observed).toMatchObject({path:'review-prompt.md',StartLine:1,EndLine:1});
+ expect(Buffer.byteLength(observed.visible)).toBeLessThan(observed.total_bytes);expect(observed.visible.split('\n')).toHaveLength(2);
+ expect(member.status,'ORACLE-P10-AG-PROMPT-PARTIAL full_file_result is required for prompt').toBe('failed');
+ expect(member.error.code).toBe('OCR_PROVIDER_PACKET_GUARD_FAILED');expect(member.error.message).toMatch(/prompt read was not confirmed/);
+ expect(member.material_coverage.read).toEqual([]);
+ const audit=persistedAudit(s,member),rows=audit.bytes.toString('utf8').trim().split('\n').map(JSON.parse);
+ expect(rows).toEqual(expect.arrayContaining([expect.objectContaining({path:'review-prompt.md',phase:'post',StartLine:1,EndLine:1,full_file_result:false})]));
+ for(const file of ['src/read.mjs','src/unread.mjs'])expect(rows).toEqual(expect.arrayContaining([expect.objectContaining({path:file,phase:'post',full_file_result:true})]));
+ expect(s.auditCallbacks).toHaveLength(1);expect(existsSync(s.launches()[0].cwd)).toBe(false);expect(hash(readFileSync(join(s.root,audit.ref)))).toBe(hash(audit.bytes));
+},15_000);
+
+function realAgExecutorWithoutRawBuffers(observed){
+ return async({profile,cwd})=>{
+  const output=execFileSync(profile.command,[],{cwd,encoding:'utf8',timeout:5000});
+  const init=output.trim().split('\n').map(JSON.parse).find(row=>row.event==='init');
+  expect(init,'setup: actual owned CLI emitted native session').toBeDefined();
+  observed.push({cwd,bytes:readFileSync(join(cwd,'.ocr-ag-guard/events.jsonl'))});
+  return {status:'completed',output,session_id:init.conversation_id};
+ };
+}
+
+test.each(['saved','save-failure','no-sink'])('ORACLE-P10-AUDIT-ONLY %s keeps genuine AG audit without raw stdout/stderr',async(mode)=>{
+ const s=fixture(['antigravity/owned'],mode==='save-failure'?'save-failure':'partial'),observed=[];
+ const result=await s.run({providerExecutor:realAgExecutorWithoutRawBuffers(observed),...(mode==='no-sink'?{rawOutputSink:null}:{})}),member=result.provider_results[0];
+ expect(observed,'setup: actual custom CLI completed, not fabricated output').toHaveLength(1);
+ const rows=observed[0].bytes.toString('utf8').trim().split('\n').map(JSON.parse);
+ expect(rows).toEqual(expect.arrayContaining([expect.objectContaining({path:'review-prompt.md',phase:'post',full_file_result:true})]));
+ expect(member.unavailable_diagnostics.message).toContain('executor did not return stdout/stderr Buffers');
+ if(mode==='saved'){
+  expect(member.status).toBe('completed');
+  const audit=persistedAudit(s,member);expect(s.saved).toHaveLength(1);expect(s.auditCallbacks).toHaveLength(1);
+  expect(audit.bytes).toEqual(observed[0].bytes);expect(member.raw_output_ref).toBe(audit.ref);expect(member.raw_output_sha256).toBe(hash(observed[0].bytes));
+  expect(readFileSync(join(s.root,audit.ref))).toEqual(observed[0].bytes);
+ }else if(mode==='save-failure'){
+  expect(s.auditCallbacks,'ORACLE-P10-AUDIT-ONLY original audit reaches actual failing sink').toHaveLength(1);
+  expect(s.auditCallbacks[0].bytes).toEqual(observed[0].bytes);expect(member.status).toBe('failed');expect(member.error.code).toBe('OCR_PROVIDER_OUTPUT_SAVE_FAILED');
+  expect(member.unavailable_diagnostics.message).toContain('raw_output_save_error=native-audit:');expect(member.unavailable_diagnostics.message).toContain('owned native audit save failed');
+  expect(s.saved).toHaveLength(0);expect(member.raw_output_ref).toBeNull();expect(member.evidence_refs??[]).toEqual([]);expect(member.material_coverage.read).toEqual([]);
+ }else{
+  expect(s.auditCallbacks).toHaveLength(0);expect(s.saved).toHaveLength(0);expect(member.raw_output_ref).toBeNull();expect(member.evidence_refs??[]).toEqual([]);
+  expect(member.unavailable_diagnostics.message,'ORACLE-P10-AUDIT-ONLY absent sink diagnoses native audit loss').toContain('native-audit original bytes not persisted: raw output sink is absent');
+  expect(member.material_coverage.read).toEqual([]);
+ }
+ expect(existsSync(observed[0].cwd),'actual packet disposed after audit observation').toBe(false);
 },15_000);
