@@ -83,7 +83,7 @@ test.each([
   const f=await fixture(change);expect(f.parsed.ok).toBe(false);expect(f.parsed.errors.join('\n')).toMatch(signature);
   const bundle=f.bundle();try{const facts=sourceFacts(bundle);expect(facts.contract_ok).toBe(false);expect(facts.contract_errors.join('\n')).toMatch(signature);expect(readFileSync(join(bundle.bundleRoot,'changes.diff'),'utf8')).not.toContain('outside.md');}finally{bundle.dispose();}
 });
-test.each(['none','../outside.mjs'])('ORACLE-P11-AUTHOR-SCOPE %s keeps current MATERIAL_INCOMPLETE',async(path)=>{
+test.each([['empty',''],['../outside.mjs','../outside.mjs']])('ORACLE-P11-AUTHOR-SCOPE %s keeps current MATERIAL_INCOMPLETE',async(_name,path)=>{
   const f=await fixture(m=>{field(m,phase1,'Write set','\u0060'+path+'\u0060');m.index=m.index.replace('src/owned.mjs',path);});
   expect(f.parsed.ok).toBe(false);expect(()=>f.bundle()).toThrow(/MATERIAL_INCOMPLETE/);
 });
