@@ -54,6 +54,10 @@ For each applicable behavior change, build-plan authors a real executable test b
 
 Every behavior Task records project-declared testing surfaces, a reason for testing or excluding each surface, one executable Phase command for every tested surface and covered AC, a main concrete testing skill, scenario/input, fixture or service, expected exit, oracle, test path, actual RED ref or honest unavailable, GREEN evidence path, coverage limit, and STOP. Surfaces may be multiple; routing tiers are only a technical forecast, not the project's surface list. A browser-visible surface without browser end-to-end testing needs a named reason.
 
+按原 AC 的每个适用条件安排验收：在既有验收正文与 Task 的 Inputs / Scenario 中写清结果对象、真实 producer/consumer、具体输入及其提供者、执行 owner 和取得结果的时点。技术接线可在当前任务通过真实入口或具名受控反例核；自然语言质量由独立读者消费完整实际材料；真实用户效果仍需要其实际旅程和输入。同一个 AC 的技术子条件与整体效果分别给证据，全部适用条件满足才判该 AC 通过；来源送达、工具读取或结构检查不额外要求证明 provider 理解，也不能代替真实效果。
+
+计划确认前逐条展示本次无法闭环的具体条件、输入提供者与执行时点，同时保留当前能完成的技术和独立人读验收。未知落在缺输入的条件，不因部分真实效果要等后续任务而整批推迟。以下末 Phase 规则保原适用范围：可执行或混合交付除消费上游原件，还要执行必要未闭环 case；只读聚合只报告读回，不称端到端执行。纯文档/纯方法工作流沿下文 G-2 的具名豁免与风险、客观替代；不把此义务扩成所有任务一律实跑，不新增字段、状态或推进门。
+
 G-2 for pure documentation or exploratory work permits N/A only with a concrete reason, risk, objective alternative (prefer a falsifiable check), and acceptance disclosure; do not manufacture a failure. For an executable artifact, plan exactly one final acceptance Phase covering all task ACs, using the existing acceptance section in `templates/phase-template.md`. Its inputs are earlier Phase originals; it consumes them once and executes only necessary unresolved cases. A pure-document task may exempt this final acceptance Phase only by declaring the exemption and a named reason in an actual Phase’s existing contract or testing-strategy section, with a pointer to the risk and falsifiable alternative in the global testing design; mixed or executable-artifact tasks remain outside this exemption. This is an output obligation, not a runtime gate; missing or incomplete facts do not freeze same-task repair.
 
 计划里每一条红测都必须同时写下归因：目标行为失败 / 夹具或环境失败 / 本来就通过；只写命令与期望退出码不算写完。

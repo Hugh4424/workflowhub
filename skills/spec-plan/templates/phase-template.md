@@ -196,7 +196,7 @@
 | 卡片 | 来源 / FR / AC | `Source / FR / AC` | 是 | 逐字来源编号/位置 + 决定 + FR/AC；不得只写编号不写内容 |
 | 卡片 | 文件 / 符号 | `Files / symbols` | 是 | 精确路径或符号/签名，未知项写负责人与停止条件 |
 | 卡片 | 动作 | `Action` | 是 | 有序改动、数据与控制流、兼容边界；足以让人不必猜产品就找到第一处改动 |
-| 卡片 | 输入 | `Inputs` | 是 | 上游材料、产出它的 Task、已核实的接口或夹具；独立 Task 写 `none` 并给理由 |
+| 卡片 | 输入 | `Inputs` | 是 | 上游材料、产出它的 Task、已核实的接口或夹具；沿 AC 条件写具体输入/提供者、结果 producer/consumer、执行 owner 与时点；独立 Task 写 `none` 并给理由 |
 | 卡片 | 输出 / 失败 | `Outputs / failure` | 是 | 可观察结果 + 非法输入与失败信号 + 清理/回滚效果 |
 | 卡片 | 边界 / 禁止改动 | `Boundary / DO NOT TOUCH` | 是 | 精确受保护范围 + 为什么不能改 |
 | 卡片 | 依赖 | `Dependency` | 是 | Task 编号或 `none`、上游产物、文件所有权、串行/并行理由 |
@@ -205,7 +205,7 @@
 | 卡片 | 预写测试 | —（写作说明） | 否 | 独占测试文件、目标断言、作者；不适用时给理由、风险与客观替代 |
 | 卡片 | 可观察接缝 | —（实际来源说明） | 否 | 既有产出方 → 已持久化产物 → 真实读取方 → 来源分母；**并写清「我是怎么知道的」（至少一项 `文件路径:行号` 或 `命令 + 退出码`）**；不存在就写 `unverified`/`unknown` 并让该 AC 保持未完成 |
 | 卡片 | RED/GREEN 门禁命令 | `RED/GREEN gate_cmd` | 是 | 目标 RED 与配对 GREEN 共用同一条有范围的命令 |
-| 卡片 | 预期退出码 | `expected_exit` | 是 | 行为或混合任务 RED：具名断言非零（setup失败不算）；GREEN：0。仅窄纯文档 G-2 可按下例声明客观检查预期0、不执行RED与真实限制。 |
+| 卡片 | 预期退出码 | `expected_exit` | 是 | 行为或混合任务用 `RED nonzero; GREEN 0`，RED必须为具名断言失败，setup失败不算。仅窄纯文档 G-2 可按下例声明客观检查预期0、不执行RED与真实限制。 |
 | 卡片 | RED 目标失败 | `RED target failure` | 是 | 行为任务：同一判定器编号与改动前应失败的确切断言；窄纯文档 G-2 保留同一编号、具名客观替代断言，不制造RED。 |
 | 卡片 | RED 证据 | `RED evidence`（G-2声明） | 行为写作说明；G-2具体声明必需 | 行为：真实命令/退出/断言/原始ref，缺失unavailable。窄纯文档G-2：N/A + 具体理由、风险和客观替代；结构接纳不证明执行或GREEN。 |
 | 卡片 | GREEN 判定器 | `GREEN oracle` | 是 | 同一个判定器编号 + 通过信号 + 具名反向行为 |
@@ -222,6 +222,8 @@
 ### 验收 Phase 固定小节（只在验收 Phase 填写）
 
 本节回答：如何逐条执行验收、留下可复核结论并闭环失败。可执行产物的唯一末 Phase 在本节覆盖全部 AC；纯文档任务仅按 `skills/spec-plan/SKILL.md` 的「Test design and quality」具名豁免，混合任务不在豁免范围。按下列 13 项填写；复用既有 Phase、Task 与原始证据，不新增 stage、gate、审查点、schema 或校验器。
+
+先消费 `skills/spec-plan/SKILL.md#Test design and quality` 的结果/输入/owner/时点约定，再填本节现有输入与逐条结论：引用上游原件，并给必要未闭环 case 的真实入口、具名命令与执行者。没有所需输入时，列具体缺口和取得条件；只读原件汇总不冒端到端执行。完整的行为卡、纯文档 G-2 卡与同一 spec/index 组合见下方「完整作者材料示例」，不能只抽字段首行重组为一份测试专用合同。
 
 1. **入口准则**：逐条核对前置 Phase 的 Done、写入集落地和两份就绪件的 status；每条写核对结果与证据路径。
 2. **两份就绪件**：数据就绪件与环境就绪件各一份，独立成件放 `quality/evidence/`，各写 status；同类别新增实例不算新文件类型。前置 Phase 在写入集与 Done 提前设计能设计的验收数据；验收 Phase 只许补并标来源档位，缺数据写 `incomplete` 或 `unavailable`，不得伪造。
@@ -240,7 +242,7 @@
 ### Tnnn — [下一个全局唯一的 Task 编号与一个可观察结果]
 
 - **来源 / FR / AC**: [可观察结果；当前 decision-log 的逐字来源编号/位置（适用时附上游 PRD 引用）、决定、FR 与 AC 编号；保留量词、否定、顺序与失败强度；不得只写编号不写内容]
-- **输入**: [当前材料引用、产出它的 Task、已核实的接口或夹具；若本 Task 独立，写 `none` 并给理由]
+- **输入**: [当前材料引用、产出它的 Task、已核实的接口或夹具；沿所属 AC 条件写结果 producer/consumer、具体输入与提供者、执行 owner 与时点；若本 Task 独立，写 `none` 并给理由]
 - **文件 / 符号**: [本 Phase 写入集内的新增/修改路径；既有符号/签名/消费者与核实来源；未知项要写明负责人与停止条件]
 - **动作**: [在每个锚点上的有序改动或操作、数据与控制流、兼容边界；要足以让人不必猜产品就找到第一处改动]
 - **输出 / 失败**: [可观察的接口、schema 或状态结果，非法输入与失败信号，清理或回滚效果]
@@ -251,7 +253,7 @@
 - **预写测试**: [本 Task 独占的测试文件、目标断言与作者；build-plan 在实现之前写好它；若 G-2 不适用，给出理由、风险与客观替代]
 - **可观察接缝**: [本 AC 对应的既有产出方 → 已持久化的产物 → 真实读取方/消费者；来源分母；缺失或非法的语义。**三项都要写「我是怎么知道的」**：至少一项是 `文件路径:行号`，或 `实际命令 + 退出码`。只写「将来如何观察效果」不算接缝。若这条接缝目前不存在，就写 `unverified` 或 `unknown`，同时把该 AC 标为未完成并写明负责人与下次核实动作——不要改去测文本，也不要把它留给 build-code]
 - **RED/GREEN 门禁命令**: [本 Task 的目标 RED 与配对 GREEN 共用同一条可执行、有范围的命令；若确实不适用，说明理由并给出客观替代]
-- **预期退出码**: [RED：由具名目标断言产生的非零退出码，不是 setup 失败；GREEN：0]
+- **预期退出码**: [行为或混合任务写 `RED nonzero; GREEN 0`；RED由具名目标断言产生，不是setup失败；纯文档G-2按下例给客观检查与真实限制]
 - **RED 目标失败**: [稳定的判定器编号，以及改动之前必须失败的那条确切断言或拒绝；setup 或收集失败不算 RED]
 - **RED 证据**: [来自既有任务事实的真实 build-plan 命令、退出码、失败断言、原始输出/实际引用与受测范围；没有真实执行记录就是「不可用」，不是 RED]
 - **GREEN 判定器**: [同一个判定器编号；改动之后的通过信号，以及具名的反向行为；不加反引号，整段以 `ORACLE-` 开头]
@@ -297,3 +299,187 @@
 本节回答：哪些推导、原始输出与被否方案只供核对。
 
 [用具名原件路径与节锚点引用参考材料；固定合同、来源、锁定文字与当前验收判据保留在正文，不在这里另建权威。]
+
+## 完整作者材料示例
+
+本例沿“明确导出结果→独立操作说明”给出完整 spec、纯指针 index 与两个具名 Phase。它是未来作者可替换为真实需求的一个小例子，不是当前任务的执行证据。第二 Phase 是小例子的末验收，覆盖两个 AC；其中纯文档 Task 使用 G-2，不能据此豁免混合交付。
+
+在核作者与真实消费者是否一致时，读取以下四个完整块，按 `spec`、`index`、`phase-behavior`、`phase-document` 分别写入 spec.md、phases/index.md、phases/P1-行为结果.md、phases/P2-文档核对.md。只替显式环境占位 `{{TASK_ID}}`、`{{TASK_ROOT}}`、`{{WORKTREE_ROOT}}`；未出现的占位无需添加。来源、标签、trace、路径和 oracle 原样送入生产 reader，不能由测试补齐作者遗漏。该机制仅核完整材料消费与错误投影，独立人读仍核实际语义与输入边界。
+
+<!-- card05-author-example:spec -->
+```markdown
+# 功能规格：owned 导出与操作说明
+
+读者：实施者与独立验收者。任务示例标识为 {{TASK_ID}}；本示例描述局部模块和文档的交付，执行结果另由真实命令与独立读回记录。
+
+## 来源与场景
+
+R-001：调用者需要从 src/owned.mjs 得到布尔 false；得到 true、非布尔值或无法导入均须明确失败。
+R-002：操作者需要 docs/owned.md 说明同一模块的前置输入、执行位置、成功信号和失败处理，按文档复放时不把导入错误当成功。
+
+SCN-001：实施者把已有 owned 导出从 true 改为 false，独立执行者在本次任务内读取真实模块并检查结果。
+SCN-002：文档作者消费 P1 的命令与原件，独立读者按成稿逐步复放既有行为，检查遗漏输入和错误处理。
+示例不包含外部用户旅程、网络、数据库或界面；若真实需求包含这些效果，另按原需求明确其输入与 owner，不能用本模块样例替代。
+
+## 产品事实与需求
+
+- **PFACT-001**：assumed；示例输入约定 src/owned.mjs 已导出 owned=true。实施者开工时直接读取该文件，若与约定不同，记录实际差异后按已确认范围处理。
+- **PFACT-002**：assumed；示例 docs/owned.md 已存在但缺少同一命令的操作说明，P2 作者与独立读者检查实际正文；文件存在不证明说明完整。
+- **FR-EXAMPLE-001**：来源 R-001；current；关联 PFACT-001、SCN-001、AC-EXAMPLE-001；模块明确导出布尔 false，由本次真实模块读取验证。
+- **FR-EXAMPLE-002**：来源 R-002；current；关联 PFACT-002、SCN-002、AC-EXAMPLE-002；文档让独立读者复放既有行为并识别失败。
+
+## 测试标准与验收流程
+
+模块结果与文档可操作性是两个验收对象。P1 负责模块行为，P2 为唯一末验收 Phase：一次读回 P1 原件，补必要未闭环模块检查，并完成文档独立复放；P2 的纯文档 Task 使用 G-2，不把混合交付整体豁免。
+Node 命令直接消费真实模块，无缺失的测试脚本依赖。模块导入失败、结果为 true 或非布尔值时命令非零；该断言的期望来自 R-001，不从实现重算。文档语义由独立读者对原 R-002 判断，命令退出0不能替代其人读结论。
+每项未观察条件均写具体缺输入、执行 owner 与下一动作；本示例没有实际执行记录，不声称 RED、GREEN、独立审查或真实用户效果已经完成。
+
+## 实现设计（全局权威）
+
+### 代码锚点
+
+`src/owned.mjs` 的导出符号 owned 是行为 producer，Node 的 ESM import 是实际 consumer；`docs/owned.md` 的操作说明由独立读者消费。P1 只改模块，P2 只改文档，两份文件不并发双写。
+
+### 接口与失败语义
+
+模块输入是当前工作树真实源码，输出是布尔值；import 失败明确报错，结果不等于 false 时断言失败，不回退默认值。文档输入是 P1 已核命令与实际原件，输出是可逐步执行的说明；缺命令、工作目录、成功信号或错误处理时不判文档完成。
+不新增状态、schema、持久化 owner、公共命令或外部服务；示例观察结果只留真实原件。
+
+### 需求到任务追踪
+
+| Source | FR | AC | Phase/Task | oracle |
+| --- | --- | --- | --- | --- |
+| R-001 | FR-EXAMPLE-001 | AC-EXAMPLE-001 | P1/T001 | ORACLE-EXAMPLE-BEHAVIOR |
+| R-002 | FR-EXAMPLE-002 | AC-EXAMPLE-002 | P2/T002 | ORACLE-EXAMPLE-DOCUMENT |
+
+### 全局验证策略
+
+独立环境探针 `node --version` 只观察当前Node是否可用及其报告版本，不证明模块行为或AC通过。行为精确命令由 P1/T001 的 RED/GREEN gate_cmd 唯一承载，P1 执行者在任务工作树运行并绑定实际输出原件；P2 独立读者按 docs/owned.md 引用该命令，在同一已核输入上复放，只对必要未闭环 case 重跑，逐项检查两个 AC。
+来源、写集、command/oracle 在四份材料里同义，结构错误作为送审事实保留；结构成功也不能代替上述实际执行与独立人读。
+
+## Appendix A — 验收判据（唯一权威）
+
+- **AC-EXAMPLE-001**：关联 FR-EXAMPLE-001；来源 R-001；观察对象为当前真实模块导出。
+验证：P1 实施者提供源码，独立执行者在本次任务内于工作树执行 ORACLE-EXAMPLE-BEHAVIOR；输入是 src/owned.mjs 的当前字节，producer为owned导出，consumer为Node import与断言。缺Node或源码时记录具体缺口。
+通过：真实导出的值严格等于布尔 false，导入成功且命令退出0；true或非布尔值的受控错误输入触发结果断言失败；缺导出在模块链接时产生导入失败，结果断言未到达。两类失败分别记录，均不能算通过。
+失败：导入失败被忽略，true/非布尔值被当成功，或以文档声明代替真实模块结果。
+证据：P1 的原始命令、cwd、exit与输出，以及 P2 对原件的逐条读回；本节不填写执行状态。
+
+- **AC-EXAMPLE-002**：关联 FR-EXAMPLE-002；来源 R-002；观察对象为 docs/owned.md 的可操作说明。
+验证：P2 文档作者提供成稿与 P1 原件，独立读者在本次交付末按说明复放既有模块命令，并核前置Node、工作目录、成功与失败处理。文档只声明步骤，不自行证明业务结果。
+通过：独立读者能找到所有所需输入、执行同一命令、识别 false 的成功信号与导入失败；缺任一输入时说明具体owner/恢复动作，不能略过错误。
+失败：步骤遗漏输入/位置，命令与P1不一致，或把未知和导入错误写成成功。
+证据：具名独立文档读回与实际复放原件；G-2不制造目标RED，替代未执行时不算完成。
+```
+
+<!-- card05-author-example:index -->
+```markdown
+# Phase 索引 — owned 导出与操作说明
+
+本件只导航实际 Phase，正文与验收归各自 owner。
+
+## Execution Index
+
+| 阶段 | 权威引用 | 语义锚点 | 写入集 | 依赖 | 消费者 |
+| --- | --- | --- | --- | --- | --- |
+| `P1` | `phases/P1-行为结果.md` | `L0 — 行为结果` | `src/owned.mjs` | none | Node模块调用者与P2文档作者 |
+| `P2` | `phases/P2-文档核对.md` | `L0 — 文档核对` | `docs/owned.md` | P1 | 独立文档读者与整任务验收者 |
+```
+
+<!-- card05-author-example:phase-behavior -->
+```markdown
+# Phase P1 — 行为结果
+
+- **Global spec**：`spec.md#实现设计全局权威`
+- **Write set**：`src/owned.mjs`
+- **Dependency**：none
+- **Consumer**：Node模块调用者与P2文档作者
+- **gate_cmd**：`node --input-type=module -e "import { strict as assert } from 'node:assert'; import { owned } from './src/owned.mjs'; assert.equal(owned, false, 'ORACLE-EXAMPLE-BEHAVIOR');"`
+- **oracle**：ORACLE-EXAMPLE-BEHAVIOR
+- **evidence_path**：`quality/tests/owned-behavior.output`（预期证据类型；实际引用由执行者保存）
+- **STOP**：源码或Node输入不可用时保真实错误，交P1实施owner定位；不将环境失败当目标RED。
+- **覆盖 AC**：AC-EXAMPLE-001
+- **Done**：AC-EXAMPLE-001按原判据逐条件核实际命令/源码/失败反例及独立审查；未知输入具体列出，不预填通过。
+
+## L0 — 行为结果
+
+交付可直接导入的布尔 false。P1 只改变 owned 导出，交P2真实命令和原件；外部用户旅程不是本例的验收对象。
+
+## L1 — 可执行契约
+
+### T001 — 导出明确的布尔结果
+
+- **Source / FR / AC**：R-001 / FR-EXAMPLE-001 / AC-EXAMPLE-001；导出必须严格为false，失败不能回退。
+- **Files / symbols**：`src/owned.mjs`；symbol: owned
+- **Action**：先读取当前导出并保原字节，再只把owned值改为布尔false；保持ESM导出形状；移除修改仅退回本hunk，不覆盖其它工作。
+- **Inputs**：none；可独立开始，真实输入为当前src/owned.mjs与调用者提供的Node运行环境；实施owner核实PFACT-001。
+- **Outputs / failure**：Node import得到false；模块缺失、语法错或其它值均明确非零，不造成功。
+- **Boundary / DO NOT TOUCH**：docs/owned.md及所有其它生产文件保持；不新增默认值、writer或外部副作用。
+- **Dependency**：none
+- **Test tier / skill**：feature / backend-testing；真实模块结果与失败面，UI/数据库/网络不涉及。
+- **Scenario / fixture or service**：当前工作树模块为正例；独立临时源码中的true、字符串和缺导出为负例，检查后清理自建目录；临时反例不修改当前生产或原证据。
+- **RED/GREEN gate_cmd**：`node --input-type=module -e "import { strict as assert } from 'node:assert'; import { owned } from './src/owned.mjs'; assert.equal(owned, false, 'ORACLE-EXAMPLE-BEHAVIOR');"`
+- **expected_exit**：RED nonzero; GREEN 0；只有owned结果断言失败算目标RED，导入/环境失败另记。
+- **RED target failure**：ORACLE-EXAMPLE-BEHAVIOR 断言当前owned为true时不等于false；若原值本来false如实记本来通过，不制造生产回退。
+- **GREEN oracle**：ORACLE-EXAMPLE-BEHAVIOR 真实owned严格等于false；同一结果断言拒绝true与非布尔值；缺导出在模块链接时导入失败、结果断言未到达，两类失败均不能算通过。
+- **Evidence**：命令/源码输入/cwd/exit/原始输出由执行者各留单原件；当前示例未执行，RED/GREEN原件均unavailable。
+- **STOP / recovery**：目标断言未到达时定位实际输入，回P1原owner修；保失败，禁止改oracle求绿。
+- **Coverage limit**：只证明当前模块结果；不证明文档可操作性、真实用户效果或所有未来输入。
+- **Done**：AC-EXAMPLE-001逐条件有真实效果与反例证据；交P2原件，未观察部分具名保留。
+
+## L2 — 可删除参考
+
+当前仅示例合同，非执行记录；P2消费其实际原件时复核输入与覆盖。
+```
+
+<!-- card05-author-example:phase-document -->
+```markdown
+# Phase P2 — 文档核对
+
+- **Global spec**：`spec.md#实现设计全局权威`
+- **Write set**：`docs/owned.md`
+- **Dependency**：P1
+- **Consumer**：独立文档读者与整任务验收者
+- **gate_cmd**：`node --input-type=module -e "import { strict as assert } from 'node:assert'; import { owned } from './src/owned.mjs'; assert.equal(owned, false, 'ORACLE-EXAMPLE-BEHAVIOR');"`
+- **oracle**：ORACLE-EXAMPLE-DOCUMENT
+- **evidence_path**：`quality/evidence/owned-document-readback.md`（预期独立读回原件；实际引用由执行者保存）
+- **STOP**：P1实际原件或文档必要输入缺失时逐条留缺口并交owner补；不把结构可读或命令可执行当语义通过。
+- **覆盖 AC**：AC-EXAMPLE-001、AC-EXAMPLE-002
+- **Done**：唯一末Phase逐AC消费P1原件、补必要未闭环模块检查并完成AC-EXAMPLE-002独立复放；缺条件逐项保未完成，不将文档G-2扩成混合交付豁免。
+
+## L0 — 文档核对
+
+交付与真实模块一致、可独立复放的操作说明。P2同时收束本小交付全部AC：模块行为归P1原件与必要复验，文档可操作性归独立读者；只读汇总本身不叫端到端执行。
+
+## L1 — 可执行契约
+
+### 验收输入与执行责任
+
+P1作者提供源码和命令原件；P2独立验收者一次读回AC-EXAMPLE-001，输入改变或缺反例时执行本Phase同一模块命令补必要case，并给实际结果。AC-EXAMPLE-002在成稿后由未参与写作的读者按步骤复放与核对，缺具体输入时定位其owner；不能用复放成功代替说明完整。
+本例无外部账号或副作用、无UI；这两个AC的输入在本次工作树可获得，不整批延期到下一真实任务。下方Task只改文档，G-2只替代该文档卡的新行为RED，不取消整个混合交付的末验收。
+
+### T002 — 使操作说明可独立复放
+
+- **Source / FR / AC**：R-002 / FR-EXAMPLE-002 / AC-EXAMPLE-002；文档须交代前置输入、位置、同一命令与失败处理。
+- **Files / symbols**：`docs/owned.md`；symbol: N/A — 非代码操作说明
+- **Action**：只编写现有owned导出的操作说明，无新增运行行为；从P1实际命令与原件记录Node前提、工作树执行位置、false成功信号及导入失败恢复，不修改执行逻辑。
+- **Inputs**：G-2纯文档无新增运行行为；P1/T001提供真实模块、命令与原件，P2独立读者提供逐步复放结果。
+- **Outputs / failure**：文档步骤可在临时目录复放；缺输入、错命令、略过导入失败均保留为具体问题，不发布完成结论。
+- **Boundary / DO NOT TOUCH**：src/owned.mjs及其它代码保持；只读P1来源，不新增runtime状态或修订其oracle。
+- **Dependency**：P1；T001提供实际输入与原件后才做独立文档复放。
+- **Test tier / skill**：simple / backend-testing；既有模块命令复放与具名独立文档审查，无新运行行为。
+- **Scenario / fixture or service**：G-2纯文档无新增运行行为；独立读者从docs/owned.md执行既有owned正例，并核缺Node、错目录和导入错误的处理说明；只清理自建临时目录。
+- **RED/GREEN gate_cmd**：`node --input-type=module -e "import { strict as assert } from 'node:assert'; import { owned } from './src/owned.mjs'; assert.equal(owned, false, 'ORACLE-EXAMPLE-BEHAVIOR');"`
+- **expected_exit**：既有owned客观检查预期0；不执行RED；结构接纳不等于替代已执行或GREEN。
+- **RED target failure**：ORACLE-EXAMPLE-DOCUMENT 断言：文档步骤可在临时目录复放；遗漏输入或错误处理的文档保持可见为未完成，不制造新目标RED。
+- **RED evidence**：N/A — 理由：纯文档无新增运行行为；风险：操作员误把文档可读当作业务已验；客观替代：独立逐步文档审查与既有owned用例重放，断言文档步骤可在临时目录复放。
+- **GREEN oracle**：ORACLE-EXAMPLE-DOCUMENT 文档步骤可在临时目录复放；所需输入、同一命令、成功信号和失败处理与真实来源一致；原失败保持可见。
+- **Evidence**：独立逐步文档审查与既有命令原输出各留单原件；本例替代未执行，不能当GREEN；格式检查不证明语义。
+- **STOP / recovery**：来源或步骤不一致交P2文档owner修正文，行为问题回P1；保原失败，不修改测试或扩大业务判据。
+- **Coverage limit**：只证明本次文档复放与具名模块输入；不证明真实用户长期使用，结构接纳不等于GREEN。
+- **Done**：AC-EXAMPLE-002全部适用条件有独立读回与复放证据；未知具体说明。整个交付另按本Phase覆盖AC逐条收束，不预填完成。
+
+## L2 — 可删除参考
+
+文档G-2是当前纯.md任务的具名客观替代；同卡若增加运行代码，不再适用该替代。
+```

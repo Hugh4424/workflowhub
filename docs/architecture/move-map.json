@@ -4594,6 +4594,45 @@
       ],
       "delete_condition": "P9/T017仅在真实新唯一术语载体及上述reader承接后完成rename，历史ADR正文只读/仅授权文首批注；新职责被原owner的经审查替代承接且无当前consumer时按spec:161删除，不授本Task提前删根文件。",
       "retention_basis": "当前唯一根术语已由 P9/T017 真实迁名，source146交付、169实际提交/3f048来源与当前四 reader 可读；父会话回传398 classification3与 verify-structure PASS 只证明各自有限检查，不冒整体P9质量。后续 T018 原171合法政策源只更改当前 GLOSSARY.md:22 的严格 OCR/architect 回退语义，其余术语与该目录职责保持，当前 root27行已实读；source=P9/T017:86–99、spec:161，原128 prereg未rename语句仅当时状态，历史原件不改。旧 CONTEXT.md 根载体已 absent，旧分类 control 与历史 ADR 旧名不激活旧载体；全仓当前旧pin扫描另由独立owner验证，本条未作该扫描，不新增gate/第三writer/清理许可。"
+    },
+    {
+      "source": "tests/contract/card05-native-observation-target.test.mjs",
+      "destination": "tests/contract/card05-native-observation-target.test.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "runConfiguredOcrHostReview native guard/MCP → rawOutputSink → coverage/recovery 的局部读取、重试、失败/取消/清理事实回归",
+      "owner": "workflowhub-card05-stage-defect-audit-20261012 P10 / 预写测试作者；生产实现者不得弱化冻结oracle",
+      "consumer": "Vitest定向命令 ./node_modules/.bin/vitest run tests/contract/card05-native-observation-target.test.mjs --poolOptions.forks.singleFork --no-fileParallelism；verify-code读取同命令原始执行事实",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "现契约退役或经独立审查的等效现consumer测试已覆盖全部所承接场景后删除重复测试；不删除历史RED/原始证据，不新增推进门",
+      "retention_basis": "U-020/U-021、N22/N23、AC-C05AUD-26至29；补足现 ocr-delegation-adapter 测试未覆盖的原生观察投影；旧测试保持；创建前登记不证明执行通过"
+    },
+    {
+      "source": "tests/contract/stage-evidence-contract.test.mjs",
+      "destination": "tests/contract/stage-evidence-contract.test.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "public verify/capture → receipt/raw/facts.jsonl 精确三键与 source/cursor 保全回归",
+      "owner": "workflowhub-card05-stage-defect-audit-20261012 P11/A / 预写测试作者；生产实现者不得弱化冻结oracle",
+      "consumer": "Vitest定向命令 ./node_modules/.bin/vitest run tests/contract/stage-evidence-contract.test.mjs --poolOptions.forks.singleFork --no-fileParallelism；verify-code读取同命令原始执行事实",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "现契约退役或经独立审查的等效现consumer测试已覆盖全部所承接场景后删除重复测试；不删除历史RED/原始证据，不新增推进门",
+      "retention_basis": "U-020/U-021、N22/N23、AC-C05AUD-26至29；替代外置016探针的日常回归职责；历史原件只读保留；创建前登记不证明执行通过"
+    },
+    {
+      "source": "tests/contract/card05-author-material-consumer.test.mjs",
+      "destination": "tests/contract/card05-author-material-consumer.test.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "phase-template 完整四份作者示例 → validatePostPhaseContract → bundle/source.json 消费回归",
+      "owner": "workflowhub-card05-stage-defect-audit-20261012 P11/B / 预写测试作者；生产实现者不得弱化冻结oracle",
+      "consumer": "Vitest定向命令 ./node_modules/.bin/vitest run tests/contract/card05-author-material-consumer.test.mjs --poolOptions.forks.singleFork --no-fileParallelism；verify-code读取同命令原始执行事实",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "现契约退役或经独立审查的等效现consumer测试已覆盖全部所承接场景后删除重复测试；不删除历史RED/原始证据，不新增推进门",
+      "retention_basis": "U-020/U-021、N22/N23、AC-C05AUD-26至29；补足现首12字段示例检查，不修改原 post-build-plan-missing-index 测试；创建前登记不证明执行通过"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

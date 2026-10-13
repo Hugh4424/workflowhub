@@ -897,3 +897,191 @@
 按同一条判据外置的内容：18 条需求变更记录、68 条已知事实、更正与过程记录、34 条未确认项、9 条冲突的全部裁定、覆盖矩阵逐项结论、写集的历史对账明细、14 块原五字段文本（该件标题共 17 个 `### N`，14 个为五字段块）、对抗检查 29 条判据与方向审查 11 条处置——这些是证明与过程，build-plan 只在需要核对时才按指针回读。
 
 完成判据：每条指针说明基准目录、唯一原件定位、到达条件与主文留什么；缺失逐项说明；每类事实只留一份原始件。
+
+## 2026-10-13 追加决策草稿：验收设计、状态解释与永久回归
+
+本节是 U-020/U-021 选定方向的具体追加决定，供本轮 build-plan 使用；独立建议已处置，主会话通过066展示当前材料，用户067真实确认“确认决策与计划，停在计划交接”。正式确认见TASK/quality/evidence/human-confirmations/2026-10-13-001-make-decision-approved.json及2026-10-13-002-build-plan-approved.json。前文全部原字节保留，其中历史数量、行号、质量与确认只描述原范围；本节的新增编号不反写那些历史陈述。任务性质仍为原普通任务，本轮只完成同任务的决策与计划，不把起草当实施。
+
+### 追加内容地图与真实选择
+
+本追加节依次提供：五段方向地图、U 最小索引、N21–N23、最小写集、范围、验收索引、覆盖与未决、风险、术语与 Grill 核查、原件取用条件。它是原大纲的追加导航，不改原地图或另造地图文件。
+
+- **Destination**：未来计划能在确认前说明每个结果用什么真实输入、由谁、何时验证；用户能从原件知道审查失败、已修发现与未观测业务分别是什么；两处已证漏检接缝有永久回归。达到目的须有新增范围的实际验证，不能只凭方法文字或状态标签。
+- **Notes**：U-020 选先验收设计、再状态与取证、再永久回归；本轮不跑真实任务。U-021 允许对当前 decision/spec/index 只追加并新增 Phase，旧正文、23 AC、P1–P8、六冻结测试保持原样。研究 033/038 是技术输入，不能代替用户选择。
+- **Decisions so far**：U-019 要研究根因；U-020 选择三块最小后续方向；U-021 解决同任务材料追加边界。具体新增合同由 N21–N23 承接，已取得067最终材料确认；当前停在计划交接，不开始生产实施。
+- **Not yet specified**：Kimi 连接失败的底层成因未知；现日志是否足以完整辨识全部 native retry 仍需对应负例核实。前者不属这次连接修复范围，后者影响 N22 的事实可知边界，不得补零。没有可凭空承诺的未来真实用户效果。
+- **Out of scope**：真实消费者任务验证由 U-020 明确排除；网络配置、模型、timeout/retry 策略、CLI 状态计算、schema、进度对象与冻结旧材料均不改。排除是范围选择，不等于通过或风险被接受。
+
+本次方向问题仅一个：如何在同任务保存新材料而保护冻结正文。主会话已通过宿主问答工具取得 U-021 实际选择；本作者不重复提问、不代答。U-020 已给模块顺序；无需重问三块是否要做。完整问答仍沿原来源，不新增问答事件账本。
+
+| U 编号 | 最小决定与落点 | 唯一来源及到达条件 |
+| --- | --- | --- |
+| U-019 | 调研“23 项业务未知、质量 incomplete”的根因与以后修法；由 033 研究与 N21–N23 承接 | TASK/quality/evidence/2026-10-13-028-user-root-cause-research-request.md；核原意或授权范围时读 |
+| U-020 | 同任务按三块顺序先完成标准决策和计划；不跑真实任务、不新增 gate/状态/账本；最终 close 再确认 | TASK/quality/evidence/2026-10-13-036-user-minimal-decision-plan-request.md；核选择、非目标与阶段边界时读 |
+| U-021 | 当前三材料只追加、新增 Phase；原正文、23 AC、旧 Phase 与六冻结测试保持原样 | TASK/quality/evidence/2026-10-13-037-user-append-only-planning-boundary.md；核写集与冻结边界时读 |
+
+TASK 为原任务库绝对根，见本节末；U 完整原文各只在表中已有唯一 ref 保存。原 requirement-change-log 的 U-001…U-018 保留，不搬移或复制这些新原件。
+
+### N21 先把结果、输入、负责人和发生时点写清
+
+- **做什么**：修改未来新任务所消费的现有验收方法与模板，让作者在其新 AC 与 Phase 正文中写出实际可观察结果；本任务旧 23 AC 和 P1–P8 不在改动范围。
+  - 交付与消费者：P9 交可供计划作者和实施者消费的验收合同及完整例子。
+  - 依据 U-020 和 033：旧合同把全部 23 项推到下一真实任务，导致当前技术事实无法当作原业务验收；新增方法区分技术结果、真实使用结果和独立人读，不新增机器分类。
+  - 每个承诺说明实际 producer/consumer、所需输入、执行 owner、发生时点，以及未能当次闭环时缺的具体条件。
+  - 可执行或混合交付的末 Phase 消费上游原件，并实跑本次范围内尚未完成的必要 case；纯文档／工作流任务保留现 Test design and quality 的具名豁免及 G-2 可证伪替代。本次含 adapter 行为，不适用纯文档豁免；只读汇总不能称为端到端执行。
+  - 完整作者示例保真实 source ID、逐项 FR/AC trace、path/symbol、RED nonzero 与 GREEN 0 的现识别表达；由 N23 验证整份示例真实消费。
+- **不做什么**：不改旧 23 条 AC 或 P8，也不把其 unknown 改成通过。
+  - 拒绝“把更多技术结果也延期到下一任务”：它重演本次无法交代当前交付的根因。
+  - 拒绝新增必填字段、结果状态或完成 gate；改进落在已有正文与模板。
+  - 合法只读 none、中文非零/PATH 等额外 reader 语义不在本次范围；不能编造写集躲过真实不兼容。
+- **风险**：模板写得完整仍可能与生产 parser 不一致。
+  - 失败恢复：退回具体示例或正文 hunk 修正，保留原判据和失败，不放宽 parser 凑绿。
+  - P9 作者只交方法与完整示例；P11 从该唯一示例走生产链检验，失败回原作者串行修，不在测试内补标签或 trace 造合法性。
+  - 不运行真实任务使执行者是否持续遵循方法仍未观测；owner 为未来真实任务的实施与验收者。
+- **改动**：P9 单一作者持有四份验收设计文档：skills/spec-plan/SKILL.md:49、skills/spec-plan/templates/phase-template.md:222、skills/spec-specify/templates/spec-template.md:298、workflows/build-plan/SKILL.md:13。
+  - verify-code 的原 oracle 核对说明随 N22 全部归 P10，P9 只交建议，避免同文件双 writer。
+  - 对 N8/N10 的未来方法作 amend；旧承诺与历史验收对象保留，不作 supersede。
+
+### N22 用现有原件解释状态并保住已观察的读取与失败
+
+- **做什么**：状态解释由 verify-code 的实际人读回复承担，原生取证由已有 adapter 承接。
+  - 交付与消费者：P10 交可回读的局部观察、重试与失败原件，供审查事实消费及最终回复。
+  - 现 thinQuality 把具名审查的 available、available-with-failures、incomplete 均投为 incomplete；它不计算业务完成。回复沿 review_result_ref/facts 说明各 provider 终态、finding 处置、功能证据与具体缺输入，不能从标签推断坏了多少功能。
+  - native audit 在清理 packet 前交现 rawOutputSink，经既有 review-record-route 保存单份原件，再沿 evidence_refs 引用。事件须绑定真实 session/hash；局部读取仅证明可观测 path/range，不证明理解或全文已读。
+  - material_coverage 沿既有 path 数组；range 与截断保在 audit 原件，不加 range 字段。失败 provider 的事件原件保留，顶层仍按现规则 undetermined；没有证据不能填 unread。
+  - recovery 的 native retry、fresh execution retry、same-session repair 按实际事件分别记。缺可靠完整事件时保 null/诊断，不能把 fresh 0 写成全部链路 0。
+  - 保留成功 sibling finding、原失败、取消、raw 保存与清理错误。保存失败不能静默宣布证据已持久化。
+- **不做什么**：不改 status JSON、thinQuality、质量枚举、review-record-route 或 schema。
+  - 不为解释状态构建新 renderer、聚合对象或账本。
+  - Codex 沿已有原 stdout 说明已观察局部读取，read_confirmed 保现 null；不新增任意 shell 解析器。
+  - 不诊断未经取证的 DNS/代理根因，不改网络配置、provider、timeout 或重试策略。
+- **风险**：范围不完整的 native 日志可能让次数与读取覆盖未知。
+  - 失败恢复：停止夸大该成员覆盖，保原错误与已成功来源；同任务继续修具体 hunk，不换 provider 漂白。
+  - 保留缺证及截断说明，由 P10 对可信事件、错误 session/hash、页缺口、retry 未知和失败 sibling 设受控负例。
+  - raw 保存或 cleanup 失败需显式返回已有诊断；已经保存的 stdout/stderr 与 sibling 原件不可抹掉。
+- **改动**：P10 唯一持笔 workflows/verify-code/SKILL.md:13 与 runtime/review/ocr-delegation-adapter.mjs:1642；tests/contract/card05-native-observation-target.test.mjs:1 由 build-plan 预写后冻结供 P10 消费。
+  - 方法同时承接 N21 的原 oracle 核对与 N22 的状态解释；adapter 只沿现 guard、settlement、projection、raw sink 和 dispose 链修改。
+  - 测试用本地假 CLI 与真实现 guard，不调用真实 provider；OCR 版本能力检测若发生须按事实披露。
+
+### N23 把真实 CLI 和完整作者产物的消费链补成永久回归
+
+- **做什么**：用两个独立永久测试文件证明现有生产入口的实际结果。
+  - 交付与消费者：P11 交仓库可重复执行的窄回归与新增范围验收事实。
+  - A 从 public verify/capture 真入口取得 receipt/raw/JSONL，逐项精确断言 evidence 仅 command、exit_code、failure_signature 三键；覆盖 7/0/124/null/130，null 不伪造整数，refs 可读，source/evidence/cursor 互不覆盖。
+  - B 消费 P9 的完整 spec/index/具名 Phase/Task 示例，仅替真实占位，经 validatePostPhaseContract、prepareTaskBoundBuildCodeReviewBundle 到真实 source.json 的 contract_facts。正常例含行为 Task 与纯 .md 的 G2；不再只抽首部 12 字段。
+  - 负例分别打中多/缺键、错误 exit、覆盖 source、缺 source、漏 AC、错 oracle、空或越界写集、G2 混代码。可入包错误如实入 source.json；非法 scope 保现 MATERIAL_INCOMPLETE，不把所有 contract false 升级成门。
+  - P11 同时承担新增范围末 Phase：消费 P9/P10 原件、执行尚未闭环的 A/B 和必要相邻负控，独立人读验收对象；不再增纯聚合 Phase。
+- **不做什么**：不改六冻结测试或既有 post-build-plan-missing-index.test.mjs。
+  - 不重做已有四项 close 取消窗口回归，不改 close 生产链。
+  - 不新增自动 CI、validator、runtime 文件、schema 或永久进度对象；新测试沿现 Vitest 定向调用。
+  - 不以这些受控测试把原 23 项业务判绿，不运行替身真实任务。
+- **风险**：手写简化 fixture 容易与作者真正交付的完整材料脱节。
+  - 失败恢复：区分 fixture/setup 失败、真实目标 RED 与已绿机制；修相应 owner，不弱化冻结断言。
+  - P11 只消费 P9 唯一模板；发现模板缺陷回 P9 作者修，保原失败，测试作者不另造当前真相。
+  - 当前三键代码已修，A 可能起始即 GREEN；须用具名错误替身证明 oracle 会拒错，不能伪称旧实现 RED。
+- **改动**：P11 两名可独立测试作者分别消费 tests/contract/stage-evidence-contract.test.mjs:1 与 tests/contract/card05-author-material-consumer.test.mjs:1；两测试已由 build-plan 预写后冻结，后续不另造重复测试。
+  - build-plan 预写测试作者已在创建前单独写 docs/architecture/move-map.json 的三个测试职责条目；P11 后续只核对并维护现有登记，不能把 P10 测试创建依赖未来 P11 启动。
+  - 外置 probe 原件继续保留；永久 A 替代其日常回归职责，不删除历史证据。
+
+### 最小文件写集与 Phase 骨架
+
+本表是新增范围的唯一文件分配；生产实现尚未开始。三测试与其职责登记按 build-plan 预写义务已产生，真实结果只引用 048，不能称为生产修复完成。用户要求 P9 → P10 → P11，阶段内独立测试实现可并行，共享文件由唯一 owner 串行。P9/P10 之间没有并发改 verify-code；P11 对 P9 模板为只读消费者。
+
+| 文件 | 改动结果 | 唯一 writer | 决定 |
+| --- | --- | --- | --- |
+| skills/spec-plan/SKILL.md | Test design 明确结果/输入/owner/时点及末 Phase 实跑责任 | P9 作者 | N21 |
+| skills/spec-plan/templates/phase-template.md | 现 Inputs/Scenario/验收正文与完整可消费示例 | P9 作者 | N21 |
+| skills/spec-specify/templates/spec-template.md | AC 与 trace 示例保真实 source ID、结果和输入 | P9 作者 | N21 |
+| workflows/build-plan/SKILL.md | 调用点指向验收设计 owner，不复制规则 | P9 作者 | N21 |
+| workflows/verify-code/SKILL.md | 原 oracle 二级核对及基于原件的人读状态说明 | P10 作者 | N21/N22 |
+| runtime/review/ocr-delegation-adapter.mjs | native audit 原件、局部读取、retry/失败/清理事实 | P10 作者 | N22 |
+| tests/contract/card05-native-observation-target.test.mjs | 本地假 CLI 驱动真实 guard/adapter 的新增行为回归 | P10 测试作者 | N22 |
+| tests/contract/stage-evidence-contract.test.mjs | public verify 精确三键、真实 ref 与保存边界回归 | P11 测试作者 A | N23 |
+| tests/contract/card05-author-material-consumer.test.mjs | 完整作者示例到 parser 与 source.json 回归 | P11 测试作者 B | N23 |
+| docs/architecture/move-map.json | 三新测试登记已在预写前完成；后续核对现登记 | 本轮 build-plan 预写作者单一持笔，后续 P11 维护 | N23 |
+
+新增测试未来由等效现 consumer 测试承接后删除重复者；未被承接前保留。本轮三测试的创建前登记由 build-plan 预写作者实际完成（048）；P9→P10→P11 是后续实施顺序，登记没有未来 Phase 前置依赖。复用既有职责登记，不增加许可、gate 或账本。
+
+本轮规划写面依 U-021 为 specs/workflowhub-card05-stage-defect-audit-20261012/decision-log.md、spec.md、phases/index.md 的尾部追加及三个新的具名 P9/P10/P11 文件；具体文件名由 build-plan 确定。没有对旧 P1–P8 的编辑授权。
+
+### 范围、非目标与候选处置
+
+采用“现 owner 内修合同、原件和窄测试”的最小候选，理由来自 033/038 与 U-020：能击中已证根因且不建立新控制面。三块均有当前 consumer 和可证伪结果，不拆成多张只交记录的 Phase。
+
+拒绝仅优化回复文案：它不能补 native 原件丢失和永久回归。拒绝直接将 status 改为通过或另造验收聚合状态：现 status 没有完整业务计算，该改法会制造假绿。拒绝加更长 timeout/更多宿主 retry/更换 provider：当前没有足够连接层证据，而且会掩盖原失败。拒绝整批真实任务实跑：U-020 明确不做；代价是用户真实使用效果仍未观测。拒绝扩大 parser 支持语法或自动 CI：均非这次最小必需，已知边界保留。
+
+本轮没有退役旧需求、旧决定、旧 AC 或旧 Phase；N21–N23 是 amend。N8/N10 的未来验收写法、N1 的事实回归、N18 的输入消费证据与 N20 的结构事实需要按本次增量重新核对各自受影响面，其余旧模块不重审、不改写。历史 N13 取消保持。
+
+### 新增验收面索引
+
+下表只定义本次新增承诺的可观察接口；完整判据由 spec 的追加 Appendix A 同号承接。新增生产行为的GREEN与完整验收证据尚未产生；规划预写测试及真实RED/已有GREEN见048，不能把它们写成新增范围全部通过。旧 AC-C05AUD-01…23 原判据不变，新增范围全过也不会自动更改其 unknown。
+
+| AC 编号 | 可观察用例与成功条件 | 失败条件 | 证据与 owner |
+| --- | --- | --- | --- |
+| AC-C05AUD-24 | 计划作者从完整示例逐项指出结果对象、真实输入、producer/consumer、owner、时点；可执行／混合交付的末 Phase 有必要实跑，纯文档／工作流保现具名豁免，清楚划出未观测真实效果 | 整批技术结果被不加区分延期；只读汇总冒 E2E；受控函数冒真实效果；扩大原 oracle | P9 完整方法/示例的独立人读原件，P11 核对；U-019/U-020，N21 |
+| AC-C05AUD-25 | verify-code 回复从现原件解释 provider 终态、finding 处置、功能证据与具体缺输入，status JSON/枚举和 thinQuality 不变 | 凭 incomplete 推断功能坏了；把 review 当业务通过；新增返回字段或聚合对象 | P10 方法独立人读与限定 diff；U-020，N22 |
+| AC-C05AUD-26 | 本地假 CLI 的可信 session/hash 局部读取留下单份可读 audit；已有 path 事实只表达能证明的覆盖，范围/截断留 raw | 未读全却声称全文/理解；错 session/hash 得到覆盖；失败路径抹已观察事件；缺证冒 unread | P10 adapter 目标正负用例与实际 raw/ref；U-020，N22 |
+| AC-C05AUD-27 | native retry/fresh retry 分别按已证事件，未知保 null/诊断；失败 sibling、取消、保存失败、cleanup 错误均保原始事实与成功来源 | 未知造 0；宿主 0 冒总链 0；保存失败被吞；清理先于持久化；有效 sibling 丢失 | P10 retry/失败/取消/清理目标正负用例；U-020，N22 |
+| AC-C05AUD-28 | 真实 public verify 的 evidence 精确三键、真实 refs、exit 与 source/evidence/cursor 保全均可断言；错误替身被拒 | 只做局部匹配、额外键被接受；null 冒整数；旧 source/evidence 被覆盖；ref 不可读 | P11 A 的命令原始输出与 receipt，build-code 测试作者/verify-code 核对；U-020，N23 |
+| AC-C05AUD-29 | 完整作者示例经现 parser 与 bundle 到真实 source.json；合法行为/G2 与具名错误有预期事实或现范围错误 | 测试仅取首部；测试内补作者遗漏造合法性；G2 混代码获豁免；contract false 成新门 | P11 B 的完整输入/原输出与 source.json ref，build-code 测试作者/verify-code 核对；U-020，N23 |
+
+### 来源覆盖与新增未决项
+
+已按真实编号读原 R-001…R-018 与 U-001…U-018 主文、requirement-change-log 全文和 coverage-matrix-itemized 原件；没有因本轮只看新需求而声称旧需求被重新验收。原 R-001…R-015/U-001…U-012 逐项沿原矩阵，R-016…R-018/U-013…U-015 沿同件末尾补记，旧缺口与历史取值照原保留。
+
+该覆盖原件没有 U-016/U-017/U-018 的完整逐项行；当前主文的 U 最小索引已有其各自落点：U-016→N16/N19、U-017→N16/N19/N20/AC21–23、U-018→原签字范围。此处只披露，不补旧外置原件、不称原覆盖完成。新增 U-019→研究033/N21–N23；U-020→三决定/新增六AC/最小写集；U-021→本节追加与冻结边界。全部新增写面反查到 U-020/038，材料追加反查到 U-021。
+
+| OI 编号 | 问题与来源 | 状态与真实处置 | 解决者与下一步 |
+| --- | --- | --- | --- |
+| OI-009 | 最终新增具体材料是否获确认；036/037只定方向/写法边界 | resolved；066实际展示后，用户067确认决策与计划并要求停在计划交接 | 主会话记录两阶段真实confirm原件并完成确认后核对及交接；不开始实施 |
+| OI-010 | Kimi 连接错误底层原因；033/038 | deferred；本次只保观测错误，不改网络策略 | 未来经明确范围的连接层诊断者取得 HTTP/TLS/DNS 原证后判断；本次不自动开任务 |
+| OI-011 | native retry/读取在截断与不完整事件下究竟可知多少；038 | open；已定缺证保 unknown/null，不编 0 或全文已读 | P10 作者在已授权实现时用真实接口的目标负例核定；不改变方向、不增加字段 |
+| OI-012 | 旧唯一覆盖原件缺 U-016/U-017/U-018 行 | deferred；本轮只读保原，主文已有各自落点，不假全矩阵完成 | 主会话展示该历史限制；本轮不扩成旧材料修复 |
+
+旧 OI-001…OI-008 保留原状态，不能把本轮无新增提问写成旧 OI 全关闭。
+
+### 风险、领域与方向核查结论
+
+本轮最主要风险是受控技术证据仍被误当真实使用效果；N21/N23 以原验收对象和新增范围分开说明，owner 为计划及验收作者。原网络失败和未读证据继续保留；N22 只能改善可解释性，不能承诺网络永不失败或 provider 已理解材料。
+
+GLOSSARY.md 为 **no-change**：已实读“AC”“oracle”“逐 AC 业务效果”“质量事实与原件”“来源权威与真实消费者”“内容确认/任务行动授权”。本轮使用其现有含义，只细化具体执行与证据归属，没有新领域概念、含义变化或另一上下文；当前根无 GLOSSARY-MAP.md，未据目录数虚构多上下文。
+
+ADR 为 **not-needed**：hard_to_reverse=false（现文档、adapter 窄 hunk 与测试可局部修回）；surprising_without_context=false（沿现唯一事实 owner 和无新增 gate 原则）；real_tradeoff=true（不跑真实任务换取当前最小交付，同时保留未观测边界）。三项未同时成立，故不新建 ADR；旧 N/ADR 编号与正文均保留。
+
+作者按 Grill 五类作了实际来源核查，交主会话作最终 Grill 收口输入，不冒独立质量裁决：
+
+| 消息类 | 已核来源与落点 | 不重复提问的依据 |
+| --- | --- | --- |
+| goal | 028/036 的根因与三块改进，N21–N23 | 用户已明选方向；具体稿另由067真实确认 |
+| flow_or_surface | 038 的计划作者→parser→source、native audit→raw sink→reply；N21/N22/N23 | 最小真实消费路径已有源；不新增页面 |
+| data_or_state | 实读 thinQuality/status、result.schema 的 path coverage/recovery；N22 | U-020 不加状态；现 JSON 保原 |
+| success_failure_acceptance | 033/038 的局部读、retry/取消、raw失败、精确三键与全材料负例；AC24–29 | 已知技术边界可由实现验证，不借机向用户问接口细节 |
+| constraint_non_goal_defer | 036/037 的不跑真实任务、只追加、冻结与 close 边界 | 唯一材料边界问题已有真实 U-021 回复 |
+
+四项退出核查：external_interfaces＝**已核本次使用的本地接口，真实网络根因未解决**（现 status、coverage/recovery 真实 schema 已读，adapter guard/settlement/dispose 具名锚与 038 一致；不声称 provider 上游全部协议已核，OI-010/011 承接）；canonical_names＝**pass**（现字段和本表唯一路径，不另造 state/schema）；failure_semantics＝**pass（设计层）**（未知、失败、取消、保存/清理失败各有保留与 owner，新增生产GREEN未执行，规划预写结果见048）；scope_boundaries＝**pass**（036/037 与本表限定）。方向建议、细节建议处置及067真实确认均已发生；阶段完成事实由既有task facts与确认后核对、交接记录承接，不将实施质量判绿。
+
+宪法与 WR001 作者核查只针对本次追加：F1/F2/F5/F8/F10/F11 保现 owner、无新控制面；F3/F6/F9 保旧 bytes、原件与未知；F4/Q3 独立质量由独立审查者产出，作者不判；F7/Q1/Q2 区分方向、计划、实施与 close。S1/S2/S3/S6 沿 033/038 既有研究，不在本次起草声称外部升级；S4 不造指标系统，S5 独立上下文只收摘要，S7/S8 保原方法位置与可搬运性。WR001 Q01–Q12 按下游是否需用安排正文/条件引用，四字段就近解释，保旧标题/条件/失败强度，不作篇幅评分；未观测的真实使用收益保持未观测。
+
+### 审查与来源取用
+
+方向 wh-review 已实际完成（quality/reviews/2026-10-13-013-make-decision-direction.json），available-with-failures，Kimi blue OUTPUT_INVALID，材料读取覆盖 undetermined；五条原major逐项处置见 /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-card05-stage-defect-audit-20261012/quality/evidence/2026-10-13-045-direction-findings-dispositions.md。细节审查019已执行、处置见051；独立spec-analyze见047及修后050。用户实际材料确认已通过067及两份human-confirmations原件记录；确认后核对与stage-handoff由本轮既有task facts承接，不套用旧审查状态。独立建议的 Kill/Recycle 是有源风险建议，不是推进门，也不能替用户定方向；有效问题就地修，失败或缺覆盖照实保留。
+
+唯一任务库基准：/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-card05-stage-defect-audit-20261012。以下均相对该根解析：
+
+| 原件 | 取用条件 | 本节保留 |
+| --- | --- | --- |
+| quality/evidence/2026-10-13-028-user-root-cause-research-request.md | 核 U-019 根因研究原意 | 研究目标与未批准 close |
+| quality/evidence/2026-10-13-036-user-minimal-decision-plan-request.md | 核 U-020 三块选择与非目标 | 最小方向与阶段边界 |
+| quality/evidence/2026-10-13-037-user-append-only-planning-boundary.md | 核 U-021 实际问答及写入边界 | 只追加与冻结要求 |
+| quality/evidence/2026-10-13-033-workflowhub-root-cause-solution-summary.md | 核根因、候选与限制，按其中直接源继续回读 | 三块理由、旧23未知、连接成因未证 |
+| quality/evidence/2026-10-13-038-minimal-repair-plan-technical-input.md | build-plan 核真实接口、负例与最小设计 | 实施边界、验收接口、唯一 writer |
+| quality/evidence/decision-log-refs/requirement-change-log.md | 核旧 U 完整真实处置 | 沿用原最小索引，不重抄 |
+| quality/evidence/decision-log-refs/coverage-matrix-itemized.md | 逐项核旧 R/U 覆盖与历史缺口 | 覆盖到达条件及具名缺行，不假完成 |
+
+与 038 的窄收敛差异：该件逻辑 P1/P2/P3 在本任务顺延为 P9/P10/P11；verify-code 全部归 P10；三个新测试独占新增行为，原 ocr-delegation-adapter.test.mjs 与 post-build-plan-missing-index.test.mjs 保持不改。以上是最小写集分工，不扩大用户方向。
+
+追加消费限制：当前 validatePostPhaseContract 只读 spec 的首个全局实现设计节，U-021 允许的尾部新增 trace 不能因此成为该 parser 已完整读到的新合同。本轮不改 validator 或旧 spec；当前 task 的旧 108 与新增诊断按实际输出保留，不能称机器 contract GREEN。新增范围由人读当前追加材料正常承接；AC-C05AUD-29 使用独立完整新作者示例，让新增设计出现在该示例的首个对应节，经真实 parser→bundle→source.json 检验未来作者材料，不用它给当前 task 全材料机器通过背书。来源：主会话对现 validatePostPhaseContract 消费边界的技术核查；build-plan 须保留此限制。
+
+范围收敛：033是先前研究来源，仅前三块按U-020采纳；其第四步真实消费者验证明确排除。本次make-decision/build-plan只追加规划材料并完成标准要求的预写测试，当前计划已由067真实确认；按用户同句要求停在计划交接，未来方法/adapter尚未开始实施。U-021解决规划材料的保存方式，不把三文件保存范围冒充未来实施写集。
+
+细节建议本轮已执行并逐项处置：/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-card05-stage-defect-audit-20261012/quality/evidence/2026-10-13-051-detail-findings-dispositions.md。本次仍保独立审查失败和读取覆盖未知；make-decision与build-plan最终材料已由066展示并获067真实确认；确认命令081/082均exit0，不借新测试原件制造实施质量通过。
