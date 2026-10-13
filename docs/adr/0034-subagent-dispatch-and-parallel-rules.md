@@ -1,12 +1,12 @@
 # ADR-0034：五阶段统一的子代理派发方法与并行规则落地形态
 
-> 改名批注（2026-10-09，P9/T017）：本文原引用的根 `CONTEXT.md` 已改名为当前唯一术语路径 `GLOSSARY.md`；旧术语文件的原行号锚点已失效。除本批注外原正文及其中历史路径、引用行号数字逐字保留；文首插入批注使本文件后续物理行号顺移，不代表历史锚已重新定位。
+> 改名批注（2026-10-09，P9/T017）：本文原引用的根 `CONTEXT.md` 已改名为当前唯一术语路径 `GLOSSARY.md`；旧术语文件的原行号锚点已失效。除本批注外原正文及其中历史路径、引用行号数字逐字保留；文首插入批注使本文件后续物理行号顺移，不代表历史锚已重新定位。归档维护补注（2026-10-13）：仅更新母规划读取位置并附当前归档决定入口；历史结论、原身份和引用行号含义不变。
 
 ## 状态
 
 已确认（2026-09-26，任务 `workflowhub-thin-core-card-03-20260919` 的 make-decision 阶段）。方向已选，尚未实施。
 
-决定来源：该任务 `specs/workflowhub-thin-core-card-03-20260919/decision-log.md` 的
+决定来源：该任务 `specs/workflowhub-thin-core-card-03-20260919/decision-log.md`（当前归档入口：[decision-log.md](../../specs/archive/workflowhub-thin-core-card-03-20260919/decision-log.md)；旧路径保形成时 provenance）的
 T-006/T-007/T-010/T-011/T-012/T-014/T-015 与该任务 OI-002/OI-004/OI-010/OI-011。
 上位依据：母任务 `specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md:69-71`
 （SD-11 并行规则五件套）与 `specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md:93-95`
