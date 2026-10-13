@@ -4,7 +4,7 @@
 - Slug: workflowhub-thin-core-card-04-20260919
 - 日期: 2026-09-19
 - 状态: D-009..D-014 六项质量方向及 D-015 补做三项旧缺口的方向已有真实用户选择；2026-09-27 对 P2/P3/P6 作了精确同任务材料修订，局部代码/测试结果与当前材料分开核。P5/T008 真实报告、P6/T012 动态夹具、P10/P11 消费者及 P13 最终交付仍未完成。新版材料的独立审查、正式 build-plan 确认及当前 build-code 阶段事实尚待办理；旧确认、历史评审、预置 RED 或局部 GREEN 均不等于相位/整卡验收通过。
-- 上游: 母 PRD `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md`（CARD-04 卡面 `:322-351`、FR-16..FR-21 `:328-333`、AC-16..AC-21 `:335-340`、SD-05/06/07/08/15/17 `:45-95`）、本卡 `specs/workflowhub-thin-core-card-04-20260919/decision-log.md`（D-001..D-008 与旧确认 `:1758-1770` 为历史；R-009..R-018、D-009..D-014 详案及方向确认 `:2159-2408`；D-015 记录用户选择补做 AC-17/18/19，具体样例和新版材料确认另核）
+- 上游: 母 PRD `specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md`（CARD-04 卡面 `:322-351`、FR-16..FR-21 `:328-333`、AC-16..AC-21 `:335-340`、SD-05/06/07/08/15/17 `:45-95`）、本卡 `specs/workflowhub-thin-core-card-04-20260919/decision-log.md`（D-001..D-008 与旧确认 `:1758-1770` 为历史；R-009..R-018、D-009..D-014 详案及方向确认 `:2159-2408`；D-015 记录用户选择补做 AC-17/18/19，具体样例和新版材料确认另核）
 - 路线: post cohort（build-spec 历史只读，唯一 authoring 链 = build-plan）
 - 本规格角色: 需求与行为唯一权威；`phases/index.md` 与 `phases/P*.md` 只做相位/任务编排
 
@@ -24,7 +24,7 @@ A1 当前最多核认证 Git/bootstrap 原件重算的应测路径与应选 case
 |------|------|----------|
 | 本规格（`specs/workflowhub-thin-core-card-04-20260919/spec.md`） | 需求与行为唯一权威（母 PRD 保真需求 + 本卡扩展项 + 实现设计） | spec-specify / spec-plan / spec-analyze 全程 |
 | 决策日志（`specs/workflowhub-thin-core-card-04-20260919/decision-log.md`） | D-001..D-008 历史裁决；R-009..R-018 与 D-009..D-014 新增六项方向、详细机制及 `:2404-2408` 的限定确认 | read-current-materials 与全部下游步骤 |
-| 母 PRD（`specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md`） | CARD-04 卡面、FR-16..FR-21、AC-16..AC-21 与共享定义 SD-05/06/07/08/15/17 的权威原文 | 核对需求保真与验收口径时 |
+| 母 PRD（`specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md`） | CARD-04 卡面、FR-16..FR-21、AC-16..AC-21 与共享定义 SD-05/06/07/08/15/17 的权威原文 | 核对需求保真与验收口径时 |
 | 执行索引（`specs/workflowhub-thin-core-card-04-20260919/phases/index.md`） | 相位指针表（无 oracle 细节） | spec-plan 之后、build-code 入口 |
 | 相位规格（`specs/workflowhub-thin-core-card-04-20260919/phases/P1.md` .. `P13.md`） | P1..P7 旧范围保留；P5/T008 仅中途检查点，P8..P12 为新增功能相位，P13/T024 在 P11/P12 后负责 D-005 独立最终聚合与原样聊天交付。相位文件/任务已编写、有限 RED 已取得，但 P6/T012 动态夹具报告缺失 G2、P10/P11 消费者/受保护接线与最终 P13 GREEN 均未解决；仍待正式审查和新 build-plan 人工确认 | build-code 逐相位执行须先核对最新获确认材料 |
 | 入口索引（`ENTRYPOINT.md`、`TASKS.md`） | 仓库级入口 | 任何阶段定位真实入口 |
@@ -167,7 +167,7 @@ A1 当前最多核认证 Git/bootstrap 原件重算的应测路径与应选 case
 | SD-03 | 原始共享状态窄词表，被 OI-015 引用；decision-log :346 | FR-26/FR-27、AC-26/AC-27、§7；不把不可用写通过 |
 | SD-05 | 真实入口联通实跑才可宣称整体完成；原始需求 :67 | FR-21/FR-23、AC-21/AC-23、P6/T012、P13/T024；T012 动态夹具报告缺失仍 G2，P13 不得因此宣称整体完成 |
 | SD-06 | 有效 RED/G-2 豁免；原始需求 :67 | FR-18/FR-19、AC-18/AC-19、P3/T005；环境错不算 RED |
-| SD-13 | 母 PRD `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:77-79`：build-prd 两个命名可检查交付项——具体重构验收标准（可观察成功/失败用例、所需证据、承接负责人，CARD-10 执行）；可测量的「无重复契约」标准（一事实一权威文件、不得两文件分别宣称同一事实的权威，CARD-02 执行）。本卡原始需求 :67 的「验收五段式」系误引 | 本卡不冒领两项的执行/通过事实；FR-16/AC-16、DER-11 的可执行验收依据另见母 PRD :322-340 与母 decision-log OI-004 :258-272，非 SD-13 |
+| SD-13 | 母 PRD `specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md:77-79`：build-prd 两个命名可检查交付项——具体重构验收标准（可观察成功/失败用例、所需证据、承接负责人，CARD-10 执行）；可测量的「无重复契约」标准（一事实一权威文件、不得两文件分别宣称同一事实的权威，CARD-02 执行）。本卡原始需求 :67 的「验收五段式」系误引 | 本卡不冒领两项的执行/通过事实；FR-16/AC-16、DER-11 的可执行验收依据另见母 PRD :322-340 与母 decision-log OI-004 :258-272，非 SD-13 |
 | SD-15 | 质量事实不作推进许可证；原始需求 :67 | FR-20/AC-20、§2.3、§验收流程；失败事实保留 |
 | SD-17 | 零新增机器门禁、哈希/回执不作推进资格；原始需求 :67 | FR-32/AC-32、§2.3、§架构边界；可信快照只供测试真实性对账 |
 

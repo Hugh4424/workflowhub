@@ -4,7 +4,7 @@
 > 验收正文只在 Appendix A；其余章节只引用 AC 编号。
 
 - **功能名**：CARD-03 全阶段子代理工作方法落地与残留缺陷收口
-- **来源**：`decision-log.md` R-001…R-020（`:96-117`）、`## 决定`（`:890-906`）、§二十 路线裁决（`:830-844`）；母 PRD `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:299-310`（FR-11…FR-15、AC-11…AC-15）
+- **来源**：`decision-log.md` R-001…R-020（`:96-117`）、`## 决定`（`:890-906`）、§二十 路线裁决（`:830-844`）；母 PRD `specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md:299-310`（FR-11…FR-15、AC-11…AC-15）
 - **状态**：build-plan 当前草稿
 
 ## 速读卡（30 秒）

@@ -80,9 +80,9 @@ const commands = Object.freeze([
 
 const POST_PHASE_ACS = new Set(["AC-DOC-003", "AC-DOC-004", "AC-FLOW-003"]);
 const ORIGINAL_REQUIREMENT_TRACE = Object.freeze({
-  "AC-DOC-003": "specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md#R-002/AC-08",
-  "AC-DOC-004": "specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md#R-002/AC-08",
-  "AC-FLOW-003": "specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md#R-002/AC-09",
+  "AC-DOC-003": "specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md#R-002/AC-08",
+  "AC-DOC-004": "specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md#R-002/AC-08",
+  "AC-FLOW-003": "specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md#R-002/AC-09",
 });
 
 export function evaluateCard02PostPhaseEvidence({ spec, index, phases, legacyFiles = [] } = {}) {

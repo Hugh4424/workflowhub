@@ -8,4 +8,4 @@ WorkflowHub的目标形态是方法工具包：由现有AI助手和子代理执�
 
 三项判据均成立：以后恢复统一认证/接续需重新引入状态、适配与恢复责任，改变方向有实际成本；没有背景时维护者可能把主动放弃的认证误当缺陷重建；宿主方法工具包与独立平台之间存在真实能力保证与维护成本取舍，用户已选前者。此决定不意味着降低真实交付质量，也不宣称纯技能具有同等自动认证能力。
 
-来源：specs/workflowhub-thin-core-rebuild-planning-20260919/decision-log.md 的U-007/T-006，以及现有task研究区research-synthesis.md；owner=本任务make-decision主会话；consumer=最终确认、build-prd和后续实施任务。它补充未来方向，不取代历史ADR对当前实现的记录，不新增运行时对象。
+来源：specs/archive/workflowhub-thin-core-rebuild-planning-20260919/decision-log.md 的U-007/T-006，以及现有task研究区research-synthesis.md；owner=本任务make-decision主会话；consumer=最终确认、build-prd和后续实施任务。它补充未来方向，不取代历史ADR对当前实现的记录，不新增运行时对象。

@@ -51,8 +51,8 @@
 
 **主输入**（只读）：
 
-- PRD 卡节：`/Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md` 中 `### CARD-02 文档权威与单一事实源`（L264-291）
-- 规划 decision-log：`/Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-thin-core-rebuild-planning-20260919/decision-log.md`，关键条目：
+- PRD 卡节：`/Users/Hugh/Hugh/Project/workflowhub/specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md` 中 `### CARD-02 文档权威与单一事实源`（L264-291）
+- 规划 decision-log：`/Users/Hugh/Hugh/Project/workflowhub/specs/archive/workflowhub-thin-core-rebuild-planning-20260919/decision-log.md`，关键条目：
   - OI-001（文档形态：一份权威 spec + 每 phase 差异 + 常驻紧凑索引）
   - OI-003（保留真实证据/原子写入/授权/失败事实；删重复 evidence 包装与 fact graph 强制依赖）
   - OI-013（校验机器彻底全删；普通文件名 + 纯文本引用）
