@@ -9,6 +9,9 @@ skills:
   - name: frontend-testing
     path: skills/frontend-testing/SKILL.md
     trigger: actual_frontend_test
+  - name: isolated-browser-qa
+    path: skills/isolated-browser-qa/SKILL.md
+    trigger: actual_browser_visible_phase_test
   - name: frontend-component-quality
     path: skills/frontend-component-quality/SKILL.md
     trigger: actual_frontend_test

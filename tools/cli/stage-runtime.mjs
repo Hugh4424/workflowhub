@@ -19,6 +19,7 @@ import { CURRENT_MATERIAL_FILES, materialFilesForCohort, phaseFilesFromIndex } f
 import { readTaskFacts, STAGE_ROW_KEYS, writeStageRow } from "../../runtime/task/task-store.mjs";
 import { inspectWorkspace } from "../../runtime/interface/workspace-check.mjs";
 import { captureCommand } from "../../runtime/interface/run-command.mjs";
+import { withLock } from "../../runtime/interface/record-lock.mjs";
 import { recordConfirmation } from "../../runtime/interface/human-confirm.mjs";
 import { confirmClosePlan } from "../../core/task-close.mjs";
 import { validateTaskId } from "../../runtime/task/task-identity.mjs";
@@ -537,11 +538,17 @@ function phaseReviewSourceProjection(context, request, source, attachmentRoot) {
   const phases = Object.fromEntries(phaseFilesFromIndex(index).map((ref) => [ref, context.artifacts.read(ref)]));
   const parsed = validatePostPhaseContract({ spec: context.artifacts.read("spec.md"), index, phases });
   const phase = parsed.facts?.phase_rows?.find((row) => row.id === request.phase_id);
-  if (!phase?.write_set?.length) throw new Error("MATERIAL_INCOMPLETE: current Phase write set is unavailable");
+  const invalidEmptyScope = phase?.write_set?.length === 0 && parsed.errors.some(error =>
+    error.startsWith(`${phase.path} `) && /Write set is missing|Write set none declaration is invalid|unsafe Write set path:|write set differs from Phase index|must declare Phase /.test(error));
+  if (!Array.isArray(phase?.write_set) || invalidEmptyScope) throw new Error("MATERIAL_INCOMPLETE: current Phase write set is unavailable");
   const selected = compactReviewDiff(readFileSync(source.diffPath, "utf8"), { writeSet: phase.write_set }).diff;
   const diffPath = join(dirname(source.diffPath), `phase-${request.phase_id}.diff`);
   writeFileSync(diffPath, selected, { flag: "wx", mode: 0o600 });
-  return Object.freeze({ ...source, diffPath, diffBytes: Buffer.byteLength(selected, "utf8") });
+  return Object.freeze({ ...source, diffPath, diffBytes: Buffer.byteLength(selected, "utf8"),
+    contract_facts: Object.freeze({ contract_ok: parsed.ok, contract_error_count: parsed.errors.length,
+      contract_errors: parsed.errors, ac_coverage: parsed.facts?.ac_coverage ?? null,
+      fr_coverage: parsed.facts?.fr_coverage ?? null, command_oracle_checks: parsed.facts?.command_oracle_checks ?? null }),
+  });
 }
 
 function phaseReviewDiffBase(context, request) {
@@ -748,8 +755,8 @@ finally { for (const fd of held.reverse()) fs.closeSync(fd); }
 
 export function phaseProgressTargetExists(cursor, materials) {
   if (!cursor || typeof cursor !== "object" || !materials || typeof materials !== "object") return false;
-  const ref = `phases/${cursor.phase_id}.md`;
-  if (!phaseFilesFromIndex(materials["phases/index.md"]).includes(ref) || typeof materials[ref] !== "string") return false;
+  const ref = phaseFilesFromIndex(materials["phases/index.md"]).find(path => path.match(/^phases\/(P[1-9][0-9]*)(?:-|\.md$)/)?.[1] === cursor.phase_id);
+  if (!ref || typeof materials[ref] !== "string") return false;
   return materials[ref].split("\n").some((line) => /^###\s+T[0-9]{3,}\b/.test(line) && line.match(/^###\s+(T[0-9]{3,})\b/)[1] === cursor.task_id);
 }
 
@@ -818,63 +825,83 @@ function currentPhaseMaterialsHead(context) {
   return GIT_OID.test(head) ? head : null;
 }
 
-async function writeBuildCodePhaseProgressCursor(context, inputCursor) {
-  if (!inputCursor || typeof inputCursor !== "object" || Array.isArray(inputCursor)
-      || Object.keys(inputCursor).sort().join("\0") !== ["phase_id", "task_id"].sort().join("\0")) {
-    throw new TypeError("phase_progress input must contain exactly phase_id and task_id");
-  }
-  const { materials, phasesHead } = currentPostPhaseMaterialState(context);
-  if (phasesHead === null) throw new Error("phase_progress requires a real tracked materials commit");
-  if (typeof inputCursor.phase_id !== "string" || !/^P[1-9][0-9]*$/.test(inputCursor.phase_id)
-      || typeof inputCursor.task_id !== "string" || !/^T[0-9]{3,}$/.test(inputCursor.task_id)) {
-    throw new TypeError("phase_progress phase_id or task_id is invalid");
-  }
-  if (!phaseProgressTargetExists(inputCursor, materials)) {
-    throw new TypeError(`phase_progress target ${inputCursor.phase_id}/${inputCursor.task_id} is not in the current indexed Phase files`);
-  }
-  const currentRow = readTaskFacts(context.task.taskPath).find((row) =>
-    row?.record_kind === "stage" && row.stage === "build-code") ?? null;
-  const cursor = currentRow?.phase_progress;
-  const samePhaseBase = cursor?.phase_id === inputCursor.phase_id && typeof cursor.base_head === "string" && GIT_OID.test(cursor.base_head)
-    ? cursor.base_head : null;
-  const baseHead = samePhaseBase ?? execFileSync("git", ["rev-parse", "--verify", "HEAD^{commit}"], {
-    cwd: context.workspace.worktreeRoot, env: gitMetadataEnvironment(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
-  }).trim();
-  if (!GIT_OID.test(baseHead)) throw new TypeError("phase_progress requires a real Phase start Git commit");
-  const phaseProgress = Object.freeze({
-    phase_id: inputCursor.phase_id,
-    task_id: inputCursor.task_id,
-    phases_head: phasesHead,
-    base_head: baseHead,
-    recorded_at: new Date().toISOString(),
+async function recordBuildCodeCommandEvidence(context, receipt) {
+  return withLock(context.task.taskPath, "workflowhub-build-code-row", async () => {
+    const current = readTaskFacts(context.task.taskPath).find(row => row?.record_kind === "stage" && row.stage === "build-code");
+    const prior = current ? Object.fromEntries([...STAGE_ROW_KEYS, "phase_progress"].filter(key => Object.hasOwn(current, key)).map(key => [key, current[key]])) : {};
+    const evidence = [...(current?.evidence?.value ?? [])];
+    if (Number.isInteger(receipt.exit_code)) {
+      evidence.push({ command: JSON.stringify(receipt.argv), exit_code: receipt.exit_code,
+        failure_signature: receipt.cancelled ? `cancelled: ${receipt.cancellation_reason ?? receipt.signal ?? "reason unavailable"}`
+          : receipt.timed_out ? "timed out" : receipt.error ? `${receipt.error.code}: ${receipt.error.message}`
+            : receipt.exit_code === 0 ? "exit 0; no failing assertion" : `exit ${receipt.exit_code}; output: ${receipt.output_ref}` });
+    }
+    await writeStageRow(context.task.taskPath, { ...prior, record_kind: "stage", task_id: context.identity.taskId, stage: "build-code",
+      source: Number.isInteger(receipt.exit_code) ? `${current?.source ?? "command capture"}; receipt: ${receipt.receipt_ref}; output: ${receipt.output_ref}`
+        : `${current?.source ?? "command capture unavailable"}; receipt: ${receipt.receipt_ref}; output: ${receipt.output_ref}; ${receipt.error?.message ?? "no integer exit"}`,
+      evidence: evidence.length ? { value: evidence } : { value: null, reason: `no integer command exit; receipt: ${receipt.receipt_ref}` } });
   });
-  const files = Object.fromEntries(Object.entries(materials).map(([file, content]) => [file, Buffer.byteLength(content, "utf8")]));
-  const materialBaseline = Object.keys(files).length ? { value: { total_bytes: Object.values(files).reduce((sum, bytes) => sum + bytes, 0), files } }
-    : { value: null, reason: "no current post material sizes available" };
-  const rowInput = currentRow
-    ? { ...Object.fromEntries(STAGE_ROW_KEYS.filter(key => Object.hasOwn(currentRow, key)).map(key => [key, currentRow[key]])), phase_progress: phaseProgress }
-    : {
-      record_kind: "stage",
-      task_id: context.identity.taskId,
+}
+
+async function writeBuildCodePhaseProgressCursor(context, inputCursor) {
+  return withLock(context.task.taskPath, "workflowhub-build-code-row", async () => {
+    if (!inputCursor || typeof inputCursor !== "object" || Array.isArray(inputCursor)
+        || Object.keys(inputCursor).sort().join("\0") !== ["phase_id", "task_id"].sort().join("\0")) {
+      throw new TypeError("phase_progress input must contain exactly phase_id and task_id");
+    }
+    const { materials, phasesHead } = currentPostPhaseMaterialState(context);
+    if (phasesHead === null) throw new Error("phase_progress requires a real tracked materials commit");
+    if (typeof inputCursor.phase_id !== "string" || !/^P[1-9][0-9]*$/.test(inputCursor.phase_id)
+        || typeof inputCursor.task_id !== "string" || !/^T[0-9]{3,}$/.test(inputCursor.task_id)) {
+      throw new TypeError("phase_progress phase_id or task_id is invalid");
+    }
+    if (!phaseProgressTargetExists(inputCursor, materials)) {
+      throw new TypeError(`phase_progress target ${inputCursor.phase_id}/${inputCursor.task_id} is not in the current indexed Phase files`);
+    }
+    const currentRow = readTaskFacts(context.task.taskPath).find((row) =>
+      row?.record_kind === "stage" && row.stage === "build-code") ?? null;
+    const cursor = currentRow?.phase_progress;
+    const samePhaseBase = cursor?.phase_id === inputCursor.phase_id && typeof cursor.base_head === "string" && GIT_OID.test(cursor.base_head)
+      ? cursor.base_head : null;
+    const baseHead = samePhaseBase ?? execFileSync("git", ["rev-parse", "--verify", "HEAD^{commit}"], {
+      cwd: context.workspace.worktreeRoot, env: gitMetadataEnvironment(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+    if (!GIT_OID.test(baseHead)) throw new TypeError("phase_progress requires a real Phase start Git commit");
+    const phaseProgress = Object.freeze({
+      phase_id: inputCursor.phase_id,
+      task_id: inputCursor.task_id,
+      phases_head: phasesHead,
+      base_head: baseHead,
+      recorded_at: new Date().toISOString(),
+    });
+    const files = Object.fromEntries(Object.entries(materials).map(([file, content]) => [file, Buffer.byteLength(content, "utf8")]));
+    const materialBaseline = Object.keys(files).length ? { value: { total_bytes: Object.values(files).reduce((sum, bytes) => sum + bytes, 0), files } }
+      : { value: null, reason: "no current post material sizes available" };
+    const rowInput = currentRow
+      ? { ...Object.fromEntries(STAGE_ROW_KEYS.filter(key => Object.hasOwn(currentRow, key)).map(key => [key, currentRow[key]])), phase_progress: phaseProgress }
+      : {
+        record_kind: "stage",
+        task_id: context.identity.taskId,
+        stage: "build-code",
+        source: PHASE_PROGRESS_ONLY_SOURCE,
+        phase_progress: phaseProgress,
+        review_origin: "not_run",
+        review_result_ref: { value: null, reason: "a resume cursor is not a review result" },
+        finding_dispositions: [],
+        spec_analyze: { value: null, reason: "a resume cursor does not run stage-end reflection" },
+        evidence: { value: null, reason: "a resume cursor does not execute stage-end work" },
+        serious_issue_disposition: { value: null, reason: "a resume cursor carries no serious-issue disposition" },
+        close_action: { value: null, reason: "a resume cursor carries no close action" },
+        handoff: { value: null, reason: "a resume cursor publishes no handoff" },
+      };
+    const written = await writeStageRow(context.task.taskPath, { ...rowInput, material_bytes: materialBaseline });
+    return Object.freeze({
+      status: "recorded",
       stage: "build-code",
-      source: PHASE_PROGRESS_ONLY_SOURCE,
       phase_progress: phaseProgress,
-      review_origin: "not_run",
-      review_result_ref: { value: null, reason: "a resume cursor is not a review result" },
-      finding_dispositions: [],
-      spec_analyze: { value: null, reason: "a resume cursor does not run stage-end reflection" },
-      evidence: { value: null, reason: "a resume cursor does not execute stage-end work" },
-      serious_issue_disposition: { value: null, reason: "a resume cursor carries no serious-issue disposition" },
-      close_action: { value: null, reason: "a resume cursor carries no close action" },
-      handoff: { value: null, reason: "a resume cursor publishes no handoff" },
-    };
-  const written = await writeStageRow(context.task.taskPath, { ...rowInput, material_bytes: materialBaseline });
-  return Object.freeze({
-    status: "recorded",
-    stage: "build-code",
-    phase_progress: phaseProgress,
-    record_ref: written.ref,
-    action: written.action,
+      record_ref: written.ref,
+      action: written.action,
+    });
   });
 }
 
@@ -1097,12 +1124,27 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     // capture owns its fresh single output/receipt filenames, with no reuse.
     const recordDir = join(context.task.taskPath, "quality", "tests");
     mkdirSync(recordDir, { recursive: true });
-    return captureCommand({ cwd: context.workspace.worktreeRoot, recordDir, slug: input.slug ?? `${values.stage}-verify`,
+    let captured;
+    try { captured = await captureCommand({ cwd: context.workspace.worktreeRoot, recordDir, slug: input.slug ?? `${values.stage}-verify`,
       ...(input.argv === undefined ? {} : { argv: input.argv }),
       ...((input.shell ?? input.command) === undefined ? {} : { shell: input.shell ?? input.command }),
       ...((input.timeoutMs ?? input.timeout_ms) === undefined ? {} : { timeoutMs: input.timeoutMs ?? input.timeout_ms }),
       ...(services.commandSignal === undefined ? {} : { signal: services.commandSignal }),
-    });
+    }); } catch (error) {
+      if (values.stage === "build-code" && error.receipt_ref) {
+        try {
+          const receipt = JSON.parse(readFileSync(error.receipt_ref, "utf8"));
+          await recordBuildCodeCommandEvidence(context, { ...receipt, receipt_ref: error.receipt_ref });
+        } catch (evidenceError) {
+          // Preserve the capture Error and its receipt; expose the secondary
+          // failure through the stack already rendered by the CLI error path.
+          error.stack = `${error.stack ?? `${error.name}: ${error.message}`}\n[command-evidence] ${JSON.stringify({ code: evidenceError.code ?? null, message: evidenceError.message })}\n${evidenceError.stack ?? ""}`;
+        }
+      }
+      throw error;
+    }
+    if (values.stage === "build-code") await recordBuildCodeCommandEvidence(context, captured);
+    return captured;
   }
   if (command === "confirm") {
     const fields = input ?? { stage: values.stage, decision: values.decision, reply: values["reply-text"], materialRefs: values["material-ref"] === undefined ? [] : [values["material-ref"]] };
@@ -1123,7 +1165,8 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     // The native authorization API intentionally binds process.cwd(). Invoke
     // its existing CLI in the real worktree; never mutate this process cwd.
     const output = execFileSync(process.execPath, [fileURLToPath(new URL("../../runtime/interface/git-authorize.mjs", import.meta.url)), "record",
-      "--operation", values.operation, "--confirmation-ref", values["subject-ref"], "--dir", join(context.task.taskPath, "quality", "evidence", "git-authorizations")],
+      "--operation", values.operation, "--confirmation-ref", values["subject-ref"],
+      ...(values.stage === "build-code" && values.operation === "commit" ? ["--phase", "build-code"] : []), "--dir", join(context.task.taskPath, "quality", "evidence", "git-authorizations")],
       { cwd: context.workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
     return { status: "recorded", ...JSON.parse(output) };
   }

@@ -57,7 +57,7 @@
     {
       "step_id": 5,
       "step_slug": "run-tests",
-      "observable_result": "针对性命令保存实际cwd/argv/exit、超时取消、原输出与清理；真实场景对照oracle，失败不伪绿。",
+      "observable_result": "按 Phase 每个声明的测试面逐面执行针对性命令，保存实际cwd/argv/exit、超时取消、原输出与清理；未跑写清哪一面／卡在哪／什么条件下能跑；真实场景对照oracle，失败不伪绿。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -72,7 +72,7 @@
     {
       "step_id": 6,
       "step_slug": "inspect-acceptance-and-ui",
-      "observable_result": "每AC的实际效果/失败反例/未执行项可读；UI按真实消费者和隔离浏览器事实核对，模拟或缺失不冒充通过。",
+      "observable_result": "每AC的实际效果/失败反例/未执行项可读；UI按真实消费者核对；声明写集含浏览器可见面时实际执行 isolated-browser-qa，在唯一原ref留engine、route／场景、截图路径或真实not_observed及原因、命令／输出／exit；只有声明写集不含任何浏览器可见面才用 N/A 并具名判断依据，适用但缺工具记unavailable与恢复条件；模拟或缺失不冒充通过。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",

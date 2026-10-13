@@ -1879,7 +1879,7 @@ function combinePairedResults(input, pairId, roleResults) {
     role_results: { red, blue },
     ...(incomplete.red ? { red_incomplete: true } : {}),
     ...(incomplete.blue ? { blue_incomplete: true } : {}),
-    ...(allIncomplete && materialConsistent ? { error: red.error ?? blue.error ?? { code: "REVIEW_NO_SEMANTIC_RESULT", message: "neither paired review produced a semantic result" } } : {}),
+    ...(allIncomplete && materialConsistent ? { error: { ...(red.error ?? blue.error ?? { code: "REVIEW_NO_SEMANTIC_RESULT" }), message: uniquePairFindings(roleResults).length > 0 ? `paired review is incomplete; ${uniquePairFindings(roleResults).length} findings remain available` : (red.error ?? blue.error)?.message ?? "neither paired review produced a semantic result" } } : {}),
   };
 }
 

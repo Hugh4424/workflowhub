@@ -15,9 +15,10 @@ function required(values,name){if(!values[name])throw new TypeError(`--${name} i
 function metadataGit(cwd,argv){const env={...process.env};for(const key of Object.keys(env))if(key.startsWith("GIT_"))delete env[key];env.GIT_OPTIONAL_LOCKS="0";return execFileSync("git",argv,{cwd,env,encoding:"utf8",stdio:["ignore","pipe","pipe"]}).trim();}
 export async function taskCloseMain(argv=process.argv.slice(2),{cwd=process.cwd(),signal}={}){
   const {command,values}=args(argv);
-  if(!["prepare","confirm","execute","manual-close","complete","status","close"].includes(command))throw new TypeError("usage: task-close.mjs prepare|confirm|execute|manual-close|complete|status|close --project=... --task=... [--plan-ref=...]");
-  const allowed=new Set(["project","task","task-path","plan-ref","confirmation-ref","task-branch","target-branch","task-commit","remote","spec-source","spec-archive","mode","close-mode","decision","reply-text","step-slug","operations","archive"]);
+  if(!["prepare","confirm","execute","manual-close","complete","status","close"].includes(command))throw new TypeError("usage: task-close.mjs prepare|confirm|execute|manual-close|complete|status|close --project=... --task=... [--plan-ref=...] [--until=<action>]");
+  const allowed=new Set(["project","task","task-path","plan-ref","confirmation-ref","task-branch","target-branch","task-commit","remote","spec-source","spec-archive","mode","close-mode","decision","reply-text","step-slug","operations","archive","until"]);
   if(Object.keys(values).some(key=>!allowed.has(key)))throw new TypeError("unknown close option; old plan-hash/receipt bindings are retired");
+  if(values.until!==undefined&&command!=="execute")throw new TypeError("--until is only supported by execute");
   const project=required(values,"project"),task=required(values,"task");
   const path=resolveCanonicalTaskPath({project,task,taskPath:values["task-path"],env:process.env,home:process.env.HOME});
   const taskDir=path.taskPath;const manifest=JSON.parse(readFileSync(resolve(taskDir,"task.json"),"utf8"));
@@ -41,7 +42,7 @@ export async function taskCloseMain(argv=process.argv.slice(2),{cwd=process.cwd(
     // override or synthesized risk acceptance is created by this route.
     return authorizeClosePlan({taskDir,planRef,confirmationRef:required(values,"confirmation-ref"),...(values.operations?{operations:JSON.parse(values.operations)}:{})});
   }
-  return executeClosePlan({taskDir,planRef,confirmationRef:required(values,"confirmation-ref"),signal});
+  return executeClosePlan({taskDir,planRef,confirmationRef:required(values,"confirmation-ref"),signal,...(values.until!==undefined?{until:values.until}:{})});
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){
   const controller=new AbortController();let cancelledExit=130;const cancel=name=>()=>{if(!controller.signal.aborted){cancelledExit=name==="SIGTERM"?143:130;controller.abort(new Error(`close interrupted by ${name}`));}};

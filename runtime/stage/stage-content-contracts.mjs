@@ -172,6 +172,9 @@ function unsafeWritePath(path) {
 const SHARED_GOVERNANCE_PATH = /(?:^|\/)(?:README|AGENTS|CLAUDE|CONTEXT|CONSTITUTION|GLOSSARY)\.md$/i;
 function isSharedGovernancePath(path) { return SHARED_GOVERNANCE_PATH.test(path) || /(?:^|\/)architecture\/components\.ya?ml$/i.test(path); }
 
+const EXPLICIT_EMPTY_WRITE_SET = /^none(?:\s*[（(][^`()（）\r\n]*[）)])?$/i;
+const EMPTY_WRITE_SET_PREFIX = /^none(?=$|[\s（(;；])/i;
+
 function executionIndexRows(document, errors) {
   const lines = document.split(/\r?\n/);
   const start = lines.findIndex((line) => /^##\s+(?:Execution Index|执行索引)\s*$/i.test(line));
@@ -195,12 +198,15 @@ function executionIndexRows(document, errors) {
     }
     const phase = plain(cells[0]);
     if (phase !== `P${position}`) rowErrors.push(`Phase index must declare contiguous P1..Pn; expected P${position}`);
-    if (plain(cells[1]) !== `phases/${phase}.md`) rowErrors.push(`authority ref must be phases/${phase}.md`);
+    const authority = plain(cells[1]).match(/^phases\/(P[1-9][0-9]*)(?:-[^/\\.\s|`:\x00-\x1f]+)?\.md$/);
+    if (!authority || authority[1] !== phase) rowErrors.push(`authority ref must be a safe phases/${phase}.md or named Phase file`);
     if (!plain(cells[2])) rowErrors.push("semantic anchor is required");
     const ownership = cells.length === 5 ? cells[4].split(/\s*(?:→|->)\s*/) : cells.slice(4);
     if (ownership.length !== 2 || ownership.some((value) => !plain(value))) rowErrors.push("dependency → consumer must name both fields");
     const paths = inlinePaths(cells[3]);
-    if (paths.length === 0) rowErrors.push("write set is empty");
+    const explicitNone = EXPLICIT_EMPTY_WRITE_SET.test(cells[3].trim());
+    if (paths.length === 0 && !explicitNone) rowErrors.push("write set is empty");
+    if (EMPTY_WRITE_SET_PREFIX.test(cells[3].trim()) && !explicitNone) rowErrors.push("none write set declaration is invalid");
     for (const path of paths) if (unsafeWritePath(path)) rowErrors.push(`unsafe write set path: ${path}`);
     if (rowErrors.length) {
       errors.push(...rowErrors.map((error) => `${label} ${error}`));
@@ -380,7 +386,7 @@ export function validatePostPhaseContract({ spec, index, phases } = {}) {
   for (const row of (rows ?? [])) {
     const dependencies = WITHOUT_PREDECESSOR.test(row.dependency ?? "") ? [] : identifiers(row.dependency ?? "", /\bP\d+\b/g);
     phaseAncestors.set(row.authority_ref, new Set(dependencies.flatMap((id) => {
-      const ref = `phases/${id}.md`;
+      const ref = (rows ?? []).find((candidate) => candidate.phase === id)?.authority_ref ?? `phases/${id}.md`;
       return [ref, ...(phaseAncestors.get(ref) ?? [])];
     })));
   }
@@ -390,8 +396,8 @@ export function validatePostPhaseContract({ spec, index, phases } = {}) {
   for (const row of (rows ?? [])) {
     const position = row.position - 1;
     const expectedId = row.phase;
-    const expectedPath = `phases/${expectedId}.md`;
-    if (row.authority_ref !== expectedPath) errors.push(`${expectedId} authority ref must be ${expectedPath}`);
+    const expectedPath = row.authority_ref;
+    if (expectedPath.match(/^phases\/(P[1-9][0-9]*)(?:-|\.md$)/)?.[1] !== expectedId) errors.push(`${expectedId} authority ref must identify ${expectedId}`);
     if (!row.semantic_anchor) errors.push(`${expectedId} semantic anchor is required`);
     if (!row.consumer) errors.push(`${expectedId} consumer is required`);
     if (indexedPaths.has(row.authority_ref)) errors.push(`duplicate Phase authority ref: ${row.authority_ref}`);
@@ -410,7 +416,14 @@ export function validatePostPhaseContract({ spec, index, phases } = {}) {
       if (!new RegExp(`^##\\s+${heading}\\b`, "m").test(body)) errors.push(`${expectedPath} is missing ${heading}`);
     }
     const declaredWriteSet = phaseWriteSet(body);
-    if (declaredWriteSet.length === 0) {
+    const authorityBody = body.split(/^##\s+L2\b|^###\s+T\d{3,}\b/m, 1)[0];
+    const declaration = fieldValue(authorityBody, "Write set");
+    const explicitNone = EXPLICIT_EMPTY_WRITE_SET.test(declaration ?? "");
+    if (EMPTY_WRITE_SET_PREFIX.test(declaration ?? "") && !explicitNone) {
+      errors.push(`${expectedPath} Write set none declaration is invalid`);
+      scopeValid = false;
+    }
+    if (declaredWriteSet.length === 0 && !(explicitNone && row.write_set.length === 0)) {
       errors.push(`${expectedPath} Write set is missing`);
       scopeValid = false;
     }
@@ -595,7 +608,7 @@ export function validatePostPhaseContract({ spec, index, phases } = {}) {
     }
   }
   const acceptedFrs = [...new Set([...spec.matchAll(/^-\s+\*\*(FR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3}))\*\*/gm)].map((match) => match[1]))];
-  const declaredAcs = [...new Set([...spec.matchAll(/^-\s+(?:\[[ xX]\]\s+)?\*\*(AC-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3}))\b/gm)].map((match) => match[1]))];
+  const declaredAcs = [...new Set([...spec.matchAll(new RegExp(String.raw`^-\s+(?:\[[ xX]\]\s+)?\*\*(${ACCEPTANCE_CRITERION_SOURCE})\b`, "gm"))].map((match) => match[1]))];
   const dispositions = acceptanceCriterionDispositions(spec);
   const activeAcs = new Set(dispositions.active_ids);
   const acceptedAcs = declaredAcs.filter((id) => activeAcs.has(id));

@@ -3,7 +3,7 @@ import { dirname, isAbsolute, join, parse, resolve, sep } from "node:path";
 import { writeFileAtomic } from "../interface/safe-write.mjs";
 
 export const CURRENT_MATERIAL_FILES = Object.freeze(["decision-log.md", "spec.md", "phases/index.md"]);
-const PHASE_FILE = /^phases\/P([1-9][0-9]*)\.md$/;
+const PHASE_FILE = /^phases\/P([1-9][0-9]*)(?:-[^/\\.\s|`:\x00-\x1f]+)?\.md$/;
 
 export function phaseFilesFromIndex(index) {
   if (typeof index !== "string" || index.trim() === "") throw new TypeError("post Phase index is missing");
@@ -24,14 +24,14 @@ export function phaseFilesFromIndex(index) {
     const row = cells(line);
     const phase = row[phaseColumn]?.match(/^`(P[1-9][0-9]*)`$/)?.[1];
     const ref = row[authorityColumn]?.match(/^`([^`]+)`$/)?.[1];
-    if (!phase || ref !== `phases/${phase}.md`) throw new TypeError("post Phase index row has mismatched Phase authority");
+    if (!phase || !PHASE_FILE.test(ref ?? "") || `P${ref.match(PHASE_FILE)[1]}` !== phase) throw new TypeError("post Phase index row has mismatched Phase authority");
     return ref;
   });
   if (refs.length === 0) throw new TypeError("post Phase index has no Phase refs");
   if (refs.some((ref) => !PHASE_FILE.test(ref))) throw new TypeError("post Phase index has an unsafe Phase ref");
   if (new Set(refs).size !== refs.length) throw new TypeError("post Phase index has duplicate Phase refs");
   for (let index = 0; index < refs.length; index += 1) {
-    if (refs[index] !== `phases/P${index + 1}.md`) throw new TypeError("post Phase index must list consecutive ordered Phases");
+    if (Number(refs[index].match(PHASE_FILE)[1]) !== index + 1) throw new TypeError("post Phase index must list consecutive ordered Phases");
   }
   return Object.freeze(refs);
 }

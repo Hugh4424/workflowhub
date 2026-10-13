@@ -30,11 +30,11 @@ Review the current accepted specification, its global implementation design, all
    required to have happened during planning; keep it not_run/unknown until
    actual evidence exists. Reject placeholder or default full suite commands.
 
-6a. 对每一条预写红测核以下三问；只有发现有锚点、影响交付的实质误判时，才把依据写进 genuine finding 的 prose，正常 RED 不制造 finding：
-    (a) 它是**因目标行为**失败的吗——失败的断言名指向本 Task 要改的那个行为？
-    (b) 它是夹具/环境/收集失败吗（缺少依赖、路径不存在、配置未建、collect error）？——这类**不是 RED**，只能记 `unavailable`。
-    (c) 它本来就通过吗——那不是红测，是既存行为的现状证据，不能计入本阶段 RED。
-    三类分不清时按 `unavailable` 处理。禁止把「命令返回非零」当作 RED。
+   6a. 对每一条预写红测核以下三问；只有发现有锚点、影响交付的实质误判时，才把依据写进 genuine finding 的 prose，正常 RED 不制造 finding：
+       (a) 它是**因目标行为**失败的吗——失败的断言名指向本 Task 要改的那个行为？
+       (b) 它是夹具/环境/收集失败吗（缺少依赖、路径不存在、配置未建、collect error）？——这类**不是 RED**，只能记 `unavailable`。
+       (c) 它本来就通过吗——那不是红测，是既存行为的现状证据，不能计入本阶段 RED。
+       三类分不清时按 `unavailable` 处理。禁止把「命令返回非零」当作 RED。
 7. Identify failure modes, rollback/recovery boundaries, irreversible actions,
    and whether rollback preserves accepted artifacts.
 8. Check implementation effect: the planned consumer must actually use the new

@@ -760,7 +760,7 @@ export function buildReviewMaterials({attachmentRoot,reviewDataRoot,stage,review
       write(`skills/${name}/SKILL.md`,readRegisteredFile(resolve(workflowhubSkills,name,"SKILL.md"),name));
     }
     providerMaterialEntries({stage,review_track:reviewTrack,review_scope:reviewScope,review_kind:reviewKind,activation_cohort:activationCohort,materials:filtered.materials}).forEach(([key,value],index)=>{if(key!=="review_instructions")write(codePacket&&key==="acceptance_criteria" ? `requirements/acceptance_criteria.${typeof value==="string" ? "md" : "json"}` : providerMaterialPath(key,index,redactProviderHostPaths(value)),value);});
-    if(codePacket&&source)write("source.json",{captured_head:source.capturedHead,baseline_commit:source.baseCommit});
+    if(codePacket&&source)write("source.json",{captured_head:source.capturedHead,baseline_commit:source.baseCommit,...(source.contract_facts===undefined ? {} : {contract_facts:source.contract_facts})});
     if(source?.diffPath)writeReviewDiff(write,readRegisteredFile(source.diffPath,"supplied diff"));
     if(authenticated_evidence!==undefined)write("authenticated-evidence.json",authenticated_evidence);
     const manifest={version:1,stage,review_scope:reviewScope,subject_kind:reviewScope==="phase" ? "phase" : "document",phase_id:phaseId,surface:surface ?? reviewKind ?? stage,files:[...entries]};write("manifest.json",JSON.stringify(manifest,null,2)+"\n");

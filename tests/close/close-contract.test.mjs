@@ -1,8 +1,9 @@
-import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync, readdirSync, lstatSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { join, dirname, basename } from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import * as workspaceCheck from "../../runtime/interface/workspace-check.mjs";
 import { prepareDeliveryClosePlan, confirmClosePlan, authorizeClosePlan, executeClosePlan, inspectDeliveryCloseState, closeDelivery } from "../../core/task-close.mjs";
 const roots=[];let counter=0;
 afterEach(()=>{while(roots.length)rmSync(roots.pop(),{recursive:true,force:true});});
@@ -26,6 +27,159 @@ async function prepare(s,mode){return prepareDeliveryClosePlan({taskDir:s.taskDi
 async function confirm(s,p,outcome="confirmed",replyText="Owned fixture explicit reply"){return confirmClosePlan({taskDir:s.taskDir,planRef:p.plan_ref,outcome,replyText});}
 async function authorized(s,p){const c=await confirm(s,p);await authorizeClosePlan({taskDir:s.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref});return c;}
 async function execute(s,p,c){return executeClosePlan({taskDir:s.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref});}
+
+it.each(["merge", "archive", "push", "cleanup"])("N12 cancellation during %s async preflight leaves the action unsent and resumes the original plan", async (operation) => {
+ const saved={...process.env},s=fixture(),bin=join(s.base,"bin"),calls=join(s.base,"preflight-calls.jsonl"),state=join(s.base,"preflight-pr.json"),identity=lstatSync(s.base);
+ const realGit=execFileSync("/usr/bin/which",["git"],{encoding:"utf8"}).trim();let spy,running,release;
+ try {
+  mkdirSync(bin);writeFileSync(calls,"");git(s.repo,["remote","set-url","origin","https://github.com/owned/p4-preflight.git"]);
+  // The Git and GH command seams stay local: every transport command goes to
+  // this fixture's bare repo; the fake GH command only reads/writes local JSON.
+  writeFileSync(join(bin,"git"),`#!${process.execPath}\nconst fs=require('node:fs'),cp=require('node:child_process');let args=process.argv.slice(2);if(!process.cwd().startsWith(${JSON.stringify(s.base+'/')}))process.exit(95);fs.appendFileSync(${JSON.stringify(calls)},JSON.stringify({tool:'git',args})+'\\n');if(['push','fetch','ls-remote'].includes(args[0])){args=args.map(x=>x==='origin'?${JSON.stringify(s.bare)}:x);if(args.some(x=>/^https?:|^git@/.test(x)))process.exit(96);}const r=cp.spawnSync(${JSON.stringify(realGit)},args,{cwd:process.cwd(),env:process.env,encoding:'utf8'});process.stdout.write(r.stdout||'');process.stderr.write(r.stderr||'');process.exit(r.status??97);\n`,{mode:0o700});
+  writeFileSync(join(bin,"gh"),`#!${process.execPath}\nconst fs=require('node:fs'),cp=require('node:child_process'),args=process.argv.slice(2);if(!process.cwd().startsWith(${JSON.stringify(s.base+'/')}))process.exit(95);fs.appendFileSync(${JSON.stringify(calls)},JSON.stringify({tool:'gh',args})+'\\n');if(args[0]==='--version'){console.log('owned local gh transport');}else if(args[0]==='auth'){process.exit(0);}else if(args[0]==='repo'){console.log(JSON.stringify({nameWithOwner:'owned/p4-preflight',defaultBranchRef:{name:'main'},viewerPermission:'WRITE'}));}else if(args[0]==='pr'&&args[1]==='create'){const oid=cp.execFileSync(${JSON.stringify(realGit)},['rev-parse','HEAD'],{encoding:'utf8'}).trim();fs.writeFileSync(${JSON.stringify(state)},JSON.stringify({headRefName:${JSON.stringify(s.branch)},baseRefName:'main',headRefOid:oid,url:'https://github.com/owned/p4-preflight/pull/1',number:1}));console.log('https://github.com/owned/p4-preflight/pull/1');}else if(args[0]==='pr'&&(args[1]==='view'||args[1]==='list')){console.log(JSON.stringify(fs.existsSync(${JSON.stringify(state)})?(args[1]==='view'?JSON.parse(fs.readFileSync(${JSON.stringify(state)})):[JSON.parse(fs.readFileSync(${JSON.stringify(state)}))]):[]));}else process.exit(98);\n`,{mode:0o700});
+  Object.assign(process.env,{PATH:bin+':'+saved.PATH,WORKFLOWHUB_TASK_DIR:join(s.base,'storage')});
+  const p=await prepare(s),c=await authorized(s,p),controller=new AbortController();
+  expect(p.plan.steps).toEqual(["commit","push-task","pr","merge","archive","push","cleanup"]);
+  const confirmation=readFileSync(c.confirmation_ref),authDir=join(s.taskDir,"quality/evidence/git-authorizations");
+  const consumes=()=>readdirSync(authDir).filter(name=>name.includes("-consumed-")).sort().map(name=>({name,bytes:readFileSync(join(authDir,name),"utf8")}));
+  const physical=()=>({target:git(s.repo,["rev-parse","HEAD"]),source:git(s.worktree,["rev-parse","HEAD"]),localRefs:git(s.repo,["for-each-ref","--format=%(refname):%(objectname)"]),remoteRefs:git(s.bare,["for-each-ref","--format=%(refname):%(objectname)"]),sourceMaterials:existsSync(join(s.repo,s.source)),archive:existsSync(join(s.repo,`specs/archive/${s.id}`)),worktree:existsSync(s.worktree)});
+  let enteredResolve,checks=0;const entered=new Promise(resolve=>enteredResolve=resolve),gate=new Promise(resolve=>release=resolve),original=workspaceCheck.assertCleanTarget;
+  const pauseAt=2+["merge","archive","push","cleanup"].indexOf(operation);
+  spy=vi.spyOn(workspaceCheck,"assertCleanTarget").mockImplementation(async options=>{
+   await original(options);
+   if(++checks===pauseAt){enteredResolve();await gate;}
+  });
+  running=executeClosePlan({taskDir:s.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref,signal:controller.signal});
+  await Promise.race([entered,running.then(()=>{throw Error("async preflight was not reached");})]);
+  const before=physical(),beforeConsumes=consumes(),beforeActions=(await inspectDeliveryCloseState({taskDir:s.taskDir,planRef:p.plan_ref})).step_records;
+  const expected=p.plan.steps.slice(0,p.plan.steps.indexOf(operation));
+  expect(beforeActions.map(row=>row.operation)).toEqual(expected);
+  expect(beforeConsumes.some(row=>JSON.parse(row.bytes).step_id===`${p.plan_ref}:${operation}`)).toBe(false);
+  controller.abort("owned async preflight cancellation");release();const cancelled=await running;
+  expect(cancelled.status).toBe("cancelled");expect(cancelled.records.map(row=>row.operation)).toEqual(expected);
+  expect(cancelled.physical.step_records).toEqual(beforeActions);
+  expect(consumes()).toEqual(beforeConsumes);expect(physical()).toEqual(before);
+  spy.mockRestore();spy=undefined;
+  const resumed=await execute(s,p,c);
+  expect(resumed.status).toBe("completed");expect(resumed.records.map(row=>row.operation)).toEqual(p.plan.steps);
+  expect(resumed.physical.step_records.filter(row=>row.status==="completed").map(row=>row.operation)).toEqual(p.plan.steps);
+  expect(readFileSync(c.confirmation_ref)).toEqual(confirmation);
+  expect(existsSync(s.worktree)).toBe(false);
+  expect(git(s.repo,["cat-file","-e",`main:specs/archive/${s.id}/spec.md`])).toBe("");
+  const requests=readFileSync(calls,"utf8").trim().split("\n").map(JSON.parse);
+  expect(requests.filter(row=>row.tool==="gh"&&row.args[0]==="pr"&&row.args[1]==="create")).toHaveLength(1);
+ } finally {
+  release?.();spy?.mockRestore();if(running)await running;
+  for(const key of Object.keys(process.env))if(!(key in saved))delete process.env[key];Object.assign(process.env,saved);
+  const current=lstatSync(s.base);expect({dev:current.dev,ino:current.ino}).toEqual({dev:identity.dev,ino:identity.ino});
+  expect(realpathSync(s.base)).toBe(s.base);rmSync(s.base,{recursive:true,force:true});expect(existsSync(s.base)).toBe(false);
+ }
+}, 30000);
+
+it("N12 invalid cutoff is rejected before any authorized action", async()=>{
+ const s=fixture(),p=await prepare(s),c=await authorized(s,p);
+ const before=await inspectDeliveryCloseState({taskDir:s.taskDir,planRef:p.plan_ref});
+ await expect(executeClosePlan({taskDir:s.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref,until:"pr"})).rejects.toMatchObject({code:"AUTH_SCOPE"});
+ const after=await inspectDeliveryCloseState({taskDir:s.taskDir,planRef:p.plan_ref});
+ expect(after.step_records).toEqual(before.step_records);expect(git(s.repo,["rev-parse","HEAD"])).toBe(p.plan.target_head);
+});
+it("N12 failed cutoff retains failure and does not report partial", async()=>{
+ const s=fixture(),p=await prepare(s),c=await confirm(s,p);
+ const out=await executeClosePlan({taskDir:s.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref,until:"commit"});
+ expect(out.status).toBe("failed");expect(out.operation).toBe("commit");expect(out.records).toEqual([]);expect(out).not.toHaveProperty("stopped_at");
+ expect(JSON.parse(readFileSync(out.failure_ref))).toMatchObject({operation:"commit",status:"failed"});
+});
+
+it("N12 cancellation after completed commit preserves sent push and resumes same confirmation without repeat", async()=>{
+ const saved={...process.env},s=fixture({existing:true,remoteTask:false}),bin=join(s.base,"bin"),calls=join(s.base,"calls.jsonl"),state=join(s.base,"pr.json"),marker=join(s.base,"push-ready"),release=join(s.base,"push-release"),hook=join(s.base,"hooks","pre-push");
+ const realGit=execFileSync("/usr/bin/which",["git"],{encoding:"utf8"}).trim(),rootIdentity=lstatSync(s.base);let child,closed=false,childDone;
+ try{
+  mkdirSync(bin);writeFileSync(calls,"");git(s.repo,["remote","set-url","origin","https://github.com/owned/p4-cancel.git"]);
+  writeFileSync(join(bin,"git"),`#!${process.execPath}\nconst fs=require('node:fs'),cp=require('node:child_process');let args=process.argv.slice(2);if(!process.cwd().startsWith(${JSON.stringify(s.base+'/')}))process.exit(95);fs.appendFileSync(${JSON.stringify(calls)},JSON.stringify({tool:'git',args})+'\\n');if(['push','fetch','ls-remote'].includes(args[0])){args=args.map(x=>x==='origin'?${JSON.stringify(s.bare)}:x);if(args.some(x=>/^https?:|^git@/.test(x)))process.exit(96);}const r=cp.spawnSync(${JSON.stringify(realGit)},args,{cwd:process.cwd(),env:process.env,encoding:'utf8'});process.stdout.write(r.stdout||'');process.stderr.write(r.stderr||'');process.exit(r.status??97);\n`,{mode:0o700});
+  writeFileSync(join(bin,"gh"),`#!${process.execPath}\nconst fs=require('node:fs'),cp=require('node:child_process'),args=process.argv.slice(2);if(!process.cwd().startsWith(${JSON.stringify(s.base+'/')}))process.exit(95);fs.appendFileSync(${JSON.stringify(calls)},JSON.stringify({tool:'gh',args})+'\\n');if(args[0]==='--version'){console.log('owned local gh transport');}else if(args[0]==='auth'){process.exit(0);}else if(args[0]==='repo'){console.log(JSON.stringify({nameWithOwner:'owned/p4-cancel',defaultBranchRef:{name:'main'},viewerPermission:'WRITE'}));}else if(args[0]==='pr'&&args[1]==='create'){const oid=cp.execFileSync(${JSON.stringify(realGit)},['rev-parse','HEAD'],{encoding:'utf8'}).trim();fs.writeFileSync(${JSON.stringify(state)},JSON.stringify({headRefName:${JSON.stringify(s.branch)},baseRefName:'main',headRefOid:oid,url:'https://github.com/owned/p4-cancel/pull/1',number:1}));console.log('https://github.com/owned/p4-cancel/pull/1');}else if(args[0]==='pr'&&(args[1]==='view'||args[1]==='list')){console.log(JSON.stringify(fs.existsSync(${JSON.stringify(state)})?(args[1]==='view'?JSON.parse(fs.readFileSync(${JSON.stringify(state)})):[JSON.parse(fs.readFileSync(${JSON.stringify(state)}))]):[]));}else process.exit(98);\n`,{mode:0o700});
+  Object.assign(process.env,{PATH:bin+':'+saved.PATH,WORKFLOWHUB_TASK_DIR:join(s.base,'storage')});
+  writeFileSync(join(s.worktree,"cancel-change.txt"),"planned real commit before cancellation\n");
+  const p=await prepare(s),c=await authorized(s,p);expect(p.plan.steps).toEqual(["commit","push-task","pr","merge","archive","push","cleanup"]);
+  const confirmationBytes=readFileSync(c.confirmation_ref),confirmationNames=readdirSync(join(s.taskDir,"quality/evidence/human-confirmations"));
+  // The hook pauses a real git push before transmission. The parent sends a
+  // real OS signal to the CLI, then releases the already-authorized push.
+  writeFileSync(hook,`#!${process.execPath}\nconst fs=require('node:fs');fs.writeFileSync(${JSON.stringify(marker)},'actual pre-push reached');const deadline=Date.now()+15000;while(!fs.existsSync(${JSON.stringify(release)})){if(Date.now()>deadline)process.exit(91);Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,10);}\n`,{mode:0o700});
+  const cli=new URL('../../tools/cli/task-close.mjs',import.meta.url).pathname,args=[cli,'execute','--project=workflowhub','--task='+s.id,'--task-path='+s.taskDir,'--plan-ref='+p.plan_ref,'--confirmation-ref='+c.confirmation_ref];
+  child=spawn(process.execPath,args,{cwd:s.worktree,env:process.env,detached:true,stdio:['ignore','pipe','pipe']});let stdout='',stderr='';child.stdout.on('data',b=>stdout+=b);child.stderr.on('data',b=>stderr+=b);
+  childDone=new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',(code,signal)=>{closed=true;resolve({code,signal});});});
+  const deadline=Date.now()+15000;while(!existsSync(marker)){if(closed||Date.now()>deadline)throw Error('pre-push marker not reached: '+stderr);await new Promise(resolve=>setTimeout(resolve,10));}
+  const absent=spawnSync(realGit,['show-ref','--verify','--quiet','refs/heads/'+s.branch],{cwd:s.bare,encoding:'utf8'});expect(absent.status).toBe(1);expect(absent.stdout).toBe('');
+  child.kill('SIGINT');writeFileSync(release,'release after SIGINT sent');const exit=await childDone;
+  const cancelled=JSON.parse(stdout);expect(cancelled.status,'actual CLI cancellation: '+stderr).toBe('cancelled');expect(exit.code).toBe(130);
+  expect(cancelled.records.map(row=>row.operation)).toEqual(['commit','push-task']);expect(cancelled.physical.step_records.map(row=>row.operation)).toEqual(['commit','push-task']);
+  const committed=git(s.worktree,['rev-parse','HEAD']);expect(committed).not.toBe(p.plan.source.head);expect(git(s.bare,['rev-parse',s.branch])).toBe(committed);expect(git(s.repo,['rev-parse','main'])).toBe(p.plan.target_head);expect(existsSync(state)).toBe(false);
+  rmSync(hook);const resumed=await execute(s,p,c);expect(resumed.status).toBe('completed');const replay=await execute(s,p,c);expect(replay.status).toBe('completed');
+  expect(replay.physical.step_records).toEqual(resumed.physical.step_records);expect(resumed.physical.step_records.filter(row=>row.status==='completed').map(row=>row.operation)).toEqual(['commit','push-task','pr','merge','archive','push']);
+  const actualCalls=readFileSync(calls,'utf8').trim().split('\n').map(JSON.parse);expect(actualCalls.filter(row=>row.tool==='git'&&row.args[0]==='commit'&&row.args.includes('close '+s.id+': publish task source'))).toHaveLength(1);expect(actualCalls.filter(row=>row.tool==='git'&&row.args[0]==='push'&&row.args.includes(s.branch+':'+s.branch))).toHaveLength(1);expect(actualCalls.filter(row=>row.tool==='gh'&&row.args[1]==='create')).toHaveLength(1);
+  expect(readFileSync(c.confirmation_ref)).toEqual(confirmationBytes);expect(readdirSync(join(s.taskDir,'quality/evidence/human-confirmations'))).toEqual(confirmationNames);expect(git(s.worktree,['rev-parse','HEAD'])).toBe(committed);
+  console.log(JSON.stringify({scenario:'owned local/bare SIGINT during pre-push',external_gh:false,remote_absent_at_hook:absent.status===1,signal_exit:exit.code,cancelled_status:cancelled.status,completed_before_cancel:cancelled.records.map(row=>({operation:row.operation,source_head:row.source_head,target_head:row.target_head})),actual_source_head:committed,remote_task_head:git(s.bare,['rev-parse',s.branch]),target_before_resume:cancelled.records[0].target_head,resumed_status:resumed.status,replayed_status:replay.status,replayed_action_facts_equal:JSON.stringify(replay.physical.step_records)===JSON.stringify(resumed.physical.step_records),completed_once:resumed.physical.step_records.filter(row=>row.status==='completed').map(row=>row.operation),source_commit_calls:actualCalls.filter(row=>row.tool==='git'&&row.args[0]==='commit'&&row.args.includes('close '+s.id+': publish task source')).length,task_push_calls:actualCalls.filter(row=>row.tool==='git'&&row.args[0]==='push'&&row.args.includes(s.branch+':'+s.branch)).length,pr_fixture_create_calls:actualCalls.filter(row=>row.tool==='gh'&&row.args[1]==='create').length,confirmation_ref:c.confirmation_ref,confirmation_unchanged:readFileSync(c.confirmation_ref).equals(confirmationBytes),hook_removed:!existsSync(hook),cli_child_closed:closed}));
+ }finally{
+  if(child?.pid&&!closed){writeFileSync(release,'finally release');try{process.kill(-child.pid,'SIGKILL');}catch(error){if(error.code!=='ESRCH')throw error;}await childDone;}
+  if(existsSync(hook))rmSync(hook);for(const key of Object.keys(process.env))if(!(key in saved))delete process.env[key];Object.assign(process.env,saved);
+  const actual=lstatSync(s.base);expect(realpathSync(s.base)).toBe(s.base);expect(dirname(s.base)).toBe(realpathSync(tmpdir()));expect(basename(s.base).startsWith('workflowhub-close-narrow-')).toBe(true);expect([actual.dev,actual.ino]).toEqual([rootIdentity.dev,rootIdentity.ino]);
+  const at=roots.indexOf(s.base);expect(at).not.toBe(-1);roots.splice(at,1);rmSync(s.base,{recursive:true});console.log(JSON.stringify({scenario:'owned cancel fixture finally',root:s.base,original_dev:rootIdentity.dev,original_ino:rootIdentity.ino,root_removed:!existsSync(s.base),child_closed:!child||closed}));
+ }
+},60000);
+
+// Real-service readback only. The coordinator executes one isolated ordinary
+// task, displays its URL in chat, then resumes the same plan without a reply.
+// No test creates, merges, archives or deletes anything on GitHub. An absent
+// input is explicitly unavailable; the local gh fixtures prove no service AC.
+const realPrReadback = process.env.WORKFLOWHUB_CARD05_PR_READBACK;
+function readRealPrRun(){
+ const input=JSON.parse(readFileSync(realPrReadback,"utf8"));
+ const plan=JSON.parse(readFileSync(input.plan_ref,"utf8"));
+ const load=name=>{
+  const receipt=JSON.parse(readFileSync(input[name],"utf8"));
+  expect(receipt.exit_code).toBe(0);expect(receipt.cancelled).toBe(false);expect(receipt.timed_out).toBe(false);
+  expect(receipt.cwd).toBe(plan.worktree_root);
+  expect(receipt.argv).toContain("--plan-ref="+input.plan_ref);expect(receipt.argv).toContain("--confirmation-ref="+input.confirmation_ref);
+  const output=readFileSync(receipt.output_ref,"utf8");return{receipt,output,result:JSON.parse(output)};
+ };
+ expect(plan.steps).toEqual(["commit","push-task","pr","merge","archive","push","cleanup"]);
+ expect(plan.target_branch).not.toBe("main");expect(plan.preserve_existing_workspace).toBe(true);
+ const cutoff=load("cutoff_receipt"),resume=load("resume_receipt"),replay=load("replay_receipt");
+ const pr=cutoff.result.records.find(row=>row.operation==="pr").pr;
+ const live=JSON.parse(execFileSync("gh",["pr","view",pr.url,"--repo",input.repository,"--json","url,headRefName,baseRefName,headRefOid,createdAt,mergedAt,state"],{cwd:plan.worktree_root,encoding:"utf8",stdio:["ignore","pipe","pipe"]}));
+ expect(live.url).toBe(pr.url);expect(live.headRefName).toBe(plan.task_branch);expect(live.baseRefName).toBe(plan.target_branch);
+ expect(live.headRefOid).toBe(cutoff.result.records.find(row=>row.operation==="commit").source_head);
+ const matching=JSON.parse(execFileSync("gh",["pr","list","--repo",input.repository,"--head",plan.task_branch,"--base",plan.target_branch,"--state","all","--json","url"],{cwd:plan.worktree_root,encoding:"utf8",stdio:["ignore","pipe","pipe"]}));
+ expect(matching).toEqual([{url:pr.url}]);
+ const source=readFileSync(input.visible_message_ref,"utf8").split(/\r?\n/).filter(Boolean).map(JSON.parse);
+ const messages=source.filter(row=>row.type==="response_item"&&row.payload?.type==="message"&&row.payload.role==="assistant"&&row.payload.phase==="commentary"&&row.payload.content?.some(part=>typeof part.text==="string"&&part.text.includes(pr.url)));
+ expect(messages).toHaveLength(1);const visibleAt=Date.parse(messages[0].timestamp);expect(Number.isFinite(visibleAt)).toBe(true);
+ return{input,plan,cutoff,resume,replay,pr,live,visibleAt};
+}
+it.skipIf(!realPrReadback)("card05 PR cutoff: real URL was read back before any merge",()=>{
+ const{cutoff,pr,live}=readRealPrRun();expect(cutoff.receipt.argv).toContain("--until=pr");
+ expect(cutoff.result.status).toBe("partial");expect(cutoff.result.stopped_at).toBe("pr");
+ expect(cutoff.result.records.map(row=>row.operation)).toEqual(["commit","push-task","pr"]);
+ expect(cutoff.result.physical.facts.merge).toBe(false);expect(cutoff.output).toContain(pr.url);expect(live.createdAt).toBeTruthy();
+});
+it.skipIf(!realPrReadback)("card05 PR resume: same plan and confirmation perform each action once",()=>{
+ const{cutoff,resume,replay,visibleAt}=readRealPrRun();
+ expect(visibleAt).toBeGreaterThanOrEqual(Date.parse(cutoff.receipt.ended_at));
+ expect(visibleAt).toBeLessThan(Date.parse(resume.receipt.started_at));
+ for(const run of[resume,replay]){expect(run.receipt.argv).toContain("--until=push");expect(run.receipt.argv.some(arg=>/reply-text|decision|confirm$/.test(arg))).toBe(false);expect(run.result.status).toBe("partial");expect(run.result.stopped_at).toBe("push");}
+ const completed=resume.result.physical.step_records.filter(row=>row.status==="completed");
+ expect(completed.map(row=>row.operation)).toEqual(["commit","push-task","pr","merge","archive","push"]);
+ expect(replay.result.physical.step_records).toEqual(resume.result.physical.step_records);
+ expect(replay.result.physical.facts.cleanup.skipped).toBe(true);
+});
+it.skipIf(!realPrReadback)("card05 PR visibility: GitHub creation and visible output precede resumed merge",()=>{
+ const{cutoff,resume,live,visibleAt}=readRealPrRun();expect(live.state).toBe("MERGED");expect(live.mergedAt).toBeTruthy();
+ expect(Date.parse(live.createdAt)).toBeLessThan(Date.parse(live.mergedAt));
+ const merge=resume.result.physical.step_records.find(row=>row.operation==="merge");
+ expect(Date.parse(cutoff.receipt.ended_at)).toBeLessThan(visibleAt);
+ expect(visibleAt).toBeLessThan(Date.parse(resume.receipt.started_at));
+ expect(Date.parse(resume.receipt.started_at)).toBeLessThanOrEqual(Date.parse(merge.recorded_at));
+ expect(Date.parse(merge.recorded_at)).toBeLessThanOrEqual(Date.parse(live.mergedAt)+999);
+});
 
 describe("close actual transactions without retired workflow permits",()=>{
  it("reports missing quality as unknown and stores a single ordinary explicit plan reference",async()=>{const s=fixture(),p=await prepare(s);expect(p.quality_status).toBe("unknown");expect(p.plan_ref).toMatch(/\d{4}-\d{2}-\d{2}-\d{3}-close-plan\.json$/);expect(p.plan).not.toHaveProperty("plan_hash");expect(p.plan).not.toHaveProperty("snapshot_tree");expect(JSON.parse(readFileSync(p.plan_ref))).toEqual(p.plan);});

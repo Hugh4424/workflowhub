@@ -804,7 +804,9 @@ skills:
     purpose: 隔离 profile 执行 UI 验收并清理
     design_idea: session/profile/cleanup 全部封装，保留证据
     standalone: true
-    used_by_stages: []
+    used_by_stages:
+      - build-code
+      - verify-code
     upstream:
       - kind: user-provided-local-source
         path: isolated-browser-qa

@@ -17,7 +17,7 @@ readable narrative spine and one `Appendix A` contract appendix. Appendix A is
 the exclusive authority for AC condition, behavior, measurable pass criterion,
 failure condition, and expected evidence. The narrative follows the single-authority writing rules below. The four discoverable translations are
 requirement explanation, acceptance flow, test standard, and architecture
-boundary. This changes no pre-cohort material reader. For post-cohort work,
+boundary. The test standard names the project's own surfaces and, for each, applicability or a named exclusion reason, an oracle, evidence type and coverage limit; tested surfaces and covered ACs point to an executable command in the owning Phase. Browser-visible surfaces without browser end-to-end testing name the reason. Routing tiers do not define the surfaces. This changes no pre-cohort material reader. For post-cohort work,
 `spec.md` is also the single global implementation design authority. The
 `spec-specify` step records the accepted requirement translation and design
 constraints; the later `spec-plan` step adds verified code anchors, chosen
@@ -70,7 +70,7 @@ historical read-only material, not post-cohort output.
 
 Give every scenario, PFACT, FR, AC, risk, and open question a stable ID. New
 requirements use `FR-{DOMAIN}-{NNN}`; DOMAIN is one uppercase segment `[A-Z][A-Z0-9]*` and NNN is exactly three digits (the same rule applies to new AC IDs); accept `FR-{NNN}` only when reading legacy
-material. Every FR links to at least one PFACT, scenario, and AC. Every AC names
+material. Every FR links to at least one PFACT, scenario, and AC. For repeated counts and same-ID relationships, read `skills/decision-log/SKILL.md`'s 「编号写作规则」 and cite the original producer's anchor; do not recount the same fact in each section. Every AC names
 its FR, verification method, pass condition, failure condition, and evidence
 type. Consider default, empty, error, loading, cancellation, boundary,
 permission, and race states; link each applicable state to a scenario or record
@@ -153,6 +153,8 @@ discover files. Missing input/callback fails loud.
 10. **Q10 — No-op**：逐句问删除后相对当前模型默认行为会否变化。真正 no-op 删除整句而非修词，记录删除理由与含义保全落点；模型默认有争议就保留待相关真实 case 有/无句消费验证，不凭全文相似、行数或主观风格裁定。弱引领词先换更强且有行为锚的词。
 11. **Q11 — Sediment**：核每句与当前行为相关性，清已过时、被替代或从未相关的层；来源、决定与失败原件留历史原ref，不覆写过去或把未知写已解决。
 12. **Q12 — Sprawl**：即使每行活且唯一仍过长时，按真实分支/序列渐进披露，保执行链与到达条件。没有行数配额，也没有靠长度证明质量的自动 eval；手跑文档并用 duplication/sediment/no-op/sprawl/premature completion 词表定位失败。字符/句长预算只有具源依据才采用，无依据保 unknown；表达整理逐核心保全与有限无回归，新行为用对应目标 case，不强求赢家。未测行为/真人量如实未观测，不采集或估算输出用量。
+
+编辑保全：替换前保存本次涉及文件的原始字节，用该文件唯一原文串定位；替换范围止于小节标题行（`^#{1,6} `）之前。改后逐条核对原标题的数量、顺序和逐字文本，在当次普通编辑说明列实际文件与原标题清单。若标题受损，先从对应原始字节恢复被损坏的 hunk 再重新编辑，保留其它改动，不手工补标题、不整份 checkout；本规则只指导编辑，不新增运行时函数、CLI、pre-hook 或检查链。 <!-- markdownlint-disable-line MD038 -->
 
 ## 固定来源与本地偏离
 
