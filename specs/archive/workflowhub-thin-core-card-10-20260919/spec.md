@@ -5,7 +5,7 @@
 > AC 的唯一定义在 `Appendix A`。叙事各节可以指向 AC，但不复制 AC 正文。`spec.md` 拥有产品行为与全局实现设计；`phases/P<n>.md` 拥有各 Phase 实现增量；`phases/index.md` 是纯指针。
 
 - **功能名**：CARD-10 总体集成验收收口（执行既定套件、不发明套件）
-- **来源**：母 PRD CARD-10 卡正文 `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:524-549`；总体集成验收套件 `prd.md:551-607`；本卡 `specs/workflowhub-thin-core-card-10-20260919/decision-log.md`（唯一权威，保留原来源/决定；当前方向增量为U-019、R-C10-GAP-001、ADR-016，逐字来源见D对应节）
+- **来源**：母 PRD CARD-10 卡正文 `specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md:524-549`；总体集成验收套件 `prd.md:551-607`；本卡 `specs/workflowhub-thin-core-card-10-20260919/decision-log.md`（唯一权威，保留原来源/决定；当前方向增量为U-019、R-C10-GAP-001、ADR-016，逐字来源见D对应节）
 - **状态**：当前增量草稿；一次独立审查原件已返回，处置后最后分析及完整计划实际确认尚待主会话完成
 
 ## 材料导航
@@ -13,7 +13,7 @@
 | 要找什么 | 去哪里 | 什么时候读 |
 | --- | --- | --- |
 | 本卡唯一权威决定（ADR、验收面、退役登记、Supersedes） | `specs/workflowhub-thin-core-card-10-20260919/decision-log.md` | 开工前全读 |
-| CARD-10 卡正文与套件主体 | `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:524-607` | 写用例与 AC 前 |
+| CARD-10 卡正文与套件主体 | `specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md:524-607` | 写用例与 AC 前 |
 | 九卡验收事实与结论原件 | `specs/archive/workflowhub-thin-core-card-0X-20260919/` 与 `<TASKS_ROOT>/workflowhub-thin-core-card-0X-20260919/quality/` | 存在性核对时 |
 | 规划任务阶段事实、确认原件、交互聚合 | `<TASKS_ROOT>/workflowhub-thin-core-rebuild-planning-20260919/` | E2E-1 执行时 |
 | 现行三审查点执行合同 | `workflows/make-decision/SKILL.md`、`workflows/build-plan/SKILL.md`、`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md` | 审查节奏核对时 |
@@ -451,7 +451,7 @@ node tests/acceptance/card-09-session-ledger.mjs --session <真实 session.jsonl
 本节是已接受决定的 AC 条件、可测通过判据、失败条件与预期证据的唯一权威，不覆盖或放宽 `decision-log.md` 已 accepted 的强输入定义。叙事各节可指向 AC，但不复制本节正文。`证据：` 只声明预期证据类型或制品；执行事实由 verify-code 提供。本卡 AC 编号自铸 `AC-C10-{NNN}`；母 PRD 的 `AC-47..AC-50`（`prd.md:535-538`）只作来源 ID。
 
 - [ ] **AC-C10-001**：总体集成验收套件以母 PRD 所载三部分主体成形，8 项条目齐备，每条含可观察用例、所需证据、承接负责人，无临时增删用例、无改写失败判据；关联 FR-C10-001；来源 FR-47、AC-47。
-验证：把本卡套件条目表与 `### 套件条目与执行映射` 下的逐条成功/失败条件清单，与 `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:551-607` 逐条对照，核对三部分齐备、每条五要素齐全、失败判据逐字一致。「五要素」在此处定义＝①编号 ②可观察用例（`prd.md` 的「可观察结果」）③成功条件 ④失败条件 ⑤承接负责人；第六项「证据类型」归入条目表的「证据落点」列与逐条清单的证据行，不单独计入五要素。
+验证：把本卡套件条目表与 `### 套件条目与执行映射` 下的逐条成功/失败条件清单，与 `specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md:551-607` 逐条对照，核对三部分齐备、每条五要素齐全、失败判据逐字一致。「五要素」在此处定义＝①编号 ②可观察用例（`prd.md` 的「可观察结果」）③成功条件 ④失败条件 ⑤承接负责人；第六项「证据类型」归入条目表的「证据落点」列与逐条清单的证据行，不单独计入五要素。
 通过：三部分齐备；条目数＝8（0 号输入核对 + 7 项）；每条五要素齐全（逐项点名核对：①编号 ②可观察用例 ③成功条件 ④失败条件 ⑤承接负责人；第六项证据类型按上一句归入证据落点）；失败判据与 `prd.md:561-605` 逐字一致；无 PRD 未载用例。
 失败：任一条目缺要素；出现 PRD 未载的用例；任一失败判据被改写或删除。
 证据：套件条目对照表 + `prd.md:551-607` 原文引用，落 `<TASK_DIR>/quality/evidence/input-check/`。

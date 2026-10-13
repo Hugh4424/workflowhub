@@ -560,20 +560,20 @@ C03依赖C04的条件分支只在确需新提炼输出时启用；已有可核�
 
 ### 读取基准、资料保管与开工方式
 
-本节是当前开发导航；S1中的历史原件及确认不改写。仓内链接相对本PRD所在目录解析，`../../`指承载本PRD的仓库根，不指某个具名worktree。旧研究直接读`../workflowhub-ui-frontend-capability-20260904/`，当前决定直接读[decision-log.md](decision-log.md)；旧task.json的创建来源不能覆盖当前决定。知识库中的研究原件在持久任务目录保存，与开发worktree生命周期分开。
+本节是当前开发导航；S1中的历史原件及确认不改写。仓内链接相对本PRD所在目录解析，`../../../`指承载本PRD的仓库根，不指某个具名worktree。旧研究直接读`../workflowhub-ui-frontend-capability-20260904/`，当前决定直接读[decision-log.md](decision-log.md)；旧task.json的创建来源不能覆盖当前决定。知识库中的研究原件在持久任务目录保存，与开发worktree生命周期分开。
 
 | 资料类型 | 当前准确入口 | 读取及交接规则 |
 | --- | --- | --- |
-| 当前母规划 | 本PRD、[当前决定](decision-log.md)、[GLOSSARY](../../GLOSSARY.md) | 从当前检出仓库读取；确认/实施/交付事实分别核实 |
+| 当前母规划 | 本PRD、[当前决定](decision-log.md)、[GLOSSARY](../../../GLOSSARY.md) | 从当前检出仓库读取；确认/实施/交付事实分别核实 |
 | 仓内方法与历史来源 | 下方相对技能、ADR、旧报告链接 | 新工作区保持相同仓内布局；旧正文及旧任务状态只读 |
 | 持久研究与执行原件 | 下方具名研究及S1链接，根为`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-decision-refresh-20261013/` | 本机持续保管位置；跨机器通过已有任务资料交接取得合法访问，不复制为第二套报告权威 |
 | 外部原技能与概念 | 下方固定commit文件或具名官方章节 | 缓存只是形成时取证位置；采用前核文件、完整依赖闭包、许可和真实运行条件 |
 
 历史报告或已确认决定中出现的工作区绝对路径、`/private/tmp/`、`/tmp/`、下载目录与作者自路径保原始provenance；当前文件读取从本节具名入口到达，不把缓存存活或原工作区仍在当开发依赖。历史盘点描述的代码须在当前检出仓库重新核实，不能只机械替换路径就宣称事实仍成立。设计源样本路径按S6/C09实核，缺合法源不能用缓存或新造样本冒充。
 
-目前新版母规划只在当前工作区，尚未Git交付到main；本节解决定位方式，不宣称资料已被提交、归档或迁走。以后从main新开任务前，先核当前母规划及配套术语已正常交付、仓内相对引用可读、持久任务资料可访问。本轮不执行这些Git或清理动作。换机器时只有仓库而没有外置研究原件，相关研究消费仍为缺源，不用文件名/摘要替代全文。
+归档定位更新（2026-10-13）：本母规划及有效决定保存于`specs/archive/workflowhub-ui-frontend-decision-refresh-20261013/`，当前开发入口见[归档开发导航](../README.md)。归档仅维护位置和引用，不启动九卡，不更改已确认需求、任务边界、质量目标或历史结论。本文确认/审查章节中“本轮尚未Git交付”等描述保留规划形成时的事实；后续提交、main/远端交付与物理清理以本次真实交付原件和最新人读交接为准。新开任务前核当前归档母规划、配套术语、仓内引用和持久研究可读；换机器只有仓库而没有外置研究原件时仍为缺源，不用文件名/摘要替代全文。
 
-九卡各自建立开发任务，引用本PRD对应卡、有效母决定、适用共享定义和下方本卡资料。先沿[make-decision](../../workflows/make-decision/SKILL.md)承接本卡已有方向和必要未知项，再沿[build-plan](../../workflows/build-plan/SKILL.md)形成自己的`spec.md`、`phases/P<n>.md`和纯指针`phases/index.md`；计划得到真实选择后实施、验证和正常收口。复杂卡在内部拆Phase，九卡数量与职责保持。子任务只读母/兄/旧材料，具体任务状态与事实写自己的当前材料及task facts，不恢复旧build-spec/plan/tasks或复制全套历史材料。
+九卡各自建立开发任务，引用本PRD对应卡、有效母决定、适用共享定义和下方本卡资料。先沿[make-decision](../../../workflows/make-decision/SKILL.md)承接本卡已有方向和必要未知项，再沿[build-plan](../../../workflows/build-plan/SKILL.md)形成自己的`spec.md`、`phases/P<n>.md`和纯指针`phases/index.md`；计划得到真实选择后实施、验证和正常收口。复杂卡在内部拆Phase，九卡数量与职责保持。子任务只读母/兄/旧材料，具体任务状态与事实写自己的当前材料及task facts，不恢复旧build-spec/plan/tasks或复制全套历史材料。
 
 C02/C08的具名后续真实消费者在各自计划中安排并在本卡验收；C01计划区分首交可用规范、缺源及后续补强；C09早期准备同时核固定旧版本、有稿两页业务操作/结果读回、无稿真实对象/API和六指标原始事件采集。它们沿现卡落实，不增加独立试点，也不把整卡完成设为全主干准入门。
 
@@ -585,17 +585,17 @@ C02/C08的具名后续真实消费者在各自计划中安排并在本卡验收�
 
 | 方法／入口 | 准确章节 | 本期责任 |
 | --- | --- | --- |
-| [ui-project-init](../../skills/ui-project-init/SKILL.md) | 规范职责、方法、完成边界 | C01初始化/旧规则迁移；C08更新消费 |
-| [design-source-readiness](../../skills/design-source-readiness/SKILL.md) | 方法、边界 | C01来源路由；C04输入/Read Map，非DOM提取器 |
-| [frontend-prototype-render](../../skills/frontend-prototype-render/SKILL.md) | 方法、条件降级、输出与结束条件 | C05真实组件原型；C01迁reader |
-| [plan-design-review](../../skills/plan-design-review/SKILL.md) | Check、Result | C05独立设计检查 |
-| [frontend-component-quality](../../skills/frontend-component-quality/SKILL.md) | Component Quality Map、React/Next lens、Static quality check、固定来源与偏离 | C03真实资产/consumer；C06工程检查；C08变更影响 |
-| [frontend-testing](../../skills/frontend-testing/SKILL.md) | UI交付合同、build-code实际消费 | C06针对性验证；C07运行判据/失败传播 |
-| [fullstack-slice-testing](../../skills/fullstack-slice-testing/SKILL.md) | Fullstack Slice Testing正文 | C07/C09真实请求、服务处理及结果读回 |
-| [isolated-browser-qa](../../skills/isolated-browser-qa/SKILL.md) | Engine Router、Standard Workflow、Auth Rules、Output Contract | C04合法隔离采集；C07/C09真实页面验证 |
-| [build-plan](../../workflows/build-plan/SKILL.md)、[build-code](../../workflows/build-code/SKILL.md)、[verify-code](../../workflows/verify-code/SKILL.md) | 各入口的方法、UI/组件与质量职责 | 各卡本身计划/实施/独立核验；调用当前治理规则 |
-| [wh-review](../../skills/wh-review/SKILL.md) | 分工与真实消费者、输入与方法、Long-review host convention | 文档建议及代码等待；OCR/补充分工沿实际开发入口 |
-| [stage-handoff](../../skills/stage-handoff/SKILL.md) | 方法、信息来源、回读结果 | 当前材料与真实证据交接，历史原件不重写 |
+| [ui-project-init](../../../skills/ui-project-init/SKILL.md) | 规范职责、方法、完成边界 | C01初始化/旧规则迁移；C08更新消费 |
+| [design-source-readiness](../../../skills/design-source-readiness/SKILL.md) | 方法、边界 | C01来源路由；C04输入/Read Map，非DOM提取器 |
+| [frontend-prototype-render](../../../skills/frontend-prototype-render/SKILL.md) | 方法、条件降级、输出与结束条件 | C05真实组件原型；C01迁reader |
+| [plan-design-review](../../../skills/plan-design-review/SKILL.md) | Check、Result | C05独立设计检查 |
+| [frontend-component-quality](../../../skills/frontend-component-quality/SKILL.md) | Component Quality Map、React/Next lens、Static quality check、固定来源与偏离 | C03真实资产/consumer；C06工程检查；C08变更影响 |
+| [frontend-testing](../../../skills/frontend-testing/SKILL.md) | UI交付合同、build-code实际消费 | C06针对性验证；C07运行判据/失败传播 |
+| [fullstack-slice-testing](../../../skills/fullstack-slice-testing/SKILL.md) | Fullstack Slice Testing正文 | C07/C09真实请求、服务处理及结果读回 |
+| [isolated-browser-qa](../../../skills/isolated-browser-qa/SKILL.md) | Engine Router、Standard Workflow、Auth Rules、Output Contract | C04合法隔离采集；C07/C09真实页面验证 |
+| [build-plan](../../../workflows/build-plan/SKILL.md)、[build-code](../../../workflows/build-code/SKILL.md)、[verify-code](../../../workflows/verify-code/SKILL.md) | 各入口的方法、UI/组件与质量职责 | 各卡本身计划/实施/独立核验；调用当前治理规则 |
+| [wh-review](../../../skills/wh-review/SKILL.md) | 分工与真实消费者、输入与方法、Long-review host convention | 文档建议及代码等待；OCR/补充分工沿实际开发入口 |
+| [stage-handoff](../../../skills/stage-handoff/SKILL.md) | 方法、信息来源、回读结果 | 当前材料与真实证据交接，历史原件不重写 |
 
 <a id="upstream-methods"></a>
 
@@ -615,7 +615,7 @@ C02/C08的具名后续真实消费者在各自计划中安排并在本卡验收�
 | <a id="up-ues"></a>[UES/skills/ues-expert-suite/SKILL.md](https://github.com/Alibaba-Cloud-Design/ues-evaluation-suite/blob/813d17db4c7c4e9941bd2b8d202e32a39752ec3d/skills/ues-expert-suite/SKILL.md) | `813d17db4c7c4e9941bd2b8d202e32a39752ec3d` | C07条件评价方法/窄工具；RS05～07逐模块源码/缺陷；不是Playbook Evaluator，无校准评分不作完成阈值 |
 | <a id="up-vercel"></a>[Vercel SKILL.md](https://github.com/vercel-labs/agent-skills/blob/dd089a8c752c966dee8bf0f27cb625ba193ffd9e/skills/react-best-practices/SKILL.md)、[AGENTS.md](https://github.com/vercel-labs/agent-skills/blob/dd089a8c752c966dee8bf0f27cb625ba193ffd9e/skills/react-best-practices/AGENTS.md) | `dd089a8c752c966dee8bf0f27cb625ba193ffd9e` | C06必须承接完整官方固定源；采用前核规则、引用、LICENSE全闭包；目前摘要不算履约 |
 
-Vercel定位差异直接核[ADR0016](../../docs/adr/0016-external-first-frontend-component-quality.md)的SKILL路径，与[现frontend-component-quality固定来源](../../skills/frontend-component-quality/SKILL.md)及[UPSTREAM](../../skills/frontend-component-quality/upstream/react-best-practices/UPSTREAM.md)的AGENTS路径。既定目标目录`skills/external/vercel-react-best-practices/`尚未形成完整交付，不能把宿主安装或21行摘要当该目录已经满足。
+Vercel定位差异直接核[ADR0016](../../../docs/adr/0016-external-first-frontend-component-quality.md)的SKILL路径，与[现frontend-component-quality固定来源](../../../skills/frontend-component-quality/SKILL.md)及[UPSTREAM](../../../skills/frontend-component-quality/upstream/react-best-practices/UPSTREAM.md)的AGENTS路径。既定目标目录`skills/external/vercel-react-best-practices/`尚未形成完整交付，不能把宿主安装或21行摘要当该目录已经满足。
 
 UI Designer八个子技能均绑定上表同一commit，采用条件和硬编码偏离读[production复用核对](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-decision-refresh-20261013/quality/evidence/decision-log-refs/uxm-production-skill-reuse.md)的“2. 真实技能、产物与可复用等级”。
 
@@ -647,7 +647,7 @@ Playbook采用固定commit `c7096e9aeee6bfa4fd3266274d321107e426185d`；准确�
 
 ### 概念与一手知识定位
 
-本项目概念正文沿[GLOSSARY的“UI设计依据与验收”及相关词义边界](../../GLOSSARY.md)，八类规范分权沿S2和DEC D014；精确API/值仍归项目真实源。下表官方链接来自RS08/09/11/15已保存研究，滚动网页没有固定commit，使用版本在各采用卡核实；DTCG链接显式绑定2025.10。研究原件含具体章节、方法适用面及反例，不把链接存在当标准已落实。
+本项目概念正文沿[GLOSSARY的“UI设计依据与验收”及相关词义边界](../../../GLOSSARY.md)，八类规范分权沿S2和DEC D014；精确API/值仍归项目真实源。下表官方链接来自RS08/09/11/15已保存研究，滚动网页没有固定commit，使用版本在各采用卡核实；DTCG链接显式绑定2025.10。研究原件含具体章节、方法适用面及反例，不把链接存在当标准已落实。
 
 | 概念／知识 | 准确官方入口 | 到达条件／责任 |
 | --- | --- | --- |
@@ -725,15 +725,15 @@ Playbook采用固定commit `c7096e9aeee6bfa4fd3266274d321107e426185d`；准确�
 
 | 卡 | 先读的准确入口 | 条件读／开工落实 |
 | --- | --- | --- |
-| <a id="dev-c01"></a>[C01](#c01) | [init](../../skills/ui-project-init/SKILL.md)、[readiness](../../skills/design-source-readiness/SKILL.md)、[现consumer表](#local-methods)、[RS12～15](#rs12)、NORM、[SDD](#up-sdd)、[材料评估](#up-material) | 所选原包读material/production核对；首交条款/缺源/真实reader与已有规范逐项具名 |
+| <a id="dev-c01"></a>[C01](#c01) | [init](../../../skills/ui-project-init/SKILL.md)、[readiness](../../../skills/design-source-readiness/SKILL.md)、[现consumer表](#local-methods)、[RS12～15](#rs12)、NORM、[SDD](#up-sdd)、[材料评估](#up-material) | 所选原包读material/production核对；首交条款/缺源/真实reader与已有规范逐项具名 |
 | <a id="dev-c02"></a>[C02](#c02) | [RS01](#rs01)、[design-wiki固定Skill](#up-wiki)、material核对的知识链、DEC D002/D010 | 本卡计划安排经验生产及后续真实消费任务、来源权利/反例；不等C05/C09 |
-| <a id="dev-c03"></a>[C03](#c03) | [组件质量Map](../../skills/frontend-component-quality/SKILL.md)、[RS08/09](#rs08)、[任务模式RS11](#rs11)、ASSET、[概念表](#concept-nav) | Figma/Code Connect/Storybook、G grammar按实际分支读固定源/权限；真API/consumer另核 |
-| <a id="dev-c04"></a>[C04](#c04) | [readiness](../../skills/design-source-readiness/SKILL.md)、[隔离QA引擎/流程](../../skills/isolated-browser-qa/SKILL.md)、[RS02/03](#rs02)、[旧PB-T08教训](../workflowhub-ui-frontend-capability-20260904/evidence/research-pbt08-lessons.md) | style-ref-gen/G/Figma按选型到[固定源表](#upstream-methods)；具名合法源、评分模型、裁决和真实builder |
-| <a id="dev-c05"></a>[C05](#c05) | [原型](../../skills/frontend-prototype-render/SKILL.md)、[设计审查](../../skills/plan-design-review/SKILL.md)、[UI Designer八分工](#up-ui)、[Playbook公开方法](#up-playbook)、[RS03/05](#rs03) | 当前真实业务/资产/状态/viewport；Figma实际库权限及所用P0方法；本次原型答复 |
-| <a id="dev-c06"></a>[C06](#c06) | [组件质量](../../skills/frontend-component-quality/SKILL.md)、[Vercel完整固定源及ADR冲突](#up-vercel)、[四维工程报告](../workflowhub-ui-frontend-capability-20260904/evidence/engineering-quality-integration.md)、[RS09](#rs09)、[代码阶段入口](#local-methods) | 真实任务/设计/API/样式owner；删除侧、动效等按实际影响读[P0原件](#legacy-nav)，采用前补旧候选固定源 |
-| <a id="dev-c07"></a>[C07](#c07) | [frontend-testing](../../skills/frontend-testing/SKILL.md)、[隔离QA](../../skills/isolated-browser-qa/SKILL.md)、[fullstack验证](../../skills/fullstack-slice-testing/SKILL.md)、[RS05～07](#rs05)、S5/S6 | 所选[UES固定入口](#up-ues)及对应报告模块/失败实现；真实状态/业务oracle，a11y/P0按需 |
-| <a id="dev-c08"></a>[C08](#c08) | [SDD执行/更新](#up-sdd)、[材料OPTIMIZE](#up-material)、[RS13～15](#rs13)、NORM/ASSET、[组件质量](../../skills/frontend-component-quality/SKILL.md) | 真实旧新差异/owner/直接间接consumer/后续任务；设计/工程所选原Skill、Figma/Code Connect按分支 |
-| <a id="dev-c09"></a>[C09](#c09) | S4～S7、DEC D009/D012、[baseline原件](../workflowhub-ui-frontend-capability-20260904/evidence/pilot-baseline-design.md)、[fullstack](../../skills/fullstack-slice-testing/SKILL.md)、[隔离QA](../../skills/isolated-browser-qa/SKILL.md) | 早期实核两页及无稿真实业务；最终读C01～08实际交付/AC证据，偏差只追受影响具体源 |
+| <a id="dev-c03"></a>[C03](#c03) | [组件质量Map](../../../skills/frontend-component-quality/SKILL.md)、[RS08/09](#rs08)、[任务模式RS11](#rs11)、ASSET、[概念表](#concept-nav) | Figma/Code Connect/Storybook、G grammar按实际分支读固定源/权限；真API/consumer另核 |
+| <a id="dev-c04"></a>[C04](#c04) | [readiness](../../../skills/design-source-readiness/SKILL.md)、[隔离QA引擎/流程](../../../skills/isolated-browser-qa/SKILL.md)、[RS02/03](#rs02)、[旧PB-T08教训](../workflowhub-ui-frontend-capability-20260904/evidence/research-pbt08-lessons.md) | style-ref-gen/G/Figma按选型到[固定源表](#upstream-methods)；具名合法源、评分模型、裁决和真实builder |
+| <a id="dev-c05"></a>[C05](#c05) | [原型](../../../skills/frontend-prototype-render/SKILL.md)、[设计审查](../../../skills/plan-design-review/SKILL.md)、[UI Designer八分工](#up-ui)、[Playbook公开方法](#up-playbook)、[RS03/05](#rs03) | 当前真实业务/资产/状态/viewport；Figma实际库权限及所用P0方法；本次原型答复 |
+| <a id="dev-c06"></a>[C06](#c06) | [组件质量](../../../skills/frontend-component-quality/SKILL.md)、[Vercel完整固定源及ADR冲突](#up-vercel)、[四维工程报告](../workflowhub-ui-frontend-capability-20260904/evidence/engineering-quality-integration.md)、[RS09](#rs09)、[代码阶段入口](#local-methods) | 真实任务/设计/API/样式owner；删除侧、动效等按实际影响读[P0原件](#legacy-nav)，采用前补旧候选固定源 |
+| <a id="dev-c07"></a>[C07](#c07) | [frontend-testing](../../../skills/frontend-testing/SKILL.md)、[隔离QA](../../../skills/isolated-browser-qa/SKILL.md)、[fullstack验证](../../../skills/fullstack-slice-testing/SKILL.md)、[RS05～07](#rs05)、S5/S6 | 所选[UES固定入口](#up-ues)及对应报告模块/失败实现；真实状态/业务oracle，a11y/P0按需 |
+| <a id="dev-c08"></a>[C08](#c08) | [SDD执行/更新](#up-sdd)、[材料OPTIMIZE](#up-material)、[RS13～15](#rs13)、NORM/ASSET、[组件质量](../../../skills/frontend-component-quality/SKILL.md) | 真实旧新差异/owner/直接间接consumer/后续任务；设计/工程所选原Skill、Figma/Code Connect按分支 |
+| <a id="dev-c09"></a>[C09](#c09) | S4～S7、DEC D009/D012、[baseline原件](../workflowhub-ui-frontend-capability-20260904/evidence/pilot-baseline-design.md)、[fullstack](../../../skills/fullstack-slice-testing/SKILL.md)、[隔离QA](../../../skills/isolated-browser-qa/SKILL.md) | 早期实核两页及无稿真实业务；最终读C01～08实际交付/AC证据，偏差只追受影响具体源 |
 
 <a id="delivery"></a>
 

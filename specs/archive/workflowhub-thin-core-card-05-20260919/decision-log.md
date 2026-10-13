@@ -24,9 +24,9 @@
 
 ### 主输入（只读引用）
 
-- 母 PRD：`/Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md`，`### CARD-05 审查链替换(有证据门槛)`。
+- 母 PRD：`/Users/Hugh/Hugh/Project/workflowhub/specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md`，`### CARD-05 审查链替换(有证据门槛)`。
 - 母 PRD 共享定义：`SD-07 审查节奏`、`SD-08 独立替代审查(T-003)`、`SD-15 质量事实≠推进许可证`、`SD-17 两道人为门与零机器门禁`、`SD-16 过渡基线`。
-- 规划 decision-log：`/Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-thin-core-rebuild-planning-20260919/decision-log.md`，`OI-005`、`OI-013`、`OI-014`、`U-009#2`、`U-010#2/#3`、`Q13`、`T-003`。
+- 规划 decision-log：`/Users/Hugh/Hugh/Project/workflowhub/specs/archive/workflowhub-thin-core-rebuild-planning-20260919/decision-log.md`，`OI-005`、`OI-013`、`OI-014`、`U-009#2`、`U-010#2/#3`、`Q13`、`T-003`。
 - 全局审查配置：`/Users/Hugh/.config/workflowhub/config.json` 的 `wh_review.stages.*`。
 - 本机 build-code / verify-code 真实执行会话（取证材料，见 `research/`）。
 

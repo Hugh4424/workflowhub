@@ -8,8 +8,8 @@
 
 决定来源：该任务 `specs/workflowhub-thin-core-card-03-20260919/decision-log.md` 的
 T-006/T-007/T-010/T-011/T-012/T-014/T-015 与该任务 OI-002/OI-004/OI-010/OI-011。
-上位依据：母任务 `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:69-71`
-（SD-11 并行规则五件套）与 `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:93-95`
+上位依据：母任务 `specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md:69-71`
+（SD-11 并行规则五件套）与 `specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md:93-95`
 （SD-17 两道人为门与零机器门禁）。
 
 事实依据：三份真实会话审计 `/tmp/wh-card03-session-analysis/s0921a.md`、
@@ -32,7 +32,7 @@ card-07 的审计显示真正的开发在第 56 分钟就基本结束，之后 6
 重读率 2.9×（379 次读 / 129 个文件）、重复检索 3.3×
 （`/tmp/wh-card03-session-analysis/s0922a.md:316`）。
 
-与之对照，SD-11 五件套（`specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:70`：
+与之对照，SD-11 五件套（`specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md:70`：
 ①接口蓝图冻结 ②依赖感知调度 ③中心化验证瓶颈 ④worktree 隔离 ⑤并发上限 2–5 个子代理）
 的第 1、4、5 条在三份审计里没有任何对应故障记录；第 3 条方向相反——审计显示验证不是瓶颈，
 而是被重复触发：`/tmp/wh-card03-session-analysis/s0922a.md:229` 记录同一

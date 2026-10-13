@@ -6,14 +6,14 @@
 
 - **任务类型**：普通任务
 
-判断依据：母 PRD CARD-10「五阶段开工说明」（`specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:549`）逐字要求「以本卡创建**收口实施 task**」，其第③条明确 build-code 无新实现、仅缺口修复交回原责任卡；任务地图行（`prd.md:118`）将 CARD-10 登记为「总体集成验收」实施卡；规划拓扑（U-008：make-decision→build-prd，`prd.md:19`、`prd.md:240`）不适用于本卡。
+判断依据：母 PRD CARD-10「五阶段开工说明」（`specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md:549`）逐字要求「以本卡创建**收口实施 task**」，其第③条明确 build-code 无新实现、仅缺口修复交回原责任卡；任务地图行（`prd.md:118`）将 CARD-10 登记为「总体集成验收」实施卡；规划拓扑（U-008：make-decision→build-prd，`prd.md:19`、`prd.md:240`）不适用于本卡。
 
 - **task_id**：`workflowhub-thin-core-card-10-20260919`
 - **任务 worktree**：`<card-10-worktree>`
 - **分支**：`task/workflowhub/workflowhub-thin-core-card-10-20260919`
 - **基线 commit**：`be393a6ef10db7df919e01f194b47f8dd856d9b4`（外置 `task.json` 的 `baseline_commit` 逐字值）
 - **外置任务目录**：`<task-dir>/`，现有 `task.json`、`facts.jsonl`、`quality/{reviews,tests}`；`task.json` 另载 `target_repo_root=<target-repo>`、`activation_cohort=post`、`execution_mode=per_invocation`、`record_model=vnext-single-write`
-- **母材料（只读）**：`specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md`（698 行）与同目录 `decision-log.md`
+- **母材料（只读）**：`specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md`（698 行）与同目录 `decision-log.md`
 - **ui_applicability**：`non_ui`（`prd.md:545`：`ui_applicability=non_ui,无设计稿`）
 - **执行纪律**：合并依赖=中心化验证瓶颈、独占运行、不与任何卡并行（Group 3，`prd.md:543`、`prd.md:129`）；共享资源冲突=无共享写面、独占收口（`prd.md:544`）
 - **起草时间**：2026-10-05（宿主本地时间 17:56 CST）
@@ -243,7 +243,7 @@ Talk 第 1 轮未留存用户逐字原文（见 `## 需求变更记录` 的缺�
 | V 编号 | 说话人 | 上下文/来源 | 逐字文本 |
 | --- | --- | --- | --- |
 | V-001 | 用户 | Talk 第 1 轮（2026-10-05 make-decision 起草轮） | （缺口：第 1 轮无用户逐字原文留存；不得以改写摘要冒充引文。答复语义见 U-001..U-004 的「变更与处置」。第 2 轮的**选项选择**答复另见 V-012..V-014。） |
-| V-002 | 母 PRD | `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:603`（INTEG-3 上游变化注，2026-10-04，只注不改） | 上游变化注(2026-10-04,只注不改):CARD-09 已撤销「限制单次审查并发 provider 数」(CARD-09 decision-log D-001,FR-44/AC-44 撤销),本条中「并发限制/并发上限」的前提已不存在;本条是否改为「CARD-05 审查链与 CARD-09 资源/效率改动共存」由 CARD-10 owner 在其承接 task 中裁定。 |
+| V-002 | 母 PRD | `specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md:603`（INTEG-3 上游变化注，2026-10-04，只注不改） | 上游变化注(2026-10-04,只注不改):CARD-09 已撤销「限制单次审查并发 provider 数」(CARD-09 decision-log D-001,FR-44/AC-44 撤销),本条中「并发限制/并发上限」的前提已不存在;本条是否改为「CARD-05 审查链与 CARD-09 资源/效率改动共存」由 CARD-10 owner 在其承接 task 中裁定。 |
 | V-003 | 母 PRD | `prd.md:600-602`（INTEG-3 旧判据，作为被替代对象逐字保留） | 可观察结果:CARD-05 新审查链与 CARD-09 并发限制在同一审查基建上共存,SD-07 完整节奏点(build-plan 合并审查、每 phase、全 phase 集成、verify-code 终末代码审查)与并发上限同时成立。／失败判据:并发限制使应有审查节奏点缺失,或新审查链绕过并发限制,即失败。／证据:审查执行记录与并发采样记录的对照。owner=CARD-10。 |
 | V-004 | 母 PRD | `prd.md:543`（合并依赖） | - **合并依赖**:中心化验证瓶颈,独占运行,不与任何卡并行(Group 3)。 |
 | V-005 | 母 PRD | `prd.md:658`（停止规则，加固修订 R10） | CARD-10 通过后进入停止规则——只有真实用户问题或真实失败才触发新一轮修改,不做猜测式流程优化(2026-09-19 加固修订 R10) |
@@ -281,7 +281,7 @@ Talk 第 1 轮未留存用户逐字原文（见 `## 需求变更记录` 的缺�
 - 第二轮方向审查事实（只读引用）：`<task-dir>/quality/reviews/2026-10-05-014-make-decision-direction.json`（`version=wh-review-result.v1`、`status=available`、`outcome=completed`、`pair_status=complete`、`review_track=direction`、`subject_kind=document`、**12 条 findings / 1 条 blocking**）及同目录 6 份 provider `.output`（`2026-10-05-008..013-make-decision-document-provider-1..6.output`）；主题归并处置见 `## 审查处置` `DIR-R2-T1`..`T7`。
 - INTEG-1 事实面（只读核实，逐条见 U-013）：蓝图原件 `docs/contracts/card-01-stage-material-interface.md` 的历史版本（46 行、sha256 `7aa596fb7f7e794b6b25af831fcef5aa321de0dbe2576f6c7eb20e2986447e63`）与 HEAD 版本（761 字节、5 行、首行 `# 当前材料接口`、sha256 `1ab0afe45c9001e93ca95091d8bff848980c11f6f19810bd03d779214554df72`）；`runtime/task/task-topology.mjs` 在 HEAD ABSENT；CARD-06 迁移表 MT-7-078 的 NARROW/B7-P8 登记；CARD-07 `18b8134a` 的消费证据；CARD-03/04/05 无消费证据；四卡关闭时间与两次 2026-10-04 提交的时间关系。
 - 第一轮方向审查事实（只读引用）：`<task-dir>/quality/reviews/2026-10-05-007-make-decision-direction.json`（`status=available`、`outcome=completed`、`pair_status=complete`、20 条 findings / 1 条 blocking）及同目录 6 份 provider `.output`（`2026-10-05-001..006-make-decision-document-provider-*.output`）；该轮材料滞后事实与处置见 U-008、`## 审查处置`。
-- 母 PRD 原文：`specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md`（698 行），逐条行号见 `## 原始需求` 表第三列与 V-002..V-005、V-011。
+- 母 PRD 原文：`specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md`（698 行），逐条行号见 `## 原始需求` 表第三列与 V-002..V-005、V-011。
 - 现行工作流合同原文：`workflows/make-decision/SKILL.md:38`、`workflows/build-plan/SKILL.md:36`、`workflows/build-code/SKILL.md:22`、`:40`、`workflows/verify-code/SKILL.md:34`（V-006..V-010）；OCR 回退口径 `workflows/build-code/SKILL.md:28-30`。
 - CARD-09 侧撤销事实（只读引用）：`specs/archive/workflowhub-thin-core-card-09-20260919/decision-log.md:498`（D-001 撤销「限制单次审查并发 provider 数」、连带 FR-44/AC-44）、`:519`（D-022 拒绝限并发要求本身）、D-044（固定 600000 ms 墙钟截止改为不得设固定墙钟截止 + ownerloss guardian/显式取消收场）、D-046（审查请求文件内嵌整份材料=真冗余，改按路径引用）。
 - 母 PRD 侧同步事实：`prd.md:697` A 条（FR-44、AC-44 以「已撤销」一行标记替代原文，编号保留不复用；AC-51 收窄为只挂 FR-46）；`prd.md:692`（CARD-10 沿既有存在性核对及用户抽验权消费新增事实，总体套件/E2E/INTEG 主体、失败判据和 SD-07 历史表述不变）。

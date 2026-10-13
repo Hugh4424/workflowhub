@@ -39,8 +39,8 @@
 
 | 输入 | 路径 | 用途 |
 | --- | --- | --- |
-| 母任务 PRD（CARD-04 卡面与共享定义） | `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md`（只读） | 卡面 FR-16 至 FR-21、AC-16 至 AC-21、SD-05/SD-06/SD-13/SD-15/SD-17 |
-| 母任务 decision-log（原始需求） | `specs/workflowhub-thin-core-rebuild-planning-20260919/decision-log.md`（只读） | OI-004（验收标准可执行）、OI-013（零机器门禁）、D-001 |
+| 母任务 PRD（CARD-04 卡面与共享定义） | `specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md`（只读） | 卡面 FR-16 至 FR-21、AC-16 至 AC-21、SD-05/SD-06/SD-13/SD-15/SD-17 |
+| 母任务 decision-log（原始需求） | `specs/archive/workflowhub-thin-core-rebuild-planning-20260919/decision-log.md`（只读） | OI-004（验收标准可执行）、OI-013（零机器门禁）、D-001 |
 | 本卡 decision-log | `specs/workflowhub-thin-core-card-04-20260919/decision-log.md`（本文件，读写） | make-decision 唯一权威 |
 | 兄弟卡归档材料 | `specs/archive/workflowhub-thin-core-card-01-20260919/`、`-02-`、`-07-`（只读） | 返工取证与 AC 质量对照 |
 | 返工取证报告集 | `/tmp/wh-an/report-*.md`、`/tmp/wh-an/synthesis.md`、`/tmp/wh-an/session-inventory.md`（只读） | OI-001 的事实底座 |
@@ -63,9 +63,9 @@
 
 | ID | 原始需求（逐字要点） | 来源 | 关联 OI | 处置 |
 | --- | --- | --- | --- | --- |
-| R-001 | 「CARD-04 真实验收与有条件 TDD」：验收标准在 make-decision 即写成可执行形式（条件→系统必须做什么 + 可度量成功标准 + 至少一条失败或边界场景；写不出标 incomplete）；验收 oracle 与实现者分离（测试目录对实现者只读或隐藏）；通过必要条件含「改动前是红的」；机器产物按测试路线适用（硬要求=真实命令 + exit + output + 对应 oracle 证据，trace/JUnit/跳过计数仅在该路线适用时必需，不适用记 N/A + reason）；真实测试失败必修并复验；测试与验收类技能必须真实执行并留执行事实 | `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:322-352` | OI-002、OI-004、OI-005、OI-006、OI-007、OI-011、OI-016、OI-017 | covered（D-003 逐 AC 执行事实；D-007 测试资产体系化；承载 AC-16、AC-18、AC-20、AC-21） |
-| R-002 | 共享定义：SD-05 真实入口联通实跑才算整体完成（代码审查不等于功能验收）；SD-06 有效 RED（环境故障、配置不当、无意义断言不算 RED）、G-2 豁免须补可失败检查或写明理由与风险；SD-13 验收标准五段式；SD-15 质量事实不等于推进许可证；SD-17 零机器门禁（不依赖回执、哈希、快照、材料身份校验） | `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:25-96` | OI-006、OI-011、OI-015、OI-016 | covered（D-001 把已算出的真实事实接回给人看；G-2 豁免记录；承载 AC-20、AC-21） |
-| R-003 | 母任务 decision-log 的 OI-004（confirmed）：验收标准在 make-decision 就写成可执行形式；只有真实入口联通实跑才能宣称整体完成；**代码审查不等于功能验收**；验收 oracle 与实现者分离（测试目录对实现者只读或隐藏）；通过条件必须含「改动前是红的」；保留 trace、JUnit、跳过计数等机器产物；真实测试失败必须修复复验；测试与验收类技能必须被实际执行且执行事实被记录 | `specs/workflowhub-thin-core-rebuild-planning-20260919/decision-log.md` OI-004 | OI-004、OI-005、OI-007、OI-011 | covered（D-001、D-003；承载 AC-16、AC-21） |
+| R-001 | 「CARD-04 真实验收与有条件 TDD」：验收标准在 make-decision 即写成可执行形式（条件→系统必须做什么 + 可度量成功标准 + 至少一条失败或边界场景；写不出标 incomplete）；验收 oracle 与实现者分离（测试目录对实现者只读或隐藏）；通过必要条件含「改动前是红的」；机器产物按测试路线适用（硬要求=真实命令 + exit + output + 对应 oracle 证据，trace/JUnit/跳过计数仅在该路线适用时必需，不适用记 N/A + reason）；真实测试失败必修并复验；测试与验收类技能必须真实执行并留执行事实 | `specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md:322-352` | OI-002、OI-004、OI-005、OI-006、OI-007、OI-011、OI-016、OI-017 | covered（D-003 逐 AC 执行事实；D-007 测试资产体系化；承载 AC-16、AC-18、AC-20、AC-21） |
+| R-002 | 共享定义：SD-05 真实入口联通实跑才算整体完成（代码审查不等于功能验收）；SD-06 有效 RED（环境故障、配置不当、无意义断言不算 RED）、G-2 豁免须补可失败检查或写明理由与风险；SD-13 验收标准五段式；SD-15 质量事实不等于推进许可证；SD-17 零机器门禁（不依赖回执、哈希、快照、材料身份校验） | `specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md:25-96` | OI-006、OI-011、OI-015、OI-016 | covered（D-001 把已算出的真实事实接回给人看；G-2 豁免记录；承载 AC-20、AC-21） |
+| R-003 | 母任务 decision-log 的 OI-004（confirmed）：验收标准在 make-decision 就写成可执行形式；只有真实入口联通实跑才能宣称整体完成；**代码审查不等于功能验收**；验收 oracle 与实现者分离（测试目录对实现者只读或隐藏）；通过条件必须含「改动前是红的」；保留 trace、JUnit、跳过计数等机器产物；真实测试失败必须修复复验；测试与验收类技能必须被实际执行且执行事实被记录 | `specs/archive/workflowhub-thin-core-rebuild-planning-20260919/decision-log.md` OI-004 | OI-004、OI-005、OI-007、OI-011 | covered（D-001、D-003；承载 AC-16、AC-21） |
 | R-004 | 用户逐字（m00006 第 5 条）：以 i-kh.net 文章为参考，仔细设计整个 workflowhub 的验收标准、测试流程、真实验收，让每个通过 workflowhub 开发的项目有完整的单元测试和端到端测试，**而不是做一个功能补一点测试**，避免功能多了之后测试文件大量堆积、完全没有系统化考虑和优化 | 本会话用户消息 | OI-003、OI-008、OI-009、OI-010、OI-013 | covered（D-006 真实入口库存；D-007 测试资产体系化；承载 AC-16、AC-20） |
 | R-005 | 用户逐字（m00314）：希望 card-04 以 i-kh.net 文章为参考，仔细设计整个 workflowhub 的验收标准、测试流程、真实验收；让每个通过 workflowhub 开发的项目能有完整的单元测试和端到端测试；而不是做一个功能补一点，导致功能多了之后大量测试文件，完全没有系统化的考虑和优化 | 本会话用户消息 | OI-002、OI-003、OI-008、OI-009、OI-010 | covered（D-005 阶段末报告；D-007 测试资产体系化；承载 AC-16、AC-20） |
 | R-006 | 外部基准文章七层防御：L1 需求写对（让 AI 审需求与技术设计找缺口与意外交互）、L2 单测覆盖 >95% 且**不能让 agent 为自己刚写进去的 bug 顺手写一批能通过的测试**（5 步模式：先想用例、写用例、写实现、跑用例修问题、按需求回填缺口）、L3 人工测试不可替代、L4 大量自动化 E2E（最重要，理想在 PR、stage 环境、生产三处跑，**不是人工测试的替代品**）、L5 AI 代码质量专项 pass（单开一个 pass 专找一类问题）、L6 人 + AI PR review（AI review 会过度吹毛求疵，需再有一个 pass 剪掉无意义评论）、L7 监控告警 | <https://www.i-kh.net/p/if-ai-coding-is-lowering-your-code>（本地 `/tmp/wh-an/ref/ikh-7-layers.md`） | OI-003、OI-009、OI-013 | covered（D-003、D-007；覆盖率为诊断非门，见 `## 拒绝方案`） |
@@ -1120,7 +1120,7 @@ diff 规模：1 文件 +6 −1。修复后 `status --action=begin --stage=make-d
 ## 范围
 
 - **已收敛的交付范围（OPEN-001 逐字）**：「**已收敛**：卡面四项 + 测试资产落点/命名/规模规则 + 覆盖率口径 + 入口登记规则 + AC→阶段末报告翻译契约（step 5 outline-talk 第 1 批 Q1–Q2）」（`decision-log.md:2056`）。
-- **卡面来源**：母 PRD `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md`（只读）的 **FR-16 至 FR-21、AC-16 至 AC-21、SD-05/SD-06/SD-13/SD-15/SD-17**（`decision-log.md:37`）。
+- **卡面来源**：母 PRD `specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md`（只读）的 **FR-16 至 FR-21、AC-16 至 AC-21、SD-05/SD-06/SD-13/SD-15/SD-17**（`decision-log.md:37`）。
 - **本卡工作面**：`ui_applicability` 为 `non_ui`；工作面是 `workflows` 目录、`runtime` 目录、`tools` 目录、`tests` 目录与 `skills` 目录，**没有前端目录、没有路由、没有页面清单**，故 `page_scope` 类别在本卡没有适用单元（`decision-log.md:126`）。
 - **材料形态（post）**：`decision-log.md` + `spec.md` + `phases/index.md` + `phases/P<n>.md`；不产出 `plan.md`/`tasks.md` 双写（`decision-log.md:975`）。
 - **写面与兄弟卡硬边界**（`decision-log.md:53-55`）：
@@ -1404,7 +1404,7 @@ diff 规模：1 文件 +6 −1。修复后 `status --action=begin --stage=make-d
 
 ## 本卡自身的验收标准（AC-16…AC-21）
 
-母 PRD 已为本卡指定六条验收标准（`specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:335-340`，对应 FR-16..FR-21）。本卡在 make-decision 阶段即把它们写成可执行形式（R-001「验收标准在 make-decision 写为可执行」）。
+母 PRD 已为本卡指定六条验收标准（`specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md:335-340`，对应 FR-16..FR-21）。本卡在 make-decision 阶段即把它们写成可执行形式（R-001「验收标准在 make-decision 写为可执行」）。
 
 **分界（回答 detail 审查 #26）**：`validatePostPhaseContract` 的 17 个必填字段（`runtime/stage/stage-content-contracts.mjs:6918-6923`）是**机器必填**，必须在 build-plan 真实填出，填不出就是 build-plan 走不下去，没有 MISSING 余地；本节其余标 `MISSING — not established` 的项是**机器不校验**的，如实缺着，不补造、不阻断。
 
@@ -2503,8 +2503,8 @@ V-001 是现有 :26 明示「用户确认新方向（step 5 答复，逐字）�
 ## 来源归属勘误：SD-13 与可执行验收
 
 - **保留历史原文，不追认误引**：本文件原始需求 R-002（:67）把 SD-13 写成「验收标准五段式」；历史审查处置（:1727、:1749、:1785）沿用了这一前提。这些行保留作原始记录，读作当时的误归属，不再用来证明 SD-13 定义了五段式，也不因此抹去审查当时指出的追踪缺口。`spec.md` 上游覆盖账本原 SD-13 行亦按下述母来源更正。
-- **SD-13 的实际定义与分工**：`specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:77-79` 明定 build-prd 两个**命名可检查交付项**：①具体重构验收标准，含可观察成功/失败用例、所需证据、承接负责人，**由 CARD-10 执行**；②可测量的「无重复契约」标准，即同一事实只有一个权威文件，不得两个文件各自声明权威，**由 CARD-02 执行**。本卡不能把两项改写成本卡五段式验收，也不冒称已执行。
-- **本卡可执行验收的正确来源**：`specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:322-340` 的 CARD-04/FR-16/AC-16，以及 `specs/workflowhub-thin-core-rebuild-planning-20260919/decision-log.md:258-272` 的 OI-004，要求逐条写明**条件→系统行为、可度量的成功标准、至少一条失败或边界场景**；写不出须标 `incomplete`，不得伪造。按展示拆成更多栏（例如五栏）仅是本地排版，不是 SD-13 的权威五段定义，也不替代真实任务、真实入口与证据的验收。
+- **SD-13 的实际定义与分工**：`specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md:77-79` 明定 build-prd 两个**命名可检查交付项**：①具体重构验收标准，含可观察成功/失败用例、所需证据、承接负责人，**由 CARD-10 执行**；②可测量的「无重复契约」标准，即同一事实只有一个权威文件，不得两个文件各自声明权威，**由 CARD-02 执行**。本卡不能把两项改写成本卡五段式验收，也不冒称已执行。
+- **本卡可执行验收的正确来源**：`specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md:322-340` 的 CARD-04/FR-16/AC-16，以及 `specs/archive/workflowhub-thin-core-rebuild-planning-20260919/decision-log.md:258-272` 的 OI-004，要求逐条写明**条件→系统行为、可度量的成功标准、至少一条失败或边界场景**；写不出须标 `incomplete`，不得伪造。按展示拆成更多栏（例如五栏）仅是本地排版，不是 SD-13 的权威五段定义，也不替代真实任务、真实入口与证据的验收。
 
 ## 2026-09-27 ADR 编号迁移（当前执行索引）
 

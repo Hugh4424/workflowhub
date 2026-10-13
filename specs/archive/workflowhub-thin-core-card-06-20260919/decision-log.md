@@ -2,7 +2,7 @@
 
 - 任务：Card-06「薄核心删除与窄工具保留」（PRD 十卡拓扑 Group 2 先行串行卡）
 - Cohort：post ｜ 认证 worktree：`workflowhub-workflowhub-thin-core-card-06-20260919` ｜ 分支：`task/workflowhub/workflowhub-thin-core-card-06-20260919`
-- 权威来源：`specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md`（CARD-06 全文 + AC-27~32/52/53）与 `decision-log.md`（OI-003/006/012/013、L662-668、G-3 L857、L694 重访条款）
+- 权威来源：`specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md`（CARD-06 全文 + AC-27~32/52/53）与 `decision-log.md`（OI-003/006/012/013、L662-668、G-3 L857、L694 重访条款）
 - 本文档 append-only；更正见末节。
 
 ## 任务身份
@@ -106,7 +106,7 @@
 
 ## 原始声明层
 
-- 母 cohort 原始八点需求与 U-010 三点：见 `specs/workflowhub-thin-core-rebuild-planning-20260919/decision-log.md` L46-57、L113-115（OI/SD/R 体系唯一权威，本文档不复制原文，只按 ID 引用）
+- 母 cohort 原始八点需求与 U-010 三点：见 `specs/archive/workflowhub-thin-core-rebuild-planning-20260919/decision-log.md` L46-57、L113-115（OI/SD/R 体系唯一权威，本文档不复制原文，只按 ID 引用）
 - Card-06 直接来源条款：OI-003（L235-254）、OI-006（L297-316）、OI-012（L420-437）、OI-013（L439-458）、SD-12（损失清单四项）、保留工具删除职责节（L662-668）、Grill G-3（L857）、最小 runtime 重访条款（L694）
 - 阶段事实：本会话 ask_user_question 六批（T-001~T-006）真实回复为本文件唯一交互凭证来源
 

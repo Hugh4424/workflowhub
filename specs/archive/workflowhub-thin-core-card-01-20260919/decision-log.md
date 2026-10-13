@@ -8,7 +8,7 @@
 - task_id：workflowhub-thin-core-card-01-20260919
 - worktree：/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-01-20260919
 - branch：task/workflowhub/workflowhub-thin-core-card-01-20260919
-- 承接来源：母 PRD `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md` 的 CARD-01（prd.md L233-263），该 PRD 已 final（U-010 版，2026-09-19）
+- 承接来源：母 PRD `specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md` 的 CARD-01（prd.md L233-263），该 PRD 已 final（U-010 版，2026-09-19）
 - 原始要求来源：当前用户会话；本 decision-log 只记方向、边界、验收口径与交接
 
 选 `普通任务` 的理由：本卡要改的是入口、阶段拓扑、流程清单语义与门禁骨架位，这些都必须谈实现层落点才能被验收；`规划任务` 的提问边界明确禁止文件面、命令形态与 schema 形状类问题，会把实现细节整体推给 build-plan 自行猜测。
@@ -19,7 +19,7 @@
 
 ## 原始需求
 
-> 来源：`specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md` L233-263（CARD-01 卡片全文）。
+> 来源：`specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md` L233-263（CARD-01 卡片全文）。
 > 以下 R 编号沿用母 PRD「需求覆盖结论」逐条追踪表的编号，只摘取 CARD-01 责任范围内、或对本卡构成边界的条目；母 PRD 中归其他卡的 R 不在本表重复。
 
 | source_id | 原始需求/约束 | 来源引用/原文摘录 | 关联 D/处理状态 |
@@ -681,7 +681,7 @@
 
 ## Supersedes
 
-无。本卡为母 PRD `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md` 的 CARD-01 承接任务，母任务材料只读，不触发母任务 close。
+无。本卡为母 PRD `specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md` 的 CARD-01 承接任务，母任务材料只读，不触发母任务 close。
 
 材料层面：本文件是 2026-09-19 丢失版本的重建版，替代丢失版本作为本 task 的当前 `decision-log.md`；丢失事件本身作为 RK-007 事实保留。
 

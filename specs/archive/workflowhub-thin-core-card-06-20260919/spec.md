@@ -3,7 +3,7 @@
 > 本文件是本实施 task 的产品行为与全局实现设计权威。每个 Phase 的差异、精确命令和执行卡只在 `phases/P<n>.md`；索引只存指针。逐文件处置的唯一权威是 [attachments/migration-table.md](attachments/migration-table.md)（迁移表，冻结后只允许 append-only 补记）。验收正文只在 Appendix A，叙事区只引用 AC ID。
 
 - **功能名**：薄核心删除与窄工具保留
-- **来源**：`decision-log.md` ADR-001～021、OI-001～018、U-001～004、V-001～021；母 PRD `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md` CARD-06（FR-27～32/51/52、AC-27～32/52/53）
+- **来源**：`decision-log.md` ADR-001～021、OI-001～018、U-001～004、V-001～021；母 PRD `specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md` CARD-06（FR-27～32/51/52、AC-27～32/52/53）
 - **状态**：设计材料已于冻结记录 `d3cd1cdfc99304f6700cb0f5c8a26f331a33a458` 固定；023 的限定登记例外已获具体用户批准（原件 `quality/confirmations/2026-10-01-001-build-code-accepted.json`）。设计冻结与该具体授权分别按原件读回，本状态行不证明正式 build-plan 阶段完成或整体质量接受。
 
 ## 速读卡（30 秒）

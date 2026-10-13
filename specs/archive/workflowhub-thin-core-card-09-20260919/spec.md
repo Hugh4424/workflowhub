@@ -42,7 +42,7 @@
 | D-008、D-012 | D-008、D-012 | FR-C09-T1、AC-T1 | current；开工前对齐 | 无 |
 | D-027、D-029、D-042、D-044 | 同左 | FR-C09-T4、AC-T4 | current；①已由 main `9ba93e11` 满足 | 无 |
 
-母 PRD 正文：`specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:486-522`（`:489` 范围与非目标，`:491-499` FR，`:500-509` AC）。
+母 PRD 正文：`specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md:486-522`（`:489` 范围与非目标，`:491-499` FR，`:500-509` AC）。
 
 ## 1. 需求解释：问题与紧迫性
 

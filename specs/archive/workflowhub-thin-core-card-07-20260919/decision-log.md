@@ -36,7 +36,7 @@
 
 ### 主输入（本卡来源）
 
-- 母 PRD `### CARD-07 make-decision 头脑风暴平台改造`（`/Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md`，约 L425-455）。
+- 母 PRD `### CARD-07 make-decision 头脑风暴平台改造`（`/Users/Hugh/Hugh/Project/workflowhub/specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md`，约 L425-455）。
 - 规划 decision-log：OI-010（make-decision 改造为头脑风暴平台）。
 - 用户当面追加的需求（见下方 `需求变更记录`）。
 

@@ -5,7 +5,7 @@
 - 认证 worktree：`workflowhub-workflowhub-thin-core-card-08-20260919`
 - 分支：`task/workflowhub/workflowhub-thin-core-card-08-20260919`
 - baseline_commit：`7619db8e1601b620c695faf2f3c889fb5518f569`（main HEAD：已完成卡 CARD-01/02/03/04/05/07 的集成状态）
-- 母材料（只读）：`specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md`（CARD-08 正文 L456-L481）、同目录 `decision-log.md`
+- 母材料（只读）：`specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md`（CARD-08 正文 L456-L481）、同目录 `decision-log.md`
 - 在途兄弟材料（只读）：CARD-06 活动 worktree `/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-06-20260919`
 
 ## 任务身份
@@ -96,8 +96,8 @@
 本卡原始声明只存在于本节的引用与上方 U/V 行；不在此处复制第二份方向正文。
 
 - U-001/V-001 全文见「需求变更记录」与「逐字声明层」。
-- 母需求原文：`specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md` L456-L481（CARD-08 全卡）、L25-L95（SD-01..SD-17 共享定义）、L97-L188（任务地图与依赖拓扑）。
-- 母决策原文：`specs/workflowhub-thin-core-rebuild-planning-20260919/decision-log.md` L317-L336（OI-007）、L541（T-004）、L810（Q4(b)）、L817（Q11）、L668、L135。
+- 母需求原文：`specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md` L456-L481（CARD-08 全卡）、L25-L95（SD-01..SD-17 共享定义）、L97-L188（任务地图与依赖拓扑）。
+- 母决策原文：`specs/archive/workflowhub-thin-core-rebuild-planning-20260919/decision-log.md` L317-L336（OI-007）、L541（T-004）、L810（Q4(b)）、L817（Q11）、L668、L135。
 - 兄弟卡约束：CARD-06 `decision-log.md` L700-L716（ADR-015）、L685（ADR-014）、L718+（ADR-016）、L860（ADR-023）、L878（ADR-024）、L896（ADR-025）；`spec.md` L248（FR-THIN-006 显式幸存者）。
 - 母来源清单另含 D-001 L589 与 Grill L500；本卡以 decision-log.md:L668 的「跨会话只保留已决定、已完成且验证、未完成及证据位置」为直接权威表述，D-001 L589 与 Grill L500 为同源旁证。
 
