@@ -621,7 +621,7 @@ OI 编号与问题的逐字原文见 `log-archive-decision-outline.md`（YAML）
 | 短名 | 真实位置 |
 | --- | --- |
 | `log-archive-*.md`、`F-0xx-*.md` | task store `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-acceptance-flow-hardening-20261006/quality/evidence/`（调研件在其 `research/` 子目录） |
-| `prd.md` | `specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md`（另有 `specs/archive/` 下同名件） |
+| `prd.md` | `specs/archive/workflowhub-thin-core-rebuild-planning-20260919/prd.md` |
 | `phases/P6.md`（CARD-03） | `specs/archive/workflowhub-thin-core-card-03-20260919/phases/P6.md` |
 | 其余 `runtime/`、`skills/`、`tools/`、`tests/`、`docs/` 路径 | 本 worktree 根目录下同名相对路径 |
 
