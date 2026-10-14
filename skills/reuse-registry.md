@@ -43,8 +43,8 @@ UI governance records include an explicit owner, consumer, and delete condition.
 | audit-summary-carrier | 自研 | 已退役，无当前路径 | P0 bounded audit-summary contract；审计任务保留 |
 | requirement-lineage | 自研 | 已退役，无当前路径 | P0 requirement evidence contract；审计任务保留 |
 | workflowhub-multica-sync | 自研 | skills/workflowhub-multica-sync/SKILL.md | 固定 main 快照并做 Git 连通性预检，按阶段三件套审计 Multica 技能、依赖绑定和 agent 提示词；确认后才同步 |
-| ui-project-init | 自研 | skills/ui-project-init/SKILL.md | new/legacy 最小 UI 基线；owner/consumer/deletion 条件见 catalog |
-| design-source-readiness | 自研 | skills/design-source-readiness/SKILL.md | Design.md → Screen Read Map；不打分、不设 gate |
+| ui-project-init | 自研 | skills/ui-project-init/SKILL.md | version 2.0.0；三起点按类接线原专业 owner；consumer/deletion 见 catalog |
+| design-source-readiness | 自研 | skills/design-source-readiness/SKILL.md | 按本动作适用专业来源 → Screen Read Map；不打分、不设 gate |
 | frontend-prototype-render | 自研 | skills/frontend-prototype-render/SKILL.md | 真实组件渲染→任务预览/截图；降级须用户明确同意 |
 | frontend-component-quality | 外部改造适配 | skills/frontend-component-quality/SKILL.md + Vercel pinned guide | Component Quality Map；React/Next 只读内部 lens |
 
@@ -86,13 +86,19 @@ UI governance records include an explicit owner, consumer, and delete condition.
 - `test-routing-advisor` — adapted；build-plan 预判、build-code 真实范围变化时重判。来源 [AgentHub 固定快照](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/test-routing-advisor)，MIT。删除跨仓执行器，输出三档 JSON 并保留预判/重判事实。
 - `testing-system-blueprint` — adapted；build-plan 的 advisory 测试设计输入，供 build-code 按真实改动消费；不承担执行器、交付 gate 或第二控制面。来源 [AgentHub 固定快照](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/testing-system-blueprint)，MIT。
 - `backend-testing` — adapted；build-code 真实后端改动后调用。来源 [AgentHub 固定快照](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/backend-testing)，MIT。保留真实后端边界测试和报告字段，不新增执行器控制面。
-- `frontend-testing` — adapted；build-code 真实 UI 改动后调用。来源 [AgentHub 固定快照](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/frontend-testing)，MIT。保留状态/交互/UI 证据，owner 是 build-code 前端测试路由，consumer 是真实 changed files；适用 UI attempt 经官方 build-code seam 一次调用 isolated-browser-qa，绑定 Design/Experience 与 service/API/DTO identity、取消和 cleanup；不把 browser pass 当推进 gate，不新增 Runner；无阶段引用时可删除。
+- `frontend-testing` — adapted；build-code 真实 UI 改动后调用。来源 [AgentHub 固定快照](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/frontend-testing)，MIT。保留状态/交互/UI 证据，owner 是 build-code 前端测试路由，consumer 是真实 changed files；适用 UI attempt 经官方 build-code seam 一次调用 isolated-browser-qa，绑定本动作各类实际专业来源/版本/作用域与 service/API/DTO identity、取消和 cleanup；不把 browser pass 当推进 gate，不新增 Runner；无阶段引用时可删除。
 - `fullstack-slice-testing` — adapted；build-code 真实跨边界改动后调用。来源 [AgentHub 固定快照](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/fullstack-slice-testing)，MIT。保留真实 seam slice 和报告，不恢复强制 worktree/commit/release gate。
-- `isolated-browser-qa` — adopted；build-code controlled QA 与 verify-code UI 条件。来源为用户明确提供并授权迁入的本机 skill snapshot，审查快照 hash `ccfcbefcde46da585f1d627218965c573575f8e4d8ecd59fec2b028e22a981ef`；尚无公开 canonical URL。owner 是 browser QA 路由，consumer 是官方 build-code seam 与 verify-code；一次 invocation 绑定 task/material/snapshot/Design/Experience/service/API/DTO identity，取消、cleanup、blocked/unknown 必须保留；无 browser QA consumer 时可删除。
-- `ui-project-init` — native；build-spec 的 UI 分支强制消费。为新项目/历史项目建立最小设计源、组件边界、fixture 和 Preview 事实；owner 是 UI 交付合同，唯一 consumer 是 build-spec UI 分支；所有 consumer 迁移后才删除。
-- `design-source-readiness` — native；build-spec 的 UI 分支强制消费。只读项目级 `Design.md`，派生 Screen Read Map 和 bindable/not_bindable/unknown 事实；不打分、不设 gate、不复制设计源；唯一 consumer 是现有 `plan-design-review` 输入。
-- `frontend-prototype-render` — native；build-spec 的 UI 分支强制消费。只从真实组件输入生成任务级预览和截图，写入 `quality/evidence/`；降级为提示词包前必须取得用户明确同意。owner 是 build-spec，唯一 consumer 是 build-spec UI path；宿主原生能力替代且 consumer 迁移后删除。
-- `frontend-component-quality` — adapted；暂不直接接入阶段。Component Quality Map 支持 reuse/modify/extend-state-or-variant/add-local/extract-shared/remove-after-no-consumers；React/Next 只读 Vercel MIT 固定 commit `dd089a8c752c966dee8bf0f27cb625ba193ffd9e`；不替代 frontend-testing，不创建第二 workflow 或 gate。
+- `isolated-browser-qa` — adopted；build-code controlled QA 与 verify-code UI 条件。来源为用户明确提供并授权迁入的本机 skill snapshot，审查快照 hash `ccfcbefcde46da585f1d627218965c573575f8e4d8ecd59fec2b028e22a981ef`；尚无公开 canonical URL。owner 是 browser QA 路由，consumer 是官方 build-code seam 与 verify-code；一次 invocation 沿当前 task/spec/Phase 核实际适用专业来源与 service/API/DTO identity，取消、cleanup、blocked/unknown 必须保留；pre/history snapshot 只读；无 browser QA consumer 时可删除。
+- `ui-project-init` — native，version 2.0.0；现 build-plan UI trigger 消费，build-prd 经 readiness/render 读取来源指针。按三起点接线八类原专业 owner；职责与条件方法只读本入口「规范职责/方法」，fixture/Preview 的真实事实另由其执行 owner 留原件。owner 是 UI 专业规范接线作者；所有 consumer 经已审替代承接后才删除。
+- `design-source-readiness` — native；现 build-plan UI 分支与 build-prd 条件设计分支消费。沿 ui-project-init 读取本动作适用专业源，按类保 bindable/not_bindable/unknown、实际确认与缺口，派生 Screen Read Map；旧 Design.md/Experience.md 仅为有据历史/可信条款输入。不打分、不设 gate、不复制正文；owner 是 UI 来源只读作者，consumer 是现 plan-design-review 输入；consumer 经已审替代承接后可删除。
+- `frontend-prototype-render` — native；现 build-plan UI 分支与 build-prd 条件设计分支消费。按适用专业来源从真实组件/fixture生成任务预览和截图，沿 task 原件保命令/退出码/实际展示与用户答复；降级为提示词包前必须取得用户明确同意，降级同意不等于最终稿确认。owner 是当前 UI 方法主会话；两个当前 consumer 经已审替代承接后删除。
+- `frontend-component-quality` — adapted；现 build-plan/build-code/verify-code 的真实 UI 条件消费。Component Quality Map 支持 reuse/modify/extend-state-or-variant/add-local/extract-shared/remove-after-no-consumers，读适用专业源及真实 consumer；React/Next 只读 Vercel MIT 固定 commit `dd089a8c752c966dee8bf0f27cb625ba193ffd9e`。owner 是组件质量作者；consumer 经已审替代承接后可删除；不替代 frontend-testing，不创建第二 workflow 或 gate。
+
+本任务 C01 的固定在线方法参考由 catalog 的 ui-project-init.local_changes 现字段登记，未导入本地运行闭包：
+- SDD `000b04a2a3553bddcf991b3dc42f9a5a2746fa6f` 的 SKILL/execution 人读分责与更新方法，consumer 是⑥工程 owner 与本次 P6 应用。保现 spec/Phase/facts，不迁六材料双写/reopen。
+- 材料 `b62e87f3f91868033106b21f6398f0fd6d3d2043` 的 GUIDE/AUDIT 原能力分开：本次只有用途解释/PB旧规范输入盘点；定制 GUIDE 缺用户用途选择，AUDIT 未取得获准入口/资源操作范围，未运行原脚本或产出报告。许可grant未知与用途/操作授权缺口分列，原 owner 下一动作见 catalog。
+- UI Designer `c7317a841b6427360bc1b94151a03cf023e6643e` 四类原方法、固定 frontend-design、闭包和本地偏离沿入口条件指针与 catalog。tokens/IA/brief 上游 designer-skills `c259656c76d9758d7ead46b0d2f125cbe84f8665` 与固定 frontend-design 各有 Apache-2.0；states 单独副本/分发grant未知，不泛化许可。专业正文应用归 P7，尚未执行。
+本次实际查新/许可/闭包/query failure 为 task `quality/tests/2026-10-14-061-c01-p6-source-check.output` 与同名 `.json`；真实 SDD 应用/有界候选比较和 GUIDE 前置原件为 `quality/evidence/2026-10-14-134-c01-p6-method-application.md`。HTTP400是受控不存在路径拒绝，非真实上游故障。空 License 仅 grant 未核，当前003另不含copy/install/vendor；本次只引用阅读与项目事实原创结果，无外源副本。可读/登记/字面GREEN不宣实际能力完成或产品质量。
 
 ## 已吸收
 
@@ -158,3 +164,5 @@ UI governance records include an explicit owner, consumer, and delete condition.
 4. 更新 `local_changes`、`dependency_closure`、`last_reviewed_at` 和固定 commit。
 5. 同步 `THIRD_PARTY_NOTICES.md` 与局部 LICENSE。
 6. 跑 skill closure、bundle、stage prompt 和五阶段 smoke；再走 `wh-review` 异源审查。
+
+只引用外源的方法不加入本地 dependency_closure；许可/操作授权按单项核验后才允许资源导入。当前C01只更新登记与适用consumer，执行本Phase字面target及受影响UI contract，不因上述历史全套smoke描述跑全量回归；实际原件和正式审查沿既有owner，失败/unknown不改为采用效果。

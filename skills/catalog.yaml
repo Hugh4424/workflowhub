@@ -814,40 +814,98 @@ skills:
         authorization_basis: user explicitly supplied local source and authorized migration into workflowhub
         reviewed_at: '2026-07-14'
         review_outcome: accepted
-    local_changes: 搬入完整闭包；去个人绝对路径；owner 是 isolated browser QA，consumer 是官方 build-code controlled QA seam 与 verify-code；一次 invocation 绑定 task/material/snapshot/Design/Experience/service/API/DTO identity，blocked/unknown 保留 failure_reason，取消和 cleanup 必须可见；不新增 Runner；delete-condition 为 browser QA 路由退役或被唯一替代
+    local_changes: 搬入完整闭包；去个人绝对路径；owner 是 isolated browser QA，consumer 是官方 build-code controlled QA seam 与 verify-code；一次 invocation 按当前 task/spec/Phase 记录各适用专业来源/版本/作用域与 service/API/DTO identity，pre/history snapshot 只读保留，blocked/unknown 保留 failure_reason，取消和 cleanup 必须可见；不新增 Runner；delete-condition 为 browser QA 路由退役或被唯一替代
     dependency_closure:
       - skills/isolated-browser-qa
     update_policy: 上游暂无公开 canonical skill URL；维护本地快照并人工比较来源目录
   - name: ui-project-init
     path: skills/ui-project-init/SKILL.md
-    local_version: 1.0.0
-    last_reviewed_at: '2026-07-14'
+    local_version: 2.0.0
+    last_reviewed_at: '2026-10-14'
     status: native
     metrics_enabled: true
-    purpose: 为新项目和历史项目建立最小 UI 设计/组件基线
-    design_idea: new/legacy 只读盘点、首个页面限界和可回放 fixture
+    purpose: 为三种真实起点定位适用专业来源并接线原专业 owner
+    design_idea: new/legacy 按类复用真实源、缺口局部显露、实际 consumer 与适用范围可读
     standalone: true
     used_by_stages: [build-plan]
     upstream: []
-    local_changes: WorkflowHub 原生可搬运入口；owner 是 UI 交付合同，consumer 是 build-spec 的 UI 分支；delete-condition 所有 UI consumer 迁移后
+    local_changes: |
+      WorkflowHub 原生薄入口，version 2.0.0；owner 是 UI 专业规范接线作者。
+      consumer 是 workflows/build-plan/SKILL.md 的现 UI trigger，build-prd 经 readiness/render 读取同一来源指针。
+      八类职责及三起点只引用 skills/ui-project-init/SKILL.md「规范职责/方法」，各正文仍归原专业 owner；
+      delete-condition 为所有 UI consumer 由已审替代方法承接后。下列为在线方法参考登记，不是已导入的可运行 skill；
+      upstream=[] 保无外源代码导入，dependency_closure 只包含现仓内入口，不加入任何未安装资源。
+
+      SDD：原 owner WenjiaWang/spec-driven-production，Source=ModelScope，SourceURL 空；
+      固定 commit 000b04a2a3553bddcf991b3dc42f9a5a2746fa6f，
+      原方法 https://modelscope.cn/skills/WenjiaWang/spec-driven-production/resolve/000b04a2a3553bddcf991b3dc42f9a5a2746fa6f/SKILL.md；
+      同固定根 references/execution.md 在⑥分责或更新动作到达时完整读。
+      声明必需闭包为 SKILL.md、assets/templates/【模板】SDD 首轮需求输入文档.md、
+      assets/templates/【模板】Spec 评审文档.md、references/design-spec.md、experience-spec.md、
+      engineering-spec.md、collaborative-review.md、execution.md、sources.md（references/ 同目录）。
+      完整存在/身份核对见本任务061原输出；本次选用SKILL/execution全文已读，其余本次仅身份核验。
+      当前 consumer 为 P6真实分责/影响应用和 ui-project-init 的⑥前端工程 owner；P7正文应用尚未执行。
+      保现 spec/Phase/facts 分责，不迁六材料双写/reopen；无终端依赖的Markdown人读分支已实际应用134。
+      元数据 License 空，固定闭包无可核grant；复制/分发权限 unknown，由实际权利 owner 提供，
+      本任务确认003不覆盖复制/安装/vendor，005继续build-code未扩该操作。未复制不等于全部采用完成。
+
+      材料：原 owner WenjiaWang/material-agent-readiness-eval，Source=ModelScope，SourceURL 空；
+      固定 commit b62e87f3f91868033106b21f6398f0fd6d3d2043，
+      原方法 https://modelscope.cn/skills/WenjiaWang/material-agent-readiness-eval/resolve/b62e87f3f91868033106b21f6398f0fd6d3d2043/skills/material-agent-readiness-eval-markdown/SKILL.md。
+      同固定根 skills/material-agent-readiness-eval-markdown/ 下必需十一资源为 SKILL.md；
+      references/layer-model.md、assessment-profiles.md、audit-method.md、report-format.md；
+      scripts/scan_markdown.py、build-report.mjs、validate-report.mjs、readiness-model.mjs；
+      assets/material-agent-readiness-eval-markdown-report-template.html、report-locales.json。
+      GUIDE需全文原方法/layer-model/assessment-profiles；AUDIT另需原脚本、report方法和assets，
+      完整存在/身份核对见061，本次只全文读取GUIDE必读三件，未执行/复制scripts或assets。
+      consumer 为现材料准备执行者；本次134完成用途解释和PB旧规范输入盘点，
+      源方法要求用户先确认纯视觉组合还是完整交互组件实现：具名原答复未找到可复用选择，
+      定制GUIDE当前未完成，由用户/产品owner给真实选择后GUIDE执行者按原法继续，不从代码推用途。
+      AUDIT当前 unavailable：未取得获准执行入口/资源操作范围，无builder/validator/HTML或评分输出；
+      元数据 License 空且固定闭包无可核grant，复制/分发权限 unknown，由实际权利owner提供，
+      执行者须核具体操作授权和所用资源许可后执行固定原方法，不以空license断言所有阅读/执行违法。
+      GUIDE盘点不冒AUDIT；不自建评分器、validator、gate或替代原能力。P7新正文未交付不称已消费。
+
+      UI Designer：原 owner WenjiaWang/ui-designer，固定 commit c7317a841b6427360bc1b94151a03cf023e6643e，
+      共同原根 https://modelscope.cn/skills/WenjiaWang/ui-designer/resolve/c7317a841b6427360bc1b94151a03cf023e6643e/。
+      ②原方法 skills/design-tokens/SKILL.md、④skills/information-architecture/SKILL.md、
+      ⑦skills/design-brief/SKILL.md 各为单文件Markdown闭包，通知THIRD_PARTY_NOTICES.md说明来自
+      julianoczkowski/designer-skills@c259656c76d9758d7ead46b0d2f125cbe84f8665原样复制；
+      正确原根 https://raw.githubusercontent.com/julianoczkowski/designer-skills/c259656c76d9758d7ead46b0d2f125cbe84f8665/
+      下 design-tokens/SKILL.md、information-architecture/SKILL.md、design-brief/SKILL.md 与ModelScope字节一致，
+      原根 LICENSE 为Apache-2.0。固定skills/frontend-design/SKILL.md和同目录LICENSE.txt构成其闭包，
+      自带Apache-2.0；在②方向需要或⑦文案动作时读取，不以宿主同名技能代固定原件。
+      ⑤skills/ui-interaction-states/SKILL.md为单文件方法，optional agents/openai.yaml仅展示metadata；
+      此项为原包本地原创，无可核单独grant，副本/分发权限unknown，不能套其他子项Apache。
+      逐类实际许可/原文字节依据为本任务工程研究186–204与P3现入口45行；原件不镜像。
+      consumer/适用输入和本地偏离逐类在ui-project-init「四类固定在线方法」：
+      ②token owner、④IA owner、⑤交互owner、⑦内容owner；值留CSS，任务状态/权限恢复留task spec，
+      不强双主题/默认数值、新.design输出、重复访谈或机械全状态。各专业expert实际应用归P7，当前计划未执行。
+      维护者为当前采用登记owner，各权利owner补grant；所有条目只在线参考，未copy/install/vendor。
+
+      本次S3查新：061实际固定/current API各返回上述SDD/材料固定commit，仅在该UTC查询范围未显示更新，
+      不宣全市场无更新/最优；受控不存在路径HTTP400是查询失败反例，非上游事故或AUDIT失败。
+      实际原件在 task quality/tests/2026-10-14-061-c01-p6-source-check.output 及同名.json；
+      真实SDD应用/有界候选比较、GUIDE前置输入与具体未做项在 task
+      quality/evidence/2026-10-14-134-c01-p6-method-application.md。登记/可读/字面GREEN不能替实际采用或全AC。
     dependency_closure:
       - skills/ui-project-init
-    update_policy: 随 UI Contract 与新旧项目初始化事实变更人工审查
+    update_policy: 随实际三起点/专业 consumer 人工复核入口；到达固定外源条件时完整读所选原方法和必需闭包，逐项核许可/操作授权，查新比较和失败保原件，不自动追HEAD或复制；来源更新仅登记实际适用差异，现字段不授予能力执行许可
   - name: design-source-readiness
     path: skills/design-source-readiness/SKILL.md
     local_version: 1.0.0
-    last_reviewed_at: '2026-07-14'
+    last_reviewed_at: '2026-10-14'
     status: native
     metrics_enabled: true
-    purpose: 从项目级 Design.md 派生可读 Screen Read Map
+    purpose: 从本动作适用的真实专业来源逐类派生 Screen Read Map
     design_idea: bindable/not_bindable/unknown 与缺项可见，不打分不设 gate
     standalone: true
     used_by_stages: [build-plan]
     upstream: []
-    local_changes: WorkflowHub 原生只读 lens；owner 是 UI 交付合同，consumer 是 build-spec 的现有 plan-design-review；delete-condition consumer 迁移后
+    local_changes: WorkflowHub 原生只读 lens；owner 是 UI 来源只读作者，consumer 是现 build-plan UI 分支和 build-prd 条件设计分支的 plan-design-review 输入；按ui-project-init职责读实际路径/稳定节/version/作用域及各类缺口，旧Design/Experience只作历史或可信输入；delete-condition consumer 经已审替代承接后
     dependency_closure:
       - skills/design-source-readiness
-    update_policy: 随 Design.md Read Map 字段和 plan-design-review consumer 人工审查
+    update_policy: 随按类专业来源与实际 plan-design-review consumer 人工复核；不以单一Design.md身份替全部类，不复制原正文或增gate
   - name: frontend-prototype-render
     path: skills/frontend-prototype-render/SKILL.md
     local_version: 1.0.0
