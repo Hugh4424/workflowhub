@@ -2586,15 +2586,16 @@
       "destination": "skills/spec-specify/templates/spec-template.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "同左",
-      "owner": "B3/P4 / MT-3-050",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
+      "responsibility": "当前 spec.md 唯一模板资源，spec-specify 作者人读消费；C01 P5 将验收对象局部 checker 置于该既有模板，由 P4/P5 已声明 reader 接线，当前尚未产生该区块，不宣已运行。",
+      "owner": "spec-specify/templates 原 owner / C01 P5 T005；P3 只登记已有模板资源，不写 producer",
+      "consumer": "现 skills/spec-specify/SKILL.md 模板作者；已存在的 acceptance-object-required-fields 测试直接读取此模板并报告当前缺失。build-plan/verify-code 对象块真实消费仍待 P4/P5，不能用本登记冒运行效果。",
       "module_consumers": [],
       "named_data_readers": [
-        ".planning/2026-09-09-build-spec-and-build-plan/findings.md"
+        "skills/spec-specify/SKILL.md",
+        "tests/contract/acceptance-object-required-fields.test.mjs"
       ],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "MT-3-050 / NARROW"
+      "delete_condition": "模板资源保留其原 spec producer consumer；C01 局部 checker 替代旧仅指针对象规则，只有已有同职责 checker 完整承接全部真实 consumer 后由模板 owner 移除该块，不增 runtime 第二实现。",
+      "retention_basis": "MT-3-050 既有资源；C01 ADR-C01-009 / P5 T005 唯一 producer，P4/P5 实施与 P13 消费原件证明实际行为，当前缺项事实保留。"
     },
     {
       "source": "skills/spec-tasks/templates/index-template.md",
@@ -2790,18 +2791,19 @@
       "destination": "skills/ui-project-init/SKILL.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "宿主读（UI 组）",
-      "owner": "B3/P4 / MT-3-062",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
+      "responsibility": "C01/P3/T003 薄规范入口：定位八类真实源、作用域/version/owner/consumer/缺口，接线各原专业方法；不写八类正文，不新建规范维护 skill/阶段/机器 gate。精确值/API/资产仍原位引用，三起点逐类取源。",
+      "owner": "ui-project-init 原方法 owner / C01 P3 T003；各专业正文仍归项目事实原专业 owner，map 由本 P3 唯一持笔",
+      "consumer": "当前 workflows/build-plan/SKILL.md step5 与 skill-deps.yaml 的 ui_scope_existing_project_baseline 条件调用；build-prd 经现 readiness/render 与 spec-prd 作者间接消费来源/缺口；catalog/reuse-registry 与 ui-skill-contract 是既有发现/合同 reader。方法接线不宣 runtime 自动调用、完整专家产物或产品验收。",
       "module_consumers": [],
       "named_data_readers": [
         "skills/catalog.yaml",
         "skills/reuse-registry.md",
         "tests/contract/ui-skill-contract.test.mjs",
-        "workflows/build-plan/skill-deps.yaml"
+        "workflows/build-plan/skill-deps.yaml",
+        "workflows/build-plan/SKILL.md"
       ],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "MT-3-062 / NARROW"
+      "delete_condition": "薄入口职责由经独立审查的现原专业方法完整承接且上述真实 consumer 全部迁接后，由原 owner 删除；无实质来源只记该类缺口，不造空正文，不由登记新增许可或未来 actor。",
+      "retention_basis": "MT-3-062 保留职责；当前 C01 ADR-C01-014 / spec FR-C01-001 / P3 T003 将旧双正文 producer 替换为八类定位/接线。新项目 q20 缺真实输入保持 incomplete；固定外源引用不授权 copy/install/vendor。五 UI trigger 字面原位保留，reader/catalog 全迁仍分别由 P4/P6 承接。"
     },
     {
       "source": "skills/ui-project-init/skill-bundle.json",
@@ -4633,6 +4635,32 @@
       "named_data_readers": [],
       "delete_condition": "现契约退役或经独立审查的等效现consumer测试已覆盖全部所承接场景后删除重复测试；不删除历史RED/原始证据，不新增推进门",
       "retention_basis": "U-020/U-021、N22/N23、AC-C05AUD-26至29；补足现首12字段示例检查，不修改原 post-build-plan-missing-index 测试；创建前登记不证明执行通过"
+    },
+    {
+      "source": "tests/contract/acceptance-object-required-fields.test.mjs",
+      "destination": "tests/contract/acceptance-object-required-fields.test.mjs",
+      "status": "retain",
+      "role": "test_only",
+      "responsibility": "C01 已预写冻结的验收对象行为合同；直接运行真实模板中具名 checker，合法/缺五必填/空白/多缺/owner 缺省与保留反例。checker 本身由 P5 唯一模板 owner 交付，当前冻结目标 RED 不冒已实现。",
+      "owner": "tests/contract 原 owner；build-plan 预写冻结，后续具体测试变更须独立 TCR；P3 仅负责既有 map 登记",
+      "consumer": "现 Vitest 定向执行者；本任务 P5 对象 producer 与 P13 验收消费原断言。",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "只有该确认行为由经审查的替代合同完整承接，且真实定向执行/Phase 验收 consumer 均迁接后由测试 owner 移除；原失败和历史原件保留，不用登记改变 frozen oracle。",
+      "retention_basis": "build-plan 已创建且独立批准冻结的真实测试资源；C01 ADR-C01-009 / P5 T005，固定已确认行为，替代无。"
+    },
+    {
+      "source": "tests/contract/wh-review-public-entry-and-ref-resolution.test.mjs",
+      "destination": "tests/contract/wh-review-public-entry-and-ref-resolution.test.mjs",
+      "status": "retain",
+      "role": "test_only",
+      "responsibility": "C01 已预写冻结的公开入口/ref 行为合同；认证 worktree 下公开 review owner 解析顶层 ref，裸入口仅序列化，错误 hash/非认证 cwd 的真实失败边界。P10 只改既有方法说明，不由本登记改 runtime/resolver。",
+      "owner": "tests/contract 原 owner；build-plan 预写冻结，后续具体测试变更须独立 TCR；P3 仅负责既有 map 登记",
+      "consumer": "现 Vitest 定向执行者；本任务 P10 入口说明与 P13 验收消费原断言。",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "只有该确认行为由经审查的替代合同完整承接，且真实定向执行/Phase 验收 consumer 均迁接后由测试 owner 移除；原失败和历史原件保留，不用登记改变 frozen oracle。",
+      "retention_basis": "build-plan 已创建且独立批准冻结的真实测试资源；C01 ADR-C01-017 / P10 T010，固定已确认 public/ref 既有行为，替代无。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"
