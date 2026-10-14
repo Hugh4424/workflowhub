@@ -16,12 +16,12 @@ stage-skill-plan.json 仍在本技能原路径提供 required_skills/optional_sk
 
 本节解释现有输入，不新增必填字段：`stage` 指本次审查阶段，`materials` 是本次允许审查的完整材料；make-decision 用 `review_track` 区分方向与细节，mini-task 用现有 `review_kind` 区分审查面。材料名按当前阶段合同选取，例如 `raw_requirement`、`approved_direction`、`draft_spec_or_acceptance`。`host_provider` 已不参与读取或 reviewer 选择，旧调用者传入也不能用它排除或阻断来源。
 
-普通首轮审查不传 `task_path`、`project_name`、`task_id`、Workspace、Git、snapshot、revision、provider allowlist 或 result-storage 字段；旧调用者的额外 task/workspace 字段不成为审查门。现有方法第5条的未完成来源补派仍按其声明使用 `only_providers`、`dispatch_reason` 和原记录引用；本节不新增路由或补派接口。
+普通首轮审查的 request 对象不传 `task_path`、`project_name`、`task_id`、Workspace、Git、snapshot、revision、provider allowlist 或 result-storage 字段；公开 runtime 的任务认证 CLI 参数沿下方「现有接口」提供，不混入 provider 材料。旧调用者的额外 task/workspace 字段不成为审查门。现有方法第5条的未完成来源补派仍按其声明使用 `only_providers`、`dispatch_reason` 和原记录引用；本节不新增路由或补派接口。
 
 ## 输入与方法
 
 1. 接收本次实际 stage/track、允许范围与完整材料。方向盲审只看原始要求、客观事实、约束和非目标；细节审查读当前方向与细节；PRD 读实际任务地图/正文；代码面读声明的真实 diff、合同、lens 和相关验收原件。缺必要材料如实报 MATERIAL_INCOMPLETE，不补猜或擅读范围外文件。
-2. 按现有配置选择实际 provider/route，使用现有请求 owner 与阶段审查重点；先备齐可读材料，再调用。包封装/hash 是传输事实，不是人类确认或继续工作的许可证。材料已落盘为任务或工作树文件时写 `{ "ref": "<路径>", "sha256": "<hex>" }`，不再内嵌；读回校验 sha256。
+2. 按现有配置选择实际 provider/route，使用现有请求 owner 与阶段审查重点；先备齐可读材料，再调用。材料按下方「现有接口」区分公开入口的顶层 ref 解析与裸入口的完整字节内联，确认所有本次允许材料实际进入 packet。包封装/hash 是传输事实，不是人类确认或继续工作的许可证。
 3. 一次请求返回原始 provider 身份、传输状态、真实 findings、错误及覆盖限制。provider 只读本次提交材料，不访问真实仓库、父目录、Git、网络或宿主秘密，不派子代理或写文件。工具限制及已证明的 packet 内只读查看例外按本次全文提供的 `contracts/provider-protocol.md` 执行，不把宿主双轴分派搬进 provider。Temporary bundle 使用现有安全路径/清理，失败保持原错误，不能静默丢材料。
 4. 主会话保留一份真实 review 原件及执行回执，处置 fixed、rejected_invalid、accepted_risk 或 needs_human。finding 要有能回读的问题/根因/建议/证据；无效锚点标记留原件，内容仍由独立事实判断，不能自动删真实问题。build-code、verify-code 内严重问题自动优先修复，无法解决保留 incomplete 并继续可执行部分，最终 close 前展示实际损失和风险，不新增中间确认；其它阶段按其真实选择合同处理。仅已有绑定该 finding 的真实用户风险决定才可记 accepted_risk，持续实施授权不能代填风险接受。
 5. 请求只要已经返回语义建议，就不因修复或想追空 findings 重派同 scope 轮次。无语义结果且具体传输/材料问题已改变时，按原调用范围处理安全重试。恢复/长等待沿同一个实际请求，取消按现信号路径执行；本技能不新建异步对象或第二层生命周期。 明确补派仅用于原记录未 completed 的来源：提交非空 `only_providers`、`dispatch_reason` 和带 sha256 的 `supplements` 原记录引用；绑定相同材料与 subject，不重发已成功来源，不因空 findings 追派。补派只由人显式发起，不自动补派；按失败率自动降权同样不做（ADR-029、ADR-031）。
@@ -55,7 +55,17 @@ partial 不表示通过。原始私有 provider 文本保持在既有安全诊�
 
 ## 现有接口
 
-当前 CLI 保留 run、verify-final、doctor 的真实既有接口，按实际脚本参数调用；不要为方法改写发明新 flag/public command。正式审查原件由现有 `runtime/review/review-record-route.mjs` 单一 producer 保存；只读查询、parser/error、mini_task 路由及 contracts、runner/provider/source/helper/schema 仍归现有实现 owner，不由本方法另建流程或 writer。方法正文与接线登记分别由其 owner 维护，不以改文承诺 runtime/canonical/bundle 消费者运行等价。
+任务内保存正式审查走七类 public runtime 中的 `node tools/cli/stage-runtime.mjs review --action=record`，带当前真实 `--stage`、`--project`、`--task`、`--task-path` 和 `--input`；input 使用普通请求原件的实际路径。命令在该任务的认证 worktree 执行，非认证 cwd 拒绝并报 `CURRENT_WORKTREE_MISMATCH`，外层错误 code 可能为 `WRITE_IDENTITY_PREFLIGHT_FAILED`。`review-record` 是私有映射名，不作为公开命令调用。
+
+公开入口的 input JSON 外壳是 `{request:{stage,review_track,surface,materials}}`；`review_track` 仅在当前阶段需要区分审查轨道时提供，`surface` 为实际 document 或 code 面。request 的 stage 与 CLI 一致，materials 按当前阶段合同给完整内容，不能把外壳示意当成备齐材料；caller 不导入自写 result。
+
+现 `recordTaskReview` 调用 `resolveMaterialRefs`，只解析 materials **顶层**恰有 `ref`、`sha256` 两键的对象。ref 是实际文件相对路径，sha256 是其原字节的 64 位小写 hex；`quality/tests/`、`quality/evidence/` 取认证 task 根，其余取认证 worktree 根。读取校验 hash；绝对路径、空段、`.`/`..`、反斜杠、路径 alias 或非普通文件拒绝，不能静默替换字节。使用现可信只读 scope 时，ref 还须落在已批准精确范围；材料声明或路径存在不授予读取根/范围，普通单仓调用不新增 callback 前置条件。
+
+嵌套 ref 不递归读取，不能把 context_map/evidence_map 内的 ref 存根当作已投递正文。post build-plan 的独立 Phase 组包须将 `phase_authorities` 内联为 plain object，每个实际相对 Phase path 对应完整正文 string，并按 `phase_index` 执行索引匹配；顶层 JSON ref 只返回文件 string，不会自动变成这个 map。phase_index 可沿公开顶层 ref 读入完整文本。
+
+裸 `wh-review-cli.mjs run` 不解析 ref：它接收审查请求本身，没有公开入口的 request 外壳，材料必须先内联完整字节；ref 对象只会被 packet 序列化，不能冒文件已读。该旧 CLI 仍保留 run、verify-final、doctor 三个真实接口，按实际脚本参数调用；它们与公开七类 runtime 的职责分别保留，不新增 flag/public command 或 legacy bridge。
+
+正式审查原件由现有 `runtime/review/review-record-route.mjs` 单一 producer 保存；只读查询、parser/error、mini_task 路由及 contracts、runner/provider/source/helper/schema 仍归现有实现 owner，不由本方法另建流程或 writer。方法正文与接线登记分别由其 owner 维护，不以改文承诺 runtime/canonical/bundle 消费者运行等价。
 
 ## 写作与来源
 
