@@ -4,7 +4,7 @@
 读完要能：沿真实来源执行规范接线与迁移，定位唯一验收条件、文件写主和不能闭环的具体输入。
 
 - **来源**：[当前决定](/Users/Hugh/Hugh/Project/workflowhub-workflowhub-ui-frontend-c01-norm-init-20261014/specs/workflowhub-ui-frontend-c01-norm-init-20261014/decision-log.md)、[母PRD的C01及共享定义](/Users/Hugh/Hugh/Project/workflowhub-workflowhub-ui-frontend-c01-norm-init-20261014/specs/archive/workflowhub-ui-frontend-decision-refresh-20261013/prd.md#L73-L208)。产品目标与取舍归原件，本件承载产品行为和全局实现设计。
-- **状态**：build-plan草稿；当前实施计划尚待真实展示与用户确认，生产未实施。方向确认不等于当前计划/删除/Git/外部副本授权。
+- **状态**：build-plan形成时为草稿，实施计划尚待真实展示与用户确认，生产未实施；后续完整计划确认见[003确认原件](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c01-norm-init-20261014/quality/evidence/human-confirmations/2026-10-14-003-build-plan-approved.md)，当前实施与质量分别读[task facts](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c01-norm-init-20261014/facts.jsonl)及对应唯一原件，不从本形成时说明推当前执行态。方向确认不等于当前计划/删除/Git/外部副本授权。
 
 ## 速读卡（30 秒）
 
@@ -106,7 +106,7 @@ review公开入口与裸入口差异明确，契约固定现有行为；每步�
 - **PFACT-001**：状态 `verified`；当前旧reader和间接链真实存在。证据为[迁移原件](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c01-norm-init-20261014/quality/evidence/decision-log-refs/migration-surface-audit.md)及[工程实读](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c01-norm-init-20261014/quality/evidence/build-plan-engineering-research.md#L11-L19)。关联FR-C01-001/002、AC-C01-001/002。
 - **PFACT-002**：状态 `verified`；PaperBuilder具有旧规范/实现两起点，根Design/Experience/CONTEXT的条款原件与真实CSS/守卫有消费者。证据为[47条款原件](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c01-norm-init-20261014/quality/evidence/decision-log-refs/research.md)、[PB真实consumer实读](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c01-norm-init-20261014/quality/evidence/build-plan-paperbuilder-research.md#L125-L142)。关联FR-C01-004/006/010、AC-C01-001/002/004；它证明当前事实不证明迁移后有效。
 - **PFACT-003**：状态 `unknown`；真实新项目目标/方向/栈输入不存在。owner为未来真实项目owner/用户；影响FR-C01-001/004、AC-C01-001、OPEN-01/RISK-01，不能以两个例成功推整条通过。
-- **PFACT-004**：状态 `verified`；模板当前仅指针、无验收对象checker，public review有顶层ref resolver，裸入口不解析。证据为[工程接缝实读](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c01-norm-init-20261014/quality/evidence/build-plan-engineering-research.md#L15-L33)。关联FR-C01-003/007/008/009、AC-C01-003/006。
+- **PFACT-004**：状态 `verified`；build-plan形成时工程实读基线：模板当时仅指针、无验收对象checker，public review有顶层ref resolver，裸入口不解析。证据为[工程接缝实读](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c01-norm-init-20261014/quality/evidence/build-plan-engineering-research.md#L15-L33)。后续实现与质量读[task facts](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c01-norm-init-20261014/facts.jsonl)及对应唯一原件，本形成时基线不声明当前checker仍缺失。关联FR-C01-003/007/008/009、AC-C01-003/006。
 - **PFACT-005**：状态 `unknown`；两外部固定来源无可核复制许可grant，完整AUDIT合法执行入口未具备，UI Designer具名子技能不在本仓。owner为采用者；影响FR-C01-001/005、AC-C01-001/005、OPEN-02/RISK-03。可达性与闭包读取不证明合法运行。
 - **PFACT-006**：状态 `verified`；旧六指标原数据absent，用户q10已定本卡不真跑，Downloads/UI是选定新代、两代均非Git。证据[真实答复](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c01-norm-init-20261014/quality/evidence/decision-log-refs/talk-batches.md#L100-L116)、[现场事实](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c01-norm-init-20261014/quality/evidence/decision-log-refs/target-recon.md#L59-L93)。关联附加B/OPEN-05/06，不冒C01/C09 AC。
 - **PFACT-007**：状态 `inferred`；规范暂定小写specs/design、既有大写原型原位，可在case-sensitive系统分开布局。依据母U020与当前D风险，但未经用户确认、当前APFS无法证明Linux正确；缓存Docker内部clone检查已设计但尚未执行。关联FR-C01-010、AC-C01-004、OPEN-04/RISK-04；这是一处普通细节最小假设，不是新方向裁定。
@@ -216,6 +216,35 @@ action=reuse的对象是现AsyncStatePanel、UiDialog、UiDrawer及UiAsyncState/
 **选型与简化**：复用现技能、模板、真实CSS、task facts与七public入口。没有额外runtime对象执行器：模板内唯一具名JS块导出checkAcceptanceObject(input)，由两个方法消费者抽取实际字节运行；测试同样运行producer，不在测试重实现。它解决真实缺项不点名问题且不需要新脚本/CLI/schema/持久控制面；现同职责能力将来完整替代才移除。
 
 对象块marker为HTML注释中的精确标识`c01-acceptance-object-check`（注释起止语法按已冻目标源码）；输出`{ok, missing_fields, object}`，固定五字段顺序workspace/service/route/state/viewport；缺/空白按名列missing，owner省略/空白归用户，原值保留。消费者须传真实完整对象并保存执行输出；missing不可忽略，block未生成/导出错误不冒检查成功。实际接口以P5冻结测试与作者实读为准，若源不一致回规格owner修不另造resolver。
+
+#### 验收对象（模拟记录列表声明输入）
+
+此处填写P13原定模拟记录列表/详情准备中的列表对象；五项取自真实工作区、配置、入口、待验状态定义和规定尺寸，不是现场观察，也不将任何最小项写为N/A。数据形状与声明/观察界线沿[唯一模板验收对象节](/Users/Hugh/Hugh/Project/workflowhub-workflowhub-ui-frontend-c01-norm-init-20261014/skills/spec-specify/templates/spec-template.md:227)。
+
+```json
+{
+  "workspace": "/Users/Hugh/Hugh/Project/PaperBuilder-workflowhub-ui-frontend-c01-norm-init-20261014",
+  "service": "http://127.0.0.1:5175",
+  "route": "/simulations",
+  "state": "loading",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  }
+}
+```
+
+| 字段 | 真实来源 | 本次未观察范围 |
+| --- | --- | --- |
+| workspace | setup118已认证PB专用checkout `/Users/Hugh/Hugh/Project/PaperBuilder-workflowhub-ui-frontend-c01-norm-init-20261014`，本次原路径实读 | 不由本对象授予新的写入、Git或服务操作范围 |
+| service | [vite.config.ts](/Users/Hugh/Hugh/Project/PaperBuilder-workflowhub-ui-frontend-c01-norm-init-20261014/frontend/vite.config.ts:6)的host `127.0.0.1`与默认port `5175`；`PAPERBUILDER_F6_FRONTEND_PORT`可覆盖 | 此值是配置默认声明；当前环境覆盖、实际监听、health、API连通均未观察，不宣服务已启动 |
+| route | [App.tsx](/Users/Hugh/Hugh/Project/PaperBuilder-workflowhub-ui-frontend-c01-norm-init-20261014/frontend/src/App.tsx:138)真实`/simulations`入口接SimulationRecordsRoute | 未请求页面或观察路由成功；详情139–142需真实simulationId，当前不编造详情ID/URL |
+| state | [App.tsx](/Users/Hugh/Hugh/Project/PaperBuilder-workflowhub-ui-frontend-c01-norm-init-20261014/frontend/src/App.tsx:39)的RouteLoadingState与[SimulationRecordsRoute](/Users/Hugh/Hugh/Project/PaperBuilder-workflowhub-ui-frontend-c01-norm-init-20261014/frontend/src/App.tsx:85)的LazyRouteBoundary声明loading | 待验状态定义，非此刻页面状态；未获取真实列表数据或呈现该状态 |
+| viewport | [T05规定尺寸](/Users/Hugh/Hugh/Project/PaperBuilder-workflowhub-ui-frontend-c01-norm-init-20261014/specs/paperbuilder-v2-t05-realtime-market-footprint/spec.md:441)、同spec AC-UI-003/004（715–724）、[layouts fixture](/Users/Hugh/Hugh/Project/PaperBuilder-workflowhub-ui-frontend-c01-norm-init-20261014/specs/design/layouts.md:86)与[Playwright配置](/Users/Hugh/Hugh/Project/PaperBuilder-workflowhub-ui-frontend-c01-norm-init-20261014/frontend/playwright.config.ts:134)规定1440×900 | 规定的验收尺寸，非观察；不推CSS断点、视觉批准或任一页面已通过 |
+
+既有业务目标源为[T05-SPEC-004](/Users/Hugh/Hugh/Project/PaperBuilder-workflowhub-ui-frontend-c01-norm-init-20261014/specs/paperbuilder-v2-t05-realtime-market-footprint/spec.md:9)与只读归档[T04-SPEC-001-R1](/Users/Hugh/Hugh/Project/PaperBuilder-workflowhub-ui-frontend-c01-norm-init-20261014/specs/archive/paperbuilder-v2-t04-simulation-preflight/spec.md:12)：从模拟记录定位真实模拟，再进入详情/工作台核身份与输入来源；T04保保存/预检/明确开始边界。本次只提供源目标，不重开旧task、回写归档或套用历史进度/视觉批准/业务通过；缺真实详情ID、数据、权限与执行证据仍具名未完成。
+
+没有用户新指定owner，因此对象不填猜测的C11 owner，独立消费者沿已有唯一checker缺省输出“用户”；这不是风险接受。此处未运行checker、两方法/API、六入口、服务或浏览器；字段结构接纳与真实对象准备/服务健康/业务效果分别由原独立消费者观察，不能以本声明完成验收。
 
 规范来源→薄定位/接线→专家必要正文→reader本动作适用投影/按类identity→任务准备；断链/冲突/生成失败记录类名、源、影响、owner，不回旧双源。readiness仅组织Read Map，不冒观察采集器。
 
