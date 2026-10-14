@@ -196,7 +196,7 @@ function writePathIdentity(path, scope) {
 
 function hasAffirmativeCodeWrite(action) {
   // A prohibition applies to its clause, not to a later contradictory action.
-  return String(action ?? '').split(/[;；,，。\n]|\b(?:and|but|however|then)\b|但是|但|却|并且|同时|随后|然后|并/i).some(clause => {
+  return String(action ?? '').split(/[;；,，。\n]|\b(?:and|but|however|then|unless|except|otherwise)\b|但是|但|却|并且|同时|随后|然后|并/i).some(clause => {
     const affirmative = clause
       .replace(/\b(?:do not|don't|must not|never)\s+.*$/i, '')
       .replace(/(?:不得|禁止|无需|不)(?:产出|生产|编写|写|修改|更改|编辑|实现|新增|删除|重构|修复|调整|替换|迁移).*$/, '')

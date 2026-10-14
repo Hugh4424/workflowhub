@@ -360,3 +360,13 @@ test.each(['C09 owner reads baseline facts; TBD: absent measurement', 'C09 owner
   expect(result.ok).toBe(true);
   expect(result.facts.phase_rows.find(row => row.id === 'P2').task_ids).toEqual(['T002']);
 });
+
+// Regression for the existing readonly Action declaration seam, not a language parser.
+test.each(['unless','except','otherwise'])('C01 readonly conditional reversal remains an affirmative action — %s',async separator=>{
+ const f=await c01ReviewedScopeFixture({none:true}),original='read-only verification; do not produce or change code';
+ const check=action=>f.validate({...f.m,phases:{...f.m.phases,[target]:f.m.phases[target].replace(original,action)}}).errors.filter(error=>/Files \/ symbols must name owned write-set paths/.test(error));
+ expect(check('read-only verification; do not produce or change code '+separator+' you implement owned.mjs').length,'conditional reversal must not conceal an affirmative implementation').toBeGreaterThan(0);
+ expect(check('read-only verification; do not produce or change code '+separator+' you read the audit results'),'pure prohibition and readonly condition remain permitted').toEqual([]);
+ expect(check('只读核验实现，不修改代码'),'existing Chinese readonly semantics remain permitted').toEqual([]);
+ expect(check('只读核验实现，不修改代码；但实现 owned.mjs 新代码').length,'existing Chinese reversal remains rejected').toBeGreaterThan(0);
+});
