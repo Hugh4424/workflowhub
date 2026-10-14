@@ -16,6 +16,10 @@
 
 文档面用 wh-review；代码面默认 OCR，OCR 不可用（命令不存在（ENOENT）或版本低于1.12.9）如实记 unavailable/unknown，不换执行者，保留检测输出与原始失败；版本检测其它错误不推断未安装。architect-code-review 是同源补充轴，独立执行，与 OCR 可用性无关；已装 OCR 失败、超时、取消、无效输出、零成功路或空 findings 均保留原始事实。三审查点保留，真实未执行或不足独立数量保持 unavailable/incomplete，有效单源发现原来源照留。原始失败、晚 raw、取消与来源不被摘要覆盖。
 
+### 三审查点与结论真实性
+
+三审查点保留。审查「真的出了结论」须从原件同时读出：至少一路真实 `completed && parse_outcome === "ok"`、该路发现或空 findings 的原始件引用、未确认项 `material_coverage.undetermined` 与真实 `discarded_facts`（若有；无真实丢弃事实不制造占位）。缺一则报告无结论与原因，三条件齐不表示质量通过。OCR 不可用四件齐：检测输出、原始失败、实际执行者、覆盖限制，各沿唯一原件引用并注明保留位置。`material_coverage` 的 `read` 只放可靠读取证据，`unread` 为明确未送达或未打开，`undetermined` 为未报覆盖或不可证；不可证一律进 `undetermined` 不进 `read`。`read_confirmed` 未证保持 `null`／不适用，不新增 `material_coverage` 键。不得以 OCR 身份记 wh-review 结果；schema 版本不是执行者声明。architect-code-review 是同源补充轴，独立执行，与 OCR 可用性无关。字段依据、原件与覆盖事实按 `skills/wh-review/SKILL.md` 的输出和失败边界读取，不新增字段、门禁或校验器。
+
 ### 专业质量
 
 每个行为风险都必须落到可执行任务和真实 oracle，不能用任务数量、文件列表或测试命令字符串代替设计质量。**完成声明的上限 = 独立来源的结论**；该结论为 adverse 或 unavailable 时，只能声明到该结论允许的程度，不得把未验证的部分说成已完成；这只限制声明的措辞，不阻断同任务内的修复与后续安全工作。

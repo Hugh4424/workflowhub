@@ -298,9 +298,9 @@ Phase 边界由「可独立交付验收的单元」决定；写集是申报结�
 
 ### 审查真实性（TRUTH）
 
-- **FR-TRUTH-001**：审查「真的出了结论」= 三条件同时成立（至少一路真实 `completed && parse_outcome === "ok"` + 有原始件引用 + 未确认项 `undetermined` 与 `discarded_facts` 并存）；`read_confirmed` 未证保持 `null`；不可证一律进 `undetermined` 不进 `read`，关联 PFACT-004、PFACT-005、AC-007
+- **FR-TRUTH-001**：审查「真的出了结论」= 三条件同时成立（至少一路真实 `completed && parse_outcome === "ok"` + 有原始件引用 + 未确认项 `undetermined` 与真实 `discarded_facts`（若有；无真实丢弃事实时不制造占位）并存）；`read_confirmed` 未证保持 `null`；不可证一律进 `undetermined` 不进 `read`，关联 PFACT-004、PFACT-005、AC-007
   - **范围边界**：零新增字段；改 `skills/wh-review/SKILL.md` 与两份审查合同；不改历史 review 原件。
-  - **依据**：D-016、D-030、module-design/M3M7.md。
+  - **依据**：D-016、D-030、D-033、module-design/M3M7.md；用户146与提案145原件。
   - **场景**：SCN-004 的排除项
   - **验收**：AC-007
 
@@ -357,7 +357,7 @@ Phase 边界由「可独立交付验收的单元」决定；写集是申报结�
   - **关系**：被 `validatePostPhaseContract` 校验；被 `phases/index.md` 纯指针引用；被 build-code 逐 Phase 消费。
 - **审查结论三条件**：
   - **定义**：「有结论」的成立条件集合。
-  - **字段和约束**：至少一路真实 `completed && parse_outcome === "ok"`；有原始件引用；未确认项（`undetermined` + `discarded_facts`）并存。零新增字段。
+  - **字段和约束**：至少一路真实 `completed && parse_outcome === "ok"`；有原始件引用；未确认项（`undetermined` + 真实 `discarded_facts`（若有；无真实丢弃事实不制造占位））并存。零新增字段。
   - **关系**：决定 Phase 的审查面能否记为已出结论；不决定 AC 是否通过。
 
 ## 8. 数据和生命周期

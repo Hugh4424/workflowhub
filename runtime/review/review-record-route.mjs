@@ -229,6 +229,8 @@ export async function recordSimpleReviewRequest({taskDir,request,runRound=runSim
         duration_ms:member.timing?.duration_ms ?? member.execution?.timing?.duration_ms ?? null,
         usage, usage_status:usage === null ? "not_reported" : "reported" };
     });
+    // 不得以 OCR 身份记 wh-review 结果；schema 版本不是执行者声明。
+    // 记录身份、schema 版本与执行者声明不得互相顶替。
     const record={version:"wh-review-result.v1",...ordinary,task_id:manifest.task_id,...tuple,started_at:started,completed_at:completed,
       request:{...tuple,...submittedSubject,material_keys:materialKeys,material_id:materialId,...Object.fromEntries(["only_providers","dispatch_reason","supplements"].filter(key=>Object.hasOwn(request,key)).map(key=>[key,structuredClone(request[key])]))},provider_results:providers,findings,
       review_facts:{providers:providerFacts,material_bytes:materialBytes(request.materials),wall_clock_ms:Date.parse(completed)-Date.parse(started),

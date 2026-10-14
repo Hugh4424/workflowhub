@@ -480,3 +480,12 @@ U-003 最小决定：任务类型表述更正为普通任务（原件头部「�
 - **不做什么**：不改变 `reserveOutput`、`publishReceipt` 或 create-only 算法，不修改 `safe-write.mjs`、`task-store.mjs`、schema、公共命令或 stage 字段；不新增持久字段/状态/控制面，不删除或覆写历史、已发布记录及任何 immutable 原始回执。D-031 与085原件继续保留，原冻结测试和 oracle 强度不变。
 - **风险**：诊断若混入原始回执可能形成未经授权的持久事实；正常 reused/unknown 沿现有回复与 stage 文本，真实结算失败沿既有错误表达，不伪装为复用成功。P5/T014 实施者负责真实生产行为与失败路径，独立审查者核对；尚未实施、未测试或未审查部分不声明通过。领域术语 no change：沿用既有采集、原始回执、引用与诊断含义，不新增术语或 ADR。
 - **改动**：材料作者仅追加本决定、更新当前 `spec.md` 的 P5 接口职责与写集，以及 P5 卡的 T014 Files/Action/Boundary/Done 相关授权边界；生产 writer 为 P5/T014，新增私有结算职责的唯一 consumer 为 `tools/cli/stage-runtime.mjs` 的 capture 分支。owner、替代关系、必要验证和退出条件在现 spec 登记，不改责任登记 schema 或生成新的阶段许可。
+
+### D-033 — 保留真实 discarded_facts 若有，不制造占位（2026-10-14）
+
+- **做什么**：补回 M7 三条件第三项的真实范围：未确认材料 `undetermined` 与真实丢弃事实 `discarded_facts`（若有）一并保留；没有真实丢弃事实时不制造占位，有真实事实时必须保留。三条件仍同时成立，至少一路真实 `completed && parse_outcome === "ok"` 与有原始件引用两项硬条件保持原义。
+  - 真实来源：任务库根 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/design-execution-efficiency-20261014` 的 `quality/evidence/2026-10-14-146-p7-discarded-facts-condition-user.json`（sha256 `decbfa709b1e55e9007fbda79daba7c02ae9b6cb431ea75414dea0f3520ad3c0`）；当前 Codex chat `01a139be-b1e4-7b63-b15c-d809dc904fcb` 的真实 `send_user_message_question_reply`，questionItemId `["request_user_input_async","call_242f0ed79e054839832f368b9d3fd29f",0]`，答复原话「批准补回若有（推荐）」。展示提案沿 `quality/evidence/2026-10-14-145-p7-discarded-facts-condition-proposal.md`；原方案唯一原件 `quality/evidence/decision-log-refs/module-design/M3M7.md` 第三条件本有「若有」。
+  - 理由与取舍：本日志原 M7 收敛段与 spec 省略该限定，真实 writer 只在发生真实丢弃时保存该事实；用户选择补回来源原义，拒绝把没有该字段的记录机械读成三条件不齐。原 M7 正文与旧决定保留，新决定追加补充，不改历史事实。
+- **不做什么**：不降低其余两项硬条件或把执行过当质量通过；覆盖未知仍为 `undetermined`，`read_confirmed` 未证仍为 `null`，八个禁止自造字段与零新增字段保持；不改运行时、schema、历史原件、冻结测试/oracle、原索引或 P7 六路径生产写集。
+- **风险**：有真实丢弃事实却省略会丢 provenance；无真实事实却造占位会伪造证据。P7 实施者按当前记录逐项读回，独立审查者核真实来源与覆盖限制，未知不补成已读。领域术语 no change：只是恢复「若有」条件，沿用未确认项与丢弃事实的既有含义，不新增术语或 ADR。
+- **改动**：材料作者仅在当前 decision-log 追加本决定，在 `spec.md` 的 FR-TRUTH-001 与对应三条件定义、`phases/P7-审查结论可核.md` 的相同条件正文补回「若有」并明确不制造占位；机械导航和执行器描述按当前真实位置核正。消费者为 P7 实施者及独立审查者；生产实现仍沿原六文件、原冻结命令和 oracle，作者不声明实施或质量完成。
