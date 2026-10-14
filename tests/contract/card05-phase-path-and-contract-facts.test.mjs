@@ -229,3 +229,134 @@ test.each([
  expect(check(read),'readonly inspection of implementation/refactor result is not a production action').toEqual([]);
  expect(check(write).length,'inspection prefix cannot hide a later affirmative code action').toBeGreaterThan(0);
 });
+
+// Non-AC fact trace regression: declaration validator only, no filesystem grants or quality result.
+function c01NonAcFactTraceFixture() {
+  const m = materials(), phase = 'phases/P2-事实原件.md';
+  const taskRoot = '/controlled/task', paths = ['quality/evidence/baseline.md', 'quality/evidence/environment.md'];
+  const owned = paths.map(path => taskRoot + '/' + path), quoted = owned.map(path => '`' + path + '`').join('；').replaceAll('\`', '`');
+  // Match the current five-column trace shape; retain the ordinary accepted FR/AC task.
+  m.spec = m.spec.replace('| source | FR | AC | task | oracle |\n| --- | --- | --- | --- | --- |\n| R-001 | FR-001 | AC-001 | P1/T001 | ORACLE-P1 |',
+    '| source | FR / AC | task | oracle | consumer |\n| --- | --- | --- | --- | --- |\n| R-001 | FR-001 / AC-001 | P1/T001 | ORACLE-P1 | build-code reads README result |\n| U-FACT-01/U-FACT-02 | 附加Z，非产品AC | P2/T002 | ORACLE-FACT-PIN | C09 owner reads baseline and environment facts; absent measurements remain absent |');
+  m.spec += '\n## 附加Z — 基线事实（不计产品 AC）\nP2/T002 only records original baseline and environment facts for C09 owner; it is not a product acceptance condition. U-FACT-01/U-FACT-02 bind the input; ORACLE-FACT-PIN preserves absent measurements.\n';
+  m.index += '| `P2` | `' + phase + '` | `phase-p2` | ' + quoted + ' | `P1` | C09 input owner |\n';
+  let body = m.phases[target].replace('# Phase P1 — owned result', '# Phase P2 — baseline fact records')
+    .replace('- **Global spec**：`spec.md`', '- **Global spec**：`spec.md#附加z--基线事实不计产品-ac`')
+    .replace('- **Write set**：`README.md`', '- **Write set**：' + quoted)
+    .replaceAll('- **Dependency**：none', '- **Dependency**：P1')
+    .replace('- **Consumer**：build-code', '- **Consumer**：C09 input owner\n- **覆盖 AC**：附加Z；不计产品AC')
+    .replace('### T001 — deliver owned result', '### T002 — record original baseline facts')
+    .replace('- **Source / FR / AC**：R-001 / FR-001 / AC-001', '- **Source / FR / AC**：U-FACT-01/02；spec附加Z，非产品AC：只整理原事实，不形成产品验收条件')
+    .replace('- **Files / symbols**：`README.md` symbol: N/A — fixture source text', '- **Files / symbols**：' + quoted + ' symbol: N/A — task-owned documentation facts only')
+    .replace('- **Action**：return the owned result', '- **Action**：只读整理原baseline事实；不产出或修改生产代码；保存形成时与当前差异')
+    .replace('- **Inputs**：owned input and a negative case', '- **Inputs**：G-2文档无新增runtime；原baseline与环境输入，仅保事实不采实验结果')
+    .replace('- **Scenario / fixture or service**：owned local result', '- **Scenario / fixture or service**：G-2文档无新增运行行为；原始输入的具名只读整理')
+    .replace('- **expected_exit**：RED target nonzero; GREEN 0', '- **expected_exit**：客观检查预期0，不执行RED；结构接纳不等于GREEN')
+    .replace('- **RED target failure**：ORACLE-P1 assertion fails when result lost', '- **RED target failure**：ORACLE-FACT-PIN 断言 baseline facts preserves absent measurements\n- **RED evidence**：N/A — 文档无新增运行行为；风险：C09 owner误把fixed对象当collected导致收益比较失真；客观替代：具名pin复放和独立文档审查')
+    .replace('- **GREEN oracle**：ORACLE-P1 visible output assertion', '- **GREEN oracle**：ORACLE-FACT-PIN baseline facts preserves absent measurements')
+    .replaceAll('ORACLE-P1', 'ORACLE-FACT-PIN');
+  m.phases[phase] = body;
+  m.reviewReadScope = { taskRoot, repositories: [{ id: 'wh', sourceRoot: '/controlled/wh', paths: ['README.md'] }], evidenceFiles: paths.map(ref => ({ ref })) };
+  return { m, phase, owned };
+}
+test('C01 trace fact-only — source-bound non-AC task remains in graph without inflating FR/AC coverage', () => {
+  const { m, phase } = c01NonAcFactTraceFixture(), result = validatePostPhaseContract(m);
+  expect(result.errors, 'same source, addendum, task and oracle must be a legal fact trace').toEqual([]);
+  expect(result.ok).toBe(true);
+  expect(result.facts.task_count).toBe(2);
+  expect(result.facts.phase_rows.find(row => row.path === phase)).toMatchObject({ task_ids: ['T002'], frs: [], acs: [] });
+  expect(result.facts.fr_coverage).toMatchObject({ accepted_count: 1, covered_count: 1, accepted_ids: ['FR-001'], covered_ids: ['FR-001'] });
+  expect(result.facts.ac_coverage).toMatchObject({ accepted_count: 1, covered_count: 1, accepted_ids: ['AC-001'], covered_ids: ['AC-001'] });
+});
+test.each([
+  ['missing source', ({ m, phase }) => { m.phases[phase] = m.phases[phase].replace('U-FACT-01/02', 'N/A'); }],
+  ['wrong source suffix', ({ m, phase }) => { m.phases[phase] = m.phases[phase].replace('U-FACT-01/02', 'U-FACT-01/99'); }],
+  ['bare N/A reason', ({ m, phase }) => { m.phases[phase] = m.phases[phase].replace('spec附加Z，非产品AC：只整理原事实，不形成产品验收条件', 'N/A'); }],
+  ['wrong task', ({ m }) => { m.spec = m.spec.replace('| P2/T002 |', '| P2/T999 |'); }],
+  ['missing oracle', ({ m }) => { m.spec = m.spec.replace('| ORACLE-FACT-PIN |', '| |'); }],
+  ['wrong oracle', ({ m }) => { m.spec = m.spec.replace('| ORACLE-FACT-PIN |', '| ORACLE-WRONG |'); }],
+  ['missing consumer', ({ m }) => { m.spec = m.spec.replace('C09 owner reads baseline and environment facts; absent measurements remain absent |', ' |'); }],
+  ['fake non-AC row containing product IDs', ({ m }) => { m.spec = m.spec.replace('附加Z，非产品AC |', '附加Z，非产品AC FR-001 AC-001 |'); }],
+  ['ordinary method write set', ({ m, phase, owned }) => { const path = 'skills/method/SKILL.md'; m.index = m.index.replaceAll(owned[0], path); m.phases[phase] = m.phases[phase].replaceAll(owned[0], path); m.reviewReadScope.repositories[0].paths.push(path); }],
+  ['affirmative code mutation after readonly clause', ({ m, phase }) => { m.phases[phase] = m.phases[phase].replace('保存形成时与当前差异', '但是修改 owned.mjs 代码'); }],
+])('C01 trace fact-only protection — %s', (name, mutate) => {
+  const fixture = c01NonAcFactTraceFixture(); mutate(fixture);
+  const result = validatePostPhaseContract(fixture.m);
+  expect(result.errors.some(error => /Source \/ FR \/ AC must bind|Requirement-to-Task Trace.*P2\/T002/.test(error)), name + ' cannot bypass product trace obligations').toBe(true);
+});
+
+test.each(['unapproved fact file', 'scope absent'])('C01 trace fact-only scope protection — %s', name => {
+  const { m } = c01NonAcFactTraceFixture();
+  if (name === 'scope absent') delete m.reviewReadScope;
+  else m.reviewReadScope.evidenceFiles.pop();
+  const result = validatePostPhaseContract(m);
+  expect(result.errors.some(error => error.includes('P2') && error.includes('unsafe write set path: /controlled/task/quality/evidence/environment.md'))).toBe(true);
+  expect(result.facts.phase_rows.some(row => row.id === 'P2')).toBe(false);
+});
+
+
+async function c01ApprovedSubsetFixture() {
+  const f = await c01ReviewedScopeFixture(), declared = ['owned.mjs', 'picked.mjs', 'unapproved-1.mjs', 'unapproved-2.mjs', 'unapproved-3.mjs', 'unapproved-4.mjs', 'unapproved-5.mjs'];
+  const quote = String.fromCharCode(96), original = quote + 'owned.mjs' + quote, owned = declared.map(path => quote + path + quote).join('；');
+  f.m.index = f.m.index.replace(original, owned); f.m.phases[target] = f.m.phases[target].replaceAll(original, owned);
+  for (const [path, text] of Object.entries(asMap(f.m))) writeFileSync(join(f.f.materialRoot, path), text);
+  for (const path of declared) writeFileSync(join(f.f.wt, path), 'CURRENT ' + path + '\n');
+  writeFileSync(join(f.f.wt, 'extra.mjs'), 'APPROVED UNDECLARED MUST NOT BE CAPTURED\n');
+  f.scope.repositories[0].paths = declared.slice(0, 2);
+  return { f, declared };
+}
+test('C01 capture approved subset — real WH source captures two out of seven declared paths', async () => {
+  const { f, declared } = await c01ApprovedSubsetFixture(), result = f.attempt();
+  expect(result.error, 'approved intersection must reach real held-FD source capture').toBeNull();
+  expect(result.captures.find(row => row.id === 'wh')).toEqual({ id: 'wh', paths: declared.slice(0, 2), bytes: declared.slice(0, 2).map(path => 'repos/wh/' + path) });
+  expect(result.source.repositories.find(row => row.id === 'wh').selected_paths).toEqual(declared.slice(0, 2).map(path => 'repos/wh/' + path));
+  for (const path of declared.slice(0, 2)) expect(result.diff).toContain('CURRENT ' + path);
+  for (const path of declared.slice(2)) expect(result.diff).not.toContain('CURRENT ' + path);
+});
+test('C01 capture approved subset — approved undeclared source still stays outside packet', async () => {
+  const { f, declared } = await c01ApprovedSubsetFixture(); f.scope.repositories[0].paths.push('extra.mjs');
+  const result = f.attempt(); expect(result.error).toBeNull();
+  expect(result.captures.find(row => row.id === 'wh').paths).toEqual(declared.slice(0, 2));
+  expect(result.captures.find(row => row.id === 'wh').bytes).not.toContain('repos/wh/extra.mjs');
+  expect(result.diff).not.toContain('APPROVED UNDECLARED MUST NOT BE CAPTURED');
+});
+test('C01 capture approved subset — selected symlink and traversal grant are rejected by real owners', async () => {
+  const { f, declared } = await c01ApprovedSubsetFixture(), fs = process.getBuiltinModule('node:fs');
+  fs.unlinkSync(join(f.f.wt, declared[0])); fs.symlinkSync(join(f.f.wt, declared[2]), join(f.f.wt, declared[0]));
+  const alias = f.attempt(); expect(alias.error?.message).toMatch(/secure source capture failed/); expect(alias.captures).toEqual([]); expect(alias.diff).toBe('');
+  const traversal = f.attempt({ ...f.scope, repositories: f.scope.repositories.map(repo => repo.id === 'wh' ? { ...repo, paths: ['../outside.mjs'] } : repo) });
+  expect(traversal.error?.message).toMatch(/invalid exact repository scope/); expect(traversal.captures).toEqual([]);
+});
+
+
+test.each(['N/A', 'TBD', 'TODO', '待补充'])('C01 trace consumer placeholder — bare %s cannot stand for a named consumer', placeholder => {
+  const { m } = c01NonAcFactTraceFixture();
+  m.spec = m.spec.replace('C09 owner reads baseline and environment facts; absent measurements remain absent |', placeholder + ' |');
+  const result = validatePostPhaseContract(m);
+  expect(result.ok, 'bare consumer placeholder must not qualify for a non-AC fact trace').toBe(false);
+  expect(result.errors.some(error => /Source \/ FR \/ AC must bind|Requirement-to-Task Trace.*P2\/T002/.test(error))).toBe(true);
+});
+test.each(['N/A', 'TBD', 'TODO', '待补充'])('C01 trace consumer placeholder — named consumer describing %s remains valid', placeholder => {
+  const { m } = c01NonAcFactTraceFixture();
+  m.spec = m.spec.replace('C09 owner reads baseline and environment facts; absent measurements remain absent |', 'C09 owner reads baseline and environment facts; ' + placeholder + ' measurements stay absent |');
+  const result = validatePostPhaseContract(m);
+  expect(result.errors).toEqual([]);
+  expect(result.ok).toBe(true);
+  expect(result.facts.phase_rows.find(row => row.id === 'P2').task_ids).toEqual(['T002']);
+});
+
+test.each(['TBD: consumer not assigned', 'TODO: assign a consumer', '待补充：消费者尚未确定', 'N/A: no consumer assigned'])('C01 trace consumer assignment — unresolved %s cannot qualify', consumer => {
+  const { m } = c01NonAcFactTraceFixture();
+  m.spec = m.spec.replace('C09 owner reads baseline and environment facts; absent measurements remain absent |', consumer + ' |');
+  const result = validatePostPhaseContract(m);
+  expect(result.ok, 'unassigned consumer status cannot stand for a named receiver').toBe(false);
+  expect(result.errors.some(error => /Source \/ FR \/ AC must bind|Requirement-to-Task Trace.*P2\/T002/.test(error))).toBe(true);
+});
+test.each(['C09 owner reads baseline facts; TBD: absent measurement', 'C09 owner reads baseline facts; TODO: collect later', 'C09 owner reads baseline facts; 待补充：实际测量', 'TBD archive owner reads baseline facts'])('C01 trace consumer assignment — named description %s remains valid', consumer => {
+  const { m } = c01NonAcFactTraceFixture();
+  m.spec = m.spec.replace('C09 owner reads baseline and environment facts; absent measurements remain absent |', consumer + ' |');
+  const result = validatePostPhaseContract(m);
+  expect(result.errors).toEqual([]);
+  expect(result.ok).toBe(true);
+  expect(result.facts.phase_rows.find(row => row.id === 'P2').task_ids).toEqual(['T002']);
+});

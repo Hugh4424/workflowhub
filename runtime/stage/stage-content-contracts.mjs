@@ -428,6 +428,19 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
     })));
   }
   const serializedPair = (ownerRef, currentRef) => phaseAncestors.get(currentRef)?.has(ownerRef) === true;
+  const design = markdownSections(spec, 2).find(({ heading }) => /^(?:实现设计（全局权威）|Implementation Design)$/i.test(heading));
+  const designSections = design ? markdownSections(`## ${design.heading}\n${design.body}`, 3) : [];
+  const designBody = Object.fromEntries(designSections.map(({ heading, body }) => [canonicalDesignHeading(heading), body]));
+  const traceLines = (designBody["Requirement-to-Task Trace"] ?? "").split(/\r?\n/).filter((line) => /^\s*\|/.test(line));
+  const sourceIds = value => identifiers(String(value ?? "").replace(/\b((?:R|U|PRD|CARD)-[A-Z0-9-]*-)(\d+)((?:\/\d+)+)\b/g,
+    (_, prefix, first, rest) => [first, ...rest.slice(1).split("/")].map(suffix => prefix + suffix).join("/")), /\b(?:R|U|PRD|CARD)-[A-Z0-9-]+\b/g);
+  const nonAcceptance = value => /(?:非|不计|不属于)[^；;。|\n]*\bAC\b/i.test(value ?? "");
+  const factTraceRows = traceLines.map(analyzeMarkdownTableCells).filter(cells => cells.length === 5
+    && sourceIds(cells[0]).length > 0 && nonAcceptance(cells[1])
+    && !/\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/.test(cells[1]) && identifiers(cells[1], ACCEPTANCE_CRITERION_ID).length === 0
+    && /^P\d+\/T\d{3,}$/.test(cells[2]) && /^ORACLE-[A-Z0-9-]+$/.test(cells[3]) && cells[4].trim().length > 0
+    && !/^(?:N\/A|TBD|TODO|待补充)(?:\s*[:：]|$)/i.test(cells[4].trim()));
+  const factTaskTraces = new Map();
   const taskOwners = new Map();
   const taskCards = [];
   for (const row of (rows ?? [])) {
@@ -532,9 +545,6 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
       }
       const cardFrs = identifiers(fields["Source / FR / AC"] ?? "", /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g);
       const cardAcs = identifiers(fields["Source / FR / AC"] ?? "", ACCEPTANCE_CRITERION_ID);
-      if (cardFrs.length === 0 || cardAcs.length === 0 || !/\b(?:R|U|PRD|CARD)-[A-Z0-9-]+\b/.test(fields["Source / FR / AC"] ?? "")) {
-        errors.push(`${expectedPath} ${taskId} Source / FR / AC must bind original source, FR, and AC`);
-      }
       const filePaths = inlinePaths(fields["Files / symbols"] ?? "").filter((path) => /[/.]/.test(path));
       const readOnlyTask = explicitNone && row.write_set.length === 0 && declaredWriteSet.length === 0
         && /(?:read-only|只读)/i.test(fields["Files / symbols"] ?? "")
@@ -623,6 +633,22 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
         for (const missing of g2Missing) errors.push(`${expectedPath} ${taskId} G-2 missing concrete ${missing}`);
       }
       const pureDocumentAlternative = requestsG2 && g2Missing.length === 0;
+      // A declared task-owned fact document still needs source, consumer and
+      // oracle trace; an explicit non-AC contract cannot invent product IDs.
+      const factPaths = scopeValid && declaredWriteSet.length > 0 && declaredWriteSet.every(path => {
+        const identity = writePathIdentity(path, reviewReadScope);
+        return identity.startsWith('["task-evidence",') && /\.md$/i.test(path);
+      });
+      const originalSources = sourceIds(fields["Source / FR / AC"]);
+      const factTraces = factPaths && pureDocumentAlternative && !hasAffirmativeCodeWrite(fields.Action)
+        && cardFrs.length === 0 && cardAcs.length === 0 && originalSources.length > 0
+        && nonAcceptance(fields["Source / FR / AC"])
+        ? factTraceRows.filter(cells => cells[2] === `${expectedId}/${taskId}`
+          && cells[3] === greenOracle && sameIds(sourceIds(cells[0]), originalSources)) : [];
+      if (factTraces.length === 1) factTaskTraces.set(`${expectedId}/${taskId}`, factTraces[0].join(" | "));
+      else if (cardFrs.length === 0 || cardAcs.length === 0 || originalSources.length === 0) {
+        errors.push(`${expectedPath} ${taskId} Source / FR / AC must bind original source, FR, and AC`);
+      }
       if (!pureDocumentAlternative && !behaviorExit) {
         errors.push(`${expectedPath} ${taskId} expected_exit must distinguish RED target failure from GREEN 0`);
       }
@@ -661,17 +687,13 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
     for (const id of card.frs) if (!acceptedFrs.includes(id)) errors.push(`${card.phase}/${card.id} task card references unknown FR: ${id}`);
     for (const id of card.acs) if (!declaredAcs.includes(id)) errors.push(`${card.phase}/${card.id} task card references unknown AC: ${id}`);
   }
-  const design = markdownSections(spec, 2).find(({ heading }) => /^(?:实现设计（全局权威）|Implementation Design)$/i.test(heading));
   if (!design) errors.push("spec.md requires Implementation Design (全局权威)");
-  const designSections = design ? markdownSections(`## ${design.heading}\n${design.body}`, 3) : [];
-  const designBody = Object.fromEntries(designSections.map(({ heading, body }) => [canonicalDesignHeading(heading), body]));
   for (const heading of ["Code Anchors", "Interfaces and Failure Semantics", "Requirement-to-Task Trace", "Global Verification Strategy"]) {
     if (!designBody[heading] || placeholderOrTemplateNoise(designBody[heading])) errors.push(`spec.md Implementation Design requires concrete ${heading}`);
   }
   if (designBody["Code Anchors"] && !/`[^`\n]*[/.][^`\n]*`/.test(designBody["Code Anchors"])) {
     errors.push("spec.md Code Anchors must identify a concrete path");
   }
-  const traceLines = (designBody["Requirement-to-Task Trace"] ?? "").split(/\r?\n/).filter((line) => /^\s*\|/.test(line));
   const traceRows = traceLines.filter((line) => /\b(?:R|U|PRD|CARD)-[A-Z0-9-]+\b/.test(line)
     && /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/.test(line)
     && identifiers(line, ACCEPTANCE_CRITERION_ID).length > 0
@@ -681,7 +703,8 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
   for (const id of acceptedFrs) if (!traceRows.some((row) => row.includes(id))) errors.push(`spec.md Requirement-to-Task Trace is missing FR: ${id}`);
   for (const id of acceptedAcs) if (!traceRows.some((row) => row.includes(id))) errors.push(`spec.md Requirement-to-Task Trace is missing AC: ${id}`);
   for (const card of taskCards) {
-    const trace = traceRows.filter((row) => row.includes(`${card.phase}/${card.id}`));
+    const factTrace = factTaskTraces.get(`${card.phase}/${card.id}`);
+    const trace = factTrace ? [factTrace] : traceRows.filter((row) => row.includes(`${card.phase}/${card.id}`));
     if (trace.length === 0 || card.frs.some((id) => !trace.some((row) => row.includes(id)))
         || card.acs.some((id) => !trace.some((row) => row.includes(id)))) {
       errors.push(`spec.md Requirement-to-Task Trace is missing ${card.phase}/${card.id} FR/AC binding`);

@@ -573,7 +573,7 @@ function captureScopedReviewSource(context,request,scope,attachmentRoot,captureS
   try{
     for(const repo of scope.repositories){
       const paths=[...new Set(selected===null ? repo.paths : selected.flatMap(path=>{
-        if(!isAbsolute(path))return repo.id==='wh' ? [path] : [];
+        if(!isAbsolute(path))return repo.id==='wh'&&repo.paths.includes(path) ? [path] : [];
         const rel=relative(repo.sourceRoot,path);return repo.paths.includes(rel) ? [rel] : [];
       }))];
       if(paths.some(path=>!repo.paths.includes(path)))throw new Error('SOURCE_UNAVAILABLE: Phase path outside approved read scope');
@@ -584,7 +584,7 @@ function captureScopedReviewSource(context,request,scope,attachmentRoot,captureS
       const diffPath=join(temporary,'changes.diff'),diff=captures.map(source=>readFileSync(source.diffPath,'utf8')).join('');
       writeFileSync(diffPath,diff,{flag:'wx',mode:0o600});
       const primary=captures.find(source=>source.repositoryId==='wh');
-      return {sourceRoot:scope.primaryRoot,capturedHead:primary.capturedHead,baseCommit:primary.baseCommit,diffPath,diffBytes:Buffer.byteLength(diff),changedPaths:captures.flatMap(source=>source.changedPaths??[]),sourceBytes:Object.assign({},...captures.map(source=>source.sourceBytes)),repositories:captures.map(source=>({id:source.repositoryId,captured_head:source.capturedHead,baseline_commit:source.baseCommit,changed_paths:source.changedPaths,selected_paths:source.selectedPaths,coverage_limit:'only exact scoped paths; other working-tree changes were not read or inventoried'})),dispose(){for(const source of captures)source.dispose?.();rmSync(temporary,{recursive:true,force:true});}};
+      return {sourceRoot:scope.primaryRoot,capturedHead:primary.capturedHead,baseCommit:primary.baseCommit,diffPath,diffBytes:Buffer.byteLength(diff),changedPaths:captures.flatMap(source=>source.changedPaths??[]),sourceBytes:Object.assign({},...captures.map(source=>source.sourceBytes)),repositories:captures.map(source=>({id:source.repositoryId,captured_head:source.capturedHead,baseline_commit:source.baseCommit,changed_paths:source.changedPaths,selected_paths:source.selectedPaths,coverage_limit:selected===null ? 'only exact scoped paths; other working-tree changes were not read or inventoried' : 'only current Phase declared and approved paths; other source content was not captured, read or inventoried'})),dispose(){for(const source of captures)source.dispose?.();rmSync(temporary,{recursive:true,force:true});}};
     }catch(error){rmSync(temporary,{recursive:true,force:true});throw error;}
   }catch(error){for(const source of captures)source.dispose?.();throw error;}
 }
