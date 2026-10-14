@@ -850,7 +850,7 @@ function captureOutputSettlement(input, recordDir, slug) {
       const receiptPath = ref(input.receipt_ref) ?? (explicitOutput?.endsWith(".output") ? explicitOutput.slice(0, -7) + ".json" : null);
       const prior = JSON.parse(read(receiptPath).toString("utf8"));
       const candidate = explicitOutput ?? ref(prior.output_ref);
-      if (!basename(receiptPath).endsWith(`-${slug}.json`) || ref(prior.output_ref) !== candidate) throw new Error("candidate receipt/ref/slug mismatch");
+      if (ref(prior.output_ref) !== candidate) throw new Error("candidate receipt/ref mismatch");
       const fields = ["argv", "cwd", "exit_code", "signal", "timed_out", "cancelled", "truncated", "error"];
       if (fields.some(key => JSON.stringify(prior[key]) !== JSON.stringify(observed[key])) || observed.timed_out || observed.cancelled || observed.error) throw new Error("different invocation outcome");
       const previousBytes = read(candidate), freshBytes = read(observed.output_ref);

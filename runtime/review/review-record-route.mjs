@@ -93,7 +93,11 @@ function priorProviderOutputs(dir, root, provider, taskId, discardedFacts, dropp
   const paths = new Set();
   for (const name of readdirSync(dir).filter(name => name.endsWith(".json"))) {
     let record;
-    try { record = JSON.parse(readProviderOriginal(join(dir, name), dir).toString("utf8")); }
+    try {
+      record = JSON.parse(readProviderOriginal(join(dir, name), dir).toString("utf8"));
+      if (record === null || typeof record !== "object" || Array.isArray(record))
+        throw coded("REVIEW_RECORD_INVALID", "historical review record must be an object");
+    }
     catch (error) {
       discardedFacts.push({ fact_kind: "provider_output_deduplication_unknown", dropped_key: droppedKey,
         reason: `deduplication: unknown; historical record ${relative(root, join(dir, name)).split("\\").join("/")}; ${error.code ?? error.name ?? "REVIEW_RECORD_UNREADABLE"}: ${error.message}` });

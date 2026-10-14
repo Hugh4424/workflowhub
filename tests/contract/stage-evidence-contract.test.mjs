@@ -127,3 +127,28 @@ test('ORACLE-P11-MUTANTS exact oracle rejects added/missing keys and false exit 
     {command:correct.command,exit_code:7}, {...correct,exit_code:0}, {...correct,command:'other'},
   ]) expect(()=>exactEvidence(mutant,receipt),'named in-memory mutant must be rejected').toThrow();
 });
+
+test('different capture slugs reuse identical invocation bytes while mismatched receipt refs stay unknown', () => {
+  const f=fixture(),argv=[process.execPath,'-e','console.log("owned-cross-slug-original")'];
+  const firstRun=invoke(f,'verify',{argv,slug:'first-owned-label'});
+  expect(firstRun.status,firstRun.stderr).toBe(0);
+  const first=JSON.parse(firstRun.stdout),original=readFileSync(first.output_ref),receiptBytes=readFileSync(first.receipt_ref);
+  const secondRun=invoke(f,'verify',{argv,slug:'different-owned-label',receipt_ref:first.receipt_ref,output_ref:first.output_ref});
+  expect(secondRun.status,secondRun.stderr).toBe(0);
+  const second=JSON.parse(secondRun.stdout);
+  expect(second.output_ref).toBe(first.output_ref);
+  expect(second.receipt_ref).not.toBe(first.receipt_ref);
+  expect(second.output_disposition).toContain('reused:');
+  const otherRun=invoke(f,'verify',{argv:[process.execPath,'-e','console.log("different owned original")'],slug:'other-original'});
+  expect(otherRun.status,otherRun.stderr).toBe(0);
+  const other=JSON.parse(otherRun.stdout);
+  const mismatchRun=invoke(f,'verify',{argv,slug:'mismatched-pair',receipt_ref:first.receipt_ref,output_ref:other.output_ref});
+  expect(mismatchRun.status,mismatchRun.stderr).toBe(0);
+  const mismatch=JSON.parse(mismatchRun.stdout);
+  expect(mismatch.output_ref).not.toBe(first.output_ref);
+  expect(mismatch.output_ref).not.toBe(other.output_ref);
+  expect(mismatch.output_disposition).toContain('deduplication: unknown');
+  expect(readFileSync(mismatch.output_ref)).toEqual(original);
+  expect(readFileSync(first.output_ref)).toEqual(original);
+  expect(readFileSync(first.receipt_ref)).toEqual(receiptBytes);
+}, 15000);
