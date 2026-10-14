@@ -283,7 +283,7 @@ export function checkAcceptanceObject(input) {
 - **来源边界**：原始 PRD/用户要求与 decision-log 只作为来源映射，不在实现设计中创建第二份需求账本。
 - **现状与目标差异**：示例现状为解析错误回退默认值，目标为位置错误；消费者CLI，真实源码证据待OPEN-01核实
 - **读取顺序**：先读 `src/config/load.ts` 的加载分支，再读 `src/cli/main.ts` 的错误输出分支；这些是示例路径
-- **代码锚点**：示例 `src/config/load.ts` 的 `loadConfig(path)` 与 `src/cli/main.ts` 顶层错误处理；真实符号待build-plan核实
+- **代码锚点**：示例 `src/config/load.ts` 的 `loadConfig(path)` 与 `src/cli/main.ts` 顶层错误处理；真实符号待build-plan核实。锚点写符号／签名与所在文件；行号只作定位辅助，标注为生成时刻快照、会漂移、不作契约。契约面由点名的符号与行为语义构成；坐标、判定阈值与字段级方案归本实现设计，逐 Task 的坐标与常量名归 Phase 卡，数值唯一来源为生产代码内的既有具名常量。
 - **运行条件**：示例采用Node ESM与单文件测试；实际版本、依赖和入口按仓库查证
 
 ### 接口与失败语义

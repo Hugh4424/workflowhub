@@ -23,17 +23,19 @@ Phase 内的 Task 是 task graph，不是可任意跳过依赖的步骤表。选
    - 规则锚：本 Phase 依赖的业务规则，逐条写「文件 + 章节标题逐字」或「FR/AC 编号 + 该段首句逐字」。锚只绑定所依段落；其它段落变化不构成本 Phase 事实作废的理由。
    - 材料变更影响：本次实施预计会改动 spec 与本 Phase 材料的哪些段落；不会改动的段落不在本 Phase 的审查与实现范围内。
    材料变化时按两行定位实际影响：无关变化继续并在 handoff 说明；所依段落变化才把受影响实施/测试/审查事实读为 stale 并重新核对。两行是人读解释，不作机器门。
-2. 消费计划已冻结的目标测试与 RED，保留原始失败；需要补行为测试时先写明确 oracle、实跑目标断言失败再实施。纯材料按 G-2 说明检查办法或真实不适用理由。冻结断言改变先走 test change request 和独立审查，不能弱化断言换绿。
+2. 消费计划已冻结的目标测试与 RED，保留原始失败；需要补行为测试时先写明确 oracle、实跑目标断言失败再实施。纯材料按 G-2 说明检查办法或真实不适用理由。冻结断言改变先走 test change request 和独立审查，不能弱化断言换绿。 按名改一个已先在 Phase 卡里点名的既有具名常量取值不触发 TCR（测试变更请求）；改断言表达式、期望方向、判定或评分逻辑仍须走既有 test change request 与独立审查。冻结 oracle 的单一来源是该 Phase 卡的预写测试与 `DO NOT TOUCH` 声明，按每任务声明一次；每次实际测试变更的来源是同卡「测试变更请求」字段加一份独立审查原件，变更后 oracle 身份（`ORACLE-…`）保持不变，不另立账本、不复制镜像、不按每个 oracle 另记一次账。免 TCR 只区分期望值来源与断言变更，不扩大写权限或任务授权，不降低断言强度、不取消独立审查、不改变 `DO NOT TOUCH` 的物理隔离要求。
 3. 在允许文件/符号内做最小实现，错误明确暴露。计划缺口一次列清影响、风险与需 owner 回答的问题，规格/Phase 交 build-plan，方向交 make-decision；不自行改材料。先继续不受缺口影响的安全部分，未知范围留给具名 owner 核实。 本步完成以改动全部落在允许写集内且无吞掉的错误为准，越界或吞错即本步未完成；对应 Task 的目标行为交付也是本步完成条件，未交付即本步未完成。
 4. 对真实 changed files 用 test-routing-advisor 选择 simple/feature/fullstack，记录与计划相同或改变的理由。选择 backend-testing、frontend-testing 或 fullstack-slice-testing 中适用的一条具体路线，研究真实入口、权限、数据、并发、超时、取消和恢复边界。
-5. 测试子代理按当前 Phase 及 Task 声明的面，逐面把 `gate_cmd` 与 `RED/GREEN gate_cmd` 的字面命令提交现有 `verify --action=execute`，不能从 Phase 文本自动抓命令运行。跑声明的针对性命令和必要相邻检查，用 `runtime/interface/run-command.mjs` 保存实际 cwd、argv、exit、signal、timeout/cancel、输出和清理事实，原始输出只存单份。build-code 的实际整数回执由运行时汇总进现有 stage evidence；保已有非空事实与游标，更新游标也不把 evidence 回落为 null。未执行或无整数退出保原回执与具体原因，不捏 exit0；契约校验的 contract_ok、contract_error_count、errors 片段、AC/FR 覆盖与 command_oracle_checks 随现 source.json 送审，只记录事实、不作失败门。每个未跑面明写“哪一面／卡在哪／什么条件下能跑”，不能只有 unavailable 或 incomplete。只跑受影响测试，不用无范围全量回归代替；环境、收集和配置失败不当成目标 RED，exit0 不自动证明业务通过。
+5. 测试子代理按当前 Phase 及 Task 声明的面，逐面把 `gate_cmd` 与 `RED/GREEN gate_cmd` 的字面命令提交现有 `verify --action=execute`，不能从 Phase 文本自动抓命令运行。跑声明的针对性命令和必要相邻检查，用 `runtime/interface/run-command.mjs` 保存实际 cwd、argv、exit、signal、timeout/cancel、输出和清理事实，原始输出只存单份。同一事实＝字节相同；同一命令、退出事实一致且内容比较确立相等的重跑不再新写输出，把既有原 ref 引入本次真实回执并注明「与 `<ref>` 同字节，未新写」；裁剪、脱敏、exit 等改变字节才新写并说明变化。命令或退出事实不一致、内容改变、候选原件不可读时保留新件、实际原因与 `deduplication: unknown`，不能仅凭字节数一致复用。证明范围按 `AGENTS.md`「证据硬规则」只写 `路径 + hash` 一行，三类字节保留例外为该文件随后会被改动或删除、外部服务返回体、一次性环境读数；临时重复输出的处理须按 `docs/standard-workflow.md`「证据只留原始件」的真实窄授权，保留 canonical 与每次真实 immutable 回执；正常 reused／unknown 诊断沿该节留在现有 CLI 回复与 source/evidence，磁盘 native 原始回执仍须完整真实且 output_ref 正确，正常诊断不写成 native error。build-code 的实际整数回执由运行时汇总进现有 stage evidence；保已有非空事实与游标，更新游标也不把 evidence 回落为 null。未执行或无整数退出保原回执与具体原因，不捏 exit0；契约校验的 contract_ok、contract_error_count、errors 片段、AC/FR 覆盖与 command_oracle_checks 随现 source.json 送审，只记录事实、不作失败门。每个未跑面明写“哪一面／卡在哪／什么条件下能跑”，不能只有 unavailable 或 incomplete。只跑受影响测试，不用无范围全量回归代替；环境、收集和配置失败不当成目标 RED，exit0 不自动证明业务通过。 按 `AGENTS.md`「卡住与升级」的适用范围分类该失败信号；属于外部不可重试时零重试，立即按该节格式报告并给可直接回复的选项，停止该外部失败路径，其余安全工作继续。
 6. 对声明的 command/service 验收执行真实场景，逐项对照 oracle、可观察效果与失败反例。记录每条 AC 的实际结果、原始输出、输入/环境和覆盖限制；真实服务缺失、未执行、部分或不可用保持原样，模拟效果不冒充外部效果。
    验收证据人读词表为 pass/fail/inconclusive/deferred/missing/inconsistent/incomplete/unavailable，来源 `runtime/evidence/acceptance-evidence-validator.mjs:6`；本词表只约束人读措辞，不改变现有 writer。未达成如实记为未达成并进失败事实清单，这一条不新增任何推进前置。
 7. 检查实际 diff 与声明写集、真实消费者、接口两端、状态、错误传播、并发原子性和资源释放。UI 按组件质量地图与真实页面验证状态和 DTO→ViewModel，浏览器 QA 先读取并执行 `skills/isolated-browser-qa/SKILL.md`，保留隔离、取消和自建资源清理事实。 仅声明写集没有任何浏览器可见面时，记 `N/A — 理由` 并引用写集；已声明适用而缺工具时记 unavailable。QA engine、route/场景、截图路径或 not_observed 的真实原因保在唯一原 ref，不伪造浏览器通过。来源、样本、场景、浏览器或截图缺失不宣称 UI 完成。
 8. 每个 Phase 对当前 diff、完整 AC、实际执行原件和审查重点发起一次独立代码审查：先读取 `skills/wh-review/SKILL.md` 的「Long-review host convention」。正常使用 OCR；不可用时的记录口径见下节。同时显式派一次独立上下文的同源补充审查，方法见「同源补充轴」。各轴真实终态、原件与覆盖限制可定位才算完成本次审查工作；没有额外全 Phase 集成审查点，不为追空 findings 重派未变范围。
 9. 主会话保留每条 finding 原文和真实处置。有效问题回原实施会话自动修复，先列受影响 file/case，再只跑该集合并写实际结果；严重问题优先修复，不以请求用户承担风险代替修复。确实无法在当前任务范围内解决时，写清影响、证据、原因和剩余选项，继续不受影响的工作；未处理保持 incomplete。只有已有绑定该 finding 的用户真实决定才可记 accepted_risk，不能自行接受风险或伪造通过。
-   重试前自述一行并写进本 Phase 的 task facts：「自上次以来我改了什么：<一句话>；失败信号：与上次相同／已变」。
-10. 所有实施任务结束后，按计划执行一次最终聚合，逐 AC 对账实现、真实效果、测试和未覆盖项；没有新改动、失败或疑点时不重复运行。最终聚合不证明 review pass，也不替代独立审查。
+   重试前自述一行并写进本 Phase 的 task facts：「自上次以来我改了什么：<一句话>；失败信号：与上次相同／已变」。 对上述适用范围内的反馈路径，只认改变继续条件的事实为新事实；同一失败信号在继续条件未改变时再次出现，判定该路径无界，就换独立上下文重开一次，仍出现则按既有格式升级并给可直接回复的选项，owner 是执行者。外部不可重试类直接走第 5 步的零重试报告，不进入同路重试。用户给新答复即复位，时间不构成复位条件；收到答复后按当前材料续跑，不新建任务或账本。
+   本 Phase 收口时，契约头 `Done` 逐条承接 AC：每条写 AC 编号、一个上述现成 8 值档位和一条具名证据指针，并在现有正文写「本 Phase 自带判据小结」：自己验了什么（附本 Phase `gate_cmd` 原件）、没验什么（逐条带档位）、未验项所需条件与具名 owner。逐条记录、实际审查事实和本 Phase 提交分别可定位，才完成本 Phase 的收口工作；档位不要求全部为 pass。
+   AC 的判定归属由 spec 的 AC 正文决定：实读判定方式、时点、执行 owner、所需条件和成功失败信号，不由依赖链位置决定。未参与该 AC 判定的 Phase 不得为该条写 pass，下游不得替上游补签。承接 AC 未达成时，按 `docs/standard-workflow.md`「专业质量」的「带欠账完成」口径显著标注、逐条保留缺口；继续同任务修复与后续安全部分。
+10. 所有实施任务结束后，按计划执行一次最终聚合，逐 AC 消费沿途已产生的结论原件，对账实现、真实效果、测试和未覆盖项。末 Phase 保留完整端到端串演，只作复核与必要未闭环 case 补充，不得成为任何 AC 的首次结论产生点；首次结论仍按 spec 的 AC 正文归属各承接 Phase。没有新改动、失败或疑点时不重复运行。最终聚合不证明 review pass，也不替代独立审查。
     对账时在独立上下文按当前项目声明的会话用量核对命令跑一次，当场展示时间窗、分账与计数，不落派生文件；修 finding 后只复验受影响 file/case 并写明理由。
 11. 用 spec-analyze 对照原始需求、当前材料、实现、测试、发现处置与用户可见结果。实施/事实问题在本阶段修，方向和作者材料仍交对应 owner。缺项明确写未启动、未执行、失败、不适用、unknown 或 unavailable，不用产物存在代替完成条件。
 12. 阶段末执行 stage-handoff，写清交付行为、测试和 AC 限制、原始发现与处置、风险及 verify-code 下一步。Phase 的局部交付摘要不触发每 Phase 一次 stage-end/复盘；只在整个 stage 收口时写阶段人读交接。
@@ -41,7 +43,7 @@ Phase 内的 Task 是 task graph，不是可任意跳过依赖的步骤表。选
 
 ## OCR 能力与缺省记录
 
-先检查 `ocr` 命令与 `ocr --version`。OCR 不可用（命令不存在（ENOENT）或版本低于1.12.9）如实记 unavailable/unknown，不换执行者，保留检测输出与原始失败；版本检测其它错误不推断未安装。architect-code-review 是同源补充轴，独立执行，与 OCR 可用性无关；已装 OCR 失败、超时、取消、无效输出、零成功路或空 findings 均保留原始事实。依赖真实 OCR 的测试在未安装时显式 skip 并披露；不把不可用写成空 findings。
+先检查 `ocr` 命令与 `ocr --version`。OCR 不可用（命令不存在（ENOENT）或版本低于1.12.9）如实记 unavailable/unknown，不换执行者，保留检测输出与原始失败；版本检测其它错误不推断未安装。architect-code-review 是同源补充轴，独立执行，与 OCR 可用性无关；已装 OCR 失败、超时、取消、无效输出、零成功路或空 findings 均保留原始事实。依赖真实 OCR 的测试在未安装时显式 skip 并披露；不把不可用写成空 findings。 同一不可用事实不再重复采集，由执行者自行停机并报告；此处只停止重复采集路径，审查 provider 各轴继续按上述既有口径执行，保留各轴终态与原失败，其余安全工作继续。
 
 代码审查输入保留 build-code 合同、provider 协议、stageReviewFocus 与所需 lens 正文、当前 diff、完整 AC 及实际执行原件；只搬方法合同，不能重建旧执行流程。材料外发前核范围、路径边界并脱敏私有路径/secret；没有真实只读边界的执行者记不可用。取消、单路失败、迟到 findings 与其它成功路的 provenance 分别保留，不能由首个结果取消其它路或把失败写成通过。
 
@@ -49,7 +51,7 @@ Phase 内的 Task 是 task graph，不是可任意跳过依赖的步骤表。选
 
 每 Phase 的 review-change 使用与正式审查相同的允许 scope：当前真实 diff、完整 AC、实际输出原ref及当前仓库规范；补充执行者在独立上下文按 Standards 与 Spec 两个镜头返回发现。仓库规范优先，工具已强制的项由工具核，不再当模型新发现。两镜头分别展示；OCR 与补充轴也并排展示，均不合并或跨轴排名。
 
-补充明确标为 `same_source_degraded`，不声称异源、不计异源 quorum、不替代 OCR。执行者返回原始文本而不自写文件；主会话用现有 `appendRecord` 在当前外置任务证据区保存一次，后续只引用该原件，不镜像。
+补充明确标为 `same_source_degraded`，不声称异源、不计异源 quorum、不替代 OCR。执行者返回原始文本而不自写文件；主会话先比较已有原件的实际内容：确立同字节时只引用既有原 ref 并标注同字节，不调用 `appendRecord` 新写副本；不存在相等原件或无法确立相等时，才用现有 `appendRecord` 在当前外置任务证据区保存一次，后续只引用该原件，不镜像；无法确立相等的真实原因与 `deduplication: unknown` 保留。
 
 现 stage row 保留真实 OCR 的 `review_origin`、失败及 `review_result_ref`；补充引用放既有 evidence/普通说明，不覆盖 OCR identity、不新增字段。单独读回补充事实时，`review_origin: same_source_degraded` 的 `review_result_ref.value` 为 `null` 且有 reason，原件仍由普通引用定位。已装 OCR 失败、超时或取消不被补充轴洗成通过；补充缺失、失败、取消、迟到 finding 各保原事实，继续安全修复，未测来源或空 findings 不冒成功。
 

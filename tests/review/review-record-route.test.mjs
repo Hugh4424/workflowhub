@@ -90,4 +90,19 @@ describe("ordinary review request/result lifecycle",()=>{
  it("waits for a live cancelled round to settle, retains its original facts and releases the lock only after cleanup",async()=>{const f=await fixture(),controller=new AbortController();let started,finish;const ready=new Promise(r=>started=r),cleanup=new Promise(r=>finish=r),trace=[];const first=record(f,async(_input,{signal})=>{trace.push("first-start");started();await cleanup;expect(signal.aborted).toBe(true);trace.push("first-cleaned");return result({provider_results:[member("codex/owned",{status:"cancelled",error:{code:"OCR_PROVIDER_CANCELLED",message:"owned cancellation"}})]});},request(),{signal:controller.signal});await ready;controller.abort();const second=record(f,async()=>{trace.push("second-start");return result();});await new Promise(r=>setTimeout(r,20));expect(trace).toEqual(["first-start"]);finish();const [a,b]=await Promise.all([first,second]);expect(trace).toEqual(["first-start","first-cleaned","second-start"]);expect(a.value).toMatchObject({status:"unavailable",error:{code:"REVIEW_CANCELLED"},provider_results:[{status:"cancelled",error:{code:"OCR_PROVIDER_CANCELLED"}}]});expect(b.value.status).toBe("unavailable");});
  it("records a typed throwing runner failure with unknown dispatch instead of inferring send from invocation",async()=>{const f=await fixture(),{value}=await record(f,async()=>{throw Object.assign(new Error("owned launch failure"),{code:"BROKER_SPAWN_FAILED"});});expect(value).toMatchObject({status:"unavailable",dispatch_state:"unknown",provider_results:[],findings:[],error:{code:"BROKER_SPAWN_FAILED",message:"owned launch failure"}});});
  it("keeps malformed foreign history passive and stores a new current result without a namespace gate",async()=>{const f=await fixture(),dir=join(f.task.taskPath,"quality","reviews","results");mkdirSync(dir,{recursive:true});const raw=Buffer.from('{"old-pair":');writeFileSync(join(dir,"old.json"),raw);const {value}=await record(f,async()=>result());expect(value.status).toBe("unavailable");expect(readFileSync(join(dir,"old.json"))).toEqual(raw);});
+ it.each(["null", '"foreign"', "1", "true", "[]", '{"broken":'])("keeps invalid historical JSON %s passive while saving sink and member originals",async history=>{
+   const f=await fixture(),dir=join(f.task.taskPath,"quality","reviews");mkdirSync(dir,{recursive:true});
+   const historical=join(dir,"foreign.json");writeFileSync(historical,history);let sinkRef;
+   const {value}=await record(f,async(_input,{onProviderOutput})=>{
+     sinkRef=await onProviderOutput({provider:"codex/owned",output:"current sink original"});
+     return result({provider_results:[member("codex/owned",{raw_output_ref:sinkRef,output:"current member original"})]});
+   });
+   expect(readFileSync(historical,"utf8")).toBe(history);
+   expect(typeof sinkRef).toBe("string");
+   expect(f.task.readRecord(sinkRef)).toBe("current sink original");
+   expect(readFileSync(value.provider_results[0].output_ref,"utf8")).toBe("current member original");
+   expect(value.discarded_facts).toEqual(expect.arrayContaining([expect.objectContaining({fact_kind:"provider_output_deduplication_unknown",reason:expect.stringContaining("deduplication: unknown; historical record quality/reviews/foreign.json")})]));
+   expect(value.error ?? null).toBeNull();
+ });
+
 });

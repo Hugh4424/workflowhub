@@ -22,8 +22,13 @@ Review the current accepted specification, its global implementation design, all
    against an exact current anchor and an explicit consumer.
 4. Trace state transitions and data flow, including invalid transitions,
    concurrency assumptions, and fail-loud behavior.
-5. Check task dependency order, file ownership, and whether every parallel
-   `[P]` claim has independent inputs and non-overlapping files.
+5. Check task dependency order and declared writers: every parallel `[P]` claim
+   needs independent inputs and non-overlapping paths within its batch; shared
+   paths across batches need real dependency edges and named earlier/later writers.
+   Explain boundaries and batches by independently deliverable and verifiable units,
+   not file ownership or technical layers. Read both granularity halves in
+   `skills/spec-plan/templates/phase-template.md`; report any unit split despite
+   a merge predicate, keeping this observation in the existing merged review.
 6. For every behavior change, inspect the pre-implementation RED source and
    the planned post-implementation GREEN: exact executable command, expected
    exit, evidence path, and observable oracle. Future GREEN execution is not

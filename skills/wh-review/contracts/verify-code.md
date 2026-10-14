@@ -6,6 +6,8 @@
 
 ## 审查顺序和重点
 
+终末审查核最终实际差异与完整适用 AC；终末面再宽也不改变每 Phase 的对象是本 Phase 的 diff ＋ 本 Phase 承接的 AC。逐 Phase 消费其原件及覆盖限制，旧审查或上游结论不能替本次对象；有结论／无结论加原因分别报告，不因未找到问题追加同 scope 轮次。
+
 固定顺序：代码入口 → 真实消费者 → 接口与状态 → 测试断言 → 实际结果 → 弱 oracle/假绿。
 检查跨 Phase 接口、生命周期、并发与取消、资源释放、权限、数据泄漏和真实失败路径。
 核对代码是否被实际调用，异常是否可见；重点寻找“测试通过但用户仍会失败”的具体原因。
@@ -20,6 +22,10 @@
 优先由已安装且符合 ADR-021 最低版本 1.12.9 的 OCR 执行同一代码审查面。
 OCR 不可用（命令不存在（ENOENT）或版本低于1.12.9）如实记 unavailable/unknown，不换执行者，保留检测输出与原始失败；版本检测其它错误不推断未安装。architect-code-review 是同源补充轴，独立执行，与 OCR 可用性无关；已装 OCR 失败、超时、取消、无效输出、零成功路或空 findings 均保留原始事实。
 不能把失败改写为空 findings。
+
+有结论三条件核对：终末审查原件须同时保留至少一路真实 `completed && parse_outcome === "ok"`、该路发现或空 findings 的原始件引用、未确认项 `material_coverage.undetermined` 与真实 `discarded_facts`（若有；无真实丢弃事实不制造占位）。缺一则报告无结论与原因；三条件齐不表示质量通过，终末审查回执不能替任一承接 Phase 的结论。
+
+OCR 不可用四件齐：检测输出、原始失败、实际执行者、覆盖限制各有具名原件或保留位置，缺项如实说明。`material_coverage` 的 `read` 仅放有可靠读取证据的材料，`unread` 为明确未送达或未打开，`undetermined` 为未报覆盖或读取不可证；不可证一律进 `undetermined` 不进 `read`。`read_confirmed` 未证保持 `null`／不适用，它是现有 provider 结果上的覆盖事实，不是新增 `material_coverage` 键。字段依据与记录身份按 `skills/wh-review/SKILL.md` 的冻结字段清单读取；不得以 OCR 身份记 wh-review 结果，schema 版本不能代替执行者声明。
 
 ## 输出与处置
 

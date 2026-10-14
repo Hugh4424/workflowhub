@@ -66,8 +66,11 @@ _Avoid_: 编号相邻即依赖、任意顺序的步骤表；方法见[spec-plan]
 **纵切（tracer bullet）**：贯穿一次交付实际所需层面的窄而完整增量，能够演示或验证用户可见结果。
 _Avoid_: 按 schema、API、UI 等层分别宣称交付。
 
-**写集与 owner**：写集是某次工作允许修改的明确范围，owner 是负责该内容或执行职责的持笔者；并行要求真实独立输入与写面。
-_Avoid_: 目录存在即授权、多个持笔者共同覆盖一份权威；边界见[spec-plan](<skills/spec-plan/SKILL.md#L37-L47>)。
+**写集与 owner**：写集是某次工作允许修改的明确范围，是**申报结果**而不是切分依据；owner 是负责该内容或执行职责的持笔者。**同一并行批次内**要求真实独立输入与写面；**跨批次**可以先后写同一路径，前提是依赖图上有真实边固定先后。
+_Avoid_: 目录存在即授权、同一批次内多个持笔者共同覆盖一份权威、把写面互斥当作切分依据；边界见[spec-plan](<skills/spec-plan/SKILL.md#L37-L47>)与 [ADR-0036](<docs/adr/0036-write-set-governance-exemption-and-serialized-sharing.md>)、[ADR-0038](<docs/adr/0038-decomposition-follows-deliverable-units.md>)。
+
+**可独立交付验收单元**：能被独立交付、独立验收（有自己的成功与失败信号）且不依赖尚未完成的其它单元才能判定的工作包；Phase 的边界由它决定，不由文件所有权决定。
+_Avoid_: 按文件、目录或技术层切出的假独立单元，把写面互斥当成切分依据；判据见[phase-template](<skills/spec-plan/templates/phase-template.md>)，取舍理由见 [ADR-0038](<docs/adr/0038-decomposition-follows-deliverable-units.md>)。
 
 **导航游标（phase_progress）**：帮助定位当前可续接位置的普通进度线索，不是完成证明或另一个历史进度权威。
 _Avoid_: 阶段成功、完整交付清单；游标与材料变化处理仍归[宪法 Q2](<CONSTITUTION.md#L98-L103>)和[build-code 材料影响](<workflows/build-code/SKILL.md#L21-L25>)。
@@ -88,6 +91,9 @@ _Avoid_: 工作许可证、摘要替原件、镜像数量证明质量；保留�
 
 **逐 AC 业务效果**：对每条验收条件的实际用户结果作出的有源判断，区分真实效果、模拟、未执行和覆盖限制。
 _Avoid_: 用代码审查结论或测试数量代替业务验收；职责见[verify-code](<workflows/verify-code/SKILL.md#L18-L22>)。
+
+**带欠账完成**：某 Phase 已按自身范围收口（开发、测试、独立审查、提交齐备），但其承接的验收条件尚未达成时的完成形态；必须显著标注，并逐条写明未达成项、所需条件与具名 owner，永不写成 pass。
+_Avoid_: 无标注的 completed、把带欠账完成读成通过、用它替代未闭环事实。
 
 ### UI 设计依据与验收
 
