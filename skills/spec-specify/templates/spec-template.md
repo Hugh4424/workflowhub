@@ -222,6 +222,45 @@
 
 填写验收对象与输入安排时读 `skills/spec-plan/SKILL.md#Test design and quality`；保留原 source ID、每条 FR/AC 到实际 Task/oracle 的关系。需要核完整作者产物能否被生产 reader 消费时，读 `skills/spec-plan/templates/phase-template.md#完整作者材料示例` 的四个完整块；那里给一条行为和一条纯文档 G-2 的完整组合，本文件不另造第二份样例。
 
+### 验收对象
+
+本节回答：哪个真实对象被检查，缺什么输入，谁提供或执行。
+
+当前 `spec.md` 在本节填写实际验收对象数据、每项来源与未观察范围；它属于现有规格，不另建验收对象文件。以下 JSON 只示范数据形状，null 表示仍缺真实输入，不能把示例、占位文字或 unknown 填充冒可用对象。最小五项始终是 workspace、service、route、state、viewport，依此顺序检查，不按 UI/non_UI 标签跳过；其余适用 S5 设计来源、代码/URL、数据、权限由真实任务合同补齐，具名不适用与未知分别说明。
+
+```json
+{
+  "workspace": null,
+  "service": null,
+  "route": null,
+  "state": null,
+  "viewport": null,
+  "owner": null
+}
+```
+
+workspace 来自认证工作区；service、route 来自真实服务配置/入口；state 来自实际待验状态，viewport 来自规定的验收尺寸或真实观察。配置入口、状态定义和规定尺寸不证明服务已启动或页面已观察。owner 未给、null 或空白时，执行结果明确为“用户”；已有非空 owner 原值保留。缺任一最小项时保 null/缺失及提供者、影响和下一动作，不编默认服务、路径或尺寸。
+
+下方代码仅是本模板的唯一 `checkAcceptanceObject(input)` producer；生成 `spec.md` 只填写上述对象数据，不复制此 JS 到 spec、Skill、workflow 或测试。消费者读取唯一 marker 后立即跟随的完整 js/javascript 代码块，仅移除该具名函数的 export 语法，在 Node VM 空上下文中取得函数并传入当前 spec 的真实对象；实际使用者保输入、返回结果与执行原件。缺 marker、重复块、导出/执行失败显露 source/producer 错误，不用另一份 checker 绕过。函数只报告字段缺项，不访问文件、服务或浏览器。
+
+<!-- c01-acceptance-object-check -->
+```javascript
+export function checkAcceptanceObject(input) {
+  if (input === null || typeof input !== "object" || Array.isArray(input)) {
+    throw new TypeError("acceptance input must be an object, not null or an array");
+  }
+  const object = { ...input };
+  const empty = value => value === undefined || value === null
+    || (typeof value === "string" && value.trim() === "");
+  const fields = ["workspace", "service", "route", "state", "viewport"];
+  const missing_fields = fields.filter(field => !Object.hasOwn(input, field) || empty(input[field]));
+  if (empty(object.owner)) object.owner = "用户";
+  return { ok: missing_fields.length === 0, missing_fields, object };
+}
+```
+
+`ok` 仅表示最小字段已提供：合法对象保全部原输入与已有 owner，不修改调用者对象；缺项按固定顺序点名。undefined/null/空串/全空白均不能静默通过，非对象/数组输入明确抛错。返回结果不验证 URL/尺寸语义、权限、完整 S5、环境健康或业务效果，不能作为阶段推进许可证；这些效果仍由各真实验收者独立观察。
+
 ## 架构边界
 
 本节回答：产品接口与工程职责如何划分。
