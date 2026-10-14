@@ -566,8 +566,23 @@ function captureScopedReviewSource(context,request,scope,attachmentRoot,captureS
     const index=context.artifacts.read('phases/index.md');
     const phases=Object.fromEntries(phaseFilesFromIndex(index).map(ref=>[ref,context.artifacts.read(ref)]));
     const parsed=validatePostPhaseContract({spec:context.artifacts.read('spec.md'),index,phases,reviewReadScope:scope});
-    selected=parsed.facts?.phase_rows?.find(row=>row.id===request.phase_id)?.write_set;
+    const phase=parsed.facts?.phase_rows?.find(row=>row.id===request.phase_id);
+    if(parsed.errors.some(error=>(phase&&error.startsWith(`${phase.path} unsafe Write set path:`))||(error.startsWith('phases/index.md:')&&error.includes(` ${request.phase_id} (`)&&error.includes('unsafe write set path:'))))throw new Error('SOURCE_UNAVAILABLE: Phase path outside approved read scope');
+    selected=phase?.write_set;
     if(!Array.isArray(selected))throw new Error('MATERIAL_INCOMPLETE: current Phase write set is unavailable');
+  }
+  // Validate declarations before projecting or starting any repository capture.
+  // Task-owned facts retain their existing exact material-reference reader.
+  if(selected!==null)for(const path of selected){
+    const canonical=!isAbsolute(path)||resolve(path)===path;
+    const matches=scope.repositories.filter(repo=>{
+      if(!isAbsolute(path))return repo.id==='wh'&&repo.paths.includes(path);
+      const rel=relative(repo.sourceRoot,path);
+      return canonical&&rel&&!isAbsolute(rel)&&!rel.split('/').includes('..')&&repo.paths.includes(rel);
+    });
+    const fact=canonical&&isAbsolute(path)&&scope.evidenceFiles.some(({ref})=>path===resolve(scope.taskRoot,ref));
+    if(matches.length!==1&&!fact)throw new Error('SOURCE_UNAVAILABLE: Phase path outside approved read scope');
+    if(matches.length>1)throw new Error('SOURCE_UNAVAILABLE: Phase path has ambiguous approved repository scope');
   }
   const captures=[];
   try{
@@ -576,7 +591,6 @@ function captureScopedReviewSource(context,request,scope,attachmentRoot,captureS
         if(!isAbsolute(path))return repo.id==='wh'&&repo.paths.includes(path) ? [path] : [];
         const rel=relative(repo.sourceRoot,path);return repo.paths.includes(rel) ? [rel] : [];
       }))];
-      if(paths.some(path=>!repo.paths.includes(path)))throw new Error('SOURCE_UNAVAILABLE: Phase path outside approved read scope');
       captures.push(captureSource({sourceRoot:repo.sourceRoot,targetRepoRoot:repo.targetRepoRoot,baselineCommit:repo.baseCommit,expectedHead:repo.expectedHead,expectedBranch:repo.expectedBranch,writeSet:paths,repositoryId:repo.id,secureRead:true,reviewDataRoot:attachmentRoot,includeDiff:true}));
     }
     const temporary=mkdtempSync(join(attachmentRoot,'review-source-'));

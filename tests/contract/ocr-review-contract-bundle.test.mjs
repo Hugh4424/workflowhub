@@ -967,3 +967,28 @@ it('C01 wiring direct and shard anchors preserve quoted UTF8 and hunk text',asyn
     }finally{bundle.dispose();}
   }
 },30000);
+
+it('C01 scoped Phase preflight rejects every unapproved declaration before capture',async()=>{
+  const {cli}=await c01Modules();
+  for(const mode of ['relative-outside','absolute-pb-outside','mixed','task-fact','capture-failure']){
+    const f=await c01ScopedFixture(),{state,wh,pb,scope,context,attachmentRoot}=f;
+    const materialRoot=join(wh,'specs',state.taskId);
+    const factRef='quality/evidence/scoped-fact.md',factBytes='APPROVED TASK FACT BODY\n';
+    if(mode==='task-fact'){mkdirSync(join(context.task.taskPath,'quality/evidence'),{recursive:true});writeFileSync(join(context.task.taskPath,factRef),factBytes);scope.evidenceFiles=[{ref:factRef}];}
+    const declared=mode==='task-fact' ? ['README.md',join(context.task.taskPath,factRef)] : mode==='relative-outside' ? ['README.md','outside.mjs'] : mode==='absolute-pb-outside' ? ['README.md',pb+'/outside.mjs'] : ['README.md',pb+'/README.md'];
+    const owned=declared.map(path=>'`'+path+'`').join('；');
+    writeFileSync(join(materialRoot,'phases/P3.md'),readFileSync(join(materialRoot,'phases/P3.md'),'utf8').replaceAll('`README.md`',owned));
+    writeFileSync(join(materialRoot,'phases/index.md'),readFileSync(join(materialRoot,'phases/index.md'),'utf8').replace(/^(\| `P3`[^\n]*?)`README.md`/m,'$1'+owned));
+    let captures=0,disposed=0,bundle,received;
+    const prepare=()=>cli.prepareTaskBoundBuildCodeReviewBundle(context,{stage:'build-code',review_scope:'phase',phase_id:'P3',materials:{approved_spec:mode==='task-fact'?{ref:factRef,sha256:createHash('sha256').update(factBytes).digest('hex')}:'scope preflight fixture',acceptance_criteria:'AC-1: complete approved Phase source'}},{loadConfig:()=>({attachmentRoot}),reviewReadScope:scope,buildMaterials:input=>{received=input;return buildReviewMaterials(input);},captureSource:options=>{
+      captures++;if(mode==='capture-failure'&&captures===2)throw new Error('controlled second capture failure');
+      const source=captureReviewSource(options),dispose=source.dispose;return {...source,dispose(){disposed++;dispose();}};
+    }});
+    try{
+      if(mode.endsWith('outside')){expect(prepare).toThrow(/SOURCE_UNAVAILABLE/);expect(captures).toBe(0);}
+      else if(mode==='capture-failure'){expect(prepare).toThrow('controlled second capture failure');expect(captures).toBe(2);expect(disposed).toBe(1);}
+      else{bundle=prepare();expect(captures).toBe(2);if(mode==='task-fact')expect(received.materials.approved_spec).toEqual({ref:factRef,sha256:createHash('sha256').update(factBytes).digest('hex')});bundle.dispose();bundle=null;expect(disposed).toBe(2);}
+      expect(readdirSync(attachmentRoot).filter(name=>name.startsWith('review-source-')||name.startsWith('.ocr-code-review-'))).toEqual([]);
+    }finally{bundle?.dispose();rmSync(state.root,{recursive:true,force:true});expect(fs.existsSync(state.root)).toBe(false);}
+  }
+});
