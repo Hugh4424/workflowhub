@@ -29,7 +29,7 @@ import { authenticatedEvidenceBytes } from "../../runtime/review/review-packet-i
 import { runSimpleReview, validateReviewSupplement, validateReviewCallerMaterials } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 import { prepareConfiguredOcrHostContext, runConfiguredOcrHostReview, runOcrDelegationRound, detectOcr } from "../../runtime/review/ocr-delegation-adapter.mjs";
 import { compactReviewDiff, compactVerifyCodeMaterials, gitDiffPath, verifyCodeChangedPaths } from "../../runtime/review/review-input-bounds.mjs";
-import { captureReviewSource } from "../../skills/wh-review/scripts/review-source.mjs";
+import { captureReviewSource, readScopedReviewMaterial } from "../../skills/wh-review/scripts/review-source.mjs";
 import { buildReviewMaterials, canonicalMaterialManifest, reviewMaterialBytes, reviewInstructionsFor, validateVerifyAcceptanceSummary } from "../../skills/wh-review/scripts/review-materials.mjs";
 import { loadTrustedThirdReviewConfig } from "../../skills/wh-review/scripts/third-review-host-config.mjs";
 
@@ -449,16 +449,22 @@ function projectOcrCodeReviewBundle(built, attachmentRoot, request, source) {
       const path=gitDiffPath(tokens[1]);sourcePaths.add(path);
       if(/^GIT binary patch$/m.test(section))binarySourcePaths.add(path);
     }
-    const sourceRoot=realpathSync(source.sourceRoot);
+    const sourceRoot=source.sourceBytes ? null : realpathSync(source.sourceRoot);
     const includedSources=new Set(), nonTextArchives=[];
     for(const path of sourcePaths){
       if(isAbsolute(path)||path.split("/").some(x=>!x||x==="."||x===".."))throw new Error("OCR source path is unsafe");
+      let raw;
+      if(source.sourceBytes){
+        if(!Object.hasOwn(source.sourceBytes,path))continue;
+        raw=source.sourceBytes[path];
+      }else{
       const target=join(sourceRoot,path);let named;
       try{let cursor=sourceRoot;for(const part of path.split("/")){cursor=join(cursor,part);const st=lstatSync(cursor);if(st.isSymbolicLink()||realpathSync(cursor)!==cursor)throw new Error(`OCR source path alias: ${path}`);}named=lstatSync(target);}
       catch(error){if(error.code==="ENOENT")continue;throw error;}
       if(!named.isFile()||named.nlink!==1)throw new Error(`OCR source is not a single-link regular file: ${path}`);
-      const fd=openSync(target,fsConstants.O_RDONLY|fsConstants.O_NOFOLLOW);let raw;
+      const fd=openSync(target,fsConstants.O_RDONLY|fsConstants.O_NOFOLLOW);
       try{const st=fstatSync(fd);if(st.dev!==named.dev||st.ino!==named.ino||!st.isFile()||st.nlink!==1)throw new Error(`OCR source changed: ${path}`);raw=readFileSync(fd);}finally{closeSync(fd);}
+      }
       let bytes;
       try{bytes=reviewMaterialBytes(path,raw);}
       catch(error){
@@ -531,17 +537,74 @@ function projectOcrCodeReviewBundle(built, attachmentRoot, request, source) {
   }
 }
 
-function phaseReviewSourceProjection(context, request, source, attachmentRoot) {
+// The host's private service supplies a short-lived scope. Request/material
+// JSON is never consulted for roots or authority. This checks structure and
+// the authenticated primary binding; the host retains the human provenance.
+function trustedReviewReadScope(context,request,value){
+  if(value===undefined||value===null)return undefined;
+  const invalid=message=>{throw Object.assign(new Error(`SOURCE_UNAVAILABLE: ${message}`),{code:'SOURCE_UNAVAILABLE'});};
+  const pathSafe=path=>typeof path==='string'&&path.length>0&&!isAbsolute(path)&&!/[\\\0*?\[\]{}\x01-\x1f]/.test(path)&&!path.split('/').some(part=>!part||part==='.'||part==='..');
+  const rootSafe=root=>typeof root==='string'&&isAbsolute(root)&&resolve(root)===root&&!/[\\\0*?\[\]{}]/.test(root);
+  if(value.taskId!==context.task.identity.taskId||value.primaryRoot!==context.workspace.worktreeRoot||!Array.isArray(value.repositories)||value.repositories.length<1||value.repositories.length>2)invalid('scope task/workspace mismatch');
+  const ids=new Set();
+  const repositories=value.repositories.map(repo=>{
+    if(!repo||!['wh','pb'].includes(repo.id)||ids.has(repo.id)||!rootSafe(repo.sourceRoot)||!rootSafe(repo.targetRepoRoot)||!GIT_OID.test(repo.baseCommit??'')||!GIT_OID.test(repo.expectedHead??'')||typeof repo.expectedBranch!=='string'||!repo.expectedBranch||!Array.isArray(repo.paths)||repo.paths.some(path=>!pathSafe(path))||new Set(repo.paths).size!==repo.paths.length)invalid('invalid exact repository scope');
+    ids.add(repo.id);
+    if(repo.id==='wh'&&(repo.sourceRoot!==context.workspace.worktreeRoot||repo.targetRepoRoot!==context.workspace.targetRepoRoot))invalid('primary repository mismatch');
+    if(repo.id==='pb'&&(repo.sourceRoot===context.workspace.worktreeRoot||repo.targetRepoRoot!==repo.sourceRoot))invalid('secondary repository mismatch');
+    return Object.freeze({...repo,paths:Object.freeze([...repo.paths])});
+  });
+  if(!ids.has('wh'))invalid('primary repository scope missing');
+  if(!Array.isArray(value.evidenceFiles)||value.evidenceFiles.some(item=>!item||Object.keys(item).join()!=='ref'||!pathSafe(item.ref)||!/^quality\/(?:tests|evidence)\//.test(item.ref)))invalid('invalid exact evidence scope');
+  if(!value.authorizationSource||typeof value.authorizationSource.confirmationRef!=='string'||!value.authorizationSource.confirmationRef||!Array.isArray(value.authorizationSource.materialRefs))invalid('scope provenance missing');
+  return Object.freeze({...value,repositories:Object.freeze(repositories),evidenceFiles:Object.freeze(value.evidenceFiles.map(item=>Object.freeze({...item}))),taskRoot:context.task.taskPath});
+}
+
+function captureScopedReviewSource(context,request,scope,attachmentRoot,captureSource){
+  let selected=null;
+  if(request.stage==='build-code'&&(request.review_scope??request.reviewScope)==='phase'&&context.manifest.activation_cohort==='post'){
+    const index=context.artifacts.read('phases/index.md');
+    const phases=Object.fromEntries(phaseFilesFromIndex(index).map(ref=>[ref,context.artifacts.read(ref)]));
+    const parsed=validatePostPhaseContract({spec:context.artifacts.read('spec.md'),index,phases,reviewReadScope:scope});
+    selected=parsed.facts?.phase_rows?.find(row=>row.id===request.phase_id)?.write_set;
+    if(!Array.isArray(selected))throw new Error('MATERIAL_INCOMPLETE: current Phase write set is unavailable');
+  }
+  const captures=[];
+  try{
+    for(const repo of scope.repositories){
+      const paths=[...new Set(selected===null ? repo.paths : selected.flatMap(path=>{
+        if(!isAbsolute(path))return repo.id==='wh' ? [path] : [];
+        const rel=relative(repo.sourceRoot,path);return repo.paths.includes(rel) ? [rel] : [];
+      }))];
+      if(paths.some(path=>!repo.paths.includes(path)))throw new Error('SOURCE_UNAVAILABLE: Phase path outside approved read scope');
+      captures.push(captureSource({sourceRoot:repo.sourceRoot,targetRepoRoot:repo.targetRepoRoot,baselineCommit:repo.baseCommit,expectedHead:repo.expectedHead,expectedBranch:repo.expectedBranch,writeSet:paths,repositoryId:repo.id,secureRead:true,reviewDataRoot:attachmentRoot,includeDiff:true}));
+    }
+    const temporary=mkdtempSync(join(attachmentRoot,'review-source-'));
+    try{
+      const diffPath=join(temporary,'changes.diff'),diff=captures.map(source=>readFileSync(source.diffPath,'utf8')).join('');
+      writeFileSync(diffPath,diff,{flag:'wx',mode:0o600});
+      const primary=captures.find(source=>source.repositoryId==='wh');
+      return {sourceRoot:scope.primaryRoot,capturedHead:primary.capturedHead,baseCommit:primary.baseCommit,diffPath,diffBytes:Buffer.byteLength(diff),changedPaths:captures.flatMap(source=>source.changedPaths??[]),sourceBytes:Object.assign({},...captures.map(source=>source.sourceBytes)),repositories:captures.map(source=>({id:source.repositoryId,captured_head:source.capturedHead,baseline_commit:source.baseCommit,changed_paths:source.changedPaths,selected_paths:source.selectedPaths,coverage_limit:'only exact scoped paths; other working-tree changes were not read or inventoried'})),dispose(){for(const source of captures)source.dispose?.();rmSync(temporary,{recursive:true,force:true});}};
+    }catch(error){rmSync(temporary,{recursive:true,force:true});throw error;}
+  }catch(error){for(const source of captures)source.dispose?.();throw error;}
+}
+
+function phaseReviewSourceProjection(context, request, source, attachmentRoot, reviewReadScope) {
   if (request.stage !== "build-code" || (request.review_kind ?? request.reviewKind ?? null) !== null || (request.review_scope ?? request.reviewScope) !== "phase"
       || context.manifest?.activation_cohort !== "post") return source;
   const index = context.artifacts.read("phases/index.md");
   const phases = Object.fromEntries(phaseFilesFromIndex(index).map((ref) => [ref, context.artifacts.read(ref)]));
-  const parsed = validatePostPhaseContract({ spec: context.artifacts.read("spec.md"), index, phases });
+  const parsed = validatePostPhaseContract({ spec: context.artifacts.read("spec.md"), index, phases, reviewReadScope });
   const phase = parsed.facts?.phase_rows?.find((row) => row.id === request.phase_id);
   const invalidEmptyScope = phase?.write_set?.length === 0 && parsed.errors.some(error =>
     error.startsWith(`${phase.path} `) && /Write set is missing|Write set none declaration is invalid|unsafe Write set path:|write set differs from Phase index|must declare Phase /.test(error));
   if (!Array.isArray(phase?.write_set) || invalidEmptyScope) throw new Error("MATERIAL_INCOMPLETE: current Phase write set is unavailable");
-  const selected = compactReviewDiff(readFileSync(source.diffPath, "utf8"), { writeSet: phase.write_set }).diff;
+  const selectedPaths=reviewReadScope ? phase.write_set.flatMap(path=>{
+    if(!isAbsolute(path))return [`repos/wh/${path}`];
+    const repo=reviewReadScope.repositories.find(repo=>repo.paths.includes(relative(repo.sourceRoot,path)));
+    return repo ? [`repos/${repo.id}/${relative(repo.sourceRoot,path)}`] : [];
+  }) : phase.write_set;
+  const selected = compactReviewDiff(readFileSync(source.diffPath, "utf8"), { writeSet: selectedPaths }).diff;
   const diffPath = join(dirname(source.diffPath), `phase-${request.phase_id}.diff`);
   writeFileSync(diffPath, selected, { flag: "wx", mode: 0o600 });
   return Object.freeze({ ...source, diffPath, diffBytes: Buffer.byteLength(selected, "utf8"),
@@ -566,6 +629,8 @@ export function prepareTaskBoundBuildCodeReviewBundle(context, request, {
   loadConfig = loadTrustedThirdReviewConfig,
   captureSource = captureReviewSource,
   buildMaterials = buildReviewMaterials,
+  resolveReviewReadScope,
+  reviewReadScope,
 } = {}) {
   if (!isTaskBoundBuildCodeReviewRequest(request)) throw new TypeError("task-bound build-code review request required");
   const reviewScope = request.review_scope ?? request.reviewScope;
@@ -576,16 +641,14 @@ export function prepareTaskBoundBuildCodeReviewBundle(context, request, {
   const trusted = loadConfig({ requestedStage: request.stage, requestedTrack: request.review_track ?? request.reviewTrack ?? null,
     requestedReviewKind: request.review_kind ?? request.reviewKind ?? null });
   const cursorDiffBase = phaseReviewDiffBase(context, request);
-  const changedPaths = request.stage === "verify-code" ? verifyCodeChangedPaths(execFileSync("git", [
-    "diff", "--name-only", `${context.workspace.baselineCommit}...HEAD`,
-  ], { cwd: context.workspace.worktreeRoot, env: gitMetadataEnvironment(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })) : undefined;
-  const compacted = compactVerifyCodeMaterials(request.materials, { changedPaths });
-  const source = captureSource({ workspace: context.workspace, reviewDataRoot: trusted.attachmentRoot,
+  const scope=trustedReviewReadScope(context,request,typeof resolveReviewReadScope==='function' ? resolveReviewReadScope({task:context.task,workspace:context.workspace,stage:request.stage,phaseId:request.phase_id??null}) : reviewReadScope);
+  const source = scope ? captureScopedReviewSource(context,request,scope,trusted.attachmentRoot,captureSource) : captureSource({ workspace: context.workspace, reviewDataRoot: trusted.attachmentRoot,
     includeDiff: true, taskId: context.task.identity.taskId,
-    ...(cursorDiffBase === null ? {} : { baselineCommit: cursorDiffBase }),
-    ...(changedPaths === undefined ? {} : { writeSet: changedPaths }) });
+    ...(cursorDiffBase === null ? {} : { baselineCommit: cursorDiffBase }) });
   try {
-    const selectedSource = phaseReviewSourceProjection(context, request, source, trusted.attachmentRoot);
+    const changedPaths = request.stage === 'verify-code' ? source.changedPaths : undefined;
+    const compacted = compactVerifyCodeMaterials(request.materials, { changedPaths });
+    const selectedSource = phaseReviewSourceProjection(context, request, source, trusted.attachmentRoot,scope);
     const built = buildMaterials({
       reviewDataRoot: trusted.attachmentRoot,
       attachmentRoot: trusted.attachmentRoot,
@@ -676,7 +739,7 @@ function readPlainInputFile(path,label) {
   try{const st=fstatSync(fd);if(st.dev!==named.dev||st.ino!==named.ino||!st.isFile()||st.nlink!==1)throw Object.assign(new Error(`${label} changed`),{code:"TASK_FILE_CHANGED"});return readFileSync(fd,"utf8");}finally{closeSync(fd);}
 }
 
-function resolveMaterialRefs(context, materials) {
+function resolveMaterialRefs(context, materials, reviewReadScope) {
   if (!materials || typeof materials !== "object" || Array.isArray(materials)) return materials;
   return Object.fromEntries(Object.entries(materials).map(([key, value]) => {
     if (!value || typeof value !== "object" || Array.isArray(value)
@@ -691,6 +754,19 @@ function resolveMaterialRefs(context, materials) {
       }
       const root = /^quality\/(?:tests|evidence)\//.test(value.ref)
         ? context.task.taskPath : context.workspace.worktreeRoot;
+      if(reviewReadScope){
+        if(root===context.task.taskPath&&!reviewReadScope.evidenceFiles.some(item=>item.ref===value.ref))throw new Error('material ref is outside approved evidence scope');
+        if(root===context.workspace.worktreeRoot){
+          const wh=reviewReadScope.repositories.find(repo=>repo.id==='wh');
+          const granted=wh.paths.includes(value.ref)||reviewReadScope.authorizationSource.materialRefs.some(ref=>{
+            if(typeof ref!=='string'||ref.includes('\\')||ref.includes('\0'))return false;
+            const within=isAbsolute(ref)?relative(wh.sourceRoot,ref):ref;
+            return within===value.ref;
+          });
+          if(!granted)throw new Error('material ref is outside approved workspace scope');
+        }
+        return [key,readScopedReviewMaterial({sourceRoot:root,ref:value.ref,sha256:value.sha256})];
+      }
       const path = resolve(root, value.ref);
       const within = relative(resolve(root), path);
       if (!within || isAbsolute(within) || within.split(/[\\/]/).includes("..")) throw new Error("material reference escapes its root");
@@ -995,7 +1071,6 @@ async function recordTaskReview(context, input, values, services = {}) {
     const original=input.request;
     if(original.stage!==undefined && original.stage!==values.stage) throw new TypeError("review request stage differs from CLI stage");
     const request={...original,stage:values.stage,activation_cohort:context.manifest.activation_cohort ?? "pre"};
-    request.materials = resolveMaterialRefs(context, request.materials);
     const isPhase=values.stage==="build-code" && (request.review_kind ?? request.reviewKind ?? null)===null;
     if(isPhase) {
       request.review_scope=request.review_scope ?? request.reviewScope ?? "phase";
@@ -1004,6 +1079,8 @@ async function recordTaskReview(context, input, values, services = {}) {
     }
     const miniImplementation = request.stage === "build-code" && (request.review_kind ?? request.reviewKind ?? null) === "mini_task.implementation";
     if (miniImplementation) request.review_scope = request.review_scope ?? request.reviewScope ?? "phase";
+    const reviewReadScope=trustedReviewReadScope(context,request,typeof services.resolveReviewReadScope==='function' ? services.resolveReviewReadScope({task:context.task,workspace:context.workspace,stage:request.stage,phaseId:request.phase_id??null}) : undefined);
+    request.materials = resolveMaterialRefs(context, request.materials,reviewReadScope);
     const codeSurface=miniImplementation || ["build-code","verify-code"].includes(request.stage)
       && (request.review_kind ?? request.reviewKind ?? null)===null && request.surface!=="document";
     if(codeSurface)request.surface="code";
@@ -1027,7 +1104,7 @@ async function recordTaskReview(context, input, values, services = {}) {
       const ocrRunner=services.runOcrDelegationRound;
       let bundle;
       try {
-        try{bundle=prepareTaskBoundBuildCodeReviewBundle(context,current);}catch(error){return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:error.code??"ROUTE_UNAVAILABLE",message:redactProviderHostPaths(String(error.message)),diagnostic:{field:"materials/route",expected:"current task-bound materials and trusted route",actual:"invalid",next_action:"repair the reported input or route before dispatch"}}};}
+        try{bundle=prepareTaskBoundBuildCodeReviewBundle(context,current,{reviewReadScope});}catch(error){return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:error.code??"ROUTE_UNAVAILABLE",message:redactProviderHostPaths(String(error.message)),diagnostic:{field:"materials/route",expected:"current task-bound materials and trusted route",actual:"invalid",next_action:"repair the reported input or route before dispatch"}}};}
         let trustedContext;
         try{trustedContext=prepareConfiguredOcrHostContext(current);}catch(error){
           return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:error.code??"ROUTE_UNAVAILABLE",message:redactProviderHostPaths(String(error.message)),diagnostic:{field:"route/provider_selection",expected:"one current trusted code route and valid provider configuration",actual:"invalid",next_action:"repair current route/configuration before dispatch"}}};

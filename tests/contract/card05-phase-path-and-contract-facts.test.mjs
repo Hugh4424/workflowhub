@@ -70,3 +70,162 @@ test('N1 target: actual provider packet exposes the calculated contract failure 
 test('N1 baseline: incomplete contract does not block packet creation or broaden selected Phase diff', async () => {
   const { bundle } = await packetFixture(); try { const diff = readFileSync(join(bundle.bundleRoot, 'changes.diff'), 'utf8'); expect(diff).toContain('README.md'); expect(diff).toContain('owned result change'); expect(diff).not.toContain('outside.md'); expect(diff).not.toContain('OUTSIDE-PHASE-CHANGE'); expect(existsSync(join(bundle.bundleRoot, 'manifest.json'))).toBe(true); } finally { bundle.dispose(); }
 });
+
+
+// C01 additions: independent scope/owned oracle; existing assertions above remain frozen.
+test('C01 wiring approved host scope and readonly owned boundaries', async () => {
+  const { pathToFileURL } = await import('node:url');
+  const production = process.env.C01_WIRING_PRODUCTION_ROOT ?? fileURLToPath(rootUrl);
+  const { prepareTaskBoundBuildCodeReviewBundle: prepare } = await import(pathToFileURL(join(production,'tools/cli/stage-runtime.mjs')).href);
+  const { validatePostPhaseContract: validate } = await import(pathToFileURL(join(production,'runtime/stage/stage-content-contracts.mjs')).href);
+  const f=fixture(), pb=join(f.root,'pb'), attachmentRoot=join(f.root,'attachments');mkdirSync(pb);mkdirSync(attachmentRoot);
+  git(pb,'init','-q','-b','main');git(pb,'config','user.name','C01 scope oracle');git(pb,'config','user.email','oracle@example.invalid');git(pb,'config','commit.gpgsign','false');
+  writeFileSync(join(pb,'README.md'),'PB BASE\n');git(pb,'add','.');git(pb,'commit','-qm','PB baseline');
+  const task=openTask(f.taskDir,{projectName:'workflowhub',taskId:f.taskId}), workspace=await openCurrentTaskWorkspace(task);
+  const context={task,manifest:task.manifest,workspace,artifacts:ArtifactDir.open(f.wt,task)};
+  const scope={taskId:f.taskId,primaryRoot:f.wt,repositories:[
+    {id:'wh',sourceRoot:f.wt,targetRepoRoot:f.repo,baseCommit:git(f.wt,'rev-parse','HEAD'),expectedHead:git(f.wt,'rev-parse','HEAD'),expectedBranch:workspace.branch,paths:['README.md']},
+    {id:'pb',sourceRoot:pb,targetRepoRoot:pb,baseCommit:git(pb,'rev-parse','HEAD'),expectedHead:git(pb,'rev-parse','HEAD'),expectedBranch:'main',paths:['README.md']},
+  ],evidenceFiles:[],authorizationSource:{confirmationRef:'controlled human-source fixture',materialRefs:[]}};
+  const owned='`README.md`；`'+pb+'/README.md`';
+  const phase=f.m.phases[target].replaceAll('`README.md`',owned);
+  writeFileSync(join(f.materialRoot,target),phase);writeFileSync(join(f.materialRoot,'phases/index.md'),f.m.index.replace('`README.md`',owned));
+  const request={stage:'build-code',review_scope:'phase',phase_id:'P1',materials:{approved_spec:f.m.spec,acceptance_criteria:'AC-001: actual approved source',test_evidence:'controlled construction only'}};
+  writeFileSync(join(f.wt,'README.md'),'WH APPROVED\n');writeFileSync(join(pb,'README.md'),'PB APPROVED\n');
+  const attempt=options=>{let bundle;try{bundle=prepare(context,request,{loadConfig:()=>({attachmentRoot}),...options});return {error:null,text:readFileSync(join(bundle.bundleRoot,'changes.diff'),'utf8')};}catch(error){return {error,text:''};}finally{bundle?.dispose();}};
+  const approved=attempt({resolveReviewReadScope:()=>scope});
+  expect(approved.error,'approved exact host scope must reach the real phase producer').toBeNull();expect(approved.text).toContain('WH APPROVED');expect(approved.text).toContain('PB APPROVED');
+  expect(approved.text).toContain('repos/wh/README.md');expect(approved.text).toContain('repos/pb/README.md');
+  expect(attempt({reviewReadScope:{...scope,primaryRoot:pb}}).error).toBeTruthy();
+  expect(attempt({reviewReadScope:{...scope,taskId:'another-task'}}).error).toBeTruthy();
+  expect(attempt({reviewReadScope:{...scope,repositories:scope.repositories.map(r=>r.id==='pb'?{...r,sourceRoot:pb+'-sibling'}:r)}}).error).toBeTruthy();
+  expect(attempt({reviewReadScope:{...scope,repositories:scope.repositories.map(r=>r.id==='pb'?{...r,paths:['../outside.md']}:r)}}).error).toBeTruthy();
+  expect(attempt({reviewReadScope:{...scope,repositories:scope.repositories.map(r=>r.id==='pb'?{...r,paths:[]}:r)}}).error).toBeTruthy();
+  expect(attempt({}).error,'external Phase has no self-granted default read authority').toBeTruthy();
+  const spoof={...request,materials:{...request.materials,reviewReadScope:scope}};
+  expect(()=>prepare(context,spoof,{loadConfig:()=>({attachmentRoot})})).toThrow();
+  const readOnly=materials();readOnly.index=readOnly.index.replace('`README.md`','none（只读验收，无生产修改）');readOnly.phases[target]=readOnly.phases[target]
+    .replace('- **Write set**：`README.md`','- **Write set**：none（只读验收，无生产修改）')
+    .replace('`README.md` symbol: N/A — fixture source text','N/A — read-only symbol result; no production writes')
+    .replace('return the owned result','read-only verification; do not produce or change code');
+  expect(validate(readOnly).errors.filter(e=>/Files \/ symbols must name owned write-set paths/.test(e))).toEqual([]);
+  const ordinary=materials();ordinary.phases[target]=ordinary.phases[target].replace('`README.md` symbol: N/A — fixture source text','`outside.md` symbol: result');
+  expect(validate(ordinary).errors.some(e=>/Files \/ symbols must name owned write-set paths/.test(e))).toBe(true);
+  readOnly.phases[target]=readOnly.phases[target].replace('read-only verification; do not produce or change code','implement new code');
+  expect(validate(readOnly).errors.some(e=>/Files \/ symbols must name owned write-set paths/.test(e))).toBe(true);
+});
+
+
+// P1 independent-review regression cases; earlier scope/oracle bodies remain unchanged.
+async function c01ReviewedScopeFixture({none=false,aliases=false}={}){
+  const {pathToFileURL}=await import('node:url');const production=process.env.C01_WIRING_PRODUCTION_ROOT??fileURLToPath(rootUrl);
+  const {prepareTaskBoundBuildCodeReviewBundle:prepare}=await import(pathToFileURL(join(production,'tools/cli/stage-runtime.mjs')).href);
+  const {validatePostPhaseContract:validate}=await import(pathToFileURL(join(production,'runtime/stage/stage-content-contracts.mjs')).href);
+  const {captureReviewSource:capture}=await import(pathToFileURL(join(production,'skills/wh-review/scripts/review-source.mjs')).href);
+  const f=fixture(),pb=join(f.root,'pb'),attachmentRoot=join(f.root,'reviewed-attachments');mkdirSync(pb);mkdirSync(attachmentRoot);
+  git(pb,'init','-q','-b','main');git(pb,'config','user.name','Reviewed scope oracle');git(pb,'config','user.email','oracle@example.invalid');git(pb,'config','commit.gpgsign','false');writeFileSync(join(pb,'owned.mjs'),'PB METADATA ONLY\n');git(pb,'add','.');git(pb,'commit','-qm','PB baseline');
+  writeFileSync(join(f.wt,'owned.mjs'),'WH BASE\n');git(f.wt,'add','owned.mjs');git(f.wt,'commit','-qm','WH owned baseline');
+  const task=openTask(f.taskDir,{projectName:'workflowhub',taskId:f.taskId}),workspace=await openCurrentTaskWorkspace(task),context={task,manifest:task.manifest,workspace,artifacts:ArtifactDir.open(f.wt,task)};
+  const scope={taskId:f.taskId,primaryRoot:f.wt,repositories:[{id:'wh',sourceRoot:f.wt,targetRepoRoot:f.repo,baseCommit:git(f.wt,'rev-parse','HEAD'),expectedHead:git(f.wt,'rev-parse','HEAD'),expectedBranch:workspace.branch,paths:none?[]:['owned.mjs']},{id:'pb',sourceRoot:pb,targetRepoRoot:pb,baseCommit:git(pb,'rev-parse','HEAD'),expectedHead:git(pb,'rev-parse','HEAD'),expectedBranch:'main',paths:[]}],evidenceFiles:[],authorizationSource:{confirmationRef:'controlled reviewed scope',materialRefs:[]}};
+  const m=materials();m.spec=m.spec.replaceAll('README.md','owned.mjs');m.index=m.index.replaceAll('README.md','owned.mjs');m.phases[target]=m.phases[target].replaceAll('README.md','owned.mjs');
+  if(none){m.index=m.index.replace('`owned.mjs`','none（只读验收，无生产修改）');m.phases[target]=m.phases[target].replace('- **Write set**：`owned.mjs`','- **Write set**：none（只读验收，无生产修改）').replace('`owned.mjs` symbol: N/A — fixture source text','N/A — read-only symbol result; no production writes').replace('return the owned result','read-only verification; do not produce or change code');}
+  if(aliases){const pair='`owned.mjs`；`'+f.wt+'/owned.mjs`';m.index=m.index.replace('`owned.mjs`',pair);m.phases[target]=m.phases[target].replaceAll('`owned.mjs`',pair);}
+  for(const [path,text]of Object.entries(asMap(m)))writeFileSync(join(f.materialRoot,path),text);
+  const request={stage:'build-code',review_scope:'phase',phase_id:'P1',materials:{approved_spec:m.spec,acceptance_criteria:'AC-001: actual metadata and canonical source identity',test_evidence:'owned fixture; no provider'}};
+  const attempt=(selected=scope)=>{let bundle;const captures=[];try{bundle=prepare(context,request,{loadConfig:()=>({attachmentRoot}),reviewReadScope:selected,captureSource:options=>{const source=capture(options);captures.push({id:options.repositoryId,paths:options.writeSet,bytes:Object.keys(source.sourceBytes??{})});return source;}});return{error:null,diff:readFileSync(join(bundle.bundleRoot,'changes.diff'),'utf8'),source:JSON.parse(readFileSync(join(bundle.bundleRoot,'source.json'),'utf8')),captures};}catch(error){return{error,diff:'',source:null,captures};}finally{bundle?.dispose();}};
+  return{f,pb,m,scope,validate,attempt,attachmentRoot};
+}
+function c01BusinessReadObserver(f){
+  const instrument=join(f.f.root,'business-read-observer'),log=join(f.f.root,'business-read-observer.jsonl');mkdirSync(instrument);
+  const fs=process.getBuiltinModule('node:fs'),forbidden=f.scope.repositories.map(repo=>{const st=fs.statSync(join(repo.sourceRoot,'owned.mjs'),{bigint:true});return{dev:String(st.dev),ino:String(st.ino)};});
+  writeFileSync(join(instrument,'sitecustomize.py'),String.raw`
+import os,json,subprocess
+writer=open(os.environ['C01_EMPTY_READ_OBSERVER_LOG'],'a',buffering=1);realopen=os.open;realread=os.read;realrun=subprocess.run
+def note(value):writer.write(json.dumps(value)+'\n')
+def opened(path,*args,**kwargs):
+ fd=realopen(path,*args,**kwargs);st=os.fstat(fd);note({'event':'open','dev':str(st.st_dev),'ino':str(st.st_ino)});return fd
+def read(fd,*args,**kwargs):
+ st=os.fstat(fd);note({'event':'read','dev':str(st.st_dev),'ino':str(st.st_ino)});return realread(fd,*args,**kwargs)
+def command(argv,*args,**kwargs):
+ note({'event':'git','cwd':os.getcwd(),'argv':argv});return realrun(argv,*args,**kwargs)
+if realopen in os.supports_dir_fd:os.supports_dir_fd.add(opened)
+os.open=opened;os.read=read;subprocess.run=command
+`);
+  const keys={PYTHONPATH:instrument,C01_EMPTY_READ_OBSERVER_LOG:log},prior={};for(const[key,value]of Object.entries(keys)){prior[key]=process.env[key];process.env[key]=value;}
+  return{forbidden,records:()=>fs.existsSync(log)?readFileSync(log,'utf8').trim().split('\n').filter(Boolean).map(JSON.parse):[],restore(){for(const[key,value]of Object.entries(prior)){if(value===undefined)delete process.env[key];else process.env[key]=value;}}};
+}
+test('C01 wiring approved host scope and readonly owned boundaries — empty repositories report observed metadata',async()=>{
+  const f=await c01ReviewedScopeFixture({none:true}),observer=c01BusinessReadObserver(f);let actual;try{actual=f.attempt();}finally{observer.restore();}expect(actual.error).toBeNull();
+  expect(actual.source.repositories,'both empty-scope Git identities must actually be observed').toEqual(expect.arrayContaining(f.scope.repositories.map(repo=>expect.objectContaining({id:repo.id,captured_head:git(repo.sourceRoot,'rev-parse','HEAD'),baseline_commit:repo.baseCommit,changed_paths:[]}))));
+  expect(actual.captures).toEqual([{id:'wh',paths:[],bytes:[]},{id:'pb',paths:[],bytes:[]}]);expect(actual.diff).toBe('');
+  const events=observer.records();
+  for(const repo of f.scope.repositories)expect(events.some(event=>event.event==='git'&&event.cwd===repo.sourceRoot&&event.argv.includes('rev-parse')&&event.argv.includes('HEAD')),'observer must witness actual HEAD metadata for '+repo.id).toBe(true);
+  expect(events.filter(event=>(event.event==='open'||event.event==='read')&&observer.forbidden.some(inode=>inode.dev===event.dev&&inode.ino===event.ino)),'empty metadata capture must never open/read either regular business inode').toEqual([]);
+  const gitPrefix=['git','--no-optional-locks','-c','core.fsmonitor=false','-c','core.hooksPath=/dev/null','-c','diff.external=','-c','protocol.allow=never'];
+  expect(events.filter(event=>event.event==='git').every(event=>{const repo=f.scope.repositories.find(repo=>repo.sourceRoot===event.cwd);if(!repo)return false;const tails=[['rev-parse','--show-toplevel'],['rev-parse','--git-common-dir'],['rev-parse','--verify','HEAD'],['symbolic-ref','--quiet','--short','HEAD'],['cat-file','-e',repo.baseCommit+'^{commit}']];return tails.some(tail=>JSON.stringify(event.argv)===JSON.stringify([...gitPrefix,...tail]));}),'empty capture permits only exact metadata/object-existence argv with the fixed safe prefix').toBe(true);
+  expect(actual.source.captured_head).toBe(git(f.f.wt,'rev-parse','HEAD'));expect(JSON.stringify(actual.source)).not.toContain('PB METADATA ONLY');
+  expect(readFileSync(join(f.pb,'owned.mjs'),'utf8')).toBe('PB METADATA ONLY\n');
+});
+test('C01 wiring approved host scope and readonly owned boundaries — empty repositories reject identity drift',async()=>{
+  const f=await c01ReviewedScopeFixture({none:true});
+  const changes=[{id:'wh',expectedHead:'0'.repeat(40)},{id:'pb',expectedBranch:'wrong-branch'},{id:'pb',baseCommit:'0'.repeat(40)},{id:'pb',sourceRoot:f.pb+'-missing',targetRepoRoot:f.pb+'-missing'}];
+  for(const change of changes){const scope={...f.scope,repositories:f.scope.repositories.map(repo=>repo.id===change.id?{...repo,...change}:repo)};const actual=f.attempt(scope);expect(actual.error,'empty capture must reject '+JSON.stringify(change)).toBeTruthy();expect(actual.error.message).toContain('SOURCE_UNAVAILABLE');expect(actual.diff).toBe('');}
+  expect(readFileSync(join(f.pb,'owned.mjs'),'utf8')).toBe('PB METADATA ONLY\n');
+  expect(readdirSyncForReviewedScope(f.attachmentRoot).filter(name=>name.startsWith('review-source-')||name.startsWith('.ocr-code-review-'))).toEqual([]);
+});
+function readdirSyncForReviewedScope(path){return process.getBuiltinModule('node:fs').readdirSync(path);}
+test('C01 wiring approved host scope and readonly owned boundaries — canonical aliases share one owner',async()=>{
+  const f=await c01ReviewedScopeFixture(),abs='`'+f.f.wt+'/owned.mjs`',relative='`owned.mjs`';
+  const equivalent={...f.m,index:f.m.index.replace(relative,abs),reviewReadScope:f.scope};
+  expect(f.validate(equivalent).errors.filter(error=>/write set differs from Phase index/.test(error)),'different text for one approved source must have one identity').toEqual([]);
+  const phase2=f.m.phases[target].replaceAll('P1','P2').replaceAll('T001','T002').replaceAll(relative,abs);
+  const index=f.m.index+'| `P2` | `phases/P2-owned.md` | `phase-p2` | '+abs+' | `none` | build-code |\n';
+  const duplicate=f.validate({...f.m,index,phases:{...f.m.phases,'phases/P2-owned.md':phase2},reviewReadScope:f.scope});
+  expect(duplicate.errors.some(error=>/write set duplicates.*owned.mjs.*owned by/.test(error)),'independent phases cannot disguise a source alias as a second owner').toBe(true);
+});
+test('C01 wiring approved host scope and readonly owned boundaries — alias capture emits one patch',async()=>{
+  const f=await c01ReviewedScopeFixture({aliases:true});writeFileSync(join(f.f.wt,'owned.mjs'),'WH UNIQUE CURRENT\n');const actual=f.attempt();expect(actual.error).toBeNull();
+  expect((actual.diff.match(/^diff --git /gm)??[]).length,'relative/absolute aliases must not duplicate the physical patch').toBe(1);
+  expect(actual.captures.find(source=>source.id==='wh').paths).toEqual(['owned.mjs']);expect(actual.diff).toContain('WH UNIQUE CURRENT');
+  expect(f.validate({...f.m,reviewReadScope:f.scope}).errors.some(error=>/write set duplicates.*owned.mjs.*owned by/.test(error))).toBe(true);
+});
+
+
+// OCR037 regressions: exact host grants and coherent readonly declaration.
+async function c01PublicScopedMaterialFixture(){
+ const f=await c01ReviewedScopeFixture(),{stageRuntimeCliMain}=await import(new URL('../../tools/cli/stage-runtime.mjs',import.meta.url));
+ const {createHash}=await import('node:crypto'),sha=text=>createHash('sha256').update(text).digest('hex');
+ mkdirSync(join(f.f.taskDir,'quality','evidence'),{recursive:true});
+ const declared='guidance.md';writeFileSync(join(f.f.wt,declared),'TRUSTED GUIDANCE\n');f.scope.authorizationSource.materialRefs=[join(f.f.wt,declared)];
+ const attempt=async(ref,selected=f.scope)=>{const text=readFileSync(join(f.f.wt,ref),'utf8');writeFileSync(join(f.f.taskDir,'quality','evidence','scope-request.json'),JSON.stringify({request:{stage:'build-plan',surface:'document',materials:{raw_requirement:{ref,sha256:sha(text)}}}}));let calls=0,received,error=null;
+ const priorStorage=process.env.WORKFLOWHUB_TASK_DIR;process.env.WORKFLOWHUB_TASK_DIR=f.f.storage;
+ try{await stageRuntimeCliMain(['review','--action=record','--stage=build-plan','--project=workflowhub','--task='+f.f.taskId,'--task-path='+f.f.taskDir,'--input=quality/evidence/scope-request.json'],{cwd:f.f.wt,services:{resolveReviewReadScope:()=>selected,runReviewRound:async req=>{calls++;received=req.materials.raw_requirement;return{status:'unavailable',stage:req.stage,review_track:null,review_kind:null,review_scope:null,subject_kind:'document',phase_id:null,provider_results:[],findings:[],error:{code:'OWNED_OBSERVER_ONLY',message:'controlled transport observation, not quality'}};}}});}catch(cause){error=cause;}finally{if(priorStorage===undefined)delete process.env.WORKFLOWHUB_TASK_DIR;else process.env.WORKFLOWHUB_TASK_DIR=priorStorage;}return{error,calls,received};};
+ return{...f,attemptMaterial:attempt,declared};
+}
+test('C01 wiring reviewed major material scope — exact repository and material grants resolve',async()=>{
+ const f=await c01PublicScopedMaterialFixture();
+ for(const ref of ['owned.mjs',f.declared]){const actual=await f.attemptMaterial(ref);expect(actual.error).toBeNull();expect(actual.calls).toBe(1);expect(actual.received).toBe(readFileSync(join(f.f.wt,ref),'utf8'));}
+});
+test.each(['owned.mjs.backup','guidance.md-sibling'])('C01 wiring reviewed major material scope — denied exact-prefix sibling %s is never opened',async ref=>{
+ const f=await c01PublicScopedMaterialFixture();writeFileSync(join(f.f.wt,ref),'UNAPPROVED PRIVATE CONTENT\n');const observer=c01BusinessReadObserver(f),st=process.getBuiltinModule('node:fs').statSync(join(f.f.wt,ref),{bigint:true}),secret={dev:String(st.dev),ino:String(st.ino)};let actual,events;
+ try{const prime=await f.attemptMaterial('owned.mjs');expect(prime.error).toBeNull();expect(prime.calls).toBe(1);expect(observer.records().some(event=>event.event==='read'&&observer.forbidden.some(inode=>inode.dev===event.dev&&inode.ino===event.ino)),'real worker observer must load and observe positive material read').toBe(true);const start=observer.records().length;actual=await f.attemptMaterial(ref);events=observer.records().slice(start);}finally{observer.restore();}
+ expect(actual.error,'matching SHA must not grant a workspace sibling').toBeTruthy();expect(actual.error.code).toBe('TASK_FILE_INVALID');expect(actual.error.message).toContain('outside approved');expect(actual.calls).toBe(0);expect(actual.received).toBeUndefined();
+ expect(events.filter(event=>(event.event==='open'||event.event==='read')&&event.dev===secret.dev&&event.ino===secret.ino),'denial must precede actual worker open/read of this regular inode').toEqual([]);
+});
+test.each(['read-only verification; do not produce or change code; but implement new code in owned.mjs','只读核验，不修改代码；但是修改 owned.mjs 代码'])('C01 wiring reviewed major readonly scope — contradictory Action rejected: %s',async action=>{
+ const f=await c01ReviewedScopeFixture({none:true}),original='read-only verification; do not produce or change code';
+ expect(f.validate(f.m).errors.filter(error=>/Files \/ symbols must name owned write-set paths/.test(error)),'coherent readonly none remains supported').toEqual([]);
+ const contradictory={...f.m,phases:{...f.m.phases,[target]:f.m.phases[target].replace(original,action)}};
+ expect(f.validate(contradictory).errors.some(error=>/Files \/ symbols must name owned write-set paths/.test(error)),'negative phrase cannot conceal affirmative code mutation').toBe(true);
+});
+
+// Supplement050: inspection nouns are readonly, later code actions remain owned.
+test.each([
+ {read:'只读核验实现，不修改代码',write:'只读核验实现，不修改代码；但实现 owned.mjs 新代码'},
+ {read:'只读审查重构结果，不修改代码',write:'只读审查重构结果，不修改代码；但重构 owned.mjs 模块'},
+])('C01 wiring readonly inspection noun — $read',async({read,write})=>{
+ const f=await c01ReviewedScopeFixture({none:true}),original='read-only verification; do not produce or change code';
+ const check=action=>f.validate({...f.m,phases:{...f.m.phases,[target]:f.m.phases[target].replace(original,action)}}).errors.filter(error=>/Files \/ symbols must name owned write-set paths/.test(error));
+ expect(check(read),'readonly inspection of implementation/refactor result is not a production action').toEqual([]);
+ expect(check(write).length,'inspection prefix cannot hide a later affirmative code action').toBeGreaterThan(0);
+});

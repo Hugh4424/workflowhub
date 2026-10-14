@@ -844,46 +844,75 @@ function ocrDiffPacketRaw(packetText, packetPath, sourcePath, rawBytes) {
   return redactProviderHostPaths(rawText) === body ? rawText : null;
 }
 
-function ocrDiffSourceLine(diffText, targetPath, diffLine) {
-  if (!Number.isSafeInteger(diffLine) || diffLine < 1 || !safeOcrSnapshotPath(targetPath)) return null;
-  const lines = diffText.split("\n").map((line) => line.endsWith("\r") ? line.slice(0, -1) : line);
-  let currentPath = null;
-  let newLine = null;
-  for (let index = 0; index < lines.length; index += 1) {
-    const lineNumber = index + 1;
-    const line = lines[index];
-    if (line.startsWith("diff --git ")) {
-      currentPath = null;
-      newLine = null;
+function strictOcrGitPath(token) {
+  if(typeof token!=='string')return null;
+  let bytes;
+  if(token.startsWith('"')){
+    if(!token.endsWith('"'))return null;
+    const text=token.slice(1,-1),values=[];
+    const escapes={n:'\n',r:'\r',t:'\t',b:'\b',f:'\f',v:'\v','\\':'\\','"':'"'};
+    for(let i=0;i<text.length;){
+      if(text[i]!=='\\'){const point=String.fromCodePoint(text.codePointAt(i));values.push(...Buffer.from(point));i+=point.length;continue;}
+      const octal=text.slice(i+1).match(/^[0-7]{1,3}/)?.[0];
+      if(octal){const value=parseInt(octal,8);if(value>255)return null;values.push(value);i+=octal.length+1;}
+      else{const escape=text[i+1];if(!Object.hasOwn(escapes,escape))return null;values.push(...Buffer.from(escapes[escape]));i+=2;}
     }
-    if (line.startsWith("+++ ")) {
-      let headerPath = line.slice(4).split("\t", 1)[0];
-      if (headerPath.startsWith('"') && headerPath.endsWith('"')) return null;
-      if (headerPath === "/dev/null") {
-        currentPath = null;
-      } else if (headerPath.startsWith("b/")) {
-        headerPath = headerPath.slice(2);
-        currentPath = safeOcrSnapshotPath(headerPath) ? headerPath : null;
-      }
+    bytes=Buffer.from(values);
+  }else bytes=Buffer.from(token);
+  const text=bytes.toString('utf8');
+  return Buffer.from(text,'utf8').equals(bytes) ? text : null;
+}
+
+// One section/hunk parser serves both direct and indexed shard findings. A
+// source line beginning +++ is consumed by hunk counts, never reinterpreted.
+function ocrDiffSourceMappings(diffText){
+  if(typeof diffText!=='string')return null;
+  const lines=diffText.split('\n').map(line=>line.endsWith('\r')?line.slice(0,-1):line),mapped=new Map();
+  let section=false,header=true,path=null,target=null,oldRemaining=0,newRemaining=0,newLine=0,hunk=false;
+  for(let i=0;i<lines.length;i++){
+    const line=lines[i];
+    if(i===lines.length-1&&line==='')continue;
+    if(hunk&&(oldRemaining>0||newRemaining>0)){
+      if(line==='\\ No newline at end of file')continue;
+      const prefix=line[0];
+      if(prefix===' '){if(oldRemaining<1||newRemaining<1)return null;oldRemaining--;newRemaining--;if(path)mapped.set(i+1,{path,line:newLine,patch:line.slice(1)});newLine++;}
+      else if(prefix==='+'){if(newRemaining<1)return null;newRemaining--;if(path)mapped.set(i+1,{path,line:newLine,patch:line.slice(1)});newLine++;}
+      else if(prefix==='-'){if(oldRemaining<1)return null;oldRemaining--;}
+      else return null;
       continue;
     }
-    const hunk = /^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(line);
-    if (hunk) {
-      newLine = Number(hunk[2]);
+    if(line==='\\ No newline at end of file'&&hunk)continue;
+    if(line.startsWith('diff --git ')){
+      const tokens=line.slice(11).match(/"(?:\\.|[^"\\])*"|\S+/g);
+      if(tokens?.length!==2)return null;
+      const a=strictOcrGitPath(tokens[0]),b=strictOcrGitPath(tokens[1]);
+      if(!a?.startsWith('a/')||!b?.startsWith('b/')||!safeOcrSnapshotPath(a.slice(2))||!safeOcrSnapshotPath(b.slice(2)))return null;
+      section=true;header=true;hunk=false;path=null;target=b.slice(2);continue;
+    }
+    if(!section)return null;
+    if(header&&line.startsWith('+++ ')){
+      const decoded=strictOcrGitPath(line.slice(4).split('\t',1)[0]);
+      if(decoded==='/dev/null')path=null;
+      else if(decoded?.startsWith('b/')&&decoded.slice(2)===target&&safeOcrSnapshotPath(decoded.slice(2)))path=decoded.slice(2);
+      else return null;
       continue;
     }
-    if (newLine === null || currentPath !== targetPath || lineNumber !== diffLine) {
-      if (newLine !== null && currentPath === targetPath) {
-        if (line.startsWith(" ") || line.startsWith("+")) newLine += 1;
-        else if (!line.startsWith("-") && !line.startsWith("\\")) newLine = null;
-      }
+    const count=/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(?:.*)$/.exec(line);
+    if(count){
+      header=false;hunk=true;oldRemaining=Number(count[2]??1);newRemaining=Number(count[4]??1);newLine=Number(count[3]);
+      if(![Number(count[1]),oldRemaining,newRemaining,newLine].every(Number.isSafeInteger)||(newRemaining>0&&newLine<1))return null;
       continue;
     }
-    if (line.startsWith(" ")) return { line: newLine, patch: line.slice(1) };
-    if (line.startsWith("+")) return { line: newLine, patch: line.slice(1) };
-    return null;
+    if(!header)return null;
+    // Metadata/binary sections have no current-source hunk anchors.
   }
-  return null;
+  return oldRemaining||newRemaining ? null : mapped;
+}
+
+function ocrDiffSourceLine(diffText,targetPath,diffLine){
+  if(!Number.isSafeInteger(diffLine)||diffLine<1||!safeOcrSnapshotPath(targetPath))return null;
+  const mapped=ocrDiffSourceMappings(diffText)?.get(diffLine);
+  return mapped?.path===targetPath ? {line:mapped.line,patch:mapped.patch} : null;
 }
 
 function ocrByteLineStart(bytes, line) {
@@ -968,13 +997,12 @@ function createOcrSourceAnchorResolver({ sourceBundle, packetFiles }) {
   const sourceFor=path=>{const bytes=readVerifiedOcrBundleFile(sourceBundle,manifestByPath,path);const text=bytes&&ocrUtf8Text(bytes);return typeof text==="string" ? {bytes,text} : null;};
   const diffAnchor=(diffText,diffLine,targetPath=null)=>{
     if(typeof diffText!=="string"||!Number.isSafeInteger(diffLine)||diffLine<1)return null;
-    const targets=targetPath ? [targetPath] : [...new Set([...diffText.matchAll(/^\+\+\+ b\/(.+)$/gm)].map(m=>m[1]).filter(safeOcrSnapshotPath))];
-    const mapped=targets.map(target=>({target,line:ocrDiffSourceLine(diffText,target,diffLine)})).filter(x=>x.line);
-    if(mapped.length!==1)return null;
-    const source=sourceFor(mapped[0].target);if(!source)return null;
-    const lines=source.text.split(/\r?\n/);const line=mapped[0].line;
+    const mapped=ocrDiffSourceMappings(diffText)?.get(diffLine);
+    if(!mapped||(targetPath!==null&&mapped.path!==targetPath))return null;
+    const source=sourceFor(mapped.path);if(!source)return null;
+    const lines=source.text.split(/\r?\n/);const line=mapped;
     if(lines[line.line-1]!==line.patch)return null;
-    return {path:mapped[0].target,line:line.line,content:source.text,diffPatch:true};
+    return {path:mapped.path,line:line.line,content:source.text,diffPatch:true};
   };
   return finding=>{
     if(!safeOcrSnapshotPath(finding?.path)||!Number.isSafeInteger(finding.line)||finding.line<1)return null;

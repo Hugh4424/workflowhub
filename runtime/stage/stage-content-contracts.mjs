@@ -1,5 +1,6 @@
 // Current post Phase and ordinary decision-log text contracts.
 // Pure facts only: no retired appendices, hash-bound identities or stage-completion machines.
+import { isAbsolute, relative, resolve } from "node:path";
 
 const ACCEPTANCE_CRITERION_SOURCE = String.raw`AC(?:\d{1,3}|-\d{1,3}|(?:-[A-Z][A-Z0-9]*)+-\d{1,3})`;
 
@@ -163,19 +164,55 @@ function markdownSections(document, level, prefix = "") {
   }));
 }
 
-function unsafeWritePath(path) {
+function unsafeWritePath(path, reviewReadScope) {
+  if (path.startsWith("/") && reviewReadScope) {
+    if (resolve(path) !== path || /[\\\0*?\[\]{}]/.test(path)) return true;
+    const owned = reviewReadScope.repositories?.some(repo => {
+      const within = relative(repo.sourceRoot, path);
+      return within && !isAbsolute(within) && !within.split("/").includes("..") && repo.paths?.includes(within);
+    });
+    const evidence = reviewReadScope.taskRoot && reviewReadScope.evidenceFiles?.some(({ ref }) =>
+      path === resolve(reviewReadScope.taskRoot, ref));
+    return !owned && !evidence;
+  }
   return path.startsWith("/") || /^[A-Za-z]:/.test(path)
     || /[\\\0*?\[\]{}]/.test(path)
     || path.split("/").some((part) => !part || part === "." || part === "..");
 }
 
 const SHARED_GOVERNANCE_PATH = /(?:^|\/)(?:README|AGENTS|CLAUDE|CONTEXT|CONSTITUTION|GLOSSARY)\.md$/i;
+// Compare the approved source identity while retaining original text in facts
+// and diagnostics. Without a host scope the existing relative identity stays.
+function writePathIdentity(path, scope) {
+  if (!scope) return path;
+  if (!isAbsolute(path)) return JSON.stringify(['wh', path]);
+  for (const repo of scope.repositories ?? []) {
+    const within = relative(repo.sourceRoot, path);
+    if (repo.paths?.includes(within)) return JSON.stringify([repo.id, within]);
+  }
+  const evidence = scope.evidenceFiles?.find(({ref}) => path === resolve(scope.taskRoot ?? '/', ref));
+  return evidence ? JSON.stringify(['task-evidence', evidence.ref]) : path;
+}
+
+function hasAffirmativeCodeWrite(action) {
+  // A prohibition applies to its clause, not to a later contradictory action.
+  return String(action ?? '').split(/[;；,，。\n]|\b(?:and|but|however|then)\b|但是|但|却|并且|同时|随后|然后|并/i).some(clause => {
+    const affirmative = clause
+      .replace(/\b(?:do not|don't|must not|never)\s+.*$/i, '')
+      .replace(/(?:不得|禁止|无需|不)(?:产出|生产|编写|写|修改|更改|编辑|实现|新增|删除|重构|修复|调整|替换|迁移).*$/, '')
+      .replace(/(?:no production writes|无生产修改)/gi, '')
+      // Remove only the inspected noun span, never the rest of the action.
+      .replace(/(?:核验|审查|检查|核对|复核|阅读|读取)(?:现有|已有|当前)?(?:实现|重构)(?:结果)?/g, '');
+    return /\b(?:implement|refactor)\b/i.test(affirmative)
+      || /(?:\b(?:produce|change|write|modify|edit|add|remove|delete|create|update|replace|fix|patch|rewrite|migrate)\b|实现|重构|产出|生产|编写|写入|修改|更改|编辑|新增|删除|修复|调整|替换|迁移)[^;；\n]*(?:\b(?:code|source|file|function|class|method|module|implementation)\b|代码|源码|源文件|函数|模块|\.[a-z][a-z0-9]*\b)/i.test(affirmative);
+  });
+}
 function isSharedGovernancePath(path) { return SHARED_GOVERNANCE_PATH.test(path) || /(?:^|\/)architecture\/components\.ya?ml$/i.test(path); }
 
 const EXPLICIT_EMPTY_WRITE_SET = /^none(?:\s*[（(][^`()（）\r\n]*[）)])?$/i;
 const EMPTY_WRITE_SET_PREFIX = /^none(?=$|[\s（(;；])/i;
 
-function executionIndexRows(document, errors) {
+function executionIndexRows(document, errors, reviewReadScope) {
   const lines = document.split(/\r?\n/);
   const start = lines.findIndex((line) => /^##\s+(?:Execution Index|执行索引)\s*$/i.test(line));
   if (start < 0) return null;
@@ -207,7 +244,7 @@ function executionIndexRows(document, errors) {
     const explicitNone = EXPLICIT_EMPTY_WRITE_SET.test(cells[3].trim());
     if (paths.length === 0 && !explicitNone) rowErrors.push("write set is empty");
     if (EMPTY_WRITE_SET_PREFIX.test(cells[3].trim()) && !explicitNone) rowErrors.push("none write set declaration is invalid");
-    for (const path of paths) if (unsafeWritePath(path)) rowErrors.push(`unsafe write set path: ${path}`);
+    for (const path of paths) if (unsafeWritePath(path, reviewReadScope)) rowErrors.push(`unsafe write set path: ${path}`);
     if (rowErrors.length) {
       errors.push(...rowErrors.map((error) => `${label} ${error}`));
       continue;
@@ -367,14 +404,14 @@ function analyzeMarkdownTableCells(line) {
     .map((cell) => cell.trim());
 }
 
-export function validatePostPhaseContract({ spec, index, phases } = {}) {
+export function validatePostPhaseContract({ spec, index, phases, reviewReadScope } = {}) {
   const errors = [];
   if (!nonEmptyString(spec)) errors.push("spec.md content is required");
   if (!nonEmptyString(index)) errors.push("phases/index.md content is required");
   if (!phases || typeof phases !== "object" || Array.isArray(phases)) errors.push("independent Phase files are required");
   if (errors.length) return Object.freeze({ ok: false, errors: Object.freeze(errors), facts: null });
 
-  const rows = executionIndexRows(index, errors);
+  const rows = executionIndexRows(index, errors, reviewReadScope);
   if (!rows || rows.length === 0) errors.push("phases/index.md requires an Execution Index with Phase pointers");
   if (/^\s*[-*]\s*(?:\*\*)?(?:gate_cmd|expected_exit|oracle|evidence_path)\b/mi.test(index)) {
     errors.push("Phase index must remain pointer-only; command, oracle, and evidence belong to Phase files");
@@ -427,20 +464,22 @@ export function validatePostPhaseContract({ spec, index, phases } = {}) {
       errors.push(`${expectedPath} Write set is missing`);
       scopeValid = false;
     }
-    for (const path of declaredWriteSet) if (unsafeWritePath(path)) {
+    for (const path of declaredWriteSet) if (unsafeWritePath(path, reviewReadScope)) {
       errors.push(`${expectedPath} unsafe Write set path: ${path}`);
       scopeValid = false;
     }
-    if (!sameIds(declaredWriteSet, row.write_set)) {
+    const sourceIdentity = path => writePathIdentity(path, reviewReadScope);
+    if (!sameIds(new Set(declaredWriteSet.map(sourceIdentity)), new Set(row.write_set.map(sourceIdentity)))) {
       errors.push(`${expectedPath} write set differs from Phase index`);
       scopeValid = false;
     }
     for (const path of declaredWriteSet) {
       if (isSharedGovernancePath(path)) continue;
-      const owners = writeOwners.get(path) ?? [];
+      const identity = sourceIdentity(path);
+      const owners = writeOwners.get(identity) ?? [];
       const owner = owners.find((ref) => !serializedPair(ref, expectedPath));
       if (owner) errors.push(`${expectedPath} write set duplicates ${path} owned by ${owner}`);
-      writeOwners.set(path, [...owners, expectedPath]);
+      writeOwners.set(identity, [...owners, expectedPath]);
     }
     const dependencyText = fieldValue(body, "Dependency");
     const dependency = dependencyText?.match(/`([^`]+)`/)?.[1] ?? dependencyText ?? null;
@@ -497,7 +536,12 @@ export function validatePostPhaseContract({ spec, index, phases } = {}) {
         errors.push(`${expectedPath} ${taskId} Source / FR / AC must bind original source, FR, and AC`);
       }
       const filePaths = inlinePaths(fields["Files / symbols"] ?? "").filter((path) => /[/.]/.test(path));
-      if (filePaths.length === 0 || filePaths.some((path) => !declaredWriteSet.includes(path))) {
+      const readOnlyTask = explicitNone && row.write_set.length === 0 && declaredWriteSet.length === 0
+        && /(?:read-only|只读)/i.test(fields["Files / symbols"] ?? "")
+        && /(?:read-only|只读)/i.test(fields.Action ?? "")
+        && /(?:no production writes|无生产修改|不.*(?:写|修改)|do not produce or change code)/i.test(`${fields["Files / symbols"] ?? ""} ${fields.Action ?? ""}`)
+        && !hasAffirmativeCodeWrite(fields.Action);
+      if (!readOnlyTask && (filePaths.length === 0 || filePaths.some((path) => !declaredWriteSet.some(owned => sourceIdentity(owned) === sourceIdentity(path))))) {
         errors.push(`${expectedPath} ${taskId} Files / symbols must name owned write-set paths`);
       }
       if (!/(?:\bsymbol|符号|N\/A\s+[—-]\s+\S)/i.test(fields["Files / symbols"] ?? "")) {

@@ -848,3 +848,122 @@ nativeBinaryTest("rejects real ZIP when its supplied diff lacks a GIT binary pat
 nativeBinaryTest("rejects real ZIP when its source path conflicts with a declared packet control",()=>nativeBinaryGuardRejection("control-conflict"));
 
 });
+
+
+// C01 additions: scoped real Git/packet seams; no provider/network or production Git writes.
+async function c01Modules(){
+  const {pathToFileURL}=await import('node:url');const root=process.env.C01_WIRING_PRODUCTION_ROOT??repoRoot;
+  return {cli:await import(pathToFileURL(join(root,'tools/cli/stage-runtime.mjs')).href),source:await import(pathToFileURL(join(root,'skills/wh-review/scripts/review-source.mjs')).href),adapter:await import(pathToFileURL(join(process.env.C01_WIRING_ADAPTER_ROOT??root,'runtime/review/ocr-delegation-adapter.mjs')).href)};
+}
+async function c01ScopedFixture(){
+  const state=fixture(),wh=state.worktreeRoot,pb=join(state.root,'pb'),attachmentRoot=join(state.root,'c01-review-data');mkdirSync(pb);mkdirSync(attachmentRoot);
+  git(pb,['init','-q','-b','main']);git(pb,['config','user.name','C01 packet oracle']);git(pb,['config','user.email','oracle@example.invalid']);git(pb,['config','commit.gpgsign','false']);
+  writeFileSync(join(pb,'README.md'),'PB BASE\n');writeFileSync(join(pb,'deleted.mjs'),'PB DELETED BASE\n');git(pb,['add','.']);git(pb,['commit','-qm','PB baseline']);
+  writeFileSync(join(wh,'deleted.mjs'),'WH DELETED BASE\n');git(wh,['add','deleted.mjs']);git(wh,['commit','-qm','WH deleted baseline']);
+  const context=await contextFor(state),baseWh=git(wh,['rev-parse','HEAD']),basePb=git(pb,['rev-parse','HEAD']);
+  context.workspace={...context.workspace,baselineCommit:baseWh};
+  const paths=['README.md','new.mjs','deleted.mjs'];
+  const scope={taskId:state.taskId,primaryRoot:wh,repositories:[{id:'wh',sourceRoot:wh,targetRepoRoot:context.workspace.targetRepoRoot,baseCommit:baseWh,expectedHead:baseWh,expectedBranch:context.workspace.branch,paths},
+    {id:'pb',sourceRoot:pb,targetRepoRoot:pb,baseCommit:basePb,expectedHead:basePb,expectedBranch:'main',paths}],evidenceFiles:[],authorizationSource:{confirmationRef:'controlled host fixture',materialRefs:[]}};
+  return {state,wh,pb,attachmentRoot,context,scope};
+}
+const c01FinalRequest=()=>({stage:'verify-code',subject_kind:'worktree',materials:{changed_files:'actual controlled committed, staged, dirty, new and deleted paths',acceptance_criteria:'AC-1: actual namespace source bytes and failure boundaries.',implementation_assessment:'Only the real prepare/capture/compact/packet seam is observed.',test_context:'Controlled Git fixtures; no model quality.',open_risks:'No external provider or production task acceptance.'}});
+it('C01 wiring namespaced phase and terminal source bytes',async()=>{
+  const {cli}=await c01Modules(),f=await c01ScopedFixture(),{state,wh,pb,scope,context,attachmentRoot}=f;
+  writeFileSync(join(wh,'README.md'),'WH COMMITTED\n');git(wh,['add','README.md']);git(wh,['commit','-qm','WH committed change']);scope.repositories[0].expectedHead=git(wh,['rev-parse','HEAD']);
+  writeFileSync(join(wh,'README.md'),'WH CURRENT DIRTY\n');writeFileSync(join(pb,'README.md'),'PB CURRENT STAGED\n');git(pb,['add','README.md']);
+  writeFileSync(join(wh,'new.mjs'),'WH NEW CURRENT\n');writeFileSync(join(pb,'new.mjs'),'PB NEW CURRENT\n');fs.unlinkSync(join(wh,'deleted.mjs'));fs.unlinkSync(join(pb,'deleted.mjs'));
+  writeFileSync(join(pb,'outside.mjs'),'PB UNAPPROVED SENTINEL\n');
+  const request=c01FinalRequest();request.materials['repos/pb/new.mjs']='approved current context';request.materials['repos/pb/outside.mjs']='UNAPPROVED CONTEXT SENTINEL';
+  let received;
+  const bundle=cli.prepareTaskBoundBuildCodeReviewBundle(context,request,{loadConfig:()=>({attachmentRoot}),resolveReviewReadScope:()=>scope,buildMaterials:input=>{received=input;return buildReviewMaterials(input);}});
+  try{
+    const diff=readFileSync(join(bundle.bundleRoot,'changes.diff'),'utf8');
+    for(const repo of ['wh','pb'])for(const path of ['README.md','new.mjs','deleted.mjs'])expect(diff).toContain('repos/'+repo+'/'+path);
+    expect(diff).toContain('WH CURRENT DIRTY');expect(diff).toContain('PB CURRENT STAGED');expect(diff).toContain('WH NEW CURRENT');expect(diff).toContain('PB NEW CURRENT');
+    expect(diff).toContain('-WH DELETED BASE');expect(diff).toContain('-PB DELETED BASE');expect(diff).not.toContain('PB UNAPPROVED SENTINEL');
+    expect(readFileSync(join(bundle.bundleRoot,'repos/wh/README.md'),'utf8')).toBe('WH CURRENT DIRTY\n');expect(readFileSync(join(bundle.bundleRoot,'repos/pb/README.md'),'utf8')).toBe('PB CURRENT STAGED\n');
+    expect(readFileSync(join(bundle.bundleRoot,'repos/pb/new.mjs'),'utf8')).toBe('PB NEW CURRENT\n');expect(fs.existsSync(join(bundle.bundleRoot,'repos/pb/deleted.mjs'))).toBe(false);
+    expect(received.changed_paths).toContain('repos/pb/new.mjs');expect(received.materials['repos/pb/new.mjs']).toBe('approved current context');expect(received.materials).not.toHaveProperty('repos/pb/outside.mjs');
+    expect(received.dropped_materials).toContainEqual({dropped_key:'repos/pb/outside.mjs',reason:'outside_task_changed_paths'});
+    const identity=JSON.parse(readFileSync(join(bundle.bundleRoot,'source.json'),'utf8'));expect(identity.repositories).toEqual(expect.arrayContaining([expect.objectContaining({id:'wh',baseline_commit:scope.repositories[0].baseCommit,captured_head:scope.repositories[0].expectedHead}),expect.objectContaining({id:'pb',baseline_commit:scope.repositories[1].baseCommit})]));
+    expect(JSON.stringify(identity)).not.toContain(state.root);
+  }finally{bundle.dispose();}
+  // Same producer on a declared P3 intersection, excluding terminal-only WH new/delete.
+  const materialRoot=join(wh,'specs',state.taskId),owned='`README.md`；`'+pb+'/README.md`；`'+pb+'/new.mjs`；`'+pb+'/deleted.mjs`';
+  writeFileSync(join(materialRoot,'phases/P3.md'),readFileSync(join(materialRoot,'phases/P3.md'),'utf8').replaceAll('`README.md`',owned));
+  writeFileSync(join(materialRoot,'phases/index.md'),readFileSync(join(materialRoot,'phases/index.md'),'utf8').replace(/^(\| `P3`[^\n]*?)`README.md`/m,'$1'+owned));
+  const phase=cli.prepareTaskBoundBuildCodeReviewBundle(context,{stage:'build-code',review_scope:'phase',phase_id:'P3',materials:{approved_spec:'actual controlled dual Phase',acceptance_criteria:'AC-1: declared intersection only'}},{loadConfig:()=>({attachmentRoot}),reviewReadScope:scope});
+  try{const diff=readFileSync(join(phase.bundleRoot,'changes.diff'),'utf8');expect(diff).toContain('PB NEW CURRENT');expect(diff).toContain('WH CURRENT DIRTY');expect(diff).not.toContain('repos/wh/new.mjs');expect(diff).not.toContain('repos/wh/deleted.mjs');}finally{phase.dispose();}
+  expect(readdirSync(attachmentRoot).filter(name=>name.startsWith('review-source-')||name.startsWith('.ocr-code-review-'))).toEqual([]);
+});
+it('C01 wiring dirfd captures reject ancestor swaps before content reads',async()=>{
+  const {source}=await c01Modules(),f=await c01ScopedFixture(),{pb,state,scope,attachmentRoot}=f;
+  const outside=join(state.root,'outside'),observations=join(state.root,'observer.jsonl'),instrument=join(state.root,'python-observer');mkdirSync(outside);mkdirSync(instrument);
+  writeFileSync(join(outside,'README.md'),'UNAUTHORIZED REGULAR SECRET\n');const forbidden=fs.statSync(join(outside,'README.md'));
+  // Python observer wraps all os.open/os.read calls, logging FD inode before
+  // reads. Its deterministic subprocess return hook swaps root on ls-tree,
+  // before any business current source can be opened. Git argv are logged.
+  writeFileSync(join(instrument,'sitecustomize.py'),String.raw`
+import os,json,subprocess
+log=os.environ['C01_OBSERVER_LOG'];root=os.environ['C01_OBSERVER_ROOT'];outside=os.environ['C01_OBSERVER_OUTSIDE'];realopen=os.open;realread=os.read;run=subprocess.run;swapped=False
+writer=open(log,'a',buffering=1)
+def note(value):writer.write(json.dumps(value)+'\n')
+def opened(path,*args,**kwargs):
+ fd=realopen(path,*args,**kwargs);s=os.fstat(fd);note({'event':'open','path':str(path),'dev':s.st_dev,'ino':s.st_ino});return fd
+def read(fd,*args,**kwargs):
+ s=os.fstat(fd);note({'event':'read','dev':s.st_dev,'ino':s.st_ino});return realread(fd,*args,**kwargs)
+def command(argv,*args,**kwargs):
+ global swapped
+ note({'event':'git','argv':argv});result=run(argv,*args,**kwargs)
+ if 'ls-tree' in argv and not swapped:
+  os.rename(root,root+'-held');os.symlink(outside,root);swapped=True;note({'event':'swap'})
+ return result
+if realopen in os.supports_dir_fd:os.supports_dir_fd.add(opened)
+os.open=opened;os.read=read;subprocess.run=command
+`);
+  const prior={};for(const [key,value] of Object.entries({PYTHONPATH:instrument,C01_OBSERVER_LOG:observations,C01_OBSERVER_ROOT:pb,C01_OBSERVER_OUTSIDE:outside})){prior[key]=process.env[key];process.env[key]=value;}
+  let observed,error,captured;
+  try{try{captured=source.captureReviewSource({sourceRoot:pb,targetRepoRoot:pb,baselineCommit:scope.repositories[1].baseCommit,expectedHead:scope.repositories[1].expectedHead,expectedBranch:'main',writeSet:['README.md'],repositoryId:'pb',secureRead:true,reviewDataRoot:attachmentRoot});}catch(caught){error=caught;}
+    observed=fs.existsSync(observations)?readFileSync(observations,'utf8').trim().split('\n').map(JSON.parse):[];
+  }finally{captured?.dispose();for(const[key,value]of Object.entries(prior)){if(value===undefined)delete process.env[key];else process.env[key]=value;}if(fs.existsSync(pb+'-held')){fs.unlinkSync(pb);fs.renameSync(pb+'-held',pb);}}
+  expect(observed.some(e=>e.event==='swap'),'deterministic swap must actually execute; no environment failure counts').toBe(true);
+  expect(error?.message).toMatch(/ancestor changed/);expect(captured).toBeUndefined();
+  expect(observed.filter(e=>(e.event==='open'||e.event==='read')&&e.dev===forbidden.dev&&e.ino===forbidden.ino),'no unauthorized regular inode open or read').toEqual([]);
+  expect(observed.filter(e=>e.event==='git').every(e=>!e.argv.includes('status')&&!e.argv.includes('diff')),'no Git current source content command before swap').toBe(true);
+  expect(readdirSync(attachmentRoot).filter(name=>name.startsWith('review-source-'))).toEqual([]);
+},15000);
+it('C01 wiring direct and shard anchors preserve quoted UTF8 and hunk text',async()=>{
+  const {cli,adapter}=await c01Modules(),f=await c01ScopedFixture(),{wh,scope,context,attachmentRoot,state}=f;
+  const names=['中文 file.mjs','a.txt','b.txt','�.txt'];
+  for(const name of names)writeFileSync(join(wh,name),'old\n');git(wh,['add','--',...names]);git(wh,['commit','-qm','anchor baseline']);
+  scope.repositories[0].baseCommit=git(wh,['rev-parse','HEAD']);scope.repositories[0].expectedHead=scope.repositories[0].baseCommit;scope.repositories[0].paths=names;scope.repositories[1].paths=[];
+  const run=async large=>{
+    writeFileSync(join(wh,'中文 file.mjs'),'中文 source\n');writeFileSync(join(wh,'a.txt'),'++ b/repos/wh/b.txt\nsame\n'+(large?'filler\n'.repeat(50000):''));writeFileSync(join(wh,'b.txt'),'same\n');writeFileSync(join(wh,'�.txt'),'invalid collision target\n');
+    const bundle=cli.prepareTaskBoundBuildCodeReviewBundle(context,c01FinalRequest(),{loadConfig:()=>({attachmentRoot}),reviewReadScope:scope});
+    try{
+      const index=fs.existsSync(join(bundle.bundleRoot,'diff-index.json'))?JSON.parse(readFileSync(join(bundle.bundleRoot,'diff-index.json'),'utf8')):null;
+      expect(Boolean(index)).toBe(large);
+      const cases=[{path:'repos/wh/中文 file.mjs',text:'+中文 source',line:1},{path:'repos/wh/a.txt',text:'+same',line:2}];
+      const findings=cases.map(item=>{const ref=large?index.changes.find(c=>c.path===item.path).shards[0].ref:'changes.diff';const diff=readFileSync(join(bundle.bundleRoot,ref),'utf8');const line=diff.split('\n').findIndex(value=>value===item.text)+1;expect(line).toBeGreaterThan(0);return {severity:'minor',path:large?ref:'diff/changes.md',line:line+(large?0:3),issue:'controlled source mapping',recommendation:'observe actual source',root_cause:'controlled anchor fixture',evidence_kind:'direct',evidence:'`'+item.text.slice(1)+'`'};});
+      const nativeCli=join(state.root,'owned-c01-native-cli');writeFileSync(nativeCli,'#!/usr/bin/env node\nconsole.log(JSON.stringify({type:"thread.started",thread_id:"c01-controlled"}));console.log(JSON.stringify({type:"item.completed",item:{type:"agent_message",text:JSON.stringify({findings:'+JSON.stringify(findings)+'})}}));console.log(JSON.stringify({type:"turn.completed"}));\n',{mode:0o700});
+      const parsed=await adapter.runOcrDelegationRound({...c01FinalRequest(),candidate_experiment:true},{buildBundle:()=>bundle,executor:params=>adapter.runConfiguredOcrHostReview(params,{sourceBundle:bundle,trustedContext:{trusted:{},route:{minimum_heterologous:1},selection:{providers:['codex/owned']},providerConfig:{providers:{'codex/owned':{enabled:true,command:nativeCli,model:'controlled-cli'}}}}})});
+      expect(parsed.status,JSON.stringify(parsed.provider_results?.map(p=>p.error))).toBe('available');expect(parsed.findings).toEqual(expect.arrayContaining(cases.map(item=>expect.objectContaining({path:item.path,line:item.line}))));
+      expect(parsed.provider_results[0].evidence_anchor_valid).toEqual([true,true]);
+    }finally{bundle.dispose();}
+  };
+  await run(false);await run(true);
+  // Exact producer bytes create malformed/invalid-byte negative packets. A
+  // manifest-listed U+FFFD source must never make \377 a valid path anchor.
+  for(const bad of ['invalid-byte','invalid-hunk']){
+    const text='diff --git "a/repos/wh/\\377.txt" "b/repos/wh/\\377.txt"\n--- "a/repos/wh/\\377.txt"\n+++ "b/repos/wh/\\377.txt"\n@@ -1 +1 @@\n-old\n+invalid collision target\n';
+    const malformed=bad==='invalid-byte'?text:text.replaceAll('\\377','�').replace('@@ -1 +1 @@','@@ -1,9 +1,9 @@');
+    const bundle=cli.prepareTaskBoundBuildCodeReviewBundle(context,c01FinalRequest(),{loadConfig:()=>({attachmentRoot}),reviewReadScope:scope,captureSource:options=>{const source=captureReviewSource(options);if(options.repositoryId==='wh'){writeFileSync(source.diffPath,malformed);source.changedPaths=['repos/wh/�.txt'];source.sourceBytes={'repos/wh/�.txt':Buffer.from('invalid collision target\n')};}return source;}});
+    try{
+      const finding={severity:'minor',path:'diff/changes.md',line:9,issue:'controlled invalid anchor',recommendation:'do not infer path',root_cause:'controlled negative',evidence_kind:'direct',evidence:'`invalid collision target`'};
+      const nativeCli=join(state.root,'owned-c01-native-cli');writeFileSync(nativeCli,'#!/usr/bin/env node\nconsole.log(JSON.stringify({type:"thread.started",thread_id:"c01-negative"}));console.log(JSON.stringify({type:"item.completed",item:{type:"agent_message",text:JSON.stringify({findings:'+JSON.stringify([finding])+'})}}));console.log(JSON.stringify({type:"turn.completed"}));\n',{mode:0o700});
+      const parsed=await adapter.runOcrDelegationRound({...c01FinalRequest(),candidate_experiment:true},{buildBundle:()=>bundle,executor:params=>adapter.runConfiguredOcrHostReview(params,{sourceBundle:bundle,trustedContext:{trusted:{},route:{minimum_heterologous:1},selection:{providers:['codex/owned']},providerConfig:{providers:{'codex/owned':{enabled:true,command:nativeCli,model:'controlled-cli'}}}}})});
+      expect(parsed.provider_results[0].evidence_anchor_valid,'invalid encoding/count must stay unavailable anchor').toEqual([false]);expect(parsed.findings[0]?.path).not.toBe('repos/wh/�.txt');
+    }finally{bundle.dispose();}
+  }
+},30000);
