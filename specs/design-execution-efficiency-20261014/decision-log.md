@@ -460,3 +460,23 @@ U-003 最小决定：任务类型表述更正为普通任务（原件头部「�
 | `quality/reviews/2026-10-14-014-make-decision-detail.json` | 细节审查回执（唯一一次） | 回执路径、口径与处置 | 已产生（`available`／`completed`／6 路全完成；仍无 provider 报告已读确认） |
 | `quality/evidence/decision-log-refs/module-design/`（M1–M6） | 复核逐模块设计原文时读 | 各模块方案、替代、验收、风险与未决项 | 已产生（六份唯一原件） |
 | `quality/evidence/decision-log-refs/review-dispositions.md` | 逐条处置 finding 时读 | 方向审查 8 个问题 + 细节审查 11 个问题的处置与理由 | 已产生 |
+
+## build-code 期间的真实用户方向补充
+
+### D-031 — 允许仅处理本次尚未对外引用的临时重复输出（2026-10-14）
+
+- **做什么**：为本日志 M5「删件前的安全规则」（原第218行）追加一个窄例外：仅本次尚未对外引用的临时重复 `.output` 可处理；前提是同任务、同目录的既有原件真实可读，命令、退出事实和字节相同，返回仍引用既有 canonical 原 ref，原件字节保持不变。
+  - 真实来源：任务库根 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/design-execution-efficiency-20261014` 下的 `quality/evidence/2026-10-14-085-p5-temporary-output-exception-user.json`（sha256 `5c089ee68b6f923af0dbf0d7628d9b7a645e788cb89f14dbb142e0aeedd49ebd`）；Codex chat `01a139be-b1e4-7b63-b15c-d809dc904fcb` 的 `send_user_message_question_reply`，questionItemId 为 `["request_user_input_async","call_2de2e3da474d4e7a92e461bfd71dc347",0]`，答复原话「允许这个窄例外（推荐）」。该答复是当前 build-code 中已取得的用户方向补充，不替代旧 make-decision 确认。
+  - 理由：原两问的「未改工作树字节」条件不覆盖外置同目录已有唯一输出；本次选择只消解该已展示冲突，保留同事实复用与真实执行事实。未获选择的更广删除路线不采用。
+- **不做什么**：历史输出、已引用输出及所有 immutable 原始回执均不删除、不覆写；原第218行对其它对象仍适用。此答复不批准扩大受保护 `captureCommand`／`reserveOutput`／`run-command.mjs`／`safe-write.mjs` 的生产写集，不弱化冻结 literal／oracle，不清历史账，不新增字段、状态、schema、账本或公共命令。
+- **风险**：刚产生的原始回执也可能已指向临时 output；本例外不许可修改或删除该 immutable 回执，也不许可留下悬空引用。P5/T014 实施者须在当前授权与既有写集内解决自洽真实回执及临时件处理；不能同时满足时保留原件并如实报告未解约束，不能借旧回执冒充本次或推断保护范围已获批准。领域术语 no change：本决定只补该删除场景的适用边界，沿用同任务、同目录、原件、引用及回执的既有含义，不创建新术语或 ADR。
+- **改动**：材料作者仅追加本决定，并在 `specs/design-execution-efficiency-20261014/phases/P5-同一事实不重复存件.md` 的 T014 `Action` 引用本决定与用户原件；消费者为当前 P5/T014 实施者和独立审查者。生产 seam 仍只在该卡既有写集 `tools/cli/stage-runtime.mjs` 的 capture 分支内寻找，本决定不宣称实现或质量已完成；旧日志正文及旧确认原字节保留。
+
+### D-032 — 批准发布前输出结算的私有 helper 窄扩与诊断落点（2026-10-14）
+
+- **做什么**：在 D-031 临时重复输出窄例外上，允许 P5/T014 扩入 `runtime/interface/run-command.mjs` 中 `captureCommand` 的私有发布前输出结算接口；原始回执保存完整真实执行事实和正确 output 引用，正常复用与未知诊断由既有 CLI 回复及 source/evidence 承载。
+  - 真实来源：任务库根 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/design-execution-efficiency-20261014` 的 `quality/evidence/2026-10-14-095-p5-helper-consumer-scope-user.json`（sha256 `6adf8d149e11b3b20cf856251b953df059f2d6b5c8e4778b3c6f2553043c5aec`）；Codex chat `01a139be-b1e4-7b63-b15c-d809dc904fcb` 的 `send_user_message_question_reply`，questionItemId `["request_user_input_async","call_f2fffe283ffd4b1fa2605db9f7004ccb",0]`，答复原话「批准窄扩写与诊断落点（推荐）」。整任务实施授权沿 `quality/evidence/2026-10-14-024-build-code-user-goal-original.md`。
+  - 理由与取舍：当前 create-only 回执不能在发布后整理；用户选择仅扩入发布前结算的必要职责，替代旧发布后处理 seam，未选择保持原边界使 P5 及依赖继续未达成的路线。工程接口与生命周期只写当前 spec/P5 卡，不在此复制方案。
+- **不做什么**：不改变 `reserveOutput`、`publishReceipt` 或 create-only 算法，不修改 `safe-write.mjs`、`task-store.mjs`、schema、公共命令或 stage 字段；不新增持久字段/状态/控制面，不删除或覆写历史、已发布记录及任何 immutable 原始回执。D-031 与085原件继续保留，原冻结测试和 oracle 强度不变。
+- **风险**：诊断若混入原始回执可能形成未经授权的持久事实；正常 reused/unknown 沿现有回复与 stage 文本，真实结算失败沿既有错误表达，不伪装为复用成功。P5/T014 实施者负责真实生产行为与失败路径，独立审查者核对；尚未实施、未测试或未审查部分不声明通过。领域术语 no change：沿用既有采集、原始回执、引用与诊断含义，不新增术语或 ADR。
+- **改动**：材料作者仅追加本决定、更新当前 `spec.md` 的 P5 接口职责与写集，以及 P5 卡的 T014 Files/Action/Boundary/Done 相关授权边界；生产 writer 为 P5/T014，新增私有结算职责的唯一 consumer 为 `tools/cli/stage-runtime.mjs` 的 capture 分支。owner、替代关系、必要验证和退出条件在现 spec 登记，不改责任登记 schema 或生成新的阶段许可。

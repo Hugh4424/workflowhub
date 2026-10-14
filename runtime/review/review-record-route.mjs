@@ -1,5 +1,6 @@
 import { constants, closeSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, readdirSync } from "node:fs";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { createHash } from "node:crypto";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { withLock } from "../interface/record-lock.mjs";
 import { appendRecord } from "../interface/safe-write.mjs";
 import { reviewIdentityFromInput } from "./review-policy.mjs";
@@ -74,7 +75,76 @@ function providerCoverage(member, materialKeys) {
   }
   return fact;
 }
-async function providerFact(member,dir,slug,root,discardedFacts) {
+function readProviderOriginal(path, dir) {
+  if (dirname(path) !== dir) throw coded("PROVIDER_OUTPUT_REF_INVALID", "provider original is outside this task's review directory");
+  const checked = checkedPath(path), named = lstatSync(checked);
+  const fd = openSync(checked, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    const before = fstatSync(fd);
+    if (before.dev !== named.dev || before.ino !== named.ino) throw coded("PROVIDER_OUTPUT_CHANGED", "provider original replaced before reading");
+    const bytes = readFileSync(fd), after = fstatSync(fd), current = lstatSync(checked);
+    if (before.size !== after.size || before.mtimeMs !== after.mtimeMs
+        || current.dev !== after.dev || current.ino !== after.ino || current.nlink !== 1 || current.isSymbolicLink())
+      throw coded("PROVIDER_OUTPUT_CHANGED", "provider original changed while reading");
+    return bytes;
+  } finally { closeSync(fd); }
+}
+function priorProviderOutputs(dir, root, provider, taskId, discardedFacts, droppedKey) {
+  const paths = new Set();
+  for (const name of readdirSync(dir).filter(name => name.endsWith(".json"))) {
+    let record;
+    try { record = JSON.parse(readProviderOriginal(join(dir, name), dir).toString("utf8")); }
+    catch (error) {
+      discardedFacts.push({ fact_kind: "provider_output_deduplication_unknown", dropped_key: droppedKey,
+        reason: `deduplication: unknown; historical record ${relative(root, join(dir, name)).split("\\").join("/")}; ${error.code ?? error.name ?? "REVIEW_RECORD_UNREADABLE"}: ${error.message}` });
+      continue; // Preserve the damaged original; it cannot establish ownership.
+    }
+    if (record.version !== "wh-review-result.v1" || record.task_id !== taskId || !Array.isArray(record.provider_results)) continue;
+    for (const member of record.provider_results) {
+      if (member?.provider !== provider) continue;
+      for (const ref of [member.output_ref, member.raw_output_ref, ...(Array.isArray(member.evidence_refs) ? member.evidence_refs : [])]) {
+        if (typeof ref !== "string" || !ref.endsWith(".output")) continue;
+        const path = isAbsolute(ref) ? resolve(ref) : resolve(root, ref);
+        if (dirname(path) === dir) paths.add(path);
+      }
+    }
+  }
+  return paths;
+}
+function providerOutputReuse(dir, root, discardedFacts, taskId) {
+  // This request's event ownership plus existing record members are the only
+  // provider-to-ref sources. Bare filenames never establish provider identity.
+  const owned = new Map();
+  return async (provider, slug, output, droppedKey) => {
+    const bytes = Buffer.from(output);
+    if (!provider) {
+      discardedFacts.push({ fact_kind: "provider_output_deduplication_unknown", dropped_key: droppedKey, reason: "deduplication: unknown; provider identity is empty" });
+      return appendRecord(dir, slug, "output", bytes);
+    }
+    const lockName = `provider-output-${createHash("sha256").update(provider).digest("hex").slice(0, 24)}`;
+    return withLock(dir, lockName, async () => {
+      if (!owned.has(provider)) owned.set(provider, priorProviderOutputs(dir, root, provider, taskId, discardedFacts, droppedKey));
+      const candidates = owned.get(provider);
+      for (const path of candidates) {
+        let original;
+        try { original = readProviderOriginal(path, dir); }
+        catch (error) {
+          discardedFacts.push({ fact_kind: "provider_output_deduplication_unknown", dropped_key: droppedKey,
+            reason: `deduplication: unknown; ${relative(root, path).split("\\").join("/")}; ${error.code ?? "PROVIDER_OUTPUT_UNREADABLE"}: ${error.message}` });
+          continue;
+        }
+        if (!original.equals(bytes)) continue;
+        discardedFacts.push({ fact_kind: "provider_output_reused", dropped_key: droppedKey,
+          reason: `same bytes as ${relative(root, path).split("\\").join("/")}` });
+        return path;
+      }
+      const path = await appendRecord(dir, slug, "output", bytes);
+      candidates.add(path);
+      return path;
+    });
+  };
+}
+async function providerFact(member,dir,slug,root,discardedFacts,reuseOutput) {
   if(!member || typeof member.provider!=="string" || !member.provider) throw coded("PROVIDER_RESULT_INVALID","provider name is missing");
   const fact={...member};
   // Raw output is one immutable local original, never copied into the result.
@@ -84,7 +154,7 @@ async function providerFact(member,dir,slug,root,discardedFacts) {
       delete fact[key];
       continue;
     }
-    const path=await appendRecord(dir,slug+"-"+key.replaceAll("_","-"),"output",fact[key]);
+    const path=await reuseOutput(member.provider,slug+"-"+key.replaceAll("_","-"),fact[key],`${member.provider}:${key}`);
     if(key==="raw_output") {
       const ref=relative(root,path).split("\\").join("/");
       if(fact.raw_output_ref && typeof fact.raw_output_ref==="object") {
@@ -116,13 +186,15 @@ export async function recordSimpleReviewRequest({taskDir,request,runRound=runSim
     const started=new Date().toISOString(); let result;
     let rawCount=0;
     const discardedFacts=[];
+    const reuseOutput=providerOutputReuse(dir,root,discardedFacts,manifest.task_id);
     const onProviderOutput=async ({provider,role=null,output})=>{
       if(typeof output!=="string" && !Buffer.isBuffer(output) && !(output instanceof Uint8Array) || typeof provider!=="string")throw coded("PROVIDER_OUTPUT_INVALID","provider raw output must be named text or original bytes");
       if ((typeof output === "string" ? Buffer.byteLength(output, "utf8") : output.byteLength) === 0) {
         discardedFacts.push({ fact_kind: "provider_output_not_persisted", dropped_key: `provider-output:${provider}`, reason: "zero_bytes" });
         return null;
       }
-      const path=await appendRecord(dir,`${tuple.stage}-${tuple.review_scope ?? "document"}-provider-${++rawCount}`,"output",output);
+      const event=++rawCount;
+      const path=await reuseOutput(provider,`${tuple.stage}-${tuple.review_scope ?? "document"}-provider-${event}`,output,`provider-output:${provider}:${event}`);
       return relative(root,path).split("\\").join("/");
     };
     try { result=await runRound({...request,...tuple,...structuredClone(submittedSubject)},{...(signal ? {signal} : {}),onProviderOutput,taskId:manifest.task_id}); }
@@ -143,7 +215,7 @@ export async function recordSimpleReviewRequest({taskDir,request,runRound=runSim
       result={...result,discarded_facts:[...(result.discarded_facts ?? []),...(parsed.discarded_facts ?? [])]};
     }
     const providers=[];
-    for(const [index,member] of (result.provider_results ?? []).entries()) providers.push(await providerFact(member,dir,`${tuple.stage}-${tuple.review_scope ?? "document"}-provider-${index+1}`,root,discardedFacts));
+    for(const [index,member] of (result.provider_results ?? []).entries()) providers.push(await providerFact(member,dir,`${tuple.stage}-${tuple.review_scope ?? "document"}-provider-${index+1}`,root,discardedFacts,reuseOutput));
     const slug=`${tuple.stage}-${tuple.review_scope ?? tuple.review_track ?? "document"}${tuple.phase_id ? "-"+tuple.phase_id.toLowerCase() : ""}`;
     const {material_id,authenticated_evidence,authenticated_evidence_sha256,snapshot_tree,candidate_tree,base_tree,request_key,request_hash,closure_manifest,material_revision,source,...ordinary}=result;
     const completed=new Date().toISOString();

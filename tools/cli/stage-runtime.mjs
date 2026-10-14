@@ -825,20 +825,59 @@ function currentPhaseMaterialsHead(context) {
   return GIT_OID.test(head) ? head : null;
 }
 
+// Candidate ownership and invocation equality belong to the capture caller.
+// The capture owner still validates bytes/path and publishes its receipt once.
+function captureOutputSettlement(input, recordDir, slug) {
+  let disposition = "deduplication: unknown (no eligible candidate)";
+  const read = (path) => {
+    if (typeof path !== "string" || resolve(path) !== path || dirname(path) !== recordDir) throw new Error("candidate outside current task tests");
+    const named = lstatSync(path);
+    if (!named.isFile() || named.isSymbolicLink() || named.nlink !== 1 || realpathSync(path) !== path) throw new Error("candidate is not a canonical single-link original");
+    const fd = openSync(path, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+    try {
+      const before = fstatSync(fd);
+      if (before.dev !== named.dev || before.ino !== named.ino) throw new Error("candidate replaced");
+      const bytes = readFileSync(fd), after = fstatSync(fd), current = lstatSync(path);
+      if (before.size !== after.size || before.mtimeMs !== after.mtimeMs || current.dev !== after.dev || current.ino !== after.ino) throw new Error("candidate changed");
+      return bytes;
+    } finally { closeSync(fd); }
+  };
+  const resolveOutputRef = (observed) => {
+    try {
+      const taskRoot = dirname(dirname(recordDir));
+      const ref = value => typeof value === "string" ? (isAbsolute(value) ? value : resolve(taskRoot, value)) : null;
+      const explicitOutput = ref(input.output_ref);
+      const receiptPath = ref(input.receipt_ref) ?? (explicitOutput?.endsWith(".output") ? explicitOutput.slice(0, -7) + ".json" : null);
+      const prior = JSON.parse(read(receiptPath).toString("utf8"));
+      const candidate = explicitOutput ?? ref(prior.output_ref);
+      if (!basename(receiptPath).endsWith(`-${slug}.json`) || ref(prior.output_ref) !== candidate) throw new Error("candidate receipt/ref/slug mismatch");
+      const fields = ["argv", "cwd", "exit_code", "signal", "timed_out", "cancelled", "truncated", "error"];
+      if (fields.some(key => JSON.stringify(prior[key]) !== JSON.stringify(observed[key])) || observed.timed_out || observed.cancelled || observed.error) throw new Error("different invocation outcome");
+      const previousBytes = read(candidate), freshBytes = read(observed.output_ref);
+      if (!previousBytes.equals(freshBytes)) throw new Error("bytes differ");
+      disposition = `reused: ${candidate} (same bytes)`;
+      return { output_ref: candidate, output_disposition: disposition };
+    } catch (error) { disposition = `deduplication: unknown (${error.message})`; return { output_disposition: disposition }; }
+  };
+  return { resolveOutputRef };
+}
+
 async function recordBuildCodeCommandEvidence(context, receipt) {
   return withLock(context.task.taskPath, "workflowhub-build-code-row", async () => {
     const current = readTaskFacts(context.task.taskPath).find(row => row?.record_kind === "stage" && row.stage === "build-code");
     const prior = current ? Object.fromEntries([...STAGE_ROW_KEYS, "phase_progress"].filter(key => Object.hasOwn(current, key)).map(key => [key, current[key]])) : {};
     const evidence = [...(current?.evidence?.value ?? [])];
     if (Number.isInteger(receipt.exit_code)) {
+      const signature = receipt.cancelled ? `cancelled: ${receipt.cancellation_reason ?? receipt.signal ?? "reason unavailable"}`
+        : receipt.timed_out ? "timed out" : receipt.error ? `${receipt.error.code}: ${receipt.error.message}`
+          : receipt.exit_code === 0 ? "exit 0; no failing assertion" : `exit ${receipt.exit_code}; output: ${receipt.output_ref}`;
       evidence.push({ command: JSON.stringify(receipt.argv), exit_code: receipt.exit_code,
-        failure_signature: receipt.cancelled ? `cancelled: ${receipt.cancellation_reason ?? receipt.signal ?? "reason unavailable"}`
-          : receipt.timed_out ? "timed out" : receipt.error ? `${receipt.error.code}: ${receipt.error.message}`
-            : receipt.exit_code === 0 ? "exit 0; no failing assertion" : `exit ${receipt.exit_code}; output: ${receipt.output_ref}` });
+        failure_signature: receipt.output_disposition && !signature.includes(receipt.output_disposition)
+          ? `${signature}; ${receipt.output_disposition}` : signature });
     }
     await writeStageRow(context.task.taskPath, { ...prior, record_kind: "stage", task_id: context.identity.taskId, stage: "build-code",
-      source: Number.isInteger(receipt.exit_code) ? `${current?.source ?? "command capture"}; receipt: ${receipt.receipt_ref}; output: ${receipt.output_ref}`
-        : `${current?.source ?? "command capture unavailable"}; receipt: ${receipt.receipt_ref}; output: ${receipt.output_ref}; ${receipt.error?.message ?? "no integer exit"}`,
+      source: Number.isInteger(receipt.exit_code) ? `${current?.source ?? "command capture"}; receipt: ${receipt.receipt_ref}; output: ${receipt.output_ref}${receipt.output_disposition ? "; " + receipt.output_disposition : ""}`
+        : `${current?.source ?? "command capture unavailable"}; receipt: ${receipt.receipt_ref}; output: ${receipt.output_ref}; ${receipt.error?.message ?? "no integer exit"}${receipt.output_disposition ? "; " + receipt.output_disposition : ""}`,
       evidence: evidence.length ? { value: evidence } : { value: null, reason: `no integer command exit; receipt: ${receipt.receipt_ref}` } });
   });
 }
@@ -1120,21 +1159,27 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     if (Object.keys(input).some((key) => !allowed.has(key))) throw new TypeError("verify input has unknown fields");
     if (input.shell !== undefined && input.command !== undefined) throw new TypeError("verify accepts shell or command, not both");
     if (input.timeoutMs !== undefined && input.timeout_ms !== undefined) throw new TypeError("verify accepts one timeout field");
-    // Historical receipt/output refs are accepted input labels only: native
-    // capture owns its fresh single output/receipt filenames, with no reuse.
+    // Only supplied current-task originals may be selected before receipt publication.
     const recordDir = join(context.task.taskPath, "quality", "tests");
     mkdirSync(recordDir, { recursive: true });
+    const settlement = input.output_ref !== undefined || input.receipt_ref !== undefined ? captureOutputSettlement(input, recordDir, input.slug ?? `${values.stage}-verify`) : null;
     let captured;
     try { captured = await captureCommand({ cwd: context.workspace.worktreeRoot, recordDir, slug: input.slug ?? `${values.stage}-verify`,
       ...(input.argv === undefined ? {} : { argv: input.argv }),
       ...((input.shell ?? input.command) === undefined ? {} : { shell: input.shell ?? input.command }),
       ...((input.timeoutMs ?? input.timeout_ms) === undefined ? {} : { timeoutMs: input.timeoutMs ?? input.timeout_ms }),
       ...(services.commandSignal === undefined ? {} : { signal: services.commandSignal }),
+      ...(settlement ? { resolveOutputRef: settlement.resolveOutputRef } : {}),
     }); } catch (error) {
+      const disposition = settlement ? error.code === "OUTPUT_SETTLEMENT_FAILED" ? error.message
+        : `deduplication: unknown; capture failed before output settlement; ${error.code ?? "CAPTURE_FAILED"}: ${error.message}` : null;
+      if (disposition && error.code !== "OUTPUT_SETTLEMENT_FAILED") error.message = disposition;
       if (values.stage === "build-code" && error.receipt_ref) {
         try {
           const receipt = JSON.parse(readFileSync(error.receipt_ref, "utf8"));
-          await recordBuildCodeCommandEvidence(context, { ...receipt, receipt_ref: error.receipt_ref });
+          await recordBuildCodeCommandEvidence(context, { ...receipt, receipt_ref: error.receipt_ref,
+            ...(disposition ? { output_disposition: disposition } : {}),
+          });
         } catch (evidenceError) {
           // Preserve the capture Error and its receipt; expose the secondary
           // failure through the stack already rendered by the CLI error path.

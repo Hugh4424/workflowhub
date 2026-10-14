@@ -271,7 +271,7 @@ Phase 边界由「可独立交付验收的单元」决定；写集是申报结�
   - **验收**：AC-008
 
 - **FR-EVIDENCE-003**：捕获层与审查输出层必须落实复用：`tools/cli/stage-runtime.mjs` 已接收但被弃用的 `receipt_ref` / `output_ref` 复用支路必须落实；`runtime/review/review-record-route.mjs` 的同内容 provider 输出（`:87` 与 `:119-127`）必须去重；复用事实按落点分别写进**既有**字段：**捕获层**（`tools/cli/stage-runtime.mjs` 的 `capture-tests`，落 stage 行）写进 stage 行的 `source` 与 `evidence`；**审查输出层**（`runtime/review/review-record-route.mjs`，落 review 记录）写进 review 记录既有的 `discarded_facts`。依据 `runtime/task/task-store.mjs` 的 `STAGE_ROW_KEYS`：stage 行**没有** `discarded_facts` 键（多写未知键会被拒绝），该键只存在于 review 记录；**上游 `decision-log.md` 的 D-022 把两处落点混写，本任务如实登记并用真实 schema 修正，不改写上游字节**，关联 PFACT-003、SCN-005、AC-008、AC-014
-  - **范围边界**：只改这两处运行时行为与既有字段写入；不减少任何 provider、轮次或并发，不新增字段/账本/控制面，不改 `safe-write.mjs`、`task-store.mjs`。
+  - **范围边界**：只改捕获与审查两处行为及既有落点；D-032 追加授权 `runtime/interface/run-command.mjs` 的私有发布前输出结算接口，由 P5/T014 承接；不减少任何 provider、轮次或并发，不新增字段/账本/控制面，不改 `safe-write.mjs`、`task-store.mjs`。
   - **依据**：D-019、D-022、D-023、module-design/M5.md。
   - **场景**：SCN-005
   - **验收**：AC-008、AC-014
@@ -438,7 +438,7 @@ Phase 边界由「可独立交付验收的单元」决定；写集是申报结�
 - **代码锚点**（符号名，无行号）：
   - `runtime/stage/stage-content-contracts.mjs`：`validatePostPhaseContract`、`isSharedGovernancePath`、`serializedPair`、`readTaskTypeFromDecisionLog`
   - `tools/cli/stage-runtime.mjs`：`stageRuntimeCliMain` 的 `review:record` 与 `verify:execute` 两条行为、`prepareTaskBoundBuildCodeReviewBundle`、`capture-tests` 私有分支
-  - `runtime/interface/run-command.mjs`：`captureCommand`（**只读**：本任务不改它；它每次由 `reserveOutput` 单调分配新件，是「捕获层复用」必须落在 `stage-runtime.mjs` 侧的原因）
+  - `runtime/interface/run-command.mjs`：`captureCommand` 的私有发布前输出结算接口（D-032）；流式采集仍先产生临时 output，结算发生在原始回执发布前；`reserveOutput`、`publishReceipt` 与 create-only 算法只读不改
   - `runtime/interface/safe-write.mjs`：`appendRecord`、`writeFileAtomic`、`createFileOnce`（**只读**，本任务零改动）
   - `runtime/review/review-record-route.mjs`：`recordSimpleReviewRequest`、`providerFact`、`onProviderOutput`、`providerCoverage`
   - `runtime/task/task-store.mjs`：`REVIEW_ORIGINS`、stage 行的 `evidence`／`material_bytes`／`source`（**只读**，本任务零改动）；`discarded_facts` 归 review 记录 schema／producer（**只读**）
@@ -453,7 +453,7 @@ Phase 边界由「可独立交付验收的单元」决定；写集是申报结�
 - **接口与数据流**：
   - 入口：用户在 make-decision 第 8／13 步看到入口事实与范围声明 ← 主会话调用 `evaluateMiniTaskScope` ← 一条既有四字段决定。
   - 计划：`spec.md` + `phases/P<n>.md` + `phases/index.md` → `validatePostPhaseContract`（写集、依赖、消费者、gate_cmd、oracle、卡片字段）→ `stage-runtime.mjs` 用「声明写集 ∩ 真实 diff」窄化审查包。
-  - 证据：命令 → `captureCommand`（写新件）→ **本任务新增的复用判定**（既有 ref 存在 + 命令逐字相同 + **字节比较确立内容相等**）→ 相等则复用既有 ref 并删除本次新写的重复件、把复用事实按既有 schema 落位：捕获层写进 stage 行的 `source` 与 `evidence`，审查输出层写进 review 记录的 `discarded_facts`；不相等或无法确立则保留新件并记 `deduplication: unknown`。
+  - 证据：命令 → `captureCommand` 流式写本次临时 output → 原始回执发布前的私有输出结算接口，唯一调用者为 `stage-runtime.mjs` capture 分支 → 同任务同目录既有原件真实可读、命令与退出事实一致且**内容相等已确立**时，沿 D-031 仅处理本次未对外引用的临时重复 output，选定既有 canonical ref → 原始回执按既有字段一次发布完整本次事实与正确 `output_ref`。正常 reused/unknown 只进既有 CLI 回复与 stage 行 `source`／`evidence`；不相等或无法确立则保留新件并如实记 unknown。真实结算失败由既有 `error` 槽保留失败，不冒成功。审查输出层仍写 review 记录既有 `discarded_facts`。
   - 审查记录：provider 原始流 → `recordSimpleReviewRequest` → **同一 provider 内、内容相同**的输出复用一份并写引用（**不跨 provider 去重**，见下）。
 - **失败语义**：
   - 入口材料缺失 → 写缺口 + `unassessed` + 具名 owner，不空填、不阻断。
@@ -461,7 +461,7 @@ Phase 边界由「可独立交付验收的单元」决定；写集是申报结�
   - 内容相等无法确立（既有件不可读、字节数不同、命令不同）→ 保留新件 + `deduplication: unknown`；**不得**据「命令相同 + 字节数一致」判定为重复（DF-08）。来源优先级：上游 D-022 的旧弱条件与混写目标受后续 DF-08 内容相等要求及本阶段实读 schema 限制；捕获写 source/evidence、review 写 discarded_facts。只在本 spec 登记更正，不覆盖决策/审查原字节。
   - 审查 provider 不可用/失败/超时/取消/无效输出/零成功路/空 findings → 如实记 unavailable／incomplete，**不换执行者、不属于外部停机适用范围、不缩减并发或轮次、不按时长停止**。
   - OCR 不可用 → 四件齐 + `read_confirmed` 保持 `null` + 不可证一律进 `undetermined`。
-- **新增控制面**：N/A — 不新增公共命令、schema、持久对象、账本或第二进度权威。捕获层复用是本任务在 `stage-runtime.mjs` 内新增的**私有实现分支**（不是第八类公共命令），其触发输入是既有 `receipt_ref`／`output_ref` 标签。
+- **新增控制面**：N/A — 不新增公共命令、schema、持久对象、账本或第二进度权威。捕获层复用是本任务在 `stage-runtime.mjs` 内新增的**私有实现分支**（不是第八类公共命令），其触发输入是既有 `receipt_ref`／`output_ref` 标签。D-032 私有接口职责登记：唯一 consumer 为 `tools/cli/stage-runtime.mjs` capture 分支，writer 为 P5/T014，文件既有 owner 为 move-map 的 `B0/P1 / MT-1-004`（当前实读）；承接输出结算并替代发布后改写/删除原始回执的错误 seam，不新增公共入口。验证沿冻结 T014 命令、既有采集/证据契约及相关失败路径；当该 consumer 退役或经独立审查的既有实现已承接同一职责且消费者完成改接时，删除本私有扩展；直接消费者仍存在时保留。`reserveOutput`／`publishReceipt`、create-only 与其它现有消费者行为保持既有口径。
 - **跨 provider 去重的边界（重要，如实登记）**：`tests/contract/ocr-delegation-route.test.mjs` 逐字断言「each provider owns both original streams, **no cross-provider hash-dedupe authority**」。因此 D-019／D-023 授权的「同内容 provider 输出不重复存件」在实现上**收窄为同一 provider 内、内容相同的输出**（`providerFact` 与 `onProviderOutput` 对同一 provider 产生的同一份内容）；跨 provider 同内容**不去重**。这是对既有测试所固化决定的尊重，不是范围扩大。
 
 ### 全局文件边界与依赖
@@ -470,7 +470,7 @@ Phase 边界由「可独立交付验收的单元」决定；写集是申报结�
 - **修改**（20 条，取自 `decision-log.md` 的 23 行写集表减去 3 条前置已落盘：`GLOSSARY.md`、两份 ADR）：
   `AGENTS.md`；`docs/standard-workflow.md`；`workflows/make-decision/SKILL.md`；`workflows/make-decision/steps.json`；`skills/decision-log/SKILL.md`；`skills/decision-log/templates/decision-log-template.md`；`skills/spec-plan/SKILL.md`；`skills/spec-plan/templates/phase-template.md`；`skills/spec-specify/templates/spec-template.md`；`workflows/build-plan/SKILL.md`；`workflows/build-code/SKILL.md`；`workflows/verify-code/SKILL.md`；`skills/wh-review/SKILL.md`；`skills/wh-review/contracts/build-plan.md`；`skills/wh-review/contracts/build-code.md`；`skills/wh-review/contracts/verify-code.md`；`skills/plan-eng-review/SKILL.md`；`docs/architecture/test-asset-governance-rules.md`；`tools/cli/stage-runtime.mjs`；`runtime/review/review-record-route.mjs`
   另加终末验收 Phase 自己回写的材料：`specs/design-execution-efficiency-20261014/spec.md`、`specs/design-execution-efficiency-20261014/phases/index.md` 与七个 `phases/P<n>-*.md`。
-- **禁止改动**：`CONSTITUTION.md`（D-027）；`runtime/stage/stage-content-contracts.mjs`；`runtime/interface/safe-write.mjs`；`runtime/task/task-store.mjs`；`runtime/interface/run-command.mjs`；`runtime/review/schemas/result.schema.json`；`specs/archive/**`；既有 `quality/reviews/**` 与 `quality/evidence/**` 原件（只读保留，不重写、不镜像）；`docs/adr/0035-*`／`0036-*`（既有决定，只引用）；本仓之外的 PaperBuilder CARD-05 全部字节（R-004）。
+- **禁止改动**：`CONSTITUTION.md`（D-027）；`runtime/stage/stage-content-contracts.mjs`；`runtime/interface/safe-write.mjs`；`runtime/task/task-store.mjs`；`runtime/interface/run-command.mjs` 的 D-032 批准范围之外（`reserveOutput`／`publishReceipt`／create-only 算法仍禁止改）；`runtime/review/schemas/result.schema.json`；`specs/archive/**`；既有 `quality/reviews/**` 与 `quality/evidence/**` 原件（只读保留，不重写、不镜像）；`docs/adr/0035-*`／`0036-*`（既有决定，只引用）；本仓之外的 PaperBuilder CARD-05 全部字节（R-004）。
 - **收敛次序与施工次序**：上游 D-009 的 M2→M1→M3+M7、再 M5/M6/M4 是 make-decision 细化讨论的次序，不是文件施工依赖。当前 DAG 按已确认 spec-clarify Q1 的真实编辑依赖排；P1 先定义入口事实、P2 再消费该输入，M3/M7 讨论绑定但 M7 施工须消费 M5 的输出语义与 M6 的模板边界。这解释讨论顺序与施工顺序的差别，方向原件不改。
 - **入口图事实的交接**：M1 的独立交付数与用户在场动作由 P1 保证，依赖图／最长链／并行宽度由 P2 双输入重演与本 spec DAG 产出；均作为既有计划确认的可见输入，不添加计算平台或阈值。P1 不能把未计算的图事实虚写已显示，P2 补齐后交同一人类边界读回。
 - **全局依赖（8 个 Phase 的真实 DAG，无环）**：
@@ -504,6 +504,7 @@ Phase 边界由「可独立交付验收的单元」决定；写集是申报结�
   | `skills/plan-eng-review/SKILL.md` | P2 | 单写者 |
   | `docs/architecture/test-asset-governance-rules.md` | P6 | 单写者 |
   | `tools/cli/stage-runtime.mjs` | P5 | 单写者 |
+  | `runtime/interface/run-command.mjs` | P5/T014 | D-032：仅私有发布前输出结算接口 |
   | `runtime/review/review-record-route.mjs` | P5 → P7 | 上游同序 |
   | `specs/…/spec.md`、`phases/index.md`、`phases/P1..P7` | P8 | 终末验收回写 |
 - **三处定序偏离的登记（对应 AC-004 的判据与 OPEN-02）**：上游 `decision-log.md` 的「定序写主」列存在**两处环**——① `M1 → M2 → M6`（`workflows/make-decision/SKILL.md`）与 `M6 → M1`（`skills/decision-log/SKILL.md`）互斥；② `M4 → M5`（`AGENTS.md`、`docs/standard-workflow.md`）与 `M5 → M4`（两份 workflow）互斥。build-plan 按**真实编辑依赖**选定全局顺序 `M1 → M2 → M3 → M4 → M5 → M6 → M7`，据此改写上表 3 行：`skills/decision-log/SKILL.md` 改为 P1→P6（两处编辑落在不同节：M1 补「入口事实与 U 最小索引」口径、M6 改「内容边界」节，无文本依赖）；两份 workflow 改为 M3→M4→M5（M4 定义「外部不可重试失败」的适用范围与「同一不可用事实」，M5 定义「同一事实＝字节相同」的复用判据，唯一真实语义方向是 M4 先于 M5）。**上游 `decision-log.md` 字节不改**；本登记即事实。

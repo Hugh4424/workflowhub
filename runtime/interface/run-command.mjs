@@ -1,11 +1,11 @@
 import { spawn } from "node:child_process";
 import {
   closeSync, constants, fstatSync, fsyncSync, linkSync, lstatSync, openSync,
-  readdirSync, realpathSync, unlinkSync, writeFileSync,
+  readFileSync, readdirSync, realpathSync, unlinkSync, writeFileSync,
 } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { constants as osConstants } from "node:os";
-import { join, parse, resolve, sep } from "node:path";
+import { dirname, join, parse, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const LIMIT = 8 * 1024 * 1024;
@@ -199,7 +199,43 @@ function execute(cwd, argv, output, timeoutMs, signal) {
   });
 }
 
-export async function captureCommand({ cwd, recordDir, slug, argv, shell, timeoutMs, signal } = {}) {
+// Private capture caller seam: choose the original reference before the only
+// create-only receipt publication. Default callers keep their fresh output.
+function settleOutputReference(storage, output, requested) {
+  if (requested === undefined || requested === null || requested === output.output) return output.output;
+  if (typeof requested !== "string" || resolve(requested) !== requested || dirname(requested) !== storage.root
+      || !/^\d{4}-\d{2}-\d{2}-\d{3}-[a-z0-9-]+\.output$/.test(parse(requested).base)) {
+    throw failure("OUTPUT_REUSE_PATH_INVALID", "reuse requires a canonical output in the same record directory");
+  }
+  storage.verify();
+  const read = (path, expected) => {
+    const named = lstatSync(path);
+    if (!named.isFile() || named.isSymbolicLink() || named.nlink !== 1 || realpathSync(path) !== path
+        || (expected && !sameFile(named, expected))) throw failure("OUTPUT_REUSE_PATH_INVALID", "reuse output is not an unchanged single-link original");
+    const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+    try {
+      const before = fstatSync(fd);
+      if (!sameFile(before, named)) throw failure("OUTPUT_REUSE_CHANGED", "reuse output replaced before reading");
+      const bytes = readFileSync(fd);
+      const after = fstatSync(fd);
+      if (!sameFile(after, lstatSync(path)) || before.size !== after.size || before.mtimeMs !== after.mtimeMs)
+        throw failure("OUTPUT_REUSE_CHANGED", "reuse output changed while reading");
+      return { bytes, identity: after };
+    } finally { closeSync(fd); }
+  };
+  const canonical = read(requested);
+  const fresh = read(output.output, output.identity);
+  if (!canonical.bytes.equals(fresh.bytes)) throw failure("OUTPUT_REUSE_BYTES_DIFFER", "reuse output has different bytes");
+  storage.verify();
+  if (!sameFile(lstatSync(requested), canonical.identity) || !sameFile(lstatSync(output.output), output.identity))
+    throw failure("OUTPUT_REUSE_CHANGED", "reuse output replaced before cleanup");
+  // No receipt or public ref has named this newly reserved output yet.
+  unlinkSync(output.output);
+  return requested;
+}
+
+export async function captureCommand({ cwd, recordDir, slug, argv, shell, timeoutMs, signal, resolveOutputRef } = {}) {
+  if (resolveOutputRef !== undefined && typeof resolveOutputRef !== "function") throw failure("INVALID_OUTPUT_RESOLVER", "resolveOutputRef must be a private caller function");
   if (process.platform === "win32") throw failure("UNSUPPORTED_PLATFORM", "POSIX process groups are required");
   if (typeof cwd !== "string" || !cwd) throw failure("INVALID_CWD", "cwd is required");
   const working = realpathSync(resolve(cwd));
@@ -239,9 +275,32 @@ export async function captureCommand({ cwd, recordDir, slug, argv, shell, timeou
     started_at: startedAt, ended_at: new Date().toISOString(), output_ref: output.output,
     ...(result.error ? { error: { code: result.error.code ?? "CAPTURE_FAILED", message: result.error.message } } : {}),
   };
+  let settlementError, outputDisposition;
+  if (resolveOutputRef && !result.error) {
+    try {
+      const observed = Object.freeze({ ...receipt, argv: Object.freeze([...receipt.argv]) });
+      const selection = await resolveOutputRef(observed);
+      const selected = selection && typeof selection === "object" ? selection : { output_ref: selection };
+      if (Object.keys(selected).some(key => !["output_ref", "output_disposition"].includes(key))
+          || selected.output_disposition !== undefined && (typeof selected.output_disposition !== "string" || !selected.output_disposition))
+        throw failure("OUTPUT_SELECTION_INVALID", "output selection has unknown fields or an invalid disposition");
+      receipt.output_ref = settleOutputReference(storage, output, selected.output_ref);
+      // CLI-only presentation. Native receipt execution fields remain unchanged.
+      if (selected.output_disposition !== undefined) outputDisposition = selected.output_disposition;
+    } catch (cause) {
+      const detail = `${cause?.code ?? "OUTPUT_RESOLVER_ERROR"}: ${cause?.message ?? String(cause)}`;
+      settlementError = failure("OUTPUT_SETTLEMENT_FAILED", `deduplication: unknown; capture output settlement failed; ${detail}`, { cause });
+      if (cause?.stack) settlementError.stack += `\n[output-settlement-cause] ${cause.stack}`;
+      // This is the actual capture finalization error, not a fabricated child exit.
+      receipt.error = { code: settlementError.code, message: settlementError.message };
+    }
+  }
   publishReceipt(storage, output.receipt, receipt);
+  if (settlementError) throw Object.assign(settlementError, { output_ref: receipt.output_ref, receipt_ref: output.receipt, exitCode: 1 });
   if (result.error) throw Object.assign(result.error, { output_ref: output.output, receipt_ref: output.receipt, exitCode: result.error.code === "ABORT_ERR" ? cancellationExit : result.error.code === "ENOENT" ? 127 : 1 });
-  return { ...receipt, exit, stdoutTruncated: result.truncated.stdout, stderrTruncated: result.truncated.stderr, receipt_ref: output.receipt };
+  return { ...receipt, exit, stdoutTruncated: result.truncated.stdout, stderrTruncated: result.truncated.stderr, receipt_ref: output.receipt,
+    ...(outputDisposition === undefined ? {} : { output_disposition: outputDisposition }),
+  };
 }
 
 async function main(argv) {
