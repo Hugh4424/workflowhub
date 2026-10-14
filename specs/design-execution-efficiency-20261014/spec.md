@@ -91,6 +91,9 @@
 - **结果**：调用既有评估函数并留下调用命令与返回原件；「独立可交付验收单元数」「是否含需用户在场或真实凭证的动作」两项事实写入一条既有四字段决定；第 8 步与第 13 步的展示都包含这两项事实及其范围声明；返回 `paused` 时同时给出至少一条可选拆分路线。
 - **回写**：AC-001 / AC-002 的判定与本节同步。
 
+
+本次P8效果读回：036入口干跑／展示；详见「P8 当前逐条对账（实施与效果分别读）」。这只是具名受控范围，未来真实任务采用、用户效率与业务效果未观测。
+
 ### SCN-002：Phase 边界由交付单元决定，写集只作申报
 
 - **角色**：build-plan 作者（本任务自己即为实例）。
@@ -98,6 +101,9 @@
 - **触发**：核对每个 Phase 的边界依据。
 - **结果**：每个边界能用「可独立交付验收的单元」逐条解释；跨批次写同一路径的每一处都有具名先写者/后写者与依据；整张写集表的先后关系无环；粒度规则同时含拆与并两半。
 - **回写**：AC-003 / AC-004。
+
+
+本次P8效果读回：091两输入候选／定序；详见「P8 当前逐条对账（实施与效果分别读）」。这只是具名受控范围，未来真实任务采用、用户效率与业务效果未观测。
 
 ### SCN-003：承接 AC 未达成时的 Phase 完成形态
 
@@ -107,6 +113,9 @@
 - **结果**：契约头显著标「带欠账完成」，逐条列未达成项、所需条件与具名 owner，且不写 pass。
 - **回写**：AC-006。
 
+
+本次P8效果读回：033受控欠账形态；详见「P8 当前逐条对账（实施与效果分别读）」。这只是具名受控范围，未来真实任务采用、用户效率与业务效果未观测。
+
 ### SCN-004：外部不可重试失败与同一不可用事实
 
 - **角色**：任何阶段的执行者。
@@ -114,6 +123,9 @@
 - **触发**：第一次观察到该失败。
 - **结果**：零重试；按 `AGENTS.md` 既有格式写出「卡在哪、为什么、几条路、代价与风险、可直接回复的选项」；同一失败信号在继续条件未改变时再次出现，不再原地重试（换独立上下文重开一次，仍出现则升级问人）。审查 provider 不可用/失败/超时/取消/无效输出/零成功路/空 findings **不属于**本停机范围，仍按 wh-review 与 `docs/standard-workflow.md` 既有口径处理。
 - **回写**：AC-011。
+
+
+本次P8效果读回：055／059受控missing-input处置；详见「P8 当前逐条对账（实施与效果分别读）」。这只是具名受控范围，未来真实任务采用、用户效率与业务效果未观测。
 
 ### SCN-005：同一事实不重复存件
 
@@ -123,6 +135,9 @@
 - **结果**：捕获层仅在命令逐字相同、既有 ref 存在且逐字节比较确立内容相等时复用并写引用；审查输出层仅在同一 provider 内确立字节相等时复用，不跨 provider 去重。字节数相同本身不能证明相等；未做内容比较或无法确立内容相等时保留新件并记 `deduplication: unknown`，不得把该缺口当作复用依据。证明范围只写路径 + hash（三类例外除外）。
 - **回写**：AC-008。
 
+
+本次P8效果读回：126两runtime受控与034／047历史欠账；详见「P8 当前逐条对账（实施与效果分别读）」。这只是具名受控范围，未来真实任务采用、用户效率与业务效果未观测。
+
 ### SCN-006：写 Phase 卡时坐标不再当契约
 
 - **角色**：build-plan 作者与本任务自身。
@@ -130,6 +145,9 @@
 - **触发**：核对契约面写法。
 - **结果**：契约性字段（写入集、符号、覆盖 AC、Done）只写路径与符号；行号只出现在导航性字段（动手前必读、材料导航、可观察接缝）并被声明为生成时刻提示、漂移不判卡失效；decision-log 不再新增长度、阈值或字段级方案。
 - **回写**：AC-009。
+
+
+本次P8效果读回：142分工与TCR文字边界；详见「P8 当前逐条对账（实施与效果分别读）」。这只是具名受控范围，未来真实任务采用、用户效率与业务效果未观测。
 
 ### 状态覆盖清单
 
@@ -469,7 +487,7 @@ Phase 边界由「可独立交付验收的单元」决定；写集是申报结�
 - **新增**：`N/A — 本任务不新增仓库文件`。`docs/adr/0038-decomposition-follows-deliverable-units.md` 与 `docs/adr/0039-evidence-scope-path-and-hash.md` 已在 make-decision 阶段新增（前置事实 PFACT-006），不再是下游 Phase 的写集成员。
 - **修改**（20 条，取自 `decision-log.md` 的 23 行写集表减去 3 条前置已落盘：`GLOSSARY.md`、两份 ADR）：
   `AGENTS.md`；`docs/standard-workflow.md`；`workflows/make-decision/SKILL.md`；`workflows/make-decision/steps.json`；`skills/decision-log/SKILL.md`；`skills/decision-log/templates/decision-log-template.md`；`skills/spec-plan/SKILL.md`；`skills/spec-plan/templates/phase-template.md`；`skills/spec-specify/templates/spec-template.md`；`workflows/build-plan/SKILL.md`；`workflows/build-code/SKILL.md`；`workflows/verify-code/SKILL.md`；`skills/wh-review/SKILL.md`；`skills/wh-review/contracts/build-plan.md`；`skills/wh-review/contracts/build-code.md`；`skills/wh-review/contracts/verify-code.md`；`skills/plan-eng-review/SKILL.md`；`docs/architecture/test-asset-governance-rules.md`；`tools/cli/stage-runtime.mjs`；`runtime/review/review-record-route.mjs`
-  另加终末验收 Phase 自己回写的材料：`specs/design-execution-efficiency-20261014/spec.md`、`specs/design-execution-efficiency-20261014/phases/index.md` 与七个 `phases/P<n>-*.md`。
+  另加终末验收 Phase 自己回写的材料：`specs/design-execution-efficiency-20261014/spec.md`、`specs/design-execution-efficiency-20261014/phases/index.md` 与八个 `phases/P<n>-*.md`（P1–P7 仅机械指针回写，P8 按自身 Action 自回写）。
 - **禁止改动**：`CONSTITUTION.md`（D-027）；`runtime/stage/stage-content-contracts.mjs`；`runtime/interface/safe-write.mjs`；`runtime/task/task-store.mjs`；`runtime/interface/run-command.mjs` 的 D-032 批准范围之外（`reserveOutput`／`publishReceipt`／create-only 算法仍禁止改）；`runtime/review/schemas/result.schema.json`；`specs/archive/**`；既有 `quality/reviews/**` 与 `quality/evidence/**` 原件（只读保留，不重写、不镜像）；`docs/adr/0035-*`／`0036-*`（既有决定，只引用）；本仓之外的 PaperBuilder CARD-05 全部字节（R-004）。
 - **收敛次序与施工次序**：上游 D-009 的 M2→M1→M3+M7、再 M5/M6/M4 是 make-decision 细化讨论的次序，不是文件施工依赖。当前 DAG 按已确认 spec-clarify Q1 的真实编辑依赖排；P1 先定义入口事实、P2 再消费该输入，M3/M7 讨论绑定但 M7 施工须消费 M5 的输出语义与 M6 的模板边界。这解释讨论顺序与施工顺序的差别，方向原件不改。
 - **入口图事实的交接**：M1 的独立交付数与用户在场动作由 P1 保证，依赖图／最长链／并行宽度由 P2 双输入重演与本 spec DAG 产出；均作为既有计划确认的可见输入，不添加计算平台或阈值。P1 不能把未计算的图事实虚写已显示，P2 补齐后交同一人类边界读回。
@@ -506,7 +524,7 @@ Phase 边界由「可独立交付验收的单元」决定；写集是申报结�
   | `tools/cli/stage-runtime.mjs` | P5 | 单写者 |
   | `runtime/interface/run-command.mjs` | P5/T014 | D-032：仅私有发布前输出结算接口 |
   | `runtime/review/review-record-route.mjs` | P5 → P7 | 上游同序 |
-  | `specs/…/spec.md`、`phases/index.md`、`phases/P1..P7` | P8 | 终末验收回写 |
+  | `specs/…/spec.md`、`phases/index.md`、`phases/P1..P8` | P8 | 终末验收回写（P8 自回写沿原 Action 补登记） |
 - **三处定序偏离的登记（对应 AC-004 的判据与 OPEN-02）**：上游 `decision-log.md` 的「定序写主」列存在**两处环**——① `M1 → M2 → M6`（`workflows/make-decision/SKILL.md`）与 `M6 → M1`（`skills/decision-log/SKILL.md`）互斥；② `M4 → M5`（`AGENTS.md`、`docs/standard-workflow.md`）与 `M5 → M4`（两份 workflow）互斥。build-plan 按**真实编辑依赖**选定全局顺序 `M1 → M2 → M3 → M4 → M5 → M6 → M7`，据此改写上表 3 行：`skills/decision-log/SKILL.md` 改为 P1→P6（两处编辑落在不同节：M1 补「入口事实与 U 最小索引」口径、M6 改「内容边界」节，无文本依赖）；两份 workflow 改为 M3→M4→M5（M4 定义「外部不可重试失败」的适用范围与「同一不可用事实」，M5 定义「同一事实＝字节相同」的复用判据，唯一真实语义方向是 M4 先于 M5）。**上游 `decision-log.md` 字节不改**；本登记即事实。
 - **回滚与恢复**：每个 Phase 的改动都是方法文本或窄扩展的私有实现分支，回滚＝退回该 Phase 的 hunk（`git revert` 或按 Phase 提交粒度回退），不覆盖其它 Phase 的改动、不改历史原件。新增的复用分支若判定条件不成立，失败安全是「保留新件 + `deduplication: unknown`」，即退化为现状行为，不需要回滚。
 
@@ -646,6 +664,76 @@ Phase 边界由「可独立交付验收的单元」决定；写集是申报结�
   证据：提交记录（`git log` / `git show --stat`）+ Phase 卡。
 
 > 每条 AC 的判定方式标记齐全（15/15）；没有一条 AC 把首次结论点放在末 Phase（AC-005 的材料侧首次核对、AC-013 的产出均在 build-plan 收口，AC-012/AC-015 的首次核对在 P1 收口）。
+
+## P8 当前逐条对账（实施与效果分别读）
+
+当前基线＝6b09d7dba7ed9a3983d7b6973474973211d13595；task facts 当前 P8/T022。原始需求＝任务根 `quality/evidence/raw-requirements/2026-10-14-design-execution-efficiency.md`；当前普通任务范围沿 D-029／U-003 与 build-code 用户原件024，D-031／D-032／D-033只承接各具名窄授权。原始需求头的“规划任务”为记录者旧阶段说明，不撤销当前实施授权。planned 唯一权威仍是上述20FR与Appendix A的15AC，本节不改变量词、失败条件、判定时点或owner。implemented 是当前路径与接口；effect_observed 只到具名原件覆盖的受控范围。下表档位复述原owner／独立读回，不是P8替上游补签；本次实际测试与独立全表审计已发生，见下方具名原件；P8正式OCR已返回060失败／解析invalid，提交尚未发生。实施者只转抄真实来源，不自判质量或整任务通过。
+
+当前实际执行与独立读回：`quality/evidence/2026-10-14-178-p8-independent-declared-test-readback.json` 保T022首测065 exit1及T023066三文件36测试exit0、结构067 exit0、材料068 exit0；原owner179／180／181只移动完整质量／场景说明，冻结断言不变，原065保留。`quality/evidence/2026-10-14-184-p8-affected-done-metadata-test-readback.json` 保同一冻结字面T022复验069 exit0（15行、plan_ok=true／errors0、档位候选无差额；005／013机器首次点仍unknown），及材料070真实receipt exit0、字节相等复用068原output；`quality/evidence/2026-10-14-185-p8-metadata-ref-correction.json` 将184误写的180文件名纠正为真实 `quality/evidence/2026-10-14-180-p8-owner-ac011-single-enum.json`，旧184保留。独立完整需求审计 `quality/evidence/2026-10-14-186-build-code-original-requirements-audit.json`（sha256 5c3b387354ac0e63cedcb1549f4a0f6c24261572696f29a599074ba03c9b3989，actor /root/final_requirements_audit）已逐条读20FR／15AC／真实consumer／效果与069全表，三材料finding均按独立原件fixed。审计stage_statement=unverified；10条为原owner既有bounded判断，005 inconclusive、008／012／013 incomplete、015 deferred均保留，未接受风险、未补签首次结论、未证明未来用户效率。当前P8正式OCR唯一原件 `quality/reviews/2026-10-14-060-build-code-phase-p8.json` 已执行并返回失败：Kimi/coding provider_status=failed、parse_outcome=invalid、OUTPUT_INVALID，duration_ms=711259；read0／unread0／undetermined19、read_confirmed=null、usage未报告，authoritative=false。终末来源 `quality/evidence/2026-10-14-192-p8-current-review-terminal-readback.json` 保原件／送达全文／覆盖与失败事实，不把完整供料或空正式findings变成质量通过。原raw058唯一保留，`quality/evidence/2026-10-14-193-p8-invalid-output-visible-findings.json` 仅转录其最后assistant可见两条语义建议：minor路径计数与major旧Current标签；直接可解析JSON未取得，major省略号／转义锚无效也保留。两建议在本次授权材料面最小澄清，不把它们变成正式parse_ok。`quality/evidence/2026-10-14-190-p8-independent-same-source-axes-provenance.json` 的Standards／Spec各独立上下文completed、零发现仍属same_source_degraded，不代OCR、无异源quorum；`quality/evidence/2026-10-14-186-build-code-original-requirements-audit.json` 与 `quality/evidence/2026-10-14-191-p8-source-sync-independent-readback.json` 的审计stage仍unverified。五条原未达成档位及015历史前置时序不符保持；P8自身提交未发生，不预写质量通过或完成交付。
+
+表内路径相对当前任务根 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/design-execution-efficiency-20261014`；Txxx／E或无前缀xxx的简称分别按 `quality/tests/2026-10-14-`、`quality/evidence/2026-10-14-` 定位，Rxxx按 `quality/reviews/2026-10-14-` 定位。所有已存在原始输出、receipt与review只读引用，原件不镜像。
+
+| AC | 原承接／首次点 | 判定方式（引用Appendix A） | 当前档位 | 一条具名原件指针 | 范围与未观测效果 |
+| --- | --- | --- | --- | --- | --- |
+| AC-001 | P1 | 只能人读 | pass | `quality/evidence/2026-10-14-036-p1-independent-acceptance-readback.md` | P1 原判，仅入口干跑／两处展示；025／026 与真实 T010 exit 0，真实用户答复与效率未观测 |
+| AC-002 | P1 | 机器可判 | pass | `quality/tests/2026-10-14-010-p1-t003-target.json` | P1 原判，仅函数真实调用、返回与可读落点；036 独立读回，未证明未来主会话照做 |
+| AC-003 | P2 | 只能人读 | pass | `quality/evidence/2026-10-14-091-p2-major-independent-acceptance-readback.md` | P2原owner169依据既有独立091／092机械落档，限受控两输入方法／材料面；未验完整施工接线，不由P8新签 |
+| AC-004 | P2 | 机器可判 | pass | `quality/evidence/2026-10-14-091-p2-major-independent-acceptance-readback.md` | P2原owner169机械落档，仅既有091当前定序结构；8Phase／23Task、10重叠路径祖先定序无环，完整189施工接线未验 |
+| AC-005 | build-plan 首次；P3承接；P8复核 | 机器可判 | inconclusive | `quality/evidence/build-plan-refs/plan-conformance-check.md` | 沿P3原档位；旧29/29只点名的首次③缺口保留。当前069结构0与186逐条语义映射已读，不能回溯补签原首次结论 |
+| AC-006 | P3 | 只能人读 | pass | `quality/evidence/2026-10-14-033-p3-finding-independent-readback.md` | P3 原判，仅受控欠账形态；原024 major与作者030修复均保留，不证明真实任务采用 |
+| AC-007 | P7 | 机器可判 | pass | `quality/evidence/2026-10-14-157-p7-independent-green-semantic-readback.json` | P7 原判，仅方法／真实来源读取。原build-plan019与本P7正式057均回读；057 read11／undetermined8、read_confirmed null，不是质量通过 |
+| AC-008 | P5 | 机器可判 | incomplete | `quality/evidence/2026-10-14-126-p5-four-root-independent-repair-readback.json` | 沿P5原档位；034／047输出同字节已双写的历史欠账保留。后来048／054／064真实复用042不消除旧欠账；全族长期纪律未证 |
+| AC-009 | P6 | 只能人读 | pass | `quality/evidence/2026-10-14-142-p6-review-terminal-tcr-correction.md` | P6 原判，仅方法／模板分工和行号提示文字面；140旧反例措辞经142独立纠正，物理读写隔离未验 |
+| AC-010 | P6 | 只能人读 | pass | `quality/evidence/2026-10-14-142-p6-review-terminal-tcr-correction.md` | P6 原判，仅TCR两半、先点名及每任务一次单一来源文字面；本任务没有真实TCR／常量分流事件 |
+| AC-011 | P4 | 只能人读 | pass | `quality/evidence/2026-10-14-059-p4-spec-supplement.md` | P4 原判，仅方法与055受控missing-input处置。真实T017 exit1／MODULE_NOT_FOUND，复合grep exit0不冒Node成功；真实换上下文链未观测 |
+| AC-012 | P1起逐Phase；P8汇总 | 机器可判 | incomplete | `quality/evidence/2026-10-14-164-p7-phase-close-facts.md` | 186已逐处读当前全diff，受控范围未新增四类；原各Phase首次owner历史证据不足仍保，不由终末补签，也不以计数推通过 |
+| AC-013 | build-plan 首次；P8只复核 | 只能人读 | incomplete | `quality/evidence/build-plan-refs/predecessor-29ac-judgeability.md` | 分类原件29条齐且sha256 eaa9f366d5713cf9ed303bcc5c1f6fa3d35f9deb91cfbbfa585cde2b10a74f2d匹配；16候选／7open／6bounded不等于旧任务关闭，07用户条件未消解 |
+| AC-014 | P5两行为；P7身份面；P8复核 | 机器可判 | pass | `quality/evidence/2026-10-14-126-p5-four-root-independent-repair-readback.json` | 复述P5受控原判；045／046 exit0与四根因修复读回；P7只两身份注释与061契约、157／158，不新增Runtime执法。真实provider／长期效果未验 |
+| AC-015 | P1首次；各Phase自带；P8汇总 | 机器可判 | deferred | `quality/evidence/2026-10-14-164-p7-phase-close-facts.md` | 沿P3原档位；186已按真时序／范围核七Phase审查后提交，但前置b1c在17:37早于首Phase，不符合原带走条件；P8未提交，后续commit不能补足过去条件 |
+
+| FR | 实施owner | implemented：当前落点 | 真实consumer | effect_observed：来源与限制 | 关联AC |
+| --- | --- | --- | --- | --- | --- |
+| FR-ENTRY-001 | P1 | workflows/make-decision/SKILL.md、steps.json；skills/decision-log/SKILL.md与模板 | 入口作者与第8／13步确认读者 | 036：真实函数返回、四字段入口、两处受控展示；真实用户看见／答复未观测 | AC-001、AC-002 |
+| FR-SPLIT-001 | P2 | skills/spec-plan/templates/phase-template.md | Phase作者 | 091：15候选边界、拆并两半；未来真实作者选择与效率未观测 | AC-003 |
+| FR-SPLIT-002 | P2 | skills/spec-plan/SKILL.md；workflows/build-plan/SKILL.md | 规划作者与既有validatePostPhaseContract | T024／091：当前8Phase图与10重叠路径无环；不据计数验语义 | AC-004 |
+| FR-SPLIT-003 | P2 | skills/spec-plan/SKILL.md、workflows/build-plan/SKILL.md与phase-template；skills/plan-eng-review/SKILL.md；skills/wh-review/contracts/build-plan.md | 合并审查者与工程lens读者 | 091：四消费面一致；真实新任务采用未观测 | AC-003、AC-004 |
+| FR-CLOSURE-001 | P3／P7 | skills/spec-plan/templates/phase-template.md；workflows/build-code/SKILL.md与verify-code/SKILL.md | 实施与复核者 | 033受控形态，157模板口径；P2漏档沿169原owner已机械纠正；005终末语义缺口另列 | AC-005、AC-006 |
+| FR-CLOSURE-002 | P3 | docs/standard-workflow.md；workflows/build-code/SKILL.md | Phase收口作者 | 033：受控欠账形态；本P5原008欠账如实保留，非用户效率效果 | AC-006 |
+| FR-CLOSURE-003 | P3／各Phase | docs/standard-workflow.md；build-code／verify-code方法 | 实施者与Git owner | 039／092／035／066／129／144／164七提交可读；186已核时间／范围，原前置早于首Phase条件未符，P8未提交 | AC-015 |
+| FR-STOP-001 | P4 | AGENTS.md；docs/standard-workflow.md | 五阶段执行者 | 055／059：受控不存在输入、报告与选项；其余真实外部类未观测 | AC-011 |
+| FR-STOP-002 | P4 | build-code／verify-code方法；standard-workflow | 执行者 | 055／059：反馈控制链人读；真实换上下文一次仍失败的完整事件未观测 | AC-011 |
+| FR-EVIDENCE-001 | P5 | AGENTS／standard-workflow／build-code／verify-code证据段 | 证据生产者 | 126受控复用；034／047同字节双写欠账存在；后064复用042不洗历史 | AC-008 |
+| FR-EVIDENCE-002 | P5 | AGENTS.md／docs/standard-workflow.md／workflows/build-code/SKILL.md／workflows/verify-code/SKILL.md证据段 | 范围记录作者 | 119／126：路径hash与三例外口径；全族真实持续遵守尚未证明 | AC-008 |
+| FR-EVIDENCE-003 | P5 | tools/cli/stage-runtime.mjs captureOutputSettlement；runtime/interface/run-command.mjs settleOutputReference；runtime/review/review-record-route.mjs providerOutputReuse | captureCommand私有结算→capture分支；providerFact／onProviderOutput→单一review记录 | T043／044与修复后045／046／047真实FS受控输出；四根因126固定，真实服务／crash与长期效果未验 | AC-008、AC-014 |
+| FR-BOUNDARY-001 | P6 | workflows/make-decision/SKILL.md；skills/decision-log/SKILL.md与templates/decision-log-template.md；skills/spec-specify/templates/spec-template.md | 方向与规格材料作者 | 140／142：分工文字面；历史已确认decision-log不回溯改写 | AC-009 |
+| FR-BOUNDARY-002 | P6 | skills/spec-plan/templates/phase-template.md字段说明与导航提示 | Phase作者 | 142：当前契约面与导航分界人读；未来作者照做未观测 | AC-009 |
+| FR-BOUNDARY-003 | P6 | workflows/build-plan/SKILL.md／workflows/build-code/SKILL.md；docs/architecture/test-asset-governance-rules.md；skills/spec-plan/templates/phase-template.md | 测试修改作者与独立审查者 | 142：两半边界与先点名；没有真实TCR／常量分流事件 | AC-010 |
+| FR-TRUTH-001 | P7 | skills/wh-review/SKILL.md与skills/wh-review/contracts/build-code.md／verify-code.md；docs/standard-workflow.md | 审查原件读者 | 157与原R019／R057字段；D033仅若有保留discarded_facts，不造占位；覆盖仍未知 | AC-007 |
+| FR-TRUTH-002 | P7 | skills/wh-review/SKILL.md与两合同 | 审查读者 | 157逐八类producer／carrier／consumer与四件齐口径；新不可用场景未注入 | AC-007 |
+| FR-TRUTH-003 | P7 | runtime/review/review-record-route.mjs身份注释；skills/wh-review/contracts/build-code.md／verify-code.md | 记录与审查读者 | 157／158：只增两注释、executor／schema不变；六反例人读，不冒新运行执法 | AC-007、AC-014 |
+| FR-PREDECESSOR-001 | build-plan；P8复核 | quality/evidence/build-plan-refs/predecessor-29ac-judgeability.md | P8与整任务交接读者 | 29条分类原件及hash可读；16候选／7open／6bounded，用户07条件未消解 | AC-013 |
+| FR-GUARD-001 | 全部Phase | 各Phase边界与本任务全部实际diff | 独立diff审查者 | 186当前全diff逐处读回无新增四类；原首次owner历史证据不足另保，不用文件数量推通过 | AC-012 |
+
+P2档位漏字面由原owner独立上下文机械落档，唯一原件 `quality/evidence/2026-10-14-169-p2-owner-done-enum-source.md`，sha256 7e22aeef642a7e397c85af1a6b482b6eae3923d8ce47a840fe38f4ea4fcd57b6；完整原质量否定句移入P2的L0普通正文而不删义，冻结判据与命令不改。当前P2卡hash 4d57ba891ab2a2c6124718dc462c14a9fc091e3990fff93e4392da6de1d4b6f8。
+
+提交来源（原件各一份）：P1 `quality/evidence/2026-10-14-039-p1-phase-close-facts.md`；P2 `quality/evidence/2026-10-14-092-p2-phase-close-facts.md`；P3 `quality/evidence/2026-10-14-035-p3-phase-close-facts.md`；P4 `quality/evidence/2026-10-14-066-p4-phase-close-facts.md`；P5 `quality/evidence/2026-10-14-129-p5-phase-close-facts.md`；P6 `quality/evidence/2026-10-14-144-p6-phase-close-facts.md`；P7 `quality/evidence/2026-10-14-164-p7-phase-close-facts.md`（sha256 8fee90bb61860f668b01b6599d69bcfb10b2c929b812cd8fda3151ad10838c1e）。这里只列已发生提交，不提前生成P8提交或以交付代验收。P1原039明确真实顺序为baseline→P3→P1；原AC015还要求前置未提交字节由第一个Phase提交带走，该条件必须另按实际Git时序逐条核，不把已有baseline提交改述为P1／P3带走；前置提交、各Phase提交及P8待提交分别报告。
+
+审查／修复来源：P1正式030保Kimi connection failure；P3正式024、作者030处置与独立033修复；P4正式035；P2正式040原major、作者087修复与独立091；P5正式045的三条 finding，加同源121 Standards 的第四根因 P5-STANDARDS-001；独立126 finding_dispositions[0..3] 分别绑定原来源并读回四处 fixed，受控执行原件为 tests045／046；P6正式050与142纠正；P7正式057与160首次组包缺口、161完整材料第二dispatch例外、162纠正终末、159同源两轴分开保留。所有authoritative=false／coverage未知／read_confirmed null均不改写。R019=`quality/reviews/2026-10-14-019-build-plan-document.json`是AC007原指定材料源，P7方法与真实读回157不代换它；R057是P7交付审查来源，二者分别读。
+
+P8的T022冻结Node只报结构／档位候选，不检查表中具名原件是否可读、不独立证明首次归属与语义。T023三文件旧绿回归不证明新增复用行为；它消费P5配对与四根因受控原件。原P8已具备完整材料且历史slot缺陷曾消解，不制造仪式性RED；本次真实失败若发生原样保存，修改冻结oracle须回作者和独立审查，不删断言消音。
+
+未闭环case（具名真实入口与owner，不假造效率改善）：
+
+| case | 当前真实入口／所需条件 | 具名命令或原件读回 | owner与限制 |
+| --- | --- | --- | --- |
+| P2契约头档位漏字面（已机械纠正，保留来源） | P2契约头Done与原091受控判定 | 原owner169依据091／092登记既有八值；本次Node由setup真实执行，069结果沿184，186独立语义读回，不从exit0预填效果 | P2原owner已落档；P8只复述169，未改变上游判断 |
+| AC005首次归属／档位语义 | Appendix A、P1–P8 Done、build-plan首次原件 | 当前069冻结Node原件＋186独立逐条人读全表（不回溯补签原首次） | 独立全表审核者；结构exit0不代语义 |
+| AC008历史双件与全族纪律 | tests034／047相同字节、P5当前实现与126 | 读126#acceptance_readback[0]与129；后064receipt真实output_ref指042 | P5原owner／任务交接读者；历史件不删除，不伪归零 |
+| AC012全部diff四类 | 前置b66c1348与当前实际改动、各Phase提交范围 | 186实际逐处读b66→6b09与当前元数据diff；历史首次owner来源仍需分别读 | 186独立全表审核者已读当前四类；历史首次证据仍不足，只读路径不是完整质量证据 |
+| AC013前作分类及07用户条件 | 前作只读分类原件29行与用户原话 | 读predecessor-29ac-judgeability.md逐条与具名锚点 | 独立读者与用户；16候选不写closed |
+| AC014两运行时受控事实 | capture-tests→captureCommand、recordSimpleReviewRequest两写点 | P5T045／046、126与P7T061／157／158；P8只跑T023三文件 | P5／P7原owner；真实provider与crash／长期效果未验 |
+| AC015八Phase审查→提交时序 | 七提交原件与对应review；P8待实际提交 | `git log`／`git show --stat`并读真实review时间 | setup Git owner＋独立审核者；P8未发生动作不预填 |
+| 真实后续任务效率 | 未来任务入口、分解、执行、审查与收口真实序列 | 按各原AC真实输入复放并读用户可见结果，不新建执行平台 | 后续任务主会话／verify-code；本次无原件，未观测 |
 
 ## 12. 风险、未决与交接
 
