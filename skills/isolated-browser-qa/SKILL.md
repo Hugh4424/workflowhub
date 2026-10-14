@@ -228,7 +228,7 @@ A blocked or unknown run may have zero screenshots. Follow the failure report co
 
 Cleanup is complete only after this run's owned browser session/PIDs/temp resources are handled and the user's app service remains running. Use the bundled session cleanup route; never kill an unrelated browser, live user profile or app service. Preserve partial cleanup and exit failures. For non-UI scope give not_applicable with the actual reason, not missing-evidence pass.
 
-Keep only one original output per fact. Use ordinary paths rather than {ref,sha256}/task snapshot/material/invocation certification. Never include cookie, token, password, Authorization, API key, secret or profile contents. Do not write QA outcomes back into Experience.md; send actual outcomes and limitations to the caller.
+Keep only one original output per fact. Use ordinary paths rather than {ref,sha256}/task snapshot/material/invocation certification. Never include cookie, token, password, Authorization, API key, secret or profile contents. Send actual QA outcomes and limitations to the caller and its existing task facts; keep professional rules with their original owners. Do not write run outcomes into professional specifications or historical Experience.md. A reusable rule candidate returns to its existing owner for a sourced decision; this QA run does not become another specification writer.
 
 ## Bundled Resources
 

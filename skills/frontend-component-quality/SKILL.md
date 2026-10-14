@@ -58,7 +58,7 @@ JSON：
 
 ## 边界
 
-本技能不重新设计视觉、不调用浏览器、不把 Design.md 改成任务状态。build-plan 只设计地图，build-code 按真实 diff 回填并调用具体 testing skill，verify-code 检查真实 consumer、兼容性和 CSS/token 泄漏。
+本技能不重新设计视觉、不调用浏览器。沿 `skills/ui-project-init/SKILL.md` 的「规范职责」取本动作适用专业源的组件/布局/工程/质量规则，各类真实path/稳定节、version/作用域、owner/consumer 和缺口可定位；任务状态和实际测试结论留当前 task spec/facts，不写成专业规则或旧 Experience.md 历史。build-plan 只设计地图，build-code 按真实 diff 回填并调用具体 testing skill，verify-code 检查真实 consumer、兼容性和 CSS/token 泄漏。
 
 ## 固定来源与偏离
 

@@ -10,7 +10,7 @@ build-plan UI 分支与 build-prd 条件设计分支调用：用真实组件和 
 
 ## 方法
 
-1. 读取当前组件/路由入口、export、fixture/数据形状、viewport、Design.md 与 Experience.md 的实际路径和适用规则。缺真实组件就报告 unknown，不用静态假页面冒充运行原型。
+1. 读取当前组件/路由入口、export、fixture/数据形状、viewport；沿 `skills/ui-project-init/SKILL.md` 的「规范职责」定位本次原型适用类的真实专业源，核各源路径/稳定节、version、作用域、owner/consumer 与适用规则。通用规则沿原专业源，本次页面步骤/状态/权限/恢复沿当前 task spec/API，不复制第二正文。按类给缺源/冲突及影响，未读或单类 missing/stale 不当全部类失败；旧 Design.md/Experience.md 可供真实历史/可信条款输入，不是两份必需 active 源。缺真实组件就报告 unknown，不用静态假页面冒充运行原型。
 2. 复用项目现有 preview/story/test harness；保存实际渲染命令、cwd、退出码、原始输出路径和失败原因。未运行或非零不称成功。
 3. 用 `skills/isolated-browser-qa/SKILL.md` 的隔离路线展示真实组件。记录组件/fixture 路径、viewport、实际 Preview/截图文件和页/状态覆盖；缺展示就没有视觉通过。保留原始失败，一类输出一份。
 4. **展示后确认**：展示完整、可审查原型后请用户确认展示内容。未答、拒绝、取消、不可展示分别保留 unknown/unavailable/human_not_approved；只记录真实答复和展示稿的实际路径，不依赖 hash、material revision、snapshot 或 stage-outcome proof 认证。

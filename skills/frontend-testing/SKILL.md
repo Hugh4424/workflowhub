@@ -29,7 +29,7 @@ screenshot 和 coverage limits。没有可执行 route 时写 `N/A — reason`�
 
 ## build-code 实际消费
 
-build-code 当前主会话按真实 changed files 选择一次具体测试路径，并把 UI 适用性、Design.md/Experience.md identity、consumer census 和 AC 绑定到同一份证据。现有 handler 的执行原件如实消费；不把尚未运行的官方 handler 当作主会话工作的前置条件。Skill 被声明或被解析不等于执行；未触发、已触发但未执行和已执行必须分别记录。
+build-code 当前主会话按真实 changed files 选择一次具体测试路径；沿 `skills/ui-project-init/SKILL.md` 的「规范职责」读取本动作适用专业规则，把 UI 适用性、各类实际源路径/稳定节、version/作用域、owner/真实 consumer、consumer census 和 AC 关联到同一份原始证据。各类缺源/stale/冲突分别说明影响及原 owner，不以单一 design_revision 或旧 Design.md/Experience.md 两文件替全部来源；旧文件只作有据历史或可信条款输入。本次业务状态/权限/取消恢复从当前 task spec/API取，token/API精确事实引用原源，不把执行结果回写为规范正文。现有 handler 的执行原件如实消费；不把尚未运行的官方 handler 当作主会话工作的前置条件。Skill 被声明或被解析不等于执行；未触发、已触发但未执行和已执行必须分别记录。
 
 需要真实页面时，当前执行者通过既有 isolated-browser-qa 的受控执行链调用一次。证据必须带当前
 service instance、API/DTO contract、隔离 profile、invocation、viewport、console/network/focus/overflow

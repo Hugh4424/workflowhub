@@ -16,7 +16,11 @@ const skillSpecs = {
     required: [
       "new",
       "legacy",
-      "Design.md",
+      "GLOSSARY.md",
+      "specs/design/",
+      "specs/frontend/",
+      "owner",
+      "consumer",
       "version",
       "fixture",
       "Preview",
@@ -39,7 +43,11 @@ const skillSpecs = {
       "human",
       "no score",
       "no gate",
-      "Design.md",
+      "GLOSSARY.md",
+      "specs/design/",
+      "specs/frontend/",
+      "owner",
+      "consumer",
     ],
     forbidden: ["quality score"],
   },
@@ -104,6 +112,31 @@ test("quality score remains forbidden except explicit negation", () => {
   assertNoQualityScore("no quality score；不打 quality score。", "negative wording");
   assert.throws(() => assertNoQualityScore("Generate a quality score.", "positive wording"), /forbidden quality score/);
   assert.throws(() => assertNoQualityScore("不打 quality score，但实际生成 quality score。", "mixed wording"), /forbidden quality score/);
+});
+
+function assertNoHashDesignRevision(content, sourceName) {
+  assert.doesNotMatch(
+    content,
+    /(?:Design\.md|Experience\.md|GLOSSARY\.md|CONTEXT\.md|specs\/(?:design|frontend)\/[A-Za-z0-9_./-]*\.md)[^\r\n]*(?:SHA-256|sha256)/i,
+    `${sourceName}: source hash cannot replace a human design revision`,
+  );
+}
+
+test("professional sources preserve the no-hash revision protection on current and historical paths", () => {
+  for (const source of [
+    "Design.md", "Experience.md", "GLOSSARY.md", "CONTEXT.md",
+    "specs/design/design.md", "specs/design/components.md", "specs/design/layouts.md",
+    "specs/design/interaction.md", "specs/design/craft.md", "specs/design/quality.md",
+    "specs/frontend/frontend.md", "specs/frontend/ui-quality.md",
+  ]) {
+    assertNoHashDesignRevision(`${source}: version 2026.10.14; owner design; consumer reader`, source);
+    for (const hashLabel of ["SHA-256", "sha256"]) {
+      assert.throws(
+        () => assertNoHashDesignRevision(`${source}: design revision ${hashLabel} abc123`, source),
+        /source hash cannot replace a human design revision/,
+      );
+    }
+  }
 });
 
 test("P1 skill contracts are explicit before implementation", () => {
@@ -195,6 +228,6 @@ test("P1 public records preserve no-hash design revision and no-gate semantics",
   assert.match(notices, /Vercel Engineering|Vercel React Best Practices/);
   assert.match(notices, /dd089a8c752c966dee8bf0f27cb625ba193ffd9e/);
   assert.match(notices, /MIT/);
-  assert.doesNotMatch(registry, /Design\.md.*SHA-256|Design\.md.*sha256/i);
-  assert.doesNotMatch(notices, /Design\.md.*SHA-256|Design\.md.*sha256/i);
+  assertNoHashDesignRevision(registry, "reuse registry");
+  assertNoHashDesignRevision(notices, "third-party notices");
 });
