@@ -131,7 +131,7 @@ skills:
     standalone: true
     purpose: 阶段调研与收口统一消费图知识、正常增量更新及明确降级
     design_idea: 图是发现入口；回source_file核原文，代码文档分别报告，内容和prompt缓存分别核，费用许可先于新语义抽取
-    used_by_stages: []
+    used_by_stages: [make-decision, build-prd, build-plan, build-code, verify-code]
     upstream: []
     local_changes: 包装外部graphify现有CLI和库；不新建runtime adapter、质量门、API key、hook或记忆回写；保合法外部占位、去重和当前图未修限制
     dependency_closure: [skills/knowledge-graph]
