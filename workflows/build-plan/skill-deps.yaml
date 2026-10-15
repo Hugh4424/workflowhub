@@ -1,5 +1,8 @@
 stage: build-plan
 skills:
+  - name: knowledge-graph
+    path: skills/knowledge-graph/SKILL.md
+    trigger: stage_opening_and_existing_source_research
   - name: deep-research
     path: skills/deep-research/SKILL.md
     trigger: real_research_question
@@ -84,6 +87,13 @@ runtime_capabilities:
     required_when: research_or_review
     absence_semantics: diagnostic
 external_capabilities:
+  - id: graphify
+    kind: cli
+    doctor:
+      - graphify
+      - '--help'
+    required_when: internal_knowledge_research
+    absence_semantics: diagnostic
   - id: ocr-cli
     kind: cli
     version_policy: '>=1.12.9'
