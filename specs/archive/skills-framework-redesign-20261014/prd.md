@@ -870,9 +870,9 @@ U-021的逐字原话见[唯一原件][adoption-order]；54项已逐行写首次c
 [conflicts]: /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/skills-framework-redesign-20261014/quality/evidence/research/constitutional-conflicts.md
 [test004]: /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/skills-framework-redesign-20261014/quality/tests/2026-10-14-004-baseline-repair-verify.txt
 [test005]: /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/skills-framework-redesign-20261014/quality/tests/2026-10-14-005-oi034-repair-verify.txt
-[prior-spec]: /Users/Hugh/Hugh/Project/workflowhub-skills-framework-redesign-20261014/specs/archive/design-execution-efficiency-20261014/spec.md
-[prior-p7]: /Users/Hugh/Hugh/Project/workflowhub-skills-framework-redesign-20261014/specs/archive/design-execution-efficiency-20261014/phases/P7-审查结论可核.md
-[prior-p8]: /Users/Hugh/Hugh/Project/workflowhub-skills-framework-redesign-20261014/specs/archive/design-execution-efficiency-20261014/phases/P8-终末逐AC验收.md
+[prior-spec]: /Users/Hugh/Hugh/Project/workflowhub/specs/archive/design-execution-efficiency-20261014/spec.md
+[prior-p7]: /Users/Hugh/Hugh/Project/workflowhub/specs/archive/design-execution-efficiency-20261014/phases/P7-审查结论可核.md
+[prior-p8]: /Users/Hugh/Hugh/Project/workflowhub/specs/archive/design-execution-efficiency-20261014/phases/P8-终末逐AC验收.md
 
 [map-approved]: /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/skills-framework-redesign-20261014/quality/evidence/human-confirmations/2026-10-15-001-build-prd-map-approved.json
 [modeltest-source]: /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/skills-framework-redesign-20261014/quality/evidence/research/s3/T0-D-modeltest-reuse.md
