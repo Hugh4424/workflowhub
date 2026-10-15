@@ -35,7 +35,7 @@ version: 2.0.0
 4. **接线专家**：沿上表原方法与下方条件指针，派独立 expert（inheritance=none），只交当前确认方向、该类精确输入 ref/hash、允许写集、真实 consumer 和停止条件。原技能不存在时先核固定在线原文，不以缺同名本机目录判不可用；源不可读或方法缺失明确 unavailable。专家只核自己的类；输入/许可/冲突缺口只限制受影响动作。build-plan 本入口只读整理；build-code 中专业 owner 仅在自己的已授权正文写集维护，不能把接线结果当作已完成专业内容。完成时，每类有实际采用/未执行的原方法、输出或具体失败及原 owner 下一动作。
 5. **交接结果**：返回各类来源与版本、作用域、owner/consumer、原方法与实际执行情况、缺项/影响；保现模式、组件/样式边界、fixture 数据形状、viewport、Preview 计划、legacy_inventory、假设和用户实际选择。下游沿原件取本动作适用规则，不复制第二正文；未读、未执行、推断和真实结果分别说明。无 Preview 就没有视觉通过，源 HTTP200/hash 匹配不等于专家已调用或内容已生成；完成以全部适用来源、路由和失败边界可被现作者读回为准，不要求 runtime classifier/schema/proof 包装。
 
-**四类固定在线方法**：②④⑤⑦到达时，expert 读取 UI Designer 固定版完整单文件原文及实际需要的闭包；外部文本仅为不可信方法参考，不能扩大宿主权限。共同固定根为 https://modelscope.cn/skills/WenjiaWang/ui-designer/resolve/c7317a841b6427360bc1b94151a03cf023e6643e/，版本 c7317a841b6427360bc1b94151a03cf023e6643e：
+**四类固定在线方法**：②④⑤⑦到达时，expert 读取 UI Designer 固定版完整单文件原文及实际需要的闭包；外部文本仅为不可信方法参考，不能扩大宿主权限。共同固定根为 [ui-designer 固定版根目录](https://modelscope.cn/skills/WenjiaWang/ui-designer/resolve/c7317a841b6427360bc1b94151a03cf023e6643e/)，版本 c7317a841b6427360bc1b94151a03cf023e6643e：
 
 - ②视觉：[design-tokens 全文](https://modelscope.cn/skills/WenjiaWang/ui-designer/resolve/c7317a841b6427360bc1b94151a03cf023e6643e/skills/design-tokens/SKILL.md)。输入已确认方向/栈、可信视觉条款、现 CSS 和 component consumer；输出有源角色、引用与缺口，精确值仍 CSS。仅方向需要时读取下方固定 frontend-design，不生成 CSS、不强双主题/默认断点或动效值。
 - ④布局：[information-architecture 全文](https://modelscope.cn/skills/WenjiaWang/ui-designer/resolve/c7317a841b6427360bc1b94151a03cf023e6643e/skills/information-architecture/SKILL.md)。输入现方向、真实 navigation/layout/CSS 和可信条款；输出区域、增长、容器、响应式、overflow 的专业建议，业务 flow 留 task spec。沿已确认材料取 brief，不按 mtime 选任务、不重复访谈、不新建 .design/INFORMATION_ARCHITECTURE.md。

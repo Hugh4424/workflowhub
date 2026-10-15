@@ -302,21 +302,26 @@ async function c01ApprovedSubsetFixture() {
   for (const [path, text] of Object.entries(asMap(f.m))) writeFileSync(join(f.f.materialRoot, path), text);
   for (const path of declared) writeFileSync(join(f.f.wt, path), 'CURRENT ' + path + '\n');
   writeFileSync(join(f.f.wt, 'extra.mjs'), 'APPROVED UNDECLARED MUST NOT BE CAPTURED\n');
-  f.scope.repositories[0].paths = declared.slice(0, 2);
+  // 2026-10-14 基线修复：f2bab8d7「fix(review): reject omitted phase scope paths」把语义从
+  // 「只捕获交集」改为「声明里出现任何未获批路径就在捕获前 fail closed」
+  // （tools/cli/stage-runtime.mjs:582-590）。因此本 fixture 必须让 scope 覆盖全部声明路径；
+  // 「未获批声明直接拒绝」这一面由 tests/contract/ocr-review-contract-bundle.test.mjs 覆盖，
+  // 本文件不再重复它。
+  // 必须传副本：测试 B 会 push 到 scope 数组，直接引用 declared 会把 fixture 自己的清单也改掉。
+  f.scope.repositories[0].paths = [...declared];
   return { f, declared };
 }
-test('C01 capture approved subset — real WH source captures two out of seven declared paths', async () => {
+test('C01 capture approved subset — real WH source captures every declared and approved path', async () => {
   const { f, declared } = await c01ApprovedSubsetFixture(), result = f.attempt();
-  expect(result.error, 'approved intersection must reach real held-FD source capture').toBeNull();
-  expect(result.captures.find(row => row.id === 'wh')).toEqual({ id: 'wh', paths: declared.slice(0, 2), bytes: declared.slice(0, 2).map(path => 'repos/wh/' + path) });
-  expect(result.source.repositories.find(row => row.id === 'wh').selected_paths).toEqual(declared.slice(0, 2).map(path => 'repos/wh/' + path));
-  for (const path of declared.slice(0, 2)) expect(result.diff).toContain('CURRENT ' + path);
-  for (const path of declared.slice(2)) expect(result.diff).not.toContain('CURRENT ' + path);
+  expect(result.error, 'every declared path is approved, so real held-FD source capture must run').toBeNull();
+  expect(result.captures.find(row => row.id === 'wh')).toEqual({ id: 'wh', paths: declared, bytes: declared.map(path => 'repos/wh/' + path) });
+  expect(result.source.repositories.find(row => row.id === 'wh').selected_paths).toEqual(declared.map(path => 'repos/wh/' + path));
+  for (const path of declared) expect(result.diff).toContain('CURRENT ' + path);
 });
 test('C01 capture approved subset — approved undeclared source still stays outside packet', async () => {
   const { f, declared } = await c01ApprovedSubsetFixture(); f.scope.repositories[0].paths.push('extra.mjs');
   const result = f.attempt(); expect(result.error).toBeNull();
-  expect(result.captures.find(row => row.id === 'wh').paths).toEqual(declared.slice(0, 2));
+  expect(result.captures.find(row => row.id === 'wh').paths).toEqual(declared);
   expect(result.captures.find(row => row.id === 'wh').bytes).not.toContain('repos/wh/extra.mjs');
   expect(result.diff).not.toContain('APPROVED UNDECLARED MUST NOT BE CAPTURED');
 });
