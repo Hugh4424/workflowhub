@@ -20,29 +20,31 @@ version: 1.0.0
 
 将散文输出交调研子代理；主会话只收少数结论、真实`source_file`/位置、如何改变当次做法、未定/无信号和原执行ref。每阶段尝试找`specs/archive/`相关历史决定/失败，再回原文核实其适用条件；确无相关历史可写“本次无历史经验可挖”，不拿查询次数冒真实收益。指定历史正例的验收要求仍由caller保留。
 
-从图实际label词汇中选不超过12个与问题相关的词，处理中英文/符号别名；无匹配词就明确无信号。执行者把入口已核验的realpath root赋给本次进程变量`KG_ROOT`，作为参数值传递，不从查询时cwd重算或拼进待执行代码；以下示例用绝对图路径，切换cwd后仍指向同一图：
+先从当前真实任务职责、允许写集、实际consumer与问题选择可能的 source_file；在图内存中分别筛“当前契约/实现”和“独立历史决定/失败”两通道，不硬把archive排前，也不只凭source命中认相关。先只投影有界候选的完整id、label、source_file/source_location，逐个按职责语义选完整ID；意译词可辅助发现，不能把每词seed并集、序列前25或高连接数当相关排序。禁止打印整node/全label词汇。每批候选最多20—30项、每字段限制长度、整批最多8000字符；超限在工具内先筛再输出，并显式记真实裁剪/未覆盖。候选未排序时不得伪称top relevant。
+
+入口已核验的realpath root赋给进程变量`KG_ROOT`，图路径固定为`"$KG_ROOT/graphify-out/graph.json"`，切cwd不重算。正常路径仍先 query、god-nodes 发现，再选择相关完整ID explain；以下命令必须由执行者用subprocess capture或现宿主有界采集器执行，**不能将无限stdout直接打印**。query预算不是字符硬上限；对返回体只消费最多8000字符并显式记录实际长度/截断，god JSON在工具内投影最多10个id/label/source/degree、最多4000字符，保真实exit/stderr。不能把工具截断当完整阅读或用截取序列冒相关性。
 
 ```bash
 : "${KG_ROOT:?set KG_ROOT to the caller-verified realpath root}"
-graphify query '已从图词汇选定的真实问题词' --graph "$KG_ROOT/graphify-out/graph.json" --budget 1500
+graphify query '职责相关且来自有界候选的真实问题词' --graph "$KG_ROOT/graphify-out/graph.json" --budget 1500
 graphify god-nodes --graph "$KG_ROOT/graphify-out/graph.json" --top 10 --json
+graphify explain '已按职责语义选定的完整节点ID' --graph "$KG_ROOT/graphify-out/graph.json"
 ```
 
-然后按任务的精确路径/符号筛相关跨社区候选边，仅取20—30条，并随每条输出两端label、relation、confidence、origin `source_file/source_location`。用只读Python加载JSON在内存过滤，不把全图、全communities或全部候选输出给主会话。候选空，或候选仅共享同一端点标签、没有独立命题时，说明无信号并停止该拓展。低召回`surprises`不当发现入口；analysis里的`questions`/`gods`仅在需要时有界取值，不整份读sidecar。
+query仅作发现；god-nodes保规定调用，但通用测试/import枢纽不自动重要，无新命题就不拓展。explain仍在工具内只输出与问题相关的节点/关系字段，整批最多8000字符；需要协作链才用path，路径端点也用已消歧完整ID。精确source/consumer筛后的跨社区关系最多20—30条，投影两端完整id/label、relation、confidence、origin source_file/source_location，再按命题独立性与职责选择；共享端点标签不等于独立知识。筛选规则和实际计数可读，不复制全图或全部候选。无新信号及时转原文，不为凑20条扩读。surprises不作入口，questions/gods按需有界取值，不整份读sidecar。
 
-实施时按实际问题选命令，不把它们都当必跑清单：
+按实际问题选后续命令，不把不适用命令都硬跑：
 
 ```bash
 graphify affected '真实路径或符号' --graph "$KG_ROOT/graphify-out/graph.json" --depth 2
-graphify explain '真实节点名' --graph "$KG_ROOT/graphify-out/graph.json"
-graphify path '实际协作起点' '实际协作终点' --graph "$KG_ROOT/graphify-out/graph.json"
+graphify path '已消歧的完整起点ID' '已消歧的完整终点ID' --graph "$KG_ROOT/graphify-out/graph.json"
 ```
 
 `path`只用于实际模块协作/依赖链问题。保真实exit/stdout/stderr：0只说明命令有结果；3按返回候选消歧后再查，不称工具失败；4明确无匹配，转原文检索，不编边。其它失败按降级处理，不把异常称无匹配。不存在目标或命令不适用写具体原因。
 
 结论只引用`source_file`对应的真实文件；**绝不把节点id当文件路径**。label可能是意译，不当逐字引用；每条对方案有影响的结论都读origin上下文。关系来源是关系来自的文档，可以不同于端点定义文件；先读关系origin，再按需读端点来源。外部import和ArgumentParser这类source-less stub可合法存在，沿import/annotation的引用出处解释，不伪造本库定义。`Community N`是占位，不能作模块语义导航；JSON data/schema覆盖不得推定，问契约/governance直接读原文件。repo ignore与dot-directory能力分开核实，不能声称所有隐藏目录不受支持。
 
-遇到当前图已有质量报告时消费原件限制。已知误边、关系方向/强度未定、source位置漂移或缓存不可复现时，保真实未定，回origin核命题；缓存有同条不等于原文支持，raw ID/label未见也不等于知识丢失。完成：每条使用中的结论有原文支撑和对当次产出的具体影响；未支撑项未被当成事实。
+遇到当前图已有质量报告时消费原件限制。已知误边、关系方向/强度未定、source位置漂移或缓存不可复现时，保真实未定，回origin核命题；缓存有同条不等于原文支持，raw ID/label未见也不等于知识丢失。完成：每条使用中的结论有原文支撑，明确“具体多知道什么、改变哪条建议/内容”；与原已知或无图来源等价就标重复/补强，不编新增收益。未支撑项未被当成事实。
 
 ## 建图：代码自动，文档先算再问
 
