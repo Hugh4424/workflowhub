@@ -1,3 +1,5 @@
+import { assertRunnerCompatibility } from "./runner-contract.mjs";
+
 export const RUNTIME_BEHAVIORS = Object.freeze([
   "doctor",
   "status",
@@ -33,6 +35,7 @@ export function createRuntimeFacade({
   const target = Object.fromEntries(RUNTIME_BEHAVIORS.map((behavior) => [
     behavior,
     async (request) => {
+      assertRunnerCompatibility(skillBundleContract, runnerContract);
       const delegate = delegates[behavior];
       if (typeof delegate !== "function") {
         throw new Error(`runtime behavior delegate is unavailable: ${behavior}`);

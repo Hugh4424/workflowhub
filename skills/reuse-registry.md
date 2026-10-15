@@ -95,6 +95,7 @@ UI governance records include an explicit owner, consumer, and delete condition.
 - `frontend-component-quality` — adapted；现 build-plan/build-code/verify-code 的真实 UI 条件消费。Component Quality Map 支持 reuse/modify/extend-state-or-variant/add-local/extract-shared/remove-after-no-consumers，读适用专业源及真实 consumer；React/Next 只读 Vercel MIT 固定 commit `dd089a8c752c966dee8bf0f27cb625ba193ffd9e`。owner 是组件质量作者；consumer 经已审替代承接后可删除；不替代 frontend-testing，不创建第二 workflow 或 gate。
 
 本任务 C01 的固定在线方法参考由 catalog 的 ui-project-init.local_changes 现字段登记，未导入本地运行闭包：
+
 - SDD `000b04a2a3553bddcf991b3dc42f9a5a2746fa6f` 的 SKILL/execution 人读分责与更新方法，consumer 是⑥工程 owner 与本次 P6 应用。保现 spec/Phase/facts，不迁六材料双写/reopen。
 - 材料 `b62e87f3f91868033106b21f6398f0fd6d3d2043` 的 GUIDE/AUDIT 原能力分开：本次只有用途解释/PB旧规范输入盘点；定制 GUIDE 缺用户用途选择，AUDIT 未取得获准入口/资源操作范围，未运行原脚本或产出报告。许可grant未知与用途/操作授权缺口分列，原 owner 下一动作见 catalog。
 - UI Designer `c7317a841b6427360bc1b94151a03cf023e6643e` 四类原方法、固定 frontend-design、闭包和本地偏离沿入口条件指针与 catalog。tokens/IA/brief 上游 designer-skills `c259656c76d9758d7ead46b0d2f125cbe84f8665` 与固定 frontend-design 各有 Apache-2.0；states 单独副本/分发grant未知，不泛化许可。专业正文应用归 P7，尚未执行。
