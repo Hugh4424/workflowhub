@@ -5,7 +5,7 @@
 
 - **任务**：`graphify-knowledge-integration-20261015`
 - **来源**：当前 `decision-log.md` 的原始需求、ADR-001～ADR-018、M0～M7；原始逐项来源为任务库 `quality/evidence/decision-log-refs/requirement-index.md`。
-- **状态**：build-plan 草稿；计划确认与生产实施尚未发生。当前规格保留既有 `AC-001`～`AC-012`；`AC-KG-013` 补接已经明确决定的 M6 完成判据，不增加新产品方向。
+- **状态**：build-plan 已确认，后续已进入 P1–P8 实施与验收。当前阶段、验收和交付结论以各 Phase、外置 task facts、`quality/tests/P8-acceptance.md` 与最新 stage-handoff 为准；本规格不代表阶段完成。当前规格保留既有 `AC-001`～`AC-012`；`AC-KG-013` 补接已经明确决定的 M6 完成判据，不增加新产品方向。
 
 ## 材料导航
 
