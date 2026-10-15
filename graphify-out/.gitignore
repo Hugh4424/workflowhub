@@ -1,0 +1,11 @@
+# Durable knowledge payload only; governance policy is tracked separately.
+*
+!.gitignore
+!graph.json
+!manifest.json
+!.graphify_analysis.json
+!cache/
+cache/*
+!cache/semantic/
+!cache/semantic/**/
+!cache/semantic/**

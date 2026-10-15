@@ -108,6 +108,20 @@ skills:
     local_changes: workflowhub 原生技能；只读当前四材料和正式原件指针，不建立历史 handoff 控制面；不新增 writer、facts 字段、schema、公共命令或持久对象
     dependency_closure: [skills/stage-handoff]
     update_policy: 随 stage-handoff 方法、safe-write appendRecord 发布与回读边界和五阶段挂载合同一并审查
+  - name: knowledge-graph
+    path: skills/knowledge-graph/SKILL.md
+    local_version: 1.0.0
+    last_reviewed_at: '2026-10-15'
+    status: native
+    metrics_enabled: false
+    standalone: true
+    purpose: 阶段调研与收口统一消费图知识、正常增量更新及明确降级
+    design_idea: 图是发现入口；回source_file核原文，代码文档分别报告，内容和prompt缓存分别核，费用许可先于新语义抽取
+    used_by_stages: []
+    upstream: []
+    local_changes: 包装外部graphify现有CLI和库；不新建runtime adapter、质量门、API key、hook或记忆回写；保合法外部占位、去重和当前图未修限制
+    dependency_closure: [skills/knowledge-graph]
+    update_policy: 随当前CLI和cache/build/export边界及五阶段真实consumer一起审查；失配保unavailable，不自动升级
   - name: anysearch
     path: skills/anysearch/SKILL.md
     local_version: 1.0.0
