@@ -40,8 +40,8 @@ export function checkSkillConsistency(root) {
   for (const entry of catalog.skills) {
     if (!entry || typeof entry !== "object") continue;
     const label = `${CATALOG} ${entry.name ?? "<unnamed>"} upstream source`;
-    if (entry.status === "adapted" && (!Array.isArray(entry.upstream) || entry.upstream.length === 0))
-      reports.push(`${label}: adapted registration requires a declared source; report-only`);
+    if (["adapted", "adopted"].includes(entry.status) && (!Array.isArray(entry.upstream) || entry.upstream.length === 0))
+      reports.push(`${label}: ${entry.status} registration requires a declared source; report-only`);
     if (entry.upstream !== undefined && !Array.isArray(entry.upstream)) {
       reports.push(`${label}: upstream must be an array; report-only`);
       continue;

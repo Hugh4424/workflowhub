@@ -225,15 +225,21 @@ R-012与U-001…U-009为同一会话指令来源组的联合映射：FR/AC引用
 ```json
 {
   "workspace": "/Users/Hugh/Hugh/Project/workflowhub-n2-skill-catalog-portability-20261016",
+  "cli": {
+    "command": "node tools/cli/check-skill-consistency.mjs --root /Users/Hugh/Hugh/Project/workflowhub-n2-skill-catalog-portability-20261016",
+    "entry_ref": "tools/cli/check-skill-consistency.mjs",
+    "sample_ref": "skills/catalog.yaml",
+    "oracle_ref": "tests/n2-skill-catalog-portability.test.mjs"
+  },
   "service": null,
   "route": null,
-  "state": "本任务认证工作树内的技能目录、来源、引用和依赖待实施状态",
+  "state": "当前CLI可核对已实现目录、来源、引用和依赖；目标测试通过，整体验收仍为 partial/incomplete，AC009与AC011未达成",
   "viewport": null,
   "owner": "build-plan 主会话"
 }
 ```
 
-workspace 来源为 decision-log 任务身份；state 来源为当前范围与尚未实施状态。service、route、viewport 未由 non_ui 合同提供，分别缺真实服务配置、HTTP/页面路由、浏览器规定尺寸；提供者为 build-plan 主会话，影响仅为不能主张对应服务/浏览器验收。当前仍保 null。模板唯一 producer 已真实执行，命令退出 0，但返回 `ok=false`、`missing_fields=[service, route, viewport]`；唯一输入/返回原件为 `task:quality/evidence/2026-10-16-003-build-plan-acceptance-object.output`，对应执行记录 `.json`。该结果只披露最小输入缺失，不是业务失败或新推进门。若后续范围引入真实服务/UI，由原材料 owner 回读来源再补输入，不能给本次编造默认服务或尺寸。设计来源、数据、权限按来源与写入契约验，不把这五项当完整业务验收。
+workspace 来源为 decision-log 任务身份；state 依据当前真实CLI、目标测试和既有AC读回：`check-skill-consistency` 在当前catalog上exit 0并报告声明一致，针对性Vitest与Node测试均通过；整体验收仍partial/incomplete，AC009失败、AC011 inconclusive，来源/成本证明限制照实保留。cli.command 指向本任务的真实 CLI 命令，entry_ref、sample_ref、oracle_ref 分别指向当前 CLI 实现、技能目录样本和目标测试文件；verify-code 以实际读取的文件哈希绑定这些来源。service、route、viewport 未由 non_ui 合同提供，分别缺真实服务配置、HTTP/页面路由、浏览器规定尺寸；当前仍保 null，不主张对应服务或浏览器验收。早期 build-plan 对旧对象的检查原件 `task:quality/evidence/2026-10-16-003-build-plan-acceptance-object.output` 及 `.json` 保留为时点事实，不代表当前对象。当前对象结构检查以本次 verify-code 原件为准；即使必填字段齐全，也只证明对象结构，不证明业务效果或完整验收。设计来源、数据、权限仍按来源与写入契约验。
 
 ### 十维澄清结论
 
