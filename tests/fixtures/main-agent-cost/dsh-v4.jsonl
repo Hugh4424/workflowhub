@@ -1,0 +1,8 @@
+{"type":"session","version":4,"id":"fixture-dsh-v4-1","createdAt":1792030881272,"cwd":"/fixture/workspace","isSeeded":false,"delegationDepth":0}
+{"type":"turn/start","seq":5,"time":1792031430777,"data":{"turn":1}}
+{"type":"step/start","seq":7,"time":1792031430809,"data":{"turn":1,"step":1}}
+{"type":"user/message","seq":9,"time":1792031430809,"data":{"id":"fixture-dsh-v4-2"}}
+{"type":"assistant/message","seq":17,"time":1792031434553,"data":{"turn":1,"step":1,"message":{"id":"fixture-dsh-v4-3","role":"assistant"},"usage":{"inputTokens":8923,"outputTokens":210,"totalTokens":25517,"cacheReadTokens":16384},"stream":{"9":{"chunk":{"usage":{"inputTokens":8923,"outputTokens":210,"totalTokens":25517,"cacheReadTokens":16384}}}}}}
+{"type":"tool/call","seq":18,"time":1792031434554,"data":{"turn":1,"step":1,"callId":"fixture-dsh-v4-4","name":"bash"}}
+{"type":"step/end","seq":22,"time":1792031434629,"data":{"turn":1,"step":1}}
+{"type":"turn/end","seq":168,"time":1792031682908,"data":{"turn":1}}

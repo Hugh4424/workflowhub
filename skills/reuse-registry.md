@@ -167,3 +167,15 @@ UI governance records include an explicit owner, consumer, and delete condition.
 6. 跑 skill closure、bundle、stage prompt 和五阶段 smoke；再走 `wh-review` 异源审查。
 
 只引用外源的方法不加入本地 dependency_closure；许可/操作授权按单项核验后才允许资源导入。当前C01只更新登记与适用consumer，执行本Phase字面target及受影响UI contract，不因上述历史全套smoke描述跑全量回归；实际原件和正式审查沿既有owner，失败/unknown不改为采用效果。
+
+## N1 数字观测采用（catalog的人读投影）
+
+来源原登记为 `catalog.yaml` projects.addy-agent-skills / projects.pstack；固定commit、原路径及内容hash只归该登记，许可见 `THIRD_PARTY_NOTICES.md`。三项均内联吸收，不新增可派发skill。
+
+| 原方法 | 本地采用与差异 | 首consumer / owner / 验证 |
+| --- | --- | --- |
+| observability-and-instrumentation | 四组各邻接真实问题、独立原数自验；不固定问题数、不引入遥测平台 | `tools/cli/measure-main-agent-cost.mjs`，N1 P1/T001；冻结ORACLE-COST-READ/BOUNDARY与真实完整输出独立核读 |
+| performance-optimization | 同条件复跑与全部原始尝试；工具不作收益判决 | 同一脚本P1先交显式复跑；P2/T002串行接写账本后验证追加/返工，P1不代签 |
+| principle-explain-the-number | 分列范围、缺项与替代解释；没有profiler/计数器事实不声称已定位瓶颈，不强制六嫌疑门或收益打分 | 同一脚本P1输出/来源核读，P2保全部尝试；独立完整输出判断，关键词不冒生效 |
+
+P1实际冻结contract首测35/39、三根因修复后39/39，真实执行引用由本任务P1原件承接；独立审查尚待完成，不登记accepted。三项采用全部正式退役且无当前consumer时由原owner更新登记；不另建采用账本或双写进度。

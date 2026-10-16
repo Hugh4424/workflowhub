@@ -94,7 +94,7 @@
     {
       "step_id": 8,
       "step_slug": "stage-handoff",
-      "observable_result": "阶段主会话写人读交接，列代码入口、修复、审查、验证限制、材料风险及下一步；缺事实保持incomplete而不冻结修复。 真实 stage 末过程问题可按 stage-reflection 提有源候选，用户真选后才分确定检查或人判断未解 Improvements；未答不采用、已解由人 prune，不新增规范/知识库/机器进度或每 Phase 固定复盘。",
+      "observable_result": "阶段主会话写人读交接，列代码入口、修复、审查、验证限制、材料风险及下一步；缺事实保持incomplete而不冻结修复。 真实 stage 末过程问题可按 stage-reflection 提有源候选，用户真选后才分确定检查或人判断未解 Improvements；未答不采用、已解由人 prune，不新增规范/知识库/机器进度或每 Phase 固定复盘。 在图更新/非破坏性收口结果之后、最终交接前由阶段主会话执行 measure-main-agent-cost --stage=verify-code --record 并回读任务根main-agent-cost.md；首次用真实start-ref，失败/未触发写本阶段无记录。唯一工具将删除时先record再删，披露until后清理/发布/回复未计入；不每Phase触发、不新增stage或共享writer。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",

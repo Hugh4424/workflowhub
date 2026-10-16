@@ -1,6 +1,28 @@
 schema_version: 2
 last_reviewed_at: '2026-07-14'
 projects:
+  addy-agent-skills:
+    github_url: https://github.com/addyosmani/agent-skills
+    commit: aeac41d4d005999432bb7312f7ff06383a91d59d
+    commit_url: https://github.com/addyosmani/agent-skills/commit/aeac41d4d005999432bb7312f7ff06383a91d59d
+    license: MIT
+    # Copyright (c) 2025 Addy Osmani; LICENSE sha256 6f202f8bd568cd730dbb2b0d1f8e243bc74c2fa1f64dbce9b2c7ea08bd5c9fd7.
+    # N1 P1/T001 consumer tools/cli/measure-main-agent-cost.mjs; no new skill dispatch.
+    # skills/observability-and-instrumentation/SKILL.md sha256 e7fcb0820306d46268de9594d676ad98e35040858926c412b7000faa52a61f87:
+    # question -> quantity and independent source self-check; no telemetry platform/fixed question count.
+    # skills/performance-optimization/SKILL.md sha256 bd36a30e55a5f84329a6977eba5e1ab7654146e71eaba88e34337d4ee020460f:
+    # repeatable raw measurements; no benefit verdict. P2 owns append/all-attempt validation.
+    # Verification: frozen cost contract and real-source/output independent readback; pending independent review.
+  pstack:
+    github_url: https://github.com/backnotprop/pstack
+    commit: unresolved-pstack-content-snapshot
+    license: MIT
+    # Copyright (c) 2026 Lauren Tan; LICENSE sha256 bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e.
+    # Actual package sha256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8; commit/package binding unknown.
+    # skills/principle-explain-the-number/SKILL.md sha256 cd5a25f9e7cf023627ccb470dc5faa97542f29b4319496a32b839a8e1e988047.
+    # N1 P1/T001 consumer tools/cli/measure-main-agent-cost.mjs: scope, missing fields and alternative explanations.
+    # No profiler/counter claim, enforced suspect set or benefit score; P2 retains attempts.
+    # Verification: frozen cost contract plus independent full numeric output readback; pending independent review.
   workflowhub:
     github_url: https://github.com/Hugh4424/workflowhub
     commit: local
