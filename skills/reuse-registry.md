@@ -42,7 +42,7 @@
 | plan-eng-review | 只读审查工程顺序、接口、失败路径与验证设计。 | [读取正文](plan-eng-review/SKILL.md) |
 | review | 只读审查正确性、范围、证据和未决风险；测试可信度沿verify正文条件指针。 | [读取正文](review/SKILL.md) |
 | resolving-merge-conflicts | 已在合并中遇到冲突，需要按真实目标解冲突。 | [读取正文](resolving-merge-conflicts/SKILL.md) |
-| diagnosing-bugs | 已有错误、测试失败或性能回退，需要复现、最小化并定位根因。 | [读取正文](diagnosing-bugs/SKILL.md) |
+| diagnosing-bugs | build-code失败分支实读；复现/最小化/探针后修根因，输出与页面信任边界和性能方法唯一正文；两来源见catalog。 | [读取正文](diagnosing-bugs/SKILL.md) |
 | test-routing-advisor | 按真实changed files选择simple、feature或fullstack测试路线；本身不执行测试。 | [读取正文](test-routing-advisor/SKILL.md) |
 | testing-system-blueprint | 规划本Phase测试面与针对性验证；oracle读backend唯一证伪方法。 | [读取正文](testing-system-blueprint/SKILL.md) |
 | backend-testing | 实施后仅有后端改动，验证参数、业务、权限和错误边界，定义唯一行为证伪方法；跨端另读fullstack-slice-testing。 | [读取正文](backend-testing/SKILL.md) |

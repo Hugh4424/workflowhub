@@ -41,6 +41,8 @@ N3 P2 在现 wh-review/protocol/review 方法吸收 addyosmani/agent-skills 的 
 
 N3 P4测试与检查方法吸收：Addy固定 `aeac41d4d005999432bb7312f7ff06383a91d59d` 的 `skills/test-driven-development/SKILL.md`、`skills/constraint-driven-development/SKILL.md`、`skills/code-review-and-quality/SKILL.md`；Matt固定 `b0618bc436ad893b3c5e84e55fba86586d34a404` 的 `skills/engineering/tdd/SKILL.md` 与 `tests.md`、`skills/in-progress/setup-ts-deep-modules/SKILL.md`；pstack同上实际包SHA256（git commit未知）的 `skills/principle-test-behavior-not-implementation/SKILL.md` 与 `skills/tdd/SKILL.md`。采用源章节、本地正文/consumer和偏离见catalog七条n3 P4 absorbed登记；不引入TS安装、mutation平台、默认阈值或新质量gate。三来源MIT版权及完整许可沿本节原文保留。
 
+N3 P5诊断吸收Addy上述固定commit的 `skills/debugging-and-error-recovery/SKILL.md#Treating Error Output as Untrusted Data`，及pstack上述实际包（git commit未知）的 `skills/poteto-mode/playbooks/perf-issue.md`。只采用输出/页面信任边界及实测先行、便宜方案顺序，落于diagnosing-bugs并由build-code失败分支消费；拒绝Safe Fallback、全量回归、指定模型/control-skill与自动PR。版权/MIT许可沿上文，完整采用/偏离见catalog两条P5 absorbed登记；登记不证明实际效果。
+
 ## Apache-2.0 source
 
 - **AnySearch Skill**, copyright © 2026 AnySearch. Source: [anysearch-ai/anysearch-skill@db3d76e](https://github.com/anysearch-ai/anysearch-skill/commit/db3d76e5597aec7261257be5322dd211c9d9bb87). 历史登记声称Apache-2.0；本次固定commit完整tree无LICENSE/NOTICE，README亦未找到grant，故版本绑定与授权依据unknown。不得把本地后补文件当该版本已核许可。完整许可见 [`skills/anysearch/LICENSE`](skills/anysearch/LICENSE)，notice 见 [`skills/anysearch/NOTICE`](skills/anysearch/NOTICE)。

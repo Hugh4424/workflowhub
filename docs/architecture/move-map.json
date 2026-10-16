@@ -1626,15 +1626,15 @@
       "destination": "skills/diagnosing-bugs/SKILL.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "既有模块／资源职责；不从登记新增能力",
-      "owner": "原路径维护 owner；P7 仅登记现职责",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
+      "responsibility": "根因诊断四步；N3 P5输出与页面内容唯一信任边界、实测性能与便宜方案",
+      "owner": "diagnosing-bugs维护owner；N3 P5/T005",
+      "consumer": "workflows/build-code/SKILL.md方法2/3真实失败分支执行者；P7 QA/auth按条件指针消费输出与页面内容",
+      "module_consumers": ["workflows/build-code/SKILL.md"],
       "named_data_readers": [
         "skills/catalog.yaml"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "既有保留生产路径；本次仅归位说明"
+      "retention_basis": "既有方法承接P5两来源，无新增runtime/schema/账本；被独立审查替代且全部当前consumer迁移后退役"
     },
     {
       "source": "skills/diagnosing-bugs/hitl-loop.template.sh",

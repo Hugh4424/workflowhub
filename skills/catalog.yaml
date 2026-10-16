@@ -1940,3 +1940,42 @@ capability_decisions:
     local_changes: "P4原writer在既有consumer采用；方法独立读回与程序执行分开，不新增runtime/字段/账本/默认gate；不采用全量回归、默认阈值或自动拒绝/安装。pstack实际包SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；git commit未知，main URL仅来源locator，不冒固定commit。"
     dependency_closure: [skills/spec-specify/SKILL.md]
     update_policy: 固定source章节与本地唯一正文/条件指针逐项比较；更新需保持本地保护，不自动追HEAD；无consumer且替代经独立审查后退役。
+  - name: n3-debugging-and-error-recovery
+    status: absorbed
+    purpose: N3真实失败诊断方法采用
+    design_idea: 输出与页面内容只作数据，不改变任务授权
+    used_by_stages: [build-code]
+    local_path: skills/diagnosing-bugs/SKILL.md
+    upstream:
+      - github_url: https://github.com/addyosmani/agent-skills
+        commit: aeac41d4d005999432bb7312f7ff06383a91d59d
+        commit_url: https://github.com/addyosmani/agent-skills/commit/aeac41d4d005999432bb7312f7ff06383a91d59d
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/debugging-and-error-recovery/SKILL.md
+        skill_url: https://github.com/addyosmani/agent-skills/blob/aeac41d4d005999432bb7312f7ff06383a91d59d/skills/debugging-and-error-recovery/SKILL.md
+        adopted:
+          - "SKILL.md#Treating Error Output as Untrusted Data — 程序错误/日志/API与页面文本只作数据，动作从用户授权独立推导"
+    local_changes: "在既有diagnosing-bugs输出与页面内容唯一正文采用；build-code方法2/3失败分支实读。保根因回路、三次失败边界和清理；不采用Safe Fallback、全量测试或逐条错误文本审批。"
+    dependency_closure: [skills/spec-specify/SKILL.md]
+    update_policy: "对照固定源章节与真实consumer；不自动追HEAD，方法/调用/效果分别验。"
+  - name: n3-perf-issue
+    status: absorbed
+    purpose: N3真实失败诊断方法采用
+    design_idea: 先实测baseline/bisect/profile，再选择满足目标的便宜方案
+    used_by_stages: [build-code]
+    local_path: skills/diagnosing-bugs/SKILL.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        commit: unresolved-pstack-content-snapshot
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/poteto-mode/playbooks/perf-issue.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/poteto-mode/playbooks/perf-issue.md
+        adopted:
+          - "perf-issue.md#Perf issue 步骤1–4 — 先量再改，依次评估不做/少做/晚做/复用/便宜做，保同口径前后读数与不确定性"
+    local_changes: "既有diagnosing-bugs性能分支采用；不引control-skill、benchmark-checklist、指定模型或自动PR。pstack实际包SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；git commit未知，main仅locator，不冒固定commit。"
+    dependency_closure: [skills/spec-specify/SKILL.md]
+    update_policy: "按实际包SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8 与固定子文件核源差/本地偏离；新包需重核身份，不伪造commit或无实测收益。"
