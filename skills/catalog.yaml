@@ -108,6 +108,34 @@ skills:
     local_changes: workflowhub 原生技能；只读当前四材料和正式原件指针，不建立历史 handoff 控制面；不新增 writer、facts 字段、schema、公共命令或持久对象
     dependency_closure: [skills/stage-handoff]
     update_policy: 随 stage-handoff 方法、safe-write appendRecord 发布与回读边界和五阶段挂载合同一并审查
+  - name: stage-closeout
+    path: skills/stage-closeout/SKILL.md
+    local_version: 1.0.0
+    last_reviewed_at: '2026-10-15'
+    status: native
+    metrics_enabled: false
+    standalone: true
+    purpose: 两caller及独立宿主共用当前授权范围内的Git与物理收尾方法
+    design_idea: 先委派知识更新，逐动作record/consume，PR先回真实URL同流续跑，最终归档删除只确认一次实际范围
+    used_by_stages: [build-prd, verify-code]
+    upstream: []
+    local_changes: 抽取既有安全收口方法；保质量与事实caller owner、普通Git和workspace窄工具，不恢复close-plan或新增执行器
+    dependency_closure: [skills/stage-closeout, skills/knowledge-graph]
+    update_policy: 随授权/工作区owner、知识方法和两真实caller消费一并审查；内容确认不冒Git授权，未知字节保留
+  - name: knowledge-graph
+    path: skills/knowledge-graph/SKILL.md
+    local_version: 1.0.0
+    last_reviewed_at: '2026-10-15'
+    status: native
+    metrics_enabled: false
+    standalone: true
+    purpose: 阶段调研与收口统一消费图知识、正常增量更新及明确降级
+    design_idea: 图是发现入口；回source_file核原文，代码文档分别报告，内容和prompt缓存分别核，费用许可先于新语义抽取
+    used_by_stages: [make-decision, build-prd, build-plan, build-code, verify-code]
+    upstream: []
+    local_changes: 包装外部graphify现有CLI和库；不新建runtime adapter、质量门、API key、hook或记忆回写；保合法外部占位、去重和当前图未修限制
+    dependency_closure: [skills/knowledge-graph]
+    update_policy: 随当前CLI和cache/build/export边界及五阶段真实consumer一起审查；失配保unavailable，不自动升级
   - name: anysearch
     path: skills/anysearch/SKILL.md
     local_version: 1.0.0

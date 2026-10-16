@@ -1,5 +1,8 @@
 stage: make-decision
 skills:
+  - name: knowledge-graph
+    path: skills/knowledge-graph/SKILL.md
+    trigger: stage_opening_and_research_and_diverge_internal_knowledge
   - name: talk-with-zhipeng
     path: skills/talk-with-zhipeng/SKILL.md
     trigger: dynamic_oi_driven_talk_batches
@@ -63,6 +66,13 @@ runtime_capabilities:
     required_when: implementation_selected
     absence_semantics: diagnostic
 external_capabilities:
+  - id: graphify
+    kind: cli
+    doctor:
+      - graphify
+      - '--help'
+    required_when: internal_knowledge_research
+    absence_semantics: diagnostic
   - id: ocr-cli
     kind: cli
     version_policy: '>=1.12.9'

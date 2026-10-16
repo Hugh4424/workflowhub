@@ -1,5 +1,11 @@
 stage: build-prd
 skills:
+  - name: knowledge-graph
+    path: skills/knowledge-graph/SKILL.md
+    trigger: stage_opening_and_existing_source_research
+  - name: stage-closeout
+    path: skills/stage-closeout/SKILL.md
+    trigger: confirmed_final_prd_authorized_delivery_and_final_scope_cleanup
   - name: spec-prd
     path: skills/spec-prd/SKILL.md
     trigger: prd_outline_or_detail
@@ -22,6 +28,13 @@ runtime_capabilities:
     required_when: always
     absence_semantics: diagnostic
 external_capabilities:
+  - id: graphify
+    kind: cli
+    doctor:
+      - graphify
+      - '--help'
+    required_when: internal_knowledge_research
+    absence_semantics: diagnostic
   - id: wh-review-provider
     kind: review
     doctor:

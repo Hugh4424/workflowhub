@@ -1,5 +1,11 @@
 stage: verify-code
 skills:
+  - name: knowledge-graph
+    path: skills/knowledge-graph/SKILL.md
+    trigger: stage_opening_and_inspect_real_entry_and_tests
+  - name: stage-closeout
+    path: skills/stage-closeout/SKILL.md
+    trigger: authorized_verification_delivery_and_final_scope_cleanup
   - name: isolated-browser-qa
     path: skills/isolated-browser-qa/SKILL.md
     trigger: browser_visible_acceptance
@@ -63,6 +69,13 @@ runtime_capabilities:
     required_when: ui_acceptance
     absence_semantics: diagnostic
 external_capabilities:
+  - id: graphify
+    kind: cli
+    doctor:
+      - graphify
+      - '--help'
+    required_when: internal_knowledge_research_or_closeout_update
+    absence_semantics: diagnostic
   - id: ocr-cli
     kind: cli
     doctor:

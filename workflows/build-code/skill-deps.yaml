@@ -1,5 +1,8 @@
 stage: build-code
 skills:
+  - name: knowledge-graph
+    path: skills/knowledge-graph/SKILL.md
+    trigger: phase_start_research_and_before_targeted_implementation
   - name: test-routing-advisor
     path: skills/test-routing-advisor/SKILL.md
     trigger: every_behavior_phase_actual_scope
@@ -77,6 +80,13 @@ runtime_capabilities:
     required_when: always
     absence_semantics: diagnostic
 external_capabilities:
+  - id: graphify
+    kind: cli
+    doctor:
+      - graphify
+      - --help
+    required_when: knowledge_graph_research
+    absence_semantics: diagnostic
   - id: host-subagent
     kind: host
     doctor:
