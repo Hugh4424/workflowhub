@@ -1,7 +1,6 @@
 ---
 name: stage-handoff
 description: 每个阶段末写当前、可复制的人读交接，不作工作门，也不依赖可选复盘。
-version: 1.0.0
 ---
 
 # stage-handoff
@@ -52,3 +51,7 @@ stage-reflection 本轮未执行时，在真实 stage 结束的交接中写明�
 ## 写作规范
 
 创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；此处不复制规范。
+
+## 同仓方法依赖
+
+`skills/spec-specify/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。

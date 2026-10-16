@@ -66,6 +66,14 @@ function requirementInputs(file) {
   if(!plain(inputs) || Object.entries(inputs).some(([k,v])=>!["decision","spec","build_plan","raw_requirement"].includes(k) || (k==="raw_requirement"?!validRaw(v):typeof v!=="string" || !isAbsolute(v)))) throw new TypeError("invalid bootstrap material inputs or raw requirement source bytes");
   return inputs;
 }
+// Command authors must answer both replay questions: runs twice? failed halfway?
+// Reuse createFileOnce and compare complete bytes, not age/order. A published
+// manifest followed by failure remains real: a new invocation can conflict when
+// created_at differs. Report that failure, read the stored manifest, then use the
+// existing --task-path opening entry; do not claim transparent recovery or adopt
+// a live session. Opening preserves manifest/history and may initialize absent
+// facts; even its post-publication fsync failure requires residual readback before
+// retry. Keep workspace/manifest identity checks and only self-owned temp cleanup.
 export async function bootstrapTask(values,{env=process.env,home}={}) {
   const existing=Object.hasOwn(values,"task-path");
   const allowed=new Set(existing?["task-path","project","task"]:["project","task","target-repo","workspace-root","inputs","issues"]);

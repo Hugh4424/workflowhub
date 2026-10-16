@@ -69,18 +69,22 @@
       "items": { "oneOf": [
         {
           "type": "object",
-          "required": ["url", "commit", "path", "license"],
+          "required": ["url", "commit", "path", "license", "adopted"],
           "properties": {
             "url": { "type": "string", "pattern": "^https://github\\.com/" },
             "commit": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
             "path": { "type": "string", "minLength": 1 },
-            "license": { "type": "string", "minLength": 1 }
+            "license": { "type": "string", "minLength": 1 },
+            "adopted": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+            "content_sha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" }
           },
+          "$comment": "Complete facts belong to catalog; adopted names source sections and local adoption. content_sha256 is only for genuinely vendored bytes; null is unmeasured. Default hashing/writeback is deferred to N10.",
           "additionalProperties": false
         },
         {
           "type": "object",
-          "required": ["kind", "path", "license", "snapshot_sha256", "authorization_basis", "reviewed_at", "review_outcome"],
+          "required": ["kind", "path", "license", "authorization_basis", "reviewed_at", "review_outcome"],
+          "$comment": "Local sources retain authorization; absent snapshot_sha256 is unknown, never a Git commit.",
           "properties": {
             "kind": { "const": "user-provided-local-source" },
             "path": { "type": "string", "minLength": 1 },
@@ -91,6 +95,13 @@
             "review_outcome": { "enum": ["accepted", "rejected", "watch"] }
           },
           "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["path"],
+          "properties": { "path": { "type": "string", "pattern": "^\\.\\./catalog\\.yaml#skills\\.[a-z0-9][a-z0-9-]*$" } },
+          "additionalProperties": false,
+          "$comment": "Non-authoritative pointer relative to skills/<name>/. A copied skill may lack catalog; SKILL.md retains source names/retrieval clues, never a second registration."
         }
       ] }
     }

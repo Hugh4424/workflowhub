@@ -1,7 +1,6 @@
 ---
 name: resolving-merge-conflicts
 description: Resolve a planned close merge conflict on the task branch.
-version: 1.0.0
 ---
 
 # Resolving Merge Conflicts

@@ -20,10 +20,7 @@
   ],
   "sources": [
     {
-      "url": "https://github.com/anysearch-ai/anysearch-skill",
-      "commit": "db3d76e5597aec7261257be5322dd211c9d9bb87",
-      "path": "SKILL.md",
-      "license": "Apache-2.0"
+      "path": "../catalog.yaml#skills.anysearch"
     }
   ]
 }

@@ -9,22 +9,7 @@
   ],
   "sources": [
     {
-      "url": "https://github.com/mattpocock/skills",
-      "commit": "b0618bc436ad893b3c5e84e55fba86586d34a404",
-      "path": "skills/engineering/diagnosing-bugs",
-      "license": "MIT"
-    },
-    {
-      "url": "https://github.com/obra/superpowers",
-      "commit": "d884ae04edebef577e82ff7c4e143debd0bbec99",
-      "path": "skills/systematic-debugging",
-      "license": "MIT"
-    },
-    {
-      "url": "https://github.com/garrytan/gstack",
-      "commit": "7c9df1c568a9ea745508f679a329332b2c338063",
-      "path": "investigate",
-      "license": "MIT"
+      "path": "../catalog.yaml#skills.diagnosing-bugs"
     }
   ]
 }

@@ -1,5 +1,5 @@
 ---
-name: 3rd-review
+name: third-review
 description: 通用异源 CLI 调用器。用户要求“审查、仔细审查、异源审查、找独立 reviewer”时使用；按全局配置调用其他 provider，返回原始意见、session id 和明确失败诊断，不生成业务 verdict、合同或报告。
 ---
 来源：3rd-review v4.0.0，commit 97132960d7dab9145cbd0bdf610e09bf422e2ec0
@@ -67,3 +67,7 @@ node {skill-root}/scripts/3rd-review.mjs run \
 ## 写作规范
 
 创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；此处不复制规范。
+
+## 同仓方法依赖
+
+`skills/spec-specify/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。

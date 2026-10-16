@@ -253,8 +253,13 @@ Keep only one original output per fact. Use ordinary paths rather than {ref,sha2
 
 ## Source and maintenance
 
-来源是用户提供并授权迁入的本地 `isolated-browser-qa`（同目录 bundle 登记于 2026-07-14）；本地保留单 engine/session、隔离认证、同 engine 修复和不停止用户服务的清理路线。迭代时核原来源及本包 scripts/references 的实际差异，再决定更新；来源不可读时如实 unknown，不猜新版行为。
+完整来源权威：[catalog条目](../catalog.yaml#skills.isolated-browser-qa)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。
+来源是用户提供并授权迁入的本地 `isolated-browser-qa`（完整授权事实在catalog，小卡仅指针；原快照缺失为unknown）；本地保留单 engine/session、隔离认证、同 engine 修复和不停止用户服务的清理路线。迭代时核原来源及本包 scripts/references 的实际差异，再决定更新；来源不可读时如实 unknown，不猜新版行为。
 
 ## 写作规范
 
 创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；此处不复制规范。
+
+## 同仓方法依赖
+
+`skills/spec-specify/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。

@@ -42,7 +42,7 @@ Choose reuse, then narrow extension, then new mechanism with stated consumer, ow
 
 Apply both halves of the granularity rules in `templates/phase-template.md`: when to split and when to merge. The template owns those predicates; explain each candidate boundary with its delivery, verifier and real consumer, then declare the write set and ordered writers.
 
-When authoring each Phase's scope and write set, run the same self-check with `simplicity-guard`'s core questions — has this layer earned its place, and can an existing capability carry it — record any shrink, retire, or reuse decision in that Phase's existing 非目标 line, and let the existing `plan-eng-review` reading report the deletion-class count (count only; no quota).
+When authoring each Phase's scope and write set, run the same self-check with `skills/simplicity-guard/SKILL.md`'s core questions — has this layer earned its place, and can an existing capability carry it — record any shrink, retire, or reuse decision in that Phase's existing 非目标 line, and let the existing `plan-eng-review` reading report the deletion-class count (count only; no quota).
 
 凡写入 DO NOT TOUCH、或依赖「外部尚未改动」的受保护文件，计划里必须留下核实那一刻的实读结果：文件路径、读到的字段/签名/版本项**逐字清单**、读取所用的命令或工具、日期。字段个数、必填项、版本项这类断言只能来自实读，不能来自记忆、推断或上游摘要——上游摘要是线索，不是证据。实读结果与已有断言不一致时，先改断言再继续；本轮无法实读就写 `unknown`，并写明 owner 与下次核实动作。计划里出现「恰含 N 个字段」「签名未变」「只依赖既有接口」这类句子而没有实读记录时，按未核实处理。
 
@@ -92,6 +92,11 @@ Return the actual spec/Phase paths and the design/verification limits. Read curr
 
 ## 固定来源与本地偏离
 
-参考 [mattpocock/skills](https://github.com/mattpocock/skills) 固定 commit `b0618bc436ad893b3c5e84e55fba86586d34a404`：`skills/engineering/to-tickets/SKILL.md` 的 tracer bullet/blocking/prefactor/expand–contract、`skills/engineering/tdd/SKILL.md` 的先确认接缝与独立期望/纵切循环、`skills/engineering/codebase-design/SKILL.md` 的窄接口与可测试接缝；写作源为 `skills/productivity/writing-for-agents/SKILL.md` 与 `SKILL-MECHANICS.md`。
+完整来源权威：[catalog条目](../catalog.yaml#skills.spec-plan)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。
+来源线索：Spec Kit plan、Superpowers writing-plans、Matt to-tickets/tdd/codebase-design与writing-for-agents。采用tracer bullet、依赖分类、纵切与可测试窄接口；逐源章节回catalog。
 
 本地保全独立 Phase、全局递增 Task、单 spec 设计、冻结 RED/GREEN、逐字边界实读与全部失败/覆盖/回退条件；只吸收方法，不采用外部 tracker、ready-for-agent 标签、.scratch 票文件或宿主 setup/Skill 硬依赖。索引原职责由本技能承接，旧调用与附件按各自 owner 迁完再删。迭代时核上述固定子文件的更新与更优候选，记录源差和本地偏离后决定采用，不自动追 HEAD。输入是实际项目材料和允许写目标，缺宿主能力返回 unavailable，不绑定本任务路径/账号。
+
+## 同仓方法依赖
+
+`skills/simplicity-guard/SKILL.md`、`skills/spec-specify/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。

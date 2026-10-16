@@ -270,12 +270,10 @@ password、credential、cookie 或其他秘密。用户真实答案的决策含�
 
 ## Sources
 
-- 固定来源：AgentHub historical import，`multica-agenthub` 的
-  `packages/core/agenthub/skills/talk-with-zhipeng/SKILL.md`；该文件最后变更 commit
-  `2468b5e6907c67d7518583982c5729dcc98e414a`。WorkflowHub 已把宿主适配移除并演进为
-  native Skill，不再运行时依赖 AgentHub。
-- 更新检查：2026-07-26。检查时 AgentHub repository HEAD 为
-  `fabc82100b3dde2678a5fb81484bab3149c1e72d`，该来源文件在上述 commit 后没有更新；
-  保留 WorkflowHub 当前版本。
-- 候选方法参考：Matt Pocock `skills/productivity/grilling/SKILL.md`，固定 commit `b0618bc436ad893b3c5e84e55fba86586d34a404`，MIT；本地保留动态 OI 队列、真实题目总数、四维范围判定及薄适配层，不替换为上游宿主 Skill 调用或本地 `deep-interview`。历史 2026-07-26 的旧版候选比较不是本次新固定源未变化的结论。
+完整来源权威：[catalog条目](../catalog.yaml#skills.talk-with-zhipeng)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。
+来源线索：AgentHub历史导入talk-with-zhipeng与Matt grilling；旧更新观察和逐pin许可缺口回catalog。采用frontier独立问答；本地保留动态 OI 队列、真实题目总数、四维范围判定及薄适配层，不替换为上游宿主 Skill 调用或本地 `deep-interview`。历史 2026-07-26 的旧版候选比较不是本次新固定源未变化的结论。
 - 迭代时核该固定子文件与真实上游更新、更优候选，说明源差与本地偏离后决定采用；不自动追 HEAD。本技能接收调用方材料和宿主能力，不绑定本任务路径或账号。
+
+## 同仓方法依赖
+
+`skills/spec-specify/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。

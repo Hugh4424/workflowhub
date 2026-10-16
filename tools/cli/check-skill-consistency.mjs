@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
+import Ajv2020 from "ajv/dist/2020.js";
 import { loadStageSkillManifest } from "../../runtime/stage/stage-skill-runtime.mjs";
 import { validateSkillBundle } from "../../runtime/adapters/local-skill-resolver.mjs";
 
@@ -28,16 +29,48 @@ export function checkSkillConsistency(root) {
     fail(CATALOG, "current skills must be an array");
     return { failures, reports };
   }
+  // Source shape is a report-only fact, never proof of identity or permission.
+  let validateSource;
+  try {
+    const schema = JSON.parse(fs.readFileSync(new URL("../../runtime/schemas/skill-bundle.schema.json", import.meta.url), "utf8"));
+    validateSource = new Ajv2020({ validateFormats: false, allErrors: true }).compile(schema.properties.sources.items);
+  } catch (error) {
+    reports.push(`${CATALOG} source schema unavailable: ${error.message}; report-only`);
+  }
+  for (const entry of catalog.skills) {
+    if (!entry || typeof entry !== "object") continue;
+    const label = `${CATALOG} ${entry.name ?? "<unnamed>"} upstream source`;
+    if (["adapted", "adopted"].includes(entry.status) && (!Array.isArray(entry.upstream) || entry.upstream.length === 0))
+      reports.push(`${label}: ${entry.status} registration requires a declared source; report-only`);
+    if (entry.upstream !== undefined && !Array.isArray(entry.upstream)) {
+      reports.push(`${label}: upstream must be an array; report-only`);
+      continue;
+    }
+    for (const [index, source] of (entry.upstream ?? []).entries()) {
+      if (!validateSource) continue; // The explicit schema-unavailable report above covers this gap.
+      let projected = source;
+      if (source && typeof source === "object" && !Array.isArray(source) && Object.hasOwn(source, "github_url")) {
+        // These catalog retrieval/review facts are not bundle-source fields.
+        const { github_url, commit_url, skill_url, reviewed_at, review_outcome, ...shape } = source;
+        projected = { ...shape, url: github_url };
+        if (Object.hasOwn(source, "url"))
+          reports.push(`${label}[${index}]: catalog github_url must not be mixed with bundle url; report-only`);
+      }
+      if (!validateSource(projected))
+        reports.push(`${label}[${index}]: ${JSON.stringify(validateSource.errors)}; report-only, shape does not establish authorization or identity`);
+    }
+  }
   const registrations = new Map();
   const paths = new Set();
   for (const entry of catalog.skills) {
     if (!entry || typeof entry.name !== "string" || !entry.name) {
       fail(CATALOG, "current registration requires name"); continue;
     }
-    if (!/^[a-z][a-z0-9-]*$/.test(entry.name) || entry.path !== `skills/${entry.name}/SKILL.md`)
+    if (!/^[a-z][a-z0-9-]*$/.test(entry.name) || (entry.status !== "retired" && entry.path !== `skills/${entry.name}/SKILL.md`))
       fail(CATALOG, `name/path mismatch ${entry.name}: ${entry.path}; expected skills/${entry.name}/SKILL.md`);
     if (registrations.has(entry.name)) fail(CATALOG, `duplicate current registration ${entry.name}`);
     registrations.set(entry.name, entry);
+    if (entry.status === "retired") continue;
     if (typeof entry.path !== "string" || paths.has(entry.path)) fail(CATALOG, `duplicate/invalid current path ${entry.name}: ${entry.path}`);
     paths.add(entry.path);
   }
@@ -49,8 +82,8 @@ export function checkSkillConsistency(root) {
     }
     const registration = registrations.get(name);
     if (!registration) { fail(source, `${CATALOG} has no current registration for ${name}: ${locator}`); return; }
-    if (registration.path !== locator) fail(source, `${CATALOG} path mismatch ${name}: ${registration.path}; expected ${locator}`);
     if (registration.status === "retired") { fail(source, `active reference to retired ${name}: ${locator}`); return; }
+    if (registration.path !== locator) fail(source, `${CATALOG} path mismatch ${name}: ${registration.path}; expected ${locator}`);
     if (!actualStages.has(name)) actualStages.set(name, new Set());
     actualStages.get(name).add(stage);
     if (payloads.has(name)) return;

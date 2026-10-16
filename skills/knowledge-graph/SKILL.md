@@ -1,7 +1,6 @@
 ---
 name: knowledge-graph
 description: 阶段开工调研、模块影响定位或收口更新图时，查询现有知识图谱并回原文；无图时建代码图，文档更新先核缓存与费用；工具或图不可用时明确降级。
-version: 1.0.0
 ---
 
 # Knowledge Graph
@@ -133,4 +132,9 @@ manifest逐来源核已抽取内容，不能并集出虚假新hash；semantic ca
 
 ## 方法来源与迭代
 
+完整来源权威：[catalog条目](../catalog.yaml#skills.knowledge-graph)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。
 本方法按当前项目spec/decision的四动作、成本与来源边界包装已装graphify CLI/库，不复制其宽触发宿主安装、全量后端、记忆回写或导出支路。函数/参数以实际安装源码与顶级help窄核，失配只报该能力不可用，不自动追升级。创建或修改方法时读取项目`skills/spec-specify/SKILL.md`的「技能写作规范（WR001）」唯一规范，保步骤/条件/权限/失败强度；不复制规范，不用方法文件存在或字面测试绿冒实际消费。
+
+## 同仓方法依赖
+
+`skills/spec-specify/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。

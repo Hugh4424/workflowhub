@@ -154,6 +154,22 @@ const withDocChange = (fixture, from, to) => ({
 
 describe("post-cohort narrow pure-document G-2", () => {
   it.each([
+    ["yaml comment method", "config/method.yaml", "（仅注释方法）", true],
+    ["yml comment method", "config/method.yml", "（仅注释方法）", true],
+    ["yaml data", "config/method.yaml", "（数据字段）", false],
+    ["unclassified yaml", "config/method.yaml", "", false],
+    ["executable code", "src/method.mjs", "（仅注释方法）", false],
+    ["conflicting same path", "config/method.yaml", "（仅注释方法；修改数据字段）", false],
+  ])("classifies declared %s without claiming actual diff verification", (_name, path, declaration, accepted) => {
+    const base = pureDocFixture();
+    const fixture = JSON.parse(JSON.stringify(base).replaceAll("docs/calendar-refresh.md", path));
+    fixture.phases["phases/P1.md"] = fixture.phases["phases/P1.md"].replace(`owner=documentation; \`${path}\`;`, `owner=documentation; \`${path}\`${declaration};`);
+    const result = validatePostPhaseContract(fixture);
+    expect(result.ok, result.errors.join("; ")).toBe(accepted);
+    if (!accepted) expect(result.errors.join("; ")).toMatch(/G-2.*owned write set/);
+  });
+
+  it.each([
     ["one-character placeholder", "expected x preserves evidence", false],
     ["named English procedure and outcome", "expected publish procedure preserves credential requirements", true],
   ])("checks the English criterion: %s", (_name, criterion, accepted) => {

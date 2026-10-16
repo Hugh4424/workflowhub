@@ -1,7 +1,6 @@
 ---
 name: wh-review
 description: 文档审查保留真实发现与失败；代码调用读取 Long-review 等待方法，OCR 不可用如实记录，同源补充轴独立执行。
-version: 4.1.0
 ---
 
 # wh-review
@@ -86,4 +85,9 @@ partial 不表示通过。原始私有 provider 文本保持在既有安全诊�
 
 ## 写作与来源
 
+完整来源权威：[catalog条目](../catalog.yaml#skills.wh-review)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。来源：本仓review-record-route与provider协议。
 创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；保原步骤、条件、权限、失败强度和受保护字面，缺源如实 unavailable，不复制规范。
+
+## 同仓方法依赖
+
+`skills/intake-decision-review/SKILL.md`、`skills/plan-ceo-review/SKILL.md`、`skills/plan-design-review/SKILL.md`、`skills/plan-eng-review/SKILL.md`、`skills/review/SKILL.md`、`skills/simplicity-guard/SKILL.md`、`skills/spec-specify/SKILL.md`；按上文及stage-skill-plan的实际条件读取（plan-design-review仅UI分支），搬运时需同时提供或由调用者提供可读原件。

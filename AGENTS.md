@@ -64,7 +64,8 @@
 - 当前工作真相按 cohort 读取认证 worktree `specs/<task-id>/`：pre/history 保留 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 四材料；post 使用 `decision-log.md`、承载全局实现设计的 `spec.md`、独立 `phases/P<n>.md` 和纯指针 `phases/index.md`。post 不生成 `plan.md/tasks.md` 双写。外置任务追踪目录只放 `task.json`、`facts.jsonl`、`quality/`、`index.json` 等执行文件，不新增 gate。旧 task、receipt、review、历史 snapshot 只读保留。
 - 测试、审查、历史和 inventory/complexity 只产生事实证据，不是推进许可证；质量缺失保持 `unknown`/`unavailable`/`incomplete`，不能伪造通过。
 - provenance、原始 review 事实和失败事实必须保留，不能用摘要覆盖来源，也不能把 provider 失败改写为质量通过。
-- 新机制或新控制面必须先登记职责、真实 consumer、owner、测试和删除/保留条件；没有当前消费者的重复控制面不新增。
+- 新机制或新控制面必须先登记职责、真实 consumer、owner、测试和删除/保留条件；没有当前消费者的重复控制面不新增。登记作者先真读目标与调用处，写出使用者正在做的具体动作、输入、输出及为何需要；读不到目标停止本次登记并交原 owner，不写 active 猜测。下一位维护代码的人也是用户。
+- 改接口前按真实 caller 判断输入是否跨模块边界、能否作一次纯函数判断；通用机制留内部、专用策略留边缘，公共面不暴露 storage/transport/framework 内部表示。判据邻接现有 runtime/interface/runtime-facade.mjs，不另建规范层。
 - 当前 WorkflowHub 会话直接执行并发布阶段事实；外部 Stage Agent、bridge、session 或 stage outcome 不是任务推进前置条件。旧 bridge/adapter 只读保留历史 provenance，不得重新成为 active run、reflection、handoff 或 close 的门。
 
 ### 当前窄工具与事实职责登记

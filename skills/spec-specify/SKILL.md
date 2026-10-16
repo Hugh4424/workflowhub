@@ -36,7 +36,7 @@ exclusions, and the global implementation-design section. Keep the quick-read
 section short; put narrative before trace fields. Translate source requirements
 into four discoverable surfaces: requirement explanation, acceptance flow,
 test standard, and architecture boundary. Link each to source/decision IDs;
-Reference the PRD goal and decision rationale in their original owners. Before choosing or retaining a solution shape, self-check with `simplicity-guard`'s core questions (has this layer earned its place; can an existing capability carry it instead) and write the conclusion into the existing solution trade-off and 非目标 text, not into a new artifact.
+Reference the PRD goal and decision rationale in their original owners. Before choosing or retaining a solution shape, self-check with `skills/simplicity-guard/SKILL.md`'s core questions (has this layer earned its place; can an existing capability carry it instead) and write the conclusion into the existing solution trade-off and 非目标 text, not into a new artifact.
 
 The template is the same content contract consumed by stage-end
 `spec-analyze`. Generate canonical `PFACT-{NNN}` and `AC-{DOMAIN}-{NNN}`
@@ -162,10 +162,15 @@ discover files. Missing input/callback fails loud.
 
 ## 固定来源与本地偏离
 
-参考 [mattpocock/skills](https://github.com/mattpocock/skills) 固定 commit `b0618bc436ad893b3c5e84e55fba86586d34a404` 的 `skills/productivity/writing-for-agents/SKILL.md`、`SKILL-MECHANICS.md` 与 docs，提炼为 WR001 Q01–Q12；叙事参考 `skills/engineering/to-spec/SKILL.md`。本地保留当前完整 spec 模板、Appendix A 独占验收、canonical IDs、PFACT 四状态互斥、FR 来源映射、十维状态与全局设计/Phase 职责。来源是判据，不是已经改善的证据。
+完整来源权威：[catalog条目](../catalog.yaml#skills.spec-specify)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。
+来源线索：Matt writing-for-agents、SKILL-MECHANICS与to-spec；WR001 Q01–Q12及用户叙事的逐源章节回catalog。本地保留当前完整 spec 模板、Appendix A 独占验收、canonical IDs、PFACT 四状态互斥、FR 来源映射、十维状态与全局设计/Phase 职责。来源是判据，不是已经改善的证据。
 
 本地不采用外部 tracker、ready-for-agent 标签、setup/宿主 Skill 依赖或另根材料；上游「不写具体路径」不覆盖本地经实读的工程锚/精确写集，User Stories 细节仍由产品需求 owner 负责。方法接收调用者材料与允许写目标，缺源/不安全目标/未知 profile 明确报错，不绑定任务路径或账号。迭代时核这些固定子文件的更新与更优候选，写源差与本地偏离后决定采用，不自动追 HEAD。
 
 ## 补充材料
 
 本节回答：Where to locate source reasoning and examples. Use the supplied current decision-log, source anchors and existing template; preserve historical material read-only.
+
+## 同仓方法依赖
+
+`skills/decision-log/SKILL.md`、`skills/simplicity-guard/SKILL.md`、`skills/spec-plan/SKILL.md`；按上文及自带模板「测试标准」的实际条件读取，搬运时需同时提供或由调用者提供可读原件。

@@ -1,7 +1,6 @@
 ---
 name: backend-testing
 description: 在 build-code 看到真实后端改动后执行风险导向测试；build-plan 只记录预判的 skill，不调用本技能。
-version: 1.0.0
 ---
 
 # Backend Testing
@@ -19,3 +18,9 @@ coverage limits 和本次实际代码/材料来源。post 只绑定当前 Phase 
 ## 写作规范
 
 创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；此处不复制规范。
+
+完整来源权威：[catalog条目](../catalog.yaml#skills.backend-testing)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。来源：AgentHub packages/core/agenthub/skills/backend-testing/SKILL.md（许可适用性unknown）。
+
+## 同仓方法依赖
+
+`skills/spec-specify/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。
