@@ -92,3 +92,44 @@ test('ORACLE-P11-AUTHOR-G2 mixed executable scope cannot use pure-document excep
   expect(f.parsed.ok).toBe(false);expect(f.parsed.errors.join('\n')).toMatch(/documentation-only owned write set|G-2|RED.*nonzero/);
   const bundle=f.bundle();try{expect(sourceFacts(bundle).contract_ok).toBe(false);}finally{bundle.dispose();}
 });
+
+test.each([
+  ['comment method','`config/method.yaml`（仅注释方法）',true],
+  ['comma separated docs','`config/method.yaml`（仅注释方法）, `docs/owned.md`',true],
+  ['Chinese separator and read anchor','`config/method.yaml`（仅注释方法）；只读锚点 runtime/publish.mjs:20',true],
+  ['data fields','`config/method.yaml`（数据字段）',false],
+  ['comma data conflict','`config/method.yaml`（仅注释方法）, 修改数据字段',false],
+  ['semicolon data conflict','`config/method.yaml`（仅注释方法）；修改数据字段',false],
+  ['unknown extra scope','`config/method.yaml`（仅注释方法）；调整其它内容',false],
+  ['Chinese comma data conflict','`config/method.yaml`（仅注释方法），修改数据字段',false],
+  ['unclassified','`config/method.yaml`',false],
+  ['mixed executable','`config/method.yaml`（仅注释方法）, `src/owned.mjs`',false],
+  ['other unclassified yaml','`config/method.yaml`（仅注释方法）, `config/other.yaml`',false],
+  ['global comment claim','仅注释方法；`config/method.yaml`',false],
+  ['same path data claim','`config/method.yaml`（仅注释方法）; `config/method.yaml`（数据字段）',false],
+])('ORACLE-G2-YAML %s projects declaration facts through real source.json',async(_name,files,accepted)=>{
+  const f=await fixture(m=>{
+    m.phases[phase2]=m.phases[phase2].replaceAll('docs/owned.md','config/method.yaml');
+    field(m,phase2,'Files / symbols',files+'; symbol: N/A — 非代码方法说明');
+    const paths=[...files.matchAll(/`([^`]+)`/g)].map(match=>'`'+match[1]+'`').join(', ');
+    field(m,phase2,'Write set',paths);m.index=m.index.replace('`docs/owned.md`',paths);
+    m.spec=m.spec.replaceAll('docs/owned.md','config/method.yaml');
+  },'P2');
+  expect(f.parsed.ok,f.parsed.errors.join('\n')).toBe(accepted);
+  const bundle=f.bundle();try{expect(sourceFacts(bundle).contract_ok).toBe(accepted);}finally{bundle.dispose();}
+});
+
+test.each([
+  ['Action','将 config/method.yaml 的 enabled 数据字段改为 false。',false],
+  ['Outputs / failure','config/method.yaml 的 enabled 数据字段更新为 false；失败时保留错误。',false],
+  ['Action','不修改数据字段，仅调整注释方法文字。',true],
+])('ORACLE-G2-YAML cross-field %s declaration conflicts are projected',async(name,value,accepted)=>{
+  const f=await fixture(m=>{
+    m.phases[phase2]=m.phases[phase2].replaceAll('docs/owned.md','config/method.yaml');
+    field(m,phase2,'Files / symbols','`config/method.yaml`（仅注释方法）; symbol: N/A — 非代码方法说明');
+    field(m,phase2,name,value);
+    m.index=m.index.replace('docs/owned.md','config/method.yaml');m.spec=m.spec.replaceAll('docs/owned.md','config/method.yaml');
+  },'P2');
+  expect(f.parsed.ok,f.parsed.errors.join('\n')).toBe(accepted);
+  const bundle=f.bundle();try{expect(sourceFacts(bundle).contract_ok).toBe(accepted);}finally{bundle.dispose();}
+});

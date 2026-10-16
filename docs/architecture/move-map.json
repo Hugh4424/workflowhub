@@ -4819,6 +4819,19 @@
       ],
       "delete_condition": "职责被独立审查的替代承接且实际具名consumer为零时由对应owner移除；不因登记或暂未接线自动删除。",
       "retention_basis": "收窄原denylist为已定知识载荷白名单；不扩图扫描、不删机器/未知既有字节。"
+    },
+    {
+      "source": "tests/n2-skill-catalog-portability.test.mjs",
+      "destination": "tests/n2-skill-catalog-portability.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "N2清单路径、名称、来源、依赖、单技能搬运及只报告边界的目标行为Oracle；供既有定向测试消费。",
+      "owner": "N2 build-plan oracle owner；build-code只读消费冻结断言",
+      "consumer": "本卡具名Phase的定向Vitest命令及verify-code独立读回；普通质量事实，不作阶段许可证。",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "当前Oracle职责退役或经独立审查的替代测试完整承接，且冻结变更遵既有TCR后由原owner删除；历史RED与测试原件保留。",
+      "retention_basis": "补齐本卡缺失的行为测试接缝；冻结和变更沿Phase既有DO NOT TOUCH与TCR，原始失败事实保留在任务库。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"
