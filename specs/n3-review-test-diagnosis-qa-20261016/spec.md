@@ -285,13 +285,31 @@ checker的调用内sources应从下表实际读取，不把本段标签当三源
 | 现有路径/符号 | 现状与选用方式 | consumer/影响 |
 | --- | --- | --- |
 | `skills/wh-review/scripts/simple-review-runner.mjs`：`isPairedMakeDecisionInput(input)`、`runSimpleReview(input, dependencies = {})` | P3只缩配对track分支，保公开runner受控transport seam | wh-review公共group；AC-003 |
-| `skills/wh-review/scripts/review-materials.mjs`：`validateDirectionReviewInput({ materials } = {})`、`buildPlanningArtifacts`、`selectReviewerSkills` | P2/P6说明材料位与现有lens，不另建validator；实现owner本卡不改这些函数 | 现有文档审查包；AC-002、AC-006 |
+| `skills/wh-review/scripts/review-materials.mjs`：`validateDirectionReviewInput({ materials } = {})`、`buildPlanningArtifacts`、`selectReviewerSkills` | P2说明材料位、P6消费现有lens；P6仅修mini design实际kind分支，保持其它组包/validator职责，不另建validator | 现有文档审查包；AC-002、AC-006 |
 | `runtime/review/stage-materials.json`：`stages.make-decision.tracks.direction`、`stages.build-plan.profiles.post` | 读已有required/optional/generated/forbidden，不加选择表或新字段 | 材料producer；保护逐字见下文 |
 | `tools/cli/stage-runtime.mjs`：OCR包body检查附近 | 现有代码包要求simplicity/review正文；只从真实包读回，不改executor路径 | OCR代码包；AC-006、AC-010 |
 | `workflows/build-code/SKILL.md`、`skill-deps.yaml` | P1口径、P5真实诊断触发；保已存在的诊断deps | build-code现场步骤；AC-001、AC-005 |
 | `skills/diagnosing-bugs/SKILL.md` 四步 | P5窄加不可信输出/性能来源，保根因回路 | build-code现步骤；AC-005 |
 | `skills/simplicity-guard/SKILL.md`：Packet lens contract、写作调用点 | P6同版融合并删重复；不单独起review | 文档/代码包与写作步骤；AC-006 |
 | `skills/isolated-browser-qa/scripts/browser-qa-context.sh`、`browser-qa-cleanup.sh` | P7扩现入口的会话和票据生命周期；临时资源只认本次归属 | 隔离QA；AC-007 |
+
+### 2026-10-17已批准的P2/P8窄修订
+
+真实授权：主会话用户消息 `msg_01a145c3-9dd4-74c2-8d08-9614db7edbf2`，取证原件 `quality/evidence/2026-10-16-187-p2-p8-narrow-plan-approval-source.json`；scope分别为“批准窄扩写集并修复（推荐）”与“允许核现存后补采（推荐）”。需求/验收authority仍是当前decision、Appendix A与P2/P8原合同。P2新增既有broker/attachments/必要AG/OpenCode adapter及具名定向测试写集，精确动作、条件client写面、先RED后生产及硬只读失败处理见P2「已批准窄修订」。不改一次公共group、direction独立role、安全边界及原冻结oracle。
+
+P8先认证现存正常review；不足时允许按P8「补采前冻结同cohort输入」预先冻结条件后补采真实baseline/candidate连续三对。只解除原“不为凑样本另发provider”的执行限制，不降低N≥3、可比性、逐风险独立质量、成本四组或失败分母要求；不得先跑再改标准。原161、真实登录、23保护与G2历史冲突不在这次修订范围，仍保原事实。
+
+### P6 mini design既定合同修复（2026-10-17）
+
+235实际caller与239独立读回发现mini_task.design合法默认包被codePacket注入simplicity，违背P6原“design无lens”合同。按原用户完整实现目标、D-011及该原合同，P6窄扩既有 `skills/wh-review/scripts/review-materials.mjs` 与 `tests/contract/review-materials-contract.test.mjs`，由原P6owner修实际mini kind分支；不是P2最新答复另授的文件范围。授权核对240与原声明越界事实241分别保留。具体独立先RED方案/consumer/保留删除条件见P6「mini design既定合同的根因修复」。不改AC、八入口原表、stage identity、广义documentFace或direction盲边界，不加schema/字段/runner/public命令。
+
+### P4当前纯.md G2合同的根因修复
+
+按当前P4纯.md要求及原用户完整实现目标，独立370确认需收窄既有G2 reader，不因旧N2合法scope-approved而免当前交付；不是N2未授权归责。P4窄增 `runtime/stage/stage-content-contracts.mjs` 写集；模板仅解除允许注释YAML/YML豁免那一句的保护，其它标题/示例/字段保留。两原已声明测试的六个positive须独立exact TCR先冻结拒绝期望并取目标RED，再原owner修runtime/template与同oracle GREEN，保纯.md和正常YAML行为RED/GREEN正控。完整owner/consumer、测试、保留删除与scope来源见P4「当前pure.md G2合同收窄」。不改AC、旧decision、四冻结oracle或历史十红，不加新gate/schema/对象；P8付费cohort修后重新freeze，当前0provider。
+
+### G2修后当前P4采样scope对齐
+
+既有P4写集已纳入stage-content-contracts，纯指针index逐路径保持与P4一致。411只读取当前真实声明/源：83声明、19changed，旧306/363的82/16/29不作为当前输入。按P8「本次review方法分量预冻方案（G2修后）」最终重建正常CLI两投影后再冻结成员数与源hash；169原合同和四风险oracle语义不变，已修G2候选不要求产旧bugfinding。P1/P2/G2代码交付与本规划材料交付后，原dispatcher依已授权次序补采；技术preflight、字节减法、单AG真实三段均不代全局质量/成本/真实登录或完成。当前0provider、未确认完成事实保留。
 
 ### 原需求与采用项的具体首验导航
 
@@ -337,6 +355,20 @@ tickets的窄接口为 `filterTargetCookies(cookies, scope)` 与 `transferTarget
 
 | 精确路径 | 持笔Phase/顺序 |
 | --- | --- |
+| `skills/third-review/lib/broker.mjs` | P2（本次批准窄修订） |
+| `skills/third-review/lib/attachments.mjs` | P2（本次批准窄修订） |
+| `skills/third-review/lib/adapters/antigravity.mjs` | P2（本次批准窄修订） |
+| `skills/third-review/lib/adapters/opencode.mjs` | P2（本次批准窄修订） |
+| `skills/third-review/lib/adapters/opencode-supervised-cli.mjs` | P2（本次批准窄修订） |
+| `skills/third-review/test/broker.test.mjs` | P2（本次批准窄修订） |
+| `skills/third-review/test/attachments-protocol.test.mjs` | P2（本次批准窄修订） |
+| `skills/third-review/test/antigravity-adapter.test.mjs` | P2（本次批准窄修订） |
+| `skills/third-review/test/adapters-health.test.mjs` | P2（本次批准窄修订） |
+| `skills/wh-review/scripts/review-provider-client.mjs` | P2（条件写集：仅实际集成证明需要，默认不改） |
+| `skills/wh-review/scripts/__tests__/review-provider-client-v3.test.mjs` | P2（条件写集：仅实际集成证明需要，默认不改） |
+| `skills/wh-review/scripts/review-materials.mjs` | P6（mini design实际kind分支窄修） |
+| `tests/contract/review-materials-contract.test.mjs` | P6（独立预写mini design目标RED/同oracle GREEN） |
+| `runtime/stage/stage-content-contracts.mjs` | P4（当前纯.md G2既有reader窄收） |
 | `AGENTS.md` | P2 → P4 → P6 |
 | `THIRD_PARTY_NOTICES.md` | P2 → P4 → P5 → P6 → P7 |
 | `core/__tests__/check-anti-host.test.mjs` | P4 |
@@ -601,7 +633,7 @@ P8为唯一最终全AC验收Phase，按输入清单一次消费早期唯一原�
 验证：P8成本验收者复用完整N1，在复跑前按父PRD193–199、父PRD#n3“验收依赖”及父decision AC-005（1344行）声明同cohort连续N≥3、同任务/命令/条件/预算及样本波动；这是既有收益样本条件，不是provider数量、推理或成本上限；消费P3调用、P6删减、原基线引用与当前字节，不另跑无信息重复。质量子面由P2/P3引用正常审查baseline/candidate原件，P8按[P8「同cohort审查质量比较」](phases/P8-整卡独立验收.md)核同内容artifact/contract身份、stage/track、实际模型与路由/预算条件及声明自变量，独立逐问题判断有效发现、误报和可证遗漏；不以同名文件、总finding数或受控dispatch代真实质量。
 通过：cacheRead与wall_s均不劣化，steps或cacheRead至少一项下降；调用次数2→1只作可数事实，不替成本不劣化或审查质量不降；失败和不可用留分母、token/步骤报实际值、墙钟未测下降如实未测；受影响方法与常驻/必读字节不增，减法不靠丢约束/移出分母；缺字段保持incomplete，不能据此声称整卡全验；质量比较仅对可比连续样本中有独立事实依据的具体风险给范围内结论，候选不能遗漏仍适用的已证问题、把反例判clean或丢必要事实。
 失败：只报调用减半/total、缺源填0或宣下降、忽略失败/不可用、任一不劣化项劣化、二下降项均无下降、字节增加或改分母付减法；质量损失不满足，baseline缺失/不可比/N不足或关键质量事实不可判时质量子面incomplete，不能宣裁剪安全。
-证据：前后同条件N1四组原数与来源/波动/失败、实际调用与删改理由、路径+hash和字节差；不可得字段及owner如实列出；既有baseline/candidate review原ref、材料/config身份、逐风险独立比较/误报反证与质量限制，和成本分别报告，不新增provider轮或评分对象。
+证据：前后同条件N1四组原数与来源/波动/失败、实际调用与删改理由、路径+hash和字节差；不可得字段及owner如实列出；既有baseline/candidate review原ref、材料/config身份、逐风险独立比较/误报反证与质量限制，和成本分别报告，现存不足时按P8获准预冻方案补采，不新增评分对象。
 
 - [ ] **AC-010**：既有红与未知不被漂白；关联FR-N3-010。
 验证：P4/P8执行者读取十红原件与本次受影响前后目标输出，若状态变动逐条查实际原因；核runtime-facade既有保留决定及通过/未知同输入的不同读数。六对象源为父任务 `quality/evidence/decision-log-refs/s3/T4-T10-remaining.md:60–69`；P4/T004按下表分别实际读回当前producer/consumer、合法/零输入/受控反例及误导汇总，不以历史S2数字替当前观察；P8读其唯一原件。
