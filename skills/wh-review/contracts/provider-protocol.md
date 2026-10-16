@@ -17,6 +17,12 @@
 材料缺失、不可读或传输失败保持 unavailable/incomplete，不能生成“没有问题”的结果。
 大差异可分为完整 shard 和索引；所有判断只基于本次提供的内容，不能截断必要合同或源码证据。
 
+派发内容为 ARTIFACT + CONTRACT；实施者 CLAIM、胜利摘要与推理不作为 reviewer 判断输入。按实际 adapter/source/model 展示身份，未知保持 unknown；同模型族的不同 provider 键不算异源。覆盖三键及三条件结论唯一读取 `skills/wh-review/SKILL.md`「输出和失败边界」，不得由送达推已读。
+
+只有已存在真实候选生成→judge 比较 consumer 时，才应用 arena：候选接收同一任务而不见 rubric、模型名与其它候选；judge 接收匿名 A/B 和同一已定 rubric，逐标准核实际依据，分歧回具体证据。泄露 rubric/身份、不同标准比较或只说意见不同均不成立。候选完成后再比较，选可维护的基底，说明保留/舍弃与有来源的合入，并对最终合成产物按原合同验证、保失败。当前 reconstruct/reveal/challenge 与普通 findings 合并不是该 consumer；未找到真实入口则明确“只落文字/未生效”，适用性未查明记 unknown，不为首验建候选框架、cross-judge、评分表或新审查轮。
+
+发现归并仍沿现有 owner；涉及共同简洁视角时读 `skills/simplicity-guard/SKILL.md` 唯一方法，不在协议复制规则。
+
 ## 一次调用的真实过程事实
 
 WorkflowHub 的 wh-review / ReviewProviderClient 保留 reviewer group 的输入、路由、身份及过程事实职责；一次审查只发一个公共 group 请求。实际使用 broker 协议时按其协议校验；现客户端的原生 Codex、Antigravity 和 Kimi transport 按各自真实原生会话、进程及工具边界记事实，不伪称旧 broker 已执行。
@@ -73,7 +79,7 @@ evidence_kind 只用 direct、machine、inferred：direct 有直接源码/材料
 
 ## 聚合与审查面
 
-按根因、路径和规范化 issue 合并重复发现，保留每个 provider 的 attribution 和不同后果。
+按根因、路径和规范化 issue 合并重复发现，保留每个 provider 的 attribution 和不同后果。 同一根因被多路独立提出时如实保留来源数量与同源/unknown，不凭路数升级严重度；单源有效发现不丢弃。共同简洁视角归并时消费 `skills/simplicity-guard/SKILL.md`。
 直接或机器证据可供逐项处理；单个 inferred 严重问题保持需核实，不能凭置信度制造裁决。
 空 findings 只表示本轮没有提出具体问题；可用传输、空发现与最终质量结论分别记事实。
 当前正式审查点为 make-decision、build-plan 和代码审查；build-code 只用当前 phase，

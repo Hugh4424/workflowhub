@@ -37,6 +37,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+N3 P2 在现 wh-review/protocol/review 方法吸收 addyosmani/agent-skills 的 `skills/doubt-driven-development/SKILL.md`（MIT，固定 commit `aeac41d4d005999432bb7312f7ff06383a91d59d`）的 ARTIFACT + CONTRACT 与去 CLAIM；pstack（MIT，Copyright (c) 2026 Lauren Tan，实际包 SHA256 `f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8`，git commit未知）的 `skills/interrogate/SKILL.md`、`skills/principle-attack-the-premise/SKILL.md`、`skills/blast-radius/SKILL.md`、`skills/architect/SKILL.md` 及 `references/design-red-flags.md`、`skills/arena/SKILL.md`、`skills/show-me-your-work/SKILL.md`。采用章节与本地偏离见catalog的n3 absorbed条目；不采用默认模型表、固定轮次、TSV新账本或候选框架。arena无真实consumer只落文字/未生效；来源登记不证明方法效果。
+
 ## Apache-2.0 source
 
 - **AnySearch Skill**, copyright © 2026 AnySearch. Source: [anysearch-ai/anysearch-skill@db3d76e](https://github.com/anysearch-ai/anysearch-skill/commit/db3d76e5597aec7261257be5322dd211c9d9bb87). 历史登记声称Apache-2.0；本次固定commit完整tree无LICENSE/NOTICE，README亦未找到grant，故版本绑定与授权依据unknown。不得把本地后补文件当该版本已核许可。完整许可见 [`skills/anysearch/LICENSE`](skills/anysearch/LICENSE)，notice 见 [`skills/anysearch/NOTICE`](skills/anysearch/NOTICE)。

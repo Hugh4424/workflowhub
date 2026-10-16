@@ -25,7 +25,12 @@ stage-skill-plan.json 仍在本技能原路径提供 required_skills/optional_sk
 4. 主会话保留一份真实 review 原件及执行回执，处置 fixed、rejected_invalid、accepted_risk 或 needs_human。finding 要有能回读的问题/根因/建议/证据；无效锚点标记留原件，内容仍由独立事实判断，不能自动删真实问题。build-code、verify-code 内严重问题自动优先修复，无法解决保留 incomplete 并继续可执行部分，最终 close 前展示实际损失和风险，不新增中间确认；其它阶段按其真实选择合同处理。仅已有绑定该 finding 的真实用户风险决定才可记 accepted_risk，持续实施授权不能代填风险接受。
 5. 请求只要已经返回语义建议，就不因修复或想追空 findings 重派同 scope 轮次。无语义结果且具体传输/材料问题已改变时，按原调用范围处理安全重试。恢复/长等待沿同一个实际请求，取消按现信号路径执行；本技能不新建异步对象或第二层生命周期。 明确补派仅用于原记录未 completed 的来源：提交非空 `only_providers`、`dispatch_reason` 和带 sha256 的 `supplements` 原记录引用；绑定相同材料与 subject，不重发已成功来源，不因空 findings 追派。补派只由人显式发起，不自动补派；按失败率自动降权同样不做（ADR-029、ADR-031）。
 
-派发卫生：派发前用已有的 broker 探针筛掉确定性不可用的路线；在满足「至少一条异源建议」的前提下把路线数收到 3 条；账号配额窗口内不使用对应的 provider；大包全文审查不使用会打转的路线。探针只读，筛除与配额事实照实记录；本条不新增公共命令、调度状态或重试状态。
+派发卫生：读取本次可信配置的 initial 实际路线，逐路派发并保留真实 adapter/source/model；未报 model 或模型族记 unknown。同一家族换 provider 键仍是同源，不用键名冒异源。只读探针的不可用、配额或包能力事实单列；不固定收到数量，不以异源下限取消来源，不由 workflow 输入改配置。各来源失败、无效输出与空 findings 分别读回，成功路不覆盖失败。
+
+材料位按 `runtime/review/stage-materials.json` 当前 stage/track 合同读取；direction 的 `raw_requirement` 是用户原始要求及来源，`objective_facts` 是可核对现状/限制及原件，`convergence_outline` 只列问题、约束、失败后果和较小可逆选项，不提前放当前选择或理由。三个键齐全或 hash 可验不证明三个角色齐；同字节填三位须报告角色未成立，不能只改标签或补 manifest。缺必要位报 MATERIAL_INCOMPLETE，派发前停该请求。detail 使用真实 `raw_requirement` 与 `approved_direction`，其余位沿当前合同，不新增必填键。
+
+调用方沿现 `buildReviewMaterials` 核实际 manifest 与每份正文、来源及盲/揭示可见性；仅路径或嵌套 ref 不算正文已送达。direction 的 reconstruct → reveal → challenge 内部 packet 边界由 provider 协议唯一说明；只投盲重建包只能证明重建。审查派发给 ARTIFACT + CONTRACT，不附实施者 CLAIM、胜利摘要或自拟结论引导判断；处置必须回原件，可用 Contract misread / Valid + actionable / Valid trade-off / Noise 解释理由，不新增裁决枚举、轮次或 provider 替换。
+
 
 ## 输出和失败边界
 

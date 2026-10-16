@@ -46,6 +46,11 @@ Each smell reads *what it is* → *how to fix*; match it against the diff:
 4. Prefer a precise finding over a broad quality opinion.
 5. Keep contract-external observations minor.
 
+沿本次真实失败追问共同前提：写出失败修法共同假定、可推翻它的包内事实，并比较“继续补偿”与“消除前提”的修法。三个必填键同 hash 不能靠重命名修好角色；角色已独立而文件不可读则检查传输，不能套用同字节诊断。缺历史原件保 incomplete，不编次数或引入固定配额/census。
+
+有架构相关 diff 时，用包内代码逐类调查 Shallow module、Information leakage、Temporal decomposition、Pass-through method、Split ownership、Two ways to do one task、Importable internals、Hand-synced list；每类给代码证据、未见证据或不适用原因。标签是调查线索，不自动变 finding，不以 temporal 标签否定已确认 Phase。比较有不同结构后果的备选：现 canonical owner 与 adapter/reader 各写同义映射在多写者、wire 泄漏、修改面及失败保全上有何区别；同逻辑换名/同形 wrapper 不算备选。实际无机会给依据，缺源保 unknown；只消费本 task 已有一次架构机会，不新增 interface 或评审轮。
+
+
 ## Evidence handling
 
 - Missing evidence is unavailable, never pass. Use the supplied packet only.
@@ -54,6 +59,10 @@ Each smell reads *what it is* → *how to fix*; match it against the diff:
 - Every finding must use only the provider protocol fields:
   `severity`, `path`, optional `line`, `issue`, `root_cause`, `recommendation`,
   `evidence_kind`, and `evidence`.
+
+方法追源与条件消费：审查的材料位、真实路线/身份、覆盖及三条件结论读 `skills/wh-review/SKILL.md`；盲揭示与条件 arena 读本次全文 provider 协议。归并共同简洁问题时读 `skills/simplicity-guard/SKILL.md`，不造第二套规则。
+
+影响范围须核实际非符号边：JSON 键、wire 表示、当前配置与下游 reader；无 DB/跨语言 consumer 说明不适用原因。找一两个安全关键事实，用现 owner 的真实调用和坏输入证明；例如 failed/invalid 来源自称 read 应被转到 undetermined，completed/ok 且可靠读证可保 read，明确未送达保 unread。仅 grep/行锚或合理推理记 unproven；区分已证风险、已排除风险、未证前提，不增加 evidence_level 或 finding 字段。
 
 ## Result
 

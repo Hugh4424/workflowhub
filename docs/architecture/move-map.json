@@ -2292,7 +2292,7 @@
       "destination": "skills/review/SKILL.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "既有模块／资源职责；不从登记新增能力",
+      "responsibility": "既有模块／资源职责；不从登记新增能力；N3 P2审查材料语义、真实配置路线/身份/覆盖与artifact+contract消费；arena无真实consumer仅保条件方法",
       "owner": "原路径维护 owner；P7 仅登记现职责",
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
@@ -2307,7 +2307,7 @@
         "tools/cli/stage-runtime.mjs"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "既有保留生产路径；本次仅归位说明"
+      "retention_basis": "既有保留生产路径；本次仅归位说明；N3 P2/T002来源采用及原consumer首验，不新增runtime/schema/账本"
     },
     {
       "source": "skills/review/review-bundle.json",
@@ -2829,7 +2829,7 @@
       "destination": "skills/wh-review/SKILL.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "宿主读、文档审查方法 owner",
+      "responsibility": "宿主读、文档审查方法 owner；N3 P2审查材料语义、真实配置路线/身份/覆盖与artifact+contract消费；arena无真实consumer仅保条件方法",
       "owner": "B3/P4 / MT-3-067",
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
@@ -2848,7 +2848,7 @@
         "workflows/verify-code/skill-deps.yaml"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "MT-3-067 / NARROW"
+      "retention_basis": "MT-3-067 / NARROW；N3 P2/T002来源采用及原consumer首验，不新增runtime/schema/账本"
     },
     {
       "source": "skills/wh-review/contracts/build-code.md",
@@ -2941,7 +2941,7 @@
       "destination": "skills/wh-review/contracts/provider-protocol.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "OCR + 文档面 reviewer 输出协议",
+      "responsibility": "OCR + 文档面 reviewer 输出协议；N3 P2审查材料语义、真实配置路线/身份/覆盖与artifact+contract消费；arena无真实consumer仅保条件方法",
       "owner": "B4/P5 / MT-3-078",
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
@@ -2950,7 +2950,7 @@
         "skills/wh-review/scripts/review-materials.mjs"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "MT-3-078 / NARROW"
+      "retention_basis": "MT-3-078 / NARROW；N3 P2/T002来源采用及原consumer首验，不新增runtime/schema/账本"
     },
     {
       "source": "skills/wh-review/contracts/verify-code.md",

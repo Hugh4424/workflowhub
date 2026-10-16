@@ -1621,3 +1621,184 @@ capability_decisions:
     local_changes: 当前五阶段没有 deploy-observe workflow
     dependency_closure: []
     update_policy: 未来独立 deploy-observe workflow 建立后重评
+  - name: n3-doubt-driven-development
+    status: absorbed
+    purpose: N3审查材料与路由方法吸收
+    design_idea: ARTIFACT + CONTRACT；去CLAIM诱导及有源处置理由
+    used_by_stages:
+      - make-decision
+      - build-plan
+      - build-code
+      - verify-code
+    local_path: skills/wh-review/SKILL.md; skills/wh-review/contracts/provider-protocol.md; skills/review/SKILL.md
+    upstream:
+      - github_url: https://github.com/addyosmani/agent-skills
+        commit: aeac41d4d005999432bb7312f7ff06383a91d59d
+        commit_url: https://github.com/addyosmani/agent-skills/commit/aeac41d4d005999432bb7312f7ff06383a91d59d
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/doubt-driven-development/SKILL.md
+        skill_url: https://github.com/addyosmani/agent-skills/blob/aeac41d4d005999432bb7312f7ff06383a91d59d/skills/doubt-driven-development/SKILL.md
+        adopted:
+          - ARTIFACT + CONTRACT；去CLAIM诱导及有源处置理由
+    local_changes: 方法吸收入既有consumer；不改native身份、不新建runtime/账本/路由。固定commit；不采用跨模型升级或固定轮次。
+    dependency_closure:
+      - skills/spec-specify/SKILL.md
+    update_policy: 按固定来源/章节与本地consumer逐项比较；实际生效和方法文字分开，不自动追HEAD。
+  - name: n3-interrogate
+    status: absorbed
+    purpose: N3审查材料与路由方法吸收
+    design_idea: 当前配置逐路派发；来源归属、失败并列及唯一simplicity指针
+    used_by_stages:
+      - make-decision
+      - build-plan
+      - build-code
+      - verify-code
+    local_path: skills/wh-review/SKILL.md; skills/wh-review/contracts/provider-protocol.md; skills/review/SKILL.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        commit: unresolved-pstack-content-snapshot
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/interrogate/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/interrogate/SKILL.md
+        adopted:
+          - 当前配置逐路派发；来源归属、失败并列及唯一simplicity指针
+    local_changes: >-
+      方法吸收入既有consumer；不改native身份、不新建runtime/账本/路由。pstack实际包sha256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；git
+      commit未知；不采用宿主默认模型、cross-judge或额外审批。
+    dependency_closure:
+      - skills/spec-specify/SKILL.md
+    update_policy: 按固定来源/章节与本地consumer逐项比较；实际生效和方法文字分开，不自动追HEAD。
+  - name: n3-attack-the-premise
+    status: absorbed
+    purpose: N3审查材料与路由方法吸收
+    design_idea: 共同前提与可推翻事实；补偿和消除前提对照
+    used_by_stages:
+      - make-decision
+      - build-plan
+      - build-code
+      - verify-code
+    local_path: skills/wh-review/SKILL.md; skills/wh-review/contracts/provider-protocol.md; skills/review/SKILL.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        commit: unresolved-pstack-content-snapshot
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/principle-attack-the-premise/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/principle-attack-the-premise/SKILL.md
+        adopted:
+          - 共同前提与可推翻事实；补偿和消除前提对照
+    local_changes: >-
+      方法吸收入既有consumer；不改native身份、不新建runtime/账本/路由。pstack实际包sha256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；git
+      commit未知；不采用宿主默认模型、cross-judge或额外审批。
+    dependency_closure:
+      - skills/spec-specify/SKILL.md
+    update_policy: 按固定来源/章节与本地consumer逐项比较；实际生效和方法文字分开，不自动追HEAD。
+  - name: n3-blast-radius
+    status: absorbed
+    purpose: N3审查材料与路由方法吸收
+    design_idea: 非符号边、安全关键事实实跑、unproven与风险区分
+    used_by_stages:
+      - make-decision
+      - build-plan
+      - build-code
+      - verify-code
+    local_path: skills/wh-review/SKILL.md; skills/wh-review/contracts/provider-protocol.md; skills/review/SKILL.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        commit: unresolved-pstack-content-snapshot
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/blast-radius/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/blast-radius/SKILL.md
+        adopted:
+          - 非符号边、安全关键事实实跑、unproven与风险区分
+    local_changes: >-
+      方法吸收入既有consumer；不改native身份、不新建runtime/账本/路由。pstack实际包sha256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；git
+      commit未知；不采用宿主默认模型、cross-judge或额外审批。
+    dependency_closure:
+      - skills/spec-specify/SKILL.md
+    update_policy: 按固定来源/章节与本地consumer逐项比较；实际生效和方法文字分开，不自动追HEAD。
+  - name: n3-architect
+    status: absorbed
+    purpose: N3审查材料与路由方法吸收
+    design_idea: references/design-red-flags.md八红旗与结构备选比较，不新增接口或轮次
+    used_by_stages:
+      - make-decision
+      - build-plan
+      - build-code
+      - verify-code
+    local_path: skills/wh-review/SKILL.md; skills/wh-review/contracts/provider-protocol.md; skills/review/SKILL.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        commit: unresolved-pstack-content-snapshot
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/architect/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/architect/SKILL.md
+        adopted:
+          - references/design-red-flags.md八红旗与结构备选比较，不新增接口或轮次
+    local_changes: >-
+      方法吸收入既有consumer；不改native身份、不新建runtime/账本/路由。pstack实际包sha256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；git
+      commit未知；不采用宿主默认模型、cross-judge或额外审批。
+    dependency_closure:
+      - skills/spec-specify/SKILL.md
+    update_policy: 按固定来源/章节与本地consumer逐项比较；实际生效和方法文字分开，不自动追HEAD。
+  - name: n3-arena
+    status: absorbed
+    purpose: N3审查材料与路由方法吸收
+    design_idea: 条件consumer、匿名同尺与rubric隔离、合成后验证；无consumer只落文字
+    used_by_stages:
+      - make-decision
+      - build-plan
+      - build-code
+      - verify-code
+    local_path: skills/wh-review/SKILL.md; skills/wh-review/contracts/provider-protocol.md; skills/review/SKILL.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        commit: unresolved-pstack-content-snapshot
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/arena/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/arena/SKILL.md
+        adopted:
+          - 条件consumer、匿名同尺与rubric隔离、合成后验证；无consumer只落文字
+    local_changes: >-
+      方法吸收入既有consumer；不改native身份、不新建runtime/账本/路由。pstack实际包sha256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；git
+      commit未知；不采用宿主默认模型、cross-judge或额外审批。
+    dependency_closure:
+      - skills/spec-specify/SKILL.md
+    update_policy: 按固定来源/章节与本地consumer逐项比较；实际生效和方法文字分开，不自动追HEAD。
+  - name: n3-show-me-your-work
+    status: absorbed
+    purpose: N3审查材料与路由方法吸收
+    design_idea: 真实原件与来源/同源/未知展示，不采用TSV账本
+    used_by_stages:
+      - make-decision
+      - build-plan
+      - build-code
+      - verify-code
+    local_path: skills/wh-review/SKILL.md; skills/wh-review/contracts/provider-protocol.md; skills/review/SKILL.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        commit: unresolved-pstack-content-snapshot
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/show-me-your-work/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/show-me-your-work/SKILL.md
+        adopted:
+          - 真实原件与来源/同源/未知展示，不采用TSV账本
+    local_changes: >-
+      方法吸收入既有consumer；不改native身份、不新建runtime/账本/路由。pstack实际包sha256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；git
+      commit未知；不采用宿主默认模型、cross-judge或额外审批。
+    dependency_closure:
+      - skills/spec-specify/SKILL.md
+    update_policy: 按固定来源/章节与本地consumer逐项比较；实际生效和方法文字分开，不自动追HEAD。

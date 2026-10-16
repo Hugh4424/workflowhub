@@ -20,6 +20,8 @@
 - 不空转轮询：不以远小于任务耗时的固定超时重复空转调用；派发按工作类型，回传结论与清单，修复回原实施子代理同一会话。五阶段共用并发区间为 2–5，具体每个任务开几个并发在 build-plan 的当前并行方案里逐任务确定。
 - 跨 Phase 不做全量快照绑定：只核对本 Phase 声明写集；声明不实由独立审查用 `git diff --name-only` 与声明写集逐条比对发现，记为事实，不作门。
 
+审查派发只提供 ARTIFACT + CONTRACT，沿 `skills/wh-review/SKILL.md` 核完整输入、实际配置路线、adapter/source/model、同源/unknown、覆盖和三条件结论；实施者 CLAIM、胜利摘要及自拟结论不作为判断输入。独立执行者回读真实原件，失败/invalid/未报覆盖分别保留，不由 provider 键名推异源，不把空 findings 或命令0写成质量通过。
+
 ### 测试硬规则
 
 - 只跑受影响针对性测试；禁止全量回归：禁止无范围地跑全量 `vitest`、`npm test` 或 `test:safe`。
