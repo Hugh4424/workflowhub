@@ -5,42 +5,30 @@ description: 在 build-code 看到真实 UI 改动后执行状态和交互测试
 
 # Frontend Testing
 
-仅在 build-code 检查真实 changed files 后确认 frontend/UI 范围时调用。除了默认态，还要
-覆盖 loading、empty、error、cancel、boundary、permission 和重复操作；检查用户
-可见文案、状态恢复、键盘/可访问性和与后端契约的边界。真实 UI 流程按仓库的
-isolated browser QA 路由执行，截图和清理事实必须保留。
-
-执行事实必须绑定 FR/AC、场景/oracle、命令和 expected exit、截图/证据路径、changed files、
-本次实际代码/材料来源、coverage limits 和不适用理由。post 按当前 spec、所属 Phase 与实际 task facts 定位，只记录本 Phase 改动和命令实际来源；pre/history 的旧 snapshot 只读保留，不重绑历史。build-code 只做真实流程执行；只做组件快照
-不能冒充完整用户流程验收。
+build-code按真实changed files确认frontend/UI后覆盖默认态及loading/empty/error/cancel/boundary/permission、重复操作/恢复，核文案、键盘/a11y与后端契约；组件快照不冒完整用户流程。
 
 ## UI 交付合同
 
-每个 UI phase/task 必须写清 component action、real consumer、state owner、typed ViewModel、
-CSS/token owner、fixture、viewport/responsive、browser、keyboard/a11y、performance、
-screenshot 和 coverage limits。没有可执行 route 时写 `N/A — reason`；不能用 `not_applicable`
-掩盖真实的 blocked/unknown。
+每UI phase/task声明component action、real consumer、state owner、typed ViewModel、CSS/token owner、fixture、viewport/responsive、browser、keyboard/a11y、performance、screenshot、coverage limits；无可执行route给`N/A — reason`，不以not_applicable掩blocked/unknown。
 
-状态与负例（negative fixtures）至少覆盖 loading、empty、error、cancel、boundary、permission、重复操作和
-恢复路径。质量检查要拒绝 duplicate component、无 real consumer（no consumer）的删除、少于 two consumers
-就 extract-shared、缺 state owner、CSS 泄漏、global override 和 `!important`；这些是失败事实，
-不是推进 gate。失败、blocked、unknown 均保留 failure reason 和截图数量事实。
+负例覆盖上述各状态/恢复；检查duplicate component、无real consumer的删除、少于two consumers就extract-shared、缺state owner、CSS泄漏、global override、!important。保failure reason及截图数量；失败/blocked/unknown是事实，不是推进gate。
 
 ## build-code 实际消费
 
-build-code 当前主会话按真实 changed files 选择一次具体测试路径；沿 `skills/ui-project-init/SKILL.md` 的「规范职责」读取本动作适用专业规则，把 UI 适用性、各类实际源路径/稳定节、version/作用域、owner/真实 consumer、consumer census 和 AC 关联到同一份原始证据。各类缺源/stale/冲突分别说明影响及原 owner，不以单一 design_revision 或旧 Design.md/Experience.md 两文件替全部来源；旧文件只作有据历史或可信条款输入。本次业务状态/权限/取消恢复从当前 task spec/API取，token/API精确事实引用原源，不把执行结果回写为规范正文。现有 handler 的执行原件如实消费；不把尚未运行的官方 handler 当作主会话工作的前置条件。Skill 被声明或被解析不等于执行；未触发、已触发但未执行和已执行必须分别记录。
+主会话按changed files选一次路线；沿ui-project-init「规范职责」读适用规则，同份原证据关联UI适用、各源路径/稳定节、version/作用域、owner/consumer/census及AC。缺源/stale/冲突各给影响/原owner；单design_revision、旧Design.md/Experience.md不代全部来源，旧源仅有据历史/可信条款输入。业务状态/权限/取消恢复取当前spec/API，token/API引用原源；执行结果不回写规范。消费handler实件，未运行官方handler非前置；Skill声明/解析非执行，未触发/触发未执行/已执行分记。
 
-需要真实页面时，当前执行者通过既有 `skills/isolated-browser-qa/SKILL.md` 的受控执行链调用一次。证据必须带当前
-service instance、API/DTO contract、隔离 profile、invocation、viewport、console/network/focus/overflow
-观察、视觉/a11y/performance oracle 和 cleanup。fixture-only 只能证明组件，不得冒充页面通过；服务
-身份不匹配、取消、浏览器失败或 cleanup 失败保持 `failed`/`blocked`/`unknown`，不能被默认值改成绿灯。
+页面经isolated-browser-qa受控链调用一次，保service instance、API/DTO contract、隔离profile/invocation、viewport、console/network/focus/overflow、视觉/a11y/performance oracle、cleanup。fixture-only仅组件；服务身份不符/取消/browser或cleanup失败保failed/blocked/unknown，不用默认值改绿。
+
+## 行为测试方法
+
+断言/替身与证据读[backend-testing「行为测试与证伪」](../backend-testing/SKILL.md#行为测试与证伪)及「执行事实」，再依本UI流程执行。
 
 ## 写作规范
 
-创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；此处不复制规范。
+创建/编辑方法读`skills/spec-specify/SKILL.md`的WR001唯一规范，不复制。
 
-完整来源权威：[catalog条目](../catalog.yaml#skills.frontend-testing)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。来源：AgentHub packages/core/agenthub/skills/frontend-testing/SKILL.md（许可适用性unknown）。
+来源权威[catalog](../catalog.yaml#skills.frontend-testing)；正文/小卡非权威，缺登记找维护者。AgentHub路径/采用及许可适用性unknown见登记。
 
 ## 同仓方法依赖
 
-`skills/isolated-browser-qa/SKILL.md`、`skills/spec-specify/SKILL.md`、`skills/ui-project-init/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。
+`skills/backend-testing/SKILL.md`、`skills/isolated-browser-qa/SKILL.md`、`skills/spec-specify/SKILL.md`、`skills/ui-project-init/SKILL.md`；按条件读，搬运带可读原件。

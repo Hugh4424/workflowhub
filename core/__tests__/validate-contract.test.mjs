@@ -50,14 +50,22 @@ describe("validateContract — missing required fields", () => {
     ensureModule();
     const result = validateContract({ output_path: "/tmp/y" }, contract);
     expect(result.valid).toBe(false);
-    expect(result.errors.length).toBeGreaterThan(0);
+    expect(result.errors).toHaveLength(1);
+    expect(typeof result.errors[0]).toBe("string");
+    expect(result.errors[0]).toMatch(/\bmissing\b/i);
+    expect(result.errors[0]).toMatch(/\bcomponent_id\b/);
+    expect(result.errors[0]).not.toMatch(/\boutput_path\b/);
   });
 
   it("returns valid:false and non-empty errors when output_path is missing", () => {
     ensureModule();
     const result = validateContract({ component_id: "x" }, contract);
     expect(result.valid).toBe(false);
-    expect(result.errors.length).toBeGreaterThan(0);
+    expect(result.errors).toHaveLength(1);
+    expect(typeof result.errors[0]).toBe("string");
+    expect(result.errors[0]).toMatch(/\bmissing\b/i);
+    expect(result.errors[0]).toMatch(/\boutput_path\b/);
+    expect(result.errors[0]).not.toMatch(/\bcomponent_id\b/);
   });
 });
 
@@ -70,7 +78,12 @@ describe("validateContract — wrong field type", () => {
       contract
     );
     expect(result.valid).toBe(false);
-    expect(result.errors.length).toBeGreaterThan(0);
+    expect(result.errors).toHaveLength(1);
+    expect(typeof result.errors[0]).toBe("string");
+    expect(result.errors[0]).toMatch(/\bcomponent_id\b/);
+    expect(result.errors[0]).toMatch(/\bexpected\b[\s\S]*\bstring\b/i);
+    expect(result.errors[0]).toMatch(/\bgot\b[\s\S]*\bnumber\b/i);
+    expect(result.errors[0]).not.toMatch(/\boutput_path\b/);
   });
 });
 

@@ -51,6 +51,8 @@ Each smell reads *what it is* → *how to fix*; match it against the diff:
 有架构相关 diff 时，用包内代码逐类调查 Shallow module、Information leakage、Temporal decomposition、Pass-through method、Split ownership、Two ways to do one task、Importable internals、Hand-synced list；每类给代码证据、未见证据或不适用原因。标签是调查线索，不自动变 finding，不以 temporal 标签否定已确认 Phase。比较有不同结构后果的备选：现 canonical owner 与 adapter/reader 各写同义映射在多写者、wire 泄漏、修改面及失败保全上有何区别；同逻辑换名/同形 wrapper 不算备选。实际无机会给依据，缺源保 unknown；只消费本 task 已有一次架构机会，不新增 interface 或评审轮。
 
 
+涉及测试/检查/升级时，宿主将[verify-code「测试充分性与检查可信度」](../../workflows/verify-code/SKILL.md#测试充分性与检查可信度)全文送同包；reader依其正反输入判断，缺正文报缺源，不越packet取材。
+
 ## Evidence handling
 
 - Missing evidence is unavailable, never pass. Use the supplied packet only.
@@ -78,4 +80,4 @@ and any line reference in the allowed finding fields. Do not return `verdict`,
 
 ## 同仓方法依赖
 
-`skills/spec-specify/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。
+`workflows/verify-code/SKILL.md`、`skills/spec-specify/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。

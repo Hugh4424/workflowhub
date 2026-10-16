@@ -5,24 +5,18 @@ description: 在 build-code 看到真实跨边界改动后执行最小真实链�
 
 # Fullstack Slice Testing
 
-仅在 build-code 检查真实 changed files 后确认改动跨越前端/API/后端/数据库、认证、协议、
-并发或边界不清时调用。按一个
-用户可观察 slice 贯通：启动/健康状态、输入、真实请求、服务处理、持久化、返回
-状态、前端呈现和失败/恢复。记录端口、进程、fixture、schema/协议、命令、oracle 和
-清理；mock-only 测试不能代替这条 seam。build-plan 不调用本技能；build-code 按实际范围执行
-这条 slice。
+build-code按changed files确认跨前端/API/后端/数据库、认证/协议/并发或边界不清时，贯通一条用户可观察slice：启动/健康→输入→真实请求→服务→持久化→返回→前端呈现及失败/恢复。保端口/进程/fixture/schema/协议/清理；mock-only不代seam，build-plan不执行。
 
-策略必须绑定 FR/AC 和场景/oracle，记录每条命令、expected exit、fixture/service、
-截图（如适用）、本次实际代码/材料来源、coverage limits 和未覆盖 seam；post 读取当前 spec、所属 Phase 的当前 Task/预判及实际 task facts，只记录本 Phase 改动和命令实际来源；pre/history 旧 tasks/snapshot 只读保留，不重新绑定；build-code 再补 exit code、
-输出 hash、实际结果和失败事实。它是风险证据，不成为 `pass` gate，也不要求每个 Phase
-重跑无关的全量测试。
+## 行为测试方法
+
+slice断言/替身/缺RED/证据读[backend-testing「行为测试与证伪」](../backend-testing/SKILL.md#行为测试与证伪)及「执行事实」；同一循环贯通真实链路，记适用截图/未覆盖seam。
 
 ## 写作规范
 
-创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；此处不复制规范。
+创建/编辑方法读`skills/spec-specify/SKILL.md`的WR001唯一规范，不复制。
 
-完整来源权威：[catalog条目](../catalog.yaml#skills.fullstack-slice-testing)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。来源：AgentHub packages/core/agenthub/skills/fullstack-slice-testing/SKILL.md（许可适用性unknown）。
+来源权威[catalog](../catalog.yaml#skills.fullstack-slice-testing)；正文/小卡非权威，缺登记找维护者。AgentHub路径/采用及许可适用性unknown见登记。
 
 ## 同仓方法依赖
 
-`skills/spec-specify/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。
+`skills/backend-testing/SKILL.md`、`skills/spec-specify/SKILL.md`；按条件读，搬运带可读原件。

@@ -1430,17 +1430,22 @@
       "destination": "skills/backend-testing/SKILL.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "既有模块／资源职责；不从登记新增能力",
+      "responsibility": "既有模块／资源职责；不从登记新增能力；N3 P4 真实changed files后设计/执行风险测试；唯一行为证伪方法与缺RED分支",
       "owner": "原路径维护 owner；P7 仅登记现职责",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
+      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor；N3 P4 build-code测试执行者；frontend/fullstack/blueprint按条件指针读取独立预期、三反模式和替身理由",
       "module_consumers": [],
       "named_data_readers": [
         "skills/backend-testing/skill-bundle.json",
         "skills/catalog.yaml",
-        "workflows/build-code/skill-deps.yaml"
+        "workflows/build-code/skill-deps.yaml",
+        "skills/frontend-testing/SKILL.md",
+        "skills/fullstack-slice-testing/SKILL.md",
+        "skills/testing-system-blueprint/SKILL.md",
+        "skills/spec-plan/templates/phase-template.md",
+        "workflows/verify-code/SKILL.md"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "既有保留生产路径；本次仅归位说明"
+      "retention_basis": "既有保留生产路径；本次仅归位说明；P4方法采用既有owner，无新增runtime/schema/双写；无当前consumer且经独立审查替代后退役"
     },
     {
       "source": "skills/backend-testing/skill-bundle.json",
@@ -1783,9 +1788,9 @@
       "destination": "skills/frontend-testing/SKILL.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "state, interaction, component/CSS negative, accessibility, and screenshot evidence contract",
+      "responsibility": "state, interaction, component/CSS negative, accessibility, and screenshot evidence contract；N3 P4 UI状态/交互/恢复与组件质量、真实隔离页面证据；oracle沿backend唯一方法",
       "owner": "build-code frontend testing route",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
+      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor；N3 P4 build-code真实UI测试执行者按条件读取backend后沿原UI合同执行",
       "module_consumers": [],
       "named_data_readers": [
         "skills/catalog.yaml",
@@ -1793,7 +1798,7 @@
         "workflows/build-code/skill-deps.yaml"
       ],
       "delete_condition": "remove when frontend-testing has no stage reference and an approved replacement is the sole consumer",
-      "retention_basis": "既有保留生产路径；本次仅归位说明"
+      "retention_basis": "既有保留生产路径；本次仅归位说明；P4方法采用既有owner，无新增runtime/schema/双写；无当前consumer且经独立审查替代后退役"
     },
     {
       "source": "skills/frontend-testing/skill-bundle.json",
@@ -1813,9 +1818,9 @@
       "destination": "skills/fullstack-slice-testing/SKILL.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "既有模块／资源职责；不从登记新增能力",
+      "responsibility": "既有模块／资源职责；不从登记新增能力；N3 P4 真实可观察跨边界slice、错误恢复/清理；oracle与缺RED沿backend唯一方法",
       "owner": "原路径维护 owner；P7 仅登记现职责",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
+      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor；N3 P4 build-code跨边界测试执行者用具体输入/独立结果和真实接口贯通",
       "module_consumers": [],
       "named_data_readers": [
         "skills/catalog.yaml",
@@ -1823,7 +1828,7 @@
         "workflows/build-code/skill-deps.yaml"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "既有保留生产路径；本次仅归位说明"
+      "retention_basis": "既有保留生产路径；本次仅归位说明；P4方法采用既有owner，无新增runtime/schema/双写；无当前consumer且经独立审查替代后退役"
     },
     {
       "source": "skills/fullstack-slice-testing/skill-bundle.json",
@@ -2292,9 +2297,9 @@
       "destination": "skills/review/SKILL.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "既有模块／资源职责；不从登记新增能力；N3 P2审查材料语义、真实配置路线/身份/覆盖与artifact+contract消费；arena无真实consumer仅保条件方法",
+      "responsibility": "既有模块／资源职责；不从登记新增能力；N3 P2审查材料语义、真实配置路线/身份/覆盖与artifact+contract消费；arena无真实consumer仅保条件方法；N3 P4 P4测试检查/升级条件下消费同包verify唯一可信度正文",
       "owner": "原路径维护 owner；P7 仅登记现职责",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
+      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor；N3 P4 真实只读review provider从packet已提供正文判断测试强度/五类削弱/未知",
       "module_consumers": [],
       "named_data_readers": [
         ".planning/2026-09-16-build-code-mechanism-waste-reduction/p1-phase-review-input.json",
@@ -2304,10 +2309,11 @@
         "tests/contract/build-prd-review-contract.test.mjs",
         "tests/contract/ocr-review-contract-bundle.test.mjs",
         "tests/contract/review-materials-contract.test.mjs",
-        "tools/cli/stage-runtime.mjs"
+        "tools/cli/stage-runtime.mjs",
+        "workflows/verify-code/SKILL.md"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "既有保留生产路径；本次仅归位说明；N3 P2/T002来源采用及原consumer首验，不新增runtime/schema/账本"
+      "retention_basis": "既有保留生产路径；本次仅归位说明；N3 P2/T002来源采用及原consumer首验，不新增runtime/schema/账本；P4方法采用既有owner，无新增runtime/schema/双写；无当前consumer且经独立审查替代后退役"
     },
     {
       "source": "skills/review/review-bundle.json",
@@ -2765,9 +2771,9 @@
       "destination": "skills/testing-system-blueprint/SKILL.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "既有模块／资源职责；不从登记新增能力",
+      "responsibility": "既有模块／资源职责；不从登记新增能力；N3 P4 build-plan测试设计输入；独立oracle/三反模式沿backend唯一方法",
       "owner": "原路径维护 owner；P7 仅登记现职责",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
+      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor；N3 P4 build-plan作者填写同一Task卡，build-code沿其事实执行",
       "module_consumers": [],
       "named_data_readers": [
         "skills/catalog.yaml",
@@ -2775,7 +2781,7 @@
         "workflows/build-plan/skill-deps.yaml"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "既有保留生产路径；本次仅归位说明"
+      "retention_basis": "既有保留生产路径；本次仅归位说明；P4方法采用既有owner，无新增runtime/schema/双写；无当前consumer且经独立审查替代后退役"
     },
     {
       "source": "skills/testing-system-blueprint/skill-bundle.json",
@@ -3767,19 +3773,21 @@
       "destination": "workflows/verify-code/SKILL.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "宿主读（纯方法说明）",
+      "responsibility": "宿主读（纯方法说明）；N3 P4 P4唯一测试充分性与检查可信度方法：pass/fail/pass、变异、升级与读数",
       "owner": "B2/P3 / MT-3-146",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
+      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor；N3 P4 verify-code读者与review按条件同包消费完整正反方法",
       "module_consumers": [],
       "named_data_readers": [
         ".planning/2026-09-16-eliminate-external-stage-agent/findings.md",
         "skills/architect-code-review/SKILL.md",
         "skills/catalog.yaml",
         "skills/wh-review/scripts/review-materials.mjs",
-        "tests/contract/verify-architect-acceptance.test.mjs"
+        "tests/contract/verify-architect-acceptance.test.mjs",
+        "skills/review/SKILL.md",
+        "AGENTS.md"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "MT-3-146 / NARROW"
+      "retention_basis": "MT-3-146 / NARROW；P4方法采用既有owner，无新增runtime/schema/双写；无当前consumer且经独立审查替代后退役"
     },
     {
       "source": "workflows/verify-code/capture.mjs",

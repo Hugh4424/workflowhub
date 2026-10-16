@@ -28,6 +28,8 @@
 - 例外只有用户或 CI 守卫明确要求；例外命令必须在执行证据中写清原因和范围。
 - 依据：[docs/standard-workflow.md](docs/standard-workflow.md) 的 build-code 测试与质量段；本条是执行纪律，不是新的 stage、gate 或质量结论。
 
+核测试/检查读数时读 `workflows/verify-code/SKILL.md`「测试充分性与检查可信度」；设计oracle/替身或分类候选时读 `skills/backend-testing/SKILL.md`「行为测试与证伪」「执行事实」。
+
 ### 证据硬规则
 
 - 同一事实＝字节相同：先比较内容，确立相等后复用既有唯一原件并写引用；重跑、换 executor 或换时刻产生相同字节时不再新写。确因裁剪、脱敏、追加时刻或 exit 改变字节才另存，并说明为何字节必须不同；无法确立内容相等时保留新件并如实记 `deduplication: unknown`。原始测试输出、正式 review 回执、review 原件各一份，禁止复制镜像到 `quality/evidence/`。

@@ -39,6 +39,8 @@ SOFTWARE.
 
 N3 P2 在现 wh-review/protocol/review 方法吸收 addyosmani/agent-skills 的 `skills/doubt-driven-development/SKILL.md`（MIT，固定 commit `aeac41d4d005999432bb7312f7ff06383a91d59d`）的 ARTIFACT + CONTRACT 与去 CLAIM；pstack（MIT，Copyright (c) 2026 Lauren Tan，实际包 SHA256 `f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8`，git commit未知）的 `skills/interrogate/SKILL.md`、`skills/principle-attack-the-premise/SKILL.md`、`skills/blast-radius/SKILL.md`、`skills/architect/SKILL.md` 及 `references/design-red-flags.md`、`skills/arena/SKILL.md`、`skills/show-me-your-work/SKILL.md`。采用章节与本地偏离见catalog的n3 absorbed条目；不采用默认模型表、固定轮次、TSV新账本或候选框架。arena无真实consumer只落文字/未生效；来源登记不证明方法效果。
 
+N3 P4测试与检查方法吸收：Addy固定 `aeac41d4d005999432bb7312f7ff06383a91d59d` 的 `skills/test-driven-development/SKILL.md`、`skills/constraint-driven-development/SKILL.md`、`skills/code-review-and-quality/SKILL.md`；Matt固定 `b0618bc436ad893b3c5e84e55fba86586d34a404` 的 `skills/engineering/tdd/SKILL.md` 与 `tests.md`、`skills/in-progress/setup-ts-deep-modules/SKILL.md`；pstack同上实际包SHA256（git commit未知）的 `skills/principle-test-behavior-not-implementation/SKILL.md` 与 `skills/tdd/SKILL.md`。采用源章节、本地正文/consumer和偏离见catalog七条n3 P4 absorbed登记；不引入TS安装、mutation平台、默认阈值或新质量gate。三来源MIT版权及完整许可沿本节原文保留。
+
 ## Apache-2.0 source
 
 - **AnySearch Skill**, copyright © 2026 AnySearch. Source: [anysearch-ai/anysearch-skill@db3d76e](https://github.com/anysearch-ai/anysearch-skill/commit/db3d76e5597aec7261257be5322dd211c9d9bb87). 历史登记声称Apache-2.0；本次固定commit完整tree无LICENSE/NOTICE，README亦未找到grant，故版本绑定与授权依据unknown。不得把本地后补文件当该版本已核许可。完整许可见 [`skills/anysearch/LICENSE`](skills/anysearch/LICENSE)，notice 见 [`skills/anysearch/NOTICE`](skills/anysearch/NOTICE)。

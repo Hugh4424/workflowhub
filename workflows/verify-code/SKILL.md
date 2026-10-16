@@ -17,10 +17,12 @@ version: 5.2.0
 2. 先实际消费 `docs/standard-workflow.md` 的「三审查点与结论真实性」：主会话按同一比较基准提交三维原始读数及直接consumer依据，记录真实应用和缺料回退，并列声明写集与实际diff，终末完整审当前交付。读取 `skills/wh-review/SKILL.md` 的「Long-review host convention」并按其等待方法发起一次终末独立代码审查，正常使用 OCR，不可用时的记录口径见下节；本步完成以每路 provider 的原始 findings 或真实失败、取消、unavailable、实际执行者与覆盖限制均已保存且可定位为准，缺一路即本步未完成。原件「可定位」可由真实可读的既有原 ref 满足：同一命令、退出事实一致且内容比较确立同字节时只引用并标注，不要求为本路新写一份物理副本；各路真实终态、来源与失败仍分别保留，不能用旧回执冒本次执行。审查输入包含 verify-code 合同、provider 协议、stageReviewFocus、lens 正文、当前 diff、完整 AC 与可用执行原件；执行者检查真实消费者、生命周期、权限、数据泄漏、并发、取消、恢复、资源释放和测试强度。
 3. 保留每路 provider 的原始 findings、实际执行者、错误、取消与覆盖限制。已安装 OCR 的失败不由其它 route 漂白。外发材料核实际范围、路径安全和敏感信息脱敏，缺真实只读能力时明确不可用。 首个 provider 到终态后立即处理并把迟到 findings 交给同一回调，剩余 provider 继续运行；不能因首个结果取消 sibling。跨 stage 的 build-code Phase 审查结果不得充当 verify-code 的第二次独立审查。
 4. 在 `inspect-real-entry-and-tests` 原职责内实际消费 `skills/knowledge-graph/SKILL.md`：用affected核声明实现之外的波及面，用query核同类约定与标准来源；沿有界完整ID解释/必要协作path定向回真实source_file/origin原文。图标准过期或与当前文件冲突时由当前权威文件纠正，说明影响的验证case/边界，未核支持保unknown；不能把source路径存在、label、缓存同条或旧历史条款当现行标准。无新信号就记重复/无信号并继续实际入口和测试核对，不为凑收益拓展。
-   先只读核对每一个实际 Phase 声明的测试事实，每 Phase 一行，行内逐面写「声明面 → 实际原件 path/cwd/argv/exit/原始输出 → 已跑或未跑」，未跑须具名说明哪一面、卡在哪、什么条件下能跑与 owner；缺 Phase 行、缺面或只有“没跑”均保持 incomplete，不用 review coverage 补齐。该核对穷尽声明，不要求全部重跑。 对未跑面的失败信号按 `AGENTS.md`「卡住与升级」的适用范围与排除分类；属于外部不可重试时零重试、立即按该节格式报告并给可直接回复的选项，停该外部失败路径、继续其它安全验证；同一不可用事实的重复采集路径由执行者自行停机并报告，审查 provider 各轴仍继续既有口径。再按金钱、隐私权限、不可逆后果、外部副作用、跨 Phase 旅程和失败恢复风险独立选样；逐项列已抽查与未抽查 case/AC 及理由。沿原始业务规则→真实入口→断言→实际效果核语义，代码质量、业务效果、测试充分性分别给证据；模拟结果不当外部效果，缺数据、权限或服务保持未知。 三类证据分别记 `business_effect=observed_pass|observed_fail|unknown|unavailable|N/A(reason)`、`semantic_test_adequacy=adequate|inadequate|unknown`、`code_review=clean|resolved|incomplete|failed`。semantic_test_adequacy 由上述逐 Phase 逐面核对表、原始业务规则与实际断言判断，缺表或原件保持 unknown/inadequate，不从 provider coverage 推导。功能验收记录与终末代码审查回执分开成件：功能验收记录独立成件，不得由代码审查回执替代或冒充。 按当前 AC 的原 oracle 逐项定位验收对象、所需真实输入、执行 owner 与时点；需要对象检查时，读取 `skills/spec-specify/templates/spec-template.md` 中唯一 `checkAcceptanceObject` 的完整可执行代码块，从当前 spec 既有对象区块取真实输入，沿模板「验收对象」唯一合同实际读取原始要求、当前项目库存、已接受计划或实际前端改动，核角色、理由及范围冲突，把三源适用性和已读材料作为本次 context 传给同一函数；实际执行验收对象检查并保存对象输入、三源引用/读取范围/hash、返回与原始执行结果，不在本 workflow 重实现 checker。模板 producer 未交付、提取或执行失败时具体记 source/producer/失败原因、影响和原 owner；未运行不冒缺项行为已验证，检查成功不代环境或业务效果。缺输入时写出具体数据、服务、权限或观察及对应未达断言，不扩大判据或把整批技术结果笼统推到下一真实任务。审查回执内的宿主侧 `conclusion` 与 `coverage` 由 provider 状态与 findings 推导，只记代码审查观察和覆盖事实；覆盖只说明是否返回 findings 及 provider 完成/失败数量，不代表 user case 执行或被审对象完整覆盖，不是功能验收结论。功能验收记录及独立人读判断分别成件，功能判断的判定来源件是功能验收记录；各给实际路径，验收记录逐条给 AC 结论与独立证据指针。按当前验收 Phase 正文的具名引用读取实际输出、执行/复验/分诊与独立走查原件，来源核对复用 stage-handoff 的路径回读方法；不以审查字段或 findings 代替业务效果，不新增同名功能机器字段、第二 writer 或质量对象图。
-   对每个 Phase 的契约头 `Done` 逐条承接的 AC，核对 AC 编号、一个来自 `runtime/evidence/acceptance-evidence-validator.mjs` 的现成 8 值档位与具名证据指针；同处的「本 Phase 自带判据小结」须写自己验了什么（附本 Phase `gate_cmd` 原件）、没验什么（逐条带档位）、未验项所需条件与具名 owner。缺项逐条保持可见，不用聚合计数代替归属核对。
-   AC 的判定归属由 spec 的 AC 正文决定，实读判定方式、时点、执行 owner、所需条件与成功失败信号，不由依赖链位置决定。未参与该 AC 判定的 Phase 不得为该条写 pass，下游不得替上游补签。终末复核按 spec 的判定方式标记选实际判据；缺真实环境、用户在场或来源时保留 unknown／unavailable 与具体条件，不能由审查成功代判。
-   末 Phase 保留完整端到端串演，只消费沿途结论并复核、补必要未闭环 case，不得成为任何 AC 的首次结论产生点。承接 AC 未达成时，核 `docs/standard-workflow.md`「专业质量」的「带欠账完成」形态与逐条缺口；这只限制完成声明，不阻断同任务修复与后续安全部分。
+   穷尽核对各实际Phase的声明测试面，每Phase一行：「声明面 → 原件path/cwd/argv/exit/原始输出 → 已跑/未跑」。每未跑面写具体阻碍、可跑条件及owner；缺Phase/面/原件保持incomplete，review coverage不能补齐。核已有事实，不全重跑。失败分类/零重试/升级与provider排除按AGENTS「卡住与升级」；同一不可用事实不重复采集，其它安全验证与provider轴继续。
+   再按金钱、隐私权限、不可逆后果、外部副作用、跨Phase旅程、失败恢复风险独立选样，逐case/AC列已查/未查理由。沿原始业务规则→真实入口→断言→实际效果核语义；模拟不冒外部效果，缺数据/权限/服务保持未知。分别给`business_effect=observed_pass|observed_fail|unknown|unavailable|N/A(reason)`、`semantic_test_adequacy=adequate|inadequate|unknown`、`code_review=clean|resolved|incomplete|failed`及证据。测试充分性据逐Phase逐面表、原始规则和实际断言判，缺表/原件为unknown/inadequate，不由provider coverage推导。
+   按当前AC oracle定对象/真实输入/owner/时点；需检查时读`skills/spec-specify/templates/spec-template.md`唯一`checkAcceptanceObject`完整可执行块，从spec对象区取实参；依模板合同实读原始要求/项目库存/已接受计划或实际前端改动，核角色/理由/范围冲突；三源适用性/已读材料作context交同函数。保存对象输入、三源引用/范围/hash、返回与原始执行结果，不在此重写checker。模板producer缺件、提取/执行失败分别记source/producer、原因/影响/原owner；未运行不冒验证，检查成功非环境/业务效果。缺输入写具体数据/服务/权限/观察与未达断言，不扩判据/笼统后推。
+   功能验收记录、代码审查回执、独立人读功能判断各自成件；功能判断据验收记录，各给路径，验收记录逐AC给结论与独立证据。审查回执的host conclusion/coverage仅从provider状态/findings推导审查观察、返回findings与完成/失败数量，不代表user case或完整覆盖，不代功能结论。按当前验收Phase具名引用读实际输出、执行/复验/分诊/独立走查原件，来源回读沿stage-handoff；不以审查字段/findings代业务，不新增同名功能字段、第二writer/质量对象图。
+   逐Phase核Done承接AC的编号、`runtime/evidence/acceptance-evidence-validator.mjs`现成8值档位与具名ref；同处“本Phase自带判据小结”列已验（gate_cmd原件）、未验各项档位、条件与owner，不能用计数代归属。AC归属与实际判据只按spec正文的方式/时点/owner/条件/成功失败信号，不按依赖位置；未参与不得pass或下游补签。缺真实环境/用户在场/来源保unknown/unavailable，审查成功不代判。
+   末Phase完整串演只复核沿途结论并补必要未闭环case，不作任何AC首次判定点。未达AC按standard-workflow「专业质量」“带欠账完成”显著留逐项缺口，只限完成声明、不阻同任务安全修复。核测试/命令/升级时读下节唯一正文。
 5. 主会话逐条判断 finding，仅修影响当前交付的有效代码问题，不因材料偏好扩大范围。有效问题回原实施会话自动修复，严重问题优先修复，不以请求用户承担风险代替修复。确实无法在当前任务范围内解决时，列影响、证据、owner、原因和剩余选项，继续不受影响的工作，严重未修风险保持 incomplete；只有已有绑定该 finding 的用户真实决定才可记 accepted_risk，不能自行接受风险或伪造通过。
 6. 对新修复和真实疑点只做必要定向复验，事先列 file/case 集合，把实际 command/exit/raw 和恢复结果写在对应 finding 处置旁；无改动或疑点时说明无需复跑。不重派第二次正常代码审查，不重做全量上游测试。
 7. 保留原始审查与当前 fixed、rejected_invalid、accepted_risk、needs_human 处置。真实修复可报告 resolved，不能改写原 review 或用摘要覆盖失败。核对本次 actual/oracle、未执行事项和覆盖限制；材料问题交 owner，不另建恢复、继任或重绑定任务。
@@ -45,6 +47,16 @@ UI 适用时沿 `skills/isolated-browser-qa/SKILL.md` 消费页面、console 与
 评估者返回实际路径/符号、问题与来源、机会、收益和未知项，不先提 interface 设计（Do NOT propose interfaces yet.）。主会话用既有安全记录工具保存一份普通评估原件并展示实际引用；无机会说明依据，缺代码、执行者或来源如实 unknown/unavailable，取消保已发生事实，不将部分报告标为完整。评估是人读建议，不是 reviewer verdict 或工作许可。
 
 用户真实选中机会后，才按当前 task 允许写集与原 owner 设计窄 interface 并实施优化；未答、拒选或旧答不当采纳，保原实现。超出已授权方向/范围时交原方向或规划 owner，不自动生成票、扩大任务或让 reviewer 选。改后列受影响 file/case 并做定向复验，原对象、实际新 diff、命令与结果各可定位；只说方法已写不能声称已评估、采纳、优化或验过。复验失败优先回原实施会话修，安全部分继续，未知保持未知。
+
+### 测试充分性与检查可信度
+
+核断言/替身、缺RED与原件时，读[backend-testing「行为测试与证伪」](../../skills/backend-testing/SKILL.md#行为测试与证伪)及同文件「执行事实」，沿其TCR/冻结保护与失败分类执行。新增/扩展检查用同判据：合法pass→仅受控违规改变后目标fail→恢复同合法输入pass，核argv/cwd/raw、exit/signal/timeout及恢复字节；同字节复用原件。违规仍绿报具名遗漏case，恢复未通过incomplete；不以方法读回冒检查器接线。适用代码改动做受控行为变异（如取反新增条件），目标断言须fail再恢复，不拿字符串变异充数；无新增/扩展检查按真实diff写N/A，只免执行，仍消费完整正反输入。
+
+依赖升级先读changelog，major另读migration notes；逐项或具理由关联小组升级，同一受影响行为前后验证。核直接/传递lockfile diff，包管理器生成、不手改；安装成功、缺notes/lockfile/前后行为不能当完成。无升级给实际diff依据，不凑依赖。
+
+逐项报告diff五类削弱的路径/来源/理由：阈值/严重级降低；新增.skip、删case/唯一结果断言；@ts-ignore/eslint-disable/istanbul ignore等静音；抛错stub/空catch/TODO代实现；无真实决定的新allow/exception。等价重构/收紧不误报，旧有源例外按原范围；exit0不盖无源削弱。
+
+读producer原报告、输入数/范围：exit0或ALL CHECKS PASSED不盖report-only漂移，零输入不证覆盖；exit2、null/缺件、未跑/环境失败保exit/signal/timeout、未达断言、owner/恢复条件，不写clean。历史target存在不证行为，step方法非命令，validator事实非自动阻断；合法advisory不当故障。不改工具退出语义/加Block或质量对象。
 
 ## OCR 能力与缺省记录
 

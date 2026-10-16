@@ -872,7 +872,7 @@ skills:
         adopted:
           - packages/core/agenthub/skills/testing-system-blueprint/SKILL.md#二、需求↔测试可追溯（双向不漏） — 采用testing-system-blueprint的测试分责、真实输入/输出与覆盖限制；不采用安装、全量扫描或release gate
     local_changes: 作为 build-plan 的 advisory 测试设计输入，并由 build-code 消费；不新增 AgentHub release gate 或执行器控制面；2026-10-16固定258f5a2的LICENSE实际为modified Apache-2.0，含第三方hosted/embedded商业服务授权及frontend logo/copyright条件；旧MIT登记不实。抽取技能文字的适用性unknown，由来源维护者向权利owner核具体grant，当前不扩采用/分发范围，不视为已接受附加条款。
-    dependency_closure: *deps_spec_specify
+    dependency_closure: ["skills/spec-specify", "skills/backend-testing"]
 
     update_policy: 随测试证据合同和 build-code 阶段边界人工比较
   - name: backend-testing
@@ -912,7 +912,7 @@ skills:
         adopted:
           - packages/core/agenthub/skills/frontend-testing/SKILL.md#工作流（六步闭环） — 采用frontend-testing的测试分责、真实输入/输出与覆盖限制；不采用安装、全量扫描或release gate
     local_changes: 保留状态/交互维度、UI phase/task 字段和失败证据；owner 是 build-code 前端测试路由，consumer 是真实 UI changed files；适用 UI attempt 经官方 build-code seam 一次调用 isolated-browser-qa，绑定 Design/Experience、service/API/DTO identity 和 cleanup；截图或 browser pass 不变成普遍 gate；不新增 Runner；delete-condition 为 frontend-testing 退役且无阶段引用；2026-10-16固定258f5a2的LICENSE实际为modified Apache-2.0，含第三方hosted/embedded商业服务授权及frontend logo/copyright条件；旧MIT登记不实。抽取技能文字的适用性unknown，由来源维护者向权利owner核具体grant，当前不扩采用/分发范围，不视为已接受附加条款。
-    dependency_closure: &deps_browser_spec_ui ["skills/isolated-browser-qa","skills/spec-specify","skills/ui-project-init"]
+    dependency_closure: ["skills/isolated-browser-qa","skills/spec-specify","skills/ui-project-init","skills/backend-testing"]
 
     update_policy: 随前端测试和 browser 证据合同人工比较
   - name: fullstack-slice-testing
@@ -932,7 +932,7 @@ skills:
         adopted:
           - packages/core/agenthub/skills/fullstack-slice-testing/SKILL.md#工作流（六步闭环） — 采用fullstack-slice-testing的测试分责、真实输入/输出与覆盖限制；不采用安装、全量扫描或release gate
     local_changes: 适配为风险证据技能；不恢复强制 commit/worktree/release gate；2026-10-16固定258f5a2的LICENSE实际为modified Apache-2.0，含第三方hosted/embedded商业服务授权及frontend logo/copyright条件；旧MIT登记不实。抽取技能文字的适用性unknown，由来源维护者向权利owner核具体grant，当前不扩采用/分发范围，不视为已接受附加条款。
-    dependency_closure: *deps_spec_specify
+    dependency_closure: ["skills/spec-specify", "skills/backend-testing"]
 
     update_policy: 随跨端 seam 和全链路证据合同人工比较
   - name: isolated-browser-qa
@@ -1053,7 +1053,7 @@ skills:
     used_by_stages: *stages_build_plan
     upstream: []
     local_changes: WorkflowHub 原生渲染入口；owner 是 UI 方法当前调用主会话，consumer 是 workflows/build-plan/SKILL.md:19 与 frontend-prototype-render/SKILL.md:9 的 build-prd 条件设计分支；test=tests/contract/ui-skill-contract.test.mjs；不改产品源码；delete-condition 两个当前方法 consumer 退役或由已审替代方法承接后
-    dependency_closure: *deps_browser_spec_ui
+    dependency_closure: ["skills/isolated-browser-qa","skills/spec-specify","skills/ui-project-init"]
     update_policy: 随真实组件渲染命令、截图证据和 当前 build-plan/build-prd consumer 合同人工审查
   - name: frontend-component-quality
     path: skills/frontend-component-quality/SKILL.md
@@ -1802,3 +1802,141 @@ capability_decisions:
     dependency_closure:
       - skills/spec-specify/SKILL.md
     update_policy: 按固定来源/章节与本地consumer逐项比较；实际生效和方法文字分开，不自动追HEAD。
+  - name: n3-addy-test-driven-development
+    status: absorbed
+    purpose: N3 P4测试证伪与检查可信度方法
+    design_idea: "仓内具名命令、纵切RED/GREEN、真实优先替身和无新信息不重跑"
+    used_by_stages: [build-plan, build-code, verify-code]
+    local_path: "skills/backend-testing/SKILL.md; skills/frontend-testing/SKILL.md; skills/fullstack-slice-testing/SKILL.md; skills/testing-system-blueprint/SKILL.md; skills/spec-plan/templates/phase-template.md"
+    upstream:
+      - github_url: https://github.com/addyosmani/agent-skills
+        commit: aeac41d4d005999432bb7312f7ff06383a91d59d
+        commit_url: https://github.com/addyosmani/agent-skills/commit/aeac41d4d005999432bb7312f7ff06383a91d59d
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/test-driven-development/SKILL.md
+        skill_url: https://github.com/addyosmani/agent-skills/blob/aeac41d4d005999432bb7312f7ff06383a91d59d/skills/test-driven-development/SKILL.md
+        adopted:
+          - "skills/test-driven-development/SKILL.md#Discover the Stack First；The TDD Cycle；Prefer Real Implementations Over Mocks；Common Rationalizations — 仓内具名命令、纵切RED/GREEN、真实优先替身和无新信息不重跑"
+    local_changes: "P4原writer在既有consumer采用；方法独立读回与程序执行分开，不新增runtime/字段/账本/默认gate；不采用全量回归、默认阈值或自动拒绝/安装。"
+    dependency_closure: [skills/spec-specify/SKILL.md]
+    update_policy: 固定source章节与本地唯一正文/条件指针逐项比较；更新需保持本地保护，不自动追HEAD；无consumer且替代经独立审查后退役。
+  - name: n3-test-behavior-not-implementation
+    status: absorbed
+    purpose: N3 P4测试证伪与检查可信度方法
+    design_idea: "具体输入/独立结果、undefined反事实及absence配presence；合法交互与缺省逐case保留"
+    used_by_stages: [build-plan, build-code, verify-code]
+    local_path: "skills/backend-testing/SKILL.md; skills/frontend-testing/SKILL.md; skills/fullstack-slice-testing/SKILL.md; skills/testing-system-blueprint/SKILL.md; skills/spec-plan/templates/phase-template.md"
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        commit: unresolved-pstack-content-snapshot
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/principle-test-behavior-not-implementation/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/principle-test-behavior-not-implementation/SKILL.md
+        adopted:
+          - "skills/principle-test-behavior-not-implementation/SKILL.md#Test Behavior, Not Implementation — 具体输入/独立结果、undefined反事实及absence配presence；合法交互与缺省逐case保留"
+    local_changes: "P4原writer在既有consumer采用；方法独立读回与程序执行分开，不新增runtime/字段/账本/默认gate；不采用全量回归、默认阈值或自动拒绝/安装。pstack实际包SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；git commit未知，main URL仅来源locator，不冒固定commit。"
+    dependency_closure: [skills/spec-specify/SKILL.md]
+    update_policy: 固定source章节与本地唯一正文/条件指针逐项比较；更新需保持本地保护，不自动追HEAD；无consumer且替代经独立审查后退役。
+  - name: n3-constraint-driven-development
+    status: absorbed
+    purpose: N3 P4测试证伪与检查可信度方法
+    design_idea: "逐项读回五类削弱与真实来源/理由；未知非clean，不加Block"
+    used_by_stages: [build-plan, build-code, verify-code]
+    local_path: "workflows/verify-code/SKILL.md; skills/review/SKILL.md; AGENTS.md"
+    upstream:
+      - github_url: https://github.com/addyosmani/agent-skills
+        commit: aeac41d4d005999432bb7312f7ff06383a91d59d
+        commit_url: https://github.com/addyosmani/agent-skills/commit/aeac41d4d005999432bb7312f7ff06383a91d59d
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/constraint-driven-development/SKILL.md
+        skill_url: https://github.com/addyosmani/agent-skills/blob/aeac41d4d005999432bb7312f7ff06383a91d59d/skills/constraint-driven-development/SKILL.md
+        adopted:
+          - "skills/constraint-driven-development/SKILL.md#Step 6: Guard the bar itself — 逐项读回五类削弱与真实来源/理由；未知非clean，不加Block"
+    local_changes: "P4原writer在既有consumer采用；方法独立读回与程序执行分开，不新增runtime/字段/账本/默认gate；不采用全量回归、默认阈值或自动拒绝/安装。"
+    dependency_closure: [skills/spec-specify/SKILL.md]
+    update_policy: 固定source章节与本地唯一正文/条件指针逐项比较；更新需保持本地保护，不自动追HEAD；无consumer且替代经独立审查后退役。
+  - name: n3-setup-ts-deep-modules
+    status: absorbed
+    purpose: N3 P4测试证伪与检查可信度方法
+    design_idea: "同一检查合法pass/违规目标fail/恢复pass；不安装TS工具或改N10接线"
+    used_by_stages: [build-plan, build-code, verify-code]
+    local_path: "workflows/verify-code/SKILL.md; skills/review/SKILL.md; AGENTS.md"
+    upstream:
+      - github_url: https://github.com/mattpocock/skills
+        commit: b0618bc436ad893b3c5e84e55fba86586d34a404
+        commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/in-progress/setup-ts-deep-modules/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/in-progress/setup-ts-deep-modules/SKILL.md
+        adopted:
+          - "skills/in-progress/setup-ts-deep-modules/SKILL.md#6. Prove the rules bite — 同一检查合法pass/违规目标fail/恢复pass；不安装TS工具或改N10接线"
+    local_changes: "P4原writer在既有consumer采用；方法独立读回与程序执行分开，不新增runtime/字段/账本/默认gate；不采用全量回归、默认阈值或自动拒绝/安装。"
+    dependency_closure: [skills/spec-specify/SKILL.md]
+    update_policy: 固定source章节与本地唯一正文/条件指针逐项比较；更新需保持本地保护，不自动追HEAD；无consumer且替代经独立审查后退役。
+  - name: n3-code-review-and-quality
+    status: absorbed
+    purpose: N3 P4测试证伪与检查可信度方法
+    design_idea: "受控行为变异存活即finding；条件式依赖notes、前后行为与直接/传递lockfile读回"
+    used_by_stages: [build-plan, build-code, verify-code]
+    local_path: "workflows/verify-code/SKILL.md; skills/review/SKILL.md; AGENTS.md"
+    upstream:
+      - github_url: https://github.com/addyosmani/agent-skills
+        commit: aeac41d4d005999432bb7312f7ff06383a91d59d
+        commit_url: https://github.com/addyosmani/agent-skills/commit/aeac41d4d005999432bb7312f7ff06383a91d59d
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/code-review-and-quality/SKILL.md
+        skill_url: https://github.com/addyosmani/agent-skills/blob/aeac41d4d005999432bb7312f7ff06383a91d59d/skills/code-review-and-quality/SKILL.md
+        adopted:
+          - "skills/code-review-and-quality/SKILL.md#Step 2: Review the Tests First；Dependency Discipline — 受控行为变异存活即finding；条件式依赖notes、前后行为与直接/传递lockfile读回"
+    local_changes: "P4原writer在既有consumer采用；方法独立读回与程序执行分开，不新增runtime/字段/账本/默认gate；不采用全量回归、默认阈值或自动拒绝/安装。"
+    dependency_closure: [skills/spec-specify/SKILL.md]
+    update_policy: 固定source章节与本地唯一正文/条件指针逐项比较；更新需保持本地保护，不自动追HEAD；无consumer且替代经独立审查后退役。
+  - name: n3-matt-tdd
+    status: absorbed
+    purpose: N3 P4测试证伪与检查可信度方法
+    design_idea: "Implementation-coupled/Tautological/Horizontal slicing只在backend定义，三个执行consumer沿指针实际消费"
+    used_by_stages: [build-plan, build-code, verify-code]
+    local_path: "skills/backend-testing/SKILL.md; skills/frontend-testing/SKILL.md; skills/fullstack-slice-testing/SKILL.md; skills/testing-system-blueprint/SKILL.md; skills/spec-plan/templates/phase-template.md"
+    upstream:
+      - github_url: https://github.com/mattpocock/skills
+        commit: b0618bc436ad893b3c5e84e55fba86586d34a404
+        commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/engineering/tdd/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/tdd/SKILL.md
+        adopted:
+          - "skills/engineering/tdd/SKILL.md#Anti-patterns；Rules of the loop；tests.md#Good and Bad Tests — Implementation-coupled/Tautological/Horizontal slicing只在backend定义，三个执行consumer沿指针实际消费"
+    local_changes: "P4原writer在既有consumer采用；方法独立读回与程序执行分开，不新增runtime/字段/账本/默认gate；不采用全量回归、默认阈值或自动拒绝/安装。"
+    dependency_closure: [skills/spec-specify/SKILL.md]
+    update_policy: 固定source章节与本地唯一正文/条件指针逐项比较；更新需保持本地保护，不自动追HEAD；无consumer且替代经独立审查后退役。
+  - name: n3-pstack-tdd
+    status: absorbed
+    purpose: N3 P4测试证伪与检查可信度方法
+    design_idea: "缺RED真实原因/最近既有检查/漏掉seam；环境失败另记，不为凑RED造坏测试"
+    used_by_stages: [build-plan, build-code, verify-code]
+    local_path: "skills/backend-testing/SKILL.md; skills/frontend-testing/SKILL.md; skills/fullstack-slice-testing/SKILL.md; skills/testing-system-blueprint/SKILL.md; skills/spec-plan/templates/phase-template.md"
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        commit: unresolved-pstack-content-snapshot
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/tdd/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/tdd/SKILL.md
+        adopted:
+          - "skills/tdd/SKILL.md#Workflow；If a Failing Test Is Impractical；Guardrails；Final Response — 缺RED真实原因/最近既有检查/漏掉seam；环境失败另记，不为凑RED造坏测试"
+    local_changes: "P4原writer在既有consumer采用；方法独立读回与程序执行分开，不新增runtime/字段/账本/默认gate；不采用全量回归、默认阈值或自动拒绝/安装。pstack实际包SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；git commit未知，main URL仅来源locator，不冒固定commit。"
+    dependency_closure: [skills/spec-specify/SKILL.md]
+    update_policy: 固定source章节与本地唯一正文/条件指针逐项比较；更新需保持本地保护，不自动追HEAD；无consumer且替代经独立审查后退役。
