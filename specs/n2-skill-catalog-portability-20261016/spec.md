@@ -634,6 +634,8 @@ Multica是实际catalog消费者，具体为`skills/workflowhub-multica-sync/scr
 
 N1本次只读来源：`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n1-main-agent-cost-20261015/quality/evidence/2026-10-16-131-verify-code-functional-acceptance.md`第19–49行及不可变补件`2026-10-16-133-verify-code-functional-supplement.md`第25–32行（同目录，SHA256 `7e765dd212bf6f8b7b34bd00e5a658d28ee3fbe1adf88ea933965c75b684a5a1`），执行事实以该task的`facts.jsonl`当前verify-code行及close_action行为准。AC-001–013只在具名样本范围observed_pass；AC-014仍unknown，缺make-decision/build-plan真实主会话调用；business_effect unknown、semantic_test_adequacy inadequate（正式临时TaskHandle删除序列未验）、code_review incomplete（终末OCR零provider完成），verify-code unverified。真实verify成本行已发布但incomplete、exit1；不以物理合并/归档/推送/清理改写质量，也不把工具、接线或该账行当本卡同条件收益样本。N1交付原端点为main `0c43823c67f701fbb4bea349a52d09c8302d5ed3`；本轮main维护端点为`8accb3b9e2bf2167e9bb73c3d37511e200e7cf67`，N2已合入该main，实际合入提交为`732f2919dac00b95fdfeb7f4356ea2dccd50a7f6`，本轮读回HEAD一致。
 
+本轮build-plan主会话真实N1调用原件为`task:quality/tests/2026-10-16-046-build-plan-main-session-cost.{json,output}`，exit1但首条27列incomplete账行已发布；独立读回047确认起点事件形状不匹配及继承边界缺失，时间/用量不可比较、调用计数未支持。具体源、until和不足见P11本轮集成消费者读回；不补成AC-011通过、不启动N2实施。
+
 本次main合入与N2增量分账：历史开工到8accb3b9为main增量，8accb3b9到最终合入提交为N2已有草稿/共享修复净差，合入提交到现场为后续N2变化；N2自身合计仍取现场减8accb3b9。历史开工基线和AC判据不变，重叠hunk限制及逐路径计量只归P10。当前及后续stage成本留账复用合入后四阶段方法正文：图更新/非破坏性收口结果之后、最终stage-handoff之前，由真实阶段主会话调用既有CLI并回读任务账本；首笔绑定真实开工事件，未触发或失败明确“本阶段无记录”及原因，已发布缺口行如实披露，不因exit1重跑造绿；until后的清理/发布/回复未计入。build-code只在整个stage末调用，P11比较与stage留账各保原职责，不新增writer或门。
 
 OI-006/007/008 已由 D-005/016/008/026 解决，OI-009责任已定；已回答项不重问。R-008 的5b“54条整体搬迁/内容生效”由各实际owner首次实现验收，最终复核归N10；N2只交形态和自身八项采用，保明确non-goal，不假覆盖。
