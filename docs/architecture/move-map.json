@@ -522,17 +522,17 @@
       "destination": "runtime/interface/runtime-facade.mjs",
       "status": "retain",
       "role": "production",
-      "responsibility": "七类公共行为门面（实质保留）",
-      "owner": "B4/P5 / MT-1-044",
-      "consumer": "当前直接模块消费者：tests/contract/doctor-interface.test.mjs, tests/contract/runtime-facade.test.mjs, tools/cli/stage-runtime.mjs",
+      "responsibility": "七类公共行为门面（实质保留）；N2 P9/T009仅在createRuntimeFacade/invokeRuntimeCommand邻接解释边界/纯函数判据，七public、请求与delegate兼容检查顺序保持。",
+      "owner": "B4/P5 / MT-1-044；N2 P9/T009接口维护规则原writer承接本次注释，原运行时owner不变",
+      "consumer": "当前直接模块消费者：tests/contract/doctor-interface.test.mjs, tests/contract/runtime-facade.test.mjs, tools/cli/stage-runtime.mjs；下一位CLI/接口维护者在改run输入检查前，读取stageRuntimeCliMain真实{action,argv}及runner-contract兼容条件，决定复用现有delegate接缝；独立方法读者260先消费258，261/263再消费259/262，非新增程序reader。",
       "module_consumers": [
         "tests/contract/doctor-interface.test.mjs",
         "tests/contract/runtime-facade.test.mjs",
         "tools/cli/stage-runtime.mjs"
       ],
       "named_data_readers": [],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "MT-1-044 / NARROW",
+      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费；本次维护说明仅在经独立审查的同职责替代承接该维护动作后收缩，历史方法消费原件保留；不授文件删除或新公共行为许可。",
+      "retention_basis": "MT-1-044 / NARROW；当前stageRuntimeCliMain→invokeRuntimeCommand真实调用及独立维护消费支持保留邻接说明，替代重复接口规范/无consumer类型层，不新增第四规范层。",
       "registration_history": "import/path-only"
     },
     {

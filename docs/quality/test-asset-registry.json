@@ -4,7 +4,7 @@
   "owner": "CARD-04 P9 test asset owner",
   "outside_scope": "unknown",
   "scope_note": "Only five independently discovered CARD-04 targets are registered; all other project test assets remain unknown.",
-  "retirement_policy": "Retire a target only after an independently reviewed replacement preserves the prior revision, source hash, full leaf IDs, and consumer migration.",
+  "retirement_policy": "Retire a target only after an independently reviewed replacement preserves the prior revision, source hash, full leaf IDs, and consumer migration. Before writing path, consumer, or stage ownership, read the actual target and caller; name the maintainer’s concrete action, input, output, and need. If the target cannot be read, stop that registration and report to its original owner; do not invent active entries. Current-state whole replacement is idempotent: compare complete content first, preserve identical bytes, and do not duplicate the same fact. Preserve historical targets, hashes, decisions, and results; these are author actions, not a new machine gate.",
   "targets": [
     {
       "path": "tests/contract/decision-log-census.test.mjs",
