@@ -119,7 +119,7 @@ version: 3.2.0
 
    主会话写人读交接，列当前材料、已做与未做、原件、风险及下游下一步。执行者自己范围内的步骤未做记未做，未启动、产物缺失与完成判据缺失保持可定位；披露不代替完成，只有来源或工具缺失记 unavailable；未确定是 unknown，执行者或工具缺席是 unavailable，`executor_absent` 只记不可用。产物存在不能替代完成判据，交接缺失只披露，不作为工作门。
 
-阶段成本留账：在本次已授权的图更新与非破坏性收口取得各自实际结果后、最终 stage-handoff 之前，由阶段主会话执行一次本仓已核入口 `node tools/cli/measure-main-agent-cost.mjs --project=<本项目> --task=<本任务> --stage=make-decision --record`。project/task取当前认证任务；首次记录附已有真实开工事件 `--start-ref=<原件绝对路径>#seq=<用户事件seq>` 或Codex的 `#item_id=<URI编码UserMessage.id>`，已有账行不重置起点。需要明确源复跑时可附合同内 `--session=<原件绝对路径>`；无参来源仅用原主会话实际环境及父记录明确后代，不能让子代理环境、工具cwd或根SESSION_ID冒当前主会话。
+阶段成本留账：在本次已授权的图更新与非破坏性收口取得各自实际结果后、最终 stage-handoff 之前，由阶段主会话执行一次本仓已核入口 `node tools/cli/measure-main-agent-cost.mjs --project=<本项目> --task=<本任务> --stage=make-decision --record`。project/task取当前认证任务；首次记录附已有真实开工事件 `--start-ref=<原件绝对路径>#seq=<用户事件seq>` 或Codex的 `#item_id=<URI编码UserMessage.id>`，已有账行不重置起点。首笔缺少/格式非法/未唯一匹配的 `start-ref` 必须 fail-closed（exit 2，不创建账行）；源文件不可读或解析失败也必须 fail-closed（exit 1，不创建账行），两类都不得发布污染首行；若已有且仅有一行历史坏首行（`from` 与起点来源均为 `unavailable:task_start_unavailable`），只允许显式合法 `start-ref` 窄范围重开，保留旧字节、从真实起点重测，不得使用坏行的 `until` 或 boundary；其它已有账行仍拒绝重置。需要明确源复跑时可附合同内 `--session=<原件绝对路径>`；无参来源仅用原主会话实际环境及父记录明确后代，不能让子代理环境、工具cwd或根SESSION_ID冒当前主会话。
 
 执行前核工具真实路径/版本与依赖闭包、认证checkout、外置task访问及原会话身份；回读任务根 `main-agent-cost.md` 的新增27列行、旧字节前缀、实际until与缺报。未触发、读取/锁/写入/取消失败都在同一交接写“本阶段无记录”及实际原因，保CLI原件；可写的缺口行按实际内容披露，留账失败不阻塞原阶段收尾。若即将删除唯一工具worktree，在工具/原身份仍可访问时先record并回读外置账本，再按既有授权清理；不从已删除入口补记、不假定存续repo有同版闭包。交接明确实际until之后的物理清理、交接发布和最终回复未计入该笔。通用stage-handoff保持发布职责，不新增共享writer。
 

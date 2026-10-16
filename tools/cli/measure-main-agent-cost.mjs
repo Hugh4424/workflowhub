@@ -476,8 +476,13 @@ async function recordMeasurement(args,signal) {
  try {
   return await task.withRecordLock('main-agent-cost',async()=>{
    signal.throwIfAborted();let old='';try{old=task.readRecord('main-agent-cost.md');}catch(error){if(error.code!=='ENOENT')throw error;}
-   const rows=parseLedger(old),last=rows.at(-1);
-   if(last&&args['start-ref'])throw Object.assign(new TypeError('start-ref cannot reset an existing ledger'),{argumentError:true});
+   // First writes require an explicit, verifiable task-start event. The only
+   // recovery exception is one historical poisoned first row from the former
+   // implementation; it stays append-only history and never supplies a window.
+   const rows=parseLedger(old),last=rows.at(-1),reopen=rows.length===1&&last?.[2]==='unavailable:task_start_unavailable'&&last?.[4]==='unavailable:task_start_unavailable'&&Boolean(args['start-ref']);
+   if(!last&&!args['start-ref'])throw Object.assign(new TypeError('first record requires --start-ref pointing to the real task-start user event'),{argumentError:true});
+   if(last&&args['start-ref']&&!reopen)throw Object.assign(new TypeError('start-ref cannot reset an existing ledger'),{argumentError:true});
+   if(last&&!reopen&&(last[2]==='unavailable:task_start_unavailable'||last[4]==='unavailable:task_start_unavailable'))throw new Error('ledger_reopen_required: existing ledger has no authoritative first task-start boundary; preserve it and reopen the ledger before recording another row');
    const until=new Date().toISOString(),load=path=>readSourceAsync(path,signal),explicit=args.session.length>0;
    let sources=[],loadIssue;
    try {
@@ -487,15 +492,31 @@ async function recordMeasurement(args,signal) {
      if(h?.type==='session_meta'&&(h.payload.parent_thread_id||h.payload.source?.subagent)||h?.type==='session'&&(h.origin==='subagent'||h.delegationDepth>0))throw new Error('stage_caller_is_subagent');
      sources=[current];
     }
-   }catch(error){if(signal.aborted)throw error;loadIssue={code:'current_source_unavailable',message:error.message,expected:false};}
-   const previousSources=last?JSON.parse(last[24]):[],startRef=last?last[4]:args['start-ref']??null;
-   const selector=!last&&args['start-ref']?parseSelector(args['start-ref']):null;
+   }catch(error){if(signal.aborted||error.message==='stage_caller_is_subagent')throw error;loadIssue={code:'current_source_unavailable',message:error.message,expected:false};}
+   const previousSources=reopen?[]:(last?JSON.parse(last[24]):[]),startRef=last&&!reopen?last[4]:args['start-ref']??null;
+   const selector=args['start-ref']?parseSelector(args['start-ref']):null;
    const extra=[...new Set([...previousSources,...(selector?[selector.sourcePath]:[])])].filter(path=>!sources.some(s=>s.sourcePath===path));
    sources.push(...await Promise.all(extra.map(load)));
    sources=await explicitDescendants(sources,date(until),load);
-   const start=last?{from:last[3]}:startFrom(startRef,sources),previousBoundaries=last?JSON.parse(last[25]).flatMap(s=>s.observedBoundaries):[];
-   const result=measureSessions(sources,{window:{from:start.from,until,includeFrom:!last,startRef,previousBoundaries}});
-   if(start.issue)result.issues.push(start.issue);if(loadIssue)result.issues.push(loadIssue);
+   // A retained valid user event cannot authenticate a source whose full read
+   // failed. This applies only to first/reopened publication; later gaps remain
+   // measured and recorded as incomplete evidence.
+   if((!last||reopen)&&selector){
+    const selected=sources.find(source=>source.sourcePath===selector.sourcePath);
+    if(selected?.readIssue)throw new Error((reopen?'ledger reopen':'first record')+' start-ref unavailable: '+selected.readIssue.message);
+   }
+   const start=reopen?startFrom(startRef,sources):last?{from:last[3]}:startFrom(startRef,sources);
+   if(!last&&start.issue){
+    if(loadIssue||sources.some(source=>source.readIssue))throw new Error('first record start-ref unavailable: '+start.issue.message);
+    throw Object.assign(new TypeError(start.issue.message),{argumentError:true});
+   }
+   if(reopen&&start.issue){
+    if(loadIssue||sources.some(source=>source.readIssue))throw new Error('ledger reopen start-ref unavailable: '+start.issue.message);
+    throw Object.assign(new TypeError(start.issue.message),{argumentError:true});
+   }
+   const previousBoundaries=reopen?[]:(last?JSON.parse(last[25]).flatMap(s=>s.observedBoundaries):[]);
+   const result=measureSessions(sources,{window:{from:start.from,until,includeFrom:!last||reopen,startRef,previousBoundaries}});
+   if(loadIssue)result.issues.push(loadIssue);
    try{result.sources=taskSourceFacts(args,result);}catch(error){result.sources.reviewProviderUsage.metric=unavailable('task_source_unavailable');result.sources.materialBytes.metric=unavailable('task_source_unavailable');result.issues.push({code:'task_source_unavailable',message:error.message,expected:false});}
    result.status=result.issues.some(x=>!x.expected)?'incomplete':'available';signal.throwIfAborted();
    const prefix=old||LEDGER_HEADER+'\n| '+Array(27).fill('---').join(' | ')+' |\n',next=prefix+ledgerRow(args,result,startRef);

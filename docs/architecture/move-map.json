@@ -3810,13 +3810,13 @@
       "destination": "workflows/verify-code/isolated-browser-qa.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "同左",
-      "owner": "B3/P4 / MT-3-154",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
+      "responsibility": "历史职责已退役；浏览器 QA 由 canonical skills/isolated-browser-qa/SKILL.md 承接",
+      "owner": "B3/P4 / MT-3-154；N3 退役执行由当前用户授权",
+      "consumer": "已退役；无当前直接模块消费者；现行 build-code/verify-code 均改读 canonical skill",
       "module_consumers": [],
       "named_data_readers": [],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "MT-3-154 / SURVIVOR"
+      "delete_condition": "已由 canonical skills/isolated-browser-qa/SKILL.md 承接并经 N3 定向核对零 active consumer；用户于 2026-10-16 明确授权删除旧副本，删除已在当前 worktree 执行；不因本登记产生未来消费或历史原件删除许可",
+      "retention_basis": "MT-3-154 / SURVIVOR；退役事实来源：N3 用户授权与旧副本 SHA256 45d9ea4b8f5ef292123050b0bfeacd32ac52d1691ef6a07fc608c4189eb10bad；canonical replacement=skills/isolated-browser-qa/SKILL.md；删除日期=2026-10-16；删除 commit=未提交（当前 worktree HEAD 0c43823c67f701fbb4bea349a52d09c8302d5ed3）"
     },
     {
       "source": "workflows/verify-code/metrics-writer.mjs",
@@ -4976,6 +4976,66 @@
       "named_data_readers": [],
       "delete_condition": "职责被正式替代且全部真实consumer改接后删除；历史原件保留",
       "retention_basis": "specs/n1-main-agent-cost-20261015/spec.md 合同8；P1/T001。替代临时测量，不新增runtime公共命令/常驻服务/进度对象"
+    },
+    {
+      "source": "tests/review/n3-detail-single-dispatch.test.mjs",
+      "destination": "tests/review/n3-detail-single-dispatch.test.mjs",
+      "status": "retain",
+      "role": "test_only",
+      "responsibility": "N3 build-plan预写冻结oracle；Vitest runSimpleReview真实依赖注入入口；detail每配置路线一次且direction保留配对",
+      "owner": "N3独立测试作者；冻结后修改须TCR与独立审查",
+      "consumer": "P3/T003实施者、末Phase与verify-code独立验收者",
+      "module_consumers": [
+        "tests/review/n3-detail-single-dispatch.test.mjs"
+      ],
+      "named_data_readers": [],
+      "delete_condition": "真实消费者退役且经独立审查证明替代oracle不降低断言强度后删除；原始RED保留",
+      "retention_basis": "specs/n3-review-test-diagnosis-qa-20261016/spec.md 与对应Phase；不新增runtime入口/状态/公共命令"
+    },
+    {
+      "source": "tests/integration/n3-browser-session-lifecycle.node-test.mjs",
+      "destination": "tests/integration/n3-browser-session-lifecycle.node-test.mjs",
+      "status": "retain",
+      "role": "test_only",
+      "responsibility": "N3 build-plan预写冻结oracle；Node受控进程/会话夹具经真实cleanup入口；取消、隔离回收与清理负例",
+      "owner": "N3独立测试作者；冻结后修改须TCR与独立审查",
+      "consumer": "P7/T007实施者、末Phase与verify-code独立验收者",
+      "module_consumers": [
+        "tests/integration/n3-browser-session-lifecycle.node-test.mjs"
+      ],
+      "named_data_readers": [],
+      "delete_condition": "真实消费者退役且经独立审查证明替代oracle不降低断言强度后删除；原始RED保留",
+      "retention_basis": "specs/n3-review-test-diagnosis-qa-20261016/spec.md 与对应Phase；不新增runtime入口/状态/公共命令"
+    },
+    {
+      "source": "tests/integration/n3-browser-ticket-boundary.node-test.mjs",
+      "destination": "tests/integration/n3-browser-ticket-boundary.node-test.mjs",
+      "status": "retain",
+      "role": "test_only",
+      "responsibility": "N3 build-plan预写只读票据边界oracle；仅经现有context/runner接缝使用受控CDP样本，不接触真实凭据",
+      "owner": "N3独立浏览器测试作者；冻结修改须TCR",
+      "consumer": "P7/T007与P8/verify-code验收者",
+      "module_consumers": [
+        "tests/integration/n3-browser-ticket-boundary.node-test.mjs"
+      ],
+      "named_data_readers": [],
+      "delete_condition": "实际接缝正式退役且经独立审查证明等强替代后删除；原始失败保留",
+      "retention_basis": "specs/n3-review-test-diagnosis-qa-20261016/spec.md；P7/T007。先登记再创建，不新增生产公共命令或持久对象"
+    },
+    {
+      "source": "tests/contract/n3-adoption-metadata.node-test.mjs",
+      "destination": "tests/contract/n3-adoption-metadata.node-test.mjs",
+      "status": "retain",
+      "role": "test_only",
+      "responsibility": "N3预写catalog唯一来源权威与真实consumer登记的技术oracle；不证明方法效果",
+      "owner": "N3独立元数据测试作者；冻结后修改须TCR",
+      "consumer": "P2/T002、P5/T005、P6/T006与末Phase独立验收",
+      "module_consumers": [
+        "tests/contract/n3-adoption-metadata.node-test.mjs"
+      ],
+      "named_data_readers": [],
+      "delete_condition": "登记职责正式退役且经独立审查有等强替代后删除；原始RED不删",
+      "retention_basis": "本任务当前decision R008/R013/R015；P2/P5/P6 first consumer登记；先登记后创建，不增runtime命令/状态"
     },
     {
       "source": "skills/isolated-browser-qa/scripts/browser-qa-session.mjs",
