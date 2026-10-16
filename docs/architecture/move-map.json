@@ -4677,7 +4677,7 @@
       "module_consumers": [],
       "named_data_readers": [
         "skills/catalog.yaml",
-        "specs/graphify-knowledge-integration-20261015/phases/P3-共享收口技能.md"
+        "specs/archive/graphify-knowledge-integration-20261015/phases/P3-共享收口技能.md"
       ],
       "delete_condition": "职责被独立审查的替代承接且实际具名consumer为零时由对应owner移除；不因登记或暂未接线自动删除。",
       "retention_basis": "将已装graphify四动作包装为可搬运方法；替代重复caller图方法，不新增runtime wrapper/控制面。"
@@ -4741,7 +4741,7 @@
       "consumer": "P1/T001 gate与P8逐AC聚合。",
       "module_consumers": [],
       "named_data_readers": [
-        "specs/graphify-knowledge-integration-20261015/phases/P1-图谱质量归因.md"
+        "specs/archive/graphify-knowledge-integration-20261015/phases/P1-图谱质量归因.md"
       ],
       "delete_condition": "仅当前oracle职责退役、具名consumer均改接且冻结变更经既有TCR独立审查后删除；历史执行原件保留。",
       "retention_basis": "有限当前图观察，不替代完整语义与质量判断；不改变冻结权限。"
@@ -4756,7 +4756,7 @@
       "consumer": "P2/T002技术gate与P8聚合。",
       "module_consumers": [],
       "named_data_readers": [
-        "specs/graphify-knowledge-integration-20261015/phases/P2-知识图谱能力.md"
+        "specs/archive/graphify-knowledge-integration-20261015/phases/P2-知识图谱能力.md"
       ],
       "delete_condition": "仅当前oracle职责退役、具名consumer均改接且冻结变更经既有TCR独立审查后删除；历史执行原件保留。",
       "retention_basis": "有限技术接线检查，不替代自然语言实际消费/用户效果；不改变冻结权限。"
@@ -4771,7 +4771,7 @@
       "consumer": "P3/T003及P5/P6共享caller验收。",
       "module_consumers": [],
       "named_data_readers": [
-        "specs/graphify-knowledge-integration-20261015/phases/P3-共享收口技能.md"
+        "specs/archive/graphify-knowledge-integration-20261015/phases/P3-共享收口技能.md"
       ],
       "delete_condition": "仅当前oracle职责退役、具名consumer均改接且冻结变更经既有TCR独立审查后删除；历史执行原件保留。",
       "retention_basis": "有限方法结构检查，不替代真实Git/授权消费；不改变冻结权限。"
@@ -4786,10 +4786,10 @@
       "consumer": "P4—P7具名stage gate与P8聚合。",
       "module_consumers": [],
       "named_data_readers": [
-        "specs/graphify-knowledge-integration-20261015/phases/P4-决策阶段接入.md",
-        "specs/graphify-knowledge-integration-20261015/phases/P5-验证阶段接入.md",
-        "specs/graphify-knowledge-integration-20261015/phases/P6-规划阶段接入.md",
-        "specs/graphify-knowledge-integration-20261015/phases/P7-实施阶段接入.md"
+        "specs/archive/graphify-knowledge-integration-20261015/phases/P4-决策阶段接入.md",
+        "specs/archive/graphify-knowledge-integration-20261015/phases/P5-验证阶段接入.md",
+        "specs/archive/graphify-knowledge-integration-20261015/phases/P6-规划阶段接入.md",
+        "specs/archive/graphify-knowledge-integration-20261015/phases/P7-实施阶段接入.md"
       ],
       "delete_condition": "仅当前oracle职责退役、具名consumer均改接且冻结变更经既有TCR独立审查后删除；历史执行原件保留。",
       "retention_basis": "接线事实不冒五阶段真实知识效果；不改变冻结权限。"
