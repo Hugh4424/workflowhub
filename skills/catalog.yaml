@@ -1,20 +1,18 @@
 schema_version: 2
-# Source authority: skills[].upstream and named local_changes own current facts; portable bundle/body are non-authoritative pointers.
-# 手动上游核对（默认不跑；维护者要求核对具名来源时才只读执行，不自动更新）：
-# 1. 从本登记取来源类型、实际仓库/取回坐标、采用pin及本次要读的ref；先读目标，缺坐标不猜URL/commit。
-#    常规Git来源按同一来源+同一ref取一次当时坐标；同repo/ref可共用一次观测，各采用pin/路径分别比较。
-#    本地用户提供来源或无版本历史包，只核实际可取归档指纹/取回坐标；取不到写unavailable和原因，不伪造Git历史。
-# 2. 例：git ls-remote https://github.com/mattpocock/skills.git HEAD
-#    保实际cwd、argv、来源/ref、时点、exit与完整stdout/stderr的唯一原件；exit0也须检查确有该ref有效坐标。
-# 3. 分别报告两个比较：当前坐标与采用pin相同/不同；先前同来源同ref观测与当前坐标一致/变化。
-#    没有先前同ref观测时，只报告当前坐标和采用差异，两次上游观测间变动/未变不能判断。
-#    坐标不同不自动证明祖先前进；取回成功不证明本地已同步、方法效果或许可/归档到commit身份已核实。
-# 4. 查不到、未知、无版本历史、不适用与未变化分别说明；真实错误原样保留，不能把失败写成未变。
-#    真实权限/登录/输入非法/资源不存在等不可重试外部失败首现零重试，只停该路径，其余安全读取继续。
-# 5. 复放断网条件仅在该次进程加：git -c http.proxy=http://127.0.0.1:1 ls-remote https://github.com/mattpocock/skills.git HEAD
-#    这是受控环境反例，保真实非零/错误，不改系统代理、不把连接失败叫目标RED或上游未变。
-# 6. 核对只产观测与比较报告；采用pin、来源、review日期、许可、状态及文件字节更新仍由各自原owner按真实授权决定。
-# capability_decisions preserves historical decisions: its old AgentHub MIT labels are historical claims, superseded for current use by projects.agenthub and THIRD_PARTY_NOTICES.md.
+# 来源权威为skills[].upstream/local_changes；正文与小卡仅非权威指针。
+# 未核项由knowledge-graph方法维护者取graphify同版原法/许可；frontend-component-quality来源维护者取固定许可绑定；ui-project-init接线owner向交互状态权利owner取固定grant；取得前不扩复制/分发。
+# 手动上游核对：仅维护者点名时只读执行，默认不跑、不自动更新。
+# 1. 取登记的来源类型、真实仓库/取回坐标、采用pin和本次ref；先读目标，缺项不猜URL/commit。
+#    同Git repo/ref共用一次当前观测，各采用pin/路径分别比；本地/无历史包仅核归档指纹与取回坐标，取不到记unavailable及原因，不造Git历史。
+# 2. git ls-remote https://github.com/mattpocock/skills.git HEAD
+#    留cwd/argv/来源ref/时点/exit及完整stdout/stderr唯一原件；exit0仍核有效ref坐标。
+# 3. 分报当前坐标对采用pin、先前同源同ref观测对当前坐标；无前观测只报当前/采用差异，不判上游变或未变。
+#    坐标不同不证祖先前进；取回不证本地同步、方法效果、许可或归档到commit身份。
+# 4. 查不到/未知/无版本历史/不适用/未变分报，错误原样保留；权限/登录/输入非法/资源不存在等不可重试失败首现零重试，仅停该路径，其余安全读取继续。
+# 5. 仅当次进程复放断网：git -c http.proxy=http://127.0.0.1:1 ls-remote https://github.com/mattpocock/skills.git HEAD
+#    保真实非零/错误，不改系统代理；连接失败不冒目标RED或上游未变。
+# 6. 核对只产观测/比较；采用pin、来源、review日期、许可、状态及文件字节更新由原owner按真实授权决定。
+# capability_decisions旧AgentHub MIT是历史声称；当前更正信projects.agenthub与THIRD_PARTY_NOTICES.md。
 last_reviewed_at: '2026-07-14'
 projects:
   vercel-agent-skills:
