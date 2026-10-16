@@ -91,6 +91,27 @@ test('WINDOW DSH inherited seed prefix excluded only by explicit inherited bound
  available(f([s]).totals.usage.inputTokens,11);
  const missingBoundary=structuredClone(s);missingBoundary.records=missingBoundary.records.filter(x=>x.type!=='session/end-seed');unavailable(f([missingBoundary]).totals.usage.inputTokens);
 });
+test('WINDOW Codex inherited markers without a valid ordinal boundary exclude source events and dependent metrics',async()=>{
+ const f=await measure(),base=source('codex'),from='2026-10-02T23:03:07.088Z',until='2026-10-02T23:04:01.933Z';
+ const cases=[
+  ['paginated marker',p=>{p.history_mode='paginated';}],
+  ['parent marker',p=>{p.parent_thread_id='fixture-parent';}],
+  ['subagent marker',p=>{p.source={subagent:{id:'fixture-subagent'}};}],
+  ['invalid numeric ordinal',p=>{p.history_mode='paginated';p.subagent_history_start_ordinal=-1;}],
+  ['invalid string ordinal',p=>{p.history_mode='paginated';p.subagent_history_start_ordinal='2';}],
+ ];
+ for(const [label,markInherited]of cases){
+  const s=structuredClone(base),p=s.records[0].payload;delete p.history_mode;delete p.parent_thread_id;delete p.subagent_history_start_ordinal;p.source={};markInherited(p);
+  const r=f([s],window(from,until)),session=r.sessions[0];assert.equal(r.status,'incomplete',label);available(r.totals.wallMs,54845);
+  for(const key of ['inputTokens','outputTokens','cacheReadTokens','cacheWriteTokens','reasoningTokens'])unavailable(session.usage[key]);
+  for(const key of ['inputTokens','outputTokens','cacheReadTokens','cacheWriteTokens','reasoningTokens'])unavailable(r.totals.usage[key]);
+  unavailable(session.counts.codexResponseItems);unavailable(session.counts.turns);unavailable(session.spanMs);unavailable(session.activeMs);
+  unavailable(r.totals.sessionSpanSumMs);unavailable(r.totals.activeUnionMs);unavailable(r.totals.waitingMs);
+  assert.equal(session.observedBoundaries[0].lastPosition,null,label+' has no trusted latest position');
+  assert.ok(session.cumulativePoints.every(point=>point.from===null&&point.until===null),label+' has no fabricated cumulative endpoints');
+  assert.ok(r.issues.some(issue=>issue.code.startsWith('inherited_boundary_')),label+' explains missing boundary');
+ }
+});
 test('WINDOW Codex cumulative same-thread delta ignores usage, turn usage and fallback duplicate',async()=>{
  const f=await measure(),s=source('codex'),r=f([s],window('2026-10-02T23:03:07.088Z','2026-10-02T23:04:01.933Z'));
  assert.equal(r.status,'available');const a=r.sessions[0];assert.equal(a.sessionId,'fixture-codex-1');assert.equal(a.parentSessionId,'fixture-codex-3');
@@ -124,6 +145,15 @@ test('WINDOW cross-session activity uses interval union, span sum remains separa
 test('WINDOW open turn clips at cutoff; orphan end invalidates activity only',async()=>{
  const f=await measure(),s=source('dsh-v4');s.records=s.records.filter(x=>x.type!=='turn/end');const r=f([s],window(iso(1792031430777),iso(1792031440777),true));available(r.totals.activeUnionMs,10000);assert.ok(r.issues.some(x=>x.code==='open_turn'));
  const o=source('dsh-v4');o.records=o.records.filter(x=>x.type!=='turn/start');unavailable(f([o]).totals.activeUnionMs);
+});
+test('WINDOW DSH and Codex turn boundaries with missing or invalid IDs never pair',async()=>{
+ const f=await measure(),cases=[
+  ['DSH missing ID',source('dsh-v4'),r=>delete r.data.turn,r=>r.type==='turn/start'||r.type==='turn/end'],
+  ['DSH invalid ID',source('dsh-v4'),r=>{r.data.turn=-1;},r=>r.type==='turn/start'||r.type==='turn/end'],
+  ['Codex missing ID',source('codex'),r=>delete r.payload.turn_id,r=>r.type==='event_msg'&&(r.payload?.type==='task_started'||r.payload?.type==='task_complete')],
+  ['Codex invalid ID',source('codex'),r=>{r.payload.turn_id='';},r=>r.type==='event_msg'&&(r.payload?.type==='task_started'||r.payload?.type==='task_complete')],
+ ];
+ for(const [label,s,mutate,isBoundary]of cases){for(const row of s.records.filter(isBoundary))mutate(row);const r=f([s]);assert.equal(r.status,'incomplete',label);unavailable(r.sessions[0].activeMs);unavailable(r.totals.activeUnionMs);unavailable(r.totals.waitingMs);assert.ok(r.issues.some(issue=>issue.code==='invalid_turn_id'),label+' records the missing association');}
 });
 test('BOUNDARY three independent source facts retained exactly and function input immutable',async()=>{
  const f=await measure(),s=source('dsh-v4'),facts={hostInjectedBytes:{metric:{status:'not_reported',reason:'no_authoritative_host_injection_source'},refs:[],scope:'host injection',unit:'byte'},reviewProviderUsage:{metric:{status:'available',value:[{provider:'constructed-provider',usage:{prompt_tokens:19},usage_status:'reported',ref:'quality/reviews/current.json'}]},refs:['quality/reviews/current.json'],scope:'current stage report',unit:'provider original'},materialBytes:{metric:{status:'available',value:7},refs:['decision-log.md','spec.md'],scope:'current material sample',unit:'byte'}};

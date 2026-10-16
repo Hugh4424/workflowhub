@@ -11514,9 +11514,9 @@
     "semantic_hash": ""
   },
   "tests/contract/measure-main-agent-cost.node-test.mjs": {
-    "mtime": 1792075206.838034,
-    "seen": 1792109953.5264971,
-    "ast_hash": "3fdc4749b8ea7610cf639497dc81c614",
+    "mtime": 1792121467.855834,
+    "seen": 1792124308.181213,
+    "ast_hash": "26c382826833576db6cf7152967edd0d",
     "semantic_hash": ""
   },
   "tests/contract/stage-closeout-skill.test.mjs": {
@@ -11526,9 +11526,15 @@
     "semantic_hash": ""
   },
   "tests/integration/main-agent-cost-closeout.node-test.mjs": {
-    "mtime": 1792075992.6219463,
-    "seen": 1792109953.526499,
-    "ast_hash": "3374696029309066b2770c76931c3b87",
+    "mtime": 1792122118.1909811,
+    "seen": 1792124308.181215,
+    "ast_hash": "4cf81c3ec49a9bfcda51a54447e421eb",
+    "semantic_hash": ""
+  },
+  "tools/cli/measure-main-agent-cost.mjs": {
+    "mtime": 1792122150.303071,
+    "seen": 1792124308.181211,
+    "ast_hash": "cf38c868ebc5a9eafc3626022c990949",
     "semantic_hash": ""
   }
 }

@@ -29,6 +29,7 @@ const available = value => ({status:'available',value});
 const missing = reason => ({status:'not_reported',reason});
 const unavailable = reason => ({status:'unavailable',reason});
 const validNumber = value => Number.isSafeInteger(value) && value >= 0 && !Object.is(value,-0);
+const validCodexTurnId = value => typeof value==='string' && value.trim().length>0;
 const canonical = value => JSON.stringify(sort(value));
 function sort(value) { if(Array.isArray(value))return value.map(sort);if(value && typeof value==='object')return Object.fromEntries(Object.keys(value).sort().map(k=>[k,sort(value[k])]));return value; }
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -62,8 +63,8 @@ export function measureSessions(sources, options={}) {
   const records=[],seen=new Map();
   for(const source of group){if(source.readIssue){issues.push({...source.readIssue});invalid=true;}for(const r of source.records){const identity=r===source.records[0]?'header':transport(r)?'transport:'+source.records.indexOf(r):r[key];const fingerprint=canonical(r);if(seen.has(identity)){if(seen.get(identity)!==fingerprint){bad('conflicting_event','same position has different content');records.push(r);}continue;}seen.set(identity,fingerprint);records.push(r);}}
   let last=-1;for(const r of records.slice(1).filter(r=>!transport(r))){if(!validNumber(r[key])||r[key]<=last)bad('invalid_position','positions must be unique and increasing');if(!validNumber(recordTime(r)))bad('invalid_event_time','formal event timestamp must be valid');last=r[key];}
-  let seed=-Infinity;if(dsh&&header?.isSeeded){const b=records.find(r=>r.type==='session/end-seed'&&r.data?.inherited===true);if(!b)bad('inherited_boundary_missing','seed prefix has no explicit boundary');else seed=b.seq;}
-  if(codex&&header?.payload?.subagent_history_start_ordinal!==undefined)seed=header.payload.subagent_history_start_ordinal;
+  let seed=-Infinity,inheritedBoundaryIssue=null;if(dsh&&header?.isSeeded){const b=records.find(r=>r.type==='session/end-seed'&&r.data?.inherited===true);if(!b)bad('inherited_boundary_missing','seed prefix has no explicit boundary');else seed=b.seq;}
+  if(codex){const boundary=codexHistoryBoundary(header);seed=boundary.seed;inheritedBoundaryIssue=boundary.issueCode;if(inheritedBoundaryIssue)bad(inheritedBoundaryIssue,'inherited history has no valid ordinal boundary');}
   const times=records.slice(1).filter(r=>r[key]>seed&&(!dsh||/^(turn|step|user|assistant|tool)\//.test(r.type))).map(recordTime).filter(Number.isFinite);
   effectiveTimes.push(...times);
   const lo=explicit?from:Math.min(...times),hi=explicit?until:Math.max(...times),windowValid=Number.isFinite(lo)&&Number.isFinite(hi)&&hi>=lo;
@@ -132,12 +133,13 @@ export function measureSessions(sources, options={}) {
    counts.dshSteps=uniqueCount('step/start',r=>validNumber(r.data?.turn)&&validNumber(r.data?.step)?r.data.turn+':'+r.data.step:undefined);counts.turns=uniqueCount('turn/start',r=>validNumber(r.data?.turn)?r.data.turn:undefined);counts.codexResponseItems=missing('not_applicable');
    counts.toolCalls=uniqueCount('tool/call',r=>r.data?.callId);for(const [k,names] of [['subagentCalls',['subagent']],['commandCalls',['bash','pwsh']]])counts[k]=counts.toolCalls.status==='available'?available((countRows.get('tool/call')??[]).filter(r=>names.includes(r.data?.name)).length):unavailable('conflicting_count');
   }else{
-   counts.dshSteps=missing('not_applicable');counts.codexResponseItems=available(chosen.filter(r=>r.type==='response_item').length);counts.turns=available(new Set(chosen.filter(r=>r.type==='turn_context').map(r=>r.payload?.turn_id)).size);for(const k of ['toolCalls','subagentCalls','commandCalls'])counts[k]=missing('unsupported_in_this_task');
+   counts.dshSteps=missing('not_applicable');counts.codexResponseItems=available(chosen.filter(r=>r.type==='response_item').length);const turnContexts=chosen.filter(r=>r.type==='turn_context');if(turnContexts.some(r=>!validCodexTurnId(r.payload?.turn_id))){counts.turns=unavailable('invalid_turn_id');bad('invalid_turn_id','turn_context has no valid turn_id','turns');}else counts.turns=available(new Set(turnContexts.map(r=>r.payload.turn_id)).size);for(const k of ['toolCalls','subagentCalls','commandCalls'])counts[k]=missing('unsupported_in_this_task');
    const preferred=records.some(r=>r.type==='token_usage_record'),series=preferred?'token_usage_record.thread_token_usage':'event_msg.token_count.total_token_usage';
    const points=consumed.filter(r=>preferred?r.type==='token_usage_record':r.type==='event_msg'&&r.payload?.type==='token_count');
    const container=r=>preferred?r?.payload?.thread_token_usage:r?.payload?.info?.total_token_usage;
    const point=(r,value)=>({eventRef:path+'#ordinal='+r.ordinal,at:iso(recordTime(r)),value});
    for(const [i,k] of usageKeys.entries()){
+    if(inheritedBoundaryIssue){usage[k]=unavailable('inherited_boundary_unavailable');cumulativePoints.push({sourceRef:path,threadId:id,series,metric:k,from:null,until:null});continue;}
     const relevant=points.filter(r=>r.ordinal>seed);let error=points.some(r=>preferred&&r.payload?.thread_id!==id);let prev=-1;for(const r of relevant){const n=container(r)?.[nativeKeys[i]];if(n===undefined&&i>=3)continue;if(!validNumber(n)||n<prev)error=true;else prev=n;}
     const end=relevant.at(-1),endValue=container(end)?.[nativeKeys[i]],saved=previous?.cumulative?.find(p=>p.metric===k);let start=null;
     if(saved){const original=points.find(r=>path+'#ordinal='+r.ordinal===saved.eventRef);if(saved.series!==series||!original||iso(recordTime(original))!==saved.at||container(original)?.[nativeKeys[i]]!==saved.value||records.indexOf(original)>previousIndex){boundaryInvalid=true;bad('previous_boundary_mismatch','previous cumulative observation changed');}else start={eventRef:saved.eventRef,at:saved.at,value:saved.value};}
@@ -148,22 +150,22 @@ export function measureSessions(sources, options={}) {
     if(error||!start||!endPoint||endPoint.value<start.value){usage[k]=unavailable('cumulative_baseline_or_field_invalid');bad('invalid_cumulative','cumulative baseline, identity or field unavailable',k);}else usage[k]=available(endPoint.value-start.value);
    }
   }
-  const starts=new Map(),turnHistory=new Map();for(const r of consumed.filter(r=>r[key]>seed)){const start=dsh?r.type==='turn/start':r.type==='event_msg'&&r.payload?.type==='task_started',end=dsh?r.type==='turn/end':r.type==='event_msg'&&r.payload?.type==='task_complete';if(!start&&!end)continue;const turn=dsh?r.data?.turn:r.payload?.turn_id,t=recordTime(r);const identity=(start?'start:':'end:')+turn,body=canonical(dsh?r.data:r.payload);if(turnHistory.has(identity)){if(turnHistory.get(identity)!==body)activeInvalid=true;continue;}turnHistory.set(identity,body);if(start){if(starts.has(turn))activeInvalid=true;starts.set(turn,t);}else{if(!starts.has(turn)){activeInvalid=true;continue;}const a=starts.get(turn);if(t<a)activeInvalid=true;else if(windowValid&&Math.min(t,hi)>=Math.max(a,lo))intervals.push([Math.max(a,lo),Math.min(t,hi)]);starts.delete(turn);}}
+  const starts=new Map(),turnHistory=new Map();let invalidTurnId=false;for(const r of consumed.filter(r=>r[key]>seed)){const start=dsh?r.type==='turn/start':r.type==='event_msg'&&r.payload?.type==='task_started',end=dsh?r.type==='turn/end':r.type==='event_msg'&&r.payload?.type==='task_complete';if(!start&&!end)continue;const turn=dsh?r.data?.turn:r.payload?.turn_id,validTurn=dsh?validNumber(turn):validCodexTurnId(turn);if(!validTurn){invalidTurnId=true;activeInvalid=true;continue;}const t=recordTime(r),identity=(start?'start:':'end:')+turn,body=canonical(dsh?r.data:r.payload);if(turnHistory.has(identity)){if(turnHistory.get(identity)!==body)activeInvalid=true;continue;}turnHistory.set(identity,body);if(start){if(starts.has(turn))activeInvalid=true;starts.set(turn,t);}else{if(!starts.has(turn)){activeInvalid=true;continue;}const a=starts.get(turn);if(t<a)activeInvalid=true;else if(windowValid&&Math.min(t,hi)>=Math.max(a,lo))intervals.push([Math.max(a,lo),Math.min(t,hi)]);starts.delete(turn);}}
   for(const a of starts.values())if(windowValid&&hi>=a){intervals.push([Math.max(a,lo),hi]);issue('open_turn',path,'open turn clipped at cutoff',true);}
-  const declaredChildren=consumed.flatMap(record=>declaredChildIds(record,dsh));
+  const declaredChildren=consumed.filter(record=>record[key]>seed).flatMap(record=>declaredChildIds(record,dsh));
   const missingChildren=[...new Set(declaredChildren)].filter(child=>!sources.some(s=>{const h=s.records[0];return dsh?h?.id===child&&h.parentSession===id:h?.payload?.id===child&&h.payload.parent_thread_id===id;}));for(const child of missingChildren)bad('missing_child','declared child source unavailable: '+child);
   if(invalid||boundaryInvalid){for(const k of usageKeys)if(usage[k]?.status==='available'&&(boundaryInvalid||issues.some(x=>x.sourcePath===path&&['unknown_format','inherited_boundary_missing','conflicting_event','invalid_position','invalid_event_time'].includes(x.code))))usage[k]=unavailable('source_integrity_invalid');}
   const unknownFormat=issues.some(x=>x.sourcePath===path&&x.code==='unknown_format');
-  if(unknownFormat||group.some(source=>source.readIssue)||issues.some(x=>x.sourcePath===path&&['inherited_boundary_missing','conflicting_event','invalid_position','invalid_event_time'].includes(x.code)))for(const k of countKeys)if(unknownFormat||counts[k]?.status==='available')counts[k]=unavailable('source_integrity_invalid');
+  if(unknownFormat||group.some(source=>source.readIssue)||issues.some(x=>x.sourcePath===path&&['inherited_boundary_missing','inherited_boundary_invalid','conflicting_event','invalid_position','invalid_event_time'].includes(x.code)))for(const k of countKeys)if(unknownFormat||counts[k]?.status==='available')counts[k]=unavailable(inheritedBoundaryIssue?'inherited_boundary_unavailable':'source_integrity_invalid');
   if(!windowValid){for(const k of usageKeys)usage[k]=unavailable('window_unavailable');for(const k of countKeys)if(counts[k]?.status==='available')counts[k]=unavailable('window_unavailable');}
   if(!times.length)for(const k of usageKeys)usage[k]=unavailable('no_execution_events');
   const span=Number.isFinite(hi)&&times.length?Math.max(0,Math.min(hi,Math.max(...times))-Math.max(Number.isFinite(lo)?lo:Math.min(...times),Math.min(...times))):NaN;
-  const sourceActivityInvalid=issues.some(x=>x.sourcePath===path&&['unknown_format','inherited_boundary_missing','conflicting_event','invalid_position','invalid_event_time','source_read_failed','truncated_tail'].includes(x.code));
+  const sourceActivityInvalid=issues.some(x=>x.sourcePath===path&&['unknown_format','inherited_boundary_missing','inherited_boundary_invalid','invalid_turn_id','conflicting_event','invalid_position','invalid_event_time','source_read_failed','truncated_tail'].includes(x.code));
   const active=windowValid&&!activeInvalid&&!boundaryInvalid&&!sourceActivityInvalid?available(union(intervals)):unavailable('activity_boundary_invalid');if(active.status!=='available')activityFailed=true;
-  if(activeInvalid)bad('invalid_turn_interval','turn boundary has no matching start or conflicts');
+  if(activeInvalid)bad('invalid_turn_interval','turn boundary has no matching start or conflicts');if(invalidTurnId)bad('invalid_turn_id','turn boundary has no valid association id');
   const position=lastRecord?{kind:dsh?'dsh_seq':'codex_ordinal',[key]:lastRecord[key],eventId:eventId(lastRecord),recordSha256:hash(canonical(lastRecord))}:null;
   const boundary={sourcePath:path,sessionId:id??'unknown',family,observedAt:iso(hi),lastPosition:position,prefixSha256:position?hash(consumed.slice(0,consumed.indexOf(lastRecord)+1).map(r=>canonical(r)+'\n').join('')):null,cumulative:snapshots};
-  sessions.push({sessionId:id??'unknown',parentSessionId:dsh?header?.parentSession??null:header?.payload?.parent_thread_id??null,family,version,sourceRefs:refs,spanMs:validNumber(span)?available(span):unavailable('window_unavailable'),activeMs:active,usage,counts,observedBoundaries:[boundary],cumulativePoints,missingChildren});
+  sessions.push({sessionId:id??'unknown',parentSessionId:dsh?header?.parentSession??null:header?.payload?.parent_thread_id??null,family,version,sourceRefs:refs,spanMs:inheritedBoundaryIssue?unavailable('inherited_boundary_unavailable'):validNumber(span)?available(span):unavailable('window_unavailable'),activeMs:active,usage,counts,observedBoundaries:[boundary],cumulativePoints,missingChildren});
   allIntervals.push(...intervals);
  }
  const globalFrom=explicit?from:Math.min(...effectiveTimes),globalUntil=explicit?until:Math.max(...effectiveTimes),wall=Number.isFinite(globalFrom)&&Number.isFinite(globalUntil)?globalUntil-globalFrom:NaN;
@@ -211,8 +213,20 @@ function declaredChildIds(record,dsh) {
 }
 function childIds(source, cutoff=Infinity) {
  const dsh=source.records[0]?.type==='session';
+ const boundary=dsh?null:codexHistoryBoundary(source.records[0]);
+ if(boundary?.issueCode)return [];
  const prefix=[];for(const record of source.records){if(recordTime(record)>cutoff)break;prefix.push(record);}
- return [...new Set(prefix.flatMap(record=>declaredChildIds(record,dsh)))];
+ return [...new Set(prefix.filter(record=>dsh||record.ordinal>boundary.seed).flatMap(record=>declaredChildIds(record,dsh)))];
+}
+function codexHistoryBoundary(header) {
+ const payload=header?.type==='session_meta'&&header.payload&&typeof header.payload==='object'&&!Array.isArray(header.payload)?header.payload:{};
+ const seedPresent=Object.hasOwn(payload,'subagent_history_start_ordinal');
+ const parentHint=Object.hasOwn(payload,'parent_thread_id')&&payload.parent_thread_id!==undefined&&payload.parent_thread_id!==null&&payload.parent_thread_id!=='';
+ const subagentHint=payload.source?.subagent!==undefined&&payload.source?.subagent!==null&&payload.source?.subagent!==false;
+ const inherited=payload.history_mode==='paginated'||parentHint||subagentHint||seedPresent;
+ if(!inherited)return {seed:-Infinity};
+ if(validNumber(payload.subagent_history_start_ordinal))return {seed:payload.subagent_history_start_ordinal};
+ return {seed:Infinity,issueCode:seedPresent?'inherited_boundary_invalid':'inherited_boundary_missing'};
 }
 function encodeSegment(value) {
  if(value==='.'||value==='..')return value.replaceAll('.','~002E');
@@ -402,7 +416,7 @@ async function discoverCurrent(task,signal) {
   for(const cwd of projects) {
    const directory=join(home,'sessions',dshProjectKey(cwd),encodeSegment(dsh));
    let paths;try{paths=generationPaths(directory);}catch(error){if(error.code==='ENOENT')continue;throw error;}
-   for(const path of paths){const source=await load(path),h=source.records[0];if(h?.id!==dsh||h.cwd!==cwd)throw new Error('current DSH header identity mismatch');candidates.push(source);}
+   for(const path of paths){const source=await load(path),h=source.records[0];if(h?h.id!==dsh||h.cwd!==cwd:!source.readIssue)throw new Error('current DSH header identity mismatch');candidates.push(source);}
   }
   expected=dsh;
  }else {
@@ -410,8 +424,8 @@ async function discoverCurrent(task,signal) {
   const home=process.env.CODEX_HOME||join(homedir(),'.codex');if(!isAbsolute(home))throw new Error('CODEX_HOME must be absolute');
   for(const path of codexPaths(id,home)) {
    const source=await load(path),h=source.records[0];
-   if(h?.type!=='session_meta'||h.payload?.id!==id)throw new Error('current Codex header/thread identity mismatch');
-   if(!thread&&(h.payload.parent_thread_id||h.payload.source?.subagent))throw new Error('root session fallback is not a current main thread');
+   if(h?h.type!=='session_meta'||h.payload?.id!==id:!source.readIssue)throw new Error('current Codex header/thread identity mismatch');
+   if(!thread&&h?.type==='session_meta'&&(h.payload.parent_thread_id||h.payload.source?.subagent))throw new Error('root session fallback is not a current main thread');
    candidates.push(source);
   }
   expected=id;
@@ -458,7 +472,7 @@ function ledgerRow(args,result,startRef) {
 }
 async function recordMeasurement(args,signal) {
  const task=taskFor(args);if(task.manifest.activation_cohort!=='post')throw new Error('pre/history task is read-only');
- authenticatedWorkspace(task);let published=false;
+ authenticatedWorkspace(task);let publicationState='not_published',publicationWarning=null;
  try {
   return await task.withRecordLock('main-agent-cost',async()=>{
    signal.throwIfAborted();let old='';try{old=task.readRecord('main-agent-cost.md');}catch(error){if(error.code!=='ENOENT')throw error;}
@@ -470,7 +484,7 @@ async function recordMeasurement(args,signal) {
     if(explicit)sources=await Promise.all([...new Set(args.session)].map(load));
     else {
      const current=await discoverCurrent(task,signal),h=current.records[0];
-     if(h.type==='session_meta'&&(h.payload.parent_thread_id||h.payload.source?.subagent)||h.type==='session'&&(h.origin==='subagent'||h.delegationDepth>0))throw new Error('stage_caller_is_subagent');
+     if(h?.type==='session_meta'&&(h.payload.parent_thread_id||h.payload.source?.subagent)||h?.type==='session'&&(h.origin==='subagent'||h.delegationDepth>0))throw new Error('stage_caller_is_subagent');
      sources=[current];
     }
    }catch(error){if(signal.aborted)throw error;loadIssue={code:'current_source_unavailable',message:error.message,expected:false};}
@@ -485,14 +499,20 @@ async function recordMeasurement(args,signal) {
    try{result.sources=taskSourceFacts(args,result);}catch(error){result.sources.reviewProviderUsage.metric=unavailable('task_source_unavailable');result.sources.materialBytes.metric=unavailable('task_source_unavailable');result.issues.push({code:'task_source_unavailable',message:error.message,expected:false});}
    result.status=result.issues.some(x=>!x.expected)?'incomplete':'available';signal.throwIfAborted();
    const prefix=old||LEDGER_HEADER+'\n| '+Array(27).fill('---').join(' | ')+' |\n',next=prefix+ledgerRow(args,result,startRef);
-   await task.writeRecordAtomic('main-agent-cost.md',next);published=true;
-   const readback=task.readRecord('main-agent-cost.md');
-   if(readback!==next||!readback.startsWith(old))throw new Error('ledger publication readback mismatch');
+   let writeError,readback,readbackError;publicationState='uncertain';
+   try{await task.writeRecordAtomic('main-agent-cost.md',next);}catch(error){writeError=error;}
+   try{readback=task.readRecord('main-agent-cost.md');}catch(error){readbackError=error;}
+   const writerMessage=writeError?.message??'atomic writer returned without publishing the intended row';
+   if(!readbackError&&readback===next&&readback.startsWith(old)){publicationState='published';publicationWarning=writeError??null;}
+   else if(!readbackError&&readback===old){publicationState='not_published';throw new Error('publication_not_published: readback equals prior ledger: '+writerMessage);}
+   else if(writeError&&readbackError&&old===''&&readbackError.code==='ENOENT'){publicationState='not_published';throw new Error('publication_not_published: no ledger exists: '+writerMessage);}
+   else {publicationState='uncertain';throw new Error('publication_uncertain: readback could not confirm prior or intended ledger: '+writerMessage+(readbackError?'; readback: '+readbackError.message:''));}
    process.stdout.write(human(result));process.stdout.write('已发布一条任务账本记录: '+task.recordPath('main-agent-cost.md')+'\n');
+   if(publicationWarning)process.stderr.write('发布已由读回确认，但原子写入器随后报错：'+publicationWarning.message+'；请先核对该行再决定后续操作。\n');
    if(signal.aborted){process.stderr.write('已发布，随后取消；本笔实际until之后动作未计入。\n');return 1;}
-   return result.status==='available'?0:1;
+   return result.status==='available'&&!publicationWarning?0:1;
   });
- }catch(error){if(error.argumentError)throw error;process.stderr.write((published?'已发布后失败: ':'本阶段无记录: ')+(signal.aborted?'cancelled: ':'')+error.message+'\n');return 1;}
+ }catch(error){if(error.argumentError)throw error;const prefix=publicationState==='published'?'已发布后失败: ':publicationState==='uncertain'?'发布状态不确定: ':'本阶段无记录: ';process.stderr.write(prefix+(signal.aborted?'cancelled: ':'')+error.message+'\n');return 1;}
 }
 async function cliMain(argv=process.argv.slice(2)) {
  let args;try{args=parseArgs(argv);}catch(error){process.stderr.write('参数错误: '+error.message+'\n');return 2;}

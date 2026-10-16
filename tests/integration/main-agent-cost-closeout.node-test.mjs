@@ -37,6 +37,24 @@ function setup(t){
 }
 function args(f,stage='build-plan',extra=[]){return ['--project=cost-project','--task=cost-task','--stage='+stage,'--record','--session='+f.session,...extra];}
 function run(f,argv,env=f.env){target();return spawnSync(process.execPath,[entry,...argv],{cwd:f.workspace,env,encoding:'utf8',timeout:15000});}
+function runWithRenameFault(f,mode){
+ target();const preload=join(f.root,'rename-fault-'+mode+'.cjs');
+ writeFileSync(preload,[
+  "const fs=require('node:fs');",
+  'const original=fs.renameSync;',
+  'const fail=()=>{const error=new Error("constructed rename fault");error.code="EIO";return error;};',
+  'fs.renameSync=function(from,to,...args){',
+  ' const mode=process.env.WH_COST_RENAME_FAULT;',
+  ' if(mode==="before")throw fail();',
+  ' const result=original.call(this,from,to,...args);',
+  ' if(mode==="after")throw fail();',
+  ' if(mode==="replace-after"){fs.writeFileSync(to,"unexpected replacement\\n");throw fail();}',
+  ' return result;',
+  '};',
+  "require('node:module').syncBuiltinESMExports();",
+ ].join('\n'));
+ return spawnSync(process.execPath,['--require='+preload,entry,...args(f,'build-code',['--start-ref='+f.session+'#seq=9'])],{cwd:f.workspace,env:{...f.env,WH_COST_RENAME_FAULT:mode},encoding:'utf8',timeout:15000});
+}
 function record(f,stage='build-plan',extra=[]){return run(f,args(f,stage,extra));}
 function first(f,stage='build-plan'){return record(f,stage,['--start-ref='+f.session+'#seq=9']);}
 const unescapeCell=cell=>cell.replace(/&(amp|#92|#124|#13|#10|lt|gt);/g,(_,entity)=>({amp:'&','#92':'\\','#124':'|','#13':'\r','#10':'\n',lt:'<',gt:'>'}[entity]));
@@ -67,6 +85,11 @@ test('LEDGER malformed header/truncated row/column mismatch refused without any 
 test('LEDGER symlink write target refuses publication, preserves external file and handoff-visible gap',t=>{
  const f=setup(t),outside=join(f.root,'outside.md');writeFileSync(outside,'keep\n');symlinkSync(outside,f.ledger);const r=first(f);assert.equal(r.status,1);assert.equal(readFileSync(outside,'utf8'),'keep\n');assert.match(r.stderr,/本阶段无记录/);assert.doesNotMatch(r.stdout,/已新增|added record|recorded successfully/i);
 });
+test('LEDGER failed atomic rename classifies prior, published and uncertain readbacks',t=>{
+ const before=setup(t),beforeFailure=runWithRenameFault(before,'before');assert.equal(beforeFailure.status,1);assert.match(beforeFailure.stderr,/本阶段无记录: publication_not_published/);assert.equal(existsSync(before.ledger),false);
+ const after=setup(t),afterFailure=runWithRenameFault(after,'after');assert.equal(afterFailure.status,1);assert.match(afterFailure.stdout,/已发布一条任务账本记录/);assert.match(afterFailure.stderr,/发布已由读回确认/);assert.doesNotMatch(afterFailure.stderr,/本阶段无记录/);assert.equal(readLedger(after).rows.length,1);
+ const changed=setup(t),uncertain=runWithRenameFault(changed,'replace-after');assert.equal(uncertain.status,1);assert.match(uncertain.stderr,/发布状态不确定: publication_uncertain/);assert.doesNotMatch(uncertain.stderr,/本阶段无记录/);assert.equal(readFileSync(changed.ledger,'utf8'),'unexpected replacement\n');
+});
 test('LEDGER concurrent writers serialize cutoff and append; previous bytes never lost',async t=>{
  const f=setup(t);ok(first(f));const old=readLedger(f),a=spawnRecord(f),b=spawnRecord(f);const results=await Promise.all([a.done,b.done]);for(const r of results)ok(r);const next=readLedger(f);assert.equal(next.rows.length,3);assert.ok(next.raw.startsWith(old.raw));assert.equal(next.rows[1][2],next.rows[0][3]);assert.equal(next.rows[2][2],next.rows[1][3]);assert.ok(Date.parse(next.rows[2][3])>=Date.parse(next.rows[1][3]));assert.equal(existsSync(join(f.taskPath,'.main-agent-cost.lock')),false);
 });
@@ -91,6 +114,24 @@ test('AUTO DSH explicit catalog discovers owned child; missing and foreign paren
  const f=setup(t),parent=f.records;parent.push({type:'subagent/catalog',seq:170,time:1792031682909,data:{childId:'constructed-child',childCreatedAt:1792030881272}});put(f.session,parent);const child=load();child[0].id='constructed-child';child[0].parentSession=parent[0].id;child[0].cwd=f.workspace;put(dshPath(f,'constructed-child'),child);ok(first(f));const sessions=JSON.parse(readLedger(f).rows[0][25]);assert.equal(sessions.length,2);assert.ok(sessions.some(x=>x.sessionId==='constructed-child'));numeric(readLedger(f).rows[0][10],17846);
  // A separate record attempt cannot silently accept a child claiming a different parent.
  child[0].parentSession='foreign-parent';put(dshPath(f,'constructed-child'),child);assert.equal(record(f).status,1);assert.match(readLedger(f).rows.at(-1)[26],/parent|child|归属/i);
+});
+test('AUTO current DSH and Codex EACCES remain source read issues instead of header identity errors',t=>{
+ const dsh=setup(t),dshRecords=load();dshRecords[0].cwd=dsh.workspace;const dshId=dshRecords[0].id,dshSource=put(dshPath(dsh,dshId),dshRecords);let dshResult;
+ chmodSync(dshSource,0);try{dshResult=run(dsh,['--project=cost-project','--task=cost-task','--stage=build-plan','--record'],{...dsh.env,DSH_SESSION_ID:dshId});}finally{chmodSync(dshSource,0o600);}
+ assert.equal(dshResult.status,1);assert.doesNotMatch(dshResult.stdout+dshResult.stderr,/current DSH header identity mismatch/);assert.match(readLedger(dsh).rows[0][26],/EACCES|permission denied/i);
+ const codex=setup(t),id='01a0feda-b95f-7163-a9c1-0ea058d0fa95',codexRecords=load('codex');codexRecords[0].payload.id=id;const codexSource=put(join(codex.env.CODEX_HOME,'sessions/2026/10/03/rollout-2026-10-03T07-02-22-'+id+'.jsonl'),codexRecords);let codexResult;
+ chmodSync(codexSource,0);try{codexResult=run(codex,['--project=cost-project','--task=cost-task','--stage=build-plan','--record'],{...codex.env,CODEX_THREAD_ID:id});}finally{chmodSync(codexSource,0o600);}
+ assert.equal(codexResult.status,1);assert.doesNotMatch(codexResult.stdout+codexResult.stderr,/current Codex header\/thread identity mismatch/);assert.match(readLedger(codex).rows[0][26],/EACCES|permission denied/i);
+});
+test('AUTO DSH and Codex reject a wrong current header even when a later line is malformed',t=>{
+ const dsh=setup(t),dshId=dsh.records[0].id,dshHeader={...dsh.records[0],cwd:dsh.workspace,id:'wrong-dsh-identity'},dshSource=dshPath(dsh,dshId);
+ mkdirSync(dirname(dshSource),{recursive:true});
+ writeFileSync(dshSource,JSON.stringify(dshHeader)+'\n{malformed\n');
+ const dshResult=run(dsh,[],{...dsh.env,DSH_SESSION_ID:dshId});assert.equal(dshResult.status,1);assert.match(dshResult.stderr,/current DSH header identity mismatch/);assert.doesNotMatch(dshResult.stdout,/8923/);
+ const codex=setup(t),id='01a0feda-b95f-7163-a9c1-0ea058d0fa95',codexRecords=load('codex'),codexHeader=structuredClone(codexRecords[0]);codexHeader.payload.id='wrong-codex-identity';const codexSource=join(codex.env.CODEX_HOME,'sessions/2026/10/03/rollout-2026-10-03T07-02-22-'+id+'.jsonl');
+ mkdirSync(dirname(codexSource),{recursive:true});
+ writeFileSync(codexSource,JSON.stringify(codexHeader)+'\n{malformed\n');
+ const codexResult=run(codex,[],{...codex.env,CODEX_THREAD_ID:id});assert.equal(codexResult.status,1);assert.match(codexResult.stderr,/current Codex header\/thread identity mismatch/);assert.doesNotMatch(codexResult.stdout,/186557/);
 });
 test('AUTO Codex thread identity beats root session and current subagent cannot record stage',t=>{
  const f=setup(t),id='01a0feda-b95f-7163-a9c1-0ea058d0fa95',parent='01a0feda-b95f-7163-a9c1-0ea058d0fa94',records=load('codex');records[0].payload.id=id;records[0].payload.session_id=parent;records[0].payload.parent_thread_id=parent;for(const r of records)if(r.type==='token_usage_record'){r.payload.thread_id=id;r.payload.session_id=parent;}
