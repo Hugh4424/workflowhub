@@ -12,7 +12,8 @@ check_agent_browser() {
   fi
 
   echo "agent_browser=$(command -v agent-browser)"
-  if agent-browser skills get agent-browser >/dev/null 2>&1; then
+  local guide
+  if guide="$(agent-browser skills get core --full 2>/dev/null)" && [[ "$guide" == *"# agent-browser core"* ]] && [[ "$guide" == *"## The core loop"* ]]; then
     echo "agent_browser_skill=ok"
   else
     echo "agent_browser_skill=failed"

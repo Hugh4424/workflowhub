@@ -1,13 +1,8 @@
 # browser-use Workflow
 
-Use `browser-use` only when the task needs browser-use-specific capability:
+Select only when browser-use-specific isolated capability is required; canonical Engine Router is authoritative.
 
-- Chrome profile reuse
-- Browser Use Cloud
-- Python Agent / LLM-driven browser tasks
-- browser-use templates, tasks, or APIs
-
-Do not use `browser-use` as an automatic fallback after `agent-browser` was selected for the same QA run.
+The installed native CLI requires `open URL`; `get` supports title/html/text/value/attributes/bbox, not cdp-url, and uses BROWSER_USE_HOME (default ~/.browser-use) for its own PID/socket rather than AGENT_BROWSER_SOCKET_DIR. Therefore context --run reports BROWSER_USE_RUN_UNAVAILABLE before launch for this engine. Use the manual isolated local route below with explicit finally cleanup; it has no verified cancellable-ticket lifecycle. Do not switch engines or treat this capability limit as broken ownership/auth.
 
 ## Local Launch
 
@@ -18,13 +13,7 @@ browser-use --session "$BROWSER_QA_SESSION" open "<url>"
 browser-use --session "$BROWSER_QA_SESSION" state
 ```
 
-If a mapped QA profile exists:
-
-```bash
-browser-use --session "$BROWSER_QA_SESSION" --profile "$BROWSER_QA_PROFILE" open "<url>"
-```
-
-Do not choose `Default` or the user's main profile unless the user explicitly asks for it.
+For isolation and login restrictions follow canonical Auth Rules and references/auth.md; keep the selected engine/session and target whitelist.
 
 ## Interaction
 
@@ -39,12 +28,4 @@ browser-use --session "$BROWSER_QA_SESSION" screenshot /tmp/codex-qa.png
 
 ## Repair
 
-```bash
-browser-use doctor
-browser-use sessions || true
-browser-use --session "$BROWSER_QA_SESSION" close >/dev/null 2>&1 || true
-browser-use --session "$BROWSER_QA_SESSION" open "<url>"
-browser-use --session "$BROWSER_QA_SESSION" state
-```
-
-If it still fails, report the blocker and stop this QA run. Do not switch to `agent-browser` or Playwright MCP in the same run.
+Use canonical Standard Workflow §6 and the same browser-use session. Recheck browser-use doctor after a failed drive; reset only owned isolated resources. Persistent failure remains blocked; report unsupported ticket capabilities rather than switching to agent-browser or Playwright MCP.

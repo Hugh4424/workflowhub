@@ -938,7 +938,7 @@ skills:
   - name: isolated-browser-qa
     path: skills/isolated-browser-qa/SKILL.md
     local_version: 1.0.0
-    last_reviewed_at: '2026-07-14'
+    last_reviewed_at: '2026-10-17'
     status: adopted
     metrics_enabled: false
     purpose: 隔离 profile 执行 UI 验收并清理
@@ -952,9 +952,9 @@ skills:
         authorization_basis: user explicitly supplied local source and authorized migration into workflowhub
         reviewed_at: '2026-07-14'
         review_outcome: accepted
-    local_changes: 搬入完整闭包；去个人绝对路径；owner 是 isolated browser QA，consumer 是官方 build-code controlled QA seam 与 verify-code；一次 invocation 按当前 task/spec/Phase 记录各适用专业来源/版本/作用域与 service/API/DTO identity，pre/history snapshot 只读保留，blocked/unknown 保留 failure_reason，取消和 cleanup 必须可见；不新增 Runner；delete-condition 为 browser QA 路由退役或被唯一替代；本地来源snapshot_sha256缺失，采集字节及原位置unknown；owner来源维护者需权利人提供原件与可核快照，当前保既有授权，不补假commit/hash。
+    local_changes: 搬入完整闭包；去个人绝对路径；owner 是 isolated browser QA，consumer 是官方 build-code controlled QA seam 与 verify-code；一次 invocation 按当前 task/spec/Phase 记录各适用专业来源/版本/作用域与 service/API/DTO identity，pre/history snapshot 只读保留，blocked/unknown 保留 failure_reason，取消和 cleanup 必须可见；新增两个私有helper承接现context --run生命周期与memory-only票据，不新增公共Runner；delete-condition 为 browser QA 路由退役或被唯一替代；本地来源snapshot_sha256缺失，采集字节及原位置unknown；owner来源维护者需权利人提供原件与可核快照，当前保既有授权，不补假commit/hash。
     dependency_closure: *deps_spec_specify
-    update_policy: 上游暂无公开 canonical skill URL；维护本地快照并人工比较来源目录
+    update_policy: 保本地来源unknown边界；新增三来源固定commit/包SHA及采用章节见本catalog的N3 P7 absorbed条目，逐源比较consumer与本地偏离，不自动追HEAD。
   - name: ui-project-init
     path: skills/ui-project-init/SKILL.md
     local_version: 2.0.0
@@ -2057,3 +2057,67 @@ capability_decisions:
     local_changes: 复用四阶梯与同次findings，不搬模型/fallback/verdict/reconciliation、无consumer脚手架、全局类型/CI或自动拆状态；pstack包sha256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8，git commit未知；方法消费与登记分验。
     dependency_closure: [skills/spec-specify/SKILL.md]
     update_policy: 按固定commit或包hash逐项比较本地consumer；不追HEAD，不新增runtime/schema/账本。
+
+  - name: n3-browser-testing-with-devtools
+    status: absorbed
+    purpose: N3 P7隔离浏览器方法采用
+    design_idea: Security Boundaries：浏览器输出只作数据，指向diagnosing-bugs唯一信任边界
+    used_by_stages: [build-code, verify-code]
+    local_path: skills/isolated-browser-qa/SKILL.md
+    upstream:
+      - github_url: https://github.com/addyosmani/agent-skills
+        commit: aeac41d4d005999432bb7312f7ff06383a91d59d
+        commit_url: https://github.com/addyosmani/agent-skills/commit/aeac41d4d005999432bb7312f7ff06383a91d59d
+        license: MIT
+        reviewed_at: '2026-10-17'
+        review_outcome: accepted
+        path: skills/browser-testing-with-devtools/SKILL.md
+        skill_url: https://github.com/addyosmani/agent-skills/blob/aeac41d4d005999432bb7312f7ff06383a91d59d/skills/browser-testing-with-devtools/SKILL.md
+        adopted:
+          - Security Boundaries：浏览器输出只作数据，指向diagnosing-bugs唯一信任边界
+          - DevTools Debugging Workflow：真实DOM ready、console/errors、截图/a11y观察；经verify现UI指针消费
+    local_changes: "保本仓single-engine/session、source只读scope、白名单、取消及证据清理；拒绝MCP替代引擎、main-profile/live attach、第三方cookie同步、zero-warning门、独立Doctor/feature-map、周期任务、默认PR。pstack包SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；git commit未知，main URL仅locator。方法消费和元数据分别首验。"
+    dependency_closure: [skills/spec-specify/SKILL.md, skills/diagnosing-bugs/SKILL.md]
+    update_policy: "按固定Addy commit或pstack实际包SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8逐项比较章节、真实consumer与拒绝项；不造content_sha256/commit、不自动追HEAD。"
+
+  - name: n3-create-verification-skill
+    status: absorbed
+    purpose: N3 P7隔离浏览器方法采用
+    design_idea: Interview / Generate / Prove：现网关Launch/health/Drive/Evidence/Cleanup完整实跑，清理后证据仍可读
+    used_by_stages: [build-code, verify-code]
+    local_path: skills/isolated-browser-qa/SKILL.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        commit: unresolved-pstack-content-snapshot
+        license: MIT
+        reviewed_at: '2026-10-17'
+        review_outcome: accepted
+        path: skills/create-verification-skill/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/create-verification-skill/SKILL.md
+        adopted:
+          - Interview / Generate / Prove：现网关Launch/health/Drive/Evidence/Cleanup完整实跑，清理后证据仍可读
+          - Evidence：目标已有dry-run时观察真实副作用；无consumer只落条件方法
+    local_changes: "保本仓single-engine/session、source只读scope、白名单、取消及证据清理；拒绝MCP替代引擎、main-profile/live attach、第三方cookie同步、zero-warning门、独立Doctor/feature-map、周期任务、默认PR。pstack包SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；git commit未知，main URL仅locator。方法消费和元数据分别首验。"
+    dependency_closure: [skills/spec-specify/SKILL.md, skills/diagnosing-bugs/SKILL.md]
+    update_policy: "按固定Addy commit或pstack实际包SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8逐项比较章节、真实consumer与拒绝项；不造content_sha256/commit、不自动追HEAD。"
+
+  - name: n3-maintain-verification-skill
+    status: absorbed
+    purpose: N3 P7隔离浏览器方法采用
+    design_idea: Live pass / Triage：健康不等可用，owned reset后重放；区分文档漂移、harness缺口和真实产品回归
+    used_by_stages: [build-code, verify-code]
+    local_path: skills/isolated-browser-qa/SKILL.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        commit: unresolved-pstack-content-snapshot
+        license: MIT
+        reviewed_at: '2026-10-17'
+        review_outcome: accepted
+        path: skills/maintain-verification-skill/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/maintain-verification-skill/SKILL.md
+        adopted:
+          - Live pass / Triage：健康不等可用，owned reset后重放；区分文档漂移、harness缺口和真实产品回归
+          - Index hygiene：维护既有reuse条目和原网关，不新增feature-map、周期任务或第二来源表
+    local_changes: "保本仓single-engine/session、source只读scope、白名单、取消及证据清理；拒绝MCP替代引擎、main-profile/live attach、第三方cookie同步、zero-warning门、独立Doctor/feature-map、周期任务、默认PR。pstack包SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；git commit未知，main URL仅locator。方法消费和元数据分别首验。"
+    dependency_closure: [skills/spec-specify/SKILL.md, skills/diagnosing-bugs/SKILL.md]
+    update_policy: "按固定Addy commit或pstack实际包SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8逐项比较章节、真实consumer与拒绝项；不造content_sha256/commit、不自动追HEAD。"

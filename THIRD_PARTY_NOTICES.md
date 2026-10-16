@@ -61,3 +61,9 @@ AgentHub固定commit `258f5a2548fa8cc15325c6aa18dd107c1fc497b9` 的 [LICENSE](ht
 AnySearch固定版本Apache-2.0 grant、pstack历史包与commit绑定、本地用户来源缺snapshot各自保持具体unknown；来源维护者取回权利依据/原件后再核，不能用其他版本或文件名补证。Vercel固定README声明MIT，本地保留MIT文本但其与固定原文字节的绑定未证；该19行摘要不建立vendored指纹。N2的 `content_sha256` 仅适用于真正vendored对象；默认复算、漂移检测和回填仍由N10接线，本次未生效。
 
 N3 P6在既有simplicity-guard吸收 addyosmani/agent-skills 的 `skills/code-simplification/SKILL.md`（MIT，commit `aeac41d4d005999432bb7312f7ff06383a91d59d`）及 pstack 的 `skills/principle-laziness-protocol/SKILL.md`、`skills/interrogate/SKILL.md` 与 `references/rubric.md` / `references/code-quality-review.md`、`skills/principle-subtract-before-you-add/SKILL.md`、`skills/principle-foundational-thinking/SKILL.md`（MIT，Copyright (c) 2026 Lauren Tan，包SHA256 `f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8`，git commit未知）。仅采用catalog具名子集；subtract/foundational合入P0/P1，不重复计机制，不搬上游模型/裁决/脚手架。来源登记不证明方法效果。
+
+N3 P7浏览器QA在既有网关吸收Addy上述固定commit的 `skills/browser-testing-with-devtools/SKILL.md` 的真实console/ready/a11y与信任边界指针，以及pstack上述实际包SHA256（git commit未知）的 `skills/create-verification-skill/SKILL.md`、`skills/maintain-verification-skill/SKILL.md` 的完整实跑/证据存活、dry-run实观、健康与可用分开、owned reset及doc drift/product gap分诊。各采用/拒绝章节与本地consumer归catalog三条P7 absorbed；不采用DevTools MCP引擎、live profile、第三方cookie同步、独立Doctor/feature-map或周期任务。MIT版权及完整许可沿本节原文。
+
+## agent-browser runtime dependency
+
+agent-browser 0.36.0，Copyright 2025 Vercel Inc.，Apache License 2.0；本机只读许可来源为安装包 `agent-browser/LICENSE`，固定版本来源 [vercel-labs/agent-browser v0.36.0](https://github.com/vercel-labs/agent-browser/tree/v0.36.0)。本包调用已安装CLI，不vendoring其二进制/源码，不伪造内容指纹。Apache-2.0许可文本见上述LICENSE及 [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)。Lightpanda为研究后未采用候选，不进入本交付依赖闭包。

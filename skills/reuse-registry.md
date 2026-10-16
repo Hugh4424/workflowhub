@@ -48,7 +48,7 @@
 | backend-testing | 实施后仅有后端改动，验证参数、业务、权限和错误边界，定义唯一行为证伪方法；跨端另读fullstack-slice-testing。 | [读取正文](backend-testing/SKILL.md) |
 | frontend-testing | 实施后仅有UI状态、交互或键盘行为改动，接口不变；跨端链路另读fullstack-slice-testing。 | [读取正文](frontend-testing/SKILL.md) |
 | fullstack-slice-testing | 改动跨前端、API、worker或持久化边界，验证一个用户可观察的完整链路。 | [读取正文](fullstack-slice-testing/SKILL.md) |
-| isolated-browser-qa | 需要浏览器测试、localhost检查、截图验收或页面流程排查。 | [读取正文](isolated-browser-qa/SKILL.md) |
+| isolated-browser-qa | 浏览器/公开页/localhost验收；从正文context --run走Launch/health/Drive/Evidence/Cleanup，维护时区分文档漂移、owned harness缺口与产品回归；清理后回读原证据。来源/许可只读catalog，运行缺口留原task。 | [读取正文](isolated-browser-qa/SKILL.md) |
 | ui-project-init | UI规划先定位本动作适用的专业规范与原owner。 | [读取正文](ui-project-init/SKILL.md) |
 | design-source-readiness | 核对已有设计材料是否能供当前动作使用，并显露缺源或冲突。 | [读取正文](design-source-readiness/SKILL.md) |
 | frontend-prototype-render | 用真实组件输入渲染任务原型，提供预览与截图。 | [读取正文](frontend-prototype-render/SKILL.md) |

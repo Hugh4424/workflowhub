@@ -1,7 +1,5 @@
 # Selected-Engine Repair Policy
 
-This skill uses one browser engine per QA run. Tool switching is not part of the normal flow.
-
 ## Blocked Means
 
 A browser tool is blocked only when one of these remains true after selected-engine repair:
@@ -25,11 +23,7 @@ These do not justify switching engines:
 
 ## Order
 
-1. Repair the selected engine.
-2. Retry same derived session.
-3. Retry headed only when visual/manual debugging is needed.
-4. If the selected engine is still blocked, stop and report the blocker.
-5. Do not switch to the alternate CLI or Playwright MCP in the same QA run.
+Canonical Standard Workflow §6 owns repair order; keep this selected engine and owned session, preserve evidence and report the actual terminal blocker.
 
 ## Report
 
@@ -39,3 +33,5 @@ When the selected engine stays blocked, report:
 - failure symptom
 - repair steps attempted
 - why the run stopped
+
+Healthy-but-stuck DOM, stale-map and product-regression cases follow canonical Output Contract maintenance triage; global counts remain diagnostic.

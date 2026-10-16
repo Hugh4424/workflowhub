@@ -11,7 +11,9 @@
     "scripts/browser-qa-context.sh",
     "scripts/browser-qa-doctor.sh",
     "scripts/cleanup-browser-qa.sh",
-    "scripts/cleanup-codex-qa.sh"
+    "scripts/cleanup-codex-qa.sh",
+    "scripts/browser-qa-session.mjs",
+    "scripts/browser-qa-tickets.mjs"
   ],
   "sources": [
     {

@@ -5,11 +5,11 @@ description: >
   staging, and active-development web checks. Trigger it for browser testing,
   page acceptance, screenshot acceptance, flow reproduction, UI bug checks,
   localhost inspection, and post-change verification. Default to agent-browser
-  for local Coding Agent QA. Use browser-use only for Chrome profile reuse,
-  Browser Use Cloud, Python-agent workflows, or browser-use-specific tasks.
+  for local Coding Agent QA. Use browser-use only for isolated Browser Use Cloud, Python-agent workflows,
+  or browser-use-specific tasks.
   Choose exactly one engine per QA run, run only that engine, repair only that
   engine, and stop with a clear blocker instead of mixing browser tools.
-allowed-tools: Bash(agent-browser:*), Bash(browser-use:*), Bash(bash:*), Bash(command:*), Bash(curl:*)
+allowed-tools: Bash(agent-browser:*), Bash(browser-use:*), Bash(bash:*), Bash(command:*), Bash(curl:*), Bash(node:*), Bash(python3:*), Bash(ps:*), Bash(lsof:*)
 ---
 
 # Isolated Browser QA
@@ -20,94 +20,46 @@ It is a router, not a wrapper around one browser tool.
 
 ## Core Rules
 
-1. Use exactly one engine for the whole QA run.
-2. Default to `agent-browser` for local Coding Agent QA.
-3. Use `browser-use` only when the user explicitly needs Chrome profile reuse, Browser Use Cloud, Python-agent workflows, or browser-use-specific tasks.
-4. Derive one project session and reuse it for the whole QA run.
-5. Repair the selected engine only. Do not switch engines during the same run.
-6. Resolve bundled scripts from this skill directory, not from the current repo.
-7. Run bundled cleanup before and after QA.
-8. Cleanup must never stop the user's app service, dev server, worktree, or local stack.
-9. Stay headless by default.
-10. Do not auto-attach to the user's live Chrome or main profile.
-11. Treat browser automation as memory-expensive: keep one derived session per task and verify residual browser processes after cleanup.
-12. Do not use Playwright MCP from this skill. If the selected CLI engine is blocked, stop and report the blocker.
+Use one selected engine and one owned session throughout the run. Default to headless agent-browser; browser-use is only for its explicitly required isolated capabilities. Repair that engine, preserving failures, then stop if blocked. Resolve bundled scripts from the loaded skill, clean before/after and verify owned residue; leave user browsers, app services and worktrees running. Auth details belong in references/auth.md; never auto-attach user Chrome/main profiles. Playwright MCP and switching engines are excluded.
 
 ## When To Use
 
-Use this skill for:
-
-- localhost checks
-- preview or staging QA
-- browser acceptance after implementation
-- screenshot acceptance with interaction
-- multi-step flow verification
-- UI bug reproduction
-- console, network, storage, and basic performance inspection
-- checking a deployed page that still needs interaction
-
-Do not lead with this skill for:
-
-- one public page screenshot with no interaction
-- one quick public DOM check with no meaningful interaction
+Use for localhost/preview/staging/deployed-page tests, screenshots, DOM/flow acceptance, UI reproduction, console/network/storage/performance inspection and post-change verification, including public screenshots and DOM checks.
 
 ## Engine Router
 
-Pick one engine before any browser action. The selected engine is exclusive.
-
-Use `agent-browser` for:
-
-- local web app smoke tests
-- UI bug reproduction
-- form clicking and filling
-- screenshot acceptance
-- console, network, HAR, cookies, localStorage, or sessionStorage inspection
-- auth vault flows
-- test-oriented workflows using `snapshot -i` and `@ref` selectors
-- default localhost and preview QA
-
-Use `browser-use` for:
-
-- user-requested Chrome profile reuse
-- Browser Use Cloud
-- Python Agent / LLM-driven browser tasks
-- browser-use-specific templates, tasks, or APIs
-
-Do not use `browser-use` as an automatic fallback from `agent-browser`.
-
-Do not use Playwright MCP as a fallback from either CLI. Playwright MCP is outside this skill's normal route.
+Select agent-browser for normal browser QA, interactive refs, screenshots and browser inspection. Select browser-use only for its required isolated Cloud/Python-agent/template capabilities. Selection is exclusive: no alternate CLI or Playwright MCP fallback.
 
 ## Standard Workflow
 
 ### 1. Context
 
-Always start with the bundled context script:
+Resolve SKILL_DIR from the directory of the actually loaded SKILL.md, independently of the target cwd; a non-Git target is valid. If supplied, workflowhub_package_root identifies this package:
 
 ```bash
-SKILL_DIR="${workflowhub_package_root:?workflowhub_package_root is required}/skills/isolated-browser-qa"
+SKILL_DIR="${workflowhub_package_root:?resolve from the loaded skill location}/skills/isolated-browser-qa"
 export BROWSER_QA_ENGINE="${BROWSER_QA_ENGINE:-agent-browser}"
-eval "$(bash "$SKILL_DIR/scripts/browser-qa-context.sh" "<url>")"
+eval "$(bash "$SKILL_DIR/scripts/browser-qa-context.sh" "$BROWSER_QA_TARGET_URL")"
 ```
 
-The script exports:
+Default context prints nonsecret engine/session/host/allowed-domains/auth/profile metadata. For a cancellable lifecycle use that same entry:
 
-- `BROWSER_QA_ENGINE`
-- `BROWSER_QA_SESSION`
-- `BROWSER_QA_HOST`
-- `BROWSER_QA_ALLOWED_DOMAINS`
-- `BROWSER_QA_AUTH_MODE`
-- `BROWSER_QA_PROFILE`
-- `BROWSER_QA_PROFILE_SOURCE`
+```bash
+bash "$SKILL_DIR/scripts/browser-qa-context.sh" --run --url "$BROWSER_QA_TARGET_URL" \
+  --evidence-dir "$BROWSER_QA_EVIDENCE_DIR" -- bash "$BROWSER_QA_SCENARIO_SCRIPT"
+```
+
+Evidence must be outside temporary browser roots. Scenario inherits the owned session; runner strips source capabilities, launches native blank and caches owned CDP before target work, then finally closes receiver/cleans on success, failure and cancel. Caller preserves actual exit (cancel 130/143) and rereads named evidence with size/hash after cleanup. --run is private, not another WorkflowHub command.
 
 ### 2. Doctor
 
-Run the bundled doctor before browser actions:
+Before driving, check the selected engine:
 
 ```bash
 bash "$SKILL_DIR/scripts/browser-qa-doctor.sh" "$BROWSER_QA_ENGINE"
 ```
 
-If the selected engine is missing or broken, repair that engine only. Do not check or launch the other engine as fallback.
+Guide stub/failure is unavailable, not usable; repair only that engine.
 
 ### 3. Cleanup Before Launch
 
@@ -115,124 +67,69 @@ If the selected engine is missing or broken, repair that engine only. Do not che
 bash "$SKILL_DIR/scripts/browser-qa-cleanup.sh" "$BROWSER_QA_SESSION" "$BROWSER_QA_ENGINE"
 ```
 
-This cleanup is only for browser automation resources. It must not stop the target app.
-It closes only the selected engine. For `agent-browser`, cleanup uses the saved session metadata, kills every daemon bound to the session socket, removes stale runtime files, then removes stale browser temp directories and Playwright MCP residuals. If cleanup still reports session residuals or exits non-zero, stop and resolve that state before launching a new browser session.
+Capture exact ownership before graceful close; TERM only authenticated main browsers if needed. Remove owned profiles/metadata, preserve foreign resources. Global counts are diagnostics; selected-session/profile residue or cleanup errors must remain explicit before launch.
 
 ### 4. Launch With `agent-browser`
 
-Use this section only when `BROWSER_QA_ENGINE=agent-browser`.
-
-Read the live command guide before using `agent-browser`:
+For the selected agent-browser, read its full guide (not the legacy stub):
 
 ```bash
-agent-browser skills get agent-browser
+agent-browser skills get core --full
+agent-browser --session "$BROWSER_QA_SESSION" --allowed-domains "$BROWSER_QA_ALLOWED_DOMAINS" --content-boundaries --max-output 20000 open "$BROWSER_QA_TARGET_URL"
+agent-browser --session "$BROWSER_QA_SESSION" snapshot -i -c
 ```
 
-Default launch:
-
-```bash
-agent-browser \
-  --session "$BROWSER_QA_SESSION" \
-  --allowed-domains "$BROWSER_QA_ALLOWED_DOMAINS" \
-  --content-boundaries \
-  --max-output 20000 \
-  open "<url>"
-
-agent-browser \
-  --session "$BROWSER_QA_SESSION" \
-  snapshot -i -c
-```
-
-Use `@ref` selectors from `snapshot` for actions:
-
-```bash
-agent-browser --session "$BROWSER_QA_SESSION" click @e12
-agent-browser --session "$BROWSER_QA_SESSION" fill @e8 "demo@example.com"
-agent-browser --session "$BROWSER_QA_SESSION" screenshot /tmp/codex-qa.png
-```
-
-For details, read `references/agent-browser.md`.
+Use fresh snapshot refs for click/fill/press. Read references/agent-browser.md for ready, console/errors, screenshot/a11y and controlled reset observations.
 
 ### 5. Launch With `browser-use`
 
-Use this section only when `BROWSER_QA_ENGINE=browser-use`. Do not run it after `agent-browser` has already been selected for the same QA run.
+Use only when selected; keep isolated QA state, never real/main profiles or third-party cookie synchronization:
 
 ```bash
-command -v browser-use
 browser-use doctor
-browser-use --session "$BROWSER_QA_SESSION" open "<url>"
+browser-use --session "$BROWSER_QA_SESSION" open "$BROWSER_QA_TARGET_URL"
 browser-use --session "$BROWSER_QA_SESSION" state
 ```
 
-If a QA profile is mapped:
-
-```bash
-browser-use --session "$BROWSER_QA_SESSION" --profile "$BROWSER_QA_PROFILE" open "<url>"
-```
-
-For details, read `references/browser-use.md`.
+Read references/browser-use.md for its commands and capability limitations.
 
 ### 6. Repair Selected Engine
 
-If the selected tool fails:
-
-1. Keep the same derived session.
-2. Close and reopen that tool's session.
-3. Retry headless once.
-4. Retry headed only if visual debugging, CAPTCHA, MFA, SSO, or headless mismatch requires it.
-5. If the selected engine remains blocked, stop and report the blocker.
-6. Do not switch to the alternate CLI or Playwright MCP in the same QA run.
-
-For repair rules, read `references/fallback.md`.
+Preserve prior evidence, reset only this owned session and repeat the original action headless once. Use headed only for requested visual debugging, CAPTCHA/MFA/SSO or observed headless mismatch; follow platform confirmation rules. If still blocked, report selected engine, symptom, attempts and reason; do not switch. Read references/fallback.md for doc drift versus harness gap versus product failure.
 
 ### 7. Finish Cleanly
-
-Always finish with:
 
 ```bash
 bash "$SKILL_DIR/scripts/browser-qa-cleanup.sh" "$BROWSER_QA_SESSION" "$BROWSER_QA_ENGINE"
 ```
 
-The task is not done until cleanup has run and the target app service is still left running.
-Do not use broad `agent-browser close --all` during normal QA cleanup. Use the derived session cleanup script, which applies command timeouts, PID-file fallback, and stale temporary directory cleanup.
+Verify owned PIDs/temp resources are gone, target service remains running, and original evidence remains readable. Keep partial cleanup/nonzero exits explicit. Never close all sessions or kill a target app/worktree stack.
 
 ## Auth Rules
 
-1. Prefer `agent-browser` auth vault when credentials are already saved.
-2. Prefer a dedicated QA state or mapped QA profile.
-3. Use a real Chrome profile only when the user explicitly asks for it.
-4. Do not silently choose `Default`, the user's main profile, or a random profile.
-5. Never put plaintext passwords in chat, shell history, screenshots, or logs.
-6. If auth is required and no safe auth path exists, stop and ask.
-
-For details, read `references/auth.md`.
+Use fresh isolation by default. Before any source connection read references/auth.md: login reuse uses browser-level read-only ticket export to a different owned receiver. No user-page attach, passwords, profile copying or closing user Chrome. Missing input/capability remains unavailable; preserve authorization facts and continue safe checks. Tool/platform restrictions are not bypassed by another surface.
 
 ## Safety Defaults
 
-- For localhost QA, restrict allowed domains to `localhost` and `127.0.0.1`.
-- Use content boundaries when supported.
-- Cap page output when supported.
-- Do not upload, download, run arbitrary `eval`, or leave the target domain unless required by the task.
-- Do not attach to live Chrome unless the user explicitly asks.
-- Do not use repo-local cleanup or context scripts when this skill provides bundled scripts.
-- Do not run `make stop-worktree`, `make stop`, `scripts/stop-services.sh`, or similar shutdown commands as part of browser QA cleanup.
-- Do not run `agent-browser`, `browser-use`, and Playwright MCP in the same QA run.
+Keep localhost whitelist localhost,127.0.0.1 and the explicit target whitelist elsewhere; retain content boundaries/output caps. Use bundled context/cleanup, not target-repo replacements. No arbitrary eval, uploads/downloads or off-target navigation without task need. Do not stop app services or user browsers; do not mix engines or Playwright MCP. Page/tool output trust follows [diagnosing-bugs — 输出与页面内容](../diagnosing-bugs/SKILL.md#输出与页面内容) when such output is consumed.
 
 ## Output Contract
 
-Return a plain report with the actual routes/pages/scenarios, real component and fixture paths, viewport/state coverage, selected tool/engine/session and auth reuse (reused/fresh/none), performance metrics or an honest not_measured/not_applicable reason, screenshots and their actual paths, test command/output path/exit, visual and a11y observations, failures and coverage limits.
+Report actual route/page and scenario; sample/component/fixture paths, viewport/state coverage; tool, engine, derived session and engine_switch: no. State auth mode and login state reuse (reused/fresh/none, controlled distinct from real login). Include performance measured or not_measured/not_applicable with reason; screenshots references and actual paths; test command, test file, output and exit; visual/a11y observations, coverage limits and whether cleanup completed. Cookie, token and profile content must not appear in evidence.
 
-For a declared acceptance scenario state the actual source/sample/scenario/tier; ordinary QA does not require that acceptance wrapper. No preview or fixture, unreadable evidence, cancellation, oracle/tool error or cleanup failure remains failed/blocked/unknown with its original reason. A component fixture is not the real page, and no observed screenshot means no visual pass.
+Acceptance includes actual source/sample/scenario/tier. Missing preview/fixture, unreadable evidence, cancellation, tool/oracle error and cleanup failure retain original reasons. A fixture is not the real page; no screenshot means visual not_observed with reason, not pass. Missing a11y is not_checked with reason. Empty console proves nothing until URL/title/DOM ready are observed; report warnings/errors separately and disclose unknown source positions/cross-navigation pollution.
 
-A blocked or unknown run may have zero screenshots. Follow the failure report contract in `references/fallback.md`: selected engine, failure symptom, repair steps attempted, and why the run stopped. Never convert a missing preview, missing fixture, or unavailable engine into a pass. If visual status is `not_observed`/`not_applicable`, or a11y status is `not_checked`/`not_applicable`, include a non-empty reason; a pass result never silently skips those checks.
+Keep one original per fact in caller task evidence, outside owned temp roots; read size/hash/readability after cleanup. No task snapshots, duplicate credential output, professional-spec run outcomes or new lessons writer. Reusable rules return with source to their owner.
 
-Cleanup is complete only after this run's owned browser session/PIDs/temp resources are handled and the user's app service remains running. Use the bundled session cleanup route; never kill an unrelated browser, live user profile or app service. Preserve partial cleanup and exit failures. For non-UI scope give not_applicable with the actual reason, not missing-evidence pass.
+Maintenance starts at the reuse-registry entry: inspect current source/commands/prerequisites, drive a reachable path, fix only owned map/harness, replay affected action, then reread index/evidence. Healthy process with stuck DOM warrants owned-instance reset; stale command path warrants map correction; real product regression stays failed with original evidence and product owner. Catalog owns source/license facts; task owns outcomes.
 
-Keep only one original output per fact. Use ordinary paths rather than {ref,sha256}/task snapshot/material/invocation certification. Never include cookie, token, password, Authorization, API key, secret or profile contents. Send actual QA outcomes and limitations to the caller and its existing task facts; keep professional rules with their original owners. Do not write run outcomes into professional specifications or historical Experience.md. A reusable rule candidate returns to its existing owner for a sourced decision; this QA run does not become another specification writer.
+When a named target already has dry-run/test mode, read its promise and caller, then observe actual skipped/performed writes, network and Git effects. Do not trust its name. No real consumer means method-only/branch inactive; do not invent a mode.
 
 ## Bundled Resources
 
-- `scripts/browser-qa-context.sh`: derives session, engine, host, allowed domains, auth/profile metadata.
+- `scripts/browser-qa-context.sh`: exports context or delegates `--run` to the private lifecycle helper.
+- `scripts/browser-qa-session.mjs`: owns launch, cancellation, scenario and finally cleanup.
+- `scripts/browser-qa-tickets.mjs`: validates scope and transfers target cookies only in memory.
 - `scripts/browser-qa-doctor.sh`: checks selected browser CLI availability.
 - `scripts/browser-qa-cleanup.sh`: closes the selected engine session without stopping app services.
 - `scripts/cleanup-browser-qa.sh`: compatibility wrapper for older calls.
@@ -243,18 +140,12 @@ Keep only one original output per fact. Use ordinary paths rather than {ref,sha2
 
 ## Guardrails
 
-- Do not claim browser verification without running it.
-- Do not treat unresolved tool breakage as permission to switch tools.
-- Do not invent extra session names when the derived project session works.
-- Do not leave cleanup to the user.
-- Do not document unsupported CLI flags as if they exist.
-- Do not use `auto` as an engine value.
-- Do not call Playwright MCP from this skill.
+Claim verification only for executed observations; never invent flags, extra session names or success from missing evidence. Use agent-browser or browser-use, never auto. Preserve the canonical single-engine, owned cleanup and platform boundaries even when blocked; cleanup remains this caller's responsibility.
 
 ## Source and maintenance
 
 完整来源权威：[catalog条目](../catalog.yaml#skills.isolated-browser-qa)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。
-来源是用户提供并授权迁入的本地 `isolated-browser-qa`（完整授权事实在catalog，小卡仅指针；原快照缺失为unknown）；本地保留单 engine/session、隔离认证、同 engine 修复和不停止用户服务的清理路线。迭代时核原来源及本包 scripts/references 的实际差异，再决定更新；来源不可读时如实 unknown，不猜新版行为。
+来源是用户提供并授权迁入的本地 `isolated-browser-qa`（完整授权事实在catalog，小卡仅指针；原快照缺失为unknown）；本地保留单 engine/session、隔离认证、同 engine 修复和不停止用户服务的清理路线。N3三来源与本机agent-browser Apache-2.0的采用/拒绝与固定身份见catalog对应absorbed条目；私有session/tickets替代手工生命周期，不是公共Runner。迭代比较固定源与scripts/references真实差异，缺源如实unknown，不追HEAD或猜新版。
 
 ## 写作规范
 
