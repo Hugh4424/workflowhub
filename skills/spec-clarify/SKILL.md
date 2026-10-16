@@ -90,6 +90,7 @@ answer for the user, or turn an inferred answer into a confirmed decision.
 
 ## 写作与固定来源
 
+完整来源权威：[catalog条目](../catalog.yaml#skills.spec-clarify)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。
 创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；保原步骤、条件、权限、失败强度和受保护字面，缺源如实 unavailable，不复制规范。
 
-问答来源为 github/spec-kit 固定 commit `b7e67f55bf7a937aaa57dbe0a8198774e285de3a` 的 `templates/commands/clarify.md`；frontier/事实与决定分工吸收 mattpocock/skills 固定 commit `b0618bc436ad893b3c5e84e55fba86586d34a404` 的 `skills/productivity/grilling/SKILL.md`。本地保独立轴批问、最多3选项、主会话真实问答、发卡即归还控制及十维核对，不采用上游单题循环、路径发现脚本、即时写 spec 或扩展 hooks。按固定源与本地偏离评更新，不自动追 HEAD。
+来源线索：Spec Kit clarify与Matt grilling；采用问答覆盖和frontier/事实与决定分工。本地保独立轴批问、最多3选项、主会话真实问答、发卡即归还控制及十维核对，不采用上游单题循环、路径发现脚本、即时写 spec 或扩展 hooks。按固定源与本地偏离评更新，不自动追 HEAD。

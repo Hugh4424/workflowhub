@@ -46,7 +46,8 @@ description: 诊断 bug、测试失败、性能回退或未知异常时，先建
 
 ## 来源边界
 
-参考 [mattpocock/skills](https://github.com/mattpocock/skills) 固定 commit `b0618bc436ad893b3c5e84e55fba86586d34a404` 的 `skills/engineering/diagnosing-bugs/SKILL.md`：紧反馈回路、复现与最小化先于假设、正确接缝和清理。吸收 Superpowers `skills/systematic-debugging`（固定 `d884ae04edebef577e82ff7c4e143debd0bbec99`）的证据/单假设纪律，以及 gstack `investigate`（固定 `7c9df1c568a9ea745508f679a329332b2c338063`）的调查—分析—假设—实现顺序；三方来源均 MIT，完整来源与附件由同目录 bundle 承接。
+完整来源权威：[catalog条目](../catalog.yaml#skills.diagnosing-bugs)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。
+来源线索：Matt diagnosing-bugs、Superpowers systematic-debugging与gstack investigate。采用紧反馈、先复现最小化、单假设与调查顺序；固定章节和许可回catalog。
 
 本地保留根因证据护栏、三次失败人工裁决和现有 HITL 模板；不引入上游全局发现、TDD skill 跳转、gbrain、telemetry、Bun、hook 或宿主专用工具。方法及权限由当前调用方提供，真实触发接线由工作流 owner 负责，本正文不证明已调用。迭代时核固定子文件的真实更新与更优候选，说明实际源差和本地偏离后决定采用，不自动追 HEAD。
 

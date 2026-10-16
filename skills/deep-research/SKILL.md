@@ -89,6 +89,7 @@ description: 调研方向问题形成可复核报告；已收敛方向的点状�
 
 ## 写作与固定来源
 
+完整来源权威：[catalog条目](../catalog.yaml#skills.deep-research)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。
 创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；保原步骤、条件、权限、失败强度和受保护字面，缺源如实 unavailable，不复制规范。
 
-原文来源、逐事实引用与推断分离吸收 mattpocock/skills 固定 commit `b0618bc436ad893b3c5e84e55fba86586d34a404` 的 `skills/engineering/research/SKILL.md`；轻分支保本地 spec-research 的明确输入、内存/skipped 和不写文件合同。保本地 R0–R5、批准外发、饱和/时间盒、独立复核不可用与失败原件，不采用上游临时研究分支、额外报告或宿主硬依赖。更新时核固定子文件和本地偏离，不自动追 HEAD。
+来源线索：Matt research；采用原文来源、逐事实引用与推断分离；轻分支保本地 spec-research 的明确输入、内存/skipped 和不写文件合同。保本地 R0–R5、批准外发、饱和/时间盒、独立复核不可用与失败原件，不采用上游临时研究分支、额外报告或宿主硬依赖。更新时核固定子文件和本地偏离，不自动追 HEAD。

@@ -1,4 +1,6 @@
 schema_version: 2
+# Source authority: skills[].upstream and named local_changes own current facts; portable bundle/body are non-authoritative pointers.
+# capability_decisions preserves historical decisions: its old AgentHub MIT labels are historical claims, superseded for current use by projects.agenthub and THIRD_PARTY_NOTICES.md.
 last_reviewed_at: '2026-07-14'
 projects:
   vercel-agent-skills:
@@ -20,7 +22,7 @@ projects:
     # Verification: frozen cost contract and real-source/output independent readback; pending independent review.
   pstack:
     github_url: https://github.com/backnotprop/pstack
-    commit: unresolved-pstack-content-snapshot
+    # commit unknown: archive identity below is authoritative; do not manufacture a Git pin.
     license: MIT
     # Copyright (c) 2026 Lauren Tan; LICENSE sha256 bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e.
     # Actual package sha256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8; commit/package binding unknown.
@@ -28,6 +30,13 @@ projects:
     # N1 P1/T001 consumer tools/cli/measure-main-agent-cost.mjs: scope, missing fields and alternative explanations.
     # No profiler/counter claim, enforced suspect set or benefit score; P2 retains attempts.
     # Verification: frozen cost contract plus independent full numeric output readback; pending independent review.
+    # N2 P3 source: actual archive /tmp/pstack-research/pstack.tar.gz, SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8.
+    # skills/setup-pstack/SKILL.md#1-detect-available-models + #4-validate -> catalog/notice author reads actual target before registration; no model setup/installation adopted.
+    # skills/principle-type-system-discipline/SKILL.md#type-system-discipline -> runtime/schemas/skill-bundle.schema.json properties.sources.items.oneOf rejects contradictory source variants; P8 checker consumes this same definition, not yet wired in P3.
+    # skills/correct/SKILL.md -> skills/stage-reflection/SKILL.md#方法 source reflection only; not N7 runtime.
+    # skills/principle-redesign-from-first-principles/SKILL.md#redesign-from-first-principles -> catalog/upstream and 18 bundle.sources pointers; P4 owns dependency alignment.
+    # Original extraction ref: skills-framework-redesign-20261014/quality/evidence/research/s1-skills/backnotprop-pstack.md:12-18.
+    # MIT LICENSE and these seven archive files were individually compared with extracted package; equality to selected clone files does not bind the entire archive to a commit.
   workflowhub:
     github_url: https://github.com/Hugh4424/workflowhub
     commit: local
@@ -39,7 +48,7 @@ projects:
     github_url: https://github.com/Hugh4424/AgentHub
     commit: 258f5a2548fa8cc15325c6aa18dd107c1fc497b9
     commit_url: https://github.com/Hugh4424/AgentHub/commit/258f5a2548fa8cc15325c6aa18dd107c1fc497b9
-    license: MIT
+    license: "Modified Apache-2.0 with additional commercial-service and frontend-logo/copyright conditions; applicability to extracted skill text unknown"
     reviewed_at: '2026-07-14'
     review_outcome: accepted
   superpowers:
@@ -117,7 +126,37 @@ skills:
     purpose: 真实阶段末有过程问题时可选提出有源候选，供用户选择检查、判断待办或无操作
     design_idea: 只读可见会话与现材料/执行原件；用户选机械候选后优先结构、类型、测试，人判断项只留未解 Improvements，不生成质量裁决或推进门
     used_by_stages: [build-code, build-plan, build-prd, make-decision, verify-code]
-    upstream: []
+    upstream:
+      - github_url: https://github.com/mattpocock/skills
+        commit: b0618bc436ad893b3c5e84e55fba86586d34a404
+        commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/engineering/retro/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/retro/SKILL.md
+        adopted:
+          - skills/engineering/retro/SKILL.md#steps — 从真实交互提候选，机械检查优先；不采用外部工作分支或自动提交
+      - github_url: https://github.com/backnotprop/pstack
+        commit: c0c3f13cc58005cce7f28c1e6d7ccc439867f171
+        commit_url: https://github.com/backnotprop/pstack/commit/c0c3f13cc58005cce7f28c1e6d7ccc439867f171
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/correct/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/c0c3f13cc58005cce7f28c1e6d7ccc439867f171/skills/correct/SKILL.md
+        adopted:
+          - skills/correct/SKILL.md#fix-each-class-at-the-highest-level-that-works — 对真实重复错误选最高可行结构修复层，候选仍经用户真选
+      - github_url: https://github.com/backnotprop/pstack
+        commit: 55bfdc262dd7f99254d19b53a96cf1dfb24c213b
+        commit_url: https://github.com/backnotprop/pstack/commit/55bfdc262dd7f99254d19b53a96cf1dfb24c213b
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/principle-encode-lessons-in-structure/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/55bfdc262dd7f99254d19b53a96cf1dfb24c213b/skills/principle-encode-lessons-in-structure/SKILL.md
+        adopted:
+          - skills/principle-encode-lessons-in-structure/SKILL.md#encode-lessons-in-structure — 历史负例与结构护栏，原采集commit/时刻未知，不采用规则表/自动提交
     local_changes: workflowhub 原生方法吸收 Matt retro 与 pstack correct/principle 的适用纪律；候选经用户真选，检查须败于真实历史错，判断未解项归目标项目 Improvements、人确认解决才 prune；普通复盘原件不另建 lessons writer、validator 或第二控制面
     dependency_closure:
       - skills/stage-reflection
@@ -146,7 +185,7 @@ skills:
     design_idea: 先委派知识更新，逐动作record/consume，PR先回真实URL同流续跑，最终归档删除只确认一次实际范围
     used_by_stages: [build-prd, verify-code]
     upstream: []
-    local_changes: 抽取既有安全收口方法；保质量与事实caller owner、普通Git和workspace窄工具，不恢复close-plan或新增执行器
+    local_changes: 抽取既有安全收口方法；保质量与事实caller owner、普通Git和workspace窄工具，不恢复close-plan或新增执行器；来源为本仓verify-code授权/安全收口与docs/standard-workflow.md现有默认收口；本仓方法抽取，不伪造GitHub外源。
     dependency_closure: [skills/stage-closeout, skills/knowledge-graph]
     update_policy: 随授权/工作区owner、知识方法和两真实caller消费一并审查；内容确认不冒Git授权，未知字节保留
   - name: knowledge-graph
@@ -160,7 +199,7 @@ skills:
     design_idea: 图是发现入口；回source_file核原文，代码文档分别报告，内容和prompt缓存分别核，费用许可先于新语义抽取
     used_by_stages: [make-decision, build-prd, build-plan, build-code, verify-code]
     upstream: []
-    local_changes: 包装外部graphify现有CLI和库；不新建runtime adapter、质量门、API key、hook或记忆回写；保合法外部占位、去重和当前图未修限制
+    local_changes: 包装外部graphify现有CLI和库；不新建runtime adapter、质量门、API key、hook或记忆回写；保合法外部占位、去重和当前图未修限制；graphify为工具能力参考而非vendored文本；版本/函数以实际安装回读，原始方法/许可绑定unknown由来源维护者补核。
     dependency_closure: [skills/knowledge-graph]
     update_policy: 随当前CLI和cache/build/export边界及五阶段真实consumer一起审查；失配保unavailable，不自动升级
   - name: anysearch
@@ -182,7 +221,22 @@ skills:
         review_outcome: accepted
         path: SKILL.md
         skill_url: https://github.com/anysearch-ai/anysearch-skill/blob/db3d76e5597aec7261257be5322dd211c9d9bb87/SKILL.md
-    local_changes: 仓内打包；通过 stage manifest 按需加载；不做全局安装
+        adopted:
+          - SKILL.md#trigger — 真实搜索/提取触发条件
+          - SKILL.md#recommended-entry-point — 采用预检及真实参数入口，供应方隐私声明另核
+          - SKILL.md#command-cheat-sheet — 搜索/垂直检索/提取命令，不采用未经验证的供应方保证
+      - github_url: https://github.com/anysearch-ai/anysearch-skill
+        commit: db3d76e5597aec7261257be5322dd211c9d9bb87
+        commit_url: https://github.com/anysearch-ai/anysearch-skill/commit/db3d76e5597aec7261257be5322dd211c9d9bb87
+        license: Apache-2.0
+        reviewed_at: '2026-07-14'
+        review_outcome: accepted
+        path: scripts/anysearch_cli.js
+        skill_url: https://github.com/anysearch-ai/anysearch-skill/blob/db3d76e5597aec7261257be5322dd211c9d9bb87/scripts/anysearch_cli.js
+        adopted:
+          - scripts/anysearch_cli.js — 单个CLI原字节vendor；123原体与本地14741B逐字相等；固定版本许可grant仍unknown
+        content_sha256: null
+    local_changes: 仓内打包；通过 stage manifest 按需加载；不做全局安装；固定db3d76e完整tree无LICENSE/NOTICE，Apache-2.0为既有声明，当前grant/版权绑定unknown；owner来源维护者须向AnySearch取得该版本授权依据，未扩大复制范围。
     dependency_closure:
       - skills/anysearch
     update_policy: 比较固定 commit 后的安全边界和 bundle，再人工升级
@@ -197,7 +251,7 @@ skills:
     used_by_stages:
       - make-decision
     upstream: []
-    local_changes: workflowhub 原生实现；当前交互真相仅为 decision-log.md 直接字段，make-decision 的完成与审查消费者不读取 interaction aggregate；历史 aggregate 只读保留，不新增独立 runtime
+    local_changes: workflowhub 原生实现；当前交互真相仅为 decision-log.md 直接字段，make-decision 的完成与审查消费者不读取 interaction aggregate；历史 aggregate 只读保留，不新增独立 runtime；来源为本仓decision-log模板、make-decision与grill-with-docs领域方法；外源完整登记沿后者catalog条目，不重复登记为本技能外源。
     dependency_closure:
       - skills/decision-log
     update_policy: 随 stage 合同变更审查
@@ -210,7 +264,17 @@ skills:
     purpose: 为 make-decision 方向问题提供深研究报告，为 build-plan 或后续已收敛方向的点状问题返回轻研究内存结果
     design_idea: 按真实问题选 R0-R5 有界普通报告/独立复核或轻研究证据、备选、取舍与未决；两分支不重复，不以报告hash认证为Talk前提
     used_by_stages: [build-plan, make-decision]
-    upstream: []
+    upstream:
+      - github_url: https://github.com/mattpocock/skills
+        commit: b0618bc436ad893b3c5e84e55fba86586d34a404
+        commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
+        license: MIT
+        reviewed_at: "2026-10-16"
+        review_outcome: accepted
+        path: skills/engineering/research/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/research/SKILL.md
+        adopted:
+          - skills/engineering/research/SKILL.md#L7-L12 — 逐事实引用原始来源、明确报告问题与推断；本地保R0–R5及轻分支
     local_changes: workflowhub 原生方法；方向问题供 make-decision Talk，深报告写任务约定普通研究原件；轻研究承接 spec-research 点状规划职责，仅返回既有内存 spec-research-result.v1，不强制深报告或另写文件；母方向变化交回调用者，缺工具/来源/失败/取消保真实限制，不新增 gate
     dependency_closure:
       - skills/deep-research
@@ -230,26 +294,54 @@ skills:
         commit: b0618bc436ad893b3c5e84e55fba86586d34a404
         commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
         license: MIT
-        reviewed_at: '2026-07-14'
+        reviewed_at: "2026-07-14"
         review_outcome: accepted
         path: skills/engineering/grill-with-docs/SKILL.md
         skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/grill-with-docs/SKILL.md
+        adopted:
+          - skills/engineering/grill-with-docs/SKILL.md#L7 — 采用grilling/domain-modeling组合关系；本地融合正文，不照搬宿主Skill调用
       - github_url: https://github.com/mattpocock/skills
         commit: b0618bc436ad893b3c5e84e55fba86586d34a404
         commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
         license: MIT
-        reviewed_at: '2026-07-14'
+        reviewed_at: "2026-07-14"
         review_outcome: accepted
         path: skills/engineering/domain-modeling/SKILL.md
         skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/domain-modeling/SKILL.md
+        adopted:
+          - skills/engineering/domain-modeling/SKILL.md#offer-adrs-sparingly — ADR三条件，任一缺失不创建
+          - skills/engineering/domain-modeling/SKILL.md#update-glossarymd-inline — 领域词确定即写glossary，不承载实现设计
+          - skills/engineering/domain-modeling/SKILL.md#file-structure — 单/多上下文边界与懒创建
       - github_url: https://github.com/mattpocock/skills
         commit: b0618bc436ad893b3c5e84e55fba86586d34a404
         commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
         license: MIT
-        reviewed_at: '2026-07-14'
+        reviewed_at: "2026-07-14"
         review_outcome: accepted
         path: skills/productivity/grilling/SKILL.md
         skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/productivity/grilling/SKILL.md
+        adopted:
+          - skills/productivity/grilling/SKILL.md#L7-L30 — 独立frontier同轮提问、依赖答案后重算、等待真实用户回答
+      - github_url: https://github.com/mattpocock/skills
+        commit: b0618bc436ad893b3c5e84e55fba86586d34a404
+        commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
+        license: MIT
+        reviewed_at: "2026-10-16"
+        review_outcome: accepted
+        path: skills/engineering/domain-modeling/GLOSSARY-FORMAT.md
+        skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/domain-modeling/GLOSSARY-FORMAT.md
+        adopted:
+          - skills/engineering/domain-modeling/GLOSSARY-FORMAT.md#rules — 领域语言与单/多上下文边界，本地格式owner仍为grill-with-docs
+      - github_url: https://github.com/mattpocock/skills
+        commit: b0618bc436ad893b3c5e84e55fba86586d34a404
+        commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
+        license: MIT
+        reviewed_at: "2026-10-16"
+        review_outcome: accepted
+        path: skills/engineering/domain-modeling/ADR-FORMAT.md
+        skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/domain-modeling/ADR-FORMAT.md
+        adopted:
+          - skills/engineering/domain-modeling/ADR-FORMAT.md#when-to-offer-an-adr — 难逆转、背景意外和真实取舍三条件，本地格式owner仍为grill-with-docs
     local_changes: 保留四项退出记录和可批量的大白话问题卡；先自行诊断和安全重试，只把方向问题交给用户，未完成不得跳过
     dependency_closure:
       - skills/grill-with-docs
@@ -278,7 +370,7 @@ skills:
     design_idea: 只读 lens 识别范围膨胀并优先删除或复用
     used_by_stages: [build-code, build-plan, build-prd, make-decision]
     upstream: []
-    local_changes: workflowhub 原生 review-only lens；不参与 stage 生成
+    local_changes: workflowhub 原生 review-only lens；不参与 stage 生成；正文参考ponytail七阶梯YAGNI与andrej-karpathy-skills三纪律，来源仓/版本/许可未核；owner来源维护者补原出处和grant前不扩大采用。
     dependency_closure:
       - skills/simplicity-guard
     update_policy: 随宪法复用条款变更审查
@@ -292,8 +384,18 @@ skills:
     design_idea: 一次一组独立问题，按影响重排，达到阈值即收敛
     used_by_stages:
       - make-decision
-    upstream: []
-    local_changes: workflowhub 原生实现；问题卡支持一组独立问题、编号选项、后果和风险，用户可部分回答后重新排序
+    upstream:
+      - github_url: https://github.com/mattpocock/skills
+        commit: b0618bc436ad893b3c5e84e55fba86586d34a404
+        commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/productivity/grilling/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/productivity/grilling/SKILL.md
+        adopted:
+          - skills/productivity/grilling/SKILL.md#L7-L30 — 独立问题frontier与真实回答后重排；保本地动态OI和四维判定
+    local_changes: workflowhub 原生实现；问题卡支持一组独立问题、编号选项、后果和风险，用户可部分回答后重新排序；AgentHub历史导入取回坐标packages/core/agenthub/skills/talk-with-zhipeng/SKILL.md，最后变更2468b5e6907c67d7518583982c5729dcc98e414a；旧2026-07-26对HEAD fabc82100b3dde2678a5fb81484bab3149c1e72d的无更新观察仅历史事实。该原pin许可当前未核，不能借258f5a2许可推定；owner来源维护者须取原pin和grant。
     dependency_closure:
       - skills/talk-with-zhipeng
     update_policy: 随 make-decision 交互合同变更审查
@@ -307,8 +409,18 @@ skills:
     design_idea: 同一版本先产大纲/任务地图，再经真实核对展开单一 PRD 正文
     standalone: true
     used_by_stages: [build-prd]
-    upstream: []
-    local_changes: workflowhub 原生可搬运内容技能；只写显式提供的单一 PRD 目标，不伪造平台、确认或交付事实
+    upstream:
+      - github_url: https://github.com/mattpocock/skills
+        commit: b0618bc436ad893b3c5e84e55fba86586d34a404
+        commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/engineering/to-spec/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/to-spec/SKILL.md
+        adopted:
+          - skills/engineering/to-spec/SKILL.md#user-stories — 以真实角色、诉求、收益组织本技能User Stories；本地两步地图/详情和真实确认合同保留
+    local_changes: workflowhub 原生可搬运内容技能；只写显式提供的单一 PRD 目标，不伪造平台、确认或交付事实；来源为本仓build-prd与prd-template.md职责/确认合同，既有User Stories方法吸收Matt to-spec#user-stories，完整来源在本条upstream；本次未新增第三方字节复制。
     dependency_closure:
       - skills/spec-prd
     update_policy: 随 PRD 模板、两步内容合同和 build-prd consumer 变更审查
@@ -344,10 +456,44 @@ skills:
         commit: b7e67f55bf7a937aaa57dbe0a8198774e285de3a
         commit_url: https://github.com/github/spec-kit/commit/b7e67f55bf7a937aaa57dbe0a8198774e285de3a
         license: MIT
-        reviewed_at: '2026-07-14'
+        reviewed_at: "2026-07-14"
         review_outcome: accepted
         path: templates/commands/specify.md
         skill_url: https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/specify.md
+        adopted:
+          - templates/commands/specify.md#outline — 从用户目标整理规格与可验证成功条件，本地保Appendix A唯一验收权威
+      - github_url: https://github.com/mattpocock/skills
+        commit: b0618bc436ad893b3c5e84e55fba86586d34a404
+        commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
+        license: MIT
+        reviewed_at: "2026-10-16"
+        review_outcome: accepted
+        path: skills/productivity/writing-for-agents/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/productivity/writing-for-agents/SKILL.md
+        adopted:
+          - skills/productivity/writing-for-agents/SKILL.md#context-pointers — WR001渐进披露与唯一权威
+          - skills/productivity/writing-for-agents/SKILL.md#steps-and-completion-criteria — WR001完整步骤与完成条件
+          - skills/productivity/writing-for-agents/SKILL.md#pruning — WR001 duplication/sediment/no-op整理纪律
+      - github_url: https://github.com/mattpocock/skills
+        commit: b0618bc436ad893b3c5e84e55fba86586d34a404
+        commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
+        license: MIT
+        reviewed_at: "2026-10-16"
+        review_outcome: accepted
+        path: skills/productivity/writing-for-agents/SKILL-MECHANICS.md
+        skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/productivity/writing-for-agents/SKILL-MECHANICS.md
+        adopted:
+          - skills/productivity/writing-for-agents/SKILL-MECHANICS.md#invocation — 按真实触发区分宿主调用与路由，不靠名称冒可发现性
+      - github_url: https://github.com/mattpocock/skills
+        commit: b0618bc436ad893b3c5e84e55fba86586d34a404
+        commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
+        license: MIT
+        reviewed_at: "2026-10-16"
+        review_outcome: accepted
+        path: skills/engineering/to-spec/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/to-spec/SKILL.md
+        adopted:
+          - skills/engineering/to-spec/SKILL.md#user-stories — 需求叙事与用户结果；本地spec模板仍为唯一正文合同
     local_changes: post cohort 由 build-plan 写 spec.md 产品规格与全局实现设计，pre cohort 由 build-spec 读取旧材料；consumer 为 spec-plan、spec-analyze、build-code；owner 为 build-plan；测试为 post-cohort-spec-design-authority；当单一 spec 作者机制被审查后的替代机制取代时删除
     dependency_closure: []
     update_policy: 上游更新时从固定 commit 人工比较规格质量规则
@@ -371,6 +517,18 @@ skills:
         review_outcome: accepted
         path: templates/commands/clarify.md
         skill_url: https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/clarify.md
+        adopted:
+          - templates/commands/clarify.md#outline — 按覆盖缺口排序澄清并把真实回答融回规格
+      - github_url: https://github.com/mattpocock/skills
+        commit: b0618bc436ad893b3c5e84e55fba86586d34a404
+        commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/productivity/grilling/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/productivity/grilling/SKILL.md
+        adopted:
+          - skills/productivity/grilling/SKILL.md#L7-L30 — frontier同批独立问题、事实由agent查、决定等真实用户；本地十维与返回控制不变
     local_changes: 保留可独立搬运的十维歧义扫描合同和批量问题卡；post cohort 由 build-plan 唯一消费，build-spec 只读，不能在 make-decision 再接入第二套 Clarify；closure test 校验唯一归属
     dependency_closure: []
     update_policy: 先解析固定导入 commit；人工比较扫描维度和问答合同
@@ -394,6 +552,8 @@ skills:
         review_outcome: accepted
         path: templates/commands/plan.md
         skill_url: https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/plan.md
+        adopted:
+          - templates/commands/plan.md#phases — 先研究缺口再设计契约，保本地spec与独立Phase材料
       - github_url: https://github.com/obra/superpowers
         commit: d884ae04edebef577e82ff7c4e143debd0bbec99
         commit_url: https://github.com/obra/superpowers/commit/d884ae04edebef577e82ff7c4e143debd0bbec99
@@ -402,6 +562,58 @@ skills:
         review_outcome: accepted
         path: skills/writing-plans/SKILL.md
         skill_url: https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans/SKILL.md
+        adopted:
+          - skills/writing-plans/SKILL.md#task-right-sizing — 拆可执行任务、精确文件和独立验证，拒绝占位步骤
+      - github_url: https://github.com/mattpocock/skills
+        commit: b0618bc436ad893b3c5e84e55fba86586d34a404
+        commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/engineering/to-tickets/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/to-tickets/SKILL.md
+        adopted:
+          - skills/engineering/to-tickets/SKILL.md#3-draft-vertical-slices — tracer bullet、blocking/prefactor/expand-contract关系，不采用外部tracker
+      - github_url: https://github.com/mattpocock/skills
+        commit: b0618bc436ad893b3c5e84e55fba86586d34a404
+        commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/engineering/tdd/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/tdd/SKILL.md
+        adopted:
+          - skills/engineering/tdd/SKILL.md#rules-of-the-loop — 独立期望与纵切反馈循环
+      - github_url: https://github.com/mattpocock/skills
+        commit: b0618bc436ad893b3c5e84e55fba86586d34a404
+        commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/engineering/codebase-design/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/codebase-design/SKILL.md
+        adopted:
+          - skills/engineering/codebase-design/SKILL.md#designing-for-testability — 窄接口与可测试接缝
+      - github_url: https://github.com/mattpocock/skills
+        commit: b0618bc436ad893b3c5e84e55fba86586d34a404
+        commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/productivity/writing-for-agents/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/productivity/writing-for-agents/SKILL.md
+        adopted:
+          - skills/productivity/writing-for-agents/SKILL.md#context-pointers — 规划材料渐进披露
+      - github_url: https://github.com/mattpocock/skills
+        commit: b0618bc436ad893b3c5e84e55fba86586d34a404
+        commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/productivity/writing-for-agents/SKILL-MECHANICS.md
+        skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/productivity/writing-for-agents/SKILL-MECHANICS.md
+        adopted:
+          - skills/productivity/writing-for-agents/SKILL-MECHANICS.md#invocation — 调用与路由边界
     local_changes: post cohort 只写 spec.md 实现设计与独立 phases/P<n>.md；旧 plan 模板仅历史只读，不纳入可分发 bundle；consumer 为 build-code 和 spec-analyze；owner 为 build-plan；测试为 post-cohort-authoring-files；当 Phase 作者机制被审查后的替代机制取代时删除
     dependency_closure: []
     update_policy: 比较 Spec Kit 与 Superpowers planning 变更，只吸收不重复编排的规则
@@ -422,18 +634,22 @@ skills:
         commit: b7e67f55bf7a937aaa57dbe0a8198774e285de3a
         commit_url: https://github.com/github/spec-kit/commit/b7e67f55bf7a937aaa57dbe0a8198774e285de3a
         license: MIT
-        reviewed_at: '2026-07-14'
+        reviewed_at: "2026-07-14"
         review_outcome: accepted
         path: templates/commands/tasks.md
         skill_url: https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/tasks.md
+        adopted:
+          - templates/commands/tasks.md#task-organization — 历史任务按用户结果组织；当前已退役，不恢复旧tasks writer
       - github_url: https://github.com/obra/superpowers
         commit: d884ae04edebef577e82ff7c4e143debd0bbec99
         commit_url: https://github.com/obra/superpowers/commit/d884ae04edebef577e82ff7c4e143debd0bbec99
         license: MIT
-        reviewed_at: '2026-07-14'
+        reviewed_at: "2026-07-14"
         review_outcome: accepted
         path: skills/writing-plans/SKILL.md
         skill_url: https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans/SKILL.md
+        adopted:
+          - skills/writing-plans/SKILL.md#task-right-sizing — 拆可执行任务、精确文件和独立验证，拒绝占位步骤
     local_changes: post cohort 只写 phases/index.md；旧 tasks 模板仅历史只读，不纳入可分发 bundle；consumer 为 build-code 和 spec-analyze；owner 为 build-plan；测试为 post-cohort-authoring-files；当 Phase 索引被审查后的替代机制取代时删除
     dependency_closure: []
     update_policy: 比较任务粒度和验证映射规则，拒绝引入第二计划格式
@@ -466,42 +682,52 @@ skills:
         commit: 99f6f02fecdb7dff40c3fbc9470f5907c29f74ca
         commit_url: https://github.com/deepseek-ai/deepseek-harness/commit/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca
         license: MIT
-        reviewed_at: '2026-07-14'
+        reviewed_at: "2026-07-14"
         review_outcome: accepted
         path: .agents/skills/dsh-code-review/SKILL.md
         skill_url: https://github.com/deepseek-ai/deepseek-harness/tree/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca/.agents/skills/dsh-code-review
+        adopted:
+          - .agents/skills/dsh-code-review/SKILL.md#manual-checks — 正确性/测试/边界检查与可定位发现
       - github_url: https://github.com/deepseek-ai/deepseek-harness
         commit: 99f6f02fecdb7dff40c3fbc9470f5907c29f74ca
         commit_url: https://github.com/deepseek-ai/deepseek-harness/commit/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca
         license: MIT
-        reviewed_at: '2026-07-14'
+        reviewed_at: "2026-07-14"
         review_outcome: accepted
         path: .agents/skills/dsh-find-simplifications/SKILL.md
         skill_url: https://github.com/deepseek-ai/deepseek-harness/tree/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca/.agents/skills/dsh-find-simplifications
+        adopted:
+          - .agents/skills/dsh-find-simplifications/SKILL.md#prove-or-reject-each-candidate — 先证真实consumer与等价替代再建议简化
       - github_url: https://github.com/deepseek-ai/deepseek-harness
         commit: 99f6f02fecdb7dff40c3fbc9470f5907c29f74ca
         commit_url: https://github.com/deepseek-ai/deepseek-harness/commit/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca
         license: MIT
-        reviewed_at: '2026-07-14'
+        reviewed_at: "2026-07-14"
         review_outcome: accepted
         path: .agents/skills/dsh-doc-standards/SKILL.md
         skill_url: https://github.com/deepseek-ai/deepseek-harness/tree/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca/.agents/skills/dsh-doc-standards
+        adopted:
+          - .agents/skills/dsh-doc-standards/SKILL.md#review-structure-before-prose — 核文档职责/重复与当前实现一致性
       - github_url: https://github.com/deepseek-ai/deepseek-harness
         commit: 99f6f02fecdb7dff40c3fbc9470f5907c29f74ca
         commit_url: https://github.com/deepseek-ai/deepseek-harness/commit/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca
         license: MIT
-        reviewed_at: '2026-07-14'
+        reviewed_at: "2026-07-14"
         review_outcome: accepted
         path: .agents/skills/dsh-prose-standard/SKILL.md
         skill_url: https://github.com/deepseek-ai/deepseek-harness/tree/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca/.agents/skills/dsh-prose-standard
+        adopted:
+          - .agents/skills/dsh-prose-standard/SKILL.md#preserve-the-complete-proposition — 保条件、量词、限制与失败强度的完整命题
       - github_url: https://github.com/deepseek-ai/deepseek-harness
         commit: 99f6f02fecdb7dff40c3fbc9470f5907c29f74ca
         commit_url: https://github.com/deepseek-ai/deepseek-harness/commit/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca
         license: MIT
-        reviewed_at: '2026-07-14'
+        reviewed_at: "2026-07-14"
         review_outcome: accepted
         path: .agents/skills/dsh-trim-cot-leakage/SKILL.md
         skill_url: https://github.com/deepseek-ai/deepseek-harness/tree/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca/.agents/skills/dsh-trim-cot-leakage
+        adopted:
+          - .agents/skills/dsh-trim-cot-leakage/SKILL.md#the-one-test — 区分可用结果与推理过程泄漏
     local_changes: 保留合并代码审查、简化、文档、prose 和过程叙述的独立 skill；历史 AC-REVIEW-011 已归档于 specs/archive/workflowhub-thin-core-card-05-20260919/spec.md:30/:78/:94；该历史任务的 Architect 替代、recordDshCodeReviewResult、receipts.quality_review、dsh-code-review provider 与原 OCR attempt 为旧审查来源，不据此声明当前执行者或验收通过；当前 architect-code-review 是与 OCR 可用性无关的独立同源补充轴，实际范围按当前 workflow；显式诊断仅作诊断事实，不新增 dispatch/provider/控制面
     dependency_closure:
       - skills/architect-code-review
@@ -510,28 +736,28 @@ skills:
     path: skills/workflowhub-host-protocol/SKILL.md
     local_version: 0.1.1
     last_reviewed_at: "2026-07-14"
-    status: adapted
+    status: native
     metrics_enabled: false
     standalone: true
     purpose: 记录宿主把 WorkflowHub 阶段事实投影到外部任务系统的规则
     design_idea: 宿主适配层只负责可见性、交接和恢复，不进入 WorkflowHub 阶段门禁
     used_by_stages: []
     upstream: []
-    local_changes: 宿主直接调度五阶段 portable package；删除 host bridge、receipt 门禁和评论状态机，保留 worktree 隔离与真实通知
+    local_changes: 宿主直接调度五阶段 portable package；删除 host bridge、receipt 门禁和评论状态机，保留 worktree 隔离与真实通知；N2 P3更正无源adapted误登记：原始本仓登记：55e56137d76cd18da54c66a3f53bea576d01231c:skills/catalog.yaml仅含host-protocol(native/upstream[])；fe991fac228f954b9a066989dcda162adaef2f38:skills/catalog.yaml两项均native/upstream[]，sync首次新增于fe991fac；upstream仍空，无伪造外源。
     dependency_closure: []
     update_policy: 修订宿主边界或 WorkflowHub close 合同时重新审查
   - name: workflowhub-multica-sync
     path: skills/workflowhub-multica-sync/SKILL.md
     local_version: 1.3.0
     last_reviewed_at: '2026-07-14'
-    status: adapted
+    status: native
     metrics_enabled: false
     standalone: true
     purpose: 审计本机 WorkflowHub 技能与 Multica 技能和 agent 提示词的一致性
     design_idea: 按发布闭包同步阶段三件套、托管技能和 agent；先生成唯一差异计划，用户确认后才同步
     used_by_stages: []
     upstream: []
-    local_changes: 只读审计和显式确认后的 Multica CLI 同步；阶段只认 SKILL.md、skill-deps.yaml、steps.json；不改运行时
+    local_changes: 只读审计和显式确认后的 Multica CLI 同步；阶段只认 SKILL.md、skill-deps.yaml、steps.json；不改运行时；N2 P3更正无源adapted误登记：原始本仓登记：55e56137d76cd18da54c66a3f53bea576d01231c:skills/catalog.yaml仅含host-protocol(native/upstream[])；fe991fac228f954b9a066989dcda162adaef2f38:skills/catalog.yaml两项均native/upstream[]，sync首次新增于fe991fac；upstream仍空，无伪造外源。
     dependency_closure:
       - skills/workflowhub-multica-sync
     update_policy: 随 Multica CLI、agent 绑定和 WorkflowHub 技能闭包合同变更审查
@@ -545,7 +771,7 @@ skills:
     design_idea: frozen materials、一次新的 3rd-review public run、attempt/result、verify-final
     used_by_stages: [build-code, build-plan, build-prd, make-decision, verify-code]
     upstream: []
-    local_changes: authoring review 保留既有 public run；正常 build-code 每 Phase 一次 OCR，最终 aggregate 与逐 AC 结果后由 verify-code 对最终 worktree 做一次 OCR；历史 integration 事实只读；两次代码审查由现有 review/run receipt 消费；保留路径安全与原始 provenance
+    local_changes: authoring review 保留既有 public run；正常 build-code 每 Phase 一次 OCR，最终 aggregate 与逐 AC 结果后由 verify-code 对最终 worktree 做一次 OCR；历史 integration 事实只读；两次代码审查由现有 review/run receipt 消费；保留路径安全与原始 provenance；来源为本仓既有review-record-route及provider协议，本文不将宿主工具声明当外部文本来源。
     dependency_closure:
       - skills/wh-review
     update_policy: 只通过本地合同和异源审查演进，禁止第二 review 路径
@@ -578,10 +804,12 @@ skills:
         commit: 7c9df1c568a9ea745508f679a329332b2c338063
         commit_url: https://github.com/garrytan/gstack/commit/7c9df1c568a9ea745508f679a329332b2c338063
         license: MIT
-        reviewed_at: '2026-07-14'
+        reviewed_at: "2026-07-14"
         review_outcome: accepted
         path: plan-ceo-review
         skill_url: https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/plan-ceo-review
+        adopted:
+          - plan-ceo-review/SKILL.md#0a-premise-challenge — 挑战真实用户结果、既有能力复用与替代方案
     local_changes: 裁为 report-only lens；去 runtime/gbrain/telemetry
     dependency_closure:
       - skills/plan-ceo-review
@@ -600,10 +828,12 @@ skills:
         commit: 7c9df1c568a9ea745508f679a329332b2c338063
         commit_url: https://github.com/garrytan/gstack/commit/7c9df1c568a9ea745508f679a329332b2c338063
         license: MIT
-        reviewed_at: '2026-07-14'
+        reviewed_at: "2026-07-14"
         review_outcome: accepted
         path: plan-design-review
         skill_url: https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/plan-design-review
+        adopted:
+          - plan-design-review/SKILL.md#step-0-design-scope-assessment — 按实际页面/状态识别设计完整性和既有设计复用
     local_changes: 裁为 report-only lens；去浏览器 daemon 和宿主命令
     dependency_closure:
       - skills/plan-design-review
@@ -623,10 +853,12 @@ skills:
         commit: 7c9df1c568a9ea745508f679a329332b2c338063
         commit_url: https://github.com/garrytan/gstack/commit/7c9df1c568a9ea745508f679a329332b2c338063
         license: MIT
-        reviewed_at: '2026-07-14'
+        reviewed_at: "2026-07-14"
         review_outcome: accepted
         path: plan-eng-review
         skill_url: https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/plan-eng-review
+        adopted:
+          - plan-eng-review/SKILL.md#step-0-scope-challenge — 核最小完整方案、真实复用和工程风险
     local_changes: 裁为 report-only lens；去 gstack 编排依赖
     dependency_closure:
       - skills/plan-eng-review
@@ -645,10 +877,12 @@ skills:
         commit: 7c9df1c568a9ea745508f679a329332b2c338063
         commit_url: https://github.com/garrytan/gstack/commit/7c9df1c568a9ea745508f679a329332b2c338063
         license: MIT
-        reviewed_at: '2026-07-14'
+        reviewed_at: "2026-07-14"
         review_outcome: accepted
         path: review
         skill_url: https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/review
+        adopted:
+          - review/SKILL.md#step-15-scope-drift-detection — 核实现与已陈述需求范围一致；不采用自动fix/远端流程
     local_changes: 裁为 wh-review lens；禁止自动修复和第二 review flow
     dependency_closure:
       - skills/review
@@ -690,6 +924,8 @@ skills:
         review_outcome: accepted
         path: SKILL.md
         skill_url: https://github.com/Hugh4424/debate/blob/af121a1e24ae3af48f5e132d3de1342d16eccf31/SKILL.md
+        adopted:
+          - SKILL.md#五方结构 — 历史吸收独立对抗视角；该技能现retired，不恢复团队编排或运行时
     local_changes: 保留仓内 provenance；仅作可选诊断，不进入核心 Bundle 或生产扫描；测试文件不纳入可分发 bundle；bundle 按普通文件名登记，resolver 保留路径包含与逃逸检查
     dependency_closure: []
     update_policy: 比较固定 commit；只同步协议和规则，不依赖全局安装
@@ -708,26 +944,32 @@ skills:
         commit: b0618bc436ad893b3c5e84e55fba86586d34a404
         commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
         license: MIT
-        reviewed_at: '2026-07-14'
+        reviewed_at: "2026-07-14"
         review_outcome: accepted
         path: skills/engineering/diagnosing-bugs
         skill_url: https://github.com/mattpocock/skills/tree/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/diagnosing-bugs
+        adopted:
+          - skills/engineering/diagnosing-bugs/SKILL.md#phase-1-build-a-feedback-loop — 先建可失败反馈回路，再复现最小化、单假设、修复与清理
       - github_url: https://github.com/obra/superpowers
         commit: d884ae04edebef577e82ff7c4e143debd0bbec99
         commit_url: https://github.com/obra/superpowers/commit/d884ae04edebef577e82ff7c4e143debd0bbec99
         license: MIT
-        reviewed_at: '2026-07-14'
+        reviewed_at: "2026-07-14"
         review_outcome: accepted
         path: skills/systematic-debugging
         skill_url: https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/systematic-debugging
+        adopted:
+          - skills/systematic-debugging/SKILL.md#the-four-phases — 先根因证据、再模式/单假设与定向实现
       - github_url: https://github.com/garrytan/gstack
         commit: 7c9df1c568a9ea745508f679a329332b2c338063
         commit_url: https://github.com/garrytan/gstack/commit/7c9df1c568a9ea745508f679a329332b2c338063
         license: MIT
-        reviewed_at: '2026-07-14'
+        reviewed_at: "2026-07-14"
         review_outcome: accepted
         path: investigate
         skill_url: https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/investigate
+        adopted:
+          - investigate/SKILL.md#phase-1-root-cause-investigation — 调查→模式分析→假设→实现的顺序
     local_changes: 保留仓内 provenance；根因事实由当前 build-code 直接记录，不进入核心 Bundle 或生产扫描
     dependency_closure: []
     update_policy: 三方更新时比较诊断方法；禁止引入自动补丁循环
@@ -747,12 +989,14 @@ skills:
       - github_url: https://github.com/Hugh4424/AgentHub
         commit: 258f5a2548fa8cc15325c6aa18dd107c1fc497b9
         commit_url: https://github.com/Hugh4424/AgentHub/commit/258f5a2548fa8cc15325c6aa18dd107c1fc497b9
-        license: MIT
-        reviewed_at: '2026-07-14'
+        license: Modified Apache-2.0 with additional commercial-service and frontend-logo/copyright conditions; applicability to extracted skill text unknown
+        reviewed_at: "2026-07-14"
         review_outcome: accepted
         path: packages/core/agenthub/skills/test-routing-advisor/SKILL.md
         skill_url: https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/test-routing-advisor/SKILL.md
-    local_changes: 保留三档路由判断；build-plan 写入预判，build-code 按真实 changed files 必要时重判
+        adopted:
+          - packages/core/agenthub/skills/test-routing-advisor/SKILL.md#路由职责：每个缺口路由到对应类别的执行器 skill — 采用test-routing-advisor的测试分责、真实输入/输出与覆盖限制；不采用安装、全量扫描或release gate
+    local_changes: 保留三档路由判断；build-plan 写入预判，build-code 按真实 changed files 必要时重判；2026-10-16固定258f5a2的LICENSE实际为modified Apache-2.0，含第三方hosted/embedded商业服务授权及frontend logo/copyright条件；旧MIT登记不实。抽取技能文字的适用性unknown，由来源维护者向权利owner核具体grant，当前不扩采用/分发范围，不视为已接受附加条款。
     dependency_closure: []
     update_policy: 只同步有证据的路由启发式，不恢复多执行器框架
   - name: testing-system-blueprint
@@ -770,12 +1014,14 @@ skills:
       - github_url: https://github.com/Hugh4424/AgentHub
         commit: 258f5a2548fa8cc15325c6aa18dd107c1fc497b9
         commit_url: https://github.com/Hugh4424/AgentHub/commit/258f5a2548fa8cc15325c6aa18dd107c1fc497b9
-        license: MIT
-        reviewed_at: '2026-07-14'
+        license: Modified Apache-2.0 with additional commercial-service and frontend-logo/copyright conditions; applicability to extracted skill text unknown
+        reviewed_at: "2026-07-14"
         review_outcome: accepted
         path: packages/core/agenthub/skills/testing-system-blueprint/SKILL.md
         skill_url: https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/testing-system-blueprint/SKILL.md
-    local_changes: 作为 build-plan 的 advisory 测试设计输入，并由 build-code 消费；不新增 AgentHub release gate 或执行器控制面
+        adopted:
+          - packages/core/agenthub/skills/testing-system-blueprint/SKILL.md#二、需求↔测试可追溯（双向不漏） — 采用testing-system-blueprint的测试分责、真实输入/输出与覆盖限制；不采用安装、全量扫描或release gate
+    local_changes: 作为 build-plan 的 advisory 测试设计输入，并由 build-code 消费；不新增 AgentHub release gate 或执行器控制面；2026-10-16固定258f5a2的LICENSE实际为modified Apache-2.0，含第三方hosted/embedded商业服务授权及frontend logo/copyright条件；旧MIT登记不实。抽取技能文字的适用性unknown，由来源维护者向权利owner核具体grant，当前不扩采用/分发范围，不视为已接受附加条款。
     dependency_closure: []
     update_policy: 随测试证据合同和 build-code 阶段边界人工比较
   - name: backend-testing
@@ -793,12 +1039,14 @@ skills:
       - github_url: https://github.com/Hugh4424/AgentHub
         commit: 258f5a2548fa8cc15325c6aa18dd107c1fc497b9
         commit_url: https://github.com/Hugh4424/AgentHub/commit/258f5a2548fa8cc15325c6aa18dd107c1fc497b9
-        license: MIT
-        reviewed_at: '2026-07-14'
+        license: Modified Apache-2.0 with additional commercial-service and frontend-logo/copyright conditions; applicability to extracted skill text unknown
+        reviewed_at: "2026-07-14"
         review_outcome: accepted
         path: packages/core/agenthub/skills/backend-testing/SKILL.md
         skill_url: https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/backend-testing/SKILL.md
-    local_changes: 只保留测试方法和证据字段；失败是质量事实，不是推进 gate
+        adopted:
+          - packages/core/agenthub/skills/backend-testing/SKILL.md#工作流（六步闭环） — 采用backend-testing的测试分责、真实输入/输出与覆盖限制；不采用安装、全量扫描或release gate
+    local_changes: 只保留测试方法和证据字段；失败是质量事实，不是推进 gate；2026-10-16固定258f5a2的LICENSE实际为modified Apache-2.0，含第三方hosted/embedded商业服务授权及frontend logo/copyright条件；旧MIT登记不实。抽取技能文字的适用性unknown，由来源维护者向权利owner核具体grant，当前不扩采用/分发范围，不视为已接受附加条款。
     dependency_closure: []
     update_policy: 随后端测试和证据 schema 人工比较
   - name: frontend-testing
@@ -816,12 +1064,14 @@ skills:
       - github_url: https://github.com/Hugh4424/AgentHub
         commit: 258f5a2548fa8cc15325c6aa18dd107c1fc497b9
         commit_url: https://github.com/Hugh4424/AgentHub/commit/258f5a2548fa8cc15325c6aa18dd107c1fc497b9
-        license: MIT
-        reviewed_at: '2026-07-14'
+        license: Modified Apache-2.0 with additional commercial-service and frontend-logo/copyright conditions; applicability to extracted skill text unknown
+        reviewed_at: "2026-07-14"
         review_outcome: accepted
         path: packages/core/agenthub/skills/frontend-testing/SKILL.md
         skill_url: https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/frontend-testing/SKILL.md
-    local_changes: 保留状态/交互维度、UI phase/task 字段和失败证据；owner 是 build-code 前端测试路由，consumer 是真实 UI changed files；适用 UI attempt 经官方 build-code seam 一次调用 isolated-browser-qa，绑定 Design/Experience、service/API/DTO identity 和 cleanup；截图或 browser pass 不变成普遍 gate；不新增 Runner；delete-condition 为 frontend-testing 退役且无阶段引用
+        adopted:
+          - packages/core/agenthub/skills/frontend-testing/SKILL.md#工作流（六步闭环） — 采用frontend-testing的测试分责、真实输入/输出与覆盖限制；不采用安装、全量扫描或release gate
+    local_changes: 保留状态/交互维度、UI phase/task 字段和失败证据；owner 是 build-code 前端测试路由，consumer 是真实 UI changed files；适用 UI attempt 经官方 build-code seam 一次调用 isolated-browser-qa，绑定 Design/Experience、service/API/DTO identity 和 cleanup；截图或 browser pass 不变成普遍 gate；不新增 Runner；delete-condition 为 frontend-testing 退役且无阶段引用；2026-10-16固定258f5a2的LICENSE实际为modified Apache-2.0，含第三方hosted/embedded商业服务授权及frontend logo/copyright条件；旧MIT登记不实。抽取技能文字的适用性unknown，由来源维护者向权利owner核具体grant，当前不扩采用/分发范围，不视为已接受附加条款。
     dependency_closure: []
     update_policy: 随前端测试和 browser 证据合同人工比较
   - name: fullstack-slice-testing
@@ -839,12 +1089,14 @@ skills:
       - github_url: https://github.com/Hugh4424/AgentHub
         commit: 258f5a2548fa8cc15325c6aa18dd107c1fc497b9
         commit_url: https://github.com/Hugh4424/AgentHub/commit/258f5a2548fa8cc15325c6aa18dd107c1fc497b9
-        license: MIT
-        reviewed_at: '2026-07-14'
+        license: Modified Apache-2.0 with additional commercial-service and frontend-logo/copyright conditions; applicability to extracted skill text unknown
+        reviewed_at: "2026-07-14"
         review_outcome: accepted
         path: packages/core/agenthub/skills/fullstack-slice-testing/SKILL.md
         skill_url: https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/fullstack-slice-testing/SKILL.md
-    local_changes: 适配为风险证据技能；不恢复强制 commit/worktree/release gate
+        adopted:
+          - packages/core/agenthub/skills/fullstack-slice-testing/SKILL.md#工作流（六步闭环） — 采用fullstack-slice-testing的测试分责、真实输入/输出与覆盖限制；不采用安装、全量扫描或release gate
+    local_changes: 适配为风险证据技能；不恢复强制 commit/worktree/release gate；2026-10-16固定258f5a2的LICENSE实际为modified Apache-2.0，含第三方hosted/embedded商业服务授权及frontend logo/copyright条件；旧MIT登记不实。抽取技能文字的适用性unknown，由来源维护者向权利owner核具体grant，当前不扩采用/分发范围，不视为已接受附加条款。
     dependency_closure: []
     update_policy: 随跨端 seam 和全链路证据合同人工比较
   - name: isolated-browser-qa
@@ -866,7 +1118,7 @@ skills:
         authorization_basis: user explicitly supplied local source and authorized migration into workflowhub
         reviewed_at: '2026-07-14'
         review_outcome: accepted
-    local_changes: 搬入完整闭包；去个人绝对路径；owner 是 isolated browser QA，consumer 是官方 build-code controlled QA seam 与 verify-code；一次 invocation 按当前 task/spec/Phase 记录各适用专业来源/版本/作用域与 service/API/DTO identity，pre/history snapshot 只读保留，blocked/unknown 保留 failure_reason，取消和 cleanup 必须可见；不新增 Runner；delete-condition 为 browser QA 路由退役或被唯一替代
+    local_changes: 搬入完整闭包；去个人绝对路径；owner 是 isolated browser QA，consumer 是官方 build-code controlled QA seam 与 verify-code；一次 invocation 按当前 task/spec/Phase 记录各适用专业来源/版本/作用域与 service/API/DTO identity，pre/history snapshot 只读保留，blocked/unknown 保留 failure_reason，取消和 cleanup 必须可见；不新增 Runner；delete-condition 为 browser QA 路由退役或被唯一替代；本地来源snapshot_sha256缺失，采集字节及原位置unknown；owner来源维护者需权利人提供原件与可核快照，当前保既有授权，不补假commit/hash。
     dependency_closure:
       - skills/isolated-browser-qa
     update_policy: 上游暂无公开 canonical skill URL；维护本地快照并人工比较来源目录
@@ -991,10 +1243,13 @@ skills:
         commit: dd089a8c752c966dee8bf0f27cb625ba193ffd9e
         commit_url: https://github.com/vercel-labs/agent-skills/commit/dd089a8c752c966dee8bf0f27cb625ba193ffd9e
         license: MIT
-        reviewed_at: '2026-08-22'
+        reviewed_at: "2026-08-22"
         review_outcome: accepted
         path: skills/react-best-practices/AGENTS.md
         skill_url: https://github.com/vercel-labs/agent-skills/blob/dd089a8c752c966dee8bf0f27cb625ba193ffd9e/skills/react-best-practices/AGENTS.md
+        adopted:
+          - skills/react-best-practices/AGENTS.md#1-eliminating-waterfalls — 从消除串行请求建议提炼组件质量检查，保留真实依赖顺序
+          - skills/react-best-practices/AGENTS.md#2-bundle-size-optimization — 从包体积建议提炼窄客户端边界与按需加载审查，收益仍须实测
     local_changes: 公开唯一组件质量入口；Vercel 只读为 React/Next 内部 lens；owner 是 UI 交付合同；delete-condition consumer 迁移后
     dependency_closure:
       - skills/frontend-component-quality

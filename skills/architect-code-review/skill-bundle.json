@@ -6,34 +6,7 @@
   ],
   "sources": [
     {
-      "url": "https://github.com/deepseek-ai/deepseek-harness",
-      "commit": "99f6f02fecdb7dff40c3fbc9470f5907c29f74ca",
-      "path": ".agents/skills/dsh-code-review/SKILL.md",
-      "license": "MIT"
-    },
-    {
-      "url": "https://github.com/deepseek-ai/deepseek-harness",
-      "commit": "99f6f02fecdb7dff40c3fbc9470f5907c29f74ca",
-      "path": ".agents/skills/dsh-find-simplifications/SKILL.md",
-      "license": "MIT"
-    },
-    {
-      "url": "https://github.com/deepseek-ai/deepseek-harness",
-      "commit": "99f6f02fecdb7dff40c3fbc9470f5907c29f74ca",
-      "path": ".agents/skills/dsh-doc-standards/SKILL.md",
-      "license": "MIT"
-    },
-    {
-      "url": "https://github.com/deepseek-ai/deepseek-harness",
-      "commit": "99f6f02fecdb7dff40c3fbc9470f5907c29f74ca",
-      "path": ".agents/skills/dsh-prose-standard/SKILL.md",
-      "license": "MIT"
-    },
-    {
-      "url": "https://github.com/deepseek-ai/deepseek-harness",
-      "commit": "99f6f02fecdb7dff40c3fbc9470f5907c29f74ca",
-      "path": ".agents/skills/dsh-trim-cot-leakage/SKILL.md",
-      "license": "MIT"
+      "path": "../catalog.yaml#skills.architect-code-review"
     }
   ]
 }

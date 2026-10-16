@@ -162,7 +162,8 @@ discover files. Missing input/callback fails loud.
 
 ## 固定来源与本地偏离
 
-参考 [mattpocock/skills](https://github.com/mattpocock/skills) 固定 commit `b0618bc436ad893b3c5e84e55fba86586d34a404` 的 `skills/productivity/writing-for-agents/SKILL.md`、`SKILL-MECHANICS.md` 与 docs，提炼为 WR001 Q01–Q12；叙事参考 `skills/engineering/to-spec/SKILL.md`。本地保留当前完整 spec 模板、Appendix A 独占验收、canonical IDs、PFACT 四状态互斥、FR 来源映射、十维状态与全局设计/Phase 职责。来源是判据，不是已经改善的证据。
+完整来源权威：[catalog条目](../catalog.yaml#skills.spec-specify)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。
+来源线索：Matt writing-for-agents、SKILL-MECHANICS与to-spec；WR001 Q01–Q12及用户叙事的逐源章节回catalog。本地保留当前完整 spec 模板、Appendix A 独占验收、canonical IDs、PFACT 四状态互斥、FR 来源映射、十维状态与全局设计/Phase 职责。来源是判据，不是已经改善的证据。
 
 本地不采用外部 tracker、ready-for-agent 标签、setup/宿主 Skill 依赖或另根材料；上游「不写具体路径」不覆盖本地经实读的工程锚/精确写集，User Stories 细节仍由产品需求 owner 负责。方法接收调用者材料与允许写目标，缺源/不安全目标/未知 profile 明确报错，不绑定任务路径或账号。迭代时核这些固定子文件的更新与更优候选，写源差与本地偏离后决定采用，不自动追 HEAD。
 

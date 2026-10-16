@@ -950,12 +950,12 @@
       "destination": "runtime/schemas/skill-bundle.schema.json",
       "status": "retain",
       "role": "production",
-      "responsibility": "skill-bundle.json 的纯路径文件清单（技能可搬运打包：26 个 bundle NARROW、13 个已是纯路径 SURVIVOR）",
-      "owner": "B5/P6 / MT-5-027",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
+      "responsibility": "技能bundle文件清单与sources三型子定义：GitHub采用、本地授权、非权威catalog指针",
+      "owner": "现有bundle schema owner；N2 P3维护sources.items",
+      "consumer": "现有bundle校验/便携作者；N2 P8 checkSkillConsistency消费同一properties.sources.items（P8尚未接线）",
       "module_consumers": [],
       "named_data_readers": [],
-      "delete_condition": "remove portable_workflows schema support when release identity is replaced by an approved equivalent",
+      "delete_condition": "仅当经独立审查的替代schema已承接全部bundle及来源检查consumer后删除；不增独立类型层",
       "retention_basis": "MT-5-027 / NARROW"
     },
     {

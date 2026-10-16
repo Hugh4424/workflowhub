@@ -92,6 +92,7 @@ Return the actual spec/Phase paths and the design/verification limits. Read curr
 
 ## 固定来源与本地偏离
 
-参考 [mattpocock/skills](https://github.com/mattpocock/skills) 固定 commit `b0618bc436ad893b3c5e84e55fba86586d34a404`：`skills/engineering/to-tickets/SKILL.md` 的 tracer bullet/blocking/prefactor/expand–contract、`skills/engineering/tdd/SKILL.md` 的先确认接缝与独立期望/纵切循环、`skills/engineering/codebase-design/SKILL.md` 的窄接口与可测试接缝；写作源为 `skills/productivity/writing-for-agents/SKILL.md` 与 `SKILL-MECHANICS.md`。
+完整来源权威：[catalog条目](../catalog.yaml#skills.spec-plan)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。
+来源线索：Spec Kit plan、Superpowers writing-plans、Matt to-tickets/tdd/codebase-design与writing-for-agents。采用tracer bullet、依赖分类、纵切与可测试窄接口；逐源章节回catalog。
 
 本地保全独立 Phase、全局递增 Task、单 spec 设计、冻结 RED/GREEN、逐字边界实读与全部失败/覆盖/回退条件；只吸收方法，不采用外部 tracker、ready-for-agent 标签、.scratch 票文件或宿主 setup/Skill 硬依赖。索引原职责由本技能承接，旧调用与附件按各自 owner 迁完再删。迭代时核上述固定子文件的更新与更优候选，记录源差和本地偏离后决定采用，不自动追 HEAD。输入是实际项目材料和允许写目标，缺宿主能力返回 unavailable，不绑定本任务路径/账号。

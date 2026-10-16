@@ -78,3 +78,5 @@ spec-prd 是规划 prd.md 的唯一正文作者。build-prd 协调条件工作�
 创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；保原步骤、条件、权限、失败强度和受保护字面，缺源如实 unavailable，不复制规范。
 
 User Stories 吸收 mattpocock/skills 固定 commit `b0618bc436ad893b3c5e84e55fba86586d34a404` 的 `skills/engineering/to-spec/SKILL.md`：完整角色/诉求/收益。保本地单 PRD owner、两步内容及调用者限制、地图/设计/详情真实答复、16字段卡与只读母兄边界；不采用 tracker/setup 或发布机制。更新时核固定子文件及本地偏离，不自动追 HEAD。
+
+完整来源权威：[catalog条目](../catalog.yaml#skills.spec-prd)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。来源：本仓build-prd/prd-template.md与Matt skills/engineering/to-spec/SKILL.md#user-stories。

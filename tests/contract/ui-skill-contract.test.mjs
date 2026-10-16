@@ -199,6 +199,10 @@ test("UI support skills declare their real stage consumers without a parallel UI
       license: "MIT",
       reviewed_at: "2026-08-22",
       review_outcome: "accepted",
+      adopted: [
+        "skills/react-best-practices/AGENTS.md#1-eliminating-waterfalls — 从消除串行请求建议提炼组件质量检查，保留真实依赖顺序",
+        "skills/react-best-practices/AGENTS.md#2-bundle-size-optimization — 从包体积建议提炼窄客户端边界与按需加载审查，收益仍须实测"
+      ],
       path: "skills/react-best-practices/AGENTS.md",
       skill_url: "https://github.com/vercel-labs/agent-skills/blob/dd089a8c752c966dee8bf0f27cb625ba193ffd9e/skills/react-best-practices/AGENTS.md",
     },

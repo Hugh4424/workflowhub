@@ -10,10 +10,7 @@
   ],
   "sources": [
     {
-      "url": "https://github.com/vercel-labs/agent-skills",
-      "commit": "dd089a8c752c966dee8bf0f27cb625ba193ffd9e",
-      "path": "skills/react-best-practices/AGENTS.md",
-      "license": "MIT"
+      "path": "../catalog.yaml#skills.frontend-component-quality"
     }
   ]
 }

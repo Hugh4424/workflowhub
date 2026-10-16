@@ -15,12 +15,7 @@
   ],
   "sources": [
     {
-      "kind": "user-provided-local-source",
-      "path": "isolated-browser-qa",
-      "license": "user-owned",
-      "authorization_basis": "user explicitly supplied local source and authorized migration into workflowhub",
-      "reviewed_at": "2026-07-14",
-      "review_outcome": "accepted"
+      "path": "../catalog.yaml#skills.isolated-browser-qa"
     }
   ]
 }

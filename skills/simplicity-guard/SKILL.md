@@ -102,6 +102,7 @@ review 的删除类 finding 措辞；不新建字段、模板、文件或第二�
 
 ## 来源
 
+完整来源权威：[catalog条目](../catalog.yaml#skills.simplicity-guard)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。
 - ponytail 七阶梯 YAGNI 法（压缩为四阶梯）
 - andrej-karpathy-skills 三条纪律（并入 P3 写法纪律）
 - 需要核四阶梯术语时，读取本文件「四阶梯决策树」的 P0–P3 唯一定义。

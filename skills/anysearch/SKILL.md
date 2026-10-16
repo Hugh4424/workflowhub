@@ -191,7 +191,8 @@ Once the active CLI is determined, all tool calls use the same subcommand syntax
 
 ## Fixed source and local adaptation
 
-来源：[anysearch-ai/anysearch-skill](https://github.com/anysearch-ai/anysearch-skill)，固定 commit `db3d76e5597aec7261257be5322dd211c9d9bb87` 的 `SKILL.md`（Apache-2.0）。本地保原 CLI、vertical/required params、匿名与保存 key 确认，补当前调用者批准范围和实际能力边界；不把供应方隐私声称当独立验证。迭代时核固定正文和 bundled CLI 的真实更新与本地偏离，不自动追 main/latest。
+完整来源权威：[catalog条目](../catalog.yaml#skills.anysearch)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。
+固定来源及许可缺口见catalog；现有Apache-2.0声明未由固定版本grant核实。本地保原 CLI、vertical/required params、匿名与保存 key 确认，补当前调用者批准范围和实际能力边界；不把供应方隐私声称当独立验证。迭代时核固定正文和 bundled CLI 的真实更新与本地偏离，不自动追 main/latest。
 
 ## 写作规范
 
