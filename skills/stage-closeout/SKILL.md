@@ -1,7 +1,6 @@
 ---
 name: stage-closeout
 description: 阶段已交付或用户要求独立收尾时，统一提交、PR、合并、推送、归档和工作区清理；先委派图更新，逐动作核已有授权，最终删除前确认一次真实范围。
-version: 1.0.0
 ---
 
 # Stage Closeout

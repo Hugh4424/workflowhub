@@ -83,7 +83,11 @@ function assertFrontmatter(skillName, content) {
   assert.match(content, /^---\n[\s\S]*?\n---\n/, `${skillName}: YAML frontmatter is required`);
   assert.match(content, new RegExp(`name:\\s*${skillName.replaceAll("-", "\\-")}`));
   assert.match(content, /description:\s*.+/);
-  assert.match(content, /version:\s*["']?\d+\.\d+\.\d+["']?/);
+  const registrations = yaml.load(read("skills/catalog.yaml")).skills.filter(entry => entry.name === skillName);
+  assert.equal(registrations.length, 1, `${skillName}: catalog registration must be unique`);
+  assert.match(registrations[0].local_version ?? "", /^\d+\.\d+\.\d+$/, `${skillName}: catalog version must be semver`);
+  const frontmatter = yaml.load(content.match(/^---\n([\s\S]*?)\n---\n/)[1]);
+  assert.equal(Object.hasOwn(frontmatter, "version"), false, `${skillName}: header version duplicates catalog`);
 }
 
 function loadBundle(skillName, bundlePath) {

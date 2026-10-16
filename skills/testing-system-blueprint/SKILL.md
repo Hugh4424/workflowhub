@@ -1,7 +1,6 @@
 ---
 name: testing-system-blueprint
 description: 在 build-plan 为每个 Task/Phase 生成分层测试和证据策略。
-version: 1.0.0
 ---
 
 # Testing System Blueprint

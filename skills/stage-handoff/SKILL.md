@@ -1,7 +1,6 @@
 ---
 name: stage-handoff
 description: 每个阶段末写当前、可复制的人读交接，不作工作门，也不依赖可选复盘。
-version: 1.0.0
 ---
 
 # stage-handoff

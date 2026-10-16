@@ -1,7 +1,6 @@
 ---
 name: knowledge-graph
 description: 阶段开工调研、模块影响定位或收口更新图时，查询现有知识图谱并回原文；无图时建代码图，文档更新先核缓存与费用；工具或图不可用时明确降级。
-version: 1.0.0
 ---
 
 # Knowledge Graph

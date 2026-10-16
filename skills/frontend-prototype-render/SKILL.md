@@ -1,7 +1,6 @@
 ---
 name: frontend-prototype-render
 description: Render one task-scoped UI prototype from real component inputs and retain preview evidence before the user confirms it.
-version: 1.0.0
 ---
 
 # Frontend Prototype Render

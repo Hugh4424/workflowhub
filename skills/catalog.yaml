@@ -1,6 +1,11 @@
 schema_version: 2
 last_reviewed_at: '2026-07-14'
 projects:
+  vercel-agent-skills:
+    github_url: https://github.com/vercel-labs/agent-skills
+    commit: dd089a8c752c966dee8bf0f27cb625ba193ffd9e
+    commit_url: https://github.com/vercel-labs/agent-skills/commit/dd089a8c752c966dee8bf0f27cb625ba193ffd9e
+    license: MIT
   addy-agent-skills:
     github_url: https://github.com/addyosmani/agent-skills
     commit: aeac41d4d005999432bb7312f7ff06383a91d59d
@@ -257,7 +262,7 @@ skills:
     metrics_enabled: true
     purpose: 对 intake direction 冻结材料执行四角度纯盲审
     design_idea: wh-review 唯一 provider owner；lens 不提问、不持有 transport
-    used_by_stages: []
+    used_by_stages: [make-decision]
     upstream: []
     local_changes: 裁为 wh-review direction 纯 lens；禁止候选方案、交互确认和第二 provider 路径
     dependency_closure:
@@ -271,7 +276,7 @@ skills:
     metrics_enabled: true
     purpose: 审查方案是否遵守四阶梯最小路径
     design_idea: 只读 lens 识别范围膨胀并优先删除或复用
-    used_by_stages: [build-plan]
+    used_by_stages: [build-code, build-plan, build-prd, make-decision]
     upstream: []
     local_changes: workflowhub 原生 review-only lens；不参与 stage 生成
     dependency_closure:
@@ -308,7 +313,6 @@ skills:
       - skills/spec-prd
     update_policy: 随 PRD 模板、两步内容合同和 build-prd consumer 变更审查
   - name: spec-research
-    path: skills/spec-research/SKILL.md
     local_version: 1.0.0
     last_reviewed_at: '2026-07-14'
     status: retired
@@ -402,7 +406,6 @@ skills:
     dependency_closure: []
     update_policy: 比较 Spec Kit 与 Superpowers planning 变更，只吸收不重复编排的规则
   - name: spec-tasks
-    path: skills/spec-tasks/SKILL.md
     local_version: 2.2.0
     last_reviewed_at: '2026-07-14'
     status: retired
@@ -569,7 +572,7 @@ skills:
     metrics_enabled: true
     purpose: 产品方向审查 lens
     design_idea: premise、scope、leverage、alternatives、delivery risk
-    used_by_stages: []
+    used_by_stages: [make-decision]
     upstream:
       - github_url: https://github.com/garrytan/gstack
         commit: 7c9df1c568a9ea745508f679a329332b2c338063
@@ -636,7 +639,7 @@ skills:
     metrics_enabled: true
     purpose: 正确性、范围、证据和未决风险通用 lens
     design_idea: 独立 report-only review
-    used_by_stages: []
+    used_by_stages: [build-code, build-plan, build-prd, make-decision, verify-code]
     upstream:
       - github_url: https://github.com/garrytan/gstack
         commit: 7c9df1c568a9ea745508f679a329332b2c338063
@@ -667,7 +670,6 @@ skills:
       - skills/resolving-merge-conflicts
     update_policy: 随 verify-code close 合同变更审查
   - name: debate
-    path: skills/debate/SKILL.md
     local_version: 1.0.0
     last_reviewed_at: '2026-07-14'
     status: retired
@@ -1020,7 +1022,7 @@ capability_decisions:
     design_idea: in-scope/out-of-scope 与风险词分档内联到现有 stage
     used_by_stages:
       - make-decision
-    local_path: workflows/make-decision/SKILL.md; workflows/build-spec/SKILL.md
+    local_path: workflows/make-decision/SKILL.md; workflows/build-plan/SKILL.md
     upstream:
       - github_url: https://github.com/Hugh4424/AgentHub
         commit: 258f5a2548fa8cc15325c6aa18dd107c1fc497b9
@@ -1039,7 +1041,7 @@ capability_decisions:
     design_idea: 先见红、最小绿、fresh evidence
     used_by_stages:
       - build-code
-    local_path: workflows/build-code/SKILL.md; core/capture.mjs; skills/test-strategy/SKILL.md
+    local_path: workflows/build-code/SKILL.md; runtime/interface/run-command.mjs; skills/backend-testing/SKILL.md
     upstream:
       - github_url: https://github.com/obra/superpowers
         commit: d884ae04edebef577e82ff7c4e143debd0bbec99

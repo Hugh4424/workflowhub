@@ -1,7 +1,6 @@
 ---
 name: frontend-component-quality
 description: 为 UI phase 维护组件、状态、ViewModel 与 CSS/token 的可复核质量地图。
-version: 1.0.0
 ---
 
 # Frontend Component Quality

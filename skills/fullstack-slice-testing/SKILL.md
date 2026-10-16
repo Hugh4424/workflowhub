@@ -1,7 +1,6 @@
 ---
 name: fullstack-slice-testing
 description: 在 build-code 看到真实跨边界改动后执行最小真实链路测试；build-plan 只记录预判的 skill，不调用本技能。
-version: 1.0.0
 ---
 
 # Fullstack Slice Testing

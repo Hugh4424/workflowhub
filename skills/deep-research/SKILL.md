@@ -1,7 +1,6 @@
 ---
 name: deep-research
 description: 调研方向问题形成可复核报告；已收敛方向的点状规划疑问返回轻量内存结果。
-version: 1.0.0
 ---
 
 # Deep Research

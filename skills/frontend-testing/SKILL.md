@@ -1,7 +1,6 @@
 ---
 name: frontend-testing
 description: 在 build-code 看到真实 UI 改动后执行状态和交互测试；build-plan 只记录预判的 skill，不调用本技能。
-version: 1.0.0
 ---
 
 # Frontend Testing

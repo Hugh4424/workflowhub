@@ -1,7 +1,6 @@
 ---
 name: spec-prd
 description: 根据已确认方向分两步形成可维护的任务组 PRD，展示任务地图与详情稿并保留真实用户答复。
-version: 1.0.0
 ---
 
 # Spec PRD

@@ -1,7 +1,6 @@
 ---
 name: backend-testing
 description: 在 build-code 看到真实后端改动后执行风险导向测试；build-plan 只记录预判的 skill，不调用本技能。
-version: 1.0.0
 ---
 
 # Backend Testing

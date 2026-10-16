@@ -1,7 +1,6 @@
 ---
 name: wh-review
 description: 文档审查保留真实发现与失败；代码调用读取 Long-review 等待方法，OCR 不可用如实记录，同源补充轴独立执行。
-version: 4.1.0
 ---
 
 # wh-review

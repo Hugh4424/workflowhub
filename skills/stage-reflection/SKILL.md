@@ -1,7 +1,6 @@
 ---
 name: stage-reflection
 description: 阶段末有过程问题时可选复盘，提出有源候选供用户选择；后继任务可读项目根未解待办，不生成质量裁决。
-version: 1.0.0
 ---
 
 # stage-reflection

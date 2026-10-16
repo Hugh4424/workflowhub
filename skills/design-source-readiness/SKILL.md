@@ -1,7 +1,6 @@
 ---
 name: design-source-readiness
 description: 从本动作适用的项目专业来源派生 Screen Read Map，按类保留引用、缺项与人工确认事实。
-version: 1.0.0
 ---
 
 # Design Source Readiness

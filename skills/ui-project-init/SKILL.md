@@ -1,7 +1,6 @@
 ---
 name: ui-project-init
 description: UI 规划需定位专业来源时，按新项目、已有可信规范或已有实现接线原专业 owner，显露各类缺口。
-version: 2.0.0
 ---
 
 # UI Project Init
