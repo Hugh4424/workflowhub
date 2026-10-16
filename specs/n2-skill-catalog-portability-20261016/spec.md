@@ -32,15 +32,17 @@ R 与 U 的原义、来源地址、真实用户答复均由 decision-log 原节�
 | R-001 | D-003、D-004、D-022、D-023、D-027 | 003、007 | current / SCN-003、006 | 原始需求 §1 第 8 项 |
 | R-002 | D-003、D-010、D-023 | 003、008 | current / SCN-003、007 | 父 T11 开头质询 |
 | R-003 | D-007、D-019、D-020、D-021、D-023 | 001、002、003 | current / SCN-001、002、003 | 父 PRD N2 FR-T2-001 |
-| R-004 | D-002、D-006、D-008、D-026、D-031 | 004、006、012 | current / SCN-004、005 | 父 PRD N2 FR-T2-002；ADR 0045 |
+| R-004 | D-002、D-006、D-008、D-026、D-031 | 004、005、006、012 | current / SCN-004、005 | 父 PRD N2 FR-T2-002；ADR 0045 |
 | R-005 | D-003、D-016、D-022、D-024 | 003 | current / SCN-003 | 父 PRD N2 FR-T2-003；ADR 0046 |
 | R-006 | D-004、D-027 | 007 | current / SCN-006 | 父 PRD N2 FR-T2-004 |
 | R-007 | D-013、D-016、D-028 | 003、008 | current / SCN-003、007 | 父 decision-log AC-007 |
-| R-008 | D-002、D-003、D-004、D-022 | 003、006、007、011 | current（8a/b/c、5b 的 N2 形态）；其余 non-goal / SCN-003、005、006、007 | 父 UNITS 8a/b/c、5b |
+| R-008 | D-002、D-003、D-004、D-022 | 003、004、005、006、007、011 | current（8a/b/c、5b 的 N2 形态）；其余 non-goal / SCN-003、004、005、006、007 | 父 UNITS 8a/b/c、5b |
 | R-009 | D-005、D-010、D-028 | 001、002、003、008 | current / SCN-001…007 | 父 PRD 54 项采用表 N2 八行 |
 | R-010 | D-010、D-029 | 001、002、003、005、008 | current / SCN-001…004、007 | 父 PRD 17 来源表与 E-2/E-10 |
 | R-011 | D-014、D-025、D-032 | 005、009、011 | current；具名风险 / SCN-004、007 | 父 PRD G1；U-009 |
 | R-012、U-001…U-009 | D-001、D-009、D-011、D-012、D-015、D-017、D-018、D-030、D-031、D-032 | 001…012 | current / SCN-001…007 | 当前 decision-log 需求变更记录 |
+
+R-012与U-001…U-009为同一会话指令来源组的联合映射：FR/AC引用适用U，或经同号FR引用U，即沿该成员回原文；不表示每个U均直连全部十二项。各Phase的Source只列本任务直接采用的来源子集，完整来源沿本表和同号FR/AC追溯，避免复制整组来源。
 
 每个表内数字指同号 `FR-N2-NNN` 与 `AC-N2-NNN`；例如 003 为 `FR-N2-003` / `AC-N2-003`。原 `AC-001…AC-012` 与本规格同序一一映射，仅增加 canonical DOMAIN，原编号保 provenance。全部既有 D-001…D-032 均在本表或其来源行具名，不新设要求分母。R-008 中各实际 owner 的 54 项整体生效与最终全量复核按第 10、12 节交接。
 
@@ -123,24 +125,24 @@ R 与 U 的原义、来源地址、真实用户答复均由 decision-log 原节�
 
 机器清单承接登记事实，人读索引引导人找到正文。两者分工消除状态副本；名字/版本只留机器权威，文件头仍带可读标识。
 
-- **FR-N2-001**：修真实活动路径、退役语义、漏登项目和文件头冲突；保留历史登记及其理由。来源 R-003、R-009、U-008；PFACT-001/002；SCN-001；AC-N2-001。
-- **FR-N2-002**：人读索引只承接技能、适用场景与正文入口，旧 docs 副本退指针；以真实目标处理语义冲突。来源 R-003、R-010、U-008；PFACT-001/002；SCN-002；AC-N2-002。
+- **FR-N2-001**：修真实活动路径、退役语义、漏登项目和文件头冲突；逐技能将`used_by_stages`与真实workflow/plan消费者对账并处置声明漂移，保既有reports/failures与退出语义；保留历史登记及其理由。来源 R-003、R-009、R-010、U-008；PFACT-001/002；SCN-001；AC-N2-001。
+- **FR-N2-002**：人读索引只承接技能、适用场景与正文入口，旧 docs 副本退指针；以真实目标处理语义冲突。来源 R-003、R-009、R-010、U-008；PFACT-001/002；SCN-002；AC-N2-002。
 
 ### 来源、引用与搬运
 
 每条采用先可定位，再区分证明到哪里；来源缺口不能通过格式一致或 hash 字样掩盖。单技能搬运允许显式同仓依赖，因此依赖登记先改真，再检查副本。
 
-- **FR-N2-003**：完整来源事实归 catalog，便携小卡标明非权威；两型来源、采用描述、许可、取回、vendored 指纹及两个具名无源adapted矛盾按当前决定处理。来源 R-001、R-002、R-005、R-007、R-008、U-008；PFACT-001/003/004；SCN-003；AC-N2-003。
-- **FR-N2-004**：正文区分本仓相对路径与外部“来源仓＋技能名”，修已识别坏引用。来源 R-004、R-008；PFACT-001/002；SCN-004；AC-N2-004。
-- **FR-N2-005**：现有依赖目录路径列表与逐条确认的正文引用相符，自引用去除，空依赖留空。来源 R-004、R-010、U-006/008；PFACT-001/002；SCN-004；AC-N2-005。
+- **FR-N2-003**：完整来源事实归 catalog，便携小卡标明非权威；两型来源、采用描述、许可、取回、vendored 指纹及两个具名无源adapted矛盾按当前决定处理。来源 R-001、R-002、R-003、R-005、R-007、R-008、R-009、R-010、U-008；PFACT-001/003/004；SCN-003；AC-N2-003。
+- **FR-N2-004**：正文区分本仓相对路径与外部“来源仓＋技能名”，修已识别坏引用。来源 R-004、R-008、U-008；PFACT-001/002；SCN-004；AC-N2-004。
+- **FR-N2-005**：现有依赖目录路径列表与逐条确认的正文引用相符，自引用去除，空依赖留空。来源 R-004、R-008、R-010、R-011、U-006/008；PFACT-001/002；SCN-004；AC-N2-005。
 - **FR-N2-006**：三个具名技能各自脱离仓根，按同一个单技能判据做真实引用读回。来源 R-004、R-008、U-008；PFACT-001/002；SCN-005；AC-N2-006。
-- **FR-N2-007**：在来源登记处提供默认不跑的一次性只读上游核对方法，首次坐标基线和失败如实保留。来源 R-001、R-006、R-008；PFACT-001/004；SCN-006；AC-N2-007。
+- **FR-N2-007**：在来源登记处提供默认不跑的一次性只读上游核对方法，首次坐标基线和失败如实保留。来源 R-001、R-006、R-008、U-008；PFACT-001/004；SCN-006；AC-N2-007。
 
 ### 采用、验证与效果
 
 采用在真实消费行为首次发生时交付，末段只回读。字节减少与主 Agent 效率分别可证，不能相互替代。
 
-- **FR-N2-008**：本卡八项采用与补充目录职责在既有消费位置落地，各有能失败的反例；运行时/工具只加内容规则与校验判据，保现有报告和退出语义。来源 R-009、R-010、U-008；PFACT-001/003；SCN-001…007；AC-N2-008。
+- **FR-N2-008**：本卡八项采用与补充目录职责在既有消费位置落地，各有能失败的反例；运行时/工具只加内容规则与校验判据，保现有报告和退出语义。来源 R-002、R-007、R-009、R-010、U-008；PFACT-001/003；SCN-001…007；AC-N2-008。
 - **FR-N2-009**：按选定口径与全口径分别现场复算，列具名删除/合并对象，保留 D-032 风险。来源 R-011、U-009；PFACT-001/006；SCN-007；AC-N2-009。
 - **FR-N2-010**：各行为段有针对性检查、独立审查及提交；现有已知红不改绿，缺质量真实记缺。来源 R-012、U-001/003/005；PFACT-001/002；SCN-007；AC-N2-010。
 - **FR-N2-011**：成本结论消费 N1 完整结果并进行同任务同命令同条件同预算对照；未具输入保未知。来源 R-008、R-011、U-003；PFACT-005；SCN-007；AC-N2-011。
@@ -327,7 +329,7 @@ safe-write 现 API 仅 `(root, relPath, bytes)`，底层路径/符号链接/原�
 下列每组只授权指定文件与节，是 exact 写集；没有列入的技能不写。
 
 - **P1文件头**：`skills/<name>/SKILL.md` 的重复version：anysearch、backend-testing、deep-research、design-source-readiness、frontend-component-quality、frontend-prototype-render、frontend-testing、fullstack-slice-testing、knowledge-graph、resolving-merge-conflicts、spec-prd、stage-closeout、stage-handoff、stage-reflection、testing-system-blueprint、ui-project-init、wh-review；另third-review仅纠正头部name。不改description调用策略。
-- **P3来源段**：`skills/<name>/SKILL.md` 的来源段/来源指针：anysearch、architect-code-review、backend-testing、diagnosing-bugs、frontend-component-quality、frontend-testing、fullstack-slice-testing、grill-with-docs、isolated-browser-qa、plan-ceo-review、plan-design-review、plan-eng-review、review、spec-clarify、spec-plan、spec-specify、test-routing-advisor、testing-system-blueprint、deep-research、spec-prd、stage-reflection、talk-with-zhipeng、decision-log、simplicity-guard、knowledge-graph、stage-closeout、wh-review、ui-project-init。前十八个技能同Phase修改`skills/<name>/skill-bundle.json`的非空sources为最小指针；五个原空sources bundle维持不写。
+- **P3来源段**：`skills/<name>/SKILL.md` 的来源段/来源指针：anysearch、architect-code-review、backend-testing、diagnosing-bugs、frontend-component-quality、frontend-testing、fullstack-slice-testing、grill-with-docs、isolated-browser-qa、plan-ceo-review、plan-design-review、plan-eng-review、review、spec-clarify、spec-plan、spec-specify、test-routing-advisor、testing-system-blueprint、deep-research、spec-prd、stage-reflection、talk-with-zhipeng、decision-log、simplicity-guard、knowledge-graph、stage-closeout、wh-review、ui-project-init。上述28个技能均有bundle；前十八个技能同Phase修改非空sources为最小指针，其余十个当前为九个无sources键、ui-project-init唯一sources空数组，均维持不写且不补键。
 - **P4引用/依赖段**：`skills/<name>/SKILL.md` 的真实依赖声明、本仓相对路径与外部引用：anysearch、architect-code-review、backend-testing、decision-log、deep-research、design-source-readiness、diagnosing-bugs、frontend-component-quality、frontend-prototype-render、frontend-testing、fullstack-slice-testing、grill-with-docs、intake-decision-review、isolated-browser-qa、knowledge-graph、plan-ceo-review、plan-design-review、plan-eng-review、review、simplicity-guard、spec-analyze、spec-clarify、spec-plan、spec-prd、spec-specify、stage-closeout、stage-handoff、stage-reflection、talk-with-zhipeng、test-routing-advisor、testing-system-blueprint、third-review、ui-project-init、wh-review、workflowhub-multica-sync。八处已识别裸外部引用落ui-project-init/stage-reflection；其余逐条对账，WR001规范正文不重写。
 
 P1→P3→P4对重叠正文严格串行，只写对应节；ui-skill-contract.test.mjs由P1版本TCR后P3来源TCR串行持笔，P4 closeout测试按已送审TCR保持原保护修改；逐TCR coverage未证，不改写成批准。bundle保其payload与非来源契约字段。P5/P10/P11/P12仓库写集none，P6仅catalog说明；命令/外置事实沿现producer，不是新增材料写集。
@@ -344,7 +346,7 @@ P1→P3→P4对重叠正文严格串行，只写对应节；ui-skill-contract.te
 | addyosmani::using-agent-skills | P2/T002；P8保报告 | reuse-registry场景入口；checker.reports | ORACLE-N2-HUMAN/ORACLE-N2-REPORTONLY；三测试技能prompt |
 | pstack::setup-pstack | P1/T001、P3/T003；P9登记政策 | catalog路径/consumer/used_by_stages；test-asset-registry.retirement_policy | ORACLE-N2-CATALOG/ORACLE-N2-BOUNDARY；写前真读 |
 | pstack::poteto-help | P2/T002 | reuse-registry抬头、旧docs指针 | ORACLE-N2-HUMAN；按入口读目标 |
-| pstack::principle-make-operations-idempotent | P7/T007 | task-bootstrap.bootstrapTask/createFileOnce、safe-write.publish | ORACLE-N2-SAFETY/ORACLE-N2-BOUNDARY；重复/半失败调用 |
+| pstack::principle-make-operations-idempotent | P7/T007；P9只承接登记政策 | task-bootstrap.bootstrapTask/createFileOnce、safe-write.publish | ORACLE-N2-SAFETY在P7首验重复/半失败/内容一致；BOUNDARY只验P9登记政策，不代操作证据 |
 | pstack::principle-type-system-discipline | P3/T003；P8保全 | skill-bundle.schema.sources.oneOf；checker来源内容 | ORACLE-N2-SOURCES/ORACLE-N2-REPORTONLY；真实schema/函数 |
 | pstack::principle-boundary-discipline | P9/T009 | runtime-facade两符号、AGENTS登记义务、CLAUDE薄核心窄契约 | ORACLE-N2-BOUNDARY；真实调用/维护动作 |
 | pstack::principle-experience-first | P9/T009 | AGENTS真实consumer邻接 | ORACLE-N2-BOUNDARY；具名使用动作 |
@@ -446,12 +448,12 @@ P10本次范围补齐前的reader观察原件为`task:quality/tests/2026-10-16-0
 
 状态：`planned`；原始编号仅 provenance，不新增验收项。
 
-来源：原 AC-001、R-003、U-008；FR-N2-001；SCN-001；oracle ORACLE-N2-CATALOG、HOST-INDEPENDENCE；P1/T001。
+来源：原 AC-001、R-003、R-009、R-010、U-008；FR-N2-001；SCN-001；oracle ORACLE-N2-CATALOG、HOST-INDEPENDENCE；P1/T001。
 
-验证：逐条实读活动路径、退役目录、历史能力取舍及项目登记；修前修后各读一次；读取技能文件头与 catalog 对照，运行修复后的宿主闭包读取。
-通过：坏路径、死路径与不存在技能记录逐项修正；活动路径可达，退役条目去失效路径但保名称、理由、来源，漏登补齐；两块无程序消费者登记保留且不新增消费者。catalog 为名字/版本唯一权威，文件头保可读标识、去重复 version，并修正名字不符。
-失败：任一活动路径仍不存在、历史理由被删、退役记录被整条删、漏项未补、预填缺陷数冒实读；头部仍冲突或去掉可读名字；测试仍以 undefined 崩溃而报告通过。
-证据：具名修前/修后路径与字段读回、目标测试原始输出；旧 baseline 原件引用。
+验证：逐条实读活动路径、退役目录、历史能力取舍及项目登记；修前修后各读一次；读取技能文件头与 catalog 对照，运行修复后的宿主闭包读取。 依父FR-T2-001继承的AC-T2-3，P1逐技能对账`used_by_stages`与当前workflow/plan实际使用，P8消费其处置原件并以受控漂移复核既有报告/退出语义；具体步骤各归对应Phase。
+通过：坏路径、死路径与不存在技能记录逐项修正；活动路径可达，退役条目去失效路径但保名称、理由、来源，漏登补齐；两块无程序消费者登记保留且不新增消费者。catalog 为名字/版本唯一权威，文件头保可读标识、去重复 version，并修正名字不符。 阶段使用声明与真实消费者逐项相符，差异有具名改前/改后；接线归属仍有争议时交原owner并保该项未完成，不以展示报告代替漂移收敛。
+失败：任一活动路径仍不存在、历史理由被删、退役记录被整条删、漏项未补、预填缺陷数冒实读；头部仍冲突或去掉可读名字；阶段使用声明仍漂移、仅展示reports未处置、把历史4条当当前分母、改变报告/退出语义；测试仍以 undefined 崩溃而报告通过。
+证据：具名修前/修后路径与字段读回、逐技能阶段使用声明/真实consumer处置原件、P8报告与退出语义对照、目标测试原始输出；旧 baseline 原件引用。
 
 ### AC-N2-002：唯一人读索引仍可作入口
 
@@ -459,7 +461,7 @@ P10本次范围补齐前的reader观察原件为`task:quality/tests/2026-10-16-0
 
 状态：`planned`；原始编号仅 provenance，不新增验收项。
 
-来源：原 AC-002、R-003、R-009/010；FR-N2-002；SCN-002；oracle ORACLE-N2-HUMAN；P2/T002。
+来源：原 AC-002、R-003、R-009、R-010；FR-N2-002；SCN-002；oracle ORACLE-N2-HUMAN；P2/T002。
 
 验证：从索引按任务定位技能并读目标正文；逐条比 catalog，核旧 docs 副本；三类测试技能各用正负 prompt，保模板相似的对照案例。
 通过：索引只讲技能、适用场景、正文入口，不再抄状态/版本/来源；实测十三处冲突逐条消除（唯一数量出处为 decision-log D-021）；docs 旧副本退为指针；冲突说明明确登记信 catalog、语义信目标、谁改哪处。三类测试技能任务边界能区分，模板相似不冒语义冲突，不硬套英文阈值。
@@ -472,7 +474,7 @@ P10本次范围补齐前的reader观察原件为`task:quality/tests/2026-10-16-0
 
 状态：`planned`；原始编号仅 provenance，不新增验收项。
 
-来源：原 AC-003、R-001/002/005/007/008、U-008；FR-N2-003；SCN-003；oracle ORACLE-N2-SOURCES；P3/T003。
+来源：原 AC-003、R-001、R-002、R-003、R-005、R-007、R-008、R-009、R-010、U-008；FR-N2-003；SCN-003；oracle ORACLE-N2-SOURCES；P3/T003。
 
 验证：逐采用项定位来源与采用内容；合并前逐字段比 catalog upstream/bundle sources；通过真实 schema consumer 验合法与非法组合；核 notice、LICENSE、vendored 对象与可复算事实。
 通过：常规外部来源能定位“来源仓＋相对路径＋稳定章节＋采用简述＋许可＋取回坐标”，无稳定章节才补行段；本地来源保授权依据与取回事实，缺项各有 owner/下一步。完整登记仅在 catalog，bundle 退最小便携小卡且人读流程标非权威。两个无源adapted项按实现设计中的原始登记证据修为native并由独立者回读，不通过测试豁免绕过；adopted/content_sha256 字段首次建立；仅实际 vendored 对象另留一次性可复算事实，权威字段本卡为 null；默认机器复算与真实回填归 N10，如实标未生效；不可复算旧 hash 删除或升级可复算对象。核不到许可/commit按具体缺口保留，补登 notice 以实际读许可为前置。
@@ -485,7 +487,7 @@ P10本次范围补齐前的reader观察原件为`task:quality/tests/2026-10-16-0
 
 状态：`planned`；原始编号仅 provenance，不新增验收项。
 
-来源：原 AC-004、R-004/008；FR-N2-004；SCN-004；oracle ORACLE-N2-DEPENDENCIES；P4/T004。
+来源：原 AC-004、R-004、R-008、U-008；FR-N2-004；SCN-004；oracle ORACLE-N2-DEPENDENCIES；P4/T004。
 
 验证：逐条改正基线识别的八处坏引用后复读同段；确认来源仓与真实目标。
 通过：八处按真实来源改正；本仓技能写仓内相对路径，外部源写来源仓＋技能名，规则在既有文档内可发现；来源不明保缺口。
@@ -498,7 +500,7 @@ P10本次范围补齐前的reader观察原件为`task:quality/tests/2026-10-16-0
 
 状态：`planned`；原始编号仅 provenance，不新增验收项。
 
-来源：原 AC-005、R-004/010、U-006/008；FR-N2-005；SCN-004；oracle ORACLE-N2-DEPENDENCIES；P4/T004。
+来源：原 AC-005、R-004、R-008、R-010、R-011、U-006/008；FR-N2-005；SCN-004；oracle ORACLE-N2-DEPENDENCIES；P4/T004。
 
 验证：逐条阅读全部技能正文的同仓跨技能引用，与现有 dependency_closure 的目录路径数组对账；记录候选提取与人工确认的区别。
 通过：全部记录与真实依赖一致，只列其他技能；自引用不写、空依赖留空；有一次完整真实对账读回，常驻机器检查交 N10。
@@ -511,7 +513,7 @@ P10本次范围补齐前的reader观察原件为`task:quality/tests/2026-10-16-0
 
 状态：`planned`；原始编号仅 provenance，不新增验收项。
 
-来源：原 AC-006、R-004/008；FR-N2-006；SCN-005；oracle ORACLE-N2-PORTABILITY；P5/T005。
+来源：原 AC-006、R-004、R-008；FR-N2-006；SCN-005；oracle ORACLE-N2-PORTABILITY；P5/T005。
 
 验证：把 ui-project-init、stage-reflection、spec-specify 各自复制到自己的空目录，逐正文引用读回；至少一个样本含附加资源目录。
 通过：外部引用写“来源仓＋技能名”；同仓引用在副本可解析，或正文具名声明依赖且与 catalog 一致；明显不存在文件如实报告为失败。全程不改宿主全局目录，原目录保留，不复制索引权威；披露样本区分度与范围。
@@ -524,7 +526,7 @@ P10本次范围补齐前的reader观察原件为`task:quality/tests/2026-10-16-0
 
 状态：`planned`；原始编号仅 provenance，不新增验收项。
 
-来源：原 AC-007、R-001/006/008；FR-N2-007；SCN-006；oracle ORACLE-N2-UPSTREAM；P6/T006。
+来源：原 AC-007、R-001、R-006、R-008、U-008；FR-N2-007；SCN-006；oracle ORACLE-N2-UPSTREAM；P6/T006。
 
 验证：在 catalog 来源使用说明按登记坐标真实只读核对一次，并执行一次断网条件；首次留真实上游坐标基线；无历史包按真实归档指纹/取回坐标处理。
 通过：方法可照做、默认不跑、只报告不自动改；有基线才能比较变化。真实不可取回记 unavailable/原因，无版本历史、不适用、未知与未变化分别呈现，结果仅证明当时读到的状态。
@@ -537,7 +539,7 @@ P10本次范围补齐前的reader观察原件为`task:quality/tests/2026-10-16-0
 
 状态：`planned`；原始编号仅 provenance，不新增验收项。
 
-来源：原 AC-008、R-009/010、U-008；FR-N2-008；SCN-001…007；oracle ORACLE-N2-SAFETY/ORACLE-N2-REPORTONLY/ORACLE-N2-BOUNDARY与各内容oracle；首次owner见实现设计。
+来源：原 AC-008、R-002、R-007、R-009、R-010、U-008；FR-N2-008；SCN-001…007；oracle ORACLE-N2-SAFETY/ORACLE-N2-REPORTONLY/ORACLE-N2-BOUNDARY与各内容oracle；首次owner见实现设计。
 
 验证：逐条核本卡八项采用及六项补充目录职责，按首次消费者运行具名正例与真能失败反例。以具体文件/符号定位，不以目录/通配符当已生效。
 通过：security-and-hardening在既有破坏操作边界由调用方/维护者联验允许根、至少下一层、操作前属主；以真实受控候选和操作前证据交独立读者判定，合法对照实际执行现入口，不匹配候选在调用前拒绝且目标零写入，形状检查不冒授权、底层API不冒强制属主授权；using-agent-skills在索引任务语义路由与三测试技能正负prompt生效，相似度只诊断；setup-pstack在catalog/docs质量登记写前真实探测，缺失停止当次写入并报告，重复整覆写内容幂等；poteto-help引用先读目标、登记/语义各信原owner、旧指针显露；make-operations-idempotent在受影响既有写入口验证重复/半途失败/内容一致、不重复事实；type-system-discipline在真实schema/检查consumer拒非法组合并保合法组合，不造无消费者层；boundary-discipline在AGENTS/CLAUDE/interface全部落点有边界/纯函数判据且公共面不泄内部表示；experience-first在真实consumer登记点名维护者/调用者的实际动作、无consumer不实施。correct目录读回、redesign的catalog/deps/bundle同步、fix-root-causes同类登记修复、poteto-mode索引/指针、E-2三层、E-10过期投影分别在已有内容包完成，并与各内容oracle对应。新checker内容仅进reports，保原failures、退出码与不新增拦门；不等N10代本卡首次验。
@@ -576,7 +578,7 @@ P10本次范围补齐前的reader观察原件为`task:quality/tests/2026-10-16-0
 
 状态：`planned`；原始编号仅 provenance，不新增验收项。
 
-来源：原 AC-011、R-008/011；FR-N2-011；SCN-007；oracle ORACLE-N2-COST；P11/T011。
+来源：原 AC-011、R-008、R-011；FR-N2-011；SCN-007；oracle ORACLE-N2-COST；P11/T011。
 
 验证：取得N1“主Agent成本观测”整卡完整结果后，核同任务、同命令、同条件、同预算，读取原始样本与全部尝试并报告波动；字段不齐保持缺项。
 通过：本卡成本结论实际消费该完整结果，提供可回读同条件对照、次数/波动、全部尝试与限制。沿父PRD G1，主Agent四组指标分别保 `wall_s`、`input/output/cacheRead`、`steps/turns`、`subagent/bash` 调用数；缺字段或解析失败记unavailable，provider未报usage记not_reported，不用provider token/材料字节替代主Agent token。成本收益要求 `cacheRead` 与 `wall_s` 均不劣化，`steps` 或 `cacheRead` 至少一项下降；质量或数据不足不宣称收益。技术结果与整体收益分报，未测保unknown/unavailable而不宣称整卡全验。
