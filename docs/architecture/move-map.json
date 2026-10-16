@@ -540,7 +540,7 @@
       "destination": "runtime/interface/safe-write.mjs",
       "status": "retain",
       "role": "production",
-      "responsibility": "③ 原子写：task-handle、task-store、core/artifact-dir、material-workspace（B4/P5 改接后）",
+      "responsibility": "③ 原子写：task-handle、task-store、core/artifact-dir、material-workspace（B4/P5 改接后）；调用维护者在破坏操作前核允许根、至少下一层及属主证据，API只保护文件身份；重复/半失败先读残留并比较完整bytes，同事实append复用原件",
       "owner": "B0/P1 / MT-1-001",
       "consumer": "当前直接模块消费者：core/task-close.mjs, runtime/evidence/artifact-dir.mjs, runtime/evidence/research-report.mjs, runtime/review/review-record-route.mjs, runtime/task/material-workspace.mjs, runtime/task/portable-workflow-run.mjs, runtime/task/task-handle.mjs, runtime/task/task-store.mjs, skills/mini-task/scripts/mini-task-runner.mjs, skills/wh-review/scripts/__tests__/simple-e2e-faults.test.mjs, tests/contract/narrow-tool-safe-write.test.mjs, tests/contract/ocr-delegation-adapter.test.mjs, tests/integration/minimal-task-storage.test.mjs, tests/integration/quality-store-concurrency.test.mjs, tools/cli/task-bootstrap.mjs",
       "module_consumers": [
@@ -3439,7 +3439,7 @@
       "destination": "tools/cli/task-bootstrap.mjs",
       "status": "retain",
       "role": "production",
-      "responsibility": "建/开 task 目录、原子发布 task.json；改接①（工作区/范围核对）③（原子写）",
+      "responsibility": "建/开 task 目录、原子发布 task.json；改接①（工作区/范围核对）③（原子写）；CLI作者核重复/半失败与内容一致，新建冲突明确失败后读manifest沿既有打开入口继续，不新增恢复机制",
       "owner": "B5/P6 / MT-2-023",
       "consumer": "当前直接模块消费者：scripts/__tests__/task-bootstrap.test.mjs, tests/contract/build-code-change-scope.test.mjs, tests/contract/governance-startup-event-early-failure.test.mjs, tests/contract/write-identity-workspace.test.mjs, tests/contract/writer-resolution-source.test.mjs",
       "module_consumers": [

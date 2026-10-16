@@ -87,6 +87,13 @@ function verifyDirectories(snapshot) {
   }
 }
 
+// Caller/maintainer destructive-operation contract (delete, move, overwrite):
+// resolve the target under an allowlisted root, require at least one level below
+// it, and read ownership evidence before operating. Trust follows the author of
+// a value; a path shape or in-tree marker alone does not establish permission.
+// Refuse a missing condition with the actual target/error, never a broader path.
+// These helpers protect file identity, not caller authorization. Keep ancestry
+// stable against untrusted swaps; dev/ino and no-follow checks retain their scope.
 function destination(root, relPath) {
   if (typeof relPath !== "string" || !relPath || isAbsolute(relPath)
     || relPath.split(/[\\/]/).includes("..")) {
@@ -145,6 +152,13 @@ function syncDirectory(target) {
   } finally { closeSync(fd); }
 }
 
+// Before replay, ask: what if this runs twice, or failed halfway? Directory
+// fsync can fail after rename/link published bytes: propagate the error, inspect
+// the residual target, then compare full content before retrying. Overwrite
+// replaces bytes; createFileOnce reuses identical bytes and rejects differences.
+// appendRecord allocates a new fact per call: for the same fact read/compare and
+// reuse its existing original instead of appending again. Cleanup owns only the
+// temporary file whose dev/ino still matches; never remove another file.
 function publish(target, bytes, createOnly, acceptIdentical) {
   if (!Number.isInteger(constants.O_NOFOLLOW)) {
     throw failure("UNSUPPORTED_PLATFORM", "O_NOFOLLOW is required for safe writes");
