@@ -13417,6 +13417,17 @@
   ],
   "surprises": [
     {
+      "source": "skill stage-handoff",
+      "target": "appendRecord()",
+      "source_files": [
+        "skills/reuse-registry.md",
+        "runtime/interface/safe-write.mjs"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "references",
+      "why": "crosses file types (code ↔ doc); connects across different repos/directories; bridges separate communities; peripheral node `skill stage-handoff` unexpectedly reaches hub `appendRecord()`"
+    },
+    {
       "source": "no stage、no gate 的可搬运方法",
       "target": "只报告不阻断的文档规范检查器",
       "source_files": [
@@ -13426,17 +13437,6 @@
       "confidence": "INFERRED",
       "relation": "semantically_similar_to",
       "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; semantically similar concepts with no structural link; peripheral node `no stage、no gate 的可搬运方法` unexpectedly reaches hub `只报告不阻断的文档规范检查器`"
-    },
-    {
-      "source": "skill stage-handoff",
-      "target": "appendRecord()",
-      "source_files": [
-        "skills/reuse-registry.md",
-        "runtime/interface/safe-write.mjs"
-      ],
-      "confidence": "EXTRACTED",
-      "relation": "references",
-      "why": "crosses file types (doc ↔ code); connects across different repos/directories; bridges separate communities; peripheral node `skill stage-handoff` unexpectedly reaches hub `appendRecord()`"
     },
     {
       "source": "来源权威与真实消费者",
@@ -13450,17 +13450,6 @@
       "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; semantically similar concepts with no structural link; peripheral node `来源权威与真实消费者` unexpectedly reaches hub `catalog.yaml（唯一来源、许可与历史归属登记）`"
     },
     {
-      "source": "档位 8 值词表与档位判定顺序",
-      "target": "ACCEPTANCE_RESULTS",
-      "source_files": [
-        "specs/archive/design-execution-efficiency-20261014/phases/P8-终末逐AC验收.md",
-        "runtime/evidence/acceptance-evidence-validator.mjs"
-      ],
-      "confidence": "INFERRED",
-      "relation": "conceptually_related_to",
-      "why": "inferred connection - not explicitly stated in source; crosses file types (code ↔ doc); connects across different repos/directories"
-    },
-    {
       "source": "Phase P11 — verify-code 死链路离场、全仓悬空引用归零",
       "target": "validatePostPhaseContract()",
       "source_files": [
@@ -13469,7 +13458,18 @@
       ],
       "confidence": "EXTRACTED",
       "relation": "references",
-      "why": "crosses file types (doc ↔ code); connects across different repos/directories; bridges separate communities"
+      "why": "crosses file types (code ↔ doc); connects across different repos/directories; bridges separate communities"
+    },
+    {
+      "source": "Phase P2 — 写集校验对治理文件豁免、对已按 Dependency 串行的 Phase 对放行共享写集",
+      "target": "validatePostPhaseContract()",
+      "source_files": [
+        "specs/archive/workflowhub-skill-quality-regression-20261010/phases/P2.md",
+        "runtime/stage/stage-content-contracts.mjs"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "implements",
+      "why": "crosses file types (code ↔ doc); connects across different repos/directories; bridges separate communities"
     }
   ],
   "questions": [
@@ -13482,7 +13482,7 @@
     {
       "type": "bridge_node",
       "question": "Why does `vitest` connect `Community 0` to `Community 1`, `Community 2`, `Community 3`, `Community 4`, `Community 5`, `Community 9`, `Community 10`, `Community 11`, `Community 12`, `Community 13`, `Community 14`, `Community 15`, `Community 16`, `Community 19`, `Community 20`, `Community 22`, `Community 23`, `Community 31`, `Community 36`, `Community 50`, `Community 68`, `Community 69`, `Community 79`, `Community 132`, `Community 143`, `Community 148`, `Community 149`, `Community 151`, `Community 161`, `Community 163`, `Community 171`, `Community 172`, `Community 176`, `Community 182`, `Community 189`, `Community 190`, `Community 192`, `Community 195`, `Community 196`, `Community 197`, `Community 202`, `Community 203`, `Community 204`, `Community 206`, `Community 212`, `Community 216`, `Community 219`, `Community 221`, `Community 226`, `Community 227`, `Community 228`, `Community 231`, `Community 232`, `Community 234`, `Community 235`, `Community 238`, `Community 241`, `Community 262`, `Community 271`, `Community 273`, `Community 278`, `Community 282`, `Community 296`, `Community 297`, `Community 301`, `Community 320`, `Community 321`, `Community 325`, `Community 327`, `Community 342`, `Community 343`, `Community 347`, `Community 360`, `Community 362`, `Community 363`, `Community 384`, `Community 385`, `Community 386`, `Community 391`, `Community 402`, `Community 404`, `Community 414`, `Community 443`?",
-      "why": "High betweenness centrality (0.013) - this node is a cross-community bridge."
+      "why": "High betweenness centrality (0.019) - this node is a cross-community bridge."
     },
     {
       "type": "isolated_nodes",
@@ -13503,7 +13503,7 @@
     {
       "type": "bridge_node",
       "question": "Why does `appendRecord()` connect `Community 149` to `Community 2`, `Community 132`, `Community 36`, `Community 172`, `Community 12`, `Community 206`, `Community 15`, `Community 342`, `Community 278`, `Community 188`?",
-      "why": "High betweenness centrality (0.007) - this node is a cross-community bridge."
+      "why": "High betweenness centrality (0.018) - this node is a cross-community bridge."
     },
     {
       "type": "low_cohesion",

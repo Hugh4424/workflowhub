@@ -46,7 +46,11 @@ node "$AUTH_TOOL" consume --operation "$OPERATION" --step-id "$ACTUAL_STEP_ID" -
 
 对照当前材料、真实diff和允许写集，按具名路径stage，再读回索引。提交授权record/consume后执行普通commit；若无改动保真实no-change原因，不造空提交冒实施。读回commit/tree、branch/HEAD和clean状态。提交后任何新字节回本步骤核，不漏掉当前材料或本次图变化。
 
-项目/环境支持且未明确opt-out时沿caller现有PR路线。先在任务分支核push授权并正常push-task，读回远端同名分支实际OID；再核pr授权，用已配置PR能力创建/复用真实head/base对应PR，不猜URL。描述来自当前task/spec、已验AC与未验项、实际提交diff和原件，保Summary、Evidence、Merge Danger；Door与Blast Radius分别说明真实回退边界与影响域，不把测试绿冒发布。
+先确定唯一PR写入路由。caller明确给出已有路由时沿用；否则，对GitHub remote优先用本机已有`gh` CLI。按已核的remote URL确定host和owner/repo，通过`runtime/interface/run-command.mjs`记录`gh auth status --hostname <host>`，确认活动账号与caller声明一致，不读取或输出token。没有可用的`gh`登录时，只使用caller明确声明、且写前已核实可访问目标仓库及PR写权限的替代路由；不能只因MCP/connector出现在工具列表就选它，也不安装或扩大应用权限。没有已配置可用路由时，保留实际读回并记`PR unavailable`，沿本节退路继续。
+
+使用`gh`时，先完成本节前述`push-task`并读回远端同名分支OID；本地`HEAD`须与该OID一致。然后用`gh pr list --repo <owner/repo> --head <task branch> --base <target branch> --state all --json number,url,state,headRefName,baseRefName,headRefOid,baseRefOid`查找精确repo/head/base的现有PR。只复用唯一的open匹配项；把该项的`number`或`url`明确传给`gh pr view <number-or-URL> --repo <owner/repo> --json number,url,state,headRefName,baseRefName,headRefOid,baseRefOid`。只有读回仍为open、repo/head/base完全匹配，且`headRefOid`等于已读回的远端分支OID时才复用。若读回命令失败、状态变化、字段不符或OID不符，报告具体差异并停止PR路径，不转而新建或合并。存在多个open匹配项，或只有closed匹配项时，也停止并报告具体PR，不猜测或创建重复PR。没有匹配项时，按当前branch/HEAD核pr授权，通过`runtime/interface/run-command.mjs`执行`gh pr create --repo <owner/repo> --head <task branch> --base <target branch> --title <title> --body-file <prepared body>`。正文来自当前task/spec、已验AC与未验项、实际提交diff和原件，保Summary、Evidence、Merge Danger；Door与Blast Radius分别说明真实回退边界与影响域，不把测试绿冒发布。保留原始命令、退出码和输出。
+
+GitHub API/MCP返回`Resource not accessible by integration`时，保留原始失败并认定该integration的权限不足；它不说明本机`gh`账号无权，也不构成安装或扩大App权限的理由。已选定的写入路由遇到权限失败后不重试、不切换执行者；按`PR unavailable`处理并继续本节规定的退路。
 
 创建成功后**立即显示真实PR URL**；使用本宿主现有artifact连接能力附到当前聊天，随后读PR/head/base/branch实际状态。`until=pr`只表示同次执行的一个可观察切片：先回URL，再在**同一次执行流**沿已有授权继续合并及剩余收尾，不创建或消费旧close plan/confirmation执行对象。只有第6节规定的最终物理范围确认尚未取得、且合并可能删除源任务分支时，才在合并前暂停；收到答复后沿同一任务流继续。这是唯一一次最终范围确认，不另加普通PR确认。PR需外部审查或合并保护而不能继续时如实报告那个外部条件，不能制造合并成功。
 

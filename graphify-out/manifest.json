@@ -11514,9 +11514,9 @@
     "semantic_hash": ""
   },
   "tests/contract/stage-closeout-skill.test.mjs": {
-    "mtime": 1792156069.685836,
-    "seen": 1792160033.763325,
-    "ast_hash": "1ef73e8c166a40331530eb9bd4b141bb",
+    "mtime": 1792162227.8423872,
+    "seen": 1792162408.864977,
+    "ast_hash": "929186575a933075d3cf56fa2d028993",
     "semantic_hash": ""
   },
   "tests/integration/main-agent-cost-closeout.node-test.mjs": {

@@ -44,4 +44,19 @@ describe('ORACLE-KG-P3 standalone closeout discovery and portable closure', () =
       expect(result.bundle.skill).toBe(name);
     }
   });
+
+  it('selects and verifies the configured GitHub PR route before writing', () => {
+    const entry = catalog().skills.find(skill => skill.name === 'stage-closeout');
+    const body = readFileSync(resolve(root, entry.path), 'utf8');
+    expect(body).toContain('`runtime/interface/run-command.mjs`');
+    expect(body).toContain('`gh auth status --hostname <host>`');
+    expect(body).toContain('gh pr list --repo <owner/repo>');
+    expect(body).toContain('--json number,url,state,headRefName,baseRefName,headRefOid,baseRefOid');
+    expect(body).toContain('gh pr view <number-or-URL> --repo <owner/repo>');
+    expect(body).toContain('存在多个open匹配项，或只有closed匹配项时，也停止');
+    expect(body).toContain('读回命令失败、状态变化、字段不符或OID不符，报告具体差异并停止PR路径');
+    expect(body).toContain('gh pr create --repo <owner/repo>');
+    expect(body).toContain('Resource not accessible by integration');
+    expect(body).toContain('不安装或扩大应用权限');
+  });
 });
