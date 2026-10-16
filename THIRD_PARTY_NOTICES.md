@@ -13,6 +13,11 @@ workflowhub 包含或改编下列第三方项目的部分技能文字、规则�
 - **DeepSeek Harness**, source: [deepseek-ai/deepseek-harness@99f6f02](https://github.com/deepseek-ai/deepseek-harness/tree/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca/.agents/skills). WorkflowHub 将 `dsh-code-review` 与 `dsh-find-simplifications`、`dsh-doc-standards`、`dsh-prose-standard`、`dsh-trim-cot-leakage` 的规则合并为一次 verify-code 代码审查调用；未引入 push、merge、翻译、归档或 GIF 运行时。
 - **Vercel React Best Practices**, source: [vercel-labs/agent-skills@dd089a8](https://github.com/vercel-labs/agent-skills/tree/dd089a8c752c966dee8bf0f27cb625ba193ffd9e/skills/react-best-practices). WorkflowHub 只读保存 compiled guide，作为 React/Next 的内部组件质量 lens；保留本地 `skills/frontend-component-quality/upstream/react-best-practices/LICENSE` 与 `UPSTREAM.md`，不创建第二执行器或 gate。
 
+- **Addy Osmani Agent Skills**, Copyright (c) 2025 Addy Osmani. Source: [addyosmani/agent-skills@aeac41d4d005999432bb7312f7ff06383a91d59d](https://github.com/addyosmani/agent-skills/tree/aeac41d4d005999432bb7312f7ff06383a91d59d). N1吸收 `skills/observability-and-instrumentation/SKILL.md` 与 `skills/performance-optimization/SKILL.md` 的问题/原数自验、同条件复跑纪律；不引入遥测平台或收益判断。
+- **pstack**, Copyright (c) 2026 Lauren Tan. Source: [backnotprop/pstack](https://github.com/backnotprop/pstack). 固定实际读取包 SHA256 `f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8`、`skills/principle-explain-the-number/SKILL.md` SHA256 `cd5a25f9e7cf023627ccb470dc5faa97542f29b4319496a32b839a8e1e988047`；commit未证实，不能以API短HEAD冒包绑定。N1吸收数字的范围/缺项解释，不引入profiler或收益打分。
+
+上述两源适用以下完整MIT许可，固定源及本地差异/owner/验证在catalog登记。
+
 MIT License
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
