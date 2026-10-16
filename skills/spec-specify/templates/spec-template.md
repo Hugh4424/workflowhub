@@ -226,7 +226,7 @@
 
 本节回答：哪个真实对象被检查，缺什么输入，谁提供或执行。
 
-当前 `spec.md` 在本节填写实际验收对象数据、每项来源与未观察范围；它属于现有规格，不另建验收对象文件。以下 JSON 只示范数据形状，null 表示仍缺真实输入，不能把示例、占位文字或 unknown 填充冒可用对象。最小五项始终是 workspace、service、route、state、viewport，依此顺序检查，不按 UI/non_UI 标签跳过；其余适用 S5 设计来源、代码/URL、数据、权限由真实任务合同补齐，具名不适用与未知分别说明。
+当前 `spec.md` 在本节填写实际验收对象数据、每项来源与未观察范围；它属于现有规格，不另建验收对象文件。以下 JSON 只示范数据形状，null 表示仍缺真实输入，不能把示例、占位文字或 unknown 填充冒可用对象。缺省或来源不完整时，最小五项仍为 workspace、service、route、state、viewport，依此顺序检查；只有下述真实三源已核非 UI 的分支检查 CLI 对象，不按 UI/non_UI 标签跳过；其余适用 S5 设计来源、代码/URL、数据、权限由真实任务合同补齐，具名不适用与未知分别说明。
 
 ```json
 {
@@ -241,25 +241,69 @@
 
 workspace 来自认证工作区；service、route 来自真实服务配置/入口；state 来自实际待验状态，viewport 来自规定的验收尺寸或真实观察。配置入口、状态定义和规定尺寸不证明服务已启动或页面已观察。owner 未给、null 或空白时，执行结果明确为“用户”；已有非空 owner 原值保留。缺任一最小项时保 null/缺失及提供者、影响和下一动作，不编默认服务、路径或尺寸。
 
-下方代码仅是本模板的唯一 `checkAcceptanceObject(input)` producer；生成 `spec.md` 只填写上述对象数据，不复制此 JS 到 spec、Skill、workflow 或测试。消费者读取唯一 marker 后立即跟随的完整 js/javascript 代码块，仅移除该具名函数的 export 语法，在 Node VM 空上下文中取得函数并传入当前 spec 的真实对象；实际使用者保输入、返回结果与执行原件。缺 marker、重复块、导出/执行失败显露 source/producer 错误，不用另一份 checker 绕过。函数只报告字段缺项，不访问文件、服务或浏览器。
+下方代码是唯一 `checkAcceptanceObject(input, context={})` producer；生成 `spec.md` 只填对象数据和来源安排，不复制此 JS。消费者实际读原始要求、当前项目库存、已接受计划或实际前端改动，核三来源的角色、理由与范围矛盾，再把已读内容放入本次调用的 `context.sources` 材料映射；复用已有 `context.ui_applicability` 的 `raw_requirement/project_inventory/planned_or_changed_frontend_fact`，每项为 `{ui_scope,source_ref,reason}`。三项都明确为 false、理由为非空文本且引用可解析时才选 CLI；缺源、未知、冲突或任一 UI 事实沿原 Web 五项，并保存具体缺口。kind/non_UI、自选标签或字段可读均不能认证非 UI 事实。
+
+引用只用 `sources` 自有材料 key 或 `key#/RFC6901-pointer`；整份材料用裸 key，出现 # 时后面必须以 / 开始，`key#` 不属于本合同语法。逐层自有属性，转义只认 ~0/~1；目标须为非空文本、对象或数组。允许三角色引用同一已读材料，但消费者仍核实其确有三个角色的事实，不能用同一标签冒充来源。CLI 对象使用 `input.workspace/state` 和 `input.cli.command/entry_ref/sample_ref/oracle_ref`；缺项依次报 `workspace,state,cli.command,cli.entry_ref,cli.sample_ref,cli.oracle_ref`。command 为非空文本；后三项引用同一 sources 中的入口权威、真实样本、oracle。规划入口可引用已有 spec/Phase 的明确计划文字，保 `state.execution=not_run`；不要求尚未实施的文件存在，也不冒命令已执行。workspace/state 仍沿原空值判据。
+
+消费者读取唯一 marker 后立即跟随的完整 js/javascript 代码块，仅移除具名函数 export，在 Node VM 空上下文取得函数并传真实对象与上述调用内 context；保存对象输入、三来源引用/实际读取范围与内容 hash、返回结果和原始执行事实，既有原字节以 ref 复用，不把已读大材料再复制为证据。context 不持久化为新对象；函数只核结构、引用和缺项，不读文件、不执行命令、不认证来源语义。缺 marker、重复块、导出/执行失败显露 source/producer 错误，交原 owner 修复。
 
 <!-- c01-acceptance-object-check -->
 ```javascript
-export function checkAcceptanceObject(input) {
+export function checkAcceptanceObject(input, context = {}) {
+  // 本模板“验收对象”合同：调用者先核实三种真实来源；本函数仅核结构/引用，不认证适用性事实。
   if (input === null || typeof input !== "object" || Array.isArray(input)) {
     throw new TypeError("acceptance input must be an object, not null or an array");
   }
   const object = { ...input };
   const empty = value => value === undefined || value === null
     || (typeof value === "string" && value.trim() === "");
-  const fields = ["workspace", "service", "route", "state", "viewport"];
-  const missing_fields = fields.filter(field => !Object.hasOwn(input, field) || empty(input[field]));
+  const record = value => value !== null && typeof value === "object" && !Array.isArray(value);
+  const presentSource = value => typeof value === "string" ? value.trim() !== ""
+    : value !== null && typeof value === "object" && Object.keys(value).length > 0;
+  const sources = record(context) && record(context.sources) ? context.sources : null;
+  const resolves = ref => {
+    if (!sources || typeof ref !== "string" || ref.trim() === "") return false;
+    const hash = ref.indexOf("#");
+    const key = hash < 0 ? ref : ref.slice(0, hash);
+    if (!key || !Object.hasOwn(sources, key)) return false;
+    let value = sources[key];
+    if (hash >= 0) {
+      const pointer = ref.slice(hash + 1);
+      if (!pointer.startsWith("/")) return false;
+      for (const token of pointer.slice(1).split("/")) {
+        if (/~(?:[^01]|$)/.test(token)) return false;
+        const part = token.replace(/~1/g, "/").replace(/~0/g, "~");
+        if (value === null || typeof value !== "object" || !Object.hasOwn(value, part)) return false;
+        value = value[part];
+      }
+    }
+    return presentSource(value);
+  };
+  const applicability = record(context) && record(context.ui_applicability) ? context.ui_applicability : null;
+  const cliScope = applicability && ["raw_requirement", "project_inventory", "planned_or_changed_frontend_fact"].every(key => {
+    if (!Object.hasOwn(applicability, key)) return false;
+    const source = applicability[key];
+    return record(source) && source.ui_scope === false
+      && typeof source.reason === "string" && source.reason.trim() !== "" && resolves(source.source_ref);
+  });
+  let missing_fields;
+  if (cliScope) {
+    const cli = record(input.cli) ? input.cli : {};
+    missing_fields = ["workspace", "state"].filter(field => !Object.hasOwn(input, field) || empty(input[field]));
+    if (typeof cli.command !== "string" || cli.command.trim() === "") missing_fields.push("cli.command");
+    for (const field of ["entry_ref", "sample_ref", "oracle_ref"]) {
+      if (!resolves(cli[field])) missing_fields.push("cli." + field);
+    }
+  } else {
+    const fields = ["workspace", "service", "route", "state", "viewport"];
+    missing_fields = fields.filter(field => !Object.hasOwn(input, field) || empty(input[field]));
+  }
   if (empty(object.owner)) object.owner = "用户";
   return { ok: missing_fields.length === 0, missing_fields, object };
 }
 ```
 
-`ok` 仅表示最小字段已提供：合法对象保全部原输入与已有 owner，不修改调用者对象；缺项按固定顺序点名。undefined/null/空串/全空白均不能静默通过，非对象/数组输入明确抛错。返回结果不验证 URL/尺寸语义、权限、完整 S5、环境健康或业务效果，不能作为阶段推进许可证；这些效果仍由各真实验收者独立观察。
+`ok` 仅表示最小字段已提供：合法对象保全部原输入与已有 owner，不修改调用者对象；缺项按固定顺序点名。undefined/null/空串/全空白均不能静默通过，非对象/数组输入明确抛错。返回仍仅有 ok/missing_fields/object，保原输入与 context 不变；坏 context 或 CLI 容器以原 Web 分支或具名 CLI 缺项处理，不新增异常。返回结果不验证来源事实真值、URL/尺寸语义、权限、完整 S5、环境健康或业务效果，不能作为阶段推进许可证；这些效果仍由各真实验收者独立观察。
 
 ## 架构边界
 

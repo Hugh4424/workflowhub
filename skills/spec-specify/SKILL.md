@@ -53,9 +53,9 @@ expected evidence type or artifact only; verify-code supplies execution facts.
 
 从已确认来源合成，不重新访谈或替用户选择方向。先说明真实角色面临的问题、目标与结果，再连起场景、机制、取舍、失败和显式非目标；追踪字段跟在叙事后，不以 ID 清单代替行为解释。User Stories 的详细格式由产品需求 owner 承接，本步骤保现 PRD/decision 的目标权威。
 
-**验收对象**：在当前 `spec.md` 的「测试标准／验收对象」填写模板的数据形状及真实来源，不新建独立材料；workspace/service/route/state/viewport 五项始终必需，缺失保 null/具体缺口、提供者与影响，不用示例或 UI 标签绕过。owner 空缺/空白在执行结果显式为“用户”，给定 owner 和其它原输入保留；S5 其余适用设计来源、代码/URL、数据、权限另沿当前任务合同说明，不把最小五项当完整 S5。
+**验收对象**：在当前 `spec.md` 的「测试标准／验收对象」填写模板对象及真实来源，不新建独立材料。按模板「验收对象」唯一合同实际读原始要求、当前库存和已接受计划或实际前端改动，核角色、理由、范围冲突；复用三源适用性和已读材料构成本次调用 context。只有真实三源已核非 UI 才用模板的嵌套 CLI 对象，其余保原 Web 五项与具体缺口，不用示例或标签代来源。owner 空缺/空白仍显式为“用户”，已有 owner 和原输入保留；S5 其余设计、代码/URL、数据、权限沿任务合同，不把最小对象当完整 S5。
 
-需要对象检查时，读取 `skills/spec-specify/templates/spec-template.md` 内唯一 marker 后的完整可执行 `checkAcceptanceObject(input)` JS 块，只移除该具名函数的 export 语法，在 Node VM 空上下文取得函数，传当前 spec 的真实对象并保存输入/返回结果/执行原件。checker 只留模板，不复制到生成 spec、本 Skill、workflow 或 test，不新增 runtime validator/command/schema/gate。marker 缺失/重复、无法导出或执行失败明确记录 source/producer、影响和原 owner；未执行不冒缺项已验证。`ok=false` 逐项报告 missing_fields 及取得条件；`ok=true` 只证明最小输入存在，配置服务/规定 viewport 不证明环境健康、UI或业务通过。写作完成以对象有实际来源或具名缺项、已有两个 workflow 能按原 producer 消费为准，实际方法/业务验证仍由其 owner 和最终验收者完成。
+需要对象检查时，读取 `skills/spec-specify/templates/spec-template.md` 内唯一 marker 后的完整可执行 `checkAcceptanceObject(input, context={})` JS 块，只移除该具名函数的 export 语法，在 Node VM 空上下文取得函数，传当前 spec 的真实对象与上述本次 context，保存对象输入、三源实际读取范围/引用/hash、返回及执行原件；已读材料复用原 ref，不复制大材料。checker 只留模板，不复制到生成 spec、本 Skill、workflow 或 test，不新增 runtime validator/command/schema/gate。marker 缺失/重复、无法导出或执行失败明确记录 source/producer、影响和原 owner；未执行不冒缺项已验证。`ok=false` 逐项报告 missing_fields 及取得条件；`ok=true` 只证明最小输入存在，配置服务/规定 viewport 不证明环境健康、UI或业务通过。写作完成以对象有实际来源或具名缺项、已有两个 workflow 能按原 producer 消费为准，实际方法/业务验证仍由其 owner 和最终验收者完成。
 
 写作完成时，按原来源→场景/状态→FR/PFACT→唯一 Appendix A 读回：每个适用用户结果与失败都有落点，四个翻译表面可发现，全局实现设计 scaffold 为后续 spec-plan 留在同一 spec；缺口带 owner、影响与下一动作，不把草稿或可读文件说成已验通过。所有正文整理使用下节唯一规范；条件、顺序、权限和失败强度先保全，再修表达。
 

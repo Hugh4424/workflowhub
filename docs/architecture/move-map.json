@@ -1033,7 +1033,8 @@
         "runtime/stage/stage-context.mjs",
         "tools/cli/stage-runtime.mjs",
         "tools/cli/task-bootstrap.mjs",
-        "tools/cli/task-close.mjs"
+        "tools/cli/task-close.mjs",
+        "tools/cli/measure-main-agent-cost.mjs"
       ],
       "named_data_readers": [],
       "delete_condition": "旧 source 仅在当前外集合 incoming import/真实非 ESM 调用归零、原测试保留义务有真实 consumer/oracle 承接且 root 放行时删除；target 被经独立审查的替代实现取代且本项当前消费者改接后才删除。",
@@ -1052,7 +1053,8 @@
         "tests/acceptance/card-02-current.mjs",
         "tests/contract/material-set-per-stage.test.mjs",
         "tests/contract/material-workspace.test.mjs",
-        "tools/cli/stage-runtime.mjs"
+        "tools/cli/stage-runtime.mjs",
+        "tools/cli/measure-main-agent-cost.mjs"
       ],
       "named_data_readers": [],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
@@ -1132,7 +1134,8 @@
         "tests/review/review-foreign-pair-history.test.mjs",
         "tests/review/review-managed-lifecycle.test.mjs",
         "tests/review/review-record-route.test.mjs",
-        "tools/cli/stage-runtime.mjs"
+        "tools/cli/stage-runtime.mjs",
+        "tools/cli/measure-main-agent-cost.mjs"
       ],
       "named_data_readers": [],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
@@ -1174,7 +1177,8 @@
         "tests/contract/zero-machine-gate-advancement.test.mjs",
         "tests/integration/minimal-task-storage.test.mjs",
         "tools/cli/stage-runtime.mjs",
-        "tools/cli/task-bootstrap.mjs"
+        "tools/cli/task-bootstrap.mjs",
+        "tools/cli/measure-main-agent-cost.mjs"
       ],
       "named_data_readers": [],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费；退役登记（ADR-021）：entry_release_commit 与 finding_dispositions[].repair_commit 零 reader/writer，当前代码零命中，历史 task.json 值只读保留",
@@ -4819,6 +4823,123 @@
       ],
       "delete_condition": "职责被独立审查的替代承接且实际具名consumer为零时由对应owner移除；不因登记或暂未接线自动删除。",
       "retention_basis": "收窄原denylist为已定知识载荷白名单；不扩图扫描、不删机器/未知既有字节。"
+    },
+    {
+      "source": "tools/cli/measure-main-agent-cost.mjs",
+      "destination": "tools/cli/measure-main-agent-cost.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "N1 P1正式measureSessions/显式CLI；P2串行扩展自动当前源、父事件后代、三来源、锁内唯一任务MD账本事务；仅窄工具，不是runtime第八命令或进度writer",
+      "owner": "N1 P1/T001；P2/T002串行接写",
+      "consumer": "两Node测试实际Node CLI/import；四阶段末步主会话按各自方法正文实际调用/回读任务根main-agent-cost.md；真实受控复放另留独立原件，登记本身不证明执行。",
+      "module_consumers": [
+        "tests/contract/measure-main-agent-cost.node-test.mjs",
+        "tests/integration/main-agent-cost-closeout.node-test.mjs"
+      ],
+      "named_data_readers": [
+        "workflows/make-decision/SKILL.md",
+        "workflows/build-plan/SKILL.md",
+        "workflows/build-code/SKILL.md",
+        "workflows/verify-code/SKILL.md"
+      ],
+      "delete_condition": "职责被正式替代且全部真实consumer改接后删除；历史原件保留",
+      "retention_basis": "specs/n1-main-agent-cost-20261015/spec.md 合同8；P1/T001。替代临时测量，不新增runtime公共命令/常驻服务/进度对象"
+    },
+    {
+      "source": "tests/contract/measure-main-agent-cost.node-test.mjs",
+      "destination": "tests/contract/measure-main-agent-cost.node-test.mjs",
+      "status": "retain",
+      "role": "test_only",
+      "responsibility": "N1冻结oracle与真实脱敏格式样本；不凭存在宣称验收",
+      "owner": "N1独立测试作者；冻结修改须TCR",
+      "consumer": "Node定向runner / 两Node测试",
+      "module_consumers": [],
+      "named_data_readers": [
+        "N1实施者",
+        "独立审查与验收者"
+      ],
+      "delete_condition": "职责被正式替代且全部真实consumer改接后删除；历史原件保留",
+      "retention_basis": "specs/n1-main-agent-cost-20261015/spec.md 合同8；P1/T001。替代临时测量，不新增runtime公共命令/常驻服务/进度对象"
+    },
+    {
+      "source": "tests/integration/main-agent-cost-closeout.node-test.mjs",
+      "destination": "tests/integration/main-agent-cost-closeout.node-test.mjs",
+      "status": "retain",
+      "role": "test_only",
+      "responsibility": "N1冻结oracle与真实脱敏格式样本；不凭存在宣称验收",
+      "owner": "N1独立测试作者；本轮TCR-N1-P2-002由独立execution_support持笔，生产作者DO NOT TOUCH",
+      "consumer": "Node定向runner / 两Node测试",
+      "module_consumers": [],
+      "named_data_readers": [
+        "N1实施者",
+        "独立审查与验收者"
+      ],
+      "delete_condition": "职责被正式替代且全部真实consumer改接后删除；历史原件保留",
+      "retention_basis": "specs/n1-main-agent-cost-20261015/spec.md 合同8；P1/T001。替代临时测量，不新增runtime公共命令/常驻服务/进度对象"
+    },
+    {
+      "source": "tests/fixtures/main-agent-cost/dsh-v0.jsonl",
+      "destination": "tests/fixtures/main-agent-cost/dsh-v0.jsonl",
+      "status": "retain",
+      "role": "test_only",
+      "responsibility": "N1冻结oracle与真实脱敏格式样本；不凭存在宣称验收",
+      "owner": "N1独立测试作者；冻结修改须TCR",
+      "consumer": "Node定向runner / 两Node测试",
+      "module_consumers": [
+        "tests/contract/measure-main-agent-cost.node-test.mjs",
+        "tests/integration/main-agent-cost-closeout.node-test.mjs"
+      ],
+      "named_data_readers": [],
+      "delete_condition": "职责被正式替代且全部真实consumer改接后删除；历史原件保留",
+      "retention_basis": "specs/n1-main-agent-cost-20261015/spec.md 合同8；P1/T001。替代临时测量，不新增runtime公共命令/常驻服务/进度对象"
+    },
+    {
+      "source": "tests/fixtures/main-agent-cost/dsh-v3.jsonl",
+      "destination": "tests/fixtures/main-agent-cost/dsh-v3.jsonl",
+      "status": "retain",
+      "role": "test_only",
+      "responsibility": "N1冻结oracle与真实脱敏格式样本；不凭存在宣称验收",
+      "owner": "N1独立测试作者；冻结修改须TCR",
+      "consumer": "Node定向runner / 两Node测试",
+      "module_consumers": [
+        "tests/contract/measure-main-agent-cost.node-test.mjs",
+        "tests/integration/main-agent-cost-closeout.node-test.mjs"
+      ],
+      "named_data_readers": [],
+      "delete_condition": "职责被正式替代且全部真实consumer改接后删除；历史原件保留",
+      "retention_basis": "specs/n1-main-agent-cost-20261015/spec.md 合同8；P1/T001。替代临时测量，不新增runtime公共命令/常驻服务/进度对象"
+    },
+    {
+      "source": "tests/fixtures/main-agent-cost/dsh-v4.jsonl",
+      "destination": "tests/fixtures/main-agent-cost/dsh-v4.jsonl",
+      "status": "retain",
+      "role": "test_only",
+      "responsibility": "N1冻结oracle与真实脱敏格式样本；不凭存在宣称验收",
+      "owner": "N1独立测试作者；冻结修改须TCR",
+      "consumer": "Node定向runner / 两Node测试",
+      "module_consumers": [
+        "tests/contract/measure-main-agent-cost.node-test.mjs",
+        "tests/integration/main-agent-cost-closeout.node-test.mjs"
+      ],
+      "named_data_readers": [],
+      "delete_condition": "职责被正式替代且全部真实consumer改接后删除；历史原件保留",
+      "retention_basis": "specs/n1-main-agent-cost-20261015/spec.md 合同8；P1/T001。替代临时测量，不新增runtime公共命令/常驻服务/进度对象"
+    },
+    {
+      "source": "tests/fixtures/main-agent-cost/codex.jsonl",
+      "destination": "tests/fixtures/main-agent-cost/codex.jsonl",
+      "status": "retain",
+      "role": "test_only",
+      "responsibility": "N1冻结oracle与真实脱敏格式样本；不凭存在宣称验收",
+      "owner": "N1独立测试作者；冻结修改须TCR",
+      "consumer": "Node定向runner / 两Node测试",
+      "module_consumers": [
+        "tests/contract/measure-main-agent-cost.node-test.mjs",
+        "tests/integration/main-agent-cost-closeout.node-test.mjs"
+      ],
+      "named_data_readers": [],
+      "delete_condition": "职责被正式替代且全部真实consumer改接后删除；历史原件保留",
+      "retention_basis": "specs/n1-main-agent-cost-20261015/spec.md 合同8；P1/T001。替代临时测量，不新增runtime公共命令/常驻服务/进度对象"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"
