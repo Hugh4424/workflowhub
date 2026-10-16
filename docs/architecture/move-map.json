@@ -952,7 +952,7 @@
       "role": "production",
       "responsibility": "技能bundle文件清单与sources三型子定义：GitHub采用、本地授权、非权威catalog指针",
       "owner": "现有bundle schema owner；N2 P3维护sources.items",
-      "consumer": "现有bundle校验/便携作者；N2 P8 checkSkillConsistency消费同一properties.sources.items（P8尚未接线）",
+      "consumer": "现有bundle校验/便携作者；N2 P8 checkSkillConsistency(root)已复用同一properties.sources.items作report-only来源形状验证，schema不可读明确报告缺口，保既有failures/CLI退出；不证明来源许可或identity。",
       "module_consumers": [],
       "named_data_readers": [],
       "delete_condition": "仅当经独立审查的替代schema已承接全部bundle及来源检查consumer后删除；不增独立类型层",
@@ -3361,15 +3361,15 @@
       "destination": "tools/cli/check-skill-consistency.mjs",
       "status": "retain",
       "role": "production",
-      "responsibility": "已实施源码（尚待独立针对性验证）：P8/T016 的窄只读 CLI --root W，定向核当前五 stage skill-deps.yaml、wh-review manifest/stage-skill-plan、catalog 当前唯一 name/path 登记及真实磁盘/bundle闭包；历史44/provenance不 active，used_by_stages差异单独事实报告不作硬等价dispatch。缺失/重复/路径错配/mandatory清单不一致/实际active引用retired及坏安全闭包显式非零；不变成 Runner、技能派发器、公共阶段或推进 gate。",
-      "owner": "P8/T016 原唯一接线/map/checker实施维护者（本会话）；既有 tools/cli/run-checks.mjs 聚合 owner不新增",
-      "consumer": "唯一生产调用方为既有 tools/cli/run-checks.mjs 的 runChecker/runAggregate；现 runChecker:44–55 已提供同目录脚本spawn与argv/输出/exit聚合接缝，T016将在原文件scope接入本CLI。另消费者是变更维护者及T016原独立测试owner定向 --root fixture执行。当前CLI已创建、run-checks已接入；执行结果尚待独立针对性验证；不登记假runtime模块reader。",
+      "responsibility": "已实施源码（尚待独立针对性验证）：P8/T016 的窄只读 CLI --root W，定向核当前五 stage skill-deps.yaml、wh-review manifest/stage-skill-plan、catalog 当前唯一 name/path 登记及真实磁盘/bundle闭包；历史44/provenance不 active，used_by_stages差异单独事实报告不作硬等价dispatch。缺失/重复/路径错配/mandatory清单不一致/实际active引用retired及坏安全闭包显式非零；不变成 Runner、技能派发器、公共阶段或推进 gate。 N2 P8/T008复用模块相对runtime/schemas/skill-bundle.schema.json的properties.sources.items，以Ajv2020校验catalog来源投影；采用来源缺失、非法组合与schema不可读明确追加reports，保原failures/CLI退出，不复算或回填hash、不证明grant/identity。所有登记保name/重复检查；仅retired免活动path形状/唯一性，活动引用retired仍失败。",
+      "owner": "P8/T016 原唯一接线/map/checker实施维护者（本会话）；既有 tools/cli/run-checks.mjs 聚合 owner不新增；N2 P8/T008承接本次来源规则及D-018退休consumer适配",
+      "consumer": "唯一生产调用方为既有tools/cli/run-checks.mjs的runChecker/runAggregate（132–134实际调用本CLI）；变更维护者及独立测试owner通过既有--root夹具消费同一checkSkillConsistency(root)。N2 P8已实现来源reports与退休登记适配，使用既有schema三型子定义，不新增runtime模块reader、命令或推进许可。",
       "module_consumers": [],
       "named_data_readers": [
         "tools/cli/run-checks.mjs"
       ],
-      "delete_condition": "保持只读且只服务该有限对账；若现职责已由经独立审读的原实现承接且 run-checks及其它真实当前consumer为零，或维护成本高于已证损失，原T016维护owner按spec:161/:570收缩/退役。登记不授当前任意文件/历史删除许可；历史清理仍须真实用户范围与原source保留，不以本checker或计数授权退役18。",
-      "retention_basis": "当前 CLI 已创建并在 tools/cli/run-checks.mjs:132–134 真实接入既有 runChecker 聚合，仍仅为有限只读开发事实工具，不作 Runner/dispatch/阶段许可；061创建前预登记及其未创建、未接线、未实施测试状态仅为该历史时点原件，不修改061。职责源=spec.md:155/:161/:570、P8/T016:190/:196–202；替代旧manifest当前对账/手工5deps+wh映射遗漏核。复用现runChecker及loadStageSkillManifest/validateSkillBundle语法/包安全，不复制安全helper；两wh清单与catalog/current映射由 finite --root CLI核。原测试作者fd814预写冻结的既有25例：父会话回传独立N1/W1实际通过，以及372实际25pass另2选中重复；既有consistency与thin各3例、当前root CLI退出0且差异report-only只证明各自有限覆盖，不当完整Phase质量通过。新发现unreferenced current catalog name/path未覆盖的有效gap已确认，原25例不证明该新负控；待独立预写、批准及真实RED后原owner最小修，未称全current登记验证完成。保旧P2P历史原ref，不把新CLI实际结果覆写为原P2P覆盖。本条只维护真实当前目录职责，不新增schema/永久machinewriter/gate或清理许可。"
+      "delete_condition": "保持只读且只服务该有限对账；若现职责已由经独立审读的原实现承接且 run-checks及其它真实当前consumer为零，或维护成本高于已证损失，原T016维护owner按spec:161/:570收缩/退役。登记不授当前任意文件/历史删除许可；历史清理仍须真实用户范围与原source保留，不以本checker或计数授权退役18。 N2来源reports由后续N10接线保全；只有经独立审查的替代承接上述真实consumer及报告/退出语义后才退役，content_sha256默认复算/回填未在本次启用。",
+      "retention_basis": "当前 CLI 已创建并在 tools/cli/run-checks.mjs:132–134 真实接入既有 runChecker 聚合，仍仅为有限只读开发事实工具，不作 Runner/dispatch/阶段许可；061创建前预登记及其未创建、未接线、未实施测试状态仅为该历史时点原件，不修改061。职责源=spec.md:155/:161/:570、P8/T016:190/:196–202；替代旧manifest当前对账/手工5deps+wh映射遗漏核。复用现runChecker及loadStageSkillManifest/validateSkillBundle语法/包安全，不复制安全helper；两wh清单与catalog/current映射由 finite --root CLI核。原测试作者fd814预写冻结的既有25例：父会话回传独立N1/W1实际通过，以及372实际25pass另2选中重复；既有consistency与thin各3例、当前root CLI退出0且差异report-only只证明各自有限覆盖，不当完整Phase质量通过。新发现unreferenced current catalog name/path未覆盖的有效gap已确认，原25例不证明该新负控；待独立预写、批准及真实RED后原owner最小修，未称全current登记验证完成。保旧P2P历史原ref，不把新CLI实际结果覆写为原P2P覆盖。本条只维护真实当前目录职责，不新增schema/永久machinewriter/gate或清理许可。 N2 P8限定验证：133冻结REPORTONLY两例通过、132来源/退休/used_by_stages三态、129真实root六项introduced debt关闭、134精确schema EACCES故障显式报告；241独立效果已核132/129，134补充独立读回及本Phase正式审查待完成。原始失败074/127及P3许可/identity unknown保留，不改写历史质量。"
     },
     {
       "source": "tools/cli/run-checks.mjs",
