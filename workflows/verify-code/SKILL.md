@@ -28,6 +28,10 @@ version: 5.2.0
 
 UI 适用时沿 `skills/ui-project-init/SKILL.md` 的「规范职责」读取本次验证适用专业源，逐类核真实路径/稳定节、version/作用域、owner/consumer 与规则，再从真实页面和 Component Quality Map 核消费者、状态 owner、typed ViewModel、CSS/token、story/test 更新及已实际产生的浏览器状态。单类 missing/stale/冲突给影响及原 owner，不用旧 Design.md/Experience.md 两文件或单一 design_revision 代全部来源；历史条款按真实输入读取，本次行为/spec、专业规则、知识与执行 facts 各保其原写主。缺扫描、浏览器、fixture、viewport、截图或入口受阻保持 unknown/unavailable，不能把未观察当 N/A 或视觉通过。只有新疑点才重跑相应浏览器检查，先按 isolated-browser-qa 管理隔离、登录态与自建资源清理。
 
+阶段成本留账：在本次已授权的图更新与非破坏性收口取得各自实际结果后、最终 stage-handoff 之前，由阶段主会话执行一次本仓已核入口 `node tools/cli/measure-main-agent-cost.mjs --project=<本项目> --task=<本任务> --stage=verify-code --record`。project/task取当前认证任务；首次记录附已有真实开工事件 `--start-ref=<原件绝对路径>#seq=<用户事件seq>` 或Codex的 `#item_id=<URI编码UserMessage.id>`，已有账行不重置起点。需要明确源复跑时可附合同内 `--session=<原件绝对路径>`；无参来源仅用原主会话实际环境及父记录明确后代，不能让子代理环境、工具cwd或根SESSION_ID冒当前主会话。
+
+执行前核工具真实路径/版本与依赖闭包、认证checkout、外置task访问及原会话身份；回读任务根 `main-agent-cost.md` 的新增27列行、旧字节前缀、实际until与缺报。未触发、读取/锁/写入/取消失败都在同一交接写“本阶段无记录”及实际原因，保CLI原件；可写的缺口行按实际内容披露，留账失败不阻塞原阶段收尾。若即将删除唯一工具worktree，在工具/原身份仍可访问时先record并回读外置账本，再按既有授权清理；不从已删除入口补记、不假定存续repo有同版闭包。交接明确实际until之后的物理清理、交接发布和最终回复未计入该笔。通用stage-handoff保持发布职责，不新增共享writer。
+
 ## 一次架构机会
 
 每 task 最多一次实际架构机会评估。先从当前人读材料与既有 evidence 引用定位已发生的评估原件，实际读取范围、发现及限制；第二次触发只引用该原件和当前相关事实，不重跑评估。路径可读不等于评估已执行或通过；已有评估但原件缺失时保 unknown/unavailable 和具体缺口，不伪造报告、不借缺原件再评一次。未观察到评估而来源不足时说明未知，继续能够定位的安全验证；不新增已评估字段、拦截器或第二进度账本。

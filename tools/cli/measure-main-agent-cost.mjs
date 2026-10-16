@@ -11,9 +11,9 @@
  * independent full output/source readback; P2 owns retained ledger attempts.
  * Fixed source hashes and MIT notices: THIRD_PARTY_NOTICES.md, skills/catalog.yaml.
  */
-import { closeSync, constants, fstatSync, lstatSync, openSync, readSync, readdirSync, realpathSync } from 'node:fs';
+import { closeSync, constants, existsSync, fstatSync, lstatSync, openSync, readSync, readdirSync, realpathSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, parse, resolve, sep } from 'node:path';
 import { resolveCanonicalTaskPath } from '../../runtime/task/load-config.mjs';
@@ -141,7 +141,7 @@ export function measureSessions(sources, options={}) {
     const relevant=points.filter(r=>r.ordinal>seed);let error=points.some(r=>preferred&&r.payload?.thread_id!==id);let prev=-1;for(const r of relevant){const n=container(r)?.[nativeKeys[i]];if(n===undefined&&i>=3)continue;if(!validNumber(n)||n<prev)error=true;else prev=n;}
     const end=relevant.at(-1),endValue=container(end)?.[nativeKeys[i]],saved=previous?.cumulative?.find(p=>p.metric===k);let start=null;
     if(saved){const original=points.find(r=>path+'#ordinal='+r.ordinal===saved.eventRef);if(saved.series!==series||!original||iso(recordTime(original))!==saved.at||container(original)?.[nativeKeys[i]]!==saved.value||records.indexOf(original)>previousIndex){boundaryInvalid=true;bad('previous_boundary_mismatch','previous cumulative observation changed');}else start={eventRef:saved.eventRef,at:saved.at,value:saved.value};}
-    else{const base=points.filter(r=>previous||w?.previousBoundaries?recordTime(r)<lo:recordTime(r)<=lo).at(-1);if(base&&validNumber(container(base)?.[nativeKeys[i]]))start=point(base,container(base)[nativeKeys[i]]);else if(!header?.payload?.history_mode&&!header?.payload?.parent_thread_id&&!header?.payload?.source?.subagent&&seed===-Infinity&&!group.some(s=>s.readIssue)&&records.every((r,i)=>r.ordinal===i)&&!records.some(r=>r.payload?.type==='compaction')&&records.filter(r=>recordTime(r)<=lo).every(r=>r.type==='session_meta'||r.type==='turn_context'||r.type==='event_msg'&&r.payload?.type==='task_started'))start={eventRef:path+'#ordinal=0',at:iso(recordTime(header)),value:0};}
+    else{const base=points.filter(r=>previous||w?.previousBoundaries?recordTime(r)<lo:recordTime(r)<=lo).at(-1);if(base&&validNumber(container(base)?.[nativeKeys[i]]))start=point(base,container(base)[nativeKeys[i]]);else if(!header?.payload?.history_mode&&!header?.payload?.parent_thread_id&&!header?.payload?.source?.subagent&&seed===-Infinity&&!group.some(s=>s.readIssue)&&records.every((r,i)=>r.ordinal===i)&&!records.some(r=>r.payload?.type==='compaction')&&records.filter(r=>recordTime(r)<=lo).every(r=>r.type==='session_meta'||r.type==='turn_context'||r.type==='event_msg'&&(r.payload?.type==='task_started'||recordTime(r)===lo&&r.payload?.type==='item_completed'&&r.payload?.item?.type==='UserMessage')))start={eventRef:path+'#ordinal=0',at:iso(recordTime(header)),value:0};}
     const endPoint=end&&validNumber(endValue)?point(end,endValue):null;cumulativePoints.push({sourceRef:path,threadId:id,series,metric:k,from:start,until:endPoint});
     if(endPoint)snapshots.push({metric:k,series,...endPoint});
     if(endValue===undefined&&i>=3){usage[k]=missing('field_not_reported');continue;}
@@ -150,12 +150,14 @@ export function measureSessions(sources, options={}) {
   }
   const starts=new Map(),turnHistory=new Map();for(const r of consumed.filter(r=>r[key]>seed)){const start=dsh?r.type==='turn/start':r.type==='event_msg'&&r.payload?.type==='task_started',end=dsh?r.type==='turn/end':r.type==='event_msg'&&r.payload?.type==='task_complete';if(!start&&!end)continue;const turn=dsh?r.data?.turn:r.payload?.turn_id,t=recordTime(r);const identity=(start?'start:':'end:')+turn,body=canonical(dsh?r.data:r.payload);if(turnHistory.has(identity)){if(turnHistory.get(identity)!==body)activeInvalid=true;continue;}turnHistory.set(identity,body);if(start){if(starts.has(turn))activeInvalid=true;starts.set(turn,t);}else{if(!starts.has(turn)){activeInvalid=true;continue;}const a=starts.get(turn);if(t<a)activeInvalid=true;else if(windowValid&&Math.min(t,hi)>=Math.max(a,lo))intervals.push([Math.max(a,lo),Math.min(t,hi)]);starts.delete(turn);}}
   for(const a of starts.values())if(windowValid&&hi>=a){intervals.push([Math.max(a,lo),hi]);issue('open_turn',path,'open turn clipped at cutoff',true);}
-  const declaredChildren=consumed.flatMap(r=>dsh?(r.type==='subagent/catalog'&&typeof r.data?.childId==='string'?[r.data.childId]:[]):r.type==='event_msg'&&r.payload?.type==='item_completed'?(r.payload.item?.type==='SubAgentActivity'?[r.payload.item.agent_thread_id]:r.payload.item?.type==='CollabAgentToolCall'?r.payload.item.receiver_thread_ids??[]:[]):[]).filter(x=>typeof x==='string');
+  const declaredChildren=consumed.flatMap(record=>declaredChildIds(record,dsh));
   const missingChildren=[...new Set(declaredChildren)].filter(child=>!sources.some(s=>{const h=s.records[0];return dsh?h?.id===child&&h.parentSession===id:h?.payload?.id===child&&h.payload.parent_thread_id===id;}));for(const child of missingChildren)bad('missing_child','declared child source unavailable: '+child);
   if(invalid||boundaryInvalid){for(const k of usageKeys)if(usage[k]?.status==='available'&&(boundaryInvalid||issues.some(x=>x.sourcePath===path&&['unknown_format','inherited_boundary_missing','conflicting_event','invalid_position','invalid_event_time'].includes(x.code))))usage[k]=unavailable('source_integrity_invalid');}
-  if(issues.some(x=>x.sourcePath===path&&['conflicting_event','invalid_position'].includes(x.code)))for(const k of countKeys)if(counts[k]?.status==='available')counts[k]=unavailable('source_integrity_invalid');
+  const unknownFormat=issues.some(x=>x.sourcePath===path&&x.code==='unknown_format');
+  if(unknownFormat||group.some(source=>source.readIssue)||issues.some(x=>x.sourcePath===path&&['inherited_boundary_missing','conflicting_event','invalid_position','invalid_event_time'].includes(x.code)))for(const k of countKeys)if(unknownFormat||counts[k]?.status==='available')counts[k]=unavailable('source_integrity_invalid');
+  if(!windowValid){for(const k of usageKeys)usage[k]=unavailable('window_unavailable');for(const k of countKeys)if(counts[k]?.status==='available')counts[k]=unavailable('window_unavailable');}
   if(!times.length)for(const k of usageKeys)usage[k]=unavailable('no_execution_events');
-  const span=windowValid&&times.length?Math.max(0,Math.min(hi,Math.max(...times))-Math.max(lo,Math.min(...times))):NaN;
+  const span=Number.isFinite(hi)&&times.length?Math.max(0,Math.min(hi,Math.max(...times))-Math.max(Number.isFinite(lo)?lo:Math.min(...times),Math.min(...times))):NaN;
   const sourceActivityInvalid=issues.some(x=>x.sourcePath===path&&['unknown_format','inherited_boundary_missing','conflicting_event','invalid_position','invalid_event_time','source_read_failed','truncated_tail'].includes(x.code));
   const active=windowValid&&!activeInvalid&&!boundaryInvalid&&!sourceActivityInvalid?available(union(intervals)):unavailable('activity_boundary_invalid');if(active.status!=='available')activityFailed=true;
   if(activeInvalid)bad('invalid_turn_interval','turn boundary has no matching start or conflicts');
@@ -199,35 +201,18 @@ function safeReadBytes(path) {
   return bytes;
  } finally {closeSync(fd);}
 }
-function readSource(sourcePath) {
- const records=[];
- try {
-  let bytes=safeReadBytes(sourcePath);
-  if(/\.zst(?:d)?$/.test(sourcePath)) {
-   const result=spawnSync('zstd',['-dc'],{input:bytes,maxBuffer:Math.max(bytes.length*100,64*1024*1024)});
-   if(result.error||result.status!==0)throw new Error('invalid compressed source: '+(result.error?.message??result.stderr.toString()));
-   bytes=result.stdout;
-  }
-  const text=new TextDecoder('utf-8',{fatal:true}).decode(bytes);
-  if(text&&!text.endsWith('\n'))throw new Error('truncated_tail: incomplete final line');
-  for(const [index,line]of text.split('\n').entries()) {
-   if(!line.trim())continue;
-   try{records.push(JSON.parse(line));}catch{throw new Error('invalid_json line '+(index+1));}
-  }
-  const header=records[0],match=sourcePath.match(/\.v(\d+)\.jsonl(?:\.zst(?:d)?)?$/);
-  if(header?.type==='session'&&match&&Number(match[1])!==header.version)throw new Error('filename/header version mismatch');
-  return {sourcePath,records};
- } catch(error) {return {sourcePath,records,readIssue:{code:'source_read_failed',sourcePath,message:error.message,expected:false}};}
+function declaredChildIds(record,dsh) {
+ if(dsh)return record.type==='subagent/catalog'&&typeof record.data?.childId==='string'?[record.data.childId]:[];
+ if(record.type!=='event_msg'||record.payload?.type!=='item_completed')return [];
+ const item=record.payload.item;
+ const ids=item?.type==='SubAgentActivity'&&item.kind==='started'?[item.agent_thread_id]
+  :item?.type==='CollabAgentToolCall'&&item.tool==='spawn_agent'&&Array.isArray(item.receiver_thread_ids)?item.receiver_thread_ids:[];
+ return ids.filter(id=>typeof id==='string');
 }
 function childIds(source, cutoff=Infinity) {
  const dsh=source.records[0]?.type==='session';
- const prefix=[];for(const r of source.records){if(recordTime(r)>cutoff)break;prefix.push(r);}
- return [...new Set(prefix.flatMap(r=>dsh
-  ? r.type==='subagent/catalog'&&typeof r.data?.childId==='string'?[r.data.childId]:[]
-  : r.type==='event_msg'&&r.payload?.type==='item_completed'
-   ? r.payload.item?.type==='SubAgentActivity'?[r.payload.item.agent_thread_id]
-    : r.payload.item?.type==='CollabAgentToolCall'?r.payload.item.receiver_thread_ids??[]:[]
-   : []).filter(x=>typeof x==='string'))];
+ const prefix=[];for(const record of source.records){if(recordTime(record)>cutoff)break;prefix.push(record);}
+ return [...new Set(prefix.flatMap(record=>declaredChildIds(record,dsh)))];
 }
 function encodeSegment(value) {
  if(value==='.'||value==='..')return value.replaceAll('.','~002E');
@@ -244,7 +229,8 @@ function dshProjectKey(cwd) {
  const body=encoded.replace(/^-+/,'')||'root';
  return '--'+body.slice(0,251)+'--';
 }
-function explicitDescendants(initial, cutoff=Infinity) {
+async function explicitDescendants(initial, cutoff, load) {
+ if(typeof load!=='function')throw new TypeError('explicit asynchronous source loader required');
  const sources=[...initial],visited=new Set();
  for(let i=0;i<sources.length;i++) {
   const parent=sources[i],header=parent.records[0],dsh=header?.type==='session',parentId=dsh?header.id:header?.payload?.id;
@@ -267,14 +253,14 @@ function explicitDescendants(initial, cutoff=Infinity) {
      for(const delta of [-1,0,1]){const date=new Date(millis+delta*86400000).toISOString().slice(0,10).replaceAll('-',sep);for(const kind of ['sessions','archived_sessions']){const directory=join(root,kind,date);let names;try{names=readdirSync(directory);}catch(error){if(error.code==='ENOENT')continue;throw error;}candidates.push(...names.filter(n=>n.includes(child)&&/\.jsonl(?:\.zst(?:d)?)?$/.test(n)).map(n=>join(directory,n)));}}
     }
    } catch(error) {if(error.code!=='ENOENT')parent.readIssue={code:'child_source_failed',sourcePath:parent.sourcePath,message:error.message,expected:false};}
-   const loaded=candidates.map(readSource),valid=loaded.filter(s=>{const h=s.records[0];return dsh?h?.id===child&&h.parentSession===parentId:h?.payload?.id===child&&h.payload.parent_thread_id===parentId;});
-   if(valid.length){const first=canonical(valid[0].records);if(valid.some(s=>canonical(s.records)!==first))valid[0].readIssue={code:'conflicting_child_source',sourcePath:valid[0].sourcePath,message:'same child identity has conflicting source copies',expected:false};sources.push(valid[0]);}
+   const loaded=await Promise.all(candidates.map(load)),valid=loaded.filter(s=>{const h=s.records[0];return dsh?h?.id===child&&h.parentSession===parentId:h?.payload?.id===child&&h.payload.parent_thread_id===parentId;});
+   if(valid.length){const selected=valid.find(source=>!source.readIssue)??valid[0],broken=valid.filter(source=>source.readIssue);const first=canonical(selected.records);if(broken.length)selected.readIssue={code:'source_read_failed',sourcePath:broken[0].sourcePath,message:'child session copies include incomplete source: '+broken.map(source=>source.sourcePath+': '+source.readIssue.message).join('; '),expected:false};else if(valid.some(source=>canonical(source.records)!==first))selected.readIssue={code:'conflicting_child_source',sourcePath:selected.sourcePath,message:'same child identity has conflicting source copies',expected:false};sources.push(selected);}
   }
  }
  return sources;
 }
-function parseArgs(argv){const args={session:[]};const single=new Set(['from','until','project','task','stage','start-ref']);for(const arg of argv){if(arg==='--record'){if(args.record)throw new Error('duplicate record');args.record=true;continue;}const match=arg.match(/^--([^=]+)=(.*)$/);if(!match||(!single.has(match[1])&&match[1]!=='session'))throw new Error('unknown argument '+arg);const [,key,value]=match;if(!value)throw new Error('empty argument '+key);if(key==='session'){if(!isAbsolute(value))throw new Error('session must be absolute file');args.session.push(value);}else{if(Object.hasOwn(args,key))throw new Error('duplicate '+key);args[key]=value;}}
- if(Boolean(args.project)!==Boolean(args.task))throw new Error('project/task must be paired');if(args.stage&&!['make-decision','build-plan','build-code','verify-code'].includes(args.stage))throw new Error('invalid stage');for(const key of ['from','until'])if(args[key])date(args[key]);if(args.from&&args.until&&date(args.from)>date(args.until))throw new Error('reversed window');if(args['start-ref']&&!/^.+#(?:seq=\d+|item_id=.+)$/.test(args['start-ref']))throw new Error('invalid start selector');if(args.record&&(!args.project||!args.stage||args.from||args.until))throw new Error('record requires identity/stage and disallows explicit window');return args;
+function parseArgs(argv){const args={session:[]};const single=new Set(['from','until','project','task','stage','start-ref']);for(const arg of argv){if(arg==='--record'){if(args.record)throw new Error('duplicate record');args.record=true;continue;}const match=arg.match(/^--([^=]+)=(.*)$/s);if(!match||(!single.has(match[1])&&match[1]!=='session'))throw new Error('unknown argument '+arg);const [,key,value]=match;if(!value)throw new Error('empty argument '+key);if(key==='session'){if(!isAbsolute(value))throw new Error('session must be absolute file');args.session.push(value);}else{if(Object.hasOwn(args,key))throw new Error('duplicate '+key);args[key]=value;}}
+ if(Boolean(args.project)!==Boolean(args.task))throw new Error('project/task must be paired');if(args.stage&&!['make-decision','build-plan','build-code','verify-code'].includes(args.stage))throw new Error('invalid stage');for(const key of ['from','until'])if(args[key])date(args[key]);if(args.from&&args.until&&date(args.from)>date(args.until))throw new Error('reversed window');if(args['start-ref'])parseSelector(args['start-ref']);if(args.record&&(!args.project||!args.stage||args.from||args.until))throw new Error('record requires identity/stage and disallows explicit window');return args;
 }
 function taskSourceFacts(args, result) {
  const facts=sourceDefaults();
@@ -283,11 +269,11 @@ function taskSourceFacts(args, result) {
  const task=openTask(taskPath,{projectName:args.project,taskId:args.task});
  const fail=(code,message)=>result.issues.push({code,message,expected:false});
  try {
-  const root=resolve(dirname(fileURLToPath(import.meta.url)),'../..');
-  const materialRoot=join(root,'specs',args.task), map={};
-  if(args.stage!=='make-decision')map['phases/index.md']=safeReadBytes(join(materialRoot,'phases/index.md')).toString('utf8');
+  const root=authenticatedWorkspace(task);
+  const materialRoot=join(root,'specs',args.task),map={},sampled=new Map();
+  if(args.stage!=='make-decision'){const path=join(materialRoot,'phases/index.md'),bytes=safeReadBytes(path);sampled.set(path,bytes);map['phases/index.md']=new TextDecoder('utf-8',{fatal:true}).decode(bytes);}
   const names=materialFilesForCohort(task.manifest.activation_cohort,map,{stage:args.stage});
-  const details=names.map(name=>{const path=join(materialRoot,name),stat=lstatSync(path);if(!stat.isFile()||stat.isSymbolicLink())throw new Error('invalid material file '+name);const bytes=safeReadBytes(path);return {path,byteCount:bytes.length,sha256:hash(bytes)};});
+  const details=names.map(name=>{const path=join(materialRoot,name),stat=lstatSync(path);if(!stat.isFile()||stat.isSymbolicLink())throw new Error('invalid material file '+name);const bytes=sampled.get(path)??safeReadBytes(path);return {path,byteCount:bytes.length,sha256:hash(bytes)};});
   facts.materialBytes={metric:available(details.reduce((n,x)=>n+x.byteCount,0)),refs:details.map(x=>x.path),scope:'authenticated checkout material sample: '+JSON.stringify(details),unit:'byte'};
  } catch(error){facts.materialBytes={metric:unavailable('material_source_unavailable'),refs:[],scope:'current task materials',unit:'byte'};fail('material_source_unavailable',error.message);}
  facts.reviewProviderUsage={metric:missing('stage_not_supplied'),refs:[],scope:'current stage review',unit:'provider original'};
@@ -296,19 +282,234 @@ function taskSourceFacts(args, result) {
   const rows=readTaskFacts(taskPath).filter(r=>r.record_kind==='stage'&&r.stage===args.stage);
   if(!rows.length){facts.reviewProviderUsage.metric=missing('no_stage_fact');return facts;}
   if(rows.length!==1)throw new Error('review_source_ambiguity: multiple stage rows');
-  const wrapped=rows[0].review_result_ref,ref=wrapped&&typeof wrapped==='object'&&!Array.isArray(wrapped)?wrapped.value:wrapped;
-  if(ref===null||ref===undefined){facts.reviewProviderUsage.metric=missing('review_not_reported');return facts;}
+  const wrapped=rows[0].review_result_ref;
+  if(wrapped===null||wrapped===undefined){facts.reviewProviderUsage.metric=missing('review_not_reported');return facts;}
+  const wrapper=typeof wrapped==='object'&&!Array.isArray(wrapped),ref=wrapper?wrapped.value:wrapped;
+  if(wrapper&&ref===null&&typeof wrapped.reason==='string'&&wrapped.reason.trim()){facts.reviewProviderUsage.metric=missing('review_not_reported');return facts;}
   if(typeof ref!=='string'||!ref.trim()||ref!==ref.trim())throw new Error('review_source_ambiguity: no unique review ref');
   const report=JSON.parse(task.readRecord(ref));facts.reviewProviderUsage.refs=[ref];
   const completed=date(report.completed_at),from=result.window.from?date(result.window.from):NaN,until=result.window.until?date(result.window.until):NaN;
   if(!Number.isFinite(from)||!Number.isFinite(until))throw new Error('review window unavailable');
   if(completed<from||completed>until){facts.reviewProviderUsage.metric=missing('no_new_report_in_window');return facts;}
   const providers=report.review_facts?.providers;if(!Array.isArray(providers))throw new Error('review providers unavailable');
-  const values=[];for(const p of providers){if(p.usage_status!=='reported'){values.push({provider:p.provider,usage_status:p.usage_status??'not_reported',ref});continue;}if(!p.usage||typeof p.usage!=='object'||Array.isArray(p.usage))throw new Error('reported usage invalid');const usage={};for(const key of ['input','output','cacheRead','cacheWrite','reasoning','totalTokens'])if(Object.hasOwn(p.usage,key)){if(!validNumber(p.usage[key]))throw new Error('reported quantity invalid');usage[key]=p.usage[key];}const omitted=Object.keys(p.usage).filter(k=>!Object.hasOwn(usage,k));if(omitted.length)result.issues.push({code:'review_usage_fields_omitted',message:'unverified quantity or amount categories omitted; ref='+ref,expected:true});values.push({provider:p.provider,usage,usage_status:Object.keys(usage).length?'reported':'not_reported',ref});}
+  const values=[];for(const p of providers){if(p.usage_status!=='reported'){values.push({provider:p.provider,usage_status:p.usage_status??'not_reported',ref});continue;}if(!p.usage||typeof p.usage!=='object'||Array.isArray(p.usage))throw new Error('reported usage invalid');const usage={};for(const key of ['input','output','cacheRead','cacheWrite','reasoning','totalTokens','prompt_tokens','completion_tokens','input_tokens','output_tokens','cached_input_tokens','cache_read_input_tokens','cache_creation_input_tokens','reasoning_output_tokens'])if(Object.hasOwn(p.usage,key)){if(!validNumber(p.usage[key]))throw new Error('reported quantity invalid');usage[key]=p.usage[key];}const omitted=Object.keys(p.usage).filter(k=>!Object.hasOwn(usage,k));if(omitted.length)result.issues.push({code:'review_usage_fields_omitted',message:'unverified quantity or amount categories omitted; ref='+ref,expected:true});values.push({provider:p.provider,usage,usage_status:Object.keys(usage).length?'reported':'not_reported',ref});}
   facts.reviewProviderUsage.metric=values.some(x=>x.usage_status==='reported')?available(values):missing('quantities_not_reported');
- } catch(error){facts.reviewProviderUsage.metric=unavailable('review_source_unavailable');fail('review_source_unavailable',error.message);}
+ } catch(error){const reason=error.message.includes('review_source_ambiguity')?'review_source_ambiguity':'review_source_unavailable';facts.reviewProviderUsage.metric=unavailable(reason);fail(reason,error.message);}
  return facts;
 }
-function human(result){const render=m=>m.status==='available'?JSON.stringify(m.value):m.status+':'+m.reason;const lines=['N1 原始读数；不产 N10 检查器 / N11 总分。', '时间：这段多久、轮次内/等待各多久？等待计入任务墙钟。'];for(const k of ['wallMs','sessionSpanSumMs','activeUnionMs','waitingMs'])lines.push(k+' (ms): '+render(result.totals[k]));lines.push('token：上报哪些输入/输出/缓存量？');for(const [k,m]of Object.entries(result.totals.usage))lines.push(k+' (token): '+render(m));lines.push('步骤/轮次：源发生多少步骤或响应项、多少轮？');for(const k of ['dshSteps','codexResponseItems','turns'])lines.push(k+' (次): '+render(result.totals.counts[k]));lines.push('调用：发起多少子代理与命令工具调用？');for(const k of ['toolCalls','subagentCalls','commandCalls'])lines.push(k+' (次): '+render(result.totals.counts[k]));lines.push('三来源（各自口径，不能互替）：');for(const [k,fact]of Object.entries(result.sources))lines.push(k+' ['+fact.unit+']: '+render(fact.metric));lines.push('会话明细：'+JSON.stringify(result.sessions),'缺报与错误：'+JSON.stringify({issues:result.issues,missing:Object.entries(result.totals.usage).concat(Object.entries(result.totals.counts)).filter(([,v])=>v.status!=='available')}));return lines.join('\n')+'\n';}
-function explicitMain(argv=process.argv.slice(2)) {let args;try{args=parseArgs(argv);}catch(error){process.stderr.write('参数错误: '+error.message+'\n');return 2;}try{if(args.record||!args.session.length){process.stderr.write('unavailable: automatic discovery/record belongs to P2\n');return 1;}const sources=explicitDescendants([...new Set(args.session)].map(readSource),args.until?date(args.until):Infinity);const options={};if(args.from||args.until)options.window={from:args.from??null,until:args.until??null,includeFrom:false,startRef:args['start-ref']??null};const result=measureSessions(sources,options);try{result.sources=taskSourceFacts(args,result);}catch(error){result.sources.reviewProviderUsage.metric=unavailable('task_source_unavailable');result.sources.materialBytes.metric=unavailable('task_source_unavailable');result.issues.push({code:'task_source_unavailable',message:error.message,expected:false});}if(result.issues.some(x=>!x.expected))result.status='incomplete';process.stdout.write(human(result));return result.status==='available'?0:1;}catch(error){process.stderr.write('工具错误: '+error.stack+'\n');return 2;}}
-if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href)process.exitCode=explicitMain();
+function human(result){const render=m=>m.status==='available'?JSON.stringify(m.value):m.status+':'+m.reason;const lines=['N1 原始读数；不产 N10 检查器 / N11 总分。', '时间：这段多久、轮次内/等待各多久？等待计入任务墙钟。'];for(const k of ['wallMs','sessionSpanSumMs','activeUnionMs','waitingMs'])lines.push(k+' (ms): '+render(result.totals[k]));lines.push('token：上报哪些输入/输出/缓存量？');for(const [k,m]of Object.entries(result.totals.usage))lines.push(k+' (token): '+render(m));lines.push('步骤/轮次：源发生多少步骤或响应项、多少轮？');for(const k of ['dshSteps','codexResponseItems','turns'])lines.push(k+' (次): '+render(result.totals.counts[k]));lines.push('调用：发起多少子代理与命令工具调用？');for(const k of ['toolCalls','subagentCalls','commandCalls'])lines.push(k+' (次): '+render(result.totals.counts[k]));lines.push('三来源（各自口径，不能互替）：');for(const [k,fact]of Object.entries(result.sources))lines.push(k+' ['+fact.unit+']: '+render(fact.metric)+'; scope='+fact.scope+'; refs='+JSON.stringify(fact.refs));lines.push('会话明细：'+JSON.stringify(result.sessions),'缺报与错误：'+JSON.stringify({issues:result.issues,missing:Object.entries(result.totals.usage).concat(Object.entries(result.totals.counts)).filter(([,v])=>v.status!=='available')}));return lines.join('\n')+'\n';}
+
+function authenticatedWorkspace(task) {
+ const directory=path=>{const stat=lstatSync(path);if(!stat.isDirectory()||stat.isSymbolicLink())throw new Error('unsafe checkout metadata directory');return realpathSync(path);};
+ const text=path=>safeReadBytes(path).toString('utf8').trim();
+ const common=root=>{
+  const marker=join(root,'.git'),stat=lstatSync(marker);let gitdir;
+  if(stat.isDirectory()&&!stat.isSymbolicLink())gitdir=directory(marker);
+  else if(stat.isFile()&&!stat.isSymbolicLink()){const match=text(marker).match(/^gitdir: ([^\r\n]+)$/);if(!match)throw new Error('invalid checkout gitdir metadata');gitdir=directory(resolve(root,match[1]));}
+  else throw new Error('unsafe checkout gitdir metadata');
+  const head=text(join(gitdir,'HEAD'));if(!/^(?:ref: refs\/[^\s]+|[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/.test(head))throw new Error('invalid checkout HEAD metadata');
+  const commonPath=join(gitdir,'commondir');let result=gitdir;
+  try{const value=text(commonPath);if(!value||/[\r\n]/.test(value))throw new Error('invalid checkout commondir metadata');result=directory(resolve(gitdir,value));}catch(error){if(error.code!=='ENOENT')throw error;}
+  directory(join(result,'objects'));directory(join(result,'refs'));return result;
+ };
+ let root=realpathSync(process.cwd());
+ while(true){try{lstatSync(join(root,'.git'));break;}catch(error){if(error.code!=='ENOENT')throw error;const parent=dirname(root);if(parent===root)throw new Error('authenticated checkout is unavailable');root=parent;}}
+ if(task.manifest.workspace_root&&realpathSync(task.manifest.workspace_root)!==root)throw new Error('task workspace identity mismatch');
+ if(common(root)!==common(realpathSync(task.manifest.target_repo_root)))throw new Error('task checkout belongs to another repository');
+ return root;
+}
+function taskFor(args) {
+ const taskPath=resolveCanonicalTaskPath({project:args.project,task:args.task}).taskPath;
+ return openTask(taskPath,{projectName:args.project,taskId:args.task});
+}
+function parseSelector(value) {
+ const match=typeof value==='string'&&value.match(/^(.*)#(seq|item_id)=(.*)$/s);
+ if(!match||!isAbsolute(match[1]))throw new TypeError('invalid start selector');
+ if(match[2]==='seq') {
+  if(!/^\d+$/.test(match[3])||!validNumber(Number(match[3])))throw new TypeError('invalid seq selector');
+  return {sourcePath:match[1],kind:'seq',value:Number(match[3])};
+ }
+ let id;try{id=decodeURIComponent(match[3]);}catch{throw new TypeError('invalid encoded item_id');}
+ if(!id||/[\x00-\x1f\x7f/\\]/.test(id))throw new TypeError('invalid item_id selector');
+ return {sourcePath:match[1],kind:'item_id',value:id};
+}
+function startFrom(ref,sources) {
+ if(!ref)return {from:null,issue:{code:'task_start_unavailable',message:'first record has no authoritative start-ref',expected:false}};
+ const selector=parseSelector(ref),source=sources.find(s=>s.sourcePath===selector.sourcePath);
+ const matches=(source?.records??[]).filter(r=>selector.kind==='seq'
+  ?r.type==='user/message'&&r.seq===selector.value
+  :r.type==='event_msg'&&r.payload?.type==='item_completed'&&r.payload?.item?.type==='UserMessage'&&r.payload.item.id===selector.value);
+ if(matches.length!==1||!validNumber(recordTime(matches[0])))return {from:null,issue:{code:'task_start_unavailable',sourcePath:selector.sourcePath,message:'start-ref must match exactly one real user event',expected:false}};
+ return {from:iso(recordTime(matches[0]))};
+}
+function decodeSource(sourcePath,bytes) {
+ const records=[];
+ try {
+  const text=new TextDecoder('utf-8',{fatal:true}).decode(bytes);
+  if(text&&!text.endsWith('\n'))throw new Error('truncated_tail: incomplete final line');
+  for(const [index,line]of text.split('\n').entries()) {
+   if(!line.trim())continue;
+   let value;try{value=JSON.parse(line);}catch{throw new Error('invalid_json line '+(index+1));}
+   if(!value||typeof value!=='object'||Array.isArray(value))throw new Error('invalid source object line '+(index+1));
+   records.push(value);
+  }
+  const h=records[0],match=sourcePath.match(/\.v(\d+)\.jsonl(?:\.zst(?:d)?)?$/);
+  if(h?.type==='session'&&match&&Number(match[1])!==h.version)throw new Error('filename/header version mismatch');
+  return {sourcePath,records};
+ }catch(error){return {sourcePath,records,readIssue:{code:'source_read_failed',sourcePath,message:error.message,expected:false}};}
+}
+async function readSourceAsync(sourcePath,signal) {
+ try {
+  signal?.throwIfAborted();let bytes=safeReadBytes(sourcePath);
+  if(/\.zst(?:d)?$/.test(sourcePath)) {
+   bytes=await new Promise((resolve,reject)=>{
+    const child=spawn('zstd',['-dc'],{stdio:['pipe','pipe','pipe'],signal});
+    const chunks=[],errors=[];let size=0,settled=false;
+    const fail=error=>{if(!settled){settled=true;reject(error);}};
+    child.on('error',fail);child.stdin.on('error',error=>{if(error.code!=='EPIPE')fail(error);});
+    child.stdout.on('data',chunk=>{size+=chunk.length;if(size>Math.max(bytes.length*100,64*1024*1024)){child.kill('SIGTERM');fail(new Error('decoded source exceeds bounded buffer'));}else chunks.push(chunk);});
+    child.stderr.on('data',chunk=>errors.push(chunk));
+    child.on('close',(code,killed)=>{if(settled)return;settled=true;if(code!==0)reject(new Error('invalid compressed source: '+Buffer.concat(errors).toString('utf8')+' '+(killed??'')));else resolve(Buffer.concat(chunks));});
+    child.stdin.end(bytes);
+   });
+  }
+  signal?.throwIfAborted();return decodeSource(sourcePath,bytes);
+ }catch(error){if(signal?.aborted)throw error;return {sourcePath,records:[],readIssue:{code:'source_read_failed',sourcePath,message:error.message,expected:false}};}
+}
+function generationPaths(directory) {
+ const names=readdirSync(directory).filter(n=>/^session(?:\.v\d+)?\.jsonl(?:\.zst(?:d)?)?$/.test(n));
+ const generation=n=>Number(n.match(/\.v(\d+)\.jsonl/)?.[1]??0),highest=Math.max(...names.map(generation));
+ return names.filter(n=>generation(n)===highest).map(n=>join(directory,n));
+}
+function codexPaths(id,root) {
+ if(!/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))throw new Error('current thread UUIDv7 date is unavailable');
+ const millis=Number.parseInt(id.replaceAll('-','').slice(0,12),16),paths=[];
+ for(const delta of [-1,0,1])for(const kind of ['sessions','archived_sessions']) {
+  const date=new Date(millis+delta*86400000).toISOString().slice(0,10).replaceAll('-',sep),directory=join(root,kind,date);
+  let names;try{names=readdirSync(directory);}catch(error){if(error.code==='ENOENT')continue;throw error;}
+  const suffix=new RegExp(id+'\\.jsonl(?:\\.zst(?:d)?)?$','i');
+  paths.push(...names.filter(n=>suffix.test(n)).map(n=>join(directory,n)));
+ }
+ return paths;
+}
+async function discoverCurrent(task,signal) {
+ const dsh=process.env.DSH_SESSION_ID,thread=process.env.CODEX_THREAD_ID,fallback=process.env.CODEX_SESSION_ID;
+ if(dsh&&thread)throw new Error('ambiguous current host identities');
+ const load=path=>readSourceAsync(path,signal);let candidates=[],expected;
+ if(dsh) {
+  const home=process.env.DSH_HOME||join(homedir(),'.dsh');if(!isAbsolute(home))throw new Error('DSH_HOME must be absolute');
+  const projects=[...new Set([process.cwd(),task?.manifest.workspace_root,task?.manifest.target_repo_root].filter(Boolean))];
+  for(const cwd of projects) {
+   const directory=join(home,'sessions',dshProjectKey(cwd),encodeSegment(dsh));
+   let paths;try{paths=generationPaths(directory);}catch(error){if(error.code==='ENOENT')continue;throw error;}
+   for(const path of paths){const source=await load(path),h=source.records[0];if(h?.id!==dsh||h.cwd!==cwd)throw new Error('current DSH header identity mismatch');candidates.push(source);}
+  }
+  expected=dsh;
+ }else {
+  const id=thread||fallback;if(!id)throw new Error('current session environment is unavailable');
+  const home=process.env.CODEX_HOME||join(homedir(),'.codex');if(!isAbsolute(home))throw new Error('CODEX_HOME must be absolute');
+  for(const path of codexPaths(id,home)) {
+   const source=await load(path),h=source.records[0];
+   if(h?.type!=='session_meta'||h.payload?.id!==id)throw new Error('current Codex header/thread identity mismatch');
+   if(!thread&&(h.payload.parent_thread_id||h.payload.source?.subagent))throw new Error('root session fallback is not a current main thread');
+   candidates.push(source);
+  }
+  expected=id;
+ }
+ if(!candidates.length)throw new Error('current session source unavailable for '+expected);
+ const broken=candidates.filter(source=>source.readIssue);
+ if(broken.length) {
+  const selected=candidates.find(source=>!source.readIssue)??candidates[0];
+  return {...selected,readIssue:{code:'source_read_failed',sourcePath:broken[0].sourcePath,
+   message:'current session copies include incomplete source: '+broken.map(source=>source.sourcePath+': '+source.readIssue.message).join('; '),expected:false}};
+ }
+ const first=canonical(candidates[0].records);
+ if(candidates.some(s=>canonical(s.records)!==first))throw new Error('current session copies conflict');
+ return candidates[0];
+}
+const LEDGER_HEADER='| 记录时间(UTC) | 阶段 | from(UTC) | until(UTC) | 起点来源 | 窗口状态 | 任务墙钟(ms) | 会话跨度和(ms) | 轮次内并集(ms) | 等待(ms) | 输入(token) | 输出(token) | 缓存读(token) | 缓存写(token) | 推理(token) | DSH步骤(次) | Codex响应项(次) | 轮次(次) | 工具调用(次) | 子代理调用(次) | 命令调用(次) | 宿主实际注入(byte) | 审查provider上报(原口径) | 当前材料(byte) | 来源refs | 会话明细与累计点 | 缺报与错误 |';
+const ledgerEscape=value=>String(value).replaceAll('&','&amp;').replaceAll('\\','&#92;').replaceAll('|','&#124;').replaceAll('\r','&#13;').replaceAll('\n','&#10;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+const ledgerUnescape=value=>value.replace(/&(amp|#92|#124|#13|#10|lt|gt);/g,(_,e)=>({amp:'&','#92':'\\','#124':'|','#13':'\r','#10':'\n',lt:'<',gt:'>'}[e]));
+const renderMetric=m=>m.status==='available'?JSON.stringify(m.value):m.status+':'+m.reason;
+function parseLedger(raw) {
+ if(raw==='')return [];
+ if(!raw.endsWith('\n'))throw new Error('ledger_format_invalid: truncated final row');
+ const lines=raw.slice(0,-1).split('\n');
+ if(lines[0]!==LEDGER_HEADER||!/^\|(?:\s*-{3,}\s*\|){27}$/.test(lines[1]??''))throw new Error('ledger_format_invalid: header');
+ return lines.slice(2).map(line=>{
+  if(!line.startsWith('|')||!line.endsWith('|'))throw new Error('ledger_format_invalid: row boundary');
+  const cells=line.split('|').slice(1,-1).map(c=>ledgerUnescape(c.trim()));
+  if(cells.length!==27)throw new Error('ledger_format_invalid: column count');
+  try{date(cells[0]);date(cells[3]);for(const index of [24,25,26])if(!Array.isArray(JSON.parse(cells[index])))throw new Error('not an array');}
+  catch(error){throw new Error('ledger_format_invalid: '+error.message);}
+  return cells;
+ });
+}
+function ledgerRow(args,result,startRef) {
+ const t=result.totals;
+ const material=result.sources.materialBytes;
+ if(material.metric.status==='available')result.issues.push({code:'material_sample',message:material.scope,expected:true});
+ const cells=[new Date().toISOString(),args.stage,result.window.from??'unavailable:task_start_unavailable',result.window.until,startRef??'unavailable:task_start_unavailable',result.status,
+  ...['wallMs','sessionSpanSumMs','activeUnionMs','waitingMs'].map(k=>renderMetric(t[k])),
+  ...usageKeys.map(k=>renderMetric(t.usage[k])),...countKeys.map(k=>renderMetric(t.counts[k])),
+  renderMetric(result.sources.hostInjectedBytes.metric),renderMetric(result.sources.reviewProviderUsage.metric),renderMetric(material.metric),
+  JSON.stringify(result.sessions.flatMap(s=>s.sourceRefs)),JSON.stringify(result.sessions),JSON.stringify(result.issues)];
+ return '| '+cells.map(ledgerEscape).join(' | ')+' |\n';
+}
+async function recordMeasurement(args,signal) {
+ const task=taskFor(args);if(task.manifest.activation_cohort!=='post')throw new Error('pre/history task is read-only');
+ authenticatedWorkspace(task);let published=false;
+ try {
+  return await task.withRecordLock('main-agent-cost',async()=>{
+   signal.throwIfAborted();let old='';try{old=task.readRecord('main-agent-cost.md');}catch(error){if(error.code!=='ENOENT')throw error;}
+   const rows=parseLedger(old),last=rows.at(-1);
+   if(last&&args['start-ref'])throw Object.assign(new TypeError('start-ref cannot reset an existing ledger'),{argumentError:true});
+   const until=new Date().toISOString(),load=path=>readSourceAsync(path,signal),explicit=args.session.length>0;
+   let sources=[],loadIssue;
+   try {
+    if(explicit)sources=await Promise.all([...new Set(args.session)].map(load));
+    else {
+     const current=await discoverCurrent(task,signal),h=current.records[0];
+     if(h.type==='session_meta'&&(h.payload.parent_thread_id||h.payload.source?.subagent)||h.type==='session'&&(h.origin==='subagent'||h.delegationDepth>0))throw new Error('stage_caller_is_subagent');
+     sources=[current];
+    }
+   }catch(error){if(signal.aborted)throw error;loadIssue={code:'current_source_unavailable',message:error.message,expected:false};}
+   const previousSources=last?JSON.parse(last[24]):[],startRef=last?last[4]:args['start-ref']??null;
+   const selector=!last&&args['start-ref']?parseSelector(args['start-ref']):null;
+   const extra=[...new Set([...previousSources,...(selector?[selector.sourcePath]:[])])].filter(path=>!sources.some(s=>s.sourcePath===path));
+   sources.push(...await Promise.all(extra.map(load)));
+   sources=await explicitDescendants(sources,date(until),load);
+   const start=last?{from:last[3]}:startFrom(startRef,sources),previousBoundaries=last?JSON.parse(last[25]).flatMap(s=>s.observedBoundaries):[];
+   const result=measureSessions(sources,{window:{from:start.from,until,includeFrom:!last,startRef,previousBoundaries}});
+   if(start.issue)result.issues.push(start.issue);if(loadIssue)result.issues.push(loadIssue);
+   try{result.sources=taskSourceFacts(args,result);}catch(error){result.sources.reviewProviderUsage.metric=unavailable('task_source_unavailable');result.sources.materialBytes.metric=unavailable('task_source_unavailable');result.issues.push({code:'task_source_unavailable',message:error.message,expected:false});}
+   result.status=result.issues.some(x=>!x.expected)?'incomplete':'available';signal.throwIfAborted();
+   const prefix=old||LEDGER_HEADER+'\n| '+Array(27).fill('---').join(' | ')+' |\n',next=prefix+ledgerRow(args,result,startRef);
+   await task.writeRecordAtomic('main-agent-cost.md',next);published=true;
+   const readback=task.readRecord('main-agent-cost.md');
+   if(readback!==next||!readback.startsWith(old))throw new Error('ledger publication readback mismatch');
+   process.stdout.write(human(result));process.stdout.write('已发布一条任务账本记录: '+task.recordPath('main-agent-cost.md')+'\n');
+   if(signal.aborted){process.stderr.write('已发布，随后取消；本笔实际until之后动作未计入。\n');return 1;}
+   return result.status==='available'?0:1;
+  });
+ }catch(error){if(error.argumentError)throw error;process.stderr.write((published?'已发布后失败: ':'本阶段无记录: ')+(signal.aborted?'cancelled: ':'')+error.message+'\n');return 1;}
+}
+async function cliMain(argv=process.argv.slice(2)) {
+ let args;try{args=parseArgs(argv);}catch(error){process.stderr.write('参数错误: '+error.message+'\n');return 2;}
+ const controller=new AbortController(),interrupt=()=>controller.abort(new Error('cancelled'));
+ process.on('SIGTERM',interrupt);process.on('SIGINT',interrupt);
+ try {
+  if(args.record)return await recordMeasurement(args,controller.signal);
+  const task=args.task?taskFor(args):null,load=path=>readSourceAsync(path,controller.signal);
+  let sources=[];
+  try{sources=args.session.length?await Promise.all([...new Set(args.session)].map(load)):[await discoverCurrent(task,controller.signal)];}
+  catch(error){process.stderr.write('unavailable: '+error.message+'\n');return 1;}
+  sources=await explicitDescendants(sources,args.until?date(args.until):Infinity,load);
+  const options={};if(args.from||args.until)options.window={from:args.from??null,until:args.until??null,includeFrom:false,startRef:null};
+  const result=measureSessions(sources,options);
+  try{result.sources=taskSourceFacts(args,result);}catch(error){result.sources.reviewProviderUsage.metric=unavailable('task_source_unavailable');result.sources.materialBytes.metric=unavailable('task_source_unavailable');result.issues.push({code:'task_source_unavailable',message:error.message,expected:false});}
+  if(result.issues.some(x=>!x.expected))result.status='incomplete';process.stdout.write(human(result));return result.status==='available'?0:1;
+ }catch(error){process.stderr.write((args.record?'本阶段无记录: ':'工具错误: ')+error.message+'\n');return error.argumentError?2:args.record?1:2;}
+ finally{process.off('SIGTERM',interrupt);process.off('SIGINT',interrupt);}
+}
+if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href)process.exitCode=await cliMain();

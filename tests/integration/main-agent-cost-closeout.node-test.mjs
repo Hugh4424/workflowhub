@@ -81,10 +81,10 @@ test('LEDGER special-character source refs round-trip through fixed entity escap
  const f=setup(t),path=join(f.root,'pipes|back\\slash&<x>\n/session.v4.jsonl');put(path,f.records);f.session=path;ok(first(f));const {raw,rows}=readLedger(f);assert.ok(raw.includes('&#124;'));assert.ok(raw.includes('&#92;'));assert.ok(raw.includes('&amp;'));assert.ok(raw.includes('&lt;'));assert.ok(raw.includes('&#10;'));assert.ok(JSON.parse(rows[0][24]).includes(path));
 });
 test('AUTO DSH parameterized home/cwd discovers only exact session, highest generation once',t=>{
- const f=setup(t),path=dshPath(f);put(path,f.records);put(path.replace('v4','v3'),[{...f.records[0],version:3},...f.records.slice(1)]);const env={...f.env,DSH_SESSION_ID:'fixture-dsh-v4-1'};const r=run(f,['--project=cost-project','--task=cost-task','--stage=build-plan','--record','--start-ref='+path+'#seq=9'],env);ok(r);const row=readLedger(f).rows[0];numeric(row[10],8923);assert.deepEqual(JSON.parse(row[24]),[path]);
+ const f=setup(t),path=dshPath(f);put(path,f.records);put(join(dirname(path),'session.v3.jsonl'),[{...f.records[0],version:3},...f.records.slice(1)]);const env={...f.env,DSH_SESSION_ID:'fixture-dsh-v4-1'};const r=run(f,['--project=cost-project','--task=cost-task','--stage=build-plan','--record','--start-ref='+path+'#seq=9'],env);ok(r);const row=readLedger(f).rows[0];numeric(row[10],8923);assert.deepEqual(JSON.parse(row[24]),[path]);
 });
 test('AUTO DSH unknown higher generation and missing ID never silently fallback or scan other history',t=>{
- const f=setup(t),path=dshPath(f);put(path,f.records);put(path.replace('v4','v99'),[{...f.records[0],version:99},...f.records.slice(1)]);const env={...f.env,DSH_SESSION_ID:'fixture-dsh-v4-1'};assert.equal(run(f,['--project=cost-project','--task=cost-task'],env).status,1);
+ const f=setup(t),path=dshPath(f);put(path,f.records);put(join(dirname(path),'session.v99.jsonl'),[{...f.records[0],version:99},...f.records.slice(1)]);const env={...f.env,DSH_SESSION_ID:'fixture-dsh-v4-1'};assert.equal(run(f,['--project=cost-project','--task=cost-task'],env).status,1);
  const unrelated=put(dshPath(f,'other-session'),f.records),before=hash(readFileSync(unrelated));assert.equal(run(f,['--project=cost-project','--task=cost-task'],{...env,DSH_SESSION_ID:'absent-session'}).status,1);assert.equal(hash(readFileSync(unrelated)),before);
 });
 test('AUTO DSH explicit catalog discovers owned child; missing and foreign parent remain visible',t=>{
@@ -116,7 +116,7 @@ test('SOURCE current stage provider raw usage retained; historical report not re
  ok(record(f));assert.equal(readLedger(f).rows[1][22],'not_reported:no_new_report_in_window');report.completed_at=new Date().toISOString();report.review_facts.providers[0].usage=[];writeFileSync(join(f.taskPath,ref),JSON.stringify(report));assert.equal(record(f).status,1);assert.match(readLedger(f).rows.at(-1)[22],/^unavailable:/);
 });
 test('SOURCE review ref escaping task root and pre/history write attempt fail without external change',t=>{
- const f=setup(t),outside=join(f.root,'review.json');writeFileSync(outside,'KEEP');writeFileSync(join(f.taskPath,'facts.jsonl'),JSON.stringify({task_id:'cost-task',stage:'build-plan',review_result_ref:{value:'../../../../review.json'}})+'\n');assert.equal(first(f).status,1);assert.equal(readFileSync(outside,'utf8'),'KEEP');
+ const f=setup(t),outside=join(f.root,'review.json');writeFileSync(outside,'KEEP');writeFileSync(join(f.taskPath,'facts.jsonl'),JSON.stringify({record_kind:'stage',task_id:'cost-task',stage:'build-plan',review_result_ref:{value:'../../../../review.json'}})+'\n');assert.equal(first(f).status,1);assert.equal(readFileSync(outside,'utf8'),'KEEP');
  writeFileSync(join(f.taskPath,'task.json'),JSON.stringify({...f.manifest,activation_cohort:'pre'}));const before=existsSync(f.ledger)?readFileSync(f.ledger,'utf8'):null;assert.notEqual(record(f).status,0);assert.equal(existsSync(f.ledger)?readFileSync(f.ledger,'utf8'):null,before);
 });
 test('BOUNDARY existing four workflow final-step IDs and completion evidence remain unchanged',()=>{
@@ -155,8 +155,31 @@ test('START AUTO Codex main thread resolves item_id user start and reports cumul
  const f=setup(t),c=codexMain(f);const r=run(f,['--project=cost-project','--task=cost-task','--stage=build-code','--record','--start-ref='+c.path+'#item_id=constructed%20user-start'],c.env);ok(r);const row=readLedger(f).rows[0];assert.equal(row[2],'2026-10-02T23:02:22.379Z');numeric(row[10],271369);numeric(row[11],382);numeric(row[12],182528);assert.equal(row[18],'not_reported:unsupported_in_this_task');assert.equal(JSON.parse(row[25])[0].sessionId,c.id);
 });
 test('AUTO Codex child refs use actual agent_thread_id and parent header; foreign receivers excluded',t=>{
- const f=setup(t),p=codexMain(f),childId='01a0feda-b95f-7163-a9c1-0ea058d0fa96',c=codexMain(f,childId);c.records[0].payload.parent_thread_id=p.id;c.records[0].payload.source={subagent:{other:'constructed'}};put(c.path,c.records);
- p.records.push({timestamp:'2026-10-02T23:04:01.934Z',ordinal:15,type:'event_msg',payload:{type:'item_completed',item:{type:'SubAgentActivity',id:'constructed-spawn',agent_thread_id:childId}}});put(p.path,p.records);
+ const f=setup(t),p=codexMain(f),childId='01a0feda-b95f-7163-a9c1-0ea058d0fa96',c=codexMain(f,childId);c.records[0].payload.parent_thread_id=p.id;c.records[0].payload.source={subagent:{other:'constructed'}};
+ // Explicitly constructed child boundary and reported zero point;
+ // not evidence of a real historical child session.
+ c.records[0].payload.subagent_history_start_ordinal=0;
+ c.records[0].timestamp='2026-10-02T23:02:22.378Z';
+ for(const r of c.records.slice(1))r.ordinal+=1;
+ c.records.splice(1,0,{
+  timestamp:'2026-10-02T23:02:22.378Z',
+  ordinal:1,
+  type:'token_usage_record',
+  payload:{
+   thread_id:childId,
+   session_id:childId,
+   response_id:'constructed-child-zero',
+   thread_token_usage:{
+    input_tokens:0,
+    output_tokens:0,
+    cached_input_tokens:0,
+    cache_write_input_tokens:0,
+    reasoning_output_tokens:0
+   }
+  }
+ });
+ put(c.path,c.records);
+ p.records.push({timestamp:'2026-10-02T23:04:01.934Z',ordinal:15,type:'event_msg',payload:{type:'item_completed',item:{type:'SubAgentActivity',id:'constructed-spawn',kind:'started',agent_thread_id:childId}}});put(p.path,p.records);
  const argv=['--project=cost-project','--task=cost-task','--stage=build-code','--record','--start-ref='+p.path+'#item_id=constructed%20user-start'];ok(run(f,argv,p.env));const row=readLedger(f).rows[0];numeric(row[10],542738);assert.deepEqual(JSON.parse(row[25]).map(x=>x.sessionId).sort(),[p.id,childId].sort());
  c.records[0].payload.parent_thread_id='01a0feda-b95f-7163-a9c1-0ea058d0fa97';put(c.path,c.records);assert.equal(run(f,['--project=cost-project','--task=cost-task','--stage=build-code','--record'],p.env).status,1);assert.match(readLedger(f).rows.at(-1)[26],/parent|child|归属/i);
 });
