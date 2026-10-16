@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test } from "vitest";
+import { test, vi, beforeEach, afterEach } from "vitest";
 import { Broker, publicV2Error, sumUsage } from "../lib/broker.mjs";
 import { canonicalDeliveryManifestHash, canonicalInnerManifestHash, canonicalMaterialManifestHash, canonicalPacketHash, canonicalWorkflowHubMaterialId, planDelivery, prepareAttachments, probeAttachmentWorkspace, validateAttachments } from "../lib/attachments.mjs";
 import { validateConfig } from "../lib/config.mjs";
@@ -32,6 +32,49 @@ function config(root, tiers, attachmentRoot = null) {
   const ids = [...new Set(tiers.flat())];
   return validateConfig({ version: 4, runtime: { root, ttl_hours: 24, max_prompt_bytes: 10000, max_output_bytes: 100000, max_attachment_bytes: 10000, liveness_interval_ms: 5, orphan_timeout_ms: 100 }, attachment_roots: attachmentRoot ? [{ root: attachmentRoot, sources: ["skills", "contracts", "requirements", "review-instructions.md", "review-packet.v1.json", "changes.diff", "manifest.json"] }] : [], tiers, providers: Object.fromEntries(ids.map((id) => [id, { enabled: true, command: fake, model: null, effort: null, thinking: null, auth: { type: "native" }, env: [] }])) });
 }
+
+
+// TCR260: these named legacy tests cover controlled child lifecycle, not
+// native capability. Derive the real native guarded plan first; replace only
+// its execution copy with the original direct child (which had no supervisor).
+import controlledOpenCode from "../lib/adapters/opencode.mjs";
+import { prepareAttachments as prepareControlledPacket, prepareWritableAttachmentView as controlledPacketView } from "../lib/attachments.mjs";
+const controlledLegacyCases = new Set(["workflowhub result v2 requires a candidate group and executes every configured member", "workflowhub result v2 runs every configured profile in initial and continuation groups", "doctor and default run follow configured tier order", "file_only runs Kimi and OpenCode from frozen provider-private workspaces", "continuation intersects its frozen allowlist with completed sessions only", "OpenCode stdin delivery ignores legacy max_prompt_bytes", "an always_embed continuation uses the small delta prompt and preserves its session"]);
+const guardedLegacyStart = controlledOpenCode.start;
+const guardedLegacyResume = controlledOpenCode.resume;
+let controlledPacketCleanup = [];
+let controlledAllowsSyntheticPacket = false;
+function controlledLegacyPlan(provider, cwd, prompt, session = null) {
+  let guardCwd = cwd;
+  if (!fs.existsSync(path.join(cwd, "bundle", "attachments-manifest.json"))) {
+    if (!controlledAllowsSyntheticPacket) throw new Error("real packet-bearing caller did not supply its guarded bundle root");
+    // Prompt-only generic broker tests have no real packet. Their isolated
+    // synthetic guard packet makes no claim that native prompt-only is safe.
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "legacy-guard-")));
+    controlledPacketCleanup.push(root);
+    const source = path.join(root, "source"); fs.mkdirSync(source);
+    const text = "controlled generic lifecycle guard input"; fs.writeFileSync(path.join(source, "input.md"), text);
+    const runtime = path.join(root, "runtime"); fs.mkdirSync(runtime);
+    const stored = prepareControlledPacket({ root: source, delivery: "file_only", manifest: {version: 1, bundle_id: "controlled-legacy", entries: [{source: "input.md", destination: "input.md", size: Buffer.byteLength(text), sha256: createHash("sha256").update(text).digest("hex"), embed: false}]}}, runtime, "opencode", 10000, [{root: source, sources: ["input.md"]}]);
+    guardCwd = controlledPacketView(runtime, "opencode", stored).cwd;
+  }
+  const actual = {...provider, command: "/Users/Hugh/.opencode/bin/opencode"};
+  const guarded = session === null ? guardedLegacyStart(actual, guardCwd, prompt, null) : guardedLegacyResume(actual, guardCwd, session, prompt, null);
+  const argv = [...guarded.clientArgv]; const attach = argv.indexOf("--attach"); if (attach >= 0) argv.splice(attach, 2);
+  return {...guarded, command: provider.command, argv, cwd, healthServer: undefined, probeSession: undefined};
+}
+beforeEach(({task}) => {
+  if (!controlledLegacyCases.has(task.name)) return;
+  controlledAllowsSyntheticPacket = task.name === "continuation intersects its frozen allowlist with completed sessions only";
+  vi.spyOn(controlledOpenCode, "start").mockImplementation((p,cwd,prompt) => controlledLegacyPlan(p,cwd,prompt));
+  vi.spyOn(controlledOpenCode, "resume").mockImplementation((p,cwd,session,prompt) => controlledLegacyPlan(p,cwd,prompt,session));
+});
+afterEach(() => {
+  vi.restoreAllMocks();
+  const unlock = root => { for (const e of fs.readdirSync(root,{withFileTypes:true})) {const f=path.join(root,e.name);if(e.isDirectory())unlock(f);if(!e.isSymbolicLink())fs.chmodSync(f,e.isDirectory()?0o700:0o600);}fs.chmodSync(root,0o700); };
+  for (const root of controlledPacketCleanup) {unlock(root);fs.rmSync(root,{recursive:true,force:true});}
+  controlledPacketCleanup = [];
+});
 
 test("workflowhub material id binds semantic files and ignores transport wrappers", () => {
   const files = [

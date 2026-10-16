@@ -4046,15 +4046,18 @@
       "destination": "skills/third-review/lib/adapters/antigravity.mjs",
       "status": "move",
       "role": "production",
-      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "responsibility": "既有AG start/parse/observeLine现安装exact-member原生default-deny hook；同进程仅复用完整性未变的自有policy，ambient/tampered拒绝。真实单包拒绝矩阵及124实际flash单成员red三阶段已证；未证明full paired全配置路线或质量不劣化",
       "owner": "skills/third-review",
-      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
-      "module_consumers": [],
+      "consumer": "skills/third-review/lib/adapters/index.mjs registry供broker adapter(provider.adapter)取得worker；broker调用start并消费计划/终末解析",
+      "module_consumers": [
+        "skills/third-review/lib/adapters/index.mjs",
+        "skills/third-review/lib/broker.mjs"
+      ],
       "named_data_readers": [
         "skills/wh-review/scripts/review-provider-client.mjs"
       ],
       "delete_condition": "宿主不再调用 third-review",
-      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0；N3 P2批准窄修订登记，保既有owner；不新增生产文件/公共入口/schema/持久账本，未实施职责不报active完成"
     },
     {
       "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/adapters/claude-code.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
@@ -4211,30 +4214,35 @@
       "destination": "skills/third-review/lib/adapters/opencode-supervised-cli.mjs",
       "status": "move",
       "role": "production",
-      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "responsibility": "既有本地serve/client启动、终末探测和所属进程清理；消费OpenCode adapter传入的同一原生permission环境，当前未改supervisor。受控最终env已核；真实tool拒绝因TLS未到tool，保持未验证",
       "owner": "skills/third-review",
-      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
-      "module_consumers": [],
+      "consumer": "skills/third-review/lib/adapters/opencode.mjs executionPlan作为controller传入workspace/clientArgv；本进程输出原流/终末失败给broker",
+      "module_consumers": [
+        "skills/third-review/lib/adapters/opencode.mjs"
+      ],
       "named_data_readers": [
         "skills/wh-review/scripts/review-provider-client.mjs"
       ],
       "delete_condition": "宿主不再调用 third-review",
-      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0；N3 P2批准窄修订登记，保既有owner；不新增生产文件/公共入口/schema/持久账本，未实施职责不报active完成"
     },
     {
       "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/adapters/opencode.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
       "destination": "skills/third-review/lib/adapters/opencode.mjs",
       "status": "move",
       "role": "production",
-      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "responsibility": "既有OpenCode executionPlan/start/resume现验证原生能力和最终default-deny exact-file permission，runFromWritableRoot使正常caller传真实bundle父根；隔离dataHome/supervisor沿用。真实TLS失败前无tool拒绝事实，保持未验证",
       "owner": "skills/third-review",
-      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
-      "module_consumers": [],
+      "consumer": "adapter registry供broker取得worker；executionPlan把workspace/clientArgv交opencode-supervised-cli，broker消费计划/解析",
+      "module_consumers": [
+        "skills/third-review/lib/adapters/index.mjs",
+        "skills/third-review/lib/broker.mjs"
+      ],
       "named_data_readers": [
         "skills/wh-review/scripts/review-provider-client.mjs"
       ],
       "delete_condition": "宿主不再调用 third-review",
-      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0；N3 P2批准窄修订登记，保既有owner；不新增生产文件/公共入口/schema/持久账本，未实施职责不报active完成"
     },
     {
       "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/adapters/pi-supervised-cli.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
@@ -4301,30 +4309,34 @@
       "destination": "skills/third-review/lib/attachments.mjs",
       "status": "move",
       "role": "production",
-      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "responsibility": "既有packet校验/准备/freeze与managed清理；prepareDirectionReviewStep按当前step只选准入材料，reveal/challenge接收前步有效原始意见，各步独立临时根并清理。受控三段及124实际AGflash单role前步意见传入并打开已验；全配置消费未验",
       "owner": "skills/third-review",
-      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
-      "module_consumers": [],
+      "consumer": "skills/third-review/lib/broker.mjs通过planDelivery/prepareCheckedAttachments/freezeManagedAttachments/discardManagedAttachments消费已验材料",
+      "module_consumers": [
+        "skills/third-review/lib/broker.mjs"
+      ],
       "named_data_readers": [
         "skills/wh-review/scripts/review-provider-client.mjs"
       ],
-      "delete_condition": "宿主不再调用 third-review",
-      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+      "delete_condition": "宿主不再调用third-review且真实消费者迁移后删除；N3 P2每步临时packet须完成/失败/取消后清理，原始stdout/stderr/身份/用量与失败沿现sink保留，非整树镜像",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0；N3 P2批准窄修订登记，保既有owner；不新增生产文件/公共入口/schema/持久账本，未实施职责不报active完成"
     },
     {
       "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/broker.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
       "destination": "skills/third-review/lib/broker.mjs",
       "status": "move",
       "role": "production",
-      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "responsibility": "单provider既有#runClaimedProvider现顺序执行direction reconstruct→reveal→challenge，前步raw先落后构下一包，只发布最终challenge；失败/取消不续，角色并发互不取消。当前step提示列精确准入路径；合法当前packet引用归一化后仍拒绝包外绝对路径。受控及124实际AGflash单role三段已验，full paired全配置及OC原生工具效果仍未验",
       "owner": "skills/third-review",
-      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
-      "module_consumers": [],
+      "consumer": "ReviewProviderClient.startManaged经既有configured broker请求；#runClaimedProvider消费review_flow和验证后attachments，输出现有每role最终结果",
+      "module_consumers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
       "named_data_readers": [
         "skills/wh-review/scripts/review-provider-client.mjs"
       ],
       "delete_condition": "宿主不再调用 third-review",
-      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0；N3 P2批准窄修订登记，保既有owner；不新增生产文件/公共入口/schema/持久账本，未实施职责不报active完成"
     },
     {
       "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/config.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
