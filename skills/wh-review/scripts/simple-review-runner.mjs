@@ -1792,7 +1792,7 @@ function isPairedMakeDecisionInput(input) {
   const track = input.review_track ?? input.reviewTrack ?? null;
   const reviewKind = input.review_kind ?? input.reviewKind ?? null;
   return input.stage === "make-decision"
-    && ["direction", "detail"].includes(track)
+    && track === "direction"
     && reviewKind === null
     && input.pair_id === undefined && input.pairId === undefined
     && input.role === undefined;
