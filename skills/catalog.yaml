@@ -189,19 +189,19 @@ skills:
     update_policy: 随 stage-handoff 方法、safe-write appendRecord 发布与回读边界和五阶段挂载合同一并审查
   - name: stage-closeout
     path: skills/stage-closeout/SKILL.md
-    local_version: 1.0.0
-    last_reviewed_at: '2026-10-15'
+    local_version: 1.1.0
+    last_reviewed_at: '2026-10-16'
     status: native
     metrics_enabled: false
     standalone: true
     purpose: 两caller及独立宿主共用当前授权范围内的Git与物理收尾方法
-    design_idea: 先委派知识更新，逐动作record/consume，PR先回真实URL同流续跑，最终归档删除只确认一次实际范围
+    design_idea: 先委派知识更新，逐动作record/consume，PR先回真实URL同流续跑；先核目标分支独有变化并判断是否同步及处理冲突，合并隐含的源分支删除纳入一次最终范围确认
     used_by_stages: [build-prd, verify-code]
     upstream: []
-    local_changes: 抽取既有安全收口方法；保质量与事实caller owner、普通Git和workspace窄工具，不恢复close-plan或新增执行器；来源为本仓verify-code授权/安全收口与docs/standard-workflow.md现有默认收口；本仓方法抽取，不伪造GitHub外源。
-    dependency_closure: ["skills/knowledge-graph","skills/spec-specify"]
+    local_changes: 抽取既有安全收口方法；保质量与事实caller owner、普通Git和workspace窄工具，不恢复close-plan或新增执行器；按用户指出的缺口新增目标分支独有提交/路径核对，按任务依赖决定是否同步，冲突复用既有解决方法；PR合并可能自动删除源分支时纳入同一物理范围确认；来源为本仓verify-code授权/安全收口、docs/standard-workflow.md和resolving-merge-conflicts方法；本仓方法抽取，不伪造GitHub外源。
+    dependency_closure: ["skills/knowledge-graph","skills/spec-specify","skills/resolving-merge-conflicts"]
 
-    update_policy: 随授权/工作区owner、知识方法和两真实caller消费一并审查；内容确认不冒Git授权，未知字节保留
+    update_policy: 随授权/工作区owner、知识方法、目标基线差异判断、PR合并副作用和两真实caller消费一并审查；内容确认不冒Git授权，未知字节保留
   - name: knowledge-graph
     path: skills/knowledge-graph/SKILL.md
     local_version: 1.0.0
@@ -764,12 +764,12 @@ skills:
     purpose: 在 close 阶段 task 分支内解决 Git 合并冲突
     design_idea: 只恢复 task 分支，不接管 target 合并和推送
     standalone: true
-    used_by_stages: []
-    consumer: core/task-close.mjs:1411 (merge conflict error path)
+    used_by_stages: [build-prd, verify-code]
+    consumer: skills/stage-closeout/SKILL.md (target-branch sync conflicts); core/task-close.mjs:1411 (merge conflict error path)
     upstream: []
-    local_changes: WorkflowHub close 冲突恢复约束；唯一消费者=core/task-close.mjs:1411 合并冲突报错路径
+    local_changes: WorkflowHub close 冲突恢复约束；由stage-closeout在目标分支同步预演发现冲突时复用；消费者为skills/stage-closeout/SKILL.md与core/task-close.mjs:1411
     dependency_closure: []
-    update_policy: 随 verify-code close 合同变更审查
+    update_policy: 随 stage-closeout 目标分支同步和 verify-code close 合同变更审查
   - name: debate
     local_version: 1.0.0
     last_reviewed_at: '2026-07-14'

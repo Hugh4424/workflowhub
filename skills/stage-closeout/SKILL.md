@@ -13,6 +13,8 @@ description: 阶段已交付或用户要求独立收尾时，统一提交、PR�
 
 先读本项目`docs/standard-workflow.md`的「当前路线」与「stage 结束」及caller现有授权约定。用`runtime/interface/workspace-check.mjs`的`inspectWorkspace({root: targetRepoRoot, target: worktreeRoot, baseline, expectBranch})`核真实工作区，再用Git读分支/HEAD、remote URL、目标分支状态与dirty归属。不能在dirty main替任务树执行，不能stash或覆盖未知改动。以caller提供的真实task上下文核身份，不能从cwd猜task、伪造TaskHandle或修改task.json求通过。
 
+主线同步预检：在PR及任务合并前，以caller声明的实际目标分支（通常`main`）、任务分支和remote为准；有remote时用`git ls-remote --heads <remote> refs/heads/<target-branch>`核具名目标分支tip。tracking ref OID与该tip不同时只fetch该具名分支并读回；后续`<target>`统一使用已核实同OID的tracking ref或OID。远端不可读或ref仍不一致就标unavailable，不拿旧ref冒充当前。用`git merge-base <target> <task>`、`git rev-list --left-right --count <target>...<task>`和`git log --left-right --oneline <target>...<task>`找双方独有提交；用`git diff --name-status <merge-base>..<target>`只看目标分支独有路径，再结合当前task材料和真实consumer判断是否影响本任务依赖的契约、同一消费者或集成基线。支持时用`git merge-tree --write-tree <target> <task>`预演冲突并保留退出和冲突路径；不要用两端tip的tree diff冒充一方独有变化，也不要只按ahead/behind计数决定合并。目标独有变更确实影响本任务或集成要求同步时，确认任务worktree干净后把目标分支普通merge进任务分支，并按`skills/resolving-merge-conflicts/SKILL.md`逐项保留双方行为、跑受影响检查及独立复核；无关变更且无依赖时记录独有提交/路径、预演结果和无需同步理由，不为分叉强行merge。冲突无法解释或超出授权写集时停该merge并交原owner。目标tip变化时重新核差异；该预检是事实判断，不新增gate或状态对象。
+
 实现、质量/验收、发布、Git交付、物理清理各自说明。有效finding按caller合同处置，无法修复/未验证保持incomplete；不自行accepted_risk，也不把质量缺失单独当停止安全交付的许可证门。只读历史证据不改。完成：每个待执行动作有当前身份、实际目标、已授权范围或具体缺口，未完成质量/保留材料可定位。
 
 ## 2. 逐动作核授权，复用现有record/consume
@@ -46,7 +48,9 @@ node "$AUTH_TOOL" consume --operation "$OPERATION" --step-id "$ACTUAL_STEP_ID" -
 
 项目/环境支持且未明确opt-out时沿caller现有PR路线。先在任务分支核push授权并正常push-task，读回远端同名分支实际OID；再核pr授权，用已配置PR能力创建/复用真实head/base对应PR，不猜URL。描述来自当前task/spec、已验AC与未验项、实际提交diff和原件，保Summary、Evidence、Merge Danger；Door与Blast Radius分别说明真实回退边界与影响域，不把测试绿冒发布。
 
-创建成功后**立即显示真实PR URL**；使用本宿主现有artifact连接能力附到当前聊天，随后读PR/head/base/branch实际状态。`until=pr`只表示同次执行的一个可观察切片：先回URL，再在**同一次执行流**沿已有授权继续合并及剩余收尾，不等待新答复、不新增确认，不创建或消费旧close plan/confirmation执行对象。PR需外部审查或合并保护而不能继续时如实报告那个外部条件，不能制造合并成功。
+创建成功后**立即显示真实PR URL**；使用本宿主现有artifact连接能力附到当前聊天，随后读PR/head/base/branch实际状态。`until=pr`只表示同次执行的一个可观察切片：先回URL，再在**同一次执行流**沿已有授权继续合并及剩余收尾，不创建或消费旧close plan/confirmation执行对象。只有第6节规定的最终物理范围确认尚未取得、且合并可能删除源任务分支时，才在合并前暂停；收到答复后沿同一任务流继续。这是唯一一次最终范围确认，不另加普通PR确认。PR需外部审查或合并保护而不能继续时如实报告那个外部条件，不能制造合并成功。
+
+PR合并前读取PR宿主的“合并后自动删除源分支”设置。已开启时，合并会删除具名远端任务分支：先按第6节展示范围并取得那一次最终范围确认，再合并；该答复也覆盖后续清理，不重复询问。已关闭时沿同流继续；若设置无法读取或没有等价字段，不假定关闭，先把“合并可能删除该远端分支”列进第6节范围，在取得同一次确认前不合并。合并后仍读回实际分支状态，已自动删除就不再发起删除。
 
 PR能力不可用/环境不支持时保真实错误，继续可执行的普通五步退路：commit → 归档已交付材料（仅最终范围确认后）→ merge → push → cleanup（仅确认范围内）。如果PR路线已先merge，后续归档在已交付目标分支单独提交/推送，重新按实际HEAD授权；不重做已完成动作，不借五步跳过最终确认。已授权可做动作继续，缺外部条件的路径零重试按本项目规则说明选项，不改换目的地/执行者洗掉失败。
 
@@ -56,13 +60,15 @@ PR能力不可用/环境不支持时保真实错误，继续可执行的普通�
 
 合并前在目标repo重新核目标分支/HEAD、dirty归属、任务HEAD已交付内容和remote。按真实授权record/consume merge，用普通Git或已授权PR合并入口；冲突回原owner处理，图冲突仅交knowledge-graph方法按原件/版本核，不拿两方compose当三方裁定。目标分支有无关dirty时先保范围，不能checkout覆盖或强推。
 
+本节是任务分支交付到目标分支；第1节判断的是目标分支是否需要先同步进任务分支，方向不同、分别读回，不以其中一个合并替代另一个。
+
 读回目标分支确含预期任务提交/内容，再对该分支当前HEAD record/consume push，正常推送目标远端。用真实remote OID与预期HEAD比较，不把本地merge当远端已发布。失败/部分成功分开报告；不force、不回滚已发生事实，不用错误默认值补成功。后续若还有归档提交，重复的是该新提交必要push，不重复原合并或旧测试。完成：merge与push各自可回读，实际目标OID和未交付项明确；尚待最终清理与业务质量仍分别保留。
 
 ## 6. 最终归档和清理前一次真实范围确认
 
-**归档、删除任务分支/worktree及交付清理前**，caller统一展示：实际交付/PR/图状态与质量限制；待归档的具名材料路径与目标；task-owned worktree路径；本地任务分支；实际存在的同名远端分支；未知/私有/未交付/packet TTL等具名例外及保管位置；main/existing workspace明确保留。取得一次覆盖该实际范围的真实用户答复，不能把稿件确认、阶段事实、旧建议或当前默认策略当删除确认。
+**归档、删除任务分支/worktree及交付清理前**，caller统一展示：实际交付/PR/图状态与质量限制；待归档的具名材料路径与目标；task-owned worktree路径；本地任务分支；实际存在的同名远端分支及PR合并是否会自动删除它；未知/私有/未交付/packet TTL等具名例外及保管位置；main/existing workspace明确保留。取得一次覆盖该实际范围的真实用户答复，不能把稿件确认、阶段事实、旧建议或当前默认策略当删除确认。
 
-先核具名当前消费者是否必须使用材料的现有路径：能在本次授权范围内安全迁接的reader、技能链接和测试依赖，随归档更新到目标路径并读回；确需原路径且不能同批安全迁接的，逐项写明消费者、用途和保留原因。只读历史引用、immutable证据与图中历史source_file保留原文，不单独构成材料必须原位保留的理由；图更新按第3节与knowledge-graph规则执行，未更新如实说明。父规划材料仍被后续子任务消费时，保留其具体路径和用途，不由子任务归档/移动/删除父/兄弟材料；已安全交付也不等于所有执行侧资料可弃。旧worktree备忘逐件核外置唯一原件保管位置或用户明确可弃范围，本次备忘从创建就外置appendRecord，不因目录名当可丢缓存。确认拒绝/缺失只停archive/删除/cleanup，已完成commit/merge/push不改写，保留实际路径和下一步条件。确认只授权列出的物理范围，不接受质量风险或让incomplete变完成。
+先核具名当前消费者是否必须使用材料的现有路径：能在本次授权范围内安全迁接的reader、技能链接和测试依赖，随归档更新到目标路径并读回；确需原路径且不能同批安全迁接的，逐项写明消费者、用途和保留原因。只读历史引用、immutable证据与图中历史source_file保留原文，不单独构成材料必须原位保留的理由；图更新按第3节与knowledge-graph规则执行，未更新如实说明。父规划材料仍被后续子任务消费时，保留其具体路径和用途，不由子任务归档/移动/删除父/兄弟材料；已安全交付也不等于所有执行侧资料可弃。旧worktree备忘逐件核外置唯一原件保管位置或用户明确可弃范围，本次备忘从创建就外置appendRecord，不因目录名当可丢缓存。确认拒绝/缺失时，若因PR合并可能自动删除源任务分支（包括宿主设置未知）而在merge前请求确认，则停该merge以及archive/删除/cleanup；其它场景只停archive/删除/cleanup。已完成commit/merge/push事实不改写，保留实际路径和下一步条件。确认只授权列出的物理范围，不接受质量风险或让incomplete变完成。
 
 获确认后，对无需留当前路径的已交付材料普通`git mv`归档；仅保留前述确需原路径且不能安全迁接的具名例外。在实际执行分支按archive授权record/consume，归档新字节另核commit授权、提交并正常merge/push到目标；不使用旧task-close计划/恢复状态。若路径/HEAD/保留需求变化超原确认范围，先重新展示变化并取得新增范围答复；不靠时间或先前机器记录扩大授权。
 
@@ -95,10 +101,10 @@ worktree确认已移除后，在目标repo按独立cleanup步骤授权，普通`
 ## 保全来源与迭代
 
 完整来源权威：[catalog条目](../catalog.yaml#skills.stage-closeout)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。
-本方法抽取verify-code的授权/安全收口与standard-workflow当前默认安全收口，保build-prd稿件确认不授Git权。原文中的same plan/confirmation仅保其“真实PR先回URL、同流续跑”行为，由当前真实输入和窄工具消费承接，不恢复旧plan/confirmation执行对象。caller的审查点、质量、交接、真实最终选择及阶段正式事实保持原owner；两caller接线由各Phase实施。
+本方法抽取verify-code的授权/安全收口与standard-workflow当前默认安全收口，保build-prd稿件确认不授Git权；主线差异预检按本地用户要求补入，冲突处理复用`skills/resolving-merge-conflicts/SKILL.md`已有方法。原文中的same plan/confirmation仅保其“真实PR先回URL、同流续跑”行为，由当前真实输入和窄工具消费承接，不恢复旧plan/confirmation执行对象。caller的审查点、质量、交接、真实最终选择及阶段正式事实保持原owner；两caller接线由各Phase实施。
 
-修改本方法时读取项目`skills/spec-specify/SKILL.md`的「技能写作规范（WR001）」唯一规范，逐项核任务身份、质量限制、授权/HEAD、图更新、PR、归档、push、worktree/本地远端分支清理和结果读回的保全。方法接收真实项目输入与已有工具能力，不绑定账号/任务绝对路径，不打包第二Git executor；工具不支持保unavailable，回原owner修，不新增控制面。
+修改本方法时读取项目`skills/spec-specify/SKILL.md`的「技能写作规范（WR001）」唯一规范，逐项核任务身份、质量限制、授权/HEAD、目标分支独有改动与同步决策、冲突处理、图更新、PR、归档、push、worktree/本地远端分支清理和结果读回的保全。方法接收真实项目输入与已有工具能力，不绑定账号/任务绝对路径，不打包第二Git executor；工具不支持保unavailable，回原owner修，不新增控制面。
 
 ## 同仓方法依赖
 
-`skills/knowledge-graph/SKILL.md`、`skills/spec-specify/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。
+`skills/knowledge-graph/SKILL.md`、`skills/spec-specify/SKILL.md`、`skills/resolving-merge-conflicts/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。

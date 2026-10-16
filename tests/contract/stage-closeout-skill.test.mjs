@@ -24,7 +24,7 @@ describe('ORACLE-KG-P3 standalone closeout discovery and portable closure', () =
   it('resolves its declared graph dependency with the existing bundle consumer', () => {
     const entry = catalog().skills.find(skill => skill.name === 'stage-closeout');
     expect(entry, 'ORACLE-KG-P3: missing shared closeout owner').toBeDefined();
-    const expectedDependencies = ['skills/knowledge-graph', 'skills/spec-specify'];
+    const expectedDependencies = ['skills/knowledge-graph', 'skills/resolving-merge-conflicts', 'skills/spec-specify'];
     const body = readFileSync(resolve(root, entry.path), 'utf8');
     const localBody = body.replace(/\[[^\]]*\]\(https?:\/\/[^)]+\)/gu, '')
       .replace(/https?:\/\/[^\s<>`]+/gu, '');
