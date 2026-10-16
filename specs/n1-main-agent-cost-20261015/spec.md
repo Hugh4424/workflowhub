@@ -659,7 +659,9 @@ DSH同turn的turn/start与turn/end、Codex同turn_id的event_msg/task_started与
 
 #### 合同8：挂点、写集、Phase与验证
 
-四阶段末步主会话在生成最终交接前直接record，流程传project/task/stage，首次传已有真实start-ref；回读行/缺口后写同一handoff。触发未执行/没行须在实际handoff写“本阶段无记录+原因”，不新增自动成功或后台补记。通用skills/stage-handoff/SKILL.md不加owner/writer；stage-reflection仅可选核账。
+四阶段末步主会话在本次已授权图更新、非破坏性交付与收口工作取得各自实际结果后、生成最终交接前直接record，流程传project/task/stage，首次传已有真实start-ref；回读行/缺口后写同一handoff。图的代码/文档状态、未批准付费路径及收口失败各自如实披露，不因本次计量变成完成或工作许可。若现收口将删除唯一可用的工具worktree，caller在物理删除前先record并回读外置task根账本，再继续既有授权内的删除/清理；记录实际until，handoff明确until之后的物理清理、最终交接发布和回复不计入该笔。阶段观测切片与最终physical close分别报告，不补假行覆盖采样后的动作。
+
+执行入口与会话来源分别核实：当前只知道计划工具位于任务worktree，不默认目标repo已交付同版CLI或其runtime import闭包，更不在原树消失后默认原cwd/入口可用。若未来从存续入口运行，先核该入口真实路径、代码版本/依赖闭包、外置task访问与原主会话身份和有限source候选；工具执行cwd不能冒DSH原会话创建cwd，不能用子代理环境、挑最新或全历史搜索补身份。缺可证存续入口时采用上述删前record，不扩CLI参数/自动定位算法。shared stage-closeout、knowledge-graph和stage-handoff保持原职责；record仍归四阶段caller与唯一现脚本，不新增共享writer、第五个build-prd挂点或第二账本。触发未执行/没行须在实际handoff写“本阶段无记录+原因”，不新增自动成功或后台补记。通用skills/stage-handoff/SKILL.md不加owner/writer；stage-reflection仅可选核账。
 
 | 精确路径 | 动作/职责 | 唯一写owner与consumer | 替代与删除/保留条件 |
 | --- | --- | --- | --- |
@@ -767,6 +769,11 @@ Node覆盖边界与补充实际验收：两冻结Node文件只证明其实际断
 | EFACT-008 | host-independence.activeSurfaceFiles、check-skill-consistency.checkSkillConsistency、vitest.config.mjs include tests/**/*.test.mjs | Node文件用.node-test.mjs避误收，扫描范围如合同8 |
 | EFACT-009 | 四steps末步15/12/12/8、已有phase_task_facts；package.json /scripts 与README的CLI入口/文件式workflow说明 | 只改observable_result；本任务无前端写集，不据此断言全repo零UI |
 | EFACT-010 | runtime/task/task-store.mjs:34—44的factLines/readTaskFacts保留普通既有行；:76 conducted允许string或plain wrapper.value；:91—103 writeStageRow同record_kind/stage原位replace | 消费者0/1/异常多行及ref唯一性按合同7处理；不新增attempt级join，不拒未消费的合法wrapper metadata |
+
+中途main同步后的增量读集基线为9dc964f02ad0ac3c11cc943ec5d2914aa99f7969中的skills/knowledge-graph/SKILL.md（sha256 b2c1b9329a7e073f098d5f45368be1de6a258b7dbf7535deae842b2d1b69af10）、skills/stage-closeout/SKILL.md（587febcbc86f4d6601720a6fd13082e7caa95d68a03875a5357043d4d1ee7e55）；skills/catalog.yaml当前85143B、sha256 0033bb0afafa2fd6103182a0b29a175a7e9da0a1d8a99f083438e4a033dfb4e4，已登记两方法的native职责/consumer/dependency_closure；docs/architecture/move-map.json当前277806B、sha256 725cbbc13cbe7f02f2f7868281b797f7f76e5c89f2414616a76c29a815c4039d，已保知识owner、shared-closeout、图allowlist及各原consumer。P1/P2实施时读届时当前登记，仅增本卡已声明项，保这些同步入来的职责/closure/图边界，不拿旧基线整份覆写；该基线是本次实读事实，不是跨Phase版本绑定或新门。图产物按既有知识方法另列非源码已知改动，本卡不扩功能写集。
+
+本次归因为“历史补强+当前consumer核验”：quality/evidence/2026-10-16-003-main-sync-independent-impact.md（sha256 b5925d684810e15d1afb3676b9c2a36080450fb3e743b9da52f927af2905b8a4）先直读stage-closeout第7步及caller最终handoff，已指出唯一工具被删除的时序风险；之后004-graph-internal-research.md（sha256 5b4e6d1266c963f6cef4867c7b35368f9e2cc9f0b197a860cc0b5bf8e3da1423）与原执行quality/tests/2026-10-16-005-graph-query-research.json（a5c8a8e27428aba3046880bc42309b5e62de3f0e124fffe36f03d734edaceb0b）补读Card06 decision-log.md:875—891 ADR-024“去门留交接”及751—767 ADR-017删前损失先例，并回当前stage-closeout:64—94核实际保留/删除/交接职责。历史人类确认条款不泛化为本卡新审批门，图也不是该风险的首次发现。query实际展示36/177节点，其余受budget裁剪；当前N1规划尚未入图，会话/窗口没有新增当前实现图依据，原合同维持。这里只记录任务中途同步后的实际增量研究，不追认此前开工已用图，不重新绑定旧确认，也不宣计划approve或生产验收。
+
 
 ### 非UI三来源的组包依据
 
