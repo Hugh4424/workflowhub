@@ -13,9 +13,9 @@ stage-skill-plan.json 仍在本技能原路径提供 required_skills/optional_sk
 
 ## Input
 
-本节解释现有输入，不新增必填字段：`stage` 指本次审查阶段，`materials` 是本次允许审查的完整材料；make-decision 用 `review_track` 区分方向与细节，mini-task 用现有 `review_kind` 区分审查面。材料名按当前阶段合同选取，例如 `raw_requirement`、`approved_direction`、`draft_spec_or_acceptance`。`host_provider` 已不参与读取或 reviewer 选择，旧调用者传入也不能用它排除或阻断来源。
+本节只解释现字段：`stage`为审查阶段、`materials`为允许的完整材料；make-decision以 `review_track`分方向/细节，mini-task以现 `review_kind`分面。材料名依当前合同，如 `raw_requirement`、`approved_direction`、`draft_spec_or_acceptance`。`host_provider`不读、不参与选择，旧值不排除/阻断来源，不增必填。
 
-普通首轮审查的 request 对象不传 `task_path`、`project_name`、`task_id`、Workspace、Git、snapshot、revision、provider allowlist 或 result-storage 字段；公开 runtime 的任务认证 CLI 参数沿下方「现有接口」提供，不混入 provider 材料。旧调用者的额外 task/workspace 字段不成为审查门。现有方法第5条的未完成来源补派仍按其声明使用 `only_providers`、`dispatch_reason` 和原记录引用；本节不新增路由或补派接口。
+普通首轮request不传 `task_path`、`project_name`、`task_id`、Workspace、Git、snapshot、revision、provider allowlist、result-storage；任务认证仅由「现有接口」的公开CLI参数提供，不入provider材料，旧额外task/workspace字段不作门。第5条未完成来源补派仍用其 `only_providers`、`dispatch_reason`及原记录引用，本节不新增路由/补派接口。
 
 ## 输入与方法
 
@@ -23,13 +23,13 @@ stage-skill-plan.json 仍在本技能原路径提供 required_skills/optional_sk
 2. 按现有配置选择实际 provider/route，使用现有请求 owner 与阶段审查重点；先备齐可读材料，再调用。材料按下方「现有接口」区分公开入口的顶层 ref 解析与裸入口的完整字节内联，确认所有本次允许材料实际进入 packet。包封装/hash 是传输事实，不是人类确认或继续工作的许可证。
 3. 一次请求返回原始 provider 身份、传输状态、真实 findings、错误及覆盖限制。provider 只读本次提交材料，不访问真实仓库、父目录、Git、网络或宿主秘密，不派子代理或写文件。工具限制及已证明的 packet 内只读查看例外按本次全文提供的 `contracts/provider-protocol.md` 执行，不把宿主双轴分派搬进 provider。Temporary bundle 使用现有安全路径/清理，失败保持原错误，不能静默丢材料。
 4. 主会话保留一份真实 review 原件及执行回执，处置 fixed、rejected_invalid、accepted_risk 或 needs_human。finding 要有能回读的问题/根因/建议/证据；无效锚点标记留原件，内容仍由独立事实判断，不能自动删真实问题。build-code、verify-code 内严重问题自动优先修复，无法解决保留 incomplete 并继续可执行部分，最终 close 前展示实际损失和风险，不新增中间确认；其它阶段按其真实选择合同处理。仅已有绑定该 finding 的真实用户风险决定才可记 accepted_risk，持续实施授权不能代填风险接受。
-5. 请求只要已经返回语义建议，就不因修复或想追空 findings 重派同 scope 轮次。无语义结果且具体传输/材料问题已改变时，按原调用范围处理安全重试。恢复/长等待沿同一个实际请求，取消按现信号路径执行；本技能不新建异步对象或第二层生命周期。 明确补派仅用于原记录未 completed 的来源：提交非空 `only_providers`、`dispatch_reason` 和带 sha256 的 `supplements` 原记录引用；绑定相同材料与 subject，不重发已成功来源，不因空 findings 追派。补派只由人显式发起，不自动补派；按失败率自动降权同样不做（ADR-029、ADR-031）。
+5. 已返回语义建议的同scope，不因修复或追空findings重派；无语义结果且具体传输/材料条件已变才按原范围安全重试。恢复/长等待沿同请求，取消沿现信号，不建异步对象/二层生命周期。仅人显式补派原记录未completed来源：非空 `only_providers`、`dispatch_reason`、带sha256的 `supplements`原记录，绑定同材料/subject；不重发成功来源、不追空，不自动补派或按失败率降权（ADR-029/031）。
 
 派发卫生：读取本次可信配置的 initial 实际路线，逐路派发并保留真实 adapter/source/model；未报 model 或模型族记 unknown。同一家族换 provider 键仍是同源，不用键名冒异源。只读探针的不可用、配额或包能力事实单列；不固定收到数量，不以异源下限取消来源，不由 workflow 输入改配置。各来源失败、无效输出与空 findings 分别读回，成功路不覆盖失败。
 
 材料位按 `runtime/review/stage-materials.json` 当前 stage/track 合同读取；direction 的 `raw_requirement` 是用户原始要求及来源，`objective_facts` 是可核对现状/限制及原件，`convergence_outline` 只列问题、约束、失败后果和较小可逆选项，不提前放当前选择或理由。三个键齐全或 hash 可验不证明三个角色齐；同字节填三位须报告角色未成立，不能只改标签或补 manifest。缺必要位报 MATERIAL_INCOMPLETE，派发前停该请求。detail 使用真实 `raw_requirement` 与 `approved_direction`，其余位沿当前合同，不新增必填键。
 
-调用方沿现 `buildReviewMaterials` 核实际 manifest 与每份正文、来源及盲/揭示可见性；仅路径或嵌套 ref 不算正文已送达。direction 的 reconstruct → reveal → challenge 内部 packet 边界由 provider 协议唯一说明；只投盲重建包只能证明重建。审查派发给 ARTIFACT + CONTRACT，不附实施者 CLAIM、胜利摘要或自拟结论引导判断；处置必须回原件，可用 Contract misread / Valid + actionable / Valid trade-off / Noise 解释理由，不新增裁决枚举、轮次或 provider 替换。
+调用方用现 `buildReviewMaterials` 核manifest、每份正文/来源及盲/揭示可见性；路径或嵌套ref不证正文送达。direction内部reconstruct→reveal→challenge按本次provider协议，只有盲包仅证重建。派发ARTIFACT + CONTRACT，排除实施者CLAIM/胜利摘要/自拟结论；处置回原件，可用Contract misread / Valid + actionable / Valid trade-off / Noise解释，不新增裁决枚举、轮次或provider替换。
 
 
 ## 输出和失败边界
@@ -44,14 +44,14 @@ OCR 不可用时四件齐：检测输出与原始失败各沿其唯一原件引�
 
 **冻结字段清单（禁止自造）**：八类为 `review_origin`、`review_result_ref`、provider 结果的 `status`、`parse_outcome`、`review_facts.providers[].opinion_returned`、既有 `material_coverage`（覆盖三键 `read`／`unread`／`undetermined`）、`discarded_facts`、`executor`。三键属于同一类既有覆盖事实，不另算顶层字段。记录字段只填已发生事实的读取结果，不能填对判据的期望；每项都要回到其原件。
 
-- `review_origin`：producer 是 `runtime/task/task-store.mjs` 的 `writeStageRow`／`currentRow`，carrier 是 `facts.jsonl` 的现有 stage 行，reader 是 `readTaskFacts` 与阶段审查读者。依据同文件 `REVIEW_ORIGINS` 枚举；`conducted` 必须有具名 `review_result_ref`，只表示确实执行过且有原件，实际执行者与 OCR 不可用事实如实并列，不由该取值推定有结论。
-- `review_result_ref`：同一 stage producer、carrier 与 reader。依据 `task-store.mjs` 的 `currentRow` 校验：`conducted` 需具名原件；非 `conducted` 必须空值加具体 reason。引用要能读回真实执行者、终态和原件，原因不能只写 unknown。
-- provider 结果的 `status`：runner 返回真实终态，`runtime/review/review-record-route.mjs` 的 `providerFact` 保留到 review 原件的 `provider_results[]`，`providerCoverage` 与 `providerFacts` 消费它。依据 `runtime/review/schemas/result.schema.json` 的 `provider_results.items.properties.status` 枚举 `running`／`completed`／`failed`／`cancelled`；不能因阶段重要而改终态。
-- provider 结果的 `parse_outcome`：同一 runner／`providerFact` 保存到 `provider_results[]`，`providerCoverage` 与 `providerFacts` 读取现有直接字段或 `execution.parse_outcome`。依据 `result.schema.json` 的真实解析枚举 `ok`／`invalid`／`empty_output`／null；失败、空输出和未取得解析事实分别保留。
-- `review_facts.providers[].opinion_returned`：`review-record-route.mjs` 的 `providerFacts` producer 推导，carrier 是 review 原件的 `review_facts.providers[]`，审查读者据此核本路是否返回意见。依据 `result.schema.json` 的 `$defs.reviewFacts` 必填布尔；仅真实 `completed` 且解析 `ok` 为 true，不代表覆盖完整或质量通过。
-- `material_coverage`：`review-record-route.mjs` 的 `providerCoverage` producer 保存到既有 review 原件覆盖数组，审查读者逐材料核对。依据 `result.schema.json` 的 `$defs.materialCoverage`：对象仅允许 `provider` 加 `read`／`unread`／`undetermined` 四键，`additionalProperties:false`。三键语义见上文；`read_confirmed` 的现有 producer 是 `runtime/review/ocr-delegation-adapter.mjs`，carrier 是 provider 的 `coverage.read_confirmed`，不是这里的新键。
-- `discarded_facts`：真实解析丢弃事实与 `review-record-route.mjs` 的 `onProviderOutput`／`providerFact` 等输出处理产生，carrier 是 review 原件的现有数组，审查读者消费理由与来源。依据 `result.schema.json` 的 `$defs.discardedFact` 必填 `fact_kind`／`reason`，并保所需 `dropped_key` 或 `finding_excerpt`；零字节沿真实 `provider_output_not_persisted`／`zero_bytes` 事实保留。有真实事实才保留，无事实不制造占位。
-- `executor`：`tools/cli/stage-runtime.mjs` 的代码审查 OCR 返回路径产生实际执行者声明，`review-record-route.mjs` 将现有返回结果身份保存到 review 原件；`tests/contract/ocr-delegation-route.test.mjs` 与 `tests/contract/verify-code-dsh-public-run.test.mjs` 的身份断言及审查读者消费它。依据 `result.schema.json` 的既有枚举 `ocr`／`wh-review`；没有执行身份事实时保留缺口，不补造值。不得以 OCR 身份记 wh-review 结果；schema 版本不是执行者声明，记录身份、schema 版本与执行者声明不得互相顶替。
+- `review_origin`：`runtime/task/task-store.mjs` 的 `writeStageRow`／`currentRow` 按 `REVIEW_ORIGINS` 产出，存 `facts.jsonl` stage行，由 `readTaskFacts`／阶段审查读者消费。`conducted` 须具名 `review_result_ref`，仅证已执行、有原件；实际执行者与OCR不可用事实并列，不据值推结论。
+- `review_result_ref`：同上producer/carrier/reader；按 `task-store.mjs:currentRow`，`conducted` 须具名可回读原件（真实执行者/终态）；其它值须null及具体reason，不能仅写unknown。
+- provider结果的 `status`：runner给真实终态，`runtime/review/review-record-route.mjs:providerFact` 存原件 `provider_results[]`；`providerCoverage`／`providerFacts`消费。依据 `runtime/review/schemas/result.schema.json:provider_results.items.properties.status`：`running`／`completed`／`failed`／`cancelled`，阶段重要性不能改终态。
+- provider结果的 `parse_outcome`：同一runner／`providerFact` 存 `provider_results[]`，`providerCoverage`／`providerFacts`读直接字段或 `execution.parse_outcome`。依据 `result.schema.json`：`ok`／`invalid`／`empty_output`／null；失败/空输出/未取得解析分别保留。
+- `review_facts.providers[].opinion_returned`：`review-record-route.mjs:providerFacts`推导，存原件 `review_facts.providers[]`，审查读者核本路意见。`result.schema.json:$defs.reviewFacts`必填布尔，仅真实 `completed` 且解析 `ok` 为true，不证完整覆盖/质量通过。
+- `material_coverage`：`review-record-route.mjs:providerCoverage`存原件覆盖数组，审查读者逐材料核。`result.schema.json:$defs.materialCoverage`仅允许 `provider`／`read`／`unread`／`undetermined`，`additionalProperties:false`；三键语义见本节。`read_confirmed`由 `runtime/review/ocr-delegation-adapter.mjs`存provider的 `coverage.read_confirmed`，不在此对象加键。
+- `discarded_facts`：真实解析丢弃及 `review-record-route.mjs:onProviderOutput`／`providerFact`产生，存原件现数组，审查读者读理由/来源。`result.schema.json:$defs.discardedFact`必填 `fact_kind`／`reason`并保所需 `dropped_key` 或 `finding_excerpt`；零字节按真实 `provider_output_not_persisted`／`zero_bytes`保留，无事实不造占位。
+- `executor`：`tools/cli/stage-runtime.mjs`代码审查OCR返回实际声明，`review-record-route.mjs`存原件；审查读者及 `tests/contract/ocr-delegation-route.test.mjs`、`tests/contract/verify-code-dsh-public-run.test.mjs`身份断言消费。依据 `result.schema.json`枚举 `ocr`／`wh-review`，缺身份留缺口，不造值。不得以OCR身份记wh-review结果；schema版本不是执行者声明，身份/版本/声明不得互代。
 
 对 `OUTPUT_INVALID` 且保留了原始输出的失败来源，操作者必须只读回读该原始输出一次，并记录「其中是否存在唯一可解析的 findings JSON」这一事实；只允许据此救回真实发现，禁止把失败改写成通过或空 findings。
 
@@ -72,7 +72,7 @@ OCR 不可用时四件齐：检测输出与原始失败各沿其唯一原件引�
 | `PUBLIC_RESULT_INVALID` 或宿主调用链失败 | unavailable，保留具体错误 |
 | 零字节或无效 JSON | 内部标记 `contract_failure`，不得当空 findings |
 
-partial 不表示通过。原始私有 provider 文本保持在既有安全诊断位置，公开边界保留脱敏错误和原记录引用；不由等待成功推导质量通过或操作授权。
+等待终末后仍按「输出和失败边界」逐路报告失败/partial、脱敏与唯一原件；等待成功不授予质量通过或操作权限。
 
 ## 现有接口
 
@@ -80,7 +80,7 @@ partial 不表示通过。原始私有 provider 文本保持在既有安全诊�
 
 公开入口的 input JSON 外壳是 `{request:{stage,review_track,surface,materials}}`；`review_track` 仅在当前阶段需要区分审查轨道时提供，`surface` 为实际 document 或 code 面。request 的 stage 与 CLI 一致，materials 按当前阶段合同给完整内容，不能把外壳示意当成备齐材料；caller 不导入自写 result。
 
-现 `recordTaskReview` 调用 `resolveMaterialRefs`，只解析 materials **顶层**恰有 `ref`、`sha256` 两键的对象。ref 是实际文件相对路径，sha256 是其原字节的 64 位小写 hex；`quality/tests/`、`quality/evidence/` 取认证 task 根，其余取认证 worktree 根。读取校验 hash；绝对路径、空段、`.`/`..`、反斜杠、路径 alias 或非普通文件拒绝，不能静默替换字节。使用现可信只读 scope 时，ref 还须落在已批准精确范围；材料声明或路径存在不授予读取根/范围，普通单仓调用不新增 callback 前置条件。
+`recordTaskReview`的 `resolveMaterialRefs`仅解析materials顶层恰含 `ref`／`sha256` 的对象。ref为真实相对路径，sha256为原字节64位小写hex；`quality/tests/`、`quality/evidence/`从认证task根读，其余从认证worktree根读并验hash。拒绝绝对路径、空段、`.`/`..`、反斜杠、alias、非普通文件，不静默替字节。可信只读scope下ref须在已批准精确范围，声明/存在不授权根或范围；普通单仓不增callback前置。
 
 嵌套 ref 不递归读取，不能把 context_map/evidence_map 内的 ref 存根当作已投递正文。post build-plan 的独立 Phase 组包须将 `phase_authorities` 内联为 plain object，每个实际相对 Phase path 对应完整正文 string，并按 `phase_index` 执行索引匹配；顶层 JSON ref 只返回文件 string，不会自动变成这个 map。phase_index 可沿公开顶层 ref 读入完整文本。
 

@@ -16,7 +16,7 @@ Source: adapted from the project review baseline. Mode: `lens-only`. Standards/S
 
 宿主执行同源补充时，向两个互不继承对方上下文的独立执行者同时提供上述共同材料，并分别给 Standards 规范/baseline 或 Spec 来源。执行者只返回原文，不写文件；宿主按当前 workflow 保存单份原件，在 Standards / Spec 两栏分别展示发现、范围和不可用原因，只汇总各栏数量及各栏最严重问题，不合并、不重排名、不选跨轴赢家。同源补充标为 same_source_degraded，不替代 OCR、不计异源 quorum；OCR 与补充也并排保留，各路失败、取消与迟到有效发现不被成功路覆盖。
 
-正式 provider 在其只读 packet 内应用两镜头，按下节和既有 provider 协议返回一个 findings JSON；这是镜头阅读，不是 host 分派许可。宿主分派、等待、sleep/poll 等只由宿主执行，不作为 provider 的执行控制指令；文件被提交作审查材料不代表已从 packet 剔除这些原文字节。provider 不调用 Agent/subagent，不增 axis 或第二结果协议。正式 provider 内的重复 finding 仍按既有协议处理，不把该聚合跨到宿主分开的两轴。
+正式 provider 在其只读 packet 内应用两镜头，按下节和既有 provider 协议返回一个 findings JSON；这是镜头阅读，不是 host 分派许可。provider不执行宿主分派/等待，不调用Agent/subagent，不增axis或第二结果；源文件入包不代表其宿主控制字节已剔除。正式 provider 内的重复 finding 仍按既有协议处理，不把该聚合跨到宿主分开的两轴。
 
 ## Fowler smell baseline — what → fix
 

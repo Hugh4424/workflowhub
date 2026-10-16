@@ -12,9 +12,9 @@ version: 5.2.0
 
 ## 方法
 
-1. 先按「## 一次架构机会」核本 task 已有评估原件（有则只引用、无则说明未知，不重跑），再核真实 worktree、branch、当前 HEAD、允许写集及其来源，把实际核对命令和结果用已有 `runtime/interface/run-command.mjs` 保存为当前 `quality/tests/` 原件；同一事实＝字节相同，同一核对命令与退出事实一致、内容比较确立相等时只引用既有原 ref 并注明同字节、不新写副本，本次真实 immutable 回执仍保留。命令或退出事实不一致、内容改变、候选原件不可读时保留新件、真实原因与 `deduplication: unknown`；不以字节数一致推定相等。证明范围按 `AGENTS.md`「证据硬规则」只写 `路径 + hash` 一行；三类保留字节的例外为该文件随后会被改动或删除、外部服务返回体、一次性环境读数；临时重复输出处理按 `docs/standard-workflow.md`「证据只留原始件」的真实窄授权，既有 canonical 与所有已引用件保留；正常 reused／unknown 诊断按该节核现有 CLI 回复与 source/evidence，磁盘 native 原始回执应完整真实且 output_ref 正确，真正结算失败才进既有 native error；不一致先定位纠正，不猜任务，不把核对变成人类确认或新的 runtime gate，无法完成时如实保留缺口。接续时读取 `skills/stage-handoff/SKILL.md`，按其路径选择与回读方法消费实际交接、当前材料和 task facts，定位有来源的阶段工作陈述、四类信息、证据与具体未完事项；材料疑点仍交原作者 owner。新会话据此核对当前范围并直接续跑，沿用已有任务授权；缺失或错 task 如实披露，旧对象只读，能够定位的同 task 工作按共享方法继续。读真实入口、消费者、diff、完整 AC 和 build-code 的实际执行原件，区分已经执行、未执行、失败、不可用及覆盖限制。原始来源、服务、样本或 Phase 正文缺失保持 unknown/unavailable，不以文件存在、旧 review 或 exit0 代填通过。 在本次常规代码审查中，对交付范围逐项抽查母 PRD/原始需求 → decision-log.md 的已确认裁决 → spec.md 的 FR/AC → 按 `phases/index.md` 每条实际权威引用逐条打开的物理 Phase 的任务与 oracle（当前具名 `phases/P<n>-<结果短名>.md` 按原路径读取，历史裸 `phases/P<n>.md` 仍只读兼容；索引只导航，缺索引或物理正文保 unknown/unavailable 与具体缺口，不按编号猜补文件路径） → 当前实现、测试/质量证据。用户采纳的范围内优化及受影响复验完成后，才将实际当前对象交方法第2步，不为优化另加第二次正常审查。
-   开工在当前真实工作区/材料核对后实际读取并消费 `skills/knowledge-graph/SKILL.md`，委派独立上下文以本次真实验证对象、标准、完整AC和允许写集查项目领域/历史约束；按职责/source/consumer有界选完整ID并回原文，保真实来源、代码层/文档层及可观察覆盖年龄（无法判断写unknown），指出影响哪项验证或只是重复补强。五阶段开工义务不由已有报告代跑；缺图/无匹配/歧义或工具失败按知识方法保真实诊断并继续普通阅读，不先更新现图、不触发未批准文档抽取。图不代独立审查或业务效果。
-2. 先实际消费 `docs/standard-workflow.md` 的「三审查点与结论真实性」：主会话按同一比较基准提交三维原始读数及直接consumer依据，记录真实应用和缺料回退，并列声明写集与实际diff，终末完整审当前交付。读取 `skills/wh-review/SKILL.md` 的「Long-review host convention」并按其等待方法发起一次终末独立代码审查，正常使用 OCR，不可用时的记录口径见下节；本步完成以每路 provider 的原始 findings 或真实失败、取消、unavailable、实际执行者与覆盖限制均已保存且可定位为准，缺一路即本步未完成。原件「可定位」可由真实可读的既有原 ref 满足：同一命令、退出事实一致且内容比较确立同字节时只引用并标注，不要求为本路新写一份物理副本；各路真实终态、来源与失败仍分别保留，不能用旧回执冒本次执行。审查输入包含 verify-code 合同、provider 协议、stageReviewFocus、lens 正文、当前 diff、完整 AC 与可用执行原件；执行者检查真实消费者、生命周期、权限、数据泄漏、并发、取消、恢复、资源释放和测试强度。
+1. 按「## 一次架构机会」核task已有评估：有原件只引用，无则记未知、不重跑。核真实worktree/branch/HEAD、写集及来源，实际命令/结果用 `runtime/interface/run-command.mjs` 存当前quality/tests；去重/临时输出实际执行 `docs/standard-workflow.md`「证据只留原始件（同字节即同一事实）」，保本次真实immutable回执及正确output_ref。不一致先定位纠正，不猜task、不造人类确认/runtime gate，无法完成留缺口。接续实际按 `skills/stage-handoff/SKILL.md` 路径选择/回读交接、当前材料/task facts、有源阶段陈述、四类信息、证据/具体未完项；材料疑点交原作者。同task核当前范围沿已有授权续跑；缺失/错task披露，旧对象只读。读真实入口/consumer/diff、完整AC、build-code执行原件，分清已跑/未跑/失败/不可用/覆盖限制；缺原始来源/服务/样本/Phase正文保unknown/unavailable，不以文件存在/旧review/exit0填通过。常规审查逐项抽查母PRD/原始需求→decision-log已确认裁决→spec FR/AC→phases/index.md每条实际引用逐一打开的物理Phase任务/oracle→实现/测试/质量证据；现具名 `phases/P<n>-<结果短名>.md` 按原路径，历史裸 `phases/P<n>.md` 只读兼容。索引只导航，缺索引/正文留unknown/unavailable及具体缺口，不猜路径。用户采纳的范围内优化及受影响复验完成后才将当前对象交步骤2，不另加第二次正常审查。
+   工作区/材料核对后，独立上下文实际按 `skills/knowledge-graph/SKILL.md` 用真实验证对象、标准、完整AC/写集查领域与历史约束；按职责/source/consumer有界选完整ID并回源，保代码/文档来源、可观察图龄（不可判记unknown）及本次验证影响或重复补强。五阶段开工义务不由旧报告代跑；缺图/无匹配/歧义/工具失败保真实诊断并回原文，不先更新现图/触发未许可文档抽取；图不代独立审查/业务效果。
+2. 先实际消费 `docs/standard-workflow.md` 的「三审查点与结论真实性」，主会话提交其要求的原始依据并记录应用；终末范围按该段完整提供。读取 `skills/wh-review/SKILL.md` 的「Long-review host convention」并按其等待方法发起一次终末独立代码审查，正常使用 OCR，不可用时的记录口径见下节；本步完成以每路 provider 的原始 findings 或真实失败、取消、unavailable、实际执行者与覆盖限制均已保存且可定位为准，缺一路即本步未完成。原件「可定位」可由真实可读的既有原 ref 满足：同一命令、退出事实一致且内容比较确立同字节时只引用并标注，不要求为本路新写一份物理副本；各路真实终态、来源与失败仍分别保留，不能用旧回执冒本次执行。审查输入包含 verify-code 合同、provider 协议、stageReviewFocus、lens 正文、当前 diff、完整 AC 与可用执行原件；执行者检查真实消费者、生命周期、权限、数据泄漏、并发、取消、恢复、资源释放和测试强度。
 3. 保留每路 provider 的原始 findings、实际执行者、错误、取消与覆盖限制。已安装 OCR 的失败不由其它 route 漂白。外发材料核实际范围、路径安全和敏感信息脱敏，缺真实只读能力时明确不可用。 首个 provider 到终态后立即处理并把迟到 findings 交给同一回调，剩余 provider 继续运行；不能因首个结果取消 sibling。跨 stage 的 build-code Phase 审查结果不得充当 verify-code 的第二次独立审查。
 4. 在 `inspect-real-entry-and-tests` 原职责内实际消费 `skills/knowledge-graph/SKILL.md`：用affected核声明实现之外的波及面，用query核同类约定与标准来源；沿有界完整ID解释/必要协作path定向回真实source_file/origin原文。图标准过期或与当前文件冲突时由当前权威文件纠正，说明影响的验证case/边界，未核支持保unknown；不能把source路径存在、label、缓存同条或旧历史条款当现行标准。无新信号就记重复/无信号并继续实际入口和测试核对，不为凑收益拓展。
    穷尽核对各实际Phase的声明测试面，每Phase一行：「声明面 → 原件path/cwd/argv/exit/原始输出 → 已跑/未跑」。每未跑面写具体阻碍、可跑条件及owner；缺Phase/面/原件保持incomplete，review coverage不能补齐。核已有事实，不全重跑。失败分类/零重试/升级与provider排除按AGENTS「卡住与升级」；同一不可用事实不重复采集，其它安全验证与provider轴继续。
@@ -26,7 +26,7 @@ version: 5.2.0
 5. 主会话逐条判断 finding，仅修影响当前交付的有效代码问题，不因材料偏好扩大范围。有效问题回原实施会话自动修复，严重问题优先修复，不以请求用户承担风险代替修复。确实无法在当前任务范围内解决时，列影响、证据、owner、原因和剩余选项，继续不受影响的工作，严重未修风险保持 incomplete；只有已有绑定该 finding 的用户真实决定才可记 accepted_risk，不能自行接受风险或伪造通过。
 6. 对新修复和真实疑点只做必要定向复验，事先列 file/case 集合，把实际 command/exit/raw 和恢复结果写在对应 finding 处置旁；无改动或疑点时说明无需复跑。不重派第二次正常代码审查，不重做全量上游测试。
 7. 保留原始审查与当前 fixed、rejected_invalid、accepted_risk、needs_human 处置。真实修复可报告 resolved，不能改写原 review 或用摘要覆盖失败。核对本次 actual/oracle、未执行事项和覆盖限制；材料问题交 owner，不另建恢复、继任或重绑定任务。
-8. 给人读结论并执行 stage-handoff：检查范围、代码修复、原发现和处置、必要验证、业务结果、未知项、上游材料风险及下一步。缺 review/执行原件/严重风险处置时保持 incomplete；继续同任务修复，但不宣称已完成验收或物理交付。 对账时在独立上下文消费当前项目声明的验收命令与真实原件，当场展示时间窗、分账与计数，不落派生文件；未观察的范围、结果或计数如实披露，不写死宿主脚本路径；修 finding 后只复验受影响 file/case 并写明理由。 如果 finding 在同一 task 已修复，resolved 与无 finding 的 clean 具有同等完成含义；这不是“所有材料和证据都齐了”。人读回复沿现 review_result_ref 和 task facts，分别说明每路 provider 的真实终态与原失败、各 finding 的处置、具名功能原件与仍缺的输入，并给出相应修复或取得输入的下一步；resolved findings、局部测试通过和审查完成各自只说明其原件所证明的范围。原件不可读时指出具体路径与错误，不从 incomplete 推断所有功能失败，也不把 provider 成功或已修 finding 当业务验收通过。复用现有来源、证据与完成说明；status JSON、枚举及 thinQuality 保持原合同。 incomplete 只限制质量声明，不限制同一 task 继续修复。按当前材料与实际未完成事项继续同一 task；work_status 与 quality 状态只记录材料/质量事实，不是继续工作的许可证；不能把 status=in_progress 或 quality_status=incomplete 当作工作冻结，不增加 continuation_allowed 字段或 runtime 机制。
+8. 人读结论并执行stage-handoff：列范围、修复、原finding/处置、必要验证、业务结果、未知、上游材料风险及下一步。缺review/执行原件/严重风险处置保incomplete，同task继续修复，不冒验收或物理交付完成。对账由独立上下文消费项目声明命令和原件，当场展示时间窗/分账/计数，不落派生文件、不写死宿主脚本；未观测如实说明，finding修后仅受影响file/case复验并给理由。同task已修finding的resolved与无finding的clean完成含义相同，均不证全部材料/证据齐备。回复沿review_result_ref/task facts逐路列终态/原失败、finding处置、功能原件、仍缺输入和修复/取得条件；resolved findings、局部测试通过与审查完成各仅证原件所覆盖范围；原件不可读给具体路径/错误，不从incomplete推全部功能失败，不以provider成功/已修finding冒业务验收。复用既有来源、证据/完成说明，status JSON/枚举/thinQuality不变。incomplete只限质量声明；按当前材料/未完项继续同task，work_status/quality仅记材料质量事实，不作in_progress/incomplete冻结，不增continuation_allowed或runtime机制。
 
 UI 适用时沿 `skills/ui-project-init/SKILL.md` 的「规范职责」读取本次验证适用专业源，逐类核真实路径/稳定节、version/作用域、owner/consumer 与规则，再从真实页面和 Component Quality Map 核消费者、状态 owner、typed ViewModel、CSS/token、story/test 更新及已实际产生的浏览器状态。单类 missing/stale/冲突给影响及原 owner，不用旧 Design.md/Experience.md 两文件或单一 design_revision 代全部来源；历史条款按真实输入读取，本次行为/spec、专业规则、知识与执行 facts 各保其原写主。缺扫描、浏览器、fixture、viewport、截图或入口受阻保持 unknown/unavailable，不能把未观察当 N/A 或视觉通过。只有新疑点才重跑相应浏览器检查，先按 isolated-browser-qa 管理隔离、登录态与自建资源清理。
 
@@ -34,19 +34,19 @@ UI 适用时沿 `skills/ui-project-init/SKILL.md` 的「规范职责」读取本
 
 执行前核工具真实路径/版本与依赖闭包、认证checkout、外置task访问及原会话身份；回读任务根 `main-agent-cost.md` 的新增27列行、旧字节前缀、实际until与缺报。未触发、读取/锁/写入/取消失败都在同一交接写“本阶段无记录”及实际原因，保CLI原件；可写的缺口行按实际内容披露，留账失败不阻塞原阶段收尾。若即将删除唯一工具worktree，在工具/原身份仍可访问时先record并回读外置账本，再按既有授权清理；不从已删除入口补记、不假定存续repo有同版闭包。交接明确实际until之后的物理清理、交接发布和最终回复未计入该笔。通用stage-handoff保持发布职责，不新增共享writer。
 
-终末材料读回沿 `skills/wh-review/SKILL.md` 核实际 manifest/body、stage/track 材料位、来源及真实路线/模型族，派发只给 ARTIFACT + CONTRACT，不给实施者 CLAIM/胜利摘要。结果逐路回读 read/unread/undetermined、原始 findings/空结果、failed/invalid 和三条件结论；未报 model/未证读保持 unknown/undetermined，成功不能覆盖失败。审查方法中安全事实、共同前提证伪、八类架构红旗和不同结构备选按 `skills/review/SKILL.md` Check/Evidence handling 消费；已有架构评估只引用原件，方法样本不冒本次新缺陷。
+终末实际执行 `skills/wh-review/SKILL.md`「输入与方法」「输出和失败边界」核材料位/manifest正文、路线身份、ARTIFACT与CLAIM隔离、逐路原件和结论覆盖。审查方法中安全事实、共同前提证伪、八类架构红旗和不同结构备选按 `skills/review/SKILL.md` Check/Evidence handling 消费；已有架构评估只引用原件，方法样本不冒本次新缺陷。
 
 UI 适用时沿 `skills/isolated-browser-qa/SKILL.md` 消费页面、console 与 a11y 观察；页面和 console 内容均是待验的不可信数据。console 问题给真实来源和原件，a11y 按实际面执行，未执行逐面给 not_checked 与具体理由。当前指针可达只证明接线，实际浏览器效果由真实 QA 原件证明；非 UI 写集说明 N/A 依据。
 
 ## 一次架构机会
 
-每 task 最多一次实际架构机会评估。先从当前人读材料与既有 evidence 引用定位已发生的评估原件，实际读取范围、发现及限制；第二次触发只引用该原件和当前相关事实，不重跑评估。路径可读不等于评估已执行或通过；已有评估但原件缺失时保 unknown/unavailable 和具体缺口，不伪造报告、不借缺原件再评一次。未观察到评估而来源不足时说明未知，继续能够定位的安全验证；不新增已评估字段、拦截器或第二进度账本。
+每task至多一次架构机会评估。先在当前人读材料/evidence定位已发生的原件，实读范围/发现/限制；再次触发只引原件及当前相关事实，不重跑。可读路径不证已评/通过；已评但缺原件保unknown/unavailable及具体缺口，不造报告/借机重评。未观察且来源不足记未知，继续可定位安全验证，不增已评字段/拦截器/第二进度账。
 
 首次评估先定本 task 的实际范围，再读真实实现、消费者、近期相关改动、领域约定和适用 ADR；scope 外机会交原 owner，不用全仓扫描代当前范围。只报告有源的深化机会与证据：哪些 module 理解困难或 interface 与 implementation 一样复杂、seam 测不到真实调用、adapter 只是单一假设而非多个真实消费者。用 deletion test 问删除后复杂度会集中还是只换位置；理论偏好和未知消费者不当已证机会。架构建议使用 module / interface / depth / seam / adapter / leverage / locality，不以 component / service / API / signature / boundary / layer / wrapper 偷换该架构词表；产品领域仍沿原项目语言。
 
 评估者返回实际路径/符号、问题与来源、机会、收益和未知项，不先提 interface 设计（Do NOT propose interfaces yet.）。主会话用既有安全记录工具保存一份普通评估原件并展示实际引用；无机会说明依据，缺代码、执行者或来源如实 unknown/unavailable，取消保已发生事实，不将部分报告标为完整。评估是人读建议，不是 reviewer verdict 或工作许可。
 
-用户真实选中机会后，才按当前 task 允许写集与原 owner 设计窄 interface 并实施优化；未答、拒选或旧答不当采纳，保原实现。超出已授权方向/范围时交原方向或规划 owner，不自动生成票、扩大任务或让 reviewer 选。改后列受影响 file/case 并做定向复验，原对象、实际新 diff、命令与结果各可定位；只说方法已写不能声称已评估、采纳、优化或验过。复验失败优先回原实施会话修，安全部分继续，未知保持未知。
+用户真实选中机会后，才按当前task写集和原owner设计窄interface/实施；未答/拒选/旧答不算采纳，保原实现。超方向/范围交原决定或规划owner，不造票/扩任务/让reviewer选。改后列受影响file/case定向复验，原对象/新diff/命令结果可定位；只写方法不证评估/采纳/优化/验证，失败回原实施者优先修，安全继续、未知不变。
 
 ### 测试充分性与检查可信度
 
@@ -64,7 +64,7 @@ UI 适用时沿 `skills/isolated-browser-qa/SKILL.md` 消费页面、console 与
 
 ## 人为门与审查点
 
-用户已授权任务进入实施，或已选择方向与实施计划后，该授权持续覆盖本 task 范围内的验证、独立审查、修复及完成交付必要的 commit、push、merge；阶段切换、新会话和 handoff 不重置授权。本阶段直接执行，不要求日常确认、本地提交授权、技术验收确认或用户承担严重风险；新增方向或任务范围不能据此擅自扩大。能通过真实入口观察的业务效果自动验证；确实依赖真人、缺权限、数据或外部服务的部分，列清所需条件、操作、成功/失败恢复判据和应回传证据，保持 unknown/unavailable/incomplete，继续其它验证，不将其变成中间确认门或推导为业务通过。真实平台权限限制与无法解决的方向问题同样如实报告。 对 `AGENTS.md`「卡住与升级」适用的其它反馈路径，只认改变继续条件的事实为新事实；同一失败信号在继续条件未改变时再次出现即判该路径无界，换独立上下文重开一次，仍出现则按该节既有格式升级并给可直接回复的选项，owner 是执行者；外部不可重试类仍零重试直接报告。用户给新答复即复位，时间不构成复位条件；收到答复后从当前材料续跑，不新建任务或账本。
+用户已授权任务进入实施，或已选择方向与实施计划后，该授权持续覆盖本 task 范围内的验证、独立审查、修复及完成交付必要的 commit、push、merge；阶段切换、新会话和 handoff 不重置授权。本阶段直接执行，不要求日常确认、本地提交授权、技术验收确认或用户承担严重风险；新增方向或任务范围不能据此擅自扩大。能通过真实入口观察的业务效果自动验证；确实依赖真人、缺权限、数据或外部服务的部分，列清所需条件、操作、成功/失败恢复判据和应回传证据，保持 unknown/unavailable/incomplete，继续其它验证，不将其变成中间确认门或推导为业务通过。真实平台权限限制与无法解决的方向问题同样如实报告。 失败重试按 `AGENTS.md`「卡住与升级」及 `docs/standard-workflow.md`「stage 结束」实际执行适用/排除、零重试、新事实判定与升级；收到答复按当前材料续跑，不新建任务或账本。
 
 Git授权与物理收口执行唯一消费 `skills/stage-closeout/SKILL.md`，本caller不保第二执行实现或旧plan续跑分支。已有授权是记录/消费来源，不是提问门；本阶段主会话仍核真实授权、允许范围和当前验证结果并把输入交共享方法。普通Git前按其方法record/consume动作/分支/HEAD，保既有scoped例外；最终close归档/删除/清理仍先展示实际结果、质量限制、目标范围与具名例外并取得一次真实范围确认，未答/拒绝不执行该范围。必要commit/push/merge沿持续授权，无技术验收确认；整树丢弃、强推、任务外改动不包含。含PR时立即展示真实URL并同流继续已授权动作，不等待新回复；不恢复旧close plan。三必留审查点为build-plan wh-review合并、build-code每Phase OCR、本阶段终末OCR，不恢复全Phase集成审查。
 
@@ -74,7 +74,7 @@ Git授权与物理收口执行唯一消费 `skills/stage-closeout/SKILL.md`，�
 
 本阶段完成已授权验证/修复后，实际读取并按 `skills/stage-closeout/SKILL.md` 执行共享收口，由其委派knowledge-graph更新并回读代码图与文档图两类真实状态/费用答复/未完成项，不能用代码成功冒文档已更新。质量结论、finding处置、正式task facts及handoff仍归本阶段主会话；共享方法缺失/调用失败明确unavailable并交其owner，不复制旧方法兜底，不以缺质量冻结同任务修复或假报已交付。
 
-阶段末主会话使用 `skills/stage-handoff/SKILL.md` 保存交接，报告该方法返回的实际不可变绝对路径，供用户交接材料现状、当前代码、真实检查、风险和下一步。交接执行不是门，交接必须实际执行并报告返回路径；缺失写清原因与影响，披露不代替完成，不要求固定机器复盘或交接认证。正式阶段事实仍由现有公共流程处理。实现、质量、业务验收、发布和物理 close 分别报告，不互相代填。交接列出默认安全收口的实际目标路径、任务分支、待最终确认动作与具名保留原因；确认后逐项回读普通执行结果，保留旧 raw/审查原件，不恢复旧 close plan 或新增公共流程节点。
+阶段末主会话实际按 `skills/stage-handoff/SKILL.md` 保存交接并报告返回的不可变绝对路径：材料现状、代码、真实检查、风险/下一步。执行不是门，但须实际执行/回报；缺失写原因/影响，披露不代完成，不要求固定机器复盘/交接认证。正式阶段事实仍由公共流程处理；实现/质量/业务验收/发布/物理close分别报、不互代。交接列默认安全收口的实际路径、任务分支、待最终确认动作及具名保留原因；确认后逐项回读普通执行结果，保旧raw/review原件，不恢复旧close plan或新增公共节点。
 
 真实 stage 末有过程问题时，读取 skills/stage-reflection/SKILL.md 的「方法」与「用户选择后的归口」两节一次；局部 Phase 摘要不触发 stage-end。交接类信息按 skills/stage-handoff/SKILL.md:31-34 的四类表读回。
 

@@ -19,9 +19,7 @@
 
 派发内容为 ARTIFACT + CONTRACT；实施者 CLAIM、胜利摘要与推理不作为 reviewer 判断输入。按实际 adapter/source/model 展示身份，未知保持 unknown；同模型族的不同 provider 键不算异源。覆盖三键及三条件结论唯一读取 `skills/wh-review/SKILL.md`「输出和失败边界」，不得由送达推已读。
 
-只有已存在真实候选生成→judge 比较 consumer 时，才应用 arena：候选接收同一任务而不见 rubric、模型名与其它候选；judge 接收匿名 A/B 和同一已定 rubric，逐标准核实际依据，分歧回具体证据。泄露 rubric/身份、不同标准比较或只说意见不同均不成立。候选完成后再比较，选可维护的基底，说明保留/舍弃与有来源的合入，并对最终合成产物按原合同验证、保失败。当前 reconstruct/reveal/challenge 与普通 findings 合并不是该 consumer；未找到真实入口则明确“只落文字/未生效”，适用性未查明记 unknown，不为首验建候选框架、cross-judge、评分表或新审查轮。
-
-发现归并仍沿现有 owner；涉及共同简洁视角时读 `skills/simplicity-guard/SKILL.md` 唯一方法，不在协议复制规则。
+仅已有真实候选生成→judge比较consumer时用arena：候选同任务且不见rubric/模型名/他者；judge按同一已定rubric核匿名A/B逐标准证据，分歧回证据。泄露rubric/身份、标准不同或只有意见分歧均不成立。候选完成再比较，选可维护基底，说明有源保留/舍弃/合入，最终合成按原合同验证并保失败。reconstruct/reveal/challenge、普通findings合并不属此consumer；无入口记“只落文字/未生效”，适用不明记unknown；不为首验建候选框架、cross-judge、评分表或新轮。
 
 ## 一次调用的真实过程事实
 
