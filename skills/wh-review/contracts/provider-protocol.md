@@ -79,7 +79,7 @@ evidence_kind 只用 direct、machine、inferred：direct 有直接源码/材料
 
 ## 聚合与审查面
 
-按根因、路径和规范化 issue 合并重复发现，保留每个 provider 的 attribution 和不同后果。 同一根因被多路独立提出时如实保留来源数量与同源/unknown，不凭路数升级严重度；单源有效发现不丢弃。共同简洁视角归并时消费 `skills/simplicity-guard/SKILL.md`。
+沿现owner的根因、路径、规范化 issue 规则归并。共同简洁发现处理时读 `skills/simplicity-guard/SKILL.md` Packet lens，消费三问与有源归并；保每路 attribution 和不同后果，不能以词近合并异根因。
 直接或机器证据可供逐项处理；单个 inferred 严重问题保持需核实，不能凭置信度制造裁决。
 空 findings 只表示本轮没有提出具体问题；可用传输、空发现与最终质量结论分别记事实。
 当前正式审查点为 make-decision、build-plan 和代码审查；build-code 只用当前 phase，

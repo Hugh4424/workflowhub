@@ -1500,7 +1500,7 @@
       "destination": "skills/decision-log/SKILL.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "宿主读、阶段材料作者",
+      "responsibility": "材料作者按来源写决定；风险/取舍前条件读取simplicity三问，不复制定义",
       "owner": "B3/P4 / MT-3-009",
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
@@ -2346,9 +2346,9 @@
       "destination": "skills/simplicity-guard/SKILL.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "同左（审查点必留 lens）",
+      "responsibility": "同次文档/OCR包的四阶梯、删前理由/行为保持、三问与有源归并；N3 P6复用现lens，不独立调用provider",
       "owner": "B3/P4 / MT-3-035",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
+      "consumer": "skills/wh-review/scripts/review-materials.mjs按stage-skill-plan动态读全文入packet；tools/cli/stage-runtime.mjs的projectOcrCodeReviewBundle核代码包正文；decision-log写风险/取舍、AGENTS共享写前条件读取",
       "module_consumers": [],
       "named_data_readers": [
         ".planning/2026-09-16-build-code-mechanism-waste-reduction/p1-phase-review-input.json",
@@ -2357,7 +2357,10 @@
         "skills/catalog.yaml",
         "tests/contract/ocr-review-contract-bundle.test.mjs",
         "tools/cli/stage-runtime.mjs",
-        "workflows/build-plan/skill-deps.yaml"
+        "workflows/build-plan/skill-deps.yaml",
+        "skills/wh-review/scripts/review-materials.mjs",
+        "skills/decision-log/SKILL.md",
+        "AGENTS.md"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
       "retention_basis": "MT-3-035 / NARROW"
@@ -2947,7 +2950,7 @@
       "destination": "skills/wh-review/contracts/provider-protocol.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "OCR + 文档面 reviewer 输出协议；N3 P2审查材料语义、真实配置路线/身份/覆盖与artifact+contract消费；arena无真实consumer仅保条件方法",
+      "responsibility": "OCR + 文档面 reviewer 输出协议；N3 P2审查材料语义、真实配置路线/身份/覆盖与artifact+contract消费；arena无真实consumer仅保条件方法；N3 P6发现归并条件读取唯一simplicity lens，不新增语义聚合器",
       "owner": "B4/P5 / MT-3-078",
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],

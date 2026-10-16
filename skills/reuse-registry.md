@@ -25,7 +25,7 @@
 | deep-research | 方向仍有关键未知，需要深度调研与可回读来源。 | [读取正文](deep-research/SKILL.md) |
 | grill-with-docs | 通过追问检验方案，并维护术语与架构决定。 | [读取正文](grill-with-docs/SKILL.md) |
 | intake-decision-review | 只读审查问题界定、范围与可行性。 | [读取正文](intake-decision-review/SKILL.md) |
-| simplicity-guard | 检查是否能删除、复用或用更小方案满足目标。 | [读取正文](simplicity-guard/SKILL.md) |
+| simplicity-guard | 同次包核最小路径、删前理由/行为、三问与有源归并；N3采用/排除读catalog absorbed来源，subtract/foundational同落P0/P1。 | [读取正文](simplicity-guard/SKILL.md) |
 | talk-with-zhipeng | 需要用户决定方向、风险或范围，组织真实问答。 | [读取正文](talk-with-zhipeng/SKILL.md) |
 | spec-prd | 把已确认方向写成任务组PRD与产品表达。 | [读取正文](spec-prd/SKILL.md) |
 | spec-specify | 从已确认决定起草规格与全局实现设计骨架，或查技能写作规范。 | [读取正文](spec-specify/SKILL.md) |

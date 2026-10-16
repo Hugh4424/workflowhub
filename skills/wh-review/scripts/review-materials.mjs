@@ -742,7 +742,7 @@ export function buildReviewMaterials({attachmentRoot,reviewDataRoot,stage,review
   };
   try {
     const documentFace=surface==="document"&&stage==="build-code";
-    const codePacket=["build-code","verify-code"].includes(stage)&&!documentFace;
+    const codePacket=["build-code","verify-code"].includes(stage)&&!documentFace&&reviewKind!=="mini_task.design";
     const selection=selectReviewerSkills(stage,reviewTrack,reviewKind,uiScope,filtered.materials,codePacket);
     const instructionSelection=stage==="build-plan" && reviewKind===null
       ? selection : selectReviewerSkills(stage,reviewTrack,reviewKind,uiScope,filtered.materials);

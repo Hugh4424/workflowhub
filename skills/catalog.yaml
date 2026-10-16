@@ -1655,7 +1655,7 @@ capability_decisions:
       - build-plan
       - build-code
       - verify-code
-    local_path: skills/wh-review/SKILL.md; skills/wh-review/contracts/provider-protocol.md; skills/review/SKILL.md
+    local_path: skills/wh-review/SKILL.md; skills/wh-review/contracts/provider-protocol.md; skills/review/SKILL.md; skills/simplicity-guard/SKILL.md; skills/decision-log/SKILL.md; AGENTS.md
     upstream:
       - github_url: https://github.com/backnotprop/pstack
         commit: unresolved-pstack-content-snapshot
@@ -1666,6 +1666,7 @@ capability_decisions:
         skill_url: https://github.com/backnotprop/pstack/blob/main/skills/interrogate/SKILL.md
         adopted:
           - 当前配置逐路派发；来源归属、失败并列及唯一simplicity指针
+          - N3 P6：rubric幂等/并发与code-quality-review消除复杂度三问；有源归并/有效单源/证据拒绝
     local_changes: >-
       方法吸收入既有consumer；不改native身份、不新建runtime/账本/路由。pstack实际包sha256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；git
       commit未知；不采用宿主默认模型、cross-judge或额外审批。
@@ -1979,3 +1980,80 @@ capability_decisions:
     local_changes: "既有diagnosing-bugs性能分支采用；不引control-skill、benchmark-checklist、指定模型或自动PR。pstack实际包SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；git commit未知，main仅locator，不冒固定commit。"
     dependency_closure: [skills/spec-specify/SKILL.md]
     update_policy: "按实际包SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8 与固定子文件核源差/本地偏离；新包需重核身份，不伪造commit或无实测收益。"
+  - name: n3-code-simplification
+    status: absorbed
+    purpose: N3共同简洁方法采用
+    design_idea: 删前六问/git blame、原理由与输入输出/错误/副作用行为保持
+    used_by_stages: [make-decision, build-plan, build-code, verify-code]
+    local_path: skills/simplicity-guard/SKILL.md
+    upstream:
+      - github_url: https://github.com/addyosmani/agent-skills
+        commit: aeac41d4d005999432bb7312f7ff06383a91d59d
+        commit_url: https://github.com/addyosmani/agent-skills/commit/aeac41d4d005999432bb7312f7ff06383a91d59d
+        license: MIT
+        reviewed_at: '2026-10-17'
+        review_outcome: accepted
+        path: skills/code-simplification/SKILL.md
+        skill_url: https://github.com/addyosmani/agent-skills/blob/aeac41d4d005999432bb7312f7ff06383a91d59d/skills/code-simplification/SKILL.md
+        adopted:
+          - 删前六问/git blame、原理由与输入输出/错误/副作用行为保持
+    local_changes: 复用四阶梯与同次findings，不搬模型/fallback/verdict/reconciliation、无consumer脚手架、全局类型/CI或自动拆状态；pstack包sha256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8，git commit未知；方法消费与登记分验。
+    dependency_closure: [skills/spec-specify/SKILL.md]
+    update_policy: 按固定commit或包hash逐项比较本地consumer；不追HEAD，不新增runtime/schema/账本。
+  - name: n3-laziness-protocol
+    status: absorbed
+    purpose: N3共同简洁方法采用
+    design_idea: 最小有效路径与唯一权威，不造第二份
+    used_by_stages: [make-decision, build-plan, build-code, verify-code]
+    local_path: skills/simplicity-guard/SKILL.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        commit: unresolved-pstack-content-snapshot
+        license: MIT
+        reviewed_at: '2026-10-17'
+        review_outcome: accepted
+        path: skills/principle-laziness-protocol/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/principle-laziness-protocol/SKILL.md
+        adopted:
+          - 最小有效路径与唯一权威，不造第二份
+    local_changes: 复用四阶梯与同次findings，不搬模型/fallback/verdict/reconciliation、无consumer脚手架、全局类型/CI或自动拆状态；pstack包sha256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8，git commit未知；方法消费与登记分验。
+    dependency_closure: [skills/spec-specify/SKILL.md]
+    update_policy: 按固定commit或包hash逐项比较本地consumer；不追HEAD，不新增runtime/schema/账本。
+  - name: n3-subtract-before-you-add
+    status: absorbed
+    purpose: N3共同简洁方法采用
+    design_idea: P0/P1先减再加，动态consumer核实，不建无需求validator
+    used_by_stages: [make-decision, build-plan, build-code, verify-code]
+    local_path: skills/simplicity-guard/SKILL.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        commit: unresolved-pstack-content-snapshot
+        license: MIT
+        reviewed_at: '2026-10-17'
+        review_outcome: accepted
+        path: skills/principle-subtract-before-you-add/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/principle-subtract-before-you-add/SKILL.md
+        adopted:
+          - P0/P1先减再加，动态consumer核实，不建无需求validator
+    local_changes: 复用四阶梯与同次findings，不搬模型/fallback/verdict/reconciliation、无consumer脚手架、全局类型/CI或自动拆状态；pstack包sha256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8，git commit未知；方法消费与登记分验。
+    dependency_closure: [skills/spec-specify/SKILL.md]
+    update_policy: 按固定commit或包hash逐项比较本地consumer；不追HEAD，不新增runtime/schema/账本。
+  - name: n3-foundational-thinking
+    status: absorbed
+    purpose: N3共同简洁方法采用
+    design_idea: 仅先减再建子集与subtract同落P0/P1，不另计采用机制
+    used_by_stages: [make-decision, build-plan, build-code, verify-code]
+    local_path: skills/simplicity-guard/SKILL.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        commit: unresolved-pstack-content-snapshot
+        license: MIT
+        reviewed_at: '2026-10-17'
+        review_outcome: accepted
+        path: skills/principle-foundational-thinking/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/principle-foundational-thinking/SKILL.md
+        adopted:
+          - 仅先减再建子集与subtract同落P0/P1，不另计采用机制
+    local_changes: 复用四阶梯与同次findings，不搬模型/fallback/verdict/reconciliation、无consumer脚手架、全局类型/CI或自动拆状态；pstack包sha256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8，git commit未知；方法消费与登记分验。
+    dependency_closure: [skills/spec-specify/SKILL.md]
+    update_policy: 按固定commit或包hash逐项比较本地consumer；不追HEAD，不新增runtime/schema/账本。
