@@ -612,7 +612,7 @@ P10本次范围补齐前的reader观察原件为`task:quality/tests/2026-10-16-0
 
 Multica是实际catalog消费者，具体为`skills/workflowhub-multica-sync/scripts/multica-skill-sync.mjs`；mainRef读取边界与skills区retired/absorbed选择器风险原调研未具名收口。现有P1/P3由原作者补只读前后集合/真实下游影响核查，分别报告未改变、本次受影响或既有不一致交原owner；两条adapted→native仍属managed集合，不能冒作该风险已解决。此处不授权改同步脚本、外发Multica操作或新增gate，也不把缺线上读数写成已发生误删/漏删。
 
-原graphify任务已verify-code、merge、push和物理close，但业务验收仍3项pass、10项incomplete，quality unavailable、stage unverified；这不是功能实现百分比。verify-code到stage-closeout接线存在，自家specs未归档的直接依据是原执行侧最终scope第19行保留该路径；未证用户逐字批准该例外，不能扩大成人类明确接受，也不据此直接断言越权。move-map的named_data_readers登记本身不证明活跃consumer或原路径不可迁接；旧任务归档由原收尾owner核真实消费者/可迁接性及当时授权另处置，外置facts/review/raw和原验收欠账保留，不在当前dirty N2树替其归档。上述原任务欠账与N2当前计划、后续验收分别报告。
+原graphify任务当时已verify-code、merge、push和物理close，但业务验收仍3项pass、10项incomplete、quality unavailable、stage unverified；这些历史欠账保留，不是功能实现百分比。当时自家specs未归档的直接依据为原执行侧最终scope第19行保留该路径，未证用户逐字批准该例外，不能扩大成人类明确接受或直接断言越权。本轮main维护提交`8accb3b9e2bf2167e9bb73c3d37511e200e7cf67`已将11份材料字节不变归档至`specs/archive/graphify-knowledge-integration-20261015/`、迁接8处活动引用并修正规则；当前N2只消费该main交付，不另行归档旧材料。原历史依据见既有T027调查原件；本轮原graphify归档补件为`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/graphify-knowledge-integration-20261015/quality/evidence/2026-10-16-001-archive-bytes-supplement.md`（主会话读回提供：11/11 Git blob实比、11项hash齐备）。外置facts/review/raw、原验收欠账和provenance保留。图文档路径未更新，不能从材料归档推断知识图谱新鲜或业务验收完成。
 
 ### 未决与延期对象
 
@@ -632,9 +632,9 @@ Multica是实际catalog消费者，具体为`skills/workflowhub-multica-sync/scr
 | OPEN-010 / OI-013 | accepted_risk；FR/AC009 | 父规则owner/后续复核者；P10双口径现场事实 | 按RISK-003处理；不把用户已承担风险改为fixed |
 | OPEN-011 / U-009与确认接口 | unknown历史证明边界；FR/AC009/010 | make-decision主会话与原确认接口producer；第二次询问问题卡未保存、确认未含字节hash | 保原缺口，不补造原话/绑定，不扩大本卡实施范围 |
 
-N1本次只读来源：`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n1-main-agent-cost-20261015/quality/evidence/2026-10-16-131-verify-code-functional-acceptance.md`第19–49行及不可变补件`2026-10-16-133-verify-code-functional-supplement.md`第25–32行（同目录，SHA256 `7e765dd212bf6f8b7b34bd00e5a658d28ee3fbe1adf88ea933965c75b684a5a1`），执行事实以该task的`facts.jsonl`当前verify-code行及close_action行为准。AC-001–013只在具名样本范围observed_pass；AC-014仍unknown，缺make-decision/build-plan真实主会话调用；business_effect unknown、semantic_test_adequacy inadequate（正式临时TaskHandle删除序列未验）、code_review incomplete（终末OCR零provider完成），verify-code unverified。真实verify成本行已发布但incomplete、exit1；不以物理合并/归档/推送/清理改写质量，也不把工具、接线或该账行当本卡同条件收益样本。N1源码基线已读main `0c43823c67f701fbb4bea349a52d09c8302d5ed3`；当前N2尚待main维护归档后合入，实际合入提交SHA由主会话随后读回，不预填。
+N1本次只读来源：`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n1-main-agent-cost-20261015/quality/evidence/2026-10-16-131-verify-code-functional-acceptance.md`第19–49行及不可变补件`2026-10-16-133-verify-code-functional-supplement.md`第25–32行（同目录，SHA256 `7e765dd212bf6f8b7b34bd00e5a658d28ee3fbe1adf88ea933965c75b684a5a1`），执行事实以该task的`facts.jsonl`当前verify-code行及close_action行为准。AC-001–013只在具名样本范围observed_pass；AC-014仍unknown，缺make-decision/build-plan真实主会话调用；business_effect unknown、semantic_test_adequacy inadequate（正式临时TaskHandle删除序列未验）、code_review incomplete（终末OCR零provider完成），verify-code unverified。真实verify成本行已发布但incomplete、exit1；不以物理合并/归档/推送/清理改写质量，也不把工具、接线或该账行当本卡同条件收益样本。N1交付原端点为main `0c43823c67f701fbb4bea349a52d09c8302d5ed3`；本轮main维护端点为`8accb3b9e2bf2167e9bb73c3d37511e200e7cf67`，N2已合入该main，实际合入提交为`732f2919dac00b95fdfeb7f4356ea2dccd50a7f6`，本轮读回HEAD一致。
 
-本次main合入与N2增量分账，历史开工基线和AC判据不变，逐路径计量只归P10。当前及后续stage成本留账复用合入后四阶段方法正文：图更新/非破坏性收口结果之后、最终stage-handoff之前，由真实阶段主会话调用既有CLI并回读任务账本；首笔绑定真实开工事件，未触发或失败明确“本阶段无记录”及原因，已发布缺口行如实披露，不因exit1重跑造绿；until后的清理/发布/回复未计入。build-code只在整个stage末调用，P11比较与stage留账各保原职责，不新增writer或门。
+本次main合入与N2增量分账：历史开工到8accb3b9为main增量，8accb3b9到最终合入提交为N2已有草稿/共享修复净差，合入提交到现场为后续N2变化；N2自身合计仍取现场减8accb3b9。历史开工基线和AC判据不变，重叠hunk限制及逐路径计量只归P10。当前及后续stage成本留账复用合入后四阶段方法正文：图更新/非破坏性收口结果之后、最终stage-handoff之前，由真实阶段主会话调用既有CLI并回读任务账本；首笔绑定真实开工事件，未触发或失败明确“本阶段无记录”及原因，已发布缺口行如实披露，不因exit1重跑造绿；until后的清理/发布/回复未计入。build-code只在整个stage末调用，P11比较与stage留账各保原职责，不新增writer或门。
 
 OI-006/007/008 已由 D-005/016/008/026 解决，OI-009责任已定；已回答项不重问。R-008 的5b“54条整体搬迁/内容生效”由各实际owner首次实现验收，最终复核归N10；N2只交形态和自身八项采用，保明确non-goal，不假覆盖。
 
