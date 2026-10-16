@@ -301,10 +301,10 @@ D-015的其他候选明确处置：既有diff压缩可接入，但上下文/合�
 - **验收依赖**：本卡自身合法/坏字段/跨样本与同条件对照即可独立验；其它卡最终G1必须消费完整N1，不能取最小采集片段宣成本全验。
 - **合并依赖**：只读观测方法/工具按实际写集独立合入；同文件普通记录冲突串行处理，不增功能依赖。
 - **共享资源冲突与集成责任**：N1直接负责自身3项固定来源、采用内容、差异与普通登记；不交N2补尾，不另建成本持久平台。
-- **来源/设计**：[成本研究E35/A1][cost-source]、[T0方向][t0-source]、[纠错C-18/20][corrections]及G1；旧DSH常驻样本不能直接套Codex。
+- **来源/设计**：[成本研究E35/A1][cost-source]、[T0方向][t0-source]、[纠错C-18/20][corrections]及G1；旧DSH常驻样本不能直接套Codex。 固定外部参考（3项）：addyosmani/agent-skills：`observability-and-instrumentation`、`performance-optimization`；backnotprop/pstack：`explain-the-number`；逐项原文与配套见[N1资料索引](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N1.md)。
 - **局部风险**：宿主格式/强制注入可能不可观测；保unknown和真实范围。不能把常驻字节代理量称实际总token，无法可比时不宣布收益。
 - **可后置技术项**：跨宿主解析仅在该宿主存在显式输入/真实consumer时实施；本卡声明的跨样本稳定性、坏字段/对照/解释不能后补给N11。
-- **最小读取集**：本卡/G1、成本研究E35、显式原始导出及当前只读producer；缺稳定入口时才按已登记边界新增measure-main-agent-cost，不读宿主全部历史。
+- **最小读取集**：本卡/G1、成本研究E35、显式原始导出及当前只读producer；缺稳定入口时才按已登记边界新增measure-main-agent-cost，不读宿主全部历史。 在设计/实施本任务前，先读[N1固定资料索引](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N1.md)及其中所列原件；按当前分支需要读取本地配套，未采用内容仍按本PRD排除。
 - **五阶段开工说明**：沿共同方法；先核原始基线和producer，build-plan定完整观测/样本/窗口，build-code校准坏字段与对照，verify-code区分成本可测/收益未知。规划不执行采集、评测或Git。
 
 <a id="n2"></a>
@@ -322,10 +322,10 @@ D-015的其他候选明确处置：既有diff压缩可接入，但上下文/合�
 - **验收依赖**：现有consistency可作辅助，真实活动路径/负例、3技能独立搬运与手动上游变化由本卡独立验；G1最终消费完整N1。
 - **合并依赖**：按本卡实际写集与共享文件表逐项串行合入；同文件先后只解决冲突，不新增功能前置。不依赖未交付兄弟新版方法。
 - **共享资源冲突与集成责任**：本卡直接完成自身方法、全部声明既有consumer及普通登记/来源/notice；同文件冲突锁内重读、唯一当次writer合入。不得由另一卡补本卡首次落点/验收；后继替换consumer保全已交行为。
-- **来源/设计**：[N2后置裁决][t2-source]、D-010/ADR-0042、[纠错C-13/17][corrections]、[54项表](#migration)。已不可复算的旧hash文字删除或升级到实际可复算对象，不能维持“看似可核”。
+- **来源/设计**：[N2后置裁决][t2-source]、D-010/ADR-0042、[纠错C-13/17][corrections]、[54项表](#migration)。已不可复算的旧hash文字删除或升级到实际可复算对象，不能维持“看似可核”。 固定外部参考（8项）：addyosmani/agent-skills：`security-and-hardening`、`using-agent-skills`；backnotprop/pstack：`setup-pstack`、`poteto-help`、`make-operations-idempotent`、`type-system-discipline`、`boundary-discipline`、`experience-first`；逐项原文与配套见[N2资料索引](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N2.md)。
 - **局部风险**：正文和投影漂移、上游名称与包版本不对应；以实际固定来源和本地采用内容为准。相似description只作诊断，不把英文rank-1或75%套成中文硬规则。
 - **可后置技术项**：手动上游检查在来源登记可核后由N2完成；自动同步不在范围，只有用户新决定才重开。无tag不阻塞内容登记，commit不明则如实保来源缺口。
-- **最小读取集**：本卡、catalog、skills/reuse-registry与docs旧副本、THIRD_PARTY_NOTICES、8项采用的目标文件来源段、现有内容检查接口及父PRD固定合同、相关固定LICENSE；其余技能按实际consumer读取。
+- **最小读取集**：本卡、catalog、skills/reuse-registry与docs旧副本、THIRD_PARTY_NOTICES、8项采用的目标文件来源段、现有内容检查接口及父PRD固定合同、相关固定LICENSE；其余技能按实际consumer读取。 在设计/实施本任务前，先读[N2固定资料索引](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N2.md)及其中所列原件；按当前分支需要读取本地配套，未采用内容仍按本PRD排除。
 - **五阶段开工说明**：沿共同方法；先核活动/历史登记边界，build-plan把清单、来源、手动漂移、搬运组织为本卡完整结果，build-code按原owner逐批改，verify-code实际复制与漂移复跑，不能拿登记数量当效果。
 
 <a id="n3"></a>
@@ -343,10 +343,10 @@ D-015的其他候选明确处置：既有diff压缩可接入，但上下文/合�
 - **验收依赖**：在现有完整consumer分别核策略、行为负例、诊断、simplicity及真实浏览器适用面；同cohort连续N≥3，失败在分母；G1最终消费完整N1。不等N9最终十环或N11总评测补本卡首次验收。
 - **合并依赖**：按本卡实际写集与共享文件表逐项串行合入；同文件先后只解决冲突，不新增功能前置。不依赖未交付兄弟新版方法。
 - **共享资源冲突与集成责任**：本卡直接完成自身方法、全部声明既有consumer及普通登记/来源/notice；同文件冲突锁内重读、唯一当次writer合入。不得由另一卡补本卡首次落点/验收；后继替换consumer保全已交行为。
-- **来源/设计**：[N3方向][remaining]、[6项源][t5-migration]、D-007/015、共享审查合同；已读review-policy、wh-review派发卫生和third-review-host-config真实consumer。
+- **来源/设计**：[N3方向][remaining]、[6项源][t5-migration]、D-007/015、共享审查合同；已读review-policy、wh-review派发卫生和third-review-host-config真实consumer。 固定外部参考（16项）：addyosmani/agent-skills：`browser-testing-with-devtools`、`code-simplification`、`constraint-driven-development`、`debugging-and-error-recovery`、`doubt-driven-development`、`test-driven-development`；backnotprop/pstack：`create-verification-skill`、`maintain-verification-skill`、`interrogate`、`test-behavior-not-implementation`、`laziness-protocol`、`attack-the-premise`、`blast-radius`、`architect`、`arena`、`perf-issue.md`；逐项原文与配套见[N3资料索引](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N3.md)。 另读mattpocock/skills既有方法：[tdd](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/mattpocock-skills/skills/engineering/tdd/SKILL.md)的测试反模式/独立期望，以及[setup-ts-deep-modules](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/mattpocock-skills/skills/in-progress/setup-ts-deep-modules/SKILL.md)的受控正→负→正证明；仅承接已定方法，不引入TS安装器或全量门，详见[N3既有方法索引](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N3.md)。 这些既有方法不计54项新增。
 - **局部风险**：减少次数不保证不漏；保终末审、失败分母和同样本对比。预算/输入量口径不明时不设限；当前文案不能被用作自动停止审查授权。
 - **可后置技术项**：推理预算/输入量上限等未实测候选保原审查合同边界；不按任意时长停审、不换provider。诊断、QA、simplicity及适用当前consumer都是本卡完整范围，不能后置给采用汇总。
-- **最小读取集**：本卡、审查共享合同、已知红；review-policy/stage-materials、simple-review-runner的配对条件、provider-protocol、真实identity/coverage producer、目标测试方法与本卡16项采用源；diagnosing-bugs、simplicity-guard、isolated-browser-qa及本卡16项完整源片段/现有consumer。
+- **最小读取集**：本卡、审查共享合同、已知红；review-policy/stage-materials、simple-review-runner的配对条件、provider-protocol、真实identity/coverage producer、目标测试方法与本卡16项采用源；diagnosing-bugs、simplicity-guard、isolated-browser-qa及本卡16项完整源片段/现有consumer。 在设计/实施本任务前，先读[N3固定资料索引](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N3.md)及其中所列原件；按当前分支需要读取本地配套，未采用内容仍按本PRD排除。 同时读取本卡索引“既有外部方法/检查来源”中的mattpocock/skills具名原件及当前承接owner；只读本卡消费者所需配套。
 - **五阶段开工说明**：沿共同方法；build-plan先定三维样本/组合而非交给代码猜，build-code可内部先验证配对和负例，外部只交完整本卡；verify-code独立核全部适用方法、有效原件与失效边界，保已知红，不自发全仓测试。
 
 <a id="n4"></a>
@@ -364,10 +364,10 @@ D-015的其他候选明确处置：既有diff压缩可接入，但上下文/合�
 - **验收依赖**：使用现有真实作者/下游consumer独立验四类材料、各出口/负例、来源分类和评测区分度；材料下降且下游不回改；G1最终消费完整N1。不等N6/N8替本卡首次验收。
 - **合并依赖**：按本卡实际写集与共享文件表逐项串行合入；同文件先后只解决冲突，不新增功能前置。不依赖未交付兄弟新版方法。
 - **共享资源冲突与集成责任**：本卡直接完成自身方法、全部声明既有consumer及普通登记/来源/notice；同文件冲突锁内重读、唯一当次writer合入。不得由另一卡补本卡首次落点/验收；后继替换consumer保全已交行为。
-- **来源/设计**：[N4方向][t3-source]、共享选节合同、D-016、OI-021/022/028/033。旧M3的“候选节/读者”和旧M11的“分层/模板表达”两项职责均保留在N4内部；先后关系与同一候选集可核，模板仍单一writer，不恢复两个任务或两套P0。 [N4方向][remaining]、D-011、M7中文算法与可靠性范围、[54项处置](#migration)。ISO §5.2.4–Annex B未取得全文，不能宣称完整标准符合。
+- **来源/设计**：[N4方向][t3-source]、共享选节合同、D-016、OI-021/022/028/033。旧M3的“候选节/读者”和旧M11的“分层/模板表达”两项职责均保留在N4内部；先后关系与同一候选集可核，模板仍单一writer，不恢复两个任务或两套P0。 [N4方向][remaining]、D-011、M7中文算法与可靠性范围、[54项处置](#migration)。ISO §5.2.4–Annex B未取得全文，不能宣称完整标准符合。 固定外部参考（15项）：addyosmani/agent-skills：`documentation-and-adrs`、`incremental-implementation`、`planning-and-task-breakdown`、`shipping-and-launch`、`source-driven-development`、`spec-driven-development`；backnotprop/pstack：`technical-writing`、`unslop`、`build-the-lever`、`minimize-reader-load`、`why`、`multi-phase-plan.md`、`refactoring.md`、`hillclimb.md`、`eval.md`；逐项原文与配套见[N4资料索引](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N4.md)。 另读mattpocock/skills既有[writing-for-agents](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/mattpocock-skills/skills/productivity/writing-for-agents/SKILL.md)及其本地配套；当前规则owner仍为WR001，四类模板消费其指针，详见[N4既有方法索引](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N4.md)。 这些既有方法不计54项新增。
 - **局部风险**：P0过宽会换名保留臃肿；通过消费者删除试验判断必需性。外部≤3AC/两小时等只作提醒线索，最终拆分靠独立结果、consumer、oracle和可单独交付，不机械按数切卡。 中文句法精确率跨文体漂移；本仓校准低于80%的项停检测，保人工指引，不能通过放松标签制造高精确率。
 - **可后置技术项**：ISO §5.2.4–Annex B缺合法全文时保范围限制，仅采用已读原则；低可靠语义自动检测不启用。四类模板、WR001、所有当前出口与研究/评测合同均为整卡交付，不再分最小规则/模板给兄弟开工；历史不可变材料不清账。
-- **最小读取集**：本卡与选节合同；四类现有模板、decision-log/spec-plan/spec-specify/spec-prd方法；当前材料校验器；归档P8反例；N4的15项采用及相关真实consumer。 本卡、WR001/ADR-0037/0043、四类模板出口、AGENTS当前提示、M7规则/算法/缺源段、technical-writing/unslop具名片段。
+- **最小读取集**：本卡与选节合同；四类现有模板、decision-log/spec-plan/spec-specify/spec-prd方法；当前材料校验器；归档P8反例；N4的15项采用及相关真实consumer。 本卡、WR001/ADR-0037/0043、四类模板出口、AGENTS当前提示、M7规则/算法/缺源段、technical-writing/unslop具名片段。 在设计/实施本任务前，先读[N4固定资料索引](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N4.md)及其中所列原件；按当前分支需要读取本地配套，未采用内容仍按本PRD排除。 同时读取本卡索引“既有外部方法/检查来源”中的mattpocock/skills具名原件及当前承接owner；只读本卡消费者所需配套。
 - **五阶段开工说明**：沿共同方法；build-plan明确候选节/读者、同集P0/P1/P2、写作校准、当前出口/来源/评测合同全部范围；build-code可内部逐类验证，verify-code以现有完整consumer读回四类、负例及语言/来源/评测效果，整卡之后才供N5/N6。
 
 <a id="n5"></a>
@@ -385,10 +385,10 @@ D-015的其他候选明确处置：既有diff压缩可接入，但上下文/合�
 - **验收依赖**：两类真实派发完整/缺字段/不可读/未知枚举/取消与修复回原会话均核；发送字节与宿主额外注入分列；G1消费完整N1，未知不宣节省。
 - **合并依赖**：按本卡实际写集与共享文件表逐项串行合入；同文件先后只解决冲突，不新增功能前置。功能依赖按上述整卡输入读取。
 - **共享资源冲突与集成责任**：本卡直接完成自身方法、全部声明既有consumer及普通登记/来源/notice；同文件冲突锁内重读、唯一当次writer合入。不得由另一卡补本卡首次落点/验收；后继替换consumer保全已交行为。
-- **来源/设计**：[N5方向][remaining]、D-008/009、[54项表](#migration)、[纠错C-17][corrections]；去重理由为成本/召回和权威漂移，不宣称重复同句必然伤注意力。
+- **来源/设计**：[N5方向][remaining]、D-008/009、[54项表](#migration)、[纠错C-17][corrections]；去重理由为成本/召回和权威漂移，不宣称重复同句必然伤注意力。 固定外部参考（2项）：addyosmani/agent-skills：`context-engineering`；backnotprop/pstack：`orchestrate.md`；逐项原文与配套见[N5资料索引](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N5.md)。
 - **局部风险**：新字段可能变成负担；只保有实际consumer字段，非适用内容说明理由，不用空占位。自然语言结论真实性不能机械证明。
 - **可后置技术项**：机械CLI仅在真派发回传需要复用检查时由N5实现；无消费者不加。宿主注入控制不在本卡，未知只披露，不追造适配层。
-- **最小读取集**：本卡/G1、AGENTS/CLAUDE派发段、deep-research并发指针、N2完整身份/来源/搬运结果与N4完整模板/研究合同、研究/实施真实回传样本；只读所采用的context/orchestrate源片段。
+- **最小读取集**：本卡/G1、AGENTS/CLAUDE派发段、deep-research并发指针、N2完整身份/来源/搬运结果与N4完整模板/研究合同、研究/实施真实回传样本；只读所采用的context/orchestrate源片段。 在设计/实施本任务前，先读[N5固定资料索引](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N5.md)及其中所列原件；按当前分支需要读取本地配套，未采用内容仍按本PRD排除。
 - **五阶段开工说明**：沿共同方法；build-plan用两类真实派发定义字段，不按想象列全；build-code先试合同/完整性，verify-code核主Agent上下文与成本，未测不宣布节省。
 
 <a id="n6"></a>
@@ -406,10 +406,10 @@ D-015的其他候选明确处置：既有diff压缩可接入，但上下文/合�
 - **验收依赖**：同原需求完整旅程证明骨架真实答复、逐模块五段、故事、新模块回收、模糊答复及技术分歧；现有记录保事实即可，不等N9或N11首验；G1消费完整N1。
 - **合并依赖**：按本卡实际写集与共享文件表逐项串行合入；同文件先后只解决冲突，不新增功能前置。功能依赖按上述整卡输入读取。
 - **共享资源冲突与集成责任**：本卡直接完成自身方法、全部声明既有consumer及普通登记/来源/notice；同文件冲突锁内重读、唯一当次writer合入。不得由另一卡补本卡首次落点/验收；后继替换consumer保全已交行为。
-- **来源/设计**：[N6方向][t1-source]、[43单元根因修复][units]、U-015/016。保留本任务曾大纲未确认、讨论攒批、缺故事与越界并行决策的反例，不美化历史。
+- **来源/设计**：[N6方向][t1-source]、[43单元根因修复][units]、U-015/016。保留本任务曾大纲未确认、讨论攒批、缺故事与越界并行决策的反例，不美化历史。 固定外部参考（3项）：addyosmani/agent-skills：`idea-refine`、`interview-me`；backnotprop/pstack：`prototype.md`；逐项原文与配套见[N6资料索引](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N6.md)。
 - **局部风险**：新增显式动作可能把入口做重；把已有重复说明删/外置来支付，主会话只拿摘要。骨架确认和分级选择在第一次实际问答合并呈现，不制造两次重复批准。
 - **可后置技术项**：细节措辞可在本卡完整旅程实跑后按真实失败修；改变范围/目标的分歧交用户，不能当技术细节。talk/grill两项提问和适用prototype成功/失败不是后续采用卡义务。
-- **最小读取集**：本卡、共享材料合同、当前make-decision SKILL/steps/skill-deps、N4完整四类模板/写作/研究合同、N6方向及U-015/016、N3完整审查/简化方法；不读全部兄弟研究。
+- **最小读取集**：本卡、共享材料合同、当前make-decision SKILL/steps/skill-deps、N4完整四类模板/写作/研究合同、N6方向及U-015/016、N3完整审查/简化方法；不读全部兄弟研究。 在设计/实施本任务前，先读[N6固定资料索引](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N6.md)及其中所列原件；按当前分支需要读取本地配套，未采用内容仍按本PRD排除。
 - **五阶段开工说明**：沿共同方法；N3/N4整卡完成后，build-plan明确三段方法、全部提问采用、模板消费与完整实跑；build-code内部按模块推进，verify-code逐原需求/模块/异常读回，不等N9观测、不以标题数算完成。
 
 <a id="n7"></a>
@@ -427,10 +427,10 @@ D-015的其他候选明确处置：既有diff压缩可接入，但上下文/合�
 - **验收依赖**：现有路线完整核五件、各阶段收口、授权业务仓创建/追加/重复去重/后继读取、无发现、失败/取消/越权/并发；安全不写只证明拒绝场景，缺权限的成功场景保未完成；G1最终消费完整N1。
 - **合并依赖**：按本卡实际写集与共享文件表逐项串行合入；同文件先后只解决冲突，不新增功能前置。不依赖未交付兄弟新版方法。
 - **共享资源冲突与集成责任**：本卡直接完成自身方法、全部声明既有consumer及普通登记/来源/notice；同文件冲突锁内重读、唯一当次writer合入。不得由另一卡补本卡首次落点/验收；后继替换consumer保全已交行为。
-- **来源/设计**：[N7方向][remaining]、[6项采用][t8-migration]、D-004/012；现stage-reflection仍可选、已有文件才写和工具仓回落的行为是本卡将替代的真实对象。 [N7方向][remaining]、D-012、现stage-reflection“用户选择后的归口”。本地已明确自动发起收口，保需人决定与机械落账分工，不把旧可选复盘恢复成前置门。
+- **来源/设计**：[N7方向][remaining]、[6项采用][t8-migration]、D-004/012；现stage-reflection仍可选、已有文件才写和工具仓回落的行为是本卡将替代的真实对象。 [N7方向][remaining]、D-012、现stage-reflection“用户选择后的归口”。本地已明确自动发起收口，保需人决定与机械落账分工，不把旧可选复盘恢复成前置门。 固定外部参考（6项）：addyosmani/agent-skills：`git-workflow-and-versioning`；backnotprop/pstack：`no-comments`、`ketchup`、`reflect`、`recall`、`opening-a-pr.md`；逐项原文与配套见[N7资料索引](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N7.md)。
 - **局部风险**：统一文字会撞被钉死测试；先把同一保护语义写成可观察判据，再同批调整测试，不能借去重减弱授权/失败规则。 经验沦为流水账或重复；每条必须说明下次相关情境怎么改变行动，真实来源不可见则unknown而非记忆补造。
 - **可后置技术项**：新四级全部交付/收口/经验接线归N8，构成本卡之外的新消费者；本卡现有路线的五件、各阶段收口、业务仓创建/追加/后继消费及失败透传不可拆后补。具体目标仓权限缺失保未完成成功场景，不回落工具仓；自动prune/全仓同步不采用。
-- **最小读取集**：本卡、共享授权合同、各stage末步、stage-reflection/handoff、grill-with-docs领域段、workspace/task/close既有入口、被影响字面测试和6项源。 本卡、现有收口接口、stage-reflection/handoff、目标仓资源/写集与已有Improvements、本次事件唯一原件；不扫描其他项目经验。
+- **最小读取集**：本卡、共享授权合同、各stage末步、stage-reflection/handoff、grill-with-docs领域段、workspace/task/close既有入口、被影响字面测试和6项源。 本卡、现有收口接口、stage-reflection/handoff、目标仓资源/写集与已有Improvements、本次事件唯一原件；不扫描其他项目经验。 在设计/实施本任务前，先读[N7固定资料索引](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N7.md)及其中所列原件；按当前分支需要读取本地配套，未采用内容仍按本PRD排除。
 - **五阶段开工说明**：沿共同方法独立开工；build-plan逐件列当前路线权威/阶段consumer/业务仓许可与全部成功失败；build-code可内部依次整理和试跑，verify-code整卡读回五件、各阶段handoff、创建/追加/后继复用/取消/越权/并发。最终close仍一次确认，当前PRD不授权执行。
 
 <a id="n8"></a>
@@ -448,10 +448,10 @@ D-015的其他候选明确处置：既有diff压缩可接入，但上下文/合�
 - **验收依赖**：四级真实调用逐格核必需/按需/跳过，轻档真实少调用，所有适用新级别收口与经验成功/失败完整核；G1用完整N1成本对照。不以profile或单轻路线宣布整卡完成。
 - **合并依赖**：按本卡实际写集与共享文件表逐项串行合入；同文件先后只解决冲突，不新增功能前置。功能依赖按上述整卡输入读取。
 - **共享资源冲突与集成责任**：本卡直接完成自身方法、全部声明既有consumer及普通登记/来源/notice；同文件冲突锁内重读、唯一当次writer合入。不得由另一卡补本卡首次落点/验收；后继替换consumer保全已交行为。
-- **来源/设计**：[N8方向][remaining]、[普通与跨级补遗][grading]、D-002/003、ADR-0040/0041；已读evaluateMiniTaskScope七事实与review身份约束。
+- **来源/设计**：[N8方向][remaining]、[普通与跨级补遗][grading]、D-002/003、ADR-0040/0041；已读evaluateMiniTaskScope七事实与review身份约束。 本卡0项新增外部采用；四级路线复用addyosmani/agent-skills（addy-agent-skills）的测试/写作/上下文/提问方法，以及backnotprop/pstack的验证QA/简化/Phase/编排/原型/收口方法；按本卡消费者读取[N3](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N3.md)、[N4](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N4.md)、[N5](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N5.md)、[N6](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N6.md)、[N7](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N7.md)中对应具名方法，不把兄弟全部原件加入本卡必读。直接导航见[N8资料索引](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N8.md)。
 - **局部风险**：当前mini_task.design受build-code绑定，普通方案审先用make-decision现detail路径，不凭空制造stage；共享材料键由N3/N4对齐。跳过代价高于收益时保失败证据，不能擅自新增stage。
 - **可后置技术项**：内部可先验证轻路线再核复杂/规划，但外部只交四级完整卡；自动数值分类和默认降级不采用。真实风险改变产品行为时回用户选择；所有适用级别收口/经验接线不可留后补。
-- **最小读取集**：本卡、四级表、N6步骤、N4轻spec、mini-task SKILL/runner、review-policy/stage-materials、真实普通/复杂材料读取方及N8补遗。
+- **最小读取集**：本卡、四级表、N6步骤、N4轻spec、mini-task SKILL/runner、review-policy/stage-materials、真实普通/复杂材料读取方及N8补遗。 在设计/实施本任务前，先读[N8固定资料索引](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N8.md)及本卡来源/设计具名的必要方法原件；按当前消费者需要读取本地配套，未采用内容仍按本PRD排除。
 - **五阶段开工说明**：自身沿共同标准；依赖N3/N4/N5/N6/N7整卡完成，build-plan按本稿矩阵与全部级别交付/收口/经验定义接缝，build-code可内部逐级验证，verify-code整卡核四级实际调用/少调用/共享定义与成功失败。
 
 <a id="n9"></a>
@@ -469,10 +469,10 @@ D-015的其他候选明确处置：既有diff压缩可接入，但上下文/合�
 - **验收依赖**：当前最终步骤声明、实际原件与合法跳过/漏步/重复冲突负例逐环核；完成率分母可复算，正常工作继续；G1消费完整N1。不以N10/N11补本卡首次行为验收。
 - **合并依赖**：按本卡实际写集与共享文件表逐项串行合入；同文件先后只解决冲突，不新增功能前置。功能依赖按上述整卡输入读取。
 - **共享资源冲突与集成责任**：本卡直接完成自身方法、全部声明既有consumer及普通登记/来源/notice；同文件冲突锁内重读、唯一当次writer合入。不得由另一卡补本卡首次落点/验收；后继替换consumer保全已交行为。
-- **来源/设计**：[十环补遗][chain]、[单元修复2][units]、D-014；已读loader、portable核对/terminal实现、task-store的现有evidence结构和run入口限制。
+- **来源/设计**：[十环补遗][chain]、[单元修复2][units]、D-014；已读loader、portable核对/terminal实现、task-store的现有evidence结构和run入口限制。 本卡0项新增外部采用；复用[N8](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N8.md)最终路线，重点按十环消费者读[N4](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N4.md)的addyosmani/agent-skills（addy-agent-skills）`planning-and-task-breakdown`、`source-driven-development`及backnotprop/pstack的`build-the-lever`、`minimize-reader-load`（任务粒度、独立oracle与引用），并读[N3](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N3.md)的`test-driven-development`、`test-behavior-not-implementation`验证方法；不要求全读兄弟原件。直接导航见[N9资料索引](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N9.md)。
 - **局部风险**：机械只能判存在性时输出证据等级和未证实内容；将真实阅读事件与作者自述分开。不同级别跳过阶段是适用性事实，不计为违规跳步。
 - **可后置技术项**：无后补的十环核心步骤；自然语言完成判定保持独立内容审查，不建新LLM判分通道。
-- **最小读取集**：本卡、N8最终四级步骤及N6/N7完整方法、N4引用契约；`runtime/stage/stage-skill-runtime.mjs`、`runtime/task/portable-workflow-run.mjs`核对函数、`runtime/task/task-store.mjs`证据字段、`tools/cli/stage-runtime.mjs`run边界及本卡十环源。
+- **最小读取集**：本卡、N8最终四级步骤及N6/N7完整方法、N4引用契约；`runtime/stage/stage-skill-runtime.mjs`、`runtime/task/portable-workflow-run.mjs`核对函数、`runtime/task/task-store.mjs`证据字段、`tools/cli/stage-runtime.mjs`run边界及本卡十环源。 在设计/实施本任务前，先读[N9固定资料索引](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N9.md)及本卡来源/设计具名的必要方法原件；按当前消费者需要读取本地配套，未采用内容仍按本PRD排除。
 - **五阶段开工说明**：沿共同方法；N8整卡后build-plan列最终十环/各级适用性与真实原件，build-code复用私有核对逻辑，verify-code逐环核漏步可见、合法跳过和正常继续，不以报告文件或字段齐全算完成。
 
 <a id="n10"></a>
@@ -490,10 +490,10 @@ D-015的其他候选明确处置：既有diff压缩可接入，但上下文/合�
 - **验收依赖**：全部声明适用consumer、合法/负例/零输入及恢复原始结果；G1完整N1。不等N11代本卡首次检测验收。
 - **合并依赖**：工具由N10写；内容owner已交的普通变更不移回N2；共享文件串行合入且保行为，不新增检查许可证。
 - **共享资源冲突与集成责任**：复用当前reports/failures责任和run-checks；新增规则优先既有consistency纯函数，确需复用拆tools/cli/lib时先登记唯一consumer/owner/替代/删除条件。不新建证据去重检查器（ADR-0039）。
-- **来源/设计**：[T0方向][t0-source]、下列17来源/E-1…E-10、父PRD已定各规则、[54项表](#migration)figure-it-out；当前reports/公共退出语义按真实消费者读回。
+- **来源/设计**：[T0方向][t0-source]、下列17来源/E-1…E-10、父PRD已定各规则、[54项表](#migration)figure-it-out；当前reports/公共退出语义按真实消费者读回。 固定外部参考（1项）：backnotprop/pstack：`figure-it-out`；逐项原文与配套见[N10资料索引](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N10.md)。 另读mattpocock/skills既有[writing-for-agents](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/mattpocock-skills/skills/productivity/writing-for-agents/SKILL.md)与[setup-ts-deep-modules](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/mattpocock-skills/skills/in-progress/setup-ts-deep-modules/SKILL.md)，分别消费N4/WR001规则和受影响检查的负例→恢复证明；测试反模式沿[N3 tdd方法索引](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N3.md)读取，不替N3/N4首次验收，详见[N10既有方法索引](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N10.md)。 这些既有方法不计54项新增。
 - **局部风险**：检查本身错误须在本卡范围修，过易通过先查观察方法；保10既有红，不绕下游豁免，不为可机器验全链路造状态机。
 - **可后置技术项**：已列17/E-1…E-10与全部适用新规则不可后置；新发现未命名问题按真实范围另处置，不无限增加历史差额。
-- **最小读取集**：本卡/有限集合/G1、tools/cli/check-skill-consistency.mjs、check-decision-log-chain.mjs、run-checks.mjs、runtime/stage/stage-content-contracts.mjs及各完整内容owner规则/N9结果；不整包复制工作树。
+- **最小读取集**：本卡/有限集合/G1、tools/cli/check-skill-consistency.mjs、check-decision-log-chain.mjs、run-checks.mjs、runtime/stage/stage-content-contracts.mjs及各完整内容owner规则/N9结果；不整包复制工作树。 在设计/实施本任务前，先读[N10固定资料索引](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N10.md)及其中所列原件；按当前分支需要读取本地配套，未采用内容仍按本PRD排除。 同时读取本卡索引“既有外部方法/检查来源”中的mattpocock/skills具名原件及当前承接owner；只读本卡消费者所需配套。
 - **五阶段开工说明**：沿共同方法；依赖整卡齐后build-plan列完整规则→consumer→oracle，build-code只做有限机制/接线，verify-code逐项真实合法/负例/恢复读回，缺一保未完成。
 
 **N10的有限验收集合（原T0-B）**：原始诉求是让已有机制真正生效；BT-012先做阻塞其他卡的登记、材料、完成判据与WR001消费者，并未要求凑28条。对[主表第一节][skill-table]的142个真实条目穷尽关系列，精确标签“本仓已有但没生效”为16行，同义标签“本仓已有且没生效”为1行，无第三种未生效标签；附表再次展示的benny不重复计。旧汇总28/29为统计错误，原件保留，不能继续作为本卡工作承诺或终末完成目标。
@@ -552,10 +552,10 @@ N10验收只对上述有限来源与消费者逐项给“已生效并读回／�
 - **验收依赖**：N1完整观测、N4完整评测合同、各卡已有独立功能/成本验收和全部真实评测原件；同cohort连续N≥3审查收益规则保持。缺授权/资源仅停止受影响外部路径，其余安全工作继续，不伪造最终通过。
 - **合并依赖**：外仓适配需该仓实际授权，由本卡允许写面执行；不把PRD授权扩到ModelTest或Git。WorkflowHub普通方法接线已由N1–N10完成。
 - **共享资源冲突与集成责任**：N11只写其评测适配与真实总对照必要内容，复用既有producer/原件；54来源/notice和首次consumer不是本卡兜底责任，缺前卡结论如实报未完成。
-- **来源/设计**：[复测研究][modeltest-source]、[成本研究][cost-source]、[T0方向][t0-source]、N4评测合同/G1和全部各卡已有结论；已发布ModelTest资产与oracle保留。
+- **来源/设计**：[复测研究][modeltest-source]、[成本研究][cost-source]、[T0方向][t0-source]、N4评测合同/G1和全部各卡已有结论；已发布ModelTest资产与oracle保留。 本卡0项新增外部采用；按总对照消费者读[N1](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N1.md)的addyosmani/agent-skills（addy-agent-skills）`observability-and-instrumentation`、`performance-optimization`及backnotprop/pstack的`explain-the-number`成本/性能方法；读[N3](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N3.md)的`arena`独立同尺方法和[N4](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N4.md)的`hillclimb.md`、`eval.md`评测/匿名同尺合同，不全读兄弟原件。ModelTest US-07是内部复用资产，不是54项外部项目；其既定来源另按[复测研究][modeltest-source]读取。直接导航见[N11资料索引](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N11.md)。
 - **局部风险**：历史接口脱钩/旧snapshot/profiles和登录额度未验证，当前PRD不声称可跑；不恢复WorkflowHub历史控制面，真实不可用保具体原因和受影响面。
 - **可后置技术项**：已声明适用stage/九面扩面不得首个根阶段成功后无限后置；未适用或真实资源不可用逐项说明，不把缺项改N/A。新宿主/新评测平台不在范围。
-- **最小读取集**：本卡/G1、N4完整评测合同、N1观测、N1–N10验收原ref；ModelTest evaluation-assets/scripts/run-us07-fixed-stage-cohort.mjs、固定fixture/runner合同和profiles消费；不改其已发布资产。
+- **最小读取集**：本卡/G1、N4完整评测合同、N1观测、N1–N10验收原ref；ModelTest evaluation-assets/scripts/run-us07-fixed-stage-cohort.mjs、固定fixture/runner合同和profiles消费；不改其已发布资产。 在设计/实施本任务前，先读[N11固定资料索引](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/tasks/N11.md)及本卡来源/设计具名的必要方法原件；按当前消费者需要读取本地配套，未采用内容仍按本PRD排除。
 - **五阶段开工说明**：沿共同方法；所有整卡后核ModelTest当前接口/许可，build-plan定完整真实对照集/匿名同尺/预算，build-code做评测侧适配和实跑，verify-code独立核轨迹、成本、质量和失败分母；保规划/功能验收/最终效果/物理动作分离。
 
 <a id="parallel"></a>
@@ -663,69 +663,74 @@ R-013由N9/N3承接正确执行步骤；R-014由G1/N1承接主Agent成本；R-01
 
 计数单位是[主表第一节][skill-table]的唯一“来源仓＋完整条目名”键；可复跑筛选为 **关系＝本仓没有，且判定≠不参考**。第一节共142个真实行（119个SKILL＋23个playbook，附表188–190重复展示的benny不再计）；其中“本仓没有”74行，筛选后54个唯一键，与[原54项认领表][migration-source]双向差集均空，仍为历史认领旧T0-C 3、旧T2 16、旧T3 16、旧T5 6、旧T8 6、旧T11 7；本次按实际实施者改为N1 3、N2 8、N3 16、N4 15、N5 2、N6 3、N7 6、N10 1。主表第二节的37、后文34和父材料沿用34是错误旧汇总；本稿以第一节逐行数据纠正统计，保原研究字节。`unslop`在主表108行的关系确为“本仓没有”，应保留在54项内，不改成未生效项。下表是每行在本地的具体处置，内容不整包搬运；采用部分替代既有重复段，排除部分明确不实施。当前责任卡直接完成其全部声明既有落点，不再区分内容供给者和另一文件writer。mattpocock已采用/待生效内容由既有基线和N10消费，不为凑三仓再次搬一遍。
 
-**来源定位**：下表“主表行号”指[逐技能主表][skill-table]的生成时导航，源名/路径/稳定章节才是语义依据。addy源为本地固定commit `aeac41d4d005999432bb7312f7ff06383a91d59d` 的 `skills/<name>/SKILL.md`；pstack读取包sha256 `f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8`，归档坐标与2026-10-14取回事实见[原研究][pstack-source]。该包无git历史，不能证明它等于API当时观察的commit；不伪造pin。普通pstack项为 `skills/<name>/SKILL.md`，playbook为 `skills/poteto-mode/playbooks/<name>.md`；explain-the-number、test-behavior-not-implementation、laziness-protocol、build-the-lever、attack-the-premise、minimize-reader-load、make-operations-idempotent、type-system-discipline、boundary-discipline、experience-first十个简称的目录实际带 `principle-` 前缀。
+**来源定位**：下表“主表行号”保留为[逐技能主表][skill-table]的历史生成导航；当前54条采用从[固定资料总索引][fixed-references]进入，逐行最后一列直达固定原文，不依赖临时源码目录。固定根为 `/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/`，各任务的 `tasks/N<n>.md` 列真实项目、英文原名、集成落点及原件；设计/实施该任务前读取该索引和所列原件，按需读本地配套，不整包加载兄弟任务。
+
+[manifest][fixed-manifest]只说明逐文件原路径、固定路径、sha256、大小、身份依据、配套和未保存链接；它是资料对账索引，不是运行时对象、推进门、完成或许可证明。54项新增来自addyosmani/agent-skills 20项与backnotprop/pstack 34项；N3/N4/N10另有mattpocock/skills的`tdd`、`writing-for-agents`、`setup-ts-deep-modules`三项既有方法参考，不计54；配套44件、mattpocock既有基线和17待生效来源不另加进54。addy原件逐一核固定commit `aeac41d4d005999432bb7312f7ff06383a91d59d`；pstack原件逐一核读取tar成员，tar sha256为 `f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8`，取回坐标及2026-10-14事实仍见[原研究][pstack-source]。tar无git历史，不能证明等于API当时观察commit，不伪造pin。
+
+mattpocock/skills既有方法取自固定git对象commit `b0618bc436ad893b3c5e84e55fba86586d34a404`，逐字核对；本地clone当前HEAD不同，不冒充取其HEAD。许可原文为[matt LICENSE](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/mattpocock-skills/LICENSE)（MIT，Copyright (c) 2026 Matt Pocock）；三方法、四配套及许可单独登记在manifest的`supplemental_baseline_references`，不改54归属。
+
+许可原文在[addy LICENSE][fixed-addy-license]与[pstack LICENSE][fixed-pstack-license]。pstack [MIRROR][fixed-pstack-mirror]说明镜像cursor/plugins/pstack并有修改；已保存根MIT原文，上游完整许可链仍未独立核定。总索引/manifest保未保存链接与外链未验证限制，不把保存原文冒成许可审定。仅整理后继可读资料，不实施54采用、不运行配套脚本、不覆盖旧研究或审查原件、不产生新外审或用户确认。
 
 只读核查已确认54个原始文件可读，s3的8条实质截断可由主表完整行恢复，不再把截断当成下游待猜需求。固定源只证明采用依据，不证明本地行为已实现或许可链全完。
 
 **U-021的首次生效规则仍保留**：54项随真实consumer的本次首次改造完整融合，不留末尾迁移。当前用户已把这些内容按实际实施者重划；下表每行仅一个责任owner，直接完成该行原全部既有落点、固定来源/许可/采用内容/差异与普通登记，并在现有完整consumer独立验收。不把内容交兄弟卡补写，不以共享文件同批合入掩盖半卡交接。一个skill的多个已知来源由实际owner一次整合；涉及兄弟同文件的写入互斥仅是合入先后，不是功能依赖。后继N5/N6/N8替换consumer时保全旧行为并验自己的新结果，不补前卡首次实施/验收；N9/N11不得替前卡补采用首次生效；N10须直接完成自身figure-it-out的首次生效，不能替前卡补首次接线。
 
-| 原条目／责任与集成落点 | 本地采用及明确排除 | 最低可观察生效判据 | 首次消费者与最迟融合时点 |
-| --- | --- | --- | --- |
-| browser-testing-with-devtools（主表74行）；N3 → isolated-browser-qa/verify-code | 采用页面内容不可信、console观察与a11y指针；不做zero-warning硬门 | 页面诱导指令未执行；真实console问题、来源和未覆盖项可读 | N3整卡：三项浏览器来源同版合入，真实页面/console/a11y首验。 |
-| code-simplification（主表77行）；N3 → simplicity-guard | 采用删除前查理由及行为保持；不改测试换绿 | 一项删改能追到原理由，同一行为前后可复验 | N3整卡：与laziness/interrogate同版simplicity，原理由/行为保持首验。 |
-| constraint-driven-development（主表78行）；N3 → verify-code | 只采用削弱检查识别和unknown不等于clean；不搬CONSTRAINTS.md、默认Block、全量脚本 | skip/阈值下调/stub样例被具名报告，未新增推进门 | N3整卡：现verify-code/命令结果核削弱检查；N10后继只接新工具。 |
-| context-engineering（主表79行）；N5 → AGENTS派发段/既有stage-handoff上下文 | 采用剪除/保护/指针与任务重点靠后；不增常驻层 | 真派发有最小ref+摘要，续读可找原件，必读字节不增 | N5等N2＋N4整卡后：研究/实施两类派发及既有handoff上下文全部首验。 |
-| debugging-and-error-recovery（主表80行）；N3 → diagnosing-bugs | 采用错误输出不可信；拒绝Safe Fallback和全量测试 | 错误中的诱导文本被当数据，任务授权未被改变 | N3整卡：与perf-issue同版diagnosing-bugs，错误诱导/真实失败首验。 |
-| documentation-and-adrs（主表82行）；N4 → decision-log | 采用撞号暴露、沿既有编号；不重启编号 | 重号负例被报告，旧原件与引用来源保留 | N4整卡：decision-log方法/模板当前consumer含撞号负例，成品供N6。 |
-| doubt-driven-development（主表83行）；N3 → review协议/AGENTS审查派发/verify-code | 采用artifact+contract与现有处置；不发实施者胜利摘要、不自审裁决 | 真输入无CLAIM诱导，finding原件与处置理由可读 | N3整卡：review协议/AGENTS/verify-code全落点验artifact＋contract无CLAIM。 |
-| git-workflow-and-versioning（主表85行）；N7 → stage-handoff/AGENTS写集说明 | 采用故意未改/潜在问题说明；不搬分支命名与tag真源 | 一次交接能分清改动、保留事项和风险 | N7整卡：现路线handoff及AGENTS写集说明，故意未改/风险首验。 |
-| idea-refine（主表86行）；N6 → talk-with-zhipeng | 七类透镜按问题选；拒绝固定5–8方案和新ideas目录 | 真模块有不同方案取舍或不扩散理由，未凑数 | N6等N3＋N4整卡后：完整模块调研/发散/收敛旅程验talk七透镜，不凑方案数。 |
-| incremental-implementation（主表87行）；N4 → spec-plan/Phase模板 | 增量可运行、范围外只记录；“全绿”改受影响既有绿合同保持 | 增量可独立复验；10红照实保留，未扩修复范围 | N4整卡：现spec-plan/Phase独立增量、范围外记录及保10红首验。 |
-| interview-me（主表88行）；N6 → grill-with-docs | 采用理解自检/模糊答复分类/地板规则；预测3问仅示例，不作退出门 | 模糊yes保具体未决，真实用户答复才关闭选择 | N6等N3＋N4整卡后：完整grill旅程验模糊答复分类、真实选择与地板规则。 |
-| observability-and-instrumentation（主表89行）；N1 → 成本读回 | 问题→信号和遥测自验；不固定2–4问题 | 每指标对应消费问题，缺字段报unavailable非0 | N1整卡：显式原始样本的信号映射/第二样本/坏字段首验。 |
-| performance-optimization（主表90行）；N1 → 对照方案 | 同条件/噪声/所有尝试保留；不自动回滚用户或上游改动 | 对照含波动，噪声内不称收益；只撤无其他已确认价值的本次实验并记理由 | N1整卡：首个同条件对照含噪声、全部尝试及撤回边界。 |
-| planning-and-task-breakdown（主表91行）；N4 → spec-plan/Phase模板 | 采用独立结果/consumer/承载过量语义；不搬小时/文件数/≤3AC硬门和双计划 | P8反例给可解释分解，没按数字机械切卡 | N4整卡：现Phase以P8反例验独立consumer/oracle，不按数切卡。 |
-| security-and-hardening（主表92行）；N2 → 既有安全写/删除边界 | 根允许范围、子层、属主证据及值的作者来源；不搬token/rate限额/新release门 | 越界/根目录/属主不符破坏动作不发生，合法路径可用 | N2整卡：全部受影响现有安全入口，合法/越界/根目录/属主首验。 |
-| shipping-and-launch（主表93行）；N4 → Phase回滚字段 | 回滚路径和耗时实测或unknown；不设外部固定上界 | 独立交付单元可找到实际回滚动作与观测依据 | N4整卡：真实Phase回滚动作/路径/耗时依据或unknown首验。 |
-| source-driven-development（主表94行）；N4 → deep-research/spec-plan | 来源权威、版本核对、深链、推断分离；不因缺版本扩大停机 | 核心结论可回到具名原件，未知版本未被猜值 | N4整卡：deep-research/spec-plan现来源链、深链/版本/推断首验。 |
-| spec-driven-development（主表95行）；N4 → spec模板模块划分 | capability可独立消费/验收、稳定名称和无环依赖；不搬多SPEC/四批准门 | 各模块有consumer/oracle，互需模块说明合并理由 | N4整卡：spec模块/稳定名/无环依赖独立验，成品供N8。 |
-| test-driven-development（主表96行）；N3 → 三个测试技能/既有Phase测试合同 | 真实>Fake>Stub>Mock、替身理由、仓内gate_cmd来源、无新信息不重跑；无全量/比例门 | 真行为破坏会使目标测试失败，mock/重跑有理由 | N3整卡：三个测试技能及现Phase合同，行为/替身/gate_cmd/重跑首验。 |
-| using-agent-skills（主表97行）；N2 → reuse-registry | 任务语义路由+正负prompt评估；相似度只诊断，不套0.75/0.50/95%或DoD门 | 三类测试技能在正/负例上可区分，模板相似不误判语义冲突 | N2整卡：索引/路由正负prompt及三测试技能边界首验。 |
-| create-verification-skill（主表99行）；N3 → reuse-registry/isolated-browser-qa | 真执行、cleanup后原件、dry-run核实际跳过；不搬宿主目录/新Doctor体系 | 一次执行可读，cleanup后证据仍在原命名位置 | N3整卡：索引/QA真执行、dry-run跳过、cleanup后原件首验。 |
-| maintain-verification-skill（主表100行）；N3 → isolated-browser-qa/既有索引维护 | 健康≠可用、受控重置、doc drift与product regression分诊；不加periodic pass | 进程健康但页面卡死被识别，产品坏没用改文档抹平 | N3整卡：QA/索引维护验健康≠可用、重置/cleanup/漂移分诊。 |
-| interrogate（主表101行）；N3 → review协议/decision-log/simplicity-guard | 同根因多源数、假阳性理由、幂等/并发/简化问句；不搬≤5行动/模型表/verdict/reconciliation | 单源有效发现不丢；不凭路数升严重度；拒绝理由有证据 | N3整卡：协议/既有decision-log/simplicity全部落点首验，N4后继保全。 |
-| no-comments（主表103行）；N7 → stage-reflection | 机制真承接后才删对应散文；拒绝拿不准就删或借此新建检查器 | 原规则→consumer→删除段可对账，未覆盖含义保留 | N7整卡：现收口核规则→consumer→可删文，未承接含义保留。 |
-| technical-writing（主表106行）；N4 → WR001/四类写作出口 | 可重生成计数、语言中性消歧、修改交原owner；无20/25词门与副本 | 一项当前计数能按命令重生成，一段歧义消除但原义保持 | N4整卡：与unslop同版WR001/当前四类出口，数字/消歧/原义首验。 |
-| unslop（主表108行）；N4 → WR001/decision-log写法 | 空话结构自检、稳定编号；不搬英文禁词/既有术语清洗 | 泛泛段改具名事实或删除，编号不洗牌 | N4整卡：WR001/现decision-log验具体事实、稳定编号及保术语。 |
-| setup-pstack（主表111行）；N2 → catalog登记维护 | 登记前真读目标，缺失如实报；不搬全局模型文件/无条件整覆写/新停机门 | 无效path/consumer可见，27条与无关记录保留 | N2整卡：catalog维护真读目标，坏path/consumer/保27条首验。 |
-| poteto-help（主表112行）；N2 → reuse-registry | 引用前实读、相近技能边界；语义信目标、登记状态信catalog，冲突交owner | 旧指针例子显露，正文与投影不互冒权威 | N2整卡：索引/指针与using-agent-skills同版验目标实读与语义边界。 |
-| figure-it-out（主表115行）；N10 → 标准流程/收口 | 检查错在其范围修、过易通过先查观察法；不绕过或加下游豁免 | 受影响负例报真问题，未碰裁定保留10红 | N10等N9/全部内容整卡后：完整检查负例、标准流程/收口全部落点验检查归属，不前供半卡。 |
-| ketchup（主表117行）；N7 → handoff | 用户才能做的动作、推荐/理由/不答后果/unknown/真实链接；无150词或视觉副本 | Agent可继续做的事不甩给用户，链接目标存在 | N7整卡：现handoff/业务经验验用户动作、推荐/后果与真链接。 |
-| explain-the-number（主表120行）；N1 → 成本报告 | 样本/波动/替代解释/瓶颈；六类嫌疑作提示，不凑六项门 | 收益数字附次数、spread、具名limiter或unknown | N1整卡：每次成本解释附次数/波动/替代解释/瓶颈，先于收益声明。 |
-| test-behavior-not-implementation（主表122行）；N3 → AGENTS/三个测试技能 | undefined自问、具体输入/独立预期、absence配presence；不按词lint或全仓改测试 | 选定弱断言在真行为破坏时失败，合法缺省有理由 | N3整卡：AGENTS及三个测试技能验undefined反问/独立预期/presence。 |
-| laziness-protocol（主表125行）；N3 → simplicity-guard/既有AGENTS | 最小有效路径、合并到已有唯一权威；不借consolidate造第二份 | 一个需求说明为何选小方案及没有第二机制 | N3整卡：simplicity及既有AGENTS全部首验，N5后继派发保全。 |
-| build-the-lever（主表126行）；N4 → build-plan/Phase模板 | 手工oracle对照、worker不改自身验收契约、标签查对应产物；不冻全树 | 生成结果与独立oracle比较，worker未改判据换绿 | N4整卡：现build-plan/Phase比独立手工oracle，worker不改契约首验。 |
-| attack-the-premise（主表127行）；N3 → review/repair方法 | 反复同前提失败时证伪前提、消除/补偿分类；≥2只示例，不加配额/账本/换provider | 一个反复失败案例有能推翻前提的事实而非只换补丁 | N3整卡：现review/repair真实失败证伪前提，分类与原件保留。 |
-| minimize-reader-load（主表129行）；N4 → 材料模板 | 来源在哪/谁能改、derive替代sync；不做30秒门或自动合职责层 | 新读者能找到唯一来源/owner，未加手抄同步字段 | N4整卡：四类现consumer均定位来源/owner，derive替代手抄sync。 |
-| make-operations-idempotent（主表130行）；N2 → 既有写入口设计 | 重复/半途失败两问和内容一致；无adopt/recovery/rebind/PID替换 | 重复调用不重复记同事实，失败不伪成功 | N2整卡：全部受影响现写入口验重复/半途失败/内容一致。 |
-| type-system-discipline（主表132行）；N2 → 现有schema/检查 | 非法组合和不同语义值区分；不为.mjs引TS/无consumer类型层 | 真实consumer拒非法组合，合法组合保持 | N2整卡：现schema/检查验非法/合法组合，无consumer不加类型层。 |
-| boundary-discipline（主表134行）；N2 → interface职责/AGENTS | 输入是否过边界、能否纯函数；保文件系统/Git保护；不照抄Trust-the-types/外仓清单 | 新校验有真实边界，公共面不泄内部表示 | N2整卡：现interface/AGENTS/CLAUDE全落点验边界/纯函数/公共表示。 |
-| experience-first（主表137行）；N2 → consumer登记 | 维护者/调用者也是用户；不要求每事先原型 | 新能力能点名实际使用动作，无consumer不实施 | N2整卡：现consumer登记验维护者/调用者具体使用动作。 |
-| blast-radius（主表143行）；N3 → review/verify-code | 证据强弱、不可见耦合与一个安全事实；不增必填evidence_level/评分门 | 缺运行证据的主张标unproven，grep命中不冒验收 | N3整卡：现三维审查/verify核证据强弱/不可见耦合/unproven。 |
-| reflect（主表144行）；N7 → stage-reflection | 结构优先、需批准/可落账分开、经验接受判据；无纯人触发/固定四路/逐行批准 | 自动收口留经验或具名无发现，已授权落账不反复问 | N7整卡：现每stage收口/经验验自动发起、结构优先、批准/落账分工。 |
-| recall（主表145行）；N7 → stage-reflection | 默认读相关经验与人读状态；不新增机器reader/强制标签/状态对象 | 后继相关任务能指到消费项，无可用项有理由 | N7整卡：现收口/经验格式/后继真读取全验，无可用项给理由。 |
-| architect（主表146行）；N3 → verify-code/review | 8类红旗作观察、有意义备选对比；不增审查轮次/自动门/默认实施 | 有具体代码证据和取舍；不因temporal decomposition标签推翻阶段骨架 | N3整卡：现架构/终末review以红旗、代码和有意义备选首验。 |
-| arena（主表148行）；N3 → wh-review协议 | rubric隔离、匿名同尺、分歧查依据；3–6非配额，不加评分账本/cross-judge/无限重跑 | 候选不见rubric，judge同尺，分歧具体可读 | N3整卡：现协议/受控对照验隔离、匿名同尺、分歧依据，不等N11首验。 |
-| why（主表150行）；N4 → decision-log/spec-analyze/verify-code | 可得来源分类、空/跳过说明、Preserve/Change/Avoid/Risk；无固定7调查者或readonly:false | 回执区分读到/空/不可得/未读，历史理由只作背景 | N4整卡：decision-log/spec-analyze/既有verify全落点验来源分类。 |
-| multi-phase-plan.md（主表165行）；N4 → spec-plan现校验调用 | 无状态校验接作者收口；不搬<10行/1–2文件门、十泳道、review gate或证据抄计划 | 缺验收例由现reports报出，退出语义不变，开头可读结果/依赖 | N4整卡：现spec-plan收口消费既有无状态校验/缺验收负例，N10后继总接。 |
-| orchestrate.md（主表166行）；N5 → AGENTS/实际派发方法 | 适量brief、依赖内容中继、真事实进展；TIMEBOX仅回报提示，修复回原会话 | 真子任务能凭brief执行，缺关键输入报清；不计时停审、不搬store/tick/默认新spawn | N5等N2＋N4整卡后：与context同版，真brief/依赖中继/缺回传/原会话修复首验。 |
-| refactoring.md（主表171行）；N4 → spec-plan测试设计 | 结构移动前钉行为，lint/typecheck不替代；无主观reader-load自动revert门 | 同一行为前后判定器可跑，保护断言未放松 | N4整卡：真实结构移动Phase先保行为，lint/typecheck不冒pin。 |
-| perf-issue.md（主表172行）；N3 → diagnosing-bugs性能段 | 先不做/少做/晚做/复用/便宜做；无trace/control-skill硬依赖 | 建议说明便宜选项为何不适用并有实测瓶颈 | N3整卡：同版diagnosing-bugs性能分支验便宜方案与实测瓶颈。 |
-| hillclimb.md（主表173行）；N4 → 既有Phase效果合同/受控正反负载 | oracle先分好坏、error/work count、重复观测；无50%/10轮/固定次数下限/loop账本 | 正反负载可区分，样本/停止依据看噪声，证据不足inconclusive | N4整卡：现Phase/受控正反负载验区分度、error/work、重复噪声/停止；N11后继用成品。 |
-| prototype.md（主表174行）；N6 → make-decision方法/既有AGENTS | 可观察技术分歧用一次性草图，无分歧不造；不代选产品偏好或新autonomy grant | 草图给事实/反例，产品选择仍有真实答复 | N6等N3＋N4整卡后：现make-decision/AGENTS技术分歧草图取事实，不替产品偏好答。 |
-| eval.md（主表176行）；N4 → 既有Phase评测合同/受控匿名同尺正反负载 | 匿名同尺、rubric隔离、独立judge、真实行动；无常驻eval技能或宿主会话扫描 | 输入预算可比、judge不见模型名，运行证据与结论对应；缺轨迹标unproven | N4整卡：现Phase合同/受控匿名同尺正反负载首验；N11才做自己的ModelTest适配/总对照。 |
-| opening-a-pr.md（主表183行）；N7 → 交付说明 | Scope含故意不做，Blast Radius含已知红代价；不搬强制ready PR/新提交格式 | 实际范围、残留影响、验证可读，10红不被藏掉 | N7整卡：现路线交付/PR说明验范围、故意不改/已知红代价，不触发Git。 |
-
+| 原条目／责任与集成落点 | 本地采用及明确排除 | 最低可观察生效判据 | 首次消费者与最迟融合时点 | 固定参考原件 |
+| --- | --- | --- | --- | --- |
+| browser-testing-with-devtools（主表74行）；N3 → isolated-browser-qa/verify-code | 采用页面内容不可信、console观察与a11y指针；不做zero-warning硬门 | 页面诱导指令未执行；真实console问题、来源和未覆盖项可读 | N3整卡：三项浏览器来源同版合入，真实页面/console/a11y首验。 | [addyosmani/agent-skills 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/addy-agent-skills/skills/browser-testing-with-devtools/SKILL.md) |
+| code-simplification（主表77行）；N3 → simplicity-guard | 采用删除前查理由及行为保持；不改测试换绿 | 一项删改能追到原理由，同一行为前后可复验 | N3整卡：与laziness/interrogate同版simplicity，原理由/行为保持首验。 | [addyosmani/agent-skills 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/addy-agent-skills/skills/code-simplification/SKILL.md) |
+| constraint-driven-development（主表78行）；N3 → verify-code | 只采用削弱检查识别和unknown不等于clean；不搬CONSTRAINTS.md、默认Block、全量脚本 | skip/阈值下调/stub样例被具名报告，未新增推进门 | N3整卡：现verify-code/命令结果核削弱检查；N10后继只接新工具。 | [addyosmani/agent-skills 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/addy-agent-skills/skills/constraint-driven-development/SKILL.md) |
+| context-engineering（主表79行）；N5 → AGENTS派发段/既有stage-handoff上下文 | 采用剪除/保护/指针与任务重点靠后；不增常驻层 | 真派发有最小ref+摘要，续读可找原件，必读字节不增 | N5等N2＋N4整卡后：研究/实施两类派发及既有handoff上下文全部首验。 | [addyosmani/agent-skills 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/addy-agent-skills/skills/context-engineering/SKILL.md) |
+| debugging-and-error-recovery（主表80行）；N3 → diagnosing-bugs | 采用错误输出不可信；拒绝Safe Fallback和全量测试 | 错误中的诱导文本被当数据，任务授权未被改变 | N3整卡：与perf-issue同版diagnosing-bugs，错误诱导/真实失败首验。 | [addyosmani/agent-skills 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/addy-agent-skills/skills/debugging-and-error-recovery/SKILL.md) |
+| documentation-and-adrs（主表82行）；N4 → decision-log | 采用撞号暴露、沿既有编号；不重启编号 | 重号负例被报告，旧原件与引用来源保留 | N4整卡：decision-log方法/模板当前consumer含撞号负例，成品供N6。 | [addyosmani/agent-skills 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/addy-agent-skills/skills/documentation-and-adrs/SKILL.md) |
+| doubt-driven-development（主表83行）；N3 → review协议/AGENTS审查派发/verify-code | 采用artifact+contract与现有处置；不发实施者胜利摘要、不自审裁决 | 真输入无CLAIM诱导，finding原件与处置理由可读 | N3整卡：review协议/AGENTS/verify-code全落点验artifact＋contract无CLAIM。 | [addyosmani/agent-skills 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/addy-agent-skills/skills/doubt-driven-development/SKILL.md) |
+| git-workflow-and-versioning（主表85行）；N7 → stage-handoff/AGENTS写集说明 | 采用故意未改/潜在问题说明；不搬分支命名与tag真源 | 一次交接能分清改动、保留事项和风险 | N7整卡：现路线handoff及AGENTS写集说明，故意未改/风险首验。 | [addyosmani/agent-skills 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/addy-agent-skills/skills/git-workflow-and-versioning/SKILL.md) |
+| idea-refine（主表86行）；N6 → talk-with-zhipeng | 七类透镜按问题选；拒绝固定5–8方案和新ideas目录 | 真模块有不同方案取舍或不扩散理由，未凑数 | N6等N3＋N4整卡后：完整模块调研/发散/收敛旅程验talk七透镜，不凑方案数。 | [addyosmani/agent-skills 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/addy-agent-skills/skills/idea-refine/SKILL.md) |
+| incremental-implementation（主表87行）；N4 → spec-plan/Phase模板 | 增量可运行、范围外只记录；“全绿”改受影响既有绿合同保持 | 增量可独立复验；10红照实保留，未扩修复范围 | N4整卡：现spec-plan/Phase独立增量、范围外记录及保10红首验。 | [addyosmani/agent-skills 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/addy-agent-skills/skills/incremental-implementation/SKILL.md) |
+| interview-me（主表88行）；N6 → grill-with-docs | 采用理解自检/模糊答复分类/地板规则；预测3问仅示例，不作退出门 | 模糊yes保具体未决，真实用户答复才关闭选择 | N6等N3＋N4整卡后：完整grill旅程验模糊答复分类、真实选择与地板规则。 | [addyosmani/agent-skills 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/addy-agent-skills/skills/interview-me/SKILL.md) |
+| observability-and-instrumentation（主表89行）；N1 → 成本读回 | 问题→信号和遥测自验；不固定2–4问题 | 每指标对应消费问题，缺字段报unavailable非0 | N1整卡：显式原始样本的信号映射/第二样本/坏字段首验。 | [addyosmani/agent-skills 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/addy-agent-skills/skills/observability-and-instrumentation/SKILL.md) |
+| performance-optimization（主表90行）；N1 → 对照方案 | 同条件/噪声/所有尝试保留；不自动回滚用户或上游改动 | 对照含波动，噪声内不称收益；只撤无其他已确认价值的本次实验并记理由 | N1整卡：首个同条件对照含噪声、全部尝试及撤回边界。 | [addyosmani/agent-skills 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/addy-agent-skills/skills/performance-optimization/SKILL.md) |
+| planning-and-task-breakdown（主表91行）；N4 → spec-plan/Phase模板 | 采用独立结果/consumer/承载过量语义；不搬小时/文件数/≤3AC硬门和双计划 | P8反例给可解释分解，没按数字机械切卡 | N4整卡：现Phase以P8反例验独立consumer/oracle，不按数切卡。 | [addyosmani/agent-skills 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/addy-agent-skills/skills/planning-and-task-breakdown/SKILL.md) |
+| security-and-hardening（主表92行）；N2 → 既有安全写/删除边界 | 根允许范围、子层、属主证据及值的作者来源；不搬token/rate限额/新release门 | 越界/根目录/属主不符破坏动作不发生，合法路径可用 | N2整卡：全部受影响现有安全入口，合法/越界/根目录/属主首验。 | [addyosmani/agent-skills 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/addy-agent-skills/skills/security-and-hardening/SKILL.md) |
+| shipping-and-launch（主表93行）；N4 → Phase回滚字段 | 回滚路径和耗时实测或unknown；不设外部固定上界 | 独立交付单元可找到实际回滚动作与观测依据 | N4整卡：真实Phase回滚动作/路径/耗时依据或unknown首验。 | [addyosmani/agent-skills 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/addy-agent-skills/skills/shipping-and-launch/SKILL.md) |
+| source-driven-development（主表94行）；N4 → deep-research/spec-plan | 来源权威、版本核对、深链、推断分离；不因缺版本扩大停机 | 核心结论可回到具名原件，未知版本未被猜值 | N4整卡：deep-research/spec-plan现来源链、深链/版本/推断首验。 | [addyosmani/agent-skills 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/addy-agent-skills/skills/source-driven-development/SKILL.md) |
+| spec-driven-development（主表95行）；N4 → spec模板模块划分 | capability可独立消费/验收、稳定名称和无环依赖；不搬多SPEC/四批准门 | 各模块有consumer/oracle，互需模块说明合并理由 | N4整卡：spec模块/稳定名/无环依赖独立验，成品供N8。 | [addyosmani/agent-skills 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/addy-agent-skills/skills/spec-driven-development/SKILL.md) |
+| test-driven-development（主表96行）；N3 → 三个测试技能/既有Phase测试合同 | 真实>Fake>Stub>Mock、替身理由、仓内gate_cmd来源、无新信息不重跑；无全量/比例门 | 真行为破坏会使目标测试失败，mock/重跑有理由 | N3整卡：三个测试技能及现Phase合同，行为/替身/gate_cmd/重跑首验。 | [addyosmani/agent-skills 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/addy-agent-skills/skills/test-driven-development/SKILL.md) |
+| using-agent-skills（主表97行）；N2 → reuse-registry | 任务语义路由+正负prompt评估；相似度只诊断，不套0.75/0.50/95%或DoD门 | 三类测试技能在正/负例上可区分，模板相似不误判语义冲突 | N2整卡：索引/路由正负prompt及三测试技能边界首验。 | [addyosmani/agent-skills 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/addy-agent-skills/skills/using-agent-skills/SKILL.md) |
+| create-verification-skill（主表99行）；N3 → reuse-registry/isolated-browser-qa | 真执行、cleanup后原件、dry-run核实际跳过；不搬宿主目录/新Doctor体系 | 一次执行可读，cleanup后证据仍在原命名位置 | N3整卡：索引/QA真执行、dry-run跳过、cleanup后原件首验。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/create-verification-skill/SKILL.md) |
+| maintain-verification-skill（主表100行）；N3 → isolated-browser-qa/既有索引维护 | 健康≠可用、受控重置、doc drift与product regression分诊；不加periodic pass | 进程健康但页面卡死被识别，产品坏没用改文档抹平 | N3整卡：QA/索引维护验健康≠可用、重置/cleanup/漂移分诊。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/maintain-verification-skill/SKILL.md) |
+| interrogate（主表101行）；N3 → review协议/decision-log/simplicity-guard | 同根因多源数、假阳性理由、幂等/并发/简化问句；不搬≤5行动/模型表/verdict/reconciliation | 单源有效发现不丢；不凭路数升严重度；拒绝理由有证据 | N3整卡：协议/既有decision-log/simplicity全部落点首验，N4后继保全。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/interrogate/SKILL.md) |
+| no-comments（主表103行）；N7 → stage-reflection | 机制真承接后才删对应散文；拒绝拿不准就删或借此新建检查器 | 原规则→consumer→删除段可对账，未覆盖含义保留 | N7整卡：现收口核规则→consumer→可删文，未承接含义保留。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/no-comments/SKILL.md) |
+| technical-writing（主表106行）；N4 → WR001/四类写作出口 | 可重生成计数、语言中性消歧、修改交原owner；无20/25词门与副本 | 一项当前计数能按命令重生成，一段歧义消除但原义保持 | N4整卡：与unslop同版WR001/当前四类出口，数字/消歧/原义首验。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/technical-writing/SKILL.md) |
+| unslop（主表108行）；N4 → WR001/decision-log写法 | 空话结构自检、稳定编号；不搬英文禁词/既有术语清洗 | 泛泛段改具名事实或删除，编号不洗牌 | N4整卡：WR001/现decision-log验具体事实、稳定编号及保术语。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/unslop/SKILL.md) |
+| setup-pstack（主表111行）；N2 → catalog登记维护 | 登记前真读目标，缺失如实报；不搬全局模型文件/无条件整覆写/新停机门 | 无效path/consumer可见，27条与无关记录保留 | N2整卡：catalog维护真读目标，坏path/consumer/保27条首验。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/setup-pstack/SKILL.md) |
+| poteto-help（主表112行）；N2 → reuse-registry | 引用前实读、相近技能边界；语义信目标、登记状态信catalog，冲突交owner | 旧指针例子显露，正文与投影不互冒权威 | N2整卡：索引/指针与using-agent-skills同版验目标实读与语义边界。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/poteto-help/SKILL.md) |
+| figure-it-out（主表115行）；N10 → 标准流程/收口 | 检查错在其范围修、过易通过先查观察法；不绕过或加下游豁免 | 受影响负例报真问题，未碰裁定保留10红 | N10等N9/全部内容整卡后：完整检查负例、标准流程/收口全部落点验检查归属，不前供半卡。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/figure-it-out/SKILL.md) |
+| ketchup（主表117行）；N7 → handoff | 用户才能做的动作、推荐/理由/不答后果/unknown/真实链接；无150词或视觉副本 | Agent可继续做的事不甩给用户，链接目标存在 | N7整卡：现handoff/业务经验验用户动作、推荐/后果与真链接。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/ketchup/SKILL.md) |
+| explain-the-number（主表120行）；N1 → 成本报告 | 样本/波动/替代解释/瓶颈；六类嫌疑作提示，不凑六项门 | 收益数字附次数、spread、具名limiter或unknown | N1整卡：每次成本解释附次数/波动/替代解释/瓶颈，先于收益声明。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/principle-explain-the-number/SKILL.md) |
+| test-behavior-not-implementation（主表122行）；N3 → AGENTS/三个测试技能 | undefined自问、具体输入/独立预期、absence配presence；不按词lint或全仓改测试 | 选定弱断言在真行为破坏时失败，合法缺省有理由 | N3整卡：AGENTS及三个测试技能验undefined反问/独立预期/presence。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/principle-test-behavior-not-implementation/SKILL.md) |
+| laziness-protocol（主表125行）；N3 → simplicity-guard/既有AGENTS | 最小有效路径、合并到已有唯一权威；不借consolidate造第二份 | 一个需求说明为何选小方案及没有第二机制 | N3整卡：simplicity及既有AGENTS全部首验，N5后继派发保全。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/principle-laziness-protocol/SKILL.md) |
+| build-the-lever（主表126行）；N4 → build-plan/Phase模板 | 手工oracle对照、worker不改自身验收契约、标签查对应产物；不冻全树 | 生成结果与独立oracle比较，worker未改判据换绿 | N4整卡：现build-plan/Phase比独立手工oracle，worker不改契约首验。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/principle-build-the-lever/SKILL.md) |
+| attack-the-premise（主表127行）；N3 → review/repair方法 | 反复同前提失败时证伪前提、消除/补偿分类；≥2只示例，不加配额/账本/换provider | 一个反复失败案例有能推翻前提的事实而非只换补丁 | N3整卡：现review/repair真实失败证伪前提，分类与原件保留。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/principle-attack-the-premise/SKILL.md) |
+| minimize-reader-load（主表129行）；N4 → 材料模板 | 来源在哪/谁能改、derive替代sync；不做30秒门或自动合职责层 | 新读者能找到唯一来源/owner，未加手抄同步字段 | N4整卡：四类现consumer均定位来源/owner，derive替代手抄sync。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/principle-minimize-reader-load/SKILL.md) |
+| make-operations-idempotent（主表130行）；N2 → 既有写入口设计 | 重复/半途失败两问和内容一致；无adopt/recovery/rebind/PID替换 | 重复调用不重复记同事实，失败不伪成功 | N2整卡：全部受影响现写入口验重复/半途失败/内容一致。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/principle-make-operations-idempotent/SKILL.md) |
+| type-system-discipline（主表132行）；N2 → 现有schema/检查 | 非法组合和不同语义值区分；不为.mjs引TS/无consumer类型层 | 真实consumer拒非法组合，合法组合保持 | N2整卡：现schema/检查验非法/合法组合，无consumer不加类型层。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/principle-type-system-discipline/SKILL.md) |
+| boundary-discipline（主表134行）；N2 → interface职责/AGENTS | 输入是否过边界、能否纯函数；保文件系统/Git保护；不照抄Trust-the-types/外仓清单 | 新校验有真实边界，公共面不泄内部表示 | N2整卡：现interface/AGENTS/CLAUDE全落点验边界/纯函数/公共表示。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/principle-boundary-discipline/SKILL.md) |
+| experience-first（主表137行）；N2 → consumer登记 | 维护者/调用者也是用户；不要求每事先原型 | 新能力能点名实际使用动作，无consumer不实施 | N2整卡：现consumer登记验维护者/调用者具体使用动作。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/principle-experience-first/SKILL.md) |
+| blast-radius（主表143行）；N3 → review/verify-code | 证据强弱、不可见耦合与一个安全事实；不增必填evidence_level/评分门 | 缺运行证据的主张标unproven，grep命中不冒验收 | N3整卡：现三维审查/verify核证据强弱/不可见耦合/unproven。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/blast-radius/SKILL.md) |
+| reflect（主表144行）；N7 → stage-reflection | 结构优先、需批准/可落账分开、经验接受判据；无纯人触发/固定四路/逐行批准 | 自动收口留经验或具名无发现，已授权落账不反复问 | N7整卡：现每stage收口/经验验自动发起、结构优先、批准/落账分工。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/reflect/SKILL.md) |
+| recall（主表145行）；N7 → stage-reflection | 默认读相关经验与人读状态；不新增机器reader/强制标签/状态对象 | 后继相关任务能指到消费项，无可用项有理由 | N7整卡：现收口/经验格式/后继真读取全验，无可用项给理由。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/recall/SKILL.md) |
+| architect（主表146行）；N3 → verify-code/review | 8类红旗作观察、有意义备选对比；不增审查轮次/自动门/默认实施 | 有具体代码证据和取舍；不因temporal decomposition标签推翻阶段骨架 | N3整卡：现架构/终末review以红旗、代码和有意义备选首验。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/architect/SKILL.md) |
+| arena（主表148行）；N3 → wh-review协议 | rubric隔离、匿名同尺、分歧查依据；3–6非配额，不加评分账本/cross-judge/无限重跑 | 候选不见rubric，judge同尺，分歧具体可读 | N3整卡：现协议/受控对照验隔离、匿名同尺、分歧依据，不等N11首验。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/arena/SKILL.md) |
+| why（主表150行）；N4 → decision-log/spec-analyze/verify-code | 可得来源分类、空/跳过说明、Preserve/Change/Avoid/Risk；无固定7调查者或readonly:false | 回执区分读到/空/不可得/未读，历史理由只作背景 | N4整卡：decision-log/spec-analyze/既有verify全落点验来源分类。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/why/SKILL.md) |
+| multi-phase-plan.md（主表165行）；N4 → spec-plan现校验调用 | 无状态校验接作者收口；不搬<10行/1–2文件门、十泳道、review gate或证据抄计划 | 缺验收例由现reports报出，退出语义不变，开头可读结果/依赖 | N4整卡：现spec-plan收口消费既有无状态校验/缺验收负例，N10后继总接。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/poteto-mode/playbooks/multi-phase-plan.md) |
+| orchestrate.md（主表166行）；N5 → AGENTS/实际派发方法 | 适量brief、依赖内容中继、真事实进展；TIMEBOX仅回报提示，修复回原会话 | 真子任务能凭brief执行，缺关键输入报清；不计时停审、不搬store/tick/默认新spawn | N5等N2＋N4整卡后：与context同版，真brief/依赖中继/缺回传/原会话修复首验。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/poteto-mode/playbooks/orchestrate.md) |
+| refactoring.md（主表171行）；N4 → spec-plan测试设计 | 结构移动前钉行为，lint/typecheck不替代；无主观reader-load自动revert门 | 同一行为前后判定器可跑，保护断言未放松 | N4整卡：真实结构移动Phase先保行为，lint/typecheck不冒pin。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/poteto-mode/playbooks/refactoring.md) |
+| perf-issue.md（主表172行）；N3 → diagnosing-bugs性能段 | 先不做/少做/晚做/复用/便宜做；无trace/control-skill硬依赖 | 建议说明便宜选项为何不适用并有实测瓶颈 | N3整卡：同版diagnosing-bugs性能分支验便宜方案与实测瓶颈。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/poteto-mode/playbooks/perf-issue.md) |
+| hillclimb.md（主表173行）；N4 → 既有Phase效果合同/受控正反负载 | oracle先分好坏、error/work count、重复观测；无50%/10轮/固定次数下限/loop账本 | 正反负载可区分，样本/停止依据看噪声，证据不足inconclusive | N4整卡：现Phase/受控正反负载验区分度、error/work、重复噪声/停止；N11后继用成品。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/poteto-mode/playbooks/hillclimb.md) |
+| prototype.md（主表174行）；N6 → make-decision方法/既有AGENTS | 可观察技术分歧用一次性草图，无分歧不造；不代选产品偏好或新autonomy grant | 草图给事实/反例，产品选择仍有真实答复 | N6等N3＋N4整卡后：现make-decision/AGENTS技术分歧草图取事实，不替产品偏好答。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/poteto-mode/playbooks/prototype.md) |
+| eval.md（主表176行）；N4 → 既有Phase评测合同/受控匿名同尺正反负载 | 匿名同尺、rubric隔离、独立judge、真实行动；无常驻eval技能或宿主会话扫描 | 输入预算可比、judge不见模型名，运行证据与结论对应；缺轨迹标unproven | N4整卡：现Phase合同/受控匿名同尺正反负载首验；N11才做自己的ModelTest适配/总对照。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/poteto-mode/playbooks/eval.md) |
+| opening-a-pr.md（主表183行）；N7 → 交付说明 | Scope含故意不做，Blast Radius含已知红代价；不搬强制ready PR/新提交格式 | 实际范围、残留影响、验证可读，10红不被藏掉 | N7整卡：现路线交付/PR说明验范围、故意不改/已知红代价，不触发Git。 | [backnotprop/pstack 原文](/Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/skills/poteto-mode/playbooks/opening-a-pr.md) |
 ### 46项冲突的本地处置
 
 原X编号只定位主表第三节，不另立决定编号。下表覆盖X-1…X-46；处置依据是当前已授权方向和硬边界，不能把旧报告的“待讨论”当新确认门。
@@ -905,3 +910,9 @@ U-021的逐字原话见[唯一原件][adoption-order]；54项已逐行写首次c
 [adoption-order]: /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/skills-framework-redesign-20261014/quality/evidence/raw-requirements/2026-10-15-external-adoption-order.md
 
 [prd-approved]: /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/skills-framework-redesign-20261014/quality/evidence/human-confirmations/2026-10-15-002-build-prd-prd-approved.json
+
+[fixed-references]: /Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/README.md
+[fixed-manifest]: /Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/manifest.json
+[fixed-addy-license]: /Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/addy-agent-skills/LICENSE
+[fixed-pstack-license]: /Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/LICENSE
+[fixed-pstack-mirror]: /Users/Hugh/Downloads/workflowhub-skills-framework-references-20261014/sources/pstack/MIRROR.md
