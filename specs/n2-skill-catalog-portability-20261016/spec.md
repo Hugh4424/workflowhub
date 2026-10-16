@@ -5,6 +5,7 @@
 - 功能：`n2-skill-catalog-portability-20261016`；`content_profile: post`；范围 `non_ui`。
 - 来源：[decision-log.md](decision-log.md) 的 R-001…R-012、U-001…U-009 与 D-001…D-032；父 PRD N2 段只读保留产品目标权威。
 - 状态：build-plan 草稿，`unverified`；实施计划尚未取得用户选择，build-code 未开始；本轮按独立scope-approved另做四个共享文件补修，见“额外授权补修”，不代表N2计划获批。本文件写成不表示N2行为已实现、已验收或已交付。
+- **当前窄修订：依389及本轮真人直接实施、免审查指令落实。** 上列来源范围与状态保留原build-plan编写时点；原计划之后已有真实实施、测试、审查和提交，当前事实见任务原件与各Phase。本次同步U-011/389与D-033的既成体积接受处置，不再为这点小修改新增审查、Grill或确认流程；不重写其余十一Phase或扩大生产工作。仅本次字节finding记accepted_risk，不代表原G1满足、其它验收通过或阶段整体完成。
 - 身份与外置原件基准：worktree、分支、HEAD、任务库根以 [decision-log.md#任务身份](decision-log.md#任务身份) 为准；下文 `task:` 指该任务库根，`parent:` 指父任务库 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/skills-framework-redesign-20261014`。
 
 ## 速读卡（30 秒）
@@ -41,6 +42,7 @@ R 与 U 的原义、来源地址、真实用户答复均由 decision-log 原节�
 | R-010 | D-010、D-029 | 001、002、003、005、008 | current / SCN-001…004、007 | 父 PRD 17 来源表与 E-2/E-10 |
 | R-011 | D-014、D-025、D-032 | 005、009、011 | current；具名风险 / SCN-004、007 | 父 PRD G1；U-009 |
 | R-012、U-001…U-009 | D-001、D-009、D-011、D-012、D-015、D-017、D-018、D-030、D-031、D-032 | 001…012 | current / SCN-001…007 | 当前 decision-log 需求变更记录 |
+| U-011及本轮直接实施/免审查指令 | D-033 | 009 | 本次具名体积accepted_risk；原零增长fail保留 / SCN-007 | `task:quality/evidence/2026-10-16-389-user-adoption-byte-exception-decision.json`与当前真人指令 |
 
 R-012与U-001…U-009为同一会话指令来源组的联合映射：FR/AC引用适用U，或经同号FR引用U，即沿该成员回原文；不表示每个U均直连全部十二项。各Phase的Source只列本任务直接采用的来源子集，完整来源沿本表和同号FR/AC追溯，避免复制整组来源。
 
@@ -117,6 +119,7 @@ R-012与U-001…U-009为同一会话指令来源组的联合映射：FR/AC引用
 - **PFACT-004** — **状态**：`unknown`。来源包许可链、真实固定版本与可取回性未全部核实。owner：build-code 来源维护者；影响 FR-N2-003、007 与 AC-N2-003、007，绑定 OPEN-002/003、RISK-002；下一动作由 P3/P6 逐来源读取 LICENSE、取回坐标并保真实缺口。
 - **PFACT-005** — **状态**：`unknown`。N1工具、四阶段末步接线及整卡验收结论已可读；完整同条件成本样本仍缺，整体效果未知。精确来源与限制见第12节OPEN-004。owner：N1 owner；影响 FR-N2-011、AC-N2-011；绑定 OPEN-004、RISK-004。不能从字节数推断 token/耗时收益。
 - **PFACT-006** — **状态**：`verified`。当前 G1 基线和具名口径风险已有原件。证据：`task:quality/evidence/2026-10-16-005-g1-baseline.txt`、decision-log D-032/AC-009 与 U-009 原件；关联 FR-N2-009、AC-N2-009。精确基线只在 Appendix A 引用。
+  - 本轮处置补充：389真实选择保全部采用、允许本次已展示的既成体积例外；依本轮直接实施/免审查指令同步记录accepted_risk，D-033定位具体内容、数字和不覆盖事项。原零增长未满足的事实不变，既有D-032口径排除与本次增长接受是两件事，不扩大为其它验收接受。
 - **PFACT-007** — **状态**：`unknown`。真实 service、route、viewport 未由 non_ui 合同提供。owner：build-plan 主会话；影响测试标准验收对象，不影响已知文件/CLI 检查；绑定 OPEN-005。缺项保 null，不编服务或浏览器观测。
 
 ## 5. 功能需求
@@ -144,6 +147,7 @@ R-012与U-001…U-009为同一会话指令来源组的联合映射：FR/AC引用
 
 - **FR-N2-008**：本卡八项采用与补充目录职责在既有消费位置落地，各有能失败的反例；运行时/工具只加内容规则与校验判据，保现有报告和退出语义。来源 R-002、R-007、R-009、R-010、U-008；PFACT-001/003；SCN-001…007；AC-N2-008。
 - **FR-N2-009**：按选定口径与全口径分别现场复算，列具名删除/合并对象，保留 D-032 风险。来源 R-011、U-009；PFACT-001/006；SCN-007；AC-N2-009。
+  - 当前处置承接U-011/D-033：只对本次具名既成增量记录真实用户accepted_risk；保原ORACLE-N2-BYTES核算与零增长fail，不另设自动cap评分或更改通过阈值。精确范围及后续变更边界只在AC-N2-009下述处置补充维护。
 - **FR-N2-010**：各行为段有针对性检查、独立审查及提交；现有已知红不改绿，缺质量真实记缺。来源 R-012、U-001/003/005；PFACT-001/002；SCN-007；AC-N2-010。
 - **FR-N2-011**：成本结论消费 N1 完整结果并进行同任务同命令同条件同预算对照；未具输入保未知。来源 R-008、R-011、U-003；PFACT-005；SCN-007；AC-N2-011。
 - **FR-N2-012**：宿主独立性用修复后的真实宿主守卫和单技能搬运两个动作判断，区分样本与整体主张。来源 R-004、U-008；PFACT-001/002；SCN-005；AC-N2-012。
@@ -249,6 +253,8 @@ workspace 来源为 decision-log 任务身份；state 来源为当前范围与�
 | 验收/观察证据 | 各Phase首次判定，终末逐项复核 | 缺原件保unknown/unavailable/incomplete |
 
 依据：D-002/026 已统一搬运二分，D-024 已处理来源异形，D-005 已区分写前行为与机器门，D-028 已取代 D-013 的写入归属旧句，D-032 是已知情风险。无需重新问相同方向；环境事实由现有代码与来源读取，不转成用户选择。
+
+本轮U-011已回答采用与既成体积取舍，D-033记录具名处置；最新真人明确这点小修改直接落实、不要审查。本次仅同步spec＋P10，不重复389问题，不新增多阶段审批；原计划与各验收边界不因此改写。
 
 ## 架构边界
 
@@ -377,6 +383,8 @@ P1→P3→P4对重叠正文严格串行，只写对应节；ui-skill-contract.te
 | R-011、R-012、U-009 | 双口径真实字节与风险 | FR-N2-009、FR-N2-010 / AC-N2-009、AC-N2-010 | P10/T010 | ORACLE-N2-BYTES；planned |
 | R-008、R-011、R-012 | 完整N1输入的成本结论 | FR-N2-011、FR-N2-010 / AC-N2-011、AC-N2-010 | P11/T011 | ORACLE-N2-COST；planned |
 | R-012、U-003、U-005 | 只消费各段首次原件，不首次补效果 | FR-N2-001、FR-N2-002、FR-N2-003、FR-N2-004、FR-N2-005、FR-N2-006、FR-N2-007、FR-N2-008、FR-N2-009、FR-N2-010、FR-N2-011、FR-N2-012 / AC-N2-001、AC-N2-002、AC-N2-003、AC-N2-004、AC-N2-005、AC-N2-006、AC-N2-007、AC-N2-008、AC-N2-009、AC-N2-010、AC-N2-011、AC-N2-012 | P12/T012 | ORACLE-N2-ACCEPTANCE；planned |
+
+本轮窄修订只由P10/T010在原字节事实之外消费U-011/D-033的接受处置；P1–P9/P11/P12的写集、Task、依赖与首次验收职责不变，纯指针index不变。后续P12/verify-code可读取新处置事实，不由本轮改写它们的既有材料或首次结论。
 
 P12/T012只消费上述首次原件，逐AC报告完成、缺失、失败与限制；没有新能力或首次通过判定。表中P12绑定所有AC用于最终回读，不使其成为各采用的首次owner。
 
@@ -559,6 +567,14 @@ P10本次范围补齐前的reader观察原件为`task:quality/tests/2026-10-16-0
 失败：隐去任一增长、只报一口径、只有一数字现场核算、扩大排除到方法/模板/正文/清单、把承载规则的代码/JSON转supporting逃避统计、丢约束或搬未统计文件凑数、未列对象称已删除；将口径风险改写成已满足G1。
 证据：原基线引用、改后路径+hash与字节聚合的现场原件、双净额、具名删除/合并与原义保全读回；不保存目录快照。确认接口未含材料hash/字节的既有证明限制保留为undetermined，owner为原接口产出方，不新增绑定机制。
 
+**本次既成体积接受处置（accepted_risk，source389及本轮直接实施/免审查指令；不改上列原判据）**：
+
+- 原ORACLE-N2-BYTES与本节原零增长通过/失败条件完整保留；148真实核算和375独立复算的原结果仍为fail，不改写成pass、误报或历史绿。079 blocking、337原处置、旧139及089覆盖时点原件均只读保留。本补充不把`selected≤0`替换成新阈值，不新增cap评分或生产校验器，因此不修改测试Oracle或触发测试变更请求；若后续实际要改通过/评分逻辑，须先走P10窄TCR及独立审查，不能借本补充暗改。
+- 389真实选择允许的是本task、375沿原282核定的同81条具名路径，在catalog修复提交`9b29b4840a63ee05b649bf7e145838766a57f6e2`所证既成内容：71 selected、3 exception、7 supporting。开工基线仍`3068cfd09b421bcfedc0a4e861b05871081c101b`，main/合入归因端点仍`8accb3b9e2bf2167e9bb73c3d37511e200e7cf67`与`732f2919dac00b95fdfeb7f4356ea2dccd50a7f6`；统计集合/分类不变，不拿N2自身差额替换历史分母。
+- 当前允许记录的处置为“用户允许本次已展示的既成体积增长；原G1零增长未满足”。selected历史＋23,049 B、full历史＋33,481 B是389已展示的两数字；N2自身＋13,577/＋24,009 B及supporting历史＋29,690/自身＋22,855 B只作归因/透明披露，不抵扣、不成为新例外。两数字不是未来可反复消耗的额度，不增统计排除项；D-032仍仅排除术语表新增与两份新ADR。
+- 无计量对象变化时复用148/375现场事实，当前材料修订不制造新测量。以后真实内容变化仍按同口径核算相对本次具名内容的新增净额；不自动套用本次例外，超出范围的取舍回原owner及真实有权决定。不得以“仍低于旧展示数”允许未授权新内容、删约束、换基线或减分母；不新增runtime许可门。
+- 原采用完整保留；专业正文扩写集不获授权。来源许可/grant/provenance、历史八项、成本收益仍各按原证据与owner未决，不能从体积接受推它们通过，也不推导stage成功/full acceptance或最终close。本次文档同步按真人指令直接实施且免审查，不另设待展示/Grill/确认事项；旧阶段、审查与失败原件保留其历史事实。
+
 ### AC-N2-010：各行为段真实验证与交付
 
 - [ ] **AC-N2-010**
@@ -605,6 +621,7 @@ P10本次范围补齐前的reader观察原件为`task:quality/tests/2026-10-16-0
 - **RISK-001**：全部依赖改真与共享文件冲突；影响FR/AC 001—005、008。触发为机械提取代人工确认或跨卡并写，后果为批量低报/高报及先写行为丢失；P4原owner逐条对账、各Phase锁内重读，相关oracle复验，不能扩大无关清理。
 - **RISK-002**：许可/版本/网络不能核；影响PFACT-004、FR/AC003/007。触发为来源不可取回或无历史，后果为无法证明固定版本或许可；P3/P6真实读取与缺口登记，核不到保unavailable，不改成无变化；维护者后续取回关闭。
 - **RISK-003**：双口径与G1文义冲突；影响PFACT-006、FR/AC009。D-032/OI-013是既有accepted_risk；P10及verify-code并列真实净额，最终汇报实际影响，若父规则owner不接受则全口径判定；不隐藏或扩例外。
+  - 当前另消费U-011/D-033对既成selected＋23,049/full＋33,481 B的真实选择，本次字节finding为accepted_risk；这不是D-032扩分母豁免，也不证明原G1已满足。风险是保全部采用所伴随的较大常驻字节，不能据此宣主Agent成本收益；未来增长与其它验收不在389授权内。
 - **RISK-004**：N1技术交付已可读，但完整同条件成本样本及N10接线仍未齐；影响PFACT-003/005、FR/AC003/008/011。字段存在、局部绿不能证明整体收益或N10生效；P11给真实缺项，P12/verify-code保incomplete，不估数。
 - **RISK-005**：历史/当前审查混读；影响FR/AC010及全部完成结论。旧方向pair partial、缺reveal与细节材料覆盖undetermined均保来源；build-plan当前审查及各实现段独立产出，不以旧结论顶替。方法不能靠目录/标题静态出现就称已消费。
 
@@ -633,6 +650,8 @@ Multica是实际catalog消费者，具体为`skills/workflowhub-multica-sync/scr
 | OPEN-009 / OI-011 | open；旧ADR重号与悬空引用 | ADR目录归属owner；旧引用/重号处置 | 本卡只避号保事实，不动旧档；0045/0046已真实存在 |
 | OPEN-010 / OI-013 | accepted_risk；FR/AC009 | 父规则owner/后续复核者；P10双口径现场事实 | 按RISK-003处理；不把用户已承担风险改为fixed |
 | OPEN-011 / U-009与确认接口 | unknown历史证明边界；FR/AC009/010 | make-decision主会话与原确认接口producer；第二次询问问题卡未保存、确认未含字节hash | 保原缺口，不补造原话/绑定，不扩大本卡实施范围 |
+
+OPEN-010本轮后续处置：旧OI-013/原accepted_risk与未满足G1历史保留；389对本次具名增量已作真实选择，D-033定位。本轮真人进一步指示小修改直接实施、免审查，材料owner据此同步spec＋P10，并仅将本次字节finding记accepted_risk；不称已修复历史fail或整卡通过，不将此小修改变成新的多阶段审批。
 
 N1本次只读来源：`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n1-main-agent-cost-20261015/quality/evidence/2026-10-16-131-verify-code-functional-acceptance.md`第19–49行及不可变补件`2026-10-16-133-verify-code-functional-supplement.md`第25–32行（同目录，SHA256 `7e765dd212bf6f8b7b34bd00e5a658d28ee3fbe1adf88ea933965c75b684a5a1`），执行事实以该task的`facts.jsonl`当前verify-code行及close_action行为准。AC-001–013只在具名样本范围observed_pass；AC-014仍unknown，缺make-decision/build-plan真实主会话调用；business_effect unknown、semantic_test_adequacy inadequate（正式临时TaskHandle删除序列未验）、code_review incomplete（终末OCR零provider完成），verify-code unverified。真实verify成本行已发布但incomplete、exit1；不以物理合并/归档/推送/清理改写质量，也不把工具、接线或该账行当本卡同条件收益样本。N1交付原端点为main `0c43823c67f701fbb4bea349a52d09c8302d5ed3`；本轮main维护端点为`8accb3b9e2bf2167e9bb73c3d37511e200e7cf67`，N2已合入该main，实际合入提交为`732f2919dac00b95fdfeb7f4356ea2dccd50a7f6`，本轮读回HEAD一致。
 
