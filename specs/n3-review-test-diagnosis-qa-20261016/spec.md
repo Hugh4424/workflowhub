@@ -299,6 +299,12 @@ checker的调用内sources应从下表实际读取，不把本段标签当三源
 
 P8先认证现存正常review；不足时允许按P8「补采前冻结同cohort输入」预先冻结条件后补采真实baseline/candidate连续三对。只解除原“不为凑样本另发provider”的执行限制，不降低N≥3、可比性、逐风险独立质量、成本四组或失败分母要求；不得先跑再改标准。原161、真实登录、23保护与G2历史冲突不在这次修订范围，仍保原事实。
 
+### P2共享投影既定语义缺陷修复（456/458）
+
+456已定位当前共享脱敏producer误吞真实JS执行声明的await，破坏AC-002送审语义。按完整N3目标及D-011自身问题修复，仅新增P2既有 `runtime/review/provider-material-projection.mjs` 与 `skills/wh-review/scripts/__tests__/material-redaction.test.mjs` 写集，独立458先RED/正反保护与实际egress，原P2owner后修；精确consumer、词法边界与保留删除条件见P2“本轮自身缺陷窄修”。187原答复不冒逐路径批准shared runtime。455 OCR检测器另行诊断，不取消fullread、秘密、硬只读或旧失败，不改AC/方向/路由/新schema。
+
+483独立窄TCR确认139/140同四旧fixture失败属于当前consumer迁移遗漏，479已排除由456新修复引入。P2仅迁material-redaction中1个真实catalog pin来源fixture及原P4所属review-semantic-projection中3个verify-code implementation_assessment fixture；原相等/不等、host-only/snapshot不入、秘密/路径强断言保持，其它旧case不动。精确条件与跨P4定序归属见P2“四个既有fixture的当前契约迁移”，不扩production，不改AC/路由/冻结oracle或provider重采。
+
 ### P6 mini design既定合同修复（2026-10-17）
 
 235实际caller与239独立读回发现mini_task.design合法默认包被codePacket注入simplicity，违背P6原“design无lens”合同。按原用户完整实现目标、D-011及该原合同，P6窄扩既有 `skills/wh-review/scripts/review-materials.mjs` 与 `tests/contract/review-materials-contract.test.mjs`，由原P6owner修实际mini kind分支；不是P2最新答复另授的文件范围。授权核对240与原声明越界事实241分别保留。具体独立先RED方案/consumer/保留删除条件见P6「mini design既定合同的根因修复」。不改AC、八入口原表、stage identity、广义documentFace或direction盲边界，不加schema/字段/runner/public命令。
@@ -366,6 +372,9 @@ tickets的窄接口为 `filterTargetCookies(cookies, scope)` 与 `transferTarget
 | `skills/third-review/test/adapters-health.test.mjs` | P2（本次批准窄修订） |
 | `skills/wh-review/scripts/review-provider-client.mjs` | P2（条件写集：仅实际集成证明需要，默认不改） |
 | `skills/wh-review/scripts/__tests__/review-provider-client-v3.test.mjs` | P2（条件写集：仅实际集成证明需要，默认不改） |
+| `runtime/review/provider-material-projection.mjs` | P2（456共享producer词法语义窄修；秘密/私有路径保护不降） |
+| `skills/wh-review/scripts/__tests__/material-redaction.test.mjs` | P2（458新增oracle保持；483仅1个旧URL来源fixture精确迁移，其余旧case不改） |
+| `skills/wh-review/scripts/__tests__/review-semantic-projection.test.mjs` | 原P4候选分类保留；483仅3个旧integration fixture迁现verify-code，由P2定序执行，原强方向不变 |
 | `skills/wh-review/scripts/review-materials.mjs` | P6（mini design实际kind分支窄修） |
 | `tests/contract/review-materials-contract.test.mjs` | P6（独立预写mini design目标RED/同oracle GREEN） |
 | `runtime/stage/stage-content-contracts.mjs` | P4（当前纯.md G2既有reader窄收） |
