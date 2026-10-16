@@ -24,7 +24,16 @@ describe('ORACLE-KG-P3 standalone closeout discovery and portable closure', () =
   it('resolves its declared graph dependency with the existing bundle consumer', () => {
     const entry = catalog().skills.find(skill => skill.name === 'stage-closeout');
     expect(entry, 'ORACLE-KG-P3: missing shared closeout owner').toBeDefined();
-    expect(entry.dependency_closure).toEqual(expect.arrayContaining(['skills/stage-closeout', 'skills/knowledge-graph']));
+    const expectedDependencies = ['skills/knowledge-graph', 'skills/spec-specify'];
+    const body = readFileSync(resolve(root, entry.path), 'utf8');
+    const localBody = body.replace(/\[[^\]]*\]\(https?:\/\/[^)]+\)/gu, '')
+      .replace(/https?:\/\/[^\s<>`]+/gu, '');
+    const bodyDependencies = [...new Set([...localBody.matchAll(/\bskills\/([a-z][a-z0-9-]*)\/SKILL\.md\b/gu)]
+      .map(match => `skills/${match[1]}`))];
+    expect(bodyDependencies.sort(), 'ORACLE-KG-P3: actual body method references must match the two independent sources').toEqual(expectedDependencies);
+    expect(entry.dependency_closure.slice().sort()).toEqual(expectedDependencies);
+    expect(bodyDependencies).not.toContain('skills/stage-closeout');
+    expect(entry.dependency_closure).not.toContain('skills/stage-closeout');
     expect(new Set(entry.dependency_closure).size).toBe(entry.dependency_closure.length);
     for (const locator of entry.dependency_closure) {
       expect(locator, 'ORACLE-KG-P3: dependency must stay repository-relative').toMatch(/^skills\/[a-z][a-z0-9-]*$/);

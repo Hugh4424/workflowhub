@@ -52,8 +52,12 @@ description: 阶段末有过程问题时可选复盘，提出有源候选供用�
 ## 固定来源、本地偏离与更新入口
 
 完整来源权威：[catalog条目](../catalog.yaml#skills.stage-reflection)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。
-来源线索：Matt retro与pstack correct/principle-encode-lessons-in-structure；采用候选提案、机械检查优先、层级修复与历史负例。逐pin取回坐标及原采集版本unknown回catalog；历史旧pin缺retro不能推新pin缺失。
+来源线索：mattpocock/skills 的 retro 与 backnotprop/pstack 的 correct、principle-encode-lessons-in-structure；采用候选提案、机械检查优先、层级修复与历史负例。逐pin取回坐标及原采集版本unknown回catalog；历史旧pin缺retro不能推新pin缺失。
 
 本地偏离：判断项按「用户选择后的归口」回流到已有 `Improvements.md`，保本文件的用户选择、检查与人确认 prune 规则；不搬上游 `CODING_STANDARDS.md`、规则执行表、自动修复/提交或 pstack 编排器。写作工具调用改为上节 WR001 唯一规范指针，保持现有单一路径与可搬运性。
 
 更新入口：迭代本方法时对照上述三个固定子文件、其更新与更优候选，说明源差和本地偏离后决定采用，不自动追 HEAD。子文件或版本不可核时保具体缺口并交来源 owner；来源核定不证明方法效果或质量通过。
+
+## 同仓方法依赖
+
+`skills/spec-specify/SKILL.md`、`skills/stage-handoff/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。

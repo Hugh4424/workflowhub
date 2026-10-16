@@ -25,3 +25,7 @@ build-plan UI 分支与 build-prd 条件设计分支调用：用真实组件和 
 ## 写作规范
 
 创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；此处不复制规范。
+
+## 同仓方法依赖
+
+`skills/isolated-browser-qa/SKILL.md`、`skills/spec-specify/SKILL.md`、`skills/ui-project-init/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。

@@ -30,7 +30,7 @@ screenshot 和 coverage limits。没有可执行 route 时写 `N/A — reason`�
 
 build-code 当前主会话按真实 changed files 选择一次具体测试路径；沿 `skills/ui-project-init/SKILL.md` 的「规范职责」读取本动作适用专业规则，把 UI 适用性、各类实际源路径/稳定节、version/作用域、owner/真实 consumer、consumer census 和 AC 关联到同一份原始证据。各类缺源/stale/冲突分别说明影响及原 owner，不以单一 design_revision 或旧 Design.md/Experience.md 两文件替全部来源；旧文件只作有据历史或可信条款输入。本次业务状态/权限/取消恢复从当前 task spec/API取，token/API精确事实引用原源，不把执行结果回写为规范正文。现有 handler 的执行原件如实消费；不把尚未运行的官方 handler 当作主会话工作的前置条件。Skill 被声明或被解析不等于执行；未触发、已触发但未执行和已执行必须分别记录。
 
-需要真实页面时，当前执行者通过既有 isolated-browser-qa 的受控执行链调用一次。证据必须带当前
+需要真实页面时，当前执行者通过既有 `skills/isolated-browser-qa/SKILL.md` 的受控执行链调用一次。证据必须带当前
 service instance、API/DTO contract、隔离 profile、invocation、viewport、console/network/focus/overflow
 观察、视觉/a11y/performance oracle 和 cleanup。fixture-only 只能证明组件，不得冒充页面通过；服务
 身份不匹配、取消、浏览器失败或 cleanup 失败保持 `failed`/`blocked`/`unknown`，不能被默认值改成绿灯。
@@ -40,3 +40,7 @@ service instance、API/DTO contract、隔离 profile、invocation、viewport、c
 创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；此处不复制规范。
 
 完整来源权威：[catalog条目](../catalog.yaml#skills.frontend-testing)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。来源：AgentHub packages/core/agenthub/skills/frontend-testing/SKILL.md（许可适用性unknown）。
+
+## 同仓方法依赖
+
+`skills/isolated-browser-qa/SKILL.md`、`skills/spec-specify/SKILL.md`、`skills/ui-project-init/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。

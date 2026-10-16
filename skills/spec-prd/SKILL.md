@@ -55,7 +55,7 @@ spec-prd 是规划 prd.md 的唯一正文作者。build-prd 协调条件工作�
 
 本节回答：变更承诺与物理动作分别留下什么事实。
 
-归档小修保留依据与影响；承诺有实质变化先展示前后差异并取得真实选择，再写变更说明和在途影响。保留历史决定、确认、审查、测试和 Git/物理事实；新任务记录采用的来源，现有在途任务不自动覆盖。交接分别说明规划、材料可用、开发、质量、附件和物理动作事实；阶段末的人读交接按 stage-handoff 方法执行，不创建第五材料、状态机或新 gate。
+归档小修保留依据与影响；承诺有实质变化先展示前后差异并取得真实选择，再写变更说明和在途影响。保留历史决定、确认、审查、测试和 Git/物理事实；新任务记录采用的来源，现有在途任务不自动覆盖。交接分别说明规划、材料可用、开发、质量、附件和物理动作事实；阶段末的人读交接按 `skills/stage-handoff/SKILL.md` 方法执行，不创建第五材料、状态机或新 gate。
 
 ## 可搬运调用边界
 
@@ -80,3 +80,7 @@ spec-prd 是规划 prd.md 的唯一正文作者。build-prd 协调条件工作�
 User Stories 吸收 mattpocock/skills 固定 commit `b0618bc436ad893b3c5e84e55fba86586d34a404` 的 `skills/engineering/to-spec/SKILL.md`：完整角色/诉求/收益。保本地单 PRD owner、两步内容及调用者限制、地图/设计/详情真实答复、16字段卡与只读母兄边界；不采用 tracker/setup 或发布机制。更新时核固定子文件及本地偏离，不自动追 HEAD。
 
 完整来源权威：[catalog条目](../catalog.yaml#skills.spec-prd)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。来源：本仓build-prd/prd-template.md与Matt skills/engineering/to-spec/SKILL.md#user-stories。
+
+## 同仓方法依赖
+
+`skills/spec-specify/SKILL.md`、`skills/stage-handoff/SKILL.md`、`skills/ui-project-init/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。

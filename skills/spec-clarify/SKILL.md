@@ -94,3 +94,7 @@ answer for the user, or turn an inferred answer into a confirmed decision.
 创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；保原步骤、条件、权限、失败强度和受保护字面，缺源如实 unavailable，不复制规范。
 
 来源线索：Spec Kit clarify与Matt grilling；采用问答覆盖和frontier/事实与决定分工。本地保独立轴批问、最多3选项、主会话真实问答、发卡即归还控制及十维核对，不采用上游单题循环、路径发现脚本、即时写 spec 或扩展 hooks。按固定源与本地偏离评更新，不自动追 HEAD。
+
+## 同仓方法依赖
+
+`skills/spec-specify/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。

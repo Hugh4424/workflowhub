@@ -108,3 +108,7 @@ review 的删除类 finding 措辞；不新建字段、模板、文件或第二�
 - 需要核四阶梯术语时，读取本文件「四阶梯决策树」的 P0–P3 唯一定义。
 
 创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；本 lens 保留原四阶梯、保护例外与 findings 合同，不另建规范。
+
+## 同仓方法依赖
+
+`skills/spec-specify/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。

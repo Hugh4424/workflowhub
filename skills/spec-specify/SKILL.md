@@ -36,7 +36,7 @@ exclusions, and the global implementation-design section. Keep the quick-read
 section short; put narrative before trace fields. Translate source requirements
 into four discoverable surfaces: requirement explanation, acceptance flow,
 test standard, and architecture boundary. Link each to source/decision IDs;
-Reference the PRD goal and decision rationale in their original owners. Before choosing or retaining a solution shape, self-check with `simplicity-guard`'s core questions (has this layer earned its place; can an existing capability carry it instead) and write the conclusion into the existing solution trade-off and 非目标 text, not into a new artifact.
+Reference the PRD goal and decision rationale in their original owners. Before choosing or retaining a solution shape, self-check with `skills/simplicity-guard/SKILL.md`'s core questions (has this layer earned its place; can an existing capability carry it instead) and write the conclusion into the existing solution trade-off and 非目标 text, not into a new artifact.
 
 The template is the same content contract consumed by stage-end
 `spec-analyze`. Generate canonical `PFACT-{NNN}` and `AC-{DOMAIN}-{NNN}`
@@ -170,3 +170,7 @@ discover files. Missing input/callback fails loud.
 ## 补充材料
 
 本节回答：Where to locate source reasoning and examples. Use the supplied current decision-log, source anchors and existing template; preserve historical material read-only.
+
+## 同仓方法依赖
+
+`skills/decision-log/SKILL.md`、`skills/simplicity-guard/SKILL.md`、`skills/spec-plan/SKILL.md`；按上文及自带模板「测试标准」的实际条件读取，搬运时需同时提供或由调用者提供可读原件。

@@ -16,7 +16,7 @@ AnySearch is a unified real-time search service supporting general web search, v
 
 ## Trigger
 
-WorkflowHub 调用时，外发前读取调用者真实批准的查询/来源范围、调用次数与时间盒；只在该范围和实际可用能力内执行，匿名访问不替代外发批准。方向研究的 R0–R5、检索轮数/饱和、原文、独立复核与报告 owner 由 `skills/deep-research/SKILL.md` 承接；本技能只提供搜索方法，不重写那套研究步骤。方法名不证明同名宿主工具可用；无真实能力、拒绝外发或取消时保 unavailable/unknown 和已取得的部分来源，不自动用 mock/默认知识补成功。
+WorkflowHub 调用时，外发前读取调用者真实批准的查询/来源范围、调用次数与时间盒；只在该范围和实际可用能力内执行，匿名访问不替代外发批准。方向研究的 R0–R5、检索轮数/饱和、原文、独立复核与报告 owner 见 [catalog 的 deep-research 登记](../catalog.yaml#skills.deep-research)；这是职责归属指针，执行搜索不要求读取该研究方法。本技能只提供搜索方法，不重写那套研究步骤。方法名不证明同名宿主工具可用；无真实能力、拒绝外发或取消时保 unavailable/unknown 和已取得的部分来源，不自动用 mock/默认知识补成功。
 
 This skill SHOULD be activated when the AI agent needs to perform any of the following:
 
@@ -197,3 +197,7 @@ Once the active CLI is determined, all tool calls use the same subcommand syntax
 ## 写作规范
 
 创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；此处不复制规范。
+
+## 同仓方法依赖
+
+`skills/spec-specify/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。

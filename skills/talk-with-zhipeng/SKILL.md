@@ -273,3 +273,7 @@ password、credential、cookie 或其他秘密。用户真实答案的决策含�
 完整来源权威：[catalog条目](../catalog.yaml#skills.talk-with-zhipeng)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。
 来源线索：AgentHub历史导入talk-with-zhipeng与Matt grilling；旧更新观察和逐pin许可缺口回catalog。采用frontier独立问答；本地保留动态 OI 队列、真实题目总数、四维范围判定及薄适配层，不替换为上游宿主 Skill 调用或本地 `deep-interview`。历史 2026-07-26 的旧版候选比较不是本次新固定源未变化的结论。
 - 迭代时核该固定子文件与真实上游更新、更优候选，说明源差与本地偏离后决定采用；不自动追 HEAD。本技能接收调用方材料和宿主能力，不绑定本任务路径或账号。
+
+## 同仓方法依赖
+
+`skills/spec-specify/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。

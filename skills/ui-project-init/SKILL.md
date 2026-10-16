@@ -13,14 +13,14 @@ description: UI 规划需定位专业来源时，按新项目、已有可信规�
 
 | 类 | 正文或真实源 | 专业方法 | 原 owner | consumer |
 | --- | --- | --- | --- | --- |
-| ①领域语义 | WH 的 GLOSSARY.md；宿主自己的词义源，PB 为 CONTEXT.md | grill-with-docs；domain-modeling 仅词义 lens | 项目领域 owner | 设计、组件、文案 |
-| ②视觉设计系统 | specs/design/design.md；值引用现 token/主题/Figma 变量 | design-tokens；方向需要时 frontend-design | 设计系统/token owner | Read Map、前端规范 reader、守卫 |
-| ③组件及设计代码对应 | specs/design/components.md；工程独立内容确需时 specs/frontend/components.md，否则归 frontend.md | frontend-design + frontend-component-quality | 组件设计与前端 owner | 真实 wrapper/API/type、实现/测试 |
-| ④布局与场景 | specs/design/layouts.md；独立工程内容确需时 specs/frontend/layouts.md，否则归 frontend.md | information-architecture + frontend-design | 布局/信息架构 owner | renderer、实际 DOM/CSS/滚动/浮层 |
-| ⑤通用交互 | specs/design/interaction.md；控件内合同引用组件源 | ui-interaction-states | 交互/组件行为 owner | 规划、测试、verify reader |
-| ⑥前端工程 | specs/frontend/frontend.md；引用配置/架构/ADR | spec-driven-production 分责/更新；现前端工程方法 | 前端工程 owner | 实现、构建、工程验证 |
-| ⑦内容与设计工艺 | specs/design/craft.md；词义和值引用原源 | design-brief + 固定 frontend-design 文案方法 | 内容设计 owner | 组件、文案、专业 reader |
-| ⑧质量判据 | 确需独立正文时 specs/design/quality.md；工程/运行共用 specs/frontend/ui-quality.md | frontend-testing + isolated-browser-qa | 设计/工程/运行质量原 owner | 独立设计、代码及运行验证 |
+| ①领域语义 | WH 的 GLOSSARY.md；宿主自己的词义源，PB 为 CONTEXT.md | `skills/grill-with-docs/SKILL.md`；mattpocock/skills 的 domain-modeling 仅词义 lens | 项目领域 owner | 设计、组件、文案 |
+| ②视觉设计系统 | specs/design/design.md；值引用现 token/主题/Figma 变量 | WenjiaWang/ui-designer 的 design-tokens；方向需要时 WenjiaWang/ui-designer 的 frontend-design | 设计系统/token owner | Read Map、前端规范 reader、守卫 |
+| ③组件及设计代码对应 | specs/design/components.md；工程独立内容确需时 specs/frontend/components.md，否则归 frontend.md | WenjiaWang/ui-designer 的 frontend-design + `skills/frontend-component-quality/SKILL.md` | 组件设计与前端 owner | 真实 wrapper/API/type、实现/测试 |
+| ④布局与场景 | specs/design/layouts.md；独立工程内容确需时 specs/frontend/layouts.md，否则归 frontend.md | WenjiaWang/ui-designer 的 information-architecture + frontend-design | 布局/信息架构 owner | renderer、实际 DOM/CSS/滚动/浮层 |
+| ⑤通用交互 | specs/design/interaction.md；控件内合同引用组件源 | WenjiaWang/ui-designer 的 ui-interaction-states | 交互/组件行为 owner | 规划、测试、verify reader |
+| ⑥前端工程 | specs/frontend/frontend.md；引用配置/架构/ADR | WenjiaWang/spec-driven-production 分责/更新；现前端工程方法 | 前端工程 owner | 实现、构建、工程验证 |
+| ⑦内容与设计工艺 | specs/design/craft.md；词义和值引用原源 | WenjiaWang/ui-designer 的 design-brief + frontend-design 文案方法 | 内容设计 owner | 组件、文案、专业 reader |
+| ⑧质量判据 | 确需独立正文时 specs/design/quality.md；工程/运行共用 specs/frontend/ui-quality.md | `skills/frontend-testing/SKILL.md` + `skills/isolated-browser-qa/SKILL.md` | 设计/工程/运行质量原 owner | 独立设计、代码及运行验证 |
 
 组件设计用途、variant/slot/组合与真实代码映射各归其 owner，映射可非一对一。布局保内容增长、容器、响应式与 overflow；交互只保跨控件导航、反馈、焦点，本次业务步骤、状态、权限、取消/恢复归当前 task spec/API。工程保模块、类型、DTO/ViewModel、生命周期、错误与样式归属；质量 oracle/反例与预算各保一处正文，任务 AC 和实测另留原 owner。
 
@@ -74,3 +74,7 @@ tokens/IA/brief 是单文件 Markdown；固定 frontend-design 闭包是 SKILL.m
 创建或改写 agent 方法时，读取 skills/spec-specify/SKILL.md 的「技能写作规范（WR001）」唯一规范；此处不复制规范。
 
 完整来源权威：[catalog条目](../catalog.yaml#skills.ui-project-init)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。
+
+## 同仓方法依赖
+
+`skills/frontend-component-quality/SKILL.md`、`skills/frontend-testing/SKILL.md`、`skills/grill-with-docs/SKILL.md`、`skills/isolated-browser-qa/SKILL.md`、`skills/spec-specify/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。

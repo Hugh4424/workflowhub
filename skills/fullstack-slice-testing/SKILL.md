@@ -22,3 +22,7 @@ description: 在 build-code 看到真实跨边界改动后执行最小真实链�
 创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；此处不复制规范。
 
 完整来源权威：[catalog条目](../catalog.yaml#skills.fullstack-slice-testing)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。来源：AgentHub packages/core/agenthub/skills/fullstack-slice-testing/SKILL.md（许可适用性unknown）。
+
+## 同仓方法依赖
+
+`skills/spec-specify/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。
