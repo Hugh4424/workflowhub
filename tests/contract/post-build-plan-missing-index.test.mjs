@@ -154,8 +154,8 @@ const withDocChange = (fixture, from, to) => ({
 
 describe("post-cohort narrow pure-document G-2", () => {
   it.each([
-    ["yaml comment method", "config/method.yaml", "（仅注释方法）", true],
-    ["yml comment method", "config/method.yml", "（仅注释方法）", true],
+    ["yaml comment method", "config/method.yaml", "（仅注释方法）", false],
+    ["yml comment method", "config/method.yml", "（仅注释方法）", false],
     ["yaml data", "config/method.yaml", "（数据字段）", false],
     ["unclassified yaml", "config/method.yaml", "", false],
     ["executable code", "src/method.mjs", "（仅注释方法）", false],
@@ -167,6 +167,11 @@ describe("post-cohort narrow pure-document G-2", () => {
     const result = validatePostPhaseContract(fixture);
     expect(result.ok, result.errors.join("; ")).toBe(accepted);
     if (!accepted) expect(result.errors.join("; ")).toMatch(/G-2.*owned write set/);
+    if (_name === "yaml comment method" || _name === "yml comment method") {
+      expect(result.errors).toContain("phases/P1.md T001 G-2 missing concrete documentation-only owned write set");
+      expect(result.errors).toContain("phases/P1.md T001 expected_exit must distinguish RED target failure from GREEN 0");
+      expect(result.facts.command_oracle_checks.valid).toBe(false);
+    }
   });
 
   it.each([
