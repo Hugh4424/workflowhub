@@ -26,15 +26,15 @@ export async function connectCdp(endpoint, {signal,closeOnAbort=true} = {}) {
   const connected=channel('undici:client:connected');
   const observe=({socket})=>{if(connectionContext.getStore()===transport)transport.peer={address:socket.remoteAddress?.replace(/^::ffff:/,''),port:socket.remotePort};};
   connected.subscribe(observe);
-  const ws = connectionContext.run(transport,()=>new WebSocket(endpoint)); let id=0; const pending=new Map();
-  const fail=()=>{for(const p of pending.values())p.reject(safeError('CDP_CONNECTION_CLOSED'));pending.clear();};
-  ws.addEventListener('message',e=>{let m;try{m=JSON.parse(String(e.data));}catch{return;}const p=pending.get(m.id);if(!p)return;pending.delete(m.id);clearTimeout(p.timer);m.error?p.reject(safeError('CDP_METHOD_FAILED',p.method)):p.resolve(m.result);});
+  const ws = connectionContext.run(transport,()=>new WebSocket(endpoint)); let id=0,closed=false; const pending=new Map(),events=new Set(),disconnects=new Set();
+  const fail=()=>{for(const p of pending.values()){clearTimeout(p.timer);p.reject(safeError('CDP_CONNECTION_CLOSED'));}pending.clear();if(!closed){closed=true;for(const listener of disconnects)listener();}};
+  ws.addEventListener('message',e=>{let m;try{m=JSON.parse(String(e.data));}catch{return;}if(typeof m.method==='string'){for(const listener of events)listener(m);return;}const p=pending.get(m.id);if(!p)return;pending.delete(m.id);clearTimeout(p.timer);if(m.error){const error=safeError('CDP_METHOD_FAILED',p.method);p.reject(error);}else p.resolve(m.result);});
   ws.addEventListener('close',fail);ws.addEventListener('error',fail);
   try {await new Promise((resolve,reject)=>{const timer=setTimeout(()=>{ws.close();reject(safeError('CDP_CONNECT_TIMEOUT'));},3000);const abort=()=>{clearTimeout(timer);ws.close();reject(safeError('CANCELLED'));};signal?.addEventListener('abort',abort,{once:true});ws.addEventListener('open',()=>{clearTimeout(timer);signal?.removeEventListener('abort',abort);resolve();},{once:true});ws.addEventListener('error',()=>{clearTimeout(timer);reject(safeError('CDP_CONNECT_FAILED'));},{once:true});});} finally {connected.unsubscribe(observe);}
   if(!transport.peer?.address||!transport.peer?.port){ws.close();throw safeError('CDP_PEER_UNAVAILABLE');}
   const abort=()=>{fail();ws.close();};if(closeOnAbort)signal?.addEventListener('abort',abort,{once:true});
   const peerIdentity=[transport.peer.address,transport.peer.port,new URL(endpoint).pathname].join('|');
-  return {peerIdentity,call(method,params={}) {if(closeOnAbort&&signal?.aborted)return Promise.reject(safeError('CANCELLED'));return new Promise((resolve,reject)=>{const n=++id;const timer=setTimeout(()=>{pending.delete(n);reject(safeError('CDP_METHOD_TIMEOUT',method));},3000);pending.set(n,{resolve,reject,timer,method});ws.send(JSON.stringify({id:n,method,params}));});}, close(){signal?.removeEventListener('abort',abort);for(const p of pending.values())clearTimeout(p.timer);fail();ws.close();}};
+  return {peerIdentity,onEvent(listener){events.add(listener);return()=>events.delete(listener);},onDisconnect(listener){disconnects.add(listener);if(closed)listener();return()=>disconnects.delete(listener);},call(method,params={},sessionId) {if(closeOnAbort&&signal?.aborted)return Promise.reject(safeError('CANCELLED'));if(closed)return Promise.reject(safeError('CDP_CONNECTION_CLOSED'));return new Promise((resolve,reject)=>{const n=++id;const timer=setTimeout(()=>{pending.delete(n);reject(safeError('CDP_METHOD_TIMEOUT',method));},3000);pending.set(n,{resolve,reject,timer,method});ws.send(JSON.stringify({id:n,method,params,...(sessionId?{sessionId}:{})}));});}, close(){signal?.removeEventListener('abort',abort);fail();ws.close();}};
 }
 export function filterTargetCookies(cookies, scope, now=Date.now()/1000) {
   return cookies.filter(c=>{
@@ -46,12 +46,12 @@ export function filterTargetCookies(cookies, scope, now=Date.now()/1000) {
     return true;
   }).map(c=>{const out={};for(const k of ['name','value','domain','path','secure','httpOnly','sameSite','partitionKey'])if(c[k]!==undefined)out[k]=c[k];if(!c.session&&c.expires>0)out.expires=c.expires;return out;});
 }
-export async function transferTargetCookies({source,receiver,scope,signal,report=()=>{}}) {
+export async function transferTargetCookies({source,receiver,scope,signal,report=()=>{},onSecret=()=>{}}) {
   await source.call('Browser.getVersion');
   const before=await source.call('Target.getTargets');
   let payload=await source.call('Storage.getCookies');let selected=filterTargetCookies(payload.cookies||[],scope);payload=null;
   const after=await source.call('Target.getTargets');
   if(JSON.stringify(before)!==JSON.stringify(after))throw safeError('SOURCE_TARGETS_CHANGED');
   if(signal?.aborted)throw safeError('CANCELLED');
-  try {if(selected.length)await receiver.call('Storage.setCookies',{cookies:selected});report({ticket_count:selected.length,partition_coverage:scope.topLevelSite?'scoped':'unknown'});} finally {selected.length=0;}
+  try {for(const cookie of selected)onSecret(cookie.value);if(selected.length)await receiver.call('Storage.setCookies',{cookies:selected});report({ticket_count:selected.length,partition_coverage:scope.topLevelSite?'scoped':'unknown'});} finally {selected.length=0;}
 }

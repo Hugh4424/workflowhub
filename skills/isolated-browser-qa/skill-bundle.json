@@ -13,7 +13,8 @@
     "scripts/cleanup-browser-qa.sh",
     "scripts/cleanup-codex-qa.sh",
     "scripts/browser-qa-session.mjs",
-    "scripts/browser-qa-tickets.mjs"
+    "scripts/browser-qa-tickets.mjs",
+    "scripts/browser-qa-browser-use.py"
   ],
   "sources": [
     {

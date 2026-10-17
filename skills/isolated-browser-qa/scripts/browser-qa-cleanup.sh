@@ -175,13 +175,6 @@ for pid in sorted(kill_pids, reverse=True):
     except ProcessLookupError:
         pass
 
-def extract_user_data_dir(command):
-    match = re.search(r"--user-data-dir=(\"[^\"]+\"|'[^']+'|[^ ]+)", command)
-    if not match:
-        return None
-    return match.group(1).strip("\"'")
-
-
 time.sleep(0.15)
 active_ps_output = subprocess.check_output(
     ["ps", "-axo", "pid=,ppid=,command="],

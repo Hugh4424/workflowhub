@@ -16,8 +16,6 @@ allowed-tools: Bash(agent-browser:*), Bash(browser-use:*), Bash(bash:*), Bash(co
 
 This skill is the browser QA gateway for local, preview, and staging checks.
 
-It is a router, not a wrapper around one browser tool.
-
 ## Core Rules
 
 Use one selected engine and one owned session throughout the run. Default to headless agent-browser; browser-use is only for its explicitly required isolated capabilities. Repair that engine, preserving failures, then stop if blocked. Resolve bundled scripts from the loaded skill, clean before/after and verify owned residue; leave user browsers, app services and worktrees running. Auth details belong in references/auth.md; never auto-attach user Chrome/main profiles. Playwright MCP and switching engines are excluded.
@@ -59,7 +57,7 @@ Before driving, check the selected engine:
 bash "$SKILL_DIR/scripts/browser-qa-doctor.sh" "$BROWSER_QA_ENGINE"
 ```
 
-Guide stub/failure is unavailable, not usable; repair only that engine.
+Guide/dependency failure is unavailable; repair only that engine. Doctor does not prove browser behavior.
 
 ### 3. Cleanup Before Launch
 
@@ -83,15 +81,7 @@ Use fresh snapshot refs for click/fill/press. Read references/agent-browser.md f
 
 ### 5. Launch With `browser-use`
 
-Use only when selected; keep isolated QA state, never real/main profiles or third-party cookie synchronization:
-
-```bash
-browser-use doctor
-browser-use --session "$BROWSER_QA_SESSION" open "$BROWSER_QA_TARGET_URL"
-browser-use --session "$BROWSER_QA_SESSION" state
-```
-
-Read references/browser-use.md for its commands and capability limitations.
+Select `BROWSER_QA_ENGINE=browser-use` and Step 1's `--run`. Read references/browser-use.md for native dependencies, scenario CLI and failure boundaries before driving.
 
 ### 6. Repair Selected Engine
 
@@ -130,7 +120,8 @@ When a named target already has dry-run/test mode, read its promise and caller, 
 - `scripts/browser-qa-context.sh`: exports context or delegates `--run` to the private lifecycle helper.
 - `scripts/browser-qa-session.mjs`: owns launch, cancellation, scenario and finally cleanup.
 - `scripts/browser-qa-tickets.mjs`: validates scope and transfers target cookies only in memory.
-- `scripts/browser-qa-doctor.sh`: checks selected browser CLI availability.
+- `scripts/browser-qa-browser-use.py`: native parser/handler adapter and scenario CLI, owned by session.mjs.
+- `scripts/browser-qa-doctor.sh`: checks selected engine prerequisites.
 - `scripts/browser-qa-cleanup.sh`: closes the selected engine session without stopping app services.
 - `scripts/cleanup-browser-qa.sh`: compatibility wrapper for older calls.
 - `references/agent-browser.md`: agent-browser command workflow.
@@ -153,4 +144,4 @@ Claim verification only for executed observations; never invent flags, extra ses
 
 ## 同仓方法依赖
 
-`skills/spec-specify/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。
+`skills/spec-specify/SKILL.md`、`skills/diagnosing-bugs/SKILL.md`；按上文条件读取，搬运时提供可读原件。

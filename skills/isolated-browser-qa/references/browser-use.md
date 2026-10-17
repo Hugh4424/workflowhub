@@ -1,31 +1,33 @@
 # browser-use Workflow
 
-Select only when browser-use-specific isolated capability is required; canonical Engine Router is authoritative.
+Canonical Engine Router owns selection.
 
-The installed native CLI requires `open URL`; `get` supports title/html/text/value/attributes/bbox, not cdp-url, and uses BROWSER_USE_HOME (default ~/.browser-use) for its own PID/socket rather than AGENT_BROWSER_SOCKET_DIR. Therefore context --run reports BROWSER_USE_RUN_UNAVAILABLE before launch for this engine. Use the manual isolated local route below with explicit finally cleanup; it has no verified cancellable-ticket lifecycle. Do not switch engines or treat this capability limit as broken ownership/auth.
+Use canonical `--run` with `BROWSER_QA_ENGINE=browser-use`. The private CLI reuses 0.12.6 public parser/send_command/handlers and one SDK instance; it skips native main migration/auto-start. Direct original binaries, foreign sessions, profile/CDP auto-connect and cloud are outside this owned route.
 
 ## Local Launch
 
 ```bash
-command -v browser-use
-browser-use doctor
-browser-use --session "$BROWSER_QA_SESSION" open "<url>"
-browser-use --session "$BROWSER_QA_SESSION" state
+bash "$SKILL_DIR/scripts/browser-qa-doctor.sh" browser-use
+# Inside the --run scenario only:
+browser-use --session "$BROWSER_QA_SESSION" open "$BROWSER_QA_TARGET_URL"
+browser-use state
 ```
 
-For isolation and login restrictions follow canonical Auth Rules and references/auth.md; keep the selected engine/session and target whitelist.
+Requires Python with browser-use 0.12.6 and public-located Chrome. Optional BROWSER_QA_BROWSER_USE_PYTHON/BROWSER_QA_BROWSER_EXECUTABLE select existing executables; missing dependencies fail closed, without installation. Doctor checks dependencies, not browser behavior. HOME/TMPDIR stay unchanged; requests carry cwd, restored after Python threads end. Auth Rules own login/secret limits.
+
+The owner blocks off-scope Document navigation/redirects before requests, including new tabs/iframes. Minimal native args retain popup support but omit background-network/update/sync suppression; this is not an all-network sandbox.
 
 ## Interaction
 
-Use indices from `state`:
+Use `state` indices:
 
 ```bash
 browser-use --session "$BROWSER_QA_SESSION" click 5
 browser-use --session "$BROWSER_QA_SESSION" input 3 "demo@example.com"
 browser-use --session "$BROWSER_QA_SESSION" keys "Enter"
-browser-use --session "$BROWSER_QA_SESSION" screenshot /tmp/codex-qa.png
+browser-use --session "$BROWSER_QA_SESSION" screenshot "$BROWSER_QA_EVIDENCE_DIR/screen.png"
 ```
 
 ## Repair
 
-Use canonical Standard Workflow §6 and the same browser-use session. Recheck browser-use doctor after a failed drive; reset only owned isolated resources. Persistent failure remains blocked; report unsupported ticket capabilities rather than switching to agent-browser or Playwright MCP.
+§6/§7 own repair/cleanup. Report browser/helper TERM fallback, exit and retained handles. CLI/JSON failures fail the owner even if ignored by shell.

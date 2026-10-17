@@ -953,7 +953,7 @@ skills:
         reviewed_at: '2026-07-14'
         review_outcome: accepted
     local_changes: 搬入完整闭包；去个人绝对路径；owner 是 isolated browser QA，consumer 是官方 build-code controlled QA seam 与 verify-code；一次 invocation 按当前 task/spec/Phase 记录各适用专业来源/版本/作用域与 service/API/DTO identity，pre/history snapshot 只读保留，blocked/unknown 保留 failure_reason，取消和 cleanup 必须可见；新增两个私有helper承接现context --run生命周期与memory-only票据，不新增公共Runner；delete-condition 为 browser QA 路由退役或被唯一替代；本地来源snapshot_sha256缺失，采集字节及原位置unknown；owner来源维护者需权利人提供原件与可核快照，当前保既有授权，不补假commit/hash。
-    dependency_closure: *deps_spec_specify
+    dependency_closure: ["skills/spec-specify", "skills/diagnosing-bugs"]
     update_policy: 保本地来源unknown边界；新增三来源固定commit/包SHA及采用章节见本catalog的N3 P7 absorbed条目，逐源比较consumer与本地偏离，不自动追HEAD。
   - name: ui-project-init
     path: skills/ui-project-init/SKILL.md

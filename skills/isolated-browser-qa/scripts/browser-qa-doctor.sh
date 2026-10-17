@@ -22,16 +22,27 @@ check_agent_browser() {
 }
 
 check_browser_use() {
-  if ! command -v browser-use >/dev/null 2>&1; then
-    echo "browser_use=missing"
-    return 1
+  local python helper cli
+  python="${BROWSER_QA_BROWSER_USE_PYTHON:-}"
+  if [ -z "$python" ]; then
+    if ! cli="$(command -v browser-use)"; then
+      echo "browser_use_native_capability=unavailable"
+      return 1
+    fi
+    echo "browser_use=$cli"
+    IFS= read -r python < "$cli"
+    if [[ "$python" != '#!'* || "$python" != *python* ]]; then
+      echo "browser_use_native_capability=unavailable"
+      return 1
+    fi
+    python="${python#\#!}"
   fi
-
-  echo "browser_use=$(command -v browser-use)"
-  if browser-use doctor >/dev/null 2>&1; then
-    echo "browser_use_doctor=ok"
+  helper="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/browser-qa-browser-use.py"
+  if "$python" "$helper" probe >/dev/null 2>&1; then
+    echo "browser_use_native_capability=ok"
+    echo "browser_use_check=dependencies_only"
   else
-    echo "browser_use_doctor=failed"
+    echo "browser_use_native_capability=unavailable"
     return 1
   fi
 }

@@ -5066,6 +5066,21 @@
       "named_data_readers": [],
       "delete_condition": "网关职责经独立审查的替代承接且本helper零consumer时由owner删除；保历史原件。",
       "retention_basis": "当前session→tickets真实调用已读；037冻结/入口测试、036真实controlled CDP；用户真实登录未验，平台禁止调试入口及绕过。"
+    },
+    {
+      "source": "skills/isolated-browser-qa/scripts/browser-qa-browser-use.py",
+      "destination": "skills/isolated-browser-qa/scripts/browser-qa-browser-use.py",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "已实现P7单生命周期内部browser-use adapter与短CLI frontend，同caller另probe能力；替代先前永久unavailable/manual-only限制，非独立QA入口或永久service。当前仅有限验收，整P7仍partial/incomplete。",
+      "owner": "isolated-browser-qa / N3 P7 T007",
+      "consumer": "实际session.mjs:155生成本run CLI shim调用helper cli，:159 spawn adapter child，:145–147同caller probe能力。scenario经该临时shim消费cli argv/原parser/send_command/renderer；adapter消费session/root/profile及匿名stdio owned endpoint，attach同SDK/SessionInfo并返回安全lifecycle/response事实。唯一生命周期owner=session.mjs，两个caller不冒独立runner。",
+      "module_consumers": [
+        "skills/isolated-browser-qa/scripts/browser-qa-session.mjs"
+      ],
+      "named_data_readers": [],
+      "delete_condition": "browser-use分支退役或经独立验证原生替代已承接同consumer/正反oracle后，同步删helper、shim接线与bundle；PID/socket/shim随每次ownedrun清理。",
+      "retention_basis": "当前session/helper实际调用源码已读；570声明/571独立核源与consumer；171正例、172四Document面GREEN仅限实际范围。173冻结16/16及53中48pass/5fail作为历史失败保留；571启动取消发现由580/175处置，176完整16＋55、177默认locator及179/180分别定向已验（非单次57全跑），quality/tests/2026-10-17-001-p7-source-observer-race-corrected.json限定source三终态通过，具体范围见当前P7卡；202登录unavailable、057旧OCR未覆盖新helper、168残留路径unknown保留。513/514及147/509原件不覆盖，职责登记不等整卡验收。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

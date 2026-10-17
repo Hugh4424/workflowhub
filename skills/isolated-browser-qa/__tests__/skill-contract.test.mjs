@@ -284,10 +284,11 @@ exec(compile(source,'production-browser-qa-cleanup','exec'))
 
 
 describe('isolated-browser-qa native browser-use capability', () => {
-  it('reports unsupported cancellable run before agent-browser ownership or CDP assumptions', async () => {
-    const r=await gateway(invalidArgs,{BROWSER_QA_ENGINE:'browser-use',BROWSER_QA_AUTH_MODE:'none'});
+  it('reports missing native capability before scenario without agent-browser ownership or source misattribution', async () => {
+    const r=await gateway(invalidArgs,{BROWSER_QA_ENGINE:'browser-use',BROWSER_QA_AUTH_MODE:'none',
+      BROWSER_QA_BROWSER_USE_PYTHON:join(tmpdir(),'bqa-deliberately-absent-python')});
     expect(r.code).toBe(1);
-    expect(r.stderr).toContain('BROWSER_USE_RUN_UNAVAILABLE');
+    expect(r.stderr).toContain('BROWSER_USE_CAPABILITY_UNAVAILABLE');
     expect(r.stderr).not.toMatch(/RECEIVER_OWNERSHIP|INVALID_SOURCE_ENDPOINT/);
   });
 });
@@ -337,4 +338,465 @@ describe('isolated-browser-qa incomplete cleanup handoff', () => {
     expect(output, 'retained owned metadata must be precisely locatable without scanning profiles or ports').toContain(cleanupHandle.ownedRoot);
     expect(output, 'caller needs the runner-derived session rather than the old context export').toContain(cleanupHandle.session);
   });
+});
+
+// Independent 514 native increment: real public gateway/parser/handlers, no AG mock.
+import { homedir } from 'node:os';
+import { createServer as createUnixServer } from 'node:net';
+import { statSync, readdirSync } from 'node:fs';
+const nativePython=process.env.BROWSER_QA_BROWSER_USE_PYTHON||join(homedir(),'.local/share/uv/tools/browser-use/bin/python');
+const nativeChrome=process.env.BROWSER_QA_BROWSER_EXECUTABLE||join(homedir(),'.agent-browser/browsers/chrome-155.0.8059.39/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing');
+const nativeOwned=String.raw`
+test -n "$BROWSER_QA_OWNED_BROWSER_PID"
+test -n "$BROWSER_QA_OWNED_HELPER_PID"
+test -n "$BROWSER_QA_OWNED_ROOT"
+printf '%s\n%s\n%s\n' "$BROWSER_QA_OWNED_BROWSER_PID" "$BROWSER_QA_OWNED_HELPER_PID" "$BROWSER_QA_OWNED_ROOT" > "$P7_NATIVE_EVIDENCE/owned"
+`;
+const shellWord=value=>"'"+String(value).replaceAll("'","'\\''")+"'";
+async function nativeFixture({redirectTo}={}){
+  const root=mkdtempSync(join(tmpdir(),'bqa-native-contract-'));
+  const evidence=join(root,'evidence'),cwd=join(root,'scenario'),temp=join(root,'temp'),home=join(root,'home');
+  for(const dir of [evidence,cwd,temp,home])mkdirSync(dir);
+  const hits=[],requests=[];const server=createServer((req,res)=>{hits.push(req.url);requests.push({url:req.url,cookie:req.headers.cookie||''});console.log('ORACLE-P7-NATIVE-HTTP '+JSON.stringify({hit_count:hits.length}));if(req.url.startsWith('/guard-allowed-'))writeFileSync(join(evidence,'allowed-navigation-hit'),'seen');if(req.url==='/guard-redirect'){res.writeHead(302,{location:redirectTo});res.end();return;}if(req.url==='/redirect'){res.writeHead(302,{location:'http://off-target.invalid/blocked'});res.end();return;}res.setHeader('content-type','text/html');res.end('<!doctype html><title>P7 native fixture</title><input id="field"><input id="upload" type="file"><button id="button" onclick="document.title=\'clicked\'">Go</button><p>native ready</p>');});
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  const url=`http://127.0.0.1:${server.address().port}/`;
+  const env={...process.env,BROWSER_QA_ENGINE:'browser-use',BROWSER_QA_AUTH_MODE:'none',BROWSER_QA_BROWSER_USE_PYTHON:nativePython,BROWSER_QA_BROWSER_EXECUTABLE:nativeChrome,BROWSER_QA_TICKET_SOURCE_WS:'',BROWSER_QA_TICKET_TOP_LEVEL_SITE:'',BROWSER_QA_ALLOWED_DOMAINS:'127.0.0.1',P7_NATIVE_URL:url,P7_NATIVE_EVIDENCE:evidence,P7_NATIVE_CWD:cwd,P7_NATIVE_TEST_HOME:home,P7_NATIVE_TEST_TMPDIR:temp};
+  const runs=[];
+  function start(script,extra={}){const file=join(root,`scenario-${runs.length}.sh`);writeFileSync(file,script);const child=spawn('bash',[contextEntry,'--run','--url',url,'--evidence-dir',evidence,'--','bash',file],{cwd,env:{...env,...extra}});let stdout='',stderr='',phaseBuffer='';
+    // Harness safety only: preserve the ordinary exit assertion, request normal
+    // gateway cancellation before Vitest/outer execution budgets can force-kill.
+    const watchdog=setTimeout(()=>{if(child.exitCode===null&&child.signalCode===null){console.log('ORACLE-P7-NATIVE-WATCHDOG '+JSON.stringify({pid:child.pid,signal:'SIGTERM'}));child.kill('SIGTERM');}},50000);
+    child.stdout.on('data',b=>{stdout+=b;phaseBuffer+=b;const rows=phaseBuffer.split('\n');phaseBuffer=rows.pop();for(const row of rows){try{const event=JSON.parse(row);if(event.native_qa==='owned'){console.log('ORACLE-P7-NATIVE-OWNED '+JSON.stringify({browser_pid:event.browser_pid,browser_start:event.browser_start,helper_pid:event.helper_pid,helper_start:event.helper_start,profile:event.profile}));}if(event.native_qa==='identity_pending'){console.log('ORACLE-P7-NATIVE-IDENTITY-PENDING '+JSON.stringify(Object.fromEntries(['helper_path_matches','role_matches','session_matches','root_matches','profile_matches'].map(key=>[key,event[key]===true]))));}if(event.native_qa==='identity_unavailable'&&['helper','browser'].includes(event.resource)){console.log('ORACLE-P7-NATIVE-IDENTITY '+JSON.stringify({resource:event.resource,present:event.present===true,parent_matches:event.parent_matches===true,marker_matches:event.marker_matches===true}));}if(event.native_qa==='phase'&&['received','lock_acquired','handler_returned','approval_sent','approval_received','drained'].includes(event.phase)){const safe={phase:event.phase,hit_count:hits.length};if(['open','state','get','python','screenshot','wait','click','input','type','keys','upload','eval','shutdown'].includes(event.action))safe.action=event.action;console.log('ORACLE-P7-NATIVE-PHASE '+JSON.stringify(safe));}}catch{}}});
+    child.stderr.on('data',b=>stderr+=b);const run={child,output:()=>stdout+stderr,done:new Promise(resolve=>child.once('close',(code,signal)=>{clearTimeout(watchdog);const errors=stderr.split('\n').flatMap(line=>{try{const value=JSON.parse(line).error;return typeof value==='string'&&/^[A-Z][A-Z0-9_]*$/.test(value)?[value]:[];}catch{return [];}});console.log('ORACLE-P7-NATIVE-RESULT '+JSON.stringify({code,signal,errors,hit_count:hits.length}));resolve({code,signal,stdout,stderr});}))};runs.push(run);return run;}
+  return{root,evidence,cwd,temp,home,url,hits,requests,env,start,run:async(script,extra)=>start(script,extra).done,close:async()=>{for(const {child,done} of runs){if(child.exitCode===null&&child.signalCode===null)child.kill('SIGTERM');await done;}await new Promise(resolve=>server.close(resolve));let ownedRoot;try{ownedRoot=readFileSync(join(evidence,'owned'),'utf8').trim().split('\n')[2];}catch{}if(!ownedRoot){for(const run of runs){const match=run.output().match(/^cleanup_owned_root=(.+)$/m);if(match){try{const value=JSON.parse(match[1]);if(typeof value==='string'&&value.startsWith('/'))ownedRoot=value;}catch{}}}}const incomplete=runs.some(run=>run.output().includes('cleanup_incomplete'));if(readdirSync(temp).length||incomplete||ownedRoot&&existsSync(ownedRoot))console.log('ORACLE-P7-NATIVE-RETAINED '+JSON.stringify({fixture_root:root,owned_root:ownedRoot||null,incomplete}));else rmSync(root,{recursive:true,force:true});}};
+}
+function nativeExit(r){expect(Number.isInteger(r.code),'native failure must have a real numeric exit code').toBe(true);expect(r.signal,'policy failure must not be a killed process').toBe(null);}
+function nativeResult(r,code=0){nativeExit(r);expect(r.stderr).not.toMatch(/BROWSER_USE_RUN_UNAVAILABLE|BROWSER_USE_CAPABILITY_UNAVAILABLE/);expect(r.code,r.stderr+'\n'+r.stdout).toBe(code);}
+function nativeClean(f){const own=readFileSync(join(f.evidence,'owned'),'utf8').trim().split('\n');expect(own).toHaveLength(3);for(const pid of own.slice(0,2)){expect(Number(pid)).toBeGreaterThan(1);expect(()=>process.kill(Number(pid),0),'actual owned child must be gone').toThrow();}expect(existsSync(own[2]),'owned profile/socket/metadata root must be gone').toBe(false);}
+describe('isolated-browser-qa real native gateway increment',()=>{
+  it('native gateway accepts real bash commands',async()=>{
+    const f=await nativeFixture();try{const r=await f.run('set -eu\n'+nativeOwned+String.raw`
+command -v browser-use > "$P7_NATIVE_EVIDENCE/cli-path"
+browser-use --session "$BROWSER_QA_SESSION" open "$P7_NATIVE_URL"
+browser-use --json get title > "$P7_NATIVE_EVIDENCE/title.json"
+browser-use state > "$P7_NATIVE_EVIDENCE/state.txt"
+browser-use wait text 'native ready' --timeout 2000
+browser-use python 'import os; print(os.getpid())' > "$P7_NATIVE_EVIDENCE/helper-pid"
+browser-use screenshot "$P7_NATIVE_EVIDENCE/screen.png"
+`);nativeResult(r);expect(JSON.parse(readFileSync(join(f.evidence,'title.json'),'utf8')).data.title).toBe('P7 native fixture');expect(readFileSync(join(f.evidence,'state.txt'),'utf8')).toContain('native');expect(readFileSync(join(f.evidence,'helper-pid'),'utf8').trim()).toBe(readFileSync(join(f.evidence,'owned'),'utf8').split('\n')[1]);expect(statSync(join(f.evidence,'screen.png')).size).toBeGreaterThan(100);const digest=createHash('sha256').update(readFileSync(join(f.evidence,'screen.png'))).digest('hex');nativeClean(f);expect(digest).toHaveLength(64);}finally{await f.close();}
+  },90000);
+  it('native cwd and literal tilde preserve file semantics and screenshot output',async()=>{
+    const f=await nativeFixture();mkdirSync(join(f.cwd,'sub'));mkdirSync(join(f.cwd,'sub','~'));writeFileSync(join(f.cwd,'sub','~','literal.py'),'from pathlib import Path\nPath("relative.txt").write_text("same cwd")\nprint("literal-file")\n');
+    try{const r=await f.run('set -eu\n'+nativeOwned+String.raw`
+cd "$P7_NATIVE_CWD/sub"
+browser-use python --file '~/literal.py'
+browser-use screenshot shot.png > "$P7_NATIVE_EVIDENCE/saved-output"
+browser-use python 'from pathlib import Path; print(Path("relative.txt").read_text())'
+`);nativeResult(r);expect(r.stdout).toContain('literal-file');expect(r.stdout).toContain('same cwd');expect(readFileSync(join(f.evidence,'saved-output'),'utf8')).toContain('saved: shot.png');expect(statSync(join(f.cwd,'sub','shot.png')).size).toBeGreaterThan(100);expect(readFileSync(join(f.cwd,'sub','relative.txt'),'utf8')).toBe('same cwd');nativeClean(f);}finally{await f.close();}
+  },90000);
+  it.each(['--json click 999999','python "raise ValueError(\'controlled failure\')"'])('native failure is latched despite a successful last shell command: %s',async command=>{
+    const f=await nativeFixture();try{const r=await f.run('set -u\n'+nativeOwned+`\nif browser-use ${command}; then exit 88; fi\necho shell-last-command-succeeded\n`);expect(r.stderr).not.toMatch(/BROWSER_USE_RUN_UNAVAILABLE|BROWSER_USE_CAPABILITY_UNAVAILABLE/);nativeExit(r);expect(r.code).not.toBe(0);expect(r.code).not.toBe(88);expect(r.stdout).toContain('shell-last-command-succeeded');nativeClean(f);}finally{await f.close();}
+  },90000);
+  it('native eval nested error remains ordinary successful data',async()=>{
+    const f=await nativeFixture();try{const r=await f.run('set -eu\n'+nativeOwned+`\nbrowser-use --json eval '({error:"business data"})' > "$P7_NATIVE_EVIDENCE/eval.json"\n`);nativeResult(r);const response=JSON.parse(readFileSync(join(f.evidence,'eval.json'),'utf8'));expect(response.success).toBe(true);expect(JSON.stringify(response.data)).toContain('business data');nativeClean(f);}finally{await f.close();}
+  },90000);
+  it('native guard preserves live foreign legacy socket and files while rejecting global commands',async()=>{
+    const f=await nativeFixture();let bytes='',connections=0;const foreign=createUnixServer(socket=>{connections++;socket.on('data',b=>bytes+=b);socket.end();});await new Promise(resolve=>foreign.listen(join(f.temp,'browser-use-cli.sock'),resolve));const old=join(f.home,'.browser-use','run');mkdirSync(old,{recursive:true});writeFileSync(join(old,'browser-use-preserve'),'foreign bytes');
+    try{const r=await f.run('set -u\n'+nativeOwned+String.raw`
+native_cli(){ env HOME="$P7_NATIVE_TEST_HOME" TMPDIR="$P7_NATIVE_TEST_TMPDIR" browser-use "$@"; }
+native_cli get title || exit 77
+for command in '--session foreign open http://127.0.0.1/' '--con open http://127.0.0.1/' 'close --all' 'install' 'init' 'setup' '--mcp'; do
+  if native_cli $command; then exit 88; fi
+done
+echo forbidden-commands-rejected
+`);expect(r.stderr).not.toMatch(/BROWSER_USE_RUN_UNAVAILABLE|BROWSER_USE_CAPABILITY_UNAVAILABLE/);expect(r.stdout).toContain('forbidden-commands-rejected');nativeExit(r);expect(r.code).not.toBe(0);expect(r.code).not.toBe(77);expect(r.code).not.toBe(88);expect(connections,'foreign legacy socket must not even be connected').toBe(0);expect(bytes).toBe('');expect(readFileSync(join(old,'browser-use-preserve'),'utf8')).toBe('foreign bytes');nativeClean(f);}finally{await new Promise(resolve=>foreign.close(resolve));await f.close();}
+  },90000);
+  it('native missing socket fails closed without a replacement daemon',async()=>{
+    const f=await nativeFixture();try{const r=await f.run('set -u\n'+nativeOwned+String.raw`
+rm "$BROWSER_USE_HOME/$BROWSER_QA_SESSION.sock"
+if browser-use get title; then exit 88; fi
+test ! -S "$BROWSER_USE_HOME/$BROWSER_QA_SESSION.sock" || exit 89
+echo missing-socket-refused
+`);expect(r.stderr).not.toMatch(/BROWSER_USE_RUN_UNAVAILABLE|BROWSER_USE_CAPABILITY_UNAVAILABLE/);expect(r.stdout).toContain('missing-socket-refused');nativeExit(r);expect(r.code).not.toBe(0);expect(r.code).not.toBe(88);expect(r.code).not.toBe(89);nativeClean(f);}finally{await f.close();}
+  },90000);
+  it.each(['wait','python'])('native %s real 20 second work cancels after 2 seconds without late artifact',async kind=>{
+    const f=await nativeFixture();const entered=join(f.evidence,'work-entered'),late=join(f.evidence,'late-artifact');const operation=kind==='wait'?`browser-use wait selector '#never-created' --timeout 20000\nprintf late > ${shellWord(late)}\n`:`browser-use python ${shellWord(`import time; from pathlib import Path; Path(${JSON.stringify(entered)}).write_text('entered'); time.sleep(20); Path(${JSON.stringify(late)}).write_text('late')`)}\n`;
+    try{const run=f.start('set -eu\n'+nativeOwned+(kind==='wait'?`printf entered > ${shellWord(entered)}\n`:'')+operation);const readyDeadline=Date.now()+30000;while(!existsSync(entered)&&Date.now()<readyDeadline&&run.child.exitCode===null)await delay(25);expect(existsSync(entered),'real native work must start').toBe(true);await delay(2000);const start=Date.now();run.child.kill('SIGTERM');const r=await run.done;nativeResult(r,143);expect(Date.now()-start).toBeLessThan(15000);nativeClean(f);const next=await f.run('set -eu\n'+nativeOwned+'browser-use get title\n');nativeResult(next);nativeClean(f);expect(Date.now()-start,'next command must finish before original work deadline').toBeLessThan(18000);await delay(Math.max(0,21000-(Date.now()-start)-2000));expect(existsSync(late)).toBe(false);}finally{await f.close();}
+  },90000);
+});
+
+// Further independent real-native boundaries. Controlled HTTP/CDP source fixtures
+// are explicitly not evidence of real user login; receiver always uses native engine.
+describe('isolated-browser-qa native lifecycle and scope increment',()=>{
+  it.each(['direct','redirect'])('native navigation rejects off-target %s navigation without treating it as success',async mode=>{
+    const f=await nativeFixture();try{
+      const target=mode==='direct'?'http://off-target.invalid/blocked':f.url+'redirect';
+      const r=await f.run('set -u\n'+nativeOwned+`\nif browser-use open ${shellWord(target)}; then exit 88; fi\nbrowser-use --json get title > "$P7_NATIVE_EVIDENCE/after-rejection.json"\necho rejected-navigation\n`);
+      expect(r.stderr).not.toMatch(/BROWSER_USE_RUN_UNAVAILABLE|BROWSER_USE_CAPABILITY_UNAVAILABLE/);nativeExit(r);expect(r.code).not.toBe(0);expect(r.code).not.toBe(88);expect(r.stdout).toContain('rejected-navigation');
+      expect(JSON.parse(readFileSync(join(f.evidence,'after-rejection.json'),'utf8')).data.title).toBe('P7 native fixture');
+      if(mode==='redirect')expect(f.hits).toContain('/redirect');nativeClean(f);
+    }finally{await f.close();}
+  },90000);
+  it('native page failure keeps evidence readable and clears only owned resources',async()=>{
+    const f=await nativeFixture();try{const r=await f.run('set -eu\n'+nativeOwned+String.raw`
+browser-use screenshot "$P7_NATIVE_EVIDENCE/failure.png"
+exit 17
+`);nativeResult(r,17);nativeClean(f);const bytes=readFileSync(join(f.evidence,'failure.png'));expect(bytes.length).toBeGreaterThan(100);expect(createHash('sha256').update(bytes).digest('hex')).toHaveLength(64);}finally{await f.close();}
+  },90000);
+  it('native busy command disconnect fails closed after authenticated helper death without a new daemon',async()=>{
+    const f=await nativeFixture();try{const r=await f.run('set -u\n'+nativeOwned+String.raw`
+browser-use wait selector '#never-created' --timeout 20000 &
+request=$!
+sleep 1
+# This PID is supplied by the same gateway and was recorded before the fault.
+kill -TERM "$BROWSER_QA_OWNED_HELPER_PID"
+wait "$request" && exit 88
+if browser-use get title; then exit 89; fi
+echo disconnected-native-refused
+`);expect(r.stderr).not.toMatch(/BROWSER_USE_RUN_UNAVAILABLE|BROWSER_USE_CAPABILITY_UNAVAILABLE/);nativeExit(r);expect(r.code).not.toBe(0);expect(r.code).not.toBe(88);expect(r.code).not.toBe(89);nativeClean(f);}finally{await f.close();}
+  },90000);
+  it('native cancellation preserves a parallel owned session and its HTTP service',async()=>{
+    const a=await nativeFixture(),b=await nativeFixture();const ready=join(b.evidence,'parallel-ready'),release=join(b.evidence,'release');
+    try{
+      const other=b.start('set -eu\n'+nativeOwned+`\nprintf ready > ${shellWord(ready)}\nwhile ! test -e ${shellWord(release)}; do sleep .1; done\nbrowser-use get title\nbrowser-use screenshot "$P7_NATIVE_EVIDENCE/parallel.png"\n`);
+      const readyDeadline=Date.now()+30000;while(!existsSync(ready)&&Date.now()<readyDeadline&&other.child.exitCode===null)await delay(25);expect(existsSync(ready)).toBe(true);
+      const marker=join(a.evidence,'cancel-ready');const run=a.start('set -eu\n'+nativeOwned+`\nprintf ready > ${shellWord(marker)}\nbrowser-use wait selector '#never-created' --timeout 20000\n`);
+      const deadline=Date.now()+30000;while(!existsSync(marker)&&Date.now()<deadline&&run.child.exitCode===null)await delay(25);expect(existsSync(marker)).toBe(true);await delay(2000);run.child.kill('SIGTERM');nativeResult(await run.done,143);nativeClean(a);
+      const own=readFileSync(join(b.evidence,'owned'),'utf8').trim().split('\n');for(const pid of own.slice(0,2))expect(()=>process.kill(Number(pid),0)).not.toThrow();expect((await fetch(b.url)).status).toBe(200);
+      writeFileSync(release,'continue');nativeResult(await other.done);nativeClean(b);expect(statSync(join(b.evidence,'parallel.png')).size).toBeGreaterThan(100);
+    }finally{writeFileSync(release,'continue');await a.close();await b.close();}
+  },90000);
+  it.each(['success','failure'])('native receiver transfers only eligible controlled tickets and cleans on %s',async mode=>{
+    const f=await nativeFixture();const secret='P7_CONTROLLED_NATIVE_TICKET_SENTINEL';
+    const ordinary={name:'p7ordinary',value:secret,domain:'127.0.0.1',path:'/',secure:false,httpOnly:true,session:true};
+    const source=await memoryCdp([ordinary,{...ordinary,name:'wrong-path',path:'/other'},{...ordinary,name:'partition',partitionKey:{topLevelSite:'https://example.test',hasCrossSiteAncestor:false}}]);
+    try{
+      const r=await f.run('set -eu\n'+nativeOwned+`\nbrowser-use open "$P7_NATIVE_URL"\nbrowser-use screenshot "$P7_NATIVE_EVIDENCE/ticket.png"\nexit ${mode==='success'?0:17}\n`,{BROWSER_QA_AUTH_MODE:'read-only-ticket-export',BROWSER_QA_TICKET_SOURCE_WS:source.endpoint});
+      nativeResult(r,mode==='success'?0:17);expect(f.requests.some(req=>req.cookie.includes('p7ordinary='+secret)),'eligible HttpOnly ticket must reach actual native receiver request').toBe(true);expect(f.requests.some(req=>req.cookie.includes('wrong-path=')||req.cookie.includes('partition='))).toBe(false);expect((r.stdout+r.stderr).includes(secret),'ticket payload must not reach output').toBe(false);
+      expect(source.methods).toContain('Storage.getCookies');expect(source.methods).toContain('Target.getTargets');expect(source.methods.every(method=>['Browser.getVersion','Storage.getCookies','Target.getTargets'].includes(method)),'source must remain strictly read-only').toBe(true);nativeClean(f);expect(statSync(join(f.evidence,'ticket.png')).size).toBeGreaterThan(100);
+    }finally{await source.close();await f.close();}
+  },90000);
+});
+
+describe('isolated-browser-qa native complete shell interaction increment',()=>{
+  it('native state indices drive real input click keys and upload with original tilde expansion',async()=>{
+    const f=await nativeFixture();writeFileSync(join(f.home,'upload.txt'),'controlled upload');
+    // State indices are intentionally obtained from native state, not fabricated.
+    const findIndex=String.raw`const fs=require('node:fs');const text=fs.readFileSync(process.argv[1],'utf8');const line=text.split('\n').find(x=>x.includes('id='+process.argv[2])||x.includes('id="'+process.argv[2]+'"'));const m=line&&line.match(/\[(\d+)\]/);if(!m)process.exit(91);console.log(m[1]);`;
+    const node=shellWord(process.execPath);
+    try{const r=await f.run('set -eu\n'+nativeOwned+`
+browser-use state > "$P7_NATIVE_EVIDENCE/indices"
+field=$(${node} -e ${shellWord(findIndex)} "$P7_NATIVE_EVIDENCE/indices" field)
+browser-use input "$field" 'native value'
+browser-use keys 'End'
+browser-use type '!'
+browser-use --json get value "$field" > "$P7_NATIVE_EVIDENCE/value.json"
+browser-use state > "$P7_NATIVE_EVIDENCE/indices"
+upload=$(${node} -e ${shellWord(findIndex)} "$P7_NATIVE_EVIDENCE/indices" upload)
+env HOME="$P7_NATIVE_TEST_HOME" browser-use upload "$upload" '~/upload.txt'
+browser-use --json eval 'document.querySelector("#upload").files[0]?.name' > "$P7_NATIVE_EVIDENCE/upload.json"
+browser-use state > "$P7_NATIVE_EVIDENCE/indices"
+button=$(${node} -e ${shellWord(findIndex)} "$P7_NATIVE_EVIDENCE/indices" button)
+browser-use click "$button"
+browser-use --json get title > "$P7_NATIVE_EVIDENCE/clicked.json"
+`);nativeResult(r);expect(JSON.parse(readFileSync(join(f.evidence,'value.json'),'utf8')).data.value).toBe('native value!');expect(JSON.parse(readFileSync(join(f.evidence,'upload.json'),'utf8')).data.result).toBe('upload.txt');expect(JSON.parse(readFileSync(join(f.evidence,'clicked.json'),'utf8')).data.title).toBe('clicked');nativeClean(f);}finally{await f.close();}
+  },90000);
+  it('native controlled ticket value cannot escape through Python output or vars',async()=>{
+    const f=await nativeFixture(),secret='P7_CONTROLLED_OUTPUT_SECRET';const source=await memoryCdp([{name:'p7ordinary',value:secret,domain:'127.0.0.1',path:'/',secure:false,httpOnly:true,session:true}]);
+    try{const r=await f.run('set -u\n'+nativeOwned+`\nif browser-use python ${shellWord(`print(${JSON.stringify(secret)})`)}; then exit 88; fi\nif browser-use python --vars; then :; fi\necho secret-output-was-refused\n`,{BROWSER_QA_AUTH_MODE:'read-only-ticket-export',BROWSER_QA_TICKET_SOURCE_WS:source.endpoint});expect(r.stderr).not.toMatch(/BROWSER_USE_RUN_UNAVAILABLE|BROWSER_USE_CAPABILITY_UNAVAILABLE/);expect((r.stdout+r.stderr).includes(secret)).toBe(false);nativeExit(r);expect(r.code).not.toBe(0);expect(r.code).not.toBe(88);expect(r.stdout).toContain('secret-output-was-refused');nativeClean(f);}finally{await source.close();await f.close();}
+  },90000);
+  it('native controlled tickets are removed with owned resources after real cancellation',async()=>{
+    const f=await nativeFixture(),secret='P7_CONTROLLED_CANCEL_TICKET';const source=await memoryCdp([{name:'p7ordinary',value:secret,domain:'127.0.0.1',path:'/',secure:false,httpOnly:true,session:true}]);const entered=join(f.evidence,'ticket-cancel-entered');
+    try{const run=f.start('set -eu\n'+nativeOwned+`\nprintf ready > ${shellWord(entered)}\nbrowser-use wait selector '#never-created' --timeout 20000\n`,{BROWSER_QA_AUTH_MODE:'read-only-ticket-export',BROWSER_QA_TICKET_SOURCE_WS:source.endpoint});const deadline=Date.now()+30000;while(!existsSync(entered)&&Date.now()<deadline&&run.child.exitCode===null)await delay(25);expect(existsSync(entered)).toBe(true);expect(f.requests.some(req=>req.cookie.includes('p7ordinary='+secret))).toBe(true);await delay(2000);run.child.kill('SIGTERM');const r=await run.done;nativeResult(r,143);expect((r.stdout+r.stderr).includes(secret)).toBe(false);nativeClean(f);expect(source.methods.every(method=>['Browser.getVersion','Storage.getCookies','Target.getTargets'].includes(method))).toBe(true);}finally{await source.close();await f.close();}
+  },90000);
+});
+
+describe('isolated-browser-qa native startup and refusal increment',()=>{
+  it('native startup cancellation never reaches the scenario and retains no owned profile process',async()=>{
+    const f=await nativeFixture(),marker=join(f.evidence,'must-not-enter');
+    const helperPath=fileURLToPath(new URL('../scripts/browser-qa-browser-use.py',import.meta.url));
+    // TCR-P7-NATIVE-STARTUP-OWNERSHIP-ROOT-01 (522): authenticate public OS
+    // process facts and actual argv root; caller TMPDIR is not an ownership oracle.
+    const observe=String.raw`
+import json,os,sys
+import psutil
+owner=int(sys.argv[1]);helper_path=sys.argv[2];browser_exe=os.path.realpath(sys.argv[3])
+rows=[]
+try:
+ for p in psutil.Process(owner).children(recursive=False):
+  try: rows.append(dict(pid=p.pid,ppid=p.ppid(),start=p.create_time(),exe=p.exe(),argv=p.cmdline(),status=p.status()))
+  except psutil.Error: pass
+except psutil.Error: pass
+helper=next((p for p in rows if len(p['argv'])>=6 and p['argv'][1]==helper_path and p['argv'][2]=='adapter' and p['argv'][3].startswith('whqa-') and p['ppid']==owner),None)
+result=None
+if helper:
+ session,root,profile=helper['argv'][3:6]
+ browser=next((p for p in rows if p['ppid']==owner and os.path.realpath(p['exe'])==browser_exe and '--user-data-dir='+profile in p['argv'] and p['status']!=psutil.STATUS_ZOMBIE),None)
+ if browser and helper['status']!=psutil.STATUS_ZOMBIE and os.path.isabs(root) and os.path.isdir(root) and os.path.isdir(profile):result=dict(helper=helper,browser=browser,session=session,root=root,profile=profile)
+print(json.dumps(result))
+`;
+    try{
+      writeFileSync(join(f.evidence,'startup-evidence'),'preserve startup evidence');
+      const run=f.start('set -eu\n'+`printf late > ${shellWord(marker)}\n`);
+      let identity;const deadline=Date.now()+30000;
+      while(!identity&&Date.now()<deadline&&run.child.exitCode===null&&!existsSync(marker)){
+        identity=JSON.parse(execFileSync(nativePython,['-c',observe,String(run.child.pid),helperPath,nativeChrome],{encoding:'utf8'}));
+        if(!identity)await delay(20);
+      }
+      expect(identity,'must observe authenticated helper AND browser startup before cancelling').not.toBeNull();
+      expect(identity).toBeDefined();expect(existsSync(marker),'scenario must not already have started').toBe(false);
+      expect(identity.helper.ppid).toBe(run.child.pid);expect(identity.browser.ppid).toBe(run.child.pid);
+      run.child.kill('SIGTERM');const r=await run.done;nativeResult(r,143);
+      expect(r.stdout+r.stderr).not.toContain('cleanup_incomplete');expect(existsSync(marker)).toBe(false);
+      const remaining=JSON.parse(execFileSync(nativePython,['-c',String.raw`
+import json,sys
+import psutil
+result=[]
+for row in json.loads(sys.argv[1]):
+ try:
+  p=psutil.Process(row['pid'])
+  if p.create_time()==row['start']:result.append(dict(pid=p.pid,status=p.status()))
+ except psutil.Error:pass
+print(json.dumps(result))
+`,JSON.stringify([identity.helper,identity.browser])],{encoding:'utf8'}));
+      expect(remaining,'the exact observed child identities must be gone; PID reuse is distinct').toEqual([]);
+      for(const path of [identity.profile,join(identity.root,identity.session+'.pid'),join(identity.root,identity.session+'.sock'),identity.root])expect(existsSync(path),'observed owned resource must be removed: '+path).toBe(false);
+      await delay(500);expect(existsSync(marker),'no late scenario artifact after cleanup').toBe(false);
+      expect(readFileSync(join(f.evidence,'startup-evidence'),'utf8')).toBe('preserve startup evidence');
+    }finally{await f.close();}
+  },90000);
+  it('native refused socket never starts a daemon or rewrites the owned PID record',async()=>{
+    const f=await nativeFixture();try{const r=await f.run('set -u\n'+nativeOwned+String.raw`
+pid_before=$(cat "$BROWSER_USE_HOME/$BROWSER_QA_SESSION.pid")
+rm "$BROWSER_USE_HOME/$BROWSER_QA_SESSION.sock"
+: > "$BROWSER_USE_HOME/$BROWSER_QA_SESSION.sock"
+if browser-use get title; then exit 88; fi
+pid_after=$(cat "$BROWSER_USE_HOME/$BROWSER_QA_SESSION.pid")
+test "$pid_before" = "$pid_after" || exit 89
+echo refused-socket-no-replacement
+`);expect(r.stderr).not.toMatch(/BROWSER_USE_RUN_UNAVAILABLE|BROWSER_USE_CAPABILITY_UNAVAILABLE/);expect(r.stdout).toContain('refused-socket-no-replacement');nativeExit(r);expect(r.code).not.toBe(0);expect(r.code).not.toBe(88);expect(r.code).not.toBe(89);nativeClean(f);}finally{await f.close();}
+  },90000);
+});
+
+import { get as plainHttpGet } from 'node:http';
+// Oracle 560: one real reachable off-allowlist Document endpoint, not DNS failure.
+async function reachableDenyDocument(){
+  let documents=0;
+  const server=createServer((req,res)=>{if(req.url==='/denied-document')documents++;res.setHeader('content-type','text/html');res.end('<!doctype html><title>reachable deny</title><p>deny fixture</p>');});
+  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'::1',resolve);});
+  const url=`http://[::1]:${server.address().port}/denied-document`;
+  let status;try{status=await new Promise((resolve,reject)=>{const request=plainHttpGet(url,response=>{response.resume();response.once('end',()=>resolve(response.statusCode));});request.once('error',reject);request.setTimeout(3000,()=>request.destroy(new Error('DENY_BASELINE_TIMEOUT')));});
+  expect(status,'off-allowlist endpoint must actually be reachable before testing refusal').toBe(200);
+  expect(documents,'baseline must reach exactly the controlled Document').toBe(1);documents=0;}catch(error){await new Promise(resolve=>server.close(resolve));throw error;}
+  return{url,count:()=>documents,close:()=>new Promise(resolve=>server.close(resolve))};
+}
+describe('isolated-browser-qa real reachable Document frontgate increment',()=>{
+  it.each(['direct','redirect','newtab','iframe'])('native reachable deny Document is refused before request on %s',async mode=>{
+    const deny=await reachableDenyDocument();let f;
+    try{
+      f=await nativeFixture({redirectTo:deny.url});
+      expect(f.env.BROWSER_QA_ALLOWED_DOMAINS.split(',')).not.toContain('::1');
+      let allowed='';
+      if(mode==='newtab'||mode==='iframe'){
+        const allowedUrl=f.url+'guard-allowed-'+mode;
+        const js=mode==='newtab'?`window.open(${JSON.stringify(allowedUrl)},'_blank');'allowed-created'`:`var allowedFrame=document.createElement('iframe');allowedFrame.src=${JSON.stringify(allowedUrl)};document.body.append(allowedFrame);'allowed-created'`;
+        allowed=`browser-use eval ${shellWord(js)}\nfor ((i=0;i<500;i++)); do test -f "$P7_NATIVE_EVIDENCE/allowed-navigation-hit" && break; sleep .01; done\ntest -f "$P7_NATIVE_EVIDENCE/allowed-navigation-hit" || exit 87\n`;
+      }
+      let trigger;
+      if(mode==='direct')trigger=`browser-use open ${shellWord(deny.url)}`;
+      if(mode==='redirect')trigger=`browser-use open ${shellWord(f.url+'guard-redirect')}`;
+      if(mode==='newtab')trigger=`browser-use eval ${shellWord(`window.open(${JSON.stringify(deny.url)},'_blank');'deny-created'`)}`;
+      if(mode==='iframe')trigger=`browser-use eval ${shellWord(`var deniedFrame=document.createElement('iframe');deniedFrame.src=${JSON.stringify(deny.url)};document.body.append(deniedFrame);'deny-created'`)}`;
+      const r=await f.run('set -u\n'+nativeOwned+`\nbrowser-use open "$P7_NATIVE_URL" || exit 86\n`+allowed+`printf 'deny-trigger-started\\n'\n${trigger}\nsleep 1\n`);
+      const observation={mode,allowed_hits:f.hits.length,denied_documents:deny.count(),code:r.code,typed_rejection:(r.stdout+r.stderr).includes('TARGET_OUTSIDE_ALLOWED_DOMAINS'),trigger_started:r.stdout.includes('deny-trigger-started')};
+      console.log('ORACLE-P7-REACHABLE-DOCUMENT '+JSON.stringify(observation));
+      expect(r.stderr).not.toMatch(/BROWSER_USE_RUN_UNAVAILABLE|BROWSER_USE_CAPABILITY_UNAVAILABLE/);
+      expect(observation.trigger_started,'must reach the actual native navigation trigger').toBe(true);
+      expect(f.hits).toContain('/');
+      if(mode==='newtab'||mode==='iframe')expect(f.hits,'allowed new pages/frames must work in the same run').toContain('/guard-allowed-'+mode);
+      nativeClean(f);expect(r.stdout+r.stderr).not.toContain('cleanup_incomplete');
+      expect(observation.denied_documents,'reachable deny server must receive zero Document requests').toBe(0);
+      expect(observation.typed_rejection,'network failures and generic command errors are not policy refusals').toBe(true);
+      nativeExit(r);expect(r.code,'an ignored policy failure must remain latched by the owner').not.toBe(0);
+      expect(r.code).not.toBe(86);expect(r.code).not.toBe(87);expect(r.code).not.toBe(143);
+    }finally{await f?.close();await deny.close();}
+  },90000);
+});
+
+// Independent 574/195 increment: real fs-await cancellation, not SDK handshake.
+describe('isolated-browser-qa native prespawn cancellation increment',()=>{
+  for(const stage of ['before-helper','before-chrome'])it(`native prespawn cancellation at ${stage} retains no later owned child`,async()=>{
+    const f=await nativeFixture();const checkpoint=join(f.root,'prespawn-checkpoint.json'),release=join(f.root,'prespawn-release'),events=join(f.root,'prespawn-events.jsonl'),hook=join(f.root,'prespawn-hook.mjs'),marker=join(f.evidence,'scenario-entered'),late=join(f.evidence,'late');
+    const helperPath=fileURLToPath(new URL('../scripts/browser-qa-browser-use.py',import.meta.url));
+    const sessionPath=fileURLToPath(new URL('../scripts/browser-qa-session.mjs',import.meta.url));
+    writeFileSync(hook,String.raw`
+import fs from 'node:fs/promises';
+import syncfs from 'node:fs';
+import cp from 'node:child_process';
+import {syncBuiltinESMExports} from 'node:module';
+import {dirname,join} from 'node:path';
+const e=process.env;
+if(process.argv[1]===e.P7_PRE_ENTRY&&e.P7_PRE_TOKEN&&e.P7_PRE_CHECKPOINT.startsWith(e.P7_PRE_TOKEN+'/')){
+  const originalWrite=fs.writeFile,originalRead=fs.readFile,originalAccess=fs.access,originalSpawn=cp.spawn;
+  let hit=false,helperRoot;
+  const record=value=>syncfs.appendFileSync(e.P7_PRE_EVENTS,JSON.stringify(value)+'\n');
+  record({event:'observer',pid:process.pid,entry_matches:true,token_matches:true});
+  cp.spawn=function(executable,args=[],options){
+    const child=originalSpawn.call(this,executable,args,options);
+    let role='other';
+    if(args[0]===e.P7_PRE_HELPER&&args[1]==='adapter'){role='helper';helperRoot=args[3];}
+    if(executable===e.P7_PRE_CHROME&&args.some(arg=>String(arg).startsWith('--user-data-dir=')))role='chrome';
+    record({event:'spawn',pid:child.pid??null,role,exe:executable,argv:role==='helper'?args:[],time:Date.now()});
+    return child;
+  };
+  const barrier=async(stage,root)=>{
+    if(hit)throw new Error('duplicate prespawn checkpoint');hit=true;
+    await originalWrite(e.P7_PRE_CHECKPOINT,JSON.stringify({stage,root,pid:process.pid,real_operation_completed:true}));
+    while(true){try{await originalRead(e.P7_PRE_RELEASE);break;}catch(error){if(error.code!=='ENOENT')throw error;}await new Promise(resolve=>setTimeout(resolve,10));}
+  };
+  fs.writeFile=async function(path,data,...rest){
+    const result=await originalWrite.call(this,path,data,...rest);
+    if(e.P7_PRE_STAGE==='before-helper'&&typeof path==='string'&&path.endsWith('/bin/browser-use')&&typeof data==='string'&&data.startsWith('#!/bin/sh\nexec ')&&data.includes("'"+e.P7_PRE_HELPER+"' 'cli'"))await barrier('before-helper',dirname(dirname(path)));
+    return result;
+  };
+  fs.access=async function(path,...rest){
+    const result=await originalAccess.call(this,path,...rest);
+    if(e.P7_PRE_STAGE==='before-chrome'&&path===e.P7_PRE_CHROME&&helperRoot)await barrier('before-chrome',helperRoot);
+    return result;
+  };
+  syncBuiltinESMExports();
+}
+`);
+    let run;try{
+      run=f.start(`set -eu\nprintf entered > ${shellWord(marker)}\nsleep 2\nprintf late > ${shellWord(late)}\n`,{
+        NODE_OPTIONS:`--import=${hook}`,P7_PRE_TOKEN:f.root,P7_PRE_ENTRY:sessionPath,P7_PRE_HELPER:helperPath,P7_PRE_CHROME:nativeChrome,P7_PRE_STAGE:stage,P7_PRE_CHECKPOINT:checkpoint,P7_PRE_RELEASE:release,P7_PRE_EVENTS:events
+      });
+      const deadline=Date.now()+30000;while(!existsSync(checkpoint)&&Date.now()<deadline&&run.child.exitCode===null&&run.child.signalCode===null)await delay(20);
+      expect(existsSync(checkpoint),'must hit the successful real fs operation before cancellation').toBe(true);
+      const point=JSON.parse(readFileSync(checkpoint,'utf8'));
+      expect(point).toMatchObject({stage,pid:run.child.pid,real_operation_completed:true});expect(point.root.startsWith('/')).toBe(true);
+      const before=readFileSync(events,'utf8').trim().split('\n').map(JSON.parse);
+      expect(before[0]).toMatchObject({event:'observer',pid:run.child.pid,entry_matches:true,token_matches:true});
+      const helpers=before.filter(event=>event.role==='helper'),browsers=before.filter(event=>event.role==='chrome');
+      expect(browsers).toHaveLength(0);expect(helpers).toHaveLength(stage==='before-helper'?0:1);
+      let identity;
+      if(stage==='before-chrome'){
+        identity=JSON.parse(execFileSync(nativePython,['-c',String.raw`
+import psutil,json,sys
+p=psutil.Process(int(sys.argv[1]));a=p.cmdline()
+print(json.dumps({'pid':p.pid,'start':p.create_time(),'parent_matches':p.ppid()==int(sys.argv[2]),'role_matches':len(a)>5 and a[1]==sys.argv[3] and a[2]=='adapter' and a[4]==sys.argv[4],'exe':p.exe()}))
+`,String(helpers[0].pid),String(run.child.pid),helperPath,point.root],{encoding:'utf8'}));
+        expect(identity.parent_matches).toBe(true);expect(identity.role_matches).toBe(true);expect(identity.start).toBeGreaterThan(0);
+      }
+      expect(existsSync(marker)).toBe(false);const signalledAt=Date.now();expect(run.child.kill('SIGTERM'),'exact real gateway must accept the single TERM').toBe(true);
+      await delay(100);writeFileSync(release,'release');const r=await run.done;nativeResult(r,143);expect(Date.now()-signalledAt,'normal cleanup must finish before harness watchdog').toBeLessThan(15000);
+      expect(r.stdout).not.toContain('cleanup_incomplete');expect(r.stdout).not.toContain('ORACLE-P7-NATIVE-WATCHDOG');
+      const after=readFileSync(events,'utf8').trim().split('\n').map(JSON.parse);
+      expect(after.filter(event=>event.role==='helper')).toHaveLength(stage==='before-helper'?0:1);expect(after.filter(event=>event.role==='chrome')).toHaveLength(0);
+      const live=JSON.parse(execFileSync(nativePython,['-c',String.raw`
+import psutil,json,sys,os
+root=sys.argv[1];pid=int(sys.argv[2]);start=float(sys.argv[3]);same=False;matching=0
+if pid:
+ try:same=psutil.Process(pid).create_time()==start
+ except psutil.NoSuchProcess:pass
+for p in psutil.process_iter(['cmdline']):
+ try:
+  a=p.info['cmdline'] or []
+  if p.pid!=os.getpid() and (root in a or '--user-data-dir='+root+'/browser-use-user-data-dir-owned' in a):matching+=1
+ except (psutil.NoSuchProcess,psutil.AccessDenied):pass
+print(json.dumps({'same_helper_alive':same,'owned_argv_processes':matching}))
+`,point.root,String(identity?.pid||0),String(identity?.start||0)],{encoding:'utf8'}));
+      expect(live).toEqual({same_helper_alive:false,owned_argv_processes:0});expect(existsSync(point.root),'actual profile/socket/metadata root must be removed before fixture cleanup').toBe(false);
+      await delay(Math.max(0,2500-(Date.now()-signalledAt)));expect(existsSync(marker)).toBe(false);expect(existsSync(late)).toBe(false);
+      console.log('ORACLE-P7-PRESPAWN '+JSON.stringify({stage,checkpoint:true,code:r.code,signal:r.signal,helper_spawns:helpers.length,chrome_spawns:0,helper_identity_exited:!live.same_helper_alive,root_removed:true}));
+    }finally{if(!existsSync(release))writeFileSync(release,'release');await f.close();}
+  },90000);
+});
+
+// Independent 582/196-197 increment: exact SDK-await and FIFO-write windows.
+describe('isolated-browser-qa native exact cancellation increment',()=>{
+  it('native SDK connected await cancellation never reaches ready or scenario',async()=>{
+    const f=await nativeFixture(),hooks=join(f.root,'sdk-hooks'),checkpoint=join(f.evidence,'sdk-checkpoint.json'),release=join(f.root,'sdk-release'),marker=join(f.evidence,'sdk-scenario'),late=join(f.evidence,'sdk-late');mkdirSync(hooks);
+    const helperPath=fileURLToPath(new URL('../scripts/browser-qa-browser-use.py',import.meta.url));
+    writeFileSync(join(hooks,'sitecustomize.py'),String.raw`
+import os,sys,pathlib
+if len(sys.argv)==5 and sys.argv[0]==os.environ.get('P7_SDK_HELPER') and sys.argv[1]=='adapter' and sys.argv[2].startswith('whqa-') and sys.argv[4]==str(pathlib.Path(sys.argv[3])/'browser-use-user-data-dir-owned') and os.environ.get('P7_SDK_CHECKPOINT','').startswith(os.environ.get('P7_SDK_TOKEN','!')+'/'):
+ import asyncio,json
+ from urllib.parse import urlparse
+ from cdp_use import CDPClient
+ original=CDPClient.start
+ hit=False
+ async def controlled(self,*args,**kwargs):
+  global hit
+  result=await original(self,*args,**kwargs)
+  parsed=urlparse(self.url)
+  if not hit and parsed.hostname in ('127.0.0.1','localhost') and parsed.path.startswith('/devtools/browser/'):
+   hit=True
+   info=await self.send.SystemInfo.getProcessInfo()
+   browsers=[p['id'] for p in info['processInfo'] if p['type']=='browser']
+   if len(browsers)!=1:raise RuntimeError('owned SystemInfo browser count mismatch')
+   pathlib.Path(os.environ['P7_SDK_CHECKPOINT']).write_text(json.dumps({'helper_pid':os.getpid(),'browser_pid':browsers[0],'port':parsed.port,'session':sys.argv[2],'root':sys.argv[3],'profile':sys.argv[4],'real_connection_completed':True}))
+   while not pathlib.Path(os.environ['P7_SDK_RELEASE']).exists():await asyncio.sleep(.01)
+  return result
+ CDPClient.start=controlled
+`);
+    let run;try{
+      run=f.start(`set -eu\nprintf entered > ${shellWord(marker)}\nsleep 2\nprintf late > ${shellWord(late)}\n`,{PYTHONPATH:hooks+(process.env.PYTHONPATH?':'+process.env.PYTHONPATH:''),P7_SDK_HELPER:helperPath,P7_SDK_TOKEN:f.root,P7_SDK_CHECKPOINT:checkpoint,P7_SDK_RELEASE:release});
+      const deadline=Date.now()+30000;while(!existsSync(checkpoint)&&Date.now()<deadline&&run.child.exitCode===null&&run.child.signalCode===null)await delay(20);
+      expect(existsSync(checkpoint),'must reach real SDK CDP start after successful connection').toBe(true);const point=JSON.parse(readFileSync(checkpoint,'utf8'));expect(point.real_connection_completed).toBe(true);
+      const ids=JSON.parse(execFileSync(nativePython,['-c',String.raw`
+import psutil,json,sys
+h=psutil.Process(int(sys.argv[1]));b=psutil.Process(int(sys.argv[2]));owner=int(sys.argv[3]);a=h.cmdline();ba=b.cmdline()
+print(json.dumps({'helper_start':h.create_time(),'browser_start':b.create_time(),'parent_matches':h.ppid()==owner and b.ppid()==owner,'helper_role_matches':len(a)==6 and a[1]==sys.argv[4] and a[2]=='adapter' and a[3]==sys.argv[5] and a[4]==sys.argv[6] and a[5]==sys.argv[7],'browser_profile_matches':'--user-data-dir='+sys.argv[7] in ba,'browser_exe_matches':b.exe()==sys.argv[8]}))
+`,String(point.helper_pid),String(point.browser_pid),String(run.child.pid),helperPath,point.session,point.root,point.profile,nativeChrome],{encoding:'utf8'}));
+      expect(ids.parent_matches).toBe(true);expect(ids.helper_role_matches).toBe(true);expect(ids.browser_profile_matches).toBe(true);expect(ids.browser_exe_matches).toBe(true);
+      const connections=execFileSync('/usr/sbin/lsof',['-nP','-a','-p',String(point.helper_pid),'-iTCP','-Fn'],{encoding:'utf8'});expect(connections.split('\n').some(row=>row.startsWith('n')&&row.includes('->127.0.0.1:'+point.port))).toBe(true);
+      expect(existsSync(join(point.root,point.session+'.sock')),'SDK ready socket must not exist at this await').toBe(false);expect(run.output()).not.toContain('"native_qa":"owned"');expect(existsSync(marker)).toBe(false);expect(f.hits).toHaveLength(0);
+      const start=Date.now();expect(run.child.kill('SIGTERM')).toBe(true);await delay(100);writeFileSync(release,'release');const r=await run.done;nativeResult(r,143);expect(Date.now()-start).toBeLessThan(15000);expect(r.stdout).not.toContain('cleanup_incomplete');expect(r.stdout).not.toContain('"native_qa":"owned"');
+      const alive=JSON.parse(execFileSync(nativePython,['-c',String.raw`
+import psutil,json,sys
+result=[]
+for pid,start in [(int(sys.argv[1]),float(sys.argv[2])),(int(sys.argv[3]),float(sys.argv[4]))]:
+ try:result.append(psutil.Process(pid).create_time()==start)
+ except psutil.NoSuchProcess:result.append(False)
+print(json.dumps(result))
+`,String(point.helper_pid),String(ids.helper_start),String(point.browser_pid),String(ids.browser_start)],{encoding:'utf8'}));expect(alive).toEqual([false,false]);expect(existsSync(point.root)).toBe(false);await delay(Math.max(0,2500-(Date.now()-start)));expect(existsSync(marker)).toBe(false);expect(existsSync(late)).toBe(false);expect(f.hits).toHaveLength(0);
+      console.log('ORACLE-P7-SDK-AWAIT '+JSON.stringify({connected:true,system_info_same_browser:true,helper_tcp_matches:true,before_ready:true,code:r.code,signal:r.signal,both_identities_exited:true,root_removed:true}));
+    }finally{writeFileSync(release,'release');await f.close();}
+  },90000);
+
+  it('native FIFO screenshot write cancellation leaves no late write or owned child',async()=>{
+    const f=await nativeFixture(),fifo=join(f.evidence,'screen.fifo'),baseline=join(f.evidence,'baseline.png'),ready=join(f.evidence,'fifo-ready'),go=join(f.root,'fifo-go'),after=join(f.evidence,'screenshot-returned'),late=join(f.evidence,'screenshot-late');
+    execFileSync('/usr/bin/mkfifo',[fifo]);const fs=await import('node:fs');const info=fs.statSync(fifo);expect(info.isFIFO()).toBe(true);const reader=fs.openSync(fifo,fs.constants.O_RDONLY|fs.constants.O_NONBLOCK),writer=fs.openSync(fifo,fs.constants.O_WRONLY|fs.constants.O_NONBLOCK);let capacity=0;
+    try{const block=Buffer.alloc(4096);while(true){try{capacity+=fs.writeSync(writer,block);}catch(error){if(error.code==='EAGAIN')break;throw error;}}}finally{fs.closeSync(writer);}expect(capacity).toBeGreaterThan(0);const buffer=Buffer.alloc(65536);while(true){try{if(fs.readSync(reader,buffer)===0)break;}catch(error){if(error.code==='EAGAIN')break;throw error;}}
+    let run;try{
+      const noise=`(()=>{const c=document.createElement('canvas');c.width=2048;c.height=2048;const x=c.getContext('2d');const d=x.createImageData(2048,2048);let n=1;for(let i=0;i<d.data.length;i+=4){n=(n*1664525+1013904223)>>>0;d.data[i]=n&255;d.data[i+1]=(n>>>8)&255;d.data[i+2]=(n>>>16)&255;d.data[i+3]=255;}x.putImageData(d,0,0);document.body.replaceChildren(c);return true})()`;
+      run=f.start('set -eu\n'+nativeOwned+`browser-use eval ${shellWord(noise)}\nbrowser-use screenshot --full ${shellWord(baseline)}\nprintf ready > ${shellWord(ready)}\nwhile [ ! -f ${shellWord(go)} ]; do sleep 0.05; done\nbrowser-use screenshot --full ${shellWord(fifo)}\nprintf returned > ${shellWord(after)}\nsleep 2\nprintf late > ${shellWord(late)}\n`);
+      let deadline=Date.now()+30000;while(!existsSync(ready)&&Date.now()<deadline&&run.child.exitCode===null&&run.child.signalCode===null)await delay(25);expect(existsSync(ready),'real large screenshot preparation must finish').toBe(true);expect(statSync(baseline).size).toBeGreaterThan(capacity);
+      const own=readFileSync(join(f.evidence,'owned'),'utf8').trim().split('\n'),helper=Number(own[1]);const helperStart=Number(execFileSync(nativePython,['-c','import psutil,sys;print(psutil.Process(int(sys.argv[1])).create_time())',String(helper)],{encoding:'utf8'}));writeFileSync(go,'go');
+      const canonicalFifo=fs.realpathSync(fifo),stableFifo=value=>value.isFIFO()&&value.dev===info.dev&&value.ino===info.ino;
+      expect(stableFifo(fs.fstatSync(reader))).toBe(true);expect(stableFifo(fs.statSync(fifo))).toBe(true);
+      let head=Buffer.alloc(0),fdMatched=false;deadline=Date.now()+15000;
+      while(Date.now()<deadline&&run.child.exitCode===null&&run.child.signalCode===null){
+        if(head.length<8){try{const bytes=Buffer.alloc(8-head.length),n=fs.readSync(reader,bytes);if(n)head=Buffer.concat([head,bytes.subarray(0,n)]);}catch(error){if(error.code!=='EAGAIN')throw error;}}
+        try{
+          const rows=execFileSync('/usr/sbin/lsof',['-nP','-a','-p',String(helper),'-Ffaitn'],{encoding:'utf8'}).split('\n');let fd,mode,inode,type,name;
+          for(const row of [...rows,'fEND']){
+            if(row.startsWith('f')){
+              if(/^\d+$/.test(fd||'')&&mode==='w'&&type==='FIFO'&&inode===String(info.ino)&&name&&!name.includes(' (deleted)')&&fs.realpathSync(name)===canonicalFifo&&stableFifo(fs.statSync(name))&&stableFifo(fs.fstatSync(reader))&&stableFifo(fs.statSync(fifo))){
+                const currentStart=Number(execFileSync(nativePython,['-c','import psutil,sys;print(psutil.Process(int(sys.argv[1])).create_time())',String(helper)],{encoding:'utf8'}));
+                if(currentStart===helperStart)fdMatched=true;
+              }
+              fd=row.slice(1);mode=inode=type=name=undefined;
+            }else if(row.startsWith('a'))mode=row.slice(1);else if(row.startsWith('i'))inode=row.slice(1);else if(row.startsWith('t'))type=row.slice(1);else if(row.startsWith('n'))name=row.slice(1);
+          }
+        }catch{}
+        if(fdMatched&&head.length===8)break;await delay(25);
+      }
+      expect([...head]).toEqual([137,80,78,71,13,10,26,10]);expect(fdMatched,'must observe real helper writable FIFO FD/inode').toBe(true);expect(existsSync(after)).toBe(false);expect(run.child.exitCode).toBe(null);await delay(2000);expect(existsSync(after)).toBe(false);const start=Date.now();expect(run.child.kill('SIGTERM')).toBe(true);const r=await run.done;nativeResult(r,143);expect(Date.now()-start).toBeLessThan(15000);
+      const same=JSON.parse(execFileSync(nativePython,['-c','import psutil,json,sys\ntry: alive=psutil.Process(int(sys.argv[1])).create_time()==float(sys.argv[2])\nexcept psutil.NoSuchProcess: alive=False\nprint(json.dumps(alive))',String(helper),String(helperStart)],{encoding:'utf8'}));expect(same).toBe(false);nativeClean(f);expect(r.stdout).not.toContain('cleanup_incomplete');
+      let drained=0;while(true){try{const n=fs.readSync(reader,buffer);if(!n)break;drained+=n;}catch(error){if(error.code==='EAGAIN')break;throw error;}}await delay(2500);expect(existsSync(after)).toBe(false);expect(existsSync(late)).toBe(false);expect(stableFifo(fs.fstatSync(reader))).toBe(true);expect(stableFifo(fs.statSync(fifo))).toBe(true);expect(fs.realpathSync(fifo)).toBe(canonicalFifo);
+      console.log('ORACLE-P7-FIFO-WRITE '+JSON.stringify({capacity,baseline_bytes:statSync(baseline).size,png_header:true,helper_write_fd_inode:true,reader_held_through_exit:true,code:r.code,signal:r.signal,drained_bytes:drained,root_removed:true}));
+    }finally{if(!existsSync(go))writeFileSync(go,'go');await f.close();fs.closeSync(reader);}
+  },90000);
 });
