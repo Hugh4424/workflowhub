@@ -67,8 +67,11 @@ describe("T016 FR-BASELINE-002 source task set + limitation, no fabrication", ()
       "m2-microkernel",
       "m3-narrow-contract",
     ]);
-    expect(typeof baseline.limitation).toBe("string"); // quasi-experiment caveat
-    expect(baseline.limitation.length).toBeGreaterThan(0);
+    expect(baseline.limitation).toBe(
+      "Computed from archived AgentHub M1-M3 as a quasi-experiment reference; " +
+        "treat as a rough acceptance line, not a controlled measurement. Fields absent " +
+        "in the archived records are marked gap, not zero."
+    );
   });
 
   it("assembleBaseline throws when no source task set is recorded", () => {
