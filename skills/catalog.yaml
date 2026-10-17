@@ -1831,7 +1831,6 @@ capability_decisions:
     local_path: "skills/backend-testing/SKILL.md; skills/frontend-testing/SKILL.md; skills/fullstack-slice-testing/SKILL.md; skills/testing-system-blueprint/SKILL.md; skills/spec-plan/templates/phase-template.md"
     upstream:
       - github_url: https://github.com/backnotprop/pstack
-        commit: unresolved-pstack-content-snapshot
         license: MIT
         reviewed_at: '2026-10-16'
         review_outcome: accepted
@@ -1839,9 +1838,9 @@ capability_decisions:
         skill_url: https://github.com/backnotprop/pstack/blob/main/skills/principle-test-behavior-not-implementation/SKILL.md
         adopted:
           - "skills/principle-test-behavior-not-implementation/SKILL.md#Test Behavior, Not Implementation — 具体输入/独立结果、undefined反事实及absence配presence；合法交互与缺省逐case保留"
-    local_changes: "P4原writer在既有consumer采用；方法独立读回与程序执行分开，不新增runtime/字段/账本/默认gate；不采用全量回归、默认阈值或自动拒绝/安装。pstack实际包SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；git commit未知，main URL仅来源locator，不冒固定commit。"
+    local_changes: "P4原writer在既有consumer采用；方法独立读回与程序执行分开，不新增runtime/字段/账本/默认gate；不采用全量回归、默认阈值或自动拒绝/安装。pstack archive SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8 对应 upstream.path=skills/principle-test-behavior-not-implementation/SKILL.md；Git revision unknown，/blob/main/ 仅为来源定位。"
     dependency_closure: [skills/spec-specify/SKILL.md]
-    update_policy: 固定source章节与本地唯一正文/条件指针逐项比较；更新需保持本地保护，不自动追HEAD；无consumer且替代经独立审查后退役。
+    update_policy: 按pstack archive SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8 对 upstream.path=skills/principle-test-behavior-not-implementation/SKILL.md 的固定source章节与本地唯一正文/条件指针逐项比较；Git revision unknown，不自动追HEAD；无consumer且替代经独立审查后退役。
   - name: n3-constraint-driven-development
     status: absorbed
     purpose: N3 P4测试证伪与检查可信度方法
@@ -1930,7 +1929,6 @@ capability_decisions:
     local_path: "skills/backend-testing/SKILL.md; skills/frontend-testing/SKILL.md; skills/fullstack-slice-testing/SKILL.md; skills/testing-system-blueprint/SKILL.md; skills/spec-plan/templates/phase-template.md"
     upstream:
       - github_url: https://github.com/backnotprop/pstack
-        commit: unresolved-pstack-content-snapshot
         license: MIT
         reviewed_at: '2026-10-16'
         review_outcome: accepted
@@ -1938,9 +1936,9 @@ capability_decisions:
         skill_url: https://github.com/backnotprop/pstack/blob/main/skills/tdd/SKILL.md
         adopted:
           - "skills/tdd/SKILL.md#Workflow；If a Failing Test Is Impractical；Guardrails；Final Response — 缺RED真实原因/最近既有检查/漏掉seam；环境失败另记，不为凑RED造坏测试"
-    local_changes: "P4原writer在既有consumer采用；方法独立读回与程序执行分开，不新增runtime/字段/账本/默认gate；不采用全量回归、默认阈值或自动拒绝/安装。pstack实际包SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；git commit未知，main URL仅来源locator，不冒固定commit。"
+    local_changes: "P4原writer在既有consumer采用；方法独立读回与程序执行分开，不新增runtime/字段/账本/默认gate；不采用全量回归、默认阈值或自动拒绝/安装。pstack archive SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8 对应 upstream.path=skills/tdd/SKILL.md；Git revision unknown，/blob/main/ 仅为来源定位。"
     dependency_closure: [skills/spec-specify/SKILL.md]
-    update_policy: 固定source章节与本地唯一正文/条件指针逐项比较；更新需保持本地保护，不自动追HEAD；无consumer且替代经独立审查后退役。
+    update_policy: 按pstack archive SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8 对 upstream.path=skills/tdd/SKILL.md 的固定source章节与本地唯一正文/条件指针逐项比较；Git revision unknown，不自动追HEAD；无consumer且替代经独立审查后退役。
   - name: n3-debugging-and-error-recovery
     status: absorbed
     purpose: N3真实失败诊断方法采用
