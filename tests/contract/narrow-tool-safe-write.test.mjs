@@ -44,8 +44,7 @@ describe("safe-write writeFileAtomic", () => {
     const marker = join(root, "..", `escape-${process.pid}.txt`);
     const error = await rejection(writeFileAtomic(root, join("..", `escape-${process.pid}.txt`), Buffer.from("x")));
     expect(error).toBeInstanceOf(Error);
-    expect(typeof error.code).toBe("string");
-    expect(error.code.length).toBeGreaterThan(0);
+    expect(error.code).toBe("PATH_ESCAPE");
     expect(existsSync(marker)).toBe(false);
   });
 

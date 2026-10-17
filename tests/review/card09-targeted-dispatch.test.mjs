@@ -158,7 +158,16 @@ test.each([false,true])("public code supplement selects only failed A and final 
     try{const out=await invoke(invalid);observed={code:out.record.error?.code,diagnostic:out.record.error?.diagnostic,dispatch_state:out.record.dispatch_state};}
     catch(error){observed={code:error.code,diagnostic:error.diagnostic,message:error.message};}
     finally{writeFileSync(hostPath,hostBytes);writeFileSync(providerPath,providerBytes);}
-    console.log("CONTROLLED_PUBLIC_NATIVE",JSON.stringify({mode,...observed,dispatchCount:calls.length-before}));expect(observed.diagnostic).toBeTruthy();expect(observed.code).toBe(mode==="missing material"?"MATERIAL_INCOMPLETE":mode==="wrong lifecycle"?"REVIEW_IDENTITY_INVALID":"ROUTE_UNAVAILABLE");expect(calls.length).toBe(before);
+    console.log("CONTROLLED_PUBLIC_NATIVE",JSON.stringify({mode,...observed,dispatchCount:calls.length-before}));
+    expect(observed.diagnostic).toBeTruthy();expect(observed.code).toBe(mode==="missing material"?"MATERIAL_INCOMPLETE":mode==="wrong lifecycle"?"REVIEW_IDENTITY_INVALID":"ROUTE_UNAVAILABLE");expect(calls.length).toBe(before);
+    if(mode==="missing material"){
+      const diagnostic=observed.diagnostic;
+      expect(diagnostic).not.toBeNull();
+      expect(diagnostic).not.toBeUndefined();
+      expect(Array.isArray(diagnostic)).toBe(false);
+      expect(Object.getPrototypeOf(diagnostic)).toBe(Object.prototype);
+      expect(diagnostic).toStrictEqual({field:"approved_spec",expected:"non-empty caller material",actual:"missing",next_action:"supply current material and retry"});
+    }
   }
   for(const mode of ["outside root","symlink","hardlink","wrong hash","wrong task","completed C"]){
     const alias=join(f.taskDir,"quality","reviews","owned-"+randomUUID()+".json"),input={...request,only_providers:["codex/a"],dispatch_reason:"A repaired",supplements:{record_ref:first.saved.result_ref,record_sha256:sha(first.bytes)}};

@@ -48,22 +48,28 @@ afterEach(() => {
 });
 
 describe("task writer storage resolution source", () => {
-  it.each(["env", "config", "home"])("records %s as the immutable task writer source", (source) => {
+  it.each(["env", "config", "home"])("records %s as the immutable task writer source", async (source) => {
     const state = fixture();
-    const result = bootstrap(state, source);
+    const result = await bootstrap(state, source);
     const manifest = JSON.parse(readFileSync(join(result.task_path, "task.json"), "utf8"));
 
     expect(manifest.write_resolution_source).toBe(source);
   });
 
-  it("leaves old task manifests readable when the field is absent", () => {
+  it("leaves old task manifests readable when the field is absent", async () => {
     const state = fixture();
-    const result = bootstrap(state, "env");
+    const result = await bootstrap(state, "env");
     const path = join(result.task_path, "task.json");
     const manifest = JSON.parse(readFileSync(path, "utf8"));
     delete manifest.write_resolution_source;
     writeFileSync(path, `${JSON.stringify(manifest, null, 2)}\n`);
 
-    expect(() => bootstrapTask({ "task-path": result.task_path, project: "workflowhub", task: "writer-env" }, { env: { HOME: state.home, XDG_CONFIG_HOME: state.configHome, WORKFLOWHUB_TASK_DIR: state.storage }, home: state.home, cwd: state.repo })).not.toThrow();
+    await expect(bootstrapTask({ "task-path": result.task_path, project: "workflowhub", task: "writer-env" }, { env: { HOME: state.home, XDG_CONFIG_HOME: state.configHome, WORKFLOWHUB_TASK_DIR: state.storage }, home: state.home, cwd: state.repo })).resolves.toMatchObject({
+      task_path: result.task_path,
+      project: "workflowhub",
+      task: "writer-env",
+    });
+    const manifestAfter = JSON.parse(readFileSync(path, "utf8"));
+    expect(manifestAfter).not.toHaveProperty("write_resolution_source");
   });
 });
