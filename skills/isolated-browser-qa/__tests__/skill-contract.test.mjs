@@ -99,8 +99,12 @@ describe('isolated-browser-qa gateway boundary', () => {
     expect(r.code).toBe(1);expect(r.stderr).toContain('TARGET_OUTSIDE_ALLOWED_DOMAINS');
   });
   it('invalid top-level site is rejected before ticket transfer', async () => {
-    const r=await gateway(invalidArgs,{BROWSER_QA_AUTH_MODE:'none',BROWSER_QA_TICKET_TOP_LEVEL_SITE:'https://evil.test'});
-    expect(r.code).toBe(1);expect(r.stderr).toContain('INVALID_TOP_LEVEL_SITE');
+    const source=await memoryCdp([]);
+    try {
+      const r=await gateway(invalidArgs,{BROWSER_QA_ENGINE:'unsupported-synthetic-engine',BROWSER_QA_AUTH_MODE:'read-only-ticket-export',BROWSER_QA_TICKET_SOURCE_WS:source.endpoint,BROWSER_QA_TICKET_TOP_LEVEL_SITE:'https://evil.test'});
+      expect(r.code).toBe(1);expect(r.stderr).toContain('INVALID_TOP_LEVEL_SITE');expect(r.stderr).not.toContain('UNSUPPORTED_ENGINE');
+      expect(source.methods).toEqual([]);expect(source.peers).toEqual([]);
+    } finally { await source.close(); }
   });
 });
 
