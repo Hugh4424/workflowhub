@@ -2,44 +2,44 @@
 
 ## 当前路线
 
-领域术语读取根 [GLOSSARY.md](../GLOSSARY.md)；旧术语来源与历史 ADR 引用只读保留。
+领域术语读根 [GLOSSARY.md](../GLOSSARY.md)；旧术语来源、历史 ADR 引用只读保留。
 
-当前 WorkflowHub 主会话按认证工作区的当前材料执行。post 材料为 decision-log.md、spec.md、独立 phases/P<n>.md 与纯指针 index；旧四材料与旧执行记录只读保留。七类公共工具是 doctor/status/run/review/verify/confirm/authorize；run:execute 只更新导航游标，不恢复旧官方 stage pipeline。质量缺失如实 unknown/unavailable/incomplete，不锁修复，也不证明完成。
+WorkflowHub 主会话按认证工作区当前材料执行。post 材料为 decision-log.md、spec.md、独立 phases/P<n>.md 与纯指针 index；旧四材料与旧执行记录只读保留。七类公共工具是 doctor/status/run/review/verify/confirm/authorize；run:execute 只更新导航游标，不恢复旧官方 stage pipeline。质量缺失如实 unknown/unavailable/incomplete，不锁修复，也不证明完成。
 
-方向与计划两道人为选择按真实答复执行；已有授权继续有效。主会话组织必要交互，重活按工作类型派给独立上下文，修复回原实施者；不整份继承父上下文。独立审查与人把关不由实现者自判，普通小修不重复全范围审查。
+方向与计划按用户真实答复执行，已有授权有效。主会话组织交互、按工作类型派重活到独立上下文，修复回原实施者，不整份继承父上下文；实现者不自判独立审查或人把关，普通小修不重复全范围审查。
 
-进入已授权任务的 build-code、verify-code 后，自动完成实施、验证、审查、修复及交付必要的 commit/push/merge；阶段切换、新会话与 handoff 不重置授权，不再次申请本地提交、日常技术验收或风险承担确认。一个 Phase 的实施、针对性测试、独立审查与 finding 修复全部完成后，在本 Phase 提交一次，审查在提交前进行；verify-code 结束时完成全部提交与合并。authorize 复用真实授权来源，实际操作前核范围、分支、当前 HEAD 并 record/consume；build-code commit 显式同传 phase=build-code，绑当前 task、分支和阶段，同阶段共用授权，实际 HEAD 与每次消费保在既有 consumed 原件，授权原件不改。其它阶段、旧无 phase 记录与 push/merge/pr 保原 HEAD 严格匹配。最终 close 默认收口已交付的任务材料、task-owned worktree 和任务分支：先展示实际交付结果、质量限制、待归档路径、待删除 worktree/本地分支及存在的同名远端分支，列出具名安全例外，取得一次最终范围确认；质量声明与清理授权分别保真。确认后归档已交付材料，复用 `runtime/task/workspace.mjs` 的 `inspectWorktreeCleanup`、`createTaskWorktreeRemoval` probe/execute/verify 与现有 authorize/run-command，普通移除已合入目标分支且无未交付或未知独有字节的 task-owned worktree，再用 `git branch -d` 删除本地任务分支；远端同名任务分支实际存在且已交付时才普通删除。main 与 existing workspace 保留；未知、私有、未交付资料逐件写明路径、原因、保管位置或最终明确可弃的范围，保护这些具体例外，不以惯例保留整个已安全交付 worktree。执行备忘从创建起用现有 appendRecord 外置到任务库，仅记必要上下文；旧 worktree 备忘逐件核已有唯一原件保管位置或最终明确舍弃，不能按目录名当可丢缓存。禁止 `--force`、`-D` 或强推；默认策略变更本身不是当前任务的删除确认，不解除另有来源的 packet TTL 延期。无法修复或验证的事项如实保留并继续可执行部分，不能自行 accepted_risk 或伪造通过。
+已授权任务进入 build-code/verify-code 后，自动实施、验证、审查、修复及交付必要的 commit/push/merge；切阶段/会话/handoff 不重置授权，不重问本地提交、日常技术验收或风险承担确认。Phase 实施、针对性测试、独立审查及 finding 修复全完成后，本 Phase 审后提交一次；verify-code 结束时完成全部提交与合并。authorize 复用真实授权来源，操作前核范围/分支/当前 HEAD 并 record/consume；build-code commit 显式同传 phase=build-code，绑当前 task、分支和阶段，同阶段共用授权；实际 HEAD/每次消费保在既有 consumed 原件，授权原件不改。其它阶段、旧无 phase 记录及 push/merge/pr 仍严格匹配原 HEAD。最终 close 默认收口已交付任务材料、task-owned worktree/任务分支：先展示实际交付、质量限制、归档路径、待删 worktree/本地分支/实际同名远端分支及具名安全例外，取得一次最终范围确认；质量声明、清理授权各自保真。确认后归档交付材料，复用 `runtime/task/workspace.mjs` 的 `inspectWorktreeCleanup`、`createTaskWorktreeRemoval` probe/execute/verify 与现有 authorize/run-command，task-owned worktree 已合入目标分支且无未交付/未知独有字节才普通移除，再用 `git branch -d` 删除本地任务分支；同名远端任务分支仅实际存在且已交付时普通删除。main 与 existing workspace 保留；未知/私有/未交付资料逐件列路径、原因、保管位置或最终明确可弃范围，保护具体例外，不惯例保留整个已安全交付 worktree。执行备忘创建即用现有 appendRecord 外置任务库，只记必要上下文；旧 worktree 备忘逐件核唯一原件位置或最终明确舍弃，不按目录名视作缓存。禁止 `--force`、`-D`、强推；默认策略变更不代当前删除确认，也不解除另有来源的 packet TTL 延期。无法修复/验证的事项如实保留，继续可执行部分，不自行 accepted_risk 或伪造通过。
 
 ## build-code 测试与质量
 
-只运行受影响针对性测试，禁止无范围全量 vitest/npm test/test:safe；例外须用户或 CI 明确要求。源与测试应验证真实效果、失败和取消，假 transport 不能证明实际模型或硬隔离。已有成功范围只在新变化/失败/未解疑点时重跑，不按每个文件机械新增审查。
+只运行受影响针对性测试，禁止无范围全量 vitest/npm test/test:safe；例外须用户或 CI 明确要求。源与测试应验证真实效果、失败和取消，假 transport 不能证明实际模型或硬隔离。成功范围只因新变化、失败或未解疑点重跑，不按文件机械增审。
 
 文档面用 wh-review；代码面默认 OCR，OCR 不可用（命令不存在（ENOENT）或版本低于1.12.9）如实记 unavailable/unknown，不换执行者，保留检测输出与原始失败；版本检测其它错误不推断未安装。architect-code-review 是同源补充轴，独立执行，与 OCR 可用性无关；已装 OCR 失败、超时、取消、无效输出、零成功路或空 findings 均保留原始事实。三审查点保留，真实未执行或不足独立数量保持 unavailable/incomplete，有效单源发现原来源照留。原始失败、晚 raw、取消与来源不被摘要覆盖。
 
 ### 三审查点与结论真实性
 
-按真实范围/大小/影响说明审查投入：认证工作区同一具名基准的 `git diff --name-only` 给路径，`git diff --numstat` 分列新增/删除；未提交/未跟踪交付物逐一纳入两者，二进制等无法量化项记不可核。+100/-100不以净0抵消。依目录职责回读真实直接调用方/显式数据reader，列路径/符号/依据；move-map仅导航，目录名/传递猜测不作已证影响。
+审查投入按真实范围/大小/影响说明：认证工作区同一具名基准用 `git diff --name-only` 列路径、`git diff --numstat` 分列增删，逐项纳入未提交/未跟踪交付物；二进制等不可量化项记不可核，+100/-100不以净0抵消。按目录职责实读直接 caller/显式 reader，列路径/符号/依据；move-map仅导航，目录名/传递猜测不证影响。
 
-每次挑审前，主会话提供三维原读数/直接consumer依据并解释投入。任一维缺失/不可读/不可核，回每Phase审；其余输入相同时，任一维扩增不得更轻，内容类型不免审。本轮缺同cohort真实质量不降对照，仍每Phase审，文字不授权降投入，不增选择表/动态评分器/selector；同输入机械同结论仍未达成。终末完整审当前交付，并列声明写集/实际diff，沿途挑审不替代。
+挑审前主会话给三维原读数、直接 consumer 依据及投入理由；任一维缺失/不可读/不可核则每 Phase 审。其余输入相同时任一维扩增不得更轻，内容类型不免审。本轮缺同 cohort 真实质量，仍每 Phase 审、不降对照或投入、不增选择表/动态评分器/selector；同输入机械同结论仍未达。终末完整审当前交付，并列声明写集/实际 diff，沿途挑审不替代。
 
-三审查点保留。审查「真的出了结论」须从原件同时读出：至少一路真实 `completed && parse_outcome === "ok"`、该路发现或空 findings 的原始件引用、未确认项 `material_coverage.undetermined` 与真实 `discarded_facts`（若有；无真实丢弃事实不制造占位）。缺一则报告无结论与原因，三条件齐不表示质量通过。OCR 不可用四件齐：检测输出、原始失败、实际执行者、覆盖限制，各沿唯一原件引用并注明保留位置。`material_coverage` 的 `read` 只放可靠读取证据，`unread` 为明确未送达或未打开，`undetermined` 为未报覆盖或不可证；不可证一律进 `undetermined` 不进 `read`。`read_confirmed` 未证保持 `null`／不适用，不新增 `material_coverage` 键。不得以 OCR 身份记 wh-review 结果；schema 版本不是执行者声明。architect-code-review 是同源补充轴，独立执行，与 OCR 可用性无关。字段依据、原件与覆盖事实按 `skills/wh-review/SKILL.md` 的输出和失败边界读取，不新增字段、门禁或校验器。
+保三审查点。审查有结论须从原件同时读出：至少一路真实 `completed && parse_outcome === "ok"`、该路发现或空 findings 的原始件引用、未确认项 `material_coverage.undetermined` 与真实 `discarded_facts`（若有；无真实丢弃事实不制造占位）。缺一则报告无结论与原因，三条件齐不表示质量通过。OCR 不可用须同时引用检测输出、原始失败、实际执行者、覆盖限制四项唯一原件及保留位置。`material_coverage.read` 只记可靠已读，`unread` 记明确未送达/未打开；未报覆盖或不可证一律 `undetermined`，不记 `read`。`read_confirmed` 未证保持 `null`／不适用，不新增 `material_coverage` 键。不得以 OCR 身份记 wh-review 结果；schema 版本不是执行者声明。architect-code-review 是同源补充轴，独立执行，与 OCR 可用性无关。字段依据、原件与覆盖事实读 `skills/wh-review/SKILL.md` 输出/失败边界，不增字段/门禁/校验器。
 
 ### 专业质量
 
-每个行为风险都必须落到可执行任务和真实 oracle，不能用任务数量、文件列表或测试命令字符串代替设计质量。**完成声明的上限 = 独立来源的结论**；该结论为 adverse 或 unavailable 时，只能声明到该结论允许的程度，不得把未验证的部分说成已完成；这只限制声明的措辞，不阻断同任务内的修复与后续安全工作。
+每个行为风险须有可执行任务与真实 oracle；数量、文件列表、命令字符串不代设计质量。**完成声明的上限 = 独立来源的结论**；adverse/unavailable 时不把未验证部分说成完成；此限制只约束声明，不阻断同任务修复及后续安全工作。
 
-承接 AC 未达成时允许「带欠账完成」：在 Phase 契约头与 `Done` 同处的显著位置标注，逐条列出未达成项、所需条件与具名 owner，永不写成 pass。未达成项按 spec 的 AC 判定方式与实际缺口记 unavailable 或 incomplete；这是现有 `Done` 正文的人读完成形态，不是新状态或新字段，不阻断收口、同任务修复与后续安全部分。
+承接 AC 未达成可「带欠账完成」：在 Phase 契约头及 `Done` 显著列每项缺口、所需条件、具名 owner，按 spec 判法与实际缺口记 unavailable/incomplete，不写 pass。这是现有 `Done` 的人读正文，不增状态/字段，不阻断收口、同任务修复及后续安全工作。
 
-每个 Phase 自带开发、针对性测试、独立审查与提交，提交在该 Phase 独立审查之后、该 Phase 收口时完成。末 Phase 保留完整端到端串演，消费沿途已产生的逐条结论，只作复核与必要未闭环 case 补充；末 Phase 不得成为任何 AC 的首次结论产生点，首次结论按 spec 的 AC 正文归属各承接 Phase。本条沿用既有授权来源与三审查点，不新增 stage 或审查点。
+每个 Phase 自带开发、针对性测试、独立审查，收口时审后提交。末 Phase 完整端到端串演只复核沿途逐条结论、补未闭环 case；各 AC 首判归 spec 指定承接 Phase，不能拖到末 Phase。沿用既有授权与三审查点，不增 stage/审查点。
 
 ### 证据只留原始件（同字节即同一事实）
 
 raw 测试输出、正式回执和审查原件各一份；同一事实＝字节相同，必要证据区只保存不同字节的事实原件/引用。先做内容比较、确立相等后复用已有唯一原 ref；重跑得到相同字节时不再新写物理副本，裁剪、脱敏或 exit 等使字节不同才新写并说明变化。无法确立内容相等时保留新件并如实记 `deduplication: unknown`，不能用命令相同与字节数一致代替内容比较。禁止复制镜像、整棵目录/工作树快照、tar、git archive 或全树清单；目录保存判据按 `AGENTS.md`「证据硬规则」，各文件各为真实事实原件不算快照。证明范围只写 `路径 + hash` 一行，原始字节留在工作树；例外仅三类：该文件随后会被改动或删除、外部服务返回体、一次性环境读数，逐条说明保存字节的原因。历史原件不重写。需要前后历史字节检查时内存比较，只落实际摘要，不保存目录清单。
 
-命令输出复用还须命令与退出事实一致；命令或退出事实不一致、内容改变、候选原件不可读时保留本次新件和真实原因，并保留 `deduplication: unknown`。仅在用户已明确授权该次临时输出窄例外时，才可处理本次新产生且尚未对外引用的临时重复 `.output`：同任务、同目录的 canonical 原件真实可读，命令、退出事实及字节相同，返回仍引用既有原 ref；既有原件、历史输出、已引用输出与每次真实 immutable 原始回执均保留，不删除、不覆写，不留下悬空引用。其它对象仍按当前任务已确认的删件安全规则处理；受保护实现扩写须另有真实范围授权。正常 reused／unknown 诊断留在现有 CLI 回复与既有 source/evidence；磁盘 native 原始回执保留完整真实执行字段和正确 output_ref，不新增持久字段或 schema。只有真正结算失败进入既有 native error；正常复用或未知不冒执行失败，已发布回执、历史原件与 create-only 算法不改。
+复用输出还须命令、退出事实一致；两者不一致、内容改变或候选原件不可读，保本次新件、真实原因及 `deduplication: unknown`。仅用户明确授权该次窄例外，才可处理本次新产、尚未对外引用的临时重复 `.output`：同任务、同目录的 canonical 原件真实可读，命令、退出事实及字节相同，返回仍引用既有原 ref；保留既有原件、历史/已引用输出及每次真实 immutable 原始回执，不删不覆写、不留悬空引用。其它对象按当前任务已确认删件规则处理，扩写受保护实现须另有真实范围授权。正常 reused／unknown 诊断留在现有 CLI 回复与既有 source/evidence；磁盘 native 原始回执保留完整真实执行字段和正确 output_ref，不新增持久字段或 schema。仅真实结算失败进入既有 native error；正常复用/未知不冒失败，不改已发布回执、历史原件、create-only 算法。
 
 ### stage 结束
 
-主会话按实际已有记录接口和安全写入保普通 stage facts，不恢复 run:execute 完整官方执行门。实施、质量、Git交付与物理清理分别读回；局部GREEN不说明全任务完成。逐AC只由实际交付和对应证据判断，缺项如实保留；新唯一人读handoff MD给绝对ref和实际下一阶段，旧原件immutable。最终 close 按上文默认安全收口执行并回读归档、worktree、本地及远端任务分支的实际结果；未知或未执行项给具体例外，不把质量 incomplete 改写为完成，也不把它单独当清理许可或阻断条件。
+主会话复用已有记录接口、安全写入普通 stage facts，不恢复 run:execute 完整官方门。分别读回实施、质量、Git交付、物理清理；局部 GREEN 不冒全任务完成。逐 AC 据实际交付与证据判断、保缺项；唯一新的人读 handoff MD 给绝对 ref 与实际下一阶段，旧原件 immutable。最终 close 按上文默认安全收口执行并回读归档、worktree、本地及远端任务分支的实际结果；未知或未执行项给具体例外，不把质量 incomplete 改写为完成，也不把它单独当清理许可或阻断条件。
 
-卡住先说明现在卡在哪、原因、可行路线和代价；只有真实方向改变需用户选择，避免用内部编号作为唯一说明。同一尝试没有新事实则停止重复，不自动续跑空转。未取得的答复、provider失败或许可不能靠时间流逝当同意。 路径必须有界：新事实只指改变继续条件的事实，包括新答复或输入、新可取结果、不同失败信号，或写集与依赖发生变化；同一失败信号的第 N 份写入不是新事实。适用范围与排除按 `AGENTS.md`「卡住与升级」两行：外部不可重试失败零重试、立即按该节格式报告并给可直接回复的选项；其它适用的反馈路径中，同一失败信号在继续条件未改变时再次出现即判该路径无界，换独立上下文重开一次，仍出现则升级问人，owner 是执行者。用户给新答复即复位，按当前材料续跑；时长本身永远不构成停止条件，时间不构成复位条件。审查 provider 各轴仍按该节排除行继续既有审查工作。
+卡住先说明现在卡在哪、原因、可行路线和代价；只有真实方向改变需用户选择，避免用内部编号作为唯一说明。尝试无新事实则停止重复，不自动续跑空转。未取得的答复、provider失败或许可不能靠时间流逝当同意。 路径必须有界：新事实须改变继续条件，包括新答复/输入、新可取结果、不同失败信号或写集/依赖变化；同失败信号多写一份不算。适用范围与排除按 `AGENTS.md`「卡住与升级」两行：外部不可重试失败零重试、立即按该节格式报告并给可直接回复的选项；其它适用的反馈路径中，同一失败信号在继续条件未改变时再次出现即判该路径无界，换独立上下文重开一次，仍出现则升级问人，owner 是执行者。用户给新答复即复位，按当前材料续跑；时长本身永远不构成停止条件，时间不构成复位条件。审查 provider 各轴仍按该节排除行继续既有审查工作。

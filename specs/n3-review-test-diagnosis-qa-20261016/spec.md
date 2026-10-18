@@ -384,7 +384,7 @@ tickets的窄接口为 `filterTargetCookies(cookies, scope)` 与 `transferTarget
 | `skills/wh-review/scripts/review-materials.mjs` | P6（mini design实际kind分支窄修） |
 | `tests/contract/review-materials-contract.test.mjs` | P6（独立预写mini design目标RED/同oracle GREEN） |
 | `runtime/stage/stage-content-contracts.mjs` | P4（当前纯.md G2既有reader窄收） |
-| `AGENTS.md` | P2 → P4 → P6 |
+| `AGENTS.md` | P2 → P4 → P6 → P1（本轮末尾保义压缩） |
 | `THIRD_PARTY_NOTICES.md` | P2 → P4 → P5 → P6 → P7 |
 | `core/__tests__/check-anti-host.test.mjs` | P4 |
 | `core/__tests__/local-skill-resolver.test.mjs` | P4 |
