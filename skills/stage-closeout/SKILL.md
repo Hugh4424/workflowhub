@@ -48,9 +48,23 @@ node "$AUTH_TOOL" consume --operation "$OPERATION" --step-id "$ACTUAL_STEP_ID" -
 
 对照当前材料、真实diff和允许写集，按具名路径stage，再读回索引。提交授权record/consume后执行普通commit；若无改动保真实no-change原因，不造空提交冒实施。读回commit/tree、branch/HEAD和clean状态。提交后任何新字节回本步骤核，不漏掉当前材料或本次图变化。
 
+交付说明只在真正执行关闭的阶段生成。据真实task/spec、已验AC与未验项、base到task HEAD提交/diff、facts及测试原ref成稿。
+
+- **Default**：未传`delivery.pr`或body时复用close owner的`buildDefaultPrDescription`；来源、helper或环境probe缺失/不可读写明缺口，不编内容或宣称已生成。默认稿同按下列合同读回补缺。
+- **Explicit**：body须有`Door`、`Blast Radius`两个独立非空行；缺项报`PR_DESCRIPTION_INCOMPLETE`，交producer补齐。
+- **Environment**：支持时默认PR，仅明确`enabled: false`主动退出；不支持保原因与描述退commit。旧stored plan缺pr沿旧序兼容；生成描述不证明push、PR或读回，动作沿第2节授权。
+
+沿Summary／Evidence／Merge Danger承载：
+
+- **范围（Scope）**：Summary写关键变化和故意不做什么；title来自真实任务与提交语义。
+- **影响面**：Merge Danger保`Door:`独立非空行，说明commit可回退及merge／远端／销毁的不可逆边界；`Blast Radius:`另行说明diff影响域、消费者、相关已知红及代价，明说其余不在本卡范围，未核风险写unknown；测试绿不冒发布。
+- **验证（Verification）**：Evidence的Before／After引原内容、输出或失败／通过原ref，没有写未知。每条验证给真实路径与结果；未执行、unavailable和覆盖上限分明，facts空不编GREEN，模拟不冒外部效果。
+
+完成：内容逐项可回源、字段完整；稿件、未验与实际PR分列，缺项保缺口。
+
 先确定唯一PR写入路由。caller明确给出已有路由时沿用；否则，对GitHub remote优先用本机已有`gh` CLI。按已核的remote URL确定host和owner/repo，通过`runtime/interface/run-command.mjs`记录`gh auth status --hostname <host>`，确认活动账号与caller声明一致，不读取或输出token。没有可用的`gh`登录时，只使用caller明确声明、且写前已核实可访问目标仓库及PR写权限的替代路由；不能只因MCP/connector出现在工具列表就选它，也不安装或扩大应用权限。没有已配置可用路由时，保留实际读回并记`PR unavailable`，沿本节退路继续。
 
-使用`gh`时，先完成本节前述`push-task`并读回远端同名分支OID；本地`HEAD`须与该OID一致。然后用`gh pr list --repo <owner/repo> --head <task branch> --base <target branch> --state all --json number,url,state,headRefName,baseRefName,headRefOid,baseRefOid`查找精确repo/head/base的现有PR。只复用唯一的open匹配项；把该项的`number`或`url`明确传给`gh pr view <number-or-URL> --repo <owner/repo> --json number,url,state,headRefName,baseRefName,headRefOid,baseRefOid`。只有读回仍为open、repo/head/base完全匹配，且`headRefOid`等于已读回的远端分支OID时才复用。若读回命令失败、状态变化、字段不符或OID不符，报告具体差异并停止PR路径，不转而新建或合并。存在多个open匹配项，或只有closed匹配项时，也停止并报告具体PR，不猜测或创建重复PR。没有匹配项时，按当前branch/HEAD核pr授权，通过`runtime/interface/run-command.mjs`执行`gh pr create --repo <owner/repo> --head <task branch> --base <target branch> --title <title> --body-file <prepared body>`。正文来自当前task/spec、已验AC与未验项、实际提交diff和原件，保Summary、Evidence、Merge Danger；Door与Blast Radius分别说明真实回退边界与影响域，不把测试绿冒发布。保留原始命令、退出码和输出。
+使用`gh`时，先完成本节前述`push-task`并读回远端同名分支OID；本地`HEAD`须与该OID一致。然后用`gh pr list --repo <owner/repo> --head <task branch> --base <target branch> --state all --json number,url,state,headRefName,baseRefName,headRefOid,baseRefOid`查找精确repo/head/base的现有PR。只复用唯一的open匹配项；把该项的`number`或`url`明确传给`gh pr view <number-or-URL> --repo <owner/repo> --json number,url,state,headRefName,baseRefName,headRefOid,baseRefOid`。只有读回仍为open、repo/head/base完全匹配，且`headRefOid`等于已读回的远端分支OID时才复用。若读回命令失败、状态变化、字段不符或OID不符，报告具体差异并停止PR路径，不转而新建或合并。存在多个open匹配项，或只有closed匹配项时，也停止并报告具体PR，不猜测或创建重复PR。没有匹配项时，按当前branch/HEAD核pr授权，通过`runtime/interface/run-command.mjs`执行`gh pr create --repo <owner/repo> --head <task branch> --base <target branch> --title <title> --body-file <prepared body>`。正文按本节内容合同生成并读回。保留原始命令、退出码和输出。
 
 GitHub API/MCP返回`Resource not accessible by integration`时，保留原始失败并认定该integration的权限不足；它不说明本机`gh`账号无权，也不构成安装或扩大App权限的理由。已选定的写入路由遇到权限失败后不重试、不切换执行者；按`PR unavailable`处理并继续本节规定的退路。
 
@@ -107,6 +121,8 @@ worktree确认已移除后，在目标repo按独立cleanup步骤授权，普通`
 ## 保全来源与迭代
 
 来源权威：[catalog](../catalog.yaml#skills.stage-closeout)；本便携小卡非权威；单技能副本缺catalog时向来源维护者取登记。
+交付内容取backnotprop/pstack的`skills/poteto-mode/playbooks/opening-a-pr.md`，2026-10-14固定研究成员SHA256 `931070f5674e81a191277253d4e02b1c45d091b223f93bf506d3896a428a5967`，commit unknown；只取三项含义，不搬强制ready、提交格式、六段模板、自动盯PR及上游reset/forge策略。
+
 本方法抽取verify-code的授权/安全收口与standard-workflow当前默认安全收口，保build-prd稿件确认不授Git权；主线差异预检按本地用户要求补入，冲突处理复用`skills/resolving-merge-conflicts/SKILL.md`已有方法。原文中的same plan/confirmation仅保其“真实PR先回URL、同流续跑”行为，由当前真实输入和窄工具消费承接，不恢复旧plan/confirmation执行对象。caller的审查点、质量、交接、真实最终选择及阶段正式事实保持原owner；两caller接线由各Phase实施。
 
 修改本方法时读取项目`skills/spec-specify/SKILL.md`的「技能写作规范（WR001）」唯一规范，逐项核任务身份、质量限制、授权/HEAD、目标分支独有改动与同步决策、冲突处理、图更新、PR、归档、push、worktree/本地远端分支清理和结果读回的保全。方法接收真实项目输入与已有工具能力，不绑定账号/任务绝对路径，不打包第二Git executor；工具不支持保unavailable，回原owner修，不新增控制面。

@@ -62,17 +62,7 @@ Phase 内的 Task 是 task graph，不是可任意跳过依赖的步骤表。选
 
 ## PR 描述方法
 
-对 new 普通任务，交付描述基于当前真实 task/spec、已验 AC、base 到 task HEAD 的提交标题与实际 diff、现 task facts 和测试输出原ref。用既有 close 的 prepare 输入承接 title/body；这是材料收集与描述方法，不新增 PR 技能、状态或公共入口。
-
-- **Default**：未传 `delivery.pr` 或 body 时，由既有 close owner 的私有 `buildDefaultPrDescription` 从上述来源生成 title/body；不把缺默认 body 当调用者缺输入。实际 helper 与环境 probe 由 close 实现提供，尚不存在或源不可读时保真实原因，不宣称已生成。
-- **Explicit**：调用者提供 body 时，外发前核 `Door` 与 `Blast Radius` 两独立字段；缺项报 `PR_DESCRIPTION_INCOMPLETE` 并回描述 producer 补齐。默认来源缺失也须明确缺口，不能编内容。
-- **Environment**：环境与项目支持时默认 PR，明确 `enabled: false` 才主动 opt out；不支持时保真实原因与描述退 commit，不伪造 URL。旧 stored plan 没有 pr 仍按旧序兼容；描述本身不证明 push、PR 创建或读回已执行。远端动作仍遵下节真实授权。
-
-描述使用以下三段，完成判据是每个主张可回到真实来源或明确未观测：
-
-PR 描述的第一段 Summary：选择说明本任务关键变化的最小视图；title 来自真实任务与提交语义，不输出无关全树。
-PR 描述的第二段 Evidence：Before / After 引用真实原内容、执行输出或失败/通过原ref。无 before/after 就明确未知；facts 空时测试为未执行/unavailable，不编 GREEN，模拟不冒外部效果。
-PR 描述的第三段 Merge Danger：**Door:** 说明实际 commit 可回退与 merge/远端/销毁操作的不可逆边界；**Blast Radius:** 说明真实 diff 影响域及消费者。两字段分开，未核风险明说未知。
+本阶段不生成交付说明；交付说明在真正执行关闭的阶段（目前是规划收尾与终末验证）生成；本阶段只备 Evidence 与真实 diff 事实。
 
 ## 人为门与审查点
 
