@@ -7,18 +7,18 @@
   "entries": [
     {
       "source": "Improvements.md",
-      "destination": "Improvements.md",
-      "status": "retain",
+      "destination": "specs/Improvements.md",
+      "status": "move",
       "role": "production",
-      "responsibility": "P8/T014 原owner已创建源文件（真实无人选/方法效果限制按原事实）：P8/T014 创建项目根未解决人判断待办清单，头说明不是规范或知识库；仅保真实复盘候选经用户选择、确需人判断且尚未解决的项。机械重复优先 architecture → types → test；根载体与原 T014 方法正文已实际创建；当前没有真实用户已选问题条目，未观测人工 prune 或后继消费，不代表候选采用或测试/质量通过，不形成第二进度来源。",
-      "owner": "P8/T014 / stage-reflection 与 Improvements.md 原文件 writer（当前派发68c）；move-map 仍由原 P8/T016 维护者唯一持笔",
-      "consumer": "既有 skills/stage-reflection/SKILL.md:13–16 的可见会话观察→有依据建议→主会话链，由 accepted P8/T014:139–147 与 ADR-009 / D-004 承接用户挑选后的根待办；主会话、用户及后继任务发起者按真实未解项人读参考。实际 T014 根文件/method已交付；候选是否真选、prune及后继消费仍按原T014执行事实，不伪称已有机器 reader 或真实执行。",
+      "responsibility": "N7/P2/T002 将根经验与人判断待办载体迁入 specs/Improvements.md，保全旧文件原文并按模块保留有源经验及其真实状态；写作、判重、读回与用户确认清理统一消费 stage-reflection，不新增机器 reader 或进度事实。",
+      "owner": "N7/P2/T002 唯一持笔；P3 依赖 P2 完成后重读 move-map 再写 charter 条目",
+      "consumer": "业务仓维护者与后继任务执行者按真实问题读取 specs/Improvements.md 及条目原来源；skills/stage-reflection/SKILL.md「用户选择后的归口」提供唯一方法。P3 登记作者只消费本迁移事实，独立后继消费另据实际原件，不以登记冒已发生。",
       "module_consumers": [],
       "named_data_readers": [
         "skills/stage-reflection/SKILL.md"
       ],
-      "delete_condition": "按 ADR-009 / D-004 与 P8/T014，只由人对真实已解决项 prune；未答候选不得自动 adopt，未知不得当已解决自动清空。全部项解决时条目可由人删尽，不由本预登记推导整文件删除许可；职责被审查后的替代承接且无当前 consumer 时才由对应文件 owner 按 spec:161 删除载体，历史来源与原始候选证据只读保留。",
-      "retention_basis": "当前根载体与 T014 方法已存在；真实选择、prune 与后继消费未观测，不宣称方法效果或完整质量通过。旧058创建前预登记及其未创建状态仅是该历史时点原件，不作当前状态；原职责 source=P8.md:139–147/:154、spec.md:31/:161、decision-log.md ADR-009:243–247 / D-004:443。替代重复 lessons/规则账本，不复制原始会话、raw候选或审查事实，不自动清理、不新增 schema/machine gate/Task/事实游标。测试仅既有外置 quality/tests/skill-modernization-reflection.test.mjs（P8:148同命令，T014独立测试owner消费）；旧3pass是有限方法report/负控回放，不证明新正文/根文件写入、真实用户选择、prune或下一任务消费，本次测试0。"
+      "delete_condition": "只有用户明确确认具体条目已解决后才清理该条目；未答、unknown 与未找到不等于解决。整文件仅在职责被经审查的替代承接且无当前消费者时，由实际 owner 按真实授权删除；历史原件不删覆。",
+      "retention_basis": "当前根载体与 T014 方法已存在；真实选择、prune 与后继消费未观测，不宣称方法效果或完整质量通过。旧058创建前预登记及其未创建状态仅是该历史时点原件，不作当前状态；原职责 source=P8.md:139–147/:154、spec.md:31/:161、decision-log.md ADR-009:243–247 / D-004:443。替代重复 lessons/规则账本，不复制原始会话、raw候选或审查事实，不自动清理、不新增 schema/machine gate/Task/事实游标。测试仅既有外置 quality/tests/skill-modernization-reflection.test.mjs（P8:148同命令，T014独立测试owner消费）；旧3pass是有限方法report/负控回放，不证明新正文/根文件写入、真实用户选择、prune或下一任务消费，本次测试0。 N7/P2 本次迁移保旧原文；旧P8无人选择与未观测陈述仅对应迁移前历史时点，不冒当前已确认/已解决。"
     },
     {
       "source": "config/workflowhub.yaml",
