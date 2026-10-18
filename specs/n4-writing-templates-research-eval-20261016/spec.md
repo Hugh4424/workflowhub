@@ -648,7 +648,7 @@
 | R-010、U-005 / D-015、prd:187 | why 三处落点与三项重复清单被核收 | FR-N4-010、FR-N4-004、FR-N4-008、FR-N4-012、FR-N4-001 / AC-N4-07、AC-004、AC-N4-06、AC-T9-1、AC-T9-2、AC-013、AC-N4-05 | P7/T029 | ORACLE-N4-BLIND-REVIEW / quality/tests/2026-10-17-013-p5-why-outlets.txt |
 | R-012 / D-018、D-019 | 效果评测的基线、指标与正负例被核收 | FR-N4-012、FR-N4-009、FR-N4-011、FR-N4-001 / AC-013、AC-N4-02、AC-N4-03、AC-004、AC-N4-05、AC-N4-06、AC-N4-07 | P7/T029 | ORACLE-N4-BLIND-REVIEW / quality/tests/2026-10-17-001-build-plan-silent-layer-red-probe.txt |
 | R-001、R-012 / D-019、D-018 | 六项结论与带欠账完成形态被核收 | FR-N4-001、FR-N4-012 / AC-004、AC-013、AC-N4-05、AC-N4-06、AC-N4-07 | P7/T029 | ORACLE-N4-BLIND-REVIEW / quality/tests/2026-10-17-018-p7-blind-review-and-acceptance.txt |
-| R-001、U-004 / D-019、ADR-0049 | 四类材料读者能用完整产物独立行动；质量由独立方匿名盲评判定 | FR-N4-001、FR-N4-005 / AC-013 | P7/T022 | ORACLE-N4-BLIND-REVIEW / quality/tests/2026-10-17-018-p7-blind-review-and-acceptance.txt |
+| R-001、U-004 / D-004、D-019、ADR-0049 | 四类材料读者能用完整产物独立行动；质量由独立方匿名盲评判定 | FR-N4-001、FR-N4-005 / AC-013 | P7/T022 | ORACLE-N4-BLIND-REVIEW / quality/tests/2026-10-17-018-p7-blind-review-and-acceptance.txt |
 | U-008 / D-019、ADR-0049 | 盲评无法判断记具名原因、不折算成更好；全样本无法判断的维度记未达成 | FR-N4-005、FR-N4-001、FR-N4-009、FR-N4-011 / AC-N4-05、AC-N4-01、AC-N4-02、AC-N4-03、AC-T3-1、AC-T3-2、AC-T3-3、AC-T3-4、AC-T3-6、AC-T3-8 | P7/T023 | ORACLE-N4-BLIND-REVIEW / quality/tests/2026-10-17-018-p7-blind-review-and-acceptance.txt |
 | R-012、R-013、R-014、R-015 / D-017、D-018、D-019、D-021 | 全部小节按 P0/P1/P2 分级；P0 基准是该产物本次权威声明 | FR-N4-012、FR-N4-002、FR-N4-008、FR-N4-009 / AC-013、AC-N4-04、AC-T3-10、AC-T3-5、AC-T9-3 | P7/T024 | ORACLE-N4-BLIND-REVIEW / quality/tests/2026-10-17-018-p7-blind-review-and-acceptance.txt |
 
