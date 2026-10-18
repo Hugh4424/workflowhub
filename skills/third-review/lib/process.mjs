@@ -10,7 +10,7 @@ function terminateProcessGroup(pid, signal) {
   if (process.platform === "win32" || !Number.isInteger(pid) || pid < 1) return false;
   try { process.kill(-pid, signal); return true; } catch { return false; }
 }
-function isProcessGroupAlive(pid) {
+export function isProcessGroupAlive(pid) {
   if (process.platform === "win32" || !Number.isInteger(pid) || pid < 1) return false;
   try { process.kill(-pid, 0); return true; }
   catch (error) { return error?.code === "EPERM"; }

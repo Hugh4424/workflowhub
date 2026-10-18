@@ -77,6 +77,16 @@ function writePromptFile(cwd, contents) {
   return file;
 }
 
+function thinkingEnvironment(provider) {
+  const effort = nonempty(provider.effort);
+  if ((provider.thinking === false && effort && effort !== "off")
+      || (provider.thinking === true && effort === "off")) {
+    throw Object.assign(new Error("Kimi thinking and effort settings conflict"), { code: "PROVIDER_OPTION_UNSUPPORTED" });
+  }
+  const value = effort ?? (provider.thinking === true ? "on" : provider.thinking === false ? "off" : null);
+  return value === null ? {} : { KIMI_MODEL_THINKING_EFFORT: value };
+}
+
 function streamPlan(provider, cwd, prompt, session = null) {
   const bundle = path.join(cwd, "bundle");
   const hasBundle = fs.existsSync(bundle);
@@ -140,7 +150,7 @@ function streamPlan(provider, cwd, prompt, session = null) {
       ...(isKnown ? {} : { progress: true }),
     };
   };
-  return { ...plan(provider, cwd, argv, null), expectedSession: session, observeLine };
+  return { ...plan(provider, cwd, argv, null, thinkingEnvironment(provider)), expectedSession: session, observeLine };
 }
 
 function parse(stdout, stderr = "", expectedSession = null) {

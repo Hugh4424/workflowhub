@@ -34,6 +34,21 @@ function sha256(bytes) {
 }
 
 describe("trusted third-review host configuration", () => {
+  it("accepts active routes without a configurable heterologous threshold and rejects the retired key", () => {
+    const { hostConfig } = configuredRoot();
+    const host = JSON.parse(readFileSync(hostConfig, "utf8"));
+    host.wh_review = { version: 2, stages: {
+      "build-plan": { initial: ["kimi"], mode: "single_round" },
+    } };
+    writeFileSync(hostConfig, JSON.stringify(host));
+    const trusted = loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig, requestedStage: "build-plan" });
+    expect(resolveTrustedReviewRoute(trusted.whReview, "build-plan")).toEqual({ initial: ["kimi"], mode: "single_round" });
+    host.wh_review.stages["build-plan"].minimum_heterologous = 1;
+    writeFileSync(hostConfig, JSON.stringify(host));
+    expect(() => loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig, requestedStage: "build-plan" }))
+      .toThrow(/minimum_heterologous is retired/i);
+  });
+
   it("migrates duplicate profiles to the ordered route and restores only with a matching current hash", () => {
     const { hostConfig } = configuredRoot();
     const config = JSON.parse(readFileSync(hostConfig, "utf8"));
@@ -203,7 +218,7 @@ describe("trusted third-review host configuration", () => {
   // host argument neither blocks nor changes the route selection.
   it("ignores a historical host argument, including one outside the 3rd-review registry", () => {
     const { brokerConfig } = configuredRoot();
-    const route = { initial: ["kimi"], mode: "full_only", minimum_heterologous: 1 };
+    const route = { initial: ["kimi"], mode: "full_only" };
     expect(selectTrustedReviewProviderSelection(brokerConfig, "claude", route))
       .toEqual(selectTrustedReviewProviderSelection(brokerConfig, route));
     expect(selectTrustedReviewProviderSelection(brokerConfig, route)).toMatchObject({ providers: ["kimi"], eligibleProfiles: ["kimi"] });
@@ -216,12 +231,12 @@ describe("trusted third-review host configuration", () => {
     writeFileSync(brokerConfig, JSON.stringify(broker));
     const host = JSON.parse(readFileSync(hostConfig, "utf8"));
     host.wh_review = { version: 2, stages: {
-      "build-code": { initial: ["codex/terra", "kimi"], mode: "full_only", minimum_heterologous: 1 },
+      "build-code": { initial: ["codex/terra", "kimi"], mode: "full_only" },
     } };
     writeFileSync(hostConfig, JSON.stringify(host));
     const trusted = loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig });
     const route = resolveTrustedReviewRoute(trusted.whReview, "build-code");
-    expect(route).toMatchObject({ initial: ["codex/terra", "kimi"], mode: "full_only", minimum_heterologous: 1 });
+    expect(route).toMatchObject({ initial: ["codex/terra", "kimi"], mode: "full_only" });
     expect(selectTrustedReviewProviders(brokerConfig, route)).toEqual(["codex/terra", "kimi"]);
     const selection = selectTrustedReviewProviderSelection(brokerConfig, route);
     expect(selection).not.toHaveProperty("sameSourceExcluded");
@@ -253,8 +268,8 @@ describe("trusted third-review host configuration", () => {
     const { brokerConfig, hostConfig } = configuredRoot();
     const host = JSON.parse(readFileSync(hostConfig, "utf8"));
     host.wh_review = { version: 2, stages: {}, mini_task: {
-      design: { initial: ["kimi", "claude-code"], mode: "single_round", minimum_heterologous: 1 },
-      implementation: { initial: ["kimi", "claude-code"], mode: "single_round", minimum_heterologous: 1 },
+      design: { initial: ["kimi", "claude-code"], mode: "single_round" },
+      implementation: { initial: ["kimi", "claude-code"], mode: "single_round" },
     } };
     writeFileSync(hostConfig, JSON.stringify(host));
     const trusted = loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig });
@@ -271,8 +286,8 @@ describe("trusted third-review host configuration", () => {
     const { hostConfig } = configuredRoot();
     const host = JSON.parse(readFileSync(hostConfig, "utf8"));
     host.wh_review = { version: 2, stages: {}, mini_task: {
-      design: { initial: ["opencode/v4flash", "codex/luna"], mode: "single_round", minimum_heterologous: 1 },
-      implementation: { initial: ["opencode/v4flash", "codex/luna"], mode: "single_round", minimum_heterologous: 1 },
+      design: { initial: ["opencode/v4flash", "codex/luna"], mode: "single_round" },
+      implementation: { initial: ["opencode/v4flash", "codex/luna"], mode: "single_round" },
     } };
     writeFileSync(hostConfig, JSON.stringify(host));
     const trusted = loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig });
@@ -286,8 +301,8 @@ describe("trusted third-review host configuration", () => {
     const { hostConfig } = configuredRoot();
     const host = JSON.parse(readFileSync(hostConfig, "utf8"));
     host.wh_review = { version: 2, stages: { mini_task: {
-      design: { initial: ["kimi", "claude-code"], mode: "single_round", minimum_heterologous: 1 },
-      implementation: { initial: ["kimi", "claude-code"], mode: "single_round", minimum_heterologous: 1 },
+      design: { initial: ["kimi", "claude-code"], mode: "single_round" },
+      implementation: { initial: ["kimi", "claude-code"], mode: "single_round" },
     } } };
     writeFileSync(hostConfig, JSON.stringify(host));
     const trusted = loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig });
@@ -303,8 +318,8 @@ describe("trusted third-review host configuration", () => {
     const host = JSON.parse(readFileSync(hostConfig, "utf8"));
     host.wh_review = { version: 2, stages: {
       "make-decision": {
-        direction: { initial: ["kimi"], mode: "single_round", minimum_heterologous: 1 },
-        detail: { initial: ["opencode"], mode: "single_round", minimum_heterologous: 1 },
+        direction: { initial: ["kimi"], mode: "single_round" },
+        detail: { initial: ["opencode"], mode: "single_round" },
       },
     } };
     writeFileSync(hostConfig, JSON.stringify(host));
@@ -315,7 +330,7 @@ describe("trusted third-review host configuration", () => {
       .toMatchObject({ initial: ["opencode"], mode: "single_round" });
   });
 
-  it("retains every configured profile and applies no minimum_heterologous headcount", () => {
+  it("retains every configured profile without a headcount gate", () => {
     const { brokerConfig } = configuredRoot();
     const broker = JSON.parse(readFileSync(brokerConfig, "utf8"));
     broker.providers["kimi/k3"] = { enabled: true, source_id: "source-kimi-k3", model: "kimi-for-coding", thinking: true };
@@ -323,7 +338,7 @@ describe("trusted third-review host configuration", () => {
     broker.providers["claude-code/opus"] = { enabled: true, source_id: "source-claude-opus", model: "claude-opus-4-8", effort: "high" };
     writeFileSync(brokerConfig, JSON.stringify(broker));
     const route = {
-      initial: ["kimi/k3", "kimi/coding", "claude-code/opus"], mode: "adaptive", minimum_heterologous: 2,
+      initial: ["kimi/k3", "kimi/coding", "claude-code/opus"], mode: "adaptive",
     };
     expect(selectTrustedReviewProviderSelection(brokerConfig, route)).toMatchObject({
       // Every configured profile is sent to 3rd-review.
@@ -336,12 +351,11 @@ describe("trusted third-review host configuration", () => {
         { provider: "claude-code/opus", adapter: "claude-code", model: "claude-opus-4-8", effort: "high", thinking: null },
       ],
     });
-    // minimum_heterologous is config provenance only: more than the distinct
-    // model count no longer blocks selection.
-    expect(selectTrustedReviewProviderSelection(brokerConfig, { ...route, minimum_heterologous: 3 }).providers)
+    // Multiple profiles on the same model remain selected; selection has no headcount gate.
+    expect(selectTrustedReviewProviderSelection(brokerConfig, { ...route }).providers)
       .toEqual(["kimi/k3", "kimi/coding", "claude-code/opus"]);
     expect(selectTrustedReviewProviderSelection(brokerConfig, {
-      initial: ["kimi/k3", "kimi/coding"], mode: "adaptive", minimum_heterologous: 2,
+      initial: ["kimi/k3", "kimi/coding"], mode: "adaptive",
     }).providers).toEqual(["kimi/k3", "kimi/coding"]);
   });
 
@@ -352,7 +366,7 @@ describe("trusted third-review host configuration", () => {
     broker.providers[provider] = { enabled: true, model: "grok-4.6", ...(configuredSource === undefined ? {} : { source_id: configuredSource }) };
     writeFileSync(brokerConfig, JSON.stringify(broker));
     const selection = selectTrustedReviewProviderSelection(brokerConfig, "codex", {
-      initial: [provider], mode: "full_only", minimum_heterologous: 1,
+      initial: [provider], mode: "full_only",
     });
     // 3rd-review v4 config contract: only an omitted source defaults to the
     // full profile key; the source participates in the normalized config hash.
@@ -375,7 +389,7 @@ describe("trusted third-review host configuration", () => {
     broker.providers.kimi.source_id = source;
     writeFileSync(brokerConfig, JSON.stringify(broker));
     expect(() => selectTrustedReviewProviderSelection(brokerConfig, "codex", {
-      initial: ["kimi"], mode: "full_only", minimum_heterologous: 1,
+      initial: ["kimi"], mode: "full_only",
     })).toThrow(/source_id.*safe non-empty string/);
   });
 
@@ -388,7 +402,7 @@ describe("trusted third-review host configuration", () => {
     writeFileSync(brokerConfig, JSON.stringify(broker));
     const host = JSON.parse(readFileSync(hostConfig, "utf8"));
     host.wh_review = { version: 2, stages: {
-      "build-code": { initial: ["claude-code/opus", "kimi/coding", "kimi/k3"], mode: "full_only", minimum_heterologous: 2 },
+      "build-code": { initial: ["claude-code/opus", "kimi/coding", "kimi/k3"], mode: "full_only" },
     } };
     writeFileSync(hostConfig, JSON.stringify(host));
     const trusted = loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig });
@@ -415,18 +429,18 @@ describe("trusted third-review host configuration", () => {
     const broker = JSON.parse(readFileSync(brokerConfig, "utf8"));
     broker.providers.kimi.enabled = false;
     writeFileSync(brokerConfig, JSON.stringify(broker));
-    expect(() => selectTrustedReviewProviders(brokerConfig, "codex", { initial: ["kimi"], mode: "adaptive", minimum_heterologous: 1 })).toThrow(/disabled/i);
+    expect(() => selectTrustedReviewProviders(brokerConfig, "codex", { initial: ["kimi"], mode: "adaptive" })).toThrow(/disabled/i);
   });
 
   it("requires one round for non-build-code stages and rejects structural rework mode", () => {
     const { hostConfig } = configuredRoot();
     const host = JSON.parse(readFileSync(hostConfig, "utf8"));
     host.wh_review = { version: 2, stages: {
-      "build-spec": { initial: ["kimi", "claude-code"], mode: "single_round", minimum_heterologous: 2 },
+      "build-spec": { initial: ["kimi", "claude-code"], mode: "single_round" },
     } };
     writeFileSync(hostConfig, JSON.stringify(host));
     expect(resolveTrustedReviewRoute(loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig }).whReview, "build-spec"))
-      .toEqual({ initial: ["kimi", "claude-code"], mode: "single_round", minimum_heterologous: 2 });
+      .toEqual({ initial: ["kimi", "claude-code"], mode: "single_round" });
     host.wh_review.stages["build-spec"].mode = "full_on_structural_rework";
     writeFileSync(hostConfig, JSON.stringify(host));
     expect(() => loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig }))
@@ -437,7 +451,7 @@ describe("trusted third-review host configuration", () => {
     const { hostConfig } = configuredRoot();
     const host = JSON.parse(readFileSync(hostConfig, "utf8"));
     host.wh_review = { version: 2, stages: {
-      "build-plan": { initial: ["kimi", "claude-code"], closure: ["kimi"], mode: "adaptive", minimum_heterologous: 2 },
+      "build-plan": { initial: ["kimi", "claude-code"], closure: ["kimi"], mode: "adaptive" },
     } };
     writeFileSync(hostConfig, JSON.stringify(host));
     expect(() => loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig }))
@@ -456,8 +470,8 @@ describe("trusted third-review host configuration", () => {
     writeFileSync(brokerConfig, JSON.stringify(broker));
     const host = JSON.parse(readFileSync(hostConfig, "utf8"));
     host.wh_review = { version: 2, stages: {
-      "build-code": { initial: ["kimi"], mode: "full_only", minimum_heterologous: 1 },
-      "build-plan": { initial: ["claude-code/opus", "kimi"], mode: "single_round", minimum_heterologous: 1 },
+      "build-code": { initial: ["kimi"], mode: "full_only" },
+      "build-plan": { initial: ["claude-code/opus", "kimi"], mode: "single_round" },
     } };
     writeFileSync(hostConfig, JSON.stringify(host));
     const trusted = loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig, requestedStage: "build-code" });
@@ -473,7 +487,7 @@ describe("trusted third-review host configuration", () => {
     const { hostConfig } = configuredRoot();
     const host = JSON.parse(readFileSync(hostConfig, "utf8"));
     host.wh_review = { version: 2, stages: {
-      "build-code": { initial: ["kimi", "opencode"], mode: "full_only", minimum_heterologous: 1 },
+      "build-code": { initial: ["kimi", "opencode"], mode: "full_only" },
     } };
     writeFileSync(hostConfig, JSON.stringify(host));
     const trusted = loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig, requestedStage: "build-code" });
@@ -487,8 +501,8 @@ describe("trusted third-review host configuration", () => {
     writeFileSync(brokerConfig, JSON.stringify(broker));
     const host = JSON.parse(readFileSync(hostConfig, "utf8"));
     host.wh_review = { version: 2, stages: {
-      "build-code": { initial: ["opencode/pax3.8"], mode: "full_only", minimum_heterologous: 1 },
-      "build-plan": { initial: ["opencode/bad..profile"], mode: "single_round", minimum_heterologous: 1 },
+      "build-code": { initial: ["opencode/pax3.8"], mode: "full_only" },
+      "build-plan": { initial: ["opencode/bad..profile"], mode: "single_round" },
     } };
     writeFileSync(hostConfig, JSON.stringify(host));
     expect(loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig, requestedStage: "build-code" }).whReview)

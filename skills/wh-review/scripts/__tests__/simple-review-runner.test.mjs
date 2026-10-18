@@ -30,7 +30,7 @@ function completeBuildPrdMaterials() {
 // Shared by the static-preflight and neutral-identity suites. It simulates only
 // the host dependencies; production defaults still resolve the trusted route.
 function trustedDependencies(attachmentRoot, {
-  route = { initial: ["other/model"], mode: "single_round", minimum_heterologous: 1 },
+  route = { initial: ["other/model"], mode: "single_round" },
   selection = { providers: ["other/model"], provider_models: { "other/model": "other-model" } },
   broker = null,
   callLog = null,
@@ -284,7 +284,7 @@ describe("simple material-only review", () => {
       materials: { zebra: "zebra bytes", alpha: "alpha bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["other/model"], provider_models: { "other/model": "other-model" } }),
       client: {
         async runGroup(request) {
@@ -324,7 +324,7 @@ describe("simple material-only review", () => {
     }, {
       signal: controller.signal,
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["other/model"], provider_models: { "other/model": "other-model" } }),
       client: {
         async runGroup(request) {
@@ -362,7 +362,7 @@ describe("simple material-only review", () => {
     let providerMaterialId = null;
     const result = await runSimpleReview(input, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["other/model"], provider_models: { "other/model": "other-model" } }),
       client: {
         async runGroup(request) {
@@ -399,7 +399,7 @@ describe("simple material-only review", () => {
       },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["other/model"], provider_models: { "other/model": "other-model" } }),
       client: {
         async runGroup(request) {
@@ -428,7 +428,7 @@ describe("simple material-only review", () => {
     const forgedMaterialId = "f".repeat(64);
     const result = await runSimpleReview(input, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["other/model"], provider_models: { "other/model": "other-model" } }),
       client: { async runGroup(request) {
         expect(request.strictProtocol).toBe(true);
@@ -469,7 +469,7 @@ describe("simple material-only review", () => {
       materials: { decision: "current decision bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" } }),
       client: {
         async runGroup(request) {
@@ -505,7 +505,7 @@ describe("simple material-only review", () => {
       materials: { decision: "current decision bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" } }),
       client: { async runGroup(request) {
         return { runtimeId: `runtime-${request.role}`, outcome: "completed", providers: [{
@@ -545,7 +545,7 @@ describe("simple material-only review", () => {
       materials: { decision: "current decision bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" }, provider_identities: { "model-a": { source_id: "trusted-source", config_id: "trusted-config" } } }),
       client: { async runGroup() {
         return { runtimeId: "runtime-pair-identity", outcome: "unavailable", providers: [{
@@ -569,7 +569,7 @@ describe("simple material-only review", () => {
     }, {
       pairId: "pair-material-mismatch",
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" } }),
       client: { async runGroup(request) {
         return {
@@ -605,7 +605,7 @@ describe("simple material-only review", () => {
     }, {
       pairId: `pair-${incompleteRole}-incomplete`,
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" } }),
       client: { async runGroup(request) {
         if (request.role === incompleteRole) {
@@ -636,7 +636,7 @@ describe("simple material-only review", () => {
     }, {
       pairId: "pair-provider-failure",
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a", "model-b"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["model-a", "model-b"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["model-a", "model-b"], provider_models: { "model-a": "model-a-model", "model-b": "model-b-model" } }),
       client: { async runGroup(request) {
         const failed = request.role === "red";
@@ -668,7 +668,7 @@ describe("simple material-only review", () => {
       materials: { decision: "current decision bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["other/model"], provider_models: { "other/model": "other-model" } }),
       client: {
         async runGroup(request) {
@@ -709,7 +709,7 @@ describe("simple material-only review", () => {
       materials: { implementation: "current implementation", tests: "current tests" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["other/model"], provider_models: { "other/model": "other-model" } }),
       client: {
         async runGroup(request) {
@@ -738,7 +738,7 @@ describe("simple material-only review", () => {
       materials: { raw_requirement: "requirement", spec: "spec body" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a", "model-b"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["model-a", "model-b"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["model-a", "model-b"], provider_models: { "model-a": "model-a-model", "model-b": "model-b-model" } }),
       client: {
         async runGroup() {
@@ -777,7 +777,7 @@ describe("simple material-only review", () => {
       stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" } }),
       client: {
         async runGroup() {
@@ -814,7 +814,7 @@ describe("simple material-only review", () => {
       stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" } }),
       client: {
         async runGroup() {
@@ -843,7 +843,7 @@ describe("simple material-only review", () => {
       stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" } }),
       client: {
         async runGroup() {
@@ -879,7 +879,7 @@ describe("simple material-only review", () => {
       stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" } }),
       client: { async runGroup() { throw new Error("broker failed at /tmp/private-review/config.json"); } },
     });
@@ -898,7 +898,7 @@ describe("simple material-only review", () => {
       stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" } }),
       client: { async runGroup() {
         return { runtimeId: "runtime-error", outcome: "unavailable", providers: [{
@@ -920,7 +920,7 @@ describe("simple material-only review", () => {
       stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a", "model-b"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["model-a", "model-b"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["model-a", "model-b"], provider_models: { "model-a": "model-a-model", "model-b": "model-b-model" } }),
       client: { async runGroup() {
         return { runtimeId: "runtime-partial", outcome: "partial", providers: [{
@@ -946,7 +946,7 @@ describe("simple material-only review", () => {
       stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" } }),
       client: {
         async runGroup() {
@@ -982,7 +982,7 @@ describe("simple material-only review", () => {
       stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" } }),
       client: { async runGroup() { throw Object.assign(new Error("broker fixture"), { code: sourceCode }); } },
     });
@@ -1000,7 +1000,7 @@ describe("simple material-only review", () => {
       stage: "verify-code", host_provider: "codex", materials: { implementation: "current bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" } }),
       client: { async runGroup() {
         return { runtimeId: "runtime-classification", outcome: "unavailable", providers: [{
@@ -1048,7 +1048,7 @@ describe("simple material-only review", () => {
       stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" }, provider_identities: { "model-a": { source_id: "trusted-source", config_id: "trusted-config" } } }),
       client: { async runGroup() {
         return { runtimeId: "runtime-identity-degraded", outcome: "unavailable", providers: [{
@@ -1074,7 +1074,7 @@ describe("simple material-only review", () => {
       stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" }, provider_identities: { "model-a": { source_id: "trusted-source", config_id: "trusted-config" } } }),
       client: { async runGroup() {
         return { runtimeId: "runtime-identity-plain", outcome: "unavailable", providers: [{
@@ -1097,7 +1097,7 @@ describe("simple material-only review", () => {
       stage: "verify-code", host_provider: "codex", materials: { implementation: "current bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" }, provider_identities: { "model-a": { source_id: "trusted-source", config_id: "trusted-config" } } }),
       client: { async runGroup() {
         return { runtimeId: "runtime-missing-provider", outcome: "unavailable", providers: [{
@@ -1121,7 +1121,7 @@ describe("simple material-only review", () => {
       stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" }, provider_identities: { "model-a": { source_id: "trusted-source", config_id: "trusted-config" } } }),
       client: { async startManaged() {
         return { state: "terminal", group: { runtime_id: "runtime-managed-identity", outcome: "completed", providers: [{
@@ -1148,7 +1148,7 @@ describe("simple material-only review", () => {
       stage: "verify-code", host_provider: "codex", materials: { implementation: "current bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" }, provider_identities: { "model-a": { source_id: "trusted-source", config_id: "trusted-config" } } }),
       onProviderOutput: async ({output}) => {writeFileSync(rawPath,output,{flag:"wx"});return rawRef;},
       client: {
@@ -1206,7 +1206,7 @@ describe("simple material-only review", () => {
       stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a", "model-b"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["model-a", "model-b"], mode: "single_round" }),
       selectProviders: () => providerSelectionFor(["model-a", "model-b"], { "model-a": "model-a-model", "model-b": "model-b-model" }),
       managedStatusPollMs: 0,
       client: {
@@ -1240,7 +1240,7 @@ describe("simple material-only review", () => {
       stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
       selectProviders: () => providerSelectionFor(["model-a"], { "model-a": "model-a-model" }),
       managedStatusPollMs: 0,
       client: {
@@ -1303,7 +1303,7 @@ describe("simple material-only review", () => {
       stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
       selectProviders: () => providerSelectionFor(["model-a"], { "model-a": "model-a-model" }),
       managedStatusPollMs: 0,
       client: {
@@ -1359,7 +1359,7 @@ describe("simple material-only review", () => {
         stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
       }, {
         loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-        resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+        resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
         selectProviders: () => providerSelectionFor(["model-a"], { "model-a": "model-a-model" }),
         managedStatusPollMs: 0,
         client: {
@@ -1430,7 +1430,7 @@ describe("simple material-only review", () => {
       }, {
         signal: controller.signal,
         loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-        resolveRoute: () => ({ initial: ["model-a", "model-b"], mode: "single_round", minimum_heterologous: 1 }),
+        resolveRoute: () => ({ initial: ["model-a", "model-b"], mode: "single_round" }),
         selectProviders: () => providerSelectionFor(["model-a", "model-b"], {
           "model-a": "model-a-model", "model-b": "model-b-model",
         }),
@@ -1745,7 +1745,7 @@ describe("review flow static preflight", () => {
         "antigravity/flash": { enabled: true, source_id: "preflight-source", model: "gemini-3.8-flash-high" },
       },
     }));
-    const route = { initial: ["antigravity/flash"], mode: "single_round", minimum_heterologous: 1 };
+    const route = { initial: ["antigravity/flash"], mode: "single_round" };
     const requests = [];
     const result = await runSimpleReview({
       stage: "build-code",
@@ -1793,7 +1793,7 @@ describe("review flow static preflight", () => {
     roots.push(attachmentRoot);
     const provider = "antigravity/flash";
     const selection = providerSelectionFor([provider], { [provider]: "agy-model-not-listed" });
-    const route = { initial: [provider], mode: "single_round", minimum_heterologous: 1 };
+    const route = { initial: [provider], mode: "single_round" };
     const events = [];
     let dispatches = 0;
     const { dependencies, calls } = trustedDependencies(attachmentRoot, {
@@ -1858,7 +1858,7 @@ describe("review flow static preflight", () => {
       [blockedProvider]: "agy-model-not-listed",
       [healthyProvider]: "kimi-for-coding",
     });
-    const route = { initial: [blockedProvider, healthyProvider], mode: "single_round", minimum_heterologous: 1 };
+    const route = { initial: [blockedProvider, healthyProvider], mode: "single_round" };
     const events = [];
     const dispatchProviders = [];
     const { dependencies } = trustedDependencies(attachmentRoot, { route, selection, callLog: events });
@@ -1931,7 +1931,7 @@ describe("review flow static preflight", () => {
     roots.push(attachmentRoot);
     const provider = "antigravity/flash";
     const selection = providerSelectionFor([provider], { [provider]: "gemini-3.8-flash-high" });
-    const route = { initial: [provider], mode: "single_round", minimum_heterologous: 1 };
+    const route = { initial: [provider], mode: "single_round" };
     const events = [];
     const { dependencies } = trustedDependencies(attachmentRoot, { route, selection, callLog: events });
     dependencies.providerPreflight = ({ provider: currentProvider } = {}) => {
@@ -2490,7 +2490,7 @@ describe("neutral review instruction identity and trusted selection", () => {
       },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["other/model"], provider_models: { "other/model": "other-model" } }),
       buildBundle: () => hostBundle,
       client: { async runGroup() {
@@ -2577,7 +2577,7 @@ describe("direction review flow transport parity", () => {
       review_flow: DIRECTION_FLOW,
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["other/model"], provider_models: { "other/model": "other-model" } }),
       client: { async runGroup(request) {
         seen.push(request.reviewFlow ?? null);
@@ -2603,7 +2603,7 @@ describe("direction review flow transport parity", () => {
       review_flow: DIRECTION_FLOW,
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["other/model"], provider_models: { "other/model": "other-model" } }),
       client: { async runGroup(request) {
         materialIds.push(request.materials.materialId);
@@ -2623,7 +2623,7 @@ describe("native broker packet boundary", () => {
   async function blockedNativeCase(clientKind) {
     const attachmentRoot=realpathSync(mkdtempSync(join(tmpdir(),"card06-doc-native-blocked-")));roots.push(attachmentRoot);
     const providers=["codex/luna","kimi/coding"],selection=providerSelectionFor(providers);
-    const {dependencies}=trustedDependencies(attachmentRoot,{route:{initial:providers,mode:"single_round",minimum_heterologous:2},selection});
+    const {dependencies}=trustedDependencies(attachmentRoot,{route:{initial:providers,mode:"single_round"},selection});
     let bundleCalls=0,invokeCalls=0;
     dependencies.buildBundle=()=>{bundleCalls++;return preparedBundle(attachmentRoot);};
     if(clientKind==="default") delete dependencies.client;

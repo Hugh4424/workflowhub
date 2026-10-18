@@ -115,7 +115,7 @@ function runnerDependencies(groupFactory, requests, selectionOverrides = {}) {
   roots.push(root);
   return {
     loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot: root }),
-    resolveRoute: () => ({ initial: ["kimi/shared", "claude-code/shared", "kimi/other"], mode: "full_only", minimum_heterologous: 2 }),
+    resolveRoute: () => ({ initial: ["kimi/shared", "claude-code/shared", "kimi/other"], mode: "full_only" }),
     selectProviders: () => ({ ...runnerSelection(), ...selectionOverrides }),
     buildBundle: () => ({
       bundleRoot: root,
@@ -218,7 +218,7 @@ describe("external review threshold contract", () => {
     let calls = 0;
     const impossible = await runSimpleReview(input, {
       ...runnerDependencies(() => v3Group([]), []),
-      resolveRoute: () => ({ initial: ["kimi/shared", "claude-code/shared", "kimi/other"], mode: "full_only", minimum_heterologous: 3 }),
+      resolveRoute: () => ({ initial: ["kimi/shared", "claude-code/shared", "kimi/other"], mode: "full_only" }),
       client: { async runGroup() { calls += 1; throw new Error("must not dispatch"); } },
     });
     expect(impossible).toMatchObject({ status: "unavailable", dispatch_state: "blocked_before_dispatch" });

@@ -126,7 +126,7 @@ function fixture() {
   writeFileSync(join(hostDir, "config.json"), JSON.stringify({
     task_dir: root,
     third_review: { command: [join(root, "missing-wh-review-broker")], config: configPath, attachment_root: attachmentRoot },
-    wh_review: { version: 2, stages: { "build-code": { initial: ["codex/luna"], mode: "full_only", minimum_heterologous: 1 } } },
+    wh_review: { version: 2, stages: { "build-code": { initial: ["codex/luna"], mode: "full_only" } } },
   }));
   const task = openTask(taskDir, { projectName: "workflowhub", taskId });
   return { root, home, taskId, taskDir, worktreeRoot, task };
@@ -536,7 +536,7 @@ process.stdout.write(JSON.stringify({type:"turn.completed"})+"\n");
           expectBytes(readFileSync(join(params.packet.root,part.ref)),readFileSync(join(bundle.bundleRoot,part.ref)),"actual delivered shard ref bytes");
         }
         deliveryObserved=true;
-        return runConfiguredOcrHostReview(params,{sourceBundle:bundle,trustedContext:{trusted:{},route:{minimum_heterologous:1},selection:{providers:["codex/owned"]},
+        return runConfiguredOcrHostReview(params,{sourceBundle:bundle,trustedContext:{trusted:{},route:{},selection:{providers:["codex/owned"]},
           providerConfig:{providers:{"codex/owned":{enabled:true,command:nativeCli,model:"owned-native-cli"}}}}});
       }});
       expect(deliveryObserved).toBe(true);
@@ -602,7 +602,7 @@ setInterval(()=>{},100);
     try{
       recorded=await recordSimpleReviewRequest({taskDir:state.taskDir,request:{stage:"verify-code",subject_kind:"worktree",surface:"code",materials:{}},signal:controller.signal,
         runRound:(request,options)=>runConfiguredOcrHostReview({request,packet,signal:options.signal},{
-          trustedContext:{trusted:{},route:{minimum_heterologous:1},selection:{providers:["codex/owned"]},
+          trustedContext:{trusted:{},route:{},selection:{providers:["codex/owned"]},
             providerConfig:{providers:{"codex/owned":{enabled:true,command:executable,model:"owned-observer"}}}},
           onProviderHealth:health=>{if(health.stdout_bytes>0)controller.abort(new Error("owned explicit cancellation after actual output"));},
           rawOutputSink:(hint,bytes,metadata)=>options.onProviderOutput({provider:metadata.provider,output:bytes}),
@@ -947,7 +947,7 @@ it('C01 wiring direct and shard anchors preserve quoted UTF8 and hunk text',asyn
       const cases=[{path:'repos/wh/中文 file.mjs',text:'+中文 source',line:1},{path:'repos/wh/a.txt',text:'+same',line:2}];
       const findings=cases.map(item=>{const ref=large?index.changes.find(c=>c.path===item.path).shards[0].ref:'changes.diff';const diff=readFileSync(join(bundle.bundleRoot,ref),'utf8');const line=diff.split('\n').findIndex(value=>value===item.text)+1;expect(line).toBeGreaterThan(0);return {severity:'minor',path:large?ref:'diff/changes.md',line:line+(large?0:3),issue:'controlled source mapping',recommendation:'observe actual source',root_cause:'controlled anchor fixture',evidence_kind:'direct',evidence:'`'+item.text.slice(1)+'`'};});
       const nativeCli=join(state.root,'owned-c01-native-cli');writeFileSync(nativeCli,'#!/usr/bin/env node\nconsole.log(JSON.stringify({type:"thread.started",thread_id:"c01-controlled"}));console.log(JSON.stringify({type:"item.completed",item:{type:"agent_message",text:JSON.stringify({findings:'+JSON.stringify(findings)+'})}}));console.log(JSON.stringify({type:"turn.completed"}));\n',{mode:0o700});
-      const parsed=await adapter.runOcrDelegationRound({...c01FinalRequest(),candidate_experiment:true},{buildBundle:()=>bundle,executor:params=>adapter.runConfiguredOcrHostReview(params,{sourceBundle:bundle,trustedContext:{trusted:{},route:{minimum_heterologous:1},selection:{providers:['codex/owned']},providerConfig:{providers:{'codex/owned':{enabled:true,command:nativeCli,model:'controlled-cli'}}}}})});
+      const parsed=await adapter.runOcrDelegationRound({...c01FinalRequest(),candidate_experiment:true},{buildBundle:()=>bundle,executor:params=>adapter.runConfiguredOcrHostReview(params,{sourceBundle:bundle,trustedContext:{trusted:{},route:{},selection:{providers:['codex/owned']},providerConfig:{providers:{'codex/owned':{enabled:true,command:nativeCli,model:'controlled-cli'}}}}})});
       expect(parsed.status,JSON.stringify(parsed.provider_results?.map(p=>p.error))).toBe('available');expect(parsed.findings).toEqual(expect.arrayContaining(cases.map(item=>expect.objectContaining({path:item.path,line:item.line}))));
       expect(parsed.provider_results[0].evidence_anchor_valid).toEqual([true,true]);
     }finally{bundle.dispose();}
@@ -962,7 +962,7 @@ it('C01 wiring direct and shard anchors preserve quoted UTF8 and hunk text',asyn
     try{
       const finding={severity:'minor',path:'diff/changes.md',line:9,issue:'controlled invalid anchor',recommendation:'do not infer path',root_cause:'controlled negative',evidence_kind:'direct',evidence:'`invalid collision target`'};
       const nativeCli=join(state.root,'owned-c01-native-cli');writeFileSync(nativeCli,'#!/usr/bin/env node\nconsole.log(JSON.stringify({type:"thread.started",thread_id:"c01-negative"}));console.log(JSON.stringify({type:"item.completed",item:{type:"agent_message",text:JSON.stringify({findings:'+JSON.stringify([finding])+'})}}));console.log(JSON.stringify({type:"turn.completed"}));\n',{mode:0o700});
-      const parsed=await adapter.runOcrDelegationRound({...c01FinalRequest(),candidate_experiment:true},{buildBundle:()=>bundle,executor:params=>adapter.runConfiguredOcrHostReview(params,{sourceBundle:bundle,trustedContext:{trusted:{},route:{minimum_heterologous:1},selection:{providers:['codex/owned']},providerConfig:{providers:{'codex/owned':{enabled:true,command:nativeCli,model:'controlled-cli'}}}}})});
+      const parsed=await adapter.runOcrDelegationRound({...c01FinalRequest(),candidate_experiment:true},{buildBundle:()=>bundle,executor:params=>adapter.runConfiguredOcrHostReview(params,{sourceBundle:bundle,trustedContext:{trusted:{},route:{},selection:{providers:['codex/owned']},providerConfig:{providers:{'codex/owned':{enabled:true,command:nativeCli,model:'controlled-cli'}}}}})});
       expect(parsed.provider_results[0].evidence_anchor_valid,'invalid encoding/count must stay unavailable anchor').toEqual([false]);expect(parsed.findings[0]?.path).not.toBe('repos/wh/�.txt');
     }finally{bundle.dispose();}
   }

@@ -33,7 +33,7 @@ function fixture() {
     third_review: { command: [process.execPath, "broker.mjs"], config: brokerPath, attachment_root: packetRoot },
     wh_review: {
       version: 2,
-      stages: { "build-code": { initial: ["grok/grok", "kimi/coding"], mode: "full_only", minimum_heterologous: 1 } },
+      stages: { "build-code": { initial: ["grok/grok", "kimi/coding"], mode: "full_only" } },
     },
   }));
   return { root, brokerPath, hostPath };

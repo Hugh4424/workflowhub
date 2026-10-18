@@ -521,3 +521,87 @@ test("a dead health probe does not terminate an otherwise live Kimi process", as
   broker.cancel(runtimeId, "kimi"); const result = await running;
   assert.equal(result.providers[0].status, "cancelled");
 });
+
+test.each([{ delivery: "file_only" }, { delivery: "always_embed" }, { delivery: "file_only", managed: true }, { delivery: "file_only", detail: true }, { delivery: "file_only", malformed: true }, { delivery: "file_only", lingering: true }, { delivery: "file_only", tamper: "missing" }, { delivery: "file_only", tamper: "invalid" }, { delivery: "file_only", tamper: "mismatch" }])("direction managed provider physically hides the choice until reconstruction completes (%j)", async ({ delivery, managed = false, detail = false, malformed = false, lingering = false, tamper = null }) => {
+  const root = temp(), materialRoot = temp(), fixtureRoot = temp();
+  const trace = path.join(fixtureRoot, "visible.jsonl"), cli = path.join(fixtureRoot, "direction-cli.mjs");
+  const secret = "CHOICE_ONLY_AFTER_RECONSTRUCTION_7491";
+  fs.writeFileSync(cli, `#!/usr/bin/env node
+import fs from 'node:fs';import path from 'node:path';import {spawn} from 'node:child_process';
+let prompt='';for await(const chunk of process.stdin)prompt+=chunk;
+const args=process.argv.slice(2),cwd=args[args.indexOf('--dir')+1]??process.cwd();
+const read=dir=>fs.readdirSync(dir,{withFileTypes:true}).flatMap(e=>e.isDirectory()?read(path.join(dir,e.name)):[{path:path.relative(cwd,path.join(dir,e.name)),body:fs.readFileSync(path.join(dir,e.name),'utf8')}]);
+const files=read(cwd),step=prompt.match(/Private direction-review\\.v1 step: (reconstruct|reveal|challenge)/)?.[1]??'combined';
+let previous_child_alive=false;const childFile=${JSON.stringify(path.join(fixtureRoot, 'child.pid'))};if(step!=='reconstruct'&&fs.existsSync(childFile)){try{process.kill(Number(fs.readFileSync(childFile,'utf8')),0);previous_child_alive=true}catch{}}
+fs.appendFileSync(${JSON.stringify(trace)},JSON.stringify({step,previous_child_alive,choice_present:files.some(f=>f.body.includes(${JSON.stringify(secret)})),prompt_choice_present:prompt.includes(${JSON.stringify(secret)}),navigation_choice_present:files.some(f=>/manifest|instructions/.test(f.path)&&f.body.includes(${JSON.stringify(secret)})),choice_path_present:files.some(f=>f.path.includes('current_selection')),reconstruction_present:files.some(f=>f.body.includes('fixture-independent-reconstruction'))||prompt.includes('fixture-independent-reconstruction'),reveal_present:files.some(f=>f.body.includes('fixture-revealed-choice'))||prompt.includes('fixture-revealed-choice')})+'\\n');
+const text=step==='reconstruct'?(${JSON.stringify(malformed)}?JSON.stringify({unrelated:'invalid reconstruction'}):JSON.stringify({independent_reconstruction:'fixture-independent-reconstruction'})):step==='reveal'?JSON.stringify({revealed_choice:'fixture-revealed-choice'}):JSON.stringify({findings:[]});
+let background=null;if(${JSON.stringify(lingering)}&&step==='reconstruct'){background=spawn(process.execPath,['-e',"process.on('SIGTERM',()=>{});console.log('ready');setInterval(()=>{},1000)"],{stdio:['ignore','pipe','ignore']});await new Promise(resolve=>background.stdout.once('data',resolve));fs.writeFileSync(childFile,String(background.pid));}
+console.log(JSON.stringify({type:'session.completed',session_id:'fixture-'+step,text}));if(background)setInterval(()=>{},1000);
+`, { mode: 0o700 });
+  const flow = { version: "direction-review.v1", public_request_count: 1, steps: [
+    { id: "reconstruct", visible: ["raw_requirement", "objective_facts"], hidden_until: "reveal" },
+    { id: "reveal", after: ["reconstruct"], visible: ["current_selection", "alternatives", "selection_rationale", "key_assumptions", "independent_reconstruction"] },
+    { id: "challenge", after: ["reveal"], visible: ["revealed_choice", "independent_reconstruction"], output: "findings" },
+  ], output: { one_provider_result: true, one_logical_fact: true } };
+  const material = { "materials/01-raw_requirement.md": "Trim user input.", "materials/02-objective_facts.md": "No implementation exists.", "materials/03-current_selection.md": secret, "direction_flow.json": JSON.stringify(flow), "manifest.json": JSON.stringify({ navigation: secret }), "review-instructions.md": "Revealed selection: " + secret };
+  if (detail || tamper === "missing") delete material["direction_flow.json"];
+  if (tamper === "invalid") material["direction_flow.json"] = "invalid-json";
+  if (tamper === "mismatch") material["direction_flow.json"] = JSON.stringify({ ...flow, public_request_count: 2 });
+  const entries = Object.entries(material).map(([destination, body]) => { const file = path.join(materialRoot, destination); fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, body); return { source: destination, destination, size: Buffer.byteLength(body), sha256: createHash("sha256").update(body).digest("hex"), embed: delivery === "always_embed" }; });
+  const value = config(root, [["opencode"]]); value.providers.opencode.command = cli; value.providers.opencode.model = "fixture"; value.attachment_roots = [{ root: materialRoot, sources: entries.map(e => e.source) }];
+  const intermediateStates = [];
+  const broker = new Broker(value, { ...(lingering ? { terminationGraceMs: 200, healthCheckIntervalMs: 500, probeSession: async ({ session_id }) => {
+    if (!session_id) return { status: "busy", session_id: null, cursor: null, raw: null, error: null };
+    const step = session_id.slice("fixture-".length), text = step === "reconstruct" ? JSON.stringify({ independent_reconstruction: "fixture-independent-reconstruction" }) : step === "reveal" ? JSON.stringify({ revealed_choice: "fixture-revealed-choice" }) : JSON.stringify({ findings: [] });
+    return { status: "completed", session_id, cursor: null, raw: { stdout: JSON.stringify({ type: "session.completed", session_id, text }) + "\n", stderr: "" }, error: null };
+  } } : {}), onStart() { const id = fs.readdirSync(root).find(name => /^[0-9a-f-]{36}$/.test(name)); const previous = id ? readRuntime(root, id).providers?.opencode : null; if (previous?.attempts?.length) intermediateStates.push({ status: previous.status, output: previous.output }); } });
+  const request = { version: 4, host_provider: "dsh", required_result_protocol: "workflowhub-result.v3", provider_allowlist: ["opencode"], review_mode: "single_round", ...(detail ? {} : { review_flow: flow }), prompt: "Review direction and return findings. Current choice: " + secret + "\nPaired review role: red. " + secret, attachments: { root: materialRoot, delivery, manifest: { version: 1, bundle_id: "direction-fixture", entries } } };
+  if (tamper) {
+    await assert.rejects(broker.run(request), error => error.code === "MATERIAL_INCOMPLETE");
+    assert.throws(() => broker.startManaged(request, "invalid-direction-" + Date.now()), error => error.code === "MATERIAL_INCOMPLETE");
+    assert.equal(fs.existsSync(trace), false); assert.equal(intermediateStates.length, 0);
+    return;
+  }
+  let result;
+  if (managed) {
+    const started = broker.startManaged(request, "direction-fixture-" + Date.now());
+    await eventually(() => broker.managedStatus(started.runtime_id).state === "terminal");
+    result = broker.managedStatus(started.runtime_id).group;
+  } else result = await broker.run(request);
+  if (malformed) {
+    assert.equal(result.providers[0].status, "failed"); assert.equal(result.providers[0].error.code, "DIRECTION_STEP_OUTPUT_INVALID");
+    const records = fs.readFileSync(trace, "utf8").trim().split("\n").map(line => JSON.parse(line));
+    assert.equal(records.length, 1); assert.equal(records[0].choice_present, false);
+    assert.equal(result.providers[0].attempts[0].parse_outcome, "invalid");
+    assert.equal(fs.existsSync(path.join(root, result.runtime_id, "workspace", "opencode-direction-reveal")), false);
+    return;
+  }
+  if (detail) {
+    assert.equal(result.providers[0].status, "completed"); assert.equal(result.providers[0].attempts.length, 1);
+    const records = fs.readFileSync(trace, "utf8").trim().split("\n").map(line => JSON.parse(line));
+    assert.equal(records.length, 1); assert.equal(records[0].choice_present, true); assert.equal(records[0].step, "combined");
+    return;
+  }
+  assert.equal(result.providers[0].status, "completed", JSON.stringify(result.providers[0].error));
+  const visible = fs.readFileSync(trace, "utf8").trim().split("\n").map(line => JSON.parse(line));
+  assert.equal(visible[0].choice_present, false, "initial physical provider packet must not contain revealed choice bytes");
+  assert.equal(visible[0].prompt_choice_present, false, "blind prompt must not reveal choice bytes");
+  assert.equal(visible[0].navigation_choice_present, false, "blind manifest/navigation must not reveal choice bytes");
+  assert.equal(visible[0].choice_path_present, false, "blind cwd must not contain a choice attachment");
+  if (!managed) assert.deepEqual(intermediateStates, [{ status: "running", output: undefined }, { status: "running", output: undefined }]);
+  assert.deepEqual(visible.map(row => row.step), ["reconstruct", "reveal", "challenge"]);
+  assert.equal(visible[1].choice_present || visible[1].prompt_choice_present, true); assert.equal(visible[1].reconstruction_present, true);
+  assert.equal(visible[2].reveal_present, true);
+  if (lingering) assert.equal(visible[1].previous_child_alive, false, "reveal cannot be created while a previous native process-group child survives");
+  assert.equal(result.providers.length, 1); assert.equal(result.providers[0].status, "completed");
+  assert.deepEqual(JSON.parse(result.providers[0].output), { findings: [] });
+  assert.equal(result.providers[0].attempts.length, 3);
+  for (let index = 1; index < 3; index += 1) assert.ok(result.providers[0].attempts[index - 1].completed_at_ms <= result.providers[0].attempts[index].started_at_ms);
+  const stored = readRuntime(root, result.runtime_id).providers.opencode;
+  assert.deepEqual(stored.attempts[0].delivery.provider_visible_attachment_manifest.map(file => file.destination), ["materials/01-raw_requirement.md", "materials/02-objective_facts.md"]);
+  assert.ok(stored.attempts.every(attempt => attempt.raw_stdout_ref && fs.existsSync(path.join(root, result.runtime_id, attempt.raw_stdout_ref))));
+  assert.ok(stored.attempts.every(attempt => attempt.raw_input_ref));
+  const nativeInput = fs.readFileSync(path.join(root, result.runtime_id, stored.attempts[0].raw_input_ref), "utf8");
+  assert.equal(nativeInput.includes(secret), false, "actual native wire input must not contain choice bytes");
+  assert.deepEqual(result.providers[0].attempts.map(item => item.session_id), ["fixture-reconstruct", "fixture-reveal", "fixture-challenge"]);
+});

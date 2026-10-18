@@ -78,7 +78,7 @@ function fixture(runRoot, stage) {
   const slow = executable(join(root, "controlled-slow-cli"), slowLog, "slow");
   const providers = ["codex/fast", "codex/slow"];
   const trustedContext = {
-    trusted: {}, route: { initial: providers, mode: "single_round", minimum_heterologous: 1 },
+    trusted: {}, route: { initial: providers, mode: "single_round" },
     selection: {
       providers, eligibleProfiles: providers,
       provider_identities: Object.fromEntries(providers.map((provider) => [provider, { source_id: `${provider}-controlled`, config_id: `${provider}-config` }])),

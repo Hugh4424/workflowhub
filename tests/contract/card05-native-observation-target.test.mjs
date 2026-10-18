@@ -156,7 +156,7 @@ function fixture(providers=['antigravity/owned'],mode='partial'){
  if(mode==='kimi-page-hole')files['src/unread.mjs']='//'+'h'.repeat(285)+'\n'; // Exactly 288 bytes before manifest/hash.
  const manifest=Object.entries(files).map(([path,content])=>{writeFileSync(join(packetRoot,path),content);return{path,bytes:Buffer.byteLength(content),sha256:hash(content)};});
  const packet={root:packetRoot,material_id:'a'.repeat(64),preview:{reviewable_files:manifest.map(({path})=>({path}))},rules:{rules:manifest.map(({path})=>({path,rule:'Inspect correctness.'}))},manifest};
- const trustedContext={trusted:{},route:{mode:'single_round',minimum_heterologous:1},selection:{providers,provider_identities:Object.fromEntries(providers.map(provider=>[provider,{source_id:provider+'-source',config_id:provider+'-config'}]))},providerConfig:{providers:Object.fromEntries(providers.map(provider=>[provider,{enabled:true,command:executable,model:'owned-test'}]))}};
+ const trustedContext={trusted:{},route:{mode:'single_round',},selection:{providers,provider_identities:Object.fromEntries(providers.map(provider=>[provider,{source_id:provider+'-source',config_id:provider+'-config'}]))},providerConfig:{providers:Object.fromEntries(providers.map(provider=>[provider,{enabled:true,command:executable,model:'owned-test'}]))}};
  const saved=[],auditCallbacks=[];
  const auditKind=bytes=>{const text=bytes.toString('utf8');return text.includes('"tool":"view_file"')&&text.includes('"phase":"post"')?'ag':text.includes('"tool":"Read"')&&text.includes('"allowed":true')?'kimi':null;};
  const launches=()=>existsSync(join(root,'launches.jsonl'))?readFileSync(join(root,'launches.jsonl'),'utf8').trim().split('\n').filter(Boolean).map(JSON.parse):[];
@@ -361,7 +361,7 @@ async function runCleanupThroughWriter(cancelDuringFinalization){
  const manifest=[...s.packet.manifest,{path:'review-instructions.md',bytes:Buffer.byteLength(instructions),sha256:hash(instructions)}];
  const bundle={bundleRoot:s.packet.root,materialId:s.packet.material_id,manifest};
  const materials=Object.fromEntries(manifest.map(({path})=>[path,readFileSync(join(s.packet.root,path),'utf8')]));
- const trustedContext={trusted:{},route:{mode:'single_round',minimum_heterologous:1},selection:{providers,provider_identities:Object.fromEntries(providers.map(provider=>[provider,{source_id:provider+'-source',config_id:provider+'-config'}]))},providerConfig:{providers:Object.fromEntries(providers.map(provider=>[provider,{enabled:true,command:executable,model:'owned-test'}]))}};
+ const trustedContext={trusted:{},route:{mode:'single_round',},selection:{providers,provider_identities:Object.fromEntries(providers.map(provider=>[provider,{source_id:provider+'-source',config_id:provider+'-config'}]))},providerConfig:{providers:Object.fromEntries(providers.map(provider=>[provider,{enabled:true,command:executable,model:'owned-test'}]))}};
  const observed=[],originals=[],controller=new AbortController();
  let dispatched=false,hostRejection=null,watchdogFired=false,receipt;
  const previousHome=process.env.KIMI_CODE_HOME;process.env.KIMI_CODE_HOME=join(s.root,'kimi-home');
