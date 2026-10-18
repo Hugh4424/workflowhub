@@ -5,7 +5,7 @@ description: 在 build-code 看到真实后端改动后执行风险导向测试�
 
 # Backend Testing
 
-build-code按真实changed files确认backend/feature后，覆盖业务/校验/错误/权限、持久化/迁移、并发/幂等，执行下两节。build-plan不调用、不依赖testing-system-blueprint。
+build-code按真实changed files确认backend/feature后，覆盖业务/校验/错误/权限、持久化/迁移、并发/幂等，执行下两节。build-plan不直接执行本技能；经testing-system-blueprint读取下两节用于设计，不提前执行测试或新增gate。
 
 ## 行为测试与证伪
 
