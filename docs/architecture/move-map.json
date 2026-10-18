@@ -5302,6 +5302,22 @@
       ],
       "delete_condition": "该方法消费者由独立审查替代承接且零当前消费时由原owner退役登记；保来源与历史原件。",
       "retention_basis": "当前目标与调用处已实读；仅既有方法增量/复用，无新技能或控制面。"
+    },
+    {
+      "source": "docs/delivery-closeout-charter.md",
+      "destination": "docs/delivery-closeout-charter.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "五件正文位置、读取条件与边界的纯索引，不承载第二份规则。",
+      "owner": "N7/P3/T004 索引维护者；各方法正文仍归原 owner。",
+      "consumer": "阶段执行者与外部接手者从 AGENTS.md、CLAUDE.md 入口定位领域、工作区任务、交接、收口与交付说明正文；独立读者核导航与排除索引后方法仍可用。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "AGENTS.md",
+        "CLAUDE.md"
+      ],
+      "delete_condition": "消费者消失或五件正文合并策略改变时，由实际 owner 按真实授权移除索引及入口；各方法独立正文与历史原件保留。",
+      "retention_basis": "替代分散的入口导航，不替代或复制方法规则；真实导航及独立消费由当前P3原件报告，登记不证明通过。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

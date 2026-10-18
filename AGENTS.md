@@ -11,7 +11,7 @@
 ## 给 agent 的规则
 
 - 改动须符合宪法，逐条对照 [constitution-checklist.md](constitution-checklist.md)。
-- build-code、verify-code 在已授权任务范围内自动实施、验证、审查、修复及执行交付必要的 commit/push/merge；阶段切换和接续不重新申请本地提交或日常确认。Git 动作前按真实授权来源、范围、分支与当前 HEAD 自动 record/consume，不能把 authorize 当提问门。仅最终 close（含归档、删除任务分支/工作区及交付清理）前展示实际结果与范围，取得一次确认；无法修复或验证的部分如实保留，不自动接受严重风险。
+- 已授权 build-code/verify-code 自动实施、验证、审查、修复及必要 Git 交付，不重复日常确认；动作前读 [标准工作方法“当前路线”](docs/standard-workflow.md#当前路线) 的持续授权、record/consume 与 HEAD 条件，最终 close 依其唯一范围确认和安全收口边界；无法修复/验证的部分保真，不自动接受严重风险。
 - 重活交子代理，主上下文只收摘要。
 - 全仓 grep、测试/RED/GREEN、多文件对标、反向引用扫描默认由子代理执行，主上下文只收路径、exit_code、结论清单；一两行可讲清的微动作除外。
 - 技能可独立调用、搬运，不绑定单一宿主。
@@ -19,7 +19,8 @@
 - 不整份继承父代理上下文：派发记录写明继承模式，只附原文摘要 ref、sha256 与不超过 500 字摘要。
 - 不空转轮询：不以远小于任务耗时的固定超时重复空转调用；派发按工作类型，回传结论与清单，修复回原实施子代理同一会话。五阶段共用并发区间为 2–5，具体每个任务开几个并发在 build-plan 的当前并行方案里逐任务确定。
 - 写共享文件前，读 `skills/simplicity-guard/SKILL.md` Packet lens并发/简化问题，核真实状态、前后writer及现有锁/独占；同文件不同字段仍共享，提示中的“别撞”不代结构性串行。按最小有效路径复用唯一权威，不新建协调状态。
-- 跨 Phase 只核本 Phase 声明写集，不绑全量快照；独立审查逐条比对 `git diff --name-only` 与声明，不实记事实、不作门。
+- 跨 Phase 只核本 Phase 声明写集，不绑全量快照；写集说明须交代改了什么、故意没改什么及理由、风险与影响面，独立审查按真实 `git diff --name-only` 逐条比对，不实记事实、不作门；内容细节读 [stage-handoff 信息来源](skills/stage-handoff/SKILL.md#信息来源)。
+- 交接动作项只列用户独占决定、授权、不可逆动作或只有用户能提供的信息/凭证；逐项给推荐、理由和不答后果，代理可做的授权内工作继续执行，细节读 [stage-handoff 信息来源](skills/stage-handoff/SKILL.md#信息来源)。
 
 审查派发及结果回读实际执行 `skills/wh-review/SKILL.md`「输入与方法」「输出和失败边界」；独立执行者据ARTIFACT + CONTRACT及真实原件判断。
 
@@ -33,10 +34,10 @@
 
 ### 证据硬规则
 
-- 同一事实＝字节相同：先比较内容，相等即引用唯一原件；重跑、换 executor/时刻得到相同字节不另写。仅裁剪、脱敏、追加时刻或 exit 改变字节才另存并说明必要性；无法确立相等则保新件、记 `deduplication: unknown`。测试 raw、正式 review 回执及原件各一份，不复制镜像到 `quality/evidence/`。
+- 保存或复用证据前读 [标准工作方法“证据只留原始件”](docs/standard-workflow.md#证据只留原始件同字节即同一事实)：执行同字节唯一原件、内容比较与未知保新件规则。
 - 禁止把整棵工作树或整个目录作为证据保存（禁止目录快照、整树 tar、`git archive` 产物、文件树清单）。 整目录保存＝新写出的证据件的直接子目录里存在完整包含某个既有目录全部文件名与字节的集合；每个文件各自都是某条真实事实的原始件不算快照。
-- 证明改动范围只写一行 `路径 + hash`，原字节留工作树；仅随后会修改/删除的文件、外部服务返回体、一次性环境读数可留字节，逐项说明必要性。历史原件、已引用件不删不覆写。
-- 依据：[docs/standard-workflow.md](docs/standard-workflow.md) 的 `### 证据只留原始件` 段；本条是执行纪律，不是新的 stage、gate 或质量结论。
+- 范围证据、留字节三类例外、历史及已引用原件保全沿同节，不删不覆写。
+- 本节只约束证据执行纪律，不新增 stage、gate 或质量结论。
 
 ### 卡住与升级
 
@@ -53,6 +54,7 @@
 - 设计宪法：[CONSTITUTION.md](CONSTITUTION.md)
 - 检查清单：[constitution-checklist.md](constitution-checklist.md)
 - 术语表：[GLOSSARY.md](GLOSSARY.md)
+- 五件正文入口与读取时机：[交付与收口总纲](docs/delivery-closeout-charter.md)。
 - 唯一进度来源：认证 worktree 的 `specs/<task-id>/` 当前材料与外置任务 task facts；`docs/archive/retired-root-progress/` 只读保留旧任务过程文件，不作为当前进度。
 
 ## 当前目录职责
@@ -66,7 +68,7 @@
 
 ## 当前治理边界
 
-- 当前工作真相按 cohort 读取认证 worktree `specs/<task-id>/`：pre/history 保留 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 四材料；post 使用 `decision-log.md`、承载全局实现设计的 `spec.md`、独立 `phases/P<n>.md` 和纯指针 `phases/index.md`。post 不生成 `plan.md/tasks.md` 双写。外置任务追踪目录只放 `task.json`、`facts.jsonl`、`quality/`、`index.json` 等执行文件，不新增 gate。旧 task、receipt、review、历史 snapshot 只读保留。
+- 读取认证 worktree 当前材料时，按下文 [vNext 永久实施边界](#vnext-永久实施边界) 区分 post 与 pre/history；旧 task、receipt、review、历史 snapshot 只读保留，不新增 gate。
 - 测试、审查、历史、inventory/complexity 只记事实，不作许可证；质量缺失保持 `unknown`/`unavailable`/`incomplete`，不伪造通过。
 - 保留 provenance、review 原件及失败；摘要不覆盖来源，provider 失败不冒质量通过。
 - 新机制或新控制面必须先登记职责、真实 consumer、owner、测试和删除/保留条件；没有当前消费者的重复控制面不新增。登记作者先真读目标与调用处，写出使用者正在做的具体动作、输入、输出及为何需要；读不到目标停止本次登记并交原 owner，不写 active 猜测。维护者亦用户。
@@ -76,12 +78,12 @@
 ### 当前窄工具与事实职责登记
 
 - 工作区/命令/普通记录/Git授权/锁/回复复用 runtime/interface/ 已有 owner；真实 consumer 见 docs/architecture/move-map.json。工具输出是事实，非阶段许可证；被经独立审查的替代实现承接实际消费者后才退役。
-- 审查事实由 review-record-route 单一 producer保存；文档 wh-review，代码 OCR；OCR 不可用（命令不存在（ENOENT）或版本低于1.12.9）如实记 unavailable/unknown，不换执行者，保留检测输出与原始失败；版本检测其它错误不推断未安装。architect-code-review 是同源补充轴，独立执行，与 OCR 可用性无关；已装 OCR 失败、超时、取消、无效输出、零成功路或空 findings 均保留原始事实。provider缺失/失败不制造质量通过，有效单源发现不丢弃。
+- 审查事实由 review-record-route 单一 producer 保存；调用与回读时读 [标准工作方法“build-code 测试与质量”](docs/standard-workflow.md#build-code-测试与质量) 的 wh-review/OCR、不可用检测、同源补充、原始失败与有效单源发现边界；不换执行者，不以 provider 失败冒质量通过。
 - 退役登记保决定、未决项及理由/决定人/来源，供人读交接；不增机器 reader/字段。
 
 ## vNext 永久实施边界
 
-- post 的 `make-decision` 写 `decision-log.md`，`build-plan` 写 `spec.md`、各 `phases/P<n>.md` 和 `phases/index.md`；`build-code`、`verify-code` 消费这些当前材料和 task facts。pre/history 仍按旧四材料读取。材料形态变化不新增 stage、gate 或第二套进度权威。
+- post 的 `make-decision` 写 `decision-log.md`，`build-plan` 写承载全局实现设计的 `spec.md`、独立 `phases/P<n>.md` 和纯指针 `phases/index.md`，不双写 `plan.md/tasks.md`；`build-code`、`verify-code` 消费当前材料和 task facts。pre/history 仍按 `decision-log.md/spec.md/plan.md/tasks.md` 旧四材料读取。材料形态变化不新增 stage、gate 或第二套进度权威。
 - vNext task 目录只保留 `task.json`、`facts.jsonl`、`quality/reviews/`、`quality/tests/`、`index.json` 及必要的 `quality/evidence/`；C6 规定移除 active `quality/verify.v1` object graph、`product_release` 与 `status_groups`，不创建旧 accepted、run、receipt、review-flow 或独立进度对象。`facts.jsonl` 现有 build-code stage row 可原位保存一个当前 `phase_progress` 游标；现有 `run` 写入、`status` 读取。游标只定位续跑位置，不证明完成、不阻止继续，也不保存历史序列；材料版本变化时读为 stale，代码快照变化本身不使它 stale。`specs/archive/**`、`docs/research/**` 只读保留。
 - 禁止 successor/predecessor、selector、snapshot lineage、phase 历史 trace、historical correction、replacement review、reopen、rebind、continuation、recovery、checkpoint permit；旧记录只读，不作为新 task writer。唯一进度例外是上述单行当前游标，不另建 projection 或账本。
 - review、test、evidence、history、inventory、complexity 都是事实，不是继续工作的许可证；`unknown`、`unavailable`、`incomplete` 不能阻止同 task 修复，但缺失质量事实不能被宣称为完成。

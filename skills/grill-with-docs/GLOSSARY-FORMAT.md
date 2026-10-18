@@ -38,6 +38,8 @@ _Avoid_: Client, buyer, account
 
 ## Rules
 
+- **Update resolved terms inline.** Talk、研究、Grill、写稿和确认中，按实际来源定位唯一上下文 owner；领域术语、含义或边界确有变化时，就地最小写入并读回，不延迟成批量更新。逐本次已解决项返回实际变化引用；已有定义一致或没有术语变化时，返回 `no-change` 及事实依据，不能只写“已检查”。未解含义或归属等待真实答复，暂停依赖该答复的写入。结果沿调用方既有结束事实返回，不新建术语台账。
+- **Use domain language.** 只收领域专家会使用的概念、含义、边界和避免同义词；class/module/API 等实现细节留在原 owner，术语表不充当 spec 或 scratchpad。
 - **Be opinionated.** When multiple words exist for the same concept, pick the best one and list the others under `_Avoid_`.
 - **Flag conflicts explicitly.** If a term is used ambiguously, call it out in "Flagged ambiguities" with a clear resolution.
 - **Keep definitions tight.** One sentence max. Define what it IS, not what it does.
