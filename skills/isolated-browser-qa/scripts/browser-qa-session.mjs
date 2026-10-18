@@ -17,11 +17,52 @@ function command(argv,env,{signal,inherit=false,outputSecrets}={}) {
     const c=spawn(argv[0],argv.slice(1),{env,detached:true,stdio:inherit&&!protectedOutput?'inherit':[inherit?'inherit':'ignore','pipe','pipe']});
     const stdoutChunks=[],stderrChunks=[];
     if(!inherit||protectedOutput){c.stdout.on('data',b=>stdoutChunks.push(b));if(protectedOutput)c.stderr.on('data',b=>stderrChunks.push(b));else c.stderr.resume();}
-    const abort=()=>{try{process.kill(-c.pid,'SIGTERM');}catch{}};
+    let observeClose,cancellation,cleanupFailure;
+    const childClosed=new Promise(resolve=>{observeClose=resolve;});
+    const group=async()=>{
+      if(!Number.isInteger(c.pid)||c.pid<=0)throw safeError('COMMAND_GROUP_IDENTITY_UNAVAILABLE');
+      const result=await command(['ps','-ww','-axo','pid=,ppid=,pgid=,lstart=,stat='],env);
+      if(result.code)throw safeError('COMMAND_GROUP_IDENTITY_UNAVAILABLE');
+      return result.stdout.split('\n').map(row=>row.trim().split(/\s+/)).filter(fields=>fields.length>=9&&Number(fields[2])===c.pid)
+        .map(fields=>({pid:Number(fields[0]),ppid:Number(fields[1]),pgid:Number(fields[2]),start:fields.slice(3,8).join(' '),state:fields[8]}));
+    };
+    const live=members=>members.filter(member=>!member.state.startsWith('Z'));
+    const signalGroup=signal=>{try{process.kill(-c.pid,signal);}catch(error){if(error.code!=='ESRCH')throw safeError('COMMAND_GROUP_SIGNAL_FAILED');}};
+    const abort=()=>{
+      if(cancellation)return;
+      cancellation=(async()=>{
+        // detached:true creates a new group. Authenticate its actual leader
+        // before TERM, retaining members so a surviving child can prove group
+        // continuity after the leader exits and leaves inherited pipes open.
+        const before=await group();
+        if(!live(before).length)return;
+        if(!before.some(member=>member.pid===c.pid&&member.ppid===process.pid))throw safeError('COMMAND_GROUP_IDENTITY_UNAVAILABLE');
+        const expires=Date.now()+1500;signalGroup('SIGTERM');
+        let timer;
+        try{await Promise.race([childClosed,new Promise(resolve=>{timer=setTimeout(resolve,1500);})]);}finally{clearTimeout(timer);}
+        let current=live(await group());if(!current.length)return;
+        const remaining=expires-Date.now();if(remaining>0)await new Promise(resolve=>setTimeout(resolve,remaining));
+        current=live(await group());if(!current.length)return;
+        const continuous=current.some(member=>before.some(original=>member.pid===original.pid&&member.pgid===original.pgid&&member.start===original.start));
+        if(!continuous)throw safeError('COMMAND_GROUP_IDENTITY_CHANGED');
+        signalGroup('SIGKILL');
+        const deadline=Date.now()+3000;
+        while(live(await group()).length){if(Date.now()>=deadline)throw safeError('COMMAND_GROUP_CLEANUP_TIMEOUT');await new Promise(resolve=>setTimeout(resolve,50));}
+      })().catch(error=>{
+        cleanupFailure=error;
+        console.error(JSON.stringify({error:error.code||'COMMAND_GROUP_CLEANUP_FAILED',owned_group:c.pid??null}));
+        console.error('cleanup_incomplete=command_owned_group');
+      });
+    };
     signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();
     c.once('error',()=>reject(safeError('COMMAND_UNAVAILABLE')));
-    c.once('close',(code)=>{
+    c.once('close',async(code)=>{
+      observeClose();
+      // With inherited stdio, close of the leader alone does not mean its work
+      // stopped. Cancellation must also finish reclaiming the owned group.
+      await cancellation;
       signal?.removeEventListener('abort',abort);
+      if(cleanupFailure){reject(cleanupFailure);return;}
       const stdout=Buffer.concat(stdoutChunks),stderr=Buffer.concat(stderrChunks);let resultCode=code??143;
       if(protectedOutput){
         const leaked=[...outputSecrets].some(value=>value&&(stdout.includes(Buffer.from(value))||stderr.includes(Buffer.from(value))));

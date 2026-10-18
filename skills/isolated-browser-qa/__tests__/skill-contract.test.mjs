@@ -916,3 +916,48 @@ const e=process.env;if(process.argv[1]===e.P7_VERIFY_ENTRY&&e.P7_VERIFY_EVENTS.s
 describe('N3 verify source-unverified cleanup',()=>{
   it.each(['refused','cancel-before-compare','collision'])('native source %s preserves source and settles owned cleanup',async mode=>{await verifyNativeSourceCleanup(mode);},45000);
 });
+
+// Independent OCR184 TCR: one owned-group cancellation counterexample. No
+// setsid escape; the leader exits on TERM while its real same-group work ignores it.
+async function verifyCommandProcess(pid){
+  return JSON.parse(execFileSync(nativePython,['-c',String.raw`
+import json,os,psutil,sys
+try:
+ p=psutil.Process(int(sys.argv[1]));print(json.dumps({'pid':p.pid,'ppid':p.ppid(),'pgid':os.getpgid(p.pid),'start':p.create_time(),'exe':p.exe(),'argv':p.cmdline(),'status':p.status()}))
+except psutil.NoSuchProcess:print('null')
+`,String(pid)],{encoding:'utf8'}));
+}
+describe('N3 verify scenario group cancellation',()=>{
+  it('settles cancellation when the leader exits but owned same-group work ignores TERM and holds pipes',async()=>{
+    const f=await nativeFixture(),ready=join(f.evidence,'term-ready.json'),ignored=join(f.evidence,'term-ignored'),leafFile=join(f.root,'same-group-work.mjs');
+    writeFileSync(leafFile,`import fs from 'node:fs';process.on('SIGTERM',()=>fs.writeFileSync(${JSON.stringify(ignored)},'TERM received and ignored'));fs.writeFileSync(${JSON.stringify(ready)},JSON.stringify({pid:process.pid,leader:process.ppid}));process.stdout.write('owned same-group work ready');setInterval(()=>{},1000);`);
+    execFileSync(process.execPath,['--check',leafFile],{stdio:'pipe'});
+    const foreign=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{detached:true,stdio:'ignore'}),foreignDone=new Promise(resolve=>foreign.once('close',resolve));
+    let run,leafBefore,leaderBefore,foreignBefore,settled=false,result,observation;
+    try{
+      foreignBefore=await verifyCommandProcess(foreign.pid);expect(foreignBefore).not.toBe(null);
+      run=f.start('set -eu\n'+nativeOwned+`\ntrap 'exit 0' TERM\n${shellWord(process.execPath)} ${shellWord(leafFile)} &\nwait\n`);
+      run.done.then(r=>{settled=true;result=r;});
+      const readyDeadline=Date.now()+30000;while(!existsSync(ready)&&!settled&&Date.now()<readyDeadline)await delay(20);
+      expect(existsSync(ready),'real handler must be installed and the work must enter before cancellation: '+run.output()).toBe(true);
+      const point=JSON.parse(readFileSync(ready,'utf8'));leafBefore=await verifyCommandProcess(point.pid);leaderBefore=await verifyCommandProcess(point.leader);
+      expect(leafBefore).not.toBe(null);expect(leaderBefore).not.toBe(null);expect(leaderBefore.ppid).toBe(run.child.pid);expect(leaderBefore.pgid).toBe(leaderBefore.pid);expect(leafBefore.ppid).toBe(leaderBefore.pid);expect(leafBefore.pgid).toBe(leaderBefore.pgid);expect(leafBefore.argv).toContain(leafFile);expect(foreignBefore.pgid).not.toBe(leaderBefore.pgid);
+      expect(run.child.kill('SIGTERM'),'send exactly one real cancellation to the gateway').toBe(true);
+      const ignoredDeadline=Date.now()+1200;while(!existsSync(ignored)&&Date.now()<ignoredDeadline&&!settled)await delay(10);
+      expect(existsSync(ignored),'the real same-group work must receive and ignore TERM').toBe(true);
+      let leaderAfter;const leaderDeadline=Date.now()+1000;do{leaderAfter=await verifyCommandProcess(leaderBefore.pid);if(!leaderAfter||leaderAfter.status==='zombie')break;await delay(10);}while(Date.now()<leaderDeadline);
+      const ignoring=await verifyCommandProcess(leafBefore.pid);expect(!leaderAfter||leaderAfter.status==='zombie','the actual detached leader must exit before this counterexample').toBe(true);expect(ignoring?.start).toBe(leafBefore.start);expect(ignoring?.pgid).toBe(leafBefore.pgid);expect(ignoring?.status).not.toBe('zombie');
+      const settledDeadline=Date.now()+15000;while(!settled&&Date.now()<settledDeadline)await delay(20);
+      const leafAfter=await verifyCommandProcess(leafBefore.pid),foreignAfter=await verifyCommandProcess(foreign.pid);
+      observation={handler_ready:true,term_received_and_ignored:true,leader_exited_before_escalation:true,owned_pgid:leaderBefore.pgid,owned_work_pid:leafBefore.pid,owned_work_start:leafBefore.start,gateway_settled_before_harness_cleanup:settled,gateway_code:result?.code??null,gateway_signal:result?.signal??null,owned_work_still_live:Boolean(leafAfter&&leafAfter.status!=='zombie'),foreign_pid:foreign.pid,foreign_start_unchanged:foreignAfter?.start===foreignBefore.start,foreign_pgid:foreignAfter?.pgid??null};
+      console.log('ORACLE-VERIFY-IGNORE-TERM '+JSON.stringify(observation));
+      expect(observation.foreign_start_unchanged).toBe(true);expect(observation.foreign_pgid).toBe(foreignBefore.pgid);
+      expect(settled,'cancellation must settle before the harness reclaims ignored-TERM work').toBe(true);
+      nativeResult(result,143);expect(observation.owned_work_still_live,'owned same-group work must really exit despite the missing leader').toBe(false);nativeClean(f);expect(result.stdout).not.toContain('cleanup_incomplete');
+    }finally{
+      if(leafBefore){const live=await verifyCommandProcess(leafBefore.pid);if(live&&live.start===leafBefore.start&&live.pgid===leafBefore.pgid&&live.argv.includes(leafFile)&&live.pgid!==foreignBefore?.pgid&&live.status!=='zombie'){process.kill(-live.pgid,'SIGKILL');console.log('ORACLE-VERIFY-IGNORE-TERM-HARNESS '+JSON.stringify({owned_group:live.pgid,authenticated_survivor:live.pid,signal:'SIGKILL',after_oracle:true}));}}
+      if(run){await Promise.race([run.done,delay(10000)]);if(run.child.exitCode===null&&run.child.signalCode===null)run.child.kill('SIGTERM');await run.done;}
+      foreign.kill('SIGTERM');await foreignDone;await f.close();console.log('ORACLE-VERIFY-IGNORE-TERM-CLEAN '+JSON.stringify({fixture_removed:!existsSync(f.root),foreign_owned_test_process_exited:true}));
+    }
+  },60000);
+});
