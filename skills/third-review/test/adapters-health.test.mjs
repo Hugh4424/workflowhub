@@ -100,6 +100,7 @@ test("a semantic terminal result completes without waiting for a wrapper close",
 import { createHash } from "node:crypto";
 import openCodePacketWorker, { packetPermissions as n3NativePacketPermissions } from "../lib/adapters/opencode.mjs";
 import net from "node:net";
+import http from "node:http";
 import { prepareAttachments, prepareWritableAttachmentView } from "../lib/attachments.mjs";
 function n3OcPacket() {
   const root=fs.realpathSync(temp());const source=path.join(root,"source");fs.mkdirSync(source);
@@ -235,12 +236,11 @@ for(const scenario of n3DiagnosticCases) test(`N3 P2 native diagnostic: ${scenar
 });
 
 
-for (const suffix of ["literal%25", "%2F", "space 中文"]) test(`N3 P2 OpenCode bound exact --dir retains ${suffix} owner bytes`,()=>{
+for (const suffix of ["literal%25", "%2F", "space 中文"]) test(`N3 P2 OpenCode bound exact ${suffix.includes("%")?"rejects unsupported":"--dir retains"} ${suffix} owner bytes`,()=>{
   const s=n3OcPacket();try {
     const owner=path.join(s.root,suffix);fs.renameSync(s.cwd,owner);s.cwd=owner;
-    const p=n3OcPlan(s);const spec=JSON.parse(Buffer.from(p.argv[0],"base64url").toString("utf8"));
-    assert.equal(spec.workspace,fs.realpathSync(owner));
-    assert.equal(p.clientArgv[p.clientArgv.indexOf("--dir")+1],spec.workspace,"native CLI receives literal canonical owner without percent pre-escaping");
+    if(suffix.includes("%")){assert.throws(()=>n3OcPlan(s),{code:"PROVIDER_PACKET_GUARD_UNAVAILABLE"},"unsupported percent owner must fail before any executable serve/client plan exists");}
+    else {const p=n3OcPlan(s);const spec=JSON.parse(Buffer.from(p.argv[0],"base64url").toString("utf8"));assert.equal(spec.workspace,fs.realpathSync(owner));assert.equal(p.clientArgv[p.clientArgv.indexOf("--dir")+1],spec.workspace,"native CLI receives literal canonical owner without percent pre-escaping");}
   }finally{s.clean();}
 });
 
@@ -268,9 +268,9 @@ async function n3NativePath(owner, env) {
 for(const git of [false,true]) test(`N3 P2 OpenCode bound native Read exact grant and denied undeclared paths (${git?"Git":"nonGit"})`,async()=>{
   const root=fs.realpathSync(fs.mkdtempSync("/private/tmp/n3-oc-native-read-"));
   try {
-    const repository=path.join(root,"repo %25 space 中文");fs.mkdirSync(repository);
+    const repository=path.join(root,"repo space 中文");fs.mkdirSync(repository);
     if(git){const init=childProcess.spawnSync("git",["init","--quiet",repository],{encoding:"utf8"});assert.equal(init.status,0,init.stderr);}
-    const owner=path.join(repository,"packet %2F literal%25 空格");fs.mkdirSync(owner);const bundle=path.join(owner,"bundle");fs.mkdirSync(bundle);
+    const owner=path.join(repository,"packet space 空格");fs.mkdirSync(owner);const bundle=path.join(owner,"bundle");fs.mkdirSync(bundle);
     const inside=path.join(bundle,"inside.txt"),sentinel="NATIVE_FULL_BYTES_%25_中文_9f17";fs.writeFileSync(inside,sentinel);
     const bytes=fs.readFileSync(inside);fs.writeFileSync(path.join(bundle,"attachments-manifest.json"),JSON.stringify({files:[{target:"inside.txt",size:bytes.length,sha256:createHash("sha256").update(bytes).digest("hex")}]}));
     const command="/Users/Hugh/.opencode/bin/opencode",p=openCodePacketWorker.start({...provider(command),id:"opencode"},owner,"No model command is executed",path.join(root,"owned-native-runtime"));
@@ -298,3 +298,37 @@ for(const mutation of ["symlink","hardlink","hash","glob"]) test(`N3 P2 OpenCode
     assert.throws(()=>openCodePacketWorker.start({...provider("/Users/Hugh/.opencode/bin/opencode"),id:"opencode"},root,"No native model client may exist"),{code:"PROVIDER_PACKET_GUARD_UNAVAILABLE"},"packet guard failure must occur before returning an executable native plan");
   }finally{fs.rmSync(root,{recursive:true,force:true});}
 });
+
+
+test("N3 P2 OpenCode bound exact percent parent is rejected before a native plan exists",()=>{
+  const s=n3OcPacket();try{const parent=path.join(s.root,"parent%25");fs.mkdirSync(parent);const owner=path.join(parent,"safe-leaf");fs.renameSync(s.cwd,owner);s.cwd=owner;assert.throws(()=>n3OcPlan(s),{code:"PROVIDER_PACKET_GUARD_UNAVAILABLE"});}finally{s.clean();}
+});
+
+
+// The only model endpoint is this owned loopback HTTP fixture. This exercises
+// native SessionPrompt.environment and the real Read roundtrip, not debugRead.
+test("N3 P2 OpenCode workspace real SessionPrompt reaches only loopback and returns native Read bytes in the next request",async()=>{
+  const root=fs.realpathSync(fs.mkdtempSync("/private/tmp/n3-sessionprompt-owned-")),requests=[];let server,child,closed;
+  const run=async(command,args,cwd,env,input="")=>{
+    child=childProcess.spawn(command,args,{cwd,env,detached:true,stdio:["pipe","pipe","pipe"]});let stdout="",stderr="";child.stdout.on("data",b=>stdout+=b);child.stderr.on("data",b=>stderr+=b);closed=new Promise((resolve,reject)=>{child.once("error",reject);child.once("close",(code,signal)=>resolve({code,signal,stdout,stderr}));});child.stdin.end(input);let timer;try{return await Promise.race([closed,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error("owned loopback native consumer did not terminate")),25000);})]);}finally{clearTimeout(timer);if(child.exitCode===null&&child.signalCode===null){try{process.kill(-child.pid,"SIGTERM");}catch{}await closed;}assert.throws(()=>process.kill(child.pid,0),{code:"ESRCH"});}
+  };
+  try {
+    const home=path.join(root,"home"),configRoot=path.join(home,"config"),data=path.join(home,"data");for(const d of [home,configRoot,data,path.join(home,".local/share/opencode")])fs.mkdirSync(d,{recursive:true});
+    const source=path.join(root,"source");fs.mkdirSync(source);const sentinel="NATIVE_SESSIONPROMPT_READ_EXACT_汉字_42a9";fs.writeFileSync(path.join(source,"inside.txt"),sentinel);const bytes=fs.readFileSync(path.join(source,"inside.txt"));
+    const runtime=path.join(root,"runtime");fs.mkdirSync(runtime);const stored=prepareAttachments({root:source,delivery:"file_only",manifest:{version:1,bundle_id:"owned-local-sessionprompt",entries:[{source:"inside.txt",destination:"inside.txt",size:bytes.length,sha256:createHash("sha256").update(bytes).digest("hex"),embed:false}]}},runtime,"opencode/profile-local",10000,[{root:source,sources:["inside.txt"]}]);const view=prepareWritableAttachmentView(runtime,"opencode/profile-local",stored),inside=path.join(view.bundle,"inside.txt");
+    server=http.createServer((req,res)=>{let body="";req.on("data",b=>body+=b);req.on("end",()=>{const payload=JSON.parse(body);requests.push({url:req.url,body:payload});const main=payload.messages?.some(m=>m.role==="system"&&JSON.stringify(m.content).includes("Working directory:"));const hasRead=payload.messages?.some(m=>m.role==="tool"&&JSON.stringify(m.content).includes(sentinel));const tool=main&&!hasRead&&requests.length<5;
+      res.writeHead(200,{"content-type":"text/event-stream","connection":"close"});const chunk=(delta,finish_reason=null)=>res.write("data: "+JSON.stringify({id:"owned-completion",object:"chat.completion.chunk",created:1,model:"fixture",choices:[{index:0,delta,finish_reason}]})+"\n\n");
+      if(tool)chunk({role:"assistant",tool_calls:[{index:0,id:"owned_read",type:"function",function:{name:"read",arguments:JSON.stringify({filePath:inside})}}]});else chunk({role:"assistant",content:'{"findings":[]}'});chunk({},tool?"tool_calls":"stop");res.end("data: [DONE]\n\n");});});await new Promise((resolve,reject)=>{server.once("error",reject);server.listen(0,"127.0.0.1",resolve);});const port=server.address().port;
+    const cfg={enabled_providers:["ownedloopback"],model:"ownedloopback/fixture",small_model:"ownedloopback/fixture",provider:{ownedloopback:{npm:"@ai-sdk/openai-compatible",name:"Owned local HTTP fixture",options:{baseURL:`http://127.0.0.1:${port}/v1`,apiKey:"owned-fixture-not-a-secret"},models:{fixture:{name:"Owned fixture",limit:{context:32000,output:1024}}}}},plugin:[],instructions:[],autoupdate:false,share:"disabled"};fs.mkdirSync(path.join(configRoot,"opencode"),{recursive:true});fs.writeFileSync(path.join(configRoot,"opencode/opencode.json"),JSON.stringify(cfg));
+    const env={PATH:process.env.PATH,LANG:"en_US.UTF-8",HOME:home,XDG_CONFIG_HOME:configRoot,XDG_DATA_HOME:data,XDG_CACHE_HOME:path.join(home,"cache"),XDG_STATE_HOME:path.join(home,"state"),OPENCODE_DISABLE_MODELS_FETCH:"1",OPENCODE_DISABLE_AUTOUPDATE:"1",OPENCODE_DISABLE_DEFAULT_PLUGINS:"1",OPENCODE_DISABLE_EXTERNAL_SKILLS:"1",OPENCODE_DISABLE_CLAUDE_CODE:"1",OPENCODE_DISABLE_PROJECT_CONFIG:"1",OPENCODE_PERMISSION:JSON.stringify({"*":"deny"})};
+    const bad=path.join(root,"opencode%2Flegacy");fs.mkdirSync(bad);const negative=await run("/Users/Hugh/.opencode/bin/opencode",["--pure","run","--dir",bad,"--model","ownedloopback/fixture","--title","Owned negative","--format","json","--print-logs","ENV_CONSUMER_NEGATIVE"],bad,env);
+    console.log(JSON.stringify({owned_native_negative:negative,http_requests:requests.length,external_model_endpoints:[]}));assert.equal(requests.length,0,"legacy percent coordinate must fail before contacting even the local model");assert.match(negative.stderr+negative.stdout,/ENOENT|NotFound/);assert.match(negative.stderr+negative.stdout,/SystemPrompt\.environment/);
+    const original=process.env;let planned;try{process.env=env;planned=openCodePacketWorker.start({...provider("/Users/Hugh/.opencode/bin/opencode"),id:"opencode",model:"ownedloopback/fixture",env:["OPENCODE_DISABLE_MODELS_FETCH","OPENCODE_DISABLE_AUTOUPDATE"]},view.cwd,"Read only bundle/inside.txt; return the supplied JSON",null);}finally{process.env=original;}
+    const spec=JSON.parse(Buffer.from(planned.argv[0],"base64url").toString("utf8"));spec.clientArgv.push("--title","Owned local consumer");const positive=await run(process.execPath,[planned.command,Buffer.from(JSON.stringify(spec)).toString("base64url")],view.cwd,{...env,...planned.env,HOME:home},planned.input);
+    console.log(JSON.stringify({owned_native_positive:positive,loopback_requests:requests,external_model_endpoints:[]}));assert.equal(positive.code,0,positive.stderr);const main=requests.filter(r=>r.body.messages?.some(m=>m.role==="system"&&JSON.stringify(m.content).includes("Working directory:")));assert.ok(main.length>=2,"native Read must produce a second actual model request");assert.ok(main.some(r=>r.body.messages.some(m=>m.role==="system"&&JSON.stringify(m.content).includes(view.cwd))),"actual environment must identify the producer safe cwd");const feedback=main.flatMap(r=>r.body.messages).find(m=>m.role==="tool"&&JSON.stringify(m.content).includes(sentinel));assert.ok(feedback,"the next actual local request must contain the real native Read sentinel result");assert.match(JSON.stringify(feedback.content),/End of file - total 1 lines/);assert.match(positive.stdout,/findings/);
+  } finally {
+    if(child&&child.exitCode===null&&child.signalCode===null){try{process.kill(-child.pid,"SIGKILL");}catch{}await closed;}
+    if(server){server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
+    const unlock=p=>{for(const e of fs.readdirSync(p,{withFileTypes:true})){const f=path.join(p,e.name);if(e.isDirectory())unlock(f);if(!e.isSymbolicLink())fs.chmodSync(f,e.isDirectory()?0o700:0o600);}fs.chmodSync(p,0o700);};unlock(root);fs.rmSync(root,{recursive:true,force:true});
+  }
+},60000);

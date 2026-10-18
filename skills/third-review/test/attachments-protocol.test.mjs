@@ -8,6 +8,8 @@ import { test, vi, beforeEach, afterEach } from "vitest";
 import { Broker, publicV2Error, sumUsage } from "../lib/broker.mjs";
 import { canonicalDeliveryManifestHash, canonicalInnerManifestHash, canonicalMaterialManifestHash, canonicalPacketHash, canonicalWorkflowHubMaterialId, planDelivery, prepareAttachments, probeAttachmentWorkspace, validateAttachments } from "../lib/attachments.mjs";
 import { validateConfig } from "../lib/config.mjs";
+import { prepareWritableAttachmentView, verifyWritableAttachmentView, refreshWritableAttachmentView, verifyFrozenAttachments } from "../lib/attachments.mjs";
+import { providerRuntimeKey } from "../lib/provider-ids.mjs";
 import { cancellationRequested, cancellationSource, createRuntime, requestCancellation } from "../lib/runtime.mjs";
 
 const fake = migratedFilePath(new URL("../test/fake-cli.mjs", import.meta.url));
@@ -594,4 +596,20 @@ test("a tampered cancellation marker remains explicit instead of defaulting to u
   fs.writeFileSync(path.join(runtime, state.runtime_id, ".cancel-kimi"), JSON.stringify({ version: 1, source: "forged" }));
   assert.equal(cancellationRequested(runtime, state.runtime_id, "kimi"), true);
   assert.equal(cancellationSource(runtime, state.runtime_id, "kimi"), "invalid");
+});
+
+
+for(const adapter of ["opencode","kimi"]) test(`N3 P2 OpenCode workspace ${adapter} profile and step views preserve identity while sharing one create verify refresh leaf`,()=>{
+  const root=fs.realpathSync(temp()),sourceRoot=fs.realpathSync(simpleSource());controlledPacketCleanup.push(root,sourceRoot);
+  const keys=[`${adapter}/profile-one`,`${adapter}/profile-two`,...["reconstruct","challenge","synthesize"].map(step=>`${adapter}/profile-one-direction-${step}`)];const owners=[];
+  for(const key of keys){
+    const historical=providerRuntimeKey(key),stored=prepareAttachments(simplePacket(sourceRoot),root,key,10000,[{root:sourceRoot,sources:["review-instructions.md","requirements","manifest.json"]}]);
+    const frozen=verifyFrozenAttachments(root,key,stored);assert.equal(frozen.cwd,path.join(root,"workspace",historical));assert.equal(providerRuntimeKey(key),historical,"runtime identity is unchanged");
+    const view=prepareWritableAttachmentView(root,key,stored),leaf=adapter==="opencode"?"opencode-"+Buffer.from(key,"utf8").toString("base64url"):historical;
+    assert.equal(view.cwd,path.join(root,"work",leaf));if(adapter==="opencode")assert.match(path.basename(view.cwd),/^opencode-[A-Za-z0-9_-]+$/);owners.push(view.cwd);
+    assert.deepEqual(verifyWritableAttachmentView(root,key,stored),view);assert.deepEqual(refreshWritableAttachmentView(root,key,key,stored),view);
+    const manifest=path.join(view.bundle,"attachments-manifest.json");fs.chmodSync(manifest,0o600);fs.writeFileSync(manifest,"{}");assert.throws(()=>verifyWritableAttachmentView(root,key,stored),{code:"ATTACHMENT_IMMUTABLE"});
+    assert.deepEqual(refreshWritableAttachmentView(root,key,key,stored),view);assert.deepEqual(verifyWritableAttachmentView(root,key,stored),view);assert.equal(fs.readFileSync(path.join(frozen.cwd,"review-instructions.md"),"utf8"),"one");
+  }
+  assert.equal(new Set(owners).size,keys.length,"complete profile and step identities must never collide");
 });

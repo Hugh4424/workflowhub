@@ -212,8 +212,9 @@ function preserveNativeAuth(dataHome) {
   fs.chmodSync(target, 0o600);
 }
 function executionPlan(provider, cwd, prompt, session = null, runtime = null) {
-  requireNativePermissions(provider);
   cwd = fs.realpathSync(cwd);
+  if (cwd.includes("%")) fail("PROVIDER_PACKET_GUARD_UNAVAILABLE", "OpenCode native workspace cannot contain percent-encoded path segments");
+  requireNativePermissions(provider);
   const permission = packetPermissions(cwd);
   const dataHome = isolatedDataHome(provider, runtime);
   const extraEnv = {

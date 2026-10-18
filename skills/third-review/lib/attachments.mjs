@@ -7,6 +7,9 @@ import { adapterForProviderId, providerRuntimeKey } from "./provider-ids.mjs";
 const digest = (value) => createHash("sha256").update(value).digest("hex");
 const storageKey = (provider) => providerRuntimeKey(provider) ?? provider;
 const providerAdapter = (provider) => adapterForProviderId(provider) ?? provider;
+// Only writable OpenCode views cross native URI-based workspace consumers.
+const workKey = (provider) => providerAdapter(provider) === "opencode"
+  ? "opencode-" + Buffer.from(provider, "utf8").toString("base64url") : storageKey(provider);
 export function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
@@ -193,7 +196,7 @@ export function verifyFrozenAttachments(runtime, provider, stored) {
   catch (error) { if (error?.code === "ATTACHMENT_IMMUTABLE") throw error; fail("ATTACHMENT_IMMUTABLE", "frozen attachment workspace is unavailable"); }
 }
 export function prepareWritableAttachmentView(runtime, provider, stored) {
-  const key = storageKey(provider); const frozen = verifyFrozenAttachments(runtime, provider, stored); const cwd = path.join(runtime, "work", key); const bundle = path.join(cwd, "bundle"); fs.mkdirSync(cwd, { recursive: true, mode: 0o700 }); fs.chmodSync(cwd, 0o700);
+  const frozen = verifyFrozenAttachments(runtime, provider, stored); const cwd = path.join(runtime, "work", workKey(provider)); const bundle = path.join(cwd, "bundle"); fs.mkdirSync(cwd, { recursive: true, mode: 0o700 }); fs.chmodSync(cwd, 0o700);
   if (fs.existsSync(bundle)) { try { verifyTree(bundle, stored); return { cwd, bundle }; } catch (error) { if (error?.code === "ATTACHMENT_IMMUTABLE") throw error; fail("ATTACHMENT_IMMUTABLE", "provider bundle view is unavailable"); } }
   const staging = path.join(cwd, `.bundle-${randomUUID()}`); fs.mkdirSync(staging, { mode: 0o700 });
   try { for (const item of stored.files) { const source = path.join(frozen.cwd, ...item.target.split("/")); const target = path.join(staging, ...item.target.split("/")); fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 }); fs.copyFileSync(source, target, fs.constants.COPYFILE_EXCL); fs.chmodSync(target, 0o400); } if (providerAdapter(provider) === "kimi") fs.mkdirSync(path.join(staging, "skills"), { recursive: true, mode: 0o700 }); writeManifest(staging, stored); lockTree(staging); fs.renameSync(staging, bundle); }
@@ -201,12 +204,12 @@ export function prepareWritableAttachmentView(runtime, provider, stored) {
   return { cwd, bundle };
 }
 export function verifyWritableAttachmentView(runtime, provider, stored) {
-  const cwd = path.join(runtime, "work", storageKey(provider)); const bundle = path.join(cwd, "bundle");
+  const cwd = path.join(runtime, "work", workKey(provider)); const bundle = path.join(cwd, "bundle");
   try { if (!fs.statSync(cwd).isDirectory()) fail("ATTACHMENT_IMMUTABLE", "provider writable workspace is unavailable"); verifyTree(bundle, stored); return { cwd, bundle }; }
   catch (error) { if (error?.code === "ATTACHMENT_IMMUTABLE") throw error; fail("ATTACHMENT_IMMUTABLE", "provider bundle view is unavailable"); }
 }
 export function refreshWritableAttachmentView(runtime, provider, sourceProvider, stored) {
-  const frozen = verifyFrozenAttachments(runtime, sourceProvider, stored); const cwd = path.join(runtime, "work", storageKey(provider)); const bundle = path.join(cwd, "bundle"); fs.mkdirSync(cwd, { recursive: true, mode: 0o700 }); fs.chmodSync(cwd, 0o700);
+  const frozen = verifyFrozenAttachments(runtime, sourceProvider, stored); const cwd = path.join(runtime, "work", workKey(provider)); const bundle = path.join(cwd, "bundle"); fs.mkdirSync(cwd, { recursive: true, mode: 0o700 }); fs.chmodSync(cwd, 0o700);
   if (fs.existsSync(bundle)) { try { verifyTree(bundle, stored); return { cwd, bundle }; } catch { /* replace only from the verified frozen source */ } }
   const staging = path.join(cwd, `.bundle-next-${randomUUID()}`); const backup = path.join(cwd, `.bundle-old-${randomUUID()}`); fs.mkdirSync(staging, { mode: 0o700 }); let movedOld = false;
   try {
