@@ -1,3 +1,5 @@
+import { Script } from "node:vm";
+
 /** Shared provider-visible text/JSON/UTF-8 byte projection.
  * Preserve public provenance and line positions; remove known credentials and
  * local host paths before serialization. This is not a universal secret detector.
@@ -37,12 +39,81 @@ function urlRanges(text) {
   return [...text.matchAll(URL_TEXT)].map(match => [match.index, match.index + match[0].length]);
 }
 function insideUrl(ranges, offset) { return ranges.some(([start, end]) => offset >= start && offset < end); }
+// Only a complete, parseable single-line declaration can preserve an await
+// keyword. The API accepts arbitrary text: strings/comments/templates are not
+// executable context, even when a line in their body looks like a declaration.
+function executableAwaitOffsets(text) {
+  const candidates = [...text.matchAll(/^[ \t]*(?:[+-][ \t]*)?(?:const|let|var)[ \t]+[A-Za-z_$][\w$]*[ \t]*=[ \t]*(await)[ \t]+[A-Za-z_$][\w$]*(?:[ \t]*\.[ \t]*[A-Za-z_$][\w$]*)*[ \t]*\(/gm)];
+  if (candidates.length === 0) return new Set();
+  const code = new Uint8Array(text.length).fill(1);
+  const quotedEnd = (start, quote) => {
+    let i = start + 1;
+    while (i < text.length) {
+      if (text[i] === "\\") { i += 2; continue; }
+      if (text[i++] === quote) return i;
+    }
+    return i;
+  };
+  const commentEnd = start => {
+    const end = text.indexOf("*/", start + 2);
+    return end < 0 ? text.length : end + 2;
+  };
+  const lineEnd = start => { const end = text.indexOf("\n", start); return end < 0 ? text.length : end; };
+  const templateEnd = start => {
+    const stack = [{ text: true }]; let i = start + 1;
+    while (i < text.length && stack.length) {
+      const frame = stack.at(-1), char = text[i];
+      if (frame.text) {
+        if (char === "\\") { i += 2; continue; }
+        if (char === "`") { stack.pop(); i++; continue; }
+        if (char === "$" && text[i + 1] === "{") { stack.push({ depth: 1 }); i += 2; continue; }
+      } else {
+        if (char === "'" || char === '"') { i = quotedEnd(i, char); continue; }
+        if (char === "`") { stack.push({ text: true }); i++; continue; }
+        if (char === "/" && text[i + 1] === "*") { i = commentEnd(i); continue; }
+        // A slash expression is deliberately conservative; no execution
+        // exception is needed inside a template interpolation or regex body.
+        if (char === "/") { i = lineEnd(i); continue; }
+        if (char === "{") frame.depth++;
+        if (char === "}" && --frame.depth === 0) stack.pop();
+      }
+      i++;
+    }
+    return i;
+  };
+  for (let i = 0; i < text.length;) {
+    const start = i, char = text[i];
+    if (char === "'" || char === '"') i = quotedEnd(i, char);
+    else if (char === "`") i = templateEnd(i);
+    else if (char === "/" && text[i + 1] === "*") i = commentEnd(i);
+    else if (char === "/") i = lineEnd(i);
+    else { i++; continue; }
+    code.fill(0, start, i);
+  }
+  const allowed = new Set();
+  for (const match of candidates) {
+    const keyword = match.index + match[0].indexOf("await", match[0].indexOf("=") + 1);
+    if (code.subarray(match.index, keyword + 5).some(value => value === 0)) continue;
+    const end = lineEnd(match.index);
+    const declaration = text.slice(match.index, end).replace(/^([ \t]*)[+-][ \t]*/, "$1");
+    try {
+      // Parse only. Never evaluate caller material. V8 rejects incomplete or
+      // ambiguous RHS syntax instead of granting it an exception.
+      new Script(`(async function(){\n${declaration}\n})`);
+      allowed.add(keyword);
+    } catch { /* Ambiguous material retains ordinary credential redaction. */ }
+  }
+  return allowed;
+}
+
 function redactKnownSecrets(value) {
+  const executableAwait = executableAwaitOffsets(value);
   const ranges = urlRanges(value);
   const text = value.replace(KEY_VALUE_SECRET, (whole, prefix, authorization, literal, offset) => {
     // Query keys belong to redactUrl. Outside URLs, redact the complete known
     // credential value even when its quoted text or Bearer token contains a URL.
     if (insideUrl(ranges, offset)) return whole;
+    if (literal === "await" && executableAwait.has(offset + prefix.length)) return whole;
     if (literal === '""' || literal === "''") return whole;
     const quote = literal?.[0];
     return prefix + (quote === '"' || quote === "'" ? `${quote}${SECRET_PLACEHOLDER}${quote}` : SECRET_PLACEHOLDER);

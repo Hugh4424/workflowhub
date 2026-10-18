@@ -1,9 +1,11 @@
 import { createHash, randomInt } from "node:crypto";
 import fs from "node:fs";
-import { homedir } from "node:os";
+import { homedir, constants as osConstants } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
 import { invalid, lines, nonempty, plan, publicOutputRewritePrompt } from "./shared.mjs";
+import { fail } from "../errors.mjs";
 import { failureCode, failureMessage } from "../provider-failure.mjs";
 
 function normalizeAssistantText(value) {
@@ -27,6 +29,81 @@ function parseTerminalRecovery(stdout, stderr, expectedSession = null) {
   return result;
 }
 const controller = fileURLToPath(new URL("./opencode-supervised-cli.mjs", import.meta.url));
+const nativeSupport = new Map();
+
+function requireNativePermissions(provider) {
+  try {
+    const requested = provider.command.includes(path.sep) ? provider.command : String(process.env.PATH ?? "").split(path.delimiter).map((directory) => path.join(directory, provider.command)).find((file) => fs.existsSync(file));
+    const command = fs.realpathSync(requested); const stat = fs.statSync(command);
+    const identity = `${command}:${stat.size}:${stat.mtimeMs}`;
+    if (nativeSupport.has(identity)) return;
+    const version = spawnSync(command, ["--version"], { encoding: "utf8", timeout: 10_000 });
+    if (version.status !== 0 || !/^1\.19\.\d+\s*$/.test(version.stdout)) throw new Error("unverified native CLI version");
+    const bytes = fs.readFileSync(command);
+    for (const marker of ["OPENCODE_CONFIG_CONTENT", "OPENCODE_PERMISSION", "external_directory"]) if (!bytes.includes(Buffer.from(marker))) throw new Error("native permissions absent");
+    nativeSupport.set(identity, true);
+  } catch {
+    fail("PROVIDER_PACKET_GUARD_UNAVAILABLE", "OpenCode native packet permissions are unavailable or their installed version is unverified");
+  }
+}
+
+export function packetPermissions(cwd, worktree = null) {
+  try {
+    const bundle = path.join(cwd, "bundle");
+    if (fs.realpathSync(bundle) !== bundle || !fs.lstatSync(bundle).isDirectory()) throw new Error("unsafe bundle");
+    const manifestFile = path.join(bundle, "attachments-manifest.json"); const manifestStat = fs.lstatSync(manifestFile);
+    if (!manifestStat.isFile() || manifestStat.isSymbolicLink() || manifestStat.nlink !== 1) throw new Error("unsafe manifest");
+    const manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8"));
+    if (!Array.isArray(manifest.files) || !manifest.files.length) throw new Error("missing packet members");
+    const read = { "*": "deny" };
+    for (const item of manifest.files) {
+      if (typeof item.target !== "string" || item.target.includes("\\") || path.isAbsolute(item.target) || item.target.split("/").some((part) => !part || part === "." || part === "..")) throw new Error("unsafe member path");
+      const file = path.join(bundle, item.target); const stat = fs.lstatSync(file);
+      // Native permission patterns are globs. Refuse metacharacters rather
+      // than broadening an exact member into a wildcard grant.
+      if (/[\*?\[\]{}]/.test(file) || fs.realpathSync(file) !== file || !stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || stat.size !== item.size || createHash("sha256").update(fs.readFileSync(file)).digest("hex") !== item.sha256 || Object.hasOwn(read, file)) throw new Error("unsafe packet member");
+      const pattern = worktree === null ? file : path.relative(worktree, file);
+      if (!pattern || /[\*?\[\]{}]/.test(pattern) || Object.hasOwn(read, pattern)) throw new Error("unsafe native read coordinate");
+      read[pattern] = "allow";
+    }
+    return { "*": "deny", read };
+  } catch {
+    fail("PROVIDER_PACKET_GUARD_UNAVAILABLE", "OpenCode requires an intact frozen packet manifest and regular exact members without glob metacharacters");
+  }
+}
+
+function verifyNativePolicy(provider, cwd, env, permission) {
+  let reason = "debug-exit", exit = null, signal = null;
+  try {
+    const result = spawnSync(provider.command, ["--pure", "debug", "agent", "build"], { cwd, env, encoding: "utf8", timeout: 15_000, maxBuffer: 4 * 1024 * 1024 });
+    exit = Number.isInteger(result.status) && result.status >= 0 && result.status <= 255 ? result.status : null;
+    signal = typeof result.signal === "string" && Object.hasOwn(osConstants.signals, result.signal) ? result.signal : null;
+    if (result.error || result.status !== 0 || result.signal) {
+      reason = signal === null ? "debug-exit" : "debug-signal";
+      throw new Error("native agent policy unavailable");
+    }
+    reason = "debug-json";
+    const agent = JSON.parse(result.stdout);
+    reason = "permission-mismatch";
+    verifyNativeAgentPolicy(agent, permission);
+  } catch {
+    fail("PROVIDER_PACKET_GUARD_UNAVAILABLE", `OpenCode did not confirm the final native default-deny exact-read policy; reason=${reason}; exit=${exit}; signal=${signal}`);
+  }
+}
+
+// Shared only with the owned native supervisor final-server readback.
+export function verifyNativeAgentPolicy(agent, permission, requireTools = true) {
+    if (agent.name !== "build" || (requireTools && (agent.tools?.read !== true || Object.entries(agent.tools).some(([tool, enabled]) => tool !== "read" && enabled !== false)))) throw new Error("native tools exceed packet scope");
+    const rules = agent.permission;
+    if (!Array.isArray(rules) || rules.some(rule => !rule || typeof rule.permission !== "string" || typeof rule.pattern !== "string" || !["allow","ask","deny"].includes(rule.action))) throw new Error("native permission readback missing");
+    const lastDefault = rules.findLastIndex((rule) => rule.permission === "*" && rule.pattern === "*");
+    if (lastDefault < 0 || rules[lastDefault].action !== "deny") throw new Error("native default deny missing");
+    const current = rules.slice(lastDefault + 1);
+    const reads = current.filter((rule) => rule.permission === "read");
+    const expected = Object.entries(permission.read);
+    if (JSON.stringify(reads.map((rule) => [rule.pattern, rule.action])) !== JSON.stringify(expected)) throw new Error("native exact read grants differ");
+    if (current.some((rule) => rule.permission !== "read" && !(rule.permission === "external_directory" && rule.action === "allow" && rule.pattern.endsWith("/opencode/tool-output/*")))) throw new Error("native policy adds another tool grant");
+}
 
 function cursorFor(messages, status = null) {
   if (!messages.length && !status) return null;
@@ -43,7 +120,7 @@ function assistantTerminal(messages) {
       return { failed: true, tool_only: true, code: "PROVIDER_NO_TERMINAL_RESULT", message: "OpenCode session ended after tool-only steps without a terminal assistant result" };
     }
     if (["error", "failed", "cancelled", "canceled"].includes(String(reason).toLowerCase()) || message.info?.error) {
-      const reported = message.info?.error?.message ?? `OpenCode session finished with ${reason ?? "an error"}`;
+      const reported = message.info?.error?.message ?? message.info?.error?.data?.message ?? `OpenCode session finished with ${reason ?? "an error"}`;
       const classified = failureCode(reported);
       const code = [
         "AUTHENTICATION_FAILED", "NETWORK_TLS_CERTIFICATE", "NETWORK_UNAVAILABLE", "RATE_LIMITED",
@@ -136,19 +213,26 @@ function preserveNativeAuth(dataHome) {
 }
 function executionPlan(provider, cwd, prompt, session = null, runtime = null) {
   cwd = fs.realpathSync(cwd);
+  if (cwd.includes("%")) fail("PROVIDER_PACKET_GUARD_UNAVAILABLE", "OpenCode native workspace cannot contain percent-encoded path segments");
+  requireNativePermissions(provider);
+  const permission = packetPermissions(cwd);
   const dataHome = isolatedDataHome(provider, runtime);
-  const extraEnv = { OPENCODE_DISABLE_CLAUDE_CODE: "1", ...(dataHome ? { XDG_DATA_HOME: dataHome } : {}) };
-  // OpenCode decodes percent escapes in --dir. Runtime provider keys use
-  // `%2F` to keep `provider/model` in one directory name, so escape the
-  // percent sign once more before handing the path to OpenCode.
-  const cliCwd = cwd.replaceAll("%", "%25");
+  const extraEnv = {
+    OPENCODE_DISABLE_CLAUDE_CODE: "1", OPENCODE_DISABLE_EXTERNAL_SKILLS: "1", OPENCODE_DISABLE_DEFAULT_PLUGINS: "1", OPENCODE_DISABLE_PROJECT_CONFIG: "1",
+    OPENCODE_CONFIG_CONTENT: JSON.stringify({ permission, default_agent: "build", agent: { build: { permission } }, plugin: [], instructions: [], autoupdate: false, share: "disabled" }),
+    OPENCODE_PERMISSION: JSON.stringify(permission),
+    ...(dataHome ? { XDG_DATA_HOME: dataHome } : {}),
+  };
+  verifyNativePolicy(provider, cwd, plan(provider, cwd, [], null, extraEnv).env, permission);
+  // The native CLI consumes the literal owner; API encoding belongs to the HTTP boundary.
+  const cliCwd = cwd;
   if (!/^opencode(?:$|[-_.])/.test(path.basename(provider.command))) {
-    const argv = ["run", ...(session ? ["--session", session] : []), "--pure", "--dir", cliCwd, "--format", "json"];
+    const argv = ["run", ...(session ? ["--session", session] : []), "--pure", "--agent", "build", "--dir", cliCwd, "--format", "json"];
     if (provider.model) argv.push("--model", provider.model); if (provider.effort) argv.push("--variant", provider.effort);
     return { ...plan(provider, cwd, argv, prompt, extraEnv), observeLine };
   }
   const port = randomInt(49152, 65536); const url = `http://127.0.0.1:${port}`;
-  const clientArgv = ["run", "--attach", url, "--pure", "--dir", cliCwd, "--format", "json"];
+  const clientArgv = ["run", "--attach", url, "--pure", "--agent", "build", "--dir", cliCwd, "--format", "json"];
   if (session) clientArgv.push("--session", session);
   if (provider.model) clientArgv.push("--model", provider.model);
   if (provider.effort) clientArgv.push("--variant", provider.effort);
@@ -165,6 +249,7 @@ export default {
   publicOutputRewritePrompt,
   requiresWritableCwd: true,
   stableContinuationCwd: true,
+  runFromWritableRoot: true,
   promptViaStdin: true,
   doctor: (provider, cwd) => plan(provider, cwd, ["--version"], null),
   start(provider, cwd, prompt, runtime) { return executionPlan(provider, cwd, prompt, null, runtime); },

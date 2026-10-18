@@ -436,15 +436,15 @@ describe("trusted third-review host configuration", () => {
     const { hostConfig } = configuredRoot();
     const host = JSON.parse(readFileSync(hostConfig, "utf8"));
     host.wh_review = { version: 2, stages: {
-      "build-spec": { initial: ["kimi", "claude-code"], mode: "single_round" },
+      "build-plan": { initial: ["kimi", "claude-code"], mode: "single_round" },
     } };
     writeFileSync(hostConfig, JSON.stringify(host));
-    expect(resolveTrustedReviewRoute(loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig }).whReview, "build-spec"))
+    expect(resolveTrustedReviewRoute(loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig }).whReview, "build-plan"))
       .toEqual({ initial: ["kimi", "claude-code"], mode: "single_round" });
-    host.wh_review.stages["build-spec"].mode = "full_on_structural_rework";
+    host.wh_review.stages["build-plan"].mode = "full_on_structural_rework";
     writeFileSync(hostConfig, JSON.stringify(host));
     expect(() => loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig }))
-      .toThrow(/build-spec\.mode must be single_round/i);
+      .toThrow(/build-plan\.mode must be single_round/i);
   });
 
   it("rejects V2 modes that could reopen a cheap non-code closure review", () => {
@@ -508,6 +508,47 @@ describe("trusted third-review host configuration", () => {
     expect(loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig, requestedStage: "build-code" }).whReview)
       .not.toHaveProperty("profiles");
     expect(() => loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig })).toThrow(/build-plan\.initial must be a provider id/i);
+  });
+
+  it("N3 P2 route accepts omitted legacy minimum through trusted load resolve and selection", () => {
+    const { brokerConfig, hostConfig } = configuredRoot();
+    const initial = ["opencode", "kimi"];
+    const host = JSON.parse(readFileSync(hostConfig, "utf8"));
+    host.wh_review = { version: 2, stages: {
+      "make-decision": { direction: { initial, mode: "single_round" } },
+    } };
+    writeFileSync(hostConfig, JSON.stringify(host));
+    const trusted = loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig, requestedStage: "make-decision", requestedTrack: "direction" });
+    const route = resolveTrustedReviewRoute(trusted.whReview, "make-decision", "direction");
+    expect(route).toEqual({ initial, mode: "single_round" });
+    expect(Object.hasOwn(route, "minimum_heterologous")).toBe(false);
+    const selected = selectTrustedReviewProviderSelection(trusted.config, route);
+    expect(selected.providers).toEqual(initial);
+    expect(selected.eligibleProfiles).toEqual(initial);
+    expect(selected.requestedProfiles).toEqual(initial);
+    expect(selected.skipped_providers).toEqual([]);
+    expect(selected.provider_models).toEqual({ opencode: "opencode/deepseek-flash", kimi: "kimi-for-coding" });
+    expect(Object.keys(selected.provider_identities)).toEqual(initial);
+    expect(selected.provider_identities.opencode.source_id).toBe("source-opencode");
+    expect(selected.provider_identities.kimi.source_id).toBe("source-kimi");
+    for (const identity of Object.values(selected.provider_identities)) expect(identity.config_id).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it("N3 P2 route rejects every explicit retired minimum without changing configured provider order", () => {
+    const { hostConfig } = configuredRoot();
+    const initial = ["opencode", "kimi"];
+    const host = JSON.parse(readFileSync(hostConfig, "utf8"));
+    const configure = (minimum) => {
+      host.wh_review = { version: 2, stages: {
+        "make-decision": { direction: { initial, mode: "single_round", minimum_heterologous: minimum } },
+      } };
+      writeFileSync(hostConfig, JSON.stringify(host));
+    };
+    for (const minimum of [7, null, 0, -1, 1.5, "2"]) {
+      configure(minimum);
+      expect(() => loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig, requestedStage: "make-decision", requestedTrack: "direction" }))
+        .toThrow(/minimum_heterologous is retired/);
+    }
   });
 
 });

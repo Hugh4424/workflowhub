@@ -458,7 +458,7 @@ describe("simple material-only review", () => {
     expect(result.material_id).not.toBe(forgedMaterialId);
   });
 
-  it.each(["direction", "detail"])("dispatches one red/blue pair for make-decision %s", async (reviewTrack) => {
+  it.each(["direction"])("dispatches one red/blue pair for make-decision %s", async (reviewTrack) => {
     const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), `simple-wh-review-red-blue-${reviewTrack}-`)));
     roots.push(attachmentRoot);
     const calls = [];
@@ -466,7 +466,7 @@ describe("simple material-only review", () => {
       stage: "make-decision",
       review_track: reviewTrack,
       host_provider: "codex",
-      materials: { decision: "current decision bytes" },
+      materials: { raw_requirement: "Review the complete user need.", objective_facts: "The configured provider boundary is controlled.", convergence_outline: "Preserve independent direction roles and explicit failures." },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
       resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
@@ -501,8 +501,8 @@ describe("simple material-only review", () => {
     const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-pair-dispatch-")));
     roots.push(attachmentRoot);
     const dispatched = await runSimpleReview({
-      stage: "make-decision", review_track: "detail", host_provider: "codex",
-      materials: { decision: "current decision bytes" },
+      stage: "make-decision", review_track: "direction", host_provider: "codex",
+      materials: { raw_requirement: "Review the complete user need.", objective_facts: "The configured provider boundary is controlled.", convergence_outline: "Preserve independent direction roles and explicit failures." },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
       resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
@@ -523,8 +523,8 @@ describe("simple material-only review", () => {
     const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-pair-blocked-")));
     roots.push(attachmentRoot);
     const blocked = await runSimpleReview({
-      stage: "make-decision", review_track: "detail", host_provider: "codex",
-      materials: { decision: "current decision bytes" },
+      stage: "make-decision", review_track: "direction", host_provider: "codex",
+      materials: { raw_requirement: "Review the complete user need.", objective_facts: "The configured provider boundary is controlled.", convergence_outline: "Preserve independent direction roles and explicit failures." },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
       resolveRoute: () => ({ initial: [], mode: "single_round" }),
@@ -542,7 +542,7 @@ describe("simple material-only review", () => {
     roots.push(attachmentRoot);
     const result = await runSimpleReview({
       stage: "make-decision", review_track: "direction", host_provider: "codex",
-      materials: { decision: "current decision bytes" },
+      materials: { raw_requirement: "Review the complete user need.", objective_facts: "The configured provider boundary is controlled.", convergence_outline: "Preserve independent direction roles and explicit failures." },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
       resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
@@ -565,7 +565,7 @@ describe("simple material-only review", () => {
     roots.push(attachmentRoot);
     const result = await runSimpleReview({
       stage: "make-decision", review_track: "direction", host_provider: "codex",
-      materials: { decision: "current decision bytes" },
+      materials: { raw_requirement: "Review the complete user need.", objective_facts: "The configured provider boundary is controlled.", convergence_outline: "Preserve independent direction roles and explicit failures." },
     }, {
       pairId: "pair-material-mismatch",
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
@@ -582,16 +582,17 @@ describe("simple material-only review", () => {
       } },
     });
     expect(result).toMatchObject({
-      status: "available-with-failures", pair_status: "partial", material_consistency: "consistent",
+      status: "available-with-failures", pair_status: "partial",
       blue_incomplete: true,
     });
     expect(result.role_results.blue).toMatchObject({
       status: "unavailable",
       material_id: result.role_results.red.material_id,
       error: { code: "REVIEW_MATERIAL_IDENTITY_MISMATCH" },
-      provider_results: [],
+      provider_results: [{ provider: "model-a", status: "completed", parse_outcome: "ok", identity_authenticated: false, pair_id: "pair-material-mismatch", role: "blue" }],
       findings: [],
     });
+    expect(result.role_results.blue.provider_results).toHaveLength(1);
     expect(result.material_id).toBe(result.role_results.red.material_id);
     expect(result.material_ids.red).toBe(result.material_ids.blue);
   });
@@ -600,8 +601,8 @@ describe("simple material-only review", () => {
     const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), `simple-wh-review-pair-${incompleteRole}-incomplete-`)));
     roots.push(attachmentRoot);
     const result = await runSimpleReview({
-      stage: "make-decision", review_track: "detail", host_provider: "codex",
-      materials: { decision: "current decision bytes" },
+      stage: "make-decision", review_track: "direction", host_provider: "codex",
+      materials: { raw_requirement: "Review the complete user need.", objective_facts: "The configured provider boundary is controlled.", convergence_outline: "Preserve independent direction roles and explicit failures." },
     }, {
       pairId: `pair-${incompleteRole}-incomplete`,
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
@@ -632,7 +633,7 @@ describe("simple material-only review", () => {
     roots.push(attachmentRoot);
     const result = await runSimpleReview({
       stage: "make-decision", review_track: "direction", host_provider: "codex",
-      materials: { decision: "current decision bytes" },
+      materials: { raw_requirement: "Review the complete user need.", objective_facts: "The configured provider boundary is controlled.", convergence_outline: "Preserve independent direction roles and explicit failures." },
     }, {
       pairId: "pair-provider-failure",
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
@@ -654,6 +655,38 @@ describe("simple material-only review", () => {
     ]));
   });
 
+  it.each(["provider failure", "cancel"])("preserves single detail dispatch on %s", async (scenario) => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-detail-failure-")));
+    roots.push(attachmentRoot);
+    const controller = new AbortController();
+    const calls = [];
+    const result = await runSimpleReview({
+      stage: "make-decision", review_track: "detail",
+      materials: { raw_requirement: "Review this complete detail.", approved_direction: "One dispatch per configured reviewer." },
+    }, {
+      signal: controller.signal,
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
+      selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" } }),
+      client: { async runGroup(request) {
+        calls.push(request);
+        if (scenario === "cancel") throw Object.assign(new Error("detail cancelled"), { code: "PROCESS_CANCELLED" });
+        return { runtimeId: "runtime-detail-failed", outcome: "unavailable", providers: [{
+          provider: "model-a", status: "failed", identity: { provider: "model-a", model: "model-a-model" },
+          error: { code: "RATE_LIMITED", message: "detail provider failed" }, timing: null, usage: null,
+        }] };
+      } },
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0].role).toBeFalsy();
+    expect(calls[0].pair_id).toBeFalsy();
+    expect(calls[0].signal).toBe(controller.signal);
+    expect(result.role_results).toBeUndefined();
+    expect(result.status).toBe("unavailable");
+    if (scenario === "cancel") expect(result.error.code).toBe("REVIEW_CANCELLED");
+    else expect(result.provider_results[0]).toMatchObject({ status: "failed", error: { code: "RATE_LIMITED" } });
+  });
+
   it("reviews submitted bytes without Workspace or TaskHandle", async () => {
     const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-")));
     roots.push(attachmentRoot);
@@ -665,7 +698,7 @@ describe("simple material-only review", () => {
       task_path: "/does/not/exist",
       project_name: "ignored",
       task_id: "ignored",
-      materials: { decision: "current decision bytes" },
+      materials: { raw_requirement: "current decision bytes", approved_direction: "Review detail once per provider." },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
       resolveRoute: () => ({ initial: ["other/model"], mode: "single_round" }),
@@ -675,13 +708,13 @@ describe("simple material-only review", () => {
           calls.push({
             prompt: request.prompt,
             instructions: readFileSync(join(request.materials.bundleRoot, "review-instructions.md"), "utf8"),
-            decision: readFileSync(join(request.materials.bundleRoot, "materials/01-decision.md"), "utf8"),
+            decision: readFileSync(join(request.materials.bundleRoot, "materials/01-raw_requirement.md"), "utf8"),
           });
           return {
             runtimeId: "runtime-1", outcome: "completed",
             providers: [{
               provider: "other/model", status: "completed", identity: { provider: "other/model", model: "other-model" }, error: null,
-              output: JSON.stringify({ findings: [{ severity: "minor", path: "materials/01-decision.md", line: 1, issue: "gap", recommendation: "fix" }] }),
+              output: JSON.stringify({ findings: [{ severity: "minor", path: "materials/01-raw_requirement.md", line: 1, issue: "gap", recommendation: "fix" }] }),
               timing: null, usage: null,
             }],
           };
@@ -691,9 +724,9 @@ describe("simple material-only review", () => {
     expect(result).toMatchObject({ status: "available", stage: "make-decision", review_track: "detail" });
     expect(result.findings).toHaveLength(1);
     expect(result.provider_results[0].evidence_anchor_valid).toEqual([true]);
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(1);
     expect(calls[0].decision).toBe("current decision bytes");
-    expect(calls[0].instructions).toContain("complete user flow");
+    expect(calls[0].instructions).toContain("complete flow");
     expect(calls[0].prompt).toContain("Return exactly one JSON object");
     expect(calls[0].prompt).toContain("sample below.\n\nExample of a complete finding:");
     expect(calls[0].prompt).not.toContain("sample below.\\n\\n");

@@ -8,9 +8,10 @@ async function projectionApi() {
 test("semantic projection excludes T010 status writes but changes for delivery behavior", async () => {
   const api = await projectionApi();
   expect(api).toBeTruthy();
-  const base = { stage: "build-code", review_scope: "integration", contract_id: "build-code", contract_hash: "contract-1", materials: { approved_spec: "same", acceptance_criteria: ["AC-1"], ac_trace: [{ id: "AC-1", test: "green" }], implementation_summary: "works", test_evidence: { exit_code: 0 } } };
+  const base = { stage: "verify-code", contract_id: "verify-code", contract_hash: "contract-1", materials: { acceptance_criteria: ["AC-1"], implementation_assessment: { summary: "works", anchors: [{ id: "service", path: "src/service.py", start_line: 1, end_line: 4 }] }, test_context: { exit_code: 0 } } };
   const withStatusWrite = { ...base, materials: { ...base.materials, status: "completed", handoff: "written", review_ref: "new-ref" } };
-  const withBehaviorChange = { ...base, materials: { ...base.materials, implementation_summary: "fails on retry" } };
+  const withBehaviorChange = structuredClone(base);
+  withBehaviorChange.materials.implementation_assessment.summary = "fails on retry";
   const first = api.buildSemanticProjection(base);
   const second = api.buildSemanticProjection(withStatusWrite);
   const third = api.buildSemanticProjection(withBehaviorChange);
@@ -29,29 +30,33 @@ test("projection identity includes surface and contract version but never full s
   expect(Object.hasOwn(result.input, "snapshot_tree")).toBe(false);
 });
 
-test("integration semantic projection ignores host-only AC evidence trace", async () => {
+test("verify-code semantic projection ignores host-only AC evidence trace", async () => {
   const api = await projectionApi();
   expect(api).toBeTruthy();
-  const base = { stage: "build-code", review_scope: "integration", contract_id: "build-code", contract_hash: "contract-1", materials: { approved_spec: "same", acceptance_criteria: ["AC-1"], ac_trace: { entries: [{ acceptance_criterion_id: "AC-1", status: "passed" }] }, implementation_summary: "works", test_evidence: { exit_code: 0 } } };
+  const base = { stage: "verify-code", contract_id: "verify-code", contract_hash: "contract-1", materials: { acceptance_criteria: ["AC-1"], implementation_assessment: { summary: "works", anchors: [{ id: "service", path: "src/service.py", start_line: 1, end_line: 4 }] }, ac_trace: { entries: [{ acceptance_criterion_id: "AC-1", status: "passed" }] }, test_context: { exit_code: 0 } } };
   const changed = structuredClone(base);
   changed.materials.ac_trace.entries[0].status = "failed";
   expect(api.buildSemanticProjection(base).semantic_hash).toBe(api.buildSemanticProjection(changed).semantic_hash);
+  expect(Object.hasOwn(api.buildSemanticProjection(base).input, "ac_trace")).toBe(false);
+  expect(api.buildSemanticProjection(base).input.implementation_assessment).toEqual(base.materials.implementation_assessment);
 });
 
-test("integration semantic projection changes when implementation context changes", async () => {
+test("verify-code semantic projection changes when implementation context changes", async () => {
   const api = await projectionApi();
   expect(api).toBeTruthy();
   const base = {
-    stage: "build-code", review_scope: "integration", contract_id: "build-code", contract_hash: "contract-1",
+    stage: "verify-code", contract_id: "verify-code", contract_hash: "contract-1",
     materials: {
-      approved_spec: "same", acceptance_criteria: ["AC-1"], implementation_summary: "works",
-      implementation_context: { schema_version: "wh-review-integration-implementation-context.v1", anchors: [{ id: "service", path: "src/service.py", start_line: 1, end_line: 4, role: "implementation" }] },
-      test_evidence: { exit_code: 0 },
+      acceptance_criteria: ["AC-1"],
+      implementation_assessment: { summary: "works", anchors: [{ id: "service", path: "src/service.py", start_line: 1, end_line: 4 }] },
+      test_context: { exit_code: 0 },
     },
   };
   const changed = structuredClone(base);
-  changed.materials.implementation_context.anchors[0].path = "src/other.py";
+  changed.materials.implementation_assessment.anchors[0].path = "src/other.py";
   expect(api.buildSemanticProjection(base).semantic_hash).not.toBe(api.buildSemanticProjection(changed).semantic_hash);
+  expect(api.buildSemanticProjection(base).input.implementation_assessment.anchors[0].path).toBe("src/service.py");
+  expect(api.buildSemanticProjection(changed).input.implementation_assessment.anchors[0].path).toBe("src/other.py");
 });
 
 test("projection ignores execution-status writeback but keeps task-material changes semantic", async () => {

@@ -1,6 +1,7 @@
-import {mkdtempSync,realpathSync,readFileSync,writeFileSync,rmSync} from "node:fs";import {tmpdir} from "node:os";import {join} from "node:path";
+import {mkdtempSync,realpathSync,readFileSync,writeFileSync,rmSync,existsSync} from "node:fs";import {tmpdir} from "node:os";import {join} from "node:path";
 import {afterEach,describe,expect,it} from "vitest";
 import {buildReviewMaterials,canonicalMaterialManifest,validateAuthorityMap,validateBuildCodeAcceptanceMap,validateVerifyAcceptanceSummary,classifyReviewableCodePath,selectVerifyCodeDiffPaths,verifyCodeDiffDeliveryForPath,reviewInstructionsFor,materialAllowlistForRule,redactProviderHostPaths} from "../../skills/wh-review/scripts/review-materials.mjs";
+import {assertReviewIdentity} from "../../runtime/review/review-policy.mjs";
 const roots=[];afterEach(()=>{for(const root of roots.splice(0))rmSync(root,{recursive:true,force:true});});
 function root(){const r=realpathSync(mkdtempSync(join(tmpdir(),"review-material-current-")));roots.push(r);return r;}
 const verify=()=>({changed_files:"src/app.mjs",implementation_assessment:"actual code",test_context:"owned test",open_risks:"unknown"});
@@ -113,4 +114,73 @@ describe("current packet material contracts",()=>{
     expect(selectVerifyCodeDiffPaths(sections, "build-code")).toBeNull();
   });
 
+});
+
+
+// ORACLE-N3-P6-MINI: expectations come from the approved P6 applicability table,
+// independently of buildReviewMaterials' current codePacket selection.
+describe("N3 P6 mini design lens boundary", () => {
+  const lensPath = "skills/simplicity-guard/SKILL.md";
+  const lensBytes = () => readFileSync(new URL("../../skills/simplicity-guard/SKILL.md", import.meta.url));
+  const miniMaterials = () => ({
+    raw_requirement: "Keep one small mini-task design within its approved scope.",
+    decision_log: "The mini-task has one outcome; implementation follows design review.",
+    spec: "The design review sees its current requirements, risks, tests and rollback.",
+  });
+
+  it("keeps a legal default mini design identity and excludes the lens from delivery", () => {
+    const request = {stage: "build-code", reviewKind: "mini_task.design", materials: miniMaterials()};
+    expect(Object.hasOwn(request, "surface")).toBe(false);
+    expect(assertReviewIdentity(request)).toMatchObject({stage: "build-code", reviewKind: "mini_task.design"});
+    const b = packet(request);
+    try {
+      const manifest = JSON.parse(readFileSync(join(b.bundleRoot, "manifest.json"), "utf8"));
+      expect(manifest).toMatchObject({stage: "build-code", surface: "mini_task.design"});
+      expect(b.deliveryManifest.map(entry => entry.path)).not.toContain(lensPath);
+      expect(manifest.files.map(entry => entry.path)).not.toContain(lensPath);
+      expect(existsSync(join(b.bundleRoot, lensPath))).toBe(false);
+      expect(readFileSync(join(b.bundleRoot, "review-instructions.md"), "utf8")).not.toContain(lensPath);
+      for (const entry of b.deliveryManifest) {
+        expect(readFileSync(join(b.bundleRoot, entry.path)).includes(lensBytes())).toBe(false);
+      }
+    } finally { b.dispose(); }
+  });
+
+  const controls = [
+    ["mini implementation", () => ({stage: "build-code", reviewKind: "mini_task.implementation", materials: {
+      ...miniMaterials(), test_evidence: "Owned behavior test result", ac_trace: "AC-1: implemented outcome",
+      user_result: "Owned implementation result", coverage_limits: "No live provider in this packet test",
+      skip_reasons: "No skipped behavior in the controlled packet", remaining_risks: "Live advice not observed",
+    }}), true],
+    ["detail", () => ({stage: "make-decision", reviewTrack: "detail", materials: {
+      raw_requirement: "R-1: one small outcome", approved_direction: "D-1: implement that outcome with bounded scope",
+    }}), true],
+    ["post build-plan", () => ({stage: "build-plan", activationCohort: "post", materials: {
+      raw_requirement: "R-1: one small outcome", draft_spec: "AC-1: actual outcome", acceptance_criteria: "AC-1: actual outcome",
+      phase_authorities: {"phases/P1.md": "# Phase P1\nphysical write set: src/app.mjs\n"},
+      phase_index: "## Execution Index\n| phase | authority ref | semantic anchor | write set | dependency | consumer |\n| --- | --- | --- | --- | --- | --- |\n| P1 | phases/P1.md | phase-p1 | src/app.mjs | none | build-code |\n",
+    }}), true],
+    ["phase build-code", () => ({stage: "build-code", reviewScope: "phase", materials: {
+      approved_spec: "AC-1: actual outcome", acceptance_criteria: "AC-1: actual outcome", test_evidence: "Owned targeted output",
+    }}), true],
+    ["terminal verify-code", () => ({stage: "verify-code", materials: verify()}), true],
+    ["build-prd", () => ({stage: "build-prd", reviewKind: "build_prd", materials: {
+      decision_log: "Approved bounded direction", prd: "Current complete PRD", task_map: "One independently delivered card",
+      design_facts: "CLI outcome; no product UI", quality_facts: "Packet test only; live review not observed",
+    }}), true],
+    ["blind direction", () => ({stage: "make-decision", reviewTrack: "direction", materials: {
+      raw_requirement: "R-1: user needs one small outcome", objective_facts: "Current tool has an existing packet builder",
+      convergence_outline: "Question: what boundary is needed? Constraint: preserve the user's scope. Failure: scope expansion. Smaller reversible options remain open.",
+    }}), false],
+  ];
+  it.each(controls)("preserves %s applicability", (_name, input, expectedLens) => {
+    const b = packet(input());
+    try {
+      const paths = b.deliveryManifest.map(entry => entry.path);
+      expect(paths.includes(lensPath)).toBe(expectedLens);
+      expect(existsSync(join(b.bundleRoot, lensPath))).toBe(expectedLens);
+      if (expectedLens) expect(readFileSync(join(b.bundleRoot, lensPath)).equals(lensBytes())).toBe(true);
+      else expect(readFileSync(join(b.bundleRoot, "review-instructions.md"), "utf8")).not.toContain(lensPath);
+    } finally { b.dispose(); }
+  });
 });

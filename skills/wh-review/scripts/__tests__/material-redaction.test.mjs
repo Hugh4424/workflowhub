@@ -1,3 +1,4 @@
+import yaml from "js-yaml";
 import { mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -70,8 +71,17 @@ describe("provider-visible material redaction", () => {
     expect(Buffer.from(uint8).toString("utf8")).toBe(input);
   });
   it("preserves the real pinned public source URL and reviewer line positions", () => {
-    const skill = readFileSync(new URL("../../../grill-with-docs/SKILL.md", import.meta.url), "utf8");
-    const url = skill.match(/https:\/\/github\.com\/mattpocock\/skills\/blob\/[a-f0-9]{40}\/[^>\s]+/)[0];
+    const catalog = yaml.load(readFileSync(new URL("../../../catalog.yaml", import.meta.url), "utf8"));
+    const skills = catalog.skills.filter(skill => skill.name === "grill-with-docs");
+    expect(skills).toHaveLength(1);
+    const sources = skills[0].upstream.filter(source => source.path === "skills/engineering/grill-with-docs/SKILL.md");
+    expect(sources).toHaveLength(1);
+    const source = sources[0];
+    expect(source.github_url).toBe("https://github.com/mattpocock/skills");
+    expect(source.commit).toBe("b0618bc436ad893b3c5e84e55fba86586d34a404");
+    expect(source.commit).toMatch(/^[a-f0-9]{40}$/);
+    expect(source.skill_url).toBe(`${source.github_url}/blob/${source.commit}/${source.path}`);
+    const url = source.skill_url;
     const input = `上游 ${url}，来源正文。\n见 /Users/fixture/private.md，取消理由：DEF-01；DEF-01\n末行\n`;
     const output = redactProviderHostPaths(input);
     expect(output).toContain(url);
@@ -170,5 +180,80 @@ describe("provider-visible material redaction", () => {
     expect(providerMaterialPath("direction_flow", 8, { version: "direction-review.v1" })).toBe("direction_flow.json");
     expect(providerMaterialPath("raw_requirement", 0, "text")).toBe("materials/01-raw_requirement.md");
     expect(providerMaterialPath("context_map", 3, { note: true })).toBe("materials/04-context_map.json");
+  });
+});
+
+// Independent TCR458: preserve an executable keyword, never a credential value.
+import { createHash as n3LexicalHash } from "node:crypto";
+describe("N3 P2 lexical redaction", () => {
+  const recordLine = 'const authorization = await record({ operation: "commit", confirmationRef: "confirm-2" });';
+  const consumeLine = 'const authorization = await consume({ operation: "commit" });';
+  it("preserves the real authorization record source line and its line mapping", () => {
+    const source = readFileSync(new URL("../../../../tests/contract/narrow-tool-git-authorize.test.mjs", import.meta.url), "utf8");
+    expect(source.split("\n")[78]).toBe("    " + recordLine);
+    const projected = redactProviderHostPaths(source);
+    expect(projected.split("\n")[78]).toBe(source.split("\n")[78]);
+    expect(lines(projected)).toBe(lines(source));
+  });
+  it.each([
+    recordLine, consumeLine,
+    'let authorization = await api.consume({ operation: "commit" });',
+    '\tconst\tauthorization\t=\tawait\trecord({ operation: "commit" });',
+    '+' + recordLine, '-' + consumeLine,
+  ])("preserves only explicit executable awaited calls: %s", source => {
+    expect(redactProviderHostPaths(source)).toBe(source);
+  });
+  it("keeps string Buffer Uint8Array types and idempotent projected bytes", () => {
+    const source = recordLine + '\n' + consumeLine + '\nAPI_KEY=synthetic-lexical-key\n';
+    const expected = recordLine + '\n' + consumeLine + '\nAPI_KEY=<secret-redacted>\n';
+    for (const value of [source, Buffer.from(source), new Uint8Array(Buffer.from(source))]) {
+      const output = redactProviderHostPaths(value);
+      expect(typeof output === "string" ? output : Buffer.from(output).toString()).toBe(expected);
+      if (typeof value === "string") expect(typeof output).toBe("string");
+      else if (Buffer.isBuffer(value)) expect(Buffer.isBuffer(output)).toBe(true);
+      else { expect(output).toBeInstanceOf(Uint8Array); expect(Buffer.isBuffer(output)).toBe(false); }
+      expect(redactProviderHostPaths(output)).toEqual(output);
+    }
+  });
+  it.each([
+    'authorization=await', 'authorization: await', 'authorization="await"', "authorization='await'",
+    'const authorization = "await";', '{ authorization: "await" }',
+    '"const authorization = await consume()"', "'const authorization = await consume()'",
+    '// const authorization = await consume()', '/*\nconst authorization = await consume()\n*/',
+    '`multiline\nconst authorization = await consume()\nend`',
+    '"escaped \\" text; const authorization = await consume()"',
+    '`outer ${"text"}\nconst authorization = await consume()\nend`',
+    'const authorization = await;', 'prose const authorization = await consume()',
+  ])("retains conservative protection for non-code or ambiguous carriers: %s", source => {
+    expect(redactProviderHostPaths(source)).toContain("<secret-redacted>");
+  });
+  it("preserves awaited syntax while redacting mixed arguments and actual serialized egress", () => {
+    const source = [recordLine, consumeLine,
+      'const authorization = await api.consume({ api_key: "synthetic-lexical-argument", path: "/Users/fixture/private.md" });',
+      'const authorization = await api.consume({ path: "C:\\Users\\fixture\\private.md", url: "file:///tmp/fixture-private.md" });',
+      'Authorization: Bearer synthetic-lexical-bearer', 'Authorization: Basic synthetic-lexical-basic',
+      'Bearer synthetic-lexical-standalone', '// const authorization = await consume()',
+      '`template\nconst authorization = await consume()\nend`',
+      'https://user:synthetic-lexical-password@example.com/a?api_key=synthetic-lexical-query&view=raw，尾句',
+    ].join('\n');
+    const restored = providerBundle({raw_requirement: source, context_map: {nested: {authorization: "await", public: "https://example.com/public"}}});
+    try {
+      const file = "materials/01-raw_requirement.md";
+      const bytes = readFileSync(join(restored.materials.bundleRoot, file));
+      const text = bytes.toString();
+      expect(text.split('\n')[0]).toBe(recordLine); expect(text.split('\n')[1]).toBe(consumeLine);
+      expect(text).toContain('const authorization = await api.consume(');
+      for (const secret of ["synthetic-lexical-argument", "synthetic-lexical-bearer", "synthetic-lexical-basic", "synthetic-lexical-standalone", "synthetic-lexical-password", "synthetic-lexical-query", "/Users/fixture/", "C:\\Users\\fixture\\", "file:///tmp/"]) expect(text).not.toContain(secret);
+      expect(text).toContain("view=raw，尾句"); expect(lines(text)).toBe(lines(source));
+      expect(redactProviderHostPaths(text)).toBe(text);
+      expect(text).toContain('// const authorization = <secret-redacted> consume()');
+      expect(text).toContain('`template\nconst authorization = <secret-redacted> consume()\nend`');
+      const nested = JSON.parse(readFileSync(join(restored.materials.bundleRoot, "materials/02-context_map.json"), "utf8"));
+      expect(nested.nested.authorization).toBe("<secret-redacted>");
+      const manifest = JSON.parse(readFileSync(join(restored.materials.bundleRoot, "manifest.json"), "utf8"));
+      const member = manifest.files.find(entry => entry.path === file);
+      expect(member.sha256).toBe(n3LexicalHash("sha256").update(bytes).digest("hex"));
+      expect(member.bytes).toBe(bytes.length);
+    } finally { restored.materials.dispose(); }
   });
 });

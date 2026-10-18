@@ -75,11 +75,19 @@ describe("git-authorize record/consume (ADR-020, HEAD-only)", () => {
   });
 
   it("consume succeeds once, retries of the same step are idempotent, and another step is rejected", async () => {
-    useGitRepo();
-    await record({ operation: "commit", confirmationRef: "confirm-2" });
+    const repo = useGitRepo();
+    const authorization = await record({ operation: "commit", confirmationRef: "confirm-2" });
+    const authorizationBytes = readFileSync(authorization);
     const first = await consume({ operation: "commit", stepId: "step-1" });
+    expect(first).toMatchObject({ operation: "commit", step_id: "step-1", authorization_ref: authorization, path: expect.any(String) });
+    const consumedBytes = readFileSync(first.path);
+    expect(JSON.parse(consumedBytes.toString("utf8"))).toMatchObject({ operation: "commit", step_id: "step-1", authorization_ref: authorization });
+    const beforeRetry = walkFiles(repo).sort();
     const retry = await consume({ operation: "commit", stepId: "step-1" });
     expect(retry).toEqual(first);
+    expect(readFileSync(first.path)).toEqual(consumedBytes);
+    expect(readFileSync(authorization)).toEqual(authorizationBytes);
+    expect(walkFiles(repo).sort()).toEqual(beforeRetry);
     const error = await rejection(consume({ operation: "commit", stepId: "step-2" }));
     expect(error).toBeInstanceOf(Error);
     expect(typeof error.code).toBe("string");

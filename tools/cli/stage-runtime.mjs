@@ -745,12 +745,61 @@ function readTaskBoundInput(context, inputPath) {
   return JSON.parse(readPlainInputFile(path,"review input"));
 }
 
-function readPlainInputFile(path,label) {
+function readPlainInputFile(path,label,encoding="utf8") {
   const absolute=resolve(path);let cursor="/";
   for(const part of absolute.split("/").filter(Boolean)){cursor=join(cursor,part);const stat=lstatSync(cursor);if(stat.isSymbolicLink()||realpathSync(cursor)!==cursor)throw Object.assign(new Error(`${label} path alias`),{code:"TASK_PATH_ALIAS"});}
   const named=lstatSync(absolute);if(!named.isFile()||named.nlink!==1)throw Object.assign(new Error(`${label} must be a single-link regular file`),{code:"TASK_FILE_INVALID"});
   const fd=openSync(absolute,fsConstants.O_RDONLY|fsConstants.O_NOFOLLOW);
-  try{const st=fstatSync(fd);if(st.dev!==named.dev||st.ino!==named.ino||!st.isFile()||st.nlink!==1)throw Object.assign(new Error(`${label} changed`),{code:"TASK_FILE_CHANGED"});return readFileSync(fd,"utf8");}finally{closeSync(fd);}
+  try{const st=fstatSync(fd);if(st.dev!==named.dev||st.ino!==named.ino||!st.isFile()||st.nlink!==1)throw Object.assign(new Error(`${label} changed`),{code:"TASK_FILE_CHANGED"});return readFileSync(fd,encoding);}finally{closeSync(fd);}
+}
+
+async function observeReviewMaterials(bundle, observer, signal) {
+  if (typeof observer !== "function") throw new TypeError("review materials observer must be a function");
+  const manifest = [], members = new Map();
+  for (const entry of bundle.manifest ?? []) {
+    const path = entry?.path;
+    if (typeof path !== "string" || isAbsolute(path) || /[\\\0]/.test(path)
+        || path.split("/").some(part => !part || part === "." || part === "..")
+        || members.has(path) || !Number.isSafeInteger(entry.bytes) || entry.bytes < 0
+        || typeof entry.sha256 !== "string" || !/^[a-f0-9]{64}$/.test(entry.sha256)) {
+      throw Object.assign(new Error("review materials manifest is invalid or ambiguous"), { code: "MATERIAL_INCOMPLETE" });
+    }
+    const member = Object.freeze({ path, bytes: entry.bytes, sha256: entry.sha256 });
+    members.set(path, member);
+    manifest.push(member);
+  }
+  let active = true;
+  const readMaterial = path => {
+    if (!active) throw new Error("review materials observation has ended");
+    const member = members.get(path);
+    if (!member) throw new Error("review material is not a manifest member");
+    const bytes = readPlainInputFile(join(bundle.bundleRoot, path), "review material", null);
+    if (bytes.length !== member.bytes || sha256(bytes) !== member.sha256) {
+      throw Object.assign(new Error("review material changed from its manifest"), { code: "MATERIAL_INCOMPLETE" });
+    }
+    return bytes;
+  };
+  const cancelled = () => Object.assign(new Error("review cancelled during material observation"), { code: "REVIEW_CANCELLED", dispatch_state: "blocked_before_dispatch" });
+  let onAbort;
+  try {
+    if (signal?.aborted) throw cancelled();
+    const aborted = signal ? new Promise((_, reject) => {
+      onAbort = () => { active = false; reject(cancelled()); };
+      signal.addEventListener("abort", onAbort, { once: true });
+    }) : null;
+    // This observer can read authenticated members only. Its return value never
+    // supplies a review result or replaces the configured execution route. The
+    // signal lets cooperative observers stop; revocation also bounds observers
+    // that never settle. Late completion cannot reopen the reader or dispatch.
+    const observing = Promise.resolve().then(() => {
+      if (signal?.aborted) throw cancelled();
+      return observer(Object.freeze({ materialId: bundle.materialId, manifest: Object.freeze(manifest), readMaterial }), Object.freeze({ signal }));
+    });
+    await (aborted ? Promise.race([observing, aborted]) : observing);
+  } finally {
+    active = false;
+    if (onAbort) signal.removeEventListener("abort", onAbort);
+  }
 }
 
 function resolveMaterialRefs(context, materials, reviewReadScope) {
@@ -1158,6 +1207,10 @@ async function recordTaskReview(context, input, values, services = {}) {
       let bundle;
       try {
         try{bundle=prepareTaskBoundBuildCodeReviewBundle(context,current,{reviewReadScope});}catch(error){return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:error.code??"ROUTE_UNAVAILABLE",message:redactProviderHostPaths(String(error.message)),diagnostic:{field:"materials/route",expected:"current task-bound materials and trusted route",actual:"invalid",next_action:"repair the reported input or route before dispatch"}}};}
+        if (services.onReviewMaterials !== undefined) {
+          await observeReviewMaterials(bundle, services.onReviewMaterials, options.signal);
+          if (options.signal?.aborted) throw Object.assign(new Error("review cancelled after material observation"), { code: "REVIEW_CANCELLED", dispatch_state: "blocked_before_dispatch" });
+        }
         let trustedContext;
         try{trustedContext=prepareConfiguredOcrHostContext(current);}catch(error){
           return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:error.code??"ROUTE_UNAVAILABLE",message:redactProviderHostPaths(String(error.message)),diagnostic:{field:"route/provider_selection",expected:"one current trusted code route and valid provider configuration",actual:"invalid",next_action:"repair current route/configuration before dispatch"}}};
@@ -1431,7 +1484,11 @@ export async function stageRuntimeCliMain(argv = process.argv.slice(2), {
     behavior,
     Object.freeze({ action, argv: delegatedArgv }),
     ({ argv: internalArgv }) => delegate(internalArgv, {
-      services: reviewSignal === null ? services : { ...services, reviewSignal },
+      services: reviewSignal === null ? services : {
+        ...services,
+        reviewSignal: services.reviewSignal == null
+          ? reviewSignal : AbortSignal.any([reviewSignal, services.reviewSignal]),
+      },
       cwd,
     }),
     { skillBundleContract, runnerContract },

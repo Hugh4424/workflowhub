@@ -5,33 +5,22 @@ description: 在 build-plan 为每个 Task/Phase 生成分层测试和证据策�
 
 # Testing System Blueprint
 
-这是 build-plan 的测试设计输入，不是测试通过门；它只负责把风险维度、场景、
-oracle、证据路径和覆盖限制折叠进 post cohort 的 `spec.md` 全局验证策略及每个
-`phases/P<n>.md` 的逐 Task 执行卡；pre/history 保留原 `plan.md`/`tasks.md`。
-标准链是：build-plan
-先读取本技能设计 blueprint，再用 `test-routing-advisor` 选择路线；build-code
-按真实 changed files 直接调用一个适用的具体 testing skill。build-code 消费
-已设计的 blueprint，不重复运行本技能，不生成第二份 ledger，也不把 blueprint
-当成开始、继续或完成的 gate。
+build-plan advisory设计，非通过/开始/继续/完成gate。post把风险/场景/oracle/证据/限制写spec全局策略和物理Phase逐Task卡；pre/history保plan/tasks。先读本技能再用test-routing-advisor选路线；build-code按真实changed files调用具体testing skill消费既有设计，不重跑蓝图/建第二ledger。
 
-至少检查：行为结果、状态/数据流、错误/取消/恢复、权限/安全、并发/原子性、
-跨模块 seam、可观测性/来源，以及 UI 适用时的加载/空/错误/边界和可访问性。
-明确哪些维度不适用以及原因；不能只写“单测通过”。按真实改动选择
-`simple|feature|fullstack`，不依赖 plan 预先贴的标签。
+检查行为/状态数据流、错误取消恢复、权限安全、并发原子性、跨模块seam、可观测性/来源，UI适用时含加载/空/错误/边界/a11y；每维不适用给理由，不能只写单测通过。按真实改动选simple|feature|fullstack，不凭规划标签。
 
-输出至少包含：scope、风险维度、测试层级、场景、命令、预期 oracle、fixture/service、
-适用执行器、证据路径、覆盖限制和所依实际材料/代码来源。post 只声明本 Phase 写集及受影响来源，不设计跨 Phase snapshot 绑定；pre/history 原 snapshot 只读保留。每个行为 Task 有自身正常/负例、
-同一 `gate_cmd` 的目标 RED 与 GREEN、预期失败断言、STOP/恢复；Phase 级摘要不能
-代替逐 Task 设计。build-code 在 task facts 中写实际结果、跳过原因和 evidence refs，
-不回写 authored Phase 正文。报告是质量事实；缺失写
-`unknown/incomplete`，不能伪造 pass，也不重复要求无关全量回归。
+每Task设计按backend「执行事实」字段，另列scope、风险维度/层级、执行器；正常/负例、同gate_cmd目标RED/GREEN、具名失败断言、STOP/恢复属Task，Phase摘要不代。post只本Phase写集/受影响来源，旧snapshot只读，不建跨Phase绑定。实际结果/跳过原因/ref归build-code task facts，不回写作者Phase；缺失unknown/incomplete，不造pass或要求无关全量回归。
+
+## 行为测试设计
+
+设计oracle/替身/缺RED时，读[backend-testing「行为测试与证伪」](../backend-testing/SKILL.md#行为测试与证伪)及「执行事实」设计字段，填原Task，不提前执行build-code/造入口。
 
 ## 写作规范
 
-创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；此处不复制规范。
+创建/编辑方法读`skills/spec-specify/SKILL.md`的WR001唯一规范，不复制。
 
-完整来源权威：[catalog条目](../catalog.yaml#skills.testing-system-blueprint)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。来源：AgentHub packages/core/agenthub/skills/testing-system-blueprint/SKILL.md（许可适用性unknown）。
+来源权威[catalog](../catalog.yaml#skills.testing-system-blueprint)；正文/小卡非权威，缺登记找维护者。AgentHub路径/采用及许可适用性unknown见登记。
 
 ## 同仓方法依赖
 
-`skills/spec-specify/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。
+`skills/backend-testing/SKILL.md`、`skills/spec-specify/SKILL.md`；按条件读，搬运带可读原件。

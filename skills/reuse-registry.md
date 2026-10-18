@@ -9,7 +9,7 @@
 | make-decision | 调研并确认方向。 | [读取正文](../workflows/make-decision/SKILL.md) |
 | build-plan | 把已确认方向写成规格与独立Phase计划。 | [读取正文](../workflows/build-plan/SKILL.md) |
 | build-code | 按当前Phase实施、验证和修复。 | [读取正文](../workflows/build-code/SKILL.md) |
-| verify-code | 独立核实现、实际效果及剩余缺口。 | [读取正文](../workflows/verify-code/SKILL.md) |
+| verify-code | 独立核实现、实际效果及剩余缺口；测试/检查/依赖升级读正文唯一可信度方法。 | [读取正文](../workflows/verify-code/SKILL.md) |
 | build-prd | 整理已确认方向的产品表达与任务组PRD。 | [读取正文](../workflows/build-prd/SKILL.md) |
 
 ## 技能入口
@@ -25,7 +25,7 @@
 | deep-research | 方向仍有关键未知，需要深度调研与可回读来源。 | [读取正文](deep-research/SKILL.md) |
 | grill-with-docs | 通过追问检验方案，并维护术语与架构决定。 | [读取正文](grill-with-docs/SKILL.md) |
 | intake-decision-review | 只读审查问题界定、范围与可行性。 | [读取正文](intake-decision-review/SKILL.md) |
-| simplicity-guard | 检查是否能删除、复用或用更小方案满足目标。 | [读取正文](simplicity-guard/SKILL.md) |
+| simplicity-guard | 同次包核最小路径、删前理由/行为、三问与有源归并；N3采用/排除读catalog absorbed来源，subtract/foundational同落P0/P1。 | [读取正文](simplicity-guard/SKILL.md) |
 | talk-with-zhipeng | 需要用户决定方向、风险或范围，组织真实问答。 | [读取正文](talk-with-zhipeng/SKILL.md) |
 | spec-prd | 把已确认方向写成任务组PRD与产品表达。 | [读取正文](spec-prd/SKILL.md) |
 | spec-specify | 从已确认决定起草规格与全局实现设计骨架，或查技能写作规范。 | [读取正文](spec-specify/SKILL.md) |
@@ -35,20 +35,20 @@
 | architect-code-review | 审查实现的正确性、生命周期、接口消费者与测试强度。 | [读取正文](architect-code-review/SKILL.md) |
 | workflowhub-host-protocol | 查当前会话如何执行五阶段、记录事实及说明完成边界。 | [读取正文](workflowhub-host-protocol/SKILL.md) |
 | workflowhub-multica-sync | 明确要求核对或同步本机main与Multica的技能和agent配置。 | [读取正文](workflowhub-multica-sync/SKILL.md) |
-| wh-review | 执行阶段文档审查，或查代码OCR调用及失败记录方法。 | [读取正文](wh-review/SKILL.md) |
+| wh-review | 审查材料位/配置路线、ARTIFACT + CONTRACT、身份与覆盖/三条件结论；方法来源读catalog的N3 absorbed条目。 | [读取正文](wh-review/SKILL.md) |
 | mini-task | 在独立任务工作区内交付一个小功能。 | [读取正文](mini-task/SKILL.md) |
 | plan-ceo-review | 只读审查产品前提、范围、替代方案与交付风险。 | [读取正文](plan-ceo-review/SKILL.md) |
 | plan-design-review | 只读审查UI信息架构、状态、无障碍及响应布局。 | [读取正文](plan-design-review/SKILL.md) |
 | plan-eng-review | 只读审查工程顺序、接口、失败路径与验证设计。 | [读取正文](plan-eng-review/SKILL.md) |
-| review | 只读审查正确性、范围、证据和未决风险。 | [读取正文](review/SKILL.md) |
+| review | 只读审查正确性、范围、证据和未决风险；测试可信度沿verify正文条件指针。 | [读取正文](review/SKILL.md) |
 | resolving-merge-conflicts | 已在合并中遇到冲突，需要按真实目标解冲突。 | [读取正文](resolving-merge-conflicts/SKILL.md) |
-| diagnosing-bugs | 已有错误、测试失败或性能回退，需要复现、最小化并定位根因。 | [读取正文](diagnosing-bugs/SKILL.md) |
+| diagnosing-bugs | build-code失败分支实读；复现/最小化/探针后修根因，输出与页面信任边界和性能方法唯一正文；两来源见catalog。 | [读取正文](diagnosing-bugs/SKILL.md) |
 | test-routing-advisor | 按真实changed files选择simple、feature或fullstack测试路线；本身不执行测试。 | [读取正文](test-routing-advisor/SKILL.md) |
-| testing-system-blueprint | 在规划时设计本Phase的测试面与针对性验证。 | [读取正文](testing-system-blueprint/SKILL.md) |
-| backend-testing | 实施后仅有后端改动，验证参数、业务、权限和错误边界；跨端链路另读fullstack-slice-testing。 | [读取正文](backend-testing/SKILL.md) |
+| testing-system-blueprint | 规划本Phase测试面与针对性验证；oracle读backend唯一证伪方法。 | [读取正文](testing-system-blueprint/SKILL.md) |
+| backend-testing | 实施后仅有后端改动，验证参数、业务、权限和错误边界，定义唯一行为证伪方法；跨端另读fullstack-slice-testing。 | [读取正文](backend-testing/SKILL.md) |
 | frontend-testing | 实施后仅有UI状态、交互或键盘行为改动，接口不变；跨端链路另读fullstack-slice-testing。 | [读取正文](frontend-testing/SKILL.md) |
 | fullstack-slice-testing | 改动跨前端、API、worker或持久化边界，验证一个用户可观察的完整链路。 | [读取正文](fullstack-slice-testing/SKILL.md) |
-| isolated-browser-qa | 需要浏览器测试、localhost检查、截图验收或页面流程排查。 | [读取正文](isolated-browser-qa/SKILL.md) |
+| isolated-browser-qa | 浏览器/公开页/localhost验收；从正文context --run走Launch/health/Drive/Evidence/Cleanup，维护时区分文档漂移、owned harness缺口与产品回归；清理后回读原证据。来源/许可只读catalog，运行缺口留原task。 | [读取正文](isolated-browser-qa/SKILL.md) |
 | ui-project-init | UI规划先定位本动作适用的专业规范与原owner。 | [读取正文](ui-project-init/SKILL.md) |
 | design-source-readiness | 核对已有设计材料是否能供当前动作使用，并显露缺源或冲突。 | [读取正文](design-source-readiness/SKILL.md) |
 | frontend-prototype-render | 用真实组件输入渲染任务原型，提供预览与截图。 | [读取正文](frontend-prototype-render/SKILL.md) |

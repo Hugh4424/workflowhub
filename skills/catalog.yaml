@@ -750,8 +750,8 @@ skills:
         skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/code-review/SKILL.md
         adopted:
           - skills/engineering/code-review/SKILL.md#3-identify-the-standards-sources — skills/review/SKILL.md的Standards与Fowler baseline；仓库规则优先、smell仅heuristic、跳过工具已强制项
-          - skills/engineering/code-review/SKILL.md#4-spawn-both-sub-agents-in-parallel — skills/review/SKILL.md的双轴独立上下文分派及各自判据
-          - skills/engineering/code-review/SKILL.md#5-aggregate — skills/review/SKILL.md按Standards/Spec并排展示，不跨轴合并或重排名
+          - skills/engineering/code-review/SKILL.md#4-spawn-both-sub-agents-in-parallel — skills/review/SKILL.md双轴镜头及host指针；workflows/build-code/SKILL.md同源补充轴实际独立上下文分派及各自判据
+          - skills/engineering/code-review/SKILL.md#5-aggregate — skills/review/SKILL.md的host指针；workflows/build-code/SKILL.md同源补充轴实际按Standards/Spec并排展示，不跨轴合并或重排名
     local_changes: 裁为 wh-review lens；禁止自动修复和第二 review flow
     dependency_closure: *deps_spec_specify
     update_policy: 人工比较 review checklist，只保留 lens 规则
@@ -872,7 +872,7 @@ skills:
         adopted:
           - packages/core/agenthub/skills/testing-system-blueprint/SKILL.md#二、需求↔测试可追溯（双向不漏） — 采用testing-system-blueprint的测试分责、真实输入/输出与覆盖限制；不采用安装、全量扫描或release gate
     local_changes: 作为 build-plan 的 advisory 测试设计输入，并由 build-code 消费；不新增 AgentHub release gate 或执行器控制面；2026-10-16固定258f5a2的LICENSE实际为modified Apache-2.0，含第三方hosted/embedded商业服务授权及frontend logo/copyright条件；旧MIT登记不实。抽取技能文字的适用性unknown，由来源维护者向权利owner核具体grant，当前不扩采用/分发范围，不视为已接受附加条款。
-    dependency_closure: *deps_spec_specify
+    dependency_closure: ["skills/spec-specify", "skills/backend-testing"]
 
     update_policy: 随测试证据合同和 build-code 阶段边界人工比较
   - name: backend-testing
@@ -912,7 +912,7 @@ skills:
         adopted:
           - packages/core/agenthub/skills/frontend-testing/SKILL.md#工作流（六步闭环） — 采用frontend-testing的测试分责、真实输入/输出与覆盖限制；不采用安装、全量扫描或release gate
     local_changes: 保留状态/交互维度、UI phase/task 字段和失败证据；owner 是 build-code 前端测试路由，consumer 是真实 UI changed files；适用 UI attempt 经官方 build-code seam 一次调用 isolated-browser-qa，绑定 Design/Experience、service/API/DTO identity 和 cleanup；截图或 browser pass 不变成普遍 gate；不新增 Runner；delete-condition 为 frontend-testing 退役且无阶段引用；2026-10-16固定258f5a2的LICENSE实际为modified Apache-2.0，含第三方hosted/embedded商业服务授权及frontend logo/copyright条件；旧MIT登记不实。抽取技能文字的适用性unknown，由来源维护者向权利owner核具体grant，当前不扩采用/分发范围，不视为已接受附加条款。
-    dependency_closure: &deps_browser_spec_ui ["skills/isolated-browser-qa","skills/spec-specify","skills/ui-project-init"]
+    dependency_closure: ["skills/isolated-browser-qa","skills/spec-specify","skills/ui-project-init","skills/backend-testing"]
 
     update_policy: 随前端测试和 browser 证据合同人工比较
   - name: fullstack-slice-testing
@@ -932,13 +932,13 @@ skills:
         adopted:
           - packages/core/agenthub/skills/fullstack-slice-testing/SKILL.md#工作流（六步闭环） — 采用fullstack-slice-testing的测试分责、真实输入/输出与覆盖限制；不采用安装、全量扫描或release gate
     local_changes: 适配为风险证据技能；不恢复强制 commit/worktree/release gate；2026-10-16固定258f5a2的LICENSE实际为modified Apache-2.0，含第三方hosted/embedded商业服务授权及frontend logo/copyright条件；旧MIT登记不实。抽取技能文字的适用性unknown，由来源维护者向权利owner核具体grant，当前不扩采用/分发范围，不视为已接受附加条款。
-    dependency_closure: *deps_spec_specify
+    dependency_closure: ["skills/spec-specify", "skills/backend-testing"]
 
     update_policy: 随跨端 seam 和全链路证据合同人工比较
   - name: isolated-browser-qa
     path: skills/isolated-browser-qa/SKILL.md
     local_version: 1.0.0
-    last_reviewed_at: '2026-07-14'
+    last_reviewed_at: '2026-10-17'
     status: adopted
     metrics_enabled: false
     purpose: 隔离 profile 执行 UI 验收并清理
@@ -952,9 +952,9 @@ skills:
         authorization_basis: user explicitly supplied local source and authorized migration into workflowhub
         reviewed_at: '2026-07-14'
         review_outcome: accepted
-    local_changes: 搬入完整闭包；去个人绝对路径；owner 是 isolated browser QA，consumer 是官方 build-code controlled QA seam 与 verify-code；一次 invocation 按当前 task/spec/Phase 记录各适用专业来源/版本/作用域与 service/API/DTO identity，pre/history snapshot 只读保留，blocked/unknown 保留 failure_reason，取消和 cleanup 必须可见；不新增 Runner；delete-condition 为 browser QA 路由退役或被唯一替代；本地来源snapshot_sha256缺失，采集字节及原位置unknown；owner来源维护者需权利人提供原件与可核快照，当前保既有授权，不补假commit/hash。
-    dependency_closure: *deps_spec_specify
-    update_policy: 上游暂无公开 canonical skill URL；维护本地快照并人工比较来源目录
+    local_changes: 搬入完整闭包；去个人绝对路径；owner 是 isolated browser QA，consumer 是官方 build-code controlled QA seam 与 verify-code；一次 invocation 按当前 task/spec/Phase 记录各适用专业来源/版本/作用域与 service/API/DTO identity，pre/history snapshot 只读保留，blocked/unknown 保留 failure_reason，取消和 cleanup 必须可见；新增两个私有helper承接现context --run生命周期与memory-only票据，不新增公共Runner；delete-condition 为 browser QA 路由退役或被唯一替代；本地来源snapshot_sha256缺失，采集字节及原位置unknown；owner来源维护者需权利人提供原件与可核快照，当前保既有授权，不补假commit/hash。
+    dependency_closure: ["skills/spec-specify", "skills/diagnosing-bugs"]
+    update_policy: 保本地来源unknown边界；新增三来源固定commit/包SHA及采用章节见本catalog的N3 P7 absorbed条目，逐源比较consumer与本地偏离，不自动追HEAD。
   - name: ui-project-init
     path: skills/ui-project-init/SKILL.md
     local_version: 2.0.0
@@ -1053,7 +1053,7 @@ skills:
     used_by_stages: *stages_build_plan
     upstream: []
     local_changes: WorkflowHub 原生渲染入口；owner 是 UI 方法当前调用主会话，consumer 是 workflows/build-plan/SKILL.md:19 与 frontend-prototype-render/SKILL.md:9 的 build-prd 条件设计分支；test=tests/contract/ui-skill-contract.test.mjs；不改产品源码；delete-condition 两个当前方法 consumer 退役或由已审替代方法承接后
-    dependency_closure: *deps_browser_spec_ui
+    dependency_closure: ["skills/isolated-browser-qa","skills/spec-specify","skills/ui-project-init"]
     update_policy: 随真实组件渲染命令、截图证据和 当前 build-plan/build-prd consumer 合同人工审查
   - name: frontend-component-quality
     path: skills/frontend-component-quality/SKILL.md
@@ -1621,3 +1621,501 @@ capability_decisions:
     local_changes: 当前五阶段没有 deploy-observe workflow
     dependency_closure: []
     update_policy: 未来独立 deploy-observe workflow 建立后重评
+  - name: n3-doubt-driven-development
+    status: absorbed
+    purpose: N3审查材料与路由方法吸收
+    design_idea: ARTIFACT + CONTRACT；去CLAIM诱导及有源处置理由
+    used_by_stages:
+      - make-decision
+      - build-plan
+      - build-code
+      - verify-code
+    local_path: skills/wh-review/SKILL.md; skills/wh-review/contracts/provider-protocol.md; skills/review/SKILL.md
+    upstream:
+      - github_url: https://github.com/addyosmani/agent-skills
+        commit: aeac41d4d005999432bb7312f7ff06383a91d59d
+        commit_url: https://github.com/addyosmani/agent-skills/commit/aeac41d4d005999432bb7312f7ff06383a91d59d
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/doubt-driven-development/SKILL.md
+        skill_url: https://github.com/addyosmani/agent-skills/blob/aeac41d4d005999432bb7312f7ff06383a91d59d/skills/doubt-driven-development/SKILL.md
+        adopted:
+          - ARTIFACT + CONTRACT；去CLAIM诱导及有源处置理由
+    local_changes: 方法吸收入既有consumer；不改native身份、不新建runtime/账本/路由。固定commit；不采用跨模型升级或固定轮次。
+    dependency_closure:
+      - skills/spec-specify/SKILL.md
+    update_policy: 按固定来源/章节与本地consumer逐项比较；实际生效和方法文字分开，不自动追HEAD。
+  - name: n3-interrogate
+    status: absorbed
+    purpose: N3审查材料与路由方法吸收
+    design_idea: 当前配置逐路派发；来源归属、失败并列及唯一simplicity指针
+    used_by_stages:
+      - make-decision
+      - build-plan
+      - build-code
+      - verify-code
+    local_path: skills/wh-review/SKILL.md; skills/wh-review/contracts/provider-protocol.md; skills/review/SKILL.md; skills/simplicity-guard/SKILL.md; skills/decision-log/SKILL.md; AGENTS.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        commit: unresolved-pstack-content-snapshot
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/interrogate/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/interrogate/SKILL.md
+        adopted:
+          - 当前配置逐路派发；来源归属、失败并列及唯一simplicity指针
+          - N3 P6：rubric幂等/并发与code-quality-review消除复杂度三问；有源归并/有效单源/证据拒绝
+    local_changes: >-
+      方法吸收入既有consumer；不改native身份、不新建runtime/账本/路由。pstack实际包sha256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；git
+      commit未知；不采用宿主默认模型、cross-judge或额外审批。
+    dependency_closure:
+      - skills/spec-specify/SKILL.md
+    update_policy: 按固定来源/章节与本地consumer逐项比较；实际生效和方法文字分开，不自动追HEAD。
+  - name: n3-attack-the-premise
+    status: absorbed
+    purpose: N3审查材料与路由方法吸收
+    design_idea: 共同前提与可推翻事实；补偿和消除前提对照
+    used_by_stages:
+      - make-decision
+      - build-plan
+      - build-code
+      - verify-code
+    local_path: skills/wh-review/SKILL.md; skills/wh-review/contracts/provider-protocol.md; skills/review/SKILL.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        commit: unresolved-pstack-content-snapshot
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/principle-attack-the-premise/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/principle-attack-the-premise/SKILL.md
+        adopted:
+          - 共同前提与可推翻事实；补偿和消除前提对照
+    local_changes: >-
+      方法吸收入既有consumer；不改native身份、不新建runtime/账本/路由。pstack实际包sha256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；git
+      commit未知；不采用宿主默认模型、cross-judge或额外审批。
+    dependency_closure:
+      - skills/spec-specify/SKILL.md
+    update_policy: 按固定来源/章节与本地consumer逐项比较；实际生效和方法文字分开，不自动追HEAD。
+  - name: n3-blast-radius
+    status: absorbed
+    purpose: N3审查材料与路由方法吸收
+    design_idea: 非符号边、安全关键事实实跑、unproven与风险区分
+    used_by_stages:
+      - make-decision
+      - build-plan
+      - build-code
+      - verify-code
+    local_path: skills/wh-review/SKILL.md; skills/wh-review/contracts/provider-protocol.md; skills/review/SKILL.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        commit: unresolved-pstack-content-snapshot
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/blast-radius/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/blast-radius/SKILL.md
+        adopted:
+          - 非符号边、安全关键事实实跑、unproven与风险区分
+    local_changes: >-
+      方法吸收入既有consumer；不改native身份、不新建runtime/账本/路由。pstack实际包sha256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；git
+      commit未知；不采用宿主默认模型、cross-judge或额外审批。
+    dependency_closure:
+      - skills/spec-specify/SKILL.md
+    update_policy: 按固定来源/章节与本地consumer逐项比较；实际生效和方法文字分开，不自动追HEAD。
+  - name: n3-architect
+    status: absorbed
+    purpose: N3审查材料与路由方法吸收
+    design_idea: references/design-red-flags.md八红旗与结构备选比较，不新增接口或轮次
+    used_by_stages:
+      - make-decision
+      - build-plan
+      - build-code
+      - verify-code
+    local_path: skills/wh-review/SKILL.md; skills/wh-review/contracts/provider-protocol.md; skills/review/SKILL.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        commit: unresolved-pstack-content-snapshot
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/architect/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/architect/SKILL.md
+        adopted:
+          - references/design-red-flags.md八红旗与结构备选比较，不新增接口或轮次
+    local_changes: >-
+      方法吸收入既有consumer；不改native身份、不新建runtime/账本/路由。pstack实际包sha256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；git
+      commit未知；不采用宿主默认模型、cross-judge或额外审批。
+    dependency_closure:
+      - skills/spec-specify/SKILL.md
+    update_policy: 按固定来源/章节与本地consumer逐项比较；实际生效和方法文字分开，不自动追HEAD。
+  - name: n3-arena
+    status: absorbed
+    purpose: N3审查材料与路由方法吸收
+    design_idea: 条件consumer、匿名同尺与rubric隔离、合成后验证；无consumer只落文字
+    used_by_stages:
+      - make-decision
+      - build-plan
+      - build-code
+      - verify-code
+    local_path: skills/wh-review/SKILL.md; skills/wh-review/contracts/provider-protocol.md; skills/review/SKILL.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        commit: unresolved-pstack-content-snapshot
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/arena/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/arena/SKILL.md
+        adopted:
+          - 条件consumer、匿名同尺与rubric隔离、合成后验证；无consumer只落文字
+    local_changes: >-
+      方法吸收入既有consumer；不改native身份、不新建runtime/账本/路由。pstack实际包sha256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；git
+      commit未知；不采用宿主默认模型、cross-judge或额外审批。
+    dependency_closure:
+      - skills/spec-specify/SKILL.md
+    update_policy: 按固定来源/章节与本地consumer逐项比较；实际生效和方法文字分开，不自动追HEAD。
+  - name: n3-show-me-your-work
+    status: absorbed
+    purpose: N3审查材料与路由方法吸收
+    design_idea: 真实原件与来源/同源/未知展示，不采用TSV账本
+    used_by_stages:
+      - make-decision
+      - build-plan
+      - build-code
+      - verify-code
+    local_path: skills/wh-review/SKILL.md; skills/wh-review/contracts/provider-protocol.md; skills/review/SKILL.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        commit: unresolved-pstack-content-snapshot
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/show-me-your-work/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/show-me-your-work/SKILL.md
+        adopted:
+          - 真实原件与来源/同源/未知展示，不采用TSV账本
+    local_changes: >-
+      方法吸收入既有consumer；不改native身份、不新建runtime/账本/路由。pstack实际包sha256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；git
+      commit未知；不采用宿主默认模型、cross-judge或额外审批。
+    dependency_closure:
+      - skills/spec-specify/SKILL.md
+    update_policy: 按固定来源/章节与本地consumer逐项比较；实际生效和方法文字分开，不自动追HEAD。
+  - name: n3-addy-test-driven-development
+    status: absorbed
+    purpose: N3 P4测试证伪与检查可信度方法
+    design_idea: "仓内具名命令、纵切RED/GREEN、真实优先替身和无新信息不重跑"
+    used_by_stages: [build-plan, build-code, verify-code]
+    local_path: "skills/backend-testing/SKILL.md; skills/frontend-testing/SKILL.md; skills/fullstack-slice-testing/SKILL.md; skills/testing-system-blueprint/SKILL.md; skills/spec-plan/templates/phase-template.md"
+    upstream:
+      - github_url: https://github.com/addyosmani/agent-skills
+        commit: aeac41d4d005999432bb7312f7ff06383a91d59d
+        commit_url: https://github.com/addyosmani/agent-skills/commit/aeac41d4d005999432bb7312f7ff06383a91d59d
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/test-driven-development/SKILL.md
+        skill_url: https://github.com/addyosmani/agent-skills/blob/aeac41d4d005999432bb7312f7ff06383a91d59d/skills/test-driven-development/SKILL.md
+        adopted:
+          - "skills/test-driven-development/SKILL.md#Discover the Stack First；The TDD Cycle；Prefer Real Implementations Over Mocks；Common Rationalizations — 仓内具名命令、纵切RED/GREEN、真实优先替身和无新信息不重跑"
+    local_changes: "P4原writer在既有consumer采用；方法独立读回与程序执行分开，不新增runtime/字段/账本/默认gate；不采用全量回归、默认阈值或自动拒绝/安装。"
+    dependency_closure: [skills/spec-specify/SKILL.md]
+    update_policy: 固定source章节与本地唯一正文/条件指针逐项比较；更新需保持本地保护，不自动追HEAD；无consumer且替代经独立审查后退役。
+  - name: n3-test-behavior-not-implementation
+    status: absorbed
+    purpose: N3 P4测试证伪与检查可信度方法
+    design_idea: "具体输入/独立结果、undefined反事实及absence配presence；合法交互与缺省逐case保留"
+    used_by_stages: [build-plan, build-code, verify-code]
+    local_path: "skills/backend-testing/SKILL.md; skills/frontend-testing/SKILL.md; skills/fullstack-slice-testing/SKILL.md; skills/testing-system-blueprint/SKILL.md; skills/spec-plan/templates/phase-template.md"
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/principle-test-behavior-not-implementation/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/principle-test-behavior-not-implementation/SKILL.md
+        adopted:
+          - "skills/principle-test-behavior-not-implementation/SKILL.md#Test Behavior, Not Implementation — 具体输入/独立结果、undefined反事实及absence配presence；合法交互与缺省逐case保留"
+    local_changes: "P4原writer在既有consumer采用；方法独立读回与程序执行分开，不新增runtime/字段/账本/默认gate；不采用全量回归、默认阈值或自动拒绝/安装。pstack archive SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8 对应 upstream.path=skills/principle-test-behavior-not-implementation/SKILL.md；Git revision unknown，/blob/main/ 仅为来源定位。"
+    dependency_closure: [skills/spec-specify/SKILL.md]
+    update_policy: 按pstack archive SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8 对 upstream.path=skills/principle-test-behavior-not-implementation/SKILL.md 的固定source章节与本地唯一正文/条件指针逐项比较；Git revision unknown，不自动追HEAD；无consumer且替代经独立审查后退役。
+  - name: n3-constraint-driven-development
+    status: absorbed
+    purpose: N3 P4测试证伪与检查可信度方法
+    design_idea: "逐项读回五类削弱与真实来源/理由；未知非clean，不加Block"
+    used_by_stages: [build-plan, build-code, verify-code]
+    local_path: "workflows/verify-code/SKILL.md; skills/review/SKILL.md; AGENTS.md"
+    upstream:
+      - github_url: https://github.com/addyosmani/agent-skills
+        commit: aeac41d4d005999432bb7312f7ff06383a91d59d
+        commit_url: https://github.com/addyosmani/agent-skills/commit/aeac41d4d005999432bb7312f7ff06383a91d59d
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/constraint-driven-development/SKILL.md
+        skill_url: https://github.com/addyosmani/agent-skills/blob/aeac41d4d005999432bb7312f7ff06383a91d59d/skills/constraint-driven-development/SKILL.md
+        adopted:
+          - "skills/constraint-driven-development/SKILL.md#Step 6: Guard the bar itself — 逐项读回五类削弱与真实来源/理由；未知非clean，不加Block"
+    local_changes: "P4原writer在既有consumer采用；方法独立读回与程序执行分开，不新增runtime/字段/账本/默认gate；不采用全量回归、默认阈值或自动拒绝/安装。"
+    dependency_closure: [skills/spec-specify/SKILL.md]
+    update_policy: 固定source章节与本地唯一正文/条件指针逐项比较；更新需保持本地保护，不自动追HEAD；无consumer且替代经独立审查后退役。
+  - name: n3-setup-ts-deep-modules
+    status: absorbed
+    purpose: N3 P4测试证伪与检查可信度方法
+    design_idea: "同一检查合法pass/违规目标fail/恢复pass；不安装TS工具或改N10接线"
+    used_by_stages: [build-plan, build-code, verify-code]
+    local_path: "workflows/verify-code/SKILL.md; skills/review/SKILL.md; AGENTS.md"
+    upstream:
+      - github_url: https://github.com/mattpocock/skills
+        commit: b0618bc436ad893b3c5e84e55fba86586d34a404
+        commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/in-progress/setup-ts-deep-modules/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/in-progress/setup-ts-deep-modules/SKILL.md
+        adopted:
+          - "skills/in-progress/setup-ts-deep-modules/SKILL.md#6. Prove the rules bite — 同一检查合法pass/违规目标fail/恢复pass；不安装TS工具或改N10接线"
+    local_changes: "P4原writer在既有consumer采用；方法独立读回与程序执行分开，不新增runtime/字段/账本/默认gate；不采用全量回归、默认阈值或自动拒绝/安装。"
+    dependency_closure: [skills/spec-specify/SKILL.md]
+    update_policy: 固定source章节与本地唯一正文/条件指针逐项比较；更新需保持本地保护，不自动追HEAD；无consumer且替代经独立审查后退役。
+  - name: n3-code-review-and-quality
+    status: absorbed
+    purpose: N3 P4测试证伪与检查可信度方法
+    design_idea: "受控行为变异存活即finding；条件式依赖notes、前后行为与直接/传递lockfile读回"
+    used_by_stages: [build-plan, build-code, verify-code]
+    local_path: "workflows/verify-code/SKILL.md; skills/review/SKILL.md; AGENTS.md"
+    upstream:
+      - github_url: https://github.com/addyosmani/agent-skills
+        commit: aeac41d4d005999432bb7312f7ff06383a91d59d
+        commit_url: https://github.com/addyosmani/agent-skills/commit/aeac41d4d005999432bb7312f7ff06383a91d59d
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/code-review-and-quality/SKILL.md
+        skill_url: https://github.com/addyosmani/agent-skills/blob/aeac41d4d005999432bb7312f7ff06383a91d59d/skills/code-review-and-quality/SKILL.md
+        adopted:
+          - "skills/code-review-and-quality/SKILL.md#Step 2: Review the Tests First；Dependency Discipline — 受控行为变异存活即finding；条件式依赖notes、前后行为与直接/传递lockfile读回"
+    local_changes: "P4原writer在既有consumer采用；方法独立读回与程序执行分开，不新增runtime/字段/账本/默认gate；不采用全量回归、默认阈值或自动拒绝/安装。"
+    dependency_closure: [skills/spec-specify/SKILL.md]
+    update_policy: 固定source章节与本地唯一正文/条件指针逐项比较；更新需保持本地保护，不自动追HEAD；无consumer且替代经独立审查后退役。
+  - name: n3-matt-tdd
+    status: absorbed
+    purpose: N3 P4测试证伪与检查可信度方法
+    design_idea: "Implementation-coupled/Tautological/Horizontal slicing只在backend定义，三个执行consumer沿指针实际消费"
+    used_by_stages: [build-plan, build-code, verify-code]
+    local_path: "skills/backend-testing/SKILL.md; skills/frontend-testing/SKILL.md; skills/fullstack-slice-testing/SKILL.md; skills/testing-system-blueprint/SKILL.md; skills/spec-plan/templates/phase-template.md"
+    upstream:
+      - github_url: https://github.com/mattpocock/skills
+        commit: b0618bc436ad893b3c5e84e55fba86586d34a404
+        commit_url: https://github.com/mattpocock/skills/commit/b0618bc436ad893b3c5e84e55fba86586d34a404
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/engineering/tdd/SKILL.md
+        skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/tdd/SKILL.md
+        adopted:
+          - "skills/engineering/tdd/SKILL.md#Anti-patterns；Rules of the loop；tests.md#Good and Bad Tests — Implementation-coupled/Tautological/Horizontal slicing只在backend定义，三个执行consumer沿指针实际消费"
+    local_changes: "P4原writer在既有consumer采用；方法独立读回与程序执行分开，不新增runtime/字段/账本/默认gate；不采用全量回归、默认阈值或自动拒绝/安装。"
+    dependency_closure: [skills/spec-specify/SKILL.md]
+    update_policy: 固定source章节与本地唯一正文/条件指针逐项比较；更新需保持本地保护，不自动追HEAD；无consumer且替代经独立审查后退役。
+  - name: n3-pstack-tdd
+    status: absorbed
+    purpose: N3 P4测试证伪与检查可信度方法
+    design_idea: "缺RED真实原因/最近既有检查/漏掉seam；环境失败另记，不为凑RED造坏测试"
+    used_by_stages: [build-plan, build-code, verify-code]
+    local_path: "skills/backend-testing/SKILL.md; skills/frontend-testing/SKILL.md; skills/fullstack-slice-testing/SKILL.md; skills/testing-system-blueprint/SKILL.md; skills/spec-plan/templates/phase-template.md"
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/tdd/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/tdd/SKILL.md
+        adopted:
+          - "skills/tdd/SKILL.md#Workflow；If a Failing Test Is Impractical；Guardrails；Final Response — 缺RED真实原因/最近既有检查/漏掉seam；环境失败另记，不为凑RED造坏测试"
+    local_changes: "P4原writer在既有consumer采用；方法独立读回与程序执行分开，不新增runtime/字段/账本/默认gate；不采用全量回归、默认阈值或自动拒绝/安装。pstack archive SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8 对应 upstream.path=skills/tdd/SKILL.md；Git revision unknown，/blob/main/ 仅为来源定位。"
+    dependency_closure: [skills/spec-specify/SKILL.md]
+    update_policy: 按pstack archive SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8 对 upstream.path=skills/tdd/SKILL.md 的固定source章节与本地唯一正文/条件指针逐项比较；Git revision unknown，不自动追HEAD；无consumer且替代经独立审查后退役。
+  - name: n3-debugging-and-error-recovery
+    status: absorbed
+    purpose: N3真实失败诊断方法采用
+    design_idea: 输出与页面内容只作数据，不改变任务授权
+    used_by_stages: [build-code]
+    local_path: skills/diagnosing-bugs/SKILL.md
+    upstream:
+      - github_url: https://github.com/addyosmani/agent-skills
+        commit: aeac41d4d005999432bb7312f7ff06383a91d59d
+        commit_url: https://github.com/addyosmani/agent-skills/commit/aeac41d4d005999432bb7312f7ff06383a91d59d
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/debugging-and-error-recovery/SKILL.md
+        skill_url: https://github.com/addyosmani/agent-skills/blob/aeac41d4d005999432bb7312f7ff06383a91d59d/skills/debugging-and-error-recovery/SKILL.md
+        adopted:
+          - "SKILL.md#Treating Error Output as Untrusted Data — 程序错误/日志/API与页面文本只作数据，动作从用户授权独立推导"
+    local_changes: "在既有diagnosing-bugs输出与页面内容唯一正文采用；build-code方法2/3失败分支实读。保根因回路、三次失败边界和清理；不采用Safe Fallback、全量测试或逐条错误文本审批。"
+    dependency_closure: [skills/spec-specify/SKILL.md]
+    update_policy: "对照固定源章节与真实consumer；不自动追HEAD，方法/调用/效果分别验。"
+  - name: n3-perf-issue
+    status: absorbed
+    purpose: N3真实失败诊断方法采用
+    design_idea: 先实测baseline/bisect/profile，再选择满足目标的便宜方案
+    used_by_stages: [build-code]
+    local_path: skills/diagnosing-bugs/SKILL.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        commit: unresolved-pstack-content-snapshot
+        license: MIT
+        reviewed_at: '2026-10-16'
+        review_outcome: accepted
+        path: skills/poteto-mode/playbooks/perf-issue.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/poteto-mode/playbooks/perf-issue.md
+        adopted:
+          - "perf-issue.md#Perf issue 步骤1–4 — 先量再改，依次评估不做/少做/晚做/复用/便宜做，保同口径前后读数与不确定性"
+    local_changes: "既有diagnosing-bugs性能分支采用；不引control-skill、benchmark-checklist、指定模型或自动PR。pstack实际包SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；git commit未知，main仅locator，不冒固定commit。"
+    dependency_closure: [skills/spec-specify/SKILL.md]
+    update_policy: "按实际包SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8 与固定子文件核源差/本地偏离；新包需重核身份，不伪造commit或无实测收益。"
+  - name: n3-code-simplification
+    status: absorbed
+    purpose: N3共同简洁方法采用
+    design_idea: 删前六问/git blame、原理由与输入输出/错误/副作用行为保持
+    used_by_stages: [make-decision, build-plan, build-code, verify-code]
+    local_path: skills/simplicity-guard/SKILL.md
+    upstream:
+      - github_url: https://github.com/addyosmani/agent-skills
+        commit: aeac41d4d005999432bb7312f7ff06383a91d59d
+        commit_url: https://github.com/addyosmani/agent-skills/commit/aeac41d4d005999432bb7312f7ff06383a91d59d
+        license: MIT
+        reviewed_at: '2026-10-17'
+        review_outcome: accepted
+        path: skills/code-simplification/SKILL.md
+        skill_url: https://github.com/addyosmani/agent-skills/blob/aeac41d4d005999432bb7312f7ff06383a91d59d/skills/code-simplification/SKILL.md
+        adopted:
+          - 删前六问/git blame、原理由与输入输出/错误/副作用行为保持
+    local_changes: 复用四阶梯与同次findings，不搬模型/fallback/verdict/reconciliation、无consumer脚手架、全局类型/CI或自动拆状态；pstack包sha256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8，git commit未知；方法消费与登记分验。
+    dependency_closure: [skills/spec-specify/SKILL.md]
+    update_policy: 按固定commit或包hash逐项比较本地consumer；不追HEAD，不新增runtime/schema/账本。
+  - name: n3-laziness-protocol
+    status: absorbed
+    purpose: N3共同简洁方法采用
+    design_idea: 最小有效路径与唯一权威，不造第二份
+    used_by_stages: [make-decision, build-plan, build-code, verify-code]
+    local_path: skills/simplicity-guard/SKILL.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        commit: unresolved-pstack-content-snapshot
+        license: MIT
+        reviewed_at: '2026-10-17'
+        review_outcome: accepted
+        path: skills/principle-laziness-protocol/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/principle-laziness-protocol/SKILL.md
+        adopted:
+          - 最小有效路径与唯一权威，不造第二份
+    local_changes: 复用四阶梯与同次findings，不搬模型/fallback/verdict/reconciliation、无consumer脚手架、全局类型/CI或自动拆状态；pstack包sha256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8，git commit未知；方法消费与登记分验。
+    dependency_closure: [skills/spec-specify/SKILL.md]
+    update_policy: 按固定commit或包hash逐项比较本地consumer；不追HEAD，不新增runtime/schema/账本。
+  - name: n3-subtract-before-you-add
+    status: absorbed
+    purpose: N3共同简洁方法采用
+    design_idea: P0/P1先减再加，动态consumer核实，不建无需求validator
+    used_by_stages: [make-decision, build-plan, build-code, verify-code]
+    local_path: skills/simplicity-guard/SKILL.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        commit: unresolved-pstack-content-snapshot
+        license: MIT
+        reviewed_at: '2026-10-17'
+        review_outcome: accepted
+        path: skills/principle-subtract-before-you-add/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/principle-subtract-before-you-add/SKILL.md
+        adopted:
+          - P0/P1先减再加，动态consumer核实，不建无需求validator
+    local_changes: 复用四阶梯与同次findings，不搬模型/fallback/verdict/reconciliation、无consumer脚手架、全局类型/CI或自动拆状态；pstack包sha256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8，git commit未知；方法消费与登记分验。
+    dependency_closure: [skills/spec-specify/SKILL.md]
+    update_policy: 按固定commit或包hash逐项比较本地consumer；不追HEAD，不新增runtime/schema/账本。
+  - name: n3-foundational-thinking
+    status: absorbed
+    purpose: N3共同简洁方法采用
+    design_idea: 仅先减再建子集与subtract同落P0/P1，不另计采用机制
+    used_by_stages: [make-decision, build-plan, build-code, verify-code]
+    local_path: skills/simplicity-guard/SKILL.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        commit: unresolved-pstack-content-snapshot
+        license: MIT
+        reviewed_at: '2026-10-17'
+        review_outcome: accepted
+        path: skills/principle-foundational-thinking/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/principle-foundational-thinking/SKILL.md
+        adopted:
+          - 仅先减再建子集与subtract同落P0/P1，不另计采用机制
+    local_changes: 复用四阶梯与同次findings，不搬模型/fallback/verdict/reconciliation、无consumer脚手架、全局类型/CI或自动拆状态；pstack包sha256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8，git commit未知；方法消费与登记分验。
+    dependency_closure: [skills/spec-specify/SKILL.md]
+    update_policy: 按固定commit或包hash逐项比较本地consumer；不追HEAD，不新增runtime/schema/账本。
+
+  - name: n3-browser-testing-with-devtools
+    status: absorbed
+    purpose: N3 P7隔离浏览器方法采用
+    design_idea: Security Boundaries：浏览器输出只作数据，指向diagnosing-bugs唯一信任边界
+    used_by_stages: [build-code, verify-code]
+    local_path: skills/isolated-browser-qa/SKILL.md
+    upstream:
+      - github_url: https://github.com/addyosmani/agent-skills
+        commit: aeac41d4d005999432bb7312f7ff06383a91d59d
+        commit_url: https://github.com/addyosmani/agent-skills/commit/aeac41d4d005999432bb7312f7ff06383a91d59d
+        license: MIT
+        reviewed_at: '2026-10-17'
+        review_outcome: accepted
+        path: skills/browser-testing-with-devtools/SKILL.md
+        skill_url: https://github.com/addyosmani/agent-skills/blob/aeac41d4d005999432bb7312f7ff06383a91d59d/skills/browser-testing-with-devtools/SKILL.md
+        adopted:
+          - Security Boundaries：浏览器输出只作数据，指向diagnosing-bugs唯一信任边界
+          - DevTools Debugging Workflow：真实DOM ready、console/errors、截图/a11y观察；经verify现UI指针消费
+    local_changes: "保本仓single-engine/session、source只读scope、白名单、取消及证据清理；拒绝MCP替代引擎、main-profile/live attach、第三方cookie同步、zero-warning门、独立Doctor/feature-map、周期任务、默认PR。pstack包SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；git commit未知，main URL仅locator。方法消费和元数据分别首验。"
+    dependency_closure: [skills/spec-specify/SKILL.md, skills/diagnosing-bugs/SKILL.md]
+    update_policy: "按固定Addy commit或pstack实际包SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8逐项比较章节、真实consumer与拒绝项；不造content_sha256/commit、不自动追HEAD。"
+
+  - name: n3-create-verification-skill
+    status: absorbed
+    purpose: N3 P7隔离浏览器方法采用
+    design_idea: Interview / Generate / Prove：现网关Launch/health/Drive/Evidence/Cleanup完整实跑，清理后证据仍可读
+    used_by_stages: [build-code, verify-code]
+    local_path: skills/isolated-browser-qa/SKILL.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        commit: unresolved-pstack-content-snapshot
+        license: MIT
+        reviewed_at: '2026-10-17'
+        review_outcome: accepted
+        path: skills/create-verification-skill/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/create-verification-skill/SKILL.md
+        adopted:
+          - Interview / Generate / Prove：现网关Launch/health/Drive/Evidence/Cleanup完整实跑，清理后证据仍可读
+          - Evidence：目标已有dry-run时观察真实副作用；无consumer只落条件方法
+    local_changes: "保本仓single-engine/session、source只读scope、白名单、取消及证据清理；拒绝MCP替代引擎、main-profile/live attach、第三方cookie同步、zero-warning门、独立Doctor/feature-map、周期任务、默认PR。pstack包SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；git commit未知，main URL仅locator。方法消费和元数据分别首验。"
+    dependency_closure: [skills/spec-specify/SKILL.md, skills/diagnosing-bugs/SKILL.md]
+    update_policy: "按固定Addy commit或pstack实际包SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8逐项比较章节、真实consumer与拒绝项；不造content_sha256/commit、不自动追HEAD。"
+
+  - name: n3-maintain-verification-skill
+    status: absorbed
+    purpose: N3 P7隔离浏览器方法采用
+    design_idea: Live pass / Triage：健康不等可用，owned reset后重放；区分文档漂移、harness缺口和真实产品回归
+    used_by_stages: [build-code, verify-code]
+    local_path: skills/isolated-browser-qa/SKILL.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        commit: unresolved-pstack-content-snapshot
+        license: MIT
+        reviewed_at: '2026-10-17'
+        review_outcome: accepted
+        path: skills/maintain-verification-skill/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/maintain-verification-skill/SKILL.md
+        adopted:
+          - Live pass / Triage：健康不等可用，owned reset后重放；区分文档漂移、harness缺口和真实产品回归
+          - Index hygiene：维护既有reuse条目和原网关，不新增feature-map、周期任务或第二来源表
+    local_changes: "保本仓single-engine/session、source只读scope、白名单、取消及证据清理；拒绝MCP替代引擎、main-profile/live attach、第三方cookie同步、zero-warning门、独立Doctor/feature-map、周期任务、默认PR。pstack包SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；git commit未知，main URL仅locator。方法消费和元数据分别首验。"
+    dependency_closure: [skills/spec-specify/SKILL.md, skills/diagnosing-bugs/SKILL.md]
+    update_policy: "按固定Addy commit或pstack实际包SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8逐项比较章节、真实consumer与拒绝项；不造content_sha256/commit、不自动追HEAD。"

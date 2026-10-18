@@ -1,5 +1,6 @@
 // build-plan 预写测试（冻结）：断言变更须走 test change request + 独立审查
 import { afterEach, describe, expect, it } from "vitest";
+import { execFileSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -44,8 +45,7 @@ describe("safe-write writeFileAtomic", () => {
     const marker = join(root, "..", `escape-${process.pid}.txt`);
     const error = await rejection(writeFileAtomic(root, join("..", `escape-${process.pid}.txt`), Buffer.from("x")));
     expect(error).toBeInstanceOf(Error);
-    expect(typeof error.code).toBe("string");
-    expect(error.code.length).toBeGreaterThan(0);
+    expect(error.code).toBe("PATH_ESCAPE");
     expect(existsSync(marker)).toBe(false);
   });
 
@@ -121,11 +121,46 @@ describe("safe-write appendRecord", () => {
     expect(readFileSync(next, "utf8")).toBe("three");
   });
 
-  it("surfaces failures with a stable error code instead of swallowing them", async () => {
+  it("rejects a missing record directory without creating output and preserves the original filesystem error", async () => {
     const root = tempRoot("wh-safe-write-");
-    const error = await rejection(appendRecord(join(root, "missing"), "s", "txt", Buffer.from("x")));
+    const missing = join(root, "missing");
+    const error = await rejection(appendRecord(missing, "s", "txt", Buffer.from("x")));
     expect(error).toBeInstanceOf(Error);
     expect(typeof error.code).toBe("string");
     expect(error.code.length).toBeGreaterThan(0);
+    expect(existsSync(missing)).toBe(false);
+    expect(readdirSync(root)).toEqual([]);
+
+    // Inject only the owned filesystem error source in a separate process;
+    // preserve the real appendRecord path and avoid mutating this Vitest worker.
+    const probe = `
+      import assert from 'node:assert/strict';
+      import fs from 'node:fs';
+      import { syncBuiltinESMExports } from 'node:module';
+      const [moduleUrl, root, missing] = process.argv.slice(1);
+      const original = fs.lstatSync;
+      const sentinel = Object.assign(new Error('controlled owned-directory I/O failure'), { code: 'P4_CONTROLLED_IO_FAILURE' });
+      fs.lstatSync = (path, ...args) => {
+        if (path === missing) throw sentinel;
+        return original(path, ...args);
+      };
+      syncBuiltinESMExports();
+      try {
+        const { appendRecord } = await import(moduleUrl);
+        const rejected = await appendRecord(missing, 's', 'txt', Buffer.from('x')).then(() => null, error => error);
+        assert.equal(rejected, sentinel, 'appendRecord must preserve the original filesystem error object');
+        assert.equal(rejected.code, 'P4_CONTROLLED_IO_FAILURE');
+        assert.equal(fs.existsSync(missing), false, 'missing record directory must not be created');
+        assert.deepEqual(fs.readdirSync(root), [], 'rejected append must leave no output');
+        process.stdout.write('original-error/no-output\\n');
+      } finally {
+        fs.lstatSync = original;
+        syncBuiltinESMExports();
+      }
+    `;
+    const moduleUrl = new URL("../../runtime/interface/safe-write.mjs", import.meta.url).href;
+    expect(execFileSync(process.execPath, ["--input-type=module", "-e", probe, moduleUrl, root, missing], { encoding: "utf8" })).toBe("original-error/no-output\n");
+    expect(existsSync(missing)).toBe(false);
+    expect(readdirSync(root)).toEqual([]);
   });
 });

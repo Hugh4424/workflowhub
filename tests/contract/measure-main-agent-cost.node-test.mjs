@@ -230,3 +230,82 @@ test('BOUNDARY changed observed prefix, absent read position and earlier late ev
  for(const mode of ['rewrite','missing-position','late']){const a=structuredClone(s),previous=structuredClone(boundaries);if(mode==='rewrite')a.records[0].cwd='/constructed-rewritten-prefix';if(mode==='missing-position'){previous[0].lastPosition=null;previous[0].prefixSha256=null;previous[0].cumulative=[];}if(mode==='late')a.records.push({type:'assistant/message',seq:169,time:1792031682907,data:{turn:1,step:1,message:{id:'constructed-late',role:'assistant'},usage:{inputTokens:11,outputTokens:2,cacheReadTokens:3}}});
  const r=f([a],{window:{from:cutoff,until:'2026-10-15T02:34:42.918Z',includeFrom:false,startRef:null,previousBoundaries:previous}});assert.equal(r.status,'incomplete');unavailable(r.totals.usage.inputTokens);assert.ok(r.issues.some(x=>x.code===(mode==='late'?'late_event_before_window':'previous_boundary_mismatch')),mode);}
 });
+
+// Approved narrow root-paginated compatibility TCR; original frozen prefix unchanged.
+{
+const f=await measure();
+const rootPaginatedTest=(name,fn)=>test('ROOT-PAGINATED '+name,fn);
+const time=n=>new Date(Date.UTC(2026,9,18,0,0,n)).toISOString();
+const tokens=n=>({input_tokens:n,output_tokens:n,cached_input_tokens:n,cache_write_input_tokens:0,reasoning_output_tokens:n});
+function src(){return {sourcePath:'/constructed/root.jsonl',records:[
+ {ordinal:0,timestamp:time(0),type:'session_meta',payload:{id:'root',history_mode:'paginated',source:'vscode'}},
+ {ordinal:1,timestamp:time(1),type:'token_usage_record',payload:{thread_id:'root',thread_token_usage:tokens(10)}},
+ {ordinal:2,timestamp:time(2),type:'turn_context',payload:{turn_id:'t1'}},
+ {ordinal:3,timestamp:time(3),type:'response_item',payload:{type:'function_call',id:'call-1'}},
+ {ordinal:4,timestamp:time(4),type:'token_usage_record',payload:{thread_id:'root',thread_token_usage:tokens(22)}},
+ {ordinal:5,timestamp:time(5),type:'event_msg',payload:{type:'token_count',info:{total_token_usage:tokens(9999)}}},
+ ]};}
+const opts={window:{from:time(1),until:time(5),includeFrom:false}};
+const unavailable=m=>assert.equal(m.status,'unavailable');
+rootPaginatedTest('complete root paginated uses same-thread 10→22 delta, response/turn counts and no fallback double count',()=>{
+ const r=f([src()],opts);assert.deepEqual(r.totals.usage.inputTokens,{status:'available',value:12});
+ assert.deepEqual(r.totals.counts.codexResponseItems,{status:'available',value:1});assert.deepEqual(r.totals.counts.turns,{status:'available',value:1});
+ assert.equal(r.totals.counts.commandCalls.reason,'unsupported_in_this_task');
+ assert.equal(r.sessions[0].observedBoundaries[0].lastPosition.ordinal,5);
+});
+for(const [key,value]of [['parent_thread_id','parent'],['source',{subagent:{id:'child'}}],['history_base',{id:'base'}],['forked_from_id','fork'],['subagent_history_start_ordinal',-1]])rootPaginatedTest('preserve fail closed '+key,()=>{
+ const s=src();s.records[0].payload[key]=value;const r=f([s],opts);unavailable(r.totals.usage.inputTokens);assert.ok(r.issues.some(x=>x.code.startsWith('inherited_boundary_')));
+});
+rootPaginatedTest('paginated ordinal gap cannot establish root prefix',()=>{const s=src();s.records.splice(2,1);unavailable(f([s],opts).totals.usage.inputTokens);});
+rootPaginatedTest('foreign thread cumulative cannot become valid delta',()=>{const s=src();s.records[4].payload.thread_id='foreign';unavailable(f([s],opts).totals.usage.inputTokens);});
+rootPaginatedTest('conflicting ordinal cannot become valid delta',()=>{const s=src();s.records.push({...s.records[4],payload:{thread_id:'root',thread_token_usage:tokens(23)}});unavailable(f([s],opts).totals.usage.inputTokens);});
+rootPaginatedTest('paginated root without baseline does not invent zero',()=>{const s=src();s.records=s.records.filter(r=>r.ordinal!==1);s.records.forEach((r,i)=>r.ordinal=i);unavailable(f([s],{window:{from:time(0),until:time(5),includeFrom:true}}).totals.usage.inputTokens);});
+rootPaginatedTest('missing declared child remains incomplete and visible',()=>{const s=src();s.records.push({ordinal:6,timestamp:time(5),type:'event_msg',payload:{type:'item_completed',item:{type:'CollabAgentToolCall',tool:'spawn_agent',receiver_thread_ids:['child-missing']}}});const r=f([s],opts);assert.equal(r.status,'incomplete');assert.ok(r.issues.some(x=>x.code==='missing_child'));});
+rootPaginatedTest('changed observed prefix remains rejected',()=>{const s=src();const first=f([s],opts);const b=first.sessions[0].observedBoundaries;if(!b[0].lastPosition)return;const changed=structuredClone(s);changed.records[3].payload.id='changed';const r=f([changed],{window:{from:time(5),until:time(6),includeFrom:false,previousBoundaries:b}});assert.ok(r.issues.some(x=>x.code==='previous_boundary_mismatch'));unavailable(r.totals.usage.inputTokens);});
+
+}
+
+// Reviewed fresh-child narrow compatibility TCR; all preceding frozen bytes unchanged.
+{
+const freshChildTest=(name,fn)=>test('FRESH-CHILD '+name,fn);
+const f=await measure();const t=n=>new Date(Date.UTC(2026,9,18,0,0,n)).toISOString();const u=n=>({input_tokens:n,output_tokens:n,cached_input_tokens:n,cache_write_input_tokens:0,reasoning_output_tokens:n});
+const row=(ordinal,second,type,payload)=>({ordinal,timestamp:t(second),type,payload});
+function sources(){return [{sourcePath:'/fresh/root.jsonl',records:[row(0,0,'session_meta',{id:'root',history_mode:'paginated',cli_version:'0.163.0-alpha.10.2',source:'vscode'}),row(1,1,'token_usage_record',{thread_id:'root',thread_token_usage:u(10)}),row(2,2,'response_item',{type:'function_call',namespace:'collaboration',name:'spawn_agent',call_id:'spawn-1',arguments:JSON.stringify({fork_turns:'none'})}),row(3,2,'event_msg',{type:'item_completed',item:{type:'SubAgentActivity',kind:'started',id:'spawn-1',agent_thread_id:'child',agent_path:'/root/test'}}),row(4,6,'token_usage_record',{thread_id:'root',thread_token_usage:u(22)})]}, {sourcePath:'/fresh/child.jsonl',records:[row(0,3,'session_meta',{id:'child',parent_thread_id:'root',history_mode:'paginated',cli_version:'0.163.0-alpha.10.2',source:{subagent:{thread_spawn:{parent_thread_id:'root',agent_path:'/root/test'}}}}),row(1,3,'event_msg',{type:'task_started',turn_id:'child-turn'}),row(2,4,'token_usage_record',{thread_id:'child',thread_token_usage:u(7)}),row(3,5,'token_usage_record',{thread_id:'child',thread_token_usage:u(11)})]}];}
+const opts={window:{from:t(2),until:t(6),includeFrom:false}};const child=r=>r.sessions.find(s=>s.sessionId==='child');const unavailable=r=>assert.equal(child(r).usage.inputTokens.status,'unavailable');
+freshChildTest('parent fresh spawn chain authorizes child own source and positive birth zero baseline',()=>{const r=f(sources(),opts);assert.deepEqual(child(r).usage.inputTokens,{status:'available',value:11});assert.equal(child(r).observedBoundaries[0].lastPosition.ordinal,3);assert.deepEqual(r.totals.usage.inputTokens,{status:'available',value:23});});
+freshChildTest('child born before window needs real prewindow cumulative, not birth zero',()=>{const r=f(sources(),{window:{from:t(4),until:t(6),includeFrom:false}});assert.deepEqual(child(r).usage.inputTokens,{status:'available',value:4});});
+const mutations=[['no parent',s=>s.shift()],['fork all',s=>s[0].records[2].payload.arguments='{"fork_turns":"all"}'],['no issue',s=>{s[0].records[2].payload.type='not_function_call';}],['wrong namespace',s=>{s[0].records[2].payload.namespace='untrusted';}],['missing association',s=>{s[0].records[3].payload.item.id='other';}],['wrong header parent',s=>{s[1].records[0].payload.parent_thread_id='other';}],['wrong spawn parent',s=>{s[1].records[0].payload.source.subagent.thread_spawn.parent_thread_id='other';}],['wrong agent path',s=>{s[1].records[0].payload.source.subagent.thread_spawn.agent_path='other';}],['history base',s=>{s[1].records[0].payload.history_base={id:'ancestor'};}],['explicit invalid seed',s=>{s[1].records[0].payload.subagent_history_start_ordinal=-1;}],['foreign cumulative',s=>{s[1].records[3].payload.thread_id='other';}],['child gap',s=>{s[1].records[2].ordinal=20;}],['parent gap',s=>{s[0].records[2].ordinal=20;}],['unknown generation',s=>{s[1].records[0].payload.cli_version='unknown';}],['ancestor header',s=>{s[1].records[1].type='session_meta';s[1].records[1].payload={id:'ancestor'};}],['child read failure',s=>{s[1].readIssue={code:'truncated_tail',sourcePath:s[1].sourcePath,message:'constructed',expected:false};}],['parent read failure',s=>{s[0].readIssue={code:'truncated_tail',sourcePath:s[0].sourcePath,message:'constructed',expected:false};}],['reused spawn identity',s=>{s[0].records.splice(4,0,row(4,3,'response_item',{...s[0].records[2].payload,arguments:'{"fork_turns":"all"}'}));s[0].records.at(-1).ordinal=5;}],['reused started identity',s=>{s[0].records.splice(4,0,row(4,3,'event_msg',{type:'item_completed',item:{...s[0].records[3].payload.item,agent_thread_id:'other'}}));s[0].records.at(-1).ordinal=5;}],['parent foreign cumulative',s=>{s[0].records[1].payload.thread_id='other';}],['child predates birth',s=>{s[1].records[1].timestamp=t(0);}],['future spawn',s=>{s[0].records[3].timestamp=t(7);}]];
+for(const[name,mutate]of mutations)freshChildTest('fresh child fail closed: '+name,()=>{const s=sources();mutate(s);unavailable(f(s,opts));});
+freshChildTest('fresh child before window without real baseline cannot use birth zero',()=>{const s=sources();s[1].records.splice(2,1);s[1].records.forEach((r,i)=>r.ordinal=i);unavailable(f(s,{window:{from:t(4),until:t(6),includeFrom:false}}));});
+freshChildTest('cyclic parent ancestry never proves fresh history',()=>{const s=sources();s[0].records[0].payload.parent_thread_id='child';s[0].records[0].payload.source={subagent:{thread_spawn:{parent_thread_id:'child',agent_path:'/root/parent'}}};unavailable(f(s,opts));});
+
+freshChildTest('trusted parent may not issue spawn before its own header birth',()=>{const s=sources();s[0].records[0].timestamp=t(5);unavailable(f(s,opts));});
+
+}
+
+// Valid formal112 finding: a malformed exact-UUID candidate cannot vanish behind a good copy.
+test('FRESH-CHILD-COPY CLI keeps headerless failed copy and blocks inferred child birth zero',t=>{
+ const root=scratch(t),leaf=join(root,'sessions','2026','10','18');mkdirSync(leaf,{recursive:true});
+ const parent='01a14c6d-0000-7000-8000-000000000001',child='01a14c6e-0000-7000-8000-000000000002';
+ const at=n=>'2026-10-18T00:00:0'+n+'.000Z',usage=n=>({input_tokens:n,output_tokens:n,cached_input_tokens:n,cache_write_input_tokens:0,reasoning_output_tokens:n});
+ const row=(ordinal,n,type,payload)=>({ordinal,timestamp:at(n),type,payload});
+ const parentPath=put(leaf,'rollout-parent-'+parent+'.jsonl',[
+  row(0,0,'session_meta',{id:parent,history_mode:'paginated',cli_version:'0.163.0-alpha.10.2',source:'vscode'}),
+  row(1,1,'token_usage_record',{thread_id:parent,thread_token_usage:usage(10)}),
+  row(2,2,'response_item',{type:'function_call',namespace:'collaboration',name:'spawn_agent',call_id:'copy-spawn',arguments:'{"fork_turns":"none"}'}),
+  row(3,2,'event_msg',{type:'item_completed',item:{type:'SubAgentActivity',kind:'started',id:'copy-spawn',agent_thread_id:child,agent_path:'/root/copy'}}),
+  row(4,6,'token_usage_record',{thread_id:parent,thread_token_usage:usage(22)}),
+ ]);
+ put(leaf,'rollout-good-'+child+'.jsonl',[
+  row(0,3,'session_meta',{id:child,parent_thread_id:parent,history_mode:'paginated',cli_version:'0.163.0-alpha.10.2',source:{subagent:{thread_spawn:{parent_thread_id:parent,agent_path:'/root/copy'}}}}),
+  row(1,3,'event_msg',{type:'task_started',turn_id:'copy-turn'}),
+  row(2,4,'token_usage_record',{thread_id:child,thread_token_usage:usage(7)}),
+  row(3,5,'token_usage_record',{thread_id:child,thread_token_usage:usage(11)}),
+ ]);
+ const argv=['--session='+parentPath,'--from='+at(1),'--until='+at(6)];
+ const clean=run(argv);assert.equal(clean.status,0,clean.stderr);assert.match(clean.stdout,/inputTokens \(token\): 23/);
+ const broken=join(leaf,'rollout-broken-'+child+'.jsonl');writeFileSync(broken,'not valid JSON\n');
+ const result=run(argv);assert.equal(result.status,1,'unreadable candidate must make whole measurement incomplete');
+ assert.match(result.stdout,/child session copies include incomplete source/);assert.match(result.stdout,/inherited_boundary_missing/);
+ assert.match(result.stdout,/inputTokens \(token\): unavailable:source_read_incomplete/);
+});

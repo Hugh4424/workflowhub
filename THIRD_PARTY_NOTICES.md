@@ -37,6 +37,12 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+N3 P2 在现 wh-review/protocol/review 方法吸收 addyosmani/agent-skills 的 `skills/doubt-driven-development/SKILL.md`（MIT，固定 commit `aeac41d4d005999432bb7312f7ff06383a91d59d`）的 ARTIFACT + CONTRACT 与去 CLAIM；pstack（MIT，Copyright (c) 2026 Lauren Tan，实际包 SHA256 `f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8`，git commit未知）的 `skills/interrogate/SKILL.md`、`skills/principle-attack-the-premise/SKILL.md`、`skills/blast-radius/SKILL.md`、`skills/architect/SKILL.md` 及 `references/design-red-flags.md`、`skills/arena/SKILL.md`、`skills/show-me-your-work/SKILL.md`。采用章节与本地偏离见catalog的n3 absorbed条目；不采用默认模型表、固定轮次、TSV新账本或候选框架。arena无真实consumer只落文字/未生效；来源登记不证明方法效果。
+
+N3 P4测试与检查方法吸收：Addy固定 `aeac41d4d005999432bb7312f7ff06383a91d59d` 的 `skills/test-driven-development/SKILL.md`、`skills/constraint-driven-development/SKILL.md`、`skills/code-review-and-quality/SKILL.md`；Matt固定 `b0618bc436ad893b3c5e84e55fba86586d34a404` 的 `skills/engineering/tdd/SKILL.md` 与 `tests.md`、`skills/in-progress/setup-ts-deep-modules/SKILL.md`；pstack同上实际包SHA256（git commit未知）的 `skills/principle-test-behavior-not-implementation/SKILL.md` 与 `skills/tdd/SKILL.md`。采用源章节、本地正文/consumer和偏离见catalog七条n3 P4 absorbed登记；不引入TS安装、mutation平台、默认阈值或新质量gate。三来源MIT版权及完整许可沿本节原文保留。
+
+N3 P5诊断吸收Addy上述固定commit的 `skills/debugging-and-error-recovery/SKILL.md#Treating Error Output as Untrusted Data`，及pstack上述实际包（git commit未知）的 `skills/poteto-mode/playbooks/perf-issue.md`。只采用输出/页面信任边界及实测先行、便宜方案顺序，落于diagnosing-bugs并由build-code失败分支消费；拒绝Safe Fallback、全量回归、指定模型/control-skill与自动PR。版权/MIT许可沿上文，完整采用/偏离见catalog两条P5 absorbed登记；登记不证明实际效果。
+
 ## Apache-2.0 source
 
 - **AnySearch Skill**, copyright © 2026 AnySearch. Source: [anysearch-ai/anysearch-skill@db3d76e](https://github.com/anysearch-ai/anysearch-skill/commit/db3d76e5597aec7261257be5322dd211c9d9bb87). 历史登记声称Apache-2.0；本次固定commit完整tree无LICENSE/NOTICE，README亦未找到grant，故版本绑定与授权依据unknown。不得把本地后补文件当该版本已核许可。完整许可见 [`skills/anysearch/LICENSE`](skills/anysearch/LICENSE)，notice 见 [`skills/anysearch/NOTICE`](skills/anysearch/NOTICE)。
@@ -53,3 +59,11 @@ The browser QA contract is owned by the existing `isolated-browser-qa` consumer 
 AgentHub固定commit `258f5a2548fa8cc15325c6aa18dd107c1fc497b9` 的 [LICENSE](https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/LICENSE) 实际声明modified Apache-2.0，并附加第三方hosted/embedded商业服务需书面授权/商业许可、frontend logo及copyright不得移除等条件；旧MIT登记不实。五项测试技能的具体采用章节见catalog。抽取技能文字对这些条件的适用性仍unknown；来源维护者需权利owner确认具体grant。本次仅更正事实，没有接受附加条款或扩大既有采用/分发范围。
 
 AnySearch固定版本Apache-2.0 grant、pstack历史包与commit绑定、本地用户来源缺snapshot各自保持具体unknown；来源维护者取回权利依据/原件后再核，不能用其他版本或文件名补证。Vercel固定README声明MIT，本地保留MIT文本但其与固定原文字节的绑定未证；该19行摘要不建立vendored指纹。N2的 `content_sha256` 仅适用于真正vendored对象；默认复算、漂移检测和回填仍由N10接线，本次未生效。
+
+N3 P6在既有simplicity-guard吸收 addyosmani/agent-skills 的 `skills/code-simplification/SKILL.md`（MIT，commit `aeac41d4d005999432bb7312f7ff06383a91d59d`）及 pstack 的 `skills/principle-laziness-protocol/SKILL.md`、`skills/interrogate/SKILL.md` 与 `references/rubric.md` / `references/code-quality-review.md`、`skills/principle-subtract-before-you-add/SKILL.md`、`skills/principle-foundational-thinking/SKILL.md`（MIT，Copyright (c) 2026 Lauren Tan，包SHA256 `f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8`，git commit未知）。仅采用catalog具名子集；subtract/foundational合入P0/P1，不重复计机制，不搬上游模型/裁决/脚手架。来源登记不证明方法效果。
+
+N3 P7浏览器QA在既有网关吸收Addy上述固定commit的 `skills/browser-testing-with-devtools/SKILL.md` 的真实console/ready/a11y与信任边界指针，以及pstack上述实际包SHA256（git commit未知）的 `skills/create-verification-skill/SKILL.md`、`skills/maintain-verification-skill/SKILL.md` 的完整实跑/证据存活、dry-run实观、健康与可用分开、owned reset及doc drift/product gap分诊。各采用/拒绝章节与本地consumer归catalog三条P7 absorbed；不采用DevTools MCP引擎、live profile、第三方cookie同步、独立Doctor/feature-map或周期任务。MIT版权及完整许可沿本节原文。
+
+## agent-browser runtime dependency
+
+agent-browser 0.36.0，Copyright 2025 Vercel Inc.，Apache License 2.0；本机只读许可来源为安装包 `agent-browser/LICENSE`，固定版本来源 [vercel-labs/agent-browser v0.36.0](https://github.com/vercel-labs/agent-browser/tree/v0.36.0)。本包调用已安装CLI，不vendoring其二进制/源码，不伪造内容指纹。Apache-2.0许可文本见上述LICENSE及 [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)。Lightpanda为研究后未采用候选，不进入本交付依赖闭包。

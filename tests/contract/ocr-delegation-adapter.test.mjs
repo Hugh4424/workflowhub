@@ -54,11 +54,13 @@ function ownedPacketCli(root) {
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),crypto=require('node:crypto');
 const {spawn,spawnSync}=require('node:child_process'),readline=require('node:readline');
 const root=${JSON.stringify(root)},outside=${JSON.stringify(outside)},launches=${JSON.stringify(launches)};
-const args=process.argv.slice(2),cwd=fs.realpathSync(process.cwd());
+const args=process.argv.slice(2),cwd=args[0]==='exec'?args[args.indexOf('-C')+1]:fs.realpathSync(process.cwd());
+assert.equal(fs.realpathSync(cwd),fs.realpathSync(process.cwd()));
 const adapter=args[0]==='exec'?'codex':args[0]==='run'?'opencode':args.includes('--agent-file')?'kimi':'antigravity';
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 const session=adapter==='opencode'?'owned-opencode-packet':adapter==='kimi'?'owned-kimi-packet':'owned-ag-packet';
-const report={adapter,cwd,pid:process.pid,denied:[],thinkingEffort:process.env.KIMI_MODEL_THINKING_EFFORT};
+const configs=args.flatMap((arg,index)=>arg==='-c'?[args[index+1]]:[]);
+const report={adapter,cwd,pid:process.pid,denied:[],thinkingEffort:process.env.KIMI_MODEL_THINKING_EFFORT,developerInstructions:configs.find(value=>value.startsWith('developer_instructions='))?.slice('developer_instructions='.length),permissionConfig:configs.find(value=>value.startsWith('permissions.wh_ocr='))};
 function finished(){if(adapter==='opencode'){fs.appendFileSync(launches,JSON.stringify(report)+'\n');process.stdout.write(JSON.stringify({type:'text',sessionID:session,part:{text:JSON.stringify({findings:[]})}})+'\n');process.stdout.write(JSON.stringify({type:'step_finish',sessionID:session,part:{reason:fs.existsSync(path.join(root,'tool-only'))?'tool-calls':'stop'}})+'\n');if(fs.existsSync(path.join(root,'after-error')))process.stdout.write(JSON.stringify({type:'error',error:{message:'owned native failure'}})+'\n');if(fs.existsSync(path.join(root,'next-tool-turn'))){process.stdout.write(JSON.stringify({type:'step_start'})+'\n');process.stdout.write(JSON.stringify({type:'text',part:{text:JSON.stringify({findings:[]})}})+'\n');process.stdout.write(JSON.stringify({type:'step_finish',part:{reason:'tool-calls'}})+'\n');}return;}fs.appendFileSync(launches,JSON.stringify(report)+'\n');
  if(adapter==='kimi')process.stdout.write(JSON.stringify({role:'meta',type:'session.resume_hint',session_id:session})+'\n');
  if(fs.existsSync(path.join(root,'hold'))){process.on('SIGTERM',()=>{});setInterval(()=>{},1000);return;}
@@ -81,8 +83,8 @@ async function main(){
   const config=JSON.parse(fs.readFileSync('.agents/hooks.json','utf8'))['workflowhub-packet-reader'];
   assert.equal(config.PreToolUse[0].matcher,'*');assert.equal(config.PostToolUse[0].matcher,'*');
   const hook=path.join(cwd,'.ocr-ag-guard/hook.cjs');
-  function call(phase,name,a){const child=spawnSync(process.execPath,[hook,phase],{input:JSON.stringify({conversationId:session,toolCall:{name,args:a}}),encoding:'utf8',timeout:3000});assert.equal(child.status,0,child.stderr);return JSON.parse(child.stdout);}
-  for(const file of ['review-prompt.md','src/reviewed.mjs']){const AbsolutePath=path.join(cwd,file);assert.equal(call('pre','view_file',{AbsolutePath}).decision,'allow');const bytes=fs.readFileSync(AbsolutePath);report[file]=hash(bytes);call('post','view_file',{AbsolutePath});}
+  function call(phase,name,a,content){const child=spawnSync(process.execPath,[hook,phase],{input:JSON.stringify({conversationId:session,toolCall:{name,args:a},...(phase==='post'?{toolResult:{content}}:{})}),encoding:'utf8',timeout:3000});assert.equal(child.status,0,child.stderr);return JSON.parse(child.stdout);}
+  for(const file of ['review-prompt.md','src/reviewed.mjs']){const AbsolutePath=path.join(cwd,file);assert.equal(call('pre','view_file',{AbsolutePath}).decision,'allow');const bytes=fs.readFileSync(AbsolutePath);report[file]=hash(bytes);call('post','view_file',{AbsolutePath},bytes.toString('utf8'));}
   for(const AbsolutePath of [outside,alias,path.join(cwd,'undeclared.txt')]){assert.equal(call('pre','view_file',{AbsolutePath}).decision,'deny');report.denied.push('view:'+AbsolutePath);}
   for(const name of ['write_to_file','run_command','read_url_content','Agent','UnknownTool']){assert.equal(call('pre',name,{}).decision,'deny');report.denied.push(name);}
   assert.equal(fs.existsSync(path.join(cwd,'write-canary.txt')),false);finished();return;
@@ -104,13 +106,18 @@ async function main(){
  readline.createInterface({input:child.stdout}).on('line',line=>{const response=JSON.parse(line),waiter=waiting.get(response.id);if(waiter){waiting.delete(response.id);waiter.resolve(response);}});
  function rpc(method,params){return new Promise((resolve,reject)=>{const id=++next;waiting.set(id,{resolve,reject});child.stdin.write(JSON.stringify({jsonrpc:'2.0',id,method,params})+'\n');});}
  const read=async a=>(await rpc('tools/call',{name:'Read',arguments:a})).result;
+ const serializedBudget=adapter==='opencode'&&fs.existsSync(path.join(root,'serialized-budget'));
+ const kimiLargePage=adapter==='kimi'&&fs.existsSync(path.join(root,'kimi-large-pages'));
+ report.maxSerializedResponseBytes=0;report.rawLargePageSeen=false;
  try{
   const init=await rpc('initialize',{protocolVersion:'2024-11-05'});assert(init.result.capabilities.tools);
   const tools=(await rpc('tools/list',{})).result.tools;assert.deepEqual(tools.map(x=>x.name),['Read']);
   for(const file of ['review-prompt.md','src/reviewed.mjs',...(fs.existsSync('diff-index.json')?['diff-index.json']:[])]){
    const original=fs.readFileSync(file),chunks=[];let offset=0,pages=0;
-   do{const response=await read({path:file,offset});assert.equal(response.isError,false);const page=JSON.parse(response.content[0].text),bytes=Buffer.from(page.content);assert.equal(page.offset,offset);assert.equal(page.bytes_returned,bytes.length);assert(bytes.length<=16384);assert.equal(page.total_bytes,original.length);assert.equal(page.sha256,hash(original));assert.equal(page.unread_before.bytes,offset);chunks.push(bytes);pages++;if(!page.has_more){assert.equal(page.unread_after.bytes,0);break;}assert(page.next_offset>offset);assert.equal(page.next_offset,offset+bytes.length);offset=page.next_offset;}while(true);
-   const joined=Buffer.concat(chunks);assert(joined.equals(original));report[file]={bytes:joined.length,sha256:hash(joined),pages};
+   do{const response=await read({path:file,offset,...(serializedBudget||kimiLargePage?{limit:65536}:{})});assert.equal(response.isError,false);const serializedBytes=Buffer.byteLength(JSON.stringify(response),'utf8');report.maxSerializedResponseBytes=Math.max(report.maxSerializedResponseBytes,serializedBytes);if(serializedBudget)assert(serializedBytes<=16384,'serialized MCP result exceeds native-visible budget: '+serializedBytes);const page=JSON.parse(response.content[0].text),bytes=Buffer.from(page.content);assert.equal(page.offset,offset);assert.equal(page.bytes_returned,bytes.length);if(!serializedBudget&&!kimiLargePage)assert(bytes.length<=16384);if(kimiLargePage&&file==='src/reviewed.mjs'&&offset===0){assert(bytes.length>16384,'Kimi original large page must remain available');report.rawLargePageSeen=true;}assert.equal(page.total_bytes,original.length);assert.equal(page.sha256,hash(original));assert.equal(page.unread_before.bytes,offset);chunks.push(bytes);pages++;if(!page.has_more){assert.equal(page.unread_after.bytes,0);break;}assert(page.next_offset>offset);assert.equal(page.next_offset,offset+bytes.length);offset=page.next_offset;}while(true);
+   const joined=Buffer.concat(chunks);assert(joined.equals(original));
+   if(serializedBudget){const eof=await read({path:file,offset:original.length,limit:65536});assert.equal(eof.isError,false);assert(Buffer.byteLength(JSON.stringify(eof),'utf8')<=16384);const value=JSON.parse(eof.content[0].text);assert.equal(value.content,'');assert.equal(value.bytes_returned,0);assert.equal(value.has_more,false);assert.equal(value.next_offset,null);assert.equal(value.unread_after.bytes,0);const continuation=original.findIndex(b=>(b&0xc0)===0x80);if(continuation>=0)assert.equal((await read({path:file,offset:continuation})).isError,true);}
+   report[file]={bytes:joined.length,sha256:hash(joined),pages};
   }
   for(const input of [outside,'../outside.txt',path.basename(alias),'undeclared.txt']){const response=await read({path:input});assert.equal(response.isError,true);assert(!JSON.stringify(response).includes('OWNED_OUTSIDE_MUST_NOT_BE_READ'));report.denied.push(input);}
   for(const a of [{path:'review-prompt.md',offset:-1},{path:'review-prompt.md',limit:65537}]){assert.equal((await read(a)).isError,true);report.denied.push('invalid-page');}
@@ -510,7 +517,7 @@ process.stdout.write(JSON.stringify({type:"turn.completed",usage:{input_tokens:3
       const context = configuredContext(["antigravity/flash"],cli.executable);context.providerConfig.providers["antigravity/flash"].allow_host_state=acknowledged;
       const raw = new Map();
       const result = await runConfiguredOcrHostReview({request:input,packet:configuredPacket()},{trustedContext:context,rawOutputSink:async(_hint,bytes,meta)=>{const saved=await appendRecord(join(root,"quality","reviews"),meta.stream,"output",bytes);raw.set(meta.stream,readFileSync(saved));return relative(root,saved).split("\\").join("/");}});
-      expect(result).toMatchObject({status:"available",provider_results:[{provider:"antigravity/flash",status:"completed",session_id:"owned-ag-packet",findings:[],parse_outcome:"ok"}]});
+      expect(result,JSON.stringify(result.provider_results.map(member=>({provider:member.provider,error:member.error,diagnostic:member.unavailable_diagnostics})))).toMatchObject({status:"available",provider_results:[{provider:"antigravity/flash",status:"completed",session_id:"owned-ag-packet",findings:[],parse_outcome:"ok"}]});
       const report = JSON.parse(readFileSync(cli.launches,"utf8").trim().split("\n").at(-1));
       expect(report.denied).toHaveLength(8); expect(raw.get("stdout").toString()).toContain('"conversation_id":"owned-ag-packet"');
       expect(existsSync(report.cwd)).toBe(false);expect(()=>process.kill(report.pid,0)).toThrow();
@@ -1609,4 +1616,63 @@ else {
     });
   });
 
+});
+
+
+it("presents the Codex packet exception as developer instructions without changing native permissions", async () => {
+  const root=realpathSync(mkdtempSync(join(tmpdir(),"workflowhub-codex-exception-")));roots.push(root);
+  const cli=ownedPacketCli(root);
+  const result=await runConfiguredOcrHostReview({request,packet:configuredPacket()},
+    {trustedContext:configuredContext(["codex/luna"],cli.executable)});
+  expect(result.provider_results[0].status).toBe("completed");
+  const report=JSON.parse(readFileSync(cli.launches,"utf8").trim().split("\n").at(-1));
+  expect(report.developerInstructions).toBeTypeOf("string");
+  const instruction=JSON.parse(report.developerInstructions);
+  expect(instruction).toContain(`the exact packet root ${report.cwd} has an explicit read-only grant`);
+  expect(instruction).toContain("This narrower grant overrides its broader denied TMPDIR parent for this packet only");
+  expect(instruction).toContain("The parent denial still applies to all other temporary files");
+  expect(instruction).toContain("no writes, no network and no escalation remain unchanged");
+  expect(instruction).toContain("preserve any actual tool denial as an error");
+  expect(instruction).toContain("This text grants no additional OS permission");
+  console.log(JSON.stringify({oracle:"codex-developer-exception-host-injection",developer_instruction_utf8_bytes:Buffer.byteLength(instruction,"utf8"),serialized_config_utf8_bytes:Buffer.byteLength("developer_instructions="+report.developerInstructions,"utf8"),boundary:"controlled native CLI argv readback; not model behavior or old static-method budget"}));
+  expect(report.permissionConfig).toBe('permissions.wh_ocr={filesystem={":root"="deny",":minimal"="read",":tmpdir"="deny",":slash_tmp"="deny",'
+    +JSON.stringify(report.cwd)+'="read"},network={enabled=false}}');
+});
+
+
+it.each([
+  ["empty file", ""],
+  ["large ASCII", "a".repeat(180000)],
+  ["multibyte UTF8", "汉字🙂é\n".repeat(18000)],
+  ["JSON escaping", String.fromCharCode(34,92,10,13,9,8,12).repeat(22000)],
+])("bounds the complete OpenCode serialized page and reconstructs %s exactly", async (_kind,content) => {
+  const root=realpathSync(mkdtempSync(join(tmpdir(),"workflowhub-oc-response-budget-")));roots.push(root);
+  const cli=ownedPacketCli(root),context=configuredContext(["opencode/reviewer"],cli.executable);
+  context.providerConfig.providers["opencode/reviewer"].effort="max";
+  writeFileSync(join(root,"serialized-budget"),"");
+  const result=await runConfiguredOcrHostReview({request,packet:configuredPacket(content)},{trustedContext:context});
+  expect(result.provider_results[0].status,JSON.stringify(result.provider_results[0].error)).toBe("completed");
+  const report=JSON.parse(readFileSync(cli.launches,"utf8").trim().split("\n").at(-1));
+  expect(report.maxSerializedResponseBytes).toBeLessThanOrEqual(16384);
+  expect(report["src/reviewed.mjs"].bytes).toBe(Buffer.byteLength(content));
+  expect(report["src/reviewed.mjs"].sha256).toBe(createHash("sha256").update(content).digest("hex"));
+  if(!content.length)expect(report["src/reviewed.mjs"].pages).toBe(1);
+  if(content.length)expect(report["src/reviewed.mjs"].pages).toBeGreaterThan(1);
+  expect(report.denied).toEqual(expect.arrayContaining(["../outside.txt","undeclared.txt","Write","Shell","Web","Agent","UnknownTool"]));
+});
+
+it("preserves Kimi original large-page MCP contract beside the OpenCode serialized budget", async () => {
+  const root=realpathSync(mkdtempSync(join(tmpdir(),"workflowhub-kimi-original-pages-")));roots.push(root);
+  const cli=ownedPacketCli(root),context=configuredContext(["kimi/coding"],cli.executable);
+  const nativeHome=join(root,"kimi-home");mkdirSync(nativeHome);mkdirSync(join(nativeHome,"workspace-trust"));
+  const prior=process.env.KIMI_CODE_HOME;process.env.KIMI_CODE_HOME=nativeHome;writeFileSync(join(root,"kimi-large-pages"),"");
+  try {
+    const result=await runConfiguredOcrHostReview({request,packet:configuredPacket("k".repeat(120000))},{trustedContext:context});
+    expect(result.provider_results[0].status,JSON.stringify(result.provider_results[0].error)).toBe("completed");
+    const report=JSON.parse(readFileSync(cli.launches,"utf8").trim().split("\n").at(-1));
+    expect(report.rawLargePageSeen).toBe(true);
+    expect(report.maxSerializedResponseBytes).toBeGreaterThan(16384);
+    expect(report["src/reviewed.mjs"].bytes).toBe(120000);
+    expect(report["src/reviewed.mjs"].pages).toBeGreaterThan(1);
+  } finally {if(prior===undefined)delete process.env.KIMI_CODE_HOME;else process.env.KIMI_CODE_HOME=prior;}
 });

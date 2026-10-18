@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [ "${1:-}" = "--run" ]; then
+  shift
+  exec node "$(cd "$(dirname "$0")" && pwd)/browser-qa-session.mjs" "$@"
+fi
 TARGET_URL="${1:-}"
 PROFILE_MAP_FILE="${BROWSER_QA_PROFILE_MAP:-$HOME/.config/workflowhub/browser-qa-profiles.conf}"
 ENGINE="${BROWSER_QA_ENGINE:-agent-browser}"
@@ -78,6 +82,10 @@ printf 'export BROWSER_QA_SESSION=%q\n' "workflowhub-qa-$session_slug"
 printf 'export BROWSER_QA_ENGINE=%q\n' "$ENGINE"
 printf 'export BROWSER_QA_HOST=%q\n' "$host_name"
 printf 'export BROWSER_QA_ALLOWED_DOMAINS=%q\n' "$allowed_domains"
-printf 'export BROWSER_QA_AUTH_MODE=%q\n' "none"
+case "${BROWSER_QA_AUTH_MODE:-none}" in
+  none|read-only-ticket-export) ;;
+  *) echo unsupported_auth_mode >&2; exit 64 ;;
+esac
+printf 'export BROWSER_QA_AUTH_MODE=%q\n' "${BROWSER_QA_AUTH_MODE:-none}"
 printf 'export BROWSER_QA_PROFILE=%q\n' "$profile_name"
 printf 'export BROWSER_QA_PROFILE_SOURCE=%q\n' "$profile_source"

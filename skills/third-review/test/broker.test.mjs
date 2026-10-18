@@ -5,11 +5,11 @@ import os from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
-import { test, vi, afterEach } from "vitest";
+import { test, vi, beforeEach, afterEach } from "vitest";
 afterEach(() => vi.restoreAllMocks());
 import { Broker } from "../lib/broker.mjs";
 import { validateConfig } from "../lib/config.mjs";
-import { cleanup, createRuntime, currentOwnerIdentity, ensureRuntimeGuardian, isAlive, processIdentity, readRuntime, terminateProcess, updateRuntime } from "../lib/runtime.mjs";
+import { cleanup, createRuntime, currentOwnerIdentity, ensureRuntimeGuardian, isAlive, processIdentity, readRuntime, removeRuntimeDirectory, terminateProcess, updateRuntime } from "../lib/runtime.mjs";
 
 const fake = migratedFilePath(new URL("../test/fake-cli.mjs", import.meta.url));
 const slow = migratedFilePath(new URL("../test/slow-cli.mjs", import.meta.url));
@@ -33,6 +33,49 @@ function fileOnlyAttachment(value) {
   return { root, delivery: "file_only", manifest: { version: 1, bundle_id: `route-test-${sha256.slice(0, 12)}`, entries: [{ source: name, destination: name, size: Buffer.byteLength(contents), sha256, embed: false }] } };
 }
 async function eventually(check, timeoutMs = 3_000) { const deadline = Date.now() + timeoutMs; while (Date.now() < deadline) { if (check()) return; await new Promise((resolve) => setTimeout(resolve, 20)); } assert.fail("condition did not become true"); }
+
+
+// TCR260: these named legacy tests cover controlled child lifecycle, not
+// native capability. Derive the real native guarded plan first; replace only
+// its execution copy with the original direct child (which had no supervisor).
+import controlledOpenCode from "../lib/adapters/opencode.mjs";
+import { prepareAttachments as prepareControlledPacket, prepareWritableAttachmentView as controlledPacketView } from "../lib/attachments.mjs";
+const controlledLegacyCases = new Set(["default route runs every heterologous provider in its first tier", "persists OpenCode terminal failure classification and observed session identity", "recovers an OpenCode no-terminal result in the same native session", "fails closed when OpenCode terminal recovery changes its session", "accepts one fenced JSON object from OpenCode terminal recovery", "keeps terminal recovery evidence when the recovered output still leaks a private path", "preserves the original OpenCode no-terminal error when recovery fails", "provider terminal recovery completes without an elapsed-time cutoff", "does not recover an OpenCode terminal failure without a session id", "runtime keeps process liveness and output progress as separate timestamps", "broker updates last progress for parsed stream output"]);
+const guardedLegacyStart = controlledOpenCode.start;
+const guardedLegacyResume = controlledOpenCode.resume;
+let controlledPacketCleanup = [];
+let controlledAllowsSyntheticPacket = false;
+function controlledLegacyPlan(provider, cwd, prompt, session = null) {
+  let guardCwd = cwd;
+  if (!fs.existsSync(path.join(cwd, "bundle", "attachments-manifest.json"))) {
+    if (!controlledAllowsSyntheticPacket) throw new Error("real packet-bearing caller did not supply its guarded bundle root");
+    // Prompt-only generic broker tests have no real packet. Their isolated
+    // synthetic guard packet makes no claim that native prompt-only is safe.
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "legacy-guard-")));
+    controlledPacketCleanup.push(root);
+    const source = path.join(root, "source"); fs.mkdirSync(source);
+    const text = "controlled generic lifecycle guard input"; fs.writeFileSync(path.join(source, "input.md"), text);
+    const runtime = path.join(root, "runtime"); fs.mkdirSync(runtime);
+    const stored = prepareControlledPacket({ root: source, delivery: "file_only", manifest: {version: 1, bundle_id: "controlled-legacy", entries: [{source: "input.md", destination: "input.md", size: Buffer.byteLength(text), sha256: createHash("sha256").update(text).digest("hex"), embed: false}]}}, runtime, "opencode", 10000, [{root: source, sources: ["input.md"]}]);
+    guardCwd = controlledPacketView(runtime, "opencode", stored).cwd;
+  }
+  const actual = {...provider, command: "/Users/Hugh/.opencode/bin/opencode"};
+  const guarded = session === null ? guardedLegacyStart(actual, guardCwd, prompt, null) : guardedLegacyResume(actual, guardCwd, session, prompt, null);
+  const argv = [...guarded.clientArgv]; const attach = argv.indexOf("--attach"); if (attach >= 0) argv.splice(attach, 2);
+  return {...guarded, command: provider.command, argv, cwd, healthServer: undefined, probeSession: undefined};
+}
+beforeEach(({task}) => {
+  if (!controlledLegacyCases.has(task.name)) return;
+  controlledAllowsSyntheticPacket = true;
+  vi.spyOn(controlledOpenCode, "start").mockImplementation((p,cwd,prompt) => controlledLegacyPlan(p,cwd,prompt));
+  vi.spyOn(controlledOpenCode, "resume").mockImplementation((p,cwd,session,prompt) => controlledLegacyPlan(p,cwd,prompt,session));
+});
+afterEach(() => {
+  vi.restoreAllMocks();
+  const unlock = root => { for (const e of fs.readdirSync(root,{withFileTypes:true})) {const f=path.join(root,e.name);if(e.isDirectory())unlock(f);if(!e.isSymbolicLink())fs.chmodSync(f,e.isDirectory()?0o700:0o600);}fs.chmodSync(root,0o700); };
+  for (const root of controlledPacketCleanup) {unlock(root);fs.rmSync(root,{recursive:true,force:true});}
+  controlledPacketCleanup = [];
+});
 
 test("legacy elapsed-time configuration is rejected", () => {
   const value = config(temp(), [["kimi"]]);
@@ -522,21 +565,220 @@ test("a dead health probe does not terminate an otherwise live Kimi process", as
   assert.equal(result.providers[0].status, "cancelled");
 });
 
-test.each([{ delivery: "file_only" }, { delivery: "always_embed" }, { delivery: "file_only", managed: true }, { delivery: "file_only", detail: true }, { delivery: "file_only", malformed: true }, { delivery: "file_only", lingering: true }, { delivery: "file_only", tamper: "missing" }, { delivery: "file_only", tamper: "invalid" }, { delivery: "file_only", tamper: "mismatch" }])("direction managed provider physically hides the choice until reconstruction completes (%j)", async ({ delivery, managed = false, detail = false, malformed = false, lingering = false, tamper = null }) => {
+
+// Independent ORACLE-N3-P2: provider protocol's blind -> reveal -> challenge contract.
+// The adapter boundary is controlled; Broker.run, process execution and attachment
+// preparation are real. These cases do not claim a native permission guard.
+import kimiDirectionWorker from "../lib/adapters/kimi.mjs";
+import { buildReviewMaterials as buildN3DirectionMaterials } from "../../wh-review/scripts/review-materials.mjs";
+import { planDirectionReviewRequests as planN3Direction } from "../../wh-review/scripts/review-runner.mjs";
+
+async function n3DirectionScenario({ mode = "normal", cancel = false, native = false } = {}) {
+  const root = fs.realpathSync(temp()); const runtime = path.join(root, "runtime"); fs.mkdirSync(runtime);
+  const selection = "SELECTION_ONLY_AFTER_RECONSTRUCTION_74291";
+  const materials = { raw_requirement: "Deliver reliable reports", objective_facts: "The queue has two independent consumers", convergence_outline: "Which path avoids loss?", current_selection: selection, alternatives: "B", selection_rationale: "durability", key_assumptions: "bounded input" };
+  const flow = planN3Direction(materials).flow;
+  const packet = buildN3DirectionMaterials({ attachmentRoot: root, stage: "make-decision", reviewTrack: "direction", materials: { ...materials, direction_flow: flow } });
+  const ids = native ? ["antigravity", "opencode"] : ["kimi/red", "kimi/blue"];
+  const value = config(runtime, [ids]);
+  if(native) value.providers.antigravity.allow_host_state = true;
+  value.runtime.max_attachment_bytes = 2_000_000;
+  value.attachment_roots = [{ root, sources: [".wh-review-packets"] }];
+  const observations = []; const counts = new Map(); const transcript = [];
+  const scan = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap(item => item.isDirectory() ? scan(path.join(dir,item.name)) : item.isFile() ? [{ path: path.join(dir,item.name), text: fs.readFileSync(path.join(dir,item.name), "utf8") }] : []);
+  vi.spyOn(kimiDirectionWorker, "start").mockImplementation((provider, cwd, prompt) => {
+    const n = (counts.get(provider.id) ?? 0) + 1; counts.set(provider.id,n);
+    const files = scan(cwd);
+    const rawFiles = fs.existsSync(runtime) ? scan(runtime).filter(f => f.path.includes(`${path.sep}raw${path.sep}`)) : [];
+    observations.push({ role: provider.id, n, cwd, text: prompt + files.map(f=>f.text).join("\n"), raw: rawFiles.map(f=>f.text).join("\n") });
+    const text = mode === "invalid" && provider.id === "kimi/red" && n === 1 ? "INVALID_INTERMEDIATE" : JSON.stringify({ findings: n === 3 ? [{ severity: "minor", path: "requirements/raw_requirement.md", line: 1, issue: `${provider.id} final challenge`, recommendation: "retain evidence" }] : [] });
+    transcript.push(text);
+    const fail = mode === "failure" && provider.id === "kimi/red" && n === 1;
+    const hang = cancel && provider.id === "kimi/red" && n === 1;
+    const code = hang ? 'process.stdout.write("CANCEL_RAW");setInterval(()=>{},1000)' : `process.stdout.write(${JSON.stringify(text)});process.stderr.write("step-stderr-${n}");process.exit(${fail ? 7 : 0})`;
+    return { command: process.execPath, argv: ["-e", code], cwd, input: null, env: {}, redact: [] };
+  });
+  vi.spyOn(kimiDirectionWorker, "parse").mockImplementation((stdout) => {
+    try { JSON.parse(stdout); return { ok: true, text: stdout, session_id: "controlled-direction", usage: null }; }
+    catch { return { ok: false, parse_outcome: "invalid", error: { code: "PROVIDER_OUTPUT_INVALID", message: "invalid controlled JSON" } }; }
+  });
+  const unsafeStarts=[];
+  const broker = new Broker(value, {onStart: (info)=>unsafeStarts.push(info)});
+  try {
+    const execution = broker.run({ version: 4, host_provider: "codex", required_result_protocol: "workflowhub-result.v3", provider_allowlist: ids, review_mode: "single_round", prompt: "Review using the supplied direction protocol", review_flow: flow, continuation: null, attachments: { root, delivery: "file_only", manifest: { version: 1, bundle_id: "n3-direction", entries: packet.deliveryManifest.map(({path: name,bytes,sha256})=>({source: `${packet.sourcePrefix}/${name}`,destination:name,size:bytes,sha256,embed:false})) } } });
+    if (cancel) {
+      await eventually(() => observations.some(o=>o.role==="kimi/red"));
+      const id = fs.readdirSync(runtime).find(name => fs.existsSync(path.join(runtime,name,"runtime.json"))) ?? fs.readdirSync(runtime)[0];
+      await eventually(() => readRuntime(runtime,id).providers?.["kimi/red"]?.status === "running");
+      await eventually(() => scan(runtime).some(f=>f.path.includes(`${path.sep}raw${path.sep}`) && f.text.includes("CANCEL_RAW")));
+      broker.cancel(id,"kimi/red");
+    }
+    const result = await execution;
+    const originals = scan(runtime).filter(f=>f.path.includes(`${path.sep}raw${path.sep}`));
+    return { result, observations, originals, selection, counts, root, packet, transcript, unsafeStarts };
+  } catch (error) { packet.dispose(); fs.rmSync(root,{recursive:true,force:true}); throw error; }
+}
+function n3Dispose(s) { s.packet.dispose(); const r=path.join(s.root,"runtime"); for(const id of fs.readdirSync(r)) if (/^[0-9a-f-]{36}$/i.test(id)) removeRuntimeDirectory(r,id); fs.rmSync(s.root,{recursive:true,force:true,maxRetries:10,retryDelay:30}); }
+
+test("N3 P2 direction lifecycle: one public group executes each independent role three times with genuinely blind packets and durable raw outputs", async () => {
+  const s = await n3DirectionScenario();
+  try {
+    assert.deepEqual([...s.counts], [["kimi/red",3],["kimi/blue",3]], "each configured role must execute reconstruct, reveal and challenge inside this one public call");
+    assert.equal(s.result.providers.length,2);
+    for (const role of ["kimi/red","kimi/blue"]) {
+      const steps=s.observations.filter(o=>o.role===role);
+      assert.equal(steps[0].text.includes(s.selection),false,"blind provider cannot read current choice through any packet file or prompt");
+      assert.equal(steps[1].text.includes(s.selection),true,"reveal receives the actual choice");
+      assert.equal(new Set(steps.map(o=>o.cwd)).size,3,"different step packets must be real workspaces");
+      assert.ok(steps[1].raw.includes('{"findings":[]}'),"reconstruction raw bytes must be saved before reveal is created");
+      const member=s.result.providers.find(p=>p.identity.provider===role);
+      assert.equal(member.status,"completed");
+      assert.match(member.output,/final challenge/);
+    }
+    assert.ok(s.originals.some(f=>f.text.includes('step-stderr-1')));
+    assert.ok(s.originals.some(f=>f.text.includes('final challenge')));
+    s.packet.dispose();
+    for(const original of s.originals) assert.equal(fs.readFileSync(original.path,"utf8"),original.text,"packet cleanup must preserve original process output references");
+  } finally { n3Dispose(s); }
+});
+for (const mode of ["invalid","failure"]) test(`N3 P2 direction lifecycle: ${mode} reconstruction stops that role and preserves successful concurrent sibling`, async()=>{
+  const s=await n3DirectionScenario({mode});
+  try {
+    assert.equal(s.counts.get("kimi/red"),1,"invalid or failed intermediate output must not start reveal");
+    assert.equal(s.counts.get("kimi/blue"),3,"one failed role cannot cancel its sibling");
+    assert.equal(s.result.providers.find(p=>p.identity.provider==="kimi/red").status,"failed");
+    assert.equal(s.result.providers.find(p=>p.identity.provider==="kimi/blue").status,"completed");
+    assert.ok(s.originals.some(f=>f.text.includes(mode==="invalid" ? "INVALID_INTERMEDIATE" : '{"findings":[]}')));
+  } finally { n3Dispose(s); }
+});
+test("N3 P2 direction lifecycle: cancellation stops progression without killing the other role or losing emitted bytes", async()=>{
+  const s=await n3DirectionScenario({cancel:true});
+  try {
+    assert.equal(s.counts.get("kimi/red"),1);
+    assert.equal(s.counts.get("kimi/blue"),3);
+    assert.equal(s.result.providers.find(p=>p.identity.provider==="kimi/red").status,"cancelled");
+    assert.equal(s.result.providers.find(p=>p.identity.provider==="kimi/blue").status,"completed");
+    assert.ok(s.originals.some(f=>f.text.includes("CANCEL_RAW")));
+  } finally { n3Dispose(s); }
+});
+
+test("N3 P2 direction lifecycle: native adapters without proved hard guard stay unavailable before any unsafe process starts", async()=>{
+  const s=await n3DirectionScenario({native:true});
+  try {
+    assert.equal(s.unsafeStarts.length,0,"plan mode, chmod and prompt restrictions do not authorize an unguarded provider start");
+    assert.equal(s.result.outcome,"unavailable");
+    assert.ok(s.result.providers.every(p=>p.status!=="completed" && p.output===null));
+    assert.ok(s.result.providers.every(p=>p.error && /guard|capability|read.only|sandbox|unavailable/i.test(p.error.code+" "+p.error.message)),"each unavailable route must expose the missing hard boundary");
+  } finally { n3Dispose(s); }
+});
+
+import n3CorrectionAg from "../lib/adapters/antigravity.mjs";
+// Public Broker, step delivery and AG startup policy are real. Only execution
+// after guarded plan construction becomes a controlled child; no model runs.
+async function n3CorrectionDirection(mode) {
+  const root=fs.realpathSync(temp()),runtime=path.join(root,"runtime");fs.mkdirSync(runtime);
+  const materials={raw_requirement:"Keep delivered reports",objective_facts:"Two real queue consumers",convergence_outline:"Which path preserves reports?",current_selection:"CORRECTION_SELECTION_HIDDEN",alternatives:"B",selection_rationale:"durability",key_assumptions:"bounded queue"};
+  const flow=planN3Direction(materials).flow;
+  const packet=buildN3DirectionMaterials({attachmentRoot:root,stage:"make-decision",reviewTrack:"direction",materials:{...materials,direction_flow:flow}});
+  const value=config(runtime,[["antigravity"]]);value.providers.antigravity.command="/Users/Hugh/.local/bin/agy";value.providers.antigravity.allow_host_state=true;
+  value.attachment_roots=[{root,sources:[".wh-review-packets"]}];
+  const starts=[];const original=n3CorrectionAg.start;
+  vi.spyOn(n3CorrectionAg,"start").mockImplementation((p,cwd,prompt,r)=>{
+    const guarded=original(p,cwd,prompt,r);const manifest=JSON.parse(fs.readFileSync(path.join(cwd,"bundle","attachments-manifest.json"),"utf8"));
+    const n=starts.length+1;const target=manifest.files.find(f=>/^materials\/\d+-raw_requirement\./.test(f.target)).target;
+    starts.push({cwd,prompt:guarded.argv[guarded.argv.indexOf("-p")+1],files:manifest.files.map(f=>f.target),target});
+    const findingPath=mode==="packet-path" ? path.join(cwd,"bundle",target) : mode==="host-path" ? "/etc/n3-private-host-config" : `bundle/${target}`;
+    const response=JSON.stringify(n===3 ? {findings:[{severity:"minor",path:findingPath,line:1,issue:"Preserve source trace",recommendation:"Keep the packet reference"}]} : {independent_observation:`step-${n}`});
+    const stdout=JSON.stringify({event:"result",result:{status:"SUCCESS",response}})+"\n";
+    return {...guarded,command:process.execPath,argv:["-e",`process.stdout.write(${JSON.stringify(stdout)})`]};
+  });
+  try {
+    const result=await new Broker(value).run({version:4,host_provider:"codex",required_result_protocol:"workflowhub-result.v3",provider_allowlist:["antigravity"],review_mode:"single_round",prompt:"Review supplied direction materials",review_flow:flow,continuation:null,attachments:{root,delivery:"file_only",manifest:{version:1,bundle_id:"n3-native-correction",entries:packet.deliveryManifest.map(({path:name,bytes,sha256})=>({source:`${packet.sourcePrefix}/${name}`,destination:name,size:bytes,sha256,embed:false}))}}});
+    return {result,starts,root,packet};
+  } catch(error) {n3Dispose({root,packet});throw error;}
+}
+test("N3 P2 native correction: actual first AG launch prompt locates every admitted blind bundle member",async()=>{
+  const s=await n3CorrectionDirection("prompt");try {
+    assert.equal(s.result.providers[0].status,"completed");assert.equal(s.starts.length,3);
+    const first=s.starts[0];assert.equal(first.prompt.includes("CORRECTION_SELECTION_HIDDEN"),false);
+    for(const target of first.files)assert.ok(first.prompt.includes(`bundle/${target}`),`native -p prompt must locate admitted read-only bundle/${target}`);
+  }finally{n3Dispose(s);}
+});
+test("N3 P2 native correction: challenge returns a current packet absolute path as a relative reference",async()=>{
+  const s=await n3CorrectionDirection("packet-path");try {
+    assert.equal(s.starts.length,3);const result=s.result.providers[0];
+    assert.equal(result.status,"completed","a legitimate current challenge packet reference must be normalized before the private-path guard");
+    assert.equal(JSON.parse(result.output).findings[0].path,`bundle/${s.starts[2].target}`);
+    assert.equal(result.output.includes(s.starts[2].cwd),false);
+  }finally{n3Dispose(s);}
+});
+test("N3 P2 native correction: challenge still rejects an absolute host reference outside the packet",async()=>{
+  const s=await n3CorrectionDirection("host-path");try {
+    assert.equal(s.starts.length,3);const result=s.result.providers[0];
+    assert.equal(result.status,"failed");assert.equal(result.output,null);assert.ok(result.error);
+    assert.equal(JSON.stringify(s.result).includes("/etc/n3-private-host-config"),false);
+  }finally{n3Dispose(s);}
+});
+
+
+// Independent carrier oracle: provider-protocol.md permits one whole JSON
+// object or one whole fenced JSON object. Never extract candidates from prose.
+async function n3CarrierDirection(wrap) {
+  const root=fs.realpathSync(temp()),runtime=path.join(root,"runtime");fs.mkdirSync(runtime);
+  const selection="CARRIER_SELECTION_ONLY_AFTER_REVEAL";
+  const materials={raw_requirement:"Preserve reports",objective_facts:"Two independent consumers",convergence_outline:"Which path avoids loss?",current_selection:selection,alternatives:"B",selection_rationale:"durability",key_assumptions:"bounded input"};
+  const flow=planN3Direction(materials).flow;
+  const packet=buildN3DirectionMaterials({attachmentRoot:root,stage:"make-decision",reviewTrack:"direction",materials:{...materials,direction_flow:flow}});
+  const value=config(runtime,[["antigravity"]]);value.providers.antigravity.command="/Users/Hugh/.local/bin/agy";value.providers.antigravity.allow_host_state=true;value.attachment_roots=[{root,sources:[".wh-review-packets"]}];
+  const starts=[],original=n3CorrectionAg.start;
+  vi.spyOn(n3CorrectionAg,"start").mockImplementation((p,cwd,prompt,r)=>{
+    const guarded=original(p,cwd,prompt,r),n=starts.length+1;
+    const files=fs.readdirSync(path.join(cwd,"bundle"),{recursive:true}).filter(f=>fs.statSync(path.join(cwd,"bundle",f)).isFile()).map(f=>fs.readFileSync(path.join(cwd,"bundle",f),"utf8")).join("\n");
+    const object=n===3?{findings:[{severity:"minor",path:"materials/raw_requirement.md",line:1,issue:"Keep reports",recommendation:"Retain evidence"}]}:n===1?{problem:"Preserve reports",constraints:["Two consumers"],non_goals:[],questions:[],unknowns:[]}:{agreements:["Preserve reports"],differences:[],unknowns:[]};
+    const response=wrap(JSON.stringify(object),n);starts.push({cwd,prompt,files,response});
+    const stdout=JSON.stringify({event:"result",result:{status:"SUCCESS",response}})+"\n";
+    return {...guarded,command:process.execPath,argv:["-e",'process.stdout.write('+JSON.stringify(stdout)+')']};
+  });
+  try {
+    const result=await new Broker(value).run({version:4,host_provider:"codex",required_result_protocol:"workflowhub-result.v3",provider_allowlist:["antigravity"],review_mode:"single_round",prompt:"Review current direction",review_flow:flow,continuation:null,attachments:{root,delivery:"file_only",manifest:{version:1,bundle_id:"n3-carrier",entries:packet.deliveryManifest.map(({path:name,bytes,sha256})=>({source:packet.sourcePrefix+"/"+name,destination:name,size:bytes,sha256,embed:false}))}}});
+    const id=result.runtime_id,state=readRuntime(runtime,id);return {root,packet,result,starts,state,selection};
+  }catch(error){n3Dispose({root,packet});throw error;}
+}
+for(const form of ["plain","fenced"])test("N3 P2 carrier contract: accepts whole "+form+" JSON at all three native terminal steps",async()=>{
+  const s=await n3CarrierDirection(text=>form==="plain"?text:"\x60\x60\x60json\n"+text+"\n\x60\x60\x60");try{
+    assert.equal(s.result.providers[0].status,"completed","one whole fenced JSON object is an existing permitted carrier");assert.equal(s.starts.length,3);
+    assert.equal((s.starts[0].prompt+s.starts[0].files).includes(s.selection),false);assert.equal(s.starts[1].files.includes(s.selection),true);
+    assert.equal(JSON.parse(s.result.providers[0].output).findings[0].issue,"Keep reports");
+    const attempts=s.state.providers.antigravity.attempts;assert.equal(attempts.length,3);
+    for(let i=0;i<3;i++){const raw=fs.readFileSync(path.join(s.root,"runtime",s.result.runtime_id,attempts[i].raw_stdout_ref),"utf8");assert.equal(JSON.parse(raw.trim()).result.response,s.starts[i].response,"native carrier bytes must remain recoverable from the process original");}
+  }finally{n3Dispose(s);}
+});
+const n3BadCarriers={malformed:()=>"\x60\x60\x60json\n{bad}\n\x60\x60\x60",multiple:text=>text+"\n"+text,prefix:text=>"Explanation\n\x60\x60\x60json\n"+text+"\n\x60\x60\x60",suffix:text=>"\x60\x60\x60json\n"+text+"\n\x60\x60\x60\nExplanation",two_fences:text=>"\x60\x60\x60json\n"+text+"\n\x60\x60\x60\n\x60\x60\x60json\n"+text+"\n\x60\x60\x60",array:()=>"[]",empty_object:()=>"{}"};
+for(const [name,wrap]of Object.entries(n3BadCarriers))test("N3 P2 carrier contract: rejects "+name+" without reveal or challenge",async()=>{
+  const s=await n3CarrierDirection(wrap);try{assert.equal(s.starts.length,1);assert.equal(s.result.providers[0].status,"failed");assert.equal(s.result.providers[0].output,null);assert.equal(s.result.providers[0].error.code,"PROVIDER_OUTPUT_INVALID");assert.equal(s.state.providers.antigravity.attempts.length,1);}finally{n3Dispose(s);}
+});
+
+test.each([{ delivery: "file_only" }, { delivery: "always_embed" }, { delivery: "file_only", managed: true }, { delivery: "file_only", detail: true }, { delivery: "file_only", malformed: true }, { delivery: "file_only", lingering: true }, { delivery: "file_only", tamper: "missing" }, { delivery: "file_only", tamper: "invalid" }, { delivery: "file_only", tamper: "mismatch" }, { delivery: "file_only", contracts: true }])("direction managed provider physically hides the choice until reconstruction completes (%j)", async ({ delivery, managed = false, detail = false, malformed = false, lingering = false, tamper = null, contracts = false }) => {
   const root = temp(), materialRoot = temp(), fixtureRoot = temp();
   const trace = path.join(fixtureRoot, "visible.jsonl"), cli = path.join(fixtureRoot, "direction-cli.mjs");
   const secret = "CHOICE_ONLY_AFTER_RECONSTRUCTION_7491";
   fs.writeFileSync(cli, `#!/usr/bin/env node
-import fs from 'node:fs';import path from 'node:path';import {spawn} from 'node:child_process';
+import fs from 'node:fs';import path from 'node:path';import {spawn} from 'node:child_process';import http from 'node:http';
+// Controlled CLI implements native guard readback, never actual model capability.
+const nativeArgs=process.argv.slice(2),terminalFile=${JSON.stringify(path.join(fixtureRoot, 'terminal.json'))};
+if(nativeArgs.includes('--version')){console.log('1.19.0');process.exit(0);}
+if(nativeArgs.includes('debug')){const config=JSON.parse(process.env.OPENCODE_CONFIG_CONTENT),permission=JSON.parse(process.env.OPENCODE_PERMISSION);if(JSON.stringify(config.permission)!==JSON.stringify(permission))throw Error('guard config differs');console.log(JSON.stringify({name:'build',tools:{read:true},permission:[{permission:'*',pattern:'*',action:permission['*']},...Object.entries(permission.read).map(([pattern,action])=>({permission:'read',pattern,action}))]}));process.exit(0);}
+if(nativeArgs[0]==='serve'){http.createServer((req,res)=>{const value=fs.existsSync(terminalFile)?JSON.parse(fs.readFileSync(terminalFile,'utf8')):null;res.setHeader('content-type','application/json');if(req.url==='/global/health')res.end(JSON.stringify({healthy:true}));else if(req.url==='/session/status')res.end(JSON.stringify(value?{[value.id]:{type:'idle'}}:{}));else if(req.url.includes('/message'))res.end(JSON.stringify(value?[{info:{sessionID:value.id,role:'assistant',time:{completed:1},finish:'stop'},parts:[{type:'text',text:value.text}]}]:[]));else res.end('[]');}).listen(Number(nativeArgs[nativeArgs.indexOf('--port')+1]),'127.0.0.1');await new Promise(()=>{});}
+// external_directory remains denied by the actual config above.
 let prompt='';for await(const chunk of process.stdin)prompt+=chunk;
-const args=process.argv.slice(2),cwd=args[args.indexOf('--dir')+1]??process.cwd();
+const args=process.argv.slice(2),cwd=(args[args.indexOf('--dir')+1]??process.cwd()).replaceAll('%25','%');
 const read=dir=>fs.readdirSync(dir,{withFileTypes:true}).flatMap(e=>e.isDirectory()?read(path.join(dir,e.name)):[{path:path.relative(cwd,path.join(dir,e.name)),body:fs.readFileSync(path.join(dir,e.name),'utf8')}]);
 const files=read(cwd),step=prompt.match(/Private direction-review\\.v1 step: (reconstruct|reveal|challenge)/)?.[1]??'combined';
 let previous_child_alive=false;const childFile=${JSON.stringify(path.join(fixtureRoot, 'child.pid'))};if(step!=='reconstruct'&&fs.existsSync(childFile)){try{process.kill(Number(fs.readFileSync(childFile,'utf8')),0);previous_child_alive=true}catch{}}
-fs.appendFileSync(${JSON.stringify(trace)},JSON.stringify({step,previous_child_alive,choice_present:files.some(f=>f.body.includes(${JSON.stringify(secret)})),prompt_choice_present:prompt.includes(${JSON.stringify(secret)}),navigation_choice_present:files.some(f=>/manifest|instructions/.test(f.path)&&f.body.includes(${JSON.stringify(secret)})),choice_path_present:files.some(f=>f.path.includes('current_selection')),reconstruction_present:files.some(f=>f.body.includes('fixture-independent-reconstruction'))||prompt.includes('fixture-independent-reconstruction'),reveal_present:files.some(f=>f.body.includes('fixture-revealed-choice'))||prompt.includes('fixture-revealed-choice')})+'\\n');
-const text=step==='reconstruct'?(${JSON.stringify(malformed)}?JSON.stringify({unrelated:'invalid reconstruction'}):JSON.stringify({independent_reconstruction:'fixture-independent-reconstruction'})):step==='reveal'?JSON.stringify({revealed_choice:'fixture-revealed-choice'}):JSON.stringify({findings:[]});
+fs.appendFileSync(${JSON.stringify(trace)},JSON.stringify({step,previous_child_alive,admitted_contracts:files.map(f=>({path:f.path.replace(/^bundle\\//,''),body:f.body})).filter(f=>['contracts/make-decision.md','contracts/provider-protocol.md'].includes(f.path)),choice_present:files.some(f=>f.body.includes(${JSON.stringify(secret)})),prompt_choice_present:prompt.includes(${JSON.stringify(secret)}),navigation_choice_present:files.some(f=>/manifest|instructions/.test(f.path)&&f.body.includes(${JSON.stringify(secret)})),choice_path_present:files.some(f=>f.path.includes('current_selection')),reconstruction_present:files.some(f=>f.body.includes('fixture-independent-reconstruction'))||prompt.includes('fixture-independent-reconstruction'),reveal_present:files.some(f=>f.body.includes('fixture-revealed-choice'))||prompt.includes('fixture-revealed-choice')})+'\\n');
+const text=step==='reconstruct'?(${JSON.stringify(malformed)}?'INVALID_INTERMEDIATE_JSON':JSON.stringify({independent_reconstruction:'fixture-independent-reconstruction'})):step==='reveal'?JSON.stringify({revealed_choice:'fixture-revealed-choice'}):JSON.stringify({findings:[]});
 let background=null;if(${JSON.stringify(lingering)}&&step==='reconstruct'){background=spawn(process.execPath,['-e',"process.on('SIGTERM',()=>{});console.log('ready');setInterval(()=>{},1000)"],{stdio:['ignore','pipe','ignore']});await new Promise(resolve=>background.stdout.once('data',resolve));fs.writeFileSync(childFile,String(background.pid));}
-console.log(JSON.stringify({type:'session.completed',session_id:'fixture-'+step,text}));if(background)setInterval(()=>{},1000);
+fs.writeFileSync(terminalFile,JSON.stringify({id:'fixture-'+step,text}));console.log(JSON.stringify({type:'session.completed',session_id:'fixture-'+step,text}));if(background)setInterval(()=>{},1000);
 `, { mode: 0o700 });
   const flow = { version: "direction-review.v1", public_request_count: 1, steps: [
     { id: "reconstruct", visible: ["raw_requirement", "objective_facts"], hidden_until: "reveal" },
@@ -544,6 +786,11 @@ console.log(JSON.stringify({type:'session.completed',session_id:'fixture-'+step,
     { id: "challenge", after: ["reveal"], visible: ["revealed_choice", "independent_reconstruction"], output: "findings" },
   ], output: { one_provider_result: true, one_logical_fact: true } };
   const material = { "materials/01-raw_requirement.md": "Trim user input.", "materials/02-objective_facts.md": "No implementation exists.", "materials/03-current_selection.md": secret, "direction_flow.json": JSON.stringify(flow), "manifest.json": JSON.stringify({ navigation: secret }), "review-instructions.md": "Revealed selection: " + secret };
+  const expectedContracts = [
+    {path:"contracts/make-decision.md",body:"Frozen direction scope and constraints"},
+    {path:"contracts/provider-protocol.md",body:"Return one complete JSON object using the supplied independent role"},
+  ];
+  if (contracts) for (const {path: name,body} of expectedContracts) material[name] = body;
   if (detail || tamper === "missing") delete material["direction_flow.json"];
   if (tamper === "invalid") material["direction_flow.json"] = "invalid-json";
   if (tamper === "mismatch") material["direction_flow.json"] = JSON.stringify({ ...flow, public_request_count: 2 });
@@ -569,7 +816,7 @@ console.log(JSON.stringify({type:'session.completed',session_id:'fixture-'+step,
     result = broker.managedStatus(started.runtime_id).group;
   } else result = await broker.run(request);
   if (malformed) {
-    assert.equal(result.providers[0].status, "failed"); assert.equal(result.providers[0].error.code, "DIRECTION_STEP_OUTPUT_INVALID");
+    assert.equal(result.providers[0].status, "failed"); assert.equal(result.providers[0].error.code, "PROVIDER_OUTPUT_INVALID");
     const records = fs.readFileSync(trace, "utf8").trim().split("\n").map(line => JSON.parse(line));
     assert.equal(records.length, 1); assert.equal(records[0].choice_present, false);
     assert.equal(result.providers[0].attempts[0].parse_outcome, "invalid");
@@ -590,6 +837,10 @@ console.log(JSON.stringify({type:'session.completed',session_id:'fixture-'+step,
   assert.equal(visible[0].choice_path_present, false, "blind cwd must not contain a choice attachment");
   if (!managed) assert.deepEqual(intermediateStates, [{ status: "running", output: undefined }, { status: "running", output: undefined }]);
   assert.deepEqual(visible.map(row => row.step), ["reconstruct", "reveal", "challenge"]);
+  if (contracts) for (const row of visible) {
+    assert.equal(new Set(row.admitted_contracts.map(file=>file.path)).size,2,"each physical step must contain both unique contract paths");
+    assert.deepEqual(row.admitted_contracts.sort((a,b)=>a.path.localeCompare(b.path)),expectedContracts,"each physical step must preserve both full contract bodies");
+  }
   assert.equal(visible[1].choice_present || visible[1].prompt_choice_present, true); assert.equal(visible[1].reconstruction_present, true);
   assert.equal(visible[2].reveal_present, true);
   if (lingering) assert.equal(visible[1].previous_child_alive, false, "reveal cannot be created while a previous native process-group child survives");
@@ -598,7 +849,7 @@ console.log(JSON.stringify({type:'session.completed',session_id:'fixture-'+step,
   assert.equal(result.providers[0].attempts.length, 3);
   for (let index = 1; index < 3; index += 1) assert.ok(result.providers[0].attempts[index - 1].completed_at_ms <= result.providers[0].attempts[index].started_at_ms);
   const stored = readRuntime(root, result.runtime_id).providers.opencode;
-  assert.deepEqual(stored.attempts[0].delivery.provider_visible_attachment_manifest.map(file => file.destination), ["materials/01-raw_requirement.md", "materials/02-objective_facts.md"]);
+  assert.deepEqual(stored.attempts[0].delivery.provider_visible_attachment_manifest.map(file => file.destination), ["materials/01-raw_requirement.md", "materials/02-objective_facts.md", ...(contracts ? expectedContracts.map(file=>file.path) : [])]);
   assert.ok(stored.attempts.every(attempt => attempt.raw_stdout_ref && fs.existsSync(path.join(root, result.runtime_id, attempt.raw_stdout_ref))));
   assert.ok(stored.attempts.every(attempt => attempt.raw_input_ref));
   const nativeInput = fs.readFileSync(path.join(root, result.runtime_id, stored.attempts[0].raw_input_ref), "utf8");

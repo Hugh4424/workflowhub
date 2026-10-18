@@ -1430,17 +1430,22 @@
       "destination": "skills/backend-testing/SKILL.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "既有模块／资源职责；不从登记新增能力",
+      "responsibility": "既有模块／资源职责；不从登记新增能力；N3 P4 真实changed files后设计/执行风险测试；唯一行为证伪方法与缺RED分支",
       "owner": "原路径维护 owner；P7 仅登记现职责",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
+      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor；N3 P4 build-code测试执行者；frontend/fullstack/blueprint按条件指针读取独立预期、三反模式和替身理由",
       "module_consumers": [],
       "named_data_readers": [
         "skills/backend-testing/skill-bundle.json",
         "skills/catalog.yaml",
-        "workflows/build-code/skill-deps.yaml"
+        "workflows/build-code/skill-deps.yaml",
+        "skills/frontend-testing/SKILL.md",
+        "skills/fullstack-slice-testing/SKILL.md",
+        "skills/testing-system-blueprint/SKILL.md",
+        "skills/spec-plan/templates/phase-template.md",
+        "workflows/verify-code/SKILL.md"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "既有保留生产路径；本次仅归位说明"
+      "retention_basis": "既有保留生产路径；本次仅归位说明；P4方法采用既有owner，无新增runtime/schema/双写；无当前consumer且经独立审查替代后退役"
     },
     {
       "source": "skills/backend-testing/skill-bundle.json",
@@ -1495,7 +1500,7 @@
       "destination": "skills/decision-log/SKILL.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "宿主读、阶段材料作者",
+      "responsibility": "材料作者按来源写决定；风险/取舍前条件读取simplicity三问，不复制定义",
       "owner": "B3/P4 / MT-3-009",
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
@@ -1621,15 +1626,17 @@
       "destination": "skills/diagnosing-bugs/SKILL.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "既有模块／资源职责；不从登记新增能力",
-      "owner": "原路径维护 owner；P7 仅登记现职责",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
+      "responsibility": "根因诊断四步；N3 P5输出与页面内容唯一信任边界、实测性能与便宜方案",
+      "owner": "diagnosing-bugs维护owner；N3 P5/T005",
+      "consumer": "workflows/build-code/SKILL.md方法2/3真实失败分支执行者；P7 QA/auth按条件指针消费输出与页面内容",
+      "module_consumers": [
+        "workflows/build-code/SKILL.md"
+      ],
       "named_data_readers": [
         "skills/catalog.yaml"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "既有保留生产路径；本次仅归位说明"
+      "retention_basis": "既有方法承接P5两来源，无新增runtime/schema/账本；被独立审查替代且全部当前consumer迁移后退役"
     },
     {
       "source": "skills/diagnosing-bugs/hitl-loop.template.sh",
@@ -1783,9 +1790,9 @@
       "destination": "skills/frontend-testing/SKILL.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "state, interaction, component/CSS negative, accessibility, and screenshot evidence contract",
+      "responsibility": "state, interaction, component/CSS negative, accessibility, and screenshot evidence contract；N3 P4 UI状态/交互/恢复与组件质量、真实隔离页面证据；oracle沿backend唯一方法",
       "owner": "build-code frontend testing route",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
+      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor；N3 P4 build-code真实UI测试执行者按条件读取backend后沿原UI合同执行",
       "module_consumers": [],
       "named_data_readers": [
         "skills/catalog.yaml",
@@ -1793,7 +1800,7 @@
         "workflows/build-code/skill-deps.yaml"
       ],
       "delete_condition": "remove when frontend-testing has no stage reference and an approved replacement is the sole consumer",
-      "retention_basis": "既有保留生产路径；本次仅归位说明"
+      "retention_basis": "既有保留生产路径；本次仅归位说明；P4方法采用既有owner，无新增runtime/schema/双写；无当前consumer且经独立审查替代后退役"
     },
     {
       "source": "skills/frontend-testing/skill-bundle.json",
@@ -1813,9 +1820,9 @@
       "destination": "skills/fullstack-slice-testing/SKILL.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "既有模块／资源职责；不从登记新增能力",
+      "responsibility": "既有模块／资源职责；不从登记新增能力；N3 P4 真实可观察跨边界slice、错误恢复/清理；oracle与缺RED沿backend唯一方法",
       "owner": "原路径维护 owner；P7 仅登记现职责",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
+      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor；N3 P4 build-code跨边界测试执行者用具体输入/独立结果和真实接口贯通",
       "module_consumers": [],
       "named_data_readers": [
         "skills/catalog.yaml",
@@ -1823,7 +1830,7 @@
         "workflows/build-code/skill-deps.yaml"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "既有保留生产路径；本次仅归位说明"
+      "retention_basis": "既有保留生产路径；本次仅归位说明；P4方法采用既有owner，无新增runtime/schema/双写；无当前consumer且经独立审查替代后退役"
     },
     {
       "source": "skills/fullstack-slice-testing/skill-bundle.json",
@@ -2292,9 +2299,9 @@
       "destination": "skills/review/SKILL.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "既有模块／资源职责；不从登记新增能力",
+      "responsibility": "既有模块／资源职责；不从登记新增能力；N3 P2审查材料语义、真实配置路线/身份/覆盖与artifact+contract消费；arena无真实consumer仅保条件方法；N3 P4 P4测试检查/升级条件下消费同包verify唯一可信度正文",
       "owner": "原路径维护 owner；P7 仅登记现职责",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
+      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor；N3 P4 真实只读review provider从packet已提供正文判断测试强度/五类削弱/未知",
       "module_consumers": [],
       "named_data_readers": [
         ".planning/2026-09-16-build-code-mechanism-waste-reduction/p1-phase-review-input.json",
@@ -2304,10 +2311,11 @@
         "tests/contract/build-prd-review-contract.test.mjs",
         "tests/contract/ocr-review-contract-bundle.test.mjs",
         "tests/contract/review-materials-contract.test.mjs",
-        "tools/cli/stage-runtime.mjs"
+        "tools/cli/stage-runtime.mjs",
+        "workflows/verify-code/SKILL.md"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "既有保留生产路径；本次仅归位说明"
+      "retention_basis": "既有保留生产路径；本次仅归位说明；N3 P2/T002来源采用及原consumer首验，不新增runtime/schema/账本；P4方法采用既有owner，无新增runtime/schema/双写；无当前consumer且经独立审查替代后退役"
     },
     {
       "source": "skills/review/review-bundle.json",
@@ -2340,9 +2348,9 @@
       "destination": "skills/simplicity-guard/SKILL.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "同左（审查点必留 lens）",
+      "responsibility": "同次文档/OCR包的四阶梯、删前理由/行为保持、三问与有源归并；N3 P6复用现lens，不独立调用provider",
       "owner": "B3/P4 / MT-3-035",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
+      "consumer": "skills/wh-review/scripts/review-materials.mjs按stage-skill-plan动态读全文入packet；tools/cli/stage-runtime.mjs的projectOcrCodeReviewBundle核代码包正文；decision-log写风险/取舍、AGENTS共享写前条件读取",
       "module_consumers": [],
       "named_data_readers": [
         ".planning/2026-09-16-build-code-mechanism-waste-reduction/p1-phase-review-input.json",
@@ -2351,7 +2359,10 @@
         "skills/catalog.yaml",
         "tests/contract/ocr-review-contract-bundle.test.mjs",
         "tools/cli/stage-runtime.mjs",
-        "workflows/build-plan/skill-deps.yaml"
+        "workflows/build-plan/skill-deps.yaml",
+        "skills/wh-review/scripts/review-materials.mjs",
+        "skills/decision-log/SKILL.md",
+        "AGENTS.md"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
       "retention_basis": "MT-3-035 / NARROW"
@@ -2765,9 +2776,9 @@
       "destination": "skills/testing-system-blueprint/SKILL.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "既有模块／资源职责；不从登记新增能力",
+      "responsibility": "既有模块／资源职责；不从登记新增能力；N3 P4 build-plan测试设计输入；独立oracle/三反模式沿backend唯一方法",
       "owner": "原路径维护 owner；P7 仅登记现职责",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
+      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor；N3 P4 build-plan作者填写同一Task卡，build-code沿其事实执行",
       "module_consumers": [],
       "named_data_readers": [
         "skills/catalog.yaml",
@@ -2775,7 +2786,7 @@
         "workflows/build-plan/skill-deps.yaml"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "既有保留生产路径；本次仅归位说明"
+      "retention_basis": "既有保留生产路径；本次仅归位说明；P4方法采用既有owner，无新增runtime/schema/双写；无当前consumer且经独立审查替代后退役"
     },
     {
       "source": "skills/testing-system-blueprint/skill-bundle.json",
@@ -2829,7 +2840,7 @@
       "destination": "skills/wh-review/SKILL.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "宿主读、文档审查方法 owner",
+      "responsibility": "宿主读、文档审查方法 owner；N3 P2审查材料语义、真实配置路线/身份/覆盖与artifact+contract消费；arena无真实consumer仅保条件方法",
       "owner": "B3/P4 / MT-3-067",
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
@@ -2848,7 +2859,7 @@
         "workflows/verify-code/skill-deps.yaml"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "MT-3-067 / NARROW"
+      "retention_basis": "MT-3-067 / NARROW；N3 P2/T002来源采用及原consumer首验，不新增runtime/schema/账本"
     },
     {
       "source": "skills/wh-review/contracts/build-code.md",
@@ -2941,7 +2952,7 @@
       "destination": "skills/wh-review/contracts/provider-protocol.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "OCR + 文档面 reviewer 输出协议",
+      "responsibility": "OCR + 文档面 reviewer 输出协议；N3 P2审查材料语义、真实配置路线/身份/覆盖与artifact+contract消费；arena无真实consumer仅保条件方法；N3 P6发现归并条件读取唯一simplicity lens，不新增语义聚合器",
       "owner": "B4/P5 / MT-3-078",
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
@@ -2950,7 +2961,7 @@
         "skills/wh-review/scripts/review-materials.mjs"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "MT-3-078 / NARROW"
+      "retention_basis": "MT-3-078 / NARROW；N3 P2/T002来源采用及原consumer首验，不新增runtime/schema/账本"
     },
     {
       "source": "skills/wh-review/contracts/verify-code.md",
@@ -3415,9 +3426,9 @@
       "destination": "tools/cli/stage-runtime.mjs",
       "status": "retain",
       "role": "production",
-      "responsibility": "七类公共入口后端 = 窄工具①~④ + human-confirm：doctor→① + 存储报告；status→读 task.json/facts.jsonl/游标 + 材料存在性（质量缺失显示 unknown/incomplete）；run:draft→③；verify→②；confirm→human-confirm；authorize→④；review:record→审查链（ADR-018/019/021）",
-      "owner": "B4/P5 / MT-2-022",
-      "consumer": "当前直接模块消费者：tests/contract/card03-review-orchestration.test.mjs, tests/contract/code-review-ocr.test.mjs, tests/contract/doctor-interface.test.mjs, tests/contract/ocr-delegation-route.test.mjs, tests/contract/ocr-production-cutover.test.mjs, tests/contract/ocr-review-contract-bundle.test.mjs, tests/contract/review-public-entrypoints.test.mjs, tests/contract/runtime-facade.test.mjs, tests/contract/stage-progress-contract.test.mjs, tests/contract/write-identity-workspace.test.mjs",
+      "responsibility": "七类公共入口后端 = 窄工具①~④ + human-confirm：doctor→① + 存储报告；status→读 task.json/facts.jsonl/游标 + 材料存在性（质量缺失显示 unknown/incomplete）；run:draft→③；verify→②；confirm→human-confirm；authorize→④；review:record→审查链（ADR-018/019/021）；N3 P2仅在真实code bundle生成后、provider准备前向现public review host提供onReviewMaterials只读成员观察，原signal取消与review owner原件/dispose复用；027已证invoke覆盖host取消，现process/host两signal合并，默认无host不变，不新增公共动作。",
+      "owner": "B4/P5 / MT-2-022；N3 P2原生产owner仅承接材料观察窄修",
+      "consumer": "当前直接模块消费者：tests/contract/card03-review-orchestration.test.mjs, tests/contract/code-review-ocr.test.mjs, tests/contract/doctor-interface.test.mjs, tests/contract/ocr-delegation-route.test.mjs, tests/contract/ocr-production-cutover.test.mjs, tests/contract/ocr-review-contract-bundle.test.mjs, tests/contract/review-public-entrypoints.test.mjs, tests/contract/runtime-facade.test.mjs, tests/contract/stage-progress-contract.test.mjs, tests/contract/write-identity-workspace.test.mjs；P8原dispatcher在stageRuntimeCliMain相同argv/认证cwd下预读完整B/C包后abort原signal；tests/contract/n3-review-material-observer.test.mjs定向消费实际材料、取消/失败与默认route。",
       "module_consumers": [
         "tests/contract/card03-review-orchestration.test.mjs",
         "tests/contract/code-review-ocr.test.mjs",
@@ -3428,11 +3439,12 @@
         "tests/contract/review-public-entrypoints.test.mjs",
         "tests/contract/runtime-facade.test.mjs",
         "tests/contract/stage-progress-contract.test.mjs",
-        "tests/contract/write-identity-workspace.test.mjs"
+        "tests/contract/write-identity-workspace.test.mjs",
+        "tests/contract/n3-review-material-observer.test.mjs"
       ],
       "named_data_readers": [],
-      "delete_condition": "remove when the stage reflection mechanism is retired",
-      "retention_basis": "MT-2-022 / NARROW"
+      "delete_condition": "remove when the stage reflection mechanism is retired；本次observer由更窄既有实现完整承接P8相同消费及正反oracle后删除，不留第二projection/执行链。",
+      "retention_basis": "MT-2-022 / NARROW；2026-10-18本轮用户接受P2完整包预读根因/最小修复；103/139真实缺口、P2契约与独立018目标RED；不证明完整B/C可比或AC009质量/成本。"
     },
     {
       "source": "tools/cli/task-bootstrap.mjs",
@@ -3767,19 +3779,21 @@
       "destination": "workflows/verify-code/SKILL.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "宿主读（纯方法说明）",
+      "responsibility": "宿主读（纯方法说明）；N3 P4 P4唯一测试充分性与检查可信度方法：pass/fail/pass、变异、升级与读数",
       "owner": "B2/P3 / MT-3-146",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
+      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor；N3 P4 verify-code读者与review按条件同包消费完整正反方法",
       "module_consumers": [],
       "named_data_readers": [
         ".planning/2026-09-16-eliminate-external-stage-agent/findings.md",
         "skills/architect-code-review/SKILL.md",
         "skills/catalog.yaml",
         "skills/wh-review/scripts/review-materials.mjs",
-        "tests/contract/verify-architect-acceptance.test.mjs"
+        "tests/contract/verify-architect-acceptance.test.mjs",
+        "skills/review/SKILL.md",
+        "AGENTS.md"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "MT-3-146 / NARROW"
+      "retention_basis": "MT-3-146 / NARROW；P4方法采用既有owner，无新增runtime/schema/双写；无当前consumer且经独立审查替代后退役"
     },
     {
       "source": "workflows/verify-code/capture.mjs",
@@ -3799,13 +3813,13 @@
       "destination": "workflows/verify-code/isolated-browser-qa.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "同左",
-      "owner": "B3/P4 / MT-3-154",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
+      "responsibility": "历史职责已退役；浏览器 QA 由 canonical skills/isolated-browser-qa/SKILL.md 承接",
+      "owner": "B3/P4 / MT-3-154；N3 退役执行由当前用户授权",
+      "consumer": "已退役；无当前直接模块消费者；现行 build-code/verify-code 均改读 canonical skill",
       "module_consumers": [],
       "named_data_readers": [],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "MT-3-154 / SURVIVOR"
+      "delete_condition": "已由 canonical skills/isolated-browser-qa/SKILL.md 承接并经 N3 定向核对零 active consumer；用户于 2026-10-16 明确授权删除旧副本，删除已在当前 worktree 执行；不因本登记产生未来消费或历史原件删除许可",
+      "retention_basis": "MT-3-154 / SURVIVOR；退役事实来源：N3 用户授权与旧副本 SHA256 45d9ea4b8f5ef292123050b0bfeacd32ac52d1691ef6a07fc608c4189eb10bad；canonical replacement=skills/isolated-browser-qa/SKILL.md；删除日期=2026-10-16；删除 commit=未提交（当前 worktree HEAD 0c43823c67f701fbb4bea349a52d09c8302d5ed3）"
     },
     {
       "source": "workflows/verify-code/metrics-writer.mjs",
@@ -4035,15 +4049,18 @@
       "destination": "skills/third-review/lib/adapters/antigravity.mjs",
       "status": "move",
       "role": "production",
-      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "responsibility": "既有AG start/parse/observeLine现安装exact-member原生default-deny hook；同进程仅复用完整性未变的自有policy，ambient/tampered拒绝。真实单包拒绝矩阵及124实际flash单成员red三阶段已证；未证明full paired全配置路线或质量不劣化",
       "owner": "skills/third-review",
-      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
-      "module_consumers": [],
+      "consumer": "skills/third-review/lib/adapters/index.mjs registry供broker adapter(provider.adapter)取得worker；broker调用start并消费计划/终末解析",
+      "module_consumers": [
+        "skills/third-review/lib/adapters/index.mjs",
+        "skills/third-review/lib/broker.mjs"
+      ],
       "named_data_readers": [
         "skills/wh-review/scripts/review-provider-client.mjs"
       ],
       "delete_condition": "宿主不再调用 third-review",
-      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0；N3 P2批准窄修订登记，保既有owner；不新增生产文件/公共入口/schema/持久账本，未实施职责不报active完成"
     },
     {
       "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/adapters/claude-code.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
@@ -4200,30 +4217,35 @@
       "destination": "skills/third-review/lib/adapters/opencode-supervised-cli.mjs",
       "status": "move",
       "role": "production",
-      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "responsibility": "既有本地serve/client启动、终末探测和所属进程清理；消费OpenCode adapter传入的同一原生permission环境，当前未改supervisor。受控最终env已核；真实tool拒绝因TLS未到tool，保持未验证",
       "owner": "skills/third-review",
-      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
-      "module_consumers": [],
+      "consumer": "skills/third-review/lib/adapters/opencode.mjs executionPlan作为controller传入workspace/clientArgv；本进程输出原流/终末失败给broker",
+      "module_consumers": [
+        "skills/third-review/lib/adapters/opencode.mjs"
+      ],
       "named_data_readers": [
         "skills/wh-review/scripts/review-provider-client.mjs"
       ],
       "delete_condition": "宿主不再调用 third-review",
-      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0；N3 P2批准窄修订登记，保既有owner；不新增生产文件/公共入口/schema/持久账本，未实施职责不报active完成"
     },
     {
       "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/adapters/opencode.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
       "destination": "skills/third-review/lib/adapters/opencode.mjs",
       "status": "move",
       "role": "production",
-      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "responsibility": "既有OpenCode executionPlan/start/resume现验证原生能力和最终default-deny exact-file permission，runFromWritableRoot使正常caller传真实bundle父根；隔离dataHome/supervisor沿用。真实TLS失败前无tool拒绝事实，保持未验证",
       "owner": "skills/third-review",
-      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
-      "module_consumers": [],
+      "consumer": "adapter registry供broker取得worker；executionPlan把workspace/clientArgv交opencode-supervised-cli，broker消费计划/解析",
+      "module_consumers": [
+        "skills/third-review/lib/adapters/index.mjs",
+        "skills/third-review/lib/broker.mjs"
+      ],
       "named_data_readers": [
         "skills/wh-review/scripts/review-provider-client.mjs"
       ],
       "delete_condition": "宿主不再调用 third-review",
-      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0；N3 P2批准窄修订登记，保既有owner；不新增生产文件/公共入口/schema/持久账本，未实施职责不报active完成"
     },
     {
       "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/adapters/pi-supervised-cli.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
@@ -4290,30 +4312,34 @@
       "destination": "skills/third-review/lib/attachments.mjs",
       "status": "move",
       "role": "production",
-      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "responsibility": "既有packet校验/准备/freeze与managed清理；prepareDirectionReviewStep按当前step只选准入材料，reveal/challenge接收前步有效原始意见，各步独立临时根并清理。受控三段及124实际AGflash单role前步意见传入并打开已验；全配置消费未验",
       "owner": "skills/third-review",
-      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
-      "module_consumers": [],
+      "consumer": "skills/third-review/lib/broker.mjs通过planDelivery/prepareCheckedAttachments/freezeManagedAttachments/discardManagedAttachments消费已验材料",
+      "module_consumers": [
+        "skills/third-review/lib/broker.mjs"
+      ],
       "named_data_readers": [
         "skills/wh-review/scripts/review-provider-client.mjs"
       ],
-      "delete_condition": "宿主不再调用 third-review",
-      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+      "delete_condition": "宿主不再调用third-review且真实消费者迁移后删除；N3 P2每步临时packet须完成/失败/取消后清理，原始stdout/stderr/身份/用量与失败沿现sink保留，非整树镜像",
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0；N3 P2批准窄修订登记，保既有owner；不新增生产文件/公共入口/schema/持久账本，未实施职责不报active完成"
     },
     {
       "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/broker.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
       "destination": "skills/third-review/lib/broker.mjs",
       "status": "move",
       "role": "production",
-      "responsibility": "third-review V4 broker运行资源与就地方法文档",
+      "responsibility": "单provider既有#runClaimedProvider现顺序执行direction reconstruct→reveal→challenge，前步raw先落后构下一包，只发布最终challenge；失败/取消不续，角色并发互不取消。当前step提示列精确准入路径；合法当前packet引用归一化后仍拒绝包外绝对路径。受控及124实际AGflash单role三段已验，full paired全配置及OC原生工具效果仍未验",
       "owner": "skills/third-review",
-      "consumer": "skills/wh-review/scripts/review-provider-client.mjs",
-      "module_consumers": [],
+      "consumer": "ReviewProviderClient.startManaged经既有configured broker请求；#runClaimedProvider消费review_flow和验证后attachments，输出现有每role最终结果",
+      "module_consumers": [
+        "skills/wh-review/scripts/review-provider-client.mjs"
+      ],
       "named_data_readers": [
         "skills/wh-review/scripts/review-provider-client.mjs"
       ],
       "delete_condition": "宿主不再调用 third-review",
-      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0"
+      "retention_basis": "CARD-09 D-002/D-017；固定上游 97132960d7dab9145cbd0bdf610e09bf422e2ec0；N3 P2批准窄修订登记，保既有owner；不新增生产文件/公共入口/schema/持久账本，未实施职责不报active完成"
     },
     {
       "source": "/Users/Hugh/Hugh/Project/3rd-review/lib/config.mjs@97132960d7dab9145cbd0bdf610e09bf422e2ec0",
@@ -4953,6 +4979,124 @@
       "named_data_readers": [],
       "delete_condition": "职责被正式替代且全部真实consumer改接后删除；历史原件保留",
       "retention_basis": "specs/n1-main-agent-cost-20261015/spec.md 合同8；P1/T001。替代临时测量，不新增runtime公共命令/常驻服务/进度对象"
+    },
+    {
+      "source": "tests/review/n3-detail-single-dispatch.test.mjs",
+      "destination": "tests/review/n3-detail-single-dispatch.test.mjs",
+      "status": "retain",
+      "role": "test_only",
+      "responsibility": "N3 build-plan预写冻结oracle；Vitest runSimpleReview真实依赖注入入口；detail每配置路线一次且direction保留配对",
+      "owner": "N3独立测试作者；冻结后修改须TCR与独立审查",
+      "consumer": "P3/T003实施者、末Phase与verify-code独立验收者",
+      "module_consumers": [
+        "tests/review/n3-detail-single-dispatch.test.mjs"
+      ],
+      "named_data_readers": [],
+      "delete_condition": "真实消费者退役且经独立审查证明替代oracle不降低断言强度后删除；原始RED保留",
+      "retention_basis": "specs/archive/n3-review-test-diagnosis-qa-20261016/spec.md 与对应Phase；不新增runtime入口/状态/公共命令"
+    },
+    {
+      "source": "tests/integration/n3-browser-session-lifecycle.node-test.mjs",
+      "destination": "tests/integration/n3-browser-session-lifecycle.node-test.mjs",
+      "status": "retain",
+      "role": "test_only",
+      "responsibility": "N3 build-plan预写冻结oracle；Node受控进程/会话夹具经真实cleanup入口；取消、隔离回收与清理负例",
+      "owner": "N3独立测试作者；冻结后修改须TCR与独立审查",
+      "consumer": "P7/T007实施者、末Phase与verify-code独立验收者",
+      "module_consumers": [
+        "tests/integration/n3-browser-session-lifecycle.node-test.mjs"
+      ],
+      "named_data_readers": [],
+      "delete_condition": "真实消费者退役且经独立审查证明替代oracle不降低断言强度后删除；原始RED保留",
+      "retention_basis": "specs/archive/n3-review-test-diagnosis-qa-20261016/spec.md 与对应Phase；不新增runtime入口/状态/公共命令"
+    },
+    {
+      "source": "tests/integration/n3-browser-ticket-boundary.node-test.mjs",
+      "destination": "tests/integration/n3-browser-ticket-boundary.node-test.mjs",
+      "status": "retain",
+      "role": "test_only",
+      "responsibility": "N3 build-plan预写只读票据边界oracle；仅经现有context/runner接缝使用受控CDP样本，不接触真实凭据",
+      "owner": "N3独立浏览器测试作者；冻结修改须TCR",
+      "consumer": "P7/T007与P8/verify-code验收者",
+      "module_consumers": [
+        "tests/integration/n3-browser-ticket-boundary.node-test.mjs"
+      ],
+      "named_data_readers": [],
+      "delete_condition": "实际接缝正式退役且经独立审查证明等强替代后删除；原始失败保留",
+      "retention_basis": "specs/archive/n3-review-test-diagnosis-qa-20261016/spec.md；P7/T007。先登记再创建，不新增生产公共命令或持久对象"
+    },
+    {
+      "source": "tests/contract/n3-adoption-metadata.node-test.mjs",
+      "destination": "tests/contract/n3-adoption-metadata.node-test.mjs",
+      "status": "retain",
+      "role": "test_only",
+      "responsibility": "N3预写catalog唯一来源权威与真实consumer登记的技术oracle；不证明方法效果",
+      "owner": "N3独立元数据测试作者；冻结后修改须TCR",
+      "consumer": "P2/T002、P5/T005、P6/T006与末Phase独立验收",
+      "module_consumers": [
+        "tests/contract/n3-adoption-metadata.node-test.mjs"
+      ],
+      "named_data_readers": [],
+      "delete_condition": "登记职责正式退役且经独立审查有等强替代后删除；原始RED不删",
+      "retention_basis": "本任务当前decision R008/R013/R015；P2/P5/P6 first consumer登记；先登记后创建，不增runtime命令/状态"
+    },
+    {
+      "source": "skills/isolated-browser-qa/scripts/browser-qa-session.mjs",
+      "destination": "skills/isolated-browser-qa/scripts/browser-qa-session.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "N3 P7已实现可取消隔离网关生命周期/finally，替代手工生命周期；私有helper，不新增公共runtime命令。",
+      "owner": "isolated-browser-qa / N3 P7 T007",
+      "consumer": "现browser-qa-context.sh --run exec本helper；runBrowserQa由冻结ticket test、skill-contract及真实owned Chrome场景消费。",
+      "module_consumers": [
+        "skills/isolated-browser-qa/scripts/browser-qa-context.sh"
+      ],
+      "named_data_readers": [],
+      "delete_condition": "网关职责经独立审查的替代承接且本helper零consumer时由owner删除；保历史原件。",
+      "retention_basis": "P7当前源码已读：context --run→session.runBrowserQa→tickets；037 gate与036真实controlled三路；真实用户source平台边界见外置202，不由登记冒验收。"
+    },
+    {
+      "source": "skills/isolated-browser-qa/scripts/browser-qa-tickets.mjs",
+      "destination": "skills/isolated-browser-qa/scripts/browser-qa-tickets.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "N3 P7已实现memory-only目标cookie过滤与source只读/owned receiver传输，替代未实现票据文案。",
+      "owner": "isolated-browser-qa / N3 P7 T007",
+      "consumer": "现browser-qa-session.mjs import并由runBrowserQa调用transferTargetCookies；同consumer调用scope与endpoint校验。",
+      "module_consumers": [
+        "skills/isolated-browser-qa/scripts/browser-qa-session.mjs"
+      ],
+      "named_data_readers": [],
+      "delete_condition": "网关职责经独立审查的替代承接且本helper零consumer时由owner删除；保历史原件。",
+      "retention_basis": "当前session→tickets真实调用已读；037冻结/入口测试、036真实controlled CDP；用户真实登录未验，平台禁止调试入口及绕过。"
+    },
+    {
+      "source": "skills/isolated-browser-qa/scripts/browser-qa-browser-use.py",
+      "destination": "skills/isolated-browser-qa/scripts/browser-qa-browser-use.py",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "已实现P7单生命周期内部browser-use adapter与短CLI frontend，同caller另probe能力；替代先前永久unavailable/manual-only限制，非独立QA入口或永久service。当前仅有限验收，整P7仍partial/incomplete。",
+      "owner": "isolated-browser-qa / N3 P7 T007",
+      "consumer": "实际session.mjs:155生成本run CLI shim调用helper cli，:159 spawn adapter child，:145–147同caller probe能力。scenario经该临时shim消费cli argv/原parser/send_command/renderer；adapter消费session/root/profile及匿名stdio owned endpoint，attach同SDK/SessionInfo并返回安全lifecycle/response事实。唯一生命周期owner=session.mjs，两个caller不冒独立runner。",
+      "module_consumers": [
+        "skills/isolated-browser-qa/scripts/browser-qa-session.mjs"
+      ],
+      "named_data_readers": [],
+      "delete_condition": "browser-use分支退役或经独立验证原生替代已承接同consumer/正反oracle后，同步删helper、shim接线与bundle；PID/socket/shim随每次ownedrun清理。",
+      "retention_basis": "当前session/helper实际调用源码已读；570声明/571独立核源与consumer；171正例、172四Document面GREEN仅限实际范围。173冻结16/16及53中48pass/5fail作为历史失败保留；571启动取消发现由580/175处置，176完整16＋55、177默认locator及179/180分别定向已验（非单次57全跑），quality/tests/2026-10-17-001-p7-source-observer-race-corrected.json限定source三终态通过，具体范围见当前P7卡；202登录unavailable、057旧OCR未覆盖新helper、168残留路径unknown保留。513/514及147/509原件不覆盖，职责登记不等整卡验收。"
+    },
+    {
+      "source": "tests/contract/n3-review-material-observer.test.mjs",
+      "destination": "tests/contract/n3-review-material-observer.test.mjs",
+      "status": "retain",
+      "role": "test_only",
+      "responsibility": "独立先RED的public review材料观察行为oracle：完整manifest/source字节hash、包外及篡改拒绝、原signal取消/observer失败零provider与清理；正常路线受控seam只证明派发不证明provider质量。",
+      "owner": "N3 P2独立测试作者；生产修复由原P2owner承担，冻结后断言改变须独立TCR",
+      "consumer": "唯一执行consumer为P2定向命令 npx vitest run tests/contract/n3-review-material-observer.test.mjs -t 'N3 P2 material observer'；独立验收读取唯一执行原件。",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "现public review材料观察consumer退役且等强正反行为oracle经独立审查承接后删除；原始RED/GREEN及取消/失败原件保留。",
+      "retention_basis": "本轮已授权P2完整包预读根因/最小修复与P2精确写集；已实读test/recordTaskReview/consumer，先018真实RED后生产；本条创建晚于测试文件，照实补登记，不冒事前登记，不新增门或进度对象。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

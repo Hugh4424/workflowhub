@@ -141,10 +141,13 @@ describe("TaskHandle", () => {
     expect(task.listCanonicalReviewResultRefs()).toEqual([]);
   });
 
-  it("does not expose retired review-flow operations from TaskKernel", () => {
+  it("does not expose retired review-flow operations from the current TaskHandle", async () => {
     const { storageRoot, taskPath } = fixture();
-    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
-    const kernel = createTaskKernel(task);
+    const task = await createTask({
+      storageRoot,
+      taskPath,
+      manifest: manifest({ activation_cohort: "post", execution_mode: "per_invocation" }),
+    });
 
     for (const operation of [
       "readReviewFlow",
@@ -156,7 +159,7 @@ describe("TaskHandle", () => {
       "advanceReviewFlow",
       "adoptLegacyReviewRoot",
     ]) {
-      expect(kernel[operation]).toBeUndefined();
+      expect(task[operation]).toBeUndefined();
     }
   });
 
@@ -220,17 +223,91 @@ describe("TaskHandle", () => {
     expect(() => createTask({ storageRoot, taskPath, manifest })).toThrow(/already exists|create-only/i);
   });
 
-  it("opens a case-preserving task path after macOS realpath canonicalizes directory case", () => {
-    if (process.platform !== "darwin") return;
+  it("opens a case-preserving task path after macOS realpath canonicalizes directory case", async ({ skip }) => {
+    if (process.platform !== "darwin") skip("macOS realpath case canonicalization is platform-specific");
     const { storageRoot, taskPath } = fixture();
-    createTask({ storageRoot, taskPath, manifest: manifest() });
+    const postManifest = {
+      schema_version: "1.0.0",
+      task_id: "paperbuilder-phase-foundation",
+      project_name: "PaperBuilder",
+      created_at: "2026-07-16T00:00:00.000Z",
+      target_repo_root: "/absolute/PaperBuilder",
+      activation_cohort: "post",
+      execution_mode: "per_invocation",
+      record_model: "vnext-single-write",
+      issue_ids: [],
+      inputs: {},
+    };
+    const created = await createTask({ storageRoot, taskPath, manifest: postManifest });
     const projectRoot = join(storageRoot, "Projects", "PaperBuilder");
     const caseSwap = `${projectRoot}-case-swap`;
     const lowerProjectRoot = join(storageRoot, "Projects", "paperbuilder");
     renameSync(projectRoot, caseSwap);
     renameSync(caseSwap, lowerProjectRoot);
 
-    expect(() => openTask(taskPath, "PaperBuilder", "paperbuilder-phase-foundation")).not.toThrow();
+    if (!existsSync(taskPath)) skip("filesystem requires the renamed directory's exact case");
+    const canonicalTaskPath = realpathSync(taskPath);
+    const lowerTaskPath = join(lowerProjectRoot, "tasks", "paperbuilder-phase-foundation");
+    if (canonicalTaskPath === taskPath || canonicalTaskPath !== realpathSync(lowerTaskPath)) {
+      skip("filesystem realpath did not produce the case difference required by this test");
+    }
+
+    const opened = openTask(taskPath, "PaperBuilder", "paperbuilder-phase-foundation");
+    expect(created.identity).toEqual({
+      projectName: "PaperBuilder",
+      taskId: "paperbuilder-phase-foundation",
+    });
+    expect(opened.identity).toEqual(created.identity);
+    expect(opened.manifest).toEqual(postManifest);
+  });
+
+  it("opens a case-mismatched task path on case-insensitive macOS filesystems", async ({ skip }) => {
+    if (process.platform !== "darwin") skip("case-insensitive macOS path aliases are platform-specific");
+    const { storageRoot } = fixture();
+    const postManifest = {
+      schema_version: "1.0.0",
+      task_id: "paperbuilder-phase-foundation",
+      project_name: "paperbuilder",
+      created_at: "2026-07-16T00:00:00.000Z",
+      target_repo_root: "/absolute/paperbuilder",
+      activation_cohort: "post",
+      execution_mode: "per_invocation",
+      record_model: "vnext-single-write",
+      issue_ids: [],
+      inputs: {},
+    };
+    const taskPath = join(
+      storageRoot,
+      "Projects",
+      "paperbuilder",
+      "tasks",
+      postManifest.task_id,
+    );
+    const aliasTaskPath = join(
+      storageRoot,
+      "Projects",
+      "PaperBuilder",
+      "tasks",
+      postManifest.task_id,
+    );
+    const created = await createTask({ storageRoot, taskPath, manifest: postManifest });
+
+    if (!existsSync(aliasTaskPath)) skip("filesystem does not resolve the differently-cased path alias");
+    const actualProjectName = realpathSync(aliasTaskPath).split("/").at(-3);
+    if (actualProjectName === postManifest.project_name) {
+      skip("realpath did not retain a project-name case difference from the manifest identity");
+    }
+    if (actualProjectName?.toLowerCase() !== postManifest.project_name.toLowerCase()) {
+      skip("realpath alias does not resolve to the manifest project identity");
+    }
+
+    const opened = openTask(aliasTaskPath, postManifest.project_name, postManifest.task_id);
+    expect(created.identity).toEqual({
+      projectName: "paperbuilder",
+      taskId: "paperbuilder-phase-foundation",
+    });
+    expect(opened.identity).toEqual(created.identity);
+    expect(opened.manifest).toEqual(postManifest);
   });
 
   it.each([

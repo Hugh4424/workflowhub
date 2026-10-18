@@ -576,30 +576,13 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
         && /GREEN[^\n]*\b0\b/i.test(fields.expected_exit ?? "");
       // Mentioning G-2 while satisfying the normal behavioral contract is not
       // an exemption request. Inapplicable tags must not reject legal behavior.
-      const requestsG2 = !behaviorExit && [fields.Inputs, fields["Scenario / fixture or service"]].some((value) => /G-2/i.test(value ?? ""));
+      const requestsG2 = docDeclaration || (!behaviorExit && [fields.Inputs, fields["Scenario / fixture or service"]].some((value) => /G-2/i.test(value ?? "")));
       const g2Missing = [];
       if (requestsG2) {
         if (!docDeclaration) g2Missing.push("pure documentation declaration (文档无新增运行行为)");
         const ownedPaths = inlinePaths(fields["Files / symbols"] ?? "");
-        // YAML is method text only when EVERY occurrence declares the narrow
-        // comment-only scope next to that path. This checks author declarations,
-        // never YAML bytes or the actual diff; independent review checks those.
-        const fileDeclarations = [...String(fields["Files / symbols"] ?? "").matchAll(/`([^`]+)`([^`；;\n]*)/g)];
-        const documentPath = (path) => /\.md$/i.test(path) || (/\.ya?ml$/i.test(path)
-          && fileDeclarations.filter((match) => match[1] === path).every((match) => /^\s*（仅注释方法）\s*(?:[,，]|$)/u.test(match[2])));
-        // For YAML, remaining Files prose must use existing, narrowly named
-        // ownership/symbol/read-anchor metadata. Unknown extra write scope is
-        // not silently covered by a comment-only marker.
-        const yamlScope = !ownedPaths.some((path) => /\.ya?ml$/i.test(path))
-          || String(fields["Files / symbols"] ?? "").split(/[;；,，]/u).every((part) => {
-            const value = part.trim().replace(/[。.]$/, "");
-            return !value || /^`[^`]+\.md`$/i.test(value)
-              || /^`[^`]+\.ya?ml`\s*（仅注释方法）$/i.test(value)
-              || /^owner=documentation$/i.test(value)
-              || /^(?:symbol:\s*)?N\/A\s*[—–-]\s*非代码(?:方法说明|文档|操作说明)$/u.test(value)
-              || /^只读锚点\s+[A-Za-z0-9_./-]+:\d+$/u.test(value);
-          });
-        if (ownedPaths.length === 0 || ownedPaths.some((path) => !documentPath(path)) || !yamlScope) g2Missing.push("documentation-only owned write set");
+        const documentPath = (path) => /\.md$/i.test(path);
+        if (ownedPaths.length === 0 || ownedPaths.some((path) => !documentPath(path))) g2Missing.push("documentation-only owned write set");
         // Bound this optional field to its own line: the general reader's \s
         // can otherwise consume the next field when RED evidence is empty.
         const redEvidenceLine = cardBody.split(/\r?\n/).find((line) => /^\s*-\s+\*\*(?:RED evidence|RED 证据)\*\*\s*[:：]/i.test(line));
@@ -647,14 +630,7 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
         // Strip supported negative forms before looking for affirmative conflicts.
         const affirmativeConflict = declarations.flatMap(clauses).some((part) =>
           /(?:新增\s*(?:runtime|运行行为)|修改\s*执行逻辑)/i.test(part.replace(/(?:无|不|未|不会)\s*(?:新增\s*(?:runtime|运行行为)|修改\s*执行逻辑)/gi, "")));
-        const yamlDataConflict = ownedPaths.some((path) => /\.ya?ml$/i.test(path))
-          && declarations.flatMap(clauses).flatMap((part) => part.split(/[，,]/u)).some((part) => {
-            // Only explicit data-field write claims are classified here; this
-            // is not a natural-language proof that the actual YAML diff is safe.
-            const affirmative = part.replace(/(?:不|未|无|不会)\s*(?:修改|更改|调整|写入|新增|删除|更新)\s*数据字段/gu, "");
-            return /(?:修改|更改|调整|写入|新增|删除|更新)[^；;。]*数据字段|数据字段[^；;。]*(?:改为|更新为|修改|更改|调整|写入|新增|删除)/u.test(affirmative);
-          });
-        if (affirmativeConflict || yamlDataConflict) g2Missing.push("contradiction (新增 runtime/运行行为、修改执行逻辑或 YAML 数据字段写入)");
+        if (affirmativeConflict) g2Missing.push("contradiction (新增 runtime/运行行为、修改执行逻辑)");
         for (const missing of g2Missing) errors.push(`${expectedPath} ${taskId} G-2 missing concrete ${missing}`);
       }
       const pureDocumentAlternative = requestsG2 && g2Missing.length === 0;

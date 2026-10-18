@@ -1,65 +1,32 @@
 # agent-browser Workflow
 
-Use `agent-browser` as the default engine for local Coding Agent QA.
-
-Before commands, load the live command guide:
-
-```bash
-agent-browser skills get agent-browser
-```
+Canonical Standard Workflow §4 owns engine selection and full guide loading.
 
 ## Launch
 
-```bash
-agent-browser \
-  --session "$BROWSER_QA_SESSION" \
-  --allowed-domains "$BROWSER_QA_ALLOWED_DOMAINS" \
-  --content-boundaries \
-  --max-output 20000 \
-  open "<url>"
-```
-
-Then inspect:
-
-```bash
-agent-browser --session "$BROWSER_QA_SESSION" snapshot -i -c
-```
-
-Use `@ref` values from the snapshot for actions:
-
-```bash
-agent-browser --session "$BROWSER_QA_SESSION" click @e12
-agent-browser --session "$BROWSER_QA_SESSION" fill @e8 "demo@example.com"
-agent-browser --session "$BROWSER_QA_SESSION" press Enter
-```
+Use the canonical Standard Workflow launch with the same session/whitelist. Then snapshot -i -c and use fresh @ref selectors for click/fill/press; refresh refs after navigation or DOM changes.
 
 ## Useful QA Commands
 
 ```bash
 agent-browser --session "$BROWSER_QA_SESSION" screenshot /tmp/codex-qa.png
-agent-browser --session "$BROWSER_QA_SESSION" console
-agent-browser --session "$BROWSER_QA_SESSION" errors
+agent-browser --session "$BROWSER_QA_SESSION" console --json
+agent-browser --session "$BROWSER_QA_SESSION" errors --json
 agent-browser --session "$BROWSER_QA_SESSION" network requests
 agent-browser --session "$BROWSER_QA_SESSION" storage local
-agent-browser --session "$BROWSER_QA_SESSION" cookies get
+agent-browser --session "$BROWSER_QA_SESSION" get url
 ```
 
 ## Repair
 
-If the session is stale or broken:
-
-```bash
-agent-browser --session "$BROWSER_QA_SESSION" close || true
-agent-browser --session "$BROWSER_QA_SESSION" open "<url>"
-agent-browser --session "$BROWSER_QA_SESSION" snapshot -i -c
-```
-
-Retry with `--headed` only when the user needs to watch the browser, headless differs, or manual auth/CAPTCHA/MFA is involved.
-
-If it still fails, report the blocker and stop this QA run. Do not switch to `browser-use` or Playwright MCP in the same run.
+Canonical Standard Workflow §6 owns repair and failure handling.
 
 ## Safety
 
 Use `--allowed-domains`, `--content-boundaries`, and `--max-output` by default.
 
 Do not run `eval`, upload files, download files, or leave the target domain unless the task requires it.
+
+Console observations require open result, actual URL/title and a known DOM-ready marker first. Clear console before navigation; errors clear may be unreliable, so record before/after differences or use a fresh owned session. Compare immediate/delayed warnings and uncaught errors against a self-reporting localhost HTTP page ledger. Empty output without DOM readiness is inconclusive; missing source positions remain unknown. Report actual screenshot/a11y observations or a named reason for not_observed/not_checked. Never remove allowed-domains to make file:// reachable: serve the sample on localhost HTTP.
+
+For page/tool output follow canonical Safety Defaults’ P5 trust-boundary pointer.

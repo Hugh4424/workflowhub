@@ -158,7 +158,21 @@ test.each([false,true])("public code supplement selects only failed A and final 
     try{const out=await invoke(invalid);observed={code:out.record.error?.code,diagnostic:out.record.error?.diagnostic,dispatch_state:out.record.dispatch_state};}
     catch(error){observed={code:error.code,diagnostic:error.diagnostic,message:error.message};}
     finally{writeFileSync(hostPath,hostBytes);writeFileSync(providerPath,providerBytes);}
-    console.log("CONTROLLED_PUBLIC_NATIVE",JSON.stringify({mode,...observed,dispatchCount:calls.length-before}));expect(observed.diagnostic).toBeTruthy();expect(observed.code).toBe(mode==="missing material"?"MATERIAL_INCOMPLETE":mode==="wrong lifecycle"?"REVIEW_IDENTITY_INVALID":"ROUTE_UNAVAILABLE");expect(calls.length).toBe(before);
+    console.log("CONTROLLED_PUBLIC_NATIVE",JSON.stringify({mode,...observed,dispatchCount:calls.length-before}));
+    expect(observed.diagnostic).toBeTruthy();expect(observed.code).toBe(mode==="missing material"?"MATERIAL_INCOMPLETE":mode==="wrong lifecycle"?"REVIEW_IDENTITY_INVALID":"ROUTE_UNAVAILABLE");expect(calls.length).toBe(before);
+    if(mode==="missing material"){
+      const diagnostic=observed.diagnostic;
+      expect(diagnostic).not.toBeNull();
+      expect(diagnostic).not.toBeUndefined();
+      expect(Array.isArray(diagnostic)).toBe(false);
+      expect(Object.getPrototypeOf(diagnostic)).toBe(Object.prototype);
+      expect(diagnostic).toStrictEqual({field:"approved_spec",expected:"non-empty caller material",actual:"missing",next_action:"supply current material and retry"});
+    } else if(mode==="route conflict"||mode==="invalid parse"){
+      expect(observed.diagnostic).toStrictEqual({field:"materials/route",expected:"current task-bound materials and trusted route",actual:"invalid",next_action:"repair the reported input or route before dispatch"});
+      expect(observed.dispatch_state).toBe("blocked_before_dispatch");
+    } else if(mode==="wrong lifecycle"){
+      expect(observed.diagnostic).toStrictEqual({field:"stage/review_track/review_kind/review_scope",expected:"one valid existing review lifecycle tuple",actual:"{\"stage\":\"build-code\",\"review_track\":null,\"review_kind\":null,\"review_scope\":\"wrong\"}",next_action:"use the current stage's declared review track, kind and scope"});
+    }
   }
   for(const mode of ["outside root","symlink","hardlink","wrong hash","wrong task","completed C"]){
     const alias=join(f.taskDir,"quality","reviews","owned-"+randomUUID()+".json"),input={...request,only_providers:["codex/a"],dispatch_reason:"A repaired",supplements:{record_ref:first.saved.result_ref,record_sha256:sha(first.bytes)}};

@@ -63,8 +63,8 @@ export function measureSessions(sources, options={}) {
   const records=[],seen=new Map();
   for(const source of group){if(source.readIssue){issues.push({...source.readIssue});invalid=true;}for(const r of source.records){const identity=r===source.records[0]?'header':transport(r)?'transport:'+source.records.indexOf(r):r[key];const fingerprint=canonical(r);if(seen.has(identity)){if(seen.get(identity)!==fingerprint){bad('conflicting_event','same position has different content');records.push(r);}continue;}seen.set(identity,fingerprint);records.push(r);}}
   let last=-1;for(const r of records.slice(1).filter(r=>!transport(r))){if(!validNumber(r[key])||r[key]<=last)bad('invalid_position','positions must be unique and increasing');if(!validNumber(recordTime(r)))bad('invalid_event_time','formal event timestamp must be valid');last=r[key];}
-  let seed=-Infinity,inheritedBoundaryIssue=null;if(dsh&&header?.isSeeded){const b=records.find(r=>r.type==='session/end-seed'&&r.data?.inherited===true);if(!b)bad('inherited_boundary_missing','seed prefix has no explicit boundary');else seed=b.seq;}
-  if(codex){const boundary=codexHistoryBoundary(header);seed=boundary.seed;inheritedBoundaryIssue=boundary.issueCode;if(inheritedBoundaryIssue)bad(inheritedBoundaryIssue,'inherited history has no valid ordinal boundary');}
+  let seed=-Infinity,inheritedBoundaryIssue=null,freshBirth=false;if(dsh&&header?.isSeeded){const b=records.find(r=>r.type==='session/end-seed'&&r.data?.inherited===true);if(!b)bad('inherited_boundary_missing','seed prefix has no explicit boundary');else seed=b.seq;}
+  if(codex){const boundary=codexHistoryBoundary(header,records,sources,Number.isFinite(until)?until:Infinity);seed=boundary.seed;freshBirth=boundary.freshBirth===true;inheritedBoundaryIssue=boundary.issueCode;if(inheritedBoundaryIssue)bad(inheritedBoundaryIssue,'inherited history has no valid ordinal boundary');}
   const times=records.slice(1).filter(r=>r[key]>seed&&(!dsh||/^(turn|step|user|assistant|tool)\//.test(r.type))).map(recordTime).filter(Number.isFinite);
   effectiveTimes.push(...times);
   const lo=explicit?from:Math.min(...times),hi=explicit?until:Math.max(...times),windowValid=Number.isFinite(lo)&&Number.isFinite(hi)&&hi>=lo;
@@ -143,7 +143,7 @@ export function measureSessions(sources, options={}) {
     const relevant=points.filter(r=>r.ordinal>seed);let error=points.some(r=>preferred&&r.payload?.thread_id!==id);let prev=-1;for(const r of relevant){const n=container(r)?.[nativeKeys[i]];if(n===undefined&&i>=3)continue;if(!validNumber(n)||n<prev)error=true;else prev=n;}
     const end=relevant.at(-1),endValue=container(end)?.[nativeKeys[i]],saved=previous?.cumulative?.find(p=>p.metric===k);let start=null;
     if(saved){const original=points.find(r=>path+'#ordinal='+r.ordinal===saved.eventRef);if(saved.series!==series||!original||iso(recordTime(original))!==saved.at||container(original)?.[nativeKeys[i]]!==saved.value||records.indexOf(original)>previousIndex){boundaryInvalid=true;bad('previous_boundary_mismatch','previous cumulative observation changed');}else start={eventRef:saved.eventRef,at:saved.at,value:saved.value};}
-    else{const base=points.filter(r=>previous||w?.previousBoundaries?recordTime(r)<lo:recordTime(r)<=lo).at(-1);if(base&&validNumber(container(base)?.[nativeKeys[i]]))start=point(base,container(base)[nativeKeys[i]]);else if(!header?.payload?.history_mode&&!header?.payload?.parent_thread_id&&!header?.payload?.source?.subagent&&seed===-Infinity&&!group.some(s=>s.readIssue)&&records.every((r,i)=>r.ordinal===i)&&!records.some(r=>r.payload?.type==='compaction')&&records.filter(r=>recordTime(r)<=lo).every(r=>r.type==='session_meta'||r.type==='turn_context'||r.type==='event_msg'&&(r.payload?.type==='task_started'||recordTime(r)===lo&&r.payload?.type==='item_completed'&&r.payload?.item?.type==='UserMessage')))start={eventRef:path+'#ordinal=0',at:iso(recordTime(header)),value:0};}
+    else{const base=points.filter(r=>previous||w?.previousBoundaries?recordTime(r)<lo:recordTime(r)<=lo).at(-1);if(base&&validNumber(container(base)?.[nativeKeys[i]]))start=point(base,container(base)[nativeKeys[i]]);else if(freshBirth&&recordTime(header)>=lo&&recordTime(header)<=hi)start={eventRef:path+'#ordinal=0',at:iso(recordTime(header)),value:0};else if(!header?.payload?.history_mode&&!header?.payload?.parent_thread_id&&!header?.payload?.source?.subagent&&seed===-Infinity&&!group.some(s=>s.readIssue)&&records.every((r,i)=>r.ordinal===i)&&!records.some(r=>r.payload?.type==='compaction')&&records.filter(r=>recordTime(r)<=lo).every(r=>r.type==='session_meta'||r.type==='turn_context'||r.type==='event_msg'&&(r.payload?.type==='task_started'||recordTime(r)===lo&&r.payload?.type==='item_completed'&&r.payload?.item?.type==='UserMessage')))start={eventRef:path+'#ordinal=0',at:iso(recordTime(header)),value:0};}
     const endPoint=end&&validNumber(endValue)?point(end,endValue):null;cumulativePoints.push({sourceRef:path,threadId:id,series,metric:k,from:start,until:endPoint});
     if(endPoint)snapshots.push({metric:k,series,...endPoint});
     if(endValue===undefined&&i>=3){usage[k]=missing('field_not_reported');continue;}
@@ -211,22 +211,55 @@ function declaredChildIds(record,dsh) {
   :item?.type==='CollabAgentToolCall'&&item.tool==='spawn_agent'&&Array.isArray(item.receiver_thread_ids)?item.receiver_thread_ids:[];
  return ids.filter(id=>typeof id==='string');
 }
-function childIds(source, cutoff=Infinity) {
+function childIds(source, cutoff=Infinity, sources=[]) {
  const dsh=source.records[0]?.type==='session';
- const boundary=dsh?null:codexHistoryBoundary(source.records[0]);
+ const boundary=dsh?null:codexHistoryBoundary(source.records[0],source.records,sources,cutoff);
  if(boundary?.issueCode)return [];
  const prefix=[];for(const record of source.records){if(recordTime(record)>cutoff)break;prefix.push(record);}
  return [...new Set(prefix.filter(record=>dsh||record.ordinal>boundary.seed).flatMap(record=>declaredChildIds(record,dsh)))];
 }
-function codexHistoryBoundary(header) {
+function codexHistoryBoundary(header, records, sources=[], cutoff=Infinity, visiting=new Set()) {
  const payload=header?.type==='session_meta'&&header.payload&&typeof header.payload==='object'&&!Array.isArray(header.payload)?header.payload:{};
  const seedPresent=Object.hasOwn(payload,'subagent_history_start_ordinal');
  const parentHint=Object.hasOwn(payload,'parent_thread_id')&&payload.parent_thread_id!==undefined&&payload.parent_thread_id!==null&&payload.parent_thread_id!=='';
  const subagentHint=payload.source?.subagent!==undefined&&payload.source?.subagent!==null&&payload.source?.subagent!==false;
- const inherited=payload.history_mode==='paginated'||parentHint||subagentHint||seedPresent;
+ // Pagination describes storage; only a complete root prefix can disambiguate it
+ // from inherited/omitted history. Never infer a zero cumulative baseline here.
+ const inheritedHint=['history_base','forked_from_id'].some(key=>Object.hasOwn(payload,key)&&payload[key]!==undefined&&payload[key]!==null);
+ const completeRoot=payload.history_mode==='paginated'&&!parentHint&&!subagentHint&&!seedPresent&&!inheritedHint&&records.every((record,index)=>record.ordinal===index);
+ const inherited=(payload.history_mode==='paginated'&&!completeRoot)||parentHint||subagentHint||seedPresent||inheritedHint;
  if(!inherited)return {seed:-Infinity};
  if(validNumber(payload.subagent_history_start_ordinal))return {seed:payload.subagent_history_start_ordinal};
+ if(!seedPresent&&!inheritedHint&&codexFreshChildBirth(header,records,sources,cutoff,visiting))return {seed:-Infinity,freshBirth:true};
  return {seed:Infinity,issueCode:seedPresent?'inherited_boundary_invalid':'inherited_boundary_missing'};
+}
+
+// A fresh child is proved by immutable parent invocation + completed spawn +
+// matching complete child source, never by parent metadata or pagination alone.
+function codexFreshChildBirth(header, records, sources, cutoff, visiting) {
+ const h=header?.payload,id=h?.id,parent=h?.parent_thread_id,spawn=h?.source?.subagent?.thread_spawn;
+ if(!id||!parent||visiting.has(id)||h.cli_version!=='0.163.0-alpha.10.2'||spawn?.parent_thread_id!==parent)return false;
+ if(!records.length||records.some((r,i)=>r.ordinal!==i||!validNumber(recordTime(r))||recordTime(r)<recordTime(header))||records.filter(r=>r.type==='session_meta').length!==1||records.some(r=>r.type==='token_usage_record'&&r.payload?.thread_id!==id))return false;
+ const children=sources.filter(s=>s.records[0]?.payload?.id===id);
+ if(children.some(s=>s.readIssue))return false;
+ const parents=sources.filter(s=>s.records[0]?.payload?.id===parent);
+ if(!parents.length||parents.some(s=>s.readIssue||canonical(s.records)!==canonical(parents[0].records)))return false;
+ const p=parents[0],ph=p.records[0];
+ if(ph?.payload?.cli_version!==h.cli_version||p.records.some((r,i)=>r.ordinal!==i||!validNumber(recordTime(r))||recordTime(r)<recordTime(ph)||r.type==='token_usage_record'&&r.payload?.thread_id!==parent)||p.records.filter(r=>r.type==='session_meta').length!==1)return false;
+ const next=new Set(visiting);next.add(id);
+ const boundary=codexHistoryBoundary(ph,p.records,sources,cutoff,next);
+ if(boundary.issueCode)return false;
+ const own=p.records.filter(r=>r.ordinal>boundary.seed&&recordTime(r)<=cutoff);
+ const starts=own.filter(r=>r.type==='event_msg'&&r.payload?.type==='item_completed'&&r.payload.item?.type==='SubAgentActivity'&&r.payload.item.kind==='started'&&r.payload.item.agent_thread_id===id);
+ if(starts.length!==1)return false;
+ const start=starts[0],item=start.payload.item;
+ if(own.filter(r=>r.type==='event_msg'&&r.payload?.type==='item_completed'&&r.payload.item?.type==='SubAgentActivity'&&r.payload.item.kind==='started'&&r.payload.item.id===item.id).length!==1)return false;
+ const calls=own.filter(r=>r.type==='response_item'&&r.payload?.type==='function_call'&&r.payload.call_id===item.id);
+ if(calls.length!==1)return false;
+ const call=calls[0];let args;try{args=JSON.parse(call.payload.arguments);}catch{return false;}
+ if(call.payload.namespace!=='collaboration'||call.payload.name!=='spawn_agent'||args?.fork_turns!=='none'||!validCodexTurnId(item.id)||item.agent_path!==spawn.agent_path)return false;
+ const born=recordTime(header),issued=recordTime(call),started=recordTime(start);
+ return validNumber(born)&&validNumber(issued)&&validNumber(started)&&call.ordinal<start.ordinal&&issued<=started&&started<=born&&born<=cutoff;
 }
 function encodeSegment(value) {
  if(value==='.'||value==='..')return value.replaceAll('.','~002E');
@@ -249,7 +282,7 @@ async function explicitDescendants(initial, cutoff, load) {
  for(let i=0;i<sources.length;i++) {
   const parent=sources[i],header=parent.records[0],dsh=header?.type==='session',parentId=dsh?header.id:header?.payload?.id;
   if(!parentId||visited.has(parentId))continue;visited.add(parentId);
-  for(const child of childIds(parent,cutoff)) {
+  for(const child of childIds(parent,cutoff,sources)) {
    if(visited.has(child)||sources.some(s=>(dsh?s.records[0]?.id:s.records[0]?.payload?.id)===child))continue;
    let candidates=[];
    try {
@@ -268,7 +301,7 @@ async function explicitDescendants(initial, cutoff, load) {
     }
    } catch(error) {if(error.code!=='ENOENT')parent.readIssue={code:'child_source_failed',sourcePath:parent.sourcePath,message:error.message,expected:false};}
    const loaded=await Promise.all(candidates.map(load)),valid=loaded.filter(s=>{const h=s.records[0];return dsh?h?.id===child&&h.parentSession===parentId:h?.payload?.id===child&&h.payload.parent_thread_id===parentId;});
-   if(valid.length){const selected=valid.find(source=>!source.readIssue)??valid[0],broken=valid.filter(source=>source.readIssue);const first=canonical(selected.records);if(broken.length)selected.readIssue={code:'source_read_failed',sourcePath:broken[0].sourcePath,message:'child session copies include incomplete source: '+broken.map(source=>source.sourcePath+': '+source.readIssue.message).join('; '),expected:false};else if(valid.some(source=>canonical(source.records)!==first))selected.readIssue={code:'conflicting_child_source',sourcePath:selected.sourcePath,message:'same child identity has conflicting source copies',expected:false};sources.push(selected);}
+   if(valid.length){const selected=valid.find(source=>!source.readIssue)??valid[0],broken=loaded.filter(source=>source.readIssue);const first=canonical(selected.records);if(broken.length)selected.readIssue={code:'source_read_failed',sourcePath:broken[0].sourcePath,message:'child session copies include incomplete source: '+broken.map(source=>source.sourcePath+': '+source.readIssue.message).join('; '),expected:false};else if(valid.some(source=>canonical(source.records)!==first))selected.readIssue={code:'conflicting_child_source',sourcePath:selected.sourcePath,message:'same child identity has conflicting source copies',expected:false};sources.push(selected);}
   }
  }
  return sources;
@@ -476,8 +509,13 @@ async function recordMeasurement(args,signal) {
  try {
   return await task.withRecordLock('main-agent-cost',async()=>{
    signal.throwIfAborted();let old='';try{old=task.readRecord('main-agent-cost.md');}catch(error){if(error.code!=='ENOENT')throw error;}
-   const rows=parseLedger(old),last=rows.at(-1);
-   if(last&&args['start-ref'])throw Object.assign(new TypeError('start-ref cannot reset an existing ledger'),{argumentError:true});
+   // First writes require an explicit, verifiable task-start event. The only
+   // recovery exception is one historical poisoned first row from the former
+   // implementation; it stays append-only history and never supplies a window.
+   const rows=parseLedger(old),last=rows.at(-1),reopen=rows.length===1&&last?.[2]==='unavailable:task_start_unavailable'&&last?.[4]==='unavailable:task_start_unavailable'&&Boolean(args['start-ref']);
+   if(!last&&!args['start-ref'])throw Object.assign(new TypeError('first record requires --start-ref pointing to the real task-start user event'),{argumentError:true});
+   if(last&&args['start-ref']&&!reopen)throw Object.assign(new TypeError('start-ref cannot reset an existing ledger'),{argumentError:true});
+   if(last&&!reopen&&(last[2]==='unavailable:task_start_unavailable'||last[4]==='unavailable:task_start_unavailable'))throw new Error('ledger_reopen_required: existing ledger has no authoritative first task-start boundary; preserve it and reopen the ledger before recording another row');
    const until=new Date().toISOString(),load=path=>readSourceAsync(path,signal),explicit=args.session.length>0;
    let sources=[],loadIssue;
    try {
@@ -487,15 +525,31 @@ async function recordMeasurement(args,signal) {
      if(h?.type==='session_meta'&&(h.payload.parent_thread_id||h.payload.source?.subagent)||h?.type==='session'&&(h.origin==='subagent'||h.delegationDepth>0))throw new Error('stage_caller_is_subagent');
      sources=[current];
     }
-   }catch(error){if(signal.aborted)throw error;loadIssue={code:'current_source_unavailable',message:error.message,expected:false};}
-   const previousSources=last?JSON.parse(last[24]):[],startRef=last?last[4]:args['start-ref']??null;
-   const selector=!last&&args['start-ref']?parseSelector(args['start-ref']):null;
+   }catch(error){if(signal.aborted||error.message==='stage_caller_is_subagent')throw error;loadIssue={code:'current_source_unavailable',message:error.message,expected:false};}
+   const previousSources=reopen?[]:(last?JSON.parse(last[24]):[]),startRef=last&&!reopen?last[4]:args['start-ref']??null;
+   const selector=args['start-ref']?parseSelector(args['start-ref']):null;
    const extra=[...new Set([...previousSources,...(selector?[selector.sourcePath]:[])])].filter(path=>!sources.some(s=>s.sourcePath===path));
    sources.push(...await Promise.all(extra.map(load)));
    sources=await explicitDescendants(sources,date(until),load);
-   const start=last?{from:last[3]}:startFrom(startRef,sources),previousBoundaries=last?JSON.parse(last[25]).flatMap(s=>s.observedBoundaries):[];
-   const result=measureSessions(sources,{window:{from:start.from,until,includeFrom:!last,startRef,previousBoundaries}});
-   if(start.issue)result.issues.push(start.issue);if(loadIssue)result.issues.push(loadIssue);
+   // A retained valid user event cannot authenticate a source whose full read
+   // failed. This applies only to first/reopened publication; later gaps remain
+   // measured and recorded as incomplete evidence.
+   if((!last||reopen)&&selector){
+    const selected=sources.find(source=>source.sourcePath===selector.sourcePath);
+    if(selected?.readIssue)throw new Error((reopen?'ledger reopen':'first record')+' start-ref unavailable: '+selected.readIssue.message);
+   }
+   const start=reopen?startFrom(startRef,sources):last?{from:last[3]}:startFrom(startRef,sources);
+   if(!last&&start.issue){
+    if(loadIssue||sources.some(source=>source.readIssue))throw new Error('first record start-ref unavailable: '+start.issue.message);
+    throw Object.assign(new TypeError(start.issue.message),{argumentError:true});
+   }
+   if(reopen&&start.issue){
+    if(loadIssue||sources.some(source=>source.readIssue))throw new Error('ledger reopen start-ref unavailable: '+start.issue.message);
+    throw Object.assign(new TypeError(start.issue.message),{argumentError:true});
+   }
+   const previousBoundaries=reopen?[]:(last?JSON.parse(last[25]).flatMap(s=>s.observedBoundaries):[]);
+   const result=measureSessions(sources,{window:{from:start.from,until,includeFrom:!last||reopen,startRef,previousBoundaries}});
+   if(loadIssue)result.issues.push(loadIssue);
    try{result.sources=taskSourceFacts(args,result);}catch(error){result.sources.reviewProviderUsage.metric=unavailable('task_source_unavailable');result.sources.materialBytes.metric=unavailable('task_source_unavailable');result.issues.push({code:'task_source_unavailable',message:error.message,expected:false});}
    result.status=result.issues.some(x=>!x.expected)?'incomplete':'available';signal.throwIfAborted();
    const prefix=old||LEDGER_HEADER+'\n| '+Array(27).fill('---').join(' | ')+' |\n',next=prefix+ledgerRow(args,result,startRef);

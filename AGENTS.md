@@ -1,24 +1,27 @@
 # AGENTS.md
 
-本文件给通用 AI 助手（任意命令行 agent）提供 workflowhub 仓库的身份与规则信息。
+通用 AI 助手的 workflowhub 身份与规则。
 
 ## 项目身份
 
 - 名称：workflowhub
-- 定位：面向 AI 开发工作流的编排工具，可被多种命令行 AI 助手复用。
+- 定位：供命令行 AI 助手复用的开发工作流编排工具。
 - 构建基准：本仓库的设计宪法 [CONSTITUTION.md](CONSTITUTION.md)。
 
 ## 给 agent 的规则
 
-- 任何改动须符合宪法，并用 [constitution-checklist.md](constitution-checklist.md) 逐条对照。
+- 改动须符合宪法，逐条对照 [constitution-checklist.md](constitution-checklist.md)。
 - build-code、verify-code 在已授权任务范围内自动实施、验证、审查、修复及执行交付必要的 commit/push/merge；阶段切换和接续不重新申请本地提交或日常确认。Git 动作前按真实授权来源、范围、分支与当前 HEAD 自动 record/consume，不能把 authorize 当提问门。仅最终 close（含归档、删除任务分支/工作区及交付清理）前展示实际结果与范围，取得一次确认；无法修复或验证的部分如实保留，不自动接受严重风险。
-- 重活放进子代理上下文执行，主上下文只收摘要（减少主上下文占用）。
-- 重读量动作点默认派子代理：grep 全仓扫描、跑测试/采集 RED/GREEN 证据、读多文件对标、反向引用扫描——这些由子代理在其上下文执行，主上下文（工头）只收结论摘要（路径+exit_code+清单），不自己跑。真正一两行能讲清的微动作除外。
-- 技能应可独立调用、可搬运，不绑死单一宿主环境。
-- 质量裁决由独立来源独立上下文产出，禁止自审自判。
+- 重活交子代理，主上下文只收摘要。
+- 全仓 grep、测试/RED/GREEN、多文件对标、反向引用扫描默认由子代理执行，主上下文只收路径、exit_code、结论清单；一两行可讲清的微动作除外。
+- 技能可独立调用、搬运，不绑定单一宿主。
+- 质量裁决由独立来源、独立上下文产出，禁止自判。
 - 不整份继承父代理上下文：派发记录写明继承模式，只附原文摘要 ref、sha256 与不超过 500 字摘要。
 - 不空转轮询：不以远小于任务耗时的固定超时重复空转调用；派发按工作类型，回传结论与清单，修复回原实施子代理同一会话。五阶段共用并发区间为 2–5，具体每个任务开几个并发在 build-plan 的当前并行方案里逐任务确定。
-- 跨 Phase 不做全量快照绑定：只核对本 Phase 声明写集；声明不实由独立审查用 `git diff --name-only` 与声明写集逐条比对发现，记为事实，不作门。
+- 写共享文件前，读 `skills/simplicity-guard/SKILL.md` Packet lens并发/简化问题，核真实状态、前后writer及现有锁/独占；同文件不同字段仍共享，提示中的“别撞”不代结构性串行。按最小有效路径复用唯一权威，不新建协调状态。
+- 跨 Phase 只核本 Phase 声明写集，不绑全量快照；独立审查逐条比对 `git diff --name-only` 与声明，不实记事实、不作门。
+
+审查派发及结果回读实际执行 `skills/wh-review/SKILL.md`「输入与方法」「输出和失败边界」；独立执行者据ARTIFACT + CONTRACT及真实原件判断。
 
 ### 测试硬规则
 
@@ -26,18 +29,20 @@
 - 例外只有用户或 CI 守卫明确要求；例外命令必须在执行证据中写清原因和范围。
 - 依据：[docs/standard-workflow.md](docs/standard-workflow.md) 的 build-code 测试与质量段；本条是执行纪律，不是新的 stage、gate 或质量结论。
 
+核测试/检查读数时读 `workflows/verify-code/SKILL.md`「测试充分性与检查可信度」；设计oracle/替身或分类候选时读 `skills/backend-testing/SKILL.md`「行为测试与证伪」「执行事实」。
+
 ### 证据硬规则
 
-- 同一事实＝字节相同：先比较内容，确立相等后复用既有唯一原件并写引用；重跑、换 executor 或换时刻产生相同字节时不再新写。确因裁剪、脱敏、追加时刻或 exit 改变字节才另存，并说明为何字节必须不同；无法确立内容相等时保留新件并如实记 `deduplication: unknown`。原始测试输出、正式 review 回执、review 原件各一份，禁止复制镜像到 `quality/evidence/`。
+- 同一事实＝字节相同：先比较内容，相等即引用唯一原件；重跑、换 executor/时刻得到相同字节不另写。仅裁剪、脱敏、追加时刻或 exit 改变字节才另存并说明必要性；无法确立相等则保新件、记 `deduplication: unknown`。测试 raw、正式 review 回执及原件各一份，不复制镜像到 `quality/evidence/`。
 - 禁止把整棵工作树或整个目录作为证据保存（禁止目录快照、整树 tar、`git archive` 产物、文件树清单）。 整目录保存＝新写出的证据件的直接子目录里存在完整包含某个既有目录全部文件名与字节的集合；每个文件各自都是某条真实事实的原始件不算快照。
-- 需要证明改动范围时，只写 `路径 + hash` 一行，原始字节留在工作树，不搬进证据区；例外仅三类：该文件随后会被改动或删除、外部服务返回体、一次性环境读数。例外须逐条说明为何必须保留字节；历史原件及已引用件不删除或覆写。
+- 证明改动范围只写一行 `路径 + hash`，原字节留工作树；仅随后会修改/删除的文件、外部服务返回体、一次性环境读数可留字节，逐项说明必要性。历史原件、已引用件不删不覆写。
 - 依据：[docs/standard-workflow.md](docs/standard-workflow.md) 的 `### 证据只留原始件` 段；本条是执行纪律，不是新的 stage、gate 或质量结论。
 
 ### 卡住与升级
 
 - 卡住时必须先把话说明白再停：用日常语言写清「现在卡在哪、为什么不能继续、有几条路、每条路的代价与风险」，并给出可以直接回复的选项。
-- 禁止把阶段缩写、AC 编号、内部取值或其它只有读过材料的人才懂的词，作为唯一的说明。
-- 同一件事连续若干次没有产生任何新事实时，停止自动续跑，把上面这条报告写出来，不重复同一次无进展的尝试。
+- 阶段缩写、AC 编号、内部值等需材料背景的术语不能作为唯一说明。
+- 连续无新事实即停重复续跑，按上条报告。
 - 依据：[docs/standard-workflow.md](docs/standard-workflow.md) 的 `### stage 结束` 段（R13 人类边界）之后；本条是沟通与停机纪律，不是新的 stage、gate 或质量结论。
 - 适用范围：本条只适用于外部依赖的不可重试失败与非受控反馈路径；不可重试类为许可或授权被拒绝、权限不足、密钥或登录失效、输入非法、真实资源或真环境不存在。不可重试失败第一次出现即零重试，立即按上面既有格式报告并给可直接回复的选项，停该外部失败路径，其余安全工作继续；用户给新答复即复位，时间不构成复位条件。
 - 排除与前置：审查 provider 不可用、失败、超时、取消、无效输出、零成功路或空 findings 不属于上述停机范围，继续按 wh-review 与 `docs/standard-workflow.md` 既有口径处理：如实记 unavailable／incomplete、不换执行者、保留检测输出与原始失败、其余安全工作继续；不因此限制审查并发或轮次，也不按任何时长停止审查；同一不可用事实记录一次即可。
@@ -62,17 +67,17 @@
 ## 当前治理边界
 
 - 当前工作真相按 cohort 读取认证 worktree `specs/<task-id>/`：pre/history 保留 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 四材料；post 使用 `decision-log.md`、承载全局实现设计的 `spec.md`、独立 `phases/P<n>.md` 和纯指针 `phases/index.md`。post 不生成 `plan.md/tasks.md` 双写。外置任务追踪目录只放 `task.json`、`facts.jsonl`、`quality/`、`index.json` 等执行文件，不新增 gate。旧 task、receipt、review、历史 snapshot 只读保留。
-- 测试、审查、历史和 inventory/complexity 只产生事实证据，不是推进许可证；质量缺失保持 `unknown`/`unavailable`/`incomplete`，不能伪造通过。
-- provenance、原始 review 事实和失败事实必须保留，不能用摘要覆盖来源，也不能把 provider 失败改写为质量通过。
-- 新机制或新控制面必须先登记职责、真实 consumer、owner、测试和删除/保留条件；没有当前消费者的重复控制面不新增。登记作者先真读目标与调用处，写出使用者正在做的具体动作、输入、输出及为何需要；读不到目标停止本次登记并交原 owner，不写 active 猜测。下一位维护代码的人也是用户。
+- 测试、审查、历史、inventory/complexity 只记事实，不作许可证；质量缺失保持 `unknown`/`unavailable`/`incomplete`，不伪造通过。
+- 保留 provenance、review 原件及失败；摘要不覆盖来源，provider 失败不冒质量通过。
+- 新机制或新控制面必须先登记职责、真实 consumer、owner、测试和删除/保留条件；没有当前消费者的重复控制面不新增。登记作者先真读目标与调用处，写出使用者正在做的具体动作、输入、输出及为何需要；读不到目标停止本次登记并交原 owner，不写 active 猜测。维护者亦用户。
 - 改接口前按真实 caller 判断输入是否跨模块边界、能否作一次纯函数判断；通用机制留内部、专用策略留边缘，公共面不暴露 storage/transport/framework 内部表示。判据邻接现有 runtime/interface/runtime-facade.mjs，不另建规范层。
 - 当前 WorkflowHub 会话直接执行并发布阶段事实；外部 Stage Agent、bridge、session 或 stage outcome 不是任务推进前置条件。旧 bridge/adapter 只读保留历史 provenance，不得重新成为 active run、reflection、handoff 或 close 的门。
 
 ### 当前窄工具与事实职责登记
 
-- 工作区/命令/普通记录/Git授权/锁/回复复用 runtime/interface/ 已有 owner；真实 consumer 见 docs/architecture/move-map.json。工具输出是事实，不是阶段许可证；被经独立审查的替代实现承接实际消费者后才退役。
+- 工作区/命令/普通记录/Git授权/锁/回复复用 runtime/interface/ 已有 owner；真实 consumer 见 docs/architecture/move-map.json。工具输出是事实，非阶段许可证；被经独立审查的替代实现承接实际消费者后才退役。
 - 审查事实由 review-record-route 单一 producer保存；文档 wh-review，代码 OCR；OCR 不可用（命令不存在（ENOENT）或版本低于1.12.9）如实记 unavailable/unknown，不换执行者，保留检测输出与原始失败；版本检测其它错误不推断未安装。architect-code-review 是同源补充轴，独立执行，与 OCR 可用性无关；已装 OCR 失败、超时、取消、无效输出、零成功路或空 findings 均保留原始事实。provider缺失/失败不制造质量通过，有效单源发现不丢弃。
-- 退役登记保既有决定与未决项的理由/决定人/来源，人读交接消费，不新增机器reader或字段。
+- 退役登记保决定、未决项及理由/决定人/来源，供人读交接；不增机器 reader/字段。
 
 ## vNext 永久实施边界
 

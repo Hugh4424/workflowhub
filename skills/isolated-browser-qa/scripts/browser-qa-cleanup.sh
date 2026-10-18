@@ -7,49 +7,12 @@ TMP_ROOT="${TMPDIR:-/tmp}"
 AGENT_BROWSER_HOME="${AGENT_BROWSER_HOME:-$HOME/.agent-browser}"
 
 case "$ENGINE" in
-  agent-browser|browser-use|all) ;;
+  agent-browser|browser-use) ;;
   *)
     printf 'unsupported_cleanup_engine=%s\n' "$ENGINE" >&2
     exit 64
     ;;
 esac
-
-run_with_timeout() {
-  local seconds="$1"
-  shift
-
-  "$@" >/dev/null 2>&1 &
-  local pid="$!"
-  local waited=0
-
-  while kill -0 "$pid" 2>/dev/null; do
-    if [ "$waited" -ge "$seconds" ]; then
-      kill "$pid" 2>/dev/null || true
-      sleep 1
-      kill -9 "$pid" 2>/dev/null || true
-      wait "$pid" 2>/dev/null || true
-      return 124
-    fi
-    sleep 1
-    waited=$((waited + 1))
-  done
-
-  wait "$pid" >/dev/null 2>&1 || true
-}
-
-if [ "$ENGINE" = "browser-use" ] || [ "$ENGINE" = "all" ]; then
-  if command -v browser-use >/dev/null 2>&1; then
-    run_with_timeout 8 browser-use --session "$SESSION" close || true
-  fi
-fi
-
-sleep 1
-
-if [ "$ENGINE" = "browser-use" ] || [ "$ENGINE" = "all" ]; then
-  if command -v browser-use >/dev/null 2>&1; then
-    run_with_timeout 8 browser-use --session "$SESSION" close || true
-  fi
-fi
 
 python3 - "$SESSION" "$ENGINE" "$TMP_ROOT" "$AGENT_BROWSER_HOME" <<'PY'
 import os
@@ -58,6 +21,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 session = sys.argv[1]
@@ -69,6 +33,7 @@ session_runtime_files = (
     agent_browser_home / f"{session}.pid",
     agent_browser_home / f"{session}.sock",
     agent_browser_home / f"{session}.stream",
+    *(agent_browser_home / f"{session}.{ext}" for ext in ("config", "engine", "target", "version")),
 )
 
 ps_output = subprocess.check_output(
@@ -154,6 +119,32 @@ def descendants(root_pid: int) -> set[int]:
                 stack.append(child)
     return found
 
+def start_identities():
+    output = subprocess.check_output(["ps", "-axo", "pid=,ppid=,lstart=,command="], text=True)
+    identities = {}
+    for raw in output.splitlines():
+        parts = raw.strip().split(None, 7)
+        if len(parts) == 8 and parts[0].isdigit() and parts[2] in ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"):
+            identities[int(parts[0])] = (" ".join(parts[2:7]), parts[7])
+    return identities
+
+initial_identities = start_identities()
+# Capture owned profiles before graceful close removes the process records.
+def extract_user_data_dir(command):
+    match = re.search(r"--user-data-dir=(\"[^\"]+\"|'[^']+'|[^ ]+)", command)
+    return match.group(1).strip("\"'") if match else None
+owned_roots = agent_browser_roots if engine == "agent-browser" else browser_use_roots
+owned_pids = set(owned_roots)
+for root_pid in owned_roots:
+    owned_pids.update(descendants(root_pid))
+owned_profiles = {extract_user_data_dir(by_pid[pid]["command"]) for pid in owned_pids}
+owned_profiles.discard(None)
+close_error = False
+try:
+    closed = subprocess.run([engine, "--session", session, "close"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8)
+    close_error = closed.returncode != 0
+except (OSError, subprocess.TimeoutExpired):
+    close_error = True
 kill_pids = set()
 if engine in ("browser-use", "all"):
     for root_pid in browser_use_roots:
@@ -165,37 +156,26 @@ if engine in ("agent-browser", "all"):
         kill_pids.add(root_pid)
         kill_pids.update(descendants(root_pid))
 
-for root_pid in playwright_mcp_roots:
-    kill_pids.add(root_pid)
-    kill_pids.update(descendants(root_pid))
-
-def has_browser_use_ancestor(pid: int) -> bool:
-    current = by_pid.get(pid)
-    while current:
-        if current["pid"] in all_browser_use_roots:
-            return True
-        current = by_pid.get(current["ppid"])
-    return False
-
-if engine in ("browser-use", "all"):
-    for row in rows:
-        if "browser-use-user-data-dir-" in row["command"] and not has_browser_use_ancestor(row["pid"]):
-            kill_pids.add(row["pid"])
-            kill_pids.update(descendants(row["pid"]))
-
+# TERM only an authenticated main browser, not its entire process tree.
+kill_pids = {pid for pid in kill_pids if "--user-data-dir=" in by_pid[pid]["command"]}
+# Only exact authenticated roots may receive TERM; never sweep other engines.
+current_rows = subprocess.check_output(["ps", "-axo", "pid=,ppid=,command="], text=True)
+current_commands = {}
+for raw in current_rows.splitlines():
+    parts = raw.strip().split(None, 2)
+    if len(parts) == 3 and parts[0].isdigit():
+        current_commands[int(parts[0])] = parts[2]
+current_identities = start_identities() if kill_pids.intersection(current_commands) else {}
 for pid in sorted(kill_pids, reverse=True):
+    if (pid not in initial_identities or current_identities.get(pid) != initial_identities[pid]
+            or current_commands.get(pid) != by_pid[pid]["command"]):
+        continue
     try:
-        os.kill(pid, signal.SIGKILL)
-    except OSError:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
         pass
 
-def extract_user_data_dir(command):
-    match = re.search(r"--user-data-dir=(\"[^\"]+\"|'[^']+'|[^ ]+)", command)
-    if not match:
-        return None
-    return match.group(1).strip("\"'")
-
-
+time.sleep(0.15)
 active_ps_output = subprocess.check_output(
     ["ps", "-axo", "pid=,ppid=,command="],
     text=True,
@@ -224,21 +204,23 @@ patterns = (
     "playwright-artifacts-",
 )
 
+# A replacement PID must never authorize deletion of its data-dir, even if
+# its command string is identical. Keep the historical profile on uncertainty.
+latest_identities = start_identities() if owned_pids.intersection(row["pid"] for row in active_rows) else {}
+replacement_profiles = set()
+for pid in owned_pids:
+    if pid in latest_identities and latest_identities.get(pid) != initial_identities.get(pid):
+        value = extract_user_data_dir(by_pid[pid]["command"])
+        if value:
+            replacement_profiles.add(value)
 removed_dirs = 0
-if tmp_root.exists():
-    for child in tmp_root.iterdir():
-        if not any(child.name.startswith(prefix) for prefix in patterns):
-            continue
-        if str(child) in active_tmp_dirs:
-            continue
-        try:
-            if child.is_dir():
-                shutil.rmtree(child, ignore_errors=True)
-            else:
-                child.unlink(missing_ok=True)
-            removed_dirs += 1
-        except OSError:
-            pass
+for value in owned_profiles:
+    child = Path(value)
+    if value in replacement_profiles or child.is_symlink() or not child.is_relative_to(tmp_root) or str(child) in active_tmp_dirs:
+        continue
+    if child.exists():
+        shutil.rmtree(child)
+        removed_dirs += 1
 
 final_ps = subprocess.check_output(["ps", "-axo", "pid=,command="], text=True)
 final_rows = []
@@ -308,12 +290,13 @@ if tmp_root.exists():
         if any(child.name.startswith(prefix) for prefix in patterns):
             residual_tmp_dirs += 1
 
+metadata_error = False
 if not final_session_root_pids:
     for runtime_file in session_runtime_files:
         try:
             runtime_file.unlink(missing_ok=True)
         except OSError:
-            pass
+            metadata_error = True
 
 print(f"cleanup_engine={engine}")
 print(f"agent_browser_session_residual_processes={agent_browser_session_residual}")
@@ -323,14 +306,16 @@ print(f"browser_use_global_residual_processes={browser_use_global_residual}")
 print(f"playwright_mcp_residual_processes={playwright_mcp_residual}")
 print(f"browser_residual_tmp_dirs={residual_tmp_dirs}")
 print(f"browser_removed_tmp_dirs={removed_dirs}")
+print(f"graceful_close_failed={int(close_error)}")
+owned_profile_residual = sum(Path(value).exists() for value in owned_profiles)
+print(f"owned_profile_residual_dirs={owned_profile_residual}")
 
-exit_code = 0
+exit_code = int(metadata_error or owned_profile_residual > 0)
 if agent_browser_session_residual > 0:
     exit_code = 1
 if browser_use_session_residual > 0:
     exit_code = 1
-if playwright_mcp_residual > 0:
-    exit_code = 1
+
 
 sys.exit(exit_code)
 PY

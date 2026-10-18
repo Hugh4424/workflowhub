@@ -69,8 +69,10 @@ test('LEDGER first explicit record uses selected real user event; fixed columns 
  const f=setup(t),before=hash(readFileSync(f.session)),r=first(f);ok(r);const {rows}=readLedger(f);assert.equal(rows.length,1);const row=rows[0];assert.equal(row[1],'build-plan');assert.equal(row[2],'2026-10-15T02:30:30.809Z');assert.equal(row[4],f.session+'#seq=9');numeric(row[10],8923);numeric(row[11],210);numeric(row[12],16384);numeric(row[15],1);assert.match(row[21],/^not_reported:no_authoritative_host_injection_source$/);assert.match(row[22],/^not_reported:/);assert.ok(JSON.parse(row[24]).includes(f.session));assert.equal(JSON.parse(row[25])[0].sessionId,'fixture-dsh-v4-1');assert.equal(hash(readFileSync(f.session)),before);
  assert.equal(existsSync(join(f.workspace,'main-agent-cost.md')),false);assert.equal(readFileSync(join(f.taskPath,'facts.jsonl'),'utf8'),'');assert.equal(existsSync(join(f.taskPath,'index.json')),false);
 });
-test('LEDGER first record without start-ref appends unknown window then later valid incremental window',t=>{
- const f=setup(t),r=record(f);assert.equal(r.status,1,r.stderr);let ledger=readLedger(f);assert.equal(ledger.rows.length,1);const old=ledger.raw,until=ledger.rows[0][3];assert.match(ledger.rows[0][6],/^unavailable:/);assert.ok(Number.isFinite(Date.parse(until)));const next=record(f);ok(next);ledger=readLedger(f);assert.ok(ledger.raw.startsWith(old));assert.equal(ledger.rows.length,2);assert.equal(ledger.rows[1][2],until);numeric(ledger.rows[1][10],0);assert.match(ledger.rows[0][6],/^unavailable:/,'unknown historic window stays unknown');
+test('LEDGER first record requires a valid start-ref and never publishes an unusable row',t=>{
+ const f=setup(t),missing=record(f);assert.equal(missing.status,2,missing.stderr);assert.match(missing.stderr,/first record requires.*start-ref/i);assert.equal(existsSync(f.ledger),false,'missing start-ref must not create a poisoned ledger');
+ const invalid=record(f,'build-plan',['--start-ref='+f.session+'#seq=17']);assert.equal(invalid.status,2,invalid.stderr);assert.match(invalid.stderr,/start-ref must match exactly one real user event/i);assert.equal(existsSync(f.ledger),false,'invalid start-ref must not create a poisoned ledger');
+ ok(first(f));const ledger=readLedger(f);assert.equal(ledger.rows.length,1);assert.equal(ledger.rows[0][2],'2026-10-15T02:30:30.809Z');assert.equal(ledger.rows[0][4],f.session+'#seq=9');
 });
 test('LEDGER same-stage rework appends every attempt, keeps old bytes and refuses start-ref reset',t=>{
  const f=setup(t);ok(first(f));const before=readLedger(f);ok(record(f));const after=readLedger(f);assert.equal(after.rows.length,2);assert.ok(after.raw.startsWith(before.raw));assert.equal(after.rows[1][1],'build-plan');assert.equal(after.rows[1][2],before.rows[0][3]);numeric(after.rows[1][10],0);
@@ -117,11 +119,11 @@ test('AUTO DSH explicit catalog discovers owned child; missing and foreign paren
 });
 test('AUTO current DSH and Codex EACCES remain source read issues instead of header identity errors',t=>{
  const dsh=setup(t),dshRecords=load();dshRecords[0].cwd=dsh.workspace;const dshId=dshRecords[0].id,dshSource=put(dshPath(dsh,dshId),dshRecords);let dshResult;
- chmodSync(dshSource,0);try{dshResult=run(dsh,['--project=cost-project','--task=cost-task','--stage=build-plan','--record'],{...dsh.env,DSH_SESSION_ID:dshId});}finally{chmodSync(dshSource,0o600);}
- assert.equal(dshResult.status,1);assert.doesNotMatch(dshResult.stdout+dshResult.stderr,/current DSH header identity mismatch/);assert.match(readLedger(dsh).rows[0][26],/EACCES|permission denied/i);
+ chmodSync(dshSource,0);try{dshResult=run(dsh,['--project=cost-project','--task=cost-task','--stage=build-plan','--record','--start-ref='+dshSource+'#seq=9'],{...dsh.env,DSH_SESSION_ID:dshId});}finally{chmodSync(dshSource,0o600);}
+ assert.equal(dshResult.status,1);assert.doesNotMatch(dshResult.stdout+dshResult.stderr,/current DSH header identity mismatch/);assert.match(dshResult.stderr,/first record start-ref unavailable|EACCES|permission denied/i);assert.equal(existsSync(dsh.ledger),false);
  const codex=setup(t),id='01a0feda-b95f-7163-a9c1-0ea058d0fa95',codexRecords=load('codex');codexRecords[0].payload.id=id;const codexSource=put(join(codex.env.CODEX_HOME,'sessions/2026/10/03/rollout-2026-10-03T07-02-22-'+id+'.jsonl'),codexRecords);let codexResult;
- chmodSync(codexSource,0);try{codexResult=run(codex,['--project=cost-project','--task=cost-task','--stage=build-plan','--record'],{...codex.env,CODEX_THREAD_ID:id});}finally{chmodSync(codexSource,0o600);}
- assert.equal(codexResult.status,1);assert.doesNotMatch(codexResult.stdout+codexResult.stderr,/current Codex header\/thread identity mismatch/);assert.match(readLedger(codex).rows[0][26],/EACCES|permission denied/i);
+ chmodSync(codexSource,0);try{codexResult=run(codex,['--project=cost-project','--task=cost-task','--stage=build-plan','--record','--start-ref='+codexSource+'#item_id=constructed%20user-start'],{...codex.env,CODEX_THREAD_ID:id});}finally{chmodSync(codexSource,0o600);}
+ assert.equal(codexResult.status,1);assert.doesNotMatch(codexResult.stdout+codexResult.stderr,/current Codex header\/thread identity mismatch/);assert.match(codexResult.stderr,/first record start-ref unavailable|EACCES|permission denied/i);assert.equal(existsSync(codex.ledger),false);
 });
 test('AUTO DSH and Codex reject a wrong current header even when a later line is malformed',t=>{
  const dsh=setup(t),dshId=dsh.records[0].id,dshHeader={...dsh.records[0],cwd:dsh.workspace,id:'wrong-dsh-identity'},dshSource=dshPath(dsh,dshId);
@@ -136,14 +138,34 @@ test('AUTO DSH and Codex reject a wrong current header even when a later line is
 test('AUTO Codex thread identity beats root session and current subagent cannot record stage',t=>{
  const f=setup(t),id='01a0feda-b95f-7163-a9c1-0ea058d0fa95',parent='01a0feda-b95f-7163-a9c1-0ea058d0fa94',records=load('codex');records[0].payload.id=id;records[0].payload.session_id=parent;records[0].payload.parent_thread_id=parent;for(const r of records)if(r.type==='token_usage_record'){r.payload.thread_id=id;r.payload.session_id=parent;}
  const path=put(join(f.env.CODEX_HOME,'sessions/2026/10/03/rollout-2026-10-03T07-02-22-'+id+'.jsonl'),records),env={...f.env,CODEX_THREAD_ID:id,CODEX_SESSION_ID:parent};
- const read=run(f,['--project=cost-project','--task=cost-task','--from=2026-10-02T23:03:07.088Z','--until=2026-10-02T23:04:01.933Z'],env);ok(read);assert.match(read.stdout,/186557/);const r=run(f,['--project=cost-project','--task=cost-task','--stage=build-code','--record'],env);assert.equal(r.status,1);assert.match(r.stdout+r.stderr,/stage_caller_is_subagent/);assert.ok(!existsSync(f.ledger)||readLedger(f).rows.length===1);assert.ok(existsSync(path));
+ const read=run(f,['--project=cost-project','--task=cost-task','--from=2026-10-02T23:03:07.088Z','--until=2026-10-02T23:04:01.933Z'],env);ok(read);assert.match(read.stdout,/186557/);const r=run(f,['--project=cost-project','--task=cost-task','--stage=build-code','--record','--start-ref='+f.session+'#seq=9'],env);assert.equal(r.status,1,r.stderr);assert.match(r.stderr,/stage_caller_is_subagent/);assert.equal(existsSync(f.ledger),false);assert.ok(existsSync(path));
 });
 test('AUTO Codex root session fallback cannot select parent or a non-v7 unknown thread',t=>{
  const f=setup(t);for(const env of [{...f.env,CODEX_SESSION_ID:'not-a-v7-id'},{...f.env,CODEX_THREAD_ID:'not-a-v7-id',CODEX_SESSION_ID:'parent-root'}]){const r=run(f,['--project=cost-project','--task=cost-task'],env);assert.equal(r.status,1);assert.match(r.stdout+r.stderr,/unavailable|incomplete|thread|定位/i);}
 });
-test('START DSH selector must uniquely identify a user event; invalid selectors exit2',t=>{
- const f=setup(t);for(const suffix of ['#seq=-1','#seq=NaN','#seq=9007199254740992','#item_id=%2Fbad']){const r=record(f,'build-plan',['--start-ref='+f.session+suffix]);assert.equal(r.status,2,suffix+' '+r.stderr);}
- for(const selector of ['#seq=17','#seq=999']){const r=record(f,'build-plan',['--start-ref='+f.session+selector]);assert.equal(r.status,1);assert.match(readLedger(f).rows.at(-1)[6],/^unavailable:/);rmSync(f.ledger);}
+test('START DSH selector must uniquely identify a user event; invalid selectors never publish a first row',t=>{
+ const f=setup(t);for(const suffix of ['#seq=-1','#seq=NaN','#seq=9007199254740992','#item_id=%2Fbad','#seq=17','#seq=999']){const r=record(f,'build-plan',['--start-ref='+f.session+suffix]);assert.equal(r.status,2,suffix+' '+r.stderr);assert.equal(existsSync(f.ledger),false,suffix+' must not publish a poisoned first row');}
+});
+test('LEDGER one historical task-start gap can be explicitly reopened without changing old bytes',t=>{
+ const f=setup(t);ok(first(f));const valid=readLedger(f);const before=valid.raw.replace('| '+valid.rows[0][2]+' |','| unavailable:task_start_unavailable |').replace('| '+valid.rows[0][4]+' |','| unavailable:task_start_unavailable |');writeFileSync(f.ledger,before);
+ const invalid=record(f,'make-decision',['--start-ref='+f.session+'#seq=999']);assert.equal(invalid.status,2);assert.match(invalid.stderr,/start-ref must match exactly one real user event/);assert.equal(readFileSync(f.ledger,'utf8'),before);
+ const reopened=record(f,'make-decision',['--start-ref='+f.session+'#seq=9']);ok(reopened);const ledger=readLedger(f);assert.equal(ledger.rows.length,2);assert.equal(ledger.raw.startsWith(before),true);assert.equal(ledger.rows[1][2],'2026-10-15T02:30:30.809Z');assert.equal(ledger.rows[1][4],f.session+'#seq=9');numeric(ledger.rows[1][10],8923);numeric(ledger.rows[1][11],210);numeric(ledger.rows[1][12],16384);
+ const incremental=record(f,'make-decision');ok(incremental);const next=readLedger(f);assert.equal(next.rows.length,3);assert.equal(next.rows[2][2],next.rows[1][3]);
+ const f2=setup(t);ok(first(f2));const valid2=readLedger(f2);const bad2=valid2.raw.replace('| '+valid2.rows[0][2]+' |','| unavailable:task_start_unavailable |').replace('| '+valid2.rows[0][4]+' |','| unavailable:task_start_unavailable |');writeFileSync(f2.ledger,bad2+bad2.split('\n').at(-2)+'\n');const unchanged=readFileSync(f2.ledger,'utf8');const refused=record(f2,'make-decision',['--start-ref='+f2.session+'#seq=9']);assert.equal(refused.status,2);assert.match(refused.stderr,/start-ref cannot reset an existing ledger/);assert.equal(readFileSync(f2.ledger,'utf8'),unchanged);
+});
+
+// N3 residual TCR: independent review 2026-10-16-430; source failures reject
+// publication while ordinary incremental missing-source coverage above stays intact.
+for(const mode of ['first','reopen'])for(const fault of ['malformed-tail','version-mismatch'])test('LEDGER '+mode+' rejects selected source '+fault+' after valid user without publishing',t=>{
+ const f=setup(t);let before;
+ if(mode==='reopen'){
+  ok(first(f));const valid=readLedger(f);before=valid.raw.replace('| '+valid.rows[0][2]+' |','| unavailable:task_start_unavailable |').replace('| '+valid.rows[0][4]+' |','| unavailable:task_start_unavailable |');writeFileSync(f.ledger,before);
+ }
+ if(fault==='malformed-tail')appendFileSync(f.session,'{invalid json}\n');
+ else{f.records[0].version=3;put(f.session,f.records);}
+ const result=first(f);assert.equal(result.status,1,result.stderr);assert.match(result.stderr,/本阶段无记录/);assert.match(result.stderr,fault==='malformed-tail'?/invalid_json/:/filename\/header version mismatch/);assert.doesNotMatch(result.stdout,/已发布一条/);
+ if(mode==='reopen')assert.equal(readFileSync(f.ledger,'utf8'),before,'historic poisoned row remains byte-identical');
+ else assert.equal(existsSync(f.ledger),false,'selected source integrity failure must not publish first row');
 });
 test('SOURCE material bytes use authenticated checkout/index only, never main or post plan/tasks',t=>{
  const f=setup(t);writeFileSync(join(f.materials,'plan.md'),'POISON'.repeat(100));writeFileSync(join(f.materials,'tasks.md'),'POISON'.repeat(100));ok(first(f));const expected=Object.values(f.materialText).reduce((sum,text)=>sum+Buffer.byteLength(text),0);numeric(readLedger(f).rows[0][23],expected);

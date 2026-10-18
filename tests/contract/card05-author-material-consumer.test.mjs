@@ -94,9 +94,9 @@ test('ORACLE-P11-AUTHOR-G2 mixed executable scope cannot use pure-document excep
 });
 
 test.each([
-  ['comment method','`config/method.yaml`（仅注释方法）',true],
-  ['comma separated docs','`config/method.yaml`（仅注释方法）, `docs/owned.md`',true],
-  ['Chinese separator and read anchor','`config/method.yaml`（仅注释方法）；只读锚点 runtime/publish.mjs:20',true],
+  ['comment method','`config/method.yaml`（仅注释方法）',false],
+  ['comma separated docs','`config/method.yaml`（仅注释方法）, `docs/owned.md`',false],
+  ['Chinese separator and read anchor','`config/method.yaml`（仅注释方法）；只读锚点 runtime/publish.mjs:20',false],
   ['data fields','`config/method.yaml`（数据字段）',false],
   ['comma data conflict','`config/method.yaml`（仅注释方法）, 修改数据字段',false],
   ['semicolon data conflict','`config/method.yaml`（仅注释方法）；修改数据字段',false],
@@ -115,14 +115,24 @@ test.each([
     field(m,phase2,'Write set',paths);m.index=m.index.replace('`docs/owned.md`',paths);
     m.spec=m.spec.replaceAll('docs/owned.md','config/method.yaml');
   },'P2');
-  expect(f.parsed.ok,f.parsed.errors.join('\n')).toBe(accepted);
-  const bundle=f.bundle();try{expect(sourceFacts(bundle).contract_ok).toBe(accepted);}finally{bundle.dispose();}
+  const bundle=f.bundle();try{
+    const facts=sourceFacts(bundle);
+    expect(f.parsed.ok,f.parsed.errors.join('\n')).toBe(accepted);
+    expect(facts.contract_ok).toBe(accepted);
+    if (['comment method','comma separated docs','Chinese separator and read anchor'].includes(_name)) {
+      for (const errors of [f.parsed.errors,facts.contract_errors]) {
+        expect(errors).toContain('phases/P2-文档核对.md T002 G-2 missing concrete documentation-only owned write set');
+        expect(errors).toContain('phases/P2-文档核对.md T002 expected_exit must distinguish RED target failure from GREEN 0');
+      }
+      for (const actual of [f.parsed.facts,facts]) expect(actual.command_oracle_checks.valid).toBe(false);
+    }
+  }finally{bundle.dispose();}
 });
 
 test.each([
   ['Action','将 config/method.yaml 的 enabled 数据字段改为 false。',false],
   ['Outputs / failure','config/method.yaml 的 enabled 数据字段更新为 false；失败时保留错误。',false],
-  ['Action','不修改数据字段，仅调整注释方法文字。',true],
+  ['Action','不修改数据字段，仅调整注释方法文字。',false],
 ])('ORACLE-G2-YAML cross-field %s declaration conflicts are projected',async(name,value,accepted)=>{
   const f=await fixture(m=>{
     m.phases[phase2]=m.phases[phase2].replaceAll('docs/owned.md','config/method.yaml');
@@ -130,6 +140,66 @@ test.each([
     field(m,phase2,name,value);
     m.index=m.index.replace('docs/owned.md','config/method.yaml');m.spec=m.spec.replaceAll('docs/owned.md','config/method.yaml');
   },'P2');
-  expect(f.parsed.ok,f.parsed.errors.join('\n')).toBe(accepted);
-  const bundle=f.bundle();try{expect(sourceFacts(bundle).contract_ok).toBe(accepted);}finally{bundle.dispose();}
+  const bundle=f.bundle();try{
+    const facts=sourceFacts(bundle);
+    expect(f.parsed.ok,f.parsed.errors.join('\n')).toBe(accepted);
+    expect(facts.contract_ok).toBe(accepted);
+    if (name === 'Action' && value === '不修改数据字段，仅调整注释方法文字。') {
+      for (const errors of [f.parsed.errors,facts.contract_errors]) {
+        expect(errors).toContain('phases/P2-文档核对.md T002 G-2 missing concrete documentation-only owned write set');
+        expect(errors).toContain('phases/P2-文档核对.md T002 expected_exit must distinguish RED target failure from GREEN 0');
+      }
+      for (const actual of [f.parsed.facts,facts]) expect(actual.command_oracle_checks.valid).toBe(false);
+    }
+  }finally{bundle.dispose();}
+});
+
+// N3 current contract: G-2 exempts only owned .md paths; YAML remains legal
+// under the ordinary behavioral RED/GREEN contract. These check material facts,
+// not execution of the declared command or YAML business behavior.
+test.each([
+  ['pure .md G-2',false],
+  ['ordinary YAML with RED nonzero and GREEN 0',true],
+])('ORACLE-N3-G2-MD-ONLY %s retains parser and real source.json acceptance',async(_name,yamlBehavior)=>{
+  const f=await fixture(m=>{
+    if (!yamlBehavior) return;
+    m.phases[phase2]=m.phases[phase2].replaceAll('docs/owned.md','config/method.yaml');
+    m.index=m.index.replace('docs/owned.md','config/method.yaml');
+    m.spec=m.spec.replaceAll('docs/owned.md','config/method.yaml');
+    field(m,phase2,'expected_exit','RED nonzero; GREEN 0；正常行为合同，不申请G-2免RED。');
+    field(m,phase2,'Inputs','配置输入 enabled=true；配置加载器读取 config/method.yaml。');
+    field(m,phase2,'Scenario / fixture or service','配置加载器读取 enabled=false 时拒绝启动；旧实现仍启动。');
+    field(m,phase2,'Action','将 enabled 配置改为 false，执行加载器并验证拒绝启动。');
+    field(m,phase2,'RED target failure','ORACLE-EXAMPLE-DOC 断言 disabled 配置必须拒绝启动；旧实现仍启动。');
+    field(m,phase2,'GREEN oracle','ORACLE-EXAMPLE-DOC disabled 配置加载器拒绝启动。');
+  },'P2');
+  expect(f.parsed.ok,f.parsed.errors.join('\n')).toBe(true);
+  expect(f.parsed.errors).toEqual([]);
+  expect(f.parsed.facts.command_oracle_checks.valid).toBe(true);
+  const bundle=f.bundle();try{
+    const facts=sourceFacts(bundle);
+    expect(facts.contract_ok).toBe(true);
+    expect(facts.contract_errors).toEqual([]);
+    expect(facts.command_oracle_checks.valid).toBe(true);
+  }finally{bundle.dispose();}
+});
+
+// A behavioral exit label cannot override an explicit pure-document G-2 request.
+test('ORACLE-N3-G2-MD-ONLY pure-document YAML with behavioral exit remains rejected',async()=>{
+  const f=await fixture(m=>{
+    m.phases[phase2]=m.phases[phase2].replaceAll('docs/owned.md','config/method.yaml');
+    m.index=m.index.replace('docs/owned.md','config/method.yaml');
+    m.spec=m.spec.replaceAll('docs/owned.md','config/method.yaml');
+    field(m,phase2,'expected_exit','RED nonzero; GREEN 0；正常行为合同，不申请G-2免RED。');
+  },'P2');
+  const diagnostic='phases/P2-文档核对.md T002 G-2 missing concrete documentation-only owned write set';
+  const bundle=f.bundle();try{
+    const facts=sourceFacts(bundle);
+    expect(f.parsed.ok).toBe(false);
+    expect(f.parsed.errors).toContain(diagnostic);
+    expect(f.parsed.facts.command_oracle_checks.valid).toBe(false);
+    expect(facts.contract_ok).toBe(false);
+    expect(facts.contract_errors).toContain(diagnostic);
+    expect(facts.command_oracle_checks.valid).toBe(false);
+  }finally{bundle.dispose();}
 });

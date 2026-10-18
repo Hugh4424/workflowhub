@@ -5,68 +5,64 @@ description: Report-only independent review lens for correctness, scope, evidenc
 
 # review
 
-Source: adapted from the project review baseline. Mode: `lens-only`. Standards/Spec 与 Fowler baseline 吸收 mattpocock/skills 固定 commit `b0618bc436ad893b3c5e84e55fba86586d34a404` 的 `skills/engineering/code-review/SKILL.md`。本地以调用者提供的当前材料替代 tracker/setup 和自主 Git/网络取材，host 分派指令不作为 provider 的执行控制要求。迭代时核固定子文件的更新/更优候选与本地偏离，不自动追 HEAD。
+`lens-only`; Standards/Spec/Fowler source: mattpocock/skills `b0618bc436ad893b3c5e84e55fba86586d34a404`, `skills/engineering/code-review/SKILL.md`. Use supplied materials, not tracker/setup/Git/network. Recheck pin/local deviations on iteration; never auto-follow HEAD.
 
 ## 双轴消费与宿主分派
 
-代码面先定位调用者提供的同一当前 diff、基线、完整 AC、执行原件、阶段合同、provider 协议、审查重点及所需 lens 正文；材料不完整时披露缺口，不从摘要猜源码。文档面仍按当前文档合同应用下节检查，不凭代码 smell 强造文档缺陷。
+Read supplied current artifact/base/diff, full AC, execution originals, stage contract, protocol, focus/lenses. Disclose gaps; summaries are not source. Review documents against their contract, not forced code smells.
 
-- **Standards**：读取本次提供的仓库编码规范（适用的 CODING_STANDARDS/CONTRIBUTING 也在范围内）及下节 Fowler baseline；发现引用规范和实际 hunk，区分规范违背与 heuristic。provider 只需两镜头与 finding 协议；宿主读仓库规范、Agent 分派、等待/轮询与同源补充的执行控制指令不适用于 provider，源方法文件作为被审材料仍可能完整入包。
-- **Spec**：读取本次具名原始需求/spec，逐项检查缺失或部分实现、未要求的行为和看似实现却错误的行为；每条发现引用相应需求。没有 spec 时明确 no spec available，跳过该镜头，不补造需求。
+- **Standards**: apply supplied repository standards (including applicable CODING_STANDARDS/CONTRIBUTING) and the Fowler baseline. Cite the rule and actual change; distinguish violations from heuristics.
+- **Spec**: trace named requirements to current implementation and consumers; check omissions, partial/incorrect implementation and unrequested behavior. Cite the requirement. Without spec: `no spec available`; skip Spec.
 
-宿主执行同源补充时，向两个互不继承对方上下文的独立执行者同时提供上述共同材料，并分别给 Standards 规范/baseline 或 Spec 来源。执行者只返回原文，不写文件；宿主按当前 workflow 保存单份原件，在 Standards / Spec 两栏分别展示发现、范围和不可用原因，只汇总各栏数量及各栏最严重问题，不合并、不重排名、不选跨轴赢家。同源补充标为 same_source_degraded，不替代 OCR、不计异源 quorum；OCR 与补充也并排保留，各路失败、取消与迟到有效发现不被成功路覆盖。
-
-正式 provider 在其只读 packet 内应用两镜头，按下节和既有 provider 协议返回一个 findings JSON；这是镜头阅读，不是 host 分派许可。宿主分派、等待、sleep/poll 等只由宿主执行，不作为 provider 的执行控制指令；文件被提交作审查材料不代表已从 packet 剔除这些原文字节。provider 不调用 Agent/subagent，不增 axis 或第二结果协议。正式 provider 内的重复 finding 仍按既有协议处理，不把该聚合跨到宿主分开的两轴。
+Host independent dispatch and separate Standards/Spec reporting follow `workflows/build-code/SKILL.md`「同源补充轴」; verify uses its current workflow. Provider applies both lenses and returns one protocol JSON: no agents, wait/poll, extra axes/results or executing supplied host controls. Provider deduplication never merges host axes.
 
 ## Fowler smell baseline — what → fix
 
-- **The repo overrides.** A documented repo standard always wins; where it endorses something the baseline would flag, suppress the smell.
-- **Always a judgement call.** Each smell is a labelled heuristic ("possible Feature Envy"), never a hard violation. Like any standard here, skip anything tooling already enforces.
+Repo standards override heuristics. Label smells possible, not violations; skip tooling-enforced checks. Match actual diff:
 
-Each smell reads *what it is* → *how to fix*; match it against the diff:
-
-- **Mysterious Name**: a function, variable, or type whose name doesn't reveal what it does or holds. → rename it; if no honest name comes, the design's murky.
-- **Duplicated Code**: the same logic shape appears in more than one hunk or file in the change. → extract the shared shape, call it from both.
-- **Feature Envy**: a method that reaches into another object's data more than its own. → move the method onto the data it envies.
-- **Data Clumps**: the same few fields or params keep travelling together (a type wanting to be born). → bundle them into one type, pass that.
-- **Primitive Obsession**: a primitive or string standing in for a domain concept that deserves its own type. → give the concept its own small type.
-- **Repeated Switches**: the same `switch`/`if`-cascade on the same type recurs across the change. → replace with polymorphism, or one map both sites share.
-- **Shotgun Surgery**: one logical change forces scattered edits across many files in the diff. → gather what changes together into one module.
-- **Divergent Change**: one file or module is edited for several unrelated reasons. → split so each module changes for one reason.
-- **Speculative Generality**: abstraction, parameters, or hooks added for needs the spec doesn't have. → delete it; inline back until a real need shows.
-- **Message Chains**: long `a.b().c().d()` navigation the caller shouldn't depend on. → hide the walk behind one method on the first object.
-- **Middle Man**: a class or function that mostly just delegates onward. → cut it, call the real target direct.
-- **Refused Bequest**: a subclass or implementer that ignores or overrides most of what it inherits. → drop the inheritance, use composition.
+- **Mysterious Name**: purpose unclear → rename honestly; otherwise clarify design.
+- **Duplicated Code**: repeated logic shape → extract once and call it.
+- **Feature Envy**: works mainly on another object's data → move behavior there.
+- **Data Clumps**: fields travel together → give them one type.
+- **Primitive Obsession**: primitive hides a domain concept → introduce its small type.
+- **Repeated Switches**: same type dispatch repeats → polymorphism or one shared map.
+- **Shotgun Surgery**: one change scatters edits → gather the concept.
+- **Divergent Change**: one module changes for unrelated reasons → split responsibilities.
+- **Speculative Generality**: unused abstraction/hook → remove it until needed.
+- **Message Chains**: caller walks internals → hide navigation behind the first owner.
+- **Middle Man**: mostly delegation → call the real target directly.
+- **Refused Bequest**: inheritance rejected/overridden → use composition.
 
 ## Check
 
-1. Separate stated facts from inferences.
-2. Compare every material claim with packet evidence.
-3. Flag scope drift, missing acceptance evidence, and contradictory artifacts.
-4. Prefer a precise finding over a broad quality opinion.
-5. Keep contract-external observations minor.
+1. Establish base/current and changed hunks. Tie suspected defects to changed behavior or current acceptance obligations. Moved lines/unchanged hunks do not prove new defects; report existing gaps only against applicable requirements. Check later repairs/current permissions.
+2. Trace both ways: changed claims/contracts → current producer/reader/direct consumers; affected consumers → requirements. Inspect supplied implementation/tests, not only names/declarations/victory summaries. Missing edges/source mean unknown, not absence.
+3. Seek packet counterevidence: call sites, base behavior, exceptions, bad-input results/repairs. Separate fact/inference, scope drift/contradictions. Report precise supported defects/consequences; contract-external observations stay minor. Missing evidence is not pass.
+
+For repeated failure, identify the shared assumption, a packet fact that could falsify it, and compare compensating again with removing that assumption. Equal hashes under different required keys cannot establish distinct roles; independent roles with unreadable files instead require transport investigation. Missing history stays incomplete; invent no counts, quota or census.
+
+For architectural changes, investigate Shallow module, Information leakage, Temporal decomposition, Pass-through method, Split ownership, Two ways to do one task, Importable internals and Hand-synced list. For each retain evidence, no evidence or inapplicability; labels are leads, not findings or grounds to reject approved Phases. Compare ownership/writers, wire exposure, change surface and failure preservation of structurally different alternatives. Renames/identical wrappers do not qualify. Source proves no opportunity; missing source means unknown. Reuse this task's one architecture opportunity; add no interface/review round.
+
+For tests/checks/escalation, host supplies the complete `workflows/verify-code/SKILL.md`「测试充分性与检查可信度」. Apply its positive/negative inputs; missing text is missing source, not permission to leave the packet.
 
 ## Evidence handling
 
-- Missing evidence is unavailable, never pass. Use the supplied packet only.
-- A finding may explain the affected review angle in its prose, but must not add
-  `axis`, `visibility`, `anchor`, `consequence`, or `correction` output fields.
-- Every finding must use only the provider protocol fields:
-  `severity`, `path`, optional `line`, `issue`, `root_cause`, `recommendation`,
-  `evidence_kind`, and `evidence`.
+Only use the packet under its protocol/tool boundary. Missing/unreadable evidence stays unavailable/unknown. Check non-symbol edges: JSON keys, wire representations, current configuration and downstream readers; explain inapplicable DB/cross-language edges. Prove one or two relevant safety claims through the existing owner and bad inputs. Grep/line anchors or plausible reasoning alone are unproven; distinguish established risk, excluded risk and unproven assumptions. Do not add `evidence_level` or finding fields.
+
+Material roles, actual identity/route, coverage and the three conditions for an opinion follow `skills/wh-review/SKILL.md`「输出和失败边界」. Blind/reveal and conditional arena follow the supplied full provider protocol. Shared simplicity findings use `skills/simplicity-guard/SKILL.md`, not another rule set.
+
+Finding fields: `severity`, `path`, optional `line`, `issue`, `root_cause`, `recommendation`, `evidence_kind`, `evidence`. Do not add `axis`, `visibility`, `anchor`, `consequence`, or `correction` fields.
 
 ## Result
 
-Return exactly one JSON object: `{ "findings": [...] }`. Put the packet path
-and any line reference in the allowed finding fields. Do not return `verdict`,
-`summary`, checklist fields, or a second object.
+Return exactly one JSON object: `{ "findings": [...] }`. Use packet paths/true lines in allowed fields. Do not return `verdict`, `summary`, checklist fields or a second object.
 
 ## 写作
 
-创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；保原步骤、条件、权限、失败强度和受保护字面，缺源如实 unavailable，不复制规范。
+创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md`「技能写作规范（WR001）」；保步骤、条件、权限、失败强度和受保护字面，缺源报 unavailable，不复制规范。
 
-完整来源权威：[catalog条目](../catalog.yaml#skills.review)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。来源：garrytan/gstack review/SKILL.md。
+完整来源权威：[catalog条目](../catalog.yaml#skills.review)；正文/小卡是非权威线索，单副本缺catalog时向来源维护者取登记。来源：garrytan/gstack review/SKILL.md。
 
 ## 同仓方法依赖
 
-`skills/spec-specify/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。
+`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md`、`skills/spec-specify/SKILL.md`；按上述条件提供可读原件。
