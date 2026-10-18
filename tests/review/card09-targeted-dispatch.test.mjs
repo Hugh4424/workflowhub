@@ -167,6 +167,11 @@ test.each([false,true])("public code supplement selects only failed A and final 
       expect(Array.isArray(diagnostic)).toBe(false);
       expect(Object.getPrototypeOf(diagnostic)).toBe(Object.prototype);
       expect(diagnostic).toStrictEqual({field:"approved_spec",expected:"non-empty caller material",actual:"missing",next_action:"supply current material and retry"});
+    } else if(mode==="route conflict"||mode==="invalid parse"){
+      expect(observed.diagnostic).toStrictEqual({field:"materials/route",expected:"current task-bound materials and trusted route",actual:"invalid",next_action:"repair the reported input or route before dispatch"});
+      expect(observed.dispatch_state).toBe("blocked_before_dispatch");
+    } else if(mode==="wrong lifecycle"){
+      expect(observed.diagnostic).toStrictEqual({field:"stage/review_track/review_kind/review_scope",expected:"one valid existing review lifecycle tuple",actual:"{\"stage\":\"build-code\",\"review_track\":null,\"review_kind\":null,\"review_scope\":\"wrong\"}",next_action:"use the current stage's declared review track, kind and scope"});
     }
   }
   for(const mode of ["outside root","symlink","hardlink","wrong hash","wrong task","completed C"]){
