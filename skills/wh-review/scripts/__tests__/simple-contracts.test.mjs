@@ -61,10 +61,10 @@ function reviewGroup(selection, output, { provider = selection.providers[0], ...
   };
 }
 
-function runnerDependencies({ selection, minimum = 1, bundleRoot = root, deliveryManifest = [], group, calls = [] } = {}) {
+function runnerDependencies({ selection, bundleRoot = root, deliveryManifest = [], group, calls = [] } = {}) {
   return {
     loadConfig: () => ({ whReview: {}, attachmentRoot: bundleRoot, config: "/unused/config.json", command: ["unused"] }),
-    resolveRoute: () => ({ initial: [...selection.providers], mode: "single_round", minimum_heterologous: minimum }),
+    resolveRoute: () => ({ initial: [...selection.providers], mode: "single_round" }),
     selectProviders: () => selection,
     buildBundle: () => ({ bundleRoot, materialId: hash, deliveryManifest, dispose() {} }),
     client: { async runGroup() { calls.push("run"); return group ?? reviewGroup(selection, JSON.stringify({ findings: [] })); } },
@@ -257,7 +257,6 @@ describe("simple wh-review contracts", () => {
     const calls = [];
     const dependencies = runnerDependencies({
       selection,
-      minimum: 2,
       calls,
       group: reviewGroup(selection, JSON.stringify({ findings: [] }), { provider: healthyProvider }),
     });

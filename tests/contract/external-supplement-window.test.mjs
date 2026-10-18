@@ -193,7 +193,7 @@ describe("external review publication and supplement window", () => {
       materials: { implementation: "current" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot: root }),
-      resolveRoute: () => ({ initial: ["kimi/shared"], mode: "full_only", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["kimi/shared"], mode: "full_only" }),
       selectProviders: () => ({
         providers: ["kimi/shared"],
         eligibleProfiles: ["kimi/shared"],
@@ -251,7 +251,7 @@ describe("external review publication and supplement window", () => {
       materials: { implementation: "current" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot: root }),
-      resolveRoute: () => ({ initial: ["kimi/shared"], mode: "full_only", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["kimi/shared"], mode: "full_only" }),
       selectProviders: () => ({
         providers: ["kimi/shared"],
         eligibleProfiles: ["kimi/shared"],

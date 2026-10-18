@@ -178,7 +178,7 @@ describe("wh-review production CLI", () => {
         [field]: value,
       }, {
         loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot: realpathSync(mkdtempSync(join(tmpdir(), "wh-review-retired-"))), command: ["unused"] }),
-        resolveRoute: () => ({ initial: ["other"], mode: "single_round", minimum_heterologous: 1 }),
+        resolveRoute: () => ({ initial: ["other"], mode: "single_round" }),
         selectProviders: () => ({ providers: ["other"], provider_models: { other: "other-model" } }),
         client: {
           async runGroup() {
@@ -196,7 +196,7 @@ describe("wh-review production CLI", () => {
       materials: { raw: "current", response_ledger: {} },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot: realpathSync(mkdtempSync(join(tmpdir(), "wh-review-ledger-"))), command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["other"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["other"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["other"], provider_models: { other: "other-model" } }),
       client: {
         async runGroup() {
@@ -265,7 +265,7 @@ describe("wh-review production CLI", () => {
       materials: { raw: "x", scope_revision: {} },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot: realpathSync(mkdtempSync(join(tmpdir(), "wh-review-scope-"))), command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["other"], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: ["other"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["other"], provider_models: { other: "other-model" } }),
       client: {
         async runGroup() {
@@ -288,7 +288,7 @@ describe("wh-review production CLI", () => {
         [field]: { opencode: "old-runtime" },
       }, {
         loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot: realpathSync(mkdtempSync(join(tmpdir(), "wh-review-runtime-"))), command: ["unused"] }),
-        resolveRoute: () => ({ initial: ["other"], mode: "single_round", minimum_heterologous: 1 }),
+        resolveRoute: () => ({ initial: ["other"], mode: "single_round" }),
         selectProviders: () => ({ providers: ["other"], provider_models: { other: "other-model" } }),
         client: {
           async runGroup() {
@@ -718,7 +718,7 @@ process.stdout.write(JSON.stringify({
       third_review: { command: [process.execPath, broker], config: brokerConfig, attachment_root: packetRoot },
       wh_review: {
         version: 2,
-        stages: { "make-decision": { direction: { initial: ["kimi"], minimum_heterologous: 1, mode: "single_round" } } },
+        stages: { "make-decision": { direction: { initial: ["kimi"], mode: "single_round" } } },
       },
     }));
     const inputPath = join(root, "input.json");

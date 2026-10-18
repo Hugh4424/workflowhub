@@ -99,3 +99,15 @@ test("Kimi Code does not add a provider wall-clock timeout", () => {
     fs.rmSync(cwd, { recursive: true, force: true });
   }
 });
+
+test("Kimi Code passes profile thinking and effort to the native configuration environment", () => {
+ const cwd=fs.mkdtempSync(path.join(os.tmpdir(),"kimi-thinking-plan-"));
+ try {
+  for(const [settings,expected] of [[{thinking:true,effort:"max"},"max"],[{thinking:true},"on"],[{thinking:false},"off"],[{effort:"high"},"high"]]) {
+   const configured={...provider,thinking:null,...settings};
+   assert.equal(kimi.start(configured,cwd,"review").env.KIMI_MODEL_THINKING_EFFORT,expected);
+   assert.equal(kimi.resume(configured,cwd,session,"review").env.KIMI_MODEL_THINKING_EFFORT,expected);
+  }
+  assert.throws(()=>kimi.start({...provider,thinking:false,effort:"max"},cwd,"review"),error=>error.code==="PROVIDER_OPTION_UNSUPPORTED");
+ }finally{fs.rmSync(cwd,{recursive:true,force:true});}
+});

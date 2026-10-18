@@ -303,20 +303,14 @@ function requestedProfileNames(value, { requestedStage = null, requestedTrack = 
 
 function route(value, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(label + " must be an object");
-  for (const key of Object.keys(value)) if (!["initial", "closure", "mode", "minimum_heterologous"].includes(key)) throw new Error(label + "." + key + " is not supported");
+  if (Object.hasOwn(value, "minimum_heterologous")) throw new Error(label + ".minimum_heterologous is retired; remove it from the active route configuration");
+  for (const key of Object.keys(value)) if (!["initial", "closure", "mode"].includes(key)) throw new Error(label + "." + key + " is not supported");
   const mode = value.mode ?? "adaptive";
   if (!REVIEW_MODES.has(mode)) throw new Error(label + ".mode is invalid");
   const initial = profileList(value.initial, label + ".initial");
   const closure = value.closure === undefined ? null : profileList(value.closure, label + ".closure");
   if (mode !== "adaptive" && closure !== null) throw new Error(label + ".closure is supported only for adaptive");
-  if (Object.hasOwn(value, "minimum_heterologous")
-      && (!Number.isSafeInteger(value.minimum_heterologous) || value.minimum_heterologous < 1)) {
-    throw new Error(label + ".minimum_heterologous must be an explicit positive integer");
-  }
-  return {
-    initial, ...(closure ? { closure } : {}), mode,
-    ...(Object.hasOwn(value, "minimum_heterologous") ? { minimum_heterologous: value.minimum_heterologous } : {}),
-  };
+  return { initial, ...(closure ? { closure } : {}), mode };
 }
 
 function validateRouteProfiles(route, profiles, label) {

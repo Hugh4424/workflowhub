@@ -113,7 +113,7 @@ function nativeFixture() {
   writeFileSync(join(hostDir, "config.json"), JSON.stringify({
     task_dir: root,
     third_review: { command: [join(root, "missing-wh-review-broker")], config: configPath, attachment_root: attachmentRoot },
-    wh_review: { version: 2, stages: { "build-code": { initial: ["codex/a","codex/b","codex/c"], mode: "full_only", minimum_heterologous: 1 } } },
+    wh_review: { version: 2, stages: { "build-code": { initial: ["codex/a","codex/b","codex/c"], mode: "full_only" } } },
   }));
   const task = openTask(taskDir, { projectName: "workflowhub", taskId });
   return { root, home, taskId, taskDir, worktreeRoot, task };

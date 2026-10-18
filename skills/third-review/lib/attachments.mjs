@@ -159,37 +159,6 @@ export function prepareCheckedAttachments(checked, runtime, provider) {
   return { cwd, ...checked };
 }
 export function prepareAttachments(input, runtime, provider, maxBytes, roots) { return prepareCheckedAttachments(validateAttachments(input, maxBytes, roots), runtime, provider); }
-// Private packet preparation for the broker's existing single-provider owner.
-// Each step has an independent real root; the complete submitted packet is never
-// the reconstruction workspace, including through its manifest or instructions.
-export function prepareDirectionReviewStep(checked, runtime, provider, step, observations = {}, writable = false) {
-  if (!["reconstruct", "reveal", "challenge"].includes(step)) fail("MATERIAL_INCOMPLETE", "unknown direction review step");
-  const original = checked.content_entries;
-  const selected = original.filter(({ target }) => step === "reconstruct"
-    ? /^materials\/[0-9]+-(?:raw_requirement|objective_facts)\.(?:md|json)$/.test(target)
-      || ["contracts/make-decision.md", "contracts/provider-protocol.md"].includes(target)
-    : !["manifest.json", "review-instructions.md"].includes(target));
-  if (step === "reconstruct" && !["raw_requirement", "objective_facts"].every(name => selected.some(({ target }) => new RegExp("^materials/[0-9]+-" + name + "\\.(?:md|json)$").test(target)))) {
-    fail("MATERIAL_INCOMPLETE", "blind reconstruction requires original requirement and objective facts");
-  }
-  const values = selected.map(entry => ({ ...entry }));
-  for (const [name, text] of Object.entries(observations)) {
-    if (!["independent-reconstruction", "reveal-observation"].includes(name) || typeof text !== "string" || !text.trim()) fail("MATERIAL_INCOMPLETE", "direction observation is missing");
-    const target = `direction-${name}.json`, contents = Buffer.from(text);
-    values.push({ source: target, target, contents, size: contents.length, sha256: digest(contents), embed: checked.requested_delivery === "always_embed" });
-  }
-  const files = records(values), bundle_id = `${checked.bundle_id}-${step}`;
-  const projected = { ...checked, bundle_id, content_entries: values, entries: values.map(({ contents, ...entry }) => entry), files,
-    manifest_hash: canonicalMaterialManifestHash(bundle_id, files), material_id: canonicalWorkflowHubMaterialId(files), total_bytes: values.reduce((sum, entry) => sum + entry.size, 0) };
-  const key = `${provider}-direction-${step}`;
-  const directories = [path.join(runtime, "work", storageKey(key)), path.join(runtime, "workspace", storageKey(key))];
-  const dispose = () => { for (const directory of directories) if (fs.existsSync(directory)) { unlockTree(directory); fs.rmSync(directory, { recursive: true, force: true }); } };
-  try {
-    const stored = prepareCheckedAttachments(projected, runtime, key);
-    const cwd = writable ? prepareWritableAttachmentView(runtime, key, stored).cwd : stored.cwd;
-    return { checked: projected, stored, cwd, dispose };
-  } catch (error) { dispose(); throw error; }
-}
 // A managed review must survive the process that supplied its source packet.
 // Freeze one broker-private, source-shaped copy before the detached manager is
 // started.  Later provider-specific copies still use prepareCheckedAttachments

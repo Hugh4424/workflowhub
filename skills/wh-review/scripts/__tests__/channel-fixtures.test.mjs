@@ -96,7 +96,7 @@ function pairedDependencies(root, groupForRole, pairId) {
   return {
     pairId,
     loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot: root, command: ["unused"] }),
-    resolveRoute: () => ({ initial: ["model-a", "model-b"], mode: "single_round", minimum_heterologous: 1 }),
+    resolveRoute: () => ({ initial: ["model-a", "model-b"], mode: "single_round" }),
     selectProviders: () => ({ providers: ["model-a", "model-b"] }),
     client: {
       async runGroup(request) {

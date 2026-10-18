@@ -306,7 +306,7 @@ describe("managed review lifecycle boundary", () => {
       stage: "verify-code", host_provider: "codex", materials: { implementation: "managed source drift bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round" }),
       selectProviders: () => ({ providers: [managedProvider], provider_identities: {
         [managedProvider]: { source_id: "review/source", config_id: "review-config" },
       }, provider_models: { [managedProvider]: "review-model" } }),
@@ -336,7 +336,7 @@ describe("managed review lifecycle boundary", () => {
       stage: "verify-code", host_provider: "codex", materials: { implementation: "managed source drift bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round" }),
       selectProviders: () => ({ providers: [managedProvider], provider_identities: {
         [managedProvider]: { source_id: "review/source", config_id: "review-config" },
       }, provider_models: { [managedProvider]: "review-model" } }),
@@ -386,7 +386,7 @@ describe("managed review lifecycle boundary", () => {
       materials: { implementation: "managed runner bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round" }),
       selectProviders: () => ({
         providers: [managedProvider],
         provider_identities: { [managedProvider]: { source_id: "review/source", config_id: "review-config" } },
@@ -432,7 +432,7 @@ describe("managed review lifecycle boundary", () => {
       stage: "verify-code", host_provider: "codex", materials: { implementation: "managed runner bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round" }),
       selectProviders: () => ({ providers: [managedProvider], provider_identities: {
         [managedProvider]: { source_id: "review/source", config_id: "review-config" },
       }, provider_models: { [managedProvider]: "review-model" } }),
@@ -528,7 +528,7 @@ describe("managed review lifecycle boundary", () => {
       stage: "verify-code", host_provider: "codex", materials: { implementation: "managed member health bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round" }),
       selectProviders: () => ({ providers: [managedProvider], provider_identities: {
         [managedProvider]: { source_id: "review/source", config_id: "review-config" },
       }, provider_models: { [managedProvider]: "review-model" } }),
@@ -566,7 +566,7 @@ describe("managed review lifecycle boundary", () => {
       stage: "verify-code", host_provider: "codex", materials: { implementation: "managed runner bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round" }),
       selectProviders: () => ({ providers: [managedProvider], provider_identities: {
         [managedProvider]: { source_id: "review/source", config_id: "review-config" },
       }, provider_models: { [managedProvider]: "review-model" } }),
@@ -595,7 +595,7 @@ describe("managed review lifecycle boundary", () => {
       stage: "verify-code", host_provider: "codex", materials: { implementation: "managed runner bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round" }),
       selectProviders: () => ({ providers: [managedProvider], provider_identities: {
         [managedProvider]: { source_id: "review/source", config_id: "review-config" },
       }, provider_models: { [managedProvider]: "review-model" } }),
@@ -657,7 +657,7 @@ describe("managed review lifecycle boundary", () => {
     }, {
       signal: controller.signal,
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round" }),
       selectProviders: () => ({ providers: [managedProvider], provider_identities: {
         [managedProvider]: { source_id: "review/source", config_id: "review-config" },
       }, provider_models: { [managedProvider]: "review-model" } }),
@@ -702,7 +702,7 @@ describe("managed review lifecycle boundary", () => {
       stage: "verify-code", host_provider: "codex", materials: { implementation: "managed final recheck bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round" }),
       selectProviders: () => ({ providers: [managedProvider], provider_identities: {
         [managedProvider]: { source_id: "review/source", config_id: "review-config" },
       }, provider_models: { [managedProvider]: "review-model" } }),
@@ -804,7 +804,7 @@ console.log(JSON.stringify(envelope));
     let settled = false;
     const promise = runSimpleReview({ stage: "verify-code", materials: { implementation: "owned managed lifecycle bytes" } }, {
       loadConfig: () => ({ whReview: {}, config: configPath, attachmentRoot, command: [process.execPath, cli] }),
-      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round" }),
       selectProviders: () => ({ providers: [managedProvider], provider_identities: { [managedProvider]: { source_id: "review/source", config_id: "review-config" } }, provider_models: { [managedProvider]: "review-model" } }),
       client, signal: controller.signal, managedStatusPollMs: 10,
     }).finally(() => { settled = true; });
@@ -1062,7 +1062,7 @@ console.log(JSON.stringify(envelope));
       stage: "verify-code", host_provider: "codex", materials: { implementation: "managed v3 runner bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round" }),
       selectProviders: () => ({ providers: [managedProvider], provider_identities: {
         [managedProvider]: { source_id: "review/source", config_id: "review-config" },
       }, provider_models: { [managedProvider]: "review-model" } }),
@@ -1101,7 +1101,7 @@ console.log(JSON.stringify(envelope));
       },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round", minimum_heterologous: 1 }),
+      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round" }),
       selectProviders: () => ({ providers: [managedProvider], provider_identities: {
         [managedProvider]: { source_id: "review/source", config_id: "review-config" },
       }, provider_models: { [managedProvider]: "review-model" } }),

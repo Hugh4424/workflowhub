@@ -702,3 +702,8 @@ decision模块⑤明确放弃“提升为给agent的总规则”。P5唯一正�
 ### 2026-10-18 适用条件澄清来源
 
 AC-007公开观察/条件登录与AC-009原N1支持范围按本任务D-015及用户原件 `quality/evidence/human-confirmations/2026-10-18-001-acceptance-conditional-clarification-approval.json` 更新；精确提案为 `quality/evidence/2026-10-18-165-acceptance-conditional-clarification-proposal.md`。原生命周期/票据冻结oracle、收益阈值、连续三对、质量不降和失败分母不变，历史失败不改。
+
+
+### 当前用户批准的 main 审查实现整合
+
+用户批准原件 `quality/evidence/human-confirmations/2026-10-18-002-main-review-integration-approval.json` 对应 main `8e41f1ae470e8bfe4b9a8d419f7963f646e8d2db`。P2承接该提交28个具名审查路径和现有 attachments helper 的退役；精确写集/唯一 owner、真实 caller、替代关系、清理条件见 P2「用户批准接入 main 审查修复」。OCR adapter 仍由现有 stage-runtime 代码审查入口直接消费，Kimi/process 沿既有 native/broker consumer；不新增公共动作、持久对象或配置写入。direction 统一主线正常执行链并保 N3 已验证合同，退役字段拒绝不恢复人数 gate。原保护测试与历史失败不弱化，测试迁移先独立 TCR。AC和收益阈值不改，旧未完成成本组不补样漂白；不进入 verify-code 或 close。
