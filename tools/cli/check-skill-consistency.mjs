@@ -5,6 +5,7 @@ import yaml from "js-yaml";
 import Ajv2020 from "ajv/dist/2020.js";
 import { loadStageSkillManifest } from "../../runtime/stage/stage-skill-runtime.mjs";
 import { validateSkillBundle } from "../../runtime/adapters/local-skill-resolver.mjs";
+import { validatePostPhaseContract } from "../../runtime/stage/stage-content-contracts.mjs";
 
 // T016: finite, read-only development facts consumed by run-checks and --root
 // fixture checks. No Runner dispatch, progress authority, or history scanner.
@@ -145,6 +146,67 @@ export function checkSkillConsistency(root) {
     const current = [...stages].sort();
     if (!Array.isArray(source) || JSON.stringify([...new Set(source)].sort()) !== JSON.stringify(current)) {
       reports.push(`${CATALOG} ${name} used_by_stages source=${JSON.stringify(source)} actual=${JSON.stringify(current)}; report-only, not dispatch authority`);
+    }
+  }
+  // P2: the existing reports channel serves material authors and run-checks.
+  // These are current template inputs, not a second required-section registry.
+  // Remove this extension when those consumers retire or a reviewed existing
+  // checker takes over; prose completeness remains an independent human task.
+  for (const locator of [
+    "skills/decision-log/templates/decision-log-template.md",
+    "skills/spec-specify/templates/spec-template.md",
+    "skills/spec-plan/templates/phase-template.md",
+    "skills/spec-plan/templates/index-template.md",
+    "skills/spec-prd/templates/prd-template.md",
+  ]) {
+    const prefix = `material-authoring ${locator}:`;
+    try {
+      const body = read(locator, value => value);
+      // Preserve source lines, but exclude quoted and fenced examples from
+      // heading/placeholder diagnostics. Inline code still counts as one unit
+      // in the explicitly reference-only sentence figures below.
+      let fence = null;
+      const lines = body.split(/\r?\n/).map((text, index) => {
+        const marker = text.match(/^\s*(`{3,}|~{3,})/);
+        if (marker) {
+          if (!fence) fence = marker[1];
+          else if (marker[1][0] === fence[0] && marker[1].length >= fence.length) fence = null;
+          return { line: index + 1, text: "" };
+        }
+        return { line: index + 1, text: fence || /^\s*>/.test(text) ? "" : text };
+      });
+      const visible = lines.map(({ text }) => text).join("\n");
+      const missing = [];
+      if (locator.endsWith("/phase-template.md")) {
+        if (!/^##\s+L2\b/m.test(visible)) missing.push("L2");
+        const authority = visible.split(/^##\s+L2\b|^###\s+T\d{3,}\b/m, 1)[0];
+        if (!/^\s*[-*]\s+\*\*(?:Write set|写入集|写集)\*\*\s*[:：]\s*\S/im.test(authority)) missing.push("写入集");
+      }
+      if (locator.endsWith("/index-template.md")) {
+        // Reuse the production purity condition, including Chinese aliases;
+        // unrelated whole-Phase validation errors are not template verdicts.
+        const projection = validatePostPhaseContract({ spec: "Structural report projection only", index: body, phases: {} });
+        if (!/^##\s+(?:Execution Index|执行索引)\s*$/im.test(visible)
+            || projection.errors.includes("Phase index must remain pointer-only; command, oracle, and evidence belong to Phase files")) missing.push("纯指针边界");
+      }
+      const mechanical = locator.endsWith("/phase-template.md") || locator.endsWith("/index-template.md");
+      reports.push(`${prefix} 必留项 ${missing.length ? `缺失 ${missing.join("、")}` : mechanical ? "机器结构在场" : "unknown — 无机器可判声明"}; 散文必留声明 unknown／未覆盖，交独立人读; report-only`);
+      const proseLines = [];
+      for (const { line, text } of lines) {
+        const prose = text.replace(/(`+)(.*?)\1/g, "");
+        if (/^\s*#{1,6}\s*$/.test(text) && text.trim()) reports.push(`${prefix} 空标题 line=${line}; report-only`);
+        if (/\bTBD\b|待补充|\{\{[^{}]+\}\}/u.test(prose)) reports.push(`${prefix} 占位 line=${line}; report-only`);
+        // Headings, table rows and machine field literals are not prose.
+        if (/^\s*(?:#|\||[-*]\s+\*\*[^*]+\*\*\s*[:：])/.test(text)) continue;
+        proseLines.push(text.replace(/(`+)(.*?)\1/g, "\uE000"));
+      }
+      const sentenceCounts = proseLines.join("\n").split(/[。！？]/u)
+        .map(sentence => (sentence.match(/[\p{Script=Han}]|[A-Za-z0-9]+|\uE000/gu) ?? []).length).filter(count => count > 0);
+      reports.push(`${prefix} 句长参考 ${JSON.stringify(sentenceCounts)}; 汉字各1、连续拉丁/数字串1、行内代码1，排除机器字面/引用块/围栏; 校准 TP=unknown FP=unknown 分母=unknown（P5人工标注尚未提供）；无句长门／评分; report-only`);
+    } catch (error) {
+      // Only this added read/report capability degrades. Catalog/bundle errors
+      // and CLI argument/dependency failures keep their original blocking path.
+      reports.push(`${prefix} 必留项 unknown／未覆盖; 原始失败 ${error.code ?? error.name}: ${error.message}; 检测=读取当前模板; 缺失条件=可读模板与可判声明; report-only`);
     }
   }
   return { failures, reports };
