@@ -550,3 +550,11 @@
 
 核对实际授权时引用任务库 `quality/evidence/human-confirmations/`（第 13 步生成）与既有 `quality/evidence/git-authorizations/`。本任务已产出 `human-confirmations/2026-10-17-001-p4-b66-source-substitution-approval.json`，仅记录 D-014 的替代输入选择；`quality/evidence/git-authorizations/` 当前未产生，该用户决定不作 Git 授权。缺失逐项说明，每类事实只留一份原始件。
 
+
+#### D-015 — 本任务验收适用条件澄清（2026-10-18，用户已确认）
+
+- 原问题：用户指出浏览器验收标准过于复杂并换用公开目标；AC-009“缺字段”广句未区分原N1已批准的不支持字段。
+- 决定：按 `quality/evidence/2026-10-18-165-acceptance-conditional-clarification-proposal.md` 的两处窄澄清执行。公开页面用authnone，不索取用户票据；需要登录复用时继续ADR0048全部授权/安全限制。正确观察第三方阻断与隔离回收可证明工具能力，绝不证明该站点业务内容通过。N1原已批准unsupported字段完整展示，不新造数值门；收益必需cacheRead/wall及实际用于下降的steps缺失仍incomplete。
+- 不变：安全行为/冻结测试/白名单/秘密/取消强度、cacheRead和wall均不劣化、steps或cacheRead至少一下降、连续N≥3、质量不降、方法/必读字节不增以及全部失败分母。原099与原账本等历史事实不改。
+- 决定人及来源：当前用户原答“按提案澄清（推荐）”，真实原件 `quality/evidence/human-confirmations/2026-10-18-001-acceptance-conditional-clarification-approval.json`。本决定不直接签任何AC通过，不授予网站业务成功、风险接受、verify-code或close。
+- 当前消费者/写主：spec Appendix A、P7相应Done/适用登录用例、P8当前逐条件读回及成本预冻。只有对应owner实际验证和独立核对后才写其限定结论。
