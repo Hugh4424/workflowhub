@@ -86,3 +86,30 @@ test('ORACLE-N4-LABEL-GATE dependency on a Phase missing from parsed rows is inv
   expect(actual.errors).toContain('phases/P2-文档核对.md dependency must match the index and reference only earlier Phase IDs');
   expect(actual.facts.dependency_validation.valid).toBe(false);
 });
+
+// P3-TCR-002: the leading dependency declaration may carry ownership prose.
+function setTaskDependency(m, path, task, value) {
+  const offset = m.phases[path].indexOf(`### ${task} `);
+  expect(offset).toBeGreaterThan(-1);
+  m.phases[path] = m.phases[path].slice(0, offset) + m.phases[path].slice(offset)
+    .replace(/^- \*\*Dependency\*\*[:：].*$/m, `- **Dependency**：${value}`);
+}
+test.each(['`none`；独立建立目标判据，后续消费者在 Task order 中声明。', 'none；独立交付。', '`无`；独立交付。', '无前序；独立交付。', '无依赖；独立交付。'])('ORACLE-N4-LABEL-GATE leading no-prerequisite declaration accepts prose: %s', (value) => {
+  const m = materials(); setTaskDependency(m, phase1, 'T001', value);
+  expect(check(m).errors).toEqual([]);
+  expect(check(m).facts.dependency_validation.valid).toBe(true);
+});
+test.each(['`P1`；由前序交付输入。', '`T001`；由前序交付输入。', '`P1`、`T001`；保留两个真实前置。'])('ORACLE-N4-LABEL-GATE real earlier dependencies retain prose: %s', (value) => {
+  const m = materials(); setTaskDependency(m, 'phases/P2-文档核对.md', 'T002', value);
+  expect(check(m).errors).toEqual([]);
+});
+test.each(['T999；说明内 none 不豁免', 'T002；说明内 none 不豁免', 'P1；说明内 none 不豁免', 'P2；说明内 none 不豁免', 'P9；说明内 none 不豁免', 'P0；说明内 none 不豁免', '说明里偶然 none', '`noneExtra`；并非无前置声明', '无依赖说明不是字段声明'])('ORACLE-N4-LABEL-GATE invalid declaration cannot be exempted by prose: %s', (value) => {
+  const m = materials(); setTaskDependency(m, phase1, 'T001', value);
+  expect(check(m).ok).toBe(false);
+  expect(check(m).facts.dependency_validation.valid).toBe(false);
+});
+test('ORACLE-N4-LABEL-GATE a later second prerequisite is not swallowed by leading valid token', () => {
+  const m = materials(); setTaskDependency(m, 'phases/P2-文档核对.md', 'T002', '`T001`、`T999`；none只是说明');
+  expect(check(m).errors).toContain('P2/T002 dependency T999 must be an existing earlier task');
+  expect(check(m).facts.dependency_validation.valid).toBe(false);
+});

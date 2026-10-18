@@ -10,7 +10,7 @@ import {
   evaluateCard02PostPhaseEvidence,
 } from "./card-02-current.mjs";
 
-const liveRoot = resolve("specs/workflowhub-thin-core-card-07-20260919");
+const liveRoot = resolve("specs/archive/workflowhub-thin-core-card-07-20260919");
 function livePostMaterials() {
   const phases = Object.fromEntries(readdirSync(resolve(liveRoot, "phases"))
     .filter((name) => /^P[0-9]+\.md$/.test(name))

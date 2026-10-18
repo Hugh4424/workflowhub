@@ -678,11 +678,13 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
   }
   for (const [position, card] of taskCards.entries()) {
     const refs = identifiers(card.dependency, /\b[PT]\d+\b/g);
-    if (refs.length === 0 && !WITHOUT_PREDECESSOR.test(card.dependency)) {
+    const leading = card.dependency.match(/^\s*(?:`([^`]+)`|([^；;。，,\s]+))(?=$|[；;。，,\s])/u);
+    const declaration = leading?.[1] ?? leading?.[2] ?? "";
+    if (refs.length === 0 && !WITHOUT_PREDECESSOR.test(declaration)) {
       dependencyError(`${card.phase}/${card.id} dependency must be none or identify a Phase/Task`);
     }
     for (const ref of refs) {
-      if (ref.startsWith("P") && Number(ref.slice(1)) >= Number(card.phase.slice(1))) {
+      if (ref.startsWith("P") && !(rows ?? []).some((row) => row.phase === ref && Number(ref.slice(1)) < Number(card.phase.slice(1)))) {
         dependencyError(`${card.phase}/${card.id} dependency ${ref} must be an earlier Phase`);
       }
       if (ref.startsWith("T") && (!taskOwners.has(ref) || taskCards.findIndex((task) => task.id === ref) >= position)) {

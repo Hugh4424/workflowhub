@@ -37,6 +37,21 @@
 >
 > **模板版本（仅供人读，runtime 不解析）**：`phase-file.v1`
 
+
+本类 P0 必留内容如下。该声明属于当前模板的人读选节指引，不是全仓固定清单，也不新增 runtime 标题、字段或质量门。
+
+| 必留内容（P0） | 本模板已有落点 |
+| --- | --- |
+| 独立结果与对应 FR/AC | Phase 契约头；L0 — 结果与变更 |
+| 已交付输入/本卡增量 | 工作包声明；L0；L1 的 Task 输入与动作 |
+| 实施合同与写入边界 | L1 — 可执行契约／文件边界与 Task |
+| 目标命令/oracle/原件位置 | 契约头；L1／测试策略与 Task |
+| 停止/回滚/完成条件 | L1／停止、完成、风险与回滚 |
+
+生成时逐项在上述既有落点标状态，声明与实际内容一致才算在场：`written` 指向已写的必要内容；`not-applicable` 必须写不适用理由和依据，不能用它掩盖缺失设计；`deferred` 必须写责任卡、触发条件、受影响结果。P0 标题保留，deferred 只声明缺口和承接，不删除必要标题，也不冒已完成。P0/P1/P2 决定是否选节，三态决定在场内容的状态，两者不互相代替。
+
+契约头、L0、L1 必留，L2 备用。P1 有额外接口或外部环境才展开对应说明，测试表面按真实行为选；P2 只在具名读者需要时保留 L2 参考。删除 L2 后，独立执行者仍能从契约头与 L0/L1 取得完整输入、动作、失败/权限边界及验收判据；不能将必做步骤藏进 L2。
+
 ## Phase 契约头（文件级字段；runtime 逐字读取）
 
 本节回答：Phase 契约头要写什么、依据和例外是什么。
@@ -241,9 +256,9 @@
 1. **入口准则**：逐条核对前置 Phase 的 Done、写入集落地和两份就绪件的 status；每条写核对结果与证据路径。
 2. **两份就绪件**：数据就绪件与环境就绪件各一份，独立成件放 `quality/evidence/`，各写 status；同类别新增实例不算新文件类型。前置 Phase 在写入集与 Done 提前设计能设计的验收数据；验收 Phase 只许补并标来源档位，缺数据写 `incomplete` 或 `unavailable`，不得伪造。
 3. **授权边界**：写目标账号与环境、副作用白名单与数量上限、明确禁止的动作、授权有效期、失败即停条件。agent 全自动操作真实环境，不设人工确认或人工执行；凭据失效或环境不可达时按停止条件留真实失败。
-4. **逐条结论**：每条 AC 一行，写 AC 编号、一个档位、一条具名证据路径。档位只引用 `runtime/evidence/acceptance-evidence-validator.mjs:6` 的 8 值词表，不复制新词表；结论行数与 AC 条数相等，非 `pass` 一律不计通过，不用计数替代逐条。
+4. **逐条结论**：每格带证据才算完成；缺证据如实保留缺口，不读成通过。每条 AC 一行，写 AC 编号、一个档位、一条具名证据路径。档位只引用 `runtime/evidence/acceptance-evidence-validator.mjs:6` 的 8 值词表，不复制新词表；结论行数与 AC 条数相等，非 `pass` 一律不计通过，不用计数替代逐条。
 5. **五类执行事实**：逐条记命令与参数、cwd 与执行者、exit code 与 signal 与 timeout、原始输出落点、机器可读测试报告（runner 与版本）。`refs` 各标 `execution_record`、`machine_report`、`trace`、`screenshot`、`coverage`、`mutation`、`contract_check`、`red_original`、`negative_control` 之一。首次失败、重跑通过时标 `flaky`、档位记 `inconclusive`，不得记 `pass`。
-6. **效果评测**：写比较基线、指标与统计量、正例与负例、具名原始输出文件及结论。UI 判据须明确；本仓无 UI 可写 worktree 无 `apps/`、无 `.tsx`、`.vue`、`.jsx`，但不能免掉代码与接口面。不用环境指纹、产物 digest、哈希或版本相等判定，不用覆盖率或测试数量判通过。
+6. **效果评测**：写比较基线、指标与统计量、正例与负例、具名原始输出文件及结论。指标基线须在改动前实测，比较两侧条件可比；这里的指标基线不是材料字节基线。UI 判据须明确；本仓无 UI 可写 worktree 无 `apps/`、无 `.tsx`、`.vue`、`.jsx`，但不能免掉代码与接口面。不用环境指纹、产物 digest、哈希或版本相等判定，不用覆盖率或测试数量判通过。
 7. **复验四项**：写复验者与修复者的上下文差异（具体 subagent 身份或 provider 名）、F2P 与 P2P 各自用例清单且计数都大于 0、所跑回归范围与它为何是本次修改的保守超集、三档判分。F2P 为 1 且 P2P 为 1 记 FULL；0 小于 F2P 小于 1 且 P2P 为 1 记 PARTIAL；其余记 NO。PARTIAL 不得记 `pass`，分母为 0 不判通过；修复者自己的声明不算复验证据。
 8. **变更批准**：AC 或用例集合每次增删改，写独立审查批准者身份、`Rationale for Change`、`Impact Assessment`；登记列为 `Change Request ID`、`Impact Assessment`、`Approval Status`、`Closure Notes/Verification Status`。批准者非实现者、非同一上下文；纯重构不改既有测试，改 AC 等于改承诺，须重新取得确认。没有变更写「无加理由」。
 9. **分诊与关闭**：失败先复现；分诊者不是实现者，保留步骤与结果。最低字段为 `Defect ID`、描述、是否可复现、`Version detected`、`Severity`、`Priority`、`Disposition`（初值 `Pending`）。终值只取 `Fixed`、`Won'tFix`、`Deferred`、`AcceptedRisk`、`Duplicate`、`NotABug`、`Referred`；不修的值须写理由与风险接受人署名。关闭留 `Closed by`、`Date closed`、`Change reference`、`Test reference`、`Closure Notes/Verification Status`。
