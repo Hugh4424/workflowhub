@@ -1,6 +1,6 @@
 # Make Decision 审查合同
 
-provider 只读取本次 bundle，不能访问真实仓库、Git、一般 shell、网络或宿主路径。只有实际 host transport 已证明原生硬包根、工具及环境边界的 Codex，可用 cat、sed、rg 等只读文件查看命令读取该 packet 内声明的路径。这不是一般 shell 许可：仍禁止写入、Git、网络、父目录、宿主材料、Agent/subagent 和 wait/poll。原生权限的 minimal runtime 例外只用于工具运行，不属于审查材料。direction 与 detail 各有自己的 red/blue paired fact，保留 provider × role 来源；pair_id 是普通事实标识，不认证快照或材料许可。每个 role 一次公共 wh-review 请求，不循环取得空 findings；transport 来源按实际记录，不把内部原生会话谎称为旧 broker 执行。
+provider 只读取本次 bundle，不能访问真实仓库、Git、一般 shell、网络或宿主路径。只有实际 host transport 已证明原生硬包根、工具及环境边界的 Codex，可用 cat、sed、rg 等只读文件查看命令读取该 packet 内声明的路径。这不是一般 shell 许可：仍禁止写入、Git、网络、父目录、宿主材料、Agent/subagent 和 wait/poll。原生权限的 minimal runtime 例外只用于工具运行，不属于审查材料。direction 保留 red/blue paired fact、provider × role 来源，每 role 一次公共 wh-review 请求；detail 每 provider 每轮一次，不重复配对。pair_id 是普通事实标识，不认证快照或材料许可。两轨均不循环取得空 findings；保留实际 provider/transport 来源，不把内部原生会话谎称为旧 broker 执行。
 
 ## direction：先重建，再揭示，再挑战
 
