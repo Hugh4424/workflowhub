@@ -57,7 +57,7 @@
 | `R-009` | `D-002`、`D-014` | `FR-N4-009 / AC-T3-2、AC-T3-5、AC-N4-01、AC-N4-02` | `current；判定器口径的承接` | `OI-009：父件未逐条给各号条文，本卡逐条条件是分解结果` |
 | `R-010` | `D-015`、`D-016`、`D-017` | `FR-N4-010 / AC-N4-06、AC-N4-07` | `current；15 项采用与 why 三处落点` | `why 三处落点当前零锚点，见 OPEN-04` |
 | `R-011` | `D-005`、`D-006`、`D-007` | `FR-N4-011 / AC-T3-3、AC-T3-6、AC-T3-10` | `current；选节合同全表的三态与判定器` | `无` |
-| `R-012` | `D-018`、`D-019`、`ADR-0049:25` | `FR-N4-013 / AC-N4-08`（声明义务）与 `FR-N4-012 / AC-004、AC-013`（链路与分级） | `current；G1 只留声明义务` | `字节子句与字节分母已退役` |
+| `R-012` | `D-018`、`D-019`、`ADR-0049:25` | `FR-N4-013 / AC-N4-08`（声明义务）与 `FR-N4-012 / AC-004、AC-013`（链路与分级）；父 G1 非字节成本最终依赖另行保留 | `current；声明履行与最终成本收益分列` | `仅字节轴退役；非字节收益 unknown/incomplete，见下方 G1 范围说明` |
 | `R-013` | `D-020` | `FR-N4-006 / AC-T9-1` | `current；最小读取集与标准范围限制` | `不声称完整符合 ISO` |
 | `R-014` | `D-017` | `FR-N4-012 / AC-004` | `current；与 n3 互斥合入定序` | `19 处真重叠与 n3 完成事实，见 OPEN-02` |
 | `R-015` | `D-021`、`D-019` | `FR-N4-012 / AC-013` | `current；供 N5/N6/N8 的整卡结果` | `本卡不给首切片` |
@@ -169,7 +169,7 @@
 
 本节回答：该场景的角色、前提、触发与可观察结果是什么。
 
-- **角色**：verify-code 指派的不参与本次改动的独立判定者
+- **角色**：本阶段 P7/T026 首次盲评由当前 build-code 主会话指派未参与本次实现或样本编写的独立判定者；verify-code 后续以独立身份复核
 - **前提**：判定标准与样本清单在判定前定死；样本匿名
 - **触发**：对改前（归档真实材料）与改后（同题重写）样本逐维度判定
 - **结果**：五项维度各给「更好／打平／无法判断」与具名原因；`无法判断` 不折算成「更好」；某维度在全部样本上都「无法判断」时该维度记未达成
@@ -359,6 +359,8 @@
   - **验收**：AC-T3-3、AC-T3-6、AC-T3-10
 
 - **FR-N4-013**：G1 的声明义务在本卡内履行并逐条写出——声明本卡删除、合并或降档了什么；只加规则而未简化既有物时如实写明这一点，不声称已简化；声明不实由独立方用真实 diff 与读回发现，记为事实而不作门
+
+**G1 原始成本范围与当前缺口**：父 PRD `specs/archive/skills-framework-redesign-20261014/prd.md:197–199,365` 的非字节成本最终依赖仍在；D-018／ADR-0049 退役的是字节轴，不是 `wall_s`、`input/output/cacheRead`、`steps/turns`、`subagent/bash` 的观测与同任务、同命令、同条件、同预算比较义务。当前未找到可合法绑定 N4 改前→候选的同条件原始 baseline，故最终成本收益为 `unknown/incomplete`；N1 自身 smoke 的1.31→1.50秒、N4不同阶段的常规cost账本不能代该对照。当前24AC限定用例、实现交付和声明真实性与此最终收益分开，不宣全部原始需求已验收。按父件，完整N1提供观测/对照能力，各卡仍自行负责本卡前后收益，N4当前主会话与原规格owner保留此缺口；未声称N1/N11或任何后继已接手本卡验收。后续需先定位合法N4原始基线及其条件，再消费完整N1取得同条件候选与次数/波动，按父AC-012原义核成本；不能事后造开工基线或用新候选充基线。N11仅最后总对照，不替本卡首次义务；合法可比输入缺失时继续如实保留未验证，不新增gate、控制面或兄弟实施前置。独立原件：`quality/reviews/2026-10-18-058-p7-spec-original-requirement-analysis.json`。
   - **范围边界**：包括删除/合并/降档的三类声明与「只加规则」的如实标注；不设字节基线、不报净字节、不用分母核销（ADR-0049:26）
   - **依据**：R-012、D-018、ADR-0049:25、`prd:195`
   - **场景**：SCN-007
@@ -658,7 +660,7 @@
 
 - **验证策略**：本卡的行为面集中在两个 `.mjs` 模块的可观察输出与 52 个写路径（其中 `.md` 43 个）的文本在场。机器面用冻结负例与真实执行输出核；文本面用逐处读回与收敛前后 `grep` 比对核；整体效果由独立方匿名盲评核。三个面各自报告，互不代替。
 - **RED/GREEN 设计**：原 P1 探针 `quality/tests/2026-10-17-001-build-plan-silent-layer-red-probe.txt` 保留为历史线索，不是有效目标 RED：合法 control 本身有未知 FR 等错误，且只含纯度文案导致 valid 翻转的假设未被该件证实。P1/T001 在当前 HEAD 先证明合法 control，再对四中文/四英文越层例与恢复例、两 valid 的真实错误条件逐一实跑；同一冻结 oracle 配对 GREEN，未执行前写 unavailable。原 P2 `…002-build-plan-report-only-gap.txt` 只有关键词能力缺口观察（exit1），不等于行为断言 RED；T004 仍须具名报告断言。其余 Task 按卡片取得真实目标失败，未取得写 unavailable，不用旧观察冒本轮验证。
-- **最终聚合**：由 P7 逐条消费 P1–P6 的原件核对全部 24 条 AC；P7 只复核与补必要未闭环 case，不作任何 AC 的首次结论。门命令 `npx vitest run tests/contract/chinese-label-detection.test.mjs tests/contract/post-build-plan-missing-index.test.mjs tests/contract/card05-author-material-consumer.test.mjs tests/contract/acceptance-object-required-fields.test.mjs`。
+- **最终聚合**：由 P7 逐条消费 P1–P6 的原件核对全部 24 条 AC；P7 对 P1–P6 已拥有的 AC 只复核原件与补必要未闭环 case，不代签其首次结论；P7/T026 则由当前 build-code 主会话指派且未参与改动的独立方，在判定前定死的标准与匿名样本上实际执行本 Phase 自有盲评，产出 AC-013/AC-N4-05 盲评子条件首次事实。既定五维三态、无法判断不折算、匿名与不自判合同不变；判定者或样本缺失保持 incomplete 与指派 owner，不推整卡成功。门命令 `npx vitest run tests/contract/chinese-label-detection.test.mjs tests/contract/post-build-plan-missing-index.test.mjs tests/contract/card05-author-material-consumer.test.mjs tests/contract/acceptance-object-required-fields.test.mjs`。
 - **不能证明的内容**：不证明 ISO 标准符合性、不证明真实读者理解质量、不证明未来任务的效果、不证明检查器在语义层可靠；这些保持 `unknown` 或交独立人读。
 
 每个 Phase `phases/P<n>-*.md` 指向本节和全局目标的稳定锚点，不复制全局设计；每个 Task 再写自己的第一步代码动作、同命令 RED/GREEN 和失败 oracle。
@@ -919,7 +921,7 @@
 
 - **OPEN-05**：独立盲评的判定者身份与样本清单尚无原件
   - **受影响 ID**：FR-N4-001、FR-N4-005、AC-013、AC-N4-05
-  - **负责人**：verify-code 指派不参与本次改动的独立方；样本清单落本卡验收材料
+  - **负责人**：本阶段 P7/T026 首次盲评由当前 build-code 主会话指派不参与本次实现或样本编写的独立方，样本清单判前定死；verify-code 后续独立复核。此项原计划缺口已有身份188、匿名入口179与独立186/201/203实际原件，历史原文不回写
   - **影响**：判定前未落实会导致自审自判或验收口径落空
   - **处理阶段**：P7、verify-code
   - **关闭条件或停止**：判定者身份与上下文差异有原件、样本清单在判定前定死
