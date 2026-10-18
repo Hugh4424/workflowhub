@@ -212,7 +212,7 @@ function isSharedGovernancePath(path) { return SHARED_GOVERNANCE_PATH.test(path)
 const EXPLICIT_EMPTY_WRITE_SET = /^none(?:\s*[（(][^`()（）\r\n]*[）)])?$/i;
 const EMPTY_WRITE_SET_PREFIX = /^none(?=$|[\s（(;；])/i;
 
-function executionIndexRows(document, errors, reviewReadScope) {
+function executionIndexRows(document, errors, reviewReadScope, invalidDependency = () => {}) {
   const lines = document.split(/\r?\n/);
   const start = lines.findIndex((line) => /^##\s+(?:Execution Index|执行索引)\s*$/i.test(line));
   if (start < 0) return null;
@@ -234,12 +234,18 @@ function executionIndexRows(document, errors, reviewReadScope) {
       continue;
     }
     const phase = plain(cells[0]);
-    if (phase !== `P${position}`) rowErrors.push(`Phase index must declare contiguous P1..Pn; expected P${position}`);
+    if (phase !== `P${position}`) {
+      invalidDependency();
+      rowErrors.push(`Phase index must declare contiguous P1..Pn; expected P${position}`);
+    }
     const authority = plain(cells[1]).match(/^phases\/(P[1-9][0-9]*)(?:-[^/\\.\s|`:\x00-\x1f]+)?\.md$/);
     if (!authority || authority[1] !== phase) rowErrors.push(`authority ref must be a safe phases/${phase}.md or named Phase file`);
     if (!plain(cells[2])) rowErrors.push("semantic anchor is required");
     const ownership = cells.length === 5 ? cells[4].split(/\s*(?:→|->)\s*/) : cells.slice(4);
-    if (ownership.length !== 2 || ownership.some((value) => !plain(value))) rowErrors.push("dependency → consumer must name both fields");
+    if (ownership.length !== 2 || ownership.some((value) => !plain(value))) {
+      invalidDependency();
+      rowErrors.push("dependency → consumer must name both fields");
+    }
     const paths = inlinePaths(cells[3]);
     const explicitNone = EXPLICIT_EMPTY_WRITE_SET.test(cells[3].trim());
     if (paths.length === 0 && !explicitNone) rowErrors.push("write set is empty");
@@ -411,9 +417,15 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
   if (!phases || typeof phases !== "object" || Array.isArray(phases)) errors.push("independent Phase files are required");
   if (errors.length) return Object.freeze({ ok: false, errors: Object.freeze(errors), facts: null });
 
-  const rows = executionIndexRows(index, errors, reviewReadScope);
+  let dependencyValid = true;
+  let commandOracleValid = true;
+  const dependencyError = (message) => { dependencyValid = false; errors.push(message); };
+  const commandError = (message) => { commandOracleValid = false; errors.push(message); };
+  const rows = executionIndexRows(index, errors, reviewReadScope, () => { dependencyValid = false; });
   if (!rows || rows.length === 0) errors.push("phases/index.md requires an Execution Index with Phase pointers");
-  if (/^\s*[-*]\s*(?:\*\*)?(?:gate_cmd|expected_exit|oracle|evidence_path)\b/mi.test(index)) {
+  const pointerLabels = ["gate_cmd", "expected_exit", "oracle", "evidence_path"]
+    .map((name) => `(?:${name}\\b|(?:${labelAlternation(name)})(?=\\*\\*|[:：\\s]|$))`).join("|");
+  if (new RegExp(`^\\s*[-*]\\s*(?:\\*\\*)?(?:${pointerLabels})`, "mi").test(index)) {
     errors.push("Phase index must remain pointer-only; command, oracle, and evidence belong to Phase files");
   }
   const phaseRows = [];
@@ -450,7 +462,7 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
     if (expectedPath.match(/^phases\/(P[1-9][0-9]*)(?:-|\.md$)/)?.[1] !== expectedId) errors.push(`${expectedId} authority ref must identify ${expectedId}`);
     if (!row.semantic_anchor) errors.push(`${expectedId} semantic anchor is required`);
     if (!row.consumer) errors.push(`${expectedId} consumer is required`);
-    if (indexedPaths.has(row.authority_ref)) errors.push(`duplicate Phase authority ref: ${row.authority_ref}`);
+    if (indexedPaths.has(row.authority_ref)) dependencyError(`duplicate Phase authority ref: ${row.authority_ref}`);
     indexedPaths.add(row.authority_ref);
     const body = phases[expectedPath];
     if (!nonEmptyString(body)) {
@@ -501,8 +513,8 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
     if (!sameIds(phaseDependencies, indexDependencies)
         || (!WITHOUT_PREDECESSOR.test(dependency ?? "") && phaseDependencies.length === 0)
         || (!WITHOUT_PREDECESSOR.test(row.dependency ?? "") && indexDependencies.length === 0)
-        || phaseDependencies.some((id) => Number(id.slice(1)) >= position + 1)) {
-      errors.push(`${expectedPath} dependency must match the index and reference only earlier Phase IDs`);
+        || phaseDependencies.some((id) => !(rows ?? []).some((candidate) => candidate.phase === id && candidate.position < row.position))) {
+      dependencyError(`${expectedPath} dependency must match the index and reference only earlier Phase IDs`);
     }
     if (!fieldValue(body, "Global spec")?.includes("spec.md")) errors.push(`${expectedPath} requires a stable spec.md pointer`);
     const consumer = fieldValue(body, "Consumer")?.replace(/[。；;\s]+$/u, "").trim();
@@ -512,7 +524,7 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
     const command = fieldValue(body, "gate_cmd");
     const oracle = fieldValue(body, "oracle");
     if (!hasExecutableCommand(command) || !/^ORACLE-[A-Z0-9-]+/.test(oracle ?? "")) {
-      errors.push(`${expectedPath} requires an executable gate_cmd and oracle`);
+      commandError(`${expectedPath} requires an executable gate_cmd and oracle`);
     }
     if (!fieldValue(body, "STOP") || !fieldValue(body, "Done") || !fieldValue(body, "evidence_path")) {
       errors.push(`${expectedPath} requires STOP, Done, and evidence_path`);
@@ -521,14 +533,14 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
     const acs = identifiers(body, ACCEPTANCE_CRITERION_ID);
     const l1 = body.split(/^##\s+L1\b[^\n]*\n/m)[1]?.split(/^##\s+L2\b/m)[0] ?? "";
     const cards = markdownSections(l1, 3).filter(({ heading }) => /^T\d+\b/.test(heading));
-    if (cards.length === 0) errors.push(`${expectedPath} requires independent ### Tnnn task cards; one-line Tasks is insufficient`);
+    if (cards.length === 0) commandError(`${expectedPath} requires independent ### Tnnn task cards; one-line Tasks is insufficient`);
     for (const { heading, body: cardBody } of cards) {
       const taskId = heading.match(/^(T\d{3,})\s+[—–-]\s+\S/)?.[1];
       if (!taskId) {
-        errors.push(`${expectedPath} task card requires stable ### Tnnn — outcome heading`);
+        commandError(`${expectedPath} task card requires stable ### Tnnn — outcome heading`);
         continue;
       }
-      if (taskOwners.has(taskId)) errors.push(`${expectedPath} duplicate task card ${taskId} owned by ${taskOwners.get(taskId)}`);
+      if (taskOwners.has(taskId)) commandError(`${expectedPath} duplicate task card ${taskId} owned by ${taskOwners.get(taskId)}`);
       else taskOwners.set(taskId, expectedPath);
       const required = [
         "Source / FR / AC", "Files / symbols", "Action", "Inputs", "Outputs / failure",
@@ -540,7 +552,7 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
       for (const field of required) {
         const value = fields[field];
         if (!value || /^(?:TBD|TODO|待补充|\[|N\/A\s*$)/i.test(value)) {
-          errors.push(`${expectedPath} ${taskId} task card missing concrete ${field}`);
+          commandError(`${expectedPath} ${taskId} task card missing concrete ${field}`);
         }
       }
       const cardFrs = identifiers(fields["Source / FR / AC"] ?? "", /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g);
@@ -557,13 +569,13 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
       if (!/(?:\bsymbol|符号|N\/A\s+[—-]\s+\S)/i.test(fields["Files / symbols"] ?? "")) {
         errors.push(`${expectedPath} ${taskId} Files / symbols must name a symbol or explain N/A for non-code files`);
       }
-      if (!hasExecutableCommand(fields["RED/GREEN gate_cmd"])) errors.push(`${expectedPath} ${taskId} needs one executable RED/GREEN gate_cmd`);
-      if (!/^ORACLE-[A-Z0-9-]+\b/.test(fields["GREEN oracle"] ?? "")) errors.push(`${expectedPath} ${taskId} needs an identifiable GREEN oracle`);
+      if (!hasExecutableCommand(fields["RED/GREEN gate_cmd"])) commandError(`${expectedPath} ${taskId} needs one executable RED/GREEN gate_cmd`);
+      if (!/^ORACLE-[A-Z0-9-]+\b/.test(fields["GREEN oracle"] ?? "")) commandError(`${expectedPath} ${taskId} needs an identifiable GREEN oracle`);
       const greenOracle = fields["GREEN oracle"]?.match(/^ORACLE-[A-Z0-9-]+\b/)?.[0];
       const redOracle = fields["RED target failure"]?.match(/\bORACLE-[A-Z0-9-]+\b/)?.[0];
-      if (!greenOracle || redOracle !== greenOracle) errors.push(`${expectedPath} ${taskId} RED oracle must match GREEN oracle`);
+      if (!greenOracle || redOracle !== greenOracle) commandError(`${expectedPath} ${taskId} RED oracle must match GREEN oracle`);
       if (!/(?:assert|断言|expected|预期|nonzero|失败)/i.test(fields["RED target failure"] ?? "")) {
-        errors.push(`${expectedPath} ${taskId} RED target failure must identify the failing assertion`);
+        commandError(`${expectedPath} ${taskId} RED target failure must identify the failing assertion`);
       }
       // This is a declaration-only exception, never an execution/quality fact.
       // Read Task fields and the SAME owned paths checked above, not Phase text.
@@ -631,7 +643,7 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
         const affirmativeConflict = declarations.flatMap(clauses).some((part) =>
           /(?:新增\s*(?:runtime|运行行为)|修改\s*执行逻辑)/i.test(part.replace(/(?:无|不|未|不会)\s*(?:新增\s*(?:runtime|运行行为)|修改\s*执行逻辑)/gi, "")));
         if (affirmativeConflict) g2Missing.push("contradiction (新增 runtime/运行行为、修改执行逻辑)");
-        for (const missing of g2Missing) errors.push(`${expectedPath} ${taskId} G-2 missing concrete ${missing}`);
+        for (const missing of g2Missing) commandError(`${expectedPath} ${taskId} G-2 missing concrete ${missing}`);
       }
       const pureDocumentAlternative = requestsG2 && g2Missing.length === 0;
       // A declared task-owned fact document still needs source, consumer and
@@ -651,7 +663,7 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
         errors.push(`${expectedPath} ${taskId} Source / FR / AC must bind original source, FR, and AC`);
       }
       if (!pureDocumentAlternative && !behaviorExit) {
-        errors.push(`${expectedPath} ${taskId} expected_exit must distinguish RED target failure from GREEN 0`);
+        commandError(`${expectedPath} ${taskId} expected_exit must distinguish RED target failure from GREEN 0`);
       }
       if (!/(?:`[^`]+`|\bP\d+\b|\bT\d+\b|\bnone\b|无)/i.test(fields.Dependency ?? "")) {
         errors.push(`${expectedPath} ${taskId} Dependency must identify an existing prerequisite or none`);
@@ -667,14 +679,14 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
   for (const [position, card] of taskCards.entries()) {
     const refs = identifiers(card.dependency, /\b[PT]\d+\b/g);
     if (refs.length === 0 && !WITHOUT_PREDECESSOR.test(card.dependency)) {
-      errors.push(`${card.phase}/${card.id} dependency must be none or identify a Phase/Task`);
+      dependencyError(`${card.phase}/${card.id} dependency must be none or identify a Phase/Task`);
     }
     for (const ref of refs) {
       if (ref.startsWith("P") && Number(ref.slice(1)) >= Number(card.phase.slice(1))) {
-        errors.push(`${card.phase}/${card.id} dependency ${ref} must be an earlier Phase`);
+        dependencyError(`${card.phase}/${card.id} dependency ${ref} must be an earlier Phase`);
       }
       if (ref.startsWith("T") && (!taskOwners.has(ref) || taskCards.findIndex((task) => task.id === ref) >= position)) {
-        errors.push(`${card.phase}/${card.id} dependency ${ref} must be an existing earlier task`);
+        dependencyError(`${card.phase}/${card.id} dependency ${ref} must be an existing earlier task`);
       }
     }
   }
@@ -685,8 +697,8 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
   const acceptedAcs = declaredAcs.filter((id) => activeAcs.has(id));
   const deferredAcs = declaredAcs.filter((id) => dispositions.deferred_ids.includes(id));
   for (const card of taskCards) {
-    for (const id of card.frs) if (!acceptedFrs.includes(id)) errors.push(`${card.phase}/${card.id} task card references unknown FR: ${id}`);
-    for (const id of card.acs) if (!declaredAcs.includes(id)) errors.push(`${card.phase}/${card.id} task card references unknown AC: ${id}`);
+    for (const id of card.frs) if (!acceptedFrs.includes(id)) commandError(`${card.phase}/${card.id} task card references unknown FR: ${id}`);
+    for (const id of card.acs) if (!declaredAcs.includes(id)) commandError(`${card.phase}/${card.id} task card references unknown AC: ${id}`);
   }
   if (!design) errors.push("spec.md requires Implementation Design (全局权威)");
   for (const heading of ["Code Anchors", "Interfaces and Failure Semantics", "Requirement-to-Task Trace", "Global Verification Strategy"]) {
@@ -700,7 +712,7 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
     && identifiers(line, ACCEPTANCE_CRITERION_ID).length > 0
     && /\bP\d+\/T\d{3,}\b/.test(line)
     && /\bORACLE-[A-Z0-9-]+\b/.test(line));
-  if (traceRows.length === 0) errors.push("spec.md Requirement-to-Task Trace needs source → FR → AC → Phase/Task → oracle rows");
+  if (traceRows.length === 0) commandError("spec.md Requirement-to-Task Trace needs source → FR → AC → Phase/Task → oracle rows");
   for (const id of acceptedFrs) if (!traceRows.some((row) => row.includes(id))) errors.push(`spec.md Requirement-to-Task Trace is missing FR: ${id}`);
   for (const id of acceptedAcs) if (!traceRows.some((row) => row.includes(id))) errors.push(`spec.md Requirement-to-Task Trace is missing AC: ${id}`);
   for (const card of taskCards) {
@@ -712,7 +724,7 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
     }
     const oracle = card.oracle?.match(/^ORACLE-[A-Z0-9-]+\b/)?.[0];
     if (oracle && !trace.some((row) => row.includes(oracle))) {
-      errors.push(`spec.md Requirement-to-Task Trace ${card.phase}/${card.id} oracle differs from task card`);
+      commandError(`spec.md Requirement-to-Task Trace ${card.phase}/${card.id} oracle differs from task card`);
     }
   }
   if (designBody["Global Verification Strategy"] && !/`(?:npx|npm|pnpm|yarn|bun|node|python|pytest|go|cargo|make|bash|sh|git|\.\/)[^`\n]+`/.test(designBody["Global Verification Strategy"])) {
@@ -729,8 +741,8 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
     phase_rows: Object.freeze(phaseRows),
     fr_coverage: Object.freeze({ accepted_count: acceptedFrs.length, covered_count: acceptedFrs.filter((id) => coveredFrs.includes(id)).length, accepted_ids: Object.freeze(acceptedFrs), covered_ids: Object.freeze(coveredFrs) }),
     ac_coverage: Object.freeze({ accepted_count: acceptedAcs.length, covered_count: acceptedAcs.filter((id) => coveredAcs.includes(id)).length, accepted_ids: Object.freeze(acceptedAcs), covered_ids: Object.freeze(coveredAcs), deferred_ids: Object.freeze(deferredAcs) }),
-    dependency_validation: Object.freeze({ valid: !errors.some((error) => /dependency|contiguous|duplicate Phase/.test(error)) }),
-    command_oracle_checks: Object.freeze({ valid: taskCards.length > 0 && !errors.some((error) => /task card|gate_cmd|oracle|RED target|expected_exit/i.test(error)) }),
+    dependency_validation: Object.freeze({ valid: dependencyValid }),
+    command_oracle_checks: Object.freeze({ valid: taskCards.length > 0 && commandOracleValid }),
   });
   return Object.freeze({ ok: errors.length === 0, errors: Object.freeze(errors), facts });
 }

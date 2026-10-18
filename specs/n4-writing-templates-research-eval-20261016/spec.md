@@ -777,11 +777,13 @@
 失败：检查阻断或改退出码；把只报告改造成门；不可判定项被报成确定结论；不可用被写进 `failures`。
 证据：`run-checks` 输出与退出码原件、不可用受控场景输出原件；由执行者发布。
 
-- [ ] **AC-N4-03（本卡新造）**：用归档与在跑任务材料做兼容读回——n2/n3 的 22 个 active 材料与归档材料零字节改动且照旧通过（沿整篇兜底与中英对照表），对照表能解释旧写法。关联 FR-N4-009。判定方式：机器可判。
+- [ ] **AC-N4-03（本卡新造）**：用归档与在跑任务材料做兼容读回——n2/n3 的 22 个 active 材料与归档材料零字节改动；合法旧材料通过、违规旧材料继续明确报错，且无新增回归（沿整篇兜底与中英对照表），对照表能解释旧写法。关联 FR-N4-009。判定方式：机器可判。
 验证：P1 实施者提供范围声明；独立执行者跑 `git diff --name-only` 并与声明写集逐条比对，再对旧材料复跑。执行 owner 是独立验收者，时点是 P1 完成后。
-通过：`git diff --name-only` 未出现 `specs/archive/**`、`specs/n2-*/**`、`specs/n3-*/**`；旧材料复跑照旧通过；对照表能解释旧写法。
-失败：任一归档或在跑材料被改动；旧材料因本次改动失配报错。
+通过：`git diff --name-only` 未出现 `specs/archive/**`、`specs/n2-*/**`、`specs/n3-*/**`；旧材料按改动前生产基线与当前生产实现对同一原字节复跑：合法输入通过，违规输入继续明确报错，未新增回归；对照表能解释旧写法。
+失败：任一归档或在跑材料被改动；合法旧材料因本次改动失配报错、违规旧材料被静默放过，或新增回归。
 证据：`git diff --name-only` 输出与旧材料复跑输出原件；由执行者发布。
+
+用户澄清（2026-10-18）：/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n4-writing-templates-research-eval-20261016/quality/evidence/2026-10-18-016-p1-compatibility-user-decision.json；正式确认：/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n4-writing-templates-research-eval-20261016/quality/evidence/human-confirmations/2026-10-18-002-build-plan-compatibility-clarified.json。原基线错误与审查原件保留，不把澄清当作已执行或通过。
 
 - [ ] **AC-N4-04（本卡新造）**：对 28 个 `SKILL.md` 逐路径跑收敛前后的 `grep -rl "完整来源权威" --include="SKILL.md" skills/` 并逐处读回——28 处全部收敛为「最小便携小卡 + 非权威」一形，权威唯一处仍是 `skills/catalog.yaml`，每处仍能回 catalog 与外部原文根。关联 FR-N4-004。判定方式：机器可判加只能人读。
 验证：P4 实施者提供收敛前后 grep 输出；独立执行者跑同一条 `grep -rl "完整来源权威" --include="SKILL.md" skills/` 并逐处读回 28 个文件。执行 owner 是独立验收者，时点是 P4 完成后。
