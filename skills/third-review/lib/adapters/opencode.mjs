@@ -47,7 +47,7 @@ function requireNativePermissions(provider) {
   }
 }
 
-function packetPermissions(cwd) {
+export function packetPermissions(cwd, worktree = null) {
   try {
     const bundle = path.join(cwd, "bundle");
     if (fs.realpathSync(bundle) !== bundle || !fs.lstatSync(bundle).isDirectory()) throw new Error("unsafe bundle");
@@ -62,7 +62,9 @@ function packetPermissions(cwd) {
       // Native permission patterns are globs. Refuse metacharacters rather
       // than broadening an exact member into a wildcard grant.
       if (/[\*?\[\]{}]/.test(file) || fs.realpathSync(file) !== file || !stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || stat.size !== item.size || createHash("sha256").update(fs.readFileSync(file)).digest("hex") !== item.sha256 || Object.hasOwn(read, file)) throw new Error("unsafe packet member");
-      read[file] = "allow";
+      const pattern = worktree === null ? file : path.relative(worktree, file);
+      if (!pattern || /[\*?\[\]{}]/.test(pattern) || Object.hasOwn(read, pattern)) throw new Error("unsafe native read coordinate");
+      read[pattern] = "allow";
     }
     return { "*": "deny", read };
   } catch {
@@ -83,9 +85,17 @@ function verifyNativePolicy(provider, cwd, env, permission) {
     reason = "debug-json";
     const agent = JSON.parse(result.stdout);
     reason = "permission-mismatch";
-    if (agent.name !== "build" || agent.tools?.read !== true || Object.entries(agent.tools).some(([tool, enabled]) => tool !== "read" && enabled !== false)) throw new Error("native tools exceed packet scope");
+    verifyNativeAgentPolicy(agent, permission);
+  } catch {
+    fail("PROVIDER_PACKET_GUARD_UNAVAILABLE", `OpenCode did not confirm the final native default-deny exact-read policy; reason=${reason}; exit=${exit}; signal=${signal}`);
+  }
+}
+
+// Shared only with the owned native supervisor final-server readback.
+export function verifyNativeAgentPolicy(agent, permission, requireTools = true) {
+    if (agent.name !== "build" || (requireTools && (agent.tools?.read !== true || Object.entries(agent.tools).some(([tool, enabled]) => tool !== "read" && enabled !== false)))) throw new Error("native tools exceed packet scope");
     const rules = agent.permission;
-    if (!Array.isArray(rules)) throw new Error("native permission readback missing");
+    if (!Array.isArray(rules) || rules.some(rule => !rule || typeof rule.permission !== "string" || typeof rule.pattern !== "string" || !["allow","ask","deny"].includes(rule.action))) throw new Error("native permission readback missing");
     const lastDefault = rules.findLastIndex((rule) => rule.permission === "*" && rule.pattern === "*");
     if (lastDefault < 0 || rules[lastDefault].action !== "deny") throw new Error("native default deny missing");
     const current = rules.slice(lastDefault + 1);
@@ -93,9 +103,6 @@ function verifyNativePolicy(provider, cwd, env, permission) {
     const expected = Object.entries(permission.read);
     if (JSON.stringify(reads.map((rule) => [rule.pattern, rule.action])) !== JSON.stringify(expected)) throw new Error("native exact read grants differ");
     if (current.some((rule) => rule.permission !== "read" && !(rule.permission === "external_directory" && rule.action === "allow" && rule.pattern.endsWith("/opencode/tool-output/*")))) throw new Error("native policy adds another tool grant");
-  } catch {
-    fail("PROVIDER_PACKET_GUARD_UNAVAILABLE", `OpenCode did not confirm the final native default-deny exact-read policy; reason=${reason}; exit=${exit}; signal=${signal}`);
-  }
 }
 
 function cursorFor(messages, status = null) {
@@ -216,10 +223,8 @@ function executionPlan(provider, cwd, prompt, session = null, runtime = null) {
     ...(dataHome ? { XDG_DATA_HOME: dataHome } : {}),
   };
   verifyNativePolicy(provider, cwd, plan(provider, cwd, [], null, extraEnv).env, permission);
-  // OpenCode decodes percent escapes in --dir. Runtime provider keys use
-  // `%2F` to keep `provider/model` in one directory name, so escape the
-  // percent sign once more before handing the path to OpenCode.
-  const cliCwd = cwd.replaceAll("%", "%25");
+  // The native CLI consumes the literal owner; API encoding belongs to the HTTP boundary.
+  const cliCwd = cwd;
   if (!/^opencode(?:$|[-_.])/.test(path.basename(provider.command))) {
     const argv = ["run", ...(session ? ["--session", session] : []), "--pure", "--agent", "build", "--dir", cliCwd, "--format", "json"];
     if (provider.model) argv.push("--model", provider.model); if (provider.effort) argv.push("--variant", provider.effort);

@@ -98,7 +98,8 @@ test("a semantic terminal result completes without waiting for a wrapper close",
 // Independent adapter/supervisor configuration oracle. Controlled children below
 // consume the real planned env; they are not proof of native tool enforcement.
 import { createHash } from "node:crypto";
-import openCodePacketWorker from "../lib/adapters/opencode.mjs";
+import openCodePacketWorker, { packetPermissions as n3NativePacketPermissions } from "../lib/adapters/opencode.mjs";
+import net from "node:net";
 import { prepareAttachments, prepareWritableAttachmentView } from "../lib/attachments.mjs";
 function n3OcPacket() {
   const root=fs.realpathSync(temp());const source=path.join(root,"source");fs.mkdirSync(source);
@@ -135,12 +136,13 @@ test("N3 P2 direction lifecycle: OpenCode supervised server and client consume t
  const s=n3OcPacket();try {
   const p=n3OcPlan(s);const c=n3OcPolicy(p);assert.equal(c.permission["*"],"deny");
   const trace=path.join(s.root,"policy-trace.jsonl");const fixture=path.join(s.root,"safe-opencode.mjs");
-  fs.writeFileSync(fixture,`import fs from 'node:fs';import http from 'node:http';const a=process.argv.slice(2);const side=a.includes('serve')?'server':'client';fs.appendFileSync(${JSON.stringify(trace)},JSON.stringify({side,config:process.env.OPENCODE_CONFIG_CONTENT,permission:process.env.OPENCODE_PERMISSION??null,disableSkills:process.env.OPENCODE_DISABLE_EXTERNAL_SKILLS})+String.fromCharCode(10));if(side==='server'){const port=Number(a[a.indexOf('--port')+1]);http.createServer((q,r)=>{r.setHeader('content-type','application/json');r.end(JSON.stringify(q.url==='/global/health'?{healthy:true}:q.url==='/session/status'?{'n3-safe-session':{type:'idle'}}:[{info:{role:'assistant',sessionID:'n3-safe-session',time:{completed:1},finish:'stop'},parts:[{type:'text',text:'{"findings":[]}'}]}]));}).listen(port,'127.0.0.1');}else{process.stdin.resume();process.stdin.on('end',()=>{console.log(JSON.stringify({type:'session.completed',session_id:'n3-safe-session',text:'{"findings":[]}'}));});}`);
+  fs.writeFileSync(fixture,`import fs from 'node:fs';import http from 'node:http';const a=process.argv.slice(2);const side=a.includes('serve')?'server':'client';fs.appendFileSync(${JSON.stringify(trace)},JSON.stringify({side,config:process.env.OPENCODE_CONFIG_CONTENT,permission:process.env.OPENCODE_PERMISSION??null,disableSkills:process.env.OPENCODE_DISABLE_EXTERNAL_SKILLS})+String.fromCharCode(10));if(side==='server'){const port=Number(a[a.indexOf('--port')+1]);http.createServer((q,r)=>{r.setHeader('content-type','application/json');const config=JSON.parse(process.env.OPENCODE_CONFIG_CONTENT);if(q.url==='/path')return r.end(JSON.stringify({directory:process.cwd(),worktree:'/'}));if(q.url==='/config')return r.end(JSON.stringify(config));if(q.url==='/agent')return r.end(JSON.stringify([{name:'build',permission:Object.entries(config.permission).flatMap(([permission,v])=>typeof v==='string'?[{permission,pattern:'*',action:v}]:Object.entries(v).map(([pattern,action])=>({permission,pattern,action})))}]));r.end(JSON.stringify(q.url==='/global/health'?{healthy:true}:q.url==='/session/status'?{'n3-safe-session':{type:'idle'}}:[{info:{role:'assistant',sessionID:'n3-safe-session',time:{completed:1},finish:'stop'},parts:[{type:'text',text:'{"findings":[]}'}]}]));}).listen(port,'127.0.0.1');}else{process.stdin.resume();process.stdin.on('end',()=>{console.log(JSON.stringify({type:'session.completed',session_id:'n3-safe-session',text:'{"findings":[]}'}));});}`);
   const safeCommand=path.join(s.root,"safe-command");const quote=v=>"'"+v.replaceAll("'", "'\"'\"'")+"'";fs.writeFileSync(safeCommand,`#!/bin/sh\nexec ${quote(process.execPath)} ${quote(fixture)} "$@"\n`,{mode:0o700});const spec=JSON.parse(Buffer.from(p.argv[0],"base64url").toString("utf8"));spec.command=safeCommand;
   const controlled={...p,argv:[Buffer.from(JSON.stringify(spec)).toString("base64url")]};
   const result=await execute(controlled,{maxOutputBytes:100000,healthCheckIntervalMs:10000});assert.equal(result.ok,true);
-  const rows=fs.readFileSync(trace,"utf8").trim().split("\n").map(JSON.parse);assert.deepEqual(rows.map(r=>r.side),["server","client"]);
-  for(const row of rows){assert.deepEqual(JSON.parse(row.config),c);if(row.permission!==null)assert.deepEqual(JSON.parse(row.permission),c.permission);assert.equal(row.disableSkills,p.env.OPENCODE_DISABLE_EXTERNAL_SKILLS);}
+  const rows=fs.readFileSync(trace,"utf8").trim().split("\n").map(JSON.parse);assert.deepEqual(rows.map(r=>r.side),["server","server","client"]);
+  const denied={"*":"deny",read:{"*":"deny"}},final={"*":"deny",read:{"*":"deny",[path.relative("/",s.inside)]:"allow"}};
+  for(const [index,row] of rows.entries()){const permission=index===0?denied:final;assert.deepEqual(JSON.parse(row.config),{...c,permission,agent:{...c.agent,build:{...c.agent.build,permission}}});if(row.permission!==null)assert.deepEqual(JSON.parse(row.permission),permission);assert.equal(row.disableSkills,p.env.OPENCODE_DISABLE_EXTERNAL_SKILLS);}
  }finally{s.clean();}
 });
 
@@ -230,4 +232,69 @@ for(const scenario of n3DiagnosticCases) test(`N3 P2 native diagnostic: ${scenar
       assert.match(item.message,new RegExp(`\\bsignal=${scenario.signal??"null"}\\b`),"retain only the actual safe native signal scalar");
     }
   }finally{spy.mockRestore();syncBuiltinESMExports();s.clean();}
+});
+
+
+for (const suffix of ["literal%25", "%2F", "space 中文"]) test(`N3 P2 OpenCode bound exact --dir retains ${suffix} owner bytes`,()=>{
+  const s=n3OcPacket();try {
+    const owner=path.join(s.root,suffix);fs.renameSync(s.cwd,owner);s.cwd=owner;
+    const p=n3OcPlan(s);const spec=JSON.parse(Buffer.from(p.argv[0],"base64url").toString("utf8"));
+    assert.equal(spec.workspace,fs.realpathSync(owner));
+    assert.equal(p.clientArgv[p.clientArgv.indexOf("--dir")+1],spec.workspace,"native CLI receives literal canonical owner without percent pre-escaping");
+  }finally{s.clean();}
+});
+
+
+// Actual native Read + Permission.evaluate, with no run/model command. The
+// metadata server is native; the policy is the same production packet owner.
+async function n3NativePath(owner, env) {
+  const socket=net.createServer();await new Promise((resolve,reject)=>{socket.once("error",reject);socket.listen(0,"127.0.0.1",resolve);});const port=socket.address().port;await new Promise(resolve=>socket.close(resolve));
+  const denied={"*":"deny",read:{"*":"deny"}},config=JSON.parse(env.OPENCODE_CONFIG_CONTENT);
+  const child=childProcess.spawn("/Users/Hugh/.opencode/bin/opencode",["--pure","serve","--hostname","127.0.0.1","--port",String(port)],{cwd:owner,env:{...env,OPENCODE_CONFIG_CONTENT:JSON.stringify({...config,permission:denied,agent:{build:{permission:denied}}}),OPENCODE_PERMISSION:JSON.stringify(denied)},stdio:["ignore","ignore","ignore"]});
+  const closed=new Promise((resolve,reject)=>{child.once("close",resolve);child.once("error",reject);});
+  try {
+    let healthy=false;
+    for(let attempt=0;attempt<100;attempt++) {if(child.exitCode!==null||child.signalCode!==null) throw new Error("native metadata server exited before readiness");try {const r=await fetch(`http://127.0.0.1:${port}/global/health`,{signal:AbortSignal.timeout(150)});healthy=r.ok&&(await r.json()).healthy===true;}catch{}if(healthy)break;await new Promise(resolve=>setTimeout(resolve,50));}
+    assert.equal(healthy,true,"native metadata server must become healthy");
+    const response=await fetch(`http://127.0.0.1:${port}/path`,{headers:{"x-opencode-directory":encodeURIComponent(owner)},signal:AbortSignal.timeout(5000)});assert.equal(response.ok,true);const metadata=await response.json();assert.equal(metadata.directory,owner);assert.equal(typeof metadata.worktree,"string");
+    console.log(JSON.stringify({native_path:{directory:metadata.directory,worktree:metadata.worktree},model_requests:0}));
+    return metadata;
+  } finally {
+    child.kill("SIGTERM");let timer;try {await Promise.race([closed,new Promise((_,reject)=>{timer=setTimeout(()=>{child.kill("SIGKILL");reject(new Error("native metadata server required forced cleanup"));},5000);})]);}finally{clearTimeout(timer);await closed;}
+    assert.throws(()=>process.kill(child.pid,0),{code:"ESRCH"});
+    const probe=net.createServer();await new Promise((resolve,reject)=>{probe.once("error",reject);probe.listen(port,"127.0.0.1",resolve);});await new Promise(resolve=>probe.close(resolve));
+  }
+}
+for(const git of [false,true]) test(`N3 P2 OpenCode bound native Read exact grant and denied undeclared paths (${git?"Git":"nonGit"})`,async()=>{
+  const root=fs.realpathSync(fs.mkdtempSync("/private/tmp/n3-oc-native-read-"));
+  try {
+    const repository=path.join(root,"repo %25 space 中文");fs.mkdirSync(repository);
+    if(git){const init=childProcess.spawnSync("git",["init","--quiet",repository],{encoding:"utf8"});assert.equal(init.status,0,init.stderr);}
+    const owner=path.join(repository,"packet %2F literal%25 空格");fs.mkdirSync(owner);const bundle=path.join(owner,"bundle");fs.mkdirSync(bundle);
+    const inside=path.join(bundle,"inside.txt"),sentinel="NATIVE_FULL_BYTES_%25_中文_9f17";fs.writeFileSync(inside,sentinel);
+    const bytes=fs.readFileSync(inside);fs.writeFileSync(path.join(bundle,"attachments-manifest.json"),JSON.stringify({files:[{target:"inside.txt",size:bytes.length,sha256:createHash("sha256").update(bytes).digest("hex")}]}));
+    const command="/Users/Hugh/.opencode/bin/opencode",p=openCodePacketWorker.start({...provider(command),id:"opencode"},owner,"No model command is executed",path.join(root,"owned-native-runtime"));
+    const metadata=await n3NativePath(owner,p.env);assert.equal(metadata.worktree,git?repository:"/");
+    const permission=n3NativePacketPermissions(owner,metadata.worktree),config=JSON.parse(p.env.OPENCODE_CONFIG_CONTENT);
+    const env={...p.env,OPENCODE_CONFIG_CONTENT:JSON.stringify({...config,permission,agent:{...config.agent,build:{...config.agent?.build,permission}}}),OPENCODE_PERMISSION:JSON.stringify(permission)};
+    const read=(file)=>{const r=childProcess.spawnSync(command,["--pure","debug","agent","build","--tool","read","--params",JSON.stringify({filePath:file})],{cwd:owner,env,encoding:"utf8",timeout:15000,maxBuffer:1024*1024});console.log(JSON.stringify({native_read:{target:file,exit:r.status,signal:r.signal,stdout:r.stdout,stderr:r.stderr},model_requests:0}));return r;};
+    const positive=read(inside);assert.equal(positive.status,0,"native Read positive control failed before its tool result");assert.equal(JSON.parse(positive.stdout).result.metadata.display.text,sentinel,"native Read must return the complete exact declared sentinel bytes");assert.equal(JSON.parse(positive.stdout).result.metadata.truncated,false);
+    const undeclared=path.join(bundle,"undeclared.txt"),adjacent=path.join(repository,"adjacent-provider.txt"),parent=path.join(root,"parent.txt");for(const file of [undeclared,adjacent,parent])fs.writeFileSync(file,"UNDECLARED_MUST_NOT_READ");
+    // /tmp is a real macOS alias. Its lexical coordinate differs from the
+    // canonical grant, and must not inherit permission for the canonical file.
+    for(const file of [undeclared,adjacent,parent,inside.replace(/^\/private\/tmp\//,"/tmp/")]) {const denied=read(file);assert.notEqual(denied.status,0);assert.match(denied.stderr,/The user has specified a rule which prevents you from using this specific tool call\. Here are some of the relevant rules /,"installed PermissionDeniedError.message is the native permission denial oracle");const rules=JSON.parse(denied.stderr.split("Here are some of the relevant rules ")[1].trim());assert.ok(rules.some(rule=>rule.permission==="read"&&rule.pattern==="*"&&rule.action==="deny"));assert.doesNotMatch(denied.stdout,/UNDECLARED_MUST_NOT_READ/);}
+
+  }finally{fs.rmSync(root,{recursive:true,force:true});}
+},60000);
+
+
+for(const mutation of ["symlink","hardlink","hash","glob"]) test(`N3 P2 OpenCode bound packet guard rejects ${mutation} before a native plan exists`,()=>{
+  const root=fs.realpathSync(temp());try {
+    const bundle=path.join(root,"bundle");fs.mkdirSync(bundle);const name=mutation==="glob"?"inside*.txt":"inside.txt",inside=path.join(bundle,name),outside=path.join(root,"outside.txt");fs.writeFileSync(inside,"EXACT_GUARD_BYTES");fs.writeFileSync(outside,"EXACT_GUARD_BYTES");const bytes=fs.readFileSync(inside);
+    fs.writeFileSync(path.join(bundle,"attachments-manifest.json"),JSON.stringify({files:[{target:name,size:bytes.length,sha256:createHash("sha256").update(bytes).digest("hex")}]}));
+    if(mutation==="hash")fs.writeFileSync(inside,"WRONG_GUARD_BYTES");
+    if(mutation==="symlink"){fs.unlinkSync(inside);fs.symlinkSync(outside,inside);}
+    if(mutation==="hardlink"){fs.unlinkSync(inside);fs.linkSync(outside,inside);}
+    assert.throws(()=>openCodePacketWorker.start({...provider("/Users/Hugh/.opencode/bin/opencode"),id:"opencode"},root,"No native model client may exist"),{code:"PROVIDER_PACKET_GUARD_UNAVAILABLE"},"packet guard failure must occur before returning an executable native plan");
+  }finally{fs.rmSync(root,{recursive:true,force:true});}
 });
