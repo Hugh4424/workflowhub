@@ -1629,7 +1629,9 @@
       "responsibility": "根因诊断四步；N3 P5输出与页面内容唯一信任边界、实测性能与便宜方案",
       "owner": "diagnosing-bugs维护owner；N3 P5/T005",
       "consumer": "workflows/build-code/SKILL.md方法2/3真实失败分支执行者；P7 QA/auth按条件指针消费输出与页面内容",
-      "module_consumers": ["workflows/build-code/SKILL.md"],
+      "module_consumers": [
+        "workflows/build-code/SKILL.md"
+      ],
       "named_data_readers": [
         "skills/catalog.yaml"
       ],
@@ -3424,9 +3426,9 @@
       "destination": "tools/cli/stage-runtime.mjs",
       "status": "retain",
       "role": "production",
-      "responsibility": "七类公共入口后端 = 窄工具①~④ + human-confirm：doctor→① + 存储报告；status→读 task.json/facts.jsonl/游标 + 材料存在性（质量缺失显示 unknown/incomplete）；run:draft→③；verify→②；confirm→human-confirm；authorize→④；review:record→审查链（ADR-018/019/021）",
-      "owner": "B4/P5 / MT-2-022",
-      "consumer": "当前直接模块消费者：tests/contract/card03-review-orchestration.test.mjs, tests/contract/code-review-ocr.test.mjs, tests/contract/doctor-interface.test.mjs, tests/contract/ocr-delegation-route.test.mjs, tests/contract/ocr-production-cutover.test.mjs, tests/contract/ocr-review-contract-bundle.test.mjs, tests/contract/review-public-entrypoints.test.mjs, tests/contract/runtime-facade.test.mjs, tests/contract/stage-progress-contract.test.mjs, tests/contract/write-identity-workspace.test.mjs",
+      "responsibility": "七类公共入口后端 = 窄工具①~④ + human-confirm：doctor→① + 存储报告；status→读 task.json/facts.jsonl/游标 + 材料存在性（质量缺失显示 unknown/incomplete）；run:draft→③；verify→②；confirm→human-confirm；authorize→④；review:record→审查链（ADR-018/019/021）；N3 P2仅在真实code bundle生成后、provider准备前向现public review host提供onReviewMaterials只读成员观察，原signal取消与review owner原件/dispose复用；027已证invoke覆盖host取消，现process/host两signal合并，默认无host不变，不新增公共动作。",
+      "owner": "B4/P5 / MT-2-022；N3 P2原生产owner仅承接材料观察窄修",
+      "consumer": "当前直接模块消费者：tests/contract/card03-review-orchestration.test.mjs, tests/contract/code-review-ocr.test.mjs, tests/contract/doctor-interface.test.mjs, tests/contract/ocr-delegation-route.test.mjs, tests/contract/ocr-production-cutover.test.mjs, tests/contract/ocr-review-contract-bundle.test.mjs, tests/contract/review-public-entrypoints.test.mjs, tests/contract/runtime-facade.test.mjs, tests/contract/stage-progress-contract.test.mjs, tests/contract/write-identity-workspace.test.mjs；P8原dispatcher在stageRuntimeCliMain相同argv/认证cwd下预读完整B/C包后abort原signal；tests/contract/n3-review-material-observer.test.mjs定向消费实际材料、取消/失败与默认route。",
       "module_consumers": [
         "tests/contract/card03-review-orchestration.test.mjs",
         "tests/contract/code-review-ocr.test.mjs",
@@ -3437,11 +3439,12 @@
         "tests/contract/review-public-entrypoints.test.mjs",
         "tests/contract/runtime-facade.test.mjs",
         "tests/contract/stage-progress-contract.test.mjs",
-        "tests/contract/write-identity-workspace.test.mjs"
+        "tests/contract/write-identity-workspace.test.mjs",
+        "tests/contract/n3-review-material-observer.test.mjs"
       ],
       "named_data_readers": [],
-      "delete_condition": "remove when the stage reflection mechanism is retired",
-      "retention_basis": "MT-2-022 / NARROW"
+      "delete_condition": "remove when the stage reflection mechanism is retired；本次observer由更窄既有实现完整承接P8相同消费及正反oracle后删除，不留第二projection/执行链。",
+      "retention_basis": "MT-2-022 / NARROW；2026-10-18本轮用户接受P2完整包预读根因/最小修复；103/139真实缺口、P2契约与独立018目标RED；不证明完整B/C可比或AC009质量/成本。"
     },
     {
       "source": "tools/cli/task-bootstrap.mjs",
@@ -5081,6 +5084,19 @@
       "named_data_readers": [],
       "delete_condition": "browser-use分支退役或经独立验证原生替代已承接同consumer/正反oracle后，同步删helper、shim接线与bundle；PID/socket/shim随每次ownedrun清理。",
       "retention_basis": "当前session/helper实际调用源码已读；570声明/571独立核源与consumer；171正例、172四Document面GREEN仅限实际范围。173冻结16/16及53中48pass/5fail作为历史失败保留；571启动取消发现由580/175处置，176完整16＋55、177默认locator及179/180分别定向已验（非单次57全跑），quality/tests/2026-10-17-001-p7-source-observer-race-corrected.json限定source三终态通过，具体范围见当前P7卡；202登录unavailable、057旧OCR未覆盖新helper、168残留路径unknown保留。513/514及147/509原件不覆盖，职责登记不等整卡验收。"
+    },
+    {
+      "source": "tests/contract/n3-review-material-observer.test.mjs",
+      "destination": "tests/contract/n3-review-material-observer.test.mjs",
+      "status": "retain",
+      "role": "test_only",
+      "responsibility": "独立先RED的public review材料观察行为oracle：完整manifest/source字节hash、包外及篡改拒绝、原signal取消/observer失败零provider与清理；正常路线受控seam只证明派发不证明provider质量。",
+      "owner": "N3 P2独立测试作者；生产修复由原P2owner承担，冻结后断言改变须独立TCR",
+      "consumer": "唯一执行consumer为P2定向命令 npx vitest run tests/contract/n3-review-material-observer.test.mjs -t 'N3 P2 material observer'；独立验收读取唯一执行原件。",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "现public review材料观察consumer退役且等强正反行为oracle经独立审查承接后删除；原始RED/GREEN及取消/失败原件保留。",
+      "retention_basis": "本轮已授权P2完整包预读根因/最小修复与P2精确写集；已实读test/recordTaskReview/consumer，先018真实RED后生产；本条创建晚于测试文件，照实补登记，不冒事前登记，不新增门或进度对象。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

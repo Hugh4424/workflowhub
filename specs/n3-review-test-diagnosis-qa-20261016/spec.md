@@ -299,6 +299,10 @@ checker的调用内sources应从下表实际读取，不把本段标签当三源
 
 P8先认证现存正常review；不足时允许按P8「补采前冻结同cohort输入」预先冻结条件后补采真实baseline/candidate连续三对。只解除原“不为凑样本另发provider”的执行限制，不降低N≥3、可比性、逐风险独立质量、成本四组或失败分母要求；不得先跑再改标准。原161、真实登录、23保护与G2历史冲突不在这次修订范围，仍保原事实。
 
+### P2完整审查包预读的现有consumer窄修（2026-10-18）
+
+沿本轮用户已接受的P2 B/C完整包预读根因与最小修复、D-011及既有AC-002/009，P2窄增既有 `tools/cli/stage-runtime.mjs` 与独立新增 `tests/contract/n3-review-material-observer.test.mjs` 写集。原public review consumer只在真实bundle构建后/provider准备前提供可选host只读 `onReviewMaterials({materialId,manifest,readMaterial})`；完整成员读回后caller主动abort原signal，由现review owner记录真实取消/unavailable并finally清理，不新增公共动作/参数、runner、writer、schema、gate或持久对象。精确读边界、独立先RED、默认路线保护、B/C现最小闭包与保留/删除条件见P2「完整审查包预读的现有consumer窄修」。187原批不冒此二路径的逐名授权；新登记不代替实现/验证，不改AC、冻结oracle、硬只读、成本/质量分母或旧103/139失败。P8不承担生产写入，仍只消费原件。
+
 ### P2共享投影既定语义缺陷修复（456/458）
 
 456已定位当前共享脱敏producer误吞真实JS执行声明的await，破坏AC-002送审语义。按完整N3目标及D-011自身问题修复，仅新增P2既有 `runtime/review/provider-material-projection.mjs` 与 `skills/wh-review/scripts/__tests__/material-redaction.test.mjs` 写集，独立458先RED/正反保护与实际egress，原P2owner后修；精确consumer、词法边界与保留删除条件见P2“本轮自身缺陷窄修”。187原答复不冒逐路径批准shared runtime。455 OCR检测器另行诊断，不取消fullread、秘密、硬只读或旧失败，不改AC/方向/路由/新schema。
