@@ -67,3 +67,26 @@ N3 P7浏览器QA在既有网关吸收Addy上述固定commit的 `skills/browser-t
 ## agent-browser runtime dependency
 
 agent-browser 0.36.0，Copyright 2025 Vercel Inc.，Apache License 2.0；本机只读许可来源为安装包 `agent-browser/LICENSE`，固定版本来源 [vercel-labs/agent-browser v0.36.0](https://github.com/vercel-labs/agent-browser/tree/v0.36.0)。本包调用已安装CLI，不vendoring其二进制/源码，不伪造内容指纹。Apache-2.0许可文本见上述LICENSE及 [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)。Lightpanda为研究后未采用候选，不进入本交付依赖闭包。
+
+
+## N4写作、规划与评测方法
+
+addyosmani/agent-skills 固定commit `aeac41d4d005999432bb7312f7ff06383a91d59d`，MIT，Copyright (c) 2025 Addy Osmani；pstack本地固定包SHA256 `f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8`，plugin声明0.15.23、Git revision unknown，MIT，Copyright (c) 2026 Lauren Tan。现有MIT完整许可声明及上述版权保留；逐文件固定hash/采用内容由catalog唯一登记。当前镜像/上游LICENSE均与本地许可同字节，不证明历史包绑定当前Git revision或法律充分性；本次仅在授权内改写方法子集，不复制整套原文。
+
+| 条目 | 来源与既有落点（非权威导航） |
+| --- | --- |
+| documentation-and-adrs | https://github.com/addyosmani/agent-skills；`skills/decision-log/SKILL.md`；具体pin/许可范围回catalog |
+| incremental-implementation | https://github.com/addyosmani/agent-skills；`skills/spec-plan/SKILL.md`；具体pin/许可范围回catalog |
+| planning-and-task-breakdown | https://github.com/addyosmani/agent-skills；`skills/spec-plan/SKILL.md`；具体pin/许可范围回catalog |
+| shipping-and-launch | https://github.com/addyosmani/agent-skills；`skills/spec-plan/templates/phase-template.md`；具体pin/许可范围回catalog |
+| source-driven-development | https://github.com/addyosmani/agent-skills；`skills/deep-research/SKILL.md`；具体pin/许可范围回catalog |
+| spec-driven-development | https://github.com/addyosmani/agent-skills；`skills/spec-specify/templates/spec-template.md`；具体pin/许可范围回catalog |
+| technical-writing | https://github.com/backnotprop/pstack；`skills/spec-specify/SKILL.md`；`skills/decision-log/templates/decision-log-template.md`；`skills/spec-specify/templates/spec-template.md`；`skills/spec-plan/templates/phase-template.md`；`skills/spec-prd/templates/prd-template.md`；具体pin/许可范围回catalog |
+| unslop | https://github.com/backnotprop/pstack；`skills/spec-specify/SKILL.md`；具体pin/许可范围回catalog |
+| build-the-lever | https://github.com/backnotprop/pstack；`workflows/build-plan/SKILL.md`；具体pin/许可范围回catalog |
+| minimize-reader-load | https://github.com/backnotprop/pstack；`skills/spec-plan/SKILL.md`；具体pin/许可范围回catalog |
+| why | https://github.com/backnotprop/pstack；`skills/decision-log/SKILL.md`；`skills/spec-analyze/SKILL.md`；`workflows/verify-code/SKILL.md`；具体pin/许可范围回catalog |
+| multi-phase-plan.md | https://github.com/backnotprop/pstack；`skills/spec-plan/templates/phase-template.md`；具体pin/许可范围回catalog |
+| refactoring.md | https://github.com/backnotprop/pstack；`skills/spec-plan/SKILL.md`；具体pin/许可范围回catalog |
+| hillclimb.md | https://github.com/backnotprop/pstack；`skills/spec-plan/templates/phase-template.md`；具体pin/许可范围回catalog |
+| eval.md | https://github.com/backnotprop/pstack；`skills/wh-review/contracts/provider-protocol.md`；`docs/architecture/test-asset-governance-rules.md`；具体pin/许可范围回catalog |

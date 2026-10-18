@@ -338,4 +338,26 @@ describe("ORACLE-N4-REPORT-ONLY writing reports", () => {
     expect(failed.status, failed.stdout + failed.stderr).toBe(1);
     expect(failed.stderr).toContain("FAILED: check-anti-host (exit 1)");
   });
+
+  it("states unconnected calibration availability without claiming independent labels are absent", () => {
+    const root = fixture();
+    const diagnostic = () => checkSkillConsistency(root).reports.filter(report => report.includes("句长参考"));
+    const before = diagnostic();
+    expect(before).toHaveLength(5);
+    for (const report of before) {
+      expect(report).toContain("本检查未接入独立标注；校准见独立原件");
+      expect(report).toContain("TP=unknown FP=unknown 分母=unknown");
+      expect(report).not.toContain("P5人工标注尚未提供");
+    }
+    // Independent evidence may exist, but this CLI has no label input/reader.
+    // Its diagnostic must neither invent availability nor consume that file.
+    put(root, "quality/evidence/independent-labels.json", { annotator: "independent", TP: 1, FP: 0, denominator: 1 });
+    expect(diagnostic()).toEqual(before);
+    expect(checkSkillConsistency(root).failures).toEqual([]);
+    const cli = spawnSync(process.execPath, [join(ROOT, "tools/cli/check-skill-consistency.mjs"), "--root", root], { encoding: "utf8" });
+    expect(cli.status, cli.stderr).toBe(0);
+    expect(cli.stdout).toContain("本检查未接入独立标注；校准见独立原件");
+    expect(cli.stdout).toContain("TP=unknown FP=unknown 分母=unknown");
+    expect(cli.stdout).not.toContain("P5人工标注尚未提供");
+  });
 });

@@ -30,9 +30,9 @@ Task IDs are unique across the entire task, not per Phase. Assign `T001`, `T002`
 
 Task 卡描述 task graph：每张卡在现有依赖字段明确写 `blocked_by` 的含义——哪些较早 Phase/Task 必须完成后才能开始；无阻塞写明「无，可立即开始」。阻塞边必须对应真实输入或交付依赖，不因编号相邻就制造依赖。frontier 是阻塞已满足的 Task；共享写集仍串行，不新增机器字段或调度器。
 
-- **tracer bullet**：一张卡切穿本交付实际涉及的 schema / API / UI / tests，形成窄但完整、可独立演示或验证的用户可见增量。不存在的层说明不适用，方法文档也沿真实输入→产物→消费者切片。规模以新独立上下文能完成为准，不按层横切；同一交付的连续步骤不拆成假独立票。
+- **tracer bullet**：一张卡切穿本交付实际涉及的 schema / API / UI / tests，形成窄但完整、可独立演示或验证的用户可见增量。不存在的层说明不适用，方法文档也沿真实输入→产物→消费者切片。每个增量先固定一个真实入口与正反结果，完成实现、核验和下游读回再开始下一增量；只交某层而无消费者闭环不能冒完整纵切。规模以新独立上下文能完成为准，不按层横切；同一交付的连续步骤不拆成假独立票。
 - **prefactor**：真实代码事实证明某准备改动能让实施更简单时，先交付这项准备；给明确输出、消费者与阻塞边，不为未来假设加基础设施。
-- **expand–contract**：机械宽重构无法逐纵切独立落绿时，先并存新旧形态，再按 blast radius 分批迁真实调用者；各迁移依赖 expand，最后 contract 依赖全部迁移，仅零当前调用后删除。若连批次也不能各自落绿，写清同一 integration 分支及最终整合验证的实际范围，不能把中间态说成全绿；保现 Phase/Task 形态，不建 tracker 或第二工件根。
+- **expand–contract**：结构改动前先用真实旧行为的特征测试或等价对照钉住行为契约，类型检查与 lint 不算 pin；该对照沿当前 oracle 与冻结测试，不另立第二判据。机械宽重构无法逐纵切独立落绿时，先并存新旧形态，再按 blast radius 分批迁真实调用者；各迁移依赖 expand，最后 contract 依赖全部迁移，仅零当前调用后删除。若连批次也不能各自落绿，写清同一 integration 分支及最终整合验证的实际范围，不能把中间态说成全绿；保现 Phase/Task 形态，不建 tracker 或第二工件根。
 
 在既有计划确认展示 Task 标题、blocked_by、用户可见结果、粒度与真实接缝；已接受的计划不重复询问。每候选 seam 一行说明能抓到什么、漏掉什么；先复用现有最高行为接缝，按当前已接受材料核对真实接缝确认与测试范围；确认记录只作来源线索，不是独立测试许可，记录不可得时如实披露缺口并继续范围明确的安全测试。只有接缝、接口形状或产品选择确实未定时，才交现 owner 确认，不自答。期望值来自独立真相源，禁从实施重算期望；执行一条纵切 test → 最小实现 → 下一条，horizontal slicing 不替行为循环。refactor 属于 review 阶段，不属于 red–green 循环。
 
@@ -67,6 +67,8 @@ G-2 for pure documentation or exploratory work permits N/A only with a concrete 
 计划里每一条红测都必须同时写下归因：目标行为失败 / 夹具或环境失败 / 本来就通过；只写命令与期望退出码不算写完。
 
 Cross-check the original requirement, decision, `spec.md`, every `phases/P<n>.md`, and generated `phases/index.md` for omissions, contradictions, cycles, duplicated bodies, boundary widening, and two-way traceability. Perform an execution dry-run on each Task card: can an implementer using only current spec, index, and that Phase identify the first symbol to inspect, the first edit, target RED, GREEN, negative case, and recovery without inventing a product choice? Repair any no. Independent findings review and final `spec-analyze` are quality facts, not work permits. Preserve partial and unavailable facts honestly; repair valid findings in this task.
+
+作者收口实际消费既有无状态 `validatePostPhaseContract({spec,index,phases})` 与 `checkSkillConsistency(root)`：前者按原 `{ok,errors,facts}` 返回机械合同缺项，后者只沿现 `reports` 报告可判缺例/占位、不可判散文保持 unknown；缺验收例先定位真实 Task 与原文，不用编号或模板在场冒完整。缺例用占位明示时应在现报告可见，整段语义缺失而工具不能判时由独立读者报告该缺口；不新增校验器、状态或持久报告对象，不改变任何原退出语义，也不把 reports 升为许可。开头仍让读者能定位交付结果与真实依赖。
 
 Return the actual spec/Phase paths and the design/verification limits. Read current required materials directly; missing input is unavailable with impact and next action, not empty content. No packet hash, snapshot or actual independent review receipt is a prerequisite.
 

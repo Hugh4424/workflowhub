@@ -54,3 +54,26 @@
 | frontend-prototype-render | 用真实组件输入渲染任务原型，提供预览与截图。 | [读取正文](frontend-prototype-render/SKILL.md) |
 | frontend-component-quality | 实现或审查组件的真实consumer、状态、ViewModel、样式与复用边界。 | [读取正文](frontend-component-quality/SKILL.md) |
 | third-review | 明确调用通用异源CLI审查器，保原始意见和失败诊断。 | [读取正文](third-review/SKILL.md) |
+
+
+## N4既有方法采用索引
+
+来源/固定版本/许可唯一回 `catalog.yaml` 的 `n4-*` absorbed条目；以下只给真实动作与正文入口，不建立第二来源权威。三重复项只核复用，其余文字采用不冒行为效果。
+
+| 条目 | 采用或复用动作 | 既有正文入口 |
+| --- | --- | --- |
+| documentation-and-adrs | 先读现有ADR约定；被拒替代逐项留理由与代价 | `skills/decision-log/SKILL.md` |
+| incremental-implementation | 真实纵切逐增量实现/验证/下游消费闭环 | `skills/spec-plan/SKILL.md` |
+| planning-and-task-breakdown | 复用既有依赖图与共享文件定序，重复项不新写规则 | `skills/spec-plan/SKILL.md` |
+| shipping-and-launch | 复用既有精确hunk回滚与触发，重复项不新写发布清单 | `skills/spec-plan/templates/phase-template.md` |
+| source-driven-development | 复用P4实读版本/直达原文/unverified，不凭记忆实现 | `skills/deep-research/SKILL.md` |
+| spec-driven-development | 多能力先列模块职责/稳定称谓/单向依赖，互依赖核合并 | `skills/spec-specify/templates/spec-template.md` |
+| technical-writing | WR001跨语言模式/术语/指代与条件保全；四类写作出口读唯一规范 | `skills/spec-specify/SKILL.md`；`skills/decision-log/templates/decision-log-template.md`；`skills/spec-specify/templates/spec-template.md`；`skills/spec-plan/templates/phase-template.md`；`skills/spec-prd/templates/prd-template.md` |
+| unslop | 人读跨语言表面痕迹并保意义，不作评分或风格门 | `skills/spec-specify/SKILL.md` |
+| build-the-lever | 手工独立oracle与worker产物逐项对照；worker不改自身验收契约/保留标签，标签回真实产物，不冻全树 | `workflows/build-plan/SKILL.md` |
+| minimize-reader-load | 复用WR001与材料指针降低追溯负担，重复项不加同义权威 | `skills/spec-plan/SKILL.md` |
+| why | 代码anchor→git历史/原决定→竞争假设与unknown，三处真实方法消费 | `skills/decision-log/SKILL.md`；`skills/spec-analyze/SKILL.md`；`workflows/verify-code/SKILL.md` |
+| multi-phase-plan.md | spec-plan作者收口实际消费既有无状态合同校验与现reports，缺验收例/占位可见，语义不明unknown，原退出语义不变 | `skills/spec-plan/templates/phase-template.md` |
+| refactoring.md | 结构改动先pin行为契约；typecheck/lint不算pin，无第二oracle | `skills/spec-plan/SKILL.md` |
+| hillclimb.md | 独立oracle区分好坏、error/work明确单位、重复观测/噪声与停止；无固定次数门/loop账本 | `skills/spec-plan/templates/phase-template.md` |
+| eval.md | 真实独立候选→匿名同尺judge→基底合成与验证，实际轨迹不信自报 | `skills/wh-review/contracts/provider-protocol.md`；`docs/architecture/test-asset-governance-rules.md` |

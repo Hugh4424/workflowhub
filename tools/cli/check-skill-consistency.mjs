@@ -202,7 +202,7 @@ export function checkSkillConsistency(root) {
       }
       const sentenceCounts = proseLines.join("\n").split(/[。！？]/u)
         .map(sentence => (sentence.match(/[\p{Script=Han}]|[A-Za-z0-9]+|\uE000/gu) ?? []).length).filter(count => count > 0);
-      reports.push(`${prefix} 句长参考 ${JSON.stringify(sentenceCounts)}; 汉字各1、连续拉丁/数字串1、行内代码1，排除机器字面/引用块/围栏; 校准 TP=unknown FP=unknown 分母=unknown（P5人工标注尚未提供）；无句长门／评分; report-only`);
+      reports.push(`${prefix} 句长参考 ${JSON.stringify(sentenceCounts)}; 汉字各1、连续拉丁/数字串1、行内代码1，排除机器字面/引用块/围栏; 校准 TP=unknown FP=unknown 分母=unknown（本检查未接入独立标注；校准见独立原件）；无句长门／评分; report-only`);
     } catch (error) {
       // Only this added read/report capability degrades. Catalog/bundle errors
       // and CLI argument/dependency failures keep their original blocking path.

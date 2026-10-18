@@ -253,6 +253,10 @@
 
 本节回答：如何逐条执行验收、留下可复核结论并闭环失败。可执行产物的唯一末 Phase 在本节覆盖全部 AC；纯文档任务仅按 `skills/spec-plan/SKILL.md` 的「Test design and quality」具名豁免，混合任务不在豁免范围。按下列 13 项填写；复用既有 Phase、Task 与原始证据，不新增 stage、gate、审查点、schema 或校验器。
 
+验收作者与独立判定者先读 `docs/architecture/test-asset-governance-rules.md#验收标准可执行形式der-01der-11r-001fr-16ac-16` 的真实好坏例、同尺、独立判定与匿名不自判要求；样本与身份回本任务原件，未执行不预填通过，本节不另建标准。
+
+工具或 worker 生成的结果先与独立手工 oracle 对照，标签逐项回真实产物；worker 不改自身验收契约或保留标签，执行后核原件未改，未建立物理隔离就如实披露，不冻结全树。
+
 先消费 `skills/spec-plan/SKILL.md#Test design and quality` 的结果/输入/owner/时点约定，再填本节现有输入与逐条结论：引用上游原件，并给必要未闭环 case 的真实入口、具名命令与执行者。没有所需输入时，列具体缺口和取得条件；只读原件汇总不冒端到端执行。完整的行为卡、纯文档 G-2 卡与同一 spec/index 组合见下方「完整作者材料示例」，不能只抽字段首行重组为一份测试专用合同。
 
 1. **入口准则**：逐条核对前置 Phase 的 Done、写入集落地和两份就绪件的 status；每条写核对结果与证据路径。
@@ -260,7 +264,7 @@
 3. **授权边界**：写目标账号与环境、副作用白名单与数量上限、明确禁止的动作、授权有效期、失败即停条件。agent 全自动操作真实环境，不设人工确认或人工执行；凭据失效或环境不可达时按停止条件留真实失败。
 4. **逐条结论**：每格带证据才算完成；缺证据如实保留缺口，不读成通过。每条 AC 一行，写 AC 编号、一个档位、一条具名证据路径。档位只引用 `runtime/evidence/acceptance-evidence-validator.mjs:6` 的 8 值词表，不复制新词表；结论行数与 AC 条数相等，非 `pass` 一律不计通过，不用计数替代逐条。
 5. **五类执行事实**：逐条记命令与参数、cwd 与执行者、exit code 与 signal 与 timeout、原始输出落点、机器可读测试报告（runner 与版本）。`refs` 各标 `execution_record`、`machine_report`、`trace`、`screenshot`、`coverage`、`mutation`、`contract_check`、`red_original`、`negative_control` 之一。首次失败、重跑通过时标 `flaky`、档位记 `inconclusive`，不得记 `pass`。
-6. **效果评测**：写比较基线、指标与统计量、正例与负例、具名原始输出文件及结论。指标基线须在改动前实测，比较两侧条件可比；这里的指标基线不是材料字节基线。UI 判据须明确；本仓无 UI 可写 worktree 无 `apps/`、无 `.tsx`、`.vue`、`.jsx`，但不能免掉代码与接口面。不用环境指纹、产物 digest、哈希或版本相等判定，不用覆盖率或测试数量判通过。
+6. **效果评测**：写比较基线、指标与统计量、正例与负例、具名原始输出文件及结论。先用具名受控正反负载证明测具能区分目标变化，再冻结输入、指标与停止条件；迭代一次只改一处并测量，保留有可观察收益且未放松原判据的改动，否则撤回该处，不增逐次台账。报告 error/work count 的实际单位与范围：error 是相对独立 oracle 的误报、漏报或错误结果，work 是本次工具真实处理的输入/对照次数，并分开样本数、变更数和未测工程成本；标签逐项指回真实产物。重复观测须保同输入/条件及原读数，按观测波动说明停止依据；仅少量重复未见差异不等于稳定或改善，噪声不可估或收益未越过可观察波动则记 inconclusive，不加固定次数下限、数值门或循环账本。指标基线须在改动前实测，比较两侧条件可比；这里的指标基线不是材料字节基线。UI 判据须明确；本仓无 UI 可写 worktree 无 `apps/`、无 `.tsx`、`.vue`、`.jsx`，但不能免掉代码与接口面。不用环境指纹、产物 digest、哈希或版本相等判定，不用覆盖率或测试数量判通过。
 7. **复验四项**：写复验者与修复者的上下文差异（具体 subagent 身份或 provider 名）、F2P 与 P2P 各自用例清单且计数都大于 0、所跑回归范围与它为何是本次修改的保守超集、三档判分。F2P 为 1 且 P2P 为 1 记 FULL；0 小于 F2P 小于 1 且 P2P 为 1 记 PARTIAL；其余记 NO。PARTIAL 不得记 `pass`，分母为 0 不判通过；修复者自己的声明不算复验证据。
 8. **变更批准**：AC 或用例集合每次增删改，写独立审查批准者身份、`Rationale for Change`、`Impact Assessment`；登记列为 `Change Request ID`、`Impact Assessment`、`Approval Status`、`Closure Notes/Verification Status`。批准者非实现者、非同一上下文；纯重构不改既有测试，改 AC 等于改承诺，须重新取得确认。没有变更写「无加理由」。
 9. **分诊与关闭**：失败先复现；分诊者不是实现者，保留步骤与结果。最低字段为 `Defect ID`、描述、是否可复现、`Version detected`、`Severity`、`Priority`、`Disposition`（初值 `Pending`）。终值只取 `Fixed`、`Won'tFix`、`Deferred`、`AcceptedRisk`、`Duplicate`、`NotABug`、`Referred`；不修的值须写理由与风险接受人署名。关闭留 `Closed by`、`Date closed`、`Change reference`、`Test reference`、`Closure Notes/Verification Status`。

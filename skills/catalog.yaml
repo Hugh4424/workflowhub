@@ -2119,3 +2119,346 @@ capability_decisions:
     local_changes: "保本仓single-engine/session、source只读scope、白名单、取消及证据清理；拒绝MCP替代引擎、main-profile/live attach、第三方cookie同步、zero-warning门、独立Doctor/feature-map、周期任务、默认PR。pstack包SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；git commit未知，main URL仅locator。方法消费和元数据分别首验。"
     dependency_closure: [skills/spec-specify/SKILL.md, skills/diagnosing-bugs/SKILL.md]
     update_policy: "按固定Addy commit或pstack实际包SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8逐项比较章节、真实consumer与拒绝项；不造content_sha256/commit、不自动追HEAD。"
+
+  - name: n4-documentation-and-adrs
+    status: absorbed
+    purpose: N4 documentation-and-adrs 既有方法采用/复用登记
+    design_idea: 先读现有ADR约定；被拒替代逐项留理由与代价
+    used_by_stages:
+      - build-plan
+      - build-code
+      - verify-code
+    local_path: skills/decision-log/SKILL.md
+    upstream:
+      - github_url: https://github.com/addyosmani/agent-skills
+        commit: aeac41d4d005999432bb7312f7ff06383a91d59d
+        commit_url: https://github.com/addyosmani/agent-skills/commit/aeac41d4d005999432bb7312f7ff06383a91d59d
+        license: MIT
+        reviewed_at: '2026-10-18'
+        review_outcome: accepted
+        path: skills/documentation-and-adrs/SKILL.md
+        skill_url: https://github.com/addyosmani/agent-skills/blob/aeac41d4d005999432bb7312f7ff06383a91d59d/skills/documentation-and-adrs/SKILL.md
+        adopted:
+          - skills/documentation-and-adrs/SKILL.md — 先读现有ADR约定；被拒替代逐项留理由与代价
+    local_changes: commit aeac41d4d005999432bb7312f7ff06383a91d59d；子文件 SHA256 b60d503925bbaacee7fd63935db70b9ced5b2514ff5a56a672130e01b9690bc5；既有正文差量；consumer为Read current docs/adr naming/conventions and current N4 decision D015 before writing adoption choice; report actual established convention and rejected alternative reason.；首验与负例见本任务原件，登记不冒效果。
+    dependency_closure:
+      - skills/spec-specify/SKILL.md
+    update_policy: 按固定本地原件逐项比source/本地偏离；不自动追HEAD；被独立审查替代且零consumer后退役，历史原件保留。
+  - name: n4-incremental-implementation
+    status: absorbed
+    purpose: N4 incremental-implementation 既有方法采用/复用登记
+    design_idea: 真实纵切逐增量实现/验证/下游消费闭环
+    used_by_stages:
+      - build-plan
+      - build-code
+      - verify-code
+    local_path: skills/spec-plan/SKILL.md
+    upstream:
+      - github_url: https://github.com/addyosmani/agent-skills
+        commit: aeac41d4d005999432bb7312f7ff06383a91d59d
+        commit_url: https://github.com/addyosmani/agent-skills/commit/aeac41d4d005999432bb7312f7ff06383a91d59d
+        license: MIT
+        reviewed_at: '2026-10-18'
+        review_outcome: accepted
+        path: skills/incremental-implementation/SKILL.md
+        skill_url: https://github.com/addyosmani/agent-skills/blob/aeac41d4d005999432bb7312f7ff06383a91d59d/skills/incremental-implementation/SKILL.md
+        adopted:
+          - skills/incremental-implementation/SKILL.md — 真实纵切逐增量实现/验证/下游消费闭环
+    local_changes: commit aeac41d4d005999432bb7312f7ff06383a91d59d；子文件 SHA256 df66536610071727feae1ca95f3c391c248ad828041750ccd3699cce763aa00b；既有正文差量；consumer为Consume actual P5 T013–T019 delivery sequence and identify complete outcome/input/output/consumer per card.；首验与负例见本任务原件，登记不冒效果。
+    dependency_closure:
+      - skills/spec-specify/SKILL.md
+    update_policy: 按固定本地原件逐项比source/本地偏离；不自动追HEAD；被独立审查替代且零consumer后退役，历史原件保留。
+  - name: n4-planning-and-task-breakdown
+    status: absorbed
+    purpose: N4 planning-and-task-breakdown 既有方法采用/复用登记
+    design_idea: 复用既有依赖图与共享文件定序，重复项不新写规则
+    used_by_stages:
+      - build-plan
+      - build-code
+      - verify-code
+    local_path: skills/spec-plan/SKILL.md
+    upstream:
+      - github_url: https://github.com/addyosmani/agent-skills
+        commit: aeac41d4d005999432bb7312f7ff06383a91d59d
+        commit_url: https://github.com/addyosmani/agent-skills/commit/aeac41d4d005999432bb7312f7ff06383a91d59d
+        license: MIT
+        reviewed_at: '2026-10-18'
+        review_outcome: accepted
+        path: skills/planning-and-task-breakdown/SKILL.md
+        skill_url: https://github.com/addyosmani/agent-skills/blob/aeac41d4d005999432bb7312f7ff06383a91d59d/skills/planning-and-task-breakdown/SKILL.md
+        adopted:
+          - skills/planning-and-task-breakdown/SKILL.md — 复用既有依赖图与共享文件定序，重复项不新写规则
+    local_changes: commit aeac41d4d005999432bb7312f7ff06383a91d59d；子文件 SHA256 ed0f90cc5951ddd4bcab7f871f64efec93a49af9279ef93bc470da77ad8da3f7；只核既有等价机制，不冒本次新实施。consumer为Read actual P5 graph and shared-path overlaps.；首验与负例见本任务原件，登记不冒效果。
+    dependency_closure:
+      - skills/spec-specify/SKILL.md
+    update_policy: 按固定本地原件逐项比source/本地偏离；不自动追HEAD；被独立审查替代且零consumer后退役，历史原件保留。
+  - name: n4-shipping-and-launch
+    status: absorbed
+    purpose: N4 shipping-and-launch 既有方法采用/复用登记
+    design_idea: 复用既有精确hunk回滚与触发，重复项不新写发布清单
+    used_by_stages:
+      - build-plan
+      - build-code
+      - verify-code
+    local_path: skills/spec-plan/templates/phase-template.md
+    upstream:
+      - github_url: https://github.com/addyosmani/agent-skills
+        commit: aeac41d4d005999432bb7312f7ff06383a91d59d
+        commit_url: https://github.com/addyosmani/agent-skills/commit/aeac41d4d005999432bb7312f7ff06383a91d59d
+        license: MIT
+        reviewed_at: '2026-10-18'
+        review_outcome: accepted
+        path: skills/shipping-and-launch/SKILL.md
+        skill_url: https://github.com/addyosmani/agent-skills/blob/aeac41d4d005999432bb7312f7ff06383a91d59d/skills/shipping-and-launch/SKILL.md
+        adopted:
+          - skills/shipping-and-launch/SKILL.md — 复用既有精确hunk回滚与触发，重复项不新写发布清单
+    local_changes: commit aeac41d4d005999432bb7312f7ff06383a91d59d；子文件 SHA256 726f3e546369db289160b8d42195590f00b6432887e17bf19070dcc9a347fe39；只核既有等价机制，不冒本次新实施。consumer为Use P5 actual rollback contract to state affected-hunk recovery preserving P4 source changes.；首验与负例见本任务原件，登记不冒效果。
+    dependency_closure:
+      - skills/spec-specify/SKILL.md
+    update_policy: 按固定本地原件逐项比source/本地偏离；不自动追HEAD；被独立审查替代且零consumer后退役，历史原件保留。
+  - name: n4-source-driven-development
+    status: absorbed
+    purpose: N4 source-driven-development 既有方法采用/复用登记
+    design_idea: 复用P4实读版本/直达原文/unverified，不凭记忆实现
+    used_by_stages:
+      - build-plan
+      - build-code
+      - verify-code
+    local_path: skills/deep-research/SKILL.md
+    upstream:
+      - github_url: https://github.com/addyosmani/agent-skills
+        commit: aeac41d4d005999432bb7312f7ff06383a91d59d
+        commit_url: https://github.com/addyosmani/agent-skills/commit/aeac41d4d005999432bb7312f7ff06383a91d59d
+        license: MIT
+        reviewed_at: '2026-10-18'
+        review_outcome: accepted
+        path: skills/source-driven-development/SKILL.md
+        skill_url: https://github.com/addyosmani/agent-skills/blob/aeac41d4d005999432bb7312f7ff06383a91d59d/skills/source-driven-development/SKILL.md
+        adopted:
+          - skills/source-driven-development/SKILL.md — 复用P4实读版本/直达原文/unverified，不凭记忆实现
+    local_changes: commit aeac41d4d005999432bb7312f7ff06383a91d59d；子文件 SHA256 c59faf851377f0eeda45306398d16eb96d77ab1c2fd3e1a7fb58e9a0af33c1e9；既有正文差量；consumer为Read actual pstack source manifest plus frozen remote provenance record.；首验与负例见本任务原件，登记不冒效果。
+    dependency_closure:
+      - skills/spec-specify/SKILL.md
+    update_policy: 按固定本地原件逐项比source/本地偏离；不自动追HEAD；被独立审查替代且零consumer后退役，历史原件保留。
+  - name: n4-spec-driven-development
+    status: absorbed
+    purpose: N4 spec-driven-development 既有方法采用/复用登记
+    design_idea: 多能力先列模块职责/稳定称谓/单向依赖，互依赖核合并
+    used_by_stages:
+      - build-plan
+      - build-code
+      - verify-code
+    local_path: skills/spec-specify/templates/spec-template.md
+    upstream:
+      - github_url: https://github.com/addyosmani/agent-skills
+        commit: aeac41d4d005999432bb7312f7ff06383a91d59d
+        commit_url: https://github.com/addyosmani/agent-skills/commit/aeac41d4d005999432bb7312f7ff06383a91d59d
+        license: MIT
+        reviewed_at: '2026-10-18'
+        review_outcome: accepted
+        path: skills/spec-driven-development/SKILL.md
+        skill_url: https://github.com/addyosmani/agent-skills/blob/aeac41d4d005999432bb7312f7ff06383a91d59d/skills/spec-driven-development/SKILL.md
+        adopted:
+          - skills/spec-driven-development/SKILL.md — 多能力先列模块职责/稳定称谓/单向依赖，互依赖核合并
+    local_changes: commit aeac41d4d005999432bb7312f7ff06383a91d59d；子文件 SHA256 c4b97ce3d7f24be0e67fd612c7595f65504872e3a9f8d338d098b2363fdb66ef；既有正文差量；consumer为Read real spec module responsibilities, classify independently testable capabilities and dependencies without class/transport leakage.；首验与负例见本任务原件，登记不冒效果。
+    dependency_closure:
+      - skills/spec-specify/SKILL.md
+    update_policy: 按固定本地原件逐项比source/本地偏离；不自动追HEAD；被独立审查替代且零consumer后退役，历史原件保留。
+  - name: n4-technical-writing
+    status: absorbed
+    purpose: N4 technical-writing 既有方法采用/复用登记
+    design_idea: WR001跨语言模式/术语/指代与条件保全；四类写作出口读唯一规范
+    used_by_stages:
+      - build-plan
+      - build-code
+      - verify-code
+    local_path: skills/spec-specify/SKILL.md; skills/decision-log/templates/decision-log-template.md; skills/spec-specify/templates/spec-template.md; skills/spec-plan/templates/phase-template.md; skills/spec-prd/templates/prd-template.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        license: MIT
+        reviewed_at: '2026-10-18'
+        review_outcome: accepted
+        path: skills/technical-writing/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/technical-writing/SKILL.md
+        adopted:
+          - skills/technical-writing/SKILL.md — WR001跨语言模式/术语/指代与条件保全；四类写作出口读唯一规范
+    local_changes: archive SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；local plugin声明0.15.23；Git revision unknown；main URL仅来源坐标，非固定revision；子文件 SHA256 61fe9c424a798ebf36ad94941f87be049cb8827bdf86d21474a0dde37b513c43；既有正文差量；consumer为Consume current spec FR-N4-008 and write a short explanation for material author preserving all constraints and unknown.；首验与负例见本任务原件，登记不冒效果。
+    dependency_closure:
+      - skills/spec-specify/SKILL.md
+    update_policy: 按固定本地原件逐项比source/本地偏离；不自动追HEAD；被独立审查替代且零consumer后退役，历史原件保留。
+  - name: n4-unslop
+    status: absorbed
+    purpose: N4 unslop 既有方法采用/复用登记
+    design_idea: 人读跨语言表面痕迹并保意义，不作评分或风格门
+    used_by_stages:
+      - build-plan
+      - build-code
+      - verify-code
+    local_path: skills/spec-specify/SKILL.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        license: MIT
+        reviewed_at: '2026-10-18'
+        review_outcome: accepted
+        path: skills/unslop/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/unslop/SKILL.md
+        adopted:
+          - skills/unslop/SKILL.md — 人读跨语言表面痕迹并保意义，不作评分或风格门
+    local_changes: archive SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；local plugin声明0.15.23；Git revision unknown；main URL仅来源坐标，非固定revision；子文件 SHA256 ccab208e315ce05e2fab8eeee2f7879f1289b5c6844840b2d307adf31c79144f；既有正文差量；consumer为Read current decision D003 paragraph and propose meaning-preserving surface edit under WR001.；首验与负例见本任务原件，登记不冒效果。
+    dependency_closure:
+      - skills/spec-specify/SKILL.md
+    update_policy: 按固定本地原件逐项比source/本地偏离；不自动追HEAD；被独立审查替代且零consumer后退役，历史原件保留。
+  - name: n4-build-the-lever
+    status: absorbed
+    purpose: N4 build-the-lever 既有方法采用/复用登记
+    design_idea: 手工独立oracle与worker产物逐项对照；worker不改自身验收契约/保留标签，标签回真实产物，不冻全树
+    used_by_stages:
+      - build-plan
+      - build-code
+      - verify-code
+    local_path: workflows/build-plan/SKILL.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        license: MIT
+        reviewed_at: '2026-10-18'
+        review_outcome: accepted
+        path: skills/principle-build-the-lever/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/principle-build-the-lever/SKILL.md
+        adopted:
+          - skills/principle-build-the-lever/SKILL.md — 手工独立oracle与worker产物逐项对照；worker不改自身验收契约/保留标签，标签回真实产物，不冻全树
+    local_changes: archive SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；local plugin声明0.15.23；Git revision unknown；main URL仅来源坐标，非固定revision；子文件 SHA256 3434b0ad0c640c6f1d7960be7a8986c3bcdc14e26060360dec29903df60074ff；既有正文差量；consumer为现build-plan/Phase作者读127独立AI手工标签并比较089/093 worker输出，核127/133未改；标签错配/改标签计TP负例必须被独立判明；初始123/134偏义原件保留，父PRD713/726/730为原定义；实际首验见本次修复原件，登记不冒效果。
+    dependency_closure:
+      - skills/spec-specify/SKILL.md
+    update_policy: 按固定本地原件逐项比source/本地偏离；不自动追HEAD；被独立审查替代且零consumer后退役，历史原件保留。
+  - name: n4-minimize-reader-load
+    status: absorbed
+    purpose: N4 minimize-reader-load 既有方法采用/复用登记
+    design_idea: 复用WR001与材料指针降低追溯负担，重复项不加同义权威
+    used_by_stages:
+      - build-plan
+      - build-code
+      - verify-code
+    local_path: skills/spec-plan/SKILL.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        license: MIT
+        reviewed_at: '2026-10-18'
+        review_outcome: accepted
+        path: skills/principle-minimize-reader-load/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/principle-minimize-reader-load/SKILL.md
+        adopted:
+          - skills/principle-minimize-reader-load/SKILL.md — 复用WR001与材料指针降低追溯负担，重复项不加同义权威
+    local_changes: archive SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；local plugin声明0.15.23；Git revision unknown；main URL仅来源坐标，非固定revision；子文件 SHA256 1ea2b7fef2391cae5844c4efdbd59031f775e8a52d06b7495d707229a200dcca；只核既有等价机制，不冒本次新实施。consumer为Trace actual P5 contract to global spec and source registry; answer where source comes from and which owner changes it.；首验与负例见本任务原件，登记不冒效果。
+    dependency_closure:
+      - skills/spec-specify/SKILL.md
+    update_policy: 按固定本地原件逐项比source/本地偏离；不自动追HEAD；被独立审查替代且零consumer后退役，历史原件保留。
+  - name: n4-why
+    status: absorbed
+    purpose: N4 why 既有方法采用/复用登记
+    design_idea: 代码anchor→git历史/原决定→竞争假设与unknown，三处真实方法消费
+    used_by_stages:
+      - build-plan
+      - build-code
+      - verify-code
+    local_path: skills/decision-log/SKILL.md; skills/spec-analyze/SKILL.md; workflows/verify-code/SKILL.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        license: MIT
+        reviewed_at: '2026-10-18'
+        review_outcome: accepted
+        path: skills/why/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/why/SKILL.md
+        adopted:
+          - skills/why/SKILL.md — 代码anchor→git历史/原决定→竞争假设与unknown，三处真实方法消费
+    local_changes: archive SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；local plugin声明0.15.23；Git revision unknown；main URL仅来源坐标，非固定revision；子文件 SHA256 9145d2f5c26931930f68485a265eb89b2ecfe95d852f1c86ced3faa21da6da44；既有正文差量；consumer为Use actual P1 9570dce runtime/stage/stage-content-contracts.mjs change and source N4 Chinese-label defect to establish code anchor, git evidence and rationale.；首验与负例见本任务原件，登记不冒效果。
+    dependency_closure:
+      - skills/spec-specify/SKILL.md
+    update_policy: 按固定本地原件逐项比source/本地偏离；不自动追HEAD；被独立审查替代且零consumer后退役，历史原件保留。
+  - name: n4-multi-phase-plan
+    status: absorbed
+    purpose: N4 multi-phase-plan.md 既有方法采用/复用登记
+    design_idea: spec-plan作者收口实际消费既有无状态合同校验与现reports，缺验收例/占位可见，语义不明unknown，原退出语义不变
+    used_by_stages:
+      - build-plan
+      - build-code
+      - verify-code
+    local_path: skills/spec-plan/templates/phase-template.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        license: MIT
+        reviewed_at: '2026-10-18'
+        review_outcome: accepted
+        path: skills/poteto-mode/playbooks/multi-phase-plan.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/poteto-mode/playbooks/multi-phase-plan.md
+        adopted:
+          - skills/poteto-mode/playbooks/multi-phase-plan.md — spec-plan作者收口实际消费既有无状态合同校验与现reports，缺验收例/占位可见，语义不明unknown，原退出语义不变
+    local_changes: archive SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；local plugin声明0.15.23；Git revision unknown；main URL仅来源坐标，非固定revision；子文件 SHA256 27d310e3fc3937a60b8fcbe1318f9d249a7477a722907bf85b3e4eb3dc436b11；既有正文差量；consumer为现spec-plan收口读当前7Phase/result/dependencies，删T013场景字段由原validator报原错误，缺验收例占位由既有checkSkillConsistency reports报，恢复原文，不新增状态；初始123/134偏义原件保留，父PRD713/726/730为原定义；实际首验见本次修复原件，登记不冒效果。
+    dependency_closure:
+      - skills/spec-specify/SKILL.md
+    update_policy: 按固定本地原件逐项比source/本地偏离；不自动追HEAD；被独立审查替代且零consumer后退役，历史原件保留。
+  - name: n4-refactoring
+    status: absorbed
+    purpose: N4 refactoring.md 既有方法采用/复用登记
+    design_idea: 结构改动先pin行为契约；typecheck/lint不算pin，无第二oracle
+    used_by_stages:
+      - build-plan
+      - build-code
+      - verify-code
+    local_path: skills/spec-plan/SKILL.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        license: MIT
+        reviewed_at: '2026-10-18'
+        review_outcome: accepted
+        path: skills/poteto-mode/playbooks/refactoring.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/poteto-mode/playbooks/refactoring.md
+        adopted:
+          - skills/poteto-mode/playbooks/refactoring.md — 结构改动先pin行为契约；typecheck/lint不算pin，无第二oracle
+    local_changes: archive SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；local plugin声明0.15.23；Git revision unknown；main URL仅来源坐标，非固定revision；子文件 SHA256 50f4f7d3d301551f8b8a57c3303c99958c5ca630ae0d0051823b6987c0eb5b96；既有正文差量；consumer为Read actual P1 lawful/violating same-byte compatibility contract and evidence as behavior pin example.；首验与负例见本任务原件，登记不冒效果。
+    dependency_closure:
+      - skills/spec-specify/SKILL.md
+    update_policy: 按固定本地原件逐项比source/本地偏离；不自动追HEAD；被独立审查替代且零consumer后退役，历史原件保留。
+  - name: n4-hillclimb
+    status: absorbed
+    purpose: N4 hillclimb.md 既有方法采用/复用登记
+    design_idea: 独立oracle区分好坏、error/work明确单位、重复观测/噪声与停止；无固定次数门/loop账本
+    used_by_stages:
+      - build-plan
+      - build-code
+      - verify-code
+    local_path: skills/spec-plan/templates/phase-template.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        license: MIT
+        reviewed_at: '2026-10-18'
+        review_outcome: accepted
+        path: skills/poteto-mode/playbooks/hillclimb.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/poteto-mode/playbooks/hillclimb.md
+        adopted:
+          - skills/poteto-mode/playbooks/hillclimb.md — 独立oracle区分好坏、error/work明确单位、重复观测/噪声与停止；无固定次数门/loop账本
+    local_changes: archive SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；local plugin声明0.15.23；Git revision unknown；main URL仅来源坐标，非固定revision；子文件 SHA256 244f289898fe67a458065e90fe8217c916c5acf61cdee8975ade3f9831a12e91；既有正文差量；consumer为现Phase效果合同读089/093同输入2轮；报告error为误报/漏控，work为实际checker调用与逐项比较，噪声界限不可泛化，真实阳性分母0保inconclusive；初始123/134偏义原件保留，父PRD713/726/730为原定义；实际首验见本次修复原件，登记不冒效果。
+    dependency_closure:
+      - skills/spec-specify/SKILL.md
+    update_policy: 按固定本地原件逐项比source/本地偏离；不自动追HEAD；被独立审查替代且零consumer后退役，历史原件保留。
+  - name: n4-eval
+    status: absorbed
+    purpose: N4 eval.md 既有方法采用/复用登记
+    design_idea: 真实独立候选→匿名同尺judge→基底合成与验证，实际轨迹不信自报
+    used_by_stages:
+      - build-plan
+      - build-code
+      - verify-code
+    local_path: skills/wh-review/contracts/provider-protocol.md; docs/architecture/test-asset-governance-rules.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        license: MIT
+        reviewed_at: '2026-10-18'
+        review_outcome: accepted
+        path: skills/poteto-mode/playbooks/eval.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/poteto-mode/playbooks/eval.md
+        adopted:
+          - skills/poteto-mode/playbooks/eval.md — 真实独立候选→匿名同尺judge→基底合成与验证，实际轨迹不信自报
+    local_changes: archive SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；local plugin声明0.15.23；Git revision unknown；main URL仅来源坐标，非固定revision；子文件 SHA256 9f4eb0294e5d193179e03e90c90976af4d96f5be7cdbd7f4de32a3feab465ed2；既有正文差量；consumer为Read actual existing review consumer and distinguish ordinary findings review from candidate→judge arena; consume real P5 independent review with frozen contract.；首验与负例见本任务原件，登记不冒效果。
+    dependency_closure:
+      - skills/spec-specify/SKILL.md
+    update_policy: 按固定本地原件逐项比source/本地偏离；不自动追HEAD；被独立审查替代且零consumer后退役，历史原件保留。

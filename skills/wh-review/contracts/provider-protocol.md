@@ -19,7 +19,7 @@
 
 派发内容为 ARTIFACT + CONTRACT；实施者 CLAIM、胜利摘要与推理不作为 reviewer 判断输入。按实际 adapter/source/model 展示身份，未知保持 unknown；同模型族的不同 provider 键不算异源。覆盖三键及三条件结论唯一读取 `skills/wh-review/SKILL.md`「输出和失败边界」，不得由送达推已读。
 
-仅已有真实候选生成→judge比较consumer时用arena：候选同任务且不见rubric/模型名/他者；judge按同一已定rubric核匿名A/B逐标准证据，分歧回证据。泄露rubric/身份、标准不同或只有意见分歧均不成立。候选完成再比较，选可维护基底，说明有源保留/舍弃/合入，最终合成按原合同验证并保失败。reconstruct/reveal/challenge、普通findings合并不属此consumer；无入口记“只落文字/未生效”，适用不明记unknown；不为首验建候选框架、cross-judge、评分表或新轮。
+仅已有真实候选生成→judge比较consumer时用arena：候选同任务且不见rubric/模型名/他者；judge按同一已定rubric核匿名A/B逐标准证据，分歧回证据。泄露rubric/身份、标准不同或只有意见分歧均不成立。候选生成前，调用者沿现普通原件分别固定可读任务输入与 judge 标准；候选只取得同一任务输入原件的路径/版本，不取得标准或他者。worker 必须实际打开该输入并留下原命令、读到的 hash 与必要返回，judge 同样实际读取固定标准；主会话据真实读取原件核与派发版本一致，而非靠事后补写 brief 或 worker 自报。原件不可回取或读取不明时记 source unknown，不能冒输入同一或已匿名验证；hash 只证所读字节，不证理解与效果。候选完成再比较，选可维护基底，说明有源保留/舍弃/合入，最终合成按原合同验证并保失败。消费链条据实际打开/改过的文件与执行原件核对，不以候选或judge自报已读替代；看不到实际记录时明确unknown。reconstruct/reveal/challenge、普通findings合并不属此consumer；无入口记“只落文字/未生效”，适用不明记unknown；不为首验建候选框架、cross-judge、评分表或新轮。
 
 ## 一次调用的真实过程事实
 
