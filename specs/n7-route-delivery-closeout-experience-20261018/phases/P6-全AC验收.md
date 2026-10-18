@@ -11,7 +11,7 @@
 - **evidence_path**：`quality/tests/2026-10-18-p6-ac-per-ac.md`
 - **STOP**：证据形态不符/缺真实输入时只停该条通过主张，列缺口与owner；缺外仓成功、独立来源、真实PR、完整N1或build-prd成本能力均不造pass。失败修复回原Task，安全修复可继续。
 - **覆盖 AC**：AC-001、AC-002、AC-003、AC-004、AC-005、AC-006、AC-007、AC-008、AC-009、AC-010、AC-011、AC-012、AC-013
-- **Done**：13条各有实际档位与具名原件；所有适用条件满足才pass。预PR的build-code读回保AC-010真实PR子条件incomplete；verify-code在授权产生真实PR后再消费本卡与新原件，不新增Phase、不以P6全绿作为开PR前置。build-prd成本工具不支持、真实权限/方法试行或N1缺失各保独立限制，未满足不得宣整卡完成。
+- **Done**：13条各有实际档位与具名原件；所有适用条件满足才pass。预PR的build-code读回保AC-010真实PR子条件incomplete；verify-code在授权产生真实PR后再消费本卡与新原件，不新增Phase、不以P6全绿作为开PR前置。build-prd成本标签已支持但真实阶段旅程/主会话record/from/until/来源读回未齐、真实权限/方法试行或N1缺失各保独立限制，未满足不得宣整卡完成。
 
 ## 工作包声明（人读事实）
 
@@ -40,7 +40,7 @@
 | --- | --- | --- |
 | `spec.md:638-690` | I/O、去重、权限夹具、真实PR、N7数字与未决条件 | 逐条前 |
 | `docs/architecture/test-asset-governance-rules.md:9-25` | 独立同尺/匿名、物理隔离与真实RED | 判定前 |
-| `tools/cli/measure-main-agent-cost.mjs:309-310` | 四stage支持限制，不虚造build-prd账行 | 成本条件时 |
+| `tools/cli/measure-main-agent-cost.mjs:309-310` | 当前build-prd成本标签/四正式stage分界、真实来源与发布读回，不虚造账行 | 成本条件时 |
 | `tests/contract/business-repo-experience-file.test.mjs:30-68` | 只文本非真实I/O，避免覆盖膨胀 | AC-006/007/009时 |
 
 ## L0 — 结果与变更
@@ -55,7 +55,7 @@ P0五类必要设计为written，落契约头、工作包、L1/T010及十三项�
 - **修改**：N/A — 无生产修改，不改上游材料/判据/原件。
 - **禁止改动**：spec/各Phase/全部冻结测试/历史/生产与外仓路径；新验收事实若需要写范围外，先按已有owner声明范围，不暗扩。
 
-保护实读（2026-10-18，read）：P2冻结测试只读五文件文字与登记，无writer；P3 RESIDENT_BUDGET=36861且固定三文件；P4只字段/闭包；P5仅有限路径字面和共享至少一目标。成本CLI309–310只接受make-decision/build-plan/build-code/verify-code，build-prd报invalid stage。不能因卡上写DO NOT TOUCH就声称已物理隔离；执行者核实际可写面，未建立明确披露，不能修改自身验收契约/标签。
+保护实读（2026-10-18，read）：P2冻结测试只读五文件文字与登记，无writer；P3 RESIDENT_BUDGET=36861且固定三文件；P4只字段/闭包；P5仅有限路径字面和共享至少一目标。该次历史读数中成本CLI309–310只接受make-decision/build-plan/build-code/verify-code、build-prd报invalid stage；当前成本标签已支持，正式stage仍四个，实际实现/定向验证与051审查回P1原件，不把旧读数继续当当前禁止。不能因卡上写DO NOT TOUCH就声称已物理隔离；执行者核实际可写面，未建立明确披露，不能修改自身验收契约/标签。
 
 ### 任务顺序
 
@@ -97,7 +97,7 @@ T010单卡：消费上游→核缺口与必要重放→逐AC判→六项各真�
 
 ### 2. 两份就绪件
 
-数据件为头部quality/evidence中具名data-readiness.md：真实经验条目及来源、P1之后的交接、方法正反/并发/中断/拒绝、真实PR是否已有各列status/提供者；build-plan历史交接只基线。环境件同目录env-readiness.md：实际Node/runner与依赖、受控fixture授权和清理范围、两业务仓成功证据/权限缺口、PR凭据及成本CLI四stage限制；缺输入不N/A冒通过。
+数据件为头部quality/evidence中具名data-readiness.md：真实经验条目及来源、P1之后的交接、方法正反/并发/中断/拒绝、真实PR是否已有各列status/提供者；build-plan历史交接只基线。环境件同目录env-readiness.md：实际Node/runner与依赖、受控fixture授权和清理范围、两业务仓成功证据/权限缺口、PR凭据、成本CLI的build-prd标签与四正式stage边界、材料缺源unavailable/review no_stage_fact及实际发布读回；缺输入不N/A冒通过。
 
 ### 3. 授权边界
 
@@ -107,7 +107,7 @@ T010只读生产/外仓，写限七精确task原件；任何受控fixture补执�
 
 AC-013仍是六项采用，不另造第七项；P1核五项核心方法、P4核opening-a-pr，git-workflow-and-versioning/ketchup的AGENTS治理落点由P3/T007首次验收。只拿P1方法原件不能宣这两项全部落点已交；缺治理首验回T007，不由P6末尾汇总首次补实现。
 
-结论件13行：每AC一个既有ACCEPTANCE_RESULTS档位和具名原件，非pass不计通过。AC-003须有P1之后按新方法产生的四类具名试行，真实受控失败、真实取消各至少一次且原件齐全，缺任一类或原件则对应子条件incomplete；AC-004须用该问用户/不该问用户的成对输入（两类各至少一例）分别核漏问、多问，空动作项列表不代通过。AC-002/003成本build-prd子条件因现CLI不支持保incomplete；AC-006/007方法与真实两仓、AC-009路径限制/方法授权语义、AC-010结构/实际PR、AC-012数字/含义保全/质量/完整N1分条件，不互相补绿。
+结论件13行：每AC一个既有ACCEPTANCE_RESULTS档位和具名原件，非pass不计通过。AC-003须有P1之后按新方法产生的四类具名试行，真实受控失败、真实取消各至少一次且原件齐全，缺任一类或原件则对应子条件incomplete；AC-004须用该问用户/不该问用户的成对输入（两类各至少一例）分别核漏问、多问，空动作项列表不代通过。AC-002/003中build-prd成本标签已支持；真实五stage旅程、主会话record/from/until及来源读回缺项各保incomplete；材料unavailable/review no_stage_fact不冒已齐，已发布缺报/exit1不冒无记录，未发布才写本阶段无记录；AC-006/007方法与真实两仓、AC-009路径限制/方法授权语义、AC-010结构/实际PR、AC-012数字/含义保全/质量/完整N1分条件，不互相补绿。
 
 ### 5. 五类执行事实
 
@@ -175,7 +175,7 @@ T001既有lastSlug及T009引用/驱动更新须各有Rationale for Change、Impa
 
 ### 本次授权补充的验收承接与Docker边界
 
-本次用户已批准P5原两文件适配现行公共consumer、P1先补build-prd成本最小方案再实施定向验证；P6仍只读消费各原owner的新原件，不扩大自身写集。P5须逐13旧AC核承接与正负控，原AC-FIX-001未覆盖仍incomplete；导入失败/0tests不能当行为RED。P1新增成本标签不改变正式stage；核唯一旧账本、真实session/window/来源、原字节保全及读回，未取得前OPEN-009与对应成本子条件保持incomplete，旧invalid stage原件不改。
+本次用户已批准P5原两文件适配现行公共consumer、P1先补build-prd成本最小方案再实施定向验证；P6仍只读消费各原owner的新原件，不扩大自身写集。P5须逐13旧AC核承接与正负控，原AC-FIX-001未覆盖仍incomplete；导入失败/0tests不能当行为RED。P1成本标签支持已落地且不改变四正式stage；消费P1真实实施/定向验证及051审查原件，再核唯一旧账本、真实主session/window/来源、原字节保全及读回；缺材料引用unavailable、无review stage fact为no_stage_fact，已发布缺报/exit1与未发布分开。真实旅程/主会话record或来源缺项时OPEN-009对应子条件保持incomplete，旧invalid stage原件不改、不作当前禁止。
 
 已核根因是原评测输入048的task_input.materials与061的judging.access_boundary臆增独立host-mounted实现；N4原义要求实际访问结果，并未指定机器或容器。048/061旧原件不可变，修正版由原标准owner另出唯一原件并保缺陷来源，P6取到后按其真实引用消费，不覆写历史。用户明确拒绝Docker，禁止启动daemon、安装或配置；不为本卡建立容器基础设施。匿名比较复用现有native packet最小权限工具边界，按原AC-012及效果评测要求固定输入/标准、分开作者/候选/标记者/judge；候选不能见rubric、身份或其它候选，以真实访问轨迹核实际工具/文件可见面，不要求用户提供独立认证host、新机器或容器；没有物理隔离不宣已建立，但不得把N4的AC-17机械移为N7整卡前置。匿名/独立证据缺失仍保unknown/incomplete，不用普通findings代比较；不删N1四组同条件成本与真实来源要求，不用拒绝Docker作豁免。
 

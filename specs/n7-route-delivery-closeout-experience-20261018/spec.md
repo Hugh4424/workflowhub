@@ -112,7 +112,7 @@ ADR 导航须使用完整文件名：上面的 N4 `0049-retire-byte-drop-accepta
 - **角色**：当前阶段的主会话
 - **前提**：本次收口确实出现上述某一类情况
 - **触发**：写收口产物
-- **结果**：四类各自的必备要素不同且不能互相替代——无发现带具名依据；失败带原始命令与退出；取消写已发生部分与未做部分及中断原因；有发现未采纳保留原候选与理由。四类都不写"已完成"，不会互相读成"本次无问题"；每次收口的同一成本窗口只计量一次，记录失败时交接写"本阶段无记录"及原因
+- **结果**：四类各自的必备要素不同且不能互相替代——无发现带具名依据；失败带原始命令与退出；取消写已发生部分与未做部分及中断原因；有发现未采纳保留原候选与理由。四类都不写"已完成"，不会互相读成"本次无问题"；每次收口的同一成本窗口只计量一次，记录结果按真实发布状态报告：未发布才写"本阶段无记录"及原因，已发布但缺报/exit1写实际账行与缺报及影响
 - **回写**：本场景不改写
 
 ### SCN-003：交付读者看一次交付说明
@@ -151,7 +151,7 @@ ADR 导航须使用完整文件名：上面的 N4 `0049-retire-byte-drop-accepta
 
 - [x] **默认态**：SCN-001 的正常收口；四类产物中"无发现"的具名依据分支
 - [x] **空态**：SCN-002 的"本次无问题 + 具名依据"；`specs/Improvements.md` 条目为空时写具名理由而不是空表
-- [x] **错误态**：SCN-002 的失败；经验写入失败保留原始错误；收口记录成本失败写"本阶段无记录"与原因
+- [x] **错误态**：SCN-002 的失败；经验写入失败保留原始错误；收口成本未发布写"本阶段无记录"与原因；已发布但缺报/exit1保实际账行、缺报和影响，不冒无记录或全部来源通过
 - [x] **加载态**：N/A — 本任务不新增异步加载视图，方法文件是静态文本
 - [x] **取消态**：SCN-002 的取消；写入中途被取消保留已发生部分
 - [x] **边界态**：SCN-005 的判重边界（同一事实与不同事实各一例）；AC-012 的字节边界（持平即合格）
@@ -197,7 +197,7 @@ ADR 导航须使用完整文件名：上面的 N4 `0049-retire-byte-drop-accepta
   - **证据或来源**：该文件第 27–34 行原文；实测正文 `grep -o "skills/[a-z][a-z0-9-]*/SKILL\.md"` 去重后同三项
   - **负责人、影响**：P4 只能在关闭方法内改写文字，不得新增或删除技能引用
   - **关联**：`FR-CLOSE-007`、`AC-010`、`AC-011`
-- **PFACT-024**：`build-prd` 在 runtime 里不是正式 stage（`runtime/review/stage-materials.json` 只有四键），且原末步 `observable_result` 与 `SKILL.md` 没有阶段成本句；本轮实读 `tools/cli/measure-main-agent-cost.mjs:309-310`：`parseArgs` 的 stage 允许值逐字为 make-decision、build-plan、build-code、verify-code，build-prd 被拒为 `invalid stage`
+- **PFACT-024**（成本支持实施前的历史读数，非当前入口限制）：`build-prd` 在 runtime 里不是正式 stage（`runtime/review/stage-materials.json` 只有四键），且原末步 `observable_result` 与 `SKILL.md` 没有阶段成本句；本轮实读 `tools/cli/measure-main-agent-cost.mjs:309-310`：`parseArgs` 的 stage 允许值逐字为 make-decision、build-plan、build-code、verify-code，build-prd 被拒为 `invalid stage`
   - **状态**：`verified`
   - **证据或来源**：原开工接线读数；本轮 read 工具读取 `tools/cli/measure-main-agent-cost.mjs:309-310`（2026-10-18），没有执行该工具或伪造失败/账行
   - **负责人、影响**：P1/T001 在 build-prd 末步说明成本不可用及 `invalid stage` 来源，保“不是正式 stage”；不伪造账行、不新增 stage 支持，五阶段实际留成本的未达成保 OPEN-009
@@ -336,7 +336,7 @@ ADR 导航须使用完整文件名：上面的 N4 `0049-retire-byte-drop-accepta
   - **依据**：`R-002`、`D-006`、`PFACT-001`、`PFACT-011`、`PFACT-013`、`PFACT-014`
   - **场景**：`SCN-001`
   - **验收**：`AC-002`
-- **FR-CLOSE-003**：收口的四类产物各有不同且不能互相替代的必备要素，四类都不写成"已完成"；阶段成本在每次收口的同一窗口只计量一次，记录失败时写出"本阶段无记录"与原因
+- **FR-CLOSE-003**：收口的四类产物各有不同且不能互相替代的必备要素，四类都不写成"已完成"；阶段成本在每次收口的同一窗口只计量一次，按真实发布状态报告：未发布才写出"本阶段无记录"与原因，已发布但缺报/exit1写实际账行、缺报与影响
   - **范围边界**：包括四类要素、顺序与成本记录位置；不包括新增状态字段或评分器
   - **依据**：`R-003`、`D-007`、`PFACT-016`
   - **场景**：`SCN-002`
@@ -551,7 +551,7 @@ ADR 导航须使用完整文件名：上面的 N4 `0049-retire-byte-drop-accepta
 
 - **末步标识取 `closeout`**：`stage-closeout` 已是物理关闭技能名且只在两个阶段调用（`PFACT-003`），同名会让读者把关闭误读成铺到五阶段（`ADR-002`、`RISK-03`）；`closeout` 只在本 workflow 内定位该步骤，生产读者只做唯一性校验（`PFACT-004`）。
 - **`quality/evidence/reflection/<stage>.md` 从"每阶段必备产物"降为"需要单独留档时写"**：`OI-002` 定"本次无问题的依据只写在交接正文一处"，若每阶段仍强制写一份复盘件，同一事实就有两处（`PFACT-011` 显示该路径无其它消费者）。收口结论的落点因此统一为交接正文，写失败与未写仍按既有口径披露。
-- **`build-prd` 成本缺口显式化**：`D-006` 的顺序保留，但 `PFACT-024` 的真实 CLI 仅接受四 stage。原invalid stage及无记录事实保留；用户现已批准原owner先补最小方案，再实施成本CLI标签与真实来源适配。复用唯一旧账本，不新增正式stage/runtime支持；真实记录和读回未取得前保OPEN-009与对应incomplete。
+- **`build-prd` 成本缺口显式化**：`D-006` 的顺序保留；PFACT-024仅记实施前四标签限制。当前CLI已接受build-prd成本标签，复用唯一旧账本，正式stage仍只有四个，不新增runtime支持。build-prd材料缺权威机器引用时为 `unavailable:build_prd_material_refs_not_supplied`，无正式stage审查事实为 `not_reported:no_stage_fact`；exit1也可能已发布缺报行，按读回区分已发布/未发布。真实主会话record、from/until、来源与五阶段旅程未齐前仍保OPEN-009及对应incomplete。
 
 ### 全局文件边界与依赖
 
@@ -621,13 +621,13 @@ ADR 导航须使用完整文件名：上面的 N4 `0049-retire-byte-drop-accepta
 
 - [ ] **AC-002**：五个阶段结束动作都由主会话发起收口，交接在收口内部发布且仍可被下游单独读取；步数不变
 验证：P1 实施者改 `workflows/*/steps.json`、五个 `SKILL.md`、`skills/catalog.yaml` 与两个方法文件，`ORACLE-P1-CLOSEOUT-STEP` 由独立执行者在本次任务内运行 `npx vitest run tests/contract/stage-closeout-step-contract.test.mjs`，读实际 `steps.json` 与两份方法正文；`node --test tests/integration/main-agent-cost-closeout.node-test.mjs` 复核步数与末步 slug 断言。结构判定方式：`机器可判`；执行 owner 为 P1 实施者（GREEN）与 P6 复核者。整体收口还由独立执行者在 P1 后对五阶段各作具名方法试行，提供阶段真实输入、调用、交接读回与独立 consumer 读取；没有真实发生的阶段不得以文本或旧交接替代，保对应子条件 incomplete。
-通过：五个 `steps.json` 末步 `step_slug` 均为 `closeout`、步数分别为 15/12/12/8/6、`step_id` 连续；`stage-reflection` 正文声明收口是每阶段主体并给出五步顺序；`stage-handoff` 正文声明交接是收口内部一步且可按原件路径单独读取；`catalog.yaml` 三条 `used_by_stages` 与改动前一致；五个末步 `observable_result` 都交代成本步骤；四正式 stage 沿现入口真实记录，build-prd 明写“不支持 stage=build-prd／本阶段无记录”及 `invalid stage` 来源，不能冒已留账；不出现 `run reflect` 与 `quality/stage-reflection`
+通过：五个 `steps.json` 末步 `step_slug` 均为 `closeout`、步数分别为 15/12/12/8/6、`step_id` 连续；`stage-reflection` 正文声明收口是每阶段主体并给出五步顺序；`stage-handoff` 正文声明交接是收口内部一步且可按原件路径单独读取；`catalog.yaml` 三条 `used_by_stages` 与改动前一致；五个末步 `observable_result` 都交代成本步骤；四正式stage与非正式build-prd工作流均沿现成本入口按实际身份/from/until记录并读回，build-prd只作成本标签、不新增正式stage；材料缺源unavailable与review的no_stage_fact如实披露，已发布缺报/exit1不写无记录，未发布才写本阶段无记录；受控CLI通过不冒五阶段真实旅程或实际主会话已留账；不出现 `run reflect` 与 `quality/stage-reflection`
 失败：任一路线仍写"可选"或末步仍是独立交接；步数变化；交接只能通过收口读到；`used_by_stages` 被改；新增公共动作或退役目录被复活
 证据：`ORACLE-P1-CLOSEOUT-STEP` 的真实 RED/GREEN 与该 node:test 输出，另列五阶段方法试行输入、执行与交接 consumer 读回原件；缺试行只报结构已检查，不报整体已执行
 
-- [ ] **AC-003**：无发现带具名依据；失败带原始命令与退出；取消带已发生与未做以及未落账项；有发现未采纳保留原候选与理由；现入口支持的阶段按每次收口的同一计量窗口记录一次、不重复计费，续测保留历史非重叠窗口；失败或不支持/未触发时写真实原因与影响，不冒成本已记录
-验证：P1 在 `skills/stage-reflection/SKILL.md` 与 `skills/stage-handoff/SKILL.md` 写出四类必备要素与固定顺序，`ORACLE-P1-CLOSEOUT-STEP` 断言之；判据对象必须是 P1 落地**之后**才产生的收口产物——即 build-code 阶段自己的收口交接原件，或执行者按新方法做的受控试写交接；build-plan 阶段的交接早于 P1，只能作历史基线，不能作新规则读回对象。独立读者按新方法对无发现、有发现未采纳、失败、取消四类各作具名试行，真实受控失败、真实取消各至少一次且原件齐全；逐类核对必备要素，缺任一类或原件则对应子条件 incomplete，并核本次实际 record 对应的 `from/until`、来源边界、读回原件及旧字节前缀：同一计量窗口不重复计费，续测按已有记录的实际 until 接续非重叠窗口，不能要求同 stage 永久只有一行或删除旧行；build-prd 不支持时记录实际未触发/拒绝原因与来源，不造账行或冒执行过拒绝；无记录原因可据 PFACT-024 披露，真实发生的失败另留原件。判定方式：`只能人读`；执行 owner 为 P1 之后的独立读者。
-通过：四类要素在方法正文各自完整且互不替代；P1 之后按新方法产生的四类具名试行交接要素各自齐全，真实受控失败、真实取消各至少一次且原件齐全；缺任一类则对应子条件 incomplete；现入口支持 stage 的本次实际 record 有真实来源、指定 from/until 且同一窗口不重复计费；同阶段续测的非重叠窗口与历史行均保留；build-prd 无行时如实披露 invalid stage，五阶段实际留账子条件仍保 OPEN-009，不能据披露宣称已满足
+- [ ] **AC-003**：无发现带具名依据；失败带原始命令与退出；取消带已发生与未做以及未落账项；有发现未采纳保留原候选与理由；现入口支持的阶段按每次收口的同一计量窗口记录一次、不重复计费，续测保留历史非重叠窗口；未发布或未触发时写真实原因与影响，不冒成本已记录；已发布但缺报/exit1保实际账行、缺报和影响，不冒无记录或全部来源通过
+验证：P1 在 `skills/stage-reflection/SKILL.md` 与 `skills/stage-handoff/SKILL.md` 写出四类必备要素与固定顺序，`ORACLE-P1-CLOSEOUT-STEP` 断言之；判据对象必须是 P1 落地**之后**才产生的收口产物——即 build-code 阶段自己的收口交接原件，或执行者按新方法做的受控试写交接；build-plan 阶段的交接早于 P1，只能作历史基线，不能作新规则读回对象。独立读者按新方法对无发现、有发现未采纳、失败、取消四类各作具名试行，真实受控失败、真实取消各至少一次且原件齐全；逐类核对必备要素，缺任一类或原件则对应子条件 incomplete，并核本次实际 record 对应的 `from/until`、来源边界、读回原件及旧字节前缀：同一计量窗口不重复计费，续测按已有记录的实际 until 接续非重叠窗口，不能要求同 stage 永久只有一行或删除旧行；build-prd成本标签现已支持，材料缺权威引用按unavailable、无正式stage审查事实按no_stage_fact逐项读回；exit1按实际发布/读回区分已发布缺报行与未发布，未发布才写无记录；PFACT-024只作实施前历史基线，不作当前拒绝理由，不造账行或拒绝日志，真实失败另留原件。判定方式：`只能人读`；执行 owner 为 P1 之后的独立读者。
+通过：四类要素在方法正文各自完整且互不替代；P1 之后按新方法产生的四类具名试行交接要素各自齐全，真实受控失败、真实取消各至少一次且原件齐全；缺任一类则对应子条件 incomplete；现入口支持 stage 的本次实际 record 有真实来源、指定 from/until 且同一窗口不重复计费；同阶段续测的非重叠窗口与历史行均保留；build-prd实际主会话记录须有真实from/until、来源、账行和读回；材料unavailable/review no_stage_fact及其它缺报逐项披露，已发布缺报行不冒全部来源通过；真实五阶段旅程、主会话record或来源缺项仍保OPEN-009对应incomplete，不能用CLI夹具通过补齐
 失败：无发现写成"已完成"；失败无原始命令或退出；取消当没发生或漏写未落账项；未采纳的发现被静默丢弃；同一成本窗口重复计费或漏记且不写原因；删旧行把续测伪装成阶段永久唯一一行；用 P1 之前的历史交接充当新规则证据
 证据：P1 之后按新方法产生的四类具名试行收口交接原件及逐类读回结论（含真实受控失败、真实取消各至少一次的事件、命令/退出或中断原件），以及本次实际 record 的命令、指定 from/until、账行/旧字节保留读回与缺报说明；build-plan 交接原件只列为历史基线
 
@@ -694,7 +694,7 @@ ADR 导航须使用完整文件名：上面的 N4 `0049-retire-byte-drop-accepta
 ## 12. 风险、未决与交接
 
 - **OPEN-010**：跨仓/任务库绝对路径的真实审查宿主 scope 尚未接通；来源为 `tools/cli/stage-runtime.mjs` 的 `trustedReviewReadScope` 与 `recordTaskReview` 实读、013 default 原始错误，影响 P2/P6 跨仓审查及其支持的 AC-006/009/011 结论。owner 为真实 host adapter 的维护者；下一动作是核已有宿主 callback/config 能否按真实用户授权、认证主仓与论文仓的精确路径及任务 evidence 提供短时 scope，实际调用后留原件。在此之前跨仓审查保持 unavailable/unknown；直接精确 scope 诊断不冒真实接线或授权通过。本 N7 不新增运行时控制面/CLI、不改 checker 或材料伪造授权，也不因缺 scope 冻结其余安全工作。
-- **OPEN-009**：D-006 的五阶段收口成本顺序与现四 stage CLI 不相等；来源 PFACT-024，影响 AC-002/003。原invalid stage及unavailable原件保留。用户已明确批准原owner先补最小方案再实施定向验证，精确增量见本节授权补充与P1；仅扩现有成本CLI标签/来源，不扩正式stage、runtime或账本。真实成本记录、窗口及读回未核前，P6仍保相应子条件incomplete。
+- **OPEN-009**：build-prd成本标签支持已落地，正式stage仍为四个；实施/定向验证与正式成本审查051见P1，旧PFACT-024的invalid stage及unavailable原件保留为历史。剩余影响AC-002/003的是五阶段真实旅程、主会话实际record/from/until及来源读回未齐；build-prd材料机器引用缺源unavailable、review no_stage_fact仍如实保留。exit1可能已发布缺报行，按读回记发布事实，不冒全部来源通过；P6保持各缺项incomplete，不据标签支持或051审查关闭本项。
 - **OPEN-007**：P2 文本测试未覆盖实际创建/追加、判重、并发、中断或授权语义处置；AC-009 已定位 safe-write 根路径边界夹具，但其 PATH_ESCAPE 不验证用户授权。P2 owner 在实施授权后提供方法试行、获授权 fixture 原件与独立授权语义读回，P6 分别消费；未取得保持 AC-006/007/009 对应子条件 incomplete/unknown，不改 frozen 测试或试写真实历史补绿。
 - **OPEN-008**：PRD G1 的完整 N1 同条件成本对照本轮未读取/执行；P6 owner 在整卡最终成本验收消费完整 N1，分列 wall_s、input/output/cacheRead、steps/turns、subagent/bash 与 unavailable/not_reported，次数/波动保原件。该缺口不阻塞范围明确的规划/实施，但不能宣成本改善或整卡全验，字节不能代替。
 
