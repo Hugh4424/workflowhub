@@ -59,7 +59,7 @@ description: 诊断 bug、测试失败、性能回退或未知异常时，先建
 
 ## 来源边界
 
-完整来源/固定章节/许可由[catalog](../catalog.yaml#skills.diagnosing-bugs)唯一登记，单技能副本缺catalog时向来源维护者取登记。Matt、Superpowers、gstack采用紧反馈、复现最小化、单假设和调查顺序；Addy/pstack新增采用同见catalog。
+完整来源/固定章节/许可由[catalog](../catalog.yaml#skills.diagnosing-bugs)唯一登记；本便携小卡非权威，单技能副本缺catalog时向来源维护者取登记。Matt、Superpowers、gstack采用紧反馈、复现最小化、单假设和调查顺序；Addy/pstack新增采用同见catalog。
 
 本地保根因护栏、三次失败裁决、HITL模板；拒绝上游全局发现、TDD skill跳转、gbrain、telemetry、Bun、hook及宿主专用工具。权限由调用方提供，真实触发由workflow owner接线，正文不证明调用。迭代核固定子文件更新与更优候选，说明源差/本地偏离再决定，不自动追HEAD。
 

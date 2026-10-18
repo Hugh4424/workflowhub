@@ -61,7 +61,7 @@ JSON：
 
 ## 固定来源与偏离
 
-完整来源权威：[catalog条目](../catalog.yaml#skills.frontend-component-quality)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。
+来源权威：[catalog](../catalog.yaml#skills.frontend-component-quality)；本便携小卡非权威；单技能副本缺catalog时向来源维护者取登记。
 React/Next采用章节见catalog对应adopted。本地 Component Quality Map、真实 consumer census 与静态 CSS 检查仍归本技能；上游性能建议不替代浏览器验证。迭代按本节固定子文件核更新，保随包 LICENSE/UPSTREAM 并经人工比较，不自动追 HEAD。
 
 ## 写作规范

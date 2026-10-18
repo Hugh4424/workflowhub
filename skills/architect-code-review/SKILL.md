@@ -77,7 +77,7 @@ description: Review an implementation diff for correctness, lifecycle, security,
 
 创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；保原步骤、条件、权限、失败强度和受保护字面，缺源如实 unavailable，不复制规范。
 
-完整来源权威：[catalog条目](../catalog.yaml#skills.architect-code-review)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。
+来源权威：[catalog](../catalog.yaml#skills.architect-code-review)；本便携小卡非权威；单技能副本缺catalog时向来源维护者取登记。
 
 ## 同仓方法依赖
 

@@ -10,6 +10,8 @@ description: Draft the post-cohort product specification and global implementati
 
 ## Post-cohort specification contract
 
+写 spec 前，先读取本文件「技能写作规范（WR001）」唯一正文，再执行以下写作动作；消费者是产品规格作者与下游实施、独立验收读者。规范不可读时如实 `unavailable`，不以模板骨架代替读取。
+
 本节回答：What the current spec owns and how build-plan authors it.
 
 For post-cohort authoring, `build-plan` invokes this skill. The output has a
@@ -51,7 +53,7 @@ expected evidence type or artifact only; verify-code supplies execution facts.
 
 ## 叙事写作与读回
 
-从已确认来源合成，不重新访谈或替用户选择方向。先说明真实角色面临的问题、目标与结果，再连起场景、机制、取舍、失败和显式非目标；追踪字段跟在叙事后，不以 ID 清单代替行为解释。User Stories 的详细格式由产品需求 owner 承接，本步骤保现 PRD/decision 的目标权威。
+从已确认来源合成，不重新访谈或替用户选择方向。引用外部来源时写清版本与回原文的直达链接；版本/签名类事实须实读依赖文件并写出处，取不到写 `unverified` 与具体来源缺口。推断就地紧跟一句“这是推断”及依据，不分小节、不加新符号约定；不要求所有断言都外部引用。先说明真实角色面临的问题、目标与结果，再连起场景、机制、取舍、失败和显式非目标；追踪字段跟在叙事后，不以 ID 清单代替行为解释。User Stories 的详细格式由产品需求 owner 承接，本步骤保现 PRD/decision 的目标权威。
 
 **验收对象**：在当前 `spec.md` 的「测试标准／验收对象」填写模板对象及真实来源，不新建独立材料。按模板「验收对象」唯一合同实际读原始要求、当前库存和已接受计划或实际前端改动，核角色、理由、范围冲突；复用三源适用性和已读材料构成本次调用 context。只有真实三源已核非 UI 才用模板的嵌套 CLI 对象，其余保原 Web 五项与具体缺口，不用示例或标签代来源。owner 空缺/空白仍显式为“用户”，已有 owner 和原输入保留；S5 其余设计、代码/URL、数据、权限沿任务合同，不把最小对象当完整 S5。
 
@@ -143,7 +145,7 @@ discover files. Missing input/callback fails loud.
 
 ## 技能写作规范（WR001）
 
-本节是 agent 文档写作的唯一规范层；本技能的 single-authority 规则是 spec 的具体落点，其它技能按「创建或改写 agent 方法」分支指向这里，不复制本节或新建第四规范对象。规范指引写法，不产生质量 gate。检核以下 Q01–Q12，逐条给出真实范围、依据与未观测；原步骤与条件的保全表和实际方法消费分别记录，字面禁区按真实 source 正负断言/guard 原样保留。
+本节是 agent 文档写作的唯一规范层；本技能的 single-authority 规则是 spec 的具体落点，其它技能在创建或改写 agent 方法、写四类材料（decision-log、spec、Phase+index、PRD）或阶段报告/交接、阶段反思、PR/交付说明前指向这里，不复制本节或新建第四规范对象。规范指引写法，不产生质量 gate。检核以下 Q01–Q12，逐条给出真实范围、依据与未观测；原步骤与条件的保全表和实际方法消费分别记录，字面禁区按真实 source 正负断言/guard 原样保留。
 
 1. **Q01 — Load**：逐行区分 context load（description/常驻指针）与 cognitive load（人记材料/触发条件），说明该行为何值得；人作选择所需认知成本不是一概消除的目标。description 是常驻 context pointer：引领词前置，每真实分支一个触发，去身份复述；model-invoked 保可发现 description，只有确实仅人触发才用 user-invoked，router 只能提示其它 user-invoked，不能代调用。
 2. **Q02 — Disclosure**：每分支都要的步骤内联，仅部分分支所需参考置于条件指针后。指针同时说明材料和到达条件；必需材料触发弱时先锐化指针再考虑内联。档内步骤、档内参考、外链参考按需分层，不把 live 步骤藏到无人会读的链接。
@@ -162,7 +164,7 @@ discover files. Missing input/callback fails loud.
 
 ## 固定来源与本地偏离
 
-完整来源权威：[catalog条目](../catalog.yaml#skills.spec-specify)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。
+来源权威：[catalog](../catalog.yaml#skills.spec-specify)；本便携小卡非权威；单技能副本缺catalog时向来源维护者取登记。
 来源线索：Matt writing-for-agents、SKILL-MECHANICS与to-spec；WR001 Q01–Q12及用户叙事的逐源章节回catalog。本地保留当前完整 spec 模板、Appendix A 独占验收、canonical IDs、PFACT 四状态互斥、FR 来源映射、十维状态与全局设计/Phase 职责。来源是判据，不是已经改善的证据。
 
 本地不采用外部 tracker、ready-for-agent 标签、setup/宿主 Skill 依赖或另根材料；上游「不写具体路径」不覆盖本地经实读的工程锚/精确写集，User Stories 细节仍由产品需求 owner 负责。方法接收调用者材料与允许写目标，缺源/不安全目标/未知 profile 明确报错，不绑定任务路径或账号。迭代时核这些固定子文件的更新与更优候选，写源差与本地偏离后决定采用，不自动追 HEAD。

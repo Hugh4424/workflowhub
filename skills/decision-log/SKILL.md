@@ -12,6 +12,8 @@ description: Convert supplied decision material into a structured downstream rec
 
 ## 写作步骤
 
+写 decision-log 前，先读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一正文，再按下列步骤写作；服务于材料作者及后续 build-plan/build-code/verify-code 读者，缺源如实 `unavailable`，不复制规范。
+
 本节回答：怎样从真实来源形成可供下游消费的决定。
 
 1. 读取原始需求、已确认答复、约束、调研/Grill/独立发现的真实来源。记录任务类型（规划任务/普通任务）；缺失或矛盾写 unknown，不按路径或旧任务猜类型。
@@ -54,6 +56,8 @@ description: Convert supplied decision material into a structured downstream rec
 
 ## 来源与未决问题写法
 
+推断就地紧跟一句“这是推断”及依据，不分小节、不加新符号约定。引用外部来源时写清版本与回原文的直达链接；版本/签名须实读依赖文件并写出处，取不到写 `unverified` 与具体缺口。
+
 本节回答：怎样在 `## 原始需求`、`## 需求变更记录`、`## 未决项` 与 `## 外置事实索引` 保留原义、真实处置和来源，不把写作说明变成必填 schema。
 
 OI 写在 `## 未决项`，一张表、一条一行；列出问题与来源、状态与真实处置、解决者及下一步。open/confirmed/deferred/not_applicable 分开；缺证据标出具体缺口与承接人，零问题写无。方向审查只看问题与事实，细节审查读真实处置；两者使用同一份当前未决项。
@@ -78,7 +82,7 @@ U 的完整 `## 需求变更记录` 整节在任务库根唯一 `quality/evidenc
 
 创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；保原步骤、条件、权限、失败强度和受保护字面，缺源如实 unavailable，不复制规范。
 
-完整来源权威：[catalog条目](../catalog.yaml#skills.decision-log)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。来源：本仓decision-log模板与grill-with-docs领域方法。
+来源权威：[catalog](../catalog.yaml#skills.decision-log)；本便携小卡非权威；单技能副本缺catalog时向来源维护者取登记。来源：本仓decision-log模板与grill-with-docs领域方法。
 
 ## 同仓方法依赖
 

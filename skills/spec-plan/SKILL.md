@@ -10,6 +10,8 @@ description: Author implementation design in spec.md and independent Phase files
 
 ## Post-cohort authoring contract
 
+写全局实现设计、Phase 或 index 前，先读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一正文，再执行以下写作动作；消费者是计划作者与下游实施、独立验收读者。缺源如实 `unavailable`，不复制规范。
+
 本节回答：How to write independent Phase deltas against one global spec.
 
 Read the confirmed `decision-log.md`, current `spec.md`, and verified current code facts. `spec.md` owns the global product contract **and implementation design**: code anchors, chosen solution, interfaces, global file boundary, dependency graph, source → FR → AC → Phase → oracle trace, risks, rollback, and testing strategy. Extend its implementation design section in place; preserve its product narrative and acceptance criteria.
@@ -44,7 +46,7 @@ Apply both halves of the granularity rules in `templates/phase-template.md`: whe
 
 When authoring each Phase's scope and write set, run the same self-check with `skills/simplicity-guard/SKILL.md`'s core questions — has this layer earned its place, and can an existing capability carry it — record any shrink, retire, or reuse decision in that Phase's existing 非目标 line, and let the existing `plan-eng-review` reading report the deletion-class count (count only; no quota).
 
-凡写入 DO NOT TOUCH、或依赖「外部尚未改动」的受保护文件，计划里必须留下核实那一刻的实读结果：文件路径、读到的字段/签名/版本项**逐字清单**、读取所用的命令或工具、日期。字段个数、必填项、版本项这类断言只能来自实读，不能来自记忆、推断或上游摘要——上游摘要是线索，不是证据。实读结果与已有断言不一致时，先改断言再继续；本轮无法实读就写 `unknown`，并写明 owner 与下次核实动作。计划里出现「恰含 N 个字段」「签名未变」「只依赖既有接口」这类句子而没有实读记录时，按未核实处理。
+凡写入 DO NOT TOUCH、或依赖「外部尚未改动」的受保护文件，计划里必须留下核实那一刻的实读结果：文件路径、读到的字段/签名/版本项**逐字清单**、读取所用的命令或工具、日期。字段个数、必填项、版本项这类断言只能来自实读，不能来自记忆、推断或上游摘要——上游摘要是线索，不是证据。引用外部来源时写清版本与回原文的直达链接；版本/签名取不到写 `unverified` 与具体缺口，不以摘要代实读。实读结果与已有断言不一致时，先改断言再继续；本轮无法实读就写 `unknown`，并写明 owner 与下次核实动作。计划里出现「恰含 N 个字段」「签名未变」「只依赖既有接口」这类句子而没有实读记录时，按未核实处理。
 
 Trace every current source requirement, FR, and AC to a Phase, Task, and objective oracle. Read the original requirement as well as the decision: a compact decision summary is not proof that every requested behavior reached the plan. Check both directions: every in-scope source has implementation and a failure oracle, and every task has an authorized source. A mere ID occurrence is not coverage. Resolve an omitted source before calling the plan executable. A direction-changing gap returns to `make-decision`; a product-detail gap returns to the owning `spec-specify`/`spec-clarify` step. Continue unaffected planning and same-task repair.
 
@@ -92,7 +94,7 @@ Return the actual spec/Phase paths and the design/verification limits. Read curr
 
 ## 固定来源与本地偏离
 
-完整来源权威：[catalog条目](../catalog.yaml#skills.spec-plan)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。
+来源权威：[catalog](../catalog.yaml#skills.spec-plan)；本便携小卡非权威；单技能副本缺catalog时向来源维护者取登记。
 来源线索：Spec Kit plan、Superpowers writing-plans、Matt to-tickets/tdd/codebase-design与writing-for-agents。采用tracer bullet、依赖分类、纵切与可测试窄接口；逐源章节回catalog。
 
 本地保全独立 Phase、全局递增 Task、单 spec 设计、冻结 RED/GREEN、逐字边界实读与全部失败/覆盖/回退条件；只吸收方法，不采用外部 tracker、ready-for-agent 标签、.scratch 票文件或宿主 setup/Skill 硬依赖。索引原职责由本技能承接，旧调用与附件按各自 owner 迁完再删。迭代时核上述固定子文件的更新与更优候选，记录源差和本地偏离后决定采用，不自动追 HEAD。输入是实际项目材料和允许写目标，缺宿主能力返回 unavailable，不绑定本任务路径/账号。

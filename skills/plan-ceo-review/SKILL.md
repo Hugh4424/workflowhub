@@ -30,7 +30,7 @@ lens only evaluates supplied material; its absence or lack of findings does not 
 
 创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；此处不复制规范。
 
-完整来源权威：[catalog条目](../catalog.yaml#skills.plan-ceo-review)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。来源：garrytan/gstack plan-ceo-review/SKILL.md。
+来源权威：[catalog](../catalog.yaml#skills.plan-ceo-review)；本便携小卡非权威；单技能副本缺catalog时向来源维护者取登记。来源：garrytan/gstack plan-ceo-review/SKILL.md。
 
 ## 同仓方法依赖
 

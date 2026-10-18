@@ -9,6 +9,8 @@ description: 阶段末有过程问题时可选复盘，提出有源候选供用�
 
 ## 方法
 
+写阶段反思前，先读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一正文，再执行本方法的写作动作；消费者是阶段复盘读取者。缺源如实 `unavailable`，此处只落实到达条件，不复制规范或改变原授权、失败与收口步骤。
+
 1. 只读本次可见会话事实、当前材料位置、实际测试/审查/失败和用户纠正。历史教训作背景；不可见、压缩、截断或缺来源写 unknown，不推断发生过什么。
 阶段成本仅可选只读核账：当前阶段主会话已在必经收尾调用record时，读取任务根 `main-agent-cost.md` 的实际行/来源与缺报，原件仅引用不复制；没有该行就在交接披露“本阶段无记录”与原因，不在reflection补写、回填或成为唯一触发点。
 
@@ -51,7 +53,7 @@ description: 阶段末有过程问题时可选复盘，提出有源候选供用�
 
 ## 固定来源、本地偏离与更新入口
 
-完整来源权威：[catalog条目](../catalog.yaml#skills.stage-reflection)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。
+来源权威：[catalog](../catalog.yaml#skills.stage-reflection)；本便携小卡非权威；单技能副本缺catalog时向来源维护者取登记。
 来源线索：mattpocock/skills 的 retro 与 backnotprop/pstack 的 correct、principle-encode-lessons-in-structure；采用候选提案、机械检查优先、层级修复与历史负例。逐pin取回坐标及原采集版本unknown回catalog；历史旧pin缺retro不能推新pin缺失。
 
 本地偏离：判断项按「用户选择后的归口」回流到已有 `Improvements.md`，保本文件的用户选择、检查与人确认 prune 规则；不搬上游 `CODING_STANDARDS.md`、规则执行表、自动修复/提交或 pstack 编排器。写作工具调用改为上节 WR001 唯一规范指针，保持现有单一路径与可搬运性。

@@ -9,6 +9,8 @@ description: 阶段已交付或用户要求独立收尾时，统一提交、PR�
 
 ## 1. 核输入与未完成范围
 
+写PR/交付说明前，先读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一正文，再执行本方法的写作动作；消费者是PR 读者与交付验收者。缺源如实 `unavailable`，此处只落实到达条件，不复制规范或改变原授权、失败与收口步骤。
+
 调用者提供当前task身份和外置task路径、认证worktree/目标repo、当前材料、质量与发现处置原件、真实授权原文/ref、当前分支/HEAD、目标分支/remote、允许写集、PR状态、需交付/归档/保留/清理的精确范围。按实际项目能力读取现有窄工具；缺工具只停相应动作，不能偷偷改用旧close控制面。
 
 先读本项目`docs/standard-workflow.md`的「当前路线」与「stage 结束」及caller现有授权约定。用`runtime/interface/workspace-check.mjs`的`inspectWorkspace({root: targetRepoRoot, target: worktreeRoot, baseline, expectBranch})`核真实工作区，再用Git读分支/HEAD、remote URL、目标分支状态与dirty归属。不能在dirty main替任务树执行，不能stash或覆盖未知改动。以caller提供的真实task上下文核身份，不能从cwd猜task、伪造TaskHandle或修改task.json求通过。
@@ -104,7 +106,7 @@ worktree确认已移除后，在目标repo按独立cleanup步骤授权，普通`
 
 ## 保全来源与迭代
 
-完整来源权威：[catalog条目](../catalog.yaml#skills.stage-closeout)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。
+来源权威：[catalog](../catalog.yaml#skills.stage-closeout)；本便携小卡非权威；单技能副本缺catalog时向来源维护者取登记。
 本方法抽取verify-code的授权/安全收口与standard-workflow当前默认安全收口，保build-prd稿件确认不授Git权；主线差异预检按本地用户要求补入，冲突处理复用`skills/resolving-merge-conflicts/SKILL.md`已有方法。原文中的same plan/confirmation仅保其“真实PR先回URL、同流续跑”行为，由当前真实输入和窄工具消费承接，不恢复旧plan/confirmation执行对象。caller的审查点、质量、交接、真实最终选择及阶段正式事实保持原owner；两caller接线由各Phase实施。
 
 修改本方法时读取项目`skills/spec-specify/SKILL.md`的「技能写作规范（WR001）」唯一规范，逐项核任务身份、质量限制、授权/HEAD、目标分支独有改动与同步决策、冲突处理、图更新、PR、归档、push、worktree/本地远端分支清理和结果读回的保全。方法接收真实项目输入与已有工具能力，不绑定账号/任务绝对路径，不打包第二Git executor；工具不支持保unavailable，回原owner修，不新增控制面。

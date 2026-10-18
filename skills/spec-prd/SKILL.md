@@ -14,9 +14,11 @@ spec-prd 是规划 prd.md 的唯一正文作者。build-prd 协调条件工作�
 
 本节回答：从哪里读取已确认方向，本技能能写哪份正文。
 
-读取当前已明确确认的决定及必要原始来源。来源的文件路径、人读版本/节定位用于说明依据，不作四 revision/hash 认证；缺母决定、冲突来源或真实确认就返回具体缺口。只写已授权的一个 `specs/<task-id>/prd.md`，不写当前 spec/Phase/index、任务状态、review verdict 或 Git 事实。
+读取当前已明确确认的决定及必要原始来源。引用外部来源时写清版本与回原文的直达链接；版本/签名类事实须实读依赖文件并写出处，取不到写 `unverified` 与具体来源缺口。写大纲/地图或按既有模板展开详情时，推断就地紧跟一句“这是推断”及依据，不分小节、不加新符号约定；不要求所有断言都外部引用。来源的文件路径、人读版本/节定位用于说明依据，不作四 revision/hash 认证；缺母决定、冲突来源或真实确认就返回具体缺口。只写已授权的一个 `specs/<task-id>/prd.md`，不写当前 spec/Phase/index、任务状态、review verdict 或 Git 事实。
 
 ## 正常两步内容方法
+
+写 PRD 的大纲/地图或详情前，先读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一正文，再按下列两步写作；消费者是 PRD 作者、后续任务作者与用户。缺源如实 `unavailable`，不复制规范。
 
 本节回答：先展示什么、在收到什么真实答复后展开详情。
 
@@ -79,7 +81,7 @@ spec-prd 是规划 prd.md 的唯一正文作者。build-prd 协调条件工作�
 
 User Stories 吸收 mattpocock/skills 固定 commit `b0618bc436ad893b3c5e84e55fba86586d34a404` 的 `skills/engineering/to-spec/SKILL.md`：完整角色/诉求/收益。保本地单 PRD owner、两步内容及调用者限制、地图/设计/详情真实答复、16字段卡与只读母兄边界；不采用 tracker/setup 或发布机制。更新时核固定子文件及本地偏离，不自动追 HEAD。
 
-完整来源权威：[catalog条目](../catalog.yaml#skills.spec-prd)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。来源：本仓build-prd/prd-template.md与Matt skills/engineering/to-spec/SKILL.md#user-stories。
+来源权威：[catalog](../catalog.yaml#skills.spec-prd)；本便携小卡非权威；单技能副本缺catalog时向来源维护者取登记。来源：本仓build-prd/prd-template.md与Matt skills/engineering/to-spec/SKILL.md#user-stories。
 
 ## 同仓方法依赖
 

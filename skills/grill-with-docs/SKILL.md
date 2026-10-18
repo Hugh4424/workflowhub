@@ -197,7 +197,7 @@ If any of the three is missing, skip the ADR. Use the format in [ADR-FORMAT.md](
 
 ## Sources
 
-完整来源权威：[catalog条目](../catalog.yaml#skills.grill-with-docs)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。
+来源权威：[catalog](../catalog.yaml#skills.grill-with-docs)；本便携小卡非权威；单技能副本缺catalog时向来源维护者取登记。
 采用frontier问答与领域/ADR方法的来源章节见catalog；本地融合这些方法，不调用或要求独立 domain-modeling 技能；保留全需求覆盖、四项客观退出检查、大白话卡、失败自行诊断与真实问答边界。格式以本地 Relationships / Example dialogue / Flagged ambiguities 为主，吸收新固定版 Rules / Single vs multi-context repos；ADR 原三项全部成立才创建，不把格式迁名当新决定。
 
 历史 2026-07-26 对旧固定源的 bytes 相同／不升级结论只适用于当时版本，不能说明本次新源无差异。新固定版术语为 GLOSSARY，格式附件属于 domain-modeling；本地承接于本技能，拒绝用缺完整领域/ADR、退出与问答合同的 lite 版本替换。迭代时核上述子文件的真实更新与更优候选，记录源差与本地偏离后决定采用，不自动追 HEAD。创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」，不复制规范。

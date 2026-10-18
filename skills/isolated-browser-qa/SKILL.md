@@ -135,7 +135,7 @@ Claim verification only for executed observations; never invent flags, extra ses
 
 ## Source and maintenance
 
-完整来源权威：[catalog条目](../catalog.yaml#skills.isolated-browser-qa)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。
+来源权威：[catalog](../catalog.yaml#skills.isolated-browser-qa)；本便携小卡非权威；单技能副本缺catalog时向来源维护者取登记。
 来源是用户提供并授权迁入的本地 `isolated-browser-qa`（完整授权事实在catalog，小卡仅指针；原快照缺失为unknown）；本地保留单 engine/session、隔离认证、同 engine 修复和不停止用户服务的清理路线。N3三来源与本机agent-browser Apache-2.0的采用/拒绝与固定身份见catalog对应absorbed条目；私有session/tickets替代手工生命周期，不是公共Runner。迭代比较固定源与scripts/references真实差异，缺源如实unknown，不追HEAD或猜新版。
 
 ## 写作规范

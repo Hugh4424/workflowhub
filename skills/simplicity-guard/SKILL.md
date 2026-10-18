@@ -58,7 +58,7 @@ P3：最小新增。先说明P0-P2为何不可；不确定停下问，不静默�
 
 ## 来源
 
-完整来源权威：[catalog条目](../catalog.yaml#skills.simplicity-guard)；正文/小卡是非权威线索，单技能副本缺catalog时向来源维护者取登记。
+来源权威：[catalog](../catalog.yaml#skills.simplicity-guard)；本便携小卡非权威；单技能副本缺catalog时向来源维护者取登记。
 - ponytail 七阶梯 YAGNI 法（压缩为四阶梯）
 - andrej-karpathy-skills 三条纪律（并入 P3 写法纪律）
 - N3吸收code-simplification的删前六问/行为保持、laziness的最小有效路径、interrogate的三问/有源归并、subtract-before-you-add及foundational-thinking的先减再建；后二者同落P0/P1，不增第五规则。pstack包SHA256 `f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8`，git commit未知；完整来源坐标见catalog。

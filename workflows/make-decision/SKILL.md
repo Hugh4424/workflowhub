@@ -24,6 +24,8 @@ version: 3.2.0
 
 ## 方法
 
+写decision-log前，先读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一正文，再调用本流程对应的材料作者；缺源如实 `unavailable`，保留原问答、确认、权限和失败边界，不复制规范。
+
 全程领域维护：Talk、研究、Grill、写稿或确认中出现已解决的领域术语、含义或边界变化时，按 `skills/grill-with-docs/SKILL.md:178-180` 就地最小写入 `GLOSSARY.md` 并读回；本步完成前必须有其一——具名写入读回，或本 decision-log 里有来源的 no change 理由；未变保来源充分的 no change，归属或含义冲突交真实 owner 回答。写入方法、懒创建与返回事实归该领域 owner，本阶段只在现 decision-log 记录变化引用、理由或待问来源，逐词核对不延迟成阶段末批量写。
 
 下方两行只显露各步骤原有产物与前提，是可发现性改进，不是新 gate 或审批；细则仍在同一步正文及所指原专业方法。十五步由真实主会话执行，公共 run --action=execute 不会自动执行 make-decision 或代填完成；材料渲染、问题生成与原件保存均不冒真人答复。
