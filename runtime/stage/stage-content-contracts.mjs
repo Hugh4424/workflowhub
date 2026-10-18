@@ -576,7 +576,7 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
         && /GREEN[^\n]*\b0\b/i.test(fields.expected_exit ?? "");
       // Mentioning G-2 while satisfying the normal behavioral contract is not
       // an exemption request. Inapplicable tags must not reject legal behavior.
-      const requestsG2 = !behaviorExit && [fields.Inputs, fields["Scenario / fixture or service"]].some((value) => /G-2/i.test(value ?? ""));
+      const requestsG2 = docDeclaration || (!behaviorExit && [fields.Inputs, fields["Scenario / fixture or service"]].some((value) => /G-2/i.test(value ?? "")));
       const g2Missing = [];
       if (requestsG2) {
         if (!docDeclaration) g2Missing.push("pure documentation declaration (文档无新增运行行为)");

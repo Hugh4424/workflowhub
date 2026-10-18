@@ -167,6 +167,11 @@ test.each([
     m.index=m.index.replace('docs/owned.md','config/method.yaml');
     m.spec=m.spec.replaceAll('docs/owned.md','config/method.yaml');
     field(m,phase2,'expected_exit','RED nonzero; GREEN 0；正常行为合同，不申请G-2免RED。');
+    field(m,phase2,'Inputs','配置输入 enabled=true；配置加载器读取 config/method.yaml。');
+    field(m,phase2,'Scenario / fixture or service','配置加载器读取 enabled=false 时拒绝启动；旧实现仍启动。');
+    field(m,phase2,'Action','将 enabled 配置改为 false，执行加载器并验证拒绝启动。');
+    field(m,phase2,'RED target failure','ORACLE-EXAMPLE-DOC 断言 disabled 配置必须拒绝启动；旧实现仍启动。');
+    field(m,phase2,'GREEN oracle','ORACLE-EXAMPLE-DOC disabled 配置加载器拒绝启动。');
   },'P2');
   expect(f.parsed.ok,f.parsed.errors.join('\n')).toBe(true);
   expect(f.parsed.errors).toEqual([]);
@@ -176,5 +181,25 @@ test.each([
     expect(facts.contract_ok).toBe(true);
     expect(facts.contract_errors).toEqual([]);
     expect(facts.command_oracle_checks.valid).toBe(true);
+  }finally{bundle.dispose();}
+});
+
+// A behavioral exit label cannot override an explicit pure-document G-2 request.
+test('ORACLE-N3-G2-MD-ONLY pure-document YAML with behavioral exit remains rejected',async()=>{
+  const f=await fixture(m=>{
+    m.phases[phase2]=m.phases[phase2].replaceAll('docs/owned.md','config/method.yaml');
+    m.index=m.index.replace('docs/owned.md','config/method.yaml');
+    m.spec=m.spec.replaceAll('docs/owned.md','config/method.yaml');
+    field(m,phase2,'expected_exit','RED nonzero; GREEN 0；正常行为合同，不申请G-2免RED。');
+  },'P2');
+  const diagnostic='phases/P2-文档核对.md T002 G-2 missing concrete documentation-only owned write set';
+  const bundle=f.bundle();try{
+    const facts=sourceFacts(bundle);
+    expect(f.parsed.ok).toBe(false);
+    expect(f.parsed.errors).toContain(diagnostic);
+    expect(f.parsed.facts.command_oracle_checks.valid).toBe(false);
+    expect(facts.contract_ok).toBe(false);
+    expect(facts.contract_errors).toContain(diagnostic);
+    expect(facts.command_oracle_checks.valid).toBe(false);
   }finally{bundle.dispose();}
 });
