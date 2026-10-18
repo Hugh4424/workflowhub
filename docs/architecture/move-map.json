@@ -4993,7 +4993,7 @@
       ],
       "named_data_readers": [],
       "delete_condition": "真实消费者退役且经独立审查证明替代oracle不降低断言强度后删除；原始RED保留",
-      "retention_basis": "specs/n3-review-test-diagnosis-qa-20261016/spec.md 与对应Phase；不新增runtime入口/状态/公共命令"
+      "retention_basis": "specs/archive/n3-review-test-diagnosis-qa-20261016/spec.md 与对应Phase；不新增runtime入口/状态/公共命令"
     },
     {
       "source": "tests/integration/n3-browser-session-lifecycle.node-test.mjs",
@@ -5008,7 +5008,7 @@
       ],
       "named_data_readers": [],
       "delete_condition": "真实消费者退役且经独立审查证明替代oracle不降低断言强度后删除；原始RED保留",
-      "retention_basis": "specs/n3-review-test-diagnosis-qa-20261016/spec.md 与对应Phase；不新增runtime入口/状态/公共命令"
+      "retention_basis": "specs/archive/n3-review-test-diagnosis-qa-20261016/spec.md 与对应Phase；不新增runtime入口/状态/公共命令"
     },
     {
       "source": "tests/integration/n3-browser-ticket-boundary.node-test.mjs",
@@ -5023,7 +5023,7 @@
       ],
       "named_data_readers": [],
       "delete_condition": "实际接缝正式退役且经独立审查证明等强替代后删除；原始失败保留",
-      "retention_basis": "specs/n3-review-test-diagnosis-qa-20261016/spec.md；P7/T007。先登记再创建，不新增生产公共命令或持久对象"
+      "retention_basis": "specs/archive/n3-review-test-diagnosis-qa-20261016/spec.md；P7/T007。先登记再创建，不新增生产公共命令或持久对象"
     },
     {
       "source": "tests/contract/n3-adoption-metadata.node-test.mjs",
