@@ -309,13 +309,13 @@ function route(value, label) {
   const initial = profileList(value.initial, label + ".initial");
   const closure = value.closure === undefined ? null : profileList(value.closure, label + ".closure");
   if (mode !== "adaptive" && closure !== null) throw new Error(label + ".closure is supported only for adaptive");
-  if (!Object.hasOwn(value, "minimum_heterologous")
-      || !Number.isSafeInteger(value.minimum_heterologous) || value.minimum_heterologous < 1) {
+  if (Object.hasOwn(value, "minimum_heterologous")
+      && (!Number.isSafeInteger(value.minimum_heterologous) || value.minimum_heterologous < 1)) {
     throw new Error(label + ".minimum_heterologous must be an explicit positive integer");
   }
   return {
     initial, ...(closure ? { closure } : {}), mode,
-    minimum_heterologous: value.minimum_heterologous,
+    ...(Object.hasOwn(value, "minimum_heterologous") ? { minimum_heterologous: value.minimum_heterologous } : {}),
   };
 }
 

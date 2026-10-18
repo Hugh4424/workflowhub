@@ -56,7 +56,9 @@ Phase 内的 Task 是 task graph，不是可任意跳过依赖的步骤表。选
 
 ## 同源补充轴
 
-每Phase的review-change与正式审查使用相同scope、当前diff、完整AC、执行原ref和仓库规范；主会话实际执行 `skills/review/SKILL.md`「双轴消费与宿主分派」的独立Standards/Spec派发与并列展示。补充原文由主会话按 `docs/standard-workflow.md`「证据只留原始件（同字节即同一事实）」比较后用现有appendRecord保存唯一原件或复用同字节原ref。
+每Phase的review-change与正式审查使用相同scope、当前artifact/基线/diff、完整AC、执行原ref、阶段合同、provider协议、审查重点、所需lens全文和仓库规范；主会话按下段实际执行独立Standards/Spec派发与并列展示，两个执行者消费 `skills/review/SKILL.md` 的对应镜头。补充原文由主会话按 `docs/standard-workflow.md`「证据只留原始件（同字节即同一事实）」比较后用现有appendRecord保存唯一原件或复用同字节原ref。
+
+宿主执行同源补充时，向两个互不继承对方上下文的独立执行者同时提供上述共同材料，并分别给 Standards 规范/baseline 或 Spec 来源。执行者只返回原文，不写文件；宿主按当前 workflow 保存单份原件，在 Standards / Spec 两栏分别展示发现、范围和不可用原因，只汇总各栏数量及各栏最严重问题，不合并、不重排名、不选跨轴赢家。同源补充标为 same_source_degraded，不替代 OCR、不计异源 quorum；OCR 与补充也并排保留，各路失败、取消与迟到有效发现不被成功路覆盖。
 
 现 stage row 保留真实 OCR 的 `review_origin`、失败及 `review_result_ref`；补充引用放既有 evidence/普通说明，不覆盖 OCR identity、不新增字段。单独读回补充事实时，`review_origin: same_source_degraded` 的 `review_result_ref.value` 为 `null` 且有 reason，原件仍由普通引用定位。已装 OCR 失败、超时或取消不被补充轴洗成通过；补充缺失、失败、取消、迟到 finding 各保原事实，继续安全修复，未测来源或空 findings 不冒成功。
 

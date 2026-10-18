@@ -750,8 +750,8 @@ skills:
         skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/code-review/SKILL.md
         adopted:
           - skills/engineering/code-review/SKILL.md#3-identify-the-standards-sources — skills/review/SKILL.md的Standards与Fowler baseline；仓库规则优先、smell仅heuristic、跳过工具已强制项
-          - skills/engineering/code-review/SKILL.md#4-spawn-both-sub-agents-in-parallel — skills/review/SKILL.md的双轴独立上下文分派及各自判据
-          - skills/engineering/code-review/SKILL.md#5-aggregate — skills/review/SKILL.md按Standards/Spec并排展示，不跨轴合并或重排名
+          - skills/engineering/code-review/SKILL.md#4-spawn-both-sub-agents-in-parallel — skills/review/SKILL.md双轴镜头及host指针；workflows/build-code/SKILL.md同源补充轴实际独立上下文分派及各自判据
+          - skills/engineering/code-review/SKILL.md#5-aggregate — skills/review/SKILL.md的host指针；workflows/build-code/SKILL.md同源补充轴实际按Standards/Spec并排展示，不跨轴合并或重排名
     local_changes: 裁为 wh-review lens；禁止自动修复和第二 review flow
     dependency_closure: *deps_spec_specify
     update_policy: 人工比较 review checklist，只保留 lens 规则
