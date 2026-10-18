@@ -13,19 +13,19 @@ stage-skill-plan.json 仍在本技能原路径提供 required_skills/optional_sk
 
 ## Input
 
-本节只解释现字段：`stage`为审查阶段、`materials`为允许的完整材料；make-decision以 `review_track`分方向/细节，mini-task以现 `review_kind`分面。材料名依当前合同，如 `raw_requirement`、`approved_direction`、`draft_spec_or_acceptance`。`host_provider`不读、不参与选择，旧值不排除/阻断来源，不增必填。
+`stage`为审查阶段、`materials`为允许的完整材料；make-decision以 `review_track`分方向/细节，mini-task以现 `review_kind`分面。材料名依当前合同，如 `raw_requirement`、`approved_direction`、`draft_spec_or_acceptance`。`host_provider`不读、不参与选择，旧值不排除/阻断来源，不增必填。
 
-普通首轮request不传 `task_path`、`project_name`、`task_id`、Workspace、Git、snapshot、revision、provider allowlist、result-storage；任务认证仅由「现有接口」的公开CLI参数提供，不入provider材料，旧额外task/workspace字段不作门。第5条未完成来源补派仍用其 `only_providers`、`dispatch_reason`及原记录引用，本节不新增路由/补派接口。
+普通首轮request不传 `task_path`、`project_name`、`task_id`、Workspace、Git、snapshot、revision、provider allowlist、result-storage；任务认证仅由「现有接口」的公开CLI参数提供，不入provider材料，旧额外task/workspace字段不作门。
 
 ## 输入与方法
 
 1. 接收本次实际 stage/track、允许范围与完整材料。方向盲审只看原始要求、客观事实、约束和非目标；细节审查读当前方向与细节；PRD 读实际任务地图/正文；代码面读声明的真实 diff、合同、lens 和相关验收原件。缺必要材料如实报 MATERIAL_INCOMPLETE，不补猜或擅读范围外文件。
 2. 按现有配置选择实际 provider/route，使用现有请求 owner 与阶段审查重点；先备齐可读材料，再调用。材料按下方「现有接口」区分公开入口的顶层 ref 解析与裸入口的完整字节内联，确认所有本次允许材料实际进入 packet。包封装/hash 是传输事实，不是人类确认或继续工作的许可证。
-3. 一次请求返回原始 provider 身份、传输状态、真实 findings、错误及覆盖限制。provider 只读本次提交材料，不访问真实仓库、父目录、Git、网络或宿主秘密，不派子代理或写文件。工具限制及已证明的 packet 内只读查看例外按本次全文提供的 `contracts/provider-protocol.md` 执行，不把宿主双轴分派搬进 provider。Temporary bundle 使用现有安全路径/清理，失败保持原错误，不能静默丢材料。
+3. provider 只读本次提交材料，不访问真实仓库、父目录、Git、网络或宿主秘密，不派子代理或写文件。工具限制及已证明的 packet 内只读查看例外按本次全文提供的 `contracts/provider-protocol.md` 执行，不把宿主双轴分派搬进 provider。Temporary bundle 使用现有安全路径/清理，失败保持原错误，不能静默丢材料。
 4. 主会话保留一份真实 review 原件及执行回执，处置 fixed、rejected_invalid、accepted_risk 或 needs_human。finding 要有能回读的问题/根因/建议/证据；无效锚点标记留原件，内容仍由独立事实判断，不能自动删真实问题。build-code、verify-code 内严重问题自动优先修复，无法解决保留 incomplete 并继续可执行部分，最终 close 前展示实际损失和风险，不新增中间确认；其它阶段按其真实选择合同处理。仅已有绑定该 finding 的真实用户风险决定才可记 accepted_risk，持续实施授权不能代填风险接受。
 5. 已返回语义建议的同scope，不因修复或追空findings重派；无语义结果且具体传输/材料条件已变才按原范围安全重试。恢复/长等待沿同请求，取消沿现信号，不建异步对象/二层生命周期。仅人显式补派原记录未completed来源：非空 `only_providers`、`dispatch_reason`、带sha256的 `supplements`原记录，绑定同材料/subject；不重发成功来源、不追空，不自动补派或按失败率降权（ADR-029/031）。
 
-派发卫生：读取本次可信配置的 initial 实际路线，逐路派发并保留真实 adapter/source/model；未报 model 或模型族记 unknown。同一家族换 provider 键仍是同源，不用键名冒异源。只读探针的不可用、配额或包能力事实单列；不固定收到数量，不以异源下限取消来源，不由 workflow 输入改配置。各来源失败、无效输出与空 findings 分别读回，成功路不覆盖失败。
+派发卫生：读取本次可信配置的 initial 实际路线，逐路派发并保留真实 adapter/source/model；未报 model 或模型族记 unknown。同一家族换 provider 键仍是同源，不用键名冒异源。只读探针的不可用、配额或包能力事实单列；不固定收到数量，不以异源下限取消来源，不由 workflow 输入改配置。
 
 材料位按 `runtime/review/stage-materials.json` 当前 stage/track 合同读取；direction 的 `raw_requirement` 是用户原始要求及来源，`objective_facts` 是可核对现状/限制及原件，`convergence_outline` 只列问题、约束、失败后果和较小可逆选项，不提前放当前选择或理由。三个键齐全或 hash 可验不证明三个角色齐；同字节填三位须报告角色未成立，不能只改标签或补 manifest。缺必要位报 MATERIAL_INCOMPLETE，派发前停该请求。detail 使用真实 `raw_requirement` 与 `approved_direction`，其余位沿当前合同，不新增必填键。
 
@@ -36,11 +36,11 @@ stage-skill-plan.json 仍在本技能原路径提供 required_skills/optional_sk
 
 available 只表示实际收到可读建议，至少一个有效语义 sibling 可以与其它失败并存；partial/available-with-failures 不等于通过。空 findings 只表示本次完成阅读后未提出问题；未执行、不可用、取消、无效 JSON 或缺材料都不是空 findings，也不是用户同意或交付完成。
 
-真的出了结论，须从本次审查原件同时读出三条件：至少一路真实 `completed && parse_outcome === "ok"`；该路发现或空 findings 有可回读的原始件引用；记录保留未确认项 `material_coverage.undetermined` 与真实 `discarded_facts`（若有，无真实丢弃事实不制造占位）。三条件缺一，报告无结论及具体原因；三条件齐只说明本次返回了可核对的意见，不表示质量通过或功能验收。实际执行者、真实终态和来源均沿原件读取，不由实施者自述或 `review_origin` 的取值推定。
+结论须从本次原件同时读出三条件：至少一路真实 `completed && parse_outcome === "ok"`；该路发现或空 findings 有可回读的原始件引用；记录保留未确认项 `material_coverage.undetermined` 与真实 `discarded_facts`（若有，无真实丢弃事实不制造占位）。三条件缺一，报告无结论及具体原因；实际执行者、真实终态和来源均沿原件读取，不由实施者自述或 `review_origin` 的取值推定。
 
 OCR 不可用时四件齐：检测输出与原始失败各沿其唯一原件引用；实际执行者沿本次执行身份原件；覆盖限制沿本次审查记录逐材料说明。四件各给具名保留位置，未取得的写明缺口。检测、失败或同源补充均不能成为非 OCR 结果的 OCR 身份。
 
-`material_coverage` 的覆盖三键语义固定：`read` 仅含有可靠读取证据的材料；`unread` 是明确未送达或未打开；`undetermined` 是 provider 未报覆盖或读取不可证。不可证一律进 `undetermined`，不进 `read`。现有 `providerCoverage` 对非 `completed` 或非 `ok` 的来源清空 `read` 并保留到 `undetermined`。`read_confirmed` 未证保持 `null`／不适用；当前 OCR adapter 将该布尔或 null 事实放在 provider 结果的 `coverage.read_confirmed`，`material_coverage` 没有这个键，不能新增键或把送出当读懂。覆盖不证明 user case 执行、完整阅读或功能验收。
+`material_coverage` 三键语义固定：`read` 仅含有可靠读取证据的材料；`unread` 是明确未送达或未打开；`undetermined` 是 provider 未报覆盖或读取不可证。不可证一律进 `undetermined`，不进 `read`。现有 `providerCoverage` 对非 `completed` 或非 `ok` 的来源清空 `read` 并保留到 `undetermined`。`read_confirmed` 未证保持 `null`／不适用；当前 OCR adapter 将该布尔或 null 事实放在 provider 结果的 `coverage.read_confirmed`，`material_coverage` 没有这个键，不能新增键或把送出当读懂。覆盖不证明 user case 执行、完整阅读或功能验收。
 
 **冻结字段清单（禁止自造）**：八类为 `review_origin`、`review_result_ref`、provider 结果的 `status`、`parse_outcome`、`review_facts.providers[].opinion_returned`、既有 `material_coverage`（覆盖三键 `read`／`unread`／`undetermined`）、`discarded_facts`、`executor`。三键属于同一类既有覆盖事实，不另算顶层字段。记录字段只填已发生事实的读取结果，不能填对判据的期望；每项都要回到其原件。
 
@@ -61,9 +61,9 @@ OCR 不可用时四件齐：检测输出与原始失败各沿其唯一原件引�
 
 ## Long-review host convention
 
-- 正常代码审查仍由 OCR 执行，本节仅调用等待方法；由专用审查子代理在一个连续 activation 承接一个同步请求，守到整轮 settled：全部真实 provider 终态且正常已启动请求的正式记录可读，才 final 交付。单来源完成不算整轮完成；失败/取消也算终态。
+- 由专用审查子代理在一个连续 activation 承接一个同步请求，守到整轮 settled：全部真实 provider 终态且正常已启动请求的正式记录可读，才 final 交付。单来源完成不算整轮完成；失败/取消也算终态。
 - 宿主返回 running 时沿同一 job 使用宿主既有长等待，保持 owner 活动；不 final、重启请求或短轮询，不留待下次 activation 收尾。跨 activation 所有权持久性未经验证时保持同步 owner；不新增 tracker、状态、timeout、API 或进度对象。
-- 启动失败或未知 job 使正式记录无法取得时，按真实失败/unavailable 交付；显式取消沿既有信号回收并保留 settled 来源事实，未知保持未知。既有第5条的人显式补派边界不变；调用完成职责不改审查次数、质量或授权。
+- 启动失败或未知 job 使正式记录无法取得时，按真实失败/unavailable 交付；显式取消沿既有信号回收并保留 settled 来源事实，未知保持未知。补派仍仅按第5条。
 
 | 实际结果 | 报告口径 |
 | --- | --- |
@@ -72,7 +72,7 @@ OCR 不可用时四件齐：检测输出与原始失败各沿其唯一原件引�
 | `PUBLIC_RESULT_INVALID` 或宿主调用链失败 | unavailable，保留具体错误 |
 | 零字节或无效 JSON | 内部标记 `contract_failure`，不得当空 findings |
 
-等待终末后仍按「输出和失败边界」逐路报告失败/partial、脱敏与唯一原件；等待成功不授予质量通过或操作权限。
+终末逐路回读并按「输出和失败边界」报告；等待不授质量通过或操作权限。
 
 ## 现有接口
 
