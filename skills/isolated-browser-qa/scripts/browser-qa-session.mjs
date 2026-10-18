@@ -8,7 +8,30 @@ import {createHash} from 'node:crypto';
 import {connectCdp,validateEndpoint,makeScope,transferTargetCookies,safeError} from './browser-qa-tickets.mjs';
 const here=dirname(fileURLToPath(import.meta.url));
 const nativeHelper=join(here,'browser-qa-browser-use.py');
-function command(argv,env,{signal,inherit=false}={}) {if(signal?.aborted)return Promise.reject(safeError('CANCELLED'));return new Promise((resolve,reject)=>{const c=spawn(argv[0],argv.slice(1),{env,detached:true,stdio:inherit?'inherit':['ignore','pipe','pipe']});let stdout='';if(!inherit){c.stdout.on('data',b=>stdout+=b);c.stderr.resume();}const abort=()=>{try{process.kill(-c.pid,'SIGTERM');}catch{}};signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();c.once('error',()=>reject(safeError('COMMAND_UNAVAILABLE')));c.once('close',(code)=>{signal?.removeEventListener('abort',abort);resolve({code:code??143,stdout});});});}
+function command(argv,env,{signal,inherit=false,outputSecrets}={}) {
+  if(signal?.aborted)return Promise.reject(safeError('CANCELLED'));
+  return new Promise((resolve,reject)=>{
+    // Ticket values may cross arbitrary chunk boundaries. Keep protected output
+    // in memory until it can be checked in full, before forwarding either stream.
+    const protectedOutput=inherit&&Boolean(outputSecrets?.size);
+    const c=spawn(argv[0],argv.slice(1),{env,detached:true,stdio:inherit&&!protectedOutput?'inherit':[inherit?'inherit':'ignore','pipe','pipe']});
+    const stdoutChunks=[],stderrChunks=[];
+    if(!inherit||protectedOutput){c.stdout.on('data',b=>stdoutChunks.push(b));if(protectedOutput)c.stderr.on('data',b=>stderrChunks.push(b));else c.stderr.resume();}
+    const abort=()=>{try{process.kill(-c.pid,'SIGTERM');}catch{}};
+    signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();
+    c.once('error',()=>reject(safeError('COMMAND_UNAVAILABLE')));
+    c.once('close',(code)=>{
+      signal?.removeEventListener('abort',abort);
+      const stdout=Buffer.concat(stdoutChunks),stderr=Buffer.concat(stderrChunks);let resultCode=code??143;
+      if(protectedOutput){
+        const leaked=[...outputSecrets].some(value=>value&&(stdout.includes(Buffer.from(value))||stderr.includes(Buffer.from(value))));
+        if(leaked){console.error(JSON.stringify({error:'SECRET_OUTPUT_BLOCKED'}));resultCode=resultCode||1;}
+        else{process.stdout.write(stdout);process.stderr.write(stderr);}
+        resolve({code:resultCode,stdout:''});
+      }else resolve({code:resultCode,stdout:stdout.toString()});
+    });
+  });
+}
 async function ownedReceiver(env,session,signal) {
   const home=env.AGENT_BROWSER_SOCKET_DIR||env.AGENT_BROWSER_HOME||join(env.HOME,'.agent-browser');
   let pid;try {pid=Number((await readFile(join(home,session+'.pid'),'utf8')).trim());}catch{throw safeError('RECEIVER_OWNERSHIP_MISSING');}
@@ -109,7 +132,7 @@ async function runNativeQa({env,session,evidence,scenario,scope,sourceEndpoint,m
   const int=()=>stop('SIGINT'),term=()=>stop('SIGTERM');process.on('SIGINT',int);process.on('SIGTERM',term);
   let ownedRoot,profile,helper,browser,helperIdentity,helperBaseline,browserIdentity,receiver,source,guard,adapterFailure;
   let helperExit,browserExit,helperDone,browserDone,helperClosed,browserClosed;
-  let code=1,commandFailed=false,teardown=false,closing,distinct=!sourceEndpoint;
+  let code=1,commandFailed=false,teardown=false,closing,distinct=!sourceEndpoint,sourceCollision=false;
   const secrets=new Set(sourceEndpoint?[sourceEndpoint]:[]),events=[],waiters=[];
   const report=(event,fields={})=>console.log(JSON.stringify({native_qa:event,...fields}));
   const allowed=url=>{try{const parsed=new URL(url);return ['http:','https:'].includes(parsed.protocol)&&env.BROWSER_QA_ALLOWED_DOMAINS.split(',').includes(parsed.hostname);}catch{return false;}};
@@ -139,7 +162,13 @@ async function runNativeQa({env,session,evidence,scenario,scope,sourceEndpoint,m
     if(!child.kill('SIGTERM'))throw safeError('NATIVE_TERM_FAILED');
   };
   const closeBrowser=()=>closing||=(async()=>{
-    if(!distinct)throw safeError('SOURCE_RECEIVER_IDENTITY_UNVERIFIED');
+    if(!distinct){
+      // A transport not yet compared is not permission to send Browser.close.
+      // Its separately authenticated direct child is still ours to reclaim.
+      if(sourceCollision)throw safeError('SOURCE_RECEIVER_IDENTICAL');
+      if(browser){await exactTerm(browser,browserIdentity,'browser');await bounded(browserDone,10000);await bounded(browserClosed,1000);}
+      return;
+    }
     guard?.expectClose();
     if(helper&&!helperExit){send({command:'detach'});try{await eventWait('detached',3000);}catch{}}
     if(receiver){try{await receiver.call('Browser.close');report('browser_close');}catch{report('browser_close_unavailable');}}
@@ -223,7 +252,7 @@ async function runNativeQa({env,session,evidence,scenario,scope,sourceEndpoint,m
     receiver=await connectCdp(endpoint,{signal:aborter.signal,closeOnAbort:false});
     const info=await receiver.call('SystemInfo.getProcessInfo');
     if(info.processInfo.filter(p=>p.type==='browser').map(p=>Number(p.id)).join('')!==String(browser.pid))throw safeError('NATIVE_ENDPOINT_IDENTITY_INVALID');
-    if(sourceEndpoint){source=await connectCdp(sourceEndpoint,{signal:aborter.signal});if(source.peerIdentity===receiver.peerIdentity)throw safeError('SOURCE_RECEIVER_IDENTICAL');distinct=true;
+    if(sourceEndpoint){source=await connectCdp(sourceEndpoint,{signal:aborter.signal});if(source.peerIdentity===receiver.peerIdentity){sourceCollision=true;throw safeError('SOURCE_RECEIVER_IDENTICAL');}distinct=true;
       await transferTargetCookies({source,receiver,scope,signal:aborter.signal,onSecret:s=>secrets.add(s),report:r=>console.log(JSON.stringify(r))});source.close();source=null;}
     guard=await documentGuard(receiver,{allowed,reject:rejectDomain,fault:guardFault,signal:aborter.signal});
     send({endpoint});await eventWait('ready',35000,aborter.signal);
@@ -245,10 +274,14 @@ async function runNativeQa({env,session,evidence,scenario,scope,sourceEndpoint,m
     // A failed bounded cleanup must not release paused Documents on a live
     // owned browser. The existing foreground ChildProcess owner stays attached;
     // release this connection only when its actual browser exit is observed.
-    if(browser&&!browserExit)void browserDone.then(releaseGuard);else releaseGuard();
-    if(helper&&!helperExit&&distinct){send({command:'stop'});try{await bounded(helperDone,3000);}catch{try{await exactTerm(helper,helperIdentity,'helper');await bounded(helperDone,5000);}catch{clean=false;}}}
-    if(helper&&distinct){try{await bounded(helperClosed,1000);}catch{clean=false;}}
-    if(!distinct)clean=false;
+    if(sourceCollision){
+      // No guard or helper endpoint was installed before the comparison. Leave
+      // the source browser alive, but release our transport and foreground ref.
+      releaseGuard();browser?.unref();
+    }else if(browser&&!browserExit)void browserDone.then(releaseGuard);else releaseGuard();
+    if(helper&&!helperExit){send({command:'stop'});try{await bounded(helperDone,3000);}catch{try{await exactTerm(helper,helperIdentity,'helper');await bounded(helperDone,5000);}catch{clean=false;}}}
+    if(helper){try{await bounded(helperClosed,1000);}catch{clean=false;}}
+    if(sourceCollision)clean=false;
     if(browser&&!browserExit||helper&&!helperExit)clean=false;
     if(ownedRoot&&clean){
       const rows=(await command(['ps','-ww','-axo','pid=,command='],env)).stdout.split('\n');
@@ -281,7 +314,7 @@ export async function runBrowserQa(args=process.argv.slice(2),inputEnv=process.e
   await mkdir(resolve(evidence),{recursive:true});
   const ownedRoot=await mkdtemp(join(env.TMPDIR||tmpdir(),'whqa-'));
   Object.assign(env,{AGENT_BROWSER_SOCKET_DIR:ownedRoot,AGENT_BROWSER_HOME:ownedRoot});
-  const aborter=new AbortController();let cancelled=0;let source,receiver;let cleanupOwnership;let sourceCollision=false;let receiverDistinct=!sourceEndpoint;let code=1;
+  const aborter=new AbortController();let cancelled=0;let source,receiver;let cleanupOwnership;let sourceCollision=false;let receiverDistinct=!sourceEndpoint;let code=1;const secrets=new Set();
   const stop=s=>{cancelled=s==='SIGINT'?130:143;aborter.abort();};const int=()=>stop('SIGINT'),term=()=>stop('SIGTERM');process.on('SIGINT',int);process.on('SIGTERM',term);
   try {
     const launch=engine==='agent-browser'?[engine,'--session',session,'--allowed-domains',allowed,'--content-boundaries','open']:[engine,'--session',session,'open'];
@@ -300,10 +333,10 @@ export async function runBrowserQa(args=process.argv.slice(2),inputEnv=process.e
       if(sourceEndpoint){source=await connectCdp(sourceEndpoint,{signal:aborter.signal});
       if(source.peerIdentity===receiver.peerIdentity){sourceCollision=true;throw safeError('SOURCE_RECEIVER_IDENTICAL');}
       receiverDistinct=true;
-      await transferTargetCookies({source,receiver,scope,signal:aborter.signal,report:r=>console.log(JSON.stringify(r))});source.close();source=null;}
+      await transferTargetCookies({source,receiver,scope,signal:aborter.signal,onSecret:value=>secrets.add(value),report:r=>console.log(JSON.stringify(r))});source.close();source=null;}
     }
     const navigated=await command([engine,'--session',session,'open',scope.targetUrl],env,{signal:aborter.signal});if(navigated.code)throw safeError('TARGET_NAVIGATION_FAILED');
-    const result=await command(a,env,{signal:aborter.signal,inherit:true});code=result.code;
+    const result=await command(a,env,{signal:aborter.signal,inherit:true,outputSecrets:secrets});code=result.code;
   } catch(e){console.error(JSON.stringify({error:e.code||'QA_RUN_FAILED',...(e.method?{method:e.method}:{})}));code=cancelled||1;}
   finally {
     source?.close();
@@ -320,6 +353,7 @@ export async function runBrowserQa(args=process.argv.slice(2),inputEnv=process.e
     }
     if(!cleaned.code)await rm(ownedRoot,{recursive:true,force:true});
     process.off('SIGINT',int);process.off('SIGTERM',term);
+    secrets.clear();
   }
   return cancelled||code;
 }

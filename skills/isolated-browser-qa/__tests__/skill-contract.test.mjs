@@ -804,3 +804,115 @@ print(json.dumps(result))
     }finally{if(!existsSync(go))writeFileSync(go,'go');await f.close();fs.closeSync(reader);}
   },90000);
 });
+
+// Independent terminal verify TCR: append only; old 57 cases/frozen 16 unchanged.
+// Fake engine/CDP isolates credentials; production context/session owns the run.
+async function verifyAgentCookieOutput(channel){
+  const root=mkdtempSync(join(tmpdir(),'bqa-verify-cookie-')),bin=join(root,'bin'),evidence=join(root,'evidence'),profile=join(root,'agent-browser-profile-owned');
+  for(const dir of [bin,evidence,profile])mkdirSync(dir);
+  const cookie={name:'ordinary',value:'VERIFY_SYNTHETIC_TICKET_OUTPUT_SENTINEL',domain:'app.example.test',path:'/',secure:true,httpOnly:true,session:true};
+  const source=await memoryCdp([cookie]),receiver=await memoryCdp([]);let toolReads=0;
+  const jarServer=createServer((req,res)=>{toolReads++;res.setHeader('content-type','application/json');res.end(JSON.stringify(receiver.received));});
+  await new Promise(resolve=>jarServer.listen(0,'127.0.0.1',resolve));
+  const daemon=spawn(process.execPath,['-e',`process.title='agent-browser';const {spawn}=require('node:child_process');const b=spawn(process.execPath,['-e',"process.title='Chrome --user-data-dir='+process.argv[1];setInterval(()=>{},1000)",process.argv[1]],{stdio:'ignore'});process.on('SIGTERM',()=>b.kill('SIGTERM'));b.on('close',()=>process.exit());setInterval(()=>{},1000);`,profile],{stdio:'ignore'});
+  const daemonDone=new Promise(resolve=>daemon.once('close',resolve));
+  writeFileSync(join(bin,'agent-browser'),`#!${process.execPath}
+const fs=require('node:fs'),p=require('node:path'),a=process.argv.slice(2),s=a[a.indexOf('--session')+1]||process.env.BROWSER_QA_SESSION;
+if(a.includes('open'))fs.writeFileSync(p.join(process.env.AGENT_BROWSER_SOCKET_DIR,s+'.pid'),process.env.BQA_DAEMON);
+else if(a.includes('cdp-url'))console.log(process.env.BQA_RECEIVER);
+else if(a.includes('close')){try{process.kill(Number(process.env.BQA_DAEMON),'SIGTERM')}catch{}}
+else if(a.includes('cookies'))fetch(process.env.BQA_JAR).then(r=>r.json()).then(jar=>{const text=JSON.stringify(jar);const channel=process.env.BQA_OUTPUT;const stream=channel==='stderr'?process.stderr:process.stdout;if(channel==='split-stdout'){const pos=text.indexOf(jar[0].value)+Math.floor(jar[0].value.length/2);stream.write(text.slice(0,pos));setTimeout(()=>stream.write(text.slice(pos)+'\\n'),80);}else stream.write(text+'\\n');});
+`,{mode:0o755});
+  const scenario=join(root,'scenario.sh');writeFileSync(scenario,channel==='safe'?'echo safe-scenario\n':`agent-browser --session "$BROWSER_QA_SESSION" cookies\n`);
+  const env={...process.env,PATH:bin+':'+process.env.PATH,BROWSER_QA_ENGINE:'agent-browser',BROWSER_QA_AUTH_MODE:'read-only-ticket-export',BROWSER_QA_TICKET_SOURCE_WS:source.endpoint,BROWSER_QA_TICKET_TOP_LEVEL_SITE:'',BROWSER_QA_ALLOWED_DOMAINS:'app.example.test',BQA_DAEMON:String(daemon.pid),BQA_RECEIVER:receiver.endpoint,BQA_JAR:`http://127.0.0.1:${jarServer.address().port}/jar`,BQA_OUTPUT:channel};
+  try{
+    const r=await gateway(['--url','https://app.example.test/private','--evidence-dir',evidence,'--','bash',scenario],env);
+    const hit=(r.stdout+r.stderr).includes(cookie.value);
+    console.log('ORACLE-VERIFY-COOKIE '+JSON.stringify({channel,code:r.code,transferred:receiver.received.length,tool_reads:toolReads,output_contains_synthetic_cookie:hit,output_sha256:createHash('sha256').update(r.stdout+r.stderr).digest('hex')}));
+    expect(source.methods).toEqual(['Browser.getVersion','Target.getTargets','Storage.getCookies','Target.getTargets']);
+    expect(receiver.received).toHaveLength(1);expect(receiver.received[0].value).toBe(cookie.value);
+    expect(toolReads).toBe(channel==='safe'?0:1);
+    expect(existsSync(profile),'production cleanup must remove owned profile').toBe(false);
+    expect(hit,'AC007 transferred cookie must not enter stdout or stderr').toBe(false);
+    if(channel==='safe')expect(r.code).toBe(0);else{expect(Number.isInteger(r.code)).toBe(true);expect(r.code,'secret output refusal must stay nonzero').not.toBe(0);}
+  }finally{daemon.kill('SIGTERM');await daemonDone;await source.close();await receiver.close();await new Promise(resolve=>jarServer.close(resolve));rmSync(root,{recursive:true,force:true});}
+}
+describe('N3 verify cookie-output protection',()=>{
+  it.each(['stdout','stderr','split-stdout','safe'])('agent-browser receiver cookie %s follows the output contract',async channel=>{await verifyAgentCookieOutput(channel);},15000);
+});
+
+// The native source uses a real loopback transport. The collision relay rewrites
+// only this run's owned DevToolsActivePort file, not peerIdentity or its comparison.
+async function verifyNativeSourceCleanup(mode){
+  const f=await nativeFixture(),hook=join(f.root,'verify-owner-hook.mjs'),events=join(f.root,'verify-owner-events.jsonl'),nativeEndpoint=join(f.root,'verify-native-endpoint.json'),marker=join(f.evidence,'must-not-enter');
+  const sessionPath=fileURLToPath(new URL('../scripts/browser-qa-session.mjs',import.meta.url)),helperPath=fileURLToPath(new URL('../scripts/browser-qa-browser-use.py',import.meta.url));
+  let upgradeHit=false,upgradeCount=0;const sockets=new Set(),methods=[],upstreams=new Set();
+  const server=createServer();
+  server.on('upgrade',(req,socket,head)=>{
+    upgradeHit=true;upgradeCount++;sockets.add(socket);socket.on('close',()=>sockets.delete(socket));
+    if(mode==='refused'){socket.destroy();return;}
+    if(mode==='cancel-before-compare')return;
+    const point=JSON.parse(readFileSync(nativeEndpoint,'utf8'));
+    import('node:net').then(({connect})=>{
+      const remote=connect({host:'127.0.0.1',port:point.port});upstreams.add(remote);remote.on('close',()=>upstreams.delete(remote));remote.on('error',()=>socket.destroy());socket.on('error',()=>remote.destroy());socket.on('close',()=>remote.destroy());
+      remote.once('connect',()=>{const headers=Object.entries(req.headers).map(([k,v])=>k+': '+v).join('\r\n');remote.write('GET '+point.path+' HTTP/1.1\r\n'+headers+'\r\n\r\n');if(head.length)remote.write(head);});
+      // Observe client websocket frames without changing their bytes or methods.
+      let buffered=Buffer.alloc(0);socket.on('data',chunk=>{buffered=Buffer.concat([buffered,chunk]);while(buffered.length>=2){let n=buffered[1]&127,o=2;if(n===126){if(buffered.length<4)break;n=buffered.readUInt16BE(2);o=4;}if(n===127)break;const masked=Boolean(buffered[1]&128);if(buffered.length<o+(masked?4:0)+n)break;const mask=buffered.subarray(o,o+4);if(masked)o+=4;const body=Buffer.from(buffered.subarray(o,o+n));const opcode=buffered[0]&15;buffered=buffered.subarray(o+n);if(masked)for(let i=0;i<body.length;i++)body[i]^=mask[i%4];if(opcode===1){try{methods.push(JSON.parse(body).method);}catch{}}}});
+      socket.pipe(remote);remote.pipe(socket);
+    }).catch(()=>socket.destroy());
+  });
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  const port=server.address().port,sourceEndpoint=`ws://127.0.0.1:${port}/devtools/browser/verify-controlled`;
+  writeFileSync(hook,String.raw`
+import cp from 'node:child_process';import fs from 'node:fs/promises';import syncfs from 'node:fs';import {syncBuiltinESMExports} from 'node:module';
+const e=process.env;if(process.argv[1]===e.P7_VERIFY_ENTRY&&e.P7_VERIFY_EVENTS.startsWith(e.P7_VERIFY_ROOT+'/')){
+ const record=v=>syncfs.appendFileSync(e.P7_VERIFY_EVENTS,JSON.stringify(v)+'\n');const spawn=cp.spawn,read=fs.readFile;let root,changed=false;
+ const WS=globalThis.WebSocket;globalThis.WebSocket=class extends WS{send(data){try{const m=JSON.parse(String(data));if(typeof m.method==='string')record({event:'cdp-method',method:m.method});}catch{}return super.send(data);}};
+ cp.spawn=function(exe,args=[],options){const c=spawn.call(this,exe,args,options);const role=args[0]===e.P7_VERIFY_HELPER&&args[1]==='adapter'?'helper':exe===e.P7_VERIFY_CHROME&&args.some(a=>String(a).startsWith('--user-data-dir='))?'browser':null;if(role){if(role==='helper')root=args[3];const identity=cp.spawnSync('/bin/ps',['-ww','-p',String(c.pid),'-o','pid=,ppid=,lstart=,command='],{encoding:'utf8'}).stdout.trim();record({event:'spawn',role,pid:c.pid,identity,root});const kill=c.kill;c.kill=function(signal){record({event:'kill',role,pid:c.pid,signal});return kill.call(this,signal);};if(role==='helper'){const write=c.stdin.write;c.stdin.write=function(data,...rest){try{const m=JSON.parse(String(data));if(m.endpoint)record({event:'helper_attach'});}catch{}return write.call(this,data,...rest);};}}return c;};
+ fs.readFile=async function(path,...args){const result=await read.call(this,path,...args);if(e.P7_VERIFY_MODE==='collision'&&!changed&&root&&path===root+'/browser-use-user-data-dir-owned/DevToolsActivePort'){changed=true;const lines=String(result).trim().split('\n');await fs.writeFile(e.P7_VERIFY_NATIVE,JSON.stringify({port:Number(lines[0]),path:lines[1]}));await fs.writeFile(path,e.P7_VERIFY_PORT+'\n/devtools/browser/verify-controlled\n');record({event:'relay-bound',root});return read.call(this,path,...args);}return result;};syncBuiltinESMExports();
+}
+`);
+  let run,settled=false,result,beforeCleanup=[];
+  const readEvents=()=>existsSync(events)?readFileSync(events,'utf8').trim().split('\n').filter(Boolean).map(JSON.parse):[];
+  try{
+    run=f.start(`printf entered > ${shellWord(marker)}\n`,{NODE_OPTIONS:`--import=${hook}`,P7_VERIFY_ENTRY:sessionPath,P7_VERIFY_HELPER:helperPath,P7_VERIFY_CHROME:nativeChrome,P7_VERIFY_ROOT:f.root,P7_VERIFY_EVENTS:events,P7_VERIFY_NATIVE:nativeEndpoint,P7_VERIFY_MODE:mode,P7_VERIFY_PORT:String(port),BROWSER_QA_AUTH_MODE:'read-only-ticket-export',BROWSER_QA_TICKET_SOURCE_WS:sourceEndpoint});
+    run.done.then(r=>{settled=true;result=r;});
+    const deadline=Date.now()+20000;while(!upgradeHit&&!settled&&Date.now()<deadline)await delay(20);
+    expect(upgradeHit,'must reach actual source connection after native receiver identity').toBe(true);
+    if(mode==='cancel-before-compare')expect(run.child.kill('SIGTERM')).toBe(true);
+    const until=Date.now()+9000;while(!settled&&Date.now()<until)await delay(20);
+    beforeCleanup=readEvents();const children=beforeCleanup.filter(e=>e.event==='spawn');
+    expect(children.map(c=>c.role).sort()).toEqual(['browser','helper']);
+    const current=children.map(c=>({role:c.role,pid:c.pid,alive:(()=>{try{process.kill(c.pid,0);return true;}catch{return false;}})()}));
+    console.log('ORACLE-VERIFY-SOURCE-CLEANUP '+JSON.stringify({mode,source_upgrade:true,gateway_settled:settled,gateway_exit:result?.code??null,source_upgrade_count:upgradeCount,samepeer_typed_failure:run.output().includes('SOURCE_RECEIVER_IDENTICAL'),methods,child_observations:current,browser_term_calls:beforeCleanup.filter(e=>e.event==='kill'&&e.role==='browser').length,helper_attach_calls:beforeCleanup.filter(e=>e.event==='helper_attach').length,port}));
+    expect(existsSync(marker)).toBe(false);
+    expect(methods).not.toContain('Browser.close');expect(beforeCleanup.filter(e=>e.event==='cdp-method').map(e=>e.method),'unverified or samepeer must never send Browser.close').not.toContain('Browser.close');
+    if(mode==='collision'){
+      expect(upgradeCount,'receiver and source must both reach the same real relay').toBe(2);expect(run.output(),'must hit actual samepeer classification, not relay failure').toContain('SOURCE_RECEIVER_IDENTICAL');
+      expect(beforeCleanup.filter(e=>e.event==='relay-bound')).toHaveLength(1);
+      expect(beforeCleanup.filter(e=>e.event==='kill'&&e.role==='browser'),'samepeer must never TERM the browser').toEqual([]);
+      expect(beforeCleanup.filter(e=>e.event==='helper_attach')).toEqual([]);
+      expect(current.find(c=>c.role==='browser').alive).toBe(true);
+      expect(current.find(c=>c.role==='helper').alive,'unattached owned helper must be reclaimed').toBe(false);
+    }else{
+      expect(current.every(c=>!c.alive),'only authenticated owned children must exit before harness cleanup').toBe(true);
+      expect(children[0].root&&existsSync(children[0].root),'owned root removed after observed exits').toBe(false);
+    }
+    expect(settled,'gateway must settle before fixture signals any retained child').toBe(true);
+    nativeResult(result,mode==='cancel-before-compare'?143:1);
+    if(mode==='collision')expect(result.stdout).toContain('cleanup_incomplete');else expect(result.stdout).not.toContain('cleanup_incomplete');
+  }finally{
+    // Harness cleanup is after every oracle observation; only this run's direct
+    // child with unchanged start/PPID/command may be signalled, never a scan kill.
+    const children=readEvents().filter(e=>e.event==='spawn');
+    for(const c of children){let now='';try{now=execFileSync('/bin/ps',['-ww','-p',String(c.pid),'-o','pid=,ppid=,lstart=,command='],{encoding:'utf8',stdio:['ignore','pipe','ignore']}).trim();}catch{}const parts=now.split(/\s+/),original=c.identity.split(/\s+/);const stable=now&&parts.slice(0,7).join(' ')===original.slice(0,7).join(' ')&&Number(parts[1])===run?.child.pid;const role= c.role==='helper'?parts.slice(8).join(' ')===original.slice(8).join(' ')&&parts.slice(8).join(' ').includes(helperPath+' adapter ')&&parts.includes(c.root)&&parts.includes(c.root+'/browser-use-user-data-dir-owned'):now===c.identity;if(stable&&role)try{process.kill(c.pid,'SIGTERM');}catch{}}
+    for(const remote of upstreams)remote.destroy();for(const socket of sockets)socket.destroy();await new Promise(resolve=>server.close(resolve));
+    if(run){await Promise.race([run.done,delay(5000)]);if(run.child.exitCode===null&&run.child.signalCode===null)run.child.kill('SIGTERM');await run.done;}
+    for(const c of children){for(let n=0;n<100;n++){try{process.kill(c.pid,0);await delay(20);}catch{break;}}}
+    for(const c of children)if(c.root&&!children.some(x=>{try{process.kill(x.pid,0);return true;}catch{return false;}}))rmSync(c.root,{recursive:true,force:true});
+    await f.close();rmSync(f.root,{recursive:true,force:true});console.log('ORACLE-VERIFY-SOURCE-FIXTURE-CLEAN '+JSON.stringify({mode,port,fixture_removed:!existsSync(f.root)}));
+  }
+}
+describe('N3 verify source-unverified cleanup',()=>{
+  it.each(['refused','cancel-before-compare','collision'])('native source %s preserves source and settles owned cleanup',async mode=>{await verifyNativeSourceCleanup(mode);},45000);
+});
