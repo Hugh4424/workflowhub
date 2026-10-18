@@ -47,6 +47,16 @@ function scratch(t) { const root=realpathSync(mkdtempSync(join(tmpdir(),'wh-cost
 function put(root,name,records) { const path=join(root,name);writeFileSync(path,records.map(JSON.stringify).join('\n')+'\n');return path; }
 function deepFreeze(value) { if(value&&typeof value==='object'){for(const child of Object.values(value))deepFreeze(child);Object.freeze(value);}return value; }
 
+// Independently approved additive TCR: 2026-10-18-079-build-prd-cost-test-tcr.md.
+test('BUILD-PRD cost label accepts real CLI session input while unknown stage remains invalid',()=>{
+ const argv=['--session='+join(fixtures,'dsh-v4.jsonl')];
+ const accepted=run([...argv,'--stage=build-prd']);
+ assert.equal(accepted.status,0,'build-prd cost label must be accepted: '+accepted.stderr);
+ assert.match(accepted.stdout,/inputTokens \(token\): 8923/);
+ const rejected=run([...argv,'--stage=unknown-stage']);
+ assert.equal(rejected.status,2);assert.match(rejected.stderr,/invalid stage/);
+});
+
 for (const [name,input,output,cache,span,command] of [
  ['dsh-v0',6909,868,8192,210288,1],['dsh-v3',6858,74,8960,362347,0],['dsh-v4',8923,210,16384,252131,1],
 ]) test('READ '+name+': official usage once; exact selected-sample tokens, span and counts',async()=>{

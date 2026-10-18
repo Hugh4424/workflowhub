@@ -10,7 +10,7 @@
 
 - **功能名**：阶段收口与五件各归一处（收口、交接、业务仓经验、交付说明、领域词表与工作区任务）
 - **来源**：`specs/n7-route-delivery-closeout-experience-20261018/decision-log.md` 的 R-001…R-015、U-001…U-005、D-003…D-018、ADR-001、ADR-002、AC-001…AC-013
-- **状态**：草稿，等待用户对当前计划的实际确认；本次只合入 N4 并更新计划，不授权 build-code。
+- **状态**：当前build-code材料；用户已授权实施，并明确批准下述两项最小范围补充。本次材料更新不宣实施、验证或验收成功。
 
 本次适配基线为本地 main `df342ee0`（由 `5e6eb6e2` fast-forward 合入）；原始需求和 decision-log 仍是产品选择来源，历史原件不改。N4 的写作合同用于组织当前材料，不增加 N7 产品范围或新验收门。
 
@@ -265,7 +265,7 @@ ADR 导航须使用完整文件名：上面的 N4 `0049-retire-byte-drop-accepta
 - **PFACT-016**：现有阶段成本入口为 `tools/cli/measure-main-agent-cost.mjs`，其集成测试钉死 27 列账行与 `start-ref` 的 fail-closed 行为
   - **状态**：`verified`
   - **证据或来源**：`tests/integration/main-agent-cost-closeout.node-test.mjs` 的 `readLedger` 与首笔记录用例
-  - **负责人、影响**：收口的"记录阶段成本"一步消费该入口，不改其行为
+  - **负责人、影响**：收口的"记录阶段成本"一步消费该入口，除本次明确批准的build-prd成本标签与来源适配外，不改其计量/窗口/记录行为
   - **关联**：`FR-CLOSE-003`、`AC-003`
 - **PFACT-017**：`skills/stage-handoff/SKILL.md` 现有 13 区块内容合同，其中"下一步动作"与"可自行判断与必须问用户的边界"两区块是 D-008 的落点
   - **状态**：`verified`
@@ -551,7 +551,7 @@ ADR 导航须使用完整文件名：上面的 N4 `0049-retire-byte-drop-accepta
 
 - **末步标识取 `closeout`**：`stage-closeout` 已是物理关闭技能名且只在两个阶段调用（`PFACT-003`），同名会让读者把关闭误读成铺到五阶段（`ADR-002`、`RISK-03`）；`closeout` 只在本 workflow 内定位该步骤，生产读者只做唯一性校验（`PFACT-004`）。
 - **`quality/evidence/reflection/<stage>.md` 从"每阶段必备产物"降为"需要单独留档时写"**：`OI-002` 定"本次无问题的依据只写在交接正文一处"，若每阶段仍强制写一份复盘件，同一事实就有两处（`PFACT-011` 显示该路径无其它消费者）。收口结论的落点因此统一为交接正文，写失败与未写仍按既有口径披露。
-- **`build-prd` 成本缺口显式化**：`D-006` 的顺序保留，但 `PFACT-024` 的真实 CLI 仅接受四 stage。build-prd 的文本交代“本阶段无记录”与 `invalid stage` 原因，不把加入句子冒成本功能支持；不改工具/runtime、不伪造第五账行。若要满足五阶段都真实计成本，需要原 owner 的范围决定，缺口保 OPEN-009，现四阶段能力与其它工作继续。
+- **`build-prd` 成本缺口显式化**：`D-006` 的顺序保留，但 `PFACT-024` 的真实 CLI 仅接受四 stage。原invalid stage及无记录事实保留；用户现已批准原owner先补最小方案，再实施成本CLI标签与真实来源适配。复用唯一旧账本，不新增正式stage/runtime支持；真实记录和读回未取得前保OPEN-009与对应incomplete。
 
 ### 全局文件边界与依赖
 
@@ -572,10 +572,11 @@ ADR 导航须使用完整文件名：上面的 N4 `0049-retire-byte-drop-accepta
   - `skills/catalog.yaml`、`docs/architecture/move-map.json`
   - `docs/standard-workflow.md`
   - `AGENTS.md`、`CLAUDE.md`、`GLOSSARY.md`
+  - `tools/cli/measure-main-agent-cost.mjs`、`tests/contract/measure-main-agent-cost.node-test.mjs`（本次用户明确批准的成本最小增量）
   - `tests/integration/main-agent-cost-closeout.node-test.mjs`、`tests/contract/build-prd-review-contract.test.mjs`、`tests/acceptance/card-03-current.mjs`、`tests/acceptance/card-03-current.test.mjs`
   - `/Users/Hugh/Hugh/Project/PaperBuilder/AGENTS.md`（工作区外，一行指针）
 - **删除**：`Improvements.md`（本仓仓根，内容先迁入 `specs/Improvements.md`）
-- **禁止改动**：五份预写目标测试在实施阶段均为只读输入（本轮也不改）；确需纠正 oracle 走原 TCR 与独立审查，不能改断言求绿。`runtime/**`（含 `runtime/task/portable-workflow-run.mjs`、`runtime/stage/stage-skill-runtime.mjs`）、`core/**`（含 `core/task-close.mjs`）、`tools/cli/**`、`skills/catalog.yaml` 的 `used_by_stages` 值、`specs/archive/**`、`docs/archive/**` 与任何历史交接/审查/测试原件。理由：本卡是文本与接线改造（`D-016`），改运行时或机器校验会超出授权范围并改变既有保护。
+- **禁止改动**：五份预写目标测试在实施阶段均为只读输入（本轮也不改）；确需纠正 oracle 走原 TCR 与独立审查，不能改断言求绿。`runtime/**`（含 `runtime/task/portable-workflow-run.mjs`、`runtime/stage/stage-skill-runtime.mjs`）、`core/**`（含 `core/task-close.mjs`）、`tools/cli/**`（仅下述批准的 `measure-main-agent-cost.mjs` 除外）、`skills/catalog.yaml` 的 `used_by_stages` 值、`specs/archive/**`、`docs/archive/**` 与任何历史交接/审查/测试原件。理由：本卡是文本与接线改造（`D-016`），改运行时或机器校验会超出授权范围并改变既有保护。
 - **全局依赖**：P1 → P2（经验写入方法在 P1 定，P2 按该形状真实落地）；P2 → P3（`move-map.json` 的先写者是 P2，后写者是 P3，依据是 P3 新增 charter 条目而 P2 改 `Improvements.md` 条目）；P1 → P4（`workflows/build-code/SKILL.md` 的先写者是 P1 改末步，后写者是 P4 改交付说明指针）；`docs/standard-workflow.md` 的工作区、关闭与交付说明指针均由 P3/T005 独写，P4/T008 只改关闭方法与 build-code，故不新增 P3→P4 边；P5 依赖 P1；P6 依赖 P1–P5 全部。
 - **文件归属**：同一 Phase 内每路径只有一个写主；跨 Phase 同一路径按上条依赖边定序，先写者在自己的 Phase 交回该路径已核实状态（字节数与关键节存在性），后写者据此改。
 - **基线时点**：原受影响正文合计 211,944 B 是 N7 开工历史读数，N4 已修改其中方法；实施前读当前候选字节并与固定起点分列，不能把旧总数冒当前读数、改分母或用这次合入制造 N7 减法收益。
@@ -693,7 +694,7 @@ ADR 导航须使用完整文件名：上面的 N4 `0049-retire-byte-drop-accepta
 ## 12. 风险、未决与交接
 
 - **OPEN-010**：跨仓/任务库绝对路径的真实审查宿主 scope 尚未接通；来源为 `tools/cli/stage-runtime.mjs` 的 `trustedReviewReadScope` 与 `recordTaskReview` 实读、013 default 原始错误，影响 P2/P6 跨仓审查及其支持的 AC-006/009/011 结论。owner 为真实 host adapter 的维护者；下一动作是核已有宿主 callback/config 能否按真实用户授权、认证主仓与论文仓的精确路径及任务 evidence 提供短时 scope，实际调用后留原件。在此之前跨仓审查保持 unavailable/unknown；直接精确 scope 诊断不冒真实接线或授权通过。本 N7 不新增运行时控制面/CLI、不改 checker 或材料伪造授权，也不因缺 scope 冻结其余安全工作。
-- **OPEN-009**：D-006 的五阶段收口成本顺序与现四 stage CLI 不相等；来源 PFACT-024，影响 AC-002/003。P1 owner 保 build-prd 成本 unavailable 的解释；若要求该分支实际落账，由原 owner 提出范围决定，不在 D-016 禁止写的工具/runtime 偷扩支持、不伪造账行或拒绝日志；P6 保相应子条件 incomplete。
+- **OPEN-009**：D-006 的五阶段收口成本顺序与现四 stage CLI 不相等；来源 PFACT-024，影响 AC-002/003。原invalid stage及unavailable原件保留。用户已明确批准原owner先补最小方案再实施定向验证，精确增量见本节授权补充与P1；仅扩现有成本CLI标签/来源，不扩正式stage、runtime或账本。真实成本记录、窗口及读回未核前，P6仍保相应子条件incomplete。
 - **OPEN-007**：P2 文本测试未覆盖实际创建/追加、判重、并发、中断或授权语义处置；AC-009 已定位 safe-write 根路径边界夹具，但其 PATH_ESCAPE 不验证用户授权。P2 owner 在实施授权后提供方法试行、获授权 fixture 原件与独立授权语义读回，P6 分别消费；未取得保持 AC-006/007/009 对应子条件 incomplete/unknown，不改 frozen 测试或试写真实历史补绿。
 - **OPEN-008**：PRD G1 的完整 N1 同条件成本对照本轮未读取/执行；P6 owner 在整卡最终成本验收消费完整 N1，分列 wall_s、input/output/cacheRead、steps/turns、subagent/bash 与 unavailable/not_reported，次数/波动保原件。该缺口不阻塞范围明确的规划/实施，但不能宣成本改善或整卡全验，字节不能代替。
 
@@ -811,6 +812,14 @@ ADR 导航须使用完整文件名：上面的 N4 `0049-retire-byte-drop-accepta
   - **影响**：本卡只处置 `ORACLE-FIX-001` 的 8 处引用；其余 49 条陈旧路径保持现状并如实记录，不由本卡顺带重写
   - **处理阶段**：本卡只记事实；修复交原 owner
   - **关闭条件或停止**：交接写明该事实与原 owner，本卡不声称该脚本整体已可跑
+
+### 本次用户授权补充（两项最小范围）
+
+来源为本会话用户最新明确答复：批准P5两现有验收文件适配现行公共接口、保13原判据与未覆盖；批准build-prd成本由原owner先补最小方案再实施定向验证。该答复只替换此前“需范围决定”的待决状态，不改历史决定/失败原件、不证明实施成功。
+
+- P5写集仍仅 `tests/acceptance/card-03-current.mjs`、`tests/acceptance/card-03-current.test.mjs`。适配退役kernel/validator的真实现行公共consumer；13原AC的输入、assertion_ids、期望方向、scope、失败与未知条件逐项承接，原未覆盖保持incomplete。不恢复退役runtime、不新增生产文件/兼容桥，不顺带修其余陈旧引用。
+- P1新增允许修改 `tools/cli/measure-main-agent-cost.mjs`、`tests/contract/measure-main-agent-cost.node-test.mjs`；复用已声明集成测试与build-prd两方法路径。CLI只接受build-prd成本标签并适配其真实材料/审查来源；原window/session计量、唯一 `main-agent-cost.md`、锁/原子写/读回及缺报语义保持。不得新增正式stage、schema、账本或runtime桥。
+- Docker不是本任务的验收要求或独立性的必要实现。不得启动daemon、安装或配置Docker；不得把N4其它任务的物理隔离AC机械移为N7新门。N7保原匿名同题、独立judge、生成前固定输入/标准与候选不得读标准的要求；实际权限/读取边界如实记录，未建立物理隔离不宣已建立，不因不用Docker阻止范围内工作。
 
 ## 13. 业务影响与回归范围
 

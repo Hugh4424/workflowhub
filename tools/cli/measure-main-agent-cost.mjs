@@ -307,7 +307,7 @@ async function explicitDescendants(initial, cutoff, load) {
  return sources;
 }
 function parseArgs(argv){const args={session:[]};const single=new Set(['from','until','project','task','stage','start-ref']);for(const arg of argv){if(arg==='--record'){if(args.record)throw new Error('duplicate record');args.record=true;continue;}const match=arg.match(/^--([^=]+)=(.*)$/s);if(!match||(!single.has(match[1])&&match[1]!=='session'))throw new Error('unknown argument '+arg);const [,key,value]=match;if(!value)throw new Error('empty argument '+key);if(key==='session'){if(!isAbsolute(value))throw new Error('session must be absolute file');args.session.push(value);}else{if(Object.hasOwn(args,key))throw new Error('duplicate '+key);args[key]=value;}}
- if(Boolean(args.project)!==Boolean(args.task))throw new Error('project/task must be paired');if(args.stage&&!['make-decision','build-plan','build-code','verify-code'].includes(args.stage))throw new Error('invalid stage');for(const key of ['from','until'])if(args[key])date(args[key]);if(args.from&&args.until&&date(args.from)>date(args.until))throw new Error('reversed window');if(args['start-ref'])parseSelector(args['start-ref']);if(args.record&&(!args.project||!args.stage||args.from||args.until))throw new Error('record requires identity/stage and disallows explicit window');return args;
+ if(Boolean(args.project)!==Boolean(args.task))throw new Error('project/task must be paired');if(args.stage&&!['make-decision','build-plan','build-code','verify-code','build-prd'].includes(args.stage))throw new Error('invalid stage');for(const key of ['from','until'])if(args[key])date(args[key]);if(args.from&&args.until&&date(args.from)>date(args.until))throw new Error('reversed window');if(args['start-ref'])parseSelector(args['start-ref']);if(args.record&&(!args.project||!args.stage||args.from||args.until))throw new Error('record requires identity/stage and disallows explicit window');return args;
 }
 function taskSourceFacts(args, result) {
  const facts=sourceDefaults();
@@ -317,12 +317,15 @@ function taskSourceFacts(args, result) {
  const fail=(code,message)=>result.issues.push({code,message,expected:false});
  try {
   const root=authenticatedWorkspace(task);
+  // Portable build-prd owns human-readable decision/PRD/attachment refs, not
+  // formal post Phase materials. No authoritative machine refs are supplied.
+  if(args.stage==='build-prd')throw Object.assign(new Error('build-prd decision/PRD/attachment references are not supplied to this measurement'),{code:'build_prd_material_refs_not_supplied'});
   const materialRoot=join(root,'specs',args.task),map={},sampled=new Map();
   if(args.stage!=='make-decision'){const path=join(materialRoot,'phases/index.md'),bytes=safeReadBytes(path);sampled.set(path,bytes);map['phases/index.md']=new TextDecoder('utf-8',{fatal:true}).decode(bytes);}
   const names=materialFilesForCohort(task.manifest.activation_cohort,map,{stage:args.stage});
   const details=names.map(name=>{const path=join(materialRoot,name),stat=lstatSync(path);if(!stat.isFile()||stat.isSymbolicLink())throw new Error('invalid material file '+name);const bytes=sampled.get(path)??safeReadBytes(path);return {path,byteCount:bytes.length,sha256:hash(bytes)};});
   facts.materialBytes={metric:available(details.reduce((n,x)=>n+x.byteCount,0)),refs:details.map(x=>x.path),scope:'authenticated checkout material sample: '+JSON.stringify(details),unit:'byte'};
- } catch(error){facts.materialBytes={metric:unavailable('material_source_unavailable'),refs:[],scope:'current task materials',unit:'byte'};fail('material_source_unavailable',error.message);}
+ } catch(error){const reason=error.code==='build_prd_material_refs_not_supplied'?error.code:'material_source_unavailable';facts.materialBytes={metric:unavailable(reason),refs:[],scope:'current task materials',unit:'byte'};fail(reason,error.message);}
  facts.reviewProviderUsage={metric:missing('stage_not_supplied'),refs:[],scope:'current stage review',unit:'provider original'};
  if(!args.stage)return facts;
  try {

@@ -64,7 +64,7 @@
     {
       "step_id": 6,
       "step_slug": "closeout",
-      "observable_result": "当前主会话在整个阶段结束时按 stage-reflection 的方法执行阶段收口，内部发布并读回可单独读取的 stage-handoff；归纳、分类归口、记录阶段成本、发布、报告依唯一方法顺序执行。成本沿 measure-main-agent-cost 的来源与窗口边界，同一窗口一次，未触发/失败写本阶段无记录及真实原因；Phase摘要不另触发，不新增stage、字段、writer或关闭许可。现入口不支持 stage=build-prd（parseArgs: invalid stage），不执行已知非法调用，不造拒绝日志或账行，五阶段实际留账子条件 incomplete。",
+      "observable_result": "当前主会话在整个阶段结束时按 stage-reflection 的方法执行阶段收口，内部发布并读回可单独读取的 stage-handoff；归纳、分类归口、记录阶段成本、发布、报告依唯一方法顺序执行。成本沿 measure-main-agent-cost 的来源与窗口边界，同一窗口一次，未触发/失败写本阶段无记录及真实原因；Phase摘要不另触发，不新增stage、字段、writer或关闭许可。build-prd仅成本标签，材料未供unavailable、无审查事实no_stage_fact；读回27列及旧前缀/窗口，缺报exit1与无记录分列，未齐incomplete。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",

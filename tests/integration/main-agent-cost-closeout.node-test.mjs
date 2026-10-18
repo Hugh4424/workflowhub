@@ -187,6 +187,33 @@ test('BOUNDARY existing four workflow final-step IDs and completion evidence rem
  // This structural preservation test is deliberately not evidence that a natural-language workflow actually invoked record.
 });
 
+// Independently approved additive TCR: 2026-10-18-079-build-prd-cost-test-tcr.md.
+test('BUILD-PRD records real session cost and explicit source gaps without post materials or formal stage writes',t=>{
+ const f=setup(t),factsBefore=readFileSync(join(f.taskPath,'facts.jsonl'),'utf8');
+ rmSync(join(f.materials,'phases'),{recursive:true});
+ writeFileSync(join(f.materials,'spec.md'),'POISON_POST_SPEC'.repeat(100));
+ writeFileSync(join(f.materials,'prd.md'),'UNREFERENCED_PRD_MUST_NOT_BE_GUESSED');
+ const firstResult=first(f,'build-prd');
+ assert.equal(firstResult.status,1,'accepted label publishes a gap row with existing incomplete exit semantics: '+firstResult.stderr);
+ assert.doesNotMatch(firstResult.stderr,/invalid stage/);
+ assert.match(firstResult.stdout,/已发布一条任务账本记录/);
+ const before=readLedger(f),row=before.rows[0];assert.equal(before.rows.length,1);assert.equal(row[1],'build-prd');
+ assert.equal(row[2],'2026-10-15T02:30:30.809Z');assert.equal(row[4],f.session+'#seq=9');
+ numeric(row[10],8923);numeric(row[11],210);numeric(row[12],16384);
+ assert.equal(row[23],'unavailable:build_prd_material_refs_not_supplied');assert.equal(row[22],'not_reported:no_stage_fact');
+ assert.match(row[26],/build_prd_material_refs_not_supplied/);
+ assert.deepEqual(JSON.parse(row[24]),[f.session]);
+ rmSync(f.materials,{recursive:true});
+ const nextResult=record(f,'build-prd');assert.equal(nextResult.status,1);assert.match(nextResult.stdout,/已发布一条任务账本记录/);
+ const after=readLedger(f);assert.equal(after.rows.length,2);assert.ok(after.raw.startsWith(before.raw));
+ assert.equal(after.rows[1][2],row[3]);numeric(after.rows[1][10],0);
+ assert.equal(after.rows[1][23],'unavailable:build_prd_material_refs_not_supplied');
+ assert.equal(after.rows[1][22],'not_reported:no_stage_fact');
+ assert.equal(readFileSync(join(f.taskPath,'facts.jsonl'),'utf8'),factsBefore);
+ assert.equal(existsSync(join(f.taskPath,'index.json')),false);
+ assert.equal(existsSync(join(f.taskPath,'.main-agent-cost.lock')),false);
+});
+
 function codexMain(f,id='01a0feda-b95f-7163-a9c1-0ea058d0fa95'){
  // TCR-N1-P2-001: explicitly constructed COMPLETE synthetic history, not a stripped real paginated sample.
  // Header/user start are simultaneous; all events are enumerated here, ordinal0..14, with no inherited/compacted prefix or pre-start consumption.
