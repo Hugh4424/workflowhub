@@ -28,4 +28,4 @@ accepted（2026-10-16，make-decision 阶段质询后定稿，任务 `n4-writing
 - **验收类标题的边界**：只把四类模板的验收类标题统一到机器已认字面，**不**把 `Appendix A — 验收判据（唯一权威）` 追加进识别集合——那会把在跑任务材料的扫描范围从「整篇兜底」改成「节内」，造成未验证的静默变动。
 - **与既有决定的关系**：与 [ADR-0043](<docs/adr/0043-document-standards-checks-are-report-only.md>) 同向——检查只报告、不评分、默认退出 0、不接 stage/gate/CI 失败路径；本决定不把统一写法做成门。
 - **编号**：本目录此前最大编号 0046，另有 5 处历史重号（0002、0009、0025、0027、0031）；兄弟卡 `n3-review-test-diagnosis-qa-20261016` 的 worktree 已有**未提交**的 `0047`／`0048`，为避免两卡合入后出现新重号，本次新增取 **0050**。不重排、不改名任何现存文件。
-- 字段级实现方案、精确改动清单与阈值不在本 ADR；由任务材料 `specs/n4-writing-templates-research-eval-20261016/decision-log.md` 的决定与后续 `spec.md` 承接。
+- 字段级实现方案、精确改动清单与阈值不在本 ADR；由任务材料 `specs/archive/n4-writing-templates-research-eval-20261016/decision-log.md` 的决定与后续 `spec.md` 承接。

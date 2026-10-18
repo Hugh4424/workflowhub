@@ -28,4 +28,4 @@ N4 是写作规则、四类模板、研究来源与评测合同的完整 owner�
 - **可客观检查项与盲评分列**：机器侧漏检修复、只报告语义、旧材料可读、必留项在场各自独立报告，不用盲评替代；盲评也不用来替代这些可客观项。
 - **与既有决定的关系**：本决定不推翻 [ADR-0037](<docs/adr/0037-adopt-cross-language-writing-rules.md>) 与 [ADR-0043](<docs/adr/0043-document-standards-checks-are-report-only.md>)——它们否定的是自动评分器与字数门，本决定同样不引入评分、字数门或阻断行为。
 - **编号**：本目录此前最大编号 0046，另有 5 处历史重号（0002、0009、0025、0027、0031）；兄弟卡 `n3-review-test-diagnosis-qa-20261016` 的 worktree 已有**未提交**的 `0047`／`0048`，为避免两卡合入后出现新重号，本次新增取 **0049**。不重排、不改名任何现存文件。
-- 逐列事实（日期、对象、理由、决定人与原需求编号去向）保留在任务材料 `specs/n4-writing-templates-research-eval-20261016/decision-log.md` 的「退役登记」节；本 ADR 只记方向，不替代该表。
+- 逐列事实（日期、对象、理由、决定人与原需求编号去向）保留在任务材料 `specs/archive/n4-writing-templates-research-eval-20261016/decision-log.md` 的「退役登记」节；本 ADR 只记方向，不替代该表。
