@@ -27,11 +27,9 @@ version: 4.1.0
 9. 在 Phase 审查前，逐 Phase/Task 自查项目声明的测试面是否适合结果与写集、oracle 是否能证伪、测或不测的理由是否有源；按 `skills/spec-plan/SKILL.md#Test design and quality` 逐条件核输入与时点，遗漏与未知逐项定位。对当前规格和 Phase 做一次 wh-review 合并审查。simplicity-guard、plan-eng-review 等 lens 看同一材料，发现由独立上下文产生，不成为额外固定审查轮。保留原始 findings、实际 provider、失败和覆盖限制，不把 unavailable 写成空 findings 或通过。组包者将第5步已核的三来源事实作为普通可选内容放入 `context_map.ui_applicability`，三项键为 `raw_requirement`、`project_inventory`、`planned_or_changed_frontend_fact`，每项用 `{ui_scope: true|false|null, source_ref: "材料key或key#/JSON-pointer", reason: "实际来源理由"}` 描述当前审查范围。库存正文放同一 `context_map.project_inventory`；原要求引用 `raw_requirement`，库存引用 `context_map#/project_inventory`，已接受计划引用 `draft_spec`（pre 为 `approved_spec`）或 `phase_authorities#/phases~1P1.md` 等实际相对成员。引用只定位本包已提交材料，不读包外路径；理由由审查者核合理性，不以字段可读认证真值。缺源或尚有范围矛盾时该项写 null 并说明未知，旧包缺这些内容仍正常审查：默认 review、simplicity-guard、plan-eng-review 三 lens，指令显出缺口而不当非 UI/N/A；三项均有效且非 null 时任一 true 才加同包 plan-design-review，全部 false 才省该 UI lens。直接调用与保存恢复沿同份材料选择，调用者标签不覆盖事实，不新增字段必填门、审查轮或用户确认。
 10. 消费本次审查对测试面适用性、oracle 与理由的实际 findings；coverage unknown 保持未知，不用 Appendix 编号出现替代自查，也不新增审查轮。主会话逐条处置 fixed、rejected_invalid、accepted_risk 或 needs_human。有效设计问题回原作者修；严重问题若不修，向用户展示具体风险、影响和替代路径，取得真实选择并写负责人。未经实际处理不宣布计划已经完整。
 11. 逐项核对原始需求、决策、spec、每个 Phase 与索引的语义、边界与测试充分性，六类（遗漏、矛盾、孤儿任务、越界、消费者、测试充分性）各给落点或排除理由，缺一即本步未完成；用 spec-analyze 执行同一核对。分析是质量事实，不是推进许可证；缺失与失败继续保持可见。
-12. 交接重叠路径时，先写者交回该路径已核实状态；无法回读写 unknown 与原因，不阻断，后写者在自己的 Phase 边界点名先写者与依据。范围核对只读取并引用目标项目自己声明的受保护类别；待授权改动在材料中保持 pending，列具体文件/符号、授权原文位置和缺哪一条确认，已有确认按原件消费。分别核「授权是否包含该改动」与「是否超出声明写集」，各引用既有普通核对原件，不新建 scope 对象。项目声明的受保护改动未获授权或越界时只停该处；纯文档、注释、测试夹具的越界按真实来源继续登记；项目未声明类别时只查一次、记未声明，继续范围明确的规划，不等待新清单。展示将做什么、Phase 分工、验证办法、发现处置、风险与下一步，取得用户对当前计划的实际确认。拒绝或未答保持草稿，继续同任务的安全修复；确认不能被审查结果或 agent 推测代替。阶段末执行 stage-handoff，写人读交接。 有待处理缺口时，确认问题按三选一提出：①按现有材料修完缺口再推进；②指派缺口负责人后推进；③取消本次执行。未答不等于默认继续。交接逐项披露未启动、跳过、产物缺失、完成判据缺失；未确定为 unknown，工具或执行者不可用为 unavailable，`executor_absent` 只记为不可用。产物存在不能替代完成判据。
+12. 交接重叠路径时，先写者交回该路径已核实状态；无法回读写 unknown 与原因，不阻断，后写者在自己的 Phase 边界点名先写者与依据。范围核对只读取并引用目标项目自己声明的受保护类别；待授权改动在材料中保持 pending，列具体文件/符号、授权原文位置和缺哪一条确认，已有确认按原件消费。分别核「授权是否包含该改动」与「是否超出声明写集」，各引用既有普通核对原件，不新建 scope 对象。项目声明的受保护改动未获授权或越界时只停该处；纯文档、注释、测试夹具的越界按真实来源继续登记；项目未声明类别时只查一次、记未声明，继续范围明确的规划，不等待新清单。展示将做什么、Phase 分工、验证办法、发现处置、风险与下一步，取得用户对当前计划的实际确认。拒绝或未答保持草稿，继续同任务的安全修复；确认不能被审查结果或 agent 推测代替。计划真实确认后，由当前主会话按 `skills/stage-reflection/SKILL.md`「方法」「用户选择后的归口」「判断词表与完成检查」执行阶段收口，内部发布并读回交接；未答保草稿，不发布已确认计划的交接。 有待处理缺口时，确认问题按三选一提出：①按现有材料修完缺口再推进；②指派缺口负责人后推进；③取消本次执行。未答不等于默认继续。交接逐项披露未启动、跳过、产物缺失、完成判据缺失；未确定为 unknown，工具或执行者不可用为 unavailable，`executor_absent` 只记为不可用。产物存在不能替代完成判据。
 
-阶段成本留账：在本次已授权的图更新与非破坏性收口取得各自实际结果后、最终 stage-handoff 之前，由阶段主会话执行一次本仓已核入口 `node tools/cli/measure-main-agent-cost.mjs --project=<本项目> --task=<本任务> --stage=build-plan --record`。project/task取当前认证任务；首次记录附已有真实开工事件 `--start-ref=<原件绝对路径>#seq=<用户事件seq>` 或Codex的 `#item_id=<URI编码UserMessage.id>`，已有账行不重置起点。首笔缺少/格式非法/未唯一匹配的 `start-ref` 必须 fail-closed（exit 2，不创建账行）；源文件不可读或解析失败也必须 fail-closed（exit 1，不创建账行），两类都不得发布污染首行；若已有且仅有一行历史坏首行（`from` 与起点来源均为 `unavailable:task_start_unavailable`），只允许显式合法 `start-ref` 窄范围重开，保留旧字节、从真实起点重测，不得使用坏行的 `until` 或 boundary；其它已有账行仍拒绝重置。需要明确源复跑时可附合同内 `--session=<原件绝对路径>`；无参来源仅用原主会话实际环境及父记录明确后代，不能让子代理环境、工具cwd或根SESSION_ID冒当前主会话。
-
-执行前核工具真实路径/版本与依赖闭包、认证checkout、外置task访问及原会话身份；回读任务根 `main-agent-cost.md` 的新增27列行、旧字节前缀、实际until与缺报。未触发、读取/锁/写入/取消失败都在同一交接写“本阶段无记录”及实际原因，保CLI原件；可写的缺口行按实际内容披露，留账失败不阻塞原阶段收尾。若即将删除唯一工具worktree，在工具/原身份仍可访问时先record并回读外置账本，再按既有授权清理；不从已删除入口补记、不假定存续repo有同版闭包。交接明确实际until之后的物理清理、交接发布和最终回复未计入该笔。通用stage-handoff保持发布职责，不新增共享writer。
+阶段收口中的成本：执行 `skills/stage-reflection/SKILL.md`「方法」第 3 步的 measure-main-agent-cost 入口及完整来源、窗口、失败和删除前留账边界；本阶段只在整个 stage 末触发一次，同一计量窗口不重复，不每 Phase 触发。
 
 ## UI 组件与真实消费者
 
@@ -47,7 +45,7 @@ confirm 发生在 make-decision、build-plan 和 build-prd 收口，保留用户
 
 当前材料决定工作内容，测试、审查和历史不替代材料，也不是继续修复的许可证。写材料前核目标工作区与写集；原子写入失败明确报告，共享写入冲突用记录锁，原始来源与失败保留单份。阶段事实仍由现有公共流程处理，本方法不增加认证包装或永久状态。主会话执行 `skills/stage-handoff/SKILL.md` 保存交接，报告该方法返回的实际不可变绝对路径，说明材料现状、已做/未做、证据、风险及 build-code 下一步。handoff 必须实际执行并报告返回路径；缺失写清原因与影响，披露不代替完成，不要求固定机器复盘或逐步发布。
 
-真实 stage 末有过程问题时，主会话可读取并调用 `skills/stage-reflection/SKILL.md` 一次，消费有源候选、真实用户选择与未解项的方法；局部 Phase 摘要不触发 stage-end。复盘可跳过并说明原因，取消、缺会话源或不可用保原事实，既有持续授权不代候选采纳。stage-handoff 独立按其方法保存一份交接并定位已决定、已完成且验证、未完成、证据位置四类 source；不以复盘或交接成为继续工作的许可证，不重复每 Phase handoff 或建立机器复盘。
+阶段末统一按收口方法执行一次；交接内容与独立读取沿 `skills/stage-handoff/SKILL.md`「信息来源」「回读结果」「结束条件与边界」，返回其实际不可变路径。局部 Phase 摘要不触发收口，原失败与缺口可见，持续授权不代候选采纳。
 
 ## 写作与固定来源
 

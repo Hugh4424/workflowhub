@@ -21,7 +21,7 @@ version: 1.0.0
 4. 地图和适用设计得到实际答复后，第二次调用同一 spec-prd 作者扩展成完整 PRD。保持同一决策、来源和地图语义；未知或冲突仍明确列出，不增加第二作者，也不增加第三次内容调用。本 caller 只有第一次地图与第二次详情两次实际内容调用；返回后的再次内容请求也按真实调用计，不能改称同一次或隐藏第三调用。需额外调用才能修的缺口交协调者说明影响，保持 draft，不自行突破限制；同次内容调用内只修受影响部分。
 5. 在展示/核对规划稿时再次消费 `skills/knowledge-graph/SKILL.md` 的三类问题：模块职责与边界、既往决定及适用条件、失败教训；按真实source_file回源，把有效知识落到同一稿的范围/任务卡/验收边界，并指出具体多知道什么、哪条建议改变，重复则标补强。不得因此增加第三次内容调用或由caller另写PRD；新发现内容缺口沿原作者同次受影响修复/协调者处理，图不越过地图/详情真实答复。
    展示第二次内容调用后的完整稿，借 wh-review 做文档建议并逐条处理发现。改稿后重新展示真正待确认的内容；保留审查来源、失败与限制。主会话用现有 confirm 取得对最终展示稿的真实答复，不以先前地图答复或 review 推断最终同意。版本指代不清、未展示、拒绝或未答保持 draft；不计算内容身份锁替用户做决定。
-6. 分开报告来源、实际问答、文档审查、未知项、验收范围和交付事实。主会话执行 stage-handoff，写材料现状、已做与未做、证据、风险及子任务下一步；没有执行过的 host/provider/发布/物理交付不能填成完成。 `report-facts-and-handoff` 的人读交接仅 task_id、workflow、material_refs、reply_text、step_results、reflection_facts 六类信息：material_refs 列当前决策/PRD/附件的具名引用，reply_text 保留实际用户答复，step_results 与 reflection_facts 只列真实步骤结果与其引用。将普通 raw 原字节按任务指定具名路径保存并回读，写入或读回失败如实 unavailable；使用现有安全写入/记录窄工具，不另造 writer。旧契约职责标记 `reportFactsAndHandoff` 表示保存并交接、`readReflectionForReport` 表示读取实际复盘事实、`publishCanonicalRecord` 表示保存原件职责；这些名字不是当前可调用的 TaskKernel 函数，不恢复旧 kernel 或 fixture，不使用 SHA 内容寻址、材料质量绑定或相等门。本次 reflection 不是正式stage 复盘，不产生 close approval 或操作确认。
+6. 分开报告来源、实际问答、文档审查、未知项、验收范围和交付事实。主会话按 `skills/stage-reflection/SKILL.md`「方法」「用户选择后的归口」「判断词表与完成检查」执行阶段收口，内部发布并读回交接，列材料现状、已做与未做、证据、风险及子任务下一步；没有执行过的 host/provider/发布/物理交付不能填成完成。 `report-facts-and-handoff` 的人读交接仅 task_id、workflow、material_refs、reply_text、step_results、reflection_facts 六类信息：material_refs 列当前决策/PRD/附件的具名引用，reply_text 保留实际用户答复，step_results 与 reflection_facts 只列真实步骤结果与其引用。将普通 raw 原字节按任务指定具名路径保存并回读，写入或读回失败如实 unavailable；使用现有安全写入/记录窄工具，不另造 writer。旧契约职责标记 `reportFactsAndHandoff` 表示保存并交接、`readReflectionForReport` 表示读取实际复盘事实、`publishCanonicalRecord` 表示保存原件职责；这些名字不是当前可调用的 TaskKernel 函数，不恢复旧 kernel 或 fixture，不使用 SHA 内容寻址、材料质量绑定或相等门。本次 reflection 不是正式stage 复盘，不产生 close approval 或操作确认。成本步骤沿 measure-main-agent-cost 的真实入口限制：不支持 stage=build-prd，parseArgs 的 invalid stage 为来源；本阶段无记录，不执行已知非法调用、不造拒绝日志或账行，对应实际留账子条件保持 incomplete。
 
 第 1–6 步全程适用：地图覆盖完整用户旅程和每条需求。子任务只接最小读取集及自身材料，父任务和兄弟材料只读；不能由子任务触发父 close、移动或删除父/兄弟材料。边界偏离记录原范围、实际偏离与原因，交原 owner 处理，不造第二套进度或许可对象。
 
@@ -37,7 +37,7 @@ confirm 用于 make-decision/build-plan/build-prd 收口，保存用户对实际
 
 对目标材料先核工作区和写集，写入使用现有安全原子写方法；共享记录冲突使用记录锁，失败和来源缺失如实保留，原始报告只存单份。展示稿与真实答复让人能理解“批准了什么”，不通过机器认证或内容寻址包装制造成功。主会话按 `skills/stage-handoff/SKILL.md` 保存交接，报告该方法返回的实际不可变绝对路径；交接必须实际执行并报告返回路径；缺失写清原因与影响，披露不代替完成，不当工作门或物理 close 授权。可总结经验，不要求固定机器复盘或绑定交接。正式阶段/规划事实仍由现有 owner 与公共流程负责，本方法不增加公共命令、schema 或存储对象。
 
-真实 stage 末有过程问题时，读取 skills/stage-reflection/SKILL.md 的「方法」与「用户选择后的归口」两节一次；局部 Phase 摘要不触发 stage-end。交接类信息按 skills/stage-handoff/SKILL.md:31-34 的四类表读回。
+阶段末统一按收口方法执行一次；交接内容与独立读取沿 `skills/stage-handoff/SKILL.md`「信息来源」「回读结果」「结束条件与边界」，返回其实际不可变路径。局部 Phase 摘要不触发收口，原失败与缺口可见，持续授权不代候选采纳。
 
 ## 写作与固定来源
 

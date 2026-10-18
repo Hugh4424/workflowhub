@@ -183,7 +183,7 @@ test('SOURCE review ref escaping task root and pre/history write attempt fail wi
  writeFileSync(join(f.taskPath,'task.json'),JSON.stringify({...f.manifest,activation_cohort:'pre'}));const before=existsSync(f.ledger)?readFileSync(f.ledger,'utf8'):null;assert.notEqual(record(f).status,0);assert.equal(existsSync(f.ledger)?readFileSync(f.ledger,'utf8'):null,before);
 });
 test('BOUNDARY existing four workflow final-step IDs and completion evidence remain unchanged',()=>{
- for(const [stage,count,lastSlug]of [['make-decision',15,'stage-handoff'],['build-plan',12,'confirm-plan-and-handoff'],['build-code',12,'stage-handoff'],['verify-code',8,'stage-handoff']]){const manifest=JSON.parse(readFileSync(join(repo,'workflows',stage,'steps.json'),'utf8'));assert.equal(manifest.steps.length,count);assert.deepEqual(manifest.steps.map(x=>x.step_id),Array.from({length:count},(_,i)=>i+1));assert.equal(manifest.steps.at(-1).step_slug,lastSlug);assert.deepEqual(manifest.steps.at(-1).completion_evidence,[{kind:'phase_task_facts',uri_or_path:'facts.jsonl'}]);}
+ for(const [stage,count,lastSlug]of [['make-decision',15,'closeout'],['build-plan',12,'closeout'],['build-code',12,'closeout'],['verify-code',8,'closeout']]){const manifest=JSON.parse(readFileSync(join(repo,'workflows',stage,'steps.json'),'utf8'));assert.equal(manifest.steps.length,count);assert.deepEqual(manifest.steps.map(x=>x.step_id),Array.from({length:count},(_,i)=>i+1));assert.equal(manifest.steps.at(-1).step_slug,lastSlug);assert.deepEqual(manifest.steps.at(-1).completion_evidence,[{kind:'phase_task_facts',uri_or_path:'facts.jsonl'}]);}
  // This structural preservation test is deliberately not evidence that a natural-language workflow actually invoked record.
 });
 

@@ -26,13 +26,11 @@ version: 5.2.0
 5. 主会话逐条判断 finding，仅修影响当前交付的有效代码问题，不因材料偏好扩大范围。有效问题回原实施会话自动修复，严重问题优先修复，不以请求用户承担风险代替修复。确实无法在当前任务范围内解决时，列影响、证据、owner、原因和剩余选项，继续不受影响的工作，严重未修风险保持 incomplete；只有已有绑定该 finding 的用户真实决定才可记 accepted_risk，不能自行接受风险或伪造通过。
 6. 对新修复和真实疑点只做必要定向复验，事先列 file/case 集合，把实际 command/exit/raw 和恢复结果写在对应 finding 处置旁；无改动或疑点时说明无需复跑。不重派第二次正常代码审查，不重做全量上游测试。
 7. 保留原始审查与当前 fixed、rejected_invalid、accepted_risk、needs_human 处置。真实修复可报告 resolved，不能改写原 review 或用摘要覆盖失败。核对本次 actual/oracle、未执行事项和覆盖限制；材料问题交 owner，不另建恢复、继任或重绑定任务。
-8. 人读结论并执行stage-handoff：列范围、修复、原finding/处置、必要验证、业务结果、未知、上游材料风险及下一步。缺review/执行原件/严重风险处置保incomplete，同task继续修复，不冒验收或物理交付完成。对账由独立上下文消费项目声明命令和原件，当场展示时间窗/分账/计数，不落派生文件、不写死宿主脚本；未观测如实说明，finding修后仅受影响file/case复验并给理由。同task已修finding的resolved与无finding的clean完成含义相同，均不证全部材料/证据齐备。回复沿review_result_ref/task facts逐路列终态/原失败、finding处置、功能原件、仍缺输入和修复/取得条件；resolved findings、局部测试通过与审查完成各仅证原件所覆盖范围；原件不可读给具体路径/错误，不从incomplete推全部功能失败，不以provider成功/已修finding冒业务验收。复用既有来源、证据/完成说明，status JSON/枚举/thinQuality不变。incomplete只限质量声明；按当前材料/未完项继续同task，work_status/quality仅记材料质量事实，不作in_progress/incomplete冻结，不增continuation_allowed或runtime机制。
+8. 当前主会话按 `skills/stage-reflection/SKILL.md`「方法」「用户选择后的归口」「判断词表与完成检查」执行阶段收口，内部发布并读回交接：列范围、修复、原finding/处置、必要验证、业务结果、未知、上游材料风险及下一步。缺review/执行原件/严重风险处置保incomplete，同task继续修复，不冒验收或物理交付完成。对账由独立上下文消费项目声明命令和原件，当场展示时间窗/分账/计数，不落派生文件、不写死宿主脚本；未观测如实说明，finding修后仅受影响file/case复验并给理由。同task已修finding的resolved与无finding的clean完成含义相同，均不证全部材料/证据齐备。回复沿review_result_ref/task facts逐路列终态/原失败、finding处置、功能原件、仍缺输入和修复/取得条件；resolved findings、局部测试通过与审查完成各仅证原件所覆盖范围；原件不可读给具体路径/错误，不从incomplete推全部功能失败，不以provider成功/已修finding冒业务验收。复用既有来源、证据/完成说明，status JSON/枚举/thinQuality不变。incomplete只限质量声明；按当前材料/未完项继续同task，work_status/quality仅记材料质量事实，不作in_progress/incomplete冻结，不增continuation_allowed或runtime机制。
 
 UI 适用时沿 `skills/ui-project-init/SKILL.md` 的「规范职责」读取本次验证适用专业源，逐类核真实路径/稳定节、version/作用域、owner/consumer 与规则，再从真实页面和 Component Quality Map 核消费者、状态 owner、typed ViewModel、CSS/token、story/test 更新及已实际产生的浏览器状态。单类 missing/stale/冲突给影响及原 owner，不用旧 Design.md/Experience.md 两文件或单一 design_revision 代全部来源；历史条款按真实输入读取，本次行为/spec、专业规则、知识与执行 facts 各保其原写主。缺扫描、浏览器、fixture、viewport、截图或入口受阻保持 unknown/unavailable，不能把未观察当 N/A 或视觉通过。只有新疑点才重跑相应浏览器检查，先按 isolated-browser-qa 管理隔离、登录态与自建资源清理。
 
-阶段成本留账：在本次已授权的图更新与非破坏性收口取得各自实际结果后、最终 stage-handoff 之前，由阶段主会话执行一次本仓已核入口 `node tools/cli/measure-main-agent-cost.mjs --project=<本项目> --task=<本任务> --stage=verify-code --record`。project/task取当前认证任务；首次记录附已有真实开工事件 `--start-ref=<原件绝对路径>#seq=<用户事件seq>` 或Codex的 `#item_id=<URI编码UserMessage.id>`，已有账行不重置起点。首笔缺少/格式非法/未唯一匹配的 `start-ref` 必须 fail-closed（exit 2，不创建账行）；源文件不可读或解析失败也必须 fail-closed（exit 1，不创建账行），两类都不得发布污染首行；若已有且仅有一行历史坏首行（`from` 与起点来源均为 `unavailable:task_start_unavailable`），只允许显式合法 `start-ref` 窄范围重开，保留旧字节、从真实起点重测，不得使用坏行的 `until` 或 boundary；其它已有账行仍拒绝重置。需要明确源复跑时可附合同内 `--session=<原件绝对路径>`；无参来源仅用原主会话实际环境及父记录明确后代，不能让子代理环境、工具cwd或根SESSION_ID冒当前主会话。
-
-执行前核工具真实路径/版本与依赖闭包、认证checkout、外置task访问及原会话身份；回读任务根 `main-agent-cost.md` 的新增27列行、旧字节前缀、实际until与缺报。未触发、读取/锁/写入/取消失败都在同一交接写“本阶段无记录”及实际原因，保CLI原件；可写的缺口行按实际内容披露，留账失败不阻塞原阶段收尾。若即将删除唯一工具worktree，在工具/原身份仍可访问时先record并回读外置账本，再按既有授权清理；不从已删除入口补记、不假定存续repo有同版闭包。交接明确实际until之后的物理清理、交接发布和最终回复未计入该笔。通用stage-handoff保持发布职责，不新增共享writer。
+阶段收口中的成本：执行 `skills/stage-reflection/SKILL.md`「方法」第 3 步的 measure-main-agent-cost 入口及完整来源、窗口、失败和删除前留账边界；本阶段只在整个 stage 末触发一次，同一计量窗口不重复，不每 Phase 触发。
 
 终末实际执行 `skills/wh-review/SKILL.md`「输入与方法」「输出和失败边界」核材料位/manifest正文、路线身份、ARTIFACT与CLAIM隔离、逐路原件和结论覆盖。审查方法中安全事实、共同前提证伪、八类架构红旗和不同结构备选按 `skills/review/SKILL.md` Check/Evidence handling 消费；已有架构评估只引用原件，方法样本不冒本次新缺陷。
 
@@ -76,7 +74,7 @@ Git授权与物理收口执行唯一消费 `skills/stage-closeout/SKILL.md`，�
 
 阶段末主会话实际按 `skills/stage-handoff/SKILL.md` 保存交接并报告返回的不可变绝对路径：材料现状、代码、真实检查、风险/下一步。执行不是门，但须实际执行/回报；缺失写原因/影响，披露不代完成，不要求固定机器复盘/交接认证。正式阶段事实仍由公共流程处理；实现/质量/业务验收/发布/物理close分别报、不互代。交接列默认安全收口的实际路径、任务分支、待最终确认动作及具名保留原因；确认后逐项回读普通执行结果，保旧raw/review原件，不恢复旧close plan或新增公共节点。
 
-真实 stage 末有过程问题时，读取 skills/stage-reflection/SKILL.md 的「方法」与「用户选择后的归口」两节一次；局部 Phase 摘要不触发 stage-end。交接类信息按 skills/stage-handoff/SKILL.md:31-34 的四类表读回。
+阶段末统一按收口方法执行一次；交接内容与独立读取沿 `skills/stage-handoff/SKILL.md`「信息来源」「回读结果」「结束条件与边界」，返回其实际不可变路径。局部 Phase 摘要不触发收口，原失败与缺口可见，持续授权不代候选采纳。
 
 ## 写作与固定来源
 
