@@ -533,23 +533,23 @@
 
 当前 spec 在本节填写实际验收对象数据、每项来源与未观察范围。三项来源已按真实材料核实：`raw_requirement` 取 `specs/archive/skills-framework-redesign-20261014/prd.md` 的 N4 章节（`:354`–`:371`，该文件 sha256 `ea45ae46c6117f00c0534523400e89d5e16ec4aaf6f68649bd74ae31de68e1b0`），请求里没有任何页面、视图、组件或浏览器交互；`project_inventory` 取认证 worktree 实测（无 `apps/`、零 `.tsx`/`.vue`/`.jsx`、`package.json` 无前端框架依赖）；`planned_or_changed_frontend_fact` 取本卡 decision-log 声明的写集（markdown 方法/模板文件加两个 `.mjs` 模块与四个测试文件，不新增路由、页面、组件或视口）。三项都核为非 UI，理由均为真实来源事实。
 
-因为三项均为非 UI，验收对象采用本模板的嵌套 CLI 形状。`workspace` 与 `state` 取真实值；`cli.command`、`cli.entry_ref`、`cli.sample_ref`、`cli.oracle_ref` 在本步为 `null`：它们指向的是一条真实可执行的验收命令、其入口权威、真实样本与 oracle，而这三件在本阶段确实尚未产生，由 build-code／verify-code 的对应 Phase 补齐。本步据此如实记录 `ok=false` 与缺项清单，不伪造一条命令冒充已存在。
+因为三项均为非 UI，验收对象采用本模板的嵌套 CLI 形状。`workspace` 与 `state` 取真实值；`cli.command`、`cli.entry_ref`、`cli.sample_ref`、`cli.oracle_ref` 在 build-plan 时为 `null`（当时这一条真实可执行的验收命令及其入口权威、真实样本与 oracle 尚未产生），由 build-code／verify-code 的对应 Phase 补齐。verify-code 阶段已按实际交付补入四项，并以唯一 producer 重放：当前对象 `ok=true`、`missing_fields=[]`；键 `verify_code_receipt` 指向本阶段实跑回执。build-plan 时那份 `null` 形状与 `ok=false` 结论保留在同一具名原件里（`quality/evidence/2026-10-17-build-plan-acceptance-object-check.json`），不倒签、不改写。
 
 ```json
 {
   "workspace": "/Users/Hugh/Hugh/Project/workflowhub-n4-writing-templates-research-eval-20261016",
-  "state": { "execution": "not_run", "subject": "build-plan 材料：spec.md、phases/P1-P7、phases/index.md" },
+  "state": { "execution": "executed", "subject": "verify-code 终末核验：四项合同测试与 P7 原件 130，非盲评" },
   "cli": {
-    "command": null,
-    "entry_ref": null,
-    "sample_ref": null,
-    "oracle_ref": null
+    "command": "node /Users/Hugh/Hugh/Project/workflowhub/node_modules/vitest/vitest.mjs run tests/contract/chinese-label-detection.test.mjs tests/contract/post-build-plan-missing-index.test.mjs tests/contract/card05-author-material-consumer.test.mjs tests/contract/acceptance-object-required-fields.test.mjs",
+    "entry_ref": "p7_phase",
+    "sample_ref": "current_cli_samples",
+    "oracle_ref": "spec"
   },
   "owner": "用户"
 }
 ```
 
-本步的真实执行原件：`quality/evidence/2026-10-17-build-plan-acceptance-object-check.json`（含对象输入、三来源引用与实际读取范围、生产模板 sha256、VM 执行返回值与 `missing_fields` 原文）。该检查只核结构、引用与缺项，不读文件、不执行命令、不认证来源语义，也不证明服务健康或业务效果。
+本步的真实执行原件：`quality/evidence/2026-10-17-build-plan-acceptance-object-check.json`（build-plan 时的对象输入与 `missing_fields` 原文）。verify-code 阶段按实际交付补齐四项后的重放原件：`quality/tests/2026-10-18-304-verify-code-acceptance-object-check.json` 与其输出 `quality/tests/2026-10-18-304-verify-code-acceptance-object-check.output`（含对象输入、三来源引用与实际读取范围、生产模板 sha256、VM 执行返回值与 `missing_fields` 原文、命令 exit）。该检查只核结构、引用与缺项，不读文件、不执行命令、不认证来源语义，也不证明服务健康或业务效果。
 
 ## 架构边界
 
@@ -677,7 +677,7 @@
 失败：两项指向不同候选集，或恢复成两个 writer、两套 P0，或回读记录缺失而被当成通过。
 证据：两份回读记录与 `git diff --name-only` 范围的原件路径；由执行者发布，此处不是执行结果。
 
-- [ ] **AC-T3-2**：模板声明的必留项与产物实际在场节一致；有机器可识别结构可判的必留项缺失时被只报告检查报出；仅散文声明的必留项如实报「无法判定/未覆盖」并交独立人读。关联 FR-N4-002、FR-N4-009。
+- [ ] **AC-T3-2**：模板声明的必留项与产物实际在场节一致；有机器可识别结构可判的必留项缺失时被只报告检查报出；仅散文声明的必留项如实报「无法判定/未覆盖」并交独立人读。关联 FR-N4-002、FR-N4-009。判定方式：机器可判加只能人读。
 验证：P3 实施者提供五个模板的声明与 P2 的只报告检查输出；独立执行者逐类打开模板，核声明为必留的节是否实际在场，并对受控制造的一处可判定缺失与一处散文声明分别核报告措辞。执行 owner 是独立验收者，时点是 P3 完成后。
 通过：可判定必留项缺失被报出且报出具体项；仅散文声明项报「无法判定/未覆盖」；声明的必留集合与实际一致。
 失败：可判定必留项缺失而无人报出；把仅散文声明项报成确定结论或静默通过；声明的必留集合与实际不符。

@@ -251,6 +251,18 @@ describe("ORACLE-N4-REPORT-ONLY writing reports", () => {
     expect(reportFor(root, indexPath)).toContain("机器结构在场");
   });
 
+  it("reports an Execution Index that keeps the heading but has no pointer row, and clears it after restore", () => {
+    const root = fixture();
+    expect(reportFor(root, indexPath)).toContain("机器结构在场");
+    // 只有标题、没有任何 Phase 指针行：validatePostPhaseContract 报
+    // 「requires an Execution Index with Phase pointers」，此前只查纯指针那条会漏报。
+    put(root, indexPath, "# Phase 索引\n## Execution Index\n必留项写在散文里，没有任何 Phase 指针行。\n");
+    expect(reportFor(root, indexPath)).toContain("缺失 纯指针边界");
+    put(root, indexPath, index);
+    expect(read(join(root, indexPath))).toBe(index);
+    expect(reportFor(root, indexPath)).toContain("机器结构在场");
+  });
+
   it("reports empty headings and explicit placeholders while excluding inline code, fences and quotes", () => {
     const root = fixture();
     const path = AUTHORING_TEMPLATES[1];

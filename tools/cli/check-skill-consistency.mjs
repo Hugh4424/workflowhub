@@ -185,9 +185,12 @@ export function checkSkillConsistency(root) {
       if (locator.endsWith("/index-template.md")) {
         // Reuse the production purity condition, including Chinese aliases;
         // unrelated whole-Phase validation errors are not template verdicts.
+        // Both index-shape verdicts count: the purity boundary and the missing
+        // Execution Index pointer rows. Reporting only the former let an index
+        // with no pointer row be reported as structurally present.
         const projection = validatePostPhaseContract({ spec: "Structural report projection only", index: body, phases: {} });
-        if (!/^##\s+(?:Execution Index|执行索引)\s*$/im.test(visible)
-            || projection.errors.includes("Phase index must remain pointer-only; command, oracle, and evidence belong to Phase files")) missing.push("纯指针边界");
+        const indexShapeInvalid = projection.errors.some((error) => /Phase index must remain pointer-only|requires an Execution Index with Phase pointers/.test(error));
+        if (!/^##\s+(?:Execution Index|执行索引)\s*$/im.test(visible) || indexShapeInvalid) missing.push("纯指针边界");
       }
       const mechanical = locator.endsWith("/phase-template.md") || locator.endsWith("/index-template.md");
       reports.push(`${prefix} 必留项 ${missing.length ? `缺失 ${missing.join("、")}` : mechanical ? "机器结构在场" : "unknown — 无机器可判声明"}; 散文必留声明 unknown／未覆盖，交独立人读; report-only`);
