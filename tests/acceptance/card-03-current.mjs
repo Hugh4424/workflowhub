@@ -4,8 +4,9 @@
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { resolveWorkflowHubIdentity } from "../../tools/cli/stage-runtime.mjs";
-import { openTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
+import { openTask } from "../../runtime/task/task-handle.mjs";
 import { openCurrentTaskWorkspace } from "../../runtime/task/workspace.mjs";
+import { materialFilesForCohort } from "../../runtime/task/material-workspace.mjs";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -47,7 +48,7 @@ export const BASELINE_FILES = Object.freeze([
   "tests/contract/session-binding-removed.test.mjs",
   "tests/contract/spec-stage-artifact-closure.test.mjs",
   "tests/contract/stage-interaction-batching.test.mjs",
-  "tests/contract/stage-reflection-e2e-constructed.test.mjs",
+  "tests/contract/stage-closeout-step-contract.test.mjs",
   "tests/contract/stage-reflection-skill-contract.test.mjs",
   "tests/contract/stage-routing-and-concrete-testing.test.mjs",
   "tests/contract/stage-skill-consumer-contract.test.mjs",
@@ -124,7 +125,7 @@ export const ORACLE_DESCRIBES = Object.freeze({
   "ORACLE-REV-001": [REVIEW, "ORACLE-REV-001 review request precheck, bad results and packet narrowing"],
   "ORACLE-REV-002": [REVIEW, "ORACLE-REV-002 partial coverage and same-triple reuse"],
   "ORACLE-SKL-003": [REVIEW, "ORACLE-SKL-003 runner reviewer skills follow stage-skill-plan.json"],
-  "ORACLE-FIX-001": ["tests/contract/stage-reflection-e2e-constructed.test.mjs", "CARD-03 P6 post decision-only make-decision public reflection (ORACLE-FIX-001)"],
+  "ORACLE-FIX-001": ["tests/contract/stage-closeout-step-contract.test.mjs", "ORACLE-P1-CLOSEOUT-STEP stage closeout step and method contract"],
 });
 
 export const ORACLE_WHOLE_FILES = Object.freeze({
@@ -188,7 +189,7 @@ export const RUN_FILES = Object.freeze([
   "tests/contract/spec-prd-skill-contract.test.mjs",
   "tests/contract/spec-stage-artifact-closure.test.mjs",
   "tests/contract/stage-interaction-batching.test.mjs",
-  "tests/contract/stage-reflection-e2e-constructed.test.mjs",
+  "tests/contract/stage-closeout-step-contract.test.mjs",
   "tests/contract/stage-reflection-skill-contract.test.mjs",
   "tests/contract/stage-routing-and-concrete-testing.test.mjs",
   "tests/contract/stage-skill-consumer-contract.test.mjs",
@@ -321,12 +322,12 @@ const MECHANISMS = Object.freeze([
 ]);
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
-function actualTaskContext(cwd) {
+async function actualTaskContext(cwd) {
   const root = realpathSync(cwd), identity = resolveWorkflowHubIdentity({}, root);
   const task = openTask(identity.taskPath, identity.project, identity.task);
-  const workspace = openCurrentTaskWorkspace(task);
+  const workspace = await openCurrentTaskWorkspace(task);
   if (workspace.worktreeRoot !== root || identity.task !== CARD_DIR.split("/").at(-1)) throw new Error("acceptance task/worktree identity mismatch");
-  return { task, workspace, kernel: createTaskKernel(task, { workspace }) };
+  return { task, workspace };
 }
 
 function mechanismReadback(cwd) {
@@ -339,9 +340,9 @@ function mechanismReadback(cwd) {
   });
 }
 
-function nativeDispatchReadback(cwd) {
+async function nativeDispatchReadback(cwd) {
   try {
-    const { task } = actualTaskContext(cwd);
+    const { task } = await actualTaskContext(cwd);
     const ref = "quality/evidence/card03/host-collaboration-source/selection-index.json";
     const raw = task.readRecord(ref), index = JSON.parse(raw);
     const nativePath = realpathSync(index.source_path);
@@ -382,21 +383,33 @@ function nativeDispatchReadback(cwd) {
   } catch (error) { return { status: "unknown", reason: error.message, independent_initial_contexts: "unknown" }; }
 }
 
-function archiveRaw(context, raw, scope) {
+async function historicalInventoryReadback(cwd) {
+  const ref = "quality/evidence/card03/P6/test-scope-union-audit.json";
+  try {
+    const { task } = await actualTaskContext(cwd);
+    const source = JSON.parse(task.readRecord(ref));
+    if (!Array.isArray(source.full_union_paths)) throw new Error("historical inventory source has no full_union_paths");
+    // Readability alone does not authenticate the historical producer.
+    return { status: "unverified", source_ref: ref, paths: source.full_union_paths,
+      reason: "Historical producer authentication is not provided by ordinary record I/O." };
+  } catch (error) { return { status: "unknown", source_ref: ref, reason: error.message }; }
+}
+
+async function archiveRaw(context, raw, scope) {
   const facts = {};
   for (const stream of ["stdout", "stderr"]) {
     const bytes = raw[stream];
     if (!Buffer.isBuffer(bytes)) throw new Error("acceptance child stream must retain original bytes");
     const sha = hash(bytes), ref = `quality/evidence/stage-quality/build-code/acceptance-${stream}-${sha}.bin`;
-    const saved = context.kernel.publishCanonicalRecord(ref, bytes);
-    if (!readFileSync(join(context.task.taskPath, ref)).equals(bytes)) throw new Error("acceptance stream archive readback mismatch");
+    const saved = { ...await context.task.createRecord(ref, bytes), ref };
+    if (!context.task.readRecordBytes(ref).equals(bytes)) throw new Error("acceptance stream archive readback mismatch");
     facts[stream] = { ...saved, bytes: bytes.length, original_sha256: sha };
   }
   if (Buffer.isBuffer(raw.report)) {
     const sha = hash(raw.report), text = raw.report.toString("utf8"), lossless = Buffer.from(text).equals(raw.report) && text.length > 0;
     const ref = `quality/tests/card03/P6/${scope}-report-${sha}.${lossless ? "json" : "base64.txt"}`;
-    const saved = context.kernel.publishCanonicalRecord(ref, lossless ? text : `${raw.report.toString("base64")}\n`);
-    const archived = readFileSync(join(context.task.taskPath, ref));
+    const saved = { ...await context.task.createRecord(ref, lossless ? text : `${raw.report.toString("base64")}\n`), ref };
+    const archived = context.task.readRecordBytes(ref);
     const decoded = lossless ? archived : Buffer.from(archived.toString("utf8").trim(), "base64");
     if (!decoded.equals(raw.report)) throw new Error("acceptance JSON original bytes archive mismatch");
     facts.report = { ...saved, encoding: lossless ? "utf8" : "base64", original_sha256: sha, bytes: raw.report.length };
@@ -441,8 +454,7 @@ export async function observeWorkspace(cwd = process.cwd()) {
 
   let makeDecisionMaterialSet;
   try {
-    const mod = await import(pathToFileURL(join(cwd, "runtime/task/material-workspace.mjs")).href);
-    makeDecisionMaterialSet = [...mod.materialFilesForCohort("post", { "decision-log.md": "# d\n" }, { stage: "make-decision" })];
+    makeDecisionMaterialSet = [...materialFilesForCohort("post", { "decision-log.md": "# d\n" }, { stage: "make-decision" })];
   } catch (error) {
     makeDecisionMaterialSet = { error: error.message };
   }
@@ -479,7 +491,8 @@ export async function observeWorkspace(cwd = process.cwd()) {
     spec_work_package_declaration: /工作包声明：读集、写集、文件 owner、接口符号清单、合并责任/.test(spec),
     canonical_stages: stageSource ? JSON.parse(stageSource[1]) : null,
     mechanism_readback: mechanismReadback(cwd),
-    dispatch_evidence: nativeDispatchReadback(cwd),
+    dispatch_evidence: await nativeDispatchReadback(cwd),
+    historical_inventory_source: await historicalInventoryReadback(cwd),
     g1_actual_demonstration: "unknown",
     build_prd_na_reason: readOptional(cwd, "workflows/build-prd/SKILL.md")
       .includes("Do not add `build-prd` to the canonical five stages"),
@@ -542,6 +555,8 @@ export function deriveCard03Entry({ vitest, closure, observations, cwd }) {
     a("ORACLE-DISP-002:phase-template-fields", [], o.phase_template_fields_missing),
     a("ORACLE-RT-002:no-review-budget-run-field", false, o.stage_runtime_review_budget),
     a("ORACLE-FIX-001:make-decision-needs-decision-log-only", ["decision-log.md"], o.make_decision_material_set),
+    // P1 proves closeout wiring/method text only; original public reflection behavior remains 未覆盖.
+    a("ORACLE-FIX-001:original-public-reflection-coverage", "covered", "未覆盖"),
     a("ORACLE-FIX-003:no-c2-irreversible-rules", false, o.c2_irreversible_rules_present),
     ...Object.entries(ORACLE_DESCRIBES).map(([oracle, [file, title]]) =>
       a(`${oracle}:describe:${file}`, passed, { status: describeStatus(byFile, file, title) })),
@@ -748,17 +763,18 @@ const TECHNICAL_AC_SCOPES = Object.freeze([
   {
     "id": "AC-FIX-001",
     "assertion_ids": [
+      "ORACLE-FIX-001:original-public-reflection-coverage",
       "ORACLE-FIX-001:make-decision-needs-decision-log-only",
       "ORACLE-FIX-001:file:tests/contract/material-set-per-stage.test.mjs",
-      "ORACLE-FIX-001:describe:tests/contract/stage-reflection-e2e-constructed.test.mjs"
+      "ORACLE-FIX-001:describe:tests/contract/stage-closeout-step-contract.test.mjs"
     ],
     "scopes": [
       {
         "file": "tests/contract/material-set-per-stage.test.mjs"
       },
       {
-        "file": "tests/contract/stage-reflection-e2e-constructed.test.mjs",
-        "describe": "CARD-03 P6 post decision-only make-decision public reflection (ORACLE-FIX-001)"
+        "file": "tests/contract/stage-closeout-step-contract.test.mjs",
+        "describe": "ORACLE-P1-CLOSEOUT-STEP stage closeout step and method contract"
       }
     ]
   },
@@ -907,16 +923,17 @@ function currentRepairScope(cwd, input) {
 
 async function produceAffectedCard03Current({ cwd, run, affected_scope }) {
   const declaration = currentRepairScope(cwd, affected_scope);
-  const context = actualTaskContext(cwd);
+  const context = await actualTaskContext(cwd);
   const commands = declaration.scopes.map(({ file, pattern }) => runScopedVitest({ run, cwd, files: [file], pattern }));
-  const scopes = commands.map((command, index) => {
-    command.raw_evidence = archiveRaw(context, command.raw, `repair-scope-${index}`);
+  const scopes = [];
+  for (const [index, command] of commands.entries()) {
+    command.raw_evidence = await archiveRaw(context, command.raw, `repair-scope-${index}`);
     const reportFiles = (command.report?.testResults ?? []).map((file) => relative(cwd, file.name).split("\\").join("/"));
     const leaves = [...summarizeVitestReport(command.report, cwd).values()].flat();
     const selected = leaves.filter((leaf) => !["pending", "skipped"].includes(leaf.status));
     const reportValid = reportFiles.length === 1 && reportFiles[0] === command.files[0];
     const expectedNames = REPAIR_CASE_NAMES[index].names.map((name) => `${command.files[0]} > ${REPAIR_CASE_NAMES[index].describe} > ${name}`);
-    return { files: command.files, pattern: command.pattern, report_valid: reportValid,
+    scopes.push({ files: command.files, pattern: command.pattern, report_valid: reportValid,
       selected_test_names: selected.map((leaf) => leaf.name),
       expected_test_names: expectedNames,
       uncovered_test_names: expectedNames.filter((name) => !selected.some((leaf) => leaf.name === name)),
@@ -924,8 +941,8 @@ async function produceAffectedCard03Current({ cwd, run, affected_scope }) {
       excluded_test_names: leaves.filter((leaf) => ["pending", "skipped"].includes(leaf.status)).map((leaf) => leaf.name),
       raw_persisted: true, raw_evidence: command.raw_evidence, report_files: reportFiles,
       exit_code: command.exit_code, timed_out: command.timed_out, error: command.error, signal: command.signal,
-      coverage: "explicit_consumer_scope", leaves: selected };
-  });
+      coverage: "explicit_consumer_scope", leaves: selected });
+  }
   const observations = await observeWorkspace(cwd);
   const aggregate = deriveCard03Entry({ vitest: { report: { testResults: [] }, scopes: [] }, observations, cwd });
   const subjects = [...TECHNICAL_AC_SCOPES, { id: ACCEPTANCE_CRITERION_ID,
@@ -957,7 +974,7 @@ async function produceAffectedCard03Current({ cwd, run, affected_scope }) {
 
 export async function produceCard03Current({ cwd = process.cwd(), run = spawnSync, affected_scope } = {}) {
   if (affected_scope !== undefined) return produceAffectedCard03Current({ cwd, run, affected_scope });
-  const context = actualTaskContext(cwd);
+  const context = await actualTaskContext(cwd);
   const started = Date.now(), budget = 1800000, remaining = () => Math.max(1, budget - (Date.now() - started));
   const batches = [runScopedVitest({ run, cwd, timeoutMs: remaining() })];
   for (const scope of RESTRICTED) batches.push(runScopedVitest({ run, cwd, files: [scope.file], pattern: scope.pattern, timeoutMs: remaining() }));
@@ -968,7 +985,7 @@ export async function produceCard03Current({ cwd = process.cwd(), run = spawnSyn
   const closure = runSkillClosure({ run, cwd });
   const allCommands = [...batches, node, closure], scopes = [];
   for (const [i, command] of allCommands.entries()) {
-    command.raw_evidence = archiveRaw(context, command.raw, `scope-${i}`);
+    command.raw_evidence = await archiveRaw(context, command.raw, `scope-${i}`);
     if (command.files) scopes.push({ files: command.files, pattern: command.pattern ?? null, raw_persisted: true,
       selected_test_names: (command.report?.testResults ?? []).flatMap((file) => (file.assertionResults ?? []).filter((row) => row.status !== "pending" && row.status !== "skipped").map((row) => row.fullName ?? [...(row.ancestorTitles ?? []), row.title].join(" > "))),
       excluded_test_names: (command.report?.testResults ?? []).flatMap((file) => (file.assertionResults ?? []).filter((row) => row.status === "pending" || row.status === "skipped").map((row) => row.fullName ?? [...(row.ancestorTitles ?? []), row.title].join(" > "))),
@@ -993,7 +1010,9 @@ export async function produceCard03Current({ cwd = process.cwd(), run = spawnSyn
   const legacyVerified = expectedFailures.length === 7 && currentFailures.every((name) => expectedFailures.includes(name));
   const observations = await observeWorkspace(cwd);
   const grep = observations.mechanism_readback.flatMap((row) => row.matches.map((match) => `${row.id}\t${row.path}:${match.line}\t${match.text}\tsha256=${row.file_sha256}`)).join("\n") + "\n";
-  const grepRecord = context.kernel.publishCanonicalRecord("quality/tests/card03/P6/mech-readback/anchor-grep.txt", grep);
+  const grepRef = "quality/tests/card03/P6/mech-readback/anchor-grep.txt";
+  const grepRecord = { ...await context.task.createRecord(grepRef, grep), ref: grepRef };
+  if (!context.task.readRecordBytes(grepRef).equals(Buffer.from(grep))) throw new Error("acceptance grep record readback mismatch");
   observations.mechanism_grep = grepRecord;
   const boundedReportErrors = batches.flatMap((batch) => {
     if (!Array.isArray(batch.report?.testResults)) return [{ files: batch.files, reason: "report not parsed" }];
