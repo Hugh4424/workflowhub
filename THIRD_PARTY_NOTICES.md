@@ -15,6 +15,9 @@ workflowhub 包含或改编下列第三方项目的部分技能文字、规则�
 - **Addy Osmani Agent Skills**, Copyright (c) 2025 Addy Osmani. Source: [addyosmani/agent-skills@aeac41d4d005999432bb7312f7ff06383a91d59d](https://github.com/addyosmani/agent-skills/tree/aeac41d4d005999432bb7312f7ff06383a91d59d). N1吸收 `skills/observability-and-instrumentation/SKILL.md` 与 `skills/performance-optimization/SKILL.md` 的问题/原数自验、同条件复跑纪律；不引入遥测平台或收益判断。
 - **pstack**, Copyright (c) 2026 Lauren Tan. Source: [backnotprop/pstack](https://github.com/backnotprop/pstack). 固定实际读取包 SHA256 `f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8`、`skills/principle-explain-the-number/SKILL.md` SHA256 `cd5a25f9e7cf023627ccb470dc5faa97542f29b4319496a32b839a8e1e988047`；commit未证实，不能以API短HEAD冒包绑定。N1吸收数字的范围/缺项解释，不引入profiler或收益打分。
 
+- **context-engineering**, Addy Osmani Agent Skills，Copyright (c) 2025 Addy Osmani，MIT；固定 commit `aeac41d4d005999432bb7312f7ff06383a91d59d`，文件 SHA256 `8b736cb9e55b82b265ab6ff78349c0e826e8a6df550deddf665b7fb3ff858b63`。N5只吸收任务重点靠后、保护字段与进入面指针纪律到 `AGENTS.md`；拒绝75%触发与宿主自剪；完整来源/落点见catalog `n5-dispatch-and-return`。
+- **orchestrate.md**, pstack，Copyright (c) 2026 Lauren Tan，MIT；实际包 SHA256 `f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8`，文件 SHA256 `d42b4375f1bd4ce23da0b575a198571a2117df7eea10c3c9fc6d92ae1053f7be`，commit未证实，上游许可链未独立核实。N5采用brief缩放、指针中继、事实回传到 `AGENTS.md` 与 `skills/deep-research/SKILL.md`；拒绝常驻寄存器/store、默认重开、全文粘贴、TIMEBOX/tick，沿现有完整MIT文本保留，不声称未知许可链已核。
+
 上列已核MIT来源保留以下完整MIT许可，固定源及本地差异/owner/验证在catalog登记。
 
 MIT License
