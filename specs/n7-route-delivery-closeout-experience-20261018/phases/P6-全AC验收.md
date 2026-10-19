@@ -12,6 +12,7 @@
 - **STOP**：证据形态不符/缺真实输入时只停该条通过主张，列缺口与owner；缺外仓成功、独立来源、真实PR、完整N1或build-prd成本能力均不造pass。失败修复回原Task，安全修复可继续。
 - **覆盖 AC**：AC-001、AC-002、AC-003、AC-004、AC-005、AC-006、AC-007、AC-008、AC-009、AC-010、AC-011、AC-012、AC-013
 - **Done**：13条各有实际档位与具名原件；所有适用条件满足才pass。预PR的build-code读回保AC-010真实PR子条件incomplete；verify-code在授权产生真实PR后再消费本卡与新原件，不新增Phase、不以P6全绿作为开PR前置；预PR子条件incomplete不阻止build-code收口及按已有授权接续verify-code。build-prd成本标签已支持；五路线具名真实方法试行及当前实际stage末主会话record/from/until/来源读回逐项核证，缺项、真实权限/方法试行或N1缺失各保独立限制，未满足不得宣整卡完成。
+- 当前 AC-012 收口边界：数字与逐段含义保全已验；原 G1 成本关系未通过，语言质量 unknown。Hugh（用户/维护者）本次直接决定“保留该项未通过，按当前实测结果收口”，承接此成本欠账；成本不改 pass，原判据与样本不改，后续若追求原收益，须方法改进后同题验证。直接答复及身份：`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n7-route-delivery-closeout-experience-20261018/quality/evidence/2026-10-19-039-user-g1-unmet-closeout-decision.md`；037 判据纠错、040 当前单对原始成本关系、041 匿名 overall unable 与历史失败均保留，不新增完整 N1 缺报或稳定胜出/次数门；本决定不代最终物理清理确认。
 
 ## 工作包声明（人读事实）
 
