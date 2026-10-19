@@ -675,6 +675,7 @@ function chainFor(id) {
     ? DATA.phaseTasks[id]
     : side.indexOf(o.kind) >= 0
       ? wpsUsing(id)
+      : o.kind === 'dec' ? [id].concat(wpsUsing(id))
       : (o.kind === 'risk' || o.kind === 'acc') && o.of && OBJ[o.of] ? [id, o.of] : [id];
   // File/test siblings are Task context, never invented per-file coverage edges.
   if (o.kind === 'file' || o.kind === 'test') {
@@ -856,7 +857,7 @@ function objCard(id, opt) {
   return phaseLabel ? '<div class="task-phase-entry">'+card+'<button type="button" class="task-phase-link" data-go="'+o.phase+'">查看 '+esc(OBJ[o.phase].label)+'</button></div>' : card;
 }
 
-const testLine = function (id) { return OBJ[id].summary || '尚未取得测试结果'; };
+const testLine = function (id) { return OBJ[id].summary || OBJ[id].explain || '尚未取得测试结果'; };
 const decLine = function (id) {
   return OBJ[id].detail + '；因为' + OBJ[id].why;
 };
@@ -1214,12 +1215,16 @@ const ui = { sources: new Set(), plan: false, fileFold: false, srcRows: new Set(
 let storageError = '';
 function seenKey(id) {
   const o = OBJ[id];
+  if (typeof DATA.taskIdentity !== 'string' || !DATA.taskIdentity.trim()
+    || !o || typeof o.contentDigest !== 'string' || !o.contentDigest.trim()) {
+    throw new Error('缺少任务身份或节点内容摘要，已读状态不能持久保存');
+  }
   return 'workflowhub:page-seen:' + JSON.stringify([DATA.taskIdentity, id, o.contentDigest]);
 }
 const CHANGED = new Set((DATA.initialChanged || []).filter(function (id) {
   if (!OBJ[id]) return false;
   try { return localStorage.getItem(seenKey(id)) !== 'seen'; }
-  catch (error) { storageError = '显示偏好不可读，刷新后的已读状态未知：' + error.name; return true; }
+  catch (error) { storageError = '显示偏好不可读，刷新后的已读状态未知：' + error.message; return true; }
 }));
 let sel = 'progress';
 let hist = [];
@@ -1319,7 +1324,7 @@ document.addEventListener('click', function (e) {
     storageError = '';
     Array.from(CHANGED).forEach(function (id) {
       try { localStorage.setItem(seenKey(id), 'seen'); CHANGED.delete(id); }
-      catch (error) { storageError = '本次清除未持久保存：' + error.name; }
+      catch (error) { storageError = '本次清除未持久保存：' + error.message; }
     });
     renderAll(); return;
   }

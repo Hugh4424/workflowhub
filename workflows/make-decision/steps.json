@@ -64,7 +64,7 @@
     {
       "step_id": 6,
       "step_slug": "adversarial-direction-check",
-      "observable_result": "第5步已执行攻击自查的原件与结果读回，风险仍留原风险／假设位置。 已回读同一次自查；不重复执行，不把用户骨架答复冒成自查结果。 真实骨架确认后在本步显式--file读取当前需求索引和覆盖表，保存第一次实际warning/exit，只报不阻断。",
+      "observable_result": "第5步已执行攻击自查的原件与结果读回，风险仍留原风险／假设位置。 已回读同一次自查；不重复执行，不把用户骨架答复冒成自查结果。 真实骨架确认后在本步分两次独立调用，每次只传一个--file，分别读取当前需求索引和覆盖表，各自保存该时点的实际warning/exit，只报不阻断。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -138,7 +138,7 @@
     {
       "step_id": 12,
       "step_slug": "write-decision-draft",
-      "observable_result": "当前 decision-log 完整草稿：原话/派生判断/来源、真实已确认或待确认/退役、风险与延期 owner。 所有真实 R/U 在主文必要接口及唯一覆盖原件有落点或有源具名缺口，排除保真人理由/去向；历史与更改理由保留，文件/编号/索引不冒语义覆盖。 全部工作包谈完后本步显式--file读取两件，保存第二次warning/exit并回读第一次原件。",
+      "observable_result": "当前 decision-log 完整草稿：原话/派生判断/来源、真实已确认或待确认/退役、风险与延期 owner。 所有真实 R/U 在主文必要接口及唯一覆盖原件有落点或有源具名缺口，排除保真人理由/去向；历史与更改理由保留，文件/编号/索引不冒语义覆盖。 全部工作包谈完后本步再次分两次独立调用，每次只传一个--file，分别读取当前需求索引和覆盖表，各自保存第二时点的warning/exit并回读第一次原件。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
