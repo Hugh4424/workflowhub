@@ -16,7 +16,7 @@ const CHAIN_FIELDS = ["决定", "为什么", "否掉了什么", "后果与风险
 const CURRENT_FIELDS = ["做什么", "不做什么", "风险", "改动"];
 const LEGACY_CHAIN_FIELDS = ["module", "requirement_ids", "derived_from", "artifacts"];
 const DECISION_ID = /^(?:ADR|D)-\d+$/;
-const REQUIREMENT_ID = /^R-\d+$/;
+const REQUIREMENT_ID = /^R-\d+[a-z]?$/;
 
 function parseList(value) {
   const match = /^\[([^\]]*)\]$/.exec(value.trim().replaceAll("［", "[").replaceAll("］", "]"));
@@ -67,6 +67,49 @@ function decisionSections(markdown) {
   return { sections, headings, sourceIds };
 }
 
+// Only explicitly headed unit tables contribute unit warnings; they never
+// contribute decision parent-field statistics. Headings mirror the real sources.
+function unitWarnings(markdown) {
+  const warnings = [];
+  let columns = null;
+  let fence = null;
+  for (const line of markdown.split("\n")) {
+    const marker = /^\s*(`{3,}|~{3,})/.exec(line);
+    if (marker) {
+      if (!fence) fence = marker[1];
+      else if (marker[1][0] === fence[0] && marker[1].length >= fence.length) fence = null;
+      columns = null;
+      continue;
+    }
+    if (fence) continue;
+    if (!/^\s*\|/.test(line)) { columns = null; continue; }
+    const cells = line.trim().replace(/^\||\|$/g, "").split("|").map(value => value.trim());
+    const names = cells.map(value => value.replace(/\*\*/g, "").replace(/（[^）]*）/g, "").trim());
+    if (["单元", "派生号", "需求"].includes(names[0])
+      && ["谁接", "落在哪", "怎么验"].every(field => names.includes(field))) {
+      columns = names;
+      continue;
+    }
+    if (!columns || cells.every(value => /^:?-+:?$/.test(value))) continue;
+    const idCell = cells[0].replace(/\*\*/g, "");
+    // Current coverage rows carry parent-source type plus an explicit unit.
+    // An explicit “无单元” row declares no unit, not a malformed unit.
+    if (/·\s*无单元$/.test(idCell)) continue;
+    const id = /·\s*单元\s+(R-\d+[a-z])(?=\s|$)/.exec(idCell)?.[1]
+      ?? /^(R-\d+[a-z])(?=\s|（|$)/.exec(idCell)?.[1];
+    if (!id) {
+      warnings.push(warning("invalid_unit_id", idCell || "unknown", "单元", `${idCell || "unknown"} contains an invalid unit id`));
+      continue;
+    }
+    for (const field of ["谁接", "落在哪", "怎么验"]) {
+      if (!cells[columns.indexOf(field)]?.trim()) {
+        warnings.push(warning("missing_unit_field", id, field, `${id} is missing ${field}`));
+      }
+    }
+  }
+  return warnings;
+}
+
 export function checkDecisionLogChain({ markdown, source_ref = "decision-log.md" } = {}) {
   if (typeof markdown !== "string") {
     return {
@@ -80,7 +123,7 @@ export function checkDecisionLogChain({ markdown, source_ref = "decision-log.md"
 
   const { sections, headings, sourceIds } = decisionSections(markdown);
   const knownDecisions = new Set(sections.map(({ decision_id }) => decision_id));
-  const warnings = [];
+  const warnings = unitWarnings(markdown);
   let recognizedFields = 0;
 
   if (sections.length === 0) {

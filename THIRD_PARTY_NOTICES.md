@@ -12,11 +12,15 @@ workflowhub 包含或改编下列第三方项目的部分技能文字、规则�
 - **DeepSeek Harness**, source: [deepseek-ai/deepseek-harness@99f6f02](https://github.com/deepseek-ai/deepseek-harness/tree/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca/.agents/skills). WorkflowHub 将 `dsh-code-review` 与 `dsh-find-simplifications`、`dsh-doc-standards`、`dsh-prose-standard`、`dsh-trim-cot-leakage` 的规则合并为一次 verify-code 代码审查调用；未引入 push、merge、翻译、归档或 GIF 运行时。
 - **Vercel React Best Practices**, source: [vercel-labs/agent-skills@dd089a8](https://github.com/vercel-labs/agent-skills/tree/dd089a8c752c966dee8bf0f27cb625ba193ffd9e/skills/react-best-practices). 本地 AGENTS.md 为19行compiled改编摘要，未核为上游原字节vendored；WorkflowHub 只读保存该本地摘要，作为 React/Next 的内部组件质量 lens；保留本地 `skills/frontend-component-quality/upstream/react-best-practices/LICENSE` 与 `UPSTREAM.md`，不创建第二执行器或 gate。
 
-- **Addy Osmani Agent Skills**, Copyright (c) 2025 Addy Osmani. Source: [addyosmani/agent-skills@aeac41d4d005999432bb7312f7ff06383a91d59d](https://github.com/addyosmani/agent-skills/tree/aeac41d4d005999432bb7312f7ff06383a91d59d). N1吸收 `skills/observability-and-instrumentation/SKILL.md` 与 `skills/performance-optimization/SKILL.md` 的问题/原数自验、同条件复跑纪律；不引入遥测平台或收益判断。
+- **Addy Osmani Agent Skills**, Copyright (c) 2025 Addy Osmani. Source: [addyosmani/agent-skills@aeac41d4d005999432bb7312f7ff06383a91d59d](https://github.com/addyosmani/agent-skills/tree/aeac41d4d005999432bb7312f7ff06383a91d59d). N6采用 `skills/idea-refine/SKILL.md` 的按问题选透镜与 `skills/interview-me/SKILL.md` 的模糊答复识别、原意追问及地板规则，具体采用与本地偏离见catalog。N1吸收 `skills/observability-and-instrumentation/SKILL.md` 与 `skills/performance-optimization/SKILL.md` 的问题/原数自验、同条件复跑纪律；不引入遥测平台或收益判断。
 - **pstack**, Copyright (c) 2026 Lauren Tan. Source: [backnotprop/pstack](https://github.com/backnotprop/pstack). 固定实际读取包 SHA256 `f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8`、`skills/principle-explain-the-number/SKILL.md` SHA256 `cd5a25f9e7cf023627ccb470dc5faa97542f29b4319496a32b839a8e1e988047`；commit未证实，不能以API短HEAD冒包绑定。N1吸收数字的范围/缺项解释，不引入profiler或收益打分。
 
 - **context-engineering**, Addy Osmani Agent Skills，Copyright (c) 2025 Addy Osmani，MIT；固定 commit `aeac41d4d005999432bb7312f7ff06383a91d59d`，文件 SHA256 `8b736cb9e55b82b265ab6ff78349c0e826e8a6df550deddf665b7fb3ff858b63`。N5只吸收任务重点靠后、保护字段与进入面指针纪律到 `AGENTS.md`；拒绝75%触发与宿主自剪；完整来源/落点见catalog `n5-dispatch-and-return`。
 - **orchestrate.md**, pstack，Copyright (c) 2026 Lauren Tan，MIT；实际包 SHA256 `f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8`，文件 SHA256 `d42b4375f1bd4ce23da0b575a198571a2117df7eea10c3c9fc6d92ae1053f7be`，commit未证实，上游许可链未独立核实。N5采用brief缩放、指针中继、事实回传到 `AGENTS.md` 与 `skills/deep-research/SKILL.md`；拒绝常驻寄存器/store、默认重开、全文粘贴、TIMEBOX/tick，沿现有完整MIT文本保留，不声称未知许可链已核。
+
+- **Answer me with HTML**. Source: [QingYunA/answer-me-with-html@7acea240](https://github.com/QingYunA/answer-me-with-html/tree/7acea24024923eaae8647f5988e826062456dc86). MIT；仅适配技能方法/组件词汇/回灌，不搬renderer、字体或其它许可层。完整MIT许可见下文通用文本。
+
+Copyright (c) 2026 Answer me with HTML contributors
 
 上列已核MIT来源保留以下完整MIT许可，固定源及本地差异/owner/验证在catalog登记。
 
@@ -92,3 +96,7 @@ addyosmani/agent-skills 固定commit `aeac41d4d005999432bb7312f7ff06383a91d59d`�
 | refactoring.md | <https://github.com/backnotprop/pstack>；`skills/spec-plan/SKILL.md`；具体pin/许可范围回catalog |
 | hillclimb.md | <https://github.com/backnotprop/pstack>；`skills/spec-plan/templates/phase-template.md`；具体pin/许可范围回catalog |
 | eval.md | <https://github.com/backnotprop/pstack>；`skills/wh-review/contracts/provider-protocol.md`；`docs/architecture/test-asset-governance-rules.md`；具体pin/许可范围回catalog |
+
+## N6技术分歧草图方法
+
+`skills/poteto-mode/playbooks/prototype.md` 来自 [backnotprop/pstack](https://github.com/backnotprop/pstack)，本地 LICENSE 为 MIT、Copyright (c) 2026 Lauren Tan；沿本文件既有完整 MIT 许可保留。固定原件、归档指纹和采用范围唯一回 catalog 的 `n6-technical-sketch`。提交未证实，镜像带自行改动，不称已绑定上游版本；上游许可链未独立核实。只采用该单文件的隔离观察方法；Feature、exhaust-the-design-space、the control skill及宿主调度器四项未保存，不声称吸收。拒绝代理代选产品偏好和一般免测试；实际消费者读 `AGENTS.md`「卡住与升级」。

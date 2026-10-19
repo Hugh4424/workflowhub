@@ -85,3 +85,65 @@
 | --- | --- | --- |
 | context-engineering | 任务重点靠后、保护字段与指针进入面 | [AGENTS.md](../AGENTS.md#派发与回传) |
 | orchestrate.md | brief缩放、上游指针中继、可核事实回传 | [AGENTS.md](../AGENTS.md#派发与回传)；`skills/deep-research/SKILL.md` |
+
+## N6研究方法采用索引
+
+来源、固定版本、许可与未证实项唯一回 `catalog.yaml` 的 `knowledge-graph`、`deep-research` 与 `make-decision`；写作沿 `skills/spec-specify/SKILL.md` 的 WR001。此节只索引正文，保留既有 N4／N5 内容。消费者读对应方法，owner为各方法维护者；替代旧的内外混写与重复来源转述。正文被正式替代且无消费者时，由原 owner 同批删除对应索引行，历史原件保留。
+
+| 条目 | 采用动作 | 既有正文入口 |
+| --- | --- | --- |
+| 内部研究 | 图／文件三保障与查图判据，供研究派发者及 P3 作者消费 | `skills/knowledge-graph/SKILL.md` |
+| 外部研究 | 来源／检索三保障、单份报告与逐任务找回，供 make-decision 作者消费 | `skills/deep-research/SKILL.md` |
+| 研究分工与来源减法 | 第3步分工与关键结论消费；D7来源转述降为固定来源与 WR001 指针，供方向作者及 P3 消费 | `workflows/make-decision/SKILL.md` |
+
+`runtime/evidence/research-report.mjs` 的职责是旧 JSON 研究报告校验与保存；当前普通 Markdown 报告和轻研究没有生产 consumer，保留旧测试／历史读取，不反向接线。owner＝研究报告运行时维护者（P9/T019 原归属）；本卡不替代其实现。保留条件＝仍需旧报告读取／验证；删除条件＝原 owner 核全真实 caller、历史保全及替代消费者后确认没有消费者，再按原治理处理。当前缺口是没有当前报告 consumer，不能把旧校验器存在当研究已验证。
+
+## N6提问方法采用索引
+
+固定版本与许可唯一回 `catalog.yaml` 的 `talk-with-zhipeng`、`grill-with-docs`；本节只保采用/偏离与正文入口。owner＝两方法维护者；consumer＝Talk/Grill调用者、独立搬运者与P3收敛作者；替代旧重复问答转述。方法被正式替代且无消费者时，由原owner同批删除本节对应行，历史原件保留。
+
+| 条目 | 采用与本地偏离 | 既有正文入口 |
+| --- | --- | --- |
+| `skills/idea-refine/SKILL.md` | Phase 1–3 七类透镜按问题选，比较关键取舍而不凑数量；三份配套 frameworks.md、refinement-criteria.md、examples.md 未保存/未登记，不声称完整评分标准 | Talk「2.2 扩散透镜」 |
+| `skills/interview-me/SKILL.md` | Step 3–5 四类信号、四类非确认、原意追问与地板规则；来源条款“不许给用户列选项”明确“不采用”：这是决定口径／文档转述，非用户逐字——本地采用每题2～3互斥选项、推荐及后果风险，用户原话是“Talk 和 grill 请用大白话说明选项、后果和风险”。固定原文 Common Rationalizations:204 可回读；不采用置信度退出与绝对批量禁令 | Grill「Sharpen fuzzy language」与本地最小问卡；Talk链接只供可选示例 |
+
+版本/许可沿catalog；pin为commit级＋逐字节哈希，不是签名/发布级强绑定。三份缺失配套由来源维护方提供后才能评估，不静默补全。
+
+## N6骨架与逐包收敛采用索引
+
+当前owner＝N6/P3方法维护者；本卡是N4/N5与N6研究/提问节的后写方，只追加本节，不改其来源权威。固定源、许可与能力决定沿 catalog 的现条目，本文只指正文。consumer＝P4/T004、P5/T005登记writer读回本节后在各自新节追加，P6只聚合原件；正文全部由catalog承接且无引用时原owner删本节并保历史。
+
+| 条目 | 采用／减法承接 | 既有正文入口 |
+| --- | --- | --- |
+| 骨架到逐包 | 需求单元、四查定序、真实骨架答复与逐包五段；不新增进度权威 | `workflows/make-decision/SKILL.md` 第4–9步 |
+| D5 Grill方法转述 | 删方法侧重复完整checklist；保本步产物／进下一步前两行，Grill调用者与P4仍按原owner全文执行 | `workflows/make-decision/SKILL.md` 第11步；`skills/grill-with-docs/SKILL.md` |
+| D6 Talk方法转述 | 方法侧压为最小内联卡；保文本降级及真实原因，Talk调用者与P5仍读问答契约／每答重排 | `workflows/make-decision/SKILL.md` 第1步；`skills/talk-with-zhipeng/SKILL.md` |
+| 显式单元检查 | 单元／派生号／需求三表头与派生号缺格只报warning；唯一生产者checkDecisionLogChain，consumer为run-checks advisory及两冻测；owner为checker维护者，均无消费且无正文引用才删码 | `tools/cli/check-decision-log-chain.mjs` |
+
+## N6技术分歧草图采用索引
+
+第三项来源新开 catalog 能力决定 `n6-technical-sketch`，不复用无关 `matt-prototype` watch；来源为 `skills/poteto-mode/playbooks/prototype.md`，固定字节、许可与未证实项只回catalog。owner＝总则维护者；consumer＝主会话读 `AGENTS.md`「卡住与升级」三触发/四禁用后决定是否取事实，用户消费观察再决定方向；删除条件＝替代方法经独立审查承接全部消费者且无正文引用，原owner退役本节并保历史。
+
+跨卡重叠：本节接在P3骨架与逐包收敛索引之后，是后写方，只追加本节；既有N4/N5、P1/P2/P3来源及减法说明不动，P5在自己的新节追加。采用隔离草图、变体观察与路径交接；三句宽许可仅限隔离/一次性/非生产；四项未保存机制不声称吸收，提交未证实且镜像带自行改动，不写已绑定上游版本。
+
+减法声明：删charter成本预算门，存在/非空/指针/角色保护仍由原五个it消费；降prototype通用原型流程为AGENTS适用分支，调用者仍在原总则读到触发与边界；不新增流程、技能、控制面或进度对象。全卡D1–D7由原Phase各自首验，本节不替P5或P6补签。
+
+## N6 P5 answer-as-page采用索引
+
+唯一来源事实见catalog answer-as-page；独立于pstack。固定pin 7acea24024923eaae8647f5988e826062456dc86 / Release v0.5.5（仅此tag核过且未签名）。MIT；owner=P5/T005及后续技能维护者；首consumer=用户直接调用/本任务驾驶舱生成者，首验=冻结合同＋独立真实页消费。替代宿主绑定renderer；替代实现接全部消费者或整体退役时同步删除登记，历史保留。下表不是额外验收门，13项须读原义；原源坐标相对上述pin。U1–U12单层MIT，U13打包许可不完整，未采用部分不称已适配。
+
+| 项 | 原做法 | 原源 | 本地处置与删除/重评条件 |
+| --- | --- | --- | --- |
+| U1 | 输出默认目录 | SKILL.md:61 | 改用caller指定任务库路径；不需默认目录时删 |
+| U2 | always-on | SKILL.md:37–45 | 不采用；改显式入口时重评 |
+| U3 | 后台更新 | references/settings.md | 不采用；有统一更新owner时重评 |
+| U4 | 清理命令 | commands/clean.md | 不采用；任务库owner承接时删 |
+| U5 | Node20 | package.json engines / README.md:75 | 不搬CLI；本仓Node>=24不变，engines变化重评 |
+| U6 | 宿主变量 | SKILL.md:56–61 | 改本技能相对路径；宿主变量成为公共面时重评 |
+| U7 | 专有命令 | SKILL.md:42/89/91/92、settings | 不搬；宿主放弃专有命令时删 |
+| U8 | 下载上游清单追新 | references/settings.md | 不采用；统一owner承接时重评，与U3独立 |
+| U9 | frontmatter宿主键 | SKILL.md:3 | 只name/description；本仓消费新键时重评 |
+| U10 | 视频依赖 | SKILL.md:193–197 / references/video.md | 不搬；视频确需且许可补齐后重评 |
+| U11 | Reply/ask/复制源 | SKILL.md:159/163–170 | 仅保安全回灌方法；当前只读页不用控件，真实确认互动后重评 |
+| U12 | 嵌真实代码 | SKILL.md:157 | 只稳定指针、不嵌正文造双写；改运行时取数时重评 |
+| U13 | 打包许可缺失 | scripts/am.mjs bundled license block | 不搬renderer；dagre/marked等许可补齐并独立审查后由ADR-012回退块承接 |

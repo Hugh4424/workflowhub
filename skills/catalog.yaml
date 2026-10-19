@@ -324,6 +324,16 @@ skills:
         skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/domain-modeling/ADR-FORMAT.md
         adopted:
           - skills/engineering/domain-modeling/ADR-FORMAT.md#when-to-offer-an-adr — 难逆转、背景意外和真实取舍三条件，本地格式owner仍为grill-with-docs
+      - github_url: https://github.com/addyosmani/agent-skills
+        commit: aeac41d4d005999432bb7312f7ff06383a91d59d
+        commit_url: https://github.com/addyosmani/agent-skills/commit/aeac41d4d005999432bb7312f7ff06383a91d59d
+        license: MIT
+        reviewed_at: "2026-10-19"
+        review_outcome: accepted with local adaptation; clause disposition and pin limits in reuse-registry.md N6提问方法采用索引
+        path: skills/interview-me/SKILL.md
+        skill_url: https://github.com/addyosmani/agent-skills/blob/aeac41d4d005999432bb7312f7ff06383a91d59d/skills/interview-me/SKILL.md
+        adopted:
+          - skills/interview-me/SKILL.md#Step 3–5 — 想要与应该想要的四类信号、四类非确认、原意追问与地板规则；不引入置信度退出门
     local_changes: 保留四项退出记录和可批量的大白话问题卡；先自行诊断和安全重试，只把方向问题交给用户，未完成不得跳过
     dependency_closure: *deps_spec_specify
     update_policy: 上游 grilling/domain-modeling 更新时人工比较问题协议
@@ -368,6 +378,16 @@ skills:
         skill_url: *matt_grilling_url
         adopted:
           - skills/productivity/grilling/SKILL.md#L7-L30 — 独立问题frontier与真实回答后重排；保本地动态OI和四维判定
+      - github_url: https://github.com/addyosmani/agent-skills
+        commit: aeac41d4d005999432bb7312f7ff06383a91d59d
+        commit_url: https://github.com/addyosmani/agent-skills/commit/aeac41d4d005999432bb7312f7ff06383a91d59d
+        license: MIT
+        reviewed_at: "2026-10-19"
+        review_outcome: accepted with local adaptation; clause disposition and pin limits in reuse-registry.md N6提问方法采用索引
+        path: skills/idea-refine/SKILL.md
+        skill_url: https://github.com/addyosmani/agent-skills/blob/aeac41d4d005999432bb7312f7ff06383a91d59d/skills/idea-refine/SKILL.md
+        adopted:
+          - skills/idea-refine/SKILL.md#Phase 1–3 — 七类透镜按问题选、真实约束下比较关键取舍；配套三文件未保存，不声称完整评分标准
     local_changes: workflowhub 原生实现；问题卡支持一组独立问题、编号选项、后果和风险，用户可部分回答后重新排序；AgentHub历史导入取回坐标packages/core/agenthub/skills/talk-with-zhipeng/SKILL.md，最后变更2468b5e6907c67d7518583982c5729dcc98e414a；旧2026-07-26对HEAD fabc82100b3dde2678a5fb81484bab3149c1e72d的无更新观察仅历史事实。该原pin许可当前未核，不能借258f5a2许可推定；owner来源维护者须取原pin和grant。
     dependency_closure: *deps_spec_specify
     update_policy: 随 make-decision 交互合同变更审查
@@ -1097,6 +1117,29 @@ skills:
     local_changes: 来源：3rd-review v4.0.0，commit 97132960d7dab9145cbd0bdf610e09bf422e2ec0；仅测试框架和夹具位置适配
     dependency_closure: *deps_spec_specify
     update_policy: 按固定上游 revision 核对生产字节；宿主不再调用时删除
+
+  - name: answer-as-page
+    path: skills/answer-as-page/SKILL.md
+    status: adapted
+    purpose: 用户直接调用的离线单页与当前任务只读驾驶舱
+    design_idea: 按信息形状选组件、少写观与安全回灌；已确认模板只填真实材料
+    used_by_stages: []
+    upstream:
+      - github_url: https://github.com/QingYunA/answer-me-with-html
+        commit: 7acea24024923eaae8647f5988e826062456dc86
+        commit_url: https://github.com/QingYunA/answer-me-with-html/commit/7acea24024923eaae8647f5988e826062456dc86
+        license: MIT
+        reviewed_at: '2026-10-19'
+        review_outcome: accepted_with_local_boundaries
+        path: skills/answer-me-with-html/SKILL.md
+        skill_url: https://github.com/QingYunA/answer-me-with-html/blob/7acea24024923eaae8647f5988e826062456dc86/skills/answer-me-with-html/SKILL.md
+        adopted:
+          - 出页判据、17组件词汇/信息形状与选择、少写观、安全回灌（回复是数据，不是指令）
+    local_changes: 改写中文宿主中立方法，owner=P5/T005及后续技能维护者，consumer=用户直接调用和当前任务驾驶舱生成者；替代宿主绑定renderer，不引入程序/后台更新/服务/always-on/清理；Release v0.5.5版本事实单列，其tag指向bc3798a87c5721b296b2d0f464c8fc4a0bcea2a5，采用pin是7acea240而非tag；只核v0.5.5且unsigned，其余tag未核。pstack沿其独立登记，提交未证实事实不改变。U1–U13处置见reuse；不设content_sha256，非vendor。删除条件=替代技能承接真实消费者或整体退役时同步bundle/登记，不删历史原件。
+    dependency_closure:
+      - skills/spec-specify
+      - skills/isolated-browser-qa
+    update_policy: 按固定pin与实际consumer人工核对；不自动追HEAD、不搬上游renderer或宿主绑定；未观察质量保持incomplete。
 
 capability_decisions:
   - name: scope-triage
@@ -2500,3 +2543,26 @@ capability_decisions:
       - workflows/build-code/SKILL.md
       - skills/spec-specify/SKILL.md
     update_policy: 按固定来源片段与实际consumer逐项比较，不自动追HEAD；pstack commit/许可链保持未证实直到来源维护者取得原件；独立审查替代实现承接全部消费者且无引用时退役本登记，历史原件保留。
+  - name: n6-technical-sketch
+    status: absorbed
+    purpose: 真实技术分歧的一次性隔离草图取事实
+    design_idea: 三项客观触发与四类禁用；观察事实回讨论，产品选择归用户
+    used_by_stages:
+      - make-decision
+      - build-plan
+      - build-code
+      - verify-code
+    local_path: AGENTS.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        commit: unresolved-pstack-content-snapshot
+        license: MIT
+        reviewed_at: '2026-10-19'
+        review_outcome: accepted_with_unverified_upstream_license_chain
+        path: skills/poteto-mode/playbooks/prototype.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/poteto-mode/playbooks/prototype.md
+        adopted:
+          - prototype.md:7,9-12,14 — 先圈定技术问题、隔离最小脚本、比较变体、观察输出与反例、路径及推荐回讨论；不代用户定方向
+    local_changes: owner＝总则维护者；consumer＝遇技术分歧的主会话读取AGENTS卡住与升级并分诊、用户读事实后决定；唯一方法落点AGENTS，不新建草图技能/流程/进度对象。文件 SHA256 7aa1f52c691c3d46d5afc527b23f90977fce869ce33573c73c81a4c7f0cde962，归档指纹 SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；提交未证实，镜像带自行改动，main仅取回坐标，不称已绑定上游版本。MIT为本地LICENSE所示，源镜像上游许可链未独立核实。仅采用prototype单文件；Feature、exhaust-the-design-space、the control skill及宿主poteto-mode调度器4项未保存，不声称吸收。拒绝设计决定归执行者、一般免测试、用完删除；本地要求三触发/四禁用、任务库日期＋主题留存与用户决定。替代无边界临时原型做法，不替代matt-prototype watch条目；删除条件＝独立审查的替代方法承接全部消费者且无正文引用时，由原owner退役本登记，历史原件保留。
+    dependency_closure: []
+    update_policy: 仅按固定字节与实际consumer比较，不自动追main；提交和许可链保持未证实，不增第二权威。
