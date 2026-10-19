@@ -137,13 +137,14 @@ export function measureSessions(sources, options={}) {
    const preferred=records.some(r=>r.type==='token_usage_record'),series=preferred?'token_usage_record.thread_token_usage':'event_msg.token_count.total_token_usage';
    const points=consumed.filter(r=>preferred?r.type==='token_usage_record':r.type==='event_msg'&&r.payload?.type==='token_count');
    const container=r=>preferred?r?.payload?.thread_token_usage:r?.payload?.info?.total_token_usage;
+   const rootBirth=preferred&&seed===-Infinity&&!group.some(s=>s.readIssue)&&recordTime(header)>lo&&recordTime(header)<=hi&&codexFreshRootBirth(header,consumed);
    const point=(r,value)=>({eventRef:path+'#ordinal='+r.ordinal,at:iso(recordTime(r)),value});
    for(const [i,k] of usageKeys.entries()){
     if(inheritedBoundaryIssue){usage[k]=unavailable('inherited_boundary_unavailable');cumulativePoints.push({sourceRef:path,threadId:id,series,metric:k,from:null,until:null});continue;}
     const relevant=points.filter(r=>r.ordinal>seed);let error=points.some(r=>preferred&&r.payload?.thread_id!==id);let prev=-1;for(const r of relevant){const n=container(r)?.[nativeKeys[i]];if(n===undefined&&i>=3)continue;if(!validNumber(n)||n<prev)error=true;else prev=n;}
     const end=relevant.at(-1),endValue=container(end)?.[nativeKeys[i]],saved=previous?.cumulative?.find(p=>p.metric===k);let start=null;
     if(saved){const original=points.find(r=>path+'#ordinal='+r.ordinal===saved.eventRef);if(saved.series!==series||!original||iso(recordTime(original))!==saved.at||container(original)?.[nativeKeys[i]]!==saved.value||records.indexOf(original)>previousIndex){boundaryInvalid=true;bad('previous_boundary_mismatch','previous cumulative observation changed');}else start={eventRef:saved.eventRef,at:saved.at,value:saved.value};}
-    else{const base=points.filter(r=>previous||w?.previousBoundaries?recordTime(r)<lo:recordTime(r)<=lo).at(-1);if(base&&validNumber(container(base)?.[nativeKeys[i]]))start=point(base,container(base)[nativeKeys[i]]);else if(freshBirth&&recordTime(header)>=lo&&recordTime(header)<=hi)start={eventRef:path+'#ordinal=0',at:iso(recordTime(header)),value:0};else if(!header?.payload?.history_mode&&!header?.payload?.parent_thread_id&&!header?.payload?.source?.subagent&&seed===-Infinity&&!group.some(s=>s.readIssue)&&records.every((r,i)=>r.ordinal===i)&&!records.some(r=>r.payload?.type==='compaction')&&records.filter(r=>recordTime(r)<=lo).every(r=>r.type==='session_meta'||r.type==='turn_context'||r.type==='event_msg'&&(r.payload?.type==='task_started'||recordTime(r)===lo&&r.payload?.type==='item_completed'&&r.payload?.item?.type==='UserMessage')))start={eventRef:path+'#ordinal=0',at:iso(recordTime(header)),value:0};}
+    else{const base=points.filter(r=>previous||w?.previousBoundaries?recordTime(r)<lo:recordTime(r)<=lo).at(-1);if(base&&validNumber(container(base)?.[nativeKeys[i]]))start=point(base,container(base)[nativeKeys[i]]);else if(freshBirth&&recordTime(header)>=lo&&recordTime(header)<=hi)start={eventRef:path+'#ordinal=0',at:iso(recordTime(header)),value:0};else if(rootBirth)start={eventRef:path+'#ordinal=0',at:iso(recordTime(header)),value:0};else if(!header?.payload?.history_mode&&!header?.payload?.parent_thread_id&&!header?.payload?.source?.subagent&&seed===-Infinity&&!group.some(s=>s.readIssue)&&records.every((r,i)=>r.ordinal===i)&&!records.some(r=>r.payload?.type==='compaction')&&records.filter(r=>recordTime(r)<=lo).every(r=>r.type==='session_meta'||r.type==='turn_context'||r.type==='event_msg'&&(r.payload?.type==='task_started'||recordTime(r)===lo&&r.payload?.type==='item_completed'&&r.payload?.item?.type==='UserMessage')))start={eventRef:path+'#ordinal=0',at:iso(recordTime(header)),value:0};}
     const endPoint=end&&validNumber(endValue)?point(end,endValue):null;cumulativePoints.push({sourceRef:path,threadId:id,series,metric:k,from:start,until:endPoint});
     if(endPoint)snapshots.push({metric:k,series,...endPoint});
     if(endValue===undefined&&i>=3){usage[k]=missing('field_not_reported');continue;}
@@ -232,6 +233,21 @@ function codexHistoryBoundary(header, records, sources=[], cutoff=Infinity, visi
  if(validNumber(payload.subagent_history_start_ordinal))return {seed:payload.subagent_history_start_ordinal};
  if(!seedPresent&&!inheritedHint&&codexFreshChildBirth(header,records,sources,cutoff,visiting))return {seed:-Infinity,freshBirth:true};
  return {seed:Infinity,issueCode:seedPresent?'inherited_boundary_invalid':'inherited_boundary_missing'};
+}
+
+// A root birth requires the complete first request, not its pagination marker.
+function codexFreshRootBirth(header, records) {
+ const h=header?.payload,id=h?.id,born=recordTime(header);
+ if(!id||h.history_mode!=='paginated'||h.parent_thread_id||h.source?.subagent||Object.hasOwn(h,'subagent_history_start_ordinal')||h.history_base!=null||h.forked_from_id!=null||h.session_id!==undefined&&h.session_id!==id)return false;
+ if(records.filter(r=>r.type==='session_meta').length!==1||records.some((r,i)=>r.ordinal!==i||!validNumber(recordTime(r))||recordTime(r)<born||i>0&&recordTime(r)<recordTime(records[i-1])||r.payload?.type==='compaction'))return false;
+ const firstIndex=records.findIndex(r=>r.type==='token_usage_record'),first=records[firstIndex],turn=first?.payload?.turn_id;
+ if(firstIndex<0||first.payload.thread_id!==id||!validCodexTurnId(turn))return false;
+ const prefix=records.slice(1,firstIndex),start=prefix[0],contexts=prefix.filter(r=>r.type==='turn_context'),users=prefix.filter(r=>r.type==='event_msg'&&r.payload?.type==='item_completed'&&r.payload.item?.type==='UserMessage');
+ if(start?.type!=='event_msg'||start.payload?.type!=='task_started'||start.payload.turn_id!==turn||recordTime(start)!==born||!contexts.length||contexts.some(r=>r.payload?.turn_id!==turn)||users.length!==1)return false;
+ const user=users[0];
+ if(!validCodexTurnId(user.payload.item?.id)||user.payload.thread_id!==id||user.payload.turn_id!==turn||contexts[0].ordinal>=user.ordinal||prefix.some(r=>r.type==='event_msg'&&r.payload?.type==='task_started'&&r.payload.turn_id!==turn))return false;
+ const activity=r=>r.type==='response_item'&&(['assistant','tool'].includes(r.payload?.role)||['function_call','custom_tool_call','function_call_output','custom_tool_call_output','tool_result'].includes(r.payload?.type))||r.type==='event_msg'&&r.payload?.type==='item_completed'&&r.payload.item?.type!=='UserMessage';
+ return !prefix.some(r=>activity(r)&&r.ordinal<user.ordinal);
 }
 
 // A fresh child is proved by immutable parent invocation + completed spawn +

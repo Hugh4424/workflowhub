@@ -319,3 +319,67 @@ test('FRESH-CHILD-COPY CLI keeps headerless failed copy and blocks inferred chil
  assert.match(result.stdout,/child session copies include incomplete source/);assert.match(result.stdout,/inherited_boundary_missing/);
  assert.match(result.stdout,/inputTokens \(token\): unavailable:source_read_incomplete/);
 });
+
+// Additive root-birth regression: constructed first-request history, not a real-session copy.
+// The earlier ROOT-PAGINATED no-baseline and inherited-history assertions stay unchanged.
+{
+ const f=await measure(),at=n=>new Date(Date.UTC(2026,9,19,1,0,n)).toISOString();
+ const totals={inputTokens:139,outputTokens:21,cacheReadTokens:92,cacheWriteTokens:0,reasoningTokens:8};
+ const usage=(input,output,cache,reasoning)=>({input_tokens:input,output_tokens:output,cached_input_tokens:cache,cache_write_input_tokens:0,reasoning_output_tokens:reasoning});
+ const row=(ordinal,timestamp,type,payload)=>({ordinal,timestamp:at(timestamp),type,payload});
+ function bornRoot(){return {sourcePath:'/constructed/root-birth.jsonl',records:[
+  row(0,1,'session_meta',{id:'born-root',session_id:'born-root',history_mode:'paginated',source:'vscode'}),
+  row(1,1,'event_msg',{type:'task_started',turn_id:'first-turn'}),
+  row(2,2,'response_item',{type:'message',role:'user'}),
+  row(3,2,'turn_context',{turn_id:'first-turn'}),
+  row(4,2,'event_msg',{type:'item_completed',thread_id:'born-root',turn_id:'first-turn',item:{type:'UserMessage',id:'first-user'}}),
+  row(5,3,'event_msg',{type:'item_completed',thread_id:'born-root',turn_id:'first-turn',item:{type:'AgentMessage',id:'first-agent'}}),
+  row(6,3,'response_item',{type:'message',role:'assistant'}),
+  row(7,3,'response_item',{type:'custom_tool_call'}),
+  row(8,4,'token_usage_record',{thread_id:'born-root',turn_id:'first-turn',thread_token_usage:usage(101,13,70,5)}),
+  row(9,5,'event_msg',{type:'task_complete',turn_id:'first-turn'}),
+  row(10,6,'event_msg',{type:'task_started',turn_id:'second-turn'}),
+  row(11,6,'turn_context',{turn_id:'second-turn'}),
+  row(12,7,'token_usage_record',{thread_id:'born-root',turn_id:'second-turn',thread_token_usage:usage(139,21,92,8)}),
+  row(13,8,'event_msg',{type:'task_complete',turn_id:'second-turn'}),
+ ]};}
+ const opts={window:{from:at(0),until:at(8),includeFrom:false}};
+ const unavailableAll=(r,label)=>{for(const k of Object.keys(totals))assert.equal(r.sessions[0].usage[k].status,'unavailable',label+' '+k);};
+ const remove=(s,index)=>{s.records.splice(index,1);s.records.forEach((r,i)=>r.ordinal=i);};
+ test('ROOT-BIRTH complete paginated first request born inside window retains all five cumulative values',()=>{
+  const s=bornRoot(),before=JSON.stringify(s),r=f([s],opts);
+  for(const [k,value] of Object.entries(totals))assert.deepEqual(r.sessions[0].usage[k],{status:'available',value},k);
+  assert.equal(r.status,'available');assert.equal(JSON.stringify(s),before,'source records remain immutable');
+  for(const p of r.sessions[0].cumulativePoints){assert.equal(p.from.value,0);assert.equal(p.from.eventRef,s.sourcePath+'#ordinal=0');assert.equal(p.until.value,totals[p.metric]);}
+ });
+ const cases=[
+  ['parent',s=>{s.records[0].payload.parent_thread_id='other';}],
+  ['subagent',s=>{s.records[0].payload.source={subagent:{id:'child'}};}],
+  ['history-base',s=>{s.records[0].payload.history_base={id:'base'};}],
+  ['fork',s=>{s.records[0].payload.forked_from_id='other';}],
+  ['seed',s=>{s.records[0].payload.subagent_history_start_ordinal=0;}],
+  ['ordinal gap',s=>{s.records.splice(2,1);}],
+  ['conflicting ordinal',s=>{s.records.push({...s.records[8],payload:{thread_id:'born-root',turn_id:'first-turn',thread_token_usage:usage(102,13,70,5)}});}],
+  ['read issue',s=>{s.readIssue={code:'truncated_tail',sourcePath:s.sourcePath,message:'constructed missing suffix',expected:false};}],
+  ['compaction',s=>{s.records[2].payload.type='compaction';}],
+  ['foreign usage thread',s=>{s.records[8].payload.thread_id='other';}],
+  ['foreign first usage turn',s=>{s.records[8].payload.turn_id='other';}],
+  ['foreign user thread',s=>{s.records[4].payload.thread_id='other';}],
+  ['foreign user turn',s=>{s.records[4].payload.turn_id='other';}],
+  ['foreign initial context turn',s=>{s.records[3].payload.turn_id='other';}],
+  ['no user origin',s=>{remove(s,4);}],
+  ['no task start',s=>{remove(s,1);}],
+  ['assistant before user',s=>{s.records[2].payload={type:'message',role:'assistant'};}],
+  ['tool before user',s=>{s.records[2].payload={type:'function_call_output'};}],
+  ['no usage',s=>{s.records=s.records.filter(r=>r.type!=='token_usage_record');s.records.forEach((r,i)=>r.ordinal=i);}],
+  ['second header',s=>{s.records[2].type='session_meta';s.records[2].payload={id:'born-root'};}],
+ ];
+ for(const [label,mutate]of cases)test('ROOT-BIRTH rejects '+label+' without inventing a zero baseline',()=>{const s=bornRoot();mutate(s);const r=f([s],opts);if(label==='no usage'){for(const k of ['inputTokens','outputTokens','cacheReadTokens'])assert.equal(r.sessions[0].usage[k].status,'unavailable',k);for(const k of ['cacheWriteTokens','reasoningTokens'])assert.deepEqual(r.sessions[0].usage[k],{status:'not_reported',reason:'field_not_reported'},k);}else unavailableAll(r,label);});
+ test('ROOT-BIRTH birth at window boundary cannot prove a new zero baseline',()=>{unavailableAll(f([bornRoot()],{window:{from:at(1),until:at(8),includeFrom:true}}),'birth at from');});
+ test('ROOT-BIRTH response prefix before window without a cumulative observation stays unavailable',()=>{unavailableAll(f([bornRoot()],{window:{from:at(3),until:at(8),includeFrom:false}}),'response before from');});
+ test('ROOT-BIRTH missing child usage remains incomplete even if its proven parent has complete cumulative values',()=>{
+  const root=bornRoot();root.records.push(row(14,8,'event_msg',{type:'item_completed',item:{type:'SubAgentActivity',kind:'started',id:'child-start',agent_thread_id:'usage-missing-child'}}));
+  const child={sourcePath:'/constructed/usage-missing-child.jsonl',records:[row(0,8,'session_meta',{id:'usage-missing-child',parent_thread_id:'born-root',subagent_history_start_ordinal:0}),row(1,8,'event_msg',{type:'task_started',turn_id:'child-turn'})]};
+  const r=f([root,child],opts);for(const k of Object.keys(totals)){assert.deepEqual(r.sessions[0].usage[k],{status:'available',value:totals[k]},'root '+k);assert.equal(r.sessions[1].usage[k].status,['cacheWriteTokens','reasoningTokens'].includes(k)?'not_reported':'unavailable','child '+k);assert.equal(Object.hasOwn(r.sessions[1].usage[k],'value'),false,'no fabricated child value '+k);assert.equal(r.totals.usage[k].status,'unavailable','total '+k);}
+ });
+}
