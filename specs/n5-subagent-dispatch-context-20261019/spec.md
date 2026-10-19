@@ -4,7 +4,7 @@
 
 - 功能：`n5-subagent-dispatch-context-20261019`；`content_profile: post`；范围 `non_ui`。
 - 来源：[decision-log.md](decision-log.md) 的 R-001…R-013、D-001…D-037 与 AC-001…AC-012；父 PRD N5 卡（`specs/archive/skills-framework-redesign-20261014/prd.md:375-392`）只读保留产品目标权威。
-- 状态：build-plan 草稿，`unverified`；实施计划尚未取得用户确认，build-code 未开始。本文件写成不表示行为已实现、已验收或已交付。
+- 状态说明：实施计划已由用户确认，原件为任务库 `quality/evidence/human-confirmations/2026-10-19-002-build-plan-approved.json`；build-code 已开展。当前执行位置、Phase 材料与真实审查/欠账事实，分别读 `phases/index.md` 所指当前材料及任务库 `facts.jsonl`，不由本说明推定阶段完成。用户现已选择按批准范围带欠账收口（`quality/evidence/2026-10-19-117-build-code-user-debt-boundary.json`），不表示全部原始验收通过。
 
 ## 速读卡（30 秒）
 
@@ -682,7 +682,7 @@ _Avoid_: 回传模板、五套回传、子代理格式。
 6. **D-002／D-032**：上游「五套回传收敛一份 / G1 删旧五套」只并派发侧三族（主会话检索回传、派发继承载荷、研究回传）；审查回传与跨阶段交接因字段冻结与固定发布口保留（偏离 6；D-032 要求逐族展示，清单见第 12 节）。
 7. **上游 `prd.md:584`**「Phase 与并发人数由 build-plan 沿 2–5 区间定」与 D-006／D-025 直接冲突；本计划不写任何并发数字，按用户真实改判执行（事实注记，不是新偏离）。
 8. **AC-T6-4／AC-T6-5 口径**：其字面（常驻实测、净长与常驻不增）已由 AC-008 改写为分面披露；decision-log `:373` 自称「沿用原编号与强度」与表内实际不一致，此处按表内实际执行，不改上游材料。
-9. **既有检查实跑口径**：`tests/acceptance/card-03-current.test.mjs` 在本次 worktree 实跑 exit 0（52 项），与 decision-log OI-013／D-018 的「不可满足」表述不一致；本卡按实跑记录、不改测试，也不把该差异算作本卡红因。`tests/contract/delivery-closeout-charter-contract.test.mjs` 实跑 exit 0（6 项，36,849 B ≤ 36,861 B）；本卡写入后预计变红，按 RISK-01 披露。
+9. **既有检查实跑口径**：`tests/acceptance/card-03-current.test.mjs` 在 build-plan 时点的 009 次历史运行实跑 exit 0（52 项，原件 `quality/tests/2026-10-19-009-build-plan-governance-regression.output`）；build-code 时点 055 次当前实跑为 exit 0（47 项，见 `quality/tests/2026-10-19-055-p4-card03.output` 与纠错 `quality/evidence/2026-10-19-120-p4-card03-count-correction.md`），与 decision-log OI-013／D-018 的「不可满足」表述不一致；本卡按实跑记录、不改测试，也不把该差异算作本卡红因。`tests/contract/delivery-closeout-charter-contract.test.mjs` 实跑 exit 0（6 项，36,849 B ≤ 36,861 B）；本卡写入后预计变红，按 RISK-01 披露。
 10. **AC-003 来源冲突**：decision-log `:373` 把 AC-003 列为「本次新增」，`:381` 的 AC-003 行却写上「AC-006 / R-004 / R-008」；本规格按 `:381` 行执行并在 AC-003 保留两处 provenance，不改上游材料。
 11. **AC-008 预期未达成**：可控面逐项「不增」来自已确认 AC；本卡正常写入后可控面预计净增，故 AC-008 预期不能记 pass（RISK-02），不把「记录实际增减」偷换成通过条件。
 
@@ -713,7 +713,7 @@ _Avoid_: 回传模板、五套回传、子代理格式。
 
 - **既有行为**：五阶段派发者读 `AGENTS.md` 派发段；研究技能读者读 `deep-research`；维护者读 catalog/notices/registry；术语读者读 `GLOSSARY.md`。
 - **本需求影响**：派发段新增一小节并删两处失效表述；研究技能删两处上限并加一句指针；三处登记各加一项；术语表加两条。其它规则与冻结合同不动。
-- **回归路径**：`node tools/cli/verify-structure.mjs`（GLOSSARY 术语与 denylist）、`node tools/cli/check-skill-consistency.mjs --root <绝对包根>`（catalog 与 bundle 闭包）、`node tools/cli/run-checks.mjs`（既有报告，只作事实）、`tests/contract/business-repo-experience-file.test.mjs`（五文件不得引用 `Improvements.md`）、`tests/contract/delivery-closeout-charter-contract.test.mjs`（常驻预算，预计红并如实报告）。`tests/acceptance/card-03-current.test.mjs` 本次实跑 exit 0（52 项通过，见任务库 `quality/tests/2026-10-19-009-build-plan-governance-regression.output`）；其同名 `.mjs` 原生采集脚本依赖本树不存在的 `specs/workflowhub-thin-core-card-03-20260919`，只作直接运行时的历史资产。decision-log OI-013 的「不可满足」表述与本次实跑不一致，本卡按实跑记录并披露差异，不改该测试、不冒红因归属。
+- **回归路径**：`node tools/cli/verify-structure.mjs`（GLOSSARY 术语与 denylist）、`node tools/cli/check-skill-consistency.mjs --root <绝对包根>`（catalog 与 bundle 闭包）、`node tools/cli/run-checks.mjs`（既有报告，只作事实）、`tests/contract/business-repo-experience-file.test.mjs`（五文件不得引用 `Improvements.md`）、`tests/contract/delivery-closeout-charter-contract.test.mjs`（常驻预算，预计红并如实报告）。`tests/acceptance/card-03-current.test.mjs` 在 build-plan 时点 009 次历史运行实跑 exit 0（52 项通过，见任务库 `quality/tests/2026-10-19-009-build-plan-governance-regression.output`）；build-code 时点 055 次当前运行为 exit 0（47 项通过，原件 `quality/tests/2026-10-19-055-p4-card03.output`，数量纠错见 `quality/evidence/2026-10-19-120-p4-card03-count-correction.md`）；其同名 `.mjs` 原生采集脚本依赖本树不存在的 `specs/workflowhub-thin-core-card-03-20260919`，只作直接运行时的历史资产。decision-log OI-013 的「不可满足」表述与本次实跑不一致，本卡按实跑记录并披露差异，不改该测试、不冒红因归属。
 - **验收**：AC-N5-004、AC-N5-008、AC-N5-009 与上述命令的原件。
 - **可能受冲击的业务规则**：`AGENTS.md` 与 `CLAUDE.md` 必须含 `docs/delivery-closeout-charter.md` 的既有断言；GLOSSARY 的五段术语与 denylist；catalog `skills[]` 的 name/path 形态（本卡只加 `capability_decisions`，不动 `skills[]`）。
 - **明确无影响**：runtime、tools、schemas、config、其它技能、Git 工作流、权限与部署；无 UI、无数据迁移、无外部服务。
