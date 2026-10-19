@@ -76,3 +76,12 @@
 | refactoring.md | 结构改动先pin行为契约；typecheck/lint不算pin，无第二oracle | `skills/spec-plan/SKILL.md` |
 | hillclimb.md | 独立oracle区分好坏、error/work明确单位、重复观测/噪声与停止；无固定次数门/loop账本 | `skills/spec-plan/templates/phase-template.md` |
 | eval.md | 真实独立候选→匿名同尺judge→基底合成与验证，实际轨迹不信自报 | `skills/wh-review/contracts/provider-protocol.md`；`docs/architecture/test-asset-governance-rules.md` |
+
+## N5既有方法采用索引
+
+来源、固定版本、许可与未证实项唯一回 `catalog.yaml` 的 `n5-dispatch-and-return`；此处只索引正文。
+
+| 条目 | 采用动作 | 既有正文入口 |
+| --- | --- | --- |
+| context-engineering | 任务重点靠后、保护字段与指针进入面 | [AGENTS.md](../AGENTS.md#派发与回传) |
+| orchestrate.md | brief缩放、上游指针中继、可核事实回传 | [AGENTS.md](../AGENTS.md#派发与回传)；`skills/deep-research/SKILL.md` |

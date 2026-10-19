@@ -2462,3 +2462,41 @@ capability_decisions:
     dependency_closure:
       - skills/spec-specify/SKILL.md
     update_policy: 按固定本地原件逐项比source/本地偏离；不自动追HEAD；被独立审查替代且零consumer后退役，历史原件保留。
+  - name: n5-dispatch-and-return
+    status: absorbed
+    purpose: 五阶段派发与回传共用合同及研究消费者对齐
+    design_idea: brief随活缩放，任务重点靠后；上游原件指针中继，六项事实回传，授权和失败边界保全
+    used_by_stages:
+      - make-decision
+      - build-plan
+      - build-code
+      - verify-code
+    local_path: AGENTS.md; skills/deep-research/SKILL.md
+    upstream:
+      - github_url: https://github.com/addyosmani/agent-skills
+        commit: aeac41d4d005999432bb7312f7ff06383a91d59d
+        commit_url: https://github.com/addyosmani/agent-skills/commit/aeac41d4d005999432bb7312f7ff06383a91d59d
+        license: MIT
+        reviewed_at: '2026-10-19'
+        review_outcome: accepted_with_local_boundaries
+        path: skills/context-engineering/SKILL.md
+        skill_url: https://github.com/addyosmani/agent-skills/blob/aeac41d4d005999432bb7312f7ff06383a91d59d/skills/context-engineering/SKILL.md
+        adopted:
+          - What to protect until the end:215-218 — 摘要保目标/当前失败/授权约束，落AGENTS派发与回传首段
+          - Compress before dropping:220-230／Order for recency:234-238 — 只采用进入面指针与结论、任务重点靠后，落AGENTS首段/进入面纪律；宿主主动自剪退役
+      - github_url: https://github.com/backnotprop/pstack
+        commit: unresolved-pstack-content-snapshot
+        license: MIT
+        reviewed_at: '2026-10-19'
+        review_outcome: accepted_with_unverified_upstream_license_chain
+        path: skills/poteto-mode/playbooks/orchestrate.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/poteto-mode/playbooks/orchestrate.md
+        adopted:
+          - Size the brief:52 — 一文件无新增对外行为可压一段但保四要素和回传形状，落AGENTS首段
+          - Dependency context relay:56 — 采用原件指针+最小结论，拒绝全文粘贴；落AGENTS上游结论中继
+          - REPORT:47-48,91 — 可核实际进展，落AGENTS六项回传及deep-research R2合同指针/来源覆盖
+    local_changes: 固定context-engineering文件 SHA256 8b736cb9e55b82b265ab6ff78349c0e826e8a6df550deddf665b7fb3ff858b63；pstack包 SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8，orchestrate.md SHA256 d42b4375f1bd4ce23da0b575a198571a2117df7eea10c3c9fc6d92ae1053f7be；Git commit未证实，main仅取回坐标，上游许可链未独立核实。不增常驻层/store/调度器；拒绝75%容量触发、preferences逐字粘贴、store账本、默认重开、全文中继、TIMEBOX/tick。修复回原会话复用现规则，审查八类与交接13区块保留，不合并或新建发布口；登记不证明方法效果。
+    dependency_closure:
+      - workflows/build-code/SKILL.md
+      - skills/spec-specify/SKILL.md
+    update_policy: 按固定来源片段与实际consumer逐项比较，不自动追HEAD；pstack commit/许可链保持未证实直到来源维护者取得原件；独立审查替代实现承接全部消费者且无引用时退役本登记，历史原件保留。
