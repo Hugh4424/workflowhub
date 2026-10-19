@@ -25,3 +25,9 @@
 | 问题 | 下次改变的行动 | 状态 |
 | --- | --- | --- |
 | 本次把 022 指成 alias 失败原件，实读发现 022 只有索引比对失败；alias 仅 003 摘要，完整 stderr 未独立存（来源：[本次观察](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n7-route-delivery-closeout-experience-20261018/quality/tests/2026-10-18-046-p2-t002-before-and-source-observations.json)、[022](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n7-route-delivery-closeout-experience-20261018/quality/tests/2026-10-18-022-n7-build-code-preflight.json)、[003](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n7-route-delivery-closeout-experience-20261018/quality/evidence/2026-10-18-003-preflight-confirm-alias-failure.json)）。 | 下次引用失败或写经验前，逐项核对操作、错误与原件正文是否对应；只有摘要时明确覆盖限制，不把另一失败替进去。 | 已落账；本次错误指针已纠正，未声称用户确认清理。 |
+
+## 匿名评测模块
+
+| 问题 | 下次改变的行动 | 状态 |
+| --- | --- | --- |
+| 本次把匿名候选的访问隔离扩大成独立host/Docker，又用全进程seatbelt挡住CLI自身并要求用户供环境（来源：N7/build-code，`quality/evidence/2026-10-18-090-native-isolation-docker-root-cause-audit.md`、`quality/tests/2026-10-18-094-p3-common-input-corrected.json`、`095-p3-judge-standard-corrected.json`、`101-native-exact-packet-host-probe.json`）。 | 下次先核现有原生packet权限及真实允许/拒绝，区分CLI控制面与模型工具；质量与成本条件分列，单路线失败不增加Docker或独立host前置。 | 已落账；未作用户确认已解决，不清理；原生探针仅证实测面，网络与工具注入缺口保留。 |

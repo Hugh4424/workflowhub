@@ -1,6 +1,6 @@
 # Phase P6 — 全任务验收：逐 AC 消费真实原件并诚实保留缺口
 
-读者：独立验收者、verify-code复核者与用户。本卡是同一任务唯一末验收；本次按用户已授权的两项最小实施范围补验收承接；不据材料授权宣实施/验收成功，不新增真实PR或物理close授权。
+读者：独立验收者、verify-code复核者与用户。本卡是同一任务唯一末验收；本次按用户已授权的两项最小实施范围补验收承接；不据材料授权宣实施/验收成功；必要验证与Git交付沿现AGENTS持续授权核范围/HEAD，不新增日常阶段授权，最终物理close仍一次确认。
 
 - **全局规格**：`spec.md#appendix-a--验收判据唯一权威`
 - **写入集**：`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n7-route-delivery-closeout-experience-20261018/quality/tests/2026-10-18-p6-acceptance-green.output`；`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n7-route-delivery-closeout-experience-20261018/quality/tests/2026-10-18-p6-ac-per-ac.md`；`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n7-route-delivery-closeout-experience-20261018/quality/tests/2026-10-18-p6-six-adoptions.md`；`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n7-route-delivery-closeout-experience-20261018/quality/tests/2026-10-18-p6-reverify.md`；`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n7-route-delivery-closeout-experience-20261018/quality/evidence/2026-10-18-p6-data-readiness.md`；`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n7-route-delivery-closeout-experience-20261018/quality/evidence/2026-10-18-p6-env-readiness.md`；`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n7-route-delivery-closeout-experience-20261018/quality/tests/2026-10-18-p6-triage.md`
@@ -11,7 +11,7 @@
 - **evidence_path**：`quality/tests/2026-10-18-p6-ac-per-ac.md`
 - **STOP**：证据形态不符/缺真实输入时只停该条通过主张，列缺口与owner；缺外仓成功、独立来源、真实PR、完整N1或build-prd成本能力均不造pass。失败修复回原Task，安全修复可继续。
 - **覆盖 AC**：AC-001、AC-002、AC-003、AC-004、AC-005、AC-006、AC-007、AC-008、AC-009、AC-010、AC-011、AC-012、AC-013
-- **Done**：13条各有实际档位与具名原件；所有适用条件满足才pass。预PR的build-code读回保AC-010真实PR子条件incomplete；verify-code在授权产生真实PR后再消费本卡与新原件，不新增Phase、不以P6全绿作为开PR前置。build-prd成本标签已支持但真实阶段旅程/主会话record/from/until/来源读回未齐、真实权限/方法试行或N1缺失各保独立限制，未满足不得宣整卡完成。
+- **Done**：13条各有实际档位与具名原件；所有适用条件满足才pass。预PR的build-code读回保AC-010真实PR子条件incomplete；verify-code在授权产生真实PR后再消费本卡与新原件，不新增Phase、不以P6全绿作为开PR前置；预PR子条件incomplete不阻止build-code收口及按已有授权接续verify-code。build-prd成本标签已支持；五路线具名真实方法试行及当前实际stage末主会话record/from/until/来源读回逐项核证，缺项、真实权限/方法试行或N1缺失各保独立限制，未满足不得宣整卡完成。
 
 ## 工作包声明（人读事实）
 
@@ -107,7 +107,7 @@ T010只读生产/外仓，写限七精确task原件；任何受控fixture补执�
 
 AC-013仍是六项采用，不另造第七项；P1核五项核心方法、P4核opening-a-pr，git-workflow-and-versioning/ketchup的AGENTS治理落点由P3/T007首次验收。只拿P1方法原件不能宣这两项全部落点已交；缺治理首验回T007，不由P6末尾汇总首次补实现。
 
-结论件13行：每AC一个既有ACCEPTANCE_RESULTS档位和具名原件，非pass不计通过。AC-003须有P1之后按新方法产生的四类具名试行，真实受控失败、真实取消各至少一次且原件齐全，缺任一类或原件则对应子条件incomplete；AC-004须用该问用户/不该问用户的成对输入（两类各至少一例）分别核漏问、多问，空动作项列表不代通过。AC-002/003中build-prd成本标签已支持；真实五stage旅程、主会话record/from/until及来源读回缺项各保incomplete；材料unavailable/review no_stage_fact不冒已齐，已发布缺报/exit1不冒无记录，未发布才写本阶段无记录；AC-006/007方法与真实两仓、AC-009路径限制/方法授权语义、AC-010结构/实际PR、AC-012数字/含义保全/质量/完整N1分条件，不互相补绿。
+结论件13行：每AC一个既有ACCEPTANCE_RESULTS档位和具名原件，非pass不计通过。AC-003须有P1之后按新方法产生的四类具名试行，真实受控失败、真实取消各至少一次且原件齐全，缺任一类或原件则对应子条件incomplete；AC-004须用该问用户/不该问用户的成对输入（两类各至少一例）分别核漏问、多问，空动作项列表不代通过。AC-002/003中build-prd成本标签已支持；五路线各一次具名真实方法试行须有明标输入、实际新方法调用、新handoff发布/读回与独立consumer，允许明标受控stage输入；缺某路线原件保对应incomplete，不要求本任务五次正式阶段结束。成本标签受控入口/窗口验证与当前实际stage末主会话record/from/until分列，未发生其它stage不造行；当前实际成本及来源读回缺项保对应incomplete；材料unavailable/review no_stage_fact不冒已齐，已发布缺报/exit1不冒无记录，未发布才写本阶段无记录；AC-006/007方法与真实两仓、AC-009路径限制/方法授权语义、AC-010结构/实际PR、AC-012数字/含义保全/质量/完整N1分条件，不互相补绿。
 
 ### 5. 五类执行事实
 
@@ -175,7 +175,7 @@ T001既有lastSlug及T009引用/驱动更新须各有Rationale for Change、Impa
 
 ### 本次授权补充的验收承接与Docker边界
 
-本次用户已批准P5原两文件适配现行公共consumer、P1先补build-prd成本最小方案再实施定向验证；P6仍只读消费各原owner的新原件，不扩大自身写集。P5须逐13旧AC核承接与正负控，原AC-FIX-001未覆盖仍incomplete；导入失败/0tests不能当行为RED。P1成本标签支持已落地且不改变四正式stage；消费P1真实实施/定向验证及051审查原件，再核唯一旧账本、真实主session/window/来源、原字节保全及读回；缺材料引用unavailable、无review stage fact为no_stage_fact，已发布缺报/exit1与未发布分开。真实旅程/主会话record或来源缺项时OPEN-009对应子条件保持incomplete，旧invalid stage原件不改、不作当前禁止。
+本次用户已批准P5原两文件适配现行公共consumer、P1先补build-prd成本最小方案再实施定向验证；P6仍只读消费各原owner的新原件，不扩大自身写集。P5须逐13旧AC核承接与正负控，原AC-FIX-001未覆盖仍incomplete；导入失败/0tests不能当行为RED。P1成本标签支持已落地且不改变四正式stage；消费P1真实实施/定向验证及051审查原件，再核唯一旧账本、真实主session/window/来源、原字节保全及读回；缺材料引用unavailable、无review stage fact为no_stage_fact，已发布缺报/exit1与未发布分开。五路线真实方法试行、当前实际stage末主会话record或来源缺项时OPEN-009对应子条件保持incomplete，受控stage输入可明标使用但须真实调用/新handoff发布读回/独立consumer，未发生其它stage不造行，旧invalid stage原件不改、不作当前禁止。
 
 已核根因是原评测输入048的task_input.materials与061的judging.access_boundary臆增独立host-mounted实现；N4原义要求实际访问结果，并未指定机器或容器。048/061旧原件不可变，修正版由原标准owner另出唯一原件并保缺陷来源，P6取到后按其真实引用消费，不覆写历史。用户明确拒绝Docker，禁止启动daemon、安装或配置；不为本卡建立容器基础设施。匿名比较复用现有native packet最小权限工具边界，按原AC-012及效果评测要求固定输入/标准、分开作者/候选/标记者/judge；候选不能见rubric、身份或其它候选，以真实访问轨迹核实际工具/文件可见面，不要求用户提供独立认证host、新机器或容器；没有物理隔离不宣已建立，但不得把N4的AC-17机械移为N7整卡前置。匿名/独立证据缺失仍保unknown/incomplete，不用普通findings代比较；不删N1四组同条件成本与真实来源要求，不用拒绝Docker作豁免。
 
