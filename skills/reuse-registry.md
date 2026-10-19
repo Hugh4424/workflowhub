@@ -127,3 +127,23 @@
 跨卡重叠：本节接在P3骨架与逐包收敛索引之后，是后写方，只追加本节；既有N4/N5、P1/P2/P3来源及减法说明不动，P5在自己的新节追加。采用隔离草图、变体观察与路径交接；三句宽许可仅限隔离/一次性/非生产；四项未保存机制不声称吸收，提交未证实且镜像带自行改动，不写已绑定上游版本。
 
 减法声明：删charter成本预算门，存在/非空/指针/角色保护仍由原五个it消费；降prototype通用原型流程为AGENTS适用分支，调用者仍在原总则读到触发与边界；不新增流程、技能、控制面或进度对象。全卡D1–D7由原Phase各自首验，本节不替P5或P6补签。
+
+## N6 P5 answer-as-page采用索引
+
+唯一来源事实见catalog answer-as-page；独立于pstack。固定pin 7acea24024923eaae8647f5988e826062456dc86 / Release v0.5.5（仅此tag核过且未签名）。MIT；owner=P5/T005及后续技能维护者；首consumer=用户直接调用/本任务驾驶舱生成者，首验=冻结合同＋独立真实页消费。替代宿主绑定renderer；替代实现接全部消费者或整体退役时同步删除登记，历史保留。下表不是额外验收门，13项须读原义；原源坐标相对上述pin。U1–U12单层MIT，U13打包许可不完整，未采用部分不称已适配。
+
+| 项 | 原做法 | 原源 | 本地处置与删除/重评条件 |
+| --- | --- | --- | --- |
+| U1 | 输出默认目录 | SKILL.md:61 | 改用caller指定任务库路径；不需默认目录时删 |
+| U2 | always-on | SKILL.md:37–45 | 不采用；改显式入口时重评 |
+| U3 | 后台更新 | references/settings.md | 不采用；有统一更新owner时重评 |
+| U4 | 清理命令 | commands/clean.md | 不采用；任务库owner承接时删 |
+| U5 | Node20 | package.json engines / README.md:75 | 不搬CLI；本仓Node>=24不变，engines变化重评 |
+| U6 | 宿主变量 | SKILL.md:56–61 | 改本技能相对路径；宿主变量成为公共面时重评 |
+| U7 | 专有命令 | SKILL.md:42/89/91/92、settings | 不搬；宿主放弃专有命令时删 |
+| U8 | 下载上游清单追新 | references/settings.md | 不采用；统一owner承接时重评，与U3独立 |
+| U9 | frontmatter宿主键 | SKILL.md:3 | 只name/description；本仓消费新键时重评 |
+| U10 | 视频依赖 | SKILL.md:193–197 / references/video.md | 不搬；视频确需且许可补齐后重评 |
+| U11 | Reply/ask/复制源 | SKILL.md:159/163–170 | 仅保安全回灌方法；当前只读页不用控件，真实确认互动后重评 |
+| U12 | 嵌真实代码 | SKILL.md:157 | 只稳定指针、不嵌正文造双写；改运行时取数时重评 |
+| U13 | 打包许可缺失 | scripts/am.mjs bundled license block | 不搬renderer；dagre/marked等许可补齐并独立审查后由ADR-012回退块承接 |

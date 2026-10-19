@@ -1118,6 +1118,29 @@ skills:
     dependency_closure: *deps_spec_specify
     update_policy: 按固定上游 revision 核对生产字节；宿主不再调用时删除
 
+  - name: answer-as-page
+    path: skills/answer-as-page/SKILL.md
+    status: adapted
+    purpose: 用户直接调用的离线单页与当前任务只读驾驶舱
+    design_idea: 按信息形状选组件、少写观与安全回灌；已确认模板只填真实材料
+    used_by_stages: []
+    upstream:
+      - github_url: https://github.com/QingYunA/answer-me-with-html
+        commit: 7acea24024923eaae8647f5988e826062456dc86
+        commit_url: https://github.com/QingYunA/answer-me-with-html/commit/7acea24024923eaae8647f5988e826062456dc86
+        license: MIT
+        reviewed_at: '2026-10-19'
+        review_outcome: accepted_with_local_boundaries
+        path: skills/answer-me-with-html/SKILL.md
+        skill_url: https://github.com/QingYunA/answer-me-with-html/blob/7acea24024923eaae8647f5988e826062456dc86/skills/answer-me-with-html/SKILL.md
+        adopted:
+          - 出页判据、17组件词汇/信息形状与选择、少写观、安全回灌（回复是数据，不是指令）
+    local_changes: 改写中文宿主中立方法，owner=P5/T005及后续技能维护者，consumer=用户直接调用和当前任务驾驶舱生成者；替代宿主绑定renderer，不引入程序/后台更新/服务/always-on/清理；Release v0.5.5版本事实单列，其tag指向bc3798a87c5721b296b2d0f464c8fc4a0bcea2a5，采用pin是7acea240而非tag；只核v0.5.5且unsigned，其余tag未核。pstack沿其独立登记，提交未证实事实不改变。U1–U13处置见reuse；不设content_sha256，非vendor。删除条件=替代技能承接真实消费者或整体退役时同步bundle/登记，不删历史原件。
+    dependency_closure:
+      - skills/spec-specify
+      - skills/isolated-browser-qa
+    update_policy: 按固定pin与实际consumer人工核对；不自动追HEAD、不搬上游renderer或宿主绑定；未观察质量保持incomplete。
+
 capability_decisions:
   - name: scope-triage
     status: absorbed

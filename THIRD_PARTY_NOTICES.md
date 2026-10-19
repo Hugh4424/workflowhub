@@ -18,6 +18,10 @@ workflowhub 包含或改编下列第三方项目的部分技能文字、规则�
 - **context-engineering**, Addy Osmani Agent Skills，Copyright (c) 2025 Addy Osmani，MIT；固定 commit `aeac41d4d005999432bb7312f7ff06383a91d59d`，文件 SHA256 `8b736cb9e55b82b265ab6ff78349c0e826e8a6df550deddf665b7fb3ff858b63`。N5只吸收任务重点靠后、保护字段与进入面指针纪律到 `AGENTS.md`；拒绝75%触发与宿主自剪；完整来源/落点见catalog `n5-dispatch-and-return`。
 - **orchestrate.md**, pstack，Copyright (c) 2026 Lauren Tan，MIT；实际包 SHA256 `f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8`，文件 SHA256 `d42b4375f1bd4ce23da0b575a198571a2117df7eea10c3c9fc6d92ae1053f7be`，commit未证实，上游许可链未独立核实。N5采用brief缩放、指针中继、事实回传到 `AGENTS.md` 与 `skills/deep-research/SKILL.md`；拒绝常驻寄存器/store、默认重开、全文粘贴、TIMEBOX/tick，沿现有完整MIT文本保留，不声称未知许可链已核。
 
+- **Answer me with HTML**. Source: [QingYunA/answer-me-with-html@7acea240](https://github.com/QingYunA/answer-me-with-html/tree/7acea24024923eaae8647f5988e826062456dc86). MIT；仅适配技能方法/组件词汇/回灌，不搬renderer、字体或其它许可层。完整MIT许可见下文通用文本。
+
+Copyright (c) 2026 Answer me with HTML contributors
+
 上列已核MIT来源保留以下完整MIT许可，固定源及本地差异/owner/验证在catalog登记。
 
 MIT License

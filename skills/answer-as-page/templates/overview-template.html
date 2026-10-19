@@ -78,7 +78,7 @@ b{font-weight:700}
 .hstage.is-now{background:var(--ink);color:#fff}
 .hstage.is-todo{border:1px dashed #c4cbd6;color:var(--sub)}
 .sep{color:var(--unk)}
-.hdr-counts{font-size:12px;line-height:16px;color:var(--sub);flex-shrink:1}
+.hdr-counts{font-size:11px;line-height:14px;color:var(--sub);flex-shrink:1;max-width:330px}
 .fail-strong{font-weight:500;color:var(--fail)}
 .hdr-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex-shrink:0}
 .hdr-live-label{font-size:12px;font-weight:500;color:var(--warm)}
@@ -434,6 +434,12 @@ b{font-weight:700}
 @media (max-width:1023px){ .hdr-live-label,.chip-live{display:none} }
 @media (max-width:767px){ .hdr-stages{display:none} }
 @media (max-width:899px){ .main{padding:20px 20px 64px} }
+
+.hero-cell p,.src-body,.srow-body,.hero-note{overflow-wrap:anywhere}.hdr-readonly{white-space:nowrap} details.panel{padding:12px;font-size:12px;line-height:1.7} details.panel summary{cursor:pointer} .thead,.trow{grid-template-columns:repeat(3,minmax(0,1fr))}
+.hdr-task{flex:1 1 180px;min-width:130px;max-width:240px}.hdr-stages{flex-shrink:0}.hstage,.hdr-stages li{white-space:nowrap}.hdr-counts{position:relative;flex:0 0 auto;max-width:none;white-space:nowrap}.hdr-counts summary{cursor:pointer}.hdr-count-body{position:absolute;top:24px;right:0;min-width:240px;background:var(--surface);padding:12px;border:1px solid var(--line);box-shadow:0 4px 14px #0001;z-index:30;line-height:1.8}.hdr-right{flex-shrink:1;min-width:0;gap:6px}.hdr-update-chips{display:flex;gap:6px;overflow-x:auto;max-width:220px;min-width:42px}.hdr-update-chips .chip-live{flex:0 0 auto}.hdr-live-label,.btn-seen,.hdr-readonly{flex-shrink:0;white-space:nowrap}
+.hero,.hero-grid,.hero-cell,.hero-quote,.hero-finding{min-width:0}.hero h2,.hero-summary,.hero-file-note,.finding-v{overflow-wrap:anywhere;word-break:normal;min-width:0}
+.basis-group+.basis-group{margin-top:16px}.basis-group h4{margin:0 0 8px;font-size:13px;line-height:20px;font-weight:600;color:var(--sub)}.chain-attachment{margin-top:12px;padding:8px 0 0;border-top:1px solid var(--line)}.attachment-label{font-size:12px;line-height:18px;color:var(--sub);margin-bottom:6px}.attachment-label span{font-size:11px;margin-left:4px}.chain-attachment .objcard{padding:8px 12px;border-left-width:3px;gap:8px}.chain-attachment .objcard-title{font-size:13px;line-height:20px}.chain-attachment .objcard-line{font-size:11px;line-height:17px}.chain-attachment .objcard-label{font-size:11px}.chain-attachment .objcard-icon .icon{width:15px;height:15px}.chain-attachment .tag{font-size:11px}
+.task-phase-entry{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}.task-phase-link{border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:var(--surface);font-size:12px;white-space:nowrap;color:var(--sub)}
 </style>
 </head>
 <body>
@@ -599,6 +605,9 @@ const descendants = function (ids) { return walk(ids, function (id) { return kid
 const ancestors = function (ids) { return walk(ids, function (id) { return parents(id); }); };
 
 const GAP = {
+  req: ['缺：没有需求对应', 'fail'],
+  dec: ['缺：没有依据对应', 'fail'],
+  acc: ['尚未产生：完整验收结果', 'unk'],
   wp: ['缺 工作包', 'fail'],
   task: ['缺 Task', 'fail'],
   file: ['缺 真实改动', 'fail'],
@@ -634,7 +643,7 @@ function flowFor(id) {
     items.sort(function (a, b) { return IDX.get(a) - IDX.get(b); });
     const col = { kind: k, items: items };
     if (!items.length) {
-      if (i > selfIdx && GAP[k]) {
+      if (GAP[k]) {
         col.gap = GAP[k][0];
         col.gapTone = GAP[k][1];
       } else {
@@ -643,18 +652,16 @@ function flowFor(id) {
     }
     return col;
   });
-  if (o.kind === 'task' && id === 'task4') {
-    const f = cols.filter(function (c) { return c.kind === 'file'; })[0];
-    f.gap = '缺：无对应文件';
-    f.gapTone = 'fail';
-    f.neutralEmpty = false;
-  }
+
   return { cols: cols, selfKind: selfKind };
 }
 
-const ANCHOR = { req: 0, acc: 0, wp: 1, goal: 1, ires: 1, eres: 1, dec: 1, risk: 1, phase: 2, task: 2, file: 3, test: 4 };
-const CORE = ['req', 'wp', 'task', 'file', 'test'];
+const ANCHOR = { req: 0, dec: 1, wp: 2, goal: 1, ires: 1, eres: 1, risk: 2, phase: 3, task: 3, file: 4, test: 5, acc: 6 };
+const CORE = ['req', 'dec', 'wp', 'task', 'file', 'test', 'acc'];
 const GAPS = {
+  req: ['缺：没有需求对应', 'fail'],
+  dec: ['缺：没有依据', 'fail'],
+  acc: ['尚未产生：验收完整结果', 'unk'],
   wp: ['缺：没有工作包承接', 'fail'],
   task: ['缺：还没拆出 Task', 'fail'],
   file: ['缺：没有真实改动', 'fail'],
@@ -663,12 +670,12 @@ const GAPS = {
 
 function chainFor(id) {
   const o = OBJ[id];
-  const side = ['goal', 'ires', 'eres', 'dec'];
+  const side = ['goal', 'ires', 'eres'];
   const base = o.kind === 'phase'
     ? DATA.phaseTasks[id]
     : side.indexOf(o.kind) >= 0
       ? wpsUsing(id)
-      : (o.kind === 'acc' || o.kind === 'risk') ? [o.of] : [id];
+      : (o.kind === 'risk' || o.kind === 'acc') && o.of && OBJ[o.of] ? [id, o.of] : [id];
   const S = new Set([id].concat(base));
   base.forEach(function (b) {
     ancestors([b]).forEach(function (x) { S.add(x); });
@@ -683,22 +690,21 @@ function chainFor(id) {
     if ((t.kind === 'risk' || t.kind === 'acc') && S.has(t.of)) S.add(x);
     if (DATA.hasPhase && t.kind === 'task' && S.has(x) && t.phase) S.add(t.phase);
   });
-  const anchor = ANCHOR[o.kind] || 0;
-  return LANES.map(function (k) {
-    const items = IDS.filter(function (x) { return S.has(x) && OBJ[x].kind === k; });
-    const lane = { kind: k, items: items };
-    const ci = CORE.indexOf(k);
-    if (!items.length && GAPS[k] && (ci > anchor || (k === 'wp' && o.kind === 'task'))) {
-      lane.gap = GAPS[k][0];
-      lane.gapTone = GAPS[k][1];
-      if (k === 'wp') {
-        lane.gap = '未挂到任何工作包';
-        lane.gapTone = 'unk';
-      }
-      if (k === 'file' && id === 'task4') lane.gap = '缺：声称完成，但没有对应文件';
-    }
+  const basisKinds = ['ires', 'eres', 'goal', 'dec'];
+  return CORE.map(function (kind) {
+    const groups = kind === 'dec' ? basisKinds.map(function (groupKind) {
+      return { kind: groupKind, items: IDS.filter(function (x) { return S.has(x) && OBJ[x].kind === groupKind; }) };
+    }).filter(function (group) { return group.items.length; }) : [];
+    const items = kind === 'dec'
+      ? groups.reduce(function (all, group) { return all.concat(group.items); }, [])
+      : IDS.filter(function (x) { return S.has(x) && OBJ[x].kind === kind; });
+    const lane = { kind: kind, items: items, groups: groups };
+    if (!items.length) { lane.gap = GAPS[kind][0]; lane.gapTone = GAPS[kind][1]; }
+    if (kind === 'wp') lane.attachments = ['risk', 'phase'].map(function (extraKind) {
+      return { kind: extraKind, items: IDS.filter(function (x) { return S.has(x) && OBJ[x].kind === extraKind; }) };
+    }).filter(function (extra) { return extra.items.length; });
     return lane;
-  }).filter(function (l) { return l.items.length || l.gap; });
+  });
 }
 
 /* ============================================================
@@ -746,25 +752,11 @@ function emptyBox(text) { return '<div class="emptybox">' + esc(text) + '</div>'
 const num = function (id) { return OBJ[id].label.replace(/\D+/g, ''); };
 
 function hintOf(id) {
-  const o = OBJ[id];
-  if (o.kind === 'req') {
-    const w = kids(id);
-    return w.length
-      ? [['→ 工作包 ' + w.map(num).join('、'), 'plain']]
-      : [['缺：没有工作包', 'fail']];
-  }
-  if (o.kind === 'wp') {
-    const r = parents(id);
-    const t = kids(id).filter(function (x) { return OBJ[x].kind === 'task'; });
-    return [
-      [r.length ? '← 要求 ' + r.map(num).join('、') : '← 无要求', 'plain'],
-      [t.length ? '→ ' + t.length + ' 个 Task' : '→ 缺 Task', t.length ? 'plain' : 'fail'],
-    ];
-  }
-  const w = parents(id).filter(function (x) { return OBJ[x].kind === 'wp'; });
-  const out = [[w.length ? '← 工作包 ' + w.map(num).join('、') : '← 未挂到工作包', w.length ? 'plain' : 'fail']];
-  if (o.phase) out.push([OBJ[o.phase].label, 'plain']);
-  return out;
+ const o=OBJ[id];
+ const ws = Array.from(descendants([id])).filter(function(x){return OBJ[x].kind === 'wp';});
+ if(o.kind === 'req') return [[ws.length ? '→ '+ws.length+' 个工作包' : '缺：没有工作包',ws.length?'plain':'fail']];
+ if(o.kind === 'wp') { const ts=kids(id).filter(function(x){return OBJ[x].kind==='task';});return [[ts.length?'→ '+ts.length+' 个 Task':'缺 Task',ts.length?'plain':'fail']]; }
+ return o.phase && OBJ[o.phase] ? [[OBJ[o.phase].label,'plain']] : [];
 }
 
 function navRow(id) {
@@ -800,7 +792,7 @@ function sidebarHtml() {
   const groups = ['req', 'wp', 'task'].map(function (kind) {
     return { kind: kind, ids: IDS.filter(function (i) { return OBJ[i].kind === kind; }) };
   });
-  const hasUpdate = CHANGED.has('test-post');
+  const hasUpdate = CHANGED.size > 0;
   const progressIcon = '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true">' +
     '<path d="M2.5 3h11M2.5 8h11M2.5 13h11M5.5 1.5v3M10.5 6.5v3M7 11.5v3"/></svg>';
   return '<button type="button" data-nav data-go="progress" tabindex="' + (sel === 'progress' ? 0 : -1) + '"' +
@@ -840,23 +832,23 @@ function objCard(id, opt) {
   const chg = opt2.changed;
   const k = DATA.kinds[o.kind];
   const label = (o.kind === 'phase' || o.kind === 'risk') ? o.label : k.label;
+  const phaseLabel = o.kind === 'task' && o.phase && OBJ[o.phase] ? ' · ' + OBJ[o.phase].label : '';
   const line = opt2.line !== undefined && opt2.line !== null ? opt2.line : (o.summary || o.finding || o.detail);
   const cls = 'objcard k-' + o.kind + (cur ? ' is-current' : '') + (chg ? ' is-changed' : '');
-  return '<button type="button" data-go="' + id + '"' + (cur ? ' aria-current="page"' : '') + ' class="' + cls + '">' +
+  const card = '<button type="button" data-go="' + id + '"' + (cur ? ' aria-current="page"' : '') + ' class="' + cls + '">' +
     '<span class="objcard-icon' + (o.kind === 'task' ? ' task-icon' : '') + '">' + icon(o.kind, 18) + '</span>' +
     '<span class="objcard-body">' +
-      '<span class="objcard-label">' + esc(label) + '</span>' +
+      '<span class="objcard-label">' + esc(label + phaseLabel) + '</span>' +
       '<span class="objcard-title' + (o.kind === 'file' ? ' mono' : '') + '">' + esc(o.title) + '</span>' +
       (line ? '<span class="objcard-line">' + esc(line) + '</span>' : '') +
     '</span>' +
     (cur ? '<span class="objcard-cur">当前</span>' : '') +
     (o.status ? statusTag(o.status) : '') +
   '</button>';
+  return phaseLabel ? '<div class="task-phase-entry">'+card+'<button type="button" class="task-phase-link" data-go="'+o.phase+'">查看 '+esc(OBJ[o.phase].label)+'</button></div>' : card;
 }
 
-const testLine = function (id) {
-  return id === 'test-post' ? '12 通过 · 1 失败 · 退出码 1' : '6 项断言失败 · 预期内（还没实现）';
-};
+const testLine = function (id) { return OBJ[id].summary || '尚未取得测试结果'; };
 const decLine = function (id) {
   return OBJ[id].detail + '；因为' + OBJ[id].why;
 };
@@ -881,7 +873,7 @@ function heroHtml(o) {
         '<span class="hero-quote-icon">' + icon('req', 28) + '</span>' +
         title('h2-xl', o.quote || o.title) +
       '</div>' +
-      '<p class="hero-note">用户原话 · 来自 ' + esc(o.source) + '</p>' +
+      '<p class="hero-note">需求条目（含归纳，非全部逐字） · 来自 ' + esc(o.source) + '</p>' +
     '</div>';
   }
   if (o.kind === 'ires' || o.kind === 'eres') {
@@ -909,16 +901,16 @@ function heroHtml(o) {
     '</div>';
   }
   if (o.kind === 'test') {
-    const post = o.id === 'test-post';
+    const post = Number.isFinite(o.pass);
     const stats = post
       ? [
           { n: o.pass, label: '通过', tone: 'ok', sign: '✓' },
           { n: o.fail, label: '失败', tone: 'fail', sign: '✕' },
-          { n: o.exit, label: '退出码', tone: 'unk', sign: '#' },
+          { n: o.exit === undefined ? '未知' : o.exit, label: '退出码', tone: 'unk', sign: '#' },
         ]
       : [
-          { n: o.fail, label: '项断言失败（预期内）', tone: 'unk', sign: '–' },
-          { n: o.exit, label: '退出码', tone: 'unk', sign: '#' },
+          { n: o.fail === undefined ? '未知' : o.fail, label: '失败数（沿原件）', tone: 'unk', sign: '–' },
+          { n: o.exit === undefined ? '未知' : o.exit, label: '退出码', tone: 'unk', sign: '#' },
         ];
     return '<div class="' + wrap + '">' + head + title('h2-xl', o.title) +
       '<div class="stats">' + stats.map(function (s) {
@@ -938,16 +930,7 @@ function heroHtml(o) {
 
 /* ---- 两份记录对不上 ---- */
 function contraHtml(o) {
-  if (o.id !== 'p2' && o.id !== 'task4') return '';
-  const claim = o.id === 'p2' ? '「补测试」已完成' : '已完成';
-  const fact = o.id === 'p2' ? '没有任何对应文件' : '没有对应文件，也没有测试输出';
-  return '<div class="contra">' +
-    '<p class="contra-head">' + warnIcon() + '两份记录对不上，这里不判断哪边对</p>' +
-    '<div class="contra-grid">' +
-      '<div class="contra-cell soft"><div class="contra-k">任务清单里写的</div><div class="contra-v">' + esc(claim) + '</div></div>' +
-      '<div class="contra-cell fail"><div class="contra-k">改动记录里查到的</div><div class="contra-v">' + esc(fact) + '</div></div>' +
-    '</div>' +
-  '</div>';
+  return o.contradiction ? '<div class="contra"><p class="contra-head">记录不一致 / 缺口</p><p>' + esc(o.contradiction) + '</p></div>' : '';
 }
 
 /* ---- 逻辑链条 ---- */
@@ -967,43 +950,46 @@ function fileFoldHtml(ids, current) {
 
 function chainHtml(o) {
   const lanes = chainFor(o.id);
-  const cur = LANES.indexOf(o.kind);
+  const ringNames = { req: '需求', dec: '依据', wp: '工作包', task: 'Task', file: '文件', test: '测试', acc: '验收' };
+  const basisNames = { ires: '内部调研', eres: '外部调研', goal: '目标', dec: '决策' };
+  const cur = ANCHOR[o.kind] || 0;
+  const isAttached = o.kind === 'risk' || o.kind === 'phase';
+  const cards = function (ids) { return ids.map(function (id) {
+    const item = OBJ[id];
+    const line = item.kind === 'dec' ? decLine(id) : item.kind === 'test' ? testLine(id) : undefined;
+    return objCard(id, { current: id === o.id, changed: CHANGED.has(id), line: line });
+  }).join(''); };
   return '<section class="chain">' +
     '<h3>逻辑链条：从原始需求到落地</h3>' +
     '<p class="lead">每一环都是平级对象，按「需求 → 依据 → 工作包 → Task → 文件 → 测试 → 验收」从上往下排；黑框是你现在看的这一项。</p>' +
-    '<ol>' + lanes.map(function (l, i) {
-      const k = DATA.kinds[l.kind];
-      const li = LANES.indexOf(l.kind);
-      const pos = li === cur ? '当前这一环' : li < cur ? '上游' : '下游';
-      const last = i === lanes.length - 1;
+    '<ol>' + lanes.map(function (lane, i) {
+      const current = !isAttached && i === cur;
+      const pos = current ? '当前这一环' : i < cur ? '上游' : '下游';
       let body;
-      if (l.kind === 'file' && l.items.length) {
-        body = fileFoldHtml(l.items, o.id);
+      if (lane.kind === 'dec' && lane.groups.length) {
+        body = lane.groups.map(function (group) {
+          return '<section class="basis-group" data-basis-group="' + group.kind + '">' +
+            '<h4>' + basisNames[group.kind] + '</h4><div class="lane-items">' + cards(group.items) + '</div></section>';
+        }).join('');
+      } else if (lane.kind === 'file' && lane.items.length) {
+        body = fileFoldHtml(lane.items, o.id);
       } else {
-        body = '<div class="lane-items">' +
-          l.items.map(function (x) {
-            const line = OBJ[x].kind === 'dec' ? decLine(x) : OBJ[x].kind === 'test' ? testLine(x) : undefined;
-            return objCard(x, { current: x === o.id, changed: CHANGED.has(x), line: line });
-          }).join('') +
-          (!l.items.length && l.gap ? (l.gapTone === 'fail' ? gapBox(l.gap) : emptyBox(l.gap)) : '') +
-        '</div>';
+        body = '<div class="lane-items">' + cards(lane.items) +
+          (!lane.items.length ? (lane.gapTone === 'fail' ? gapBox(lane.gap) : emptyBox(lane.gap)) : '') + '</div>';
       }
-      return '<li class="lane">' +
-        '<div class="lane-rail">' +
-          '<span class="lane-dot k-' + l.kind + (li === cur ? ' is-cur' : '') + '">' + icon(l.kind, 20) + '</span>' +
-          (last ? '' : '<span class="lane-line" aria-hidden="true"></span>') +
-        '</div>' +
-        '<div class="lane-body">' +
-          '<div class="lane-head">' +
-            '<span class="lane-label">' + esc(k.label) + '</span>' +
-            (l.items.length ? '<span class="lane-count">' + l.items.length + ' 项</span>' : '') +
-            '<span class="lane-pos' + (li === cur ? ' is-cur' : '') + '">' + pos + '</span>' +
-          '</div>' +
-          body +
-        '</div>' +
-      '</li>';
-    }).join('') + '</ol>' +
-  '</section>';
+      if (lane.kind === 'acc' && lane.items.length) body = '<details class="panel"><summary>验收 ' + lane.items.length + ' 项 · 点击展开</summary>' + body + '</details>';
+      const attached = (lane.attachments || []).map(function (extra) {
+        const label = extra.kind === 'risk' ? '未决项／风险' : 'Phase';
+        return '<aside class="chain-attachment" data-attachment="' + extra.kind + '"><div class="attachment-label">' + label +
+          ' <span>' + extra.items.length + ' 项</span></div><div class="lane-items">' + cards(extra.items) + '</div></aside>';
+      }).join('');
+      return '<li class="lane" data-ring="' + lane.kind + '">' +
+        '<div class="lane-rail"><span class="lane-dot k-' + lane.kind + (current ? ' is-cur' : '') + '">' + icon(lane.kind, 20) + '</span>' +
+          (i === lanes.length - 1 ? '' : '<span class="lane-line" aria-hidden="true"></span>') + '</div>' +
+        '<div class="lane-body"><div class="lane-head"><span class="lane-label k-' + lane.kind + '">' + ringNames[lane.kind] + '</span>' +
+          (lane.items.length ? '<span class="lane-count">' + lane.items.length + ' 项</span>' : '') +
+          '<span class="lane-pos' + (current ? ' is-cur' : '') + '">' + pos + '</span></div>' + body + attached + '</div></li>';
+    }).join('') + '</ol></section>';
 }
 
 /* ---- 计划动的文件（和真实改动分栏） ---- */
@@ -1037,28 +1023,21 @@ function extrasHtml(o) {
       planHtml(o.plan) +
     '</section>';
   }
-  if (o.id === 'test-post' && o.failing) {
-    out += '<section class="section">' +
-      '<h3 class="section-title">失败的那一项</h3>' +
-      '<div class="failitem">' + warnIcon() +
-        '<code class="mono13">' + esc(o.failing) + '</code>' +
-        '<span class="msg">取消之后又重试了一次</span>' +
-      '</div>' +
-    '</section>';
-  }
+  if (o.failing) out += '<div class="gapbox">' + esc(o.failing) + '</div>';
   return out;
 }
 
 /* ---- 来源与路径 ---- */
-function sourceRow(s, i) {
-  const open = ui.srcRows.has(i);
+function sourceRow(s, i, ownerKey) {
+  const key = ownerKey + '-' + i;
+  const open = ui.srcRows.has(key);
   const state = s.state || 'ok';
   const tagHtml = state !== 'ok'
     ? tag(state === 'stale' ? '指针失效' : '来源不可读', 'fail', false, false, 'ml1')
     : '';
   let body = '';
   if (open) {
-    body = '<div id="src-panel-' + i + '" aria-live="polite" class="srow-body">' +
+    body = '<div id="src-panel-' + key + '" aria-live="polite" class="srow-body">' +
       '<p>' + (state === 'ok'
         ? '当前预览无法直接打开本地原件。请按下方路径查阅。'
         : state === 'stale'
@@ -1066,13 +1045,13 @@ function sourceRow(s, i) {
           : '来源不可读：权限不足。') + '</p>' +
       '<p class="p2">路径：<code class="mono-ink">' + esc(s.path) + '</code></p>' +
       (state === 'unreadable'
-        ? '<p class="p2">具体错误：<code class="mono-ink">EACCES: permission denied</code></p>'
+        ? '<p class="p2">具体错误：<code class="mono-ink">' + esc(s.error || '原件当前不可读，见校验输出') + '</code></p>'
         : '') +
     '</div>';
   }
   return '<div class="srow">' +
-    '<button type="button" data-toggle="srcrow" data-idx="' + i + '" aria-expanded="' + open + '"' +
-      ' aria-controls="src-panel-' + i + '" class="srow-head">' +
+    '<button type="button" data-toggle="srcrow" data-owner="' + ownerKey + '" data-idx="' + i + '" aria-expanded="' + open + '"' +
+      ' aria-controls="src-panel-' + key + '" class="srow-head">' +
       '<span class="k">' + esc(s.kind) + '</span><span class="dot">·</span>' +
       '<span>' + esc(s.name) + '</span><span class="dot">·</span>' +
       '<span class="mono12">' + esc(s.loc) + '</span>' +
@@ -1083,12 +1062,13 @@ function sourceRow(s, i) {
 
 function sourcesHtml(o) {
   if (!o.src || !o.src.length) return '';
-  const open = ui.sources;
+  const ownerKey = encodeURIComponent(o.id);
+  const open = ui.sources.has(ownerKey);
   return '<div class="sources">' +
-    '<button type="button" data-toggle="sources" class="src-toggle" aria-expanded="' + open + '">' +
+    '<button type="button" data-toggle="sources" data-owner="' + ownerKey + '" class="src-toggle" aria-expanded="' + open + '">' +
       chevron(open) + '来源与路径（' + o.src.length + '）' +
     '</button>' +
-    (open ? '<div class="src-body">' + o.src.map(sourceRow).join('') + '</div>' : '') +
+    (open ? '<div class="src-body">' + o.src.map(function (source, i) { return sourceRow(source, i, ownerKey); }).join('') + '</div>' : '') +
   '</div>';
 }
 
@@ -1133,12 +1113,22 @@ function progressHtml() {
     '</section>';
 }
 
+function riskInventoryHtml() {
+  const inv=DATA.riskInventory;
+  if(!inv)return '';
+  const sections=[['原决策风险登记',inv.riskIds],['原未决记录（含已关闭与方向已裁定）',inv.issueIds]];
+  return '<section class="section"><h3 class="section-title">风险与未决来源全表</h3><p class="hero-note">'+esc(inv.note)+'</p>'+sections.map(function(row){
+    const ids=row[1]||[];
+    return '<details class="panel"><summary>'+esc(row[0])+' '+ids.length+' 条 · 点击展开</summary>'+ids.map(function(id){const o=OBJ[id];return '<div class="hero-cell">'+objChip(id)+'<p>'+esc(o.severity ? '原始等级：'+o.severity : o.status.text)+'</p>'+sourcesHtml(o)+'</div>';}).join('')+'</details>';
+  }).join('')+'<p class="hero-note">等级分布：'+esc(JSON.stringify(inv.riskSeverity))+'；未决表源状态分布：'+esc(JSON.stringify(inv.issueSourceStatus))+'。分类是来源读回，不是关闭裁决。</p></section>';
+}
+
 /* ---- 页头 / 主区 ---- */
 function taskCounts() {
   const c = { total: 0 };
   DATA.objects.filter(function (x) { return x.kind === 'task'; }).forEach(function (t) {
     c.total += 1;
-    const k = (t.status && t.status.text) || '';
+    const k = (t.status && t.status.text) || '未知';
     c[k] = (c[k] || 0) + 1;
   });
   return c;
@@ -1148,13 +1138,13 @@ function headerRightHtml() {
   const live = DATA.changedChips.filter(function (c) { return CHANGED.has(c.id); });
   let out = '';
   if (live.length) {
-    out += '<span class="hdr-live-label">有更新：</span>';
-    out += live.map(function (c) {
+    out += '<span class="hdr-live-label">本次更新：</span>';
+    out += '<span class="hdr-update-chips">' + live.map(function (c) {
       return '<button type="button" data-go="' + c.id + '" class="chip-live">' + esc(c.label) + '</button>';
-    }).join('');
+    }).join('') + '</span>';
     out += '<button type="button" data-seen class="btn-seen">我看过了</button>';
   }
-  out += '<span class="hdr-readonly">只读视图</span>';
+  out += '<span class="hdr-readonly">只读派生 · 非权威</span>' + (storageError ? '<span role="alert" class="fail-strong">' + esc(storageError) + '</span>' : '');
   return out;
 }
 
@@ -1175,11 +1165,8 @@ function headerHtml() {
       '<div class="hdr-task-sub">当前阶段：<b>' + esc(DATA.stageLabel) + '</b>（' + esc(now ? now.hint : '') + '）</div>' +
     '</div>' +
     '<ol class="hdr-stages" aria-label="任务阶段">' + stages + '</ol>' +
-    '<div class="hdr-counts">' +
-      '<div>Task 共 ' + c.total + ' 个：已完成 ' + (c['已完成'] || 0) + ' · 进行中 ' + (c['进行中'] || 0) + '</div>' +
-      '<div>未开始/未执行 ' + ((c['未开始'] || 0) + (c['未执行'] || 0)) + ' · ' +
-        '<span class="fail-strong">声称完成但无文件 ' + (c['声称完成'] || 0) + '</span></div>' +
-    '</div>' +
+    '<details class="hdr-counts"><summary>Task 共 ' + c.total + ' 个 · 状态</summary>' +
+      '<div class="hdr-count-body">'+Object.keys(c).filter(function(k){return k !== 'total';}).map(function(k){return '<div>'+esc(k)+' '+c[k]+'</div>';}).join('')+'</div></details>' +
     '<div class="hdr-right">' + headerRightHtml() + '</div>';
 }
 
@@ -1187,10 +1174,15 @@ function mainHtml() {
   const back = hist.length ? '<button type="button" data-back class="backbtn">← 返回上一对象</button>' : '';
   const toolbar = '<div class="toolbar">' + back + '</div>';
   if (sel === 'progress') {
-    return toolbar + '<h2 tabindex="-1" class="page-h2">进度总览</h2>' + progressHtml();
+    return toolbar + '<h2 tabindex="-1" class="page-h2">进度总览</h2>' +
+      '<p class="hero-note">本页是只读派生视图，不是权威。权威为当前材料与 task facts。</p>' +
+      '<details class="panel"><summary>来源指纹与本次状态</summary><p>' + esc(DATA.provenance || '尚未提供来源指纹') + '</p><p>' + esc(DATA.comparisonNote || '比较基准缺失') + '</p><p>机械比对管不住措辞漂移，不能替代独立效果验收。</p></details>' + progressHtml() +
+      '<section class="section"><h3 class="section-title">任务实际交付与验收在哪</h3><div class="panel">' +
+      IDS.filter(function(id){return OBJ[id].kind === 'task';}).map(function(id){const t=OBJ[id];return '<div class="hero-cell">'+objChip(id)+'<p>'+esc(t.summary)+'</p>'+sourcesHtml(t)+'</div>';}).join('')+'</div></section>' + riskInventoryHtml();
+
   }
   const o = OBJ[sel];
-  return toolbar + heroHtml(o) + contraHtml(o) + chainHtml(o) + extrasHtml(o) + sourcesHtml(o);
+  return toolbar + heroHtml(o) + contraHtml(o) + (o.noChain ? '' : chainHtml(o)) + extrasHtml(o) + sourcesHtml(o);
 }
 </script>
 
@@ -1204,8 +1196,17 @@ const side = document.getElementById('side');
 const scroller = document.getElementById('scroller');
 const main = document.getElementById('main');
 
-const ui = { sources: false, plan: false, fileFold: false, srcRows: new Set() };
-const CHANGED = new Set(DATA.initialChanged);
+const ui = { sources: new Set(), plan: false, fileFold: false, srcRows: new Set() };
+let storageError = '';
+function seenKey(id) {
+  const o = OBJ[id];
+  return 'workflowhub:page-seen:' + JSON.stringify([DATA.taskIdentity, id, o.contentDigest]);
+}
+const CHANGED = new Set((DATA.initialChanged || []).filter(function (id) {
+  if (!OBJ[id]) return false;
+  try { return localStorage.getItem(seenKey(id)) !== 'seen'; }
+  catch (error) { storageError = '显示偏好不可读，刷新后的已读状态未知：' + error.name; return true; }
+}));
 let sel = 'progress';
 let hist = [];
 let scrolls = {};
@@ -1223,7 +1224,7 @@ let RELATED = new Set();
 })();
 
 function resetViewUi() {
-  ui.sources = false;
+  ui.sources = new Set();
   ui.plan = false;
   ui.srcRows = new Set();
   let fileIds = [];
@@ -1279,17 +1280,20 @@ function goBack() {
 
 function handleToggle(el) {
   const kind = el.dataset.toggle;
-  if (kind === 'sources') { ui.sources = !ui.sources; ui.srcRows = new Set(); }
+  if (kind === 'sources') {
+    const owner = el.dataset.owner;
+    if (ui.sources.has(owner)) ui.sources.delete(owner); else ui.sources.add(owner);
+  }
   else if (kind === 'plan') ui.plan = !ui.plan;
   else if (kind === 'filefold') ui.fileFold = !ui.fileFold;
   else if (kind === 'srcrow') {
-    const i = Number(el.dataset.idx);
-    if (ui.srcRows.has(i)) ui.srcRows.delete(i);
-    else ui.srcRows.add(i);
+    const key = el.dataset.owner + '-' + el.dataset.idx;
+    if (ui.srcRows.has(key)) ui.srcRows.delete(key);
+    else ui.srcRows.add(key);
   }
   renderMain();
-  const selector = kind === 'srcrow'
-    ? '[data-toggle="srcrow"][data-idx="' + el.dataset.idx + '"]'
+  const selector = (kind === 'srcrow' || kind === 'sources')
+    ? '[data-toggle="' + kind + '"][data-owner="' + el.dataset.owner + '"]' + (kind === 'srcrow' ? '[data-idx="' + el.dataset.idx + '"]' : '')
     : '[data-toggle="' + kind + '"]';
   const again = main.querySelector(selector);
   if (again) again.focus();
@@ -1297,7 +1301,14 @@ function handleToggle(el) {
 
 document.addEventListener('click', function (e) {
   const seen = e.target.closest('[data-seen]');
-  if (seen) { CHANGED.clear(); renderAll(); return; }
+  if (seen) {
+    storageError = '';
+    Array.from(CHANGED).forEach(function (id) {
+      try { localStorage.setItem(seenKey(id), 'seen'); CHANGED.delete(id); }
+      catch (error) { storageError = '本次清除未持久保存：' + error.name; }
+    });
+    renderAll(); return;
+  }
   const back = e.target.closest('[data-back]');
   if (back) { goBack(); return; }
   const toggle = e.target.closest('[data-toggle]');
