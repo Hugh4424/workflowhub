@@ -52,12 +52,14 @@ version: 3.2.0
 
    主会话通过真实 Talk 产出粗粒度大纲，含每块的「问题与边界」及「方向假设」。标明可修改假设和什么证据会推翻它；不作基线，不在此承诺范围或成本。模糊需求比较至少两个角度及有差异的候选，说明证据与取舍。
 3. `research-and-diverge`：
-   **本步产物**：当前问题的有源研究报告及 candidates；decision-log 只消费真实结论与唯一原件指针，研究由 deep-research 原 owner 维护。
+   **本步产物**：内部查图／读文件的有源结论与外部研究报告及 candidates；方法分别归 knowledge-graph／deep-research 原 owner，decision-log 消费关键结论与唯一原件指针。
    **进下一步前**：内部与外部研究分别给实际执行、原文来源，或真实跳过/不可用理由，不能空白。每个候选的摘要、来源 ref、推荐/拒绝和理由可读；无候选保真实原因，研究不替用户决定。
+
+   内部调研是查项目现图并读项目文件，核当前契约、关系与历史经验；由 `skills/knowledge-graph/SKILL.md` 承接。外部调研是检索并阅读项目外来源，由 `skills/deep-research/SKILL.md` 调用检索工具承接。两边各按自己正文的搜前声明、相关性判据和零结果写法交回，未执行与零结果分开。
 
    本步内部调研再次按 `skills/knowledge-graph/SKILL.md` 查询与当前未知相关的知识及 `specs/archive/` 历史经验，消费开工结论并按新问题补查，不能只在入口挂链接。先按当前职责/写集/consumer选source，经知识方法有界候选选完整ID解释；当前契约与独立历史两通道不硬排archive，宽query/god仅发现且严格限字段/条数/字符，不拿输出前25当相关性。每条拟使用结论回真实 source_file/origin 原文核命题、条件和位置；关系来源不等于端点定义，缓存同条、raw ID缺失或label命中不证明语义。存在当前图质量报告时，按knowledge-graph方法消费其误边/位置漂移/重放限制，未证实不写成事实。把适用历史经验明确落到“原文结论→本次哪个候选/假设/提问改变→具体新内容与理由”；并说明具体多知道什么；与已有建议等价就标重复/补强，不编新增收益。只报查过图不算影响产出。确无相关历史保有源的“本次无历史经验可挖”，无匹配/歧义/工具不可用仍继续普通研究并写覆盖限制；指定历史正例的独立对照与用户判断不因此被免除。不得为普通调研顺手更新、扩大JSON/忽略路径或触发付费抽取；必要时回知识方法先估范围/成本等真实许可。
 
-   围绕大纲每块会改变方向的未知开展内部与外部研究，输入保留「大纲是待验证假设」。make-decision 使用 `skills/deep-research/SKILL.md` 的 R0–R5 契约：R0 生成缺口、R1 读一手文本、R2 受限并行深读、R3 三角验证、R4 写 research-report、R5 独立审查。跳过或不可用写真实原因，研究不替用户决定。每份完成的调研报告必须显式声明 `candidates`；每个候选写摘要、证据绑定来源 ref、推荐（含拒绝）及理由，无候选写真实原因。Talk 从唯一 canonical report 读取这些事实，不用摘要或报告引用冒充候选交付。
+   围绕大纲每块会改变方向的未知按上述分工开展研究，输入保留「大纲是待验证假设」。外部研究使用 `skills/deep-research/SKILL.md` 的 R0–R5 契约：R0 生成缺口、R1 读一手文本、R2 受限并行深读、R3 三角验证、R4 写 research-report、R5 独立审查。跳过或不可用写真实原因，研究不替用户决定。每份完成的调研报告必须显式声明 `candidates`；每个候选写摘要、证据绑定来源 ref、推荐（含拒绝）及理由，无候选写真实原因。Talk 从唯一 canonical report 读取这些事实，不用摘要或报告引用冒充候选交付。全文仍留原件；决定作者把会改变方向／范围／验收的结论与被排除候选及原因写进本日志正文，其余只给指针；取舍与逐件找回沿 deep-research「消费与所有权」的既有落点。
 4. `outline-revision-check`：
    **本步产物**：同一日志的修订大纲及逐块保留、回改或推翻的事实依据，保旧判断和更改理由。
    **进下一步前**：已逐块对照研究与原假设；大部分被推翻时先重整方案，再以修订后材料提问。
@@ -142,6 +144,3 @@ version: 3.2.0
 创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；本 workflow 只保原步骤与分支调用，不复制规范。
 
 参考 [mattpocock/skills](https://github.com/mattpocock/skills) 固定 commit `b0618bc436ad893b3c5e84e55fba86586d34a404` 的 `skills/engineering/wayfinder/SKILL.md`（五段地图/fog）与 `skills/engineering/domain-modeling/SKILL.md`（领域方法归 grill owner）；写作来源为 `skills/productivity/writing-for-agents/SKILL.md`、`SKILL-MECHANICS.md` 与 docs。固定来源是方法依据，不证明本次已获得行为效果。
-
-本地保当前材料 owner、原步骤、真实用户回复、原失败与独立审查；只吸收适用方法，拒绝外置 tracker、GitHub ticket API、宿主 setup/Skill 硬依赖和第二进度权威。旧 bridge/外部 session 只读保历史 provenance，不作 active 执行、复盘、交接或 close 的门。方法接收真实项目材料、允许路径与宿主已批准的能力，缺源或能力如实报错，不绑定任务绝对路径或账号。
-迭代本文件的固定来源时，读取 skills/stage-reflection/SKILL.md 的「固定来源、本地偏离与更新入口」节，以本文件上列具名来源应用该节更新方法；只在核到真实上游更新或更优候选时才决定采用，不自动追 HEAD。

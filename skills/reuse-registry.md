@@ -85,3 +85,15 @@
 | --- | --- | --- |
 | context-engineering | 任务重点靠后、保护字段与指针进入面 | [AGENTS.md](../AGENTS.md#派发与回传) |
 | orchestrate.md | brief缩放、上游指针中继、可核事实回传 | [AGENTS.md](../AGENTS.md#派发与回传)；`skills/deep-research/SKILL.md` |
+
+## N6研究方法采用索引
+
+来源、固定版本、许可与未证实项唯一回 `catalog.yaml` 的 `knowledge-graph`、`deep-research` 与 `make-decision`；写作沿 `skills/spec-specify/SKILL.md` 的 WR001。此节只索引正文，保留既有 N4／N5 内容。消费者读对应方法，owner为各方法维护者；替代旧的内外混写与重复来源转述。正文被正式替代且无消费者时，由原 owner 同批删除对应索引行，历史原件保留。
+
+| 条目 | 采用动作 | 既有正文入口 |
+| --- | --- | --- |
+| 内部研究 | 图／文件三保障与查图判据，供研究派发者及 P3 作者消费 | `skills/knowledge-graph/SKILL.md` |
+| 外部研究 | 来源／检索三保障、单份报告与逐任务找回，供 make-decision 作者消费 | `skills/deep-research/SKILL.md` |
+| 研究分工与来源减法 | 第3步分工与关键结论消费；D7来源转述降为固定来源与 WR001 指针，供方向作者及 P3 消费 | `workflows/make-decision/SKILL.md` |
+
+`runtime/evidence/research-report.mjs` 的职责是旧 JSON 研究报告校验与保存；当前普通 Markdown 报告和轻研究没有生产 consumer，保留旧测试／历史读取，不反向接线。owner＝研究报告运行时维护者（P9/T019 原归属）；本卡不替代其实现。保留条件＝仍需旧报告读取／验证；删除条件＝原 owner 核全真实 caller、历史保全及替代消费者后确认没有消费者，再按原治理处理。当前缺口是没有当前报告 consumer，不能把旧校验器存在当研究已验证。
