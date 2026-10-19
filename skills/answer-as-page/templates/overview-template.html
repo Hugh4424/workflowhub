@@ -20,7 +20,7 @@
   --warm-soft:#fff4d9;
   --fail:#b53d42;
   --fail-soft:#fff0f0;
-  --unk:#687486;
+  --unk:#596577;
   --unk-soft:#f0f2f5;
   --ok:#277353;
   --ok-soft:#edf7f1;
@@ -40,7 +40,7 @@ body{
 button{font:inherit;color:inherit;background:transparent;border:0;padding:0;margin:0;cursor:pointer;text-align:left}
 ol,ul{margin:0;padding:0;list-style:none}
 p{margin:0}
-h2,h3{margin:0;font-size:inherit;font-weight:inherit}
+h1,h2,h3{margin:0;font-size:inherit;font-weight:inherit}
 code{font-family:var(--mono)}
 b{font-weight:700}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -117,7 +117,7 @@ b{font-weight:700}
 .nav-progress.is-active{background:var(--ink);color:#fff}
 .nav-progress .tag{margin-left:auto}
 .nav-group{margin-top:16px}
-.nav-group h3{display:flex;align-items:center;gap:8px;margin:0 0 6px;padding:0 4px}
+.nav-group h2{display:flex;align-items:center;gap:8px;margin:0 0 6px;padding:0 4px}
 .nav-count{font-size:12px;color:var(--sub)}
 .nav-list{display:flex;flex-direction:column;gap:2px}
 .nav-note{margin:16px 0 0;padding:0 4px;font-size:12px;line-height:18px;color:var(--unk)}
@@ -447,7 +447,7 @@ b{font-weight:700}
   <header class="hdr" id="hdr"></header>
   <div class="body">
     <aside class="side" id="side">
-      <nav class="side-nav scroll-thin" id="side-nav" aria-label="任务目录"></nav>
+      <nav class="side-nav scroll-thin" id="side-nav" aria-label="任务目录" tabindex="0"></nav>
     </aside>
     <div class="scroller scroll-thin" id="scroller">
       <main class="main" id="main"></main>
@@ -671,11 +671,15 @@ const GAPS = {
 function chainFor(id) {
   const o = OBJ[id];
   const side = ['goal', 'ires', 'eres'];
-  const base = o.kind === 'phase'
+  let base = o.kind === 'phase'
     ? DATA.phaseTasks[id]
     : side.indexOf(o.kind) >= 0
       ? wpsUsing(id)
       : (o.kind === 'risk' || o.kind === 'acc') && o.of && OBJ[o.of] ? [id, o.of] : [id];
+  // File/test siblings are Task context, never invented per-file coverage edges.
+  if (o.kind === 'file' || o.kind === 'test') {
+    base = base.concat(Array.from(ancestors([id])).filter(function (x) { return OBJ[x].kind === 'task'; }));
+  }
   const S = new Set([id].concat(base));
   base.forEach(function (b) {
     ancestors([b]).forEach(function (x) { S.add(x); });
@@ -699,7 +703,11 @@ function chainFor(id) {
       ? groups.reduce(function (all, group) { return all.concat(group.items); }, [])
       : IDS.filter(function (x) { return S.has(x) && OBJ[x].kind === kind; });
     const lane = { kind: kind, items: items, groups: groups };
-    if (!items.length) { lane.gap = GAPS[kind][0]; lane.gapTone = GAPS[kind][1]; }
+    if (!items.length) {
+      lane.gap = GAPS[kind][0]; lane.gapTone = GAPS[kind][1];
+      if (o.kind === 'file' && kind === 'test') { lane.gap = '测试映射未知：未取得本文件对应的测试结果；不能据此判断未执行。'; lane.gapTone = 'unk'; }
+      if (o.kind === 'test' && kind === 'file') { lane.gap = '文件映射未知：未取得本测试对应的改动文件；不能据此判断没有改动。'; lane.gapTone = 'unk'; }
+    }
     if (kind === 'wp') lane.attachments = ['risk', 'phase'].map(function (extraKind) {
       return { kind: extraKind, items: IDS.filter(function (x) { return S.has(x) && OBJ[x].kind === extraKind; }) };
     }).filter(function (extra) { return extra.items.length; });
@@ -803,7 +811,7 @@ function sidebarHtml() {
   '</button>' +
   groups.map(function (g) {
     return '<section class="nav-group">' +
-      '<h3>' + kindChip(g.kind) + '<span class="nav-count">' + g.ids.length + ' 个</span></h3>' +
+      '<h2>' + kindChip(g.kind) + '<span class="nav-count">' + g.ids.length + ' 个</span></h2>' +
       '<div class="nav-list">' + g.ids.map(navRow).join('') + '</div>' +
     '</section>';
   }).join('') +
@@ -953,6 +961,12 @@ function chainHtml(o) {
   const ringNames = { req: '需求', dec: '依据', wp: '工作包', task: 'Task', file: '文件', test: '测试', acc: '验收' };
   const basisNames = { ires: '内部调研', eres: '外部调研', goal: '目标', dec: '决策' };
   const cur = ANCHOR[o.kind] || 0;
+  const ownerTasks = (o.kind === 'file' || o.kind === 'test') ? Array.from(ancestors([o.id])).filter(function (id) { return OBJ[id].kind === 'task'; }) : [];
+  const directPair = DATA.edges.some(function (edge) {
+    return (edge[0] === o.id && OBJ[edge[1]].kind === (o.kind === 'file' ? 'test' : 'file')) ||
+      (edge[1] === o.id && OBJ[edge[0]].kind === (o.kind === 'file' ? 'test' : 'file'));
+  });
+  const contextNote = ownerTasks.length ? '<p class="hero-note" data-task-context>本 Task（' + ownerTasks.map(function (id) { return esc(OBJ[id].label); }).join('、') + '）实际改动与执行测试；' + (directPair ? '有直接文件—测试关联，覆盖范围仍以测试原件为准。' : '逐文件测试映射未知，不代表这些测试逐文件覆盖。') + '</p>' : '';
   const isAttached = o.kind === 'risk' || o.kind === 'phase';
   const cards = function (ids) { return ids.map(function (id) {
     const item = OBJ[id];
@@ -962,7 +976,7 @@ function chainHtml(o) {
   return '<section class="chain">' +
     '<h3>逻辑链条：从原始需求到落地</h3>' +
     '<p class="lead">每一环都是平级对象，按「需求 → 依据 → 工作包 → Task → 文件 → 测试 → 验收」从上往下排；黑框是你现在看的这一项。</p>' +
-    '<ol>' + lanes.map(function (lane, i) {
+    contextNote + '<ol>' + lanes.map(function (lane, i) {
       const current = !isAttached && i === cur;
       const pos = current ? '当前这一环' : i < cur ? '上游' : '下游';
       let body;
@@ -1161,7 +1175,7 @@ function headerHtml() {
     '</li>';
   }).join('');
   return '<div class="hdr-task">' +
-      '<div class="hdr-task-name">' + esc(DATA.task) + '</div>' +
+      '<h1 class="hdr-task-name">' + esc(DATA.task) + '</h1>' +
       '<div class="hdr-task-sub">当前阶段：<b>' + esc(DATA.stageLabel) + '</b>（' + esc(now ? now.hint : '') + '）</div>' +
     '</div>' +
     '<ol class="hdr-stages" aria-label="任务阶段">' + stages + '</ol>' +
