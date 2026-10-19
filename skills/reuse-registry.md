@@ -97,3 +97,14 @@
 | 研究分工与来源减法 | 第3步分工与关键结论消费；D7来源转述降为固定来源与 WR001 指针，供方向作者及 P3 消费 | `workflows/make-decision/SKILL.md` |
 
 `runtime/evidence/research-report.mjs` 的职责是旧 JSON 研究报告校验与保存；当前普通 Markdown 报告和轻研究没有生产 consumer，保留旧测试／历史读取，不反向接线。owner＝研究报告运行时维护者（P9/T019 原归属）；本卡不替代其实现。保留条件＝仍需旧报告读取／验证；删除条件＝原 owner 核全真实 caller、历史保全及替代消费者后确认没有消费者，再按原治理处理。当前缺口是没有当前报告 consumer，不能把旧校验器存在当研究已验证。
+
+## N6提问方法采用索引
+
+固定版本与许可唯一回 `catalog.yaml` 的 `talk-with-zhipeng`、`grill-with-docs`；本节只保采用/偏离与正文入口。owner＝两方法维护者；consumer＝Talk/Grill调用者、独立搬运者与P3收敛作者；替代旧重复问答转述。方法被正式替代且无消费者时，由原owner同批删除本节对应行，历史原件保留。
+
+| 条目 | 采用与本地偏离 | 既有正文入口 |
+| --- | --- | --- |
+| `skills/idea-refine/SKILL.md` | Phase 1–3 七类透镜按问题选，比较关键取舍而不凑数量；三份配套 frameworks.md、refinement-criteria.md、examples.md 未保存/未登记，不声称完整评分标准 | Talk「2.2 扩散透镜」 |
+| `skills/interview-me/SKILL.md` | Step 3–5 四类信号、四类非确认、原意追问与地板规则；来源条款“不许给用户列选项”明确“不采用”：这是决定口径／文档转述，非用户逐字——本地采用每题2～3互斥选项、推荐及后果风险，用户原话是“Talk 和 grill 请用大白话说明选项、后果和风险”。固定原文 Common Rationalizations:204 可回读；不采用置信度退出与绝对批量禁令 | Grill「Sharpen fuzzy language」与本地最小问卡；Talk链接只供可选示例 |
+
+版本/许可沿catalog；pin为commit级＋逐字节哈希，不是签名/发布级强绑定。三份缺失配套由来源维护方提供后才能评估，不静默补全。

@@ -324,6 +324,16 @@ skills:
         skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/domain-modeling/ADR-FORMAT.md
         adopted:
           - skills/engineering/domain-modeling/ADR-FORMAT.md#when-to-offer-an-adr — 难逆转、背景意外和真实取舍三条件，本地格式owner仍为grill-with-docs
+      - github_url: https://github.com/addyosmani/agent-skills
+        commit: aeac41d4d005999432bb7312f7ff06383a91d59d
+        commit_url: https://github.com/addyosmani/agent-skills/commit/aeac41d4d005999432bb7312f7ff06383a91d59d
+        license: MIT
+        reviewed_at: "2026-10-19"
+        review_outcome: accepted with local adaptation; clause disposition and pin limits in reuse-registry.md N6提问方法采用索引
+        path: skills/interview-me/SKILL.md
+        skill_url: https://github.com/addyosmani/agent-skills/blob/aeac41d4d005999432bb7312f7ff06383a91d59d/skills/interview-me/SKILL.md
+        adopted:
+          - skills/interview-me/SKILL.md#Step 3–5 — 想要与应该想要的四类信号、四类非确认、原意追问与地板规则；不引入置信度退出门
     local_changes: 保留四项退出记录和可批量的大白话问题卡；先自行诊断和安全重试，只把方向问题交给用户，未完成不得跳过
     dependency_closure: *deps_spec_specify
     update_policy: 上游 grilling/domain-modeling 更新时人工比较问题协议
@@ -368,6 +378,16 @@ skills:
         skill_url: *matt_grilling_url
         adopted:
           - skills/productivity/grilling/SKILL.md#L7-L30 — 独立问题frontier与真实回答后重排；保本地动态OI和四维判定
+      - github_url: https://github.com/addyosmani/agent-skills
+        commit: aeac41d4d005999432bb7312f7ff06383a91d59d
+        commit_url: https://github.com/addyosmani/agent-skills/commit/aeac41d4d005999432bb7312f7ff06383a91d59d
+        license: MIT
+        reviewed_at: "2026-10-19"
+        review_outcome: accepted with local adaptation; clause disposition and pin limits in reuse-registry.md N6提问方法采用索引
+        path: skills/idea-refine/SKILL.md
+        skill_url: https://github.com/addyosmani/agent-skills/blob/aeac41d4d005999432bb7312f7ff06383a91d59d/skills/idea-refine/SKILL.md
+        adopted:
+          - skills/idea-refine/SKILL.md#Phase 1–3 — 七类透镜按问题选、真实约束下比较关键取舍；配套三文件未保存，不声称完整评分标准
     local_changes: workflowhub 原生实现；问题卡支持一组独立问题、编号选项、后果和风险，用户可部分回答后重新排序；AgentHub历史导入取回坐标packages/core/agenthub/skills/talk-with-zhipeng/SKILL.md，最后变更2468b5e6907c67d7518583982c5729dcc98e414a；旧2026-07-26对HEAD fabc82100b3dde2678a5fb81484bab3149c1e72d的无更新观察仅历史事实。该原pin许可当前未核，不能借258f5a2许可推定；owner来源维护者须取原pin和grant。
     dependency_closure: *deps_spec_specify
     update_policy: 随 make-decision 交互合同变更审查
