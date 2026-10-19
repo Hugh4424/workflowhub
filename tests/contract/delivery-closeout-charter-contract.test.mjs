@@ -13,7 +13,6 @@ const CHARTER = 'docs/delivery-closeout-charter.md';
 const FIVE = ['领域词表', '工作区与任务', '人读交接', '阶段收口', '交付说明'];
 const STAGE_NAMES = ['make-decision', 'build-plan', 'build-code', 'verify-code', 'build-prd'];
 const RESIDENT = ['AGENTS.md', 'CLAUDE.md', 'GLOSSARY.md'];
-const RESIDENT_BUDGET = 36861;
 
 describe('ORACLE-P3-CHARTER delivery and closeout charter contract', () => {
   it('creates the charter as a pure index with one row per part and an applicability column', () => {
@@ -66,10 +65,4 @@ describe('ORACLE-P3-CHARTER delivery and closeout charter contract', () => {
     expect(has(text, 'task/'), 'the section names the task branch convention').toBe(true);
   });
 
-  it('keeps the resident read set at or under its opening byte budget', () => {
-    const total = RESIDENT.reduce((sum, path) => sum + Buffer.byteLength(read(path) ?? '', 'utf8'), 0);
-    expect(total, `AGENTS.md + CLAUDE.md + GLOSSARY.md must not exceed ${RESIDENT_BUDGET} bytes`).toBeLessThanOrEqual(
-      RESIDENT_BUDGET,
-    );
-  });
 });

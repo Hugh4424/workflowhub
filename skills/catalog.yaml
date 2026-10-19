@@ -2520,3 +2520,26 @@ capability_decisions:
       - workflows/build-code/SKILL.md
       - skills/spec-specify/SKILL.md
     update_policy: 按固定来源片段与实际consumer逐项比较，不自动追HEAD；pstack commit/许可链保持未证实直到来源维护者取得原件；独立审查替代实现承接全部消费者且无引用时退役本登记，历史原件保留。
+  - name: n6-technical-sketch
+    status: absorbed
+    purpose: 真实技术分歧的一次性隔离草图取事实
+    design_idea: 三项客观触发与四类禁用；观察事实回讨论，产品选择归用户
+    used_by_stages:
+      - make-decision
+      - build-plan
+      - build-code
+      - verify-code
+    local_path: AGENTS.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        commit: unresolved-pstack-content-snapshot
+        license: MIT
+        reviewed_at: '2026-10-19'
+        review_outcome: accepted_with_unverified_upstream_license_chain
+        path: skills/poteto-mode/playbooks/prototype.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/poteto-mode/playbooks/prototype.md
+        adopted:
+          - prototype.md:7,9-12,14 — 先圈定技术问题、隔离最小脚本、比较变体、观察输出与反例、路径及推荐回讨论；不代用户定方向
+    local_changes: owner＝总则维护者；consumer＝遇技术分歧的主会话读取AGENTS卡住与升级并分诊、用户读事实后决定；唯一方法落点AGENTS，不新建草图技能/流程/进度对象。文件 SHA256 7aa1f52c691c3d46d5afc527b23f90977fce869ce33573c73c81a4c7f0cde962，归档指纹 SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；提交未证实，镜像带自行改动，main仅取回坐标，不称已绑定上游版本。MIT为本地LICENSE所示，源镜像上游许可链未独立核实。仅采用prototype单文件；Feature、exhaust-the-design-space、the control skill及宿主poteto-mode调度器4项未保存，不声称吸收。拒绝设计决定归执行者、一般免测试、用完删除；本地要求三触发/四禁用、任务库日期＋主题留存与用户决定。替代无边界临时原型做法，不替代matt-prototype watch条目；删除条件＝独立审查的替代方法承接全部消费者且无正文引用时，由原owner退役本登记，历史原件保留。
+    dependency_closure: []
+    update_policy: 仅按固定字节与实际consumer比较，不自动追main；提交和许可链保持未证实，不增第二权威。

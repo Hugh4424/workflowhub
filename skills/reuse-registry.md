@@ -119,3 +119,11 @@
 | D5 Grill方法转述 | 删方法侧重复完整checklist；保本步产物／进下一步前两行，Grill调用者与P4仍按原owner全文执行 | `workflows/make-decision/SKILL.md` 第11步；`skills/grill-with-docs/SKILL.md` |
 | D6 Talk方法转述 | 方法侧压为最小内联卡；保文本降级及真实原因，Talk调用者与P5仍读问答契约／每答重排 | `workflows/make-decision/SKILL.md` 第1步；`skills/talk-with-zhipeng/SKILL.md` |
 | 显式单元检查 | 单元／派生号／需求三表头与派生号缺格只报warning；唯一生产者checkDecisionLogChain，consumer为run-checks advisory及两冻测；owner为checker维护者，均无消费且无正文引用才删码 | `tools/cli/check-decision-log-chain.mjs` |
+
+## N6技术分歧草图采用索引
+
+第三项来源新开 catalog 能力决定 `n6-technical-sketch`，不复用无关 `matt-prototype` watch；来源为 `skills/poteto-mode/playbooks/prototype.md`，固定字节、许可与未证实项只回catalog。owner＝总则维护者；consumer＝主会话读 `AGENTS.md`「卡住与升级」三触发/四禁用后决定是否取事实，用户消费观察再决定方向；删除条件＝替代方法经独立审查承接全部消费者且无正文引用，原owner退役本节并保历史。
+
+跨卡重叠：本节接在P3骨架与逐包收敛索引之后，是后写方，只追加本节；既有N4/N5、P1/P2/P3来源及减法说明不动，P5在自己的新节追加。采用隔离草图、变体观察与路径交接；三句宽许可仅限隔离/一次性/非生产；四项未保存机制不声称吸收，提交未证实且镜像带自行改动，不写已绑定上游版本。
+
+减法声明：删charter成本预算门，存在/非空/指针/角色保护仍由原五个it消费；降prototype通用原型流程为AGENTS适用分支，调用者仍在原总则读到触发与边界；不新增流程、技能、控制面或进度对象。全卡D1–D7由原Phase各自首验，本节不替P5或P6补签。

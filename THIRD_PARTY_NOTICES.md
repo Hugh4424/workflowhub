@@ -92,3 +92,7 @@ addyosmani/agent-skills 固定commit `aeac41d4d005999432bb7312f7ff06383a91d59d`�
 | refactoring.md | <https://github.com/backnotprop/pstack>；`skills/spec-plan/SKILL.md`；具体pin/许可范围回catalog |
 | hillclimb.md | <https://github.com/backnotprop/pstack>；`skills/spec-plan/templates/phase-template.md`；具体pin/许可范围回catalog |
 | eval.md | <https://github.com/backnotprop/pstack>；`skills/wh-review/contracts/provider-protocol.md`；`docs/architecture/test-asset-governance-rules.md`；具体pin/许可范围回catalog |
+
+## N6技术分歧草图方法
+
+`skills/poteto-mode/playbooks/prototype.md` 来自 [backnotprop/pstack](https://github.com/backnotprop/pstack)，本地 LICENSE 为 MIT、Copyright (c) 2026 Lauren Tan；沿本文件既有完整 MIT 许可保留。固定原件、归档指纹和采用范围唯一回 catalog 的 `n6-technical-sketch`。提交未证实，镜像带自行改动，不称已绑定上游版本；上游许可链未独立核实。只采用该单文件的隔离观察方法；Feature、exhaust-the-design-space、the control skill及宿主调度器四项未保存，不声称吸收。拒绝代理代选产品偏好和一般免测试；实际消费者读 `AGENTS.md`「卡住与升级」。
