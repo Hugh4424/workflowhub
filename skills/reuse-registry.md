@@ -55,7 +55,6 @@
 | frontend-component-quality | 实现或审查组件的真实consumer、状态、ViewModel、样式与复用边界。 | [读取正文](frontend-component-quality/SKILL.md) |
 | third-review | 明确调用通用异源CLI审查器，保原始意见和失败诊断。 | [读取正文](third-review/SKILL.md) |
 
-
 ## N4既有方法采用索引
 
 来源/固定版本/许可唯一回 `catalog.yaml` 的 `n4-*` absorbed条目；以下只给真实动作与正文入口，不建立第二来源权威。三重复项只核复用，其余文字采用不冒行为效果。

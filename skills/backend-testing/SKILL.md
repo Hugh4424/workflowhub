@@ -14,6 +14,7 @@ build-code按真实changed files确认backend/feature后，覆盖业务/校验/�
 一行为测试→目标断言RED→最小实现→同命令GREEN，再加正常/失败/取消切片。命令来自当前Phase gate_cmd或该路径既有具名测试，保来源/测试名/oracle。收集、导入、服务或环境失败不算目标RED。无代码/实用测试路径时写failing-before不可得原因，执行最近既有检查并列漏掉的seam；邻近检查也不可跑则写缺输入、owner及unavailable。纯方法独立读者消费完整正反输入；结构只证兼容，offline CLI不证在线search。
 
 三反模式逐case判，勿按matcher形状批改：
+
 - **Implementation-coupled**：只验内部helper次数/顺序、等价重构就红；改验公开结果，等价重构应不变。次数本身是AC外部行为（如每provider单次派发）则保留。
 - **Tautological**：被测函数算预期、同式重算（如`expect(add(a,b)).toBe(a+b)`）、手抄实现快照/常量自等；改用独立事实2和3应得5。返回undefined/错值须击中；合法缺省有契约理由，absence配证明入口到达的presence。
 - **Horizontal slicing**：先铺多项未有行为的测试再批量实现；改为同一输入→公开调用→独立结果→实现闭环后下一切片。
