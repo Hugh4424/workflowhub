@@ -108,3 +108,14 @@
 | `skills/interview-me/SKILL.md` | Step 3–5 四类信号、四类非确认、原意追问与地板规则；来源条款“不许给用户列选项”明确“不采用”：这是决定口径／文档转述，非用户逐字——本地采用每题2～3互斥选项、推荐及后果风险，用户原话是“Talk 和 grill 请用大白话说明选项、后果和风险”。固定原文 Common Rationalizations:204 可回读；不采用置信度退出与绝对批量禁令 | Grill「Sharpen fuzzy language」与本地最小问卡；Talk链接只供可选示例 |
 
 版本/许可沿catalog；pin为commit级＋逐字节哈希，不是签名/发布级强绑定。三份缺失配套由来源维护方提供后才能评估，不静默补全。
+
+## N6骨架与逐包收敛采用索引
+
+当前owner＝N6/P3方法维护者；本卡是N4/N5与N6研究/提问节的后写方，只追加本节，不改其来源权威。固定源、许可与能力决定沿 catalog 的现条目，本文只指正文。consumer＝P4/T004、P5/T005登记writer读回本节后在各自新节追加，P6只聚合原件；正文全部由catalog承接且无引用时原owner删本节并保历史。
+
+| 条目 | 采用／减法承接 | 既有正文入口 |
+| --- | --- | --- |
+| 骨架到逐包 | 需求单元、四查定序、真实骨架答复与逐包五段；不新增进度权威 | `workflows/make-decision/SKILL.md` 第4–9步 |
+| D5 Grill方法转述 | 删方法侧重复完整checklist；保本步产物／进下一步前两行，Grill调用者与P4仍按原owner全文执行 | `workflows/make-decision/SKILL.md` 第11步；`skills/grill-with-docs/SKILL.md` |
+| D6 Talk方法转述 | 方法侧压为最小内联卡；保文本降级及真实原因，Talk调用者与P5仍读问答契约／每答重排 | `workflows/make-decision/SKILL.md` 第1步；`skills/talk-with-zhipeng/SKILL.md` |
+| 显式单元检查 | 单元／派生号／需求三表头与派生号缺格只报warning；唯一生产者checkDecisionLogChain，consumer为run-checks advisory及两冻测；owner为checker维护者，均无消费且无正文引用才删码 | `tools/cli/check-decision-log-chain.mjs` |

@@ -42,7 +42,7 @@
     {
       "step_id": 4,
       "step_slug": "outline-revision-check",
-      "observable_result": "逐块对照研究结果与大纲假设，判断工作包或方向假设保留、回改或推翻；产出修订后大纲，维持不变也写具体理由。",
+      "observable_result": "研究后设计的修订大纲、需求最小索引与独立四查四行结论；两份外置原件是确认输入。 逐块对照研究与假设，保旧判断及更改理由；多数被推翻先重整。四查已确定工作包顺序，太大或太碎时执行者当场改完给用户看。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -53,7 +53,7 @@
     {
       "step_id": 5,
       "step_slug": "outline-talk",
-      "observable_result": "主会话对重要方向问题取得真实答复或明确待答；独立问题合问，有依赖的问题按回复重排。",
+      "observable_result": "同一日志中的骨架展示、既有攻击自查原件及用户对此骨架的真实答复或明确待答。 先执行原第6步的轻量攻击自查，再一次展示并等待用户真实回复；未答停草稿，旧答、推荐或模拟不代答。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -64,7 +64,7 @@
     {
       "step_id": 6,
       "step_slug": "adversarial-direction-check",
-      "observable_result": "对方向过早锁定、隐藏前提与更小路径作轻量对抗性检查；不设否决权，只产出有来源的风险清单。",
+      "observable_result": "第5步已执行攻击自查的原件与结果读回，风险仍留原风险／假设位置。 已回读同一次自查；不重复执行，不把用户骨架答复冒成自查结果。 真实骨架确认后在本步显式--file读取当前需求索引和覆盖表，保存第一次实际warning/exit，只报不阻断。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -90,7 +90,7 @@
     {
       "step_id": 8,
       "step_slug": "module-breadth-confirm",
-      "observable_result": "全部模块各有命名、一到三句范围说明、风险及优先级排序；主会话取得粗粒度真实确认，确定细化顺序，不提前进入细节。向用户的展示必须包含第 1 步记录的入口事实：承诺的独立可交付验收单元数、是否包含需要用户在场或真实凭证的动作、以及 mini 适用性评估的真实返回；用户答复需覆盖这些范围声明。事实缺失时当场展示缺口与未决，不用模块清单替代；返回 paused 时，同批展示至少一条可选拆分路线，保留实际答复或未答事实。",
+      "observable_result": "全部工作包的简单／复杂分诊与入口规模事实展示，保真实回复或未答。 分诊仅决定先补调研或直接收敛，保持第4步顺序，不冒细节已收敛。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -101,7 +101,7 @@
     {
       "step_id": 9,
       "step_slug": "module-convergence",
-      "observable_result": "各重要未决项有方案、替代、验收、后果与风险；普通假设公开，方向/验收分歧交用户，零问题合法。中途新增需求在同一决策日志新增大纲模块，补齐调研、决策、方案与验收标准，不新增步骤。",
+      "observable_result": "逐模块方案/替代/验收/后果、red/blue 争议清单及每条处置或具名未决项，留现决定/处置原位置。 每条 red/blue 争议都已逐项消费，方向或验收分歧交真实用户；新增模块补齐原研究/决定/验收，仅闭包触及的旧决定复评。amend/supersede 保历史，不用泛化摘要冒逐条收敛。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -138,7 +138,7 @@
     {
       "step_id": 12,
       "step_slug": "write-decision-draft",
-      "observable_result": "决策草稿保留原话、来源、派生判断、需求处置、风险和延期负责人；更改理由可读，历史原文保留。",
+      "observable_result": "当前 decision-log 完整草稿：原话/派生判断/来源、真实已确认或待确认/退役、风险与延期 owner。 所有真实 R/U 在主文必要接口及唯一覆盖原件有落点或有源具名缺口，排除保真人理由/去向；历史与更改理由保留，文件/编号/索引不冒语义覆盖。 全部工作包谈完后本步显式--file读取两件，保存第二次warning/exit并回读第一次原件。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
