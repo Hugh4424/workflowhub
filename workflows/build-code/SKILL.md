@@ -41,12 +41,10 @@ Phase 内的 Task 是 task graph，不是可任意跳过依赖的步骤表。选
 10. 所有实施任务结束后，按计划执行一次最终聚合，逐 AC 消费沿途已产生的结论原件，对账实现、真实效果、测试和未覆盖项。末 Phase 保留完整端到端串演，只作复核与必要未闭环 case 补充，不得成为任何 AC 的首次结论产生点；首次结论仍按 spec 的 AC 正文归属各承接 Phase。没有新改动、失败或疑点时不重复运行。最终聚合不证明 review pass，也不替代独立审查。
      对账由独立上下文实跑一次项目声明的会话用量命令，当场展示时间窗/分账/计数，不落派生文件；finding修复仅复验受影响file/case并说明理由。
 11. 用 spec-analyze 对照原始需求、当前材料、实现、测试、发现处置与用户可见结果。实施/事实问题在本阶段修，方向和作者材料仍交对应 owner。缺项明确写未启动、未执行、失败、不适用、unknown 或 unavailable，不用产物存在代替完成条件。
-12. 阶段末执行 stage-handoff，写清交付行为、测试和 AC 限制、原始发现与处置、风险及 verify-code 下一步。Phase 的局部交付摘要不触发每 Phase 一次 stage-end/复盘；只在整个 stage 收口时写阶段人读交接。
-    人读结论用三词：**达成／未达成（写明下一步）／退役**——退役＝这一条不再做、已由决定退出，不用「以后再说」这类模糊说法。
+12. 整个 stage 末由当前主会话按 `skills/stage-reflection/SKILL.md`「方法」「用户选择后的归口」「判断词表与完成检查」执行阶段收口，内部发布并读回交接，说明交付行为、实际测试/AC限制、原始发现与处置、风险及 verify-code 下一步。局部 Phase 摘要不触发 stage-end 或固定复盘。
+    人读结论用达成／未达成（写明下一步）／退役；退役须有真实退出决定，不用模糊延期替代。
 
-阶段成本留账：在本次已授权的图更新与非破坏性收口取得各自实际结果后、最终 stage-handoff 之前，由阶段主会话执行一次本仓已核入口 `node tools/cli/measure-main-agent-cost.mjs --project=<本项目> --task=<本任务> --stage=build-code --record`。project/task取当前认证任务；首次记录附已有真实开工事件 `--start-ref=<原件绝对路径>#seq=<用户事件seq>` 或Codex的 `#item_id=<URI编码UserMessage.id>`，已有账行不重置起点。首笔缺少/格式非法/未唯一匹配的 `start-ref` 必须 fail-closed（exit 2，不创建账行）；源文件不可读或解析失败也必须 fail-closed（exit 1，不创建账行），两类都不得发布污染首行；若已有且仅有一行历史坏首行（`from` 与起点来源均为 `unavailable:task_start_unavailable`），只允许显式合法 `start-ref` 窄范围重开，保留旧字节、从真实起点重测，不得使用坏行的 `until` 或 boundary；其它已有账行仍拒绝重置。需要明确源复跑时可附合同内 `--session=<原件绝对路径>`；无参来源仅用原主会话实际环境及父记录明确后代，不能让子代理环境、工具cwd或根SESSION_ID冒当前主会话。
-
-执行前核工具真实路径/版本与依赖闭包、认证checkout、外置task访问及原会话身份；回读任务根 `main-agent-cost.md` 的新增27列行、旧字节前缀、实际until与缺报。未触发、读取/锁/写入/取消失败都在同一交接写“本阶段无记录”及实际原因，保CLI原件；可写的缺口行按实际内容披露，留账失败不阻塞原阶段收尾。若即将删除唯一工具worktree，在工具/原身份仍可访问时先record并回读外置账本，再按既有授权清理；不从已删除入口补记、不假定存续repo有同版闭包。交接明确实际until之后的物理清理、交接发布和最终回复未计入该笔。通用stage-handoff保持发布职责，不新增共享writer；build-code仅整个stage末调用，不每Phase调用。
+阶段收口中的成本：执行 `skills/stage-reflection/SKILL.md`「方法」第 3 步的 measure-main-agent-cost 入口及完整来源、窗口、失败和删除前留账边界；本阶段只在整个 stage 末触发一次，同一计量窗口不重复，不每 Phase 触发。
 
 ## OCR 能力与缺省记录
 
@@ -64,17 +62,7 @@ Phase 内的 Task 是 task graph，不是可任意跳过依赖的步骤表。选
 
 ## PR 描述方法
 
-对 new 普通任务，交付描述基于当前真实 task/spec、已验 AC、base 到 task HEAD 的提交标题与实际 diff、现 task facts 和测试输出原ref。用既有 close 的 prepare 输入承接 title/body；这是材料收集与描述方法，不新增 PR 技能、状态或公共入口。
-
-- **Default**：未传 `delivery.pr` 或 body 时，由既有 close owner 的私有 `buildDefaultPrDescription` 从上述来源生成 title/body；不把缺默认 body 当调用者缺输入。实际 helper 与环境 probe 由 close 实现提供，尚不存在或源不可读时保真实原因，不宣称已生成。
-- **Explicit**：调用者提供 body 时，外发前核 `Door` 与 `Blast Radius` 两独立字段；缺项报 `PR_DESCRIPTION_INCOMPLETE` 并回描述 producer 补齐。默认来源缺失也须明确缺口，不能编内容。
-- **Environment**：环境与项目支持时默认 PR，明确 `enabled: false` 才主动 opt out；不支持时保真实原因与描述退 commit，不伪造 URL。旧 stored plan 没有 pr 仍按旧序兼容；描述本身不证明 push、PR 创建或读回已执行。远端动作仍遵下节真实授权。
-
-描述使用以下三段，完成判据是每个主张可回到真实来源或明确未观测：
-
-PR 描述的第一段 Summary：选择说明本任务关键变化的最小视图；title 来自真实任务与提交语义，不输出无关全树。
-PR 描述的第二段 Evidence：Before / After 引用真实原内容、执行输出或失败/通过原ref。无 before/after 就明确未知；facts 空时测试为未执行/unavailable，不编 GREEN，模拟不冒外部效果。
-PR 描述的第三段 Merge Danger：**Door:** 说明实际 commit 可回退与 merge/远端/销毁操作的不可逆边界；**Blast Radius:** 说明真实 diff 影响域及消费者。两字段分开，未核风险明说未知。
+本阶段不生成交付说明；交付说明在真正执行关闭的阶段（目前是规划收尾与终末验证）生成；本阶段只备 Evidence 与真实 diff 事实。
 
 ## 人为门与审查点
 
@@ -90,7 +78,7 @@ authorize只记录/消费已有授权。每次Git前用 `runtime/interface/git-a
 
 按 `skill-deps.yaml` 读取所需方法，重实施、定向验证和独立审查按项目分工委派，修 finding 回原实施会话；主会话裁定范围、记录真实用户选择并汇总。新文件/机制必须有实际消费者、owner、替代关系与删除条件。写入用安全原子写，共享冲突用记录锁，工作区核对和 Git 授权分别负责各自边界；失败原样披露。
 
-阶段主会话实际执行 `skills/stage-handoff/SKILL.md` 并报返回的不可变绝对路径；handoff仅承载人读进度，不是门。缺失写原因/影响，披露不代完成。仅整个stage末存在真实过程问题时，读 `skills/stage-reflection/SKILL.md`，给有源候选及执行/跳过理由；局部Phase不固定复盘。不要求固定机器复盘/逐步认证/锁定交接/第二账本。正式事实由既有公共流程发布，本方法不增writer/推进许可。
+整个 stage 末按第 12 步执行阶段收口；交接内容与独立读取沿 `skills/stage-handoff/SKILL.md`「信息来源」「回读结果」「结束条件与边界」，报告实际不可变路径。缺失与未执行给原因及影响，披露不代完成。正式事实仍由既有公共流程发布，不增机器认证、第二账本或推进许可。
 
 ## 写作与固定来源
 

@@ -105,9 +105,8 @@ run、revision、latest、ledger 或独立持久记录。本技能不填写 task
 普通决策记录不复制 Grill 历史，Grill 事实也不向下游重复传递。
 不得返回或持久化完整问题卡原文或 secret、token、password、credential、cookie 等秘密。
 
-`GLOSSARY.md` 只在领域术语、含义或边界确有变化时最小更新。ADR 只有三项判据全部为
-真时才创建。即使没有文件变化，也必须记录 `no-change` / `not-needed` 及理由；不能只写
-“已检查”。
+领域结果按 [Rules](./GLOSSARY-FORMAT.md#rules) 返回。ADR 只有三项判据全部为
+真时才创建；未创建也必须记录 `not-needed` 及理由，不能只写“已检查”。
 
 完成后必须向调用方返回一份可直接面向用户呈现的简短总结：检查了什么、最重要的
 结论、仍存风险、`GLOSSARY.md` 是否变化、ADR 是否需要及理由、下一步。完整技术事实
@@ -125,35 +124,9 @@ During codebase exploration, also look for existing documentation:
 
 ### File structure
 
-本约定适用于 WorkflowHub 自身与所有目标项目，由本技能及 [GLOSSARY-FORMAT.md](./GLOSSARY-FORMAT.md) 承接唯一领域格式，不另建领域建模技能或第二份术语真相。多数项目只有一个领域上下文：
+本约定适用于 WorkflowHub 自身与所有目标项目。定位或创建术语表前，读取并执行 [Single vs multi-context repos](./GLOSSARY-FORMAT.md#single-vs-multi-context-repos)，核真实上下文、唯一 owner、位置与懒创建条件；本附件承接唯一领域格式，不另建领域建模技能或第二份术语真相。
 
-```text
-/
-├── GLOSSARY.md
-├── docs/
-│   └── adr/
-│       ├── 0001-event-sourced-orders.md
-│       └── 0002-postgres-for-write-model.md
-└── src/
-```
-
-先读已有 `GLOSSARY-MAP.md` 核实真实上下文及其术语表位置。仅当项目确有多个领域上下文时，才用这个可选 map 说明各自位置、关系和主要负责上下文；目录数或一个术语有多个实例不证明多个上下文：
-
-```text
-/
-├── GLOSSARY-MAP.md
-├── docs/
-│   └── adr/                          ← system-wide decisions
-├── src/
-│   ├── ordering/
-│   │   ├── GLOSSARY.md
-│   │   └── docs/adr/                 ← context-specific decisions
-│   └── billing/
-│       ├── GLOSSARY.md
-│       └── docs/adr/
-```
-
-**Lazy**：只有第一个真实领域术语已解决、确有内容时才创建 `GLOSSARY.md`；没有术语变化就返回 no change 及理由，不建空文件。已有单上下文术语表就最小更新；真实多上下文先读已有 map 找本题所属的唯一术语 owner；没有 map 时，先核实上下文、位置与关系，有真实内容才懒建唯一 map。归属不清先问，不把同一含义写成双真相。首次确需 ADR 才创建 `docs/adr/`。
+首次确需 ADR 才创建 `docs/adr/`；系统级决定放根目录的 `docs/adr/`，特定上下文的决定放该上下文的 `docs/adr/`。
 
 ## During the session
 
@@ -165,7 +138,7 @@ When the user uses a term that conflicts with the existing language in `GLOSSARY
 
 When the user uses vague or overloaded terms, propose a precise canonical term. "You're saying 'account' — do you mean the Customer or the User? Those are different things."
 
-区分领域语言与实现语言：`GLOSSARY.md` 只收录领域专家会使用的概念、含义、边界和避免同义词；不收录 class/module/API 等实现细节，不把它当 spec 或 scratchpad。
+判断词语是否属于领域时，执行 [Rules](./GLOSSARY-FORMAT.md#rules) 的领域语言与项目特有概念规则。
 
 ### Discuss concrete scenarios
 
@@ -177,9 +150,7 @@ When the user states how something works, check whether the code agrees. If you 
 
 ### Update GLOSSARY.md inline
 
-When a term is resolved, update `GLOSSARY.md` right there. Don't batch these up — capture them as they happen. Use the format in [GLOSSARY-FORMAT.md](./GLOSSARY-FORMAT.md). 本领域方法也供调用方在 Talk、研究、写稿和确认中消费：按实际来源定位唯一上下文 owner，确有含义或边界变化才最小写入并读回；已有定义一致则返回 no change 及依据，未解含义或归属等待真实答复。逐本次已解决项返回实际变化引用或 no change 理由，沿用前文结束事实，不新建术语台账。
-
-Don't couple `GLOSSARY.md` to implementation details. Only include terms that are meaningful to domain experts.
+When a term is resolved, read and execute [Rules](./GLOSSARY-FORMAT.md#rules) for inline updates, readback and per-item results; use [Structure](./GLOSSARY-FORMAT.md#structure) for its format. 调用方在 Talk、研究、写稿和确认中也从这里进入。
 
 ### Offer ADRs sparingly
 

@@ -2,13 +2,23 @@
 
 ## 当前路线
 
-领域术语读根 [GLOSSARY.md](../GLOSSARY.md)；旧术语来源、历史 ADR 引用只读保留。
+领域术语读根 [GLOSSARY.md](../GLOSSARY.md)；新增或调整领域词前读 [领域格式附件的 Rules](../skills/grill-with-docs/GLOSSARY-FORMAT.md#rules)。旧术语来源、历史 ADR 引用只读保留。
 
 WorkflowHub 主会话按认证工作区当前材料执行。post 材料为 decision-log.md、spec.md、独立 phases/P<n>.md 与纯指针 index；旧四材料与旧执行记录只读保留。七类公共工具是 doctor/status/run/review/verify/confirm/authorize；run:execute 只更新导航游标，不恢复旧官方 stage pipeline。质量缺失如实 unknown/unavailable/incomplete，不锁修复，也不证明完成。
 
 方向与计划按用户真实答复执行，已有授权有效。主会话组织交互、按工作类型派重活到独立上下文，修复回原实施者，不整份继承父上下文；实现者不自判独立审查或人把关，普通小修不重复全范围审查。
 
-已授权任务进入 build-code/verify-code 后，自动实施、验证、审查、修复及交付必要的 commit/push/merge；切阶段/会话/handoff 不重置授权，不重问本地提交、日常技术验收或风险承担确认。Phase 实施、针对性测试、独立审查及 finding 修复全完成后，本 Phase 审后提交一次；verify-code 结束时完成全部提交与合并。authorize 复用真实授权来源，操作前核范围/分支/当前 HEAD 并 record/consume；build-code commit 显式同传 phase=build-code，绑当前 task、分支和阶段，同阶段共用授权；实际 HEAD/每次消费保在既有 consumed 原件，授权原件不改。其它阶段、旧无 phase 记录及 push/merge/pr 仍严格匹配原 HEAD。最终 close 默认收口已交付任务材料、task-owned worktree/任务分支：先展示实际交付、质量限制、归档路径、待删 worktree/本地分支/实际同名远端分支及具名安全例外，取得一次最终范围确认；质量声明、清理授权各自保真。确认后归档交付材料，复用 `runtime/task/workspace.mjs` 的 `inspectWorktreeCleanup`、`createTaskWorktreeRemoval` probe/execute/verify 与现有 authorize/run-command，task-owned worktree 已合入目标分支且无未交付/未知独有字节才普通移除，再用 `git branch -d` 删除本地任务分支；同名远端任务分支仅实际存在且已交付时普通删除。main 与 existing workspace 保留；未知/私有/未交付资料逐件列路径、原因、保管位置或最终明确可弃范围，保护具体例外，不惯例保留整个已安全交付 worktree。执行备忘创建即用现有 appendRecord 外置任务库，只记必要上下文；旧 worktree 备忘逐件核唯一原件位置或最终明确舍弃，不按目录名视作缓存。禁止 `--force`、`-D`、强推；默认策略变更不代当前删除确认，也不解除另有来源的 packet TTL 延期。无法修复/验证的事项如实保留，继续可执行部分，不自行 accepted_risk 或伪造通过。
+已授权任务进入 build-code/verify-code 后，自动实施、验证、审查、修复及交付必要的 commit/push/merge；切阶段/会话/handoff 不重置授权，不重问本地提交、日常技术验收或风险承担确认。Phase 实施、针对性测试、独立审查及 finding 修复全完成后，本 Phase 审后提交一次；verify-code 结束时完成全部提交与合并。authorize 复用真实授权来源，操作前核范围/分支/当前 HEAD 并 record/consume；build-code commit 显式同传 phase=build-code，绑当前 task、分支和阶段，同阶段共用授权；实际 HEAD/每次消费保在既有 consumed 原件，授权原件不改。其它阶段、旧无 phase 记录及 push/merge/pr 仍严格匹配原 HEAD。真正执行关闭时，先按下节核工作区与任务范围，再读 [关闭方法](../skills/stage-closeout/SKILL.md)第6节「最终归档和清理前一次真实范围确认」与第7节「安全移除、分支删除与逐项读回」；只有取得其要求的最终范围确认才执行归档/删除/交付清理。无法修复/验证的事项如实保留，继续可执行部分，不自行 accepted_risk 或伪造通过。
+
+## 工作区与任务
+
+建任务用 `tools/cli/task-bootstrap.mjs` 的 `--project`、`--task`、`--target-repo`。task id 默认决定同级 `<repo>-<task-id>` 工作区与 `task/<project>/<task-id>` 分支；路径和分支须同时不存在才从目标仓当前 HEAD 创建，同时存在则核绑定，单边存在报冲突。显式 `--workspace-root` 或目标本身已是注册 linked worktree 时沿 existing 工作区及真实分支，不另建或改分支。按返回的 `task_path`、`workspace` 核实际路径/分支/基线；接续用 `--task-path` 打开原任务，核 manifest 身份、cohort 与真实绑定。pre/history 只读，不按 cwd 猜身份或改元数据求通过。
+
+动手前在当前 Phase/Task 申报具体路径/必要符号、写主和允许范围，核认证工作区、真实分支与当前字节；共享文件交唯一写主串行。范围与受保护类别按 [build-code「方法」第1步](../workflows/build-code/SKILL.md#方法)核，审查逐项比对声明与真实 `git diff --name-only`，越界或声明不实照实处置。
+
+收尾按「当前路线」的持续授权及关闭方法第6/7节执行。默认收口已交付任务材料与 task-owned 工作区/任务分支；main 与 existing workspace 保留。未知、私有、未交付字节及旧备忘逐件按该方法保管或确认可弃，保护具名例外，不惯例保留整个已安全交付 worktree；本次执行备忘从创建即用现有 appendRecord 外置任务库。默认策略不代当前删除确认，也不解除另有来源的 packet TTL 延期。安全移除、普通分支删除、`--force`／`-D`／强推禁项与失败读回均以该方法第7节为正文，不另设删除器或许可。
+
+真正执行关闭并生成交付说明时，读 [关闭方法第4节「提交、推送任务分支与PR」](../skills/stage-closeout/SKILL.md#4-提交推送任务分支与pr)的交付说明内容合同；本处只给调用条件。
 
 ## build-code 测试与质量
 
@@ -40,6 +50,6 @@ raw 测试输出、正式回执和审查原件各一份；同一事实＝字节�
 
 ### stage 结束
 
-主会话复用已有记录接口、安全写入普通 stage facts，不恢复 run:execute 完整官方门。分别读回实施、质量、Git交付、物理清理；局部 GREEN 不冒全任务完成。逐 AC 据实际交付与证据判断、保缺项；唯一新的人读 handoff MD 给绝对 ref 与实际下一阶段，旧原件 immutable。最终 close 按上文默认安全收口执行并回读归档、worktree、本地及远端任务分支的实际结果；未知或未执行项给具体例外，不把质量 incomplete 改写为完成，也不把它单独当清理许可或阻断条件。
+主会话复用已有记录接口、安全写入普通 stage facts，不恢复 run:execute 完整官方门。分别读回实施、质量、Git交付、物理清理；局部 GREEN 不冒全任务完成。逐 AC 据实际交付与证据判断、保缺项；唯一新的人读 handoff MD 给绝对 ref 与实际下一阶段，旧原件 immutable。最终 close 依「工作区与任务」及关闭方法第6/7节回读各项实际结果；质量 incomplete 的声明与清理范围授权分别保真。
 
 卡住先说明现在卡在哪、原因、可行路线和代价；只有真实方向改变需用户选择，避免用内部编号作为唯一说明。尝试无新事实则停止重复，不自动续跑空转。未取得的答复、provider失败或许可不能靠时间流逝当同意。 路径必须有界：新事实须改变继续条件，包括新答复/输入、新可取结果、不同失败信号或写集/依赖变化；同失败信号多写一份不算。适用范围与排除按 `AGENTS.md`「卡住与升级」两行：外部不可重试失败零重试、立即按该节格式报告并给可直接回复的选项；其它适用的反馈路径中，同一失败信号在继续条件未改变时再次出现即判该路径无界，换独立上下文重开一次，仍出现则升级问人，owner 是执行者。用户给新答复即复位，按当前材料续跑；时长本身永远不构成停止条件，时间不构成复位条件。审查 provider 各轴仍按该节排除行继续既有审查工作。

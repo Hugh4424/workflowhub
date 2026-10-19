@@ -137,13 +137,14 @@ export function measureSessions(sources, options={}) {
    const preferred=records.some(r=>r.type==='token_usage_record'),series=preferred?'token_usage_record.thread_token_usage':'event_msg.token_count.total_token_usage';
    const points=consumed.filter(r=>preferred?r.type==='token_usage_record':r.type==='event_msg'&&r.payload?.type==='token_count');
    const container=r=>preferred?r?.payload?.thread_token_usage:r?.payload?.info?.total_token_usage;
+   const rootBirth=preferred&&seed===-Infinity&&!group.some(s=>s.readIssue)&&recordTime(header)>lo&&recordTime(header)<=hi&&codexFreshRootBirth(header,consumed);
    const point=(r,value)=>({eventRef:path+'#ordinal='+r.ordinal,at:iso(recordTime(r)),value});
    for(const [i,k] of usageKeys.entries()){
     if(inheritedBoundaryIssue){usage[k]=unavailable('inherited_boundary_unavailable');cumulativePoints.push({sourceRef:path,threadId:id,series,metric:k,from:null,until:null});continue;}
     const relevant=points.filter(r=>r.ordinal>seed);let error=points.some(r=>preferred&&r.payload?.thread_id!==id);let prev=-1;for(const r of relevant){const n=container(r)?.[nativeKeys[i]];if(n===undefined&&i>=3)continue;if(!validNumber(n)||n<prev)error=true;else prev=n;}
     const end=relevant.at(-1),endValue=container(end)?.[nativeKeys[i]],saved=previous?.cumulative?.find(p=>p.metric===k);let start=null;
     if(saved){const original=points.find(r=>path+'#ordinal='+r.ordinal===saved.eventRef);if(saved.series!==series||!original||iso(recordTime(original))!==saved.at||container(original)?.[nativeKeys[i]]!==saved.value||records.indexOf(original)>previousIndex){boundaryInvalid=true;bad('previous_boundary_mismatch','previous cumulative observation changed');}else start={eventRef:saved.eventRef,at:saved.at,value:saved.value};}
-    else{const base=points.filter(r=>previous||w?.previousBoundaries?recordTime(r)<lo:recordTime(r)<=lo).at(-1);if(base&&validNumber(container(base)?.[nativeKeys[i]]))start=point(base,container(base)[nativeKeys[i]]);else if(freshBirth&&recordTime(header)>=lo&&recordTime(header)<=hi)start={eventRef:path+'#ordinal=0',at:iso(recordTime(header)),value:0};else if(!header?.payload?.history_mode&&!header?.payload?.parent_thread_id&&!header?.payload?.source?.subagent&&seed===-Infinity&&!group.some(s=>s.readIssue)&&records.every((r,i)=>r.ordinal===i)&&!records.some(r=>r.payload?.type==='compaction')&&records.filter(r=>recordTime(r)<=lo).every(r=>r.type==='session_meta'||r.type==='turn_context'||r.type==='event_msg'&&(r.payload?.type==='task_started'||recordTime(r)===lo&&r.payload?.type==='item_completed'&&r.payload?.item?.type==='UserMessage')))start={eventRef:path+'#ordinal=0',at:iso(recordTime(header)),value:0};}
+    else{const base=points.filter(r=>previous||w?.previousBoundaries?recordTime(r)<lo:recordTime(r)<=lo).at(-1);if(base&&validNumber(container(base)?.[nativeKeys[i]]))start=point(base,container(base)[nativeKeys[i]]);else if(freshBirth&&recordTime(header)>=lo&&recordTime(header)<=hi)start={eventRef:path+'#ordinal=0',at:iso(recordTime(header)),value:0};else if(rootBirth)start={eventRef:path+'#ordinal=0',at:iso(recordTime(header)),value:0};else if(!header?.payload?.history_mode&&!header?.payload?.parent_thread_id&&!header?.payload?.source?.subagent&&seed===-Infinity&&!group.some(s=>s.readIssue)&&records.every((r,i)=>r.ordinal===i)&&!records.some(r=>r.payload?.type==='compaction')&&records.filter(r=>recordTime(r)<=lo).every(r=>r.type==='session_meta'||r.type==='turn_context'||r.type==='event_msg'&&(r.payload?.type==='task_started'||recordTime(r)===lo&&r.payload?.type==='item_completed'&&r.payload?.item?.type==='UserMessage')))start={eventRef:path+'#ordinal=0',at:iso(recordTime(header)),value:0};}
     const endPoint=end&&validNumber(endValue)?point(end,endValue):null;cumulativePoints.push({sourceRef:path,threadId:id,series,metric:k,from:start,until:endPoint});
     if(endPoint)snapshots.push({metric:k,series,...endPoint});
     if(endValue===undefined&&i>=3){usage[k]=missing('field_not_reported');continue;}
@@ -234,6 +235,21 @@ function codexHistoryBoundary(header, records, sources=[], cutoff=Infinity, visi
  return {seed:Infinity,issueCode:seedPresent?'inherited_boundary_invalid':'inherited_boundary_missing'};
 }
 
+// A root birth requires the complete first request, not its pagination marker.
+function codexFreshRootBirth(header, records) {
+ const h=header?.payload,id=h?.id,born=recordTime(header);
+ if(!id||h.history_mode!=='paginated'||h.parent_thread_id||h.source?.subagent||Object.hasOwn(h,'subagent_history_start_ordinal')||h.history_base!=null||h.forked_from_id!=null||h.session_id!==undefined&&h.session_id!==id)return false;
+ if(records.filter(r=>r.type==='session_meta').length!==1||records.some((r,i)=>r.ordinal!==i||!validNumber(recordTime(r))||recordTime(r)<born||i>0&&recordTime(r)<recordTime(records[i-1])||r.payload?.type==='compaction'))return false;
+ const firstIndex=records.findIndex(r=>r.type==='token_usage_record'),first=records[firstIndex],turn=first?.payload?.turn_id;
+ if(firstIndex<0||first.payload.thread_id!==id||!validCodexTurnId(turn))return false;
+ const prefix=records.slice(1,firstIndex),start=prefix[0],contexts=prefix.filter(r=>r.type==='turn_context'),users=prefix.filter(r=>r.type==='event_msg'&&r.payload?.type==='item_completed'&&r.payload.item?.type==='UserMessage');
+ if(start?.type!=='event_msg'||start.payload?.type!=='task_started'||start.payload.turn_id!==turn||recordTime(start)!==born||!contexts.length||contexts.some(r=>r.payload?.turn_id!==turn)||users.length!==1)return false;
+ const user=users[0];
+ if(!validCodexTurnId(user.payload.item?.id)||user.payload.thread_id!==id||user.payload.turn_id!==turn||contexts[0].ordinal>=user.ordinal||prefix.some(r=>r.type==='event_msg'&&r.payload?.type==='task_started'&&r.payload.turn_id!==turn))return false;
+ const activity=r=>r.type==='response_item'&&(['assistant','tool'].includes(r.payload?.role)||['function_call','custom_tool_call','function_call_output','custom_tool_call_output','tool_result'].includes(r.payload?.type))||r.type==='event_msg'&&r.payload?.type==='item_completed'&&r.payload.item?.type!=='UserMessage';
+ return !prefix.some(r=>activity(r)&&r.ordinal<user.ordinal);
+}
+
 // A fresh child is proved by immutable parent invocation + completed spawn +
 // matching complete child source, never by parent metadata or pagination alone.
 function codexFreshChildBirth(header, records, sources, cutoff, visiting) {
@@ -307,7 +323,7 @@ async function explicitDescendants(initial, cutoff, load) {
  return sources;
 }
 function parseArgs(argv){const args={session:[]};const single=new Set(['from','until','project','task','stage','start-ref']);for(const arg of argv){if(arg==='--record'){if(args.record)throw new Error('duplicate record');args.record=true;continue;}const match=arg.match(/^--([^=]+)=(.*)$/s);if(!match||(!single.has(match[1])&&match[1]!=='session'))throw new Error('unknown argument '+arg);const [,key,value]=match;if(!value)throw new Error('empty argument '+key);if(key==='session'){if(!isAbsolute(value))throw new Error('session must be absolute file');args.session.push(value);}else{if(Object.hasOwn(args,key))throw new Error('duplicate '+key);args[key]=value;}}
- if(Boolean(args.project)!==Boolean(args.task))throw new Error('project/task must be paired');if(args.stage&&!['make-decision','build-plan','build-code','verify-code'].includes(args.stage))throw new Error('invalid stage');for(const key of ['from','until'])if(args[key])date(args[key]);if(args.from&&args.until&&date(args.from)>date(args.until))throw new Error('reversed window');if(args['start-ref'])parseSelector(args['start-ref']);if(args.record&&(!args.project||!args.stage||args.from||args.until))throw new Error('record requires identity/stage and disallows explicit window');return args;
+ if(Boolean(args.project)!==Boolean(args.task))throw new Error('project/task must be paired');if(args.stage&&!['make-decision','build-plan','build-code','verify-code','build-prd'].includes(args.stage))throw new Error('invalid stage');for(const key of ['from','until'])if(args[key])date(args[key]);if(args.from&&args.until&&date(args.from)>date(args.until))throw new Error('reversed window');if(args['start-ref'])parseSelector(args['start-ref']);if(args.record&&(!args.project||!args.stage||args.from||args.until))throw new Error('record requires identity/stage and disallows explicit window');return args;
 }
 function taskSourceFacts(args, result) {
  const facts=sourceDefaults();
@@ -317,12 +333,15 @@ function taskSourceFacts(args, result) {
  const fail=(code,message)=>result.issues.push({code,message,expected:false});
  try {
   const root=authenticatedWorkspace(task);
+  // Portable build-prd owns human-readable decision/PRD/attachment refs, not
+  // formal post Phase materials. No authoritative machine refs are supplied.
+  if(args.stage==='build-prd')throw Object.assign(new Error('build-prd decision/PRD/attachment references are not supplied to this measurement'),{code:'build_prd_material_refs_not_supplied'});
   const materialRoot=join(root,'specs',args.task),map={},sampled=new Map();
   if(args.stage!=='make-decision'){const path=join(materialRoot,'phases/index.md'),bytes=safeReadBytes(path);sampled.set(path,bytes);map['phases/index.md']=new TextDecoder('utf-8',{fatal:true}).decode(bytes);}
   const names=materialFilesForCohort(task.manifest.activation_cohort,map,{stage:args.stage});
   const details=names.map(name=>{const path=join(materialRoot,name),stat=lstatSync(path);if(!stat.isFile()||stat.isSymbolicLink())throw new Error('invalid material file '+name);const bytes=sampled.get(path)??safeReadBytes(path);return {path,byteCount:bytes.length,sha256:hash(bytes)};});
   facts.materialBytes={metric:available(details.reduce((n,x)=>n+x.byteCount,0)),refs:details.map(x=>x.path),scope:'authenticated checkout material sample: '+JSON.stringify(details),unit:'byte'};
- } catch(error){facts.materialBytes={metric:unavailable('material_source_unavailable'),refs:[],scope:'current task materials',unit:'byte'};fail('material_source_unavailable',error.message);}
+ } catch(error){const reason=error.code==='build_prd_material_refs_not_supplied'?error.code:'material_source_unavailable';facts.materialBytes={metric:unavailable(reason),refs:[],scope:'current task materials',unit:'byte'};fail(reason,error.message);}
  facts.reviewProviderUsage={metric:missing('stage_not_supplied'),refs:[],scope:'current stage review',unit:'provider original'};
  if(!args.stage)return facts;
  try {

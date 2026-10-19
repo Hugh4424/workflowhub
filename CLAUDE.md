@@ -1,30 +1,21 @@
 # CLAUDE.md
 
-本文件给 Claude Code 等 AI 助手提供在 workflowhub 仓库工作时的规则指引。
+Claude Code 等助手按 [AGENTS.md](AGENTS.md) 执行本仓规则。
 
 ## 项目定位
 
-workflowhub 是一个面向 AI 开发工作流的编排工具项目，按一套设计宪法构建。任何设计与实现都必须符合宪法——见 [CONSTITUTION.md](CONSTITUTION.md)，并用 [constitution-checklist.md](constitution-checklist.md) 逐条对照。
+设计与实现先读 [CONSTITUTION.md](CONSTITUTION.md)，逐条对照 [constitution-checklist.md](constitution-checklist.md)。
 
 ## 硬规则
 
-- **宪法优先**：与本项目其它惯例冲突时，以 CONSTITUTION.md 为准。
-- **薄核心、窄契约**：能力下沉到技能层，核心只做调度；模块间走窄接口。改接口先从真实 caller 判断输入是否跨边界、能否作一次纯函数判断；通用机制在内部、专用策略在边缘，不向公共面透传 storage/transport/framework 内部表示。与 AGENTS.md「当前治理边界」及 runtime/interface/runtime-facade.mjs 邻接注释用同一判据；下一位维护者也是用户，登记须点名其实际动作、输入输出与需要，无真实 consumer 不实施。
-- **质量靠独立审查与人**：不引入会阻断推进的质量门；质量裁决须由独立来源在独立上下文产出，禁止自审自判。
-- **记录事实而非阻断**：物理事实机器采集、浮现到边界，但不卡死推进。
-- **简单优先、可证伪**：选更简单的方案，不写掩盖问题的兜底；检查须在"实际为假"时真报失败。
-- **推进/不可逆操作经人确认**：不自动越过人做不可逆动作。
+惯例冲突时以宪法为准。改接口或登记机制时读 [AGENTS 当前治理边界](AGENTS.md#当前治理边界) 与 `runtime/interface/runtime-facade.mjs` 邻接判据；独立质量、事实不阻断、授权与最终确认读 [给 agent 的规则](AGENTS.md#给-agent-的规则) 及 [标准工作方法](docs/standard-workflow.md)。简单优先、真实失败沿宪法 F8/F9，不用兜底掩盖错误。
 
 ## 目录约定
 
-- `runtime/`：生产运行时与稳定 schema，按职责分区；入口通过 `runtime/interface/` 暴露。
-- `tools/cli/`：命令行和检查工具。
-- `skills/`：每个阶段一个独立技能；`workflows/`：每个工作流一个文件夹；`config/`：全局配置。
-- `core/`、`scripts/`、顶层 `schemas/` 只保留 move-map 登记的历史兼容文件；不得把新运行时能力放回这些目录。
-- 目录变更先更新 `docs/architecture/move-map.json`，再更新 import 和治理文档；不做行为重写。
-
-新增阶段/工作流按目录约定添加，核心零改动。
+目录变更先读 [AGENTS 当前目录职责](AGENTS.md#当前目录职责)，在 `docs/architecture/move-map.json` 登记后再改 import 与治理文档，不借迁移重写行为。新增阶段/工作流沿宪法 S7，核心零改动。
 
 ## 术语
 
 项目术语见 [GLOSSARY.md](GLOSSARY.md)。
+
+五件正文入口与读取时机见 [交付与收口总纲](docs/delivery-closeout-charter.md)。
