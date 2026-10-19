@@ -1,0 +1,1326 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>给导出功能加上失败重试 · 流程追踪</title>
+<style>
+/* ============================================================
+   基础：颜色、字体、重置（对应 src/index.css 的 @theme 与 preflight）
+   ============================================================ */
+:root{
+  --page:#f5f6f8;
+  --surface:#ffffff;
+  --ink:#18212f;
+  --sub:#596577;
+  --line:#e3e7ed;
+  --accent:#315ccb;
+  --accent-soft:#eef3ff;
+  --warm:#9a6508;
+  --warm-soft:#fff4d9;
+  --fail:#b53d42;
+  --fail-soft:#fff0f0;
+  --unk:#687486;
+  --unk-soft:#f0f2f5;
+  --ok:#277353;
+  --ok-soft:#edf7f1;
+  --sans:-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', 'Segoe UI', system-ui, sans-serif;
+  --mono:ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  font-family:var(--sans);
+  background:var(--page);
+  color:var(--ink);
+  font-size:14px;
+  line-height:22px;
+}
+button{font:inherit;color:inherit;background:transparent;border:0;padding:0;margin:0;cursor:pointer;text-align:left}
+ol,ul{margin:0;padding:0;list-style:none}
+p{margin:0}
+h2,h3{margin:0;font-size:inherit;font-weight:inherit}
+code{font-family:var(--mono)}
+b{font-weight:700}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+::selection{background:#dbe5ff}
+.scroll-thin{scrollbar-width:thin;scrollbar-color:#d3d9e2 transparent}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{transition:none;animation:none;scroll-behavior:auto}
+}
+
+/* 图标 */
+.icon{display:block;flex-shrink:0}
+.kt{color:var(--kc)}
+.icon-white{color:#ffffff}
+.chev{display:block;flex-shrink:0;transition:transform .15s}
+.chev.is-open{transform:rotate(90deg)}
+
+/* ============================================================
+   外壳：页头 / 左右分栏 / 页脚
+   ============================================================ */
+.app{display:flex;height:100%;flex-direction:column;background:var(--page);color:var(--ink)}
+.hdr{
+  display:flex;height:56px;flex:0 0 auto;align-items:center;gap:16px;
+  border-bottom:1px solid var(--line);background:var(--surface);padding:0 16px;
+}
+.hdr-task{min-width:0;flex-shrink:1}
+.hdr-task-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px;font-weight:700;line-height:20px}
+.hdr-task-sub{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;line-height:16px;color:var(--sub)}
+.hdr-task-sub b{color:var(--ink)}
+.hdr-stages{display:flex;align-items:center;gap:4px;flex-shrink:1}
+.hdr-stages li{display:flex;align-items:center;gap:4px}
+.hstage{border-radius:6px;padding:3px 10px;line-height:16px}
+.hstage-k{font-size:10px;font-weight:500}
+.hstage-n{font-size:13px;font-weight:600}
+.hstage.is-done{background:var(--ok-soft);color:var(--ok)}
+.hstage.is-now{background:var(--ink);color:#fff}
+.hstage.is-todo{border:1px dashed #c4cbd6;color:var(--sub)}
+.sep{color:var(--unk)}
+.hdr-counts{font-size:12px;line-height:16px;color:var(--sub);flex-shrink:1}
+.fail-strong{font-weight:500;color:var(--fail)}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex-shrink:0}
+.hdr-live-label{font-size:12px;font-weight:500;color:var(--warm)}
+.chip-live{
+  display:inline-flex;height:24px;align-items:center;border-radius:4px;
+  background:var(--warm-soft);padding:0 8px;font-size:12px;font-weight:500;color:var(--warm);
+}
+.chip-live:hover{text-decoration:underline}
+.btn-seen{height:28px;border-radius:6px;border:1px solid var(--line);background:var(--surface);padding:0 12px;font-size:13px;font-weight:500}
+.btn-seen:hover{background:var(--page)}
+.hdr-readonly{font-size:12px;color:var(--sub)}
+
+.body{position:relative;display:flex;min-height:0;flex:1}
+.side{
+  display:flex;flex-direction:column;min-height:0;width:340px;flex:0 0 auto;
+  border-right:1px solid var(--line);background:var(--surface);
+}
+.side-nav{flex:1;min-height:0;overflow-y:auto;padding:12px 12px 16px}
+.scroller{min-width:0;flex:1;overflow-y:auto}
+.main{max-width:980px;margin:0 auto;padding:20px 32px 64px}
+.foot{
+  display:flex;height:32px;flex:0 0 auto;align-items:center;
+  border-top:1px solid var(--line);background:var(--surface);padding:0 16px;
+  font-size:12px;color:var(--sub);
+}
+.foot-dir{margin-left:auto;color:var(--unk)}
+
+/* ============================================================
+   左栏目录
+   ============================================================ */
+.nav-progress{
+  display:flex;min-height:36px;width:100%;align-items:center;gap:8px;
+  border-radius:8px;padding:0 10px;font-size:14px;font-weight:600;color:var(--ink);
+}
+.nav-progress:hover{background:var(--page)}
+.nav-progress.is-active{background:var(--ink);color:#fff}
+.nav-progress .tag{margin-left:auto}
+.nav-group{margin-top:16px}
+.nav-group h3{display:flex;align-items:center;gap:8px;margin:0 0 6px;padding:0 4px}
+.nav-count{font-size:12px;color:var(--sub)}
+.nav-list{display:flex;flex-direction:column;gap:2px}
+.nav-note{margin:16px 0 0;padding:0 4px;font-size:12px;line-height:18px;color:var(--unk)}
+
+.navrow{
+  display:block;width:100%;border-radius:8px;border-left:3px solid transparent;
+  padding:6px 10px;color:var(--ink);
+}
+.navrow:hover{background:var(--page)}
+.navrow.is-related{border-left-color:var(--kc);background:rgba(238,243,255,.6)}
+.navrow.is-related:hover{background:var(--accent-soft)}
+.navrow.is-changed{border-left-color:var(--kc);background:var(--warm-soft)}
+.navrow.is-active{border-left-color:var(--ink);background:var(--ink);color:#fff}
+.navrow-main{display:flex;align-items:center;gap:8px;font-size:14px;line-height:20px}
+.navrow-name{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.navrow-hints{
+  margin-top:2px;display:flex;flex-wrap:wrap;column-gap:12px;
+  padding-left:23px;font-size:12px;line-height:16px;color:var(--sub);
+}
+.navrow.is-active .navrow-hints{color:rgba(255,255,255,.8)}
+.navrow-hints .is-fail{font-weight:500;color:var(--fail)}
+.nst{
+  display:inline-flex;height:18px;flex-shrink:0;align-items:center;
+  border-radius:3px;padding:0 6px;font-size:11px;font-weight:500;line-height:16px;
+}
+.nst.tone-ok{background:var(--ok-soft);color:var(--ok)}
+.nst.tone-accent{background:var(--accent-soft);color:var(--accent)}
+.nst.tone-fail{background:var(--fail-soft);color:var(--fail)}
+.nst.tone-unk{background:var(--unk-soft);color:var(--unk)}
+.nst.is-active{background:#fff;color:var(--ink)}
+
+/* ============================================================
+   标签 / 状态 / 类型 chip
+   ============================================================ */
+.tag{
+  display:inline-flex;align-items:center;gap:4px;height:22px;flex-shrink:0;
+  white-space:nowrap;border-radius:4px;padding:0 10px;font-size:12px;line-height:18px;
+}
+.tag:not(.sm){font-weight:500}
+.tag.sm{height:18px;padding:0 6px;font-size:11px;line-height:16px}
+.tag-ok{background:var(--ok-soft);color:var(--ok)}
+.tag-fail{background:var(--fail-soft);color:var(--fail)}
+.tag-unk{background:var(--unk-soft);color:var(--unk)}
+.tag-accent{background:var(--accent-soft);color:var(--accent)}
+.tag-warm{background:var(--warm-soft);color:var(--warm)}
+
+.chip{
+  display:inline-flex;height:24px;flex-shrink:0;align-items:center;gap:4px;
+  white-space:nowrap;border-radius:4px;padding:0 8px;
+  font-size:12px;font-weight:600;line-height:18px;
+}
+.chip.soft{background:var(--ks);color:var(--kc)}
+.chip-solid{background:var(--kc);color:#fff}
+.chip-outline{border:1px solid var(--kc);background:#fff;color:var(--kc)}
+.chip-dashed{border:1px dashed var(--kc);background:#fff;color:var(--kc);font-family:var(--mono)}
+
+/* 状态文字色 */
+.t-ok{color:var(--ok)}
+.t-accent{color:var(--accent)}
+.t-unk{color:var(--unk)}
+.t-fail{color:var(--fail)}
+.t-warm{color:var(--warm)}
+
+/* ============================================================
+   详情页：工具条 / Hero
+   ============================================================ */
+.toolbar{display:flex;min-height:32px;align-items:center;gap:12px;margin-bottom:16px}
+.backbtn{height:32px;border-radius:6px;padding:0 4px;font-size:13px;color:var(--accent)}
+.backbtn:hover{text-decoration:underline}
+.page-h2{margin:0 0 20px;font-size:28px;font-weight:700;line-height:36px;outline-offset:4px}
+
+.hero{
+  border:1px solid var(--line);border-top:5px solid var(--kc);border-radius:12px;
+  padding:24px;background:var(--surface);
+}
+.hero.is-changed{background:var(--warm-soft)}
+.hero-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:12px}
+.hero-phase{font-size:13px;font-weight:600;color:var(--kc)}
+.hero h2{margin:0;font-weight:700;color:var(--ink);outline-offset:4px}
+.h2-xl{font-size:26px;line-height:36px}
+.h2-lg{font-size:22px;line-height:32px}
+.h2-mono{font-family:var(--mono)}
+.hero-quote{border-radius:8px;background:var(--ks);padding:20px}
+.hero-quote-icon{display:block;margin-bottom:4px;color:var(--kc)}
+.hero-note{margin-top:12px;font-size:13px;line-height:22px;color:var(--sub)}
+.hero-note.small{font-size:12px}
+.hero-finding{margin-top:16px;border-radius:8px;background:var(--ks);padding:16px}
+.finding-k{font-size:12px;font-weight:600;color:var(--kc)}
+.finding-v{margin:0;font-size:18px;font-weight:600;line-height:28px;color:var(--ink)}
+.hero-grid{margin-top:16px;display:grid;gap:12px;grid-template-columns:1fr}
+.hero-cell{border-radius:8px;padding:16px}
+.hero-cell.soft{background:var(--ks)}
+.hero-cell.page{background:var(--page)}
+.cell-k{font-size:12px;font-weight:600;color:var(--kc)}
+.cell-k.sub{color:var(--sub)}
+.cell-v{margin:0;font-size:16px;font-weight:600;line-height:24px;color:var(--ink)}
+.cell-v-sm{margin:0;font-size:15px;line-height:24px;color:var(--ink)}
+.hero-file-note{margin-top:12px;font-size:16px;line-height:24px;color:var(--ink)}
+.hero-summary{margin-top:8px;font-size:16px;line-height:26px;color:var(--ink)}
+.stats{margin-top:16px;display:flex;flex-wrap:wrap;gap:12px}
+.stat{min-width:116px;border-radius:10px;padding:12px 16px}
+.stat-ok{background:var(--ok-soft);color:var(--ok)}
+.stat-fail{background:var(--fail-soft);color:var(--fail)}
+.stat-unk{background:var(--unk-soft);color:var(--unk)}
+.stat-row{display:flex;align-items:baseline;gap:6px}
+.stat-icon{font-size:14px;font-weight:700}
+.stat-num{font-size:34px;font-weight:700;line-height:40px}
+.stat-label{font-size:13px;font-weight:600}
+.hero-explain{margin-top:16px;font-size:15px;line-height:24px;color:var(--ink)}
+
+/* 两份记录对不上 */
+.contra{margin-top:24px;border:1px solid rgba(181,61,66,.4);border-radius:10px;background:var(--surface);padding:16px}
+.contra-head{display:flex;align-items:center;gap:6px;margin:0 0 12px;font-size:13px;font-weight:600;color:var(--fail)}
+.contra-grid{display:grid;gap:12px;grid-template-columns:1fr}
+.contra-cell{border-radius:8px;padding:12px}
+.contra-cell.soft{background:var(--unk-soft)}
+.contra-cell.fail{background:var(--fail-soft)}
+.contra-k{font-size:12px;color:var(--sub)}
+.contra-cell.fail .contra-k{color:var(--fail)}
+.contra-v{margin:0;font-size:15px;font-weight:600;color:var(--ink)}
+.contra-cell.fail .contra-v{color:var(--fail)}
+
+/* ============================================================
+   逻辑链条
+   ============================================================ */
+.chain{margin-top:36px}
+.chain h3{margin:0 0 4px;font-size:18px;font-weight:600;line-height:28px;color:var(--ink)}
+.chain .lead{margin:0 0 20px;font-size:13px;line-height:22px;color:var(--sub)}
+.chain ol{list-style:none;margin:0;padding:0}
+.lane{display:flex;gap:16px}
+.lane-rail{display:flex;width:40px;flex:0 0 auto;flex-direction:column;align-items:center}
+.lane-dot{
+  display:flex;height:40px;width:40px;align-items:center;justify-content:center;
+  border-radius:999px;background:var(--kc);color:#fff;
+}
+.lane-dot.is-cur{box-shadow:0 0 0 4px rgba(24,33,47,.15)}
+.lane-line{margin-top:4px;width:2px;flex:1;background:#c9d0db}
+.lane-body{min-width:0;flex:1}
+.lane:not(:last-child) .lane-body{padding-bottom:24px}
+.lane-head{display:flex;min-height:40px;align-items:center;gap:8px;margin-bottom:8px}
+.lane-label{font-size:15px;font-weight:700;color:var(--kc)}
+.lane-count{font-size:12px;color:var(--sub)}
+.lane-pos{
+  margin-left:auto;border-radius:4px;padding:0 6px;
+  font-size:11px;font-weight:500;line-height:20px;
+  background:var(--unk-soft);color:var(--unk);
+}
+.lane-pos.is-cur{background:var(--ink);color:#fff}
+.lane-items{display:flex;flex-direction:column;gap:8px}
+
+.gapbox{
+  display:flex;align-items:flex-start;gap:4px;border-radius:6px;
+  border:1px dashed rgba(181,61,66,.6);background:var(--fail-soft);
+  padding:6px 8px;font-size:12px;font-weight:500;line-height:18px;color:var(--fail);
+}
+.gapbox .icon{margin-top:2px}
+.emptybox{
+  border-radius:6px;border:1px dashed #c4cbd6;background:var(--unk-soft);
+  padding:16px;font-size:14px;line-height:22px;color:var(--sub);
+}
+
+/* ============================================================
+   卡片 / 文件折叠 / 计划文件
+   ============================================================ */
+.objcard{
+  display:flex;width:100%;align-items:center;gap:12px;
+  border:1px solid var(--line);border-left:5px solid var(--kc);border-radius:8px;
+  padding:12px 16px;background:var(--surface);text-align:left;
+  box-shadow:0 1px 0 rgba(24,33,47,.04);
+}
+.objcard:hover{border-right-color:rgba(24,33,47,.3);box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.objcard.is-changed{
+  border-top-color:rgba(154,101,8,.3);border-right-color:rgba(154,101,8,.3);
+  border-bottom-color:rgba(154,101,8,.3);background:var(--warm-soft);
+}
+.objcard.is-current{box-shadow:0 0 0 2px #fff,0 0 0 4px var(--ink)}
+.objcard-icon{
+  display:flex;height:36px;width:36px;flex:0 0 auto;align-items:center;justify-content:center;
+  border-radius:8px;background:var(--ks);color:var(--kc);
+}
+.objcard-icon.task-icon{background:var(--kc);color:#fff}
+.objcard-body{min-width:0;flex:1}
+.objcard-label{display:block;font-size:11px;font-weight:600;line-height:16px;color:var(--kc)}
+.objcard-title{display:block;font-size:15px;font-weight:600;line-height:22px;color:var(--ink)}
+.objcard-title.mono{font-family:var(--mono);font-size:14px}
+.objcard-line{display:block;font-size:13px;line-height:20px;color:var(--sub)}
+.objcard-cur{
+  flex:0 0 auto;border-radius:4px;background:var(--ink);padding:0 8px;
+  font-size:12px;font-weight:600;line-height:20px;color:#fff;
+}
+
+.objchip{
+  display:flex;width:100%;flex-direction:column;align-items:flex-start;gap:2px;
+  border:1px solid var(--line);border-left:4px solid var(--kc);border-radius:6px;
+  padding:6px 8px;background:var(--surface);text-align:left;
+}
+.objchip:hover{box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.objchip.is-changed{
+  border-top-color:var(--line);border-right-color:var(--line);border-bottom-color:var(--line);
+  background:var(--warm-soft);
+}
+.objchip.is-current{
+  background:#fff;border-top-color:transparent;border-right-color:transparent;
+  border-bottom-color:transparent;box-shadow:0 0 0 2px var(--kc);
+}
+.objchip-top{display:flex;width:100%;align-items:center;gap:6px}
+.objchip-name{min-width:0;flex:1;font-size:12.5px;font-weight:600;line-height:18px;color:var(--ink)}
+.objchip-name.mono{font-family:var(--mono);font-size:12px}
+.objchip-status{display:flex;align-items:center;gap:4px;padding-left:19px;font-size:11px;font-weight:500;line-height:16px}
+
+.filefold{border:1px solid var(--line);border-left:5px solid var(--kc);border-radius:8px;background:var(--surface)}
+.filefold-head{display:flex;width:100%;align-items:center;gap:12px;padding:12px 16px;text-align:left}
+.filefold-icon{
+  display:flex;height:36px;width:36px;flex:0 0 auto;align-items:center;justify-content:center;
+  border-radius:8px;background:var(--ks);color:var(--kc);
+}
+.filefold-title{flex:1;font-size:15px;font-weight:600;color:var(--ink)}
+.filefold-hint{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--sub)}
+.filefold-body{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding:12px}
+
+.planbtn{
+  display:flex;align-items:center;gap:8px;border:1px dashed var(--kc);border-radius:6px;
+  background:var(--surface);padding:8px 12px;font-size:14px;font-weight:500;color:var(--ink);
+}
+.planbtn .hint{display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;color:var(--sub)}
+.planlist{display:flex;flex-wrap:wrap;gap:8px}
+.planchip{
+  display:inline-flex;align-items:center;gap:6px;border:1px dashed var(--kc);border-radius:4px;
+  background:var(--surface);padding:4px 8px;font-family:var(--mono);font-size:12px;color:var(--sub);
+}
+.planchip .note{font-family:var(--sans);font-size:11px;color:var(--unk)}
+
+/* ============================================================
+   分区 / 步骤 / 失败项 / 来源
+   ============================================================ */
+.section{margin-top:36px}
+.section-title{
+  display:flex;align-items:baseline;gap:8px;margin:0 0 12px;
+  font-size:17px;font-weight:600;line-height:24px;color:var(--ink);
+}
+.section-title .count{font-size:13px;font-weight:400;color:var(--sub)}
+.section-title .hint{font-size:12px;font-weight:400;color:var(--unk)}
+.panel{border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:20px}
+.panel.flush{padding:0}
+.steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.steps li{display:flex;align-items:flex-start;gap:12px;font-size:15px;line-height:24px;color:var(--ink)}
+.step-num{
+  margin-top:2px;display:flex;height:20px;width:20px;flex:0 0 auto;align-items:center;justify-content:center;
+  border-radius:4px;background:var(--ks);color:var(--kc);font-size:12px;font-weight:600;
+}
+.failitem{
+  display:flex;flex-wrap:wrap;align-items:center;gap:12px;border:1px solid rgba(181,61,66,.4);
+  border-radius:8px;background:var(--fail-soft);padding:12px 16px;color:var(--fail);
+}
+.mono13{font-family:var(--mono);font-size:13px}
+.failitem .msg{font-size:13px;font-weight:500}
+
+.sources{margin-top:40px;border-top:1px solid var(--line);padding-top:12px}
+.src-toggle{display:flex;align-items:center;gap:6px;border-radius:3px;font-size:12px;color:var(--sub)}
+.src-toggle:hover{color:var(--ink)}
+.src-body{margin-top:8px;font-size:13px}
+.srow{border-bottom:1px solid rgba(227,231,237,.7);padding:8px 0}
+.srow:last-child{border-bottom:0}
+.srow-head{
+  display:flex;width:100%;flex-wrap:wrap;align-items:baseline;gap:0 8px;
+  border-radius:3px;font-size:14px;line-height:22px;text-align:left;
+}
+.srow-head:hover{background:rgba(240,242,245,.7)}
+.srow-head .k{font-weight:600}
+.srow-head .dot{color:var(--sub)}
+.mono12{font-family:var(--mono);font-size:12px;line-height:18px;color:var(--sub);word-break:break-all}
+.ml1{margin-left:4px}
+.srow-body{
+  margin-top:8px;border:1px dashed #c4cbd6;border-radius:6px;background:var(--unk-soft);
+  padding:12px;font-size:13px;line-height:20px;color:var(--sub);
+}
+.srow-body p{margin:0}
+.srow-body .p2{margin-top:4px}
+.mono-ink{font-family:var(--mono);font-size:12px;line-height:18px;color:var(--ink);word-break:break-all;user-select:all}
+
+/* ============================================================
+   进度总览
+   ============================================================ */
+.flow{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px}
+.flow-item{display:flex;align-items:center;gap:8px}
+.flow-box{border:1px solid var(--line);border-radius:8px;padding:8px 16px}
+.flow-box.is-done{background:var(--surface);color:var(--ink)}
+.flow-box.is-now{border-color:var(--ink);background:var(--ink);color:#fff}
+.flow-box.is-todo{border:1px dashed #c4cbd6;color:var(--sub)}
+.flow-k{font-size:11px;font-weight:500;line-height:22px;opacity:.8}
+.flow-n{font-size:15px;font-weight:600;line-height:22px}
+.table-scroll{overflow-x:auto}
+.table-inner{min-width:640px}
+.thead{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 20px;
+  border-bottom:1px solid var(--line);border-radius:10px 10px 0 0;
+  background:var(--page);padding:8px 16px;
+}
+.trow{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 20px;
+  border-bottom:1px solid var(--line);padding:12px 16px;
+}
+.trow:last-child{border-bottom:0}
+.tcell{display:flex;flex-direction:column;gap:6px}
+.dash{padding:6px 8px;font-size:12px;color:var(--unk)}
+.unlinked{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:12px;font-size:13px;color:var(--sub)}
+.slot{width:150px}
+
+/* ============================================================
+   断点（源设计：nav=900 / md=768 / lg=1024 / xl=1280 / 2xl=1536）
+   ============================================================ */
+@media (min-width:1280px){ .side{width:400px} }
+@media (max-width:1279px){ .hdr-counts{display:none} }
+@media (max-width:1023px){ .hdr-live-label,.chip-live{display:none} }
+@media (max-width:767px){ .hdr-stages{display:none} }
+@media (max-width:899px){ .main{padding:20px 20px 64px} }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="hdr" id="hdr"></header>
+  <div class="body">
+    <aside class="side" id="side">
+      <nav class="side-nav scroll-thin" id="side-nav" aria-label="任务目录"></nav>
+    </aside>
+    <div class="scroller scroll-thin" id="scroller">
+      <main class="main" id="main"></main>
+    </div>
+  </div>
+  <footer class="foot">
+    只读：这里只呈现任务记录，不做审批，也不会改动任何状态
+    <span class="foot-dir" id="foot-dir"></span>
+  </footer>
+</div>
+
+<script>
+/* ============================================================
+   1. 数据（全部示例数据都在这里）
+   ============================================================ */
+
+/* 换任务时只改这个对象，下面的渲染代码不用动 */
+const DATA = {
+  task: '给导出功能加上失败重试',
+  stageLabel: '写代码',
+  stages: [
+    { name: '定方向', hint: '看清要改成什么', state: 'done' },
+    { name: '做计划', hint: '拆工作包与任务', state: 'done' },
+    { name: '写代码', hint: '真实改动与结果', state: 'now' },
+    { name: '验收', hint: '回查要求与证据', state: 'todo' },
+  ],
+  hasPhase: true,
+  sourceDir: '.task/export-retry/',
+
+  /* 12 种对象：标签、颜色、软色、内联 SVG 图标（照抄 src/kinds.tsx） */
+  kinds: {
+    req:   { label: '原始需求', color: '#315ccb', soft: '#eef3ff', icon: '<path d="M3 5h4v4H5.5c0 1 .5 1.5 1.5 1.5V12C4.5 12 3 10.5 3 8V5Zm6 0h4v4h-1.5c0 1 .5 1.5 1.5 1.5V12C10.5 12 9 10.5 9 8V5Z" fill="currentColor"/>' },
+    goal:  { label: '目标', color: '#0f766e', soft: '#e8f6f4', icon: '<circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="2.5"/>' },
+    wp:    { label: '工作包', color: '#5b45c9', soft: '#f1eefd', icon: '<path d="M2.5 5 8 2.5 13.5 5v6L8 13.5 2.5 11V5Zm0 0L8 7.5m0 0L13.5 5M8 7.5v6"/>' },
+    ires:  { label: '内部调研', color: '#0a6c8c', soft: '#e6f4f9', icon: '<path d="M3 13.5V3h6v10.5M9 7h4v6.5M2 13.5h12M5 5.5h2M5 8h2M5 10.5h2"/>' },
+    eres:  { label: '外部调研', color: '#8a3fb5', soft: '#f5ecfa', icon: '<path d="M8 2.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2.5 8h11M8 2.5c-2.2 2.2-2.2 8.8 0 11M8 2.5c2.2 2.2 2.2 8.8 0 11"/>' },
+    dec:   { label: '决策', color: '#b03a6a', soft: '#fceef3', icon: '<path d="M8 2 14 8 8 14 2 8l6-6Z"/>' },
+    phase: { label: 'Phase', color: '#3e4a5f', soft: '#ebeef3', icon: '<path d="M4 14V2.5M4 3h8l-2 2.6L12 8.2H4"/>' },
+    task:  { label: 'Task', color: '#25324a', soft: '#eef0f4', icon: '<rect x="2.5" y="2.5" width="11" height="11" rx="2"/><path d="m5.5 8.2 1.8 1.7 3.2-3.6"/>' },
+    file:  { label: '文件', color: '#596577', soft: '#f0f2f5', icon: '<path d="M4 2h5l3 3v9H4V2ZM9 2v3h3"/>' },
+    test:  { label: '测试', color: '#c2410c', soft: '#fff1e8', icon: '<path d="M6.5 2.5h3M7 2.5v4L3.5 13a.8.8 0 0 0 .7 1.2h7.6a.8.8 0 0 0 .7-1.2L9 6.5v-4M5 10.5h6"/>' },
+    acc:   { label: '验收', color: '#66780f', soft: '#f1f5dc', icon: '<path d="M8 2 13 4v4c0 3-2.2 5-5 6-2.8-1-5-3-5-6V4l5-2Zm-2 6 1.5 1.5 3-3"/>' },
+    risk:  { label: '未决项/风险', color: '#8f2d2d', soft: '#fbeaea', icon: '<path d="M8 1.8 14.6 13.4H1.4L8 1.8ZM8 6.4v3.2M8 11.4v.2"/>' },
+  },
+
+  objects: [
+    { id: 'req1', kind: 'req', label: '要求 1', title: '导出失败要自动重试三次', short: '要求 1 · 自动重试三次', quote: '导出失败要自动重试三次', source: '用户 10 月 12 日的对话', status: { text: '已实现', tone: 'ok' }, src: [{ kind: '原始需求', name: '用户 10 月 12 日的对话', loc: '对话记录 · 10 月 12 日', path: '.task/export-retry/conversations/2026-10-12.md' }] },
+    { id: 'req2', kind: 'req', label: '要求 2', title: '重试的时候我要看得见每次为什么失败', short: '要求 2 · 看得见失败原因', quote: '重试的时候我要看得见每次为什么失败', source: '用户 10 月 12 日的对话', status: { text: '进行中', tone: 'accent' }, src: [{ kind: '原始需求', name: '用户 10 月 12 日的对话', loc: '对话记录 · 10 月 12 日', path: '.task/export-retry/conversations/2026-10-12.md' }] },
+    { id: 'req3', kind: 'req', label: '要求 3', title: '我不想等的时候要能取消', short: '要求 3 · 能取消', quote: '我不想等的时候要能取消', source: '用户 10 月 14 日的对话', status: { text: '缺环', tone: 'fail' }, src: [{ kind: '原始需求', name: '用户 10 月 14 日的对话', loc: '对话记录 · 10 月 14 日', path: '.task/export-retry/conversations/2026-10-14.md' }] },
+    { id: 'req4', kind: 'req', label: '要求 4', title: '只有网络类的错误才重试，别把格式错误也重试', short: '要求 4 · 只重试网络错误', quote: '只有网络类的错误才重试，别把格式错误也重试', source: '用户 10 月 15 日的对话', status: { text: '已实现', tone: 'ok' }, src: [{ kind: '原始需求', name: '用户 10 月 15 日的对话', loc: '对话记录 · 10 月 15 日', path: '.task/export-retry/conversations/2026-10-15.md' }] },
+
+    { id: 'g1', kind: 'goal', label: '目标', title: '网络类失败自动重试三次，格式错误不重试', short: '自动重试，格式错误不重试' },
+    { id: 'g2', kind: 'goal', label: '目标', title: '用户在导出面板里看得见每次失败的原因', short: '看得见每次失败原因' },
+    { id: 'g3', kind: 'goal', label: '目标', title: '用户能在重试中取消，取消后不再重试', short: '能取消，取消后不再重试' },
+
+    { id: 'wp1', kind: 'wp', label: '工作包 1', title: '重试引擎', short: '工作包 1 · 重试引擎', summary: '按指数退避重试，格式错误不重试', status: { text: '进行中', tone: 'accent' }, items: ['网络类失败自动重试，最多三次（1 / 3 / 9 秒）', '每次失败记录原因，供界面显示', '格式类错误不重试', '暴露取消入口，取消后不再重试', '重试次数与结果可被测试观察'], plan: ['src/export/retry.ts', 'src/export/panel.tsx'] },
+    { id: 'wp2', kind: 'wp', label: '工作包 2', title: '重试状态面板', short: '工作包 2 · 重试状态面板', summary: '在导出面板里显示每次失败的原因', status: { text: '未开始', tone: 'unk' }, items: ['面板显示每次失败的原因', '显示已重试次数', '重试状态可关闭'], plan: ['src/export/panel.tsx'] },
+    { id: 'wp3', kind: 'wp', label: '工作包 3', title: '取消入口', short: '工作包 3 · 取消入口', summary: '面板上给一个取消入口', status: { text: '缺 Task', tone: 'fail' }, items: ['沿用面板已有的取消入口，不新建弹窗', '取消后不再重试', '界面上说清：已发出的请求可能仍在进行'], plan: ['src/export/retry.ts', 'src/export/panel.tsx'] },
+
+    { id: 'i1', kind: 'ires', label: '内部调研', title: '导出模块现状', short: '导出模块现状', finding: '现有导出失败只提示一次，没有重试；面板已有取消按钮', origin: '导出模块现有代码', src: [{ kind: '内部调研', name: '导出模块现状', loc: '调研笔记 · 导出模块', path: '.task/export-retry/research/internal-export.md' }] },
+    { id: 'i2', kind: 'ires', label: '内部调研', title: '失败类型判定现状', short: '失败类型判定现状', finding: '错误已能区分网络类与格式类，可直接作为重试条件', origin: '导出模块现有代码', src: [{ kind: '内部调研', name: '失败类型判定现状', loc: '调研笔记 · 失败类型', path: '.task/export-retry/research/internal-errors.md' }] },
+    { id: 'e1', kind: 'eres', label: '外部调研', title: '重试策略调研', short: '重试策略调研', finding: '指数退避是通行做法，可避免同时重试打满服务', origin: '公开资料 · 重试策略', src: [{ kind: '外部调研', name: '重试策略调研', loc: '调研笔记 · 重试策略', path: '.task/export-retry/research/external-retry.md' }] },
+    { id: 'e2', kind: 'eres', label: '外部调研', title: '同类产品做法', short: '同类产品做法', finding: '在进行中的面板上直接展示失败原因和取消入口，最多重试三次', origin: '同类导出功能', src: [{ kind: '外部调研', name: '同类产品做法', loc: '调研笔记 · 同类产品', path: '.task/export-retry/research/external-peers.md' }] },
+
+    { id: 'd1', kind: 'dec', label: '决策 1', title: '重试采用指数退避', short: '决策 1 · 指数退避', detail: '间隔 1 / 3 / 9 秒，不用固定间隔', why: '避免同时重试把服务打满', src: [{ kind: '当前决定', name: '决定记录', loc: '决定记录 · 决定 1', path: '.task/export-retry/decisions.md' }] },
+    { id: 'd2', kind: 'dec', label: '决策 2', title: '重试状态放在导出面板里', short: '决策 2 · 状态放面板里', detail: '不新建页面', why: '用户是在导出的上下文里关心它', src: [{ kind: '当前决定', name: '决定记录', loc: '决定记录 · 决定 2', path: '.task/export-retry/decisions.md' }] },
+
+    { id: 'p1', kind: 'phase', label: 'P1', title: '重试引擎', short: 'P1 · 重试引擎', summary: '实现指数退避重试，并把失败原因暴露给界面', status: { text: '进行中', tone: 'accent' } },
+    { id: 'p2', kind: 'phase', label: 'P2', title: '界面与取消', short: 'P2 · 界面与取消', summary: '在导出面板里显示重试状态，并提供取消入口', status: { text: '有不一致', tone: 'fail', warn: true } },
+
+    { id: 'task1', kind: 'task', label: 'Task', title: '调研重试策略', short: '调研重试策略', phase: 'p1', summary: '看清同类产品如何重试，为决策 1 提供依据', status: { text: '已完成', tone: 'ok' }, note: '调研任务，不改文件' },
+    { id: 'task2', kind: 'task', label: 'Task', title: '实现重试引擎', short: '实现重试引擎', phase: 'p1', summary: '按指数退避实现重试，并把每次失败的原因暴露给界面', status: { text: '进行中', tone: 'accent' }, items: ['网络类失败自动重试，最多三次', '每次失败记录原因', '格式类错误不重试', '重试次数与结果可被测试观察'], plan: ['src/export/retry.ts'] },
+    { id: 'task3', kind: 'task', label: 'Task', title: '重试状态面板', short: '重试状态面板', phase: 'p2', summary: '在导出面板里显示每次失败的原因与重试次数', status: { text: '未开始', tone: 'unk' }, items: ['面板显示失败原因', '显示已重试次数', '重试状态可关闭'], plan: ['src/export/panel.tsx'] },
+    { id: 'task4', kind: 'task', label: 'Task', title: '补测试', short: '补测试', phase: 'p2', summary: '计划里的收尾工作：为重试补充测试', status: { text: '声称完成', tone: 'fail', warn: true } },
+    { id: 'task5', kind: 'task', label: 'Task', title: '整体验收', short: '整体验收', phase: 'p2', summary: '逐条回查四条要求与证据', status: { text: '未执行', tone: 'unk' } },
+
+    { id: 'file1', kind: 'file', label: '文件', title: 'src/export/retry.ts', short: 'retry.ts', path: 'src/export/retry.ts', note: '新增重试引擎，对应要求 1、4', status: { text: '真实改动', tone: 'ok' }, src: [{ kind: '真实改动', name: 'src/export/retry.ts', loc: '改动清单 · retry.ts', path: '.task/export-retry/changes.md' }] },
+    { id: 'file2', kind: 'file', label: '文件', title: 'src/export/panel.tsx', short: 'panel.tsx', path: 'src/export/panel.tsx', note: '面板增加重试状态，对应要求 2', status: { text: '真实改动', tone: 'ok' }, src: [{ kind: '真实改动', name: 'src/export/panel.tsx', loc: '改动清单 · panel.tsx', path: '.task/export-retry/changes.md' }] },
+
+    { id: 'r1', kind: 'risk', label: '未决项', title: '取消按钮的文案还没定', short: '取消按钮文案未定', of: 'wp3', status: { text: '未决', tone: 'unk' } },
+    { id: 'r2', kind: 'risk', label: '风险', title: '取消后，已发出的请求可能仍在进行', short: '取消后请求可能仍在进行', of: 'wp3', status: { text: '风险', tone: 'fail', warn: true } },
+
+    { id: 'a1', kind: 'acc', label: '验收', title: '失败后自动重试，最多三次', short: '验收 · 最多重试三次', of: 'req1', summary: '检查：连续制造网络失败，第三次重试后不再继续', status: { text: '未验收', tone: 'unk' } },
+    { id: 'a2', kind: 'acc', label: '验收', title: '每次失败的原因都看得见', short: '验收 · 失败原因可见', of: 'req2', summary: '检查：面板逐次列出失败原因', status: { text: '未验收', tone: 'unk' } },
+    { id: 'a3', kind: 'acc', label: '验收', title: '点取消后不再重试', short: '验收 · 取消后停止', of: 'req3', summary: '检查：重试中点取消，之后没有新的重试', status: { text: '未验收', tone: 'unk' } },
+    { id: 'a4', kind: 'acc', label: '验收', title: '格式错误不重试', short: '验收 · 格式错误不重试', of: 'req4', summary: '检查：格式类错误只失败一次，不进入重试', status: { text: '未验收', tone: 'unk' } },
+
+    { id: 'test-post', kind: 'test', label: '测试', title: '实施后测试', short: '实施后测试', pass: 12, fail: 1, exit: 1, failing: 'retry-cancel.test.ts', explain: '取消之后仍然发生了一次重试；真实结果断言失败，不是环境问题。', output: '2026-10-19-导出重试.output', status: { text: '1 失败', tone: 'fail' }, src: [{ kind: '原始输出', name: '实施后测试', loc: '2026-10-19-导出重试.output', path: '.task/export-retry/outputs/2026-10-19-导出重试.output', state: 'unreadable' }] },
+    { id: 'test-pre', kind: 'test', label: '测试', title: '先写的测试（还没实现）', short: '先写的测试', fail: 6, exit: 1, explain: '提前写好、故意失败，用来证明新功能还没做。它和「实施后测试失败」是两件事。', output: '2026-10-19-重试基线.output', status: { text: '基线', tone: 'unk' }, src: [{ kind: '原始输出', name: '先写的测试', loc: '2026-10-19-重试基线.output', path: '.task/export-retry/outputs/2026-10-19-重试基线.output' }] },
+  ],
+
+  /* 主链条：需求 → 工作包 → Task → 文件 → 测试 */
+  edges: [
+    ['req1', 'wp1'], ['req4', 'wp1'], ['req2', 'wp2'], ['req3', 'wp3'],
+    ['wp1', 'task1'], ['wp1', 'task2'], ['wp2', 'task3'],
+    ['task2', 'file1'], ['task3', 'file2'],
+    ['file1', 'test-post'], ['file1', 'test-pre'],
+  ],
+  /* 旁路：目标 / 调研 / 决策 → 工作包 */
+  sideEdges: [
+    ['g1', 'wp1'], ['g2', 'wp2'], ['g3', 'wp3'],
+    ['i1', 'wp1'], ['i2', 'wp1'], ['i1', 'wp2'], ['i1', 'wp3'],
+    ['e1', 'wp1'], ['e2', 'wp1'], ['e2', 'wp2'], ['e2', 'wp3'],
+    ['d1', 'wp1'], ['d2', 'wp2'], ['d2', 'wp3'],
+  ],
+
+  flowKinds: ['req', 'wp', 'task', 'file', 'test'],
+  lanes: ['req', 'ires', 'eres', 'goal', 'dec', 'wp', 'risk', 'phase', 'task', 'file', 'test', 'acc'],
+  phaseTasks: { p1: ['task1', 'task2'], p2: ['task3', 'task4', 'task5'] },
+  changedChips: [
+    { label: '重试状态面板', id: 'task3' },
+    { label: '测试结果', id: 'test-post' },
+  ],
+  initialChanged: ['task3', 'test-post'],
+  progress: {
+    reqIds: ['req1', 'req2', 'req3', 'req4'],
+    unlinkedTaskIds: ['task4', 'task5'],
+  },
+};
+
+/* ============================================================
+   2. 派生逻辑（等价于 src/data.ts）
+   ============================================================ */
+const OBJ = {};
+DATA.objects.forEach(function (o) { OBJ[o.id] = o; });
+const IDS = DATA.objects.map(function (o) { return o.id; });
+const IDX = new Map(IDS.map(function (id, i) { return [id, i]; }));
+const FLOW_KINDS = DATA.flowKinds;
+const LANES = DATA.lanes;
+const PROGRESS_KINDS = ['req', 'wp', 'task'];
+const SIDE_KINDS = ['goal', 'ires', 'eres', 'dec'];
+
+function kids(id, edges) {
+  const list = edges || DATA.edges;
+  return list.filter(function (e) { return e[0] === id; }).map(function (e) { return e[1]; });
+}
+function parents(id, edges) {
+  const list = edges || DATA.edges;
+  return list.filter(function (e) { return e[1] === id; }).map(function (e) { return e[0]; });
+}
+function wpsUsing(sideId) { return kids(sideId, DATA.sideEdges); }
+
+function walk(ids, next) {
+  const seen = new Set();
+  const stack = ids.slice();
+  while (stack.length) {
+    const c = stack.pop();
+    next(c).forEach(function (n) {
+      if (!seen.has(n)) { seen.add(n); stack.push(n); }
+    });
+  }
+  return seen;
+}
+const descendants = function (ids) { return walk(ids, function (id) { return kids(id); }); };
+const ancestors = function (ids) { return walk(ids, function (id) { return parents(id); }); };
+
+const GAP = {
+  wp: ['缺 工作包', 'fail'],
+  task: ['缺 Task', 'fail'],
+  file: ['缺 真实改动', 'fail'],
+  test: ['未执行', 'unk'],
+};
+
+function flowFor(id) {
+  const o = OBJ[id];
+  let base;
+  let selfKind = o.kind;
+  let up;
+  let down;
+  if (o.kind === 'phase') {
+    base = DATA.phaseTasks[id];
+    selfKind = 'task';
+    up = ancestors(base);
+    down = descendants(base);
+  } else if (SIDE_KINDS.indexOf(o.kind) >= 0) {
+    const wps = wpsUsing(id);
+    base = [];
+    selfKind = null;
+    down = new Set(wps.concat(Array.from(descendants(wps))));
+    up = ancestors(wps);
+  } else {
+    base = [id];
+    up = ancestors(base);
+    down = descendants(base);
+  }
+  const all = new Set(base.concat(Array.from(up), Array.from(down)));
+  const selfIdx = selfKind ? FLOW_KINDS.indexOf(selfKind) : FLOW_KINDS.indexOf('wp') - 1;
+  const cols = FLOW_KINDS.map(function (k, i) {
+    const items = Array.from(all).filter(function (x) { return OBJ[x].kind === k; });
+    items.sort(function (a, b) { return IDX.get(a) - IDX.get(b); });
+    const col = { kind: k, items: items };
+    if (!items.length) {
+      if (i > selfIdx && GAP[k]) {
+        col.gap = GAP[k][0];
+        col.gapTone = GAP[k][1];
+      } else {
+        col.neutralEmpty = true;
+      }
+    }
+    return col;
+  });
+  if (o.kind === 'task' && id === 'task4') {
+    const f = cols.filter(function (c) { return c.kind === 'file'; })[0];
+    f.gap = '缺：无对应文件';
+    f.gapTone = 'fail';
+    f.neutralEmpty = false;
+  }
+  return { cols: cols, selfKind: selfKind };
+}
+
+const ANCHOR = { req: 0, acc: 0, wp: 1, goal: 1, ires: 1, eres: 1, dec: 1, risk: 1, phase: 2, task: 2, file: 3, test: 4 };
+const CORE = ['req', 'wp', 'task', 'file', 'test'];
+const GAPS = {
+  wp: ['缺：没有工作包承接', 'fail'],
+  task: ['缺：还没拆出 Task', 'fail'],
+  file: ['缺：没有真实改动', 'fail'],
+  test: ['未执行：还没有测试结果', 'unk'],
+};
+
+function chainFor(id) {
+  const o = OBJ[id];
+  const side = ['goal', 'ires', 'eres', 'dec'];
+  const base = o.kind === 'phase'
+    ? DATA.phaseTasks[id]
+    : side.indexOf(o.kind) >= 0
+      ? wpsUsing(id)
+      : (o.kind === 'acc' || o.kind === 'risk') ? [o.of] : [id];
+  const S = new Set([id].concat(base));
+  base.forEach(function (b) {
+    ancestors([b]).forEach(function (x) { S.add(x); });
+    descendants([b]).forEach(function (x) { S.add(x); });
+  });
+  Array.from(S).filter(function (x) { return OBJ[x].kind === 'wp'; }).forEach(function (w) {
+    ancestors([w]).forEach(function (x) { S.add(x); });
+    DATA.sideEdges.filter(function (e) { return e[1] === w; }).forEach(function (e) { S.add(e[0]); });
+  });
+  IDS.forEach(function (x) {
+    const t = OBJ[x];
+    if ((t.kind === 'risk' || t.kind === 'acc') && S.has(t.of)) S.add(x);
+    if (DATA.hasPhase && t.kind === 'task' && S.has(x) && t.phase) S.add(t.phase);
+  });
+  const anchor = ANCHOR[o.kind] || 0;
+  return LANES.map(function (k) {
+    const items = IDS.filter(function (x) { return S.has(x) && OBJ[x].kind === k; });
+    const lane = { kind: k, items: items };
+    const ci = CORE.indexOf(k);
+    if (!items.length && GAPS[k] && (ci > anchor || (k === 'wp' && o.kind === 'task'))) {
+      lane.gap = GAPS[k][0];
+      lane.gapTone = GAPS[k][1];
+      if (k === 'wp') {
+        lane.gap = '未挂到任何工作包';
+        lane.gapTone = 'unk';
+      }
+      if (k === 'file' && id === 'task4') lane.gap = '缺：声称完成，但没有对应文件';
+    }
+    return lane;
+  }).filter(function (l) { return l.items.length || l.gap; });
+}
+
+/* ============================================================
+   3. 渲染（等价于 src/App.tsx + src/kinds.tsx + src/ui.tsx）
+   ============================================================ */
+const esc = function (s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+};
+
+function icon(kind, size, cls) {
+  const s = size || 16;
+  return '<svg class="icon ' + (cls || '') + '" width="' + s + '" height="' + s + '" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + DATA.kinds[kind].icon + '</svg>';
+}
+function warnIcon(cls) {
+  return '<svg class="icon ' + (cls || '') + '" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">' +
+    '<path d="M8 1.8 14.6 13.4H1.4L8 1.8Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>' +
+    '<path d="M8 6.4v3.2M8 11.4v.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
+}
+function chevron(open) {
+  return '<svg class="chev' + (open ? ' is-open' : '') + '" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">' +
+    '<path d="M4 2.5 7.5 6 4 9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+}
+function tag(text, tone, warn, sm, extra) {
+  return '<span class="tag' + (sm ? ' sm' : '') + ' tag-' + tone + (extra ? ' ' + extra : '') + '">' +
+    (warn ? warnIcon() : '') + esc(text) + '</span>';
+}
+function statusTag(s, sm) { return tag(s.text, s.tone, s.warn, sm); }
+
+function kindChip(kind, text) {
+  const k = DATA.kinds[kind];
+  let cls = 'chip soft k-' + kind;
+  if (kind === 'task') cls = 'chip chip-solid k-task';
+  else if (kind === 'phase') cls = 'chip chip-outline k-phase';
+  else if (kind === 'file') cls = 'chip chip-dashed k-file';
+  return '<span class="' + cls + '">' + icon(kind, 14) + esc(text === undefined ? k.label : text) + '</span>';
+}
+function gapBox(text) { return '<div class="gapbox">' + warnIcon() + '<span>' + esc(text) + '</span></div>'; }
+function emptyBox(text) { return '<div class="emptybox">' + esc(text) + '</div>'; }
+
+/* ---- 左栏 ---- */
+const num = function (id) { return OBJ[id].label.replace(/\D+/g, ''); };
+
+function hintOf(id) {
+  const o = OBJ[id];
+  if (o.kind === 'req') {
+    const w = kids(id);
+    return w.length
+      ? [['→ 工作包 ' + w.map(num).join('、'), 'plain']]
+      : [['缺：没有工作包', 'fail']];
+  }
+  if (o.kind === 'wp') {
+    const r = parents(id);
+    const t = kids(id).filter(function (x) { return OBJ[x].kind === 'task'; });
+    return [
+      [r.length ? '← 要求 ' + r.map(num).join('、') : '← 无要求', 'plain'],
+      [t.length ? '→ ' + t.length + ' 个 Task' : '→ 缺 Task', t.length ? 'plain' : 'fail'],
+    ];
+  }
+  const w = parents(id).filter(function (x) { return OBJ[x].kind === 'wp'; });
+  const out = [[w.length ? '← 工作包 ' + w.map(num).join('、') : '← 未挂到工作包', w.length ? 'plain' : 'fail']];
+  if (o.phase) out.push([OBJ[o.phase].label, 'plain']);
+  return out;
+}
+
+function navRow(id) {
+  const o = OBJ[id];
+  const active = sel === id;
+  const isChanged = CHANGED.has(id);
+  const related = RELATED.has(id);
+  const st = o.status;
+  const name = o.short.replace(/^.+? · /, '');
+  const cls = 'navrow k-' + o.kind + (active ? ' is-active' : isChanged ? ' is-changed' : related ? ' is-related' : '');
+  let badge = '';
+  if (st) {
+    badge = '<span class="nst ' + (active ? 'is-active' : 'tone-' + st.tone) + '">' + esc(st.text) + '</span>';
+  }
+  const hints = hintOf(id).map(function (h) {
+    const fail = h[1] === 'fail' && !active;
+    return '<span class="' + (fail ? 'is-fail' : '') + '">' + esc(h[0]) + '</span>';
+  }).join('');
+  return '<button type="button" data-nav data-go="' + id + '" tabindex="' + (active ? 0 : -1) + '"' +
+    (active ? ' aria-current="page"' : '') +
+    ' title="' + esc(o.title) + '" class="' + cls + '">' +
+    '<span class="navrow-main">' +
+      icon(o.kind, 15, active ? 'icon-white' : 'kt') +
+      '<span class="navrow-name">' + esc(name) + '</span>' +
+      (isChanged ? '<span class="tag sm tag-warm">有更新</span>' : '') +
+      badge +
+    '</span>' +
+    '<span class="navrow-hints">' + hints + '</span>' +
+  '</button>';
+}
+
+function sidebarHtml() {
+  const groups = ['req', 'wp', 'task'].map(function (kind) {
+    return { kind: kind, ids: IDS.filter(function (i) { return OBJ[i].kind === kind; }) };
+  });
+  const hasUpdate = CHANGED.has('test-post');
+  const progressIcon = '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true">' +
+    '<path d="M2.5 3h11M2.5 8h11M2.5 13h11M5.5 1.5v3M10.5 6.5v3M7 11.5v3"/></svg>';
+  return '<button type="button" data-nav data-go="progress" tabindex="' + (sel === 'progress' ? 0 : -1) + '"' +
+    (sel === 'progress' ? ' aria-current="page"' : '') +
+    ' class="nav-progress' + (sel === 'progress' ? ' is-active' : '') + '">' +
+    progressIcon + '进度总览' +
+    (hasUpdate ? '<span class="tag sm tag-warm">有更新</span>' : '') +
+  '</button>' +
+  groups.map(function (g) {
+    return '<section class="nav-group">' +
+      '<h3>' + kindChip(g.kind) + '<span class="nav-count">' + g.ids.length + ' 个</span></h3>' +
+      '<div class="nav-list">' + g.ids.map(navRow).join('') + '</div>' +
+    '</section>';
+  }).join('') +
+  '<p class="nav-note">点选一项，浅蓝底的就是它的上游和下游。目标、调研、决策、文件、测试在详情页的逻辑链条里。</p>';
+}
+
+/* ---- 卡片 ---- */
+function objChip(id, opt) {
+  const o = OBJ[id];
+  const cur = opt && opt.current;
+  const chg = opt && opt.changed;
+  const st = o.status;
+  return '<button type="button" data-go="' + id + '"' + (cur ? ' aria-current="page"' : '') +
+    ' class="objchip k-' + o.kind + (cur ? ' is-current' : chg ? ' is-changed' : '') + '">' +
+    '<span class="objchip-top">' + icon(o.kind, 13, 'kt') +
+      '<span class="objchip-name' + (o.kind === 'file' ? ' mono' : '') + '">' + esc(o.short) + '</span>' +
+    '</span>' +
+    (st ? '<span class="objchip-status t-' + st.tone + '">' + (st.warn ? warnIcon() : '') + esc(st.text) + '</span>' : '') +
+  '</button>';
+}
+
+function objCard(id, opt) {
+  const o = OBJ[id];
+  const opt2 = opt || {};
+  const cur = opt2.current;
+  const chg = opt2.changed;
+  const k = DATA.kinds[o.kind];
+  const label = (o.kind === 'phase' || o.kind === 'risk') ? o.label : k.label;
+  const line = opt2.line !== undefined && opt2.line !== null ? opt2.line : (o.summary || o.finding || o.detail);
+  const cls = 'objcard k-' + o.kind + (cur ? ' is-current' : '') + (chg ? ' is-changed' : '');
+  return '<button type="button" data-go="' + id + '"' + (cur ? ' aria-current="page"' : '') + ' class="' + cls + '">' +
+    '<span class="objcard-icon' + (o.kind === 'task' ? ' task-icon' : '') + '">' + icon(o.kind, 18) + '</span>' +
+    '<span class="objcard-body">' +
+      '<span class="objcard-label">' + esc(label) + '</span>' +
+      '<span class="objcard-title' + (o.kind === 'file' ? ' mono' : '') + '">' + esc(o.title) + '</span>' +
+      (line ? '<span class="objcard-line">' + esc(line) + '</span>' : '') +
+    '</span>' +
+    (cur ? '<span class="objcard-cur">当前</span>' : '') +
+    (o.status ? statusTag(o.status) : '') +
+  '</button>';
+}
+
+const testLine = function (id) {
+  return id === 'test-post' ? '12 通过 · 1 失败 · 退出码 1' : '6 项断言失败 · 预期内（还没实现）';
+};
+const decLine = function (id) {
+  return OBJ[id].detail + '；因为' + OBJ[id].why;
+};
+
+/* ---- Hero ---- */
+function heroHtml(o) {
+  const k = DATA.kinds[o.kind];
+  const changed = CHANGED.has(o.id);
+  const head = '<div class="hero-head">' + kindChip(o.kind) +
+    (o.kind === 'phase' ? '<span class="hero-phase">' + esc(o.label) + '</span>' : '') +
+    (o.status ? statusTag(o.status) : '') +
+    (changed ? tag('有更新', 'warm') : '') +
+  '</div>';
+  const wrap = 'hero k-' + o.kind + (changed ? ' is-changed' : '');
+  const title = function (cls, text) {
+    return '<h2 tabindex="-1" class="' + cls + '">' + esc(text) + '</h2>';
+  };
+
+  if (o.kind === 'req') {
+    return '<div class="' + wrap + '">' + head +
+      '<div class="hero-quote">' +
+        '<span class="hero-quote-icon">' + icon('req', 28) + '</span>' +
+        title('h2-xl', o.quote || o.title) +
+      '</div>' +
+      '<p class="hero-note">用户原话 · 来自 ' + esc(o.source) + '</p>' +
+    '</div>';
+  }
+  if (o.kind === 'ires' || o.kind === 'eres') {
+    return '<div class="' + wrap + '">' + head + title('h2-lg', o.title) +
+      '<div class="hero-finding">' +
+        '<div class="finding-k">调研结论</div>' +
+        '<p class="finding-v">' + esc(o.finding) + '</p>' +
+      '</div>' +
+      '<p class="hero-note small">' +
+        (o.kind === 'ires' ? '查的是我们自己的代码和数据' : '查的是外部资料和同类做法') + ' · ' + esc(o.origin) +
+      '</p>' +
+    '</div>';
+  }
+  if (o.kind === 'dec') {
+    return '<div class="' + wrap + '">' + head + title('h2-xl', o.title) +
+      '<div class="hero-grid">' +
+        '<div class="hero-cell soft"><div class="cell-k">决定了什么</div><p class="cell-v">' + esc(o.detail) + '</p></div>' +
+        '<div class="hero-cell page"><div class="cell-k sub">为什么这样定</div><p class="cell-v-sm">' + esc(o.why) + '</p></div>' +
+      '</div>' +
+    '</div>';
+  }
+  if (o.kind === 'file') {
+    return '<div class="' + wrap + '">' + head + title('h2-lg h2-mono', o.title) +
+      '<p class="hero-file-note">' + esc(o.note) + '</p>' +
+    '</div>';
+  }
+  if (o.kind === 'test') {
+    const post = o.id === 'test-post';
+    const stats = post
+      ? [
+          { n: o.pass, label: '通过', tone: 'ok', sign: '✓' },
+          { n: o.fail, label: '失败', tone: 'fail', sign: '✕' },
+          { n: o.exit, label: '退出码', tone: 'unk', sign: '#' },
+        ]
+      : [
+          { n: o.fail, label: '项断言失败（预期内）', tone: 'unk', sign: '–' },
+          { n: o.exit, label: '退出码', tone: 'unk', sign: '#' },
+        ];
+    return '<div class="' + wrap + '">' + head + title('h2-xl', o.title) +
+      '<div class="stats">' + stats.map(function (s) {
+        return '<div class="stat stat-' + s.tone + '">' +
+          '<div class="stat-row"><span class="stat-icon" aria-hidden="true">' + s.sign + '</span>' +
+          '<span class="stat-num">' + s.n + '</span></div>' +
+          '<div class="stat-label">' + esc(s.label) + '</div>' +
+        '</div>';
+      }).join('') + '</div>' +
+      '<p class="hero-explain">' + esc(o.explain) + '</p>' +
+    '</div>';
+  }
+  return '<div class="' + wrap + '">' + head + title('h2-xl', o.title) +
+    (o.summary ? '<p class="hero-summary">' + esc(o.summary) + '</p>' : '') +
+  '</div>';
+}
+
+/* ---- 两份记录对不上 ---- */
+function contraHtml(o) {
+  if (o.id !== 'p2' && o.id !== 'task4') return '';
+  const claim = o.id === 'p2' ? '「补测试」已完成' : '已完成';
+  const fact = o.id === 'p2' ? '没有任何对应文件' : '没有对应文件，也没有测试输出';
+  return '<div class="contra">' +
+    '<p class="contra-head">' + warnIcon() + '两份记录对不上，这里不判断哪边对</p>' +
+    '<div class="contra-grid">' +
+      '<div class="contra-cell soft"><div class="contra-k">任务清单里写的</div><div class="contra-v">' + esc(claim) + '</div></div>' +
+      '<div class="contra-cell fail"><div class="contra-k">改动记录里查到的</div><div class="contra-v">' + esc(fact) + '</div></div>' +
+    '</div>' +
+  '</div>';
+}
+
+/* ---- 逻辑链条 ---- */
+function fileFoldHtml(ids, current) {
+  const open = ui.fileFold;
+  return '<div class="filefold k-file">' +
+    '<button type="button" data-toggle="filefold" class="filefold-head" aria-expanded="' + open + '">' +
+      '<span class="filefold-icon">' + icon('file', 18) + '</span>' +
+      '<span class="filefold-title">真实改动 ' + ids.length + ' 个文件</span>' +
+      '<span class="filefold-hint">' + (open ? '收起' : '展开列表') + chevron(open) + '</span>' +
+    '</button>' +
+    (open ? '<div class="filefold-body">' + ids.map(function (x) {
+      return objCard(x, { current: x === current });
+    }).join('') + '</div>' : '') +
+  '</div>';
+}
+
+function chainHtml(o) {
+  const lanes = chainFor(o.id);
+  const cur = LANES.indexOf(o.kind);
+  return '<section class="chain">' +
+    '<h3>逻辑链条：从原始需求到落地</h3>' +
+    '<p class="lead">每一环都是平级对象，按「需求 → 依据 → 工作包 → Task → 文件 → 测试 → 验收」从上往下排；黑框是你现在看的这一项。</p>' +
+    '<ol>' + lanes.map(function (l, i) {
+      const k = DATA.kinds[l.kind];
+      const li = LANES.indexOf(l.kind);
+      const pos = li === cur ? '当前这一环' : li < cur ? '上游' : '下游';
+      const last = i === lanes.length - 1;
+      let body;
+      if (l.kind === 'file' && l.items.length) {
+        body = fileFoldHtml(l.items, o.id);
+      } else {
+        body = '<div class="lane-items">' +
+          l.items.map(function (x) {
+            const line = OBJ[x].kind === 'dec' ? decLine(x) : OBJ[x].kind === 'test' ? testLine(x) : undefined;
+            return objCard(x, { current: x === o.id, changed: CHANGED.has(x), line: line });
+          }).join('') +
+          (!l.items.length && l.gap ? (l.gapTone === 'fail' ? gapBox(l.gap) : emptyBox(l.gap)) : '') +
+        '</div>';
+      }
+      return '<li class="lane">' +
+        '<div class="lane-rail">' +
+          '<span class="lane-dot k-' + l.kind + (li === cur ? ' is-cur' : '') + '">' + icon(l.kind, 20) + '</span>' +
+          (last ? '' : '<span class="lane-line" aria-hidden="true"></span>') +
+        '</div>' +
+        '<div class="lane-body">' +
+          '<div class="lane-head">' +
+            '<span class="lane-label">' + esc(k.label) + '</span>' +
+            (l.items.length ? '<span class="lane-count">' + l.items.length + ' 项</span>' : '') +
+            '<span class="lane-pos' + (li === cur ? ' is-cur' : '') + '">' + pos + '</span>' +
+          '</div>' +
+          body +
+        '</div>' +
+      '</li>';
+    }).join('') + '</ol>' +
+  '</section>';
+}
+
+/* ---- 计划动的文件（和真实改动分栏） ---- */
+function planHtml(files) {
+  const open = ui.plan;
+  return '<div>' +
+    '<button type="button" data-toggle="plan" class="planbtn k-file" aria-expanded="' + open + '">' +
+      icon('file', 15, 'kt') + '计划动 ' + files.length + ' 个文件（还没改）' +
+      '<span class="hint">' + (open ? '收起' : '展开列表') + chevron(open) + '</span>' +
+    '</button>' +
+    (open ? '<div class="planlist">' + files.map(function (f) {
+      return '<span class="planchip k-file">' + icon('file', 13) + esc(f) +
+        '<span class="note">计划 · 未改</span></span>';
+    }).join('') + '</div>' : '') +
+  '</div>';
+}
+
+function extrasHtml(o) {
+  let out = '';
+  if (o.items) {
+    out += '<section class="section">' +
+      '<h3 class="section-title">这一项要做到<span class="count">' + o.items.length + '</span></h3>' +
+      '<div class="panel"><ol class="steps">' + o.items.map(function (t, i) {
+        return '<li><span class="step-num k-' + o.kind + '">' + (i + 1) + '</span>' + esc(t) + '</li>';
+      }).join('') + '</ol></div>' +
+    '</section>';
+  }
+  if (o.plan) {
+    out += '<section class="section">' +
+      '<h3 class="section-title">计划动的文件<span class="hint">还没改，和链条里「文件」的真实改动分开</span></h3>' +
+      planHtml(o.plan) +
+    '</section>';
+  }
+  if (o.id === 'test-post' && o.failing) {
+    out += '<section class="section">' +
+      '<h3 class="section-title">失败的那一项</h3>' +
+      '<div class="failitem">' + warnIcon() +
+        '<code class="mono13">' + esc(o.failing) + '</code>' +
+        '<span class="msg">取消之后又重试了一次</span>' +
+      '</div>' +
+    '</section>';
+  }
+  return out;
+}
+
+/* ---- 来源与路径 ---- */
+function sourceRow(s, i) {
+  const open = ui.srcRows.has(i);
+  const state = s.state || 'ok';
+  const tagHtml = state !== 'ok'
+    ? tag(state === 'stale' ? '指针失效' : '来源不可读', 'fail', false, false, 'ml1')
+    : '';
+  let body = '';
+  if (open) {
+    body = '<div id="src-panel-' + i + '" aria-live="polite" class="srow-body">' +
+      '<p>' + (state === 'ok'
+        ? '当前预览无法直接打开本地原件。请按下方路径查阅。'
+        : state === 'stale'
+          ? '指针失效：原件中未找到目标标题或编号。其余内容继续显示。'
+          : '来源不可读：权限不足。') + '</p>' +
+      '<p class="p2">路径：<code class="mono-ink">' + esc(s.path) + '</code></p>' +
+      (state === 'unreadable'
+        ? '<p class="p2">具体错误：<code class="mono-ink">EACCES: permission denied</code></p>'
+        : '') +
+    '</div>';
+  }
+  return '<div class="srow">' +
+    '<button type="button" data-toggle="srcrow" data-idx="' + i + '" aria-expanded="' + open + '"' +
+      ' aria-controls="src-panel-' + i + '" class="srow-head">' +
+      '<span class="k">' + esc(s.kind) + '</span><span class="dot">·</span>' +
+      '<span>' + esc(s.name) + '</span><span class="dot">·</span>' +
+      '<span class="mono12">' + esc(s.loc) + '</span>' +
+      tagHtml +
+    '</button>' + body +
+  '</div>';
+}
+
+function sourcesHtml(o) {
+  if (!o.src || !o.src.length) return '';
+  const open = ui.sources;
+  return '<div class="sources">' +
+    '<button type="button" data-toggle="sources" class="src-toggle" aria-expanded="' + open + '">' +
+      chevron(open) + '来源与路径（' + o.src.length + '）' +
+    '</button>' +
+    (open ? '<div class="src-body">' + o.src.map(sourceRow).join('') + '</div>' : '') +
+  '</div>';
+}
+
+/* ---- 进度总览 ---- */
+function flowCells(id) {
+  const cols = flowFor(id).cols.filter(function (c) { return PROGRESS_KINDS.indexOf(c.kind) >= 0; });
+  const cur = OBJ[id].kind === 'phase' ? '' : id;
+  return cols.map(function (c) {
+    return '<div class="tcell">' +
+      c.items.map(function (x) {
+        return objChip(x, { current: x === cur, changed: CHANGED.has(x) });
+      }).join('') +
+      (!c.items.length && c.gap ? gapBox(c.gap) : (!c.items.length ? '<div class="dash">—</div>' : '')) +
+    '</div>';
+  }).join('');
+}
+
+function progressHtml() {
+  const flow = DATA.stages.map(function (s, i) {
+    return '<div class="flow-item">' +
+      '<div class="flow-box is-' + s.state + '">' +
+        '<div class="flow-k">' + (s.state === 'done' ? '已完成' : s.state === 'now' ? '当前' : '未开始') + '</div>' +
+        '<div class="flow-n">' + esc(s.name) + '</div>' +
+      '</div>' +
+      (i < DATA.stages.length - 1 ? '<span class="sep" aria-hidden="true">›</span>' : '') +
+    '</div>';
+  }).join('');
+  return '<div class="flow">' + flow + '</div>' +
+    '<section class="section">' +
+      '<h3 class="section-title">每条原始需求走到了哪一步<span class="hint">一行一条；虚线红框 = 这一环缺</span></h3>' +
+      '<div class="panel flush"><div class="scroll-thin table-scroll"><div class="table-inner">' +
+        '<div class="thead">' + PROGRESS_KINDS.map(function (k) { return kindChip(k); }).join('') + '</div>' +
+        DATA.progress.reqIds.map(function (r) {
+          return '<div class="trow">' + flowCells(r) + '</div>';
+        }).join('') +
+      '</div></div></div>' +
+      '<div class="unlinked">没挂到任何要求的 Task：' +
+        DATA.progress.unlinkedTaskIds.map(function (t) {
+          return '<div class="slot">' + objChip(t) + '</div>';
+        }).join('') +
+      '</div>' +
+    '</section>';
+}
+
+/* ---- 页头 / 主区 ---- */
+function taskCounts() {
+  const c = { total: 0 };
+  DATA.objects.filter(function (x) { return x.kind === 'task'; }).forEach(function (t) {
+    c.total += 1;
+    const k = (t.status && t.status.text) || '';
+    c[k] = (c[k] || 0) + 1;
+  });
+  return c;
+}
+
+function headerRightHtml() {
+  const live = DATA.changedChips.filter(function (c) { return CHANGED.has(c.id); });
+  let out = '';
+  if (live.length) {
+    out += '<span class="hdr-live-label">有更新：</span>';
+    out += live.map(function (c) {
+      return '<button type="button" data-go="' + c.id + '" class="chip-live">' + esc(c.label) + '</button>';
+    }).join('');
+    out += '<button type="button" data-seen class="btn-seen">我看过了</button>';
+  }
+  out += '<span class="hdr-readonly">只读视图</span>';
+  return out;
+}
+
+function headerHtml() {
+  const now = DATA.stages.filter(function (s) { return s.state === 'now'; })[0];
+  const c = taskCounts();
+  const stages = DATA.stages.map(function (st, i) {
+    return '<li>' +
+      '<div class="hstage is-' + st.state + '"' + (st.state === 'now' ? ' aria-current="step"' : '') + '>' +
+        '<div class="hstage-k">' + (st.state === 'done' ? '已完成' : st.state === 'now' ? '当前' : '未开始') + '</div>' +
+        '<div class="hstage-n">' + esc(st.name) + '</div>' +
+      '</div>' +
+      (i < DATA.stages.length - 1 ? '<span class="sep" aria-hidden="true">›</span>' : '') +
+    '</li>';
+  }).join('');
+  return '<div class="hdr-task">' +
+      '<div class="hdr-task-name">' + esc(DATA.task) + '</div>' +
+      '<div class="hdr-task-sub">当前阶段：<b>' + esc(DATA.stageLabel) + '</b>（' + esc(now ? now.hint : '') + '）</div>' +
+    '</div>' +
+    '<ol class="hdr-stages" aria-label="任务阶段">' + stages + '</ol>' +
+    '<div class="hdr-counts">' +
+      '<div>Task 共 ' + c.total + ' 个：已完成 ' + (c['已完成'] || 0) + ' · 进行中 ' + (c['进行中'] || 0) + '</div>' +
+      '<div>未开始/未执行 ' + ((c['未开始'] || 0) + (c['未执行'] || 0)) + ' · ' +
+        '<span class="fail-strong">声称完成但无文件 ' + (c['声称完成'] || 0) + '</span></div>' +
+    '</div>' +
+    '<div class="hdr-right">' + headerRightHtml() + '</div>';
+}
+
+function mainHtml() {
+  const back = hist.length ? '<button type="button" data-back class="backbtn">← 返回上一对象</button>' : '';
+  const toolbar = '<div class="toolbar">' + back + '</div>';
+  if (sel === 'progress') {
+    return toolbar + '<h2 tabindex="-1" class="page-h2">进度总览</h2>' + progressHtml();
+  }
+  const o = OBJ[sel];
+  return toolbar + heroHtml(o) + contraHtml(o) + chainHtml(o) + extrasHtml(o) + sourcesHtml(o);
+}
+</script>
+
+<script>
+/* ============================================================
+   4. 状态与交互
+   ============================================================ */
+const hdr = document.getElementById('hdr');
+const sideNav = document.getElementById('side-nav');
+const side = document.getElementById('side');
+const scroller = document.getElementById('scroller');
+const main = document.getElementById('main');
+
+const ui = { sources: false, plan: false, fileFold: false, srcRows: new Set() };
+const CHANGED = new Set(DATA.initialChanged);
+let sel = 'progress';
+let hist = [];
+let scrolls = {};
+let RELATED = new Set();
+
+/* 用 DATA.kinds 里的颜色生成 12 个 kind 的 CSS 变量 */
+(function injectKindStyles() {
+  const css = Object.keys(DATA.kinds).map(function (k) {
+    const v = DATA.kinds[k];
+    return '.k-' + k + '{--kc:' + v.color + ';--ks:' + v.soft + '}';
+  }).join('\n');
+  const styleEl = document.createElement('style');
+  styleEl.textContent = css;
+  document.head.appendChild(styleEl);
+})();
+
+function resetViewUi() {
+  ui.sources = false;
+  ui.plan = false;
+  ui.srcRows = new Set();
+  let fileIds = [];
+  if (sel !== 'progress' && OBJ[sel]) {
+    const lane = chainFor(sel).filter(function (l) { return l.kind === 'file'; })[0];
+    fileIds = lane ? lane.items : [];
+  }
+  ui.fileFold = fileIds.indexOf(sel) >= 0;
+}
+
+function renderAll() {
+  const sideTop = sideNav.scrollTop;
+  RELATED = sel === 'progress'
+    ? new Set()
+    : new Set(chainFor(sel).reduce(function (acc, l) { return acc.concat(l.items); }, []));
+  hdr.innerHTML = headerHtml();
+  sideNav.innerHTML = sidebarHtml();
+  main.innerHTML = mainHtml();
+  sideNav.scrollTop = sideTop;
+}
+
+function renderMain() {
+  main.innerHTML = mainHtml();
+}
+
+function focusHeading() {
+  const h = main.querySelector('h2');
+  if (h) h.focus({ preventScroll: true });
+}
+
+function go(id) {
+  if (id === sel) return;
+  scrolls[sel] = scroller.scrollTop;
+  hist.push(sel);
+  sel = id;
+  resetViewUi();
+  renderAll();
+  scroller.scrollTop = 0;
+  focusHeading();
+}
+
+function goBack() {
+  const prev = hist[hist.length - 1];
+  if (!prev) return;
+  scrolls[sel] = scroller.scrollTop;
+  hist.pop();
+  sel = prev;
+  resetViewUi();
+  renderAll();
+  scroller.scrollTop = scrolls[prev] || 0;
+  focusHeading();
+}
+
+function handleToggle(el) {
+  const kind = el.dataset.toggle;
+  if (kind === 'sources') { ui.sources = !ui.sources; ui.srcRows = new Set(); }
+  else if (kind === 'plan') ui.plan = !ui.plan;
+  else if (kind === 'filefold') ui.fileFold = !ui.fileFold;
+  else if (kind === 'srcrow') {
+    const i = Number(el.dataset.idx);
+    if (ui.srcRows.has(i)) ui.srcRows.delete(i);
+    else ui.srcRows.add(i);
+  }
+  renderMain();
+  const selector = kind === 'srcrow'
+    ? '[data-toggle="srcrow"][data-idx="' + el.dataset.idx + '"]'
+    : '[data-toggle="' + kind + '"]';
+  const again = main.querySelector(selector);
+  if (again) again.focus();
+}
+
+document.addEventListener('click', function (e) {
+  const seen = e.target.closest('[data-seen]');
+  if (seen) { CHANGED.clear(); renderAll(); return; }
+  const back = e.target.closest('[data-back]');
+  if (back) { goBack(); return; }
+  const toggle = e.target.closest('[data-toggle]');
+  if (toggle) { handleToggle(toggle); return; }
+  const nav = e.target.closest('[data-go]');
+  if (nav) { go(nav.dataset.go); return; }
+});
+
+side.addEventListener('keydown', function (e) {
+  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+  const items = Array.from(sideNav.querySelectorAll('[data-nav]'));
+  const i = items.indexOf(document.activeElement);
+  if (i < 0) return;
+  e.preventDefault();
+  const n = items[Math.max(0, Math.min(items.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))];
+  items.forEach(function (x) { x.tabIndex = -1; });
+  n.tabIndex = 0;
+  n.focus();
+});
+
+document.getElementById('foot-dir').textContent = '数据来自 ' + DATA.sourceDir;
+resetViewUi();
+renderAll();
+</script>
+</body>
+</html>
