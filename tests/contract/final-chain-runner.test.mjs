@@ -1363,3 +1363,82 @@ describe('final-chain report native contract fallback result identity',()=>{
     writeFileSync(join(f.taskPath,'facts.jsonl'),facts);expect(ringAt(await report(f),5).state).toBe('completed');
   });
 });
+
+
+// P8 consumer616/205: actual P7 source-relative chapter and numbered selectors.
+async function p7OwnerSyntaxFixture(level='normal',pointer='SKILL.md#步骤 第1/2步') {
+  const f=taskFixture();writerIdentity(f);choice(f,level);controlledWorkflow(f);
+  const source=level==='complex'?'workflows/make-decision/steps.json':'workflows/make-decision/flows/'+level+'/steps.json';
+  const method=join(dirname(source),'SKILL.md'),steps=JSON.parse(readFileSync(join(f.repo,source),'utf8'));
+  steps.steps[0].observable_result='Actual P7 criterion. 判定消费：'+pointer+'；原件：真实human原件';put(f.repo,source,steps);
+  put(f.repo,method,'# Owned route\n## '+(level==='complex'?'方法':'步骤')+'\n'+(level==='complex'?'1. First root rule\n2. Second root rule\n':'### 1. First flow rule\nFlow criterion.\n### 2. Second flow rule\nFlow criterion.\n')+'## Outside selected chapter\n999. Outside rule must not count.\n');
+  return {...f,source,method,slug:steps.steps[0].step_slug,pointer};
+}
+describe('final-chain report actual P7 owner source syntax',()=>{
+  it.each([['complex','方法','1'],['normal','步骤','1/2'],['small','步骤','2'],['planning','步骤','1/2']])('resolves current %s source-relative chapter and selector without inventing human completion',async(level,chapter,selector)=>{
+    const f=await p7OwnerSyntaxFixture(level,'SKILL.md#'+chapter+' 第'+selector+'步'),value=await report(f),row=value.workflow_steps.find(row=>row.source===f.source&&row.step_slug===f.slug);
+    expect(row.owner_ref).toBe(f.method+'#'+chapter);expect(row.state).toBe('unavailable');expect(row.observable_result).toContain(f.pointer);
+    const ref=humanEvent(f,{source:f.source,slug:f.slug});put(f.taskPath,ref,readFileSync(join(f.taskPath,ref),'utf8').replaceAll('workflows/make-decision/flows/normal/SKILL.md#方法',f.method+'#'+chapter));
+    expect((await report(f)).workflow_steps.find(row=>row.source===f.source&&row.step_slug===f.slug).state).toBe('completed');
+  });
+  it.each(['SKILL.md#不存在 第1步','SKILL.md#步骤 第999步','SKILL.md#步骤 第1/999步','../SKILL.md#步骤 第1步','/tmp/SKILL.md#步骤 第1步'])('rejects missing chapter/selector or unsafe owner %s rather than guessing',async(pointer)=>{
+    const f=await p7OwnerSyntaxFixture('normal',pointer);put(f.repo,'workflows/make-decision/SKILL.md','# Root decoy\n## 步骤\n999. Root is not the chosen flow.\n');
+    const value=await report(f),row=value.workflow_steps.find(row=>row.source===f.source&&row.step_slug===f.slug);expect(row.owner_ref).toBeNull();expect(row.state).toBe('unavailable');expect(value.limits.join(' ')).toMatch(/owner|判据|anchor|定位/);
+  });
+});
+
+
+// P8 actual205/188: a task-owned command is not proof of scanning its decision log.
+async function boundDecisionScanFixture() {
+ const f=taskFixture();writerIdentity(f);
+ mkdirSync(join(f.taskPath,'quality/tests'),{recursive:true});
+ put(f.materialRoot,'decision-log.md','# Controlled decision\n## 任务身份\n任务：owned-task\n## 原始需求\nR-001：保留来源。\n## 工作包与决定\n### D-001 — owned\n- **做什么**：只读\n- **不做什么**：造成功\n- **风险**：缺源\n- **改动**：原范围\n- module: owned\n- requirement_ids: [R-001]\n- derived_from: []\n- artifacts: [owned.mjs]\n## 未决项\n无真实未知。\n');
+ const decision=join(f.materialRoot,'decision-log.md'),original=readFileSync(decision,'utf8');
+ const scan=async target=>{const r=await captureCommand({cwd:f.repo,recordDir:join(f.taskPath,'quality/tests'),slug:'decision-bound-source',argv:[process.execPath,join(ROOT,'tools/cli/check-decision-log-chain.mjs'),'--file',target]});await writeStageRow(f.taskPath,{stage:'make-decision',source:'receipt: '+r.receipt_ref+'; output: '+r.output_ref,evidence:{value:[{command:JSON.stringify(r.argv),exit_code:r.exit_code,receipt_ref:r.receipt_ref,output_ref:r.output_ref,failure_signature:'Actual advisory input '+target}]}});return r;};
+ return {...f,decision,original,scan};
+}
+describe('final-chain report exact decision scanner input and advisory meaning',()=>{
+ it.each(['wrong-document','wrong-task','unknown-advisory'])('does not borrow %s under the current task writer and restores genuine current scanning',async(kind)=>{
+  const f=await boundDecisionScanFixture();await f.scan(f.decision);expect(ringAt(await report(f),2).state).toBe('completed');
+  if(kind==='unknown-advisory'){put(f.materialRoot,'decision-log.md','# No decision entries\n');const receipt=await f.scan(f.decision);expect(receipt.exit_code).toBe(0);expect(readFileSync(receipt.output_ref,'utf8')).toMatch(/unknown.decision_entries|coverage is unavailable/);put(f.materialRoot,'decision-log.md',f.original);}
+  else {const target=kind==='wrong-document'?put(f.materialRoot,'coverage-matrix-5d.md','# Coverage table, no decision entries\n'):put(f.root,'other-task/decision-log.md',f.original);const receipt=await f.scan(target);expect(receipt.exit_code).toBe(0);}
+  const bad=await report(f);expect(ringAt(bad,2).state).toBe('unavailable');expect(JSON.stringify([ringAt(bad,2),bad.limits])).toMatch(/input|来源|扫描|advisory|unavailable|target/);
+  await f.scan(f.decision);expect(ringAt(await report(f),2).state).toBe('completed');
+ });
+});
+
+
+// Independent638: actual Node entry, not a checker filename passed as data.
+describe('final-chain report actual decision checker execution entry',()=>{
+ it.each(['eval','print','other-script','delimiter-other-script'])('rejects a real %s stdout-marker producer and restores the actual checker entry',async(kind)=>{
+  const f=await boundDecisionScanFixture();await f.scan(f.decision);expect(ringAt(await report(f),2).state).toBe('completed');
+  const marker='[check-decision-log-chain] advisory complete: 0 warning(s), non-blocking, exit 0',checker=join(ROOT,'tools/cli/check-decision-log-chain.mjs');
+  const other=put(f.materialRoot,'marker-only.mjs','console.log('+JSON.stringify(marker)+');\n');
+  const args=kind==='eval'?['-e','console.log('+JSON.stringify(marker)+')']:kind==='print'?['-p',JSON.stringify(marker)]:kind==='delimiter-other-script'?['--',other]:[other];
+  const r=await captureCommand({cwd:f.repo,recordDir:join(f.taskPath,'quality/tests'),slug:'entry-marker-bait',argv:[process.execPath,...args,checker,'--file',f.decision]});
+  expect(r.exit_code).toBe(0);expect(readFileSync(r.output_ref,'utf8')).toBe(marker+'\n');
+  await writeStageRow(f.taskPath,{stage:'make-decision',source:'receipt: '+r.receipt_ref+'; output: '+r.output_ref,evidence:{value:[{command:JSON.stringify(r.argv),exit_code:r.exit_code,receipt_ref:r.receipt_ref,output_ref:r.output_ref,failure_signature:'Real non-checker entry; exact marker stdout'}]}});
+  const bad=await report(f);expect(ringAt(bad,2).state).toBe('unavailable');expect(JSON.stringify([ringAt(bad,2),bad.limits])).toMatch(/entry|入口|profile|未取得|unavailable/);
+  await f.scan(f.decision);expect(ringAt(await report(f),2).state).toBe('completed');
+ });
+});
+
+
+// Independent645: same main-script suffix is not actual checker source identity.
+describe('final-chain report decision checker trusted source bytes',()=>{
+ it.each([false,true])('rejects a same-named decoy main inside the existing repo (Node delimiter=%s), then restores the real checker',async(delimiter)=>{
+  const f=await boundDecisionScanFixture();await f.scan(f.decision);expect(ringAt(await report(f),2).state).toBe('completed');
+  const marker='[check-decision-log-chain] advisory complete: 0 warning(s), non-blocking, exit 0',decoy=put(f.repo,'decoy/tools/cli/check-decision-log-chain.mjs','console.log('+JSON.stringify(marker)+');\n');
+  const r=await captureCommand({cwd:f.repo,recordDir:join(f.taskPath,'quality/tests'),slug:'same-name-decoy-main',argv:[process.execPath,...(delimiter?['--']:[]),decoy,'--file',f.decision]});expect(r.exit_code).toBe(0);expect(readFileSync(r.output_ref,'utf8')).toBe(marker+'\n');
+  await writeStageRow(f.taskPath,{stage:'make-decision',source:'receipt: '+r.receipt_ref+'; output: '+r.output_ref,evidence:{value:[{command:JSON.stringify(r.argv),exit_code:r.exit_code,receipt_ref:r.receipt_ref,output_ref:r.output_ref,failure_signature:'Real decoy main, not WorkflowHub checker source'}]}});
+  const bad=await report(f);expect(ringAt(bad,2).state).toBe('unavailable');expect(JSON.stringify([ringAt(bad,2),bad.limits])).toMatch(/source|源码|字节|身份|来源/);
+  await f.scan(f.decision);expect(ringAt(await report(f),2).state).toBe('completed');
+ });
+ it.each([false,true])('retains a byte-identical actual checker copy in the approved repo (Node delimiter=%s)',async(delimiter)=>{
+  const f=await boundDecisionScanFixture(),copy=put(f.repo,'tools/cli/check-decision-log-chain.mjs',readFileSync(join(ROOT,'tools/cli/check-decision-log-chain.mjs'),'utf8'));
+  const r=await captureCommand({cwd:f.repo,recordDir:join(f.taskPath,'quality/tests'),slug:'trusted-checker-copy',argv:[process.execPath,...(delimiter?['--']:[]),copy,'--file',f.decision]});expect(r.exit_code).toBe(0);
+  await writeStageRow(f.taskPath,{stage:'make-decision',source:'receipt: '+r.receipt_ref+'; output: '+r.output_ref,evidence:{value:[{command:JSON.stringify(r.argv),exit_code:r.exit_code,receipt_ref:r.receipt_ref,output_ref:r.output_ref,failure_signature:'Actual genuine source copy'}]}});
+  expect(ringAt(await report(f),2).state).toBe('completed');
+  const raw=readFileSync(copy,'utf8');put(f.repo,'tools/cli/check-decision-log-chain.mjs','console.log("different current source");\n');expect(ringAt(await report(f),2).state).toBe('unavailable');put(f.repo,'tools/cli/check-decision-log-chain.mjs',raw);expect(ringAt(await report(f),2).state).toBe('completed');
+ });
+});
