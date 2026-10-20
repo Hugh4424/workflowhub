@@ -126,12 +126,12 @@ T003 先交确认 stage 与 close-plan 路由；T004 再交 stage-closeout 调�
 
 | 目标 | Task | 角色 | gate_cmd / 预期退出码 | 判据 / 证据路径 |
 | --- | --- | --- | --- | --- |
-| 轻任务确认 stage 按实际阶段 | T003 | RED | `node node_modules/vitest/vitest.mjs run tests/contract/light-close-confirm.test.mjs` / 1 | ORACLE-LIGHT-CLOSE / `quality/tests/2026-10-20-030-p3-independent-red.output` |
-| 轻任务确认 stage 按实际阶段 | T003 | GREEN | `node node_modules/vitest/vitest.mjs run tests/contract/light-close-confirm.test.mjs` / 0 | ORACLE-LIGHT-CLOSE / `quality/tests/2026-10-20-031-p3-independent-red.output` |
-| stage-closeout 接受定方向调用者 | T004 | RED | `node node_modules/vitest/vitest.mjs run tests/contract/stage-closeout-skill.test.mjs` / 1 | ORACLE-LIGHT-CLOSE / `quality/tests/2026-10-20-030-p3-independent-red.output` |
-| stage-closeout 接受定方向调用者 | T004 | GREEN | `node node_modules/vitest/vitest.mjs run tests/contract/light-close-confirm.test.mjs tests/contract/stage-closeout-skill.test.mjs tests/contract/stage-closeout-step-contract.test.mjs tests/contract/delivery-closeout-charter-contract.test.mjs` / 0 | ORACLE-LIGHT-CLOSE / `quality/tests/2026-10-20-031-p3-independent-red.output` |
+| 轻任务确认 stage 按实际阶段 | T003 | RED | `node node_modules/vitest/vitest.mjs run tests/contract/light-close-confirm.test.mjs tests/contract/stage-closeout-skill.test.mjs tests/contract/stage-closeout-step-contract.test.mjs tests/contract/delivery-closeout-charter-contract.test.mjs` / 1（同一次030批次，非另跑） | ORACLE-LIGHT-CLOSE / `quality/tests/2026-10-20-030-p3-independent-red.output` |
+| 轻任务确认 stage 按实际阶段 | T003 | GREEN | `node node_modules/vitest/vitest.mjs run tests/contract/light-close-confirm.test.mjs tests/contract/stage-closeout-skill.test.mjs tests/contract/stage-closeout-step-contract.test.mjs tests/contract/delivery-closeout-charter-contract.test.mjs` / 0（同一次031批次，非另跑） | ORACLE-LIGHT-CLOSE / `quality/tests/2026-10-20-031-p3-independent-red.output` |
+| stage-closeout 接受定方向调用者 | T004 | RED | `node node_modules/vitest/vitest.mjs run tests/contract/light-close-confirm.test.mjs tests/contract/stage-closeout-skill.test.mjs tests/contract/stage-closeout-step-contract.test.mjs tests/contract/delivery-closeout-charter-contract.test.mjs` / 1（同一次030批次，非另跑） | ORACLE-LIGHT-CLOSE / `quality/tests/2026-10-20-030-p3-independent-red.output` |
+| stage-closeout 接受定方向调用者 | T004 | GREEN | `node node_modules/vitest/vitest.mjs run tests/contract/light-close-confirm.test.mjs tests/contract/stage-closeout-skill.test.mjs tests/contract/stage-closeout-step-contract.test.mjs tests/contract/delivery-closeout-charter-contract.test.mjs` / 0（同一次031批次，非另跑） | ORACLE-LIGHT-CLOSE / `quality/tests/2026-10-20-031-p3-independent-red.output` |
 
-实际执行说明：表中 T003/T004 窄命令仍是原定目标；030 与031实际 argv 均为契约头四文件聚合命令，按同批次承接各目标，未声称窄命令曾单独执行。030 exit 1 含真实目标/冻结集合失败及两条 runtime 夹具错误，后者不是接线 RED；分界见077原件。031文件名虽含 red，真实回执 exit 0、47 passed，保留原名。
+实际执行说明：原定 T003/T004 单文件窄命令未单独执行；表中现逐行列030/031原始回执的真实四文件命令，同一原件重复引用只表示覆盖不同目标，不表示三次或四次重复执行。030 exit 1 含真实目标/冻结集合失败及两条 runtime 夹具错误，后者不是接线 RED；分界见077原件。031文件名虽含 red，真实回执 exit 0、47 passed，保留原名。
 
 面声明：确认与 close plan 面（测）、技能目录面（测）、文档契约面（测）、真实 Git 远程面（不测，理由：本卡不发真实交付，远程动作由 P7 与真实收口运行承担）。
 
