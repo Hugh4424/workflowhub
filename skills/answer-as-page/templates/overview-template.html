@@ -5,9 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>给导出功能加上失败重试 · 流程追踪</title>
 <style>
-/* ============================================================
-   基础：颜色、字体、重置（对应 src/index.css 的 @theme 与 preflight）
-   ============================================================ */
+/* 基础：颜色、字体、重置（对应 src/index.css 的 @theme 与 preflight） */
 :root{
   --page:#f5f6f8;
   --surface:#ffffff;
@@ -49,17 +47,13 @@ b{font-weight:700}
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{transition:none;animation:none;scroll-behavior:auto}
 }
-
 /* 图标 */
 .icon{display:block;flex-shrink:0}
 .kt{color:var(--kc)}
 .icon-white{color:#ffffff}
 .chev{display:block;flex-shrink:0;transition:transform .15s}
 .chev.is-open{transform:rotate(90deg)}
-
-/* ============================================================
-   外壳：页头 / 左右分栏 / 页脚
-   ============================================================ */
+/* 外壳：页头 / 左右分栏 / 页脚 */
 .app{display:flex;height:100%;flex-direction:column;background:var(--page);color:var(--ink)}
 .hdr{
   display:flex;height:56px;flex:0 0 auto;align-items:center;gap:16px;
@@ -90,7 +84,6 @@ b{font-weight:700}
 .btn-seen{height:28px;border-radius:6px;border:1px solid var(--line);background:var(--surface);padding:0 12px;font-size:13px;font-weight:500}
 .btn-seen:hover{background:var(--page)}
 .hdr-readonly{font-size:12px;color:var(--sub)}
-
 .body{position:relative;display:flex;min-height:0;flex:1}
 .side{
   display:flex;flex-direction:column;min-height:0;width:340px;flex:0 0 auto;
@@ -105,10 +98,7 @@ b{font-weight:700}
   font-size:12px;color:var(--sub);
 }
 .foot-dir{margin-left:auto;color:var(--unk)}
-
-/* ============================================================
-   左栏目录
-   ============================================================ */
+/* 左栏目录 */
 .nav-progress{
   display:flex;min-height:36px;width:100%;align-items:center;gap:8px;
   border-radius:8px;padding:0 10px;font-size:14px;font-weight:600;color:var(--ink);
@@ -121,7 +111,6 @@ b{font-weight:700}
 .nav-count{font-size:12px;color:var(--sub)}
 .nav-list{display:flex;flex-direction:column;gap:2px}
 .nav-note{margin:16px 0 0;padding:0 4px;font-size:12px;line-height:18px;color:var(--unk)}
-
 .navrow{
   display:block;width:100%;border-radius:8px;border-left:3px solid transparent;
   padding:6px 10px;color:var(--ink);
@@ -148,10 +137,7 @@ b{font-weight:700}
 .nst.tone-fail{background:var(--fail-soft);color:var(--fail)}
 .nst.tone-unk{background:var(--unk-soft);color:var(--unk)}
 .nst.is-active{background:#fff;color:var(--ink)}
-
-/* ============================================================
-   标签 / 状态 / 类型 chip
-   ============================================================ */
+/* 标签 / 状态 / 类型 chip */
 .tag{
   display:inline-flex;align-items:center;gap:4px;height:22px;flex-shrink:0;
   white-space:nowrap;border-radius:4px;padding:0 10px;font-size:12px;line-height:18px;
@@ -163,7 +149,6 @@ b{font-weight:700}
 .tag-unk{background:var(--unk-soft);color:var(--unk)}
 .tag-accent{background:var(--accent-soft);color:var(--accent)}
 .tag-warm{background:var(--warm-soft);color:var(--warm)}
-
 .chip{
   display:inline-flex;height:24px;flex-shrink:0;align-items:center;gap:4px;
   white-space:nowrap;border-radius:4px;padding:0 8px;
@@ -173,22 +158,17 @@ b{font-weight:700}
 .chip-solid{background:var(--kc);color:#fff}
 .chip-outline{border:1px solid var(--kc);background:#fff;color:var(--kc)}
 .chip-dashed{border:1px dashed var(--kc);background:#fff;color:var(--kc);font-family:var(--mono)}
-
 /* 状态文字色 */
 .t-ok{color:var(--ok)}
 .t-accent{color:var(--accent)}
 .t-unk{color:var(--unk)}
 .t-fail{color:var(--fail)}
 .t-warm{color:var(--warm)}
-
-/* ============================================================
-   详情页：工具条 / Hero
-   ============================================================ */
+/* 详情页：工具条 / Hero */
 .toolbar{display:flex;min-height:32px;align-items:center;gap:12px;margin-bottom:16px}
 .backbtn{height:32px;border-radius:6px;padding:0 4px;font-size:13px;color:var(--accent)}
 .backbtn:hover{text-decoration:underline}
 .page-h2{margin:0 0 20px;font-size:28px;font-weight:700;line-height:36px;outline-offset:4px}
-
 .hero{
   border:1px solid var(--line);border-top:5px solid var(--kc);border-radius:12px;
   padding:24px;background:var(--surface);
@@ -227,7 +207,6 @@ b{font-weight:700}
 .stat-num{font-size:34px;font-weight:700;line-height:40px}
 .stat-label{font-size:13px;font-weight:600}
 .hero-explain{margin-top:16px;font-size:15px;line-height:24px;color:var(--ink)}
-
 /* 两份记录对不上 */
 .contra{margin-top:24px;border:1px solid rgba(181,61,66,.4);border-radius:10px;background:var(--surface);padding:16px}
 .contra-head{display:flex;align-items:center;gap:6px;margin:0 0 12px;font-size:13px;font-weight:600;color:var(--fail)}
@@ -239,10 +218,7 @@ b{font-weight:700}
 .contra-cell.fail .contra-k{color:var(--fail)}
 .contra-v{margin:0;font-size:15px;font-weight:600;color:var(--ink)}
 .contra-cell.fail .contra-v{color:var(--fail)}
-
-/* ============================================================
-   逻辑链条
-   ============================================================ */
+/* 逻辑链条 */
 .chain{margin-top:36px}
 .chain h3{margin:0 0 4px;font-size:18px;font-weight:600;line-height:28px;color:var(--ink)}
 .chain .lead{margin:0 0 20px;font-size:13px;line-height:22px;color:var(--sub)}
@@ -267,7 +243,6 @@ b{font-weight:700}
 }
 .lane-pos.is-cur{background:var(--ink);color:#fff}
 .lane-items{display:flex;flex-direction:column;gap:8px}
-
 .gapbox{
   display:flex;align-items:flex-start;gap:4px;border-radius:6px;
   border:1px dashed rgba(181,61,66,.6);background:var(--fail-soft);
@@ -278,10 +253,7 @@ b{font-weight:700}
   border-radius:6px;border:1px dashed #c4cbd6;background:var(--unk-soft);
   padding:16px;font-size:14px;line-height:22px;color:var(--sub);
 }
-
-/* ============================================================
-   卡片 / 文件折叠 / 计划文件
-   ============================================================ */
+/* 卡片 / 文件折叠 / 计划文件 */
 .objcard{
   display:flex;width:100%;align-items:center;gap:12px;
   border:1px solid var(--line);border-left:5px solid var(--kc);border-radius:8px;
@@ -308,7 +280,6 @@ b{font-weight:700}
   flex:0 0 auto;border-radius:4px;background:var(--ink);padding:0 8px;
   font-size:12px;font-weight:600;line-height:20px;color:#fff;
 }
-
 .objchip{
   display:flex;width:100%;flex-direction:column;align-items:flex-start;gap:2px;
   border:1px solid var(--line);border-left:4px solid var(--kc);border-radius:6px;
@@ -327,7 +298,6 @@ b{font-weight:700}
 .objchip-name{min-width:0;flex:1;font-size:12.5px;font-weight:600;line-height:18px;color:var(--ink)}
 .objchip-name.mono{font-family:var(--mono);font-size:12px}
 .objchip-status{display:flex;align-items:center;gap:4px;padding-left:19px;font-size:11px;font-weight:500;line-height:16px}
-
 .filefold{border:1px solid var(--line);border-left:5px solid var(--kc);border-radius:8px;background:var(--surface)}
 .filefold-head{display:flex;width:100%;align-items:center;gap:12px;padding:12px 16px;text-align:left}
 .filefold-icon{
@@ -337,7 +307,6 @@ b{font-weight:700}
 .filefold-title{flex:1;font-size:15px;font-weight:600;color:var(--ink)}
 .filefold-hint{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--sub)}
 .filefold-body{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding:12px}
-
 .planbtn{
   display:flex;align-items:center;gap:8px;border:1px dashed var(--kc);border-radius:6px;
   background:var(--surface);padding:8px 12px;font-size:14px;font-weight:500;color:var(--ink);
@@ -349,10 +318,7 @@ b{font-weight:700}
   background:var(--surface);padding:4px 8px;font-family:var(--mono);font-size:12px;color:var(--sub);
 }
 .planchip .note{font-family:var(--sans);font-size:11px;color:var(--unk)}
-
-/* ============================================================
-   分区 / 步骤 / 失败项 / 来源
-   ============================================================ */
+/* 分区 / 步骤 / 失败项 / 来源 */
 .section{margin-top:36px}
 .section-title{
   display:flex;align-items:baseline;gap:8px;margin:0 0 12px;
@@ -374,7 +340,6 @@ b{font-weight:700}
 }
 .mono13{font-family:var(--mono);font-size:13px}
 .failitem .msg{font-size:13px;font-weight:500}
-
 .sources{margin-top:40px;border-top:1px solid var(--line);padding-top:12px}
 .src-toggle{display:flex;align-items:center;gap:6px;border-radius:3px;font-size:12px;color:var(--sub)}
 .src-toggle:hover{color:var(--ink)}
@@ -397,10 +362,7 @@ b{font-weight:700}
 .srow-body p{margin:0}
 .srow-body .p2{margin-top:4px}
 .mono-ink{font-family:var(--mono);font-size:12px;line-height:18px;color:var(--ink);word-break:break-all;user-select:all}
-
-/* ============================================================
-   进度总览
-   ============================================================ */
+/* 进度总览 */
 .flow{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px}
 .flow-item{display:flex;align-items:center;gap:8px}
 .flow-box{border:1px solid var(--line);border-radius:8px;padding:8px 16px}
@@ -425,21 +387,25 @@ b{font-weight:700}
 .dash{padding:6px 8px;font-size:12px;color:var(--unk)}
 .unlinked{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:12px;font-size:13px;color:var(--sub)}
 .slot{width:150px}
-
-/* ============================================================
-   断点（源设计：nav=900 / md=768 / lg=1024 / xl=1280 / 2xl=1536）
-   ============================================================ */
+/* 断点（源设计：nav=900 / md=768 / lg=1024 / xl=1280 / 2xl=1536） */
 @media (min-width:1280px){ .side{width:400px} }
 @media (max-width:1279px){ .hdr-counts{display:none} }
 @media (max-width:1023px){ .hdr-live-label,.chip-live{display:none} }
 @media (max-width:767px){ .hdr-stages{display:none} }
 @media (max-width:899px){ .main{padding:20px 20px 64px} }
-
-.hero-cell p,.src-body,.srow-body,.hero-note{overflow-wrap:anywhere}.hdr-readonly{white-space:nowrap} details.panel{padding:12px;font-size:12px;line-height:1.7} details.panel summary{cursor:pointer} .thead,.trow{grid-template-columns:repeat(3,minmax(0,1fr))}
+.hero-cell p,.src-body,.srow-body,.hero-note,.hero-explain,[data-report-ring] dd,details.panel p{overflow-wrap:anywhere}.hdr-readonly{white-space:nowrap} details.panel{padding:12px;font-size:12px;line-height:1.7} details.panel summary{cursor:pointer} .thead,.trow{grid-template-columns:repeat(3,minmax(0,1fr))}
 .hdr-task{flex:1 1 180px;min-width:130px;max-width:240px}.hdr-stages{flex-shrink:0}.hstage,.hdr-stages li{white-space:nowrap}.hdr-counts{position:relative;flex:0 0 auto;max-width:none;white-space:nowrap}.hdr-counts summary{cursor:pointer}.hdr-count-body{position:absolute;top:24px;right:0;min-width:240px;background:var(--surface);padding:12px;border:1px solid var(--line);box-shadow:0 4px 14px #0001;z-index:30;line-height:1.8}.hdr-right{flex-shrink:1;min-width:0;gap:6px}.hdr-update-chips{display:flex;gap:6px;overflow-x:auto;max-width:220px;min-width:42px}.hdr-update-chips .chip-live{flex:0 0 auto}.hdr-live-label,.btn-seen,.hdr-readonly{flex-shrink:0;white-space:nowrap}
 .hero,.hero-grid,.hero-cell,.hero-quote,.hero-finding{min-width:0}.hero h2,.hero-summary,.hero-file-note,.finding-v{overflow-wrap:anywhere;word-break:normal;min-width:0}
 .basis-group+.basis-group{margin-top:16px}.basis-group h4{margin:0 0 8px;font-size:13px;line-height:20px;font-weight:600;color:var(--sub)}.chain-attachment{margin-top:12px;padding:8px 0 0;border-top:1px solid var(--line)}.attachment-label{font-size:12px;line-height:18px;color:var(--sub);margin-bottom:6px}.attachment-label span{font-size:11px;margin-left:4px}.chain-attachment .objcard{padding:8px 12px;border-left-width:3px;gap:8px}.chain-attachment .objcard-title{font-size:13px;line-height:20px}.chain-attachment .objcard-line{font-size:11px;line-height:17px}.chain-attachment .objcard-label{font-size:11px}.chain-attachment .objcard-icon .icon{width:15px;height:15px}.chain-attachment .tag{font-size:11px}
 .task-phase-entry{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}.task-phase-link{border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:var(--surface);font-size:12px;white-space:nowrap;color:var(--sub)}
+
+@media (max-width:767px){
+  .body{flex-direction:column}
+  .side{width:100%;max-height:30%;border-right:0;border-bottom:1px solid var(--line)}
+  .scroller{min-height:0}
+  .main{padding:16px 16px 48px;overflow-wrap:anywhere}
+  .foot-dir{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
 </style>
 </head>
 <body>
@@ -458,12 +424,8 @@ b{font-weight:700}
     <span class="foot-dir" id="foot-dir"></span>
   </footer>
 </div>
-
 <script>
-/* ============================================================
-   1. 数据（全部示例数据都在这里）
-   ============================================================ */
-
+/* 1. 数据（全部示例数据都在这里） */
 /* 换任务时只改这个对象，下面的渲染代码不用动 */
 const DATA = {
   task: '给导出功能加上失败重试',
@@ -476,9 +438,11 @@ const DATA = {
   ],
   hasPhase: true,
   sourceDir: '.task/export-retry/',
-
-  /* 12 种对象：标签、颜色、软色、内联 SVG 图标（照抄 src/kinds.tsx） */
+  /* 15 种对象：标签、颜色、软色、内联 SVG 图标（照抄 src/kinds.tsx） */
   kinds: {
+    spec: { label: 'spec', color: '#3e4a5f', soft: '#ebeef3', icon: '<path d="M4 2h8v12H4z"/>' },
+    review: { label: '最终审查', color: '#66780f', soft: '#f1f5dc', icon: '<circle cx="8" cy="8" r="5"/>' },
+    pr: { label: '提交 PR', color: '#315ccb', soft: '#eef3ff', icon: '<path d="M4 2v12M4 5h6v6"/>' },
     req:   { label: '原始需求', color: '#315ccb', soft: '#eef3ff', icon: '<path d="M3 5h4v4H5.5c0 1 .5 1.5 1.5 1.5V12C4.5 12 3 10.5 3 8V5Zm6 0h4v4h-1.5c0 1 .5 1.5 1.5 1.5V12C10.5 12 9 10.5 9 8V5Z" fill="currentColor"/>' },
     goal:  { label: '目标', color: '#0f766e', soft: '#e8f6f4', icon: '<circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="2.5"/>' },
     wp:    { label: '工作包', color: '#5b45c9', soft: '#f1eefd', icon: '<path d="M2.5 5 8 2.5 13.5 5v6L8 13.5 2.5 11V5Zm0 0L8 7.5m0 0L13.5 5M8 7.5v6"/>' },
@@ -492,53 +456,41 @@ const DATA = {
     acc:   { label: '验收', color: '#66780f', soft: '#f1f5dc', icon: '<path d="M8 2 13 4v4c0 3-2.2 5-5 6-2.8-1-5-3-5-6V4l5-2Zm-2 6 1.5 1.5 3-3"/>' },
     risk:  { label: '未决项/风险', color: '#8f2d2d', soft: '#fbeaea', icon: '<path d="M8 1.8 14.6 13.4H1.4L8 1.8ZM8 6.4v3.2M8 11.4v.2"/>' },
   },
-
   objects: [
     { id: 'req1', kind: 'req', label: '要求 1', title: '导出失败要自动重试三次', short: '要求 1 · 自动重试三次', quote: '导出失败要自动重试三次', source: '用户 10 月 12 日的对话', status: { text: '已实现', tone: 'ok' }, src: [{ kind: '原始需求', name: '用户 10 月 12 日的对话', loc: '对话记录 · 10 月 12 日', path: '.task/export-retry/conversations/2026-10-12.md' }] },
     { id: 'req2', kind: 'req', label: '要求 2', title: '重试的时候我要看得见每次为什么失败', short: '要求 2 · 看得见失败原因', quote: '重试的时候我要看得见每次为什么失败', source: '用户 10 月 12 日的对话', status: { text: '进行中', tone: 'accent' }, src: [{ kind: '原始需求', name: '用户 10 月 12 日的对话', loc: '对话记录 · 10 月 12 日', path: '.task/export-retry/conversations/2026-10-12.md' }] },
     { id: 'req3', kind: 'req', label: '要求 3', title: '我不想等的时候要能取消', short: '要求 3 · 能取消', quote: '我不想等的时候要能取消', source: '用户 10 月 14 日的对话', status: { text: '缺环', tone: 'fail' }, src: [{ kind: '原始需求', name: '用户 10 月 14 日的对话', loc: '对话记录 · 10 月 14 日', path: '.task/export-retry/conversations/2026-10-14.md' }] },
     { id: 'req4', kind: 'req', label: '要求 4', title: '只有网络类的错误才重试，别把格式错误也重试', short: '要求 4 · 只重试网络错误', quote: '只有网络类的错误才重试，别把格式错误也重试', source: '用户 10 月 15 日的对话', status: { text: '已实现', tone: 'ok' }, src: [{ kind: '原始需求', name: '用户 10 月 15 日的对话', loc: '对话记录 · 10 月 15 日', path: '.task/export-retry/conversations/2026-10-15.md' }] },
-
     { id: 'g1', kind: 'goal', label: '目标', title: '网络类失败自动重试三次，格式错误不重试', short: '自动重试，格式错误不重试' },
     { id: 'g2', kind: 'goal', label: '目标', title: '用户在导出面板里看得见每次失败的原因', short: '看得见每次失败原因' },
     { id: 'g3', kind: 'goal', label: '目标', title: '用户能在重试中取消，取消后不再重试', short: '能取消，取消后不再重试' },
-
     { id: 'wp1', kind: 'wp', label: '工作包 1', title: '重试引擎', short: '工作包 1 · 重试引擎', summary: '按指数退避重试，格式错误不重试', status: { text: '进行中', tone: 'accent' }, items: ['网络类失败自动重试，最多三次（1 / 3 / 9 秒）', '每次失败记录原因，供界面显示', '格式类错误不重试', '暴露取消入口，取消后不再重试', '重试次数与结果可被测试观察'], plan: ['src/export/retry.ts', 'src/export/panel.tsx'] },
     { id: 'wp2', kind: 'wp', label: '工作包 2', title: '重试状态面板', short: '工作包 2 · 重试状态面板', summary: '在导出面板里显示每次失败的原因', status: { text: '未开始', tone: 'unk' }, items: ['面板显示每次失败的原因', '显示已重试次数', '重试状态可关闭'], plan: ['src/export/panel.tsx'] },
     { id: 'wp3', kind: 'wp', label: '工作包 3', title: '取消入口', short: '工作包 3 · 取消入口', summary: '面板上给一个取消入口', status: { text: '缺 Task', tone: 'fail' }, items: ['沿用面板已有的取消入口，不新建弹窗', '取消后不再重试', '界面上说清：已发出的请求可能仍在进行'], plan: ['src/export/retry.ts', 'src/export/panel.tsx'] },
-
     { id: 'i1', kind: 'ires', label: '内部调研', title: '导出模块现状', short: '导出模块现状', finding: '现有导出失败只提示一次，没有重试；面板已有取消按钮', origin: '导出模块现有代码', src: [{ kind: '内部调研', name: '导出模块现状', loc: '调研笔记 · 导出模块', path: '.task/export-retry/research/internal-export.md' }] },
     { id: 'i2', kind: 'ires', label: '内部调研', title: '失败类型判定现状', short: '失败类型判定现状', finding: '错误已能区分网络类与格式类，可直接作为重试条件', origin: '导出模块现有代码', src: [{ kind: '内部调研', name: '失败类型判定现状', loc: '调研笔记 · 失败类型', path: '.task/export-retry/research/internal-errors.md' }] },
     { id: 'e1', kind: 'eres', label: '外部调研', title: '重试策略调研', short: '重试策略调研', finding: '指数退避是通行做法，可避免同时重试打满服务', origin: '公开资料 · 重试策略', src: [{ kind: '外部调研', name: '重试策略调研', loc: '调研笔记 · 重试策略', path: '.task/export-retry/research/external-retry.md' }] },
     { id: 'e2', kind: 'eres', label: '外部调研', title: '同类产品做法', short: '同类产品做法', finding: '在进行中的面板上直接展示失败原因和取消入口，最多重试三次', origin: '同类导出功能', src: [{ kind: '外部调研', name: '同类产品做法', loc: '调研笔记 · 同类产品', path: '.task/export-retry/research/external-peers.md' }] },
-
     { id: 'd1', kind: 'dec', label: '决策 1', title: '重试采用指数退避', short: '决策 1 · 指数退避', detail: '间隔 1 / 3 / 9 秒，不用固定间隔', why: '避免同时重试把服务打满', src: [{ kind: '当前决定', name: '决定记录', loc: '决定记录 · 决定 1', path: '.task/export-retry/decisions.md' }] },
     { id: 'd2', kind: 'dec', label: '决策 2', title: '重试状态放在导出面板里', short: '决策 2 · 状态放面板里', detail: '不新建页面', why: '用户是在导出的上下文里关心它', src: [{ kind: '当前决定', name: '决定记录', loc: '决定记录 · 决定 2', path: '.task/export-retry/decisions.md' }] },
-
     { id: 'p1', kind: 'phase', label: 'P1', title: '重试引擎', short: 'P1 · 重试引擎', summary: '实现指数退避重试，并把失败原因暴露给界面', status: { text: '进行中', tone: 'accent' } },
     { id: 'p2', kind: 'phase', label: 'P2', title: '界面与取消', short: 'P2 · 界面与取消', summary: '在导出面板里显示重试状态，并提供取消入口', status: { text: '有不一致', tone: 'fail', warn: true } },
-
     { id: 'task1', kind: 'task', label: 'Task', title: '调研重试策略', short: '调研重试策略', phase: 'p1', summary: '看清同类产品如何重试，为决策 1 提供依据', status: { text: '已完成', tone: 'ok' }, note: '调研任务，不改文件' },
     { id: 'task2', kind: 'task', label: 'Task', title: '实现重试引擎', short: '实现重试引擎', phase: 'p1', summary: '按指数退避实现重试，并把每次失败的原因暴露给界面', status: { text: '进行中', tone: 'accent' }, items: ['网络类失败自动重试，最多三次', '每次失败记录原因', '格式类错误不重试', '重试次数与结果可被测试观察'], plan: ['src/export/retry.ts'] },
     { id: 'task3', kind: 'task', label: 'Task', title: '重试状态面板', short: '重试状态面板', phase: 'p2', summary: '在导出面板里显示每次失败的原因与重试次数', status: { text: '未开始', tone: 'unk' }, items: ['面板显示失败原因', '显示已重试次数', '重试状态可关闭'], plan: ['src/export/panel.tsx'] },
     { id: 'task4', kind: 'task', label: 'Task', title: '补测试', short: '补测试', phase: 'p2', summary: '计划里的收尾工作：为重试补充测试', status: { text: '声称完成', tone: 'fail', warn: true } },
     { id: 'task5', kind: 'task', label: 'Task', title: '整体验收', short: '整体验收', phase: 'p2', summary: '逐条回查四条要求与证据', status: { text: '未执行', tone: 'unk' } },
-
     { id: 'file1', kind: 'file', label: '文件', title: 'src/export/retry.ts', short: 'retry.ts', path: 'src/export/retry.ts', note: '新增重试引擎，对应要求 1、4', status: { text: '真实改动', tone: 'ok' }, src: [{ kind: '真实改动', name: 'src/export/retry.ts', loc: '改动清单 · retry.ts', path: '.task/export-retry/changes.md' }] },
     { id: 'file2', kind: 'file', label: '文件', title: 'src/export/panel.tsx', short: 'panel.tsx', path: 'src/export/panel.tsx', note: '面板增加重试状态，对应要求 2', status: { text: '真实改动', tone: 'ok' }, src: [{ kind: '真实改动', name: 'src/export/panel.tsx', loc: '改动清单 · panel.tsx', path: '.task/export-retry/changes.md' }] },
-
     { id: 'r1', kind: 'risk', label: '未决项', title: '取消按钮的文案还没定', short: '取消按钮文案未定', of: 'wp3', status: { text: '未决', tone: 'unk' } },
     { id: 'r2', kind: 'risk', label: '风险', title: '取消后，已发出的请求可能仍在进行', short: '取消后请求可能仍在进行', of: 'wp3', status: { text: '风险', tone: 'fail', warn: true } },
-
     { id: 'a1', kind: 'acc', label: '验收', title: '失败后自动重试，最多三次', short: '验收 · 最多重试三次', of: 'req1', summary: '检查：连续制造网络失败，第三次重试后不再继续', status: { text: '未验收', tone: 'unk' } },
     { id: 'a2', kind: 'acc', label: '验收', title: '每次失败的原因都看得见', short: '验收 · 失败原因可见', of: 'req2', summary: '检查：面板逐次列出失败原因', status: { text: '未验收', tone: 'unk' } },
     { id: 'a3', kind: 'acc', label: '验收', title: '点取消后不再重试', short: '验收 · 取消后停止', of: 'req3', summary: '检查：重试中点取消，之后没有新的重试', status: { text: '未验收', tone: 'unk' } },
     { id: 'a4', kind: 'acc', label: '验收', title: '格式错误不重试', short: '验收 · 格式错误不重试', of: 'req4', summary: '检查：格式类错误只失败一次，不进入重试', status: { text: '未验收', tone: 'unk' } },
-
     { id: 'test-post', kind: 'test', label: '测试', title: '实施后测试', short: '实施后测试', pass: 12, fail: 1, exit: 1, failing: 'retry-cancel.test.ts', explain: '取消之后仍然发生了一次重试；真实结果断言失败，不是环境问题。', output: '2026-10-19-导出重试.output', status: { text: '1 失败', tone: 'fail' }, src: [{ kind: '原始输出', name: '实施后测试', loc: '2026-10-19-导出重试.output', path: '.task/export-retry/outputs/2026-10-19-导出重试.output', state: 'unreadable' }] },
     { id: 'test-pre', kind: 'test', label: '测试', title: '先写的测试（还没实现）', short: '先写的测试', fail: 6, exit: 1, explain: '提前写好、故意失败，用来证明新功能还没做。它和「实施后测试失败」是两件事。', output: '2026-10-19-重试基线.output', status: { text: '基线', tone: 'unk' }, src: [{ kind: '原始输出', name: '先写的测试', loc: '2026-10-19-重试基线.output', path: '.task/export-retry/outputs/2026-10-19-重试基线.output' }] },
   ],
-
   /* 主链条：需求 → 工作包 → Task → 文件 → 测试 */
   edges: [
     ['req1', 'wp1'], ['req4', 'wp1'], ['req2', 'wp2'], ['req3', 'wp3'],
@@ -553,9 +505,8 @@ const DATA = {
     ['e1', 'wp1'], ['e2', 'wp1'], ['e2', 'wp2'], ['e2', 'wp3'],
     ['d1', 'wp1'], ['d2', 'wp2'], ['d2', 'wp3'],
   ],
-
   flowKinds: ['req', 'wp', 'task', 'file', 'test'],
-  lanes: ['req', 'ires', 'eres', 'goal', 'dec', 'wp', 'risk', 'phase', 'task', 'file', 'test', 'acc'],
+  lanes: ['spec', 'review', 'pr', 'req', 'ires', 'eres', 'goal', 'dec', 'wp', 'risk', 'phase', 'task', 'file', 'test', 'acc'],
   phaseTasks: { p1: ['task1', 'task2'], p2: ['task3', 'task4', 'task5'] },
   changedChips: [
     { label: '重试状态面板', id: 'task3' },
@@ -567,10 +518,7 @@ const DATA = {
     unlinkedTaskIds: ['task4', 'task5'],
   },
 };
-
-/* ============================================================
-   2. 派生逻辑（等价于 src/data.ts）
-   ============================================================ */
+/* 2. 派生逻辑（等价于 src/data.ts） */
 const OBJ = {};
 DATA.objects.forEach(function (o) { OBJ[o.id] = o; });
 const IDS = DATA.objects.map(function (o) { return o.id; });
@@ -579,7 +527,6 @@ const FLOW_KINDS = DATA.flowKinds;
 const LANES = DATA.lanes;
 const PROGRESS_KINDS = ['req', 'wp', 'task'];
 const SIDE_KINDS = ['goal', 'ires', 'eres', 'dec'];
-
 function kids(id, edges) {
   const list = edges || DATA.edges;
   return list.filter(function (e) { return e[0] === id; }).map(function (e) { return e[1]; });
@@ -589,7 +536,6 @@ function parents(id, edges) {
   return list.filter(function (e) { return e[1] === id; }).map(function (e) { return e[0]; });
 }
 function wpsUsing(sideId) { return kids(sideId, DATA.sideEdges); }
-
 function walk(ids, next) {
   const seen = new Set();
   const stack = ids.slice();
@@ -603,7 +549,6 @@ function walk(ids, next) {
 }
 const descendants = function (ids) { return walk(ids, function (id) { return kids(id); }); };
 const ancestors = function (ids) { return walk(ids, function (id) { return parents(id); }); };
-
 const GAP = {
   req: ['缺：没有需求对应', 'fail'],
   dec: ['缺：没有依据对应', 'fail'],
@@ -613,7 +558,6 @@ const GAP = {
   file: ['缺 真实改动', 'fail'],
   test: ['未执行', 'unk'],
 };
-
 function flowFor(id) {
   const o = OBJ[id];
   let base;
@@ -652,22 +596,30 @@ function flowFor(id) {
     }
     return col;
   });
-
   return { cols: cols, selfKind: selfKind };
 }
-
-const ANCHOR = { req: 0, dec: 1, wp: 2, goal: 1, ires: 1, eres: 1, risk: 2, phase: 3, task: 3, file: 4, test: 5, acc: 6 };
-const CORE = ['req', 'dec', 'wp', 'task', 'file', 'test', 'acc'];
-const GAPS = {
-  req: ['缺：没有需求对应', 'fail'],
-  dec: ['缺：没有依据', 'fail'],
-  acc: ['尚未产生：验收完整结果', 'unk'],
-  wp: ['缺：没有工作包承接', 'fail'],
-  task: ['缺：还没拆出 Task', 'fail'],
-  file: ['缺：没有真实改动', 'fail'],
-  test: ['未执行：还没有测试结果', 'unk'],
-};
-
+const ANCHOR={req:0,dec:1,goal:1,ires:2,eres:2,wp:3,risk:3,spec:4,phase:5,task:5,file:6,test:7,review:8,acc:8,pr:9};
+const CORE=['req','dec','ires','wp','spec','phase','file','test','review','pr'];
+const RING_NAMES=['原始需求','decision-log','调研方案','方案','spec','phase','代码实现','测试验证','最终审查','提交 PR'];
+const GAPS=Object.fromEntries(CORE.map((k,i)=>[k,GAP[k]||['尚未产生：'+RING_NAMES[i],'unk']]));
+const RING_BY_ID=Object.fromEntries((DATA.ringNodes||[]).map(n=>[n.stable_id,{id:n.stable_id,contentDigest:n.content_digest}]));
+function reportRingHtml(ring) {
+const r=(DATA.rings||[]).find(row=>row.ring===ring);
+const mark=CHANGED.has('ring:'+ring)?tag('有更新','warm'):'';
+if (!r) return '<div data-report-ring="'+ring+'" class="gap">'+mark+'缺口：报告未提供第 '+ring+' 环</div>';
+const own=k=>Object.prototype.hasOwnProperty.call(r,k);
+const gaps=['ring','name','applicability','state','evidence_type','basis','counted_in_denominator','conflict'].filter(k=>!own(k)).map(k=>k+'字段缺失');
+const basisGap=!own('basis')?'依据字段缺失':!Array.isArray(r.basis)?'依据字段格式不符':r.state==='completed'&&!r.basis.length?'完成声明缺依据':'';
+if(basisGap)gaps.push(basisGap);
+const states={completed:'已完成',skipped:'尚未执行',not_applicable:'不适用',incomplete:'未完成',unavailable:'未取得'};
+const declared=states[r.state]||'未取得：报告状态未知';
+return '<section data-report-ring="'+ring+'"><h4>'+esc(r.name)+mark+'</h4><dl>'+[
+  ['结论',gaps.length?'报告声明：'+declared+'；字段缺口：'+gaps.join('；'):declared],
+  ['依据',basisGap||JSON.stringify(r.basis)], ['证据类型',r.evidence_type==null?'未取得':JSON.stringify(r.evidence_type)],
+  ['是否计入分母',r.counted_in_denominator===true?'是':r.counted_in_denominator===false?'否':'未取得'],
+  ['备注',!own('conflict')?'冲突字段未取得':r.conflict===null?'无冲突；适用性：'+JSON.stringify(r.applicability==null?'未取得':r.applicability):JSON.stringify(r.conflict)]
+].map(pair=>'<dt>'+pair[0]+'</dt><dd>'+esc(pair[1])+'</dd>').join('')+'</dl></section>';
+}
 function chainFor(id) {
   const o = OBJ[id];
   const side = ['goal', 'ires', 'eres'];
@@ -695,12 +647,13 @@ function chainFor(id) {
     if ((t.kind === 'risk' || t.kind === 'acc') && S.has(t.of)) S.add(x);
     if (DATA.hasPhase && t.kind === 'task' && S.has(x) && t.phase) S.add(t.phase);
   });
-  const basisKinds = ['ires', 'eres', 'goal', 'dec'];
+  const basisKinds = ['goal', 'dec'];
   return CORE.map(function (kind) {
-    const groups = kind === 'dec' ? basisKinds.map(function (groupKind) {
+    const groupKinds = kind === 'dec' ? basisKinds : kind === 'ires' ? ['ires','eres'] : [];
+    const groups = groupKinds.length ? groupKinds.map(function (groupKind) {
       return { kind: groupKind, items: IDS.filter(function (x) { return S.has(x) && OBJ[x].kind === groupKind; }) };
     }).filter(function (group) { return group.items.length; }) : [];
-    const items = kind === 'dec'
+    const items = groupKinds.length
       ? groups.reduce(function (all, group) { return all.concat(group.items); }, [])
       : IDS.filter(function (x) { return S.has(x) && OBJ[x].kind === kind; });
     const lane = { kind: kind, items: items, groups: groups };
@@ -709,16 +662,13 @@ function chainFor(id) {
       if (o.kind === 'file' && kind === 'test') { lane.gap = '测试映射未知：未取得本文件对应的测试结果；不能据此判断未执行。'; lane.gapTone = 'unk'; }
       if (o.kind === 'test' && kind === 'file') { lane.gap = '文件映射未知：未取得本测试对应的改动文件；不能据此判断没有改动。'; lane.gapTone = 'unk'; }
     }
-    if (kind === 'wp') lane.attachments = ['risk', 'phase'].map(function (extraKind) {
+    if (kind === 'wp' || kind === 'phase' || kind === 'review') lane.attachments = (kind === 'wp' ? ['risk'] : kind === 'phase' ? ['task'] : ['acc']).map(function (extraKind) {
       return { kind: extraKind, items: IDS.filter(function (x) { return S.has(x) && OBJ[x].kind === extraKind; }) };
     }).filter(function (extra) { return extra.items.length; });
     return lane;
   });
 }
-
-/* ============================================================
-   3. 渲染（等价于 src/App.tsx + src/kinds.tsx + src/ui.tsx）
-   ============================================================ */
+/* 3. 渲染（等价于 src/App.tsx + src/kinds.tsx + src/ui.tsx） */
 const esc = function (s) {
   return String(s)
     .replace(/&/g, '&amp;')
@@ -726,7 +676,6 @@ const esc = function (s) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 };
-
 function icon(kind, size, cls) {
   const s = size || 16;
   return '<svg class="icon ' + (cls || '') + '" width="' + s + '" height="' + s + '" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + DATA.kinds[kind].icon + '</svg>';
@@ -745,7 +694,6 @@ function tag(text, tone, warn, sm, extra) {
     (warn ? warnIcon() : '') + esc(text) + '</span>';
 }
 function statusTag(s, sm) { return tag(s.text, s.tone, s.warn, sm); }
-
 function kindChip(kind, text) {
   const k = DATA.kinds[kind];
   let cls = 'chip soft k-' + kind;
@@ -756,10 +704,8 @@ function kindChip(kind, text) {
 }
 function gapBox(text) { return '<div class="gapbox">' + warnIcon() + '<span>' + esc(text) + '</span></div>'; }
 function emptyBox(text) { return '<div class="emptybox">' + esc(text) + '</div>'; }
-
-/* ---- 左栏 ---- */
+/* 左栏 */
 const num = function (id) { return OBJ[id].label.replace(/\D+/g, ''); };
-
 function hintOf(id) {
  const o=OBJ[id];
  const ws = Array.from(descendants([id])).filter(function(x){return OBJ[x].kind === 'wp';});
@@ -767,7 +713,6 @@ function hintOf(id) {
  if(o.kind === 'wp') { const ts=kids(id).filter(function(x){return OBJ[x].kind==='task';});return [[ts.length?'→ '+ts.length+' 个 Task':'缺 Task',ts.length?'plain':'fail']]; }
  return o.phase && OBJ[o.phase] ? [[OBJ[o.phase].label,'plain']] : [];
 }
-
 function navRow(id) {
   const o = OBJ[id];
   const active = sel === id;
@@ -796,7 +741,6 @@ function navRow(id) {
     '<span class="navrow-hints">' + hints + '</span>' +
   '</button>';
 }
-
 function sidebarHtml() {
   const groups = ['req', 'wp', 'task'].map(function (kind) {
     return { kind: kind, ids: IDS.filter(function (i) { return OBJ[i].kind === kind; }) };
@@ -818,8 +762,7 @@ function sidebarHtml() {
   }).join('') +
   '<p class="nav-note">点选一项，浅蓝底的就是它的上游和下游。目标、调研、决策、文件、测试在详情页的逻辑链条里。</p>';
 }
-
-/* ---- 卡片 ---- */
+/* 卡片 */
 function objChip(id, opt) {
   const o = OBJ[id];
   const cur = opt && opt.current;
@@ -833,7 +776,6 @@ function objChip(id, opt) {
     (st ? '<span class="objchip-status t-' + st.tone + '">' + (st.warn ? warnIcon() : '') + esc(st.text) + '</span>' : '') +
   '</button>';
 }
-
 function objCard(id, opt) {
   const o = OBJ[id];
   const opt2 = opt || {};
@@ -856,13 +798,11 @@ function objCard(id, opt) {
   '</button>';
   return phaseLabel ? '<div class="task-phase-entry">'+card+'<button type="button" class="task-phase-link" data-go="'+o.phase+'">查看 '+esc(OBJ[o.phase].label)+'</button></div>' : card;
 }
-
 const testLine = function (id) { return OBJ[id].summary || OBJ[id].explain || '尚未取得测试结果'; };
 const decLine = function (id) {
   return OBJ[id].detail + '；因为' + OBJ[id].why;
 };
-
-/* ---- Hero ---- */
+/* Hero */
 function heroHtml(o) {
   const k = DATA.kinds[o.kind];
   const changed = CHANGED.has(o.id);
@@ -875,7 +815,6 @@ function heroHtml(o) {
   const title = function (cls, text) {
     return '<h2 tabindex="-1" class="' + cls + '">' + esc(text) + '</h2>';
   };
-
   if (o.kind === 'req') {
     return '<div class="' + wrap + '">' + head +
       '<div class="hero-quote">' +
@@ -936,13 +875,11 @@ function heroHtml(o) {
     (o.summary ? '<p class="hero-summary">' + esc(o.summary) + '</p>' : '') +
   '</div>';
 }
-
-/* ---- 两份记录对不上 ---- */
+/* 两份记录对不上 */
 function contraHtml(o) {
   return o.contradiction ? '<div class="contra"><p class="contra-head">记录不一致 / 缺口</p><p>' + esc(o.contradiction) + '</p></div>' : '';
 }
-
-/* ---- 逻辑链条 ---- */
+/* 逻辑链条 */
 function fileFoldHtml(ids, current) {
   const open = ui.fileFold;
   return '<div class="filefold k-file">' +
@@ -956,10 +893,9 @@ function fileFoldHtml(ids, current) {
     }).join('') + '</div>' : '') +
   '</div>';
 }
-
 function chainHtml(o) {
   const lanes = chainFor(o.id);
-  const ringNames = { req: '需求', dec: '依据', wp: '工作包', task: 'Task', file: '文件', test: '测试', acc: '验收' };
+  const ringNames = Object.fromEntries(CORE.map(function(k,i){return [k,RING_NAMES[i]];}));
   const basisNames = { ires: '内部调研', eres: '外部调研', goal: '目标', dec: '决策' };
   const cur = ANCHOR[o.kind] || 0;
   const ownerTasks = (o.kind === 'file' || o.kind === 'test') ? Array.from(ancestors([o.id])).filter(function (id) { return OBJ[id].kind === 'task'; }) : [];
@@ -968,7 +904,7 @@ function chainHtml(o) {
       (edge[1] === o.id && OBJ[edge[0]].kind === (o.kind === 'file' ? 'test' : 'file'));
   });
   const contextNote = ownerTasks.length ? '<p class="hero-note" data-task-context>本 Task（' + ownerTasks.map(function (id) { return esc(OBJ[id].label); }).join('、') + '）实际改动与执行测试；' + (directPair ? '有直接文件—测试关联，覆盖范围仍以测试原件为准。' : '逐文件测试映射未知，不代表这些测试逐文件覆盖。') + '</p>' : '';
-  const isAttached = o.kind === 'risk' || o.kind === 'phase';
+  const isAttached = o.kind === 'risk';
   const cards = function (ids) { return ids.map(function (id) {
     const item = OBJ[id];
     const line = item.kind === 'dec' ? decLine(id) : item.kind === 'test' ? testLine(id) : undefined;
@@ -976,12 +912,12 @@ function chainHtml(o) {
   }).join(''); };
   return '<section class="chain">' +
     '<h3>逻辑链条：从原始需求到落地</h3>' +
-    '<p class="lead">每一环都是平级对象，按「需求 → 依据 → 工作包 → Task → 文件 → 测试 → 验收」从上往下排；黑框是你现在看的这一项。</p>' +
+    '<p class="lead">每一环都是平级对象，按「' + RING_NAMES.join(' → ') + '」从上往下排；黑框是你现在看的这一项。</p>' +
     contextNote + '<ol>' + lanes.map(function (lane, i) {
       const current = !isAttached && i === cur;
       const pos = current ? '当前这一环' : i < cur ? '上游' : '下游';
       let body;
-      if (lane.kind === 'dec' && lane.groups.length) {
+      if (lane.groups.length) {
         body = lane.groups.map(function (group) {
           return '<section class="basis-group" data-basis-group="' + group.kind + '">' +
             '<h4>' + basisNames[group.kind] + '</h4><div class="lane-items">' + cards(group.items) + '</div></section>';
@@ -992,9 +928,8 @@ function chainHtml(o) {
         body = '<div class="lane-items">' + cards(lane.items) +
           (!lane.items.length ? (lane.gapTone === 'fail' ? gapBox(lane.gap) : emptyBox(lane.gap)) : '') + '</div>';
       }
-      if (lane.kind === 'acc' && lane.items.length) body = '<details class="panel"><summary>验收 ' + lane.items.length + ' 项 · 点击展开</summary>' + body + '</details>';
       const attached = (lane.attachments || []).map(function (extra) {
-        const label = extra.kind === 'risk' ? '未决项／风险' : 'Phase';
+        const label = DATA.kinds[extra.kind].label;
         return '<aside class="chain-attachment" data-attachment="' + extra.kind + '"><div class="attachment-label">' + label +
           ' <span>' + extra.items.length + ' 项</span></div><div class="lane-items">' + cards(extra.items) + '</div></aside>';
       }).join('');
@@ -1003,11 +938,10 @@ function chainHtml(o) {
           (i === lanes.length - 1 ? '' : '<span class="lane-line" aria-hidden="true"></span>') + '</div>' +
         '<div class="lane-body"><div class="lane-head"><span class="lane-label k-' + lane.kind + '">' + ringNames[lane.kind] + '</span>' +
           (lane.items.length ? '<span class="lane-count">' + lane.items.length + ' 项</span>' : '') +
-          '<span class="lane-pos' + (current ? ' is-cur' : '') + '">' + pos + '</span></div>' + body + attached + '</div></li>';
+          '<span class="lane-pos' + (current ? ' is-cur' : '') + '">' + pos + '</span></div>' + reportRingHtml(i+1) + body + attached + '</div></li>';
     }).join('') + '</ol></section>';
 }
-
-/* ---- 计划动的文件（和真实改动分栏） ---- */
+/* 计划动的文件（和真实改动分栏） */
 function planHtml(files) {
   const open = ui.plan;
   return '<div>' +
@@ -1021,7 +955,6 @@ function planHtml(files) {
     }).join('') + '</div>' : '') +
   '</div>';
 }
-
 function extrasHtml(o) {
   let out = '';
   if (o.items) {
@@ -1041,8 +974,7 @@ function extrasHtml(o) {
   if (o.failing) out += '<div class="gapbox">' + esc(o.failing) + '</div>';
   return out;
 }
-
-/* ---- 来源与路径 ---- */
+/* 来源与路径 */
 function sourceRow(s, i, ownerKey) {
   const key = ownerKey + '-' + i;
   const open = ui.srcRows.has(key);
@@ -1074,7 +1006,6 @@ function sourceRow(s, i, ownerKey) {
     '</button>' + body +
   '</div>';
 }
-
 function sourcesHtml(o) {
   if (!o.src || !o.src.length) return '';
   const ownerKey = encodeURIComponent(o.id);
@@ -1086,8 +1017,7 @@ function sourcesHtml(o) {
     (open ? '<div class="src-body">' + o.src.map(function (source, i) { return sourceRow(source, i, ownerKey); }).join('') + '</div>' : '') +
   '</div>';
 }
-
-/* ---- 进度总览 ---- */
+/* 进度总览 */
 function flowCells(id) {
   const cols = flowFor(id).cols.filter(function (c) { return PROGRESS_KINDS.indexOf(c.kind) >= 0; });
   const cur = OBJ[id].kind === 'phase' ? '' : id;
@@ -1100,7 +1030,6 @@ function flowCells(id) {
     '</div>';
   }).join('');
 }
-
 function progressHtml() {
   const flow = DATA.stages.map(function (s, i) {
     return '<div class="flow-item">' +
@@ -1111,7 +1040,7 @@ function progressHtml() {
       (i < DATA.stages.length - 1 ? '<span class="sep" aria-hidden="true">›</span>' : '') +
     '</div>';
   }).join('');
-  return '<div class="flow">' + flow + '</div>' +
+  return '<section class="panel"><h3>十环报告（只读派生）</h3>'+CORE.map(function(_,i){return reportRingHtml(i+1);}).join('')+'</section><div class="flow">' + flow + '</div>' +
     '<section class="section">' +
       '<h3 class="section-title">每条原始需求走到了哪一步<span class="hint">一行一条；虚线红框 = 这一环缺</span></h3>' +
       '<div class="panel flush"><div class="scroll-thin table-scroll"><div class="table-inner">' +
@@ -1127,7 +1056,6 @@ function progressHtml() {
       '</div>' +
     '</section>';
 }
-
 function riskInventoryHtml() {
   const inv=DATA.riskInventory;
   if(!inv)return '';
@@ -1137,8 +1065,7 @@ function riskInventoryHtml() {
     return '<details class="panel"><summary>'+esc(row[0])+' '+ids.length+' 条 · 点击展开</summary>'+ids.map(function(id){const o=OBJ[id];return '<div class="hero-cell">'+objChip(id)+'<p>'+esc(o.severity ? '原始等级：'+o.severity : o.status.text)+'</p>'+sourcesHtml(o)+'</div>';}).join('')+'</details>';
   }).join('')+'<p class="hero-note">等级分布：'+esc(JSON.stringify(inv.riskSeverity))+'；未决表源状态分布：'+esc(JSON.stringify(inv.issueSourceStatus))+'。分类是来源读回，不是关闭裁决。</p></section>';
 }
-
-/* ---- 页头 / 主区 ---- */
+/* 页头 / 主区 */
 function taskCounts() {
   const c = { total: 0 };
   DATA.objects.filter(function (x) { return x.kind === 'task'; }).forEach(function (t) {
@@ -1148,7 +1075,6 @@ function taskCounts() {
   });
   return c;
 }
-
 function headerRightHtml() {
   const live = DATA.changedChips.filter(function (c) { return CHANGED.has(c.id); });
   let out = '';
@@ -1162,7 +1088,6 @@ function headerRightHtml() {
   out += '<span class="hdr-readonly">只读派生 · 非权威</span>' + (storageError ? '<span role="alert" class="fail-strong">' + esc(storageError) + '</span>' : '');
   return out;
 }
-
 function headerHtml() {
   const now = DATA.stages.filter(function (s) { return s.state === 'now'; })[0];
   const c = taskCounts();
@@ -1184,37 +1109,31 @@ function headerHtml() {
       '<div class="hdr-count-body">'+Object.keys(c).filter(function(k){return k !== 'total';}).map(function(k){return '<div>'+esc(k)+' '+c[k]+'</div>';}).join('')+'</div></details>' +
     '<div class="hdr-right">' + headerRightHtml() + '</div>';
 }
-
 function mainHtml() {
   const back = hist.length ? '<button type="button" data-back class="backbtn">← 返回上一对象</button>' : '';
   const toolbar = '<div class="toolbar">' + back + '</div>';
   if (sel === 'progress') {
     return toolbar + '<h2 tabindex="-1" class="page-h2">进度总览</h2>' +
       '<p class="hero-note">本页是只读派生视图，不是权威。权威为当前材料与 task facts。</p>' +
-      '<details class="panel"><summary>来源指纹与本次状态</summary><p>' + esc(DATA.provenance || '尚未提供来源指纹') + '</p><p>' + esc(DATA.comparisonNote || '比较基准缺失') + '</p><p>机械比对管不住措辞漂移，不能替代独立效果验收。</p></details>' + progressHtml() +
+      '<details class="panel"><summary>来源指纹与本次状态</summary><p>' + esc(DATA.rings ? (/报告 sha256=[a-f0-9]{64}(?![a-f0-9])/i.test(DATA.provenance || '') && /decision-log sha256=[a-f0-9]{64}(?![a-f0-9])/i.test(DATA.provenance || '') ? DATA.provenance : '缺口：报告或decision-log指纹未取得') : '报告缺失：final-chain-report.json 未取得') + '</p><p>' + esc(DATA.comparisonNote || '比较基准缺失') + '</p><p>机械比对管不住措辞漂移，不能替代独立效果验收。</p></details>' + progressHtml() +
       '<section class="section"><h3 class="section-title">任务实际交付与验收在哪</h3><div class="panel">' +
       IDS.filter(function(id){return OBJ[id].kind === 'task';}).map(function(id){const t=OBJ[id];return '<div class="hero-cell">'+objChip(id)+'<p>'+esc(t.summary)+'</p>'+sourcesHtml(t)+'</div>';}).join('')+'</div></section>' + riskInventoryHtml();
-
   }
   const o = OBJ[sel];
   return toolbar + heroHtml(o) + contraHtml(o) + (o.noChain ? '' : chainHtml(o)) + extrasHtml(o) + sourcesHtml(o);
 }
 </script>
-
 <script>
-/* ============================================================
-   4. 状态与交互
-   ============================================================ */
+/* 4. 状态与交互 */
 const hdr = document.getElementById('hdr');
 const sideNav = document.getElementById('side-nav');
 const side = document.getElementById('side');
 const scroller = document.getElementById('scroller');
 const main = document.getElementById('main');
-
 const ui = { sources: new Set(), plan: false, fileFold: false, srcRows: new Set() };
 let storageError = '';
 function seenKey(id) {
-  const o = OBJ[id];
+  const o = OBJ[id] || RING_BY_ID[id];
   if (typeof DATA.taskIdentity !== 'string' || !DATA.taskIdentity.trim()
     || !o || typeof o.contentDigest !== 'string' || !o.contentDigest.trim()) {
     throw new Error('缺少任务身份或节点内容摘要，已读状态不能持久保存');
@@ -1222,7 +1141,7 @@ function seenKey(id) {
   return 'workflowhub:page-seen:' + JSON.stringify([DATA.taskIdentity, id, o.contentDigest]);
 }
 const CHANGED = new Set((DATA.initialChanged || []).filter(function (id) {
-  if (!OBJ[id]) return false;
+  if (!OBJ[id] && !RING_BY_ID[id]) return false;
   try { return localStorage.getItem(seenKey(id)) !== 'seen'; }
   catch (error) { storageError = '显示偏好不可读，刷新后的已读状态未知：' + error.message; return true; }
 }));
@@ -1230,8 +1149,7 @@ let sel = 'progress';
 let hist = [];
 let scrolls = {};
 let RELATED = new Set();
-
-/* 用 DATA.kinds 里的颜色生成 12 个 kind 的 CSS 变量 */
+/* 用 DATA.kinds 里的颜色生成 15 个 kind 的 CSS 变量 */
 (function injectKindStyles() {
   const css = Object.keys(DATA.kinds).map(function (k) {
     const v = DATA.kinds[k];
@@ -1241,7 +1159,6 @@ let RELATED = new Set();
   styleEl.textContent = css;
   document.head.appendChild(styleEl);
 })();
-
 function resetViewUi() {
   ui.sources = new Set();
   ui.plan = false;
@@ -1253,7 +1170,6 @@ function resetViewUi() {
   }
   ui.fileFold = fileIds.indexOf(sel) >= 0;
 }
-
 function renderAll() {
   const sideTop = sideNav.scrollTop;
   RELATED = sel === 'progress'
@@ -1264,17 +1180,15 @@ function renderAll() {
   main.innerHTML = mainHtml();
   sideNav.scrollTop = sideTop;
 }
-
 function renderMain() {
   main.innerHTML = mainHtml();
 }
-
 function focusHeading() {
   const h = main.querySelector('h2');
   if (h) h.focus({ preventScroll: true });
 }
-
 function go(id) {
+  if (RING_BY_ID[id]) { sel = 'progress'; renderAll(); const target=main.querySelector('[data-report-ring="'+id.slice(5)+'"]'); if(target) target.scrollIntoView(); return; }
   if (id === sel) return;
   scrolls[sel] = scroller.scrollTop;
   hist.push(sel);
@@ -1284,7 +1198,6 @@ function go(id) {
   scroller.scrollTop = 0;
   focusHeading();
 }
-
 function goBack() {
   const prev = hist[hist.length - 1];
   if (!prev) return;
@@ -1296,7 +1209,6 @@ function goBack() {
   scroller.scrollTop = scrolls[prev] || 0;
   focusHeading();
 }
-
 function handleToggle(el) {
   const kind = el.dataset.toggle;
   if (kind === 'sources') {
@@ -1317,7 +1229,6 @@ function handleToggle(el) {
   const again = main.querySelector(selector);
   if (again) again.focus();
 }
-
 document.addEventListener('click', function (e) {
   const seen = e.target.closest('[data-seen]');
   if (seen) {
@@ -1335,7 +1246,6 @@ document.addEventListener('click', function (e) {
   const nav = e.target.closest('[data-go]');
   if (nav) { go(nav.dataset.go); return; }
 });
-
 side.addEventListener('keydown', function (e) {
   if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
   const items = Array.from(sideNav.querySelectorAll('[data-nav]'));
@@ -1347,7 +1257,6 @@ side.addEventListener('keydown', function (e) {
   n.tabIndex = 0;
   n.focus();
 });
-
 document.getElementById('foot-dir').textContent = '数据来自 ' + DATA.sourceDir;
 resetViewUi();
 renderAll();

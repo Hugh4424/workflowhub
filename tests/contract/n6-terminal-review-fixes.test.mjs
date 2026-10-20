@@ -1,3 +1,12 @@
+// N9 D-011 TCR: 483-p5-three-case-tcr-independent.md and
+// 488-p5-three-case-scope-readback.json; prior target RED is
+// quality/tests/2026-10-20-p5-template-first.output. Scope is only the two
+// task locators below; all original IDs, fixtures and comparison strengths stay.
+// Original first locator and assertion (preserved verbatim):
+//     const lane = lanes.find(item => item.kind === kind);
+//     expect(Array.from(lane.items), `${kind} remains reachable from decision d1`).toEqual(expect.arrayContaining(ids));
+// Original second task assertion (preserved verbatim):
+//   expect(Array.from(lanes.find(lane => lane.kind === 'task').items)).toEqual(['T003']);
 // Independent regression oracles for terminal review 104. Node VM exercises
 // real template functions; this is not browser or visual acceptance.
 import { readFileSync } from 'node:fs';
@@ -28,7 +37,9 @@ test('terminal 104: decision d1 follows its real side-edge work package into the
   const view = load();
   const lanes = view.evaluate('chainFor("d1")');
   for (const [kind, ids] of Object.entries({ req: ['req1', 'req4'], dec: ['d1'], wp: ['wp1'], task: ['task1', 'task2'], file: ['file1'], test: ['test-pre', 'test-post'] })) {
-    const lane = lanes.find(item => item.kind === kind);
+    const lane = kind === 'task'
+      ? lanes.find(item => item.kind === 'phase').attachments.find(item => item.kind === 'task')
+      : lanes.find(item => item.kind === kind);
     expect(Array.from(lane.items), `${kind} remains reachable from decision d1`).toEqual(expect.arrayContaining(ids));
   }
 });
@@ -48,7 +59,7 @@ test('terminal 104: existing N6 direct decision edges retain their work package 
   `);
   const lanes = view.evaluate('chainFor("ADR-001")');
   expect(Array.from(lanes.find(lane => lane.kind === 'wp').items)).toEqual(['WP-001']);
-  expect(Array.from(lanes.find(lane => lane.kind === 'task').items)).toEqual(['T003']);
+  expect(Array.from(lanes.find(lane => lane.kind === 'phase').attachments.find(item => item.kind === 'task').items)).toEqual(['T003']);
 });
 
 test('terminal 104: seen state requires identity and digest, preserves visible changes on missing input, and isolates valid keys', () => {
