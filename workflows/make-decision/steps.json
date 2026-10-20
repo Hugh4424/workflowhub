@@ -5,7 +5,7 @@
     {
       "step_id": 1,
       "step_slug": "load-context",
-      "observable_result": "原始需求、任务类型、事实、假设、非目标和未决问题在同一决策日志可读；缺失和冲突有具体说明。用户痛点、完整旅程和成功失败边界得到区分；模糊需求有多个候选角度和可推翻依据。首次 U／OI 写入前已实读 decision-log 来源与未决问题方法，coverage 收口前已读同 owner；首次结构化提问前已读 Talk 与宿主问答契约，实际读取位置与先后可定位，读后未做如实记未执行；无可用工具发同内容文本卡并记录本轮降级为文本提问与真实原因，未答不代答。 普通执行目标已实际调用 workflows/make-decision/scripts/entry-evaluation.mjs 的 evaluateEntryRoute；真实返回、逐项依据与缺口在原决定可读，paused 同批展示可选拆分路线。",
+      "observable_result": "原始需求、任务类型、事实、假设、非目标和未决问题在同一决策日志可读；缺失和冲突有具体说明。用户痛点、完整旅程和成功失败边界得到区分；模糊需求有多个候选角度和可推翻依据。首次 U／OI 写入前已实读 decision-log 来源与未决问题方法，coverage 收口前已读同 owner；首次结构化提问前已读 Talk 与宿主问答契约，实际读取位置与先后可定位，读后未做如实记未执行；无可用工具发同内容文本卡并记录本轮降级为文本提问与真实原因，未答不代答。 普通执行目标已实际调用 workflows/make-decision/scripts/entry-evaluation.mjs 的 evaluateEntryRoute；真实返回、逐项依据与缺口在原决定可读，paused 同批展示可选拆分路线。 判定消费：SKILL.md#方法 第1步；原件：decision级别节、需求索引与入口返回原ref。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -16,7 +16,7 @@
     {
       "step_id": 2,
       "step_slug": "outline-hypothesis-talk",
-      "observable_result": "主会话产出问题与边界、各模块方向假设组成的大纲，显式标为可修改假设并写明推翻证据；不作基线，不承诺范围或成本。",
+      "observable_result": "主会话产出问题与边界、各模块方向假设组成的大纲，显式标为可修改假设并写明推翻证据；不作基线，不承诺范围或成本。 判定消费：SKILL.md#方法 第2步；原件：decision大纲与真实Talk回复。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -27,7 +27,7 @@
     {
       "step_id": 3,
       "step_slug": "research-and-diverge",
-      "observable_result": "会改变方向的未知问题有一手来源、候选和取舍；跳过或不可用有真实原因，失败假设推动重新整理。每份完成报告显式声明 candidates，逐候选写摘要、证据绑定来源 ref、推荐或拒绝、理由；无候选写真实原因，后续使用唯一 canonical report。 deep-research 对已批准的外部发现按 anysearch 方法执行，工具能力与技能同名职责分开；调用未执行或不可用保持原事实。",
+      "observable_result": "会改变方向的未知问题有一手来源、候选和取舍；跳过或不可用有真实原因，失败假设推动重新整理。每份完成报告显式声明 candidates，逐候选写摘要、证据绑定来源 ref、推荐或拒绝、理由；无候选写真实原因，后续使用唯一 canonical report。 deep-research 对已批准的外部发现按 anysearch 方法执行，工具能力与技能同名职责分开；调用未执行或不可用保持原事实。 判定消费：SKILL.md#方法 第3步；原件：canonical研究原件、内部origin和有源跳过理由。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -42,7 +42,7 @@
     {
       "step_id": 4,
       "step_slug": "outline-revision-check",
-      "observable_result": "研究后设计的修订大纲、需求最小索引与独立四查四行结论；两份外置原件是确认输入。 逐块对照研究与假设，保旧判断及更改理由；多数被推翻先重整。四查已确定工作包顺序，太大或太碎时执行者当场改完给用户看。",
+      "observable_result": "研究后设计的修订大纲、需求最小索引与独立四查四行结论；两份外置原件是确认输入。 逐块对照研究与假设，保旧判断及更改理由；多数被推翻先重整。四查已确定工作包顺序，太大或太碎时执行者当场改完给用户看。 判定消费：SKILL.md#方法 第4步；原件：需求索引、coverage唯一原件、独立四查返回。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -53,7 +53,7 @@
     {
       "step_id": 5,
       "step_slug": "outline-talk",
-      "observable_result": "同一日志中的骨架展示、既有攻击自查原件及用户对此骨架的真实答复或明确待答。 先执行原第6步的轻量攻击自查，再一次展示并等待用户真实回复；未答停草稿，旧答、推荐或模拟不代答。",
+      "observable_result": "同一日志中的骨架展示、既有攻击自查原件及用户对此骨架的真实答复或明确待答。 先执行原第6步的轻量攻击自查，再一次展示并等待用户真实回复；未答停草稿，旧答、推荐或模拟不代答。 判定消费：SKILL.md#方法 第5步；原件：展示稿、自查原ref、用户骨架确认。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -64,7 +64,7 @@
     {
       "step_id": 6,
       "step_slug": "adversarial-direction-check",
-      "observable_result": "第5步已执行攻击自查的原件与结果读回，风险仍留原风险／假设位置。 已回读同一次自查；不重复执行，不把用户骨架答复冒成自查结果。 真实骨架确认后在本步分两次独立调用，每次只传一个--file，分别读取当前需求索引和覆盖表，各自保存该时点的实际warning/exit，只报不阻断。",
+      "observable_result": "第5步已执行攻击自查的原件与结果读回，风险仍留原风险／假设位置。 已回读同一次自查；不重复执行，不把用户骨架答复冒成自查结果。 真实骨架确认后在本步分两次独立调用，每次只传一个--file，分别读取当前需求索引和覆盖表，各自保存该时点的实际warning/exit，只报不阻断。 判定消费：SKILL.md#方法 第6步；原件：自查原件；需求索引/coverage各一命令回执。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -75,7 +75,7 @@
     {
       "step_id": 7,
       "step_slug": "direction-advice",
-      "observable_result": "wh-review 独立方向建议及原始发现、真实执行者、失败和覆盖限制保存；建议不替用户选方向。审查方向与修订后大纲，不审细节；Kill 建议用于目标无效或方向违反硬约束，停止决定由用户作出；Recycle 建议用于可修补假设或证据缺口，回对应调研或方向 talk。两项权限与判据缺失时不记审查通过，审查事实不作机器门。",
+      "observable_result": "wh-review 独立方向建议及原始发现、真实执行者、失败和覆盖限制保存；建议不替用户选方向。审查方向与修订后大纲，不审细节；Kill 建议用于目标无效或方向违反硬约束，停止决定由用户作出；Recycle 建议用于可修补假设或证据缺口，回对应调研或方向 talk。两项权限与判据缺失时不记审查通过，审查事实不作机器门。 判定消费：SKILL.md#方法 第7步；原件：review原件、实际delivery与失败、用户处置。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -90,7 +90,7 @@
     {
       "step_id": 8,
       "step_slug": "module-breadth-confirm",
-      "observable_result": "按入口路由选用对应流程；复杂流程内全部工作包的简单／复杂分诊与入口规模事实展示，保真实回复或未答。分诊只决定先补调研或直接收敛，保持第4步顺序，不冒细节已收敛。",
+      "observable_result": "按入口路由选用对应流程；复杂流程内全部工作包的简单／复杂分诊与入口规模事实展示，保真实回复或未答。分诊只决定先补调研或直接收敛，保持第4步顺序，不冒细节已收敛。 判定消费：SKILL.md#方法 第8步；原件：工作包分诊、入口原ref、真实展示/答复。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -101,7 +101,7 @@
     {
       "step_id": 9,
       "step_slug": "module-convergence",
-      "observable_result": "逐模块方案/替代/验收/后果、red/blue 争议清单及每条处置或具名未决项，留现决定/处置原位置。 每条 red/blue 争议都已逐项消费，方向或验收分歧交真实用户；新增模块补齐原研究/决定/验收，仅闭包触及的旧决定复评。amend/supersede 保历史，不用泛化摘要冒逐条收敛。",
+      "observable_result": "逐模块方案/替代/验收/后果、red/blue 争议清单及每条处置或具名未决项，留现决定/处置原位置。 每条 red/blue 争议都已逐项消费，方向或验收分歧交真实用户；新增模块补齐原研究/决定/验收，仅闭包触及的旧决定复评。amend/supersede 保历史，不用泛化摘要冒逐条收敛。 判定消费：SKILL.md#方法 第9步；原件：每包五行表、Talk/研究原件、现OI处置。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -112,7 +112,7 @@
     {
       "step_id": 10,
       "step_slug": "detail-advice",
-      "observable_result": "逐模块确认后，对整体做一次 wh-review 细节审查，逐项处置并完成确认前一致性准备与必要修复；Kill 建议用于整体目标或范围无法成立，由用户决定停止；Recycle 建议用于可修补的模块间缺口，回对应模块收敛。两项权限与判据缺失时不记审查通过，不拆模块审加整体审两级。",
+      "observable_result": "逐模块确认后，对整体做一次 wh-review 细节审查，逐项处置并完成确认前一致性准备与必要修复；Kill 建议用于整体目标或范围无法成立，由用户决定停止；Recycle 建议用于可修补的模块间缺口，回对应模块收敛。两项权限与判据缺失时不记审查通过，不拆模块审加整体审两级。 判定消费：SKILL.md#方法 第10步；原件：detail包delivery、coverage、原finding与处置。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -127,7 +127,7 @@
     {
       "step_id": 11,
       "step_slug": "grill-with-docs",
-      "observable_result": "grill 开头产出计划草案骨架，以细节决策加计划草案骨架为输入作真实交互挑战；必要更新写入决策日志，Grill不伪作独立审查，其后仍写草稿、确认、核对与交接。",
+      "observable_result": "grill 开头产出计划草案骨架，以细节决策加计划草案骨架为输入作真实交互挑战；必要更新写入决策日志，Grill不伪作独立审查，其后仍写草稿、确认、核对与交接。 判定消费：SKILL.md#方法 第11步；原件：原方法grill_summary、decision/GLOSSARY/ADR原ref。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -138,7 +138,7 @@
     {
       "step_id": 12,
       "step_slug": "write-decision-draft",
-      "observable_result": "当前 decision-log 完整草稿：原话/派生判断/来源、真实已确认或待确认/退役、风险与延期 owner。 所有真实 R/U 在主文必要接口及唯一覆盖原件有落点或有源具名缺口，排除保真人理由/去向；历史与更改理由保留，文件/编号/索引不冒语义覆盖。 全部工作包谈完后本步再次分两次独立调用，每次只传一个--file，分别读取当前需求索引和覆盖表，各自保存第二时点的warning/exit并回读第一次原件。",
+      "observable_result": "当前 decision-log 完整草稿：原话/派生判断/来源、真实已确认或待确认/退役、风险与延期 owner。 所有真实 R/U 在主文必要接口及唯一覆盖原件有落点或有源具名缺口，排除保真人理由/去向；历史与更改理由保留，文件/编号/索引不冒语义覆盖。 全部工作包谈完后本步再次分两次独立调用，每次只传一个--file，分别读取当前需求索引和覆盖表，各自保存第二时点的warning/exit并回读第一次原件。 判定消费：SKILL.md#方法 第12步；原件：当前decision、R/U原件、两个checker回执。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -149,7 +149,7 @@
     {
       "step_id": 13,
       "step_slug": "approve-decision",
-      "observable_result": "一致性准备完成后的方向、范围（含第 1 步的独立可交付验收单元数与是否含需用户在场或真实凭证的动作）、风险和验收展示给用户并取得真实确认；拒绝或未答仍为草稿，不推断授权。",
+      "observable_result": "一致性准备完成后的方向、范围（含第 1 步的独立可交付验收单元数与是否含需用户在场或真实凭证的动作）、风险和验收展示给用户并取得真实确认；拒绝或未答仍为草稿，不推断授权。 判定消费：SKILL.md#方法 第13步；原件：human-confirm原件与实际materialRefs。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -160,7 +160,7 @@
     {
       "step_id": 14,
       "step_slug": "stage-end-spec-analyze",
-      "observable_result": "spec-analyze对最终决策、真实问答/审查与本次实际确认作只读一致性核对；缺口保持可见，改变决定的修复先准备可审稿再重新确认，不新增审批或机器门。同时核对本次已解决术语的写入读回或 no change 理由。",
+      "observable_result": "spec-analyze对最终决策、真实问答/审查与本次实际确认作只读一致性核对；缺口保持可见，改变决定的修复先准备可审稿再重新确认，不新增审批或机器门。同时核对本次已解决术语的写入读回或 no change 理由。 判定消费：SKILL.md#方法 第14步；原件：spec-analyze原件、确认ref、术语读回。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -175,7 +175,7 @@
     {
       "step_id": 15,
       "step_slug": "closeout",
-      "observable_result": "当前主会话在整个阶段结束时按 stage-reflection 的方法执行阶段收口，内部发布并读回可单独读取的 stage-handoff；归纳、分类归口、记录阶段成本、发布、报告依唯一方法顺序执行。成本沿 measure-main-agent-cost 的来源与窗口边界，同一窗口一次，未触发/失败写本阶段无记录及真实原因；Phase摘要不另触发，不新增stage、字段、writer或关闭许可。",
+      "observable_result": "阶段末主会话按stage-reflection收口：依次归纳、分类归口、记录阶段成本、发布、报告，内部发布并独立读回stage-handoff。成本沿 measure-main-agent-cost 的来源与窗口边界，同一窗口一次，未触发/失败写本阶段无记录及真实原因；Phase摘要不另触发，不新增stage、字段、writer或关闭许可。 判定消费：SKILL.md#方法 第15步；原件：stage-reflection成本原件、immutable handoff与读回。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",

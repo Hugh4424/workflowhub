@@ -5,7 +5,7 @@
     {
       "step_id": 1,
       "step_slug": "load-confirmed-inputs",
-      "observable_result": "父决策和必要来源可读，完整旅程、需求范围、排除理由与未知项明确；不推断缺失确认。",
+      "observable_result": "父决策和必要来源可读，完整旅程、需求范围、排除理由与未知项明确；不推断缺失确认。 判定消费：SKILL.md#方法 第1步；原件：decision确认ref、原始要求与只读输入原件。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -16,7 +16,7 @@
     {
       "step_id": 2,
       "step_slug": "generate-outline-and-task-map",
-      "observable_result": "第一次spec-prd内容调用产大纲/任务地图，每需求有负责卡或明确排除；实际稿件已展示，未答仍为草稿。",
+      "observable_result": "第一次spec-prd内容调用产大纲/任务地图，每需求有负责卡或明确排除；实际稿件已展示，未答仍为草稿。 判定消费：SKILL.md#方法 第2步；原件：prd地图实际稿、作者调用事实、来源覆盖。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -27,7 +27,7 @@
     {
       "step_id": 3,
       "step_slug": "confirm-map-and-conditional-design",
-      "observable_result": "主会话保留地图及适用设计的真实答复；未展示、旧稿指代、拒绝或未答不当当前批准。",
+      "observable_result": "主会话保留地图及适用设计的真实答复；未展示、旧稿指代、拒绝或未答不当当前批准。 判定消费：SKILL.md#方法 第3步；原件：真实问题/答复、设计来源/预览限制。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -38,7 +38,7 @@
     {
       "step_id": 4,
       "step_slug": "expand-single-prd",
-      "observable_result": "地图/设计真实答复后第二次同一spec-prd作者写完整PRD，来源/语义一致，缺口保留，不新增第三内容调用。",
+      "observable_result": "地图/设计真实答复后第二次同一spec-prd作者写完整PRD，来源/语义一致，缺口保留，不新增第三内容调用。 判定消费：SKILL.md#方法 第4步；原件：作者真实调用事实、同一prd与确认输入。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -49,7 +49,7 @@
     {
       "step_id": 5,
       "step_slug": "review-and-confirm-final-draft",
-      "observable_result": "完整稿经wh-review文档建议和逐项处置，最终实际展示稿取得真实confirm；版本指代不清或未答保持draft。",
+      "observable_result": "完整稿经wh-review文档建议和逐项处置，最终实际展示稿取得真实confirm；版本指代不清或未答保持draft。 判定消费：SKILL.md#方法 第5步；原件：wh-review原件/处置、最终稿、confirm ref。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -64,7 +64,7 @@
     {
       "step_id": 6,
       "step_slug": "closeout",
-      "observable_result": "当前主会话在整个阶段结束时按 stage-reflection 的方法执行阶段收口，内部发布并读回可单独读取的 stage-handoff；归纳、分类归口、记录阶段成本、发布、报告依唯一方法顺序执行。成本沿 measure-main-agent-cost 的来源与窗口边界，同一窗口一次，未触发/失败写本阶段无记录及真实原因；Phase摘要不另触发，不新增stage、字段、writer或关闭许可。build-prd仅成本标签，材料未供unavailable、无审查事实no_stage_fact；读回27列及旧前缀/窗口，缺报exit1与无记录分列，未齐incomplete。",
+      "observable_result": "阶段末主会话按stage-reflection收口：依次归纳、分类归口、记录阶段成本、发布、报告，内部发布并独立读回stage-handoff。成本沿 measure-main-agent-cost 的来源与窗口边界，同一窗口一次，未触发/失败写本阶段无记录及真实原因；Phase摘要不另触发，不新增stage、字段、writer或关闭许可。build-prd仅成本标签，材料未供unavailable、无审查事实no_stage_fact；读回27列及旧前缀/窗口，缺报exit1与无记录分列，未齐incomplete。 判定消费：SKILL.md#方法 第6步；原件：原hand-off、成本27列原读数、真实交付原ref。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
