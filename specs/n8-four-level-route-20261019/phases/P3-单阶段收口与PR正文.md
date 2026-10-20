@@ -21,7 +21,7 @@ P0 在场（材料选节状态，不是执行进度）：
 - **Consumer**：P5 轻档流程作者、P7 验收者、收口与交付读者
 - **gate_cmd**：`node node_modules/vitest/vitest.mjs run tests/contract/light-close-confirm.test.mjs tests/contract/stage-closeout-skill.test.mjs tests/contract/stage-closeout-step-contract.test.mjs tests/contract/delivery-closeout-charter-contract.test.mjs`
 - **oracle**：ORACLE-LIGHT-CLOSE
-- **evidence_path**：`quality/evidence/2026-10-20-003-p3-light-close.output`
+- **evidence_path**：`quality/tests/2026-10-20-031-p3-independent-red.output`
 - **STOP**：确认 stage 推导与任务阶段事实不一致、或冻结测试改动未取得独立审查时停；回本卡实施者核 `confirmClosePlan`/`acceptedConfirmation` 与三份契约测试，保留原失败。
 - **覆盖 AC**：AC-CLOSE-1（主验）、AC-CLOSE-2（主验）、AC-CLOSE-3（主验）、AC-ENTRY-4（收口读取点子面）
 - **Done**：三条 AC 按原判据逐条件核；新测试同时断言轻任务确认记录 stage 为 `make-decision`、复杂任务仍为 `verify-code`、PR 正文取 spec、三份冻结测试按 TCR 更新且审查原件可读；独立审查事实与未闭环项写明。
@@ -92,9 +92,9 @@ T003 先交确认 stage 与 close-plan 路由；T004 再交 stage-closeout 调�
 - **RED/GREEN gate_cmd**：`node node_modules/vitest/vitest.mjs run tests/contract/light-close-confirm.test.mjs`
 - **expected_exit**：RED nonzero; GREEN 0
 - **RED target failure**：`ORACLE-LIGHT-CLOSE` 断言轻任务确认记录 stage 为 `make-decision`；当前实现写死 `verify-code`，目标断言失败。
-- **RED evidence**：`quality/evidence/2026-10-20-003-p3-red.output`（首次真实执行后保存）。
+- **RED evidence**：`quality/tests/2026-10-20-030-p3-independent-red.output`（真实四文件批次 exit 1；目标断言失败与夹具错误按 `quality/evidence/2026-10-20-077-p3-red-diagnosis.json` 区分，夹具错误不当接线 RED）。
 - **GREEN oracle**：ORACLE-LIGHT-CLOSE 同命令退出 0；两条路径 stage 正确、交叉被拒、PR 正文读 spec。
-- **Evidence**：`quality/evidence/2026-10-20-003-p3-light-close.output` 与 `quality/evidence/2026-10-20-003-p3-red.output`。
+- **Evidence**：`quality/tests/2026-10-20-031-p3-independent-red.output` 与 `quality/tests/2026-10-20-030-p3-independent-red.output`。
 - **Coverage limit**：不证明真实 Git 远程动作可用；不证明归档与清理；不覆盖 mini 收口模式（归 P4）。
 - **STOP / recovery**：确认记录与 plan 不符、或 CLI 路由拒绝合法轻任务时停，回本卡实施者核推导函数与路由；不通过改测试期望值换绿。
 - **测试变更请求**：`none`（本 Task 不改冻结断言；冻结断言改动在 T004）
@@ -114,22 +114,24 @@ T003 先交确认 stage 与 close-plan 路由；T004 再交 stage-closeout 调�
 - **RED/GREEN gate_cmd**：`node node_modules/vitest/vitest.mjs run tests/contract/light-close-confirm.test.mjs tests/contract/stage-closeout-skill.test.mjs tests/contract/stage-closeout-step-contract.test.mjs tests/contract/delivery-closeout-charter-contract.test.mjs`
 - **expected_exit**：RED nonzero; GREEN 0
 - **RED target failure**：`ORACLE-LIGHT-CLOSE` 断言 `stage-closeout` 的 `used_by_stages` 含 `make-decision` 且 SKILL 有定方向调用者段；当前为 `['build-prd','verify-code']` 且无该段，目标断言失败。
-- **RED evidence**：`quality/evidence/2026-10-20-003-p3-tcr-red.output`（冻结断言旧失败原件）。
+- **RED evidence**：`quality/tests/2026-10-20-030-p3-independent-red.output`（同一真实四文件批次中的冻结集合失败；同名 `.json` 为原始回执）。
 - **GREEN oracle**：ORACLE-LIGHT-CLOSE 同命令退出 0；三份契约测试与 catalog 一致；TCR 记录含旧/新断言、理由与独立审查引用。
-- **Evidence**：`quality/evidence/2026-10-20-003-p3-light-close.output`、`quality/evidence/2026-10-20-003-p3-tcr-red.output`、TCR 审查原件路径。
+- **Evidence**：`quality/tests/2026-10-20-031-p3-independent-red.output`、`quality/tests/2026-10-20-030-p3-independent-red.output`、TCR 审查原件路径。
 - **Coverage limit**：不证明真实收口动作在业务仓执行成功；不证明经验写入的业务仓路径可用；不覆盖 P7 的四路验收。
 - **STOP / recovery**：契约测试与 catalog 不一致、或 TCR 缺独立审查时停；回本卡实施者补齐，不直接改断言值而无记录。
-- **测试变更请求**：有 — 理由：让 stage-closeout 接受定方向调用者（D-012/E 模块取舍）；旧断言：`used_by_stages` 等于 `['build-prd','verify-code']`（三份契约测试同义）；新断言：精确阶段集合为 `[build-prd, verify-code, make-decision]`；charter 明确排除 `build-plan`、`build-code`；此前 RED 证据：`quality/evidence/2026-10-20-003-p3-tcr-red.output`；独立审查引用：`quality/evidence/2026-10-20-031-p3-tcr-independent-review.md`（SHA256 `b517a23b00134d01518d7991b7ad3d16f093b8019814cce6aa01768d51d66338`）；旧三份断言字节保留于 `071-p3-before-stage-closeout-skill.txt`、`072-p3-before-stage-closeout-step-contract.txt`、`073-p3-before-delivery-closeout-charter-cont.txt`（均在 quality/evidence）。
+- **测试变更请求**：有 — 理由：让 stage-closeout 接受定方向调用者（D-012/E 模块取舍）；旧断言：`used_by_stages` 等于 `['build-prd','verify-code']`（三份契约测试同义）；新断言：精确阶段集合为 `[build-prd, verify-code, make-decision]`；charter 明确排除 `build-plan`、`build-code`；此前 RED 证据：`quality/tests/2026-10-20-030-p3-independent-red.output`；独立审查引用：`quality/evidence/2026-10-20-031-p3-tcr-independent-review.md`（SHA256 `b517a23b00134d01518d7991b7ad3d16f093b8019814cce6aa01768d51d66338`）；旧三份断言字节保留于 `071-p3-before-stage-closeout-skill.txt`、`072-p3-before-stage-closeout-step-contract.txt`、`073-p3-before-delivery-closeout-charter-cont.txt`（均在 quality/evidence）。
 - **Done**：AC-CLOSE-2、AC-CLOSE-3 中与本 Task 相关的条件核完；RED/GREEN 同 oracle；TCR 记录与审查原件可读；独立审查与未覆盖项写明。
 
 ### 测试策略
 
 | 目标 | Task | 角色 | gate_cmd / 预期退出码 | 判据 / 证据路径 |
 | --- | --- | --- | --- | --- |
-| 轻任务确认 stage 按实际阶段 | T003 | RED | `node node_modules/vitest/vitest.mjs run tests/contract/light-close-confirm.test.mjs` / 1 | ORACLE-LIGHT-CLOSE / `quality/evidence/2026-10-20-003-p3-red.output` |
-| 轻任务确认 stage 按实际阶段 | T003 | GREEN | `node node_modules/vitest/vitest.mjs run tests/contract/light-close-confirm.test.mjs` / 0 | ORACLE-LIGHT-CLOSE / `quality/evidence/2026-10-20-003-p3-light-close.output` |
-| stage-closeout 接受定方向调用者 | T004 | RED | `node node_modules/vitest/vitest.mjs run tests/contract/stage-closeout-skill.test.mjs` / 1 | ORACLE-LIGHT-CLOSE / `quality/evidence/2026-10-20-003-p3-tcr-red.output` |
-| stage-closeout 接受定方向调用者 | T004 | GREEN | `node node_modules/vitest/vitest.mjs run tests/contract/light-close-confirm.test.mjs tests/contract/stage-closeout-skill.test.mjs tests/contract/stage-closeout-step-contract.test.mjs tests/contract/delivery-closeout-charter-contract.test.mjs` / 0 | ORACLE-LIGHT-CLOSE / `quality/evidence/2026-10-20-003-p3-light-close.output` |
+| 轻任务确认 stage 按实际阶段 | T003 | RED | `node node_modules/vitest/vitest.mjs run tests/contract/light-close-confirm.test.mjs` / 1 | ORACLE-LIGHT-CLOSE / `quality/tests/2026-10-20-030-p3-independent-red.output` |
+| 轻任务确认 stage 按实际阶段 | T003 | GREEN | `node node_modules/vitest/vitest.mjs run tests/contract/light-close-confirm.test.mjs` / 0 | ORACLE-LIGHT-CLOSE / `quality/tests/2026-10-20-031-p3-independent-red.output` |
+| stage-closeout 接受定方向调用者 | T004 | RED | `node node_modules/vitest/vitest.mjs run tests/contract/stage-closeout-skill.test.mjs` / 1 | ORACLE-LIGHT-CLOSE / `quality/tests/2026-10-20-030-p3-independent-red.output` |
+| stage-closeout 接受定方向调用者 | T004 | GREEN | `node node_modules/vitest/vitest.mjs run tests/contract/light-close-confirm.test.mjs tests/contract/stage-closeout-skill.test.mjs tests/contract/stage-closeout-step-contract.test.mjs tests/contract/delivery-closeout-charter-contract.test.mjs` / 0 | ORACLE-LIGHT-CLOSE / `quality/tests/2026-10-20-031-p3-independent-red.output` |
+
+实际执行说明：表中 T003/T004 窄命令仍是原定目标；030 与031实际 argv 均为契约头四文件聚合命令，按同批次承接各目标，未声称窄命令曾单独执行。030 exit 1 含真实目标/冻结集合失败及两条 runtime 夹具错误，后者不是接线 RED；分界见077原件。031文件名虽含 red，真实回执 exit 0、47 passed，保留原名。
 
 面声明：确认与 close plan 面（测）、技能目录面（测）、文档契约面（测）、真实 Git 远程面（不测，理由：本卡不发真实交付，远程动作由 P7 与真实收口运行承担）。
 
@@ -166,7 +168,7 @@ AC-CLOSE-1/2/3 的适用条件满足、RED/GREEN 同 oracle、TCR 记录与审�
 
 ### 本次执行事实（2026-10-20，等待独立质量审查）
 
-- TCR 先于冻结断言变更：`quality/evidence/2026-10-20-031-p3-tcr-independent-review.md`。三份旧字节见上述 071–073 原件；实际旧实现与新三阶段断言的目标 RED 是 `quality/tests/2026-10-20-030-p3-independent-red.output`（同名 `.json` 原始回执，exit 1）。卡中的 003 路径为原计划路径，不复制现有输出去填同字节镜像。029 早轮夹具错误保留但不当目标 RED；030 两条 runtime 夹具路径错误不当接线目标 RED。
+- TCR 先于冻结断言变更：`quality/evidence/2026-10-20-031-p3-tcr-independent-review.md`。三份旧字节见上述 071–073 原件；实际旧实现与新三阶段断言的目标 RED 是 `quality/tests/2026-10-20-030-p3-independent-red.output`（同名 `.json` 原始回执，exit 1）。旧 `003-p3-red.output`、`003-p3-tcr-red.output`、`003-p3-light-close.output` 仅为原计划名，未生成这些文件；本卡契约头、Task 与测试表已改指实际 030/031 原件，不复制现有输出补旧名或改写 raw。029 早轮夹具错误保留但不当目标 RED；030 两条 runtime 夹具路径错误不当接线目标 RED。
 - 范围窄补：七个既有直接确认消费者的测试夹具原来没有阶段事实；新合同要求无阶段报错，不能由生产默认 verify-code 保旧夹具通过。主会话已明确允许仅补其原场景本应存在的 verify-code stage 行，原断言不变；具体七路径与调用依据见 `quality/evidence/2026-10-20-076-p3-adjacent-fixture-scope.json`。先保存新实现下真实失败，再补夹具与复验。生产写集未扩大。
 - 新实现只推导 `record_kind=stage` 的三阶段事实；旧规划确认以原文件只读接受，所有 plan/hash/remote/reply/path 保护保留。规划 consumer 使用 `tools/cli/task-close.mjs confirm`；stage-runtime 只接本卡两个阶段，普通非 close 确认沿既有分支。
 - `tools/cli/task-close.mjs` 现有参数已经直传唯一 close owner，不需要改动；`buildDefaultPrDescription` 已读 spec，本次仅用真实 prepare 输出验证，不重复实现。

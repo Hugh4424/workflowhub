@@ -21,7 +21,7 @@ P0 在场（材料选节状态，不是执行进度）：
 - **Consumer**：P5 的入口路由作者、P7 验收者、技能目录与审查合同读者
 - **gate_cmd**：`node node_modules/vitest/vitest.mjs run tests/contract/entry-evaluation.test.mjs tests/contract/ocr-delegation-route.test.mjs tests/host-independence.test.mjs tests/contract/review-materials-contract.test.mjs tests/contract/card03-review-orchestration.test.mjs tests/contract/verify-architect-acceptance.test.mjs tests/review/review-record-route.test.mjs skills/wh-review/scripts/__tests__/review-semantic-projection.test.mjs skills/wh-review/scripts/__tests__/simple-contracts.test.mjs skills/wh-review/scripts/__tests__/third-review-host-config.test.mjs skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs && node tools/cli/check-skill-consistency.mjs --root "$PWD"`
 - **oracle**：ORACLE-ENTRY-FUNCTION
-- **evidence_path**：`quality/evidence/2026-10-20-004-p4-entry-retire.output`
+- **evidence_path**：`quality/tests/2026-10-20-050-p4-phase-gate.output`（完整契约头 gate；实际244 passed / 1既有skip，exit 0）
 - **STOP**：入口评估行为改变、调用点遗漏、或删除后仍有当前消费者时停；回本卡实施者核引用扫描与调用点，保留原失败；历史原件只读保留，不因校验失败而回删。
 - **覆盖 AC**：AC-ENTRY-1（函数子面主验）、AC-MAT-3（主验）
 - **Done**：AC-ENTRY-1 的函数子面与 AC-MAT-3 按原判据逐条件核；新模块导出新名且返回语义不变（`choices` 的 mini 品牌改名有记录）、旧模块与旧调用点删除、目录与枚举扫描零当前消费者、历史原件仍在；独立审查事实与未覆盖项写明。
@@ -98,9 +98,9 @@ T005 先迁函数、调用点与模板并交回可跑测试；T006 在 T005 完�
 - **RED/GREEN gate_cmd**：`node node_modules/vitest/vitest.mjs run tests/contract/entry-evaluation.test.mjs`
 - **expected_exit**：RED nonzero; GREEN 0
 - **RED target failure**：`ORACLE-ENTRY-FUNCTION` 的目标断言是新模块 `evaluateEntryRoute` 与旧函数对同一输入返回相同 `status`/`reason`/`expanded_risks`；创建模块前该断言无法运行（导入失败属收集失败，另记，不计目标 RED）。RED 归因按「收集失败」记录，目标 RED 记 unavailable 并写原因，不以导入失败冒充目标断言失败。
-- **RED evidence**：`quality/evidence/2026-10-20-004-p4-entry-red.output`（记录实际导入失败与「收集失败、非目标 RED」的归因；目标 RED 记 unavailable 及原因）。
+- **RED evidence**：`quality/tests/2026-10-20-036-p4-entry-red.output`（记录实际导入失败与「收集失败、非目标 RED」的归因；目标 RED 记 unavailable 及原因）。
 - **GREEN oracle**：ORACLE-ENTRY-FUNCTION 同命令退出 0；两组正例与四组反例通过；调用点无旧名。
-- **Evidence**：`quality/evidence/2026-10-20-004-p4-entry-retire.output` 与 `quality/evidence/2026-10-20-004-p4-entry-red.output`。
+- **Evidence**：`quality/tests/2026-10-20-038-p4-entry-green.output`（T005单文件初轮，exit 0，16 passed / 1 T006暂skip）与 `quality/tests/2026-10-20-036-p4-entry-red.output`（exit 1，收集失败；target RED unavailable）；完整最终gate另见050，不把两次命令混同。
 - **Coverage limit**：不证明真实会话会调用新函数；不证明路由决策质量；`choices` 文本改名只在本卡记录，不回溯旧决策记录。
 - **STOP / recovery**：语义与旧函数不一致、或调用点仍有旧名时停；回本卡实施者按旧函数测试逐项对齐，不删旧测试换绿。
 - **测试变更请求**：`TCR-P4-RETIRE-MINI`：依据 D-016、RISK-008、FR-SKILL-001/AC-MAT-3；独立审查 `quality/evidence/2026-10-20-062-p4-retirement-tcr-review.md`（sha256 `08adc438956a75274ac94257280ee04656ca23e7f0cde9a72a8c514e5154a5d4`）。A：mini身份/投影/派发接受改为退休kind前置拒绝，保alias/subject/错误stage与scope负例；B：mini schema/config/目录合法项改不存在/拒绝，保其它kind与P2窄null例外；C：删除两旧路线集成测试，入口行为由新入口oracle承接、旧路线由拒绝负例承接，不冒同oracle重构；D：受保护choices首值改为shrink-scope，reason/status/风险语义保持。纯路径/导出符号迁移不改oracle；ORACLE-ENTRY-FUNCTION身份保持，原RED保留。
@@ -120,9 +120,9 @@ T005 先迁函数、调用点与模板并交回可跑测试；T006 在 T005 完�
 - **RED/GREEN gate_cmd**：`node node_modules/vitest/vitest.mjs run tests/contract/review-materials-contract.test.mjs tests/review/review-record-route.test.mjs tests/contract/verify-architect-acceptance.test.mjs tests/contract/ocr-delegation-route.test.mjs skills/wh-review/scripts/__tests__/review-semantic-projection.test.mjs skills/wh-review/scripts/__tests__/simple-contracts.test.mjs skills/wh-review/scripts/__tests__/third-review-host-config.test.mjs skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs && node tools/cli/check-skill-consistency.mjs --root "$PWD"`
 - **expected_exit**：RED nonzero; GREEN 0
 - **RED target failure**：`ORACLE-ENTRY-FUNCTION` 断言 `MINI_TASK_REFS` 扫描结果为空且未知 review kind 被拒；当前仍有残留引用与枚举，目标断言失败。
-- **RED evidence**：`quality/evidence/2026-10-20-004-p4-retire-red.output`。
+- **RED evidence**：`quality/tests/2026-10-20-037-p4-retire-red.output`（exit 1；退休身份仍被接受的真实目标失败与旧接口/夹具漂移分列，详见116；因前段失败，尾部checker未执行）。
 - **GREEN oracle**：ORACLE-ENTRY-FUNCTION 同命令退出 0；引用扫描为空、未知 kind 被拒、历史原件存在。
-- **Evidence**：`quality/evidence/2026-10-20-004-p4-entry-retire.output`、`quality/evidence/2026-10-20-004-p4-retire-red.output`、引用扫描输出。
+- **Evidence**：`quality/tests/2026-10-20-050-p4-phase-gate.output`（完整11文件gate＋checker，exit 0，244 passed / 1既有skip）、`quality/tests/2026-10-20-037-p4-retire-red.output`（局部8文件命令真实目标RED与旧漂移失败），引用扫描见102/114/133。T006预定局部命令未另跑同命令GREEN，不以050冒该局部命令的执行原件。
 - **Coverage limit**：不证明 16 个历史任务与 398 个历史审查文件仍可校验（已接受风险）；不证明业务仓经验落盘。
 - **STOP / recovery**：仍有当前消费者、或删除波及历史原件时停；回本卡实施者按引用清单逐项修，历史原件若已误删从 git 历史恢复并记录。
 - **测试变更请求**：`TCR-P4-RETIRE-MINI`：依据 D-016、RISK-008、FR-SKILL-001/AC-MAT-3；独立审查 `quality/evidence/2026-10-20-062-p4-retirement-tcr-review.md`（sha256 `08adc438956a75274ac94257280ee04656ca23e7f0cde9a72a8c514e5154a5d4`）。A：mini身份/投影/派发接受改为退休kind前置拒绝，保alias/subject/错误stage与scope负例；B：mini schema/config/目录合法项改不存在/拒绝，保其它kind与P2窄null例外；C：删除两旧路线集成测试，入口行为由新入口oracle承接、旧路线由拒绝负例承接，不冒同oracle重构；D：受保护choices首值改为shrink-scope，reason/status/风险语义保持。纯路径/导出符号迁移不改oracle；ORACLE-ENTRY-FUNCTION身份保持，原RED保留。
@@ -132,12 +132,14 @@ T005 先迁函数、调用点与模板并交回可跑测试；T006 在 T005 完�
 
 | 目标 | Task | 角色 | gate_cmd / 预期退出码 | 判据 / 证据路径 |
 | --- | --- | --- | --- | --- |
-| 入口评估迁入并改名 | T005 | RED | `node node_modules/vitest/vitest.mjs run tests/contract/entry-evaluation.test.mjs` / 1 | ORACLE-ENTRY-FUNCTION / `quality/evidence/2026-10-20-004-p4-entry-red.output` |
-| 入口评估迁入并改名 | T005 | GREEN | `node node_modules/vitest/vitest.mjs run tests/contract/entry-evaluation.test.mjs` / 0 | ORACLE-ENTRY-FUNCTION / `quality/evidence/2026-10-20-004-p4-entry-retire.output` |
-| mini 路线与枚举退役 | T006 | RED | `node node_modules/vitest/vitest.mjs run tests/contract/review-materials-contract.test.mjs` / 1 | ORACLE-ENTRY-FUNCTION / `quality/evidence/2026-10-20-004-p4-retire-red.output` |
-| mini 路线与枚举退役 | T006 | GREEN | `node node_modules/vitest/vitest.mjs run tests/contract/review-materials-contract.test.mjs tests/review/review-record-route.test.mjs tests/contract/verify-architect-acceptance.test.mjs` / 0 | ORACLE-ENTRY-FUNCTION / `quality/evidence/2026-10-20-004-p4-entry-retire.output` |
+| 入口评估迁入并改名 | T005 | RED（收集失败） | `node node_modules/vitest/vitest.mjs run tests/contract/entry-evaluation.test.mjs` / 1 | `quality/tests/2026-10-20-036-p4-entry-red.output`；target RED unavailable，非目标断言失败 |
+| 入口评估迁入并改名 | T005 | GREEN（初轮） | `node node_modules/vitest/vitest.mjs run tests/contract/entry-evaluation.test.mjs` / 0 | `quality/tests/2026-10-20-038-p4-entry-green.output`；16 passed / 1 T006暂skip |
+| mini 路线与枚举退役 | T006 | RED | `node node_modules/vitest/vitest.mjs run tests/contract/review-materials-contract.test.mjs tests/review/review-record-route.test.mjs tests/contract/verify-architect-acceptance.test.mjs tests/contract/ocr-delegation-route.test.mjs skills/wh-review/scripts/__tests__/review-semantic-projection.test.mjs skills/wh-review/scripts/__tests__/simple-contracts.test.mjs skills/wh-review/scripts/__tests__/third-review-host-config.test.mjs skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs && node tools/cli/check-skill-consistency.mjs --root "$PWD"` / 1 | `quality/tests/2026-10-20-037-p4-retire-red.output`；真实目标失败与旧漂移分列；checker未执行 |
+| mini 路线与枚举退役 | T006 | GREEN（完整Phase gate覆盖） | `node node_modules/vitest/vitest.mjs run tests/contract/entry-evaluation.test.mjs tests/contract/ocr-delegation-route.test.mjs tests/host-independence.test.mjs tests/contract/review-materials-contract.test.mjs tests/contract/card03-review-orchestration.test.mjs tests/contract/verify-architect-acceptance.test.mjs tests/review/review-record-route.test.mjs skills/wh-review/scripts/__tests__/review-semantic-projection.test.mjs skills/wh-review/scripts/__tests__/simple-contracts.test.mjs skills/wh-review/scripts/__tests__/third-review-host-config.test.mjs skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs && node tools/cli/check-skill-consistency.mjs --root "$PWD"` / 0 | `quality/tests/2026-10-20-050-p4-phase-gate.output`；244 passed / 1既有skip；不冒局部命令同次执行 |
 
 面声明：入口评估面（测）、审查身份与 schema 面（测）、目录一致性面（测）、历史文件可校验面（不测，理由：D-016 已接受删除枚举导致历史校验可能中断）。
+
+计划证据名 `quality/evidence/2026-10-20-004-p4-entry-red.output`、`004-p4-retire-red.output`、`004-p4-entry-retire.output` 未实际产生；本卡现指向036/037/038/050唯一原件，不复制补名、不改raw。
 
 ### 覆盖边界
 
