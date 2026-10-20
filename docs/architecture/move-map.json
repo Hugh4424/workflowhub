@@ -3644,9 +3644,9 @@
       "destination": "workflows/make-decision/SKILL.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "宿主读（纯方法说明）",
-      "owner": "B2/P3 / MT-3-123",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
+      "responsibility": "N8/P5 四级入口路由、复杂N6十五步原方法、原31技能适用清单与驾驶舱条件。",
+      "owner": "make-decision workflow owner；N8/P5唯一持笔，后继P6串行承接",
+      "consumer": "本地命令行宿主按入口推荐/真实用户选择读本节及对应flow；P6/P7读当前材料；不以登记证明已执行。",
       "module_consumers": [],
       "named_data_readers": [
         ".planning/2026-09-09-build-spec-and-build-plan/build-code-P2-phase-card.md",
@@ -3660,16 +3660,16 @@
         "skills/decision-log/SKILL.md"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "MT-3-123 / NARROW"
+      "retention_basis": "MT-3-123 / NARROW；N8/P5本地消费者接线，分发发布未在范围内。"
     },
     {
       "source": "workflows/make-decision/skill-deps.yaml",
       "destination": "workflows/make-decision/skill-deps.yaml",
       "status": "retain",
       "role": "production",
-      "responsibility": "doctor（capability）+ 宿主读",
-      "owner": "B2/P3 / MT-3-125",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
+      "responsibility": "make-decision 的条件技能/能力声明；answer-as-page按出页条件、stage-closeout仅轻档物理交付触发。",
+      "owner": "make-decision workflow owner；N8/P5唯一持笔，后继P6串行承接",
+      "consumer": "runtime/stage/stage-skill-runtime.mjs 的loadStageSkillManifest/resolveStageSkillPackages、doctor与当前流程执行者按条件读取原技能。",
       "module_consumers": [],
       "named_data_readers": [
         ".planning/2026-09-09-build-spec-and-build-plan/verify-code-review-input-2.json",
@@ -3679,16 +3679,16 @@
         ".planning/2026-09-09-build-spec-and-build-plan/verify-code-review-request.json"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "MT-3-125 / NARROW"
+      "retention_basis": "MT-3-125 / NARROW；N8/P5本地消费者接线，分发发布未在范围内。"
     },
     {
       "source": "workflows/make-decision/steps.json",
       "destination": "workflows/make-decision/steps.json",
       "status": "retain",
       "role": "production",
-      "responsibility": "宿主读（极简清单）",
-      "owner": "B2/P3 / MT-3-124",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
+      "responsibility": "复杂N6十五步与三套本地子flow路径的可读清单；仅第8步路由表述改变，不增步骤执行器。",
+      "owner": "make-decision workflow owner；N8/P5唯一持笔，后继P6串行承接",
+      "consumer": "runtime/stage/stage-skill-runtime.mjs 的 loadStageSkillStepManifest 读取复杂清单；宿主按flows指针读对应子流程；tests/contract/make-decision-flows.test.mjs核原slug/产物与路径。",
       "module_consumers": [],
       "named_data_readers": [
         ".planning/2026-09-09-build-spec-and-build-plan/build-code-P2-phase-card.md",
@@ -3699,7 +3699,7 @@
         ".planning/2026-09-09-build-spec-and-build-plan/verify-code-review-request.json"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "MT-3-124 / NARROW"
+      "retention_basis": "MT-3-124 / NARROW；N8/P5本地消费者接线，分发发布未在范围内。"
     },
     {
       "source": "workflows/verify-code/SKILL.md",
@@ -5320,6 +5320,115 @@
       ],
       "delete_condition": "入口评估职责经审查由替代实现承接且当前调用点全部迁走后删除。",
       "retention_basis": "N8 D-016; P4/T005; FR-ENTRY-001 / AC-ENTRY-1；不新增状态或阶段。"
+    },
+    {
+      "source": "workflows/make-decision/flows/small/SKILL.md",
+      "destination": "workflows/make-decision/flows/small/SKILL.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "N8/P5 small make-decision 分支的步骤、技能与驾驶舱方法；本地执行者按根路由选择，不增加阶段或步骤执行器。",
+      "owner": "make-decision flow owner",
+      "consumer": "workflows/make-decision/SKILL.md 入口路由按用户真实选择读取；tests/contract/make-decision-flows.test.mjs 检查结构与失败边界；P6/P7 读取当前流程而非复制方法。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "workflows/make-decision/SKILL.md",
+        "tests/contract/make-decision-flows.test.mjs"
+      ],
+      "delete_condition": "该路线经真实决定退役且当前入口与消费者全部迁走后删除；保留历史执行原件。",
+      "retention_basis": "N8 P5/T007–T009；FR-FLOW-001、FR-SKILL-001；替代轻档空跑复杂路线；安装包发布未纳入本任务。"
+    },
+    {
+      "source": "workflows/make-decision/flows/small/steps.json",
+      "destination": "workflows/make-decision/flows/small/steps.json",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "N8/P5 small make-decision 分支的可读步骤与产物清单；本地执行者按根路由选择，不增加阶段或步骤执行器。",
+      "owner": "make-decision flow owner",
+      "consumer": "workflows/make-decision/SKILL.md 入口路由按用户真实选择读取；tests/contract/make-decision-flows.test.mjs 检查结构与失败边界；P6/P7 读取当前流程而非复制方法。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "workflows/make-decision/SKILL.md",
+        "tests/contract/make-decision-flows.test.mjs"
+      ],
+      "delete_condition": "该路线经真实决定退役且当前入口与消费者全部迁走后删除；保留历史执行原件。",
+      "retention_basis": "N8 P5/T007–T009；FR-FLOW-001、FR-SKILL-001；替代轻档空跑复杂路线；安装包发布未纳入本任务。"
+    },
+    {
+      "source": "workflows/make-decision/flows/normal/SKILL.md",
+      "destination": "workflows/make-decision/flows/normal/SKILL.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "N8/P5 normal make-decision 分支的步骤、技能与驾驶舱方法；本地执行者按根路由选择，不增加阶段或步骤执行器。",
+      "owner": "make-decision flow owner",
+      "consumer": "workflows/make-decision/SKILL.md 入口路由按用户真实选择读取；tests/contract/make-decision-flows.test.mjs 检查结构与失败边界；P6/P7 读取当前流程而非复制方法。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "workflows/make-decision/SKILL.md",
+        "tests/contract/make-decision-flows.test.mjs"
+      ],
+      "delete_condition": "该路线经真实决定退役且当前入口与消费者全部迁走后删除；保留历史执行原件。",
+      "retention_basis": "N8 P5/T007–T009；FR-FLOW-001、FR-SKILL-001；替代轻档空跑复杂路线；安装包发布未纳入本任务。"
+    },
+    {
+      "source": "workflows/make-decision/flows/normal/steps.json",
+      "destination": "workflows/make-decision/flows/normal/steps.json",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "N8/P5 normal make-decision 分支的可读步骤与产物清单；本地执行者按根路由选择，不增加阶段或步骤执行器。",
+      "owner": "make-decision flow owner",
+      "consumer": "workflows/make-decision/SKILL.md 入口路由按用户真实选择读取；tests/contract/make-decision-flows.test.mjs 检查结构与失败边界；P6/P7 读取当前流程而非复制方法。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "workflows/make-decision/SKILL.md",
+        "tests/contract/make-decision-flows.test.mjs"
+      ],
+      "delete_condition": "该路线经真实决定退役且当前入口与消费者全部迁走后删除；保留历史执行原件。",
+      "retention_basis": "N8 P5/T007–T009；FR-FLOW-001、FR-SKILL-001；替代轻档空跑复杂路线；安装包发布未纳入本任务。"
+    },
+    {
+      "source": "workflows/make-decision/flows/planning/SKILL.md",
+      "destination": "workflows/make-decision/flows/planning/SKILL.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "N8/P5 planning make-decision 分支的步骤、技能与驾驶舱方法；本地执行者按根路由选择，不增加阶段或步骤执行器。",
+      "owner": "make-decision flow owner",
+      "consumer": "workflows/make-decision/SKILL.md 入口路由按用户真实选择读取；tests/contract/make-decision-flows.test.mjs 检查结构与失败边界；P6/P7 读取当前流程而非复制方法。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "workflows/make-decision/SKILL.md",
+        "tests/contract/make-decision-flows.test.mjs"
+      ],
+      "delete_condition": "该路线经真实决定退役且当前入口与消费者全部迁走后删除；保留历史执行原件。",
+      "retention_basis": "N8 P5/T007–T009；FR-FLOW-001、FR-SKILL-001；替代轻档空跑复杂路线；安装包发布未纳入本任务。"
+    },
+    {
+      "source": "workflows/make-decision/flows/planning/steps.json",
+      "destination": "workflows/make-decision/flows/planning/steps.json",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "N8/P5 planning make-decision 分支的可读步骤与产物清单；本地执行者按根路由选择，不增加阶段或步骤执行器。",
+      "owner": "make-decision flow owner",
+      "consumer": "workflows/make-decision/SKILL.md 入口路由按用户真实选择读取；tests/contract/make-decision-flows.test.mjs 检查结构与失败边界；P6/P7 读取当前流程而非复制方法。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "workflows/make-decision/SKILL.md",
+        "tests/contract/make-decision-flows.test.mjs"
+      ],
+      "delete_condition": "该路线经真实决定退役且当前入口与消费者全部迁走后删除；保留历史执行原件。",
+      "retention_basis": "N8 P5/T007–T009；FR-FLOW-001、FR-SKILL-001；替代轻档空跑复杂路线；安装包发布未纳入本任务。"
+    },
+    {
+      "source": "tests/contract/make-decision-flows.test.mjs",
+      "destination": "tests/contract/make-decision-flows.test.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "N8/P5 ORACLE-FLOW-STEPS 独立流程材料契约与负例；冻结断言变更沿TCR。",
+      "owner": "P5 independent test writer",
+      "consumer": "P5 literal gate 与后继针对性回归执行者；不证明P7真实会话。",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "流程职责退役或独立审查的替代oracle完整承接后删除，历史RED/GREEN不覆写。",
+      "retention_basis": "N8 P5/T007–T009；不新增运行时。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

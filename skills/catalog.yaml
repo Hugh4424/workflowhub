@@ -1109,7 +1109,8 @@ skills:
     status: adapted
     purpose: 用户直接调用的离线单页与当前任务只读驾驶舱
     design_idea: 按信息形状选组件、少写观与安全回灌；已确认模板只填真实材料
-    used_by_stages: []
+    used_by_stages:
+      - make-decision
     upstream:
       - github_url: https://github.com/QingYunA/answer-me-with-html
         commit: 7acea24024923eaae8647f5988e826062456dc86

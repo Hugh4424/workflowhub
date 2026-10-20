@@ -1,0 +1,127 @@
+{
+  "schema_version": "2.0.0",
+  "stage_slug": "make-decision",
+  "steps": [
+    {
+      "step_id": 1,
+      "step_slug": "entry-route",
+      "observable_result": "入口与级别：入口事实、推荐普通理由与真实用户选择写在决策记录同节。 进入下一步条件：同批展示推荐/高亮/理由与可覆盖选项，七项事实完整且风险无硬覆盖；缺失或未答按复杂并记缺口。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
+    },
+    {
+      "step_id": 2,
+      "step_slug": "outline-hypothesis",
+      "observable_result": "完整大纲：目标、边界、模块方向假设、验收与推翻依据可读。 进入下一步条件：模块与独立交付结果能对应，假设不冒已定方案。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
+    },
+    {
+      "step_id": 3,
+      "step_slug": "internal-research-talk",
+      "observable_result": "内部调研与真实问答：实际执行内部调研，按 knowledge-graph 先图后源，再用 talk-with-zhipeng 消费结论、候选与真实答复；外部仅按会改变方向的缺口。 进入下一步条件：真实内部原文/结论与未决可定位，不用空skipped代替；未答不当已选。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
+    },
+    {
+      "step_id": 4,
+      "step_slug": "module-convergence",
+      "observable_result": "逐模块收敛：按模块消费 N6 调研/发散/收敛/就地讨论/定验收五段，方案、替代、验收、后果与真实决定有原件；深度随模块。 进入下一步条件：每个未决项有处置，真实未决清零；零未决记录来源与理由，不写死问答轮数。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
+    },
+    {
+      "step_id": 5,
+      "step_slug": "write-light-materials",
+      "observable_result": "写方案与Phase：spec 在极简五类节基础上加现状、备选与依赖；逐行POSIX写集、AC、oracle/测试命令与风险齐备；1–2 个 Phase 与纯指针 phases/index.md。 进入下一步条件：默认 1 个 Phase，确有独立交付单元才 2；数量是作者义务，不新增runtime gate。spec-specify/spec-plan 原方法消费完，有驾驶舱则按下节更新。 规格作者先实际读取 skills/spec-clarify/SKILL.md：继承已答与范围，分类 Locked upstream decision / Upstream unresolved item / New ambiguity 并做十维核对；无实质歧义显式 trigger=false、具名原因、零开放方向问题；有实质歧义仅当前frontier批问，发卡归还控制，未获真实回复不改spec或审查，真实回复后只续已具前提轴，已答不复问。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
+    },
+    {
+      "step_id": 6,
+      "step_slug": "detail-review",
+      "observable_result": "一次方案审：沿 wh-review 现有 detail 细节轨做整体方案审一次，完整材料、真实provider终态、原始finding/失败及处置可回读。 进入下一步条件：已完成逐模块收敛；不增加逐模块审，审查失败/不可用保持真实，方向与验收分歧交用户，不伪造通过。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
+    },
+    {
+      "step_id": 7,
+      "step_slug": "approve-solution",
+      "observable_result": "一次确认：用户对方向＋方案的真实一次确认。 进入下一步条件：对 N6 两次确认的降级：跳过单独骨架确认，理由是方案审前已收敛，确认方案即确认骨架；未答停草稿，确认后才实施。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
+    },
+    {
+      "step_id": 8,
+      "step_slug": "implement-and-test",
+      "observable_result": "实施与目标测试：确认后实施，逐项比较 git diff --name-only 的真实 diff 与声明写集；跑目标测试保存命令、cwd、退出、回执与AC结果。越界写及失败各记具体路径/测试名、原因和原件。 进入下一步条件：越界暂停该路径回用户选择，测试失败暂停物理交付，按 diagnosing-bugs 修到通过；无法修保原件，仅用户真实接受具名剩余风险/责任人后继续，未答不继续。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
+    },
+    {
+      "step_id": 9,
+      "step_slug": "implementation-review",
+      "observable_result": "整次实现审一次：主动调用现有 review --action=record --stage=build-code 入口发起代码审，直接复用 workflows/build-code/SKILL.md 的审查面、材料与 provider；整次实施一次，不按 Phase 分审或裁剪整工作区真实 diff。输入含当前spec、完整AC/验收、目标测试回执/原件、真实改动路径与diff、声明写集、阶段合同及所需镜头。 进入下一步条件：请求/结果绑定同一 task_id；stage=build-code、review_scope=phase、subject_kind=phase、review_kind=null、phase_id=null，保持P2窄fulltuple，不省略身份冒null。审查记录挂 build-code 名下且落 quality/reviews；任务阶段仍是 make-decision，不写 build-code 阶段行，也不写 verify-code 阶段行。报告写清差异：「审查面是 build-code，任务阶段没跑 build-code」。按原build-code同次OCR与Standards/Spec补充方法保存各轴原件/失败/覆盖，不新增mini规则或逐Phase审查点；有效finding修复回原实施者，仅复验受影响case。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
+    },
+    {
+      "step_id": 10,
+      "step_slug": "reflect-and-handoff",
+      "observable_result": "一致性核对与反思收口：验收者再读级别与路线，按 spec-analyze 对照真实原件与缺口；stage-reflection 写业务仓 specs/Improvements.md 经验或具名无发现依据，越界不可用不回落工具仓；内部 stage-handoff 发布并读回唯一绝对路径。 进入下一步条件：归纳→分类→真实阶段成本→发布→报告沿原owner，同一窗口只测一次；失败写本阶段无记录与原因，不填0。反思不做Git，审查身份差异与实际测试限制同报。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
+    },
+    {
+      "step_id": 11,
+      "step_slug": "closeout",
+      "observable_result": "物理交付：实现与适用审查结束、有效finding处置后调用 stage-closeout；PR正文读当前spec，按授权执行提交/PR/合并，最终归档清理前展示实际范围并沿原owner取得一次真实确认。 进入下一步条件：收口执行者再读级别与路线与真实测试/审查原件，确认stage随实际make-decision；交接可独立读回，物理交付与反思分开，失败/未执行/清理分别说明。",
+      "completion_evidence": [
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ]
+    }
+  ]
+}

@@ -30,6 +30,12 @@ skills:
   - name: stage-reflection
     path: skills/stage-reflection/SKILL.md
     trigger: actual_stage_end_process_issue_optional
+  - name: answer-as-page
+    path: skills/answer-as-page/SKILL.md
+    trigger: route_cockpit_criteria_and_actual_update_times_except_small
+  - name: stage-closeout
+    path: skills/stage-closeout/SKILL.md
+    trigger: small_or_normal_physical_delivery_after_implementation_and_applicable_review
 runtime_capabilities:
   - id: node
     kind: cli

@@ -90,7 +90,7 @@
     {
       "step_id": 8,
       "step_slug": "module-breadth-confirm",
-      "observable_result": "全部工作包的简单／复杂分诊与入口规模事实展示，保真实回复或未答。 分诊仅决定先补调研或直接收敛，保持第4步顺序，不冒细节已收敛。",
+      "observable_result": "按入口路由选用对应流程；复杂流程内全部工作包的简单／复杂分诊与入口规模事实展示，保真实回复或未答。分诊只决定先补调研或直接收敛，保持第4步顺序，不冒细节已收敛。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -183,5 +183,19 @@
         }
       ]
     }
-  ]
+  ],
+  "flows": {
+    "small": {
+      "skill": "workflows/make-decision/flows/small/SKILL.md",
+      "steps": "workflows/make-decision/flows/small/steps.json"
+    },
+    "normal": {
+      "skill": "workflows/make-decision/flows/normal/SKILL.md",
+      "steps": "workflows/make-decision/flows/normal/steps.json"
+    },
+    "planning": {
+      "skill": "workflows/make-decision/flows/planning/SKILL.md",
+      "steps": "workflows/make-decision/flows/planning/steps.json"
+    }
+  }
 }
