@@ -11,7 +11,7 @@
 - **evidence_path**：`quality/tests/2026-10-20-p8-acceptance.output`
 - **STOP**：任一 AC 缺原件、缺结论行或把 `incomplete`/`unavailable` 写成 `pass` 时停止收口，回原承接 Phase 的 Task owner 修；不重跑到绿、不改判据求绿。
 - **覆盖 AC**：`AC-M1-1`、`AC-M1-2`、`AC-M1-3`、`AC-M2-1`、`AC-M2-2`、`AC-M3-1`、`AC-M3-2`、`AC-M3-3`、`AC-M3-4`、`AC-M4-1`、`AC-M5-1`、`AC-M5-2`、`AC-M6-1`、`AC-M6-2`、`AC-M6-3`、`AC-M7-1`、`AC-M7-2`
-- **Done**：17 条 AC 逐条消费 P1–P7 原件并给一个档位与一条具名证据路径；没参与实现的人能用本节命令重放每一条；未达成项写原因、所需条件与具名 owner，不写成 pass。
+- **Done**：T014独立聚合已执行：`quality/evidence/final-chain-acceptance-readback.md`（17项，16有界pass、AC-M6-2 deferred）、675独立审计、676完整交付原件；242计数17/exit0仅证行数，逐项语义由675独立人读，23782断言与241顶部是真实浏览器。每条有界档位及具名证据见本卡自带判据小结；P3/P7正式OCR终态仍由root汇总，不以P8审计签整stage质量或Git交付。
 
 ## 工作包声明（人读事实）
 
@@ -158,3 +158,31 @@
 - 父 AC 原文与承接：`spec.md` 的「父 AC 承接」表与 `quality/evidence/2026-10-20-022-build-plan-upstream-requirements.md`。
 - 十环定义：`quality/evidence/decision-log-refs/s3/T4-compliance-supplement.md:17-27`（相对父任务库）。
 - G1 基线：`quality/evidence/2026-10-20-027-build-plan-g1-baseline.txt`。
+
+
+## 本 Phase 自带判据小结（最终独立聚合）
+
+本节逐项消费既有首次承接原件，不产生任何上游首次验收或生产改动。逐条完整限定、源→consumer→oracle→原件链由 `quality/evidence/final-chain-acceptance-readback.md` 对应AC段及675提供，676保完整原始回传；三原件均已读回，675非全stage质量判断。
+
+- **AC-M1-1** `pass` — 原052＋180/523四级40格受控断言；不冒N8四路真实业务。 具名原件：`quality/evidence/final-chain-acceptance-readback.md#AC-M1-1`、`quality/evidence/2026-10-20-675-p8-final-independent-ac-browser-audit.json`。
+- **AC-M1-2** `pass` — 239/240真实旧N2/N6无级别fallback，十环保留缺源basis。 具名原件：`quality/evidence/final-chain-acceptance-readback.md#AC-M1-2`、`quality/evidence/2026-10-20-675-p8-final-independent-ac-browser-audit.json`。
+- **AC-M1-3** `pass` — 250首次九项采用清单；两方法缺源+owner，0新增。 具名原件：`quality/evidence/final-chain-acceptance-readback.md#AC-M1-3`、`quality/evidence/2026-10-20-675-p8-final-independent-ac-browser-audit.json`。
+- **AC-M2-1** `pass` — 655来源修复与232/239/240真实分母/两率重算，unknown按源保真。 具名原件：`quality/evidence/final-chain-acceptance-readback.md#AC-M2-1`、`quality/evidence/2026-10-20-675-p8-final-independent-ac-browser-audit.json`。
+- **AC-M2-2** `pass` — 052/148声明与事实缺失/冲突精确状态；不虚构union。 具名原件：`quality/evidence/final-chain-acceptance-readback.md#AC-M2-2`、`quality/evidence/2026-10-20-675-p8-final-independent-ac-browser-audit.json`。
+- **AC-M3-1** `pass` — 148内核/default＋238原G1分母，632同文件减法；余29/199/794不代成本。 具名原件：`quality/evidence/final-chain-acceptance-readback.md#AC-M3-1`、`quality/evidence/2026-10-20-675-p8-final-independent-ac-browser-audit.json`。
+- **AC-M3-2** `pass` — 148/073旧CLI/default与当前三任务JSON；不重跑无范围aggregate。 具名原件：`quality/evidence/final-chain-acceptance-readback.md#AC-M3-2`、`quality/evidence/2026-10-20-675-p8-final-independent-ac-browser-audit.json`。
+- **AC-M3-3** `pass` — 232/239/240三报告30环与原427source-derived比较一致，原假绿保。 具名原件：`quality/evidence/final-chain-acceptance-readback.md#AC-M3-3`、`quality/evidence/2026-10-20-675-p8-final-independent-ac-browser-audit.json`。
+- **AC-M3-4** `pass` — 真实最终DATA.rings/report同值、双指纹/引用与sidecar，237及675。 具名原件：`quality/evidence/final-chain-acceptance-readback.md#AC-M3-4`、`quality/evidence/2026-10-20-675-p8-final-independent-ac-browser-audit.json`。
+- **AC-M4-1** `pass` — 22829受控case、四级40格和真实baseline/status恢复，523/655；不冒外部PR效果。 具名原件：`quality/evidence/final-chain-acceptance-readback.md#AC-M4-1`、`quality/evidence/2026-10-20-675-p8-final-independent-ac-browser-audit.json`。
+- **AC-M5-1** `pass` — 024/027/043受控健康、允许慢流与终态恢复；不冒真实慢模型校准。 具名原件：`quality/evidence/final-chain-acceptance-readback.md#AC-M5-1`、`quality/evidence/2026-10-20-675-p8-final-independent-ac-browser-audit.json`。
+- **AC-M5-2** `pass` — 196127＋16312及589/590/593真实12行1312B逻辑行诊断；非raw/原配置全量。 具名原件：`quality/evidence/final-chain-acceptance-readback.md#AC-M5-2`、`quality/evidence/2026-10-20-675-p8-final-independent-ac-browser-audit.json`。
+- **AC-M6-1** `pass` — 237两实际viewport各12节点82assert、241顶部/675，缺件与seen211按原JS复用；contrast未完全。 具名原件：`quality/evidence/final-chain-acceptance-readback.md#AC-M6-1`、`quality/evidence/2026-10-20-675-p8-final-independent-ac-browser-audit.json`。
+- **AC-M6-2** `deferred` — 563/原spec实际两route事件未发生；owner下一实际make-decision/verify-code caller，不伪刷新/PR。 具名原件：`quality/evidence/final-chain-acceptance-readback.md#AC-M6-2`、`quality/evidence/2026-10-20-675-p8-final-independent-ac-browser-audit.json`。
+- **AC-M6-3** `pass` — 563/560十三项三态与D12补记；6已收/3incomplete/4用户决定，不清旧债。 具名原件：`quality/evidence/final-chain-acceptance-readback.md#AC-M6-3`、`quality/evidence/2026-10-20-675-p8-final-independent-ac-browser-audit.json`。
+- **AC-M7-1** `pass` — 当前47source+slug/owner可定位但真实步骤0/47、stage skip null；655/675与P3反例。 具名原件：`quality/evidence/final-chain-acceptance-readback.md#AC-M7-1`、`quality/evidence/2026-10-20-675-p8-final-independent-ac-browser-audit.json`。
+- **AC-M7-2** `pass` — 原84方法读回＋8row/四句定点补读，原八source/35条件方法保全；不等实际步骤执行。 具名原件：`quality/evidence/final-chain-acceptance-readback.md#AC-M7-2`、`quality/evidence/2026-10-20-675-p8-final-independent-ac-browser-audit.json`。
+
+- 规则锚/已验：spec Appendix A17AC原条件，P8/T014只聚合与必要未闭case；242原gate17前缀exit0不证明ID/档位语义。237单agent-browser隔离--run两viewport/12节点/实际click，241顶部、232/239/240三任务source/hash与指标复算，675独立审计来源完整；未发空writeSet OCR，P8无生产diff。
+- 未验/owner：真实双刷新AC-M6-2 deferred归下一实际routecaller；N8原28/N1同条件成本、用户审美、完整contrast/其它浏览器尺寸未清。P3/P7 formal review在途由root按真实终态/原raw/coverage汇总，business_effect16 bounded pass不冒code_review全绿。0/47真实step未执行与报告协议边界通过分义。
+- 原失败与清理：630/617/628/626/668/205/209/211/235等历史保原；235脚本漏scroll/filefold、genuinehero溢出修复与复验分别记。freshownedprofile、无login/cookie复用、无引擎切换；672/674/675证明ownedprocess/profile0、两server端口关闭，foreign全局agent/MCP仅诊断未附着/停止。
+- 范围/材料影响：原P8 read-only/no-production WriteSet不变，未首次补P5/P6/P7；本轮仅写本卡Done与本节及已授权P2/P5最终补充，不改FR/AC/测试oracle/source/facts/Git。当前聚合完成不代表stage succeeded、accepted、最终handoff已发布或Git已交付。
