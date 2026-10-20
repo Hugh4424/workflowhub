@@ -1062,11 +1062,12 @@
       "role": "production",
       "responsibility": "build-prd现有portable run/load/status projection单一producer；P2仅由CLI复用，不新增stage/action/控制对象",
       "owner": "B4/P5 / MT-1-076；CARD10/P2/T009仅CLI接线consumer owner runtime_route",
-      "consumer": "当前实际模块消费者：tests/contract/portable-workflow-run.test.mjs、tests/integration/card-01-dual-journey.test.mjs、tools/cli/stage-runtime.mjs；CLI既有run:execute build-prd调用runPortableWorkflow，status:begin/doctor:workspace build-prd读projectPortableWorkflowStatus，不新增公共action、stage、对象或actor",
+      "consumer": "当前实际模块消费者：tests/contract/portable-workflow-run.test.mjs、tests/integration/card-01-dual-journey.test.mjs、tools/cli/stage-runtime.mjs；CLI既有run:execute build-prd调用runPortableWorkflow，status:begin/doctor:workspace build-prd读projectPortableWorkflowStatus，不新增公共action、stage、对象或actor N9 P2新增直接consumer runtime/task/final-chain-runner.mjs：安全读取当前manifest、真实候选validateStepResults与显式原件verifier、chain_state；默认build-prd terminal写入不变。",
       "module_consumers": [
         "tests/contract/portable-workflow-run.test.mjs",
         "tests/integration/card-01-dual-journey.test.mjs",
-        "tools/cli/stage-runtime.mjs"
+        "tools/cli/stage-runtime.mjs",
+        "runtime/task/final-chain-runner.mjs"
       ],
       "named_data_readers": [],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
@@ -5437,13 +5438,43 @@
       "role": "production",
       "responsibility": "十环顺序、10×4适用矩阵、级别解析、逐环证据谓词与完成率、逐步骤事实与独立分母；纯声明/纯函数，不读文件、不写任务库",
       "owner": "N9 build-code P1；T001首写、T002追加谓词",
-      "consumer": "tests/contract/final-chain-declarations.test.mjs",
+      "consumer": "runtime/task/final-chain-runner.mjs 读取当前材料后调用纯判据、逐步骤选择及两个分母；tests/contract/final-chain-declarations.test.mjs 独立纯函数oracle。",
       "module_consumers": [
+        "runtime/task/final-chain-runner.mjs",
         "tests/contract/final-chain-declarations.test.mjs"
       ],
       "named_data_readers": [],
       "delete_condition": "职责被经独立审查的替代完整承接且真实消费者为零时由原owner删除；冻结断言变更按TCR。后续consumer链：P2 runner → P3负例 → P5/P6页面与刷新；仅在实际接线后更新consumer",
       "retention_basis": "本Phase唯一声明与谓词producer；矩阵不散在run-checks与页面两处；不替代现有进度/质量owner"
+    },
+    {
+      "source": "runtime/task/final-chain-runner.mjs",
+      "destination": "runtime/task/final-chain-runner.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "指定任务根的只读材料与执行原件回读，复用portable manifest/chain state与P1纯判据，在同一报告输出十环及实际选中步骤/独立分母；不运行专业技能、不写任务库。",
+      "owner": "N9 build-code P2/T004；P2实施者唯一writer",
+      "consumer": "tools/cli/run-checks.mjs 的 --task-path 分支在受控动态import后调用runFinalChainCheck取得纯JSON报告；独立tests/contract/final-chain-runner.test.mjs调用同一API。",
+      "module_consumers": [
+        "tools/cli/run-checks.mjs",
+        "tests/contract/final-chain-runner.test.mjs"
+      ],
+      "named_data_readers": [],
+      "delete_condition": "唯一只读报告职责由经独立审查的替代完整承接且真实调用者为零后，原owner可删除；历史报告和审查原件只读保留。",
+      "retention_basis": "FR-CHAIN-004/012、D-008、P2/T004；替代人工逐环摘录与重复摘要，保P1唯一谓词与现有任务事实owner。"
+    },
+    {
+      "source": "tests/contract/final-chain-runner.test.mjs",
+      "destination": "tests/contract/final-chain-runner.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "P2独立kernel/report/CLI oracle，包含真实原件绑定/validator拒绝传播/四路线/人读时点恢复与默认行为冻结相邻测试。",
+      "owner": "N9 P2 independent test author; implementation writer read-only",
+      "consumer": "P2契约头literal gate及后续P3/P8受影响复核；测试数量不代三任务独立人工首验。",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "该行为职责退役或独立oracle经审查完整替代后由原测试owner处置；冻结断言变化须TCR及独立审查。",
+      "retention_basis": "ORACLE-P2-CHAIN及P2 T003/T004/T005；保原RED/GREEN/测试修正TCR，不新增运行时。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"
