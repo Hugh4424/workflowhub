@@ -1,0 +1,6 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "fixture-declared-vs-facts",
+  "baseline_commit": "0000000000000000000000000000000000000000",
+  "target_repo_root": "./repo"
+}
