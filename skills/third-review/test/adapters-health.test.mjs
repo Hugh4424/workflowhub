@@ -5,8 +5,9 @@ import path from "node:path";
 import { test } from "vitest";
 import { fileURLToPath } from "node:url";
 import claude from "../lib/adapters/claude-code.mjs";
+import antigravity from "../lib/adapters/antigravity.mjs";
 import codex from "../lib/adapters/codex.mjs";
-import { execute } from "../lib/process.mjs";
+import { execute, isProcessGroupAlive } from "../lib/process.mjs";
 import { nodeFixtureCommand } from "./node-fixture-command.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -332,3 +333,71 @@ test("N3 P2 OpenCode workspace real SessionPrompt reaches only loopback and retu
     const unlock=p=>{for(const e of fs.readdirSync(p,{withFileTypes:true})){const f=path.join(p,e.name);if(e.isDirectory())unlock(f);if(!e.isSymbolicLink())fs.chmodSync(f,e.isDirectory()?0o700:0o600);}fs.chmodSync(p,0o700);};unlock(root);fs.rmSync(root,{recursive:true,force:true});
   }
 },60000);
+
+
+// Native child processes replay the observed protocol without a real model.
+const p4Plan = (source) => ({ command: process.execPath, argv: ["-e", source], cwd: os.tmpdir(), env: process.env, input: null, redact: [], observeLine: antigravity.observeLine, streamProgress: true });
+const p4Options = { maxOutputBytes: 100_000, healthCheckIntervalMs: 40, livenessIntervalMs: 20, terminationGraceMs: 20 };
+
+test("N9 P4 denied tool steps interleaved with model DONE cannot keep a group alive", async () => {
+  const source = "const emit=s=>process.stdout.write(JSON.stringify({event:'step_update',step_update:s})+'\\n');let i=0;const timer=setInterval(()=>{emit({step_index:i++,state:'ACTIVE',step_type:'tool'});emit({step_index:i++,state:'ERROR',step_type:'tool',tool_info:{error:{message:'denied'}}});emit({step_index:i++,state:'DONE',step_type:'agent_response'});},10);setTimeout(()=>{clearInterval(timer);process.exit(0)},1500);";
+  const sibling = execute(p4Plan("process.stdout.write(JSON.stringify({event:'result',result:{status:'SUCCESS',response:'sibling'}})+'\\n')"), p4Options);
+  const [stalled, completed] = await Promise.all([execute(p4Plan(source), p4Options), sibling]);
+  assert.equal(stalled.ok, false); assert.equal(stalled.error.code, "PROCESS_STALLED"); assert.equal(stalled.progress_events, 0);
+  assert.equal(completed.ok, true); assert.equal(antigravity.parse(completed.stdout).text, "sibling");
+});
+
+test("N9 P4 allowed reads advance a slow stream beyond five health intervals", async () => {
+  const source = "let i=0;const t=setInterval(()=>{process.stdout.write(JSON.stringify({event:'step_update',step_update:{step_index:++i,state:'DONE',step_type:'tool',tool_info:{}}})+'\\n');if(i===6){clearInterval(t);process.stdout.write(JSON.stringify({event:'result',result:{status:'SUCCESS',response:'slow reads'}})+'\\n')}},80);";
+  const result = await execute(p4Plan(source), p4Options);
+  assert.equal(result.ok, true); assert.equal(result.progress_events, 6); assert.equal(antigravity.parse(result.stdout).text, "slow reads");
+  assert.ok(result.duration_ms > 5 * p4Options.healthCheckIntervalMs);
+});
+
+test("N9 P4 vanished parent with descendant stdio settles before health stall", async () => {
+  const source = "require('node:child_process').spawn(process.execPath,['-e','setTimeout(()=>{},3000)'],{stdio:['ignore',1,2]});process.exit(0);";
+  const started = Date.now(); let cancelled = false;
+  const guard = setTimeout(() => { cancelled = true; }, 700);
+  try {
+    const [lost, sibling] = await Promise.all([
+      execute(p4Plan(source), { ...p4Options, healthCheckIntervalMs: 100, isCancelled: () => cancelled }),
+      execute(p4Plan("process.stdout.write(JSON.stringify({event:'result',result:{status:'SUCCESS',response:'survivor'}})+'\\n')"), p4Options),
+    ]);
+    assert.equal(lost.ok, false); assert.equal(lost.error.code, "PROVIDER_NO_TERMINAL_RESULT");
+    assert.ok(Date.now() - started < 500, "dead-parent recovery precedes the five-health-interval deadline");
+    assert.equal(sibling.ok, true); assert.equal(antigravity.parse(sibling.stdout).text, "survivor");
+  } finally { clearTimeout(guard); }
+});
+
+
+test("N9 P4 successful wait-for-close terminal survives a vanished parent with descendant stdio", async () => {
+  const source = "process.stdout.write(JSON.stringify({event:'result',result:{status:'SUCCESS',response:'already completed'}})+'\\n');const child=require('node:child_process').spawn(process.execPath,['-e','setTimeout(()=>{},3000)'],{stdio:['ignore',1,2]});process.stdout.write(JSON.stringify({event:'child_pid',pid:child.pid})+'\\n');process.exit(0);";
+  const validPid = (pid) => Number.isSafeInteger(pid) && pid > 0;
+  const exists = (pid) => { try { process.kill(pid, 0); return true; } catch (error) { if (error.code === "ESRCH") return false; if (error.code === "EPERM") return true; throw error; } };
+  let parentPid; let cancelled = false; const guard = setTimeout(() => { cancelled = true; }, 700);
+  try {
+    assert.notEqual(process.platform, "win32", "this case verifies the POSIX detached process-group contract");
+    const [completed, sibling] = await Promise.all([
+      execute({ ...p4Plan(source), streamProgress: false }, { ...p4Options, isCancelled: () => cancelled, onStart: (pid) => { parentPid = pid; } }),
+      execute(p4Plan("process.stdout.write(JSON.stringify({event:'result',result:{status:'SUCCESS',response:'sibling kept'}})+'\\n')"), p4Options),
+    ]);
+    assert.equal(completed.ok, true, "an observed valid successful terminal must survive bounded missing-close recovery");
+    assert.equal(antigravity.parse(completed.stdout).text, "already completed");
+    assert.equal(completed.health_harvested, true);
+    assert.equal(sibling.ok, true); assert.equal(antigravity.parse(sibling.stdout).text, "sibling kept");
+    const childPid = completed.stdout.split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line)).find((event) => event.event === "child_pid")?.pid;
+    assert.ok(validPid(parentPid), "execute must expose the real spawned parent PID");
+    assert.ok(validPid(childPid), "raw stdout must expose the real spawned descendant PID");
+    const deadline = Date.now() + 2000;
+    while ((exists(parentPid) || exists(childPid) || isProcessGroupAlive(parentPid)) && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(exists(parentPid), false, "parent must be reaped");
+    assert.equal(exists(childPid), false, "descendant holding stdio must be reaped");
+    assert.equal(isProcessGroupAlive(parentPid), false, "the owned detached provider process group must be reclaimed");
+    console.log(JSON.stringify({ p4_case: "success-terminal-missing-close", parent_pid: parentPid, child_pid: childPid, parent_alive: false, child_alive: false, group_alive: false }));
+  } finally {
+    clearTimeout(guard);
+    if (process.platform !== "win32" && validPid(parentPid) && isProcessGroupAlive(parentPid)) {
+      try { process.kill(-parentPid, "SIGKILL"); } catch (error) { if (error.code !== "ESRCH") throw error; }
+    }
+  }
+});

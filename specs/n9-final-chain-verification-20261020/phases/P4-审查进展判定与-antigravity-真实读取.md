@@ -9,7 +9,7 @@
 - **evidence_path**：`quality/tests/2026-10-20-043-p4-success-terminal-cleanup-green.output`
 - **STOP**：若 T007/T008 的目标断言未按 ORACLE 通过、三处旧断言被删除或改弱、或任何越界/链接逃逸被放行，停下并把原始失败与 `antigravity.mjs` 行号交本 Phase 实施者按 D-010 与 FR-CHAIN-007/008 修复，不放宽断言或路径检查。
 - **覆盖 AC**：AC-M5-1、AC-M5-2
-- **Done**：由未参与实现的审查者重放 gate_cmd 并读回 `quality/tests/2026-10-20-043-p4-success-terminal-cleanup-green.output` 的 RED/GREEN、T007 三场景与 T008 路径负例，核对本 Phase 的 `git diff --name-only` 只含契约头 6 条路径；process 改动限已退出/消失但 close 未触发的存活观察恢复分支及成功 wait_for_close 的最小终态记录（017 major 修复），health-runner/broker 零改动，逐条核对 AC-M5-1、AC-M5-2 后才可判本 Phase Done。
+- **Done**：AC-M5-1 `pass` — `quality/tests/2026-10-20-043-p4-success-terminal-cleanup-green.json` 与同名 `.output`，受控拒读活锁、允许读取慢流、缺 close 失败及已有成功 terminal 保全/父后代回收；AC-M5-2 `pass` — 同043原件及 `quality/tests/2026-10-20-027-p4-plan-health.json`，真实 payload 形状放行、bundle 外与链接逃逸拒绝。判定由当前主会话按 Appendix A 原判据提供；限受控场景，未宣真实 agy/native 或慢模型校准通过。独立发现处置见149/150，审查失败与覆盖限制如下保留。
 
 冻结目标RED输入：2026-10-20已read `tests/contract/final-chain-plan-red.test.mjs`（sha256 `0ca1da0ce73bacdff6f01e67bffaabf70b4a4a89f9ede9a0af2f67ef4fcd2ab4`），首部生产writer只读/TCR条件与四组原断言保全；原始总命令 `npx vitest run tests/contract/final-chain-plan-red.test.mjs` exit1，14 tests=11目标行为失败、3本来通过、0 setup，原件 `quality/tests/2026-10-20-016-n9-final-chain-plan-red.json 与同名.output`。本文件只读，不入本Phase未来Write set；不能改断言求绿。每组只证其实际接缝，PLAN-REFRESH为G-2结构合同，不证两次真实刷新。
 
@@ -21,9 +21,9 @@
 - **改动后**：真实序列（`ACTIVE`→`ERROR` 被拒 + 穿插 `agent_response` 的 `DONE`）在 5 个间隔内落 `PROCESS_STALLED`，组内其它 provider 结果照常返回；有允许读取 `DONE` 推进的慢 provider 不误判；已退出/消失但 close 未触发的 provider 在 2 个 liveness 间隔内落 `PROVIDER_NO_TERMINAL_RESULT`，不影响仍存活慢流；两种 payload 形状都按 realpath 后精确成员放行。
 - **与相邻 Phase 的边界**：P4 独立（`Dependency: none`），只消费既有 health/process/broker 行为，不消费 P1–P3 产物；P8/T014 只读本 Phase 的测试与证据原件，不重跑实现。
 - **主要风险**：收紧后只发 `agent_response`、长时间没有允许读取的正常 provider 可能被误杀（spec RISK-05）；若独立读回发现误杀且无允许读取正例支撑，替代走法是保留「被拒不算进展」并把窗口证据交用户决定是否校准，不静默加墙钟时限。
-- **下一步**：build-code 按 T007→T008 顺序实施并采集 RED/GREEN 原件；P8/T014 消费 `quality/tests/2026-10-20-043-p4-success-terminal-cleanup-green.output` 核 AC-M5-1/2。
+- **下一步**：本 Phase 两 AC 在下述受控范围首判已记录；P8/T014 消费043、017、149/150及并列同源原件复核，不补首次判定；其余 Phase 继续按真实依赖实施。
 - **动手前必读**：`skills/third-review/lib/adapters/antigravity.mjs:124-141`；`skills/third-review/lib/process.mjs:140-173`；`skills/third-review/lib/health-runner.mjs:27-38`；`skills/third-review/lib/broker.mjs:1074-1079,1863-1877`；`skills/third-review/test/antigravity-adapter.test.mjs:43-59,91-107`；`skills/third-review/test/process.test.mjs:181-198`；`skills/third-review/test/review-progress-liveness.test.mjs:245-272`；`quality/evidence/2026-10-20-024-build-plan-review-health-and-page-facts.md` §2.1、§2.5。
-- **未决事实**：N/A — 理由：5 个间隔对真实慢样本的校准属 build-code 观测（spec RISK-05），本卡不预填数值，校准记录随 T007 证据采集；`agy` 的 hook stdin 原文在 014 明确未取得，T008 只按 stream 事件形状与 024 的只读探针设计，不声称已抓包。本文件 `quality/` 路径相对外置任务基准 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n9-final-chain-verification-20261020`，不相对工作树。
+- **未决事实**：`unavailable` — 真实 agy 模型读取、hook stdin 与真实慢模型的五间隔校准未取得；具名 owner 为后续真实环境验证执行者，须具备隔离 native agy 可运行环境和允许读取样本才能核验。当前受控 payload/子进程不冒这些事实；外置 quality 根沿原卡声明。
 
 ## 本 Phase 材料导航
 
@@ -158,8 +158,20 @@ gate_cmd 退出 0、两卡的 RED/GREEN 与负例原件落 `quality/tests/2026-1
 - Codex/luna major：已有成功terminal的wait_for_close在死父/后代持stdio时不得报无terminal。主会话按017明确授权必要窄修：除原存活观察分支，在既有成功wait_for_close分支记一个内存终态；恢复到点优先既有claimCompleted保raw/session/cursor，否则保原失败。这是原“仅观察hunk”边界的具名修正，不扩health-runner/broker/路由、正常close、既有失败/取消或回收逻辑。
 - 新增oracle/TCR为`quality/evidence/2026-10-20-136-p4-success-terminal-tcr.md`，独立核为`quality/evidence/2026-10-20-142-p4-success-tcr-independent.md`；case先落盘、短暂移除又恢复的顺序偏差保留，不倒写为先审后写。原三断言TCR独立核仍沿094。
 - 动态复现`quality/tests/2026-10-20-039-p4-success-terminal-red.json`及.output：1目标失败90通过。修复后同gate`quality/tests/2026-10-20-042-p4-success-terminal-green.json`及.output：91通过，无timeout/cancel/truncation。诊断原件`quality/evidence/2026-10-20-145-p4-success-terminal-diagnosis.md`。资源加严请求`quality/evidence/2026-10-20-143-p4-success-terminal-cleanup-tcr.md`经独立`quality/evidence/2026-10-20-147-targeted-fix-and-cleanup-tcr.md`核后落同case；`quality/tests/2026-10-20-043-p4-success-terminal-cleanup-green.json`及.output同gate91通过，真实父/后代PID及父进程组均已不存在（ESRCH不存在、EPERM存在）；health_harvested本身仍只证接管，不代回收。该资源原件仅覆盖本POSIX场景，不声明Windows通过。
-- controlled hook不证明真实agy模型读取；真实hook stdin、真实慢样本校准未取得。修复后独立质量读回尚未完成，资源面已由043实际测试；不以执行绿自判Phase质量，不重派整scope追空。
+- controlled hook不证明真实agy模型读取；真实hook stdin、真实慢样本校准未取得。修复后两项 finding 已由 `quality/evidence/2026-10-20-150-p4-findings-independent-readback.md` 定向独立读回为 fixed，资源面由043实际测试；该读回不是全 Phase 重审或质量通过；不以执行绿自判Phase质量，不重派整scope追空。
 
 ## L2 — 可删除参考
 
 事件形状样例、探针命令与旧断言原文只用于实施期对照；GREEN 后删除本节不改变 L0/L1：决策、边界、命令与 oracle 已在上方契约头与两张卡中。保留 014/024 原件指针作为差异理由，不在此另建权威。
+
+
+### 本 Phase 自带判据小结（审后收口）
+
+- 规则锚：spec Appendix A「AC-M5-1」首句「关联 FR-CHAIN-007；来源 U-006；观察对象是受控假 provider 与正常慢 provider。」；「AC-M5-2」首句「关联 FR-CHAIN-008；来源 U-006；观察对象是 antigravity hook。」；decision-log「D-010」与当前 FR-CHAIN-007/008 仍为原行为来源。
+- 材料变更影响：本次只补本卡契约头 Done、当前状态、原件和判据小结；不改 spec、独立 AC/oracle、其它 Phase 或生产行为。原修改范围六条源码/测试由原实施者串行持笔；process 额外成功 wait_for_close 的内存 pendingCloseTerminal hunk 是主会话按017 major的具名必要修复授权，来源149/150及136/142/143/147；未扩 health-runner/broker/config/路由或持久状态。
+- 已验：原 gate 四文件命令由043真实执行 exit0，91/91；039 为新增成功 terminal 丢失目标 RED（1失败90通过），042/043恢复GREEN。原021/025目标RED、024/026 GREEN、027冻结组6通过及028/029受控变异、030恢复均保原件，不复制raw；043记录父57881、后代57898及组均不存在。AC-M5-1、AC-M5-2按本卡Done首判为pass，只代表原受控判据。
+- 未验：真实 native agy读取、真实hook stdin、真实慢模型五间隔校准均 unavailable；后续真实环境验证执行者负责取得隔离环境/真实样本后核验。Windows回收行为 unavailable，本阶段仅POSIX受控场景；后续Windows执行者须用实际平台场景核。UI/browser为N/A，本卡无浏览器可见面。
+- OCR：原017为 available-with-failures；Kimi/coding与Codex/luna均completed/parse_outcome=ok，原minor/major分别保013/011 provider.output；AG失败OCR_PROVIDER_PACKET_GUARD_FAILED（native packet prompt read未确认）保原件，coverage undetermined不倒填。原review仅对应当时输入，后修复仅以149处置＋150独立定向读回承接，不追空重派或冒全Phase新审。
+- 同源并列：Standards原117＋协议补120，Spec原119＋协议补121，均same_source_degraded、0条可支持finding；范围、截断/未读与真实环境限制沿各原文。它们不替代OCR，原017错误与未确认覆盖不被空findings覆盖。
+- finding处置：Codex/luna成功terminal丢失major、Kimi证据路径minor均在149记fixed，150独立确认；原意见、原RED和限制不删。136 case先落盘后短暂移除/恢复、142独立审晚于首次落盘的顺序偏差保真；资源断言按147之后追加，不能倒写先审后写。
+- Git范围：本Phase提交仅上述六源码/测试与本卡七条；规划基线另为dd3d320d，P1模块/测试/move-map排除。提交只交付Phase受控结果，不是build-code stage-end、verify-code、发布、merge或物理close。

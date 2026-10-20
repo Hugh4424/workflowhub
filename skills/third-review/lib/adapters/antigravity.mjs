@@ -54,12 +54,18 @@ function packetPolicy(cwd) {
 function hookDecision(policy, payload) {
   const denied = { decision: "deny", reason: "The packet boundary permits only exact current regular-file reads" };
   try {
-    const call = payload?.toolCall; const file = call?.args?.AbsolutePath;
-    if (call?.name !== "view_file" || typeof file !== "string" || !path.isAbsolute(file) || path.resolve(file) !== file || fs.realpathSync(file) !== file) return denied;
-    const member = policy.files.find((item) => item.file === file);
-    if (!member) return denied;
+    const call = payload?.toolCall;
+    const tool = call === undefined ? payload?.tool_name : call?.name;
+    const file = call === undefined ? payload?.tool_info?.parameters?.Path : call?.args?.AbsolutePath;
+    if (!["view_file", "read_file"].includes(tool) || (call !== undefined && tool !== "view_file")
+        || (payload?.tool_info?.name !== undefined && payload.tool_info.name !== tool)
+        || typeof file !== "string" || !path.isAbsolute(file) || path.resolve(file) !== file) return denied;
     const stat = fs.lstatSync(file);
-    if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || stat.size !== member.size || digest(fs.readFileSync(file)) !== member.sha256) return denied;
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1) return denied;
+    const resolved = fs.realpathSync(file);
+    const member = policy.files.find((item) => item.file === resolved);
+    if (!member) return denied;
+    if (stat.size !== member.size || digest(fs.readFileSync(resolved)) !== member.sha256) return denied;
     return { decision: "allow" };
   } catch { return denied; }
 }
@@ -129,7 +135,10 @@ function observeLine(stream, line) {
   const step = event?.step_update;
   if (event?.event === "step_update" && Number.isSafeInteger(step?.step_index) && step.step_index >= 0 && ["ACTIVE", "DONE", "ERROR"].includes(step.state)) {
     const cursor = `${step.step_index}:${step.state}`;
-    return { liveness: true, progress: true, cursor, progress_key: cursor, event: "step_update" };
+    const completedRead = step.state === "DONE" && (step.step_type === "tool" || step.step_type === undefined) && !step.tool_info?.error;
+    return completedRead
+      ? { liveness: true, progress: true, cursor, progress_key: `${step.step_index}:DONE`, event: "step_update" }
+      : { liveness: true, progress: false, cursor, event: "step_update" };
   }
   if (event?.event === "result") {
     const terminal = event.result?.status === "SUCCESS"
