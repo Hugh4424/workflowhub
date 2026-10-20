@@ -565,7 +565,8 @@ function trustedReviewReadScope(context,request,value){
 
 function captureScopedReviewSource(context,request,scope,attachmentRoot,captureSource){
   let selected=null;
-  if(request.stage==='build-code'&&(request.review_scope??request.reviewScope)==='phase'&&context.manifest.activation_cohort==='post'){
+  if(request.stage==='build-code'&&(request.review_scope??request.reviewScope)==='phase'&&context.manifest.activation_cohort==='post'
+      && (request.phase_id != null || (request.review_kind??request.reviewKind??null)!==null)){
     const index=context.artifacts.read('phases/index.md');
     const phases=Object.fromEntries(phaseFilesFromIndex(index).map(ref=>[ref,context.artifacts.read(ref)]));
     const parsed=validatePostPhaseContract({spec:context.artifacts.read('spec.md'),index,phases,reviewReadScope:scope});
@@ -609,6 +610,12 @@ function captureScopedReviewSource(context,request,scope,attachmentRoot,captureS
 function phaseReviewSourceProjection(context, request, source, attachmentRoot, reviewReadScope) {
   if (request.stage !== "build-code" || (request.review_kind ?? request.reviewKind ?? null) !== null || (request.review_scope ?? request.reviewScope) !== "phase"
       || context.manifest?.activation_cohort !== "post") return source;
+  // A light implementation has no Phase contract: retain the captured whole
+  // workspace (or explicitly trusted read scope) and report that it was not checked.
+  if (request.phase_id == null) return Object.freeze({ ...source,
+    contract_facts: Object.freeze({ contract_ok: null, contract_error_count: null,
+      contract_errors: [], ac_coverage: null, fr_coverage: null, command_oracle_checks: null }),
+  });
   const index = context.artifacts.read("phases/index.md");
   const phases = Object.fromEntries(phaseFilesFromIndex(index).map((ref) => [ref, context.artifacts.read(ref)]));
   const parsed = validatePostPhaseContract({ spec: context.artifacts.read("spec.md"), index, phases, reviewReadScope });
@@ -1159,7 +1166,10 @@ function thinQuality(context, row) {
   let result;
   try { result = JSON.parse(readPlainInputFile(join(context.task.taskPath, ref), "review result")); }
   catch (error) { if (error.code === "ENOENT") return "unknown"; throw error; }
-  if (result.task_id !== context.identity.taskId || result.stage !== row.stage) throw new Error("review result differs from current row identity");
+  const lightImplementation = row.stage === "make-decision" && result.stage === "build-code"
+    && result.review_scope === "phase" && result.subject_kind === "phase"
+    && result.review_kind === null && result.phase_id === null;
+  if (result.task_id !== context.identity.taskId || result.stage !== row.stage && !lightImplementation) throw new Error("review result differs from current row identity");
   if (result.status === "unavailable") return "unavailable";
   // A review is one quality fact; it cannot certify stage completion.
   return ["available", "available-with-failures", "incomplete"].includes(result.status) ? "incomplete" : "unknown";
