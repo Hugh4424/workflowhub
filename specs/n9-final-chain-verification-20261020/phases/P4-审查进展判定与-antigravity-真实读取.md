@@ -1,7 +1,7 @@
 # Phase P4 — 审查进展判定与 antigravity 真实读取
 
 - **Global spec**：`spec.md#实现设计全局权威`
-- **Write set**：`skills/third-review/lib/adapters/antigravity.mjs`、`skills/third-review/lib/process.mjs`、`skills/third-review/test/antigravity-adapter.test.mjs`、`skills/third-review/test/process.test.mjs`、`skills/third-review/test/review-progress-liveness.test.mjs`、`skills/third-review/test/adapters-health.test.mjs`
+- **Write set**：`skills/third-review/lib/adapters/antigravity.mjs`、`skills/third-review/lib/process.mjs`、`skills/third-review/test/antigravity-adapter.test.mjs`、`skills/third-review/test/process.test.mjs`、`skills/third-review/test/review-progress-liveness.test.mjs`、`skills/third-review/test/adapters-health.test.mjs`、`runtime/review/ocr-delegation-adapter.mjs`、`tests/contract/ocr-delegation-adapter.test.mjs`
 - **Dependency**：none
 - **Consumer**：review 调用者、P8 全 AC 验收与后续审查任务
 - **gate_cmd**：`npx vitest run skills/third-review/test/antigravity-adapter.test.mjs skills/third-review/test/process.test.mjs skills/third-review/test/review-progress-liveness.test.mjs skills/third-review/test/adapters-health.test.mjs`
@@ -51,8 +51,8 @@
 
 ### 文件边界
 
-- **新增**：N/A — 全部改动落在既有 6 个文件，新场景写入既有测试文件，不新增测试文件或夹具。
-- **修改**：`skills/third-review/lib/process.mjs`（仅 T007 存活观察恢复分支）、`skills/third-review/lib/adapters/antigravity.mjs`、`skills/third-review/test/antigravity-adapter.test.mjs`、`skills/third-review/test/process.test.mjs`、`skills/third-review/test/review-progress-liveness.test.mjs`、`skills/third-review/test/adapters-health.test.mjs`。
+- **新增**：N/A — 全部改动落在既有 8 个文件，新场景写入既有测试文件，不新增测试文件或夹具。
+- **修改**：`skills/third-review/lib/process.mjs`（仅 T007 存活观察恢复分支）、`skills/third-review/lib/adapters/antigravity.mjs`、`skills/third-review/test/antigravity-adapter.test.mjs`、`skills/third-review/test/process.test.mjs`、`skills/third-review/test/review-progress-liveness.test.mjs`、`skills/third-review/test/adapters-health.test.mjs`。 `runtime/review/ocr-delegation-adapter.mjs`、`tests/contract/ocr-delegation-adapter.test.mjs`（T008 既有真实 OCR guard consumer 补修）。
 - **禁止改动**：`skills/third-review/lib/health-runner.mjs`（5 间隔规则已在 `:36,61-62` 就绪）；`skills/third-review/lib/process.mjs` 的既有终态、进程组回收与 progress 消费（仅存活观察内已退出/消失但 close 未触发的窄分支可改）；`skills/third-review/lib/broker.mjs`（组内等待 `:1077` 与结果保留 `:1863-1877` 已成立）；`antigravity.mjs` 的 `requireNativeHooks`、`packetPolicy`、`installPacketHook`（`:14-30,32-52,68-95` 的版本、合同与 manifest 校验不因形状放宽而降低）；provider 路由与 `~/.config` 配置（D-010 不改路由与执行者）。
 
 本次017有效major的范围修正：下述原“process仅存活观察”限制增加一个已具名例外——既有成功wait_for_close分支只保存内存终态，供死父缺close恢复优先保全已见成功；不改正常close/已有终态claim或回收。依据136/142及本节末017处置，实际diff须逐hunk独立核。
@@ -128,8 +128,10 @@ gate_cmd 退出 0、两卡的 RED/GREEN 与负例原件落 `quality/tests/2026-1
 
 ### T008 — antigravity 接受真实读取 payload
 
+FR-CHAIN-008 形状来源澄清（384/390）：`tool_name`＋`tool_info.parameters.Path` 是已观察 stream 字段，并非已捕获 hook stdin；原 stdin 未取得。真实 OCR 使用既有 `runtime/review/ocr-delegation-adapter.mjs` 的 `installAgPacketGuard`，本 T008 同时覆盖该 consumer 与原 skills adapter。stream+audit 重建的受控候选为 `toolCall.name=read_file`＋`args.Path`；保旧 `view_file/AbsolutePath` 与顶层 `tool_name/tool_info.parameters.Path`。仅在原 guard 统一解析、decision/audit/permissionOverrides/inspect/启动提示；override 只取已核精确文件，不新 guard/manifest/schema/root。路径策略按原 owner 分列：OCR guard 保原祖先 alias/link deny；skills adapter 保原目录 alias 归一后精确 manifest 匹配的 allow oracle，final-file link/hardlink/hash 边界沿原实现与受保护断言。两者各保原 canonical 根、manifest/bytes/hash、越界/冲突拒绝及同 session pre/post 完整内容覆盖强度，不统一放宽或统一收紧；仅 pre、partial/error/缺 content/hook 自读不算完整读取。受控实际安装 hook 命令验证与真实 native 调用分别记录；031 的 packet guard failed/coverage 未确定及独立远端503原件保留，受控通过不倒填 native 成功。此为材料 scope，同轮447 TCR 独立核进行中；尚未实施/测试授权，新增面未验不能沿原受控 pass 报过。
+
 - **Source / FR / AC**：U-006；D-010（hook 同时接受真实 `tool_name`＋`tool_info.parameters.Path` 与 `toolCall.name=view_file`＋`args.AbsolutePath`，先 realpath 再与 bundle 内精确文件比对，越界与链接逃逸继续拒绝）/ FR-CHAIN-008 / AC-M5-2（真实形状放行，bundle 外与链接逃逸拒绝，既有形状不回归）。
-- **Files / symbols**：`skills/third-review/lib/adapters/antigravity.mjs`；symbol: hookDecision（payload 归一化）。`skills/third-review/test/antigravity-adapter.test.mjs`；symbol: N/A — 测试文件无导出符号，新增 hook 断言。
+- **Files / symbols**：`skills/third-review/lib/adapters/antigravity.mjs`；symbol: hookDecision（payload 归一化）；`runtime/review/ocr-delegation-adapter.mjs`、`tests/contract/ocr-delegation-adapter.test.mjs`（既有 installAgPacketGuard、audit、permissionOverrides、inspect 与 native 启动提示的同口径消费）。`skills/third-review/test/antigravity-adapter.test.mjs`；symbol: N/A — 测试文件无导出符号，新增 hook 断言。
 - **Action**：在 `hookDecision` 先取候选：既有形状 `payload.toolCall.name==="view_file"` 用 `args.AbsolutePath`，真实形状 `payload.tool_name` 用 `tool_info.parameters.Path`；工具名只允许 `view_file`、`read_file`，`tool_info.name` 存在时必须与工具名一致；路径必须为绝对且已规范化，`lstat` 必须是普通文件且最后一段非符号链接，再 `realpathSync` 与 `policy.files` 精确 `file` 比对，命中后保留既有 `nlink===1`、size、sha256 校验；其余一律 deny。`requireNativeHooks` 的版本/合同检查、`packetPolicy` 的 manifest/成员校验、1 MiB stdin 上限与默认 deny 不变。
 - **Inputs**：`quality/evidence/2026-10-20-024-build-plan-review-health-and-page-facts.md` §1.2 的真实事件形状与 §1.4 的最小改法；`2026-10-20-014:11-25,167-171` 的只读探针与 stdin 原文未取得限制；无上游 Task，测试用既有 `n3AgPacket`/`n3AgHook` 夹具执行安装后的 hook 命令。
 - **Outputs / failure**：真实形状与既有形状对冻结成员返回 `{decision:"allow"}`；bundle 外、别名指向外部、最后一段符号链接、`..` 遍历、未知工具名、缺失路径或 JSON 非法均返回 `{decision:"deny"}`；hook 入口异常仍输出默认 deny，不产生 allow。
