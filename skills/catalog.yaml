@@ -2552,3 +2552,113 @@ capability_decisions:
     local_changes: owner＝总则维护者；consumer＝遇技术分歧的主会话读取AGENTS卡住与升级并分诊、用户读事实后决定；唯一方法落点AGENTS，不新建草图技能/流程/进度对象。文件 SHA256 7aa1f52c691c3d46d5afc527b23f90977fce869ce33573c73c81a4c7f0cde962，归档指纹 SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；提交未证实，镜像带自行改动，main仅取回坐标，不称已绑定上游版本。MIT为本地LICENSE所示，源镜像上游许可链未独立核实。仅采用prototype单文件；Feature、exhaust-the-design-space、the control skill及宿主poteto-mode调度器4项未保存，不声称吸收。拒绝设计决定归执行者、一般免测试、用完删除；本地要求三触发/四禁用、任务库日期＋主题留存与用户决定。替代无边界临时原型做法，不替代matt-prototype watch条目；删除条件＝独立审查的替代方法承接全部消费者且无正文引用时，由原owner退役本登记，历史原件保留。
     dependency_closure: []
     update_policy: 仅按固定字节与实际consumer比较，不自动追main；提交和许可链保持未证实，不增第二权威。
+  - name: n7-git-workflow-and-versioning
+    status: absorbed
+    purpose: N7既有消费者的来源登记修复，不新增技能或方法行为
+    design_idea: "Change Summaries — 改动、故意未改及理由、潜在风险与影响面"
+    used_by_stages: [make-decision, build-prd, build-plan, build-code, verify-code]
+    local_path: skills/stage-handoff/SKILL.md; AGENTS.md
+    upstream:
+      - github_url: https://github.com/addyosmani/agent-skills
+        commit: aeac41d4d005999432bb7312f7ff06383a91d59d
+        commit_url: https://github.com/addyosmani/agent-skills/commit/aeac41d4d005999432bb7312f7ff06383a91d59d
+        license: MIT
+        reviewed_at: '2026-10-20'
+        review_outcome: accepted_with_local_boundaries
+        path: skills/git-workflow-and-versioning/SKILL.md
+        skill_url: https://github.com/addyosmani/agent-skills/blob/aeac41d4d005999432bb7312f7ff06383a91d59d/skills/git-workflow-and-versioning/SKILL.md
+        adopted:
+          - "Change Summaries — 改动、故意未改及理由、潜在风险与影响面"
+    local_changes: "固定文件 SHA256 b7465d187935c52546d39fdc7bd6ac36d94eda25a9500ef8c18b767d2eb116ea；来源原件 sources/addy-agent-skills/skills/git-workflow-and-versioning/SKILL.md（固定资料manifest逐字节匹配）；本地偏离/排除：不搬分支命名、tag版本真源、worktree脚本、hooks。消费者为阶段主会话按上述现方法执行，AGENTS治理由派发/交接作者读取；首次原件导航：P1 quality/tests/2026-10-18-038-p1-independent-method-readback.md；P3 quality/tests/2026-10-18-077-p3-independent-consumer-readback.md；两consumer具名首验，不证明发布；历史task_id=n7-route-delivery-closeout-experience-20261018，quality/...均相对此task根；本机原件根 /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n7-route-delivery-closeout-experience-20261018/；总体AC-013与reflect历史限制不因登记关闭。owner为对应方法维护者；仅独立审查替代承接全部消费者且无正文引用后退役，保历史。"
+    dependency_closure: []
+    update_policy: 只核固定字节及具名consumer，不自动追HEAD；来源登记不证明首次验收或质量通过。
+  - name: n7-no-comments
+    status: absorbed
+    purpose: N7既有消费者的来源登记修复，不新增技能或方法行为
+    design_idea: "Steps 2/4/5 — 报告与实施分权；机制承接后删覆盖散文；未覆盖规则保留"
+    used_by_stages: [make-decision, build-prd, build-plan, build-code, verify-code]
+    local_path: skills/stage-reflection/SKILL.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        license: MIT
+        reviewed_at: '2026-10-20'
+        review_outcome: accepted_with_unverified_upstream_license_chain
+        path: skills/no-comments/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/no-comments/SKILL.md
+        adopted:
+          - "Steps 2/4/5 — 报告与实施分权；机制承接后删覆盖散文；未覆盖规则保留"
+    local_changes: "固定文件 SHA256 e466a443c6476c285a0fad0e4325452b7a76e6379d0b40aca6041ce16aa8b85d；来源原件 sources/pstack/skills/no-comments/SKILL.md（固定资料manifest逐字节匹配）；包 SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；Git commit unknown，main仅取回坐标；MIT为本地LICENSE所示、上游许可链未独立核实；本地偏离/排除：拒绝拿不准就删、标记台词；不为删字新增检查器。消费者为阶段主会话按上述现方法执行，AGENTS治理由派发/交接作者读取；首次原件导航：P1 quality/tests/2026-10-18-038-p1-independent-method-readback.md；P3 quality/tests/2026-10-18-077-p3-independent-consumer-readback.md；仅具名方法与保全，不冒泛化效果；历史task_id=n7-route-delivery-closeout-experience-20261018，quality/...均相对此task根；本机原件根 /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n7-route-delivery-closeout-experience-20261018/；总体AC-013与reflect历史限制不因登记关闭。owner为对应方法维护者；仅独立审查替代承接全部消费者且无正文引用后退役，保历史。"
+    dependency_closure: []
+    update_policy: 只核固定字节及具名consumer，不自动追HEAD；来源登记不证明首次验收或质量通过。
+  - name: n7-ketchup
+    status: absorbed
+    purpose: N7既有消费者的来源登记修复，不新增技能或方法行为
+    design_idea: "Gather what changed / Write the reply — 用户独占动作、推荐理由不答后果、unknown、真实链接及事实不重复"
+    used_by_stages: [make-decision, build-prd, build-plan, build-code, verify-code]
+    local_path: skills/stage-handoff/SKILL.md; AGENTS.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        license: MIT
+        reviewed_at: '2026-10-20'
+        review_outcome: accepted_with_unverified_upstream_license_chain
+        path: skills/ketchup/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/ketchup/SKILL.md
+        adopted:
+          - "Gather what changed / Write the reply — 用户独占动作、推荐理由不答后果、unknown、真实链接及事实不重复"
+    local_changes: "固定文件 SHA256 05a25e69c716498e6f2e94fd64777fdb435398f29c4b44d7c6ea287d77b31ae0；来源原件 sources/pstack/skills/ketchup/SKILL.md（固定资料manifest逐字节匹配）；包 SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；Git commit unknown，main仅取回坐标；MIT为本地LICENSE所示、上游许可链未独立核实；本地偏离/排除：不搬150词、视觉规格/框数、before-after。消费者为阶段主会话按上述现方法执行，AGENTS治理由派发/交接作者读取；首次原件导航：P1 quality/tests/2026-10-18-038-p1-independent-method-readback.md；P3 quality/tests/2026-10-18-077-p3-independent-consumer-readback.md；凭证正例为受控假设；历史task_id=n7-route-delivery-closeout-experience-20261018，quality/...均相对此task根；本机原件根 /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n7-route-delivery-closeout-experience-20261018/；总体AC-013与reflect历史限制不因登记关闭。owner为对应方法维护者；仅独立审查替代承接全部消费者且无正文引用后退役，保历史。"
+    dependency_closure: []
+    update_policy: 只核固定字节及具名consumer，不自动追HEAD；来源登记不证明首次验收或质量通过。
+  - name: n7-reflect
+    status: absorbed
+    purpose: N7既有消费者的来源登记修复，不新增技能或方法行为
+    design_idea: "Structural enforcement check / Apply；references/synthesizer.md接受判据 — 结构优先、批准与落账分开、改变下次行动且未被覆盖才收"
+    used_by_stages: [make-decision, build-prd, build-plan, build-code, verify-code]
+    local_path: skills/stage-reflection/SKILL.md; specs/Improvements.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        license: MIT
+        reviewed_at: '2026-10-20'
+        review_outcome: accepted_with_unverified_upstream_license_chain
+        path: skills/reflect/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/reflect/SKILL.md
+        adopted:
+          - "Structural enforcement check / Apply；references/synthesizer.md接受判据 — 结构优先、批准与落账分开、改变下次行动且未被覆盖才收"
+    local_changes: "固定文件 SHA256 ac549993825f7c1478f37c13fd6f2a9f16dabfe5d9124dfc5216a6d3ecbeb00b；来源原件 sources/pstack/skills/reflect/SKILL.md（固定资料manifest逐字节匹配）；包 SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；Git commit unknown，main仅取回坐标；MIT为本地LICENSE所示、上游许可链未独立核实；本地偏离/排除：不搬固定三路、逐行批准、固定三栏表或tracker。消费者为阶段主会话按上述方法落账、业务仓维护者按specs/Improvements.md条目形状和原来源续接（D-010/D-012；P2首验见下）；首次原件导航：P1 quality/tests/2026-10-18-038-p1-independent-method-readback.md；P2 quality/tests/2026-10-18-059-p2-independent-complete-readback.json；首验适用条件未齐保持incomplete，见quality/tests/2026-10-18-p6-six-adoptions.md；历史task_id=n7-route-delivery-closeout-experience-20261018，quality/...均相对此task根；本机原件根 /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n7-route-delivery-closeout-experience-20261018/；总体AC-013与reflect历史限制不因登记关闭。owner为对应方法维护者；仅独立审查替代承接全部消费者且无正文引用后退役，保历史。"
+    dependency_closure: []
+    update_policy: 只核固定字节及具名consumer，不自动追HEAD；来源登记不证明首次验收或质量通过。
+  - name: n7-recall
+    status: absorbed
+    purpose: N7既有消费者的来源登记修复，不新增技能或方法行为
+    design_idea: "Before you start or resume / Sweep the shared record / Output contract — 默认回读相关经验与原源；闭合状态普通文字明确"
+    used_by_stages: [make-decision, build-prd, build-plan, build-code, verify-code]
+    local_path: skills/stage-reflection/SKILL.md; specs/Improvements.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        license: MIT
+        reviewed_at: '2026-10-20'
+        review_outcome: accepted_with_unverified_upstream_license_chain
+        path: skills/recall/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/recall/SKILL.md
+        adopted:
+          - "Before you start or resume / Sweep the shared record / Output contract — 默认回读相关经验与原源；闭合状态普通文字明确"
+    local_changes: "固定文件 SHA256 d5c39c7d80afcde16c494cf33247a82ccf58a3d140be85c27a45b96b52618a7e；来源原件 sources/pstack/skills/recall/SKILL.md（固定资料manifest逐字节匹配）；包 SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；Git commit unknown，main仅取回坐标；MIT为本地LICENSE所示、上游许可链未独立核实；本地偏离/排除：不搬机器reader/标签/状态对象、5+5上限；本地状态词是偏离，不声称来自此固定原文。消费者为阶段主会话按上述方法落账、业务仓维护者按specs/Improvements.md条目形状和原来源续接（D-010/D-012；P2首验见下）；首次原件导航：P1 quality/tests/2026-10-18-038-p1-independent-method-readback.md；P2 quality/tests/2026-10-18-059-p2-independent-complete-readback.json；仅具名后继读取，不外推未来任务；历史task_id=n7-route-delivery-closeout-experience-20261018，quality/...均相对此task根；本机原件根 /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n7-route-delivery-closeout-experience-20261018/；总体AC-013与reflect历史限制不因登记关闭。owner为对应方法维护者；仅独立审查替代承接全部消费者且无正文引用后退役，保历史。"
+    dependency_closure: []
+    update_policy: 只核固定字节及具名consumer，不自动追HEAD；来源登记不证明首次验收或质量通过。
+  - name: n7-opening-a-pr
+    status: absorbed
+    purpose: N7既有消费者的来源登记修复，不新增技能或方法行为
+    design_idea: "Descriptions — Scope含故意不做；Blast Radius含相关已知红代价；Verification每条真实路径与结果"
+    used_by_stages: [build-prd, verify-code]
+    local_path: skills/stage-closeout/SKILL.md
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        license: MIT
+        reviewed_at: '2026-10-20'
+        review_outcome: accepted_with_unverified_upstream_license_chain
+        path: skills/poteto-mode/playbooks/opening-a-pr.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/poteto-mode/playbooks/opening-a-pr.md
+        adopted:
+          - "Descriptions — Scope含故意不做；Blast Radius含相关已知红代价；Verification每条真实路径与结果"
+    local_changes: "固定文件 SHA256 931070f5674e81a191277253d4e02b1c45d091b223f93bf506d3896a428a5967；来源原件 sources/pstack/skills/poteto-mode/playbooks/opening-a-pr.md（固定资料manifest逐字节匹配）；包 SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；Git commit unknown，main仅取回坐标；MIT为本地LICENSE所示、上游许可链未独立核实；本地偏离/排除：不搬强制ready、Conventional Commits、六段模板、自动盯PR、reset/forge。消费者为阶段主会话按上述现方法执行，AGENTS治理由派发/交接作者读取；首次原件导航：P4 quality/tests/2026-10-18-081-p4-controlled-delivery-materials.json及quality/tests/2026-10-18-083-p4-delivery-note-green.json、quality/tests/2026-10-18-084-p4-closeout-protection-green.json；独立首验为quality/evidence/2026-10-18-050-p4-independent-first-consumer.json、quality/evidence/2026-10-18-055-p4-compression-consumer.json；受控首验不冒真实PR，后续实际PR另见quality/tests/2026-10-19-022-ac010-real-pr-independent-consumer.md；历史task_id=n7-route-delivery-closeout-experience-20261018，quality/...均相对此task根；本机原件根 /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n7-route-delivery-closeout-experience-20261018/；总体AC-013与reflect历史限制不因登记关闭。owner为对应方法维护者；仅独立审查替代承接全部消费者且无正文引用后退役，保历史。"
+    dependency_closure: []
+    update_policy: 只核固定字节及具名consumer，不自动追HEAD；来源登记不证明首次验收或质量通过。

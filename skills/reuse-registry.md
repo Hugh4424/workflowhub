@@ -146,3 +146,18 @@
 | U11 | Reply/ask/复制源 | SKILL.md:159/163–170 | 仅保安全回灌方法；当前只读页不用控件，真实确认互动后重评 |
 | U12 | 嵌真实代码 | SKILL.md:157 | 只稳定指针、不嵌正文造双写；改运行时取数时重评 |
 | U13 | 打包许可缺失 | scripts/am.mjs bundled license block | 不搬renderer；dagre/marked等许可补齐并独立审查后由ADR-012回退块承接 |
+
+## N7六项既有方法来源登记
+
+来源、pin、许可与固定文件指纹只回 `catalog.yaml` 的 `n7-*` absorbed条目；登记修复不改变方法、不重签历史验收。历史task_id=`n7-route-delivery-closeout-experience-20261018`；以下 `quality/...` 均相对此task根，绝对根只供本机取回，不依赖向外暴露私有路径。owner为对应方法维护者；阶段主会话、交接/治理作者及读取经验条目的业务仓维护者是实际消费者。替代方法经独立审查承接全部消费者且无正文引用后，由owner退役登记并保历史。
+
+| 条目 | 现有消费者入口 | 历史首验边界 |
+| --- | --- | --- |
+| n7-git-workflow-and-versioning | `skills/stage-handoff/SKILL.md; AGENTS.md` | P1 quality/tests/2026-10-18-038-p1-independent-method-readback.md；P3 quality/tests/2026-10-18-077-p3-independent-consumer-readback.md；两consumer具名首验，不证明发布 |
+| n7-no-comments | `skills/stage-reflection/SKILL.md` | P1 quality/tests/2026-10-18-038-p1-independent-method-readback.md；P3 quality/tests/2026-10-18-077-p3-independent-consumer-readback.md；仅具名方法与保全，不冒泛化效果 |
+| n7-ketchup | `skills/stage-handoff/SKILL.md; AGENTS.md` | P1 quality/tests/2026-10-18-038-p1-independent-method-readback.md；P3 quality/tests/2026-10-18-077-p3-independent-consumer-readback.md；凭证正例为受控假设 |
+| n7-reflect | `skills/stage-reflection/SKILL.md; specs/Improvements.md` | P1 quality/tests/2026-10-18-038-p1-independent-method-readback.md；P2 quality/tests/2026-10-18-059-p2-independent-complete-readback.json；首验适用条件未齐保持incomplete，见quality/tests/2026-10-18-p6-six-adoptions.md |
+| n7-recall | `skills/stage-reflection/SKILL.md; specs/Improvements.md` | P1 quality/tests/2026-10-18-038-p1-independent-method-readback.md；P2 quality/tests/2026-10-18-059-p2-independent-complete-readback.json；仅具名后继读取，不外推未来任务 |
+| n7-opening-a-pr | `skills/stage-closeout/SKILL.md` | P4 quality/tests/2026-10-18-081-p4-controlled-delivery-materials.json及quality/tests/2026-10-18-083-p4-delivery-note-green.json、quality/tests/2026-10-18-084-p4-closeout-protection-green.json；独立首验为quality/evidence/2026-10-18-050-p4-independent-first-consumer.json、quality/evidence/2026-10-18-055-p4-compression-consumer.json；受控首验不冒真实PR，后续实际PR另见quality/tests/2026-10-19-022-ac010-real-pr-independent-consumer.md |
+
+历史原件根：`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n7-route-delivery-closeout-experience-20261018/`。六项采用/排除判据只读回 `specs/archive/n7-route-delivery-closeout-experience-20261018/decision-log.md` 的 D-017 和 spec AC-013；历史六项汇总原件 `quality/tests/2026-10-18-p6-six-adoptions.md` 保留 reflect incomplete 与受控首验限制，不把补登记冒整体验收。
