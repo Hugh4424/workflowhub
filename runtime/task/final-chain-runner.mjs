@@ -414,8 +414,13 @@ function deliveryInput(facts, taskId, read, actualCommands, declared, limits, re
         if (candidate?.verified && candidate.exit_code === 0) try {
           const pr=JSON.parse(candidate.output), remote=execFileSync("git",["remote","get-url","origin"],{cwd:repo,encoding:"utf8",stdio:["ignore","pipe","pipe"]}).trim();
           const oid=name=>execFileSync("git",["rev-parse","--verify",name],{cwd:repo,encoding:"utf8",stdio:["ignore","pipe","pipe"]}).trim();
-          if (remote === field("Git remote origin") && pr.url === field("PR URL") && pr.url === `${remote.replace(/\.git$/,"")}/pull/${pr.number}` && `#${pr.number}` === field("PR") && pr.headRefName === field("head") && pr.baseRefName === field("base") && pr.headRefOid === field("head commit") && pr.baseRefOid === field("base commit") && oid(pr.headRefName) === pr.headRefOid && oid(pr.baseRefName) === pr.baseRefOid && read(field("PR 返回输出")).raw === candidate.output) delivery.pr={...candidate,number:pr.number,url:pr.url,head:pr.headRefName,base:pr.baseRefName,basis:[fileEvidence(eventRef,source.raw),candidate]};
-          else limits.push(`${eventRef}: ordinary PR declared object/local Git identity mismatch`);
+          const authenticated=Number.isInteger(pr.number) && pr.number > 0 && text(pr.headRefName) && text(pr.baseRefName) && pr.url === `${remote.replace(/\.git$/,"")}/pull/${pr.number}` && oid(pr.headRefName) === pr.headRefOid && oid(pr.baseRefName) === pr.baseRefOid && read(field("PR 返回输出")).raw === candidate.output;
+          const fields=[["Git remote origin",remote],["PR URL",pr.url],["PR",`#${pr.number}`],["head",pr.headRefName],["base",pr.baseRefName],["head commit",pr.headRefOid],["base commit",pr.baseRefOid]];
+          if (authenticated && fields.every(([name])=>text(field(name)))) {
+            delivery.pr={...candidate,number:pr.number,url:pr.url,head:pr.headRefName,base:pr.baseRefName,basis:[fileEvidence(eventRef,source.raw),candidate]};
+            const mismatches=fields.filter(([name,value])=>field(name) !== value);
+            if (mismatches.length) delivery.conflict=`PR 声明与已认证原件矛盾：${mismatches.map(([name,value])=>`${name} 声明 ${field(name)}，原件 ${value}`).join("；")}；来源 ${eventRef} / ${candidate.ref}`;
+          } else limits.push(`${eventRef}: ordinary PR declared object/local Git identity unavailable`);
         } catch { limits.push(`${eventRef}: ordinary PR identity original unavailable`); }
       }
     } else limits.push(`${eventRef}: delivery timing original identity/observation is not reliably established`);
@@ -642,6 +647,7 @@ export function runFinalChainCheck({taskPath,materialRoot} = {}) {
     6:phaseIndex === null ? {readable:false,unavailable:true} : {...fileEvidence("phases/index.md",phaseIndex),phase_refs:phaseRefs},
     7:diff ?? {readable:false,unavailable:true},8:test ?? {readable:false,unavailable:true},9:review,
   };
+  if (delivery.conflict && delivery.pr?.verified) rings[10]={...delivery.pr,conflict:delivery.conflict};
   const unknown = section(decisionLog,"未决项");
   const bundle = {task_id:taskId,rings,...sets,directionChangingUnknown:/无真实未知|无未决|全部已解决/.test(unknown) ? false : unknown.trim() ? true : undefined,delivery};
   for (const [number,item] of Object.entries(rings)) {
