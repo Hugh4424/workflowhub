@@ -49,7 +49,7 @@
 | `R-009` | `D-011` | `FR-ENTRY-002 / AC-ENTRY-2` | current；拿不准偏重 | 无 |
 | `R-010` | `D-002` | `FR-FLOW-003 / AC-FLOW-2` | current；减负判据 | 受控任务待 P7 |
 | `R-011` | `D-013` | `FR-ACC-002 / AC-ACC-3` | current；G1 与经验 | N1 成本窗口待准备 |
-| `R-012` | `D-013` | `FR-ACC-002 / AC-ACC-4` | current；0 项新增外部采用 | N7 登记缺口未闭 |
+| `R-012` | `D-013` | `FR-ACC-002 / AC-ACC-4` | current；0 项新增外部采用 | N7 登记已补齐；首次消费未代签 |
 | `U-001` | `D-001` | `FR-FLOW-001 / AC-FLOW-3` | current；标准路线 | 无 |
 | `U-002` | `D-003` | `FR-FLOW-001 / AC-FLOW-2` | current；单阶段轻档 | 覆盖 prd:49 记录者判断 |
 | `U-003` | `D-002` | `FR-ENTRY-002 / AC-ENTRY-4` | current；级别只写决策记录 | 无 |
@@ -78,7 +78,7 @@
 | `U-005` | `D-013` | `FR-ACC-001 / AC-ACC-1` | current；四路真跑 | 受控任务待 P7 |
 | `R-008` | `D-010` | `FR-ACC-001 / AC-ACC-2` | current；中途负例 | 负例执行待 P7 |
 | `U-005` | `D-013` | `FR-ACC-001 / AC-ACC-5` | current；合法跳过声明 | 无 |
-| `PRD-N8` | `D-013` | `FR-ACC-002 / AC-ACC-6` | current；依赖门 | N7 登记未闭 |
+| `PRD-N8` | `D-013` | `FR-ACC-002 / AC-ACC-6` | current；依赖门 | N7 登记已补齐；完整验收仍待 |
 | `R-012` | `D-013` | `FR-ACC-002 / AC-ACC-7` | current；外部清单分母 | 真实消费待 P7 |
 
 ## 1. 需求解释：问题与紧迫性
@@ -89,7 +89,7 @@
 
 ### 背景
 
-`make-decision` 已由 N6 交付为三段式 15 步，并把四级定义/选择/路由/矩阵留给本卡。当前材料合同在 `make-decision` 只允许 `decision-log.md`，代码审查只认 `build-code`/`verify-code` 阶段，物理收口只挂 `build-prd`/`verify-code`，入口评估函数住在即将退役的 mini-task 技能里。ADR-0040/0041 已定「级别差异用阶段跳过与阶段内矩阵表达」，ADR-0051 记录本次单阶段取舍。依赖事实：N5 与 N6 已交付并合入；N7 的 catalog/notice/reuse 登记缺口未闭（PFACT-009、OPEN-001）。
+`make-decision` 已由 N6 交付为三段式 15 步，并把四级定义/选择/路由/矩阵留给本卡。当前材料合同在 `make-decision` 只允许 `decision-log.md`，代码审查只认 `build-code`/`verify-code` 阶段，物理收口只挂 `build-prd`/`verify-code`，入口评估函数住在即将退役的 mini-task 技能里。ADR-0040/0041 已定「级别差异用阶段跳过与阶段内矩阵表达」，ADR-0051 记录本次单阶段取舍。依赖事实：N5 与 N6 已交付并合入；N7 的 catalog/notice/reuse 登记已由N7 owner补齐并集成（150原件、PFACT-009、OPEN-001）；历史验收与本次首次实际消费不随登记自动通过。
 
 ### 目标
 
@@ -206,10 +206,10 @@
   - **状态**：`inferred`
   - **证据或来源**：由 PFACT-002、PFACT-003 的代码阅读与 D-（单阶段实施与审查）方向推出；`tools/cli/stage-runtime.mjs:606-628` 在缺少 `phase_id` 时会因取不到写集而拒绝，需在 P2 放行；未在真实轻任务上实跑
   - **关联**：FR-IMPL-001、AC-IMPL-2、RISK-002
-- **PFACT-009**：N7 的 catalog/notice/reuse 登记缺口仍在，约 42 项外部方法的真实消费数未测
+- **PFACT-009**：N7 六项 catalog/notice/reuse 登记已补齐并集成；约 42 项外部方法的真实消费数仍未测
   - **状态**：`unknown`
-  - **证据或来源**：N8 决策记录「未决项」「关键事实」；`prd.md:97` 声明 31 是设计集合数、实际调用数未测
-  - **负责人、影响**：N7 owner 闭登记；影响 AC-ACC-4、AC-ACC-6 的最终判定，不影响 P1–P6 实施
+  - **证据或来源**：`quality/evidence/2026-10-20-150-n7-registration-integration-readback.md`（source13f05f3a→集成d3666828、31定向通过）；N7新任务 `quality/evidence/2026-10-20-013-registration-delivery-readback.md`；`prd.md:97` 声明31是设计集合数、实际调用数未测
+  - **负责人、影响**：N7 owner已交登记子面；P7逐项回读真实消费，历史reflect/N7历史第13条 incomplete及外部coverage undetermined仍保；不据登记签AC-ACC-4/6 pass
   - **关联**：FR-ACC-002、AC-ACC-4、OPEN-001
 - **PFACT-010**：本机代码审查执行者可用，版本满足现有门槛
   - **状态**：`verified`
@@ -509,6 +509,7 @@ CLI 分支对象（owner 缺省为用户）：
 - **删除**：`skills/mini-task/SKILL.md`、`skills/mini-task/scripts/mini-task-runner.mjs`、`skills/mini-task/skill-bundle.json`、`skills/wh-review/contracts/mini-task-design.md`、`skills/wh-review/contracts/mini-task-implementation.md`、`tests/integration/mini-task-delivery.test.mjs`、`tests/integration/mini-task-a-resume.test.mjs`。
 - **P4 实际材料投影**：同卡补规则锚、TCR-P4-RETIRE-MINI、执行原件与覆盖边界，`phases/index.md` 同步写集指针；本段只登记材料修改，不改变FR/AC、D-016或RISK-008。
 - **禁止改动**：`skills/answer-as-page/*`；`specs/archive/**` 与 `docs/archive/**`；历史 review/facts 原件；父 PRD；`runtime/task/portable-workflow-run.mjs`（N9 十环事实不在本卡）；`.planning/**` 与 `graphify-out/**` 历史材料。
+- **P7 实际材料投影**：原四验收资产加 `specs/n8-four-level-route-20261019/spec.md`、`specs/n8-four-level-route-20261019/phases/P7-四级验收与成本对照.md`、`specs/n8-four-level-route-20261019/phases/index.md`，共7路径；唯一writer同步登记动态事实与逐AC聚合，不改N1实现或其它生产代码。
 - **全局依赖**：P1（材料）→ P2（审查）→ P3（收口）→ P4（退役与入口函数）→ P5（路由与流程）→ P6（重判）→ P7（验收）；同一路径跨 Phase 共用时前写者先交付并交回已核实状态。
 - **P2 材料修复写集**：`specs/n8-four-level-route-20261019/spec.md`、`specs/n8-four-level-route-20261019/phases/P2-整次实施一次实现审.md`、`specs/n8-four-level-route-20261019/phases/index.md` 与本卡五个实现/测试路径同列 P2 实际审查写集；仅同步既有范围、源锚和解析合同，不改方向或验收判据。材料 owner 串行持笔，后续 Phase 继承当前正文再按其本身边界修改。
 - **P5 材料修复写集**：`specs/n8-four-level-route-20261019/spec.md`、`specs/n8-four-level-route-20261019/phases/P5-入口路由与四套流程.md`、`specs/n8-four-level-route-20261019/phases/index.md` 与本卡既有十二条路径同列 P5 实际审查写集；根 SKILL/deps 与 move-map 的 Task 落点承接当前真实修改，规则仍以各 Task 正文为准，不扩大方向或验收判据。P5 原文中十三条 AC incomplete 与真实缺口保留。
@@ -743,7 +744,7 @@ CLI 分支对象（owner 缺省为用户）：
 
 - [ ] **AC-ACC-4**：约 42 项外部方法实际消费清单；N6 已交付，N7 未登记项等登记后再验收，不记已消费；关联 FR-ACC-002
 验证：P7/T012 的外部清单；独立读者按 31 技能清单与 54 项采用表核逐项状态
-通过：逐项标触发/合法跳过/未交付；N7 项标等待
+通过：逐项标触发/合法跳过/未交付；N7未登记项标等待，登记已补则引用具名原件解除登记阻塞，首次实际消费缺证仍unknown/incomplete
 失败：把 N7 未登记项记已消费；以 15 项为分母
 证据：外部清单与登记引用；本节不填执行状态
 
@@ -824,12 +825,12 @@ CLI 分支对象（owner 缺省为用户）：
   - **处理阶段**：P4
   - **验证**：P4 的引用扫描为空且历史原件仍在；spec 与交接均引用 D-016 与本条
 
-- **OPEN-001**：N7 的 catalog/notice/reuse 登记缺口未闭
+- **OPEN-001**：N7 catalog/notice/reuse 登记实物缺口已消除，真实消费与完整验收仍待逐项取证
   - **受影响 ID**：PFACT-009、FR-ACC-002、AC-ACC-4、AC-ACC-6
   - **负责人**：N7 owner
-  - **影响**：外部清单的 N7 项只能标等待，不能记已消费；最终验收不能早于 N7 闭合
+  - **影响**：150原件证明六项登记已集成；不再把当前catalog说成未补齐。登记不证明实际消费，缺首次调用/合法跳过证据仍unknown/incomplete；不改写历史reflect/N7历史第13条
   - **处理阶段**：P7
-  - **关闭条件或停止**：N7 登记闭合后重跑外部清单；未闭合前不宣布整卡最终验收
+  - **关闭条件或停止**：登记子面由150及N7 013可证补齐；P7据原件更新外部清单，真实验收仍按AC逐项判断，本次仅build-code资产，不进入verify-code
 
 ## 13. 业务影响与回归范围
 
