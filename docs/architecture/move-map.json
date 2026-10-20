@@ -130,9 +130,8 @@
       "role": "production",
       "responsibility": "本文件减薄后继续承接 close 执行器 + 窄工具①④⑤ 消费者",
       "owner": "B4/P5 / MT-1-013",
-      "consumer": "当前直接模块消费者：skills/mini-task/scripts/mini-task-runner.mjs, tests/close/close-contract.test.mjs, tests/contract/close-remote-branch-cleanup.test.mjs, tools/cli/task-close.mjs",
+      "consumer": "当前直接模块消费者：tests/close/close-contract.test.mjs, tests/contract/close-remote-branch-cleanup.test.mjs, tools/cli/task-close.mjs",
       "module_consumers": [
-        "skills/mini-task/scripts/mini-task-runner.mjs",
         "tests/close/close-contract.test.mjs",
         "tests/contract/close-remote-branch-cleanup.test.mjs",
         "tools/cli/task-close.mjs"
@@ -422,7 +421,7 @@
       "destination": "runtime/interface/git-authorize.mjs",
       "status": "retain",
       "role": "production",
-      "responsibility": "④ 不可逆授权：core/task-close、skills/mini-task/mini-task-runner、tools/cli/stage-runtime（authorize 分支）",
+      "responsibility": "④ 不可逆授权：core/task-close、tools/cli/stage-runtime（authorize 分支）",
       "owner": "B0/P1 / MT-1-005",
       "consumer": "当前直接模块消费者：tests/contract/narrow-tool-git-authorize.test.mjs",
       "module_consumers": [
@@ -440,10 +439,9 @@
       "role": "production",
       "responsibility": "人为门①：tools/cli/stage-runtime（confirm 分支）、core/task-close（确认引用）",
       "owner": "B0/P1 / MT-1-006",
-      "consumer": "当前直接模块消费者：core/task-close.mjs, skills/mini-task/scripts/mini-task-runner.mjs, tests/contract/human-confirmation-v3.test.mjs, tests/contract/narrow-tool-human-confirm.test.mjs, tools/cli/stage-runtime.mjs",
+      "consumer": "当前直接模块消费者：core/task-close.mjs, tests/contract/human-confirmation-v3.test.mjs, tests/contract/narrow-tool-human-confirm.test.mjs, tools/cli/stage-runtime.mjs",
       "module_consumers": [
         "core/task-close.mjs",
-        "skills/mini-task/scripts/mini-task-runner.mjs",
         "tests/contract/human-confirmation-v3.test.mjs",
         "tests/contract/narrow-tool-human-confirm.test.mjs",
         "tools/cli/stage-runtime.mjs"
@@ -458,15 +456,14 @@
       "destination": "runtime/interface/record-lock.mjs",
       "status": "retain",
       "role": "production",
-      "responsibility": "⑤ 记录锁：core/task-close、canonical-receipt-writer、review-record-route、mini-task-runner、stage-handoff 等7处",
+      "responsibility": "⑤ 记录锁：core/task-close、canonical-receipt-writer、review-record-route、stage-handoff 等现有调用点",
       "owner": "B0/P1 / MT-1-002",
-      "consumer": "当前直接模块消费者：core/task-close.mjs, runtime/review/review-record-route.mjs, runtime/task/task-handle.mjs, runtime/task/task-store.mjs, skills/mini-task/scripts/mini-task-runner.mjs, tests/contract/narrow-tool-record-lock.test.mjs, tests/integration/quality-store-concurrency.test.mjs",
+      "consumer": "当前直接模块消费者：core/task-close.mjs, runtime/review/review-record-route.mjs, runtime/task/task-handle.mjs, runtime/task/task-store.mjs, tests/contract/narrow-tool-record-lock.test.mjs, tests/integration/quality-store-concurrency.test.mjs",
       "module_consumers": [
         "core/task-close.mjs",
         "runtime/review/review-record-route.mjs",
         "runtime/task/task-handle.mjs",
         "runtime/task/task-store.mjs",
-        "skills/mini-task/scripts/mini-task-runner.mjs",
         "tests/contract/narrow-tool-record-lock.test.mjs",
         "tests/integration/quality-store-concurrency.test.mjs"
       ],
@@ -480,7 +477,7 @@
       "destination": "runtime/interface/run-command.mjs",
       "status": "retain",
       "role": "production",
-      "responsibility": "② 命令采集：workflows/verify-code/capture、workflows/build-code/capture、mini-task-runner、tools/cli/stage-runtime",
+      "responsibility": "② 命令采集：workflows/verify-code/capture、workflows/build-code/capture、tools/cli/stage-runtime",
       "owner": "B0/P1 / MT-1-004",
       "consumer": "当前直接模块消费者：tests/contract/acceptance-execution-medium.test.mjs, tests/contract/narrow-tool-run-command.test.mjs, tests/contract/ocr-review-contract-bundle.test.mjs, tools/cli/stage-runtime.mjs, workflows/build-code/capture.mjs, workflows/build-code/targeted-capture.mjs, workflows/verify-code/capture.mjs",
       "module_consumers": [
@@ -542,7 +539,7 @@
       "role": "production",
       "responsibility": "③ 原子写：task-handle、task-store、core/artifact-dir、material-workspace（B4/P5 改接后）；调用维护者在破坏操作前核允许根、至少下一层及属主证据，API只保护文件身份；重复/半失败先读残留并比较完整bytes，同事实append复用原件",
       "owner": "B0/P1 / MT-1-001",
-      "consumer": "当前直接模块消费者：core/task-close.mjs, runtime/evidence/artifact-dir.mjs, runtime/evidence/research-report.mjs, runtime/review/review-record-route.mjs, runtime/task/material-workspace.mjs, runtime/task/portable-workflow-run.mjs, runtime/task/task-handle.mjs, runtime/task/task-store.mjs, skills/mini-task/scripts/mini-task-runner.mjs, skills/wh-review/scripts/__tests__/simple-e2e-faults.test.mjs, tests/contract/narrow-tool-safe-write.test.mjs, tests/contract/ocr-delegation-adapter.test.mjs, tests/integration/minimal-task-storage.test.mjs, tests/integration/quality-store-concurrency.test.mjs, tools/cli/task-bootstrap.mjs",
+      "consumer": "当前直接模块消费者：core/task-close.mjs, runtime/evidence/artifact-dir.mjs, runtime/evidence/research-report.mjs, runtime/review/review-record-route.mjs, runtime/task/material-workspace.mjs, runtime/task/portable-workflow-run.mjs, runtime/task/task-handle.mjs, runtime/task/task-store.mjs, skills/wh-review/scripts/__tests__/simple-e2e-faults.test.mjs, tests/contract/narrow-tool-safe-write.test.mjs, tests/contract/ocr-delegation-adapter.test.mjs, tests/integration/minimal-task-storage.test.mjs, tests/integration/quality-store-concurrency.test.mjs, tools/cli/task-bootstrap.mjs",
       "module_consumers": [
         "core/task-close.mjs",
         "runtime/evidence/artifact-dir.mjs",
@@ -552,7 +549,6 @@
         "runtime/task/portable-workflow-run.mjs",
         "runtime/task/task-handle.mjs",
         "runtime/task/task-store.mjs",
-        "skills/mini-task/scripts/mini-task-runner.mjs",
         "skills/wh-review/scripts/__tests__/simple-e2e-faults.test.mjs",
         "tests/contract/narrow-tool-safe-write.test.mjs",
         "tests/contract/ocr-delegation-adapter.test.mjs",
@@ -572,13 +568,12 @@
       "role": "production",
       "responsibility": "① 工作区/范围核对：tools/cli/task-bootstrap、core/task-close、stage-context、tools/cli/stage-runtime",
       "owner": "B0/P1 / MT-1-003",
-      "consumer": "当前直接模块消费者：core/__tests__/resolve-path.test.mjs, core/task-close.mjs, runtime/stage/stage-context.mjs, runtime/task/workspace.mjs, skills/mini-task/scripts/mini-task-runner.mjs, tests/contract/narrow-tool-workspace-check.test.mjs, tools/cli/stage-runtime.mjs, tools/cli/task-bootstrap.mjs, workflows/build-code/change-scope.mjs, workflows/build-code/test-asset-inventory.mjs",
+      "consumer": "当前直接模块消费者：core/__tests__/resolve-path.test.mjs, core/task-close.mjs, runtime/stage/stage-context.mjs, runtime/task/workspace.mjs, tests/contract/narrow-tool-workspace-check.test.mjs, tools/cli/stage-runtime.mjs, tools/cli/task-bootstrap.mjs, workflows/build-code/change-scope.mjs, workflows/build-code/test-asset-inventory.mjs",
       "module_consumers": [
         "core/__tests__/resolve-path.test.mjs",
         "core/task-close.mjs",
         "runtime/stage/stage-context.mjs",
         "runtime/task/workspace.mjs",
-        "skills/mini-task/scripts/mini-task-runner.mjs",
         "tests/contract/narrow-tool-workspace-check.test.mjs",
         "tools/cli/stage-runtime.mjs",
         "tools/cli/task-bootstrap.mjs",
@@ -2083,47 +2078,6 @@
       "retention_basis": "MT-3-025 / NARROW"
     },
     {
-      "source": "skills/mini-task/SKILL.md",
-      "destination": "skills/mini-task/SKILL.md",
-      "status": "retain",
-      "role": "production",
-      "responsibility": "宿主读（纯方法 + 窄工具④⑤）",
-      "owner": "B3/P4 / MT-3-026",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
-      "named_data_readers": [
-        "skills/catalog.yaml"
-      ],
-      "delete_condition": "remove when mini-task has no supported consumer",
-      "retention_basis": "MT-3-026 / NARROW"
-    },
-    {
-      "source": "skills/mini-task/scripts/mini-task-runner.mjs",
-      "destination": "skills/mini-task/scripts/mini-task-runner.mjs",
-      "status": "retain",
-      "role": "production",
-      "responsibility": "窄工具①④⑤",
-      "owner": "B4/P5 / MT-3-027",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
-      "named_data_readers": [],
-      "delete_condition": "remove with mini-task skill retirement",
-      "retention_basis": "MT-3-027 / NARROW"
-    },
-    {
-      "source": "skills/mini-task/skill-bundle.json",
-      "destination": "skills/mini-task/skill-bundle.json",
-      "status": "retain",
-      "role": "production",
-      "responsibility": "技能加载",
-      "owner": "B5/P6 / MT-3-028",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
-      "named_data_readers": [],
-      "delete_condition": "remove with mini-task skill retirement",
-      "retention_basis": "MT-3-028 / NARROW"
-    },
-    {
       "source": "skills/plan-ceo-review/SKILL.md",
       "destination": "skills/plan-ceo-review/SKILL.md",
       "status": "retain",
@@ -2922,32 +2876,6 @@
       "retention_basis": "MT-3-075 / NARROW"
     },
     {
-      "source": "skills/wh-review/contracts/mini-task-design.md",
-      "destination": "skills/wh-review/contracts/mini-task-design.md",
-      "status": "retain",
-      "role": "production",
-      "responsibility": "mini-task 审查合同",
-      "owner": "B4/P5 / MT-3-076",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
-      "named_data_readers": [],
-      "delete_condition": "remove with mini-task design review retirement",
-      "retention_basis": "MT-3-076 / NARROW"
-    },
-    {
-      "source": "skills/wh-review/contracts/mini-task-implementation.md",
-      "destination": "skills/wh-review/contracts/mini-task-implementation.md",
-      "status": "retain",
-      "role": "production",
-      "responsibility": "mini-task 审查合同",
-      "owner": "B4/P5 / MT-3-077",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
-      "named_data_readers": [],
-      "delete_condition": "remove with mini-task implementation review retirement",
-      "retention_basis": "MT-3-077 / NARROW"
-    },
-    {
       "source": "skills/wh-review/contracts/provider-protocol.md",
       "destination": "skills/wh-review/contracts/provider-protocol.md",
       "status": "retain",
@@ -3196,11 +3124,10 @@
       "destination": "skills/wh-review/scripts/wh-review-cli.mjs",
       "status": "retain",
       "role": "production",
-      "responsibility": "mini_task 改接后仅保留必要分支",
+      "responsibility": "审查公开入口与当前受控路由",
       "owner": "B4/P5 / MT-3-097",
-      "consumer": "当前直接模块消费者：skills/mini-task/scripts/mini-task-runner.mjs, skills/wh-review/scripts/__tests__/channel-fixtures.test.mjs, tests/contract/review-public-entrypoints.test.mjs, tests/integration/wh-review-v3-broker-contract.test.mjs",
+      "consumer": "当前直接模块消费者：skills/wh-review/scripts/__tests__/channel-fixtures.test.mjs, tests/contract/review-public-entrypoints.test.mjs, tests/integration/wh-review-v3-broker-contract.test.mjs",
       "module_consumers": [
-        "skills/mini-task/scripts/mini-task-runner.mjs",
         "skills/wh-review/scripts/__tests__/channel-fixtures.test.mjs",
         "tests/contract/review-public-entrypoints.test.mjs",
         "tests/integration/wh-review-v3-broker-contract.test.mjs"
@@ -5378,6 +5305,21 @@
       "named_data_readers": [],
       "delete_condition": "上述真实模板消费者退役且经独立审查确认等强正反回归已承接后删除；原始审查、RED/GREEN及失败保留。",
       "retention_basis": "已实读新测试load及四组行为、模板chainFor/seenKey/testLine和真实N6调用者；160/161先RED，162同命令GREEN。仅新增必要测试，不修改旧冻结oracle；本登记晚于文件创建，照实补登记，不冒事前登记，不新增runtime或进度对象。"
+    },
+    {
+      "source": "workflows/make-decision/scripts/entry-evaluation.mjs",
+      "destination": "workflows/make-decision/scripts/entry-evaluation.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "N8/P4/T005 纯入口风险评估；迁移旧入口的输入与返回语义，仅 choices 首值更名。",
+      "owner": "make-decision entry assessment owner",
+      "consumer": "workflows/make-decision/SKILL.md 第1步实际调用，第8/13步读回；tests/contract/entry-evaluation.test.mjs 验证公开结果。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "workflows/make-decision/SKILL.md"
+      ],
+      "delete_condition": "入口评估职责经审查由替代实现承接且当前调用点全部迁走后删除。",
+      "retention_basis": "N8 D-016; P4/T005; FR-ENTRY-001 / AC-ENTRY-1；不新增状态或阶段。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

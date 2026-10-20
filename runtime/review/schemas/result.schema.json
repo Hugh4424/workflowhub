@@ -39,8 +39,6 @@
     },
     "review_kind": {
       "enum": [
-        "mini_task.design",
-        "mini_task.implementation",
         "build_prd",
         null
       ]

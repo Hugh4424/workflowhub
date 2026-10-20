@@ -330,9 +330,9 @@ function isNormalOcrCodeReviewRequest(request) {
   const scope = request?.review_scope ?? request?.reviewScope ?? null;
   const kind = request?.review_kind ?? request?.reviewKind ?? null;
   const track = request?.review_track ?? request?.reviewTrack ?? null;
-  return track === null && ((kind === "mini_task.implementation" && request?.stage === "build-code" && scope === "phase") || kind === null && (
+  return track === null && kind === null && (
     (request?.stage === "build-code" && (scope === "phase" || scope === "integration"))
-    || (request?.stage === "verify-code" && scope === null)));
+    || (request?.stage === "verify-code" && scope === null));
 }
 
 function ocrReviewInstructionsFor(request) {
@@ -395,14 +395,13 @@ function writeOcrCurrentMaterialProjection(bundleRoot, projected, evidence) {
 }
 
 function projectOcrCodeReviewBundle(built, attachmentRoot, request, source) {
-  const miniImplementation = request.stage === "build-code" && (request.review_kind ?? request.reviewKind) === "mini_task.implementation";
   const selected = built.manifest.filter(({ path }) => path !== "packet-plan.json" && path !== "manifest.json");
   const paths = new Set(selected.map(({ path }) => path));
   for (const path of ["contracts/build-code.md", "contracts/verify-code.md", "contracts/provider-protocol.md", "skills/simplicity-guard/SKILL.md", "skills/review/SKILL.md"]) {
     if (!paths.has(path)) throw new Error(`OCR packet is missing its required reviewer body: ${path}`);
   }
   if (!paths.has("review-instructions.md") || !paths.has("source.json")
-      || (!miniImplementation && ![...paths].some((path) => /^requirements\/acceptance_criteria\.(?:md|json)$/.test(path)))
+      || ![...paths].some((path) => /^requirements\/acceptance_criteria\.(?:md|json)$/.test(path))
       || ![...paths].some((path) => path === "changes.diff" || /^diff-shards\/[^/]+\.diff$/.test(path))) {
     throw new Error("OCR packet is missing its instructions, current diff, or full acceptance criteria");
   }
@@ -425,21 +424,6 @@ function projectOcrCodeReviewBundle(built, attachmentRoot, request, source) {
       if (projectedBytes === bytes) copyFileSync(join(built.bundleRoot, entry.path), destination);
       else writeFileSync(destination, projectedBytes);
       projected.push({ path: entry.path, bytes: projectedBytes.length, sha256: sha256(projectedBytes) });
-    }
-    if (miniImplementation) {
-      const specEntries = selected.filter(entry => /^materials\/\d+-spec\.(?:md|json)$/.test(entry.path));
-      if (specEntries.length !== 1) throw new Error("mini implementation packet requires one complete current spec source");
-      const spec = specEntries[0];
-      const bytes = readFileSync(join(bundleRoot, spec.path));
-      if (!bytes.length || bytes.length !== spec.bytes || sha256(bytes) !== spec.sha256) throw new Error("mini implementation spec source is empty or changed");
-      const path = `requirements/acceptance_criteria.${spec.path.endsWith(".json") ? "json" : "md"}`;
-      if (projected.some(entry => entry.path === path)) throw new Error("mini implementation acceptance projection conflicts with an existing source");
-      mkdirSync(dirname(join(bundleRoot, path)), { recursive: true }); writeFileSync(join(bundleRoot, path), bytes, { flag: "wx", mode: 0o600 });
-      projected.push({ path, bytes: bytes.length, sha256: sha256(bytes) });
-      const instructions = join(bundleRoot, "review-instructions.md");
-      const updated = Buffer.concat([readFileSync(instructions), Buffer.from(`\n${path} contains the complete supplied mini-task spec bytes from ${spec.path}, not an extracted AC summary. Read that complete authority for acceptance together with the supplied AC trace, actual user result, tests, and coverage limits.\n`)]);
-      writeFileSync(instructions, updated);
-      Object.assign(projected.find(entry => entry.path === "review-instructions.md"), { bytes: updated.length, sha256: sha256(updated) });
     }
     // Capture only this selected diff's physical source files, never a tree.
     // Their submitted bytes, not a private Git snapshot, support reviewer lines.
@@ -1192,11 +1176,9 @@ async function recordTaskReview(context, input, values, services = {}) {
       request.phase_id=request.phase_id ?? request.phaseId ?? values["phase-id"] ?? null;
       request.subject_kind=request.subject_kind ?? "phase";
     }
-    const miniImplementation = request.stage === "build-code" && (request.review_kind ?? request.reviewKind ?? null) === "mini_task.implementation";
-    if (miniImplementation) request.review_scope = request.review_scope ?? request.reviewScope ?? "phase";
     const reviewReadScope=trustedReviewReadScope(context,request,typeof services.resolveReviewReadScope==='function' ? services.resolveReviewReadScope({task:context.task,workspace:context.workspace,stage:request.stage,phaseId:request.phase_id??null}) : undefined);
     request.materials = resolveMaterialRefs(context, request.materials,reviewReadScope);
-    const codeSurface=miniImplementation || ["build-code","verify-code"].includes(request.stage)
+    const codeSurface=["build-code","verify-code"].includes(request.stage)
       && (request.review_kind ?? request.reviewKind ?? null)===null && request.surface!=="document";
     if(codeSurface)request.surface="code";
     // Reader-only storage-root adaptation: the authenticated workspace is never mutated or published as this root.
@@ -1252,13 +1234,6 @@ async function recordTaskReview(context, input, values, services = {}) {
     return recordSimpleReviewRequest({taskDir:context.task.taskPath,request,runRound:runner,signal:services.reviewSignal ?? null});
 }
 
-export async function runMiniTaskCodeReview({ taskDir, request, services = {}, cwd = process.cwd(), signal } = {}) {
-  if (request?.stage !== "build-code" || (request.review_kind ?? request.reviewKind) !== "mini_task.implementation") throw new TypeError("mini implementation code review identity required");
-  const manifest = JSON.parse(readPlainInputFile(join(taskDir, "task.json"), "task manifest"));
-  const values = { stage: "build-code", project: manifest.project_name, task: manifest.task_id, "task-path": taskDir };
-  const context = await thinTaskContext(values, cwd);
-  return recordTaskReview(context, { request }, values, { ...services, ...(signal === undefined ? {} : { reviewSignal: signal }) });
-}
 
 export async function stageRuntimeMain(argv = process.argv.slice(2), { services = {}, cwd = process.cwd() } = {}) {
   const { command, values } = parseArgs(argv);

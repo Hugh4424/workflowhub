@@ -36,7 +36,6 @@
 | workflowhub-host-protocol | 查当前会话如何执行五阶段、记录事实及说明完成边界。 | [读取正文](workflowhub-host-protocol/SKILL.md) |
 | workflowhub-multica-sync | 明确要求核对或同步本机main与Multica的技能和agent配置。 | [读取正文](workflowhub-multica-sync/SKILL.md) |
 | wh-review | 审查材料位/配置路线、ARTIFACT + CONTRACT、身份与覆盖/三条件结论；方法来源读catalog的N3 absorbed条目。 | [读取正文](wh-review/SKILL.md) |
-| mini-task | 在独立任务工作区内交付一个小功能。 | [读取正文](mini-task/SKILL.md) |
 | plan-ceo-review | 只读审查产品前提、范围、替代方案与交付风险。 | [读取正文](plan-ceo-review/SKILL.md) |
 | plan-design-review | 只读审查UI信息架构、状态、无障碍及响应布局。 | [读取正文](plan-design-review/SKILL.md) |
 | plan-eng-review | 只读审查工程顺序、接口、失败路径与验证设计。 | [读取正文](plan-eng-review/SKILL.md) |

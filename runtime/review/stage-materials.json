@@ -120,55 +120,6 @@
         "design_alignment"
       ]
     },
-    "mini-task/design": {
-      "contract": "contracts/mini-task-design.md",
-      "problem_order": [
-        "still_small",
-        "scope",
-        "states",
-        "risks",
-        "tests",
-        "rollback"
-      ],
-      "semantic_fields": [
-        "raw_requirement",
-        "decision_log",
-        "spec",
-        "plan",
-        "tasks",
-        "objective_facts",
-        "risks",
-        "rollback",
-        "phase_authorities",
-        "phase_index"
-      ]
-    },
-    "mini-task/implementation": {
-      "contract": "contracts/mini-task-implementation.md",
-      "problem_order": [
-        "spec_conformance",
-        "correctness",
-        "necessity",
-        "user_result",
-        "scope_boundary"
-      ],
-      "semantic_fields": [
-        "raw_requirement",
-        "decision_log",
-        "spec",
-        "plan",
-        "tasks",
-        "test_evidence",
-        "ac_trace",
-        "user_result",
-        "coverage_limits",
-        "skip_reasons",
-        "remaining_risks",
-        "change_map",
-        "phase_authorities",
-        "phase_index"
-      ]
-    },
     "build-prd": {
       "contract": "contracts/build-prd.md",
       "problem_order": [
@@ -371,65 +322,6 @@
       ],
       "generated": [
         "review_instructions"
-      ],
-      "forbidden": []
-    }
-  },
-  "mini_task": {
-    "design": {
-      "source_bundle": "none",
-      "required": [
-        "raw_requirement",
-        "decision_log",
-        "spec",
-        "review_instructions"
-      ],
-      "optional": [
-        "objective_facts",
-        "context_map",
-        "evidence_map",
-        "plan",
-        "tasks",
-        "phase_authorities",
-        "phase_index"
-      ],
-      "generated": [
-        "review_instructions"
-      ],
-      "forbidden": [
-        "changes_diff",
-        "changed_files",
-        "test_evidence",
-        "ac_trace",
-        "user_result"
-      ]
-    },
-    "implementation": {
-      "source_bundle": "diff",
-      "required": [
-        "raw_requirement",
-        "decision_log",
-        "spec",
-        "test_evidence",
-        "ac_trace",
-        "user_result",
-        "coverage_limits",
-        "skip_reasons",
-        "remaining_risks",
-        "review_instructions"
-      ],
-      "optional": [
-        "context_map",
-        "evidence_map",
-        "plan",
-        "tasks",
-        "phase_authorities",
-        "phase_index"
-      ],
-      "generated": [
-        "review_instructions",
-        "change_map",
-        "test_summary"
       ],
       "forbidden": []
     }

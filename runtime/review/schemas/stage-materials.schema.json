@@ -6,7 +6,6 @@
     "version",
     "surfaces",
     "stages",
-    "mini_task",
     "non_stage"
   ],
   "properties": {
@@ -21,8 +20,6 @@
         "build-plan",
         "build-code/phase",
         "verify-code",
-        "mini-task/design",
-        "mini-task/implementation",
         "build-prd"
       ],
       "properties": {
@@ -39,12 +36,6 @@
           "$ref": "#/$defs/surface"
         },
         "verify-code": {
-          "$ref": "#/$defs/surface"
-        },
-        "mini-task/design": {
-          "$ref": "#/$defs/surface"
-        },
-        "mini-task/implementation": {
           "$ref": "#/$defs/surface"
         },
         "build-prd": {
@@ -107,22 +98,6 @@
       "properties": {
         "build_prd": {
           "$ref": "#/$defs/rule"
-        }
-      },
-      "additionalProperties": false
-    },
-    "mini_task": {
-      "type": "object",
-      "required": [
-        "design",
-        "implementation"
-      ],
-      "properties": {
-        "design": {
-          "$ref": "#/$defs/rule"
-        },
-        "implementation": {
-          "$ref": "#/$defs/miniImplementationRule"
         }
       },
       "additionalProperties": false
@@ -386,89 +361,6 @@
               "type": "array"
             }
           },
-          "type": "object"
-        }
-      ]
-    },
-    "miniImplementationRule": {
-      "allOf": [
-        {
-          "$ref": "#/$defs/rule"
-        },
-        {
-          "properties": {
-            "source_bundle": {
-              "const": "diff"
-            }
-          },
-          "allOf": [
-            {
-              "properties": {
-                "required": {
-                  "contains": {
-                    "const": "test_evidence"
-                  },
-                  "type": "array"
-                }
-              },
-              "type": "object"
-            },
-            {
-              "properties": {
-                "required": {
-                  "contains": {
-                    "const": "ac_trace"
-                  },
-                  "type": "array"
-                }
-              },
-              "type": "object"
-            },
-            {
-              "properties": {
-                "required": {
-                  "contains": {
-                    "const": "user_result"
-                  },
-                  "type": "array"
-                }
-              },
-              "type": "object"
-            },
-            {
-              "properties": {
-                "required": {
-                  "contains": {
-                    "const": "coverage_limits"
-                  },
-                  "type": "array"
-                }
-              },
-              "type": "object"
-            },
-            {
-              "properties": {
-                "required": {
-                  "contains": {
-                    "const": "skip_reasons"
-                  },
-                  "type": "array"
-                }
-              },
-              "type": "object"
-            },
-            {
-              "properties": {
-                "required": {
-                  "contains": {
-                    "const": "remaining_risks"
-                  },
-                  "type": "array"
-                }
-              },
-              "type": "object"
-            }
-          ],
           "type": "object"
         }
       ]

@@ -96,16 +96,12 @@ const sidecarRejections = {
   close: 'const SIDECARS = ["quality/", "evidence/", ".multica/", "qa-artifacts/"];',
   closeUse: 'const unsafe = all.filter((p) => SIDECARS.some((prefix) => p.startsWith(prefix) || p.startsWith(`specs/${taskId}/${prefix}`)));',
   closeThrow: 'if (unsafe.length) throw failure("CLOSE_EXECUTION_SIDECARS", `publish task-owned execution sidecars before close: ${unsafe.join(", ")}`);',
-  ignored: 'if(ignored.some(path=>["quality/","evidence/",".multica/","qa-artifacts/"].some(prefix=>path.startsWith(prefix)||path.startsWith(`specs/${c.manifest.task_id}/${prefix}`))))throw fail("EXECUTION_SIDECAR","ignored task sidecars must be published before progress commit");',
-  changed: 'if (["quality/", "evidence/", ".multica/", "qa-artifacts/"].some(prefix => path.startsWith(prefix) || path.startsWith(`specs/${c.manifest.task_id}/${prefix}`))) throw fail("EXECUTION_SIDECAR", "publish task sidecars before preserving progress");',
 };
 
 function sidecarDataView(repoPath, source) {
   const closePath = "core/task-close.mjs";
-  const miniPath = "skills/mini-task/scripts/mini-task-runner.mjs";
-  if (repoPath !== closePath && repoPath !== miniPath) return { text: source, reason: "" };
-  const close = repoPath === closePath ? source : readFileSync(join(repoRoot, closePath), "utf8");
-  const mini = repoPath === miniPath ? source : readFileSync(join(repoRoot, miniPath), "utf8");
+  if (repoPath !== closePath) return { text: source, reason: "" };
+  const close = source;
   const exactLine = (text, statement) => text.split("\n").filter(line => line.trim() === statement).length === 1;
   const inside = (text, start, end, statements) => {
     const first = text.indexOf(start);
@@ -115,11 +111,9 @@ function sidecarDataView(repoPath, source) {
   const valid = exactLine(close, sidecarRejections.close)
     && inside(close, "function assertNoSidecars(root, taskId) {", "\nfunction sourceState(root, taskId) {", [sidecarRejections.closeUse, sidecarRejections.closeThrow])
     && close.includes("function sourceState(root, taskId) {\n  assertNoSidecars(root, taskId);")
-    && exactLine(close, "assertNoSidecars(plan.worktree_root, plan.task_id);")
-    && inside(mini, "function state(c) {", "\nfunction matchingAuthorization(", [sidecarRejections.ignored, sidecarRejections.changed])
-    && exactLine(mini, "state(c); // Reject a late execution sidecar before the commit.");
+    && exactLine(close, "assertNoSidecars(plan.worktree_root, plan.task_id);");
   if (!valid) return { text: source, reason: "; sidecar rejection contract mismatch" };
-  const statements = repoPath === closePath ? [sidecarRejections.close] : [sidecarRejections.ignored, sidecarRejections.changed];
+  const statements = [sidecarRejections.close];
   return {
     text: source.split("\n").map(line => statements.includes(line.trim()) ? line.replace('".multica/"', '"<execution-sidecar>/"') : line).join("\n"),
     reason: "",

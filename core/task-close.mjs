@@ -363,7 +363,7 @@ export async function prepareDeliveryClosePlan({ taskDir, delivery = {}, closeMo
   try { taskType = declaredTaskType(readFile(c.worktree, `specs/${c.manifest.task_id}/decision-log.md`).toString("utf8")); }
   catch (error) { if (error.code !== "ENOENT") throw error; }
   const mode = taskType === "规划任务" ? "planning" : closeMode ?? delivery.close_mode ?? "ordinary";
-  if (!["ordinary", "mini-task", "planning"].includes(mode)) throw failure("CLOSE_MODE", "unsupported close mode");
+  if (!["ordinary", "planning"].includes(mode)) throw failure("CLOSE_MODE", "unsupported close mode");
   const taskBranch = git(c.worktree, ["branch", "--show-current"]), targetBranch = delivery.target_branch ?? "main", remote = delivery.remote ?? "origin";
   source.remote_identity = remoteIdentity(c, remote);
   if (delivery.task_branch !== undefined && delivery.task_branch !== taskBranch) throw failure("CLOSE_TASK_BRANCH", "declared task branch differs from actual Git");

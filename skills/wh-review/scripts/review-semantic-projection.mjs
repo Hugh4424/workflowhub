@@ -21,7 +21,6 @@ function canonical(value) {
 
 function surfaceName({ stage, review_track = null, review_scope = null, review_kind = null } = {}) {
   if (review_kind === "build_prd") return "build-prd";
-  if (review_kind === "mini_task.design" || review_kind === "mini_task.implementation") return `mini-task/${review_kind.split(".")[1]}`;
   if (stage === "make-decision") return `${stage}/${review_track ?? ""}`;
   if (stage === "build-code") return `${stage}/${review_scope ?? "phase"}`;
   return stage;

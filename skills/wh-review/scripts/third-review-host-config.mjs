@@ -198,7 +198,6 @@ function command(value) {
 
 const REVIEW_STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 const DECISION_TRACKS = new Set(["direction", "detail"]);
-const MINI_TASK_REVIEW_KINDS = new Set(["mini_task.design", "mini_task.implementation"]);
 const NON_STAGE_REVIEW_KINDS = new Set(["build_prd"]);
 const REVIEW_MODES = new Set(["single_round", "adaptive", "full_only", "full_on_structural_rework"]);
 const SUPPORTED_PROVIDER_IDS = new Set([
@@ -249,7 +248,6 @@ function referencedProfileNames(value) {
   const names = new Set();
   const routes = [
     ...routeEntries(value?.stages ?? {}).map(({ route }) => route),
-    ...miniTaskRouteEntries(value?.mini_task).map(({ route }) => route),
     ...Object.values(value?.non_stage ?? {}),
   ];
   for (const routeValue of routes) {
@@ -280,11 +278,7 @@ function requestedProfileNames(value, { requestedStage = null, requestedTrack = 
   if (requestedStage === null && requestedReviewKind === null) return null;
   const routes = [];
   if (requestedReviewKind !== null) {
-    const configured = NON_STAGE_REVIEW_KINDS.has(requestedReviewKind)
-      ? value.non_stage?.[requestedReviewKind]
-      : value.mini_task?.[miniTaskConfigKey(requestedReviewKind)]
-        ?? value.stages?.mini_task?.[miniTaskConfigKey(requestedReviewKind)]
-        ?? value.stages?.["mini-task"]?.[miniTaskConfigKey(requestedReviewKind)];
+    const configured = value.non_stage?.[requestedReviewKind];
     if (configured) routes.push(configured);
   } else {
     const configured = value.stages?.[requestedStage];
@@ -331,7 +325,7 @@ function requireStageReviewMode(stage, configuredRoute, label) {
   if (configuredRoute.mode !== required) throw new Error(`${label}.mode must be ${required}`);
 }
 
-function requireMiniTaskReviewMode(reviewKind, configuredRoute, label) {
+function requireNonStageReviewMode(reviewKind, configuredRoute, label) {
   if (configuredRoute.mode !== "single_round") throw new Error(`${label}.mode must be single_round`);
 }
 
@@ -351,13 +345,6 @@ function validateRouteWarning(value, stage, track) {
   validateRouteProfiles(normalized, profiles, label);
 }
 
-function miniTaskRouteEntries(miniTask) {
-  return Object.entries(miniTask ?? {}).map(([key, route]) => ({ reviewKind: key.startsWith("mini_task.") ? key : `mini_task.${key}`, route }));
-}
-
-function miniTaskConfigKey(reviewKind) {
-  return reviewKind.startsWith("mini_task.") ? reviewKind.slice("mini_task.".length) : reviewKind;
-}
 
 export function validateWhReviewRoute(whReview, stage, reviewTrack = null) {
   if (!whReview) return null;
@@ -378,16 +365,10 @@ export function validateAllWhReviewRoutes(whReview) {
     requireStageReviewMode(stage, route, label);
     validateRouteProfiles(route, whReview.profiles, label);
   }
-  for (const { reviewKind, route } of miniTaskRouteEntries(whReview.mini_task)) {
-    if (!MINI_TASK_REVIEW_KINDS.has(reviewKind)) throw new Error(`workflowhub host wh_review.mini_task.${reviewKind} is unsupported`);
-    const label = `workflowhub host wh_review.mini_task.${reviewKind}`;
-    requireMiniTaskReviewMode(reviewKind, route, label);
-    validateRouteProfiles(route, whReview.profiles, label);
-  }
   for (const [reviewKind, route] of Object.entries(whReview.non_stage ?? {})) {
     if (!NON_STAGE_REVIEW_KINDS.has(reviewKind)) throw new Error(`workflowhub host wh_review.non_stage.${reviewKind} is unsupported`);
     const label = `workflowhub host wh_review.non_stage.${reviewKind}`;
-    requireMiniTaskReviewMode(reviewKind, route, label);
+    requireNonStageReviewMode(reviewKind, route, label);
     validateRouteProfiles(route, whReview.profiles, label);
   }
   return [];
@@ -398,12 +379,8 @@ function whReviewPolicy(value, { requestedStage = null, requestedTrack = null, r
   if (!value || typeof value !== "object" || Array.isArray(value) || value.version !== 2 || !value.stages || typeof value.stages !== "object" || Array.isArray(value.stages)) throw new Error("workflowhub host wh_review must be version 2 with stages");
   if (Object.hasOwn(value, "profiles")) throw new Error("workflowhub host wh_review.profiles is not supported; migrate provider definitions to 3rd-review config");
   if (Object.hasOwn(value, "priority")) throw new Error("workflowhub host wh_review.priority is not supported; migrate provider definitions to 3rd-review config");
-  for (const key of Object.keys(value)) if (!["version", "stages", "mini_task", "non_stage"].includes(key)) throw new Error("workflowhub host wh_review." + key + " is not supported");
-  const embeddedMiniTask = value.stages.mini_task ?? value.stages["mini-task"];
-  if (embeddedMiniTask !== undefined && value.mini_task !== undefined) throw new Error("workflowhub host wh_review mini-task routes must have one config location");
+  for (const key of Object.keys(value)) if (!["version", "stages", "non_stage"].includes(key)) throw new Error("workflowhub host wh_review." + key + " is not supported");
   const configuredStages = { ...value.stages };
-  delete configuredStages.mini_task;
-  delete configuredStages["mini-task"];
   const stages = {};
   for (const [stage, configured] of Object.entries(configuredStages)) {
     if (!REVIEW_STAGES.has(stage)) throw new Error("workflowhub host wh_review.stages." + stage + " is unsupported");
@@ -445,7 +422,7 @@ function whReviewPolicy(value, { requestedStage = null, requestedTrack = null, r
       if (!NON_STAGE_REVIEW_KINDS.has(reviewKind)) throw new Error(`${label} is unsupported`);
       try {
         const configured = route(item, label);
-        requireMiniTaskReviewMode(reviewKind, configured, label);
+        requireNonStageReviewMode(reviewKind, configured, label);
         nonStage[reviewKind] = configured;
       } catch (error) {
         if (requestedStage === null || requestedReviewKind === reviewKind) throw error;
@@ -453,29 +430,10 @@ function whReviewPolicy(value, { requestedStage = null, requestedTrack = null, r
       }
     }
   }
-  const miniTask = {};
-  const rawMiniTask = value.mini_task ?? embeddedMiniTask;
-  if (rawMiniTask !== undefined) {
-    if (!rawMiniTask || typeof rawMiniTask !== "object" || Array.isArray(rawMiniTask)) throw new Error("workflowhub host wh_review.mini_task must be an object");
-    for (const [configuredKind, item] of Object.entries(rawMiniTask)) {
-      const reviewKind = configuredKind.startsWith("mini_task.") ? configuredKind : `mini_task.${configuredKind}`;
-      const label = `workflowhub host wh_review.${reviewKind}`;
-      if (!MINI_TASK_REVIEW_KINDS.has(reviewKind)) throw new Error(`${label} is unsupported`);
-      try {
-        const configured = route(item, label);
-        requireMiniTaskReviewMode(reviewKind, configured, label);
-        miniTask[miniTaskConfigKey(reviewKind)] = configured;
-      } catch (error) {
-        if (requestedStage === null || requestedReviewKind === reviewKind) throw error;
-        miniTask[miniTaskConfigKey(reviewKind)] = { __invalid_route: error.message };
-      }
-    }
-  }
   const policy = {
     version: 2,
     stages,
     ...(Object.keys(nonStage).length ? { non_stage: nonStage } : {}),
-    ...(Object.keys(miniTask).length ? { mini_task: miniTask } : {}),
   };
   if (requestedStage === null) validateAllWhReviewRoutes(policy);
   else validateWhReviewRoute(policy, requestedStage, requestedTrack);
@@ -504,11 +462,7 @@ function validateProfileDeclaration(provider, declaration, config) {
 function validateWhReviewProfileDeclarations(whReview, config, { requestedStage = null, requestedTrack = null, requestedReviewKind = null } = {}) {
   if (!whReview) return;
   const providers = requestedReviewKind !== null
-    ? [...new Set([...(NON_STAGE_REVIEW_KINDS.has(requestedReviewKind)
-      ? (whReview.non_stage?.[requestedReviewKind]?.initial ?? [])
-      : (whReview.mini_task?.[miniTaskConfigKey(requestedReviewKind)]?.initial ?? [])), ...(NON_STAGE_REVIEW_KINDS.has(requestedReviewKind)
-      ? (whReview.non_stage?.[requestedReviewKind]?.closure ?? [])
-      : (whReview.mini_task?.[miniTaskConfigKey(requestedReviewKind)]?.closure ?? []))])]
+    ? [...new Set([...(whReview.non_stage?.[requestedReviewKind]?.initial ?? []), ...(whReview.non_stage?.[requestedReviewKind]?.closure ?? [])])]
     : requestedStage === null
     ? Object.keys(whReview.profiles)
     : [...new Set(routeEntries(whReview.stages)
@@ -571,11 +525,10 @@ export function resolveTrustedReviewRoute(whReview, stage, reviewTrack = null, r
     const configured = whReview.non_stage?.build_prd;
     if (!configured) return null;
     const label = "workflowhub host wh_review.non_stage.build_prd";
-    requireMiniTaskReviewMode(reviewKind, configured, label);
+    requireNonStageReviewMode(reviewKind, configured, label);
     validateRouteProfiles(configured, whReview.profiles, label);
     return routeWithProfilePriorities(configured, whReview.profiles);
   }
-  if (reviewKind !== null && reviewKind !== undefined) return resolveTrustedMiniTaskReviewRoute(whReview, reviewKind);
   if (!whReview) return null;
   const configured = whReview.stages[stage];
   if (!configured) return null;
@@ -589,16 +542,6 @@ export function resolveTrustedReviewRoute(whReview, stage, reviewTrack = null, r
   return routeWithProfilePriorities(configured[reviewTrack], whReview.profiles);
 }
 
-export function resolveTrustedMiniTaskReviewRoute(whReview, reviewKind) {
-  if (!whReview) return null;
-  if (!MINI_TASK_REVIEW_KINDS.has(reviewKind)) throw new Error(`unsupported mini-task review kind ${reviewKind}`);
-  const configured = whReview.mini_task?.[miniTaskConfigKey(reviewKind)];
-  if (!configured) return null;
-  const label = `workflowhub host wh_review.mini_task.${reviewKind}`;
-  requireMiniTaskReviewMode(reviewKind, configured, label);
-  validateRouteProfiles(configured, whReview.profiles, label);
-  return routeWithProfilePriorities(configured, whReview.profiles);
-}
 
 /**
  * Select the complete first usable review tier from the host-owned broker

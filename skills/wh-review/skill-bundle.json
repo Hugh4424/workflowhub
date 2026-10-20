@@ -7,8 +7,6 @@
     "contracts/build-plan.md",
     "contracts/build-prd.md",
     "contracts/make-decision.md",
-    "contracts/mini-task-design.md",
-    "contracts/mini-task-implementation.md",
     "contracts/provider-protocol.md",
     "contracts/verify-code.md",
     "contracts/workflowhub-result.v1.json",

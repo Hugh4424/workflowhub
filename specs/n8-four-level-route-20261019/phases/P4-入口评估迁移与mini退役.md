@@ -16,7 +16,7 @@ P0 在场（材料选节状态，不是执行进度）：
 ## Phase 契约头
 
 - **Global spec**：`spec.md#实现设计全局权威`
-- **Write set**：`workflows/make-decision/scripts/entry-evaluation.mjs`；`workflows/make-decision/SKILL.md`；`workflows/make-decision/steps.json`；`workflows/make-decision/skill-deps.yaml`；`skills/catalog.yaml`；`skills/reuse-registry.md`；`docs/architecture/move-map.json`；`runtime/review/review-policy.mjs`；`runtime/review/stage-materials.json`；`runtime/review/ocr-delegation-adapter.mjs`；`runtime/review/schemas/attempt.schema.json`；`runtime/review/schemas/result.schema.json`；`runtime/review/schemas/stage-materials.schema.json`；`skills/wh-review/SKILL.md`；`skills/wh-review/skill-bundle.json`；`skills/wh-review/stage-skill-plan.json`；`skills/wh-review/scripts/review-materials.mjs`；`skills/wh-review/scripts/review-semantic-projection.mjs`；`skills/wh-review/scripts/simple-review-runner.mjs`；`skills/wh-review/scripts/third-review-host-config.mjs`；`skills/wh-review/scripts/__tests__/review-semantic-projection.test.mjs`；`skills/wh-review/scripts/__tests__/simple-contracts.test.mjs`；`skills/wh-review/scripts/__tests__/third-review-host-config.test.mjs`；`skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs`；`tools/cli/stage-runtime.mjs`；`core/task-close.mjs`；`skills/decision-log/templates/decision-log-template.md`；`skills/spec-plan/templates/phase-template.md`；`tests/contract/entry-evaluation.test.mjs`；`tests/contract/ocr-delegation-route.test.mjs`；`tests/host-independence.test.mjs`；`tests/contract/card03-review-orchestration.test.mjs`；`tests/contract/review-materials-contract.test.mjs`；`tests/contract/verify-architect-acceptance.test.mjs`；`tests/review/review-record-route.test.mjs`；`GLOSSARY.md`；`docs/standard-workflow.md`
+- **Write set**：`workflows/make-decision/scripts/entry-evaluation.mjs`；`workflows/make-decision/SKILL.md`；`workflows/make-decision/steps.json`；`workflows/make-decision/skill-deps.yaml`；`skills/catalog.yaml`；`skills/reuse-registry.md`；`docs/architecture/move-map.json`；`runtime/review/review-policy.mjs`；`runtime/review/stage-materials.json`；`runtime/review/ocr-delegation-adapter.mjs`；`runtime/review/schemas/attempt.schema.json`；`runtime/review/schemas/result.schema.json`；`runtime/review/schemas/stage-materials.schema.json`；`skills/wh-review/SKILL.md`；`skills/wh-review/skill-bundle.json`；`skills/wh-review/stage-skill-plan.json`；`skills/wh-review/scripts/review-materials.mjs`；`skills/wh-review/scripts/review-semantic-projection.mjs`；`skills/wh-review/scripts/simple-review-runner.mjs`；`skills/wh-review/scripts/third-review-host-config.mjs`；`skills/wh-review/scripts/__tests__/review-semantic-projection.test.mjs`；`skills/wh-review/scripts/__tests__/simple-contracts.test.mjs`；`skills/wh-review/scripts/__tests__/third-review-host-config.test.mjs`；`skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs`；`tools/cli/stage-runtime.mjs`；`core/task-close.mjs`；`skills/decision-log/templates/decision-log-template.md`；`skills/spec-plan/templates/phase-template.md`；`tests/contract/entry-evaluation.test.mjs`；`tests/contract/ocr-delegation-route.test.mjs`；`tests/host-independence.test.mjs`；`tests/contract/card03-review-orchestration.test.mjs`；`tests/contract/review-materials-contract.test.mjs`；`tests/contract/verify-architect-acceptance.test.mjs`；`tests/review/review-record-route.test.mjs`；`GLOSSARY.md`；`docs/standard-workflow.md`；`skills/mini-task/SKILL.md`；`skills/mini-task/scripts/mini-task-runner.mjs`；`skills/mini-task/skill-bundle.json`；`skills/wh-review/contracts/mini-task-design.md`；`skills/wh-review/contracts/mini-task-implementation.md`；`tests/integration/mini-task-delivery.test.mjs`；`tests/integration/mini-task-a-resume.test.mjs`；`specs/n8-four-level-route-20261019/spec.md`；`specs/n8-four-level-route-20261019/phases/P4-入口评估迁移与mini退役.md`；`specs/n8-four-level-route-20261019/phases/index.md`
 - **Dependency**：P3
 - **Consumer**：P5 的入口路由作者、P7 验收者、技能目录与审查合同读者
 - **gate_cmd**：`node node_modules/vitest/vitest.mjs run tests/contract/entry-evaluation.test.mjs tests/contract/ocr-delegation-route.test.mjs tests/host-independence.test.mjs tests/contract/review-materials-contract.test.mjs tests/contract/card03-review-orchestration.test.mjs tests/contract/verify-architect-acceptance.test.mjs tests/review/review-record-route.test.mjs skills/wh-review/scripts/__tests__/review-semantic-projection.test.mjs skills/wh-review/scripts/__tests__/simple-contracts.test.mjs skills/wh-review/scripts/__tests__/third-review-host-config.test.mjs skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs && node tools/cli/check-skill-consistency.mjs --root "$PWD"`
@@ -25,6 +25,9 @@ P0 在场（材料选节状态，不是执行进度）：
 - **STOP**：入口评估行为改变、调用点遗漏、或删除后仍有当前消费者时停；回本卡实施者核引用扫描与调用点，保留原失败；历史原件只读保留，不因校验失败而回删。
 - **覆盖 AC**：AC-ENTRY-1（函数子面主验）、AC-MAT-3（主验）
 - **Done**：AC-ENTRY-1 的函数子面与 AC-MAT-3 按原判据逐条件核；新模块导出新名且返回语义不变（`choices` 的 mini 品牌改名有记录）、旧模块与旧调用点删除、目录与枚举扫描零当前消费者、历史原件仍在；独立审查事实与未覆盖项写明。
+
+- **规则锚**：`spec.md`「入口分级（ENTRY）」「技能与退役（SKILL）」；FR-ENTRY-001 的「入口评估复用现有函数与风险事实，不新增任务字段、不改 `TASK_TYPES` 受控值」；AC-MAT-3；`decision-log.md`「D-016 — mini-task 路线删除，历史审查身份保留」决定正文；`spec.md`「RISK-008」。入口返回语义保持，只有 `choices` 首值 `shrink-mini-task` → `shrink-scope`。P2 `result.schema.json#/allOf/0/then` 的 build-code＋review_kind=null 窄 null phase 规则保持。
+- **材料变更影响**：只补本卡规则锚、TCR、实际写集及执行证据；全局规格仅同步已授权实际文件投影，不改方向、AC与风险。历史ADR、退休kind拒绝负例及历史原件中的mini文字保留；零当前消费者不等于零字符串。
 
 ## 工作包声明（人读事实）
 
@@ -73,6 +76,10 @@ P0 在场（材料选节状态，不是执行进度）：
 - **删除**：`skills/mini-task/SKILL.md`、`skills/mini-task/scripts/mini-task-runner.mjs`、`skills/mini-task/skill-bundle.json`、`skills/wh-review/contracts/mini-task-design.md`、`skills/wh-review/contracts/mini-task-implementation.md`、`tests/integration/mini-task-delivery.test.mjs`、`tests/integration/mini-task-a-resume.test.mjs`
 - **禁止改动**：`specs/archive/**`、`docs/archive/**`、`quality/**`、`.planning/**`、`graphify-out/**` 的历史原件；`skills/answer-as-page/**`；`runtime/task/portable-workflow-run.mjs`；不删除任何历史 review/facts 文件。
 
+- **本机配置运维例外**：P4 同向本机运维例外：真实 loader `runtime/review/ocr-delegation-adapter.mjs#loadTrustedOcrConfig` 与 `skills/wh-review/scripts/third-review-host-config.mjs#loadTrustedThirdReviewConfig` 默认消费 `/Users/Hugh/.config/workflowhub/config.json`。D-016 已批准 mini 路线及身份退役；现宿主遗留 `wh_review.mini_task` 的 design/implementation 导致新 loader 报 unsupported，删该退休键是完整实施的必要收尾，不是新方向。授权源为当前用户完整实施 N8 并自行解决问题的指令（主会话本次派发转述），及 decision-log D-016；仅删除根对象下 `wh_review.mini_task`，保留 routes、stages、non_stage、provider 凭据及其余配置语义。该绝对本机路径只作本段人读运维例外，不进入相对机器写集，不新增 writer、schema、gate 或永久迁移接口。
+- **配置执行与恢复**：唯一配置写主为 phase_p4；复用 `runtime/interface/record-lock.mjs#withLock`，锁目录 `/Users/Hugh/.config/workflowhub`、锁名 `n8-mini-task-config`、`waitMs:0`；复用 safe-write 原子/create-only 原语，私密唯一备份定为 `/Users/Hugh/.config/workflowhub/config.json.n8-mini-task-retired-20261020.bak`（已核不存在；执行时再次核且拒覆盖）；主会话已确认 N7 仅写其隔离 worktree 三登记文件、无本机配置写主，已派 doc 路由启动时加载 trusted 配置，后续不动态重读。本次操作前重新核文件为普通非 alias 单链接文件，读当前 hash 并在写前比对；只在本机权限 0600 的唯一新备份保留原文件完整字节，备份不进任务审查包、不复制秘密值至 evidence。局部删除该 JSON 成员，解析比对除该键外深层语义完全一致；保原权限并原子替换，冲突或解析/比对失败即停该修改，不覆盖别人写入。既有 migrateWhReviewConfig 还会删 profiles/priority，不用于本次单键退役。恢复只从本次私密原字节备份，在确认当前 hash 仍为本次写后 hash 且无后续写入时原子恢复；不覆盖后来的合法配置。记录只留备份绝对路径/hash、字段名、删除后字段不存在、其余语义相等和 loader 预检结果，不输出 provider/route/凭据值。测试 050 的244pass/1skip仅隔离fixture通过，真实宿主须删除后读回loader才可称可用；不以此宣 provider 审查质量。
+- **配置漏项来源**：`quality/evidence/2026-10-20-123-p4-config-consumer-readback.json`、`quality/tests/2026-10-20-042-p4-ocr-blocked-probe.json` 与 `043-p4-sink-blocked-probe.json`；最终受控测试边界见 `quality/evidence/2026-10-20-127-p4-tests-final-results.md`。
+
 ### 任务顺序
 
 T005 先迁函数、调用点与模板并交回可跑测试；T006 在 T005 完成后删除路线与枚举，并修到零当前消费者。T006 依赖 T005。
@@ -96,7 +103,7 @@ T005 先迁函数、调用点与模板并交回可跑测试；T006 在 T005 完�
 - **Evidence**：`quality/evidence/2026-10-20-004-p4-entry-retire.output` 与 `quality/evidence/2026-10-20-004-p4-entry-red.output`。
 - **Coverage limit**：不证明真实会话会调用新函数；不证明路由决策质量；`choices` 文本改名只在本卡记录，不回溯旧决策记录。
 - **STOP / recovery**：语义与旧函数不一致、或调用点仍有旧名时停；回本卡实施者按旧函数测试逐项对齐，不删旧测试换绿。
-- **测试变更请求**：`none`
+- **测试变更请求**：`TCR-P4-RETIRE-MINI`：依据 D-016、RISK-008、FR-SKILL-001/AC-MAT-3；独立审查 `quality/evidence/2026-10-20-062-p4-retirement-tcr-review.md`（sha256 `08adc438956a75274ac94257280ee04656ca23e7f0cde9a72a8c514e5154a5d4`）。A：mini身份/投影/派发接受改为退休kind前置拒绝，保alias/subject/错误stage与scope负例；B：mini schema/config/目录合法项改不存在/拒绝，保其它kind与P2窄null例外；C：删除两旧路线集成测试，入口行为由新入口oracle承接、旧路线由拒绝负例承接，不冒同oracle重构；D：受保护choices首值改为shrink-scope，reason/status/风险语义保持。纯路径/导出符号迁移不改oracle；ORACLE-ENTRY-FUNCTION身份保持，原RED保留。
 - **Done**：AC-ENTRY-1 函数子面与 AC-MAT-3 迁移部分按原判据核完；RED/GREEN 同 oracle；调用点零旧名；独立审查与未覆盖项写明。
 
 ### T006 — mini-task 路线、审查枚举与收口模式退役
@@ -118,7 +125,7 @@ T005 先迁函数、调用点与模板并交回可跑测试；T006 在 T005 完�
 - **Evidence**：`quality/evidence/2026-10-20-004-p4-entry-retire.output`、`quality/evidence/2026-10-20-004-p4-retire-red.output`、引用扫描输出。
 - **Coverage limit**：不证明 16 个历史任务与 398 个历史审查文件仍可校验（已接受风险）；不证明业务仓经验落盘。
 - **STOP / recovery**：仍有当前消费者、或删除波及历史原件时停；回本卡实施者按引用清单逐项修，历史原件若已误删从 git 历史恢复并记录。
-- **测试变更请求**：`none`（受影响测试按新事实修断言，不改变被冻结的 oracle 语义）
+- **测试变更请求**：`TCR-P4-RETIRE-MINI`：依据 D-016、RISK-008、FR-SKILL-001/AC-MAT-3；独立审查 `quality/evidence/2026-10-20-062-p4-retirement-tcr-review.md`（sha256 `08adc438956a75274ac94257280ee04656ca23e7f0cde9a72a8c514e5154a5d4`）。A：mini身份/投影/派发接受改为退休kind前置拒绝，保alias/subject/错误stage与scope负例；B：mini schema/config/目录合法项改不存在/拒绝，保其它kind与P2窄null例外；C：删除两旧路线集成测试，入口行为由新入口oracle承接、旧路线由拒绝负例承接，不冒同oracle重构；D：受保护choices首值改为shrink-scope，reason/status/风险语义保持。纯路径/导出符号迁移不改oracle；ORACLE-ENTRY-FUNCTION身份保持，原RED保留。
 - **Done**：AC-MAT-3 全部适用条件核完；引用扫描为空；未知 kind 反例通过；历史原件仍在；独立审查与已接受风险写明。
 
 ### 测试策略
@@ -156,8 +163,29 @@ AC-ENTRY-1 函数子面与 AC-MAT-3 的适用条件满足、RED/GREEN 同 oracle
 ### 交接知识（给下游 Phase 与审查的已核实事实）
 
 - 新模块路径 `workflows/make-decision/scripts/entry-evaluation.mjs` 与导出名 `evaluateEntryRoute` 是 P5 路由与流程的唯一入口名。
-- `choices` 的 mini 品牌改名是唯一行为文本变化，旧值只在历史决策记录里。
+- `choices` 的 mini 品牌改名是唯一行为文本变化，旧值保留在历史记录、迁移说明与兼容性测试原始预期；当前新函数只返回新值。
 - 历史 `mini_task.*` 审查文件保留在 `quality/reviews/` 与任务库，删除枚举后可能无法再校验，已接受。
+
+### TCR-P4-TEST-DRIFT（有界追加，oracle身份不变）
+
+- **来源与独立审查**：`quality/evidence/2026-10-20-116-p4-tests-failures-and-tcr-candidates.md` 的剩余30项；独立 `121-p4-test-drift-tcr-review.md`，sha256 `adb425bc44c5abda159fef170d5dc4b6f1e49a58a82326cc8b48659d2bca5f8a`。逐项原失败及原039保留。
+- **旧→新及当前consumer**：旧CLI publish/subject/hash-history oracle迁到现 `runReviewRecovery({taskDir,...})`→`recordSimpleReviewRequest` 和 `runReviewRound`→`runSimpleReview`；每次显式请求各派发/各留不可覆盖原件、真实task/tuple绑定、facts不新增、失败/取消/锁/alias/hardlink/subject/task隔离保持。旧Workspace oracle迁到 `openCurrentTaskWorkspace`，真实await，未登记拒绝且不预建。旧文句只按121列明现同义语义校准，受控文本变异仍须失败；Phase material fixture补真实attachmentRoot/phase_authorities，保分件和原字节。
+- **OCR约束**：calls1/legacy0、candidate flag、成功与失败成员、canonical executor/raw sink/parse diagnostics不变；先核具名canonical blocked原因再补必需材料与可信配置，不能改零派发为成功。direction合法必需三材料正例与 `implementation` forbidden派发前拒绝分开测，不能期望非法key丢弃。诊断042缺changed_files；043受控fixture未隔离HOME而读到真实全局mini配置。测试隔离配置与真实本机迁移分开，后者交材料owner，不擅改。
+- **范围/停止**：仅121明确允许的P4测试与夹具，不恢复退役生产API，不弱化质量/失败边界，不skip换绿；未找到等价当前规则或超范围diff保失败再核。原RED保留，`ORACLE-ENTRY-FUNCTION`身份不变；执行修正后的真实命令，不预写GREEN。
+
+## 当前实施读回（P4 build-code，独立质量与真实验收分列）
+
+- T005：`quality/tests/2026-10-20-036-p4-entry-red.json` exit 1，因新模块缺失而收集失败，目标 RED unavailable；`038-p4-entry-green.json` exit 0（16 passed，1 个 T006 断言暂跳过，T006 后恢复）。不把收集失败称为目标断言 RED。
+- T006：`037-p4-retire-red.json` exit 1 含退休身份接受→拒绝目标失败；该轮也有既有测试漂移，原失败全部保留。`039-p4-phase-gate.json` exit 1（34 failed / 207 passed / 1 skip），不能宣称 gate 通过；本次夹具/遗漏修复与既有漂移分列，由独立 TCR 再核冻结断言。
+- 追加诊断与修复：`046-p4-ocr-fixture-diag.json` 在受控子进程HOME及合法材料下复现 `miniImplementation is not defined`；根因为OCR模式判断残留已删除变量，改为仅按stage选build-code full_only / verify-code single_round，未放宽dispatch断言。CamelCase扫描同步删去无引用 `$defs.miniImplementationRule`。`047-p4-phase-gate.json` exit 1（240 pass / 4 fail / 1 skip，无unhandled），该时点仅OCR受控fixture未过；随后修复结果见最终050，原失败不改。
+- 源读回：`quality/evidence/2026-10-20-114-p4-retire-source-readback.json`；旧技能、合同、runner 删除，登记与真实调用点已迁。P2 的 null phase 条件结构完全保留。仅原 reason/error 品牌文本与迁移注释保留，退休kind负例及历史ADR保留，不能以字符串未清零判仍有路线。
+- 最终测试：`quality/tests/2026-10-20-050-p4-phase-gate.json` exit 0，11文件通过、244 passed / 1 skipped、无unhandled；同字面gate在测试后实际执行目录checker，current declarations consistent，report-only漂移及材料unknown仍保留。入口最终18 case通过；唯一既有skip为ORACLE-P3-ROUTE non_stage/build_prd report-only seam，不以新增skip换绿。完整回传 `quality/evidence/2026-10-20-127-p4-tests-final-results.md`。
+- 本 Phase 自带判据小结：AC-ENTRY-1函数子面 pass（050），AC-MAT-3入口迁移/路线与枚举退役子面 pass（050及114/123）；全AC-ENTRY-1会话路由质量及AC-MAT-3四套流程/31技能完整验收尚未覆盖，P5/P7 owner按本卡原范围承接。历史16/398是旧交接背景，当前数量及全部历史字节未核，不能冒全量保全；本次真实diff无历史改动、具名将删原件已保。
+- 本卡审查已取得真实终态：正式035顶层unavailable / REVIEW_CANCELLED / CLI130；Kimi、Codex各completed/ok且空finding，AG因packet工具5deny/0allow不可读而取消，parse null，raw032另保503 no capacity；不改写为available或质量通过。Standards136与Spec135空finding并列、same_source_degraded，不合并为异源通过；P4无新增可修finding、不制造处置项，原discarded_facts缺键不造[]。实际提交另据审后commit原件；真实provider执行未测（受控runner/provider字节fixture不冒真实外部服务），本机运维范围由独立材料owner130/131限定；132已完成仅删 `wh_review.mini_task` 的私有备份/锁内原子迁移，其余JSON值深等相同、600权限保持、锁释放，当前真实loader与build-code prepare读回可用，未执行provider。备份只在本机私有路径，不入任务或审查包。
+
+- checker本次影响核对：`quality/evidence/2026-10-20-133-p4-checker-affected-readback.md`。stage-closeout的make-decision当前deps尚未接由P5/T008/T009承接；resolving-merge-conflicts为既有条件间接consumer、checker只计直接deps；模板unknown/旧index-template报告按真实源边界分列，不泛称全部材料通过，不为消报告新增调用或扩改模板。
+
+- Done逐条件读回：AC-ENTRY-1函数子面 pass（050/127）；AC-MAT-3当前退役子面 pass（050/132/133），旧模块/路由/枚举无当前消费者；完整AC跨卡部分 incomplete（P5/P7具名承接，未偷跑真实验收）；独立审查终态 unavailable（正式035及140/141原失败并列两成功来源），不以空finding冒quality pass。阶段仍in-progress，不进入verify-code。
 
 ## L2 — 可删除参考
 

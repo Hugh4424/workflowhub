@@ -676,20 +676,6 @@ skills:
     local_changes: authoring review 保留既有 public run；正常 build-code 每 Phase 一次 OCR，最终 aggregate 与逐 AC 结果后由 verify-code 对最终 worktree 做一次 OCR；历史 integration 事实只读；两次代码审查由现有 review/run receipt 消费；保留路径安全与原始 provenance；来源为本仓既有review-record-route及provider协议，本文不将宿主工具声明当外部文本来源。
     dependency_closure: ["skills/intake-decision-review","skills/plan-ceo-review","skills/plan-design-review","skills/plan-eng-review","skills/review","skills/simplicity-guard","skills/spec-specify"]
     update_policy: 只通过本地合同和异源审查演进，禁止第二 review 路径
-  - name: mini-task
-    path: skills/mini-task/SKILL.md
-    local_version: 1.0.0
-    last_reviewed_at: '2026-07-14'
-    status: native
-    metrics_enabled: false
-    purpose: 在独立 task 中紧凑交付小功能并恢复被阻塞的 A
-    design_idea: 复用四材料、两类专用审查、真实结果和唯一 task-close
-    standalone: true
-    used_by_stages: *stages_make_decision
-    upstream: []
-    local_changes: 薄 runner；不新增第六 stage、第五材料、关系对象或公共 runtime；mini-task Git close 复用 task-close，A 恢复使用认证 workspace 和普通 merge
-    dependency_closure: ["skills/architect-code-review","skills/wh-review"]
-    update_policy: 随 mini-task 四材料、审查和 task-close 合同人工比较
   - name: plan-ceo-review
     path: skills/plan-ceo-review/SKILL.md
     local_version: 1.0.0
