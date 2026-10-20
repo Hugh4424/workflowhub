@@ -171,8 +171,9 @@ test('SOURCE material bytes use authenticated checkout/index only, never main or
  const f=setup(t);writeFileSync(join(f.materials,'plan.md'),'POISON'.repeat(100));writeFileSync(join(f.materials,'tasks.md'),'POISON'.repeat(100));ok(first(f));const expected=Object.values(f.materialText).reduce((sum,text)=>sum+Buffer.byteLength(text),0);numeric(readLedger(f).rows[0][23],expected);
  rmSync(join(f.materials,'phases/P1.md'));assert.equal(record(f).status,1);assert.match(readLedger(f).rows.at(-1)[23],/^unavailable:/);
 });
-test('SOURCE make-decision counts only decision-log; missing later material is not zero',t=>{
- const f=setup(t);rmSync(join(f.materials,'spec.md'));ok(first(f,'make-decision'));numeric(readLedger(f).rows[0][23],9);const r=record(f,'build-plan');assert.equal(r.status,1);assert.match(readLedger(f).rows.at(-1)[23],/^unavailable:/);
+test('SOURCE make-decision counts spec and indexed Phases; missing material is unavailable, not zero',t=>{
+ const f=setup(t);ok(first(f,'make-decision'));const expected=Object.values(f.materialText).reduce((sum,text)=>sum+Buffer.byteLength(text),0);numeric(readLedger(f).rows[0][23],expected);
+ rmSync(join(f.materials,'spec.md'));for(const stage of ['make-decision','build-plan']){const r=record(f,stage);assert.equal(r.status,1);assert.equal(readLedger(f).rows.at(-1)[23],'unavailable:material_source_unavailable');}
 });
 test('SOURCE current stage provider raw usage retained; historical report not re-counted and bad reported usage exposed',t=>{
  const f=setup(t),ref='quality/reviews/current.json',report={completed_at:new Date().toISOString(),review_facts:{providers:[{provider:'fixture-provider',status:'completed',usage:{prompt_tokens:19,unusual_count:7},usage_status:'reported'}],usage_coverage:{reported:1,total:1}}};mkdirSync(dirname(join(f.taskPath,ref)),{recursive:true});writeFileSync(join(f.taskPath,ref),JSON.stringify(report));writeFileSync(join(f.taskPath,'facts.jsonl'),JSON.stringify({record_kind:'stage',task_id:'cost-task',stage:'build-plan',review_result_ref:{value:ref}})+'\n');ok(first(f));let value=JSON.parse(readLedger(f).rows[0][22]);assert.ok(JSON.stringify(value).includes('fixture-provider'));assert.ok(JSON.stringify(value).includes('prompt_tokens'));assert.ok(JSON.stringify(value).includes('19'));assert.ok(JSON.stringify(value).includes(ref));

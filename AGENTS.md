@@ -93,7 +93,7 @@
 
 ## vNext 永久实施边界
 
-- post 的 `make-decision` 写 `decision-log.md`，`build-plan` 写承载全局实现设计的 `spec.md`、独立 `phases/P<n>.md` 和纯指针 `phases/index.md`，不双写 `plan.md/tasks.md`；`build-code`、`verify-code` 消费当前材料和 task facts。pre/history 仍按 `decision-log.md/spec.md/plan.md/tasks.md` 旧四材料读取。材料形态变化不新增 stage、gate 或第二套进度权威。
+- post 的 `make-decision` 允许写读 `decision-log.md`、`spec.md`、纯指针 `phases/index.md` 与索引内独立 Phase；这是对 N6「只许 decision-log」材料边界的显式覆盖，用于轻档在同一阶段完成规格与实施，理由与影响见 [ADR-0051](docs/adr/0051-light-tasks-complete-inside-make-decision.md)。允许集合不改变复杂流程的必需材料或阶段身份。`build-plan` 写承载全局实现设计的 `spec.md`、独立 `phases/P<n>.md` 和纯指针 `phases/index.md`，不双写 `plan.md/tasks.md`；`build-code`、`verify-code` 消费当前材料和 task facts。pre/history 仍按 `decision-log.md/spec.md/plan.md/tasks.md` 旧四材料读取。材料形态变化不新增 stage、gate 或第二套进度权威。
 - vNext task 目录只保留 `task.json`、`facts.jsonl`、`quality/reviews/`、`quality/tests/`、`index.json` 及必要的 `quality/evidence/`；C6 规定移除 active `quality/verify.v1` object graph、`product_release` 与 `status_groups`，不创建旧 accepted、run、receipt、review-flow 或独立进度对象。`facts.jsonl` 现有 build-code stage row 可原位保存一个当前 `phase_progress` 游标；现有 `run` 写入、`status` 读取。游标只定位续跑位置，不证明完成、不阻止继续，也不保存历史序列；材料版本变化时读为 stale，代码快照变化本身不使它 stale。`specs/archive/**`、`docs/research/**` 只读保留。
 - 禁止 successor/predecessor、selector、snapshot lineage、phase 历史 trace、historical correction、replacement review、reopen、rebind、continuation、recovery、checkpoint permit；旧记录只读，不作为新 task writer。唯一进度例外是上述单行当前游标，不另建 projection 或账本。
 - review、test、evidence、history、inventory、complexity 都是事实，不是继续工作的许可证；`unknown`、`unavailable`、`incomplete` 不能阻止同 task 修复，但缺失质量事实不能被宣称为完成。

@@ -42,7 +42,10 @@ const POST_PHASE_ARTIFACT = /^phases\/P[1-9][0-9]*\.md$/;
 
 const PHASE_PROGRESS_ONLY_SOURCE = "phase-progress-cursor";
 
-function isDesignArtifact(stage, name, activationCohort = "pre") {
+function isDesignArtifact(stage, name, activationCohort = "pre", materials = {}) {
+  if (stage === "make-decision" && activationCohort === "post") {
+    return materialFilesForCohort(activationCohort, materials, { stage }).includes(name);
+  }
   if (stage === "build-plan" && activationCohort === "post") {
     return name === "spec.md" || name === "phases/index.md" || POST_PHASE_ARTIFACT.test(name ?? "");
   }
@@ -1289,7 +1292,10 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
   }
   if (command === "artifact") {
     const prd = values.stage === "build-prd" && values.name === "prd.md";
-    if (!prd && !isDesignArtifact(values.stage, values.name, context.manifest.activation_cohort ?? "pre")) throw new TypeError(`unsupported ${values.stage} artifact: ${values.name}`);
+    const indexedMaterials = values.stage === "make-decision" && context.manifest.activation_cohort === "post"
+      && typeof values.name === "string" && values.name.startsWith("phases/") && values.name !== "phases/index.md"
+      ? { "phases/index.md": context.artifacts.read("phases/index.md") } : {};
+    if (!prd && !isDesignArtifact(values.stage, values.name, context.manifest.activation_cohort ?? "pre", indexedMaterials)) throw new TypeError(`unsupported ${values.stage} artifact: ${values.name}`);
     if (prd && readTaskTypeFromDecisionLog(context.artifacts.read("decision-log.md")) !== "规划任务") {
       throw new TypeError("portable build-prd writes require an explicit planning task type in the current decision-log");
     }

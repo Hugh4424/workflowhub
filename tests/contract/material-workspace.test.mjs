@@ -10,8 +10,8 @@ function phaseIndex(...rows){return `# Phase index\n\n## Execution Index\n\n| ph
 function seed(root){mkdirSync(join(root,'phases'));const files={'decision-log.md':'decision\n','spec.md':'# spec\r\n\r\n- first  \r\n  continued\r\n\r\n    code  \r\n\r\n```js\r\nconst value = 1;  \r\n```\r\n','phases/index.md':phaseIndex(['P1','phases/P1.md'],['P2','phases/P2.md']),'phases/P1.md':'phase one\n','phases/P2.md':'phase two\n'};for(const[file,body]of Object.entries(files))writeFileSync(join(root,file),body);return files;}
 afterEach(()=>{while(roots.length)rmSync(roots.pop(),{recursive:true,force:true});});
 describe('current ordinary material workspace',()=>{
-  it('reads post decision/spec/index names and decision-only stage without a retired progress pointer',()=>{
-    expect(CURRENT_MATERIAL_FILES).toEqual(['decision-log.md','spec.md','phases/index.md']);expect(materialFilesForCohort('post',{}, {stage:'make-decision'})).toEqual(['decision-log.md']);
+  it('reads post decision/spec/index names at make-decision without a retired progress pointer',()=>{
+    expect(CURRENT_MATERIAL_FILES).toEqual(['decision-log.md','spec.md','phases/index.md']);expect(materialFilesForCohort('post',{}, {stage:'make-decision'})).toEqual(['decision-log.md','spec.md','phases/index.md']);
     const root=workspace(),files=seed(root);writeFileSync(join(root,'materials-current.json'),'legacy pointer ignored\n');writeFileSync(join(root,'plan.md'),'old plan ignored');writeFileSync(join(root,'tasks.md'),'old tasks ignored');const result=inspectMaterialWorkspace(root);
     expect(result.status).toBe('working');expect(result.root).toBe(root);expect(result.files).toEqual(files);expect(result.missing).toEqual([]);expect(result.errors).toEqual([]);
   });
