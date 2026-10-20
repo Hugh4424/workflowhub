@@ -5429,6 +5429,21 @@
       "named_data_readers": [],
       "delete_condition": "流程职责退役或独立审查的替代oracle完整承接后删除，历史RED/GREEN不覆写。",
       "retention_basis": "N8 P5/T007–T009；不新增运行时。"
+    },
+    {
+      "source": "runtime/task/final-chain.mjs",
+      "destination": "runtime/task/final-chain.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "十环顺序、10×4适用矩阵、级别解析、逐环证据谓词与完成率、逐步骤事实与独立分母；纯声明/纯函数，不读文件、不写任务库",
+      "owner": "N9 build-code P1；T001首写、T002追加谓词",
+      "consumer": "tests/contract/final-chain-declarations.test.mjs",
+      "module_consumers": [
+        "tests/contract/final-chain-declarations.test.mjs"
+      ],
+      "named_data_readers": [],
+      "delete_condition": "职责被经独立审查的替代完整承接且真实消费者为零时由原owner删除；冻结断言变更按TCR。后续consumer链：P2 runner → P3负例 → P5/P6页面与刷新；仅在实际接线后更新consumer",
+      "retention_basis": "本Phase唯一声明与谓词producer；矩阵不散在run-checks与页面两处；不替代现有进度/质量owner"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"
