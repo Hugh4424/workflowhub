@@ -3,6 +3,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import yaml from "js-yaml";
 import { loadPortableWorkflowManifest, stateForStepResults, validateStepResults } from "./portable-workflow-run.mjs";
 import { RINGS, resolveLevel, evaluateRing, summarize, evaluateWorkflowSteps, summarizeWorkflow } from "./final-chain.mjs";
 
@@ -442,6 +443,10 @@ function deliveryInput(facts, taskId, read, actualCommands, declared, limits, re
     if (event?.task_id === taskId && event.stage === row.stage && event.timing_verified === true && typeof event.reached === "boolean" && text(event.reader) && text(event.observation)) {
       Object.assign(delivery,{timing_verified:true,reached:event.reached,timing_ref:eventRef});
       const field=name=>source.raw.match(new RegExp(`^${name}[：:]\\s*(.+)$`,"m"))?.[1]?.trim();
+      if (/已声明交付/.test(event.observation) && /本任务提交\s*PR/.test(field("交付目标") ?? "")) {
+        if (declared === false) { delivery.declared = undefined; limits.push(`${eventRef}: 当前已认证交付声明与decision-log明确不做冲突；保未取得，不猜选一处`); }
+        else delivery.declared = true;
+      }
       if (event.reached && /不要求合并/.test(field("交付目标")??"") && [repo,targetRepo].includes(field("目标仓库"))) {
         const candidate=actualCommands.find(command=>command.ref === field("PR 读回原件"));
         if (candidate?.verified && candidate.exit_code === 0) try {
@@ -538,6 +543,7 @@ function criterionRef(repo, ref, source, limits) {
 }
 function workflowReport(repo, taskPath, materialRoot, level, facts, actualCommands, read, limits) {
   const selected = [];
+  const skillRows = new Map(), skillConflicts = new Set();
   const stages = ["make-decision","build-plan","build-code","verify-code","build-prd"];
   const actualStages = facts.filter(row=>row.record_kind === "stage").map(row=>({stage:row.stage,ref:"facts.jsonl"}));
   let portableUnknown=false;
@@ -576,12 +582,29 @@ function workflowReport(repo, taskPath, materialRoot, level, facts, actualComman
     }
     const dependencies = optional(repo,`workflows/${stage}/skill-deps.yaml`,limits);
     if (dependencies !== null) {
-      const blocks = [...dependencies.matchAll(/- name:\s*([^\n]+)\n\s+path:\s*([^\n]+)\n\s+trigger:\s*([^\n]+)/g)];
-      for (const [,name,path,trigger] of blocks) {
-        const executions = facts.flatMap(row=>row.evidence?.value ?? []).filter(item=>item.skill_name === name.trim() && item.skill_path === path.trim() && item.trigger === trigger.trim());
+      let blocks;
+      try {
+        const declaration=yaml.load(dependencies);
+        if (declaration?.stage !== stage || !Array.isArray(declaration.skills) || declaration.skills.some(item=>!text(item?.name) || !text(item.path) || !text(item.trigger) || !safeScopePath(item.path) || !item.path.startsWith("skills/")) || new Set(declaration.skills.map(item=>item.name.trim())).size !== declaration.skills.length) throw Error("stage/skills/name/path/trigger declaration invalid");
+        blocks=declaration.skills;
+      } catch (error) { limits.push(`workflows/${stage}/skill-deps.yaml: 技能声明未取得，${error.message}；不把坏源当空集合`); continue; }
+      for (const {name,path,trigger} of blocks) {
+        const executions = facts.filter(row=>row.record_kind === "stage" && row.stage === stage).flatMap(row=>(row.evidence?.value ?? []).filter(item=>item.skill_name === name.trim() && item.skill_path === path.trim() && item.trigger === trigger.trim()).map(item=>({item,source:row.source})));
         if (!executions.length) continue;
         read(path.trim());
-        selected.push({source:path.trim(),step_slug:name.trim(),stage,route:level.value,owner_ref:path.trim(),trigger:executions[0].triggered,executed:executions[0].executed,rule_ref:executions[0].rule_ref,human_required:true,program_required:false,applicability:"on_demand"});
+        const key = `${path.trim()}\0${name.trim()}`;
+        let group = skillRows.get(key);
+        if (!group) {
+          const step = {source:path.trim(),step_slug:name.trim(),stage,route:level.value,owner_ref:path.trim(),human_required:true,program_required:false,applicability:"on_demand"};
+          group = {step,observations:[]}; skillRows.set(key,group); selected.push(step);
+        }
+        group.observations.push(...executions.map(value=>({...value,stage})));
+        const observations=group.observations.map(value=>value.item);
+        for (const field of ["triggered","executed"]) group.step[field === "triggered" ? "trigger" : field] = observations.some(item=>item[field] === true) ? true : observations.every(item=>item[field] === false) ? false : undefined;
+        group.step.rule_ref = observations.every(item=>text(item.rule_ref)) ? [...new Set(observations.map(item=>item.rule_ref))].join("; ") : undefined;
+        if (new Set(executions.map(({item})=>JSON.stringify([item.triggered,item.executed,item.rule_ref]))).size > 1) skillConflicts.add(key);
+        if (skillConflicts.has(key)) group.step.rule_ref = undefined;
+        limits.push(`${path.trim()}#${name.trim()}: ${stage} 条件观察仅取对应stage；source ${executions.map(value=>value.source).join("; ")}；同source+slug合并实际观察，不增重复分母。`);
       }
     }
   }
@@ -593,7 +616,7 @@ function workflowReport(repo, taskPath, materialRoot, level, facts, actualComman
   stageScope.source_refs = ["facts.jsonl",...routeSources,...terminalRefs];
   if (!stageScope.verified) limits.push("阶段候选或实际行来源不充分；缺阶段行不推未调用，stage_skip_rate保持null");
   if (!selected.length) return {workflow_steps:[],workflow_metrics:null};
-  const evidence = [];
+  const evidence = [...skillConflicts].map(key=>{const step=skillRows.get(key).step;return {source:step.source,step_slug:step.step_slug,conflict:true};});
   for (const row of facts) for (const entry of row.evidence?.value ?? []) {
     const command = actualCommands.find(item=>item.ref === (entry.receipt_ref ?? entry.ref));
     if (command && text(entry.source) && text(entry.step_slug)) evidence.push({source:entry.source,step_slug:entry.step_slug,program:command});

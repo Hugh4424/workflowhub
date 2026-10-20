@@ -1442,3 +1442,97 @@ describe('final-chain report decision checker trusted source bytes',()=>{
   const raw=readFileSync(copy,'utf8');put(f.repo,'tools/cli/check-decision-log-chain.mjs','console.log("different current source");\n');expect(ringAt(await report(f),2).state).toBe('unavailable');put(f.repo,'tools/cli/check-decision-log-chain.mjs',raw);expect(ringAt(await report(f),2).state).toBe('completed');
  });
 });
+
+
+// Verify raw064 finding 1: reuse P3 Review518 actual condition-observation seam;
+// no professional skill execution or new runtime outcome is claimed.
+describe('final-chain repeated real skill dependency declarations',()=>{
+  it('one actual sourced condition observation does not duplicate the same source and slug across stages',async()=>{
+    const f=taskFixture();writerIdentity(f);choice(f,'complex');controlledWorkflow(f);
+    const source='skills/stage-handoff/SKILL.md',slug='stage-handoff';
+    for(const stage of ['build-code','verify-code']) put(f.repo,`workflows/${stage}/skill-deps.yaml`,readFileSync(join(ROOT,`workflows/${stage}/skill-deps.yaml`),'utf8'));
+    put(f.repo,source,readFileSync(join(ROOT,source),'utf8'));
+    const dependency='workflows/build-code/skill-deps.yaml';
+    const request=put(f.repo,'review-condition.json',{requested:false});
+    const script=put(f.repo,'observe-review-condition.mjs',`import{readFileSync}from'node:fs';const [dependency,request]=process.argv.slice(2),input=JSON.parse(readFileSync(request,'utf8')),raw=readFileSync(dependency,'utf8'),block=raw.match(/- name: stage-handoff\\n\\s+path: ([^\\n]+)\\n(?:\\s+[^\\n]+\\n)*?\\s+trigger: ([^\\n]+)/);if(!block)throw Error('actual stage-handoff declaration unavailable');console.log(JSON.stringify({skill_name:'stage-handoff',skill_path:block[1].trim(),trigger:block[2].trim(),triggered:input.requested===true,executed:false,rule_ref:'${dependency}',observation:'Actual current declaration and controlled request; no professional skill execution claimed.'}));`);
+    mkdirSync(join(f.taskPath,'quality/tests'),{recursive:true});
+    const receipt=await captureCommand({cwd:f.repo,recordDir:join(f.taskPath,'quality/tests'),slug:'actual-review-condition',argv:[process.execPath,script,join(f.repo,dependency),request]});
+    expect(receipt.exit_code,'SETUP: actual declaration observation must run').toBe(0);
+    const observed=JSON.parse(readFileSync(receipt.output_ref,'utf8'));
+    expect(observed).toMatchObject({skill_name:slug,skill_path:source,trigger:'stage_end_human_handoff',triggered:false,executed:false});
+    await writeStageRow(f.taskPath,{stage:'build-code',source:`receipt: ${receipt.receipt_ref}; output: ${receipt.output_ref}`,evidence:{value:[{command:JSON.stringify(receipt.argv),exit_code:receipt.exit_code,failure_signature:'Actual condition observation only',receipt_ref:receipt.receipt_ref,output_ref:receipt.output_ref,...observed}]}});
+    const value=await report({taskPath:f.taskPath,materialRoot:f.materialRoot});
+    expect(value.rings).toHaveLength(10);
+    const rows=value.workflow_steps.filter(row=>row.source===source&&row.step_slug===slug);
+    expect(rows).toHaveLength(1);expect(rows[0].state).toBe('not_applicable');
+  });
+});
+
+describe('final-chain ordinary sourced delivery declaration without decision section',()=>{
+  it.each([false,true])('authenticated current delivery event alone declares the PR obligation (pr=%s)',async pr=>{
+    const f=taskFixture();choice(f,'normal');controlledWorkflow(f);
+    await deliveryEvent(f,{reached:true,pr});
+    const event='quality/evidence/delivery-event.md';
+    if(!pr) put(f.taskPath,event,readFileSync(join(f.taskPath,event),'utf8')+'交付目标：本任务提交 PR 并取得读回，不要求合并。\n');
+    expect(readFileSync(join(f.materialRoot,'decision-log.md'),'utf8')).not.toContain('## 交付声明');
+    const value=await report(f);
+    expect(value.rings.find(row=>row.ring===10).state).toBe(pr?'completed':'incomplete');
+  });
+});
+
+describe('final-chain method-only real skill dependency declaration',()=>{
+  it('one actual sourced condition observation does not duplicate the same source and slug across stages',async()=>{
+    const f=taskFixture();writerIdentity(f);choice(f,'complex');controlledWorkflow(f);
+    const source='skills/wh-review/SKILL.md',slug='wh-review';
+    for(const stage of ['build-code','verify-code']) put(f.repo,`workflows/${stage}/skill-deps.yaml`,readFileSync(join(ROOT,`workflows/${stage}/skill-deps.yaml`),'utf8'));
+    put(f.repo,source,readFileSync(join(ROOT,source),'utf8'));
+    const dependency='workflows/build-code/skill-deps.yaml';
+    const request=put(f.repo,'review-condition.json',{requested:false});
+    const script=put(f.repo,'observe-review-condition.mjs',`import{readFileSync}from'node:fs';const [dependency,request]=process.argv.slice(2),input=JSON.parse(readFileSync(request,'utf8')),raw=readFileSync(dependency,'utf8'),block=raw.match(/- name: wh-review\\n\\s+path: ([^\\n]+)\\n(?:\\s+[^\\n]+\\n)*?\\s+trigger: ([^\\n]+)/);if(!block)throw Error('actual wh-review declaration unavailable');console.log(JSON.stringify({skill_name:'wh-review',skill_path:block[1].trim(),trigger:block[2].trim(),triggered:input.requested===true,executed:false,rule_ref:'${dependency}',observation:'Actual current declaration and controlled request; no professional skill execution claimed.'}));`);
+    mkdirSync(join(f.taskPath,'quality/tests'),{recursive:true});
+    const receipt=await captureCommand({cwd:f.repo,recordDir:join(f.taskPath,'quality/tests'),slug:'actual-review-condition',argv:[process.execPath,script,join(f.repo,dependency),request]});
+    expect(receipt.exit_code,'SETUP: actual declaration observation must run').toBe(0);
+    const observed=JSON.parse(readFileSync(receipt.output_ref,'utf8'));
+    expect(observed).toMatchObject({skill_name:slug,skill_path:source,trigger:'every_code_review_invocation_method_only',triggered:false,executed:false});
+    await writeStageRow(f.taskPath,{stage:'build-code',source:`receipt: ${receipt.receipt_ref}; output: ${receipt.output_ref}`,evidence:{value:[{command:JSON.stringify(receipt.argv),exit_code:receipt.exit_code,failure_signature:'Actual condition observation only',receipt_ref:receipt.receipt_ref,output_ref:receipt.output_ref,...observed}]}});
+    const value=await report({taskPath:f.taskPath,materialRoot:f.materialRoot});
+    expect(value.rings).toHaveLength(10);
+    const rows=value.workflow_steps.filter(row=>row.source===source&&row.step_slug===slug);
+    expect(rows).toHaveLength(1);expect(rows[0].state).toBe('not_applicable');
+  });
+});
+
+describe('final-chain multi-stage sourced skill observations and conflicts',()=>{
+  it('merges two actual stage observations without hiding an active obligation or conflicting originals',async()=>{
+    const f=taskFixture();writerIdentity(f);choice(f,'complex');controlledWorkflow(f);
+    const source='skills/stage-handoff/SKILL.md',slug='stage-handoff';
+    for(const stage of ['build-code','verify-code']) put(f.repo,`workflows/${stage}/skill-deps.yaml`,readFileSync(join(ROOT,`workflows/${stage}/skill-deps.yaml`),'utf8'));
+    put(f.repo,source,readFileSync(join(ROOT,source),'utf8'));
+    const dependency='workflows/build-code/skill-deps.yaml';
+    const request=put(f.repo,'review-condition.json',{requested:false});
+    const script=put(f.repo,'observe-review-condition.mjs',`import{readFileSync}from'node:fs';const [dependency,request]=process.argv.slice(2),input=JSON.parse(readFileSync(request,'utf8')),raw=readFileSync(dependency,'utf8'),block=raw.match(/- name: stage-handoff\\n\\s+path: ([^\\n]+)\\n(?:\\s+[^\\n]+\\n)*?\\s+trigger: ([^\\n]+)/);if(!block)throw Error('actual stage-handoff declaration unavailable');console.log(JSON.stringify({skill_name:'stage-handoff',skill_path:block[1].trim(),trigger:block[2].trim(),triggered:input.requested===true,executed:false,rule_ref:'${dependency}',observation:'Actual current declaration and controlled request; no professional skill execution claimed.'}));`);
+    mkdirSync(join(f.taskPath,'quality/tests'),{recursive:true});
+    const receipt=await captureCommand({cwd:f.repo,recordDir:join(f.taskPath,'quality/tests'),slug:'actual-review-condition',argv:[process.execPath,script,join(f.repo,dependency),request]});
+    expect(receipt.exit_code,'SETUP: actual declaration observation must run').toBe(0);
+    const observed=JSON.parse(readFileSync(receipt.output_ref,'utf8'));
+    expect(observed).toMatchObject({skill_name:slug,skill_path:source,trigger:'stage_end_human_handoff',triggered:false,executed:false});
+    await writeStageRow(f.taskPath,{stage:'build-code',source:`receipt: ${receipt.receipt_ref}; output: ${receipt.output_ref}`,evidence:{value:[{command:JSON.stringify(receipt.argv),exit_code:receipt.exit_code,failure_signature:'Actual condition observation only',receipt_ref:receipt.receipt_ref,output_ref:receipt.output_ref,...observed}]}});
+    const value=await report({taskPath:f.taskPath,materialRoot:f.materialRoot});
+    expect(value.rings).toHaveLength(10);
+    const rows=value.workflow_steps.filter(row=>row.source===source&&row.step_slug===slug);
+    expect(rows).toHaveLength(1);expect(rows[0].state).toBe('not_applicable');
+    const observe=async requested=>{
+      put(f.repo,'review-condition.json',{requested});
+      const actual=await captureCommand({cwd:f.repo,recordDir:join(f.taskPath,'quality/tests'),slug:'actual-verify-condition',argv:[process.execPath,script,join(f.repo,'workflows/verify-code/skill-deps.yaml'),request]});
+      expect(actual.exit_code).toBe(0);
+      return {command:JSON.stringify(actual.argv),exit_code:actual.exit_code,failure_signature:'Actual verify-code condition observation',receipt_ref:actual.receipt_ref,output_ref:actual.output_ref,...JSON.parse(readFileSync(actual.output_ref,'utf8'))};
+    };
+    const active=await observe(true);
+    const bind=async entries=>{await writeStageRow(f.taskPath,{stage:'verify-code',source:'workflows/verify-code/skill-deps.yaml; '+entries.map(item=>item.receipt_ref).join('; '),evidence:{value:entries}});return (await report(f)).workflow_steps.filter(row=>row.source===source&&row.step_slug===slug);};
+    const merged=await bind([active]);expect(merged).toHaveLength(1);expect(merged[0]).toMatchObject({trigger:true,executed:false,state:'unavailable'});
+    const inactive=await observe(false);const restored=await bind([inactive]);expect(restored).toHaveLength(1);expect(restored[0].state).toBe('not_applicable');
+    const conflicting=await bind([active,inactive]);expect(conflicting).toHaveLength(1);expect(conflicting[0].state).toBe('incomplete');
+    expect((await bind([inactive]))[0].state).toBe('not_applicable');
+
+  });
+});
