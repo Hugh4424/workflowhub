@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -17,7 +17,6 @@ const roots = [];
 // Only genuine deterministic OCR-dependent materialization cases may skip for
 // an absent executable; low/invalid versions or other errors must still run.
 const realOcrMissing=(()=>{try{execFileSync("ocr",["--version"],{stdio:"pipe"});return false;}catch(error){return error.code==="ENOENT";}})();
-async function withOwnedOcr(state,action){const before=process.env.PATH,storage=process.env.WORKFLOWHUB_TASK_DIR;process.env.PATH=`${state.bin}:${before ?? "/usr/bin:/bin"}`;process.env.WORKFLOWHUB_TASK_DIR=state.root;try{return await action();}finally{if(before===undefined)delete process.env.PATH;else process.env.PATH=before;if(storage===undefined)delete process.env.WORKFLOWHUB_TASK_DIR;else process.env.WORKFLOWHUB_TASK_DIR=storage;}}
 
 const materialId = createHash("sha256").update("ocr-route-fixture").digest("hex");
 
@@ -105,14 +104,14 @@ async function fixture() {
   mkdirSync(attachmentRoot);
   const configPath = join(root, "providers.json");
   writeFileSync(configPath, JSON.stringify({
-    tiers: [["codex/luna"]],
-    providers: { "codex/luna": { enabled: true, model: "reviewer-model", command: join(root, "missing-ocr-provider") } },
+    version:4, tiers: [["codex/luna"]],
+    providers: { "codex/luna": { enabled: true, source_id:"owned-ocr-source", model: "reviewer-model", command: join(root, "missing-ocr-provider") } },
     attachment_roots: [{ root: attachmentRoot, sources: [".wh-review-packets"] }],
   }));
   writeFileSync(join(hostDir, "config.json"), JSON.stringify({
     task_dir: root,
     third_review: { command: [join(root, "missing-wh-review-broker")], config: configPath, attachment_root: attachmentRoot },
-    wh_review: { version: 2, stages: { "build-code": { initial: ["codex/luna"], mode: "full_only" } } },
+    wh_review: { version: 2, stages: { "build-code": { initial: ["codex/luna"], mode: "full_only" }, "verify-code":{initial:["codex/luna"],mode:"single_round"} } },
   }));
   const task = openTask(taskDir, { projectName: "workflowhub", taskId });
   const workspace = await openCurrentTaskWorkspace(task);
@@ -219,6 +218,36 @@ function directProviderOutput(provider, findings) {
       JSON.stringify({ type: "turn.completed" }),
     ].join("\n")
     : JSON.stringify({ role: "assistant", content: [{ type: "text", text: review }] });
+}
+
+// P4 controlled process: HOME/PATH/storage apply only to the child; parent fixtures own cleanup.
+function runOwnedPublicReview(state,{inputPath,stage,scenario="ordinary"}){
+ const moduleUrl=new URL("../../tools/cli/stage-runtime.mjs",import.meta.url).href;
+ const driver=`import {stageRuntimeCliMain,runConfiguredOcrHostReview} from ${JSON.stringify(moduleUrl)};
+ import {mkdirSync,writeFileSync} from 'node:fs';import {join} from 'node:path';import {createHash} from 'node:crypto';
+ const state=${JSON.stringify({root:state.root,taskDir:state.taskDir,taskId:state.taskId,worktreeRoot:state.worktreeRoot})};
+ const materialId=${JSON.stringify(materialId)};const scenario=${JSON.stringify(scenario)};
+ ${resultFor.toString()}
+function trustedOcrContext(root,providers){
+ const attachmentRoot=join(root,"ocr-attachments");mkdirSync(attachmentRoot,{recursive:true});
+ const provider_identities=Object.fromEntries(providers.map(provider=>[provider,{source_id:provider+"-source",config_id:provider+"-config"}]));
+ const provider_models=Object.fromEntries(providers.map(provider=>[provider,provider+"-model"]));
+ return {trusted:{whReview:{},command:["/unused/3rd-review"],config:"trusted-config",attachmentRoot,attachmentSource:".wh-review-packets"},route:{initial:providers,mode:"single_round"},selection:{providers,provider_identities,provider_models,eligibleProfiles:providers},providerConfig:{providers:Object.fromEntries(providers.map(provider=>[provider,{enabled:true,model:provider_models[provider]}]))}};
+ }
+${directProviderOutput.toString()}
+ const calls={ocr:0,existing:0},observed=[];let flag;
+ const services={runReviewRound:async request=>{calls.existing++;flag=request.candidate_experiment===true;if(scenario!=="ordinary")throw new Error("unexpected fallback");return resultFor(request);},runOcrDelegationRound:async(request,options)=>{
+ calls.ocr++;flag=request.candidate_experiment===true;
+ if(scenario==="throw")throw Object.assign(new Error("owned private executor failed"),{code:"FIXTURE_EXECUTOR_FAILED"});
+ if(scenario!=="sink")return resultFor(request);
+ const providers=["codex/good","codex/bad"],stdout={"codex/good":Buffer.from(directProviderOutput("codex/good",[])),"codex/bad":Buffer.from('{"findings":')},stderr=Buffer.from([255,0,97]);
+ const packetRoot=join(state.root,"raw-packet");mkdirSync(packetRoot);const bytes=Buffer.from("export const current = true;"+String.fromCharCode(10));writeFileSync(join(packetRoot,"source.mjs"),bytes);
+ return runConfiguredOcrHostReview({request,packet:{root:packetRoot,material_id:materialId,preview:{reviewable_files:[{path:"source.mjs"}]},rules:{rules:[]},manifest:[{path:"source.mjs",bytes:bytes.length,sha256:createHash("sha256").update(bytes).digest("hex")}] }},{trustedContext:trustedOcrContext(state.root,providers),providerExecutor:async({provider})=>({status:"completed",output:stdout[provider].toString("utf8"),raw_output:{stdout:stdout[provider],stderr,exit_code:0,cancelled:false,captured_output_limited:false}}),rawOutputSink:async(_hint,bytes,metadata)=>options.onProviderOutput({provider:metadata.provider,output:bytes}),onProviderResult:({result})=>observed.push(result)});
+ }};
+ try{const recorded=await stageRuntimeCliMain(["review","--action=record",${JSON.stringify('--stage='+stage)},"--project=workflowhub",'--task='+state.taskId,'--task-path='+state.taskDir,${JSON.stringify('--input='+inputPath)}],{cwd:state.worktreeRoot,services});process.stdout.write(JSON.stringify({recorded,calls,flag,observed}));}
+ catch(error){process.stdout.write(JSON.stringify({error:{code:error.code??null,message:error.message},calls}));process.exitCode=1;}`;
+ const child=spawnSync(process.execPath,["--input-type=module","--eval",driver],{encoding:"utf8",env:{...process.env,HOME:state.home,PATH:`${state.bin}:${process.env.PATH??"/usr/bin:/bin"}`,WORKFLOWHUB_TASK_DIR:state.root},maxBuffer:16*1024*1024});
+ expect(child.error).toBeUndefined();expect(child.stderr).toBe("");expect([0,1]).toContain(child.status);const response=JSON.parse(child.stdout);expect(child.status).toBe(response.error?1:0);return response;
 }
 
 const surfaces = [
@@ -786,12 +815,9 @@ describe("OCR delegation public review route", () => {
 
   it("persists an actual private OCR runner failure through the current public single result writer without inventing dispatch", async()=>{
     const state=await fixture(),path=join(state.root,"failed-review-request.json");
-    writeFileSync(path,JSON.stringify({request:{stage:"verify-code",subject_kind:"worktree",host_provider:"codex/luna",materials:{acceptance_criteria:"AC-1: preserve unavailable executor facts."}}}));
-    let called=0,legacy=0;
-    const recorded=await withOwnedOcr(state,()=>stageRuntimeCliMain(["review","--action=record","--stage=verify-code","--project=workflowhub",`--task=${state.taskId}`,`--task-path=${state.taskDir}`,`--input=${path}`],{
-      cwd:state.worktreeRoot,services:{runOcrDelegationRound:async()=>{called++;throw Object.assign(new Error("owned private executor failed"),{code:"FIXTURE_EXECUTOR_FAILED"});},runReviewRound:async()=>{legacy++;throw new Error("unexpected fallback");}}
-    }));
-    expect(called).toBe(1);expect(legacy).toBe(0);expect(recorded.status).toBe("unavailable");
+    writeFileSync(path,JSON.stringify({request:{stage:"verify-code",subject_kind:"worktree",host_provider:"codex/luna",materials:{acceptance_criteria:"AC-1: preserve unavailable executor facts.",changed_files:"README.md",implementation_assessment:"Owned actual README",test_context:"Owned executor failure fixture",open_risks:"Controlled thrown exception"}}}));
+    const {recorded,calls,error}=runOwnedPublicReview(state,{inputPath:path,stage:"verify-code",scenario:"throw"});
+    expect(error).toBeUndefined();expect(calls,state.task.readRecord(recorded.result_ref)).toEqual({ocr:1,existing:0});expect(recorded.status).toBe("unavailable");
     const canonical=JSON.parse(state.task.readRecord(recorded.result_ref));
     expect(canonical).toMatchObject({stage:"verify-code",status:"unavailable",dispatch_state:"unknown",provider_results:[],findings:[],error:{code:"FIXTURE_EXECUTOR_FAILED"},authoritative:false});
     expect(canonical).not.toHaveProperty("attempt_ref");expect(state.task.readRecord("facts.jsonl")).toBe("");
@@ -803,17 +829,16 @@ describe("OCR delegation public review route", () => {
   ]);
   it.each(candidates)("ORACLE-P3-CANDIDATE: %s chooses its current permitted runner or rejects a retired scope",async(_surface,identity,candidateExperiment,useOcr,materialKey)=>{
     const state=await fixture(),path=join(state.root,"route-input.json"),calls={ocr:0,existing:0};let flag;
-    writeFileSync(path,JSON.stringify({request:{...identity,...(candidateExperiment?{candidate_experiment:true}:{}),host_provider:"codex/luna",materials:{[materialKey]:"owned current review material"}}}));
-    const invoke=()=>stageRuntimeCliMain(["review","--action=record",`--stage=${identity.stage}`,"--project=workflowhub",`--task=${state.taskId}`,`--task-path=${state.taskDir}`,`--input=${path}`],{
-      cwd:state.worktreeRoot,services:{runOcrDelegationRound:async request=>{calls.ocr++;flag=request.candidate_experiment===true;return resultFor(request);},runReviewRound:async request=>{calls.existing++;flag=request.candidate_experiment===true;return resultFor(request);}}
-    });
-    if(identity.stage==="build-spec"||identity.review_scope==="integration"){
-      await expect(withOwnedOcr(state,invoke)).rejects.toThrow(identity.stage==="build-spec"?/current five-stage/:/integration review is retired/);
+    writeFileSync(path,JSON.stringify({request:{...identity,...(candidateExperiment?{candidate_experiment:true}:{}),host_provider:"codex/luna",materials:{[materialKey]:"owned current review material",...(useOcr?(identity.stage==="build-code"?{acceptance_criteria:"AC-1: preserve current route identity",test_evidence:"Owned targeted fixture output"}:{changed_files:"README.md",implementation_assessment:"Owned current implementation",test_context:"Owned targeted fixture",open_risks:"Controlled runner; no provider quality",acceptance_criteria:"AC-1: preserve current route identity"}): {})}}}));
+    const response=runOwnedPublicReview(state,{inputPath:path,stage:identity.stage});
+    Object.assign(calls,response.calls);flag=response.flag;
+    if(identity.stage==="build-spec"||identity.review_scope==="integration"||identity.review_kind?.startsWith("mini_task.")){
+      expect(response.error?.message).toMatch(identity.stage==="build-spec"?/current five-stage/:identity.review_kind?/unsupported|unknown|review.kind/i:/integration review is retired/);
       expect(calls).toEqual({ocr:0,existing:0});expect(existsSync(join(state.taskDir,"quality","reviews"))).toBe(false);
     }else{
-      const recorded=await withOwnedOcr(state,invoke);expect(flag).toBe(candidateExperiment);
+      expect(response.error).toBeUndefined();const recorded=response.recorded;expect(flag,state.task.readRecord(recorded.result_ref)).toBe(candidateExperiment);
       expect(calls).toEqual(useOcr?{ocr:1,existing:0}:{ocr:0,existing:1});expect(recorded.status).toBe("available");
-      const canonical=JSON.parse(state.task.readRecord(recorded.result_ref));expect(canonical.stage).toBe(identity.stage);expect(canonical.request.material_keys).toEqual([materialKey]);expect(canonical.executor).toBe(useOcr?"ocr":undefined);
+      const canonical=JSON.parse(state.task.readRecord(recorded.result_ref));expect(canonical.stage).toBe(identity.stage);expect(canonical.request.material_keys).toEqual(useOcr?(identity.stage==="build-code"?["approved_spec","acceptance_criteria","test_evidence"]:["implementation_assessment","changed_files","test_context","open_risks","acceptance_criteria"]):[materialKey]);expect(canonical.executor).toBe(useOcr?"ocr":undefined);
       expect(canonical.provider_results[0].identity.source_id).toBe("fixture/source");expect(canonical).not.toHaveProperty("attempt_ref");
     }
     expect(state.task.readRecord("facts.jsonl")).toBe("");
@@ -821,26 +846,36 @@ describe("OCR delegation public review route", () => {
 
   it.each(surfaces)("ORACLE-P3-MATERIAL: %s projects actual material allowlist facts or rejects a retired identity",async(_surface,identity)=>{
     const state=await fixture();const input={attachmentRoot:state.root,stage:identity.stage,reviewTrack:identity.review_track??null,reviewScope:identity.review_scope??null,reviewKind:identity.review_kind??null,activationCohort:"post",materials:{implementation:"owned undeclared material"}};
+    if(identity.stage==="make-decision"&&identity.review_track==="direction"){
+      input.materials={raw_requirement:"Need a bounded independent direction review",objective_facts:"Current fixture has a canonical registered task workspace",convergence_outline:"Compare viable bounded directions; scope expansion needs a fresh route choice"};
+    }
     if(identity.stage==="build-plan"){
       const root=join(state.worktreeRoot,"specs",state.taskId);
       input.materials={...input.materials,draft_spec:readFileSync(join(root,"spec.md"),"utf8"),phase_index:readFileSync(join(root,"phases","index.md"),"utf8"),phase_authorities:Object.fromEntries([1,2,3].map(n=>[`phases/P${n}.md`,readFileSync(join(root,"phases",`P${n}.md`),"utf8")]))};
     }
-    if(identity.stage==="build-spec"||identity.review_scope==="integration"){
-      expect(()=>buildReviewMaterials(input)).toThrow(identity.stage==="build-spec"?/unknown review stage/:/integration review is retired/);
+    if(identity.stage==="build-spec"||identity.review_scope==="integration"||identity.review_kind?.startsWith("mini_task.")){
+      expect(()=>buildReviewMaterials(input)).toThrow(identity.stage==="build-spec"?/unknown review stage/:identity.review_kind?/unsupported|unknown|review.kind/i:/integration review is retired/);
     }else{
       const bundle=buildReviewMaterials(input);
-      try{expect(bundle.discarded_facts).toContainEqual(expect.objectContaining({fact_kind:"material_unknown_key_dropped",dropped_key:"implementation",reason:"not_in_stage_material_allowlist"}));
+      try{if(!(identity.stage==="make-decision"&&identity.review_track==="direction"))expect(bundle.discarded_facts).toContainEqual(expect.objectContaining({fact_kind:"material_unknown_key_dropped",dropped_key:"implementation",reason:"not_in_stage_material_allowlist"}));
         expect(bundle.deliveryManifest.map(x=>x.path).some(path=>path.startsWith("materials/")&&/implementation\.(md|json)$/.test(path))).toBe(false);
-        expect(readFileSync(join(bundle.bundleRoot,"review-instructions.md"),"utf8")).toContain("Supplied material is incomplete:");
+        if(identity.stage==="make-decision"&&identity.review_track==="direction"){expect(readFileSync(join(bundle.bundleRoot,"review-instructions.md"),"utf8")).not.toContain("Supplied material is incomplete:");}else expect(readFileSync(join(bundle.bundleRoot,"review-instructions.md"),"utf8")).toContain("Supplied material is incomplete:");
       }finally{bundle.dispose();}
     }
+    expect(state.task.readRecord("facts.jsonl")).toBe("");expect(existsSync(join(state.taskDir,"quality","reviews"))).toBe(false);
+  });
+
+  it("rejects forbidden direction implementation material before a packet can be dispatched",async()=>{
+    const state=await fixture();
+    expect(()=>buildReviewMaterials({attachmentRoot:state.root,stage:"make-decision",reviewTrack:"direction",materials:{raw_requirement:"Bounded direction",objective_facts:"Registered fixture",convergence_outline:"Compare scope",implementation:"forbidden implementation"}})).toThrow(/MATERIAL_INCOMPLETE.*forbidden implementation/);
     expect(state.task.readRecord("facts.jsonl")).toBe("");expect(existsSync(join(state.taskDir,"quality","reviews"))).toBe(false);
   });
 
   it("rejects a malformed ordinary verify-code tuple before either runner",async()=>{
     const state=await fixture(),path=join(state.root,"malformed-verify.json"),calls={ocr:0,existing:0};
     writeFileSync(path,JSON.stringify({request:{stage:"verify-code",review_scope:"phase",subject_kind:"phase",phase_id:"P1",materials:{implementation:"owned"}}}));
-    await expect(withOwnedOcr(state,()=>stageRuntimeCliMain(["review","--action=record","--stage=verify-code","--project=workflowhub",`--task=${state.taskId}`,`--task-path=${state.taskDir}`,`--input=${path}`],{cwd:state.worktreeRoot,services:{runOcrDelegationRound:async()=>{calls.ocr++;},runReviewRound:async()=>{calls.existing++;}}}))).rejects.toThrow(/verify-code does not use review_scope/);
+    const response=runOwnedPublicReview(state,{inputPath:path,stage:"verify-code"});Object.assign(calls,response.calls);
+    expect(response.error?.message).toMatch(/verify-code does not use review_scope/);
     expect(calls).toEqual({ocr:0,existing:0});expect(state.task.readRecord("facts.jsonl")).toBe("");expect(existsSync(join(state.taskDir,"quality","reviews"))).toBe(false);
   });
 
@@ -848,17 +883,9 @@ describe("OCR delegation public review route", () => {
     const state=await fixture(),path=join(state.root,"raw-review.json"),providers=["codex/good","codex/bad"],observed=[];
     writeFileSync(path,JSON.stringify({request:{stage:"verify-code",subject_kind:"worktree",materials:{acceptance_criteria:"AC-1: retain real original bytes and parse failure.",changed_files:"README.md",implementation_assessment:"Inspect the owned current README implementation and preserve provider facts.",test_context:"Owned canonical byte-sink fixture; no external model invocation.",open_risks:"Owned provider stream includes an intentionally malformed sibling output; preserve that failure."}}}));
     const stdout={"codex/good":Buffer.from(directProviderOutput("codex/good",[])),"codex/bad":Buffer.from('{"findings":')};const stderr=Buffer.from([0xff,0x00,0x61]);let called=0;
-    const recorded=await withOwnedOcr(state,()=>stageRuntimeCliMain(["review","--action=record","--stage=verify-code","--project=workflowhub",`--task=${state.taskId}`,`--task-path=${state.taskDir}`,`--input=${path}`],{cwd:state.worktreeRoot,services:{
-      runReviewRound:async()=>{throw new Error("unexpected fallback");},runOcrDelegationRound:async(request,options)=>{
-        called++;const packetRoot=join(state.root,"raw-packet");mkdirSync(packetRoot);const bytes=Buffer.from("export const current = true;\n");writeFileSync(join(packetRoot,"source.mjs"),bytes);
-        return runConfiguredOcrHostReview({request,packet:{root:packetRoot,material_id:materialId,preview:{reviewable_files:[{path:"source.mjs"}]},rules:{rules:[]},manifest:[{path:"source.mjs",bytes:bytes.length,sha256:createHash("sha256").update(bytes).digest("hex")}] }},{
-          trustedContext:trustedOcrContext(state.root,providers),providerExecutor:async({provider})=>({status:"completed",output:stdout[provider].toString("utf8"),raw_output:{stdout:stdout[provider],stderr,exit_code:0,cancelled:false,captured_output_limited:false}}),
-          rawOutputSink:async(_hint,bytes,metadata)=>options.onProviderOutput({provider:metadata.provider,output:bytes}),
-          onProviderResult:({result})=>observed.push(result),
-        });
-      }
-    }}));
-    expect(called).toBe(1);expect(recorded.status).toBe("available-with-failures");const canonical=JSON.parse(state.task.readRecord(recorded.result_ref));expect(canonical.provider_results).toHaveLength(2);expect(canonical).not.toHaveProperty("attempt_ref");
+    const response=runOwnedPublicReview(state,{inputPath:path,stage:"verify-code",scenario:"sink"});
+    expect(response.error).toBeUndefined();const recorded=response.recorded;called=response.calls.ocr;observed.push(...response.observed);expect(response.calls.existing).toBe(0);
+    expect(called,state.task.readRecord(recorded.result_ref)).toBe(1);expect(recorded.status,state.task.readRecord(recorded.result_ref)).toBe("available-with-failures");const canonical=JSON.parse(state.task.readRecord(recorded.result_ref));expect(canonical.provider_results).toHaveLength(2);expect(canonical).not.toHaveProperty("attempt_ref");
     for(const member of canonical.provider_results){expect(member.evidence_refs).toHaveLength(2);for(const[index,stream]of["stdout","stderr"].entries()){
       const bytes=stream==="stdout"?stdout[member.provider]:stderr;const saved=state.task.readRecordBytes(member.evidence_refs[index]);expect(saved).toEqual(bytes);expect(createHash("sha256").update(saved).digest("hex")).toBe(createHash("sha256").update(bytes).digest("hex"));expect(member.raw_output_ref).toBe(member.evidence_refs[0]);
     }}

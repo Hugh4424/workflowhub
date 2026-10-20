@@ -337,7 +337,7 @@ function taskSourceFacts(args, result) {
   // formal post Phase materials. No authoritative machine refs are supplied.
   if(args.stage==='build-prd')throw Object.assign(new Error('build-prd decision/PRD/attachment references are not supplied to this measurement'),{code:'build_prd_material_refs_not_supplied'});
   const materialRoot=join(root,'specs',args.task),map={},sampled=new Map();
-  if(args.stage!=='make-decision'){const path=join(materialRoot,'phases/index.md'),bytes=safeReadBytes(path);sampled.set(path,bytes);map['phases/index.md']=new TextDecoder('utf-8',{fatal:true}).decode(bytes);}
+  {const path=join(materialRoot,'phases/index.md'),bytes=safeReadBytes(path);sampled.set(path,bytes);map['phases/index.md']=new TextDecoder('utf-8',{fatal:true}).decode(bytes);}
   const names=materialFilesForCohort(task.manifest.activation_cohort,map,{stage:args.stage});
   const details=names.map(name=>{const path=join(materialRoot,name),stat=lstatSync(path);if(!stat.isFile()||stat.isSymbolicLink())throw new Error('invalid material file '+name);const bytes=sampled.get(path)??safeReadBytes(path);return {path,byteCount:bytes.length,sha256:hash(bytes)};});
   facts.materialBytes={metric:available(details.reduce((n,x)=>n+x.byteCount,0)),refs:details.map(x=>x.path),scope:'authenticated checkout material sample: '+JSON.stringify(details),unit:'byte'};

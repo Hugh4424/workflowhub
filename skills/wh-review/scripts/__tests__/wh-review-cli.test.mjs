@@ -1,39 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, linkSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createTask } from "../../../../runtime/task/task-handle.mjs";
-import { prepareTaskWorkspace } from "../../../../runtime/task/workspace.mjs";
+import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../../../runtime/task/workspace.mjs";
 
 const cli = new URL("../wh-review-cli.mjs", import.meta.url);
 const roots = [];
-const reviewTree = "a".repeat(40);
-const reviewMaterialId = "b".repeat(64);
-const reviewMaterialRevision = `revision-${"d".repeat(64)}`;
-const reviewSource = {
-  target_commit: reviewTree,
-  base_commit: reviewTree,
-  base_tree: reviewTree,
-  captured_head: reviewTree,
-};
-const reviewResultRecord = {
-  version: "wh-review-result.v1", task_id: "task", stage: "verify-code", review_track: null, review_kind: null,
-  subject_kind: "worktree", phase_id: null, review_scope: null, source: reviewSource,
-  snapshot_tree: reviewTree, material_id: reviewMaterialId, material_revision: reviewMaterialRevision,
-  attempt_ref: "quality/reviews/attempts/one/attempt.json",
-  provider_results: [{ provider: "codex", output: { findings: [] } }], findings: [],
-  adjudication: { version: "wh-review-adjudication.v1", clusters: [] },
-};
-const reviewAttemptRecord = {
-  version: "wh-review-attempt.v1", attempt_id: "one", task_id: "task", stage: "verify-code", review_track: null, review_kind: null,
-  subject_kind: "worktree", phase_id: null, review_scope: null, source: reviewSource,
-  snapshot_tree: reviewTree, material_id: reviewMaterialId, material_revision: reviewMaterialRevision, provider_attempts: [],
-  terminal_status: "unavailable", error: { code: "AUTH", message: "provider unavailable" },
-};
-const reviewSemanticAttemptRecord = { ...reviewAttemptRecord, terminal_status: "semantic", error: null };
 function git(cwd, args) { return String(execFileSync("git", args, { cwd, encoding: "utf8" })).trim(); }
 let previousSinkRoot;
 beforeEach(() => {
@@ -47,6 +23,17 @@ afterEach(() => {
   else process.env.WORKFLOWHUB_REVIEW_SINK_ROOT = previousSinkRoot;
   while (roots.length) rmSync(roots.pop(), { recursive: true, force: true });
 });
+
+// Current facade owns one explicit task-bound request/result; old bare hash sink and stage-fact publisher are retired (TCR-P4-TEST-DRIFT).
+async function facadeTask(){
+ const root=realpathSync(mkdtempSync(join(tmpdir(),"facade-current-")));roots.push(root);const repo=join(root,"repo");mkdirSync(repo);
+ const task=await createTask({storageRoot:root,manifest:{schema_version:"1.0.0",project_name:"workflowhub",task_id:randomUUID(),created_at:"2026-10-20T00:00:00Z",target_repo_root:repo,activation_cohort:"post",record_model:"vnext-single-write",execution_mode:"per_invocation",issue_ids:[],inputs:{}}});writeFileSync(join(task.taskPath,"facts.jsonl"),"");return{root,task};
+}
+const currentRequest=(f,extra={})=>({taskDir:f.task.taskPath,stage:"verify-code",subject_kind:"worktree",materials:{changed_files:"README.md",implementation_assessment:"Owned code",test_context:"Owned test",open_risks:"Controlled fixture"},...extra});
+const currentOutcome=(extra={})=>({status:"unavailable",outcome:"unavailable",dispatch_state:"unknown",provider_results:[],findings:[],...extra});
+const currentMember=(provider="owned/model",extra={})=>({provider,status:"completed",identity:{provider,adapter:"owned",source_id:provider+"-source",config_id:provider+"-config",model:"owned-model"},error:null,...extra});
+async function facadeRecord(f,runRound,extra={}){const {runReviewRecovery}=await import(cli.href);const ref=await runReviewRecovery(currentRequest(f,extra),{runRound});return{ref,value:JSON.parse(f.task.readRecord(ref.result_ref)),bytes:f.task.readRecordBytes(ref.result_ref)};}
+function noStageFacts(f){expect(f.task.readRecord("facts.jsonl")).toBe("");}
 
 describe("wh-review production CLI", () => {
   it("does not expose the retired task-bound E2E route", async () => {
@@ -89,77 +76,11 @@ describe("wh-review production CLI", () => {
     expect(typeof mod.runReviewRecovery).toBe("function");
   });
 
-  it("binds one verify-code review result to the vNext advisory fact", async () => {
-    const { publishStageReviewFact } = await import(cli.href);
-    const raw = `${JSON.stringify(reviewResultRecord)}\n`;
-    const attemptRaw = `${JSON.stringify(reviewSemanticAttemptRecord)}\n`;
-    const published = [];
-    const ref = "quality/reviews/results/one.json";
-    const attemptRef = reviewResultRecord.attempt_ref;
-    const factIntent = publishStageReviewFact({
-      trusted: {
-        task: { readRecord: (candidate) => candidate === ref ? raw : candidate === attemptRef ? attemptRaw : (() => { throw new Error("unexpected ref"); })() },
-        taskId: "task",
-        kernel: { currentVNextSnapshot: () => ({ tree: reviewTree }), currentVNextMaterialRevision: () => `revision-${"d".repeat(64)}`, publishVNextQualityFact: (stage, value) => { published.push({ stage, value }); return { ref: "quality/facts/verify-code/code_review-one.json" }; } },
-      },
-      stage: "verify-code",
-      reviewKind: null,
-        result: { status: "available", stage: "verify-code", review_track: null, review_kind: null, resultRef: ref, attemptRef: reviewResultRecord.attempt_ref, snapshotTree: reviewTree, materialId: reviewMaterialId, subjectKind: "worktree", phaseId: null, reviewScope: null },
-    });
-    expect(factIntent).toMatchObject({
-      schema_version: "workflowhub-quality-fact-intent.v1",
-      stage: "verify-code",
-      kind: "review", status: "recorded", subject: "independent_review",
-      evidence: [{ ref, sha256: expect.any(String), evidence_type: "review_result" }],
-      material_id: reviewMaterialId,
-      material_revision: `revision-${"d".repeat(64)}`,
-    });
-    expect(published).toEqual([]);
-  });
+  it("binds one explicit verify-code result to its current task without publishing a stage fact",async()=>{const f=await facadeTask();let calls=0;const {ref,value}=await facadeRecord(f,async()=>{calls++;return currentOutcome({status:"available",outcome:"completed",dispatch_state:"dispatched",provider_results:[currentMember()]});});expect(calls).toBe(1);expect(ref.result_ref).toMatch(/^quality\/reviews\//);expect(value).toMatchObject({task_id:f.task.identity.taskId,stage:"verify-code",review_kind:null,review_scope:null,subject_kind:"worktree",phase_id:null,authoritative:false,status:"available"});noStageFacts(f);});
 
-  it("keeps unavailable terminal facts honest and excludes mini-task reviews", async () => {
-    const { publishStageReviewFact } = await import(cli.href);
-    const ref = "quality/reviews/attempts/one/attempt.json";
-    const raw = `${JSON.stringify(reviewAttemptRecord)}\n`;
-    const published = [];
-    const trusted = {
-      task: { readRecord: (candidate) => candidate === ref ? raw : (() => { throw new Error("unexpected ref"); })() },
-      taskId: "task",
-      kernel: {
-        currentVNextSnapshot: () => ({ tree: reviewTree }),
-        currentVNextMaterialRevision: () => `revision-${"d".repeat(64)}`,
-        publishVNextQualityFact: (stage, value) => { published.push({ stage, value }); return { ref: "quality/facts/verify-code/unavailable.json" }; },
-      },
-    };
-    const intent = publishStageReviewFact({ trusted, stage: "verify-code", reviewKind: null, result: {
-      status: "unavailable", stage: "verify-code", review_track: null, review_kind: null, resultRef: null, attemptRef: ref, snapshotTree: reviewTree, materialId: reviewMaterialId, subjectKind: "worktree", phaseId: null, reviewScope: null,
-    } });
-    expect(intent).toMatchObject({ schema_version: "workflowhub-quality-fact-intent.v1", status: "unavailable" });
-    expect(published).toHaveLength(0);
-    expect(publishStageReviewFact({ trusted, stage: "build-code", reviewKind: "mini_task.implementation", result: {
-      status: "available", resultRef: "quality/reviews/results/mini.json", attemptRef: null,
-    } })).toBeNull();
-    expect(published).toHaveLength(0);
-  });
+  it("keeps unavailable results honest and rejects retired kinds before dispatch",async()=>{const f=await facadeTask(),{runReviewRecovery}=await import(cli.href);let calls=0;const {value}=await facadeRecord(f,async()=>{calls++;return currentOutcome({error:{code:"AUTH",message:"owned provider unavailable"},provider_results:[currentMember("failed/model",{status:"failed",error:{code:"AUTH",message:"owned failure"},output:"original failure"})]});});expect(calls).toBe(1);expect(value).toMatchObject({status:"unavailable",authoritative:false,error:{code:"AUTH"},provider_results:[{status:"failed",error:{code:"AUTH"}}]});expect(readFileSync(value.provider_results[0].output_ref,"utf8")).toBe("original failure");for(const review_kind of ["mini_task.design","mini_task.implementation"])await expect(runReviewRecovery(currentRequest(f,{stage:"build-code",review_scope:"phase",phase_id:"P1",review_kind}),{runRound:async()=>{calls++;}})).rejects.toThrow(/unknown review_kind/);expect(calls).toBe(1);noStageFacts(f);});
 
-  it("rejects a standard fact when its attempt is unavailable or mini-task scoped", async () => {
-    const { publishStageReviewFact } = await import(cli.href);
-    const ref = "quality/reviews/results/one.json";
-    const attemptRef = reviewResultRecord.attempt_ref;
-    const resultRaw = `${JSON.stringify(reviewResultRecord)}\n`;
-    const miniAttemptRaw = `${JSON.stringify({ ...reviewSemanticAttemptRecord, review_kind: "mini_task.implementation" })}\n`;
-    const trusted = {
-      task: { readRecord: (candidate) => candidate === ref ? resultRaw : miniAttemptRaw },
-      taskId: "task",
-      kernel: { currentVNextSnapshot: () => ({ tree: reviewTree }), currentVNextMaterialRevision: () => `revision-${"d".repeat(64)}` },
-    };
-    expect(() => publishStageReviewFact({ trusted, stage: "verify-code", reviewKind: null, result: {
-      status: "available", stage: "verify-code", review_track: null, review_kind: null, resultRef: ref, attemptRef, snapshotTree: reviewTree, materialId: reviewMaterialId, subjectKind: "worktree", phaseId: null, reviewScope: null,
-    } })).toThrow(/semantic terminal attempt|current review request/);
-    expect(() => publishStageReviewFact({ trusted, stage: "verify-code", reviewKind: null, result: {
-      status: "available", stage: "verify-code", review_track: null, review_kind: null, resultRef: ref, attemptRef, snapshotTree: reviewTree, materialId: reviewMaterialId, subjectKind: "phase", phaseId: "P1", reviewScope: "phase",
-    } })).toThrow(/worktree-scoped final review|does not use review_scope|identity aliases .*disagree/);
-  });
+  it("rejects wrong current tuples without treating unavailable results as stage success",async()=>{const f=await facadeTask(),{runReviewRecovery}=await import(cli.href);let calls=0;for(const extra of [{review_scope:"phase"},{review_kind:"mini_task.implementation"},{review_kind:"unknown.kind"}])await expect(runReviewRecovery(currentRequest(f,extra),{runRound:async()=>{calls++;}})).rejects.toThrow(/review_scope|unknown review_kind/);expect(calls).toBe(0);const {value}=await facadeRecord(f,async()=>currentOutcome({error:{code:"AUTH",message:"unavailable"}}));expect(value.status).toBe("unavailable");expect(value).not.toHaveProperty("passed");noStageFacts(f);});
 
   it("ignores retired response-ledger and round inputs", async () => {
     const { runSimpleReview } = await import(new URL("../simple-review-runner.mjs", import.meta.url));
@@ -209,7 +130,8 @@ describe("wh-review production CLI", () => {
 
   it("uses simple review path and no retired review-flow control plane", () => {
     const source = readFileSync(cli, "utf8");
-    expect(source).toContain("ReviewProviderClient");
+    expect(source).toContain("return runSimpleReview(input,options)");
+    expect(source).toContain("return recordSimpleReviewRequest({taskDir:");
     expect(source).toContain("runSimpleReview");
     expect(source).toContain("runReviewRound");
     expect(source).not.toContain("recordMissingRouteUnavailable");
@@ -343,198 +265,23 @@ describe("wh-review production CLI", () => {
     expect(result).toMatchObject({ status: "unavailable", error_code: "AUTH" });
   });
 
-  it("preserves an available-with-failures broker result instead of dropping it", async () => {
-    const { runReviewRecovery } = await import(cli.href);
-    const sinkRoot = process.env.WORKFLOWHUB_REVIEW_SINK_ROOT;
-    const calls = [];
-    const request = {
-      task_path: "/tmp/task",
-      stage: "build-spec",
-      materials: { frozen_packet: "packet-partial" },
-      snapshot_tree: "tree-1",
-      material_id: "material-1",
-    };
-    const partial = {
-      status: "available-with-failures",
-      stage: "build-spec",
-      snapshot_tree: "tree-1",
-      material_id: "material-1",
-      material_status: "partial",
-      provider_results: [{ provider: "codex", status: "completed", error: null }],
-      findings: [{ id: "F-1", severity: "major", statement: "spec flow gap" }],
-    };
-    const result = await runReviewRecovery(request, {
-      runRound: async (input) => { calls.push(input); return partial; },
-    });
-    expect(calls).toHaveLength(1);
-    expect(result).toMatchObject({ status: "available-with-failures", material_status: "partial" });
-    expect(result.findings).toHaveLength(1);
-    expect(result.authoritative).toBe(false);
-    const record = JSON.parse(readFileSync(result.sink_ref, "utf8"));
-    expect(record.result.status).toBe("available-with-failures");
-    expect(record.authoritative).toBe(false);
-    expect(readdirSync(sinkRoot)).toHaveLength(1);
-  });
+  it("preserves available-with-failures and both provider originals after one request",async()=>{const f=await facadeTask();let calls=0;const claim={provider:"healthy/model",severity:"major",path:"README.md",line:1,issue:"Owned defect",recommendation:"Repair",root_cause:"Owned cause",evidence_kind:"direct",evidence:"Owned line"};const members=[currentMember("healthy/model",{output:"healthy original"}),currentMember("failed/model",{status:"failed",error:{code:"AUTH",message:"owned unavailable"},output:"failed original"})];const {value}=await facadeRecord(f,async()=>{calls++;return currentOutcome({status:"available-with-failures",outcome:"partial",dispatch_state:"dispatched",provider_results:members,findings:[claim]});});expect(calls).toBe(1);expect(value).toMatchObject({status:"available-with-failures",authoritative:false,findings:[claim]});expect(value.provider_results.map(x=>x.status)).toEqual(["completed","failed"]);expect(value.provider_results[1].error.code).toBe("AUTH");expect(value.provider_results.map(x=>readFileSync(x.output_ref,"utf8"))).toEqual(["healthy original","failed original"]);noStageFacts(f);});
 
-  it("turns a public round exception into one unavailable fact", async () => {
-    const { runReviewRecovery } = await import(cli.href);
-    const calls = [];
-    const result = await runReviewRecovery({ snapshot_tree: "tree-1", material_id: "material-1" }, {
-      runRound: async () => {
-        calls.push(true);
-        throw Object.assign(new Error("broker process died"), { code: "PROCESS_DEAD" });
-      },
-    });
-    expect(calls).toHaveLength(1);
-    expect(result).toMatchObject({
-      status: "unavailable",
-      recovery: "run_round_exception",
-      error_code: "PROCESS_DEAD",
-      snapshot_tree: "tree-1",
-      material_id: "material-1",
-    });
-  });
+  it("records a task-bound throwing round as unavailable and rejects missing/retired identity before a round",async()=>{const f=await facadeTask(),{runReviewRecovery}=await import(cli.href);let calls=0;const {value}=await facadeRecord(f,async()=>{calls++;throw Object.assign(new Error("broker process died"),{code:"PROCESS_DEAD"});});expect(calls).toBe(1);expect(value).toMatchObject({status:"unavailable",authoritative:false,error:{code:"PROCESS_DEAD",message:"broker process died"}});for(const input of [{},{stage:"build-spec"},{stage:"build-code",review_scope:"integration"}])await expect(runReviewRecovery(input,{runRound:async()=>{calls++;}})).rejects.toThrow(/stage|integration/);expect(calls).toBe(1);noStageFacts(f);});
 
-  it("review flow sink writes one non-authoritative record and reuses it concurrently", async () => {
-    const { runReviewRecovery } = await import(cli.href);
-    const sink = realpathSync(mkdtempSync(join(tmpdir(), "wh-review-sink-"))); roots.push(sink);
-    const previousRoot = process.env.WORKFLOWHUB_REVIEW_SINK_ROOT;
-    process.env.WORKFLOWHUB_REVIEW_SINK_ROOT = sink;
-    try {
-      let calls = 0;
-      const request = { stage: "build-code", host_provider: "codex", materials: { raw: "sink fixture" } };
-      const runRound = async () => { calls += 1; await new Promise((resolve) => setTimeout(resolve, 10)); return { status: "unavailable", authoritative: true, error_code: "MATERIAL_INCOMPLETE" }; };
-      const resolveRouteIdentity = () => ({ route_identity: null });
-      const [first, second] = await Promise.all([
-        runReviewRecovery(request, { runRound, resolveRouteIdentity }),
-        runReviewRecovery(request, { runRound, resolveRouteIdentity }),
-      ]);
-      expect(calls).toBe(1);
-      expect(first).toMatchObject({ authoritative: false, reused: false });
-      expect(first).toMatchObject({ error_code: "MATERIAL_INCOMPLETE" });
-      expect(second).toMatchObject({ authoritative: false, reused: true, sink_ref: first.sink_ref, error_code: "MATERIAL_INCOMPLETE" });
-      expect(readdirSync(sink)).toHaveLength(1);
-      expect(JSON.parse(readFileSync(first.sink_ref, "utf8"))).toMatchObject({ authoritative: false, request_key: expect.any(String) });
-      expect(JSON.parse(readFileSync(first.sink_ref, "utf8")).result.authoritative).toBe(false);
-      const distinct = await runReviewRecovery({ ...request, subject: { ref: "other-subject" }, review_policy: { mode: "strict" } }, { runRound });
-      expect(distinct.reused).toBe(false);
-      expect(distinct.sink_ref).not.toBe(first.sink_ref);
-      expect(readdirSync(sink)).toHaveLength(2);
-    } finally {
-      if (previousRoot === undefined) delete process.env.WORKFLOWHUB_REVIEW_SINK_ROOT;
-      else process.env.WORKFLOWHUB_REVIEW_SINK_ROOT = previousRoot;
-    }
-  });
+  it("serializes explicit concurrent task requests and preserves every immutable original",async()=>{const f=await facadeTask();let calls=0;const trace=[];const run=async()=>{const n=++calls;trace.push(`start${n}`);await new Promise(r=>setTimeout(r,15));trace.push(`end${n}`);return currentOutcome({error:{code:"AUTH",message:`owned ${n}`}});};const [a,b]=await Promise.all([facadeRecord(f,run),facadeRecord(f,run)]);expect(calls).toBe(2);expect(trace).toEqual(["start1","end1","start2","end2"]);expect(a.ref.result_ref).not.toBe(b.ref.result_ref);expect(f.task.readRecordBytes(a.ref.result_ref)).toEqual(a.bytes);expect(a.value.authoritative).toBe(false);expect(b.value.authoritative).toBe(false);noStageFacts(f);});
 
-  it("does not reuse a bare sink record when material bytes change", async () => {
-    const { runReviewRecovery } = await import(cli.href);
-    let calls = 0;
-    const request = { stage: "build-code", host_provider: "codex", material_id: "caller-claimed-id" };
-    const runRound = async () => {
-      calls += 1;
-      return { status: "unavailable", error_code: "AUTH" };
-    };
-    const resolveRouteIdentity = () => ({ route_identity: null });
-    const first = await runReviewRecovery({ ...request, materials: { raw: "first" } }, { runRound, resolveRouteIdentity });
-    const second = await runReviewRecovery({ ...request, materials: { raw: "second" } }, { runRound, resolveRouteIdentity });
-    expect(calls).toBe(2);
-    expect(first.reused).toBe(false);
-    expect(second.reused).toBe(false);
-    expect(second.sink_ref).not.toBe(first.sink_ref);
-  });
+  it("dispatches changed material as a distinct explicit request without reusing an old sink",async()=>{const f=await facadeTask();let calls=0;const seen=[];const run=async input=>{calls++;seen.push(input.materials.implementation_assessment);return currentOutcome();};const a=await facadeRecord(f,run),b=await facadeRecord(f,run,{materials:{...currentRequest(f).materials,implementation_assessment:"Changed actual material"}});expect(calls).toBe(2);expect(seen).toEqual(["Owned code","Changed actual material"]);expect(a.ref.result_ref).not.toBe(b.ref.result_ref);expect(f.task.readRecordBytes(a.ref.result_ref)).toEqual(a.bytes);});
 
-  it("rejects bare sink tampering before status, identity, or reference recovery", async () => {
-    const { runReviewRecovery } = await import(cli.href);
-    const route = () => ({ route_identity: "1".repeat(64) });
-    const baseRequest = {
-      stage: "build-code", review_scope: "phase", host_provider: "codex",
-      task_id: "task-a", snapshot_tree: "tree-a", material_revision: "revision-a", material_id: "material-a",
-    };
-    for (const [label, mutate] of [
-      ["status", (result) => { result.status = "available"; }],
-      ["identity", (result) => { result.stage = "verify-code"; }],
-      ["reference", (result) => { result.attempt_ref = "forged-reference"; }],
-    ]) {
-      const request = { ...baseRequest, subject: { ref: `tamper-${label}` } };
-      const first = await runReviewRecovery(request, {
-        resolveRouteIdentity: route,
-        runRound: async () => ({ status: "unavailable", error_code: "AUTH" }),
-      });
-      const record = JSON.parse(readFileSync(first.sink_ref, "utf8"));
-      expect(record.sink_sha256).toMatch(/^[a-f0-9]{64}$/);
-      mutate(record.result);
-      writeFileSync(first.sink_ref, `${JSON.stringify(record)}\n`);
-      await expect(runReviewRecovery(request, {
-        resolveRouteIdentity: route,
-        runRound: async () => ({ status: "available" }),
-      })).rejects.toMatchObject({ code: "REVIEW_SINK_INVALID" });
-    }
-  });
+  it("rejects current path aliases, hardlinked manifests and runner tuple mismatch without overwriting originals",async()=>{const f=await facadeTask(),{runReviewRecovery}=await import(cli.href);let calls=0;const a=await facadeRecord(f,async()=>currentOutcome());const alias=join(f.root,"task-alias");symlinkSync(f.task.taskPath,alias);await expect(runReviewRecovery(currentRequest(f,{taskDir:alias}),{runRound:async()=>{calls++;}})).rejects.toThrow();const hardlink=join(f.root,"manifest-link.json");linkSync(join(f.task.taskPath,"task.json"),hardlink);await expect(runReviewRecovery(currentRequest(f),{runRound:async()=>{calls++;}})).rejects.toThrow();rmSync(hardlink);expect(calls).toBe(0);await expect(facadeRecord(f,async()=>currentOutcome({stage:"build-code"}))).rejects.toMatchObject({code:"REVIEW_SUBJECT_MISMATCH"});expect(f.task.readRecordBytes(a.ref.result_ref)).toEqual(a.bytes);noStageFacts(f);});
 
-  it("does not reuse a material result across snapshot, revision, or task changes", async () => {
-    const { runReviewRecovery } = await import(cli.href);
-    const route = () => ({ route_identity: "2".repeat(64) });
-    let calls = 0;
-    const runRound = async (input) => {
-      calls += 1;
-      return {
-        status: "unavailable", error_code: "AUTH", task_id: input.task_id,
-        snapshot_tree: input.snapshot_tree, material_revision: input.material_revision, material_id: input.material_id,
-      };
-    };
-    const first = await runReviewRecovery({
-      stage: "build-code", review_scope: "phase", host_provider: "codex",
-      task_id: "task-a", snapshot_tree: "tree-a", material_revision: "revision-a", material_id: "same-material",
-    }, { resolveRouteIdentity: route, runRound });
-    const second = await runReviewRecovery({
-      stage: "build-code", review_scope: "phase", host_provider: "codex",
-      task_id: "task-b", snapshot_tree: "tree-b", material_revision: "revision-b", material_id: "same-material",
-    }, { resolveRouteIdentity: route, runRound });
-    expect(calls).toBe(2);
-    expect(first.reused).toBe(false);
-    expect(second.reused).toBe(false);
-    expect(second.sink_ref).not.toBe(first.sink_ref);
-  });
+  it("keeps distinct task requests and original records isolated without a snapshot cache gate",async()=>{const a=await facadeTask(),b=await facadeTask();let calls=0;const run=async()=>{calls++;return currentOutcome();};const first=await facadeRecord(a,run),second=await facadeRecord(b,run);expect(calls).toBe(2);expect(first.value.task_id).toBe(a.task.identity.taskId);expect(second.value.task_id).toBe(b.task.identity.taskId);expect(first.value.task_id).not.toBe(second.value.task_id);expect(first.ref.path).not.toBe(second.ref.path);expect(a.task.readRecordBytes(first.ref.result_ref)).toEqual(first.bytes);expect(b.task.readRecordBytes(second.ref.result_ref)).toEqual(second.bytes);});
 
-  it("returns a route-change unavailable envelope with the complete canonical request identity", async () => {
-    const { runReviewRecovery } = await import(cli.href);
-    const request = {
-      stage: "build-code", review_scope: "integration", host_provider: "codex",
-      task_id: "task-route", snapshot_tree: "tree-route", material_revision: "revision-route", material_id: "material-route",
-    };
-    const first = await runReviewRecovery(request, {
-      resolveRouteIdentity: () => ({ route_identity: "3".repeat(64) }),
-      runRound: async (input) => ({ status: "unavailable", error_code: "AUTH", ...input }),
-    });
-    const changed = await runReviewRecovery(request, {
-      resolveRouteIdentity: () => ({ route_identity: "4".repeat(64) }),
-      runRound: async () => { throw new Error("route change must not dispatch"); },
-    });
-    expect(first.status).toBe("unavailable");
-    expect(changed).toMatchObject({
-      status: "unavailable", stage: "build-code", review_track: null, review_kind: null,
-      review_scope: "integration", material_id: "material-route", task_id: "task-route",
-      snapshot_tree: "tree-route", material_revision: "revision-route",
-      error: { code: "REVIEW_RETRY_BUDGET_UNKNOWN" },
-    });
-  });
+  it("rejects retired integration before dispatch and preserves a current legal route-unavailable result",async()=>{const f=await facadeTask(),{runReviewRecovery}=await import(cli.href);let calls=0;await expect(runReviewRecovery(currentRequest(f,{stage:"build-code",review_scope:"integration"}),{runRound:async()=>{calls++;}})).rejects.toThrow(/integration review is retired/);expect(calls).toBe(0);const {value}=await facadeRecord(f,async()=>{calls++;return currentOutcome({error:{code:"ROUTE_UNAVAILABLE",message:"owned missing trusted route"},dispatch_state:"blocked_before_dispatch"});});expect(calls).toBe(1);expect(value).toMatchObject({task_id:f.task.identity.taskId,stage:"verify-code",review_kind:null,review_scope:null,status:"unavailable",dispatch_state:"blocked_before_dispatch",error:{code:"ROUTE_UNAVAILABLE"},authoritative:false});});
 
-  it("preserves review refs when stage-fact publication fails", async () => {
-    const { runReviewRecovery } = await import(cli.href);
-    const review = { status: "available", attemptRef: "quality/reviews/attempts/one/attempt.json", resultRef: "quality/reviews/results/one.json", reportRef: "quality/reviews/reports/one.md" };
-    const result = await runReviewRecovery({}, {
-      runRound: async () => { throw Object.assign(new Error("stale review"), { code: "QUALITY_FACT_PUBLISH_FAILED", reviewResult: review }); },
-    });
-    expect(result).toMatchObject({ status: "unavailable", attempt_ref: review.attemptRef, result_ref: review.resultRef, report_ref: review.reportRef });
-  });
+  it("propagates current record-storage failure and preserves already published originals",async()=>{const f=await facadeTask(),{runReviewRecovery}=await import(cli.href);const a=await facadeRecord(f,async()=>currentOutcome());const quality=join(f.task.taskPath,"quality"),old=join(f.root,"saved-quality");const {renameSync}=await import("node:fs");renameSync(quality,old);writeFileSync(quality,"not a directory");let calls=0;try{await expect(runReviewRecovery(currentRequest(f),{runRound:async()=>{calls++;return currentOutcome();}})).rejects.toThrow();expect(calls).toBe(0);}finally{rmSync(quality);renameSync(old,quality);}expect(f.task.readRecordBytes(a.ref.result_ref)).toEqual(a.bytes);noStageFacts(f);});
 
-  it("keeps a code-less local exception out of provider failure taxonomy", async () => {
-    const { runReviewRecovery } = await import(cli.href);
-    const result = await runReviewRecovery({ snapshot_tree: "tree-1", material_id: "material-1" }, {
-      runRound: async () => { throw new TypeError("local input is invalid"); },
-    });
-    expect(result).toMatchObject({ status: "unavailable", error_code: "WORKFLOWHUB_LOCAL_ERROR" });
-  });
+  it("propagates a bare local exception without forging a provider outage or a saved result",async()=>{const {runReviewRecovery}=await import(cli.href);let calls=0;const error=new TypeError("local input is invalid");await expect(runReviewRecovery({stage:"verify-code",materials:currentRequest({task:{taskPath:"unused"}}).materials},{runRound:async()=>{calls++;throw error;}})).rejects.toBe(error);expect(calls).toBe(1);});
 
   it("rejects the retired same-source fallback callback", async () => {
     const { runReviewRecovery } = await import(cli.href);
@@ -617,22 +364,15 @@ describe("wh-review production CLI", () => {
     execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repo });
     execFileSync("git", ["commit", "--allow-empty", "-qm", "baseline"], { cwd: repo });
     const taskPath = join(root, "Projects", "Demo", "tasks", "task");
-    const task = createTask({ storageRoot: root, taskPath, manifest: { schema_version: "1.0.0", project_name: "Demo", task_id: "task", created_at: "2026-07-19T00:00:00.000Z", target_repo_root: repo, issue_ids: [], inputs: {} } });
-    const { resolveTrustedReviewSubject } = await import(cli.href);
-    expect(() => resolveTrustedReviewSubject({ task_path: taskPath, project_name: "Demo", task_id: "task", stage: "make-decision" }))
-      .toThrow(/current task Workspace|registered|ENOENT/i);
-    expect(git(repo, ["worktree", "list", "--porcelain"]).split("\n").filter((line) => line.startsWith("worktree "))).toHaveLength(1);
-    const { prepareTaskWorkspace } = await import("../../../../runtime/task/workspace.mjs");
-    prepareTaskWorkspace(task);
-    const subject = resolveTrustedReviewSubject({ task_path: taskPath, project_name: "Demo", task_id: "task", stage: "make-decision" });
-    expect(subject.workspace.worktreeRoot).toBe(`${repo}-task`);
-    expect(subject.candidateWorkspace).toBeUndefined();
-    expect(subject).not.toHaveProperty("sourceRoot");
-    // The make-decision detail track authenticates the current material
-    // revision through the kernel; the subject must bind the existing
-    // Workspace to the kernel instead of throwing "requires an authenticated
-    // Workspace".
-    expect(subject.kernel.currentVNextMaterialRevision()).toMatch(/^revision-[a-f0-9]{64}$/);
+    const task = await createTask({ storageRoot: root, taskPath, manifest: { schema_version: "1.0.0", project_name: "Demo", task_id: "task", created_at: "2026-07-19T00:00:00.000Z", target_repo_root: repo, activation_cohort:"post",record_model:"vnext-single-write",execution_mode:"per_invocation", issue_ids: [], inputs: {} } });
+    // Workspace ownership is runtime/task/workspace.mjs, not the retired CLI subject/kernel facade.
+    const before=git(repo,["worktree","list","--porcelain"]);
+    await expect(openCurrentTaskWorkspace(task)).rejects.toThrow(/registered|ENOENT|validation failed/i);
+    expect(git(repo,["worktree","list","--porcelain"])).toBe(before);
+    const prepared=await prepareTaskWorkspace(task);const subject=await openCurrentTaskWorkspace(task);
+    expect(subject.worktreeRoot).toBe(prepared.worktreeRoot);expect(subject.worktreeRoot).toBe(`${repo}-task`);
+    expect(git(subject.worktreeRoot,["rev-parse","HEAD"])).toBe(git(repo,["rev-parse","HEAD"]));
+    expect(git(repo,["worktree","list","--porcelain"]).split("\n").filter(line=>line.startsWith("worktree "))).toHaveLength(2);
   });
 
   it("returns unavailable when the run route is missing without writing task state", async () => {
@@ -646,10 +386,11 @@ describe("wh-review production CLI", () => {
       materials: { raw: "fixture" },
     }));
 
-    const result = JSON.parse(execFileSync(process.execPath, [fileURLToPath(cli), "run", inputPath], {
+    const child = spawnSync(process.execPath, [fileURLToPath(cli), "run", inputPath], {
       encoding: "utf8",
       env: { ...process.env, HOME: home },
-    }));
+    });
+    expect(child.status).toBe(1);expect(child.stderr).toBe("");const result=JSON.parse(child.stdout);
     expect(result).toMatchObject({ status: "unavailable", error: { code: "ROUTE_UNAVAILABLE" } });
     expect(result.attempt_ref).toBeUndefined();
     expect(result).not.toHaveProperty("error_code");
@@ -672,7 +413,7 @@ describe("wh-review production CLI", () => {
     }), "utf8").digest("hex");
     const counter = join(root, "broker-count"); writeFileSync(counter, "0");
     const broker = join(root, "fake-broker.mjs");
-    writeFileSync(broker, `import { createHash } from "node:crypto";
+    writeFileSync(broker, `import { createHash, randomUUID } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 const requestPath = process.argv.find((value) => value.startsWith("--request="))?.slice("--request=".length);
 const attachmentsPath = process.argv.find((value) => value.startsWith("--attachments="))?.slice("--attachments=".length);
@@ -733,9 +474,10 @@ process.stdout.write(JSON.stringify({
       },
     }));
 
-    const result = JSON.parse(execFileSync(process.execPath, [fileURLToPath(cli), "run", inputPath], {
+    const child = spawnSync(process.execPath, [fileURLToPath(cli), "run", inputPath], {
       encoding: "utf8", env: { ...process.env, HOME: home, FAKE_REVIEW_COUNTER: counter },
-    }));
+    });
+    expect(child.status).toBe(1);expect(child.stderr).toBe("");const result=JSON.parse(child.stdout);
     // make-decision direction is one logical paired review: red and blue
     // each issue one broker request and retain role provenance. The fixture
     // counter is intentionally a best-effort side effect because the two
@@ -750,4 +492,10 @@ process.stdout.write(JSON.stringify({
       expect.objectContaining({ provider: "kimi", role: "blue", status: "failed", error: expect.objectContaining({ code: "AUTH" }) }),
     ]));
   });
+});
+
+it.each(["mini_task.design","mini_task.implementation"])("rejects retired %s before dispatch through the current CLI entry", async review_kind=>{
+ const {runReviewRecovery}=await import(cli.href);let calls=0;
+ await expect(runReviewRecovery({stage:"build-code",review_kind,review_scope:"phase",phase_id:"P4",materials:{}},{runRound:async()=>{calls++;return {status:"available",findings:[]};}})).rejects.toThrow(/unsupported|unknown|review.kind/i);
+ expect(calls).toBe(0);
 });

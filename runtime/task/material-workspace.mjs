@@ -38,7 +38,6 @@ export function phaseFilesFromIndex(index) {
 
 export function materialFilesForCohort(activationCohort = "post", materials = {}, { stage } = {}) {
   if (activationCohort !== "post") throw new TypeError("current material workspace requires post cohort; historical materials are read-only");
-  if (stage === "make-decision") return Object.freeze(["decision-log.md"]);
   if (materials?.["phases/index.md"] == null) {
     if (Object.keys(materials).some(file => file.startsWith("phases/") && file !== "phases/index.md")) throw new TypeError("post material map has Phase files without an index");
     return CURRENT_MATERIAL_FILES;
@@ -88,19 +87,19 @@ function readMaterial(root, file) {
     return value;
   } finally { closeSync(fd); }
 }
-export function inspectMaterialWorkspace(root, { activationCohort = "post" } = {}) {
-  materialFilesForCohort(activationCohort);
+export function inspectMaterialWorkspace(root, { activationCohort = "post", stage } = {}) {
+  const baseFiles = materialFilesForCohort(activationCohort, {}, { stage });
   if (typeof root !== "string" || !isAbsolute(root)) throw new TypeError("material workspace root must be absolute");
   const files = {}, missing = [], errors = [];
   const read = file => {
     try { const value = readMaterial(root, file); if (!value.trim()) missing.push(file); else files[file] = value; }
     catch (error) { missing.push(file); if (error.code !== "ENOENT") errors.push(`${file}:${error.message}`); }
   };
-  for (const file of CURRENT_MATERIAL_FILES) read(file);
+  for (const file of baseFiles) read(file);
   if (files["phases/index.md"]) {
     try {
-      const names = materialFilesForCohort("post", files);
-      for (const file of names.slice(CURRENT_MATERIAL_FILES.length)) read(file);
+      const names = materialFilesForCohort(activationCohort, files, { stage });
+      for (const file of names.slice(baseFiles.length)) read(file);
       const ancestry = directories(resolve(root, "phases"));
       const disk = readdirSync(resolve(root, "phases")).filter(name => name.endsWith(".md") && name !== "index.md").map(name => `phases/${name}`);
       checkDirectories(ancestry);

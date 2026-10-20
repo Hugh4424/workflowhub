@@ -363,7 +363,7 @@ export async function prepareDeliveryClosePlan({ taskDir, delivery = {}, closeMo
   try { taskType = declaredTaskType(readFile(c.worktree, `specs/${c.manifest.task_id}/decision-log.md`).toString("utf8")); }
   catch (error) { if (error.code !== "ENOENT") throw error; }
   const mode = taskType === "规划任务" ? "planning" : closeMode ?? delivery.close_mode ?? "ordinary";
-  if (!["ordinary", "mini-task", "planning"].includes(mode)) throw failure("CLOSE_MODE", "unsupported close mode");
+  if (!["ordinary", "planning"].includes(mode)) throw failure("CLOSE_MODE", "unsupported close mode");
   const taskBranch = git(c.worktree, ["branch", "--show-current"]), targetBranch = delivery.target_branch ?? "main", remote = delivery.remote ?? "origin";
   source.remote_identity = remoteIdentity(c, remote);
   if (delivery.task_branch !== undefined && delivery.task_branch !== taskBranch) throw failure("CLOSE_TASK_BRANCH", "declared task branch differs from actual Git");
@@ -385,6 +385,12 @@ export async function prepareDeliveryClosePlan({ taskDir, delivery = {}, closeMo
   const planRef = await writeEvidence(c, "close-plan", plan);
   return { plan, plan_ref: planRef, quality_status: "unknown" };
 }
+// Facts are passive historical input: only actual stage rows determine close identity.
+export function closeConfirmationStage(taskDir) {
+  const stages = new Set(readTaskFacts(taskDir).filter(row => row.record_kind === "stage").map(row => row.stage));
+  for (const stage of ["verify-code", "build-prd", "make-decision"]) if (stages.has(stage)) return stage;
+  throw failure("CLOSE_CONFIRMATION_STAGE_UNAVAILABLE", "close confirmation requires an actual verify-code, build-prd or make-decision stage fact");
+}
 export async function confirmClosePlan({ taskDir, planRef, outcome = "confirmed", replyText } = {}) {
   assertPostWriter(taskDir);
   const c = contextForPlan(taskDir, planRef); const plan = readPlan(c, planRef);
@@ -399,7 +405,7 @@ export async function confirmClosePlan({ taskDir, planRef, outcome = "confirmed"
   if (!same(validatePlan(JSON.parse(bytes), c), plan)) throw failure("CLOSE_PLAN_CHANGED", "close plan changed while its confirmation was prepared");
   const remote = remoteIdentity(c, plan.remote);
   if (plan.source.remote_identity !== undefined && !same(remote, plan.source.remote_identity)) throw failure("REMOTE_SCOPE_CHANGED", "actual remote destinations differ from the displayed plan source");
-  const value = await recordConfirmation({ stage: "verify-code", decision: outcome, reply: replyText, materialRefs: [planRef, `${planRef}#sha256=${digest(bytes)}`, `${planRef}#remote=${encodeURIComponent(JSON.stringify(remote))}`] }, { cwd: c.worktree, dir: join(c.taskDir, "quality", "evidence", "human-confirmations") });
+  const value = await recordConfirmation({ stage: closeConfirmationStage(c.taskDir), decision: outcome, reply: replyText, materialRefs: [planRef, `${planRef}#sha256=${digest(bytes)}`, `${planRef}#remote=${encodeURIComponent(JSON.stringify(remote))}`] }, { cwd: c.worktree, dir: join(c.taskDir, "quality", "evidence", "human-confirmations") });
   if (!same(remoteIdentity(c, plan.remote), remote)) throw failure("REMOTE_SCOPE_CHANGED", "remote destinations changed while their confirmation was recorded; original reply remains unchanged");
   if (!planBytes(c, planRef).equals(bytes)) throw failure("CLOSE_PLAN_CHANGED", "close plan changed while its confirmation was recorded; original reply remains unchanged");
   return { status: outcome === "confirmed" ? "confirmed" : "blocked", outcome, confirmation_ref: value.path, record: value };
@@ -410,7 +416,10 @@ function acceptedConfirmation(c, planRef, confirmationRef, expectedPlan) {
   if (!roots.includes(root)) throw failure("CONFIRMATION_REFERENCE", "confirmation must be this task's explicit native record");
   // Old confirmation originals are read in place; new writes use evidence only.
   const value = JSON.parse(readFile(root, resolve(confirmationRef).slice(root.length + 1)));
-  if (value.decision !== "confirmed" || value.stage !== "verify-code" || !value.reply || !Array.isArray(value.material_refs) || !value.material_refs.includes(planRef)) throw failure("CONFIRMATION_REJECTED", "confirmed verbatim user reply for this plan is required");
+  const stage = closeConfirmationStage(c.taskDir);
+  // Planning confirmations written by the former owner remain read-only originals.
+  const matchesStage = value.stage === stage || (stage === "build-prd" && value.stage === "verify-code");
+  if (value.decision !== "confirmed" || !matchesStage || !value.reply || !Array.isArray(value.material_refs) || !value.material_refs.includes(planRef)) throw failure("CONFIRMATION_REJECTED", "confirmed verbatim user reply for this plan is required");
   const fragments = value.material_refs.filter(ref => typeof ref === "string" && ref.startsWith(`${planRef}#`));
   const bindings = fragments.filter(ref => ref.startsWith(`${planRef}#sha256=`));
   const remotes = fragments.filter(ref => ref.startsWith(`${planRef}#remote=`));

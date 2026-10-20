@@ -31,3 +31,5 @@
 | 问题 | 下次改变的行动 | 状态 |
 | --- | --- | --- |
 | 本次把匿名候选的访问隔离扩大成独立host/Docker，又用全进程seatbelt挡住CLI自身并要求用户供环境（来源：N7/build-code，`quality/evidence/2026-10-18-090-native-isolation-docker-root-cause-audit.md`、`quality/tests/2026-10-18-094-p3-common-input-corrected.json`、`095-p3-judge-standard-corrected.json`、`101-native-exact-packet-host-probe.json`）。 | 下次先核现有原生packet权限及真实允许/拒绝，区分CLI控制面与模型工具；质量与成本条件分列，单路线失败不增加Docker或独立host前置。 | 已落账；未作用户确认已解决，不清理；原生探针仅证实测面，网络与工具注入缺口保留。 |
+
+上条经验的补充来源（N8/build-code）：[当前包能力拒绝审计](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n8-four-level-route-20261019/quality/evidence/2026-10-20-140-p4-ag-capability-cancellation.json)、[真实终态](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n8-four-level-route-20261019/quality/evidence/2026-10-20-141-p4-ocr-terminal-readback.md)。同上条行动；本次保留两路有效结果与一路不可用，未把原问题标为已解决。

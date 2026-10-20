@@ -26,7 +26,7 @@ describe('ORACLE-P3-CHARTER delivery and closeout charter contract', () => {
     }
   });
 
-  it('keeps the physical close limited to the two stages that actually call it', () => {
+  it('keeps the physical close limited to the three stages that actually call it', () => {
     const text = read(CHARTER) ?? '';
     const closeRow = text
       .split('\n')
@@ -35,7 +35,8 @@ describe('ORACLE-P3-CHARTER delivery and closeout charter contract', () => {
     const joined = closeRow.join('\n');
     expect(has(joined, 'build-prd'), 'the close row lists build-prd').toBe(true);
     expect(has(joined, 'verify-code'), 'the close row lists verify-code').toBe(true);
-    for (const stage of STAGE_NAMES.filter(value => value !== 'build-prd' && value !== 'verify-code')) {
+    expect(has(joined, 'make-decision'), 'the close row lists make-decision').toBe(true);
+    for (const stage of STAGE_NAMES.filter(value => value !== 'build-prd' && value !== 'verify-code' && value !== 'make-decision')) {
       expect(has(joined, stage), `the close row must not list ${stage}`).toBe(false);
     }
   });

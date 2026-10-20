@@ -42,7 +42,10 @@ const POST_PHASE_ARTIFACT = /^phases\/P[1-9][0-9]*\.md$/;
 
 const PHASE_PROGRESS_ONLY_SOURCE = "phase-progress-cursor";
 
-function isDesignArtifact(stage, name, activationCohort = "pre") {
+function isDesignArtifact(stage, name, activationCohort = "pre", materials = {}) {
+  if (stage === "make-decision" && activationCohort === "post") {
+    return materialFilesForCohort(activationCohort, materials, { stage }).includes(name);
+  }
   if (stage === "build-plan" && activationCohort === "post") {
     return name === "spec.md" || name === "phases/index.md" || POST_PHASE_ARTIFACT.test(name ?? "");
   }
@@ -327,9 +330,9 @@ function isNormalOcrCodeReviewRequest(request) {
   const scope = request?.review_scope ?? request?.reviewScope ?? null;
   const kind = request?.review_kind ?? request?.reviewKind ?? null;
   const track = request?.review_track ?? request?.reviewTrack ?? null;
-  return track === null && ((kind === "mini_task.implementation" && request?.stage === "build-code" && scope === "phase") || kind === null && (
+  return track === null && kind === null && (
     (request?.stage === "build-code" && (scope === "phase" || scope === "integration"))
-    || (request?.stage === "verify-code" && scope === null)));
+    || (request?.stage === "verify-code" && scope === null));
 }
 
 function ocrReviewInstructionsFor(request) {
@@ -392,14 +395,13 @@ function writeOcrCurrentMaterialProjection(bundleRoot, projected, evidence) {
 }
 
 function projectOcrCodeReviewBundle(built, attachmentRoot, request, source) {
-  const miniImplementation = request.stage === "build-code" && (request.review_kind ?? request.reviewKind) === "mini_task.implementation";
   const selected = built.manifest.filter(({ path }) => path !== "packet-plan.json" && path !== "manifest.json");
   const paths = new Set(selected.map(({ path }) => path));
   for (const path of ["contracts/build-code.md", "contracts/verify-code.md", "contracts/provider-protocol.md", "skills/simplicity-guard/SKILL.md", "skills/review/SKILL.md"]) {
     if (!paths.has(path)) throw new Error(`OCR packet is missing its required reviewer body: ${path}`);
   }
   if (!paths.has("review-instructions.md") || !paths.has("source.json")
-      || (!miniImplementation && ![...paths].some((path) => /^requirements\/acceptance_criteria\.(?:md|json)$/.test(path)))
+      || ![...paths].some((path) => /^requirements\/acceptance_criteria\.(?:md|json)$/.test(path))
       || ![...paths].some((path) => path === "changes.diff" || /^diff-shards\/[^/]+\.diff$/.test(path))) {
     throw new Error("OCR packet is missing its instructions, current diff, or full acceptance criteria");
   }
@@ -422,21 +424,6 @@ function projectOcrCodeReviewBundle(built, attachmentRoot, request, source) {
       if (projectedBytes === bytes) copyFileSync(join(built.bundleRoot, entry.path), destination);
       else writeFileSync(destination, projectedBytes);
       projected.push({ path: entry.path, bytes: projectedBytes.length, sha256: sha256(projectedBytes) });
-    }
-    if (miniImplementation) {
-      const specEntries = selected.filter(entry => /^materials\/\d+-spec\.(?:md|json)$/.test(entry.path));
-      if (specEntries.length !== 1) throw new Error("mini implementation packet requires one complete current spec source");
-      const spec = specEntries[0];
-      const bytes = readFileSync(join(bundleRoot, spec.path));
-      if (!bytes.length || bytes.length !== spec.bytes || sha256(bytes) !== spec.sha256) throw new Error("mini implementation spec source is empty or changed");
-      const path = `requirements/acceptance_criteria.${spec.path.endsWith(".json") ? "json" : "md"}`;
-      if (projected.some(entry => entry.path === path)) throw new Error("mini implementation acceptance projection conflicts with an existing source");
-      mkdirSync(dirname(join(bundleRoot, path)), { recursive: true }); writeFileSync(join(bundleRoot, path), bytes, { flag: "wx", mode: 0o600 });
-      projected.push({ path, bytes: bytes.length, sha256: sha256(bytes) });
-      const instructions = join(bundleRoot, "review-instructions.md");
-      const updated = Buffer.concat([readFileSync(instructions), Buffer.from(`\n${path} contains the complete supplied mini-task spec bytes from ${spec.path}, not an extracted AC summary. Read that complete authority for acceptance together with the supplied AC trace, actual user result, tests, and coverage limits.\n`)]);
-      writeFileSync(instructions, updated);
-      Object.assign(projected.find(entry => entry.path === "review-instructions.md"), { bytes: updated.length, sha256: sha256(updated) });
     }
     // Capture only this selected diff's physical source files, never a tree.
     // Their submitted bytes, not a private Git snapshot, support reviewer lines.
@@ -562,7 +549,8 @@ function trustedReviewReadScope(context,request,value){
 
 function captureScopedReviewSource(context,request,scope,attachmentRoot,captureSource){
   let selected=null;
-  if(request.stage==='build-code'&&(request.review_scope??request.reviewScope)==='phase'&&context.manifest.activation_cohort==='post'){
+  if(request.stage==='build-code'&&(request.review_scope??request.reviewScope)==='phase'&&context.manifest.activation_cohort==='post'
+      && (request.phase_id != null || (request.review_kind??request.reviewKind??null)!==null)){
     const index=context.artifacts.read('phases/index.md');
     const phases=Object.fromEntries(phaseFilesFromIndex(index).map(ref=>[ref,context.artifacts.read(ref)]));
     const parsed=validatePostPhaseContract({spec:context.artifacts.read('spec.md'),index,phases,reviewReadScope:scope});
@@ -606,6 +594,12 @@ function captureScopedReviewSource(context,request,scope,attachmentRoot,captureS
 function phaseReviewSourceProjection(context, request, source, attachmentRoot, reviewReadScope) {
   if (request.stage !== "build-code" || (request.review_kind ?? request.reviewKind ?? null) !== null || (request.review_scope ?? request.reviewScope) !== "phase"
       || context.manifest?.activation_cohort !== "post") return source;
+  // A light implementation has no Phase contract: retain the captured whole
+  // workspace (or explicitly trusted read scope) and report that it was not checked.
+  if (request.phase_id == null) return Object.freeze({ ...source,
+    contract_facts: Object.freeze({ contract_ok: null, contract_error_count: null,
+      contract_errors: [], ac_coverage: null, fr_coverage: null, command_oracle_checks: null }),
+  });
   const index = context.artifacts.read("phases/index.md");
   const phases = Object.fromEntries(phaseFilesFromIndex(index).map((ref) => [ref, context.artifacts.read(ref)]));
   const parsed = validatePostPhaseContract({ spec: context.artifacts.read("spec.md"), index, phases, reviewReadScope });
@@ -1156,7 +1150,10 @@ function thinQuality(context, row) {
   let result;
   try { result = JSON.parse(readPlainInputFile(join(context.task.taskPath, ref), "review result")); }
   catch (error) { if (error.code === "ENOENT") return "unknown"; throw error; }
-  if (result.task_id !== context.identity.taskId || result.stage !== row.stage) throw new Error("review result differs from current row identity");
+  const lightImplementation = row.stage === "make-decision" && result.stage === "build-code"
+    && result.review_scope === "phase" && result.subject_kind === "phase"
+    && result.review_kind === null && result.phase_id === null;
+  if (result.task_id !== context.identity.taskId || result.stage !== row.stage && !lightImplementation) throw new Error("review result differs from current row identity");
   if (result.status === "unavailable") return "unavailable";
   // A review is one quality fact; it cannot certify stage completion.
   return ["available", "available-with-failures", "incomplete"].includes(result.status) ? "incomplete" : "unknown";
@@ -1179,11 +1176,9 @@ async function recordTaskReview(context, input, values, services = {}) {
       request.phase_id=request.phase_id ?? request.phaseId ?? values["phase-id"] ?? null;
       request.subject_kind=request.subject_kind ?? "phase";
     }
-    const miniImplementation = request.stage === "build-code" && (request.review_kind ?? request.reviewKind ?? null) === "mini_task.implementation";
-    if (miniImplementation) request.review_scope = request.review_scope ?? request.reviewScope ?? "phase";
     const reviewReadScope=trustedReviewReadScope(context,request,typeof services.resolveReviewReadScope==='function' ? services.resolveReviewReadScope({task:context.task,workspace:context.workspace,stage:request.stage,phaseId:request.phase_id??null}) : undefined);
     request.materials = resolveMaterialRefs(context, request.materials,reviewReadScope);
-    const codeSurface=miniImplementation || ["build-code","verify-code"].includes(request.stage)
+    const codeSurface=["build-code","verify-code"].includes(request.stage)
       && (request.review_kind ?? request.reviewKind ?? null)===null && request.surface!=="document";
     if(codeSurface)request.surface="code";
     // Reader-only storage-root adaptation: the authenticated workspace is never mutated or published as this root.
@@ -1239,13 +1234,6 @@ async function recordTaskReview(context, input, values, services = {}) {
     return recordSimpleReviewRequest({taskDir:context.task.taskPath,request,runRound:runner,signal:services.reviewSignal ?? null});
 }
 
-export async function runMiniTaskCodeReview({ taskDir, request, services = {}, cwd = process.cwd(), signal } = {}) {
-  if (request?.stage !== "build-code" || (request.review_kind ?? request.reviewKind) !== "mini_task.implementation") throw new TypeError("mini implementation code review identity required");
-  const manifest = JSON.parse(readPlainInputFile(join(taskDir, "task.json"), "task manifest"));
-  const values = { stage: "build-code", project: manifest.project_name, task: manifest.task_id, "task-path": taskDir };
-  const context = await thinTaskContext(values, cwd);
-  return recordTaskReview(context, { request }, values, { ...services, ...(signal === undefined ? {} : { reviewSignal: signal }) });
-}
 
 export async function stageRuntimeMain(argv = process.argv.slice(2), { services = {}, cwd = process.cwd() } = {}) {
   const { command, values } = parseArgs(argv);
@@ -1289,7 +1277,10 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
   }
   if (command === "artifact") {
     const prd = values.stage === "build-prd" && values.name === "prd.md";
-    if (!prd && !isDesignArtifact(values.stage, values.name, context.manifest.activation_cohort ?? "pre")) throw new TypeError(`unsupported ${values.stage} artifact: ${values.name}`);
+    const indexedMaterials = values.stage === "make-decision" && context.manifest.activation_cohort === "post"
+      && typeof values.name === "string" && values.name.startsWith("phases/") && values.name !== "phases/index.md"
+      ? { "phases/index.md": context.artifacts.read("phases/index.md") } : {};
+    if (!prd && !isDesignArtifact(values.stage, values.name, context.manifest.activation_cohort ?? "pre", indexedMaterials)) throw new TypeError(`unsupported ${values.stage} artifact: ${values.name}`);
     if (prd && readTaskTypeFromDecisionLog(context.artifacts.read("decision-log.md")) !== "规划任务") {
       throw new TypeError("portable build-prd writes require an explicit planning task type in the current decision-log");
     }
@@ -1340,8 +1331,11 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     if (fields.stage !== undefined && fields.stage !== values.stage) throw new TypeError("confirmation stage differs from CLI stage");
     const refs = fields.materialRefs;
     const closeDir = join(context.task.taskPath, "quality", "evidence", "close");
-    if (values.stage === "verify-code" && Array.isArray(refs) && refs.length === 1 && typeof refs[0] === "string"
-        && dirname(refs[0]) === closeDir && /^\d{4}-\d{2}-\d{2}-\d{3}-close-plan\.json(?:#.*)?$/.test(basename(refs[0]))) {
+    const isClosePlanRef = ref => typeof ref === "string"
+      && dirname(resolve(context.workspace.worktreeRoot, ref)) === closeDir
+      && /^\d{4}-\d{2}-\d{2}-\d{3}-close-plan\.json(?:#.*)?$/.test(basename(ref));
+    if (["verify-code", "make-decision"].includes(values.stage) && Array.isArray(refs) && refs.some(isClosePlanRef)) {
+      if (refs.length !== 1) throw new TypeError("close confirmation requires exactly one plan reference");
       if (refs[0].includes("#") || !isAbsolute(refs[0]) || resolve(refs[0]) !== refs[0]) throw new TypeError("close confirmation requires a canonical plain plan path without fragments");
       if (Object.keys(fields).some(key => !["stage", "decision", "reply", "materialRefs"].includes(key))) throw new TypeError("close confirmation contains unsupported fields");
       const confirmed = await confirmClosePlan({ taskDir: context.task.taskPath, planRef: refs[0], outcome: fields.decision, replyText: fields.reply });

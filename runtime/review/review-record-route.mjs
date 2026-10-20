@@ -37,7 +37,7 @@ function subject(request) {
   if(request.surface!==undefined && request.surface!==null && !["document","code"].includes(request.surface))throw coded("REVIEW_SURFACE_INVALID","surface must describe document or code material");
   const phase=request.phase_id ?? request.phaseId ?? null;
   const scope=identity.stage==="build-code" && identity.reviewKind===null ? identity.reviewScope ?? "phase" : identity.reviewScope;
-  if(scope==="phase" && identity.reviewKind===null && (!/^P[1-9][0-9]*$/.test(phase ?? "") || request.subject_kind!==undefined && request.subject_kind!=="phase")) throw coded("REVIEW_SUBJECT_INVALID","phase review requires a concrete phase_id and subject_kind=phase");
+  if(scope==="phase" && identity.reviewKind===null && (phase !== null && !/^P[1-9][0-9]*$/.test(phase) || request.subject_kind!==undefined && request.subject_kind!=="phase")) throw coded("REVIEW_SUBJECT_INVALID","phase review requires a concrete phase_id and subject_kind=phase");
   return {stage:identity.stage,review_track:identity.reviewTrack,review_kind:identity.reviewKind,review_scope:scope,
     subject_kind:scope==="phase" ? "phase" : request.subject_kind ?? "document",phase_id:phase,surface:request.surface ?? null};
 }

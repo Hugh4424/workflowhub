@@ -39,8 +39,6 @@
     },
     "review_kind": {
       "enum": [
-        "mini_task.design",
-        "mini_task.implementation",
         "build_prd",
         null
       ]
@@ -1234,10 +1232,39 @@
         "properties": {
           "subject_kind": {
             "const": "phase"
+          }
+        },
+        "if": {
+          "properties": {
+            "stage": {
+              "const": "build-code"
+            },
+            "review_kind": {
+              "type": "null"
+            }
           },
-          "phase_id": {
-            "type": "string",
-            "pattern": "^P[1-9][0-9]*$"
+          "required": [
+            "stage",
+            "review_kind"
+          ]
+        },
+        "then": {
+          "properties": {
+            "phase_id": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^P[1-9][0-9]*$"
+            }
+          }
+        },
+        "else": {
+          "properties": {
+            "phase_id": {
+              "type": "string",
+              "pattern": "^P[1-9][0-9]*$"
+            }
           }
         }
       }

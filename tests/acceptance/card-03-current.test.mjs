@@ -119,7 +119,7 @@ const TARGET_OBSERVATIONS = Object.freeze({
   retired_templates_present: [],
   phase_template_fields_missing: [],
   stage_runtime_review_budget: false,
-  make_decision_material_set: ["decision-log.md"],
+  make_decision_material_set: ["decision-log.md", "spec.md", "phases/index.md"],
   c2_irreversible_rules_present: false,
   threshold_registered: true,
   g1_drill_steps: ["①停并行", "②主会话重排", "③作废批次登记"],
@@ -249,7 +249,7 @@ describe("CARD-03 current source readback preserves original expected values wit
     expect(byId.get("ORACLE-DISP-002:phase-template-fields")?.actual).toEqual(observations.phase_template_fields_missing);
     expect(byId.get("ORACLE-SKL-001:no-per-file-sha")?.actual)
       .toEqual({ bundles_present: observations.bundle_count > 0, per_file_sha: observations.bundle_per_file_sha_paths });
-    expect(byId.get("ORACLE-FIX-001:make-decision-needs-decision-log-only")?.expected).toEqual(["decision-log.md"]);
+    expect(byId.get("ORACLE-FIX-001:make-decision-needs-decision-log-only")?.expected).toEqual(["decision-log.md", "spec.md", "phases/index.md"]);
     expect(byId.get("ORACLE-SKL-002:skill-closure")?.expected).toEqual({ exit_code: 0, stderr: "" });
     expect(byId.get("ORACLE-SKL-002:skill-closure")?.actual).toEqual({ exit_code: closure.exit_code, stderr: closure.stderr.trim() });
     expect(observations.historical_inventory_source.status).toBe("unknown");
@@ -278,7 +278,7 @@ describe("CARD-03 current source readback preserves original expected values wit
     expect(o.bundle_per_file_sha_paths).toEqual([]);
     expect(o.retired_templates_present).toEqual([]);
     expect(o.stage_runtime_review_budget).toBe(false);
-    expect(o.make_decision_material_set).toEqual(["decision-log.md"]);
+    expect(o.make_decision_material_set).toEqual(["decision-log.md", "spec.md", "phases/index.md"]);
     expect(o.c2_irreversible_rules_present).toBe(false);
     expect(o.dispatch_evidence.status).toBe("unknown");
     expect(o.g1_actual_demonstration).toBe("unknown");

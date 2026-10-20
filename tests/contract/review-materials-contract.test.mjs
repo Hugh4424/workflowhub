@@ -128,30 +128,13 @@ describe("N3 P6 mini design lens boundary", () => {
     spec: "The design review sees its current requirements, risks, tests and rollback.",
   });
 
-  it("keeps a legal default mini design identity and excludes the lens from delivery", () => {
-    const request = {stage: "build-code", reviewKind: "mini_task.design", materials: miniMaterials()};
-    expect(Object.hasOwn(request, "surface")).toBe(false);
-    expect(assertReviewIdentity(request)).toMatchObject({stage: "build-code", reviewKind: "mini_task.design"});
-    const b = packet(request);
-    try {
-      const manifest = JSON.parse(readFileSync(join(b.bundleRoot, "manifest.json"), "utf8"));
-      expect(manifest).toMatchObject({stage: "build-code", surface: "mini_task.design"});
-      expect(b.deliveryManifest.map(entry => entry.path)).not.toContain(lensPath);
-      expect(manifest.files.map(entry => entry.path)).not.toContain(lensPath);
-      expect(existsSync(join(b.bundleRoot, lensPath))).toBe(false);
-      expect(readFileSync(join(b.bundleRoot, "review-instructions.md"), "utf8")).not.toContain(lensPath);
-      for (const entry of b.deliveryManifest) {
-        expect(readFileSync(join(b.bundleRoot, entry.path)).includes(lensBytes())).toBe(false);
-      }
-    } finally { b.dispose(); }
+  it.each(["mini_task.design", "mini_task.implementation"])("rejects retired identity %s before materialization", reviewKind => {
+    const request = {stage:"build-code",reviewKind,materials:miniMaterials()};
+    expect(()=>assertReviewIdentity(request)).toThrow(/unsupported|unknown|review.kind/i);
+    expect(()=>packet(request)).toThrow(/unsupported|unknown|review.kind/i);
   });
 
   const controls = [
-    ["mini implementation", () => ({stage: "build-code", reviewKind: "mini_task.implementation", materials: {
-      ...miniMaterials(), test_evidence: "Owned behavior test result", ac_trace: "AC-1: implemented outcome",
-      user_result: "Owned implementation result", coverage_limits: "No live provider in this packet test",
-      skip_reasons: "No skipped behavior in the controlled packet", remaining_risks: "Live advice not observed",
-    }}), true],
     ["detail", () => ({stage: "make-decision", reviewTrack: "detail", materials: {
       raw_requirement: "R-1: one small outcome", approved_direction: "D-1: implement that outcome with bounded scope",
     }}), true],

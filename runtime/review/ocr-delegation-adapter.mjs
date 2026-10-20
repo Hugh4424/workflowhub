@@ -572,20 +572,19 @@ function loadTrustedOcrConfig({ requestedStage = null } = {}) {
     throw new Error("workflowhub host wh_review must be version 2 with stages");
   }
   if (whReview && (Object.hasOwn(whReview, "profiles") || Object.hasOwn(whReview, "priority")
-      || Object.keys(whReview).some((key) => !["version", "stages", "mini_task", "non_stage"].includes(key)))) {
+      || Object.keys(whReview).some((key) => !["version", "stages", "non_stage"].includes(key)))) {
     throw new Error("workflowhub host wh_review contains unsupported provider declarations or fields");
   }
   return { config, attachmentRoot, whReview, requestedStage };
 }
 
 function resolveTrustedOcrRoute(whReview, stage, reviewTrack, reviewKind, reviewScope) {
-  const miniImplementation = reviewKind === "mini_task.implementation" && stage === "build-code" && reviewScope === "phase";
-  if (!whReview || reviewTrack !== null || (!miniImplementation && (reviewKind !== null
+  if (!whReview || reviewTrack !== null || (reviewKind !== null
       || (stage === "build-code" && reviewScope !== "phase" && reviewScope !== "integration")
-      || (stage !== "build-code" && (stage !== "verify-code" || reviewScope !== null))))) return null;
-  const configured = miniImplementation ? whReview.mini_task?.implementation : whReview.stages[stage];
+      || (stage !== "build-code" && (stage !== "verify-code" || reviewScope !== null)))) return null;
+  const configured = whReview.stages[stage];
   if (!configured) return null;
-  const label = miniImplementation ? "workflowhub host wh_review.mini_task.implementation" : `workflowhub host wh_review.stages.${stage}`;
+  const label = `workflowhub host wh_review.stages.${stage}`;
   if (Object.hasOwn(configured, "minimum_heterologous")) {
     throw new Error(`${label}.minimum_heterologous is retired; remove it from the active route configuration`);
   }
@@ -593,7 +592,7 @@ function resolveTrustedOcrRoute(whReview, stage, reviewTrack, reviewKind, review
       || Object.keys(configured).some((key) => !["initial", "closure", "mode"].includes(key))) {
     throw new Error(`${label} is invalid`);
   }
-  const requiredMode = !miniImplementation && stage === "build-code" ? "full_only" : "single_round";
+  const requiredMode = stage === "build-code" ? "full_only" : "single_round";
   if ((configured.mode ?? "adaptive") !== requiredMode || configured.closure !== undefined) {
     throw new Error(`${label}.mode must be ${requiredMode}`);
   }

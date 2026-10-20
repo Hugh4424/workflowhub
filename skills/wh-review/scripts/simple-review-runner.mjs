@@ -113,8 +113,6 @@ const FOCUS = Object.freeze({
   "build-code": "Check the submitted implementation material for correctness, real consumers, failure paths, tests, and unnecessary code.",
   "verify-code": "Check the submitted implementation and test code for correctness, real consumer seams, lifecycle/concurrency and security risks, failure boundaries, and test strength. When authenticated-evidence.json is supplied for a reviewed_execution-bound request, use it only to compare code/test claims with recorded execution and identify false-green behavior. Review acceptance artifacts for AC coverage, evidence completeness, and false-green claims alongside the implementation and tests. Do not report release/close status as code findings.",
   build_prd: "Review only the complete PRD materials (decision log, PRD, task map, design facts, quality facts, and declared supporting facts) for coverage, task ownership, handoff, acceptance, and necessity. This is report-only advice for the non-formal build-prd surface; do not treat it as a formal stage, verdict, completion, or release authorization.",
-  "mini_task.design": "Check that the mini-task remains small, complete, testable, and reversible.",
-  "mini_task.implementation": "Check implementation correctness, user result, tests, and scope boundaries.",
 });
 
 // The simple runner is the public review execution seam used by stage-runtime

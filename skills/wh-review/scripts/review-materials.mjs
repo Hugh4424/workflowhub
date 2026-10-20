@@ -26,7 +26,6 @@ const FULL_PHASE_DIFF_PREFIXES = [
   "skills/spec-clarify/",
   "skills/talk-with-zhipeng/",
   "skills/wh-review/",
-  "skills/mini-task/",
   "skills/backend-testing/",
   "skills/frontend-testing/",
   "skills/fullstack-slice-testing/",
@@ -430,7 +429,6 @@ function ruleForIdentity(stage, reviewTrack, reviewScope, reviewKind = null) {
 
 function stagePlanFor(stage, track, reviewKind = null) {
   if (reviewKind === "build_prd") return skillPlan.non_stage?.build_prd;
-  if (reviewKind !== null && reviewKind !== undefined) return skillPlan.mini_task?.[reviewKind.split(".")[1]];
   const stagePlan = skillPlan.stages[stage];
   return stage === "make-decision" ? stagePlan?.tracks?.[track] : stagePlan;
 }
@@ -501,7 +499,6 @@ function selectReviewerSkills(stage, track, reviewKind, uiScope, materials, code
 
 function reviewSurfaceFor(stage, track, reviewScope, reviewKind) {
   if (reviewKind === "build_prd") return "build-prd";
-  if (reviewKind === "mini_task.design" || reviewKind === "mini_task.implementation") return `mini-task/${reviewKind.split(".")[1]}`;
   if (stage === "make-decision") return `${stage}/${track ?? ""}`;
   if (stage === "build-code") return `${stage}/${reviewScope ?? "phase"}`;
   return stage;
@@ -521,8 +518,6 @@ function stageReviewFocus(stage, track, reviewScope, reviewKind = null, directio
       : " role=blue：对抗性审查当前材料，主动寻找隐藏前提、反例、失败后果和更小替代路径，不把 red 结果当作结论。"
     : "";
   if (reviewKind === "build_prd") return `Focus on one complete PRD review: coverage, card ownership, user flow and states, dependencies and handoff, applicable design/source facts, acceptance/failure criteria, and unnecessary scope. This is a non-stage report-only surface; debate is limited to substantive product-direction disagreement (at most two rounds), while analyze/reflection remain report-only facts. Preserve provider, transport, partial, and unavailable facts; do not invent build-plan materials or a stage result.${ordered}`;
-  if (reviewKind === "mini_task.design") return `Focus on whether the mini-task current materials describe one small, safe, complete design, its risks, dependencies, boundaries, tests, rollback, and delivery; do not invent product scope.${ordered}`;
-  if (reviewKind === "mini_task.implementation") return `Focus on whether the mini-task implementation matches the supplied current materials and current diff, tests, AC trace, real user result, coverage limits, and remaining risks.${ordered}`;
   if (stage === "make-decision" && track === "direction" && directionMode === "reconstruct") {
     return `First request: independently reconstruct the problem, user flow, hard constraints, non-goals, failure consequences, and the smallest reversible boundary from only the raw requirement and objective facts. Do not look for or infer a current choice.${roleFocus}${ordered}`;
   }
@@ -583,8 +578,6 @@ function renderReviewInstructionsFor(stage, track, uiScope, reviewScope, reviewK
   const stageFocus = stageReviewFocus(stage, track, reviewScope, reviewKind, directionMode, role);
   const verifyBound = reviewKind === "build_prd"
     ? "This is one dedicated non-stage build-prd review. Do not substitute a formal stage review, persist a canonical stage attempt/result, demand a provider verdict, or repeat an unchanged review."
-    : reviewKind
-    ? "This is one dedicated mini-task review. Do not substitute a standard stage review, demand a provider verdict, or repeat an unchanged review."
     : stage === "verify-code"
     ? "This is one bounded post-repair code review. Inspect the current diff, implementation assessment, real entry points and consumers, relevant test context, lifecycle and failure paths, security boundaries, and open implementation risks. When authenticated-evidence.json is supplied, use it only to check code/test execution claims for false-green behavior; do not audit completeness. Do not demand a full evidence tree, acceptance replay, material completeness, historical replay, provider pass, or another review; report only findings that can affect code delivery."
     : `${blind} ${reviewInstruction}`;
@@ -592,15 +585,8 @@ function renderReviewInstructionsFor(stage, track, uiScope, reviewScope, reviewK
   const buildCodeBoundary = stage === "build-code" && reviewKind === null
     ? "For build-code, record this review's real findings and transport status as advice. Downstream finding disposition and repairs continue through the manifest; they do not dispatch this completed review step again or seek a clean/provider-pass result."
     : "";
-  const miniImplementationBoundary = reviewKind === "mini_task.implementation"
-    ? "For mini-task implementation, perform one implementation review. Allow one focused re-review only after an actual repair or subject change; repeated findings, an unchanged subject, or no trusted terminal result remain visible as needs_human, unavailable, or incomplete. Do not mechanically retry."
-    : "";
   const subjectReading = reviewKind === "build_prd"
     ? "Read the complete PRD, parent decision, task map, design facts, quality facts, and any declared source/confirmation/delivery facts; do not infer missing materials or read a repository."
-    : reviewKind === "mini_task.design"
-    ? "Read the supplied current materials and design risks; no implementation diff or diff index is supplied for a design review."
-    : reviewKind === "mini_task.implementation"
-    ? "Read the current implementation diff/snapshot and the explicitly supplied tests, AC trace, and real user result."
     : stage === "build-code" && reviewScope === "integration" && candidateExperiment
     ? "For this isolated OCR candidate integration, read the complete current worktree diff together with the final current worktree subject, full acceptance criteria, relevant test outcome, and selected implementation context. AC bindings and evidence-ledger details are host-only and are not review targets."
     : stage === "build-code" && reviewScope === "integration"
@@ -631,7 +617,7 @@ function renderReviewInstructionsFor(stage, track, uiScope, reviewScope, reviewK
     if(navigation.diffBytes!==null)nav.push("完整变更：\x60"+(navigation.diffBytes>PHASE_DIFF_INLINE_LIMIT_BYTES?"diff-index.json":"changes.diff")+"\x60（索引所列分片完整保留字节）。");
     nav.push("以上仅为导航；按完整合同核对正文和失败边界。");
   }
-  return nav.map(line=>line+"\n").join("")+`Review stage ${scope}. Read the manifest-listed relative packet paths only; begin with review-instructions.md. A broker may present the packet with a bundle/ delivery prefix; native transport presents these paths directly at its packet root. Do not add that transport prefix to findings anchors. Read contracts/ and ${skillInstruction} The manifest lists the supplied provider files. Do not fetch excluded raw logs or treat receipts and checksums as workflow permission. ${subjectReading} Use context/ only for map-selected dependencies. ${stageFocus}${uiNote ? ` ${uiNote}` : ""} ${verifyBound} ${roleBoundary} ${adviceBoundary} ${buildCodeBoundary} ${miniImplementationBoundary} ${findingBudget} Return only one JSON object with findings using the requested findings-only reviewer schema; findings may be empty. Do not output verdict, pass/fail status, summary, checklist, skill execution receipts, or a second JSON object. Do not access the repository, parent directories, Git, general shell, network, or host paths. ${PACKET_BOUND_CODEX_READ_EXCEPTION}${candidateOcrToolBoundaries}\n`;
+  return nav.map(line=>line+"\n").join("")+`Review stage ${scope}. Read the manifest-listed relative packet paths only; begin with review-instructions.md. A broker may present the packet with a bundle/ delivery prefix; native transport presents these paths directly at its packet root. Do not add that transport prefix to findings anchors. Read contracts/ and ${skillInstruction} The manifest lists the supplied provider files. Do not fetch excluded raw logs or treat receipts and checksums as workflow permission. ${subjectReading} Use context/ only for map-selected dependencies. ${stageFocus}${uiNote ? ` ${uiNote}` : ""} ${verifyBound} ${roleBoundary} ${adviceBoundary} ${buildCodeBoundary} ${findingBudget} Return only one JSON object with findings using the requested findings-only reviewer schema; findings may be empty. Do not output verdict, pass/fail status, summary, checklist, skill execution receipts, or a second JSON object. Do not access the repository, parent directories, Git, general shell, network, or host paths. ${PACKET_BOUND_CODEX_READ_EXCEPTION}${candidateOcrToolBoundaries}\n`;
 }
 
 function readRegisteredFile(path,label) {
@@ -742,7 +728,7 @@ export function buildReviewMaterials({attachmentRoot,reviewDataRoot,stage,review
   };
   try {
     const documentFace=surface==="document"&&stage==="build-code";
-    const codePacket=["build-code","verify-code"].includes(stage)&&!documentFace&&reviewKind!=="mini_task.design";
+    const codePacket=["build-code","verify-code"].includes(stage)&&!documentFace;
     const selection=selectReviewerSkills(stage,reviewTrack,reviewKind,uiScope,filtered.materials,codePacket);
     const instructionSelection=stage==="build-plan" && reviewKind===null
       ? selection : selectReviewerSkills(stage,reviewTrack,reviewKind,uiScope,filtered.materials);

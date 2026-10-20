@@ -9,9 +9,6 @@ skills:
   - name: grill-with-docs
     path: skills/grill-with-docs/SKILL.md
     trigger: after_detail_advice_full_owner_method_or_resolved_domain_term_change_during_decision
-  - name: mini-task
-    path: skills/mini-task/SKILL.md
-    trigger: ordinary_task_execution_goal_entry_eligibility_advice
   - name: decision-log
     path: skills/decision-log/SKILL.md
     trigger: decision_record
@@ -33,6 +30,12 @@ skills:
   - name: stage-reflection
     path: skills/stage-reflection/SKILL.md
     trigger: actual_stage_end_process_issue_optional
+  - name: answer-as-page
+    path: skills/answer-as-page/SKILL.md
+    trigger: route_cockpit_criteria_and_actual_update_times_except_small
+  - name: stage-closeout
+    path: skills/stage-closeout/SKILL.md
+    trigger: small_or_normal_physical_delivery_after_implementation_and_applicable_review
 runtime_capabilities:
   - id: node
     kind: cli

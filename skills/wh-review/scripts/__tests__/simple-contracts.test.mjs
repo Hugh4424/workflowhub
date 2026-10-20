@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -111,14 +111,20 @@ describe("simple wh-review contracts", () => {
  const bundle=readJson(join(root,"wh-review/skill-bundle.json"));for(const path of ["scripts/review-materials.mjs","scripts/review-provider-client.mjs","scripts/simple-review-runner.mjs","contracts/provider-protocol.md","stage-skill-plan.json"])expect(bundle.files).toContain(path);
  });
 
-  it("schema-enforces mini-task implementation evidence fields", () => {
-    const schema = readJson(join(schemaRoot, "stage-materials.schema.json"));
-    const matrix = readJson(join(runtimeReviewRoot, "stage-materials.json"));
-    const validate = new Ajv2020({ strict: false }).compile(schema);
-    expect(validate(matrix)).toBe(true);
-    const missingUserResult = structuredClone(matrix);
-    missingUserResult.mini_task.implementation.required = missingUserResult.mini_task.implementation.required.filter((key) => key !== "user_result");
-    expect(validate(missingUserResult)).toBe(false);
+  it("schema rejects a retired mini-task material matrix", () => {
+    const matrix=readJson(join(runtimeReviewRoot,"stage-materials.json"));
+    const validate=validator("stage-materials.schema.json");
+    expect(validate(matrix),validate.errors).toBe(true);
+    for(const kind of ["design","implementation"]){
+      expect(validate({...matrix,mini_task:{[kind]:{required:["raw_requirement"],optional:[]}}})).toBe(false);
+    }
+    for(const name of ["attempt.schema.json","result.schema.json"]){
+      const schema=readJson(join(schemaRoot,name));
+      const enumValues=[];
+      const visit=value=>{if(!value||typeof value!=="object")return;if(Array.isArray(value.enum))enumValues.push(...value.enum);for(const child of Object.values(value))visit(child);};
+      visit(schema);
+      expect(enumValues).not.toContain("mini_task.design");expect(enumValues).not.toContain("mini_task.implementation");
+    }
   });
 
 
@@ -179,7 +185,7 @@ describe("simple wh-review contracts", () => {
   });
 
   it("seals post build-plan Phase files separately through the public packet", () => {
-    const attachmentRoot = mkdtempSync(join(tmpdir(), "workflowhub-post-phase-review-"));
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-post-phase-review-")));
     temporaryRoots.push(attachmentRoot);
     const materials = {
       raw_requirement: "R-001 original result",
@@ -223,7 +229,7 @@ describe("simple wh-review contracts", () => {
   });
 
   it("dispatches the public post build-plan packet with real Phase paths", async () => {
-    const attachmentRoot = mkdtempSync(join(tmpdir(), "workflowhub-post-phase-dispatch-"));
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-post-phase-dispatch-")));
     temporaryRoots.push(attachmentRoot);
     const selection = selectionFor(["other/model"]);
     const dependencies = runnerDependencies({ selection, bundleRoot: attachmentRoot });
@@ -397,7 +403,7 @@ describe("simple wh-review contracts", () => {
     }
   });
 
-  it("documents actual input, raw provenance and unavailable boundaries",()=>{const skill=readFileSync(join(root,"wh-review/SKILL.md"),"utf8");for(const phrase of ["stage/track","完整材料","MATERIAL_INCOMPLETE","原始 provider 身份","unavailable","空 findings","不是用户同意或交付完成"])expect(skill).toContain(phrase);expect(skill).toContain("provider 只读本次提交材料");});
+  it("documents actual input, raw provenance and unavailable boundaries",()=>{const skill=readFileSync(join(root,"wh-review/SKILL.md"),"utf8");for(const phrase of ["stage/track","完整材料","MATERIAL_INCOMPLETE","真实 adapter/source/model","unavailable","空 findings","不是用户同意或交付完成"])expect(skill).toContain(phrase);expect(skill).toMatch(/provider.*只读|只读.*provider/);});
 
   it("keeps the direct host methods and path tools independent of retired bridges",()=>{const protocol=readFileSync(join(root,"workflowhub-host-protocol/SKILL.md"),"utf8");expect(protocol).toContain("先核实际task worktree、当前材料和目标范围");expect(protocol).toContain("工作区/写边界①");expect(protocol).toContain("不建立快照/hash/receipt推进许可证");expect(protocol).toContain("外部Stage Agent/session/bridge前置");expect(protocol).not.toContain("multica repo checkout");});
 
@@ -496,19 +502,14 @@ describe("simple wh-review contracts", () => {
 
   it("validates the real stage matrix and protects blind direction fields",()=>{const matrix=readJson(join(runtimeReviewRoot,"stage-materials.json"));const validate=validator("stage-materials.schema.json");expect(validate(matrix),JSON.stringify(validate.errors)).toBe(true);const direction=matrix.stages["make-decision"].tracks.direction;expect(direction.required).toEqual(expect.arrayContaining(["raw_requirement","objective_facts","convergence_outline"]));expect(direction.forbidden).toEqual(expect.arrayContaining(["proposed_solution","decision_log","spec","plan","changes_diff"]));expect(matrix.stages["build-code"].profiles).not.toHaveProperty("integration");expect(matrix.stages["build-plan"].profiles.post.required).toEqual(expect.arrayContaining(["draft_spec","phase_authorities","phase_index"]));expect(matrix.stages["verify-code"].required).toEqual(expect.arrayContaining(["changed_files","implementation_assessment","test_context","open_risks"]));});
 
-  it("keeps mini-task review kinds outside the five formal stages", () => {
-    const matrix = readJson(join(runtimeReviewRoot, "stage-materials.json"));
-    const validate = validator("stage-materials.schema.json");
-    expect(matrix.mini_task.design.required).toEqual(expect.arrayContaining(["raw_requirement", "decision_log", "spec", "review_instructions"]));
-    expect(matrix.mini_task.implementation.required).toEqual(expect.arrayContaining(["raw_requirement", "decision_log", "spec", "test_evidence", "ac_trace", "user_result", "coverage_limits", "skip_reasons", "remaining_risks", "review_instructions"]));
-    expect(validate(matrix), validate.errors).toBe(true);
+  it("removes retired mini-task matrix, plan and contract assets", () => {
+    const matrix=readJson(join(runtimeReviewRoot,"stage-materials.json"));
+    expect(validator("stage-materials.schema.json")(matrix)).toBe(true);
+    expect(matrix).not.toHaveProperty("mini_task");
     expect(matrix.stages).not.toHaveProperty("mini-task");
-    const plan = readJson(join(root, "wh-review", "stage-skill-plan.json"));
-    expect(plan.mini_task.design.review_kind).toBe("mini_task.design");
-    expect(plan.mini_task.implementation.review_kind).toBe("mini_task.implementation");
-    expect(plan.stages).not.toHaveProperty("mini-task");
-    expect(readFileSync(join(root, "wh-review", "contracts", "mini-task-design.md"), "utf8")).toMatch(/方案审查/);
-    expect(readFileSync(join(root, "wh-review", "contracts", "mini-task-implementation.md"), "utf8")).toMatch(/实施审查/);
+    const plan=readJson(join(root,"wh-review","stage-skill-plan.json"));
+    expect(plan).not.toHaveProperty("mini_task");expect(plan.stages).not.toHaveProperty("mini-task");
+    for(const mode of ["design","implementation"])expect(existsSync(join(root,"wh-review","contracts",`mini-task-${mode}.md`))).toBe(false);
   });
 
   it("accepts additive fields in workflowhub-result.v1", () => {
@@ -528,21 +529,21 @@ describe("simple wh-review contracts", () => {
 
   it("keeps actual stage contracts packet-only and findings advisory",()=>{for(const stage of ["make-decision","build-plan","build-code","verify-code"]){const contract=readFileSync(join(root,"wh-review/contracts",stage+".md"),"utf8");expect(contract).toContain("findings");expect(contract).toMatch(/bundle|packet|包内/);expect(contract).toMatch(/unavailable|不可用/);expect(contract).toMatch(/不.*(?:完成|通过)|不是.*门/);expect(contract).toContain("宿主");}const plan=readJson(join(root,"wh-review/stage-skill-plan.json"));expect(plan.stages).not.toHaveProperty("build-spec");});
 
-  it("requires physical blind visibility and one request per role",()=>{const contract=readFileSync(join(root,"wh-review/contracts/make-decision.md"),"utf8");for(const phrase of ["每个 role 一次公共 wh-review 请求","不循环取得空 findings","reconstruct","reveal","challenge","重建包不交付已定材料","有效重建才创建揭示包"])expect(contract).toContain(phrase);});
+  it("requires physical blind visibility and one request per role",()=>{const contract=readFileSync(join(root,"wh-review/contracts/make-decision.md"),"utf8");for(const phrase of ["每 role 一次公共 wh-review 请求","不循环取得空 findings","reconstruct","reveal","challenge","重建包不交付已定材料","只有收到有效重建才创建揭示包"])expect(contract).toContain(phrase);});
 
   it("reports scope expansion as findings without rejecting necessary protections", () => {
     const lens = readFileSync(join(root, "simplicity-guard", "SKILL.md"), "utf8");
     for (const expansion of [
       "scope creep",
-      "重复已有能力",
-      "投机性抽象",
+      "重复能力",
+      "投机抽象",
       "兼容层",
       "死代码",
-      "隐藏失败兜底"
+      "隐藏失败"
     ]) expect(lens).toContain(expansion);
-    expect(lens).toMatch(/同一 provider findings 中输出具体/);
+    expect(lens).toContain("同一packet");expect(lens).toContain("输出共用findings");expect(lens).toContain("拒绝假阳性给原材料证据和理由");
     for (const protection of ["测试", "输入校验", "错误处理", "安全", "可访问性"])
-      expect(lens).toMatch(new RegExp(`不得删除[\\s\\S]*${protection}|${protection}[\\s\\S]*不得因追求少代码而删掉`));
+      expect(lens).toMatch(new RegExp(`不删必要[\\s\\S]*${protection}`));
   });
 
   it("RED: stage-result facts.review references the result instead of copying a verdict", () => {

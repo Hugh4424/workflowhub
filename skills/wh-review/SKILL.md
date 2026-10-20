@@ -13,7 +13,7 @@ stage-skill-plan.json 仍在本技能原路径提供 required_skills/optional_sk
 
 ## Input
 
-`stage`为审查阶段、`materials`为允许的完整材料；make-decision以 `review_track`分方向/细节，mini-task以现 `review_kind`分面。材料名依当前合同，如 `raw_requirement`、`approved_direction`、`draft_spec_or_acceptance`。`host_provider`不读、不参与选择，旧值不排除/阻断来源，不增必填。
+`stage`为审查阶段、`materials`为允许的完整材料；make-decision以 `review_track`分方向/细节，非阶段审查以现 `review_kind`分面。材料名依当前合同，如 `raw_requirement`、`approved_direction`、`draft_spec_or_acceptance`。`host_provider`不读、不参与选择，旧值不排除/阻断来源，不增必填。
 
 普通首轮request不传 `task_path`、`project_name`、`task_id`、Workspace、Git、snapshot、revision、provider allowlist、result-storage；任务认证仅由「现有接口」的公开CLI参数提供，不入provider材料，旧额外task/workspace字段不作门。
 
@@ -85,7 +85,7 @@ OCR 不可用时四件齐：检测输出与原始失败各沿其唯一原件引�
 
 裸 `wh-review-cli.mjs run` 不解析 ref：它接收审查请求本身，没有公开入口的 request 外壳，材料必须先内联完整字节；ref 对象只会被 packet 序列化，不能冒文件已读。该旧 CLI 仍保留 run、verify-final、doctor 三个真实接口，按实际脚本参数调用；它们与公开七类 runtime 的职责分别保留，不新增 flag/public command 或 legacy bridge。
 
-正式审查原件由现有 `runtime/review/review-record-route.mjs` 单一 producer 保存；只读查询、parser/error、mini_task 路由及 contracts、runner/provider/source/helper/schema 仍归现有实现 owner，不由本方法另建流程或 writer。方法正文与接线登记分别由其 owner 维护，不以改文承诺 runtime/canonical/bundle 消费者运行等价。
+正式审查原件由现有 `runtime/review/review-record-route.mjs` 单一 producer 保存；只读查询、parser/error、非阶段路由及 contracts、runner/provider/source/helper/schema 仍归现有实现 owner，不由本方法另建流程或 writer。方法正文与接线登记分别由其 owner 维护，不以改文承诺 runtime/canonical/bundle 消费者运行等价。
 
 ## 写作与来源
 

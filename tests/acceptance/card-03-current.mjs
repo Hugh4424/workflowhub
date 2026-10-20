@@ -554,7 +554,7 @@ export function deriveCard03Entry({ vitest, closure, observations, cwd }) {
       { exit_code: closure?.exit_code ?? null, stderr: String(closure?.stderr ?? "").trim() }),
     a("ORACLE-DISP-002:phase-template-fields", [], o.phase_template_fields_missing),
     a("ORACLE-RT-002:no-review-budget-run-field", false, o.stage_runtime_review_budget),
-    a("ORACLE-FIX-001:make-decision-needs-decision-log-only", ["decision-log.md"], o.make_decision_material_set),
+    a("ORACLE-FIX-001:make-decision-needs-decision-log-only", ["decision-log.md", "spec.md", "phases/index.md"], o.make_decision_material_set),
     // P1 proves closeout wiring/method text only; original public reflection behavior remains 未覆盖.
     a("ORACLE-FIX-001:original-public-reflection-coverage", "covered", "未覆盖"),
     a("ORACLE-FIX-003:no-c2-irreversible-rules", false, o.c2_irreversible_rules_present),

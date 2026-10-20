@@ -264,7 +264,7 @@ describe("trusted third-review host configuration", () => {
       .toThrow(/wh_review\.review_kinds is not supported/);
   });
 
-  it("requires one round for both explicit mini-task review routes", () => {
+  it("rejects both retired explicit mini-task review routes", () => {
     const { brokerConfig, hostConfig } = configuredRoot();
     const host = JSON.parse(readFileSync(hostConfig, "utf8"));
     host.wh_review = { version: 2, stages: {}, mini_task: {
@@ -272,17 +272,19 @@ describe("trusted third-review host configuration", () => {
       implementation: { initial: ["kimi", "claude-code"], mode: "single_round" },
     } };
     writeFileSync(hostConfig, JSON.stringify(host));
+    expect(() => loadTrustedThirdReviewConfig({hostConfigPath:hostConfig})).toThrow(/mini_task.*(?:not supported|unsupported)/i);
+    host.wh_review={version:2,stages:{"build-plan":{initial:["kimi"],mode:"single_round"}}};
+    writeFileSync(hostConfig,JSON.stringify(host));
     const trusted = loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig });
-    expect(resolveTrustedReviewRoute(trusted.whReview, "build-code", null, "mini_task.design"))
-      .toMatchObject({ initial: ["kimi", "claude-code"], mode: "single_round" });
-    expect(resolveTrustedReviewRoute(trusted.whReview, "build-code", null, "mini_task.implementation"))
-      .toMatchObject({ initial: ["kimi", "claude-code"], mode: "single_round" });
+    expect(resolveTrustedReviewRoute(trusted.whReview,"build-plan")).toEqual({initial:["kimi"],mode:"single_round"});
+    expect(() => resolveTrustedReviewRoute(trusted.whReview, "build-code", null, "mini_task.design")).toThrow(/unsupported|unknown|review.kind/i);
+    expect(() => resolveTrustedReviewRoute(trusted.whReview, "build-code", null, "mini_task.implementation")).toThrow(/unsupported|unknown|review.kind/i);
     expect(() => resolveTrustedReviewRoute(trusted.whReview, "build-code", null, "mini_task.unknown"))
       .toThrow(/unsupported|unknown|mini_task/i);
     expect(brokerConfig).toBeTruthy();
   });
 
-  it("accepts the live single_round mini-task routes without changing configured providers", () => {
+  it("rejects retired routes configured with live provider names", () => {
     const { hostConfig } = configuredRoot();
     const host = JSON.parse(readFileSync(hostConfig, "utf8"));
     host.wh_review = { version: 2, stages: {}, mini_task: {
@@ -290,14 +292,16 @@ describe("trusted third-review host configuration", () => {
       implementation: { initial: ["opencode/v4flash", "codex/luna"], mode: "single_round" },
     } };
     writeFileSync(hostConfig, JSON.stringify(host));
+    expect(() => loadTrustedThirdReviewConfig({hostConfigPath:hostConfig})).toThrow(/mini_task.*(?:not supported|unsupported)/i);
+    host.wh_review={version:2,stages:{"build-plan":{initial:["kimi"],mode:"single_round"}}};
+    writeFileSync(hostConfig,JSON.stringify(host));
     const trusted = loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig });
-    expect(resolveTrustedReviewRoute(trusted.whReview, "build-code", null, "mini_task.design"))
-      .toMatchObject({ initial: ["opencode/v4flash", "codex/luna"], mode: "single_round" });
-    expect(resolveTrustedReviewRoute(trusted.whReview, "build-code", null, "mini_task.implementation"))
-      .toMatchObject({ initial: ["opencode/v4flash", "codex/luna"], mode: "single_round" });
+    expect(resolveTrustedReviewRoute(trusted.whReview,"build-plan")).toEqual({initial:["kimi"],mode:"single_round"});
+    expect(() => resolveTrustedReviewRoute(trusted.whReview, "build-code", null, "mini_task.design")).toThrow(/unsupported|unknown|review.kind/i);
+    expect(() => resolveTrustedReviewRoute(trusted.whReview, "build-code", null, "mini_task.implementation")).toThrow(/unsupported|unknown|review.kind/i);
   });
 
-  it("accepts the configured mini-task routes nested under stages without treating mini-task as a sixth stage", () => {
+  it("rejects retired routes nested under stages without adding a sixth stage", () => {
     const { hostConfig } = configuredRoot();
     const host = JSON.parse(readFileSync(hostConfig, "utf8"));
     host.wh_review = { version: 2, stages: { mini_task: {
@@ -305,11 +309,13 @@ describe("trusted third-review host configuration", () => {
       implementation: { initial: ["kimi", "claude-code"], mode: "single_round" },
     } } };
     writeFileSync(hostConfig, JSON.stringify(host));
+    expect(() => loadTrustedThirdReviewConfig({hostConfigPath:hostConfig})).toThrow(/mini_task.*(?:not supported|unsupported)/i);
+    host.wh_review={version:2,stages:{"build-plan":{initial:["kimi"],mode:"single_round"}}};
+    writeFileSync(hostConfig,JSON.stringify(host));
     const trusted = loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig });
-    expect(resolveTrustedReviewRoute(trusted.whReview, "build-code", null, "mini_task.design"))
-      .toMatchObject({ initial: ["kimi", "claude-code"], mode: "single_round" });
-    expect(resolveTrustedReviewRoute(trusted.whReview, "build-code", null, "mini_task.implementation"))
-      .toMatchObject({ initial: ["kimi", "claude-code"], mode: "single_round" });
+    expect(resolveTrustedReviewRoute(trusted.whReview,"build-plan")).toEqual({initial:["kimi"],mode:"single_round"});
+    expect(() => resolveTrustedReviewRoute(trusted.whReview, "build-code", null, "mini_task.design")).toThrow(/unsupported|unknown|review.kind/i);
+    expect(() => resolveTrustedReviewRoute(trusted.whReview, "build-code", null, "mini_task.implementation")).toThrow(/unsupported|unknown|review.kind/i);
     expect(Object.hasOwn(trusted.whReview.stages, "mini_task")).toBe(false);
   });
 

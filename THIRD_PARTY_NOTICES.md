@@ -100,3 +100,9 @@ addyosmani/agent-skills 固定commit `aeac41d4d005999432bb7312f7ff06383a91d59d`�
 ## N6技术分歧草图方法
 
 `skills/poteto-mode/playbooks/prototype.md` 来自 [backnotprop/pstack](https://github.com/backnotprop/pstack)，本地 LICENSE 为 MIT、Copyright (c) 2026 Lauren Tan；沿本文件既有完整 MIT 许可保留。固定原件、归档指纹和采用范围唯一回 catalog 的 `n6-technical-sketch`。提交未证实，镜像带自行改动，不称已绑定上游版本；上游许可链未独立核实。只采用该单文件的隔离观察方法；Feature、exhaust-the-design-space、the control skill及宿主调度器四项未保存，不声称吸收。拒绝代理代选产品偏好和一般免测试；实际消费者读 `AGENTS.md`「卡住与升级」。
+
+## N7交接、收口与交付说明方法
+
+既有方法吸收 addyosmani/agent-skills 的 `skills/git-workflow-and-versioning/SKILL.md`（MIT，Copyright (c) 2025 Addy Osmani，固定commit `aeac41d4d005999432bb7312f7ff06383a91d59d`），以及 backnotprop/pstack 的 `skills/no-comments/SKILL.md`、`skills/ketchup/SKILL.md`、`skills/reflect/SKILL.md`（接受判据另读其 `references/synthesizer.md`）、`skills/recall/SKILL.md`、`skills/poteto-mode/playbooks/opening-a-pr.md`（本地LICENSE为MIT，Copyright (c) 2026 Lauren Tan）。沿本文件既有完整MIT许可与版权声明保留。
+
+pstack固定包SHA256为 `f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8`；Git commit unknown，main URL只是取回坐标，镜像上游许可链未独立核实。六项固定文件字节与采用/排除、本地偏离、实际消费者、首验限制唯一回 `skills/catalog.yaml` 的 `n7-*` 条目；`skills/reuse-registry.md`仅导航。本次只补已有采用登记，不新增外部采用、执行依赖或授权，不证明历史首验或N8最终验收通过。

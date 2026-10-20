@@ -1,0 +1,476 @@
+{
+  "tasks": [
+    {
+      "id": "n8-controlled-small",
+      "level": "small",
+      "goal": "调整合成说明文件的一条标点，单点无风险",
+      "controlled_input": "仅合成文件sample.txt、synthetic-items.json；无真实用户数据或凭据。执行前由真实用户选择路线；未答不执行。",
+      "expected_calls": {
+        "stages": [
+          "make-decision"
+        ],
+        "steps": [
+          "entry-route",
+          "outline-hypothesis",
+          "bounded-research",
+          "thin-convergence",
+          "write-light-materials",
+          "approve-solution",
+          "implement-and-test",
+          "reflect-and-handoff",
+          "closeout"
+        ],
+        "confirmations": 1,
+        "skills": [
+          "workflows/make-decision/flows/small/SKILL.md#31共用技能逐项消费"
+        ],
+        "independent_review": false,
+        "confirmation_scope": "此数只为make-decision本路线真实选择/方向确认要求；complex后继计划确认及最终物理范围确认另按实际stage原方法执行并计入观测，不在资产预填总次数。",
+        "counts_are_execution_evidence": false
+      },
+      "failure_signals": [
+        "真实用户未答却视为同意",
+        "跳过无具名理由或必需步骤未调用",
+        "实际调用与所选路线不符",
+        "用静态夹具替代真实会话结论"
+      ],
+      "evidence_path": "quality/evidence/n8-controlled-small/原件由真实执行时现有appendRecord分配",
+      "cost_observation": {
+        "start_command": "先保存真实task-start用户事件原ref。仅整个task账本首笔在实际stage末执行record时附--start-ref；不在stage开头额外record；后续沿stage_windows与同task最后until，不重置。",
+        "end_command": "实际每stage末按stage_windows.record_command执行一次现入口并读原账行；重做/续测可多行，全部保留，不能只有make-decision或只取最好一行。",
+        "material_bytes_source": "逐实际必读原件路径与真实字节读数，区分主/子/缓存与error/work，缺源unknown；字节不换算tokens",
+        "ledger_boundary": {
+          "first_record": "真实task-start用户事件原ref仅整个task首次record附--start-ref，首笔未唯一匹配失败，不造事件",
+          "subsequent_records": "继承同task上一账行until作为from，跨stage不传start-ref；已有ledger拒reset，stage不是独立ledger",
+          "stage_filter_last": false
+        },
+        "stage_windows": [
+          {
+            "stage": "make-decision",
+            "record_command": "node \"$WH_TOOL/tools/cli/measure-main-agent-cost.mjs\" --project=workflowhub --task=\"$SYNTH_TASK\" --stage=make-decision --record",
+            "start_event_ref_rule": "整个task首笔在本命令另附真实task-start --start-ref；已有账行无论stage均不附。事件尚未产生，只给规则。",
+            "ledger_row_refs_rule": "main-agent-cost.md 每笔真实行与JSON/output原ref，全部尝试/行、失败取消及重做多行保留，不限制每stage一行或总共四行",
+            "from_until_rule": "连续同task ledger窗口；首笔真实task-start，后续from=上一账行until，跨stage也继承上一until；非重叠且缺口/异步边界如实披露，不伪造连续实值"
+          }
+        ],
+        "total_accounting": {
+          "all_stage_rows": true,
+          "all_attempts": true,
+          "error_work": true,
+          "shared_overhead": true,
+          "common_segment_is_partial": true,
+          "missing_result": "incomplete",
+          "rule": "按真实task账本所有stage行与原单位分账，全部重做/失败/取消/共享宿主注入/子会话成本保留；不只算首段、不去重丢成本，不把方向common segment冒完整G1。无完整窗口/原件不宣收益。"
+        }
+      },
+      "comparison_ref": "n8-synthetic-distinct-labels-v1"
+    },
+    {
+      "id": "n8-controlled-normal",
+      "level": "normal",
+      "goal": "为合成清单增加一个可独立交付的筛选结果",
+      "controlled_input": "仅合成文件sample.txt、synthetic-items.json；无真实用户数据或凭据。执行前由真实用户选择路线；未答不执行。",
+      "expected_calls": {
+        "stages": [
+          "make-decision"
+        ],
+        "steps": [
+          "entry-route",
+          "outline-hypothesis",
+          "internal-research-talk",
+          "module-convergence",
+          "write-light-materials",
+          "detail-review",
+          "approve-solution",
+          "implement-and-test",
+          "implementation-review",
+          "reflect-and-handoff",
+          "closeout"
+        ],
+        "confirmations": 1,
+        "skills": [
+          "workflows/make-decision/flows/normal/SKILL.md#31共用技能逐项消费"
+        ],
+        "independent_review": true,
+        "confirmation_scope": "此数只为make-decision本路线真实选择/方向确认要求；complex后继计划确认及最终物理范围确认另按实际stage原方法执行并计入观测，不在资产预填总次数。",
+        "counts_are_execution_evidence": false
+      },
+      "failure_signals": [
+        "真实用户未答却视为同意",
+        "跳过无具名理由或必需步骤未调用",
+        "实际调用与所选路线不符",
+        "用静态夹具替代真实会话结论"
+      ],
+      "evidence_path": "quality/evidence/n8-controlled-normal/原件由真实执行时现有appendRecord分配",
+      "cost_observation": {
+        "start_command": "先保存真实task-start用户事件原ref。仅整个task账本首笔在实际stage末执行record时附--start-ref；不在stage开头额外record；后续沿stage_windows与同task最后until，不重置。",
+        "end_command": "实际每stage末按stage_windows.record_command执行一次现入口并读原账行；重做/续测可多行，全部保留，不能只有make-decision或只取最好一行。",
+        "material_bytes_source": "逐实际必读原件路径与真实字节读数，区分主/子/缓存与error/work，缺源unknown；字节不换算tokens",
+        "ledger_boundary": {
+          "first_record": "真实task-start用户事件原ref仅整个task首次record附--start-ref，首笔未唯一匹配失败，不造事件",
+          "subsequent_records": "继承同task上一账行until作为from，跨stage不传start-ref；已有ledger拒reset，stage不是独立ledger",
+          "stage_filter_last": false
+        },
+        "stage_windows": [
+          {
+            "stage": "make-decision",
+            "record_command": "node \"$WH_TOOL/tools/cli/measure-main-agent-cost.mjs\" --project=workflowhub --task=\"$SYNTH_TASK\" --stage=make-decision --record",
+            "start_event_ref_rule": "整个task首笔在本命令另附真实task-start --start-ref；已有账行无论stage均不附。事件尚未产生，只给规则。",
+            "ledger_row_refs_rule": "main-agent-cost.md 每笔真实行与JSON/output原ref，全部尝试/行、失败取消及重做多行保留，不限制每stage一行或总共四行",
+            "from_until_rule": "连续同task ledger窗口；首笔真实task-start，后续from=上一账行until，跨stage也继承上一until；非重叠且缺口/异步边界如实披露，不伪造连续实值"
+          }
+        ],
+        "total_accounting": {
+          "all_stage_rows": true,
+          "all_attempts": true,
+          "error_work": true,
+          "shared_overhead": true,
+          "common_segment_is_partial": true,
+          "missing_result": "incomplete",
+          "rule": "按真实task账本所有stage行与原单位分账，全部重做/失败/取消/共享宿主注入/子会话成本保留；不只算首段、不去重丢成本，不把方向common segment冒完整G1。无完整窗口/原件不宣收益。"
+        }
+      },
+      "comparison_ref": "n8-synthetic-distinct-labels-v1"
+    },
+    {
+      "id": "n8-controlled-complex",
+      "level": "complex",
+      "goal": "为合成研究工作台跨输入与报告两模块增加一致性检查，明确架构风险",
+      "controlled_input": "仅合成文件sample.txt、synthetic-items.json；无真实用户数据或凭据。执行前由真实用户选择路线；未答不执行。",
+      "expected_calls": {
+        "stages": [
+          "make-decision",
+          "build-plan",
+          "build-code",
+          "verify-code"
+        ],
+        "steps": [
+          "load-context",
+          "outline-hypothesis-talk",
+          "research-and-diverge",
+          "outline-revision-check",
+          "outline-talk",
+          "adversarial-direction-check",
+          "direction-advice",
+          "module-breadth-confirm",
+          "module-convergence",
+          "detail-advice",
+          "grill-with-docs",
+          "write-decision-draft",
+          "approve-decision",
+          "stage-end-spec-analyze",
+          "closeout"
+        ],
+        "confirmations": 2,
+        "skills": [
+          "workflows/make-decision/SKILL.md#31共用技能逐项消费"
+        ],
+        "independent_review": true,
+        "confirmation_scope": "此数只为make-decision本路线真实选择/方向确认要求；complex后继计划确认及最终物理范围确认另按实际stage原方法执行并计入观测，不在资产预填总次数。",
+        "counts_are_execution_evidence": false
+      },
+      "failure_signals": [
+        "真实用户未答却视为同意",
+        "跳过无具名理由或必需步骤未调用",
+        "实际调用与所选路线不符",
+        "用静态夹具替代真实会话结论"
+      ],
+      "evidence_path": "quality/evidence/n8-controlled-complex/原件由真实执行时现有appendRecord分配",
+      "cost_observation": {
+        "start_command": "先保存真实task-start用户事件原ref。仅整个task账本首笔在实际stage末执行record时附--start-ref；不在stage开头额外record；后续沿stage_windows与同task最后until，不重置。",
+        "end_command": "实际每stage末按stage_windows.record_command执行一次现入口并读原账行；重做/续测可多行，全部保留，不能只有make-decision或只取最好一行。",
+        "material_bytes_source": "逐实际必读原件路径与真实字节读数，区分主/子/缓存与error/work，缺源unknown；字节不换算tokens",
+        "ledger_boundary": {
+          "first_record": "真实task-start用户事件原ref仅整个task首次record附--start-ref，首笔未唯一匹配失败，不造事件",
+          "subsequent_records": "继承同task上一账行until作为from，跨stage不传start-ref；已有ledger拒reset，stage不是独立ledger",
+          "stage_filter_last": false
+        },
+        "stage_windows": [
+          {
+            "stage": "make-decision",
+            "record_command": "node \"$WH_TOOL/tools/cli/measure-main-agent-cost.mjs\" --project=workflowhub --task=\"$SYNTH_TASK\" --stage=make-decision --record",
+            "start_event_ref_rule": "整个task首笔在本命令另附真实task-start --start-ref；已有账行无论stage均不附。事件尚未产生，只给规则。",
+            "ledger_row_refs_rule": "main-agent-cost.md 每笔真实行与JSON/output原ref，全部尝试/行、失败取消及重做多行保留，不限制每stage一行或总共四行",
+            "from_until_rule": "连续同task ledger窗口；首笔真实task-start，后续from=上一账行until，跨stage也继承上一until；非重叠且缺口/异步边界如实披露，不伪造连续实值"
+          },
+          {
+            "stage": "build-plan",
+            "record_command": "node \"$WH_TOOL/tools/cli/measure-main-agent-cost.mjs\" --project=workflowhub --task=\"$SYNTH_TASK\" --stage=build-plan --record",
+            "start_event_ref_rule": "继承整个task原task_start_ref及上一账行until；已有ledger不传新的start-ref，跨stage不重新起点。真实账行原ref未产生则保持缺，不造事件。",
+            "ledger_row_refs_rule": "main-agent-cost.md 每笔真实行与JSON/output原ref，全部尝试/行、失败取消及重做多行保留，不限制每stage一行或总共四行",
+            "from_until_rule": "连续同task ledger窗口；首笔真实task-start，后续from=上一账行until，跨stage也继承上一until；非重叠且缺口/异步边界如实披露，不伪造连续实值"
+          },
+          {
+            "stage": "build-code",
+            "record_command": "node \"$WH_TOOL/tools/cli/measure-main-agent-cost.mjs\" --project=workflowhub --task=\"$SYNTH_TASK\" --stage=build-code --record",
+            "start_event_ref_rule": "继承整个task原task_start_ref及上一账行until；已有ledger不传新的start-ref，跨stage不重新起点。真实账行原ref未产生则保持缺，不造事件。",
+            "ledger_row_refs_rule": "main-agent-cost.md 每笔真实行与JSON/output原ref，全部尝试/行、失败取消及重做多行保留，不限制每stage一行或总共四行",
+            "from_until_rule": "连续同task ledger窗口；首笔真实task-start，后续from=上一账行until，跨stage也继承上一until；非重叠且缺口/异步边界如实披露，不伪造连续实值"
+          },
+          {
+            "stage": "verify-code",
+            "record_command": "node \"$WH_TOOL/tools/cli/measure-main-agent-cost.mjs\" --project=workflowhub --task=\"$SYNTH_TASK\" --stage=verify-code --record",
+            "start_event_ref_rule": "继承整个task原task_start_ref及上一账行until；已有ledger不传新的start-ref，跨stage不重新起点。真实账行原ref未产生则保持缺，不造事件。",
+            "ledger_row_refs_rule": "main-agent-cost.md 每笔真实行与JSON/output原ref，全部尝试/行、失败取消及重做多行保留，不限制每stage一行或总共四行",
+            "from_until_rule": "连续同task ledger窗口；首笔真实task-start，后续from=上一账行until，跨stage也继承上一until；非重叠且缺口/异步边界如实披露，不伪造连续实值"
+          }
+        ],
+        "total_accounting": {
+          "all_stage_rows": true,
+          "all_attempts": true,
+          "error_work": true,
+          "shared_overhead": true,
+          "common_segment_is_partial": true,
+          "missing_result": "incomplete",
+          "rule": "按真实task账本所有stage行与原单位分账，全部重做/失败/取消/共享宿主注入/子会话成本保留；不只算首段、不去重丢成本，不把方向common segment冒完整G1。无完整窗口/原件不宣收益。"
+        }
+      },
+      "comparison_ref": "n8-synthetic-distinct-labels-v1"
+    },
+    {
+      "id": "n8-controlled-planning",
+      "level": "planning",
+      "goal": "只规划合成研究工作台需求，形成可供后继写PRD的方向与八字段任务卡，不产spec/Phase、不实施",
+      "controlled_input": "仅合成文件sample.txt、synthetic-items.json；无真实用户数据或凭据。执行前由真实用户选择路线；未答不执行。",
+      "expected_calls": {
+        "stages": [
+          "make-decision"
+        ],
+        "steps": [
+          "entry-route",
+          "direction-outline",
+          "research",
+          "outline-revision",
+          "approve-outline",
+          "direction-review",
+          "task-convergence",
+          "detail-review",
+          "approve-details",
+          "reflect-and-handoff",
+          "closeout"
+        ],
+        "confirmations": 2,
+        "skills": [
+          "workflows/make-decision/flows/planning/SKILL.md#31共用技能逐项消费"
+        ],
+        "independent_review": true,
+        "confirmation_scope": "此数只为make-decision本路线真实选择/方向确认要求；complex后继计划确认及最终物理范围确认另按实际stage原方法执行并计入观测，不在资产预填总次数。",
+        "counts_are_execution_evidence": false
+      },
+      "failure_signals": [
+        "真实用户未答却视为同意",
+        "跳过无具名理由或必需步骤未调用",
+        "实际调用与所选路线不符",
+        "用静态夹具替代真实会话结论"
+      ],
+      "evidence_path": "quality/evidence/n8-controlled-planning/原件由真实执行时现有appendRecord分配",
+      "cost_observation": {
+        "start_command": "先保存真实task-start用户事件原ref。仅整个task账本首笔在实际stage末执行record时附--start-ref；不在stage开头额外record；后续沿stage_windows与同task最后until，不重置。",
+        "end_command": "实际每stage末按stage_windows.record_command执行一次现入口并读原账行；重做/续测可多行，全部保留，不能只有make-decision或只取最好一行。",
+        "material_bytes_source": "逐实际必读原件路径与真实字节读数，区分主/子/缓存与error/work，缺源unknown；字节不换算tokens",
+        "ledger_boundary": {
+          "first_record": "真实task-start用户事件原ref仅整个task首次record附--start-ref，首笔未唯一匹配失败，不造事件",
+          "subsequent_records": "继承同task上一账行until作为from，跨stage不传start-ref；已有ledger拒reset，stage不是独立ledger",
+          "stage_filter_last": false
+        },
+        "stage_windows": [
+          {
+            "stage": "make-decision",
+            "record_command": "node \"$WH_TOOL/tools/cli/measure-main-agent-cost.mjs\" --project=workflowhub --task=\"$SYNTH_TASK\" --stage=make-decision --record",
+            "start_event_ref_rule": "整个task首笔在本命令另附真实task-start --start-ref；已有账行无论stage均不附。事件尚未产生，只给规则。",
+            "ledger_row_refs_rule": "main-agent-cost.md 每笔真实行与JSON/output原ref，全部尝试/行、失败取消及重做多行保留，不限制每stage一行或总共四行",
+            "from_until_rule": "连续同task ledger窗口；首笔真实task-start，后续from=上一账行until，跨stage也继承上一until；非重叠且缺口/异步边界如实披露，不伪造连续实值"
+          }
+        ],
+        "total_accounting": {
+          "all_stage_rows": true,
+          "all_attempts": true,
+          "error_work": true,
+          "shared_overhead": true,
+          "common_segment_is_partial": true,
+          "missing_result": "incomplete",
+          "rule": "按真实task账本所有stage行与原单位分账，全部重做/失败/取消/共享宿主注入/子会话成本保留；不只算首段、不去重丢成本，不把方向common segment冒完整G1。无完整窗口/原件不宣收益。"
+        }
+      },
+      "comparison_ref": "n8-synthetic-distinct-labels-v1"
+    }
+  ],
+  "comparison": {
+    "scope_id": "n8-synthetic-distinct-labels-v1",
+    "shared_requirement": "合成输入labels.json的标签去重并按ASCII升序输出result.json；无业务数据、无新增架构风险。方向段明确同一目标、输入、验收与范围。",
+    "source_ref": "tests/fixtures/light-route-controlled/tasks.json#comparison.shared_requirement",
+    "synthetic_input": {
+      "name": "labels.json",
+      "content": "[\"B\",\"A\",\"B\"]\n",
+      "source_ref": "tests/fixtures/light-route-controlled/tasks.json#comparison.synthetic_input"
+    },
+    "environment": "同一macOS/Node实际版本及宿主模型/provider配置原ref；执行前读回固定，变化则该pair不可比",
+    "commands": "同输入同验证命令 node check.mjs；同一WH工具版本。路线方法调用按实际记录，不隐藏省略步骤",
+    "budget": "同一真实已授权预算原ref；不预填token或时长，不设新超时/配额，失败和不可用全保",
+    "success_oracle": {
+      "implementation": {
+        "input": "labels.json=[\"B\",\"A\",\"B\"]",
+        "expected_output": "result.json=[\"A\",\"B\"]（JSON数组语义相等）",
+        "command_rule": "node check.mjs，独立预写check读取result.json与固定期望深等；缺文件/错值nonzero；不改oracle至绿"
+      },
+      "planning": {
+        "required_decision_fields": [
+          "任务名",
+          "目标",
+          "用户故事",
+          "边界",
+          "输入",
+          "交付物",
+          "验收判据",
+          "依赖"
+        ],
+        "no_implementation": true,
+        "direction_oracle": "同一labels需求的八字段卡覆盖输入、去重/排序/输出与失败判据；不产spec/Phase/代码，不称通过node check.mjs"
+      }
+    },
+    "pairs": [
+      {
+        "route_id": "n8-controlled-small",
+        "scope_ref": "tests/fixtures/light-route-controlled/tasks.json#comparison.shared_requirement",
+        "input_ref": "tests/fixtures/light-route-controlled/tasks.json#comparison.synthetic_input",
+        "oracle_ref": "comparison.success_oracle.implementation",
+        "comparable_segment": "direction_to_scope_confirmation",
+        "full_outcome_comparable": true,
+        "implementation": true,
+        "baseline": {
+          "variant": "complex",
+          "source_ref": "git:91ac87877f3cb936c11b311f2e15427801beb731:workflows/make-decision/SKILL.md",
+          "request_ref": "tests/fixtures/light-route-controlled/tasks.json#comparison.shared_requirement",
+          "input_ref": "tests/fixtures/light-route-controlled/tasks.json#comparison.synthetic_input",
+          "oracle_ref": "comparison.success_oracle.implementation",
+          "environment_ref": "同一macOS/Node实际版本及宿主模型/provider配置原ref；执行前读回固定，变化则该pair不可比",
+          "commands_ref": "同输入同验证命令 node check.mjs；同一WH工具版本。路线方法调用按实际记录，不隐藏省略步骤",
+          "budget_ref": "同一真实已授权预算原ref；不预填token或时长，不设新超时/配额，失败和不可用全保"
+        },
+        "candidate": {
+          "variant": "small",
+          "source_ref": "workflows/make-decision/flows/small/SKILL.md",
+          "request_ref": "tests/fixtures/light-route-controlled/tasks.json#comparison.shared_requirement",
+          "input_ref": "tests/fixtures/light-route-controlled/tasks.json#comparison.synthetic_input",
+          "oracle_ref": "comparison.success_oracle.implementation",
+          "environment_ref": "同一macOS/Node实际版本及宿主模型/provider配置原ref；执行前读回固定，变化则该pair不可比",
+          "commands_ref": "同输入同验证命令 node check.mjs；同一WH工具版本。路线方法调用按实际记录，不隐藏省略步骤",
+          "budget_ref": "同一真实已授权预算原ref；不预填token或时长，不设新超时/配额，失败和不可用全保"
+        },
+        "legality": "代表性tasks原goal用于路由演示，不是本paired样本。paired重新以共同需求判级并由用户真实选择；任一路无法合法适用则该pair incomplete/inconclusive，不造选择/强行small。baseline/candidate源版本各回读；旧复杂baseline对planning只比较共同方向，不混全交付。"
+      },
+      {
+        "route_id": "n8-controlled-normal",
+        "scope_ref": "tests/fixtures/light-route-controlled/tasks.json#comparison.shared_requirement",
+        "input_ref": "tests/fixtures/light-route-controlled/tasks.json#comparison.synthetic_input",
+        "oracle_ref": "comparison.success_oracle.implementation",
+        "comparable_segment": "direction_to_scope_confirmation",
+        "full_outcome_comparable": true,
+        "implementation": true,
+        "baseline": {
+          "variant": "complex",
+          "source_ref": "git:91ac87877f3cb936c11b311f2e15427801beb731:workflows/make-decision/SKILL.md",
+          "request_ref": "tests/fixtures/light-route-controlled/tasks.json#comparison.shared_requirement",
+          "input_ref": "tests/fixtures/light-route-controlled/tasks.json#comparison.synthetic_input",
+          "oracle_ref": "comparison.success_oracle.implementation",
+          "environment_ref": "同一macOS/Node实际版本及宿主模型/provider配置原ref；执行前读回固定，变化则该pair不可比",
+          "commands_ref": "同输入同验证命令 node check.mjs；同一WH工具版本。路线方法调用按实际记录，不隐藏省略步骤",
+          "budget_ref": "同一真实已授权预算原ref；不预填token或时长，不设新超时/配额，失败和不可用全保"
+        },
+        "candidate": {
+          "variant": "normal",
+          "source_ref": "workflows/make-decision/flows/normal/SKILL.md",
+          "request_ref": "tests/fixtures/light-route-controlled/tasks.json#comparison.shared_requirement",
+          "input_ref": "tests/fixtures/light-route-controlled/tasks.json#comparison.synthetic_input",
+          "oracle_ref": "comparison.success_oracle.implementation",
+          "environment_ref": "同一macOS/Node实际版本及宿主模型/provider配置原ref；执行前读回固定，变化则该pair不可比",
+          "commands_ref": "同输入同验证命令 node check.mjs；同一WH工具版本。路线方法调用按实际记录，不隐藏省略步骤",
+          "budget_ref": "同一真实已授权预算原ref；不预填token或时长，不设新超时/配额，失败和不可用全保"
+        },
+        "legality": "代表性tasks原goal用于路由演示，不是本paired样本。paired重新以共同需求判级并由用户真实选择；任一路无法合法适用则该pair incomplete/inconclusive，不造选择/强行small。baseline/candidate源版本各回读；旧复杂baseline对planning只比较共同方向，不混全交付。"
+      },
+      {
+        "route_id": "n8-controlled-complex",
+        "scope_ref": "tests/fixtures/light-route-controlled/tasks.json#comparison.shared_requirement",
+        "input_ref": "tests/fixtures/light-route-controlled/tasks.json#comparison.synthetic_input",
+        "oracle_ref": "comparison.success_oracle.implementation",
+        "comparable_segment": "direction_to_scope_confirmation",
+        "full_outcome_comparable": true,
+        "implementation": true,
+        "baseline": {
+          "variant": "complex",
+          "source_ref": "git:91ac87877f3cb936c11b311f2e15427801beb731:workflows/make-decision/SKILL.md",
+          "request_ref": "tests/fixtures/light-route-controlled/tasks.json#comparison.shared_requirement",
+          "input_ref": "tests/fixtures/light-route-controlled/tasks.json#comparison.synthetic_input",
+          "oracle_ref": "comparison.success_oracle.implementation",
+          "environment_ref": "同一macOS/Node实际版本及宿主模型/provider配置原ref；执行前读回固定，变化则该pair不可比",
+          "commands_ref": "同输入同验证命令 node check.mjs；同一WH工具版本。路线方法调用按实际记录，不隐藏省略步骤",
+          "budget_ref": "同一真实已授权预算原ref；不预填token或时长，不设新超时/配额，失败和不可用全保"
+        },
+        "candidate": {
+          "variant": "complex",
+          "source_ref": "workflows/make-decision/SKILL.md",
+          "request_ref": "tests/fixtures/light-route-controlled/tasks.json#comparison.shared_requirement",
+          "input_ref": "tests/fixtures/light-route-controlled/tasks.json#comparison.synthetic_input",
+          "oracle_ref": "comparison.success_oracle.implementation",
+          "environment_ref": "同一macOS/Node实际版本及宿主模型/provider配置原ref；执行前读回固定，变化则该pair不可比",
+          "commands_ref": "同输入同验证命令 node check.mjs；同一WH工具版本。路线方法调用按实际记录，不隐藏省略步骤",
+          "budget_ref": "同一真实已授权预算原ref；不预填token或时长，不设新超时/配额，失败和不可用全保"
+        },
+        "legality": "代表性tasks原goal用于路由演示，不是本paired样本。paired重新以共同需求判级并由用户真实选择；任一路无法合法适用则该pair incomplete/inconclusive，不造选择/强行small。baseline/candidate源版本各回读；旧复杂baseline对planning只比较共同方向，不混全交付。"
+      },
+      {
+        "route_id": "n8-controlled-planning",
+        "scope_ref": "tests/fixtures/light-route-controlled/tasks.json#comparison.shared_requirement",
+        "input_ref": "tests/fixtures/light-route-controlled/tasks.json#comparison.synthetic_input",
+        "oracle_ref": "comparison.success_oracle.planning",
+        "comparable_segment": "direction_to_scope_confirmation",
+        "full_outcome_comparable": false,
+        "implementation": false,
+        "baseline": {
+          "variant": "complex",
+          "source_ref": "git:91ac87877f3cb936c11b311f2e15427801beb731:workflows/make-decision/SKILL.md",
+          "request_ref": "tests/fixtures/light-route-controlled/tasks.json#comparison.shared_requirement",
+          "input_ref": "tests/fixtures/light-route-controlled/tasks.json#comparison.synthetic_input",
+          "oracle_ref": "comparison.success_oracle.planning",
+          "environment_ref": "同一macOS/Node实际版本及宿主模型/provider配置原ref；执行前读回固定，变化则该pair不可比",
+          "commands_ref": "同输入同验证命令 node check.mjs；同一WH工具版本。路线方法调用按实际记录，不隐藏省略步骤",
+          "budget_ref": "同一真实已授权预算原ref；不预填token或时长，不设新超时/配额，失败和不可用全保"
+        },
+        "candidate": {
+          "variant": "planning",
+          "source_ref": "workflows/make-decision/flows/planning/SKILL.md",
+          "request_ref": "tests/fixtures/light-route-controlled/tasks.json#comparison.shared_requirement",
+          "input_ref": "tests/fixtures/light-route-controlled/tasks.json#comparison.synthetic_input",
+          "oracle_ref": "comparison.success_oracle.planning",
+          "environment_ref": "同一macOS/Node实际版本及宿主模型/provider配置原ref；执行前读回固定，变化则该pair不可比",
+          "commands_ref": "同输入同验证命令 node check.mjs；同一WH工具版本。路线方法调用按实际记录，不隐藏省略步骤",
+          "budget_ref": "同一真实已授权预算原ref；不预填token或时长，不设新超时/配额，失败和不可用全保"
+        },
+        "legality": "代表性tasks原goal用于路由演示，不是本paired样本。paired重新以共同需求判级并由用户真实选择；任一路无法合法适用则该pair incomplete/inconclusive，不造选择/强行small。baseline/candidate源版本各回读；旧复杂baseline对planning只比较共同方向，不混全交付。"
+      }
+    ],
+    "common_segment": {
+      "start_event_rule": "同一原需求/labels输入首次真实用户事件开始；保存start_ref与实际session，不伪造选择",
+      "end_event_rule": "同范围方向/验收范围获得真实确认的事件；四路同样的需求语义检查，不把确认轮次当通过",
+      "partial_only": true,
+      "excluded_costs": "实现、测试、代码审查、后继阶段、物理Git/真PR与清理仍纳入全程另账，不被局部片段排除",
+      "acceptance": "仅方向共同语义已明确，不要求planning产生实现；局部结果不签AC-ACC-3或完整G1"
+    },
+    "full_g1": {
+      "requires_complete_n1": true,
+      "planning_vs_implementation": "not_comparable",
+      "missing_result": "inconclusive",
+      "success_rule": "父PRD G1完整条件不变：同任务/命令/条件/预算，完整N1全程含失败/全局注入/全部stage，cacheRead与wall_s均不劣化，steps或cacheRead至少一项下降；共同方向段只能局部比较"
+    },
+    "run_bindings": {
+      "task_identity": "执行每pair时保存bootstrap返回真实task_path/project/task/cohort与独立repo/worktree身份原件；尚未执行",
+      "session_identity": "baseline/candidate各实际主会话及真实子会话原ref，工具cwd不代主会话；尚未执行",
+      "start_ref": "task首笔真实task-start用户事件原ref，符合原CLI规则，不预造item_id/seq",
+      "end_ref": "每真实stage结束事件/命令回执与记录时刻原件，未发生不得填值",
+      "from_until_ref": "每task原账行from/until及行原ref，首笔真实起点，后续继承同task最后账行until，跨stage不reset",
+      "all_attempts": "所有失败/取消/重做/不可用及实际多行全部留分母，不选最好一次",
+      "error_work": "error/work与共享开销分列并全含；无可比数据inconclusive，不省失败或主机注入"
+    }
+  }
+}
