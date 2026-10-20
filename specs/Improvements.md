@@ -33,3 +33,19 @@
 | 本次把匿名候选的访问隔离扩大成独立host/Docker，又用全进程seatbelt挡住CLI自身并要求用户供环境（来源：N7/build-code，`quality/evidence/2026-10-18-090-native-isolation-docker-root-cause-audit.md`、`quality/tests/2026-10-18-094-p3-common-input-corrected.json`、`095-p3-judge-standard-corrected.json`、`101-native-exact-packet-host-probe.json`）。 | 下次先核现有原生packet权限及真实允许/拒绝，区分CLI控制面与模型工具；质量与成本条件分列，单路线失败不增加Docker或独立host前置。 | 已落账；未作用户确认已解决，不清理；原生探针仅证实测面，网络与工具注入缺口保留。 |
 
 上条经验的补充来源（N8/build-code）：[当前包能力拒绝审计](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n8-four-level-route-20261019/quality/evidence/2026-10-20-140-p4-ag-capability-cancellation.json)、[真实终态](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n8-four-level-route-20261019/quality/evidence/2026-10-20-141-p4-ocr-terminal-readback.md)。同上条行动；本次保留两路有效结果与一路不可用，未把原问题标为已解决。
+
+## 审查健康与页面结构（N9）
+
+| 问题 | 下次改变的行动 | 状态 |
+| --- | --- | --- |
+| 审查 provider 反复调用被 packet hook 拒绝的读取，拒绝事件仍被算作“有进展”，整组因等待全部 provider 而不返回（来源：N9 make-decision 方向审查，`quality/evidence/2026-10-20-014-direction-review-slowdown-diagnosis.md`）。 | 下次审查前先核 provider 真实工具名/参数形状与 hook 白名单是否一致；重复拒绝不计进展，无进展窗口到即把该路判终态，其余结果照常返回；不加墙钟超时。 | 已落账（N9 D-010，待实施）。 |
+| 把任务页面的节点分类（七环）误当成流程步骤（十环），直接合并会丢五态与分母的承载位置（来源：N9 M6，`quality/evidence/2026-10-20-018-n6-page-seven-vs-ten-rings-analysis.md`）。 | 下次改页面前先分清“节点分类”和“执行环节”两个维度；五态、分母、证据类型放执行维度，历史页保留不动。 | 已落账（N9 D-011，含用户要求改十环的取舍）。 |
+| 方向/细节审查包只内联摘要，关键来源原件不在包内，审查者只能看到指针（来源：N9 detail 审查发现 11，`quality/evidence/2026-10-20-020-detail-findings-dispositions.md`）。 | 下次组包把会改变判断的来源原件内联，或在材料里明确列为不可读缺口，不让审查者猜。 | 已落账（本次按材料边界记录，未改脚本）。 |
+
+## 计划来源与验收对象（N9）
+
+| 问题 | 下次改变的行动 | 状态 |
+| --- | --- | --- |
+| 初版把十环有落点当成父 PRD 全覆盖，漏掉逐实际步骤 consumer 与完成判据回填；结构检查仍能通过（来源：N9/build-plan，父 PRD:464/530、047/049 调查原件与当前 R-010）。 | 下次收口先回读原 PRD 的跨卡采用/consumer 条款，再逐条核来源→真实交付→反例，不用本地 FR/AC 数量代替原需覆盖。 | 已落账；本次补设计不冒代码实施或独立质量通过。 |
+| 静态 HTML 已明确要改，却把“无现成服务/未跑浏览器”当成不适用并把 service/viewport 交给用户补（来源：N9/build-plan，旧验收对象原件009、061澄清）。 | 下次先核原 QA 方法并由 agent 规划自有隔离会话、loopback 产物服务和测试尺寸；真实环境失败才记 unavailable，不伪装非 UI。 | 已落账；浏览器效果须后续真实执行，未记用户确认已解决。 |
+| 上游代码合并与整卡验收在材料里曾混为同一关闭条件（来源：N9/build-plan，N8 最新010交接与本任务037/050）。 | 下次依赖复核分别读代码交付、实际效果与成本欠账；保旧基线并单列合入增量，不因 merge 自动关闭质量依赖或重置预算。 | 已落账；N8 整卡缺口仍保留，不转成 N9 新范围。 |
