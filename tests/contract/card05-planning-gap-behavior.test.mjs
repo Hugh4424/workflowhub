@@ -24,7 +24,7 @@ function fixture() {
   const branch = 'task/workflowhub/' + id; git(repo, 'worktree', 'add', '-q', '-b', branch, wt, 'main'); const materials = join(wt, 'specs', id); mkdirSync(materials, { recursive: true });
   const decision = '# Decision\n\n## 外置事实索引\n基准：当前 task 根。\n- 原文：quality/evidence/original.md\n\n## 工作包与决定\n完整当前正文 FIRST-CURRENT\n末尾 END-CURRENT\n';
   writeFileSync(join(materials, 'decision-log.md'), decision); writeFileSync(join(materials, 'spec.md'), '# Owned visible result\nFull source for close fixture.\n'); git(wt, 'add', 'specs'); git(wt, 'commit', '-qm', 'owned task materials');
-  writeFileSync(join(taskDir, 'task.json'), JSON.stringify({ schema_version: '1.0.0', project_name: 'workflowhub', task_id: id, target_repo_root: repo, record_model: 'vnext-single-write', activation_cohort: 'post', workspace_mode: 'existing', workspace_root: wt })); writeFileSync(join(taskDir, 'facts.jsonl'), '');
+  writeFileSync(join(taskDir, 'task.json'), JSON.stringify({ schema_version: '1.0.0', project_name: 'workflowhub', task_id: id, target_repo_root: repo, record_model: 'vnext-single-write', activation_cohort: 'post', workspace_mode: 'existing', workspace_root: wt })); writeFileSync(join(taskDir, 'facts.jsonl'), JSON.stringify({ record_kind: 'stage', task_id: id, stage: 'verify-code', source: 'owned-close-fixture', created_at: '2026-10-20T00:00:00Z' }) + '\n');
   const original = '# 外置原文\r\n用户真实要求 COMPLETE-ORIGINAL\n末尾 END-ORIGINAL\n'; mkdirSync(join(taskDir, 'quality/evidence'), { recursive: true }); writeFileSync(join(taskDir, 'quality/evidence/original.md'), original);
   return { root, repo, wt, storage, home, id, taskDir, branch, bare, decision, original, dir: join(taskDir, 'quality/evidence/git-authorizations') };
 }

@@ -16,7 +16,7 @@ P0 在场（材料选节状态，不是执行进度）：
 ## Phase 契约头
 
 - **Global spec**：`spec.md#实现设计全局权威`
-- **Write set**：`core/task-close.mjs`；`tools/cli/task-close.mjs`；`tools/cli/stage-runtime.mjs`；`skills/stage-closeout/SKILL.md`；`skills/catalog.yaml`；`docs/delivery-closeout-charter.md`；`tests/contract/stage-closeout-skill.test.mjs`；`tests/contract/stage-closeout-step-contract.test.mjs`；`tests/contract/delivery-closeout-charter-contract.test.mjs`；`tests/contract/light-close-confirm.test.mjs`
+- **Write set**：`core/task-close.mjs`；`tools/cli/task-close.mjs`；`tools/cli/stage-runtime.mjs`；`skills/stage-closeout/SKILL.md`；`skills/catalog.yaml`；`docs/delivery-closeout-charter.md`；`tests/contract/stage-closeout-skill.test.mjs`；`tests/contract/stage-closeout-step-contract.test.mjs`；`tests/contract/delivery-closeout-charter-contract.test.mjs`；`tests/contract/light-close-confirm.test.mjs`；`tests/close/close-contract.test.mjs`；`tests/close/cleanup-resume-finalize.test.mjs`；`tests/contract/close-remote-branch-cleanup.test.mjs`；`tests/contract/card05-close-cli-mechanism.test.mjs`；`tests/contract/card05-planning-gap-behavior.test.mjs`；`tests/contract/close-sidecar-and-archive.test.mjs`；`tests/integration/vnext-delivery-close.test.mjs`；`specs/n8-four-level-route-20261019/spec.md`；`specs/n8-four-level-route-20261019/phases/P3-单阶段收口与PR正文.md`；`specs/n8-four-level-route-20261019/phases/index.md`
 - **Dependency**：P2
 - **Consumer**：P5 轻档流程作者、P7 验收者、收口与交付读者
 - **gate_cmd**：`node node_modules/vitest/vitest.mjs run tests/contract/light-close-confirm.test.mjs tests/contract/stage-closeout-skill.test.mjs tests/contract/stage-closeout-step-contract.test.mjs tests/contract/delivery-closeout-charter-contract.test.mjs`
@@ -32,6 +32,8 @@ P0 在场（材料选节状态，不是执行进度）：
 - **定序写主**：本卡唯一 writer 持笔 `core/task-close.mjs`、`tools/cli/task-close.mjs`、`tools/cli/stage-runtime.mjs` 的 confirm 分支、`skills/stage-closeout/SKILL.md`、`skills/catalog.yaml`、`docs/delivery-closeout-charter.md` 与三份契约测试；P1/P2 已交同一文件的其他分支，本卡只改 confirm 与 closeout 段
 - **接口符号清单**：`confirmClosePlan({taskDir, planRef, outcome, replyText})`、`acceptedConfirmation(c, planRef, confirmationRef, expectedPlan)`、`buildDefaultPrDescription(c, {baseline, source, head, base})`、`closeConfirmationStage(taskDir)`
 - **合并责任**：本卡 writer 交真实 diff、测试输出与 TCR 原件；与 P1/P2 同文件改动按行段分开，冲突先读当前字节
+- **规则锚**：`spec.md` FR-CLOSE-001「物理收口必须接受定方向阶段的调用者」；Appendix A AC-CLOSE-1「每次阶段末做反思收口」、AC-CLOSE-2「确认 stage 可按实际阶段传」、AC-CLOSE-3「四级每次收口都写业务仓 Improvements」；本卡 T003 Action 的 `verify-code` → `build-prd` → `make-decision` 与旧规划确认只读兼容。
+- **材料变更影响**：补规则锚、材料影响、TCR 精确断言及真实执行事实；spec 全局边界与纯指针 index 同步已授权七夹具及三材料路径，不改已确认方向。速读卡及 Outputs 的“两条路径”是旧摘要，实施以 T003 Action 三条阶段路径为准。stage-runtime 仅接 verify-code/make-decision；规划入口保留 `tools/cli/task-close.mjs confirm` 直调同一 owner，不新增 public API。范围原件为 `quality/evidence/2026-10-20-069-p3-included-scope.json`、`070-p3-outside-scope.json`。
 - **progress_cursor**：只指任务事实库 `facts.jsonl` 的 `phase_progress`，本文件不保存进度值
 
 ## 速读卡（人读；只写本 Phase 增量）
@@ -69,7 +71,7 @@ P0 在场（材料选节状态，不是执行进度）：
 ### 文件边界
 
 - **新增**：`tests/contract/light-close-confirm.test.mjs`
-- **修改**：`core/task-close.mjs`、`tools/cli/task-close.mjs`、`tools/cli/stage-runtime.mjs`（只改 confirm 分支）、`skills/stage-closeout/SKILL.md`、`skills/catalog.yaml`、`docs/delivery-closeout-charter.md`、`tests/contract/stage-closeout-skill.test.mjs`、`tests/contract/stage-closeout-step-contract.test.mjs`、`tests/contract/delivery-closeout-charter-contract.test.mjs`
+- **修改**：`tests/close/close-contract.test.mjs`；`tests/close/cleanup-resume-finalize.test.mjs`；`tests/contract/close-remote-branch-cleanup.test.mjs`；`tests/contract/card05-close-cli-mechanism.test.mjs`；`tests/contract/card05-planning-gap-behavior.test.mjs`；`tests/contract/close-sidecar-and-archive.test.mjs`；`tests/integration/vnext-delivery-close.test.mjs`；`specs/n8-four-level-route-20261019/spec.md`；`specs/n8-four-level-route-20261019/phases/P3-单阶段收口与PR正文.md`；`specs/n8-four-level-route-20261019/phases/index.md`；`core/task-close.mjs`、`tools/cli/task-close.mjs`、`tools/cli/stage-runtime.mjs`（只改 confirm 分支）、`skills/stage-closeout/SKILL.md`、`skills/catalog.yaml`、`docs/delivery-closeout-charter.md`、`tests/contract/stage-closeout-skill.test.mjs`、`tests/contract/stage-closeout-step-contract.test.mjs`、`tests/contract/delivery-closeout-charter-contract.test.mjs`
 - **禁止改动**：`runtime/review/**`、`runtime/task/portable-workflow-run.mjs`、`skills/answer-as-page/**`、`specs/archive/**`；本卡不新增 close plan 字段，不改迷你收口模式（归 P4）。
 
 ### 任务顺序
@@ -80,7 +82,7 @@ T003 先交确认 stage 与 close-plan 路由；T004 再交 stage-closeout 调�
 
 - **Source / FR / AC**：`R-004`、`D-012` / `FR-CLOSE-001` / `AC-CLOSE-1`；`PRD-N8`、`D-012` / `FR-CLOSE-001` / `AC-CLOSE-2`。四级收口与交付接线归本卡；单阶段收口可用，不伪造 verify-code。
 - **Inputs**：PFACT-004 的当前行（`core/task-close.mjs:402,413`、`tools/cli/stage-runtime.mjs:1344`）；PFACT-012 的冻结断言；P2 交回的审查记录（收口材料可读）；任务阶段事实由 `runtime/task/task-store.mjs` 读写。
-- **Files / symbols**：`core/task-close.mjs`（symbol：`confirmClosePlan`、`acceptedConfirmation`、新纯函数 `closeConfirmationStage`）；`tools/cli/task-close.mjs`（symbol：CLI 参数传递）；`tools/cli/stage-runtime.mjs`（symbol：confirm 分支）；`tests/contract/light-close-confirm.test.mjs`（新测试）
+- **Files / symbols**：`tests/close/close-contract.test.mjs`；`tests/close/cleanup-resume-finalize.test.mjs`；`tests/contract/close-remote-branch-cleanup.test.mjs`；`tests/contract/card05-close-cli-mechanism.test.mjs`；`tests/contract/card05-planning-gap-behavior.test.mjs`；`tests/contract/close-sidecar-and-archive.test.mjs`；`tests/integration/vnext-delivery-close.test.mjs`；`specs/n8-four-level-route-20261019/spec.md`；`specs/n8-four-level-route-20261019/phases/P3-单阶段收口与PR正文.md`；`specs/n8-four-level-route-20261019/phases/index.md`；七测试仅 fixture 阶段事实；三 Markdown 仅范围/原件事实；`core/task-close.mjs`（symbol：`confirmClosePlan`、`acceptedConfirmation`、新纯函数 `closeConfirmationStage`）；`tools/cli/task-close.mjs`（symbol：CLI 参数传递）；`tools/cli/stage-runtime.mjs`（symbol：confirm 分支）；`tests/contract/light-close-confirm.test.mjs`（新测试）
 - **Action**：①写 `closeConfirmationStage(taskDir)`：读任务事实行，按 `verify-code` → `build-prd` → `make-decision` 的顺序返回实际阶段；三者都没有时抛明确错误。`build-prd` 是既有收口调用者（PFACT-005），不得因新增轻档把它挤掉；既有以 `verify-code` 记录的 build-prd 确认原件只读保留，新记录按实际阶段写。②`confirmClosePlan` 用该函数记录 confirmation 的 stage；`acceptedConfirmation` 用同一函数校验 `value.stage`，不匹配时报 `CONFIRMATION_REJECTED`。③`stage-runtime` 的 confirm 分支把 close-plan 特判从 `--stage=verify-code` 放宽为 `verify-code` 与 `make-decision` 两者，仍只对 close 目录内的 plan 路径生效；实际 stage 由 `confirmClosePlan` 推导，不信任调用方传入值。④写新测试：轻任务夹具（只有 make-decision 阶段行）走 `confirmClosePlan` 后记录 stage 为 `make-decision` 且 `acceptedConfirmation` 接受；复杂任务夹具（有 verify-code 行）记录 `verify-code`；规划任务夹具（只有 build-prd 行）记录 `build-prd`；把 `verify-code` 记录挂到轻任务 plan 时被拒。⑤断言 `buildDefaultPrDescription` 读的是 spec 正文（既有行为），不新增字段。⑥兼容既有 build-prd 确认原件：任务有 `build-prd` 行且无 `verify-code` 行时，`acceptedConfirmation` 同时接受旧代码以 `verify-code` 记录的确认（历史原件只读、不改写），新记录仍按 `build-prd` 写；测试覆盖这条只读兼容。
 - **Outputs / failure**：两条任务路径各自的确认记录 stage 正确；stage 不符时拒绝并保留 plan 显示；无阶段行时报明确错误。
 - **Boundary / DO NOT TOUCH**：不改 close plan 的 JSON 字段与校验、不改显示内容、不改提交/推送/归档动作；不新增持久状态。
@@ -117,7 +119,7 @@ T003 先交确认 stage 与 close-plan 路由；T004 再交 stage-closeout 调�
 - **Evidence**：`quality/evidence/2026-10-20-003-p3-light-close.output`、`quality/evidence/2026-10-20-003-p3-tcr-red.output`、TCR 审查原件路径。
 - **Coverage limit**：不证明真实收口动作在业务仓执行成功；不证明经验写入的业务仓路径可用；不覆盖 P7 的四路验收。
 - **STOP / recovery**：契约测试与 catalog 不一致、或 TCR 缺独立审查时停；回本卡实施者补齐，不直接改断言值而无记录。
-- **测试变更请求**：有 — 理由：让 stage-closeout 接受定方向调用者（D-012/E 模块取舍）；旧断言：`used_by_stages` 等于 `['build-prd','verify-code']`（三份契约测试同义）；新断言：含 `make-decision`；此前 RED 证据：`quality/evidence/2026-10-20-003-p3-tcr-red.output`；独立审查引用：本 Phase 的独立审查原件（T004 完成后补具体路径）。
+- **测试变更请求**：有 — 理由：让 stage-closeout 接受定方向调用者（D-012/E 模块取舍）；旧断言：`used_by_stages` 等于 `['build-prd','verify-code']`（三份契约测试同义）；新断言：精确阶段集合为 `[build-prd, verify-code, make-decision]`；charter 明确排除 `build-plan`、`build-code`；此前 RED 证据：`quality/evidence/2026-10-20-003-p3-tcr-red.output`；独立审查引用：`quality/evidence/2026-10-20-031-p3-tcr-independent-review.md`（SHA256 `b517a23b00134d01518d7991b7ad3d16f093b8019814cce6aa01768d51d66338`）；旧三份断言字节保留于 `071-p3-before-stage-closeout-skill.txt`、`072-p3-before-stage-closeout-step-contract.txt`、`073-p3-before-delivery-closeout-charter-cont.txt`（均在 quality/evidence）。
 - **Done**：AC-CLOSE-2、AC-CLOSE-3 中与本 Task 相关的条件核完；RED/GREEN 同 oracle；TCR 记录与审查原件可读；独立审查与未覆盖项写明。
 
 ### 测试策略
@@ -161,3 +163,36 @@ AC-CLOSE-1/2/3 的适用条件满足、RED/GREEN 同 oracle、TCR 记录与审�
 ## L2 — 可删除参考
 
 实现期间可读 P1 的材料放行与 P5 的收口时点；删掉本节不改变 L0/L1。
+
+### 本次执行事实（2026-10-20，等待独立质量审查）
+
+- TCR 先于冻结断言变更：`quality/evidence/2026-10-20-031-p3-tcr-independent-review.md`。三份旧字节见上述 071–073 原件；实际旧实现与新三阶段断言的目标 RED 是 `quality/tests/2026-10-20-030-p3-independent-red.output`（同名 `.json` 原始回执，exit 1）。卡中的 003 路径为原计划路径，不复制现有输出去填同字节镜像。029 早轮夹具错误保留但不当目标 RED；030 两条 runtime 夹具路径错误不当接线目标 RED。
+- 范围窄补：七个既有直接确认消费者的测试夹具原来没有阶段事实；新合同要求无阶段报错，不能由生产默认 verify-code 保旧夹具通过。主会话已明确允许仅补其原场景本应存在的 verify-code stage 行，原断言不变；具体七路径与调用依据见 `quality/evidence/2026-10-20-076-p3-adjacent-fixture-scope.json`。先保存新实现下真实失败，再补夹具与复验。生产写集未扩大。
+- 新实现只推导 `record_kind=stage` 的三阶段事实；旧规划确认以原文件只读接受，所有 plan/hash/remote/reply/path 保护保留。规划 consumer 使用 `tools/cli/task-close.mjs confirm`；stage-runtime 只接本卡两个阶段，普通非 close 确认沿既有分支。
+- `tools/cli/task-close.mjs` 现有参数已经直传唯一 close owner，不需要改动；`buildDefaultPrDescription` 已读 spec，本次仅用真实 prepare 输出验证，不重复实现。
+- 浏览器面 N/A：写集无浏览器可见界面。真实远程 push/PR/归档清理及业务仓 Improvements 落盘未在本卡执行，分别等待 P7/真实收口具名 owner；本卡文档与本地夹具测试不代其通过。
+
+### 本 Phase 自带判据小结（review-ready 前记录）
+
+- 主门已由独立测试执行者实际提交 `verify --action=execute`，卡 gate_cmd 四文件 47/47、exit 0；原件 `quality/tests/2026-10-20-031-p3-independent-red.output` 与同名 `.json`。文件 slug 沿首轮命名为 red，真实执行事实是 GREEN，不改名复制。包含真实 close prepare/confirm/authorize、两阶段 runtime 路由、规划 task-close 入口、PR 正文、旧规划兼容及其保护反例。
+- AC-CLOSE-1：`incomplete` — 收口方法已区分先反思后物理，四级调用由轻档/复杂/规划 stage 入口承接；独立人读判定待主会话本 Phase 审查，证据为当前 `skills/stage-closeout/SKILL.md` 与上述主门。
+- AC-CLOSE-2：`pass`（仅本卡实现与独立执行判据）— 上述主门与 031 TCR；不冒正式代码质量结论，正式 OCR/Standards/Spec 仍由主会话执行。
+- AC-CLOSE-3：`incomplete` — 本卡已把四级每次业务仓 Improvements、无发现具名依据及越界不可用接到收口正文；真实业务仓落盘由 P7/实际收口 owner 执行，尚无该事实，不以文本测试替代。
+- AC-ENTRY-4：`incomplete`（本卡收口读取点）— 正文已有「级别与路线」读取与缺失按复杂、记缺口；实际四路消费与独立读者结论待 P7，不签全 AC。
+
+- 邻接原失败：`quality/tests/2026-10-20-032-p3-adjacent-fixture.output` / 同名 `.json`，exit 1，七文件 29 fail / 22 pass / 3 skip；具名失败是确认夹具没有实际 stage fact。只补七处 fixture 的 verify-code 行，所有原断言原样保留。CLI 边界补充 `quality/tests/2026-10-20-033-p3-route-boundary.output` / 同名 `.json`，exit 0，新增 owned relative 与多 ref 两例通过；其余 34 新例在该次按具名过滤未运行，不把 skip 当失败或新覆盖。主门 47 例与该次 2 例分别报告，不冒一次执行。
+
+- 邻接修复后同命令 GREEN：`quality/tests/2026-10-20-034-p3-adjacent-fixture.output` / 同名 `.json`，exit 0，七文件 51 passed / 3 skipped。3 skipped 是既有 `realPrReadback` 条件未提供时的真实 GitHub URL/cutoff/resume/可见性测试，未冒通过；本地真实 Git/bare remote 的授权、取消、重放、归档与清理夹具检查通过，不代真实业务仓验收。
+- 本次测试作者仅新增 `tests/contract/light-close-confirm.test.mjs` 36 例；七处邻接夹具由本卡 writer 补阶段事实，原断言未改。执行者收尾已核 `n8-light-close-*` 临时目录为空，并删除本次三个执行输入文件；未复用浏览器登录态，浏览器 N/A。正式 OCR 与 Standards/Spec 尚未启动，review-ready 交主会话，未 commit。
+
+- 审查投影范围补齐：实跑前合同 079 虽 ok=true，但 P3 phase_rows.write_set 仅原十路径，漏掉七邻接夹具及本次材料；scope capture/phase projection 都消费该列表，故按已授权纯测试范围同步本卡头、T003 Files、文件边界、spec 全局边界与 index。允许集中的 `tools/cli/task-close.mjs` 是既有未改消费者，不计实际 diff。
+
+### 本 Phase 审查与修复读回（2026-10-20）
+
+- 正式 OCR 原件 `quality/reviews/2026-10-20-027-build-code-phase-p3.json`；终态读回 `quality/evidence/2026-10-20-087-p3-ocr-terminal-readback.md`。Kimi completed/ok 一条 minor（反序测试覆盖），Codex completed/ok 零 finding；Antigravity failed/parse null packet guard，raw025 无可救回 JSON，保留 available-with-failures 与覆盖未定，不冒三路通过。Standards `085-p3-standards-review.md`、Spec `086-p3-spec-review.md`（均 quality/evidence）并列空 finding，标 same_source_degraded，不替代 OCR。
+- 唯一有效 finding 已保完整原文与 fixed 处置：`quality/evidence/2026-10-20-089-p3-review-findings-fixed.json`。只追加两项低优先阶段行在前的参数，原断言不动；当前生产已符合固定优先级，这是纯覆盖补充，不伪造实现 RED。独立具名复验 `quality/tests/2026-10-20-035-p3-reverse-order-coverage.output` 与同名 `.json`，exit 0，7 passed /31 skipped；未重复主门、邻接或 OCR。
+- AC-CLOSE-1：`pass`（本卡步骤/顺序与调用者人读判据）— 正式027与同源Spec086结合收口正文；反思/物理分开并具名四级入口，不代真实物理交付完成。
+- AC-CLOSE-2：`pass`（本卡确认/PR正文/TCR与独立执行判据）— 主门031、边界033、反序035、TCR031与正式027/处置089；provider失败与其覆盖限制保留，非总体质量全通过。
+- AC-CLOSE-3：`incomplete` — 本卡正文接线已交；真实业务仓 Improvements、无发现具名依据/越界记录仍由 P7/实际收口 owner 留证，本轮用户只执行 build-code，不进入 verify-code，保验收缺口。
+- AC-ENTRY-4：`incomplete`（全AC）— 本卡收口读取点与缺失按复杂已交；四处完整消费及实际四路判定留给相应承接 Phase/P7，不在此补签。
+- 整个 build-code 仍 in-progress；本卡审后提交不进入 verify-code、不执行真实远程发布或最终 close。原 029–034 执行/失败及上游 P1/P2 证据、游标保留。

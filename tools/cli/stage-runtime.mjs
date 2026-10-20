@@ -1356,8 +1356,11 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     if (fields.stage !== undefined && fields.stage !== values.stage) throw new TypeError("confirmation stage differs from CLI stage");
     const refs = fields.materialRefs;
     const closeDir = join(context.task.taskPath, "quality", "evidence", "close");
-    if (values.stage === "verify-code" && Array.isArray(refs) && refs.length === 1 && typeof refs[0] === "string"
-        && dirname(refs[0]) === closeDir && /^\d{4}-\d{2}-\d{2}-\d{3}-close-plan\.json(?:#.*)?$/.test(basename(refs[0]))) {
+    const isClosePlanRef = ref => typeof ref === "string"
+      && dirname(resolve(context.workspace.worktreeRoot, ref)) === closeDir
+      && /^\d{4}-\d{2}-\d{2}-\d{3}-close-plan\.json(?:#.*)?$/.test(basename(ref));
+    if (["verify-code", "make-decision"].includes(values.stage) && Array.isArray(refs) && refs.some(isClosePlanRef)) {
+      if (refs.length !== 1) throw new TypeError("close confirmation requires exactly one plan reference");
       if (refs[0].includes("#") || !isAbsolute(refs[0]) || resolve(refs[0]) !== refs[0]) throw new TypeError("close confirmation requires a canonical plain plan path without fragments");
       if (Object.keys(fields).some(key => !["stage", "decision", "reply", "materialRefs"].includes(key))) throw new TypeError("close confirmation contains unsupported fields");
       const confirmed = await confirmClosePlan({ taskDir: context.task.taskPath, planRef: refs[0], outcome: fields.decision, replyText: fields.reply });

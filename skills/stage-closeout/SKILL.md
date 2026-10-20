@@ -5,11 +5,13 @@ description: 阶段已交付或用户要求独立收尾时，统一提交、PR�
 
 # Stage Closeout
 
-共享收尾方法供verify-code、build-prd及独立宿主直接调用。caller保留方向/稿件确认、质量裁决、正式task facts、reflection和stage-handoff；本方法消费当前真实来源并回实际交付结果，不生成第二套close plan、状态账本、public API或Git执行器。
+共享收尾方法供verify-code、build-prd、make-decision及独立宿主直接调用。make-decision 的轻档在实施与适用审查完成后触发物理交付；小改动按其已确认路线无独立审查轴。反思收口在前、物理交付在后。caller保留方向/稿件确认、质量裁决、正式task facts、reflection和stage-handoff；本方法消费当前真实来源并回实际交付结果，不生成第二套close plan、状态账本、public API或Git执行器。
 
 ## 1. 核输入与未完成范围
 
 写PR/交付说明前，先读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一正文，再执行本方法的写作动作；消费者是PR 读者与交付验收者。缺源如实 `unavailable`，此处只落实到达条件，不复制规范或改变原授权、失败与收口步骤。
+
+收口前读当前决策记录的「级别与路线」，读不到按复杂路线处理并记缺口，不静默降档。四级每次收口都写业务仓 `Improvements`；无发现写具名依据，越界记不可用，不回落工具仓。反思与经验先由 caller 收口，物理交付随后消费其真实原件。
 
 调用者提供当前task身份和外置task路径、认证worktree/目标repo、当前材料、质量与发现处置原件、真实授权原文/ref、当前分支/HEAD、目标分支/remote、允许写集、PR状态、需交付/归档/保留/清理的精确范围。按实际项目能力读取现有窄工具；缺工具只停相应动作，不能偷偷改用旧close控制面。
 
@@ -50,7 +52,7 @@ node "$AUTH_TOOL" consume --operation "$OPERATION" --step-id "$ACTUAL_STEP_ID" -
 
 交付说明只在真正执行关闭的阶段生成。据真实task/spec、已验AC与未验项、base到task HEAD提交/diff、facts及测试原ref成稿。
 
-- **Default**：未传`delivery.pr`或body时复用close owner的`buildDefaultPrDescription`；来源、helper或环境probe缺失/不可读写明缺口，不编内容或宣称已生成。默认稿同按下列合同读回补缺。
+- **Default**：普通 PR 正文读当前 task 的 `spec.md`；未传`delivery.pr`或body时复用close owner的`buildDefaultPrDescription`；来源、helper或环境probe缺失/不可读写明缺口，不编内容或宣称已生成。默认稿同按下列合同读回补缺。
 - **Explicit**：body须有`Door`、`Blast Radius`两个独立非空行；缺项报`PR_DESCRIPTION_INCOMPLETE`，交producer补齐。
 - **Environment**：支持时默认PR，仅明确`enabled: false`主动退出；不支持保原因与描述退commit。旧stored plan缺pr沿旧序兼容；生成描述不证明push、PR或读回，动作沿第2节授权。
 

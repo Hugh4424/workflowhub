@@ -63,7 +63,7 @@ describe('ORACLE-P1-CLOSEOUT-STEP stage closeout step and method contract', () =
     expect(body, 'the handoff stays readable on its own').toMatch(/单独读取/u);
   });
 
-  it('keeps the three skill wirings unchanged and never widens closeout past its two stages', () => {
+  it('keeps the three skill wirings unchanged and never widens closeout past its three stages', () => {
     const catalog = read('skills/catalog.yaml');
     expect(catalog, 'catalog must be readable').not.toBeNull();
     const skills = yaml.load(catalog).skills;
@@ -74,7 +74,7 @@ describe('ORACLE-P1-CLOSEOUT-STEP stage closeout step and method contract', () =
     expect(new Set(byName('stage-handoff').used_by_stages)).toEqual(
       new Set(['make-decision', 'build-prd', 'build-plan', 'build-code', 'verify-code']),
     );
-    expect(new Set(byName('stage-closeout').used_by_stages)).toEqual(new Set(['build-prd', 'verify-code']));
+    expect(new Set(byName('stage-closeout').used_by_stages)).toEqual(new Set(['build-prd', 'verify-code', 'make-decision']));
     expect(byName('stage-reflection').dependency_closure).toContain('skills/stage-handoff');
     expect(byName('stage-closeout').dependency_closure).toHaveLength(3);
   });
