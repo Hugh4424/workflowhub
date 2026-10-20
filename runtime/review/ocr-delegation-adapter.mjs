@@ -1,6 +1,9 @@
+import { StringDecoder } from "node:string_decoder";
+import agNativeAdapter from "../../skills/third-review/lib/adapters/antigravity.mjs";
+import { createHealthRunner } from "../../skills/third-review/lib/health-runner.mjs";
 import { execFileSync, spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { closeSync, constants, cpSync, existsSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, realpathSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { closeSync, constants, cpSync, existsSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, realpathSync, readSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { homedir, tmpdir, userInfo } from "node:os";
 import { redactHostPathText, redactProviderHostPaths } from "./provider-material-projection.mjs";
@@ -1058,12 +1061,29 @@ process.stdin.on("data", chunk => { input += chunk; });
 process.stdin.on("end", () => {
   const phase = process.argv[2];
   let decision = "deny", relative = null, payload = null, hookError = null, observedHash = null;
+  let tool = null, args = null, permittedPath = null;
   try {
     payload = JSON.parse(input);
-    const call = payload.toolCall, args = call?.args;
-    if (typeof payload.conversationId !== "string" || !call || typeof call.name !== "string" || !args || typeof args !== "object") throw new Error("invalid tool hook payload");
-    if ((phase === "pre" || phase === "post") && call.name === "view_file") {
-      const raw = args.AbsolutePath;
+    if (typeof payload.conversationId !== "string") throw new Error("invalid tool hook session");
+    const call = payload.toolCall;
+    let raw = null;
+    if (call !== undefined) {
+      if (!call || typeof call.name !== "string" || !call.args || typeof call.args !== "object" || Array.isArray(call.args)) throw new Error("invalid tool hook payload");
+      tool = call.name; args = call.args;
+      raw = tool === "read_file" ? args.Path : args.AbsolutePath;
+      if (["view_file", "read_file"].includes(tool) && (typeof raw !== "string" || [args.Path, args.AbsolutePath].some(value => value !== undefined && value !== raw))) throw new Error("conflicting tool hook path");
+    }
+    if (payload.tool_name !== undefined || payload.tool_info !== undefined) {
+      const info = payload.tool_info, parameters = info?.parameters;
+      if (typeof payload.tool_name !== "string" || !parameters || typeof parameters !== "object" || Array.isArray(parameters)
+          || (info.name !== undefined && info.name !== payload.tool_name)) throw new Error("invalid tool hook payload");
+      if (["view_file", "read_file"].includes(payload.tool_name) && (typeof parameters.Path !== "string"
+          || (parameters.AbsolutePath !== undefined && parameters.AbsolutePath !== parameters.Path))) throw new Error("invalid tool hook read path");
+      if (tool !== null && (tool !== payload.tool_name || raw !== parameters.Path)) throw new Error("conflicting tool hook wrappers");
+      if (tool === null) { tool = payload.tool_name; args = parameters; raw = parameters.Path; }
+    }
+    if (tool === null) throw new Error("invalid tool hook payload");
+    if ((phase === "pre" || phase === "post") && ["view_file", "read_file"].includes(tool)) {
       if (typeof raw === "string" && path.isAbsolute(raw) && path.normalize(raw) === raw
           && !raw.split(path.sep).includes("..")) {
         const rel = path.relative(config.root, raw);
@@ -1078,7 +1098,7 @@ process.stdin.on("end", () => {
           const expected = config.files[rel.replaceAll(path.sep, "/")];
           if (fs.realpathSync(raw) !== raw || !info.isFile() || info.nlink !== 1
               || info.size !== expected.bytes || crypto.createHash("sha256").update(fs.readFileSync(raw)).digest("hex") !== expected.sha256) throw new Error("packet bytes changed");
-          decision = "allow"; relative = rel.replaceAll(path.sep, "/"); observedHash = expected.sha256;
+          decision = "allow"; relative = rel.replaceAll(path.sep, "/"); observedHash = expected.sha256; permittedPath = raw;
         }
       }
     }
@@ -1086,22 +1106,89 @@ process.stdin.on("end", () => {
   try {
     const fd = fs.openSync(config.events, fs.constants.O_WRONLY | fs.constants.O_APPEND | fs.constants.O_CREAT | (fs.constants.O_NOFOLLOW || 0), 0o600);
     try { fs.writeSync(fd, JSON.stringify({phase, conversation_id:payload?.conversationId ?? null,
-      tool:payload?.toolCall?.name ?? null, path:relative, decision:phase === "pre" ? decision : null,
+      tool:tool ?? payload?.toolCall?.name ?? payload?.tool_name ?? null, path:relative, decision:phase === "pre" ? decision : null,
       sha256:observedHash,
-      range_requested:Boolean(payload?.toolCall?.args && (Object.hasOwn(payload.toolCall.args,"StartLine") || Object.hasOwn(payload.toolCall.args,"EndLine"))),
-      StartLine:Number.isSafeInteger(payload?.toolCall?.args?.StartLine) ? payload.toolCall.args.StartLine : null,
-      EndLine:Number.isSafeInteger(payload?.toolCall?.args?.EndLine) ? payload.toolCall.args.EndLine : null,
+      range_requested:Boolean(args && (Object.hasOwn(args,"StartLine") || Object.hasOwn(args,"EndLine"))),
+      StartLine:Number.isSafeInteger(args?.StartLine) ? args.StartLine : null,
+      EndLine:Number.isSafeInteger(args?.EndLine) ? args.EndLine : null,
       full_file_result:phase === "post" && typeof payload?.toolResult?.content === "string" && observedHash
         ? crypto.createHash("sha256").update(payload.toolResult.content).digest("hex") === observedHash : null,
+      result_basis:phase === "post" && typeof payload?.toolResult?.content === "string" ? "raw_content_sha256" : null,
+      returned_content_sha256:phase === "post" && typeof payload?.toolResult?.content === "string" ? crypto.createHash("sha256").update(payload.toolResult.content).digest("hex") : null,
+      step_idx:Number.isSafeInteger(payload?.stepIdx) ? payload.stepIdx : null,
+      transcript_path:typeof payload?.transcriptPath === "string" ? payload.transcriptPath : null,
+      artifact_directory_path:typeof payload?.artifactDirectoryPath === "string" ? payload.artifactDirectoryPath : null,
+      observed_at_ms:Date.now(),
       error:hookError ?? (phase === "post" ? payload?.error || null : null)}) + "\n"); }
     finally { fs.closeSync(fd); }
   } catch (error) { decision = "deny"; hookError = "packet guard log failed"; }
   if (hookError) process.stderr.write("WH_AG_PACKET_GUARD_ERROR: " + hookError + "\n");
   process.stdout.write(JSON.stringify(phase === "post" ? {} : {decision,
-    reason:hookError ?? (decision === "allow" ? "Exact frozen packet file." : "Only exact frozen packet view_file is permitted."),
-    ...(decision === "allow" ? {permissionOverrides:["read_file(" + payload.toolCall.args.AbsolutePath + ")"]} : {})}));
+    reason:hookError ?? (decision === "allow" ? "Exact frozen packet file." : "Only exact frozen packet read_file or view_file is permitted."),
+    ...(decision === "allow" ? {permissionOverrides:["read_file(" + permittedPath + ")"]} : {})}));
 });
 `;
+
+
+// Private full-read representation adapter, consumed only by AG inspect.
+// Remove when native supplies independently verifiable raw result content.
+function readStableAgInspectionFile(file, maxBytes) {
+  if (!isAbsolute(file) || resolve(file)!==file) throw new Error("AG inspection path is not canonical");
+  const ancestors=[];let at=file;while(dirname(at)!==at)at=dirname(at);
+  for(const part of file.slice(at.length).split(sep).filter(Boolean)){
+    at=join(at,part);const stat=lstatSync(at,{bigint:true});
+    if(stat.isSymbolicLink()||realpathSync(at)!==at)throw new Error("AG inspection path alias");
+    ancestors.push({path:at,dev:stat.dev,ino:stat.ino});
+  }
+  const named=lstatSync(file,{bigint:true});
+  if(!named.isFile()||named.nlink!==1n||named.size>BigInt(maxBytes))throw new Error("AG inspection file kind/link/budget rejected");
+  const unchanged=stat=>stat.isFile()&&stat.nlink===1n&&stat.dev===named.dev&&stat.ino===named.ino&&stat.size===named.size&&stat.mtimeNs===named.mtimeNs&&stat.ctimeNs===named.ctimeNs;
+  const verify=()=>{
+    for(const before of ancestors){const now=lstatSync(before.path,{bigint:true});if(now.isSymbolicLink()||now.dev!==before.dev||now.ino!==before.ino||realpathSync(before.path)!==before.path)throw new Error("AG inspection ancestor replaced");}
+    if(!unchanged(lstatSync(file,{bigint:true})))throw new Error("AG inspection file changed");
+  };
+  const fd=openSync(file,constants.O_RDONLY|constants.O_NOFOLLOW);let bytes;
+  try{
+    if(!unchanged(fstatSync(fd,{bigint:true})))throw new Error("AG inspection opened identity changed");
+    const buffer=Buffer.alloc(Number(named.size)+1);let total=0,count;
+    while(total<buffer.length&&(count=readSync(fd,buffer,total,buffer.length-total,null))>0)total+=count;
+    if(total!==Number(named.size)||!unchanged(fstatSync(fd,{bigint:true})))throw new Error("AG inspection read changed");
+    bytes=buffer.subarray(0,total);verify();
+  }finally{closeSync(fd);}
+  return{bytes,verify};
+}
+function agStrictTime(value){
+  if(typeof value!=="string")return null;
+  const m=/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(Z|[+-]\d{2}:\d{2})$/.exec(value);if(!m)return null;
+  const[y,month,d,h,min,sec]=m.slice(1,7).map(Number),date=new Date(Date.UTC(y,month-1,d));
+  if(date.getUTCFullYear()!==y||date.getUTCMonth()!==month-1||date.getUTCDate()!==d||h>23||min>59||sec>59)return null;
+  const time=Date.parse(value);return Number.isFinite(time)?time:null;
+}
+function agNoTruncation(row){return row.truncated_fields===undefined||row.truncated_fields===null||(Array.isArray(row.truncated_fields)&&row.truncated_fields.length===0);}
+function inspectAgTranscriptRead({sessionId,pre,post,root,expected}){
+  if(!/^[A-Za-z0-9][A-Za-z0-9._-]{0,200}$/.test(sessionId)||!Number.isSafeInteger(post.step_idx)||post.step_idx<1||pre.step_idx!==post.step_idx||pre.error||post.error||pre.range_requested||post.range_requested)throw new Error("AG transcript call identity/range unavailable");
+  const artifact=join(homedir(),'.gemini','antigravity-cli','brain',sessionId),transcript=join(artifact,'.system_generated','logs','transcript_full.jsonl');
+  if(pre.artifact_directory_path!==artifact||post.artifact_directory_path!==artifact||pre.transcript_path!==transcript||post.transcript_path!==transcript)throw new Error("AG transcript is outside the exact native session source");
+  const snapshot=readStableAgInspectionFile(transcript,8*1024*1024),text=new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(snapshot.bytes);
+  if(!text.endsWith('\n'))throw new Error("AG transcript incomplete JSONL tail");
+  const rawLines=text.slice(0,-1).split('\n');if(rawLines.length>50000||rawLines.some(line=>!line||Buffer.byteLength(line)>1024*1024))throw new Error("AG transcript line budget/shape rejected");
+  const rows=rawLines.map(line=>JSON.parse(line)),seen=new Set();for(const row of rows){if(!row||!Number.isSafeInteger(row.step_index)||row.step_index<0||seen.has(row.step_index))throw new Error("AG transcript duplicate/unknown step shape");seen.add(row.step_index);}
+  const index=rows.findIndex(row=>row.step_index===post.step_idx),result=rows[index],call=rows[index-1];
+  if(!result||!call||result.source!=='MODEL'||result.type!=='GENERIC'||result.status!=='DONE'||typeof result.content!=='string'||call.source!=='MODEL'||call.type!=='PLANNER_RESPONSE'||call.status!=='DONE'||call.step_index+1!==result.step_index||!Array.isArray(call.tool_calls)||call.tool_calls.length!==1||!agNoTruncation(call)||!agNoTruncation(result))throw new Error("AG transcript result is not one unique completed read call");
+  const toolCall=call.tool_calls[0],frozenPath=join(root,post.path);let callPath=toolCall?.args?.Path;
+  if(typeof callPath==='string'&&callPath.startsWith('"')&&callPath.endsWith('"')){try{callPath=JSON.parse(callPath);}catch{throw new Error("AG transcript invalid quoted Path");}}
+  if(toolCall?.name!=='read_file'||post.tool!=='read_file'||callPath!==frozenPath||toolCall.id!==undefined||result.tool_call_id!==undefined)throw new Error("AG transcript tool/path/call format mismatch");
+  const source=readStableAgInspectionFile(frozenPath,16*1024*1024);if(source.bytes.length!==expected.bytes||sha256(source.bytes)!==expected.sha256)throw new Error("AG frozen source changed after hook");
+  const sourceText=new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(source.bytes);if(!sourceText||/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\ufeff]/.test(sourceText))throw new Error("AG transcript unsupported source text representation");
+  const logical=sourceText.split('\n');if(sourceText.endsWith('\n'))logical.pop();
+  const header=/^Created At: ([^\n]+)\nCompleted At: ([^\n]+)\nShowing lines 1-([1-9]\d*) of ([1-9]\d*)\n/.exec(result.content);
+  if(!header||Number(header[3])!==logical.length||header[3]!==header[4])throw new Error("AG transcript display range is not complete");
+  const started=agStrictTime(header[1]),ended=agStrictTime(header[2]),callAt=agStrictTime(call.created_at),resultAt=agStrictTime(result.created_at);
+  if([started,ended,callAt,resultAt].some(t=>t===null)||!Number.isSafeInteger(pre.observed_at_ms)||!Number.isSafeInteger(post.observed_at_ms)||started>ended||started<pre.observed_at_ms-1000||ended>post.observed_at_ms+1000||callAt>started+1000||resultAt<started-1000||resultAt>ended+1000)throw new Error("AG transcript times do not bind this read");
+  const displayed=result.content.slice(header[0].length).split('\n');if(displayed.length!==logical.length||displayed.some((line,i)=>line!==(i+1)+': '+logical[i]))throw new Error("AG transcript display content differs from frozen logical lines");
+  source.verify();snapshot.verify();
+  return{result_basis:'transcript_logical_lines',source_sha256:expected.sha256,transcript_path:transcript,transcript_sha256:sha256(snapshot.bytes),display_row_sha256:sha256(Buffer.from(rawLines[index]+'\n')),logical_line_count:logical.length,returned_raw_bytes_verified:false};
+}
 
 function installAgPacketGuard(materials) {
   const root = realpathSync(materials.bundleRoot), privateRoot = join(root, ".ocr-ag-guard");
@@ -1136,25 +1223,26 @@ function installAgPacketGuard(materials) {
       const rows = auditBytes.toString("utf8").trim().split(/\r?\n/).filter(Boolean).map(line=>JSON.parse(line));
       const own = rows.filter(row=>row.conversation_id === sessionId);
       if (own.length === 0 || own.some(row=>row.error && row.phase === "pre")) throw new Error("AG packet hook payload/handler failed");
-      const permitted = new Map();
-      const complete = new Set();
-      for (const row of own) {
-        const expected = files[row.path];
-        if (row.tool !== "view_file" || row.error || !expected || row.sha256 !== expected.sha256) continue;
-        const range = JSON.stringify([row.range_requested, row.StartLine, row.EndLine]);
-        if (row.phase === "pre" && row.decision === "allow") {
-          permitted.set(row.path, range);
-        } else if (row.phase === "post" && permitted.get(row.path) === range) {
-          // A ranged result is complete only when the actual returned content
-          // matches the frozen file. Integrity reads by the hook are not reads
-          // by the provider; partial/unknown tool ranges stay undetermined.
-          if (row.full_file_result === true) complete.add(row.path);
-          permitted.delete(row.path);
-        }
+      const groups=new Map(),complete=new Set(),limits=[];
+      for(const [auditIndex,row] of own.entries()){
+        const expected=files[row.path];if(!['view_file','read_file'].includes(row.tool)||row.error||!expected||row.sha256!==expected.sha256)continue;
+        const key=JSON.stringify([row.path,row.tool,row.range_requested,row.StartLine,row.EndLine,row.step_idx??null,row.transcript_path??null,row.artifact_directory_path??null]);
+        const group=groups.get(key)??{pre:[],post:[]};if(row.phase==='pre'&&row.decision==='allow')group.pre.push({row,auditIndex});if(row.phase==='post')group.post.push({row,auditIndex});groups.set(key,group);
+      }
+      for(const group of groups.values()){
+        if(group.pre.length!==1||group.post.length!==1)continue;const preEntry=group.pre[0],postEntry=group.post[0];
+        if(preEntry.auditIndex>=postEntry.auditIndex)continue;const pre=preEntry.row,post=postEntry.row;
+        if(post.full_file_result===true){complete.add(post.path);continue;}
+        if(post.full_file_result!==null||!post.transcript_path)continue;
+        let evidence,confirmed=false;
+        try{evidence=inspectAgTranscriptRead({sessionId,pre,post,root,expected:files[post.path]});confirmed=true;complete.add(post.path);}
+        catch(error){limits.push({path:post.path,reason:error.message});evidence={result_basis:'transcript_logical_lines',confirmation_error:error.message};}
+        const fd=openSync(events,constants.O_WRONLY|constants.O_APPEND|constants.O_NOFOLLOW);
+        try{writeFileSync(fd,JSON.stringify({phase:'inspect',conversation_id:sessionId,tool:post.tool,path:post.path,step_idx:post.step_idx,sha256:files[post.path].sha256,full_file_result:confirmed,...evidence})+'\n');}finally{closeSync(fd);}
       }
       if (!complete.has("review-prompt.md")) throw new Error("AG native packet prompt read was not confirmed");
       return {read_confirmed:materials.deliveryManifest.every(entry=>complete.has(entry.path)),
-        read:materials.deliveryManifest.filter(entry=>complete.has(entry.path)).map(entry=>entry.path)};
+        read:materials.deliveryManifest.filter(entry=>complete.has(entry.path)).map(entry=>entry.path),limits};
     },
   };
 }
@@ -1406,7 +1494,7 @@ function ocrProviderPlan(provider, profile, { cwd = null } = {}) {
     const root = realpathSync(cwd);
     return {adapter, executable, args:["--new-project","--disable-slash-commands",
       "--output-format","stream-json",...(model ? ["--model",model] : []),
-      "-p",entry + " Use only view_file with AbsolutePath under " + root + ". Start with " + join(root,"review-prompt.md")
+      "-p",entry + " Use only read_file with Path under " + root + ". Start with " + join(root,"review-prompt.md")
       + ". Native hook allows only frozen declared files; do not use skills or any other tool."]};
   }
   throw Object.assign(new Error("OCR has no direct host executor for " + adapter), { code: "OCR_PROVIDER_UNSUPPORTED" });
@@ -1464,7 +1552,8 @@ const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const [cleanupJson, executable, ...args] = process.argv.slice(1);
+const [cleanupJson, agJson, executable, ...args] = process.argv.slice(1);
+const agNative = JSON.parse(agJson);
 const cleanup = JSON.parse(cleanupJson);
 const ownerPid = process.ppid;
 let ownerPipeClosed = false;
@@ -1563,6 +1652,8 @@ provider.once("error", (error) => {
 provider.once("spawn", () => {
   process.send?.({ ocr_provider_pid: provider.pid });
 });
+// AG descendants may retain stdio after the provider itself has exited.
+if (agNative) provider.once("exit", () => signalGroup("SIGKILL"));
 provider.once("close", (code, signal) => {
   if (process.connected) process.send({ ocr_provider_exit: { code, signal } }, () => {});
   if (killTimer) clearTimeout(killTimer);
@@ -1604,7 +1695,7 @@ function runOcrProviderProcess({ provider, profile, cwd, signal, onProviderHealt
     try {
       child = spawn(process.platform === "win32" ? plan.executable : process.execPath,
         process.platform === "win32" ? plan.args
-          : ["-e", OCR_PROVIDER_SUPERVISOR, JSON.stringify(guardianCleanup), plan.executable, ...plan.args], {
+          : ["-e", OCR_PROVIDER_SUPERVISOR, JSON.stringify(guardianCleanup), JSON.stringify(plan.adapter === "antigravity"), plan.executable, ...plan.args], {
         cwd, stdio: process.platform === "win32"
           ? ["ignore", "pipe", "pipe"] : ["pipe", "pipe", "pipe", "ipc"],
         detached: false,
@@ -1641,6 +1732,31 @@ function runOcrProviderProcess({ provider, profile, cwd, signal, onProviderHealt
     let providerExit = null;
     const supervisorDiagnostics = [];
     let healthObserverError = null;
+    const agNative = plan.adapter === "antigravity";
+    const agDecoder = new StringDecoder("utf8"), agProgressKeys = new Set();
+    let agPending = "", agPrefix = "", agTerminal = null, agHealth = null;
+    const agLine = (line) => {
+      if (agTerminal || stopCause) return;
+      agPrefix += line + "\n";
+      const observation = agNativeAdapter.observeLine("stdout", line);
+      let readTool = null;
+      try { const step = JSON.parse(line)?.step_update; readTool = step?.tool_name ?? step?.tool_info?.name; }
+      catch { /* Non-JSON stays raw and supplies no semantic progress. */ }
+      if (observation.terminal) {
+        agTerminal = { ...observation.terminal, output: agPrefix };
+        agHealth?.stop();
+        stopProvider("SIGTERM");
+      } else if (observation.progress === true && ["read_file", "view_file"].includes(readTool) && !agProgressKeys.has(observation.progress_key)) {
+        agProgressKeys.add(observation.progress_key); progressEvents += 1;
+        agHealth?.noteProgress();
+      }
+    };
+    const agCapture = (bytes) => {
+      agPending += agDecoder.write(bytes);
+      let end; while ((end = agPending.indexOf("\n")) !== -1) {
+        const line = agPending.slice(0, end).replace(/\r$/, ""); agPending = agPending.slice(end + 1); agLine(line);
+      }
+    };
     const observe = (status, publish = true) => {
       let liveness = status === "running" ? null : false;
       if (status === "running" && Number.isInteger(child.pid)) {
@@ -1678,16 +1794,17 @@ function runOcrProviderProcess({ provider, profile, cwd, signal, onProviderHealt
       terminate(kind);
     };
     const onAbort = () => {
-      // Preserve the first observed stop: an explicit cancellation is not
-      // reclassified by anything observed after it.
-      stopCause ??= "cancelled";
+      // A consumed AG result and an earlier stop share first-cause priority.
+      // Later cancellation still reaps the process, but cannot replace that
+      // terminal. Resource/transport failures retain their own checks below.
+      if (!agTerminal) stopCause ??= "cancelled";
       stopProvider("SIGTERM");
       if (process.platform === "win32") killTimer ??= setTimeout(() => terminate("SIGKILL"), 2_000);
     };
     const capture = (stream, bytes) => {
       if (stream === "stdout") stdoutBytes += bytes.length;
       else stderrBytes += bytes.length;
-      progressEvents += 1;
+      if (!agNative) progressEvents += 1;
       lastOutputAtMs = Date.now();
       // Keep original bytes until terminal publication. Decode only for parsing;
       // decoding per chunk would corrupt both binary and split UTF-8 output.
@@ -1704,6 +1821,7 @@ function runOcrProviderProcess({ provider, profile, cwd, signal, onProviderHealt
         terminate("SIGTERM");
         if (process.platform === "win32") killTimer ??= setTimeout(() => terminate("SIGKILL"), 2_000);
       }
+      if (agNative && stream === "stdout") agCapture(bytes);
       observe("running");
     };
     child.stdout?.on("data", (bytes) => capture("stdout", bytes));
@@ -1721,7 +1839,28 @@ function runOcrProviderProcess({ provider, profile, cwd, signal, onProviderHealt
     });
     child.once("spawn", () => {
       observe("running");
-      // Observation interval only: silence never cancels or fails a live child.
+      if (agNative) {
+        // Reuse the existing 60s default and five unchanged generations; the
+        // independent PID probe below is not a semantic health window.
+        agHealth = createHealthRunner({ streamProgress: true, clock: {
+          now: () => Date.now(),
+          setTimeout(fn, ms) {
+            const timer = { handle: null, at: Date.now(), cancelled: false };
+            const tick = () => {
+              if (timer.cancelled) return;
+              if (Date.now() - timer.at >= ms) fn();
+              else timer.handle = setTimeout(tick, ms);
+            };
+            timer.handle = setTimeout(tick, ms); return timer;
+          },
+          clearTimeout(timer) { timer.cancelled = true; clearTimeout(timer.handle); },
+        }, onDecision: decision => {
+          if (settled || stopCause || agTerminal) return;
+          stopCause = decision.error.code; stopProvider("SIGTERM");
+        }});
+        agHealth.start();
+      }
+      // PID observation alone is not semantic progress.
       healthTimer = setInterval(() => observe("running"), healthPollMs);
       healthTimer.unref?.();
     });
@@ -1730,6 +1869,13 @@ function runOcrProviderProcess({ provider, profile, cwd, signal, onProviderHealt
       stopCause ??= "spawn_failed";
     });
     child.once("close", (exitCode, exitSignal) => {
+      if (agNative) {
+        agPending += agDecoder.end();
+        // A final JSONL line without LF is still parsed as a complete record.
+        if (agPending) agLine(agPending);
+        agHealth?.stop();
+        if (!stopCause && !agTerminal) stopCause = "PROVIDER_NO_TERMINAL_RESULT";
+      }
       settled = true;
       if (killTimer) clearTimeout(killTimer);
       if (healthTimer) clearInterval(healthTimer);
@@ -1740,14 +1886,14 @@ function runOcrProviderProcess({ provider, profile, cwd, signal, onProviderHealt
       const stderrText = stderr.toString("utf8");
       const printTimeout = plan.adapter === "antigravity" && /\bprint timeout\b/i.test(stderrText);
       const status = stopCause === "cancelled" ? "cancelled"
-        : stopCause === null && exitCode === 0 && !overflow && !spawnError && !printTimeout && !healthObserverError ? "completed" : "failed";
+        : stopCause === null && (exitCode === 0 || agTerminal?.state === "completed") && agTerminal?.state !== "failed" && !overflow && !spawnError && !printTimeout && !healthObserverError ? "completed" : "failed";
       const code = ({ cancelled: "OCR_PROVIDER_CANCELLED",
-        output_limit: "OCR_PROVIDER_OUTPUT_LIMIT", spawn_failed: "OCR_PROVIDER_SPAWN_FAILED" })[stopCause]
+        output_limit: "OCR_PROVIDER_OUTPUT_LIMIT", spawn_failed: "OCR_PROVIDER_SPAWN_FAILED", PROCESS_STALLED: "PROCESS_STALLED", PROVIDER_NO_TERMINAL_RESULT: "PROVIDER_NO_TERMINAL_RESULT" })[stopCause]
         ?? (overflow ? "OCR_PROVIDER_OUTPUT_LIMIT" : spawnError ? "OCR_PROVIDER_SPAWN_FAILED"
-          : printTimeout ? "OCR_PROVIDER_TIMEOUT" : healthObserverError ? "OCR_HEALTH_OBSERVER_FAILED" : "OCR_PROVIDER_EXIT_NONZERO");
+          : agTerminal?.state === "failed" ? "PROVIDER_HEALTH_FAILED" : printTimeout ? "OCR_PROVIDER_TIMEOUT" : healthObserverError ? "OCR_HEALTH_OBSERVER_FAILED" : "OCR_PROVIDER_EXIT_NONZERO");
       const health = observe(status, false);
       resolveRun({
-        status, output: status === "completed" ? stdout.toString("utf8") : null,
+        status, output: status === "completed" ? (agTerminal?.output ?? stdout.toString("utf8")) : null,
         session_id: plan.adapter === "codex" ? observedCodexSessionId(stdout) : plan.adapter === "antigravity" ? observedAgSessionId(stdout) : plan.adapter === "kimi" ? observedKimiSessionId(stdout) : plan.adapter === "opencode" ? observedOpenCodeSessionId(stdout) : null,
         raw_output: { stdout, stderr,
           exit_code: providerExit ? providerExit.code : exitCode,
@@ -1948,7 +2094,9 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
         if(member?.status !== "completed")return observed;
         try {
           if(auditError)throw new Error(auditError);
-          const coverage=adapter === "antigravity" ? guard.inspect(member.session_id,audit) : guard.inspect(audit);
+          let coverage;
+          try { coverage=adapter === "antigravity" ? guard.inspect(member.session_id,audit) : guard.inspect(audit); }
+          finally { if(adapter === "antigravity") observed.native_audit=guard.readAudit(); }
           // The Kimi audit has no per-profile session field. Shared readers
           // cannot attribute a sibling's reads to this member.
           if(["kimi","opencode"].includes(adapter) && (typeof member.session_id !== "string"

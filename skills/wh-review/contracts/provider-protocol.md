@@ -27,7 +27,7 @@ WorkflowHub 的 wh-review / ReviewProviderClient 保留 reviewer group 的输入
 请求中配置的 profile 各自保留 attribution；不同配置不能无声丢弃，异源判断按实际 adapter/source。
 broker 附件传输按能力协商 file_only 或 always_embed；上述原生 transport 使用完整声明文件的受限 packet。必要合同、来源和内容不能截断，transport 差异不拆成新的公共审查。
 审查入口可等待同一次 managed 请求的真实终态；不能把仍 running 的成员当成 completed。
-公共结果的 identity、timing、usage、实际取消/清理、过程 outcome 与 provider 归属必须按实际 transport 校验。文档请求不设固定墙钟截止，以显式调用方取消、provider 自身终态或 `PROCESS_STALLED` 终态失败收场；其中经 3rd-review 执行的 provider，连续 5 个健康检查间隔无新进展判 `PROCESS_STALLED` 终态失败并回收进程组，有进展即清零、总时长不设上限。owner 丢失时分别由 3rd-review 的 runtime-guardian 或原生 transport 的 OCR_PROVIDER_SUPERVISOR 按真实 owner 身份回收。OCR direct code provider 不额外设置 elapsed-time host kill，等待 provider 自身真实终态；其停滞判定本轮不做，显式调用方取消、既有资源与失败边界及清理保持。health/output 不作为取消或继续的许可。首因、原始输出、已观察 session 与 usage 按真实过程保留，usage 不可得保持 null。
+公共结果的 identity、timing、usage、实际取消/清理、过程 outcome 与 provider 归属必须按实际 transport 校验。文档请求不设固定墙钟截止，以显式调用方取消、provider 自身终态或 `PROCESS_STALLED` 终态失败收场；其中经 3rd-review 执行的 provider，连续 5 个健康检查间隔无新进展判 `PROCESS_STALLED` 终态失败并回收进程组，有进展即清零、总时长不设上限。owner 丢失时分别由 3rd-review 的 runtime-guardian 或原生 transport 的 OCR_PROVIDER_SUPERVISOR 按真实 owner 身份回收。OCR direct code provider 不额外设置 elapsed-time host kill；其中 AG native 按当前任务 FR-CHAIN-007，由既有 runtime/review/ocr-delegation-adapter.mjs 的 native executor/supervisor 消费语义进展、首个真实终态与 owned 进程组回收；其余 direct provider 的停滞判定本轮不做。显式调用方取消、既有资源与失败边界及清理保持。health/output 不作为取消或继续的许可。首因、原始输出、已观察 session 与 usage 按真实过程保留，usage 不可得保持 null。
 传输层完整性和来源事实由实际 transport 保留，不作为 WorkflowHub 继续工作或质量通过的许可。
 未返回 usage 时保持 null，不用文件大小推算 token 或费用。
 

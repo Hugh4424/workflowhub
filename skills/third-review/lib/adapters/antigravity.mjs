@@ -55,11 +55,21 @@ function hookDecision(policy, payload) {
   const denied = { decision: "deny", reason: "The packet boundary permits only exact current regular-file reads" };
   try {
     const call = payload?.toolCall;
-    const tool = call === undefined ? payload?.tool_name : call?.name;
-    const file = call === undefined ? payload?.tool_info?.parameters?.Path : call?.args?.AbsolutePath;
-    if (!["view_file", "read_file"].includes(tool) || (call !== undefined && tool !== "view_file")
-        || (payload?.tool_info?.name !== undefined && payload.tool_info.name !== tool)
-        || typeof file !== "string" || !path.isAbsolute(file) || path.resolve(file) !== file) return denied;
+    let tool = null, file = null;
+    if (call !== undefined) {
+      if (!call || !["view_file", "read_file"].includes(call.name) || !call.args || typeof call.args !== "object" || Array.isArray(call.args)) return denied;
+      tool = call.name; file = tool === "read_file" ? call.args.Path : call.args.AbsolutePath;
+      if (typeof file !== "string" || [call.args.Path, call.args.AbsolutePath].some(value => value !== undefined && value !== file)) return denied;
+    }
+    if (payload?.tool_name !== undefined || payload?.tool_info !== undefined) {
+      const info = payload.tool_info, parameters = info?.parameters;
+      if (!["view_file", "read_file"].includes(payload.tool_name) || !parameters || typeof parameters !== "object" || Array.isArray(parameters)
+          || (info.name !== undefined && info.name !== payload.tool_name) || typeof parameters.Path !== "string"
+          || (parameters.AbsolutePath !== undefined && parameters.AbsolutePath !== parameters.Path)) return denied;
+      if (tool !== null && (tool !== payload.tool_name || file !== parameters.Path)) return denied;
+      if (tool === null) { tool = payload.tool_name; file = parameters.Path; }
+    }
+    if (tool === null || typeof file !== "string" || !path.isAbsolute(file) || path.resolve(file) !== file) return denied;
     const stat = fs.lstatSync(file);
     if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1) return denied;
     const resolved = fs.realpathSync(file);

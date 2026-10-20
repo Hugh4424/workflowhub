@@ -176,3 +176,37 @@ test("N9 P4 installed native hook accepts both read payloads through a directory
     assert.equal(n3AgDecision(hook(real(s.inside))), "deny", "real payload keeps frozen content verification");
   } finally { s.clean(); }
 });
+
+// P4 additive TCR 447/448: wrapper reconstructed from stream + audit evidence.
+// No model request and no assertion that these bytes were captured native stdin.
+test("P4 native wrapper: installed hook accepts read_file Path and preserves skills directory-alias contract", () => {
+  const s = n3AgPacket();
+  try {
+    n3AgStart(s); const hook = n3AgHook(s);
+    const native = file => ({ conversationId: "p4-reconstructed-wrapper", toolCall: { name: "read_file", args: { Path: file } } });
+    assert.equal(n3AgDecision(hook(native(s.inside))), "allow", "installed production hook must accept reconstructed native read_file/Path wrapper");
+    const alias = path.join(s.root, "p4-native-bundle-alias"); fs.symlinkSync(s.bundle, alias);
+    assert.equal(n3AgDecision(hook(native(path.join(alias, "inside.txt")))), "allow", "skills owner retains directory alias realpath-to-exact-member behavior");
+  } finally { s.clean(); }
+});
+
+test("P4 native wrapper: installed hook default-denies conflicts unsafe exact members and malformed input", () => {
+  const s = n3AgPacket();
+  try {
+    n3AgStart(s); const hook = n3AgHook(s);
+    const native = file => ({ conversationId: "p4-reconstructed-wrapper", toolCall: { name: "read_file", args: { Path: file } } });
+    const conflict = native(s.inside); conflict.tool_name = "run_command"; conflict.tool_info = { parameters: { Path: s.outside } };
+    const paths = native(s.inside); paths.toolCall.args.AbsolutePath = s.outside;
+    for (const payload of [native(s.outside), native(`${s.bundle}/../bundle/inside.txt`), native(s.bundle), native("inside.txt"), native(path.join(s.bundle, "undeclared.txt")), conflict, paths, { toolCall: { name: "run_command", args: { Path: s.inside } } }, { toolCall: { name: "read_file", args: {} } }, "{illegal json"]) {
+      assert.equal(n3AgDecision(hook(payload)), "deny", JSON.stringify(payload));
+    }
+    fs.chmodSync(s.bundle, 0o700);
+    const last = path.join(s.bundle, "p4-last-symlink"); fs.symlinkSync(s.inside, last);
+    assert.equal(n3AgDecision(hook(native(last))), "deny");
+    const hard = path.join(s.root, "p4-hardlink"); fs.linkSync(s.inside, hard);
+    assert.equal(n3AgDecision(hook(native(s.inside))), "deny", "exact member must remain nlink=1");
+    fs.unlinkSync(hard);
+    fs.chmodSync(s.inside, 0o600); fs.writeFileSync(s.inside, "changed frozen bytes");
+    assert.equal(n3AgDecision(hook(native(s.inside))), "deny", "frozen member size and hash remain enforced");
+  } finally { s.clean(); }
+});

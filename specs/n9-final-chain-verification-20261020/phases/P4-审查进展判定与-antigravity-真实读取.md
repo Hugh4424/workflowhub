@@ -1,7 +1,7 @@
 # Phase P4 — 审查进展判定与 antigravity 真实读取
 
 - **Global spec**：`spec.md#实现设计全局权威`
-- **Write set**：`skills/third-review/lib/adapters/antigravity.mjs`、`skills/third-review/lib/process.mjs`、`skills/third-review/test/antigravity-adapter.test.mjs`、`skills/third-review/test/process.test.mjs`、`skills/third-review/test/review-progress-liveness.test.mjs`、`skills/third-review/test/adapters-health.test.mjs`、`runtime/review/ocr-delegation-adapter.mjs`、`tests/contract/ocr-delegation-adapter.test.mjs`
+- **Write set**：`skills/third-review/lib/adapters/antigravity.mjs`、`skills/third-review/lib/process.mjs`、`skills/third-review/test/antigravity-adapter.test.mjs`、`skills/third-review/test/process.test.mjs`、`skills/third-review/test/review-progress-liveness.test.mjs`、`skills/third-review/test/adapters-health.test.mjs`、`runtime/review/ocr-delegation-adapter.mjs`、`tests/contract/ocr-delegation-adapter.test.mjs`、`skills/wh-review/contracts/provider-protocol.md`
 - **Dependency**：none
 - **Consumer**：review 调用者、P8 全 AC 验收与后续审查任务
 - **gate_cmd**：`npx vitest run skills/third-review/test/antigravity-adapter.test.mjs skills/third-review/test/process.test.mjs skills/third-review/test/review-progress-liveness.test.mjs skills/third-review/test/adapters-health.test.mjs`
@@ -9,7 +9,7 @@
 - **evidence_path**：`quality/tests/2026-10-20-043-p4-success-terminal-cleanup-green.output`
 - **STOP**：若 T007/T008 的目标断言未按 ORACLE 通过、三处旧断言被删除或改弱、或任何越界/链接逃逸被放行，停下并把原始失败与 `antigravity.mjs` 行号交本 Phase 实施者按 D-010 与 FR-CHAIN-007/008 修复，不放宽断言或路径检查。
 - **覆盖 AC**：AC-M5-1、AC-M5-2
-- **Done**：AC-M5-1 `pass` — `quality/tests/2026-10-20-043-p4-success-terminal-cleanup-green.json` 与同名 `.output`，受控拒读活锁、允许读取慢流、缺 close 失败及已有成功 terminal 保全/父后代回收；AC-M5-2 `pass` — 同043原件及 `quality/tests/2026-10-20-027-p4-plan-health.json`，真实 payload 形状放行、bundle 外与链接逃逸拒绝。判定由当前主会话按 Appendix A 原判据提供；限受控场景，未宣真实 agy/native 或慢模型校准通过。独立发现处置见149/150，审查失败与覆盖限制如下保留。
+- **Done**：AC-M5-1 `pass`（限原043健康/终态恢复及当前AG native真实executor受控接线：245/246/250/252目标RED保留，249原136例135pass、251五idle窗口oracle、253首result后cancel两例pass、254必要邻近15pass；不是最新138全文件已跑）；AC-M5-2 `pass`（原196127/127与163 skills12/12、589/590/593真实12行1312B完整逻辑行native诊断沿原范围）。当前source9fca6529…/testcb8773ba…与709唯一hunk及原Spec最新定点fixed绑定；真实模型300秒五window、动态TOCTOU/1MB/chunk/Windows等未验，旧provider失败/coverage不倒填，P3/P7旧packet事实不重绑。
 
 冻结目标RED输入：2026-10-20已read `tests/contract/final-chain-plan-red.test.mjs`（sha256 `0ca1da0ce73bacdff6f01e67bffaabf70b4a4a89f9ede9a0af2f67ef4fcd2ab4`），首部生产writer只读/TCR条件与四组原断言保全；原始总命令 `npx vitest run tests/contract/final-chain-plan-red.test.mjs` exit1，14 tests=11目标行为失败、3本来通过、0 setup，原件 `quality/tests/2026-10-20-016-n9-final-chain-plan-red.json 与同名.output`。本文件只读，不入本Phase未来Write set；不能改断言求绿。每组只证其实际接缝，PLAN-REFRESH为G-2结构合同，不证两次真实刷新。
 
@@ -52,7 +52,7 @@
 ### 文件边界
 
 - **新增**：N/A — 全部改动落在既有 8 个文件，新场景写入既有测试文件，不新增测试文件或夹具。
-- **修改**：`skills/third-review/lib/process.mjs`（仅 T007 存活观察恢复分支）、`skills/third-review/lib/adapters/antigravity.mjs`、`skills/third-review/test/antigravity-adapter.test.mjs`、`skills/third-review/test/process.test.mjs`、`skills/third-review/test/review-progress-liveness.test.mjs`、`skills/third-review/test/adapters-health.test.mjs`。 `runtime/review/ocr-delegation-adapter.mjs`、`tests/contract/ocr-delegation-adapter.test.mjs`（T008 既有真实 OCR guard consumer 补修）。
+- **修改**：`skills/third-review/lib/process.mjs`（仅 T007 存活观察恢复分支）、`skills/third-review/lib/adapters/antigravity.mjs`、`skills/third-review/test/antigravity-adapter.test.mjs`、`skills/third-review/test/process.test.mjs`、`skills/third-review/test/review-progress-liveness.test.mjs`、`skills/third-review/test/adapters-health.test.mjs`。 `runtime/review/ocr-delegation-adapter.mjs`、`tests/contract/ocr-delegation-adapter.test.mjs`（T008 既有真实 OCR guard consumer 补修）。 `skills/wh-review/contracts/provider-protocol.md`（仅撤AG native停滞排除并转现FR007实际owner，其余provider排除保留）。
 - **禁止改动**：`skills/third-review/lib/health-runner.mjs`（5 间隔规则已在 `:36,61-62` 就绪）；`skills/third-review/lib/process.mjs` 的既有终态、进程组回收与 progress 消费（仅存活观察内已退出/消失但 close 未触发的窄分支可改）；`skills/third-review/lib/broker.mjs`（组内等待 `:1077` 与结果保留 `:1863-1877` 已成立）；`antigravity.mjs` 的 `requireNativeHooks`、`packetPolicy`、`installPacketHook`（`:14-30,32-52,68-95` 的版本、合同与 manifest 校验不因形状放宽而降低）；provider 路由与 `~/.config` 配置（D-010 不改路由与执行者）。
 
 本次017有效major的范围修正：下述原“process仅存活观察”限制增加一个已具名例外——既有成功wait_for_close分支只保存内存终态，供死父缺close恢复优先保全已见成功；不改正常close/已有终态claim或回收。依据136/142及本节末017处置，实际diff须逐hunk独立核。
@@ -128,7 +128,11 @@ gate_cmd 退出 0、两卡的 RED/GREEN 与负例原件落 `quality/tests/2026-1
 
 ### T008 — antigravity 接受真实读取 payload
 
-FR-CHAIN-008 形状来源澄清（384/390）：`tool_name`＋`tool_info.parameters.Path` 是已观察 stream 字段，并非已捕获 hook stdin；原 stdin 未取得。真实 OCR 使用既有 `runtime/review/ocr-delegation-adapter.mjs` 的 `installAgPacketGuard`，本 T008 同时覆盖该 consumer 与原 skills adapter。stream+audit 重建的受控候选为 `toolCall.name=read_file`＋`args.Path`；保旧 `view_file/AbsolutePath` 与顶层 `tool_name/tool_info.parameters.Path`。仅在原 guard 统一解析、decision/audit/permissionOverrides/inspect/启动提示；override 只取已核精确文件，不新 guard/manifest/schema/root。路径策略按原 owner 分列：OCR guard 保原祖先 alias/link deny；skills adapter 保原目录 alias 归一后精确 manifest 匹配的 allow oracle，final-file link/hardlink/hash 边界沿原实现与受保护断言。两者各保原 canonical 根、manifest/bytes/hash、越界/冲突拒绝及同 session pre/post 完整内容覆盖强度，不统一放宽或统一收紧；仅 pre、partial/error/缺 content/hook 自读不算完整读取。受控实际安装 hook 命令验证与真实 native 调用分别记录；031 的 packet guard failed/coverage 未确定及独立远端503原件保留，受控通过不倒填 native 成功。此为材料 scope，同轮447 TCR 独立核进行中；尚未实施/测试授权，新增面未验不能沿原受控 pass 报过。
+FR-CHAIN-008 形状来源澄清（384/390）：`tool_name`＋`tool_info.parameters.Path` 最初来自已观察 stream，384/390当时未取得原 stdin；589现已保存本次真实同session pre/post stdin，旧未取得结论保其历史范围。真实 OCR 使用既有 `runtime/review/ocr-delegation-adapter.mjs` 的 `installAgPacketGuard`，本 T008 同时覆盖该 consumer 与原 skills adapter。早期stream+audit重建且589现已真实核对的 wrapper 为 `toolCall.name=read_file`＋`args.Path`；保旧 `view_file/AbsolutePath` 与顶层 `tool_name/tool_info.parameters.Path`。仅在原 guard 统一解析、decision/audit/permissionOverrides/inspect/启动提示；override 只取已核精确文件，不新 guard/manifest/schema/root。路径策略按原 owner 分列：OCR guard 保原祖先 alias/link deny；skills adapter 保原目录 alias 归一后精确 manifest 匹配的 allow oracle，final-file link/hardlink/hash 边界沿原实现与受保护断言。两者各保原 canonical 根、manifest/bytes/hash、越界/冲突拒绝及同 session pre/post 完整内容覆盖强度，不统一放宽或统一收紧；仅 pre、partial/error、缺真实完整工具内容覆盖来源或hook 自读不算完整读取；该来源按下述raw/display双路径严格核验，不机械要求native未提供的toolResult.content。受控实际安装 hook 命令验证与真实 native 调用分别记录；031 的 packet guard failed/coverage 未确定及独立远端503原件保留，受控通过不倒填 native 成功。当前同目标补修已由原owner实施，当前source与196/163、589/590及独立Spec原件绑定；447等早期TCR/原失败保留。受控、真实native小样本与审查质量分别陈述，不能沿旧pass追溯扩大。
+
+完整读取技术口径（独立554，现580实现）：旧 `toolResult.content` 原字节完整hash匹配路径保留。native未提供该body时，仅由现 `installAgPacketGuard.inspect` 在进程终态后消费可信精确同session transcript：pre/post唯一且同session/tool/精确path/step/range，原audit顺序必须先pre后post；真实call与结果按已知精确schema唯一绑定，不以同path另一调用、最终回答或marker代工具结果。仅读取该次native hook给出的精确brain/session日志与artifact绑定，原祖先/末端link、hardlink、O_NOFOLLOW、稳定身份/大小/mtime及预算守护保持，不扩大reader root或模型readroot。完整范围必须 `Showing lines 1-N of N`，逐行连续1…N且每个字符与冻结源严格UTF-8逻辑行相等，空格/缩进/Unicode/内部与额外末空行全部保留，不trim/normalize/从源补正文；只靠marker、总行数、工具成功或宿主自行读源均不足。partial/range/truncated/unknown格式、歧义call、changed source/hash、foreign session及日志不完整/变更仍拒绝。源最后一个LF仅可作为明确不显示的行终止符，内部/额外末空行不丢；CRLF/BOM/非法UTF8等未支持表示明确未确认。冻结源hash与原始展示row/transcript hash分列；`transcript_logical_lines` 表示完整逻辑行文本覆盖，`returned_raw_bytes_verified:false`，不得补LF重构hash冒native返回原字节。现raw路径与display路径各给可回读来源，不新增公共schema/guard/阶段或永久控制面。
+
+当前补修事实与限制：580绑定OCR source SHA256 `11519c11b71b0752a2bed3e68a16b6b2397693cc7fcbc3e32299d72d9abec3cc`；194先post后pre原目标RED保留，195目标GREEN，196 OCR单文件127/127及163 skills12/12仅证对应受控范围。589真实AG 1.4.3单次启动、12逻辑行/1312B小文件、SUCCESS/exit0、inspect `read_confirmed:true`，588保存inspect后的源hash与展示row hash；真实post仍无toolResult且full_file_result:null，不倒填raw验证。589运行时用透明tee临时hooks配置，配置与原版不同；恢复后assertIntact通过及590清理（owned PID均不存在/自有临时根移除）是分开事实，不能宣原生产配置运行完整性。动态TOCTOU、1MB packet、chunking、其它formatter及真实慢模型五间隔校准未验；费用与内部API重试数未知。旧172/178/503与OCR017/031/043原provider失败/coverage限制保持；代码已修、结构测试、native小样本和独立质量各限原件覆盖，未签整Phase或整stage全部质量通过。
 
 - **Source / FR / AC**：U-006；D-010（hook 同时接受真实 `tool_name`＋`tool_info.parameters.Path` 与 `toolCall.name=view_file`＋`args.AbsolutePath`，先 realpath 再与 bundle 内精确文件比对，越界与链接逃逸继续拒绝）/ FR-CHAIN-008 / AC-M5-2（真实形状放行，bundle 外与链接逃逸拒绝，既有形状不回归）。
 - **Files / symbols**：`skills/third-review/lib/adapters/antigravity.mjs`；symbol: hookDecision（payload 归一化）；`runtime/review/ocr-delegation-adapter.mjs`、`tests/contract/ocr-delegation-adapter.test.mjs`（既有 installAgPacketGuard、audit、permissionOverrides、inspect 与 native 启动提示的同口径消费）。`skills/third-review/test/antigravity-adapter.test.mjs`；symbol: N/A — 测试文件无导出符号，新增 hook 断言。
@@ -147,7 +151,7 @@ FR-CHAIN-008 形状来源澄清（384/390）：`tool_name`＋`tool_info.paramete
 - **GREEN oracle**：ORACLE-P4-ANTIGRAVITY；同一命令下真实与既有形状均 allow，bundle 外与链接逃逸均 deny，既有 `view_file/AbsolutePath` 断言原样通过；反向行为：放宽后越界可读或真实形状仍被拒即失败。
 - **Evidence**：RED 证据 unavailable — 该补充测试/未来模块尚未存在，当前不可达目标断言；缺文件/import属setup不算RED；首个可达接缝实施前采集（已可达冻结组见016）；GREEN 与三类输入输出存 `quality/tests/2026-10-20-043-p4-success-terminal-cleanup-green.output`。
 - **STOP / recovery**：真实形状仍被拒、任一越界/链接逃逸被放行、或 `packetPolicy`/`requireNativeHooks` 需要改动时停，回本卡实施者按 D-010 与 FR-CHAIN-008 重核形状归一化与精确成员比对；保原始失败，不放宽 manifest 或版本检查。
-- **Coverage limit**：只证明两种 payload 形状与三类路径输入的 hook 决策；不证明 `agy` 内部是否调用该 hook、真实 hook stdin 原文（014 未取得）或模型遵守结果。
+- **Coverage limit**：早期043只证受控payload/path决策，014原stdin未取得历史不改；当前native完整逻辑行覆盖只限589的12行/1312B诊断及上述配置边界，非raw返回字节验证、1MB/chunking或全provider材料阅读。当前受控回归见196/163；不由局部结果推整Phase/整stage质量通过。
 - **测试变更请求**：none — 只新增断言；T007 已负责换事件类型的既有断言，本卡不改或删除既有 hook 断言。
 - **Done**：gate_cmd 退出 0、真实/既有/越界/逃逸四类输入输出可复放、`requireNativeHooks`/`packetPolicy`/`installPacketHook` 零改动（本卡减法：只放宽 `hookDecision` 的形状归一化），既有 hook 断言保留，并由未参与实现者读回 `quality/tests/2026-10-20-043-p4-success-terminal-cleanup-green.output` 后判 AC-M5-2。
 
@@ -169,10 +173,24 @@ FR-CHAIN-008 形状来源澄清（384/390）：`tool_name`＋`tool_info.paramete
 
 ### 本 Phase 自带判据小结（审后收口）
 
+当前AG native健康consumer补修（root连续任务授权与原Spec独立意见）：原provider-protocol旧“direct停滞本轮不做”仅对AG native撤销排除，因用户已要求彻底修AG实际审查流程；其它directprovider不扩。本卡前8个源码/测试路径不变，只增加既有协议文件这一技术材料路径，头部9路径连续列完；协议仅指向现FR-CHAIN-007/唯一native executor/supervisor，无新FR/AC、状态/schema、timer配置面、公共API或控制plane。当前60秒现有健康间隔×5以有效唯一允许read DONE推进，裸模型DONE、被拒/ERROR、重复read/step、stderr noise只liveness不续命；持续有效进展无总时长截止。真正首result保SUCCESS/ERROR及原raw，后到取消仍清理而不覆盖已消费terminal，取消先到仍先因；资源预算、transport、parse/readguard与owned组主动回收原强度保持。
+
+执行与独立核边界：695/696接线，690/692/701/705为独立测试作者原件；245/246/250/252真实失败与249135pass/1旧clock-oracle失败均保原，701/251严格核首有效进展后的五个未变60秒窗口，不把startup总tick或5秒PID probe当健康。新增9健康case＋2首terminal/cancelcase共11，原127prefix保全；253两例pass、254邻近15pass是当前最终字节针对性结果，不能合并宣“最新138整文件通过”。709内存仅逆onAbort一hunk精确恢复6bdc3155…，当前源码 `9fca65292bb334bdb115ad55c87e6262c45a44658d71a17b7abea3efb809a7d8`、测试 `cb8773ba8ed70301ad33e2aa36f1d92586f264603e0ebabae7aea573e7f6cb3a`。最新原p4_spec独立定点finding fixed/无新发现原文见本轮provenance；不是第二OCR或全Phase质量通过。
+
+未验/后续owner：五window由受控时间驱动真实native executor/supervisor/installedhook/ownedCLI，不是新真实模型或真实300秒覆盖；原589小文件读取成功也不扩为此新健康分支的模型验收。真实300秒/动态TOCTOU/1MB/chunk/Windows由具备对应环境的后续验证owner取得；不新增全任务推进门或要求用户决定底层格式。旧172/178/503、017/031/043provider失败/coverage及P3/P7冻结审查原件保留，实际在途请求不因本补修重发/换路/预填终态。本轮只改协议/P4卡/spec必要范围/index导航，未改任何source/test/facts/Git。
+
+
+本轮最终补修收口补充：规则锚仍为 spec Appendix A「AC-M5-1」「AC-M5-2」与D-010/FR-CHAIN-007/008；当前完整读取表示按T008独立554、580及604，不改变AC。已验与原件：196 OCR127/127含raw/display反向pre/post顺序守护，163 skills12/12保两owner路径策略；589单次真实AG1.4.3 SUCCESS/exit0、同session pre/post与inspect read_confirmed:true；593独立逐字符读回、590 owned资源清理。源hash与展示row/transcript hash分列，returned_raw_bytes_verified:false，post无toolResult/full_file_result:null历史不改。
+
+未验及owner：动态TOCTOU、1MB packet/chunking/其它formatter归后续真实runtime验证owner；真实慢模型五间隔/Windows回收归具备对应环境的原review运行owner。运行时透明tee配置与原配置不同，恢复后assertIntact和清理是分开事实，不冒原配置运行验收；费用/内部API重试数unknown。质量并列保留原017 available-with-failures、011/013原finding及149/150处置、117/119/120/121同源限制，补修593仅定点独立发现为空，不是新OCR或全量质量绿色。
+
+写集与材料影响：P4头8源码/测试范围不扩，当前补修实际为runtime/review/ocr-delegation-adapter.mjs、skills/third-review/lib/adapters/antigravity.mjs及各自原测试；旧process额外hunk授权149/150历史保留，其余原6路径提交事实不冒新改动。本轮只补本卡逐AC Done与本节，不写spec/其它Phase/source/tests/facts/Git；未重新测试。当前阶段内代码、测试、native小样本、质量和后续Git交付是分开事实。
+
+
 - 规则锚：spec Appendix A「AC-M5-1」首句「关联 FR-CHAIN-007；来源 U-006；观察对象是受控假 provider 与正常慢 provider。」；「AC-M5-2」首句「关联 FR-CHAIN-008；来源 U-006；观察对象是 antigravity hook。」；decision-log「D-010」与当前 FR-CHAIN-007/008 仍为原行为来源。
 - 材料变更影响：本次只补本卡契约头 Done、当前状态、原件和判据小结；不改 spec、独立 AC/oracle、其它 Phase 或生产行为。原修改范围六条源码/测试由原实施者串行持笔；process 额外成功 wait_for_close 的内存 pendingCloseTerminal hunk 是主会话按017 major的具名必要修复授权，来源149/150及136/142/143/147；未扩 health-runner/broker/config/路由或持久状态。
 - 已验：原 gate 四文件命令由043真实执行 exit0，91/91；039 为新增成功 terminal 丢失目标 RED（1失败90通过），042/043恢复GREEN。原021/025目标RED、024/026 GREEN、027冻结组6通过及028/029受控变异、030恢复均保原件，不复制raw；043记录父57881、后代57898及组均不存在。AC-M5-1、AC-M5-2按本卡Done首判为pass，只代表原受控判据。
-- 未验：真实 native agy读取、真实hook stdin、真实慢模型五间隔校准均 unavailable；后续真实环境验证执行者负责取得隔离环境/真实样本后核验。Windows回收行为 unavailable，本阶段仅POSIX受控场景；后续Windows执行者须用实际平台场景核。UI/browser为N/A，本卡无浏览器可见面。
+- 当前真实读取：589/590已取得单次AG native小文件完整逻辑行文本覆盖与原pre/post stdin，配置诊断边界、raw字节未验证及清理如T008所列；旧014/172/178未取得/失败结论不覆写。未验：真实慢模型五间隔校准、动态TOCTOU、1MB/chunking、其它formatter及Windows回收，具名后续环境执行者负责取得真实场景。UI/browser为N/A，本卡无浏览器可见面。
 - OCR：原017为 available-with-failures；Kimi/coding与Codex/luna均completed/parse_outcome=ok，原minor/major分别保013/011 provider.output；AG失败OCR_PROVIDER_PACKET_GUARD_FAILED（native packet prompt read未确认）保原件，coverage undetermined不倒填。原review仅对应当时输入，后修复仅以149处置＋150独立定向读回承接，不追空重派或冒全Phase新审。
 - 同源并列：Standards原117＋协议补120，Spec原119＋协议补121，均same_source_degraded、0条可支持finding；范围、截断/未读与真实环境限制沿各原文。它们不替代OCR，原017错误与未确认覆盖不被空findings覆盖。
 - finding处置：Codex/luna成功terminal丢失major、Kimi证据路径minor均在149记fixed，150独立确认；原意见、原RED和限制不删。136 case先落盘后短暂移除/恢复、142独立审晚于首次落盘的顺序偏差保真；资源断言按147之后追加，不能倒写先审后写。
