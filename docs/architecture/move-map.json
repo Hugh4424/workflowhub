@@ -5475,6 +5475,32 @@
       "named_data_readers": [],
       "delete_condition": "该行为职责退役或独立oracle经审查完整替代后由原测试owner处置；冻结断言变化须TCR及独立审查。",
       "retention_basis": "ORACLE-P2-CHAIN及P2 T003/T004/T005；保原RED/GREEN/测试修正TCR，不新增运行时。"
+    },
+    {
+      "source": "tests/contract/verify-code-page-refresh.test.mjs",
+      "destination": "tests/contract/verify-code-page-refresh.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "ORACLE-P6-REFRESH与ORACLE-P6-DEBT结构合同/受控文档反例：verify-code两处刷新文字接线、步骤身份/证据形状、decision-log日期主题接收与五行表/四字段ADR/N8唯一级别来源保全；不证明真实刷新。",
+      "owner": "N9 P6/T011首写、T012同writer追加；后续P6测试维护者",
+      "consumer": "P6契约头literal gate显式由Vitest执行本文件，独立验收者读182/185原件；测试直接读取verify-code SKILL/steps及decision-log模板/SKILL，不是生产运行时consumer。",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "对应合同被真实决定退役，或经独立审查的等强度oracle完整承接真实消费者后由P6测试owner处置；不因预算或Phase结束删除，原RED/GREEN保留。",
+      "retention_basis": "N9 P6/T011–T012与563实际consumer；新test已创建后才补登记的顺序遗漏保真；复用唯一move-map，不新增控制面。"
+    },
+    {
+      "source": "tests/contract/final-chain-negatives.test.mjs",
+      "destination": "tests/contract/final-chain-negatives.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "P3/T006七类受控负例、四级40格、真实来源/逐step人程序与技能适用集反例、同对象PR矛盾及恢复、基线与完整git status保全。其fixture()仅消费P3契约头原35实施路径中的34个具名种子，逐件复制到自有临时task根补真实受控来源，再调用P2报告与P1纯判据；不把map治理路径当fixture。",
+      "owner": "N9 P3/T006原独立测试/fixture作者；本轮职责登记由唯一材料owner补，后续P3测试维护者",
+      "consumer": "P3头literal Vitest gate执行此精确test；test:20–28 fixture()按P3头筛tests/fixtures/final-chain/<name>/，直接readFileSync34个种子并输出临时输入与断言；P3独立读者/P8消费原执行原件。种子集合唯一权威仍P3头，不复制第二清单/通配机器规则。",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "对应确认行为真实退役，或经独立审查的等强度oracle及fixture真实消费者完整承接后，由原P3测试owner处置；保原RED/GREEN/受保护断言，不因Phase结束或预算删除。",
+      "retention_basis": "FR-CHAIN-006/012、P3/T006、484/495原TCR、518独立scope及608只读核；35测试/种子先创建后补职责登记属真实顺序遗漏，不倒称预登记；map无运行时或推进职责。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

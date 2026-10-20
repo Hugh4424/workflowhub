@@ -25,8 +25,8 @@ version: 5.2.0
    末Phase完整串演只复核沿途结论并补必要未闭环case，不作任何AC首次判定点。未达AC按standard-workflow「专业质量」“带欠账完成”显著留逐项缺口，只限完成声明、不阻同任务安全修复。核测试/命令/升级时读下节唯一正文。
 5. 主会话逐条判断 finding，仅修影响当前交付的有效代码问题，不因材料偏好扩大范围。有效问题回原实施会话自动修复，严重问题优先修复，不以请求用户承担风险代替修复。确实无法在当前任务范围内解决时，列影响、证据、owner、原因和剩余选项，继续不受影响的工作，严重未修风险保持 incomplete；只有已有绑定该 finding 的用户真实决定才可记 accepted_risk，不能自行接受风险或伪造通过。
 6. 对新修复和真实疑点只做必要定向复验，事先列 file/case 集合，把实际 command/exit/raw 和恢复结果写在对应 finding 处置旁；无改动或疑点时说明无需复跑。不重派第二次正常代码审查，不重做全量上游测试。
-7. 保留原始审查与当前 fixed、rejected_invalid、accepted_risk、needs_human 处置。真实修复可报告 resolved，不能改写原 review 或用摘要覆盖失败。核对本次 actual/oracle、未执行事项和覆盖限制；材料问题交 owner，不另建恢复、继任或重绑定任务。
-8. 当前主会话按 `skills/stage-reflection/SKILL.md`「方法」「用户选择后的归口」「判断词表与完成检查」执行阶段收口，内部发布并读回交接：列范围、修复、原finding/处置、必要验证、业务结果、未知、上游材料风险及下一步。缺review/执行原件/严重风险处置保incomplete，同task继续修复，不冒验收或物理交付完成。对账由独立上下文消费项目声明命令和原件，当场展示时间窗/分账/计数，不落派生文件、不写死宿主脚本；未观测如实说明，finding修后仅受影响file/case复验并给理由。同task已修finding的resolved与无finding的clean完成含义相同，均不证全部材料/证据齐备。回复沿review_result_ref/task facts逐路列终态/原失败、finding处置、功能原件、仍缺输入和修复/取得条件；resolved findings、局部测试通过与审查完成各仅证原件所覆盖范围；原件不可读给具体路径/错误，不从incomplete推全部功能失败，不以provider成功/已修finding冒业务验收。复用既有来源、证据/完成说明，status JSON/枚举/thinQuality不变。incomplete只限质量声明；按当前材料/未完项继续同task，work_status/quality仅记材料质量事实，不作in_progress/incomplete冻结，不增continuation_allowed或runtime机制。
+7. 保留原始审查与当前 fixed、rejected_invalid、accepted_risk、needs_human 处置。真实修复可报告 resolved，不能改写原 review 或用摘要覆盖失败。核对本次 actual/oracle、未执行事项和覆盖限制；材料问题交 owner，不另建恢复、继任或重绑定任务。逐 AC 结果形成后按 `skills/answer-as-page/SKILL.md`「当前任务驾驶舱」刷新页面：重新核对本次报告，环1–9写真实结论，交付前环10记 `skipped`（交付尚未发生）。两时点共用报告sha/decision指纹接口，页面与同名侧车写 caller 指定目录并保旧件；页面只读派生、报告为唯一权威。
+8. 当前主会话按 `skills/stage-reflection/SKILL.md`「方法」「用户选择后的归口」「判断词表与完成检查」执行阶段收口，内部发布并读回交接：列范围、修复、原finding/处置、必要验证、业务结果、未知、上游材料风险及下一步。缺review/执行原件/严重风险处置保incomplete，同task继续修复，不冒验收或物理交付完成。对账由独立上下文消费项目声明命令和原件，当场展示时间窗/分账/计数，不落派生文件、不写死宿主脚本；未观测如实说明，finding修后仅受影响file/case复验并给理由。同task已修finding的resolved与无finding的clean完成含义相同，均不证全部材料/证据齐备。回复沿review_result_ref/task facts逐路列终态/原失败、finding处置、功能原件、仍缺输入和修复/取得条件；resolved findings、局部测试通过与审查完成各仅证原件所覆盖范围；原件不可读给具体路径/错误，不从incomplete推全部功能失败，不以provider成功/已修finding冒业务验收。复用既有来源、证据/完成说明，status JSON/枚举/thinQuality不变。incomplete只限质量声明；按当前材料/未完项继续同task，work_status/quality仅记材料质量事实，不作in_progress/incomplete冻结，不增continuation_allowed或runtime机制。closeout/PR 完成后按 `skills/answer-as-page/SKILL.md`「当前任务驾驶舱」与第7步共同接口重核报告，再刷新页面与同名侧车并保旧件，补环10与终态。
 
 UI 适用时沿 `skills/ui-project-init/SKILL.md` 的「规范职责」读取本次验证适用专业源，逐类核真实路径/稳定节、version/作用域、owner/consumer 与规则，再从真实页面和 Component Quality Map 核消费者、状态 owner、typed ViewModel、CSS/token、story/test 更新及已实际产生的浏览器状态。单类 missing/stale/冲突给影响及原 owner，不用旧 Design.md/Experience.md 两文件或单一 design_revision 代全部来源；历史条款按真实输入读取，本次行为/spec、专业规则、知识与执行 facts 各保其原写主。缺扫描、浏览器、fixture、viewport、截图或入口受阻保持 unknown/unavailable，不能把未观察当 N/A 或视觉通过。只有新疑点才重跑相应浏览器检查，先按 isolated-browser-qa 管理隔离、登录态与自建资源清理。
 
@@ -72,9 +72,7 @@ Git授权与物理收口执行唯一消费 `skills/stage-closeout/SKILL.md`，�
 
 本阶段完成已授权验证/修复后，实际读取并按 `skills/stage-closeout/SKILL.md` 执行共享收口，由其委派knowledge-graph更新并回读代码图与文档图两类真实状态/费用答复/未完成项，不能用代码成功冒文档已更新。质量结论、finding处置、正式task facts及handoff仍归本阶段主会话；共享方法缺失/调用失败明确unavailable并交其owner，不复制旧方法兜底，不以缺质量冻结同任务修复或假报已交付。
 
-阶段末主会话实际按 `skills/stage-handoff/SKILL.md` 保存交接并报告返回的不可变绝对路径：材料现状、代码、真实检查、风险/下一步。执行不是门，但须实际执行/回报；缺失写原因/影响，披露不代完成，不要求固定机器复盘/交接认证。正式阶段事实仍由公共流程处理；实现/质量/业务验收/发布/物理close分别报、不互代。交接列默认安全收口的实际路径、任务分支、待最终确认动作及具名保留原因；确认后逐项回读普通执行结果，保旧raw/review原件，不恢复旧close plan或新增公共节点。
-
-阶段末统一按收口方法执行一次；交接内容与独立读取沿 `skills/stage-handoff/SKILL.md`「信息来源」「回读结果」「结束条件与边界」，返回其实际不可变路径。局部 Phase 摘要不触发收口，原失败与缺口可见，持续授权不代候选采纳。
+阶段末主会话只执行一次 `skills/stage-handoff/SKILL.md`「信息来源」「回读结果」「结束条件与边界」，保存交接并报告实际不可变绝对路径：材料现状、代码、真实检查、风险/下一步、默认安全收口路径、任务分支、待最终确认动作及具名保留原因。执行不是门，但须实际执行/回报；缺失写原因/影响，披露不代完成，不要求固定机器复盘/交接认证。正式阶段事实仍由公共流程处理，实现/质量/业务验收/发布/物理close分别报、不互代。确认后逐项回读执行结果，保旧raw/review原件，不恢复旧close plan或新增公共节点。局部 Phase 摘要不触发收口，原失败与缺口可见，持续授权不代候选采纳。
 
 ## 写作与固定来源
 
