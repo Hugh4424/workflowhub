@@ -265,7 +265,7 @@ test("a moving probe leaf keeps a liveness-only stream alive without a total wal
 
 test("adapters that do not declare stream liveness keep the existing stall rule", async () => {
   let pid = null;
-  const repeated = "setInterval(() => { process.stdout.write(JSON.stringify({ event: 'init' }) + '\\n'); process.stdout.write(JSON.stringify({ event: 'step_update', step_update: { step_index: 1, state: 'ACTIVE' } }) + '\\n'); }, 5); setTimeout(() => process.exit(0), 3000);";
+  const repeated = "setInterval(() => { process.stdout.write(JSON.stringify({ event: 'init' }) + '\\n'); process.stdout.write(JSON.stringify({ event: 'step_update', step_update: { step_index: 1, state: 'DONE', step_type: 'tool', tool_info: {} } }) + '\\n'); }, 5); setTimeout(() => process.exit(0), 3000);";
   const antigravityRun = await execute({ ...plan(repeated, { observeLine: antigravity.observeLine, streamProgress: true, probeSession: null, streamLiveness: false }) }, { ...options(20), onStart: (value) => { pid = value; } });
   assert.equal(antigravityRun.ok, false);
   assert.equal(antigravityRun.error.code, "PROCESS_STALLED");

@@ -84,7 +84,23 @@ export function execute(plan, { maxOutputBytes, maxPendingLineBytes = 1_048_576,
     };
     const recordLiveness = () => { const at_ms = Date.now(); onLiveness?.({ at_ms }); return at_ms; };
     const recordLivenessFrame = () => { const at_ms = recordLiveness(); livenessGeneration += 1; lastLivenessAt = at_ms; return at_ms; };
-    const observeProcessLiveness = () => { if (!settled && child?.pid && isProcessAlive(child.pid)) { recordLiveness(); return true; } return false; };
+    let missingProcessAt = null; let pendingCloseTerminal = null;
+    const observeProcessLiveness = () => {
+      if (settled || !child?.pid) return false;
+      if (child.exitCode === null && child.signalCode === null && isProcessAlive(child.pid)) {
+        missingProcessAt = null; recordLiveness(); return true;
+      }
+      // A descendant can keep inherited stdio open after the provider exits.
+      // Recover only this missing-process path, never impose a live-run deadline.
+      const now = Date.now();
+      missingProcessAt ??= now;
+      if (now - missingProcessAt >= 2 * livenessIntervalMs) {
+        if (pendingCloseTerminal) {
+          if (claimCompleted({ raw: { stdout: redact(stdout, plan.redact), stderr: redact(stderr, plan.redact) }, session_id: pendingCloseTerminal.session_id ?? null, cursor: pendingCloseTerminal.cursor ?? null })) settleClaim();
+        } else if (claimFailure("PROVIDER_NO_TERMINAL_RESULT", "provider exited without a terminal result while its stdio remained open")) settleClaim();
+      }
+      return false;
+    };
     try { plan.beforeSpawn?.(); child = spawn(plan.command, plan.argv, { cwd: plan.cwd, env: plan.env, stdio: ["pipe", "pipe", "pipe"], detached: true }); }
     catch (error) { finish({ ok: false, error: { code: error?.code ?? "PROCESS_START_FAILED", message: error.message }, duration_ms: Date.now() - started, stdout: "", stderr: "" }); return; }
     child.once("spawn", () => {
@@ -158,7 +174,10 @@ export function execute(plan, { maxOutputBytes, maxPendingLineBytes = 1_048_576,
           // A declared progress stream carries its completed result in this
           // terminal event; a lingering wrapper cannot turn it into a stall.
           // Other protocols may still need process close to finish their output.
-          if (terminal.wait_for_close === true && plan.streamProgress !== true) { if (!terminalClaim && child.stdin && !child.stdin.destroyed) child.stdin.end(); }
+          if (terminal.wait_for_close === true && plan.streamProgress !== true) {
+            pendingCloseTerminal = terminal;
+            if (!terminalClaim && child.stdin && !child.stdin.destroyed) child.stdin.end();
+          }
           else {
             if (claimCompleted({ raw: { stdout: redact(stdout, plan.redact), stderr: redact(stderr, plan.redact) }, session_id: terminal.session_id ?? null, cursor: terminal.cursor ?? null })) settleClaim();
           }

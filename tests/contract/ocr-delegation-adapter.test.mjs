@@ -1676,3 +1676,694 @@ it("preserves Kimi original large-page MCP contract beside the OpenCode serializ
     expect(report["src/reviewed.mjs"].pages).toBeGreaterThan(1);
   } finally {if(prior===undefined)delete process.env.KIMI_CODE_HOME;else process.env.KIMI_CODE_HOME=prior;}
 });
+
+// P4 additive TCR 447/448. Reconstructed wrapper, never captured native stdin.
+// The owned CLI consumes installed configuration commands; host inspect is real.
+function p4NativeConsumerCli(root, mode, shape = "native") {
+  const executable = join(root, "p4-native-consumer"), reportPath = join(root, "report.json");
+  writeFileSync(executable, String.raw`#!/usr/bin/env node
+const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),{spawnSync}=require('node:child_process');
+const root=${JSON.stringify(root)},mode=${JSON.stringify(mode)},shape=${JSON.stringify(shape)},reportPath=${JSON.stringify(reportPath)};
+const cwd=fs.realpathSync(process.cwd()),session='p4-reconstructed-wrapper',args=process.argv.slice(2);
+const config=JSON.parse(fs.readFileSync(path.join(cwd,'.agents/hooks.json'),'utf8'))['workflowhub-packet-reader'];
+const report={cwd,calls:[],prompt:args[args.indexOf('-p')+1]};
+const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
+function payload(file,extra={}){return shape==='legacy'?{conversationId:session,toolCall:{name:'view_file',args:{AbsolutePath:file,...extra}}}:shape==='top'?{conversationId:session,tool_name:'read_file',tool_info:{name:'read_file',parameters:{Path:file,...extra}}}:{conversationId:session,toolCall:{name:'read_file',args:{Path:file,...extra}}};}
+function hook(phase,value){const entries=config[phase==='pre'?'PreToolUse':'PostToolUse'];if(entries.length!==1||entries[0].matcher!=='*')throw Error('installed match-all hook missing');const hooks=entries[0].hooks;if(hooks.length!==1||hooks[0].type!=='command')throw Error('installed command missing');const child=spawnSync('/bin/sh',['-c',hooks[0].command],{cwd,input:typeof value==='string'?value:JSON.stringify(value),encoding:'utf8',timeout:3000});if(child.status!==0)throw Error('installed hook did not emit decision: '+child.stderr);const response=JSON.parse(child.stdout);report.calls.push({phase,payload:value,response});return response;}
+function finish(){fs.writeFileSync(reportPath,JSON.stringify(report));process.stdout.write(JSON.stringify({event:'init',conversation_id:session})+'\n');process.stdout.write(JSON.stringify({event:'result',result:{conversation_id:session,status:'SUCCESS',response:JSON.stringify({findings:[]})}})+'\n');}
+const prompt=path.join(cwd,'review-prompt.md'),source=path.join(cwd,'src/reviewed.mjs');
+function read(file,kind='complete'){
+ const pre=payload(file,kind==='range-mismatch'?{StartLine:1,EndLine:2}:{});
+ if(kind!=='unmatched-post'&&hook('pre',pre).decision!=='allow')return false;
+ const bytes=fs.readFileSync(file);report[path.relative(cwd,file)]={sha256:hash(bytes),bytes:bytes.length};
+ if(kind==='pre-only')return true;
+ const post=payload(file,kind==='range-mismatch'?{StartLine:2,EndLine:3}:{});
+ if(kind==='wrong-session')post.conversationId='different-session';
+ if(kind!=='absent-content')post.toolResult={content:kind==='partial'?bytes.toString('utf8').slice(0,5):bytes.toString('utf8')};
+ if(kind==='tool-error')post.error='owned tool failure';
+ if(kind==='changed-after-pre'){fs.chmodSync(file,0o600);fs.writeFileSync(file,'changed after pre');}
+ hook('post',post);return true;
+}
+if(mode==='safety'){
+ // These payloads exercise the installed guard, never a copied normalizer.
+ const outside=path.join(root,'outside.txt');fs.writeFileSync(outside,'outside');
+ const alias=path.join(cwd,'p4-file-alias'),ancestor=path.join(cwd,'p4-parent-alias');
+ fs.symlinkSync(source,alias);fs.symlinkSync(path.join(cwd,'src'),ancestor);
+ const hardlink=path.join(root,'hardlink');fs.linkSync(source,hardlink);
+ const denied=[payload(source),payload(outside),payload(alias),payload(path.join(ancestor,'reviewed.mjs')),payload(path.join(cwd,'undeclared.txt')),payload(cwd),payload(cwd+'/src/../src/reviewed.mjs'),payload('review-prompt.md'),{},'{bad json',payload(prompt)];
+ denied[denied.length-1].toolCall={name:'run_command',args:{Path:prompt,AbsolutePath:prompt}};
+ const conflict=payload(prompt);conflict.tool_name='run_command';conflict.tool_info={parameters:{Path:outside}};denied.push(conflict);
+ const pathConflict=payload(prompt);pathConflict.toolCall={name:'read_file',args:{Path:prompt,AbsolutePath:outside}};denied.push(pathConflict);
+ for(const p of denied)hook('pre',p);
+ fs.unlinkSync(hardlink);
+ fs.chmodSync(source,0o600);fs.writeFileSync(source,'changed frozen source');hook('pre',payload(source));
+ finish();
+}else{
+ const kind=mode==='complete'||mode==='source-partial'?'complete':mode;
+ if(read(prompt,kind)&&!['pre-only','absent-content','partial','tool-error','unmatched-post','wrong-session','range-mismatch','changed-after-pre'].includes(mode))read(source,mode==='source-partial'?'partial':'complete');
+ finish();
+}
+`, { mode: 0o700 });
+  return { executable, reportPath };
+}
+
+async function p4RunNativeConsumer(mode, shape = "native") {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-p4-native-consumer-"))); roots.push(root);
+  const cli = p4NativeConsumerCli(root, mode, shape), raw = new Map();
+  mkdirSync(join(root, "quality", "reviews"), { recursive: true });
+  const result = await runConfiguredOcrHostReview({ request: { ...request, stage: "verify-code", review_scope: null, phase_id: null }, packet: configuredPacket() }, {
+    trustedContext: configuredContext(["antigravity/flash"], cli.executable),
+    rawOutputSink: async (_hint, bytes, meta) => {
+      const saved = await appendRecord(join(root, "quality", "reviews"), meta.stream, "output", bytes);
+      raw.set(meta.stream, readFileSync(saved)); return relative(root, saved).split("\\").join("/");
+    },
+  });
+  expect(existsSync(cli.reportPath), JSON.stringify(result)).toBe(true);
+  return { result, raw, report: JSON.parse(readFileSync(cli.reportPath, "utf8")) };
+}
+
+describe("P4 native OCR consumer additive TCR", () => {
+  for (const shape of ["native", "top", "legacy"]) it(`installed pre/post audit and inspect accept ${shape} frozen reads`, async () => {
+    const { result, raw, report } = await p4RunNativeConsumer("complete", shape);
+    const first = report.calls[0];
+    // Target RED must be this decision from the actual installed production hook.
+    expect(first.response.decision, JSON.stringify(first)).toBe("allow");
+    expect(first.response.permissionOverrides).toEqual([`read_file(${join(report.cwd, "review-prompt.md")})`]);
+    expect(result.provider_results[0], JSON.stringify(result)).toMatchObject({ status: "completed", parse_outcome: "ok" });
+    expect(result.provider_results[0].material_coverage.read).toContain("src/reviewed.mjs");
+    const audit = raw.get("native-audit").toString("utf8").trim().split("\n").map(JSON.parse);
+    for (const file of ["review-prompt.md", "src/reviewed.mjs"]) {
+      expect(audit).toContainEqual(expect.objectContaining({ phase: "pre", tool: shape === "legacy" ? "view_file" : "read_file", path: file, decision: "allow", sha256: report[file].sha256 }));
+      expect(audit).toContainEqual(expect.objectContaining({ phase: "post", path: file, sha256: report[file].sha256, full_file_result: true }));
+    }
+    if (shape === "native") {
+      expect(report.prompt).toContain("read_file"); expect(report.prompt).toContain("Path");
+      expect(report.prompt).not.toContain("Use only view_file");
+    }
+  }, 15000);
+
+  for (const mode of ["pre-only", "absent-content", "partial", "tool-error", "unmatched-post", "wrong-session", "range-mismatch", "changed-after-pre"]) {
+    it(`installed post/inspect cannot confirm ${mode} prompt`, async () => {
+      // Legacy isolates full-read enforcement from the new wrapper acceptance.
+      const { result, report } = await p4RunNativeConsumer(mode, "legacy");
+      expect(report.calls.length).toBeGreaterThan(0);
+      expect(result.provider_results[0]).toMatchObject({ status: "failed", error: { code: "OCR_PROVIDER_PACKET_GUARD_FAILED" } });
+      expect(result.provider_results[0].material_coverage.read).toEqual([]);
+    }, 15000);
+  }
+  it("installed inspect keeps a partial member out after complete prompt", async () => {
+    const { result } = await p4RunNativeConsumer("source-partial", "legacy");
+    expect(result.provider_results[0]).toMatchObject({ status: "completed", parse_outcome: "ok" });
+    expect(result.provider_results[0].material_coverage.read).not.toContain("src/reviewed.mjs");
+  }, 15000);
+  for (const shape of ["legacy", "native"]) it(`installed ${shape} guard denies exact-manifest and illegal-input failures`, async () => {
+    const { report } = await p4RunNativeConsumer("safety", shape);
+    expect(report.calls).toHaveLength(14);
+    for (const call of report.calls) {
+      expect(call.response.decision, JSON.stringify(call)).toBe("deny");
+      expect(call.response.permissionOverrides).toBeUndefined();
+    }
+  }, 15000);
+});
+
+// Same-source P4 review finding: a structurally valid denied tool is not a
+// handler failure. Keep malformed known reads and wrapper conflicts distinct.
+async function p4RunAfterConfirmedRead(attempt) {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-p4-top-denial-"))); roots.push(root);
+  const cli = p4NativeConsumerCli(root, "complete", "native"), raw = new Map();
+  const script = readFileSync(cli.executable, "utf8");
+  const probe = attempt === "unknown"
+    ? `{conversationId:session,tool_name:'UnknownTool',tool_info:{name:'UnknownTool',parameters:{}}}`
+    : attempt === "malformed-read"
+      ? `{conversationId:session,tool_name:'read_file',tool_info:{name:'read_file',parameters:{Path:17}}}`
+      : `{conversationId:session,toolCall:{name:'read_file',args:{Path:prompt}},tool_name:'view_file',tool_info:{name:'view_file',parameters:{Path:source}}}`;
+  expect(script.split("function finish(){")).toHaveLength(2);
+  writeFileSync(cli.executable, script.replace("function finish(){", `function finish(){hook('pre',${probe});`));
+  mkdirSync(join(root, "quality", "reviews"), { recursive: true });
+  const result = await runConfiguredOcrHostReview({ request: { ...request, stage: "verify-code", review_scope: null, phase_id: null }, packet: configuredPacket() }, {
+    trustedContext: configuredContext(["antigravity/flash"], cli.executable),
+    rawOutputSink: async (_hint, bytes, meta) => {
+      const saved = await appendRecord(join(root, "quality", "reviews"), meta.stream, "output", bytes);
+      raw.set(meta.stream, readFileSync(saved)); return relative(root, saved).split("\\").join("/");
+    },
+  });
+  expect(existsSync(cli.reportPath), JSON.stringify(result)).toBe(true);
+  const report = JSON.parse(readFileSync(cli.reportPath, "utf8"));
+  const audit = raw.get("native-audit").toString("utf8").trim().split("\n").map(JSON.parse);
+  // Prove both actual full post reads preceded the denied tool in this session.
+  for (const file of ["review-prompt.md", "src/reviewed.mjs"]) {
+    expect(audit).toContainEqual(expect.objectContaining({ phase: "pre", path: file, decision: "allow", sha256: report[file].sha256 }));
+    expect(audit).toContainEqual(expect.objectContaining({ phase: "post", path: file, full_file_result: true, sha256: report[file].sha256 }));
+  }
+  const denied = report.calls.at(-1);
+  expect(denied.response.decision, JSON.stringify(denied)).toBe("deny");
+  expect(denied.response.permissionOverrides).toBeUndefined();
+  return { result, audit, report };
+}
+
+describe("P4 top unknown tool after confirmed full read", () => {
+  it("ordinary denial preserves audit and host inspected complete reads", async () => {
+    const { result, audit } = await p4RunAfterConfirmedRead("unknown");
+    const denied = audit.at(-1);
+    // Target RED: production currently marks this ordinary denial as error.
+    expect(denied.error, JSON.stringify({ denied, provider: result.provider_results[0] })).toBeNull();
+    expect(denied).toMatchObject({ phase: "pre", tool: "UnknownTool", decision: "deny", path: null });
+    expect(result.provider_results[0], JSON.stringify(result)).toMatchObject({ status: "completed", parse_outcome: "ok" });
+    expect(result.provider_results[0].material_coverage.read).toContain("src/reviewed.mjs");
+    expect(result.provider_results[0].coverage.read_confirmed).toBe(true);
+  }, 15000);
+  for (const attempt of ["malformed-read", "conflicting-wrappers"]) it(`${attempt} stays strict and invalidates handler session`, async () => {
+    const { result, audit } = await p4RunAfterConfirmedRead(attempt);
+    expect(typeof audit.at(-1).error).toBe("string");
+    expect(audit.at(-1).error.length).toBeGreaterThan(0);
+    expect(result.provider_results[0]).toMatchObject({ status: "failed", error: { code: "OCR_PROVIDER_PACKET_GUARD_FAILED" } });
+    expect(result.provider_results[0].material_coverage.read).toEqual([]);
+  }, 15000);
+});
+
+import { homedir as p4TranscriptHome } from "node:os";
+
+// 554/561 independent oracle: actual configured hook commands and host inspect,
+// controlled native-shape log. This constructs display input, never parses it.
+function p4TranscriptCli(root, scenario) {
+  const executable = join(root, "p4-transcript-cli"), reportPath = join(root, "report.json");
+  const session = root.split("/").at(-1);
+  const sessionRoot = join(p4TranscriptHome(), ".gemini", "antigravity-cli", "brain", session);
+  // Non-recursive creation proves ownership; EEXIST never registers cleanup.
+  mkdirSync(sessionRoot, { mode: 0o700 });
+  roots.push(sessionRoot);
+  writeFileSync(executable, String.raw`#!/usr/bin/env node
+const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),{spawnSync}=require('node:child_process');
+const root=${JSON.stringify(root)},scenario=${JSON.stringify(scenario)},session=${JSON.stringify(session)},artifact=${JSON.stringify(sessionRoot)},reportPath=${JSON.stringify(reportPath)};
+const cwd=fs.realpathSync(process.cwd()),config=JSON.parse(fs.readFileSync(path.join(cwd,'.agents/hooks.json'),'utf8'))['workflowhub-packet-reader'];
+const logs=path.join(artifact,'.system_generated','logs');fs.mkdirSync(logs,{recursive:true,mode:0o700});
+let transcript=path.join(logs,'transcript_full.jsonl');
+if(scenario==='foreign-path')transcript=path.join(root,'transcript_full.jsonl');
+if(scenario==='foreign-session')transcript=path.join(artifact,'other-session','transcript_full.jsonl');
+fs.mkdirSync(path.dirname(transcript),{recursive:true});
+const report={session,artifact,transcript,calls:[],files:{},rows:[]};
+const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
+function hook(phase,payload){const group=config[phase==='pre'?'PreToolUse':'PostToolUse'];if(group.length!==1||group[0].matcher!=='*')throw Error('installed match-all config absent');const hooks=group[0].hooks;if(hooks.length!==1||hooks[0].type!=='command')throw Error('installed command absent');const child=spawnSync('/bin/sh',['-c',hooks[0].command],{cwd,input:JSON.stringify(payload),encoding:'utf8',timeout:3000});if(child.status!==0)throw Error('installed hook execution failed '+child.stderr);const response=JSON.parse(child.stdout);report.calls.push({phase,payload,response});return response;}
+const rows=[];
+for(const [index,file]of ['review-prompt.md','src/reviewed.mjs'].entries()){
+ const full=path.join(cwd,file),bytes=fs.readFileSync(full),text=bytes.toString('utf8'),step=index*2+2;
+ const started=new Date().toISOString();
+ const common={artifactDirectoryPath:artifact,conversationId:session,modelName:'test-model',stepIdx:step,transcriptPath:transcript,workspacePaths:[cwd],toolCall:{name:'read_file',args:{Path:full}}};
+ if(index===1&&scenario==='ranged')Object.assign(common.toolCall.args,{StartLine:2,EndLine:2});
+ if(hook('pre',common).decision!=='allow')throw Error('positive installed pre denied');
+ const completed=new Date().toISOString();
+ const post=JSON.parse(JSON.stringify(common));post.error='';
+ if(index===1&&scenario==='post-step-mismatch')post.stepIdx=step+20;
+ if(index===1&&scenario==='post-session-mismatch')post.conversationId='other-session';
+ if(index===1&&scenario==='post-path-mismatch')post.toolCall.args.Path=path.join(cwd,'review-prompt.md');
+ hook('post',post);
+ let lines=text.split('\n');if(text.endsWith('\n'))lines.pop();
+ let shown=lines.map((line,i)=>(i+1)+': '+line);
+ let title='Showing lines 1-'+lines.length+' of '+lines.length;
+ if(index===1){
+  if(scenario==='partial-range')title='Showing lines 2-'+lines.length+' of '+lines.length;
+  if(scenario==='wrong-total')title='Showing lines 1-'+lines.length+' of '+(lines.length+1);
+  if(scenario==='missing-line')shown.splice(1,1);
+  if(scenario==='duplicate-line')shown.splice(1,0,shown[0]);
+  if(scenario==='reordered-line')shown.reverse();
+  if(scenario==='char-changed')shown[0]+='X';
+  if(scenario==='line-truncated')shown[0]=shown[0].slice(0,-1);
+  if(scenario==='prefix')shown.unshift('Unrecognized native format');
+  if(scenario==='suffix')shown.push('Unrecognized native trailer');
+ }
+ const content='Created At: '+started+'\nCompleted At: '+(index===1&&scenario==='bad-time'?'2000-01-01T00:00:00Z':completed)+'\n'+title+'\n'+shown.join('\n');
+ const call={step_index:step-1,source:'MODEL',type:'PLANNER_RESPONSE',status:'DONE',created_at:started,tool_calls:[{name:'read_file',args:{Path:full}}]};
+ const result={step_index:step,source:'MODEL',type:'GENERIC',status:'DONE',created_at:started,content};
+ if(index===1){
+  if(scenario==='wrong-step')result.step_index=step+10;
+  if(scenario==='wrong-tool')call.tool_calls[0].name='run_command';
+  if(scenario==='wrong-path')call.tool_calls[0].args.Path=path.join(cwd,'review-prompt.md');
+  if(scenario==='double-call')call.tool_calls.push({name:'read_file',args:{Path:full}});
+  if(scenario==='explicit-truncated')result.truncated_fields=['content'];
+  if(scenario==='error-result')result.status='ERROR';
+  if(scenario==='final-marker'){result.type='PLANNER_RESPONSE';result.content='{"marker":"not-a-tool-result"}';}
+  if(scenario==='unknown-body')result.content={text:content};
+  if(scenario==='wrong-source')result.source='USER_EXPLICIT';
+ }
+ rows.push(call,result);
+ if(index===1&&scenario==='duplicate-step')rows.push({...result});
+ report.files[file]={sha256:hash(bytes),bytes:bytes.length,logical_lines:lines.length,display_row_sha256:hash(Buffer.from(JSON.stringify(result)+'\n'))};
+}
+let serialized=rows.map(row=>JSON.stringify(row)).join('\n')+'\n';
+if(scenario==='incomplete-json')serialized+='{"step_index":';
+if(scenario==='bad-json')serialized+='not JSON\n';
+if(scenario==='over-budget')serialized+=JSON.stringify({step_index:99,content:'x'.repeat(9*1024*1024)})+'\n';
+fs.writeFileSync(transcript,serialized,{mode:0o600});
+if(scenario==='source-changed'){const file=path.join(cwd,'src/reviewed.mjs');fs.chmodSync(file,0o600);fs.writeFileSync(file,'changed frozen source');}
+if(scenario==='last-symlink'){const target=path.join(root,'actual-log');fs.renameSync(transcript,target);fs.symlinkSync(target,transcript);}
+if(scenario==='ancestor-symlink'){const target=path.join(root,'actual-logs');fs.renameSync(logs,target);fs.symlinkSync(target,logs);}
+if(scenario==='hardlink')fs.linkSync(transcript,path.join(root,'linked-log'));
+if(scenario==='directory'){fs.unlinkSync(transcript);fs.mkdirSync(transcript);}
+if(scenario==='fifo'){fs.unlinkSync(transcript);const r=spawnSync('/usr/bin/mkfifo',[transcript]);if(r.status!==0)throw Error('owned FIFO setup failed');}
+report.rows=rows;report.serialized_sha256=hash(Buffer.from(serialized));
+fs.writeFileSync(reportPath,JSON.stringify(report));
+process.stdout.write(JSON.stringify({event:'init',conversation_id:session})+'\n');
+process.stdout.write(JSON.stringify({event:'result',result:{conversation_id:session,status:'SUCCESS',response:JSON.stringify({findings:[]})}})+'\n');
+`, { mode: 0o700 });
+  return { executable, reportPath, sessionRoot };
+}
+
+async function p4RunTranscript(scenario, source = "first\nsecond\nthird\n") {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-p4-display-"))); roots.push(root);
+  const cli = p4TranscriptCli(root, scenario), raw = new Map();
+  mkdirSync(join(root, "quality", "reviews"), { recursive: true });
+  try {
+    const result = await runConfiguredOcrHostReview({ request: { ...request, stage: "verify-code", review_scope: null, phase_id: null }, packet: configuredPacket(source) }, {
+      trustedContext: configuredContext(["antigravity/flash"], cli.executable),
+      rawOutputSink: async (_hint, bytes, meta) => {
+        const saved = await appendRecord(join(root, "quality", "reviews"), meta.stream, "output", bytes);
+        raw.set(meta.stream, readFileSync(saved)); return relative(root, saved).split("\\").join("/");
+      },
+    });
+    expect(existsSync(cli.reportPath), JSON.stringify(result)).toBe(true);
+    const report = JSON.parse(readFileSync(cli.reportPath, "utf8"));
+    const audit = raw.get("native-audit").toString("utf8").trim().split("\n").map(JSON.parse);
+    // Presence first: negatives must reach actual installed commands and inspect.
+    expect(report.calls).toHaveLength(4);
+    for (const call of report.calls.filter(call => call.phase === "pre")) expect(call.response.decision).toBe("allow");
+    expect(audit.filter(row => row.phase === "post")).toHaveLength(2);
+    expect(result.provider_results[0].error?.code).not.toBe("OCR_PROVIDER_EXIT_NONZERO");
+    expect(result.provider_results[0].error?.code).not.toBe("OCR_PROVIDER_OUTPUT_SAVE_FAILED");
+    return { result, report, audit };
+  } finally {
+    rmSync(cli.sessionRoot, { recursive: true, force: true });
+  }
+}
+
+describe("P4 transcript full logical line consumer", () => {
+  const positive = [
+    ["one-line-LF", "single line\n"], ["one-line-no-LF", "single line"],
+    ["multiple-LF", "first\nsecond\nthird\n"], ["unicode-whitespace", "  中文😀  \n\n\tindented  \n"],
+    ["long-line", "x".repeat(5000) + "终😀\n"],
+    ["display-symbols-in-source", "1: own text\nCreated At: literal\nShowing lines 1-9 of 9\n… truncated\n"],
+    ["multiple-final-empty-lines", "body\n\n\n"],
+  ];
+  for (const [name, source] of positive) it(`accepts exact display ${name} without claiming raw returned bytes`, async () => {
+    const { result, report, audit } = await p4RunTranscript("complete", source);
+    expect(report.files["src/reviewed.mjs"].sha256).toBe(createHash("sha256").update(source).digest("hex"));
+    expect(report.files["src/reviewed.mjs"].display_row_sha256).not.toBe(report.files["src/reviewed.mjs"].sha256);
+    // Target RED before implementation: actual inspect cannot confirm prompt.
+    expect(result.provider_results[0], JSON.stringify(result)).toMatchObject({ status: "completed", parse_outcome: "ok" });
+    expect(result.provider_results[0].material_coverage.read).toContain("src/reviewed.mjs");
+    expect(result.provider_results[0].coverage.read_confirmed).toBe(true);
+    expect(audit).toContainEqual(expect.objectContaining({ phase: "post", path: "src/reviewed.mjs", sha256: report.files["src/reviewed.mjs"].sha256 }));
+  }, 15000);
+
+  const rejected = ["ranged", "partial-range", "wrong-total", "missing-line", "duplicate-line", "reordered-line", "char-changed", "line-truncated", "prefix", "suffix", "bad-time", "wrong-step", "wrong-tool", "wrong-path", "double-call", "explicit-truncated", "error-result", "final-marker", "unknown-body", "wrong-source", "duplicate-step", "post-step-mismatch", "post-session-mismatch", "post-path-mismatch", "incomplete-json", "bad-json", "source-changed", "foreign-path", "foreign-session", "last-symlink", "ancestor-symlink", "hardlink", "directory", "fifo", "over-budget"];
+  for (const scenario of rejected) it(`does not confirm display ${scenario}`, async () => {
+    const { result } = await p4RunTranscript(scenario);
+    expect(result.provider_results[0].material_coverage.read).not.toContain("src/reviewed.mjs");
+    expect(result.provider_results[0].coverage.read_confirmed).not.toBe(true);
+  }, 15000);
+  for (const [name, source] of [["CRLF", "first\r\nsecond\r\n"], ["bare-CR", "first\rsecond"], ["BOM", "\ufeffbody\n"], ["NUL", "body\0\n"], ["invalid-UTF8", Buffer.from([0xff, 0x0a])]]) it(`does not confirm unsupported source ${name}`, async () => {
+    if (name === "NUL" || name === "invalid-UTF8") {
+      // Existing delivery projection rejects these before a native log exists.
+      await expect(p4RunTranscript("complete", source)).rejects.toMatchObject({ code: "OCR_ATTACHMENT_PROJECTION_FAILED" });
+      return;
+    }
+    const { result } = await p4RunTranscript("complete", source);
+    expect(result.provider_results[0].material_coverage.read).not.toContain("src/reviewed.mjs");
+    expect(result.provider_results[0].coverage.read_confirmed).not.toBe(true);
+  }, 15000);
+});
+
+// Independent Spec finding: a matching pair is insufficient unless pre precedes
+// post in the actual audit. Reuse the installed-command producers, not a parser.
+async function p4RunReverseHookOrder(representation) {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-p4-reverse-order-"))); roots.push(root);
+  const cli = representation === "raw" ? p4NativeConsumerCli(root, "complete", "native") : p4TranscriptCli(root, "complete");
+  let script = readFileSync(cli.executable, "utf8");
+  if (representation === "raw") {
+    const before = "if(kind!=='unmatched-post'&&hook('pre',pre).decision!=='allow')return false;";
+    expect(script.split(before)).toHaveLength(2);
+    script = script.replace(before, "/* pre deliberately delayed until after full post */");
+    expect(script.split("hook('post',post);return true;")).toHaveLength(2);
+    script = script.replace("hook('post',post);return true;", "hook('post',post);if(hook('pre',pre).decision!=='allow')throw Error('reverse pre denied');return true;");
+  } else {
+    const before = "if(hook('pre',common).decision!=='allow')throw Error('positive installed pre denied');";
+    expect(script.split(before)).toHaveLength(2);
+    script = script.replace(before, "/* pre deliberately delayed until after display post */");
+    expect(script.split("hook('post',post);")).toHaveLength(2);
+    script = script.replace("hook('post',post);", "hook('post',post);if(hook('pre',common).decision!=='allow')throw Error('reverse pre denied');");
+  }
+  writeFileSync(cli.executable, script);
+  const raw = new Map(); mkdirSync(join(root, "quality", "reviews"), { recursive: true });
+  try {
+    const result = await runConfiguredOcrHostReview({ request: { ...request, stage: "verify-code", review_scope: null, phase_id: null }, packet: configuredPacket() }, {
+      trustedContext: configuredContext(["antigravity/flash"], cli.executable),
+      rawOutputSink: async (_hint, bytes, meta) => {
+        const saved = await appendRecord(join(root, "quality", "reviews"), meta.stream, "output", bytes);
+        raw.set(meta.stream, readFileSync(saved)); return relative(root, saved).split("\\").join("/");
+      },
+    });
+    expect(existsSync(cli.reportPath), JSON.stringify(result)).toBe(true);
+    const report = JSON.parse(readFileSync(cli.reportPath, "utf8"));
+    expect(report.calls.map(call => call.phase)).toEqual(["post", "pre", "post", "pre"]);
+    for (const call of report.calls.filter(call => call.phase === "pre")) expect(call.response.decision).toBe("allow");
+    const audit = raw.get("native-audit").toString("utf8").trim().split("\n").map(JSON.parse);
+    expect(audit.filter(row => ["pre", "post"].includes(row.phase)).map(row => row.phase)).toEqual(["post", "pre", "post", "pre"]);
+    const posts = audit.filter(row => row.phase === "post");
+    expect(posts).toHaveLength(2);
+    for (const post of posts) expect(post.full_file_result).toBe(representation === "raw" ? true : null);
+    return { result, audit };
+  } finally {
+    if (cli.sessionRoot) rmSync(cli.sessionRoot, { recursive: true, force: true });
+  }
+}
+
+describe("P4 installed hook reverse order rejection", () => {
+  for (const representation of ["raw", "display"]) it(`rejects ${representation} full post preceding pre`, async () => {
+    const { result } = await p4RunReverseHookOrder(representation);
+    // Target RED is real inspect accepting out-of-order evidence as completed.
+    expect(result.provider_results[0], JSON.stringify(result)).toMatchObject({ status: "failed", error: { code: "OCR_PROVIDER_PACKET_GUARD_FAILED" } });
+    expect(result.provider_results[0].material_coverage.read).toEqual([]);
+    expect(result.provider_results[0].coverage.read_confirmed).not.toBe(true);
+  }, 15000);
+});
+
+// P4 AG-native consumer oracle. No providerExecutor override: the real direct
+// executor, supervisor, process groups, packet hook and result guards all run.
+function p4NativeHealthCli(root, kind) {
+  const cli = p4NativeConsumerCli(root, "complete", "native");
+  let script = readFileSync(cli.executable, "utf8");
+  expect(script.split("function finish(){")).toHaveLength(2);
+  script = script.replace("function finish(){", "function p4OriginalSuccessfulFinish(){");
+  if (kind === "without-reads") {
+    expect(script.split("if(mode==='safety'){")).toHaveLength(2);
+    script = script.replace("if(mode==='safety'){", "if(true){finish();}else if(mode==='safety'){");
+  }
+  script += String.raw`
+function finish(){
+ const {spawn}=require('node:child_process'),kind=${JSON.stringify(kind)};
+ report.provider_pid=process.pid;fs.writeFileSync(reportPath,JSON.stringify(report));
+ process.on('SIGTERM',()=>process.exit(0));
+ const out=value=>process.stdout.write(JSON.stringify(value)+'\n');
+ const terminal=(status,response)=>({event:'result',result:{conversation_id:session,status,response}});
+ const successful=terminal('SUCCESS',JSON.stringify({findings:[]}));
+ const failed=terminal('ERROR','owned first terminal failure');
+ const readStep=index=>({event:'step_update',step_update:{conversation_id:session,step_index:index,state:'DONE',step_type:'tool',tool_name:'read_file',tool_info:{name:'read_file',parameters:{Path:prompt},output:'中文😀 allowed completed read'}}});
+ if(kind==='noise')report.first_allowed_done_complete_bytes=Buffer.byteLength(JSON.stringify({event:'init',conversation_id:session})+'\n'+JSON.stringify(readStep(9))+'\n');
+ fs.writeFileSync(reportPath,JSON.stringify(report));
+ out({event:'init',conversation_id:session});
+ if(kind==='first-error'){process.stdout.write(JSON.stringify(failed)+'\n'+JSON.stringify(successful)+'\n');return;}
+ if(kind==='first-success'){process.stdout.write(JSON.stringify(successful)+'\n'+JSON.stringify(failed)+'\n');return;}
+ if(kind==='word-only'){out(terminal('SUCCESS','SUCCESS'));return;}
+ if(kind==='without-reads'){out(successful);return;}
+ if(kind==='terminal-descendant'||kind==='no-terminal-descendant'){
+  if(kind==='terminal-descendant')out(successful);
+  const descendant=spawn(process.execPath,['-e',"process.on('SIGTERM',()=>{});setTimeout(()=>process.exit(0),10000)"],{stdio:['ignore','inherit','inherit']});
+  report.descendant_pid=descendant.pid;report.descendant_started_at=Date.now();report.descendant_expected_lifetime_ms=10000;
+  report.provider_group=Number(spawnSync('/bin/ps',['-o','pgid=','-p',String(process.pid)],{encoding:'utf8'}).stdout.trim());
+  report.descendant_group=Number(spawnSync('/bin/ps',['-o','pgid=','-p',String(descendant.pid)],{encoding:'utf8'}).stdout.trim());
+  fs.writeFileSync(reportPath,JSON.stringify(report));
+  setTimeout(()=>process.exit(0),30);return;
+ }
+ if(kind==='slow-unique'){
+  let index=30;
+  const tick=setInterval(()=>{
+   const bytes=Buffer.from(JSON.stringify(readStep(index++))+'\n');
+   const split=bytes.indexOf(Buffer.from('😀'))+2;
+   process.stdout.write(bytes.subarray(0,split));setTimeout(()=>process.stdout.write(bytes.subarray(split)),5);
+   if(index===40){clearInterval(tick);setTimeout(()=>process.stdout.write(JSON.stringify(successful)+'\n'),15);}
+  },55);return;
+ }
+ // One accepted read DONE, then repeats are not new progress. Every other
+ // stdout frame and all stderr below supply only liveness, even continuously.
+ setTimeout(()=>{
+ out(readStep(9));
+ const tick=setInterval(()=>{
+  const frames=[
+   {event:'step_update',step_update:{conversation_id:session,step_index:10,state:'ERROR',step_type:'tool',tool_name:'read_file',tool_info:{name:'read_file',error:{message:'denied'}}}},
+   {event:'step_update',step_update:{conversation_id:session,step_index:11,state:'DONE',step_type:'agent_response'}},
+   readStep(9),
+  ];process.stdout.write(frames.map(frame=>JSON.stringify(frame)).join('\n')+'\n');process.stderr.write('owned liveness noise\n');
+ },15);
+ setTimeout(()=>{clearInterval(tick);out(failed);},700);
+ },70);
+}
+`;
+  writeFileSync(cli.executable, script);
+  return cli;
+}
+
+async function p4RunNativeHealth(kind) {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-p4-native-health-"))); roots.push(root);
+  const cli = p4NativeHealthCli(root, kind), sibling = ownedPacketCli(root);
+  const context = configuredContext(["antigravity/health", "codex/sibling"], cli.executable);
+  context.providerConfig.providers["codex/sibling"].command = sibling.executable;
+  const raw = new Map(), observed = [], completed = [], controller = new AbortController();
+  mkdirSync(join(root, "quality", "reviews"), { recursive: true });
+  const realNow = Date.now, realSetTimeout = globalThis.setTimeout, realClearTimeout = globalThis.clearTimeout;
+  const realSetInterval = globalThis.setInterval, realClearInterval = globalThis.clearInterval;
+  const intervalHandles = new Set(), timeoutHandles = new Set();
+  let logicalNow = realNow(), active = false, healthRegistrations = 0, healthTicks = 0, watchdogFired = false, pending;
+  let firstAllowedTick = null, firstAllowedLogicalMs = null, agStdoutSeen = 0, agProgressSeen = 0;
+  const healthTimeline = [];
+  const advanceHealthTick = () => {
+    if (!active) return;
+    logicalNow += 60_000; healthTicks++;
+    if (kind === "noise") healthTimeline.push({ tick: healthTicks, logical_ms: logicalNow, stdout_bytes: agStdoutSeen, progress_events: agProgressSeen });
+  };
+  Date.now = () => logicalNow;
+  // Only the 60-second health window is accelerated. The separate 5-second
+  // PID probe and the real subprocess/supervisor clocks retain their meanings.
+  globalThis.setTimeout = (fn, delay, ...args) => {
+    if (delay !== 60_000) return realSetTimeout(fn, delay, ...args);
+    healthRegistrations++;
+    const handle = realSetTimeout(() => { advanceHealthTick(); fn(...args); }, 40);
+    timeoutHandles.add(handle); return handle;
+  };
+  globalThis.setInterval = (fn, delay, ...args) => {
+    if (delay !== 60_000) return realSetInterval(fn, delay, ...args);
+    healthRegistrations++;
+    const handle = realSetInterval(() => { advanceHealthTick(); fn(...args); }, 40);
+    intervalHandles.add(handle); return handle;
+  };
+  const descendantCase = kind === "terminal-descendant" || kind === "no-terminal-descendant";
+  const forceOwnedDescendantGroup = () => {
+    if (!descendantCase || !existsSync(cli.reportPath)) return;
+    const owned = JSON.parse(readFileSync(cli.reportPath, "utf8"));
+    if (owned.provider_group === owned.provider_pid && owned.descendant_group === owned.provider_group) {
+      try { process.kill(-owned.provider_group, "SIGKILL"); } catch (error) { if (error.code !== "ESRCH") throw error; }
+    }
+  };
+  const watchdog = realSetTimeout(() => {
+    watchdogFired = true; controller.abort(new Error("owned native health watchdog"));
+    forceOwnedDescendantGroup();
+  }, 3500);
+  try {
+    pending = runConfiguredOcrHostReview({ request: { ...request, stage: "verify-code", review_scope: null, phase_id: null }, packet: configuredPacket(), signal: controller.signal }, {
+      trustedContext: context,
+      // Existing PID-observation injection only; it never counts health windows.
+      ...(descendantCase ? { healthPollMs: 20 } : {}),
+      onProviderHealth: health => {
+        observed.push(health);
+        if (health.provider === "antigravity/health" && health.stdout_bytes > 0) {
+          agStdoutSeen = health.stdout_bytes; agProgressSeen = health.progress_events;
+          if (kind === "noise" && firstAllowedTick === null) {
+            const owned = JSON.parse(readFileSync(cli.reportPath, "utf8"));
+            if (health.stdout_bytes >= owned.first_allowed_done_complete_bytes) {
+              firstAllowedTick = healthTicks; firstAllowedLogicalMs = logicalNow;
+            }
+          }
+          active = true;
+          if (kind === "cancel-first" && !controller.signal.aborted) controller.abort(new Error("owned first cancellation"));
+        }
+      },
+      onProviderResult: member => completed.push(member),
+      rawOutputSink: async (_hint, bytes, meta) => {
+        const saved = await appendRecord(join(root, "quality", "reviews"), meta.stream, "output", bytes);
+        raw.set(meta.stream + ":" + meta.provider, readFileSync(saved));
+        return relative(root, saved).split("\\").join("/");
+      },
+    });
+    const result = await pending;
+    expect(watchdogFired, JSON.stringify(result)).toBe(false);
+    expect(existsSync(cli.reportPath), JSON.stringify(result)).toBe(true);
+    const report = JSON.parse(readFileSync(cli.reportPath, "utf8"));
+    expect(report.provider_pid).toBeGreaterThan(0);
+    expect(() => process.kill(report.provider_pid, 0)).toThrow();
+    if (report.descendant_pid) {
+      expect(report.provider_group).toBe(report.provider_pid);
+      expect(report.descendant_group).toBe(report.provider_group);
+      expect(report.descendant_expected_lifetime_ms).toBe(10000);
+      const elapsed = realNow() - report.descendant_started_at;
+      expect(elapsed, "must actively reap before both the watchdog and 10s natural exit").toBeLessThan(3500);
+      expect(() => process.kill(report.descendant_pid, 0)).toThrow();
+      console.log(JSON.stringify({ oracle: "P4_ACTIVE_DESCENDANT_REAP", kind, elapsed_real_ms: elapsed, natural_lifetime_ms: 10000, pid_probe_ms: 20, provider_group: report.provider_group, descendant_pid: report.descendant_pid, watchdog_fired: watchdogFired }));
+    }
+    const member = result.provider_results[0];
+    if (kind === "cancel-first") {
+      // Caller cancellation legitimately applies to an unfinished sibling too.
+      expect(["completed", "cancelled"]).toContain(result.provider_results[1].status);
+      if (result.provider_results[1].status === "cancelled") expect(result.provider_results[1].error.code).toBe("OCR_PROVIDER_CANCELLED");
+    } else {
+      expect(result.provider_results[1], JSON.stringify(result)).toMatchObject({ provider: "codex/sibling", status: "completed", parse_outcome: "ok" });
+    }
+    expect(member.raw_output_ref).not.toBeNull();
+    expect(Buffer.isBuffer(raw.get("stdout:antigravity/health"))).toBe(true);
+    if (kind !== "without-reads") {
+      const audit = raw.get("native-audit:antigravity/health");
+      expect(Buffer.isBuffer(audit)).toBe(true);
+      const rows = audit.toString("utf8").trim().split("\n").map(JSON.parse);
+      expect(rows).toContainEqual(expect.objectContaining({ phase: "pre", path: "review-prompt.md", decision: "allow" }));
+      expect(rows).toContainEqual(expect.objectContaining({ phase: "post", path: "review-prompt.md", full_file_result: true }));
+    }
+    const facts = { kind, healthRegistrations, healthTicks, watchdogFired, progress_events: member.execution?.retry?.progress_events, code: member.error?.code, status: member.status,
+      ...(kind === "noise" ? { firstAllowedTick, firstAllowedLogicalMs, healthTimeline } : {}) };
+    console.log(JSON.stringify({ oracle: "P4_AG_NATIVE_HEALTH", ...facts }));
+    return { result, member, report, observed, completed, raw, facts };
+  } finally {
+    realClearTimeout(watchdog);
+    controller.abort(new Error("owned native health cleanup"));
+    forceOwnedDescendantGroup();
+    if (pending) await pending.catch(() => {});
+    for (const handle of timeoutHandles) realClearTimeout(handle);
+    for (const handle of intervalHandles) realClearInterval(handle);
+    Date.now = realNow; globalThis.setTimeout = realSetTimeout; globalThis.clearTimeout = realClearTimeout;
+    globalThis.setInterval = realSetInterval; globalThis.clearInterval = realClearInterval;
+  }
+}
+
+describe("P4 AG native semantic health consumer", () => {
+  it("stalls denied model duplicate and stderr noise while preserving completed sibling", async () => {
+    const { member, facts, raw } = await p4RunNativeHealth("noise");
+    expect(member.error?.code, JSON.stringify(facts)).toBe("PROCESS_STALLED");
+    const frames = raw.get("stdout:antigravity/health").toString("utf8").trim().split("\n").map(line => JSON.parse(line));
+    const accepted = frames.map(frame => frame.step_update).filter(step => step?.state === "DONE" && step.step_type === "tool" && step.tool_name === "read_file" && !step.tool_info?.error);
+    expect([...new Set(accepted.map(step => step.step_index))]).toEqual([9]);
+    expect(facts.progress_events).toBe(1);
+    expect(Number.isSafeInteger(facts.firstAllowedTick), JSON.stringify(facts)).toBe(true);
+    // Existing health-runner consumes a generation change on the next tick,
+    // then counts five unchanged generations. Startup/init ticks are excluded.
+    const reset = facts.healthTimeline.find(tick => tick.tick > facts.firstAllowedTick && tick.progress_events === 1);
+    expect(reset, JSON.stringify(facts)).toBeDefined();
+    const idle = facts.healthTimeline.filter(tick => tick.tick > reset.tick);
+    expect(idle, JSON.stringify(facts)).toHaveLength(5);
+    for (const [index, tick] of idle.entries()) {
+      expect(tick.tick).toBe(reset.tick + index + 1);
+      expect(tick.logical_ms).toBe(reset.logical_ms + 60_000 * (index + 1));
+      expect(tick.progress_events).toBe(1);
+    }
+  }, 10000);
+  it("keeps unique allowed reads successful across five windows with fragmented UTF8 JSONL", async () => {
+    const { member, facts, raw } = await p4RunNativeHealth("slow-unique");
+    expect(member, JSON.stringify(facts)).toMatchObject({ status: "completed", parse_outcome: "ok" });
+    expect(member.material_coverage.read).toContain("src/reviewed.mjs");
+    expect(facts.healthTicks, "cross-window timing remains unexercised until a native 60s health timer is wired").toBeGreaterThan(5);
+    expect(member.timing.duration_ms).toBeGreaterThan(300_000);
+    expect(facts.progress_events).toBeGreaterThanOrEqual(10);
+    expect(facts.progress_events).toBeLessThanOrEqual(11);
+    expect(raw.get("stdout:antigravity/health").toString("utf8")).toContain("中文😀 allowed completed read");
+  }, 10000);
+  it("preserves the first ERROR over a later SUCCESS", async () => {
+    const { member, raw } = await p4RunNativeHealth("first-error");
+    expect(member).toMatchObject({ status: "failed", error: { code: "PROVIDER_HEALTH_FAILED" } });
+    expect(raw.get("stdout:antigravity/health").toString("utf8")).toContain("owned first terminal failure");
+  }, 10000);
+  it("preserves the first SUCCESS over a later ERROR", async () => {
+    const { member } = await p4RunNativeHealth("first-success");
+    expect(member).toMatchObject({ status: "completed", parse_outcome: "ok", error: null });
+    expect(member.material_coverage.read).toContain("src/reviewed.mjs");
+  }, 10000);
+  it("keeps a successful terminal and reaps an inherited-stdio descendant", async () => {
+    const { member } = await p4RunNativeHealth("terminal-descendant");
+    expect(member).toMatchObject({ status: "completed", parse_outcome: "ok" });
+    expect(member.material_coverage.read).toContain("src/reviewed.mjs");
+  }, 10000);
+  it("reports no terminal result after parent exit with inherited stdio", async () => {
+    const { member } = await p4RunNativeHealth("no-terminal-descendant");
+    expect(member.error?.code).toBe("PROVIDER_NO_TERMINAL_RESULT");
+    expect(member.material_coverage.read).toEqual([]);
+  }, 10000);
+  it("retains first cancellation rather than converting it to stalled", async () => {
+    const { member } = await p4RunNativeHealth("cancel-first");
+    expect(member).toMatchObject({ status: "cancelled", error: { code: "OCR_PROVIDER_CANCELLED" } });
+  }, 10000);
+  it("does not accept SUCCESS wording without review JSON", async () => {
+    const { member } = await p4RunNativeHealth("word-only");
+    expect(member.status).toBe("failed");
+    expect(member.parse_outcome).not.toBe("ok");
+  }, 10000);
+  it("does not accept successful review JSON without actual packet reads", async () => {
+    const { member } = await p4RunNativeHealth("without-reads");
+    expect(member).toMatchObject({ status: "failed", error: { code: "OCR_PROVIDER_PACKET_GUARD_FAILED" } });
+    expect(member.material_coverage.read).toEqual([]);
+  }, 10000);
+});
+
+// New independent race oracle: capture() synchronously agCapture()s complete
+// JSONL before observe() invokes this callback, and close runs on a later turn.
+async function p4RunTerminalBeforeCancel(firstStatus) {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-p4-terminal-cancel-"))); roots.push(root);
+  const kind = firstStatus === "ERROR" ? "first-error" : "first-success";
+  const cli = p4NativeHealthCli(root, kind);
+  let script = readFileSync(cli.executable, "utf8");
+  const before = firstStatus === "ERROR"
+    ? "if(kind==='first-error'){process.stdout.write(JSON.stringify(failed)+'\\n'+JSON.stringify(successful)+'\\n');return;}"
+    : "if(kind==='first-success'){process.stdout.write(JSON.stringify(successful)+'\\n'+JSON.stringify(failed)+'\\n');return;}";
+  const after = firstStatus === "ERROR"
+    ? "if(kind==='first-error'){out(failed);setTimeout(()=>process.exit(0),1000);return;}"
+    : "if(kind==='first-success'){out(successful);setTimeout(()=>process.exit(0),1000);return;}";
+  expect(script.split(before)).toHaveLength(2);
+  writeFileSync(cli.executable, script.replace(before, after));
+  const session = "p4-reconstructed-wrapper";
+  const first = { event: "result", result: { conversation_id: session, status: firstStatus, response: firstStatus === "ERROR" ? "owned first terminal failure" : JSON.stringify({ findings: [] }) } };
+  const consumedBytes = Buffer.byteLength(JSON.stringify({ event: "init", conversation_id: session }) + "\n" + JSON.stringify(first) + "\n");
+  const controller = new AbortController(), raw = new Map();
+  let abortAfterCompleteTerminal = false, observedBytes = null, watchdogFired = false, pending;
+  mkdirSync(join(root, "quality", "reviews"), { recursive: true });
+  const watchdog = setTimeout(() => { watchdogFired = true; controller.abort(new Error("owned terminal-cancel watchdog")); }, 3500);
+  try {
+    pending = runConfiguredOcrHostReview({ request: { ...request, stage: "verify-code", review_scope: null, phase_id: null }, packet: configuredPacket(), signal: controller.signal }, {
+      trustedContext: configuredContext(["antigravity/health"], cli.executable),
+      onProviderHealth: health => {
+        if (!abortAfterCompleteTerminal && health.status === "running" && health.stdout_bytes >= consumedBytes) {
+          abortAfterCompleteTerminal = true; observedBytes = health.stdout_bytes;
+          controller.abort(new Error("owned cancellation after consumed native terminal"));
+        }
+      },
+      rawOutputSink: async (_hint, bytes, meta) => {
+        const saved = await appendRecord(join(root, "quality", "reviews"), meta.stream, "output", bytes);
+        raw.set(meta.stream, readFileSync(saved)); return relative(root, saved).split("\\").join("/");
+      },
+    });
+    const result = await pending;
+    expect(watchdogFired).toBe(false);
+    expect(abortAfterCompleteTerminal).toBe(true);
+    expect(observedBytes).toBeGreaterThanOrEqual(consumedBytes);
+    expect(existsSync(cli.reportPath), JSON.stringify(result)).toBe(true);
+    const report = JSON.parse(readFileSync(cli.reportPath, "utf8"));
+    expect(() => process.kill(report.provider_pid, 0)).toThrow();
+    const stdout = raw.get("stdout"); expect(Buffer.isBuffer(stdout)).toBe(true);
+    const frames = stdout.toString("utf8").trim().split("\n").map(JSON.parse);
+    expect(frames.filter(frame => frame.event === "result")).toEqual([first]);
+    const audit = raw.get("native-audit"); expect(Buffer.isBuffer(audit)).toBe(true);
+    const rows = audit.toString("utf8").trim().split("\n").map(JSON.parse);
+    expect(rows).toContainEqual(expect.objectContaining({ phase: "post", path: "review-prompt.md", full_file_result: true }));
+    expect(rows).toContainEqual(expect.objectContaining({ phase: "post", path: "src/reviewed.mjs", full_file_result: true }));
+    console.log(JSON.stringify({ oracle: "P4_TERMINAL_BEFORE_CANCEL", firstStatus, consumedBytes, observedBytes, abortAfterCompleteTerminal, watchdogFired, status: result.provider_results[0].status, code: result.provider_results[0].error?.code }));
+    return result.provider_results[0];
+  } finally {
+    clearTimeout(watchdog); controller.abort(new Error("owned terminal-cancel cleanup"));
+    if (pending) await pending.catch(() => {});
+  }
+}
+
+describe("P4 native terminal before cancellation", () => {
+  it("preserves consumed ERROR before subsequent caller cancellation", async () => {
+    const member = await p4RunTerminalBeforeCancel("ERROR");
+    expect(member).toMatchObject({ status: "failed", error: { code: "PROVIDER_HEALTH_FAILED" } });
+  }, 10000);
+  it("preserves consumed SUCCESS with parsing and reads before subsequent caller cancellation", async () => {
+    const member = await p4RunTerminalBeforeCancel("SUCCESS");
+    expect(member).toMatchObject({ status: "completed", parse_outcome: "ok", error: null });
+    expect(member.material_coverage.read).toContain("src/reviewed.mjs");
+    expect(member.coverage.read_confirmed).toBe(true);
+  }, 10000);
+});

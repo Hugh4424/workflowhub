@@ -1,0 +1,1 @@
+{"task_id": "fixture-unreadable-spec", "record_kind": "stage", "stage": "make-decision", "evidence": {"value": [{"command": "node tools/cli/check-decision-log-chain.mjs", "exit_code": 0}]}}

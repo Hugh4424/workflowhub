@@ -5,7 +5,7 @@
     {
       "step_id": 1,
       "step_slug": "entry-route",
-      "observable_result": "入口与级别：本次入口事实、推荐、小改动理由与用户选择在决策记录同节可读。 进入下一步条件：首次问答同批高亮推荐与理由，实际选择小改动；未答保草稿，缺事实按复杂并记缺口。",
+      "observable_result": "入口与级别：本次入口事实、推荐、小改动理由与用户选择在决策记录同节可读。 条件：首次问答同批高亮推荐与理由，实际选择小改动；未答保草稿，缺事实按复杂并记缺口。 判定消费：SKILL.md#步骤 第1步；原件：入口返回原ref与decision级别节。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -16,7 +16,7 @@
     {
       "step_id": 2,
       "step_slug": "outline-hypothesis",
-      "observable_result": "一句话大纲：目标、改动条目与可推翻依据组成一句话大纲，仍是假设。 进入下一步条件：目标对应一个可观察交付结果，用户能据反例推翻。",
+      "observable_result": "一句话大纲：目标、改动条目与可推翻依据组成一句话大纲，仍是假设。 条件：目标对应一个可观察交付结果，用户能据反例推翻。 判定消费：SKILL.md#步骤 第2步；原件：decision大纲及真实答复。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -27,7 +27,7 @@
     {
       "step_id": 3,
       "step_slug": "bounded-research",
-      "observable_result": "有界调研：会改变方向的具体未知有原文来源与结论；没有未知写具名跳过理由。 进入下一步条件：相关未知已查或明确缺口；跳过是不调用研究，不写空报告。",
+      "observable_result": "有界调研：会改变方向的具体未知有原文来源与结论；没有未知写具名跳过理由。 条件：相关未知已查或明确缺口；跳过是不调用研究，不写空报告。 判定消费：SKILL.md#步骤 第3步；原件：研究原件或具名未触发事实。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -38,7 +38,7 @@
     {
       "step_id": 4,
       "step_slug": "thin-convergence",
-      "observable_result": "薄收敛：每个未决项的方案、替代、验收、后果各一句；沿 N6 调研/发散/收敛/就地讨论/定验收五段动作名与原件指针。 进入下一步条件：真实未决清零；零未决写已知唯一合理方案与来源理由。",
+      "observable_result": "薄收敛：每个未决项的方案、替代、验收、后果各一句；沿 N6 调研/发散/收敛/就地讨论/定验收五段动作名与原件指针。 条件：真实未决清零；零未决写已知唯一合理方案与来源理由。 判定消费：SKILL.md#步骤 第4步；原件：OI逐项处置、Talk原ref。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -49,7 +49,7 @@
     {
       "step_id": 5,
       "step_slug": "write-light-materials",
-      "observable_result": "写极简方案：spec 含目标与范围、逐行POSIX写集、AC可观察结果、oracle/测试命令、风险与不做；1 个 Phase 含目标/写集/oracle/命令/完成条件，phases/index.md 只列指针。 进入下一步条件：spec-specify/spec-plan 原方法已消费，材料可读；小改动不建驾驶舱页，例外见下节。 规格作者先实际读取 skills/spec-clarify/SKILL.md：继承已答与范围，分类 Locked upstream decision / Upstream unresolved item / New ambiguity 并做十维核对；无实质歧义显式 trigger=false、具名原因、零开放方向问题；有实质歧义仅当前frontier批问，发卡归还控制，未获真实回复不改spec或审查，真实回复后只续已具前提轴，已答不复问。",
+      "observable_result": "写极简方案：spec 含目标与范围、逐行POSIX写集、AC可观察结果、oracle/测试命令、风险与不做；1 个 Phase 含目标/写集/oracle/命令/完成条件，phases/index.md 只列指针。 条件：spec-specify/spec-plan 原方法已消费，材料可读；小改动不建驾驶舱页，例外见下节。 规格作者先实际读取 skills/spec-clarify/SKILL.md：继承已答与范围，分类 Locked upstream decision / Upstream unresolved item / New ambiguity 并做十维核对；无实质歧义显式 trigger=false、具名原因、零开放方向问题；有实质歧义仅当前frontier批问，发卡归还控制，未获真实回复不改spec或审查，真实回复后只续已具前提轴，已答不复问。 判定消费：SKILL.md#步骤 第5步；原件：spec/Phase/index、clarify真实回复或trigger=false。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -60,7 +60,7 @@
     {
       "step_id": 6,
       "step_slug": "approve-solution",
-      "observable_result": "一次确认：真实用户对方向＋方案的一次确认原件。 进入下一步条件：对 N6 两次确认的降级：跳过第5步单独骨架确认，理由是单模块、方案即骨架；本次展示后真实确认才实施，未答不得代答。",
+      "observable_result": "一次确认：真实用户对方向＋方案的一次确认原件。 条件：对 N6 两次确认的降级：跳过第5步单独骨架确认，理由是单模块、方案即骨架；本次展示后真实确认才实施，未答不得代答。 判定消费：SKILL.md#步骤 第6步；原件：human-confirm原件与展示材料。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -71,7 +71,7 @@
     {
       "step_id": 7,
       "step_slug": "implement-and-test",
-      "observable_result": "实施与目标测试：确认后实施，跑目标测试留命令、cwd、退出与回执；用 git diff --name-only 对真实改动和声明写集逐条比对，越界路径、原因、影响与测试失败分别具名记录，不混进通过。 进入下一步条件：小改动无独立审查轴。发现越界暂停该路径并回用户，不能静默扩写集；目标测试失败暂停物理交付，按 diagnosing-bugs 修到通过，无法修复保原件回用户；仅真实用户明确接受具名剩余风险并记录责任人后可继续，未答不继续。",
+      "observable_result": "实施与目标测试：确认后实施，跑目标测试留命令、cwd、退出与回执；用 git diff --name-only 对真实改动和声明写集逐条比对，越界路径、原因、影响与测试失败分别具名记录，不混进通过。 条件：小改动无独立审查轴。发现越界暂停该路径并回用户，不能静默扩写集；目标测试失败暂停物理交付，按 diagnosing-bugs 修到通过，无法修复保原件回用户；仅真实用户明确接受具名剩余风险并记录责任人后可继续，未答不继续。 判定消费：SKILL.md#步骤 第7步；原件：diff、target tests argv/cwd/exit/raw、失败/用户风险原件。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -82,7 +82,7 @@
     {
       "step_id": 8,
       "step_slug": "reflect-and-handoff",
-      "observable_result": "一致性核对与反思收口：先读级别与路线逐AC核实际原件；按 spec-analyze 核一致性并做反思收口，stage-reflection 写业务仓 specs/Improvements.md 经验或具名无发现依据，越界记不可用不回落工具仓；内部 stage-handoff 发布并读回唯一绝对路径。 进入下一步条件：归纳→分类→真实阶段成本→发布→报告沿原owner；同一真实窗口只测一次、缺数据写本阶段无记录与原因；无Git操作，不把局部材料通过冒真实验收。",
+      "observable_result": "一致性核对与反思收口：先读级别与路线逐AC核实际原件；按 spec-analyze 核一致性并做反思收口，stage-reflection 写业务仓 specs/Improvements.md 经验或具名无发现依据，越界记不可用不回落工具仓；内部 stage-handoff 发布并读回唯一绝对路径。 条件：归纳→分类→真实阶段成本→发布→报告沿原owner；同一真实窗口只测一次、缺数据写本阶段无记录与原因；无Git操作，不把局部材料通过冒真实验收。 判定消费：SKILL.md#步骤 第8步；原件：AC读回、Improvements、成本与handoff原ref。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -93,7 +93,7 @@
     {
       "step_id": 9,
       "step_slug": "closeout",
-      "observable_result": "物理交付：实施和目标测试完成且无未决失败/越界后，调用 stage-closeout，读当前spec组PR正文，按授权执行提交、PR、合并；最终归档/清理前展示实际范围并取得原方法要求的一次真实确认。 进入下一步条件：物理交付前再读级别与路线、spec和测试原件，确认stage随实际make-decision；反思交接已可独立读回，操作/失败/清理逐项保真，未授权或失败项保持未执行。",
+      "observable_result": "物理交付：实施和目标测试完成且无未决失败/越界后，调用 stage-closeout，读当前spec组PR正文，按授权执行提交、PR、合并；最终归档/清理前展示实际范围并取得原方法要求的一次真实确认。 条件：物理交付前再读级别与路线、spec和测试原件，确认stage随实际make-decision；反思交接已可独立读回，操作/失败/清理逐项保真，未授权或失败项保持未执行。 判定消费：SKILL.md#步骤 第9步；原件：PR/merge/Git授权consume、最终确认及清理回执。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",

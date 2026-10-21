@@ -5,7 +5,7 @@
     {
       "step_id": 1,
       "step_slug": "read-current-materials-and-code",
-      "observable_result": "当前意图、实际代码入口、消费者、完整AC及执行原件可读；历史只作背景，缺失如实说明。",
+      "observable_result": "当前意图、真实代码入口/消费者、完整AC及执行原件可读；历史仅背景，缺失明报。 判定消费：SKILL.md#方法 第1步；原件：材料/执行原件。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -16,7 +16,7 @@
     {
       "step_id": 2,
       "step_slug": "ocr-code-review",
-      "observable_result": "一次终末独立代码审查含当前diff、完整AC、合同/protocol/lens与原件；OCR 不可用如实记 unavailable/unknown，不换执行者，保留检测输出与原始失败；同源补充轴独立执行，与 OCR 可用性无关；每次调用先读 wh-review Long-review 方法。",
+      "observable_result": "一次终末独立代码审查含当前diff/完整AC/合同/protocol/lens/原件；OCR不可用记unavailable/unknown，保检测输出/原始失败、不换执行者；同源补充轴独立且不依赖OCR可用性；每次调用先读wh-review Long-review方法。 判定消费：SKILL.md#方法 第2步；原件：审查回执。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -31,7 +31,7 @@
     {
       "step_id": 3,
       "step_slug": "preserve-review-facts",
-      "observable_result": "每路provider的原始发现、真实执行者、错误、取消和覆盖保留，外发范围/脱敏/只读边界明确。",
+      "observable_result": "各provider原发现/真实执行者/错误/取消/覆盖保留；外发范围/脱敏/只读边界明确。 判定消费：SKILL.md#方法 第3步；原件：provider记录。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -46,7 +46,7 @@
     {
       "step_id": 4,
       "step_slug": "inspect-real-entry-and-tests",
-      "observable_result": "每 Phase 一行逐面核声明、实际原件path/cwd/argv/exit/raw及未跑理由、条件与owner；缺行或缺面保持incomplete，semantic_test_adequacy取核对表而非provider coverage。高风险业务样本另沿规则、入口、断言与实际效果独立抽查；已抽查/未抽查理由及UI/服务缺口可读，不重做全量上游测试。",
+      "observable_result": "每Phase一行逐声明面核原件path/cwd/argv/exit/raw；未跑列理由/条件/owner，缺行/面incomplete；semantic_test_adequacy据核对表，非provider coverage。高风险业务样本独立沿规则→入口→断言→实际效果抽查；已/未查理由及UI/服务缺口可读，不全重做上游测试。 判定消费：SKILL.md#方法 第4步；原件：逐面表/抽样。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -61,7 +61,7 @@
     {
       "step_id": 5,
       "step_slug": "repair-and-targeted-recheck",
-      "observable_result": "有效代码发现回原实施者修，只复测受影响file/case；没有新疑点不重跑全量或第二次常规审查。",
+      "observable_result": "有效代码发现回原实施者修，仅复测受影响file/case；无新疑点不全量复跑或二次常规审查。 判定消费：SKILL.md#方法 第5/6步；原件：修复/复验。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -72,7 +72,7 @@
     {
       "step_id": 6,
       "step_slug": "record-finding-dispositions",
-      "observable_result": "每条原发现有fixed/rejected_invalid/accepted_risk/needs_human处置，严重风险不假记接受，原review不被重写。",
+      "observable_result": "逐原发现处置fixed/rejected_invalid/accepted_risk/needs_human；不假接受严重风险、不重写原review。 判定消费：SKILL.md#方法 第7步；原件：发现处置。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -83,7 +83,7 @@
     {
       "step_id": 7,
       "step_slug": "report-verification-result",
-      "observable_result": "代码质量、业务效果、测试充分性与物理交付分开报告；需真人观察的效果复用既有验收答复，未答保持待确认。",
+      "observable_result": "代码质量/业务效果/测试充分性/物理交付分报；真人观察效果复用既有验收答复，未答待确认。逐 AC 结果形成后刷新当前任务驾驶舱页面与同名侧车并保旧件：环1–9写真实结论，环10记 skipped（交付尚未发生）；页面只读派生、报告为唯一权威。 判定消费：SKILL.md#方法 第7步；原件：验收/交付。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -94,7 +94,7 @@
     {
       "step_id": 8,
       "step_slug": "closeout",
-      "observable_result": "当前主会话在整个阶段结束时按 stage-reflection 的方法执行阶段收口，内部发布并读回可单独读取的 stage-handoff；归纳、分类归口、记录阶段成本、发布、报告依唯一方法顺序执行。成本沿 measure-main-agent-cost 的来源与窗口边界，同一窗口一次，未触发/失败写本阶段无记录及真实原因；Phase摘要不另触发，不新增stage、字段、writer或关闭许可。",
+      "observable_result": "阶段末主会话依stage-reflection收口：归纳→分类归口→记录阶段成本→发布→报告；内部发布并独立读回stage-handoff。成本沿measure-main-agent-cost的来源/窗口边界，同一窗口一次；未触发/失败写本阶段无记录及真实原因；Phase摘要不触发，不增stage/字段/writer/关闭许可。closeout/PR 完成后再刷新页面与同名侧车并保旧件，补环10与终态。 判定消费：SKILL.md#方法 第8步；原件：反思/交接。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",

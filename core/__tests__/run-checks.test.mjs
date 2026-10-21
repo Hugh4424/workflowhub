@@ -1,6 +1,7 @@
 /** Native integration coverage for the retained checker aggregation. */
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -69,6 +70,7 @@ function withMetricsFixture(change = () => {}) {
   try {
     const files = [
       "tools/cli/run-checks.mjs", "runtime/evidence/validate-contract.mjs",
+      "runtime/adapters/local-skill-resolver.mjs", "runtime/evidence/skill-static-deps.mjs",
       "metrics/record-schema.mjs", "metrics/execution-record.mjs", "metrics/knowledge-card.mjs",
       "contracts/execution-record.contract.json", "contracts/knowledge-card.contract.json",
     ];
@@ -77,7 +79,11 @@ function withMetricsFixture(change = () => {}) {
       mkdirSync(dirname(destination), { recursive: true });
       copyFileSync(resolve(repoRoot, file), destination);
     }
-    for (const name of ["check-anti-host", "check-stage-quality", "check-decision-log-chain"]) {
+    mkdirSync(resolve(root, "node_modules"), { recursive: true });
+    symlinkSync(dirname(createRequire(import.meta.url).resolve("js-yaml/package.json")), resolve(root, "node_modules/js-yaml"), "dir");
+    mkdirSync(resolve(root, "skills"), { recursive: true });
+    writeFileSync(resolve(root, "skills/catalog.yaml"), "skills: []\n");
+    for (const name of ["check-anti-host", "check-stage-quality", "check-decision-log-chain", "check-skill-consistency"]) {
       writeFileSync(resolve(root, `tools/cli/${name}.mjs`), "process.exit(0);\n");
     }
     change(root);

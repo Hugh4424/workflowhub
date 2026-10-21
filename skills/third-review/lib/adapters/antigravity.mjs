@@ -54,12 +54,28 @@ function packetPolicy(cwd) {
 function hookDecision(policy, payload) {
   const denied = { decision: "deny", reason: "The packet boundary permits only exact current regular-file reads" };
   try {
-    const call = payload?.toolCall; const file = call?.args?.AbsolutePath;
-    if (call?.name !== "view_file" || typeof file !== "string" || !path.isAbsolute(file) || path.resolve(file) !== file || fs.realpathSync(file) !== file) return denied;
-    const member = policy.files.find((item) => item.file === file);
-    if (!member) return denied;
+    const call = payload?.toolCall;
+    let tool = null, file = null;
+    if (call !== undefined) {
+      if (!call || !["view_file", "read_file"].includes(call.name) || !call.args || typeof call.args !== "object" || Array.isArray(call.args)) return denied;
+      tool = call.name; file = tool === "read_file" ? call.args.Path : call.args.AbsolutePath;
+      if (typeof file !== "string" || [call.args.Path, call.args.AbsolutePath].some(value => value !== undefined && value !== file)) return denied;
+    }
+    if (payload?.tool_name !== undefined || payload?.tool_info !== undefined) {
+      const info = payload.tool_info, parameters = info?.parameters;
+      if (!["view_file", "read_file"].includes(payload.tool_name) || !parameters || typeof parameters !== "object" || Array.isArray(parameters)
+          || (info.name !== undefined && info.name !== payload.tool_name) || typeof parameters.Path !== "string"
+          || (parameters.AbsolutePath !== undefined && parameters.AbsolutePath !== parameters.Path)) return denied;
+      if (tool !== null && (tool !== payload.tool_name || file !== parameters.Path)) return denied;
+      if (tool === null) { tool = payload.tool_name; file = parameters.Path; }
+    }
+    if (tool === null || typeof file !== "string" || !path.isAbsolute(file) || path.resolve(file) !== file) return denied;
     const stat = fs.lstatSync(file);
-    if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || stat.size !== member.size || digest(fs.readFileSync(file)) !== member.sha256) return denied;
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1) return denied;
+    const resolved = fs.realpathSync(file);
+    const member = policy.files.find((item) => item.file === resolved);
+    if (!member) return denied;
+    if (stat.size !== member.size || digest(fs.readFileSync(resolved)) !== member.sha256) return denied;
     return { decision: "allow" };
   } catch { return denied; }
 }
@@ -129,7 +145,10 @@ function observeLine(stream, line) {
   const step = event?.step_update;
   if (event?.event === "step_update" && Number.isSafeInteger(step?.step_index) && step.step_index >= 0 && ["ACTIVE", "DONE", "ERROR"].includes(step.state)) {
     const cursor = `${step.step_index}:${step.state}`;
-    return { liveness: true, progress: true, cursor, progress_key: cursor, event: "step_update" };
+    const completedRead = step.state === "DONE" && (step.step_type === "tool" || step.step_type === undefined) && !step.tool_info?.error;
+    return completedRead
+      ? { liveness: true, progress: true, cursor, progress_key: `${step.step_index}:DONE`, event: "step_update" }
+      : { liveness: true, progress: false, cursor, event: "step_update" };
   }
   if (event?.event === "result") {
     const terminal = event.result?.status === "SUCCESS"

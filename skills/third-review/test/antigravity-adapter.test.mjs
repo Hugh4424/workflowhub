@@ -43,7 +43,7 @@ test("Antigravity rejects unsupported generic effort but preserves large prompts
 test("Antigravity accepts successful stream-json results and never resumes", () => {
   assert.equal(antigravity.parse("\n").parse_outcome, "empty_output");
   const step = JSON.stringify({ event: "step_update", step_update: { conversation_id: "not-a-native-session", step_index: 7, state: "ACTIVE" } });
-  assert.deepEqual(antigravity.observeLine("stdout", step), { liveness: true, progress: true, cursor: "7:ACTIVE", progress_key: "7:ACTIVE", event: "step_update" });
+  assert.deepEqual(antigravity.observeLine("stdout", step), { liveness: true, progress: false, cursor: "7:ACTIVE", event: "step_update" });
   assert.deepEqual(antigravity.observeLine("stdout", "final"), { liveness: true, progress: false, event: "text" });
   assert.equal(antigravity.observeLine("stdout", JSON.stringify({ event: "init" })).progress, false);
   assert.equal(antigravity.observeLine("stdout", JSON.stringify({ event: "step_update", step_update: {} })).progress, false);
@@ -133,4 +133,80 @@ test("N3 P2 native correction: AG refuses ambient and tampered packet hooks with
       assert.equal(fs.readFileSync(file,"utf8"),untrusted,"unowned or changed hooks must never be silently replaced");
     }finally{s.clean();}
   }
+});
+
+
+test("N9 P4 tool completion is progress while rejected and model steps are only liveness", () => {
+  const observe = (step) => antigravity.observeLine("stdout", JSON.stringify({ event: "step_update", step_update: { step_index: 7, ...step } }));
+  for (const step of [
+    { state: "ACTIVE", step_type: "tool" },
+    { state: "ERROR", step_type: "tool", tool_info: { error: { type: "TOOL_ERROR" } } },
+    { state: "DONE", step_type: "agent_response" },
+    { state: "DONE", step_type: "user_input" },
+    { state: "DONE", step_type: "tool", tool_info: { error: { message: "denied" } } },
+  ]) assert.equal(observe(step).progress, false, JSON.stringify(step));
+  for (const step of [{ state: "DONE", step_type: "tool", tool_info: {} }, { state: "DONE" }]) {
+    assert.deepEqual(observe(step), { liveness: true, progress: true, cursor: "7:DONE", progress_key: "7:DONE", event: "step_update" });
+  }
+  for (const step_index of [-1, undefined, 1.5]) assert.equal(observe({ state: "DONE", step_type: "tool", step_index }).progress, false);
+});
+
+
+test("N9 P4 installed native hook accepts both read payloads through a directory alias and denies escape", () => {
+  const s = n3AgPacket();
+  try {
+    n3AgStart(s); const hook = n3AgHook(s);
+    const alias = path.join(s.root, "bundle-alias"); fs.symlinkSync(s.bundle, alias);
+    const outsideAlias = path.join(s.root, "outside-alias"); fs.symlinkSync(path.dirname(s.outside), outsideAlias);
+    const real = (file, name = "read_file", infoName = name) => ({ tool_name: name, tool_info: { name: infoName, parameters: { Path: file } } });
+    assert.equal(n3AgDecision(hook({ toolCall: { name: "view_file", args: { AbsolutePath: s.inside } } })), "allow");
+    assert.equal(n3AgDecision(hook(real(path.join(alias, "inside.txt")))), "allow", "real read_file payload must resolve a directory alias to an exact frozen member");
+    assert.equal(n3AgDecision(hook(real(s.inside, "view_file"))), "allow");
+    assert.equal(n3AgDecision(hook({ tool_name: "read_file", tool_info: { parameters: { Path: s.inside } } })), "allow", "tool_info.name is optional");
+    assert.equal(n3AgDecision(hook({ toolCall: { name: "view_file", args: { AbsolutePath: path.join(alias, "inside.txt") } } })), "allow");
+    for (const payload of [
+      real(s.outside), real(path.join(outsideAlias, "outside.txt")), real(`${s.bundle}/../bundle/inside.txt`),
+      real(s.inside, "run_command"), real(s.inside, "read_file", "view_file"),
+      { tool_name: "read_file", tool_info: { parameters: {} } }, "{not json",
+    ]) assert.equal(n3AgDecision(hook(payload)), "deny", JSON.stringify(payload));
+    fs.chmodSync(s.bundle, 0o700);
+    const lastLink = path.join(s.bundle, "last-link.txt"); fs.symlinkSync(s.inside, lastLink);
+    assert.equal(n3AgDecision(hook(real(lastLink))), "deny", "the final path component cannot be a symlink even when its target is authorized");
+    fs.chmodSync(s.inside, 0o600); fs.writeFileSync(s.inside, "changed frozen bytes");
+    assert.equal(n3AgDecision(hook(real(s.inside))), "deny", "real payload keeps frozen content verification");
+  } finally { s.clean(); }
+});
+
+// P4 additive TCR 447/448: wrapper reconstructed from stream + audit evidence.
+// No model request and no assertion that these bytes were captured native stdin.
+test("P4 native wrapper: installed hook accepts read_file Path and preserves skills directory-alias contract", () => {
+  const s = n3AgPacket();
+  try {
+    n3AgStart(s); const hook = n3AgHook(s);
+    const native = file => ({ conversationId: "p4-reconstructed-wrapper", toolCall: { name: "read_file", args: { Path: file } } });
+    assert.equal(n3AgDecision(hook(native(s.inside))), "allow", "installed production hook must accept reconstructed native read_file/Path wrapper");
+    const alias = path.join(s.root, "p4-native-bundle-alias"); fs.symlinkSync(s.bundle, alias);
+    assert.equal(n3AgDecision(hook(native(path.join(alias, "inside.txt")))), "allow", "skills owner retains directory alias realpath-to-exact-member behavior");
+  } finally { s.clean(); }
+});
+
+test("P4 native wrapper: installed hook default-denies conflicts unsafe exact members and malformed input", () => {
+  const s = n3AgPacket();
+  try {
+    n3AgStart(s); const hook = n3AgHook(s);
+    const native = file => ({ conversationId: "p4-reconstructed-wrapper", toolCall: { name: "read_file", args: { Path: file } } });
+    const conflict = native(s.inside); conflict.tool_name = "run_command"; conflict.tool_info = { parameters: { Path: s.outside } };
+    const paths = native(s.inside); paths.toolCall.args.AbsolutePath = s.outside;
+    for (const payload of [native(s.outside), native(`${s.bundle}/../bundle/inside.txt`), native(s.bundle), native("inside.txt"), native(path.join(s.bundle, "undeclared.txt")), conflict, paths, { toolCall: { name: "run_command", args: { Path: s.inside } } }, { toolCall: { name: "read_file", args: {} } }, "{illegal json"]) {
+      assert.equal(n3AgDecision(hook(payload)), "deny", JSON.stringify(payload));
+    }
+    fs.chmodSync(s.bundle, 0o700);
+    const last = path.join(s.bundle, "p4-last-symlink"); fs.symlinkSync(s.inside, last);
+    assert.equal(n3AgDecision(hook(native(last))), "deny");
+    const hard = path.join(s.root, "p4-hardlink"); fs.linkSync(s.inside, hard);
+    assert.equal(n3AgDecision(hook(native(s.inside))), "deny", "exact member must remain nlink=1");
+    fs.unlinkSync(hard);
+    fs.chmodSync(s.inside, 0o600); fs.writeFileSync(s.inside, "changed frozen bytes");
+    assert.equal(n3AgDecision(hook(native(s.inside))), "deny", "frozen member size and hash remain enforced");
+  } finally { s.clean(); }
 });

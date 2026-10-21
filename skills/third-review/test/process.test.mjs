@@ -187,7 +187,7 @@ test("a silent streamProgress provider ends as PROCESS_STALLED and its group is 
 
 test("repeated step and init events are liveness but cannot keep a stalled stream alive", async () => {
   let pid;
-  const source = "setTimeout(()=>process.exit(0),3000);setInterval(()=>{process.stdout.write(JSON.stringify({event:'init'})+'\\n');process.stdout.write(JSON.stringify({event:'step_update',step_update:{step_index:1,state:'ACTIVE'}})+'\\n');},5);";
+  const source = "setTimeout(()=>process.exit(0),3000);setInterval(()=>{process.stdout.write(JSON.stringify({event:'init'})+'\\n');process.stdout.write(JSON.stringify({event:'step_update',step_update:{step_index:1,state:'DONE',step_type:'tool',tool_info:{}}})+'\\n');},5);";
   const result = await execute({ command: process.execPath, argv: ["-e", source], cwd: os.tmpdir(), env: process.env, input: null, redact: [], observeLine: antigravity.observeLine, streamProgress: true }, { maxOutputBytes: 65536, healthCheckIntervalMs: 20, terminationGraceMs: 20, onStart: (value) => { pid = value; } });
   assert.equal(result.ok, false); assert.equal(result.error.code, "PROCESS_STALLED"); assert.equal(result.progress_events, 1); await assertProcessGroupReaped(pid);
 });

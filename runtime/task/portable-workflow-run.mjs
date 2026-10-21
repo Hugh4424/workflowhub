@@ -18,11 +18,19 @@ function nowIso(now) {
   return value.toISOString();
 }
 
-function requirePortableManifest(value) {
+function requireWorkflow(workflow) {
+  if (typeof workflow !== "string" || !/^[a-z][a-z0-9-]*$/.test(workflow)) throw new TypeError("portable workflow namespace is invalid");
+  return workflow;
+}
+function stepResultPattern(workflow) {
+  return workflow === WORKFLOW ? STEP_RESULT_REF : new RegExp(`^quality/evidence/portable-workflow-outcomes/${workflow}/[A-Za-z0-9][A-Za-z0-9._-]*\\.json$`);
+}
+
+function requirePortableManifest(value, workflow = WORKFLOW) {
   if (!value || typeof value !== "object" || Array.isArray(value)
-      || value.schema_version !== "2.0.0" || value.stage_slug !== WORKFLOW || !Array.isArray(value.steps)
+      || value.schema_version !== "2.0.0" || value.stage_slug !== workflow || !Array.isArray(value.steps)
       || value.steps.length === 0) {
-    throw new Error("portable build-prd steps manifest is invalid");
+    throw new Error(`portable ${workflow} steps manifest is invalid`);
   }
   const seenIds = new Set();
   const seenSlugs = new Set();
@@ -31,7 +39,7 @@ function requirePortableManifest(value) {
         || !Number.isSafeInteger(step.step_id) || step.step_id !== index + 1 || seenIds.has(step.step_id)
         || typeof step.step_slug !== "string" || !step.step_slug.trim() || seenSlugs.has(step.step_slug)
         || typeof step.observable_result !== "string" || !step.observable_result.trim()) {
-      throw new Error(`portable build-prd step ${index + 1} is invalid`);
+      throw new Error(`portable ${workflow} step ${index + 1} is invalid`);
     }
     seenIds.add(step.step_id);
     seenSlugs.add(step.step_slug);
@@ -39,14 +47,15 @@ function requirePortableManifest(value) {
   return Object.freeze({ ...value, steps: Object.freeze(value.steps.map((step) => Object.freeze({ ...step }))) });
 }
 
-export function loadPortableWorkflowManifest({ worktreeRoot, read = readFileSync } = {}) {
+export function loadPortableWorkflowManifest({ worktreeRoot, workflow = WORKFLOW, read = readFileSync } = {}) {
+  requireWorkflow(workflow);
   if (typeof worktreeRoot !== "string" || !isAbsolute(worktreeRoot)) throw new TypeError("portable workflow worktreeRoot must be absolute");
-  const path = resolve(worktreeRoot, "workflows", WORKFLOW, "steps.json");
+  const path = resolve(worktreeRoot, "workflows", workflow, "steps.json");
   if (!path.startsWith(`${resolve(worktreeRoot)}/`)) throw new Error("portable workflow manifest escapes worktree");
   let value;
   try { value = JSON.parse(read(path, "utf8")); }
-  catch (error) { throw new Error(`portable build-prd steps manifest is unreadable: ${error.message}`); }
-  return requirePortableManifest(value);
+  catch (error) { throw new Error(`portable ${workflow} steps manifest is unreadable: ${error.message}`); }
+  return requirePortableManifest(value, workflow);
 }
 
 function terminalRecord({ taskId, state, reason, failedStep, stepResultRefs, startedAt, completedAt }) {
@@ -100,8 +109,21 @@ function failedTerminal(taskId, reason, startedAt, completedAt, failedStep = nul
   return terminalRecord({ taskId, state: "failed", reason, failedStep, stepResultRefs: refs, startedAt, completedAt });
 }
 
-function validateStepResultEvidence(task, result, taskId, step) {
-  if (!STEP_RESULT_REF.test(result.result_ref)) return `portable workflow step result_ref is outside the canonical outcome namespace for ${step.step_slug}`;
+export function validateStepResultEvidence(task, result, taskId, step, { workflow = WORKFLOW, verifyEvidence } = {}) {
+  requireWorkflow(workflow);
+  const ref = result.result_ref;
+  const injected = workflow === "final-chain" && typeof verifyEvidence === "function";
+  const safeOriginal = typeof ref === "string" && !isAbsolute(ref) && !ref.includes("\0") && !ref.includes("\\")
+    && !ref.split("/").some(part => part === ".." || part === "." || part === "")
+    && (/^quality\/(?:tests|reviews|evidence)\//.test(ref) || /^(?:decision-log|spec)\.md$/.test(ref) || /^(?:phases|raw-requirements)\//.test(ref))
+    && (!ref.startsWith("quality/evidence/portable-workflow-outcomes/") || stepResultPattern(workflow).test(ref));
+  if (!stepResultPattern(workflow).test(ref) && !(injected && safeOriginal)) return `portable workflow step result_ref is outside the canonical outcome namespace for ${step.step_slug}`;
+  if (injected) {
+    if (typeof verifyEvidence !== "function") throw new TypeError("portable workflow verifyEvidence must be a function");
+    const error = verifyEvidence(task, result, taskId, step, { workflow });
+    if (error !== null && (typeof error !== "string" || !error.trim())) throw new TypeError("portable workflow verifier must return null or a concrete error");
+    return error;
+  }
   let raw;
   try { raw = readOriginal(join(task.taskPath, result.result_ref)); }
   catch (error) { return `portable workflow step result evidence is unavailable for ${step.step_slug}: ${error.message}`; }
@@ -109,7 +131,7 @@ function validateStepResultEvidence(task, result, taskId, step) {
   try { value = JSON.parse(raw); }
   catch { return `portable workflow step result evidence is not JSON for ${step.step_slug}`; }
   if (!value || typeof value !== "object" || Array.isArray(value)
-      || value.task_id !== taskId || value.workflow !== WORKFLOW || !Array.isArray(value.step_results)) {
+      || value.task_id !== taskId || value.workflow !== workflow || !Array.isArray(value.step_results)) {
     return `portable workflow step result evidence is not bound to ${step.step_slug}`;
   }
   const attestations = value.step_results.filter((item) => item && typeof item === "object" && !Array.isArray(item)
@@ -120,10 +142,11 @@ function validateStepResultEvidence(task, result, taskId, step) {
     : `portable workflow step result evidence does not attest ${step.step_slug} as ${result.status}`;
 }
 
-function validateStepResults(input, taskId, steps, task) {
+export function validateStepResults(input, taskId, steps, task, { workflow = WORKFLOW, verifyEvidence } = {}) {
+  requireWorkflow(workflow);
   if (!input || typeof input !== "object" || Array.isArray(input)) return { error: "portable workflow input is invalid" };
   if (input.task_id !== taskId) return { error: "portable workflow input task_id is invalid" };
-  if (input.workflow !== WORKFLOW) return { error: "portable workflow input workflow is invalid" };
+  if (input.workflow !== workflow) return { error: "portable workflow input workflow is invalid" };
   if (!Array.isArray(input.step_results)) return { error: "portable workflow input step_results is invalid" };
   const byId = new Map();
   for (const value of input.step_results) {
@@ -135,7 +158,7 @@ function validateStepResults(input, taskId, steps, task) {
   for (const step of steps) {
     const result = byId.get(step.step_id);
     if (!result) return { missingStep: step.step_slug, refs: normalized.map(({ result_ref }) => result_ref) };
-    if (result.task_id !== taskId || result.workflow !== WORKFLOW || result.step_slug !== step.step_slug
+    if (result.task_id !== taskId || result.workflow !== workflow || result.step_slug !== step.step_slug
         || !STEP_STATUSES.has(result.status) || typeof result.result_ref !== "string") {
       return { error: `portable workflow step result is invalid for ${step.step_slug}`, failedStep: step.step_slug, refs: normalized.map(({ result_ref }) => result_ref) };
     }
@@ -143,7 +166,7 @@ function validateStepResults(input, taskId, steps, task) {
         || typeof result.unblock_condition !== "string" || !result.unblock_condition.trim())) {
       return { error: `portable workflow blocked step is missing dependency facts: ${step.step_slug}`, failedStep: step.step_slug, refs: normalized.map(({ result_ref }) => result_ref) };
     }
-    const evidenceError = validateStepResultEvidence(task, result, taskId, step);
+    const evidenceError = validateStepResultEvidence(task, result, taskId, step, { workflow, verifyEvidence });
     if (evidenceError !== null) {
       return { error: evidenceError, failedStep: step.step_slug, refs: normalized.map(({ result_ref }) => result_ref) };
     }
@@ -153,7 +176,7 @@ function validateStepResults(input, taskId, steps, task) {
   return { results: normalized, refs: normalized.map(({ result_ref }) => result_ref) };
 }
 
-function stateForStepResults(results) {
+export function stateForStepResults(results) {
   const first = results.find(({ status }) => status !== "completed");
   if (!first) return { state: "succeeded", failedStep: null, reason: "all supplied portable step outcomes are completed" };
   if (first.status === "in-progress") return { state: "in-progress", failedStep: first.step_slug, reason: `portable step is in progress: ${first.step_slug}` };

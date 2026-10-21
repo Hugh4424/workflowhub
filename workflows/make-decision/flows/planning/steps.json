@@ -5,7 +5,7 @@
     {
       "step_id": 1,
       "step_slug": "entry-route",
-      "observable_result": "入口与规划级别：规划性质、推荐、理由、入口事实与真实选择只写decision-log.md「级别与路线」。 进入下一步条件：首问同批推荐/高亮/理由，用户可覆盖；缺事实/未答推荐复杂并记未选缺口。",
+      "observable_result": "入口与规划级别：规划性质、推荐、理由、入口事实与真实选择只写decision-log.md「级别与路线」。 条件：首问同批推荐/高亮/理由，用户可覆盖；缺事实/未答推荐复杂并记未选缺口。 判定消费：SKILL.md#步骤 第1步；原件：decision级别与真实答复ref。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -16,7 +16,7 @@
     {
       "step_id": 2,
       "step_slug": "direction-outline",
-      "observable_result": "方向大纲：任务组方向大纲、目标、边界、可推翻依据与原始需求来源。 进入下一步条件：大纲仍为假设，不提前切实施票或承诺代码方案。",
+      "observable_result": "方向大纲：任务组方向大纲、目标、边界、可推翻依据与原始需求来源。 条件：大纲仍为假设，不提前切实施票或承诺代码方案。 判定消费：SKILL.md#步骤 第2步；原件：decision方向大纲与原需。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -27,7 +27,7 @@
     {
       "step_id": 3,
       "step_slug": "research",
-      "observable_result": "方向调研：按真实方向未知执行内部先图后源及有界外部调研，候选、取舍、依据与实际未解项可读。 进入下一步条件：Talk消费唯一canonical报告；无具体外部缺口时写理由，跳过是不调用，不空跑。",
+      "observable_result": "方向调研：按真实方向未知执行内部先图后源及有界外部调研，候选、取舍、依据与实际未解项可读。 条件：Talk消费唯一canonical报告；无具体外部缺口时写理由，跳过是不调用，不空跑。 判定消费：SKILL.md#步骤 第3步；原件：研究origin/原件、候选、跳过依据。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -38,7 +38,7 @@
     {
       "step_id": 4,
       "step_slug": "outline-revision",
-      "observable_result": "大纲修订与任务组拆分：研究修订后的方向骨架、各任务独立交付/验收单元、范围与依赖/共享路径次序。 进入下一步条件：完整需求各有落点或具名缺口，独立单元不拆一半给别任务，共享写主明确。",
+      "observable_result": "大纲修订与任务组拆分：研究修订后的方向骨架、各任务独立交付/验收单元、范围与依赖/共享路径次序。 条件：完整需求各有落点或具名缺口，独立单元不拆一半给别任务，共享写主明确。 判定消费：SKILL.md#步骤 第4步；原件：decision任务地图、来源/覆盖原件。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -49,7 +49,7 @@
     {
       "step_id": 5,
       "step_slug": "approve-outline",
-      "observable_result": "第一次确认方向骨架：用户对当前方向骨架的真实第一次确认原件。 进入下一步条件：骨架展示与答复绑定，未答保草稿；确认后才做方向审。",
+      "observable_result": "第一次确认方向骨架：用户对当前方向骨架的真实第一次确认原件。 条件：骨架展示与答复绑定，未答保草稿；确认后才做方向审。 判定消费：SKILL.md#步骤 第5步；原件：骨架展示与human-confirm原ref。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -60,7 +60,7 @@
     {
       "step_id": 6,
       "step_slug": "direction-review",
-      "observable_result": "一次方向审：骨架确认后沿wh-review方向轨做方向审一次，保盲审材料、provider事实、原始finding与处置。 进入下一步条件：真实来源与覆盖限制可读，不以建议代用户选择，不追空finding重复审查。",
+      "observable_result": "一次方向审：骨架确认后沿wh-review方向轨做方向审一次，保盲审材料、provider事实、原始finding与处置。 条件：真实来源与覆盖限制可读，不以建议代用户选择，不追空finding重复审查。 判定消费：SKILL.md#步骤 第6步；原件：实际方向包/delivery、provider原件。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -71,7 +71,7 @@
     {
       "step_id": 7,
       "step_slug": "task-convergence",
-      "observable_result": "逐任务卡收敛：逐任务卡八字段：任务目标；范围与不做什么；调研与依据；方向与方案（含取舍）；依赖与顺序；验收标准；风险与未知；产出物与消费者。每卡保N6调研/发散/收敛/就地讨论/定验收的动作与来源。 进入下一步条件：真实未决清零；零未决写来源理由，不写死问题数或轮数；任务卡方向可独立交付验收但不写实现代码。",
+      "observable_result": "逐任务卡收敛：逐任务卡八字段：任务目标；范围与不做什么；调研与依据；方向与方案（含取舍）；依赖与顺序；验收标准；风险与未知；产出物与消费者。每卡保N6调研/发散/收敛/就地讨论/定验收的动作与来源。 条件：真实未决清零；零未决写来源理由，不写死问题数或轮数；任务卡方向可独立交付验收但不写实现代码。 判定消费：SKILL.md#步骤 第7步；原件：各任务卡及研究/Talk/来源/验收原ref。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -82,7 +82,7 @@
     {
       "step_id": 8,
       "step_slug": "detail-review",
-      "observable_result": "一次任务卡细节审：沿wh-review detail轨做细节审，审全部任务卡的调研、方向、方案、决策与顺序一次，保原始审查事实与处置。 进入下一步条件：逐卡收敛完成，方向或验收分歧回真实用户，其余安全修复；不把结构检查冒质量通过。",
+      "observable_result": "一次任务卡细节审：沿wh-review detail轨做细节审，审全部任务卡的调研、方向、方案、决策与顺序一次，保原始审查事实与处置。 条件：逐卡收敛完成，方向或验收分歧回真实用户，其余安全修复；不把结构检查冒质量通过。 判定消费：SKILL.md#步骤 第8步；原件：完整任务卡包、review/失败与处置。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -93,7 +93,7 @@
     {
       "step_id": 9,
       "step_slug": "approve-details",
-      "observable_result": "第二次确认任务卡细节：真实第二次确认当前任务卡细节、范围、风险与验收原件。 进入下一步条件：本次展示后的用户答复可读；未答保草稿，不能用骨架答复代替。",
+      "observable_result": "第二次确认任务卡细节：真实第二次确认当前任务卡细节、范围、风险与验收原件。 条件：本次展示后的用户答复可读；未答保草稿，不能用骨架答复代替。 判定消费：SKILL.md#步骤 第9步；原件：细节展示稿与第二次confirm原ref。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -104,7 +104,7 @@
     {
       "step_id": 10,
       "step_slug": "reflect-and-handoff",
-      "observable_result": "一致性核对与反思收口：验收者重读级别与路线，spec-analyze核最终决定和真实问答/审查；stage-reflection 写业务仓 specs/Improvements.md 经验或具名无发现依据，越界不可用；内部stage-handoff发布并读回唯一交接绝对路径。 进入下一步条件：真实阶段成本沿原窗口一次，失败/缺数据写本阶段无记录与原因；驾驶舱按下节更新，未产生与未验项不冒通过。",
+      "observable_result": "一致性核对与反思收口：验收者重读级别与路线，spec-analyze核最终决定和真实问答/审查；stage-reflection 写业务仓 specs/Improvements.md 经验或具名无发现依据，越界不可用；内部stage-handoff发布并读回唯一交接绝对路径。 条件：真实阶段成本沿原窗口一次，失败/缺数据写本阶段无记录与原因；驾驶舱按下节更新，未产生与未验项不冒通过。 判定消费：SKILL.md#步骤 第10步；原件：分析/成本/handoff、原条件页面来源。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -115,7 +115,7 @@
     {
       "step_id": 11,
       "step_slug": "closeout",
-      "observable_result": "交接写PRD阶段：把已确认方向、八字段任务卡、来源、风险/缺口及唯一交接原件交给写 PRD 的 build-prd owner；接收者读取decision-log「级别与路线」。 进入下一步条件：本路线不产 spec/Phase，不做实施、不做物理交付；只交接，执行下一阶段仍沿真实用户授权，不自动启动后继工作。",
+      "observable_result": "交接写PRD阶段：把已确认方向、八字段任务卡、来源、风险/缺口及唯一交接原件交给写 PRD 的 build-prd owner；接收者读取decision-log「级别与路线」。 条件：本路线不产 spec/Phase，不做实施、不做物理交付；只交接，执行下一阶段仍沿真实用户授权，不自动启动后继工作。 判定消费：SKILL.md#步骤 第11步；原件：handoff实际路径、任务卡来源与后继输入。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
