@@ -6,9 +6,9 @@ provider 只读取本次 bundle，不能访问真实仓库、Git、一般 shell�
 
 direction 轨输入由 `skills/wh-review/scripts/review-materials.mjs` 的 `validateDirectionReviewInput` 校验，并在 `buildReviewMaterials` 创建 packet 前调用。缺失或为空的必填材料、同轨非法 key 明确抛错；此轨不比较 decision-log 字节。
 
-每个请求保留 broker-owned direction-review.v1 内部顺序：reconstruct 只读原始需求、客观事实、硬约束、非目标、问题与未知；到 reveal 才读当前选择、备选方案、理由和独立重建；challenge 检查选择、失败后果及更小可逆路径。不能用第二次 public request 假装同一请求中的 reveal 边界。安全原生 transport 也由现客户端在同一次请求内真实分段：重建包不交付已定材料，只有收到有效重建才创建揭示包，之后才创建挑战包。内部会话、取消、失败与 stdout/stderr 如实保留；不新增会话推进许可或持久进度对象。
+每个请求保留 broker-owned direction-review.v1 内部顺序：reconstruct 只读原始需求、客观事实、硬约束、非目标、问题与未知；到 reveal 才读骨架级选择（方向、范围、非目标与已确认骨架）、备选方案、理由和独立重建；当前选择不含逐模块方案结论、字段级取舍或实现细节；challenge 检查选择、失败后果及更小可逆路径。不能用第二次 public request 假装同一请求中的 reveal 边界。安全原生 transport 也由现客户端在同一次请求内真实分段：重建包不交付已定材料，只有收到有效重建才创建揭示包，之后才创建挑战包。内部会话、取消、失败与 stdout/stderr 如实保留；不新增会话推进许可或持久进度对象。
 
-questions-only 提供真实未决问题及来源，不能漏关键问题或用大概结论冒充覆盖。reconstruct 阶段不交付 OI 答案、方案结论、确认回复、decision log、detail 结果、spec、plan、代码或测试。答案与选择只能在 reveal 后可见。不要伪造未知问题的回答，也不要求 outline 版本/hash 成为继续工作或问题身份的许可。questions-only 投影接受人守：是否漏关键问题由主会话与用户人工核对，不设机器 producer 或校验器。
+questions-only 提供真实未决问题及来源，不能漏关键问题或用大概结论冒充覆盖。reconstruct 阶段不交付 OI 答案、方案结论、确认回复、decision log、detail 结果、spec、plan、代码或测试。答案与选择只能在 reveal 后可见。不要伪造未知问题的回答，也不要求 outline 版本/hash 成为继续工作或问题身份的许可。方向包须带被审大纲的可回读 ref＋sha256，说明审了哪版；这是材料身份，不是继续工作、问题身份或阶段许可。questions-only 投影接受人守：是否漏关键问题由主会话与用户人工核对，不设机器 producer 或校验器。
 
 ## detail：核对完整方案与真实回答
 

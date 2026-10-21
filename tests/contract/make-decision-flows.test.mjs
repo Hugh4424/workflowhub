@@ -434,3 +434,32 @@ describe('ORACLE-FLOW-STEPS appended checker counterexamples (controlled materia
     for(const source of [readerLegal.replace('逐 AC 对账前读取级别与路线','逐 AC 对账前读取工作包与决定'),readerLegal.replace('实施与组装审查前读取级别与路线','实施与组装审查只沿启动时读取的级别与路线'),readerLegal.replace('原 ref 缺失或不可回读时记录缺口与 owner、按复杂处理','原 ref 缺失时沿用工作包值')]) { expect(readerIssues(source).length).toBeGreaterThan(0); expect(readerIssues(readerLegal)).toEqual([]); }
   });
 });
+
+
+// N10 P6/T031 additive oracle; all earlier cases and TCR segments remain unchanged.
+describe('N10 direction review order',()=>{
+  function directionOrderIssues(body,list){
+    const required=['direction-advice','module-breadth-confirm','module-convergence','detail-advice'];
+    const indexes=required.map(slug=>list.findIndex(s=>s.step_slug===slug));
+    const issues=[];
+    const positions=required.map(slug=>body.indexOf('`'+slug+'`：'));
+    if(positions.some(i=>i<0)||positions.some((v,i)=>i>0&&v<=positions[i-1]))issues.push('text order');
+    if(list.length!==15||list.some((v,i)=>v.step_id!==i+1))issues.push('step shape');
+    if(indexes.some(i=>i<0)||indexes.some((v,i)=>i>0&&v<=indexes[i-1]))issues.push('order');
+    const part=n=>body.split(new RegExp('^'+n+'\\. `','m'))[1]?.split(/^\d+\. `/m)[0]??'';
+    if(!/只问方向轴与骨架/.test(part(5))||!/第 9 步/.test(part(5)))issues.push('outline scope');
+    if(!/第 7 步方向审查已回读/.test(part(8))||!/未达不开始逐包收敛/.test(part(8)))issues.push('readback');
+    return issues;
+  }
+  test('direction review order: legal material rejects removed guards and swapped steps',()=>{
+    const body=text('complex'),list=steps('complex').steps;
+    expect(directionOrderIssues(body,list)).toEqual([]);
+    for(const needle of ['只问方向轴与骨架','第 7 步方向审查已回读','未达不开始逐包收敛'])expect(directionOrderIssues(body.replace(needle,'已删除'),list).length).toBeGreaterThan(0);
+    const seven=body.match(/^7\. `direction-advice`：[\s\S]*?(?=^8\. `)/m)?.[0];
+    expect(seven).toBeTruthy();
+    expect(directionOrderIssues(body.replace(seven,'').replace(/^10\. `/m,seven+'10. `'),list)).toContain('text order');
+    const changed=structuredClone(list);[changed[6],changed[8]]=[changed[8],changed[6]];
+    expect(directionOrderIssues(body,changed)).toContain('order');
+    expect(directionOrderIssues(body,list)).toEqual([]);
+  });
+});

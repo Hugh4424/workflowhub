@@ -5594,6 +5594,34 @@
       "named_data_readers": [],
       "delete_condition": "经独立审查的替代测试完整承接具名行为及失败边界后由原owner退役；保原始RED/GREEN与历史引用。",
       "retention_basis": "P5已授权Phase及本次真实调用入口研究；本登记先于测试创建，测试不作阶段许可证。"
+    },
+    {
+      "source": "specs/n10-finite-check-wiring-20261020/n8-corrections.md",
+      "destination": "specs/n10-finite-check-wiring-20261020/n8-corrections.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "N8归档摘要与五处降档的有源更正；替代直接修改只读归档",
+      "owner": "N10/P6原实施owner",
+      "consumer": "N8维护者、下一任务主会话、tests/contract/n10-process-repair.test.mjs与verify-code",
+      "module_consumers": [],
+      "named_data_readers": [
+        "tests/contract/n10-process-repair.test.mjs"
+      ],
+      "delete_condition": "仅当该合同/更正职责被经独立审查的唯一替代承接且无当前消费者时退役；历史证据不删覆。",
+      "retention_basis": "N10/P6 T029–T032；spec FR-PROCESS-001…008；当前消费者按真实Phase合同读取。"
+    },
+    {
+      "source": "tests/contract/n10-process-repair.test.mjs",
+      "destination": "tests/contract/n10-process-repair.test.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "ORACLE-N10-PROCESS-REPAIR静态合同与可证伪负例；不产生运行许可",
+      "owner": "N10/P6原实施owner",
+      "consumer": "P6/T026–T032执行者、P7验收与verify-code",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "仅当该合同/更正职责被经独立审查的唯一替代承接且无当前消费者时退役；历史证据不删覆。",
+      "retention_basis": "N10/P6 T029–T032；spec FR-PROCESS-001…008；当前消费者按真实Phase合同读取。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"
