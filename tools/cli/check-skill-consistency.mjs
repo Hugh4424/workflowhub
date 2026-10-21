@@ -218,7 +218,7 @@ export function checkSkillConsistency(root) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2);
   if (args.length !== 2 || args[0] !== "--root" || !path.isAbsolute(args[1])) {
-    console.error("check-skill-consistency: requires --root <absolute package root>");
+    console.error(`check-skill-consistency: requires --root <absolute package root>; received: ${args.join(" ") || "none"}`);
     process.exitCode = 1;
   } else {
     try {
@@ -228,7 +228,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       if (!failures.length) console.log("[check-skill-consistency] current declarations consistent; historical registrations inactive");
       process.exitCode = failures.length ? 1 : 0;
     } catch (error) {
-      console.error(`[check-skill-consistency] ERROR ${error.message}`);
+      console.error(`check-skill-consistency: cannot read root ${args[1]}: ${error.code ?? error.message}; expected an existing absolute directory`);
       process.exitCode = 1;
     }
   }

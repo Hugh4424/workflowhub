@@ -8,7 +8,7 @@
  * Only local text structure and explicit current references are inspected.
  */
 
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -151,12 +151,16 @@ export function checkDecisionLogChain({ markdown, source_ref = "decision-log.md"
         return [{ field, value: match[2], line }];
       });
     });
-    const isLegacyD = decision_id.startsWith("D-");
     const hasCurrent = parents.some(({ field }) => CURRENT_FIELDS.includes(field));
     const hasOld = parents.some(({ field }) => CHAIN_FIELDS.includes(field));
-    const isCurrent = decision_id.startsWith("N") || (!isLegacyD && hasCurrent);
-    const requiredFields = isLegacyD ? LEGACY_CHAIN_FIELDS : isCurrent ? CURRENT_FIELDS : hasOld ? CHAIN_FIELDS : [];
-    if (!isLegacyD && !isCurrent && !hasOld) {
+    const hasLegacy = parents.some(({ field }) => LEGACY_CHAIN_FIELDS.includes(field))
+      || LEGACY_CHAIN_FIELDS.some(field => new RegExp(`^[\\t ]*(?:[-*+][\\t ]+)?(?:\\*\\*)?${field}(?:\\*\\*)?[\\t ]*[:：]`, "m").test(body));
+    const shape = decision_id.startsWith("N") || hasCurrent ? "current"
+      : hasOld ? "chain" : hasLegacy ? "legacy" : "unknown";
+    const isCurrent = shape === "current";
+    const isLegacy = shape === "legacy";
+    const requiredFields = isCurrent ? CURRENT_FIELDS : shape === "chain" ? CHAIN_FIELDS : isLegacy ? LEGACY_CHAIN_FIELDS : [];
+    if (shape === "unknown") {
       warnings.push(warning("unknown_decision_shape", decision_id, "decision_fields", `${decision_id} has no recognized current or historical parent labels; field coverage is unknown`));
     }
     if (isCurrent) {
@@ -169,11 +173,11 @@ export function checkDecisionLogChain({ markdown, source_ref = "decision-log.md"
         }
       }
     }
-    const fields = isLegacyD ? LEGACY_CHAIN_FIELDS : [...new Set([...CURRENT_FIELDS, ...CHAIN_FIELDS, ...LEGACY_CHAIN_FIELDS])];
+    const fields = isLegacy ? LEGACY_CHAIN_FIELDS : [...new Set([...CURRENT_FIELDS, ...CHAIN_FIELDS, ...LEGACY_CHAIN_FIELDS])];
     const values = Object.fromEntries(fields.map((field) => {
       const label = field === "决定" ? "(?:原)?决定" : field;
-      const match = isLegacyD ? body.match(new RegExp(`^[\\t ]*(?:[-*+][\\t ]+)?(?:\\*\\*)?${label}(?:（[^）\\n]*）)?(?:\\*\\*)?[\\t ]*[:：][\\t ]*(.+?)[\\t ]*$`, "m")) : null;
-      const value = isLegacyD ? match?.[1]?.trim() : parents.find((parent) => parent.field === field && parent.value.trim())?.value.trim();
+      const match = isLegacy ? body.match(new RegExp(`^[\\t ]*(?:[-*+][\\t ]+)?(?:\\*\\*)?${label}(?:（[^）\\n]*）)?(?:\\*\\*)?[\\t ]*[:：][\\t ]*(.+?)[\\t ]*$`, "m")) : null;
+      const value = isLegacy ? match?.[1]?.trim() : parents.find((parent) => parent.field === field && parent.value.trim())?.value.trim();
       if (value) recognizedFields += 1;
       return [field, value || null];
     }));
@@ -266,36 +270,84 @@ export function checkDecisionLogChain({ markdown, source_ref = "decision-log.md"
 function parseArgs(args) {
   const values = { file: null, root: resolve(".") };
   for (let index = 0; index < args.length; index += 1) {
-    if (args[index] === "--file") values.file = args[++index];
-    else if (args[index] === "--root") values.root = resolve(args[++index]);
+    const flag = args[index];
+    if (flag !== "--file" && flag !== "--root") return { error: `unknown argument ${flag}` };
+    const value = args[++index];
+    if (!value || value.startsWith("--")) return { error: `${flag} requires a value` };
+    if (flag === "--file") values.file = value;
+    else values.root = resolve(value);
   }
   return values;
 }
 
 function inputFiles({ file, root }) {
   if (file) return [{ path: resolve(file), source_ref: file }];
+  if (!statSync(root).isDirectory()) throw Object.assign(new Error("not a directory"), { code: "ENOTDIR" });
   const specs = join(root, "specs");
-  if (!existsSync(specs)) return [];
-  return readdirSync(specs, { withFileTypes: true })
+  let entries;
+  try { entries = readdirSync(specs, { withFileTypes: true }); }
+  catch (error) {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  }
+  return entries
     .filter((entry) => entry.isDirectory() && entry.name !== "archive")
     .map((entry) => ({
       path: join(specs, entry.name, "decision-log.md"),
       source_ref: `specs/${entry.name}/decision-log.md`,
     }))
-    .filter(({ path }) => existsSync(path));
+    .filter(({ path }) => {
+      try { statSync(path); return true; }
+      catch (error) {
+        if (error.code === "ENOENT") return false;
+        throw error;
+      }
+    });
 }
 
 export function main(args = process.argv.slice(2)) {
-  const files = inputFiles(parseArgs(args));
+  const values = parseArgs(args);
+  if (values.error) {
+    console.error(`[check-decision-log-chain] ${values.error}; expected --file <path> or --root <directory>`);
+    return 1;
+  }
+  let files;
+  try { files = inputFiles(values); }
+  catch (error) {
+    console.error(`[check-decision-log-chain] cannot read root ${values.root}: ${error.code ?? error.message}; expected an existing directory`);
+    return 1;
+  }
+  if (files.length === 0) {
+    console.log(`[check-decision-log-chain] no input: no decision-log.md found under ${values.root}; nothing checked`);
+    return 0;
+  }
   let warningCount = 0;
+  let checkedInputs = 0;
+  let hadReadError = false;
   for (const input of files) {
-    const result = checkDecisionLogChain({ markdown: readFileSync(input.path, "utf8"), source_ref: input.source_ref });
+    let markdown;
+    try { markdown = readFileSync(input.path, "utf8"); }
+    catch (error) {
+      console.error(`[check-decision-log-chain] cannot read ${input.source_ref}: ${error.code ?? error.message}`);
+      hadReadError = true;
+      continue;
+    }
+    if (!markdown.trim()) {
+      console.log(`[check-decision-log-chain] no input: ${input.source_ref} is empty; nothing checked`);
+      continue;
+    }
+    checkedInputs += 1;
+    const result = checkDecisionLogChain({ markdown, source_ref: input.source_ref });
     for (const item of result.warnings) {
       warningCount += 1;
       console.log(`[check-decision-log-chain] WARNING ${input.source_ref} ${item.decision_id}.${item.field}: ${item.message}`);
     }
   }
-  console.log(`[check-decision-log-chain] advisory complete: ${warningCount} warning(s), non-blocking, exit 0`);
+  if (hadReadError) {
+    console.error(`[check-decision-log-chain] input read failed; check incomplete, exit 1`);
+    return 1;
+  }
+  if (checkedInputs > 0) console.log(`[check-decision-log-chain] advisory complete: ${warningCount} warning(s), non-blocking, exit 0`);
   return 0;
 }
 

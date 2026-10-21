@@ -373,3 +373,18 @@ describe("ORACLE-N4-REPORT-ONLY writing reports", () => {
     expect(cli.stdout).not.toContain("P5人工标注尚未提供");
   });
 });
+
+
+describe("N10 CLI root diagnostics", () => {
+  it("names invalid or unreadable roots while preserving exit 1", () => {
+    const missing = join(temp(), "missing");
+    for (const [root, pattern] of [["relative", /requires --root <absolute package root>.*received:/], [missing, /cannot read root/]]) {
+      const result = spawnSync(process.execPath, [join(ROOT, "tools/cli/check-skill-consistency.mjs"), "--root", root], { cwd: ROOT, encoding: "utf8", timeout: 30_000 });
+      const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
+      expect(result.status).toBe(1);
+      expect(output).toMatch(pattern);
+      expect(output).toContain(root);
+      expect(output).not.toContain("Node.js v");
+    }
+  });
+});
