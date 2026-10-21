@@ -107,3 +107,43 @@ describe("human-confirm recordConfirmation", () => {
     }
   });
 });
+
+describe("P8 human confirmation publish executor", () => {
+  function fixture() {
+    const cwd=tempRoot("wh-human-budget-");
+    const git=(args)=>execFileSync('git',args,{cwd,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
+    git(['init','-q','-b','main']);git(['config','user.name','tests']);git(['config','user.email','tests@example.test']);
+    writeFileSync(join(cwd,'one'),'one');git(['add','.']);git(['commit','-qm','one']);
+    const dir=join(cwd,'records'),lockDir=join(cwd,'locks');mkdirSync(dir);mkdirSync(lockDir);
+    return {cwd,dir,lockDir};
+  }
+  const fields={stage:'build-code',decision:'continue',reply:'继续',materialRefs:[]};
+  it("awaits only atomic publish and uses the supplied business lock directory",async()=>{
+    const options=fixture();let request;
+    const result=await recordConfirmation(fields,{...options,performWrite:async(r,actual)=>{
+      request=r;expect(readdirSync(options.lockDir)).toContain('.human-confirm.lock');expect(readdirSync(options.dir)).toEqual([]);
+      await new Promise(resolve=>setTimeout(resolve,5));return actual();
+    }});
+    expect(request).toMatchObject({kind:'publish',path:result.path,incomingFiles:2});
+    expect(request.bytes).toBe(Buffer.byteLength(readFileSync(result.path)));
+    expect(readdirSync(options.lockDir)).toEqual([]);
+  });
+  it("refuses before creating confirmation/temp bytes and releases the business lock",async()=>{
+    const options=fixture();
+    await expect(recordConfirmation(fields,{...options,performWrite:async()=>{throw Object.assign(new Error('full'),{code:'TASK_DISK_BUDGET_EXCEEDED'});}})).rejects.toMatchObject({code:'TASK_DISK_BUDGET_EXCEEDED'});
+    expect(readdirSync(options.dir)).toEqual([]);expect(readdirSync(options.lockDir)).toEqual([]);
+  });
+});
+
+it("P8 human publication rechecks its storage after awaiting the executor",async()=>{
+  const cwd=tempRoot('wh-human-race-');
+  const run=(args)=>execFileSync('git',args,{cwd,stdio:['ignore','pipe','pipe']});
+  run(['init','-q','-b','main']);run(['config','user.name','tests']);run(['config','user.email','tests@example.test']);
+  writeFileSync(join(cwd,'one'),'one');run(['add','.']);run(['commit','-qm','one']);
+  const dir=join(cwd,'records'),lockDir=join(cwd,'locks');mkdirSync(dir);mkdirSync(lockDir);
+  const {renameSync}=await import('node:fs');
+  await expect(recordConfirmation({stage:'build-code',decision:'continue',reply:'yes',materialRefs:[]},{cwd,dir,lockDir,performWrite:async(_r,actual)=>{
+    await new Promise(resolve=>setTimeout(resolve,5));renameSync(dir,`${dir}-original`);mkdirSync(dir);return actual();
+  }})).rejects.toMatchObject({code:'ANCESTOR_REPLACED'});
+  expect(readdirSync(dir)).toEqual([]);expect(readdirSync(`${dir}-original`)).toEqual([]);expect(readdirSync(lockDir)).toEqual([]);
+});

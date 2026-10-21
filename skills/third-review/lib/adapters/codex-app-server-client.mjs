@@ -17,6 +17,11 @@ const input = JSON.parse(raw);
 const sourceCodexHome = process.env.CODEX_HOME ?? path.join(os.homedir(), ".codex");
 const isolatedCodexHome = fs.mkdtempSync(path.join(os.tmpdir(), "3rd-review-codex-home-"));
 const permissionProfile = "review_packet";
+function reportCleanupError(error, cleanupStage) {
+  const detail = { code: error?.code ?? "TEMP_CLEANUP_FAILED", message: String(error?.message ?? error) };
+  process.stderr.write(`${JSON.stringify({ code: "TEMP_CLEANUP_FAILED", cleanup_stage: cleanupStage, error: detail })}\n`);
+  return detail;
+}
 try {
   const auth = path.join(sourceCodexHome, "auth.json");
   if (fs.existsSync(auth)) fs.copyFileSync(auth, path.join(isolatedCodexHome, "auth.json"), fs.constants.COPYFILE_EXCL);
@@ -36,7 +41,8 @@ try {
   ].join("\n");
   fs.writeFileSync(path.join(isolatedCodexHome, "config.toml"), config, { mode: 0o600, flag: "wx" });
 } catch (error) {
-  fs.rmSync(isolatedCodexHome, { recursive: true, force: true });
+  try { fs.rmSync(isolatedCodexHome, { recursive: true, force: true }); }
+  catch (cleanupError) { error.cleanup_error = reportCleanupError(cleanupError, "prepare"); }
   throw error;
 }
 const server = spawn(input.command, ["app-server", "--stdio"], { cwd: input.cwd, env: { ...process.env, CODEX_HOME: isolatedCodexHome }, stdio: ["pipe", "pipe", "pipe"] });
@@ -49,7 +55,7 @@ const send = (message) => server.stdin.write(`${JSON.stringify(message)}\n`);
 const emit = (message) => { const line = `${JSON.stringify(message)}\n`; if (stdoutComplete) { if (recordedStdout.length + line.length > transcriptLimit) stdoutComplete = false; else recordedStdout += line; } process.stdout.write(line); };
 let threadId = null; let turnId = null; let terminal = false; let failed = false; let turnOutcome = null; let interruptRequested = false;
 
-const cleanup = () => { health?.close(); try { fs.rmSync(isolatedCodexHome, { recursive: true, force: true }); } catch { /* private temp cleanup is best effort */ } };
+const cleanup = () => { health?.close(); try { fs.rmSync(isolatedCodexHome, { recursive: true, force: true }); } catch (error) { reportCleanupError(error, "app-server-close"); } };
 const finish = () => { if (terminal) return; terminal = true; if (!server.killed) server.kill("SIGTERM"); };
 const fail = (message) => { failed = true; emit({ type: "error", message }); finish(); };
 const startTurn = () => send({

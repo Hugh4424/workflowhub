@@ -397,7 +397,7 @@ function publish(target, bytes, createOnly, acceptIdentical) {
   }
 }
 
-async function appendRecord(dir, slug, ext, bytes) {
+async function appendRecord(dir, slug, ext, bytes, performWrite) {
   if (typeof slug !== "string" || !/^[a-z0-9-]{1,48}$/.test(slug)) {
     throw failure("INVALID_SLUG", "slug must match [a-z0-9-]{1,48}");
   }
@@ -413,7 +413,9 @@ async function appendRecord(dir, slug, ext, bytes) {
   }
   for (; sequence <= 999; sequence += 1) {
     const name = `${day}-${String(sequence).padStart(3, "0")}-${slug}.${ext}`;
-    try { return publish(destination(root, name), bytes, true, false).path; }
+    const target = destination(root, name);
+    try { return await performWrite({ kind: "publish", path: target.path, bytes: Buffer.byteLength(bytes), incomingFiles: 2 },
+      () => publish(target, bytes, true, false).path); }
     catch (error) { if (error.code !== "EEXIST") throw error; }
   }
   throw failure("RECORD_SEQUENCE_EXHAUSTED", `record sequence exhausted for ${day}: ${root}`);
@@ -562,32 +564,40 @@ function records(dir, operation) {
   return result;
 }
 
-export async function record({ operation, confirmationRef, phase, dir = join(process.cwd(), "quality", "authorizations") } = {}) {
+export async function record({ operation, confirmationRef, phase, cwd = process.cwd(), dir = join(cwd, "quality", "authorizations"), lockDir, performWrite } = {}) {
   requireOperation(operation);
   if (phase !== undefined && (operation !== "commit" || phase !== "build-code")) throw failure("AUTH_SCOPE", "reusable authorization requires explicit build-code commit scope");
   requiredText(confirmationRef, "CONFIRMATION_REFERENCE_REQUIRED", "confirmationRef");
   requiredText(dir, "INVALID_DIRECTORY", "authorization directory");
-  const cwd = process.cwd();
+  requiredText(cwd, "INVALID_DIRECTORY", "authorization cwd");
+  cwd = rootPath(cwd);
+  if (lockDir !== undefined) requiredText(lockDir, "INVALID_DIRECTORY", "authorization lock directory");
+  if (performWrite !== undefined && typeof performWrite !== "function") throw failure("INVALID_WRITE_EXECUTOR", "performWrite must be a function");
+  performWrite ??= async (_request, actual) => actual();
   const storage = recordDirectory(dir);
-  return withLock(storage, "git-authorize", () => {
+  return withLock(lockDir === undefined ? storage : resolve(cwd, lockDir), "git-authorize", () => {
     const taskScope = phase !== undefined ? assertTaskRepositoryScope(storage, cwd) : undefined;
     if (phase !== undefined && !taskScope) throw failure("AUTH_SCOPE", "reusable authorization requires the task-owned authorization endpoint");
     const { branch, head } = gitIdentity(cwd);
     return appendRecord(storage, `authorize-${operation}`, "json", `${JSON.stringify({
       operation, branch, head, confirmation_ref: confirmationRef, created_at: new Date().toISOString(),
       ...(phase !== undefined ? { phase, ...taskScope } : {}),
-    }, null, 2)}\n`);
+    }, null, 2)}\n`, performWrite);
   });
 }
 
-export async function consume({ operation, stepId, authorizationRef, phase, dir = join(process.cwd(), "quality", "authorizations") } = {}) {
+export async function consume({ operation, stepId, authorizationRef, phase, cwd = process.cwd(), dir = join(cwd, "quality", "authorizations"), lockDir, performWrite } = {}) {
   requireOperation(operation);
   if (phase !== undefined && (operation !== "commit" || phase !== "build-code")) throw failure("AUTH_SCOPE", "reusable authorization requires explicit build-code commit scope");
   requiredText(stepId, "AUTHORIZATION_STEP_REQUIRED", "stepId");
   requiredText(dir, "INVALID_DIRECTORY", "authorization directory");
-  const cwd = process.cwd();
+  requiredText(cwd, "INVALID_DIRECTORY", "authorization cwd");
+  cwd = rootPath(cwd);
+  if (lockDir !== undefined) requiredText(lockDir, "INVALID_DIRECTORY", "authorization lock directory");
+  if (performWrite !== undefined && typeof performWrite !== "function") throw failure("INVALID_WRITE_EXECUTOR", "performWrite must be a function");
+  performWrite ??= async (_request, actual) => actual();
   const storage = recordDirectory(dir);
-  return withLock(storage, "git-authorize", async () => {
+  return withLock(lockDir === undefined ? storage : resolve(cwd, lockDir), "git-authorize", async () => {
     const taskScope = assertTaskRepositoryScope(storage, cwd);
     const { authorizations, consumptions } = records(storage, operation);
     let selected;
@@ -646,7 +656,7 @@ export async function consume({ operation, stepId, authorizationRef, phase, dir 
     const path = await appendRecord(storage, `consumed-${operation}`, "json", `${JSON.stringify({
       operation, step_id: stepId, authorization_ref: grant.path, consumed_at: new Date().toISOString(),
       ...(grant.value.phase !== undefined ? { phase, branch: current.branch, head: current.head } : {}),
-    }, null, 2)}\n`);
+    }, null, 2)}\n`, performWrite);
     const value = JSON.parse(readTarget(destination(storage, basename(path))).toString("utf8"));
     return { ...value, path };
   });

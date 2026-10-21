@@ -3,7 +3,7 @@ import agNativeAdapter from "../../skills/third-review/lib/adapters/antigravity.
 import { createHealthRunner } from "../../skills/third-review/lib/health-runner.mjs";
 import { execFileSync, spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { closeSync, constants, cpSync, existsSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, realpathSync, readSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { closeSync, constants, cpSync, existsSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, realpathSync, readSync, rmSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { homedir, tmpdir, userInfo } from "node:os";
 import { redactHostPathText, redactProviderHostPaths } from "./provider-material-projection.mjs";
@@ -202,10 +202,30 @@ function missingPromptConstraints(request, packet) {
   return missing;
 }
 
+function reportOcrCleanupFailure(role, error) {
+  const line = `${JSON.stringify({ code: "TEMP_CLEANUP_FAILED", resource_role: role,
+    error: { code: error?.code ?? "ERROR", message: String(error?.message ?? error) } })}\n`;
+  try { process.stderr.write(line); }
+  catch {
+    // A broken diagnostic stream must not replace an executor result. Try the
+    // raw descriptor once; a closed descriptor cannot be made observable here.
+    try { writeSync(2, line); } catch { /* both diagnostic sinks unavailable */ }
+  }
+}
+function cleanupOcrDirectories(entries) {
+  for (const [role, root] of entries) {
+    if (root === null) continue;
+    try { rmSync(root, { recursive: true, force: true }); }
+    catch (error) { reportOcrCleanupFailure(role, error); }
+  }
+}
+
 function materializeAndInspect(bundleRoot, files) {
-  const packetRoot = mkdtempSync(join(tmpdir(), "workflowhub-ocr-packet-"));
-  const ruleRoot = mkdtempSync(join(tmpdir(), "workflowhub-ocr-rule-"));
+  let packetRoot = null;
+  let ruleRoot = null;
   try {
+    packetRoot = mkdtempSync(join(tmpdir(), "workflowhub-ocr-packet-"));
+    ruleRoot = mkdtempSync(join(tmpdir(), "workflowhub-ocr-rule-"));
     copyPacket(bundleRoot, packetRoot, files);
     command(packetRoot, ["git", "init", "-q", "."]);
     const version = command(packetRoot, ["ocr", "--version"]).trim();
@@ -229,8 +249,7 @@ function materializeAndInspect(bundleRoot, files) {
     const rules = JSON.parse(command(packetRoot, ["ocr", "delegate", "rule", "--rule", rulePath, "--format", "json", ...reviewable]));
     return { packetRoot, ruleRoot, version, preview, rules, manifest: materialManifest(packetRoot) };
   } catch (error) {
-    rmSync(packetRoot, { recursive: true, force: true });
-    rmSync(ruleRoot, { recursive: true, force: true });
+    cleanupOcrDirectories([["packet", packetRoot], ["rule", ruleRoot]]);
     throw error;
   }
 }
@@ -282,22 +301,22 @@ export async function runOcrDelegationRound(request, {
   }
   const missingConstraints = missingPromptConstraints(request, packet);
   if (missingConstraints.length > 0) {
-    rmSync(packet.packetRoot, { recursive: true, force: true });
-    rmSync(packet.ruleRoot, { recursive: true, force: true });
+    cleanupOcrDirectories([["packet", packet.packetRoot]]);
+    cleanupOcrDirectories([["rule", packet.ruleRoot]]);
     return unavailable(request, materialId, "OCR_PROMPT_CONSTRAINTS_MISSING", "OCR prompt must prohibit Agent/subagent tools and wait/poll tools before dispatch", {
       missing_constraints: missingConstraints,
     });
   }
   if (typeof executor !== "function") {
-    rmSync(packet.packetRoot, { recursive: true, force: true });
-    rmSync(packet.ruleRoot, { recursive: true, force: true });
+    cleanupOcrDirectories([["packet", packet.packetRoot]]);
+    cleanupOcrDirectories([["rule", packet.ruleRoot]]);
     return unavailable(request, materialId, "OCR_DELEGATION_UNAVAILABLE", "host OCR delegation executor is unavailable; no substituted executor was used", {
       ocr: { version: packet.version, preview: packet.preview, rules: packet.rules, manifest: packet.manifest },
     });
   }
   if (signal?.aborted) {
-    rmSync(packet.packetRoot, { recursive: true, force: true });
-    rmSync(packet.ruleRoot, { recursive: true, force: true });
+    cleanupOcrDirectories([["packet", packet.packetRoot]]);
+    cleanupOcrDirectories([["rule", packet.ruleRoot]]);
     return unavailable(request, materialId, "OCR_EXECUTOR_CANCELLED", "OCR executor was cancelled before dispatch");
   }
   let cancellationHandler = null;
@@ -316,8 +335,8 @@ export async function runOcrDelegationRound(request, {
   if (signal?.aborted) forwardAbort();
   if (executorController.signal.aborted) {
     signal?.removeEventListener("abort", forwardAbort);
-    rmSync(packet.packetRoot, { recursive: true, force: true });
-    rmSync(packet.ruleRoot, { recursive: true, force: true });
+    cleanupOcrDirectories([["packet", packet.packetRoot]]);
+    cleanupOcrDirectories([["rule", packet.ruleRoot]]);
     return unavailable(request, materialId, "OCR_EXECUTOR_CANCELLED", "OCR executor was cancelled before dispatch");
   }
   const abortWait = waitForAbort(executorController.signal);
@@ -360,10 +379,10 @@ export async function runOcrDelegationRound(request, {
           deferredPacketCleanup = cancellationPromise
             .then((lateResult) => lateResult?.cleanup ?? executionPromise, () => executionPromise)
             .then(() => {
-              rmSync(packet.packetRoot, { recursive: true, force: true });
+              cleanupOcrDirectories([["packet", packet.packetRoot]]);
             }, () => {
-              rmSync(packet.packetRoot, { recursive: true, force: true });
-            });
+              cleanupOcrDirectories([["packet", packet.packetRoot]]);
+            }).catch(error => reportOcrCleanupFailure("deferred-packet", error));
         }
       }
       const settled = await settleWithin(executionPromise, Math.max(1, deadline - Date.now()));
@@ -375,10 +394,10 @@ export async function runOcrDelegationRound(request, {
         if (!settled.settled || cancellationResult?.confirmed === false) {
           preservePacketUntilExecutorExit = true;
           deferredPacketCleanup = Promise.resolve(cleanupWait).then(() => {
-            rmSync(packet.packetRoot, { recursive: true, force: true });
+            cleanupOcrDirectories([["packet", packet.packetRoot]]);
           }, () => {
-            rmSync(packet.packetRoot, { recursive: true, force: true });
-          });
+            cleanupOcrDirectories([["packet", packet.packetRoot]]);
+          }).catch(error => reportOcrCleanupFailure("deferred-packet", error));
         }
       }
       const observed=settled.settled && !settled.error && settled.value && typeof settled.value==="object" && !Array.isArray(settled.value) ? settled.value : null;
@@ -441,11 +460,11 @@ export async function runOcrDelegationRound(request, {
   } finally {
     signal?.removeEventListener("abort", forwardAbort);
     abortWait.dispose();
-    rmSync(packet.ruleRoot, { recursive: true, force: true });
+    cleanupOcrDirectories([["rule", packet.ruleRoot]]);
     if (preservePacketUntilExecutorExit) {
       void deferredPacketCleanup;
     } else {
-      rmSync(packet.packetRoot, { recursive: true, force: true });
+      cleanupOcrDirectories([["packet", packet.packetRoot]]);
     }
   }
 }

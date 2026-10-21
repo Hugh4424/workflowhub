@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { openTask } from "../../runtime/task/task-handle.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const TASK = realpathSync(process.env.N10_TASK_ROOT ?? "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n10-finite-check-wiring-20261020");
@@ -15,7 +16,7 @@ const temporary = [];
 const hash = bytes => createHash("sha256").update(bytes).digest("hex");
 afterEach(() => { for (const root of temporary.splice(0)) rmSync(root, { recursive: true, force: true }); });
 
-function run(args, scenario) {
+async function run(args, scenario) {
   const env = { ...process.env }; delete env.RUN_CHECKS_FORCE_FAIL_CHECKER;
   const result = spawnSync(process.execPath, [CLI, ...args], { cwd: ROOT, env, encoding: "utf8", timeout: 30_000, maxBuffer: 8 * 1024 * 1024 });
   expect(result.error).toBeUndefined();
@@ -29,10 +30,8 @@ function run(args, scenario) {
     const bytes = Buffer.from(result.stdout, "utf8");
     let ref = readdirSync(dir).filter(name => name.endsWith("-p5-n9-real-task.json")).map(name => join(dir, name)).find(path => readFileSync(path).equals(bytes));
     if (!ref) {
-      const writer = spawnSync(process.execPath, [join(ROOT, "runtime/interface/safe-write.mjs"), "--root", dir, "--append", "--slug", "p5-n9-real-task", "--ext", "json"], { cwd: ROOT, input: bytes, encoding: "utf8", timeout: 30_000 });
-      expect(writer.error).toBeUndefined(); expect(writer.signal).toBeNull();
-      expect(writer.status, writer.stderr).toBe(0);
-      ref = JSON.parse(writer.stdout).path;
+      const owner = openTask(TASK, { projectName: "workflowhub", taskId: "n10-finite-check-wiring-20261020" });
+      ref = await owner.appendRecord({ dir: "quality/evidence/n10-finite-check-wiring-20261020/raw", slug: "p5-n9-real-task", ext: "json", bytes });
     }
     const saved = readFileSync(ref);
     expect(saved.equals(bytes)).toBe(true); expect(hash(saved)).toBe(hash(bytes));
@@ -74,14 +73,14 @@ function report(result) {
   return data;
 }
 
-describe("ORACLE-N10-FINITE-SET T023", () => {
-  it("[AC-SET-3][AC-SET-6] real N10 task is consumed from the authenticated cwd through the public CLI", () => {
-    const data = report(run(["--task-path", TASK], "N10-real-task"));
+describe("ORACLE-N10-FINITE-SET T023", async () => {
+  it("[AC-SET-3][AC-SET-6] real N10 task is consumed from the authenticated cwd through the public CLI", async () => {
+    const data = report(await run(["--task-path", TASK], "N10-real-task"));
     expect(data.task_id).toBe("n10-finite-check-wiring-20261020");
     expect(data.material_root).toBe(join(ROOT, "specs/n10-finite-check-wiring-20261020"));
   });
 
-  it("[AC-SET-3][AC-SET-6] the same named original-requirement ring completes, detects its missing input and restores", () => {
+  it("[AC-SET-3][AC-SET-6] the same named original-requirement ring completes, detects its missing input and restores", async () => {
     const root = mkdtempSync(join(realpathSync(tmpdir()), "n10-owned-ring-")); temporary.push(root);
     const ref = "quality/evidence/raw-requirements/n10-controlled.md";
     const file = join(root, ref);
@@ -89,12 +88,12 @@ describe("ORACLE-N10-FINITE-SET T023", () => {
     mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, bytes);
     const actual = JSON.parse(readFileSync(join(TASK, "task.json"), "utf8"));
     writeFileSync(join(root, "task.json"), JSON.stringify({ task_id: actual.task_id, target_repo_root: ROOT, baseline_commit: actual.baseline_commit, inputs: { raw_requirement: { ref, sha256: hash(bytes) } } }));
-    const positive = report(run(["--task-path", root], "named-ring-positive"));
+    const positive = report(await run(["--task-path", root], "named-ring-positive"));
     const target = positive.rings.find(row => row.ring === 1);
     expect(target.state).toBe("completed");
     expect(target.basis.some(entry => entry.ref === ref && entry.sha256 === hash(bytes))).toBe(true);
     rmSync(file);
-    const missing = report(run(["--task-path", root], "named-ring-missing"));
+    const missing = report(await run(["--task-path", root], "named-ring-missing"));
     const missingTarget = missing.rings.find(row => row.ring === 1);
     expect(missingTarget.state).not.toBe("completed");
     expect(JSON.stringify(missingTarget.basis)).toMatch(/未取得|不可读|缺失/u);
@@ -102,22 +101,22 @@ describe("ORACLE-N10-FINITE-SET T023", () => {
     writeFileSync(file, bytes);
     expect(readFileSync(file).equals(bytes)).toBe(true);
     expect(hash(readFileSync(file))).toBe(hash(bytes));
-    const restored = report(run(["--task-path", root], "named-ring-restored"));
+    const restored = report(await run(["--task-path", root], "named-ring-restored"));
     expect(restored.rings.find(row => row.ring === 1).state).toBe("completed");
     console.log(JSON.stringify({ scenario: "named-ring-restoration", ref, sha256: hash(bytes), restored_same_bytes: true, cleanup: "afterEach removes only the self-created minimal task", boundary: "one controlled ring; other incomplete rings are not evidence of detection" }));
   });
 
-  it("[AC-SET-3] missing task exits two and invalid arguments exit one without partial JSON", () => {
+  it("[AC-SET-3] missing task exits two and invalid arguments exit one without partial JSON", async () => {
     const root = mkdtempSync(join(realpathSync(tmpdir()), "n10-bad-task-")); temporary.push(root);
     const missing = join(root, "absent"); expect(existsSync(missing)).toBe(false);
     for (const [args, status] of [[["--task-path", missing], 2], [["--task-path"], 1], [["--task-path", TASK, "extra"], 1]]) {
-      const result = run(args, "bad-task-or-arguments");
+      const result = await run(args, "bad-task-or-arguments");
       expect(result.status).toBe(status); expect(result.stdout).toBe(""); expect(result.stderr.trim()).not.toBe("");
     }
   });
 
-  it("[AC-SET-3][AC-SET-4] no arguments retain the existing successful six-checker aggregate mode", () => {
-    const result = run([], "no-arguments-aggregate");
+  it("[AC-SET-3][AC-SET-4] no arguments retain the existing successful six-checker aggregate mode", async () => {
+    const result = await run([], "no-arguments-aggregate");
     expect(result.status, result.stderr).toBe(0);
     expect((result.stdout.match(/\[run-checks\] running /gu) ?? []).length).toBe(6);
     expect(result.stdout).toContain("[run-checks] ALL CHECKS PASSED");

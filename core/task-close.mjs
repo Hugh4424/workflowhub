@@ -394,18 +394,19 @@ export function closeConfirmationStage(taskDir) {
 export async function confirmClosePlan({ taskDir, planRef, outcome = "confirmed", replyText } = {}) {
   assertPostWriter(taskDir);
   const c = contextForPlan(taskDir, planRef); const plan = readPlan(c, planRef);
+  const task=openTask(c.taskDir,{projectName:c.manifest.project_name,taskId:c.manifest.task_id});
   if (plan.mode === "post-cleanup-archive") c.worktree = c.root;
   else realDirectory(c.worktree);
   if (!["confirmed", "rejected", "timeout"].includes(outcome)) throw failure("CONFIRMATION_OUTCOME", "unsupported close decision");
   if (outcome === "timeout") {
     if (replyText !== undefined && replyText !== "") throw failure("CONFIRMATION_REPLY", "timeout must not invent a human reply");
-    return { status: "blocked", outcome, confirmation_ref: await writeEvidence(c, "close-timeout", { plan_ref: planRef, outcome, recorded_at: new Date().toISOString() }) };
+    return { status: "blocked", outcome, confirmation_ref: await task.appendRecord({dir:"quality/evidence/close",slug:"close-timeout",ext:"json",bytes:JSON.stringify({ plan_ref: planRef, outcome, recorded_at: new Date().toISOString() },null,2)+"\n"}) };
   }
   const bytes = planBytes(c, planRef);
   if (!same(validatePlan(JSON.parse(bytes), c), plan)) throw failure("CLOSE_PLAN_CHANGED", "close plan changed while its confirmation was prepared");
   const remote = remoteIdentity(c, plan.remote);
   if (plan.source.remote_identity !== undefined && !same(remote, plan.source.remote_identity)) throw failure("REMOTE_SCOPE_CHANGED", "actual remote destinations differ from the displayed plan source");
-  const value = await recordConfirmation({ stage: closeConfirmationStage(c.taskDir), decision: outcome, reply: replyText, materialRefs: [planRef, `${planRef}#sha256=${digest(bytes)}`, `${planRef}#remote=${encodeURIComponent(JSON.stringify(remote))}`] }, { cwd: c.worktree, dir: join(c.taskDir, "quality", "evidence", "human-confirmations") });
+  const value = await task.recordConfirmation({ stage: closeConfirmationStage(c.taskDir), decision: outcome, reply: replyText, materialRefs: [planRef, `${planRef}#sha256=${digest(bytes)}`, `${planRef}#remote=${encodeURIComponent(JSON.stringify(remote))}`] }, { cwd: c.worktree });
   if (!same(remoteIdentity(c, plan.remote), remote)) throw failure("REMOTE_SCOPE_CHANGED", "remote destinations changed while their confirmation was recorded; original reply remains unchanged");
   if (!planBytes(c, planRef).equals(bytes)) throw failure("CLOSE_PLAN_CHANGED", "close plan changed while its confirmation was recorded; original reply remains unchanged");
   return { status: outcome === "confirmed" ? "confirmed" : "blocked", outcome, confirmation_ref: value.path, record: value };

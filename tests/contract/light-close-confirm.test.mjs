@@ -45,3 +45,16 @@ it.each(['plan','hash','remote','reply','rejected'])('legacy planning confirmati
 it('stage-runtime rejects conflicting explicit stage before recording',async()=>{const s=fixture(),p=await prepare(s);await expect(runtime(s,'make-decision',{stage:'verify-code',decision:'confirmed',reply:'Owned reply',materialRefs:[p.plan_ref]})).rejects.toThrow('confirmation stage differs');});
 it('stage-runtime preserves ordinary non-close confirmation fallback',async()=>{const s=fixture(),out=await runtime(s,'make-decision',{decision:'confirmed',reply:'Owned ordinary decision',materialRefs:['spec.md']});expect(JSON.parse(readFileSync(out.path))).toMatchObject({stage:'make-decision',reply:'Owned ordinary decision',material_refs:['spec.md']});});
 it.each(['multiple','relative'])('stage-runtime rejects owned close plan %s reference',async kind=>{const s=fixture(),p=await prepare(s);const refs=kind==='multiple'?[p.plan_ref,'spec.md']:[relative(s.worktree,p.plan_ref)];await expect(runtime(s,'make-decision',{decision:'confirmed',reply:'Owned displayed close',materialRefs:refs})).rejects.toThrow();});
+
+it.each(['timeout','confirmed','rejected'])('P8 close %s refuses default full evidence without a partial confirmation',async outcome=>{
+ const {truncateSync,readdirSync,statSync}=await import('node:fs');
+ const {DEFAULT_TASK_DISK_LIMITS,readTaskDiskUsage}=await import('../../runtime/evidence/disk-budget.mjs');
+ const s=fixture(),p=await prepare(s),planBefore=readFileSync(p.plan_ref),factsBefore=readFileSync(join(s.taskDir,'facts.jsonl'));
+ const evidence=join(s.taskDir,'quality/evidence'),ballast=join(evidence,'owned-budget-sparse');writeFileSync(ballast,'');
+ truncateSync(ballast,DEFAULT_TASK_DISK_LIMITS.evidence.hardBytes-readTaskDiskUsage(s.taskDir).groups.evidence.bytes);
+ const files=dir=>readdirSync(dir,{withFileTypes:true}).flatMap(e=>e.isDirectory()?files(join(dir,e.name)):[join(dir,e.name)]).sort();
+ const before=files(evidence),sparseSize=statSync(ballast).size;
+ expect(readTaskDiskUsage(s.taskDir).groups.evidence.bytes).toBe(DEFAULT_TASK_DISK_LIMITS.evidence.hardBytes);
+ await expect(confirmClosePlan({taskDir:s.taskDir,planRef:p.plan_ref,outcome,...(outcome==='timeout'?{}:{replyText:'Owned actual reply'})})).rejects.toMatchObject({code:'DISK_BUDGET_EXCEEDED'});
+ expect(files(evidence)).toEqual(before);expect(readFileSync(p.plan_ref)).toEqual(planBefore);expect(readFileSync(join(s.taskDir,'facts.jsonl'))).toEqual(factsBefore);expect(statSync(ballast).size).toBe(sparseSize);
+});

@@ -1033,7 +1033,7 @@ helper首consumer为provider-client #invokeCli wh-review-public，创建marker�
 失败：用计划文字/字段存在冒充已接线、改生产代码迁就未定字段、或无参数行为变化。
 证据：`--task-path` stdout/exit、无参数 stdout/exit、N9 merge commit `b8856e5e`。
 
-- [ ] **AC-SET-4**：维护者一次重跑完整集合：现有总检查能跑全部适用检查并点名问题；报告可重定向留证。G1 的 N1 成本读数不属本卡，交 N1/N11 复核，本卡只验重跑入口。
+- [ ] **AC-SET-4**：维护者一次重跑完整集合：现有总检查能跑全部适用检查并点名问题；报告可重定向留证。G1 的成本验收由本卡复用 N1 真实消费并披露缺报；当前消费 incomplete，成本收益未验证，不以重跑入口通过冒成本验收完成。
 验证：P7 实施者执行 `node tools/cli/run-checks.mjs`（N9 已合入，另跑 `--task-path`），把 stdout 重定向到 `quality/tests/`；执行 owner 是 P7 实施者，verify-code 复核。
 通过：一条命令覆盖六段 + 材料段（显式根时）；报告点名失败项；可重定向；不要求记三条命令；未跑项明确列出。
 失败：需要多入口/漏跑、报告不可留证、或把未跑写成已跑。

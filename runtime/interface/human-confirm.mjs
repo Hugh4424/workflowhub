@@ -253,52 +253,53 @@ function currentHead(cwd) {
   }
 }
 
-function appendConfirmation(storage, slug, record) {
+async function appendConfirmation(storage, slug, record, performWrite) {
   const day = record.created_at.slice(0, 10);
+  const serialized = `${JSON.stringify(record, null, 2)}\n`;
   let sequence = 1;
   // Historical hash-named files are ignored; no old confirmation is read.
   for (const name of readdirSync(storage.root)) {
     const match = name.match(/^(\d{4}-\d{2}-\d{2})-(\d{3})-[a-z0-9-]+\.json$/);
     if (match?.[1] === day) sequence = Math.max(sequence, Number(match[2]) + 1);
   }
-  const temporary = join(storage.root, `.${randomUUID()}.tmp`);
-  let fd;
-  let identity;
-  try {
-    storage.verify();
-    fd = openSync(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
-    identity = fstatSync(fd);
-    if (!sameFile(lstatSync(temporary), identity)) throw errorWithCode("ANCESTOR_REPLACED", "confirmation temporary identity changed");
-    writeFileSync(fd, `${JSON.stringify(record, null, 2)}\n`);
-    fsyncSync(fd);
-    closeSync(fd);
-    fd = undefined;
-    for (; sequence <= 999; sequence += 1) {
-      storage.verify();
-      const named = lstatSync(temporary);
-      if (named.isSymbolicLink() || !sameFile(named, identity)) throw errorWithCode("ANCESTOR_REPLACED", "confirmation temporary replaced before publication");
-      const path = join(storage.root, `${day}-${String(sequence).padStart(3, "0")}-${slug}.json`);
-      try { linkSync(temporary, path); }
-      catch (error) {
-        if (error.code !== "EEXIST") throw error;
-        if (lstatSync(path).isSymbolicLink()) throw errorWithCode("SYMLINK_TARGET", `symlinked confirmation destination: ${path}`);
-        continue;
-      }
-      storage.verify();
-      const published = lstatSync(path);
-      if (published.isSymbolicLink() || !sameFile(published, identity)) throw errorWithCode("ANCESTOR_REPLACED", "confirmation changed during publication");
-      syncDirectory(storage);
-      return { path, ...record };
-    }
-    throw errorWithCode("RECORD_SEQUENCE_EXHAUSTED", `confirmation sequence exhausted for ${day}`);
-  } finally {
-    if (fd !== undefined) closeSync(fd);
-    if (identity) {
-      storage.verify();
-      const named = optionalStat(temporary);
-      if (named && !named.isSymbolicLink() && sameFile(named, identity)) unlinkSync(temporary);
-    }
+  for (; sequence <= 999; sequence += 1) {
+    const path = join(storage.root, `${day}-${String(sequence).padStart(3, "0")}-${slug}.json`);
+    try {
+      return await performWrite({ kind: "publish", path, bytes: Buffer.byteLength(serialized), incomingFiles: 2 }, () => {
+        const temporary = join(storage.root, `.${randomUUID()}.tmp`);
+        let fd, identity;
+        try {
+          storage.verify();
+          fd = openSync(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+          identity = fstatSync(fd);
+          if (!sameFile(lstatSync(temporary), identity)) throw errorWithCode("ANCESTOR_REPLACED", "confirmation temporary identity changed");
+          writeFileSync(fd, serialized);
+          fsyncSync(fd); closeSync(fd); fd = undefined;
+          storage.verify();
+          const named = lstatSync(temporary);
+          if (named.isSymbolicLink() || !sameFile(named, identity)) throw errorWithCode("ANCESTOR_REPLACED", "confirmation temporary replaced before publication");
+          try { linkSync(temporary, path); }
+          catch (error) {
+            if (error.code === "EEXIST" && lstatSync(path).isSymbolicLink()) throw errorWithCode("SYMLINK_TARGET", `symlinked confirmation destination: ${path}`);
+            throw error;
+          }
+          storage.verify();
+          const published = lstatSync(path);
+          if (published.isSymbolicLink() || !sameFile(published, identity)) throw errorWithCode("ANCESTOR_REPLACED", "confirmation changed during publication");
+          syncDirectory(storage);
+          return { path, ...record };
+        } finally {
+          if (fd !== undefined) closeSync(fd);
+          if (identity) {
+            storage.verify();
+            const named = optionalStat(temporary);
+            if (named && !named.isSymbolicLink() && sameFile(named, identity)) unlinkSync(temporary);
+          }
+        }
+      });
+    } catch (error) { if (error.code !== "EEXIST") throw error; }
   }
+  throw errorWithCode("RECORD_SEQUENCE_EXHAUSTED", `confirmation sequence exhausted for ${day}`);
 }
 
 export async function recordConfirmation(fields, context = {}) {
@@ -311,18 +312,21 @@ export async function recordConfirmation(fields, context = {}) {
     || `${stage}-${decision}`.length > 48) throw errorWithCode("INVALID_CONFIRMATION", "stage-decision must match [a-z0-9-]{1,48}");
   if (!Array.isArray(materialRefs) || materialRefs.some((ref) => typeof ref !== "string" || !ref || ref.includes("\0"))) throw errorWithCode("INVALID_MATERIAL_REFS", "materialRefs must be an array of nonempty plain path strings");
   if (!context || typeof context !== "object" || Array.isArray(context)
-    || Object.keys(context).some((key) => !["cwd", "dir"].includes(key))) throw errorWithCode("INVALID_CONTEXT", "context accepts only cwd and dir");
+    || Object.keys(context).some((key) => !["cwd", "dir", "lockDir", "performWrite"].includes(key))) throw errorWithCode("INVALID_CONTEXT", "context accepts only cwd, dir, lockDir and performWrite");
   if (context.cwd !== undefined && (typeof context.cwd !== "string" || !context.cwd)) throw errorWithCode("INVALID_CONTEXT", "context cwd must be a nonempty path");
   if (context.dir !== undefined && (typeof context.dir !== "string" || !context.dir)) throw errorWithCode("INVALID_CONTEXT", "context dir must be a nonempty path");
+  if (context.lockDir !== undefined && (typeof context.lockDir !== "string" || !context.lockDir)) throw errorWithCode("INVALID_CONTEXT", "context lockDir must be a nonempty path");
+  if (context.performWrite !== undefined && typeof context.performWrite !== "function") throw errorWithCode("INVALID_CONTEXT", "context performWrite must be a function");
+  const performWrite = context.performWrite ?? (async (_request, actual) => actual());
   // Bind each call to its actual cwd before waiting; never cache import-time HEAD.
   const cwd = realpathSync(resolve(context.cwd ?? process.cwd()));
   currentHead(cwd); // Reject non-Git/unborn/failed contexts before any writes.
   const storage = ensureStorage(context.dir === undefined ? join(cwd, "quality", "confirmations") : resolve(cwd, context.dir));
-  return withConfirmationLock(storage.root, "human-confirm", () => {
+  return withConfirmationLock(context.lockDir === undefined ? storage.root : resolve(cwd, context.lockDir), "human-confirm", () => {
     storage.verify();
     return appendConfirmation(storage, `${stage}-${decision}`, {
       stage, decision, reply, material_refs: [...materialRefs], head: currentHead(cwd), created_at: new Date().toISOString(),
-    });
+    }, performWrite);
   });
 }
 

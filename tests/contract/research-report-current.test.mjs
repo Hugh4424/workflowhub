@@ -239,3 +239,17 @@ describe("T001 research report contract", () => {
   it("projects actual corrupt report bytes as visible integrity unavailable rather than missing",async()=>{const f=await storage(),ref="quality/evidence/research/2026-10-03-001-corrupt.json",raw="not json";await f.task.writeRecordAtomic(ref,raw);const records=listCurrentResearchReports({task:f.task,...expectedIdentity});expect(records).toHaveLength(1);expect(records[0].error).toContain("research report JSON is invalid");expect(deriveResearchStatus(records)).toMatchObject({status:"unavailable",reason:"research_record_integrity_failure",report_ref:ref});expect(f.task.readRecord(ref)).toBe(raw);});
   it("reads an old report and its retired binding fields passively instead of enforcing snapshot freshness or rewriting it",async()=>{const f=await storage(),ref="quality/evidence/research/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json",value={...report(),snapshot_tree:"a".repeat(40),material_scope_revision:"revision-old"},raw=JSON.stringify(value,null,2)+"\r\n";await f.task.writeRecordAtomic(ref,raw);const records=listCurrentResearchReports({task:f.task,...expectedIdentity,snapshotTree:"b".repeat(40),materialScopeRevision:"revision-new"});expect(records).toHaveLength(1);expect(records[0]).toMatchObject({ref,raw,value});expect(deriveResearchStatus(records).status).toBe("completed");expect(f.task.readRecord(ref)).toBe(raw);await expect(publishResearchReport({recordDir:f.recordDir,report:value,...expectedIdentity})).rejects.toThrow(/retired research bindings are read-only/);expect(f.task.readRecord(ref)).toBe(raw);});
 });
+
+it("P8 research publisher refuses the default evidence hard limit without changing old reports",async()=>{
+  const {truncateSync,writeFileSync,readdirSync,statSync}=await import('node:fs');
+  const {DEFAULT_TASK_DISK_LIMITS,readTaskDiskUsage}=await import('../../runtime/evidence/disk-budget.mjs');
+  const f=await storage();
+  const original=await publishResearchReport({recordDir:f.recordDir,slug:'before-full',report:report('skipped'),...expectedIdentity});
+  const originalBytes=readFileSync(original.path),before=readdirSync(f.recordDir).sort();
+  const ballast=join(f.task.taskPath,'quality/evidence/owned-budget-sparse');writeFileSync(ballast,'');
+  truncateSync(ballast,DEFAULT_TASK_DISK_LIMITS.evidence.hardBytes-readTaskDiskUsage(f.task.taskPath).groups.evidence.bytes);
+  const sparseSize=statSync(ballast).size;
+  expect(readTaskDiskUsage(f.task.taskPath).groups.evidence.bytes).toBe(DEFAULT_TASK_DISK_LIMITS.evidence.hardBytes);
+  await expect(publishResearchReport({recordDir:f.recordDir,slug:'refused-full',report:report('unavailable'),...expectedIdentity})).rejects.toMatchObject({code:'DISK_BUDGET_EXCEEDED'});
+  expect(readdirSync(f.recordDir).sort()).toEqual(before);expect(readFileSync(original.path)).toEqual(originalBytes);expect(statSync(ballast).size).toBe(sparseSize);
+});

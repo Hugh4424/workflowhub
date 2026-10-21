@@ -6,13 +6,14 @@ import { createRequire } from "node:module";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { appendRecord, createFileOnce } from "../../runtime/interface/safe-write.mjs";
+import { openTask, createTask } from "../../runtime/task/task-handle.mjs";
 
 // ORACLE-N10-FINAL-ACCEPTANCE. Appendix A is authoritative; this is a consumer
 // of first-owner execution originals, not another implementation of their rules.
 const require = createRequire(import.meta.url);
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const TASK = realpathSync(process.env.N10_TASK_ROOT ?? "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n10-finite-check-wiring-20261020");
+const WRITER = openTask(TASK, { projectName: "workflowhub", taskId: "n10-finite-check-wiring-20261020" });
 const MATERIAL = "specs/n10-finite-check-wiring-20261020";
 const BASE = "0c3087580f841d3e38c249466462351c0a3a019e";
 const BEFORE = "b8856e5ef5f18e67b51e9660c662d52efc174a1b";
@@ -58,8 +59,8 @@ async function immutable(dir, name, value) {
     const candidate = join(dir, name);
     if (statSync(candidate).isFile() && candidate.endsWith(`.${fixed.split(".").at(-1)}`) && readFileSync(candidate).equals(bytes)) return candidate;
   }
-  if (!existsSync(fixed)) return (await createFileOnce(dir, name, bytes)).path;
-  return appendRecord(dir, `p7-${name.replace(/\.[^.]+$/, "").toLowerCase().replace(/[^a-z0-9-]/g, "-").slice(0, 40)}`, fixed.split(".").at(-1), bytes);
+  if (!existsSync(fixed)) return (await WRITER.createRecord(relative(WRITER.taskPath, fixed), bytes)).path;
+  return WRITER.appendRecord({dir:relative(WRITER.taskPath,dir), slug:`p7-${name.replace(/\.[^.]+$/, "").toLowerCase().replace(/[^a-z0-9-]/g, "-").slice(0,40)}`, ext:fixed.split(".").at(-1), bytes});
 }
 
 function sameCommand(a, b) {
@@ -80,7 +81,7 @@ async function commandOutput(dir, label, stream, bytes, record, records) {
     catch (error) { console.log(JSON.stringify({deduplication:"unknown",reason:`candidate bytes not obtainable (${error.code??error.name}); preserve new output`,label,stream})); }
   }
   console.log(JSON.stringify({deduplication:"unknown",reason:"No candidate with verified identical argv/cwd/exit/signal/timeout/stream and bytes; preserve new command output",label,stream}));
-  return appendRecord(dir,`p7-${label}-${stream}`.slice(0,48),"txt",incoming);
+  return WRITER.appendRecord({dir:relative(WRITER.taskPath,dir),slug:`p7-${label}-${stream}`.slice(0,48),ext:"txt",bytes:incoming});
 }
 function taskEvidencePath(path) {
   const root=join(TASK,"quality");
@@ -417,11 +418,11 @@ async function publishAggregate({ resultRows = results, commandRecords = command
   aggregate = {
     task: "n10-finite-check-wiring-20261020", phase: "P7", baseline: BASE, oracle: "ORACLE-N10-FINAL-ACCEPTANCE", results, requirement_coverage: requirementRows,
     entrance: Object.fromEntries([1,2,3,4,5,6].map(n => [`P${n}`, { status: setup.inputs_complete ? "pass" : setup.phase === `P${n}` && setup.failure?.code === "ENOENT" ? "missing" : setup.phase === `P${n}` && setup.failure?.code === "EACCES" ? "unavailable" : "incomplete", basis: setup.inputs_complete ? "all declared input checks obtained; not an AC execution/result claim" : `input checks not fully obtained; P7 judgement not executed; ${JSON.stringify(setup.failure ?? null)}`, owner: `P${n}`, refs: [...originals.values()].filter(ref => ref.path.includes(`/P${n}`) || ref.path.includes(`-p${n}-`)) }])),
-    execution: commands, effect: { basis: complete ? "existing controlled negatives and restored originals; current three public CLI modes replayed" : "effect not measured: input collection/AC judgement incomplete; only actual execution records apply", current_commands: commands.length, error: complete ? 0 : null, engineering_cost: "not measured; N1/N11 outside AC-SET-4" },
+    execution: commands, effect: { basis: complete ? "existing controlled negatives and restored originals; current three public CLI modes replayed" : "effect not measured: input collection/AC judgement incomplete; only actual execution records apply", current_commands: commands.length, error: complete ? 0 : null, engineering_cost: "not measured; N10 consumes existing N1 cost originals, reports missing/incomplete and unverified savings; stage-end cost record pending root" },
     reverification: { basis: "P1 039/041; P3 062/063/065/067; P6 073/074; no new upstream implementation mutation", new_repair: "P7 consumer setup and nine evidence-reading assertions fixed; not production target RED", originals: ["quality/tests/2026-10-21-081-p7-initial-setup-machine.json", "quality/tests/2026-10-21-082-p7-original-run2.output", "quality/tests/2026-10-21-083-p7-original-run2-machine.json"], independent_ref: "quality/tests/2026-10-21-087-p7-independent-replay.json", F2P: null, P2P: null, scope: "087 is historical consumer-repair evidence (9/9 and 27/27), not this execution or TCR077 independent reverification; current independent replay belongs to the final Phase evidence", owner: "P7/T033 consumer defects; original Phase owner for actual upstream behavior failure" },
     change_approval: "P7 explicit root authorization; no frozen assertion/spec/archive change", triage: { failures: [...(setup.failure ? [{owner:"P7/T033",input_owner:setup.phase,reason:"input/setup failure; not upstream behavior failure",error:setup.failure}] : []),...failed.map(row=>({id:row.id,owner:row.owner,reason:row.reason}))], repaired_events: [{ "Defect ID": "P7-consumer-setup", description: "hardcoded node_modules path ignored actual resolver", reproducible: true, "Version detected": "first P7 test invocation", Severity: "setup prevents acceptance", Priority: "repair before acceptance", Disposition: "Fixed", "Closed by": "P7 independent replay owner", "Date closed": "2026-10-21", "Change reference": "current P7 test createRequire resolver", "Test reference": "quality/tests/2026-10-21-087-p7-independent-replay.json", "Closure Notes/Verification Status": "independent full36 pass; setup failure is not target RED" }, { "Defect ID": "P7-consumer-readback", description: "nine wrong evidence paths/text predicates/nested mutation summary reads", reproducible: true, "Version detected": "082/083", Severity: "consumer false failure, no upstream production defect", Priority: "repair before acceptance", Disposition: "Fixed", "Closed by": "P7 independent replay owner", "Date closed": "2026-10-21", "Change reference": "current receipt path, anchored top-level summary and original field predicates", "Test reference": "087", "Closure Notes/Verification Status": "independent F2P9/9 + P2P27/27; final metadata revision separately replayed by consumer" }], independent_triage: "root/independent reviewer; implementation owner does not sign quality" },
     writeback: { spec: "unchanged", phase: "P7 current Done supplied after run", implementation: "acceptance test plus runbook; governance registration", tests: "this named test only", reflection: "stage owner; no per-Phase stage-end" },
-    conclusions: { evaluation_and_limits: complete ? "Original 36AC readback/CLI/bytes recorded individually; human semantics remain reviewed-original consumption, not machine judgment or independent quality" : "incomplete: input failure or unexecuted/non-pass AC; no complete readback or effect measurement claimed", plan_deviations_and_causes: "Necessary governance write-set registration authorized; T034 stale constant incomplete corrected against original AC; consumer setup/evidence-reading failures preserved and repaired", insufficiently_tested_features: "N9 actual completion remains report data; provider semantics, real make-decision sequence/300s windows, strict byte non-growth, N8 excluded routes/N11/user journey/P8 not proved", unresolved_incidents: "RC2 strict carrier remains unrepaired, minimal design only (P6/verify-code owner); historical PRD10 vs observed3 RED discrepancy preserved; P8 four disk AC owner remains P8", residual_risks: "GREEN/assets may be mistaken for quality/full acceptance; future source/field drift; material pollution checked by preserved hashes; budget behavior not yet P8 verified", signoff_objects: "root independent OCR/supplemental review and verify-code; final user/close decisions separate; implementer does not self-sign quality" },
+    conclusions: { evaluation_and_limits: complete ? "Original 36AC readback/CLI/bytes recorded individually; human semantics remain reviewed-original consumption, not machine judgment or independent quality" : "incomplete: input failure or unexecuted/non-pass AC; no complete readback or effect measurement claimed", plan_deviations_and_causes: "Necessary governance write-set registration authorized; T034 stale constant incomplete corrected against original AC; consumer setup/evidence-reading failures preserved and repaired", insufficiently_tested_features: "N9 actual completion remains report data; provider semantics, real make-decision sequence/300s windows, strict byte non-growth, N8 excluded routes/N11/user journey/P8 not proved; cost savings unverified", unresolved_incidents: "RC2 strict carrier remains unrepaired, minimal design only (P6/verify-code owner); historical PRD10 vs observed3 RED discrepancy preserved; P8 four disk AC owner remains P8", residual_risks: "GREEN/assets may be mistaken for quality/full acceptance; future source/field drift; material pollution checked by preserved hashes; budget behavior not yet P8 verified", signoff_objects: "root independent OCR/supplemental review and verify-code; final user/close decisions separate; implementer does not self-sign quality" },
     records_13: ["entrance", "readiness", "authorization", "individual results", "execution facts", "effect", "reverification", "change approval", "triage", "writeback", "six conclusions", "anti-self-proof", "failure loop"].map((item,i)=>({item:i+1,name:item,basis:i===1?"P7-data-readiness.json / P7-environment-readiness.json":i===11?"behavior originals/current CLI not summary counters; human semantics not machine signed; no P8 pass":i===12?"failure returns to original owner; preserve raw first failure; no assertion weakening":"existing corresponding aggregate section and original refs"})),
     resident_bytes_ref: residentRef ?? null,
     preserved_materials: unchanged, cleanup: { created_temporary_roots: null, unchanged_authoritative_materials: changed.length === 0, changed },
@@ -453,15 +454,20 @@ function privateSource(name) {
 }
 
 async function isolatedCollector(root, inputPath, timeout) {
+  // Historical TASK is read-only input; this collector owns its write task.
+  mkdirSync(root, {recursive:true});
+  const storageRoot = mkdtempSync(join(root,"owned-storage-"));
+  const owner = await createTask({storageRoot, manifest:{schema_version:"1.0.0",project_name:"workflowhub",task_id:"p7-owned-collector",created_at:new Date().toISOString(),target_repo_root:ROOT,activation_cohort:"post",write_resolution_source:"owned-test",baseline_commit:BASE,issue_ids:[],inputs:{},execution_mode:"per_invocation",record_model:"vnext-single-write"}});
   const childSource = `
 import { readFileSync, mkdirSync, readdirSync, existsSync, statSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, sep } from "node:path";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
-import { appendRecord, createFileOnce } from ${JSON.stringify(repository("runtime/interface/safe-write.mjs"))};
+import { openTask } from ${JSON.stringify(repository("runtime/task/task-handle.mjs"))};
+const WRITER=openTask(${JSON.stringify(owner.taskPath)},{projectName:"workflowhub",taskId:"p7-owned-collector"});
 const ROOT=${JSON.stringify(ROOT)}, TASK=${JSON.stringify(TASK)}, MATERIAL=${JSON.stringify(MATERIAL)}, BASE=${JSON.stringify(BASE)};
-const EVIDENCE=${JSON.stringify(root)}, RAW=join(EVIDENCE,"raw");
+const EVIDENCE=join(WRITER.taskPath,"quality/evidence/collector"), RAW=join(EVIDENCE,"raw");
 const IDS=${JSON.stringify(IDS)}, REQUIREMENT_PHASES=${JSON.stringify(REQUIREMENT_PHASES)};
 const results=[], commands=[], originals=new Map(), beforeHashes=new Map();
 let aggregate, resident, residentRef, chain; const head="private isolated collector fixture";

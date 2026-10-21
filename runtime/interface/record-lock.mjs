@@ -2,8 +2,8 @@ import {
   closeSync, constants, fstatSync, fsyncSync, lstatSync, openSync,
   readFileSync, realpathSync, unlinkSync, writeFileSync,
 } from "node:fs";
-import { randomUUID } from "node:crypto";
-import { constants as osConstants, hostname } from "node:os";
+import { createHash, randomUUID } from "node:crypto";
+import { constants as osConstants, hostname, networkInterfaces } from "node:os";
 import { join, parse, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
@@ -82,6 +82,23 @@ function readOwner(path, storage) {
   } finally { closeSync(fd); }
 }
 
+function machineIdentity() {
+  const macs = new Set();
+  for (const [name, entries] of Object.entries(networkInterfaces())) {
+    if (!/^(?:en\d+|eth\d+|eno\d+|ens\d+|enp\d+(?:s\d+)?(?:f\d+)?|wlan\d+|wl[a-z]\d+(?:s\d+)?(?:f\d+)?|em\d+)$/.test(name)) continue;
+    for (const entry of entries ?? []) {
+      const mac=entry.mac?.toLowerCase();
+      if (!entry.internal && /^[0-9a-f]{2}(?::[0-9a-f]{2}){5}$/.test(mac ?? '') && mac !== '00:00:00:00:00:00') macs.add(mac);
+    }
+  }
+  return macs.size ? createHash('sha256').update([...macs].sort().join('\n')).digest('hex') : null;
+}
+function sameMachine(a,b) {
+  const left=a.host.trim().toLowerCase(),right=b.host.trim().toLowerCase();
+  if(left===right)return true;
+  const pair=/^[a-z0-9-]+$/.test(left)&&right===left+'.local'||/^[a-z0-9-]+$/.test(right)&&left===right+'.local';
+  return pair && /^[a-f0-9]{64}$/.test(a.machine_id ?? '') && /^[a-f0-9]{64}$/.test(b.machine_id ?? '') && a.machine_id===b.machine_id;
+}
 function processAlive(pid) {
   try { process.kill(pid, 0); return true; }
   catch (error) {
@@ -125,7 +142,8 @@ export async function withLock(dir, name, fn, { waitMs = 2000 } = {}) {
   if (!Number.isSafeInteger(waitMs) || waitMs < 0) throw errorWithCode("INVALID_WAIT", "waitMs must be a nonnegative safe integer");
   const storage = storageDirectory(dir);
   const path = join(storage.root, `.${name}.lock`);
-  const owner = { pid: process.pid, host: hostname(), started_at: new Date().toISOString(), nonce: randomUUID() };
+  const machineId = machineIdentity();
+  const owner = { pid: process.pid, host: hostname(), ...(machineId ? {machine_id:machineId} : {}), started_at: new Date().toISOString(), nonce: randomUUID() };
   const started = performance.now();
   let acquired;
   while (!acquired) {
@@ -151,7 +169,7 @@ export async function withLock(dir, name, fn, { waitMs = 2000 } = {}) {
         }
       }
       if (!observed) continue;
-      const sameHost = observed.owner.host.trim().toLowerCase() === owner.host.trim().toLowerCase();
+      const sameHost = sameMachine(observed.owner, owner);
       if (sameHost && !processAlive(observed.owner.pid)) {
         removeObserved(path, storage, observed, false);
         continue;

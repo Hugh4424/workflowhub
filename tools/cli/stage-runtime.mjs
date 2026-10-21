@@ -1299,7 +1299,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     mkdirSync(recordDir, { recursive: true });
     const settlement = input.output_ref !== undefined || input.receipt_ref !== undefined ? captureOutputSettlement(input, recordDir, input.slug ?? `${values.stage}-verify`) : null;
     let captured;
-    try { captured = await captureCommand({ cwd: context.workspace.worktreeRoot, recordDir, slug: input.slug ?? `${values.stage}-verify`,
+    try { captured = await context.task.captureCommand({ cwd: context.workspace.worktreeRoot, slug: input.slug ?? `${values.stage}-verify`,
       ...(input.argv === undefined ? {} : { argv: input.argv }),
       ...((input.shell ?? input.command) === undefined ? {} : { shell: input.shell ?? input.command }),
       ...((input.timeoutMs ?? input.timeout_ms) === undefined ? {} : { timeoutMs: input.timeoutMs ?? input.timeout_ms }),
@@ -1341,17 +1341,12 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       const confirmed = await confirmClosePlan({ taskDir: context.task.taskPath, planRef: refs[0], outcome: fields.decision, replyText: fields.reply });
       return { status: "recorded", path: confirmed.confirmation_ref, ...confirmed.record };
     }
-    return { status: "recorded", ...(await recordConfirmation({ ...fields, stage: values.stage }, { cwd: context.workspace.worktreeRoot, dir: join(context.task.taskPath, "quality", "evidence", "human-confirmations") })) };
+    return { status: "recorded", ...(await context.task.recordConfirmation({ ...fields, stage: values.stage }, { cwd: context.workspace.worktreeRoot })) };
   }
   if (command === "authorize-operation") {
     if (!["commit", "push", "merge", "archive", "cleanup", "pr"].includes(values.operation) || !values["subject-ref"]) throw new TypeError("authorize requires a supported operation and --subject-ref");
-    // The native authorization API intentionally binds process.cwd(). Invoke
-    // its existing CLI in the real worktree; never mutate this process cwd.
-    const output = execFileSync(process.execPath, [fileURLToPath(new URL("../../runtime/interface/git-authorize.mjs", import.meta.url)), "record",
-      "--operation", values.operation, "--confirmation-ref", values["subject-ref"],
-      ...(values.stage === "build-code" && values.operation === "commit" ? ["--phase", "build-code"] : []), "--dir", join(context.task.taskPath, "quality", "evidence", "git-authorizations")],
-      { cwd: context.workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-    return { status: "recorded", ...JSON.parse(output) };
+    const grant=await context.task.recordGitAuthorization({cwd:context.workspace.worktreeRoot,operation:values.operation,confirmationRef:values["subject-ref"],...(values.stage==="build-code"&&values.operation==="commit"?{phase:"build-code"}:{})});
+    return { status: "recorded", ...grant };
   }
   if (command === "run") {
     if (values.stage === PORTABLE_WORKFLOW_STAGE) {
@@ -1512,7 +1507,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
       process.exitCode = 2;
       return;
     }
-    process.stderr.write(`${JSON.stringify({ error: error.message, code: error.code ?? null, stack: error.stack ?? null, output_ref: error.output_ref ?? null, receipt_ref: error.receipt_ref ?? null })}\n`);
+    process.stderr.write(`${JSON.stringify({ error: error.message, code: error.code ?? null, stack: error.stack ?? null, output_ref: error.output_ref ?? null, ...(error.receipt_ref?{receipt_ref:error.receipt_ref}:{}), ...(error.execution?{execution:error.execution,receipt_saved:error.receipt_saved}:{}),...Object.fromEntries(["subdir","current_bytes","incoming_bytes","hard_bytes","current_files","incoming_files","hard_files"].filter(k=>error[k]!==undefined).map(k=>[k,error[k]])) })}\n`);
     process.exitCode ??= Number.isInteger(error.exitCode) ? error.exitCode : 1;
   });
 }

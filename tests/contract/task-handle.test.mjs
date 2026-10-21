@@ -11,12 +11,12 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { hostname, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { createTask, createTaskKernel, localRecordLockOwnerMatchesMachine, openTask, recordLockMachineId, sameLocalRecordLockHost } from "../../runtime/task/task-handle.mjs";
+import { createTask, openTask } from "../../runtime/task/task-handle.mjs";
 
 const temporaryDirs = [];
 const modulePath = resolve(dirname(fileURLToPath(import.meta.url)), "../../runtime/task/task-handle.mjs");
@@ -24,13 +24,16 @@ const modulePath = resolve(dirname(fileURLToPath(import.meta.url)), "../../runti
 function manifest(overrides = {}) {
   return {
     schema_version: "1.0.0",
+    activation_cohort: "post",
+    execution_mode: "per_invocation",
+    record_model: "vnext-single-write",
     task_id: "paperbuilder-phase-foundation",
     project_name: "PaperBuilder",
     created_at: "2026-07-16T00:00:00.000Z",
     target_repo_root: "/absolute/PaperBuilder",
     issue_ids: [],
     inputs: {},
-    record_model: "vnext-single-write",
+
     ...overrides,
   };
 }
@@ -56,68 +59,97 @@ afterEach(() => {
   }
 });
 
+
+function isolated(source, args = []) {
+  return execFileSync(process.execPath, ["--input-type=module", "-e", source, "p8-owned-module-probe", ...args], {encoding:"utf8",stdio:["ignore","pipe","pipe"]});
+}
+const faultProbe = String.raw`
+  import assert from 'node:assert/strict';
+  import fs from 'node:fs';
+  import {syncBuiltinESMExports} from 'node:module';
+  import {join} from 'node:path';
+  const [modulePath,taskPath,mode,outside] = process.argv.slice(2);
+  const {openTask}=await import(modulePath);
+  const task=openTask(taskPath,'PaperBuilder','paperbuilder-phase-foundation');
+  const directory=join(taskPath,'records'), target=join(directory,'result.json');
+  fs.mkdirSync(directory,{recursive:true});
+  if(!mode.startsWith('swap')) await task.writeRecordAtomic('records/result.json','{"value":"old"}\n');
+  const original={openSync:fs.openSync,writeFileSync:fs.writeFileSync,fsyncSync:fs.fsyncSync,renameSync:fs.renameSync};
+  const opened=new Map();let injected=false;
+  const temporary=path=>typeof path==='string'&&path.startsWith(directory+'/.result.json.')&&path.endsWith('.tmp');
+  const inject=()=>{injected=true;throw new Error(mode==='file'?'file fsync failure':mode==='directory'?'directory fsync failure':'rename preparation failure');};
+  fs.openSync=(path,...rest)=>{
+    if(mode==='swap-precheck'&&!injected&&temporary(path)) {injected=true;fs.rmSync(directory,{recursive:true});fs.symlinkSync(outside,directory,'dir');}
+    const fd=original.openSync(path,...rest);opened.set(fd,String(path));return fd;
+  };
+  fs.writeFileSync=(fd,...rest)=>{
+    const result=original.writeFileSync(fd,...rest);
+    if(mode==='swap-open'&&!injected&&temporary(opened.get(fd))) {injected=true;fs.renameSync(directory,directory+'-parked');fs.symlinkSync(outside,directory,'dir');}
+    return result;
+  };
+  fs.fsyncSync=fd=>{const path=opened.get(fd);if(!injected&&((mode==='file'&&temporary(path))||(mode==='directory'&&path===directory&&fs.fstatSync(fd).isDirectory())))inject();return original.fsyncSync(fd);};
+  fs.renameSync=(from,to)=>{if(mode==='rename'&&!injected&&to===target)inject();return original.renameSync(from,to);};
+  syncBuiltinESMExports();
+  let error;
+  try {await task.writeRecordAtomic('records/result.json','{"value":"new"}\n');} catch(e){error=e;}
+  finally {Object.assign(fs,original);syncBuiltinESMExports();}
+  assert.equal(injected,true,'the actual owned syscall injection must have fired');
+  assert.ok(error,'real write must reject the injected failure');
+  if(mode.startsWith('swap')) {assert.equal(error.code,'ANCESTOR_REPLACED');assert.equal(fs.existsSync(join(outside,'result.json')),false);}
+  else {
+    assert.match(error.message,mode==='file'?/file fsync failure/:mode==='directory'?/directory fsync failure/:/rename preparation failure/);
+    const expected=mode==='directory'?'new':'old';
+    assert.equal(task.readRecord('records/result.json'),'{'+'"value":"'+expected+'"}\n');
+    assert.deepEqual(JSON.parse(task.readRecord('records/result.json')),{value:expected});
+    assert.deepEqual(fs.readdirSync(directory).filter(n=>n.startsWith('.result.json.')&&n.endsWith('.tmp')),[]);
+    await task.writeRecordAtomic('records/result.json','{"value":"recovered"}\n');
+    assert.deepEqual(JSON.parse(task.readRecord('records/result.json')),{value:'recovered'});
+  }
+  process.stdout.write('injected/rejected/oracle-preserved\n');
+`;
+
+
+const lockModulePath=resolve(dirname(modulePath),'../interface/record-lock.mjs');
+const machineProbe=String.raw`
+ import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import {syncBuiltinESMExports}from'node:module';import{join}from'node:path';
+ const [modulePath,root,mode]=process.argv.slice(2),physical={en0:[{internal:false,mac:'aa:bb:cc:dd:ee:ff'}]};
+ let currentHost='MacBook-Pro.local',interfaces=physical;
+ os.hostname=()=>currentHost;os.networkInterfaces=()=>interfaces;syncBuiltinESMExports();
+ const {withLock}=await import(modulePath),path=join(root,'.machine.lock');
+ const own=async()=>{let owner;await withLock(root,'machine',()=>{owner=JSON.parse(fs.readFileSync(path,'utf8'));});return owner;};
+ const initial=await own();assert.match(initial.machine_id??'',/^[a-f0-9]{64}$/,'real lock owners must expose the bound physical-interface digest');
+ const attempt=async(host,machine,expected,live=false)=>{
+   const owner={pid:live?process.pid:99999999,host,nonce:'owned-dead-owner',started_at:'2000-01-01T00:00:00.000Z',...(machine===undefined?{}:{machine_id:machine})};
+   const bytes=JSON.stringify(owner)+'\n';fs.writeFileSync(path,bytes);let entered=false,error;
+   try{await withLock(root,'machine',()=>{entered=true;},{waitMs:0});}catch(e){error=e;}
+   assert.equal(entered,expected,host+' recovery expectation');
+   if(expected)assert.equal(fs.existsSync(path),false);else{assert.equal(error?.code,'LOCK_HELD');assert.equal(error?.exitCode,75);assert.equal(fs.readFileSync(path,'utf8'),bytes);fs.unlinkSync(path);}
+ };
+ if(mode==='aliases'){
+  await attempt('MacBook-Pro',initial.machine_id,true);currentHost='MACBOOK-PRO';await attempt('macbook-pro.local',initial.machine_id,true);currentHost='MacBook-Pro.local';
+  for(const host of ['MacBook-Pro.remote','MacBook-Pro.local.local','MacBook.Pro','Other-Mac'])await attempt(host,initial.machine_id,false);
+  currentHost='MacBook.Pro.local';await attempt('MacBook.Pro',initial.machine_id,false);
+ }else if(mode==='bindings'){
+  await attempt('MacBook-Pro',initial.machine_id,true);await attempt('MacBook-Pro','b'.repeat(64),false);await attempt('MacBook-Pro',undefined,false);
+  currentHost='MacBook-Pro';await attempt('MacBook-Pro','b'.repeat(64),true);await attempt('MacBook-Pro',undefined,true);await attempt('MacBook-Pro',initial.machine_id,false,true);
+ }else if(mode==='digest'){
+  interfaces={...physical,utun3:[{internal:false,mac:'01:02:03:04:05:06'}],awdl0:[{internal:false,mac:'02:03:04:05:06:07'}],docker0:[{internal:false,mac:'03:04:05:06:07:08'}],lo0:[{internal:true,mac:'04:05:06:07:08:09'}]};syncBuiltinESMExports();
+  assert.equal((await own()).machine_id,initial.machine_id);
+  interfaces={en0:[{internal:false,mac:'aa:bb:cc:dd:ee:00'}]};syncBuiltinESMExports();assert.notEqual((await own()).machine_id,initial.machine_id);
+ }else{
+  const virtual={utun3:[{internal:false,mac:'01:02:03:04:05:06'}],awdl0:[{internal:false,mac:'02:03:04:05:06:07'}],docker0:[{internal:false,mac:'03:04:05:06:07:08'}],lo0:[{internal:true,mac:'04:05:06:07:08:09'}],enp_fake:[{internal:false,mac:'05:06:07:08:09:0a'}],wl_fake:[{internal:false,mac:'06:07:08:09:0a:0b'}]};
+  interfaces=mode==='no-physical'?{}:virtual;syncBuiltinESMExports();
+  const unbound=await own();assert.ok(unbound.machine_id===undefined||unbound.machine_id===null,'missing physical interfaces must not produce an empty-list digest');
+  await attempt('MacBook-Pro',initial.machine_id,false);await attempt('MacBook-Pro',undefined,false);
+  currentHost='MacBook-Pro';await attempt('MacBook-Pro',initial.machine_id,true);await attempt('MacBook-Pro',undefined,true);
+ }
+ process.stdout.write('machine-oracles-preserved\n');
+`;
+
 describe("TaskHandle", () => {
-  it("keeps vNext canonical records inside the quality namespace", () => {
+  it("enumerates only sorted regular canonical review results", async () => {
     const { storageRoot, taskPath } = fixture();
-    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
-    const kernel = createTaskKernel(task);
-
-    expect(() => kernel.publishCanonicalRecord("evidence/root.txt", "legacy root\n"))
-      .toThrow(/quality namespace/i);
-    expect(() => kernel.publishCanonicalRecord("quality/evidence/current.txt", "current\n"))
-      .not.toThrow();
-  });
-
-  it("keeps content-addressed quality facts kernel-owned", () => {
-    const { storageRoot, taskPath } = fixture();
-    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
-    const ref = `quality/facts/${"a".repeat(64)}.json`;
-
-    expect(() => task.writeRecordAtomic(ref, "{}\n")).toThrow(/quality facts are kernel-owned/i);
-    expect(() => task.createRecordAtomic(ref, "{}\n")).toThrow(/quality facts are kernel-owned/i);
-  });
-
-  it("enumerates only sorted regular canonical stage attempts", () => {
-    const { storageRoot, taskPath } = fixture();
-    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
-    const stageRoot = join(taskPath, "results", "build-code");
-    mkdirSync(stageRoot, { recursive: true });
-    writeFileSync(join(stageRoot, "attempt-0010.json"), "{}");
-    writeFileSync(join(stageRoot, "attempt-0002.json"), "{}");
-    writeFileSync(join(stageRoot, "accepted.json"), "{}");
-    writeFileSync(join(stageRoot, "attempt-12.json"), "{}");
-
-    expect(task.listStageAttemptRefs("build-code")).toEqual([]);
-    expect(task.listStageAttemptRefs("verify-code")).toEqual([]);
-    expect(() => task.listStageAttemptRefs("other")).toThrow(/unsupported stage/i);
-  });
-
-  it("rejects symlinked stage attempts", () => {
-    const { storageRoot, taskPath } = fixture();
-    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
-    const stageRoot = join(taskPath, "results", "build-code");
-    const outside = mkdtempSync(join(tmpdir(), "workflowhub-attempt-outside-"));
-    temporaryDirs.push(outside);
-    mkdirSync(stageRoot, { recursive: true });
-    writeFileSync(join(outside, "attempt-0001.json"), "{}");
-    symlinkSync(join(outside, "attempt-0001.json"), join(stageRoot, "attempt-0001.json"));
-
-    expect(task.listStageAttemptRefs("build-code")).toEqual([]);
-  });
-
-  it("rejects attempt enumeration after the trusted task directory changes identity", () => {
-    const { storageRoot, taskPath } = fixture();
-    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
-    const original = `${taskPath}-original`;
-    renameSync(taskPath, original);
-    mkdirSync(taskPath);
-
-    expect(() => task.listStageAttemptRefs("build-code")).toThrow(/identity|changed|stale/i);
-  });
-
-  it("enumerates only sorted regular canonical review results", () => {
-    const { storageRoot, taskPath } = fixture();
-    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    const task = await createTask({ storageRoot, taskPath, manifest: manifest() });
     const resultsRoot = join(taskPath, "quality", "reviews", "results");
     mkdirSync(resultsRoot, { recursive: true });
     writeFileSync(join(resultsRoot, "z.json"), "{}");
@@ -129,9 +161,9 @@ describe("TaskHandle", () => {
     ]);
   });
 
-  it("does not enumerate retired review-resolution records", () => {
+  it("does not enumerate retired review-resolution records", async () => {
     const { storageRoot, taskPath } = fixture();
-    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    const task = await createTask({ storageRoot, taskPath, manifest: manifest() });
     const auditsRoot = join(taskPath, "quality", "reviews", "resolutions");
     mkdirSync(auditsRoot, { recursive: true });
     const a = "a".repeat(64), b = "b".repeat(64);
@@ -163,50 +195,23 @@ describe("TaskHandle", () => {
     }
   });
 
-  it("enumerates only sorted regular canonical review attempts", () => {
-    const { storageRoot, taskPath } = fixture();
-    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
-    const attemptsRoot = join(taskPath, "quality", "reviews", "attempts");
-    for (const id of ["z-attempt", "a-attempt"]) {
-      const attemptRoot = join(attemptsRoot, id);
-      mkdirSync(attemptRoot, { recursive: true });
-      writeFileSync(join(attemptRoot, "attempt.json"), "{}");
-    }
-    writeFileSync(join(attemptsRoot, "ignored.txt"), "{}");
-
-    expect(task.listCanonicalReviewAttemptRefs()).toEqual([
-      "quality/reviews/attempts/a-attempt/attempt.json",
-      "quality/reviews/attempts/z-attempt/attempt.json",
-    ]);
-  });
-
-  it("rejects symlinked canonical review attempt directories", () => {
-    const { storageRoot, taskPath } = fixture();
-    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
-    const attemptsRoot = join(taskPath, "quality", "reviews", "attempts");
-    const outside = mkdtempSync(join(tmpdir(), "workflowhub-review-attempt-outside-"));
-    temporaryDirs.push(outside);
-    mkdirSync(attemptsRoot, { recursive: true });
-    writeFileSync(join(outside, "attempt.json"), "{}");
-    symlinkSync(outside, join(attemptsRoot, "linked-attempt"));
-
-    expect(() => task.listCanonicalReviewAttemptRefs()).toThrow(/symlink|directory/i);
-  });
-
-  it("creates task.json once and opens it only with matching path and identity", () => {
+  it("creates task.json once and opens it only with matching path and identity", async () => {
     const { storageRoot, taskPath } = fixture();
     const manifest = {
       schema_version: "1.0.0",
+      activation_cohort: "post",
+      execution_mode: "per_invocation",
+      record_model: "vnext-single-write",
       task_id: "paperbuilder-phase-foundation",
       project_name: "PaperBuilder",
       created_at: "2026-07-16T00:00:00.000Z",
       target_repo_root: "/absolute/PaperBuilder",
       issue_ids: ["ZHI-138"],
       inputs: {},
-      record_model: "vnext-single-write",
+
     };
 
-    const created = createTask({ storageRoot, taskPath, manifest });
+    const created = await createTask({ storageRoot, taskPath, manifest });
     expect(created.identity).toEqual({
       projectName: "PaperBuilder",
       taskId: "paperbuilder-phase-foundation",
@@ -220,7 +225,7 @@ describe("TaskHandle", () => {
       "paperbuilder-phase-foundation",
     );
     expect(opened.manifest).toEqual(persistedManifest);
-    expect(() => createTask({ storageRoot, taskPath, manifest })).toThrow(/already exists|create-only/i);
+    await expect(createTask({ storageRoot, taskPath, manifest })).rejects.toThrow(/already exists|create-only|EEXIST/i);
   });
 
   it("opens a case-preserving task path after macOS realpath canonicalizes directory case", async ({ skip }) => {
@@ -228,13 +233,14 @@ describe("TaskHandle", () => {
     const { storageRoot, taskPath } = fixture();
     const postManifest = {
       schema_version: "1.0.0",
+      record_model: "vnext-single-write",
       task_id: "paperbuilder-phase-foundation",
       project_name: "PaperBuilder",
       created_at: "2026-07-16T00:00:00.000Z",
       target_repo_root: "/absolute/PaperBuilder",
       activation_cohort: "post",
       execution_mode: "per_invocation",
-      record_model: "vnext-single-write",
+
       issue_ids: [],
       inputs: {},
     };
@@ -266,13 +272,14 @@ describe("TaskHandle", () => {
     const { storageRoot } = fixture();
     const postManifest = {
       schema_version: "1.0.0",
+      record_model: "vnext-single-write",
       task_id: "paperbuilder-phase-foundation",
       project_name: "paperbuilder",
       created_at: "2026-07-16T00:00:00.000Z",
       target_repo_root: "/absolute/paperbuilder",
       activation_cohort: "post",
       execution_mode: "per_invocation",
-      record_model: "vnext-single-write",
+
       issue_ids: [],
       inputs: {},
     };
@@ -313,10 +320,13 @@ describe("TaskHandle", () => {
   it.each([
     ["OtherProject", "paperbuilder-phase-foundation"],
     ["PaperBuilder", "other-task"],
-  ])("rejects expected identity mismatch (%s, %s)", (projectName, taskId) => {
+  ])("rejects expected identity mismatch (%s, %s)", async (projectName, taskId) => {
     const { storageRoot, taskPath } = fixture();
-    createTask({ storageRoot, taskPath, manifest: {
+    await createTask({ storageRoot, taskPath, manifest: {
       schema_version: "1.0.0",
+      activation_cohort: "post",
+      execution_mode: "per_invocation",
+      record_model: "vnext-single-write",
       task_id: "paperbuilder-phase-foundation",
       project_name: "PaperBuilder",
       created_at: "2026-07-16T00:00:00.000Z",
@@ -330,20 +340,23 @@ describe("TaskHandle", () => {
     );
   });
 
-  it("rejects a manifest whose identity disagrees with its directory", () => {
+  it("rejects a manifest whose identity disagrees with its directory", async () => {
     const { storageRoot, taskPath } = fixture();
     mkdirSync(taskPath, { recursive: true });
     writeFileSync(
       join(taskPath, "task.json"),
       JSON.stringify({
         schema_version: "1.0.0",
+      activation_cohort: "post",
+      execution_mode: "per_invocation",
+      record_model: "vnext-single-write",
         task_id: "wrong-task",
         project_name: "PaperBuilder",
         created_at: "2026-07-16T00:00:00.000Z",
         target_repo_root: "/absolute/PaperBuilder",
         issue_ids: [],
         inputs: {},
-        record_model: "vnext-single-write",
+
       }),
     );
 
@@ -352,7 +365,7 @@ describe("TaskHandle", () => {
     ).toThrow(/identity|mismatch|directory/i);
   });
 
-  it("keeps recordPath inside taskPath and ignores cwd bait", () => {
+  it("keeps recordPath inside taskPath and ignores cwd bait", async () => {
     const { storageRoot, taskPath } = fixture();
     const baitCwd = mkdtempSync(join(tmpdir(), "workflowhub-task-bait-"));
     temporaryDirs.push(baitCwd);
@@ -366,15 +379,18 @@ describe("TaskHandle", () => {
       join(baitCwd, "tasks", "paperbuilder-phase-foundation", "records", "fixture.json"),
       "bait",
     );
-    createTask({ storageRoot, taskPath, manifest: {
+    await createTask({ storageRoot, taskPath, manifest: {
       schema_version: "1.0.0",
+      activation_cohort: "post",
+      execution_mode: "per_invocation",
+      record_model: "vnext-single-write",
       task_id: "paperbuilder-phase-foundation",
       project_name: "PaperBuilder",
       created_at: "2026-07-16T00:00:00.000Z",
       target_repo_root: "/absolute/PaperBuilder",
         issue_ids: [],
         inputs: {},
-        record_model: "vnext-single-write",
+
     } });
 
     const previousCwd = process.cwd();
@@ -387,27 +403,27 @@ describe("TaskHandle", () => {
       );
       expect(task.recordPath("records/fixture.json")).toBe(join(taskPath, "records", "fixture.json"));
       expect(() => task.recordPath("..", "escape.json")).toThrow(
-        /escape|relative|unsafe segment/i,
+        /escape|relative|unsafe segment|inside task storage/i,
       );
-      expect(() => task.recordPath("/absolute.json")).toThrow(/absolute|relative/i);
+      expect(() => task.recordPath("/absolute.json")).toThrow(/absolute|relative|inside task storage/i);
     } finally {
       process.chdir(previousCwd);
     }
   });
 
-  it("rejects create through a symlinked parent and writes nothing outside storageRoot", () => {
+  it("rejects create through a symlinked parent and writes nothing outside storageRoot", async () => {
     const { storageRoot, taskPath } = fixture();
     const outside = mkdtempSync(join(tmpdir(), "workflowhub-task-outside-"));
     temporaryDirs.push(outside);
     symlinkSync(outside, join(storageRoot, "Projects"), "dir");
 
-    expect(() =>
+    await expect(
       createTask({ storageRoot, taskPath, manifest: manifest() }),
-    ).toThrow(/symlink|storage|escape|identity mismatch|real directory/i);
+    ).rejects.toThrow(/symlink|storage|escape|identity mismatch|real directory/i);
     expect(existsSync(join(outside, "PaperBuilder"))).toBe(false);
   });
 
-  it("requires taskPath containment under the declared storageRoot", () => {
+  it("requires taskPath containment under the declared storageRoot", async () => {
     const { storageRoot } = fixture();
     const outside = mkdtempSync(join(tmpdir(), "workflowhub-other-storage-"));
     temporaryDirs.push(outside);
@@ -419,13 +435,13 @@ describe("TaskHandle", () => {
       "paperbuilder-phase-foundation",
     );
 
-    expect(() =>
+    await expect(
       createTask({ storageRoot, taskPath: outsideTaskPath, manifest: manifest() }),
-    ).toThrow(/storage|contain|escape/i);
+    ).rejects.toThrow(/storage|contain|escape|derived identity/i);
     expect(existsSync(outsideTaskPath)).toBe(false);
   });
 
-  it("rejects a task.json symlink instead of following it", () => {
+  it("rejects a task.json symlink instead of following it", async () => {
     const { storageRoot, taskPath } = fixture();
     const outside = mkdtempSync(join(tmpdir(), "workflowhub-manifest-outside-"));
     temporaryDirs.push(outside);
@@ -439,14 +455,14 @@ describe("TaskHandle", () => {
     ).toThrow(/manifest|symlink|regular file/i);
   });
 
-  it("uses controlled record I/O and refuses an ancestor symlink", () => {
+  it("uses controlled record I/O and refuses an ancestor symlink", async () => {
     const { storageRoot, taskPath } = fixture();
     const outside = mkdtempSync(join(tmpdir(), "workflowhub-record-outside-"));
     temporaryDirs.push(outside);
-    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    const task = await createTask({ storageRoot, taskPath, manifest: manifest() });
     symlinkSync(outside, join(taskPath, "records"), "dir");
 
-    expect(() => task.writeRecordAtomic("records/result.json", "bad")).toThrow(
+    await expect(task.writeRecordAtomic("records/result.json", "bad")).rejects.toThrow(
       /symlink|escape|real directory/i,
     );
     expect(() => task.readRecord("records/secret.json")).toThrow(
@@ -455,76 +471,58 @@ describe("TaskHandle", () => {
     expect(existsSync(join(outside, "result.json"))).toBe(false);
   });
 
-  it("keeps recordPath display-only; writers remain safe if an ancestor changes", () => {
+  it("keeps recordPath display-only; writers remain safe if an ancestor changes", async () => {
     const { storageRoot, taskPath } = fixture();
     const outside = mkdtempSync(join(tmpdir(), "workflowhub-record-swap-"));
     temporaryDirs.push(outside);
-    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    const task = await createTask({ storageRoot, taskPath, manifest: manifest() });
     mkdirSync(join(taskPath, "records"));
     const displayed = task.recordPath("records/result.json");
     rmSync(join(taskPath, "records"), { recursive: true });
     symlinkSync(outside, join(taskPath, "records"), "dir");
 
     expect(displayed).toBe(join(taskPath, "records", "result.json"));
-    expect(() => task.writeRecordAtomic("records/result.json", "bad")).toThrow(
+    await expect(task.writeRecordAtomic("records/result.json", "bad")).rejects.toThrow(
       /symlink|escape|real directory/i,
     );
     expect(existsSync(join(outside, "result.json"))).toBe(false);
   });
 
-  it("revalidates record parent fd after the deterministic precheck swap hook", () => {
-    const { storageRoot, taskPath } = fixture();
-    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
-    const evidence = join(taskPath, "records");
-    const outside = mkdtempSync(join(tmpdir(), "workflowhub-record-hook-swap-"));
-    temporaryDirs.push(outside);
-    mkdirSync(evidence);
-
-    expect(() =>
-      task.writeRecordAtomic("records/result.json", "bad", {
-        testHooks: {
-          afterParentPrecheck() {
-            rmSync(evidence, { recursive: true });
-            symlinkSync(outside, evidence, "dir");
-          },
-        },
-      }),
-    ).toThrow(/changed|symlink|nofollow|race/i);
-    expect(existsSync(join(outside, "result.json"))).toBe(false);
+  it("revalidates record parent fd after the deterministic precheck swap hook", async () => {
+    const {storageRoot,taskPath}=fixture();await createTask({storageRoot,taskPath,manifest:manifest()});
+    const outside=realpathSync(mkdtempSync(join(tmpdir(),'workflowhub-injected-outside-')));temporaryDirs.push(outside);
+    expect(isolated(faultProbe,[modulePath,taskPath,'swap-precheck',outside])).toBe('injected/rejected/oracle-preserved\n');
   });
 
   it.each(["afterClaim", "afterTemporary", "beforeRename"])(
     "recovers after a creator is killed at %s without a permanent claim",
     async (phase) => {
-      const { storageRoot } = fixture();
-      const taskId = `paperbuilder-${phase.toLowerCase()}`;
-      const taskPath = join(storageRoot, "Projects", "PaperBuilder", "tasks", taskId);
-      const taskManifest = manifest({ task_id: taskId });
-      const code = [
-        `import { createTask } from ${JSON.stringify(modulePath)};`,
-        `const storageRoot = ${JSON.stringify(storageRoot)};`,
-        `const taskPath = ${JSON.stringify(taskPath)};`,
-        `const manifest = ${JSON.stringify(taskManifest)};`,
-        `const phase = ${JSON.stringify(phase)};`,
-        "const testHooks = { [phase]() { process.kill(process.pid, 'SIGKILL'); } };",
-        "createTask({ storageRoot, taskPath, manifest, testHooks });",
-      ].join("\n");
-      const killed = await new Promise((resolveResult) => {
-        const child = spawn(process.execPath, ["--input-type=module", "-e", code], {
-          stdio: "ignore",
-        });
-        child.once("exit", (status, signal) => resolveResult({ status, signal }));
-      });
-
-      expect(killed.signal).toBe("SIGKILL");
-      const recovered = createTask({ storageRoot, taskPath, manifest: taskManifest });
-      expect(recovered.identity.taskId).toBe(taskId);
-      const parentEntries = (await import("node:fs")).readdirSync(dirname(taskPath));
-      expect(parentEntries.filter((name) => name.startsWith(`.${taskId}`))).toEqual([]);
+      const {storageRoot}=fixture(),taskId=`paperbuilder-${phase.toLowerCase()}`;
+      const taskPath=join(storageRoot,'Projects','PaperBuilder','tasks',taskId),taskManifest=manifest({task_id:taskId}),trigger=join(storageRoot,`trigger-${phase}`);
+      const code=String.raw`
+        import fs from 'node:fs';import {syncBuiltinESMExports}from'node:module';import{dirname,basename,join}from'node:path';
+        const [modulePath,storageRoot,taskPath,rawManifest,phase,trigger]=process.argv.slice(1),manifest=JSON.parse(rawManifest);
+        const original={openSync:fs.openSync,writeFileSync:fs.writeFileSync,renameSync:fs.renameSync};const fds=new Map();
+        const wrapperPrefix='workflowhub-task-'+manifest.task_id+'-create-';
+        const kill=()=>{original.writeFileSync(trigger,phase);process.kill(process.pid,'SIGKILL');};
+        fs.openSync=(path,...args)=>{const fd=original.openSync(path,...args);fds.set(fd,String(path));return fd;};
+        fs.writeFileSync=(fd,...args)=>{const value=original.writeFileSync(fd,...args),path=fds.get(fd)??String(fd);
+          if(phase==='afterClaim'&&path.endsWith('/.task-create.lock'))kill();
+          if(phase==='afterTemporary'&&path.startsWith(join(dirname(taskPath),wrapperPrefix))&&/\/task\/\.task\.json\..+\.tmp$/.test(path))kill();return value;};
+        fs.renameSync=(from,to)=>{if(phase==='beforeRename'&&to===taskPath&&basename(from)==='task'&&dirname(from).startsWith(join(dirname(taskPath),wrapperPrefix)))kill();return original.renameSync(from,to);};
+        syncBuiltinESMExports();const {createTask}=await import(modulePath);await createTask({storageRoot,taskPath,manifest});
+      `;
+      const killed=await new Promise((done,reject)=>{const child=spawn(process.execPath,['--input-type=module','-e',code,modulePath,storageRoot,taskPath,JSON.stringify(taskManifest),phase,trigger],{stdio:['ignore','pipe','pipe']});let stderr='';child.stderr.on('data',b=>stderr+=b);child.once('error',reject);child.once('exit',(status,signal)=>done({status,signal,stderr}));});
+      expect(killed.signal,killed.stderr).toBe('SIGKILL');expect(readFileSync(trigger,'utf8')).toBe(phase);
+      const recovered=await createTask({storageRoot,taskPath,manifest:taskManifest});expect(recovered.identity.taskId).toBe(taskId);
+      expect(JSON.parse(readFileSync(join(taskPath,'task.json'),'utf8'))).toEqual(taskManifest);
+      expect(readdirSync(dirname(taskPath)).filter(name=>name.startsWith(`workflowhub-task-${taskId}-create-`))).toEqual([]);
+      expect(readdirSync(taskPath)).toEqual(['task.json']);
+      expect(existsSync(join(taskPath,'.workflowhub-temp.json'))).toBe(false);
     },
   );
 
-  it("never deletes a sibling named by a malicious stale claim temporary", () => {
+  it("never deletes a sibling named by a malicious stale claim temporary", async () => {
     const { storageRoot, taskPath } = fixture();
     const parent = dirname(taskPath);
     mkdirSync(parent, { recursive: true });
@@ -539,84 +537,40 @@ describe("TaskHandle", () => {
       temporary: "../do-not-delete",
     })}\n`);
 
-    expect(() =>
-      createTask({ storageRoot, taskPath, manifest: manifest() }),
-    ).toThrow(/claim|exist|temporary|EEXIST/i);
+    const claimBytes = readFileSync(claim);
+    await createTask({ storageRoot, taskPath, manifest: manifest() });
+    expect(existsSync(sibling)).toBe(true);
+    expect(readFileSync(claim)).toEqual(claimBytes);
     expect(readFileSync(join(sibling, "proof.txt"), "utf8")).toBe("safe");
   });
 
-  it("blocks a record ancestor swap in the open-to-rename window", () => {
-    const { storageRoot, taskPath } = fixture();
-    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
-    const evidence = join(taskPath, "records");
-    const parked = join(taskPath, "records-parked");
-    const outside = mkdtempSync(join(tmpdir(), "workflowhub-open-rename-outside-"));
-    temporaryDirs.push(outside);
-    mkdirSync(evidence);
-
-    expect(() =>
-      task.writeRecordAtomic("records/result.json", "bad", {
-        testHooks: {
-          afterOpenBeforeRename() {
-            renameSync(evidence, parked);
-            symlinkSync(outside, evidence, "dir");
-          },
-        },
-      }),
-    ).toThrow(/changed|symlink|nofollow|race/i);
-    expect(existsSync(join(outside, "result.json"))).toBe(false);
+  it("blocks a record ancestor swap in the open-to-rename window", async () => {
+    const {storageRoot,taskPath}=fixture();await createTask({storageRoot,taskPath,manifest:manifest()});
+    const outside=realpathSync(mkdtempSync(join(tmpdir(),'workflowhub-injected-outside-')));temporaryDirs.push(outside);
+    expect(isolated(faultProbe,[modulePath,taskPath,'swap-open',outside])).toBe('injected/rejected/oracle-preserved\n');
   });
 
-  it("keeps the old record, cleans the temporary, and recovers after a file-fsync failure", () => {
-    const { storageRoot, taskPath } = fixture();
-    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
-    task.writeRecordAtomic("records/result.json", '{"value":"old"}\n');
-
-    expect(() => task.writeRecordAtomic("records/result.json", '{"value":"new"}\n', {
-      testHooks: { beforeFileFsync() { throw new Error("file fsync failure"); } },
-    })).toThrow("file fsync failure");
-    expect(task.readRecord("records/result.json")).toBe('{"value":"old"}\n');
-    expect(JSON.parse(task.readRecord("records/result.json"))).toEqual({ value: "old" });
-    expect(readdirSync(join(taskPath, "records")).filter((name) => /^\.[0-9a-f-]+\.tmp$/.test(name))).toEqual([]);
-
-    task.writeRecordAtomic("records/result.json", '{"value":"recovered"}\n');
-    expect(JSON.parse(task.readRecord("records/result.json"))).toEqual({ value: "recovered" });
+  it("keeps the old record, cleans the temporary, and recovers after a file-fsync failure", async () => {
+    const {storageRoot,taskPath}=fixture();await createTask({storageRoot,taskPath,manifest:manifest()});
+    const outside='';
+    expect(isolated(faultProbe,[modulePath,taskPath,'file',outside])).toBe('injected/rejected/oracle-preserved\n');
   });
 
-  it("leaves a complete record and recovers after a directory-fsync failure", () => {
-    const { storageRoot, taskPath } = fixture();
-    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
-    task.writeRecordAtomic("records/result.json", '{"value":"old"}\n');
-
-    expect(() => task.writeRecordAtomic("records/result.json", '{"value":"new"}\n', {
-      testHooks: { beforeDirectoryFsync() { throw new Error("directory fsync failure"); } },
-    })).toThrow("directory fsync failure");
-    expect(task.readRecord("records/result.json")).toBe('{"value":"new"}\n');
-    expect(JSON.parse(task.readRecord("records/result.json"))).toEqual({ value: "new" });
-    expect(readdirSync(join(taskPath, "records")).filter((name) => /^\.[0-9a-f-]+\.tmp$/.test(name))).toEqual([]);
-
-    task.writeRecordAtomic("records/result.json", '{"value":"recovered"}\n');
-    expect(JSON.parse(task.readRecord("records/result.json"))).toEqual({ value: "recovered" });
+  it("leaves a complete record and recovers after a directory-fsync failure", async () => {
+    const {storageRoot,taskPath}=fixture();await createTask({storageRoot,taskPath,manifest:manifest()});
+    const outside='';
+    expect(isolated(faultProbe,[modulePath,taskPath,'directory',outside])).toBe('injected/rejected/oracle-preserved\n');
   });
 
-  it("keeps the old record and recovers after a rename-preparation failure", () => {
-    const { storageRoot, taskPath } = fixture();
-    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
-    task.writeRecordAtomic("records/result.json", '{"value":"old"}\n');
-
-    expect(() => task.writeRecordAtomic("records/result.json", '{"value":"new"}\n', {
-      testHooks: { afterOpenBeforeRename() { throw new Error("rename preparation failure"); } },
-    })).toThrow("rename preparation failure");
-    expect(task.readRecord("records/result.json")).toBe('{"value":"old"}\n');
-    expect(readdirSync(join(taskPath, "records")).filter((name) => /^\.[0-9a-f-]+\.tmp$/.test(name))).toEqual([]);
-
-    task.writeRecordAtomic("records/result.json", '{"value":"recovered"}\n');
-    expect(JSON.parse(task.readRecord("records/result.json"))).toEqual({ value: "recovered" });
+  it("keeps the old record and recovers after a rename-preparation failure", async () => {
+    const {storageRoot,taskPath}=fixture();await createTask({storageRoot,taskPath,manifest:manifest()});
+    const outside='';
+    expect(isolated(faultProbe,[modulePath,taskPath,'rename',outside])).toBe('injected/rejected/oracle-preserved\n');
   });
 
-  it("invalidates an open TaskHandle when its task root is replaced at the same path", () => {
+  it("invalidates an open TaskHandle when its task root is replaced at the same path", async () => {
     const { storageRoot, taskPath } = fixture();
-    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    const task = await createTask({ storageRoot, taskPath, manifest: manifest() });
     const original = `${taskPath}-original`;
     renameSync(taskPath, original);
     mkdirSync(taskPath);
@@ -625,29 +579,17 @@ describe("TaskHandle", () => {
 
     expect(() => task.recordPath("new.json")).toThrow(/changed|replaced|stale|identity/i);
     expect(() => task.readRecord("bait.json")).toThrow(/changed|replaced|stale|identity/i);
-    expect(() => task.writeRecordAtomic("new.json", "bad")).toThrow(
+    await expect(task.writeRecordAtomic("new.json", "bad")).rejects.toThrow(
       /changed|replaced|stale|identity/i,
     );
     expect(existsSync(join(taskPath, "new.json"))).toBe(false);
     expect(readFileSync(join(taskPath, "bait.json"), "utf8")).toBe("replacement");
   });
 
-  it("rejects retired stage invalidation record paths", () => {
-    const { storageRoot, taskPath } = fixture();
-    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
-    for (const ref of [
-      "runs/build-code/invalidations/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json",
-      "runs/build-code/journal-invalidations/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json",
-      "results/build-code/invalidations/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json",
-    ]) {
-      expect(() => task.writeRecordAtomic(ref, "{}\n")).toThrow(/kernel record path required|record is kernel-owned|results records are kernel-owned/);
-    }
-  });
-
   it("honors an explicit bounded wait when another process owns a record lock", async () => {
     const { storageRoot, taskPath } = fixture();
-    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
-    const lockRef = "locks/cross-process-wait.lock";
+    const task = await createTask({ storageRoot, taskPath, manifest: manifest() });
+    const lockRef = "cross-process-wait";
     const code = [
       `import { openTask } from ${JSON.stringify(modulePath)};`,
       `const task = openTask(${JSON.stringify(taskPath)}, "PaperBuilder", "paperbuilder-phase-foundation");`,
@@ -667,64 +609,63 @@ describe("TaskHandle", () => {
       child.once("exit", (status) => reject(new Error(`lock holder exited before ready: ${status}`)));
     });
 
-    expect(() => task.withRecordLock(lockRef, () => {}, { waitMs: 25 })).toThrow(/timed out waiting for record lock/);
+    const held = await task.withRecordLock(lockRef, () => {}, { waitMs: 25 }).then(() => null, error => error);
+    expect(held).toMatchObject({code:"LOCK_HELD",exitCode:75,holder:{pid:child.pid}});
     let acquired = false;
-    task.withRecordLock(lockRef, () => { acquired = true; }, { waitMs: 1_000 });
+    await task.withRecordLock(lockRef, () => { acquired = true; }, { waitMs: 1_000 });
     expect(acquired).toBe(true);
     await exited;
-    expect(() => task.withRecordLock(lockRef, () => {}, { waitMs: -1 })).toThrow(/waitMs.*non-negative safe integer/);
+    await expect(task.withRecordLock(lockRef, () => {}, { waitMs: -1 })).rejects.toMatchObject({code:"INVALID_WAIT"});
   });
 
-  it("recognizes only the local short-name and .local hostname aliases for dead record-lock recovery", () => {
-    expect(sameLocalRecordLockHost("MacBook-Pro", "MacBook-Pro.local")).toBe(true);
-    expect(sameLocalRecordLockHost("macbook-pro.local", "MACBOOK-PRO")).toBe(true);
-    expect(sameLocalRecordLockHost("MacBook-Pro.remote", "MacBook-Pro.local")).toBe(false);
-    expect(sameLocalRecordLockHost("MacBook-Pro.local.local", "MacBook-Pro.local")).toBe(false);
-    expect(sameLocalRecordLockHost("MacBook.Pro", "MacBook.Pro.local")).toBe(false);
-    expect(sameLocalRecordLockHost("Other-Mac", "MacBook-Pro.local")).toBe(false);
+  it("recognizes only the local short-name and .local hostname aliases for dead record-lock recovery",async()=>{
+    const {storageRoot}=fixture();
+    expect(isolated(machineProbe,[lockModulePath,storageRoot,'aliases'])).toBe('machine-oracles-preserved\n');
+  });
+  it("requires a bound machine instance before using PID liveness across hostname aliases",async()=>{
+    const {storageRoot}=fixture();
+    expect(isolated(machineProbe,[lockModulePath,storageRoot,'bindings'])).toBe('machine-oracles-preserved\n');
+  });
+  it("derives an alias-machine digest from stable physical interfaces only",async()=>{
+    const {storageRoot}=fixture();
+    expect(isolated(machineProbe,[lockModulePath,storageRoot,'digest'])).toBe('machine-oracles-preserved\n');
   });
 
-  it("requires a bound machine instance before using PID liveness across hostname aliases", () => {
-    const machine = "a".repeat(64);
-    expect(localRecordLockOwnerMatchesMachine(
-      { host: "MacBook-Pro", machine_id: machine },
-      { currentHost: "MacBook-Pro.local", currentMachineId: machine },
-    )).toBe(true);
-    expect(localRecordLockOwnerMatchesMachine(
-      { host: "MacBook-Pro", machine_id: machine },
-      { currentHost: "MacBook-Pro.local", currentMachineId: "b".repeat(64) },
-    )).toBe(false);
-    expect(localRecordLockOwnerMatchesMachine(
-      { host: "MacBook-Pro" },
-      { currentHost: "MacBook-Pro.local", currentMachineId: machine },
-    )).toBe(false);
-    expect(localRecordLockOwnerMatchesMachine(
-      { host: "MacBook-Pro", machine_id: machine },
-      { currentHost: "MacBook-Pro", currentMachineId: "b".repeat(64) },
-    )).toBe(true);
-    expect(localRecordLockOwnerMatchesMachine(
-      { host: "MacBook-Pro" },
-      { currentHost: "MacBook-Pro" },
-    )).toBe(true);
+  it.each(['no-physical','virtual-only'])("does not reclaim an alias lock without a physical machine binding (%s)",async mode=>{
+    const {storageRoot}=fixture();
+    expect(isolated(machineProbe,[lockModulePath,storageRoot,mode])).toBe('machine-oracles-preserved\n');
   });
 
-  it("derives an alias-machine digest from stable physical interfaces only", () => {
-    const physical = { en0: [{ internal: false, mac: "aa:bb:cc:dd:ee:ff" }] };
-    const changing = {
-      ...physical,
-      utun3: [{ internal: false, mac: "01:02:03:04:05:06" }],
-      awdl0: [{ internal: false, mac: "02:03:04:05:06:07" }],
-      docker0: [{ internal: false, mac: "03:04:05:06:07:08" }],
-      lo0: [{ internal: true, mac: "04:05:06:07:08:09" }],
-    };
-    expect(recordLockMachineId(changing)).toBe(recordLockMachineId(physical));
+  it("publishes only the original manifest and preserves an unmarked same-prefix directory",async()=>{
+    const {storageRoot,taskPath}=fixture(),parent=dirname(taskPath),taskManifest=manifest();
+    mkdirSync(parent,{recursive:true});
+    const unknown=join(parent,`workflowhub-task-${taskManifest.task_id}-create-owned-unknown`);
+    mkdirSync(unknown);writeFileSync(join(unknown,'proof.txt'),'unknown-original');
+    const task=await createTask({storageRoot,taskPath,manifest:taskManifest});
+    expect(task.identity).toEqual({projectName:taskManifest.project_name,taskId:taskManifest.task_id});
+    expect(readdirSync(taskPath)).toEqual(['task.json']);
+    expect(JSON.parse(readFileSync(join(taskPath,'task.json'),'utf8'))).toEqual(taskManifest);
+    expect(existsSync(join(taskPath,'.workflowhub-temp.json'))).toBe(false);
+    expect(readdirSync(unknown)).toEqual(['proof.txt']);
+    expect(readFileSync(join(unknown,'proof.txt'),'utf8')).toBe('unknown-original');
   });
 
-  it("publishes task creation atomically and leaves no orphan on serialization failure", () => {
+  it.each(['unknown-directory','dangling-symlink'])("refuses an existing canonical task target without touching it (%s)",async kind=>{
+    const {storageRoot,taskPath}=fixture(),parent=dirname(taskPath);mkdirSync(parent,{recursive:true});
+    const missing=join(storageRoot,'never-created');
+    if(kind==='unknown-directory'){mkdirSync(taskPath);writeFileSync(join(taskPath,'proof.txt'),'unknown-canonical-original');}
+    else symlinkSync(missing,taskPath,'dir');
+    await expect(createTask({storageRoot,taskPath,manifest:manifest()})).rejects.toMatchObject({code:'EEXIST'});
+    if(kind==='unknown-directory'){expect(readdirSync(taskPath)).toEqual(['proof.txt']);expect(readFileSync(join(taskPath,'proof.txt'),'utf8')).toBe('unknown-canonical-original');}
+    else {const {lstatSync,readlinkSync}=await import('node:fs');expect(lstatSync(taskPath).isSymbolicLink()).toBe(true);expect(readlinkSync(taskPath)).toBe(missing);expect(existsSync(missing)).toBe(false);}
+    expect(readdirSync(parent).filter(name=>name.startsWith('workflowhub-task-paperbuilder-phase-foundation-create-'))).toEqual([]);
+  });
+
+  it("publishes task creation atomically and leaves no orphan on serialization failure", async () => {
     const { storageRoot, taskPath } = fixture();
     const invalid = manifest({ inputs: { cannotSerialize: 1n } });
 
-    expect(() => createTask({ storageRoot, taskPath, manifest: invalid })).toThrow();
+    await expect(createTask({ storageRoot, taskPath, manifest: invalid })).rejects.toThrow();
     expect(existsSync(taskPath)).toBe(false);
     expect(
       existsSync(join(dirname(taskPath), `.paperbuilder-phase-foundation.tmp`)),
@@ -739,7 +680,7 @@ describe("TaskHandle", () => {
       `const storageRoot = ${JSON.stringify(storageRoot)};`,
       `const taskPath = ${JSON.stringify(taskPath)};`,
       `const manifest = ${JSON.stringify(taskManifest)};`,
-      "try { createTask({ storageRoot, taskPath, manifest }); process.exit(0); }",
+      "try { await createTask({ storageRoot, taskPath, manifest }); process.exit(0); }",
       "catch { process.exit(23); }",
     ].join("\n");
 

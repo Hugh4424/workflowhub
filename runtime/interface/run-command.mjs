@@ -60,7 +60,7 @@ function syncDirectory(storage) {
   } finally { closeSync(fd); }
 }
 
-function reserveOutput(storage, slug) {
+async function reserveOutput(storage, slug, performWrite) {
   const day = new Date().toISOString().slice(0, 10);
   let sequence = 1;
   for (const name of readdirSync(storage.root)) {
@@ -74,8 +74,8 @@ function reserveOutput(storage, slug) {
     const receipt = join(storage.root, `${base}.json`);
     if (optionalStat(receipt)) continue;
     let fd;
-    try { fd = openSync(output, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600); }
-    catch (error) { if (error.code === "EEXIST") continue; throw error; }
+    try { await performWrite({ kind: "output", path: output, bytes: 0, incomingFiles: 1 }, () => { storage.verify(); fd = openSync(output, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600); }); }
+    catch (error) { if (fd !== undefined) closeSync(fd); if (error.code === "EEXIST") continue; throw error; }
     const identity = fstatSync(fd);
     try {
       storage.verify();
@@ -86,7 +86,7 @@ function reserveOutput(storage, slug) {
   throw failure("RECORD_SEQUENCE_EXHAUSTED", `capture sequence exhausted for ${day}`);
 }
 
-function publishReceipt(storage, path, record) {
+function publishReceipt(storage, path, serialized) {
   const temporary = join(storage.root, `.${randomUUID()}.tmp`);
   let fd;
   let identity;
@@ -94,7 +94,7 @@ function publishReceipt(storage, path, record) {
     storage.verify();
     fd = openSync(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
     identity = fstatSync(fd);
-    writeFileSync(fd, `${JSON.stringify(record, null, 2)}\n`);
+    writeFileSync(fd, serialized);
     fsyncSync(fd);
     closeSync(fd);
     fd = undefined;
@@ -117,7 +117,7 @@ function publishReceipt(storage, path, record) {
   }
 }
 
-function execute(cwd, argv, output, timeoutMs, signal) {
+function execute(cwd, argv, output, timeoutMs, signal, performWrite) {
   return new Promise((done) => {
     let child;
     let timer;
@@ -132,6 +132,8 @@ function execute(cwd, argv, output, timeoutMs, signal) {
     let written = 0;
     const truncated = { stdout: false, stderr: false };
     let markerWritten = false;
+    let queue = Promise.resolve();
+    let pending = 0;
     const finish = (code, childSignal) => {
       if (settled) return;
       settled = true;
@@ -149,27 +151,42 @@ function execute(cwd, argv, output, timeoutMs, signal) {
       if (!deadline) deadline = setTimeout(() => {
         error ??= failure("PROCESS_CLEANUP_FAILED", "capture process group did not close after termination");
         child.stdout?.destroy(); child.stderr?.destroy(); child.unref();
-        finish(null, null);
+        queue.then(() => finish(null, null));
       }, 3000);
     };
     const collect = (stream, chunk) => {
-      if (settled || writeFailed) return; // Pipes remain in flowing mode and drain.
-      try {
+      if (settled || writeFailed || cancelled || timedOut) return;
+      child.stdout.pause(); child.stderr.pause();
+      pending += 1;
+      queue = queue.then(async () => {
+        if (writeFailed) return;
+        const write = async (kind, bytes) => {
+          await performWrite({ kind, path: output.output, bytes: bytes.length, incomingFiles: 0 }, () => {
+            writeFileSync(output.fd, bytes);
+            // Count only bytes whose actual filesystem write completed. A
+            // queued chunk still settles after interruption under its budget.
+            if (kind === "chunk") written += bytes.length;
+            else if (kind === "marker") markerWritten = true;
+          });
+        };
         const remaining = Math.max(0, LIMIT - written);
         if (remaining > 0) {
           const kept = chunk.subarray(0, remaining);
-          writeFileSync(output.fd, kept);
-          written += kept.length;
+          await write("chunk", kept);
         }
         if (chunk.length > remaining) {
           truncated[stream] = true;
-          if (!markerWritten) { writeFileSync(output.fd, TRUNCATION_MARKER); markerWritten = true; }
+          if (!markerWritten) await write("marker", TRUNCATION_MARKER);
         }
-      } catch (caught) {
+      }).catch((caught) => {
         writeFailed = true;
         error = error ? failure("CAPTURE_FAILED", "output write failed during interruption", { cause: caught, interruption: error }) : caught;
         killGroup();
-      }
+        child.stdout.destroy(); child.stderr.destroy();
+      }).finally(() => {
+        pending -= 1;
+        if (!pending && !writeFailed && !cancelled && !timedOut) { child.stdout.resume(); child.stderr.resume(); }
+      });
     };
     const onAbort = () => {
       if (settled || timedOut || cancelled) return;
@@ -177,7 +194,7 @@ function execute(cwd, argv, output, timeoutMs, signal) {
       cancellationReason = typeof signal.reason === "string" ? signal.reason : String(signal.reason ?? "aborted");
       error ??= failure("ABORT_ERR", "command capture cancelled", { cause: signal.reason });
       clearTimeout(timer);
-      if (child?.pid) killGroup();
+      if (child?.pid) { killGroup(); child.stdout.destroy(); child.stderr.destroy(); }
       else finish(null, null);
     };
     signal?.addEventListener("abort", onAbort, { once: true });
@@ -190,12 +207,11 @@ function execute(cwd, argv, output, timeoutMs, signal) {
     child.once("spawn", () => {
       spawned = true;
       if (cancelled) killGroup();
-      else if (timeoutMs !== undefined) timer = setTimeout(() => { timedOut = true; killGroup(); }, timeoutMs);
+      else if (timeoutMs !== undefined) timer = setTimeout(() => { timedOut = true; killGroup(); child.stdout.destroy(); child.stderr.destroy(); }, timeoutMs);
     });
     child.once("error", (caught) => { error ??= caught; if (child.pid) killGroup(); });
-    // close follows both stdout/stderr closure, so every received byte has
-    // already been synchronously written before output fsync and JSON publish.
-    child.once("close", (code, signal) => finish(code, signal));
+    // Both pipes share one observed-order queue; close waits for its writes.
+    child.once("close", (code, signal) => { clearTimeout(timer); clearTimeout(deadline); queue.then(() => finish(code, signal)); });
   });
 }
 
@@ -234,7 +250,9 @@ function settleOutputReference(storage, output, requested) {
   return requested;
 }
 
-export async function captureCommand({ cwd, recordDir, slug, argv, shell, timeoutMs, signal, resolveOutputRef } = {}) {
+export async function captureCommand({ cwd, recordDir, slug, argv, shell, timeoutMs, signal, resolveOutputRef, performWrite } = {}) {
+  if (performWrite !== undefined && typeof performWrite !== "function") throw failure("INVALID_WRITE_EXECUTOR", "performWrite must be a function");
+  performWrite ??= async (_request, writeActual) => writeActual();
   if (resolveOutputRef !== undefined && typeof resolveOutputRef !== "function") throw failure("INVALID_OUTPUT_RESOLVER", "resolveOutputRef must be a private caller function");
   if (process.platform === "win32") throw failure("UNSUPPORTED_PLATFORM", "POSIX process groups are required");
   if (typeof cwd !== "string" || !cwd) throw failure("INVALID_CWD", "cwd is required");
@@ -252,11 +270,11 @@ export async function captureCommand({ cwd, recordDir, slug, argv, shell, timeou
   }
   const command = argv === undefined ? ["/bin/sh", "-c", shell] : [...argv];
   const storage = recordStorage(recordDir);
-  const output = reserveOutput(storage, slug);
+  const output = await reserveOutput(storage, slug, performWrite);
   const startedAt = new Date().toISOString();
   let result;
   try {
-    result = await execute(working, command, output, timeoutMs, signal);
+    result = await execute(working, command, output, timeoutMs, signal, performWrite);
     storage.verify();
     const named = lstatSync(output.output);
     if (named.isSymbolicLink() || !sameFile(named, output.identity)) throw failure("ANCESTOR_REPLACED", "capture output replaced during execution");
@@ -295,7 +313,14 @@ export async function captureCommand({ cwd, recordDir, slug, argv, shell, timeou
       receipt.error = { code: settlementError.code, message: settlementError.message };
     }
   }
-  publishReceipt(storage, output.receipt, receipt);
+  const serialized = `${JSON.stringify(receipt, null, 2)}\n`;
+  try {
+    await performWrite({ kind: "receipt", path: output.receipt, bytes: Buffer.byteLength(serialized), incomingFiles: 2 },
+      () => publishReceipt(storage, output.receipt, serialized));
+  } catch (cause) {
+    throw Object.assign(cause, { execution: receipt, receipt_saved: false, output_ref: receipt.output_ref,
+      ...(result.error ? { execution_error: result.error } : {}), exitCode: result.cancelled ? cancellationExit : 1 });
+  }
   if (settlementError) throw Object.assign(settlementError, { output_ref: receipt.output_ref, receipt_ref: output.receipt, exitCode: 1 });
   if (result.error) throw Object.assign(result.error, { output_ref: output.output, receipt_ref: output.receipt, exitCode: result.error.code === "ABORT_ERR" ? cancellationExit : result.error.code === "ENOENT" ? 127 : 1 });
   return { ...receipt, exit, stdoutTruncated: result.truncated.stdout, stderrTruncated: result.truncated.stderr, receipt_ref: output.receipt,
@@ -344,7 +369,7 @@ async function main(argv) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   main(process.argv.slice(2)).catch((error) => {
-    process.stderr.write(`${JSON.stringify({ code: error.code ?? "CAPTURE_FAILED", message: error.message, ...(error.receipt_ref ? { receipt_ref: error.receipt_ref, output_ref: error.output_ref } : {}) })}\n`);
+    process.stderr.write(`${JSON.stringify({ code: error.code ?? "CAPTURE_FAILED", message: error.message, ...(error.output_ref ? { output_ref: error.output_ref } : {}), ...(error.receipt_ref ? { receipt_ref: error.receipt_ref } : {}), ...(error.execution ? { execution: error.execution, receipt_saved: error.receipt_saved } : {}) })}\n`);
     process.exitCode = error.exitCode ?? 1;
   });
 }

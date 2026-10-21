@@ -18,7 +18,7 @@ Phase 内的 Task 是 task graph，不是可任意跳过依赖的步骤表。选
 
 ## 方法
 
-1. 核真实工作区/分支/状态、当前Phase与写集。接续时实际按 `skills/stage-handoff/SKILL.md` 回读交接路径、当前材料/task facts、有源工作陈述、四类信息、证据及未完事项；同task沿原授权续跑，缺失/错task如实说明，旧对象只读。记录所依业务规则、接口、FR/AC、consumer、范围、测试路线与停止条件。动手前实读引用项目受保护类别；未声明只查一次并存事实。依真实授权分别核“包含此改动”与“超出写集”，各用现appendRecord存一原件，列来源、具体路径/符号、原文锚，不增字段/账本。受保护且授权未含或越界只停该处并指出缺确认，其它安全工作继续；纯文档/注释/测试夹具越界沿已授权方向继续并登记。来源和写集均可定位才完成范围核对；完成只据本Phase实际交付/执行原件。
+1. 核真实工作区/分支/状态、当前Phase与写集。接续时实际按 `skills/stage-handoff/SKILL.md` 回读交接路径、当前材料/task facts、有源工作陈述、四类信息、证据及未完事项；同task沿原授权续跑，缺失/错task如实说明，旧对象只读。记录所依业务规则、接口、FR/AC、consumer、范围、测试路线与停止条件。动手前实读引用项目受保护类别；未声明只查一次并存事实。依真实授权分别核“包含此改动”与“超出写集”，各用已认证task.appendRecord({dir,slug,ext,bytes})存一原件（复用现appendRecord原子底座），列来源、具体路径/符号、原文锚，不增字段/账本。受保护且授权未含或越界只停该处并指出缺确认，其它安全工作继续；纯文档/注释/测试夹具越界沿已授权方向继续并登记。来源和写集均可定位才完成范围核对；完成只据本Phase实际交付/执行原件。
    Phase Card 里再写两行版本锚（给人看的绑定，不是 machine gate）：
    - 规则锚：本 Phase 依赖的业务规则，逐条写「文件 + 章节标题逐字」或「FR/AC 编号 + 该段首句逐字」。锚只绑定所依段落；其它段落变化不构成本 Phase 事实作废的理由。
    - 材料变更影响：本次实施预计会改动 spec 与本 Phase 材料的哪些段落；不会改动的段落不在本 Phase 的审查与实现范围内。
@@ -29,7 +29,7 @@ Phase 内的 Task 是 task graph，不是可任意跳过依赖的步骤表。选
 3. 在允许文件/符号内做最小实现，错误明确暴露。计划缺口一次列清影响、风险与需 owner 回答的问题，规格/Phase 交 build-plan，方向交 make-decision；不自行改材料。先继续不受缺口影响的安全部分，未知范围留给具名 owner 核实。 本步完成以改动全部落在允许写集内且无吞掉的错误为准，越界或吞错即本步未完成；对应 Task 的目标行为交付也是本步完成条件，未交付即本步未完成。
 4. 在 `inspect-and-route-actual-tests`原职责及实现前，独立执行者按 `skills/knowledge-graph/SKILL.md`：真实目标affected查波及面，按职责选完整ID explain既有实现；仅两个真实模块协作/依赖链才path，先消歧端点。随后首次定向读source_file/origin源码、标准/consumer，核图年龄/原命题；位置漂移/旧决定/未证关系保unknown，当前源纠正图。trace保查询→首次读源→改动，逐条说明新知与承接实现/边界；重复定位/无信号据实，不为凑收益造改动/依赖、不按前25冒相关。目标不存在exit4、歧义exit3、工具失败分记诊断/处置，安全编码继续；图不代oracle/测试/独立质量。
    对真实 changed files 用 test-routing-advisor 选择 simple/feature/fullstack，记录与计划相同或改变的理由。选择 backend-testing、frontend-testing 或 fullstack-slice-testing 中适用的一条具体路线，研究真实入口、权限、数据、并发、超时、取消和恢复边界。
-5. 测试子代理按当前 Phase 及 Task 声明的面，逐面把 `gate_cmd` 与 `RED/GREEN gate_cmd` 的字面命令提交现有 `verify --action=execute`，不能从 Phase 文本自动抓命令运行。跑声明的针对性命令和必要相邻检查，用 `runtime/interface/run-command.mjs` 保存实际 cwd、argv、exit、signal、timeout/cancel、输出和清理事实，原始输出只存单份。证据去重与临时输出处理，实际读取并执行 `docs/standard-workflow.md`「证据只留原始件（同字节即同一事实）」；保本次真实immutable回执与正确output_ref。build-code 的实际整数回执由运行时汇总进现有 stage evidence；保已有非空事实与游标，更新游标也不把 evidence 回落为 null。未执行或无整数退出保原回执与具体原因，不捏 exit0；契约校验的 contract_ok、contract_error_count、errors 片段、AC/FR 覆盖与 command_oracle_checks 随现 source.json 送审，只记录事实、不作失败门。每个未跑面明写“哪一面／卡在哪／什么条件下能跑”，不能只有 unavailable 或 incomplete。只跑受影响测试，不用无范围全量回归代替；环境、收集和配置失败不当成目标 RED，exit0 不自动证明业务通过。 按 `AGENTS.md`「卡住与升级」的适用范围分类该失败信号；属于外部不可重试时零重试，立即按该节格式报告并给可直接回复的选项，停止该外部失败路径，其余安全工作继续。
+5. 测试子代理按当前 Phase 及 Task 声明的面，逐面把 `gate_cmd` 与 `RED/GREEN gate_cmd` 的字面命令提交现有 `verify --action=execute`，不能从 Phase 文本自动抓命令运行。跑声明的针对性命令和必要相邻检查，用已认证 `task.captureCommand`（底层唯一 `runtime/interface/run-command.mjs`）保存实际 cwd、argv、exit、signal、timeout/cancel、输出和清理事实，原始输出只存单份。证据去重与临时输出处理，实际读取并执行 `docs/standard-workflow.md`「证据只留原始件（同字节即同一事实）」；保本次真实immutable回执与正确output_ref。build-code 的实际整数回执由运行时汇总进现有 stage evidence；保已有非空事实与游标，更新游标也不把 evidence 回落为 null。未执行或无整数退出保原回执与具体原因，不捏 exit0；契约校验的 contract_ok、contract_error_count、errors 片段、AC/FR 覆盖与 command_oracle_checks 随现 source.json 送审，只记录事实、不作失败门。每个未跑面明写“哪一面／卡在哪／什么条件下能跑”，不能只有 unavailable 或 incomplete。只跑受影响测试，不用无范围全量回归代替；环境、收集和配置失败不当成目标 RED，exit0 不自动证明业务通过。 按 `AGENTS.md`「卡住与升级」的适用范围分类该失败信号；属于外部不可重试时零重试，立即按该节格式报告并给可直接回复的选项，停止该外部失败路径，其余安全工作继续。
 6. 对声明的 command/service 验收执行真实场景，逐项对照 oracle、可观察效果与失败反例。记录每条 AC 的实际结果、原始输出、输入/环境和覆盖限制；真实服务缺失、未执行、部分或不可用保持原样，模拟效果不冒充外部效果。
    验收证据人读词表为 pass/fail/inconclusive/deferred/missing/inconsistent/incomplete/unavailable，来源 `runtime/evidence/acceptance-evidence-validator.mjs:6`；本词表只约束人读措辞，不改变现有 writer。未达成如实记为未达成并进失败事实清单，这一条不新增任何推进前置。
 7. 检查实际 diff 与声明写集、真实消费者、接口两端、状态、错误传播、并发原子性和资源释放。UI 按组件质量地图与真实页面验证状态和 DTO→ViewModel，浏览器 QA 先读取并执行 `skills/isolated-browser-qa/SKILL.md`，保留隔离、取消和自建资源清理事实。 仅声明写集没有任何浏览器可见面时，记 `N/A — 理由` 并引用写集；已声明适用而缺工具时记 unavailable。QA engine、route/场景、截图路径或 not_observed 的真实原因保在唯一原 ref，不伪造浏览器通过。来源、样本、场景、浏览器或截图缺失不宣称 UI 完成。
@@ -54,7 +54,7 @@ Phase 内的 Task 是 task graph，不是可任意跳过依赖的步骤表。选
 
 ## 同源补充轴
 
-每Phase的review-change与正式审查使用相同scope、当前artifact/基线/diff、完整AC、执行原ref、阶段合同、provider协议、审查重点、所需lens全文和仓库规范；主会话按下段实际执行独立Standards/Spec派发与并列展示，两个执行者消费 `skills/review/SKILL.md` 的对应镜头。补充原文由主会话按 `docs/standard-workflow.md`「证据只留原始件（同字节即同一事实）」比较后用现有appendRecord保存唯一原件或复用同字节原ref。
+每Phase的review-change与正式审查使用相同scope、当前artifact/基线/diff、完整AC、执行原ref、阶段合同、provider协议、审查重点、所需lens全文和仓库规范；主会话按下段实际执行独立Standards/Spec派发与并列展示，两个执行者消费 `skills/review/SKILL.md` 的对应镜头。补充原文由主会话按 `docs/standard-workflow.md`「证据只留原始件（同字节即同一事实）」比较后用已认证task.appendRecord保存唯一原件或复用同字节原ref。
 
 宿主执行同源补充时，向两个互不继承对方上下文的独立执行者同时提供上述共同材料，并分别给 Standards 规范/baseline 或 Spec 来源。执行者只返回原文，不写文件；宿主按当前 workflow 保存单份原件，在 Standards / Spec 两栏分别展示发现、范围和不可用原因，只汇总各栏数量及各栏最严重问题，不合并、不重排名、不选跨轴赢家。同源补充标为 same_source_degraded，不替代 OCR、不计异源 quorum；OCR 与补充也并排保留，各路失败、取消与迟到有效发现不被成功路覆盖。
 

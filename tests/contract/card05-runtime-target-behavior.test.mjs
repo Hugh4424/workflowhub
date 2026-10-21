@@ -82,6 +82,8 @@ test('N1 target: public verify preserves real nonzero receipt and summarizes it 
 });
 test('N12 target: explicit until=commit returns partial without executing later close actions', async () => {
   const f = fixture(), bare = join(f.root, 'origin.git'); mkdirSync(bare); git(bare, 'init', '--bare', '-q'); git(f.repo, 'remote', 'add', 'origin', bare); git(f.repo, 'push', '-q', 'origin', 'main');
+  // TCR-P8-6 / independent250: actual close identity needs an owned stage fact.
+  writeFileSync(join(f.taskDir,'facts.jsonl'),JSON.stringify({record_kind:'stage',task_id:'card05-owned',stage:'verify-code',source:'owned-test',created_at:'2026-10-20T00:00:00Z'})+'\n');
   const p = await prepareDeliveryClosePlan({ taskDir: f.taskDir }); const c = await confirmClosePlan({ taskDir: f.taskDir, planRef: p.plan_ref, replyText: 'Owned local fixture close actions only.' });
   await authorizeClosePlan({ taskDir: f.taskDir, planRef: p.plan_ref, confirmationRef: c.confirmation_ref });
   const out = await executeClosePlan({ taskDir: f.taskDir, planRef: p.plan_ref, confirmationRef: c.confirmation_ref, until: 'commit' });

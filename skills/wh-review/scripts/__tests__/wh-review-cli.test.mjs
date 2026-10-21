@@ -98,7 +98,7 @@ describe("wh-review production CLI", () => {
         materials: { raw: "current" },
         [field]: value,
       }, {
-        loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot: realpathSync(mkdtempSync(join(tmpdir(), "wh-review-retired-"))), command: ["unused"] }),
+        loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot: (() => { const root = realpathSync(mkdtempSync(join(tmpdir(), "wh-review-retired-"))); roots.push(root); return root; })(), command: ["unused"] }),
         resolveRoute: () => ({ initial: ["other"], mode: "single_round" }),
         selectProviders: () => ({ providers: ["other"], provider_models: { other: "other-model" } }),
         client: {
@@ -116,7 +116,7 @@ describe("wh-review production CLI", () => {
       host_provider: "codex",
       materials: { raw: "current", response_ledger: {} },
     }, {
-      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot: realpathSync(mkdtempSync(join(tmpdir(), "wh-review-ledger-"))), command: ["unused"] }),
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot: (() => { const root = realpathSync(mkdtempSync(join(tmpdir(), "wh-review-ledger-"))); roots.push(root); return root; })(), command: ["unused"] }),
       resolveRoute: () => ({ initial: ["other"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["other"], provider_models: { other: "other-model" } }),
       client: {
@@ -186,7 +186,7 @@ describe("wh-review production CLI", () => {
       host_provider: "codex",
       materials: { raw: "x", scope_revision: {} },
     }, {
-      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot: realpathSync(mkdtempSync(join(tmpdir(), "wh-review-scope-"))), command: ["unused"] }),
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot: (() => { const root = realpathSync(mkdtempSync(join(tmpdir(), "wh-review-scope-"))); roots.push(root); return root; })(), command: ["unused"] }),
       resolveRoute: () => ({ initial: ["other"], mode: "single_round" }),
       selectProviders: () => ({ providers: ["other"], provider_models: { other: "other-model" } }),
       client: {
@@ -209,7 +209,7 @@ describe("wh-review production CLI", () => {
         materials: { raw: "current" },
         [field]: { opencode: "old-runtime" },
       }, {
-        loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot: realpathSync(mkdtempSync(join(tmpdir(), "wh-review-runtime-"))), command: ["unused"] }),
+        loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot: (() => { const root = realpathSync(mkdtempSync(join(tmpdir(), "wh-review-runtime-"))); roots.push(root); return root; })(), command: ["unused"] }),
         resolveRoute: () => ({ initial: ["other"], mode: "single_round" }),
         selectProviders: () => ({ providers: ["other"], provider_models: { other: "other-model" } }),
         client: {

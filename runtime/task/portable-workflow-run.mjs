@@ -1,5 +1,6 @@
 import { constants, closeSync, fstatSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { appendRecord } from "../interface/safe-write.mjs";
+import { createTaskDiskWriteExecutor } from "../evidence/disk-budget.mjs";
 import { isAbsolute, join, resolve } from "node:path";
 
 const WORKFLOW = "build-prd";
@@ -92,7 +93,7 @@ async function writeTerminal(task, terminal) {
   const directory=join(task.taskPath,...TERMINAL_DIRECTORY.split("/"));let cursor=task.taskPath;
   for(const part of TERMINAL_DIRECTORY.split("/")){cursor=join(cursor,part);try{const st=lstatSync(cursor);if(st.isSymbolicLink()||!st.isDirectory())throw new Error("portable storage path alias");}catch(error){if(error.code!=="ENOENT")throw error;mkdirSync(cursor,{mode:0o700});}}
   const raw = `${JSON.stringify(terminal, null, 2)}\n`;
-  const path = await appendRecord(directory,"build-prd-terminal","json",raw);
+  const path = await appendRecord(directory,"build-prd-terminal","json",raw,{performWrite:createTaskDiskWriteExecutor({taskRoot:task.taskPath})});
   return Object.freeze({ ref: `${TERMINAL_DIRECTORY}/${path.slice(directory.length+1)}`, terminal });
 }
 

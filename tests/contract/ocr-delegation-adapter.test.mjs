@@ -2367,3 +2367,123 @@ describe("P4 native terminal before cancellation", () => {
     expect(member.coverage.read_confirmed).toBe(true);
   }, 10000);
 });
+
+it("T037 second allocation failure through the real round removes the first packet directory", () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "t037-allocation-")));roots.push(root);
+  const url = new URL("../../runtime/review/ocr-delegation-adapter.mjs", import.meta.url).href;
+  const output = execFileSync(process.execPath, ["--input-type=module", "-e", `
+    import fs from 'node:fs';import {syncBuiltinESMExports} from 'node:module';import path from 'node:path';
+    const original=fs.mkdtempSync;let first=null,second=false;
+    fs.mkdtempSync=(prefix,...rest)=>{if(prefix.includes('workflowhub-ocr-rule-')){second=true;throw Object.assign(new Error('owned second allocation failure'),{code:'ENOSPC'});}const dir=original(prefix,...rest);if(prefix.includes('workflowhub-ocr-packet-'))first=dir;return dir;};
+    syncBuiltinESMExports();
+    const {runOcrDelegationRound}=await import(${JSON.stringify(url)});
+    const result=await runOcrDelegationRound({stage:'build-code',material_id:'owned-material'},{buildBundle:()=>({bundleRoot:${JSON.stringify(root)},materialId:'owned-material',manifest:[]})});
+    console.log(JSON.stringify({second,first,remains:first&&fs.existsSync(first),result}));
+    if(first&&fs.existsSync(first))fs.rmSync(first,{recursive:true,force:true});
+  `], { encoding: "utf8", timeout: 5000 });
+  const value=JSON.parse(output);
+  expect(value.second).toBe(true);
+  expect(value.first).toEqual(expect.any(String));
+  expect(value.remains).toBe(false);
+  expect(JSON.stringify(value.result)).toContain("OCR_PACKET_PREPARATION_FAILED");
+  expect(JSON.stringify(value.result)).toContain("ENOSPC");
+});
+
+it("T037 directly observes OCR rule and packet cleanup after success, failure and executor cancellation", () => {
+  const root=realpathSync(mkdtempSync(join(tmpdir(),"t037-rule-observation-")));roots.push(root);
+  const source=join(root,"source");mkdirSync(source);
+  writeFileSync(join(source,"owned.mjs"),"export const owned=true;\n");
+  writeFileSync(join(source,"review-instructions.md"),compliantReviewPrompt);
+  const url=new URL("../../runtime/review/ocr-delegation-adapter.mjs",import.meta.url).href;
+  for(const mode of ["success","failure","cancel-confirmed","cancel-deferred"]){
+    const output=execFileSync(process.execPath,["--input-type=module","-e",`
+      import fs from 'node:fs';import cp from 'node:child_process';import assert from 'node:assert/strict';import {syncBuiltinESMExports}from'node:module';
+      const allocate=fs.mkdtempSync,execute=cp.execFileSync,seen={};let ocrCalls=0;
+      fs.mkdtempSync=(prefix,...args)=>{const dir=allocate(prefix,...args);if(prefix.includes('workflowhub-ocr-rule-'))seen.rule=dir;if(prefix.includes('workflowhub-ocr-packet-'))seen.packet=dir;return dir;};
+      cp.execFileSync=(command,args,...rest)=>{if(command!=='ocr')return execute(command,args,...rest);ocrCalls++;if(args[0]==='--version')return 'open-code-review v1.12.9\\n';if(args[1]==='preview')return JSON.stringify({reviewable_files:[{path:'owned.mjs'},{path:'review-instructions.md'}]});if(args[1]==='rule')return JSON.stringify({rules:[{path:'owned.mjs'}]});throw Error('unexpected owned OCR command');};
+      syncBuiltinESMExports();
+      const{runOcrDelegationRound}=await import(${JSON.stringify(url)}),mode=${JSON.stringify(mode)},controller=new AbortController();let finish,executorEntered=false;
+      const execution=new Promise(resolve=>{finish=resolve;});const keepAlive=setInterval(()=>{},1000);
+      const result=await runOcrDelegationRound({stage:'build-code',material_id:'owned-material'},{signal:controller.signal,cancellationGraceMs:10,buildBundle:()=>({bundleRoot:${JSON.stringify(source)},materialId:'owned-material',manifest:[{path:'owned.mjs'},{path:'review-instructions.md'}]}),executor:({packet,registerCancellation})=>{
+        executorEntered=true;assert.equal(packet.root,seen.packet);assert.ok(fs.existsSync(seen.rule));assert.ok(fs.existsSync(seen.packet));
+        if(mode==='failure')throw Object.assign(new Error('owned executor failure'),{code:'OCR_OWNED_FAILURE'});
+        if(mode==='success')return {status:'available',outcome:'completed',findings:[],provider_results:[]};
+        registerCancellation(()=>{if(mode==='cancel-confirmed'){finish(null);return{confirmed:true};}return{confirmed:false,cleanup:execution};});
+        queueMicrotask(()=>controller.abort(new Error('owned cancellation')));return execution;
+      }});
+      assert.ok(executorEntered);assert.equal(ocrCalls,3);assert.ok(seen.rule);assert.ok(seen.packet);assert.equal(fs.existsSync(seen.rule),false);
+      const packetBeforeSettle=fs.existsSync(seen.packet);
+      if(mode==='cancel-deferred'){assert.equal(packetBeforeSettle,true);finish(null);for(let n=0;n<100&&fs.existsSync(seen.packet);n++)await new Promise(resolve=>setTimeout(resolve,5));}
+      else assert.equal(packetBeforeSettle,false);
+      assert.equal(fs.existsSync(seen.packet),false);
+      clearInterval(keepAlive);
+      console.log(JSON.stringify({mode,executorEntered,ocrCalls,ruleRemoved:!fs.existsSync(seen.rule),packetBeforeSettle,packetRemoved:!fs.existsSync(seen.packet),status:result.status,outcome:result.outcome,error:result.error?.code,cancellation:result.cancellation}));
+    `],{encoding:"utf8",env:{...process.env,TMPDIR:root,TMP:root,TEMP:root},timeout:5000});
+    const result=JSON.parse(output);
+    expect(result.executorEntered).toBe(true);
+    expect(result.ruleRemoved).toBe(true);
+    expect(result.packetRemoved).toBe(true);
+    expect(result.packetBeforeSettle).toBe(mode==="cancel-deferred");
+    if(mode==="success")expect(result).toMatchObject({status:"available",outcome:"completed"});
+    if(mode==="failure")expect(result.error).toBe("OCR_OWNED_FAILURE");
+    if(mode==="cancel-confirmed")expect(result.error).toBe("OCR_EXECUTOR_CANCELLED");
+    if(mode==="cancel-deferred")expect(result.error).toBe("OCR_EXECUTOR_CANCEL_UNCONFIRMED");
+  }
+});
+
+it("T037 cleanup EACCES keeps OCR terminal facts, attempts sibling directories and handles deferred rejection", () => {
+  const root=realpathSync(mkdtempSync(join(tmpdir(),"t037-cleanup-isolation-")));roots.push(root);
+  const source=join(root,"source");mkdirSync(source);writeFileSync(join(source,"owned.mjs"),"export const owned=true;\n");writeFileSync(join(source,"review-instructions.md"),compliantReviewPrompt);
+  const url=new URL("../../runtime/review/ocr-delegation-adapter.mjs",import.meta.url).href;
+  for(const [mode,target] of [["success","rule"],["failure","rule"],["cancel","rule"],["early-constraints","packet"],["early-executor","rule"],["early-aborted","packet"],["deferred-unconfirmed-resolve","packet"],["deferred-unconfirmed-reject","packet"],["deferred-timeout-resolve","packet"],["deferred-timeout-reject","packet"],["diagnostic-fails","rule"]]){
+    const output=execFileSync(process.execPath,["--input-type=module","-e",`
+      import fs from'node:fs';import cp from'node:child_process';import assert from'node:assert/strict';import{syncBuiltinESMExports}from'node:module';
+      const mode=${JSON.stringify(mode)},target=${JSON.stringify(target)},seen={},attempts=[],diagnostics=[],unhandled=[];let hits=0;
+      const allocate=fs.mkdtempSync,remove=fs.rmSync,execute=cp.execFileSync,stderr=process.stderr.write.bind(process.stderr);
+      fs.mkdtempSync=(prefix,...args)=>{const dir=allocate(prefix,...args);if(prefix.includes('workflowhub-ocr-rule-'))seen.rule=dir;if(prefix.includes('workflowhub-ocr-packet-'))seen.packet=dir;return dir;};
+      fs.rmSync=(p,...args)=>{if(p===seen.rule||p===seen.packet){attempts.push(p===seen.rule?'rule':'packet');if(p===seen[target]){hits++;throw Object.assign(new Error('owned '+target+' cleanup denied'),{code:'EACCES'});}}return remove(p,...args);};
+      cp.execFileSync=(cmd,args,...rest)=>{if(cmd!=='ocr')return execute(cmd,args,...rest);if(args[0]==='--version')return'open-code-review v1.12.9\\n';if(args[1]==='preview')return JSON.stringify({reviewable_files:[{path:'owned.mjs'},{path:'review-instructions.md'}]});if(args[1]==='rule')return JSON.stringify({rules:[]});throw Error('unexpected command');};
+      process.stderr.write=(text,...args)=>{diagnostics.push(String(text));if(mode==='diagnostic-fails')throw Object.assign(new Error('owned diagnostic sink denied'),{code:'EPIPE'});return stderr(text,...args);};
+      process.on('unhandledRejection',e=>unhandled.push(String(e)));syncBuiltinESMExports();
+      const{runOcrDelegationRound}=await import(${JSON.stringify(url)}),controller=new AbortController();
+      let settleExecution,resolveHandler,rejectHandler,resolveCleanup,rejectCleanup,entered=false;
+      const execution=new Promise(resolve=>settleExecution=resolve),handler=new Promise((resolve,reject)=>{resolveHandler=resolve;rejectHandler=reject;}),cleanup=new Promise((resolve,reject)=>{resolveCleanup=resolve;rejectCleanup=reject;});
+      // Only promises used by a scenario may be rejected; each real chain is observed.
+      const keepAlive=setInterval(()=>{},1000);
+      if(mode==='early-aborted')controller.abort();
+      let result=null,thrown=null,before=null;
+      try{result=await runOcrDelegationRound({stage:'build-code',material_id:'owned',...(mode==='early-constraints'?{prompt:'missing mandatory constraints'}:{})},{signal:controller.signal,cancellationGraceMs:10,buildBundle:()=>({bundleRoot:${JSON.stringify(source)},materialId:'owned',manifest:[{path:'owned.mjs'},{path:'review-instructions.md'}]}),...(mode==='early-executor'?{}:{executor:({registerCancellation})=>{
+        entered=true;
+        if(mode==='failure')throw Object.assign(new Error('owned executor failed'),{code:'OCR_OWNED_FAILURE'});
+        if(mode==='success'||mode==='diagnostic-fails')return{status:'available',outcome:'completed',findings:[],provider_results:[]};
+        registerCancellation(()=>{if(mode==='cancel'){settleExecution(null);return{confirmed:true};}if(mode.startsWith('deferred-timeout'))return handler;return{confirmed:false,cleanup};});
+        queueMicrotask(()=>controller.abort());return execution;
+      }})});}catch(e){thrown={code:e.code,message:e.message};}
+      if(mode.startsWith('deferred-')){
+        before={packetExists:fs.existsSync(seen.packet),packetAttempts:attempts.filter(x=>x==='packet').length};
+        if(mode.startsWith('deferred-timeout')){if(mode.endsWith('resolve'))resolveHandler({cleanup:execution});else rejectHandler(new Error('owned cancellation handler failed'));settleExecution(null);}
+        else{if(mode.endsWith('resolve'))resolveCleanup();else rejectCleanup(new Error('owned cleanup promise failed'));settleExecution(null);}
+        await new Promise(resolve=>setTimeout(resolve,30));
+      }
+      clearInterval(keepAlive);process.stderr.write=stderr;
+      const observed={mode,target,thrown,status:result?.status,outcome:result?.outcome,error:result?.error?.code,entered,hits,attempts,diagnostics,before,ruleExists:fs.existsSync(seen.rule),packetExists:fs.existsSync(seen.packet),unhandled};
+      for(const p of Object.values(seen))remove(p,{recursive:true,force:true});
+      console.log(JSON.stringify(observed));
+    `],{encoding:"utf8",env:{...process.env,TMPDIR:root,TMP:root,TEMP:root},timeout:5000});
+    const result=JSON.parse(output);
+    expect(result.thrown).toBeNull();
+    expect(result.hits).toBeGreaterThan(0);
+    expect(result.attempts).toEqual(expect.arrayContaining(["rule","packet"]));
+    expect(result.ruleExists).toBe(target==="rule");
+    expect(result.packetExists).toBe(target==="packet");
+    expect(result.diagnostics.join("\n")).toContain("TEMP_CLEANUP_FAILED");
+    expect(result.diagnostics.join("\n")).toContain("EACCES");
+    expect(result.unhandled).toEqual([]);
+    if(mode==="success"||mode==="diagnostic-fails")expect(result).toMatchObject({status:"available",outcome:"completed"});
+    if(mode==="failure")expect(result.error).toBe("OCR_OWNED_FAILURE");
+    if(mode==="cancel"||mode==="early-aborted")expect(result.error).toBe("OCR_EXECUTOR_CANCELLED");
+    if(mode==="early-constraints")expect(result.error).toBe("OCR_PROMPT_CONSTRAINTS_MISSING");
+    if(mode==="early-executor")expect(result.error).toBe("OCR_DELEGATION_UNAVAILABLE");
+    if(mode.startsWith("deferred-")){expect(result.error).toBe("OCR_EXECUTOR_CANCEL_UNCONFIRMED");expect(result.before).toEqual({packetExists:true,packetAttempts:0});}
+  }
+});
