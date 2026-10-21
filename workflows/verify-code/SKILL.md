@@ -50,6 +50,8 @@ UI 适用时沿 `skills/isolated-browser-qa/SKILL.md` 消费页面、console 与
 
 核断言/替身、缺RED与原件时，读[backend-testing「行为测试与证伪」](../../skills/backend-testing/SKILL.md#行为测试与证伪)及同文件「执行事实」，沿其TCR/冻结保护与失败分类执行。新增/扩展检查用同判据：合法pass→仅受控违规改变后目标fail→恢复同合法输入pass，核argv/cwd/raw、exit/signal/timeout及恢复字节；同字节复用原件。违规仍绿报具名遗漏case，恢复未通过incomplete；不以方法读回冒检查器接线。适用代码改动做受控行为变异（如取反新增条件），目标断言须fail再恢复，不拿字符串变异充数；无新增/扩展检查按真实diff写N/A，只免执行，仍消费完整正反输入。
 
+错在范围修：检查错时修检查本身或收窄其范围，不绕过检查、不在上下游加豁免。通过太易时先查观察方法：核断言、替身与夹具是否真能失败，再动实现。检查可信度的三值结论分为已验证/未验证/无法判断，不把未知写成通过；不替换 AC 的既有结果档位。同一修正复发时，把教训落为具名检查，先在有源真实历史错误上失败，再验证当前修复。
+
 依赖升级先读changelog，major另读migration notes；逐项或具理由关联小组升级，同一受影响行为前后验证。核直接/传递lockfile diff，包管理器生成、不手改；安装成功、缺notes/lockfile/前后行为不能当完成。无升级给实际diff依据，不凑依赖。
 
 逐项报告diff五类削弱的路径/来源/理由：阈值/严重级降低；新增.skip、删case/唯一结果断言；@ts-ignore/eslint-disable/istanbul ignore等静音；抛错stub/空catch/TODO代实现；无真实决定的新allow/exception。等价重构/收紧不误报，旧有源例外按原范围；exit0不盖无源削弱。
