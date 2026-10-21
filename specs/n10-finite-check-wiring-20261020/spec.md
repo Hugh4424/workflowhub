@@ -702,11 +702,79 @@
   - N9 已合入：`--task-path` 可用；本卡不改 N9 实现，只在 P3 参数闸保留它；复验未执行时记 incomplete。
 - **新增控制面**：一个 `run-checks` 参数（`--material-root`）；无新命令、无新持久对象、无新 schema。
 
+### P8 磁盘设计与正常写入分母
+
+本节补全D-028原需实现设计，不修改FR-DISK-001…004或Appendix A原4AC。原计划作者的OCR禁句及review-only预算遗漏保在外置原件129；修正依据为091、116、121、122，具体出处与精确写集在P8 Phase。P1/T005清旧红的局部OCR/allowlist/冻结断言边界保持不变。P8待P7结束才实施；当前材料修正不是实现证据。
+
+#### 正常task写入A–H
+
+| 面 | 当前owner与真实caller | P8接线结果 |
+| --- | --- | --- |
+| A 普通create/write/append | task-handle:95–96；build-code/verify-code/standard/stage-closeout实际保存方法 | 同已认证task方法写quality；现safe-write序号/原子发布保留。 |
+| B review | review-record-route:126/145/250，wh-review CLI/stage-runtime调用 | 空provider、新bytes及最终JSON逐写接executor；已认证同bytes复用先返回。 |
+| C research | research-report.publishResearchReport:382–390 | 现recordDir核task身份后同evidence executor发布。 |
+| D portable | portable-workflow-run.writeTerminal:89–96 | 现task校验后同evidence executor，不增加step/进度状态。 |
+| E native | stage-runtime verify:1298–1307；build-code/capture、targeted-capture、verify-code/capture | 同task.captureCommand，output创建/chunk/marker/receipt各步原子核预算。 |
+| F 人确认 | stage-runtime confirm:1344 -> human-confirm.recordConfirmation:304–325 | 同task.recordConfirmation，原cwd/HEAD/真实回复及公共字段不变。 |
+| G Git record/consume | stage-runtime authorize:1346–1355；stage-closeout:28–35 | task方法同进程调用generic record/consume，显式cwd与真实grant/ref/step，保原branch/HEAD授权检查。 |
+| H close确认 | stage-runtime confirm:1333–1342 -> core/task-close.confirmClosePlan:394–411 | 仅现入口timeout evidence及confirmed/rejected human-confirm接task owner；不激活旧prepare/execute close流程。 |
+
+以上是人读覆盖分母，不生成writer registry或许可列表。外部手工cp/恶意直写不属OS级配额；正常task方法不能继续裸append/CLI后称unsupported。artifact-dir:117–119/214是worktree/specs而非quality，091该项误判已纠正；material-workspace规格、task-store根facts/task.json不扩大。新文件职责/consumer/owner/替代与删除条件按P8表、实施前登记现move-map，当前不写map。
+
+#### 已落定内部task接口
+
+复用现 `openTask(taskPath,{projectName,taskId})` 及真实branded handle；下列方法计划在 `runtime/task/task-handle.mjs` 实现，不是现已存在的能力：
+
+- `task.createRecord(ref,bytes)`、`task.writeRecordAtomic(ref,bytes)`保现参数。quality三组接executor；其它task记录保原行为，pre/history仍只读。已有真正同bytes create-only复用先返回；不改变generic overwrite缺省语义来伪造复用。
+- `task.appendRecord({dir,slug,ext,bytes})`：dir为task内相对quality子目录，验证属于三组；委派现safe-write.appendRecord，序号算法不复制。返回现原件path。普通阶段保存、授权范围原件、handoff和closeout备忘实际改用它；先按现证据规则确认同bytes则引用原件，不新写副本。
+- `task.captureCommand({cwd,slug,argv,shell,timeoutMs,signal,resolveOutputRef})`：recordDir绑定task的quality/tests，保原argv/shell互斥及可选参数语义；内部调现generic capture并传executor，返回原执行事实。stage-runtime verify同进程调用。
+- 三个workflow薄入口保原 `runCapture` / `runPrivateTargetedCapture` 导出名，接 `{task,cwd,recordDir,slug,argv,shell,timeoutMs,signal,resolveOutputRef}`；assertTaskHandle后调用上述方法；recordDir若提供须等于该task质量测试目录，错误task拒绝。没有task的独立通用使用仍可直接导入generic工具，正常task方法始终带真实task。
+- `task.recordConfirmation(fields,{cwd})`：fields保stage/decision/reply/materialRefs；dir绑定quality/evidence/human-confirmations，内部generic context增加performWrite与lockDir（task根）。现public confirm及close.confirmClosePlan human分支消费。
+- `task.recordGitAuthorization({cwd,operation,confirmationRef,phase})` / `task.consumeGitAuthorization({cwd,operation,stepId,authorizationRef,phase})`：dir绑定quality/evidence/git-authorizations；调用现generic record/consume，传显式cwd、lockDir=task根及executor；不process.chdir，不spawn后幻想callback跨进程。stage-runtime authorize与stage-closeout record/consume是实际consumer。generic缺省cwd保旧通用能力。
+- core.confirmClosePlan沿现taskDir认证打开同task；timeout用task.appendRecord的close目录，confirmed/rejected用task.recordConfirmation；仅上述现public入口两写，不泛重构core旧writer。
+
+正常方法给可执行Node module调用形状：从已定位包导入openTask，用当前task根与原项目/task identity打开；普通保存 `await task.appendRecord({dir:"quality/evidence",slug:"build-note",ext:"md",bytes})`；实际Git动作前分别 `await task.recordGitAuthorization({cwd,operation,confirmationRef,phase})`、`await task.consumeGitAuthorization({cwd,operation,stepId,authorizationRef:grant.path,phase})`。真实cwd/ref/step来源不变，不虚构新runtime action；已有七类CLI及普通Node内部方法足够。
+
+#### 阈值、usage与写入峰值
+
+| quality子目录 | soft bytes | hard bytes | hard文件数 |
+| --- | --- | --- | --- |
+| evidence | 384 MiB | 512 MiB | 20000 |
+| reviews | 192 MiB | 256 MiB | 5000 |
+| tests | 128 MiB | 256 MiB | 10000 |
+
+MiB=1024*1024；显式soft/hard为准，删除80%歧义。soft只stderr告警；files仅hard。允许恰hard，超过hard写前抛DISK_BUDGET_EXCEEDED；错误含subdir/current_bytes/incoming_bytes/hard_bytes及current_files/incoming_files/hard_files，不输出provider raw。limits只用于明确调用配置/小fixture，不静默上调掩失败。
+
+readTaskDiskUsage只读quality三组，拒symlink不跟随；bytes按同一dev+ino的实际数据只计一次，files按regular-file目录项计（含hardlink每个pathname）；owned原子tmp与原有业务锁也是实际占用，不能简单过滤未知前缀。目录本身不计regular-file数。create/link发布峰值为新增两pathname、一个新inode的数据；overwrite为旧+temp两个inode并存、额外一个pathname；output创建+1文件、append chunk新增bytes不增files。usage与预算描述同口径，不能只用最终净增预测峰值。峰值预检可保守，descriptor明确bytes/files是峰值增量而非提交后delta。已有历史超hard只读保留，已知bytes复用不新增可继续。
+
+单一 `runtime/evidence/disk-budget.mjs` 提供readTaskDiskUsage/assertTaskDiskBudget/内部 `createTaskDiskWriteExecutor({taskRoot,limits})`；仅读实际目录，不存缓存/计数/预留账本。实际写executor形状 `performWrite({kind,path,bytes,incomingFiles},writeActual)`，bytes是本次峰值新增字节数、incomingFiles是峰值新增目录项数；writeActual仅本次有限FS动作，不调用其他task writer或child。task owner构造，不从public JSON接受函数。generic safe-write/run-command/human-confirm/git-authorize保单文件node:*，无callback保原通用行为。
+
+#### 锁、stream与失败事实
+
+复用record-lock：budget锁固定在task根、每quality组一个名字。每次真实写严格 `lock -> read usage -> assert peak -> writeActual -> unlock`；await锁后实际写内再次沿原snapshot验证，不以放锁后的write制造TOCTOU。budget是叶子锁，不跨spawn/等待child/provider，不能整capture持锁，不能预算锁内再进task writer。同task被测child可写research/record而不死锁。
+
+simplicity P1/P2选择复用现锁算法、只调task锁storage：review外锁与provider-output锁的withLock第一个参数由quality/reviews改为已核task根，name/scope保持；human-confirm context与git record/consume可选lockDir由task owner传task根，缺省通用调用仍原storage。业务数据仍原quality目录，原算法及owner/no-follow/nonce/死pid判据不改，record-lock.mjs不增hook、不扩写。task根review/provider/human/Git/budget名称各异；provider root锁内仍先比同源不可变bytes，再对真正新写申请budget锁，所以超hard复用不先消耗quality锁。旧quality内锁不删/不迁，计真实usage；切换前先核本task旧writer已settle，真实仍活持有者沿现锁等待/报告，不能以目录移动绕过并发保护，不增永久双锁compat。无task子进程/锁等待在budget叶子锁内，锁释放仍只删本进程自有锁。
+
+safe-write将已验证目标的完整单文件publish交executor；append冲突重试保旧算法，每次实际尝试都核。既有bytes复用在预算前；overwrite不凭新规则跳过。review逐写原子不是整轮事务，合法前序provider原件保留。AC-DISK4“第二次零新文件”fixture明确该调用第一个新写即超限；另测provider成功写而JSON失败，保前件、不留半截JSON。
+
+native output-create、chunk、8MiB truncation-marker及receipt逐写用同执行器。stdout/stderr共一有序队列按观察顺序入队；等待预算锁暂停两pipe并限制积压；close先等队列后fsync/close/receipt，不能借旧同步假设提前finish。abort/timeout立即终止进程组，不等队列；拒写后恢复drain或销毁pipe使child close可达；队列错误settle一次、拒绝后待写chunk不再落盘。保现8MiB语义，budget拒写不冒正常truncation/success。
+
+预算拒写保实际已写prefix，标不完整；receipt也可被拒。此时具名错误向真实CLI serializer透出execution（exit/signal/timed_out/cancelled/原error/output_ref）与receipt未保存，无假receipt_ref；原命令失败不能被budget错误覆盖。stage-runtime仅有真实receipt才回读/记录原stage evidence；无receipt分支准确报告执行与保存失败，不造facts。满目录不承诺新receipt必能落盘。fresh capture事前不知道新输出字节是否同旧件，不能用末端dedup承诺超hard重跑仍成功。
+
+#### 临时生命周期、审计与回退
+
+helper首consumer为provider-client #invokeCli wh-review-public，创建marker失败清本次新目录，下次同consumer实际跑stale；条件为允许前缀+合法owner marker+超龄+原pid已证死，权限/未知/无marker/symlink/PaperBuilder不删。OCR仅修两次分配同一try及已分配目录清理，保现dispose/cancel流程。12producer逐项回读既有正确owner与真实测试，不泛迁移，不以helper单测冒全FR；真实剩余缺口保持incomplete并回owner。
+
+审计CLI只接受--task-root绝对路径并输出只读JSON；预算reader限三组，审计另读取该task根facts/index及review-materials的有限归属元数据。review-materials已证退役writer可标historical；当前合法facts/index仍是active owner，不按文件名一律判历史；只有历史cohort/已证旧M15来源才historical，缺身份/来源为unknown。quality/reviews当前writer属active，未知子目录不猜；按任务/目录/已证writer/mtime给bytes/files，mtime只作时间事实不作归责。拒symlink、删除/清理参数，不全盘扫描/PaperBuilder；前后bytes/inode不变。
+
+恢复先保原错误、已写原件及未保存面，用户另决定历史归档/预算配置；不自动删旧件/降原FR。回退仅本Phase具体hunk，不整树回退；新增文件替代/删除条件见P8登记表。正式收口需T037–T040每条真实caller证据与独立质量事实，规划/静态检查不冒实现GREEN。
+
 ### 全局文件边界与依赖
 
 - **新增**：`tests/contract/n10-check-core.test.mjs`、`tests/contract/n10-source-registry.test.mjs`、`tests/contract/n10-material-contract.test.mjs`、`tests/contract/n10-method-readback.test.mjs`、`tests/fixtures/n10-method-readback.json`、`tests/contract/n10-source-disposition.test.mjs`、`tests/contract/n10-n9-interface.test.mjs`、`tests/contract/n10-process-repair.test.mjs`、`tests/acceptance/n10-finite-check-acceptance.test.mjs`、`docs/research/n10-finite-check-acceptance-runbook.md`；P8 新增 `runtime/interface/temp-dir.mjs`、`runtime/evidence/disk-budget.mjs`、`tools/cli/audit-disk-usage.mjs`、`tests/contract/n10-disk-boundedness.test.mjs`、`docs/research/n10-disk-boundedness.md`。
 - **修改**：`runtime/review/review-record-route.mjs`（P8/T039 预算检查）、`skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs`（P8/T037 4 处 cleanup）、`tools/cli/check-skill-consistency.mjs`、`tools/cli/check-decision-log-chain.mjs`、`tools/cli/run-checks.mjs`、`skills/catalog.yaml`、`THIRD_PARTY_NOTICES.md`、`skills/reuse-registry.md`、`skills/spec-plan/templates/index-template.md`、`workflows/verify-code/SKILL.md`、`skills/stage-reflection/SKILL.md`、`workflows/make-decision/SKILL.md`、`workflows/make-decision/steps.json`、`skills/wh-review/contracts/make-decision.md`、`specs/n10-finite-check-wiring-20261020/n8-corrections.md`、`workflows/make-decision/flows/normal/SKILL.md`、`docs/adr/0052-direction-review-before-module-convergence.md`、既有测试 `tests/n2-skill-catalog-portability.test.mjs`、`tests/contract/make-decision-flows.test.mjs`、`core/__tests__/run-checks.test.mjs`、`tests/contract/ocr-production-cutover.test.mjs`。
 - **禁止改动**：`runtime/stage/stage-content-contracts.mjs`（只读复用；若必须改回用户）、`tests/contract/ocr-delegation-route.test.mjs` 的既有断言（P1/T005 只改 production-cutover 的请求 materials）、`specs/archive/n8-four-level-route-20261019/phases/P7-四级验收与成本对照.md`（保留历史 incomplete）、`specs/archive/**`（含 N8 spec，只读；修正只在 `n8-corrections.md`）、`docs/archive/**`。
+- **P8追加修改**（仅磁盘设计接线，原各Phase范围不变）：`tests/contract/card05-runtime-target-behavior.test.mjs`；`skills/wh-review/scripts/review-provider-client.mjs`；`skills/wh-review/scripts/__tests__/review-provider-client-timeout.test.mjs`；`runtime/review/ocr-delegation-adapter.mjs`；`tests/contract/ocr-delegation-adapter.test.mjs`；`skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs`；`runtime/interface/safe-write.mjs`；`tests/contract/narrow-tool-safe-write.test.mjs`；`runtime/interface/run-command.mjs`；`tests/contract/narrow-tool-run-command.test.mjs`；`runtime/task/task-handle.mjs`；`tests/contract/task-handle.test.mjs`；`runtime/review/review-record-route.mjs`；`runtime/evidence/research-report.mjs`；`tests/contract/research-report-current.test.mjs`；`runtime/task/portable-workflow-run.mjs`；`tests/contract/portable-workflow-run.test.mjs`；`tools/cli/stage-runtime.mjs`；`tests/contract/confirmation-authorization.test.mjs`；`workflows/build-code/capture.mjs`；`workflows/build-code/targeted-capture.mjs`；`workflows/verify-code/capture.mjs`；`runtime/interface/human-confirm.mjs`；`tests/contract/narrow-tool-human-confirm.test.mjs`；`runtime/interface/git-authorize.mjs`；`tests/contract/narrow-tool-git-authorize.test.mjs`；`core/task-close.mjs`；`tests/contract/light-close-confirm.test.mjs`；`docs/standard-workflow.md`；`workflows/build-code/SKILL.md`；`workflows/verify-code/SKILL.md`；`skills/stage-closeout/SKILL.md`；`docs/architecture/move-map.json`。职责/真实consumer/TCR以P8表为准；map在实施前登记，本轮不写。
 - **全局依赖**：P1 → P2 → P3 → P4 → P5 → P7 → P8；P6（F）不依赖 P1–P5，但按阶段顺序排在 P5 后；P7 消费 P1–P6，P8 消费 P1–P7。P2/P3 都改 `check-skill-consistency.mjs`，P1/P3 都改 `run-checks.mjs`，串行定序。
 - **文件归属**：`check-skill-consistency.mjs` 唯一写主顺序 P1→P2→P3；`run-checks.mjs` P1→P3；`tests/n2-skill-catalog-portability.test.mjs` P1→P2→P3。P5 不改 P2 的 catalog/notice，只读回。
 - **回滚与恢复**：每个 Phase 的改动按文件 hunk 回退；恢复用同字节复跑；不整树 checkout。
@@ -775,7 +843,7 @@
 | D-028；R-012 | 临时目录生命周期；stale 只清允许前缀+owner marker+超龄+pid 不活 | FR-DISK-001；AC-DISK-1 | P8/T037 | ORACLE-N10-DISK-BOUNDED；before/after `wh-review-*` 计数 delta=0；负例不误删 `paperbuilder-*` |
 | D-028；R-012 | 任务证据 soft 告警、hard 写前失败；不删/不覆盖旧件 | FR-DISK-002；AC-DISK-2 | P8/T038 | ORACLE-N10-DISK-BOUNDED；`DISK_BUDGET_EXCEEDED`；前后 bytes/sha256 不变 |
 | D-028；R-012 | 只读审计按历史/当前/unknown 分类；不扫 PaperBuilder、不按前缀删 | FR-DISK-003；AC-DISK-3 | P8/T038 | ORACLE-N10-DISK-BOUNDED；审计 JSON 分类；前后 sha256 不变 |
-| D-028；R-012 | review 写入接预算；超限零新文件、无半截 JSON；相同 bytes 复用 | FR-DISK-004；AC-DISK-4 | P8/T039 | ORACLE-N10-DISK-BOUNDED；`-t T039` 超限零新文件；复用不增文件 |
+| D-028；R-012 | review 写入接预算；超限零新文件、无半截 JSON；相同 bytes 复用 | FR-DISK-002、FR-DISK-004；AC-DISK-2、AC-DISK-4 | P8/T039 | ORACLE-N10-DISK-BOUNDED；`-t T039` 超限零新文件；复用不增文件 |
 | D-028；R-012 | P8 四 AC 收口、报告与只读复核 | FR-DISK-001、FR-DISK-002、FR-DISK-003、FR-DISK-004；AC-DISK-1、AC-DISK-2、AC-DISK-3、AC-DISK-4 | P8/T040 | ORACLE-N10-DISK-BOUNDED；四条 AC 原件齐备；历史原件保真 |
 | R-009、R-017 | 该 Task 的可观察行为与失败强度见 5 节与 Phase 卡 | FR-SET-005；AC-CHECK-1、AC-CHECK-2、AC-CHECK-3、AC-CHECK-4、AC-CHECK-5、AC-CHECK-6、AC-SOURCE-1、AC-SOURCE-2、AC-SOURCE-3、AC-SOURCE-4、AC-SOURCE-5、AC-SOURCE-6、AC-MATERIAL-1、AC-MATERIAL-2、AC-MATERIAL-3、AC-MATERIAL-4、AC-MATERIAL-5、AC-MATERIAL-6、AC-METHOD-1、AC-METHOD-2、AC-METHOD-3、AC-METHOD-4、AC-SET-1、AC-SET-2、AC-SET-3、AC-SET-4、AC-SET-5、AC-SET-6、AC-PROCESS-1、AC-PROCESS-2、AC-PROCESS-3、AC-PROCESS-4、AC-PROCESS-5、AC-PROCESS-6、AC-PROCESS-7、AC-PROCESS-8 | P7/T033 | ORACLE-N10-FINAL-ACCEPTANCE；证据见 Phase 卡与 Appendix A |
 | R-009、R-017 | 该 Task 的可观察行为与失败强度见 5 节与 Phase 卡 | FR-SET-006；AC-CHECK-1、AC-CHECK-2、AC-CHECK-3、AC-CHECK-4、AC-CHECK-5、AC-CHECK-6、AC-SOURCE-1、AC-SOURCE-2、AC-SOURCE-3、AC-SOURCE-4、AC-SOURCE-5、AC-SOURCE-6、AC-MATERIAL-1、AC-MATERIAL-2、AC-MATERIAL-3、AC-MATERIAL-4、AC-MATERIAL-5、AC-MATERIAL-6、AC-METHOD-1、AC-METHOD-2、AC-METHOD-3、AC-METHOD-4、AC-SET-1、AC-SET-2、AC-SET-3、AC-SET-4、AC-SET-5、AC-SET-6、AC-PROCESS-1、AC-PROCESS-2、AC-PROCESS-3、AC-PROCESS-4、AC-PROCESS-5、AC-PROCESS-6、AC-PROCESS-7、AC-PROCESS-8 | P7/T033 | ORACLE-N10-FINAL-ACCEPTANCE；证据见 Phase 卡与 Appendix A |
