@@ -314,6 +314,7 @@ export function checkSkillConsistency(root) {
       });
       const visible = lines.map(({ text }) => text).join("\n");
       const missing = [];
+      let indexUnknown = false;
       if (locator.endsWith("/phase-template.md")) {
         if (!/^##\s+L2\b/m.test(visible)) missing.push("L2");
         const authority = visible.split(/^##\s+L2\b|^###\s+T\d{3,}\b/m, 1)[0];
@@ -326,11 +327,15 @@ export function checkSkillConsistency(root) {
         // Execution Index pointer rows. Reporting only the former let an index
         // with no pointer row be reported as structurally present.
         const projection = validatePostPhaseContract({ spec: "Structural report projection only", index: body, phases: {} });
-        const indexShapeInvalid = projection.errors.some((error) => /Phase index must remain pointer-only|requires an Execution Index with Phase pointers/.test(error));
-        if (!/^##\s+(?:Execution Index|执行索引)\s*$/im.test(visible) || indexShapeInvalid) missing.push("纯指针边界");
+        const section = visible.split(/^##\s+(?:Execution Index|执行索引)\s*$/im)[1]?.split(/^##\s/m)[0];
+        const rows = section?.split(/\r?\n/).filter(line => /^\s*\|/.test(line)) ?? [];
+        const hasData = rows.slice(1).some(line => !/^\s*\|\s*:?-{2,}/.test(line));
+        const impure = projection.errors.some(error => /Phase index must remain pointer-only/.test(error));
+        if (!section || !hasData || impure) missing.push("纯指针边界");
+        else indexUnknown = projection.errors.some(error => /requires an Execution Index with Phase pointers/.test(error));
       }
       const mechanical = locator.endsWith("/phase-template.md") || locator.endsWith("/index-template.md");
-      reports.push(`${prefix} 必留项 ${missing.length ? `缺失 ${missing.join("、")}` : mechanical ? "机器结构在场" : "unknown — 无机器可判声明"}; 散文必留声明 unknown／未覆盖，交独立人读; report-only`);
+      reports.push(`${prefix} 必留项 ${missing.length ? `缺失 ${missing.join("、")}` : indexUnknown ? "unknown — Execution Index 有表行但占位未判定" : mechanical ? "机器结构在场" : "unknown — 无机器可判声明"}; 散文必留声明 unknown／未覆盖，交独立人读; report-only`);
       const proseLines = [];
       for (const { line, text } of lines) {
         const prose = text.replace(/(`+)(.*?)\1/g, "");

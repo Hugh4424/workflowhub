@@ -919,7 +919,7 @@
 
 - [ ] **AC-MATERIAL-6**：跳过理由三态：裸 N/A 红；N/A 带理由绿；deferred 缺责任卡红。
 验证：P3 实施者在临时 Phase 文件中分别写裸 `N/A`、`N/A — 具体理由`、`deferred` 无责任卡；跑 `run-checks --material-root`；执行 owner 是 P3 实施者，verify-code 复核。
-通过：裸 N/A 被既有 validator 报错；带理由通过；deferred 缺责任卡被新增的窄检查报出（或既有 validator 报错）；三种输入可区分。
+通过：CLI 材料段的 `triageSkipReasons` 对显式状态声明中的裸 N/A 报错；带理由通过；deferred 缺责任卡由同一窄检查报出；三种输入可区分。本次只纠正诊断 producer 为已批准的 CLI 窄检查，不改变成功/失败判据、validator、FR/AC 编号或范围。
 失败：裸 N/A 通过、带理由误红、或 deferred 缺责任卡不报。
 证据：三组材料命令、stdout、exit。
 

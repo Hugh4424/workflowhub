@@ -5527,6 +5527,19 @@
       "named_data_readers": [],
       "delete_condition": "经独立审查的替代测试完整承接上述行为与失败边界后由原owner退役；原始RED及历史引用保留。",
       "retention_basis": "P2已确认Phase与现可读预写测试；来源summary/具名违规/恢复oracle有真实RED（2026-10-21-028-p2-source-red），未因注册宣称GREEN或完整验收。"
+    },
+    {
+      "source": "tests/contract/n10-material-contract.test.mjs",
+      "destination": "tests/contract/n10-material-contract.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "N10 P3 显式材料CLI、级别/零输入/跳过理由、模板报告与恢复行为oracle；非阶段许可证。",
+      "owner": "N10 P3 实施/oracle owner，冻结后遵TCR",
+      "consumer": "当前可读P3 T011–T016预写测试卡及gate_cmd由Vitest显式消费；新增前已读CLI/validator/reader及卡片。",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "等强度独立审查替代完整承接行为后原owner退役；历史原件保留。",
+      "retention_basis": "已确认P3及T011–T016，登记不冒测试已通过。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

@@ -213,6 +213,29 @@ describe("ORACLE-N4-REPORT-ONLY writing reports", () => {
     return reports[0];
   };
 
+  it("T013 distinguishes placeholder index rows from missing or impure pointers", () => {
+    const root = fixture();
+    put(root,indexPath,read(join(ROOT,indexPath)));
+    expect(reportFor(root,indexPath)).not.toContain("缺失 纯指针边界");
+    for(const body of ["", "## Execution Index\n", read(join(ROOT,indexPath))+"\n- gate_cmd: npm test\n"]){put(root,indexPath,body);expect(reportFor(root,indexPath)).toContain("缺失 纯指针边界");}
+    put(root,indexPath,read(join(ROOT,indexPath)));
+    expect(reportFor(root,indexPath)).not.toContain("缺失 纯指针边界");
+  });
+  it("T016 reports safe real templates while preserving placeholder and author boundaries", () => {
+    const root=fixture();
+    put(root,indexPath,read(join(ROOT,indexPath)));
+    expect(reportFor(root,indexPath)).toContain("机器结构在场");
+    const placeholder=read(join(ROOT,indexPath)).replace(/`README.md`/g,"`[精确路径]`");
+    put(root,indexPath,placeholder);expect(reportFor(root,indexPath)).toContain("unknown");
+    put(root,phasePath,read(join(ROOT,phasePath)));expect(reportFor(root,phasePath)).toContain("机器结构在场");
+    for(const name of ["spec.md","decision-log.md","prd.md"])put(root,name,"#\nTBD 待补充\n");
+    const result=checkSkillConsistency(root);expect(result.failures).toEqual([]);
+    expect(result.reports.filter(row=>/^material-authoring (?:spec|decision-log|prd)\.md:/.test(row))).toEqual([]);
+    const material=result.reports.filter(row=>row.startsWith("material-authoring "));
+    expect(new Set(material.map(row=>row.split(":")[0])).size).toBe(5);
+    expect(material.some(row=>/必留项 (?:pass|fail)|评分[:：]\s*\d/i.test(row))).toBe(false);
+  });
+
   it("reports each of five missing templates as unknown with its original error, without failures", () => {
     const { root } = healthyFixture();
     for (const path of AUTHORING_TEMPLATES) {
