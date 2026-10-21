@@ -85,6 +85,8 @@
 | context-engineering | 任务重点靠后、保护字段与指针进入面 | [AGENTS.md](../AGENTS.md#派发与回传) |
 | orchestrate.md | brief缩放、上游指针中继、可核事实回传 | [AGENTS.md](../AGENTS.md#派发与回传)；`skills/deep-research/SKILL.md` |
 
+人读：swarm 的具名测量方法与样本只给人工判断。派发者与结果汇总者在实际安排 commit 测量时，核对具名 SHA、样本数、单样本定义、执行顺序及结果原件，判断样本是否支持结论。swarm 当前仅 watch/consumer-only，未采用其测量机制、未取得本次测量样本，不声明测量效果；来源与未采用范围唯一回 catalog.yaml 的 swarm 条目。本段只明确人工边界，不引入采样机制、指标或机器通过结论。
+
 ## N6研究方法采用索引
 
 来源、固定版本、许可与未证实项唯一回 `catalog.yaml` 的 `knowledge-graph`、`deep-research` 与 `make-decision`；写作沿 `skills/spec-specify/SKILL.md` 的 WR001。此节只索引正文，保留既有 N4／N5 内容。消费者读对应方法，owner为各方法维护者；替代旧的内外混写与重复来源转述。正文被正式替代且无消费者时，由原 owner 同批删除对应索引行，历史原件保留。

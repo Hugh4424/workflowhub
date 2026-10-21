@@ -1,0 +1,226 @@
+{
+  "source": {
+    "research_ref": "task:quality/evidence/build-plan-research/r9-sources-content.md#5.3-5.4",
+    "contract_ref": "specs/n10-finite-check-wiring-20261020/phases/P4-方法读回与变异演示.md",
+    "manual_boundary_repair_ref": "task:quality/evidence/2026-10-21-169-registry-m05-boundary-repair.json"
+  },
+  "rows": [
+    {
+      "id": "C01",
+      "method": "后端行为证伪",
+      "path": "workflows/build-code/skill-deps.yaml",
+      "line": "9-11",
+      "trigger": "build-code真实后端测试时由actual_backend_test依赖触发backend-testing；只证可读接线",
+      "kind": "machine",
+      "AC": [
+        "AC-METHOD-1"
+      ]
+    },
+    {
+      "id": "C02",
+      "method": "前端与全栈行为证伪",
+      "path": "workflows/build-code/skill-deps.yaml",
+      "line": "12-14,21-23",
+      "trigger": "真实前端/全栈测试由actual_frontend_test与actual_fullstack_test触发；frontend-testing:24/fullstack-slice-testing:12再读backend-testing#行为测试与证伪",
+      "kind": "machine",
+      "AC": [
+        "AC-METHOD-1"
+      ]
+    },
+    {
+      "id": "C03",
+      "method": "代码审查身份与同源",
+      "path": "workflows/build-code/skill-deps.yaml",
+      "line": "30-32",
+      "trigger": "每次代码审查先读wh-review；every_code_review_invocation_method_only声明不证明宿主已执行",
+      "kind": "machine",
+      "AC": [
+        "AC-METHOD-1"
+      ]
+    },
+    {
+      "id": "C04",
+      "method": "阶段末问题收口",
+      "path": "workflows/build-code/skill-deps.yaml",
+      "line": "37-39",
+      "trigger": "阶段末真实过程问题触发stage-reflection，actual_stage_end_process_issue_optional",
+      "kind": "machine",
+      "AC": [
+        "AC-METHOD-1"
+      ]
+    },
+    {
+      "id": "C05",
+      "method": "先复现再假设",
+      "path": "workflows/build-code/skill-deps.yaml",
+      "line": "40-42",
+      "trigger": "实际失败在假设前触发diagnosing-bugs的actual_failure_reproduction_before_hypothesis",
+      "kind": "machine",
+      "AC": [
+        "AC-METHOD-1"
+      ]
+    },
+    {
+      "id": "C06",
+      "method": "WR001规格写作",
+      "path": "workflows/build-plan/skill-deps.yaml",
+      "line": "12-14",
+      "trigger": "产品规格作者在product_spec_authoring触发spec-specify并读WR001",
+      "kind": "machine",
+      "AC": [
+        "AC-METHOD-1"
+      ]
+    },
+    {
+      "id": "C07",
+      "method": "简化四阶梯",
+      "path": "workflows/build-plan/skill-deps.yaml",
+      "line": "18-20",
+      "trigger": "build-plan作者执行simplicity_check时读simplicity-guard",
+      "kind": "machine",
+      "AC": [
+        "AC-METHOD-1"
+      ]
+    },
+    {
+      "id": "C08",
+      "method": "verify审查与收口",
+      "path": "workflows/verify-code/skill-deps.yaml",
+      "line": "18-20,28-30",
+      "trigger": "verify-code每次审查读wh-review，阶段末真实过程问题读stage-reflection；这里只读依赖声明",
+      "kind": "machine",
+      "AC": [
+        "AC-METHOD-1"
+      ]
+    },
+    {
+      "id": "C09",
+      "method": "验证报告与阶段收口",
+      "path": "workflows/verify-code/steps.json",
+      "line": "85-86,96-97",
+      "trigger": "verify-code步骤7/8消费验证报告分报与stage-reflection收口；步骤声明不是已执行原件",
+      "kind": "machine",
+      "AC": [
+        "AC-METHOD-1"
+      ]
+    },
+    {
+      "id": "C10",
+      "method": "真实聚合检查调用",
+      "path": "tools/cli/run-checks.mjs",
+      "line": "132-134",
+      "trigger": "维护者显式调用node tools/cli/run-checks.mjs时，由runChecker派生check-skill-consistency --root；P4只读调用点",
+      "kind": "machine",
+      "AC": [
+        "AC-METHOD-1"
+      ]
+    },
+    {
+      "id": "C11",
+      "method": "Phase材料合同真实消费者",
+      "path": "tools/cli/stage-runtime.mjs",
+      "line": "556-557,605-606",
+      "trigger": "build-code post Phase审查的scope抓取与source投影调用validatePostPhaseContract读取当前spec/index/phases",
+      "kind": "machine",
+      "AC": [
+        "AC-METHOD-1"
+      ]
+    },
+    {
+      "id": "C12",
+      "method": "聚合报告与阻塞失败oracle",
+      "path": "tests/n2-skill-catalog-portability.test.mjs",
+      "line": "366-380",
+      "trigger": "显式Vitest运行tests/n2-skill-catalog-portability.test.mjs的具名用例会spawn run-checks并通过RUN_CHECKS_FORCE_FAIL_CHECKER核失败传播；P4只读断言",
+      "kind": "machine",
+      "AC": [
+        "AC-METHOD-1"
+      ]
+    },
+    {
+      "id": "C13",
+      "method": "主会话派发与回传",
+      "path": "AGENTS.md",
+      "line": "29-31",
+      "trigger": "人读：派发主会话与回传读者在委派/接收子任务时消费brief四要素、继承边界与六项回传纪律；无机器执行证明",
+      "kind": "manual",
+      "AC": [
+        "AC-METHOD-1",
+        "AC-METHOD-3"
+      ]
+    },
+    {
+      "id": "M01",
+      "method": "TDD三反模式逐case判断",
+      "path": "skills/backend-testing/SKILL.md",
+      "line": "16-20",
+      "trigger": "人读：测试作者和独立审查者逐case判断implementation-coupled、tautological、horizontal slicing；测试只读边界，不机判语义",
+      "kind": "manual",
+      "AC": [
+        "AC-METHOD-1",
+        "AC-METHOD-3"
+      ]
+    },
+    {
+      "id": "M02",
+      "method": "WR001完成穷尽性与no-op",
+      "path": "skills/spec-specify/SKILL.md",
+      "line": "153,159",
+      "trigger": "人读：材料作者与审查者判断Q04完成判据穷尽性及Q10相对模型默认的no-op；不以文字存在声称通过",
+      "kind": "manual",
+      "AC": [
+        "AC-METHOD-1",
+        "AC-METHOD-3"
+      ]
+    },
+    {
+      "id": "M03",
+      "method": "审查同源关系语义",
+      "path": "skills/wh-review/SKILL.md",
+      "line": "28",
+      "trigger": "人读：审查宿主与独立读者核真实adapter/source/model及模型族；机器只记录身份形状，同源解释是否正确仍人工",
+      "kind": "both",
+      "AC": [
+        "AC-METHOD-1",
+        "AC-METHOD-3"
+      ]
+    },
+    {
+      "id": "M04",
+      "method": "简化与真实consumer判断",
+      "path": "skills/simplicity-guard/SKILL.md",
+      "line": "32,39",
+      "trigger": "人读：方案作者与审查者判断重复、真实consumer与含义保全；没有机器语义判据",
+      "kind": "manual",
+      "AC": [
+        "AC-METHOD-1",
+        "AC-METHOD-3"
+      ]
+    },
+    {
+      "id": "M05",
+      "method": "swarm测量方法与样本支持度",
+      "path": "skills/reuse-registry.md",
+      "line": "88",
+      "trigger": "人读：派发者与结果汇总者在实际安排commit测量时核SHA、样本数、单样本定义、顺序和原件；当前watch未采用测量机制且未取得样本，不声明效果",
+      "kind": "manual",
+      "AC": [
+        "AC-METHOD-1",
+        "AC-METHOD-3"
+      ]
+    },
+    {
+      "id": "M06",
+      "method": "poteto草图产品取舍",
+      "path": "AGENTS.md",
+      "line": "55-56",
+      "trigger": "人读：主会话与用户在技术分歧满足三条件/四禁用时判断是否取事实及观察支持何种产品选择；不是机器性能判据",
+      "kind": "manual",
+      "AC": [
+        "AC-METHOD-1",
+        "AC-METHOD-3"
+      ]
+    }
+  ],
+  "incomplete": []
+}

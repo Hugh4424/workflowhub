@@ -5540,6 +5540,34 @@
       "named_data_readers": [],
       "delete_condition": "等强度独立审查替代完整承接行为后原owner退役；历史原件保留。",
       "retention_basis": "已确认P3及T011–T016，登记不冒测试已通过。"
+    },
+    {
+      "source": "tests/contract/n10-method-readback.test.mjs",
+      "destination": "tests/contract/n10-method-readback.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "N10 P4 固定19行可读接线/人工边界、真实N6断言四态变异及P2具名登记读回的定向oracle；不证明宿主已执行方法、不作阶段许可证。",
+      "owner": "N10 P4 实施/oracle owner；冻结后变更遵既有TCR",
+      "consumer": "P4 Phase gate_cmd通过Vitest显式执行本文件，verify-code与独立审查者读其原始输出；本文件readRow读取fixture所列当前源，T018复制真实N6测试并调用真实Vitest/生产checker，T019读取catalog/notice/spec。",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "经独立审查的等强度替代完整承接读回/负例/恢复边界后原owner退役；历史原件与已引用执行输出保留。",
+      "retention_basis": "两个路径及实际读取/调用处已经真实打开后登记；本时点尚未运行gate，不以登记冒测试通过。"
+    },
+    {
+      "source": "tests/fixtures/n10-method-readback.json",
+      "destination": "tests/fixtures/n10-method-readback.json",
+      "status": "add",
+      "role": "test",
+      "responsibility": "N10 P4 13条消费者与6条人工边界的路径/当前行号/触发方式与分类；数据只定位只读接线，不记录进度、执行许可或方法效果。",
+      "owner": "N10 P4 实施/oracle owner；冻结后变更遵既有TCR",
+      "consumer": "tests/contract/n10-method-readback.test.mjs的fixture()直接readFileSync/JSON.parse本路径，T017/T019逐行读真实文件并展示人工边界；维护者按真实source漂移更新，不以非空行凑消费者。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "tests/contract/n10-method-readback.test.mjs"
+      ],
+      "delete_condition": "经独立审查的等强度替代完整承接读回/负例/恢复边界后原owner退役；历史原件与已引用执行输出保留。",
+      "retention_basis": "两个路径及实际读取/调用处已经真实打开后登记；本时点尚未运行gate，不以登记冒测试通过。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"
