@@ -20,7 +20,7 @@ afterEach(()=>{for(const root of owned.splice(0))rmSync(root,{recursive:true,for
 function fixture(name){
  const root=temporary(),taskPath=join(root,'task'),repo=join(taskPath,'repo'),id='fixture-'+name,materialRoot=join(repo,'specs',id);
  // Copy only the exact individually declared seeds, never a directory snapshot.
- const card=get(ROOT,'specs/n9-final-chain-verification-20261020/phases/P3-七个受控负例.md');
+ const card=get(ROOT,'specs/archive/n9-final-chain-verification-20261020/phases/P3-七个受控负例.md');
  const header=card.split('\n').find(line=>line.startsWith('- **Write set**'));
  for(const [,path]of header.matchAll(/`([^`]+)`/g))if(path.startsWith(`tests/fixtures/final-chain/${name}/`))put(taskPath,path.slice(`tests/fixtures/final-chain/${name}/`.length),get(ROOT,path));
  mkdirSync(materialRoot,{recursive:true});
@@ -71,7 +71,7 @@ describe('P3 sourced levels, route originals and independent failures',()=>{
 });
 // The full-worktree check is deliberately unconditional: run only in the root-coordinated writer-free window.
 describe('P3 baseline and complete worktree preservation',()=>{
- it('restores the real read-only baseline and keeps complete git status identical',()=>{const before=execFileSync('git',['status','--porcelain'],{cwd:ROOT,encoding:'utf8'});const taskPath=temporary();put(taskPath,'task.json',{schema_version:'1.0.0',task_id:'n9-final-chain-verification-20261020',baseline_commit:'924cae2a1811c7939741ea6b0721f3949f567ea9',target_repo_root:ROOT});const options={taskPath,materialRoot:join(ROOT,'specs/n9-final-chain-verification-20261020')};const baseline=runFinalChainCheck(options);for(const name of ['missing-ring','files-without-facts','declared-vs-facts','planning-no-code-pr','legacy-no-level','unreadable-spec','empty-input'])report(fixture(name));expect(runFinalChainCheck(options)).toEqual(baseline);const after=execFileSync('git',['status','--porcelain'],{cwd:ROOT,encoding:'utf8'});console.log('P3 COMPLETE STATUS BEFORE\n'+before+'P3 COMPLETE STATUS AFTER\n'+after);expect(after).toBe(before);console.log('P3 BASELINE RESTORED',JSON.stringify(baseline));});
+ it('restores the real read-only baseline and keeps complete git status identical',()=>{const before=execFileSync('git',['status','--porcelain'],{cwd:ROOT,encoding:'utf8'});const taskPath=temporary();put(taskPath,'task.json',{schema_version:'1.0.0',task_id:'n9-final-chain-verification-20261020',baseline_commit:'924cae2a1811c7939741ea6b0721f3949f567ea9',target_repo_root:ROOT});const options={taskPath,materialRoot:join(ROOT,'specs/archive/n9-final-chain-verification-20261020')};const baseline=runFinalChainCheck(options);for(const name of ['missing-ring','files-without-facts','declared-vs-facts','planning-no-code-pr','legacy-no-level','unreadable-spec','empty-input'])report(fixture(name));expect(runFinalChainCheck(options)).toEqual(baseline);const after=execFileSync('git',['status','--porcelain'],{cwd:ROOT,encoding:'utf8'});console.log('P3 COMPLETE STATUS BEFORE\n'+before+'P3 COMPLETE STATUS AFTER\n'+after);expect(after).toBe(before);console.log('P3 BASELINE RESTORED',JSON.stringify(baseline));});
 });
 
 describe('P3 checker and human counterexamples',()=>{
