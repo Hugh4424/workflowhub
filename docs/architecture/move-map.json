@@ -5501,6 +5501,32 @@
       "named_data_readers": [],
       "delete_condition": "对应确认行为真实退役，或经独立审查的等强度oracle及fixture真实消费者完整承接后，由原P3测试owner处置；保原RED/GREEN/受保护断言，不因Phase结束或预算删除。",
       "retention_basis": "FR-CHAIN-006/012、P3/T006、484/495原TCR、518独立scope及608只读核；35测试/种子先创建后补职责登记属真实顺序遗漏，不倒称预登记；map无运行时或推进职责。"
+    },
+    {
+      "source": "tests/contract/n10-check-core.test.mjs",
+      "destination": "tests/contract/n10-check-core.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "N10 P1 检查器输入、报告与公共退出语义的受控行为oracle；普通测试事实，不作阶段许可证。",
+      "owner": "N10 P1 oracle/实施维护者；冻结后变更遵现有TCR",
+      "consumer": "specs/n10-finite-check-wiring-20261020/phases/ 中P1具名gate_cmd与verify-code独立复核通过Vitest显式消费本测试；当前可读预写测试，不以登记冒执行通过。",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "经独立审查的替代测试完整承接上述行为与失败边界后由原owner退役；原始RED及历史引用保留。",
+      "retention_basis": "P1测试已存在并完成其具名验证；本次补登记不冒创建前已登记，P1历史执行事实沿其原件。"
+    },
+    {
+      "source": "tests/contract/n10-source-registry.test.mjs",
+      "destination": "tests/contract/n10-source-registry.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "N10 P2 来源登记、声明出口、决定与索引、vendor漂移、bundle指针、空来源、总检查传递的受控行为oracle；普通测试事实，不作阶段许可证。",
+      "owner": "N10 P2 oracle/实施维护者；冻结后变更遵现有TCR",
+      "consumer": "specs/n10-finite-check-wiring-20261020/phases/ 中P2具名gate_cmd与verify-code独立复核通过Vitest显式消费本测试；当前可读预写测试，不以登记冒执行通过。",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "经独立审查的替代测试完整承接上述行为与失败边界后由原owner退役；原始RED及历史引用保留。",
+      "retention_basis": "P2已确认Phase与现可读预写测试；来源summary/具名违规/恢复oracle有真实RED（2026-10-21-028-p2-source-red），未因注册宣称GREEN或完整验收。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

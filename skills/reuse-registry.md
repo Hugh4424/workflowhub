@@ -161,3 +161,7 @@
 | n7-opening-a-pr | `skills/stage-closeout/SKILL.md` | P4 quality/tests/2026-10-18-081-p4-controlled-delivery-materials.json及quality/tests/2026-10-18-083-p4-delivery-note-green.json、quality/tests/2026-10-18-084-p4-closeout-protection-green.json；独立首验为quality/evidence/2026-10-18-050-p4-independent-first-consumer.json、quality/evidence/2026-10-18-055-p4-compression-consumer.json；受控首验不冒真实PR，后续实际PR另见quality/tests/2026-10-19-022-ac010-real-pr-independent-consumer.md |
 
 历史原件根：`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n7-route-delivery-closeout-experience-20261018/`。六项采用/排除判据只读回 `specs/archive/n7-route-delivery-closeout-experience-20261018/decision-log.md` 的 D-017 和 spec AC-013；历史六项汇总原件 `quality/tests/2026-10-18-p6-six-adoptions.md` 保留 reflect incomplete 与受控首验限制，不把补登记冒整体验收。
+
+## N10有限检查来源
+
+figure-it-out 的采用、固定字节与未证实项见 [catalog.yaml](catalog.yaml) 的 `figure-it-out` 条目；正文落点为 [verify-code 的检查可信度段](../workflows/verify-code/SKILL.md#测试充分性与检查可信度)，[stage-reflection](stage-reflection/SKILL.md) 只放指针，正文接线与首验归 P5/T021。本节只导航。

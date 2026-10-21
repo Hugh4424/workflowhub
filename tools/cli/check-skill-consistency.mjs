@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
@@ -26,40 +27,176 @@ export function checkSkillConsistency(root) {
   let catalog;
   try { catalog = read(CATALOG, yaml.load); }
   catch (error) { fail(CATALOG, error.message); return { failures, reports }; }
+  const emptySource = catalog == null || (Array.isArray(catalog.skills) && catalog.skills.length === 0
+    && (catalog.capability_decisions === undefined || (Array.isArray(catalog.capability_decisions) && catalog.capability_decisions.length === 0)));
+  if (emptySource) {
+    reports.push("source-registry 没有来源输入，未检查; report-only");
+    catalog ??= { skills: [], capability_decisions: [] };
+  }
   if (!Array.isArray(catalog?.skills)) {
     fail(CATALOG, "current skills must be an array");
     return { failures, reports };
   }
-  // Source shape is a report-only fact, never proof of identity or permission.
-  let validateSource;
-  try {
-    const schema = JSON.parse(fs.readFileSync(new URL("../../runtime/schemas/skill-bundle.schema.json", import.meta.url), "utf8"));
-    validateSource = new Ajv2020({ validateFormats: false, allErrors: true }).compile(schema.properties.sources.items);
-  } catch (error) {
-    reports.push(`${CATALOG} source schema unavailable: ${error.message}; report-only`);
-  }
-  for (const entry of catalog.skills) {
-    if (!entry || typeof entry !== "object") continue;
-    const label = `${CATALOG} ${entry.name ?? "<unnamed>"} upstream source`;
-    if (["adapted", "adopted"].includes(entry.status) && (!Array.isArray(entry.upstream) || entry.upstream.length === 0))
-      reports.push(`${label}: ${entry.status} registration requires a declared source; report-only`);
-    if (entry.upstream !== undefined && !Array.isArray(entry.upstream)) {
-      reports.push(`${label}: upstream must be an array; report-only`);
-      continue;
+  if (!emptySource) {
+    // Source shape is a report-only fact, never proof of identity or permission.
+    let validateSource;
+    try {
+      const schema = JSON.parse(fs.readFileSync(new URL("../../runtime/schemas/skill-bundle.schema.json", import.meta.url), "utf8"));
+      validateSource = new Ajv2020({ validateFormats: false, allErrors: true }).compile(schema.properties.sources.items);
+    } catch (error) {
+      reports.push(`${CATALOG} source schema unavailable: ${error.message}; report-only`);
     }
-    for (const [index, source] of (entry.upstream ?? []).entries()) {
-      if (!validateSource) continue; // The explicit schema-unavailable report above covers this gap.
-      let projected = source;
-      if (source && typeof source === "object" && !Array.isArray(source) && Object.hasOwn(source, "github_url")) {
-        // These catalog retrieval/review facts are not bundle-source fields.
-        const { github_url, commit_url, skill_url, reviewed_at, review_outcome, ...shape } = source;
-        projected = { ...shape, url: github_url };
-        if (Object.hasOwn(source, "url"))
-          reports.push(`${label}[${index}]: catalog github_url must not be mixed with bundle url; report-only`);
+    for (const entry of catalog.skills) {
+      if (!entry || typeof entry !== "object") continue;
+      const label = `${CATALOG} ${entry.name ?? "<unnamed>"} upstream source`;
+      if (["adapted", "adopted"].includes(entry.status) && (!Array.isArray(entry.upstream) || entry.upstream.length === 0))
+        reports.push(`${label}: ${entry.status} registration requires a declared source; report-only`);
+      if (entry.upstream !== undefined && !Array.isArray(entry.upstream)) {
+        reports.push(`${label}: upstream must be an array; report-only`);
+        continue;
       }
-      if (!validateSource(projected))
-        reports.push(`${label}[${index}]: ${JSON.stringify(validateSource.errors)}; report-only, shape does not establish authorization or identity`);
+      for (const [index, source] of (entry.upstream ?? []).entries()) {
+        if (!validateSource) continue; // The explicit schema-unavailable report above covers this gap.
+        let projected = source;
+        if (source && typeof source === "object" && !Array.isArray(source) && Object.hasOwn(source, "github_url")) {
+          // These catalog retrieval/review facts are not bundle-source fields.
+          const { github_url, commit_url, skill_url, reviewed_at, review_outcome, ...shape } = source;
+          projected = { ...shape, url: github_url };
+          if (Object.hasOwn(source, "url"))
+            reports.push(`${label}[${index}]: catalog github_url must not be mixed with bundle url; report-only`);
+        }
+        if (!validateSource(projected))
+          reports.push(`${label}[${index}]: ${JSON.stringify(validateSource.errors)}; report-only, shape does not establish authorization or identity`);
+      }
     }
+    // N10: the existing reports channel is the sole source-registry consumer.
+    // Findings describe local declarations; they confer no license or review pass.
+    const sourceReport = message => reports.push(`source-registry ${message}; report-only`);
+    const present = value => typeof value === "string" && value.trim() !== "";
+    const isHonestUnknown = value => value == null || value === "" || /^(?:unresolved(?:-.*)?|unknown|local)$/u.test(value);
+    const validCommit = value => /^[a-f0-9]{40}$/u.test(value ?? "") || isHonestUnknown(value);
+    const localFile = locator => {
+      if (!present(locator) || path.isAbsolute(locator) || locator.split(/[\\/]/u).includes(".."))
+        throw new Error(`invalid relative source path: ${locator}`);
+      return path.join(root, locator);
+    };
+    const sourceStart = reports.length;
+    try {
+      const adopted = catalog.skills.filter(entry => ["adapted", "adopted"].includes(entry?.status));
+      let notice = "";
+      let noticeError = null;
+      try { notice = read("THIRD_PARTY_NOTICES.md", String); if (!notice.trim()) noticeError = "empty"; }
+      catch (error) { noticeError = error.code ?? error.message; }
+      if (noticeError) sourceReport(`notice unavailable ${noticeError}`);
+      let upstreamAdopted = 0;
+      let vendored = 0;
+      for (const entry of adopted) {
+        if (!Array.isArray(entry.upstream) || entry.upstream.length === 0) sourceReport(`${entry.name} requires a declared source`);
+        if (noticeError) sourceReport(`notice coverage missing ${entry.name}: notice unavailable`);
+        for (const [i, upstream] of (Array.isArray(entry.upstream) ? entry.upstream : []).entries()) {
+          const label = `${entry.name} upstream[${i}]`;
+          if (!upstream || typeof upstream !== "object") { sourceReport(`${label} source missing`); continue; }
+          if (!present(upstream.license)) sourceReport(`${label} license missing`);
+          if (upstream.kind === "user-provided-local-source") {
+            for (const key of ["path", "authorization_basis"]) if (!present(upstream[key])) sourceReport(`${label} ${key} missing`);
+          } else {
+            if (!present(upstream.path) && !present(upstream.github_url)) sourceReport(`${label} coordinate missing`);
+            if (!validCommit(upstream.commit)) sourceReport(`${label} commit invalid: ${upstream.commit}`);
+            const project = Object.values(catalog.projects ?? {}).find(project => project.github_url === upstream.github_url);
+            if (/^[a-f0-9]{40}$/u.test(project?.commit ?? "") && /^[a-f0-9]{40}$/u.test(upstream.commit ?? "") && project.commit !== upstream.commit)
+              sourceReport(`pinned version mismatch ${label}: expected=${project.commit} actual=${upstream.commit}`);
+          }
+          if (Array.isArray(upstream.adopted) && upstream.adopted.length) {
+            upstreamAdopted += 1;
+            const slug = upstream.github_url?.match(/^https:\/\/github\.com\/([^/]+\/[^/]+)\/?$/u)?.[1];
+            const coordinates = [entry.name, entry.path, upstream.path, slug, /^[a-f0-9]{40}$/u.test(upstream.commit ?? "") ? upstream.commit : null];
+            if (!noticeError && !coordinates.some(value => present(value) && notice.includes(value)))
+              sourceReport(`notice coverage missing ${entry.name} ${upstream.path}`);
+          }
+        }
+      }
+      // A content hash is declared only for genuinely vendored bytes; no broad hashing.
+      for (const entry of catalog.skills) for (const upstream of (Array.isArray(entry?.upstream) ? entry.upstream : [])) {
+        if (typeof upstream?.content_sha256 !== "string") continue;
+        vendored += 1;
+        const locator = `skills/${entry.name}/${upstream.path}`;
+        try {
+          // Validate the unprefixed path as well, so an absolute upstream is rejected.
+          localFile(upstream.path);
+          const actual = createHash("sha256").update(fs.readFileSync(localFile(locator))).digest("hex");
+          if (actual !== upstream.content_sha256) sourceReport(`vendored sha256 mismatch ${locator}: expected=${upstream.content_sha256} actual=${actual}`);
+        } catch (error) { sourceReport(`vendored file missing ${locator}: ${error.code ?? error.message}`); }
+      }
+      const decisions = catalog.capability_decisions;
+      const statuses = { absorbed: 0, rejected: 0, watch: 0 };
+      if (!Array.isArray(decisions)) sourceReport("capability_decisions missing/not an array");
+      for (const decision of (Array.isArray(decisions) ? decisions : [])) {
+        const name = decision?.name ?? "<unnamed>";
+        if (!present(decision?.name)) sourceReport("capability decision name missing");
+        if (!Object.hasOwn(statuses, decision?.status)) sourceReport(`${name} status=${decision?.status}`);
+        else statuses[decision.status] += 1;
+        if (!Array.isArray(decision?.used_by_stages)) sourceReport(`${name} used_by_stages missing/not an array`);
+        else for (const stage of decision.used_by_stages) if (!STAGES.includes(stage)) sourceReport(`${name} used_by_stages unknown ${stage}`);
+        if (decision?.status === "absorbed" && !present(decision.local_path)) sourceReport(`local_path missing ${name}: absorbed requires a local consumer`);
+        if (present(decision?.local_path)) for (const locator of decision.local_path.split(";").map(value => value.trim())) {
+          try { if (!fs.existsSync(localFile(locator))) sourceReport(`local_path missing ${name}: ${locator}`); }
+          catch (error) { sourceReport(`local_path missing ${name}: ${locator}: ${error.message}`); }
+        }
+        if (!Array.isArray(decision?.upstream) || !decision.upstream.length) sourceReport(`${name} upstream missing`);
+        for (const upstream of (Array.isArray(decision?.upstream) ? decision.upstream : [])) {
+          if (!present(upstream?.license)) sourceReport(`${name} upstream license missing`);
+          if (upstream?.kind === "user-provided-local-source") {
+            if (!present(upstream.authorization_basis)) sourceReport(`${name} authorization_basis missing`);
+          } else {
+            if (!present(upstream?.path) && !present(upstream?.github_url)) sourceReport(`${name} upstream coordinate missing`);
+            if (!validCommit(upstream?.commit)) sourceReport(`${name} upstream commit invalid: ${upstream?.commit}`);
+          }
+        }
+        const outcomes = [decision?.review_outcome, ...(decision?.upstream ?? []).map(upstream => upstream?.review_outcome)].join(" ");
+        if (["watch", "rejected"].includes(decision?.status) || /accepted_with|unverified/u.test(outcomes)) {
+          if (!present(decision.local_changes) && !present(decision.update_policy)) sourceReport(`${name} exemption reason missing`);
+        }
+      }
+      let registryLinks = 0;
+      try {
+        const registry = read("skills/reuse-registry.md", String);
+        for (const match of registry.matchAll(/\]\(([^)]+)\)/gu)) {
+          const target = match[1];
+          if (/^(?:https?:|<|#)/u.test(target)) continue;
+          registryLinks += 1;
+          const locator = target.split("#")[0];
+          // Registry links may legitimately navigate to ../workflows within root.
+          const resolved = path.resolve(root, "skills", locator);
+          if (path.relative(root, resolved).startsWith("..") || !fs.existsSync(resolved)) sourceReport(`reuse-registry link missing: ${target}`);
+        }
+        for (const entry of catalog.skills.filter(entry => entry?.status === "retired")) {
+          if (new RegExp(`\\b${entry.name.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}\\b`, "u").test(registry)) sourceReport(`reuse-registry references retired ${entry.name}`);
+        }
+      } catch (error) { sourceReport(`reuse-registry unavailable ${error.code ?? error.message}`); }
+      let bundles = 0; let withSources = 0; let pointers = 0; let sourceCount = 0;
+      const names = new Set(catalog.skills.map(entry => entry?.name));
+      for (const directory of fs.readdirSync(path.join(root, "skills"), { withFileTypes: true })) {
+        if (!directory.isDirectory()) continue;
+        const locator = `skills/${directory.name}/skill-bundle.json`;
+        if (!fs.existsSync(path.join(root, locator))) continue;
+        bundles += 1;
+        try {
+          const bundle = read(locator, JSON.parse);
+          if (!Array.isArray(bundle.sources) || !bundle.sources.length) continue;
+          withSources += 1;
+          for (const source of bundle.sources) {
+            sourceCount += 1;
+            const anchor = source?.path?.match(/^\.\.\/catalog\.yaml#skills\.([a-z0-9-]+)$/u)?.[1];
+            if (!anchor) continue;
+            pointers += 1;
+            if (!names.has(anchor)) sourceReport(`bundle.sources anchor missing ${locator}: ${anchor}`);
+          }
+        } catch (error) { sourceReport(`bundle.sources unavailable ${locator}: ${error.code ?? error.message}`); }
+      }
+      const count = reports.length - sourceStart;
+      sourceReport(`bundle.sources ${pointers}/${sourceCount} self-referential catalog pointers; no dereferencer/reader`);
+      sourceReport(`summary skills=${catalog.skills.length} adopted=${adopted.length} upstream_adopted=${upstreamAdopted} notice=${noticeError ? "unavailable" : "present"} decisions=${Array.isArray(decisions) ? decisions.length : 0} statuses=${statuses.absorbed}/${statuses.rejected}/${statuses.watch} registry_links=${registryLinks} vendored=${vendored} bundles=${bundles}/${withSources} findings=${count}`);
+    } catch (error) { sourceReport(`来源段不可用: ${error.code ?? error.message}`); }
   }
   const registrations = new Map();
   const paths = new Set();
@@ -114,7 +251,7 @@ export function checkSkillConsistency(root) {
   } catch (error) { fail(`${MANIFEST} / ${planLocator ?? "stage_skill_plan"}`, error.message); }
   if (manifest && plan) {
     function required(value, source, label) {
-      if (!Array.isArray(value) || value.length === 0) { fail(source, `${label} mandatory required_skills missing`); return null; }
+      if (!Array.isArray(value) || (!emptySource && value.length === 0)) { fail(source, `${label} mandatory required_skills missing`); return null; }
       const seen = new Set();
       for (const name of value) {
         if (seen.has(name)) fail(source, `${label} duplicate required skill ${name}`);
@@ -225,7 +362,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       const { failures, reports } = checkSkillConsistency(fs.realpathSync(args[1]));
       for (const report of reports) console.log(`[check-skill-consistency] ${report}`);
       for (const failure of failures) console.error(`[check-skill-consistency] FAIL ${failure}`);
-      if (!failures.length) console.log("[check-skill-consistency] current declarations consistent; historical registrations inactive");
+      if (!failures.length && !reports.some(report => report.includes("没有来源输入"))) console.log("[check-skill-consistency] current declarations consistent; historical registrations inactive");
       process.exitCode = failures.length ? 1 : 0;
     } catch (error) {
       console.error(`check-skill-consistency: cannot read root ${args[1]}: ${error.code ?? error.message}; expected an existing absolute directory`);

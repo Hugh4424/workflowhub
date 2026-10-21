@@ -168,7 +168,9 @@ describe("N2 skill catalog portability target oracles", () => {
     put(root, "skills/catalog.yaml", yaml.dump(data));
     const before = checkSkillConsistency(root);
     expect(before.failures).toEqual([]);
-    expect(before.reports.filter(report => !report.startsWith("material-authoring ")), "legal adapted source must start without source diagnostics").toEqual([]);
+    expect(before.reports.filter(report => !report.startsWith("material-authoring ") && !report.startsWith("source-registry ")), "legal adapted source must start without source diagnostics").toEqual([]);
+    for (const report of before.reports.filter(report => report.startsWith("source-registry "))) expect(report).toMatch(/; report-only$/u);
+    expect(before.failures).toEqual([]);
     for (const path of AUTHORING_TEMPLATES) {
       const reports = before.reports.filter(report => report.startsWith(`material-authoring ${path}: 必留项 `));
       expect(reports, path).toHaveLength(1);
