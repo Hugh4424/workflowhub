@@ -12,6 +12,7 @@ import * as kernel from '../../runtime/task/portable-workflow-run.mjs';
 import { writeStageRow } from '../../runtime/task/task-store.mjs';
 import { captureCommand } from '../../runtime/interface/run-command.mjs';
 import { stageRuntimeCliMain } from '../../tools/cli/stage-runtime.mjs';
+import { evaluateWorkflowSteps, summarizeWorkflow } from '../../runtime/task/final-chain.mjs';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const roots = [];
 afterEach(() => { vi.restoreAllMocks(); for (const path of roots.splice(0)) rmSync(path, { recursive: true, force: true }); });
@@ -122,6 +123,15 @@ function controlledWorkflow(f) {
     put(f.repo,`workflows/make-decision/flows/${level}/SKILL.md`,'# Owned flow\n## 方法\n逐项人读原件，不能关键词代通过。\n');
   }
   put(f.repo,'workflows/make-decision/steps.json',root);
+  const declarations=[
+    ['workflows/make-decision/steps.json','root-only'],
+    ...['small','normal','planning'].map(level=>[`workflows/make-decision/flows/${level}/steps.json`,`${level}-only`]),
+    ...names.filter(name=>name!=='make-decision').map(name=>[`workflows/${name}/steps.json`,'shared-slug']),
+  ].map(([source,slug])=>`| [controlled](<../../${source}#L7>) \`${slug}\` | result | source；human | owner |`).join('\n');
+  const skillDeclarations=[
+    '| [stage-handoff:10–20,22–55](<../../skills/stage-handoff/SKILL.md#L10>) | result | input | human内容＋program发布读回；stage主会话；仅引用原方法。 |',
+  ].join('\n');
+  put(f.materialRoot,'step-consumer-design.md',declarations+'\n'+skillDeclarations+'\n');
 }
 function ringAt(value,n) { return value.rings.find(r=>r.ring===n); }
 
@@ -1534,5 +1544,65 @@ describe('final-chain multi-stage sourced skill observations and conflicts',()=>
     const conflicting=await bind([active,inactive]);expect(conflicting).toHaveLength(1);expect(conflicting[0].state).toBe('incomplete');
     expect((await bind([inactive]))[0].state).toBe('not_applicable');
 
+  });
+});
+
+describe('final-chain shared evidence and method obligations',()=>{
+  it('counts one shared original once per step only when each step-scoped readback is valid',()=>{
+    const shared='quality/evidence/shared-human-readback.md';
+    const human=(source,step_slug)=>({evidence_level:'record_ref',ref:shared,readable:true,verified:true,reader:'independent reader',source,step_slug,inputs:`inputs for ${step_slug}`,observation:`observation for ${step_slug}`,criteria_ref:'method.md#criteria',conclusion:'completed',limits:[]});
+    const first={source:'workflows/make-decision/steps.json',step_slug:'load-context',state:'completed',basis:[human('workflows/make-decision/steps.json','load-context'),{...human('workflows/make-decision/steps.json','load-context'),duplicate_of:shared}]};
+    const second={source:'workflows/make-decision/flows/normal/steps.json',step_slug:'outline-hypothesis-talk',state:'completed',basis:[human('workflows/make-decision/flows/normal/steps.json','outline-hypothesis-talk')]};
+    const invalid={source:'workflows/build-plan/steps.json',step_slug:'read-current-materials',state:'completed',basis:[{...human('workflows/make-decision/steps.json','load-context')}]};
+    const metrics=summarizeWorkflow([first,second,invalid]);
+    expect(metrics.step_attestation_numerator).toBe(2);
+    expect(metrics.attested_steps).toEqual([
+      {source:first.source,step_slug:first.step_slug,ref:shared},
+      {source:second.source,step_slug:second.step_slug,ref:shared},
+    ]);
+  });
+
+  it('does not complete a human-plus-program step without a valid program observation',()=>{
+    const source='workflows/make-decision/steps.json', slug='load-context';
+    const step={source,step_slug:slug,owner_ref:'method.md#criteria',human_required:true,program_required:true};
+    const human={ref:'quality/evidence/human.md',readable:true,verified:true,reader:'independent reader',source,step_slug:slug,inputs:'decision-log and entry facts',observation:'human criteria readback',criteria_ref:step.owner_ref,conclusion:'completed',limits:[]};
+    const missing=evaluateWorkflowSteps({steps:[step],evidence:[{source,step_slug:slug,human}],level:{value:'complex',declared:true},stageScope:{actual:[]}})[0];
+    expect(missing.state).not.toBe('completed');
+    expect(missing.limits.join(' ')).toMatch(/program|程序/);
+    const pure=evaluateWorkflowSteps({steps:[{...step,step_slug:'outline-hypothesis-talk',program_required:false}],evidence:[{source,step_slug:'outline-hypothesis-talk',human:{...human,step_slug:'outline-hypothesis-talk'}}],level:{value:'complex',declared:true},stageScope:{actual:[]}})[0];
+    expect(pure.state).toBe('completed');
+  });
+
+  it('reads the existing step-consumer declaration for runner flags and keeps a bad declaration unavailable',async()=>{
+    const f=taskFixture();choice(f,'complex');controlledWorkflow(f);
+    const source='workflows/make-decision/steps.json',slug='load-context';
+    const rootManifest=JSON.parse(readFileSync(join(f.repo,source),'utf8'));rootManifest.steps[0].step_slug=slug;put(f.repo,source,rootManifest);
+    const declaration='| [root](<../../workflows/make-decision/steps.json#L7>) `load-context` | result | source；human＋program | owner |';
+    put(f.materialRoot,'step-consumer-design.md',declaration+'\n');
+    const humanRef=humanEvent(f,{source,slug});
+    put(f.taskPath,humanRef,readFileSync(join(f.taskPath,humanRef),'utf8').replace('workflows/make-decision/flows/normal/SKILL.md#方法','workflows/make-decision/SKILL.md#方法'));
+    const program=commandEvidence(f,'runner-obligation-program','node observe-runner-program.mjs');
+    const bind=items=>{stageEvidence(f,'make-decision',items);return report(f);};
+    const withoutProgram=await bind([{ref:humanRef,source,step_slug:slug}]);
+    const first=withoutProgram.workflow_steps.find(row=>row.source===source&&row.step_slug===slug);
+    expect(first).toMatchObject({human_required:true,program_required:true,state:'unavailable'});
+    const withProgram=await bind([{ref:humanRef,source,step_slug:slug},{...program,source,step_slug:slug}]);
+    expect(withProgram.workflow_steps.find(row=>row.source===source&&row.step_slug===slug).state).toBe('completed');
+    put(f.materialRoot,'step-consumer-design.md',declaration.replace('human＋program','missing-obligation-kind')+'\n');
+    const malformed=await bind([{ref:humanRef,source,step_slug:slug}]);
+    const bad=malformed.workflow_steps.find(row=>row.source===source&&row.step_slug===slug);
+    expect(bad).toMatchObject({method_flags_unknown:true,state:'unavailable'});
+    expect(bad.limits.join(' ')).toMatch(/unknown|声明/);
+  });
+
+  it('reads skill source/name declarations for on-demand method flags',async()=>{
+    const f=taskFixture();writerIdentity(f);choice(f,'complex');controlledWorkflow(f);
+    const source='skills/stage-handoff/SKILL.md',slug='stage-handoff';
+    put(f.repo,'workflows/build-code/skill-deps.yaml',readFileSync(join(ROOT,'workflows/build-code/skill-deps.yaml'),'utf8'));
+    put(f.repo,source,readFileSync(join(ROOT,source),'utf8'));
+    put(f.materialRoot,'step-consumer-design.md','| [stage-handoff:10–20,22–55](<../../skills/stage-handoff/SKILL.md#L10>) | result | input | human内容＋program发布读回；stage主会话；仅引用原方法。 |\n');
+    await writeStageRow(f.taskPath,{stage:'build-code',source:'controlled skill observation',evidence:{value:[{command:'node controlled-skill-observation.mjs',exit_code:0,failure_signature:'controlled declaration observation',skill_name:slug,skill_path:source,trigger:'stage_end_human_handoff',triggered:true,executed:true,rule_ref:'workflows/build-code/skill-deps.yaml',observation:'controlled declaration observation'}]}});
+    const active=(await report(f)).workflow_steps.find(row=>row.source===source&&row.step_slug===slug);
+    expect(active).toMatchObject({human_required:true,program_required:true});
   });
 });

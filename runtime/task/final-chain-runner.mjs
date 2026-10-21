@@ -541,9 +541,45 @@ function criterionRef(repo, ref, source, limits) {
   }
   return target+'#'+anchor;
 }
+
+function stepObligationDeclarations(materialRoot) {
+  let raw;
+  try { raw = readOriginal(materialRoot, "step-consumer-design.md"); }
+  catch { return null; }
+  const map = new Map(), malformed = new Set();
+  for (const line of raw.split(/\r?\n/).filter(value => (value.includes("steps.json") || value.includes("skills/")) && value.trim().startsWith("|"))) {
+    const source = line.match(/((?:workflows|skills)\/[^#>]+)#/)?.[1];
+    const slug = source?.startsWith("skills/") ? line.match(/^\|\s*\[([^:\]]+):/)?.[1]?.trim() : line.match(/\]\([^)]*\)\s*`([^`]+)`/)?.[1] ?? line.match(/`([^`]+)`/)?.[1];
+    if (!source || !text(slug)) continue;
+    const key = `${source}\0${slug}`;
+    const cells = line.split("|");
+    const obligation = cells.slice(1, -1).find(cell => /\bhuman\b|\bprogram\b/i.test(cell))?.trim() ?? "";
+    const hasHuman = /\bhuman\b/i.test(obligation), hasProgram = /\bprogram\b/i.test(obligation);
+    const flags = hasHuman || hasProgram ? {human_required:hasHuman,program_required:hasProgram} : null;
+    if (!flags || map.has(key) && JSON.stringify(map.get(key)) !== JSON.stringify(flags)) malformed.add(key);
+    else map.set(key,flags);
+  }
+  return {map,malformed};
+}
+
+function methodObligationFlags(materialRoot, source, step, declarations) {
+  if (source.startsWith("workflows/") || source.startsWith("skills/")) {
+    const key = `${source}\0${step.step_slug}`;
+    if (!declarations || declarations.malformed.has(key) || !declarations.map.has(key)) return {human_required:true,program_required:false,method_flags_unknown:true};
+    return declarations.map.get(key);
+  }
+  const explicit = [step.human_required,step.program_required];
+  if (explicit.some(value => value !== undefined)) {
+    if (!explicit.every(value => typeof value === "boolean")) return {human_required:true,program_required:false,method_flags_unknown:true};
+    return {human_required:step.human_required,program_required:step.program_required};
+  }
+  return {human_required:true,program_required:false};
+}
+
 function workflowReport(repo, taskPath, materialRoot, level, facts, actualCommands, read, limits) {
   const selected = [];
   const skillRows = new Map(), skillConflicts = new Set();
+  const declarations = stepObligationDeclarations(materialRoot);
   const stages = ["make-decision","build-plan","build-code","verify-code","build-prd"];
   const actualStages = facts.filter(row=>row.record_kind === "stage").map(row=>({stage:row.stage,ref:"facts.jsonl"}));
   let portableUnknown=false;
@@ -578,7 +614,7 @@ function workflowReport(repo, taskPath, materialRoot, level, facts, actualComman
     for (const step of root.steps) {
       let ownerRef = step.observable_result.match(/判定消费[：:]\s*([^；;\n]+)/)?.[1]?.trim() ?? null;
       if (ownerRef) { const originalOwner=ownerRef; ownerRef=criterionRef(repo,originalOwner,source,limits); if (!ownerRef) limits.push(`${originalOwner}: owner 判据 anchor/定位未取得；交原方法reader`); }
-      selected.push({...step,source,stage,route:level.value,owner_ref:ownerRef,human_required:true,program_required:false,applicability:"required"});
+      selected.push({...step,source,stage,route:level.value,owner_ref:ownerRef,...methodObligationFlags(materialRoot,source,step,declarations),applicability:"required"});
     }
     const dependencies = optional(repo,`workflows/${stage}/skill-deps.yaml`,limits);
     if (dependencies !== null) {
@@ -595,7 +631,8 @@ function workflowReport(repo, taskPath, materialRoot, level, facts, actualComman
         const key = `${path.trim()}\0${name.trim()}`;
         let group = skillRows.get(key);
         if (!group) {
-          const step = {source:path.trim(),step_slug:name.trim(),stage,route:level.value,owner_ref:path.trim(),human_required:true,program_required:false,applicability:"on_demand"};
+          const flags = methodObligationFlags(materialRoot,path.trim(),{step_slug:name.trim()},declarations);
+          const step = {source:path.trim(),step_slug:name.trim(),stage,route:level.value,owner_ref:path.trim(),...flags,applicability:"on_demand"};
           group = {step,observations:[]}; skillRows.set(key,group); selected.push(step);
         }
         group.observations.push(...executions.map(value=>({...value,stage})));

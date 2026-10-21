@@ -263,9 +263,23 @@ function evaluateWorkflowSteps({ steps, evidence = [], level, stageScope } = {})
     const applicability = step.applicability ?? "required";
     if (!["required", "on_demand", "not_applicable"].includes(applicability)) fail("INVALID_APPLICABILITY", `Unknown applicability: ${applicability}`);
     const legalSkip = step.trigger === false && step.executed === false && text(step.rule_ref);
-    if (legalSkip) {
+    const humanRows = matches.filter((row) => row.human).map((row) => row.human);
+    const validHumanRows = humanRows.filter((value) => humanReadback(value, step));
+    const humanConclusions = validHumanRows.map((value) => value.conclusion);
+    const humanConflict = humanRows.some((value) => !humanReadback(value, step))
+      || humanConclusions.some((value) => value !== "skipped")
+      || new Set(humanConclusions).size > 1;
+    const programFailure = matches.some((row) => row.program && ((Number.isInteger(row.program.exit_code) && row.program.exit_code !== 0) || row.program.target_failed === true));
+    const skipConflict = matches.some((row) => row.conflict) || humanConflict || programFailure;
+    if (legalSkip && !skipConflict) {
       state = "not_applicable";
       basis.push(noteBasis(step.rule_ref, "\u771F\u5B9E\u89C4\u5219\u786E\u8BA4\u672A\u89E6\u53D1\u4E14\u672A\u6267\u884C"));
+    } else if (legalSkip && skipConflict) {
+      state = "incomplete";
+      limits.push("合法跳过观察与同一步真实观察冲突；保留冲突，不能记 not_applicable");
+    } else if (step.method_flags_unknown === true) {
+      state = "unavailable";
+      limits.push("方法 human/program 义务声明 unknown；交当前方法 owner，不能据缺失声明完成");
     } else {
       const programs = matches.filter((row) => row.program).map((row) => row.program);
       const humans = matches.filter((row) => row.human).map((row) => row.human);
@@ -273,6 +287,9 @@ function evaluateWorkflowSteps({ steps, evidence = [], level, stageScope } = {})
       const validPrograms = programs.filter(verifiedEvidence);
       const failed = validPrograms.some((p) => p.exit_code !== void 0 && p.exit_code !== 0 || p.target_failed === true);
       const zeroScan = programs.some((p) => p.scan_count === 0 || p.input_count === 0 || p.supported === false);
+      const programSatisfied = step.program_required === true
+        ? programs.length > 0 && validPrograms.length === programs.length
+        : !programs.length || validPrograms.length === programs.length;
       const conclusions = humans.filter((value) => humanReadback(value, step));
       for (const value of humans) {
         if (humanReadback(value, step)) basis.push({ ...value, evidence_level: "record_ref" });
@@ -285,7 +302,7 @@ function evaluateWorkflowSteps({ steps, evidence = [], level, stageScope } = {})
       if (failed || conflict || conclusions.some((value) => value.conclusion === "incomplete")) state = "incomplete";
       else if (!text(step.owner_ref)) limits.push("完成判据 consumer 未取得；交当前步骤 owner");
       else if (zeroScan) limits.push("\u574F checker\uFF1A\u96F6\u8F93\u5165/\u96F6\u626B\u63CF/\u4E0D\u652F\u6301\uFF0C\u4E0D\u4F5C\u4E1A\u52A1\u5931\u8D25");
-      else if (conclusions.some((value) => value.conclusion === "completed") && (!programs.length || validPrograms.length === programs.length)) state = "completed";
+      else if (conclusions.some((value) => value.conclusion === "completed") && programSatisfied) state = "completed";
       else if (step.human_required === false && step.program_required === true && validPrograms.length > 0 && validPrograms.length === programs.length) state = "completed";
       else if (matches.some((row) => row.reached === false && row.timing_verified === true)) {
         state = "skipped";
@@ -307,10 +324,23 @@ function summarizeWorkflow(results, stageScope) {
   for (const row of results) if (!RING_STATES.includes(row.state)) fail("INVALID_WORKFLOW_STATE", `Unknown step state: ${row.state}`);
   const originals = /* @__PURE__ */ new Set(), attested = [];
   for (const row of applicable) {
-    const facts = (row.basis ?? []).filter((value) => verifiedEvidence(value) || value.evidence_level === "record_ref" && value.verified === true && value.readable === true && text(value.reader) && text(value.ref));
-    const unique = facts.find((value) => !value.duplicate_of && !originals.has(value.ref));
+    const humanFact = (value) => value?.evidence_level === "record_ref"
+      && value.verified === true && value.readable === true && text(value.ref) && text(value.reader)
+      && value.source === row.source && value.step_slug === row.step_slug;
+    const scopedHumanFact = (value) => humanFact(value) && present(value.inputs) && present(value.observation);
+    const scopedProgramFact = (value) => verifiedEvidence(value) && evidenceType(value) !== "record_ref";
+    const facts = (row.basis ?? []).filter((value) => verifiedEvidence(value) || humanFact(value));
+    const unique = facts.find((value) => {
+      if (value.duplicate_of) return false;
+      const key = scopedHumanFact(value) || scopedProgramFact(value)
+        ? `${row.source}\0${row.step_slug}\0${value.ref}`
+        : value.ref;
+      return !originals.has(key);
+    });
     if (unique) {
-      originals.add(unique.ref);
+      originals.add(scopedHumanFact(unique) || scopedProgramFact(unique)
+        ? `${row.source}\0${row.step_slug}\0${unique.ref}`
+        : unique.ref);
       attested.push({ source: row.source, step_slug: row.step_slug, ref: unique.ref });
     }
   }
