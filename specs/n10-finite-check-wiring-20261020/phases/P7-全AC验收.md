@@ -16,15 +16,15 @@ P0 在场（材料选节状态，不是执行进度）：
 ## Phase 契约头
 
 - **Global spec**：`spec.md#Appendix A — 验收判据（唯一权威）`
-- **Write set**：`tests/acceptance/n10-finite-check-acceptance.test.mjs`；`docs/research/n10-finite-check-acceptance-runbook.md`
+- **Write set**：`tests/acceptance/n10-finite-check-acceptance.test.mjs`；`docs/research/n10-finite-check-acceptance-runbook.md`；`docs/architecture/move-map.json`；`specs/n10-finite-check-wiring-20261020/phases/P7-全AC验收.md`；`specs/n10-finite-check-wiring-20261020/phases/index.md`
 - **Dependency**：P1, P2, P3, P4, P5, P6
 - **Consumer**：用户、verify-code、后续维护者、P8
 - **gate_cmd**：`npx vitest run tests/acceptance/n10-finite-check-acceptance.test.mjs`
 - **oracle**：ORACLE-N10-FINAL-ACCEPTANCE
-- **evidence_path**：`quality/evidence/n10-finite-check-wiring-20261020/P7-final-acceptance.json`
+- **evidence_path**：`quality/evidence/n10-finite-check-wiring-20261020/2026-10-21-051-p7-p7-final-acceptance.json`（077修后当前真实原件；新执行使用stdout返回的实际ref，不覆写历史报告）
 - **STOP**：P1–P6 任一 Phase 的 Done、写入集落地或原件缺失、真实材料恢复后字节不一致、命令超时挂起、N9 状态与记录矛盾时停该路径；保已得失败与原件，交对应原 Phase owner 或 N9 owner，不为凑绿改判据或改断言。
 - **覆盖 AC**：AC-CHECK-1、AC-CHECK-2、AC-CHECK-3、AC-CHECK-4、AC-CHECK-5、AC-CHECK-6、AC-SOURCE-1、AC-SOURCE-2、AC-SOURCE-3、AC-SOURCE-4、AC-SOURCE-5、AC-SOURCE-6、AC-MATERIAL-1、AC-MATERIAL-2、AC-MATERIAL-3、AC-MATERIAL-4、AC-MATERIAL-5、AC-MATERIAL-6、AC-METHOD-1、AC-METHOD-2、AC-METHOD-3、AC-METHOD-4、AC-SET-1、AC-SET-2、AC-SET-3、AC-SET-4、AC-SET-5、AC-SET-6、AC-PROCESS-1、AC-PROCESS-2、AC-PROCESS-3、AC-PROCESS-4、AC-PROCESS-5、AC-PROCESS-6、AC-PROCESS-7、AC-PROCESS-8（36 条，全部承接）
-- **Done**：见下方「Done — 36 条逐条档位」表。每行写 AC 编号、一个档位、一条具名证据路径与非 pass 原因；写作时点无执行事实的记 `unavailable`，N9 已合入但复验未执行的 AC-SET-3、AC-SET-6、AC-PROCESS-8、17 行 9/10 所在的 AC-SET-1、G1 字节所在的 AC-SET-5、待 P1/T005 清零的 AC-CHECK-6 记 `incomplete`。执行时由验收器在同一结构上写 `raw/<AC>.json` 与聚合 JSON 的 `results[]`，T034 复核并落 13 项记录；任何一项没有证据不得记 `pass`，计数不替代逐条。
+- **Done**：当前执行档位见文末「当前 Done — 原36AC逐条承接」及实际原件；下方「Done — 36 条逐条档位」保留build-plan写作时点。每行写 AC 编号、一个档位、一条具名证据路径与非 pass 原因；写作时点无执行事实的记 `unavailable`，N9 已合入但复验未执行的 AC-SET-3、AC-SET-6、AC-PROCESS-8、17 行 9/10 所在的 AC-SET-1、G1 字节所在的 AC-SET-5、待 P1/T005 清零的 AC-CHECK-6 记 `incomplete`。执行时由验收器在同一结构上写 `raw/<AC>.json` 与聚合 JSON 的 `results[]`，T034 复核并落 13 项记录；任何一项没有证据不得记 `pass`，计数不替代逐条。
 
 ### Done — 36 条逐条档位（同时是验收固定小节第 4 项的唯一表）
 
@@ -72,7 +72,7 @@ P0 在场（材料选节状态，不是执行进度）：
 ## 工作包声明（人读事实）
 
 - **读集**：`spec.md` 的 Appendix A、测试标准与全局验证策略；`decision-log.md` 的验收面、D-014/D-015/D-021/D-024、未决项与根因表；P1–P6 实际契约卡与执行原件；`runtime/evidence/acceptance-evidence-validator.mjs`；现有三个 CLI 与 `tests/acceptance/` 的 vitest 写法。
-- **定序写主**：本 Phase 两份新增文件各只有一个写者。T033 先写验收器与 runbook；T034 只读执行 T033 并写外置证据，不改仓库文件。两份文件不与 P1–P6 写集重叠。
+- **定序写主**：本 Phase 两份新增文件各只有一个写者。T033 先写验收器与 runbook；T034 只读执行 T033 并写外置证据，不改仓库文件。两份新增资产不与 P1–P6 写集重叠；三处治理材料与P6串行，完整路径见Write set。
 - **接口符号清单**：无新增生产导出；测试文件内的 `runCommand`、`recordResult`、`writeRaw`、`writeAggregate` 等 helper 为文件内私有，不构成公共接口。runbook 无代码符号。
 - **合并责任**：T033 实施者提交两份文件；验收器失败或 runbook 与真实命令不一致时回 T033 同一会话修，不改 P1–P6 的实现。
 - **progress_cursor**：只指向任务事实库 `facts.jsonl` 的现有 `phase_progress`，本文件不保存进度值。
@@ -80,7 +80,7 @@ P0 在场（材料选节状态，不是执行进度）：
 ## 速读卡（人读；只写本 Phase 增量）
 
 - **本 Phase 结果**：36 条 AC 可由一条命令逐条给出档位；30 条机器可判条件由命令重放，6 条人工读回由具名读者复核；结果与证据写入任务根聚合 JSON 和逐 AC 原件；runbook 交代命令、输入、owner、时点与 N9 已合入/待复验路径。
-- **非目标**：不修生产代码、不改 spec/index/其它 Phase、不跑 N8 P7 四路、不做全量回归、不调 provider、不新增 gate/状态机/第二进度权威。
+- **非目标**：不修生产代码、不改 spec/其它 Phase；index 仅同步显式写集、不跑 N8 P7 四路、不做全量回归、不调 provider、不新增 gate/状态机/第二进度权威。
 - **改动前**：36 条 AC 散在 Appendix A 与 P1–P6，无统一重放入口；N9 已合入；G1 严格口径已被用户覆盖；`facts.jsonl` 现有 1 行 build-plan 阶段行。
 - **改动后**：新增验收器与 runbook；执行时产生 `P7-final-acceptance.json`、两份就绪件与 `raw/<AC>.json`；逐条档位与 N9 `incomplete` 可读。
 - **与相邻 Phase 的边界**：P1–P6 产生实现与各自证据；本卡只消费、重放必要未闭环 case、记录结论，不代签上游，也不修上游；失败回原 Phase owner。
@@ -118,8 +118,8 @@ P0 在场（材料选节状态，不是执行进度）：
 ### 文件边界
 
 - **新增**：`tests/acceptance/n10-finite-check-acceptance.test.mjs`、`docs/research/n10-finite-check-acceptance-runbook.md`。
-- **修改**：N/A — 本卡不修改任何既有文件。
-- **禁止改动**：`tools/cli/check-skill-consistency.mjs`、`tools/cli/check-decision-log-chain.mjs`、`tools/cli/run-checks.mjs`（实现归 P1–P3）；`runtime/**`（只读复用，含 `stage-content-contracts.mjs`）；`skills/**`、`workflows/**`（归 P2/P5/P6）；`specs/n10-finite-check-wiring-20261020/spec.md`、`decision-log.md`、`phases/index.md` 与 P1–P6 卡（本卡只读，改了即越权）；`tests/contract/n10-*.test.mjs`（P1–P6 的冻结测试，改断言须走其 TCR）；`tests/contract/ocr-production-cutover.test.mjs`（归 P1/T005）；`tests/contract/ocr-delegation-route.test.mjs` 既有断言；`specs/archive/n8-four-level-route-20261019/phases/P7-四级验收与成本对照.md`（N8 P7 历史只读，D-021）；`specs/archive/**`、`docs/archive/**`、任务库既有原件。理由：各自有 owner 与原件，本卡只做验收，不用改实现或改判据换绿。
+- **修改**：`docs/architecture/move-map.json`（两新增资产职责登记）；`specs/n10-finite-check-wiring-20261020/phases/P7-全AC验收.md`（写集、旧时点句纠正与当前Done）；`specs/n10-finite-check-wiring-20261020/phases/index.md`（只同步写集）。
+- **禁止改动**：`tools/cli/check-skill-consistency.mjs`、`tools/cli/check-decision-log-chain.mjs`、`tools/cli/run-checks.mjs`（实现归 P1–P3）；`runtime/**`（只读复用，含 `stage-content-contracts.mjs`）；`skills/**`、`workflows/**`（归 P2/P5/P6）；`specs/n10-finite-check-wiring-20261020/spec.md`、`decision-log.md` 与 P1–P6 卡（本卡只读）；`tests/contract/n10-*.test.mjs`（P1–P6 的冻结测试，改断言须走其 TCR）；`tests/contract/ocr-production-cutover.test.mjs`（归 P1/T005）；`tests/contract/ocr-delegation-route.test.mjs` 既有断言；`specs/archive/n8-four-level-route-20261019/phases/P7-四级验收与成本对照.md`（N8 P7 历史只读，D-021）；`specs/archive/**`、`docs/archive/**`、任务库既有原件。理由：各自有 owner 与原件，本卡只做验收，不用改实现或改判据换绿。
 
 ### 任务顺序
 
@@ -174,7 +174,7 @@ P1–P6 任一 Done/写集/原件缺失、真实材料恢复后字节不一致�
 
 2. **两份就绪件**：数据就绪件 `quality/evidence/n10-finite-check-wiring-20261020/P7-data-readiness.json` 与环境就绪件 `quality/evidence/n10-finite-check-wiring-20261020/P7-environment-readiness.json` 各自成件并写 `status`。写作时点事实：数据侧 N8/N9/N2 归档材料、基线 reds 原件、`source-originals-index.json` 已存在，P1–P6 实现输出与受控夹具尚未产生，status `incomplete`；环境侧 worktree、分支、Node v24.14.0、vitest 2.1.9、HEAD `b8856e5e` 已实读，N9 已合入、P1–P6 代码未实现，status `incomplete`。前置 Phase 在各自 Done 里补能设计的数据；本卡只补并标来源档位，不伪造缺失数据。
 
-3. **授权边界**：目标环境为本机 worktree `/Users/Hugh/Hugh/Project/workflowhub-n10-finite-check-wiring-20261020` 与任务根 `quality/evidence/n10-finite-check-wiring-20261020/`，无外部账号、无网络、无 provider。副作用白名单：只读 CLI；只写任务根证据（聚合、raw、两份就绪件）；临时根建在 `os.tmpdir()` 且单次 ≤ 10 个、`finally` 删除；真实材料只读并做字节恢复比较。明确禁止：改生产代码/测试断言/spec/index/其它 Phase、跑全量回归、联网抓原文、调 provider、重跑 N8 P7 四路、把证据写入仓库或覆盖历史原件。授权有效期为本 build-code P7 实施与 verify-code 复核会话，过期重取授权；agent 全自动执行，不设人工确认。失败即停：仓库写集外出现改动、真实材料无法恢复、命令超时/挂起、N9 状态与记录矛盾。
+3. **授权边界**：目标环境为本机 worktree `/Users/Hugh/Hugh/Project/workflowhub-n10-finite-check-wiring-20261020` 与任务根 `quality/evidence/n10-finite-check-wiring-20261020/`，无外部账号、无网络、无 provider。副作用白名单：只读 CLI；只写任务根证据（聚合、raw、两份就绪件）；临时根建在 `os.tmpdir()` 且单次 ≤ 10 个、`finally` 删除；真实材料只读并做字节恢复比较。明确禁止：改生产代码/冻结测试断言/spec/其它 Phase；index仅同步显式写集、跑全量回归、联网抓原文、调 provider、重跑 N8 P7 四路、把证据写入仓库或覆盖历史原件。授权有效期为本 build-code P7 实施与 verify-code 复核会话，过期重取授权；agent 全自动执行，不设人工确认。失败即停：仓库写集外出现改动、真实材料无法恢复、命令超时/挂起、N9 状态与记录矛盾。
 
 4. **逐条结论**：契约头「Done — 36 条逐条档位」表即本节唯一结论表，36 行对应 36 条 AC，每行一个档位、一条证据路径；档位只引用既有 8 值词表，不另写枚举。缺证据保留缺口，不读成通过；非 `pass` 不计通过；结论行数与 AC 条数相等，不用计数替代逐条。执行时由验收器写 `raw/<AC>.json` 与聚合 `results[]`，T034 复核并写 13 项记录，在六项结论中说明整体 partial/incomplete。
 
@@ -213,7 +213,7 @@ Done 逐条档位仍以契约头同一张表为准；独立审查按本卡实际
 - **文件 / 符号**：`tests/acceptance/n10-finite-check-acceptance.test.mjs`（vitest；文件内私有 helper `runCommand`、`recordResult`、`writeRaw`、`writeAggregate`、`assertClean`、`assertZeroInput`、`assertBadInput`、`assertRestored`、`assertN9Branch`）；`docs/research/n10-finite-check-acceptance-runbook.md`；符号：上述 helper 均为文件内私有，无生产导出。
 - **动作**：①在测试文件顶部固定 36 条 AC 清单与 A–F 分组，通过 AC 编号引用 `spec.md#Appendix A`，不复制通过/失败条件。②实现命令包装：`spawnSync(process.execPath, [script, ...args], {cwd: worktreeRoot, encoding: "utf8", timeout: 120000})`，逐条记 argv、cwd、执行者、status/signal/timed_out、stdout/stderr；超时记 `inconclusive` 并停该路径。③实现临时夹具：`mkdtempSync(join(tmpdir(), "n10-acceptance-"))`，复制最小 catalog/notice/registry/decision-log/N8 材料，`finally` 删除；真实材料只读，恢复用字节比较（`cmp`/sha256），单次 ≤ 10 个临时根。④按组执行：A 组三 CLI 合法/零/坏/违规/恢复、无参数六段、A6 读 P1/T005 的 red/green 原件与基线；B 组合法来源报告、五类受控违规、空来源、八项登记读回、13 条原文索引；C 组 N8/N2/空/轻档/伪轻档/干净模板/三态 skip；D 组消费 P4 读回表与变异原件；E 组 Appendix B 逐行、figure-it-out 落点、N9 分支、一次 `run-checks` 重定向、字节表；F 组 P6 文档与静态断言读回、N9 后复验分支。⑤N9 分支：固定 cwd=认证 worktree，`node tools/cli/run-checks.mjs --task-path <N10 任务根>` 执行一次；exit 0 时解析单份 JSON，核 rings 1..10、五态、分母公式、`material_root` 以 `/specs/n10-finite-check-wiring-20261020` 结尾、缺环负例 exit 0、任务不可读 exit 2，不符记 `inconsistent`；exit 1 unsupported 表示 N9 接线回退，记 `inconsistent`，不记 incomplete 求绿。F8 读 P6 的受控复验记录与 RC-1/2/3 三态；P7 不调 provider，P6 未执行记 `incomplete`。⑥写 `raw/<AC>.json`（含命令、exit、stdout 落点、判定与原因）与聚合 `P7-final-acceptance.json`（36 条 `results[]`、`entrance`、`effect`、`reverification`、`change_approval`、`triage`、`writeback`、`conclusions`）；聚合 result 只取既有 8 值词表。⑦断言诚实性：36 行不缺；无证据不得 `pass`；N9 相关未执行时 E3/E6/F8 为 `incomplete`，执行后按真实档位；出现 `fail`/`inconsistent` 时 gate 非零。⑧写 runbook：命令、输入、owner、时点、证据命名、清理、限制、失败分诊与 N9 已合入/待复验路径；含契约头的 gate_cmd、oracle、evidence_path。
 - **输出 / 失败**：合法输入通过时 gate 退出 0，任务根出现聚合、两份就绪件与 36 份 raw；输入缺失时对应 AC 记 `missing`/`incomplete` 并写 owner，不静默跳过；命令与 AC 判据矛盾时记 `fail`/`inconsistent` 并退出非零；临时目录与真实材料在 `finally` 恢复，失败也保留原始输出。
-- **边界 / 禁止改动**：不修改 P1–P6 的生产代码与测试、不改 spec/index/其它 Phase、不改 N8 P7 历史、不跑全量回归、不联网、不调 provider；不新增公共命令、schema 或运行时状态。
+- **边界 / 禁止改动**：不修改 P1–P6 的生产代码与测试、不改 spec/其它 Phase；index 仅同步显式写集、不改 N8 P7 历史、不跑全量回归、不联网、不调 provider；不新增公共命令、schema 或运行时状态。
 - **依赖**：P1, P2, P3, P4, P5, P6（真实输入与证据）；本 Phase 内无更早 Task，可立即开始。
 - **测试层级 / 技能**：acceptance + integration / `backend-testing`；面为 CLI 行为与退出、材料合同、来源登记数据、静态读回、N9 接口事实；UI/浏览器不适用（无页面），数据库/部署无改动。
 - **场景 / 夹具或服务**：正例为当前合法材料与三 CLI；反例为五类来源违规、空/坏输入、临时缺段/裸 N/A/deferred 缺卡、N9 缺环与不可读任务；夹具建在 `os.tmpdir()`，`finally` 删除，真实材料前后字节比较。
@@ -237,7 +237,7 @@ Done 逐条档位仍以契约头同一张表为准；独立审查按本卡实际
 - **文件 / 符号**：只读复核 `tests/acceptance/n10-finite-check-acceptance.test.mjs` 与 `docs/research/n10-finite-check-acceptance-runbook.md`（本 Phase 写集内文件，T034 不修改）；符号：无。结论写入任务根聚合 JSON、两份就绪件与逐 AC 原件，不写仓库。
 - **动作**：按第 1–13 项顺序执行并落盘：①核 P1–P6 入口准则；②确认数据/环境两份就绪件 status；③按授权边界执行；④逐条跑 36 AC 并写档位；⑤记五类执行事实；⑥按第 6 项填效果评测（基线、指标、正负例、单位）；⑦按第 7 项记复验（无修复时写 `unavailable` 与 owner）；⑧按第 8 项核变更（本次无）；⑨按第 9 项分诊（无失败时写明）；⑩按第 10 项核回写五项；⑪写六项结论；⑫执行防自证核对；⑬出现失败按第 13 项回原 owner 修复并换上下文复验。结论写聚合 JSON 的 `conclusions` 与六项，六项非空；整体结论只能是表格实际档位，不得写「全绿」「全部通过」。
 - **输出 / 失败**：执行完成时聚合 JSON 有 36 条档位、13 项记录与六项结论；有 `incomplete`/`unavailable` 时整体记 partial/incomplete 并写 owner；有 `fail`/`inconsistent` 时 gate 非零并按第 9/13 项登记；缺输入时记缺口，不伪造执行。
-- **边界 / 禁止改动**：不改 spec/AC/用例集合/其它 Phase/index/facts 字段；不新增 gate、报告类型、状态机或第二进度权威；不替原 owner 修实现；不把自己写成独立审查者。
+- **边界 / 禁止改动**：不改 spec/AC/用例集合/其它 Phase/facts 字段；index 仅同步显式写集；不新增 gate、报告类型、状态机或第二进度权威；不替原 owner 修实现；不把自己写成独立审查者。
 - **依赖**：T033（运行器与 runbook）；无其它本 Phase 前置。
 - **测试层级 / 技能**：acceptance / `backend-testing`；面同 T033，另加结论与回写读回；UI/浏览器不适用。
 - **场景 / 夹具或服务**：正例为 P1–P6 原件齐全、N9 已合入时十环/缺环/任务参数可跑；反例为 N9 接线回退（inconsistent）、某前置原件缺失（入口准则不满足）、受控违规未被点名（fail）、字节无法恢复（停）；不新建真实业务夹具。
@@ -247,12 +247,12 @@ Done 逐条档位仍以契约头同一张表为准；独立审查按本卡实际
 - **预期退出码**：GREEN 0；RED 不制造目标 RED（只消费与重放，RED 证据 unavailable）；执行时结构或诚实性断言失败才退出码 1，不是目标 RED。
 - **RED 目标失败**：ORACLE-N10-FINAL-ACCEPTANCE；N/A — 理由：验收 Phase 只消费与重放，不制造目标 RED；执行时结构/诚实性断言失败才使 gate 非零。
 - **RED 证据**：`unavailable — build-plan 未执行；执行事实由 build-code/verify-code 产生`。
-- **GREEN 判定器**：ORACLE-N10-FINAL-ACCEPTANCE；同命令退出 0 且聚合/raw/两份就绪件可读、36 行无 pass 缺证据、N9 行 `incomplete`、六项结论非空。
+- **GREEN 判定器**：ORACLE-N10-FINAL-ACCEPTANCE；同命令退出 0 且聚合/raw/两份就绪件可读、36 行无 pass 缺证据、N9 行按 Appendix A 与真实执行原件判定（未执行才 `incomplete`）、六项结论非空。
 - **证据**：`quality/evidence/n10-finite-check-wiring-20261020/P7-final-acceptance.json`、`P7-data-readiness.json`、`P7-environment-readiness.json`、`raw/AC-*.json`；写作时点为预期路径。
 - **覆盖上限**：同 T033；此外不证明独立审查已完成、不证明用户最终确认或 close。
 - **停止 / 恢复**：前置证据缺失、N9 状态矛盾、失败未分诊或结论被迫改档时停；回对应 owner 或 T033，保原件与缺口，不改判据。
 - **测试变更请求**：none — 不修改任何测试或 AC/用例集合。
-- **完成**：36 条逐条档位、13 项记录、两份就绪件与六项结论落盘；N9 相关 AC 保持 `incomplete` 并写重跑条件；非 pass 逐条有原因；整体结论如实 partial/incomplete；独立审查后交 verify-code/用户。
+- **完成**：36 条逐条档位、13 项记录、两份就绪件与六项结论落盘；N9 相关 AC 按 Appendix A 与真实执行原件判定；仅未执行/缺件保持 `incomplete` 并写重跑条件；非 pass 逐条有原因；整体结论如实 partial/incomplete；独立审查后交 verify-code/用户。
 
 ## L2 — 可删除参考
 
@@ -264,3 +264,92 @@ Done 逐条档位仍以契约头同一张表为准；独立审查按本卡实际
 - `decision-log.md#验收面` 与 `#D-024`：AC 索引与 N9 后复验边界。
 - `runtime/evidence/acceptance-evidence-validator.mjs`：8 值档位词表；本卡只引用，不复制。
 - `tests/acceptance/card-02-current.test.mjs`、`docs/research/n8-four-level-acceptance-runbook.md`：写法与 runbook 样式，仅作参考，不是本卡证据。
+
+
+## P7 实施绑定与串行写入（2026-10-21）
+
+规则锚：`spec.md#Appendix A — 验收判据（唯一权威）`；AC-SET-4「维护者一次重跑完整集合」；AC-SET-5「改动前后常驻文档字节逐项给增减、理由与分母」。材料变更影响：仅本卡写集、旧T034恒incomplete句、当前Done及索引写集；原AC、历史写作时点表与P1–P6卡不改。
+
+P6已在`0c3087580f841d3e38c249466462351c0a3a019e`释放共享`docs/architecture/move-map.json`、`specs/n10-finite-check-wiring-20261020/phases/index.md`；P7同一owner先登记后创建两资产，串行同步，不并发写。这是共享文件integration顺序，不是新增执行依赖或gate。任务外`specs/Improvements.md`开工前脏项保留。外置任务`facts.jsonl`与`index.json`仅复用既有记录接口/当前游标，不新增字段或进度权威。
+
+## 当前 Done — 原36AC逐条承接（2026-10-21）
+
+下表是原判据的实施/证据消费档位，不能据验收器测试数自证需求或独立质量通过。原上游首次验收与后修在聚合`originals`逐件列路径/hash，六条人工项沿P4/P6原读回和独立审查消费，不冒机器语义判定。表内`quality/`均为外置任务根。
+
+| AC | 当前档位 | 首验owner与具名实际原件 |
+| --- | --- | --- |
+| AC-CHECK-1 | pass | P1/P2/P3；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-240-p7-ac-check-1.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-CHECK-2 | pass | P1/P2/P3；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-241-p7-ac-check-2.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-CHECK-3 | pass | P1/P2/P3；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-242-p7-ac-check-3.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-CHECK-4 | pass | P1/P2/P3；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-243-p7-ac-check-4.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-CHECK-5 | pass | P1/P2/P3；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-244-p7-ac-check-5.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-CHECK-6 | pass | P1/P2/P3；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-245-p7-ac-check-6.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-SOURCE-1 | pass | P2；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-246-p7-ac-source-1.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-SOURCE-2 | pass | P2；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-247-p7-ac-source-2.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-SOURCE-3 | pass | P2；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-248-p7-ac-source-3.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-SOURCE-4 | pass | P2；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-249-p7-ac-source-4.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-SOURCE-5 | pass | P2；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-250-p7-ac-source-5.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-SOURCE-6 | pass | P5；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-251-p7-ac-source-6.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-MATERIAL-1 | pass | P3；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-252-p7-ac-material-1.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-MATERIAL-2 | pass | P3；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-253-p7-ac-material-2.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-MATERIAL-3 | pass | P3；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-254-p7-ac-material-3.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-MATERIAL-4 | pass | P3；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-255-p7-ac-material-4.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-MATERIAL-5 | pass | P3；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-256-p7-ac-material-5.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-MATERIAL-6 | pass | P3；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-257-p7-ac-material-6.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-METHOD-1 | pass | P4；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-258-p7-ac-method-1.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-METHOD-2 | pass | P4；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-259-p7-ac-method-2.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-METHOD-3 | pass | P4；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-260-p7-ac-method-3.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-METHOD-4 | pass | P4；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-261-p7-ac-method-4.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-SET-1 | pass | P5；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-262-p7-ac-set-1.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-SET-2 | pass | P5；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-263-p7-ac-set-2.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-SET-3 | pass | P5；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-264-p7-ac-set-3.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-SET-4 | pass | P7；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-265-p7-ac-set-4.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-SET-5 | pass | P7；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-266-p7-ac-set-5.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-SET-6 | pass | P5；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-267-p7-ac-set-6.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-PROCESS-1 | pass | P6；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-268-p7-ac-process-1.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-PROCESS-2 | pass | P6；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-269-p7-ac-process-2.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-PROCESS-3 | pass | P6；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-270-p7-ac-process-3.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-PROCESS-4 | pass | P6；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-271-p7-ac-process-4.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-PROCESS-5 | pass | P6；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-272-p7-ac-process-5.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-PROCESS-6 | pass | P6；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-273-p7-ac-process-6.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-PROCESS-7 | pass | P6；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-274-p7-ac-process-7.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+| AC-PROCESS-8 | pass | P6；`quality/evidence/n10-finite-check-wiring-20261020/raw/2026-10-21-275-p7-ac-process-8.json`（实际原owner回执/输出/hash及当前CLI/具名复验原件；不代独立质量裁决） |
+
+### 本 Phase 自带判据小结（当前）
+
+- **验了什么**：gate `npx vitest run tests/acceptance/n10-finite-check-acceptance.test.mjs`；原件`quality/tests/2026-10-21-088-p7-consumer-repair-green.output`、089机器报告；独立不同上下文087回执、084/085原stdout/stderr、086机器报告，F2P九项9/9、P2P其余27/27。真实命令分别无参数六段exit0、显式当前材料六段+材料errors0、任务模式exit0单JSON十环，当前报告3/10 completed，十行不冒十环全完成。SET4只验重跑入口，SET5真实wc/git前后字节分母与增减理由已留原件。
+- **原件承接**：P1原012与039修复/041范围解释同读，CHECK1/2/5由P2/P3分场补齐，P1旧incomplete不改；P3当前067与062/063/065同读；P4真实四态S0/S1/S2/S3为0/0/1/0及同字节恢复；P5真实接口、缺环/恢复/坏输入、13原文快照/4漂移、17来源/10机制/figure单项分别读回；P6当前073/074与52pass/18目标RED/0setup、真实一次Kimi probe按原PROCESS8复验＋未解设计消费。
+- **修复与偏差**：首次081是依赖包定位setup失败；082/083九项是验收器证据路径/文案/嵌套变异RED读取缺陷，非生产RED，未改上游或冻结断言。改实际resolver和精确原件字段后独立087复验。P7额外治理登记为root显式授权最小写集修正；旧T034恒incomplete句按原AC纠正，历史表保留。
+- **56需求**：Appendix C共27R/29U逐条核源与当前映射，聚合`requirement_coverage`给原来源/当前落点/实际证据指针；独立只读来源核对无缺号、无未落点，但未逐字重读所有调研网页、provider阅读轨迹与全部生产caller，不把ID齐全当语义覆盖通过。R009/U020与R020/U021分别在P7首次SET4/5；R024/U026排除旧N8四路，R025/U027只承接P6探针＋未解设计。
+- **未验项与owner**：P8四磁盘AC均未启动/未实施，不判pass，owner=P8；P8完成后才核全40。真实make-decision顺序、provider理解、300秒五窗口为unavailable，owner=相应路线执行者/verify-code；N8四路按用户决定不再跑，历史incomplete不新列待办；RC2严格carrier未修，owner=P6/verify-code按已给最小设计承接，若改协议方向需真实用户决定。N11/G1严格字节不增不在本卡；本卡不声称严格不增。
+- **质量/Git/下一消费者**：P7正式084三路completed/parse_outcome=ok，原9条发现按077/085窄TCR修复或有源拒绝；同源075/076同根问题已077修复并独立复验，具体见文末逐条处置；P1原012 coverage限制及P6原073两finding/074修复和undetermined均保留，不改成clean。本Phase审查与修复工作收妥，交root记录真实阶段事实及审后Git；不重派084，不把原finding改为空。未做Git。浏览器不适用，无登录态复用；正常36的CLI不创建临时根；077/TCR2的owned缺件/超时/退出/路径输入在finally清理，collector未计总数（null，不冒零）。真实spec/decision/catalog/N8归档前后SHA一致。
+
+### TCR077 审查修复事实（当前，2026-10-21）
+
+- 来源：同源Standards075/Spec076与正式084的Kimi beforeAll/catch两条major；独立窄TCR原件`quality/reviews/2026-10-21-077-p7-tcr-failed-preflight-report.md`。先等价提取私有collector/publisher，096/097原36 P2P；098/099是Vite序列化harness失败，未当目标RED；修harness不修旧行为后100/101真实两目标RED，断言实际保存报告results为0而非36。原081与旧未编号`P7-final-acceptance.json`空结果错报告保留，绝不作为当前证据。
+- 修复：捕获输入/setup错误后仍抛原异常；run保存真实code/path/argv/cwd/exit/signal/timeout和输出；发布前补未执行行并保已执行行、原AC owner；缺件missing、未执行incomplete、实际超时inconclusive、载体/接口矛盾inconsistent；未充分测量effect.error为null、basis明确未测量、整体incomplete；入口pass仅表示声明输入已取得，不证明AC执行。报告写不成保原错和写错，不猜目录。AC内ENOENT另实测为missing、P6归属未改。
+- 独立复验：`quality/tests/2026-10-21-109-p7-tcr077-final-independent.json`回执、107 stdout、108机器报告，exit0，38pass＝F2P两项＋P2P原36。源码SHA256 `4b3f6daf0325e840b2511491996d262ad2f1af25039a02aa6644284064db7584`。缺P6子进程exit1、8missing＋28incomplete；真实spawn20ms超时exit1、6inconclusive＋30incomplete；同文件/同命令恢复collector exit0但未执行AC仍36incomplete，未伪造通过。当前主聚合为契约头真实011 ref。
+- 原件纪律限制：109的空stderr曾仅按字节相等复用085，两个命令argv并不相同；原字节相等及38pass事实保留，旧109/085不删覆，但不能据此宣证据归属纪律已完整通过。验收器跨命令去重亦为084另条有效问题，后续窄TCR只在已有命令/退出事实一致且字节相等时复用，否则保新件与unknown原因；不为此单独重跑。
+- 077当时未完成的084其余finding现由085窄TCR收妥，见下节；P8四AC仍未启动。077未改原AC、上游受保护测试或生产runtime；map/index没有本轮新增改动。
+
+### TCR2／085 证据绑定修复与逐9处置（当前）
+
+正式原件`quality/reviews/2026-10-21-084-build-code-phase-p7.json`三路均completed/parse_outcome=ok；原9条及provider覆盖undetermined原样保留。Standards `075-p7-standards-original.md`、Spec `076-p7-spec-original.md`并排保留，不互相覆盖；二者同根失败记录问题由077处理，077与085各有真实RED和独立复验。当前是审查发现已处置与实施判据已核，不是provider clean，也不证明全40或用户最终签核。
+
+| 原finding | 实际处置与原件 |
+| --- | --- |
+| Kimi major :58 跨命令去重 | fixed／085。命令输出只从现有实际records按argv/cwd/exit/signal/timeout/stream核身份后实比bytes；身份未知保新件并报unknown。不同argv、退出、stream及未知候选均真实受控RED→GREEN，同身份同bytes才复用。旧085/109错误归属不删覆；新130 capture各stream新件，未再复用旧空stderr。 |
+| Kimi major :138 beforeAll中止伪完成 | fixed／077：100/101目标RED、109独立F2P2/P2P36；075/076同根一并处置。缺件、timeout及报告写错保原错，36行与未执行owner诚实；旧081/空报告保留。 |
+| Kimi major :157 catch全fail | fixed／077：AC内真实ENOENT为missing/P6；不可读unavailable、超时inconclusive、载体矛盾inconsistent，真实断言失败fail，不声称穷尽OS故障。 |
+| Kimi minor :123 HEAD相等 | recommendation not adopted：不加HEAD等值或祖先许可。environment保存实际head，BASE只是P7实施参考，BEFORE是git show字节来源；执行时worktree字节与具体19文件分母/理由单列，不冒固定BASE为测量快照。 |
+| Codex major :79 CHECK6弱绑定 | fixed／085：绑定001 RED的两文件、exit1及三条完整cutover失败title；003 GREEN两指定文件、50pass/0fail；112机器原件具名唯一skip与route源码真实report-only原因同读，非任意允许1skip。 |
+| Codex major :81 output_ref越界 | fixed／085：receipt与machine输出先realpath核当前TASK/quality边界再读，quality根别名也拒；owned外部sentinel和内链外指拒绝，合法读callback到达、越界callback0次且诊断无内容。 |
+| Codex major :197 METHOD1弱行号 | fixed／085：P4原071的19行身份与当前表同读；复用P4正整数/范围/有效非空行与人工分界逻辑；越界、错range、合法range换另一row均拒。13消费者与6人工边界保留，机器不判自然语言语义。 |
+| AG major :180 六AC静态含词 | partial finding valid／085 fixed：原首验并非零证据；CHECK2/3、SOURCE2/3、MATERIAL5补具名实际case状态（112及原067）；19个必需case逐个删除均RED。SOURCE2五类违规含各恢复断言真实passed；MATERIAL5四字段非空／空表“无”及T013/T016；SET6真同ring正completed→缺unavailable→恢复completed、字节与restored_same_bytes。保实际链3/10，不冒全链完成。 |
+| AG minor :14 脱敏placeholder | invalid：080原证据是脱敏host-path-redacted；真实源码与238原件是实际既存task路径，runbook明确N10_TASK_ROOT。保原finding，不按传输占位改真实源码。 |
+
+085原批准件`quality/reviews/2026-10-21-085-p7-tcr2-evidence-binding.md`；先保旧consumer，113/114为首18条目标RED，115/116最终37目标RED＋38 P2P，245是该RED源码原件，无setup/import错误冒RED。只为缺细日志重放原4文件具名case，110 stdout／111原生机器／112实际回执为32passed＋唯一具名skip，无真实模型。原归属仍P1–P6，不由P7补签首次结论。
+
+最终独立`quality/tests/2026-10-21-130-p7-check6-final-independent.json`（按真实130回执名读回）、127 stdout／128新stderr／129原生机器：75passed、exit0＝新F2P37＋P2P38（原36＋077两负例）。源码SHA256 `811adeca3de61b47c3c2c7e3e0fae44998c278181fdd03fe54187008d97bf9d9`。SET5既有字段直接取实际immutable返回ref，不扫文件名，不增pointer/ledger；当前051报告及SET5 raw引用同一字节原件。旧040的null导航限制原样保留。
+
+当前Done：原36逐项见当前表，075/076/084实际发现处置收妥，独立预审及修复复验原件可回读；交root作既有阶段事实与审后提交，不再写“当前OCR未执行”。未验与排除仍保：P8四ACnot_started、真实make-decision顺序/provider理解/300秒窗口未验证、N8四路不重跑、RC2未修但探针＋最小设计满足原PROCESS8、N11/G1严格不增不在本卡；当前报告不当全40或最终close。
