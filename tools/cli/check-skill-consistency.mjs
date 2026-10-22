@@ -80,6 +80,31 @@ export function checkSkillConsistency(root) {
         throw new Error(`invalid relative source path: ${locator}`);
       return path.join(root, locator);
     };
+    const readVendored = locator => {
+      localFile(locator);
+      const packageRoot = fs.realpathSync(root), target = path.resolve(packageRoot, locator);
+      const relative = path.relative(packageRoot, target);
+      if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative))
+        throw new Error(`vendored path outside package root: ${locator}`);
+      let cursor = packageRoot;
+      for (const part of relative.split(path.sep).filter(Boolean)) {
+        cursor = path.join(cursor, part);
+        if (fs.lstatSync(cursor).isSymbolicLink()) throw new Error(`vendored path alias: ${locator}`);
+      }
+      const named = fs.lstatSync(target);
+      if (!named.isFile() || named.isSymbolicLink()) throw new Error(`vendored path is not a regular file: ${locator}`);
+      let fd;
+      try {
+        fd = fs.openSync(target, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+        const opened = fs.fstatSync(fd);
+        if (!opened.isFile()) throw new Error(`vendored path is not a regular file: ${locator}`);
+        const bytes = fs.readFileSync(fd), after = fs.fstatSync(fd), current = fs.lstatSync(target);
+        if (after.dev !== opened.dev || after.ino !== opened.ino || current.isSymbolicLink()
+            || !current.isFile() || current.dev !== opened.dev || current.ino !== opened.ino)
+          throw new Error(`vendored file changed while hashing: ${locator}`);
+        return bytes;
+      } finally { if (fd !== undefined) fs.closeSync(fd); }
+    };
     const sourceStart = reports.length;
     try {
       const adopted = catalog.skills.filter(entry => ["adapted", "adopted"].includes(entry?.status));
@@ -123,7 +148,7 @@ export function checkSkillConsistency(root) {
         try {
           // Validate the unprefixed path as well, so an absolute upstream is rejected.
           localFile(upstream.path);
-          const actual = createHash("sha256").update(fs.readFileSync(localFile(locator))).digest("hex");
+          const actual = createHash("sha256").update(readVendored(locator)).digest("hex");
           if (actual !== upstream.content_sha256) sourceReport(`vendored sha256 mismatch ${locator}: expected=${upstream.content_sha256} actual=${actual}`);
         } catch (error) { sourceReport(`vendored file missing ${locator}: ${error.code ?? error.message}`); }
       }

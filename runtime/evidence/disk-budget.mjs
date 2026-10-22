@@ -20,27 +20,29 @@ function checkAncestors(root,path){
  let cursor=root;
  for(const part of rel.split(sep).filter(Boolean)){cursor=join(cursor,part);let stat;try{stat=lstatSync(cursor);}catch(e){if(e.code==='ENOENT')break;throw e;}if(stat.isSymbolicLink())throw fail('DISK_PATH_ALIAS','task storage contains a symbolic link');}
 }
-function usage(root,group,base){
+function usage(root,group,base,groupInodes){
  const path=base??join(root,'quality',group),scanRoot=path,seen=new Set(),top=[];checkAncestors(root,path);
  function walk(path){let s;try{s=lstatSync(path);}catch(e){if(e.code==='ENOENT')return {bytes:0,files:0};throw e;}
   if(s.isSymbolicLink())throw fail('DISK_PATH_ALIAS','usage never follows symbolic links');
-  if(s.isFile()){const key=`${s.dev}:${s.ino}`,bytes=seen.has(key)?0:s.size;seen.add(key);return {bytes,files:1};}
+  if(s.isFile()){const key=`${s.dev}:${s.ino}`,bytes=seen.has(key)?0:s.size;seen.add(key);groupInodes?.set(key,s.size);return {bytes,files:1};}
   if(!s.isDirectory())throw fail('DISK_PATH_INVALID','usage requires regular files/directories');
   const value={bytes:0,files:0};for(const n of readdirSync(path)){const v=walk(join(path,n));value.bytes+=v.bytes;value.files+=v.files;if(path===scanRoot)top.push({path:relative(root,join(path,n)).split(sep).join('/'),...v});}return value;
  }
  return {...walk(path),top:top.sort((a,b)=>b.bytes-a.bytes)};
 }
-export function readTaskDiskUsage(taskRoot){const root=realRoot(taskRoot),groups={};for(const group of Object.keys(DEFAULT_TASK_DISK_LIMITS))groups[group]=usage(root,group);return {task_root:root,groups,bytes:Object.values(groups).reduce((n,v)=>n+v.bytes,0),files:Object.values(groups).reduce((n,v)=>n+v.files,0)};}
+export function readTaskDiskUsage(taskRoot){const root=realRoot(taskRoot),groups={},seen=new Set();let bytes=0;for(const group of Object.keys(DEFAULT_TASK_DISK_LIMITS)){const groupInodes=new Map();groups[group]=usage(root,group,undefined,groupInodes);for(const [key,size] of groupInodes)if(!seen.has(key)){seen.add(key);bytes+=size;}}return {task_root:root,groups,bytes,files:Object.values(groups).reduce((n,v)=>n+v.files,0)};}
 function groupName(subdir){const parts=String(subdir).split('/');if(parts[0]!=='quality'||!Object.hasOwn(DEFAULT_TASK_DISK_LIMITS,parts[1]))throw fail('DISK_PATH_OUTSIDE','budget destination must be a task quality group');return parts[1];}
 function number(value,label){if(!Number.isSafeInteger(value)||value<0)throw fail('DISK_BUDGET_INVALID',`${label} must be a nonnegative safe integer`);return value;}
-export function assertTaskDiskBudget({taskRoot,subdir,incomingBytes,incomingFiles=1,limits}={}){
- const root=realRoot(taskRoot),group=groupName(subdir),limit={...DEFAULT_TASK_DISK_LIMITS[group],...(limits?.[group]??{})};
- for(const k of ['softBytes','hardBytes','hardFiles'])number(limit[k],k);if(limit.softBytes>limit.hardBytes)throw fail('DISK_BUDGET_INVALID','soft exceeds hard');
- number(incomingBytes,'incomingBytes');number(incomingFiles,'incomingFiles');const current=usage(root,group);
+function budgetLimit(group,limits){const limit={...DEFAULT_TASK_DISK_LIMITS[group],...(limits?.[group]??{})};for(const k of ['softBytes','hardBytes','hardFiles'])number(limit[k],k);if(limit.softBytes>limit.hardBytes)throw fail('DISK_BUDGET_INVALID','soft exceeds hard');return limit;}
+function assertAgainstUsage({group,current,incomingBytes,incomingFiles,limits}){
+ const limit=budgetLimit(group,limits);number(incomingBytes,'incomingBytes');number(incomingFiles,'incomingFiles');
  const details={subdir:`quality/${group}`,current_bytes:current.bytes,incoming_bytes:incomingBytes,hard_bytes:limit.hardBytes,current_files:current.files,incoming_files:incomingFiles,hard_files:limit.hardFiles};
  if(current.bytes+incomingBytes>limit.hardBytes||current.files+incomingFiles>limit.hardFiles)throw fail('DISK_BUDGET_EXCEEDED','new write exceeds task budget',details);
- if(current.bytes+incomingBytes>=limit.softBytes)process.stderr.write(`DISK_BUDGET_SOFT ${JSON.stringify(details)}\n`);
+ if(current.bytes<limit.softBytes&&current.bytes+incomingBytes>=limit.softBytes)process.stderr.write(`DISK_BUDGET_SOFT ${JSON.stringify(details)}\n`);
  return details;
+}
+export function assertTaskDiskBudget({taskRoot,subdir,incomingBytes,incomingFiles=1,limits}={}){
+ const root=realRoot(taskRoot),group=groupName(subdir);return assertAgainstUsage({group,current:usage(root,group),incomingBytes,incomingFiles,limits});
 }
 /** Leaf scope: only the finite actual filesystem write runs under this lock. */
 export function createTaskDiskWriteExecutor({taskRoot,limits}={}){

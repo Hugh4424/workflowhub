@@ -86,7 +86,7 @@ async function reserveOutput(storage, slug, performWrite) {
   throw failure("RECORD_SEQUENCE_EXHAUSTED", `capture sequence exhausted for ${day}`);
 }
 
-function publishReceipt(storage, path, serialized) {
+function publishReceipt(storage, path, serialized, publication) {
   const temporary = join(storage.root, `.${randomUUID()}.tmp`);
   let fd;
   let identity;
@@ -106,6 +106,7 @@ function publishReceipt(storage, path, serialized) {
     storage.verify();
     const published = lstatSync(path);
     if (published.isSymbolicLink() || !sameFile(published, identity)) throw failure("ANCESTOR_REPLACED", "receipt replaced during publication");
+    publication.identity = identity;
     syncDirectory(storage);
   } finally {
     if (fd !== undefined) closeSync(fd);
@@ -115,6 +116,24 @@ function publishReceipt(storage, path, serialized) {
       if (named && !named.isSymbolicLink() && sameFile(named, identity)) unlinkSync(temporary);
     }
   }
+}
+
+function receiptWasPublished(storage, path, serialized, identity) {
+  if (!identity) return false;
+  let fd;
+  try {
+    storage.verify();
+    const named = lstatSync(path);
+    if (!named.isFile() || named.isSymbolicLink() || !sameFile(named, identity)) return false;
+    fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+    const opened = fstatSync(fd);
+    if (!opened.isFile() || !sameFile(opened, identity)) return false;
+    const bytes = readFileSync(fd), after = fstatSync(fd), final = lstatSync(path);
+    storage.verify();
+    return after.isFile() && final.isFile() && !final.isSymbolicLink()
+      && sameFile(after, identity) && sameFile(final, identity) && bytes.equals(Buffer.from(serialized));
+  } catch { return false; }
+  finally { if (fd !== undefined) closeSync(fd); }
 }
 
 function execute(cwd, argv, output, timeoutMs, signal, performWrite) {
@@ -314,11 +333,14 @@ export async function captureCommand({ cwd, recordDir, slug, argv, shell, timeou
     }
   }
   const serialized = `${JSON.stringify(receipt, null, 2)}\n`;
+  const publication = {};
   try {
     await performWrite({ kind: "receipt", path: output.receipt, bytes: Buffer.byteLength(serialized), incomingFiles: 2 },
-      () => publishReceipt(storage, output.receipt, serialized));
+      () => publishReceipt(storage, output.receipt, serialized, publication));
   } catch (cause) {
-    throw Object.assign(cause, { execution: receipt, receipt_saved: false, output_ref: receipt.output_ref,
+    const receiptSaved = receiptWasPublished(storage, output.receipt, serialized, publication.identity);
+    throw Object.assign(cause, { execution: receipt, receipt_saved: receiptSaved, output_ref: receipt.output_ref,
+      ...(receiptSaved ? { receipt_ref: output.receipt } : {}),
       ...(result.error ? { execution_error: result.error } : {}), exitCode: result.cancelled ? cancellationExit : 1 });
   }
   if (settlementError) throw Object.assign(settlementError, { output_ref: receipt.output_ref, receipt_ref: output.receipt, exitCode: 1 });

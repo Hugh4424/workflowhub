@@ -153,6 +153,18 @@ describe("P8 native write executor", () => {
     expect(readFileSync(caught.output_ref,"utf8")).toBe("abc");
     expect(readdirSync(options.recordDir).some(n=>n.endsWith(".json"))).toBe(false);
   });
+  it("reads back a receipt that was published before a later wrapper failure", async () => {
+    const options = fixture(); let caught;
+    try {
+      await captureCommand({ ...options, argv: node("process.stdout.write('abc');process.exit(3)"), performWrite: async (request, actual) => {
+        const result = await actual();
+        if (request.kind === "receipt") throw Object.assign(new Error("cleanup after publish"), { code: "RECEIPT_CLEANUP_FAILED" });
+        return result;
+      } });
+    } catch (error) { caught = error; }
+    expect(caught).toMatchObject({ code: "RECEIPT_CLEANUP_FAILED", receipt_saved: true, receipt_ref: expect.any(String), execution: { exit_code: 3 } });
+    expect(JSON.parse(readFileSync(caught.receipt_ref, "utf8"))).toMatchObject({ output_ref: caught.execution.output_ref, exit_code: 3 });
+  });
   it("refuses queued chunks after the first failed write and reaps the child", async () => {
     const options = fixture(); let chunks=0;
     await expect(captureCommand({ ...options, timeoutMs: 1000, argv: node("setInterval(()=>process.stdout.write('abc'),1)"), performWrite: async (r, actual) => { if(r.kind === "chunk") { chunks++; throw Object.assign(new Error("full"), { code: "TASK_DISK_BUDGET_EXCEEDED" }); } return actual(); } })).rejects.toMatchObject({ code: "TASK_DISK_BUDGET_EXCEEDED" });
@@ -237,5 +249,24 @@ describe("P8 native interruption and marker writes", () => {
     const options=fixture(); let caught;
     try {await captureCommand({...options,argv:[join(options.cwd,'missing-command')],performWrite:async(r,actual)=>{if(r.kind==='receipt')throw Object.assign(new Error('full'),{code:'TASK_DISK_BUDGET_EXCEEDED'});return actual();}});}catch(e){caught=e;}
     expect(caught).toMatchObject({receipt_saved:false,execution:{exit_code:null,error:{code:'ENOENT'}},execution_error:{code:'ENOENT'}});
+  });
+  it.each(["same-byte-new-inode", "symlink-replacement"])("does not report receipt_saved after %s", async replacement => {
+    const fs = await import("node:fs");
+    const options = fixture(); let caught;
+    try {
+      await captureCommand({ ...options, argv: node("process.exit(3)"), performWrite: async (request, actual) => {
+        const result = await actual();
+        if (request.kind === "receipt") {
+          const original = readFileSync(request.path), backup = `${request.path}.published`;
+          fs.renameSync(request.path, backup);
+          if (replacement === "symlink-replacement") fs.symlinkSync(backup, request.path);
+          else fs.writeFileSync(request.path, original);
+          throw Object.assign(new Error("receipt replaced after publish"), { code: "RECEIPT_REPLACED_AFTER_PUBLISH" });
+        }
+        return result;
+      } });
+    } catch (error) { caught = error; }
+    expect(caught).toMatchObject({ code: "RECEIPT_REPLACED_AFTER_PUBLISH", receipt_saved: false, execution: { exit_code: 3 } });
+    expect(caught.receipt_ref).toBeUndefined();
   });
 });

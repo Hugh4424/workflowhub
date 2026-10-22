@@ -19,7 +19,8 @@ const isolatedCodexHome = fs.mkdtempSync(path.join(os.tmpdir(), "3rd-review-code
 const permissionProfile = "review_packet";
 function reportCleanupError(error, cleanupStage) {
   const detail = { code: error?.code ?? "TEMP_CLEANUP_FAILED", message: String(error?.message ?? error) };
-  process.stderr.write(`${JSON.stringify({ code: "TEMP_CLEANUP_FAILED", cleanup_stage: cleanupStage, error: detail })}\n`);
+  const line = `${JSON.stringify({ code: "TEMP_CLEANUP_FAILED", cleanup_stage: cleanupStage, error: detail })}\n`;
+  try { process.stderr.write(line); } catch { try { fs.writeSync(2, line); } catch { /* diagnostics are best effort */ } }
   return detail;
 }
 try {

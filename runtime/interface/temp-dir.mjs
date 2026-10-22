@@ -7,6 +7,7 @@ const owner = "workflowhub-temp-dir-v1";
 const tracked = new Map();
 let installed = false;
 const uid = () => process.getuid?.() ?? null;
+const uidMatches = (stat, expected) => expected === null || stat.uid === expected;
 function report(error) { process.stderr.write(`TEMP_CLEANUP_FAILED: ${error?.code ?? "ERROR"}: ${error?.message ?? error}\n`); }
 function checkedRoot(root) {
   const path = resolve(root), stat = lstatSync(path);
@@ -26,10 +27,12 @@ function installCleanup() {
   process.on("exit", cleanupTrackedTempDirs);
   for (const signal of ["SIGINT", "SIGTERM"]) {
     function onSignal() {
-      cleanupTrackedTempDirs();
       // Preserve application handlers; with no other handler, restore the native
       // signal exit (including the parent's observed signal rather than exit 0).
+      // The exit hook performs cleanup after any application-owned cancellation
+      // drain; deleting active provider material here would race that drain.
       if (process.listenerCount(signal) === 1) {
+        cleanupTrackedTempDirs();
         process.removeListener(signal, onSignal);
         process.kill(process.pid, signal);
       }
@@ -47,7 +50,8 @@ export function createTrackedTempDir(prefix, { root = realpathSync(tmpdir()) } =
   try {
     writeFileSync(join(path, markerName), `${JSON.stringify({ owner, pid: process.pid, created_at: new Date().toISOString(), prefix, uid: uid(), dev: identity.dev, ino: identity.ino })}\n`, { flag: "wx", mode: 0o600 });
   } catch (error) {
-    try { rmSync(path, { recursive: true, force: true }); } catch (cleanupError) { report(cleanupError); }
+    try { if (sameDirectory(path, identity)) rmSync(path, { recursive: true, force: true }); }
+    catch (cleanupError) { if (cleanupError?.code !== "ENOENT") report(cleanupError); }
     throw error;
   }
   const dispose = () => {
@@ -92,9 +96,10 @@ export function cleanupStaleTempDirs({ root = realpathSync(tmpdir()), prefixes =
     const path = join(root, name);
     try {
       const identity = lstatSync(path);
-      if (!identity.isDirectory() || identity.isSymbolicLink() || identity.uid !== uid()) continue;
+      const currentUid = uid();
+      if (!identity.isDirectory() || identity.isSymbolicLink() || !uidMatches(identity, currentUid)) continue;
       const markerPath = join(path, markerName), named = lstatSync(markerPath);
-      if (!named.isFile() || named.isSymbolicLink() || named.nlink !== 1 || named.uid !== uid() || (named.mode & 0o077) !== 0 || named.size > 4096) continue;
+      if (!named.isFile() || named.isSymbolicLink() || named.nlink !== 1 || !uidMatches(named, currentUid) || (named.mode & 0o077) !== 0 || named.size > 4096) continue;
       const fd = openSync(markerPath, constants.O_RDONLY | constants.O_NOFOLLOW);
       let marker;
       try {
@@ -103,7 +108,7 @@ export function cleanupStaleTempDirs({ root = realpathSync(tmpdir()), prefixes =
         marker = JSON.parse(readFileSync(fd, "utf8"));
       } finally { closeSync(fd); }
       const created = Date.parse(marker.created_at);
-      if (marker.owner !== owner || marker.prefix !== prefix || marker.uid !== uid() || marker.dev !== identity.dev || marker.ino !== identity.ino
+      if (marker.owner !== owner || marker.prefix !== prefix || (currentUid !== null && marker.uid !== currentUid) || marker.dev !== identity.dev || marker.ino !== identity.ino
           || !Number.isSafeInteger(marker.pid) || marker.pid < 1 || marker.pid === process.pid || !Number.isFinite(created) || Date.now() - created < olderThanMs) continue;
       let alive;
       try { alive = pidAlive(marker.pid); } catch { continue; }

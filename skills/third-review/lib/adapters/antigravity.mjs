@@ -72,6 +72,9 @@ function hookDecision(policy, payload) {
     if (tool === null || typeof file !== "string" || !path.isAbsolute(file) || path.resolve(file) !== file) return denied;
     const stat = fs.lstatSync(file);
     if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1) return denied;
+    // Directory aliases are intentional here: the resolved regular file must
+    // still match an exact frozen manifest member, so an alias cannot escape
+    // the packet boundary while macOS /tmp and /var remain usable.
     const resolved = fs.realpathSync(file);
     const member = policy.files.find((item) => item.file === resolved);
     if (!member) return denied;

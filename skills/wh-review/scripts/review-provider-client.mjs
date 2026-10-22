@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, realpathSync, writeFileSync, writeSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve, relative } from "node:path";
 const SHA256_HEX_CASE_INSENSITIVE = /^[a-f0-9]{64}$/i;
@@ -1254,7 +1254,10 @@ export class ReviewProviderClient {
     } finally {
       if (temporary !== null) {
         try { temporary.dispose(); }
-        catch (error) { process.stderr.write(`TEMP_CLEANUP_FAILED: ${error?.code ?? "ERROR"}: ${error?.message ?? error}\n`); }
+        catch (error) {
+          const line = `TEMP_CLEANUP_FAILED: ${error?.code ?? "ERROR"}: ${error?.message ?? error}\n`;
+          try { process.stderr.write(line); } catch { try { writeSync(2, line); } catch { /* diagnostics are best effort */ } }
+        }
       }
     }
   }

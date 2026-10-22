@@ -243,11 +243,74 @@ function codexFreshRootBirth(header, records) {
  const firstIndex=records.findIndex(r=>r.type==='token_usage_record'),first=records[firstIndex],turn=first?.payload?.turn_id;
  if(firstIndex<0||first.payload.thread_id!==id||!validCodexTurnId(turn))return false;
  const prefix=records.slice(1,firstIndex),start=prefix[0],contexts=prefix.filter(r=>r.type==='turn_context'),users=prefix.filter(r=>r.type==='event_msg'&&r.payload?.type==='item_completed'&&r.payload.item?.type==='UserMessage');
- if(start?.type!=='event_msg'||start.payload?.type!=='task_started'||start.payload.turn_id!==turn||recordTime(start)!==born||!contexts.length||contexts.some(r=>r.payload?.turn_id!==turn)||users.length!==1)return false;
+ const exactDesktopTick=h.cli_version==='0.163.0-alpha.10.2'&&h.source==='vscode'&&h.session_id===id&&recordTime(start)===born+1&&nativeKeys.every(key=>validNumber(first.payload.usage?.[key])&&first.payload.usage[key]===first.payload.thread_token_usage?.[key]);
+ if(start?.type!=='event_msg'||start.payload?.type!=='task_started'||start.payload.turn_id!==turn||(recordTime(start)!==born&&!exactDesktopTick)||!contexts.length||contexts.some(r=>r.payload?.turn_id!==turn)||users.length!==1)return false;
  const user=users[0];
  if(!validCodexTurnId(user.payload.item?.id)||user.payload.thread_id!==id||user.payload.turn_id!==turn||contexts[0].ordinal>=user.ordinal||prefix.some(r=>r.type==='event_msg'&&r.payload?.type==='task_started'&&r.payload.turn_id!==turn))return false;
  const activity=r=>r.type==='response_item'&&(['assistant','tool'].includes(r.payload?.role)||['function_call','custom_tool_call','function_call_output','custom_tool_call_output','tool_result'].includes(r.payload?.type))||r.type==='event_msg'&&r.payload?.type==='item_completed'&&r.payload.item?.type!=='UserMessage';
  return !prefix.some(r=>activity(r)&&r.ordinal<user.ordinal);
+}
+
+// Parse only the observed literal-briefs/Promise.all wrapper; never execute source.
+// A quoted call, interpolation, extra statement or different expression is unknown.
+function desktopSpawnBriefs(input) {
+ if(typeof input!=='string')return null;
+ const tokens=[];let i=0;
+ while(i<input.length){
+  if(/\s/.test(input[i])){i++;continue;}
+  const quote=input[i];
+  if(quote==='"'||quote==='`'){
+   i++;let value='',closed=false;
+   while(i<input.length){const c=input[i++];if(c===quote){closed=true;break;}
+    if(quote==='`'&&c==='$'&&input[i]==='{')return null;
+    if(c==='\\'){const escaped=input[i++],escapes={'n':'\n','r':'\r','t':'\t','b':'\b','f':'\f','v':'\v','\\':'\\','"':'"','`':'`','$':'$'};if(!Object.hasOwn(escapes,escaped))return null;value+=escapes[escaped];}
+    else {if(quote==='"'&&(c==='\n'||c==='\r'))return null;value+=c;}
+   }
+   if(!closed)return null;tokens.push({literal:value});continue;
+  }
+  const identifier=/^[A-Za-z_$][A-Za-z0-9_$]*/.exec(input.slice(i));
+  if(identifier){tokens.push(identifier[0]);i+=identifier[0].length;continue;}
+  if(input.slice(i,i+2)==='=>'){tokens.push('=>');i+=2;continue;}
+  if('{}[]():,.;='.includes(input[i])){tokens.push(input[i++]);continue;}
+  return null;
+ }
+ let n=0;const take=value=>tokens[n++]===value,sequence=text=>text.split(' ').every(take),literal=()=>{const token=tokens[n++];return token&&typeof token==='object'?token.literal:null;};
+ if(!sequence('const briefs = ['))return null;
+ const briefs=[];
+ do {if(!sequence('{ message :'))return null;const message=literal();if(message===null||!sequence(', reasoning_effort :'))return null;const effort=literal();if(effort!=='high'||!take('}'))return null;briefs.push({message,effort});if(tokens[n]!==',')break;n++;}while(true);
+ if(!sequence('] ; const spawned = await Promise . all ( briefs . map ( b => tools . multi_agent_v1__spawn_agent ( { message : b . message , reasoning_effort : b . reasoning_effort , fork_context : false } ) ) ) ; for ( const item of spawned ) text ( item ) ;')||n!==tokens.length)return null;
+ return briefs.length?briefs:null;
+}
+
+function desktopFreshChild(own, header, parent, cutoff) {
+ const h=header.payload,id=h.id,spawn=h.source.subagent.thread_spawn,born=recordTime(header);
+ if(spawn.agent_path!==null||!validCodexTurnId(spawn.agent_nickname)||h.session_id!==parent)return false;
+ const proofs=[];
+ for(const call of own.filter(r=>r.type==='response_item'&&r.payload?.type==='custom_tool_call'&&r.payload.name==='exec'&&r.payload.status==='completed')){
+  const briefs=desktopSpawnBriefs(call.payload.input);if(!briefs||!validCodexTurnId(call.payload.call_id))continue;
+  if(own.filter(r=>r.type==='response_item'&&r.payload?.type==='custom_tool_call'&&r.payload.call_id===call.payload.call_id).length!==1)continue;
+  const outputs=own.filter(r=>r.type==='response_item'&&r.payload?.type==='custom_tool_call_output'&&r.payload.call_id===call.payload.call_id);
+  if(outputs.length!==1)continue;const output=outputs[0],parts=output.payload.output;
+  if(output.ordinal<=call.ordinal||recordTime(output)<recordTime(call)||!Array.isArray(parts)||parts.length!==briefs.length+1||parts.some(p=>p.type!=='input_text'||typeof p.text!=='string')||!/^Script completed\nWall time \d+(?:\.\d+)? seconds\nOutput:\n$/.test(parts[0].text))continue;
+  let returned;try{returned=parts.slice(1).map(p=>JSON.parse(p.text));}catch{continue;}
+  if(returned.some(r=>!validCodexTurnId(r?.agent_id)||!validCodexTurnId(r.nickname))||new Set(returned.map(r=>r.agent_id)).size!==briefs.length)continue;
+  const turn=output.payload.internal_chat_message_metadata_passthrough?.turn_id;
+  const context=own.filter(r=>r.ordinal<call.ordinal&&(r.type==='turn_context'||r.type==='event_msg'&&r.payload?.type==='task_started')).at(-1);
+  if(!validCodexTurnId(turn)||context?.payload?.turn_id!==turn)continue;
+  const completions=own.filter(r=>r.ordinal>call.ordinal&&r.ordinal<output.ordinal&&r.type==='event_msg'&&r.payload?.type==='item_completed'&&r.payload.item?.type==='CollabAgentToolCall'&&r.payload.item.tool==='spawn_agent');
+  if(completions.length!==briefs.length||new Set(completions.map(r=>r.payload.item.id)).size!==briefs.length)continue;
+  const remaining=briefs.map(b=>b.message),receivers=new Set();let target=false,valid=true;
+  for(const completion of completions){
+   const p=completion.payload,item=p.item,ids=item.receiver_thread_ids,agents=item.receiver_agents,index=remaining.indexOf(item.prompt);
+   if(item.status!=='completed'||!validCodexTurnId(item.id)||p.thread_id!==parent||p.turn_id!==turn||item.sender_thread_id!==parent||!Array.isArray(ids)||ids.length!==1||receivers.has(ids[0])||!Array.isArray(agents)||agents.length!==1||agents[0]?.thread_id!==ids[0]||index<0||!validNumber(p.started_at_ms)||!validNumber(p.completed_at_ms)||recordTime(call)>p.started_at_ms||p.started_at_ms>p.completed_at_ms||p.completed_at_ms!==recordTime(completion)||p.completed_at_ms>recordTime(output)){valid=false;break;}
+   if(own.filter(r=>r.type==='event_msg'&&r.payload?.type==='item_completed'&&r.payload.item?.id===item.id).length!==1){valid=false;break;}
+   const reply=returned.find(r=>r.agent_id===ids[0]);if(!reply||reply.nickname!==agents[0].agent_nickname){valid=false;break;}
+   remaining.splice(index,1);receivers.add(ids[0]);
+   if(ids[0]===id)target=reply.nickname===spawn.agent_nickname&&p.completed_at_ms<=born&&born<=cutoff;
+  }
+  if(valid&&target&&remaining.length===0)proofs.push(call);
+ }
+ return proofs.length===1;
 }
 
 // A fresh child is proved by immutable parent invocation + completed spawn +
@@ -267,6 +330,7 @@ function codexFreshChildBirth(header, records, sources, cutoff, visiting) {
  if(boundary.issueCode)return false;
  const own=p.records.filter(r=>r.ordinal>boundary.seed&&recordTime(r)<=cutoff);
  const starts=own.filter(r=>r.type==='event_msg'&&r.payload?.type==='item_completed'&&r.payload.item?.type==='SubAgentActivity'&&r.payload.item.kind==='started'&&r.payload.item.agent_thread_id===id);
+ if(starts.length===0)return desktopFreshChild(own,header,parent,cutoff);
  if(starts.length!==1)return false;
  const start=starts[0],item=start.payload.item;
  if(own.filter(r=>r.type==='event_msg'&&r.payload?.type==='item_completed'&&r.payload.item?.type==='SubAgentActivity'&&r.payload.item.kind==='started'&&r.payload.item.id===item.id).length!==1)return false;

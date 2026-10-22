@@ -1,4 +1,4 @@
-import {afterEach,describe,it,expect} from 'vitest';
+import {afterEach,describe,it,expect,vi} from 'vitest';
 import {mkdtempSync,realpathSync,writeFileSync,mkdirSync,rmSync,linkSync,symlinkSync,readFileSync,existsSync,truncateSync,readdirSync,statSync} from 'node:fs';
 import {execFileSync,spawnSync,spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
@@ -12,6 +12,10 @@ describe('T038 actual disk ownership and task write budget',()=>{
  it('counts distinct inode bytes and each hardlink pathname; read does not change source bytes/inode',async()=>{
   const m=await moduleUnderTest(),r=fixture(),d=join(r,'quality','reviews');mkdirSync(d,{recursive:true});writeFileSync(join(d,'one'),'abc');linkSync(join(d,'one'),join(d,'two'));
   const v=m.readTaskDiskUsage(r);expect(v.groups.reviews).toMatchObject({bytes:3,files:2});expect(readFileSync(join(d,'one'),'utf8')).toBe('abc');
+ });
+ it('deduplicates hardlink bytes across quality groups while preserving per-group usage',async()=>{
+  const m=await moduleUnderTest(),r=fixture(),reviews=join(r,'quality','reviews'),evidence=join(r,'quality','evidence');mkdirSync(reviews,{recursive:true});mkdirSync(evidence,{recursive:true});writeFileSync(join(reviews,'one'),'abc');linkSync(join(reviews,'one'),join(evidence,'same'));
+  const v=m.readTaskDiskUsage(r);expect(v.groups.reviews).toMatchObject({bytes:3,files:1});expect(v.groups.evidence).toMatchObject({bytes:3,files:1});expect(v).toMatchObject({bytes:3,files:2});
  });
  it('allows the hard boundary and rejects peak overflow without touching existing originals',async()=>{
   const m=await moduleUnderTest(),r=fixture(),d=join(r,'quality','reviews');mkdirSync(d,{recursive:true});writeFileSync(join(d,'old'),'abc');
@@ -58,6 +62,16 @@ describe('T038 actual disk ownership and task write budget',()=>{
   const module=new URL('../../runtime/evidence/disk-budget.mjs',import.meta.url).href;
   const code=`import{assertTaskDiskBudget}from${JSON.stringify(module)};assertTaskDiskBudget({taskRoot:${JSON.stringify(r)},subdir:'quality/tests',incomingBytes:1,incomingFiles:1,limits:{tests:{softBytes:4,hardBytes:4,hardFiles:2}}});process.stdout.write('allowed');`;
   const result=spawnSync(process.execPath,['--input-type=module','-e',code],{encoding:'utf8'});expect(result.status).toBe(0);expect(result.stdout).toBe('allowed');expect(result.stderr).toContain('DISK_BUDGET_SOFT');
+ });
+ it('emits one soft warning when a sequence crosses the threshold, not for every later chunk',async()=>{
+  const m=await moduleUnderTest(),r=fixture(),d=join(r,'quality','tests'),path=join(d,'stream');mkdirSync(d,{recursive:true});
+  const perform=m.createTaskDiskWriteExecutor({taskRoot:r,limits:{tests:{softBytes:3,hardBytes:20,hardFiles:5}}}),write=vi.spyOn(process.stderr,'write').mockImplementation(()=>true);
+  try {
+   await perform({kind:'create',path,bytes:2,incomingFiles:1},()=>writeFileSync(path,'aa'));
+   await perform({kind:'chunk',path,bytes:2,incomingFiles:0},()=>writeFileSync(path,'aaaa'));
+   await perform({kind:'chunk',path,bytes:1,incomingFiles:0},()=>writeFileSync(path,'aaaaa'));
+   expect(write.mock.calls.filter(([value])=>String(value).startsWith('DISK_BUDGET_SOFT '))).toHaveLength(1);
+  } finally { write.mockRestore(); }
  });
 });
 

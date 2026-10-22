@@ -383,3 +383,67 @@ test('FRESH-CHILD-COPY CLI keeps headerless failed copy and blocks inferred chil
   const r=f([root,child],opts);for(const k of Object.keys(totals)){assert.deepEqual(r.sessions[0].usage[k],{status:'available',value:totals[k]},'root '+k);assert.equal(r.sessions[1].usage[k].status,['cacheWriteTokens','reasoningTokens'].includes(k)?'not_reported':'unavailable','child '+k);assert.equal(Object.hasOwn(r.sessions[1].usage[k],'value'),false,'no fabricated child value '+k);assert.equal(r.totals.usage[k].status,'unavailable','total '+k);}
  });
 }
+
+// N10 cost202 additive regression; existing frozen assertions remain unchanged.
+{
+ const f=await measure(),base=Date.parse('2026-10-21T13:51:58.043Z');
+ const at=n=>new Date(base+n).toISOString();
+ const u=n=>({input_tokens:n,output_tokens:n,cached_input_tokens:n,cache_write_input_tokens:0,reasoning_output_tokens:n});
+ const row=(ordinal,ms,type,payload)=>({ordinal,timestamp:at(ms),type,payload});
+ const input='const briefs = [{message: `owned task`, reasoning_effort: "high"}];\nconst spawned = await Promise.all(briefs.map(b => tools.multi_agent_v1__spawn_agent({message: b.message, reasoning_effort: b.reasoning_effort, fork_context: false})));\nfor (const item of spawned) text(item);';
+ function sources(){return [{sourcePath:'/cost202/root.jsonl',records:[
+  row(0,0,'session_meta',{id:'root',session_id:'root',history_mode:'paginated',cli_version:'0.163.0-alpha.10.2',source:'vscode'}),
+  row(1,1,'event_msg',{type:'task_started',turn_id:'root-turn'}),
+  row(2,2,'turn_context',{turn_id:'root-turn'}),
+  row(3,3,'event_msg',{type:'item_completed',thread_id:'root',turn_id:'root-turn',item:{type:'UserMessage',id:'user-1'}}),
+  row(4,4,'token_usage_record',{thread_id:'root',turn_id:'root-turn',usage:u(10),thread_token_usage:u(10)}),
+  row(5,5,'response_item',{type:'custom_tool_call',name:'exec',status:'completed',call_id:'call-1',input}),
+  row(6,7,'event_msg',{type:'item_completed',thread_id:'root',turn_id:'root-turn',item:{type:'CollabAgentToolCall',id:'exec-1',tool:'spawn_agent',status:'completed',sender_thread_id:'root',receiver_thread_ids:['child'],receiver_agents:[{thread_id:'child',agent_nickname:'Owned'}],prompt:'owned task'},started_at_ms:base+6,completed_at_ms:base+7}),
+  row(7,9,'response_item',{type:'custom_tool_call_output',call_id:'call-1',output:[{type:'input_text',text:'Script completed\nWall time 0.1 seconds\nOutput:\n'},{type:'input_text',text:'{"agent_id":"child","nickname":"Owned"}'}],internal_chat_message_metadata_passthrough:{turn_id:'root-turn'}}),
+  row(8,12,'token_usage_record',{thread_id:'root',turn_id:'root-turn',usage:u(12),thread_token_usage:u(22)}),
+  row(9,13,'event_msg',{type:'task_complete',turn_id:'root-turn'}),
+ ]},{sourcePath:'/cost202/child.jsonl',records:[
+  row(0,8,'session_meta',{id:'child',session_id:'root',parent_thread_id:'root',history_mode:'paginated',cli_version:'0.163.0-alpha.10.2',source:{subagent:{thread_spawn:{parent_thread_id:'root',agent_path:null,agent_nickname:'Owned'}}}}),
+  row(1,8,'event_msg',{type:'task_started',turn_id:'child-turn'}),
+  row(2,9,'token_usage_record',{thread_id:'child',turn_id:'child-turn',usage:u(7),thread_token_usage:u(7)}),
+  row(3,11,'token_usage_record',{thread_id:'child',turn_id:'child-turn',usage:u(4),thread_token_usage:u(11)}),
+  row(4,12,'event_msg',{type:'task_complete',turn_id:'child-turn'}),
+ ]}];}
+ const opts={window:{from:at(-1),until:at(13),includeFrom:false}};
+ test('COST202 real-format root 1ms and exec spawn completed chain recover exact own tokens',()=>{
+  const s=sources(),before=JSON.stringify(s),r=f(s,opts);
+  available(r.sessions[0].usage.inputTokens,22);available(r.sessions[1].usage.inputTokens,11);available(r.totals.usage.inputTokens,33);
+  assert.equal(r.status,'available');assert.equal(JSON.stringify(s),before);
+ });
+ const negatives=[
+  ['root 2ms',s=>{s[0].records[1].timestamp=at(2);},'root'],
+  ['root negative gap',s=>{s[0].records[1].timestamp=at(-1);},'root'],
+  ['root wrong generation',s=>{s[0].records[0].payload.cli_version='unknown';},'root'],
+  ['root inherited totals',s=>{s[0].records[4].payload.usage=u(1);},'root'],
+  ['root foreign user',s=>{s[0].records[3].payload.thread_id='other';},'root'],
+  ['child inherited',s=>{s[1].records[0].payload.history_base={id:'ancestor'};},'child'],
+  ['child wrong parent',s=>{s[1].records[0].payload.parent_thread_id='other';},'child'],
+  ['child session identity mismatch',s=>{s[1].records[0].payload.session_id='other';},'child'],
+  ['child foreign usage',s=>{s[1].records[2].payload.thread_id='other';},'child'],
+  ['fork true',s=>{s[0].records[5].payload.input=input.replace('fork_context: false','fork_context: true');},'child'],
+  ['quoted spoof',s=>{s[0].records[5].payload.input=JSON.stringify(input);},'child'],
+  ['dead code',s=>{s[0].records[5].payload.input='if(false){'+input+'}';},'child'],
+  ['extra executable code',s=>{s[0].records[5].payload.input=input+'; globalThis.sideEffect=true;';},'child'],
+  ['template interpolation',s=>{s[0].records[5].payload.input=input.replace('owned task','${danger()}');},'child'],
+  ['wrong tool',s=>{s[0].records[5].payload.input=input.replace('multi_agent_v1__spawn_agent','other');},'child'],
+  ['prompt mismatch',s=>{s[0].records[6].payload.item.prompt='other';},'child'],
+  ['completion failed',s=>{s[0].records[6].payload.item.status='failed';},'child'],
+  ['sender mismatch',s=>{s[0].records[6].payload.item.sender_thread_id='other';},'child'],
+  ['completion turn mismatch',s=>{s[0].records[6].payload.turn_id='other';},'child'],
+  ['receiver mismatch',s=>{s[0].records[6].payload.item.receiver_thread_ids=['other'];},'child'],
+  ['receiver metadata mismatch',s=>{s[0].records[6].payload.item.receiver_agents[0].thread_id='other';},'child'],
+  ['malformed receiver metadata',s=>{s[0].records[6].payload.item.receiver_agents=[null];},'child'],
+  ['output call mismatch',s=>{s[0].records[7].payload.call_id='other';},'child'],
+  ['output child mismatch',s=>{s[0].records[7].payload.output[1].text='{"agent_id":"other","nickname":"Owned"}';},'child'],
+  ['nickname mismatch',s=>{s[1].records[0].payload.source.subagent.thread_spawn.agent_nickname='Other';},'child'],
+  ['completion after birth',s=>{s[0].records[6].payload.completed_at_ms=base+9;},'child'],
+  ['ordinal gap',s=>{s[1].records[2].ordinal=20;},'child'],
+ ];
+ for(const[label,mutate,id]of negatives)test('COST202 rejects '+label,()=>{const s=sources();mutate(s);const r=f(s,opts);unavailable(r.sessions.find(x=>x.sessionId===id).usage.inputTokens);});
+ test('COST202 an output after cutoff cannot prove fresh child birth',()=>{const r=f(sources(),{window:{from:at(-1),until:at(8),includeFrom:false}});unavailable(r.sessions[1].usage.inputTokens);});
+}

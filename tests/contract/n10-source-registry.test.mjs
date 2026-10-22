@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -130,6 +130,25 @@ describe("ORACLE-N10-SOURCE-REGISTRY", () => {
   it("[AC-SOURCE-2] vendor one-byte drift reports both hashes and clears after byte restoration", () => {
     const f = sourceFixture();
     assertRestored(f, "skills/sample/scripts/sample.mjs", bytes => put(f.root, "skills/sample/scripts/sample.mjs", Buffer.concat([bytes, Buffer.from("x")])), /vendored sha256 mismatch.*expected=[a-f0-9]{64} actual=[a-f0-9]{64}/u);
+  });
+
+  it.each(["file", "parent directory"])("[AC-SOURCE-2] vendored hash rejects a %s symlink even when target bytes match", kind => {
+    const f = sourceFixture();
+    const target = join(f.root, "skills/sample/scripts/sample.mjs"), bytes = readFileSync(target);
+    const outside = mkdtempSync(join(tmpdir(), "n10-vendored-outside-")); roots.push(outside);
+    writeFileSync(join(outside, "sample.mjs"), bytes);
+    if (kind === "file") {
+      rmSync(target);
+      symlinkSync(join(outside, "sample.mjs"), target);
+    } else {
+      const scripts = dirname(target);
+      rmSync(scripts, { recursive: true, force: true });
+      symlinkSync(outside, scripts);
+    }
+    const result = checkSkillConsistency(f.root);
+    expect(result.failures).toEqual([]);
+    expect(findings(result.reports)).toContainEqual(expect.stringMatching(/vendored file missing skills\/sample\/scripts\/sample\.mjs: vendored path alias/u));
+    expect(runChecker(f.root).status).toBe(0);
   });
 
   it("[AC-SOURCE-2] active retired debate dependency retains the existing hard failure", () => {
