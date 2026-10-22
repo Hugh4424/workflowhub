@@ -132,7 +132,7 @@ description: 普通任务在定方向内完成方案审、一次确认、实施�
 | `frontend-prototype-render` | 按需 | 需要真实原型帮助用户选择且在授权内才读；不靠原型替正式实现或验收。 |
 | `frontend-component-quality` | 按需 | 真实UI组件改动触发原质量检查；无组件写集不调用。 |
 | `wh-review` | 必需 | 方案审沿 detail 轨一次；整次实施一次代码审沿 build-code 面/provider。 |
-| `intake-decision-review` | 按需 | 原 wh-review 选定 intake 镜头时消费，未选不另起审查。 |
+| `intake-decision-review` | 跳过 | 普通不另开方向审查点；不把 intake 方向 lens 塞进 detail 包。 |
 | `plan-ceo-review` | 按需 | 方案/方向审查真实选中产品镜头才读，不额外发起审查轮。 |
 | `review` | 必需 | 整次实现审引用 build-code 同源 Standards/Spec 方法与同scope材料，轴不增审查点。 |
 | `simplicity-guard` | 必需 | 当前方案取舍或已有审查 packet 使用原 P0–P3/并发镜头；不单开审查。 |

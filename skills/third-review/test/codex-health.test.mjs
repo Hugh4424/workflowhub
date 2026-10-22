@@ -156,3 +156,77 @@ test("Codex probe reports unverifiable when its side channel is gone", async () 
   assert.notEqual(result.terminal, true);
   assert.equal(result.error.code, "PROBE_FAILED");
 });
+
+// T037: each bridge gets an empty owned home and tmp root; no user auth/provider.
+function ownedLifecycleBridge(prompt, { denyCleanup = false, failPreparation = false } = {}) {
+  const root = fs.realpathSync(temp()), workspace = path.join(root, "workspace"), home = path.join(root, "home"), temporary = path.join(root, "tmp");
+  for (const dir of [workspace, home, temporary]) fs.mkdirSync(dir);
+  const plan = codex.start(provider(fakeAppServer), workspace, prompt);
+  const preload = `import fs from 'node:fs';const rm=fs.rmSync,write=fs.writeFileSync;fs.rmSync=(p,...args)=>{if(String(p).includes('3rd-review-codex-home-'))throw Object.assign(new Error('owned Codex cleanup denied'),{code:'EACCES'});return rm(p,...args);};${failPreparation ? "fs.writeFileSync=(p,...args)=>{if(String(p).endsWith('config.toml'))throw Object.assign(new Error('owned Codex preparation failed'),{code:'OWNED_PREPARE_FAILED'});return write(p,...args);};" : ""}`;
+  const argv = denyCleanup ? ["--import", `data:text/javascript,${encodeURIComponent(preload)}`, ...plan.argv] : plan.argv;
+  const child = spawn(plan.command, argv, { cwd: plan.cwd, env: { ...plan.env, CODEX_HOME: home, TMPDIR: temporary, TMP: temporary, TEMP: temporary }, stdio: ["pipe", "pipe", "pipe"] });
+  child.stdin.end(plan.input);
+  let stdout = "", stderr = "";
+  child.stdout.on("data", b => { stdout += b; });child.stderr.on("data", b => { stderr += b; });
+  const stopped = new Promise((resolve, reject) => { child.once("error", reject); child.once("close", (code, signal) => resolve({ code, signal })); });
+  return { root, temporary, child, stopped, url: plan.healthServer.url, output: () => ({ stdout, stderr }) };
+}
+async function finishOwnedLifecycle(bridge) {
+  if (bridge.child.exitCode === null && bridge.child.signalCode === null) { bridge.child.kill("SIGKILL"); await bridge.stopped; }
+  fs.rmSync(bridge.root, { recursive: true, force: true });
+}
+
+test("T037 Codex real bridge cleans owned homes after success, protocol failure and SIGTERM", async () => {
+  for (const prompt of ["review", "FAIL_PROTOCOL", "HOLD_TURN"]) {
+    const bridge = ownedLifecycleBridge(prompt);
+    try {
+      if (prompt === "HOLD_TURN") {
+        await waitForStatus(bridge.url, value => value.provider?.last_turn?.status === "inProgress");
+        assert.equal(fs.readdirSync(bridge.temporary).filter(name => name.startsWith("3rd-review-codex-home-")).length, 1);
+        bridge.child.kill("SIGTERM");
+      }
+      const stopped = await bridge.stopped;
+      assert.equal(stopped.code, prompt === "FAIL_PROTOCOL" ? 1 : 0);
+      assert.equal(stopped.signal, null);
+      assert.match(bridge.output().stdout, /thread.started/); // real app-server effect
+      if (prompt === "review") assert.match(bridge.output().stdout, /CODEX_FINAL/);
+      if (prompt === "FAIL_PROTOCOL") assert.match(bridge.output().stdout, /bad turn/);
+      if (prompt === "HOLD_TURN") { assert.match(bridge.output().stdout, /turn.started/); assert.doesNotMatch(bridge.output().stdout, /CODEX_FINAL|turn.completed/); }
+      assert.deepEqual(fs.readdirSync(bridge.temporary), []);
+    } finally { await finishOwnedLifecycle(bridge); }
+  }
+});
+
+test("T037 Codex cleanup EACCES remains visible while preserving real turn and primary failure", async () => {
+  for (const prompt of ["review", "FAIL_PROTOCOL", "HOLD_TURN"]) {
+    const bridge = ownedLifecycleBridge(prompt, { denyCleanup: true });
+    try {
+      if (prompt === "HOLD_TURN") { await waitForStatus(bridge.url, value => value.provider?.last_turn?.status === "inProgress"); bridge.child.kill("SIGTERM"); }
+      const stopped = await bridge.stopped;
+      assert.equal(stopped.code, prompt === "FAIL_PROTOCOL" ? 1 : 0);
+      assert.equal(stopped.signal, null);
+      assert.match(bridge.output().stdout, /thread.started/);
+      if (prompt === "review") assert.match(bridge.output().stdout, /CODEX_FINAL/);
+      if (prompt === "FAIL_PROTOCOL") assert.match(bridge.output().stdout, /bad turn/);
+      if (prompt === "HOLD_TURN") { assert.match(bridge.output().stdout, /turn.started/); assert.doesNotMatch(bridge.output().stdout, /CODEX_FINAL|turn.completed/); }
+      const diagnostic = bridge.output().stderr.split("\n").filter(Boolean).map(line => JSON.parse(line));
+      assert.ok(diagnostic.some(row => row.code === "TEMP_CLEANUP_FAILED" && row.cleanup_stage === "app-server-close" && row.error?.code === "EACCES"));
+      assert.equal(fs.readdirSync(bridge.temporary).filter(name => name.startsWith("3rd-review-codex-home-")).length, 1);
+    } finally { await finishOwnedLifecycle(bridge); }
+  }
+});
+
+test("T037 Codex preparation failure retains its original error when cleanup also fails", async () => {
+  const bridge = ownedLifecycleBridge("review", { denyCleanup: true, failPreparation: true });
+  try {
+    const stopped = await bridge.stopped;
+    assert.equal(stopped.code, 1);
+    assert.doesNotMatch(bridge.output().stdout, /thread.started/);
+    assert.match(bridge.output().stderr, /OWNED_PREPARE_FAILED/);
+    assert.match(bridge.output().stderr, /\nError: owned Codex preparation failed\n/);
+    assert.match(bridge.output().stderr, /cleanup_error/);
+    const diagnostic = bridge.output().stderr.split("\n").filter(line => line.startsWith('{"code":"TEMP_CLEANUP_FAILED"')).map(line => JSON.parse(line));
+    assert.ok(diagnostic.some(row => row.cleanup_stage === "prepare" && row.error?.code === "EACCES"));
+    assert.equal(fs.readdirSync(bridge.temporary).filter(name => name.startsWith("3rd-review-codex-home-")).length, 1);
+  } finally { await finishOwnedLifecycle(bridge); }
+});

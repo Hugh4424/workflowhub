@@ -25,16 +25,17 @@ description: 阶段已交付或用户要求独立收尾时，统一提交、PR�
 
 build-prd最终稿确认只批准内容，**不授权commit/push/merge/archive/cleanup**；先查是否另有对应动作/范围真实授权。build-code/verify-code已有任务授权持续覆盖范围内必要commit/push/merge，不因阶段/新会话/HEAD变化重复提问。授权未含新增动作、目标或范围时只停该动作并向执行主会话说明所缺决定，其余安全工作继续。审查结果、fixture回复与机器默认值不能冒用户授权。
 
-每次实际Git动作前，在**将执行该动作的仓库cwd**重新读branch/HEAD，核真实授权原文/ref和本次路径/远端范围，随后调用已有 `runtime/interface/git-authorize.mjs`。CLI形状如下，变量均来自上述真实输入，作为参数传入，不拼入待执行shell代码：
+每次实际Git动作前，在**将执行该动作的仓库cwd**重新读branch/HEAD，核真实授权原文/ref和本次路径/远端范围，随后经已认证TaskHandle同进程调用已有 `runtime/interface/git-authorize.mjs`，使task evidence预算与真实cwd一起承接；不process.chdir、不父进程check后spawn绕写。形状如下，变量均来自上述真实输入，不拼入待执行shell代码：
 
-```bash
-node "$AUTH_TOOL" record --operation "$OPERATION" --confirmation-ref "$USER_SOURCE_REF" --dir "$AUTH_DIR"
-node "$AUTH_TOOL" consume --operation "$OPERATION" --step-id "$ACTUAL_STEP_ID" --authorization-ref "$EXACT_GRANT_REF" --dir "$AUTH_DIR"
+```js
+const task = openTask(taskRoot, { projectName, taskId });
+const grant = await task.recordGitAuthorization({ cwd, operation, confirmationRef: userSourceRef, phase });
+await task.consumeGitAuthorization({ cwd, operation, stepId: actualStepId, authorizationRef: grant.path, phase });
 ```
 
-`AUTH_TOOL`为已定位包内git-authorize工具绝对路径；`AUTH_DIR`为当前task外置证据中的既有授权目录，存储在可能删除的worktree之外。`EXACT_GRANT_REF`使用record实际返回的原件路径，不猜名字；同一次实际步骤消费其唯一step-id，不能借重复消费跳过新动作核对。动作只有现有commit/push/merge/pr/archive/cleanup六类，push-task仍是push的具名步骤，不造新operation。
+openTask从已定位包的runtime/task/task-handle.mjs导入，taskRoot/projectName/taskId来自当前认证材料。授权目录由handle绑定当前task外置quality/evidence/git-authorizations，存储在可能删除的worktree之外。authorizationRef使用record实际返回的grant.path原件路径，不猜名字；同一次实际步骤消费其唯一step-id，不能借重复消费跳过新动作核对。动作只有现有commit/push/merge/pr/archive/cleanup六类，push-task仍是push的具名步骤，不造新operation。
 
-普通非scoped授权绑定当前branch/HEAD；消费旧HEAD记录必须失败。实际HEAD/分支变化后，已有用户授权仍覆盖时自动重新record/consume，无需再问用户；不修改原grant，也不把新HEAD写回旧件。只在**build-code的commit**沿现实现同传`--phase build-code` record/consume，以同task/分支/阶段复用授权，实际每次HEAD仍记在consumed原件；其它stage、旧无phase记录和push/merge/pr保持原HEAD严格匹配。混合/不明记录用准确authorization-ref，不凭最新文件名选择。
+普通非scoped授权绑定当前branch/HEAD；消费旧HEAD记录必须失败。实际HEAD/分支变化后，已有用户授权仍覆盖时自动重新record/consume，无需再问用户；不修改原grant，也不把新HEAD写回旧件。只在**build-code的commit**沿现实现同传`phase: "build-code"` record/consume，以同task/分支/阶段复用授权，实际每次HEAD仍记在consumed原件；其它stage、旧无phase记录和push/merge/pr保持原HEAD严格匹配。混合/不明记录用准确authorization-ref，不凭最新文件名选择。
 
 动作命令用已有`runtime/interface/run-command.mjs`的`captureCommand({cwd, recordDir, slug, argv, timeoutMs})`或caller现有公共capture路径保存真实argv/cwd/exit/signal/超时取消/output_ref；优先argv，外置recordDir在worktree清理后仍可读。每次失败保原件，不填exit0，不复制raw镜像。完成：实际动作前授权范围、人读来源、当时branch/HEAD和consume原件能对应；拒绝时没有发生该动作。
 
@@ -90,7 +91,7 @@ PR能力不可用/环境不支持时保真实错误，继续可执行的普通�
 
 **归档、删除任务分支/worktree及交付清理前**，caller统一展示：实际交付/PR/图状态与质量限制；待归档的具名材料路径与目标；task-owned worktree路径；本地任务分支；实际存在的同名远端分支及PR合并是否会自动删除它；未知/私有/未交付/packet TTL等具名例外及保管位置；main/existing workspace明确保留。取得一次覆盖该实际范围的真实用户答复，不能把稿件确认、阶段事实、旧建议或当前默认策略当删除确认。
 
-先核具名当前消费者是否必须使用材料的现有路径：能在本次授权范围内安全迁接的reader、技能链接和测试依赖，随归档更新到目标路径并读回；确需原路径且不能同批安全迁接的，逐项写明消费者、用途和保留原因。只读历史引用、immutable证据与图中历史source_file保留原文，不单独构成材料必须原位保留的理由；图更新按第3节与knowledge-graph规则执行，未更新如实说明。父规划材料仍被后续子任务消费时，保留其具体路径和用途，不由子任务归档/移动/删除父/兄弟材料；已安全交付也不等于所有执行侧资料可弃。旧worktree备忘逐件核外置唯一原件保管位置或用户明确可弃范围，本次备忘从创建就外置appendRecord，不因目录名当可丢缓存。确认拒绝/缺失时，若因PR合并可能自动删除源任务分支（包括宿主设置未知）而在merge前请求确认，则停该merge以及archive/删除/cleanup；其它场景只停archive/删除/cleanup。已完成commit/merge/push事实不改写，保留实际路径和下一步条件。确认只授权列出的物理范围，不接受质量风险或让incomplete变完成。
+先核具名当前消费者是否必须使用材料的现有路径：能在本次授权范围内安全迁接的reader、技能链接和测试依赖，随归档更新到目标路径并读回；确需原路径且不能同批安全迁接的，逐项写明消费者、用途和保留原因。只读历史引用、immutable证据与图中历史source_file保留原文，不单独构成材料必须原位保留的理由；图更新按第3节与knowledge-graph规则执行，未更新如实说明。父规划材料仍被后续子任务消费时，保留其具体路径和用途，不由子任务归档/移动/删除父/兄弟材料；已安全交付也不等于所有执行侧资料可弃。旧worktree备忘逐件核外置唯一原件保管位置或用户明确可弃范围，本次备忘从创建就经已认证task.appendRecord({dir:"quality/evidence",slug,ext:"md",bytes})外置（底层复用appendRecord），不因目录名当可丢缓存。确认拒绝/缺失时，若因PR合并可能自动删除源任务分支（包括宿主设置未知）而在merge前请求确认，则停该merge以及archive/删除/cleanup；其它场景只停archive/删除/cleanup。已完成commit/merge/push事实不改写，保留实际路径和下一步条件。确认只授权列出的物理范围，不接受质量风险或让incomplete变完成。
 
 获确认后，对无需留当前路径的已交付材料普通`git mv`归档；仅保留前述确需原路径且不能安全迁接的具名例外。在实际执行分支按archive授权record/consume，归档新字节另核commit授权、提交并正常merge/push到目标；不使用旧task-close计划/恢复状态。若路径/HEAD/保留需求变化超原确认范围，先重新展示变化并取得新增范围答复；不靠时间或先前机器记录扩大授权。
 

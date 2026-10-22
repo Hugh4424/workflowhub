@@ -11,3 +11,17 @@ describe("ordinary portable build-prd observations",()=>{
  it("appends immutable outcomes on repeated invocation instead of a resume/checkpoint actor",async()=>{const f=await fixture(),m=loadPortableWorkflowManifest({worktreeRoot:ROOT}),payload=await input(f.task,m),a=await runPortableWorkflow({task:f.task,worktreeRoot:ROOT,input:payload}),raw=f.task.readRecord(a.ref),b=await runPortableWorkflow({task:f.task,worktreeRoot:ROOT,input:payload});expect(b.ref).not.toBe(a.ref);expect(f.task.readRecord(a.ref)).toEqual(raw);expect(readLatestPortableTerminal({task:f.task}).ref).toBe(b.ref);});
  it("keeps historical reads passive and rejects each nonpost write before new directories or records",async()=>{for(const cohort of["pre","history",null,"unknown"]){const f=await fixture(),path=join(f.task.taskPath,"task.json"),v=JSON.parse(readFileSync(path,"utf8"));if(cohort===null)delete v.activation_cohort;else v.activation_cohort=cohort;const raw=JSON.stringify(v)+"\n";writeFileSync(path,raw);const task=openTask(f.task.taskPath,f.task.identity);expect(projectPortableWorkflowStatus({task}).state).toBe("not-started");const dir=join(task.taskPath,"quality/evidence/portable-workflow-outcomes");expect(existsSync(dir)).toBe(false);await expect(runPortableWorkflow({task,worktreeRoot:ROOT,input:{task_id:task.identity.taskId,workflow:"build-prd",step_results:[]}})).rejects.toMatchObject({code:"PORTABLE_TASK_READ_ONLY"});expect(existsSync(dir)).toBe(false);expect(readFileSync(path,"utf8")).toBe(raw);}});
 });
+
+it("P8 portable terminal publication refuses full evidence and retains its prior actual outcome",async()=>{
+  const {truncateSync,readdirSync,statSync}=await import('node:fs');
+  const {DEFAULT_TASK_DISK_LIMITS,readTaskDiskUsage}=await import('../../runtime/evidence/disk-budget.mjs');
+  const f=await fixture(),m=loadPortableWorkflowManifest({worktreeRoot:ROOT}),payload=await input(f.task,m);
+  const original=await runPortableWorkflow({task:f.task,worktreeRoot:ROOT,input:payload}),originalBytes=f.task.readRecord(original.ref),facts=readFileSync(join(f.task.taskPath,'facts.jsonl'));
+  const dir=join(f.task.taskPath,'quality/evidence/portable-workflow-outcomes/build-prd/terminal'),before=readdirSync(dir).sort();
+  const ballast=join(f.task.taskPath,'quality/evidence/owned-budget-sparse');writeFileSync(ballast,'');
+  truncateSync(ballast,DEFAULT_TASK_DISK_LIMITS.evidence.hardBytes-readTaskDiskUsage(f.task.taskPath).groups.evidence.bytes);
+  const sparseSize=statSync(ballast).size;
+  expect(readTaskDiskUsage(f.task.taskPath).groups.evidence.bytes).toBe(DEFAULT_TASK_DISK_LIMITS.evidence.hardBytes);
+  await expect(runPortableWorkflow({task:f.task,worktreeRoot:ROOT,input:payload})).rejects.toMatchObject({code:'DISK_BUDGET_EXCEEDED'});
+  expect(readdirSync(dir).sort()).toEqual(before);expect(f.task.readRecord(original.ref)).toBe(originalBytes);expect(readFileSync(join(f.task.taskPath,'facts.jsonl'))).toEqual(facts);expect(statSync(ballast).size).toBe(sparseSize);
+});

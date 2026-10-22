@@ -168,7 +168,9 @@ describe("N2 skill catalog portability target oracles", () => {
     put(root, "skills/catalog.yaml", yaml.dump(data));
     const before = checkSkillConsistency(root);
     expect(before.failures).toEqual([]);
-    expect(before.reports.filter(report => !report.startsWith("material-authoring ")), "legal adapted source must start without source diagnostics").toEqual([]);
+    expect(before.reports.filter(report => !report.startsWith("material-authoring ") && !report.startsWith("source-registry ")), "legal adapted source must start without source diagnostics").toEqual([]);
+    for (const report of before.reports.filter(report => report.startsWith("source-registry "))) expect(report).toMatch(/; report-only$/u);
+    expect(before.failures).toEqual([]);
     for (const path of AUTHORING_TEMPLATES) {
       const reports = before.reports.filter(report => report.startsWith(`material-authoring ${path}: 必留项 `));
       expect(reports, path).toHaveLength(1);
@@ -210,6 +212,29 @@ describe("ORACLE-N4-REPORT-ONLY writing reports", () => {
     expect(reports, path).toHaveLength(1);
     return reports[0];
   };
+
+  it("T013 distinguishes placeholder index rows from missing or impure pointers", () => {
+    const root = fixture();
+    put(root,indexPath,read(join(ROOT,indexPath)));
+    expect(reportFor(root,indexPath)).not.toContain("缺失 纯指针边界");
+    for(const body of ["", "## Execution Index\n", read(join(ROOT,indexPath))+"\n- gate_cmd: npm test\n"]){put(root,indexPath,body);expect(reportFor(root,indexPath)).toContain("缺失 纯指针边界");}
+    put(root,indexPath,read(join(ROOT,indexPath)));
+    expect(reportFor(root,indexPath)).not.toContain("缺失 纯指针边界");
+  });
+  it("T016 reports safe real templates while preserving placeholder and author boundaries", () => {
+    const root=fixture();
+    put(root,indexPath,read(join(ROOT,indexPath)));
+    expect(reportFor(root,indexPath)).toContain("机器结构在场");
+    const placeholder=read(join(ROOT,indexPath)).replace(/`README.md`/g,"`[精确路径]`");
+    put(root,indexPath,placeholder);expect(reportFor(root,indexPath)).toContain("unknown");
+    put(root,phasePath,read(join(ROOT,phasePath)));expect(reportFor(root,phasePath)).toContain("机器结构在场");
+    for(const name of ["spec.md","decision-log.md","prd.md"])put(root,name,"#\nTBD 待补充\n");
+    const result=checkSkillConsistency(root);expect(result.failures).toEqual([]);
+    expect(result.reports.filter(row=>/^material-authoring (?:spec|decision-log|prd)\.md:/.test(row))).toEqual([]);
+    const material=result.reports.filter(row=>row.startsWith("material-authoring "));
+    expect(new Set(material.map(row=>row.split(":")[0])).size).toBe(5);
+    expect(material.some(row=>/必留项 (?:pass|fail)|评分[:：]\s*\d/i.test(row))).toBe(false);
+  });
 
   it("reports each of five missing templates as unknown with its original error, without failures", () => {
     const { root } = healthyFixture();
@@ -371,5 +396,20 @@ describe("ORACLE-N4-REPORT-ONLY writing reports", () => {
     expect(cli.stdout).toContain("本检查未接入独立标注；校准见独立原件");
     expect(cli.stdout).toContain("TP=unknown FP=unknown 分母=unknown");
     expect(cli.stdout).not.toContain("P5人工标注尚未提供");
+  });
+});
+
+
+describe("N10 CLI root diagnostics", () => {
+  it("names invalid or unreadable roots while preserving exit 1", () => {
+    const missing = join(temp(), "missing");
+    for (const [root, pattern] of [["relative", /requires --root <absolute package root>.*received:/], [missing, /cannot read root/]]) {
+      const result = spawnSync(process.execPath, [join(ROOT, "tools/cli/check-skill-consistency.mjs"), "--root", root], { cwd: ROOT, encoding: "utf8", timeout: 30_000 });
+      const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
+      expect(result.status).toBe(1);
+      expect(output).toMatch(pattern);
+      expect(output).toContain(root);
+      expect(output).not.toContain("Node.js v");
+    }
   });
 });

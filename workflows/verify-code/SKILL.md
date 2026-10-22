@@ -12,7 +12,7 @@ version: 5.2.0
 
 ## 方法
 
-1. 按「## 一次架构机会」核task已有评估：有原件只引用，无则记未知、不重跑。核真实worktree/branch/HEAD、写集及来源，实际命令/结果用 `runtime/interface/run-command.mjs` 存当前quality/tests；去重/临时输出实际执行 `docs/standard-workflow.md`「证据只留原始件（同字节即同一事实）」，保本次真实immutable回执及正确output_ref。不一致先定位纠正，不猜task、不造人类确认/runtime gate，无法完成留缺口。接续实际按 `skills/stage-handoff/SKILL.md` 路径选择/回读交接、当前材料/task facts、有源阶段陈述、四类信息、证据/具体未完项；材料疑点交原作者。同task核当前范围沿已有授权续跑；缺失/错task披露，旧对象只读。读真实入口/consumer/diff、完整AC、build-code执行原件，分清已跑/未跑/失败/不可用/覆盖限制；缺原始来源/服务/样本/Phase正文保unknown/unavailable，不以文件存在/旧review/exit0填通过。追问why时先定位真实符号，沿git blame/log与原决定逐环读理由/反证，分已知事实/竞争假设/unknown；读不到记缺口/原因，不以最新提交或自报轨迹冒原理由。常规审查逐项抽查母PRD/原始需求→decision-log已确认裁决→spec FR/AC→phases/index.md每条实际引用逐一打开的物理Phase任务/oracle→实现/测试/质量证据；现具名 `phases/P<n>-<结果短名>.md` 按原路径，历史裸 `phases/P<n>.md` 只读兼容。索引只导航，缺索引/正文留unknown/unavailable及具体缺口，不猜路径。用户采纳的范围内优化及受影响复验完成后才将当前对象交步骤2，不另加第二次正常审查。
+1. 按「## 一次架构机会」核task已有评估：有原件只引用，无则记未知、不重跑。核真实worktree/branch/HEAD、写集及来源，实际命令/结果用已认证task.captureCommand（底层唯一 `runtime/interface/run-command.mjs`）存当前quality/tests；去重/临时输出实际执行 `docs/standard-workflow.md`「证据只留原始件（同字节即同一事实）」，保本次真实immutable回执及正确output_ref。不一致先定位纠正，不猜task、不造人类确认/runtime gate，无法完成留缺口。接续实际按 `skills/stage-handoff/SKILL.md` 路径选择/回读交接、当前材料/task facts、有源阶段陈述、四类信息、证据/具体未完项；材料疑点交原作者。同task核当前范围沿已有授权续跑；缺失/错task披露，旧对象只读。读真实入口/consumer/diff、完整AC、build-code执行原件，分清已跑/未跑/失败/不可用/覆盖限制；缺原始来源/服务/样本/Phase正文保unknown/unavailable，不以文件存在/旧review/exit0填通过。追问why时先定位真实符号，沿git blame/log与原决定逐环读理由/反证，分已知事实/竞争假设/unknown；读不到记缺口/原因，不以最新提交或自报轨迹冒原理由。常规审查逐项抽查母PRD/原始需求→decision-log已确认裁决→spec FR/AC→phases/index.md每条实际引用逐一打开的物理Phase任务/oracle→实现/测试/质量证据；现具名 `phases/P<n>-<结果短名>.md` 按原路径，历史裸 `phases/P<n>.md` 只读兼容。索引只导航，缺索引/正文留unknown/unavailable及具体缺口，不猜路径。用户采纳的范围内优化及受影响复验完成后才将当前对象交步骤2，不另加第二次正常审查。
    工作区/材料核对后，独立上下文实际按 `skills/knowledge-graph/SKILL.md` 用真实验证对象、标准、完整AC/写集查领域与历史约束；按职责/source/consumer有界选完整ID并回源，保代码/文档来源、可观察图龄（不可判记unknown）及本次验证影响或重复补强。五阶段开工义务不由旧报告代跑；缺图/无匹配/歧义/工具失败保真实诊断并回原文，不先更新现图/触发未许可文档抽取；图不代独立审查/业务效果。
 2. 先实际消费 `docs/standard-workflow.md` 的「三审查点与结论真实性」，主会话提交其要求的原始依据并记录应用；终末范围按该段完整提供。读取 `skills/wh-review/SKILL.md` 的「Long-review host convention」并按其等待方法发起一次终末独立代码审查，正常使用 OCR，不可用时的记录口径见下节；本步完成以每路 provider 的原始 findings 或真实失败、取消、unavailable、实际执行者与覆盖限制均已保存且可定位为准，缺一路即本步未完成。原件「可定位」可由真实可读的既有原 ref 满足：同一命令、退出事实一致且内容比较确立同字节时只引用并标注，不要求为本路新写一份物理副本；各路真实终态、来源与失败仍分别保留，不能用旧回执冒本次执行。审查输入包含 verify-code 合同、provider 协议、stageReviewFocus、lens 正文、当前 diff、完整 AC 与可用执行原件；执行者检查真实消费者、生命周期、权限、数据泄漏、并发、取消、恢复、资源释放和测试强度。
 3. 保留每路 provider 的原始 findings、实际执行者、错误、取消与覆盖限制。已安装 OCR 的失败不由其它 route 漂白。外发材料核实际范围、路径安全和敏感信息脱敏，缺真实只读能力时明确不可用。 首个 provider 到终态后立即处理并把迟到 findings 交给同一回调，剩余 provider 继续运行；不能因首个结果取消 sibling。跨 stage 的 build-code Phase 审查结果不得充当 verify-code 的第二次独立审查。
@@ -49,6 +49,8 @@ UI 适用时沿 `skills/isolated-browser-qa/SKILL.md` 消费页面、console 与
 ### 测试充分性与检查可信度
 
 核断言/替身、缺RED与原件时，读[backend-testing「行为测试与证伪」](../../skills/backend-testing/SKILL.md#行为测试与证伪)及同文件「执行事实」，沿其TCR/冻结保护与失败分类执行。新增/扩展检查用同判据：合法pass→仅受控违规改变后目标fail→恢复同合法输入pass，核argv/cwd/raw、exit/signal/timeout及恢复字节；同字节复用原件。违规仍绿报具名遗漏case，恢复未通过incomplete；不以方法读回冒检查器接线。适用代码改动做受控行为变异（如取反新增条件），目标断言须fail再恢复，不拿字符串变异充数；无新增/扩展检查按真实diff写N/A，只免执行，仍消费完整正反输入。
+
+错在范围修：检查错时修检查本身或收窄其范围，不绕过检查、不在上下游加豁免。通过太易时先查观察方法：核断言、替身与夹具是否真能失败，再动实现。检查可信度的三值结论分为已验证/未验证/无法判断，不把未知写成通过；不替换 AC 的既有结果档位。同一修正复发时，把教训落为具名检查，先在有源真实历史错误上失败，再验证当前修复。
 
 依赖升级先读changelog，major另读migration notes；逐项或具理由关联小组升级，同一受影响行为前后验证。核直接/传递lockfile diff，包管理器生成、不手改；安装成功、缺notes/lockfile/前后行为不能当完成。无升级给实际diff依据，不凑依赖。
 

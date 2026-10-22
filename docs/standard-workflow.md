@@ -16,7 +16,7 @@ WorkflowHub 主会话按认证工作区当前材料执行。post 材料为 decis
 
 动手前在当前 Phase/Task 申报具体路径/必要符号、写主和允许范围，核认证工作区、真实分支与当前字节；共享文件交唯一写主串行。范围与受保护类别按 [build-code「方法」第1步](../workflows/build-code/SKILL.md#方法)核，审查逐项比对声明与真实 `git diff --name-only`，越界或声明不实照实处置。
 
-收尾按「当前路线」的持续授权及关闭方法第6/7节执行。默认收口已交付任务材料与 task-owned 工作区/任务分支；main 与 existing workspace 保留。未知、私有、未交付字节及旧备忘逐件按该方法保管或确认可弃，保护具名例外，不惯例保留整个已安全交付 worktree；本次执行备忘从创建即用现有 appendRecord 外置任务库。默认策略不代当前删除确认，也不解除另有来源的 packet TTL 延期。安全移除、普通分支删除、`--force`／`-D`／强推禁项与失败读回均以该方法第7节为正文，不另设删除器或许可。
+收尾按「当前路线」的持续授权及关闭方法第6/7节执行。默认收口已交付任务材料与 task-owned 工作区/任务分支；main 与 existing workspace 保留。未知、私有、未交付字节及旧备忘逐件按该方法保管或确认可弃，保护具名例外，不惯例保留整个已安全交付 worktree；本次执行备忘从创建即用已认证 task.appendRecord({dir,slug,ext,bytes}) 外置任务库（底层复用现有 appendRecord）。默认策略不代当前删除确认，也不解除另有来源的 packet TTL 延期。安全移除、普通分支删除、`--force`／`-D`／强推禁项与失败读回均以该方法第7节为正文，不另设删除器或许可。
 
 真正执行关闭并生成交付说明时，读 [关闭方法第4节「提交、推送任务分支与PR」](../skills/stage-closeout/SKILL.md#4-提交推送任务分支与pr)的交付说明内容合同；本处只给调用条件。
 
@@ -43,6 +43,8 @@ WorkflowHub 主会话按认证工作区当前材料执行。post 材料为 decis
 每个 Phase 自带开发、针对性测试、独立审查，收口时审后提交。末 Phase 完整端到端串演只复核沿途逐条结论、补未闭环 case；各 AC 首判归 spec 指定承接 Phase，不能拖到末 Phase。沿用既有授权与三审查点，不增 stage/审查点。
 
 ### 证据只留原始件（同字节即同一事实）
+
+正常任务先以当前绝对task根及真实project/task identity调用 `openTask`，通过该handle的 `createRecord`、`writeRecordAtomic`、`appendRecord({dir,slug,ext,bytes})` 保存quality原件；命令经 `task.captureCommand`（底层唯一 `runtime/interface/run-command.mjs`）采集，确认/Git经 `task.recordConfirmation`、`recordGitAuthorization`、`consumeGitAuthorization`，都显式传实际cwd。三quality组的每次真实写在现record-lock叶子锁内核实际usage/峰值并发布；不持锁等child，不另建计数账本。通用safe-write/CLI仍可独立搬运，但当前task的方法不以裸工具绕过预算；先证实同字节才复用原ref。超hard保旧件与真实执行/prefix，receipt写不成明确未保存，不造ref、不删旧件凑绿。
 
 raw 测试输出、正式回执和审查原件各一份；同一事实＝字节相同，必要证据区只保存不同字节的事实原件/引用。先做内容比较、确立相等后复用已有唯一原 ref；重跑得到相同字节时不再新写物理副本，裁剪、脱敏或 exit 等使字节不同才新写并说明变化。无法确立内容相等时保留新件并如实记 `deduplication: unknown`，不能用命令相同与字节数一致代替内容比较。禁止复制镜像、整棵目录/工作树快照、tar、git archive 或全树清单；目录保存判据按 `AGENTS.md`「证据硬规则」，各文件各为真实事实原件不算快照。证明范围只写 `路径 + hash` 一行，原始字节留在工作树；例外仅三类：该文件随后会被改动或删除、外部服务返回体、一次性环境读数，逐条说明保存字节的原因。历史原件不重写。需要前后历史字节检查时内存比较，只落实际摘要，不保存目录清单。
 

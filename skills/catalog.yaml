@@ -46,7 +46,9 @@ projects:
     # skills/setup-pstack/SKILL.md#1-detect-available-models + #4-validate -> catalog/notice author reads actual target before registration; no model setup/installation adopted.
     # skills/principle-type-system-discipline/SKILL.md#type-system-discipline -> runtime/schemas/skill-bundle.schema.json properties.sources.items.oneOf rejects contradictory source variants; P8 checker consumes this same definition, not yet wired in P3.
     # skills/correct/SKILL.md -> skills/stage-reflection/SKILL.md#方法 source reflection only; not N7 runtime.
-    # skills/principle-redesign-from-first-principles/SKILL.md#redesign-from-first-principles -> catalog/upstream and 18 bundle.sources pointers; P4 owns dependency alignment.
+    # redesign-from-first-principles: only this historical comment; no upstream/decision/local body or reader.
+    # 38 bundles, 19 with sources: self-referential catalog pointers, no dereferencer/runtime reader.
+    # Appendix B marks this source not adopted (D-027); no additional registration or reader.
     # Original extraction ref: skills-framework-redesign-20261014/quality/evidence/research/s1-skills/backnotprop-pstack.md:12-18.
     # MIT LICENSE and these seven archive files were individually compared with extracted package; equality to selected clone files does not bind the entire archive to a commit.
   workflowhub:
@@ -151,23 +153,25 @@ skills:
         adopted:
           - skills/engineering/retro/SKILL.md#steps — 从真实交互提候选，机械检查优先；不采用外部工作分支或自动提交
       - github_url: &pstack_repo https://github.com/backnotprop/pstack
-        commit: c0c3f13cc58005cce7f28c1e6d7ccc439867f171
-        commit_url: https://github.com/backnotprop/pstack/commit/c0c3f13cc58005cce7f28c1e6d7ccc439867f171
+        # 2026-10-14 adoption snapshot, not HEAD; file SHA256 bf482bacc972b3f124a4af8bf9364b4b3e280cb5845e44c326ea4f4565e5c904
+        commit: 1f0f9c3bac03c4297f6fc8f7644fa412eda57085
+        commit_url: https://github.com/backnotprop/pstack/commit/1f0f9c3bac03c4297f6fc8f7644fa412eda57085
         license: MIT
         reviewed_at: '2026-10-16'
         review_outcome: accepted
         path: skills/correct/SKILL.md
-        skill_url: https://github.com/backnotprop/pstack/blob/c0c3f13cc58005cce7f28c1e6d7ccc439867f171/skills/correct/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/1f0f9c3bac03c4297f6fc8f7644fa412eda57085/skills/correct/SKILL.md
         adopted:
           - skills/correct/SKILL.md#fix-each-class-at-the-highest-level-that-works — 对真实重复错误选最高可行结构修复层，候选仍经用户真选
       - github_url: *pstack_repo
-        commit: 55bfdc262dd7f99254d19b53a96cf1dfb24c213b
-        commit_url: https://github.com/backnotprop/pstack/commit/55bfdc262dd7f99254d19b53a96cf1dfb24c213b
+        # 2026-10-14 adoption snapshot, not HEAD; file SHA256 228963799189f481827d6f28065f278bc2008ffa37030b1234cbd5814d36b9e9
+        commit: 1f0f9c3bac03c4297f6fc8f7644fa412eda57085
+        commit_url: https://github.com/backnotprop/pstack/commit/1f0f9c3bac03c4297f6fc8f7644fa412eda57085
         license: MIT
         reviewed_at: '2026-10-16'
         review_outcome: accepted
         path: skills/principle-encode-lessons-in-structure/SKILL.md
-        skill_url: https://github.com/backnotprop/pstack/blob/55bfdc262dd7f99254d19b53a96cf1dfb24c213b/skills/principle-encode-lessons-in-structure/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/1f0f9c3bac03c4297f6fc8f7644fa412eda57085/skills/principle-encode-lessons-in-structure/SKILL.md
         adopted:
           - skills/principle-encode-lessons-in-structure/SKILL.md#encode-lessons-in-structure — 历史负例与结构护栏，原采集commit/时刻未知，不采用规则表/自动提交
     local_changes: 复用既有收口、交接与成本入口；保用户真选检查与人确认清理，直接落账与待批分开，业务仓specs经验按下一步加现象判重，无来源不编、越权不回落；不新增writer或控制面
@@ -246,7 +250,7 @@ skills:
         skill_url: https://github.com/anysearch-ai/anysearch-skill/blob/db3d76e5597aec7261257be5322dd211c9d9bb87/scripts/anysearch_cli.js
         adopted:
           - scripts/anysearch_cli.js — 单个CLI原字节vendor；123原体与本地14741B逐字相等；固定版本许可grant仍unknown
-        content_sha256: null
+        content_sha256: 2f94ff9aa2091234ac225bfe8f16e02a148eba141b49921a8740c2d36ff4e980
     local_changes: 仓内打包；通过 stage manifest 按需加载；不做全局安装；固定db3d76e完整tree无LICENSE/NOTICE，Apache-2.0为既有声明，当前grant/版权绑定unknown；owner来源维护者须向AnySearch取得该版本授权依据，未扩大复制范围。
     dependency_closure: *deps_spec_specify
     update_policy: 比较固定 commit 后的安全边界和 bundle，再人工升级
@@ -2663,3 +2667,39 @@ capability_decisions:
     local_changes: "固定文件 SHA256 931070f5674e81a191277253d4e02b1c45d091b223f93bf506d3896a428a5967；来源原件 sources/pstack/skills/poteto-mode/playbooks/opening-a-pr.md（固定资料manifest逐字节匹配）；包 SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8；Git commit unknown，main仅取回坐标；MIT为本地LICENSE所示、上游许可链未独立核实；本地偏离/排除：不搬强制ready、Conventional Commits、六段模板、自动盯PR、reset/forge。消费者为阶段主会话按上述现方法执行，AGENTS治理由派发/交接作者读取；首次原件导航：P4 quality/tests/2026-10-18-081-p4-controlled-delivery-materials.json及quality/tests/2026-10-18-083-p4-delivery-note-green.json、quality/tests/2026-10-18-084-p4-closeout-protection-green.json；独立首验为quality/evidence/2026-10-18-050-p4-independent-first-consumer.json、quality/evidence/2026-10-18-055-p4-compression-consumer.json；受控首验不冒真实PR，后续实际PR另见quality/tests/2026-10-19-022-ac010-real-pr-independent-consumer.md；历史task_id=n7-route-delivery-closeout-experience-20261018，quality/...均相对此task根；本机原件根 /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n7-route-delivery-closeout-experience-20261018/；总体AC-013与reflect历史限制不因登记关闭。owner为对应方法维护者；仅独立审查替代承接全部消费者且无正文引用后退役，保历史。"
     dependency_closure: []
     update_policy: 只核固定字节及具名consumer，不自动追HEAD；来源登记不证明首次验收或质量通过。
+
+  - name: figure-it-out
+    status: absorbed
+    purpose: 检查本身证伪与检查可信度方法
+    design_idea: 检查错在其范围修；通过太易先疑观测法；复发修正落具名检查
+    used_by_stages: [verify-code]
+    local_path: "workflows/verify-code/SKILL.md; skills/stage-reflection/SKILL.md"
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        commit: unresolved-pstack-content-snapshot
+        license: MIT
+        path: skills/figure-it-out/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/figure-it-out/SKILL.md
+        adopted:
+          - "S1:41 检查错误在其范围修，不绕过或增加下游豁免"
+          - "S1:40 通过太易先查观察方法"
+          - "S1:50 复发修正落具名检查"
+    local_changes: "固定文件 SHA256 d9574cc24929773d5c23f40626ae1e09660afddd7de48e08dd6494d9fff9bbf0；记录包 SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8 未复现、不作内容坐标；Git commit unknown，main仅为取回坐标、非固定revision；MIT为本地LICENSE所示，上游许可链未独立核实。正文落verify-code检查可信度段，stage-reflection只放指针；P5/T021负责正文接线与首验，当前登记不证明方法生效；17行表由P5标本次接线验证。owner为verify-code与stage-reflection方法维护者；只有经独立审查的替代方法承接全部消费者且无正文引用后退役，历史原件保留。"
+    dependency_closure: []
+    update_policy: 按固定文件快照逐项比对，不追HEAD，不用记录包hash冒Git绑定；P5正文与首验未完成前不宣称生效。
+  - name: swarm
+    status: watch
+    purpose: 派发回传与样本测量纪律的消费者登记
+    design_idea: 真实消费者是AGENTS派发与回传；本仓只落纪律，不采用其它swarm机制
+    used_by_stages: []
+    local_path: "AGENTS.md; skills/deep-research/SKILL.md"
+    upstream:
+      - github_url: https://github.com/backnotprop/pstack
+        commit: unresolved-pstack-content-snapshot
+        license: MIT
+        path: skills/swarm/SKILL.md
+        skill_url: https://github.com/backnotprop/pstack/blob/main/skills/swarm/SKILL.md
+        adopted: []
+    local_changes: "未采用，consumer-only观察登记；快照文件SHA256 63e724b308f355f9940fa6753a6fa728d7c5c0df2104742fa1000019e11b17cd，采用快照坐标1f0f9c3bac03c4297f6fc8f7644fa412eda57085来自source-originals索引，未将既有纪律冒充新采用；消费者是AGENTS.md派发与回传及deep-research方法作者，不补许可出口，不写absorbed；上游许可链未独立核实；owner为派发与研究方法维护者。"
+    dependency_closure: []
+    update_policy: 仅保观察与未采用理由；无维护用途或经独立审查替代承接全部消费者后退役，保历史原件。

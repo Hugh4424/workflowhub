@@ -37,6 +37,11 @@ describe("retained native checker aggregation", () => {
     }
     expect(normal.output).not.toMatch(/\[run-checks\] running check-(?:contract|extensibility|task-record-paths)\b/);
     expect(normal.output).toContain("ALL CHECKS PASSED");
+    for (const name of ["skill-static-deps", "check-skill-consistency"]) {
+      expect(normal.output).toContain(`[run-checks] running ${name}`);
+    }
+    expect(normal.output).not.toContain("final-chain");
+    expect(normal.output).not.toContain("[run-checks][material]");
   });
 
   test("propagates a blocking checker failure as exit 1 and names the actual failure", () => {

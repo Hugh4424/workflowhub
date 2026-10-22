@@ -219,15 +219,29 @@ function publish(target, bytes, createOnly, acceptIdentical) {
   }
 }
 
-export async function writeFileAtomic(root, relPath, bytes) {
-  return publish(destination(root, relPath), bytes, false, false);
+async function controlledPublish(target, bytes, createOnly, acceptIdentical, {performWrite} = {}) {
+  if (performWrite !== undefined && typeof performWrite !== "function") throw failure("INVALID_WRITE_EXECUTOR", "performWrite must be a private caller function");
+  const data = Buffer.from(bytes);
+  const resolveExisting = acceptIdentical ? () => {
+    verifyDirectories(target.snapshot);
+    if (targetStat(target.path) && readTarget(target).equals(data)) return {path:target.path,idempotent:true};
+    return undefined;
+  } : undefined;
+  // Preserve the existing create-only idempotency before requesting any new space.
+  if (acceptIdentical && targetStat(target.path) && readTarget(target).equals(data)) return publish(target, data, createOnly, acceptIdentical);
+  const actual = () => publish(target, data, createOnly, acceptIdentical);
+  return performWrite ? performWrite({kind:"publish",path:target.path,bytes:data.length,incomingFiles:createOnly ? 2 : 1,...(resolveExisting ? {resolveExisting} : {})}, actual) : actual();
 }
 
-export async function createFileOnce(root, relPath, bytes) {
-  return publish(destination(root, relPath), bytes, true, true);
+export async function writeFileAtomic(root, relPath, bytes, options) {
+  return controlledPublish(destination(root, relPath), bytes, false, false, options);
 }
 
-export async function appendRecord(dir, slug, ext, bytes) {
+export async function createFileOnce(root, relPath, bytes, options) {
+  return controlledPublish(destination(root, relPath), bytes, true, true, options);
+}
+
+export async function appendRecord(dir, slug, ext, bytes, options) {
   if (typeof slug !== "string" || !/^[a-z0-9-]{1,48}$/.test(slug)) {
     throw failure("INVALID_SLUG", "slug must match [a-z0-9-]{1,48}");
   }
@@ -243,7 +257,7 @@ export async function appendRecord(dir, slug, ext, bytes) {
   }
   for (; sequence <= 999; sequence += 1) {
     const name = `${day}-${String(sequence).padStart(3, "0")}-${slug}.${ext}`;
-    try { return publish(destination(root, name), bytes, true, false).path; }
+    try { return (await controlledPublish(destination(root, name), bytes, true, false, options)).path; }
     catch (error) { if (error.code !== "EEXIST") throw error; }
   }
   throw failure("RECORD_SEQUENCE_EXHAUSTED", `record sequence exhausted for ${day}: ${root}`);

@@ -1,9 +1,10 @@
 import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { closeSync, constants, fstatSync, lstatSync, mkdtempSync, openSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, realpathSync, writeFileSync, writeSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve, relative } from "node:path";
 const SHA256_HEX_CASE_INSENSITIVE = /^[a-f0-9]{64}$/i;
+import { createTrackedTempDir, cleanupStaleTempDirs } from "../../../runtime/interface/temp-dir.mjs";
 import { parseReviewerOutput } from "../../../runtime/review/review-output.mjs";
 import { runPacketBoundCodexReview } from "../../../runtime/review/ocr-delegation-adapter.mjs";
 import { selectTrustedReviewProviderSelection } from "./third-review-host-config.mjs";
@@ -1232,10 +1233,11 @@ export class ReviewProviderClient {
   async #invokeCli({ command, request = null, requestId = null, runtimeId = null, attachments = null, attachmentsRoot = null, attachmentDelivery = null, signal = null }) {
     let temporary = null;
     try {
-      temporary = mkdtempSync(join(tmpdir(), "wh-review-public-"));
+      cleanupStaleTempDirs({ root: realpathSync(tmpdir()), prefixes: ["wh-review-public-"] });
+      temporary = createTrackedTempDir("wh-review-public-");
       let args;
       if (["run", "start"].includes(command)) {
-        const requestPath = join(temporary, "request.json"); const attachmentsPath = join(temporary, "attachments.json");
+        const requestPath = join(temporary.path, "request.json"); const attachmentsPath = join(temporary.path, "attachments.json");
         writeFileSync(requestPath, `${JSON.stringify(request)}\n`, { mode: 0o600 }); writeFileSync(attachmentsPath, `${JSON.stringify(attachments)}\n`, { mode: 0o600 });
         args = [...this.command.slice(1), command, `--config=${this.config}`, `--request=${requestPath}`, ...(command === "start" ? [`--request-id=${requestId ?? ""}`] : []), `--attachments=${attachmentsPath}`, `--attachments-root=${attachmentsRoot}`, `--attachment-delivery=${attachmentDelivery}`];
       } else if (["status", "cancel"].includes(command)) {
@@ -1251,8 +1253,11 @@ export class ReviewProviderClient {
       throw failure("BROKER_INVOCATION_FAILED", `3rd-review public ${command} could not be invoked`);
     } finally {
       if (temporary !== null) {
-        try { rmSync(temporary, { recursive: true, force: true }); }
-        catch { /* cleanup failures are local and never part of review evidence */ }
+        try { temporary.dispose(); }
+        catch (error) {
+          const line = `TEMP_CLEANUP_FAILED: ${error?.code ?? "ERROR"}: ${error?.message ?? error}\n`;
+          try { process.stderr.write(line); } catch { try { writeSync(2, line); } catch { /* diagnostics are best effort */ } }
+        }
       }
     }
   }

@@ -1,6 +1,6 @@
 import { lstatSync, readdirSync, realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute } from "node:path";
-import { appendRecord } from "../interface/safe-write.mjs";
+import { openTask } from "../task/task-handle.mjs";
 
 const REPORT_REF = /^quality\/evidence\/research\/([A-Za-z0-9-]+)\.json$/;
 // P9/T019 (D-029): build-spec is retained for historical report validation/read semantics.
@@ -378,7 +378,7 @@ export function listCurrentResearchReports({ task, taskId, stage } = {}) {
   });
 }
 
-/** Append one ordinary report using the existing immutable record interface ③. */
+/** Append one report to a post-cohort task's quality/evidence/research directory. */
 export async function publishResearchReport({ recordDir, slug = "research", report, raw = null, taskId, stage, recordedAt } = {}) {
   if (typeof recordDir !== "string" || !isAbsolute(recordDir) || basename(recordDir) !== "research" || basename(dirname(recordDir)) !== "evidence" || basename(dirname(dirname(recordDir))) !== "quality") throw new TypeError("recordDir must be the ordinary quality/evidence/research directory");
   const reportWithTimestamp = raw === null && recordedAt !== undefined ? { ...report, recorded_at: recordedAt } : report;
@@ -386,7 +386,10 @@ export async function publishResearchReport({ recordDir, slug = "research", repo
   const value = parseResearchReport(bytes, { taskId, stage });
   if (value.stage === "build-spec") throw new Error("retired research stage build-spec is read-only and cannot be published as a new report");
   if (["snapshot_tree", "material_scope_revision"].some(key => Object.hasOwn(value, key))) throw new Error("retired research bindings are read-only and cannot be published as a new report");
-  const path = await appendRecord(recordDir, slug, "json", bytes);
+  const taskRoot=dirname(dirname(dirname(recordDir))),taskParent=dirname(taskRoot);
+  if (basename(taskParent)!=="tasks" || basename(taskRoot)!==value.task_id) throw new TypeError("recordDir must be the current task quality/evidence/research directory");
+  const task=openTask(taskRoot,{projectName:basename(dirname(dirname(taskRoot))),taskId:value.task_id});
+  const path = await task.appendRecord({dir:"quality/evidence/research",slug,ext:"json",bytes});
   return Object.freeze({ ref: `quality/evidence/research/${basename(path)}`, path, value });
 }
 

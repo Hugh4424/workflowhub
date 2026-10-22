@@ -7,12 +7,12 @@ import { spawnSync } from "node:child_process";
 import { validateSkillBundle } from "../../runtime/adapters/local-skill-resolver.mjs";
 import { findUndeclaredStaticDependencies } from "../../runtime/evidence/skill-static-deps.mjs";
 import yaml from "js-yaml";
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync, existsSync, readdirSync } from "node:fs";
 import { validateContract } from "../../runtime/evidence/validate-contract.mjs";
 import { CORE_FIELDS, validateRecord } from "../../metrics/record-schema.mjs";
 import { GAP, SIX_KEYS, validateExecutionRecord } from "../../metrics/execution-record.mjs";
 import { validateKnowledgeCard } from "../../metrics/knowledge-card.mjs";
-import { resolve, dirname } from "node:path";
+import { resolve, dirname, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -111,7 +111,7 @@ function checkSkillStaticDependencies() {
   return failures;
 }
 
-function runAggregate() {
+async function runAggregate({ materialRoot } = {}) {
   const failures = [];
 
   // 1. check-anti-host (no args, scans core/**/*.mjs via scan-core-files)
@@ -147,8 +147,12 @@ function runAggregate() {
     console.error(`[run-checks] check-decision-log-chain advisory failed (exit ${decisionLogChainCode}); not added to failures`);
   }
 
+  const materialResult = materialRoot ? await runMaterialChecks(materialRoot) : true;
+  if (materialResult === false) failures.push({ name: "material-contract", code: 1 });
+  if (!materialRoot) console.error("[run-checks] material check not run: no --material-root");
+
   if (failures.length === 0) {
-    console.log("[run-checks] ALL CHECKS PASSED");
+    console.log(materialResult === null ? "[run-checks] material input absent; material check not run" : "[run-checks] ALL CHECKS PASSED");
     process.exit(0);
   } else {
     for (const f of failures) {
@@ -162,9 +166,82 @@ function runAggregate() {
 const isMain = process.argv[1]
   && fileURLToPath(import.meta.url) === resolve(process.argv[1]);
 
+async function runMaterialChecks(root) {
+  try {
+    const rootStat = statSync(root);
+    if (rootStat.isFile() && rootStat.size === 0) { console.log(`[run-checks][material] ${root} 没有输入，未检查`); return null; }
+    if (!rootStat.isDirectory()) throw new Error("expected a directory or empty file");
+    const { inspectMaterialWorkspace, phaseFilesFromIndex } = await import("../../runtime/task/material-workspace.mjs");
+    const { validatePostPhaseContract } = await import("../../runtime/stage/stage-content-contracts.mjs");
+    const inspection = inspectMaterialWorkspace(root);
+    if (!Object.keys(inspection.files).length && !inspection.errors.length) { console.log(`[run-checks][material] ${root} 没有输入，未检查`); return null; }
+    const section = inspection.files["decision-log.md"]?.match(/^## 级别与路线\s*\n([\s\S]*?)(?=^## |$(?![\s\S]))/m)?.[1];
+    const basis = section?.split(/\r?\n/).find(line => /^\s*-?\s*(?:\*\*)?推荐级别(?:\*\*)?[:：]\s*(轻档|普通|复杂)(?:任务)?(?:\s*(?:（[^）\n]*）|\([^\)\n]*\)))?[。.]?\s*$/.test(line));
+    const light = basis && /[:：]\s*轻档/.test(basis);
+    console.log(`[run-checks][material] level basis: ${basis ?? "未读到级别事实，按完整材料检查"}`);
+    const phaseDirectory = resolve(root, "phases");
+    const hasPhase = existsSync(phaseDirectory) && readdirSync(phaseDirectory).some(name => /^P\d+.*\.md$/.test(name));
+    if (light && !inspection.errors.length && !existsSync(resolve(root, "spec.md")) && !existsSync(resolve(root, "phases/index.md")) && !hasPhase) {
+      console.log(`[run-checks][material] ${root} 这个级别不适用这类材料`); return true;
+    }
+    const phases = {};
+    if (inspection.files["phases/index.md"]) {
+      try { for (const path of phaseFilesFromIndex(inspection.files["phases/index.md"])) phases[path] = inspection.files[path]; }
+      catch { /* The reader and validator retain the named index error below. */ }
+    }
+    const result = validatePostPhaseContract({ spec: inspection.files["spec.md"], index: inspection.files["phases/index.md"], phases });
+    const errors = [...inspection.errors, ...result.errors, ...triageSkipReasons(phases)];
+    for (const error of errors) console.log(`[run-checks][material] ${root} ${error}`);
+    if (errors.length) { console.log(`[run-checks][material] errors=${errors.length}`); return false; }
+    console.log(`[run-checks][material] PASS ${root} phase_count=${result.facts.phase_count} task_count=${result.facts.task_count} errors=0`);
+    return true;
+  } catch (error) { console.error(`[run-checks][material] cannot read material root ${root}: ${error.code ?? error.message}`); return false; }
+}
+
+function triageSkipReasons(phases) {
+  const errors = [];
+  for (const [path, body] of Object.entries(phases)) {
+    let fence = false;
+    for (const [index, line] of (body ?? "").split(/\r?\n/).entries()) {
+      if (/^\s*```/.test(line)) { fence = !fence; continue; }
+      if (fence || /^\s*>/.test(line)) continue;
+      const field = /^\s*[-*]\s+(?:\*\*)?([^:：]+?)(?:\*\*)?[:：]\s*(.*)$/.exec(line);
+      const value = field?.[2].trim();
+      // Dependency None is a valid graph declaration, not a skipped obligation.
+      const skipField = field && /状态|适用|RED 证据|必留/.test(field[1]);
+      const notApplicable = skipField && /^(?:N\/A|None|不适用)(?:\s*[—–-]\s*(.*))?$/i.exec(value);
+      if (notApplicable && !/[\p{L}\p{N}]/u.test(notApplicable[1] ?? "")) errors.push(`${path}:${index + 1} ${field[1]} 缺不适用理由`);
+      const declaration = skipField ? value : /^\s*\|/.test(line) ? line.split("|").find(cell => /^\s*deferred\s*$/.test(cell))?.trim() : null;
+      if (declaration && /^deferred(?:$|[；;])/.test(declaration)) {
+        const fields = new Map();
+        const readFields = text => {
+          let recognized = false;
+          for (const token of text.split(/[；;|]/)) {
+            const match = /^\s*(?:[-*]\s+)?(?:\*\*)?(责任卡|责任|负责人|owner|触发条件|受影响结果)(?:\*\*)?\s*[:：]\s*(.*?)\s*$/i.exec(token);
+            if (!match) continue;
+            recognized = true;
+            const name = /^(?:责任卡|责任|负责人|owner)$/i.test(match[1]) ? "责任卡" : match[1];
+            if (/[\p{L}\p{N}]/u.test(match[2])) fields.set(name, match[2]);
+          }
+          return recognized;
+        };
+        readFields(line.replace(/^.*?deferred(?:[；;]|$)/, ""));
+        for (const next of body.split(/\r?\n/).slice(index + 1)) {
+          // Only immediately adjacent structured fields belong to this state.
+          // Headings, another declaration, examples and prose end that block.
+          if (!readFields(next)) break;
+        }
+        for (const name of ["责任卡", "触发条件", "受影响结果"]) if (!fields.has(name)) errors.push(`${path}:${index + 1} deferred 缺${name}`);
+      }
+    }
+  }
+  return errors;
+}
+
 async function main() {
   const args = process.argv.slice(2);
   if (args.length === 0) return runAggregate();
+  if (args.length === 2 && args[0] === "--material-root" && isAbsolute(args[1])) return runAggregate({ materialRoot: args[1] });
   if (args.length !== 2 || args[0] !== "--task-path" || !args[1] || args[1].startsWith("-")) {
     console.error(`[run-checks] unsupported arguments: ${args.join(" ")}`);
     process.exit(1);

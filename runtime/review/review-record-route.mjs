@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { withLock } from "../interface/record-lock.mjs";
 import { appendRecord } from "../interface/safe-write.mjs";
+import { createTaskDiskWriteExecutor } from "../evidence/disk-budget.mjs";
 import { reviewIdentityFromInput } from "./review-policy.mjs";
 import { parseReviewerOutput } from "./review-output.mjs";
 import { deriveVerifyCodeConclusion } from "./canonical-review-result.mjs";
@@ -116,6 +117,7 @@ function priorProviderOutputs(dir, root, provider, taskId, discardedFacts, dropp
   return paths;
 }
 function providerOutputReuse(dir, root, discardedFacts, taskId) {
+  const performWrite=createTaskDiskWriteExecutor({taskRoot:root});
   // This request's event ownership plus existing record members are the only
   // provider-to-ref sources. Bare filenames never establish provider identity.
   const owned = new Map();
@@ -123,10 +125,10 @@ function providerOutputReuse(dir, root, discardedFacts, taskId) {
     const bytes = Buffer.from(output);
     if (!provider) {
       discardedFacts.push({ fact_kind: "provider_output_deduplication_unknown", dropped_key: droppedKey, reason: "deduplication: unknown; provider identity is empty" });
-      return appendRecord(dir, slug, "output", bytes);
+      return appendRecord(dir, slug, "output", bytes, {performWrite});
     }
     const lockName = `provider-output-${createHash("sha256").update(provider).digest("hex").slice(0, 24)}`;
-    return withLock(dir, lockName, async () => {
+    return withLock(root, lockName, async () => {
       if (!owned.has(provider)) owned.set(provider, priorProviderOutputs(dir, root, provider, taskId, discardedFacts, droppedKey));
       const candidates = owned.get(provider);
       for (const path of candidates) {
@@ -142,7 +144,7 @@ function providerOutputReuse(dir, root, discardedFacts, taskId) {
           reason: `same bytes as ${relative(root, path).split("\\").join("/")}` });
         return path;
       }
-      const path = await appendRecord(dir, slug, "output", bytes);
+      const path = await appendRecord(dir, slug, "output", bytes, {performWrite});
       candidates.add(path);
       return path;
     });
@@ -185,7 +187,8 @@ export async function recordSimpleReviewRequest({taskDir,request,runRound=runSim
   const quality=join(root,"quality");try{checkedPath(quality,{directory:true});}catch(error){if(error.code!=="ENOENT")throw error;mkdirSync(quality);checkedPath(quality,{directory:true});}
   try{checkedPath(dir,{directory:true});}catch(error){if(error.code!=="ENOENT")throw error;checkedPath(quality,{directory:true});mkdirSync(dir);checkedPath(dir,{directory:true});}
   const lockName=["review",tuple.stage,tuple.review_scope ?? tuple.review_track ?? tuple.review_kind ?? "document",tuple.phase_id].filter(Boolean).join("-").toLowerCase().replaceAll(".","-");
-  return withLock(dir,lockName,async()=>{
+  const performWrite=createTaskDiskWriteExecutor({taskRoot:root});
+  return withLock(root,lockName,async()=>{
     if(signal?.aborted) throw coded("REVIEW_CANCELLED","review cancelled before dispatch");
     const started=new Date().toISOString(); let result;
     let rawCount=0;
@@ -247,7 +250,7 @@ export async function recordSimpleReviewRequest({taskDir,request,runRound=runSim
       const {conclusion,coverage}=deriveVerifyCodeConclusion({status:record.status,provider_results:providers,findings});
       Object.assign(record,{conclusion,coverage});
     }
-    const path=await appendRecord(dir,slug,"json",JSON.stringify(record,null,2)+"\n");
+    const path=await appendRecord(dir,slug,"json",JSON.stringify(record,null,2)+"\n",{performWrite});
     const ref=relative(root,path).split("\\").join("/");return {status:record.status,result_ref:ref,path,stage:tuple.stage,review_scope:tuple.review_scope,subject_kind:tuple.subject_kind,phase_id:tuple.phase_id,authoritative:false};
   },{waitMs:lockWaitMs});
 }

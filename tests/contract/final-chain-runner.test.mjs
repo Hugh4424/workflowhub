@@ -343,7 +343,7 @@ describe('run-checks task path',()=>{
   });
   it('preserves the no-argument aggregate output and exit in an owned exact import fixture',async()=>{
     const root=await aggregateFixture(), result=cli([],root,join(root,'tools/cli/run-checks.mjs'));
-    expect(result.error).toBeUndefined();expect(result.signal).toBeNull();expect(result.status,result.stderr).toBe(0);expect(result.stderr).toBe('');
+    expect(result.error).toBeUndefined();expect(result.signal).toBeNull();expect(result.status,result.stderr).toBe(0);expect(result.stderr).toBe('[run-checks] material check not run: no --material-root\n');
     expect(result.stdout).toBe('[run-checks] running check-anti-host ...\n[run-checks] running check-metrics-schema ...\n[check-metrics-schema] PASS — retained validator and contract samples checked\n[run-checks] running skill-static-deps ...\n[skill-static-deps] PASS — retained validator and contract samples checked\n[run-checks] running check-skill-consistency ...\n[run-checks] running check-stage-quality ...\n[run-checks] running check-decision-log-chain (non-blocking) ...\n[run-checks] ALL CHECKS PASSED\n');
   });
 });

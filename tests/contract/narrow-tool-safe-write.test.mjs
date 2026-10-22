@@ -164,3 +164,27 @@ describe("safe-write appendRecord", () => {
     expect(readdirSync(root)).toEqual([]);
   });
 });
+
+describe('P8 safe-write actual executor',()=>{
+ it('awaits one actual publication with correct create/overwrite peaks and skips identical create',async()=>{
+  const root=tempRoot('wh-safe-executor-'),requests=[];let actualCalls=0;
+  const options={performWrite:async(r,actual)=>{requests.push(r);if(requests.length===1){expect(existsSync(r.path)).toBe(false);expect(r.resolveExisting()).toBeUndefined();expect(existsSync(r.path)).toBe(false);}await new Promise(resolve=>setTimeout(resolve,5));actualCalls++;return actual();}};
+  await createFileOnce(root,'one.txt',Buffer.from('abc'),options);
+  await createFileOnce(root,'one.txt',Buffer.from('abc'),{performWrite:async()=>{throw new Error('same bytes must not request new space');}});
+  await writeFileAtomic(root,'one.txt',Buffer.from('replacement'),options);
+  const appended=await appendRecord(root,'budget','txt',Buffer.from('record'),options);
+  expect(actualCalls).toBe(3);expect(requests).toEqual([
+   {kind:'publish',path:join(root,'one.txt'),bytes:3,incomingFiles:2,resolveExisting:expect.any(Function)},
+   {kind:'publish',path:join(root,'one.txt'),bytes:11,incomingFiles:1},
+   {kind:'publish',path:appended,bytes:6,incomingFiles:2},
+  ]);expect(readFileSync(join(root,'one.txt'),'utf8')).toBe('replacement');expect(readFileSync(appended,'utf8')).toBe('record');
+ });
+ it('refuses create/overwrite/append before any temporary bytes or old-record mutation',async()=>{
+  const root=tempRoot('wh-safe-refused-');await createFileOnce(root,'old.txt',Buffer.from('original'));const before=readdirSync(root).sort();
+  const options={performWrite:async()=>{throw Object.assign(new Error('controlled budget full'),{code:'DISK_BUDGET_EXCEEDED'});}};
+  await expect(createFileOnce(root,'new.txt',Buffer.from('new'),options)).rejects.toMatchObject({code:'DISK_BUDGET_EXCEEDED'});
+  await expect(writeFileAtomic(root,'old.txt',Buffer.from('replacement'),options)).rejects.toMatchObject({code:'DISK_BUDGET_EXCEEDED'});
+  await expect(appendRecord(root,'budget','txt',Buffer.from('new'),options)).rejects.toMatchObject({code:'DISK_BUDGET_EXCEEDED'});
+  expect(readdirSync(root).sort()).toEqual(before);expect(readFileSync(join(root,'old.txt'),'utf8')).toBe('original');
+ });
+});

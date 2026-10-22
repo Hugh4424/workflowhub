@@ -281,3 +281,44 @@ describe("scoped grant creation-task binding", () => {
     expect((await consume({ operation: "commit", stepId: "exact", phase: "build-code", authorizationRef, dir })).authorization_ref).toBe(authorizationRef);
   });
 });
+
+describe("P8 Git authorization publish executor",()=>{
+  function fixture(){const cwd=useGitRepo();process.chdir(ORIGINAL_CWD);const dir=join(cwd,'records'),lockDir=join(cwd,'locks');mkdirSync(dir);mkdirSync(lockDir);return{cwd,dir,lockDir};}
+  it("selects explicit cwd and routes record/consume final publication through the executor",async()=>{
+    const options=fixture();const requests=[];
+    const performWrite=async(r,actual)=>{requests.push(r);expect(readdirSync(options.lockDir)).toContain('.git-authorize.lock');await new Promise(resolve=>setTimeout(resolve,5));return actual();};
+    const path=await record({...options,operation:'commit',confirmationRef:'yes',performWrite});
+    const consumed=await consume({...options,operation:'commit',stepId:'one',performWrite});
+    expect(JSON.parse(readFileSync(path,'utf8')).head).toBe(git(options.cwd,['rev-parse','HEAD']));
+    expect(requests).toHaveLength(2);
+    expect(requests.map(r=>r.path)).toEqual([path,consumed.path]);
+    for(const r of requests){expect(r).toMatchObject({kind:'publish',incomingFiles:2});expect(r.bytes).toBe(Buffer.byteLength(readFileSync(r.path)));}
+    const retry=await consume({...options,operation:'commit',stepId:'one',performWrite:async()=>{throw new Error('same-step must not write');}});
+    expect(retry.path).toBe(consumed.path);expect(readdirSync(options.lockDir)).toEqual([]);
+  });
+  it("refuses authorization before creating temp/record bytes and releases its lock",async()=>{
+    const options=fixture();
+    await expect(record({...options,operation:'push',confirmationRef:'yes',performWrite:async()=>{throw Object.assign(new Error('full'),{code:'TASK_DISK_BUDGET_EXCEEDED'});}})).rejects.toMatchObject({code:'TASK_DISK_BUDGET_EXCEEDED'});
+    expect(readdirSync(options.dir)).toEqual([]);expect(readdirSync(options.lockDir)).toEqual([]);
+  });
+});
+
+it("P8 Git explicit cwd selects either repository without changing process cwd",async()=>{
+  const first=useGitRepo();const second=useGitRepo();
+  writeFileSync(join(second,'second'),'second');git(second,['add','.']);git(second,['commit','-qm','second']);
+  process.chdir(first);
+  const one=await record({cwd:first,operation:'commit',confirmationRef:'first'});
+  const two=await record({cwd:second,operation:'commit',confirmationRef:'second'});
+  expect(process.cwd()).toBe(first);
+  expect(JSON.parse(readFileSync(one,'utf8')).head).toBe(git(first,['rev-parse','HEAD']));
+  expect(JSON.parse(readFileSync(two,'utf8')).head).toBe(git(second,['rev-parse','HEAD']));
+  expect(JSON.parse(readFileSync(one,'utf8')).head).not.toBe(JSON.parse(readFileSync(two,'utf8')).head);
+});
+
+it("P8 Git publish rechecks storage after the executor wait",async()=>{
+  const cwd=useGitRepo();process.chdir(ORIGINAL_CWD);const dir=join(cwd,'records'),lockDir=join(cwd,'locks');mkdirSync(dir);mkdirSync(lockDir);
+  await expect(record({cwd,dir,lockDir,operation:'commit',confirmationRef:'yes',performWrite:async(_r,actual)=>{
+    await new Promise(resolve=>setTimeout(resolve,5));renameSync(dir,`${dir}-original`);mkdirSync(dir);return actual();
+  }})).rejects.toMatchObject({code:'ANCESTOR_REPLACED'});
+  expect(readdirSync(dir)).toEqual([]);expect(readdirSync(`${dir}-original`)).toEqual([]);expect(readdirSync(lockDir)).toEqual([]);
+});

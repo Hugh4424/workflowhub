@@ -254,7 +254,9 @@ describe("OCR production cutover defaults", () => {
     const healthEvents = [];
     const reviewInputPath = join(state.root, "ordinary-review.json");
     writeFileSync(reviewInputPath, JSON.stringify({ request: {
-      stage, ...scope, host_provider: "codex/luna", materials: { acceptance_criteria:"AC-1: preserve the complete current criterion.", implementation_assessment:"Inspect the real current diff." },
+      stage, ...scope, host_provider: "codex/luna", materials: stage === "build-code"
+        ? { approved_spec:"Current phase specification.", acceptance_criteria:"AC-1: preserve current code review.", test_evidence:"Owned target tests pass for the current phase." }
+        : { changed_files:"README.md", acceptance_criteria:"AC-1: preserve the complete current criterion.", implementation_assessment:"Inspect the real current diff.", test_context:"Owned target tests cover the current worktree.", open_risks:"No additional current risk." },
     } }), "utf8");
     await withRuntimeEnvironment(state, async () => {
       const recorded = await stageRuntimeCliMain([
@@ -298,7 +300,7 @@ describe("OCR production cutover defaults", () => {
     const inputPath = join(state.root, "candidate-review.json");
     writeFileSync(inputPath, JSON.stringify({ request: {
       stage: "build-code", review_scope: "phase", subject_kind: "phase", phase_id: "P3",
-      candidate_experiment: true, host_provider: "codex/luna", materials: { approved_spec:"Current phase specification.",acceptance_criteria:"AC-1: preserve current code review." },
+      candidate_experiment: true, host_provider: "codex/luna", materials: { approved_spec:"Current phase specification.",acceptance_criteria:"AC-1: preserve current code review.", test_evidence:"Owned target tests pass for the current phase." },
     } }), "utf8");
     const calls = { ocr: 0, legacy: 0 };
 

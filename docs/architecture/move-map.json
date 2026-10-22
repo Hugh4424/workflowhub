@@ -456,7 +456,7 @@
       "destination": "runtime/interface/record-lock.mjs",
       "status": "retain",
       "role": "production",
-      "responsibility": "⑤ 记录锁：core/task-close、canonical-receipt-writer、review-record-route、stage-handoff 等现有调用点",
+      "responsibility": "⑤ 记录锁：core/task-close、canonical-receipt-writer、review-record-route、stage-handoff 等现有调用点；内部同机physical MAC绑定的单label/.local别名恢复（独立259/265），无绑定拒绝alias，不新增公共API",
       "owner": "B0/P1 / MT-1-002",
       "consumer": "当前直接模块消费者：core/task-close.mjs, runtime/review/review-record-route.mjs, runtime/task/task-handle.mjs, runtime/task/task-store.mjs, tests/contract/narrow-tool-record-lock.test.mjs, tests/integration/quality-store-concurrency.test.mjs",
       "module_consumers": [
@@ -5501,6 +5501,236 @@
       "named_data_readers": [],
       "delete_condition": "对应确认行为真实退役，或经独立审查的等强度oracle及fixture真实消费者完整承接后，由原P3测试owner处置；保原RED/GREEN/受保护断言，不因Phase结束或预算删除。",
       "retention_basis": "FR-CHAIN-006/012、P3/T006、484/495原TCR、518独立scope及608只读核；35测试/种子先创建后补职责登记属真实顺序遗漏，不倒称预登记；map无运行时或推进职责。"
+    },
+    {
+      "source": "tests/contract/n10-check-core.test.mjs",
+      "destination": "tests/contract/n10-check-core.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "N10 P1 检查器输入、报告与公共退出语义的受控行为oracle；普通测试事实，不作阶段许可证。",
+      "owner": "N10 P1 oracle/实施维护者；冻结后变更遵现有TCR",
+      "consumer": "specs/n10-finite-check-wiring-20261020/phases/ 中P1具名gate_cmd与verify-code独立复核通过Vitest显式消费本测试；当前可读预写测试，不以登记冒执行通过。",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "经独立审查的替代测试完整承接上述行为与失败边界后由原owner退役；原始RED及历史引用保留。",
+      "retention_basis": "P1测试已存在并完成其具名验证；本次补登记不冒创建前已登记，P1历史执行事实沿其原件。"
+    },
+    {
+      "source": "tests/contract/n10-source-registry.test.mjs",
+      "destination": "tests/contract/n10-source-registry.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "N10 P2 来源登记、声明出口、决定与索引、vendor漂移、bundle指针、空来源、总检查传递的受控行为oracle；普通测试事实，不作阶段许可证。",
+      "owner": "N10 P2 oracle/实施维护者；冻结后变更遵现有TCR",
+      "consumer": "specs/n10-finite-check-wiring-20261020/phases/ 中P2具名gate_cmd与verify-code独立复核通过Vitest显式消费本测试；当前可读预写测试，不以登记冒执行通过。",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "经独立审查的替代测试完整承接上述行为与失败边界后由原owner退役；原始RED及历史引用保留。",
+      "retention_basis": "P2已确认Phase与现可读预写测试；来源summary/具名违规/恢复oracle有真实RED（2026-10-21-028-p2-source-red），未因注册宣称GREEN或完整验收。"
+    },
+    {
+      "source": "tests/contract/n10-material-contract.test.mjs",
+      "destination": "tests/contract/n10-material-contract.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "N10 P3 显式材料CLI、级别/零输入/跳过理由、模板报告与恢复行为oracle；非阶段许可证。",
+      "owner": "N10 P3 实施/oracle owner，冻结后遵TCR",
+      "consumer": "当前可读P3 T011–T016预写测试卡及gate_cmd由Vitest显式消费；新增前已读CLI/validator/reader及卡片。",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "等强度独立审查替代完整承接行为后原owner退役；历史原件保留。",
+      "retention_basis": "已确认P3及T011–T016，登记不冒测试已通过。"
+    },
+    {
+      "source": "tests/contract/n10-method-readback.test.mjs",
+      "destination": "tests/contract/n10-method-readback.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "N10 P4 固定19行可读接线/人工边界、真实N6断言四态变异及P2具名登记读回的定向oracle；不证明宿主已执行方法、不作阶段许可证。",
+      "owner": "N10 P4 实施/oracle owner；冻结后变更遵既有TCR",
+      "consumer": "P4 Phase gate_cmd通过Vitest显式执行本文件，verify-code与独立审查者读其原始输出；本文件readRow读取fixture所列当前源，T018复制真实N6测试并调用真实Vitest/生产checker，T019读取catalog/notice/spec。",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "经独立审查的等强度替代完整承接读回/负例/恢复边界后原owner退役；历史原件与已引用执行输出保留。",
+      "retention_basis": "两个路径及实际读取/调用处已经真实打开后登记；本时点尚未运行gate，不以登记冒测试通过。"
+    },
+    {
+      "source": "tests/fixtures/n10-method-readback.json",
+      "destination": "tests/fixtures/n10-method-readback.json",
+      "status": "add",
+      "role": "test",
+      "responsibility": "N10 P4 13条消费者与6条人工边界的路径/当前行号/触发方式与分类；数据只定位只读接线，不记录进度、执行许可或方法效果。",
+      "owner": "N10 P4 实施/oracle owner；冻结后变更遵既有TCR",
+      "consumer": "tests/contract/n10-method-readback.test.mjs的fixture()直接readFileSync/JSON.parse本路径，T017/T019逐行读真实文件并展示人工边界；维护者按真实source漂移更新，不以非空行凑消费者。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "tests/contract/n10-method-readback.test.mjs"
+      ],
+      "delete_condition": "经独立审查的等强度替代完整承接读回/负例/恢复边界后原owner退役；历史原件与已引用执行输出保留。",
+      "retention_basis": "两个路径及实际读取/调用处已经真实打开后登记；本时点尚未运行gate，不以登记冒测试通过。"
+    },
+    {
+      "source": "tests/contract/n10-source-disposition.test.mjs",
+      "destination": "tests/contract/n10-source-disposition.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "P5 T022/T024有限来源处置、唯一方法落点及13份本地原文字节读回oracle；只记测试事实。",
+      "owner": "N10 P5 oracle/实施维护者；冻结后修改遵现有TCR",
+      "consumer": "P5具名gate_cmd与verify-code通过Vitest显式消费本测试；P7沿原件复核，不以登记冒执行通过。",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "经独立审查的替代测试完整承接具名行为及失败边界后由原owner退役；保原始RED/GREEN与历史引用。",
+      "retention_basis": "P5已授权Phase及本次真实调用入口研究；本登记先于测试创建，测试不作阶段许可证。"
+    },
+    {
+      "source": "tests/contract/n10-n9-interface.test.mjs",
+      "destination": "tests/contract/n10-n9-interface.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "P5 T023真实N9 CLI稳定接口、同一具名环正反恢复及输入错误oracle；不实现十环。",
+      "owner": "N10 P5 oracle/实施维护者；冻结后修改遵现有TCR",
+      "consumer": "P5具名gate_cmd与verify-code通过Vitest显式消费本测试；P7沿原件复核，不以登记冒执行通过。",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "经独立审查的替代测试完整承接具名行为及失败边界后由原owner退役；保原始RED/GREEN与历史引用。",
+      "retention_basis": "P5已授权Phase及本次真实调用入口研究；本登记先于测试创建，测试不作阶段许可证。"
+    },
+    {
+      "source": "specs/n10-finite-check-wiring-20261020/n8-corrections.md",
+      "destination": "specs/n10-finite-check-wiring-20261020/n8-corrections.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "N8归档摘要与五处降档的有源更正；替代直接修改只读归档",
+      "owner": "N10/P6原实施owner",
+      "consumer": "N8维护者、下一任务主会话、tests/contract/n10-process-repair.test.mjs与verify-code",
+      "module_consumers": [],
+      "named_data_readers": [
+        "tests/contract/n10-process-repair.test.mjs"
+      ],
+      "delete_condition": "仅当该合同/更正职责被经独立审查的唯一替代承接且无当前消费者时退役；历史证据不删覆。",
+      "retention_basis": "N10/P6 T029–T032；spec FR-PROCESS-001…008；当前消费者按真实Phase合同读取。"
+    },
+    {
+      "source": "tests/contract/n10-process-repair.test.mjs",
+      "destination": "tests/contract/n10-process-repair.test.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "ORACLE-N10-PROCESS-REPAIR静态合同与可证伪负例；不产生运行许可",
+      "owner": "N10/P6原实施owner",
+      "consumer": "P6/T026–T032执行者、P7验收与verify-code",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "仅当该合同/更正职责被经独立审查的唯一替代承接且无当前消费者时退役；历史证据不删覆。",
+      "retention_basis": "N10/P6 T029–T032；spec FR-PROCESS-001…008；当前消费者按真实Phase合同读取。"
+    },
+    {
+      "source": "tests/acceptance/n10-finite-check-acceptance.test.mjs",
+      "destination": "tests/acceptance/n10-finite-check-acceptance.test.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "P7/T033原36AC验收：消费P1–P6首次原件与后修，执行必要CLI闭环及SET4/5，保原始输出和诚实档位，不新增runtime判据。",
+      "owner": "N10/P7/T033唯一作者；T034只读执行",
+      "consumer": "P7/T034、verify-code与维护者显式执行Phase gate_cmd，读取既有Appendix A与外置任务原件，输出逐AC原件及聚合供用户复核。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/n10-finite-check-wiring-20261020/phases/P7-全AC验收.md"
+      ],
+      "delete_condition": "唯一验收入口被经独立审查的替代承接且无当前consumer时由维护者删除；外置历史原件不删覆。",
+      "retention_basis": "原spec Appendix A原36AC与P7/T033/T034；复用已有CLI、原始证据和appendRecord，无第二runtime、报告schema或gate。"
+    },
+    {
+      "source": "docs/research/n10-finite-check-acceptance-runbook.md",
+      "destination": "docs/research/n10-finite-check-acceptance-runbook.md",
+      "status": "retain",
+      "role": "documentation",
+      "responsibility": "P7/T033验收入口的命令、输入、owner、时点、证据、清理与未覆盖说明；不复制AC正文或保存第二进度。",
+      "owner": "N10/P7/T033唯一作者；T034只读执行",
+      "consumer": "P7/T034、verify-code和后续维护者按本文定位唯一测试入口与已有原件，执行或复核36AC；用户读取限制。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/n10-finite-check-wiring-20261020/phases/P7-全AC验收.md"
+      ],
+      "delete_condition": "唯一验收入口被经独立审查的替代承接且无当前consumer时由维护者删除；外置历史原件不删覆。",
+      "retention_basis": "原spec Appendix A原36AC与P7/T033/T034；复用已有CLI、原始证据和appendRecord，无第二runtime、报告schema或gate。"
+    },
+    {
+      "source": "runtime/interface/temp-dir.mjs",
+      "destination": "runtime/interface/temp-dir.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "本进程tracked temp与可信marker/stale，替代provider-public裸mkdtemp/吞错finally；task-handle同parent已标记wrapper的创建与死pid残留回收（独立265）",
+      "owner": "N10/P8原实施owner；维护者为用户",
+      "consumer": "skills/wh-review/scripts/review-provider-client.mjs, runtime/task/task-handle.mjs",
+      "module_consumers": [
+        "skills/wh-review/scripts/review-provider-client.mjs",
+        "runtime/task/task-handle.mjs"
+      ],
+      "named_data_readers": [],
+      "delete_condition": "唯一已证consumer被经独立审查的替代完整承接且无当前消费后退役；历史原件不删覆。",
+      "retention_basis": "实施前已登记，现按真实调用维护；独立156设计与250/252/257/259/265窄TCR，职责登记不作行为/质量许可"
+    },
+    {
+      "source": "runtime/evidence/disk-budget.mjs",
+      "destination": "runtime/evidence/disk-budget.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "三quality目录真实usage/预算及逐写leaf executor，无持久账本",
+      "owner": "N10/P8原实施owner；维护者为用户",
+      "consumer": "runtime/task/task-handle.mjs, runtime/review/review-record-route.mjs, runtime/task/portable-workflow-run.mjs, tools/cli/audit-disk-usage.mjs",
+      "module_consumers": [
+        "runtime/task/task-handle.mjs",
+        "runtime/review/review-record-route.mjs",
+        "runtime/task/portable-workflow-run.mjs",
+        "tools/cli/audit-disk-usage.mjs"
+      ],
+      "named_data_readers": [],
+      "delete_condition": "唯一已证consumer被经独立审查的替代完整承接且无当前消费后退役；历史原件不删覆。",
+      "retention_basis": "实施前已登记，现按真实调用维护；独立156设计与250/252/257/259/265窄TCR，职责登记不作行为/质量许可"
+    },
+    {
+      "source": "tools/cli/audit-disk-usage.mjs",
+      "destination": "tools/cli/audit-disk-usage.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "只读task磁盘归属CLI，不接public runtime/run-checks",
+      "owner": "N10/P8原实施owner；维护者为用户",
+      "consumer": "specs/n10-finite-check-wiring-20261020/phases/P8-磁盘有界性.md",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/n10-finite-check-wiring-20261020/phases/P8-磁盘有界性.md"
+      ],
+      "delete_condition": "唯一已证consumer被经独立审查的替代完整承接且无当前消费后退役；历史原件不删覆。",
+      "retention_basis": "实施前已登记，现按真实调用维护；独立156设计与250/252/257/259/265窄TCR，职责登记不作行为/质量许可"
+    },
+    {
+      "source": "tests/contract/n10-disk-boundedness.test.mjs",
+      "destination": "tests/contract/n10-disk-boundedness.test.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "P8四AC真实writer/峰值/并发/失败边界合同，不作质量许可",
+      "owner": "N10/P8原实施owner；维护者为用户",
+      "consumer": "specs/n10-finite-check-wiring-20261020/phases/P8-磁盘有界性.md",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/n10-finite-check-wiring-20261020/phases/P8-磁盘有界性.md"
+      ],
+      "delete_condition": "唯一已证consumer被经独立审查的替代完整承接且无当前消费后退役；历史原件不删覆。",
+      "retention_basis": "实施前已登记，现按真实调用维护；独立156设计与250/252/257/259/265窄TCR，职责登记不作行为/质量许可"
+    },
+    {
+      "source": "docs/research/n10-disk-boundedness.md",
+      "destination": "docs/research/n10-disk-boundedness.md",
+      "status": "retain",
+      "role": "documentation",
+      "responsibility": "P8实际命令/原件/阈值及失败重放说明",
+      "owner": "N10/P8原实施owner；维护者为用户",
+      "consumer": "specs/n10-finite-check-wiring-20261020/phases/P8-磁盘有界性.md",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/n10-finite-check-wiring-20261020/phases/P8-磁盘有界性.md"
+      ],
+      "delete_condition": "唯一已证consumer被经独立审查的替代完整承接且无当前消费后退役；历史原件不删覆。",
+      "retention_basis": "实施前已登记，现按真实调用维护；独立156设计与250/252/257/259/265窄TCR，职责登记不作行为/质量许可"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

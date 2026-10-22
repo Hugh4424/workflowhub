@@ -1864,11 +1864,16 @@ fs.mkdirSync(path.dirname(transcript),{recursive:true});
 const report={session,artifact,transcript,calls:[],files:{},rows:[]};
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 function hook(phase,payload){const group=config[phase==='pre'?'PreToolUse':'PostToolUse'];if(group.length!==1||group[0].matcher!=='*')throw Error('installed match-all config absent');const hooks=group[0].hooks;if(hooks.length!==1||hooks[0].type!=='command')throw Error('installed command absent');const child=spawnSync('/bin/sh',['-c',hooks[0].command],{cwd,input:JSON.stringify(payload),encoding:'utf8',timeout:3000});if(child.status!==0)throw Error('installed hook execution failed '+child.stderr);const response=JSON.parse(child.stdout);report.calls.push({phase,payload,response});return response;}
+const mixedScenario=['mixed-byte-line','mixed-gap','mixed-overlap','mixed-duplicate','mixed-reordered'].includes(scenario);
+const bytePageScenario=['byte-pages','byte-gap','byte-overlap','byte-duplicate','byte-wrong-total','byte-missing','byte-implicit-partial','byte-explicit-partial'].includes(scenario)||mixedScenario;
+const pagedLineScenario=['paged-prompt','paged-single-line'].includes(scenario);
 const rows=[];
 for(const [index,file]of ['review-prompt.md','src/reviewed.mjs'].entries()){
- const full=path.join(cwd,file),bytes=fs.readFileSync(full),text=bytes.toString('utf8'),step=index*2+2;
+ const full=path.join(cwd,file),bytes=fs.readFileSync(full),text=bytes.toString('utf8');
+ let lines=text.split('\n');if(text.endsWith('\n'))lines.pop();
+ const promptPageEnd=mixedScenario?lines.length:scenario==='paged-single-line'?1:Math.ceil(lines.length/2),step=index===1&&(pagedLineScenario||bytePageScenario)?(mixedScenario?10:6):index*2+2;
  const started=new Date().toISOString();
- const common={artifactDirectoryPath:artifact,conversationId:session,modelName:'test-model',stepIdx:step,transcriptPath:transcript,workspacePaths:[cwd],toolCall:{name:'read_file',args:{Path:full}}};
+ const common={artifactDirectoryPath:artifact,conversationId:session,modelName:'test-model',stepIdx:step,transcriptPath:transcript,workspacePaths:[cwd],toolCall:{name:'read_file',args:{Path:full,...(index===0&&(pagedLineScenario||mixedScenario)?{StartLine:1,EndLine:promptPageEnd}:{}),...(index===0&&scenario==='byte-explicit-partial'?{StartLine:2,EndLine:lines.length}:{} )}}};
  if(index===1&&scenario==='ranged')Object.assign(common.toolCall.args,{StartLine:2,EndLine:2});
  if(hook('pre',common).decision!=='allow')throw Error('positive installed pre denied');
  const completed=new Date().toISOString();
@@ -1877,9 +1882,17 @@ for(const [index,file]of ['review-prompt.md','src/reviewed.mjs'].entries()){
  if(index===1&&scenario==='post-session-mismatch')post.conversationId='other-session';
  if(index===1&&scenario==='post-path-mismatch')post.toolCall.args.Path=path.join(cwd,'review-prompt.md');
  hook('post',post);
- let lines=text.split('\n');if(text.endsWith('\n'))lines.pop();
- let shown=lines.map((line,i)=>(i+1)+': '+line);
- let title='Showing lines 1-'+lines.length+' of '+lines.length;
+ const displayStart=index===0&&(scenario==='byte-implicit-partial'||scenario==='byte-explicit-partial')?2:1,displayEnd=index===0&&(pagedLineScenario||mixedScenario)?promptPageEnd:lines.length;
+ let shown=lines.slice(displayStart-1,displayEnd).map((line,i)=>(displayStart+i)+': '+line);
+ let title='Showing lines '+displayStart+'-'+displayEnd+' of '+lines.length;
+ let body=shown.join('\n'),byteStart=null,displayBytes=null;
+ if(index===0&&bytePageScenario){
+  displayBytes=Buffer.from(body);
+  byteStart=displayBytes.length>46080?46080:Math.max(1,Math.floor(displayBytes.length/2));
+  while(byteStart>0&&byteStart<displayBytes.length&&(displayBytes[byteStart]&0xc0)===0x80)byteStart--;
+  title='Partial read (lines '+displayStart+'-'+displayEnd+' of '+lines.length+'). Showing bytes 0-'+byteStart+' of '+displayBytes.length+' in this line range, truncated at the '+byteStart+'-byte limit. To read the rest of this line range, call this tool again with the same StartLine and EndLine and ByteOffset='+byteStart+'.';
+  body=displayBytes.subarray(0,byteStart).toString();
+ }
  if(index===1){
   if(scenario==='partial-range')title='Showing lines 2-'+lines.length+' of '+lines.length;
   if(scenario==='wrong-total')title='Showing lines 1-'+lines.length+' of '+(lines.length+1);
@@ -1891,8 +1904,9 @@ for(const [index,file]of ['review-prompt.md','src/reviewed.mjs'].entries()){
   if(scenario==='prefix')shown.unshift('Unrecognized native format');
   if(scenario==='suffix')shown.push('Unrecognized native trailer');
  }
- const content='Created At: '+started+'\nCompleted At: '+(index===1&&scenario==='bad-time'?'2000-01-01T00:00:00Z':completed)+'\n'+title+'\n'+shown.join('\n');
- const call={step_index:step-1,source:'MODEL',type:'PLANNER_RESPONSE',status:'DONE',created_at:started,tool_calls:[{name:'read_file',args:{Path:full}}]};
+ if(!(index===0&&bytePageScenario))body=shown.join('\n');
+ const content='Created At: '+started+'\nCompleted At: '+(index===1&&scenario==='bad-time'?'2000-01-01T00:00:00Z':completed)+'\n'+title+'\n'+body;
+ const call={step_index:step-1,source:'MODEL',type:'PLANNER_RESPONSE',status:'DONE',created_at:started,tool_calls:[{name:'read_file',args:{Path:full,...(index===1&&scenario==='ranged'?{StartLine:2,EndLine:2}:{}),...(index===0&&(pagedLineScenario||mixedScenario)?{StartLine:1,EndLine:promptPageEnd}:{}),...(index===0&&scenario==='byte-explicit-partial'?{StartLine:2,EndLine:lines.length}:{})}}]};
  const result={step_index:step,source:'MODEL',type:'GENERIC',status:'DONE',created_at:started,content};
  if(index===1){
   if(scenario==='wrong-step')result.step_index=step+10;
@@ -1908,6 +1922,50 @@ for(const [index,file]of ['review-prompt.md','src/reviewed.mjs'].entries()){
  rows.push(call,result);
  if(index===1&&scenario==='duplicate-step')rows.push({...result});
  report.files[file]={sha256:hash(bytes),bytes:bytes.length,logical_lines:lines.length,display_row_sha256:hash(Buffer.from(JSON.stringify(result)+'\n'))};
+ if(index===0&&pagedLineScenario){
+  const secondStart=promptPageEnd+1,secondEnd=lines.length,secondStep=4,secondStarted=new Date().toISOString();
+  const secondCommon={artifactDirectoryPath:artifact,conversationId:session,modelName:'test-model',stepIdx:secondStep,transcriptPath:transcript,workspacePaths:[cwd],toolCall:{name:'read_file',args:{Path:full,StartLine:secondStart,EndLine:secondEnd}}};
+  if(hook('pre',secondCommon).decision!=='allow')throw Error('positive installed paged pre denied');
+  const secondPost=JSON.parse(JSON.stringify(secondCommon));secondPost.error='';hook('post',secondPost);
+  const secondContent='Created At: '+secondStarted+'\nCompleted At: '+new Date().toISOString()+'\nShowing lines '+secondStart+'-'+secondEnd+' of '+lines.length+'\n'+lines.slice(secondStart-1,secondEnd).map((line,i)=>(secondStart+i)+': '+line).join('\n');
+  const secondCall={step_index:secondStep-1,source:'MODEL',type:'PLANNER_RESPONSE',status:'DONE',created_at:secondStarted,tool_calls:[{name:'read_file',args:{Path:full,StartLine:secondStart,EndLine:secondEnd}}]};
+  const secondResult={step_index:secondStep,source:'MODEL',type:'GENERIC',status:'DONE',created_at:secondStarted,content:secondContent};
+  rows.push(secondCall,secondResult);report.files[file].display_row_sha256=hash(Buffer.from(JSON.stringify(secondResult)+'\n'));
+ }
+ if(index===0&&mixedScenario){
+  let cursor=0,mixedStart=1;
+  for(let lineIndex=0;lineIndex<lines.length;lineIndex++){
+   const lineBytes=Buffer.byteLength((lineIndex+1)+': '+lines[lineIndex]);
+   if(byteStart<=cursor+lineBytes){mixedStart=lineIndex+1;break;}
+   cursor+=lineBytes+(lineIndex<lines.length-1?1:0);
+  }
+  if(scenario==='mixed-gap')mixedStart=Math.min(lines.length, mixedStart+1);
+  if(scenario==='mixed-overlap')mixedStart=Math.max(1, mixedStart-1);
+  const addLogicalPage=(pageStart,pageEnd,pageStep)=>{
+   const secondStarted=new Date().toISOString(),secondCommon={artifactDirectoryPath:artifact,conversationId:session,modelName:'test-model',stepIdx:pageStep,transcriptPath:transcript,workspacePaths:[cwd],toolCall:{name:'read_file',args:{Path:full,StartLine:pageStart,EndLine:pageEnd}}};
+   if(hook('pre',secondCommon).decision!=='allow')throw Error('positive installed mixed line-page pre denied');
+   const secondPost=JSON.parse(JSON.stringify(secondCommon));secondPost.error='';hook('post',secondPost);
+   const secondContent='Created At: '+secondStarted+'\nCompleted At: '+new Date().toISOString()+'\nShowing lines '+pageStart+'-'+pageEnd+' of '+lines.length+'\n'+lines.slice(pageStart-1,pageEnd).map((line,i)=>(pageStart+i)+': '+line).join('\n');
+   const secondCall={step_index:pageStep-1,source:'MODEL',type:'PLANNER_RESPONSE',status:'DONE',created_at:secondStarted,tool_calls:[{name:'read_file',args:{Path:full,StartLine:pageStart,EndLine:pageEnd}}]};
+   const secondResult={step_index:pageStep,source:'MODEL',type:'GENERIC',status:'DONE',created_at:secondStarted,content:secondContent};
+   rows.push(secondCall,secondResult);report.files[file].display_row_sha256=hash(Buffer.from(JSON.stringify(secondResult)+'\n'));
+  };
+  addLogicalPage(mixedStart,lines.length,4);
+  if(scenario==='mixed-duplicate')addLogicalPage(mixedStart,lines.length,6);
+  if(scenario==='mixed-reordered')addLogicalPage(1,Math.max(1,mixedStart-1),6);
+ }
+ if(index===0&&bytePageScenario&&scenario!=='byte-missing'&&!mixedScenario){
+  const secondOffset=scenario==='byte-gap'?byteStart+1:scenario==='byte-overlap'?byteStart-1:scenario==='byte-duplicate'?0:byteStart;
+  const secondStarted=new Date().toISOString(),secondStep=4,secondCommon={artifactDirectoryPath:artifact,conversationId:session,modelName:'test-model',stepIdx:secondStep,transcriptPath:transcript,workspacePaths:[cwd],toolCall:{name:'read_file',args:{Path:full,StartLine:displayStart,EndLine:displayEnd,ByteOffset:secondOffset}}};
+  if(hook('pre',secondCommon).decision!=='allow')throw Error('positive installed byte-page pre denied');
+  const secondPost=JSON.parse(JSON.stringify(secondCommon));secondPost.error='';hook('post',secondPost);
+  const secondTitle='Partial read (lines '+displayStart+'-'+displayEnd+' of '+lines.length+'). Showing bytes '+secondOffset+'-'+displayBytes.length+' of '+(scenario==='byte-wrong-total'?displayBytes.length+1:displayBytes.length)+' in this line range.';
+  const secondBody=scenario==='byte-duplicate'?displayBytes.subarray(0,byteStart):displayBytes.subarray(Math.max(0,secondOffset));
+  const secondContent='Created At: '+secondStarted+'\nCompleted At: '+new Date().toISOString()+'\n'+secondTitle+'\n'+secondBody.toString();
+  const secondCall={step_index:secondStep-1,source:'MODEL',type:'PLANNER_RESPONSE',status:'DONE',created_at:secondStarted,tool_calls:[{name:'read_file',args:{Path:full,StartLine:displayStart,EndLine:displayEnd,ByteOffset:secondOffset}}]};
+  const secondResult={step_index:secondStep,source:'MODEL',type:'GENERIC',status:'DONE',created_at:secondStarted,content:secondContent};
+  rows.push(secondCall,secondResult);report.files[file].display_row_sha256=hash(Buffer.from(JSON.stringify(secondResult)+'\n'));
+ }
 }
 let serialized=rows.map(row=>JSON.stringify(row)).join('\n')+'\n';
 if(scenario==='incomplete-json')serialized+='{"step_index":';
@@ -1944,9 +2002,9 @@ async function p4RunTranscript(scenario, source = "first\nsecond\nthird\n") {
     const report = JSON.parse(readFileSync(cli.reportPath, "utf8"));
     const audit = raw.get("native-audit").toString("utf8").trim().split("\n").map(JSON.parse);
     // Presence first: negatives must reach actual installed commands and inspect.
-    expect(report.calls).toHaveLength(4);
+    expect(report.calls).toHaveLength(["paged-prompt","paged-single-line","byte-pages","byte-gap","byte-overlap","byte-duplicate","byte-wrong-total","byte-implicit-partial","byte-explicit-partial","mixed-byte-line","mixed-gap","mixed-overlap"].includes(scenario) ? 6 : ["mixed-duplicate","mixed-reordered"].includes(scenario) ? 8 : 4);
     for (const call of report.calls.filter(call => call.phase === "pre")) expect(call.response.decision).toBe("allow");
-    expect(audit.filter(row => row.phase === "post")).toHaveLength(2);
+    expect(audit.filter(row => row.phase === "post")).toHaveLength(["paged-prompt","paged-single-line","byte-pages","byte-gap","byte-overlap","byte-duplicate","byte-wrong-total","byte-implicit-partial","byte-explicit-partial","mixed-byte-line","mixed-gap","mixed-overlap"].includes(scenario) ? 3 : ["mixed-duplicate","mixed-reordered"].includes(scenario) ? 4 : 2);
     expect(result.provider_results[0].error?.code).not.toBe("OCR_PROVIDER_EXIT_NONZERO");
     expect(result.provider_results[0].error?.code).not.toBe("OCR_PROVIDER_OUTPUT_SAVE_FAILED");
     return { result, report, audit };
@@ -1972,6 +2030,45 @@ describe("P4 transcript full logical line consumer", () => {
     expect(result.provider_results[0].material_coverage.read).toContain("src/reviewed.mjs");
     expect(result.provider_results[0].coverage.read_confirmed).toBe(true);
     expect(audit).toContainEqual(expect.objectContaining({ phase: "post", path: "src/reviewed.mjs", sha256: report.files["src/reviewed.mjs"].sha256 }));
+  }, 15000);
+
+  it("accepts a transcript-backed full read after a native byte-offset continuation", async () => {
+    const { result, report, audit } = await p4RunTranscript("byte-pages", "first\nsecond\nthird\n");
+    expect(result.provider_results[0], JSON.stringify(result)).toMatchObject({ status: "completed", parse_outcome: "ok" });
+    expect(result.provider_results[0].material_coverage.read).toContain("src/reviewed.mjs");
+    expect(result.provider_results[0].coverage.read_confirmed).toBe(true);
+    expect(audit).toContainEqual(expect.objectContaining({ phase: "post", path: "review-prompt.md", ByteOffset: expect.any(Number) }));
+    expect(report.files["review-prompt.md"].logical_lines).toBeGreaterThan(0);
+  }, 15000);
+
+  for (const scenario of ["byte-gap", "byte-overlap", "byte-duplicate", "byte-wrong-total", "byte-missing", "byte-implicit-partial", "byte-explicit-partial"]) it(`rejects incomplete native byte coverage: ${scenario}`, async () => {
+    const { result } = await p4RunTranscript(scenario, "first\nsecond\nthird\n");
+    expect(result.provider_results[0].material_coverage.read).not.toContain("review-prompt.md");
+    expect(result.provider_results[0].coverage.read_confirmed).not.toBe(true);
+  }, 15000);
+
+  it("accepts contiguous transcript-backed line pages without accepting a gap", async () => {
+    const { result, audit } = await p4RunTranscript("paged-prompt", "first\nsecond\nthird\n");
+    expect(result.provider_results[0], JSON.stringify(result)).toMatchObject({ status: "completed", parse_outcome: "ok" });
+    expect(result.provider_results[0].material_coverage.read).toContain("src/reviewed.mjs");
+    expect(result.provider_results[0].coverage.read_confirmed).toBe(true);
+    expect(audit.filter(row => row.phase === "inspect" && row.path === "review-prompt.md")).toHaveLength(2);
+  }, 15000);
+
+  it("accepts a single logical-line page followed by the remaining lines", async () => {
+    const { result } = await p4RunTranscript("paged-single-line", "first\nsecond\nthird\n");
+    expect(result.provider_results[0], JSON.stringify(result)).toMatchObject({ status: "completed", parse_outcome: "ok" });
+    expect(result.provider_results[0].coverage.read_confirmed).toBe(true);
+  }, 15000);
+  it("accepts only the native byte-truncation to logical-line recovery transition", async () => {
+    const { result } = await p4RunTranscript("mixed-byte-line", "first\nsecond\nthird\nfourth\nfifth\n");
+    expect(result.provider_results[0], JSON.stringify(result)).toMatchObject({ status: "completed", parse_outcome: "ok" });
+    expect(result.provider_results[0].coverage.read_confirmed).toBe(true);
+  }, 15000);
+  for (const scenario of ["mixed-gap", "mixed-overlap", "mixed-duplicate", "mixed-reordered"]) it(`rejects unsafe mixed coverage: ${scenario}`, async () => {
+    const { result } = await p4RunTranscript(scenario, "first\nsecond\nthird\nfourth\nfifth\n");
+    expect(result.provider_results[0].material_coverage.read).not.toContain("src/reviewed.mjs");
+    expect(result.provider_results[0].coverage.read_confirmed).not.toBe(true);
   }, 15000);
 
   const rejected = ["ranged", "partial-range", "wrong-total", "missing-line", "duplicate-line", "reordered-line", "char-changed", "line-truncated", "prefix", "suffix", "bad-time", "wrong-step", "wrong-tool", "wrong-path", "double-call", "explicit-truncated", "error-result", "final-marker", "unknown-body", "wrong-source", "duplicate-step", "post-step-mismatch", "post-session-mismatch", "post-path-mismatch", "incomplete-json", "bad-json", "source-changed", "foreign-path", "foreign-session", "last-symlink", "ancestor-symlink", "hardlink", "directory", "fifo", "over-budget"];
@@ -2061,7 +2158,7 @@ function p4NativeHealthCli(root, kind) {
 function finish(){
  const {spawn}=require('node:child_process'),kind=${JSON.stringify(kind)};
  report.provider_pid=process.pid;fs.writeFileSync(reportPath,JSON.stringify(report));
- process.on('SIGTERM',()=>process.exit(0));
+ if(kind!=='success-exit-nonzero')process.on('SIGTERM',()=>process.exit(0));else process.on('SIGTERM',()=>{});
  const out=value=>process.stdout.write(JSON.stringify(value)+'\n');
  const terminal=(status,response)=>({event:'result',result:{conversation_id:session,status,response}});
  const successful=terminal('SUCCESS',JSON.stringify({findings:[]}));
@@ -2072,6 +2169,10 @@ function finish(){
  out({event:'init',conversation_id:session});
  if(kind==='first-error'){process.stdout.write(JSON.stringify(failed)+'\n'+JSON.stringify(successful)+'\n');return;}
  if(kind==='first-success'){process.stdout.write(JSON.stringify(successful)+'\n'+JSON.stringify(failed)+'\n');return;}
+ if(kind==='success-exit-nonzero'){
+  if(!read(prompt)||!read(source))throw Error('success-exit-nonzero packet reads failed');
+  out(successful);setTimeout(()=>process.exit(7),50);return;
+ }
  if(kind==='word-only'){out(terminal('SUCCESS','SUCCESS'));return;}
  if(kind==='without-reads'){out(successful);return;}
  if(kind==='terminal-descendant'||kind==='no-terminal-descendant'){
@@ -2271,6 +2372,10 @@ describe("P4 AG native semantic health consumer", () => {
     expect(member).toMatchObject({ status: "completed", parse_outcome: "ok", error: null });
     expect(member.material_coverage.read).toContain("src/reviewed.mjs");
   }, 10000);
+  it("does not accept SUCCESS after a non-zero provider exit", async () => {
+    const { member } = await p4RunNativeHealth("success-exit-nonzero");
+    expect(member).toMatchObject({ status: "failed", process_outcome: "exit_nonzero", error: { code: "OCR_PROVIDER_EXIT_NONZERO" } });
+  }, 10000);
   it("keeps a successful terminal and reaps an inherited-stdio descendant", async () => {
     const { member } = await p4RunNativeHealth("terminal-descendant");
     expect(member).toMatchObject({ status: "completed", parse_outcome: "ok" });
@@ -2366,4 +2471,124 @@ describe("P4 native terminal before cancellation", () => {
     expect(member.material_coverage.read).toContain("src/reviewed.mjs");
     expect(member.coverage.read_confirmed).toBe(true);
   }, 10000);
+});
+
+it("T037 second allocation failure through the real round removes the first packet directory", () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "t037-allocation-")));roots.push(root);
+  const url = new URL("../../runtime/review/ocr-delegation-adapter.mjs", import.meta.url).href;
+  const output = execFileSync(process.execPath, ["--input-type=module", "-e", `
+    import fs from 'node:fs';import {syncBuiltinESMExports} from 'node:module';import path from 'node:path';
+    const original=fs.mkdtempSync;let first=null,second=false;
+    fs.mkdtempSync=(prefix,...rest)=>{if(prefix.includes('workflowhub-ocr-rule-')){second=true;throw Object.assign(new Error('owned second allocation failure'),{code:'ENOSPC'});}const dir=original(prefix,...rest);if(prefix.includes('workflowhub-ocr-packet-'))first=dir;return dir;};
+    syncBuiltinESMExports();
+    const {runOcrDelegationRound}=await import(${JSON.stringify(url)});
+    const result=await runOcrDelegationRound({stage:'build-code',material_id:'owned-material'},{buildBundle:()=>({bundleRoot:${JSON.stringify(root)},materialId:'owned-material',manifest:[]})});
+    console.log(JSON.stringify({second,first,remains:first&&fs.existsSync(first),result}));
+    if(first&&fs.existsSync(first))fs.rmSync(first,{recursive:true,force:true});
+  `], { encoding: "utf8", timeout: 5000 });
+  const value=JSON.parse(output);
+  expect(value.second).toBe(true);
+  expect(value.first).toEqual(expect.any(String));
+  expect(value.remains).toBe(false);
+  expect(JSON.stringify(value.result)).toContain("OCR_PACKET_PREPARATION_FAILED");
+  expect(JSON.stringify(value.result)).toContain("ENOSPC");
+});
+
+it("T037 directly observes OCR rule and packet cleanup after success, failure and executor cancellation", () => {
+  const root=realpathSync(mkdtempSync(join(tmpdir(),"t037-rule-observation-")));roots.push(root);
+  const source=join(root,"source");mkdirSync(source);
+  writeFileSync(join(source,"owned.mjs"),"export const owned=true;\n");
+  writeFileSync(join(source,"review-instructions.md"),compliantReviewPrompt);
+  const url=new URL("../../runtime/review/ocr-delegation-adapter.mjs",import.meta.url).href;
+  for(const mode of ["success","failure","cancel-confirmed","cancel-deferred"]){
+    const output=execFileSync(process.execPath,["--input-type=module","-e",`
+      import fs from 'node:fs';import cp from 'node:child_process';import assert from 'node:assert/strict';import {syncBuiltinESMExports}from'node:module';
+      const allocate=fs.mkdtempSync,execute=cp.execFileSync,seen={};let ocrCalls=0;
+      fs.mkdtempSync=(prefix,...args)=>{const dir=allocate(prefix,...args);if(prefix.includes('workflowhub-ocr-rule-'))seen.rule=dir;if(prefix.includes('workflowhub-ocr-packet-'))seen.packet=dir;return dir;};
+      cp.execFileSync=(command,args,...rest)=>{if(command!=='ocr')return execute(command,args,...rest);ocrCalls++;if(args[0]==='--version')return 'open-code-review v1.12.9\\n';if(args[1]==='preview')return JSON.stringify({reviewable_files:[{path:'owned.mjs'},{path:'review-instructions.md'}]});if(args[1]==='rule')return JSON.stringify({rules:[{path:'owned.mjs'}]});throw Error('unexpected owned OCR command');};
+      syncBuiltinESMExports();
+      const{runOcrDelegationRound}=await import(${JSON.stringify(url)}),mode=${JSON.stringify(mode)},controller=new AbortController();let finish,executorEntered=false;
+      const execution=new Promise(resolve=>{finish=resolve;});const keepAlive=setInterval(()=>{},1000);
+      const result=await runOcrDelegationRound({stage:'build-code',material_id:'owned-material'},{signal:controller.signal,cancellationGraceMs:10,buildBundle:()=>({bundleRoot:${JSON.stringify(source)},materialId:'owned-material',manifest:[{path:'owned.mjs'},{path:'review-instructions.md'}]}),executor:({packet,registerCancellation})=>{
+        executorEntered=true;assert.equal(packet.root,seen.packet);assert.ok(fs.existsSync(seen.rule));assert.ok(fs.existsSync(seen.packet));
+        if(mode==='failure')throw Object.assign(new Error('owned executor failure'),{code:'OCR_OWNED_FAILURE'});
+        if(mode==='success')return {status:'available',outcome:'completed',findings:[],provider_results:[]};
+        registerCancellation(()=>{if(mode==='cancel-confirmed'){finish(null);return{confirmed:true};}return{confirmed:false,cleanup:execution};});
+        queueMicrotask(()=>controller.abort(new Error('owned cancellation')));return execution;
+      }});
+      assert.ok(executorEntered);assert.equal(ocrCalls,3);assert.ok(seen.rule);assert.ok(seen.packet);assert.equal(fs.existsSync(seen.rule),false);
+      const packetBeforeSettle=fs.existsSync(seen.packet);
+      if(mode==='cancel-deferred'){assert.equal(packetBeforeSettle,true);finish(null);for(let n=0;n<100&&fs.existsSync(seen.packet);n++)await new Promise(resolve=>setTimeout(resolve,5));}
+      else assert.equal(packetBeforeSettle,false);
+      assert.equal(fs.existsSync(seen.packet),false);
+      clearInterval(keepAlive);
+      console.log(JSON.stringify({mode,executorEntered,ocrCalls,ruleRemoved:!fs.existsSync(seen.rule),packetBeforeSettle,packetRemoved:!fs.existsSync(seen.packet),status:result.status,outcome:result.outcome,error:result.error?.code,cancellation:result.cancellation}));
+    `],{encoding:"utf8",env:{...process.env,TMPDIR:root,TMP:root,TEMP:root},timeout:5000});
+    const result=JSON.parse(output);
+    expect(result.executorEntered).toBe(true);
+    expect(result.ruleRemoved).toBe(true);
+    expect(result.packetRemoved).toBe(true);
+    expect(result.packetBeforeSettle).toBe(mode==="cancel-deferred");
+    if(mode==="success")expect(result).toMatchObject({status:"available",outcome:"completed"});
+    if(mode==="failure")expect(result.error).toBe("OCR_OWNED_FAILURE");
+    if(mode==="cancel-confirmed")expect(result.error).toBe("OCR_EXECUTOR_CANCELLED");
+    if(mode==="cancel-deferred")expect(result.error).toBe("OCR_EXECUTOR_CANCEL_UNCONFIRMED");
+  }
+});
+
+it("T037 cleanup EACCES keeps OCR terminal facts, attempts sibling directories and handles deferred rejection", () => {
+  const root=realpathSync(mkdtempSync(join(tmpdir(),"t037-cleanup-isolation-")));roots.push(root);
+  const source=join(root,"source");mkdirSync(source);writeFileSync(join(source,"owned.mjs"),"export const owned=true;\n");writeFileSync(join(source,"review-instructions.md"),compliantReviewPrompt);
+  const url=new URL("../../runtime/review/ocr-delegation-adapter.mjs",import.meta.url).href;
+  for(const [mode,target] of [["success","rule"],["failure","rule"],["cancel","rule"],["early-constraints","packet"],["early-executor","rule"],["early-aborted","packet"],["deferred-unconfirmed-resolve","packet"],["deferred-unconfirmed-reject","packet"],["deferred-timeout-resolve","packet"],["deferred-timeout-reject","packet"],["diagnostic-fails","rule"]]){
+    const output=execFileSync(process.execPath,["--input-type=module","-e",`
+      import fs from'node:fs';import cp from'node:child_process';import assert from'node:assert/strict';import{syncBuiltinESMExports}from'node:module';
+      const mode=${JSON.stringify(mode)},target=${JSON.stringify(target)},seen={},attempts=[],diagnostics=[],unhandled=[];let hits=0;
+      const allocate=fs.mkdtempSync,remove=fs.rmSync,execute=cp.execFileSync,stderr=process.stderr.write.bind(process.stderr);
+      fs.mkdtempSync=(prefix,...args)=>{const dir=allocate(prefix,...args);if(prefix.includes('workflowhub-ocr-rule-'))seen.rule=dir;if(prefix.includes('workflowhub-ocr-packet-'))seen.packet=dir;return dir;};
+      fs.rmSync=(p,...args)=>{if(p===seen.rule||p===seen.packet){attempts.push(p===seen.rule?'rule':'packet');if(p===seen[target]){hits++;throw Object.assign(new Error('owned '+target+' cleanup denied'),{code:'EACCES'});}}return remove(p,...args);};
+      cp.execFileSync=(cmd,args,...rest)=>{if(cmd!=='ocr')return execute(cmd,args,...rest);if(args[0]==='--version')return'open-code-review v1.12.9\\n';if(args[1]==='preview')return JSON.stringify({reviewable_files:[{path:'owned.mjs'},{path:'review-instructions.md'}]});if(args[1]==='rule')return JSON.stringify({rules:[]});throw Error('unexpected command');};
+      process.stderr.write=(text,...args)=>{diagnostics.push(String(text));if(mode==='diagnostic-fails')throw Object.assign(new Error('owned diagnostic sink denied'),{code:'EPIPE'});return stderr(text,...args);};
+      process.on('unhandledRejection',e=>unhandled.push(String(e)));syncBuiltinESMExports();
+      const{runOcrDelegationRound}=await import(${JSON.stringify(url)}),controller=new AbortController();
+      let settleExecution,resolveHandler,rejectHandler,resolveCleanup,rejectCleanup,entered=false;
+      const execution=new Promise(resolve=>settleExecution=resolve),handler=new Promise((resolve,reject)=>{resolveHandler=resolve;rejectHandler=reject;}),cleanup=new Promise((resolve,reject)=>{resolveCleanup=resolve;rejectCleanup=reject;});
+      // Only promises used by a scenario may be rejected; each real chain is observed.
+      const keepAlive=setInterval(()=>{},1000);
+      if(mode==='early-aborted')controller.abort();
+      let result=null,thrown=null,before=null;
+      try{result=await runOcrDelegationRound({stage:'build-code',material_id:'owned',...(mode==='early-constraints'?{prompt:'missing mandatory constraints'}:{})},{signal:controller.signal,cancellationGraceMs:10,buildBundle:()=>({bundleRoot:${JSON.stringify(source)},materialId:'owned',manifest:[{path:'owned.mjs'},{path:'review-instructions.md'}]}),...(mode==='early-executor'?{}:{executor:({registerCancellation})=>{
+        entered=true;
+        if(mode==='failure')throw Object.assign(new Error('owned executor failed'),{code:'OCR_OWNED_FAILURE'});
+        if(mode==='success'||mode==='diagnostic-fails')return{status:'available',outcome:'completed',findings:[],provider_results:[]};
+        registerCancellation(()=>{if(mode==='cancel'){settleExecution(null);return{confirmed:true};}if(mode.startsWith('deferred-timeout'))return handler;return{confirmed:false,cleanup};});
+        queueMicrotask(()=>controller.abort());return execution;
+      }})});}catch(e){thrown={code:e.code,message:e.message};}
+      if(mode.startsWith('deferred-')){
+        before={packetExists:fs.existsSync(seen.packet),packetAttempts:attempts.filter(x=>x==='packet').length};
+        if(mode.startsWith('deferred-timeout')){if(mode.endsWith('resolve'))resolveHandler({cleanup:execution});else rejectHandler(new Error('owned cancellation handler failed'));settleExecution(null);}
+        else{if(mode.endsWith('resolve'))resolveCleanup();else rejectCleanup(new Error('owned cleanup promise failed'));settleExecution(null);}
+        await new Promise(resolve=>setTimeout(resolve,30));
+      }
+      clearInterval(keepAlive);process.stderr.write=stderr;
+      const observed={mode,target,thrown,status:result?.status,outcome:result?.outcome,error:result?.error?.code,entered,hits,attempts,diagnostics,before,ruleExists:fs.existsSync(seen.rule),packetExists:fs.existsSync(seen.packet),unhandled};
+      for(const p of Object.values(seen))remove(p,{recursive:true,force:true});
+      console.log(JSON.stringify(observed));
+    `],{encoding:"utf8",env:{...process.env,TMPDIR:root,TMP:root,TEMP:root},timeout:5000});
+    const result=JSON.parse(output);
+    expect(result.thrown).toBeNull();
+    expect(result.hits).toBeGreaterThan(0);
+    expect(result.attempts).toEqual(expect.arrayContaining(["rule","packet"]));
+    expect(result.ruleExists).toBe(target==="rule");
+    expect(result.packetExists).toBe(target==="packet");
+    expect(result.diagnostics.join("\n")).toContain("TEMP_CLEANUP_FAILED");
+    expect(result.diagnostics.join("\n")).toContain("EACCES");
+    expect(result.unhandled).toEqual([]);
+    if(mode==="success"||mode==="diagnostic-fails")expect(result).toMatchObject({status:"available",outcome:"completed"});
+    if(mode==="failure")expect(result.error).toBe("OCR_OWNED_FAILURE");
+    if(mode==="cancel"||mode==="early-aborted")expect(result.error).toBe("OCR_EXECUTOR_CANCELLED");
+    if(mode==="early-constraints")expect(result.error).toBe("OCR_PROMPT_CONSTRAINTS_MISSING");
+    if(mode==="early-executor")expect(result.error).toBe("OCR_DELEGATION_UNAVAILABLE");
+    if(mode.startsWith("deferred-")){expect(result.error).toBe("OCR_EXECUTOR_CANCEL_UNCONFIRMED");expect(result.before).toEqual({packetExists:true,packetAttempts:0});}
+  }
 });
