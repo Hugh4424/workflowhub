@@ -33,12 +33,12 @@ Phase 内的 Task 是 task graph，不是可任意跳过依赖的步骤表。选
 6. 对声明的 command/service 验收执行真实场景，逐项对照 oracle、可观察效果与失败反例。记录每条 AC 的实际结果、原始输出、输入/环境和覆盖限制；真实服务缺失、未执行、部分或不可用保持原样，模拟效果不冒充外部效果。
    验收证据人读词表为 pass/fail/inconclusive/deferred/missing/inconsistent/incomplete/unavailable，来源 `runtime/evidence/acceptance-evidence-validator.mjs:6`；本词表只约束人读措辞，不改变现有 writer。未达成如实记为未达成并进失败事实清单，这一条不新增任何推进前置。
 7. 检查实际 diff 与声明写集、真实消费者、接口两端、状态、错误传播、并发原子性和资源释放。UI 按组件质量地图与真实页面验证状态和 DTO→ViewModel，浏览器 QA 先读取并执行 `skills/isolated-browser-qa/SKILL.md`，保留隔离、取消和自建资源清理事实。 仅声明写集没有任何浏览器可见面时，记 `N/A — 理由` 并引用写集；已声明适用而缺工具时记 unavailable。QA engine、route/场景、截图路径或 not_observed 的真实原因保在唯一原 ref，不伪造浏览器通过。来源、样本、场景、浏览器或截图缺失不宣称 UI 完成。
-8. 每次挑审先实际消费 `docs/standard-workflow.md` 的「三审查点与结论真实性」，主会话提交其要求的三维原始依据并记录应用与缺料回退。每个 Phase 对当前 diff、完整 AC、实际执行原件和审查重点发起一次独立代码审查：先读取 `skills/wh-review/SKILL.md` 的「Long-review host convention」。正常使用 OCR；不可用时的记录口径见下节。同时显式派一次独立上下文的同源补充审查，方法见「同源补充轴」。各轴真实终态、原件与覆盖限制可定位才算完成本次审查工作；没有额外全 Phase 集成审查点，不为追空 findings 重派未变范围。
+8. 每次挑审先实际消费 `docs/standard-workflow.md` 的「三审查点与结论真实性」，主会话提交其要求的三维原始依据并记录应用与缺料回退。每个 Phase 对当前 diff、本 Phase 承接 AC 与声明测试面、实际执行原件和审查重点发起一次独立代码审查：先读取 `skills/wh-review/SKILL.md` 的「Long-review host convention」。正常使用 OCR；不可用时的记录口径见下节。同时显式派一次独立上下文的同源补充审查，方法见「同源补充轴」。各轴真实终态、原件与覆盖限制可定位才算完成本次审查工作；没有额外全 Phase 集成审查点，不为追空 findings 重派未变范围。
 9. 主会话保留每条 finding 原文和真实处置。有效问题回原实施会话自动修复，先列受影响 file/case，再只跑该集合并写实际结果；严重问题优先修复，不以请求用户承担风险代替修复。确实无法在当前任务范围内解决时，写清影响、证据、原因和剩余选项，继续不受影响的工作；未处理保持 incomplete。只有已有绑定该 finding 的用户真实决定才可记 accepted_risk，不能自行接受风险或伪造通过。
    重试前自述一行并写进本 Phase 的 task facts：「自上次以来我改了什么：<一句话>；失败信号：与上次相同／已变」。 按 `AGENTS.md`「卡住与升级」及 `docs/standard-workflow.md`「stage 结束」的适用范围、provider排除、无新事实判定/独立重开/升级、外部不可重试零重试及用户答复复位执行；收到答复按当前材料续跑，不新建任务或账本。
    本 Phase 收口时，契约头 `Done` 逐条承接 AC：每条写 AC 编号、一个上述现成 8 值档位和一条具名证据指针，并在现有正文写「本 Phase 自带判据小结」：自己验了什么（附本 Phase `gate_cmd` 原件）、没验什么（逐条带档位）、未验项所需条件与具名 owner。逐条记录、实际审查事实和本 Phase 提交分别可定位，才完成本 Phase 的收口工作；档位不要求全部为 pass。
    AC 的判定归属由 spec 的 AC 正文决定：实读判定方式、时点、执行 owner、所需条件和成功失败信号，不由依赖链位置决定。未参与该 AC 判定的 Phase 不得为该条写 pass，下游不得替上游补签。承接 AC 未达成时，按 `docs/standard-workflow.md`「专业质量」的「带欠账完成」口径显著标注、逐条保留缺口；继续同任务修复与后续安全部分。
-10. 所有实施任务结束后，按计划执行一次最终聚合，逐 AC 消费沿途已产生的结论原件，对账实现、真实效果、测试和未覆盖项。末 Phase 保留完整端到端串演，只作复核与必要未闭环 case 补充，不得成为任何 AC 的首次结论产生点；首次结论仍按 spec 的 AC 正文归属各承接 Phase。没有新改动、失败或疑点时不重复运行。最终聚合不证明 review pass，也不替代独立审查。
+10. 所有实施任务结束后，按计划执行一次最终聚合，逐 AC 消费沿途已产生的结论原件，对账实现、真实效果、测试和未覆盖项。末 Phase 保留完整端到端串演，只作复核与必要未闭环 case 补充，不得成为任何 AC 的首次结论产生点；首次结论仍按 spec 的 AC 正文归属各承接 Phase。默认只跑本任务范围内与本次改动相关的测试；判断不了影响面时用最小可证伪集合并记录未知影响面。全局重跑仅在改动对象是流程本身且局部无法证明时执行一次，事先说明范围与理由。没有新改动、失败或疑点时不重复运行。最终聚合不证明 review pass，也不替代独立审查。
      对账由独立上下文实跑一次项目声明的会话用量命令，当场展示时间窗/分账/计数，不落派生文件；finding修复仅复验受影响file/case并说明理由。
 11. 用 spec-analyze 对照原始需求、当前材料、实现、测试、发现处置与用户可见结果。实施/事实问题在本阶段修，方向和作者材料仍交对应 owner。缺项明确写未启动、未执行、失败、不适用、unknown 或 unavailable，不用产物存在代替完成条件。
 12. 整个 stage 末由当前主会话按 `skills/stage-reflection/SKILL.md`「方法」「用户选择后的归口」「判断词表与完成检查」执行阶段收口，内部发布并读回交接，说明交付行为、实际测试/AC限制、原始发现与处置、风险及 verify-code 下一步。局部 Phase 摘要不触发 stage-end 或固定复盘。
@@ -50,11 +50,11 @@ Phase 内的 Task 是 task graph，不是可任意跳过依赖的步骤表。选
 
 先检查 `ocr` 命令与 `ocr --version`。OCR 不可用（命令不存在（ENOENT）或版本低于1.12.9）如实记 unavailable/unknown，不换执行者，保留检测输出与原始失败；版本检测其它错误不推断未安装。architect-code-review 是同源补充轴，独立执行，与 OCR 可用性无关；已装 OCR 失败、超时、取消、无效输出、零成功路或空 findings 均保留原始事实。依赖真实 OCR 的测试在未安装时显式 skip 并披露；不把不可用写成空 findings。 同一不可用事实不再重复采集，由执行者自行停机并报告；此处只停止重复采集路径，审查 provider 各轴继续按上述既有口径执行，保留各轴终态与原失败，其余安全工作继续。
 
-代码审查输入保留 build-code 合同、provider 协议、stageReviewFocus 与所需 lens 正文、当前 diff、完整 AC 及实际执行原件；只搬方法合同，不能重建旧执行流程。材料外发前核范围、路径边界并脱敏私有路径/secret；没有真实只读边界的执行者记不可用。取消、单路失败、迟到 findings 与其它成功路的 provenance 分别保留，不能由首个结果取消其它路或把失败写成通过。
+代码审查输入保留 build-code 合同、provider 协议、stageReviewFocus 与所需 lens 正文、当前 diff、本 Phase 承接 AC 及实际执行原件；只搬方法合同，不能重建旧执行流程。材料外发前核范围、路径边界并脱敏私有路径/secret；没有真实只读边界的执行者记不可用。取消、单路失败、迟到 findings 与其它成功路的 provenance 分别保留，不能由首个结果取消其它路或把失败写成通过。
 
 ## 同源补充轴
 
-每Phase的review-change与正式审查使用相同scope、当前artifact/基线/diff、完整AC、执行原ref、阶段合同、provider协议、审查重点、所需lens全文和仓库规范；主会话按下段实际执行独立Standards/Spec派发与并列展示，两个执行者消费 `skills/review/SKILL.md` 的对应镜头。补充原文由主会话按 `docs/standard-workflow.md`「证据只留原始件（同字节即同一事实）」比较后用已认证task.appendRecord保存唯一原件或复用同字节原ref。
+每Phase的review-change与正式审查使用相同scope、当前artifact/基线/diff、本 Phase 承接 AC、执行原ref、阶段合同、provider协议、审查重点、所需lens全文和仓库规范；主会话按下段实际执行独立Standards/Spec派发与并列展示，两个执行者消费 `skills/review/SKILL.md` 的对应镜头。补充原文由主会话按 `docs/standard-workflow.md`「证据只留原始件（同字节即同一事实）」比较后用已认证task.appendRecord保存唯一原件或复用同字节原ref。
 
 宿主执行同源补充时，向两个互不继承对方上下文的独立执行者同时提供上述共同材料，并分别给 Standards 规范/baseline 或 Spec 来源。执行者只返回原文，不写文件；宿主按当前 workflow 保存单份原件，在 Standards / Spec 两栏分别展示发现、范围和不可用原因，只汇总各栏数量及各栏最严重问题，不合并、不重排名、不选跨轴赢家。同源补充标为 same_source_degraded，不替代 OCR、不计异源 quorum；OCR 与补充也并排保留，各路失败、取消与迟到有效发现不被成功路覆盖。
 
