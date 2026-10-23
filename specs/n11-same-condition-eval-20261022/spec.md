@@ -379,7 +379,7 @@ N1–N10 的交付没有带来可观察的流程改善。用户观察到的具�
   - **场景**：SCN-008
   - **验收**：AC-N11-21
 - **FR-REC-003**：十环中环 2 有真实 producer，其余环如实记未修；「0 项新采用」有资料索引与父 PRD 行为证据，关联 PFACT-009、SCN-008、AC-N11-9
-  - **范围边界**：补 producer，不新增环或状态
+  - **范围边界**：补 producer，不新增环或状态；P5 经独立 TCR025 窄扩 `tools/cli/check-decision-log-chain.mjs`，同一次扫描实际 buffer 与执行源码的 path/hash 只输出现 stdout 原件，由 `runtime/task/final-chain-runner.mjs:decisionOriginal` 唯一消费，owner 为 checker/final-chain 维护者；替代经独立审查承接后退役。空输入/读失败不输出已扫描签名，旧 unsigned 不回填；不改 receipt/schema/provider 协议或新增账本。
   - **依据**：P-004、N9 交付
   - **场景**：SCN-008
   - **验收**：AC-N11-9
@@ -598,6 +598,7 @@ ModelTest 三个卡点修通：接口改为当前 API（async、`activation_coho
   - `docs/research/n11-integration-runbook.md`（P9）
   - 外部仓新件（不在本仓 move-map，登记在 P6 runbook 与证据）：`/Users/Hugh/Hugh/Project/ModelTest/evaluation-assets/test-fixtures/us07-workflowhub/task-input-v2.json`、`/Users/Hugh/Hugh/Project/ModelTest/evaluation-assets/runner/workboard-review-queue/v0.4.0/runner-config.json`
 - **修改**：见各 Phase 契约头；全局不重复声明。
+  - P5 窄例外（TCR025）：`tools/cli/check-decision-log-chain.mjs` 同一实际输入 buffer／执行源码签名 → 现 stdout 原件 → `decisionOriginal`，owner 与退役条件沿 FR-REC-003；不扩 receipt 或接口。
 - **禁止改动**：
   - `specs/n11-same-condition-eval-20261022/decision-log.md`：本阶段唯一决策权威，改它等于改需求。
   - `specs/archive/**` 与 `docs/archive/**`：历史只读。

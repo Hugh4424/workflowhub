@@ -498,7 +498,11 @@ async function waitForManagedTerminal({ lifecycle, client, requestId, providers,
           code: "MANAGED_CANCEL_UNAVAILABLE",
         });
       }
-      await client.cancelManaged(context);
+      const observation = await client.cancelManaged(context);
+      if (observation?.request_id === (lifecycle.request_id ?? requestId)
+          && observation?.runtime_id === lifecycle.runtime_id
+          && observation?.material_id === materials.materialId) lastObservation = observation;
+      else throw Object.assign(new Error("managed cancellation response identity is missing or mismatched"), { code: "PROTOCOL_INCOMPATIBLE" });
     } catch (cancelError) {
       const normalized = normalizeProviderError(cancelError);
       error.message = `${error.message}; broker cancellation failed: ${normalized.code} (${normalized.message})`;
@@ -510,7 +514,20 @@ async function waitForManagedTerminal({ lifecycle, client, requestId, providers,
     ? value
     : { ...value, review_cancellation: cancellation };
   while (current.state !== "terminal") {
-    if (!cancellationRequested && signal?.aborted) await cancelManagedReview();
+    if (!cancellationRequested && signal?.aborted) {
+      await cancelManagedReview();
+      // Cancellation is a local terminal observation. Preserve settled members
+      // from the last authenticated status, rather than waiting for a broker
+      // that may never acknowledge terminal state.
+      const source = lastObservation.group?.providers ?? lastObservation.providers ?? [];
+      const members = Array.isArray(source) ? source : Object.entries(source).map(([provider, item]) => ({ ...item, provider }));
+      return terminalResult({ ...lastObservation, state: "terminal", group: {
+        ...(lastObservation.group ?? {}), runtime_id: lifecycle.runtime_id, outcome: "partial",
+        providers: members.map(item => ["completed", "failed", "cancelled"].includes(item.status) ? item : {
+          ...item, status: "cancelled", error: cancellation,
+        }),
+      } });
+    }
     try {
       const observation = await client.statusManaged({
         ...context,
@@ -1663,7 +1680,12 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
         });
         if (eligibleSet.has(item.provider)) semanticModels.add(item.identity.model);
         for (const finding of anchoredFindings) findings.push({ ...finding, provider: item.provider });
-        const providerResult = publicProviderResult({ ...item, parse_outcome: "ok" }, anchoredEvidence, pair);
+        const entries = providerMaterialEntries({ ...canonicalInput, materials: canonicalInput.materials });
+        const read = entries.flatMap(([key, value], index) => Object.hasOwn(input.materials, key) && anchoredFindings.some(finding =>
+          finding.path === providerMaterialPath(key, index, value)) ? [key] : []);
+        const providerResult = { ...publicProviderResult({ ...item, parse_outcome: "ok" }, anchoredEvidence, pair),
+          material_coverage: { provider: item.provider, read, unread: [],
+            undetermined: Object.keys(input.materials).filter(key => !read.includes(key)) } };
         return providerDiscardedFacts.length > 0
           ? { ...providerResult, discarded_facts: providerDiscardedFacts }
           : providerResult;
@@ -1729,9 +1751,17 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
       });
     }
     const available = semanticModels.size >= minimum;
+    const hasSemanticResult = providers.some(item => item.status === "completed" && item.parse_outcome === "ok");
+    const complete = available && reviewCancellation === null && providers.every(item => item.status === "completed" && item.parse_outcome === "ok");
+    for (const item of providers) {
+      if (item.material_coverage) continue;
+      const keys = Object.keys(input.materials);
+      const blocked = ["PROVIDER_PACKET_BOUNDARY_UNAVAILABLE", "NATIVE_DIRECTION_VISIBILITY_UNAVAILABLE", "PROVIDER_HEALTH_FAILED"].includes(item.error?.code);
+      item.material_coverage = { provider: item.provider, read: [], unread: blocked ? keys : [], undetermined: blocked ? [] : keys };
+    }
     const observedMaterialId = brokerMaterialIds[0] ?? bundle.materialId;
     const baseResult = {
-      status: reviewCancellation !== null ? "unavailable" : available ? "available" : "unavailable",
+      status: complete ? "available" : hasSemanticResult ? "available-with-failures" : "unavailable",
       stage: input.stage,
       ...reviewSubjectFields(input),
       review_track: reviewTrack,
@@ -1831,7 +1861,7 @@ function combinePairedResults(input, pairId, roleResults) {
   const materialConsistent = true; // Independent role packets are transport facts, not a shared advancement identity.
   const expectedMaterialId = materialConsistent ? materialValues[0] : null;
   const incomplete = Object.fromEntries(roleResults.map((result) => [result.role, pairResultIncomplete(result, expectedMaterialId)]));
-  const anyAvailable = roleResults.some((result) => result.status === "available");
+  const anyAvailable = roleResults.some((result) => ["available", "available-with-failures"].includes(result.status));
   const anyIncomplete = Object.values(incomplete).some(Boolean);
   const allIncomplete = roleResults.every((result) => incomplete[result.role]);
   const status = !anyAvailable ? "unavailable" : (anyIncomplete ? "available-with-failures" : "available");
@@ -1872,7 +1902,17 @@ function combinePairedResults(input, pairId, roleResults) {
     outcome: status === "available" ? "completed" : "partial",
     // Policies and selections belong to each role_result; there is no
     // authenticated shared minimum or selection for a flattened pair.
-    provider_results: roleResults.flatMap((result) => result.provider_results),
+    provider_results: [...roleResults.flatMap((result) => result.provider_results).reduce((members, item) => {
+      const previous = members.get(item.provider);
+      const semantic = value => value?.status === "completed" && value.parse_outcome === "ok" && value.identity_authenticated !== false;
+      const selected = !previous || (semantic(item) && !semantic(previous)) ? item : previous;
+      const siblings = roleResults.flatMap(result=>result.provider_results).filter(value=>value.provider === item.provider);
+      const keys = Object.keys(input.materials);
+      const read = keys.filter(key=>siblings.some(value=>semantic(value) && value.material_coverage?.provider === item.provider && value.material_coverage.read?.includes(key)));
+      const unread = keys.filter(key=>!read.includes(key) && siblings.every(value=>value.material_coverage?.provider === item.provider && value.material_coverage.unread?.includes(key)));
+      members.set(item.provider, {...selected,material_coverage:{provider:item.provider,read,unread,undetermined:keys.filter(key=>!read.includes(key)&&!unread.includes(key))}});
+      return members;
+    }, new Map()).values()],
     findings: uniquePairFindings(roleResults),
     role_results: { red, blue },
     ...(incomplete.red ? { red_incomplete: true } : {}),

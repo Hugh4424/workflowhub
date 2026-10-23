@@ -1133,6 +1133,81 @@ skills:
     update_policy: 按固定pin与实际consumer人工核对；不自动追HEAD、不搬上游renderer或宿主绑定；未观察质量保持incomplete。
 
 capability_decisions:
+  - name: n1-observability-and-instrumentation
+    status: absorbed
+    purpose: N11补记N1/N2既有采用；不新增外部采用
+    design_idea: 问题到原始数量与来源自验
+    used_by_stages:
+    - make-decision
+    - build-plan
+    - build-code
+    - verify-code
+    local_path: tools/cli/measure-main-agent-cost.mjs
+    upstream:
+    - github_url: https://github.com/addyosmani/agent-skills
+      commit: aeac41d4d005999432bb7312f7ff06383a91d59d
+      license: MIT
+      path: skills/observability-and-instrumentation/SKILL.md
+    local_changes: 既有consumer tools/cli/measure-main-agent-cost.mjs 已实读；owner为该文件维护者。仅补登记，不宣称首验或收益；被独立审查的替代consumer承接后删除本行。
+    update_policy: 固定既有pin；逐项比较来源与当前consumer，不自动追HEAD；消费者退役时移除登记。
+  - name: n1-performance-optimization
+    status: absorbed
+    purpose: N11补记N1/N2既有采用；不新增外部采用
+    design_idea: 同条件复跑与不冒收益结论
+    used_by_stages:
+    - make-decision
+    - build-plan
+    - build-code
+    - verify-code
+    local_path: tools/cli/measure-main-agent-cost.mjs
+    upstream:
+    - github_url: https://github.com/addyosmani/agent-skills
+      commit: aeac41d4d005999432bb7312f7ff06383a91d59d
+      license: MIT
+      path: skills/performance-optimization/SKILL.md
+    local_changes: 既有consumer tools/cli/measure-main-agent-cost.mjs 已实读；owner为该文件维护者。仅补登记，不宣称首验或收益；被独立审查的替代consumer承接后删除本行。
+    update_policy: 固定既有pin；逐项比较来源与当前consumer，不自动追HEAD；消费者退役时移除登记。
+  - name: n2-security-and-hardening
+    status: absorbed
+    purpose: N11补记N1/N2既有采用；不新增外部采用
+    design_idea: 路径边界、真实owner及安全写
+    used_by_stages:
+    - make-decision
+    - build-plan
+    - build-code
+    - verify-code
+    local_path: runtime/interface/safe-write.mjs
+    upstream:
+    - github_url: https://github.com/addyosmani/agent-skills
+      commit: aeac41d4d005999432bb7312f7ff06383a91d59d
+      license: MIT
+      path: skills/security-and-hardening/SKILL.md
+    local_changes: 既有consumer runtime/interface/safe-write.mjs 已实读；owner为该文件维护者。仅补登记，不宣称首验或收益；被独立审查的替代consumer承接后删除本行。
+    update_policy: 固定既有pin；逐项比较来源与当前consumer，不自动追HEAD；消费者退役时移除登记。
+  - name: n2-using-agent-skills
+    status: absorbed
+    purpose: N11补记N1/N2既有采用；不新增外部采用
+    design_idea: 先读真实目标再采用，缺consumer保留缺口
+    used_by_stages:
+    - make-decision
+    - build-plan
+    - build-code
+    - verify-code
+    local_path: skills/reuse-registry.md
+    upstream:
+    - github_url: https://github.com/addyosmani/agent-skills
+      commit: aeac41d4d005999432bb7312f7ff06383a91d59d
+      license: MIT
+      path: skills/using-agent-skills/SKILL.md
+    local_changes: 既有consumer skills/reuse-registry.md 已实读；owner为该文件维护者。仅补登记，不宣称首验或收益；被独立审查的替代consumer承接后删除本行。
+    update_policy: 固定既有pin；逐项比较来源与当前consumer，不自动追HEAD；消费者退役时移除登记。
+  # n1-explain-the-number not_backfilled: missing=upstream.commit; owner=wh-review/catalog maintainer; impact=既有pstack采用无Git绑定，保archive SHA256，不能称登记完整。
+  # n2-setup-pstack not_backfilled: missing=upstream.commit; owner=wh-review/catalog maintainer; impact=既有pstack采用无Git绑定，保archive SHA256，不能称登记完整。
+  # n2-poteto-help not_backfilled: missing=upstream.commit; owner=wh-review/catalog maintainer; impact=既有pstack采用无Git绑定，保archive SHA256，不能称登记完整。
+  # n2-make-operations-idempotent not_backfilled: missing=upstream.commit; owner=wh-review/catalog maintainer; impact=既有pstack采用无Git绑定，保archive SHA256，不能称登记完整。
+  # n2-type-system-discipline not_backfilled: missing=upstream.commit; owner=wh-review/catalog maintainer; impact=既有pstack采用无Git绑定，保archive SHA256，不能称登记完整。
+  # n2-boundary-discipline not_backfilled: missing=upstream.commit; owner=wh-review/catalog maintainer; impact=既有pstack采用无Git绑定，保archive SHA256，不能称登记完整。
+  # n2-experience-first not_backfilled: missing=upstream.commit; owner=wh-review/catalog maintainer; impact=既有pstack采用无Git绑定，保archive SHA256，不能称登记完整。
   - name: scope-triage
     status: absorbed
     purpose: 将需求拆成 scope verdict

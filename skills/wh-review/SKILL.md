@@ -35,6 +35,10 @@ stage-skill-plan.json 仍在本技能原路径提供 required_skills/optional_sk
 
 available 只表示实际收到可读建议，至少一个有效语义 sibling 可以与其它失败并存；partial/available-with-failures 不等于通过。空 findings 只表示本次完成阅读后未提出问题；未执行、不可用、取消、无效 JSON 或缺材料都不是空 findings，也不是用户同意或交付完成。
 
+单路失败或取消后，已有 `completed && parse_outcome=ok` 的意见仍可供下游消费；汇总必须标 `available-with-failures` / partial，不冒充完整结论。取消由 managed client 返回后停止本地轮询，以最后已观察的 settled 路和取消事实结束；零路语义结果仍 `unavailable`。顶层 `provider_results` 每 provider 一条、优先有效语义结果；红蓝 `role_results` 保留原路结果与失败。此处不新增请求级 timeout；真实 broker 无响应且 provider 默认无 timeout 的退出分支仍可能 unavailable。
+
+broker 与 OCR 使用同一覆盖门槛：可靠 evidence anchor 经现有校验映射到材料键才进 `read`；明确派发前受阻进 `unread`；送达但无可靠读取证据仍进 `undetermined`，不能从发送或空 findings 推断已读。
+
 结论须从本次原件同时读出三条件：至少一路真实 `completed && parse_outcome === "ok"`；该路发现或空 findings 有可回读的原始件引用；记录保留未确认项 `material_coverage.undetermined` 与真实 `discarded_facts`（若有，无真实丢弃事实不制造占位）。三条件缺一，报告无结论及具体原因；实际执行者、真实终态和来源均沿原件读取，不由实施者自述或 `review_origin` 的取值推定。
 
 OCR 不可用时四件齐：检测输出与原始失败各沿其唯一原件引用；实际执行者沿本次执行身份原件；覆盖限制沿本次审查记录逐材料说明。四件各给具名保留位置，未取得的写明缺口。检测、失败或同源补充均不能成为非 OCR 结果的 OCR 身份。

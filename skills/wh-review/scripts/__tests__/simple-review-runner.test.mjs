@@ -555,8 +555,11 @@ describe("simple material-only review", () => {
         }] };
       } },
     });
-    expect(result.provider_results.map(({ role }) => role).sort()).toEqual(["blue", "red"]);
-    expect(result.provider_results.every(({ pair_id, role, identity_degraded }) => pair_id === result.pair_id
+    expect(result.status).toBe("unavailable");
+    expect(result.provider_results).toHaveLength(1);
+    const roleMembers = [result.role_results.red, result.role_results.blue].flatMap(value=>value.provider_results);
+    expect(roleMembers.map(({ role }) => role).sort()).toEqual(["blue", "red"]);
+    expect(roleMembers.every(({ pair_id, role, identity_degraded }) => pair_id === result.pair_id
       && ["red", "blue"].includes(role) && identity_degraded === true)).toBe(true);
   });
 
@@ -622,10 +625,11 @@ describe("simple material-only review", () => {
       } },
     });
     expect(result).toMatchObject({ status: "available-with-failures", [`${incompleteRole}_incomplete`]: true });
-    expect(result.provider_results).toEqual(expect.arrayContaining([
+    expect(result.pair_status).toBe("partial");
+    expect(result.provider_results).toEqual([expect.objectContaining({ role: incompleteRole === "red" ? "blue" : "red", status: "completed", parse_outcome: "ok" })]);
+    expect(result.role_results[incompleteRole].provider_results).toEqual([
       expect.objectContaining({ role: incompleteRole, status: "failed", error: expect.objectContaining({ code: "RATE_LIMITED" }) }),
-      expect.objectContaining({ role: incompleteRole === "red" ? "blue" : "red", status: "completed" }),
-    ]));
+    ]);
   });
 
   it("retains successful providers when one role has a single provider failure", async () => {
@@ -650,9 +654,15 @@ describe("simple material-only review", () => {
     expect(result).toMatchObject({ status: "available-with-failures", red_incomplete: true });
     expect(result.provider_results).toEqual(expect.arrayContaining([
       expect.objectContaining({ provider: "model-a", role: "red", status: "completed" }),
-      expect.objectContaining({ provider: "model-b", role: "red", status: "failed", error: expect.objectContaining({ code: "RATE_LIMITED" }) }),
-      expect.objectContaining({ provider: "model-b", role: "blue", status: "completed" }),
+      expect.objectContaining({ provider: "model-b", role: "blue", status: "completed", parse_outcome: "ok" }),
     ]));
+    expect(result.provider_results).toHaveLength(2);
+    expect(result.pair_status).toBe("partial");
+    expect(result.role_results.red.provider_results).toEqual([
+      expect.objectContaining({ provider: "model-a", role: "red", status: "completed", parse_outcome: "ok" }),
+      expect.objectContaining({ provider: "model-b", role: "red", status: "failed", error: expect.objectContaining({ code: "RATE_LIMITED" }) }),
+    ]);
+    expect(result.role_results.blue.provider_results.every(member=>member.status === "completed" && member.parse_outcome === "ok")).toBe(true);
   });
 
   it.each(["provider failure", "cancel"])("preserves single detail dispatch on %s", async (scenario) => {
@@ -962,7 +972,7 @@ describe("simple material-only review", () => {
         }] };
       } },
     });
-    expect(result.status).toBe("available");
+    expect(result.status).toBe("available-with-failures");
     expect(result.provider_results).toEqual(expect.arrayContaining([
       expect.objectContaining({ provider: "model-b", status: "failed", error: expect.objectContaining({ code: "PROVIDER_RESULT_MISSING" }) }),
     ]));
@@ -1482,26 +1492,9 @@ describe("simple material-only review", () => {
           async cancelManaged(value) {
             calls.push("cancel");
             expect(value).toMatchObject({ runtimeId, requestId });
-            return { cancelled: true };
-          },
-          async statusManaged(value) {
-            calls.push("status");
-            statusSignals.push(value.signal ?? null);
-            statusCalls += 1;
-            if (statusCalls === 1) {
-              return lifecycle("running");
-            }
-            if (statusCalls === 2) {
-              controller.abort(new Error("operator cancelled"));
-              throw Object.assign(new Error("status read cancelled locally"), { code: "PROCESS_CANCELLED" });
-            }
-            if (statusCalls === 3) {
-              nowMs = 1_200_001;
-              return lifecycle("running");
-            }
-            return lifecycle("terminal", {
+            const envelope = lifecycle("terminal", {
+              version: 4, host_provider: "dsh", round: 0, selected_tier: null,
               runtime_id: runtimeId,
-              material_id: materialId,
               outcome: "cancelled",
               providers: [
                 {
@@ -1528,23 +1521,41 @@ describe("simple material-only review", () => {
                   timing: null,
                   usage: null,
                 },
-              ],
+              ].map(member=>({...member, adapter:"controlled", model:`${member.provider}-model`, effort:null, thinking:null,
+                runtime_id:runtimeId, material_id:materialId, result_protocol:"workflowhub-result.v2", continuable:false,
+                session_id:null, session_file_path:null, raw_output_ref:null, retry:{count:0,progress_events:0},
+                timing:{started_at_ms:1,completed_at_ms:2,duration_ms:1}, unavailable_diagnostics:member.error})),
             });
+            const client = new ReviewProviderClient({invoke:async()=>({stdout:JSON.stringify(envelope),stderr:"",exitCode:0})});
+            return client.cancelManaged(value);
+          },
+          async statusManaged(value) {
+            calls.push("status");
+            statusSignals.push(value.signal ?? null);
+            statusCalls += 1;
+            if (statusCalls === 1) {
+              return lifecycle("running");
+            }
+            if (statusCalls === 2) {
+              controller.abort(new Error("operator cancelled"));
+              throw Object.assign(new Error("status read cancelled locally"), { code: "PROCESS_CANCELLED" });
+            }
+            throw new Error("cancelled review must not poll again");
           },
         },
       });
 
-      expect(calls).toEqual(["start", "status", "status", "cancel", "status", "status"]);
-      expect(statusSignals).toEqual([controller.signal, controller.signal, null, null]);
-      expect(statusCalls).toBe(4);
-      expect(nowMs).toBeGreaterThan(1_200_000);
+      expect(calls).toEqual(["start", "status", "status", "cancel"]);
+      expect(statusSignals).toEqual([controller.signal, controller.signal]);
+      expect(statusCalls).toBe(2);
+      expect(nowMs).toBe(0);
       expect(result).toMatchObject({
-        status: "unavailable",
+        status: "available-with-failures",
         runtime_id: runtimeId,
-        outcome: "cancelled",
+        outcome: "partial",
         error: { code: "REVIEW_CANCELLED", message: "operator cancelled" },
         provider_results: [
-          { provider: "model-a", status: "completed", evidence_anchor_valid: [true] },
+          { provider: "model-a", status: "completed", parse_outcome: "ok", evidence_anchor_valid: [true] },
           { provider: "model-b", status: "cancelled", error: { code: "CANCELLED" } },
         ],
         findings: [{ provider: "model-a", issue: "completed before cancellation" }],
@@ -1943,7 +1954,7 @@ describe("review flow static preflight", () => {
       materials: buildCodePhaseMaterials(),
     }, dependencies);
 
-    expect(result).toMatchObject({ status: "available", dispatch_state: "dispatched", provider_attempts: 1 });
+    expect(result).toMatchObject({ status: "available-with-failures", dispatch_state: "dispatched", provider_attempts: 1 });
     const blockedOutput = result.provider_results.find(({ provider }) => provider === blockedProvider);
     expect(blockedOutput).toMatchObject({
       provider: blockedProvider,
@@ -2090,7 +2101,7 @@ describe("P8 runner failure and accounting seams", () => {
   });
   it.each(["not json at all", 'provider prose: {"findings":[]}'])("records invalid output %j without erasing a healthy sibling", async output => {
     const result = await runSimpleReview(input, dependencies([member(providers[0], { output }), member(providers[1])]));
-    expect(result.status).toBe("available"); expect(result.findings).toEqual([]);
+    expect(result.status).toBe("available-with-failures"); expect(result.findings).toEqual([]);
     expect(result.provider_results[0]).toMatchObject({ status: "failed", parse_outcome: "invalid", error: { code: "OUTPUT_INVALID" } });
     expect(result.provider_results[1]).toMatchObject({ status: "completed", parse_outcome: "ok" });
   });
@@ -2122,7 +2133,7 @@ describe("P8 runner failure and accounting seams", () => {
     expect(failed.evidence_refs).not.toContain(null);
     expect(failed).not.toHaveProperty("raw_output_ref");
     expect(failed).not.toHaveProperty("raw_output_sha256");
-    expect(result.status).toBe("available");
+    expect(result.status).toBe("available-with-failures");
     expect(result.provider_results[1]).toMatchObject({ status: "completed", parse_outcome: "ok", raw_output_ref: "quality/reviews/p8-healthy.output" });
     expect(result.findings).toEqual([{ ...finding, provider: providers[1] }]);
   });

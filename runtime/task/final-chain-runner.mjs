@@ -307,38 +307,65 @@ function contractOriginal(facts, read, materialRoot, spec, phaseIndex, phases, l
   }
   return unknown;
 }
-function decisionOriginal(commands, materialRoot, decisionLog, limits, repoRoots) {
+function decisionOriginal(commands, materialRoot, decisionLog, limits, repoRoots, taskPath) {
   const packageRoot=resolve(dirname(fileURLToPath(import.meta.url)),"../.."),checkerRelative="tools/cli/check-decision-log-chain.mjs";
-  const target=join(materialRoot,"decision-log.md"),candidates=commands.filter(command=>command.command.includes("check-decision-log-chain.mjs"));
-  for (const command of candidates.slice().reverse()) {
-    const argv=command.receipt.argv,entryIndex=argv[1] === "--" ? 2 : 1;
-    const node=/^(?:.*\/)?(?:node|nodejs)(?:\.exe)?$/.test(argv[0]??"");
-    const entry=argv[entryIndex],singleFile=argv.slice(entryIndex+1);
-    if (!node || !text(entry) || !(entry === "tools/cli/check-decision-log-chain.mjs" || entry.endsWith("/tools/cli/check-decision-log-chain.mjs")) || singleFile.length !== 2 || singleFile[0] !== "--file") {
-      limits.push(`${command.ref}: decision checker actual Node main-script entry/profile 未取得；eval/print/other-script或数据参数不证明扫描`);
+  const target=join(materialRoot,"decision-log.md"),scans=new Map();
+  const candidates=commands.filter(command=>command.command.includes("check-decision-log-chain.mjs"));
+  for(const command of candidates.slice().reverse()) {
+    const argv=command.receipt.argv,entryIndex=argv[1] === "--" ? 2 : 1,entry=argv[entryIndex],profile=argv.slice(entryIndex+1);
+    if(!/^(?:.*\/)?(?:node|nodejs)(?:\.exe)?$/.test(argv[0]??"") || !text(entry) || !(entry === checkerRelative || entry.endsWith("/"+checkerRelative)) || profile.length !== 2 || profile[0] !== "--file" || argv.includes("--root")) continue;
+    const inputPath=resolve(command.receipt.cwd,profile[1]),entryPath=resolve(command.receipt.cwd,entry);
+    let inputBytes,checkerBytes,kind=inputPath === target ? "decision-log" : null;
+    try {
+      inputBytes=inputPath === target ? readOriginal(materialRoot,"decision-log.md") : readOriginal(taskPath,inputPath);
+      if(inputPath !== target) {
+        if(/^#.*需求索引/m.test(inputBytes))kind="requirements-index";
+        else if(/^#.*(?:覆盖表|覆盖矩阵)/m.test(inputBytes))kind="coverage-matrix";
+        else continue;
+      }
+      // Once selected, a newer kind cannot be displaced by older attempts.
+      if(scans.has(kind))continue;
+      const sourceRoot=[packageRoot,...repoRoots].find(root=>inside(root,entryPath));
+      if(!sourceRoot)throw Error("checker source outside trusted roots");
+      checkerBytes=readOriginal(sourceRoot,relative(sourceRoot,entryPath));
+      if(checkerBytes !== readOriginal(packageRoot,checkerRelative))throw Error("checker source differs from installed source");
+    } catch(error){
+      limits.push(`${command.ref}: checkpoint input/source unavailable: ${error.message}`);
+      if(kind === "decision-log")return {readable:false,unavailable:true,basis:[command]};
+      if(kind && !scans.has(kind))scans.set(kind,{readable:false,unavailable:true,basis:[command]});
+      if(scans.size === 2)break;
       continue;
     }
-    const entryPath=resolve(command.receipt.cwd,entry),sourceRoot=[packageRoot,...repoRoots].find(root=>inside(root,entryPath));
-    let checkerSource;
-    try {
-      if (!sourceRoot) throw Error("checker source is outside existing package/task repository roots");
-      const trusted=readOriginal(packageRoot,checkerRelative),actual=readOriginal(sourceRoot,relative(sourceRoot,entryPath));
-      if (actual !== trusted) throw Error("same-named checker source bytes differ from installed WorkflowHub checker");
-      checkerSource=fileEvidence(entryPath,actual);
-      limits.push(`${command.ref}: checker 当前来源 ${entryPath} sha256 ${hash(actual)} 与安装源一致；原回执未声明执行时源码 hash，当前字节不证明历史执行时字节。`);
-    } catch (error) { limits.push(`${command.ref}: checker source 身份未取得：${error.message}`); continue; }
-    const positions=argv.map((arg,index)=>arg === "--file" ? index : -1).filter(index=>index >= 0);
-    const input=positions.length === 1 ? argv[positions[0]+1] : null;
-    if (!text(input) || argv.includes("--root") || resolve(command.receipt.cwd,input) !== target) { limits.push(`${command.ref}: decision scanner input target/profile does not identify current ${target}; outer task identity/exit0 cannot prove this scan`); continue; }
-    if (command.exit_code !== 0) return {...command,basis:[command,checkerSource,fileEvidence("decision-log.md",decisionLog)]};
-    if (/unknown\.decision_entries|no decision entries|coverage is unavailable/i.test(command.output) || !/\[check-decision-log-chain\] advisory complete: \d+ warning\(s\), non-blocking, exit 0/.test(command.output)) {
-      limits.push(`${command.ref}: current decision input advisory result has no reliable recognized scan; source ${target} sha256 ${hash(decisionLog)}; unavailable`);
-      return {readable:false,unavailable:true};
+    let observation;
+    if(command.exit_code !== 0) observation={...command,basis:[command,{ref:inputPath,notes:["selected input path; failed execution does not certify current bytes as scanned"]}]};
+    else {
+      const lines=typeof command.output === "string" ? command.output.split(/\r?\n/).filter(line=>line.startsWith("[check-decision-log-chain] scanned ")) : [];
+      let signature;
+      try {if(lines.length !== 1)throw Error("exactly one execution signature required");signature=JSON.parse(lines[0].slice("[check-decision-log-chain] scanned ".length));}catch{signature=null;}
+      const bound=object(signature) && Object.keys(signature).sort().join(",") === "checker_sha256,input_path,input_sha256"
+        && signature.input_path === inputPath && /^[a-f0-9]{64}$/.test(signature.input_sha256??"") && /^[a-f0-9]{64}$/.test(signature.checker_sha256??"")
+        && signature.input_sha256 === hash(inputBytes) && signature.checker_sha256 === hash(checkerBytes);
+      const advisory=/\[check-decision-log-chain\] advisory complete: \d+ warning\(s\), non-blocking, exit 0/.test(command.output);
+      if(!bound || !advisory || (kind === "decision-log" && /unknown\.decision_entries|no decision entries|coverage is unavailable/i.test(command.output))) {
+        limits.push(`${command.ref}: execution-time input/source binding or recognized scan unavailable; no current-byte backfill`);
+        observation={readable:false,unavailable:true,basis:[command,{ref:inputPath,notes:["execution signature missing, conflicting, mismatched or scan unavailable"]}]};
+      } else observation={...command,basis:[command,fileEvidence(entryPath,checkerBytes),fileEvidence(inputPath,inputBytes)]};
     }
-    return {...command,nonempty:decisionLog.trim().length>0,scan_count:1,decision_count:[...decisionLog.matchAll(/^#{3,4}\s+(?:D|ADR)-\d+/gm)].length,required_sections_present:["任务身份","原始需求","工作包与决定","未决项"].every(title=>decisionLog.includes(title)),basis:[command,checkerSource,fileEvidence("decision-log.md",decisionLog)]};
+    if(kind === "decision-log")return {...observation,nonempty:decisionLog.trim().length>0,scan_count:1,decision_count:[...decisionLog.matchAll(/^#{3,4}\s+(?:D|ADR)-\d+/gm)].length,required_sections_present:["任务身份","原始需求","工作包与决定","未决项"].every(title=>decisionLog.includes(title))};
+    scans.set(kind,observation);
+    if(scans.size === 2)break;
   }
-  return {readable:false,unavailable:true};
+  if(!scans.size)return {readable:false,unavailable:true};
+  const selected=[...scans.values()],basis=selected.flatMap(item=>item.basis??[]);
+  if(selected.some(item=>item.unavailable))return {readable:false,unavailable:true,basis};
+  const failed=selected.find(item=>item.exit_code !== 0);
+  if(failed)return {...failed,basis};
+  return {...selected[0],nonempty:typeof decisionLog === "string" && decisionLog.trim().length>0,scan_count:scans.size,
+    decision_count:[...String(decisionLog).matchAll(/^#{3,4}\s+(?:D|ADR)-\d+/gm)].length,
+    required_sections_present:scans.size === 2 && ["任务身份","原始需求","工作包与决定","未决项"].every(title=>String(decisionLog).includes(title)),
+    basis:[...basis,fileEvidence("decision-log.md",decisionLog)]};
 }
+
 function tracking(spec) {
   const body = section(spec,"需求到任务追踪");
   const lines = body.split("\n").filter(line=>line.trim().startsWith("|"));
@@ -727,7 +754,7 @@ export function runFinalChainCheck({taskPath,materialRoot} = {}) {
   const rawRefs = [...names(materialRoot,"raw-requirements",limits).map(ref=>({root:materialRoot,ref})),...names(taskPath,"quality/evidence/raw-requirements",limits).map(ref=>({root:taskPath,ref}))];
   const exactRaw = exactRawSource(taskPath,manifest,materialRoot,repo,spec,decisionLog,limits);
   const rawEvidence = exactRaw ? [exactRaw.evidence].filter(item=>item.verified) : rawRefs.map(({root,ref})=>fileEvidence(ref,optional(root,ref,limits))).filter(item=>item.verified);
-  const decisionCheck = decisionOriginal(actualCommands,materialRoot,decisionLog,limits,[materialRepo,manifest.target_repo_root]);
+  const decisionCheck = decisionOriginal(actualCommands,materialRoot,decisionLog,limits,[materialRepo,manifest.target_repo_root],taskPath);
   const ordinaryContract = contractOriginal(facts,read,materialRoot,spec,phaseIndex,phases,limits,actualCommands);
   const review = currentReview(facts,taskPath,materialRoot,taskId,level,changed,limits,phaseRefs.map(ref=>ref.match(/\/P(\d+)/)?.[1]).filter(Boolean).map(id=>`P${id}`));
   const explicitResearchRefs = decisionLog.split("\n").filter(line=>/研究|调研|research/i.test(line)).flatMap(line=>[...line.matchAll(/`([^`\n]+\.md)`/g)].map(match=>plainRef(match[1]))).filter(ref=>ref.startsWith("quality/evidence/") || isAbsolute(ref) && inside(taskPath,ref));
