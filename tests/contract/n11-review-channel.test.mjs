@@ -17,6 +17,15 @@ function put(root,name,value){const path=join(root,name);mkdirSync(dirname(path)
 const roots=[];
 afterEach(()=>{ for (const root of roots.splice(0)) rmSync(root,{recursive:true,force:true}); });
 const input={stage:'make-decision',review_track:'direction',host_provider:'codex',materials:{raw_requirement:'Preserve usable review results.',objective_facts:'One selected route fails.',convergence_outline:'Expose partial coverage honestly.'}};
+const postPhaseAuthority='# Phase P1\nphysical write set: src/app.mjs\n';
+const postInput={stage:'build-plan',activation_cohort:'post',materials:{
+  raw_requirement:'R-1: preserve the physical authority.',
+  draft_spec:'AC-1: the provider reads the complete plan.',
+  acceptance_criteria:'AC-1: the provider reads the complete plan.',
+  phase_authorities:{'phases/P1.md':postPhaseAuthority},
+  phase_index:'## Execution Index\n| phase | authority ref | semantic anchor | write set | dependency | consumer |\n| --- | --- | --- | --- | --- | --- |\n| P1 | phases/P1.md | phase-p1 | src/app.mjs | none | build-code |\n',
+}};
+const postPhaseAuthorityFinding={severity:'minor',path:'requirements/phases/P1.md',line:1,issue:'The Phase authority needs an explicit consumer check.',recommendation:'Keep the physical Phase authority in the review packet.',evidence_kind:'direct',evidence:postPhaseAuthority};
 function setup(client, extra={}) {
   const attachmentRoot=realpathSync(mkdtempSync(join(tmpdir(),'n11-review-'))); roots.push(attachmentRoot);
   return {loadConfig:()=>({whReview:{},config:'/unused/config.json',attachmentRoot,command:['unused']}),resolveRoute:()=>({initial:['model-a','model-b'],mode:'single_round'}),selectProviders:()=>({providers:['model-a','model-b'],provider_models:{'model-a':'model-a-model','model-b':'model-b-model'}}),client,...extra};
@@ -86,6 +95,18 @@ describe('ORACLE-N11-PARTIAL-REVIEW',()=>{
     expect(result.status).toBe('available-with-failures');
     expect(result.findings).toEqual([expect.objectContaining({provider:'model-a',issue:finding.issue})]);
     expect(result.provider_results[0].material_coverage).toEqual({provider:'model-a',read:['raw_requirement'],unread:[],undetermined:['objective_facts','convergence_outline']});
+  });
+  it('maps an anchored post Phase authority finding to the top-level material coverage',async()=>{
+    const result=await runSimpleReview(postInput,setup({async runGroup(){return {runtimeId:'post-authority-anchored',outcome:'partial',providers:[{...success,output:JSON.stringify({findings:[postPhaseAuthorityFinding]})},failure]};}}));
+    expect(result.status).toBe('available-with-failures');
+    expect(result.findings).toEqual([expect.objectContaining({path:postPhaseAuthorityFinding.path,issue:postPhaseAuthorityFinding.issue})]);
+    expect(result.provider_results[0].material_coverage).toEqual({provider:'model-a',read:['phase_authorities'],unread:[],undetermined:['raw_requirement','draft_spec','acceptance_criteria','phase_index']});
+  });
+  it('does not mark post Phase authorities read when the finding is not anchored',async()=>{
+    const result=await runSimpleReview(postInput,setup({async runGroup(){return {runtimeId:'post-authority-unanchored',outcome:'partial',providers:[{...success,output:JSON.stringify({findings:[{...postPhaseAuthorityFinding,line:999}]})},failure]};}}));
+    expect(result.status).toBe('available-with-failures');
+    expect(result.findings).toEqual([]);
+    expect(result.provider_results[0].material_coverage).toEqual({provider:'model-a',read:[],unread:[],undetermined:Object.keys(postInput.materials)});
   });
   it('keeps a preflight-blocked sibling explicitly unread and partial',async()=>{
     const options=setup({async runGroup(request){expect(request.providers).toEqual(['model-a']);return {runtimeId:'preflight-partial',outcome:'completed',providers:[success]};}},

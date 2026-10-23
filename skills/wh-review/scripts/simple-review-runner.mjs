@@ -1681,8 +1681,17 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
         if (eligibleSet.has(item.provider)) semanticModels.add(item.identity.model);
         for (const finding of anchoredFindings) findings.push({ ...finding, provider: item.provider });
         const entries = providerMaterialEntries({ ...canonicalInput, materials: canonicalInput.materials });
-        const read = entries.flatMap(([key, value], index) => Object.hasOwn(input.materials, key) && anchoredFindings.some(finding =>
-          finding.path === providerMaterialPath(key, index, value)) ? [key] : []);
+        const sourceKeyByProviderKey = new Map(entries.map(([key]) => [key, key]));
+        if (reviewActivationCohort(canonicalInput) === "post") {
+          for (const path of Object.keys(canonicalInput.materials.phase_authorities)) {
+            sourceKeyByProviderKey.set(`phase_authority:${path}`, "phase_authorities");
+          }
+        }
+        const read = [...new Set(entries.flatMap(([key, value], index) => {
+          const sourceKey = sourceKeyByProviderKey.get(key);
+          return Object.hasOwn(input.materials, sourceKey) && anchoredFindings.some(finding =>
+            finding.path === providerMaterialPath(key, index, value)) ? [sourceKey] : [];
+        }))];
         const providerResult = { ...publicProviderResult({ ...item, parse_outcome: "ok" }, anchoredEvidence, pair),
           material_coverage: { provider: item.provider, read, unread: [],
             undetermined: Object.keys(input.materials).filter(key => !read.includes(key)) } };
