@@ -55,3 +55,9 @@
 | 问题 | 下次改变的行动 | 状态 |
 | --- | --- | --- |
 | 审查建议曾否定 P2 明文允许的 notice 坐标，又把旧汇总漏列原件误作实现缺口（来源：N10/verify-code，`quality/reviews/2026-10-22-064-verify-code-document.json`、`specs/n10-finite-check-wiring-20261020/phases/P2-来源与目录接线.md:111`、`quality/reviews/2026-10-22-087-n10-review-clarification-20261022.md`）。 | 下次处置 finding 先回读对应原 AC、真实消费者和具名原件；与合同冲突时保留建议并写拒绝原因，不增加 hash/freshness 门。 | 已落账；仅纠正证据判读，完整验收限制不变。 |
+
+## 流程能力模块
+
+| 问题 | 下次改变的行动 | 状态 |
+| --- | --- | --- |
+| 调研空结果有真实执行，现有报告只接受三种状态，若混同工具失效会丢掉已执行事实（来源：n11-same-condition-eval-20261022/build-code/P4，runtime/evidence/research-report.mjs 与 079-p4-pre-implementation-facts.md）。 | 下次接薄入口先读唯一报告 producer 的状态与完成条件，零结果保查询、工具、空返回，以 no_results 区分工具不可用，不能为求 completed 伪造来源。 | 已落账；不代表真实调研完整验收。 |

@@ -3,7 +3,8 @@
   "skill": "answer-as-page",
   "files": [
     "SKILL.md",
-    "templates/overview-template.html"
+    "templates/overview-template.html",
+    "scripts/render-answer-page.mjs"
   ],
   "sources": [
     {

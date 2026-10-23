@@ -52,7 +52,7 @@ description: 调研方向问题形成可复核报告；已收敛方向的点状�
 
 ## R4：保存普通研究报告
 
-把报告写到任务约定的 `quality/evidence/research/日期-主题.md`，使用安全写入并回读内容。返回实际文件路径；保留原始失败和旧报告，不用内容 hash 命名、run 认证或 receipt 作为 Talk 输入前提。
+方向分支用 `scripts/research-run.mjs` 的 `runResearch` 注入宿主真实 `search`/`fetch`，经既有 `publishResearchReport` 写到任务约定的 `quality/evidence/research/` 普通 JSON 原件，再以 `readResearchReport` 回读。返回实际文件路径；保留原始失败和旧报告，不用内容 hash 命名、run 认证或 receipt 作为 Talk 输入前提。
 
 同主题多件用主题细分区分，例如「日期-取消语义-官方协议.md」与「日期-取消语义-失败反例.md」，不用序号；按真实主题避免重名。全文唯一原件留在既有证据目录，原件不搬移、不复制。报告包含上述搜前声明、相关性判断和零结果事实，以及问题/决策轴、查询与工具实际使用、读过的来源及定位、关键证据、独立交叉核对、冲突和反例、未决项、适用范围、停止/饱和原因、独立复核事实与覆盖限制。无法量出的指标写 unknown/null 与原因；这些读数不判通过。
 
@@ -103,3 +103,9 @@ description: 调研方向问题形成可复核报告；已收敛方向的点状�
 ## 同仓方法依赖
 
 `skills/anysearch/SKILL.md`、`skills/spec-specify/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。
+
+薄入口：`node skills/deep-research/scripts/research-run.mjs --input <caller输入.json>`。输入含 question、decisionAxis、queries（query/language）、recordDir、taskId、stage；CLI 没有宿主函数时产出 unavailable 原件，不能冒检索。实际检索由模块 caller 调用 `runResearch({ ...input, search, fetch })`；search 返回实际 tool 与 results（url/source_tier），fetch 返回实际 tool、text 与 locator。无真实缺口时不启调研，只写跳过与依据。零结果写 unavailable、error_class=no_results、原因「检索已执行且0结果，非工具不可用」，保查询、工具与空返回；工具缺席与失败独立记 tool_unavailable。三角测量及独立复核由 R3/R5 承接，脚本 completed 仅表示原文已取回并成报告。
+
+唯一消费者是按 R0–R5 调用的 make-decision 主会话与 build-plan；owner 为本技能维护者。等价宿主检索—记录—发布入口接管且正文改指它，或技能退役时删除此薄入口，不新增报告格式或平台。
+
+模块 caller 提供真实 `fallback` 审批状态/requested_route/approval_ref；备用 callable 必须预先声明实际 `search.route=web_search`、`fetch.route=web_fetch`，入口仅按真实调用生成used_routes与tool_usage provenance。awaiting/declined不调用备用能力。现有producer要求approved报告同时有两路实际调用，若search先失败或零结果而fetch未发生，明确抛「出版限制」并保原始原因/内存report，不伪造fetch、不降级审批、不宣称已出版unavailable。单URL可恢复失败保原URL/原因/open_items并继续其它候选及后续查询；明确AUTHORIZATION_DENIED/PERMISSION_DENIED/AUTHENTICATION_FAILED/INVALID_CREDENTIALS/INPUT_INVALID码或401/403停止同一路径，不能凭错误文本猜。完成报告仍保失败缺口；全部不足保真实unavailable。原文tool/text/locator结构异常同样进入失败记法。

@@ -2,6 +2,7 @@
   "schema_version": 1,
   "skill": "deep-research",
   "files": [
-    "SKILL.md"
+    "SKILL.md",
+    "scripts/research-run.mjs"
   ]
 }

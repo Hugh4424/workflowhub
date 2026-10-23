@@ -60,3 +60,17 @@ caller给真实问题、材料/任务事实/测试/审查/真实改动清单、�
 写作读 skills/spec-specify/SKILL.md「技能写作规范（WR001）」唯一正文，不复制。生成用本包templates/overview-template.html，无外部依赖；独立浏览器验收读 skills/isolated-browser-qa/SKILL.md。来源/U1–U13取舍唯一登记在skills/catalog.yaml及skills/reuse-registry.md。
 
 只改方法、不搬上游打包程序。首个真实页不满足用户、考虑退回renderer时，先报约+977KB、三层许可（两文本未随包发布）、黑盒不可重建/自修；补许可/真实决定后评估，模板绿不默认回退，数字仅作来源对照。ADR-012/研究原件两历史先例：每阶段一页装置按迁移表全删；监控页生成者被删、页面陈旧33天，承诺的退役提示条实测不存在。材料枚举测试固定白名单、不扫目录，新增页不自动报警；禁第二进度权威，允许只读派生。
+
+生成入口由 caller 在「共同刷新」执行，唯一消费者是阶段主会话与 verify-code，owner 为本技能维护者；等价宿主原生入口接管且正文改指它，或技能退役时删除薄脚本。
+
+1. 运行 `node skills/answer-as-page/scripts/render-answer-page.mjs --task-path <认证任务根> --report <run-checks stdout 报告路径> --out-dir <证据目录> --html <名称>.html --data <caller完整DATA.json>`。脚本只消费已存 `rings[]` 与 decision-log，不代跑检查。
+2. 用宿主浏览器能力打开生成的 HTML；模块 caller 可注入 `open`，CLI 缺宿主能力时明确返回 `opened:false`，不得据生成成功宣称已打开。
+3. 读回 HTML 与 `.nodes.json`，核对四个键与 `nodes[].stable_id/content_digest`；未自动打开时写「未自动打开」与原因。
+
+本入口由 caller 从当前材料、facts、实际diff与执行原件提供完整 `pageData`（CLI `--data`），含真实task/taskIdentity/stageLabel/stages、15类词汇内有源objects、edges/sideEdges、phaseTasks及progress；保持原类型、来源和阶段语义，不为凑齐词汇造实例。缺完整输入明确报错。`rings[]` 只作为检查环与侧车摘要，不能代任务数据、变造acc或req。输出对在既有本地锁内先读旧件/拒目录及别名，再安全写并读回；次发布失败恢复本次实际改动，遇并发新身份或字节保留新件并明确报告恢复不完整，不覆盖未知版本。
+
+CLI 的认证任务位置由 `openTask` 与 `openCurrentTaskWorkspace` 既有owner读回；regular任务不得把target_repo_root主仓当当前任务材料路径，缺registration或身份不符明确失败，不回落main。
+
+完整caller须保模板实际消费字段：每节点有源title与展示派生short（可同title），phase/risk有label；stages有name/hint/state，changedChips/initialChanged是首版可为空的展示偏好数组，提供items/plan时须数组。缺必读字段生成前明确拒绝；15类词汇无源不凑实例。生成件的HTML title从真实task做HTML escape后替换，protected模板原文件字节不改，不注入脚本。
+
+输入边界：业务对象 ID 和所有引用使用安全 ASCII 标识符 `[A-Za-z0-9][A-Za-z0-9_.:-]*`，拒绝 `__proto__`、`prototype`、`constructor`；业务对象不得占用 `ring:`。kind 使用模板已知类型；stage.state 仅 `done/now/todo`，status 若提供须为非空对象，text 为字符串，tone 仅 `ok/accent/fail/unk`。phase、边、phaseTasks、progress 引用须对应真实已声明对象与类型关系；initialChanged 和 changedChips.id 允许已声明业务对象或当前报告实际存在的 ring ID，不能引用未出现的 ring。非法输入在 HTML 与侧车落盘前明确报错。
