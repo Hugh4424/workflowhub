@@ -410,7 +410,41 @@ function analyzeMarkdownTableCells(line) {
     .map((cell) => cell.trim());
 }
 
-export function validatePostPhaseContract({ spec, index, phases, reviewReadScope } = {}) {
+// Report only the caller-selected Phase against its own baseline scope. These
+// facts never change contract errors or authorize execution.
+function reconcileWriteSetDiff({ phaseRows, phase_id, changeScope, reviewReadScope, selectedPhaseScopeValid }) {
+  const unavailable = reason => Object.freeze({ status: "unavailable", reason,
+    out_of_scope: Object.freeze([]), listed_not_changed: Object.freeze([]),
+    matched: Object.freeze([]), external_write_surfaces: Object.freeze([]) });
+  const phase = phaseRows.find(row => row.id === phase_id);
+  if (!phase) return unavailable("A known current phase_id is required");
+  if (!selectedPhaseScopeValid) return unavailable("Current Phase write-set declaration is invalid or differs from its index");
+  if (changeScope?.status !== "recorded" || !Array.isArray(changeScope.changed_paths)) {
+    return unavailable(changeScope?.reason ?? "Recorded current-Phase changeScope.changed_paths is required");
+  }
+  if (changeScope.changed_paths.some(path => typeof path !== "string" || !path || isAbsolute(path)
+      || path.split("/").some(part => !part || part === "." || part === ".."))) {
+    return unavailable("changeScope contains an invalid repository-relative path");
+  }
+  const local = [], external = [];
+  for (const path of phase.write_set) {
+    const identity = writePathIdentity(path, reviewReadScope);
+    if (!isAbsolute(path)) { local.push(path); continue; }
+    // Approved absolute repository aliases use the existing identity owner.
+    if (identity.startsWith('["wh",')) local.push(JSON.parse(identity)[1]);
+    else external.push(path);
+  }
+  const declared = new Set(local), changed = new Set(changeScope.changed_paths);
+  const sorted = paths => Object.freeze([...paths].sort());
+  return Object.freeze({ status: "recorded", phase_id,
+    out_of_scope: sorted([...changed].filter(path => !declared.has(path))),
+    listed_not_changed: sorted([...declared].filter(path => !changed.has(path))),
+    matched: sorted([...declared].filter(path => changed.has(path))),
+    external_write_surfaces: sorted(new Set(external)),
+    coverage_limit: "Caller-supplied current-Phase baseline scope only; external write surfaces are not covered" });
+}
+
+export function validatePostPhaseContract({ spec, index, phases, reviewReadScope, changeScope, phase_id } = {}) {
   const errors = [];
   if (!nonEmptyString(spec)) errors.push("spec.md content is required");
   if (!nonEmptyString(index)) errors.push("phases/index.md content is required");
@@ -429,6 +463,7 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
     errors.push("Phase index must remain pointer-only; command, oracle, and evidence belong to Phase files");
   }
   const phaseRows = [];
+  let selectedPhaseScopeValid = false;
   const indexedPaths = new Set();
   const writeOwners = new Map();
   const phaseAncestors = new Map();
@@ -671,6 +706,7 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
       taskCards.push(Object.freeze({ id: taskId, phase: expectedId, frs: Object.freeze(cardFrs), acs: Object.freeze(cardAcs), oracle: fields["GREEN oracle"] ?? null, dependency: fields.Dependency ?? "" }));
     }
     const taskIds = cards.map(({ heading }) => heading.match(/^(T\d{3,})\b/)?.[1]).filter(Boolean);
+    if (expectedId === phase_id) selectedPhaseScopeValid = scopeValid;
     phaseRows.push(Object.freeze({ id: expectedId, path: expectedPath, write_set: Object.freeze(scopeValid ? declaredWriteSet : []), dependency, frs: Object.freeze(frs), acs: Object.freeze(acs), task_ids: Object.freeze(taskIds), command, oracle }));
   }
   for (const path of Object.keys(phases)) {
@@ -738,6 +774,7 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
   for (const id of acceptedAcs) if (!coveredAcs.includes(id)) errors.push(`AC has no executable Phase task coverage: ${id}`);
   if (acceptedFrs.length === 0 || acceptedAcs.length === 0) errors.push("spec.md requires accepted FR and AC definitions");
   const facts = Object.freeze({
+    write_set_reconciliation: reconcileWriteSetDiff({ phaseRows, phase_id, changeScope, reviewReadScope, selectedPhaseScopeValid }),
     phase_count: phaseRows.length,
     task_count: [...new Set(phaseRows.flatMap((row) => row.task_ids))].length,
     phase_rows: Object.freeze(phaseRows),
