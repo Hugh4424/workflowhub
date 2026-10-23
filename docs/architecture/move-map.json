@@ -5812,7 +5812,7 @@
       "destination": "tests/contract/n11-pairwise-judge.test.mjs",
       "status": "add",
       "role": "test",
-      "responsibility": "匿名双序判定与不足样本反例",
+      "responsibility": "验证真实CLI的双序身份归一化、缺样本固定分母、匿名化、可信profile完整性、实际业务产物/source hash与成本未知不冒收益。",
       "owner": "N11/P8 实施者；维护者为用户",
       "consumer": "P8 实施者运行 Phase gate 命令",
       "module_consumers": [],
@@ -5820,7 +5820,7 @@
         "specs/n11-same-condition-eval-20261022/phases/P8-判定与成本.md"
       ],
       "delete_condition": "只有具名职责退役、真实消费者已由经审查的替代承接且用户授权删除时移除；历史执行与失败原件保留。",
-      "retention_basis": "N11/P8 已批准 Phase 中的新增路径预登记；P1 已实读 specs/n11-same-condition-eval-20261022/phases/P8-判定与成本.md 的路径与调用安排。当前文件尚未实现；仅登记批准的职责和拟接线消费者，不宣称 active 或已执行。 不新增控制面、不替代任务 facts。"
+      "retention_basis": "N11/P8具名contract测试已实现；目标RED/GREEN和真实载荷缺陷反例的执行事实由本任务原件引用，不以登记代真实判官判断或业务验收。"
     },
     {
       "source": "tests/acceptance/n11-eval-run-check.test.mjs",
@@ -5887,15 +5887,17 @@
       "destination": "tools/cli/n11-pairwise-judge.mjs",
       "status": "add",
       "role": "production",
-      "responsibility": "读答案对、匿名正反双序判定与复算",
+      "responsibility": "P8限定CLI读取P7真实stage业务产物、匿名双序native packet判定、原件replay与实际transport成本字段读取；复用既有可信profile/native driver和task证据，不新增runtime命令或成本账本。",
       "owner": "N11/P8 实施者；维护者为用户",
-      "consumer": "P8/T019 执行者按本 Phase 声明 CLI 消费 P7 答案对",
-      "module_consumers": [],
+      "consumer": "P8/T019执行者实际调用prepare/judge/replay；tests/contract/n11-pairwise-judge.test.mjs直调公开函数与CLI；用户和verify-code按判定原件复算。",
+      "module_consumers": [
+        "tests/contract/n11-pairwise-judge.test.mjs"
+      ],
       "named_data_readers": [
         "specs/n11-same-condition-eval-20261022/phases/P8-判定与成本.md"
       ],
       "delete_condition": "只有具名职责退役、真实消费者已由经审查的替代承接且用户授权删除时移除；历史执行与失败原件保留。",
-      "retention_basis": "N11/P8 已批准 Phase 中的新增路径预登记；P1 已实读 specs/n11-same-condition-eval-20261022/phases/P8-判定与成本.md 的路径与调用安排。当前文件尚未实现；仅登记批准的职责和拟接线消费者，不宣称 active 或已执行。 不新增控制面、不替代任务 facts。"
+      "retention_basis": "N11/P8当前CLI已实现，限定产物/真实调用/缺口由本任务P8判定与成本原件引用，不以登记宣称模型成功。替代临时手工拼接判定，不扩公共provider协议、P7原件或任务进度。"
     },
     {
       "source": "docs/research/n11-modeltest-adaptation-runbook.md",
@@ -5934,13 +5936,13 @@
       "role": "documentation",
       "responsibility": "判定口径、54/23 逐项复核与成本四组说明",
       "owner": "N11/P8 实施者；维护者为用户",
-      "consumer": "P9 执行者读取 P8 结论原件",
+      "consumer": "P8执行者串行写判定/54与23逐项复核和成本节；用户与verify-code读取限定范围、原始判定及缺口，P9后继仅消费引用，不预称已读。",
       "module_consumers": [],
       "named_data_readers": [
         "specs/n11-same-condition-eval-20261022/phases/P8-判定与成本.md"
       ],
       "delete_condition": "只有具名职责退役、真实消费者已由经审查的替代承接且用户授权删除时移除；历史执行与失败原件保留。",
-      "retention_basis": "N11/P8 已批准 Phase 中的新增路径预登记；P1 已实读 specs/n11-same-condition-eval-20261022/phases/P8-判定与成本.md 的路径与调用安排。当前文件尚未实现；仅登记批准的职责和拟接线消费者，不宣称 active 或已执行。 不新增控制面、不替代任务 facts。"
+      "retention_basis": "N11/P8报告当前已写，按父PRD原始77分母逐项引用当前消费者与未取得行为；成本与判定仅承接本次P7实际原件，不作首次迁移/首验或新进度权威。"
     },
     {
       "source": "docs/research/n11-integration-runbook.md",
