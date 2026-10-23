@@ -154,7 +154,7 @@ export async function renderAnswerPage({ reportPath, decisionLogPath, pageData, 
   const htmlPath = join(directory, htmlName), nodesPath = join(directory, nodesName);
   try {
     if (typeof open !== 'function') throw Error('缺宿主浏览器能力');
-    if (await open(htmlPath) === false) throw Error('宿主未打开');
+    if (await open(htmlPath) !== true) throw Error('宿主未打开');
     return { htmlPath, nodesPath, opened: true };
   } catch (error) { return { htmlPath, nodesPath, opened: false, open_reason: `未自动打开: ${error.message}` }; }
 }

@@ -124,8 +124,12 @@ export function followEvidenceReferences(content, add, missing, isDirectory = ()
   // Only existing explicit cell-local reference spellings; unsupported files are
   // reported without reading binary bytes as text or crawling any directory.
   for (const match of content.matchAll(/(?:quality\/evidence\/|specs\/US-07-modeltest-e2e-evaluation-redesign\/)[^\s`"'<>()[\]{}，；：、。,]+/g)) {
-    // A fragment names a section in an existing file; a <placeholder> is not a named file.
-    if (content[match.index + match[0].length] === '<') continue;
+    // Keep explicit path placeholders (for example test-<case>.json), but pass
+    // real refs followed by HTML markup to add(), which owns missing reporting.
+    const following = content.slice(match.index + match[0].length);
+    const placeholder = following.startsWith('<') && /^<[^>\r\n]+>/.test(following)
+      && (match[0].endsWith('/') || /(?:^|\/)[^/<>]+[-_]$/.test(match[0]));
+    if (placeholder) continue;
     const ref = match[0].split('#', 1)[0].replace(/[.;:]+$/, '');
     const extension = /\.([a-zA-Z0-9]+)$/.exec(ref)?.[1]?.toLowerCase();
     if (!extension) {

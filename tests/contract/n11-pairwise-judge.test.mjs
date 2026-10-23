@@ -104,6 +104,11 @@ describe('OCR085 reference boundaries', () => {
     const reads=[],missing=[];followEvidenceReferences('quality/evidence/report.json#probe quality/evidence/test-<case>.json quality/evidence/tmp quality/evidence/result',ref=>reads.push(ref),missing,ref=>ref==='quality/evidence/tmp');
     expect(reads).toEqual(['quality/evidence/report.json']);expect(missing).toEqual(['quality/evidence/result (not included: unsupported evidence type without extension)']);
   });
+  it('passes a real evidence ref followed by an HTML tag to add so a missing file stays explicit', () => {
+    const missing=[];const existing=new Set();
+    followEvidenceReferences('quality/evidence/report.json<br>',ref=>{if(!existing.has(ref))missing.push(`${ref} (missing)`);},missing);
+    expect(missing).toEqual(['quality/evidence/report.json (missing)']);
+  });
 });
 
 describe('OCR085 named file versus directory declaration', () => {

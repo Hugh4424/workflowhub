@@ -47,7 +47,10 @@ export async function runResearch({ question, decisionAxis, queries, search, fet
   };
   const returnedRoute = (result, invoked) => {
     if (result.route !== undefined && (!text(result.route) || result.route !== invoked)) throw Error('returned route must match the actual invoked callback route');
-    if (fallbackRoutes.has(result.tool) && !invoked) throw Error('fallback tool requires explicit callback.route provenance before invocation');
+    if (fallbackRoutes.has(result.tool)) {
+      if (result.tool !== invoked) throw Error(`fallback tool ${result.tool} must match actual invoked route`);
+      if (approval.approval_status !== 'approved') throw Error(`fallback tool ${result.tool} requires real approval before invocation`);
+    }
     return invoked;
   };
 
