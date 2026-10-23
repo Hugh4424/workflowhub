@@ -1,4 +1,16 @@
 stage: make-decision
+# Local portable execution files; public release policy remains with its owner.
+files:
+  - SKILL.md
+  - skill-deps.yaml
+  - steps.json
+  - scripts/entry-evaluation.mjs
+  - flows/small/SKILL.md
+  - flows/small/steps.json
+  - flows/normal/SKILL.md
+  - flows/normal/steps.json
+  - flows/planning/SKILL.md
+  - flows/planning/steps.json
 skills:
   - name: knowledge-graph
     path: skills/knowledge-graph/SKILL.md

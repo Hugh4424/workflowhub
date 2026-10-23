@@ -276,7 +276,7 @@
       "role": "production",
       "responsibility": "技能 bundle 发布（去双层 hash 后）由本文件承接",
       "owner": "B5/P6 / MT-1-017",
-      "consumer": "当前直接模块消费者：runtime/distribution/runner-release.mjs, tests/contract/review-input-bounds-portability.test.mjs, tests/integration/runner-clean-install.test.mjs",
+      "consumer": "当前直接模块消费者：runtime/distribution/runner-release.mjs, tests/contract/review-input-bounds-portability.test.mjs, tests/integration/runner-clean-install.test.mjs；N11内部local payload新增外仓消费者：ModelTest build-us07-workflowhub-task.mjs/materializeStageWorkflow，经冻结distribution root调用现resolvePortableStageFiles读取各侧真实source root，不改变默认公开release枚举/政策，不授予外发或host执行权限",
       "module_consumers": [
         "runtime/distribution/runner-release.mjs",
         "tests/contract/review-input-bounds-portability.test.mjs",

@@ -6,6 +6,7 @@ import yaml from "js-yaml";
 
 import { createSkillBundleContract } from "../interface/runner-contract.mjs";
 import { validateSkillBundle } from "../adapters/local-skill-resolver.mjs";
+import { resolveStageSkillPackages } from "../stage/stage-skill-runtime.mjs";
 
 const STAGES = Object.freeze(["make-decision", "build-plan", "build-code", "verify-code"]);
 const PORTABLE_WORKFLOW_KIND = "portable_workflow";
@@ -132,16 +133,17 @@ function ensureDestinationParent(destination, locator) {
   }
 }
 
-function assertLocator(locator) {
+function assertLocator(locator, { localPayload = false } = {}) {
   if (!locator || locator.startsWith("/") || locator.startsWith("\\") || /^[A-Za-z]:/.test(locator)
       || locator.includes("\\") || locator.split("/").some((segment) => segment === "." || segment === "..")) {
     throw new Error(`release locator must be contained and relative: ${locator}`);
   }
-  if (FORBIDDEN.test(locator)) throw new Error(`skill bundle contains forbidden path: ${locator}`);
+  const runtimeSource = localPayload && /^runtime\/evidence\/[^/]+\.mjs$/.test(locator);
+  if (FORBIDDEN.test(locator) && !runtimeSource) throw new Error(`skill bundle contains forbidden path: ${locator}`);
 }
 
-function readStableFile(root, locator, label = "release file") {
-  assertLocator(locator);
+function readStableFile(root, locator, label = "release file", options = {}) {
+  assertLocator(locator, options);
   const packageRoot = fs.realpathSync(root);
   const source = path.join(packageRoot, locator);
   let fd;
@@ -241,7 +243,7 @@ function validatePortableReleaseDeclarations(manifest, seen, root) {
   return [...declarations.values()];
 }
 
-function addSkillClosure(root, name, locators, visited) {
+function addSkillClosure(root, name, locators, visited, context = {}) {
   if (visited.has(name)) return;
   visited.add(name);
   const base = `skills/${name}`;
@@ -254,6 +256,15 @@ function addSkillClosure(root, name, locators, visited) {
     assertLocator(locator);
     locators.add(locator);
   }
+  if (context.localPayload) {
+    const registration = context.registry.get(name);
+    if (!registration) throw new Error(`skill has no catalog owner: ${name}`);
+    for (const ref of registration.dependency_closure ?? []) {
+      const match = String(ref).match(/^skills\/([a-z][a-z0-9-]*)(?:\/SKILL\.md)?$/);
+      if (!match) throw new Error(`invalid catalog dependency: ${name} -> ${ref}`);
+      addSkillClosure(root, match[1], locators, visited, context);
+    }
+  }
   if (name !== "wh-review") return;
   const plan = JSON.parse(fs.readFileSync(path.join(root, base, "stage-skill-plan.json"), "utf8"));
   for (const definition of Object.values(plan.stages ?? {})) {
@@ -262,12 +273,12 @@ function addSkillClosure(root, name, locators, visited) {
       for (const lens of [
         ...(variant.required_skills ?? []),
         ...(variant.optional_skills ?? []).map((entry) => typeof entry === "string" ? entry : entry.name),
-      ]) addSkillClosure(root, lens, locators, visited);
+      ]) addSkillClosure(root, lens, locators, visited, context);
     }
   }
 }
 
-function addStaticImportClosure(root, locators, { requireDependencies = false } = {}) {
+function addStaticImportClosure(root, locators, { requireDependencies = false, localPayload = false } = {}) {
   const queue = [...locators];
   const imports = /(?:import|export)\s+(?:[^"']*?\s+from\s+)?["']([^"']+)["']|import\s*\(\s*["']([^"']+)["']\s*\)/g;
   while (queue.length) {
@@ -280,12 +291,19 @@ function addStaticImportClosure(root, locators, { requireDependencies = false } 
       const base = path.posix.normalize(path.posix.join(path.posix.dirname(locator), specifier));
       const candidates = path.posix.extname(base) ? [base] : [`${base}.mjs`, `${base}.js`, path.posix.join(base, "index.mjs")];
       const dependency = candidates.find((candidate) => fs.existsSync(path.join(root, candidate)));
-      if (!dependency && requireDependencies && base.startsWith("skills/")) {
+      if (!dependency && requireDependencies && (localPayload || base.startsWith("skills/"))) {
         throw new Error(`skill bundle import is missing: ${locator} -> ${specifier}`);
       }
       if (!dependency || locators.has(dependency)) continue;
-      if (!dependency.startsWith("skills/")) continue;
-      if (FORBIDDEN.test(dependency)) throw new Error(`runtime source imports forbidden Skill Bundle content: ${locator} -> ${dependency}`);
+      if (!dependency.startsWith("skills/")) {
+        if (!localPayload) continue;
+        if (!dependency.startsWith("runtime/")) {
+          const registry = JSON.parse(readStableFile(root, "docs/architecture/move-map.json", "source ownership registry"));
+          const declared = registry.entries?.find(entry => entry.source === dependency && entry.role === "production" && entry.status === "retain");
+          if (!declared) throw new Error('portable import has no registered production source owner: ' + locator + ' -> ' + dependency);
+        }
+      }
+      assertLocator(dependency, { localPayload });
       locators.add(dependency);
       queue.push(dependency);
     }
@@ -296,13 +314,19 @@ function collectSourceClosure(root) {
   return collectDeclaredClosure(root);
 }
 
-function collectDeclaredClosure(root, { release = false } = {}) {
+function collectDeclaredClosure(root, { release = false, localPayload = false, stages = STAGES, includePortableWorkflows = true } = {}) {
   const locators = new Set();
   const visitedSkills = new Set();
+  const context = { localPayload };
+  if (localPayload) {
+    const catalog = yaml.load(readStableFile(root, "skills/catalog.yaml", "skill registry").toString("utf8"));
+    context.registry = new Map((catalog.skills ?? []).map(entry => [entry.name, entry]));
+    locators.add("skills/catalog.yaml");
+  }
   const declaredPortableWorkflows = workflowDeclarations(root).portable
     .filter((entry) => entry.kind === PORTABLE_WORKFLOW_KIND)
     .map(({ workflow }) => workflow);
-  const workflows = [...new Set([...STAGES, ...declaredPortableWorkflows])];
+  const workflows = [...new Set([...stages, ...(includePortableWorkflows ? declaredPortableWorkflows : [])])];
   for (const workflow of workflows) {
     const base = `workflows/${workflow}`;
     const workflowDirectory = path.join(root, base);
@@ -315,31 +339,45 @@ function collectDeclaredClosure(root, { release = false } = {}) {
         throw new Error(`portable workflow directory escapes package root: ${workflow}`);
       }
     }
-    const declarationFiles = declaredPortableWorkflows.includes(workflow)
-      ? PORTABLE_WORKFLOW_FILES : ["SKILL.md", "skill-deps.yaml"];
+    const loaded = localPayload ? resolveStageSkillPackages({ packageRoot: root, stage: workflow }) : null;
+    const manifest = loaded?.manifest ?? yaml.load(fs.readFileSync(path.join(root, base, "skill-deps.yaml"), "utf8"));
+    // Public release policy keeps its existing enumeration. The local execution
+    // consumer uses the same owner and source declarations, not a second list.
+    const declarationFiles = localPayload ? (manifest.files ?? PORTABLE_WORKFLOW_FILES)
+      : declaredPortableWorkflows.includes(workflow) ? PORTABLE_WORKFLOW_FILES : ["SKILL.md", "skill-deps.yaml"];
+    if (localPayload && (!Array.isArray(declarationFiles) || new Set(declarationFiles).size !== declarationFiles.length
+      || PORTABLE_WORKFLOW_FILES.some(file => !declarationFiles.includes(file)))) throw new Error(`workflow files declaration is invalid: ${workflow}`);
     for (const name of declarationFiles) {
-      if (release || fs.existsSync(path.join(root, base, name))) locators.add(`${base}/${name}`);
+      if (localPayload && (typeof name !== "string" || path.isAbsolute(name) || name.includes("\\") || name.split("/").includes(".."))) throw new Error(`workflow file escapes its owner: ${workflow}/${name}`);
+      const locator = path.posix.join(base, name);
+      if (localPayload) readStableFile(root, locator, "local workflow source");
+      if (release || localPayload || fs.existsSync(path.join(root, base, name))) locators.add(locator);
     }
-    const manifest = yaml.load(fs.readFileSync(path.join(root, base, "skill-deps.yaml"), "utf8"));
     for (const dependency of manifest.skills ?? []) {
-      // P3 keeps name/path/trigger declarations. A missing bundle field uses
-      // the same conventional sibling already consumed by addSkillClosure;
-      // an explicitly supplied field must still name that real skill bundle.
-      const bundleLocator = dependency?.bundle === undefined
-        ? `skills/${dependency?.name}/skill-bundle.json` : dependency.bundle;
-      if (!dependency || !/^[a-z][a-z0-9-]*$/.test(dependency.name ?? "")
-          || dependency.path !== `skills/${dependency.name}/SKILL.md`
-          || bundleLocator !== `skills/${dependency.name}/skill-bundle.json`) {
-        throw new Error(`skill dependency path/bundle does not match its declared name: ${workflow}`);
-      }
+      const bundleLocator = dependency?.bundle === undefined ? `skills/${dependency?.name}/skill-bundle.json` : dependency.bundle;
+      if (!dependency || !/^[a-z][a-z0-9-]*$/.test(dependency.name ?? "") || dependency.path !== `skills/${dependency.name}/SKILL.md`
+        || bundleLocator !== `skills/${dependency.name}/skill-bundle.json`) throw new Error(`skill dependency path/bundle does not match its declared name: ${workflow}`);
+      if (localPayload && !loaded.payloads.has(dependency.name)) throw new Error(`unresolved stage skill: ${workflow}/${dependency.name}`);
       validateSkillBundle(root, bundleLocator, dependency.path);
-      addSkillClosure(root, dependency.name, locators, visitedSkills);
+      addSkillClosure(root, dependency.name, locators, visitedSkills, context);
     }
-    const prompt = fs.readFileSync(path.join(root, base, "SKILL.md"), "utf8");
-    for (const name of promptSkillReferences(prompt)) addSkillClosure(root, name, locators, visitedSkills);
+    for (const file of (localPayload ? declarationFiles.filter(file => file.endsWith(".md")) : ["SKILL.md"])) {
+      const prompt = fs.readFileSync(path.join(root, base, file), "utf8");
+      for (const name of promptSkillReferences(prompt)) addSkillClosure(root, name, locators, visitedSkills, context);
+    }
   }
-  addStaticImportClosure(root, locators, { requireDependencies: release });
+  addStaticImportClosure(root, locators, { requireDependencies: release || localPayload, localPayload });
   return locators;
+}
+
+// Internal local execution input; does not build/publish a public release or
+// grant permission for provider delivery. Source/use boundaries remain facts.
+export function resolvePortableStageFiles({ packageRoot, stage } = {}) {
+  const root = assertRoot(packageRoot, "packageRoot");
+  if (!STAGES.includes(stage)) throw new Error(`unsupported portable stage: ${stage}`);
+  const files = [...collectDeclaredClosure(root, { localPayload: true, stages: [stage], includePortableWorkflows: false })].sort();
+  for (const locator of files) readStableFile(root, locator, "local portable source", { localPayload: true });
+  return Object.freeze({ root, stage, files: Object.freeze(files) });
 }
 
 function captureSourceBytes(root, locators) {

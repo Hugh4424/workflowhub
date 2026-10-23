@@ -329,7 +329,7 @@ N1–N10 的交付没有带来可观察的流程改善。用户观察到的具�
   - **场景**：SCN-003
   - **验收**：AC-N11-6
 - **FR-PLAN-003**：Phase 声明写集与真实 diff 逐路径对账，越界与「列了没改」都被报出，关联 PFACT-010、SCN-003、AC-N11-20
-  - **范围边界**：复用既有 build-code capture 返回的 `changed_paths` 事实（receipt 持久字节不含该字段，实读 `tests/contract/build-code-change-scope.test.mjs:61`）；不新增第二账本
+  - **范围边界**：复用既有 `workflows/build-code/change-scope.mjs` 独立 producer 的 `changed_paths`；当前 `capture.mjs` 仅委托 `task.captureCommand`，不返回该事实，旧capture测试不证明当前接线。调用者提供当前Phase与该Phase基准scope，不改receipt持久字节、不新增第二账本
   - **依据**：R-006、U-010
   - **场景**：SCN-003
   - **验收**：AC-N11-20
@@ -571,7 +571,7 @@ ModelTest 三个卡点修通：接口改为当前 API（async、`activation_coho
 - **接口与数据流**：
   - 验收规则：读 Phase 模板与 verify-code 正文，产出「默认最小＋一次例外＋跳过留痕」的规则文本与负例测试。
   - 讨论质量：读 Talk 方法与 make-decision 步骤，产出五类分析与前后展示的规则；步骤覆盖由 `run-checks --task-path` 输出缺失步骤。
-  - 计划质量：`validatePostPhaseContract` 增加「声明写集 vs capture 返回的 `changed_paths`」对账，输出越界与未改项清单。
+  - 计划质量：`validatePostPhaseContract` 唯一生产「当前Phase声明写集 vs 该Phase基准的 `changed_paths`」对账 facts；既有 `check-stage-quality` 显式只读报告模式消费已收集材料与scope并原样输出三类清单，默认扫描／self-test不变，不新增公共runtime命令或持久对象。
   - 审查通道：聚合器把每路终态独立记录；任一路取消不再覆盖整组状态；已得 findings 保留为 partial；覆盖字段由 broker 路写 `read`/`unread`。
   - 评测适配：ModelTest 绑定改为当前 async API 与 `activation_cohort="post"`，不再引用已删桥；runner 出新快照；配置补 `wh_review.profiles`。
   - 判定与成本：判定脚本读两份答案，正反各判一次；成本表按四组分列，缺来源写 unavailable。
@@ -596,7 +596,7 @@ ModelTest 三个卡点修通：接口改为当前 API（async、`activation_coho
   - `tests/contract/n11-pairwise-judge.test.mjs`（P8）
   - `tests/acceptance/n11-integration-acceptance.test.mjs`（P9）
   - `docs/research/n11-integration-runbook.md`（P9）
-  - 外部仓新件（不在本仓 move-map，登记在 P6 runbook 与证据）：`/Users/Hugh/Hugh/Project/ModelTest/evaluation-assets/test-fixtures/us07-workflowhub/task-input-v2.json`、`/Users/Hugh/Hugh/Project/ModelTest/evaluation-assets/runner/workboard-review-queue/v0.4.0/runner-config.json`
+  - 外部仓新件（不在本仓 move-map，登记在 P6 runbook 与证据）：`/Users/Hugh/Hugh/Project/ModelTest-n11-same-condition-eval-20261022/evaluation-assets/test-fixtures/us07-workflowhub/task-input-v2.json`、`/Users/Hugh/Hugh/Project/ModelTest-n11-same-condition-eval-20261022/evaluation-assets/runner/workboard-review-queue/v0.4.0/runner-config.json`
 - **修改**：见各 Phase 契约头；全局不重复声明。
   - P5 窄例外（TCR025）：`tools/cli/check-decision-log-chain.mjs` 同一实际输入 buffer／执行源码签名 → 现 stdout 原件 → `decisionOriginal`，owner 与退役条件沿 FR-REC-003；不扩 receipt 或接口。
 - **禁止改动**：
@@ -753,6 +753,8 @@ ModelTest 三个卡点修通：接口改为当前 API（async、`activation_coho
 失败：零问题收口且无依据、1–2 问代替、只用一个包冒充全部、讨论前不展示、讨论后不复述、把 build-code 拉来逐步确认。
 证据：讨论记录与用户答复原件。
 
+2026-10-23 用户退出决定（原要求与分母保留追溯）：用户原话「不要验收复杂任务，太浪费时间」，真实答复原件为 /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n11-same-condition-eval-20261022/quality/evidence/2026-10-22-032-ac12-user-cancellation-original.json。据此退役本条中「下一张复杂任务的一简一繁两个工作包真实讨论验收」这一验收要求；该项未执行，不记 pass，也不再作为待完成项阻止本任务收口。五类分析、讨论前后要求、简明语言、P2 的规则／CLI 实现及针对性测试仍按本任务原合同交付；静态检查通过不证明已退役的真实讨论效果。此决定只改变本任务该项验收执行范围，不删除原始需求、不改通用复杂任务方法，也不把本任务或 small 会话补作原验收。
+
 - **AC-N11-13**：不新增技能/标准/模板；新增实现脚本须登记唯一消费者、责任人与删除条件；有负例或检查
 验证：判定方式：机器可判；`git diff --name-only` 逐路径核；读 P1 登记与负例；执行 owner 是 P1 实施者，verify-code 复核。
 通过：无新增技能/标准/模板；每个新增脚本在 `docs/architecture/move-map.json` 有登记行（外部仓新件按 P6 runbook 与证据登记，不适用 move-map）；负例证明未登记脚本被报出。
@@ -784,6 +786,7 @@ ModelTest 三个卡点修通：接口改为当前 API（async、`activation_coho
 证据：写入 diff 与读回原件。
 
 - **AC-N11-18**：归档能真执行：用薄命令完成移动、读回、授权核对；不建平台
+本条验收输入的用户覆盖决定（2026-10-23）：下文“当前任务材料”改用已本地交付的独立小任务 `n11-p1-small-scope-smoke` 四份当前材料，仍须真实归档、授权与读回。用户逐字答复“同意，仅归档该小任务材料”，真实异步答复由主会话转递，原件 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n11-same-condition-eval-20261022/quality/evidence/2026-10-23-004-p4-small-archive-user-reply.json`；只执行已展示的本地 bare remote、必要 local commit→merge→archive 链，到 archive 即停；保留仓库、worktree、分支、NOTE 与全部证据，不归档 N11 实施中材料，不执行删除/cleanup/外网 remote。原通过失败条件及本条分母保留。
 验证：判定方式：需真实环境+用户在场；执行一次真实归档并读回；输入是当前任务材料；执行 owner 是 P4 实施者。
 通过：一条命令完成移动；归档后读回成功；授权核对有原件。
 失败：只有人读步骤、无可用操作。
@@ -796,7 +799,7 @@ ModelTest 三个卡点修通：接口改为当前 API（async、`activation_coho
 证据：进程退出记录与部分结果原件。
 
 - **AC-N11-20**：计划写集与真实改动对账：Phase 声明写集与真实 diff 逐路径一致；越界与「列了没改」都被报出
-验证：判定方式：机器可判；执行 P3 对账检查；输入是 Phase 写集与 build-code capture 返回的 `changed_paths`；执行 owner 是 P3 实施者。
+验证：判定方式：机器可判；执行 P3 对账检查；输入是具名当前Phase写集与既有 change-scope producer 返回的该Phase基准 `changed_paths`；通过现 `check-stage-quality` 显式只读报告消费唯一validator facts，执行 owner 是 P3 实施者。
 通过：越界路径被点名；声明未改路径被点名；一致时输出通过。
 失败：只声明不对账，或越界不报。
 证据：对账输出原件与两类负例。
@@ -883,12 +886,12 @@ ModelTest 三个卡点修通：接口改为当前 API（async、`activation_coho
   - **处理阶段**：全阶段
   - **验证**：抽样表与未做清单
 
-- **OPEN-01**：基线提交哈希 `3068cfd0` 用户未逐字确认
+- **OPEN-01**：已确认基线提交哈希 `3068cfd0`（历史原状态为“用户未逐字确认”；2026-10-23 用户原话“采用 3068cfd0”，原件 `quality/evidence/2026-10-23-058-p7-baseline-user-reply-original.json`；完整 commit/tree 独立核定）
   - **受影响 ID**：FR-RUN-001、AC-N11-5
   - **负责人**：用户
   - **影响**：基线选错则同条件对比不成立
   - **处理阶段**：P7 开工前
-  - **关闭条件或停止**：用户确认哈希或给出替代基线；未答保持未决，不按推荐自动执行
+  - **关闭条件或停止**：已据上述真实答复关闭；原历史条件为用户确认哈希或给出替代基线，未答保持未决。decision-log 原文只读保留。
 
 - **OPEN-02**：P8 判官与平局的具体规则未定
   - **受影响 ID**：FR-JUDGE-001、AC-N11-23
@@ -952,3 +955,12 @@ ModelTest 三个卡点修通：接口改为当前 API（async、`activation_coho
 - 评测链调研：`quality/evidence/decision-log-refs/research-20261022-modeltest-interface.md`
 - 4 份 `docs/research/n11-*.md` runbook 是任务执行辅助，不是技能、标准或模板（U-006 不适用）；各自唯一消费者为对应 Phase 执行者与 verify-code，删除条件见 P1/T002 的 move-map 登记。
 - 覆盖矩阵：`quality/evidence/decision-log-refs/coverage-matrix-5d.md`
+
+P6 独立审后数据/测试增量：`/Users/Hugh/Hugh/Project/ModelTest-n11-same-condition-eval-20261022/evaluation-assets/test-fixtures/us07-workflowhub/fixed-upstream-n11-v2.json`；`/Users/Hugh/Hugh/Project/ModelTest-n11-same-condition-eval-20261022/evaluation-assets/tests/n11-modeltest-adaptation.test.mjs`；来源、consumer、删除条件及真实身份分离见 P6「独立审后窄纠正」，不改原 FR/AC 或评测分母。
+
+P6用户已确认的唯一保护例外：`/Users/Hugh/Hugh/Project/ModelTest-n11-same-condition-eval-20261022/evaluation-assets/scripts/provider-transport.mjs` 仅106 patch最终prompt三处文字及142 patch的1036/1094/1109/1112四字符串文字与必要验证；新增授权原件 `quality/evidence/2026-10-23-145-p6-four-text-user-reply-original.json`（142 SHA256 `c290f65a00ca9d84770a611fb7c5f3bc1aba28dcb7a3a45e96cf079ec607b74e`），原106授权原件 `quality/evidence/2026-10-23-126-p6-three-text-and-p9-user-reply-original.json`；其余transport执行/身份/隔离/认证/工具协议、contracts/schema/旧v1资产保持原保护。P9按同条答复仅在前序P1–P8完成后执行，本次不提前实施。
+
+
+2026-10-23 portable范围例外（用户答复224；精确patch220/独审059）：本任务允许现distribution owner与MD files声明修复、现move-map consumer登记和runner-clean-install具名测试；ModelTest现四生产脚本消费同一显式MODELTEST_WORKFLOWHUB_DISTRIBUTION_ROOT冻结host算法，各侧MODELTEST_WORKFLOWHUB_ROOT只给真实source。canonical manifest.ref→binding.procedure_ref→实际prompt，portable附件source根与Workboard业务根分开；root==workspace真实返回`.`。这是106/142之外已获准的metadata路由代码例外，不改两件原文字或身份/认证/工具/重试/取消/超时协议。旧“不改WorkflowHub仓”原句保历史，仅上述四WH路径加现P6/spec/index/runbook为本次精确例外；default public release枚举/政策不扩，MD YAML字节确实改变。原有8个MT文件仍是8个，不扩作者fixturecb01/hidden/contracts/共享auth。新增provider可见附件仅本任务用途获准，许可/附加条款适用unknown继续保留，非取得上游grant/接受新条款。
+
+复制验证只做copied根纯helper/模板结构与相对模块加载，不执行baseline mini-task close/Git/host发布，不把导入闭包冒全部动态宿主操作。基线真实3068 mini-task、候选entry-evaluation分别核suitable/paused；相同host collector、各侧真实source，禁止往baseline注新YAML/export。原v4失败/hostincomplete/usageunknown原207保留，不重写成通过；P7八格未跑。

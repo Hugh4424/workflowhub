@@ -19,6 +19,29 @@ async function fixture(){
 }
 function install(f){const calls=[];const result=installRunnerRelease({...f,run(command,args,options){calls.push({command,args,options});return{status:0,stdout:"",stderr:""};}});return{calls,result};}
 describe("current Runner and Skill Bundle joint installation",()=>{
+ test("N11 local payload keeps the existing public release enumeration and clean installation",async()=>{
+  const f=await fixture();
+  const git=spawnSync("git",["show","HEAD:runtime/distribution/skill-bundle-release.mjs"],{cwd:ROOT,encoding:"utf8"});
+  expect(git.status,git.stderr).toBe(0);
+  let prior=git.stdout.slice(0,git.stdout.lastIndexOf("\nif (process.argv[1]"));
+  prior=prior.replace(/from "(\.\.[^"]+)"/g,(_,ref)=>`from ${JSON.stringify(new URL(ref,new URL("../../runtime/distribution/skill-bundle-release.mjs",import.meta.url)).href)}`);
+  const {createRequire}=await import("node:module");const require=createRequire(import.meta.url);
+  prior=prior.replace('from "js-yaml"',`from ${JSON.stringify(new URL(`file://${require.resolve("js-yaml")}`).href)}`);
+  const old=await import(`data:text/javascript;base64,${Buffer.from(prior).toString("base64")}`);
+  const previous=await old.buildSkillBundleRelease({packageRoot:ROOT,outputDir:path.join(f.root,"prior-default")});
+  expect(f.bundle.files.map(row=>row.path).sort()).toEqual(previous.files.map(row=>row.path).sort());
+  const {resolvePortableStageFiles}=await import("../../runtime/distribution/skill-bundle-release.mjs");
+  for(const stage of ["make-decision","build-plan","build-code","verify-code"]){
+   const local=resolvePortableStageFiles({packageRoot:ROOT,stage});
+   expect(local.files).toContain(`workflows/${stage}/SKILL.md`);
+   expect(local.files).toContain("skills/spec-specify/templates/spec-template.md");
+   expect(local.files.some(ref=>/(?:^|\/)(?:node_modules|tests|specs|history)(?:\/|$)/.test(ref))).toBe(false);
+  }
+  expect(f.bundle.files.some(row=>row.path==="workflows/make-decision/scripts/entry-evaluation.mjs")).toBe(false);
+  expect(validateSkillBundleRelease({releaseRoot:f.skillBundleRoot}).skill).toBe("workflowhub");
+  const installed=install(f);expect(installed.result.status).toBe(0);
+  expect(installed.calls.map(row=>row.command)).toEqual(["npm","git","git","git"]);
+ },60000);
  test("copies the real declared closure and imports the installed provider client without external tools",async()=>{
   const f=await fixture();const{calls,result}=install(f);
   expect(result.status).toBe(0);expect(calls.map(c=>c.command)).toEqual(["npm","git","git","git"]);
