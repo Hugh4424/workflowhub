@@ -13,7 +13,7 @@ description: UI 规划需定位专业来源时，按新项目、已有可信规�
 
 | 类 | 正文或真实源 | 专业方法 | 原 owner | consumer |
 | --- | --- | --- | --- | --- |
-| ①领域语义 | WH 的 GLOSSARY.md；宿主自己的词义源，PB 为 CONTEXT.md | `skills/grill-with-docs/SKILL.md`；mattpocock/skills 的 domain-modeling 仅词义 lens | 项目领域 owner | 设计、组件、文案 |
+| ①领域语义 | WH 的 GLOSSARY.md；宿主自己的词义源，PB 为 GLOSSARY.md | `skills/grill-with-docs/SKILL.md`；mattpocock/skills 的 domain-modeling 仅词义 lens | 项目领域 owner | 设计、组件、文案 |
 | ②视觉设计系统 | specs/design/design.md；值引用现 token/主题/Figma 变量 | WenjiaWang/ui-designer 的 design-tokens；方向需要时 WenjiaWang/ui-designer 的 frontend-design | 设计系统/token owner | Read Map、前端规范 reader、守卫 |
 | ③组件及设计代码对应 | specs/design/components.md；工程独立内容确需时 specs/frontend/components.md，否则归 frontend.md | WenjiaWang/ui-designer 的 frontend-design + `skills/frontend-component-quality/SKILL.md` | 组件设计与前端 owner | 真实 wrapper/API/type、实现/测试 |
 | ④布局与场景 | specs/design/layouts.md；独立工程内容确需时 specs/frontend/layouts.md，否则归 frontend.md | WenjiaWang/ui-designer 的 information-architecture + frontend-design | 布局/信息架构 owner | renderer、实际 DOM/CSS/滚动/浮层 |

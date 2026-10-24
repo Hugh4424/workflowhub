@@ -581,7 +581,7 @@ PaperBuilder（专用 worktree `PaperBuilder-workflowhub-ui-frontend-c01-norm-in
 - **验收**：AC-C01-1／AC-C01-3 的证据与上述测试原件
 
 - **可能受冲击的业务规则**：PaperBuilder 九份正文的断言与守卫（`style-token-guard.test.ts` 读九份正文）；改动后须由 PB 侧守卫在真实运行中核，不在本卡宣通过
-- **明确无影响**：PaperBuilder 业务代码、前端实现、数据库与回测链路；WorkflowHub 的公共 runtime 七类命令
+- **明确无影响**：PaperBuilder 业务代码、前端实现、数据库与回测链路；WorkflowHub 公共 runtime 七类分类、命令接口及参数不变，但现已修复 `tools/cli/stage-runtime.mjs::registeredTaskCandidates` 的既有身份发现项目隔离缺陷（跨项目同 task_id 的 deterministic 路径误收外仓 manifest）。这是当前任务必要工具依赖修复，不新增 C01 产品功能；影响原 consumer `deriveIdentityFromAuthenticatedWorktree → resolveWorkflowHubIdentity → thinTaskContext → public stage runtime` 的候选发现，项目/任务/workspace认证、真实重复冲突与坏/缺 manifest 拒绝须验证；范围及授权沿221，实际048/049 RED与对照、050单文件10/10 GREEN、051 diff沿222，局部验证不冒独立质量或整任务验收。
 
 ## 补充材料
 

@@ -2,7 +2,7 @@
 // resolver obligations are carried here before its bridge-only file retires.
 import { afterEach, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { bootstrapTask } from "../../tools/cli/task-bootstrap.mjs";
@@ -28,6 +28,67 @@ function publicCall(f,behavior,action,{cwd=f.worktreeRoot,taskPath=f.taskPath,ta
 }
 const draft=f=>["--name=spec.md",`--input=${f.content}`];
 describe("current ordinary write identity and workspace",()=>{
+ it("distinguishes native projects sharing a task id and preserves both originals",async()=>{
+  const f=await fixture("shared-native-id"),repo=repository(f.root,"paper-builder"),worktree=join(f.root,"pb-existing");
+  execFileSync("git",["worktree","add","-b","pb-owned",worktree,"HEAD"],{cwd:repo,env:cleanGitEnv(),stdio:"pipe"});
+  const pb=await bootstrapTask({project:"PaperBuilder",task:f.task,"target-repo":repo,"workspace-root":worktree},{env:f.env,home:f.home});
+  const originals=[f.taskPath,pb.task_path].flatMap(root=>["task.json","facts.jsonl"].map(name=>({path:join(root,name),bytes:readFileSync(join(root,name))})));
+  expect(resolveWorkflowHubIdentity({},worktree,f.env)).toMatchObject({project:"PaperBuilder",task:f.task,taskPath:pb.task_path});
+  const explicit=publicCall(f,"status","begin");
+  expect(explicit, "explicit identity must retain normal authenticated discovery").toMatchObject({ok:true,result:{task_id:f.task}});
+  expect(resolveWorkflowHubIdentity({},f.worktreeRoot,f.env)).toMatchObject({project:"WorkflowHub",task:f.task,taskPath:f.taskPath});
+  expect(resolveWorkflowHubIdentity({},worktree,f.env)).toMatchObject({project:"PaperBuilder",task:f.task,taskPath:pb.task_path});
+  expect(publicCall(f,"status","begin")).toMatchObject({ok:true,result:{task_id:f.task}});
+  expect(()=>resolveWorkflowHubIdentity({project:"PaperBuilder",task:f.task},f.worktreeRoot,f.env)).toThrow(/identity conflict/i);
+  for(const original of originals)expect(readFileSync(original.path)).toEqual(original.bytes);
+ });
+ it("keeps unrelated project registrations with a different task id out of discovery",async()=>{
+  const f=await fixture("native-control"),repo=repository(f.root,"paper-builder"),worktree=join(f.root,"pb-existing");
+  execFileSync("git",["worktree","add","-b","pb-owned",worktree,"HEAD"],{cwd:repo,env:cleanGitEnv(),stdio:"pipe"});
+  await bootstrapTask({project:"PaperBuilder",task:"different-native-id","target-repo":repo,"workspace-root":worktree},{env:f.env,home:f.home});
+  expect(resolveWorkflowHubIdentity({},f.worktreeRoot,f.env)).toMatchObject({project:"WorkflowHub",task:f.task});
+ });
+ it("retains genuine duplicate-worktree conflicts",async()=>{
+  const f=await fixture("duplicate-native-id");
+  await bootstrapTask({project:"OtherProject",task:f.task,"target-repo":f.repo,"workspace-root":f.worktreeRoot},{env:f.env,home:f.home});
+  expect(()=>resolveWorkflowHubIdentity({},f.worktreeRoot,f.env)).toThrow(/multiple task manifests/i);
+ });
+ it("rejects missing, malformed and identity-mismatched default manifests without rewriting them",async()=>{
+  for(const variant of ["missing","malformed","null","array","missing-target","project","task"]){
+   const f=await fixture(`broken-${variant}`),path=join(f.taskPath,"task.json"),original=readFileSync(path);
+   if(variant==="missing")unlinkSync(path);
+   else if(variant==="malformed")writeFileSync(path,"{broken");
+   else if(variant==="null")writeFileSync(path,"null");
+   else if(variant==="array")writeFileSync(path,"[]");
+   else if(variant==="missing-target"){const manifest=JSON.parse(original);delete manifest.target_repo_root;writeFileSync(path,JSON.stringify(manifest));}
+   else writeFileSync(path,JSON.stringify({...JSON.parse(original),[variant==="project"?"project_name":"task_id"]:"foreign"}));
+   const before=existsSync(path)?readFileSync(path):null;
+   const material=readFileSync(join(f.materialRoot,"spec.md")),facts=readFileSync(join(f.taskPath,"facts.jsonl"));
+   expect(()=>resolveWorkflowHubIdentity({},f.worktreeRoot,f.env)).toThrow();
+   const metadataError={null:"task manifest must be an object",array:"task manifest must be an object","missing-target":"task manifest schema or repository path is invalid",project:"task manifest identity mismatch",task:"task manifest identity mismatch"}[variant];
+   if(metadataError){
+    const {openTask}=await import("../../runtime/task/task-handle.mjs");
+    let rejection;try{openTask(f.taskPath,"WorkflowHub",f.task);}catch(error){rejection=error;}
+    expect(rejection).toBeInstanceOf(["null","array","missing-target"].includes(variant)?TypeError:Error);
+    expect(rejection.message).toBe(metadataError);
+    let discoveryError;try{resolveWorkflowHubIdentity({},f.worktreeRoot,f.env);}catch(error){discoveryError=error;}
+    expect.soft(discoveryError).toBeInstanceOf(rejection.constructor);
+    expect.soft(discoveryError?.message).toBe(metadataError);
+   }
+   if(variant==="missing"||variant==="malformed"){
+    let rejection;try{resolveWorkflowHubIdentity({},f.worktreeRoot,f.env);}catch(error){rejection=error;}
+    if(variant==="missing")expect.soft(rejection?.code,"missing manifest retains native filesystem error").toBe("ENOENT");
+    else expect.soft(rejection,"malformed manifest retains native JSON parse error").toBeInstanceOf(SyntaxError);
+   }
+   const result=publicCall(f,"run","draft",{extra:draft(f)});
+   expect(result.ok,`explicit public draft must reject ${variant} manifest`).toBe(false);
+   if(variant==="missing")expect.soft(result.error.code,"public draft retains missing manifest code").toBe("ENOENT");
+   if(metadataError)expect(result.error).toEqual({code:null,message:metadataError});
+   expect(readFileSync(join(f.materialRoot,"spec.md"))).toEqual(material);
+   expect(readFileSync(join(f.taskPath,"facts.jsonl"))).toEqual(facts);
+   expect(existsSync(path)?readFileSync(path):null).toEqual(before);
+  }
+ });
  it("writes only in the exact declared worktree, rejects wrong cwd before bytes, and retains current status",async()=>{
   const f=await fixture(),target=join(f.materialRoot,"spec.md");
   expect(publicCall(f,"run","draft",{extra:draft(f)})).toMatchObject({ok:true,result:{artifact_ref:`specs/${f.task}/spec.md`}});

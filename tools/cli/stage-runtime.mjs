@@ -266,21 +266,31 @@ function registeredTaskCandidates(storageRoot, repositoryRoot, worktreeRoot) {
       const deterministicRoot = resolve(dirname(repositoryRoot), `${basename(repositoryRoot)}-${validTaskId}`);
       let manifest;
       let manifestReadable = false;
-      if (deterministicRoot !== worktreeRoot) {
+      {
         const manifestPath = resolve(taskPath, "task.json");
         try {
           const stat = lstatSync(manifestPath);
-          if (stat.isSymbolicLink() || !stat.isFile()) continue;
+          if (stat.isSymbolicLink() || !stat.isFile()) throw new Error("task manifest must be a regular file");
           manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
           manifestReadable = true;
         } catch (error) {
-          if (error?.code === "ENOENT") continue;
-          continue;
+          // Keep the default-path candidate so openTask still rejects missing
+          // or invalid metadata instead of falling back to explicit identity.
+          if (deterministicRoot !== worktreeRoot) continue;
+        }
+        // A default-path registration must authenticate before scope filtering:
+        // corrupt metadata is an error, not an absent identity. Valid foreign
+        // registrations still pass through the target/workspace checks below.
+        if (deterministicRoot === worktreeRoot) {
+          manifest = openTask(taskPath, projectEntry.name, validTaskId).manifest;
+          manifestReadable = true;
         }
         const explicitExisting = manifest?.workspace_mode === "existing" && typeof manifest.workspace_root === "string" && resolve(manifest.workspace_root) === worktreeRoot;
-        const targetIsWorkspace = worktreeRoot !== repositoryRoot && manifest?.workspace_mode === undefined && typeof manifest.target_repo_root === "string" && resolve(manifest.target_repo_root) === worktreeRoot;
-        if ((!explicitExisting && !targetIsWorkspace) || typeof manifest.target_repo_root !== "string"
-            || ![repositoryRoot, worktreeRoot].includes(resolve(manifest.target_repo_root))) continue;
+        const targetIsWorkspace = worktreeRoot !== repositoryRoot && manifest?.workspace_mode === undefined && typeof manifest?.target_repo_root === "string" && resolve(manifest.target_repo_root) === worktreeRoot;
+        const defaultWorkspace = deterministicRoot === worktreeRoot && manifest?.workspace_mode === undefined
+          && typeof manifest?.target_repo_root === "string" && resolve(manifest.target_repo_root) === repositoryRoot;
+        if (manifestReadable && ((!explicitExisting && !targetIsWorkspace && !defaultWorkspace) || typeof manifest?.target_repo_root !== "string"
+            || ![repositoryRoot, worktreeRoot].includes(resolve(manifest.target_repo_root)))) continue;
       }
       candidates.push(Object.freeze({
         projectName: projectEntry.name,
