@@ -599,3 +599,21 @@ PaperBuilder（专用 worktree `PaperBuilder-workflowhub-ui-frontend-c01-norm-in
 - 合并审查处置：`quality/evidence/build-plan/2026-10-24-118-review-dispositions.md`
 - 一致性分析：`quality/evidence/build-plan/2026-10-24-114-spec-analyze.md` 与其处置 `2026-10-24-121-spec-analyze-dispositions.md`
 - 覆盖审计：`quality/evidence/build-plan/2026-10-24-115-coverage-audit.md`
+
+## 本次结果回写（P9/T022；独立结论转录，非判据修改）
+
+依据独立360及后到当前候选审计374、Spec376与Standards377，材料writer Kant仅串行转录。当前AC2依`quality/evidence/2026-10-24-378-p9-ac2-candidate-closure-result-correction.md`改pass；合读370撤回历史且不复用被撤回362整项推论，其局部观察保留。AC1 incomplete、AC2–5限原合同pass；Appendix A及原场景判据/复选框保持原字节。
+
+| AC | 档位 | 独立结论与原件 | 范围/缺口 |
+| --- | --- | --- | --- |
+| AC-C01-1 | incomplete | `quality/evidence/2026-10-24-360-p9-independent-five-ac-aggregation.json`（合读218） | 第一链missing、第三链incomplete；八类/模板局部可消费不补生成因果。 |
+| AC-C01-2 | pass | `quality/evidence/2026-10-24-378-p9-ac2-candidate-closure-result-correction.md`（374当前候选审计＋376/377两独立轴；合原360） | 当前两仓相关候选/reader覆盖已独立确认；非全历史/零读者/47组等义全迁，DES04/OPEN03仍unknown。 |
+| AC-C01-3 | pass | `quality/evidence/2026-10-24-360-p9-independent-five-ac-aggregation.json`（019/127/129/015及149） | 限真实对象结构、consumer与缺项/owner/本地文件负例；不证明页面、服务或权限。 |
+| AC-C01-4 | pass | `quality/evidence/2026-10-24-360-p9-independent-five-ac-aggregation.json`（012/013/313/338） | 限真实离线准备、五类分权、原字节与首次独立语义；实际实例/数据/权限/页面仍unknown。 |
+| AC-C01-5 | pass | `quality/evidence/2026-10-24-360-p9-independent-five-ac-aggregation.json`（138/142/148与P1原011/012） | 限原查询及失败可核：current=pin；history unavailable，不宣无更新。 |
+
+带欠账结果：AC1仍incomplete，全AC未通过，不宣阶段完全完成。AC1由P3原生成链writer/原决定owner承接真实成对输入、产物与形成因果/采纳证据；个人姓名未取得，历史不可得继续missing/incomplete，不重演伪历史。AC2当前相关候选覆盖已由374及376/377补齐，按378更正pass；global-reskin目标case读四CSS；live-pages读CSS＋metadata＋test-only oracle，不读旧Markdown，未运行case不冒新GREEN。不冒全历史/仓外动态零读者或47组等义全迁，DES04/OPEN03及差3保未知，不改判据。
+
+执行事实：`quality/tests/2026-10-24-149-p9-independent-two-frozen-oracles.json`及其raw为Parfit单次两文件12/12、exit0；实际argv直接用`/usr/local/bin/node`和已装Vitest绝对入口、两具名tests、显式WH `--root`。没有执行本卡后来写出的sh-exec外层，不为包装重跑，也不拿历史099的227冒当前实现验证。独立机器复放不代五AC语义。
+
+结果/就绪原件：`quality/evidence/2026-10-24-021-acceptance-results.md`、`quality/evidence/2026-10-24-023-acceptance-data-readiness.md`、`quality/evidence/2026-10-24-024-acceptance-environment-readiness.md`。三件首次native create、后续新证据只追加更正引用，不覆写。本回写不恢复P3缺链、不裁DES04/OPEN03、不清三桶差额或仓外消费者未知；不把离线准备允许unknown当失败或实际页面通过。
