@@ -20,6 +20,15 @@ version: 5.2.0
    按本 Phase 承接 AC 与声明测试面核对，每 Phase 一行：「声明面 → 原件path/cwd/argv/exit/原始输出 → 已跑/未跑」。每未跑面写具体阻碍、可跑条件及owner；缺Phase/面/原件保持incomplete，review coverage不能补齐。核已有事实，只跑本任务受影响的测试；判断不了影响面时选最小可证伪集合并记录未知影响面。全局重跑仅在改动对象是流程本身且局部无法证明时执行一次，事先说明范围与理由。跳过项记 unverified 加原因与影响面，留在分母。失败分类/零重试/升级与provider排除按AGENTS「卡住与升级」；同一不可用事实不重复采集，其它安全验证与provider轴继续。
    再按金钱、隐私权限、不可逆后果、外部副作用、跨Phase旅程、失败恢复风险独立选样，逐case/AC列已查/未查理由。沿原始业务规则→真实入口→断言→实际效果核语义；模拟不冒外部效果，缺数据/权限/服务保持未知。分别给`business_effect=observed_pass|observed_fail|unknown|unavailable|N/A(reason)`、`semantic_test_adequacy=adequate|inadequate|unknown`、`code_review=clean|resolved|incomplete|failed`及证据。测试充分性据逐Phase逐面表、原始规则和实际断言判，缺表/原件为unknown/inadequate，不由provider coverage推导。
    按当前AC oracle定对象/真实输入/owner/时点；需检查时读`skills/spec-specify/templates/spec-template.md`唯一`checkAcceptanceObject`完整可执行块，从spec对象区取实参；依模板合同实读原始要求/项目库存/已接受计划或实际前端改动，核角色/理由/范围冲突；三源适用性/已读材料作context交同函数。保存对象输入、三源引用/范围/hash、返回与原始执行结果，不在此重写checker。模板producer缺件、提取/执行失败分别记source/producer、原因/影响/原owner；未运行不冒验证，检查成功非环境/业务效果。缺输入写具体数据/服务/权限/观察与未达断言，不扩判据/笼统后推。
+   验收对象的实际命令如下。在认证 WH 根作 cwd，取当前 task 的认证 spec 绝对路径和上述本次 context JSON 文件绝对路径，依次作为 `sh -c` 的位置参数 `$1`、`$2`（`$0` 取 `verify-acceptance`）；`-c` 的命令字符串逐字取下面一行。两路径必须在本次 argv 显式绑定并保存，不猜 task、不假定环境已设、不原样执行占位文字。context 只作调用输入；`sources` 中绝对路径、`./`、`../`及不含空白、冒号或井号的目录相对路径（如 `specs/design/design.md`）明确表示本地文件，自动检查；行号/节/hash 留在原件。裸文件名须用可选 `file_source_keys` 选择已有自有key；未选择的裸单词及普通正文保持原producer输入，不按词形猜成文件。此选择仅在本次调用内生效，不新增producer必填字段、持久schema或CLI参数。
+
+   例如本次context可传 `{"sources":{"requirements":"CLI","license":"LICENSE"},"file_source_keys":["license"]}`：requirements仍是正文，license按`--root`解析为文件。保留既有`ui_applicability`及其`source_ref`，不为文件声明改三源角色；已加载对象/数组仍沿原合同消费。没有本地文件候选时stderr明确说明未查文件，exit 0只表示结构检查；声明key缺失、类型不合法或重复报具名exit 2，文件缺失仍报key/path及exit 1。URL不作本地文件检查或可达性证明。
+
+   ```sh
+   node tools/cli/check-acceptance-object.mjs --spec "${1:?必须传入当前认证spec绝对路径}" --context "${2:?必须传入本次context绝对路径}" --check-sources --root "$PWD"
+   ```
+
+   用已认证 `task.captureCommand` 保存该 shell argv、cwd、解析对象/context、退出码及 stdout/stderr 原件。exit 0 只证最小结构/已给来源文件存在；exit 1 按 `missing_fields` 或 `missing_source_files` 的名字和路径回原提供者补；exit 2 显露参数、JSON、验收对象节或 source/producer 错误，不当成缺业务字段或成功。输入、数据/权限及页面观察仍按上段分别判断；临时 context/受控副本用后仅清理本次自建件，保命令原件。
    功能验收记录、代码审查回执、独立人读功能判断各自成件；功能判断据验收记录，各给路径，验收记录逐AC给结论与独立证据。审查回执的host conclusion/coverage仅从provider状态/findings推导审查观察、返回findings与完成/失败数量，不代表user case或完整覆盖，不代功能结论。按当前验收Phase具名引用读实际输出、执行/复验/分诊/独立走查原件，来源回读沿stage-handoff；不以审查字段/findings代业务，不新增同名功能字段、第二writer/质量对象图。
    逐Phase核Done承接AC的编号、`runtime/evidence/acceptance-evidence-validator.mjs`现成8值档位与具名ref；同处“本Phase自带判据小结”列已验（gate_cmd原件）、未验各项档位、条件与owner，不能用计数代归属。AC归属与实际判据只按spec正文的方式/时点/owner/条件/成功失败信号，不按依赖位置；未参与不得pass或下游补签。缺真实环境/用户在场/来源保unknown/unavailable，审查成功不代判。
    末 Phase 完整串演只复核沿途结论并补必要未闭环 case，不新增全量重跑，不作任何 AC 首次判定点。未达AC按standard-workflow「专业质量」“带欠账完成”显著留逐项缺口，只限完成声明、不阻同任务安全修复。核测试/命令/升级时读下节唯一正文。

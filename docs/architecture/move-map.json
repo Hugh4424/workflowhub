@@ -6081,6 +6081,21 @@
       ],
       "delete_condition": "职责由经独立审查的替代承接且真实人工读者全部改接后，由维护 owner 同步退役模板与职责指针；保留历史来源和执行原件，静态零命中不等于零消费者。",
       "retention_basis": "已批准用途仍沿当前 decision-log「WP5 — 规范文件的模板、写法与语言标准」及 P6/T014–T016；共同骨架269（sha256 eb6702738af047b548bdaf97c1f4c4f5da557f9c2ef7dbc0d7d561c550bd2898）。本次在九源 freeze 后真读全文，目标 sha256=f5da86c0c521fbf8a30b47766f67155ddebf1db7422fdb9c7ea51323c0f2a8af；SKILL 导航实际 sha256=31ff408215f41af46dd8504d2cb2fdd5cc35b839e06aff8d65ecf63b2f409396，与274逐项相等。实际类职责/owner/reader/缺口及删除条件与本项用途相符，named_data_readers 是现可读导航而非拟接线；018为写前 GUIDE 准备，272/274为实施原件，均只引用不覆盖。status=add仍仅表示本次新增路径，非生命周期或进度；该次276登记时未运行检查/独立实写/业务验证，当前新检查事实另沿086保留。只用 SDD 分责与 GUIDE，不执行 AUDIT/READY，282已触发原T016恢复条件，需Copernicus在现bundle.files补八已链接模板；284声明已实施；086 static-deps PASS但material-contract13错/聚合1未解决，不要求列全目录或宣跨技能闭包完整，不增字段/枚举/门；后续目标或指针不可读即停该项登记，回原writer，不猜 active。"
+    },
+    {
+      "source": "tools/cli/check-acceptance-object.mjs",
+      "destination": "tools/cli/check-acceptance-object.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "C01 P7/T017 已批准薄CLI：main(argv)复用唯一Markdown checkAcceptanceObject处理结构，从--spec验收对象JSON取输入；--check-sources保绝对/./../及无空白、冒号、井号的目录相对路径自动检查，裸文件名仅由调用内可选context.file_source_keys选择才stat。未选裸词/普通正文保留，不猜文件意图；不新增CLI flag、持久schema或第二producer。",
+      "owner": "Copernicus为本任务P7/T017+T018同一原代码writer，已完成并冻结CLI/spec/verify-code三repo源；Kant唯一维护本CLI登记和P7/index必要材料；Curie只T019两外置准备原件，不写spec/verify-code。",
+      "consumer": "唯一生产consumer为workflows/verify-code/SKILL.md现第4步验收对象命令及相邻context说明。129在真实WH cwd逐字执行当前步骤，$1绑定当前认证spec、$2绑定原330 context（含file_source_keys），exit0；当前target/caller实际回读与验证见332。旧098/019只证当时源码/输入，不冒当前实现证据；不代表整个verify-code阶段运行或已发行。冻结tests仅验证reader。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "workflows/verify-code/SKILL.md"
+      ],
+      "delete_condition": "仅当现verify-code验收对象动作已由经独立审查的替代入口承接、实际CLI caller全部改接并由维护owner退役时移除薄CLI，同步移除该步调用与原登记；Markdown唯一producer不复制/不删除，历史失败与运行原件保留。",
+      "retention_basis": "332原件及当前CLI全文、verify-code实际步骤已实读；target sha256=8aeefff69f8bd19ac01dc791c4b63a15d902a46fe9efa9176678ec92c2989492，caller sha256=bc55eb81896c7483e2d5993e2817919e3de3fe9070aa10664727580adbe77528。125失败是无./目录相对路径specs/design/not-there.md被漏查；128相同冻结六例命令恢复exit0；127十四正文/文件/错误边界exit0；129当前caller新执行exit0，native复用同字节126.output但不借旧退出事实。自动本地路径与显式keys并集检查，空keys不禁自动路径；裸LICENSE未选保正文、选定才stat；非法keys/type/duplicate报2，缺文件/非文件报key/path及1；无候选明确stderr，URL不作本地检查。仅结构及所选文件存在，不授权UI/数据/服务/权限或认证语义。095/099/019/310/330/125/126等旧原件保各自时点，不作新源码证明；不改producer/oracle，不新增机制或进度权威。删除/替代仍沿本项原条件；后续target/caller不可读即停本项确认交原owner。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

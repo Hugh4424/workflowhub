@@ -386,21 +386,22 @@ PaperBuilder（专用 worktree `PaperBuilder-workflowhub-ui-frontend-c01-norm-in
 ```json
 {
   "workspace": "/Users/Hugh/Hugh/Project/PaperBuilder-workflowhub-ui-frontend-c01-norm-init-20261024",
-  "service": "frontend vite dev 端口 5175（frontend/vite.config.ts:7）、API 5176（:14）",
-  "route": "/simulations（frontend/src/App.tsx:166，组件 simulation-records-page.tsx:1467）",
-  "state": "UiAsyncState ready/empty/error（simulation-records-page.tsx:43；业务状态词表 :134）",
-  "viewport": "1440x900（specs/design/layouts.md:86；quality.md:39 另列 1280x900、390x844）",
+  "service": "Vite 配置默认 http://127.0.0.1:5175；/api 代理默认 http://127.0.0.1:5176（非已运行实例）",
+  "route": "/simulations",
+  "state": "待验 UiAsyncState ready/empty/error（非已观察状态）",
+  "viewport": "1440x900",
   "owner": null
 }
 ```
 
 - **owner**：留空，按合同由检查器输出"用户"；本任务无项目 owner 声明（`2026-10-24-103-paperbuilder-state.md` §9.3）。
 - **设计来源**（S5 第 4 项，相邻节承接）：`specs/design/layouts.md:47` 的 `PB-DES-T05-SIMULATION` 与原型 `specs/design/prototypes/实盘UI/src/components/SimulationBoard.tsx`。
-- **数据／权限**（S5 第 5 项）：数据为 `frontend/src/v2-simulation-api.ts:1034` 的 `/api/v2/simulation-cards`；权限仓内无声明，属真实缺口，检查时按缺项写出名字。
-- **来源安排**：`workspace` 来自本任务 PB 专用 worktree（`quality/evidence/build-plan/2026-10-24-107-paperbuilder-checkout.md`）；`service`／`route`／`state`／`viewport` 来自上列真实文件；执行 owner 为 verify-code 执行者；时点为 P7 之后、P9 验收前。
+- **数据／权限**（S5 第 5 项）：记录列表在 `frontend/src/simulation-records-page.tsx:1560` 调用 `fetchSimulationRecordSummaries`，直接数据入口为 `frontend/src/v2-simulation-api.ts:1064-1075` 的 `/api/v2/simulation-record-summaries`；`:1034` 的 `/api/v2/simulation-cards` 仅是相关卡片入口，不是该列表的直接请求。endpoint 不是已取得的数据身份。真实数据集／simulation identity、访问主体及权限合同、服务实例身份均未取得；由 PB 真实验收执行者在有权的服务／任务合同中提供。缺口影响：当前不能断言数据可读、权限具备或页面业务效果；不能从配置 URL 推导上线或填造身份。
+- **来源安排**：路径相对上述 PB workspace。`workspace` 来自本任务 PB 专用 worktree（`quality/evidence/build-plan/2026-10-24-107-paperbuilder-checkout.md`）；`service` 来自 `frontend/vite.config.ts:7-14`（允许环境覆盖，未读取环境）；`route` 来自 `frontend/src/App.tsx:166`；`state` 来自 `frontend/src/simulation-records-page.tsx:43,134,1467` 与 `frontend/src/ui/ui-contract.ts`；`viewport` 取 `specs/design/layouts.md:86` 的既有模拟 fixture，`specs/design/quality.md:39` 保留其它尺寸，不推广为全项目矩阵。执行 owner 为 verify-code 执行者；P7 此次仅执行对象结构检查，P9 仍按其合同独立验收。
+- **本次 context**：原始要求实际读任务库 `quality/evidence/direction-review/raw-requirement.md`，项目库存读 `quality/evidence/build-plan/2026-10-24-103-paperbuilder-state.md` §9 与上述当前 PB 源，计划读本 spec 当前写集；三源理由与历史限制另见 `quality/evidence/build-plan/2026-10-24-104-ui-applicability.md`。分别为 UI 规范要求 true、PB UI 库存 true、无 PB 前端实现改动 false，沿 producer 默认 Web 五项，不以本卡无页面实现冒非 UI。调用内 context、实际范围/hash 与返回由下述运行原件保存。
 - **未观察范围**：未启动服务、未开浏览器、未截图；上述值是材料位置事实，不是已观察到的页面状态。
 
-本节唯一 `checkAcceptanceObject` producer 在 `skills/spec-specify/templates/spec-template.md` 的 marker 之后；本文档不复制该函数。执行记录见 `quality/evidence/build-plan/2026-10-24-110-acceptance-object-run.json`。
+本节唯一 `checkAcceptanceObject` producer 在 `skills/spec-specify/templates/spec-template.md` 的 marker 之后；本文档不复制该函数。历史执行记录见 `quality/evidence/build-plan/2026-10-24-110-acceptance-object-run.json`；P7 本次真实 consumer／受控副本三次运行记录见任务库 `quality/evidence/2026-10-24-019-acceptance-object-runs.md`。exit 0 仅证结构和已给来源文件存在，不证三源语义、权限、服务或页面通过。
 
 ## 架构边界
 
@@ -416,7 +417,7 @@ PaperBuilder（专用 worktree `PaperBuilder-workflowhub-ui-frontend-c01-norm-in
 - **现状与目标差异**：两个入口无指针（`skills/plan-design-review/SKILL.md:8-9`、`workflows/build-code/SKILL.md:35`）；`skills/external/` 与 `skills/ui-project-init/templates/` 不存在；验收对象 producer 无生产消费者；九份正文有 6/4/3 处缺陷。
 - **读取顺序**：先读 `skills/ui-project-init/SKILL.md` 的 `:14-23`（职责表）与 `:27`（旧两源），再读 `skills/catalog.yaml:1230-1256`（absorbed 形态）与 `:986-1024`（三包现有散文登记），最后读 `skills/spec-specify/templates/spec-template.md:270-324`（producer）与 `workflows/verify-code/SKILL.md:22,31`（验收对象与 UI 指针）。
 - **代码锚点**：`skills/catalog.yaml` 的 `capability_decisions` 列表；`skills/spec-specify/templates/spec-template.md` 的 `checkAcceptanceObject(input, context)`；`tools/cli/check-acceptance-object.mjs`（新增，导出 `main(argv)`）；`workflows/verify-code/SKILL.md` 的验证步骤；`tools/cli/check-decision-log-chain.mjs`（只读，语义不变）。行号是生成时刻快照，会漂移，不作契约。
-- **运行条件**：Node ESM；`npx vitest run <file>`（本 worktree 无 node_modules，vitest 2.1.9 由 npx 解析）；PaperBuilder 侧验证用独立 worktree 与只读命令。
+- **运行条件**：Node ESM；`npx vitest run <file>`仅保便携建议，不代表本次已执行。P7当前worktree缺本地runner，本机固定复放为 `/usr/local/bin/node /Users/Hugh/Hugh/Project/workflowhub/node_modules/vitest/vitest.mjs run tests/contract/acceptance-object-cli.test.mjs tests/contract/acceptance-object-required-fields.test.mjs --root /Users/Hugh/Hugh/Project/workflowhub-workflowhub-ui-frontend-c01-norm-init-20261024`，cwd为本WH；已核Node v24.14.0/Vitest 2.1.9及入口可读，未运行、未安装或联网，不把替代argv冒历史npx同一事实。PaperBuilder只读准备仍用专用worktree。
 
 ### 接口与失败语义
 
