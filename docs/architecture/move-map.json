@@ -276,7 +276,7 @@
       "role": "production",
       "responsibility": "技能 bundle 发布（去双层 hash 后）由本文件承接",
       "owner": "B5/P6 / MT-1-017",
-      "consumer": "当前直接模块消费者：runtime/distribution/runner-release.mjs, tests/contract/review-input-bounds-portability.test.mjs, tests/integration/runner-clean-install.test.mjs",
+      "consumer": "当前直接模块消费者：runtime/distribution/runner-release.mjs, tests/contract/review-input-bounds-portability.test.mjs, tests/integration/runner-clean-install.test.mjs；N11内部local payload新增外仓消费者：ModelTest build-us07-workflowhub-task.mjs/materializeStageWorkflow，经冻结distribution root调用现resolvePortableStageFiles读取各侧真实source root，不改变默认公开release枚举/政策，不授予外发或host执行权限",
       "module_consumers": [
         "runtime/distribution/runner-release.mjs",
         "tests/contract/review-input-bounds-portability.test.mjs",
@@ -5731,6 +5731,233 @@
       ],
       "delete_condition": "唯一已证consumer被经独立审查的替代完整承接且无当前消费后退役；历史原件不删覆。",
       "retention_basis": "实施前已登记，现按真实调用维护；独立156设计与250/252/257/259/265窄TCR，职责登记不作行为/质量许可"
+    },
+    {
+      "source": "tests/contract/n11-acceptance-rules.test.mjs",
+      "destination": "tests/contract/n11-acceptance-rules.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "验收默认范围、资产前置、四禁负例与登记检查",
+      "owner": "N11/P1 实施者；维护者为用户",
+      "consumer": "P1 实施者运行 Phase gate 命令",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/n11-same-condition-eval-20261022/phases/P1-验收规则与分级.md"
+      ],
+      "delete_condition": "只有具名职责退役、真实消费者已由经审查的替代承接且用户授权删除时移除；历史执行与失败原件保留。",
+      "retention_basis": "N11/P1 已批准 Phase 中的新增路径预登记；P1 已实读 specs/n11-same-condition-eval-20261022/phases/P1-验收规则与分级.md 的路径与调用安排。当前文件已存在；执行事实另见原件。 不新增控制面、不替代任务 facts。"
+    },
+    {
+      "source": "tests/contract/n11-discussion-quality.test.mjs",
+      "destination": "tests/contract/n11-discussion-quality.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "讨论质量和跳步发现的契约测试",
+      "owner": "N11/P2 实施者；维护者为用户",
+      "consumer": "P2 实施者运行 Phase gate 命令",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/n11-same-condition-eval-20261022/phases/P2-需求讨论质量.md"
+      ],
+      "delete_condition": "只有具名职责退役、真实消费者已由经审查的替代承接且用户授权删除时移除；历史执行与失败原件保留。",
+      "retention_basis": "N11/P2 已批准 Phase 中的新增路径预登记；P1 已实读 specs/n11-same-condition-eval-20261022/phases/P2-需求讨论质量.md 的路径与调用安排。当前文件尚未实现；仅登记批准的职责和拟接线消费者，不宣称 active 或已执行。 不新增控制面、不替代任务 facts。"
+    },
+    {
+      "source": "tests/contract/n11-plan-quality.test.mjs",
+      "destination": "tests/contract/n11-plan-quality.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "计划完成、写集与测试合同的契约测试",
+      "owner": "N11/P3 实施者；维护者为用户",
+      "consumer": "P3 实施者运行 Phase gate 命令",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/n11-same-condition-eval-20261022/phases/P3-计划与执行质量.md"
+      ],
+      "delete_condition": "只有具名职责退役、真实消费者已由经审查的替代承接且用户授权删除时移除；历史执行与失败原件保留。",
+      "retention_basis": "N11/P3 已批准 Phase 中的新增路径预登记；P1 已实读 specs/n11-same-condition-eval-20261022/phases/P3-计划与执行质量.md 的路径与调用安排。当前文件尚未实现；仅登记批准的职责和拟接线消费者，不宣称 active 或已执行。 不新增控制面、不替代任务 facts。"
+    },
+    {
+      "source": "tests/contract/n11-capability-gaps.test.mjs",
+      "destination": "tests/contract/n11-capability-gaps.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "页面、调研、经验与归档能力的契约测试",
+      "owner": "N11/P4 实施者；维护者为用户",
+      "consumer": "P4 实施者运行 Phase gate 命令",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/n11-same-condition-eval-20261022/phases/P4-流程能力缺口.md"
+      ],
+      "delete_condition": "只有具名职责退役、真实消费者已由经审查的替代承接且用户授权删除时移除；历史执行与失败原件保留。",
+      "retention_basis": "N11/P4 已批准 Phase 中的新增路径预登记；P1 已实读 specs/n11-same-condition-eval-20261022/phases/P4-流程能力缺口.md 的路径与调用安排。当前文件尚未实现；仅登记批准的职责和拟接线消费者，不宣称 active 或已执行。 不新增控制面、不替代任务 facts。"
+    },
+    {
+      "source": "tests/contract/n11-review-channel.test.mjs",
+      "destination": "tests/contract/n11-review-channel.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "部分审查、取消与记录通道的契约测试",
+      "owner": "N11/P5 实施者；维护者为用户",
+      "consumer": "P5 实施者运行 Phase gate 命令",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/n11-same-condition-eval-20261022/phases/P5-记录与结论缺口.md"
+      ],
+      "delete_condition": "只有具名职责退役、真实消费者已由经审查的替代承接且用户授权删除时移除；历史执行与失败原件保留。",
+      "retention_basis": "N11/P5 已批准 Phase 中的新增路径预登记；P1 已实读 specs/n11-same-condition-eval-20261022/phases/P5-记录与结论缺口.md 的路径与调用安排。当前文件尚未实现；仅登记批准的职责和拟接线消费者，不宣称 active 或已执行。 不新增控制面、不替代任务 facts。"
+    },
+    {
+      "source": "tests/contract/n11-pairwise-judge.test.mjs",
+      "destination": "tests/contract/n11-pairwise-judge.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "验证真实CLI的双序身份归一化、缺样本固定分母、匿名化、可信profile完整性、实际业务产物/source hash与成本未知不冒收益。",
+      "owner": "N11/P8 实施者；维护者为用户",
+      "consumer": "P8 实施者运行 Phase gate 命令",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/n11-same-condition-eval-20261022/phases/P8-判定与成本.md"
+      ],
+      "delete_condition": "只有具名职责退役、真实消费者已由经审查的替代承接且用户授权删除时移除；历史执行与失败原件保留。",
+      "retention_basis": "N11/P8具名contract测试已实现；目标RED/GREEN和真实载荷缺陷反例的执行事实由本任务原件引用，不以登记代真实判官判断或业务验收。"
+    },
+    {
+      "source": "tests/acceptance/n11-eval-run-check.test.mjs",
+      "destination": "tests/acceptance/n11-eval-run-check.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "同条件实跑原件与分母核对",
+      "owner": "N11/P7 实施者；维护者为用户",
+      "consumer": "P7 实施者运行 Phase gate 命令",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/n11-same-condition-eval-20261022/phases/P7-基线与同条件实跑.md"
+      ],
+      "delete_condition": "只有具名职责退役、真实消费者已由经审查的替代承接且用户授权删除时移除；历史执行与失败原件保留。",
+      "retention_basis": "N11/P7 已批准 Phase 中的新增路径预登记；P1 已实读 specs/n11-same-condition-eval-20261022/phases/P7-基线与同条件实跑.md 的路径与调用安排。当前文件尚未实现；仅登记批准的职责和拟接线消费者，不宣称 active 或已执行。 不新增控制面、不替代任务 facts。"
+    },
+    {
+      "source": "tests/acceptance/n11-integration-acceptance.test.mjs",
+      "destination": "tests/acceptance/n11-integration-acceptance.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "真实小任务四段旅程与聚合原件核对",
+      "owner": "N11/P9 实施者；维护者为用户",
+      "consumer": "P9 实施者运行 Phase gate 命令",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/n11-same-condition-eval-20261022/phases/P9-整合端到端验收.md"
+      ],
+      "delete_condition": "只有具名职责退役、真实消费者已由经审查的替代承接且用户授权删除时移除；历史执行与失败原件保留。",
+      "retention_basis": "N11/P9 已批准 Phase 中的新增路径预登记；P1 已实读 specs/n11-same-condition-eval-20261022/phases/P9-整合端到端验收.md 的路径与调用安排。当前文件尚未实现；仅登记批准的职责和拟接线消费者，不宣称 active 或已执行。 不新增控制面、不替代任务 facts。"
+    },
+    {
+      "source": "skills/answer-as-page/scripts/render-answer-page.mjs",
+      "destination": "skills/answer-as-page/scripts/render-answer-page.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "将 caller 提供的真实报告渲染为 HTML 与既有侧车",
+      "owner": "N11/P4 实施者；维护者为用户",
+      "consumer": "skills/answer-as-page/SKILL.md 的出页 caller（P4/T008 待接线）",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/n11-same-condition-eval-20261022/phases/P4-流程能力缺口.md"
+      ],
+      "delete_condition": "只有具名职责退役、真实消费者已由经审查的替代承接且用户授权删除时移除；历史执行与失败原件保留。",
+      "retention_basis": "N11/P4 已批准 Phase 中的新增路径预登记；P1 已实读 specs/n11-same-condition-eval-20261022/phases/P4-流程能力缺口.md 的路径与调用安排。当前文件尚未实现；仅登记批准的职责和拟接线消费者，不宣称 active 或已执行。 不新增控制面、不替代任务 facts。"
+    },
+    {
+      "source": "skills/deep-research/scripts/research-run.mjs",
+      "destination": "skills/deep-research/scripts/research-run.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "按 caller 指定问题和范围执行真实检索并保留报告来源",
+      "owner": "N11/P4 实施者；维护者为用户",
+      "consumer": "skills/deep-research/SKILL.md 的研究 caller（P4/T009 待接线）",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/n11-same-condition-eval-20261022/phases/P4-流程能力缺口.md"
+      ],
+      "delete_condition": "只有具名职责退役、真实消费者已由经审查的替代承接且用户授权删除时移除；历史执行与失败原件保留。",
+      "retention_basis": "N11/P4 已批准 Phase 中的新增路径预登记；P1 已实读 specs/n11-same-condition-eval-20261022/phases/P4-流程能力缺口.md 的路径与调用安排。当前文件尚未实现；仅登记批准的职责和拟接线消费者，不宣称 active 或已执行。 不新增控制面、不替代任务 facts。"
+    },
+    {
+      "source": "tools/cli/n11-pairwise-judge.mjs",
+      "destination": "tools/cli/n11-pairwise-judge.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "P8限定CLI读取P7真实stage业务产物、匿名双序native packet判定、原件replay与实际transport成本字段读取；复用既有可信profile/native driver和task证据，不新增runtime命令或成本账本。",
+      "owner": "N11/P8 实施者；维护者为用户",
+      "consumer": "P8/T019执行者实际调用prepare/judge/replay；tests/contract/n11-pairwise-judge.test.mjs直调公开函数与CLI；用户和verify-code按判定原件复算。",
+      "module_consumers": [
+        "tests/contract/n11-pairwise-judge.test.mjs"
+      ],
+      "named_data_readers": [
+        "specs/n11-same-condition-eval-20261022/phases/P8-判定与成本.md"
+      ],
+      "delete_condition": "只有具名职责退役、真实消费者已由经审查的替代承接且用户授权删除时移除；历史执行与失败原件保留。",
+      "retention_basis": "N11/P8当前CLI已实现，限定产物/真实调用/缺口由本任务P8判定与成本原件引用，不以登记宣称模型成功。替代临时手工拼接判定，不扩公共provider协议、P7原件或任务进度。"
+    },
+    {
+      "source": "docs/research/n11-modeltest-adaptation-runbook.md",
+      "destination": "docs/research/n11-modeltest-adaptation-runbook.md",
+      "status": "add",
+      "role": "documentation",
+      "responsibility": "ModelTest 当前 API 适配、smoke 与启动排障说明",
+      "owner": "N11/P6 实施者；维护者为用户",
+      "consumer": "P7 执行者按 P6 输出启动评测",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/n11-same-condition-eval-20261022/phases/P6-评测侧适配.md"
+      ],
+      "delete_condition": "只有具名职责退役、真实消费者已由经审查的替代承接且用户授权删除时移除；历史执行与失败原件保留。",
+      "retention_basis": "N11/P6 已批准 Phase 中的新增路径预登记；P1 已实读 specs/n11-same-condition-eval-20261022/phases/P6-评测侧适配.md 的路径与调用安排。当前文件尚未实现；仅登记批准的职责和拟接线消费者，不宣称 active 或已执行。 不新增控制面、不替代任务 facts。"
+    },
+    {
+      "source": "docs/research/n11-evaluation-baseline-runbook.md",
+      "destination": "docs/research/n11-evaluation-baseline-runbook.md",
+      "status": "add",
+      "role": "documentation",
+      "responsibility": "基线与候选四阶段同条件实跑说明",
+      "owner": "N11/P7 实施者；维护者为用户",
+      "consumer": "P8 执行者读取 P7 原件与覆盖限制",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/n11-same-condition-eval-20261022/phases/P7-基线与同条件实跑.md"
+      ],
+      "delete_condition": "只有具名职责退役、真实消费者已由经审查的替代承接且用户授权删除时移除；历史执行与失败原件保留。",
+      "retention_basis": "N11/P7 已批准 Phase 中的新增路径预登记；P1 已实读 specs/n11-same-condition-eval-20261022/phases/P7-基线与同条件实跑.md 的路径与调用安排。当前文件尚未实现；仅登记批准的职责和拟接线消费者，不宣称 active 或已执行。 不新增控制面、不替代任务 facts。"
+    },
+    {
+      "source": "docs/research/n11-judge-and-cost.md",
+      "destination": "docs/research/n11-judge-and-cost.md",
+      "status": "add",
+      "role": "documentation",
+      "responsibility": "判定口径、54/23 逐项复核与成本四组说明",
+      "owner": "N11/P8 实施者；维护者为用户",
+      "consumer": "P8执行者串行写判定/54与23逐项复核和成本节；用户与verify-code读取限定范围、原始判定及缺口，P9后继仅消费引用，不预称已读。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/n11-same-condition-eval-20261022/phases/P8-判定与成本.md"
+      ],
+      "delete_condition": "只有具名职责退役、真实消费者已由经审查的替代承接且用户授权删除时移除；历史执行与失败原件保留。",
+      "retention_basis": "N11/P8报告当前已写，按父PRD原始77分母逐项引用当前消费者与未取得行为；成本与判定仅承接本次P7实际原件，不作首次迁移/首验或新进度权威。"
+    },
+    {
+      "source": "docs/research/n11-integration-runbook.md",
+      "destination": "docs/research/n11-integration-runbook.md",
+      "status": "add",
+      "role": "documentation",
+      "responsibility": "四段真实小任务串演与全 AC 原件导航",
+      "owner": "N11/P9 实施者；维护者为用户",
+      "consumer": "verify-code 复核者逐条核对本任务验收原件",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/n11-same-condition-eval-20261022/phases/P9-整合端到端验收.md"
+      ],
+      "delete_condition": "只有具名职责退役、真实消费者已由经审查的替代承接且用户授权删除时移除；历史执行与失败原件保留。",
+      "retention_basis": "N11/P9 已批准 Phase 中的新增路径预登记；P1 已实读 specs/n11-same-condition-eval-20261022/phases/P9-整合端到端验收.md 的路径与调用安排。当前文件尚未实现；仅登记批准的职责和拟接线消费者，不宣称 active 或已执行。 不新增控制面、不替代任务 facts。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

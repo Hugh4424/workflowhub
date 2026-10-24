@@ -64,7 +64,7 @@
 - **evidence_path**: `[相对任务根的证据路径，例如 quality/evidence/<task-id>/P1-structure.json]`
 - **STOP**: [什么情况停下来、找谁、怎么修]（与 L1 的「停止」写同一件事，不许两处互相矛盾）
 - **覆盖 AC**: [列本 Phase 承接的 AC 编号；验收 Phase 列全部 AC；回写时同步改这一列]
-- **Done**: [要诚实下结论还缺哪些 AC、测试、审查与交接证据；验收项必须写成**没参与实现的人能用一条命令重放**的判据——写不出可重放判据的验收项直接算未达成，不得记为达成]（与 L1 的「完成」写同一件事）。Done 逐条列出每条承接 AC 的编号、档位与证据指针；验收 Phase 列全部 AC，非 `pass` 项额外写未通过原因；build-code Phase 的 Done 与 `evidence_path` 写效果评测记录。
+- **Done**: [要诚实下结论还缺哪些 AC、测试、审查与交接证据；验收项必须写成**没参与实现的人能用一条命令重放**的判据——写不出可重放判据的验收项直接算未达成，不得记为达成]（与 L1 的「完成」写同一件事）。Done 逐条列出每条承接 AC 的编号、档位与证据指针；验收 Phase 列全部 AC，非 `pass` 项额外写未通过原因；build-code Phase 的 Done 与 `evidence_path` 写效果评测记录；不写全量重跑，跳过项写 unverified 加原因与影响面并留在分母。
 
 ## 工作包声明（人读事实）
 
@@ -129,6 +129,10 @@
 在既有计划展示中说明结果、粒度、阻塞与真实 seam，每候选接缝写能抓到什么/漏什么；按当前已接受材料核确认范围，普通来源缺口不另造测试许可，只有接缝或产品选择真未定才交原 owner 澄清。期望取独立真相，纵切 test→最小实现→下一条；refactor 归 review，不替 red–green。DO NOT TOUCH 或依赖外部未改的断言，写该次实读路径、字段/签名/版本逐字值、工具与日期；不能读取就写 unknown、owner/影响/下一动作，摘要和计数不替实读。
 
 ### 测试策略
+
+开工前四要素清单：逐条需求与承接 AC 写明验证层（静态、定向测试、一次端到端、人工）、命令或数据、预期结果、失败条件；四项缺一即未开工。不得用占位句补齐；开工后发现缺项，保留缺项事实，补齐后再实施依赖部分。
+
+默认只跑本任务范围内受影响测试，不写全量重跑；判断不了影响面时用最小可证伪集合并记录未知影响面。全局重跑仅在改动对象是流程本身且局部无法证明时执行一次，事先说明范围与理由；跳过项写 unverified 加原因与影响面并留在分母。
 
 [设计oracle/替身或缺RED检查时，读 `skills/backend-testing/SKILL.md`「行为测试与证伪」「执行事实」，据其独立预期与失败归属填原Task。]
 
@@ -220,6 +224,8 @@
 
 ### 验收 Phase 固定小节（只在验收 Phase 填写）
 
+开工前先按上方「测试策略」的开工前四要素清单逐项核对；未齐备保留缺项，不开始依赖该资产的验收。
+
 本节回答：如何逐条执行验收、留下可复核结论并闭环失败。可执行产物的唯一末 Phase 在本节覆盖全部 AC；纯文档任务仅按 `skills/spec-plan/SKILL.md` 的「Test design and quality」具名豁免，混合任务不在豁免范围。按下列 13 项填写；复用既有 Phase、Task 与原始证据，不新增 stage、gate、审查点、schema 或校验器。
 
 验收作者与独立判定者先读 `docs/architecture/test-asset-governance-rules.md#验收标准可执行形式der-01der-11r-001fr-16ac-16` 的真实好坏例、同尺、独立判定与匿名不自判要求；样本与身份回本任务原件，未执行不预填通过，本节不另建标准。
@@ -234,7 +240,7 @@
 4. **逐条结论**：每格带证据才算完成；缺证据如实保留缺口，不读成通过。每条 AC 一行，写 AC 编号、一个档位、一条具名证据路径。档位只引用 `runtime/evidence/acceptance-evidence-validator.mjs:6` 的 8 值词表，不复制新词表；结论行数与 AC 条数相等，非 `pass` 一律不计通过，不用计数替代逐条。
 5. **五类执行事实**：逐条记命令与参数、cwd 与执行者、exit code 与 signal 与 timeout、原始输出落点、机器可读测试报告（runner 与版本）。`refs` 各标 `execution_record`、`machine_report`、`trace`、`screenshot`、`coverage`、`mutation`、`contract_check`、`red_original`、`negative_control` 之一。首次失败、重跑通过时标 `flaky`、档位记 `inconclusive`，不得记 `pass`。
 6. **效果评测**：写比较基线、指标与统计量、正例与负例、具名原始输出文件及结论。先用具名受控正反负载证明测具能区分目标变化，再冻结输入、指标与停止条件；迭代一次只改一处并测量，保留有可观察收益且未放松原判据的改动，否则撤回该处，不增逐次台账。报告 error/work count 的实际单位与范围：error 是相对独立 oracle 的误报、漏报或错误结果，work 是本次工具真实处理的输入/对照次数，并分开样本数、变更数和未测工程成本；标签逐项指回真实产物。重复观测须保同输入/条件及原读数，按观测波动说明停止依据；仅少量重复未见差异不等于稳定或改善，噪声不可估或收益未越过可观察波动则记 inconclusive，不加固定次数下限、数值门或循环账本。指标基线须在改动前实测，比较两侧条件可比；这里的指标基线不是材料字节基线。UI 判据须明确；本仓无 UI 可写 worktree 无 `apps/`、无 `.tsx`、`.vue`、`.jsx`，但不能免掉代码与接口面。不用环境指纹、产物 digest、哈希或版本相等判定，不用覆盖率或测试数量判通过。
-7. **复验四项**：写复验者与修复者的上下文差异（具体 subagent 身份或 provider 名）、F2P 与 P2P 各自用例清单且计数都大于 0、所跑回归范围与它为何是本次修改的保守超集、三档判分。F2P 为 1 且 P2P 为 1 记 FULL；0 小于 F2P 小于 1 且 P2P 为 1 记 PARTIAL；其余记 NO。PARTIAL 不得记 `pass`，分母为 0 不判通过；修复者自己的声明不算复验证据。
+7. **复验四项**：写复验者与修复者的上下文差异（具体 subagent 身份或 provider 名）、F2P 与 P2P 各自用例清单且计数都大于 0、所跑回归范围与它为何是本次修改的最小可证伪集合，并记录未知影响面、三档判分。F2P 为 1 且 P2P 为 1 记 FULL；0 小于 F2P 小于 1 且 P2P 为 1 记 PARTIAL；其余记 NO。PARTIAL 不得记 `pass`，分母为 0 不判通过；修复者自己的声明不算复验证据。
 8. **变更批准**：AC 或用例集合每次增删改，写独立审查批准者身份、`Rationale for Change`、`Impact Assessment`；登记列为 `Change Request ID`、`Impact Assessment`、`Approval Status`、`Closure Notes/Verification Status`。批准者非实现者、非同一上下文；纯重构不改既有测试，改 AC 等于改承诺，须重新取得确认。没有变更写「无加理由」。
 9. **分诊与关闭**：失败先复现；分诊者不是实现者，保留步骤与结果。最低字段为 `Defect ID`、描述、是否可复现、`Version detected`、`Severity`、`Priority`、`Disposition`（初值 `Pending`）。终值只取 `Fixed`、`Won'tFix`、`Deferred`、`AcceptedRisk`、`Duplicate`、`NotABug`、`Referred`；不修的值须写理由与风险接受人署名。关闭留 `Closed by`、`Date closed`、`Change reference`、`Test reference`、`Closure Notes/Verification Status`。
 10. **回写五项**：① `spec.md` 场景卡；② `spec.md` AC 表；③ phase 契约 `覆盖 AC`；④ `facts.jsonl` 既有字段；⑤ 本次修复记录。每项写哪条 case 改了、为什么、改后判定（取既有 8 值词表）；缺一项不算闭环。

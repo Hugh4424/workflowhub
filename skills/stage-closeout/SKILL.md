@@ -11,7 +11,7 @@ description: 阶段已交付或用户要求独立收尾时，统一提交、PR�
 
 写PR/交付说明前，先读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一正文，再执行本方法的写作动作；消费者是PR 读者与交付验收者。缺源如实 `unavailable`，此处只落实到达条件，不复制规范或改变原授权、失败与收口步骤。
 
-收口前读当前决策记录的「级别与路线」，读不到按复杂路线处理并记缺口，不静默降档。四级每次收口都写业务仓 `Improvements`；无发现写具名依据，越界记不可用，不回落工具仓。反思与经验先由 caller 收口，物理交付随后消费其真实原件。
+收口前读当前决策记录的「级别与路线」，读不到按复杂路线处理并记缺口，不静默降档。四级每次收口都写业务仓 `Improvements`，沿 stage-reflection 的同一规则：节名用项目/模块名，禁止用任务编号或任务流水；写后读回必须核对节名，历史任务节保条目标「待迁移」，下次写该模块时改模块节名，来源任务留条目括号、不删旧条目；无发现写具名依据，越界记不可用，不回落工具仓。反思与经验先由 caller 收口，物理交付随后消费其真实原件。
 
 调用者提供当前task身份和外置task路径、认证worktree/目标repo、当前材料、质量与发现处置原件、真实授权原文/ref、当前分支/HEAD、目标分支/remote、允许写集、PR状态、需交付/归档/保留/清理的精确范围。按实际项目能力读取现有窄工具；缺工具只停相应动作，不能偷偷改用旧close控制面。
 
@@ -93,7 +93,19 @@ PR能力不可用/环境不支持时保真实错误，继续可执行的普通�
 
 先核具名当前消费者是否必须使用材料的现有路径：能在本次授权范围内安全迁接的reader、技能链接和测试依赖，随归档更新到目标路径并读回；确需原路径且不能同批安全迁接的，逐项写明消费者、用途和保留原因。只读历史引用、immutable证据与图中历史source_file保留原文，不单独构成材料必须原位保留的理由；图更新按第3节与knowledge-graph规则执行，未更新如实说明。父规划材料仍被后续子任务消费时，保留其具体路径和用途，不由子任务归档/移动/删除父/兄弟材料；已安全交付也不等于所有执行侧资料可弃。旧worktree备忘逐件核外置唯一原件保管位置或用户明确可弃范围，本次备忘从创建就经已认证task.appendRecord({dir:"quality/evidence",slug,ext:"md",bytes})外置（底层复用appendRecord），不因目录名当可丢缓存。确认拒绝/缺失时，若因PR合并可能自动删除源任务分支（包括宿主设置未知）而在merge前请求确认，则停该merge以及archive/删除/cleanup；其它场景只停archive/删除/cleanup。已完成commit/merge/push事实不改写，保留实际路径和下一步条件。确认只授权列出的物理范围，不接受质量风险或让incomplete变完成。
 
-获确认后，对无需留当前路径的已交付材料普通`git mv`归档；仅保留前述确需原路径且不能安全迁接的具名例外。在实际执行分支按archive授权record/consume，归档新字节另核commit授权、提交并正常merge/push到目标；不使用旧task-close计划/恢复状态。若路径/HEAD/保留需求变化超原确认范围，先重新展示变化并取得新增范围答复；不靠时间或先前机器记录扩大授权。
+归档使用既有 task-close 入口；仅保留前述确需原路径且不能安全迁接的具名例外。参数统一 `--key=value`，从真实返回取 plan-ref 与 confirmation-ref，不手造：
+
+```bash
+node tools/cli/task-close.mjs prepare --project=<项目> --task=<任务> --spec-source=<源> --spec-archive=<归档>
+# 展示 prepare 实际范围，取得本节要求的用户真实答复；confirm 保存该原话
+node tools/cli/task-close.mjs confirm --project=<项目> --task=<任务> --plan-ref=<计划原ref> --decision=confirmed --reply-text=<用户原话>
+# 仅记录上述真实答复确认的操作；本例不授权 push 或 cleanup
+node tools/cli/task-close.mjs manual-close --project=<项目> --task=<任务> --plan-ref=<计划原ref> --confirmation-ref=<确认原ref> --operations='["commit","merge","archive"]'
+node tools/cli/task-close.mjs execute --project=<项目> --task=<任务> --plan-ref=<计划原ref> --confirmation-ref=<确认原ref> --until=archive
+node tools/cli/task-close.mjs status --project=<项目> --task=<任务> --plan-ref=<计划原ref>
+```
+
+execute 后读回输出的 archive 与 merge 事实，并核 `git ls-tree --name-only <实际目标commit> -- <归档路径>`；缺 --confirmation-ref 明确报错，不执行。该入口承接现有归档动作及授权核对，不新增计划格式或恢复流程。只有授权缺失才降级为具名人工 `git mv` 步骤说明；授权缺失时只交回待执行命令，不实际移动、不提交、不声明归档完成。获确认后的归档新字节仍核当前 archive/commit 授权并正常 merge/push；不跳过本节最终范围确认。若路径/HEAD/保留需求变化超原确认范围，先重新展示变化并取得新增范围答复；不靠时间或先前机器记录扩大授权。
 
 完成：最终scope和真实答复原ref可读，归档/保留逐项实际结果可定位；拒绝或未答无对应副作用。
 

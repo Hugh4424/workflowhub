@@ -25,8 +25,10 @@
  * CLI:
  *   node tools/cli/check-stage-quality.mjs             # scan (default)
  *   node tools/cli/check-stage-quality.mjs --self-test # inject real violation + assert detection
+ *   node tools/cli/check-stage-quality.mjs --report    # stdin materials + current-Phase scope → read-only facts
  */
 
+import { validatePostPhaseContract } from "../../runtime/stage/stage-content-contracts.mjs";
 import { readFileSync, readdirSync, writeFileSync, unlinkSync } from "node:fs";
 import { join, resolve, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -336,7 +338,18 @@ const isMain =
 
 if (isMain) {
   const args = process.argv.slice(2);
-  if (args.includes("--self-test")) {
+  if (args.includes("--report")) {
+    try {
+      const input = JSON.parse(readFileSync(0, "utf8"));
+      if (!input || typeof input !== "object" || Array.isArray(input)) throw new TypeError("report input must be a materials object");
+      const result = validatePostPhaseContract(input);
+      if (!result.facts) throw new TypeError(`report materials unavailable: ${result.errors.join("; ")}`);
+      console.log(JSON.stringify(result.facts.write_set_reconciliation));
+    } catch (error) {
+      console.error(`[check-stage-quality] report ERROR: ${error.message}`);
+      process.exitCode = 2;
+    }
+  } else if (args.includes("--self-test")) {
     runSelfTest();
   } else {
     runScan();

@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createTask } from "../../runtime/task/task-handle.mjs";
+import { initializeTaskStore } from "../../runtime/task/task-store.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const taskCloseCli = join(repoRoot, "tools/cli/task-close.mjs");
@@ -16,7 +17,7 @@ afterEach(() => {
 });
 
 describe("task-close CLI task path resolution", () => {
-  it("derives the task path from ~/.config/workflowhub/config.json when omitted", () => {
+  it("derives the task path from ~/.config/workflowhub/config.json when omitted", async () => {
     const home = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-task-close-cli-")));
     temporaryRoots.push(home);
     const storageRoot = join(home, "Knowledge");
@@ -24,12 +25,17 @@ describe("task-close CLI task path resolution", () => {
     const repo = join(home, "repo");
     mkdirSync(storageRoot);
     mkdirSync(repo);
+    execFileSync("git", ["init", "-b", "main", repo], { stdio: "pipe" });
+    execFileSync("git", ["-C", repo, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--allow-empty", "-m", "fixture"], { stdio: "pipe" });
     mkdirSync(join(configHome, "workflowhub"), { recursive: true });
     writeFileSync(join(configHome, "workflowhub", "config.json"), `${JSON.stringify({ task_dir: storageRoot })}\n`);
-    createTask({
+    const task = await createTask({
       storageRoot,
       manifest: {
         schema_version: "1.0.0",
+        activation_cohort: "post",
+        execution_mode: "per_invocation",
+        record_model: "vnext-single-write",
         project_name: "workflowhub",
         task_id: "task-close-cli-resolution",
         created_at: "2026-09-10T00:00:00.000Z",
@@ -38,6 +44,7 @@ describe("task-close CLI task path resolution", () => {
         inputs: {},
       },
     });
+    await initializeTaskStore(task.taskPath, { taskId: "task-close-cli-resolution" });
 
     const env = { ...process.env, HOME: home, XDG_CONFIG_HOME: configHome };
     delete env.WORKFLOWHUB_TASK_DIR;
@@ -50,6 +57,6 @@ describe("task-close CLI task path resolution", () => {
 
     expect(result.status).toBe(0);
     expect(result.stderr).toBe("");
-    expect(JSON.parse(result.stdout)).toMatchObject({ status: "not_completed" });
+    expect(JSON.parse(result.stdout)).toMatchObject({ status: "not_started" });
   });
 });

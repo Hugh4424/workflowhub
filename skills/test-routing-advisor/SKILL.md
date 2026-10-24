@@ -17,9 +17,11 @@ description: 在 build-plan 预判并在 build-code 必要时重判 simple、fea
 
 - `simple`：只改文档、文案、静态配置，或单模块低风险改动；无接口、数据、权限、构建链变化。
 - `feature`：一个功能域内的行为变化；需要目标单测和邻接集成测试，但无跨端或基础设施链路。
-- `fullstack`：跨前后端、API/协议、数据库迁移、认证授权、部署配置、并发/事务，或改动边界无法可靠证明更窄。
+- `fullstack`：跨前后端、API/协议、数据库迁移、认证授权、部署配置、并发/事务。
 
-风险不明时选更高一级。`phase_count > 1` 不是单独升级理由，但多个 phase 跨功能域时至少 `feature`。
+风险不明时选能证明改动后果的最小可证伪集合，并把未判定的未知影响面写进当次记录。`phase_count > 1` 不是单独升级理由，但多个 phase 跨功能域时至少 `feature`。
+
+全局重跑的例外沿 `docs/standard-workflow.md`「专业质量」：改动对象是流程本身且局部无法证明时只执行一次，事先说明范围与理由。
 
 ## 输出合同
 
@@ -40,7 +42,7 @@ description: 在 build-plan 预判并在 build-code 必要时重判 simple、fea
 - `routing_rationale` 必须非空，并引用实际 changed files/边界。
 - `result` 正常判类为 `pass`；输入缺失、路径无法解析、输出无法满足合同为 `fail`。
 - `ts` 必须是 UTC ISO-8601 时间。
-- `result: fail` 时仍给出最保守可判定 tier；完全无法判定时用 `fullstack`。
+- `result: fail` 时仍给出最保守可判定 tier；完全无法判定时用最小可证伪集合，在记录里点名未知影响面；tier 仍按可证实的边界填写，不以未知自动升级。
 
 ## 写作规范
 

@@ -11,6 +11,9 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
+const executionHash = bytes => createHash("sha256").update(bytes).digest("hex");
+const checkerExecutionHash = executionHash(readFileSync(fileURLToPath(import.meta.url)));
 
 const CHAIN_FIELDS = ["决定", "为什么", "否掉了什么", "后果与风险", "影响面"];
 const CURRENT_FIELDS = ["做什么", "不做什么", "风险", "改动"];
@@ -325,8 +328,8 @@ export function main(args = process.argv.slice(2)) {
   let checkedInputs = 0;
   let hadReadError = false;
   for (const input of files) {
-    let markdown;
-    try { markdown = readFileSync(input.path, "utf8"); }
+    let markdown, inputBytes;
+    try { inputBytes = readFileSync(input.path); markdown = inputBytes.toString("utf8"); }
     catch (error) {
       console.error(`[check-decision-log-chain] cannot read ${input.source_ref}: ${error.code ?? error.message}`);
       hadReadError = true;
@@ -338,6 +341,7 @@ export function main(args = process.argv.slice(2)) {
     }
     checkedInputs += 1;
     const result = checkDecisionLogChain({ markdown, source_ref: input.source_ref });
+    console.log(`[check-decision-log-chain] scanned ${JSON.stringify({input_path:resolve(input.path),input_sha256:executionHash(inputBytes),checker_sha256:checkerExecutionHash})}`);
     for (const item of result.warnings) {
       warningCount += 1;
       console.log(`[check-decision-log-chain] WARNING ${input.source_ref} ${item.decision_id}.${item.field}: ${item.message}`);

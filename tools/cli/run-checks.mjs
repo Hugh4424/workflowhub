@@ -238,6 +238,32 @@ function triageSkipReasons(phases) {
   return errors;
 }
 
+// A report projection only: zero attestation does not claim that a workflow ran.
+export function stepCoverageExit(report) {
+  if (!Array.isArray(report?.workflow_steps)) throw new TypeError("workflow_steps report is required");
+  const stages = new Map();
+  for (const row of report.workflow_steps) {
+    if (!row || typeof row.stage !== "string" || !row.stage || typeof row.source !== "string"
+        || typeof row.step_slug !== "string" || typeof row.state !== "string") {
+      throw new TypeError("workflow step identity/state is required");
+    }
+    if (!stages.has(row.stage)) stages.set(row.stage, []);
+    stages.get(row.stage).push(row);
+  }
+  const missing_steps = [], steps_unattested = [];
+  for (const [stage, rows] of stages) {
+    const attested = rows.some(row => row.state === "completed" || row.state === "not_applicable");
+    if (!attested) {
+      steps_unattested.push({ stage, declared_steps: rows.length });
+      continue;
+    }
+    for (const { source, step_slug, state } of rows) {
+      if (state !== "completed" && state !== "not_applicable") missing_steps.push({ source, step_slug, state });
+    }
+  }
+  return { exit_code: missing_steps.length ? 1 : 0, missing_steps, steps_unattested };
+}
+
 async function main() {
   const args = process.argv.slice(2);
   if (args.length === 0) return runAggregate();
@@ -249,8 +275,9 @@ async function main() {
   try {
     const { runFinalChainCheck } = await import("../../runtime/task/final-chain-runner.mjs");
     const report = runFinalChainCheck({ taskPath: resolve(args[1]) });
-    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
-    process.exitCode = 0;
+    const { exit_code, ...coverage } = stepCoverageExit(report);
+    process.stdout.write(`${JSON.stringify({ ...report, ...coverage }, null, 2)}\n`);
+    process.exitCode = exit_code;
   } catch (error) {
     console.error(error.message);
     process.exitCode = 2;

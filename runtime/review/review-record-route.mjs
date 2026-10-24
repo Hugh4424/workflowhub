@@ -222,7 +222,13 @@ export async function recordSimpleReviewRequest({taskDir,request,runRound=runSim
       result={...result,discarded_facts:[...(result.discarded_facts ?? []),...(parsed.discarded_facts ?? [])]};
     }
     const providers=[];
-    for(const [index,member] of (result.provider_results ?? []).entries()) providers.push(await providerFact(member,dir,`${tuple.stage}-${tuple.review_scope ?? "document"}-provider-${index+1}`,root,discardedFacts,reuseOutput));
+    const uniqueProviders=new Map();
+    for(const member of result.provider_results ?? []) {
+      const previous=uniqueProviders.get(member.provider);
+      const semantic=value=>value?.status === "completed" && (value.parse_outcome ?? value.execution?.parse_outcome) === "ok";
+      if(!previous || (semantic(member) && !semantic(previous))) uniqueProviders.set(member.provider,member);
+    }
+    for(const [index,member] of [...uniqueProviders.values()].entries()) providers.push(await providerFact(member,dir,`${tuple.stage}-${tuple.review_scope ?? "document"}-provider-${index+1}`,root,discardedFacts,reuseOutput));
     const slug=`${tuple.stage}-${tuple.review_scope ?? tuple.review_track ?? "document"}${tuple.phase_id ? "-"+tuple.phase_id.toLowerCase() : ""}`;
     const {material_id,authenticated_evidence,authenticated_evidence_sha256,snapshot_tree,candidate_tree,base_tree,request_key,request_hash,closure_manifest,material_revision,source,...ordinary}=result;
     const completed=new Date().toISOString();
@@ -245,7 +251,7 @@ export async function recordSimpleReviewRequest({taskDir,request,runRound=runSim
         already_reviewed:priorMaterialReview(dir,materialId)},
       material_coverage:providers.map(member=>providerCoverage(member,materialKeys)),
       ...((result.discarded_facts?.length || discardedFacts.length) ? {discarded_facts:[...(result.discarded_facts ?? []),...discardedFacts]} : {}),
-      ...(signal?.aborted ? {status:"unavailable",error:{code:"REVIEW_CANCELLED",message:"review cancelled; settled provider facts retained"}} : {}),authoritative:false};
+      ...(signal?.aborted ? {status:providers.some(member=>member.status === "completed" && (member.parse_outcome ?? member.execution?.parse_outcome) === "ok") ? "available-with-failures" : "unavailable",error:{code:"REVIEW_CANCELLED",message:"review cancelled; settled provider facts retained"}} : {}),authoritative:false};
     if(tuple.stage==="verify-code") {
       const {conclusion,coverage}=deriveVerifyCodeConclusion({status:record.status,provider_results:providers,findings});
       Object.assign(record,{conclusion,coverage});

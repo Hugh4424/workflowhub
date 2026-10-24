@@ -13,6 +13,10 @@ function args(argv) {
 }
 function required(values,name){if(!values[name])throw new TypeError(`--${name} is required`);return values[name];}
 function metadataGit(cwd,argv){const env={...process.env};for(const key of Object.keys(env))if(key.startsWith("GIT_"))delete env[key];env.GIT_OPTIONAL_LOCKS="0";return execFileSync("git",argv,{cwd,env,encoding:"utf8",stdio:["ignore","pipe","pipe"]}).trim();}
+export async function archiveReadback({taskDir,planRef}) {
+  const state=await inspectDeliveryCloseState({taskDir,planRef});
+  return {archive:state.facts?.archive??null,merge:state.facts?.merge??null,readback:state};
+}
 export async function taskCloseMain(argv=process.argv.slice(2),{cwd=process.cwd(),signal}={}){
   const {command,values}=args(argv);
   if(!["prepare","confirm","execute","manual-close","complete","status","close"].includes(command))throw new TypeError("usage: task-close.mjs prepare|confirm|execute|manual-close|complete|status|close --project=... --task=... [--plan-ref=...] [--until=<action>]");
@@ -42,7 +46,8 @@ export async function taskCloseMain(argv=process.argv.slice(2),{cwd=process.cwd(
     // override or synthesized risk acceptance is created by this route.
     return authorizeClosePlan({taskDir,planRef,confirmationRef:required(values,"confirmation-ref"),...(values.operations?{operations:JSON.parse(values.operations)}:{})});
   }
-  return executeClosePlan({taskDir,planRef,confirmationRef:required(values,"confirmation-ref"),signal,...(values.until!==undefined?{until:values.until}:{})});
+  const result=await executeClosePlan({taskDir,planRef,confirmationRef:required(values,"confirmation-ref"),signal,...(values.until!==undefined?{until:values.until}:{})});
+  return {...result,...await archiveReadback({taskDir,planRef})};
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){
   const controller=new AbortController();let cancelledExit=130;const cancel=name=>()=>{if(!controller.signal.aborted){cancelledExit=name==="SIGTERM"?143:130;controller.abort(new Error(`close interrupted by ${name}`));}};
