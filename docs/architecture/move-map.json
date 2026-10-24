@@ -5509,7 +5509,7 @@
       "role": "test",
       "responsibility": "N10 P1 检查器输入、报告与公共退出语义的受控行为oracle；普通测试事实，不作阶段许可证。",
       "owner": "N10 P1 oracle/实施维护者；冻结后变更遵现有TCR",
-      "consumer": "specs/n10-finite-check-wiring-20261020/phases/ 中P1具名gate_cmd与verify-code独立复核通过Vitest显式消费本测试；当前可读预写测试，不以登记冒执行通过。",
+      "consumer": "specs/archive/n10-finite-check-wiring-20261020/phases/ 中P1具名gate_cmd与verify-code独立复核通过Vitest显式消费本测试；当前可读预写测试，不以登记冒执行通过。",
       "module_consumers": [],
       "named_data_readers": [],
       "delete_condition": "经独立审查的替代测试完整承接上述行为与失败边界后由原owner退役；原始RED及历史引用保留。",
@@ -5522,7 +5522,7 @@
       "role": "test",
       "responsibility": "N10 P2 来源登记、声明出口、决定与索引、vendor漂移、bundle指针、空来源、总检查传递的受控行为oracle；普通测试事实，不作阶段许可证。",
       "owner": "N10 P2 oracle/实施维护者；冻结后变更遵现有TCR",
-      "consumer": "specs/n10-finite-check-wiring-20261020/phases/ 中P2具名gate_cmd与verify-code独立复核通过Vitest显式消费本测试；当前可读预写测试，不以登记冒执行通过。",
+      "consumer": "specs/archive/n10-finite-check-wiring-20261020/phases/ 中P2具名gate_cmd与verify-code独立复核通过Vitest显式消费本测试；当前可读预写测试，不以登记冒执行通过。",
       "module_consumers": [],
       "named_data_readers": [],
       "delete_condition": "经独立审查的替代测试完整承接上述行为与失败边界后由原owner退役；原始RED及历史引用保留。",
@@ -5596,8 +5596,8 @@
       "retention_basis": "P5已授权Phase及本次真实调用入口研究；本登记先于测试创建，测试不作阶段许可证。"
     },
     {
-      "source": "specs/n10-finite-check-wiring-20261020/n8-corrections.md",
-      "destination": "specs/n10-finite-check-wiring-20261020/n8-corrections.md",
+      "source": "specs/archive/n10-finite-check-wiring-20261020/n8-corrections.md",
+      "destination": "specs/archive/n10-finite-check-wiring-20261020/n8-corrections.md",
       "status": "retain",
       "role": "production",
       "responsibility": "N8归档摘要与五处降档的有源更正；替代直接修改只读归档",
@@ -5633,7 +5633,7 @@
       "consumer": "P7/T034、verify-code与维护者显式执行Phase gate_cmd，读取既有Appendix A与外置任务原件，输出逐AC原件及聚合供用户复核。",
       "module_consumers": [],
       "named_data_readers": [
-        "specs/n10-finite-check-wiring-20261020/phases/P7-全AC验收.md"
+        "specs/archive/n10-finite-check-wiring-20261020/phases/P7-全AC验收.md"
       ],
       "delete_condition": "唯一验收入口被经独立审查的替代承接且无当前consumer时由维护者删除；外置历史原件不删覆。",
       "retention_basis": "原spec Appendix A原36AC与P7/T033/T034；复用已有CLI、原始证据和appendRecord，无第二runtime、报告schema或gate。"
@@ -5648,7 +5648,7 @@
       "consumer": "P7/T034、verify-code和后续维护者按本文定位唯一测试入口与已有原件，执行或复核36AC；用户读取限制。",
       "module_consumers": [],
       "named_data_readers": [
-        "specs/n10-finite-check-wiring-20261020/phases/P7-全AC验收.md"
+        "specs/archive/n10-finite-check-wiring-20261020/phases/P7-全AC验收.md"
       ],
       "delete_condition": "唯一验收入口被经独立审查的替代承接且无当前consumer时由维护者删除；外置历史原件不删覆。",
       "retention_basis": "原spec Appendix A原36AC与P7/T033/T034；复用已有CLI、原始证据和appendRecord，无第二runtime、报告schema或gate。"
@@ -5694,10 +5694,10 @@
       "role": "production",
       "responsibility": "只读task磁盘归属CLI，不接public runtime/run-checks",
       "owner": "N10/P8原实施owner；维护者为用户",
-      "consumer": "specs/n10-finite-check-wiring-20261020/phases/P8-磁盘有界性.md",
+      "consumer": "specs/archive/n10-finite-check-wiring-20261020/phases/P8-磁盘有界性.md",
       "module_consumers": [],
       "named_data_readers": [
-        "specs/n10-finite-check-wiring-20261020/phases/P8-磁盘有界性.md"
+        "specs/archive/n10-finite-check-wiring-20261020/phases/P8-磁盘有界性.md"
       ],
       "delete_condition": "唯一已证consumer被经独立审查的替代完整承接且无当前消费后退役；历史原件不删覆。",
       "retention_basis": "实施前已登记，现按真实调用维护；独立156设计与250/252/257/259/265窄TCR，职责登记不作行为/质量许可"
@@ -5709,10 +5709,10 @@
       "role": "test",
       "responsibility": "P8四AC真实writer/峰值/并发/失败边界合同，不作质量许可",
       "owner": "N10/P8原实施owner；维护者为用户",
-      "consumer": "specs/n10-finite-check-wiring-20261020/phases/P8-磁盘有界性.md",
+      "consumer": "specs/archive/n10-finite-check-wiring-20261020/phases/P8-磁盘有界性.md",
       "module_consumers": [],
       "named_data_readers": [
-        "specs/n10-finite-check-wiring-20261020/phases/P8-磁盘有界性.md"
+        "specs/archive/n10-finite-check-wiring-20261020/phases/P8-磁盘有界性.md"
       ],
       "delete_condition": "唯一已证consumer被经独立审查的替代完整承接且无当前消费后退役；历史原件不删覆。",
       "retention_basis": "实施前已登记，现按真实调用维护；独立156设计与250/252/257/259/265窄TCR，职责登记不作行为/质量许可"
@@ -5724,10 +5724,10 @@
       "role": "documentation",
       "responsibility": "P8实际命令/原件/阈值及失败重放说明",
       "owner": "N10/P8原实施owner；维护者为用户",
-      "consumer": "specs/n10-finite-check-wiring-20261020/phases/P8-磁盘有界性.md",
+      "consumer": "specs/archive/n10-finite-check-wiring-20261020/phases/P8-磁盘有界性.md",
       "module_consumers": [],
       "named_data_readers": [
-        "specs/n10-finite-check-wiring-20261020/phases/P8-磁盘有界性.md"
+        "specs/archive/n10-finite-check-wiring-20261020/phases/P8-磁盘有界性.md"
       ],
       "delete_condition": "唯一已证consumer被经独立审查的替代完整承接且无当前消费后退役；历史原件不删覆。",
       "retention_basis": "实施前已登记，现按真实调用维护；独立156设计与250/252/257/259/265窄TCR，职责登记不作行为/质量许可"

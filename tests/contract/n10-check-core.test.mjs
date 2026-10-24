@@ -22,7 +22,7 @@ const current = "### D-901 — current\n- 做什么：检查\n- 不做什么：�
 
 describe("ORACLE-N10-CHECK-CORE decision-chain input triage", () => {
   it("retains legal advisory output and exit 0", () => {
-    const result = runDecisionChain(["--file", "specs/n10-finite-check-wiring-20261020/decision-log.md"]);
+    const result = runDecisionChain(["--file", "specs/archive/n10-finite-check-wiring-20261020/decision-log.md"]);
     expect(result.status, result.output).toBe(0);
     expect(result.stderr).toBe("");
     expect(result.stdout).toContain("non-blocking, exit 0");
@@ -81,7 +81,7 @@ describe("ORACLE-N10-CHECK-CORE decision-chain input triage", () => {
 
 describe("ORACLE-N10-CHECK-CORE decision-chain shape inference", () => {
   it("does not report legacy missing fields for the real N10 current decisions", () => {
-    const path = join(ROOT, "specs/n10-finite-check-wiring-20261020/decision-log.md");
+    const path = join(ROOT, "specs/archive/n10-finite-check-wiring-20261020/decision-log.md");
     const result = checkDecisionLogChain({ markdown: readFileSync(path, "utf8"), source_ref: path });
     expect(result.warnings.filter(w => w.code === "missing_chain_field" && ["module", "requirement_ids", "derived_from", "artifacts"].includes(w.field))).toEqual([]);
     expect(runDecisionChain(["--file", path]).status).toBe(0);
@@ -200,7 +200,7 @@ describe("ORACLE-N10-CHECK-CORE controlled violations and byte-identical restore
     expect(observe("required_skills byte-identical restore", cli()).status).toBe(0);
   });
   it("names a missing field in a real decision-log copy, restores bytes, and leaves the real source unchanged", () => {
-    const source = join(ROOT, "specs/n10-finite-check-wiring-20261020/decision-log.md");
+    const source = join(ROOT, "specs/archive/n10-finite-check-wiring-20261020/decision-log.md");
     const original = readFileSync(source); const hash = bytes => createHash("sha256").update(bytes).digest("hex");
     const path = join(temp(), "decision-log.md"); writeFileSync(path, original);
     const baseline = observe("decision legal", runDecisionChain(["--file", path])); expect(baseline.status).toBe(0);

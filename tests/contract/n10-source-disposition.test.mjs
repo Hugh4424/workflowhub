@@ -8,7 +8,7 @@ import { execFileSync } from "node:child_process";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const read = path => readFileSync(resolve(ROOT, path), "utf8");
-const SPEC = "specs/n10-finite-check-wiring-20261020/spec.md";
+const SPEC = "specs/archive/n10-finite-check-wiring-20261020/spec.md";
 const POINTER = "../../workflows/verify-code/SKILL.md#测试充分性与检查可信度";
 const ANCHORS = ["错在范围修", "观察方法", "三值结论", "具名检查"];
 const DISPOSITIONS = ["已生效读回", "本次接线验证", "未完成", "不采用"];

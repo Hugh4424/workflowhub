@@ -10,7 +10,7 @@ const method='workflows/make-decision/SKILL.md';
 const data='workflows/make-decision/steps.json';
 const contract='skills/wh-review/contracts/make-decision.md';
 const adr='docs/adr/0052-direction-review-before-module-convergence.md';
-const corrections='specs/n10-finite-check-wiring-20261020/n8-corrections.md';
+const corrections='specs/archive/n10-finite-check-wiring-20261020/n8-corrections.md';
 const normal='workflows/make-decision/flows/normal/SKILL.md';
 const section=(s,n)=>s.split(new RegExp(`^${n}\\. \\x60`,'m'))[1]?.split(/^\d+\. `/m)[0]??'';
 const needs=(s,patterns)=>patterns.filter(re=>!re.test(s)).map(String);

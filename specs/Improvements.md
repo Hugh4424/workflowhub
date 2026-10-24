@@ -56,7 +56,7 @@
 
 | 问题 | 下次改变的行动 | 状态 |
 | --- | --- | --- |
-| 审查建议曾否定 P2 明文允许的 notice 坐标，又把旧汇总漏列原件误作实现缺口（来源：N10/verify-code，`quality/reviews/2026-10-22-064-verify-code-document.json`、`specs/n10-finite-check-wiring-20261020/phases/P2-来源与目录接线.md:111`、`quality/reviews/2026-10-22-087-n10-review-clarification-20261022.md`）。 | 下次处置 finding 先回读对应原 AC、真实消费者和具名原件；与合同冲突时保留建议并写拒绝原因，不增加 hash/freshness 门。 | 已落账；仅纠正证据判读，完整验收限制不变。 |
+| 审查建议曾否定 P2 明文允许的 notice 坐标，又把旧汇总漏列原件误作实现缺口（来源：N10/verify-code，`quality/reviews/2026-10-22-064-verify-code-document.json`、`specs/archive/n10-finite-check-wiring-20261020/phases/P2-来源与目录接线.md:111`、`quality/reviews/2026-10-22-087-n10-review-clarification-20261022.md`）。 | 下次处置 finding 先回读对应原 AC、真实消费者和具名原件；与合同冲突时保留建议并写拒绝原因，不增加 hash/freshness 门。 | 已落账；仅纠正证据判读，完整验收限制不变。 |
 
 ## 审查聚合与部分结果（N11）
 

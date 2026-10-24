@@ -1,7 +1,7 @@
 {
   "source": {
     "research_ref": "task:quality/evidence/build-plan-research/r9-sources-content.md#5.3-5.4",
-    "contract_ref": "specs/n10-finite-check-wiring-20261020/phases/P4-方法读回与变异演示.md",
+    "contract_ref": "specs/archive/n10-finite-check-wiring-20261020/phases/P4-方法读回与变异演示.md",
     "manual_boundary_repair_ref": "task:quality/evidence/2026-10-21-169-registry-m05-boundary-repair.json"
   },
   "rows": [

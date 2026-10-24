@@ -1,6 +1,6 @@
 # N10 原36AC验收重跑
 
-本入口消费P1–P6首次验收和后修原件，复核当前CLI接线，首次核SET4/5。GREEN只说明本次逐条证据有效，不是独立质量通过或追加磁盘四AC完成。唯一判据为`specs/n10-finite-check-wiring-20261020/spec.md` Appendix A。
+本入口消费P1–P6首次验收和后修原件，复核当前CLI接线，首次核SET4/5。GREEN只说明本次逐条证据有效，不是独立质量通过或追加磁盘四AC完成。唯一判据为`specs/archive/n10-finite-check-wiring-20261020/spec.md` Appendix A。
 
 ## 命令与输入
 

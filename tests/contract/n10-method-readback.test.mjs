@@ -67,7 +67,7 @@ function readRegistrations(catalogText, notice, spec) {
     if (!id) throw new Error(`unmapped registration failure: ${reason}`);
     const appendix = reason.includes('Appendix B');
     const source = appendix
-      ? `specs/n10-finite-check-wiring-20261020/spec.md#Appendix B/${entry?.[0] ?? 16}`
+      ? `specs/archive/n10-finite-check-wiring-20261020/spec.md#Appendix B/${entry?.[0] ?? 16}`
       : reason.endsWith('notice missing') ? `THIRD_PARTY_NOTICES.md#${entry[3]}`
         : entry ? `skills/catalog.yaml#upstream.path=${entry[2]}` : 'skills/catalog.yaml#capability_decisions.swarm';
     return { id, status: 'incomplete', reason, source, owner: appendix ? 'P5/材料 owner' : 'P2 owner' };
@@ -174,7 +174,7 @@ describe('ORACLE-N10-METHOD-READBACK', () => {
       expect(row.trigger, id).not.toMatch(/npx|node /u);
     }
     const catalog = text('skills/catalog.yaml'); const notice = text('THIRD_PARTY_NOTICES.md');
-    const spec = text('specs/n10-finite-check-wiring-20261020/spec.md');
+    const spec = text('specs/archive/n10-finite-check-wiring-20261020/spec.md');
     const result = readRegistrations(catalog, notice, spec);
     console.log('N10_P4_B_READBACK', JSON.stringify({ ...result, incomplete: result.diagnostics, limit: 'registration readback only; human semantics and actual adoption effects not observed' }));
     expect(result.failures, 'AC-METHOD-4 incomplete: exact P2 registrations and Appendix B').toEqual([]);
@@ -191,7 +191,7 @@ describe('ORACLE-N10-METHOD-READBACK', () => {
 
   it('T019 retains failure facts and names independent P2/P5 incomplete handoffs for real input mutations', () => {
     const catalog = text('skills/catalog.yaml'); const notice = text('THIRD_PARTY_NOTICES.md');
-    const spec = text('specs/n10-finite-check-wiring-20261020/spec.md');
+    const spec = text('specs/archive/n10-finite-check-wiring-20261020/spec.md');
     expect(readRegistrations(catalog, notice, spec).diagnostics, 'normal input has no incomplete diagnostics').toEqual([]);
     const altered = yaml.load(catalog);
     for (const skill of altered.skills) skill.upstream = (skill.upstream ?? []).filter(source => source.path !== 'skills/correct/SKILL.md');
@@ -207,7 +207,7 @@ describe('ORACLE-N10-METHOD-READBACK', () => {
     expect(result.diagnostics).toEqual(expect.arrayContaining([
       { id: 'pstack::correct', status: 'incomplete', reason: 'pstack::correct: adopted snapshot mismatch', source: 'skills/catalog.yaml#upstream.path=skills/correct/SKILL.md', owner: 'P2 owner' },
       { id: 'pstack::correct', status: 'incomplete', reason: 'pstack::correct: notice missing', source: 'THIRD_PARTY_NOTICES.md#correct', owner: 'P2 owner' },
-      { id: 'pstack::correct', status: 'incomplete', reason: 'pstack::correct: Appendix B disposition unavailable', source: 'specs/n10-finite-check-wiring-20261020/spec.md#Appendix B/5', owner: 'P5/材料 owner' },
+      { id: 'pstack::correct', status: 'incomplete', reason: 'pstack::correct: Appendix B disposition unavailable', source: 'specs/archive/n10-finite-check-wiring-20261020/spec.md#Appendix B/5', owner: 'P5/材料 owner' },
       { id: 'swarm', status: 'incomplete', reason: 'swarm: consumer-only watch registration missing', source: 'skills/catalog.yaml#capability_decisions.swarm', owner: 'P2 owner' },
     ]));
     expect(result.diagnostics).toHaveLength(result.failures.length);

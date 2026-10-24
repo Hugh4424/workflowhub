@@ -86,7 +86,7 @@ describe("ORACLE-N10-FINITE-SET T023", async () => {
       const taskRoot = resolveTaskRoot();
       const data = report(await run(["--task-path", taskRoot], "N10-real-task", taskRoot));
       expect(data.task_id).toBe(TASK_ID);
-      expect(data.material_root).toBe(join(ROOT, "specs/n10-finite-check-wiring-20261020"));
+      expect(data.material_root).toBe(join(ROOT, "specs/archive/n10-finite-check-wiring-20261020"));
     },
   );
 
