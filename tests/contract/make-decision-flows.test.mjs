@@ -347,6 +347,16 @@ function readerIssues(doc, level='complex') {
 }
 
 describe('ORACLE-FLOW-STEPS appended TCR182/183: method consumption and canonical writer',()=>{
+  test('root binds decision-log writes to the authenticated worktree material route',()=>{
+    const doc=text('complex');
+    for(const phrase of [
+      '认证 worktree 的 `specs/<task-id>/decision-log.md`',
+      'run --action=draft --stage=make-decision --name=decision-log.md',
+      '`taskPath` 只用于 `task.json`、`facts.jsonl`、`quality/` 和 `evidence/`',
+      '不得把 `taskPath` 或 `WORKFLOWHUB_TASK_DIR` 当作当前材料／decision-log 的写入根',
+      '记录 `unavailable` 并停止该写入路径，不 fallback 到 taskPath',
+    ]) expect(doc,`decision-log canonical material writer: ${phrase}`).toContain(phrase);
+  });
   for(const level of ['small','normal']) test(`${level}: step5 consumes clarify before deciding whether to ask`,()=>{
     expect(clarifyIssues(text(level),steps(level).steps[4])).toEqual([]);
   });

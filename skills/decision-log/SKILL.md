@@ -8,6 +8,10 @@ description: Convert supplied decision material into a structured downstream rec
 读者：make-decision 主会话与整理决定的材料作者。
 读完要能：从真实来源写出下游可消费的决定、索引与条件指针，保留来源并标明缺口。
 
+## 写入目标与边界
+
+post 任务的当前正文必须写入认证 worktree 的 `specs/<task-id>/decision-log.md`，只能通过当前 WorkflowHub 的材料写入路由发布；任务库 `taskPath`／`WORKFLOWHUB_TASK_DIR` 只承载 `task.json`、`facts.jsonl`、`quality/` 与 `evidence/`。当前材料写入路由不可用时记 `unavailable`，不能回退到 task 目录，也不能在 task 目录生成同名副本再把它当当前权威。
+
 用 [decision-log-template.md](templates/decision-log-template.md) 将真实输入整理为 `decision-log.md` 供上述读者消费；模板只安排正文，不认证身份或授权。方向问答及最终确认归主会话，本技能不代答。
 
 ## 写作步骤

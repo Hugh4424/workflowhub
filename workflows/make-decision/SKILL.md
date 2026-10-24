@@ -10,6 +10,12 @@ version: 3.2.0
 
 把原始需求变成用户确认的方向，写入当前任务的 `decision-log.md`。复杂路线在本阶段负责 Talk、必要调研、Grill 与决策正文，后续 build-plan 负责规格澄清和实施设计；轻档与规划的职责按下方入口选中的流程执行。读取已有材料和原始来源即可开始，历史任务与旧审查只作背景。当前 post 任务使用 decision-log、spec、独立 Phase 文件及纯指针索引；历史材料只读，不重新启用 pre 工作流。
 
+### 当前材料写入边界
+
+post 任务的当前 decision-log 唯一落点是认证 worktree 的 `specs/<task-id>/decision-log.md`。发布草稿必须经过公共 `run --action=draft --stage=make-decision --name=decision-log.md` 路由；该路由由认证任务身份解析 ArtifactDir，再以安全原子写入发布到上述材料根。不得把 `taskPath` 或 `WORKFLOWHUB_TASK_DIR` 当作当前材料／decision-log 的写入根，也不得以当前 cwd 推断写入位置。
+
+`taskPath` 只用于 `task.json`、`facts.jsonl`、`quality/` 和 `evidence/` 等任务事实与原始证据；它不是当前材料目录。若公共材料写入路由不可用，记录 `unavailable` 并停止该写入路径，不 fallback 到 taskPath；不在任务库 task 目录生成 decision-log 副本或把外置副本冒充当前权威。这是材料归属约束，不新增 stage、gate 或进度对象。
+
 ## 入口路由
 
 首次问答前只读本节与当前材料，复用 scripts/entry-evaluation.mjs 的 evaluateEntryRoute 真实返回评估七项入口事实：boundary_clear、single_outcome、limited_impact、major_architecture、migration、permission、security。函数保原风险与缺事实语义；它不是四级自动选择器。按以下顺序推荐，判据只用入口可得的交付、验收、用户故事与风险事实，不使用实施后的 diff 或 Phase 数：

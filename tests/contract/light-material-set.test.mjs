@@ -65,6 +65,19 @@ describe('ORACLE-LIGHT-MATERIALS', () => {
     expect(success(cli(f, 'status', 'make-decision')).missing_materials).toEqual([]);
     expect(success(cli(f, 'status', 'build-plan')).missing_materials).toEqual(['decision-log.md']);
   });
+  it('publishes a newly authored decision-log in worktree specs, never task storage', async () => {
+    const f = await fixture();
+    const decision = join(f.materials, 'decision-log.md');
+    const facts = readFileSync(join(f.task.taskPath, 'facts.jsonl'));
+    const body = '# Authored decision\n\n## 任务身份\n\n- **任务类型**：普通任务\n';
+    rmSync(decision);
+
+    const result = success(draft(f, 'decision-log.md', body));
+    expect(result.artifact_ref).toBe('specs/light-materials/decision-log.md');
+    expect(readFileSync(decision, 'utf8')).toBe(body);
+    expect(existsSync(join(f.task.taskPath, 'decision-log.md'))).toBe(false);
+    expect(readFileSync(join(f.task.taskPath, 'facts.jsonl'))).toEqual(facts);
+  });
   it('keeps build-plan artifact ownership and rejects missing-index light Phase publication', async () => {
     const f = await fixture();
     const rejected = draft(f, 'phases/P1.md', 'unindexed\n'); expect(rejected.status).toBe(1); expect(existsSync(join(f.materials, 'phases/P1.md'))).toBe(false);
