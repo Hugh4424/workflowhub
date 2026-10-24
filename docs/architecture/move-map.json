@@ -2780,15 +2780,18 @@
       "destination": "skills/ui-project-init/skill-bundle.json",
       "status": "retain",
       "role": "production",
-      "responsibility": "既有模块／资源职责；不从登记新增能力",
-      "owner": "原路径维护 owner；P7 仅登记现职责",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
+      "responsibility": "既有ui-project-init分发清单：files声明随技能交付的真实文件；282已证该集合控制分发闭包，284只追加八个现SKILL已链接模板，不要求列全目录。",
+      "owner": "Copernicus为284 bundle.files八项唯一writer，现已完成并冻结；Kant唯一维护本登记与四协调材料，Curie后续按主会话通知同原命令确认。",
+      "consumer": "runtime/adapters/local-skill-resolver.mjs::validateSkillBundle校验列项；runtime/distribution/skill-bundle-release.mjs::addSkillClosure逐项收集并复制，runner-release.mjs::installRunnerRelease沿其发布manifest复制。当前仅声明静态接线，不冒实际发行安装。",
       "module_consumers": [],
       "named_data_readers": [
-        "tests/contract/ui-skill-contract.test.mjs"
+        "tests/contract/ui-skill-contract.test.mjs",
+        "runtime/adapters/local-skill-resolver.mjs",
+        "runtime/distribution/skill-bundle-release.mjs",
+        "tools/cli/run-checks.mjs"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "既有保留生产路径；本次仅归位说明"
+      "retention_basis": "282回源release:246–258/281–286/421–423与runner:157–169；resolver不要求列全目录不代表未声明Markdown自动分发。284实际bundle sha256=8fa903d02ccceb5affa2046b5244ece9648a6f41305dfcc7ac676dc5125b74e1，086已报static-deps PASS但material-contract13错/聚合1。仅沿原计划与T016条件修既有声明，无新增业务逻辑；资产清单确改变分发闭包，不适用纯文档G-2豁免。未实际发行安装，不证完整跨技能闭包。"
     },
     {
       "source": "skills/wh-review/SKILL.md",
@@ -5958,6 +5961,126 @@
       ],
       "delete_condition": "只有具名职责退役、真实消费者已由经审查的替代承接且用户授权删除时移除；历史执行与失败原件保留。",
       "retention_basis": "N11/P9 已批准 Phase 中的新增路径预登记；P1 已实读 specs/n11-same-condition-eval-20261022/phases/P9-整合端到端验收.md 的路径与调用安排。当前文件尚未实现；仅登记批准的职责和拟接线消费者，不宣称 active 或已执行。 不新增控制面、不替代任务 facts。"
+    },
+    {
+      "source": "skills/ui-project-init/templates/domain-semantics.md",
+      "destination": "skills/ui-project-init/templates/domain-semantics.md",
+      "status": "add",
+      "role": "documentation",
+      "responsibility": "C01 P6/T014–T015 已批准用途：领域语义：真实词义源、关系与消歧；共用契约头、固定节序、必填项表、填写指引及反例；照抄形状不照抄事实，不强制八文件。",
+      "owner": "P6/T014–T015 模板实施 writer=Curie；专业正文仍归模板所列项目原 owner；Curie 完成 T016/SKILL 导航，Kant 唯一维护 move-map 实读登记及 finding 回修。",
+      "consumer": "仓内人工读取入口为 skills/ui-project-init/SKILL.md:25 的对应类模板链接；现有 build-plan/build-prd UI 材料作者及后续项目规范作者按类取样张，填写真实来源、职责和消费边界。Kant 本次已全文读取目标及导航，仅确认文档存在与接线；未观察真实后继项目消费，不宣 active 自动派发、产品验收或发布闭包；282已证需在既有bundle.files声明该模板，声明后resolver核列项、addSkillClosure收集并沿runner发布manifest复制；284已由Copernicus补声明，086对应static-deps PASS但材料13错待确认，不宣实际发布。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/ui-project-init/SKILL.md"
+      ],
+      "delete_condition": "职责由经独立审查的替代承接且真实人工读者全部改接后，由维护 owner 同步退役模板与职责指针；保留历史来源和执行原件，静态零命中不等于零消费者。",
+      "retention_basis": "已批准用途仍沿当前 decision-log「WP5 — 规范文件的模板、写法与语言标准」及 P6/T014–T016；共同骨架269（sha256 eb6702738af047b548bdaf97c1f4c4f5da557f9c2ef7dbc0d7d561c550bd2898）。本次在九源 freeze 后真读全文，目标 sha256=180ecff51ca10812a3d439d3b757de409598c4773cd30bb238a07bcc69ce6069；SKILL 导航实际 sha256=31ff408215f41af46dd8504d2cb2fdd5cc35b839e06aff8d65ecf63b2f409396，与274逐项相等。实际类职责/owner/reader/缺口及删除条件与本项用途相符，named_data_readers 是现可读导航而非拟接线；018为写前 GUIDE 准备，272/274为实施原件，均只引用不覆盖。status=add仍仅表示本次新增路径，非生命周期或进度；该次276登记时未运行检查/独立实写/业务验证，当前新检查事实另沿086保留。只用 SDD 分责与 GUIDE，不执行 AUDIT/READY，282已触发原T016恢复条件，需Copernicus在现bundle.files补八已链接模板；284声明已实施；086 static-deps PASS但material-contract13错/聚合1未解决，不要求列全目录或宣跨技能闭包完整，不增字段/枚举/门；后续目标或指针不可读即停该项登记，回原writer，不猜 active。"
+    },
+    {
+      "source": "skills/ui-project-init/templates/visual-design-system.md",
+      "destination": "skills/ui-project-init/templates/visual-design-system.md",
+      "status": "add",
+      "role": "documentation",
+      "responsibility": "C01 P6/T014–T015 已批准用途：视觉设计系统：token/主题/变量源，不填项目示例值；共用契约头、固定节序、必填项表、填写指引及反例；照抄形状不照抄事实，不强制八文件。",
+      "owner": "P6/T014–T015 模板实施 writer=Curie；专业正文仍归模板所列项目原 owner；Curie 完成 T016/SKILL 导航，Kant 唯一维护 move-map 实读登记及 finding 回修。",
+      "consumer": "仓内人工读取入口为 skills/ui-project-init/SKILL.md:25 的对应类模板链接；现有 build-plan/build-prd UI 材料作者及后续项目规范作者按类取样张，填写真实来源、职责和消费边界。Kant 本次已全文读取目标及导航，仅确认文档存在与接线；未观察真实后继项目消费，不宣 active 自动派发、产品验收或发布闭包；282已证需在既有bundle.files声明该模板，声明后resolver核列项、addSkillClosure收集并沿runner发布manifest复制；284已由Copernicus补声明，086对应static-deps PASS但材料13错待确认，不宣实际发布。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/ui-project-init/SKILL.md"
+      ],
+      "delete_condition": "职责由经独立审查的替代承接且真实人工读者全部改接后，由维护 owner 同步退役模板与职责指针；保留历史来源和执行原件，静态零命中不等于零消费者。",
+      "retention_basis": "已批准用途仍沿当前 decision-log「WP5 — 规范文件的模板、写法与语言标准」及 P6/T014–T016；共同骨架269（sha256 eb6702738af047b548bdaf97c1f4c4f5da557f9c2ef7dbc0d7d561c550bd2898）。本次在九源 freeze 后真读全文，目标 sha256=48d9283cda29c4decbf42ad8eff063e4b27d1c448d8329b08a1ac449ab44bd95；SKILL 导航实际 sha256=31ff408215f41af46dd8504d2cb2fdd5cc35b839e06aff8d65ecf63b2f409396，与274逐项相等。实际类职责/owner/reader/缺口及删除条件与本项用途相符，named_data_readers 是现可读导航而非拟接线；018为写前 GUIDE 准备，272/274为实施原件，均只引用不覆盖。status=add仍仅表示本次新增路径，非生命周期或进度；该次276登记时未运行检查/独立实写/业务验证，当前新检查事实另沿086保留。只用 SDD 分责与 GUIDE，不执行 AUDIT/READY，282已触发原T016恢复条件，需Copernicus在现bundle.files补八已链接模板；284声明已实施；086 static-deps PASS但material-contract13错/聚合1未解决，不要求列全目录或宣跨技能闭包完整，不增字段/枚举/门；后续目标或指针不可读即停该项登记，回原writer，不猜 active。"
+    },
+    {
+      "source": "skills/ui-project-init/templates/components.md",
+      "destination": "skills/ui-project-init/templates/components.md",
+      "status": "add",
+      "role": "documentation",
+      "responsibility": "C01 P6/T014–T015 已批准用途：组件与代码对应：职责、variant/slot/组合及真实映射；共用契约头、固定节序、必填项表、填写指引及反例；照抄形状不照抄事实，不强制八文件。",
+      "owner": "P6/T014–T015 模板实施 writer=Copernicus；专业正文仍归模板所列项目原 owner；Curie 完成 T016/SKILL 导航，Kant 唯一维护 move-map 实读登记及 finding 回修。",
+      "consumer": "仓内人工读取入口为 skills/ui-project-init/SKILL.md:25 的对应类模板链接；现有 build-plan/build-prd UI 材料作者及后续项目规范作者按类取样张，填写真实来源、职责和消费边界。Kant 本次已全文读取目标及导航，仅确认文档存在与接线；未观察真实后继项目消费，不宣 active 自动派发、产品验收或发布闭包；282已证需在既有bundle.files声明该模板，声明后resolver核列项、addSkillClosure收集并沿runner发布manifest复制；284已由Copernicus补声明，086对应static-deps PASS但材料13错待确认，不宣实际发布。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/ui-project-init/SKILL.md"
+      ],
+      "delete_condition": "职责由经独立审查的替代承接且真实人工读者全部改接后，由维护 owner 同步退役模板与职责指针；保留历史来源和执行原件，静态零命中不等于零消费者。",
+      "retention_basis": "已批准用途仍沿当前 decision-log「WP5 — 规范文件的模板、写法与语言标准」及 P6/T014–T016；共同骨架269（sha256 eb6702738af047b548bdaf97c1f4c4f5da557f9c2ef7dbc0d7d561c550bd2898）。本次在九源 freeze 后真读全文，目标 sha256=da569a31f5cdd81c44272c191e5aa5b1fc26c7dfa7f36e160af74aa96cf53319；SKILL 导航实际 sha256=31ff408215f41af46dd8504d2cb2fdd5cc35b839e06aff8d65ecf63b2f409396，与274逐项相等。实际类职责/owner/reader/缺口及删除条件与本项用途相符，named_data_readers 是现可读导航而非拟接线；018为写前 GUIDE 准备，272/274为实施原件，均只引用不覆盖。status=add仍仅表示本次新增路径，非生命周期或进度；该次276登记时未运行检查/独立实写/业务验证，当前新检查事实另沿086保留。只用 SDD 分责与 GUIDE，不执行 AUDIT/READY，282已触发原T016恢复条件，需Copernicus在现bundle.files补八已链接模板；284声明已实施；086 static-deps PASS但material-contract13错/聚合1未解决，不要求列全目录或宣跨技能闭包完整，不增字段/枚举/门；后续目标或指针不可读即停该项登记，回原writer，不猜 active。"
+    },
+    {
+      "source": "skills/ui-project-init/templates/layouts.md",
+      "destination": "skills/ui-project-init/templates/layouts.md",
+      "status": "add",
+      "role": "documentation",
+      "responsibility": "C01 P6/T014–T015 已批准用途：布局与场景：内容增长、容器、响应式、滚动及浮层归属；共用契约头、固定节序、必填项表、填写指引及反例；照抄形状不照抄事实，不强制八文件。",
+      "owner": "P6/T014–T015 模板实施 writer=Copernicus；专业正文仍归模板所列项目原 owner；Curie 完成 T016/SKILL 导航，Kant 唯一维护 move-map 实读登记及 finding 回修。",
+      "consumer": "仓内人工读取入口为 skills/ui-project-init/SKILL.md:25 的对应类模板链接；现有 build-plan/build-prd UI 材料作者及后续项目规范作者按类取样张，填写真实来源、职责和消费边界。Kant 本次已全文读取目标及导航，仅确认文档存在与接线；未观察真实后继项目消费，不宣 active 自动派发、产品验收或发布闭包；282已证需在既有bundle.files声明该模板，声明后resolver核列项、addSkillClosure收集并沿runner发布manifest复制；284已由Copernicus补声明，086对应static-deps PASS但材料13错待确认，不宣实际发布。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/ui-project-init/SKILL.md"
+      ],
+      "delete_condition": "职责由经独立审查的替代承接且真实人工读者全部改接后，由维护 owner 同步退役模板与职责指针；保留历史来源和执行原件，静态零命中不等于零消费者。",
+      "retention_basis": "已批准用途仍沿当前 decision-log「WP5 — 规范文件的模板、写法与语言标准」及 P6/T014–T016；共同骨架269（sha256 eb6702738af047b548bdaf97c1f4c4f5da557f9c2ef7dbc0d7d561c550bd2898）。本次在九源 freeze 后真读全文，目标 sha256=45660ff8f0cc491a23f7cd8983d953245a4d51a7fb7ed5cc4a34ce7d661a01c7；SKILL 导航实际 sha256=31ff408215f41af46dd8504d2cb2fdd5cc35b839e06aff8d65ecf63b2f409396，与274逐项相等。实际类职责/owner/reader/缺口及删除条件与本项用途相符，named_data_readers 是现可读导航而非拟接线；018为写前 GUIDE 准备，272/274为实施原件，均只引用不覆盖。status=add仍仅表示本次新增路径，非生命周期或进度；该次276登记时未运行检查/独立实写/业务验证，当前新检查事实另沿086保留。只用 SDD 分责与 GUIDE，不执行 AUDIT/READY，282已触发原T016恢复条件，需Copernicus在现bundle.files补八已链接模板；284声明已实施；086 static-deps PASS但material-contract13错/聚合1未解决，不要求列全目录或宣跨技能闭包完整，不增字段/枚举/门；后续目标或指针不可读即停该项登记，回原writer，不猜 active。"
+    },
+    {
+      "source": "skills/ui-project-init/templates/interaction.md",
+      "destination": "skills/ui-project-init/templates/interaction.md",
+      "status": "add",
+      "role": "documentation",
+      "responsibility": "C01 P6/T014–T015 已批准用途：通用交互：导航、反馈、焦点；业务状态和权限归 task/API；共用契约头、固定节序、必填项表、填写指引及反例；照抄形状不照抄事实，不强制八文件。",
+      "owner": "P6/T014–T015 模板实施 writer=Copernicus；专业正文仍归模板所列项目原 owner；Curie 完成 T016/SKILL 导航，Kant 唯一维护 move-map 实读登记及 finding 回修。",
+      "consumer": "仓内人工读取入口为 skills/ui-project-init/SKILL.md:25 的对应类模板链接；现有 build-plan/build-prd UI 材料作者及后续项目规范作者按类取样张，填写真实来源、职责和消费边界。Kant 本次已全文读取目标及导航，仅确认文档存在与接线；未观察真实后继项目消费，不宣 active 自动派发、产品验收或发布闭包；282已证需在既有bundle.files声明该模板，声明后resolver核列项、addSkillClosure收集并沿runner发布manifest复制；284已由Copernicus补声明，086对应static-deps PASS但材料13错待确认，不宣实际发布。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/ui-project-init/SKILL.md"
+      ],
+      "delete_condition": "职责由经独立审查的替代承接且真实人工读者全部改接后，由维护 owner 同步退役模板与职责指针；保留历史来源和执行原件，静态零命中不等于零消费者。",
+      "retention_basis": "已批准用途仍沿当前 decision-log「WP5 — 规范文件的模板、写法与语言标准」及 P6/T014–T016；共同骨架269（sha256 eb6702738af047b548bdaf97c1f4c4f5da557f9c2ef7dbc0d7d561c550bd2898）。本次在九源 freeze 后真读全文，目标 sha256=2b9c3ddb0dd57105ec0148459c0eb79aed1de4e59777eca5f989b5559c294dd0；SKILL 导航实际 sha256=31ff408215f41af46dd8504d2cb2fdd5cc35b839e06aff8d65ecf63b2f409396，与274逐项相等。实际类职责/owner/reader/缺口及删除条件与本项用途相符，named_data_readers 是现可读导航而非拟接线；018为写前 GUIDE 准备，272/274为实施原件，均只引用不覆盖。status=add仍仅表示本次新增路径，非生命周期或进度；该次276登记时未运行检查/独立实写/业务验证，当前新检查事实另沿086保留。只用 SDD 分责与 GUIDE，不执行 AUDIT/READY，282已触发原T016恢复条件，需Copernicus在现bundle.files补八已链接模板；284声明已实施；086 static-deps PASS但material-contract13错/聚合1未解决，不要求列全目录或宣跨技能闭包完整，不增字段/枚举/门；后续目标或指针不可读即停该项登记，回原writer，不猜 active。"
+    },
+    {
+      "source": "skills/ui-project-init/templates/frontend-engineering.md",
+      "destination": "skills/ui-project-init/templates/frontend-engineering.md",
+      "status": "add",
+      "role": "documentation",
+      "responsibility": "C01 P6/T014–T015 已批准用途：前端工程：配置/架构/ADR、类型/DTO/生命周期与错误归属；共用契约头、固定节序、必填项表、填写指引及反例；照抄形状不照抄事实，不强制八文件。",
+      "owner": "P6/T014–T015 模板实施 writer=Copernicus；专业正文仍归模板所列项目原 owner；Curie 完成 T016/SKILL 导航，Kant 唯一维护 move-map 实读登记及 finding 回修。",
+      "consumer": "仓内人工读取入口为 skills/ui-project-init/SKILL.md:25 的对应类模板链接；现有 build-plan/build-prd UI 材料作者及后续项目规范作者按类取样张，填写真实来源、职责和消费边界。Kant 本次已全文读取目标及导航，仅确认文档存在与接线；未观察真实后继项目消费，不宣 active 自动派发、产品验收或发布闭包；282已证需在既有bundle.files声明该模板，声明后resolver核列项、addSkillClosure收集并沿runner发布manifest复制；284已由Copernicus补声明，086对应static-deps PASS但材料13错待确认，不宣实际发布。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/ui-project-init/SKILL.md"
+      ],
+      "delete_condition": "职责由经独立审查的替代承接且真实人工读者全部改接后，由维护 owner 同步退役模板与职责指针；保留历史来源和执行原件，静态零命中不等于零消费者。",
+      "retention_basis": "已批准用途仍沿当前 decision-log「WP5 — 规范文件的模板、写法与语言标准」及 P6/T014–T016；共同骨架269（sha256 eb6702738af047b548bdaf97c1f4c4f5da557f9c2ef7dbc0d7d561c550bd2898）。本次在九源 freeze 后真读全文，目标 sha256=e386883b9a60310842fdb43ab12232e7c62d4f8485d08e4dbb93494383270637；SKILL 导航实际 sha256=31ff408215f41af46dd8504d2cb2fdd5cc35b839e06aff8d65ecf63b2f409396，与274逐项相等。实际类职责/owner/reader/缺口及删除条件与本项用途相符，named_data_readers 是现可读导航而非拟接线；018为写前 GUIDE 准备，272/274为实施原件，均只引用不覆盖。status=add仍仅表示本次新增路径，非生命周期或进度；该次276登记时未运行检查/独立实写/业务验证，当前新检查事实另沿086保留。只用 SDD 分责与 GUIDE，不执行 AUDIT/READY，282已触发原T016恢复条件，需Copernicus在现bundle.files补八已链接模板；284声明已实施；086 static-deps PASS但material-contract13错/聚合1未解决，不要求列全目录或宣跨技能闭包完整，不增字段/枚举/门；后续目标或指针不可读即停该项登记，回原writer，不猜 active。"
+    },
+    {
+      "source": "skills/ui-project-init/templates/craft.md",
+      "destination": "skills/ui-project-init/templates/craft.md",
+      "status": "add",
+      "role": "documentation",
+      "responsibility": "C01 P6/T014–T015 已批准用途：内容与设计工艺：真实身份、来源、时间、缺源及准确措辞；共用契约头、固定节序、必填项表、填写指引及反例；照抄形状不照抄事实，不强制八文件。",
+      "owner": "P6/T014–T015 模板实施 writer=Curie；专业正文仍归模板所列项目原 owner；Curie 完成 T016/SKILL 导航，Kant 唯一维护 move-map 实读登记及 finding 回修。",
+      "consumer": "仓内人工读取入口为 skills/ui-project-init/SKILL.md:25 的对应类模板链接；现有 build-plan/build-prd UI 材料作者及后续项目规范作者按类取样张，填写真实来源、职责和消费边界。Kant 本次已全文读取目标及导航，仅确认文档存在与接线；未观察真实后继项目消费，不宣 active 自动派发、产品验收或发布闭包；282已证需在既有bundle.files声明该模板，声明后resolver核列项、addSkillClosure收集并沿runner发布manifest复制；284已由Copernicus补声明，086对应static-deps PASS但材料13错待确认，不宣实际发布。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/ui-project-init/SKILL.md"
+      ],
+      "delete_condition": "职责由经独立审查的替代承接且真实人工读者全部改接后，由维护 owner 同步退役模板与职责指针；保留历史来源和执行原件，静态零命中不等于零消费者。",
+      "retention_basis": "已批准用途仍沿当前 decision-log「WP5 — 规范文件的模板、写法与语言标准」及 P6/T014–T016；共同骨架269（sha256 eb6702738af047b548bdaf97c1f4c4f5da557f9c2ef7dbc0d7d561c550bd2898）。本次在九源 freeze 后真读全文，目标 sha256=8da5231dde0dc7ceccccc73de3237c9c2612e0c733632ef7a1bf51cb49e2e870；SKILL 导航实际 sha256=31ff408215f41af46dd8504d2cb2fdd5cc35b839e06aff8d65ecf63b2f409396，与274逐项相等。实际类职责/owner/reader/缺口及删除条件与本项用途相符，named_data_readers 是现可读导航而非拟接线；018为写前 GUIDE 准备，272/274为实施原件，均只引用不覆盖。status=add仍仅表示本次新增路径，非生命周期或进度；该次276登记时未运行检查/独立实写/业务验证，当前新检查事实另沿086保留。只用 SDD 分责与 GUIDE，不执行 AUDIT/READY，282已触发原T016恢复条件，需Copernicus在现bundle.files补八已链接模板；284声明已实施；086 static-deps PASS但material-contract13错/聚合1未解决，不要求列全目录或宣跨技能闭包完整，不增字段/枚举/门；后续目标或指针不可读即停该项登记，回原writer，不猜 active。"
+    },
+    {
+      "source": "skills/ui-project-init/templates/quality.md",
+      "destination": "skills/ui-project-init/templates/quality.md",
+      "status": "add",
+      "role": "documentation",
+      "responsibility": "C01 P6/T014–T015 已批准用途：质量：可观察 oracle/反例及验证边界，任务 AC/实测另存；共用契约头、固定节序、必填项表、填写指引及反例；照抄形状不照抄事实，不强制八文件。",
+      "owner": "P6/T014–T015 模板实施 writer=Curie；专业正文仍归模板所列项目原 owner；Curie 完成 T016/SKILL 导航，Kant 唯一维护 move-map 实读登记及 finding 回修。",
+      "consumer": "仓内人工读取入口为 skills/ui-project-init/SKILL.md:25 的对应类模板链接；现有 build-plan/build-prd UI 材料作者及后续项目规范作者按类取样张，填写真实来源、职责和消费边界。Kant 本次已全文读取目标及导航，仅确认文档存在与接线；未观察真实后继项目消费，不宣 active 自动派发、产品验收或发布闭包；282已证需在既有bundle.files声明该模板，声明后resolver核列项、addSkillClosure收集并沿runner发布manifest复制；284已由Copernicus补声明，086对应static-deps PASS但材料13错待确认，不宣实际发布。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/ui-project-init/SKILL.md"
+      ],
+      "delete_condition": "职责由经独立审查的替代承接且真实人工读者全部改接后，由维护 owner 同步退役模板与职责指针；保留历史来源和执行原件，静态零命中不等于零消费者。",
+      "retention_basis": "已批准用途仍沿当前 decision-log「WP5 — 规范文件的模板、写法与语言标准」及 P6/T014–T016；共同骨架269（sha256 eb6702738af047b548bdaf97c1f4c4f5da557f9c2ef7dbc0d7d561c550bd2898）。本次在九源 freeze 后真读全文，目标 sha256=f5da86c0c521fbf8a30b47766f67155ddebf1db7422fdb9c7ea51323c0f2a8af；SKILL 导航实际 sha256=31ff408215f41af46dd8504d2cb2fdd5cc35b839e06aff8d65ecf63b2f409396，与274逐项相等。实际类职责/owner/reader/缺口及删除条件与本项用途相符，named_data_readers 是现可读导航而非拟接线；018为写前 GUIDE 准备，272/274为实施原件，均只引用不覆盖。status=add仍仅表示本次新增路径，非生命周期或进度；该次276登记时未运行检查/独立实写/业务验证，当前新检查事实另沿086保留。只用 SDD 分责与 GUIDE，不执行 AUDIT/READY，282已触发原T016恢复条件，需Copernicus在现bundle.files补八已链接模板；284声明已实施；086 static-deps PASS但material-contract13错/聚合1未解决，不要求列全目录或宣跨技能闭包完整，不增字段/枚举/门；后续目标或指针不可读即停该项登记，回原writer，不猜 active。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

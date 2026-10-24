@@ -61,7 +61,7 @@ PRD C01 卡把范围钉在三种生成起点、六处入口迁移与验收对象
 
 ### 范围内
 
-WorkflowHub：`skills/external/`（三份复制件与索引）、`skills/catalog.yaml`、`skills/reuse-registry.md`、`skills/plan-design-review/SKILL.md`、`workflows/build-code/SKILL.md`、`skills/ui-project-init/SKILL.md` 与 `skills/ui-project-init/templates/`、`workflows/verify-code/SKILL.md`、`tools/cli/check-acceptance-object.mjs`、`tests/contract/` 两份冻结 oracle、`docs/adr/0053-*`、`specs/workflowhub-ui-frontend-release-20261020/prd.md` 的许可与复制条款。
+WorkflowHub：`skills/external/`（三份复制件与索引）、`skills/catalog.yaml`、`skills/reuse-registry.md`、`skills/plan-design-review/SKILL.md`、`workflows/build-code/SKILL.md`、`skills/ui-project-init/SKILL.md` 、`skills/ui-project-init/skill-bundle.json`（P6/T016条件触发的八模板声明）与 `skills/ui-project-init/templates/`、`workflows/verify-code/SKILL.md`、`tools/cli/check-acceptance-object.mjs`、`tests/contract/` 两份冻结 oracle、`docs/adr/0053-*`、`specs/workflowhub-ui-frontend-release-20261020/prd.md` 的许可与复制条款。
 
 PaperBuilder（专用 worktree `PaperBuilder-workflowhub-ui-frontend-c01-norm-init-20261024`，分支 `task/PaperBuilder/workflowhub-ui-frontend-c01-norm-init-20261024`，基线 `de2387af`）：九份规范正文、`docs/adr/0035-project-norm-authority-and-value-source-migration.md`。
 
@@ -429,7 +429,7 @@ PaperBuilder（专用 worktree `PaperBuilder-workflowhub-ui-frontend-c01-norm-in
 ### 全局文件边界与依赖
 
 - **新增**：`skills/external/**`（29 个文件：28 份上游闭包 + 1 份 README 索引）、`skills/ui-project-init/templates/**`（8 份）、`tools/cli/check-acceptance-object.mjs`、`tests/contract/external-capability-intake.test.mjs`、`tests/contract/acceptance-object-cli.test.mjs`、`docs/adr/0053-external-capability-vendoring.md`；任务库证据新增 `quality/evidence/2026-10-24-022-six-entry-readers.md`、`quality/evidence/2026-10-24-020-eight-class-placement.md`、`quality/evidence/2026-10-24-021-acceptance-results.md`
-- **修改**：`skills/catalog.yaml`、`skills/reuse-registry.md`、`skills/plan-design-review/SKILL.md`、`workflows/build-code/SKILL.md`、`skills/ui-project-init/SKILL.md`、`workflows/verify-code/SKILL.md`、`specs/workflowhub-ui-frontend-release-20261020/prd.md`；本任务材料自身：`spec.md`（P7 写验收对象、P9 回写 AC 档位）与 `phases/P9-全AC验收.md`（P9 回写本卡结论）
+- **修改**：`skills/catalog.yaml`、`skills/reuse-registry.md`、`skills/plan-design-review/SKILL.md`、`workflows/build-code/SKILL.md`、`skills/ui-project-init/SKILL.md`、`skills/ui-project-init/skill-bundle.json`（仅P6/T016条件触发后files八模板声明）、`workflows/verify-code/SKILL.md`、`specs/workflowhub-ui-frontend-release-20261020/prd.md`；本任务材料自身：`spec.md`（P7 写验收对象、P9 回写 AC 档位）与 `phases/P9-全AC验收.md`（P9 回写本卡结论）
 - **PaperBuilder 修改**：`specs/design/{design,components,layouts,interaction,craft,quality,README}.md`、`specs/frontend/{frontend,ui-quality}.md`、`docs/adr/0035-project-norm-authority-and-value-source-migration.md`（以上路径相对 PB worktree 根）
 - **禁止改动**：`tests/contract/acceptance-object-required-fields.test.mjs`（C01 冻结 oracle，221 断言）、`tests/contract/external-capability-intake.test.mjs` 与 `tests/contract/acceptance-object-cli.test.mjs`（本轮 build-plan 作者的预写 oracle，owner 为 build-plan 作者；build-code 不改断言，需改走测试变更请求）、`tools/cli/check-decision-log-chain.mjs`（U-022 保持告警）、`specs/archive/**`（历史字节只读）、PaperBuilder `frontend/**`（本卡不改业务代码）、`specs/workflowhub-ui-frontend-release-20261020/prd.md` 中与许可复制无关的条款
 - **全局依赖**：真实边只有这些——P3 依赖 P2（消费入口事实）；P4 依赖 P3（消费旧条款材料位置）；P5 依赖 P4（消费已更正的 `specs/frontend/ui-quality.md`）；P6 依赖 P5（消费已对齐的九份正文）；P7 依赖 P6（消费八类可消费事实）；P8 依赖 P7（消费检查器）；P9 依赖 P8（消费全部原件）。P1 与 P2 无依赖边，可并行；二者都不产对方输入。跨批共享路径由这些边定序：P4 先于 P5 写 `specs/frontend/ui-quality.md`；P2 先于 P6 写 `skills/ui-project-init/SKILL.md`；P7 先于 P9 写 `spec.md` 的验收对象与 AC 回写
@@ -458,7 +458,7 @@ PaperBuilder（专用 worktree `PaperBuilder-workflowhub-ui-frontend-c01-norm-in
 | R-003／U-015（PRD C01-F2） | 三处悬空补 archive，重复段只留一处 | FR-NORM-007 / AC-C01-2 | P5/T013 | ORACLE-P5-DOCS：链接可解析且计数为 1；反例=三处并存即失败 | T012；current |
 | R-013／U-017（用户 2026-10-24 追加消息） | 八类各一份可照抄模板 | FR-NORM-006 / AC-C01-1 | P6/T014 | ORACLE-P6-TEMPLATE：八份节序与必填项齐；反例=写死 PB 值即失败 | P5；current |
 | R-014／U-018（用户 2026-10-24 追加消息） | 标准落成模板形状并给反例 | FR-NORM-006 / AC-C01-1 | P6/T015 | ORACLE-P6-TEMPLATE：六条形状可指到位置；反例=只写“参考 STE”即失败 | T014；current |
-| R-013／U-017（decision-log WP5） | 职责表指模板目录且 bundle 同步 | FR-NORM-006、FR-NORM-004 / AC-C01-1 | P6/T016 | ORACLE-P6-TEMPLATE：指针与清单可核；反例=只加目录不更新 bundle 即失败 | T015；current |
+| R-013／U-017（decision-log WP5） | T016条件已触发：导航对应八模板须加入既有bundle.files；不宣完整跨技能闭包 | FR-NORM-006、FR-NORM-004 / AC-C01-1 | P6/T016 | ORACLE-P6-TEMPLATE：导航/八模板声明与282源码链可核；反例=漏声明模板或冒实际发布通过即失败 | T015；current |
 | R-004／U-020（PRD C01-F3、L122） | 最小检查复用模板 producer | FR-NORM-008 / AC-C01-3 | P7/T017 | ORACLE-P7-ACCEPT：缺 viewport 报 viewport；反例=自造第二份 checker 即红 | P6；current |
 | R-004／U-020（PRD §S5 L122、L124） | 真实验收对象进 spec 且接进 verify-code | FR-NORM-008 / AC-C01-3 | P7/T018 | ORACLE-P7-ACCEPT：owner 空输出“用户”、verify-code 含命令；反例=静默空白即红 | T017；current |
 | R-005／U-019（PRD AC-C01-4） | 一页真实任务准备、五类分开 | FR-NORM-009 / AC-C01-4 | P7/T019 | ORACLE-P7-ACCEPT：五类落点可指、Experience sha256 一致；反例=混写即失败 | T018；current |

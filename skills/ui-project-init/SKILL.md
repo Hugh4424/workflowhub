@@ -22,6 +22,8 @@ description: UI 规划需定位专业来源时，按新项目、已有可信规�
 | ⑦内容与设计工艺 | specs/design/craft.md；词义和值引用原源 | WenjiaWang/ui-designer 的 design-brief + frontend-design 文案方法 | 内容设计 owner | 组件、文案、专业 reader |
 | ⑧质量判据 | 确需独立正文时 specs/design/quality.md；工程/运行共用 specs/frontend/ui-quality.md | `skills/frontend-testing/SKILL.md` + `skills/isolated-browser-qa/SKILL.md` | 设计/工程/运行质量原 owner | 独立设计、代码及运行验证 |
 
+写某类正文且需要写法样张时，作者从 `skills/ui-project-init/templates/` 选对应模板：①[领域语义](templates/domain-semantics.md)、②[视觉设计系统](templates/visual-design-system.md)、③[组件及设计代码对应](templates/components.md)、④[布局与场景](templates/layouts.md)、⑤[通用交互](templates/interaction.md)、⑥[前端工程](templates/frontend-engineering.md)、⑦[内容与设计工艺](templates/craft.md)、⑧[质量判据](templates/quality.md)。模板只给节序、必填项、填写指引与反例，不是强制八文件；正文、值和接口仍归上表原专业源。本导航可在仓库内直接读取；八模板现已在既有 `bundle.files` 声明，供原发布器收集。本轮未实际构建、安装或发行，不据清单声称完整跨技能闭包或实际发布通过。
+
 组件设计用途、variant/slot/组合与真实代码映射各归其 owner，映射可非一对一。布局保内容增长、容器、响应式与 overflow；交互只保跨控件导航、反馈、焦点，本次业务步骤、状态、权限、取消/恢复归当前 task spec/API。工程保模块、类型、DTO/ViewModel、生命周期、错误与样式归属；质量 oracle/反例与预算各保一处正文，任务 AC 和实测另留原 owner。
 
 精确 token/CSS 数值、API、资产和上游原件留在原位，只引用。安全隐私、无障碍、国际化、响应式极值、性能及竞态横贯原专业 owner 和项目基础规范，不新增第九规范平台。旧 Design.md/Experience.md 可作为具名历史或可信条款输入；不能把旧两文件恢复为必需的统一 active 规范或把本任务进度、截图结论写进专业正文。
