@@ -14,6 +14,8 @@
 
 ## 技能入口
 
+外部三份能力的离线采用入口：[skills/external/README.md](external/README.md)。固定来源与许可只读 catalog 同名 absorbed 条目；脚本入库不执行。
+
 | 名字 | 使用场景 | 正文入口 |
 | --- | --- | --- |
 | stage-reflection | 阶段结束发现实际过程问题，需要提出有来源的复盘改进候选。 | [读取正文](stage-reflection/SKILL.md) |

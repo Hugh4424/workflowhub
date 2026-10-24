@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="{{DOCUMENT_LANG}}" data-audience="designer" data-schema-version="{{SCHEMA_VERSION}}" data-assessment-profile="{{ASSESSMENT_PROFILE}}" data-overall-score="{{OVERALL_SCORE_DATA}}" data-grade="{{GRADE}}" data-verdict="{{VERDICT}}" data-evidence-coverage="{{EVIDENCE_COVERAGE}}" data-blocker-count="{{BLOCKER_COUNT}}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>{{REPORT_TITLE}}</title>
+  <style>
+    :root {
+      --page: #eef0f3;
+      --surface: #ffffff;
+      --surface-soft: rgba(255,255,255,.82);
+      --ink: #17191c;
+      --muted: #686d74;
+      --border: #dce0e5;
+      --purple: #5a38e8;
+      --cyan: #0f9fbd;
+      --green: #168a46;
+      --orange: #d66b0b;
+      --red: #c83d2f;
+      --purple-soft: #eeeaff;
+      --cyan-soft: #e4f7fb;
+      --green-soft: #e8f7ed;
+      --orange-soft: #fff0df;
+      --red-soft: #ffefec;
+      --radius-xl: 30px;
+      --radius-lg: 20px;
+      --radius-md: 14px;
+      --content: 1180px;
+      --panel-inline: clamp(16px, 2vw, 24px);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; background: var(--page); }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 7% 0%, rgba(90,56,232,.09), transparent 30rem),
+        radial-gradient(circle at 95% 14%, rgba(15,159,189,.09), transparent 28rem),
+        var(--page);
+      font-family: Inter, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      font-size: 15px;
+      line-height: 1.62;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; text-underline-offset: 3px; }
+    button { font: inherit; }
+    button:focus-visible, a:focus-visible { outline: 3px solid rgba(90,56,232,.35); outline-offset: 3px; }
+    .skip-link { position: fixed; z-index: 50; left: 18px; top: -80px; padding: 8px 12px; border-radius: 9px; background: white; }
+    .skip-link:focus { top: 12px; }
+    .shell { width: min(calc(100% - 40px), var(--content)); margin: 0 auto; padding: 26px 0 68px; }
+    .topbar {
+      position: sticky;
+      z-index: 20;
+      top: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 20px;
+      padding: 11px 13px 11px 17px;
+      border: 1px solid rgba(255,255,255,.86);
+      border-radius: 17px;
+      background: rgba(255,255,255,.78);
+      backdrop-filter: blur(18px);
+    }
+    .brand { display: flex; align-items: center; gap: 10px; min-width: 0; font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    .brand::before { width: 8px; height: 8px; margin-right: 27px; border-radius: 50%; background: var(--cyan); box-shadow: 13px 0 var(--orange), 26px 0 var(--purple); content: ""; }
+    .print { padding: 7px 12px; border: 1px solid var(--border); border-radius: 999px; background: white; color: var(--muted); cursor: pointer; }
+    .hero {
+      position: relative;
+      display: grid;
+      grid-template-columns: 1fr;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,.9);
+      border-radius: var(--radius-xl);
+      background: rgba(247,248,249,.9);
+      isolation: isolate;
+    }
+    .hero::before { position: absolute; z-index: -1; inset: 14px; border-radius: 21px; background-image: radial-gradient(circle,#d9dde3 1.05px,transparent 1.15px); background-size: 20px 20px; content: ""; opacity: .58; }
+    .hero::after { position: absolute; z-index: -1; inset: 0; background: linear-gradient(180deg,rgba(255,255,255,.2),rgba(255,255,255,.94) 48%,rgba(255,255,255,.15)); content: ""; }
+    .hero-score { display: flex; min-height: 300px; flex-direction: column; justify-content: center; padding: 44px 44px 28px; border-bottom: 1px solid rgba(23,25,28,.08); }
+    .eyebrow { color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+    .scoreline { display: flex; align-items: flex-start; gap: 10px; margin: 18px 0 24px; }
+    .score { color: var(--cyan); font-size: clamp(108px,13vw,170px); font-weight: 560; line-height: .76; letter-spacing: -.07em; font-variant-numeric: tabular-nums; }
+    .score-unit { padding-top: 4px; color: var(--muted); font-size: 15px; }
+    .score-unit strong { display: block; color: var(--ink); font-size: 38px; line-height: 1; }
+    .verdict { display: inline-flex; width: fit-content; max-width: 100%; min-height: 30px; align-items: center; padding: 5px 11px; border-radius: 10px; background: var(--red-soft); color: var(--red); font-size: 11px; font-weight: 800; line-height: 1.4; letter-spacing: .04em; overflow-wrap: anywhere; }
+    html[data-verdict="READY"] .verdict { background: var(--green-soft); color: var(--green); }
+    html[data-verdict="CONDITIONALLY_READY"] .verdict { background: var(--orange-soft); color: var(--orange); }
+    html[data-verdict="INSUFFICIENT_EVIDENCE"] .verdict { background: var(--purple-soft); color: var(--purple); }
+    .hero-copy { display: flex; flex-direction: column; justify-content: center; padding: 30px 44px 44px; }
+    h1 { max-width: 680px; margin: 14px 0 18px; font-size: clamp(30px,4vw,52px); font-weight: 650; line-height: 1.08; letter-spacing: -.045em; }
+    .lead { width: 100%; max-width: none; margin: 0; color: #4f545b; font-size: 16px; }
+    .hero-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 28px; }
+    .hero-note { padding: 16px 18px; border: 1px solid rgba(255,255,255,.88); border-radius: var(--radius-md); background: rgba(255,255,255,.74); }
+    .hero-note span { display: block; margin-bottom: 5px; color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+    .hero-note strong { font-size: 13px; line-height: 1.45; }
+    .meta { display: grid; grid-template-columns: 1.2fr .7fr .8fr 1.3fr; gap: 1px; overflow: hidden; margin-top: 16px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--border); }
+    .meta-item { min-height: 86px; padding: 18px 20px; background: rgba(255,255,255,.88); }
+    .meta-item span { display: block; margin-bottom: 6px; color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+    .meta-item strong { overflow-wrap: anywhere; font-size: 13px; }
+    .meta-root { grid-column: span 3; }
+    main { margin-top: 50px; }
+    .section { scroll-margin-top: 90px; margin-top: 54px; }
+    .section-head { margin-inline: var(--panel-inline); margin-bottom: 20px; }
+    .report-content { margin-inline: var(--panel-inline); }
+    .section-index { display: inline-flex; align-items: center; justify-content: center; min-width: 30px; height: 22px; margin-bottom: 9px; border-radius: 999px; background: var(--ink); color: white; font-size: 10px; font-weight: 800; }
+    h2 { margin: 0; font-size: clamp(27px,4vw,41px); font-weight: 650; line-height: 1.14; letter-spacing: -.04em; }
+    h3 { line-height: 1.32; }
+    .section-intro { width: 100%; max-width: none; margin: 9px 0 0; color: var(--muted); }
+    .grade-panel { display: grid; grid-template-columns: .7fr 1.3fr; gap: 1px; overflow: hidden; margin-top: 18px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--border); }
+    .grade-current, .grade-scale { padding: 24px; background: var(--surface-soft); }
+    .grade-current strong { display: block; color: var(--cyan); font-size: 68px; line-height: 1; letter-spacing: -.06em; }
+    .grade-current span { color: var(--muted); font-size: 12px; }
+    .grade-bands { display: grid; grid-template-columns: repeat(5,1fr); gap: 6px; margin-top: 12px; }
+    .grade-band { padding: 10px; border-radius: 10px; background: #f3f4f6; color: var(--muted); font-size: 10px; }
+    .grade-band b { display: block; color: var(--ink); font-size: 14px; }
+    .grade-band.active { background: var(--cyan-soft); color: #126e81; box-shadow: inset 0 0 0 1px rgba(15,159,189,.2); }
+    .capability-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; }
+    .capability { position: relative; min-height: 250px; overflow: hidden; padding: 22px; border: 1px solid rgba(255,255,255,.92); border-radius: var(--radius-lg); background: rgba(255,255,255,.86); }
+    .capability::after { position: absolute; right: -38px; bottom: -56px; width: 150px; height: 150px; border: 22px solid var(--soft); border-radius: 50%; content: ""; opacity: .74; }
+    .capability.good { --accent: var(--green); --soft: var(--green-soft); }
+    .capability.warn { --accent: var(--orange); --soft: var(--orange-soft); }
+    .capability.risk { --accent: var(--red); --soft: var(--red-soft); }
+    .capability.unknown { --accent: var(--purple); --soft: var(--purple-soft); }
+    .capability-top { position: relative; z-index: 1; display: flex; justify-content: space-between; gap: 14px; }
+    .capability .value { color: var(--accent); font-size: 48px; font-weight: 600; line-height: 1; letter-spacing: -.05em; }
+    .capability .weight { color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; }
+    .capability h3 { position: relative; z-index: 1; margin: 24px 0 8px; font-size: 17px; }
+    .capability p { position: relative; z-index: 1; margin: 0; color: var(--muted); font-size: 12px; }
+    .bar { position: absolute; z-index: 2; left: 22px; right: 22px; bottom: 18px; height: 4px; overflow: hidden; border-radius: 999px; background: var(--border); }
+    .bar i { display: block; width: var(--score); height: 100%; border-radius: inherit; background: var(--accent); }
+    .finding-stack { display: grid; gap: 15px; }
+    .finding { overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-lg); background: rgba(255,255,255,.9); }
+    .finding.BLOCKER { --severity: var(--red); --severity-soft: var(--red-soft); }
+    .finding.HIGH { --severity: var(--orange); --severity-soft: var(--orange-soft); }
+    .finding.MEDIUM { --severity: var(--purple); --severity-soft: var(--purple-soft); }
+    .finding.LOW { --severity: var(--cyan); --severity-soft: var(--cyan-soft); }
+    .finding-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 18px 22px; border-bottom: 1px solid var(--border); background: linear-gradient(90deg,var(--severity-soft),rgba(255,255,255,.65)); }
+    .finding-kicker { color: var(--severity); font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+    .finding h3 { margin: 4px 0 0; font-size: 19px; }
+    .finding-id { color: var(--muted); font-family: ui-monospace,SFMono-Regular,Menlo,monospace; font-size: 11px; }
+    .finding-body { display: grid; grid-template-columns: repeat(2,1fr); }
+    .finding-field { min-height: 120px; padding: 18px 22px; border-right: 1px solid rgba(23,25,28,.08); border-bottom: 1px solid rgba(23,25,28,.08); }
+    .finding-field:nth-child(2n) { border-right: 0; }
+    .finding-field:nth-last-child(-n+2) { border-bottom: 0; }
+    .field-label { display: block; margin-bottom: 7px; color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+    .finding-field p { margin: 0; font-size: 13px; }
+    .finding-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .tag { display: inline-flex; max-width: 100%; min-height: 24px; align-items: flex-start; padding: 4px 8px; border-radius: 8px; background: #f0f1f3; color: #555a61; font-size: 10px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; word-break: break-word; }
+    .tag--compact { align-items: center; padding-block: 2px; border-radius: 999px; line-height: 1.5; white-space: nowrap; overflow-wrap: normal; word-break: normal; }
+    .table-panel { overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-soft); }
+    .table-wrap { overflow-x: auto; padding-inline: 16px; }
+    table { width: 100%; border-collapse: collapse; background: rgba(255,255,255,.75); }
+    th, td { padding: 13px 15px; border-bottom: 1px solid rgba(23,25,28,.08); text-align: left; vertical-align: top; }
+    th { background: rgba(245,246,247,.94); color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+    tr:last-child td { border-bottom: 0; }
+    td { font-size: 12px; }
+    td strong { font-size: 13px; }
+    code { padding: 2px 5px; border-radius: 5px; background: #f0f1f3; color: #50545a; font-family: ui-monospace,SFMono-Regular,Menlo,monospace; font-size: .9em; }
+    .status { display: inline-flex; min-height: 24px; align-items: center; padding: 2px 8px; border-radius: 999px; background: #f0f1f3; font-size: 10px; font-weight: 800; }
+    .quality-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; }
+    .quality-card { padding: 18px; border: 1px solid rgba(255,255,255,.9); border-radius: var(--radius-md); background: rgba(255,255,255,.84); }
+    .quality-card strong { color: var(--cyan); font-size: 30px; line-height: 1; }
+    .quality-card h3 { margin: 12px 0 7px; font-size: 14px; }
+    .quality-card p { margin: 0; color: var(--muted); font-size: 11px; }
+    .evidence-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 14px; }
+    .evidence-card { padding: 20px; border: 1px solid var(--border); border-radius: var(--radius-md); background: rgba(255,255,255,.8); }
+    .evidence-card h3 { margin: 0 0 10px; font-size: 16px; }
+    .evidence-card ul { margin: 0; padding-left: 20px; }
+    .evidence-card li { margin: 5px 0; color: var(--muted); font-size: 12px; }
+    footer { display: flex; justify-content: space-between; gap: 18px; margin-top: 50px; padding-top: 20px; border-top: 1px solid rgba(23,25,28,.12); color: var(--muted); font-size: 10px; }
+    @media (max-width: 960px) {
+      .hero-score { padding-bottom: 20px; }
+      .hero-copy { padding: 12px 44px 44px; }
+      .capability-grid { grid-template-columns: repeat(2,1fr); }
+      .quality-grid { grid-template-columns: repeat(2,1fr); }
+      .meta { grid-template-columns: 1fr 1fr; }
+      .meta-root { grid-column: 1 / -1; }
+    }
+    @media (max-width: 680px) {
+      .shell { width: min(calc(100% - 24px),var(--content)); padding-top: 12px; }
+      .topbar { top: 7px; }
+      .hero-score { padding: 34px 24px 18px; }
+      .hero-copy { padding: 12px 24px 34px; }
+      .score { font-size: 116px; }
+      .hero-actions, .meta, .capability-grid, .finding-body, .quality-grid, .evidence-grid, .grade-panel { grid-template-columns: 1fr; }
+      .finding-field { min-height: auto; border-right: 0; }
+      .finding-field:nth-last-child(2) { border-bottom: 1px solid rgba(23,25,28,.08); }
+      .grade-bands { grid-template-columns: 1fr; }
+      footer { flex-direction: column; }
+    }
+    @media print {
+      :root { --page: white; --panel-inline: 0px; }
+      body { background: white; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      .shell { width: 100%; padding: 0; }
+      .topbar { display: none; }
+      .hero, .capability, .finding, .table-panel, .quality-card, .evidence-card { break-inside: avoid; }
+      .section { break-inside: auto; }
+      tr { break-inside: avoid; }
+      .table-wrap { overflow: visible; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">{{SKIP_TEXT}}</a>
+  <div class="shell">
+    <nav class="topbar" aria-label="{{BRAND_TEXT}}">
+      <div class="brand">{{BRAND_TEXT}}</div>
+      <button class="print" type="button" onclick="window.print()">{{PRINT_TEXT}}</button>
+    </nav>
+
+    <header class="hero" data-layout="stacked">
+      <div class="hero-score">
+        <span class="eyebrow">{{ASSESSMENT_PROFILE_LABEL}}</span>
+        <strong data-field="assessment-profile">{{PROFILE_LABEL}}</strong>
+        <span class="eyebrow">{{OVERALL_SCORE_LABEL}}</span>
+        <div class="scoreline"><span class="score">{{OVERALL_SCORE}}</span><span class="score-unit"><strong>{{GRADE}}</strong>/ 100</span></div>
+        <span class="verdict">{{VERDICT_LABEL}} · {{VERDICT_TEXT}}</span>
+        <p data-field="profile-boundary">{{PROFILE_BOUNDARY}}</p>
+      </div>
+      <div class="hero-copy">
+        <span class="eyebrow">{{AUDIENCE_TEXT}}</span>
+        <h1>{{REPORT_TITLE}}</h1>
+        <p class="lead">{{REPORT_SUMMARY}}</p>
+        <div class="hero-actions">
+          <div class="hero-note"><span>{{SAFE_USE_LABEL}}</span><strong>{{SAFE_USE}}</strong></div>
+          <div class="hero-note"><span>{{NEXT_ACTION_LABEL}}</span><strong>{{NEXT_ACTION}}</strong></div>
+        </div>
+      </div>
+    </header>
+
+    <section class="meta" aria-label="{{SCOPE_LABEL}}">
+      <div class="meta-item"><span>{{SOURCE_LABEL}}</span><strong>{{SOURCE_NAME}}</strong></div>
+      <div class="meta-item"><span>{{VERSION_LABEL}}</span><strong>{{SOURCE_VERSION}}</strong></div>
+      <div class="meta-item"><span>{{GENERATED_LABEL}}</span><strong>{{GENERATED_AT}}</strong></div>
+      <div class="meta-item"><span>{{SCOPE_LABEL}}</span><strong>{{SCOPE}}</strong></div>
+      <div class="meta-item"><span>{{EVIDENCE_COVERAGE_LABEL}}</span><strong>{{EVIDENCE_COVERAGE}}%</strong></div>
+      <div class="meta-item meta-root"><span>{{SOURCE_LABEL}}</span><strong>{{SOURCE_ROOT}}</strong></div>
+    </section>
+
+    <main id="main">
+      <section class="section" id="grade">
+        <div class="section-head"><span class="section-index">01</span><h2>{{GRADE_SCALE_LABEL}}</h2></div>
+        <div class="grade-panel report-content">
+          <div class="grade-current"><strong>{{GRADE}}</strong><span>{{OVERALL_SCORE_LABEL}} {{OVERALL_SCORE}} / 100</span></div>
+          <div class="grade-scale"><span class="eyebrow">{{GRADE_SCALE_LABEL}}</span><div class="grade-bands">{{GRADE_SCALE_HTML}}</div></div>
+        </div>
+      </section>
+
+      <section class="section" id="capabilities">
+        <div class="section-head"><span class="section-index">02</span><h2>{{CAPABILITIES_TITLE}}</h2><p class="section-intro">{{CAPABILITIES_INTRO}}</p></div>
+        <div class="capability-grid report-content">{{CAPABILITIES_HTML}}</div>
+      </section>
+
+      <section class="section" id="layers">
+        <div class="section-head"><span class="section-index">03</span><h2>{{LAYERS_TITLE}}</h2><p class="section-intro">{{LAYERS_INTRO}}</p></div>
+        <div class="table-panel report-content"><div class="table-wrap">{{LAYERS_TABLE_HTML}}</div></div>
+      </section>
+
+      <section class="section" id="findings">
+        <div class="section-head"><span class="section-index">04</span><h2>{{FINDINGS_TITLE}}</h2><p class="section-intro">{{FINDINGS_INTRO}}</p></div>
+        <div class="finding-stack report-content">{{FINDINGS_HTML}}</div>
+      </section>
+
+      <section class="section" id="plan">
+        <div class="section-head"><span class="section-index">05</span><h2>{{PLAN_TITLE}}</h2><p class="section-intro">{{PLAN_INTRO}}</p></div>
+        <div class="table-panel report-content"><div class="table-wrap">{{PLAN_TABLE_HTML}}</div></div>
+      </section>
+
+      <section class="section" id="quality">
+        <div class="section-head"><span class="section-index">06</span><h2>{{QUALITY_TITLE}}</h2><p class="section-intro">{{QUALITY_INTRO}}</p></div>
+        <div class="quality-grid report-content">{{QUALITY_HTML}}</div>
+      </section>
+
+      <section class="section" id="evidence">
+        <div class="section-head"><span class="section-index">07</span><h2>{{EVIDENCE_TITLE}}</h2><p class="section-intro">{{EVIDENCE_INTRO}}</p></div>
+        <div class="evidence-grid report-content">{{EVIDENCE_HTML}}</div>
+      </section>
+    </main>
+
+    <footer><span>{{FOOTER_TEXT}}</span><span>{{SOURCE_NAME}} · {{GENERATED_AT}}</span></footer>
+  </div>
+  <script id="report-model" type="application/json">{{MODEL_JSON}}</script>
+</body>
+</html>

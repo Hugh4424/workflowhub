@@ -21,7 +21,7 @@
 ## 工作包声明（人读事实）
 
 - **读集**：本任务 `spec.md`、`phases/*.md`、`decision-log.md` 的验收面；P1～P8 的证据原件；两份冻结 oracle 的 GREEN 输出。
-- **定序写主**：本 Phase 不写仓库文件；结论只写在本卡与 `quality/evidence/build-plan/P9-acceptance.md`（由 verify-code 执行时产生）。
+- **定序写主**：本 Phase 独占契约头写入集内的结论回写与两份就绪件；执行原件沿 `evidence_path` 保存。消费 P1～P8 已有首判原件，不改其形成时事实。
 - **接口符号清单**：无；只消费命令输出与原件。
 - **合并责任**：本 Phase 由 verify-code 执行者负责，判定者与实现者不同上下文。
 - **progress_cursor**：只指向 `facts.jsonl` 的 `phase_progress`。
@@ -32,7 +32,7 @@
 - **非目标**：不重做实现、不修 P1～P8 的产物（除非复验失败回原 owner）、不做业务 E2E。
 - **改动前**：五条 AC 的判据已定，但尚无逐条档位与两份就绪件。
 - **改动后**：验收档位表、缺口清单与两份就绪件；只回写本卡写集内的五处。
-- **与相邻 Phase 的边界**：上游 P8 给全部实现与负例事实；本 Phase 只判不写。
+- **与相邻 Phase 的边界**：上游各 Phase 给各自执行与首次独立结论，P8 给负例事实；本 Phase 聚合并复放，只回写本卡允许路径，不替上游首次判定。
 - **主要风险**：以"文件存在"或"命令 exit 0"冒充 AC 通过；返工替代走法是回到原 AC 判据逐条补证。
 - **下一步**：closeout 与交接。
 - **动手前必读**：`spec.md` 的 Appendix A；`decision-log.md` 的「验收面」；P1～P8 的证据原件。
@@ -106,9 +106,9 @@ T022 纵切"AC 判据 → 命令或原件 → 档位"，五条 AC 各占一行�
 
 ### 验收 Phase 固定小节
 
-1. **入口准则**：核对 P1～P8 的 Done、写入集落地与两份就绪件状态，逐条写核对结果与证据路径。
+1. **入口准则**：按 spec「首判与最终聚合」核对 P1～P8 的 Done、执行原件与首次独立结论、写入集落地及两份就绪件状态。缺首判时记具体缺口并回原 owner Phase 补证；其余安全核对继续，不由 P9 新写结论倒填上游完成。
 2. **两份就绪件**：数据就绪件写 `quality/evidence/2026-10-24-023-acceptance-data-readiness.md`（验收对象与来源清单），环境就绪件写 `quality/evidence/2026-10-24-024-acceptance-environment-readiness.md`（Node 与 npx vitest 可用、本 worktree 无 node_modules 的事实）；各写 status。
-3. **授权边界**：只读本仓与 PB worktree；禁止改任何材料；凭据失效或环境不可达时按停止条件留真实失败。
+3. **授权边界**：只读生产文件、PB worktree 与既有上游原件；仅按契约头写入集回写本卡结论与就绪件，保留 spec 原验收判据；凭据失效或环境不可达时按停止条件留真实失败。
 4. **逐条结论**：每条 AC 一行，写编号、一个档位、一条具名证据路径；结论行数等于 AC 条数。
 5. **五类执行事实**：命令、cwd、exit code、stdout 落点、runner 与版本；`refs` 标 `execution_record`／`machine_report` 等既有类型。
 6. **效果评测**：基线为改动前 RED（`quality/tests/2026-10-24-120-build-plan-red-v2.txt`），比较两侧同为 12 条失败断言到 0；不用覆盖率或测试数量判通过。
@@ -125,9 +125,9 @@ T022 纵切"AC 判据 → 命令或原件 → 档位"，五条 AC 各占一行�
 - **来源 / FR / AC**: `R-001`～`R-021` 与 `U-001`～`U-024`（PRD C01 卡 L202 的四条 AC ＋ §S3 的更新检查义务；decision-log「验收面」）——五条验收项逐条判定；FR-NORM-001～FR-NORM-011；AC-C01-1、AC-C01-2、AC-C01-3、AC-C01-4、AC-C01-5。
 - **输入**: P1～P8 的证据原件与命令输出；本任务 `spec.md` 与 `phases/*.md`。执行 owner 为 verify-code 执行者；判定者为非实现者上下文。
 - **文件 / 符号**: `specs/workflowhub-ui-frontend-c01-norm-init-20261024/spec.md`、`phases/P9-全AC验收.md`、`quality/evidence/2026-10-24-021-acceptance-results.md`、`quality/evidence/2026-10-24-023-acceptance-data-readiness.md`、`quality/evidence/2026-10-24-024-acceptance-environment-readiness.md`；符号：N/A — 只回写档位与结论。
-- **动作**: 只读核对并回写档位：逐条运行命令、读取原件、按 Appendix A 记档位；同时汇总各 Phase 在第一次实际执行时按 PRD §S6 采集的四项计量（任务返工、缺陷、人工时间、验收确认）现状与三级严重度（严重／中等／轻微）的处置结果，缺记录写 unknown 不填 0；只回写本卡允许的三处路径，不改其它材料。
+- **动作**: 消费并复放上游首判原件，按 Appendix A 逐条记档位；首判归属沿 spec「首判与最终聚合」，缺项回原 owner Phase 补证，不由 P9 替上游首次作结论。同时汇总各 Phase 在第一次实际执行时按 PRD §S6 采集的四项计量（任务返工、缺陷、人工时间、验收确认）现状与三级严重度（严重／中等／轻微）的处置结果，缺记录写 unknown 不填 0；仅写契约头内五处路径，执行原件沿 evidence_path 保存，不改其它材料。
 - **输出 / 失败**: 五条档位与缺口清单；失败信号是缺证据仍记 pass。
-- **边界 / 禁止改动**: 不改任何材料、不改冻结 oracle、不改 PaperBuilder 文件；原因是本 Phase 只判不写。
+- **边界 / 禁止改动**: 只回写契约头内允许内容；不改验收判据、冻结 oracle、P1～P8 原件与 PaperBuilder 文件，不替上游补造执行事实。
 - **依赖**: `P8`
 - **测试层级 / 技能**: 验收执行（定向命令＋独立人读）；主测试技能 `skills/spec-analyze/SKILL.md` 的只读核对。
 - **场景 / 夹具或服务**: 正例=五条 AC 均有原件与命令输出；反例=以"文件存在"或 exit 0 代 AC 语义；不搭夹具。

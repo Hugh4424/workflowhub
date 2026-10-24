@@ -311,7 +311,7 @@ PaperBuilder（专用 worktree `PaperBuilder-workflowhub-ui-frontend-c01-norm-in
 
 - **外部能力登记条目**：
   - **定义**：`skills/catalog.yaml` 的 `capability_decisions` 一条 absorbed 记录
-  - **字段和约束**：`name`、`status: absorbed`、`local_path`、`upstream[].source_url`、`upstream[].path`、`upstream[].commit`（40 位 hex）、`upstream[].license`（未声明时为 null）、`local_changes`、`update_policy`；同一包只能有一条 absorbed 记录
+  - **字段和约束**：复用既有 absorbed 字段；`name`、`status: absorbed`、`local_path`、`upstream[].path`、`upstream[].commit`（40 位 hex）、`upstream[].license`（未声明时为 null）、`local_changes`、`update_policy`。GitHub 地址用既有 `upstream[].github_url`；ModelScope 完整 URL 写进 `local_changes` 与 README，不新增键；同一包只能有一条 absorbed 记录。
   - **关系**：一条记录对应一个 `skills/external/<包名>/` 目录与 README 中一行
 
 - **旧条款去向行**：
@@ -420,7 +420,7 @@ PaperBuilder（专用 worktree `PaperBuilder-workflowhub-ui-frontend-c01-norm-in
 
 ### 接口与失败语义
 
-- **选择的架构方案**：优先复用。外部能力按既有 absorbed 形态登记并新增一个可选键 `upstream[].source_url`；验收对象检查复用模板 producer，新增的只是一个薄 CLI 与 verify-code 的一步调用；双 active 不新增检查器，用白名单＋独立审查。
+- **选择的架构方案**：优先复用。外部能力按既有 absorbed 形态登记，地址写法沿第 7 节，不新增键；验收对象检查复用模板 producer，新增的只是一个薄 CLI 与 verify-code 的一步调用；双 active 不新增检查器，用白名单＋独立审查。
 - **模块职责**：`check-acceptance-object.mjs` 只做三件事——从 spec 抽对象、调用模板 producer、按需核对 sources 引用的文件是否存在；语义适用性由独立读者判。
 - **接口与数据流**：`node tools/cli/check-acceptance-object.mjs --spec <spec.md> [--context <json>] [--check-sources] [--root <dir>]` → stdout JSON `{ok, missing_fields, missing_source_files, object}`；退出码 0 通过、1 有缺项或缺失来源、2 用法或抽取失败（stderr 具名）。
 - **失败语义**：spec 无验收对象节 → exit 2 并指出节名；缺字段 → 逐项列名；来源文件不存在 → 列 `key:path`；owner 空 → 输出"用户"，不报错。检查器不读业务数据、不认证来源语义。
@@ -470,19 +470,19 @@ PaperBuilder（专用 worktree `PaperBuilder-workflowhub-ui-frontend-c01-norm-in
 
 - **验证策略**：两条冻结 oracle 覆盖可执行面（入库登记、检查器行为）；语义面由独立读者按 Appendix A 逐条核真实材料；不声称任何 AC 已通过。
 - **RED/GREEN 设计**：`npx vitest run tests/contract/external-capability-intake.test.mjs tests/contract/acceptance-object-cli.test.mjs` 是 P1／P7 的共同判定器；RED 已实际采集（`quality/tests/2026-10-24-120-build-plan-red-v2.txt`，12 条失败、exit 1），GREEN 由 build-code 在同一 oracle 上取得。
-- **最终聚合**：P9 逐条消费 P1～P8 的原件与命令输出，按 Appendix A 给五条 AC 的档位；非 `pass` 一律不计通过。
+- **首判与最终聚合**：各 Phase 在本 Phase 取得其承接 case 的执行原件与独立核对结论：P1 外部能力与更新，P2 入口读取，P3 三起点链，P4 去向与旧 caller，P5 正文修复与八类落点，P6 模板，P7 验收对象与准备的语义适用性，P8 负例。P9 按 Appendix A 聚合并独立复放这些结论；缺少首判原件时记缺口、回原 owner Phase 补证，不替上游首次作结论，不倒填已完成；非 `pass` 一律不计通过。
 - **不能证明的内容**：不证明真实页面可用、不证明语义适用性、不证明外部包在宿主中的运行效果；这些由真实读者与后续卡片核。
 
 ## Appendix A — 验收判据（唯一权威）
 
 - [ ] **AC-C01-1**：三种起点各一条真实材料→产物链；八类可消费或具名不适用；八份模板可照抄；关联 FR-NORM-001、FR-NORM-002、FR-NORM-005、FR-NORM-006
-验证：由 P1、P3、P5、P6 交付原件，独立读者在 P9 逐条打开材料与产物：三条链每环可解析且产物是生成的规范内容而不是审计结论；`2026-10-24-020-eight-class-placement.md` 逐类给落点与缺口影响；八份模板换项目名可写；判定方式为只能人读（语义适用性）。
+验证：由 P1、P3、P5、P6 在各自 Phase 交执行原件与首次独立结论，P9 独立读者逐条复核材料与产物：三条链每环可解析且产物是生成的规范内容而不是审计结论；`2026-10-24-020-eight-class-placement.md` 逐类给落点与缺口影响；八份模板换项目名可写；判定方式为只能人读（语义适用性）。
 通过：每环路径可打开且行号指向真实字节；八类各有落点或具名不适用且缺源写影响；模板含固定节序、必填项、填写指引与反例且不依赖 PaperBuilder 专有事实；八类表按"首交可用规范／缺源／后续补强"三分标注。
 失败：空骨架；默认填业务规则；拿错误实现当标准反推；第三种起点只写"事件真实发生过"或以审计结论代替生成产物；模板只是目录或标题。
 证据：三条链原件、`2026-10-24-020-eight-class-placement.md`、八份模板与独立审查原件；复制件的许可例外依据是 `decision-log.md` 的「与来源研究的一处真冲突」段与 `quality/evidence/human-confirmations/2026-10-24-001-make-decision-approved.json`（U-008／U-009 的真实答复）。
 
 - [ ] **AC-C01-2**：47 条旧条款逐项去向；六处入口读新源；无第二 active 副本；关联 FR-NORM-004、FR-NORM-007、FR-NORM-010、FR-NORM-011
-验证：P2/P4/P5/P8 交付原件，P9 独立读者核：47 条逐行有去向或具名缺口（三桶相加若与 47 不符，先核真实清单并写明重叠）；`2026-10-24-022-six-entry-readers.md` 逐处给出六处入口的当前行号、可执行读法与该处真实读者；两处补指针入口与职责表逐项一致；白名单与残留清单存在；ADR0035 五处更正可对真实字节；判定方式为只能人读，辅以真实文件读取命令。
+验证：P2/P4/P5/P8 在各自 Phase 交原件与首次独立结论，P9 独立读者复核：47 条逐行有去向或具名缺口（三桶相加若与 47 不符，先核真实清单并写明重叠）；`2026-10-24-022-six-entry-readers.md` 逐处给出六处入口的当前行号、可执行读法与该处真实读者；两处补指针入口与职责表逐项一致；白名单与残留清单存在；ADR0035 五处更正可对真实字节；判定方式为只能人读，辅以真实文件读取命令。
 通过：每条款有去向无空行；入口路径可解析且与职责表一致；ADR 无与真实状态相悖的陈述；全仓无第二份 active 规范。
 失败：只改 ui-project-init；只换文件名；留一旧一新都能读；47 条有空行或"同上"；把"无 active 文件指向"写成"零读者"。
 证据：47 条去向表、白名单与残留清单、ADR 更正记录、入口 diff。
@@ -494,9 +494,9 @@ PaperBuilder（专用 worktree `PaperBuilder-workflowhub-ui-frontend-c01-norm-in
 证据：验收对象原件、三次运行输出与退出码原件。
 
 - [ ] **AC-C01-4**：分权后跑一次真实任务准备；五类不混写；Experience 原字节在；语义适用性被复核；关联 FR-NORM-009
-验证：P7 交付《真实任务准备》原件（`quality/evidence/2026-10-24-012-real-task-preparation.md`）与五类落点清单；独立读者在 P9 核五类位置、八项字段与 Experience sha256（`ed15c663a91c…`、`100618fec796…`）；判定方式为只能人读＋可复核的字节比对。
+验证：P7 交付《真实任务准备》原件（`quality/evidence/2026-10-24-012-real-task-preparation.md`）、五类落点清单与本 Phase 的首次独立语义复核结论；P9 独立读者复核五类位置、八项字段、语义结论与 Experience sha256（`ed15c663a91c…`、`100618fec796…`）；判定方式为只能人读＋可复核的字节比对。
 通过：准备原件存在且每节指真实位置；五类不混写；Experience 归档 sha256 前后一致；语义适用性有复核结论。
-失败：准备原件不存在；五类写在同一份文档；Experience 被改写或删除；用"缺口说明"顶替准备原件；未验证语义适用性就报规范完成。
+失败：准备原件不存在；把设计／工程／任务／知识／facts 的权威正文混写或复制成第二权威（同一页准备文档引用五类各自真实位置不属混写）；Experience 被改写或删除；用"缺口说明"顶替准备原件；未验证语义适用性就报规范完成。
 证据：准备原件、五类落点清单、sha256 前后比对记录。
 
 - [ ] **AC-C01-5**：外部能力更新检查：一次可复核的查询或失败分支；关联 FR-NORM-003
@@ -550,12 +550,12 @@ PaperBuilder（专用 worktree `PaperBuilder-workflowhub-ui-frontend-c01-norm-in
   - **缓解或停止**：缺项写名字；做不出记未通过
   - **处理阶段**：build-code P7
 
-- **OPEN-02**：`upstream[].source_url` 是否被既有读者接受
+- **OPEN-02**：新增地址键方案已放弃，沿既有字段登记
   - **受影响 ID**：PFACT-003、FR-NORM-001、AC-C01-1
   - **负责人**：P1 作者
-  - **影响**：可能产生 `check-skill-consistency` 的 license-missing 报告
-  - **处理阶段**：build-code P1
-  - **关闭条件或停止**：跑一次 `node tools/cli/check-skill-consistency.mjs`，确认只新增三条 license 缺失报告、无硬失败
+  - **影响**：不新增 `upstream[].source_url`；ModelScope 地址按第 7 节回读。许可未知仍如实保留，不因取消新增键而视为已解决。
+  - **处理阶段**：build-code P1；依据 `quality/evidence/build-plan/2026-10-24-121-spec-analyze-dispositions.md` M6。
+  - **关闭条件或停止**：架构选择已定；P1 核三条真实 URL、固定版本与既有字段一致，检查输出以实跑为准，不预填 license 提示条数。
 
 - **OPEN-03**：两条无出处旧条款的精确清单未取得
   - **受影响 ID**：PFACT-006、FR-NORM-007、AC-C01-2
@@ -576,7 +576,7 @@ PaperBuilder（专用 worktree `PaperBuilder-workflowhub-ui-frontend-c01-norm-in
 ### 既有规范与测试约定
 
 - **既有行为**：`tests/contract/acceptance-object-required-fields.test.mjs` 221 条断言、`ui-skill-contract.test.mjs`、`n2-skill-catalog-portability.test.mjs` 与 `check-skill-consistency.mjs` 的报告语义
-- **本需求影响**：新增 34 个复制文件、3 条 catalog 记录、8 份模板、1 个 CLI 与 2 份冻结 oracle；`upstream[].source_url` 为可选键
+- **本需求影响**：计划复制 28 份上游文件（SDD 17 减 `.gitattributes`／`.gitignore` 为 15，markdown 子技能 12，design-tokens 1），加本地 README 索引共 29；依据固定研究 `2026-10-24-105-external-and-standards.md` §1.2 与冻结测试 `vendoredFiles`，不是实现完成计数。另有 3 条 catalog 记录、8 份模板、1 个 CLI 与 2 份冻结 oracle；登记不新增键。许可声明的保留义务仍按固定源处理，不能用 29 的计数代替核对。
 - **回归路径**：受影响测试逐个文件跑，不跑全量；`npx vitest run tests/contract/acceptance-object-required-fields.test.mjs` 必须仍为 221 passed。PaperBuilder 的 `style-token-guard` 需在 PB 侧装依赖后真实运行，本卡不执行也不声称已跑，交 verify-code 的独立核验
 - **验收**：AC-C01-1／AC-C01-3 的证据与上述测试原件
 

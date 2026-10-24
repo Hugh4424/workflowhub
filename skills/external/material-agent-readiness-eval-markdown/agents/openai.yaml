@@ -1,0 +1,4 @@
+interface:
+  display_name: "Material Agent-readiness Eval Skill · Markdown"
+  short_description: "Assess contracts for visual or interactive Agent work"
+  default_prompt: "Use $material-agent-readiness-eval-markdown to confirm whether these materials serve visual composition or independent interactive component implementation, then assess them for me as a designer and explain how to close gaps in a validated HTML report."

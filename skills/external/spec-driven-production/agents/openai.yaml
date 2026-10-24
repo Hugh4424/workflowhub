@@ -1,0 +1,4 @@
+interface:
+  display_name: "Spec-Driven Production"
+  short_description: "分开维护设计师的体验约束与研发实现规范，贯通需求、评审、任务和验收"
+  default_prompt: "使用 $spec-driven-production，结合两个规定模板推进当前阶段，将体验设计写入 design-spec.md、研发实现约束写入 engineering-spec.md，并核对两者在评审、任务和验收中的一致性。"

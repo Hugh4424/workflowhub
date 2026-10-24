@@ -48,7 +48,7 @@
 
 范围：有稿/无稿两路；设计知识消费与受控经验；八类专业规范；设计组件、设计布局、前端组件、前端布局的整理/应用/更新/验证及用户任务模式；独立设计和代码审查；视觉/体验/行为/a11y/性能检查；流程E2E和真实业务E2E；有界回修；固定真基线与同输入效果比较；M18对应的可分发插件、幂等接入、版本更新、完整文档、repo/external manifest、外部依赖兼容矩阵及发布包真实consumer验证。
 
-不做：独立知识网站、全项目全库整理、跨项目统一皮肤/组件库/断点、万能页面IR、实时双向同步平台、后台追踪所有任务、评分放行平台、新stage/gate/进度权威或第二manifest真相。首批不做营销页专项、动态GenUI整套系统；不整族vendor、不复制未知许可语料、不把公开短模板当完整技能包。不恢复四个独立试点、P1放行门或全主干禁合并。C10不重做M14～M17，不并入X2/X3/X4，不含未经单独授权的Git push、marketplace/registry上线、部署、物理清理或分发回滚。条件工具不适用不等于删除必需能力；确无合法可行路径时显露具体影响，不能擅自降质或扩平台。
+不做：独立知识网站、全项目全库整理、跨项目统一皮肤/组件库/断点、万能页面IR、实时双向同步平台、后台追踪所有任务、评分放行平台、新stage/gate/进度权威或第二manifest真相。首批不做营销页专项、动态GenUI整套系统；不引入未选定的整族，不把公开短模板当完整技能包。C01按U-008将三份已选能力的完整文字闭包复制至skills/external/，脚本入库不执行，许可状态如实登记；未声明许可的复制风险由项目所有者本人承担。不恢复四个独立试点、P1放行门或全主干禁合并。C10不重做M14～M17，不并入X2/X3/X4，不含未经单独授权的Git push、marketplace/registry上线、部署、物理清理或分发回滚。条件工具不适用不等于删除必需能力；确无合法可行路径时显露具体影响，不能擅自降质或扩平台。
 
 <a id="shared"></a>
 
@@ -74,7 +74,7 @@
 
 ### S2 八类规范与真实资产分权
 
-文件名为缺同职责实质来源时的默认值，不强制生成空文件；同目录有等价内容时复用。长期专业正文归项目根的specs/design/、specs/frontend/，不是spec/；目录外旧专业条款由C01按源与consumer迁入。token、源码、API、Figma资产、上游技能原件保持原位，不复制成第二真相。
+文件名为缺同职责实质来源时的默认值，不强制生成空文件；同目录有等价内容时复用。长期专业正文归项目根的specs/design/、specs/frontend/，不是spec/；目录外旧专业条款由C01按源与consumer迁入。token、源码、API、Figma资产保持原位，不复制成第二真相。C01选定外部方法按固定版本复制至skills/external/，仓内副本为读取源，上游仅作比对；不复制项目token/API值或另建规范权威。
 
 | 职责 | 负责正文/真实来源 | 实际消费与边界 |
 | --- | --- | --- |
@@ -104,7 +104,7 @@
 | Playbook ux-spec/cloudai-picker/variant/Evaluator；UES候选 | C05任务/场景/方案方法；C07判据/采集/失败传播；C08问题回源 | 前者仅已取得的公开短方法/rubric，不冒完整安装包；UES非同一Evaluator，无校准评分不设完成阈值 |
 | M18分发与接入 | C10消费M18路线图、M16/M17a/M17b事实和仓内M18研究；维护发布包、manifest、兼容矩阵、安装/更新/排障及包内真实consumer | 不新增发布平台/第二manifest；不把支持宿主、registry上线、Git/部署和回滚当已授权事实 |
 
-每个采用候选由所属卡的能力owner负责：核固定版本与实际文件、LICENSE及依赖资产权利、保UPSTREAM/适配差异、真实consumer、维护owner、错误路径和升级比较。采用前、迭代该能力或维护计划到期时，沿现有维护入口查询真实上游版本及更优候选；各采用卡在build-plan具名写检查时机、入口与维护者，保查询结果、旧新差异、适用性及采用/不采用理由。有更新不自动追HEAD；查询失败或无权限保持unknown/unavailable，不报“无更新”。本卡验收一次可复核的更新发现/比较及查询失败分支；受控负例须明示，不冒实时上游运行。既有定期检查承诺由原维护者承接，不另建后台监控、定时任务或控制面。许可不可复制时采用合法引用或有源原能力替代，不能默删结果或自创新维护skill。完整Vercel官方固定源承诺由C06负责，非21行摘要、镜像或HIGH+子集；ADR0016的SKILL/AGENTS定位差异采用前核完整闭包。不得将安装数量或规则计数当效果。
+每个采用候选由所属卡的能力owner负责：核固定版本与实际文件、LICENSE及依赖资产权利、保UPSTREAM/适配差异、真实consumer、维护owner、错误路径和升级比较。采用前、迭代该能力或维护计划到期时，沿现有维护入口查询真实上游版本及更优候选；各采用卡在build-plan具名写检查时机、入口与维护者，保查询结果、旧新差异、适用性及采用/不采用理由。有更新不自动追HEAD；查询失败或无权限保持unknown/unavailable，不报“无更新”。本卡验收一次可复核的更新发现/比较及查询失败分支；受控负例须明示，不冒实时上游运行。既有定期检查承诺由原维护者承接，不另建后台监控、定时任务或控制面。C01三份已选能力按U-008/U-009整包复制，许可未声明如实登记且由项目所有者承担风险，不宣称已获权利人许可；其他未选内容仍核实际许可，无法复制时采用合法引用或有源原能力替代，不能默删结果或自创新维护skill。复制件由用户本人依U-024手工比较维护，不自动执行脚本。完整Vercel官方固定源承诺由C06负责，非21行摘要、镜像或HIGH+子集；ADR0016的SKILL/AGENTS定位差异采用前核完整闭包。不得将安装数量或规则计数当效果。
 
 ### S4 独立交付、范围与实际消费者
 
@@ -492,7 +492,7 @@ C03依赖C04的条件分支只在确需新提炼输出时启用；已有可核�
 | 来源 | 本PRD承接 | 明确不承接 |
 | --- | --- | --- |
 | `artifacts/roadmap.md` M18 | plugin/marketplace、幂等接入、semver、更新检查、完整文档、repo/external manifest、X2/X3/X4兼容矩阵 | 不把M14～M17实现、X1或M10回滚塞进C10 |
-| `artifacts/decision-log.md` D16/D16a/D29 | repo-local skills为运行时权威；外部X2/X3/X4经独立依赖和版本兼容接入 | 不复制外部插件业务逻辑，不维护第二skill registry |
+| `artifacts/decision-log.md` D16/D16a/D29 | repo-local skills为运行时权威；外部X2/X3/X4经独立依赖和版本兼容接入 | 不复制外部插件业务逻辑（仅限插件业务代码，不含C01已选方法闭包的固定复制），不维护第二skill registry |
 | `artifacts/M0/INDEX.md`、`M0-design.md`、`historical-lessons-used.md` | 真实consumer、防孤儿、防伪、失败可见、M0只作参考 | M0零gate、零校验；引用缺失不阻断，也不能当发布许可 |
 | `docs/research/m18-skill-plugin-distribution-ecosystem-research-2026-09-03.md` | Claude plugin/marketplace、Agent Skills、宿主差异、semver和更新检查的已读事实 | 未核宿主/registry/许可/运行效果不冒成C10已支持 |
 
@@ -534,7 +534,7 @@ C03依赖C04的条件分支只在确需新提炼输出时启用；已有可核�
 
 | 研究单元 | 处置及理由 | 卡/验收 |
 | --- | --- | --- |
-| RS01 A1～A3 Design-wiki来源/查询/五分析方法 | 选任务知识/证据/经验方法；拒绝整站和未知许可语料复制 | C02-1～4；C03选型、C08晋升 |
+| RS01 A1～A3 Design-wiki来源/查询/五分析方法 | 选任务知识/证据/经验方法；拒绝整站抓取及未选语料复制；C01已选三份能力按U-008/U-009复制并如实登记许可状态 | C02-1～4；C03选型、C08晋升 |
 | RS01 A4/A5 grammar-ai/专用采集 | 普通工作台不引动态GenUI；确有AI交互缺口才条件借方法，不移内部语料/固定多Agent/超时自动确认 | C05/C07适用分支；范围非目标 |
 | RS01 A6七体验方法 | 启发式/任务走查优先；埋点/A-B/问卷访谈只在有真实数据/人时，不造满意度 | C05设计、C07-1/3/6、C09效果 |
 | RS02 B1/B2扫描/材料readiness | 条件小工具与GUIDE/AUDIT；材料成熟不等语义/产品通过，错误/链接限制保留 | C01-1/2/4，C08-6 |
@@ -637,19 +637,21 @@ C02/C08的具名后续真实消费者在各自计划中安排并在本卡验收�
 
 ### 原技能固定来源与采用状态
 
-链接与版本来自已保存研究记录，本轮补定位；不宣称本轮逐URL在线查新、原包已安装或效果已验证。下表“采用方法”是已确认的方向，“条件”按实际缺口选择，“参考”不进入强制规则。各实际采用者执行S3查新、许可/完整闭包/适配/真实consumer及失败验证。`frontend-design`明确指UI Designer固定包中的子技能，不以宿主同名文件替代。
+链接与版本来自已保存研究记录，本轮补定位；不宣称本轮逐URL在线查新、原包已安装或效果已验证。C01已复制的三份固定文字闭包见下表仓内路径与skills/external/README.md；离线可读不等于脚本已运行或能力效果已验证。下表“采用方法”是已确认的方向，“条件”按实际缺口选择，“参考”不进入强制规则。各实际采用者执行S3查新、许可/完整闭包/适配/真实consumer及失败验证。`frontend-design`明确指UI Designer固定包中的子技能，不以宿主同名文件替代。
 
-| 原技能／实际文件 | 固定版本 | 用途、状态与责任 |
-| --- | --- | --- |
-| <a id="up-wiki"></a>[design-wiki/SKILL.md](https://modelscope.cn/skills/WenjiaWang/Design-wiki/resolve/0aaa9f649d90281009d08663b0f1a177ab3b7e8c/SKILL.md) | `0aaa9f649d90281009d08663b0f1a177ab3b7e8c` | C02采用知识/证据/经验方法；RS01及material复用核对。promote不自动成为MUST |
-| [experience-analysis-expert](https://modelscope.cn/api/v1/skills/WenjiaWang/design-experience-analysis/repo/raw?Revision=943d0aa3505361fac10581c0d7d3c4493243f174&FilePath=SKILL.md)、[grammar-ai](https://modelscope.cn/api/v1/skills/WenjiaWang/grammar-ai/repo/raw?Revision=b3ab0dd5e9f65460339fa34f070f819e2cfaa272&FilePath=SKILL.md) | 前者`943d0aa3505361fac10581c0d7d3c4493243f174`；后者`b3ab0dd5e9f65460339fa34f070f819e2cfaa272` | RS01条件参考；七体验方法的真人/数据依赖保真，grammar内部语料不搬；C02/C05/C07按需 |
-| <a id="up-sdd"></a>[spec-driven-production/SKILL.md](https://modelscope.cn/skills/WenjiaWang/spec-driven-production/resolve/000b04a2a3553bddcf991b3dc42f9a5a2746fa6f/SKILL.md)、[references/execution.md](https://modelscope.cn/skills/WenjiaWang/spec-driven-production/resolve/000b04a2a3553bddcf991b3dc42f9a5a2746fa6f/references/execution.md) | `000b04a2a3553bddcf991b3dc42f9a5a2746fa6f` | C01/C08采用分责/更新方法；RS04及production复用核对；不迁六材料双写/重开状态 |
-| <a id="up-material"></a>[material-agent-readiness-eval-markdown/SKILL.md](https://modelscope.cn/skills/WenjiaWang/material-agent-readiness-eval/resolve/b62e87f3f91868033106b21f6398f0fd6d3d2043/skills/material-agent-readiness-eval-markdown/SKILL.md) | `b62e87f3f91868033106b21f6398f0fd6d3d2043` | C01 GUIDE/AUDIT、C08有源OPTIMIZE；RS02及material复用核对；材料分数不代产品质量 |
-| <a id="up-contract"></a>[design-system-contract-gen/SKILL.md](https://modelscope.cn/skills/WenjiaWang/Agent-ready-Material-Generation/resolve/9da7eaf8f84cae4f0df9101d5654183736f499e8/skills/design-system-contract-gen/SKILL.md)、[component-grammar.md](https://modelscope.cn/skills/WenjiaWang/Agent-ready-Material-Generation/resolve/9da7eaf8f84cae4f0df9101d5654183736f499e8/references/component-grammar.md) | `9da7eaf8f84cae4f0df9101d5654183736f499e8` | C03～08条件选；RS02/13；非shadcn需原包改造，FROM_SPEC只更Markdown |
-| <a id="up-magnet"></a>[magnet/SKILL.md](https://modelscope.cn/skills/WenjiaWang/magnet-design/resolve/fb499eda4bd44d9554643fff4d5c6dc06184fa6e/SKILL.md)、[low-fi-html-output.md](https://modelscope.cn/skills/WenjiaWang/magnet-design/resolve/fb499eda4bd44d9554643fff4d5c6dc06184fa6e/references/low-fi-html-output.md) | `fb499eda4bd44d9554643fff4d5c6dc06184fa6e` | C03/C05/C08条件Figma实例/布局方法；RS03；真实库/权限前提，不生成应用代码 |
-| <a id="up-ui"></a>[ui-designer根SKILL](https://modelscope.cn/skills/WenjiaWang/ui-designer/resolve/c7317a841b6427360bc1b94151a03cf023e6643e/SKILL.md)、[ui-design-orchestrator](https://modelscope.cn/skills/WenjiaWang/ui-designer/resolve/c7317a841b6427360bc1b94151a03cf023e6643e/skills/ui-design-orchestrator/SKILL.md) | `c7317a841b6427360bc1b94151a03cf023e6643e` | RS03/production复用核对；协调下列八分工，不迁固定.design路径/新gate |
-| <a id="up-ues"></a>[UES/skills/ues-expert-suite/SKILL.md](https://github.com/Alibaba-Cloud-Design/ues-evaluation-suite/blob/813d17db4c7c4e9941bd2b8d202e32a39752ec3d/skills/ues-expert-suite/SKILL.md) | `813d17db4c7c4e9941bd2b8d202e32a39752ec3d` | C07条件评价方法/窄工具；RS05～07逐模块源码/缺陷；不是Playbook Evaluator，无校准评分不作完成阈值 |
-| <a id="up-vercel"></a>[Vercel SKILL.md](https://github.com/vercel-labs/agent-skills/blob/dd089a8c752c966dee8bf0f27cb625ba193ffd9e/skills/react-best-practices/SKILL.md)、[AGENTS.md](https://github.com/vercel-labs/agent-skills/blob/dd089a8c752c966dee8bf0f27cb625ba193ffd9e/skills/react-best-practices/AGENTS.md) | `dd089a8c752c966dee8bf0f27cb625ba193ffd9e` | C06必须承接完整官方固定源；采用前核规则、引用、LICENSE全闭包；目前摘要不算履约 |
+| 原技能／实际文件 | 固定版本 | 用途、状态与责任 | 仓内副本路径 |
+| --- | --- | --- | --- |
+| <a id="up-wiki"></a>[design-wiki/SKILL.md](https://modelscope.cn/skills/WenjiaWang/Design-wiki/resolve/0aaa9f649d90281009d08663b0f1a177ab3b7e8c/SKILL.md) | `0aaa9f649d90281009d08663b0f1a177ab3b7e8c` | C02采用知识/证据/经验方法；RS01及material复用核对。promote不自动成为MUST | 未选定复制；仍按本卡采用条件核原件 |
+| [experience-analysis-expert](https://modelscope.cn/api/v1/skills/WenjiaWang/design-experience-analysis/repo/raw?Revision=943d0aa3505361fac10581c0d7d3c4493243f174&FilePath=SKILL.md)、[grammar-ai](https://modelscope.cn/api/v1/skills/WenjiaWang/grammar-ai/repo/raw?Revision=b3ab0dd5e9f65460339fa34f070f819e2cfaa272&FilePath=SKILL.md) | 前者`943d0aa3505361fac10581c0d7d3c4493243f174`；后者`b3ab0dd5e9f65460339fa34f070f819e2cfaa272` | RS01条件参考；七体验方法的真人/数据依赖保真，grammar内部语料不搬；C02/C05/C07按需 | 未选定复制；仍按本卡采用条件核原件 |
+| <a id="up-sdd"></a>[spec-driven-production/SKILL.md](https://modelscope.cn/skills/WenjiaWang/spec-driven-production/resolve/000b04a2a3553bddcf991b3dc42f9a5a2746fa6f/SKILL.md)、[references/execution.md](https://modelscope.cn/skills/WenjiaWang/spec-driven-production/resolve/000b04a2a3553bddcf991b3dc42f9a5a2746fa6f/references/execution.md) | `000b04a2a3553bddcf991b3dc42f9a5a2746fa6f` | C01/C08采用分责/更新方法；RS04及production复用核对；不迁六材料双写/重开状态 | `skills/external/spec-driven-production/`（15文件；许可未声明） |
+| <a id="up-material"></a>[material-agent-readiness-eval-markdown/SKILL.md](https://modelscope.cn/skills/WenjiaWang/material-agent-readiness-eval/resolve/b62e87f3f91868033106b21f6398f0fd6d3d2043/skills/material-agent-readiness-eval-markdown/SKILL.md) | `b62e87f3f91868033106b21f6398f0fd6d3d2043` | C01 GUIDE/AUDIT、C08有源OPTIMIZE；RS02及material复用核对；材料分数不代产品质量 | `skills/external/material-agent-readiness-eval-markdown/`（12文件；许可未声明） |
+| <a id="up-contract"></a>[design-system-contract-gen/SKILL.md](https://modelscope.cn/skills/WenjiaWang/Agent-ready-Material-Generation/resolve/9da7eaf8f84cae4f0df9101d5654183736f499e8/skills/design-system-contract-gen/SKILL.md)、[component-grammar.md](https://modelscope.cn/skills/WenjiaWang/Agent-ready-Material-Generation/resolve/9da7eaf8f84cae4f0df9101d5654183736f499e8/references/component-grammar.md) | `9da7eaf8f84cae4f0df9101d5654183736f499e8` | C03～08条件选；RS02/13；非shadcn需原包改造，FROM_SPEC只更Markdown | 未选定复制；仍按本卡采用条件核原件 |
+| <a id="up-magnet"></a>[magnet/SKILL.md](https://modelscope.cn/skills/WenjiaWang/magnet-design/resolve/fb499eda4bd44d9554643fff4d5c6dc06184fa6e/SKILL.md)、[low-fi-html-output.md](https://modelscope.cn/skills/WenjiaWang/magnet-design/resolve/fb499eda4bd44d9554643fff4d5c6dc06184fa6e/references/low-fi-html-output.md) | `fb499eda4bd44d9554643fff4d5c6dc06184fa6e` | C03/C05/C08条件Figma实例/布局方法；RS03；真实库/权限前提，不生成应用代码 | 未选定复制；仍按本卡采用条件核原件 |
+| <a id="up-ui"></a>[ui-designer根SKILL](https://modelscope.cn/skills/WenjiaWang/ui-designer/resolve/c7317a841b6427360bc1b94151a03cf023e6643e/SKILL.md)、[ui-design-orchestrator](https://modelscope.cn/skills/WenjiaWang/ui-designer/resolve/c7317a841b6427360bc1b94151a03cf023e6643e/skills/ui-design-orchestrator/SKILL.md) | `c7317a841b6427360bc1b94151a03cf023e6643e` | RS03/production复用核对；协调下列八分工，不迁固定.design路径/新gate | 未选定复制；仍按本卡采用条件核原件 |
+| <a id="up-ues"></a>[UES/skills/ues-expert-suite/SKILL.md](https://github.com/Alibaba-Cloud-Design/ues-evaluation-suite/blob/813d17db4c7c4e9941bd2b8d202e32a39752ec3d/skills/ues-expert-suite/SKILL.md) | `813d17db4c7c4e9941bd2b8d202e32a39752ec3d` | C07条件评价方法/窄工具；RS05～07逐模块源码/缺陷；不是Playbook Evaluator，无校准评分不作完成阈值 | 未选定复制；仍按本卡采用条件核原件 |
+| <a id="up-vercel"></a>[Vercel SKILL.md](https://github.com/vercel-labs/agent-skills/blob/dd089a8c752c966dee8bf0f27cb625ba193ffd9e/skills/react-best-practices/SKILL.md)、[AGENTS.md](https://github.com/vercel-labs/agent-skills/blob/dd089a8c752c966dee8bf0f27cb625ba193ffd9e/skills/react-best-practices/AGENTS.md) | `dd089a8c752c966dee8bf0f27cb625ba193ffd9e` | C06必须承接完整官方固定源；采用前核规则、引用、LICENSE全闭包；目前摘要不算履约 | C06目标未交付；P1不承接 |
+
+C01已交付的复制目录为`skills/external/spec-driven-production/`、`skills/external/material-agent-readiness-eval-markdown/`与`skills/external/design-tokens/`，许可与维护入口见[离线索引](../../skills/external/README.md)。此事实只到离线字节与登记，不外推能力执行或C06交付。
 
 Vercel定位差异直接核[ADR0016](../../docs/adr/0016-external-first-frontend-component-quality.md)的SKILL路径，与[现frontend-component-quality固定来源](../../skills/frontend-component-quality/SKILL.md)及[UPSTREAM](../../skills/frontend-component-quality/upstream/react-best-practices/UPSTREAM.md)的AGENTS路径。既定目标目录`skills/external/vercel-react-best-practices/`尚未形成完整交付，不能把宿主安装或21行摘要当该目录已经满足。
 
@@ -660,7 +662,7 @@ UI Designer八个子技能均绑定上表同一commit，采用条件和硬编码
 | [design-brief](https://modelscope.cn/skills/WenjiaWang/ui-designer/resolve/c7317a841b6427360bc1b94151a03cf023e6643e/skills/design-brief/SKILL.md) | C05意图/方向；消费已确认需求，不重复母访谈 |
 | [information-architecture](https://modelscope.cn/skills/WenjiaWang/ui-designer/resolve/c7317a841b6427360bc1b94151a03cf023e6643e/skills/information-architecture/SKILL.md) | C05区域/层级/导航/增长；明确当前任务，不用mtime猜输入 |
 | [style-ref-gen](https://modelscope.cn/skills/WenjiaWang/ui-designer/resolve/c7317a841b6427360bc1b94151a03cf023e6643e/skills/style-ref-gen/SKILL.md) | C04条件采集；桌面/hover/失败语义须适配，移动化或fallback exit0不冒成功 |
-| [design-tokens](https://modelscope.cn/skills/WenjiaWang/ui-designer/resolve/c7317a841b6427360bc1b94151a03cf023e6643e/skills/design-tokens/SKILL.md) | C01/C05/C06/C08引用或更新原值源，不强加双主题/默认断点 |
+| [design-tokens](https://modelscope.cn/skills/WenjiaWang/ui-designer/resolve/c7317a841b6427360bc1b94151a03cf023e6643e/skills/design-tokens/SKILL.md) | C01/C05/C06/C08引用或更新原值源，不强加双主题/默认断点；方法副本`skills/external/design-tokens/SKILL.md`来自GitHub固定`c259656c76d9758d7ead46b0d2f125cbe84f8665`，Apache-2.0，项目值仍留原owner |
 | [frontend-design](https://modelscope.cn/skills/WenjiaWang/ui-designer/resolve/c7317a841b6427360bc1b94151a03cf023e6643e/skills/frontend-design/SKILL.md) | C05/C06真实组件原型/实现；实际后端合同另核 |
 | [ui-interaction-states](https://modelscope.cn/skills/WenjiaWang/ui-designer/resolve/c7317a841b6427360bc1b94151a03cf023e6643e/skills/ui-interaction-states/SKILL.md) | C05任务状态、焦点/反馈/恢复及可观察AC，写当前spec/API |
 | [ui-accessibility-review](https://modelscope.cn/skills/WenjiaWang/ui-designer/resolve/c7317a841b6427360bc1b94151a03cf023e6643e/skills/ui-accessibility-review/SKILL.md) | C05/C07独立a11y方法；截图不代键盘或辅助技术实测 |
