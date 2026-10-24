@@ -20,6 +20,8 @@
 | --- | --- | --- |
 | 跨仓材料声明了论文仓路径，但默认单仓审查确实拒绝这些路径（来源：N7/build-plan 的 [013 原件](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n7-route-delivery-closeout-experience-20261018/quality/tests/2026-10-18-013-n4-n7-material-contract.json)、当前 spec OPEN-010）。 | 下次筹备跨仓审查时先核真实 host 能否提供可信读取范围；缺面如实 unavailable，直接函数 scope 诊断不当宿主接通。 | 已落账；跨仓宿主接线仍缺，本条不代用户决定或新授权。 |
 
+复查（N11/make-decision）：方向审查 2 路判材料不完整（E11），第二批细节审查同项判 blocking（G1）；同上条行动，不复制正文。来源：`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n11-same-condition-eval-20261022/quality/evidence/decision-log-refs/review-dispositions.md`。
+
 ## 证据模块
 
 | 问题 | 下次改变的行动 | 状态 |
@@ -55,6 +57,31 @@
 | 问题 | 下次改变的行动 | 状态 |
 | --- | --- | --- |
 | 审查建议曾否定 P2 明文允许的 notice 坐标，又把旧汇总漏列原件误作实现缺口（来源：N10/verify-code，`quality/reviews/2026-10-22-064-verify-code-document.json`、`specs/n10-finite-check-wiring-20261020/phases/P2-来源与目录接线.md:111`、`quality/reviews/2026-10-22-087-n10-review-clarification-20261022.md`）。 | 下次处置 finding 先回读对应原 AC、真实消费者和具名原件；与合同冲突时保留建议并写拒绝原因，不增加 hash/freshness 门。 | 已落账；仅纠正证据判读，完整验收限制不变。 |
+
+## 审查聚合与部分结果（N11）
+
+| 问题 | 下次改变的行动 | 状态 |
+| --- | --- | --- |
+| 方向审查 2 路已完成并产出 15 条意见，卡住的一路让整组等了 41 分钟，汇总层仍判 `unavailable`、`authoritative=false`，已得意见在汇总口径里丢失（来源：N11/make-decision，`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n11-same-condition-eval-20261022/quality/evidence/reviews/2026-10-22-direction-review-failure.md`、同任务 `review-dispositions.md` D10）。 | 下次改审查聚合先核真实失败原件：单路无进展即判该路终态，已产 findings 落 partial 可消费，汇总层不得把已执行结果降为 unavailable。 | 已落账（P5 承接，AC-N11-14/19 验收）。 |
+
+## 质量检查模块（N11）
+
+| 问题 | 下次改变的行动 | 状态 |
+| --- | --- | --- |
+| 4 份审查汇总的 `material_coverage` 全为 undetermined（read 空），其中 3 份 `status=available`；只看 status 会把「审查返回」当成「材料被读过」（来源：N11/make-decision，同一任务库 `quality/reviews/2026-10-22-005/009/013/017-*.json`）。 | 下次引用审查结论前先读 `material_coverage.read`；全 undetermined 时写覆盖限制，不当读懂或覆盖充分。 | 已落账。 |
+
+## 验收设计模块（N11）
+
+| 问题 | 下次改变的行动 | 状态 |
+| --- | --- | --- |
+| 阶段地图每阶段有独立结果，但验收表曾漏掉四项流程能力的全部验收条目（E1），抽样条目重复一次（E8），两轮审查才发现（来源：N11/make-decision，`review-dispositions.md` E1/E8）。 | 下次收口前做「工作包独立结果 → AC 编号」逐行对照，每行结果至少一条 AC，同一抽样规则只出现一处。 | 已落账；不代用户确认 AC 内容。 |
+| 审查建议给验收加耗时/步数熔断，与「不设数字阈值」冲突被拒；成本四组曾只列三组、曾想用别人数据（来源：N11/make-decision，`review-dispositions.md` D2 未采纳、G5/G6）。 | 下次防验收失控先选范围止损（超出点名范围即停问用户），成本对照用本任务前后四组指标分列，不设数字阈值、不借外部数据。 | 已落账（P1/P2 阶段契约承接）。 |
+
+## 交互模块（N11）
+
+| 问题 | 下次改变的行动 | 状态 |
+| --- | --- | --- |
+| 用户两次确认都只覆盖实际展示的范围，另列 5 项不覆盖的待确认（Git 授权、基线提交哈希、判官与平局规则、P9 被测任务、P2 分档阈值）（来源：N11/make-decision，`/Users/Hugh/Hugh/Project/workflowhub-n11-same-condition-eval-20261022/specs/n11-same-condition-eval-20261022/decision-log.md:219`）。 | 下次记录用户确认时同段列「本次确认不覆盖」的具体项与再问阶段，阶段开工前逐项再问，不把确认当全量授权。 | 已落账。 |
 
 ## 流程能力模块
 
