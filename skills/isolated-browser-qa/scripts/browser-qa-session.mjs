@@ -440,7 +440,7 @@ export async function selectBrowserEngine(env=process.env,{probe}={}) {
   recordEngineFallback(fallbacks,'ego-lite executable unavailable before launch',result);
   return {engine:'agent-browser',fallbacks};
 }
-const registeredScripts=Object.freeze(['design-source-read-v1']);
+const registeredScripts=Object.freeze(['design-source-read-v1','design-source-prepare-v1']);
 export function assertRegisteredScript(id) {
   // unregistered identifiers are rejected before executor access.
   if(!registeredScripts.includes(id))throw safeError('UNREGISTERED_SCRIPT');
@@ -448,11 +448,18 @@ export function assertRegisteredScript(id) {
 }
 export async function runRegisteredScript(page,id,args={}) {
   assertRegisteredScript(id); // Reject before any page call; no arbitrary strings.
-  if(!args||typeof args!=='object'||Array.isArray(args)||Object.keys(args).some(key=>key!=='elements')||!Array.isArray(args.elements)||args.elements.length>1000||args.elements.some(item=>!item||typeof item!=='object'||Array.isArray(item)||Object.keys(item).some(key=>!['selector','properties'].includes(key))||typeof item.selector!=='string'||!item.selector||!Array.isArray(item.properties)||item.properties.length>1000||item.properties.some(key=>typeof key!=='string'||!key)))throw safeError('INVALID_COLLECTION_ARGUMENTS');
+  const isPrepare=id==='design-source-prepare-v1';
+  const validObject=args&&typeof args==='object'&&!Array.isArray(args);
+  const validRead=validObject&&Object.keys(args).every(key=>key==='elements')&&Array.isArray(args.elements)&&args.elements.length<=1000&&args.elements.every(item=>item&&typeof item==='object'&&!Array.isArray(item)&&Object.keys(item).every(key=>['selector','properties'].includes(key))&&typeof item.selector==='string'&&!!item.selector&&Array.isArray(item.properties)&&item.properties.length<=1000&&item.properties.every(key=>typeof key==='string'&&!!key));
+  const validPrepare=validObject&&Object.keys(args).every(key=>key==='actions')&&Array.isArray(args.actions)&&args.actions.length<=100&&args.actions.every(action=>action&&typeof action==='object'&&!Array.isArray(action)&&Object.keys(action).every(key=>['type','selector'].includes(key))&&action.type==='click'&&typeof action.selector==='string'&&!!action.selector);
+  if(!(isPrepare?validPrepare:validRead))throw safeError('INVALID_COLLECTION_ARGUMENTS');
   return page.evaluate(({id,args})=>{
     const undo=[],violations=[];
     const deny=kind=>()=>{violations.push(kind);throw new Error('READ_ONLY_'+kind);};
     const replace=(owner,key,value)=>{const descriptor=Object.getOwnPropertyDescriptor(owner,key);if(!descriptor||!descriptor.configurable)throw new Error('READ_ONLY_GUARD_UNAVAILABLE:'+key);Object.defineProperty(owner,key,{...descriptor,...value});undo.push(()=>Object.defineProperty(owner,key,descriptor));};
+    const replaceIf=(owner,key,value)=>{if(owner&&Object.getOwnPropertyDescriptor(owner,key))replace(owner,key,value);};
+    const listeners=[];
+    const listen=(target,type,handler,options)=>{if(typeof target?.addEventListener!=='function')return;target.addEventListener(type,handler,options);listeners.push(()=>target.removeEventListener(type,handler,options));};
     let observer;
     try {
       replace(window,'fetch',{value:deny('NETWORK')});
@@ -461,9 +468,19 @@ export async function runRegisteredScript(page,id,args={}) {
       for(const key of ['innerHTML','outerHTML'])replace(Element.prototype,key,{set:deny('DOM_WRITE')});
       replace(Node.prototype,'textContent',{set:deny('DOM_WRITE')});
       replace(Element.prototype,'setAttribute',{value:deny('DOM_WRITE')});
+      replaceIf(typeof HTMLFormElement==='undefined'?null:HTMLFormElement.prototype,'submit',{value:deny('DOM_WRITE')});
+      replaceIf(typeof HTMLFormElement==='undefined'?null:HTMLFormElement.prototype,'requestSubmit',{value:deny('DOM_WRITE')});
+      replaceIf(typeof Navigator==='undefined'?null:Navigator.prototype,'sendBeacon',{value:deny('NETWORK')});
+      replaceIf(window,'open',{value:deny('NETWORK')});
+      listen(document,'submit',event=>{event.preventDefault?.();violations.push('DOM_WRITE');},true);
+      listen(document,'click',event=>{let node=event.target;while(node&&node!==document){if(node.tagName==='A'&&node.href){event.preventDefault?.();violations.push('NETWORK');break;}node=node.parentElement;}},true);
       observer=new MutationObserver(()=>violations.push('DOM_MUTATION_OBSERVED'));
       observer.observe(document,{subtree:true,attributes:true,childList:true,characterData:true});
       let value;
+      if(id==='design-source-prepare-v1'){
+        for(const {selector} of args.actions){const element=document.querySelector(selector);if(!element)throw new Error('ELEMENT_NOT_FOUND:'+selector);if(typeof element.click!=='function')throw new Error('CLICK_UNAVAILABLE:'+selector);element.click();}
+        value=[];
+      }else{
         if(!Array.isArray(args.elements)||args.elements.length>1000)throw new Error('INVALID_COLLECTION_ELEMENTS');
         value=args.elements.map(({selector,properties=[]})=>{
           if(typeof selector!=='string'||!selector||!Array.isArray(properties)||properties.length>1000)throw new Error('INVALID_COLLECTION_ELEMENT');
@@ -471,10 +488,11 @@ export async function runRegisteredScript(page,id,args={}) {
           const box=element.getBoundingClientRect();if(!box.width||!box.height)throw new Error('ELEMENT_NOT_RENDERED:'+selector);
           const computed=getComputedStyle(element);return {selector,structure:{tag:element.tagName,text:element.textContent},rendered:{styles:Object.fromEntries(properties.map(key=>[key,computed.getPropertyValue(key)])),box:{x:box.x,y:box.y,width:box.width,height:box.height}},declared:{style:element.getAttribute('style')}};
         });
+      }
       if(observer.takeRecords().length)throw new Error('READ_ONLY_MUTATION_DETECTED');
       if(violations.length)throw new Error('READ_ONLY_VIOLATION:'+violations.join(','));
       return value;
-    } finally {observer?.disconnect();for(const restore of undo.reverse())restore();}
+    } finally {observer?.disconnect();for(const remove of listeners.reverse())remove();for(const restore of undo.reverse())restore();}
   },{id,args});
 }
 export async function runBrowserQa(args=process.argv.slice(2),inputEnv=process.env) {
