@@ -4640,11 +4640,29 @@
       "retention_basis": "将已装graphify四动作包装为可搬运方法；替代重复caller图方法，不新增runtime wrapper/控制面。"
     },
     {
+      "source": "skills/knowledge-graph/references/knowledge-reuse.md",
+      "destination": "skills/knowledge-graph/references/knowledge-reuse.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "任务检索的证据准备、全文比较、四判与采用定位；来源及权利维护仍归catalog，不持有规范正文或任务状态。",
+      "owner": "knowledge-graph 方法维护者",
+      "consumer": "make-decision开工与build-plan设计依据准备的任务作者；按真实catalog欠账问题选择可用证据，不以当前remote冒历史归档绑定。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/knowledge-graph/SKILL.md",
+        "skills/knowledge-graph/skill-bundle.json",
+        "workflows/make-decision/SKILL.md",
+        "workflows/build-plan/SKILL.md"
+      ],
+      "delete_condition": "同职责由经独立审查的现有方法完整承接且上述当前caller和bundle已迁接后，由知识方法owner同批删除附件及指针；历史证据保留。",
+      "retention_basis": "C02 P1/T001批准新增的唯一参考方法；窄扩既有知识方法，不采用Design-wiki运行时、独立网站或候选存储。登记不证明独立语义验收已执行。"
+    },
+    {
       "source": "skills/knowledge-graph/skill-bundle.json",
       "destination": "skills/knowledge-graph/skill-bundle.json",
       "status": "retain",
       "role": "production",
-      "responsibility": "按既有schema_version=1打包knowledge-graph正文。",
+      "responsibility": "按既有schema_version=1打包knowledge-graph正文与任务检索参考附件。",
       "owner": "P2/T002 knowledge-graph owner",
       "consumer": "既有local-skill-resolver与catalog技能分发。",
       "module_consumers": [],

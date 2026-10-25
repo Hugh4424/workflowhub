@@ -2,6 +2,7 @@
   "schema_version": 1,
   "skill": "knowledge-graph",
   "files": [
-    "SKILL.md"
+    "SKILL.md",
+    "references/knowledge-reuse.md"
   ]
 }

@@ -213,14 +213,32 @@ skills:
     status: native
     metrics_enabled: false
     standalone: true
-    purpose: 阶段调研与收口统一消费图知识、正常增量更新及明确降级
-    design_idea: 图是发现入口；回source_file核原文，代码文档分别报告，内容和prompt缓存分别核，费用许可先于新语义抽取
+    purpose: 阶段调研与收口消费图知识；任务开工及设计准备以合法全文形成采用判断
+    design_idea: 图只发现；任务问题经全文比较与四判回当前材料；版本/权利/原始失败各自保真
     used_by_stages: *stages_decision_prd_plan_code_verify
     upstream: []
-    local_changes: 包装外部graphify现有CLI和库；不新建runtime adapter、质量门、API key、hook或记忆回写；保合法外部占位、去重和当前图未修限制；graphify为工具能力参考而非vendored文本；版本/函数以实际安装回读，原始方法/许可绑定unknown由来源维护者补核。
+    # Design-wiki is a ModelScope source, not GitHub or a user-provided local source.
+    # Existing bundle source variants cannot truthfully encode it; retain the exact
+    # coordinate here rather than inventing github_url/kind or widening the schema.
+    # Source: https://modelscope.cn/api/v1/skills/WenjiaWang/Design-wiki
+    # pin: 0aaa9f649d90281009d08663b0f1a177ab3b7e8c; license: unknown.
+    # Fixed raw: https://modelscope.cn/api/v1/skills/WenjiaWang/Design-wiki/repo/raw?Revision=0aaa9f649d90281009d08663b0f1a177ab3b7e8c&FilePath=SKILL.md
+    # Method-only adoption: SKILL.md task-consultation/source-policy pointers;
+    # profiles/design/references/task-consultation.md query/applicability/failure;
+    # profiles/design/references/design-commands.md compare/extract-pattern/recommend;
+    # profiles/design/references/source-and-evidence-policy.md context/rights/conflicts;
+    # AGENTS.md knowledge/evidence/change-safety limits. Read all five current/fixed
+    # files 2026-10-25: equal per-file bytes only, not whole-package/history proof.
+    # Consumer: make-decision load-context and build-plan design/test preparation ->
+    # references/knowledge-reuse.md; owner: knowledge-graph method maintainer.
+    # Authorization: C02 decision U-003/U-004/U-013/U-017: original method rewrite
+    # only, no source/code copying, no redistribution grant, no runtime import.
+    # Not adopted: wiki engine/site/install/staging; design-experience-analysis is
+    # reference-only; grammar-ai/A6/dynamic GenUI are excluded; local methods reused.
+    local_changes: 包装graphify现有CLI/库，保原查询/更新/降级；新增references/knowledge-reuse.md原创任务判断方法及两workflow真实入口，复用bundle。Design-wiki许可unknown仅重写方法，不复制原文/源码；不采用其候选存储/命令/站点，不建新runtime adapter/门/API key/hook/记忆回写。图工具原方法/许可绑定unknown仍交来源维护者。
     dependency_closure: *deps_spec_specify
 
-    update_policy: 随当前CLI和cache/build/export边界及五阶段真实consumer一起审查；失配保unavailable，不自动升级
+    update_policy: 随当前CLI和cache/build/export边界及五阶段真实consumer一起审查；失配保unavailable，不自动升级。知识方法owner在采用前/迭代/维护计划触发时沿顶部手动核对入口，对ModelScope真实metadata和raw当前/固定逐采用文件比较；HTTP/JSON/exit分判，失败unknown不报无更新，不自动追HEAD。附件职责被独立审查替代且两caller/bundle迁接后同批退役；历史证据保留。
   - name: anysearch
     path: skills/anysearch/SKILL.md
     local_version: 1.0.0
