@@ -30,7 +30,7 @@ skills:
     trigger: actual_stage_end_process_issue_optional
   - name: norm-sync
     path: skills/norm-sync/SKILL.md
-    trigger: terminal_verified_norm_changes
+    trigger: terminal_closeout_read_norm_sync_and_record_no_change_or_sync_change
 
 
 runtime_capabilities:

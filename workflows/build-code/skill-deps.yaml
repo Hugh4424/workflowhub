@@ -42,7 +42,7 @@ skills:
     trigger: actual_failure_reproduction_before_hypothesis
   - name: norm-sync
     path: skills/norm-sync/SKILL.md
-    trigger: phase_closeout_verified_norm_changes
+    trigger: every_phase_closeout_read_norm_sync_and_record_no_change_or_sync_change
 
 
 runtime_capabilities:

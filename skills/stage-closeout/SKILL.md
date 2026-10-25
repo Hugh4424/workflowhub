@@ -144,4 +144,4 @@ worktree确认已移除后，在目标repo按独立cleanup步骤授权，普通`
 
 ## 同仓方法依赖
 
-`skills/knowledge-graph/SKILL.md`、`skills/spec-specify/SKILL.md`、`skills/resolving-merge-conflicts/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。
+`skills/knowledge-graph/SKILL.md`、`skills/spec-specify/SKILL.md`、`skills/resolving-merge-conflicts/SKILL.md`、`skills/norm-sync/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。
