@@ -6500,6 +6500,91 @@
       ],
       "delete_condition": "同职责由已审查替代完整承接且真实caller/索引/bundle均迁接后由原owner删除；历史证据保留。",
       "retention_basis": "C02 P2/T002已批准跨仓六件规范的真实绝对scope，项目归属PaperBuilder；此处为人读职责记录，不作为WH本仓resolver/分发输入。绝对坐标反映本次宿主，迁宿主时由PB owner核真实root再更新；不以WH同名相对路径替代。登记不证明产品验收。"
+    },
+    {
+      "source": "skills/norm-sync/SKILL.md",
+      "destination": "skills/norm-sync/SKILL.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "规范同步方法/五类主题路由/现bundle；复用项目共同锁和安全写，不建运行时同步引擎或进度账本。",
+      "owner": "norm-sync专业规范同步owner",
+      "consumer": "build-code每Phase收口、verify-code终末、stage-reflection写经验前、stage-closeout任务收口前；T003 PB证据归属应用、T004/T005顺序生产消费。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "workflows/build-code/skill-deps.yaml",
+        "workflows/verify-code/skill-deps.yaml",
+        "skills/catalog.yaml"
+      ],
+      "delete_condition": "四现owner被经独立审查替代完整承接、bundle/caller迁接且无实际consumer后同批退役；历史delta原件保留。",
+      "retention_basis": "C02 U014明确独立方法；P3 T003精确新增；记录事实不认证质量/事务或阶段许可。"
+    },
+    {
+      "source": "skills/norm-sync/references/routes.md",
+      "destination": "skills/norm-sync/references/routes.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "规范同步方法/五类主题路由/现bundle；复用项目共同锁和安全写，不建运行时同步引擎或进度账本。",
+      "owner": "norm-sync专业规范同步owner",
+      "consumer": "build-code每Phase收口、verify-code终末、stage-reflection写经验前、stage-closeout任务收口前；T003 PB证据归属应用、T004/T005顺序生产消费。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "workflows/build-code/skill-deps.yaml",
+        "workflows/verify-code/skill-deps.yaml",
+        "skills/catalog.yaml"
+      ],
+      "delete_condition": "四现owner被经独立审查替代完整承接、bundle/caller迁接且无实际consumer后同批退役；历史delta原件保留。",
+      "retention_basis": "C02 U014明确独立方法；P3 T003精确新增；记录事实不认证质量/事务或阶段许可。"
+    },
+    {
+      "source": "skills/norm-sync/skill-bundle.json",
+      "destination": "skills/norm-sync/skill-bundle.json",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "规范同步方法/五类主题路由/现bundle；复用项目共同锁和安全写，不建运行时同步引擎或进度账本。",
+      "owner": "norm-sync专业规范同步owner",
+      "consumer": "build-code每Phase收口、verify-code终末、stage-reflection写经验前、stage-closeout任务收口前；T003 PB证据归属应用、T004/T005顺序生产消费。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "workflows/build-code/skill-deps.yaml",
+        "workflows/verify-code/skill-deps.yaml",
+        "skills/catalog.yaml"
+      ],
+      "delete_condition": "四现owner被经独立审查替代完整承接、bundle/caller迁接且无实际consumer后同批退役；历史delta原件保留。",
+      "retention_basis": "C02 U014明确独立方法；P3 T003精确新增；记录事实不认证质量/事务或阶段许可。"
+    },
+    {
+      "source": "specs/acceptance/evidence.md",
+      "destination": "specs/acceptance/evidence.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "版本证据角色/权利判读的唯一本地原创规则",
+      "owner": "WorkflowHub验收专业owner；T004生产evidence并预登记done，T005已交付done及对应行动迁移",
+      "consumer": "stage-reflection现证据ref/覆盖判断与Improvements29/71判重consumer；T005已实际先读evidence核原源，再按done只迁行动保历史缺口，后继验收reader沿README/AGENTS读唯一规范。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/acceptance/README.md",
+        "AGENTS.md",
+        "skills/stage-reflection/SKILL.md"
+      ],
+      "delete_condition": "独立审查的替代承接原判读及真实consumer/导航后退役；普通原始证据不删除覆写。",
+      "retention_basis": "P3 T004129/T005；已读真实consumer与写前核证027；KR-EVID-001；登记不是质量或未来消费通过。"
+    },
+    {
+      "source": "specs/acceptance/done.md",
+      "destination": "specs/acceptance/done.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "KR-DONE-001完成判读独立正文：只退出已验证且唯一规范承接的对应active行动，保未解事实及原用户确认分支；T005已真实交付。",
+      "owner": "WorkflowHub验收专业owner；T004生产evidence并预登记done，T005已交付done及对应行动迁移",
+      "consumer": "stage-reflection现证据ref/覆盖判断与Improvements29/71判重consumer；T005已实际先读evidence核原源，再按done只迁行动保历史缺口，后继验收reader沿README/AGENTS读唯一规范。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/acceptance/README.md",
+        "AGENTS.md",
+        "skills/stage-reflection/SKILL.md"
+      ],
+      "delete_condition": "独立审查的替代承接原判读及真实consumer/导航后退役；普通原始证据不删除覆写。",
+      "retention_basis": "P3 T004129/T005；已读真实consumer与写前核证027；KR-DONE-001；登记不是质量或未来消费通过。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

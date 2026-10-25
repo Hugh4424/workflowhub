@@ -115,3 +115,9 @@
 - review、test、evidence、history、inventory、complexity 都是事实，不是继续工作的许可证；`unknown`、`unavailable`、`incomplete` 不能阻止同 task 修复，但缺失质量事实不能被宣称为完成。
 - public runtime 只有 `doctor`、`status`、`run`、`review`、`verify`、`confirm`、`authorize` 七类；`prepare`、`start-run`、`publish-*`、`record-*`、`recover-*`、`rebind-*`、`phase-*` 只能是私有实现，不能成为公共流程节点。
 - reports immutable；M14–M17 只读保留/归档。新增生产文件、命令、schema 或持久对象必须同时写明唯一 consumer、owner、替代关系和删除条件；不得新增双写、永久 compatibility bridge 或 history runtime branch。
+
+规范同步：build-code每Phase收口及verify终末、reflection写经验前、closeout任务收口前实际执行[同一方法](skills/norm-sync/SKILL.md)，已独立验证变化进原专业源/索引；未解判断保原待办，partial/权利/隔离缺口不冒完成。
+
+引用版本、归档绑定、权利或失败/覆盖证据前，先读[KR-EVID-001](specs/acceptance/evidence.md#kr-evid-001--分开版本事实归档绑定与权利)，由验收专业owner维护，catalog/经验判重/独立reader消费；更新2026-10-25。
+
+经验规则退役或完成声明前，读取[KR-DONE-001](specs/acceptance/done.md#kr-done-001--只退出已承接的对应规则)，由验收专业owner维护，经验维护与独立reader消费；只退对应已承接规则，不清未解事实，更新2026-10-25。

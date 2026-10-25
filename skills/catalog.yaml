@@ -175,7 +175,7 @@ skills:
         adopted:
           - skills/principle-encode-lessons-in-structure/SKILL.md#encode-lessons-in-structure — 历史负例与结构护栏，原采集commit/时刻未知，不采用规则表/自动提交
     local_changes: 复用既有收口、交接与成本入口；保用户真选检查与人确认清理，直接落账与待批分开，业务仓specs经验按下一步加现象判重，无来源不编、越权不回落；不新增writer或控制面
-    dependency_closure: ["skills/spec-specify","skills/stage-handoff"]
+    dependency_closure: ["skills/spec-specify", "skills/stage-handoff", "skills/norm-sync"]
     update_policy: 迭代时核正文三个具名固定子文件与本地偏离、用户选择/check/prune消费者；pstack各文件内容pin不推原采集commit/时间或全仓基线，不自动追HEAD或以来源登记冒效果
   - name: stage-handoff
     path: skills/stage-handoff/SKILL.md
@@ -203,7 +203,7 @@ skills:
     used_by_stages: [build-prd, verify-code, make-decision]
     upstream: []
     local_changes: 抽取既有安全收口方法；保质量与事实caller owner、普通Git和workspace窄工具，不恢复close-plan或新增执行器；按用户指出的缺口新增目标分支独有提交/路径核对，按任务依赖决定是否同步，冲突复用既有解决方法；PR合并可能自动删除源分支时纳入同一物理范围确认；来源为本仓verify-code授权/安全收口、docs/standard-workflow.md和resolving-merge-conflicts方法；本仓方法抽取，不伪造GitHub外源。
-    dependency_closure: ["skills/knowledge-graph","skills/spec-specify","skills/resolving-merge-conflicts"]
+    dependency_closure: ["skills/knowledge-graph","skills/spec-specify","skills/resolving-merge-conflicts","skills/norm-sync"]
 
     update_policy: 随授权/工作区owner、知识方法、目标基线差异判断、PR合并副作用和两真实caller消费一并审查；内容确认不冒Git授权，未知字节保留
   - name: knowledge-graph
@@ -1153,6 +1153,22 @@ skills:
       - skills/isolated-browser-qa
     update_policy: 按固定pin与实际consumer人工核对；不自动追HEAD、不搬上游renderer或宿主绑定；未观察质量保持incomplete。
 
+  - name: norm-sync
+    path: skills/norm-sync/SKILL.md
+    local_version: 1.0.0
+    last_reviewed_at: '2026-10-25'
+    status: native
+    metrics_enabled: false
+    standalone: true
+    purpose: 每Phase及终末/经验/任务收口将独立验证变化写回唯一规范与索引
+    design_idea: 锁外核证；项目同root/name锁内before/delta先行，有序写入与after匹配补偿
+    used_by_stages: [build-code, verify-code]
+    upstream: []
+    local_changes: 原生方法复用record-lock/safe-write/task handle，不导入同步引擎；owner为规范同步维护者，consumer为build-code每Phase、verify终末、reflection经验前、closeout任务前；保未解判断与独立质量，不建候选/状态/历史账本。
+    dependency_closure: ["skills/spec-specify"]
+    update_policy: 四owner与原窄接口/五类原源一起审查；替代完整承接且caller/bundle迁接后同批退役，历史delta不删覆；版本不自动升级。
+
+
 capability_decisions:
   - name: n1-observability-and-instrumentation
     status: absorbed
@@ -1222,13 +1238,13 @@ capability_decisions:
       path: skills/using-agent-skills/SKILL.md
     local_changes: 既有consumer skills/reuse-registry.md 已实读；owner为该文件维护者。仅补登记，不宣称首验或收益；被独立审查的替代consumer承接后删除本行。
     update_policy: 固定既有pin；逐项比较来源与当前consumer，不自动追HEAD；消费者退役时移除登记。
-  # n1-explain-the-number not_backfilled: missing=upstream.commit; owner=wh-review/catalog maintainer; impact=既有pstack采用无Git绑定，保archive SHA256，不能称登记完整。
-  # n2-setup-pstack not_backfilled: missing=upstream.commit; owner=wh-review/catalog maintainer; impact=既有pstack采用无Git绑定，保archive SHA256，不能称登记完整。
-  # n2-poteto-help not_backfilled: missing=upstream.commit; owner=wh-review/catalog maintainer; impact=既有pstack采用无Git绑定，保archive SHA256，不能称登记完整。
-  # n2-make-operations-idempotent not_backfilled: missing=upstream.commit; owner=wh-review/catalog maintainer; impact=既有pstack采用无Git绑定，保archive SHA256，不能称登记完整。
-  # n2-type-system-discipline not_backfilled: missing=upstream.commit; owner=wh-review/catalog maintainer; impact=既有pstack采用无Git绑定，保archive SHA256，不能称登记完整。
-  # n2-boundary-discipline not_backfilled: missing=upstream.commit; owner=wh-review/catalog maintainer; impact=既有pstack采用无Git绑定，保archive SHA256，不能称登记完整。
-  # n2-experience-first not_backfilled: missing=upstream.commit; owner=wh-review/catalog maintainer; impact=既有pstack采用无Git绑定，保archive SHA256，不能称登记完整。
+  # n1-explain-the-number not_backfilled: missing=upstream.commit; owner=wh-review/catalog maintainer; impact=既有pstack采用无Git绑定，保archive SHA256，不能称登记完整。 ref=C02 quality/evidence/norm-deltas/2026-10-25-026-t004-seven-source-proposed-kr.json及027写前独立核证；current_HEAD仅060观测，不是采用版本；原归档当前不可得，commit/package绑定unknown。 explain文件SHA仅旧登记claim，本次未重算。
+  # n2-setup-pstack not_backfilled: missing=upstream.commit; owner=wh-review/catalog maintainer; impact=既有pstack采用无Git绑定，保archive SHA256，不能称登记完整。 ref=C02 quality/evidence/norm-deltas/2026-10-25-026-t004-seven-source-proposed-kr.json及027写前独立核证；current_HEAD仅060观测，不是采用版本；原归档当前不可得，commit/package绑定unknown。 file_SHA未知，本次未核原字节。
+  # n2-poteto-help not_backfilled: missing=upstream.commit; owner=wh-review/catalog maintainer; impact=既有pstack采用无Git绑定，保archive SHA256，不能称登记完整。 ref=C02 quality/evidence/norm-deltas/2026-10-25-026-t004-seven-source-proposed-kr.json及027写前独立核证；current_HEAD仅060观测，不是采用版本；原归档当前不可得，commit/package绑定unknown。 file_SHA未知，本次未核原字节。 help精确section未核，不把猜测#help当稳定锚。
+  # n2-make-operations-idempotent not_backfilled: missing=upstream.commit; owner=wh-review/catalog maintainer; impact=既有pstack采用无Git绑定，保archive SHA256，不能称登记完整。 ref=C02 quality/evidence/norm-deltas/2026-10-25-026-t004-seven-source-proposed-kr.json及027写前独立核证；current_HEAD仅060观测，不是采用版本；原归档当前不可得，commit/package绑定unknown。 file_SHA未知，本次未核原字节。
+  # n2-type-system-discipline not_backfilled: missing=upstream.commit; owner=wh-review/catalog maintainer; impact=既有pstack采用无Git绑定，保archive SHA256，不能称登记完整。 ref=C02 quality/evidence/norm-deltas/2026-10-25-026-t004-seven-source-proposed-kr.json及027写前独立核证；current_HEAD仅060观测，不是采用版本；原归档当前不可得，commit/package绑定unknown。 file_SHA未知，本次未核原字节。
+  # n2-boundary-discipline not_backfilled: missing=upstream.commit; owner=wh-review/catalog maintainer; impact=既有pstack采用无Git绑定，保archive SHA256，不能称登记完整。 ref=C02 quality/evidence/norm-deltas/2026-10-25-026-t004-seven-source-proposed-kr.json及027写前独立核证；current_HEAD仅060观测，不是采用版本；原归档当前不可得，commit/package绑定unknown。 file_SHA未知，本次未核原字节。
+  # n2-experience-first not_backfilled: missing=upstream.commit; owner=wh-review/catalog maintainer; impact=既有pstack采用无Git绑定，保archive SHA256，不能称登记完整。 ref=C02 quality/evidence/norm-deltas/2026-10-25-026-t004-seven-source-proposed-kr.json及027写前独立核证；current_HEAD仅060观测，不是采用版本；原归档当前不可得，commit/package绑定unknown。 file_SHA未知，本次未核原字节。
   - name: scope-triage
     status: absorbed
     purpose: 将需求拆成 scope verdict

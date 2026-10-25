@@ -81,6 +81,8 @@ authorize只记录/消费已有授权。每次Git前用 `runtime/interface/git-a
 
 整个 stage 末按第 12 步执行阶段收口；交接内容与独立读取沿 `skills/stage-handoff/SKILL.md`「信息来源」「回读结果」「结束条件与边界」，报告实际不可变路径。缺失与未执行给原因及影响，披露不代完成。正式事实仍由既有公共流程发布，不增机器认证、第二账本或推进许可。
 
+在每个Phase收口、审后提交前，实际读取并执行 `skills/norm-sync/SKILL.md`，处理本Phase已独立验证变化，核目标/权利/before及项目共同锁、delta和逐件读回；不延迟至整stage末。无适用变化给具名原ref；重复触发核task＋条款ID，首次建设尚未就绪的早期Phase只记真实晚期回核，不倒称已执行。
+
 ## 写作与固定来源
 
 改写 agent 方法时，若 `skills/spec-specify/SKILL.md` 已有「技能写作规范（WR001）」节，读取该唯一规范并逐项保全；规范尚未到位时保留当前方法与调用者提供的写作源，不猜新规则。

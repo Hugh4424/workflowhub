@@ -169,3 +169,5 @@
 ## N10有限检查来源
 
 figure-it-out 的采用、固定字节与未证实项见 [catalog.yaml](catalog.yaml) 的 `figure-it-out` 条目；正文落点为 [verify-code 的检查可信度段](../workflows/verify-code/SKILL.md#测试充分性与检查可信度)，[stage-reflection](stage-reflection/SKILL.md) 只放指针，正文接线与首验归 P5/T021。本节只导航。
+
+| norm-sync | 每Phase收口、终末验证、写经验及任务收口前同步已独立验证变化；拒写不足项并保partial恢复。 | [读取正文](norm-sync/SKILL.md) |

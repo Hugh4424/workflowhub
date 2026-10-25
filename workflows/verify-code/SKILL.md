@@ -93,3 +93,5 @@ Git授权/物理收口唯一执行 `skills/stage-closeout/SKILL.md`，不保第�
 
 本地保当前材料 owner、原步骤、真实用户回复、原失败与独立审查；只吸收适用方法，拒绝外置 tracker、GitHub ticket API、宿主 setup/Skill 硬依赖和第二进度权威。旧 bridge/外部 session 只读保历史 provenance，不作 active 执行、复盘、交接或 close 的门。方法接收真实项目材料、允许路径与宿主已批准的能力，缺源或能力如实报错，不绑定任务绝对路径或账号。
 迭代本文件的固定来源时，读取 skills/stage-reflection/SKILL.md 的「固定来源、本地偏离与更新入口」节，以本文件上列具名来源应用该节更新方法；只在核到真实上游更新或更优候选时才决定采用，不自动追 HEAD。
+
+终末验证收口前，实际读取并执行 `skills/norm-sync/SKILL.md`，仅处理已独立验证变化并核各Phase既有同步原件；重复同task/条款ID不生第二有效条款。无变化、拒写、partial与恢复按原方法如实交回，不以同步代质量裁决。

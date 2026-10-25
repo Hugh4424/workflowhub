@@ -26,7 +26,7 @@
 
 | 问题 | 下次改变的行动 | 状态 |
 | --- | --- | --- |
-| 本次把 022 指成 alias 失败原件，实读发现 022 只有索引比对失败；alias 仅 003 摘要，完整 stderr 未独立存（来源：[本次观察](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n7-route-delivery-closeout-experience-20261018/quality/tests/2026-10-18-046-p2-t002-before-and-source-observations.json)、[022](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n7-route-delivery-closeout-experience-20261018/quality/tests/2026-10-18-022-n7-build-code-preflight.json)、[003](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n7-route-delivery-closeout-experience-20261018/quality/evidence/2026-10-18-003-preflight-confirm-alias-failure.json)）。 | 下次引用失败或写经验前，逐项核对操作、错误与原件正文是否对应；只有摘要时明确覆盖限制，不把另一失败替进去。 | 已落账；本次错误指针已纠正，未声称用户确认清理。 |
+| 本次把 022 指成 alias 失败原件，实读发现 022 只有索引比对失败；alias 仅 003 摘要，完整 stderr 未独立存（来源：[本次观察](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n7-route-delivery-closeout-experience-20261018/quality/tests/2026-10-18-046-p2-t002-before-and-source-observations.json)、[022](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n7-route-delivery-closeout-experience-20261018/quality/tests/2026-10-18-022-n7-build-code-preflight.json)、[003](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n7-route-delivery-closeout-experience-20261018/quality/evidence/2026-10-18-003-preflight-confirm-alias-failure.json)）。 | 行动规则已迁入 [KR-EVID-001](acceptance/evidence.md#kr-evid-001--分开版本事实归档绑定与权利)，按原操作/错误/正文核命题，不在经验中另持规则。 | 已落账；对应行动规则已验证并同步，原完整stderr不足仍保留，未声称用户确认解决。 |
 
 ## 匿名评测模块
 
@@ -68,7 +68,7 @@
 
 | 问题 | 下次改变的行动 | 状态 |
 | --- | --- | --- |
-| 4 份审查汇总的 `material_coverage` 全为 undetermined（read 空），其中 3 份 `status=available`；只看 status 会把「审查返回」当成「材料被读过」（来源：N11/make-decision，同一任务库 `quality/reviews/2026-10-22-005/009/013/017-*.json`）。 | 下次引用审查结论前先读 `material_coverage.read`；全 undetermined 时写覆盖限制，不当读懂或覆盖充分。 | 已落账。 |
+| 4 份审查汇总的 `material_coverage` 全为 undetermined（read 空），其中 3 份 `status=available`；只看 status 会把「审查返回」当成「材料被读过」（来源：N11/make-decision，同一任务库 `quality/reviews/2026-10-22-005/009/013/017-*.json`）。 | 行动规则已迁入 [KR-EVID-001](acceptance/evidence.md#kr-evid-001--分开版本事实归档绑定与权利)，由唯一证据规范承接覆盖判断。 | 历史覆盖unknown：005 unavailable，009/013/017 available，read空/undetermined仅未证读取，不推实际绝未读；未标解决、未取得用户确认。 |
 
 ## 验收设计模块（N11）
 

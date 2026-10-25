@@ -28,6 +28,11 @@ skills:
   - name: stage-reflection
     path: skills/stage-reflection/SKILL.md
     trigger: actual_stage_end_process_issue_optional
+  - name: norm-sync
+    path: skills/norm-sync/SKILL.md
+    trigger: terminal_verified_norm_changes
+
+
 runtime_capabilities:
   - id: node
     kind: cli

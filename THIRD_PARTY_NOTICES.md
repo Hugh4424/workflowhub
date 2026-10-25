@@ -110,3 +110,5 @@ addyosmani/agent-skills 固定commit `aeac41d4d005999432bb7312f7ff06383a91d59d`�
 既有方法吸收 addyosmani/agent-skills 的 `skills/git-workflow-and-versioning/SKILL.md`（MIT，Copyright (c) 2025 Addy Osmani，固定commit `aeac41d4d005999432bb7312f7ff06383a91d59d`），以及 backnotprop/pstack 的 `skills/no-comments/SKILL.md`、`skills/ketchup/SKILL.md`、`skills/reflect/SKILL.md`（接受判据另读其 `references/synthesizer.md`）、`skills/recall/SKILL.md`、`skills/poteto-mode/playbooks/opening-a-pr.md`（本地LICENSE为MIT，Copyright (c) 2026 Lauren Tan）。沿本文件既有完整MIT许可与版权声明保留。
 
 pstack固定包SHA256为 `f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8`；Git commit unknown，main URL只是取回坐标，镜像上游许可链未独立核实。六项固定文件字节与采用/排除、本地偏离、实际消费者、首验限制唯一回 `skills/catalog.yaml` 的 `n7-*` 条目；`skills/reuse-registry.md`仅导航。本次只补已有采用登记，不新增外部采用、执行依赖或授权，不证明历史首验或N8最终验收通过。
+
+C02版本核对说明（2026-10-25）：catalog七笔pstack历史not_backfilled保持未绑定；当日公开HEAD只为当前坐标，原归档当前不可回读，不能用新HEAD或单文件相等追认归档commit/完整许可。来源与限制见本任务norm-deltas026/027及quality/tests060原件；本次不新增上游代码或prose复制，不改原MIT历史登记、不赋新grant。
