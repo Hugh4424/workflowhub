@@ -65,6 +65,8 @@ The browser QA contract is owned by the existing `isolated-browser-qa` consumer 
 
 ## 许可更正与待核边界
 
+Design-wiki（WenjiaWang / ModelScope），固定版本 `0aaa9f649d90281009d08663b0f1a177ab3b7e8c`，许可 **unknown**；公开可读不是复制或分发授权。C02仅原创改写任务咨询、比较/抽模式/推荐及来源适用性方法，落在 `skills/knowledge-graph/references/knowledge-reuse.md`，不复制上游原文、源码或运行时。来源与五个采用参考文件、当前/固定比较、维护owner和排除范围唯一见catalog的knowledge-graph条目；真实consumer为make-decision开工及build-plan设计依据准备。design-experience-analysis只参考，grammar-ai/A6/动态GenUI不引入；仓内方法继续复用。本条不把未知许可列作MIT或已获grant。
+
 AgentHub固定commit `258f5a2548fa8cc15325c6aa18dd107c1fc497b9` 的 [LICENSE](https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/LICENSE) 实际声明modified Apache-2.0，并附加第三方hosted/embedded商业服务需书面授权/商业许可、frontend logo及copyright不得移除等条件；旧MIT登记不实。五项测试技能的具体采用章节见catalog。抽取技能文字对这些条件的适用性仍unknown；来源维护者需权利owner确认具体grant。本次仅更正事实，没有接受附加条款或扩大既有采用/分发范围。
 
 唯一原字节 vendored 项 anysearch 的 `scripts/anysearch_cli.js` 已回填 `content_sha256`；consistency 对其本地字节复算并只报告漂移。hash 相等不证明上游许可或包绑定，固定版本授权依据仍 unknown。
@@ -108,3 +110,5 @@ addyosmani/agent-skills 固定commit `aeac41d4d005999432bb7312f7ff06383a91d59d`�
 既有方法吸收 addyosmani/agent-skills 的 `skills/git-workflow-and-versioning/SKILL.md`（MIT，Copyright (c) 2025 Addy Osmani，固定commit `aeac41d4d005999432bb7312f7ff06383a91d59d`），以及 backnotprop/pstack 的 `skills/no-comments/SKILL.md`、`skills/ketchup/SKILL.md`、`skills/reflect/SKILL.md`（接受判据另读其 `references/synthesizer.md`）、`skills/recall/SKILL.md`、`skills/poteto-mode/playbooks/opening-a-pr.md`（本地LICENSE为MIT，Copyright (c) 2026 Lauren Tan）。沿本文件既有完整MIT许可与版权声明保留。
 
 pstack固定包SHA256为 `f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8`；Git commit unknown，main URL只是取回坐标，镜像上游许可链未独立核实。六项固定文件字节与采用/排除、本地偏离、实际消费者、首验限制唯一回 `skills/catalog.yaml` 的 `n7-*` 条目；`skills/reuse-registry.md`仅导航。本次只补已有采用登记，不新增外部采用、执行依赖或授权，不证明历史首验或N8最终验收通过。
+
+C02版本核对说明（2026-10-25）：catalog七笔pstack历史not_backfilled保持未绑定；当日公开HEAD只为当前坐标，原归档当前不可回读，不能用新HEAD或单文件相等追认归档commit/完整许可。来源与限制见本任务norm-deltas026/027及quality/tests060原件；本次不新增上游代码或prose复制，不改原MIT历史登记、不赋新grant。

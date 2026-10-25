@@ -71,6 +71,18 @@
 - 五件正文入口与读取时机：[交付与收口总纲](docs/delivery-closeout-charter.md)。
 - 唯一进度来源：认证 worktree 的 `specs/<task-id>/` 当前材料与外置任务 task facts；`docs/archive/retired-root-progress/` 只读保留旧任务过程文件，不作为当前进度。
 
+## 项目专业规范索引
+
+最后更新：2026-10-25。各原专业owner维护，consumer为规划/实现/独立验收agent。索引只导航；逐类核实际版本/范围/缺口，不复制规则。
+
+| 类别 | 实质来源与用途 | 时机／owner与consumer |
+| --- | --- | --- |
+| 设计 | [原八类职责](skills/project-norm-init/SKILL.md#规范职责)、[来源准备](skills/design-source-readiness/SKILL.md)、[页面组件词汇](skills/answer-as-page/SKILL.md#组件词汇与取舍)及[驾驶舱合同](skills/answer-as-page/SKILL.md#当前任务驾驶舱)；结构样式归[原模板](skills/answer-as-page/templates/overview-template.html) | 出页/设计准备；原设计内容owner；make-decision/verify-code页面caller及render-answer-page模板reader |
+| 前端 | [组件质量](skills/frontend-component-quality/SKILL.md)、[前端测试](skills/frontend-testing/SKILL.md)、[页面DATA与输出合同](skills/answer-as-page/SKILL.md#依赖与边界)、[回灌安全](skills/answer-as-page/SKILL.md#回灌安全) | 交互准备/验收；原方法/renderer owner；阶段caller与render-answer-page.mjs；导航不改HTML/renderer |
+| 后端 | [入口](specs/backend/README.md) → [架构](specs/backend/architecture.md) | 模块/依赖/存储选择前；运行时架构owner；实现与审查者 |
+| 接口 | [入口](specs/api/README.md) → [合同](specs/api/contract.md) | public调用/校验/错误选择前；原public owner；CLI/task调用者 |
+| 验收 | [入口](specs/acceptance/README.md) → [规范](specs/acceptance/acceptance.md) | oracle/用例准备前；task及质量owner；独立测试/OCR/verify-code |
+
 ## 当前目录职责
 
 - `runtime/`：生产运行时；按 `interface/`、`stage/`、`task/`、`evidence/`、`review/`、`adapters/`、`distribution/`、`schemas/` 分区。
@@ -103,3 +115,9 @@
 - review、test、evidence、history、inventory、complexity 都是事实，不是继续工作的许可证；`unknown`、`unavailable`、`incomplete` 不能阻止同 task 修复，但缺失质量事实不能被宣称为完成。
 - public runtime 只有 `doctor`、`status`、`run`、`review`、`verify`、`confirm`、`authorize` 七类；`prepare`、`start-run`、`publish-*`、`record-*`、`recover-*`、`rebind-*`、`phase-*` 只能是私有实现，不能成为公共流程节点。
 - reports immutable；M14–M17 只读保留/归档。新增生产文件、命令、schema 或持久对象必须同时写明唯一 consumer、owner、替代关系和删除条件；不得新增双写、永久 compatibility bridge 或 history runtime branch。
+
+规范同步：build-code每Phase收口及verify终末、reflection写经验前、closeout任务收口前实际执行[同一方法](skills/norm-sync/SKILL.md)，已独立验证变化进原专业源/索引；未解判断保原待办，partial/权利/隔离缺口不冒完成。
+
+引用版本、归档绑定、权利或失败/覆盖证据前，先读[KR-EVID-001](specs/acceptance/evidence.md#kr-evid-001--分开版本事实归档绑定与权利)，由验收专业owner维护，catalog/经验判重/独立reader消费；更新2026-10-25。
+
+经验规则退役或完成声明前，读取[KR-DONE-001](specs/acceptance/done.md#kr-done-001--只退出已承接的对应规则)，由验收专业owner维护，经验维护与独立reader消费；只退对应已承接规则，不清未解事实，更新2026-10-25。

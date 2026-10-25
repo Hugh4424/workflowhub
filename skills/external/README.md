@@ -42,7 +42,7 @@
 
 未来若启用 `AUDIT`，须由上游原 owner 修复该输入一致性缺陷，并以“缺核心层不可得到 `READY`”的负例验证后再采用；当前保留固定上游字节，不声称缺陷已修复或风险已接受。正式 finding：当前任务 `quality/reviews/2026-10-24-019-build-code-phase-p1.json` 的 codex/luna major；只读分析：`quality/evidence/2026-10-24-139-p1-ocr-readiness-finding-analysis.md`。P6 读取准备方法和采用段落，不等于已运行完整 `AUDIT`。
 
-实际读者：`skills/ui-project-init/SKILL.md` 的视觉、分责与材料准备 owner，以及 `workflows/build-plan/SKILL.md` 的 UI 规范来源读者。P1 提供离线副本与登记；入口切换由 P2 负责，本次不宣称已改入口。登记校验读者为 `tools/cli/check-skill-consistency.mjs`。当前查询与原始HTTP/refs见任务 `quality/evidence/2026-10-24-138-p1-current-update-check-supplement.md`；`quality/evidence/2026-10-24-108-external-update-check.md` 与 build-plan `2026-10-24-105-external-and-standards.md` §2 保留历史查询及原始返回缺失，新查询不作历史恢复。
+实际读者：`skills/project-norm-init/SKILL.md` 的视觉、分责与材料准备 owner，以及 `workflows/build-plan/SKILL.md` 的 UI 规范来源读者。P1 提供离线副本与登记；入口切换由 P2 负责，本次不宣称已改入口。登记校验读者为 `tools/cli/check-skill-consistency.mjs`。当前查询与原始HTTP/refs见任务 `quality/evidence/2026-10-24-138-p1-current-update-check-supplement.md`；`quality/evidence/2026-10-24-108-external-update-check.md` 与 build-plan `2026-10-24-105-external-and-standards.md` §2 保留历史查询及原始返回缺失，新查询不作历史恢复。
 
 删除条件：所有当前 reader 经独立核实已由获批替代来源承接，且来源维护者决定退役时，统一移除副本和同名登记；不得只删文件留下可用假象。更新失败保当前固定字节及真实失败，不自动覆盖、不新增定时器或第二 registry。
 

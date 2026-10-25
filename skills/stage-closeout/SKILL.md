@@ -11,7 +11,7 @@ description: 阶段已交付或用户要求独立收尾时，统一提交、PR�
 
 写PR/交付说明前，先读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一正文，再执行本方法的写作动作；消费者是PR 读者与交付验收者。缺源如实 `unavailable`，此处只落实到达条件，不复制规范或改变原授权、失败与收口步骤。
 
-收口前读当前决策记录的「级别与路线」，读不到按复杂路线处理并记缺口，不静默降档。四级每次收口都写业务仓 `Improvements`，沿 stage-reflection 的同一规则：节名用项目/模块名，禁止用任务编号或任务流水；写后读回必须核对节名，历史任务节保条目标「待迁移」，下次写该模块时改模块节名，来源任务留条目括号、不删旧条目；无发现写具名依据，越界记不可用，不回落工具仓。反思与经验先由 caller 收口，物理交付随后消费其真实原件。
+收口前读当前决策记录的「级别与路线」，读不到按复杂路线处理并记缺口，不静默降档。四级任务收口前先实际读取并执行 `skills/norm-sync/SKILL.md`，已独立验证变化进唯一规范/索引并核对应经验清理；重复task＋条款ID不生第二条款，无变化给原ref。未解判断待办才写业务仓 `Improvements`，沿 stage-reflection 的同一规则：节名用项目/模块名，禁止用任务编号或任务流水；写后读回必须核对节名，历史任务节保条目标「待迁移」，下次写该模块时改模块节名，来源任务留条目括号、不删旧条目；无发现写具名依据，越界记不可用，不回落工具仓。反思与经验先由 caller 收口，物理交付随后消费其真实原件。
 
 调用者提供当前task身份和外置task路径、认证worktree/目标repo、当前材料、质量与发现处置原件、真实授权原文/ref、当前分支/HEAD、目标分支/remote、允许写集、PR状态、需交付/归档/保留/清理的精确范围。按实际项目能力读取现有窄工具；缺工具只停相应动作，不能偷偷改用旧close控制面。
 
@@ -144,4 +144,4 @@ worktree确认已移除后，在目标repo按独立cleanup步骤授权，普通`
 
 ## 同仓方法依赖
 
-`skills/knowledge-graph/SKILL.md`、`skills/spec-specify/SKILL.md`、`skills/resolving-merge-conflicts/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。
+`skills/knowledge-graph/SKILL.md`、`skills/spec-specify/SKILL.md`、`skills/resolving-merge-conflicts/SKILL.md`、`skills/norm-sync/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。

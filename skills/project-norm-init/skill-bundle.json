@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "skill": "ui-project-init",
+  "skill": "project-norm-init",
   "files": [
     "SKILL.md",
     "templates/domain-semantics.md",
@@ -10,7 +10,10 @@
     "templates/interaction.md",
     "templates/frontend-engineering.md",
     "templates/craft.md",
-    "templates/quality.md"
+    "templates/quality.md",
+    "templates/backend-architecture.md",
+    "templates/api-contract.md",
+    "templates/acceptance.md"
   ],
   "sources": []
 }

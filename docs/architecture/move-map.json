@@ -2759,7 +2759,7 @@
     {
       "source": "skills/ui-project-init/SKILL.md",
       "destination": "skills/ui-project-init/SKILL.md",
-      "status": "retain",
+      "status": "retired",
       "role": "production",
       "responsibility": "C01/P3/T003 薄规范入口：定位八类真实源、作用域/version/owner/consumer/缺口，接线各原专业方法；不写八类正文，不新建规范维护 skill/阶段/机器 gate。精确值/API/资产仍原位引用，三起点逐类取源。",
       "owner": "ui-project-init 原方法 owner / C01 P3 T003；各专业正文仍归项目事实原专业 owner，map 由本 P3 唯一持笔",
@@ -2772,13 +2772,13 @@
         "workflows/build-plan/skill-deps.yaml",
         "workflows/build-plan/SKILL.md"
       ],
-      "delete_condition": "薄入口职责由经独立审查的现原专业方法完整承接且上述真实 consumer 全部迁接后，由原 owner 删除；无实质来源只记该类缺口，不造空正文，不由登记新增许可或未来 actor。",
+      "delete_condition": "C02 P2迁名至对应project-norm-init路径，真实caller与bundle迁接后旧文件退出；历史来源不改。",
       "retention_basis": "MT-3-062 保留职责；当前 C01 ADR-C01-014 / spec FR-C01-001 / P3 T003 将旧双正文 producer 替换为八类定位/接线。新项目 q20 缺真实输入保持 incomplete；固定外源引用不授权 copy/install/vendor。五 UI trigger 字面原位保留，reader/catalog 全迁仍分别由 P4/P6 承接。"
     },
     {
       "source": "skills/ui-project-init/skill-bundle.json",
       "destination": "skills/ui-project-init/skill-bundle.json",
-      "status": "retain",
+      "status": "retired",
       "role": "production",
       "responsibility": "既有ui-project-init分发清单：files声明随技能交付的真实文件；282已证该集合控制分发闭包，284只追加八个现SKILL已链接模板，不要求列全目录。",
       "owner": "Copernicus为284 bundle.files八项唯一writer，现已完成并冻结；Kant唯一维护本登记与四协调材料，Curie后续按主会话通知同原命令确认。",
@@ -2790,7 +2790,7 @@
         "runtime/distribution/skill-bundle-release.mjs",
         "tools/cli/run-checks.mjs"
       ],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
+      "delete_condition": "C02 P2迁名至对应project-norm-init路径，真实caller与bundle迁接后旧文件退出；历史来源不改。",
       "retention_basis": "282回源release:246–258/281–286/421–423与runner:157–169；resolver不要求列全目录不代表未声明Markdown自动分发。284实际bundle sha256=8fa903d02ccceb5affa2046b5244ece9648a6f41305dfcc7ac676dc5125b74e1，086已报static-deps PASS但material-contract13错/聚合1。仅沿原计划与T016条件修既有声明，无新增业务逻辑；资产清单确改变分发闭包，不适用纯文档G-2豁免。未实际发行安装，不证完整跨技能闭包。"
     },
     {
@@ -4640,11 +4640,29 @@
       "retention_basis": "将已装graphify四动作包装为可搬运方法；替代重复caller图方法，不新增runtime wrapper/控制面。"
     },
     {
+      "source": "skills/knowledge-graph/references/knowledge-reuse.md",
+      "destination": "skills/knowledge-graph/references/knowledge-reuse.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "任务检索的证据准备、全文比较、四判与采用定位；来源及权利维护仍归catalog，不持有规范正文或任务状态。",
+      "owner": "knowledge-graph 方法维护者",
+      "consumer": "make-decision开工与build-plan设计依据准备的任务作者；按真实catalog欠账问题选择可用证据，不以当前remote冒历史归档绑定。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/knowledge-graph/SKILL.md",
+        "skills/knowledge-graph/skill-bundle.json",
+        "workflows/make-decision/SKILL.md",
+        "workflows/build-plan/SKILL.md"
+      ],
+      "delete_condition": "同职责由经独立审查的现有方法完整承接且上述当前caller和bundle已迁接后，由知识方法owner同批删除附件及指针；历史证据保留。",
+      "retention_basis": "C02 P1/T001批准新增的唯一参考方法；窄扩既有知识方法，不采用Design-wiki运行时、独立网站或候选存储。登记不证明独立语义验收已执行。"
+    },
+    {
       "source": "skills/knowledge-graph/skill-bundle.json",
       "destination": "skills/knowledge-graph/skill-bundle.json",
       "status": "retain",
       "role": "production",
-      "responsibility": "按既有schema_version=1打包knowledge-graph正文。",
+      "responsibility": "按既有schema_version=1打包knowledge-graph正文与任务检索参考附件。",
       "owner": "P2/T002 knowledge-graph owner",
       "consumer": "既有local-skill-resolver与catalog技能分发。",
       "module_consumers": [],
@@ -5965,7 +5983,7 @@
     {
       "source": "skills/ui-project-init/templates/domain-semantics.md",
       "destination": "skills/ui-project-init/templates/domain-semantics.md",
-      "status": "add",
+      "status": "retired",
       "role": "documentation",
       "responsibility": "C01 P6/T014–T015 已批准用途：领域语义：真实词义源、关系与消歧；共用契约头、固定节序、必填项表、填写指引及反例；照抄形状不照抄事实，不强制八文件。",
       "owner": "P6/T014–T015 模板实施 writer=Curie；专业正文仍归模板所列项目原 owner；Curie 完成 T016/SKILL 导航，Kant 唯一维护 move-map 实读登记及 finding 回修。",
@@ -5974,13 +5992,13 @@
       "named_data_readers": [
         "skills/ui-project-init/SKILL.md"
       ],
-      "delete_condition": "职责由经独立审查的替代承接且真实人工读者全部改接后，由维护 owner 同步退役模板与职责指针；保留历史来源和执行原件，静态零命中不等于零消费者。",
+      "delete_condition": "C02 P2迁名至对应project-norm-init路径，真实caller与bundle迁接后旧文件退出；历史来源不改。",
       "retention_basis": "已批准用途仍沿当前 decision-log「WP5 — 规范文件的模板、写法与语言标准」及 P6/T014–T016；共同骨架269（sha256 eb6702738af047b548bdaf97c1f4c4f5da557f9c2ef7dbc0d7d561c550bd2898）。本次在九源 freeze 后真读全文，目标 sha256=180ecff51ca10812a3d439d3b757de409598c4773cd30bb238a07bcc69ce6069；SKILL 导航实际 sha256=31ff408215f41af46dd8504d2cb2fdd5cc35b839e06aff8d65ecf63b2f409396，与274逐项相等。实际类职责/owner/reader/缺口及删除条件与本项用途相符，named_data_readers 是现可读导航而非拟接线；018为写前 GUIDE 准备，272/274为实施原件，均只引用不覆盖。status=add仍仅表示本次新增路径，非生命周期或进度；该次276登记时未运行检查/独立实写/业务验证，当前新检查事实另沿086保留。只用 SDD 分责与 GUIDE，不执行 AUDIT/READY，282已触发原T016恢复条件，需Copernicus在现bundle.files补八已链接模板；284声明已实施；086 static-deps PASS但material-contract13错/聚合1未解决，不要求列全目录或宣跨技能闭包完整，不增字段/枚举/门；后续目标或指针不可读即停该项登记，回原writer，不猜 active。"
     },
     {
       "source": "skills/ui-project-init/templates/visual-design-system.md",
       "destination": "skills/ui-project-init/templates/visual-design-system.md",
-      "status": "add",
+      "status": "retired",
       "role": "documentation",
       "responsibility": "C01 P6/T014–T015 已批准用途：视觉设计系统：token/主题/变量源，不填项目示例值；共用契约头、固定节序、必填项表、填写指引及反例；照抄形状不照抄事实，不强制八文件。",
       "owner": "P6/T014–T015 模板实施 writer=Curie；专业正文仍归模板所列项目原 owner；Curie 完成 T016/SKILL 导航，Kant 唯一维护 move-map 实读登记及 finding 回修。",
@@ -5989,13 +6007,13 @@
       "named_data_readers": [
         "skills/ui-project-init/SKILL.md"
       ],
-      "delete_condition": "职责由经独立审查的替代承接且真实人工读者全部改接后，由维护 owner 同步退役模板与职责指针；保留历史来源和执行原件，静态零命中不等于零消费者。",
+      "delete_condition": "C02 P2迁名至对应project-norm-init路径，真实caller与bundle迁接后旧文件退出；历史来源不改。",
       "retention_basis": "已批准用途仍沿当前 decision-log「WP5 — 规范文件的模板、写法与语言标准」及 P6/T014–T016；共同骨架269（sha256 eb6702738af047b548bdaf97c1f4c4f5da557f9c2ef7dbc0d7d561c550bd2898）。本次在九源 freeze 后真读全文，目标 sha256=48d9283cda29c4decbf42ad8eff063e4b27d1c448d8329b08a1ac449ab44bd95；SKILL 导航实际 sha256=31ff408215f41af46dd8504d2cb2fdd5cc35b839e06aff8d65ecf63b2f409396，与274逐项相等。实际类职责/owner/reader/缺口及删除条件与本项用途相符，named_data_readers 是现可读导航而非拟接线；018为写前 GUIDE 准备，272/274为实施原件，均只引用不覆盖。status=add仍仅表示本次新增路径，非生命周期或进度；该次276登记时未运行检查/独立实写/业务验证，当前新检查事实另沿086保留。只用 SDD 分责与 GUIDE，不执行 AUDIT/READY，282已触发原T016恢复条件，需Copernicus在现bundle.files补八已链接模板；284声明已实施；086 static-deps PASS但material-contract13错/聚合1未解决，不要求列全目录或宣跨技能闭包完整，不增字段/枚举/门；后续目标或指针不可读即停该项登记，回原writer，不猜 active。"
     },
     {
       "source": "skills/ui-project-init/templates/components.md",
       "destination": "skills/ui-project-init/templates/components.md",
-      "status": "add",
+      "status": "retired",
       "role": "documentation",
       "responsibility": "C01 P6/T014–T015 已批准用途：组件与代码对应：职责、variant/slot/组合及真实映射；共用契约头、固定节序、必填项表、填写指引及反例；照抄形状不照抄事实，不强制八文件。",
       "owner": "P6/T014–T015 模板实施 writer=Copernicus；专业正文仍归模板所列项目原 owner；Curie 完成 T016/SKILL 导航，Kant 唯一维护 move-map 实读登记及 finding 回修。",
@@ -6004,13 +6022,13 @@
       "named_data_readers": [
         "skills/ui-project-init/SKILL.md"
       ],
-      "delete_condition": "职责由经独立审查的替代承接且真实人工读者全部改接后，由维护 owner 同步退役模板与职责指针；保留历史来源和执行原件，静态零命中不等于零消费者。",
+      "delete_condition": "C02 P2迁名至对应project-norm-init路径，真实caller与bundle迁接后旧文件退出；历史来源不改。",
       "retention_basis": "已批准用途仍沿当前 decision-log「WP5 — 规范文件的模板、写法与语言标准」及 P6/T014–T016；共同骨架269（sha256 eb6702738af047b548bdaf97c1f4c4f5da557f9c2ef7dbc0d7d561c550bd2898）。本次在九源 freeze 后真读全文，目标 sha256=da569a31f5cdd81c44272c191e5aa5b1fc26c7dfa7f36e160af74aa96cf53319；SKILL 导航实际 sha256=31ff408215f41af46dd8504d2cb2fdd5cc35b839e06aff8d65ecf63b2f409396，与274逐项相等。实际类职责/owner/reader/缺口及删除条件与本项用途相符，named_data_readers 是现可读导航而非拟接线；018为写前 GUIDE 准备，272/274为实施原件，均只引用不覆盖。status=add仍仅表示本次新增路径，非生命周期或进度；该次276登记时未运行检查/独立实写/业务验证，当前新检查事实另沿086保留。只用 SDD 分责与 GUIDE，不执行 AUDIT/READY，282已触发原T016恢复条件，需Copernicus在现bundle.files补八已链接模板；284声明已实施；086 static-deps PASS但material-contract13错/聚合1未解决，不要求列全目录或宣跨技能闭包完整，不增字段/枚举/门；后续目标或指针不可读即停该项登记，回原writer，不猜 active。"
     },
     {
       "source": "skills/ui-project-init/templates/layouts.md",
       "destination": "skills/ui-project-init/templates/layouts.md",
-      "status": "add",
+      "status": "retired",
       "role": "documentation",
       "responsibility": "C01 P6/T014–T015 已批准用途：布局与场景：内容增长、容器、响应式、滚动及浮层归属；共用契约头、固定节序、必填项表、填写指引及反例；照抄形状不照抄事实，不强制八文件。",
       "owner": "P6/T014–T015 模板实施 writer=Copernicus；专业正文仍归模板所列项目原 owner；Curie 完成 T016/SKILL 导航，Kant 唯一维护 move-map 实读登记及 finding 回修。",
@@ -6019,13 +6037,13 @@
       "named_data_readers": [
         "skills/ui-project-init/SKILL.md"
       ],
-      "delete_condition": "职责由经独立审查的替代承接且真实人工读者全部改接后，由维护 owner 同步退役模板与职责指针；保留历史来源和执行原件，静态零命中不等于零消费者。",
+      "delete_condition": "C02 P2迁名至对应project-norm-init路径，真实caller与bundle迁接后旧文件退出；历史来源不改。",
       "retention_basis": "已批准用途仍沿当前 decision-log「WP5 — 规范文件的模板、写法与语言标准」及 P6/T014–T016；共同骨架269（sha256 eb6702738af047b548bdaf97c1f4c4f5da557f9c2ef7dbc0d7d561c550bd2898）。本次在九源 freeze 后真读全文，目标 sha256=45660ff8f0cc491a23f7cd8983d953245a4d51a7fb7ed5cc4a34ce7d661a01c7；SKILL 导航实际 sha256=31ff408215f41af46dd8504d2cb2fdd5cc35b839e06aff8d65ecf63b2f409396，与274逐项相等。实际类职责/owner/reader/缺口及删除条件与本项用途相符，named_data_readers 是现可读导航而非拟接线；018为写前 GUIDE 准备，272/274为实施原件，均只引用不覆盖。status=add仍仅表示本次新增路径，非生命周期或进度；该次276登记时未运行检查/独立实写/业务验证，当前新检查事实另沿086保留。只用 SDD 分责与 GUIDE，不执行 AUDIT/READY，282已触发原T016恢复条件，需Copernicus在现bundle.files补八已链接模板；284声明已实施；086 static-deps PASS但material-contract13错/聚合1未解决，不要求列全目录或宣跨技能闭包完整，不增字段/枚举/门；后续目标或指针不可读即停该项登记，回原writer，不猜 active。"
     },
     {
       "source": "skills/ui-project-init/templates/interaction.md",
       "destination": "skills/ui-project-init/templates/interaction.md",
-      "status": "add",
+      "status": "retired",
       "role": "documentation",
       "responsibility": "C01 P6/T014–T015 已批准用途：通用交互：导航、反馈、焦点；业务状态和权限归 task/API；共用契约头、固定节序、必填项表、填写指引及反例；照抄形状不照抄事实，不强制八文件。",
       "owner": "P6/T014–T015 模板实施 writer=Copernicus；专业正文仍归模板所列项目原 owner；Curie 完成 T016/SKILL 导航，Kant 唯一维护 move-map 实读登记及 finding 回修。",
@@ -6034,13 +6052,13 @@
       "named_data_readers": [
         "skills/ui-project-init/SKILL.md"
       ],
-      "delete_condition": "职责由经独立审查的替代承接且真实人工读者全部改接后，由维护 owner 同步退役模板与职责指针；保留历史来源和执行原件，静态零命中不等于零消费者。",
+      "delete_condition": "C02 P2迁名至对应project-norm-init路径，真实caller与bundle迁接后旧文件退出；历史来源不改。",
       "retention_basis": "已批准用途仍沿当前 decision-log「WP5 — 规范文件的模板、写法与语言标准」及 P6/T014–T016；共同骨架269（sha256 eb6702738af047b548bdaf97c1f4c4f5da557f9c2ef7dbc0d7d561c550bd2898）。本次在九源 freeze 后真读全文，目标 sha256=2b9c3ddb0dd57105ec0148459c0eb79aed1de4e59777eca5f989b5559c294dd0；SKILL 导航实际 sha256=31ff408215f41af46dd8504d2cb2fdd5cc35b839e06aff8d65ecf63b2f409396，与274逐项相等。实际类职责/owner/reader/缺口及删除条件与本项用途相符，named_data_readers 是现可读导航而非拟接线；018为写前 GUIDE 准备，272/274为实施原件，均只引用不覆盖。status=add仍仅表示本次新增路径，非生命周期或进度；该次276登记时未运行检查/独立实写/业务验证，当前新检查事实另沿086保留。只用 SDD 分责与 GUIDE，不执行 AUDIT/READY，282已触发原T016恢复条件，需Copernicus在现bundle.files补八已链接模板；284声明已实施；086 static-deps PASS但material-contract13错/聚合1未解决，不要求列全目录或宣跨技能闭包完整，不增字段/枚举/门；后续目标或指针不可读即停该项登记，回原writer，不猜 active。"
     },
     {
       "source": "skills/ui-project-init/templates/frontend-engineering.md",
       "destination": "skills/ui-project-init/templates/frontend-engineering.md",
-      "status": "add",
+      "status": "retired",
       "role": "documentation",
       "responsibility": "C01 P6/T014–T015 已批准用途：前端工程：配置/架构/ADR、类型/DTO/生命周期与错误归属；共用契约头、固定节序、必填项表、填写指引及反例；照抄形状不照抄事实，不强制八文件。",
       "owner": "P6/T014–T015 模板实施 writer=Copernicus；专业正文仍归模板所列项目原 owner；Curie 完成 T016/SKILL 导航，Kant 唯一维护 move-map 实读登记及 finding 回修。",
@@ -6049,13 +6067,13 @@
       "named_data_readers": [
         "skills/ui-project-init/SKILL.md"
       ],
-      "delete_condition": "职责由经独立审查的替代承接且真实人工读者全部改接后，由维护 owner 同步退役模板与职责指针；保留历史来源和执行原件，静态零命中不等于零消费者。",
+      "delete_condition": "C02 P2迁名至对应project-norm-init路径，真实caller与bundle迁接后旧文件退出；历史来源不改。",
       "retention_basis": "已批准用途仍沿当前 decision-log「WP5 — 规范文件的模板、写法与语言标准」及 P6/T014–T016；共同骨架269（sha256 eb6702738af047b548bdaf97c1f4c4f5da557f9c2ef7dbc0d7d561c550bd2898）。本次在九源 freeze 后真读全文，目标 sha256=e386883b9a60310842fdb43ab12232e7c62d4f8485d08e4dbb93494383270637；SKILL 导航实际 sha256=31ff408215f41af46dd8504d2cb2fdd5cc35b839e06aff8d65ecf63b2f409396，与274逐项相等。实际类职责/owner/reader/缺口及删除条件与本项用途相符，named_data_readers 是现可读导航而非拟接线；018为写前 GUIDE 准备，272/274为实施原件，均只引用不覆盖。status=add仍仅表示本次新增路径，非生命周期或进度；该次276登记时未运行检查/独立实写/业务验证，当前新检查事实另沿086保留。只用 SDD 分责与 GUIDE，不执行 AUDIT/READY，282已触发原T016恢复条件，需Copernicus在现bundle.files补八已链接模板；284声明已实施；086 static-deps PASS但material-contract13错/聚合1未解决，不要求列全目录或宣跨技能闭包完整，不增字段/枚举/门；后续目标或指针不可读即停该项登记，回原writer，不猜 active。"
     },
     {
       "source": "skills/ui-project-init/templates/craft.md",
       "destination": "skills/ui-project-init/templates/craft.md",
-      "status": "add",
+      "status": "retired",
       "role": "documentation",
       "responsibility": "C01 P6/T014–T015 已批准用途：内容与设计工艺：真实身份、来源、时间、缺源及准确措辞；共用契约头、固定节序、必填项表、填写指引及反例；照抄形状不照抄事实，不强制八文件。",
       "owner": "P6/T014–T015 模板实施 writer=Curie；专业正文仍归模板所列项目原 owner；Curie 完成 T016/SKILL 导航，Kant 唯一维护 move-map 实读登记及 finding 回修。",
@@ -6064,13 +6082,13 @@
       "named_data_readers": [
         "skills/ui-project-init/SKILL.md"
       ],
-      "delete_condition": "职责由经独立审查的替代承接且真实人工读者全部改接后，由维护 owner 同步退役模板与职责指针；保留历史来源和执行原件，静态零命中不等于零消费者。",
+      "delete_condition": "C02 P2迁名至对应project-norm-init路径，真实caller与bundle迁接后旧文件退出；历史来源不改。",
       "retention_basis": "已批准用途仍沿当前 decision-log「WP5 — 规范文件的模板、写法与语言标准」及 P6/T014–T016；共同骨架269（sha256 eb6702738af047b548bdaf97c1f4c4f5da557f9c2ef7dbc0d7d561c550bd2898）。本次在九源 freeze 后真读全文，目标 sha256=8da5231dde0dc7ceccccc73de3237c9c2612e0c733632ef7a1bf51cb49e2e870；SKILL 导航实际 sha256=31ff408215f41af46dd8504d2cb2fdd5cc35b839e06aff8d65ecf63b2f409396，与274逐项相等。实际类职责/owner/reader/缺口及删除条件与本项用途相符，named_data_readers 是现可读导航而非拟接线；018为写前 GUIDE 准备，272/274为实施原件，均只引用不覆盖。status=add仍仅表示本次新增路径，非生命周期或进度；该次276登记时未运行检查/独立实写/业务验证，当前新检查事实另沿086保留。只用 SDD 分责与 GUIDE，不执行 AUDIT/READY，282已触发原T016恢复条件，需Copernicus在现bundle.files补八已链接模板；284声明已实施；086 static-deps PASS但material-contract13错/聚合1未解决，不要求列全目录或宣跨技能闭包完整，不增字段/枚举/门；后续目标或指针不可读即停该项登记，回原writer，不猜 active。"
     },
     {
       "source": "skills/ui-project-init/templates/quality.md",
       "destination": "skills/ui-project-init/templates/quality.md",
-      "status": "add",
+      "status": "retired",
       "role": "documentation",
       "responsibility": "C01 P6/T014–T015 已批准用途：质量：可观察 oracle/反例及验证边界，任务 AC/实测另存；共用契约头、固定节序、必填项表、填写指引及反例；照抄形状不照抄事实，不强制八文件。",
       "owner": "P6/T014–T015 模板实施 writer=Curie；专业正文仍归模板所列项目原 owner；Curie 完成 T016/SKILL 导航，Kant 唯一维护 move-map 实读登记及 finding 回修。",
@@ -6079,7 +6097,7 @@
       "named_data_readers": [
         "skills/ui-project-init/SKILL.md"
       ],
-      "delete_condition": "职责由经独立审查的替代承接且真实人工读者全部改接后，由维护 owner 同步退役模板与职责指针；保留历史来源和执行原件，静态零命中不等于零消费者。",
+      "delete_condition": "C02 P2迁名至对应project-norm-init路径，真实caller与bundle迁接后旧文件退出；历史来源不改。",
       "retention_basis": "已批准用途仍沿当前 decision-log「WP5 — 规范文件的模板、写法与语言标准」及 P6/T014–T016；共同骨架269（sha256 eb6702738af047b548bdaf97c1f4c4f5da557f9c2ef7dbc0d7d561c550bd2898）。本次在九源 freeze 后真读全文，目标 sha256=f5da86c0c521fbf8a30b47766f67155ddebf1db7422fdb9c7ea51323c0f2a8af；SKILL 导航实际 sha256=31ff408215f41af46dd8504d2cb2fdd5cc35b839e06aff8d65ecf63b2f409396，与274逐项相等。实际类职责/owner/reader/缺口及删除条件与本项用途相符，named_data_readers 是现可读导航而非拟接线；018为写前 GUIDE 准备，272/274为实施原件，均只引用不覆盖。status=add仍仅表示本次新增路径，非生命周期或进度；该次276登记时未运行检查/独立实写/业务验证，当前新检查事实另沿086保留。只用 SDD 分责与 GUIDE，不执行 AUDIT/READY，282已触发原T016恢复条件，需Copernicus在现bundle.files补八已链接模板；284声明已实施；086 static-deps PASS但material-contract13错/聚合1未解决，不要求列全目录或宣跨技能闭包完整，不增字段/枚举/门；后续目标或指针不可读即停该项登记，回原writer，不猜 active。"
     },
     {
@@ -6096,6 +6114,477 @@
       ],
       "delete_condition": "仅当现verify-code验收对象动作已由经独立审查的替代入口承接、实际CLI caller全部改接并由维护owner退役时移除薄CLI，同步移除该步调用与原登记；Markdown唯一producer不复制/不删除，历史失败与运行原件保留。",
       "retention_basis": "332原件及当前CLI全文、verify-code实际步骤已实读；target sha256=8aeefff69f8bd19ac01dc791c4b63a15d902a46fe9efa9176678ec92c2989492，caller sha256=bc55eb81896c7483e2d5993e2817919e3de3fe9070aa10664727580adbe77528。125失败是无./目录相对路径specs/design/not-there.md被漏查；128相同冻结六例命令恢复exit0；127十四正文/文件/错误边界exit0；129当前caller新执行exit0，native复用同字节126.output但不借旧退出事实。自动本地路径与显式keys并集检查，空keys不禁自动路径；裸LICENSE未选保正文、选定才stat；非法keys/type/duplicate报2，缺文件/非文件报key/path及1；无候选明确stderr，URL不作本地检查。仅结构及所选文件存在，不授权UI/数据/服务/权限或认证语义。095/099/019/310/330/125/126等旧原件保各自时点，不作新源码证明；不改producer/oracle，不新增机制或进度权威。删除/替代仍沿本项原条件；后续target/caller不可读即停本项确认交原owner。"
+    },
+    {
+      "source": "skills/project-norm-init/SKILL.md",
+      "destination": "skills/project-norm-init/SKILL.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "五类规范薄入口与既有bundle，承接旧ui-project-init；不成为专业规则writer。",
+      "owner": "P2/T002 project-norm-init及目标项目专业owner",
+      "consumer": "build-plan及make-decision/build-code/verify-code现规范reader；resolver与portable publisher",
+      "module_consumers": [],
+      "named_data_readers": [
+        "AGENTS.md"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实caller/索引/bundle均迁接后由原owner删除；历史证据保留。",
+      "retention_basis": "C02 P2/T002精确获批迁名或新增最小规范；不扩runtime/schema/第二权威，登记不证明已验收。"
+    },
+    {
+      "source": "skills/project-norm-init/skill-bundle.json",
+      "destination": "skills/project-norm-init/skill-bundle.json",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "五类规范薄入口与既有bundle，承接旧ui-project-init；不成为专业规则writer。",
+      "owner": "P2/T002 project-norm-init及目标项目专业owner",
+      "consumer": "build-plan及make-decision/build-code/verify-code现规范reader；resolver与portable publisher",
+      "module_consumers": [],
+      "named_data_readers": [
+        "AGENTS.md"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实caller/索引/bundle均迁接后由原owner删除；历史证据保留。",
+      "retention_basis": "C02 P2/T002精确获批迁名或新增最小规范；不扩runtime/schema/第二权威，登记不证明已验收。"
+    },
+    {
+      "source": "skills/project-norm-init/templates/domain-semantics.md",
+      "destination": "skills/project-norm-init/templates/domain-semantics.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "五类规范中对应专业正文的样张；不持有目标项目事实。",
+      "owner": "P2/T002 project-norm-init及目标项目专业owner",
+      "consumer": "build-plan及make-decision/build-code/verify-code现规范reader；resolver与portable publisher",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/project-norm-init/SKILL.md",
+        "skills/project-norm-init/skill-bundle.json"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实caller/索引/bundle均迁接后由原owner删除；历史证据保留。",
+      "retention_basis": "C02 P2/T002精确获批迁名或新增最小规范；不扩runtime/schema/第二权威，登记不证明已验收。"
+    },
+    {
+      "source": "skills/project-norm-init/templates/visual-design-system.md",
+      "destination": "skills/project-norm-init/templates/visual-design-system.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "五类规范中对应专业正文的样张；不持有目标项目事实。",
+      "owner": "P2/T002 project-norm-init及目标项目专业owner",
+      "consumer": "build-plan及make-decision/build-code/verify-code现规范reader；resolver与portable publisher",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/project-norm-init/SKILL.md",
+        "skills/project-norm-init/skill-bundle.json"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实caller/索引/bundle均迁接后由原owner删除；历史证据保留。",
+      "retention_basis": "C02 P2/T002精确获批迁名或新增最小规范；不扩runtime/schema/第二权威，登记不证明已验收。"
+    },
+    {
+      "source": "skills/project-norm-init/templates/components.md",
+      "destination": "skills/project-norm-init/templates/components.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "五类规范中对应专业正文的样张；不持有目标项目事实。",
+      "owner": "P2/T002 project-norm-init及目标项目专业owner",
+      "consumer": "build-plan及make-decision/build-code/verify-code现规范reader；resolver与portable publisher",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/project-norm-init/SKILL.md",
+        "skills/project-norm-init/skill-bundle.json"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实caller/索引/bundle均迁接后由原owner删除；历史证据保留。",
+      "retention_basis": "C02 P2/T002精确获批迁名或新增最小规范；不扩runtime/schema/第二权威，登记不证明已验收。"
+    },
+    {
+      "source": "skills/project-norm-init/templates/layouts.md",
+      "destination": "skills/project-norm-init/templates/layouts.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "五类规范中对应专业正文的样张；不持有目标项目事实。",
+      "owner": "P2/T002 project-norm-init及目标项目专业owner",
+      "consumer": "build-plan及make-decision/build-code/verify-code现规范reader；resolver与portable publisher",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/project-norm-init/SKILL.md",
+        "skills/project-norm-init/skill-bundle.json"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实caller/索引/bundle均迁接后由原owner删除；历史证据保留。",
+      "retention_basis": "C02 P2/T002精确获批迁名或新增最小规范；不扩runtime/schema/第二权威，登记不证明已验收。"
+    },
+    {
+      "source": "skills/project-norm-init/templates/interaction.md",
+      "destination": "skills/project-norm-init/templates/interaction.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "五类规范中对应专业正文的样张；不持有目标项目事实。",
+      "owner": "P2/T002 project-norm-init及目标项目专业owner",
+      "consumer": "build-plan及make-decision/build-code/verify-code现规范reader；resolver与portable publisher",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/project-norm-init/SKILL.md",
+        "skills/project-norm-init/skill-bundle.json"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实caller/索引/bundle均迁接后由原owner删除；历史证据保留。",
+      "retention_basis": "C02 P2/T002精确获批迁名或新增最小规范；不扩runtime/schema/第二权威，登记不证明已验收。"
+    },
+    {
+      "source": "skills/project-norm-init/templates/frontend-engineering.md",
+      "destination": "skills/project-norm-init/templates/frontend-engineering.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "五类规范中对应专业正文的样张；不持有目标项目事实。",
+      "owner": "P2/T002 project-norm-init及目标项目专业owner",
+      "consumer": "build-plan及make-decision/build-code/verify-code现规范reader；resolver与portable publisher",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/project-norm-init/SKILL.md",
+        "skills/project-norm-init/skill-bundle.json"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实caller/索引/bundle均迁接后由原owner删除；历史证据保留。",
+      "retention_basis": "C02 P2/T002精确获批迁名或新增最小规范；不扩runtime/schema/第二权威，登记不证明已验收。"
+    },
+    {
+      "source": "skills/project-norm-init/templates/craft.md",
+      "destination": "skills/project-norm-init/templates/craft.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "五类规范中对应专业正文的样张；不持有目标项目事实。",
+      "owner": "P2/T002 project-norm-init及目标项目专业owner",
+      "consumer": "build-plan及make-decision/build-code/verify-code现规范reader；resolver与portable publisher",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/project-norm-init/SKILL.md",
+        "skills/project-norm-init/skill-bundle.json"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实caller/索引/bundle均迁接后由原owner删除；历史证据保留。",
+      "retention_basis": "C02 P2/T002精确获批迁名或新增最小规范；不扩runtime/schema/第二权威，登记不证明已验收。"
+    },
+    {
+      "source": "skills/project-norm-init/templates/quality.md",
+      "destination": "skills/project-norm-init/templates/quality.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "五类规范中对应专业正文的样张；不持有目标项目事实。",
+      "owner": "P2/T002 project-norm-init及目标项目专业owner",
+      "consumer": "build-plan及make-decision/build-code/verify-code现规范reader；resolver与portable publisher",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/project-norm-init/SKILL.md",
+        "skills/project-norm-init/skill-bundle.json"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实caller/索引/bundle均迁接后由原owner删除；历史证据保留。",
+      "retention_basis": "C02 P2/T002精确获批迁名或新增最小规范；不扩runtime/schema/第二权威，登记不证明已验收。"
+    },
+    {
+      "source": "skills/project-norm-init/templates/backend-architecture.md",
+      "destination": "skills/project-norm-init/templates/backend-architecture.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "五类规范中对应专业正文的样张；不持有目标项目事实。",
+      "owner": "P2/T002 project-norm-init及目标项目专业owner",
+      "consumer": "build-plan及make-decision/build-code/verify-code现规范reader；resolver与portable publisher",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/project-norm-init/SKILL.md",
+        "skills/project-norm-init/skill-bundle.json"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实caller/索引/bundle均迁接后由原owner删除；历史证据保留。",
+      "retention_basis": "C02 P2/T002精确获批迁名或新增最小规范；不扩runtime/schema/第二权威，登记不证明已验收。"
+    },
+    {
+      "source": "skills/project-norm-init/templates/api-contract.md",
+      "destination": "skills/project-norm-init/templates/api-contract.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "五类规范中对应专业正文的样张；不持有目标项目事实。",
+      "owner": "P2/T002 project-norm-init及目标项目专业owner",
+      "consumer": "build-plan及make-decision/build-code/verify-code现规范reader；resolver与portable publisher",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/project-norm-init/SKILL.md",
+        "skills/project-norm-init/skill-bundle.json"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实caller/索引/bundle均迁接后由原owner删除；历史证据保留。",
+      "retention_basis": "C02 P2/T002精确获批迁名或新增最小规范；不扩runtime/schema/第二权威，登记不证明已验收。"
+    },
+    {
+      "source": "skills/project-norm-init/templates/acceptance.md",
+      "destination": "skills/project-norm-init/templates/acceptance.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "五类规范中对应专业正文的样张；不持有目标项目事实。",
+      "owner": "P2/T002 project-norm-init及目标项目专业owner",
+      "consumer": "build-plan及make-decision/build-code/verify-code现规范reader；resolver与portable publisher",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/project-norm-init/SKILL.md",
+        "skills/project-norm-init/skill-bundle.json"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实caller/索引/bundle均迁接后由原owner删除；历史证据保留。",
+      "retention_basis": "C02 P2/T002精确获批迁名或新增最小规范；不扩runtime/schema/第二权威，登记不证明已验收。"
+    },
+    {
+      "source": "specs/backend/README.md",
+      "destination": "specs/backend/README.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "项目后端/接口/验收规范导航及最小职责正文；原字段、架构、质量合同只引用。",
+      "owner": "P2/T002 project-norm-init及目标项目专业owner",
+      "consumer": "项目AGENTS→该类README→architecture/contract/acceptance；规划/实现/独立验收任务作者",
+      "module_consumers": [],
+      "named_data_readers": [
+        "AGENTS.md"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实caller/索引/bundle均迁接后由原owner删除；历史证据保留。",
+      "retention_basis": "C02 P2/T002精确获批迁名或新增最小规范；不扩runtime/schema/第二权威，登记不证明已验收。"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/PaperBuilder/specs/backend/README.md",
+      "destination": "/Users/Hugh/Hugh/Project/PaperBuilder/specs/backend/README.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "项目后端/接口/验收规范导航及最小职责正文；原字段、架构、质量合同只引用。",
+      "owner": "PaperBuilder项目原后端/接口/验收专业owner；C02 P2/T002仅本次规范接线writer",
+      "consumer": "PaperBuilder AGENTS.md → 本PB路径的README → architecture/contract/acceptance；PB规划/实现/独立验收作者，非WorkflowHub同名specs路径",
+      "module_consumers": [],
+      "named_data_readers": [
+        "AGENTS.md"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实caller/索引/bundle均迁接后由原owner删除；历史证据保留。",
+      "retention_basis": "C02 P2/T002已批准跨仓六件规范的真实绝对scope，项目归属PaperBuilder；此处为人读职责记录，不作为WH本仓resolver/分发输入。绝对坐标反映本次宿主，迁宿主时由PB owner核真实root再更新；不以WH同名相对路径替代。登记不证明产品验收。"
+    },
+    {
+      "source": "specs/backend/architecture.md",
+      "destination": "specs/backend/architecture.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "项目后端/接口/验收规范导航及最小职责正文；原字段、架构、质量合同只引用。",
+      "owner": "P2/T002 project-norm-init及目标项目专业owner",
+      "consumer": "项目AGENTS→该类README→architecture/contract/acceptance；规划/实现/独立验收任务作者",
+      "module_consumers": [],
+      "named_data_readers": [
+        "AGENTS.md"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实caller/索引/bundle均迁接后由原owner删除；历史证据保留。",
+      "retention_basis": "C02 P2/T002精确获批迁名或新增最小规范；不扩runtime/schema/第二权威，登记不证明已验收。"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/PaperBuilder/specs/backend/architecture.md",
+      "destination": "/Users/Hugh/Hugh/Project/PaperBuilder/specs/backend/architecture.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "项目后端/接口/验收规范导航及最小职责正文；原字段、架构、质量合同只引用。",
+      "owner": "PaperBuilder项目原后端/接口/验收专业owner；C02 P2/T002仅本次规范接线writer",
+      "consumer": "PaperBuilder AGENTS.md → 本PB路径的README → architecture/contract/acceptance；PB规划/实现/独立验收作者，非WorkflowHub同名specs路径",
+      "module_consumers": [],
+      "named_data_readers": [
+        "AGENTS.md"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实caller/索引/bundle均迁接后由原owner删除；历史证据保留。",
+      "retention_basis": "C02 P2/T002已批准跨仓六件规范的真实绝对scope，项目归属PaperBuilder；此处为人读职责记录，不作为WH本仓resolver/分发输入。绝对坐标反映本次宿主，迁宿主时由PB owner核真实root再更新；不以WH同名相对路径替代。登记不证明产品验收。"
+    },
+    {
+      "source": "specs/api/README.md",
+      "destination": "specs/api/README.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "项目后端/接口/验收规范导航及最小职责正文；原字段、架构、质量合同只引用。",
+      "owner": "P2/T002 project-norm-init及目标项目专业owner",
+      "consumer": "项目AGENTS→该类README→architecture/contract/acceptance；规划/实现/独立验收任务作者",
+      "module_consumers": [],
+      "named_data_readers": [
+        "AGENTS.md"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实caller/索引/bundle均迁接后由原owner删除；历史证据保留。",
+      "retention_basis": "C02 P2/T002精确获批迁名或新增最小规范；不扩runtime/schema/第二权威，登记不证明已验收。"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/PaperBuilder/specs/api/README.md",
+      "destination": "/Users/Hugh/Hugh/Project/PaperBuilder/specs/api/README.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "项目后端/接口/验收规范导航及最小职责正文；原字段、架构、质量合同只引用。",
+      "owner": "PaperBuilder项目原后端/接口/验收专业owner；C02 P2/T002仅本次规范接线writer",
+      "consumer": "PaperBuilder AGENTS.md → 本PB路径的README → architecture/contract/acceptance；PB规划/实现/独立验收作者，非WorkflowHub同名specs路径",
+      "module_consumers": [],
+      "named_data_readers": [
+        "AGENTS.md"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实caller/索引/bundle均迁接后由原owner删除；历史证据保留。",
+      "retention_basis": "C02 P2/T002已批准跨仓六件规范的真实绝对scope，项目归属PaperBuilder；此处为人读职责记录，不作为WH本仓resolver/分发输入。绝对坐标反映本次宿主，迁宿主时由PB owner核真实root再更新；不以WH同名相对路径替代。登记不证明产品验收。"
+    },
+    {
+      "source": "specs/api/contract.md",
+      "destination": "specs/api/contract.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "项目后端/接口/验收规范导航及最小职责正文；原字段、架构、质量合同只引用。",
+      "owner": "P2/T002 project-norm-init及目标项目专业owner",
+      "consumer": "项目AGENTS→该类README→architecture/contract/acceptance；规划/实现/独立验收任务作者",
+      "module_consumers": [],
+      "named_data_readers": [
+        "AGENTS.md"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实caller/索引/bundle均迁接后由原owner删除；历史证据保留。",
+      "retention_basis": "C02 P2/T002精确获批迁名或新增最小规范；不扩runtime/schema/第二权威，登记不证明已验收。"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/PaperBuilder/specs/api/contract.md",
+      "destination": "/Users/Hugh/Hugh/Project/PaperBuilder/specs/api/contract.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "项目后端/接口/验收规范导航及最小职责正文；原字段、架构、质量合同只引用。",
+      "owner": "PaperBuilder项目原后端/接口/验收专业owner；C02 P2/T002仅本次规范接线writer",
+      "consumer": "PaperBuilder AGENTS.md → 本PB路径的README → architecture/contract/acceptance；PB规划/实现/独立验收作者，非WorkflowHub同名specs路径",
+      "module_consumers": [],
+      "named_data_readers": [
+        "AGENTS.md"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实caller/索引/bundle均迁接后由原owner删除；历史证据保留。",
+      "retention_basis": "C02 P2/T002已批准跨仓六件规范的真实绝对scope，项目归属PaperBuilder；此处为人读职责记录，不作为WH本仓resolver/分发输入。绝对坐标反映本次宿主，迁宿主时由PB owner核真实root再更新；不以WH同名相对路径替代。登记不证明产品验收。"
+    },
+    {
+      "source": "specs/acceptance/README.md",
+      "destination": "specs/acceptance/README.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "项目后端/接口/验收规范导航及最小职责正文；原字段、架构、质量合同只引用。",
+      "owner": "P2/T002 project-norm-init及目标项目专业owner",
+      "consumer": "项目AGENTS→该类README→architecture/contract/acceptance；规划/实现/独立验收任务作者",
+      "module_consumers": [],
+      "named_data_readers": [
+        "AGENTS.md"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实caller/索引/bundle均迁接后由原owner删除；历史证据保留。",
+      "retention_basis": "C02 P2/T002精确获批迁名或新增最小规范；不扩runtime/schema/第二权威，登记不证明已验收。"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/PaperBuilder/specs/acceptance/README.md",
+      "destination": "/Users/Hugh/Hugh/Project/PaperBuilder/specs/acceptance/README.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "项目后端/接口/验收规范导航及最小职责正文；原字段、架构、质量合同只引用。",
+      "owner": "PaperBuilder项目原后端/接口/验收专业owner；C02 P2/T002仅本次规范接线writer",
+      "consumer": "PaperBuilder AGENTS.md → 本PB路径的README → architecture/contract/acceptance；PB规划/实现/独立验收作者，非WorkflowHub同名specs路径",
+      "module_consumers": [],
+      "named_data_readers": [
+        "AGENTS.md"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实caller/索引/bundle均迁接后由原owner删除；历史证据保留。",
+      "retention_basis": "C02 P2/T002已批准跨仓六件规范的真实绝对scope，项目归属PaperBuilder；此处为人读职责记录，不作为WH本仓resolver/分发输入。绝对坐标反映本次宿主，迁宿主时由PB owner核真实root再更新；不以WH同名相对路径替代。登记不证明产品验收。"
+    },
+    {
+      "source": "specs/acceptance/acceptance.md",
+      "destination": "specs/acceptance/acceptance.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "项目后端/接口/验收规范导航及最小职责正文；原字段、架构、质量合同只引用。",
+      "owner": "P2/T002 project-norm-init及目标项目专业owner",
+      "consumer": "项目AGENTS→该类README→architecture/contract/acceptance；规划/实现/独立验收任务作者",
+      "module_consumers": [],
+      "named_data_readers": [
+        "AGENTS.md"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实caller/索引/bundle均迁接后由原owner删除；历史证据保留。",
+      "retention_basis": "C02 P2/T002精确获批迁名或新增最小规范；不扩runtime/schema/第二权威，登记不证明已验收。"
+    },
+    {
+      "source": "/Users/Hugh/Hugh/Project/PaperBuilder/specs/acceptance/acceptance.md",
+      "destination": "/Users/Hugh/Hugh/Project/PaperBuilder/specs/acceptance/acceptance.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "项目后端/接口/验收规范导航及最小职责正文；原字段、架构、质量合同只引用。",
+      "owner": "PaperBuilder项目原后端/接口/验收专业owner；C02 P2/T002仅本次规范接线writer",
+      "consumer": "PaperBuilder AGENTS.md → 本PB路径的README → architecture/contract/acceptance；PB规划/实现/独立验收作者，非WorkflowHub同名specs路径",
+      "module_consumers": [],
+      "named_data_readers": [
+        "AGENTS.md"
+      ],
+      "delete_condition": "同职责由已审查替代完整承接且真实caller/索引/bundle均迁接后由原owner删除；历史证据保留。",
+      "retention_basis": "C02 P2/T002已批准跨仓六件规范的真实绝对scope，项目归属PaperBuilder；此处为人读职责记录，不作为WH本仓resolver/分发输入。绝对坐标反映本次宿主，迁宿主时由PB owner核真实root再更新；不以WH同名相对路径替代。登记不证明产品验收。"
+    },
+    {
+      "source": "skills/norm-sync/SKILL.md",
+      "destination": "skills/norm-sync/SKILL.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "规范同步方法/五类主题路由/现bundle；复用项目共同锁和安全写，不建运行时同步引擎或进度账本。",
+      "owner": "norm-sync专业规范同步owner",
+      "consumer": "build-code每Phase收口、verify-code终末、stage-reflection写经验前、stage-closeout任务收口前；T003 PB证据归属应用、T004/T005顺序生产消费。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "workflows/build-code/skill-deps.yaml",
+        "workflows/verify-code/skill-deps.yaml",
+        "skills/catalog.yaml"
+      ],
+      "delete_condition": "四现owner被经独立审查替代完整承接、bundle/caller迁接且无实际consumer后同批退役；历史delta原件保留。",
+      "retention_basis": "C02 U014明确独立方法；P3 T003精确新增；记录事实不认证质量/事务或阶段许可。"
+    },
+    {
+      "source": "skills/norm-sync/references/routes.md",
+      "destination": "skills/norm-sync/references/routes.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "规范同步方法/五类主题路由/现bundle；复用项目共同锁和安全写，不建运行时同步引擎或进度账本。",
+      "owner": "norm-sync专业规范同步owner",
+      "consumer": "build-code每Phase收口、verify-code终末、stage-reflection写经验前、stage-closeout任务收口前；T003 PB证据归属应用、T004/T005顺序生产消费。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "workflows/build-code/skill-deps.yaml",
+        "workflows/verify-code/skill-deps.yaml",
+        "skills/catalog.yaml"
+      ],
+      "delete_condition": "四现owner被经独立审查替代完整承接、bundle/caller迁接且无实际consumer后同批退役；历史delta原件保留。",
+      "retention_basis": "C02 U014明确独立方法；P3 T003精确新增；记录事实不认证质量/事务或阶段许可。"
+    },
+    {
+      "source": "skills/norm-sync/skill-bundle.json",
+      "destination": "skills/norm-sync/skill-bundle.json",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "规范同步方法/五类主题路由/现bundle；复用项目共同锁和安全写，不建运行时同步引擎或进度账本。",
+      "owner": "norm-sync专业规范同步owner",
+      "consumer": "build-code每Phase收口、verify-code终末、stage-reflection写经验前、stage-closeout任务收口前；T003 PB证据归属应用、T004/T005顺序生产消费。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "workflows/build-code/skill-deps.yaml",
+        "workflows/verify-code/skill-deps.yaml",
+        "skills/catalog.yaml"
+      ],
+      "delete_condition": "四现owner被经独立审查替代完整承接、bundle/caller迁接且无实际consumer后同批退役；历史delta原件保留。",
+      "retention_basis": "C02 U014明确独立方法；P3 T003精确新增；记录事实不认证质量/事务或阶段许可。"
+    },
+    {
+      "source": "specs/acceptance/evidence.md",
+      "destination": "specs/acceptance/evidence.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "版本证据角色/权利判读的唯一本地原创规则",
+      "owner": "WorkflowHub验收专业owner；T004生产evidence并预登记done，T005已交付done及对应行动迁移",
+      "consumer": "stage-reflection现证据ref/覆盖判断与Improvements29/71判重consumer；T005已实际先读evidence核原源，再按done只迁行动保历史缺口，后继验收reader沿README/AGENTS读唯一规范。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/acceptance/README.md",
+        "AGENTS.md",
+        "skills/stage-reflection/SKILL.md"
+      ],
+      "delete_condition": "独立审查的替代承接原判读及真实consumer/导航后退役；普通原始证据不删除覆写。",
+      "retention_basis": "P3 T004129/T005；已读真实consumer与写前核证027；KR-EVID-001；登记不是质量或未来消费通过。"
+    },
+    {
+      "source": "specs/acceptance/done.md",
+      "destination": "specs/acceptance/done.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "KR-DONE-001完成判读独立正文：只退出已验证且唯一规范承接的对应active行动，保未解事实及原用户确认分支；T005已真实交付。",
+      "owner": "WorkflowHub验收专业owner；T004生产evidence并预登记done，T005已交付done及对应行动迁移",
+      "consumer": "stage-reflection现证据ref/覆盖判断与Improvements29/71判重consumer；T005已实际先读evidence核原源，再按done只迁行动保历史缺口，后继验收reader沿README/AGENTS读唯一规范。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/acceptance/README.md",
+        "AGENTS.md",
+        "skills/stage-reflection/SKILL.md"
+      ],
+      "delete_condition": "独立审查的替代承接原判读及真实consumer/导航后退役；普通原始证据不删除覆写。",
+      "retention_basis": "P3 T004129/T005；已读真实consumer与写前核证027；KR-DONE-001；登记不是质量或未来消费通过。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

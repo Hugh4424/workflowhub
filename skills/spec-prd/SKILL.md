@@ -43,7 +43,7 @@ spec-prd 是规划 prd.md 的唯一正文作者。build-prd 协调条件工作�
 
 本节回答：来源不足时保留什么缺口与责任。
 
-沿 `skills/ui-project-init/SKILL.md` 的「规范职责」定位本动作适用专业源；只读各类真实路径/稳定节、version/作用域、owner/consumer 与规则，给实际缺源/stale/冲突/不可读项列影响与原 owner，单类缺口不吞其它类。旧 Design.md/Experience.md 仅作真实历史/可信条款输入，不要求两份旧 active 文件；缺适用来源时记录真实任务级设计基线，给原规范责任卡明确 consumer、oracle、责任与缺口，不编责任人、任务号或视觉结果。依赖尚缺真实设计输入的部分保 draft，未受影响的已授权规划可继续；风险接受、提示词 acknowledgement 不等于真实设计或最终确认。
+沿 `skills/project-norm-init/SKILL.md` 的「规范职责」定位本动作适用专业源；只读各类真实路径/稳定节、version/作用域、owner/consumer 与规则，给实际缺源/stale/冲突/不可读项列影响与原 owner，单类缺口不吞其它类。旧 Design.md/Experience.md 仅作真实历史/可信条款输入，不要求两份旧 active 文件；缺适用来源时记录真实任务级设计基线，给原规范责任卡明确 consumer、oracle、责任与缺口，不编责任人、任务号或视觉结果。依赖尚缺真实设计输入的部分保 draft，未受影响的已授权规划可继续；风险接受、提示词 acknowledgement 不等于真实设计或最终确认。
 
 ## 任务卡与子任务
 
@@ -85,4 +85,4 @@ User Stories 吸收 mattpocock/skills 固定 commit `b0618bc436ad893b3c5e84e55fb
 
 ## 同仓方法依赖
 
-`skills/spec-specify/SKILL.md`、`skills/stage-handoff/SKILL.md`、`skills/ui-project-init/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。
+`skills/spec-specify/SKILL.md`、`skills/stage-handoff/SKILL.md`、`skills/project-norm-init/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。

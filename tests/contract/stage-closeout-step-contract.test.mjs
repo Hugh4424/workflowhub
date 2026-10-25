@@ -76,6 +76,8 @@ describe('ORACLE-P1-CLOSEOUT-STEP stage closeout step and method contract', () =
     );
     expect(new Set(byName('stage-closeout').used_by_stages)).toEqual(new Set(['build-prd', 'verify-code', 'make-decision']));
     expect(byName('stage-reflection').dependency_closure).toContain('skills/stage-handoff');
-    expect(byName('stage-closeout').dependency_closure).toHaveLength(3);
+    expect(byName('stage-closeout').dependency_closure.slice().sort()).toEqual([
+      'skills/knowledge-graph', 'skills/norm-sync', 'skills/resolving-merge-conflicts', 'skills/spec-specify',
+    ]);
   });
 });

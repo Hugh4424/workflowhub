@@ -1,15 +1,15 @@
 ---
-name: ui-project-init
-description: UI 规划需定位专业来源时，按新项目、已有可信规范或已有实现接线原专业 owner，显露各类缺口。
+name: project-norm-init
+description: 规划、实施或验收需读取设计、前端、后端、接口、验收规范时，按真实起点定位唯一专业源与owner，接线并显露各类缺口。
 ---
 
-# UI Project Init
+# Project Norm Init
 
-在 build-plan 的真实 UI 范围中使用；build-prd 作者经现有 readiness/render 方法消费本入口的来源指针。它是 no stage、no gate 的可搬运方法，不执行产品 UI、不打 quality score。
+在 build-plan 设计准备、build-code 每Phase开工及 verify-code 验收对象准备时，按实际职责读取设计/前端/后端/接口/验收五类规范；UI细分仍保下列八类职责。build-prd 作者经现有 readiness/render 方法消费本入口的来源指针。它是 no stage、no gate 的可搬运方法，不执行产品 UI、不打 quality score。
 
 ## 规范职责
 
-本入口只定位来源、接线专业 owner、显露缺口。八类正文由各事实原专业 owner 生成或维护；文件名是缺少同职责实质来源时的默认落点，有等价内容就复用。来源记录类、实际路径与稳定 section/page anchor、作用域、version、owner、真实 consumer、适用或冲突与影响；标题 slug 不能假装已有稳定 anchor。
+本入口只定位来源、接线专业 owner、显露缺口。先读目标项目AGENTS规范索引，再按本次职责取五类当前唯一实质来源；等价源优先，不机械生成五个文件。八类正文由各事实原专业 owner 生成或维护；文件名是缺少同职责实质来源时的默认落点，有等价内容就复用。来源记录类、实际路径与稳定 section/page anchor、作用域、version、owner、真实 consumer、适用或冲突与影响；标题 slug 不能假装已有稳定 anchor。
 
 | 类 | 正文或真实源 | 专业方法 | 原 owner | consumer |
 | --- | --- | --- | --- | --- |
@@ -22,16 +22,26 @@ description: UI 规划需定位专业来源时，按新项目、已有可信规�
 | ⑦内容与设计工艺 | specs/design/craft.md；词义和值引用原源 | WenjiaWang/ui-designer 的 design-brief + frontend-design 文案方法 | 内容设计 owner | 组件、文案、专业 reader |
 | ⑧质量判据 | 确需独立正文时 specs/design/quality.md；工程/运行共用 specs/frontend/ui-quality.md | `skills/frontend-testing/SKILL.md` + `skills/isolated-browser-qa/SKILL.md` | 设计/工程/运行质量原 owner | 独立设计、代码及运行验证 |
 
-写某类正文且需要写法样张时，作者从 `skills/ui-project-init/templates/` 选对应模板：①[领域语义](templates/domain-semantics.md)、②[视觉设计系统](templates/visual-design-system.md)、③[组件及设计代码对应](templates/components.md)、④[布局与场景](templates/layouts.md)、⑤[通用交互](templates/interaction.md)、⑥[前端工程](templates/frontend-engineering.md)、⑦[内容与设计工艺](templates/craft.md)、⑧[质量判据](templates/quality.md)。模板只给节序、必填项、填写指引与反例，不是强制八文件；正文、值和接口仍归上表原专业源。本导航可在仓库内直接读取；八模板现已在既有 `bundle.files` 声明，供原发布器收集。本轮未实际构建、安装或发行，不据清单声称完整跨技能闭包或实际发布通过。
+写某类正文且需要写法样张时，作者从 `skills/project-norm-init/templates/` 选对应模板：①[领域语义](templates/domain-semantics.md)、②[视觉设计系统](templates/visual-design-system.md)、③[组件及设计代码对应](templates/components.md)、④[布局与场景](templates/layouts.md)、⑤[通用交互](templates/interaction.md)、⑥[前端工程](templates/frontend-engineering.md)、⑦[内容与设计工艺](templates/craft.md)、⑧[质量判据](templates/quality.md)。模板只给节序、必填项、填写指引与反例，不是强制八文件；正文、值和接口仍归上表原专业源。本导航可在仓库内直接读取；八模板现已在既有 `bundle.files` 声明，供原发布器收集。本轮未实际构建、安装或发行，不据清单声称完整跨技能闭包或实际发布通过。
 
 组件设计用途、variant/slot/组合与真实代码映射各归其 owner，映射可非一对一。布局保内容增长、容器、响应式与 overflow；交互只保跨控件导航、反馈、焦点，本次业务步骤、状态、权限、取消/恢复归当前 task spec/API。工程保模块、类型、DTO/ViewModel、生命周期、错误与样式归属；质量 oracle/反例与预算各保一处正文，任务 AC 和实测另留原 owner。
 
 精确 token/CSS 数值、API、资产和上游原件留在原位，只引用。安全隐私、无障碍、国际化、响应式极值、性能及竞态横贯原专业 owner 和项目基础规范，不新增第九规范平台。旧 Design.md/Experience.md 可作为具名历史或可信条款输入；不能把旧两文件恢复为必需的统一 active 规范或把本任务进度、截图结论写进专业正文。
 
+## 非UI规范与索引
+
+- 后端：从项目AGENTS到 `specs/backend/README.md` → `architecture.md`，核模块职责、依赖/存储边界、并发与失败owner；用当前架构/公开入口的实质源，不从HTTP存在推微服务。
+- 接口：从 `specs/api/README.md` → `contract.md`，定位输入/输出原合同、校验、错误、版本/兼容及真实caller；具体字段、状态和协议仍在唯一public contract。
+- 验收：从 `specs/acceptance/README.md` → `acceptance.md`，核oracle、实际输入/环境、证据原件与未覆盖；已有质量治理协议优先引用，不复制字段/schema/账本。
+
+各类保用途、读取时机、实际路径/稳定节、version/作用域、owner、consumer和最后更新。新正文作者按职责选 [后端架构](templates/backend-architecture.md)、[接口合同](templates/api-contract.md)、[验收](templates/acceptance.md) 样张；原八模板不减条款。模板只是写法，现runtime resolver/发布器消费bundle.files，不引入新installer或control面。
+
+当来源missing/stale/冲突时写该类影响与原owner，暂停依赖该规则的选择，其余类继续；未核为unknown，不把非UI当三类均N/A。规范索引只维护指针，不另存规则/状态/测试结论；真实新项目输入仍须原owner提供，不能用模板完成冒实际规范已生成。
+
 ## 方法
 
 1. **定位范围**：沿原始需求、现路由/组件事实和已确认计划核 ui/non_ui/backend/fullstack；来源不足写 unknown，不凭调用者标签绕过实际 UI 范围。使用现 workflow 的 UI 条件指针，不修改其五个实际 trigger。完成时，范围、依据及每项未读面可定位。
-2. **按类取源**：对八类分别选当前内容起点，而非让一个技能实现三条生成入口。new 从用户/项目维护者已确认的真实目标、受众、方向、栈和范围取源；已有可信规范先核原条款、版本、适用、冲突及 consumer；已有实现读取真实路由、组件、CSS、交互/工程证据，区分 verified/inferred/unknown，不能从当前代码推出应然标准。完成时，各类来源或具名缺口、影响与提供者可读；缺真实新项目输入保 design-incomplete，不用 fixture 充第三真实例，不重新索取已决定保留的缺口。
+2. **按类取源**：对五类及适用UI八子类分别选当前内容起点，而非让一个技能实现三条生成入口。new 从用户/项目维护者已确认的真实目标、受众、方向、栈和范围取源；已有可信规范先核原条款、版本、适用、冲突及 consumer；已有实现读取真实路由、组件、CSS、交互/工程证据，区分 verified/inferred/unknown，不能从当前代码推出应然标准。完成时，各类来源或具名缺口、影响与提供者可读；缺真实新项目输入保 design-incomplete，不用 fixture 充第三真实例，不重新索取已决定保留的缺口。
    缺源写法与 build-plan、verify-code、frontend-testing 消费方对应，逐类记录，不由单类缺口冻结其它适用类：
    - `missing`：应有而无可读来源。例如本次需要组件合同却无来源可指，依赖它的组件选择仍缺依据；由该组件/规范原 owner 提供来源，当前接线者保具体缺件与影响，不用空骨架补齐。
    - `stale`：来源存在但版本、作用域或内容与当前实现不符。例如布局来源仍描述已迁走的区域，当前布局判断保冲突及影响；由原布局/规范 owner 核对依据并处置，当前接线者不从实现直接倒填应然规则。
@@ -79,7 +89,7 @@ tokens/IA/brief 是单文件 Markdown；固定 frontend-design 闭包是 SKILL.m
 
 创建或改写 agent 方法时，读取 skills/spec-specify/SKILL.md 的「技能写作规范（WR001）」唯一规范；此处不复制规范。
 
-来源权威：[catalog](../catalog.yaml#skills.ui-project-init)；本便携小卡非权威；单技能副本缺catalog时向来源维护者取登记。
+来源权威：[catalog](../catalog.yaml#skills.project-norm-init)；本便携小卡非权威；单技能副本缺catalog时向来源维护者取登记。
 
 ## 同仓方法依赖
 

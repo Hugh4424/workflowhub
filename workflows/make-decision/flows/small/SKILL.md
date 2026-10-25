@@ -111,7 +111,7 @@ description: 单点小改动在定方向内完成方案、一次确认、实施�
 | `frontend-testing` | 按需 | 真实前端写集才读与执行；无前端改动不调用。 |
 | `fullstack-slice-testing` | 按需 | 跨端真实调用链才读；超出本级风险先沿级别与路线回用户选择。 |
 | `isolated-browser-qa` | 按需 | 产生页面或真实浏览器可见变更并需要验收才读；无页面/浏览器面写不适用，不冒截图通过。 |
-| `ui-project-init` | 按需 | 已授权目标确需新UI工程时读；无新工程不调用，风险扩大先重判。 |
+| `project-norm-init` | 按需 | 已授权目标确需新UI工程时读；无新工程不调用，风险扩大先重判。 |
 | `design-source-readiness` | 按需 | 存在需消费的真实设计来源时读取；无来源或无UI设计面写未触发。 |
 | `frontend-prototype-render` | 按需 | 需要真实原型帮助用户选择且在授权内才读；不靠原型替正式实现或验收。 |
 | `frontend-component-quality` | 按需 | 真实UI组件改动触发原质量检查；无组件写集不调用。 |

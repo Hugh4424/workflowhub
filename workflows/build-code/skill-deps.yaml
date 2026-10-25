@@ -40,6 +40,11 @@ skills:
   - name: diagnosing-bugs
     path: skills/diagnosing-bugs/SKILL.md
     trigger: actual_failure_reproduction_before_hypothesis
+  - name: norm-sync
+    path: skills/norm-sync/SKILL.md
+    trigger: every_phase_closeout_read_norm_sync_and_record_no_change_or_sync_change
+
+
 runtime_capabilities:
   - id: node
     kind: cli

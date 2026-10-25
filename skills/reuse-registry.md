@@ -21,7 +21,7 @@
 | stage-reflection | 阶段结束发现实际过程问题，需要提出有来源的复盘改进候选。 | [读取正文](stage-reflection/SKILL.md) |
 | stage-handoff | 阶段结束写人读交接，或接续时回读真实材料、事实与未完事项。 | [读取正文](stage-handoff/SKILL.md) |
 | stage-closeout | 阶段交付后整理Git、图与收口事实；最终归档或删除按实际授权处理。 | [读取正文](stage-closeout/SKILL.md) |
-| knowledge-graph | 开工查询领域与历史经验、定位影响，或按许可更新图。 | [读取正文](knowledge-graph/SKILL.md) |
+| knowledge-graph | 开工与设计依据准备时以合法全文作采用判断；查询领域/历史经验、定位影响，或按许可更新图。 | [读取正文](knowledge-graph/SKILL.md)；[任务判断方法](knowledge-graph/references/knowledge-reuse.md) |
 | anysearch | 需要联网检索、核事实或读取外部页面。 | [读取正文](anysearch/SKILL.md) |
 | decision-log | 把已确认方向写为唯一决策与需求记录。 | [读取正文](decision-log/SKILL.md) |
 | deep-research | 方向仍有关键未知，需要深度调研与可回读来源。 | [读取正文](deep-research/SKILL.md) |
@@ -50,7 +50,7 @@
 | frontend-testing | 实施后仅有UI状态、交互或键盘行为改动，接口不变；跨端链路另读fullstack-slice-testing。 | [读取正文](frontend-testing/SKILL.md) |
 | fullstack-slice-testing | 改动跨前端、API、worker或持久化边界，验证一个用户可观察的完整链路。 | [读取正文](fullstack-slice-testing/SKILL.md) |
 | isolated-browser-qa | 浏览器/公开页/localhost验收；从正文context --run走Launch/health/Drive/Evidence/Cleanup，维护时区分文档漂移、owned harness缺口与产品回归；清理后回读原证据。来源/许可只读catalog，运行缺口留原task。 | [读取正文](isolated-browser-qa/SKILL.md) |
-| ui-project-init | UI规划先定位本动作适用的专业规范与原owner。 | [读取正文](ui-project-init/SKILL.md) |
+| project-norm-init | 规划、实施或验收准备前，按职责定位设计、前端、后端、接口、验收五类规范与原owner。 | [读取正文](project-norm-init/SKILL.md) |
 | design-source-readiness | 核对已有设计材料是否能供当前动作使用，并显露缺源或冲突。 | [读取正文](design-source-readiness/SKILL.md) |
 | frontend-prototype-render | 用真实组件输入渲染任务原型，提供预览与截图。 | [读取正文](frontend-prototype-render/SKILL.md) |
 | frontend-component-quality | 实现或审查组件的真实consumer、状态、ViewModel、样式与复用边界。 | [读取正文](frontend-component-quality/SKILL.md) |
@@ -169,3 +169,5 @@
 ## N10有限检查来源
 
 figure-it-out 的采用、固定字节与未证实项见 [catalog.yaml](catalog.yaml) 的 `figure-it-out` 条目；正文落点为 [verify-code 的检查可信度段](../workflows/verify-code/SKILL.md#测试充分性与检查可信度)，[stage-reflection](stage-reflection/SKILL.md) 只放指针，正文接线与首验归 P5/T021。本节只导航。
+
+| norm-sync | 每Phase收口、终末验证、写经验及任务收口前同步已独立验证变化；拒写不足项并保partial恢复。 | [读取正文](norm-sync/SKILL.md) |
