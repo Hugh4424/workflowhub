@@ -55,6 +55,10 @@ class LinkIssue:
     resolved_path: str
 
 
+def raise_walk_error(error: OSError) -> None:
+    raise error
+
+
 def discover_markdown(inputs: list[Path]) -> tuple[list[Path], Path]:
     resolved = [path.resolve() for path in inputs]
     missing = [str(path) for path in resolved if not path.exists()]
@@ -72,7 +76,7 @@ def discover_markdown(inputs: list[Path]) -> tuple[list[Path], Path]:
             continue
 
         roots.append(item)
-        for directory, dirs, names in os.walk(item):
+        for directory, dirs, names in os.walk(item, onerror=raise_walk_error):
             dirs[:] = [name for name in dirs if name not in EXCLUDED_DIRS and not name.startswith(".")]
             for name in names:
                 candidate = Path(directory) / name

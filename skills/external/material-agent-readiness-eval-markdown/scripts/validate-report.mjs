@@ -46,8 +46,15 @@ for (const id of ['main', 'grade', 'capabilities', 'findings', 'layers', 'qualit
   if (!new RegExp(`\\bid=["']${id}["']`, 'i').test(html)) fail(`report is missing section #${id}`);
 }
 const designerSectionOrder = ['grade', 'capabilities', 'layers', 'findings', 'plan', 'quality', 'evidence'];
-const sectionPositions = designerSectionOrder.map((id) => html.search(new RegExp(`<section\\b[^>]*\\bid=["']${id}["']`, 'i')));
-if (sectionPositions.some((position, index) => index > 0 && position <= sectionPositions[index - 1])) {
+const sectionPositions = designerSectionOrder.map((id) => {
+  const position = html.search(new RegExp(`<section\\b[^>]*\\bid=["']${id}["']`, 'i'));
+  if (position < 0 && new RegExp(`\\bid=["']${id}["']`, 'i').test(html)) {
+    fail(`report section #${id} must be a <section> element`);
+  }
+  return position;
+});
+if (sectionPositions.every((position) => position >= 0)
+    && sectionPositions.some((position, index) => index > 0 && position <= sectionPositions[index - 1])) {
   fail(`report sections must follow designer-first order: ${designerSectionOrder.join(' → ')}`);
 }
 

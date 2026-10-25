@@ -48,6 +48,11 @@ describe("current ordinary write identity and workspace",()=>{
   await bootstrapTask({project:"PaperBuilder",task:"different-native-id","target-repo":repo,"workspace-root":worktree},{env:f.env,home:f.home});
   expect(resolveWorkflowHubIdentity({},f.worktreeRoot,f.env)).toMatchObject({project:"WorkflowHub",task:f.task});
  });
+ it("ignores a malformed foreign default registration when the current task branch identifies the project",async()=>{
+  const f=await fixture("foreign-default-corruption"),foreign=join(f.storage,"Projects","OtherProject","tasks",f.task);
+  mkdirSync(foreign,{recursive:true});writeFileSync(join(foreign,"task.json"),"{broken");
+  expect(resolveWorkflowHubIdentity({},f.worktreeRoot,f.env)).toMatchObject({project:"WorkflowHub",task:f.task,taskPath:f.taskPath});
+ });
  it("retains genuine duplicate-worktree conflicts",async()=>{
   const f=await fixture("duplicate-native-id");
   await bootstrapTask({project:"OtherProject",task:f.task,"target-repo":f.repo,"workspace-root":f.worktreeRoot},{env:f.env,home:f.home});

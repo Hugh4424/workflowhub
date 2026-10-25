@@ -1,8 +1,8 @@
 // C01 P7 frozen oracle: the acceptance-object minimum check must be executable and wired.
 // build-plan authors this test before implementation; build-code makes it GREEN without relaxing it.
 // The checker itself must reuse the template-owned producer, never a second acceptance checker.
-import { expect, test } from 'vitest';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { afterEach, expect, test } from 'vitest';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
@@ -11,12 +11,24 @@ import { tmpdir } from 'node:os';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const cli = join(root, 'tools/cli/check-acceptance-object.mjs');
 const marker = '<!-- c01-acceptance-object-check -->';
+const tempDirs = new Set();
+
+afterEach(() => {
+  for (const dir of tempDirs) rmSync(dir, { recursive: true, force: true });
+  tempDirs.clear();
+});
+
+function tempDir(prefix) {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  tempDirs.add(dir);
+  return dir;
+}
 
 const acceptance = (object) => ['### 验收对象', '', '```json', JSON.stringify(object, null, 2), '```', ''].join('\n');
 const valid = { workspace: 'PaperBuilder 本任务 worktree', service: 'frontend dev 5175 / API 5176', route: '/simulations', state: 'UiAsyncState ready', viewport: '1440x900' };
 
 function fixture(object, { sources = {}, context = null } = {}) {
-  const dir = mkdtempSync(join(tmpdir(), 'c01-acceptance-'));
+  const dir = tempDir('c01-acceptance-');
   writeFileSync(join(dir, 'spec.md'), `# 功能规格\n\n${acceptance(object)}`);
   // The context file is part of the fixture whenever sources are exercised, otherwise the
   // --check-sources case could never reach the checker.
@@ -74,7 +86,7 @@ test('ORACLE-P7-ACCEPT a source that points at a missing file is named with its 
 });
 
 test('ORACLE-P7-ACCEPT a spec without an acceptance-object section fails loudly instead of passing', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'c01-acceptance-empty-'));
+  const dir = tempDir('c01-acceptance-empty-');
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 'spec.md'), '# 功能规格\n\n没有验收对象节。\n');
   const result = run(['--spec', join(dir, 'spec.md')]);

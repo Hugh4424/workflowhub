@@ -240,13 +240,30 @@ function gitRepositoryRoot(cwd, worktreeRoot) {
   }
 }
 
+function gitTaskBranchIdentity(cwd) {
+  let branch;
+  try {
+    branch = String(execFileSync("git", ["symbolic-ref", "--quiet", "--short", "HEAD"], {
+      cwd,
+      env: gitMetadataEnvironment(),
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    })).trim();
+  } catch (error) {
+    if (error?.code === "ENOENT" || error?.status !== undefined) return null;
+    throw error;
+  }
+  const match = /^task\/([A-Za-z0-9][A-Za-z0-9._-]*)\/([A-Za-z0-9][A-Za-z0-9._-]*)$/.exec(branch);
+  return match ? Object.freeze({ projectName: match[1], taskId: match[2] }) : null;
+}
+
 function realDirectoryEntry(path, label) {
   const stat = lstatSync(path);
   if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error(`${label} must be a real directory: ${path}`);
   return realpathSync(path);
 }
 
-function registeredTaskCandidates(storageRoot, repositoryRoot, worktreeRoot) {
+function registeredTaskCandidates(storageRoot, repositoryRoot, worktreeRoot, taskBranchIdentity) {
   const projectsRoot = resolve(storageRoot, "Projects");
   if (!existsSync(projectsRoot)) return [];
   realDirectoryEntry(projectsRoot, "WorkflowHub Projects root");
@@ -264,6 +281,11 @@ function registeredTaskCandidates(storageRoot, repositoryRoot, worktreeRoot) {
       try { validTaskId = validateTaskId(taskId); } catch { continue; }
       const taskPath = resolve(tasksRoot, taskId);
       const deterministicRoot = resolve(dirname(repositoryRoot), `${basename(repositoryRoot)}-${validTaskId}`);
+      const defaultPath = deterministicRoot === worktreeRoot;
+      const defaultIdentityMatches = defaultPath && taskBranchIdentity
+        && taskBranchIdentity.projectName === projectEntry.name
+        && taskBranchIdentity.taskId === validTaskId;
+      const mustAuthenticateDefault = defaultPath && (!taskBranchIdentity || defaultIdentityMatches);
       let manifest;
       let manifestReadable = false;
       {
@@ -276,19 +298,21 @@ function registeredTaskCandidates(storageRoot, repositoryRoot, worktreeRoot) {
         } catch (error) {
           // Keep the default-path candidate so openTask still rejects missing
           // or invalid metadata instead of falling back to explicit identity.
-          if (deterministicRoot !== worktreeRoot) continue;
+          if (!mustAuthenticateDefault) continue;
         }
-        // A default-path registration must authenticate before scope filtering:
-        // corrupt metadata is an error, not an absent identity. Valid foreign
-        // registrations still pass through the target/workspace checks below.
-        if (deterministicRoot === worktreeRoot) {
+        // A matching default-path registration must authenticate before scope
+        // filtering: corrupt metadata is an error, not an absent identity.
+        // A recognizable task branch lets foreign default registrations be
+        // ignored before their corrupt metadata can block the current project.
+        if (mustAuthenticateDefault) {
           manifest = openTask(taskPath, projectEntry.name, validTaskId).manifest;
           manifestReadable = true;
         }
         const explicitExisting = manifest?.workspace_mode === "existing" && typeof manifest.workspace_root === "string" && resolve(manifest.workspace_root) === worktreeRoot;
         const targetIsWorkspace = worktreeRoot !== repositoryRoot && manifest?.workspace_mode === undefined && typeof manifest?.target_repo_root === "string" && resolve(manifest.target_repo_root) === worktreeRoot;
-        const defaultWorkspace = deterministicRoot === worktreeRoot && manifest?.workspace_mode === undefined
+        const defaultWorkspace = defaultPath && manifest?.workspace_mode === undefined
           && typeof manifest?.target_repo_root === "string" && resolve(manifest.target_repo_root) === repositoryRoot;
+        if (defaultPath && taskBranchIdentity && !defaultIdentityMatches && !explicitExisting && !targetIsWorkspace) continue;
         if (manifestReadable && ((!explicitExisting && !targetIsWorkspace && !defaultWorkspace) || typeof manifest?.target_repo_root !== "string"
             || ![repositoryRoot, worktreeRoot].includes(resolve(manifest.target_repo_root)))) continue;
       }
@@ -309,7 +333,7 @@ function deriveIdentityFromAuthenticatedWorktree(cwd, env) {
   const repositoryRoot = gitRepositoryRoot(cwd, worktreeRoot);
   if (!repositoryRoot) return null;
   const storageRoot = resolveStorageRoot({ env, home: env?.HOME });
-  const candidates = registeredTaskCandidates(storageRoot, repositoryRoot, worktreeRoot);
+  const candidates = registeredTaskCandidates(storageRoot, repositoryRoot, worktreeRoot, gitTaskBranchIdentity(cwd));
   if (candidates.length === 0) return null;
   if (candidates.length > 1) {
     throw new Error(`WorkflowHub identity conflict: multiple task manifests are registered for worktree ${worktreeRoot}`);
