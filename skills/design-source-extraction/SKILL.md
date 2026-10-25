@@ -12,7 +12,7 @@ version: 1.0.0
 
 1. 设计源准备后、实施开工前执行一次；先消费 `skills/design-source-readiness/SKILL.md` 的实际来源与缺口，不重复生成 Screen Read Map。沿 `skills/project-norm-init/SKILL.md` 规范职责取目标项目八类来源：领域、视觉、组件、布局、交互、工程、内容、质量。每类记录实际路径/章节或已有稳定锚、版本、作用域、owner、consumer；不适用写具体理由，缺源写影响和提供者。现有专业源优先，不把旧 Design.md/Experience.md 设为必需文件。
 2. 先探测可达性，再在正式采集前冻结页 × 状态 × 视口 × 元素集 × 规范类别清单、关键项与冲突率阈值。探测不计覆盖。冻结后范围变化须记录原因并重新冻结，不能靠缩分母凑比例。
-3. 浏览器采集只从 `skills/isolated-browser-qa/SKILL.md` 的隔离入口执行已登记的固定脚本标识；未登记标识执行前拒绝。页面操作保持只读，页面写入与网络请求尝试必须被拒且有负向原件。外层隔离链失败停该路径，保原错误，不换直连；内层引擎缺失/启动失败才沿该入口显式回退并记原因。
+3. 浏览器采集只从 `skills/isolated-browser-qa/SKILL.md` 的隔离入口执行已登记的固定脚本标识；未登记标识执行前拒绝。页面操作保持只读，页面写入与网络请求尝试必须被拒且有负向原件。外层隔离链失败停该路径，保原错误，不换直连；默认复用已开ego工作区，获取失败明确报错，不启动其它浏览器、不隐式回退。caller显式选择其它引擎时才沿该入口原生命周期合同执行，不能用回退绕过复用限制。
 4. 逐项填下述契约，事实与推断、渲染值与源码声明分开。不存在、未渲染、受限 iframe 或工具失败留原错误与影响；不默认填值，不从类名猜像素，不用截图补 DOM。完成条件是冻结清单每项有观察或具名缺口、原命令与证据能回读；不是文件存在或 exit 0。
 5. 下游先检查 `freshness`、五类输入与低保真裁决，仅停止被 `blocks` / `blocked_scope` 点名的实施步骤。对照与回填消费 `references/isolated-consumption.md`（实施消费时读取）；规范对账消费 `references/norm-alignment.md`（逐条对齐时读取）。这些后续能力未交付时记 unavailable，不把契约当采集/对账已运行。
 
@@ -59,7 +59,19 @@ version: 1.0.0
 
 `norm_state` 唯一集合为 `present | missing | conflict | pending_review`，分别表示已有、缺、冲突、待议；不是质量分数或规范批准。`norm_defects` 独立记录规范待修，不能拿规范错误覆盖页面事实。规范引用有稳定锚用稳定锚，没有则保真实章节及缺锚事实，不编锚。
 
-`evidence_kind` 为 `rendered | declared | screenshot`；截图只提供视觉辅助，`evidence_kind=screenshot` 的项不得填 rendered 实测值，写 {"status":"unknown","reason":"仅截图，无渲染测量"}。源码声明只能进 declared，不能冒 rendered。Figma 无合法源时同时写 `source.figma.status="unavailable"`、`source.figma.unavailable=true` 和非空 reason；缺一或矛盾即契约无效。两字段是同一不可用事实，没有各自生命周期、优先级或独立裁决。不新增 available 状态；后续合法来源表达交材料 owner 澄清。不可用时列未覆盖项及影响，不能由截图反推 API/语义。
+`evidence_kind` 为 `rendered | declared | screenshot`；截图只提供视觉辅助，`evidence_kind=screenshot` 的项不得填 rendered 实测值，写 {"status":"unknown","reason":"仅截图，无渲染测量"}。源码声明只能进 declared，不能冒 rendered。Figma 无合法源时同时写 `source.figma.status="unavailable"`、`source.figma.unavailable=true` 和非空 reason；缺一或矛盾即契约无效。两字段是同一不可用事实，没有各自生命周期、优先级或独立裁决。合法本地Figma导出用source.type=figma_export、source.figma.status=present及unavailable=false，并提供下述授权主张和资产绑定；不新增available枚举。无合法源的原分支仍是unavailable，不因裁决approved变为可用。不可用时列未覆盖项及影响，不能由截图反推 API/语义。
+
+### 合法导出与图片辅助输入
+
+原页面路径用source.type=runnable_page（旧未写type的页面plan沿此兼容）。合法Figma导出用figma_export，截图辅助用screenshot；未知类型明确拒绝。source.ref是已允许读取的本地根；source.asset给根内相对ref与sha256。source.authorization给status=present、根内ref/sha256、owner/scope；该原件必须声明access=read、同asset_sha256与相同owner/scope。它是调用者可回读的权限主张，不证明远端账号权限、Figma真实授权或复制分发权；授权缺失、错scope/hash/路径越界拒绝，不默认合法。
+
+figma_export读取标准导出document树，冻结entry.figma_node_id必须唯一；明确支持节点结构id/type/name/characters、style.fontSize/fontWeight/lineHeightPx或absoluteBoundingBox.width/height。缺节点/属性或坏JSON明确失败，不按节点名猜值。事实进items.structure/declared，rendered保持unknown与影响；comparison.design_basis=declared且design_value来自原声明，不把设计声明当浏览器实测。授权真实Figma源/API仍未取得，当前只验证受控合法导出合同。
+
+screenshot当前明确支持合法非交错PNG：核容器chunk/CRC/压缩scanline完整性，尺寸仅取IHDR；不识别图像内容，不把图片宽高当元素box或浏览器viewport。资产ref/hash/权限主张回读，结构、声明、rendered未观察均unknown；comparison.design_basis=unknown、design_value=unknown、state=missing。截图可另外提供source.auxiliary_observations（根内ref/sha256），观察原件绑定asset_sha256、observer、method=visual_inference、limits与observations；entry.screenshot_observation_id唯一匹配。视觉观察可给组件形状或相对布局提示，进items.inference=present并保原观察ref/hash/限制；它不证明DOM、API、computed或精确元素尺寸。缺观察不自造；显式提供但错asset/ID/内容立即拒绝，不静默退为metadata。
+
+两种非浏览器事实都不计真实rendered coverage，原冻结分母不删；缺关键观察仍走具名低保真/裁决，不用合法资产存在冒可实施。
+
+原runnable comparison.design_basis=rendered，声明与渲染逐项分列；同单位数值及明确hex/rgb等价归一，未知CSS token/单位转换不硬判冲突。已证不等数/固定scope.checklist分母严格大于冻结conflict_threshold才触发低保真；等于不触发。item.reason保双方值和未取得的实际cascade原因，comparison仍消费rendered。规范待议/工具失败不算已证声明冲突，不用低冲突比例冒全部已比较。
 
 ### 新鲜度与重新提炼
 
@@ -83,9 +95,11 @@ oracle/证据/完成解释读取目标项目验收源；本项目为 `specs/acce
 
 | 工具 | 固定参考版本 | 采用边界 | 权利与维护 |
 | --- | --- | --- | --- |
-| ego lite | 0.6.0.16 | 隔离入口首选；缺装/启动失败沿入口显式回退 | 原工具维护者持权；许可/操作能力沿入口及任务已核原件，未核部分 unknown |
-| agent-browser | 0.36.0 | 已有隔离入口回退引擎 | 原工具维护者持权；沿入口来源/许可原件，不从相邻许可类推 |
+| ego lite | 0.6.0.16 | 默认复用已开ego；缺装/获取失败明确error且不隐式回退 | 原工具维护者持权；许可/操作能力沿入口及任务已核原件，未核部分 unknown |
+| agent-browser | 0.36.0 | caller显式选择的已有隔离入口引擎；不是默认reuse失败的自动备用 | 原工具维护者持权；沿入口来源/许可原件，不从相邻许可类推 |
 | style-ref-gen | 未采用 | 许可未声明，不复制、安装或分发 | 需真实权利 owner 提供许可后重新决策；不是当前依赖 |
+
+维护检查由采用登记owner（当前维护者用户）在采用前、迭代需求/故障涉及上游或维护到期时沿原reuse-registry/catalog入口执行：取本机version与官方release/changelog，分别比较app、CLI、SDK各自同轴候选和具体适用差异，留原命令/URL/日期/原始失败与不升级理由。查询失败保持候选unknown，不能写无更新或自动切工具；受控不可达负例明确不冒实时上游宕机。不新建维护程序/后台账本。
 
 本表记录计划固定参考，不证明当前安装版本、归档commit绑定或许可已核。实际版本、命令、失败与覆盖留任务原件。升级先报告差异并取得用户决定，不静默升级；本方法由采用登记 owner 维护，替代者经独立审查承接真实 consumer 后退出。
 

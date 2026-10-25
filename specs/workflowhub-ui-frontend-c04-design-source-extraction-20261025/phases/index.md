@@ -14,6 +14,6 @@
 | `P4` | `phases/P4.md` | `L0 — 结果与变更` | `skills/design-source-extraction/references/norm-alignment.md`、`tests/contract/design-source-extraction-norm.test.mjs` | `P3` | P5 对照与消费读者、P6 接线读者 |
 | `P5` | `phases/P5.md` | `L0 — 结果与变更` | `skills/design-source-extraction/references/isolated-consumption.md`、`tests/contract/design-source-extraction-consumption.test.mjs` | `P4` | P6 接线读者与 P7 验收者 |
 | `P6` | `phases/P6.md` | `L0 — 结果与变更` | `workflows/build-plan/SKILL.md`、`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md`、`docs/architecture/move-map.json`、`workflows/build-plan/skill-deps.yaml`、`workflows/build-code/skill-deps.yaml`、`workflows/verify-code/skill-deps.yaml`、`tests/contract/design-source-extraction-wiring.test.mjs`、`skills/design-source-extraction/skill-bundle.json`、`skills/design-source-extraction/scripts/collect-design-source.mjs` | `P5` | build-plan/build-code/verify-code 三处读者与后续任务维护者 |
-| `P7` | `phases/P7.md` | `L0 — 结果与变更` | `tests/e2e/design-source-extraction-acceptance.test.mjs` | `P6` | verify-code 终末复核者与用户 |
+| `P7` | `phases/P7.md` | `L0 — 结果与变更` | `skills/design-source-extraction/SKILL.md`、`skills/design-source-extraction/scripts/collect-design-source.mjs`、`skills/design-source-extraction/references/isolated-consumption.md`、`tests/contract/design-source-extraction-collect.test.mjs`、`tests/e2e/design-source-extraction-acceptance.test.mjs` | `P6` | verify-code 终末复核者与用户 |
 
 pre cohort 的旧任务卡只读保留，在本文件中没有有效行。

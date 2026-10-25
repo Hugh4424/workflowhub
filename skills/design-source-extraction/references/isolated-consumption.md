@@ -39,3 +39,17 @@
   "completed": false
 }
 ```
+
+
+## 三来源消费分支
+
+先真实读同一产物的comparison.design_basis与对应items证据。旧页面产物未写basis时只在evidence_kind=rendered且原观察可回读的路径沿rendered解释，不能把未知来源默认合法。rendered消费实测；declared仅在合法figma_export原节点/属性与授权主张绑定后消费设计声明目标，仍须把rendered未知、关键覆盖缺口/裁决与实测回填分开。unknown（截图辅助）没有数值目标：可读asset身份/尺寸作辅助，但不能用IHDR宽高生成元素样式；comparison保持missing并列依赖步骤，不能报completed。任何blocked_scope内步骤均不启动，读取结构/声明供规划不等实施已获批准。授权主张不是远端访问验证；非浏览器事实不计真实rendered覆盖。
+
+下面唯一样例是方法契约，不是实测：
+
+<!-- SOURCE-CONSUMPTION-CASE -->
+```json
+{"figma":{"source_type":"figma_export","design_basis":"declared","design_value":"28px","rendered_status":"unknown","implementation_value":"unknown","state":"missing","expected":{"target":"28px","basis":"declared","measured":false}},"screenshot":{"source_type":"screenshot","design_basis":"unknown","design_value":"unknown","rendered_status":"unknown","implementation_value":"unknown","state":"missing","expected":{"target":"unknown","basis":"unknown","measured":false}}}
+```
+
+截图有合法绑定的inference时，consumer必须真实读取value/observer/method/limits及原观察ref/hash，将组件形状/相对布局作为视觉提示；不得只保存asset元数据就声称提取设计。没有数值目标仍保持comparison missing，不能从视觉推断生成computed或实测回填。原图可回读不证明推断必然正确，独立核观察与来源边界；显式错误观察不静默忽略。

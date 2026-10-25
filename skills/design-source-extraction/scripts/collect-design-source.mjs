@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {inflateSync} from 'node:zlib';
 const failure=(code,details={})=>Object.assign(new Error(code),{code,...details});
 const text=value=>typeof value==='string'&&value.trim().length>0;
 const clone=value=>JSON.parse(JSON.stringify(value));
@@ -23,13 +24,27 @@ export function freezeChecklist(plan,{now=()=>new Date().toISOString()}={}) {
 }
 export function computeCoverage(items,scope) {
   const collected=new Set();
-  for(const item of items){const entry=scope.checklist.find(entry=>entry.id===item.id);if(entry&&item.collection_phase==='formal'&&['page','state','viewport','property'].every(key=>item[key]===entry[key]))collected.add(item.id);}
+  for(const item of items){const entry=scope.checklist.find(entry=>entry.id===item.id);if(entry&&!['declared','screenshot'].includes(item.evidence_kind)&&item.collection_phase==='formal'&&['page','state','viewport','property'].every(key=>item[key]===entry[key]))collected.add(item.id);}
   const missing=scope.checklist.filter(entry=>!collected.has(entry.id)).map(entry=>entry.id),critical_missing=scope.critical.filter(id=>!collected.has(id)),ratio=collected.size/scope.checklist.length;
   return {denominator:scope.checklist.length,collected:collected.size,missing,critical_missing,ratio,scope_ref:'scope.checklist',accepted:ratio>=0.9&&!critical_missing.length};
 }
 function observedStateMatches(observation,entry,scope){const page=scope.pages.find(page=>page.id===entry.page),evidence=observation?.state_evidence;return !!page?.state_check&&page.state===entry.state&&evidence?.state===entry.state&&evidence.selector===page.state_check.selector&&evidence.expected_text===page.state_check.text&&text(evidence.observed_text)&&evidence.observed_text.includes(page.state_check.text);}
 const inputKeys=['design_source','target_elements','properties','states','acceptance_points'];
 const topKeys=['source','scope','norm_basis','inputs','items','comparison','gaps','norm_defects','coverage','commands','freshness','failures','low_fidelity','scoring','pending_review'];
+// Compare only provably equivalent units/encodings; unresolved CSS is not conflict evidence.
+function sourceDifference(declared,rendered){
+  if(declared?.status!=='present')return {conflict:false,reason:'Source comparison unknown: no exact declaration; rendered value remains the consumer value'};
+  const left=declared.value,right=rendered?.value;
+  if(left===right)return {conflict:false,reason:`Source declaration ${left} and rendered ${right} are equivalent; norm applicability remains pending`};
+  const numeric=v=>typeof v==='string'?v.trim().match(/^(-?\d+(?:\.\d+)?)(px|rem|em|%|vh|vw|s|ms|deg)?$/):null;
+  const color=v=>{if(typeof v!=='string')return null;const hex=v.match(/^#([\da-f]{3}|[\da-f]{6})$/i);if(hex){const h=hex[1].length===3?[...hex[1]].map(x=>x+x).join(''):hex[1];return [0,2,4].map(i=>parseInt(h.slice(i,i+2),16));}const rgb=v.match(/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/);return rgb&&rgb.slice(1).every(x=>Number(x)<=255)?rgb.slice(1).map(Number):null;};
+  const a=numeric(left),b=numeric(right),ca=color(left),cb=color(right);
+  const comparable=a&&b&&a[2]===b[2]||ca&&cb;
+  if(!comparable)return {conflict:false,reason:`Source comparison uncomparable: declaration ${left}, rendered ${right}; unsupported unit/token conversion, no conflict inferred`};
+  const equal=a&&b?Number(a[1])===Number(b[1]):ca.every((v,i)=>v===cb[i]);
+  return {conflict:!equal,reason:equal?`Source declaration ${left} and rendered ${right} are equivalent after encoding normalization`:`Source declaration ${left} differs from measured rendered ${right}; active cascade cause not established by these facts; consumers use rendered`};
+}
+function sourceConflictSummary(items,scope){const conflicts=items.filter(item=>sourceDifference(item.declared,item.rendered).conflict),ratio=conflicts.length/scope.checklist.length;return {conflicts,exceeded:ratio>scope.conflict_threshold,reason:`Source declaration/rendered conflict rate ${conflicts.length}/${scope.checklist.length} exceeds frozen threshold ${scope.conflict_threshold}`};}
 function observationFromOutput(bytes,id) {
   const rows=String(bytes).split('\n').filter(row=>row.startsWith('WHQA_OBSERVATIONS='));
   if(rows.length!==1)throw failure('OBSERVATION_ORIGINAL_INVALID');
@@ -46,7 +61,10 @@ export function validateExtraction(doc,{readEvidence,current}={}) {
   if(errors.length)return {valid:false,errors,freshness};
   let scope;try{scope=freezeChecklist(doc);}catch(error){errors.push(error.code);return {valid:false,errors,freshness};}
   check(['type','ref','version','owner','consumer'].every(key=>text(doc.source?.[key]))&&!!doc.source.scope,'INVALID_SOURCE');
-  check(doc.source?.figma?.status==='unavailable'&&doc.source.figma.unavailable===true&&text(doc.source.figma.reason),'INVALID_FIGMA_UNAVAILABLE');
+  check(['runnable_page','figma_export','screenshot'].includes(doc.source?.type),'INVALID_SOURCE_TYPE');
+  const assetSource=['figma_export','screenshot'].includes(doc.source.type);
+  if(assetSource)for(const entry of scope.checklist)try{readSourceAsset(doc.source,entry);}catch(error){errors.push('SOURCE_ASSET_INVALID:'+error.message);}
+  check(doc.source.type==='figma_export'?doc.source.figma?.status==='present'&&doc.source.figma.unavailable===false:doc.source?.figma?.status==='unavailable'&&doc.source.figma.unavailable===true&&text(doc.source.figma.reason),'INVALID_FIGMA_UNAVAILABLE');
   const norm=doc.norm_basis;
   check(text(norm?.id)&&text(norm.version)&&Array.isArray(norm.entries),'INVALID_NORM_BASIS');
   if(Array.isArray(norm?.entries))for(const category of scope.norm_categories){const entry=norm.entries.find(entry=>entry.category===category);check(!!entry&&(text(entry.not_applicable_reason)||(['ref','version','scope','owner','consumer'].every(key=>text(entry[key]))&&(text(entry.anchor)||text(entry.section)))),'INVALID_NORM_SOURCE:'+category);}
@@ -58,6 +76,7 @@ export function validateExtraction(doc,{readEvidence,current}={}) {
     const entry=scope.checklist.find(entry=>entry.id===item.id),command=commandMap.get(item.command_ref);
     check(!!entry&&!itemIds.has(item.id),'INVALID_ITEM_ID:'+item.id);itemIds.add(item.id);
     check(!!entry&&['page','state','viewport','property'].every(key=>item[key]===entry[key])&&digest(item.locator)===digest(entry.locator),'ITEM_SCOPE_MISMATCH:'+item.id);
+    if(assetSource){try{const fact=readSourceAsset(doc.source,entry),rows=String(originals.get(command?.id)).split('\n').filter(row=>row.startsWith('SOURCE_FACT='));check(rows.length===1,'SOURCE_FACT_ORIGINAL_INVALID');const raw=JSON.parse(rows[0].slice('SOURCE_FACT='.length));check(raw.id===item.id&&digest(raw.fact)===digest(fact),'SOURCE_FACT_ORIGINAL_MISMATCH');for(const key of ['structure','declared','rendered','asset','inference'])check(digest(item[key])===digest(fact[key]),'SOURCE_FACT_MISMATCH:'+key);check(item.evidence_kind===fact.evidence_kind&&item.reason===fact.reason&&item.source_ref===doc.source.ref,'SOURCE_FACT_KIND_MISMATCH');check(['present','missing','conflict','pending_review'].includes(item.norm_state)&&text(item.norm_anchor),'INVALID_NORM_STATE:'+item.id);check(digest(item.inference)===digest(fact.inference),'SOURCE_INFERENCE_UNBOUND');check(command?.exit_code===0&&!command.signal&&!command.timed_out&&!command.cancelled&&item.evidence_ref===command.output_ref,'SOURCE_COMMAND_MISMATCH');}catch(error){errors.push('SOURCE_ASSET_INVALID:'+error.message);}continue;}
     check(observedStateMatches({state_evidence:item.state_evidence},item,scope),'ITEM_STATE_UNVERIFIED:'+item.id);
     check(['source_ref','reason'].every(key=>text(item[key]))&&!!item.declared&&typeof item.declared==='object'&&!!item.inference&&typeof item.inference==='object','MISSING_ITEM_FACT:'+item.id);
     for(const key of ['declared','inference']){const fact=item[key];check(['present','unknown'].includes(fact?.status),'INVALID_FACT_STATUS:'+item.id+':'+key);if(fact?.status==='unknown')check(text(fact.reason)&&Array.isArray(fact.affected_scope)&&fact.affected_scope.includes(item.id),'UNBOUND_UNKNOWN:'+item.id+':'+key);}
@@ -70,13 +89,25 @@ export function validateExtraction(doc,{readEvidence,current}={}) {
     check(!!command&&command.exit_code===0&&!command.signal&&!command.timed_out&&!command.cancelled&&item.evidence_ref===command.output_ref,'ITEM_COMMAND_MISMATCH:'+item.id);
     if(command&&originals.has(command.id))try{const raw=observationFromOutput(originals.get(command.id),item.id);check(raw.id===item.id&&raw.page===item.page&&raw.selector===entry?.selector&&raw.observation?.rendered?.styles?.[item.property]===item.rendered?.value&&digest(raw.observation?.structure)===digest(item.structure)&&digest(raw.observation?.rendered?.box)===digest(item.rendered?.box)&&digest(raw.observation?.state_evidence)===digest(item.state_evidence),'ORIGINAL_OBSERVATION_MISMATCH:'+item.id);}catch{errors.push('ORIGINAL_OBSERVATION_UNREADABLE:'+item.id);}
   }
-  for(const row of doc.comparison){const item=doc.items.find(item=>item.id===row.item_ref);check(!!item&&row.design_value===item.rendered?.value&&row.evidence_ref===item.evidence_ref&&['present','missing','conflict','pending_review'].includes(row.state)&&(row.implementation_value!=='unknown'||row.state==='missing'),'INVALID_COMPARISON:'+row.item_ref);}
+  for(const row of doc.comparison){const item=doc.items.find(item=>item.id===row.item_ref),basis=doc.source.type==='figma_export'?'declared':doc.source.type==='screenshot'?'unknown':'rendered',value=basis==='declared'?item?.declared?.value:basis==='unknown'?'unknown':item?.rendered?.value;check(!!item&&row.design_value===value&&(!assetSource||row.design_basis===basis)&&row.evidence_ref===item.evidence_ref&&['present','missing','conflict','pending_review'].includes(row.state)&&(row.implementation_value!=='unknown'||row.state==='missing')&&(basis!=='unknown'||row.state==='missing'),'INVALID_COMPARISON:'+row.item_ref);}
   for(const item of doc.items)check(doc.comparison.some(row=>row.item_ref===item.id),'MISSING_COMPARISON:'+item.id);
   for(const entry of doc.failures)check(text(entry.category)&&text(entry.original_error)&&commandMap.has(entry.command_ref)&&Array.isArray(entry.affected_scope)&&entry.affected_scope.length>0,'INVALID_FAILURE');
   check(digest(doc.coverage)===digest(computeCoverage(doc.items,scope)),'COVERAGE_NOT_REPRODUCIBLE');
   check(typeof doc.low_fidelity?.triggered==='boolean'&&Array.isArray(doc.low_fidelity.reasons)&&['pending','approved','rejected','no_response'].includes(doc.low_fidelity.ruling)&&Array.isArray(doc.low_fidelity.blocked_scope)&&(!doc.low_fidelity.triggered||doc.low_fidelity.reasons.length>0),'INVALID_LOW_FIDELITY');
   if(['pending','rejected','no_response'].includes(doc.low_fidelity?.ruling))check(doc.low_fidelity.blocked_scope.length>0,'UNBLOCKED_RULING');
   if(!doc.low_fidelity?.triggered&&doc.low_fidelity?.ruling==='approved')check(text(doc.low_fidelity.not_applicable_reason),'MISSING_RULING_NOT_APPLICABLE');
+  const sourceConflicts=sourceConflictSummary(doc.items,scope);
+  const conditions=[],requiredBlocks=new Set(),toolAffected=new Set(doc.failures.filter(row=>row.category==='engine').flatMap(row=>row.affected_scope));
+  for(const key of inputKeys)if(doc.inputs?.[key]?.status!=='present'){if(!conditions.includes('必要输入缺失或待判断'))conditions.push('必要输入缺失或待判断');for(const block of doc.inputs?.[key]?.blocks||[])requiredBlocks.add(block);}
+  const missingCritical=computeCoverage(doc.items,scope).critical_missing.filter(id=>!toolAffected.has(id));
+  if(missingCritical.length){conditions.push('关键设计项缺失（非工具失败）');for(const id of missingCritical)requiredBlocks.add('implement:'+scope.checklist.find(entry=>entry.id===id).element);}
+  if(sourceConflicts.exceeded){conditions.push(sourceConflicts.reason);for(const item of sourceConflicts.conflicts)requiredBlocks.add('implement:'+scope.checklist.find(entry=>entry.id===item.id).element);}
+  check(doc.low_fidelity?.triggered===(conditions.length>0),'LOW_FIDELITY_TRIGGER_MISMATCH');
+  for(const reason of conditions)check(doc.low_fidelity?.reasons?.includes(reason),'LOW_FIDELITY_REASON_MISSING:'+reason);
+  if(doc.low_fidelity?.ruling!=='approved')for(const block of requiredBlocks)check(doc.low_fidelity?.blocked_scope?.includes(block),'LOW_FIDELITY_SCOPE_MISSING:'+block);
+
+  for(const item of sourceConflicts.conflicts)check(item.reason===sourceDifference(item.declared,item.rendered).reason,'SOURCE_DIFFERENCE_REASON_MISSING:'+item.id);
+  if(sourceConflicts.exceeded){check(doc.low_fidelity?.triggered===true&&doc.low_fidelity.reasons.includes(sourceConflicts.reason),'SOURCE_CONFLICT_TRIGGER_MISSING');if(doc.low_fidelity?.ruling!=='approved')for(const item of sourceConflicts.conflicts)check(doc.low_fidelity.blocked_scope.includes('implement:'+scope.checklist.find(entry=>entry.id===item.id).element),'SOURCE_CONFLICT_UNBLOCKED:'+item.id);}
   check(doc.scoring?.status==='unavailable'&&text(doc.scoring.reason),'INVALID_SCORING');
   check(Number.isFinite(Date.parse(doc.freshness?.generated_at))&&Date.parse(doc.freshness.generated_at)>=Date.parse(scope.frozen_at)&&!!doc.freshness.source_versions&&!!doc.freshness.norm_versions&&text(doc.freshness.structure_ref)&&['current','stale','unknown','missing'].includes(doc.freshness.status),'INVALID_FRESHNESS');
   if(current&&['source_versions','norm_versions','structure_ref'].every(key=>current[key]!==undefined)){
@@ -90,6 +121,10 @@ export function validateExtraction(doc,{readEvidence,current}={}) {
 export async function collectDesignSource(plan,context) {
   const scope=freezeChecklist(plan,{now:context.now}),items=[],commands=[],failures=[],gaps=[];
   if(!plan.source||!plan.norm_basis||!inputKeys.every(key=>plan.inputs?.[key]))throw failure('INVALID_COLLECTION_PLAN');
+  if(plan.source.type===undefined)plan={...plan,source:{...plan.source,type:'runnable_page'}};
+  const assetSource=['figma_export','screenshot'].includes(plan.source.type);
+  if(plan.source.type&&!['runnable_page','figma_export','screenshot'].includes(plan.source.type))throw failure('UNSUPPORTED_SOURCE_TYPE');
+  if(assetSource)for(const entry of scope.checklist)readSourceAsset(plan.source,entry);
   for(const [index,entry] of scope.checklist.entries()) {
     let command;
     try {
@@ -99,6 +134,7 @@ export async function collectDesignSource(plan,context) {
       if(previous&&digest(previous)!==digest(command))throw failure('COMMAND_IDENTITY_CHANGED',{category:'engine',command});
       if(!previous)commands.push(command);
       if(command.exit_code||command.cancelled||command.timed_out||command.signal)throw failure('COLLECTION_COMMAND_FAILED',{category:'engine',command});
+      if(assetSource){const fact=result.source_fact;if(!fact)throw failure('SOURCE_FACT_UNAVAILABLE',{category:'engine',command});items.push({id:entry.id,page:entry.page,state:entry.state,viewport:entry.viewport,property:entry.property,locator:clone(entry.locator),source_ref:plan.source.ref,...clone(fact),inference:clone(fact.inference),norm_state:'pending_review',norm_anchor:entry.norm_anchor,evidence_ref:command.output_ref,command_ref:command.id,collection_phase:'formal'});gaps.push({item:entry.id,reason:fact.rendered.reason,blocks:['implement:'+entry.element],provider:plan.source.owner});continue;}
       const observation=result.observation,box=observation?.rendered?.box;
       if(!observedStateMatches(observation,entry,scope))throw failure('STATE_NOT_OBSERVED',{category:'state_unverified',command});
       let declared={status:'unknown',reason:'No exact source declaration mapping supplied; inline style alone is not design intent',inline_style:observation.declared?.style??'unknown',affected_scope:[entry.id]};
@@ -109,7 +145,7 @@ export async function collectDesignSource(plan,context) {
       if(!box||!Number.isFinite(box.width)||!Number.isFinite(box.height)||box.width<=0||box.height<=0)throw failure('ZERO_SIZE_ELEMENT',{category:'element_unrendered',command});
       const value=observation.rendered.styles?.[entry.property];
       if(!text(value)||!text(observation.structure?.tag))throw failure('OBSERVATION_UNAVAILABLE',{category:'engine',command});
-      items.push({id:entry.id,page:entry.page,state:entry.state,viewport:entry.viewport,property:entry.property,locator:clone(entry.locator),source_ref:plan.source.ref,structure:clone(observation.structure),state_evidence:clone(observation.state_evidence),rendered:{value,box:clone(box)},declared,inference:{status:'unknown',reason:'No design intent inferred from rendered values',affected_scope:[entry.id]},norm_state:'pending_review',norm_anchor:entry.norm_anchor,evidence_kind:'rendered',evidence_ref:command.output_ref,command_ref:command.id,reason:'Measured rendered value; norm alignment belongs to P4',collection_phase:'formal'});
+      items.push({id:entry.id,page:entry.page,state:entry.state,viewport:entry.viewport,property:entry.property,locator:clone(entry.locator),source_ref:plan.source.ref,structure:clone(observation.structure),state_evidence:clone(observation.state_evidence),rendered:{value,box:clone(box)},declared,inference:{status:'unknown',reason:'No design intent inferred from rendered values',affected_scope:[entry.id]},norm_state:'pending_review',norm_anchor:entry.norm_anchor,evidence_kind:'rendered',evidence_ref:command.output_ref,command_ref:command.id,reason:sourceDifference(declared,{value}).reason,collection_phase:'formal'});
     } catch(error) {
       command=error.command||command;
       if(command&&!commands.some(existing=>existing.id===command.id))commands.push(command);
@@ -125,8 +161,10 @@ export async function collectDesignSource(plan,context) {
   if(inputKeys.some(key=>plan.inputs[key].status!=='present'))reasons.push('必要输入缺失或待判断');
   const toolAffected=new Set(failures.filter(entry=>entry.category==='engine').flatMap(entry=>entry.affected_scope));
   if(coverage.critical_missing.some(id=>!toolAffected.has(id)))reasons.push('关键设计项缺失（非工具失败）');
+  const sourceConflicts=sourceConflictSummary(items,scope);
+  if(sourceConflicts.exceeded){reasons.push(sourceConflicts.reason);for(const item of sourceConflicts.conflicts)gaps.push({item:item.id,reason:item.reason,blocks:['implement:'+scope.checklist.find(entry=>entry.id===item.id).element],provider:plan.source.owner});}
   const generated_at=context.now?.()||new Date().toISOString();
-  const doc={source:clone(plan.source),scope,norm_basis:clone(plan.norm_basis),inputs:clone(plan.inputs),items,comparison:items.map(item=>({item_ref:item.id,design_value:item.rendered.value,implementation_value:'unknown',state:'missing',evidence_ref:item.evidence_ref})),gaps,norm_defects:[],coverage,commands,freshness:{generated_at,source_versions:{[plan.source.ref]:plan.source.version},norm_versions:Object.fromEntries(plan.norm_basis.entries.map(entry=>[entry.ref,entry.version])),structure_ref:'sha256:'+digest(items.map(item=>({id:item.id,locator:item.locator,structure:item.structure}))),status:'unknown',reasons:['Current comparison materials not supplied']},failures,low_fidelity:{triggered:!!reasons.length,reasons,ruling:reasons.length?(plan.low_fidelity?.ruling||'pending'):'approved',blocked_scope:reasons.length?[...new Set(gaps.flatMap(gap=>gap.blocks))]:[],...(!reasons.length?{not_applicable_reason:'No design low-fidelity trigger; ruling not applicable, no human approval received'}:{})},scoring:{status:'unavailable',reason:'本次不实现数值评分'},pending_review:items.map(item=>({item_ref:item.id,question:'Norm alignment and source intent require owner review',owner:plan.norm_basis.owner||'norm owner'}))};
+  const doc={source:clone(plan.source),scope,norm_basis:clone(plan.norm_basis),inputs:clone(plan.inputs),items,comparison:items.map(item=>({item_ref:item.id,design_basis:plan.source.type==='figma_export'?'declared':plan.source.type==='screenshot'?'unknown':'rendered',design_value:plan.source.type==='figma_export'?item.declared.value:plan.source.type==='screenshot'?'unknown':item.rendered.value,implementation_value:'unknown',state:'missing',evidence_ref:item.evidence_ref})),gaps,norm_defects:[],coverage,commands,freshness:{generated_at,source_versions:{[plan.source.ref]:plan.source.version},norm_versions:Object.fromEntries(plan.norm_basis.entries.map(entry=>[entry.ref,entry.version])),structure_ref:'sha256:'+digest(items.map(item=>({id:item.id,locator:item.locator,structure:item.structure}))),status:'unknown',reasons:['Current comparison materials not supplied']},failures,low_fidelity:{triggered:!!reasons.length,reasons,ruling:reasons.length?(plan.low_fidelity?.ruling||'pending'):'approved',blocked_scope:reasons.length?[...new Set(gaps.filter(gap=>gap.input!=='source.figma').flatMap(gap=>gap.blocks))]:[],...(!reasons.length?{not_applicable_reason:'No design low-fidelity trigger; ruling not applicable, no human approval received'}:{})},scoring:{status:'unavailable',reason:'本次不实现数值评分'},pending_review:items.map(item=>({item_ref:item.id,question:'Norm alignment and source intent require owner review',owner:plan.norm_basis.owner||'norm owner'}))};
   const validation=validateExtraction(doc,{readEvidence:context.readEvidence,current:context.current});
   if(!validation.valid)throw failure('INVALID_EXTRACTION',{errors:validation.errors,doc});
   Object.assign(doc.freshness,validation.freshness);
@@ -141,6 +179,10 @@ export function readPlan(path,{probe=false}={}) {
   let scope;try{scope=freezeChecklist(plan);}catch(error){throw failure('INVALID_COLLECTION_PLAN',{original_error:error.message});}
   if(!probe&&!plan.scope.frozen_at)throw failure('FORMAL_PLAN_NOT_FROZEN');
   if(!plan.source||!plan.norm_basis||!inputKeys.every(key=>plan.inputs?.[key]))throw failure('INVALID_COLLECTION_PLAN');
+  const assetSource=['figma_export','screenshot'].includes(plan.source.type);
+  if(plan.source.type&&!['runnable_page','figma_export','screenshot'].includes(plan.source.type))throw failure('UNSUPPORTED_SOURCE_TYPE');
+  if(assetSource)for(const entry of scope.checklist)readSourceAsset(plan.source,entry);
+  if(['figma_export','screenshot'].includes(plan.source.type)){for(const entry of scope.checklist)readSourceAsset(plan.source,entry);return {...plan,scope};}
   const origins=new Set();
   for(const page of scope.pages){let url;try{url=new URL(page.url);}catch{throw failure('INVALID_PAGE_URL');}if(!['http:','https:'].includes(url.protocol)||url.username||url.password||url.search)throw failure('INVALID_PAGE_URL');origins.add(url.origin);if(!text(page.state_check?.selector)||!text(page.state_check?.text))throw failure('STATE_CONTRACT_REQUIRED');for(const action of page.actions||[])if(action.type!=='click'||!text(action.selector)||Object.keys(action).some(key=>!['type','selector'].includes(key)))throw failure('INVALID_PREPARATION_ACTION');}
   if(origins.size!==1)throw failure('COLLECTION_ORIGIN_MISMATCH');
@@ -160,7 +202,7 @@ async function egoContext(plan,task,env) {
       const input={spaceId,page,viewport,entries};
       // Only fixed SDK navigation, viewport setup and the P2 registered read.
       // No caller-supplied expression, protocol method or executable is accepted.
-      const script=`const {runRegisteredScript}=await import(${JSON.stringify(browserModule)});const input=${JSON.stringify(input)};const task=await taskSpace(input.spaceId);const page=task.page('p1');await page.goto(input.page.url);await page.cdp('Emulation.setDeviceMetricsOverride',{width:input.viewport.width,height:input.viewport.height,deviceScaleFactor:1,mobile:false});for(const action of input.page.actions||[])await page.click(action.selector);for(const selector of new Set(input.entries.map(entry=>entry.selector)))await page.waitForSelector(selector,{state:'attached',timeout:5000});const stateObservation=(await runRegisteredScript(page,'design-source-read-v1',{elements:[{selector:input.page.state_check.selector,properties:[]}]}))[0];const state_evidence={state:input.page.state,selector:input.page.state_check.selector,expected_text:input.page.state_check.text,observed_text:stateObservation.structure.text};if(!state_evidence.observed_text.includes(state_evidence.expected_text))throw new Error('STATE_NOT_OBSERVED');const observations=await runRegisteredScript(page,'design-source-read-v1',{elements:input.entries.map(entry=>({selector:entry.selector,properties:[entry.property]}))});console.log('WHQA_OBSERVATIONS='+JSON.stringify(input.entries.map((entry,index)=>({id:entry.id,page:entry.page,selector:entry.selector,observation:{...observations[index],state_evidence}}))));`;
+      const script=`const {runRegisteredScript}=await import(${JSON.stringify(browserModule)});const input=${JSON.stringify(input)};const task=await taskSpace(input.spaceId);const page=task.page('p1');await page.goto(input.page.url);for(const action of input.page.actions||[])await page.click(action.selector);for(const selector of new Set(input.entries.map(entry=>entry.selector)))await page.waitForSelector(selector,{state:'attached',timeout:5000});const stateObservation=(await runRegisteredScript(page,'design-source-read-v1',{elements:[{selector:input.page.state_check.selector,properties:[]}]}))[0];const state_evidence={state:input.page.state,selector:input.page.state_check.selector,expected_text:input.page.state_check.text,observed_text:stateObservation.structure.text};if(!state_evidence.observed_text.includes(state_evidence.expected_text))throw new Error('STATE_NOT_OBSERVED');const observations=await runRegisteredScript(page,'design-source-read-v1',{elements:input.entries.map(entry=>({selector:entry.selector,properties:[entry.property]}))});console.log('WHQA_OBSERVATIONS='+JSON.stringify(input.entries.map((entry,index)=>({id:entry.id,page:entry.page,selector:entry.selector,observation:{...observations[index],state_evidence}}))));`;
       const captured=await task.captureCommand({cwd:process.cwd(),slug:'design-source-observation',argv:['ego-browser','nodejs','-e',script],timeoutMs:30000});
       const command={id:captured.receipt_ref,cwd:captured.cwd,argv:captured.argv,exit_code:captured.exit_code,signal:captured.signal,timed_out:captured.timed_out,cancelled:captured.cancelled,started_at:captured.started_at,output_ref:captured.output_ref};
       const bytes=taskReader(task)(captured.output_ref);
@@ -187,7 +229,8 @@ async function runCli(args,env=process.env) {
     console.log(JSON.stringify(result));return result.valid&&result.freshness.status==='current'?0:1;
   }
   if(currentPath)throw failure('INVALID_VALIDATION_ARGUMENT');
-  if(!scenario){
+  const assetSource=['figma_export','screenshot'].includes(plan.source.type);
+  if(!scenario&&!assetSource){
     if(!/^[1-9][0-9]*$/.test(env.BROWSER_QA_EGO_SPACE_ID||''))throw failure('OWNED_EGO_CONTEXT_REQUIRED');
     const {runBrowserQa}=await import('../../isolated-browser-qa/scripts/browser-qa-session.mjs');
     const first=new URL(plan.scope.pages[0].url);first.hash='';
@@ -195,12 +238,12 @@ async function runCli(args,env=process.env) {
   }
   const {openTask}=await import('../../../runtime/task/task-handle.mjs');
   const task=openTask(resolve(execution.task_path),{projectName:execution.project_name,taskId:execution.task_id});
-  const context=await egoContext(plan,task,env);
+  const context=assetSource?await assetContext(plan,task):await egoContext(plan,task,env);
   if(probe){const observed_ids=[],commands=[],failures=[];for(const entry of plan.scope.checklist){try{const result=await context.read(entry,plan.scope);observed_ids.push(entry.id);if(!commands.some(command=>command.id===result.command.id))commands.push(result.command);}catch(error){failures.push({original_error:error.message,affected_scope:[entry.id],command_ref:error.command?.id||'unknown'});if(error.category==='engine')break;}}console.log(JSON.stringify({probe:true,observed_ids,commands,failures}));return failures.length?1:0;}
   const doc=await collectDesignSource(plan,context);
   const artifact_ref=await task.appendRecord({dir:'quality/evidence',slug:execution.document_slug||'design-source-extraction',ext:'json',bytes:JSON.stringify(doc,null,2)});
   const exit_code=doc.failures.length||!doc.coverage.accepted?1:0;
-  console.log(JSON.stringify({artifact_ref,exit_code,spaceId:Number(env.BROWSER_QA_EGO_SPACE_ID),cleanup:'retained-for-task-continuation'}));
+  console.log(JSON.stringify({artifact_ref,exit_code,...(assetSource?{source_type:plan.source.type,cleanup:'no-browser-resources-created'}:{spaceId:Number(env.BROWSER_QA_EGO_SPACE_ID),cleanup:'retained-for-task-continuation'})}));
   return exit_code;
 }
 if(process.argv[1]===fileURLToPath(import.meta.url))runCli(process.argv.slice(2)).then(code=>{process.exitCode=code;}).catch(error=>{console.error(JSON.stringify({error:error.code||'COLLECTION_FAILED',original_error:error.original_error||error.message,errors:error.errors||[],...(error.doc?{failures:error.doc.failures}:{})}));process.exitCode=1;});
@@ -232,3 +275,41 @@ export function readGeneratedCssDeclaration(plan,entry,readEvidence){
   const css=JSON.parse(body[1]),found=cssProperty(css,mapping.selector,entry.property);if(!found)throw failure('GENERATED_CSS_PROPERTY_UNAVAILABLE');
   return {status:'present',value:found.value,source_literal:found.rule,source_ref:response.url+'#'+mapping.selector,source_sha256:createHash('sha256').update(css).digest('hex'),selector:entry.selector,rule_selector:mapping.selector,property:entry.property,input_output_ref:mapping.output_ref,input_output_sha256:mapping.output_sha256,interpretation:'Exact property in actual generated stylesheet; product intent remains unknown'};
 }
+
+// Local authorized exports/assets only. The authorization file is a caller claim,
+// not independent proof of account permissions or redistribution rights.
+function pngDimensions(b){
+  if(b.length<33||b.subarray(0,8).toString('hex')!=='89504e470d0a1a0a')throw failure('INVALID_PNG_HEADER');
+  const crc=bytes=>{let c=0xffffffff;for(const byte of bytes){c^=byte;for(let i=0;i<8;i++)c=(c>>>1)^((c&1)?0xedb88320:0);}return(c^0xffffffff)>>>0;};
+  let offset=8,width,height,depth,color,ended=false,idat=false,palette=false;const data=[];
+  while(offset<b.length){if(offset+12>b.length)throw failure('TRUNCATED_PNG_CHUNK');const length=b.readUInt32BE(offset),end=offset+12+length;if(end>b.length)throw failure('TRUNCATED_PNG_CHUNK');const type=b.toString('ascii',offset+4,offset+8),body=b.subarray(offset+8,offset+8+length);if(crc(b.subarray(offset+4,offset+8+length))!==b.readUInt32BE(offset+8+length))throw failure('INVALID_PNG_CRC');
+    if(offset===8&&type!=='IHDR')throw failure('INVALID_PNG_ORDER');
+    if(type==='IHDR'){if(offset!==8||length!==13)throw failure('INVALID_PNG_HEADER');width=body.readUInt32BE(0);height=body.readUInt32BE(4);depth=body[8];color=body[9];if(!width||!height||!({0:[1,2,4,8,16],2:[8,16],3:[1,2,4,8],4:[8,16],6:[8,16]}[color]?.includes(depth))||body[10]!==0||body[11]!==0)throw failure('INVALID_PNG_HEADER');if(body[12]!==0)throw failure('UNSUPPORTED_PNG_INTERLACE');}
+    else if(type==='PLTE'){if(idat||!length||length%3||length>768)throw failure('INVALID_PNG_PALETTE');palette=true;}
+    else if(type==='IDAT'){if(ended||color===3&&!palette)throw failure('INVALID_PNG_ORDER');idat=true;data.push(body);}
+    else if(type==='IEND'){if(length||!idat||end!==b.length)throw failure('INVALID_PNG_END');ended=true;}
+    else if(type[0]===type[0]?.toUpperCase())throw failure('UNSUPPORTED_PNG_CRITICAL_CHUNK');
+    offset=end;
+  }
+  if(!ended)throw failure('PNG_IEND_REQUIRED');const channels={0:1,2:3,3:1,4:2,6:4}[color],stride=Math.ceil(width*channels*depth/8)+1,expected=stride*height;if(!Number.isSafeInteger(expected)||expected>16777216)throw failure('PNG_DECODE_LIMIT');let raw;try{raw=inflateSync(Buffer.concat(data),{maxOutputLength:expected});}catch{throw failure('INVALID_PNG_IMAGE_DATA');}if(raw.length!==expected)throw failure('INVALID_PNG_IMAGE_DATA');for(let i=0;i<height;i++)if(raw[i*stride]>4)throw failure('INVALID_PNG_FILTER');return {width,height};
+}
+export function readSourceAsset(source,entry){
+  if(!['figma_export','screenshot'].includes(source?.type))throw failure('UNSUPPORTED_ASSET_SOURCE');
+  const root=realpathSync(source.ref),load=(ref,sha)=>{if(!text(ref)||ref.startsWith('/')||!text(sha))throw failure('ASSET_REFERENCE_INVALID');const file=realpathSync(resolve(root,ref)),rel=relative(root,file);if(!rel||rel==='..'||rel.startsWith('../')||rel.startsWith('/'))throw failure('ASSET_OUTSIDE_SOURCE_ROOT');const bytes=readFileSync(file);if(createHash('sha256').update(bytes).digest('hex')!==sha)throw failure('ASSET_HASH_CHANGED');return {file,bytes};};
+  const auth=source.authorization;if(auth?.status!=='present'||!text(auth.owner)||!text(auth.scope))throw failure('SOURCE_AUTHORIZATION_REQUIRED');
+  const authorization=load(auth.ref,auth.sha256),claim=JSON.parse(authorization.bytes),asset=load(source.asset?.ref,source.asset?.sha256);
+  if(claim.access!=='read'||claim.asset_sha256!==source.asset.sha256||claim.owner!==auth.owner||claim.scope!==auth.scope||claim.scope!==source.scope)throw failure('SOURCE_AUTHORIZATION_SCOPE_MISMATCH');
+  const unknown={status:'unknown',reason:'No browser rendered observation supplied by this design asset',affected_scope:[entry.id]},base={asset:{ref:asset.file,sha256:source.asset.sha256,authorization_ref:authorization.file,authorization_sha256:auth.sha256,authorization_boundary:'Caller read-access claim, not independent account/rights verification'},rendered:unknown,inference:{status:'unknown',reason:'No visual inference provided',affected_scope:[entry.id]}};
+  if(source.type==='screenshot'){
+    const b=asset.bytes,dimensions=pngDimensions(b);let inference=base.inference;
+    if(source.auxiliary_observations||entry.screenshot_observation_id){const mapping=source.auxiliary_observations;if(!mapping)throw failure('VISUAL_OBSERVATION_REQUIRED');const original=load(mapping.ref,mapping.sha256),aux=JSON.parse(original.bytes);if(aux.asset_sha256!==source.asset.sha256||!text(aux.observer)||aux.method!=='visual_inference'||!Array.isArray(aux.limits)||!aux.limits.length||!aux.limits.every(text)||!Array.isArray(aux.observations))throw failure('VISUAL_OBSERVATION_BINDING_INVALID');const matches=aux.observations.filter(row=>row.id===entry.screenshot_observation_id);if(!text(entry.screenshot_observation_id)||matches.length!==1)throw failure('VISUAL_OBSERVATION_NOT_UNIQUE');const row=matches[0];if(row.kind!=='visual_inference'||!text(row.value)||!Array.isArray(row.limits)||!row.limits.length||!row.limits.every(text))throw failure('VISUAL_INFERENCE_INVALID');inference={status:'present',value:row.value,observer:aux.observer,method:aux.method,limits:[...aux.limits,...row.limits],observation_id:row.id,source_ref:original.file,source_sha256:mapping.sha256,asset_sha256:source.asset.sha256,meaning:'Qualitative visual inference only; not DOM, computed styles or exact element geometry'};}
+
+    return {...base,inference,asset:{...base.asset,width:dimensions.width,height:dimensions.height,dimensions_basis:'PNG IHDR header only; not full image decode',viewport:{status:'unknown',reason:'Image dimensions do not establish browser viewport'}},structure:{status:'unknown',reason:'Image asset alone does not establish DOM structure',affected_scope:[entry.id]},declared:{status:'unknown',reason:'Image does not establish a source property declaration',affected_scope:[entry.id]},evidence_kind:'screenshot',reason:'Auxiliary image asset identity only; element values/structure remain unknown and implementation is missing'};
+  }
+  if(source.figma?.status!=='present'||source.figma.unavailable!==false)throw failure('INVALID_FIGMA_PRESENT');
+  const input=JSON.parse(asset.bytes),nodes=[],visit=node=>{if(!node||typeof node!=='object')return;if(node.id===entry.figma_node_id)nodes.push(node);for(const child of node.children||[])visit(child);};visit(input.document);
+  if(!text(entry.figma_node_id)||nodes.length!==1)throw failure('FIGMA_NODE_NOT_UNIQUE');const node=nodes[0];if(!text(node.type)||!text(node.name))throw failure('FIGMA_STRUCTURE_UNAVAILABLE');
+  const styles={'font-size':['fontSize','px'],'font-weight':['fontWeight',''],'line-height':['lineHeightPx','px']},style=styles[entry.property];let value;if(style&&Number.isFinite(node.style?.[style[0]]))value=String(node.style[style[0]])+style[1];else if(['width','height'].includes(entry.property)&&Number.isFinite(node.absoluteBoundingBox?.[entry.property]))value=String(node.absoluteBoundingBox[entry.property])+'px';else throw failure('FIGMA_PROPERTY_UNAVAILABLE');
+  return {...base,structure:{id:node.id,type:node.type,name:node.name,...(typeof node.characters==='string'?{text:node.characters}:{})},declared:{status:'present',value,property:entry.property,node_id:node.id,source_ref:asset.file,source_sha256:source.asset.sha256,meaning:'Figma export declaration, not browser rendered measurement'},evidence_kind:'declared',reason:'Authorized local Figma export structure/declaration; browser rendered value remains unknown'};
+}
+async function assetContext(plan,task){return {readEvidence:taskReader(task),async read(entry){const script=`const{readSourceAsset}=await import(${JSON.stringify(import.meta.url)});console.log('SOURCE_FACT='+JSON.stringify({id:${JSON.stringify(entry.id)},fact:readSourceAsset(${JSON.stringify(plan.source)},${JSON.stringify(entry)})}));`,captured=await task.captureCommand({cwd:process.cwd(),slug:'design-source-asset-read',argv:[process.execPath,'--input-type=module','-e',script],timeoutMs:10000}),command={id:captured.receipt_ref,cwd:captured.cwd,argv:captured.argv,exit_code:captured.exit_code,signal:captured.signal,timed_out:captured.timed_out,cancelled:captured.cancelled,started_at:captured.started_at,output_ref:captured.output_ref};if(captured.exit_code)throw failure(taskReader(task)(captured.output_ref),{category:'engine',command});const rows=taskReader(task)(captured.output_ref).split('\n').filter(r=>r.startsWith('SOURCE_FACT='));if(rows.length!==1)throw failure('SOURCE_FACT_ORIGINAL_INVALID',{command,category:'engine'});return{command,source_fact:JSON.parse(rows[0].slice('SOURCE_FACT='.length)).fact};}};}
