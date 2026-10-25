@@ -1,6 +1,6 @@
 schema_version: 2
 # 来源权威为skills[].upstream/local_changes；正文与小卡仅非权威指针。
-# 未核项由knowledge-graph方法维护者取graphify同版原法/许可；frontend-component-quality来源维护者取固定许可绑定；ui-project-init接线owner向交互状态权利owner取固定grant；取得前不扩复制/分发。
+# 未核项由knowledge-graph方法维护者取graphify同版原法/许可；frontend-component-quality来源维护者取固定许可绑定；project-norm-init接线owner向交互状态权利owner取固定grant；取得前不扩复制/分发。
 # 手动上游核对：仅维护者点名时只读执行，默认不跑、不自动更新。
 # 1. 取登记的来源类型、真实仓库/取回坐标、采用pin和本次ref；先读目标，缺项不猜URL/commit。
 #    同Git repo/ref共用一次当前观测，各采用pin/路径分别比；本地/无历史包仅核归档指纹与取回坐标，取不到记unavailable及原因，不造Git历史。
@@ -430,7 +430,7 @@ skills:
         adopted:
           - skills/engineering/to-spec/SKILL.md#user-stories — 以真实角色、诉求、收益组织本技能User Stories；本地两步地图/详情和真实确认合同保留
     local_changes: workflowhub 原生可搬运内容技能；只写显式提供的单一 PRD 目标，不伪造平台、确认或交付事实；来源为本仓build-prd与prd-template.md职责/确认合同，既有User Stories方法吸收Matt to-spec#user-stories，完整来源在本条upstream；本次未新增第三方字节复制。
-    dependency_closure: ["skills/spec-specify","skills/stage-handoff","skills/ui-project-init"]
+    dependency_closure: ["skills/spec-specify","skills/stage-handoff","skills/project-norm-init"]
     update_policy: 随 PRD 模板、两步内容合同和 build-prd consumer 变更审查
   - name: spec-research
     local_version: 1.0.0
@@ -940,7 +940,7 @@ skills:
         adopted:
           - packages/core/agenthub/skills/frontend-testing/SKILL.md#工作流（六步闭环） — 采用frontend-testing的测试分责、真实输入/输出与覆盖限制；不采用安装、全量扫描或release gate
     local_changes: 保留状态/交互维度、UI phase/task 字段和失败证据；owner 是 build-code 前端测试路由，consumer 是真实 UI changed files；适用 UI attempt 经官方 build-code seam 一次调用 isolated-browser-qa，绑定 Design/Experience、service/API/DTO identity 和 cleanup；截图或 browser pass 不变成普遍 gate；不新增 Runner；delete-condition 为 frontend-testing 退役且无阶段引用；2026-10-16固定258f5a2的LICENSE实际为modified Apache-2.0，含第三方hosted/embedded商业服务授权及frontend logo/copyright条件；旧MIT登记不实。抽取技能文字的适用性unknown，由来源维护者向权利owner核具体grant，当前不扩采用/分发范围，不视为已接受附加条款。
-    dependency_closure: ["skills/isolated-browser-qa","skills/spec-specify","skills/ui-project-init","skills/backend-testing"]
+    dependency_closure: ["skills/isolated-browser-qa","skills/spec-specify","skills/project-norm-init","skills/backend-testing"]
 
     update_policy: 随前端测试和 browser 证据合同人工比较
   - name: fullstack-slice-testing
@@ -983,22 +983,22 @@ skills:
     local_changes: 搬入完整闭包；去个人绝对路径；owner 是 isolated browser QA，consumer 是官方 build-code controlled QA seam 与 verify-code；一次 invocation 按当前 task/spec/Phase 记录各适用专业来源/版本/作用域与 service/API/DTO identity，pre/history snapshot 只读保留，blocked/unknown 保留 failure_reason，取消和 cleanup 必须可见；新增两个私有helper承接现context --run生命周期与memory-only票据，不新增公共Runner；delete-condition 为 browser QA 路由退役或被唯一替代；本地来源snapshot_sha256缺失，采集字节及原位置unknown；owner来源维护者需权利人提供原件与可核快照，当前保既有授权，不补假commit/hash。
     dependency_closure: ["skills/spec-specify", "skills/diagnosing-bugs"]
     update_policy: 保本地来源unknown边界；新增三来源固定commit/包SHA及采用章节见本catalog的N3 P7 absorbed条目，逐源比较consumer与本地偏离，不自动追HEAD。
-  - name: ui-project-init
-    path: skills/ui-project-init/SKILL.md
+  - name: project-norm-init
+    path: skills/project-norm-init/SKILL.md
     local_version: 2.0.0
-    last_reviewed_at: '2026-10-14'
+    last_reviewed_at: '2026-10-25'
     status: native
     metrics_enabled: true
     purpose: 为三种真实起点定位适用专业来源并接线原专业 owner
     design_idea: new/legacy 按类复用真实源、缺口局部显露、实际 consumer 与适用范围可读
     standalone: true
-    used_by_stages: *stages_build_plan
+    used_by_stages: [build-plan, build-code, verify-code]
     upstream: []
     local_changes: |
-      WorkflowHub 原生薄入口，version 2.0.0；owner 是 UI 专业规范接线作者。
-      consumer 是 workflows/build-plan/SKILL.md 的现 UI trigger，build-prd 经 readiness/render 读取同一来源指针。
-      八类职责及三起点只引用 skills/ui-project-init/SKILL.md「规范职责/方法」，各正文仍归原专业 owner；
-      delete-condition 为所有 UI consumer 由已审替代方法承接后。SDD、markdown 材料子技能及 design-tokens
+      WorkflowHub 原生薄入口；owner 是五类专业规范接线维护者，各类规则仍归原专业owner。local_version沿既有2.0.0，不把本次审查日期冒新发行版本。
+      consumer 为 workflows/build-plan/SKILL.md 的既有UI trigger及设计/测试蓝图前非UI显式读取、workflows/build-code/SKILL.md每Phase接口/测试选择前、workflows/verify-code/SKILL.md终末验收准备；build-prd经readiness/render间接读同一来源指针，不据此增加直接运行路由。
+      五类规范、原八UI子类职责及三起点只引用 skills/project-norm-init/SKILL.md「规范职责/非UI规范与索引/方法」，各正文仍归原专业 owner；
+      delete-condition 为所有上述真实直接与间接consumer均由已审替代方法承接后。SDD、markdown 材料子技能及 design-tokens
       已由 C01 复制入库，登记见 catalog 同名 absorbed 条目与 skills/external/README.md；
       许可未声明的事实仍保留，脚本入库不执行。其余下列能力仍为在线参考，不是已导入的可运行 skill；
       upstream=[] 保无外源代码导入，dependency_closure 只包含现仓内入口，不加入任何未安装资源。
@@ -1012,7 +1012,7 @@ skills:
       assets/templates/【模板】Spec 评审文档.md、references/design-spec.md、experience-spec.md、
       engineering-spec.md、collaborative-review.md、execution.md、sources.md（references/ 同目录）。
       完整存在/身份核对见本任务061原输出；本次选用SKILL/execution全文已读，其余本次仅身份核验。
-      当前 consumer 为 P6真实分责/影响应用和 ui-project-init 的⑥前端工程 owner；P7正文应用尚未执行。
+      当前 consumer 为 P6真实分责/影响应用和 project-norm-init 的⑥前端工程 owner；P7正文应用尚未执行。
       保现 spec/Phase/facts 分责，不迁六材料双写/reopen；无终端依赖的Markdown人读分支已实际应用134。
       元数据 License 空，固定闭包无可核grant；复制/分发权限 unknown，由实际权利 owner 提供，
       上述旧任务未复制；当前 C01 U-008/U-009 已明确选择复制，仓内副本与许可事实以同名 absorbed 条目为准。
@@ -1046,7 +1046,7 @@ skills:
       ⑤skills/ui-interaction-states/SKILL.md为单文件方法，optional agents/openai.yaml仅展示metadata；
       此项为原包本地原创，无可核单独grant，副本/分发权限unknown，不能套其他子项Apache。
       逐类实际许可/原文字节依据为本任务工程研究186–204与P3现入口45行；原件不镜像。
-      consumer/适用输入和本地偏离逐类在ui-project-init「四类固定在线方法」：
+      consumer/适用输入和本地偏离逐类在project-norm-init「四类固定在线方法」：
       ②token owner、④IA owner、⑤交互owner、⑦内容owner；值留CSS，任务状态/权限恢复留task spec，
       不强双主题/默认数值、新.design输出、重复访谈或机械全状态。各专业expert实际应用归P7，当前计划未执行。
       维护者为当前采用登记owner，各权利owner补grant；本段除 design-tokens 已由 C01 复制入库外，其余仍只在线参考，未copy/install/vendor。
@@ -1069,8 +1069,8 @@ skills:
     standalone: true
     used_by_stages: *stages_build_plan
     upstream: []
-    local_changes: WorkflowHub 原生只读 lens；owner 是 UI 来源只读作者，consumer 是现 build-plan UI 分支和 build-prd 条件设计分支的 plan-design-review 输入；按ui-project-init职责读实际路径/稳定节/version/作用域及各类缺口，旧Design/Experience只作历史或可信输入；delete-condition consumer 经已审替代承接后
-    dependency_closure: &deps_spec_ui ["skills/spec-specify","skills/ui-project-init"]
+    local_changes: WorkflowHub 原生只读 lens；owner 是 UI 来源只读作者，consumer 是现 build-plan UI 分支和 build-prd 条件设计分支的 plan-design-review 输入；按project-norm-init职责读实际路径/稳定节/version/作用域及各类缺口，旧Design/Experience只作历史或可信输入；delete-condition consumer 经已审替代承接后
+    dependency_closure: &deps_spec_ui ["skills/spec-specify","skills/project-norm-init"]
     update_policy: 随按类专业来源与实际 plan-design-review consumer 人工复核；不以单一Design.md身份替全部类，不复制原正文或增gate
   - name: frontend-prototype-render
     path: skills/frontend-prototype-render/SKILL.md
@@ -1084,7 +1084,7 @@ skills:
     used_by_stages: *stages_build_plan
     upstream: []
     local_changes: WorkflowHub 原生渲染入口；owner 是 UI 方法当前调用主会话，consumer 是 workflows/build-plan/SKILL.md:19 与 frontend-prototype-render/SKILL.md:9 的 build-prd 条件设计分支；test=tests/contract/ui-skill-contract.test.mjs；不改产品源码；delete-condition 两个当前方法 consumer 退役或由已审替代方法承接后
-    dependency_closure: ["skills/isolated-browser-qa","skills/spec-specify","skills/ui-project-init"]
+    dependency_closure: ["skills/isolated-browser-qa","skills/spec-specify","skills/project-norm-init"]
     update_policy: 随真实组件渲染命令、截图证据和 当前 build-plan/build-prd consumer 合同人工审查
   - name: frontend-component-quality
     path: skills/frontend-component-quality/SKILL.md
@@ -1258,7 +1258,7 @@ capability_decisions:
       - path: .
         commit: 000b04a2a3553bddcf991b3dc42f9a5a2746fa6f
         license: null
-    local_changes: 原 owner WenjiaWang/spec-driven-production；真实上游 https://modelscope.cn/skills/WenjiaWang/spec-driven-production 。原字节无改动，根文字闭包15文件84275 bytes，排除.gitattributes/.gitignore；文件与段落见skills/external/README.md及SKILL.md、references/execution.md。许可未声明，复制/分发权限unknown，用户依U-008/U-009选择复制并承担风险，脚本入库不执行。consumer为ui-project-init的分责owner与build-plan规范来源读者；替代三包的在线字节读取，P2切入口；全部reader获批迁出后由维护者退役副本与本登记。
+    local_changes: 原 owner WenjiaWang/spec-driven-production；真实上游 https://modelscope.cn/skills/WenjiaWang/spec-driven-production 。原字节无改动，根文字闭包15文件84275 bytes，排除.gitattributes/.gitignore；文件与段落见skills/external/README.md及SKILL.md、references/execution.md。许可未声明，复制/分发权限unknown，用户依U-008/U-009选择复制并承担风险，脚本入库不执行。consumer为project-norm-init的分责owner与build-plan规范来源读者；替代三包的在线字节读取，P2切入口；全部reader获批迁出后由维护者退役副本与本登记。
     update_policy: 用户本人（skills registry维护者，同一人，decision-log U-024）在采用前、上游变化或维护计划到期时手工比对repo/files当前树与Revision固定树的path/size/sha256及git ls-remote；查询时点未发现更新，提交历史不可判定，失败保unknown/unavailable、不报无更新、不自动追HEAD；当前HTTP/refs原件见quality/evidence/2026-10-24-138-p1-current-update-check-supplement.md；原quality/evidence/2026-10-24-108-external-update-check.md保留历史缺口，不覆盖
   - name: material-agent-readiness-eval-markdown
     status: absorbed
@@ -1270,7 +1270,7 @@ capability_decisions:
       - path: skills/material-agent-readiness-eval-markdown
         commit: b62e87f3f91868033106b21f6398f0fd6d3d2043
         license: null
-    local_changes: 原 owner WenjiaWang/material-agent-readiness-eval；真实上游 https://modelscope.cn/skills/WenjiaWang/material-agent-readiness-eval 。原字节无改动，子技能12文件151776 bytes，排除Figma及根级未选资源；段落见SKILL.md和references/layer-model.md、assessment-profiles.md、audit-method.md，完整索引见skills/external/README.md。许可未声明，复制/分发权限unknown，用户依U-008/U-009选择复制并承担风险。consumer为ui-project-init材料准备owner与build-plan规范来源读者；替代该子技能在线字节读取，P2切入口；全部reader获批迁出后由用户维护者统一退役副本与登记，不自建评分器。
+    local_changes: 原 owner WenjiaWang/material-agent-readiness-eval；真实上游 https://modelscope.cn/skills/WenjiaWang/material-agent-readiness-eval 。原字节无改动，子技能12文件151776 bytes，排除Figma及根级未选资源；段落见SKILL.md和references/layer-model.md、assessment-profiles.md、audit-method.md，完整索引见skills/external/README.md。许可未声明，复制/分发权限unknown，用户依U-008/U-009选择复制并承担风险。consumer为project-norm-init材料准备owner与build-plan规范来源读者；替代该子技能在线字节读取，P2切入口；全部reader获批迁出后由用户维护者统一退役副本与登记，不自建评分器。
     update_policy: 用户本人（skills registry维护者，decision-log U-024）在采用前、上游变化或维护计划到期时比对该包repo/files固定/当前树path/size/sha256及git ls-remote；查询时点未发现更新，提交历史不可判定，失败保持unknown/unavailable、不报无更新，不自动追HEAD；当前HTTP/refs原件见quality/evidence/2026-10-24-138-p1-current-update-check-supplement.md；原quality/evidence/2026-10-24-108-external-update-check.md保留历史缺口，不覆盖
   - name: design-tokens
     status: absorbed
@@ -1283,7 +1283,7 @@ capability_decisions:
         path: design-tokens/SKILL.md
         commit: c259656c76d9758d7ead46b0d2f125cbe84f8665
         license: Apache-2.0
-    local_changes: 原字节无改动，1文件7067 bytes；原根LICENSE全文及来源通知保留在skills/external/README.md。ModelScope ui-designer包装仅交叉核对，不作第二active来源。consumer为ui-project-init视觉owner与build-plan规范来源读者；替代该方法在线字节读取，P2切入口；全部reader获批迁出后由用户维护者统一退役副本与登记。
+    local_changes: 原字节无改动，1文件7067 bytes；原根LICENSE全文及来源通知保留在skills/external/README.md。ModelScope ui-designer包装仅交叉核对，不作第二active来源。consumer为project-norm-init视觉owner与build-plan规范来源读者；替代该方法在线字节读取，P2切入口；全部reader获批迁出后由用户维护者统一退役副本与登记。
     update_policy: 用户本人（skills registry维护者，decision-log U-024）在采用前、上游变化或维护计划到期时比较GitHub固定commit/tree/raw与当前git refs及所选文件；查询时点未发现更新，失败保持unknown/unavailable、不报无更新，不自动追HEAD；当前HTTP/refs原件见quality/evidence/2026-10-24-138-p1-current-update-check-supplement.md；原quality/evidence/2026-10-24-108-external-update-check.md保留历史缺口，不覆盖
   - name: superpowers-test-driven-development
     status: absorbed

@@ -232,7 +232,7 @@ build-code 无 phase_progress 游标或游标缺失/过期时，按当前工作�
 | `frontend-testing` | 跳过 | 无前端实现；后继消费者按实际写集触发。 |
 | `fullstack-slice-testing` | 跳过 | 本阶段不实施跨端链路，留后继真实消费者。 |
 | `isolated-browser-qa` | 按需 | 产生页面或真实浏览器可见变更并需要验收才读；无页面/浏览器面写不适用，不冒截图通过。 |
-| `ui-project-init` | 跳过 | 无UI工程实施，不预建未来项目。 |
+| `project-norm-init` | 跳过 | 无UI工程实施，不预建未来项目。 |
 | `design-source-readiness` | 按需 | 存在需消费的真实设计来源时读取；无来源或无UI设计面写未触发。 |
 | `frontend-prototype-render` | 按需 | 需要真实原型帮助用户选择且在授权内才读；不靠原型替正式实现或验收。 |
 | `frontend-component-quality` | 跳过 | 当前阶段无组件实现，后继组件 owner 按真实改动触发。 |

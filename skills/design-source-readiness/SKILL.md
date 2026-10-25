@@ -5,7 +5,7 @@ description: 从本动作适用的项目专业来源派生 Screen Read Map，按
 
 # Design Source Readiness
 
-在 build-plan UI 规划或 build-prd 条件设计分支，沿 `skills/ui-project-init/SKILL.md` 的「规范职责」定位本动作适用的真实专业来源，整理 Screen Read Map，供 plan-design-review 使用。no score、no gate；不复制规范正文或增设设计权威。领域词义复用 GLOSSARY.md 或宿主既有词义源，设计/前端来源按该入口定位 specs/design/、specs/frontend/ 的适用内容或原位等价实质源；原 owner 与真实 consumer 保留。
+在 build-plan UI 规划或 build-prd 条件设计分支，沿 `skills/project-norm-init/SKILL.md` 的「规范职责」定位本动作适用的真实专业来源，整理 Screen Read Map，供 plan-design-review 使用。no score、no gate；不复制规范正文或增设设计权威。领域词义复用 GLOSSARY.md 或宿主既有词义源，设计/前端来源按该入口定位 specs/design/、specs/frontend/ 的适用内容或原位等价实质源；原 owner 与真实 consumer 保留。
 
 ## 方法
 
@@ -24,4 +24,4 @@ description: 从本动作适用的项目专业来源派生 Screen Read Map，按
 
 ## 同仓方法依赖
 
-`skills/spec-specify/SKILL.md`、`skills/ui-project-init/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。
+`skills/spec-specify/SKILL.md`、`skills/project-norm-init/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。

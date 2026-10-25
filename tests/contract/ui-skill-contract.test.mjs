@@ -10,9 +10,9 @@ const read = (relativePath) => readFileSync(join(root, relativePath), "utf8");
 const exists = (relativePath) => existsSync(join(root, relativePath));
 
 const skillSpecs = {
-  "ui-project-init": {
-    path: "skills/ui-project-init/SKILL.md",
-    bundle: "skills/ui-project-init/skill-bundle.json",
+  "project-norm-init": {
+    path: "skills/project-norm-init/SKILL.md",
+    bundle: "skills/project-norm-init/skill-bundle.json",
     required: [
       "new",
       "legacy",
@@ -177,7 +177,7 @@ test("UI support skills declare their real stage consumers without a parallel UI
   const buildPlanDependencies = yaml.load(read("workflows/build-plan/skill-deps.yaml"));
   assert.equal(buildPlanDependencies.stage, "build-plan");
   for (const [skillName, trigger] of [
-    ["ui-project-init", "ui_scope_existing_project_baseline"],
+    ["project-norm-init", "ui_scope_existing_project_baseline"],
     ["design-source-readiness", "ui_scope_readable_design_sources"],
     ["frontend-prototype-render", "ui_scope_actual_prototype_preview"],
     ["frontend-component-quality", "ui_scope"],

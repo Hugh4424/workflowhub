@@ -15,7 +15,7 @@ build-code按真实changed files确认frontend/UI后覆盖默认态及loading/em
 
 ## build-code 实际消费
 
-主会话按changed files选一次路线；沿ui-project-init「规范职责」读适用规则，同份原证据关联UI适用、各源路径/稳定节、version/作用域、owner/consumer/census及AC。缺源/stale/冲突各给影响/原owner；单design_revision、旧Design.md/Experience.md不代全部来源，旧源仅有据历史/可信条款输入。业务状态/权限/取消恢复取当前spec/API，token/API引用原源；执行结果不回写规范。消费handler实件，未运行官方handler非前置；Skill声明/解析非执行，未触发/触发未执行/已执行分记。
+主会话按changed files选一次路线；沿project-norm-init「规范职责」读适用规则，同份原证据关联UI适用、各源路径/稳定节、version/作用域、owner/consumer/census及AC。缺源/stale/冲突各给影响/原owner；单design_revision、旧Design.md/Experience.md不代全部来源，旧源仅有据历史/可信条款输入。业务状态/权限/取消恢复取当前spec/API，token/API引用原源；执行结果不回写规范。消费handler实件，未运行官方handler非前置；Skill声明/解析非执行，未触发/触发未执行/已执行分记。
 
 页面经isolated-browser-qa受控链调用一次，保service instance、API/DTO contract、隔离profile/invocation、viewport、console/network/focus/overflow、视觉/a11y/performance oracle、cleanup。fixture-only仅组件；服务身份不符/取消/browser或cleanup失败保failed/blocked/unknown，不用默认值改绿。
 
@@ -31,4 +31,4 @@ build-code按真实changed files确认frontend/UI后覆盖默认态及loading/em
 
 ## 同仓方法依赖
 
-`skills/backend-testing/SKILL.md`、`skills/isolated-browser-qa/SKILL.md`、`skills/spec-specify/SKILL.md`、`skills/ui-project-init/SKILL.md`；按条件读，搬运带可读原件。
+`skills/backend-testing/SKILL.md`、`skills/isolated-browser-qa/SKILL.md`、`skills/spec-specify/SKILL.md`、`skills/project-norm-init/SKILL.md`；按条件读，搬运带可读原件。

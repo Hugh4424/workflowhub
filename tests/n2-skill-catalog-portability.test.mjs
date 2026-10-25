@@ -13,7 +13,7 @@ import { checkSkillConsistency } from "../tools/cli/check-skill-consistency.mjs"
 // upstream network checks, and whole-catalog dependency semantics remain manual.
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const STAGES = ["make-decision", "build-plan", "build-code", "verify-code", "build-prd"];
-const SAMPLES = ["ui-project-init", "stage-reflection", "spec-specify"];
+const SAMPLES = ["project-norm-init", "stage-reflection", "spec-specify"];
 // P2-TCR-001: fixture paths are independent contract expectations, not an
 // implementation export. Missing templates must stay observable, including in
 // the small N2 package fixture.

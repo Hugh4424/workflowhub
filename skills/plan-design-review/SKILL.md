@@ -8,7 +8,7 @@ description: Report-only UI design lens for information architecture, states, ac
 Source: adapted from the project design review baseline. Mode: `advisory`, file-only.
 Use this lens for build-plan's actual UI scope and build-prd's conditional design material. Review the supplied journey, design sources and real previews within the existing merged document review; findings join that review instead of creating another review point.
 
-UI 适用时，先读 `skills/ui-project-init/SKILL.md` 的「规范职责」，再按本次审查范围读取下列具体来源。路径相对目标项目根；八类不是强制八文件，同职责已有等价实质源时复用：
+UI 适用时，先读 `skills/project-norm-init/SKILL.md` 的「规范职责」，再按本次审查范围读取下列具体来源。路径相对目标项目根；八类不是强制八文件，同职责已有等价实质源时复用：
 
 - ①领域语义：WorkflowHub 的 `GLOSSARY.md`；宿主使用自己的词义源，PaperBuilder 为 `GLOSSARY.md`。
 - ②视觉设计系统：`specs/design/design.md`；精确值仍引用现 token、主题或 Figma 变量。
@@ -19,7 +19,7 @@ UI 适用时，先读 `skills/ui-project-init/SKILL.md` 的「规范职责」，
 - ⑦内容与设计工艺：`specs/design/craft.md`，词义和值引用原源。
 - ⑧质量判据：确需独立正文时读 `specs/design/quality.md`；工程/运行共用 `specs/frontend/ui-quality.md`。
 
-以 `skills/ui-project-init/SKILL.md` 的「规范职责」表为准，本处路径随表更新。逐类核实际路径/稳定节、version/作用域、原 owner、真实 consumer 与适用性；缺源、过期或未核分别沿该入口的 missing/stale/unknown 写法给影响与承接者。只读到路径不等于已调用来源方法或观察到页面；审查只据实际提供的源与预览。
+以 `skills/project-norm-init/SKILL.md` 的「规范职责」表为准，本处路径随表更新。逐类核实际路径/稳定节、version/作用域、原 owner、真实 consumer 与适用性；缺源、过期或未核分别沿该入口的 missing/stale/unknown 写法给影响与承接者。只读到路径不等于已调用来源方法或观察到页面；审查只据实际提供的源与预览。
 
 ## Check
 

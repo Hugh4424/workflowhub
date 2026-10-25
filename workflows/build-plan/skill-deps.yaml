@@ -39,8 +39,8 @@ skills:
   - name: stage-handoff
     path: skills/stage-handoff/SKILL.md
     trigger: stage_end_human_handoff
-  - name: ui-project-init
-    path: skills/ui-project-init/SKILL.md
+  - name: project-norm-init
+    path: skills/project-norm-init/SKILL.md
     trigger: ui_scope_existing_project_baseline
   - name: design-source-readiness
     path: skills/design-source-readiness/SKILL.md
