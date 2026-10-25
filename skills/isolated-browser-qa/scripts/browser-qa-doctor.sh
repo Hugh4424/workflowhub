@@ -48,6 +48,17 @@ check_browser_use() {
 }
 
 case "$ENGINE" in
+  ego-lite)
+    if ! command -v ego-browser >/dev/null 2>&1; then
+      printf 'ego_cli=missing\n' >&2
+      status=1
+    else
+      printf 'ego_cli=%s\n' "$(command -v ego-browser)"
+      printf 'ego_mode=existing_owned_taskspace\n'
+      printf 'ego_storage=shared_profile\n'
+      printf 'ego_check=dependencies_only_not_background_guarantee\n'
+    fi
+    ;;
   agent-browser)
     check_agent_browser || status=1
     ;;

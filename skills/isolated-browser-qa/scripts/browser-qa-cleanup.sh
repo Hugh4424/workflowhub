@@ -7,6 +7,12 @@ TMP_ROOT="${TMPDIR:-/tmp}"
 AGENT_BROWSER_HOME="${AGENT_BROWSER_HOME:-$HOME/.agent-browser}"
 
 case "$ENGINE" in
+  ego-lite)
+    # A session name cannot authorize closing user pages or the whole app.
+    printf 'ego_cleanup=requires_owned_taskspace_handle\n' >&2
+    printf 'reason=finish_once_on_normal_completion_only\n' >&2
+    exit 1
+    ;;
   agent-browser|browser-use) ;;
   *)
     printf 'unsupported_cleanup_engine=%s\n' "$ENGINE" >&2

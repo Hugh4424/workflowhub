@@ -401,3 +401,11 @@ C02 已合入 main，对本任务的事实变化与处理：
 ## 补充材料
 
 - decision-log、requirement-index、coverage-matrix、两份审查原件、外部调研与 ego lite 能力记录（路径见 decision-log 外置事实索引）。
+
+## 当前执行更正：复用已开 ego（2026-10-25）
+
+真实方向与覆盖边界唯一回 decision-log.md「本次用户更正：复用已开 ego，避免打断」。FR-EXTRACT-003/004本任务ego分支改为已开实例内的新owned TaskSpace；不启动浏览器/新窗口/初始化，不用户命名、不CUA、不focus或触碰既有tab。先核guide与真实后台行为；会抢焦点即停该调用。其它FR、Appendix A八条AC及原分母保持原文。
+
+TaskSpace是页面生命周期范围，不等Cookie/cache/storage独立。auth none表示不主动读/export/inject凭据，不表示匿名，固定采集不读Cookie/storage。agent-browser/browser-use保原fresh实例与源票据能力剥离流程；复用现有profile不是其隐式替代。P2移除本次未交付独立ego实例、初始化、偏好及PID承接代码，只保所需SDK调用/owned页面清理/注册只读边界，不新增控制面。历史原件保留；实际consumer仍P3冻结清单采集与后续页面QA，登记仍由P6承接。
+
+当前执行边界补正（主会话2026-10-25中继用户“直接已开ego新工作区”，继此前要求“不再启动/初始化新窗口”）：默认复用已开ego模式无隐式启动回退。缺运行实例、获取失败、权限或取消均明确报错，不能自动打开agent-browser/新窗口；原FR-EXTRACT-003内“内层启动失败回退”在该模式由用户最新指令覆盖，不冒原回退通过。显式agent-browser/browser-use原隔离路径保留；引擎缺失的纯选择/回退记录仍可测，不能据此声称当前模式实际启动其它引擎。AC-C04-5按当前模式核拒绝、非零失败、记录与无换路，完整低保真裁决仍由对应后续Phase承接。此解释待独立Spec核，不由实施者自签。

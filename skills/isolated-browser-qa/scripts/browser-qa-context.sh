@@ -7,13 +7,24 @@ if [ "${1:-}" = "--run" ]; then
 fi
 TARGET_URL="${1:-}"
 PROFILE_MAP_FILE="${BROWSER_QA_PROFILE_MAP:-$HOME/.config/workflowhub/browser-qa-profiles.conf}"
-ENGINE="${BROWSER_QA_ENGINE:-agent-browser}"
+ENGINE="${BROWSER_QA_ENGINE:-auto}"
+if [ "$ENGINE" = auto ]; then
+  ENGINE="$(node --input-type=module - "$(cd "$(dirname "$0")" && pwd)/browser-qa-session.mjs" <<'NODE'
+import {pathToFileURL} from 'node:url';
+const {selectBrowserEngine}=await import(pathToFileURL(process.argv[2]).href);
+const selected=await selectBrowserEngine(process.env);
+if(selected.fallbacks.length)throw Object.assign(new Error('EGO_EXISTING_MODE_NO_IMPLICIT_LAUNCH'),{code:'EGO_EXISTING_MODE_NO_IMPLICIT_LAUNCH'});
+console.log(selected.engine);
+NODE
+)"
+fi
 
 case "$ENGINE" in
+  ego-lite) ;;
   agent-browser|browser-use) ;;
   *)
     printf 'unsupported_browser_qa_engine=%s\n' "$ENGINE" >&2
-    printf 'supported_browser_qa_engines=agent-browser,browser-use\n' >&2
+    printf 'supported_browser_qa_engines=ego-lite,agent-browser,browser-use\n' >&2
     exit 64
     ;;
 esac

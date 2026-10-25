@@ -4,8 +4,8 @@ description: >
   Use this skill as the mandatory browser QA gateway for localhost, preview,
   staging, and active-development web checks. Trigger it for browser testing,
   page acceptance, screenshot acceptance, flow reproduction, UI bug checks,
-  localhost inspection, and post-change verification. Default to agent-browser
-  for local Coding Agent QA. Use browser-use only for isolated Browser Use Cloud, Python-agent workflows,
+  localhost inspection, and post-change verification. Default to ego-lite
+  in an owned TaskSpace of the already open instance when explicitly requested by the caller. That mode fails explicitly without implicitly starting another browser. Missing-executable selection facts retain the agent-browser fallback for callers that allow a new isolated browser. Use browser-use only for isolated Browser Use Cloud, Python-agent workflows,
   or browser-use-specific tasks.
   Choose exactly one engine per QA run, run only that engine, repair only that
   engine, and stop with a clear blocker instead of mixing browser tools.
@@ -18,7 +18,7 @@ This skill is the browser QA gateway for local, preview, and staging checks.
 
 ## Core Rules
 
-Use one selected engine and one owned session throughout the run. Default to headless agent-browser; browser-use is only for its explicitly required isolated capabilities. Repair that engine, preserving failures, then stop if blocked. Resolve bundled scripts from the loaded skill, clean before/after and verify owned residue; leave user browsers, app services and worktrees running. Auth details belong in references/auth.md; never auto-attach user Chrome/main profiles. Playwright MCP and switching engines are excluded.
+Use one selected engine and one owned session throughout the run. For an explicit existing-ego request, own one new TaskSpace; browser-use is only for its explicitly required isolated capabilities. Repair that engine, preserving failures, then stop if blocked. Resolve bundled scripts from the loaded skill, clean before/after and verify owned residue; leave user browsers, app services and worktrees running. Auth details belong in references/auth.md; never auto-attach user Chrome/main profiles. Playwright MCP and switching engines are excluded.
 
 ## When To Use
 
@@ -26,7 +26,7 @@ Use for localhost/preview/staging/deployed-page tests, screenshots, DOM/flow acc
 
 ## Engine Router
 
-Select agent-browser for normal browser QA, interactive refs, screenshots and browser inspection. Select browser-use only for its required isolated Cloud/Python-agent/template capabilities. Selection is exclusive: no alternate CLI or Playwright MCP fallback.
+For that explicit request select ego-lite through the same --run entry and existing app; select agent-browser explicitly for its isolated interactive refs, screenshots and browser inspection. The existing-ego mode never starts another browser on acquisition failure. Select browser-use only for its required isolated Cloud/Python-agent/template capabilities. Selection is exclusive after launch. Outer isolation, permissions, navigation and scenario failures never trigger another engine; Playwright MCP remains excluded.
 
 ## Standard Workflow
 
@@ -36,7 +36,7 @@ Resolve SKILL_DIR from the directory of the actually loaded SKILL.md, independen
 
 ```bash
 SKILL_DIR="${workflowhub_package_root:?resolve from the loaded skill location}/skills/isolated-browser-qa"
-export BROWSER_QA_ENGINE="${BROWSER_QA_ENGINE:-agent-browser}"
+export BROWSER_QA_ENGINE="${BROWSER_QA_ENGINE:-auto}"
 eval "$(bash "$SKILL_DIR/scripts/browser-qa-context.sh" "$BROWSER_QA_TARGET_URL")"
 ```
 
@@ -47,7 +47,7 @@ bash "$SKILL_DIR/scripts/browser-qa-context.sh" --run --url "$BROWSER_QA_TARGET_
   --evidence-dir "$BROWSER_QA_EVIDENCE_DIR" -- bash "$BROWSER_QA_SCENARIO_SCRIPT"
 ```
 
-Evidence must be outside temporary browser roots. Scenario inherits the owned session; runner strips source capabilities, launches native blank and caches owned CDP before target work, then finally closes receiver/cleans on success, failure and cancel. Caller preserves actual exit (cancel 130/143) and rereads named evidence with size/hash after cleanup. --run is private, not another WorkflowHub command.
+Evidence must be outside temporary browser roots. Scenario inherits the owned session. For agent-browser/browser-use, runner strips source capabilities, launches native blank and caches owned CDP before target work, then finally closes receiver/cleans on success, failure and cancel. Existing ego instead follows the TaskSpace lifecycle below. Caller preserves actual exit (cancel 130/143) and rereads named evidence with size/hash after cleanup. --run is private, not another WorkflowHub command.
 
 ### 2. Doctor
 
@@ -60,6 +60,8 @@ bash "$SKILL_DIR/scripts/browser-qa-doctor.sh" "$BROWSER_QA_ENGINE"
 Guide/dependency failure is unavailable; repair only that engine. Doctor does not prove browser behavior.
 
 ### 3. Cleanup Before Launch
+
+For agent-browser/browser-use use this owned-instance cleanup. Existing ego has no instance launch or pre-run cleanup; follow its TaskSpace lifecycle below.
 
 ```bash
 bash "$SKILL_DIR/scripts/browser-qa-cleanup.sh" "$BROWSER_QA_SESSION" "$BROWSER_QA_ENGINE"
@@ -88,6 +90,8 @@ Select `BROWSER_QA_ENGINE=browser-use` and Step 1's `--run`. Read references/bro
 Preserve prior evidence, reset only this owned session and repeat the original action headless once. Use headed only for requested visual debugging, CAPTCHA/MFA/SSO or observed headless mismatch; follow platform confirmation rules. If still blocked, report selected engine, symptom, attempts and reason; do not switch. Read references/fallback.md for doc drift versus harness gap versus product failure.
 
 ### 7. Finish Cleanly
+
+For agent-browser/browser-use use this cleanup. Existing ego follows normal finish versus error/control-loss retention below.
 
 ```bash
 bash "$SKILL_DIR/scripts/browser-qa-cleanup.sh" "$BROWSER_QA_SESSION" "$BROWSER_QA_ENGINE"
@@ -131,7 +135,7 @@ When a named target already has dry-run/test mode, read its promise and caller, 
 
 ## Guardrails
 
-Claim verification only for executed observations; never invent flags, extra session names or success from missing evidence. Use agent-browser or browser-use, never auto. Preserve the canonical single-engine, owned cleanup and platform boundaries even when blocked; cleanup remains this caller's responsibility.
+Claim verification only for executed observations; never invent flags, extra session names or success from missing evidence. Use the resolved ego-lite, agent-browser or browser-use engine; auto is discovery input, never an executable. Preserve the canonical single-engine, owned cleanup and platform boundaries even when blocked; cleanup remains this caller's responsibility.
 
 ## Source and maintenance
 
@@ -145,3 +149,13 @@ Claim verification only for executed observations; never invent flags, extra ses
 ## 同仓方法依赖
 
 `skills/spec-specify/SKILL.md`、`skills/diagnosing-bugs/SKILL.md`；按上文条件读取，搬运时提供可读原件。
+
+## Design-source ego workspace and page-code boundary
+
+When the caller explicitly requests the already open ego instance, this route reuses that app and creates one automatically named, owned TaskSpace for the whole task, then reuses its initial p1. It never launches a browser or window, initializes a profile, imports data, calls newPage/activate, focuses an existing page, or changes user tabs. The user permits this one new workspace to naturally present; the SDK does not promise background/no-focus behavior. Record only the owned space/p1 metadata after that single creation. The documented global space list does not prove all user tabs unchanged; do not inspect their titles/URLs to fill that coverage gap. If it creates a window or persistently steals focus, stop this path without trying other methods. Do not represent a missing background option as a supported option.
+
+This is page-lifecycle ownership, not storage isolation. Cookie/cache/storage can be shared with other spaces in the profile. auth none means no proactive credential read/export/injection; it does not mean anonymous. Fixed collection never reads Cookie/storage. Read references/auth.md for this explicit exception and retain the agent-browser/browser-use fresh-instance and ticket rules unchanged. Credential export is not implicit in a workspace request.
+
+Reuse this one owned handle across the necessary P2/P3 localhost cases rather than opening a space for each case. On normal completion call finish({keep:[]}) once and verify its receipt; protected/unmanaged/user pages remain untouched. On error or user takeover follow the SDK guide and do not finish: retain the actual owned-resource handle and report the boundary for later normal cleanup. Never Browser.close, terminate the user's app, clear profile-wide storage or close unknown tabs. The original --run scenario argv/evidence/source capability stripping stays in place. A normal standalone --run finishes once. For a task explicitly continuing across rounds, BROWSER_QA_EGO_KEEP_OPEN=1 retains the printed own spaceId; subsequent --run resumes that numeric BROWSER_QA_EGO_SPACE_ID and initial p1, then the final normal round omits KEEP_OPEN and finishes once. These are per-command inputs and output facts, not a persistent session store. Source capabilities are never included. SDK control errors stop without retry or claim; ownership is only a creation-time snapshot, not a live permission check; the SDK adapter details must come from its current guide, not a second control plane.
+
+Page-code collection accepts only the fixed versioned IDs exported from browser-qa-session.mjs. Unknown IDs fail before page access; selectors/properties are data. The synchronous repository-owned wrapper blocks DOM mutation entry points and fetch/XMLHttpRequest, inspects MutationObserver records and restores descriptors in finally. Detected/attempted violations remain failures. It is not a hostile-code sandbox: page-owned scripts, cached original functions, other realms/iframes and unguarded APIs remain outside this claim. Use only the registered path for collection. Preserve original failures, measured coverage and the distinction between fake seams, previous-route evidence and a real current-route run.

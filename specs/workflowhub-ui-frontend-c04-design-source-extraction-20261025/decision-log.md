@@ -339,3 +339,13 @@
 - **未改**：原决定正文、R/U 编号、八条 AC、范围与非目标；本次只做上游改名与读取点的适配。
 - **确认状态**：build-plan 计划确认（`quality/evidence/human-confirmations/2026-10-25-002-build-plan-approved.json`）早于本次上游适配；本次适配属引用与读集更新，未改范围与判据。如用户认为构成计划变更，按 build-plan 重新确认处理。
 - **证据**：合并提交 `bd207d35`；材料重发布后的契约校验 ok；P4 预写测试路径更新后重跑 RED（`quality/tests/2026-10-25-044-c04-red-norm-after-c02.output`，exit 1，目标断言失败）。
+
+## 本次用户更正：复用已开 ego，避免打断（2026-10-25）
+
+来源为当前会话用户决定，由主会话明确中继授权本次修订；本段不是用户逐字聊天原件。用户要求停止反复新建ego实例、窗口和初始化，改为复用已开ego中的新owned TaskSpace；不要求用户命名、不用CUA、不focus或操作原有tab。此前独立实例研究与生产尝试及失败原件全部保留，不能把那些结果迁作本路线通过。资源停止读回见任务库 quality/evidence/2026-10-25-074-c04-p2-stop-owned-readback.json。
+
+本次只覆盖D-005/D-007在本任务ego分支的执行形态与通用isolated-browser-qa默认fresh实例要求；agent-browser/browser-use原隔离流程、D-007注册只读边界和八条AC原分母不变。TaskSpace仅承接页面生命周期隔离，其profile的Cookie/cache/storage可能共享；不声明独立存储或匿名。auth none只表示本方法不主动读取、export或inject凭据，浏览器正常请求仍可能附带该profile现有凭据；固定采集不得读Cookie/storage。票据复用仍沿原显式授权规则，不把现有登录态当额外读取授权。
+
+执行者先消费官方guide及真实后台行为研究，再调用新owned TaskSpace；API若会抢焦点，停该调用，保持unavailable，不通过新窗口/初始化或操作用户tab补救。实际真QA限受控localhost、一次必要范围；页面写入/fetch/XHR负例仍须生产wrapper执行、保证副作用为零并恢复。当前AC-C04-5保持incomplete，旧owned双实例存储事实不证明此路线存储隔离；不变更其它AC或扩大任务范围。
+
+当前执行边界补正（主会话2026-10-25中继用户“直接已开ego新工作区”，继此前要求“不再启动/初始化新窗口”）：默认复用已开ego模式无隐式启动回退。缺运行实例、获取失败、权限或取消均明确报错，不能自动打开agent-browser/新窗口；原FR-EXTRACT-003内“内层启动失败回退”在该模式由用户最新指令覆盖，不冒原回退通过。显式agent-browser/browser-use原隔离路径保留；引擎缺失的纯选择/回退记录仍可测，不能据此声称当前模式实际启动其它引擎。AC-C04-5按当前模式核拒绝、非零失败、记录与无换路，完整低保真裁决仍由对应后续Phase承接。此解释待独立Spec核，不由实施者自签。

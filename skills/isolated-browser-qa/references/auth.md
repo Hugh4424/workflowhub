@@ -36,3 +36,9 @@ accounts.example.com qa-company-auth
 ```
 
 Only dedicated QA profiles belong in this file.
+
+## Explicitly requested existing ego workspace
+
+A caller may explicitly request the already open ego instance and a new owned TaskSpace. This overrides the fresh-instance default only for that ego route; the original agent-browser/browser-use isolation and ticket rules remain unchanged. A TaskSpace owns pages, not a separate cookie/cache/storage jar. auth none means the adapter does not proactively read, export or inject credentials; ordinary browser requests may carry that profile's existing credentials, so it is not anonymous. Fixed collection must not read Cookie/storage, enumerate profiles or inspect unrelated user pages. An existing login never grants additional credential-reading authority.
+
+Create only one automatically named owned space for the task, reuse its supplied p1, and never newPage/activate/focus existing tabs or launch/initialize another browser/profile. The SDK has no promised background option; the user's permission covers one workspace naturally appearing, not repeated focus stealing. Stop if that behavior appears. On normal completion finish this owned space once; on errors or user takeover follow the current SDK guide and retain its handle instead of calling finish. Never profile-wide clear, Browser.close or terminate the app. The existing read-only-ticket-export mode remains specific to its proven original adapters; an unsupported ego ticket request must fail explicitly rather than silently changing credential mode.
