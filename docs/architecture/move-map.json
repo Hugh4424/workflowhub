@@ -6585,6 +6585,92 @@
       ],
       "delete_condition": "独立审查的替代承接原判读及真实consumer/导航后退役；普通原始证据不删除覆写。",
       "retention_basis": "P3 T004129/T005；已读真实consumer与写前核证027；KR-DONE-001；登记不是质量或未来消费通过。"
+    },
+    {
+      "source": "skills/design-source-extraction/SKILL.md",
+      "destination": "skills/design-source-extraction/SKILL.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "P1设计源提炼输入/单JSON产物/未知与定向阻断方法；不替代readiness或规范owner批准。",
+      "owner": "design-source-extraction方法维护者（当前维护者用户）",
+      "consumer": "build-plan设计准备、build-code实施、verify-code独立验收的UI且合法可读设计源reader；具体输入/产物/错误沿原技能和各当前Phase，不新增public入口。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "workflows/build-plan/SKILL.md",
+        "workflows/build-code/SKILL.md",
+        "workflows/verify-code/SKILL.md"
+      ],
+      "delete_condition": "经独立审查的替代完整承接真实consumer、迁接现deps/bundle且无当前消费者后由原owner同批退役；历史task原件不删覆。",
+      "retention_basis": "C04P6T011/T012登记此前P1-P5实际交付，唯一bundle承接现resolver；不是质量、许可或方法实际执行的证明。style-ref-gen未采用，版本/归档/权利分开；不建立替代selector或第二权威。"
+    },
+    {
+      "source": "skills/design-source-extraction/scripts/collect-design-source.mjs",
+      "destination": "skills/design-source-extraction/scripts/collect-design-source.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "P3真实冻结清单采集与唯一产物validator/private CLI；复用P2固定注册读入口，不提供任意eval。",
+      "owner": "design-source-extraction方法维护者（当前维护者用户）",
+      "consumer": "build-plan设计准备、build-code实施、verify-code独立验收的UI且合法可读设计源reader；具体输入/产物/错误沿原技能和各当前Phase，不新增public入口。",
+      "module_consumers": [
+        "tests/contract/design-source-extraction-collect.test.mjs"
+      ],
+      "named_data_readers": [
+        "workflows/build-plan/SKILL.md",
+        "workflows/build-code/SKILL.md",
+        "workflows/verify-code/SKILL.md"
+      ],
+      "delete_condition": "经独立审查的替代完整承接真实consumer、迁接现deps/bundle且无当前消费者后由原owner同批退役；历史task原件不删覆。",
+      "retention_basis": "C04P6T011/T012登记此前P1-P5实际交付，唯一bundle承接现resolver；不是质量、许可或方法实际执行的证明。style-ref-gen未采用，版本/归档/权利分开；不建立替代selector或第二权威。"
+    },
+    {
+      "source": "skills/design-source-extraction/references/norm-alignment.md",
+      "destination": "skills/design-source-extraction/references/norm-alignment.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "P4八类规范对账方法，消费原来源与提炼事实，四态和规范缺陷分责；不提供生产validator。",
+      "owner": "design-source-extraction方法维护者（当前维护者用户）",
+      "consumer": "build-plan设计准备、build-code实施、verify-code独立验收的UI且合法可读设计源reader；具体输入/产物/错误沿原技能和各当前Phase，不新增public入口。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "workflows/build-plan/SKILL.md",
+        "workflows/build-code/SKILL.md",
+        "workflows/verify-code/SKILL.md"
+      ],
+      "delete_condition": "经独立审查的替代完整承接真实consumer、迁接现deps/bundle且无当前消费者后由原owner同批退役；历史task原件不删覆。",
+      "retention_basis": "C04P6T011/T012登记此前P1-P5实际交付，唯一bundle承接现resolver；不是质量、许可或方法实际执行的证明。style-ref-gen未采用，版本/归档/权利分开；不建立替代selector或第二权威。"
+    },
+    {
+      "source": "skills/design-source-extraction/references/isolated-consumption.md",
+      "destination": "skills/design-source-extraction/references/isolated-consumption.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "P5派生对照/隔离消费/独立实测回填方法；局部分母与全局分开，不把文档oracle冒真实运行。",
+      "owner": "design-source-extraction方法维护者（当前维护者用户）",
+      "consumer": "build-plan设计准备、build-code实施、verify-code独立验收的UI且合法可读设计源reader；具体输入/产物/错误沿原技能和各当前Phase，不新增public入口。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "workflows/build-plan/SKILL.md",
+        "workflows/build-code/SKILL.md",
+        "workflows/verify-code/SKILL.md"
+      ],
+      "delete_condition": "经独立审查的替代完整承接真实consumer、迁接现deps/bundle且无当前消费者后由原owner同批退役；历史task原件不删覆。",
+      "retention_basis": "C04P6T011/T012登记此前P1-P5实际交付，唯一bundle承接现resolver；不是质量、许可或方法实际执行的证明。style-ref-gen未采用，版本/归档/权利分开；不建立替代selector或第二权威。"
+    },
+    {
+      "source": "skills/design-source-extraction/skill-bundle.json",
+      "destination": "skills/design-source-extraction/skill-bundle.json",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "既有唯一bundle声明SKILL/采集器/规范对齐/隔离消费四文件；不含task原始数据或复制外部内容。",
+      "owner": "design-source-extraction方法维护者（当前维护者用户）",
+      "consumer": "runtime/adapters/local-skill-resolver.mjs与runtime/distribution/skill-bundle-release.mjs按三stage deps读取当前四file包。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "runtime/adapters/local-skill-resolver.mjs",
+        "runtime/distribution/skill-bundle-release.mjs"
+      ],
+      "delete_condition": "经独立审查的替代完整承接真实consumer、迁接现deps/bundle且无当前消费者后由原owner同批退役；历史task原件不删覆。",
+      "retention_basis": "C04P6T011/T012登记此前P1-P5实际交付，唯一bundle承接现resolver；不是质量、许可或方法实际执行的证明。style-ref-gen未采用，版本/归档/权利分开；不建立替代selector或第二权威。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

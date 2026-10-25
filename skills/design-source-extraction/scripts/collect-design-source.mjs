@@ -83,6 +83,7 @@ export function validateExtraction(doc,{readEvidence,current}={}) {
     const changed=['source_versions','norm_versions','structure_ref'].filter(key=>digest(current[key])!==digest(doc.freshness[key]));
     if(changed.length)Object.assign(freshness,{status:'stale',reasons:changed.map(key=>'Changed '+key),affected_scope:doc.items.map(item=>item.id),next_action:'reextract'});
     else if(![...Object.values(current.source_versions),...Object.values(current.norm_versions)].some(version=>['unknown','missing'].includes(version)))Object.assign(freshness,{status:'current',reasons:[],next_action:'continue'});
+    else freshness.reasons=['Unknown or missing comparison versions: '+['source_versions','norm_versions'].flatMap(group=>Object.entries(current[group]).filter(([,version])=>['unknown','missing'].includes(version)).map(([key,version])=>`${group}.${key}=${version}`)).join(', ')];
   }
   return {valid:!errors.length,errors,freshness};
 }

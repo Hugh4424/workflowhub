@@ -1,6 +1,11 @@
 {
   "schema_version": 1,
   "skill": "design-source-extraction",
-  "files": ["SKILL.md"],
+  "files": [
+    "SKILL.md",
+    "scripts/collect-design-source.mjs",
+    "references/norm-alignment.md",
+    "references/isolated-consumption.md"
+  ],
   "sources": []
 }
