@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "skill": "design-source-extraction",
+  "files": ["SKILL.md"],
+  "sources": []
+}
