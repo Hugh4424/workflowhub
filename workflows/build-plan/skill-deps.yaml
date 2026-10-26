@@ -54,6 +54,10 @@ skills:
   - name: stage-reflection
     path: skills/stage-reflection/SKILL.md
     trigger: actual_stage_end_process_issue_optional
+  - name: design-source-extraction
+    path: skills/design-source-extraction/SKILL.md
+    trigger: ui_scope_readable_design_source_extraction
+
 runtime_capabilities:
   - id: node
     kind: cli

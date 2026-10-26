@@ -45,6 +45,10 @@ skills:
     trigger: every_phase_closeout_read_norm_sync_and_record_no_change_or_sync_change
 
 
+  - name: design-source-extraction
+    path: skills/design-source-extraction/SKILL.md
+    trigger: ui_scope_readable_design_source_extraction
+
 runtime_capabilities:
   - id: node
     kind: cli

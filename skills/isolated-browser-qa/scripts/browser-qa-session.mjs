@@ -1,14 +1,15 @@
 import {spawn} from 'node:child_process';
 import {readFile, mkdir, realpath, mkdtemp, rm, writeFile, chmod, access, lstat} from 'node:fs/promises';
 import {createInterface} from 'node:readline';
-import {dirname,join,resolve} from 'node:path';
+import {dirname,join,resolve,delimiter} from 'node:path';
+import {constants} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {tmpdir} from 'node:os';
 import {createHash} from 'node:crypto';
 import {connectCdp,validateEndpoint,makeScope,transferTargetCookies,safeError} from './browser-qa-tickets.mjs';
 const here=dirname(fileURLToPath(import.meta.url));
 const nativeHelper=join(here,'browser-qa-browser-use.py');
-function command(argv,env,{signal,inherit=false,outputSecrets}={}) {
+function command(argv,env,{signal,inherit=false,outputSecrets,captureStderr=false}={}) {
   if(signal?.aborted)return Promise.reject(safeError('CANCELLED'));
   return new Promise((resolve,reject)=>{
     // Ticket values may cross arbitrary chunk boundaries. Keep protected output
@@ -16,7 +17,7 @@ function command(argv,env,{signal,inherit=false,outputSecrets}={}) {
     const protectedOutput=inherit&&Boolean(outputSecrets?.size);
     const c=spawn(argv[0],argv.slice(1),{env,detached:true,stdio:inherit&&!protectedOutput?'inherit':[inherit?'inherit':'ignore','pipe','pipe']});
     const stdoutChunks=[],stderrChunks=[];
-    if(!inherit||protectedOutput){c.stdout.on('data',b=>stdoutChunks.push(b));if(protectedOutput)c.stderr.on('data',b=>stderrChunks.push(b));else c.stderr.resume();}
+    if(!inherit||protectedOutput){c.stdout.on('data',b=>stdoutChunks.push(b));if(protectedOutput||captureStderr)c.stderr.on('data',b=>stderrChunks.push(b));else c.stderr.resume();}
     let observeClose,cancellation,cleanupFailure;
     const childClosed=new Promise(resolve=>{observeClose=resolve;});
     const group=async()=>{
@@ -69,7 +70,7 @@ function command(argv,env,{signal,inherit=false,outputSecrets}={}) {
         if(leaked){console.error(JSON.stringify({error:'SECRET_OUTPUT_BLOCKED'}));resultCode=resultCode||1;}
         else{process.stdout.write(stdout);process.stderr.write(stderr);}
         resolve({code:resultCode,stdout:''});
-      }else resolve({code:resultCode,stdout:stdout.toString()});
+      }else resolve({code:resultCode,stdout:stdout.toString(),...(captureStderr?{stderr:stderr.toString()}: {})});
     });
   });
 }
@@ -339,11 +340,170 @@ async function runNativeQa({env,session,evidence,scenario,scope,sourceEndpoint,m
   }
   return cancelled||code||Number(commandFailed);
 }
+// Engine discovery is separate from isolation admission and scenario execution.
+// The user-requested ego route owns a TaskSpace in the already running app.
+// taskSpace(name) is the SDK ownership admission; ownership is a creation-time
+// snapshot, so do not invent enum checks as a live control/permission guard.
+export async function runEgoWorkspace({sdk,name,url,isRunning,operation,finish=true,report=()=>{}}) {
+  if(!await isRunning())throw safeError('EGO_NOT_RUNNING');
+  const task=await sdk.taskSpace(name);
+  const handle={spaceId:task.spaceId,label:'p1'};
+  report({event:'ego-workspace-owned',...handle,storage:'shared-profile',background:'not-guaranteed'});
+  try {
+    const page=task.page('p1');
+    await page.goto(url);
+    const result=await operation({task,page,handle});
+    // SDK control errors stop the operation. No retry/claim/alternate space.
+    if(!finish){report({event:'ego-workspace-retained',...handle,reason:'task-continues',cleanup:'not-yet-finished'});return {...handle,result};}
+    const receipt=validateEgoFinishReceipt(await task.finish({keep:[]}),handle);
+    report({event:'ego-workspace-finished',...handle,receipt});
+    return {...handle,result,receipt};
+  } catch(error) {
+    report({event:'ego-workspace-retained',...handle,reason:error.code||error.message,cleanup:'not-finished-on-error-or-control-loss'});
+    throw error;
+  }
+}
+async function egoAlreadyRunning(env) {
+  const result=await command(['ps','-ww','-axo','comm='],env);
+  if(result.code)throw safeError('EGO_PROCESS_OBSERVATION_FAILED');
+  return result.stdout.split('\n').some(row=>/^\/.*\/ego lite\.app\/Contents\/MacOS\/ego lite$/.test(row.trim()));
+}
+export async function executeEgoWorkspaceCommand(argv,env,signal) {
+  const result=await command(argv,env,{signal,captureStderr:true});
+  process.stdout.write(result.stdout);process.stderr.write(result.stderr);
+  const rows=(result.stdout+'\n'+result.stderr).split('\n').filter(row=>row.startsWith('WHQA_OWNED_HANDLE='));
+  if(rows.length!==1)throw safeError('EGO_WORKSPACE_HANDLE_UNAVAILABLE');
+  return {...result,handle:JSON.parse(rows[0].slice('WHQA_OWNED_HANDLE='.length))};
+}
+function invalidEgoReceipt(handle) {return Object.assign(safeError('EGO_WORKSPACE_FINISH_RECEIPT_INVALID'),{handle});}
+function validateEgoFinishReceipt(receipt,handle) {
+  const labels=value=>Array.isArray(value)&&value.every(label=>typeof label==='string')&&new Set(value).size===value.length;
+  if(!receipt||typeof receipt!=='object'||Array.isArray(receipt)||receipt.spaceId!==handle.spaceId||typeof receipt.closedSpace!=='boolean'||!labels(receipt.keptManagedLabels)||receipt.keptManagedLabels.length||!labels(receipt.closedManagedLabels)||!receipt.closedManagedLabels.includes(handle.label)||!Number.isSafeInteger(receipt.preservedUnmanagedCount)||receipt.preservedUnmanagedCount<0||receipt.closedSpace!==(receipt.preservedUnmanagedCount===0))throw invalidEgoReceipt(handle);
+  return receipt;
+}
+export async function executeEgoFinishCommand(argv,env,signal,handle) {
+  const result=await command(argv,env,{signal,captureStderr:true});
+  process.stdout.write(result.stdout);process.stderr.write(result.stderr);
+  if(result.code)throw Object.assign(safeError('EGO_WORKSPACE_FINISH_FAILED'),{handle});
+  const events=[];
+  for(const row of (result.stdout+'\n'+result.stderr).split('\n')) {
+    let event;try{event=JSON.parse(row);}catch{continue;}
+    if(event?.event==='ego-workspace-finished')events.push(event);
+  }
+  if(events.length!==1||events[0].spaceId!==handle.spaceId)throw invalidEgoReceipt(handle);
+  const receipt=validateEgoFinishReceipt(events[0].receipt,handle);
+  return {spaceId:handle.spaceId,receipt};
+}
+async function runEgoQa({env,session,evidence,scenario,scope,mode}) {
+  if(mode!=='none')throw safeError('EGO_WORKSPACE_TICKET_EXPORT_UNSUPPORTED');
+  if(!await egoAlreadyRunning(env))throw safeError('EGO_NOT_RUNNING');
+  if(env.BROWSER_QA_EGO_SPACE_ID&&!/^[1-9][0-9]*$/.test(env.BROWSER_QA_EGO_SPACE_ID))throw safeError('INVALID_EGO_SPACE_ID');
+  if(env.BROWSER_QA_EGO_KEEP_OPEN&&!['0','1'].includes(env.BROWSER_QA_EGO_KEEP_OPEN))throw safeError('INVALID_EGO_FINISH_POLICY');
+  await mkdir(resolve(evidence),{recursive:true});
+  const input={name:env.BROWSER_QA_EGO_SPACE_ID?Number(env.BROWSER_QA_EGO_SPACE_ID):session,url:scope.targetUrl};
+  // Documented SDK rounds are sequential: acquire/navigate, scenario, finish.
+  // Only nonsecret per-run metadata enters argv; ambient env never does.
+  const script=`const api=await import(${JSON.stringify(import.meta.url)});await api.runEgoWorkspace({...${JSON.stringify(input)},sdk:{taskSpace},isRunning:async()=>true,finish:false,report:fact=>{if(fact.event==='ego-workspace-owned')console.log('WHQA_OWNED_HANDLE='+JSON.stringify({spaceId:fact.spaceId,label:fact.label}));},operation:async()=>null});`;
+  const aborter=new AbortController();let cancelled=0,handle;
+  const stop=signal=>{cancelled=signal==='SIGINT'?130:143;aborter.abort();};
+  const int=()=>stop('SIGINT'),term=()=>stop('SIGTERM');process.on('SIGINT',int);process.on('SIGTERM',term);
+  try {
+    const acquired=await executeEgoWorkspaceCommand(['ego-browser','nodejs','-e',script],env,aborter.signal);
+    handle=acquired.handle;
+    if(!Number.isSafeInteger(handle.spaceId)||handle.spaceId<1||handle.label!=='p1')throw safeError('EGO_WORKSPACE_HANDLE_INVALID');
+    console.log(JSON.stringify({event:'ego-workspace-owned',...handle,storage:'shared-profile',background:'not-guaranteed'}));
+    if(cancelled||acquired.code)throw safeError(cancelled?'CANCELLED':'EGO_WORKSPACE_ACQUISITION_FAILED');
+    const result=await command(scenario,{...env,BROWSER_QA_EGO_SPACE_ID:String(handle.spaceId),BROWSER_QA_EGO_PAGE_LABEL:'p1',BROWSER_QA_TARGET_URL:scope.targetUrl,BROWSER_QA_EVIDENCE_DIR:resolve(evidence)},{signal:aborter.signal,inherit:true});
+    if(cancelled||result.code)throw safeError(cancelled||result.code===130||result.code===143?'CANCELLED':'SCENARIO_FAILED');
+    if(env.BROWSER_QA_EGO_KEEP_OPEN==='1'){console.log(JSON.stringify({event:'ego-workspace-retained',...handle,reason:'task-continues',cleanup:'not-yet-finished'}));return 0;}
+    if(!await egoAlreadyRunning(env))throw safeError('EGO_NOT_RUNNING');
+    await executeEgoFinishCommand(['ego-browser','nodejs','-e',`const task=await taskSpace(${handle.spaceId});const receipt=await task.finish({keep:[]});console.log(JSON.stringify({event:'ego-workspace-finished',spaceId:${handle.spaceId},receipt}));`],env,aborter.signal,handle);
+    return 0;
+  } catch(error) {
+    console.error(JSON.stringify({event:'ego-workspace-retained',...(handle||{}),reason:error.code||'EGO_WORKSPACE_FAILED',cleanup:'not-finished-on-error-or-control-loss'}));
+    if(cancelled)return cancelled;throw error;
+  } finally {process.off('SIGINT',int);process.off('SIGTERM',term);}
+}
+export function recordEngineFallback(report, reason, probe) {
+  const fact={event:'engine-fallback',from:'ego-lite',to:'agent-browser',reason,probe};
+  report.push(fact);return fact;
+}
+export async function selectBrowserEngine(env=process.env,{probe}={}) {
+  const requested=env.BROWSER_QA_ENGINE||'auto';
+  if(!['auto','ego-lite','agent-browser','browser-use'].includes(requested))throw safeError('UNSUPPORTED_ENGINE');
+  if(requested!=='auto')return {engine:requested,fallbacks:[]};
+  const detect=probe||(async()=>{for(const root of (env.PATH||'').split(delimiter)){if(!root)continue;try{await access(join(root,'ego-browser'),constants.X_OK);return {available:true};}catch(error){if(!['ENOENT','ENOTDIR'].includes(error.code))throw error;}}return {available:false,reason:'executable-missing'};});
+  const result=await detect(),fallbacks=[];
+  if(!result||typeof result.available!=='boolean')throw safeError('ENGINE_PROBE_INVALID');
+  if(!result.available&&!['ENOENT','executable-missing'].includes(result.reason))throw safeError(result.reason==='EACCES'?'EACCES':'ENGINE_PROBE_UNAVAILABLE');
+  if(result.available)return {engine:'ego-lite',fallbacks};
+  recordEngineFallback(fallbacks,'ego-lite executable unavailable before launch',result);
+  return {engine:'agent-browser',fallbacks};
+}
+const registeredScripts=Object.freeze(['design-source-read-v1','design-source-prepare-v1']);
+export function assertRegisteredScript(id) {
+  // unregistered identifiers are rejected before executor access.
+  if(!registeredScripts.includes(id))throw safeError('UNREGISTERED_SCRIPT');
+  return id;
+}
+export async function runRegisteredScript(page,id,args={}) {
+  assertRegisteredScript(id); // Reject before any page call; no arbitrary strings.
+  const isPrepare=id==='design-source-prepare-v1';
+  const validObject=args&&typeof args==='object'&&!Array.isArray(args);
+  const validRead=validObject&&Object.keys(args).every(key=>key==='elements')&&Array.isArray(args.elements)&&args.elements.length<=1000&&args.elements.every(item=>item&&typeof item==='object'&&!Array.isArray(item)&&Object.keys(item).every(key=>['selector','properties'].includes(key))&&typeof item.selector==='string'&&!!item.selector&&Array.isArray(item.properties)&&item.properties.length<=1000&&item.properties.every(key=>typeof key==='string'&&!!key));
+  const validPrepare=validObject&&Object.keys(args).every(key=>key==='actions')&&Array.isArray(args.actions)&&args.actions.length<=100&&args.actions.every(action=>action&&typeof action==='object'&&!Array.isArray(action)&&Object.keys(action).every(key=>['type','selector'].includes(key))&&action.type==='click'&&typeof action.selector==='string'&&!!action.selector);
+  if(!(isPrepare?validPrepare:validRead))throw safeError('INVALID_COLLECTION_ARGUMENTS');
+  return page.evaluate(({id,args})=>{
+    const undo=[],violations=[];
+    const deny=kind=>()=>{violations.push(kind);throw new Error('READ_ONLY_'+kind);};
+    const replace=(owner,key,value)=>{const descriptor=Object.getOwnPropertyDescriptor(owner,key);if(!descriptor||!descriptor.configurable)throw new Error('READ_ONLY_GUARD_UNAVAILABLE:'+key);Object.defineProperty(owner,key,{...descriptor,...value});undo.push(()=>Object.defineProperty(owner,key,descriptor));};
+    const replaceIf=(owner,key,value)=>{if(owner&&Object.getOwnPropertyDescriptor(owner,key))replace(owner,key,value);};
+    const listeners=[];
+    const listen=(target,type,handler,options)=>{if(typeof target?.addEventListener!=='function')return;target.addEventListener(type,handler,options);listeners.push(()=>target.removeEventListener(type,handler,options));};
+    let observer;
+    try {
+      replace(window,'fetch',{value:deny('NETWORK')});
+      replace(XMLHttpRequest.prototype,'open',{value:deny('NETWORK')});
+      for(const key of ['appendChild','insertBefore','replaceChild','removeChild'])replace(Node.prototype,key,{value:deny('DOM_WRITE')});
+      for(const key of ['innerHTML','outerHTML'])replace(Element.prototype,key,{set:deny('DOM_WRITE')});
+      replace(Node.prototype,'textContent',{set:deny('DOM_WRITE')});
+      replace(Element.prototype,'setAttribute',{value:deny('DOM_WRITE')});
+      replaceIf(typeof HTMLFormElement==='undefined'?null:HTMLFormElement.prototype,'submit',{value:deny('DOM_WRITE')});
+      replaceIf(typeof HTMLFormElement==='undefined'?null:HTMLFormElement.prototype,'requestSubmit',{value:deny('DOM_WRITE')});
+      replaceIf(typeof Navigator==='undefined'?null:Navigator.prototype,'sendBeacon',{value:deny('NETWORK')});
+      replaceIf(window,'open',{value:deny('NETWORK')});
+      listen(document,'submit',event=>{event.preventDefault?.();violations.push('DOM_WRITE');},true);
+      listen(document,'click',event=>{let node=event.target;while(node&&node!==document){if(node.tagName==='A'&&node.href){event.preventDefault?.();violations.push('NETWORK');break;}node=node.parentElement;}},true);
+      observer=new MutationObserver(()=>violations.push('DOM_MUTATION_OBSERVED'));
+      observer.observe(document,{subtree:true,attributes:true,childList:true,characterData:true});
+      let value;
+      if(id==='design-source-prepare-v1'){
+        for(const {selector} of args.actions){const element=document.querySelector(selector);if(!element)throw new Error('ELEMENT_NOT_FOUND:'+selector);if(typeof element.click!=='function')throw new Error('CLICK_UNAVAILABLE:'+selector);element.click();}
+        value=[];
+      }else{
+        if(!Array.isArray(args.elements)||args.elements.length>1000)throw new Error('INVALID_COLLECTION_ELEMENTS');
+        const viewport_observed={width:window.innerWidth,height:window.innerHeight};
+        value=args.elements.map(({selector,properties=[]})=>{
+          if(typeof selector!=='string'||!selector||!Array.isArray(properties)||properties.length>1000)throw new Error('INVALID_COLLECTION_ELEMENT');
+          const element=document.querySelector(selector);if(!element)throw new Error('ELEMENT_NOT_FOUND:'+selector);
+          const box=element.getBoundingClientRect();if(!box.width||!box.height)throw new Error('ELEMENT_NOT_RENDERED:'+selector);
+          const computed=getComputedStyle(element);return {selector,viewport_observed,structure:{tag:element.tagName,text:element.textContent},rendered:{styles:Object.fromEntries(properties.map(key=>[key,computed.getPropertyValue(key)])),box:{x:box.x,y:box.y,width:box.width,height:box.height}},declared:{style:element.getAttribute('style')}};
+        });
+      }
+      if(observer.takeRecords().length)throw new Error('READ_ONLY_MUTATION_DETECTED');
+      if(violations.length)throw new Error('READ_ONLY_VIOLATION:'+violations.join(','));
+      return value;
+    } finally {observer?.disconnect();for(const remove of listeners.reverse())remove();for(const restore of undo.reverse())restore();}
+  },{id,args});
+}
 export async function runBrowserQa(args=process.argv.slice(2),inputEnv=process.env) {
   let url,evidence;const a=[...args];while(a.length&&a[0]!=='--'){const flag=a.shift();if(flag==='--url')url=a.shift();else if(flag==='--evidence-dir')evidence=a.shift();else throw safeError('INVALID_RUN_ARGUMENT');}if(a.shift()!=='--'||!a.length||!evidence)throw safeError('INVALID_RUN_ARGUMENT');
   const env={...inputEnv};const sourceInput=env.BROWSER_QA_TICKET_SOURCE_WS;const site=env.BROWSER_QA_TICKET_TOP_LEVEL_SITE;delete env.BROWSER_QA_TICKET_SOURCE_WS;delete env.BROWSER_QA_TICKET_TOP_LEVEL_SITE;
-  const scope=makeScope(url,site);const mode=env.BROWSER_QA_AUTH_MODE||'none';const engine=env.BROWSER_QA_ENGINE||'agent-browser';
-  if(!['agent-browser','browser-use'].includes(engine))throw safeError('UNSUPPORTED_ENGINE');
+  const scope=makeScope(url,site);const mode=env.BROWSER_QA_AUTH_MODE||'none';
+  const selection=await selectBrowserEngine(env);let engine=selection.engine;
+  for(const fact of selection.fallbacks)console.log(JSON.stringify(fact));
+  if((env.BROWSER_QA_ENGINE||'auto')==='auto'&&selection.fallbacks.length)throw safeError('EGO_EXISTING_MODE_NO_IMPLICIT_LAUNCH');
+  if(!['ego-lite','agent-browser','browser-use'].includes(engine))throw safeError('UNSUPPORTED_ENGINE');
   if(!['none','read-only-ticket-export'].includes(mode))throw safeError('UNSUPPORTED_AUTH_MODE');
   if(mode==='read-only-ticket-export'&&!sourceInput)throw safeError('SOURCE_UNAVAILABLE');
   const sourceEndpoint=mode==='read-only-ticket-export'?validateEndpoint(sourceInput):null;
@@ -352,6 +512,7 @@ export async function runBrowserQa(args=process.argv.slice(2),inputEnv=process.e
   const root=await realpath(process.cwd());const session='whqa-'+createHash('sha256').update(root).digest('hex').slice(0,8)+'-'+process.pid;
   Object.assign(env,{BROWSER_QA_SESSION:session,BROWSER_QA_ENGINE:engine,BROWSER_QA_ALLOWED_DOMAINS:allowed,BROWSER_QA_AUTH_MODE:mode});
   if(engine==='browser-use')return runNativeQa({env,session,evidence,scenario:a,scope,sourceEndpoint,mode});
+  if(engine==='ego-lite')return runEgoQa({env,session,evidence,scenario:a,scope,sourceEndpoint,mode});
   await mkdir(resolve(evidence),{recursive:true});
   const ownedRoot=await mkdtemp(join(env.TMPDIR||tmpdir(),'whqa-'));
   Object.assign(env,{AGENT_BROWSER_SOCKET_DIR:ownedRoot,AGENT_BROWSER_HOME:ownedRoot});
