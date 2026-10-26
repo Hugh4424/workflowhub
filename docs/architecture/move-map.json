@@ -1251,7 +1251,8 @@
         "tests/integration/minimal-task-storage.test.mjs",
         "tools/cli/stage-runtime.mjs",
         "tools/cli/task-bootstrap.mjs",
-        "tools/cli/measure-main-agent-cost.mjs"
+        "tools/cli/measure-main-agent-cost.mjs",
+        "tests/contract/evidence-manifest.test.mjs"
       ],
       "named_data_readers": [],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费；退役登记（ADR-021）：entry_release_commit 与 finding_dispositions[].repair_commit 零 reader/writer，当前代码零命中，历史 task.json 值只读保留",
@@ -4899,7 +4900,8 @@
       "consumer": "两Node测试实际Node CLI/import；四阶段末步主会话按各自方法正文实际调用/回读任务根main-agent-cost.md；真实受控复放另留独立原件，登记本身不证明执行。",
       "module_consumers": [
         "tests/contract/measure-main-agent-cost.node-test.mjs",
-        "tests/integration/main-agent-cost-closeout.node-test.mjs"
+        "tests/integration/main-agent-cost-closeout.node-test.mjs",
+        "tests/contract/evidence-manifest.test.mjs"
       ],
       "named_data_readers": [
         "workflows/make-decision/SKILL.md",
@@ -5539,7 +5541,8 @@
       "consumer": "runtime/task/final-chain-runner.mjs 读取当前材料后调用纯判据、逐步骤选择及两个分母；tests/contract/final-chain-declarations.test.mjs 独立纯函数oracle。",
       "module_consumers": [
         "runtime/task/final-chain-runner.mjs",
-        "tests/contract/final-chain-declarations.test.mjs"
+        "tests/contract/final-chain-declarations.test.mjs",
+        "tests/contract/evidence-manifest.test.mjs"
       ],
       "named_data_readers": [],
       "delete_condition": "职责被经独立审查的替代完整承接且真实消费者为零时由原owner删除；冻结断言变更按TCR。后续consumer链：P2 runner → P3负例 → P5/P6页面与刷新；仅在实际接线后更新consumer",

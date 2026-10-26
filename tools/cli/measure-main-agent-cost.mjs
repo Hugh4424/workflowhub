@@ -44,13 +44,16 @@ function sourceDefaults() { return {hostInjectedBytes:{metric:missing('no_author
 /** Pure transformation of explicitly loaded, immutable source records. */
 export function measureSessions(sources, options={}) {
  if(!Array.isArray(sources)||!options||typeof options!=='object'||Array.isArray(options))throw new TypeError('invalid measurement input');
- for(const source of sources)if(!source||typeof source.sourcePath!=='string'||!isAbsolute(source.sourcePath)||!Array.isArray(source.records)||source.records.some(r=>!r||typeof r!=='object'||Array.isArray(r)))throw new TypeError('invalid LoadedSource');
+ if(options.proofSources!==undefined&&!Array.isArray(options.proofSources))throw new TypeError('invalid proof context');
+ const ancestrySources=[...sources,...(options.proofSources??[])];
+ for(const source of ancestrySources)if(!source||typeof source.sourcePath!=='string'||!isAbsolute(source.sourcePath)||!Array.isArray(source.records)||source.records.some(r=>!r||typeof r!=='object'||Array.isArray(r)))throw new TypeError('invalid LoadedSource');
  const explicit=Object.hasOwn(options,'window'),w=options.window;
  if(explicit&&(!w||typeof w!=='object'||typeof w.includeFrom!=='boolean'||!Object.hasOwn(w,'from')||!Object.hasOwn(w,'until')))throw new TypeError('invalid window');
  const from=explicit?(w.from===null?NaN:date(w.from)):NaN,until=explicit?(w.until===null?NaN:date(w.until)):NaN;
  if(from>until)throw new TypeError('reversed window');
  if(w?.previousBoundaries!==undefined&&!Array.isArray(w.previousBoundaries))throw new TypeError('invalid previous boundaries');
  const issues=[],sessions=[],allIntervals=[],effectiveTimes=[];let activityFailed=false;
+ for(const source of options.proofSources??[])issues.push({code:'birth_proof_source',sourcePath:source.sourcePath,message:'proof only; excluded from measured sessions/totals',expected:true});
  const issue=(code,path,message,expected=false,metric)=>issues.push({code,sourcePath:path,message,expected,...(metric?{metric}:{})});
  const groups=new Map();
  for(const source of sources){const header=source.records[0],id=header?.type==='session'?header.id:header?.type==='session_meta'?header.payload?.id:null;const key=id?header.type+':'+id:source.sourcePath;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(source);}
@@ -64,7 +67,7 @@ export function measureSessions(sources, options={}) {
   for(const source of group){if(source.readIssue){issues.push({...source.readIssue});invalid=true;}for(const r of source.records){const identity=r===source.records[0]?'header':transport(r)?'transport:'+source.records.indexOf(r):r[key];const fingerprint=canonical(r);if(seen.has(identity)){if(seen.get(identity)!==fingerprint){bad('conflicting_event','same position has different content');records.push(r);}continue;}seen.set(identity,fingerprint);records.push(r);}}
   let last=-1;for(const r of records.slice(1).filter(r=>!transport(r))){if(!validNumber(r[key])||r[key]<=last)bad('invalid_position','positions must be unique and increasing');if(!validNumber(recordTime(r)))bad('invalid_event_time','formal event timestamp must be valid');last=r[key];}
   let seed=-Infinity,inheritedBoundaryIssue=null,freshBirth=false;if(dsh&&header?.isSeeded){const b=records.find(r=>r.type==='session/end-seed'&&r.data?.inherited===true);if(!b)bad('inherited_boundary_missing','seed prefix has no explicit boundary');else seed=b.seq;}
-  if(codex){const boundary=codexHistoryBoundary(header,records,sources,Number.isFinite(until)?until:Infinity);seed=boundary.seed;freshBirth=boundary.freshBirth===true;inheritedBoundaryIssue=boundary.issueCode;if(inheritedBoundaryIssue)bad(inheritedBoundaryIssue,'inherited history has no valid ordinal boundary');}
+  if(codex){const boundary=codexHistoryBoundary(header,records,ancestrySources,Number.isFinite(until)?until:Infinity);seed=boundary.seed;freshBirth=boundary.freshBirth===true;inheritedBoundaryIssue=boundary.issueCode;if(inheritedBoundaryIssue)bad(inheritedBoundaryIssue,'inherited history has no valid ordinal boundary');}
   const times=records.slice(1).filter(r=>r[key]>seed&&(!dsh||/^(turn|step|user|assistant|tool)\//.test(r.type))).map(recordTime).filter(Number.isFinite);
   effectiveTimes.push(...times);
   const lo=explicit?from:Math.min(...times),hi=explicit?until:Math.max(...times),windowValid=Number.isFinite(lo)&&Number.isFinite(hi)&&hi>=lo;
@@ -133,7 +136,22 @@ export function measureSessions(sources, options={}) {
    counts.dshSteps=uniqueCount('step/start',r=>validNumber(r.data?.turn)&&validNumber(r.data?.step)?r.data.turn+':'+r.data.step:undefined);counts.turns=uniqueCount('turn/start',r=>validNumber(r.data?.turn)?r.data.turn:undefined);counts.codexResponseItems=missing('not_applicable');
    counts.toolCalls=uniqueCount('tool/call',r=>r.data?.callId);for(const [k,names] of [['subagentCalls',['subagent']],['commandCalls',['bash','pwsh']]])counts[k]=counts.toolCalls.status==='available'?available((countRows.get('tool/call')??[]).filter(r=>names.includes(r.data?.name)).length):unavailable('conflicting_count');
   }else{
-   counts.dshSteps=missing('not_applicable');counts.codexResponseItems=available(chosen.filter(r=>r.type==='response_item').length);const turnContexts=chosen.filter(r=>r.type==='turn_context');if(turnContexts.some(r=>!validCodexTurnId(r.payload?.turn_id))){counts.turns=unavailable('invalid_turn_id');bad('invalid_turn_id','turn_context has no valid turn_id','turns');}else counts.turns=available(new Set(turnContexts.map(r=>r.payload.turn_id)).size);for(const k of ['toolCalls','subagentCalls','commandCalls'])counts[k]=missing('unsupported_in_this_task');
+   counts.dshSteps=missing('not_applicable');counts.codexResponseItems=available(chosen.filter(r=>r.type==='response_item').length);const turnContexts=chosen.filter(r=>r.type==='turn_context');if(turnContexts.some(r=>!validCodexTurnId(r.payload?.turn_id))){counts.turns=unavailable('invalid_turn_id');bad('invalid_turn_id','turn_context has no valid turn_id','turns');}else counts.turns=available(new Set(turnContexts.map(r=>r.payload.turn_id)).size);for(const k of ['toolCalls','commandCalls'])counts[k]=missing('unsupported_in_this_task');
+   // Count only proved own-source calls. A selected excerpt is not a zero.
+   if(inheritedBoundaryIssue||boundaryInvalid||group.some(s=>s.readIssue)||records.some((r,i)=>r.ordinal!==i))counts.subagentCalls=unavailable('incomplete_count_source');
+   else {
+    const calls=new Map(),nativeCalls=new Map(),chosenSet=new Set(chosen);let count=0,conflict=false;
+    for(const r of consumed.filter(r=>r.ordinal>seed&&r.type==='response_item'&&r.payload?.type==='function_call')) {
+     const p=r.payload,relevant=p.namespace==='collaboration'&&['spawn_agent','followup_task'].includes(p.name);
+     if(!validCodexTurnId(p.call_id)){if(relevant)conflict=true;continue;}
+     const body=canonical(p);
+     if(calls.has(p.call_id)){if(calls.get(p.call_id)!==body)conflict=true;continue;}
+     calls.set(p.call_id,body);nativeCalls.set(p.call_id,r);if(relevant&&chosenSet.has(r))count++;
+    }
+    const desktop=desktopAttemptCounts(consumed.filter(r=>r.ordinal>seed),id,nativeCalls,lo,hi,w?.includeFrom||!explicit);
+    counts.subagentCalls=conflict||desktop.unavailable?unavailable('conflicting_count'):available(count+desktop.count);
+    if(conflict||desktop.unavailable)bad('conflicting_count','Codex subagent call requires a stable unambiguous invocation and original association','subagentCalls');
+   }
    const preferred=records.some(r=>r.type==='token_usage_record'),series=preferred?'token_usage_record.thread_token_usage':'event_msg.token_count.total_token_usage';
    const points=consumed.filter(r=>preferred?r.type==='token_usage_record':r.type==='event_msg'&&r.payload?.type==='token_count');
    const container=r=>preferred?r?.payload?.thread_token_usage:r?.payload?.info?.total_token_usage;
@@ -282,21 +300,64 @@ function desktopSpawnBriefs(input) {
  return briefs.length?briefs:null;
 }
 
+// Shared literal exec association. Birth keeps its stricter success checks below.
+function desktopExecEnvelope(own,call) {
+ const briefs=desktopSpawnBriefs(call.payload.input);
+ if(!briefs||call.payload.status!=='completed'||!validCodexTurnId(call.payload.call_id))return null;
+ if(own.filter(r=>r.type==='response_item'&&r.payload?.type==='custom_tool_call'&&r.payload.call_id===call.payload.call_id).length!==1)return null;
+ const outputs=own.filter(r=>r.type==='response_item'&&r.payload?.type==='custom_tool_call_output'&&r.payload.call_id===call.payload.call_id);
+ if(outputs.length!==1)return null;const output=outputs[0],parts=output.payload.output;
+ if(output.ordinal<=call.ordinal||recordTime(output)<recordTime(call)||!Array.isArray(parts)||parts.length!==briefs.length+1||parts.some(p=>p.type!=='input_text'||typeof p.text!=='string')||!/^Script completed\nWall time \d+(?:\.\d+)? seconds\nOutput:\n$/.test(parts[0].text))return null;
+ let returned;try{returned=parts.slice(1).map(p=>JSON.parse(p.text));}catch{return null;}
+ const turn=output.payload.internal_chat_message_metadata_passthrough?.turn_id;
+ const context=own.filter(r=>r.ordinal<call.ordinal&&(r.type==='turn_context'||r.type==='event_msg'&&r.payload?.type==='task_started')).at(-1);
+ if(!validCodexTurnId(turn)||context?.payload?.turn_id!==turn)return null;
+ return {briefs,output,returned,turn};
+}
+
+// A native completion ID proves an attempted invocation, even when no child is born.
+function desktopAttemptCounts(own,parent,nativeCalls,lo,hi,includeFrom) {
+ const unique=new Map(),normalized=[];let invalid=false,count=0;
+ const completion=r=>r.type==='event_msg'&&r.payload?.type==='item_completed'&&r.payload.item?.type==='CollabAgentToolCall'&&['spawn_agent','followup_task'].includes(r.payload.item.tool);
+ const spawnWrapper=r=>r.type==='response_item'&&r.payload?.type==='custom_tool_call'&&r.payload.name==='exec'&&typeof r.payload.input==='string'&&/\btools\s*\.\s*multi_agent_v1__spawn_agent\s*\(/.test(r.payload.input);
+ for(const r of own) {
+  const p=r.payload,isCompletion=completion(r),isCustom=r.type==='response_item'&&['custom_tool_call','custom_tool_call_output'].includes(p?.type);
+  if(!isCompletion&&!isCustom){normalized.push(r);continue;}
+  const id=isCompletion?p.item.id:p.call_id;
+  if(!validCodexTurnId(id)){if(isCompletion||spawnWrapper(r))invalid=true;normalized.push(r);continue;}
+  const key=(isCompletion?'completion':p.type)+':'+id,body=canonical({payload:p,at:recordTime(r)});
+  if(unique.has(key)){if(unique.get(key)!==body)invalid=true;continue;}
+  unique.set(key,body);normalized.push(r);
+ }
+ const accounted=new Set();
+ for(const call of normalized.filter(spawnWrapper)) {
+  const envelope=desktopExecEnvelope(normalized,call);if(!envelope){invalid=true;continue;}
+  const {briefs,output,turn}=envelope;
+  const attempts=normalized.filter(r=>completion(r)&&r.ordinal>call.ordinal&&r.ordinal<output.ordinal);
+  if(attempts.length!==briefs.length){invalid=true;continue;}
+  const remaining=briefs.map(b=>b.message);
+  for(const attempt of attempts) {
+   const p=attempt.payload,item=p.item,index=remaining.indexOf(item.prompt);
+   if(item.tool!=='spawn_agent'||!['completed','failed'].includes(item.status)||!validCodexTurnId(item.id)||p.thread_id!==parent||p.turn_id!==turn||item.sender_thread_id!==parent||index<0||!validNumber(p.started_at_ms)||!validNumber(p.completed_at_ms)||recordTime(call)>p.started_at_ms||p.started_at_ms>p.completed_at_ms||p.completed_at_ms!==recordTime(attempt)||p.completed_at_ms>recordTime(output)){invalid=true;continue;}
+   remaining.splice(index,1);accounted.add(item.id);
+   const native=nativeCalls.get(item.id);
+   if(native){if(native.payload.namespace!=='collaboration'||native.payload.name!==item.tool||recordTime(native)!==p.started_at_ms)invalid=true;continue;}
+   if((includeFrom?p.started_at_ms>=lo:p.started_at_ms>lo)&&p.started_at_ms<=hi)count++;
+  }
+  if(remaining.length)invalid=true;
+ }
+ if(normalized.some(r=>completion(r)&&!accounted.has(r.payload.item.id)))invalid=true;
+ return {count,unavailable:invalid};
+}
+
 function desktopFreshChild(own, header, parent, cutoff) {
  const h=header.payload,id=h.id,spawn=h.source.subagent.thread_spawn,born=recordTime(header);
  if(spawn.agent_path!==null||!validCodexTurnId(spawn.agent_nickname)||h.session_id!==parent)return false;
  const proofs=[];
  for(const call of own.filter(r=>r.type==='response_item'&&r.payload?.type==='custom_tool_call'&&r.payload.name==='exec'&&r.payload.status==='completed')){
-  const briefs=desktopSpawnBriefs(call.payload.input);if(!briefs||!validCodexTurnId(call.payload.call_id))continue;
-  if(own.filter(r=>r.type==='response_item'&&r.payload?.type==='custom_tool_call'&&r.payload.call_id===call.payload.call_id).length!==1)continue;
-  const outputs=own.filter(r=>r.type==='response_item'&&r.payload?.type==='custom_tool_call_output'&&r.payload.call_id===call.payload.call_id);
-  if(outputs.length!==1)continue;const output=outputs[0],parts=output.payload.output;
-  if(output.ordinal<=call.ordinal||recordTime(output)<recordTime(call)||!Array.isArray(parts)||parts.length!==briefs.length+1||parts.some(p=>p.type!=='input_text'||typeof p.text!=='string')||!/^Script completed\nWall time \d+(?:\.\d+)? seconds\nOutput:\n$/.test(parts[0].text))continue;
-  let returned;try{returned=parts.slice(1).map(p=>JSON.parse(p.text));}catch{continue;}
+  const envelope=desktopExecEnvelope(own,call);if(!envelope)continue;
+  const {briefs,output,returned,turn}=envelope;
   if(returned.some(r=>!validCodexTurnId(r?.agent_id)||!validCodexTurnId(r.nickname))||new Set(returned.map(r=>r.agent_id)).size!==briefs.length)continue;
-  const turn=output.payload.internal_chat_message_metadata_passthrough?.turn_id;
-  const context=own.filter(r=>r.ordinal<call.ordinal&&(r.type==='turn_context'||r.type==='event_msg'&&r.payload?.type==='task_started')).at(-1);
-  if(!validCodexTurnId(turn)||context?.payload?.turn_id!==turn)continue;
   const completions=own.filter(r=>r.ordinal>call.ordinal&&r.ordinal<output.ordinal&&r.type==='event_msg'&&r.payload?.type==='item_completed'&&r.payload.item?.type==='CollabAgentToolCall'&&r.payload.item.tool==='spawn_agent');
   if(completions.length!==briefs.length||new Set(completions.map(r=>r.payload.item.id)).size!==briefs.length)continue;
   const remaining=briefs.map(b=>b.message),receivers=new Set();let target=false,valid=true;
@@ -317,7 +378,7 @@ function desktopFreshChild(own, header, parent, cutoff) {
 // matching complete child source, never by parent metadata or pagination alone.
 function codexFreshChildBirth(header, records, sources, cutoff, visiting) {
  const h=header?.payload,id=h?.id,parent=h?.parent_thread_id,spawn=h?.source?.subagent?.thread_spawn;
- if(!id||!parent||visiting.has(id)||h.cli_version!=='0.163.0-alpha.10.2'||spawn?.parent_thread_id!==parent)return false;
+ if(!id||!parent||visiting.has(id)||!['0.163.0-alpha.10.2','0.164.0-alpha.11.1'].includes(h.cli_version)||spawn?.parent_thread_id!==parent)return false;
  if(!records.length||records.some((r,i)=>r.ordinal!==i||!validNumber(recordTime(r))||recordTime(r)<recordTime(header))||records.filter(r=>r.type==='session_meta').length!==1||records.some(r=>r.type==='token_usage_record'&&r.payload?.thread_id!==id))return false;
  const children=sources.filter(s=>s.records[0]?.payload?.id===id);
  if(children.some(s=>s.readIssue))return false;
@@ -427,7 +488,7 @@ function taskSourceFacts(args, result) {
  } catch(error){const reason=error.message.includes('review_source_ambiguity')?'review_source_ambiguity':'review_source_unavailable';facts.reviewProviderUsage.metric=unavailable(reason);fail(reason,error.message);}
  return facts;
 }
-function human(result){const render=m=>m.status==='available'?JSON.stringify(m.value):m.status+':'+m.reason;const lines=['N1 原始读数；不产 N10 检查器 / N11 总分。', '时间：这段多久、轮次内/等待各多久？等待计入任务墙钟。'];for(const k of ['wallMs','sessionSpanSumMs','activeUnionMs','waitingMs'])lines.push(k+' (ms): '+render(result.totals[k]));lines.push('token：上报哪些输入/输出/缓存量？');for(const [k,m]of Object.entries(result.totals.usage))lines.push(k+' (token): '+render(m));lines.push('步骤/轮次：源发生多少步骤或响应项、多少轮？');for(const k of ['dshSteps','codexResponseItems','turns'])lines.push(k+' (次): '+render(result.totals.counts[k]));lines.push('调用：发起多少子代理与命令工具调用？');for(const k of ['toolCalls','subagentCalls','commandCalls'])lines.push(k+' (次): '+render(result.totals.counts[k]));lines.push('三来源（各自口径，不能互替）：');for(const [k,fact]of Object.entries(result.sources))lines.push(k+' ['+fact.unit+']: '+render(fact.metric)+'; scope='+fact.scope+'; refs='+JSON.stringify(fact.refs));lines.push('会话明细：'+JSON.stringify(result.sessions),'缺报与错误：'+JSON.stringify({issues:result.issues,missing:Object.entries(result.totals.usage).concat(Object.entries(result.totals.counts)).filter(([,v])=>v.status!=='available')}));return lines.join('\n')+'\n';}
+function human(result){const render=m=>m.status==='available'?JSON.stringify(m.value):m.status+':'+m.reason;const lines=['N1 原始读数；不产 N10 检查器 / N11 总分。', '时间：这段多久、轮次内/等待各多久？等待计入任务墙钟。'];for(const k of ['wallMs','sessionSpanSumMs','activeUnionMs','waitingMs'])lines.push(k+' (ms): '+render(result.totals[k]));lines.push('token：上报哪些输入/输出/缓存量？');for(const [k,m]of Object.entries(result.totals.usage))lines.push(k+' (token): '+render(m));lines.push('步骤/轮次：源发生多少步骤或响应项、多少轮？');for(const k of ['dshSteps','codexResponseItems','turns'])lines.push(k+' (次): '+render(result.totals.counts[k]));lines.push('调用：发起多少子代理与命令工具调用？');for(const k of ['toolCalls','subagentCalls','commandCalls'])lines.push(k+' (次): '+render(result.totals.counts[k]));const families=new Set(result.sessions.map(s=>s.family)),stepKey=families.size===1?(families.has('codex')?'codexResponseItems':'dshSteps'):null;lines.push('结果层五数：wallclock(ms)='+render(result.totals.wallMs)+'; inputTokens='+render(result.totals.usage.inputTokens)+'; outputTokens='+render(result.totals.usage.outputTokens)+'; steps('+(stepKey??'mixed families')+')='+(stepKey?render(result.totals.counts[stepKey]):'unavailable:mixed_step_families')+'; subagentCalls='+render(result.totals.counts.subagentCalls));lines.push('三来源（各自口径，不能互替）：');for(const [k,fact]of Object.entries(result.sources))lines.push(k+' ['+fact.unit+']: '+render(fact.metric)+'; scope='+fact.scope+'; refs='+JSON.stringify(fact.refs));lines.push('会话明细：'+JSON.stringify(result.sessions),'缺报与错误：'+JSON.stringify({issues:result.issues,missing:Object.entries(result.totals.usage).concat(Object.entries(result.totals.counts)).filter(([,v])=>v.status!=='available')}));return lines.join('\n')+'\n';}
 
 function authenticatedWorkspace(task) {
  const directory=path=>{const stat=lstatSync(path);if(!stat.isDirectory()||stat.isSymbolicLink())throw new Error('unsafe checkout metadata directory');return realpathSync(path);};
@@ -557,6 +618,24 @@ async function discoverCurrent(task,signal) {
  if(candidates.some(s=>canonical(s.records)!==first))throw new Error('current session copies conflict');
  return candidates[0];
 }
+// Read-only CLI ancestry is proof context, never another measured session.
+async function loadBirthProofSources(sources,load) {
+ const proofSources=[],issues=[],known=new Set(sources.map(s=>s.records[0]?.payload?.id).filter(Boolean));
+ const queue=sources.filter(s=>s.records[0]?.type==='session_meta').map(s=>s.records[0].payload?.parent_thread_id).filter(Boolean);
+ const home=process.env.CODEX_HOME||join(homedir(),'.codex');
+ for(let index=0;index<queue.length;index++) {
+  const id=queue[index];if(known.has(id))continue;known.add(id);
+  let paths;try{if(!isAbsolute(home))throw new Error('CODEX_HOME must be absolute');paths=codexPaths(id,home);}catch(error){issues.push({code:'birth_proof_unavailable',message:id+': '+error.message,expected:false});continue;}
+  if(!paths.length){issues.push({code:'birth_proof_unavailable',message:'parent source missing: '+id,expected:false});continue;}
+  let copies=await Promise.all(paths.map(load));
+  copies=copies.map(source=>source.records[0]?.type==='session_meta'&&source.records[0]?.payload?.id===id||source.readIssue?source:{...source,readIssue:{code:'source_read_failed',sourcePath:source.sourcePath,message:'proof parent header identity mismatch',expected:false}});
+  const broken=copies.find(source=>source.readIssue);
+  if(broken){issues.push({...broken.readIssue});copies=copies.map(source=>source.readIssue?source:{...source,readIssue:{...broken.readIssue,message:'parent copies include failed source: '+broken.sourcePath}});}
+  proofSources.push(...copies);
+  for(const source of copies){const parent=source.records[0]?.payload?.parent_thread_id;if(parent)queue.push(parent);}
+ }
+ return {proofSources,issues};
+}
 const LEDGER_HEADER='| 记录时间(UTC) | 阶段 | from(UTC) | until(UTC) | 起点来源 | 窗口状态 | 任务墙钟(ms) | 会话跨度和(ms) | 轮次内并集(ms) | 等待(ms) | 输入(token) | 输出(token) | 缓存读(token) | 缓存写(token) | 推理(token) | DSH步骤(次) | Codex响应项(次) | 轮次(次) | 工具调用(次) | 子代理调用(次) | 命令调用(次) | 宿主实际注入(byte) | 审查provider上报(原口径) | 当前材料(byte) | 来源refs | 会话明细与累计点 | 缺报与错误 |';
 const ledgerEscape=value=>String(value).replaceAll('&','&amp;').replaceAll('\\','&#92;').replaceAll('|','&#124;').replaceAll('\r','&#13;').replaceAll('\n','&#10;').replaceAll('<','&lt;').replaceAll('>','&gt;');
 const ledgerUnescape=value=>value.replace(/&(amp|#92|#124|#13|#10|lt|gt);/g,(_,e)=>({amp:'&','#92':'\\','#124':'|','#13':'\r','#10':'\n',lt:'<',gt:'>'}[e]));
@@ -644,7 +723,7 @@ async function recordMeasurement(args,signal) {
    else if(!readbackError&&readback===old){publicationState='not_published';throw new Error('publication_not_published: readback equals prior ledger: '+writerMessage);}
    else if(writeError&&readbackError&&old===''&&readbackError.code==='ENOENT'){publicationState='not_published';throw new Error('publication_not_published: no ledger exists: '+writerMessage);}
    else {publicationState='uncertain';throw new Error('publication_uncertain: readback could not confirm prior or intended ledger: '+writerMessage+(readbackError?'; readback: '+readbackError.message:''));}
-   process.stdout.write(human(result));process.stdout.write('已发布一条任务账本记录: '+task.recordPath('main-agent-cost.md')+'\n');
+   process.stdout.write(human(result));process.stdout.write('已发布一条任务账本记录: '+task.recordPath('main-agent-cost.md')+'#L'+(rows.length+3)+'\n');
    if(publicationWarning)process.stderr.write('发布已由读回确认，但原子写入器随后报错：'+publicationWarning.message+'；请先核对该行再决定后续操作。\n');
    if(signal.aborted){process.stderr.write('已发布，随后取消；本笔实际until之后动作未计入。\n');return 1;}
    return result.status==='available'&&!publicationWarning?0:1;
@@ -662,8 +741,9 @@ async function cliMain(argv=process.argv.slice(2)) {
   try{sources=args.session.length?await Promise.all([...new Set(args.session)].map(load)):[await discoverCurrent(task,controller.signal)];}
   catch(error){process.stderr.write('unavailable: '+error.message+'\n');return 1;}
   sources=await explicitDescendants(sources,args.until?date(args.until):Infinity,load);
-  const options={};if(args.from||args.until)options.window={from:args.from??null,until:args.until??null,includeFrom:false,startRef:null};
-  const result=measureSessions(sources,options);
+  const proof=args.session.length?await loadBirthProofSources(sources,load):{proofSources:[],issues:[]};
+  const options={proofSources:proof.proofSources};if(args.from||args.until)options.window={from:args.from??null,until:args.until??null,includeFrom:false,startRef:null};
+  const result=measureSessions(sources,options);result.issues.push(...proof.issues);
   try{result.sources=taskSourceFacts(args,result);}catch(error){result.sources.reviewProviderUsage.metric=unavailable('task_source_unavailable');result.sources.materialBytes.metric=unavailable('task_source_unavailable');result.issues.push({code:'task_source_unavailable',message:error.message,expected:false});}
   if(result.issues.some(x=>!x.expected))result.status='incomplete';process.stdout.write(human(result));return result.status==='available'?0:1;
  }catch(error){process.stderr.write((args.record?'本阶段无记录: ':'工具错误: ')+error.message+'\n');return error.argumentError?2:args.record?1:2;}

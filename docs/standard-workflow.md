@@ -55,6 +55,16 @@ raw 测试输出、正式回执和审查原件各一份；同一事实＝字节�
 
 复用输出还须命令、退出事实一致；两者不一致、内容改变或候选原件不可读，保本次新件、真实原因及 `deduplication: unknown`。仅用户明确授权该次窄例外，才可处理本次新产、尚未对外引用的临时重复 `.output`：同任务、同目录的 canonical 原件真实可读，命令、退出事实及字节相同，返回仍引用既有原 ref；保留既有原件、历史/已引用输出及每次真实 immutable 原始回执，不删不覆写、不留悬空引用。其它对象按当前任务已确认删件规则处理，扩写受保护实现须另有真实范围授权。正常 reused／unknown 诊断留在现有 CLI 回复与既有 source/evidence；磁盘 native 原始回执保留完整真实执行字段和正确 output_ref，不新增持久字段或 schema。仅真实结算失败进入既有 native error；正常复用/未知不冒失败，不改已发布回执、历史原件、create-only 算法。
 
+#### 每 Phase 一份执行清单
+
+每个 Phase 只多一份人读执行清单，保存于当前任务 `quality/evidence`，Phase 收口原子写、审后冻结；后续用原 ref，不改历史清单。清单投影现有 facts、native 回执与原件，不能成为续跑读取的第二进度或第二账本。
+
+清单字段固定为 `phase_id`、`task_ids`、`cursor_ref`、`commands`、`failures`、`diffs`、`evidence_refs`、`materials`、`reviews`、`acceptance`、`cost`、`final_chain_ref`。`commands` 列实际 argv、cwd、exit_code、started_at、ended_at、duration_ms；`failures` 列 failure_signature 与 original_output_ref；`diffs` 列真实 git diff --name-only 路径、--numstat 分列增删及原件 ref；`evidence_refs` 列原 ref、bytes、sha256 与保留原因。`materials` 只列实际打开的路径/锚点及用途，缺件写用途与提供者；`reviews` 指向真实独立原件；`acceptance` 逐条回原 AC 档位及缺口。独立审查按实际 diff 和材料读取记录逐项核写集，未取得不猜。
+
+原始字节沿上文三类例外和证据规则保存。相同调用再次运行且退出事实一致时，用既有 `resolveOutputRef` 实际比较字节，相等才指回首次原件；native immutable receipt 保留正确 output_ref，不能删已引用原件。字节不同或候选不可读则保新件，记 `deduplication: unknown` 与原因。成功且无保留必要的输出不额外放进清单证据指针；不为每个命令再写一份人读清单或复制 native 输出。
+
+`cursor_ref` 只指向 facts.jsonl 现 build-code 行的 phase_progress；五字段及合法原位覆盖沿原 task-store，CLI 同 Phase base_head 继续沿原 caller 规则，不新建历史序列。`cost` 只引用真实 stage 末那笔账本行与窗口，Phase 中尚未发生写 incomplete、原 owner 和恢复条件，不提前 --record。`final_chain_ref` 由最后 Phase 引用一份真实十环报告；尚未产生保未取得，不预填通过。
+
 ### stage 结束
 
 主会话复用已有记录接口、安全写入普通 stage facts，不恢复 run:execute 完整官方门。分别读回实施、质量、Git交付、物理清理；局部 GREEN 不冒全任务完成。逐 AC 据实际交付与证据判断、保缺项；唯一新的人读 handoff MD 给绝对 ref 与实际下一阶段，旧原件 immutable。最终 close 依「工作区与任务」及关闭方法第6/7节回读各项实际结果；质量 incomplete 的声明与清理范围授权分别保真。
