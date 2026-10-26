@@ -108,7 +108,7 @@
 
 ### 逐包收敛（第 9 步）
 
-每包的过程记录（边界、假设、五行表、red/blue 处置）放 `quality/evidence/decision-log-refs/2026-10-25-module-convergence.md`；方向级细化（路径、路由、接口参数、分母来源、落位表、运行协议、证据点）放 `quality/evidence/decision-log-refs/2026-10-25-module-details.md`。**逐包状态**（待收敛/已收敛）放 `quality/evidence/decision-log-refs/2026-10-25-convergence-checklist.md`，每行带 8 项证据指针。截至 2026-10-25：①旧版本 已收敛；②目标仓 已收敛；③两页样本 已收敛；④无稿闭环 已收敛；⑤六项指标 已收敛；⑥外部内容 已收敛；⑦完备性 已收敛；⑧交接 已收敛；⑨输入冻结 已收敛；⑩端到端证据 已收敛；⑪修复 已收敛。只有全部已收敛才允许进入下一步。本日志每包只留结果、消费者与决定。
+每包的过程记录（边界、假设、五行表、red/blue 处置）放 `quality/evidence/decision-log-refs/2026-10-25-module-convergence.md`；方向级细化（路径、路由、接口参数、分母来源、落位表、运行协议、证据点）放 `quality/evidence/decision-log-refs/2026-10-25-module-details.md`。**当前来源定位与原逐包状态**（待收敛/已收敛）放 `quality/evidence/2026-10-26-498-current-convergence-checklist.md`，每行带 8 项证据指针。截至 2026-10-25：①旧版本 已收敛；②目标仓 已收敛；③两页样本 已收敛；④无稿闭环 已收敛；⑤六项指标 已收敛；⑥外部内容 已收敛；⑦完备性 已收敛；⑧交接 已收敛；⑨输入冻结 已收敛；⑩端到端证据 已收敛；⑪修复 已收敛。只有全部已收敛才允许进入下一步。本日志每包只留结果、消费者与决定。
 
 #### WP1 — 旧版本基线固定与可运行证明
 
@@ -352,12 +352,12 @@
 | --- | --- | --- | --- |
 | OI-001 | 旧版本基线 | confirmed（提交 b94c5e6a ＋ 真跑最小证据）；完整基线数值按用户选择后置 | 正式对比阶段采集 |
 | OI-002 | 目标仓路径与固定版本 | confirmed（新建最小仓；候选路径 `/Users/Hugh/Hugh/Project/ui-workbench-target-20261025`，版本按外部调研固定） | 执行阶段建仓并真跑 |
-| OI-003 | PaperBuilder 具体卡与端点 | confirmed（用真实服务、优先不新增对象的写操作）；具体卡号与端点执行时核 | 执行阶段核并留读回原件 |
+| OI-003 | 无稿对象与接口交接条件 | 历史PB卡号/费用配置选择保原时点；当前007完全禁止访问PB，346仅支持P5准备交接合同 | 完整C09重新选隔离授权环境并核真实对象/接口/真值；当前不执行 |
 | OI-004 | 准备期深度 | confirmed（最小验证＋冻结口径） | 执行阶段按此裁剪 |
 | OI-005 | C04 提取器未交付 | open；只预留接入位，不引用其产出 | C04 owner 交付后接入；本任务不等待 |
 | OI-006 | 需求变更原件 | resolved：已写入“无变更”及判断依据 | 已完成 |
 | OI-007 | 真实业务凭证/授权 | resolved：PaperBuilder 无认证、本机可访问；需外部凭证的实盘/行情路径明确排除 | 已处置 |
-| OI-008 | 异源审查执行者 | confirmed（方向审与细节审各派独立异源子代理）；但方向审查两次尝试均未收口，见 OI-013 | 主会话按当前可用性处置 |
+| OI-008 | 独立判定身份与用户内容判断 | 历史方向审未收口见OI013；当前081原件及469新独立判断各保真实身份/覆盖，不回填历史；用户准备内容确认尚未取得 | 主会话实际展示当前准备判定/交接/身份与缺口后一次询问用户；具体执行身份按原件核，不由路线批准代签 |
 | OI-009 | R-002/R-009 的落点 | resolved（派发记录与研究报告原件） | 已完成 |
 | OI-010 | R-007 五段表与想法扩散 | resolved（第 9 步十包五行表已建） | 已完成 |
 | OI-011 | C04 晚于本步收敛的处置 | resolved（WP6 预留接入位并标依赖） | 已处置 |
@@ -447,7 +447,7 @@
 | 派发记录：`quality/evidence/decision-log-refs/2026-10-25-dispatch-log.md` | 核主会话有没有自己做重读取时读 | 已采用：R-009 落点 |
 | 逐包过程记录：`quality/evidence/decision-log-refs/2026-10-25-module-convergence.md` | 要回读每包边界、假设、五行表、red/blue 处置时读 | 已采用：十包五行表与 RB-01～RB-07 |
 | 逐包细化：`quality/evidence/decision-log-refs/2026-10-25-module-details.md` | 要看路径、路由、接口、分母来源、落位表、运行协议、证据点时读 | 已采用：方向级细化与字段清单 |
-| 收敛清单：`quality/evidence/decision-log-refs/2026-10-25-convergence-checklist.md` | 细节审查前核 11 个模块是否过 8 项 | 已采用：11/11 过清单 |
+| 收敛清单：`quality/evidence/2026-10-26-498-current-convergence-checklist.md` | 细节审查前核 11 个模块是否过 8 项 | 当前九格来源修正；真实检查与独立人读后判，不由原11/11历史结论代签 |
 | 需求变更：`quality/evidence/decision-log-refs/requirement-change-log.md` | 核 U-001/U-002 的原文、处置与受影响决定时读 | 已采用：两次批评与对应修复要求 |
 | 追问批次：`quality/evidence/decision-log-refs/2026-10-25-talk-batch-0{4,5}-*.md` | 回读分诊、质询的真实答复时读 | 已采用：分诊确认、两侧同口径、分开确认、可回滚改选 |
 | `review-dispositions.md` | 有 finding 需处置或核对 fixed/rejected 理由时读 | 已采用：方向审查 F-01～F-08 的 fixed 处置 |
