@@ -22,6 +22,11 @@ WorkflowHub 主会话按认证工作区当前材料执行。post 材料为 decis
 
 ## build-code 测试与质量
 
+### Phase 三角色与提交点
+
+复杂任务每 Phase 的开发是唯一 writer，审查与测试只读代码、测试与材料；测试经既有 capture 保存回执。完整顺序只以 [build-code「Phase 三角色与七步顺序」](../workflows/build-code/SKILL.md#phase-三角色与七步顺序) 为准：开发完成通知后才派审查与测试，两方明确回报在开发最后确认前汇合，普通 finding 回原开发，修复后受影响方重报。主会话只核无 open finding、无未解释测试失败、Phase Done、AC 齐四项；每轮审后由开发提交一次，迟到 finding 重开同一 Phase、回同一开发，只复验受影响面。最终 Phase 提交在终末审查修复之后，push/merge/PR/归档/清理归 stage-close；本小节不改变审查分级、小改动与普通任务合同。
+
+
 只运行受影响针对性测试，禁止无范围全量 vitest/npm test/test:safe；例外须用户或 CI 明确要求。源与测试应验证真实效果、失败和取消，假 transport 不能证明实际模型或硬隔离。成功范围只因新变化、失败或未解疑点重跑，不按文件机械增审。
 
 文档面用 wh-review；复杂任务代码面按下节选择一次独立审查执行者，终末整卡固定外部 OCR 全审；小改动与普通任务的审查方式不变。外部 OCR OCR 不可用（命令不存在（ENOENT）或版本低于1.12.9）如实记 unavailable/unknown，不换执行者，保留检测输出与原始失败；版本检测其它错误不推断未安装。architect-code-review 是同源补充轴，独立执行，与 OCR 可用性无关；已装 OCR 失败、超时、取消、无效输出、零成功路或空 findings 均保留原始事实。三审查点保留，真实未执行或不足独立数量保持 unavailable/incomplete，有效单源发现原来源照留。原始失败、晚 raw、取消与来源不被摘要覆盖。

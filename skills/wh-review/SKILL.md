@@ -33,6 +33,8 @@ stage-skill-plan.json 仍在本技能原路径提供 required_skills/optional_sk
 
 ## 输出和失败边界
 
+Phase 三角色按 [build-code「Phase 三角色与七步顺序」](../../workflows/build-code/SKILL.md#phase-三角色与七步顺序)：仅在开发完成并明确回报后启动审查，审查只读，不改代码、测试或材料。普通 finding 直接回原开发；迟到 finding 重开同一 Phase，回同一开发修，审查与测试只复验受影响面。审查明确回报 finding 与未解决项；测试另报命令、退出码、失败归因及覆盖限制；两方回报在开发最后确认前汇合，修复后受影响方重新明确回报，缺回报不提交。本规则不改下方真实失败/不可用口径与 P1 审查执行者选择。
+
 复杂任务的每 Phase 审查在普通记录正文写执行者、来源、三维读数，并用 `assertReviewTierRecord` 核对。独立子代理写派发身份与上下文隔离，来源保持独立子代理，不写 `ocr` 身份或伪造 `provider_results`；外部 OCR 写 route、provider 原ref与真实终态。低风险判据及取数只以标准工作方法上述小节为权威；同输入同结论，证据不可核即外部 OCR，终末整卡全审保持。此正文记录不扩审查 schema 或任务事实 writer。
 
 available 只表示实际收到可读建议，至少一个有效语义 sibling 可以与其它失败并存；partial/available-with-failures 不等于通过。空 findings 只表示本次完成阅读后未提出问题；未执行、不可用、取消、无效 JSON 或缺材料都不是空 findings，也不是用户同意或交付完成。

@@ -6,6 +6,25 @@
   "generated_from": "当前迁移表保留分类、已改接真实相对模块 consumer 与显式数据 reader；不保存整树快照或 hash 清单",
   "entries": [
     {
+      "source": "tests/contract/phase-team.test.mjs",
+      "destination": "tests/contract/phase-team.test.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "P2 ORACLE-PHASE-TEAM: consume actual method body and replay controlled local writes, report convergence, ordinary/late findings and per-round commits; no production scheduler proof.",
+      "owner": "P2/T002 oracle owner",
+      "consumer": "P2 targeted vitest gate; independent test and review readers",
+      "module_consumers": [],
+      "named_data_readers": [
+        "workflows/build-code/SKILL.md",
+        "docs/standard-workflow.md",
+        "AGENTS.md",
+        "skills/wh-review/SKILL.md",
+        "skills/stage-handoff/SKILL.md"
+      ],
+      "delete_condition": "Remove only when replacement tests cover these same role/order/report/commit and negative cases for all current consumers.",
+      "retention_basis": "FR-PHASE-001/002 and AC-PHASE-001/002; no runtime or persistent control-plane replacement."
+    },
+    {
       "source": "tools/cli/check-stage-steps.mjs",
       "destination": "tools/cli/check-stage-steps.mjs",
       "status": "retain",

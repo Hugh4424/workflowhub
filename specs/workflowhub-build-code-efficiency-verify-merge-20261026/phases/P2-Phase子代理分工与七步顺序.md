@@ -10,9 +10,9 @@
 - **gate_cmd**：`npx vitest run tests/contract/phase-team.test.mjs`
 - **oracle**：ORACLE-PHASE-TEAM
 - **evidence_path**：`quality/evidence/workflowhub-build-code-efficiency-verify-merge-20261026/P2-phase-team.json`
-- **STOP**：正文与 `tests/contract/phase-team.test.mjs` 的七步/角色字面不一致，或写入集里 `tests/contract/phase-team.test.mjs` 开工时读不到：停该处，回 build-code 主会话与 build-plan 主写主核对写入集；不改第三方路径、不复制旧套件、不改断言求绿，其余不依赖该处的正文与断言继续。
+- **STOP**：正文与 `tests/contract/phase-team.test.mjs` 的七步/角色字面不一致，或应已存在的输入/现有文件不可读：停该处，回 build-code 主会话与 build-plan 主写主核对来源与写入集。本 Phase 声明新增的 `tests/contract/phase-team.test.mjs` 由 T002 先创建可收集的目标测试，再取得具名目标断言的真实 RED；缺文件、导入或收集失败不算目标 RED；不改第三方路径、不复制旧套件、不改断言求绿，其余不依赖该处的正文与断言继续。
 - **覆盖 AC**：AC-PHASE-001、AC-PHASE-002
-- **Done**：两条 AC 都只由 `npx vitest run tests/contract/phase-team.test.mjs` 重放判定；build-plan 阶段两条都只能记 unavailable，RED 与 GREEN 原件由 build-code 补。要诚实下结论还需：五份正文改动齐、受控夹具五项证明与普通/迟到 finding 两类往返各有原 ref、一份独立审查、`evidence_path` 一份清单；缺一不得记 pass。
+- **Done**：两条 AC 都只由 `npx vitest run tests/contract/phase-team.test.mjs` 重放判定；build-plan 阶段两条都只能记 unavailable，RED 与 GREEN 原件由 build-code 补。要诚实下结论还需：五份正文改动齐、受控夹具五项证明与普通/迟到 finding 两类往返各有原 ref、一份独立审查、`evidence_path` 一份清单；缺一不得记 pass。 当前独立判定：AC-PHASE-001 = pass；AC-PHASE-002 = pass；均据 `quality/evidence/2026-10-26-100-p2-final-independent-ac-findings-readback.json`、独立目标命令 `quality/tests/2026-10-26-077-p2-three-findings-independent.json` 和已创建清单 `quality/evidence/workflowhub-build-code-efficiency-verify-merge-20261026/P2-phase-team.json`，原判据保留。
 
 ## 工作包声明
 
@@ -23,6 +23,9 @@
 - **progress_cursor**：只指向任务事实库 `facts.jsonl` 的 `phase_progress`，本文件不保存进度值。
 
 ## 速读卡
+
+- **规则锚**：`spec.md`「Phase 子代理分工（PHASE）」FR-PHASE-001「复杂任务每个 Phase 配 1 个开发、1 个审查、1 个测试子代理」与 FR-PHASE-002「Phase 内按七步顺序执行」；Appendix A 的 AC-PHASE-001/002；`decision-log.md`「WP7」「F4 — WP7 Phase 收口与提交」；本卡「附加条款（T002）的审查与测试回报接缝」。
+- **材料变更影响**：本次只在本卡追加本两锚、测试变更请求及真实执行引用，不改 spec、AC 原文、index 或其它 Phase；新增测试路径澄清四行由原 build-plan owner先写，非本次实现。P1 的分级与原失败来源保持；后写 P3/P4 应读回本次五份方法正文。
 
 - **本 Phase 结果**：复杂任务的每个 build-code Phase 固定 1 开发、1 审查、1 测试子代理；开发是唯一 writer；七步顺序、每 Phase 审后一次提交、普通与迟到 finding 的走法写进五份正文，并由受控 Phase 夹具重放证明。
 - **非目标**：不改 P1 的审查执行者选择与 OCR 口径；不实现 P3 自动恢复、P4 证据格式、驾驶舱；不改 push/merge/PR/归档/清理（仍归 stage-close）；不新增运行时状态、公共命令或 schema；不改小改动与普通任务。
@@ -119,7 +122,7 @@
 
 ### 停止
 
-出现以下任一即停该处并回原 owner，不静默改绿：夹具出现第二个 writer、审查或测试改动了声明写集字节、审查派发早于开发完成回报、同一轮出现第二次提交、迟到 finding 被丢或只带到期终审。正文与测试字面冲突时，以 build-code 方法正文为唯一来源，两处一起改并保留原失败；声明路径 `tests/contract/phase-team.test.mjs` 读不到时停该文件，回 build-plan 主写主核对写入集。负责修复的是 T002 开发子代理；换执行者须重做并保留原失败。
+出现以下任一即停该处并回原 owner，不静默改绿：夹具出现第二个 writer、审查或测试改动了声明写集字节、审查派发早于开发完成回报、同一轮出现第二次提交、迟到 finding 被丢或只带到期终审。正文与测试字面冲突时，以 build-code 方法正文为唯一来源，两处一起改并保留原失败；应已存在的输入/现有文件不可读时停该处，回 build-plan 主写主核对来源与写入集；本 Phase 声明新增的 `tests/contract/phase-team.test.mjs` 先由 T002 创建可收集的目标测试，再取得具名目标断言的真实 RED，缺文件、导入或收集失败不算目标 RED。负责修复的是 T002 开发子代理；换执行者须重做并保留原失败。
 
 ### 完成
 
@@ -130,7 +133,7 @@
 - **风险**：正文与测试各写一套七步措辞；测试只认字面时，改一句正文就要改测试，反过来测试可能掩盖语义漂移。
 - **影响**：后续 Phase 按错误顺序或错误提交点执行，AC-PHASE-002 出现假绿。
 - **缓解**：七步只在 build-code 方法正文写一份完整文本；其余四份只写角色、写权、提交点并指向它；测试从正文抓七步编号，不另立第二份顺序表。
-- **回滚**：只回退本 Phase 的 8 个路径改动，保留 P7–P1 已有提交；回退后重跑 `npx vitest run tests/contract/phase-team.test.mjs`，失败原件保留。
+- **回滚**：只回退本 Phase 声明的 7 个路径改动，保留 P1 已有提交；回退后重跑 `npx vitest run tests/contract/phase-team.test.mjs`，失败原件保留。
 - **触发条件**：同一断言在正文未变时反复失败，或夹具为了通过开始 mock 真实调度或网络；出现即停并回 build-plan 主写主改契约。
 
 ### 交接知识
@@ -158,7 +161,7 @@
 - **GREEN 判定器**：ORACLE-PHASE-TEAM 同一命令退出 0：五份正文锚点可读，受控夹具五项证明与普通/迟到 finding 两类往返全部通过；具名反向行为是审查早于开发完成、第二个 writer、审查或测试改动字节、主会话跑测试、finding 错投或迟到项被丢，任一出现即非零。
 - **证据**：`quality/evidence/workflowhub-build-code-efficiency-verify-merge-20261026/P2-phase-team.json`；计划 RED 为 unavailable，GREEN 原件由 build-code 保存；本卡不声称执行。
 - **覆盖上限**：不证明真实子代理调度、真实 provider/OCR、真实 Git 交付与真实耗时；不证明 P1 的审查执行者选择。
-- **停止 / 恢复**：正文与测试字面不一致 → 以 build-code 方法正文为唯一来源，两处一起改并保留原失败；夹具需要真实网络或 provider → 停该夹具改纯本地替身；声明路径 `tests/contract/phase-team.test.mjs` 读不到 → 停该文件，回 build-plan 主写主核对写入集；不得静默回退或改断言求绿。
+- **停止 / 恢复**：正文与测试字面不一致 → 以 build-code 方法正文为唯一来源，两处一起改并保留原失败；夹具需要真实网络或 provider → 停该夹具改纯本地替身；应已存在的输入/现有文件不可读 → 停该处，回 build-plan 主写主核对来源与写入集；本 Phase 声明新增的 `tests/contract/phase-team.test.mjs` → T002 先创建可收集的目标测试，再取得具名目标断言的真实 RED，缺文件、导入或收集失败不算目标 RED；不得静默回退或改断言求绿。
 - **完成**：AC-PHASE-001 由三角色、唯一 writer、审查与测试字节不变三项断言通过证明；AC-PHASE-002 由七步顺序、每轮审后一次提交、普通 finding 回开发、迟到 finding 重开同一 Phase 四项断言通过证明；加上 gate_cmd 退出 0、独立审查与 `evidence_path` 清单，才可记 pass；缺项记 unavailable/incomplete 并写 owner。
 
 #### 附加条款（T002） 的审查与测试回报接缝
@@ -174,3 +177,39 @@
 ```
 
 删除条件：`tests/contract/phase-team.test.mjs` 落地后，其断言、正文锚点与证据清单足以复现本节信息。
+
+### 测试变更请求 — P2/T002 夹具真实性收紧（待独立审查）
+
+目标 RED 已记录于任务库 `quality/tests/2026-10-26-064-p2-target-red.json`（exit 1，19项收集，正文缺 Phase method；非环境/导入失败）。首轮 GREEN `quality/tests/2026-10-26-065-p2-target-green-attempt.json`（exit 0，19/19），不据此自判 AC。
+
+发现：`reopenLateFinding()` 在最后确认/四项核对之后又为第二次真实 fixture commit 写注释，写入未入事件；这会使受控事件与真实字节时点不一致。拟把迟到修复实际写入移到其目标复验之前，并记录写入，保持现有每轮一次提交/两方回报断言；独立审查之前不改冻结测试。另拟补双缺回报、迟到 finding 丢弃/不重开/更换 Phase 或开发、无额外 writer 事件但字节被改的反例，及正常/普通/迟到往返可回读运行摘要（只记录具名输入、选定文件字节比较、事件、命令/退出/覆盖限制，不保存目录树）。目标判据和 ORACLE-PHASE-TEAM 不变，只收紧覆盖。测试包含临时 task handle/capture，临时资源 finally 清理；临时回执若清理不能充当永久证据引用，真实任务 capture 原输出应保可回读运行事实。
+
+状态：独立测试 reader 已支持本窄收紧；原件 `quality/evidence/2026-10-26-072-p2-tcr-independent-test-review.md`，冻结测试原字节 `quality/evidence/2026-10-26-070-p2-frozen-test-before-tcr.mjs`。按原会话实施，不改 oracle、AC 或原成功/失败强度。新增断言实际 RED `quality/tests/2026-10-26-066-p2-tcr-target-red.json`：27 项收集，4 项目标失败（卡片结构、迟到实际写入顺序、双缺/单方报告、丢迟到项）；其余新增反例本来通过，不冒新 RED。
+
+### T002 实施事实（独立回报前）
+
+五份正文承接固定三角色、唯一 writer、两方回报汇合、七步与普通/迟到 finding；完整七步仅在 build-code，另外四份引用。登记一个测试，未加生产 runtime/调度器/持久状态。P1 第8步与标准方法挑审原段字节保持，原五份标题逐字有序保全，新增标题记录见任务库 `quality/evidence/2026-10-26-071-p2-heading-and-p1-preservation.txt`。
+
+冻结前后测试原件070；独立TCR072；RED064、初GREEN065、新目标RED066；修卡parser失败067/068保留，根因和处理见074/075。受控fixture是真实临时Git worktree、完整17字段卡、真实validatePostPhaseContract/openTask/capture；普通/迟到回放永久事实随外层capture原输出的 `P2_LOCAL_PROOF` 留存，仅选定字节、材料哈希、事件/命令/整数退出与提交次数，不保存目录树、不永久引用已清理临时回执。
+
+覆盖限制：正文reader仅证静态语义；本地seam/受控回放不证明真实子代理平台权限、真实调度、provider/OCR、真实交付或耗时下降。临时Git只在测试自建tmp目录，finally清理；真实任务仓库未提交。AC-PHASE-001/002 尚待独立测试及审查回报，本段不自签AC、不改契约头Done；正式证据清单在两方回报后由当前原owner承接。
+
+### 测试变更请求 — 保留原 result===1 判据
+
+独立Standards建议原件 `quality/evidence/2026-10-26-082-p2-standards-supplement-original.md`：fixture声明result为1，但普通/迟到修复改为2又改复验预期，finding有效。原冻结测试：`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-build-code-efficiency-verify-merge-20261026/quality/evidence/2026-10-26-084-p2-fixed-oracle-tcr-before.mjs`。本次只修test helper成功路径为源码真实变更且返回值仍1、复验始终原判据；新增真实result2即使事件齐全仍失败反例，并验证普通/迟到复验命令与原命令一致。原AC、ORACLE-PHASE-TEAM、已有成功/失败用例保持；源/Git/字节变化事实随真实capture输出。独立来源和主会话已明确支持此窄修，不扩正文或生产范围。069/070历史结果原样保留，不能用它们冒当前修复验证。
+
+本次执行：`quality/tests/2026-10-26-071-p2-fixed-oracle-red.json` exit1，29项中1项真实失败（普通/迟到复验把预期1改成2），真实result2负例本来已拒绝；`quality/tests/2026-10-26-072-p2-fixed-oracle-green.json` exit0，29/29。根因正是原082指出的oracle漂移；只改injectFinding固定result1及注释字节模拟修复，所有retested argv保持原gate。原普通/迟到场景和新增反例保留，原输出带实际source、命令整数退出及角色事件；历史069/070不重写。开发修复确认、停写等待独立测试回报，不自判AC/不Git。
+
+### 测试变更请求 — 正式OCR三项受控oracle缺口
+
+P2 OCR014 has three valid major findings from codex/luna; kimi empty does not cancel. Only local fixture/test scope. Proposed TCR: (1) test role separately task.captureCommand after its start and each affected repair; report tied to its own actual receipt, reject developer-only receipt and wrong execution ordering. Preserve fixed result1 argv. (2) in-memory enumerate/hash actual fixture worktree including untracked/ignored files excluding Git administrative entry, per review/test execution compare hashes/path set; persist only changed paths and limited selected-byte proof, never directory snapshots; reject new untracked or other-path modification by each role even without writer event. (3) per reviewed commit host check must be later than developer final and both applicable reports; reject pre-final and pre-report checks independently, preserving all existing four-check content rules. Originals review014 and before /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-build-code-efficiency-verify-merge-20261026/quality/evidence/2026-10-26-092-p2-ocr-three-findings-before.mjs. Existing29/29 covers old scope only, no current AC signature. Await independent TCR reader before test writes; other methods untouched.
+
+独立TCR支持原件094：`quality/evidence/2026-10-26-094-p2-ocr-three-findings-independent-tcr-review.md`。新增21反例目标RED `quality/tests/2026-10-26-074-p2-three-findings-red.json`：21失败/29通过；首复验075：47通过/3条旧check复用错误分类不符，原诊断095保留；最终 `quality/tests/2026-10-26-076-p2-three-findings-final-green.json` exit0，50/50。测试角色每轮start后独立真实capture，report绑定本次ref并核真实起止时间晚于开发命令及逻辑顺序，拒开发/旧测试回执；每review/test分别完整集合/类型/字节hash内存比较，含tracked、已有/新增untracked及ignored，不保存目录快照；逐commit窗口强制双方report<final<check<commit，反例真实重排事件后重编号，普通/迟到均覆盖。只观察边界稳定变化，不证明写后恢复瞬时变化或平台权限。P2正式OCR014不重派，三条修复待独立回读，旧29结果不冒新范围完成。开发修复确认并停写，无已知待修项，不Git、不自签AC。
+
+### 本 Phase 自带判据小结 — P2 最终确认
+
+实际验了什么：独立目标命令 `quality/tests/2026-10-26-077-p2-three-findings-independent.json` exit0、50/50；原输出 `quality/tests/2026-10-26-077-p2-three-findings-independent.output` 保存三类真实受控回放及所选字节/材料哈希。独立AC读回100判两条pass、四finding fixed；正式014及089覆盖限制、同源082/083与090/091来源仍保原件，局部修复不冒新OCR。约定唯一清单 `quality/evidence/workflowhub-build-code-efficiency-verify-merge-20261026/P2-phase-team.json` 已创建并逐引用读回；规范同步099为无额外delta。
+
+没验什么：真实平台硬隔离/瞬时写后恢复 = N/A（本Phase只承诺受控边界观测，平台能力owner）；真实平台调度/provider = N/A（P1/终末真实运行owner）；真实任务Git交付及耗时收益 = 未执行（当前尚未提交，stage-close/后续对应Phase owner）。未把本地fixture冒真实平台效果。
+
+审查与测试两方明确回报已取得；开发最终确认：无待修项。只补事实清单与本卡，不改七项实现、spec或index；无新代码变化，不重复测试/OCR；提交尚未发生，交主会话四项核对后按授权继续。本开发会话现在停写。
