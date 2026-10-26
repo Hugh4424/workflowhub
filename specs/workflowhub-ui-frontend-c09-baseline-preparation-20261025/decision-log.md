@@ -346,6 +346,8 @@
 | AC-07 | 准备范围逐项判定 | 唯一当前判据见 `spec.md` Appendix A AC-07；无稿交接完整性与未来业务环境可用性分别报告 | 依同条失败条件，不代签真实业务或产品效果 | 完备性表、具名未决与原件指针 | 用户 | UC-07 |
 | AC-08 | 用交接表回读版本、环境、样本、口径与未决 | C09 后续与 C10 能按指针直接找到原件；未覆盖状态可见 | 只有摘要无法回读、C10 需要再来问 | 交接表与指针清单 | 本任务执行者 | UC-08 |
 
+当前内容确认：`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-baseline-preparation-20261025/quality/evidence/human-confirmations/2026-10-26-012-verify-code-preparation-content-confirmed.json`；当前独立判断：`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-baseline-preparation-20261025/quality/evidence/2026-10-26-current-preparation-after-012-independent-verdict.md`。AC07/08限定满足，AC10仅用户子条件补齐仍incomplete，AC11含87/88及历史欠账仍incomplete；旧469的7/4保原时点，当前9限定pass/2incomplete不等全质量或完整产品通过。
+
 ## 未决项
 
 | OI 编号 | 问题与来源 | 状态与处置 | 解决者与下一步 |
@@ -357,7 +359,7 @@
 | OI-005 | C04 提取器未交付 | open；只预留接入位，不引用其产出 | C04 owner 交付后接入；本任务不等待 |
 | OI-006 | 需求变更原件 | resolved：已写入“无变更”及判断依据 | 已完成 |
 | OI-007 | 真实业务凭证/授权 | resolved：PaperBuilder 无认证、本机可访问；需外部凭证的实盘/行情路径明确排除 | 已处置 |
-| OI-008 | 独立判定身份与用户内容判断 | 历史方向审未收口见OI013；当前081原件及469新独立判断各保真实身份/覆盖，不回填历史；用户准备内容确认尚未取得 | 主会话实际展示当前准备判定/交接/身份与缺口后一次询问用户；具体执行身份按原件核，不由路线批准代签 |
+| OI-008 | 独立判定身份与用户内容判断 | 历史方向审未收口见OI013；当前081原件及469新独立判断各保真实身份/覆盖，不回填历史；用户已012确认501当前准备内容；AC10异源身份/计划覆盖仍不足 | 012真实答复及当前独立增量见下方指针；后续补AC10所需异源身份/逐点判断，不由用户确认代签 |
 | OI-009 | R-002/R-009 的落点 | resolved（派发记录与研究报告原件） | 已完成 |
 | OI-010 | R-007 五段表与想法扩散 | resolved（第 9 步十包五行表已建） | 已完成 |
 | OI-011 | C04 晚于本步收敛的处置 | resolved（WP6 预留接入位并标依赖） | 已处置 |
