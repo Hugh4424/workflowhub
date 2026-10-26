@@ -52,6 +52,124 @@ describe('ORACLE-EXTRACT-COLLECT unique production validator and provenance',()=
 
 import {mkdirSync} from 'node:fs';
 import {spawnSync} from 'node:child_process';
+describe('viewport application SDK seam',()=>{
+  for(const refuse of [false,true])it(refuse?'preserves viewport refusal before navigation or sampling':'applies each requested viewport before navigation and sampling',()=>{
+    const root=mkdtempSync(join(tmpdir(),'c04-viewport-sdk-'));
+    try{
+      const taskRoot=join(root,'Projects','fixture','tasks','collector'),bin=join(root,'bin'),trace=join(root,'navigation.jsonl');
+      mkdirSync(taskRoot,{recursive:true});mkdirSync(bin);
+      writeFileSync(join(taskRoot,'task.json'),JSON.stringify({schema_version:'1.0.0',project_name:'fixture',task_id:'collector',activation_cohort:'post',target_repo_root:ROOT}));
+      const plan=fullPlan();plan.scope.viewports=[{id:'wide',width:1440,height:900},{id:'narrow',width:1280,height:900}];
+      plan.scope.checklist=[{...plan.scope.checklist[0],id:'wide-title',viewport:'wide'},{...plan.scope.checklist[0],id:'narrow-title',viewport:'narrow'}];
+      plan.scope.critical=['wide-title','narrow-title'];plan.scope.frozen_at='2026-10-26T00:00:00Z';writeProbeBinding(plan,root);
+      plan.execution={task_path:taskRoot,project_name:'fixture',task_id:'collector'};
+      const planPath=join(root,'plan.json');writeFileSync(planPath,JSON.stringify(plan));
+      // Run the production-generated scenario, substituting only SDK/registered
+      // I/O. The page starts at a distinct size; observations use its live state.
+      writeFileSync(join(bin,'ego-browser'),`#!${process.execPath}
+const code=process.argv.at(-1);
+if(code.includes('WHQA_OWNED_HANDLE=')){console.log('WHQA_OWNED_HANDLE='+JSON.stringify({spaceId:71,label:'p1'}));}
+else if(code.includes('WHQA_OBSERVATIONS=')){
+  let viewport={width:1942,height:1005};
+  const page={async cdp(method,params){if(method!=='Emulation.setDeviceMetricsOverride')throw Error('UNEXPECTED_PROTOCOL_METHOD');if(${refuse})throw Error('CONTROLLED_VIEWPORT_REFUSED');if(params.deviceScaleFactor!==1||params.mobile!==false)throw Error('UNEXPECTED_DEVICE_MODE');viewport={width:params.width,height:params.height};},async goto(){require('node:fs').appendFileSync(${JSON.stringify(trace)},JSON.stringify(viewport)+'\\n');},async waitForSelector(){}};
+  const registered=async(_page,id,args)=>id==='design-source-prepare-v1'?[]:args.elements.map(({selector,properties})=>({structure:{tag:'DIV',text:'literal hero'},viewport_observed:{...viewport},rendered:{styles:Object.fromEntries(properties.map(p=>[p,'100px'])),box:{x:0,y:0,width:100,height:20}},declared:{style:null}}));
+  const scenario=code.replace(/^const \\{runRegisteredScript\\}=await import\\([^;]+;/,'');
+  const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
+  new AsyncFunction('taskSpace','runRegisteredScript',scenario)(async()=>({page:()=>page}),registered).catch(error=>{console.error(error.message);process.exitCode=7;});
+}else{console.error('UNEXPECTED_BROWSER_CALL');process.exitCode=8;}
+`,{mode:0o700});
+      const result=spawnSync(process.execPath,[script,'--plan',planPath,'--workspace-scenario'],{cwd:ROOT,env:{...process.env,PATH:bin+':'+process.env.PATH,BROWSER_QA_ENGINE:'ego-lite',BROWSER_QA_EGO_SPACE_ID:'71'},encoding:'utf8',timeout:15000});
+      expect(result.error).toBeUndefined();
+      const pointer=result.stdout.split('\n').map(row=>{try{return JSON.parse(row);}catch{return null;}}).find(row=>row?.artifact_ref);
+      expect(pointer,result.stderr).toBeTruthy();const doc=JSON.parse(readFileSync(pointer.artifact_ref,'utf8'));
+      if(refuse){expect(result.status).toBe(1);expect(existsSync(trace)).toBe(false);expect(doc.items).toEqual([]);expect(doc.failures[0].original_error).toContain('CONTROLLED_VIEWPORT_REFUSED');}
+      else{expect(result.status,result.stderr).toBe(0);expect(doc.items.map(item=>item.viewport_observed)).toEqual([{width:1440,height:900},{width:1280,height:900}]);expect(readFileSync(trace,'utf8').trim().split('\n').map(JSON.parse)).toEqual([{width:1440,height:900},{width:1280,height:900}]);}
+    }finally{rmSync(root,{recursive:true,force:true});}
+  });
+});
+describe('sequential preparation SDK seam',()=>{
+  for(const refuse of [false,true])it(refuse?'preserves a dependent selector wait failure without sampling':'waits for an asynchronous first click result before the dependent click',()=>{
+    const root=mkdtempSync(join(tmpdir(),'c04-sequence-sdk-'));
+    try{
+      const taskRoot=join(root,'Projects','fixture','tasks','collector'),bin=join(root,'bin'),trace=join(root,'sample.jsonl');
+      mkdirSync(taskRoot,{recursive:true});mkdirSync(bin);
+      writeFileSync(join(taskRoot,'task.json'),JSON.stringify({schema_version:'1.0.0',project_name:'fixture',task_id:'collector',activation_cohort:'post',target_repo_root:ROOT}));
+      const plan=fullPlan();plan.scope.pages[0].actions=[{type:'click',selector:'#first'},{type:'click',selector:'#second'}];
+      plan.scope.frozen_at='2026-10-26T00:00:00Z';writeProbeBinding(plan,root);plan.execution={task_path:taskRoot,project_name:'fixture',task_id:'collector'};
+      const planPath=join(root,'plan.json');writeFileSync(planPath,JSON.stringify(plan));
+      // The first click schedules a later UI commit; the second element does
+      // not exist in the same synchronous registered-script invocation.
+      writeFileSync(join(bin,'ego-browser'),`#!${process.execPath}
+const code=process.argv.at(-1);let ready=false,clicked=false;
+const page={async cdp(){},async goto(){},async waitForSelector(selector){if(selector==='#second'){await new Promise(resolve=>setTimeout(resolve,15));if(${refuse})throw Error('CONTROLLED_WAIT_SECOND_SELECTOR');if(!ready)throw Error('SECOND_ELEMENT_NOT_READY');}}};
+const registered=async(_page,id,args)=>{if(id==='design-source-prepare-v1'){for(const action of args.actions){if(action.selector==='#first')setTimeout(()=>{ready=true;},5);else if(action.selector==='#second'){if(!ready)throw Error('SECOND_ELEMENT_NOT_READY');clicked=true;}}return [];}if(!clicked)throw Error('TARGET_NOT_OPENED');require('node:fs').appendFileSync(${JSON.stringify(trace)},'sample\\n');return args.elements.map(({properties})=>({structure:{tag:'DIV',text:'literal hero'},viewport_observed:{width:1280,height:800},rendered:{styles:Object.fromEntries(properties.map(p=>[p,'100px'])),box:{x:0,y:0,width:100,height:20}},declared:{style:null}}));};
+const scenario=code.replace(/^const \\{runRegisteredScript\\}=await import\\([^;]+;/,'');
+const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
+new AsyncFunction('taskSpace','runRegisteredScript',scenario)(async()=>({page:()=>page}),registered).catch(error=>{console.error(error.message);process.exitCode=7;});
+`,{mode:0o700});
+      const result=spawnSync(process.execPath,[script,'--plan',planPath,'--workspace-scenario'],{cwd:ROOT,env:{...process.env,PATH:bin+':'+process.env.PATH,BROWSER_QA_ENGINE:'ego-lite',BROWSER_QA_EGO_SPACE_ID:'71'},encoding:'utf8',timeout:15000});
+      expect(result.error).toBeUndefined();
+      const pointer=result.stdout.split('\n').map(row=>{try{return JSON.parse(row);}catch{return null;}}).find(row=>row?.artifact_ref);
+      expect(pointer,result.stderr).toBeTruthy();const doc=JSON.parse(readFileSync(pointer.artifact_ref,'utf8'));
+      if(refuse){expect(result.status).toBe(1);expect(existsSync(trace)).toBe(false);expect(doc.items).toEqual([]);expect(doc.failures[0].original_error).toContain('CONTROLLED_WAIT_SECOND_SELECTOR');}
+      else{expect(result.status,result.stderr).toBe(0);expect(doc.items[0].rendered.value).toBe('100px');expect(existsSync(trace)).toBe(true);expect(doc.failures).toEqual([]);}
+    }finally{rmSync(root,{recursive:true,force:true});}
+  });
+});
+describe('preparation batch limit SDK seam',()=>{
+  for(const count of [100,101])it(count===101?'rejects 101 before any click or sampling':'preserves 100 legal clicks and sampling',()=>{
+    const root=mkdtempSync(join(tmpdir(),'c04-batch-limit-'));
+    try{
+      const taskRoot=join(root,'Projects','fixture','tasks','collector'),bin=join(root,'bin'),clicks=join(root,'clicks.txt'),samples=join(root,'samples.txt');
+      mkdirSync(taskRoot,{recursive:true});mkdirSync(bin);
+      writeFileSync(join(taskRoot,'task.json'),JSON.stringify({schema_version:'1.0.0',project_name:'fixture',task_id:'collector',activation_cohort:'post',target_repo_root:ROOT}));
+      const plan=fullPlan();plan.scope.pages[0].actions=Array.from({length:count},()=>({type:'click',selector:'#allowed'}));
+      plan.scope.frozen_at='2026-10-26T00:00:00Z';writeProbeBinding(plan,root);plan.execution={task_path:taskRoot,project_name:'fixture',task_id:'collector'};
+      const planPath=join(root,'plan.json');writeFileSync(planPath,JSON.stringify(plan));
+      // Keep the registered preparation's original batch admission contract.
+      writeFileSync(join(bin,'ego-browser'),`#!${process.execPath}
+const code=process.argv.at(-1),fs=require('node:fs');const page={async cdp(){},async goto(){},async waitForSelector(){}};
+const registered=async(_page,id,args)=>{if(id==='design-source-prepare-v1'){if(args.actions.length>100)throw Error('INVALID_COLLECTION_ARGUMENTS');for(const action of args.actions)fs.appendFileSync(${JSON.stringify(clicks)},'click\\n');return [];}fs.appendFileSync(${JSON.stringify(samples)},'sample\\n');return args.elements.map(({properties})=>({structure:{tag:'DIV',text:'literal hero'},viewport_observed:{width:1280,height:800},rendered:{styles:Object.fromEntries(properties.map(p=>[p,'100px'])),box:{x:0,y:0,width:100,height:20}},declared:{style:null}}));};
+const scenario=code.replace(/^const \\{runRegisteredScript\\}=await import\\([^;]+;/,'');const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
+new AsyncFunction('taskSpace','runRegisteredScript',scenario)(async()=>({page:()=>page}),registered).catch(error=>{console.error(error.message);process.exitCode=7;});
+`,{mode:0o700});
+      const result=spawnSync(process.execPath,[script,'--plan',planPath,'--workspace-scenario'],{cwd:ROOT,env:{...process.env,PATH:bin+':'+process.env.PATH,BROWSER_QA_ENGINE:'ego-lite',BROWSER_QA_EGO_SPACE_ID:'71'},encoding:'utf8',timeout:15000});
+      expect(result.error).toBeUndefined();const pointer=result.stdout.split('\n').map(row=>{try{return JSON.parse(row);}catch{return null;}}).find(row=>row?.artifact_ref);
+      expect(pointer,result.stderr).toBeTruthy();const doc=JSON.parse(readFileSync(pointer.artifact_ref,'utf8'));
+      if(count===101){expect(result.status).toBe(1);expect(existsSync(clicks)).toBe(false);expect(existsSync(samples)).toBe(false);expect(doc.items).toEqual([]);expect(doc.failures[0].original_error).toContain('INVALID_COLLECTION_ARGUMENTS');}
+      else{expect(result.status,result.stderr).toBe(0);expect(readFileSync(clicks,'utf8').trim().split('\n')).toHaveLength(100);expect(existsSync(samples)).toBe(true);expect(doc.items[0].rendered.value).toBe('100px');}
+    }finally{rmSync(root,{recursive:true,force:true});}
+  });
+});
+describe('preparation failure group SDK seam',()=>{
+  for(const preparation of [true,false])it(preparation?'stops later viewport groups after a preparation wait failure':'keeps target item absence local and continues the next group',()=>{
+    const root=mkdtempSync(join(tmpdir(),'c04-preparation-stop-'));
+    try{
+      const taskRoot=join(root,'Projects','fixture','tasks','collector'),bin=join(root,'bin'),samples=join(root,'samples.txt');
+      mkdirSync(taskRoot,{recursive:true});mkdirSync(bin);
+      writeFileSync(join(taskRoot,'task.json'),JSON.stringify({schema_version:'1.0.0',project_name:'fixture',task_id:'collector',activation_cohort:'post',target_repo_root:ROOT}));
+      const plan=fullPlan();plan.scope.viewports=[{id:'wide',width:1440,height:900},{id:'narrow',width:1280,height:900}];
+      plan.scope.checklist=[{...plan.scope.checklist[0],id:'wide-title',viewport:'wide'},{...plan.scope.checklist[0],id:'narrow-title',viewport:'narrow'}];
+      plan.scope.critical=['wide-title','narrow-title'];plan.scope.pages[0].actions=preparation?[{type:'click',selector:'#prepare'}]:[];
+      plan.scope.frozen_at='2026-10-26T00:00:00Z';writeProbeBinding(plan,root);plan.execution={task_path:taskRoot,project_name:'fixture',task_id:'collector'};
+      const planPath=join(root,'plan.json');writeFileSync(planPath,JSON.stringify(plan));
+      writeFileSync(join(bin,'ego-browser'),`#!${process.execPath}
+const code=process.argv.at(-1),fs=require('node:fs');let viewport={width:1942,height:1005};
+const page={async cdp(method,params){viewport={width:params.width,height:params.height};},async goto(){},async waitForSelector(selector){if(viewport.width===1440&&selector===${JSON.stringify(preparation?'#prepare':'#hero')})throw Error('waiting for selector '+selector+' timed out: CONTROLLED_FIRST_GROUP');}};
+const registered=async(_page,id,args)=>{if(id==='design-source-prepare-v1')return [];fs.appendFileSync(${JSON.stringify(samples)},JSON.stringify(viewport)+'\\n');return args.elements.map(({properties})=>({structure:{tag:'DIV',text:'literal hero'},viewport_observed:{...viewport},rendered:{styles:Object.fromEntries(properties.map(p=>[p,'100px'])),box:{x:0,y:0,width:100,height:20}},declared:{style:null}}));};
+const scenario=code.replace(/^const \\{runRegisteredScript\\}=await import\\([^;]+;/,'');const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
+new AsyncFunction('taskSpace','runRegisteredScript',scenario)(async()=>({page:()=>page}),registered).catch(error=>{console.error(error.message);process.exitCode=7;});
+`,{mode:0o700});
+      const result=spawnSync(process.execPath,[script,'--plan',planPath,'--workspace-scenario'],{cwd:ROOT,env:{...process.env,PATH:bin+':'+process.env.PATH,BROWSER_QA_ENGINE:'ego-lite',BROWSER_QA_EGO_SPACE_ID:'71'},encoding:'utf8',timeout:15000});
+      expect(result.error).toBeUndefined();expect(result.status).toBe(1);
+      const pointer=result.stdout.split('\n').map(row=>{try{return JSON.parse(row);}catch{return null;}}).find(row=>row?.artifact_ref);
+      expect(pointer,result.stderr).toBeTruthy();const doc=JSON.parse(readFileSync(pointer.artifact_ref,'utf8'));
+      expect(doc.failures[0].original_error).toContain('CONTROLLED_FIRST_GROUP');
+      if(preparation){expect(doc.items).toEqual([]);expect(existsSync(samples)).toBe(false);expect(doc.commands).toHaveLength(1);expect(doc.failures[0]).toMatchObject({category:'engine',affected_scope:['wide-title','narrow-title']});}
+      else{expect(doc.items.map(item=>item.id)).toEqual(['narrow-title']);expect(existsSync(samples)).toBe(true);expect(doc.failures[0]).toMatchObject({category:'element_missing',affected_scope:['wide-title']});}
+    }finally{rmSync(root,{recursive:true,force:true});}
+  });
+});
 describe('ORACLE-EXTRACT-COLLECT actual CLI boundary',()=>{
   for(const kind of ['missing-plan','bad-json','invalid-plan'])it('cli:'+kind+'-nonzero-before-browser',()=>{const root=mkdtempSync(join(tmpdir(),'c04-cli-'));try{const file=join(root,'plan.json');writeFileSync(file,kind==='bad-json'?'{bad':JSON.stringify({}));const result=spawnSync(process.execPath,[script,...(kind==='missing-plan'?[]:['--plan',file])],{cwd:ROOT,encoding:'utf8'});expect(result.status).not.toBe(0);expect(result.stderr).toMatch(/PLAN|ARGUMENT/);}finally{rmSync(root,{recursive:true,force:true});}});
   for(const kind of ['normal','engine','state','probe'])it('cli:literal-command-'+kind+'-original-not-final-doc-stub',()=>{const root=mkdtempSync(join(tmpdir(),'c04-cli-io-'));try{const taskRoot=join(root,'Projects','fixture','tasks','collector'),bin=join(root,'bin'),leak=join(root,'source-leak');mkdirSync(taskRoot,{recursive:true});mkdirSync(bin);writeFileSync(join(taskRoot,'task.json'),JSON.stringify({schema_version:'1.0.0',project_name:'fixture',task_id:'collector',activation_cohort:'post',target_repo_root:ROOT}));const plan=fullPlan();plan.scope.frozen_at='2026-10-25T00:00:00Z';if(kind==='probe')delete plan.scope.frozen_at;else writeProbeBinding(plan,root);plan.execution={task_path:taskRoot,project_name:'fixture',task_id:'collector'};const planPath=join(root,'plan.json');writeFileSync(planPath,JSON.stringify(plan));writeFileSync(join(bin,'ps'),`#!${process.execPath}\nconsole.log('/Applications/ego lite.app/Contents/MacOS/ego lite');`,{mode:0o700});const observation={structure:{tag:'DIV',text:'literal hero'},state_evidence:{state:'default',selector:'#hero',expected_text:'literal hero',observed_text:'literal hero'},viewport_observed:{width:1280,height:800},rendered:{styles:{width:'100px'},box:{x:0,y:0,width:100,height:20}},declared:{style:'width:100px'}};const payload=[{id:'k0',page:'page',selector:'#hero',observation}];writeFileSync(join(bin,'ego-browser'),`#!${process.execPath}\nif(process.env.BROWSER_QA_TICKET_SOURCE_WS){require('node:fs').writeFileSync(${JSON.stringify(leak)},'leaked');process.exit(9);}const code=process.argv.at(-1);if(code.includes('WHQA_OWNED_HANDLE=')){console.error('WHQA_OWNED_HANDLE='+JSON.stringify({spaceId:71,label:'p1'}));}else if(code.includes('WHQA_OBSERVATIONS=')){${kind==='engine'?"console.error('CONTROLLED_ENGINE_FAILURE');process.exit(7);":kind==='state'?"console.error('STATE_NOT_OBSERVED');process.exit(7);":'console.error('+JSON.stringify('WHQA_OBSERVATIONS='+JSON.stringify(payload))+');'}}else{console.error('UNEXPECTED_BROWSER_CALL');process.exit(8);}`,{mode:0o700});const result=spawnSync(process.execPath,[script,'--plan',planPath,...(kind==='probe'?['--probe']:[])],{cwd:ROOT,env:{...process.env,PATH:bin+':'+process.env.PATH,BROWSER_QA_ENGINE:'ego-lite',BROWSER_QA_EGO_SPACE_ID:'71',BROWSER_QA_AUTH_MODE:'none',BROWSER_QA_TICKET_SOURCE_WS:'fake-source-capability'},encoding:'utf8',timeout:15000});expect(result.error).toBeUndefined();expect(result.status).toBe(['engine','state'].includes(kind)?1:0);expect(existsSync(leak)).toBe(false);if(kind==='probe'){const value=result.stdout.split('\n').map(row=>{try{return JSON.parse(row);}catch{return null;}}).find(row=>row?.probe===true);expect(value).toMatchObject({observed_ids:['k0']});expect(value.coverage).toBeUndefined();expect(value.artifact_ref).toBeUndefined();return;}const pointer=result.stdout.split('\n').map(row=>{try{return JSON.parse(row);}catch{return null;}}).find(row=>row?.artifact_ref);expect(pointer,'CLI must preserve its document pointer even on nonzero').toBeTruthy();const doc=JSON.parse(readFileSync(pointer.artifact_ref,'utf8'));expect(api.validateExtraction(doc,{readEvidence:ref=>readFileSync(ref,'utf8')}).valid).toBe(true);if(kind==='normal')expect(doc.items[0].rendered.value).toBe('100px');else if(kind==='state'){expect(doc.failures[0]).toMatchObject({category:'state_unverified',affected_scope:['k0']});expect(doc.failures.some(failure=>failure.affected_scope.includes('k0'))).toBe(true);}else expect(doc.failures[0].original_error).toContain('CONTROLLED_ENGINE_FAILURE');}finally{rmSync(root,{recursive:true,force:true});}});

@@ -67,16 +67,20 @@ function runCoverage(completed, check) {
   finally { rmSync(f.root, { recursive: true }); }
 }
 describe('ORACLE-N11-STEP-COVERAGE', () => {
-  it('returns named missing steps from a partially attested stage without mutating its input', () => {
+  // P1 TCR: current spec OPEN-07/P1 + 2026-10-26 build-code authorization;
+  // independent change review precedes this edit. Old :74 exit_code: 1,
+  // old :79 expect(result.status).toBe(1), old :89 missing_steps=[] are
+  // superseded only for report-only coverage; missing rows remain strict negatives.
+  it('reports named missing steps without blocking or mutating its input', () => {
     expect(checker.stepCoverageExit).toBeTypeOf('function');
     const report = { workflow_steps: [{ stage: 'make-decision', source: 'steps.json', step_slug: 'first', state: 'completed' }, { stage: 'make-decision', source: 'steps.json', step_slug: 'second', state: 'unavailable' }] };
     const before = JSON.stringify(report);
-    expect(checker.stepCoverageExit(report)).toMatchObject({ exit_code: 1, missing_steps: [{ source: 'steps.json', step_slug: 'second', state: 'unavailable' }] });
+    expect(checker.stepCoverageExit(report)).toMatchObject({ exit_code: 0, missing_steps: [{ source: 'steps.json', step_slug: 'second', state: 'unavailable' }] });
     expect(JSON.stringify(report)).toBe(before);
   });
-  it('real CLI missing-step negative exits nonzero and names the specific slug', () => runCoverage(['first-owned-step'], (result, report) => {
+  it('real CLI missing-step negative reports without blocking and names the specific slug', () => runCoverage(['first-owned-step'], (result, report) => {
     expect(report.workflow_steps.filter(row => row.stage === 'make-decision').map(row => row.state)).toEqual(['completed', 'unavailable']);
-    expect(result.status).toBe(1);
+    expect(result.status).toBe(0);
     expect(report.missing_steps).toEqual([{ source: 'workflows/make-decision/steps.json', step_slug: 'second-owned-step', state: 'unavailable' }]);
   }));
   it('real CLI complete fixture exits zero while preserving both declared rows', () => runCoverage(['first-owned-step', 'second-owned-step'], (result, report) => {
@@ -86,7 +90,10 @@ describe('ORACLE-N11-STEP-COVERAGE', () => {
   }));
   it('real CLI zero attestation remains zero and explicitly reports steps_unattested', () => runCoverage([], (result, report) => {
     expect(result.status).toBe(0);
-    expect(report.missing_steps).toEqual([]);
+    expect(report.missing_steps).toEqual([
+      { source: 'workflows/make-decision/steps.json', step_slug: 'first-owned-step', state: 'unavailable' },
+      { source: 'workflows/make-decision/steps.json', step_slug: 'second-owned-step', state: 'unavailable' },
+    ]);
     expect(report.steps_unattested).toContainEqual({ stage: 'make-decision', declared_steps: 2 });
   }));
   it('retains the actual 15-step make-decision declaration and requires stage-end consumption', () => {
