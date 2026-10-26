@@ -88,7 +88,7 @@ describe('ORACLE-N11-ASSET-FIRST', () => {
 // Checks the designated FR body only; duplicate mentions elsewhere cannot fill a gap.
 describe('ORACLE-N11-ASSET-FIRST authoritative prohibition presence (approved TCR)', () => {
   const required = ['不新造评测台', '不扫宿主会话', '不恢复旧 snapshot 兼容桥', '不建常驻 eval 技能'];
-  const fr = read('specs/n11-same-condition-eval-20261022/spec.md').split('\n').find(line => line.startsWith('- **FR-ACCEPT-005**：'));
+  const fr = read('specs/archive/n11-same-condition-eval-20261022/spec.md').split('\n').find(line => line.startsWith('- **FR-ACCEPT-005**：'));
   const missing = text => required.filter(term => !text.includes(term));
   it('reads all four prohibitions from the actual FR-ACCEPT-005 body', () => {
     expect(typeof fr).toBe('string');

@@ -6,6 +6,25 @@
   "generated_from": "当前迁移表保留分类、已改接真实相对模块 consumer 与显式数据 reader；不保存整树快照或 hash 清单",
   "entries": [
     {
+      "source": "tests/contract/auto-recovery.test.mjs",
+      "destination": "tests/contract/auto-recovery.test.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "ORACLE-AUTO-RECOVERY: read four actual method bodies and move-map; check independently expected S1–S4 triage, six-step recovery instructions, original-failure/provider exclusions and in-memory negative mutations. Material contract only; not proof of real session recovery.",
+      "owner": "P3/T003 oracle owner",
+      "consumer": "P3 gate_cmd: npx vitest run tests/contract/auto-recovery.test.mjs; independent test and review readers",
+      "module_consumers": [],
+      "named_data_readers": [
+        "AGENTS.md",
+        "docs/standard-workflow.md",
+        "workflows/build-code/SKILL.md",
+        "skills/diagnosing-bugs/SKILL.md",
+        "docs/architecture/move-map.json"
+      ],
+      "delete_condition": "Remove only when independently verified replacement tests cover the same four-scenario material contract, preserved boundaries and negative mutations for all current consumers.",
+      "retention_basis": "P3/T003, FR-RECOVER-001/002 and AC-RECOVER-001/002 material checks; actual recovery observations remain separate evidence, no runtime or persistent control-plane addition."
+    },
+    {
       "source": "tests/contract/phase-team.test.mjs",
       "destination": "tests/contract/phase-team.test.mjs",
       "status": "retain",
@@ -1680,9 +1699,9 @@
       "destination": "skills/diagnosing-bugs/SKILL.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "根因诊断四步；N3 P5输出与页面内容唯一信任边界、实测性能与便宜方案",
-      "owner": "diagnosing-bugs维护owner；N3 P5/T005",
-      "consumer": "workflows/build-code/SKILL.md方法2/3真实失败分支执行者；P7 QA/auth按条件指针消费输出与页面内容",
+      "responsibility": "根因诊断四步；N3 P5输出与页面内容唯一信任边界、实测性能与便宜方案；自动恢复的换假设/换方法/换上下文与保留原失败",
+      "owner": "diagnosing-bugs维护owner；N3 P5/T005；P3/T003",
+      "consumer": "workflows/build-code/SKILL.md方法2/3真实失败分支执行者；P7 QA/auth按条件指针消费输出与页面内容；workflows/build-code/SKILL.md方法9自动换路径",
       "module_consumers": [
         "workflows/build-code/SKILL.md"
       ],
@@ -3485,7 +3504,7 @@
       "destination": "workflows/build-code/SKILL.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "宿主读（纯方法说明）",
+      "responsibility": "宿主读（纯方法说明）；方法2诊断与方法9自动恢复",
       "owner": "B2/P3 / MT-3-129",
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
