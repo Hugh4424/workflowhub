@@ -904,3 +904,17 @@ describe("OCR delegation public review route", () => {
     expect(state.task.readRecord("facts.jsonl")).toBe("");
   });
 });
+
+// P1 additive tier boundary; existing provider failure and unavailable assertions stay unchanged.
+import { reviewTierFor, assertReviewTierRecord } from '../../runtime/review/review-policy.mjs';
+describe('P1 tier boundary: risk selection precedes the unchanged configured OCR route', () => {
+  it('separates independent Phase review from external OCR identity', () => {
+    const input={identity:{stage:'build-code',review_scope:'phase'},risks:{permissionsSecurity:'none',dataMigrationIrreversible:'none',sharedStateConcurrency:'none',publicContractCriticalPath:'none',realExternalDependency:'none'},scope:{singleModule:true,knownDirectConsumers:true},readings:{paths:{status:'read',raw:'owned/module.mjs'},impact:{status:'read',raw:'owned named consumer'},size:{status:'read',raw:'1\t0\towned/module.mjs'}}};
+    expect(reviewTierFor(input)).toBe('独立子代理');
+    expect(()=>assertReviewTierRecord({executor:'独立子代理',input,identity:'ocr',source:{dispatch_identity:'owned-reader',context_isolation:'none'}})).toThrow(/OCR/);
+    input.risks.publicContractCriticalPath='present';expect(reviewTierFor(input)).toBe('外部 OCR');
+    input.risks.publicContractCriticalPath='none';input.identity={stage:'verify-code'};expect(reviewTierFor(input)).toBe('外部 OCR');
+    const record={executor:'外部 OCR',input,status:'unavailable',reason:'ENOENT',source:{route:'configured/single_round'},detection_output_ref:'quality/tests/version.output',failure_ref:'quality/tests/failure.json'};
+    expect(assertReviewTierRecord(record)).toBe(record);expect(record.provider_results).toBeUndefined();
+  });
+});

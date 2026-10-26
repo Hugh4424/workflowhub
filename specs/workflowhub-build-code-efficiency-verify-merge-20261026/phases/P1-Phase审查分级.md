@@ -14,7 +14,7 @@
 - **evidence_path**: `quality/evidence/workflowhub-build-code-efficiency-verify-merge-20261026/P1-review-tier.json`
 - **STOP**: 判据必须引入数字阈值、选择表、动态评分器或第二套审查点才能成立时，停该实现并交 build-plan 作者改契约；OCR 不可用时只记 unavailable 与检测输出，不换执行者；要改审查 schema、OCR 路由或任务事实 writer 时停该处并交对应 owner。
 - **覆盖 AC**: AC-REVIEW-001、AC-REVIEW-002
-- **Done**: AC-REVIEW-001 由四夹具、终末整卡全审可定位和执行者记录重放；AC-REVIEW-002 由低风险正向判据、三维取数命令、U-020 用户授权记录与无数字阈值重放；两者用 gate_cmd 与 evidence_path 原件判断。build-plan 档位：两条 AC 均为 unavailable（未实施）；owner 为 P1 实施者，build-code 按 gate 结果回填。真实 `ocr --version` 输出必存，不可用记 unavailable；独立审查原件另存。
+- **Done**: AC-REVIEW-001 由四夹具、终末整卡全审可定位和执行者记录重放；AC-REVIEW-002 由低风险正向判据、三维取数命令、U-020 用户授权记录与无数字阈值重放；两者用 gate_cmd 与 evidence_path 原件判断。build-plan 档位：两条 AC 均为 unavailable（未实施）；owner 为 P1 实施者，build-code 按 gate 结果回填。真实 `ocr --version` 输出必存，不可用记 unavailable；独立审查原件另存。 build-code 执行回填：AC-REVIEW-001 — pass — `quality/evidence/2026-10-26-063-p1-final-independent-ac-disposition-readback.json` acceptance[0]；AC-REVIEW-002 — pass — 同原件 acceptance[1]；原 build-plan unavailable 是实施前历史，不覆盖本次独立结论。
 
 ## 工作包声明（人读事实）
 
@@ -141,12 +141,26 @@
 - **证据**: `quality/evidence/workflowhub-build-code-efficiency-verify-merge-20261026/P1-review-tier.json` 保存夹具输入、实际结论、记录原件、`ocr --version` 输出与 gate 原始输出；RED 与 GREEN 原件各存一份，同字节复用。
 - **覆盖上限**: 只证明本 Phase 的选择规则、记录字段与文档授权可重放；不证明低风险审查质量、不证明子代理发现能力、不证明真实 OCR 可用或终末审查已执行。
 - **停止 / 恢复**: 规则需要数字阈值、选择表、动态评分器或第二套审查点才能一致时，停该实现交 build-plan 作者改契约；OCR 不可用时保留 unavailable 与原执行者，不换执行者、不伪造异源；记录字段与现有 schema 冲突时停该处，改用现有原件引用或交 build-plan 作者，不越界改 schema。修复回原 Task，原失败保留。
-- **测试变更请求**: none — 三份既有测试未标 Frozen，只增按档断言；实施中若确需改 Frozen 文件，停该处并按测试变更请求与独立审查处理。
+- **测试变更请求**: TCR-P1-OWNED-PREVIEW-001 — 三份既有测试未标 Frozen；按独立审查 `quality/evidence/2026-10-26-031-p1-owned-preview-fixture-tcr-independent-review.json` 与主会话明确窄授权，例外修 `tests/contract/ocr-production-cutover.test.mjs` 的 owned preview walker，仅精确排除 `.workflowhub-temp.json`，使其与生产 manifest 的管理文件排除一致；原字节交付、current material、instructions、digest 断言不变，不改 adapter、不泛跳 dotfile、不 skip。原始失败 `quality/tests/2026-10-26-028-p1-adjacent-evidence-minimal-reproduction.json` 与 `quality/tests/2026-10-26-032-p1-adjacent-manifest-error-probe.json` 保留。其它测试仍只增按档断言；Frozen 变更仍按原请求与独审处理。
+- **规则锚**: `docs/standard-workflow.md#build-code-测试与质量` 的真实效果、原失败与针对性测试；`workflows/build-code/SKILL.md#方法` 的独立测试变更请求；本次 TCR 与独审原件共同限定窄夹具修复，不放宽 ORACLE-REVIEW-TIER 或旧交付断言。
+- **材料影响**: 本次只在本卡测试变更请求位置记执行事实并补这两行；这是原 10 个实现路径外的具名材料记账偏差（`quality/evidence/2026-10-26-033-p1-fixture-write-scope-tcr.md`），不改 AC 成功失败、Task 目标、契约写集定义、`spec.md` 或 `phases/index.md`。
+- **历史来源绑定**: T02 原表逐行字段、风险源与消费者对照固定 Git 版本 `183ac869489ad4cec3a2783dd54cb8a5a04a8224` 的 index＋13 卡，逐文件 ref/path/hash 与限制见 `quality/evidence/2026-10-26-045-p1-t02-frozen-source-binding.json`；后续 `0c94ae735d0ab6bb4d5229b4dede01c4ea9a5574` 活跃指针归档改写不覆盖原样本。043 真实失败及误报更正见 `quality/evidence/2026-10-26-044-p1-supplement-disposition-readback-correction.md`，原 P1 证据保留。
+- **历史来源定位变更**: 原 T02 worktree 已由他人移除，046 字面 gate 实际 14 pass／3 skip，不冒 17/17。存活主仓 `/Users/Hugh/Hugh/Project/PaperBuilder` 中同一固定 commit 的 14 个 blob 已由独立原件 `quality/evidence/2026-10-26-049-p1-independent-t02-git-blob-readback.json` 逐 hash／十三行字段核对相同；仅改 test 的只读 repository locator，原 provenance 路径、固定 commit/path 与原 P1 表保持，不改他库、不恢复 worktree。
+- **测试变更请求补充**: OCR 原件 `quality/reviews/2026-10-26-009-build-code-phase-p1.json` findings[0] 由独立 `quality/evidence/2026-10-26-056-p1-ocr-minor-metadata-contract-tcr-readback.json` 核定：沿原 TCR 031 范围，仅给 owned walker 增真实管理文件合同注释与实际 adapter packet 接缝断言；真实 Git HEAD／manifest 排除 marker、普通证据仍选入，注入 marker 的真实 host selector 拒绝且 provider 未执行。原字节交付断言保留，不改生产 adapter／writer，不泛跳 dotfile；新增受控 ordinary payload／link／513 文件负例只核 owned fixture guard。
 - **完成**: AC-REVIEW-001 由四夹具、终末全审定位与执行者记录重放；AC-REVIEW-002 由正向判据、三维命令、U-020 授权与无数字阈值重放；另需 gate 退出 0、真实 `ocr --version` 输出、独立审查原件与 evidence_path 可读。未参与实现的人能用同一命令重放；未执行的 OCR 分支保持 unavailable，不写 pass。
 
 #### 附加条款（T02） 静态表验收
 
 四夹具之外，T001 必须消费任务库 `quality/evidence/research/T02 任务设计复盘.md` 与其所指 `PaperBuilder-paperbuilder-architecture-t02-capacity-fact-floor/specs/paperbuilder-architecture-t02-capacity-fact-floor/phases/index.md` 的十三行。逐 Phase 留原写集/直接消费者/关键风险依据、旧规则执行者、新规则执行者、选择理由与来源指针；证据不足逐行选外部 OCR，不推测低风险。表落本 Phase 现有 `evidence_path` 的 `t02_phase_table`，P12 只引用该原件，不把任选注入替代本项。动作由 T001 实施者执行；命令 `npx vitest run tests/contract/review-tier.test.mjs`，期望退出 0，十三行各有可回读来源且结论可复算；缺一行、无证据却选低风险或删除高风险依据的负例必须非零。历史来源不可读时该条件 unavailable，保留四夹具覆盖，不捏造十三行。
+
+## 本 Phase 自带判据小结
+
+- **自己验了什么**：按 ORACLE-REVIEW-TIER 实施五面具名风险、范围条件、三维读数与执行者来源核对；目标 RED 013、嵌套评分 RED 025/026、补充发现 RED 042 和来源漂移失败 043 均保留。独立最终 gate `quality/tests/2026-10-26-053-p1-independent-final-gate.json` 17/17，无 skip；独立最终结果 `quality/evidence/2026-10-26-060-p1-independent-final-result.json` 与独立 AC 回读 `quality/evidence/2026-10-26-063-p1-final-independent-ac-disposition-readback.json` 支持本 Phase 承接的 AC-REVIEW-001、AC-REVIEW-002 为 pass。
+- **邻接与真实接缝**：三 OCR 邻接修复复跑原件 `quality/tests/2026-10-26-039-p1-independent-repaired-adjacent.json`；补充修复后仅复验受影响 tier 的三项，原件 `quality/tests/2026-10-26-048-p1-independent-supplement-neighbor.json`（3 pass，其余 208 是具名过滤未运行，不冒全量复跑）。最终 metadata 接缝 `quality/tests/2026-10-26-055-p1-independent-final-metadata-seams.json` 两项 pass：运行时 marker 存在、Git HEAD/manifest 排除管理文件、普通证据包含；向真实 host selector 注入 marker 被拒，provider 未执行；原字节交付断言保留。首次新增接缝属 G2，既有生产行为已满足，不伪造实现前 RED。
+- **独立审查与发现**：一次正式 OCR 原件 `quality/reviews/2026-10-26-009-build-code-phase-p1.json`，冻结输入 039 不重派；实际终态与覆盖见 `quality/evidence/2026-10-26-055-p1-formal-ocr-settled-readback.json`。Standards040、Spec041 与 OCR009 finding[0] 三项均由 063 独立回读判 fixed，无待修项；补充同源保持 same_source_degraded，不代外部身份。原 OCR 覆盖仍为 Codex read 0／undetermined 24、Kimi read 9／undetermined 15，两路 read_confirmed 均 null；后续局部独立复验不冒外部重新覆盖。
+- **T02 历史样本边界**：原表证据 `quality/evidence/workflowhub-build-code-efficiency-verify-merge-20261026/P1-review-tier.json` 保留；045 固定版本绑定、049 独立 14 blob／13 行核对、051 定位变更可回读。同一 `183ac869489ad4cec3a2783dd54cb8a5a04a8224` 经存活 PaperBuilder 主仓只读回放，原 worktree 被他人移除不恢复。只证明原表逐字段对应具名历史版本，原采集 HEAD 未证明；历史真实 caller／numstat 未重审，十三行均保守外部 OCR，不证明低风险质量等同或零漏检。
+- **没验什么及下一条件**：终末整卡外部全审为 deferred，归后续终末 Phase owner，在整卡实现完成后执行；真实外部 preview 对新增 metadata 断言的服务效果为 unavailable，本 Phase 只执行受控接缝，需终末验收者取得具名真实服务原件方可主张该效果；低风险审查质量等同为 missing，本卡四夹具不提供该证据，owner 为后续真实质量评估者；全量回归为不适用，本 Phase 按影响只跑具名集合。非本 Phase 承接 AC 不补签。
+- **规范同步与提交边界**：实际 norm-sync 结果无额外专业 delta，原件 `quality/evidence/2026-10-26-062-p1-norm-sync-path-readback-corrected.json`；原专业源已承接本 Phase 规则，不新增第二规范。收到独立测试／审查报告后，开发最终确认：无待修项。本次仅回填第 11 个具名材料路径的执行事实，原完成判据、AC 规则、Task 目标、标题与全部断言保全；当前尚未提交，不预填未来 commit/ref，真实 Git 事实由后续 lifecycle 外置 receipt 保存。
 
 ## L2 — 可删除参考
 

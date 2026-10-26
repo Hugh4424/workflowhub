@@ -7,7 +7,7 @@ description: 文档审查保留真实发现与失败；代码调用读取 Long-r
 
 ## 分工与真实消费者
 
-wh-review 执行 make-decision 方向/细节、build-plan 合并及 build-prd 文档审查。代码审查正常由 OCR 执行：build-code 每 Phase 一次、verify-code 终末一次；每次代码调用读取本文件 Long-review 等待方法，不因此改用 wh-review 执行。OCR 不可用（命令不存在（ENOENT）或版本低于1.12.9）如实记 unavailable/unknown，不换执行者，保留检测输出与原始失败；版本检测其它错误不推断未安装。architect-code-review 是同源补充轴，独立执行，与 OCR 可用性无关；已装 OCR 失败、超时、取消、无效输出、零成功路或空 findings 均保留原始事实。具体 Phase/终末审查范围与补充派发读取当前 `workflows/build-code/SKILL.md` 或 `workflows/verify-code/SKILL.md`。
+wh-review 执行 make-decision 方向/细节、build-plan 合并及 build-prd 文档审查。复杂任务 build-code 每 Phase 一次独立代码审查，按 `docs/standard-workflow.md`「三审查点与结论真实性」的 U-020 授权与 `runtime/review/review-policy.mjs` 的 `reviewTierFor` 选择执行者；低风险独立子代理，高风险或影响说不清外部 OCR，verify-code 终末整卡固定外部 OCR 全审。小改动与普通任务审查方式不变；每次代码调用读取本文件 Long-review 等待方法，不因此改用 wh-review 执行。OCR 不可用（命令不存在（ENOENT）或版本低于1.12.9）如实记 unavailable/unknown，不换执行者，保留检测输出与原始失败；版本检测其它错误不推断未安装。architect-code-review 是同源补充轴，独立执行，与 OCR 可用性无关；已装 OCR 失败、超时、取消、无效输出、零成功路或空 findings 均保留原始事实。具体 Phase/终末审查范围与补充派发读取当前 `workflows/build-code/SKILL.md` 或 `workflows/verify-code/SKILL.md`。
 
 stage-skill-plan.json 仍在本技能原路径提供 required_skills/optional_skills：文档组包读者和 OCR 合同/lens 适配读者复用这些声明。它是选材，不是另一个调度器或审查点；不会把它搬入 runtime/review。历史 build-spec 登记退出当前调用，旧集成审查不恢复为正常节点。
 
@@ -32,6 +32,8 @@ stage-skill-plan.json 仍在本技能原路径提供 required_skills/optional_sk
 调用方用现 `buildReviewMaterials` 核manifest、每份正文/来源及盲/揭示可见性；路径或嵌套ref不证正文送达。direction内部reconstruct→reveal→challenge按本次provider协议，只有盲包仅证重建。派发ARTIFACT + CONTRACT，排除实施者CLAIM/胜利摘要/自拟结论；处置回原件，可用Contract misread / Valid + actionable / Valid trade-off / Noise解释，不新增裁决枚举、轮次或provider替换。
 
 ## 输出和失败边界
+
+复杂任务的每 Phase 审查在普通记录正文写执行者、来源、三维读数，并用 `assertReviewTierRecord` 核对。独立子代理写派发身份与上下文隔离，来源保持独立子代理，不写 `ocr` 身份或伪造 `provider_results`；外部 OCR 写 route、provider 原ref与真实终态。低风险判据及取数只以标准工作方法上述小节为权威；同输入同结论，证据不可核即外部 OCR，终末整卡全审保持。此正文记录不扩审查 schema 或任务事实 writer。
 
 available 只表示实际收到可读建议，至少一个有效语义 sibling 可以与其它失败并存；partial/available-with-failures 不等于通过。空 findings 只表示本次完成阅读后未提出问题；未执行、不可用、取消、无效 JSON 或缺材料都不是空 findings，也不是用户同意或交付完成。
 

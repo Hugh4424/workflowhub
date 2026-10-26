@@ -24,13 +24,13 @@ WorkflowHub 主会话按认证工作区当前材料执行。post 材料为 decis
 
 只运行受影响针对性测试，禁止无范围全量 vitest/npm test/test:safe；例外须用户或 CI 明确要求。源与测试应验证真实效果、失败和取消，假 transport 不能证明实际模型或硬隔离。成功范围只因新变化、失败或未解疑点重跑，不按文件机械增审。
 
-文档面用 wh-review；代码面默认 OCR，OCR 不可用（命令不存在（ENOENT）或版本低于1.12.9）如实记 unavailable/unknown，不换执行者，保留检测输出与原始失败；版本检测其它错误不推断未安装。architect-code-review 是同源补充轴，独立执行，与 OCR 可用性无关；已装 OCR 失败、超时、取消、无效输出、零成功路或空 findings 均保留原始事实。三审查点保留，真实未执行或不足独立数量保持 unavailable/incomplete，有效单源发现原来源照留。原始失败、晚 raw、取消与来源不被摘要覆盖。
+文档面用 wh-review；复杂任务代码面按下节选择一次独立审查执行者，终末整卡固定外部 OCR 全审；小改动与普通任务的审查方式不变。外部 OCR OCR 不可用（命令不存在（ENOENT）或版本低于1.12.9）如实记 unavailable/unknown，不换执行者，保留检测输出与原始失败；版本检测其它错误不推断未安装。architect-code-review 是同源补充轴，独立执行，与 OCR 可用性无关；已装 OCR 失败、超时、取消、无效输出、零成功路或空 findings 均保留原始事实。三审查点保留，真实未执行或不足独立数量保持 unavailable/incomplete，有效单源发现原来源照留。原始失败、晚 raw、取消与来源不被摘要覆盖。
 
 ### 三审查点与结论真实性
 
 审查投入按真实范围/大小/影响说明：认证工作区同一具名基准用 `git diff --name-only` 列路径、`git diff --numstat` 分列增删，逐项纳入未提交/未跟踪交付物；二进制等不可量化项记不可核，+100/-100不以净0抵消。按目录职责实读直接 caller/显式 reader，列路径/符号/依据；move-map仅导航，目录名/传递猜测不证影响。
 
-挑审前主会话给三维原读数、直接 consumer 依据及投入理由；任一维缺失/不可读/不可核则每 Phase 审。其余输入相同时任一维扩增不得更轻，内容类型不免审。本轮缺同 cohort 真实质量，仍每 Phase 审、不降对照或投入、不增选择表/动态评分器/selector；同输入机械同结论仍未达。终末完整审当前交付，并列声明写集/实际 diff，沿途挑审不替代。
+挑审前主会话给三维原读数、直接 consumer 依据及投入理由。依据用户 U-020（`specs/workflowhub-build-code-efficiency-verify-merge-20261026/decision-log.md#f2--wp1-规则例外`）现在启用：这是用户选择、不是代理自行降审；复杂任务每个 Phase 仍审一次，低风险用独立子代理，高风险或影响说不清用外部 OCR。低风险须逐面实读并记录：权限/安全面为无、数据迁移/不可逆面为无、共享状态/并发面为无、公开合同/关键路径面为无、真实外部依赖面为无；同时改动局限单一模块且直接消费者已知有限。三维证据由同一具名基准的 `git diff --name-only` 取路径、直接调用方与关键路径的定向读源取影响、`git diff --numstat` 取分列增删；未跟踪交付物逐项纳入，二进制记不可核，+100/-100不以净0抵消。任一面或范围条件不满足、任一维缺失/不可读/不可核即外部 OCR。其余输入相同时任一维扩增不得更轻，内容类型不免审，同输入同结论；不设数字阈值，不增选择表、动态评分器或 selector。终末整卡固定外部 OCR 全审当前交付，并列声明写集/实际 diff，沿途挑审不替代。选择与记录复用 `runtime/review/review-policy.mjs` 的 `reviewTierFor`、`assertReviewTierRecord`，执行者字样复用 `REVIEW_EXECUTORS`；既有阶段身份校验仍是唯一入口。每次审查正文记录执行者、来源与三维读数：独立子代理给派发身份与隔离上下文，外部 OCR 给 route/provider 原ref和真实终态；子代理不写 `ocr` 身份、不伪造 `provider_results`，OCR 不可用仍保检测输出、原始失败及原执行者。
 
 保三审查点。审查有结论须从原件同时读出：至少一路真实 `completed && parse_outcome === "ok"`、该路发现或空 findings 的原始件引用、未确认项 `material_coverage.undetermined` 与真实 `discarded_facts`（若有；无真实丢弃事实不制造占位）。缺一则报告无结论与原因，三条件齐不表示质量通过。OCR 不可用须同时引用检测输出、原始失败、实际执行者、覆盖限制四项唯一原件及保留位置。`material_coverage.read` 只记可靠已读，`unread` 记明确未送达/未打开；未报覆盖或不可证一律 `undetermined`，不记 `read`。`read_confirmed` 未证保持 `null`／不适用，不新增 `material_coverage` 键。不得以 OCR 身份记 wh-review 结果；schema 版本不是执行者声明。architect-code-review 是同源补充轴，独立执行，与 OCR 可用性无关。字段依据、原件与覆盖事实读 `skills/wh-review/SKILL.md` 输出/失败边界，不增字段/门禁/校验器。
 

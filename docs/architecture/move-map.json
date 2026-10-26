@@ -6710,6 +6710,22 @@
       ],
       "delete_condition": "经独立审查的替代完整承接真实consumer、迁接现deps/bundle且无当前消费者后由原owner同批退役；历史task原件不删覆。",
       "retention_basis": "C04P6T011/T012登记此前P1-P5实际交付，唯一bundle承接现resolver；不是质量、许可或方法实际执行的证明。style-ref-gen未采用，版本/归档/权利分开；不建立替代selector或第二权威。"
+    },
+    {
+      "source": "tests/contract/review-tier.test.mjs",
+      "destination": "tests/contract/review-tier.test.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "ORACLE-REVIEW-TIER 四夹具、终末外审、记录来源、不可用原件与T02十三行静态回放；不证明真实provider质量。",
+      "owner": "build-code效率任务 P1 实施者；独立测试执行者消费",
+      "consumer": "P1 gate_cmd: npx vitest run tests/contract/review-tier.test.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "workflows/build-code/SKILL.md",
+        "skills/wh-review/contracts/build-code.md"
+      ],
+      "delete_condition": "风险审查选择由经独立验证的替代入口承接且全部夹具与来源负例迁移后删除。",
+      "retention_basis": "P1/T001，FR-REVIEW-001/002；复用review-policy唯一入口，无公共命令或schema新增。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"
