@@ -229,6 +229,7 @@
 - **不做什么**：不用文件按顺序出现代替流程链，不用 mock/HTTP 200/toast/组件 story 代替业务链，不让实施者自判，不新增判定平台。
 - **风险**：某步找不到真实证据落点会让 C09 事后补造——准备期就写缺口与负责人；判定人独立性不足会让失败被写成通过——判定人不得参与实施。
 - **改动**：任务库证据计划原件；消费者后续 C09 执行与验证。
+- **本轮范围决定**：本轮用户批准的当前范围以 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-baseline-preparation-20261025/quality/evidence/human-confirmations/2026-10-26-007-build-code-nodraft-handoff-scope.json` 及推荐范围原件 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-baseline-preparation-20261025/quality/evidence/2026-10-26-270-nodraft-approved-recommendation-scope.json` 为准：当前只做WorkflowHub检查器、两页前端载体、设计提取、样本指标、验证协议与交接；无稿部分只交接对象/接口/权限/结果/失败判据，真实业务执行及产品最终确认留完整C09重新选隔离授权环境；完全不访问/修改PaperBuilder；旧0写入/失败不改pass，示例不冒真业务。 原D-004/D-007及003许可保历史，不再授权当前访问PaperBuilder；旧业务AC04 incomplete/0 POST保真；当前交接合同须另取独立可执行性核验，不能自动改pass。
 - **当前用户决定**：本次用户决定只确认准备方案与交接；真实两链、四类资产生命周期执行及产品结果最终确认留到完整 C09，仍未完成。本次决定不是当前材料内容验收，不改变现有 5 条限定 pass／6 条 incomplete，不解除 P5 服务失败路径停止，不取消 P7/C04、历史证据、独立审查或用户逐项判定的缺口。确认来源为本轮用户原话，原件 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-baseline-preparation-20261025/quality/evidence/human-confirmations/2026-10-26-006-build-code-prep-boundary-approved.json`；历史 D-010 原话保留，当前 AC 判据沿 spec Appendix A，不在本日志双写。
 
 ### red/blue 争议清单与逐条处置
@@ -320,7 +321,7 @@
 
 ## 范围与非目标
 
-当前执行与授权解释（仅解释后续适用范围，不改历史原话）：以 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-baseline-preparation-20261025/quality/evidence/human-confirmations/2026-10-26-002-build-code-authorized.json` 的持续 build-code 授权、`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-baseline-preparation-20261025/quality/evidence/human-confirmations/2026-10-26-004-build-code-p3-no-temp-commit.json` 的临时目标仓免提交决定和 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-baseline-preparation-20261025/quality/evidence/human-confirmations/2026-10-26-005-build-code-bounded-sample-approved.json` 的有界样本范围为准；持续授权不放宽其它边界。历史探索期“只读／不改数据／确认授权尚未产生”属于当时时点，不限制后续真实已授权工作；只读保护继续约束业务源码与其它对象。指定单卡费用来源两次切换仅在 D-004 与 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-baseline-preparation-20261025/quality/evidence/human-confirmations/2026-10-26-003-build-code-p5-residue-authorized.json` 明确条件内：合格草稿卡、预检字段原本空、无运行历史、不启动运行、不改其它对象、无合格卡不写；费用恢复但 preflight_revision 累计 +2 与更新时间变化保真实残留。当前服务失败路径仍停止、实际 0 POST，不能以持续授权重试该路径或把未执行写成成功；这些授权不替代用户 AC 签核或最终 close 确认。
+历史执行与授权解释（截至006；当前完全禁访问PaperBuilder以007本轮范围决定与spec为准，不恢复此处旧授权）：以 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-baseline-preparation-20261025/quality/evidence/human-confirmations/2026-10-26-002-build-code-authorized.json` 的持续 build-code 授权、`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-baseline-preparation-20261025/quality/evidence/human-confirmations/2026-10-26-004-build-code-p3-no-temp-commit.json` 的临时目标仓免提交决定和 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-baseline-preparation-20261025/quality/evidence/human-confirmations/2026-10-26-005-build-code-bounded-sample-approved.json` 的有界样本范围为准；持续授权不放宽其它边界。历史探索期“只读／不改数据／确认授权尚未产生”属于当时时点，不限制后续真实已授权工作；只读保护继续约束业务源码与其它对象。指定单卡费用来源两次切换仅在 D-004 与 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-baseline-preparation-20261025/quality/evidence/human-confirmations/2026-10-26-003-build-code-p5-residue-authorized.json` 明确条件内：合格草稿卡、预检字段原本空、无运行历史、不启动运行、不改其它对象、无合格卡不写；费用恢复但 preflight_revision 累计 +2 与更新时间变化保真实残留。当前服务失败路径仍停止、实际 0 POST，不能以持续授权重试该路径或把未执行写成成功；这些授权不替代用户 AC 签核或最终 close 确认。
 
 - **目标**：交付一套可复现的 C09 实验框架：固定的旧版本基线（含可运行证据）、两页有稿目标仓与同口径清单、无稿真实业务闭环与接口权限、六指标可执行口径与采集方式、外部内容引入清单与落位、准备完备性判定与交接事实。
 - **范围**：仓内材料与任务证据；新建最小目标仓；旧版本与设计源的真实最小运行；PaperBuilder 只读访问核验。
@@ -336,13 +337,13 @@
 | AC-01 | 在不借用主仓依赖的独立安装与正常分支上，按记录步骤启动旧版本、建任务、写一份材料 | 提交可回读、独立安装成功、三条命令都真跑、依赖与清理有记录、无新能力混入 | 版本未核、借用主仓依赖充数、启动失败却写可运行、用当前主干替代 | 独立安装与三条命令的原件 | 本任务执行者 | UC-01 |
 | AC-02 | 新建目标仓后按记录启动并打开两页路由 | 仓路径与提交号可回读；两页路由可访问；版本与 lockfile 固定 | 仓不存在、页面 404、版本浮动 | 仓与提交、启动输出、页面 HTTP/截图证据 | 本任务执行者 | UC-02 |
 | AC-03 | 按六维清单逐项对照设计源与目标仓 | 六维（页面/路由、状态、viewport、数据、依赖、设计源版本）各有来源且可回读；**十条已知差异逐条**：全 mock 无持久、模拟域双数据口径、占位 tab、伪随机图表需同种子、字体离线回退、hash 路由刷新丢视图、12 色中 8 色零用、无独立模拟详情页、assets 零引用、Figma 插件噪音 | 只写文件名、未真渲染、缺维度、漏列已知差异、用条数代替逐条 | 六维表原件、设计源渲染证据 | 本任务执行者 | UC-03 |
-| AC-04 | 先过可行性门禁，再对一张指定卡做“费用配置改成另一个、再改回原值”，前后各读回 | 门禁三项有据；改后读回值等于所选、改回后等于原值；前后值与卡片更新时间变化登记；失败/冲突路径写明；失败时判准备不完整，不换别的写操作 | 用 mock 或假接口冒充、无权限却写可用、门禁没过就写、改回未恢复却写成功、痕迹未登记 | 门禁记录、两次写与三次读回原件、前后值登记 | 本任务执行者 | UC-04 |
+| AC-04 | 无稿对象、接口、权限、结果与失败判据交接 | 唯一当前判据见 `spec.md` Appendix A AC-04；真实业务执行留完整C09隔离授权环境，旧失败与0写入保真 | 依当前同条失败条件；不访问PaperBuilder，不以示例冒真实运行 | 当前交接合同、条件与原件指针见spec | 执行者与独立读者 | UC-04 |
 | AC-05 | 用一次真实事件走查六项指标记录方式 | **逐项点名**任务返工、缺陷、人工时间、验收确认、提取覆盖、视觉差异六项，各有单位、分母、记录位置、缺失写法与 PRD S6 出处；分母来自 WP3 样本清单；n=1 声明写法齐备 | 用“六项”概括而不点名、口径含糊、分母事后改、拿旧案例数字替真记录 | 六指标定义表、走查记录 | 本任务执行者 | UC-05 |
-| AC-06 | 按外部内容清单逐项核落位 | **每一项**都追到 PRD 行号或技能来源，并给引入方式、时机、责任者、落位或处置；12 项显性、4 项隐性、4 项缺入口、8 项排除逐项可回读 | 只报“12/4/4/8”条数、漏项、把最终验证项提前承诺、把未交付依赖当已落位 | 外部内容清单原件与本日志落位表 | 本任务执行者 | UC-06 |
+| AC-06 | 外部内容逐项落位 | 唯一当前判据见 `spec.md` Appendix A AC-06；业务执行条件具名后置，C04实际接入仍当前交付 | 依同条失败条件，不把后置业务环境或示例冒已验证 | 外部内容落位表与原件指针 | 本任务执行者 | UC-06 |
 | AC-09 | 按输入冻结清单与运行步骤单逐项核对 | 两侧同一份设计源版本与任务说明；允许/禁止读取范围写明；步骤、记录位置、清理与偏差登记可照着做 | 两侧输入不同、步骤无法执行、清理缺失 | 输入冻结清单、运行步骤单、偏差登记表 | 本任务执行者 | UC-09 |
 | AC-11 | 用合成材料与真实历史日志各跑一次步骤检查，并对 11 个模块跑收敛完备性检查 | 缺第 8 步的合成材料能被报出；零留痕不再报“无缺失”；真实历史日志能列出已缺步骤；11 个模块的 8 项清单逐项有证据指针、每包状态为“已收敛”；报告出现未收敛包时主会话停在该步并留下记录（检查器本身仍退出 0、不阻断命令）；五个阶段的映射逐阶段给出“已配置/未配置”结论，未配置不得写通过；决策日志正文没有新增步骤节；级别行能被解析 | 检查器只报“通过”、零留痕仍是绿、清单被空话填满、有包未收敛仍继续、未配置阶段写成通过、靠新增日志节充数 | 检查器输出、历史回放原件、模块状态表、五阶段映射表、决策日志 diff | 本任务执行者 | UC-11 |
 | AC-10 | 准备证据计划与交接确认 | 唯一判据见 `spec.md` Appendix A 的 AC-10；按用户决定 006 确认当前准备方案与交接，当前仍 incomplete | 依同条失败条件判断；完整 C09 的真实执行与产品结果最终确认仍未完成 | 原件种类与判定职责见 `spec.md` Appendix A 的 AC-10 | 用户 | UC-10 |
-| AC-07 | 逐项判准备完备性 | 每项是“已核验”或“具名未决＋负责人＋下一步”；不可延期清单（旧基线独立可跑、无稿对象/API 可用、六指标分母）已核死；无稿可回滚写不存在时该项判“准备不完整”，不得用只读降级代替；准备完整性与产品效果分开报 | 用准备完成宣布 C09 达标；未测项写成已测；把不可延期三项推到正式实验；用只读降级冒充满足原要求 | 完备性表、逐项证据指针 | 本任务执行者 | UC-07 |
+| AC-07 | 准备范围逐项判定 | 唯一当前判据见 `spec.md` Appendix A AC-07；无稿交接完整性与未来业务环境可用性分别报告 | 依同条失败条件，不代签真实业务或产品效果 | 完备性表、具名未决与原件指针 | 用户 | UC-07 |
 | AC-08 | 用交接表回读版本、环境、样本、口径与未决 | C09 后续与 C10 能按指针直接找到原件；未覆盖状态可见 | 只有摘要无法回读、C10 需要再来问 | 交接表与指针清单 | 本任务执行者 | UC-08 |
 
 ## 未决项

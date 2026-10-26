@@ -8,17 +8,19 @@
 - **功能名**：C09 前期准备与步骤严格执行修复
 - **来源**：`decision-log.md` 的 R-001～R-021、D-001～D-011、AC-01～AC-11；发布 PRD 的 C09 卡（PRD:366-385）、S6（PRD:136-153）、S7（PRD:155-159）
 - **状态**：build-plan 已批准；build-code 执行与终末审查中，整体未完成。真实批准见 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-baseline-preparation-20261025/quality/evidence/human-confirmations/2026-10-26-001-build-plan-approved.json`，持续执行授权见 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-baseline-preparation-20261025/quality/evidence/human-confirmations/2026-10-26-002-build-code-authorized.json`；原交接 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-baseline-preparation-20261025/quality/evidence/handoff/2026-10-26-001-build-plan-handoff.md` 的“未确认”保留其历史时点，不冒全部通过或用户 AC 签核。
-- **当前授权边界**：当前执行与授权解释（仅解释后续适用范围，不改历史原话）：以 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-baseline-preparation-20261025/quality/evidence/human-confirmations/2026-10-26-002-build-code-authorized.json` 的持续 build-code 授权、`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-baseline-preparation-20261025/quality/evidence/human-confirmations/2026-10-26-004-build-code-p3-no-temp-commit.json` 的临时目标仓免提交决定和 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-baseline-preparation-20261025/quality/evidence/human-confirmations/2026-10-26-005-build-code-bounded-sample-approved.json` 的有界样本范围为准；持续授权不放宽其它边界。历史探索期“只读／不改数据／确认授权尚未产生”属于当时时点，不限制后续真实已授权工作；只读保护继续约束业务源码与其它对象。指定单卡费用来源两次切换仅在 D-004 与 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-baseline-preparation-20261025/quality/evidence/human-confirmations/2026-10-26-003-build-code-p5-residue-authorized.json` 明确条件内：合格草稿卡、预检字段原本空、无运行历史、不启动运行、不改其它对象、无合格卡不写；费用恢复但 preflight_revision 累计 +2 与更新时间变化保真实残留。当前服务失败路径仍停止、实际 0 POST，不能以持续授权重试该路径或把未执行写成成功；这些授权不替代用户 AC 签核或最终 close 确认。 spec 旧只读表述按已记 OPEN-05 的 D-004 优先规则消费。
+- **C04时序窄修例外**：009原件 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-baseline-preparation-20261025/quality/evidence/human-confirmations/2026-10-26-009-build-code-c04-action-order-narrow-fix.json` 允许仅`skills/design-source-extraction/scripts/collect-design-source.mjs`中egoContext固定采样script逐个调用已有registered prepare动作，等待目标元素出现后继续，并在`tests/contract/design-source-extraction-collect.test.mjs`补对应SDK seam回归；具体测试名/命令由原execution_plan实际定位。registered prepare实现、API、actions键集仍禁止改，不新增动作/引擎/后端，不改页面或设计稿，不访问PaperBuilder。008视口范围继续有效；全4项采集/current及消费仍须新回执，不因授权当已完成。
+- **C04视口窄修例外**：仅本轮008明确例外：允许`skills/design-source-extraction/scripts/collect-design-source.mjs`的`egoContext(plan,task,env)`固定采样script在取得page后、goto前调用现有`page.cdp('Emulation.setDeviceMetricsOverride',...)`设置plan中viewport，并在`tests/contract/design-source-extraction-collect.test.mjs`补对应SDK seam定向回归；不改prepare/new engine/后端/设计源，不访问PaperBuilder，其它C04代码/测试/归档结论仍禁止改。真实执行者已定位符号/现有回归文件，本材料writer不碰生产。授权原件 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-baseline-preparation-20261025/quality/evidence/human-confirmations/2026-10-26-008-build-code-c04-viewport-narrow-fix.json`。 本run新probe/冻结/正式采集/freshness仍须真实回执，不因授权当已修复或接入。
+- **当前授权边界**：本轮用户批准的当前范围以 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-baseline-preparation-20261025/quality/evidence/human-confirmations/2026-10-26-007-build-code-nodraft-handoff-scope.json` 及推荐范围原件 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-baseline-preparation-20261025/quality/evidence/2026-10-26-270-nodraft-approved-recommendation-scope.json` 为准：当前只做WorkflowHub检查器、两页前端载体、设计提取、样本指标、验证协议与交接；无稿部分只交接对象/接口/权限/结果/失败判据，真实业务执行及产品最终确认留完整C09重新选隔离授权环境；完全不访问/修改PaperBuilder；旧0写入/失败不改pass，示例不冒真业务。 原D-004/D-007及003许可保历史，不再授权当前访问PaperBuilder；旧业务AC04 incomplete/0 POST保真；当前交接合同须另取独立可执行性核验，不能自动改pass。 其它已批准旧基线、目标仓、有界样本、设计提取与持续build-code授权仍在原范围有效；不替代内容验收、Git/close的真实记录。
 
 ## 速读卡（30 秒）
 
 - **一句话需求**：把后面真实对比要用的台子（旧版本、两页样本、无稿闭环、六指标口径、外部内容、输入冻结、证据判定）先搭好并逐项验证，同时让跳步能被查出来。
 - **核心改动点**：
   - 仓内：修零留痕口径、加报告式步骤检查器、四阶段步骤到证据映射、方法纪律段、决策日志模板只加一行指针。
-  - 仓外：新建最小 Next.js 两页仓、旧版本独立安装真跑、对运行中的 PaperBuilder 做一次可回滚写并读回。
+  - 仓外：新建最小 Next.js 两页仓、旧版本独立安装真跑、形成无稿业务验证交接合同，完全不访问PaperBuilder。
   - 任务库：把上述每一项落成可回读原件，最后出一张完备性判定表与一张交接表。
-- **最大影响面**：`tools/cli/run-checks.mjs` 的既有零留痕口径、四个阶段的 `steps.json` 与 `SKILL.md`、任务库证据目录；仓外新建仓与真实业务库的一次写。
-- **验收信号**：合成材料缺第 8 步能被报出；旧版本能在独立安装下真跑；六维与十条差异逐条可回读；改回后读回等于原值；六指标逐项有单位/分母/缺失写法；外部内容逐项落位（计数口径以清单原件为准，见 `OPEN-03`）；完备性逐项“已核验/具名未决＋负责人”。
+- **最大影响面**：`tools/cli/run-checks.mjs` 的既有零留痕口径、四个阶段的 `steps.json` 与 `SKILL.md`、任务库证据目录；仓外新建前端载体、设计提取与无稿零业务访问交接。
+- **验收信号**：合成材料缺第 8 步能被报出；旧版本能在独立安装下真跑；六维与十条差异逐条可回读；无稿合同字段/来源/owner/条件经独立读者核可执行；六指标逐项有单位/分母/缺失写法；外部内容逐项落位（计数口径以清单原件为准，见 `OPEN-03`）；完备性逐项“已核验/具名未决＋负责人”。
 
 ## 来源与决策映射
 
@@ -39,7 +41,7 @@
 | `R-010` | `D-011` | `FR-REPAIR-002` / `AC-11` | current；审查纪律 | 无 |
 | `R-011` | `D-001`、`D-002` | `FR-BASELINE-001`、`FR-TARGET-001` / `AC-01`、`AC-02` | current；旧版本与目标仓 | 无 |
 | `R-012` | `D-005` | `FR-METRIC-001` / `AC-05` | current；六指标 | `OPEN-02` |
-| `R-013` | `D-003`、`D-004` | `FR-NODRAFT-001` / `AC-04` | current；无稿闭环 | 无 |
+| `R-013` | `D-003`、`D-004` | `FR-NODRAFT-001` / `AC-04` | current；无稿验证交接 | 无 |
 | `R-014` | `D-005` | `FR-METRIC-002` / `AC-05` | current；历史旁证 | 无 |
 | `R-015` | `D-005` | `FR-METRIC-002` / `AC-05` | current；不新增计量平台 | 无 |
 | `R-016` | `D-002`、`D-006` | `FR-TARGET-002` / `AC-02` | current；非目标 | 无 |
@@ -85,7 +87,7 @@ C09 要回答“新旧两条路径做出同样两页，差多少”，而本任�
 ### 范围内
 
 - 仓内：本章程列出的两个 CLI、四个阶段映射、四份方法正文、一份模板、新增契约测试。
-- 仓外：新建最小 Next.js 两页仓；旧版本独立安装与三条命令真跑；对 PaperBuilder 一张指定卡做一次可回滚写并读回。
+- 仓外：新建最小 Next.js 两页仓；旧版本独立安装与三条命令真跑；形成无稿对象/接口/权限/结果/失败判据与具名条件交接，不访问PaperBuilder。
 - 任务库：上述每一项的原件，以及完备性判定表与交接表。
 
 > 非目标只在第 10 节维护，避免两份真相。
@@ -118,16 +120,16 @@ C09 要回答“新旧两条路径做出同样两页，差多少”，而本任�
 
 ### SCN-004：无稿闭环改配置再改回
 
-- **角色**：无稿闭环执行者
-- **前提**：门禁三项通过（服务可达、目标卡可读、费用配置可读）
-- **触发**：读当前费用配置 → 改成另一个 → 读回 → 改回原值 → 再读回
-- **结果**：改后读回等于所选、改回后等于原值；前后值与卡片更新时间登记；失败保留原始错误
+- **角色**：无稿验证交接作者与独立读者
+- **前提**：本任务已有历史原件；不访问PaperBuilder，不把旧环境当当前可用
+- **触发**：逐项核对象、接口、权限、业务真值、结果读回及失败/取消/恢复判据，登记隔离环境与授权缺口
+- **结果**：读者能指出后续每步输入、输出、owner与停止条件；真实两写三读未执行，交完整C09重新选隔离授权环境；示例仅说明合同
 - **回写**：同步 `AC-04`
 
 ### SCN-005：用一次真实事件走查六项指标
 
 - **角色**：指标负责人
-- **前提**：SCN-004 已产生真实事件与原件
+- **前提**：已有真实历史失败事件及原件可读；当前无稿交接不要求新增业务事件
 - **触发**：按六项逐项记录同一次事件
 - **结果**：六项各有单位、分母、记录位置、缺失写法；n=1 声明齐备
 - **回写**：同步 `AC-05`
@@ -145,7 +147,7 @@ C09 要回答“新旧两条路径做出同样两页，差多少”，而本任�
 - **角色**：用户与 C10 读者
 - **前提**：前九包已交付原件
 - **触发**：逐项判“已核验/具名未决＋负责人＋下一步”，再填交接表
-- **结果**：不可延期三项已核死；准备完整性与产品效果分开报；交接按指针可回读
+- **结果**：当前旧基线、无稿交接完整性、指标分母分别有证据；未来业务环境/授权具名后置；准备完整性与产品效果分开报
 - **回写**：同步 `AC-07`、`AC-08`
 
 ### SCN-008：照输入冻结与运行协议复放
@@ -180,7 +182,7 @@ C09 要回答“新旧两条路径做出同样两页，差多少”，而本任�
 - [x] **加载态**：N/A — 本任务不交付常驻界面，两页空壳只放标题与“待实现”文案
 - [x] **取消态**：SCN-004 门禁不过即停该项，不用别的写操作替代
 - [x] **边界态**：SCN-003 占位 tab、双数据口径等设计源自带行为不当实现缺陷
-- [x] **权限态**：SCN-004 PaperBuilder 本机无认证；需外部凭证的路径明确排除
+- [x] **权限态**：SCN-004当前只交接；旧“无认证”是历史环境事实，完整C09隔离环境的权限/凭据尚待其owner核定，本轮不访问PaperBuilder
 - [x] **竞态**：SCN-004 真实库被在线服务持锁时保留原始错误、不重试放大
 
 ## 4. 产品事实与假设（PFACT）
@@ -333,17 +335,17 @@ C09 要回答“新旧两条路径做出同样两页，差多少”，而本任�
 
 ### 无稿真实闭环（NODRAFT）
 
-- **FR-NODRAFT-001**：先过可行性门禁三项（服务可达、目标卡可读、费用配置可读），再对一张明确指定的已有模拟卡执行闭环：列卡 → 读卡详情 → 读费用配置列表与当前值 → 选中另一个 → 读回确认 → 改回原配置 → 再读回确认恢复。关联 `PFACT-005`、`SCN-004`、`AC-04`
-  - **范围边界**：只操作一张指定卡；端点与参数按 `quality/evidence/decision-log-refs/2026-10-25-module-details.md:31`
-  - **依据**：D-004；批次 05
+- **FR-NODRAFT-001**：当前只交接无稿候选对象、接口/输入输出、权限与资格、真实业务操作、结果真值与读回、失败/取消/恢复判据；每步给owner、证据类型与取得条件，读不到写具名缺口。关联 `PFACT-005`、`SCN-004`、`AC-04`
+  - **范围边界**：完全不访问或修改PaperBuilder（源码、文件、服务、API、数据库及启停）；只读本任务既有原件，旧端点为历史候选，不证明当前可用
+  - **依据**：本轮用户范围决定 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-baseline-preparation-20261025/quality/evidence/human-confirmations/2026-10-26-007-build-code-nodraft-handoff-scope.json`；原D-004/003只保历史
   - **验收**：`AC-04`
-- **FR-NODRAFT-002**：改后读回值必须等于所选、改回后必须等于原值；前后值与卡片更新时间变化逐条登记，残留如实记。关联 `PFACT-008`、`SCN-004`、`AC-04`
-  - **范围边界**：不做硬删；不批量操作；不动其它业务对象
-  - **依据**：D-004；ADR-0054（决定段待修正，见 `OPEN-05`）
+- **FR-NODRAFT-002**：业务执行及结果最终确认由完整C09重新选择隔离、明确授权的真实环境后执行；合同仍逐项规定改后结果、恢复结果、残留与可观察失败，不降低原真实链要求。关联 `SCN-004`、`AC-04`
+  - **范围边界**：当前不运行写/读回，也不把合同例子、mock或HTTP200冒真业务；原两写三读始终未执行
+  - **依据**：本轮范围决定；原业务成功/恢复标准保留为后续执行要求
   - **验收**：`AC-04`
-- **FR-NODRAFT-003**：失败与冲突保留原始错误、不重试放大、不中途改用其它写操作；门禁不过时记“无可回滚写操作”并判准备不完整。关联 `SCN-004`、`AC-04`
-  - **范围边界**：不用只读尽量替代原要求
-  - **依据**：D-004；`decision-log.md:157-158`
+- **FR-NODRAFT-003**：原服务失败与0业务写入/0新增残留保留immutable原件和incomplete；当前逐项区分已知历史、未核条件与后续owner，不重试原路径、不推断环境恢复。关联 `SCN-004`、`AC-04`
+  - **范围边界**：当前交接合同的可执行性须独立人读；缺关键字段/owner/条件不判完整，范围决定不是内容验收
+  - **依据**：本轮范围决定；099/044/051/118原件只读
   - **验收**：`AC-04`
 
 ### 六项指标（METRIC）
@@ -368,15 +370,15 @@ C09 要回答“新旧两条路径做出同样两页，差多少”，而本任�
 
 ### 外部内容与准备完备性（EXTERNAL／READY）
 
-- **FR-EXTERNAL-001**：按清单把准备期要的 8 项现在落位（旧版本、目标仓、设计源、基线研究原件、六指标口径、授权/环境/真值、C04 局部验证输入、采集接线），把 C01～C08 交付、两路完整 E2E、独立证据、C10 交接事实留到最终验证；C04 的局部验证输入已可接入（`design-source-extraction.json` 与采集命令），落位表要写清接入命令、产物路径、`freshness` 判定与“消费并核其与收益比较未混淆”的做法；每一项追到 PRD 行号或技能来源，并给引入方式、时机、责任者、落位或处置。关联 `PFACT-012`、`SCN-006`、`AC-06`
+- **FR-EXTERNAL-001**：按清单把准备期8类逐项落位（旧版本、目标仓、设计源、基线研究原件、六指标口径、无稿授权/环境/真值交接、C04局部验证输入、采集接线）；业务真实环境/授权/结果执行条件允许具名后置，交接字段和owner当前核清，不能冒环境已验证，把 C01～C08 交付、两路完整 E2E、独立证据、C10 交接事实留到最终验证；C04 的局部验证输入已可接入（`design-source-extraction.json` 与采集命令），落位表要写清接入命令、产物路径、`freshness` 判定与“消费并核其与收益比较未混淆”的做法；每一项追到 PRD 行号或技能来源，并给引入方式、时机、责任者、落位或处置。关联 `PFACT-012`、`SCN-006`、`AC-06`
   - **范围边界**：不在本包安装或运行第三方代码；不把 C04 产物当已经消费过——接入要真读产物并核 `freshness`，未跑采集就写“未取得”
   - **依据**：D-006；R-004
   - **验收**：`AC-06`
 - **FR-EXTERNAL-002**：前序任务依赖按真实原件引用：C01 已收口（一条验收缺证据）、C02 已交付、C04 已交付并归档（main `05c36c90`，`specs/archive/workflowhub-ui-frontend-c04-design-source-extraction-20261025/`），本任务接入其产物时按隔离消费规则单独跑、单独记。关联 `PFACT-016`、`SCN-006`、`AC-06`
-  - **范围边界**：只读 C04 归档材料与产物；不改 C04 的代码、测试或结论；不把提取产物当产品规范
+  - **范围边界**：C04归档材料与旧结论只读；本轮仅008视口及009固定采样script动作调用顺序/等待与对应定向回归例外，精确范围见当前授权边界，其它代码/测试不改；不把提取产物当产品规范
   - **依据**：R-005；OI-005
   - **验收**：`AC-06`
-- **FR-READY-001**：逐项判“已核验”或“具名未决＋负责人＋下一步”；不可延期清单三项（旧基线独立可跑、无稿对象/API 可用、六指标分母）必须核死，其中“可回滚写操作”若确实不存在只能转只读并把该项判准备不完整。关联 `PFACT-011`、`SCN-007`、`AC-07`
+- **FR-READY-001**：逐项判“已核验”或“具名未决＋负责人＋下一步”；当前不可后置的是旧基线独立可跑、无稿交接合同完整可执行、六指标分母；无稿真实对象/隔离环境/API授权及业务执行由完整C09核实，当前保具名缺口与触发条件，不以历史PaperBuilder可达记录代当前可用。关联 `SCN-007`、`AC-07`
   - **范围边界**：不用准备完成宣布 C09 达标
   - **依据**：D-007；PRD:376
   - **验收**：`AC-07`
@@ -432,10 +434,10 @@ C09 要回答“新旧两条路径做出同样两页，差多少”，而本任�
 
 ### 无稿闭环与六指标
 
-- **负责什么**：一条真实业务闭环（改配置再改回）与六项指标的可执行口径
-- **对外提供什么**：门禁记录、两次写三次读回原件、六指标定义表与一次真实事件走查
-- **依赖谁**：运行中的 PaperBuilder、两页样本清单作分母
-- **测试边界**：读回值比对可重放；六项逐项点名可人读核对
+- **负责什么**：无稿验证范围与条件交接，以及六项指标可执行口径
+- **对外提供什么**：对象/接口/权限/结果/失败恢复合同与具名条件，旧失败原件指针，六指标定义与已有真实失败事件走查
+- **依赖谁**：本任务既有历史原件、两页样本分母；不依赖或访问运行中的PaperBuilder
+- **测试边界**：无稿交接字段/来源/条件可独立人读；六项逐项点名及已有失败事件记录方式可核
 
 ### 外部内容、输入冻结、证据判定、完备性与交接
 
@@ -521,7 +523,7 @@ C09 要回答“新旧两条路径做出同样两页，差多少”，而本任�
 
 - **静态面（结构合同）**：适用。`node tools/cli/run-checks.mjs --material-root=<认证 worktree 的 specs/<task-id>>` 检查 spec/index/Phase 机械合同；不代表行为或语义通过。证据类型：命令输出原件。
 - **定向单元/契约面**：适用。新增检查器、零留痕口径、级别解析、映射覆盖率各有 `npx vitest run tests/contract/<file>` 用例；oracle 为具名断言。证据类型：vitest 输出与退出码。
-- **命令面（真实环境）**：适用。三条旧版本命令、目标仓启动与两页访问、PaperBuilder 两次写三次读回，均以退出码与真实响应体为判据。
+- **命令面（真实环境）**：仅旧版本命令、目标仓两页与设计提取的本任务真实路径适用。无稿当前只核交接可执行性，不发PaperBuilder请求；两写三读保未执行。
 - **浏览器端到端面**：本阶段为具名不适用——两页是空壳，本任务不交付业务界面；浏览器可见面的真实验收在 C09 最终验证阶段（`test tier` 归后续任务）。这里只登记“可访问/不可访问”，不冒充交互验证。
 - **人工读面**：适用。六维清单、十条差异、六指标定义、外部内容落位、完备性判定、交接表都要由未参与实施的人按原件核对；命令输出不能替代。
 - **覆盖率判据**：不使用覆盖率百分比或测试条数判通过；判据是具名断言与逐条结论。
@@ -536,9 +538,9 @@ C09 要回答“新旧两条路径做出同样两页，差多少”，而本任�
 ```json
 {
   "workspace": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-ui-frontend-c09-baseline-preparation-20261025",
-  "service": "旧版本本机进程、目标仓 Next.js dev server（待建）、PaperBuilder :5176",
+  "service": "旧版本本机进程、目标仓 Next.js dev server（待建）；无稿当前不连接业务服务",
   "route": "/simulation-board、/sim-workbench",
-  "state": "两页空壳态（待建）；无稿改配置前后两种状态",
+  "state": "两页空壳态；无稿仅交接合同，真实业务状态未运行",
   "viewport": "1440×900（主）、1280×900（辅）",
   "owner": "用户"
 }
@@ -559,7 +561,7 @@ workspace 取认证 worktree；service 与 route 取本次计划要建的真实�
 - **现状与目标差异**：`tools/cli/run-checks.mjs` 现在零留痕放过、写一条反而变红（`PFACT-007`）；目标是把缺口逐项报出且不再反向失败。目标仓 `/Users/Hugh/Hugh/Project/ui-workbench-target-20261025` 现在不存在（`PFACT-003`），目标是两页可访问的 Next.js 空壳。
 - **读取顺序**：先读 `tools/cli/run-checks.mjs` 的零留痕判定与聚合出口，再读 `tools/cli/check-decision-log-chain.mjs` 的既有检查器形状，再读 `runtime/stage/stage-content-contracts.mjs` 的机械合同入口；C09 侧先读 `quality/evidence/decision-log-refs/2026-10-25-module-details.md` 与 `quality/evidence/decision-log-refs/2026-10-25-old-baseline-runnable-probe.md`。
 - **代码锚点**：`skills/design-source-extraction/SKILL.md` 与 `skills/design-source-extraction/scripts/collect-design-source.mjs`（C04 交付的提取入口）；`tools/cli/run-checks.mjs` 的零留痕与聚合分支；新增 `tools/cli/check-stage-steps.mjs` 的导出入口（含步骤映射与报告输出）；`workflows/{make-decision,build-plan,build-code,verify-code}/steps.json` 的映射键；`workflows/{make-decision,build-plan,build-code,verify-code}/SKILL.md` 的纪律段位置；`skills/decision-log/templates/decision-log-template.md` 的「外置事实索引」行；`tests/contract/` 的新增用例文件名。行号只作导航，会漂移，不作契约。
-- **运行条件**：本机 Node v24.14.0（`PFACT-009`）；目标仓依赖 Next 16.4.3／React 19.3.1／Tailwind 4.3.3；PaperBuilder 在 `:5176` 运行。
+- **运行条件**：本机 Node v24.14.0（`PFACT-009`）；目标仓依赖 Next 16.4.3／React 19.3.1／Tailwind 4.3.3；无稿业务运行环境由完整C09另选隔离授权环境，本任务不访问PaperBuilder。
 
 ### 接口与失败语义
 
@@ -572,9 +574,9 @@ workspace 取认证 worktree；service 与 route 取本次计划要建的真实�
 ### 全局文件边界与依赖
 
 - **新增**：`tools/cli/check-stage-steps.mjs`；`tests/contract/check-stage-steps.test.mjs`；`tests/contract/run-checks-zero-attestation.test.mjs`；仓外目标仓 `/Users/Hugh/Hugh/Project/ui-workbench-target-20261025`（其内具体文件由 P3 建）；任务库本阶段证据原件 15 份，逐份列在各 Phase 的写入集里。
-- **修改**：`tools/cli/run-checks.mjs`；`workflows/make-decision/SKILL.md`；`workflows/build-plan/SKILL.md`；`workflows/build-code/SKILL.md`；`workflows/verify-code/SKILL.md`；`skills/decision-log/templates/decision-log-template.md`；`docs/adr/0054-c09-no-draft-loop-uses-running-real-service.md`（按用户 2026-10-25 授权，在 P5 把决定段改成“改费用配置再改回”）。
-- **禁止改动**：`runtime/`、`core/`、`contracts/`、`schemas/`（不新增运行时状态或第二进度权威）；`/Users/Hugh/Downloads/UI设计稿`（只读）；`/Users/Hugh/Hugh/Project/PaperBuilder`（只读代码与数据，只做业务写入）；`specs/workflowhub-ui-frontend-release-20261020/**`（发布材料只读）；`specs/archive/workflowhub-ui-frontend-c04-design-source-extraction-20261025/**` 与 `skills/design-source-extraction/**`（C04 交付材料只读，本任务只接入产物）；`docs/adr/0054-*.md`（决定记录归 make-decision，见 `OPEN-05`）；`decision-log.md`（本阶段不重写）。
-- **全局依赖**：修复包独立可先做；基线、目标仓、无稿闭环三条并行；样本等目标仓；六指标等样本与无稿；外部内容等前五包。串行理由写在各 Phase 契约头。
+- **修改**：`skills/design-source-extraction/scripts/collect-design-source.mjs`（仅008 viewport及009既有动作逐步调用/目标等待）；`tests/contract/design-source-extraction-collect.test.mjs`（仅008/009对应SDK seam定向回归）；`tools/cli/run-checks.mjs`；`workflows/make-decision/SKILL.md`；`workflows/build-plan/SKILL.md`；`workflows/build-code/SKILL.md`；`workflows/verify-code/SKILL.md`；`skills/decision-log/templates/decision-log-template.md`。
+- **禁止改动**：`runtime/`、`core/`、`contracts/`、`schemas/`（不新增运行时状态或第二进度权威）；`/Users/Hugh/Downloads/UI设计稿`（只读）；`/Users/Hugh/Hugh/Project/PaperBuilder`（当前完全禁止访问/修改，包含只读探针与API）；`specs/workflowhub-ui-frontend-release-20261020/**`（发布材料只读）；`specs/archive/workflowhub-ui-frontend-c04-design-source-extraction-20261025/**` 与 `skills/design-source-extraction/**`（C04交付材料只读；仅008视口及009既有动作调用顺序/目标等待的`skills/design-source-extraction/scripts/collect-design-source.mjs`固定script与`tests/contract/design-source-extraction-collect.test.mjs`对应回归例外，其它禁止保持）；`docs/adr/0054-*.md`（历史决定只读；本轮007/008不安排ADR改动，旧OPEN-05不再派P5写）；`decision-log.md`（本阶段不重写）。
+- **全局依赖**：修复包、旧基线、目标仓与无稿交接可独立推进；样本等目标仓；六指标复用样本及既有失败事件；外部内容消费当前合同与具名未来条件，不依赖当前业务执行。串行理由写在各 Phase 契约头。
 - **文件归属**：每个写集路径只有一个 Phase 持笔；跨 Phase 无共享路径。
 - **回滚与恢复**：检查器改动可单 hunk 回退，不影响既有聚合输出；目标仓失败可整仓弃用重建；真实库改回失败按登记残留处理，不重试。
 
@@ -588,7 +590,7 @@ workspace 取认证 worktree；service 与 route 取本次计划要建的真实�
 | `R-011`、`R-018`、`R-014`、`D-001` | 旧版本独立安装真跑三条命令，依赖与环境留档 | `FR-BASELINE-001`、`FR-BASELINE-002`、`FR-BASELINE-003` / `AC-01` | P2/T004 | ORACLE-P2-BASELINE-RUN：三条命令 exit 0、独立安装 | none；current |
 | `R-011`、`R-016`、`D-002` | 目标仓两页与空壳边界 | `FR-TARGET-001`、`FR-TARGET-002` / `AC-02` | P3/T005 | ORACLE-P3-TARGET-REPO：两页 200、壳内无设计稿片段 | none；current |
 | `R-007`、`D-003`、`OI-012`、`PRD-C09-CARD` | 六维清单、十条差异、指纹、业务读回登记 | `FR-SAMPLE-001`、`FR-SAMPLE-002`、`FR-SAMPLE-003`、`FR-SAMPLE-004` / `AC-03` | P4/T006 | ORACLE-P4-SIX-DIMENSIONS：六维齐、十条差异、指纹可复算 | P3；current |
-| `R-013`、`D-004`、`ADR-0054` | 无稿闭环改配置再改回并读回 | `FR-NODRAFT-001`、`FR-NODRAFT-002`、`FR-NODRAFT-003` / `AC-04` | P5/T007 | ORACLE-P5-NODRAFT-LOOP：改后读回等于所选、改回等于原值 | none；current |
+| `R-013`、本轮用户范围决定 | 无稿对象/接口/权限/结果/失败判据交接，真实执行后置 | `FR-NODRAFT-001`、`FR-NODRAFT-002`、`FR-NODRAFT-003` / `AC-04` | P5/T007 | ORACLE-P5-NODRAFT-HANDOFF结构/来源及独立可执行性人读；282/061/302/314承接TCR，旧oracle只历史 | none；current |
 | `R-012`、`R-014`、`R-015`、`D-005`、`PRD-S6` | 六指标逐项定义、走查、N/A 与禁令 | `FR-METRIC-001`、`FR-METRIC-002`、`FR-METRIC-003`、`FR-METRIC-004` / `AC-05` | P6/T008 | ORACLE-P6-SIX-METRICS：六项逐项有单位/分母/记录位置/缺失写法 | P4,P5；current |
 | `R-004`、`R-005`、`D-006`、`OI-005`、`PRD-C09-CARD` | 外部内容逐项落位与前序依赖 | `FR-EXTERNAL-001`、`FR-EXTERNAL-002` / `AC-06` | P7/T009 | ORACLE-P7-EXTERNAL：每项有出处、方式、时机、责任者、落位 | P2,P3,P4,P5,P6；current |
 | `R-020`、`D-009` | 两侧同输入与运行协议 | `FR-FREEZE-001`、`FR-FREEZE-002` / `AC-09` | P8/T010 | ORACLE-P8-FREEZE：四项冻结与步骤单可照做 | P3,P4,P5,P6；current |
@@ -626,11 +628,11 @@ workspace 取认证 worktree；service 与 route 取本次计划要建的真实�
 失败：只写文件名；未真渲染；缺维度；漏列已知差异；用条数代替逐条；指纹不可复算；业务读回无登记。
 证据：六维表原件、设计源渲染证据、指纹清单、读回登记。
 
-- [ ] **AC-04**：先过可行性门禁，再对一张指定卡做“费用配置改成另一个、再改回原值”，前后各读回；关联 `FR-NODRAFT-001`～`FR-NODRAFT-003`
-验证：判定人读门禁记录与三次读回原件；owner 为执行者；需真实环境（PaperBuilder 在 `:5176` 运行），用户不在场。
-通过：门禁三项有据；改后读回值等于所选、改回后等于原值；前后值与卡片更新时间变化登记；失败/冲突路径写明；失败时判准备不完整且未换别的写操作。
-失败：用 mock 或假接口冒充；无权限却写可用；门禁没过就写；改回未恢复却写成功；痕迹未登记。
-证据：门禁记录、两次写与三次读回原件、前后值登记。
+- [ ] **AC-04**：核无稿验证范围与条件交接的可执行性；关联 `FR-NODRAFT-001`～`FR-NODRAFT-003`
+验证：未参与作者工作的独立读者逐项读合同与本任务已有原件；owner为执行者；完全不访问PaperBuilder。
+通过：对象/接口输入输出/权限资格/结果真值与读回/失败取消恢复/残留规则逐项有据或具名缺口；缺口有影响、owner、下一条件；后续隔离授权环境的选择责任与执行前资格写清；读者能按合同判断何时能执行、何时停止；旧0写入和连接失败与真实两写三读未执行保持原档位，示例明确不是业务证据；当前合同取得独立可执行性结论，内容确认沿用户真实答复。
+失败：缺关键字段或owner；仍要求本任务访问PaperBuilder；把环境/权限未知写可用；用示例或历史200冒当前业务完成；把旧失败改pass；以范围决定代内容验收。
+证据：当前无稿验证交接合同及独立回读、具名条件与历史原件指针；完整C09另取隔离授权真实执行原件和产品最终确认。当前修订不自动使AC-04通过。
 
 - [ ] **AC-05**：用一次真实事件走查六项指标记录方式；关联 `FR-METRIC-001`～`FR-METRIC-004`
 验证：人工读定义表与走查记录，逐项对上 PRD S6；owner 为指标负责人；只能人读（逐项点名与语义完整性）。
@@ -640,14 +642,14 @@ workspace 取认证 worktree；service 与 route 取本次计划要建的真实�
 
 - [ ] **AC-06**：按外部内容清单逐项核落位；关联 `FR-EXTERNAL-001`、`FR-EXTERNAL-002`
 验证：人工逐项追行号/来源与落位；owner 为执行者；只能人读（逐项可追溯）。
-通过：每一项追到 PRD 行号或技能来源，并给引入方式、时机、责任者、落位或处置；准备期 8 项已落位（其中 C04 局部验证输入已可接入，写清采集命令、产物路径与 `freshness` 判定）；最终验证项明确后置；前序依赖按原件引用且 C04 只留接入位。
+通过：每一项追到 PRD 行号或技能来源，并给引入方式、时机、责任者、落位或处置；准备期8类各有当前交付或真实具名处置；业务环境/授权/真值执行条件按P5合同具名后置，不冒已验证；C04局部验证输入与采集接线仍须当前实际接入、真读产物并核`freshness`及隔离消费，不能只留接入位；其它最终验证项明确后置；前序依赖按真实原件引用。
 失败：只报条数；漏项；把最终验证项提前承诺；把未交付依赖当已落位；计数口径与清单原件不一致却不说明。
 证据：外部内容清单原件与落位表。
 
 - [ ] **AC-07**：逐项判准备完备性；关联 `FR-READY-001`、`FR-READY-002`
 验证：人工读判定表逐项核；owner 为用户；只能人读（结论语义）。
-通过：每项是“已核验”或“具名未决＋负责人＋下一步”；不可延期三项已核死；无可回滚写时该项判准备不完整且未用只读替代；准备完整性与产品效果分开报；报告写明本次准备不是开工或合并门。
-失败：用准备完成宣布 C09 达标；未测项写成已测；把不可延期三项推到正式实验；用只读降级冒充满足；报告被读成放行信号而未声明。
+通过：每项是“已核验”或“具名未决＋负责人＋下一步”；当前旧基线独立可跑、无稿交接完整可执行、六指标分母有据；无稿真实隔离环境/权限/业务执行具名后置且未完成，不要求本任务访问PaperBuilder；准备完整性与产品效果分开报；报告写明本次准备不是开工或合并门。
+失败：用准备完成宣布 C09 达标；未测项写成已测；把当前三项交付推到正式实验；把未来真实业务未执行写成已执行；报告被读成放行信号而未声明。
 证据：完备性判定表、逐项证据指针。
 
 - [ ] **AC-08**：用交接表回读版本、环境、样本、口径与未决；关联 `FR-HANDOFF-001`
@@ -708,9 +710,9 @@ workspace 取认证 worktree；service 与 route 取本次计划要建的真实�
   - **受影响 ID**：`PFACT-005`、`FR-NODRAFT-002`、`AC-04`、`OI-014`
   - **触发条件**：卡片更新时间或费用来源字段变化
   - **后果**：19G 真实库留痕
-  - **缓解或停止**：只操作一张指定卡、前后读回、逐条登记、不硬删；用户已接受该风险
+  - **缓解或停止**：历史003许可与0写入事实保留；当前007完全禁止访问PaperBuilder，真实业务留完整C09隔离授权环境
   - **处理阶段**：P5
-  - **验证**：前后值登记与前八卡无变更
+  - **验证**：当前只核历史原件与交接条件；未来真实执行的前后值/残留验证仍未完成
 - **RISK-06**：截图阈值语义漂移
   - **受影响 ID**：`FR-METRIC-002`、`AC-05`
   - **触发条件**：跨版本复用阈值
@@ -745,9 +747,9 @@ workspace 取认证 worktree；service 与 route 取本次计划要建的真实�
 - **OPEN-05**：ADR-0054 决定段与 D-004／批次 05 的最终选择不一致
   - **受影响 ID**：`PFACT-008`、`FR-NODRAFT-002`、`AC-04`
   - **负责人**：make-decision 作者（用户决定是否改 ADR）
-  - **影响**：执行者可能按 ADR 走“预检后取消”或“复制→丢弃→恢复”，与本规格冲突；ADR 还写了“门禁不过退回只读闭环”与“软删行残留”，与 D-004 的“判准备不完整、不用只读替代”和“不做新增对象的写”也不一致；decision-log 的写集表把 PaperBuilder 写成“只读、不改数据”，与 D-004 的一次业务写入冲突。执行一律以 D-004 为准，ADR 与写集表的修正待用户裁定
+  - **影响**：执行者可能按 ADR 走“预检后取消”或“复制→丢弃→恢复”，与本规格冲突；ADR 还写了“门禁不过退回只读闭环”与“软删行残留”，与 D-004 的“判准备不完整、不用只读替代”和“不做新增对象的写”也不一致；decision-log 的写集表把 PaperBuilder 写成“只读、不改数据”，与 D-004 的一次业务写入冲突。历史时点执行以D-004为准；现行访问边界由007替代，完全不访问PaperBuilder，不再按该旧写许可执行
   - **处理阶段**：本次计划确认
-  - **关闭条件或停止**：已关闭——用户 2026-10-25 选“以改费用配置再改回来为准，并授权修正旧决定记录”；修正在 P5 执行
+  - **关闭条件或停止**：历史关闭依据：用户2026-10-25曾授权修正旧记录；历史实际修改事实沿P5旧原件，不补造。当前007把P5改为交接，取消当前ADR修改动作，ADR保持只读，不能再将此条派给P5
 - **OPEN-06**：目标仓尚未创建、设计源 `:5173` 当前无监听
   - **受影响 ID**：`PFACT-003`、`PFACT-004`、`AC-02`、`AC-03`
   - **负责人**：执行者（P3、P4）
