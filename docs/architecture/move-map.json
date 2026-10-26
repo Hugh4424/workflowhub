@@ -6,6 +6,45 @@
   "generated_from": "当前迁移表保留分类、已改接真实相对模块 consumer 与显式数据 reader；不保存整树快照或 hash 清单",
   "entries": [
     {
+      "source": "tools/cli/check-stage-steps.mjs",
+      "destination": "tools/cli/check-stage-steps.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "P1 只读五阶段 observable_result 映射并投影 runFinalChainCheck 的既有证据判定；报告模块八项结构、状态、原ref，不新增步骤判定生产者或持久状态。",
+      "owner": "C09 P1 唯一实施 writer；后续归 CLI owner",
+      "consumer": "四份 workflow SKILL 收口命令与 tests/contract/check-stage-steps.test.mjs 的公开入口/真实CLI场景",
+      "module_consumers": ["tests/contract/check-stage-steps.test.mjs"],
+      "named_data_readers": ["workflows/make-decision/SKILL.md", "workflows/build-plan/SKILL.md", "workflows/build-code/SKILL.md", "workflows/verify-code/SKILL.md"],
+      "delete_condition": "五阶段主会话不再消费，或 final-chain 直接提供同等清单并改接全部消费者时删除。",
+      "retention_basis": "spec FR-REPAIR-002/004 与 P1/T002；承接缺失只读报告，不替代 runtime 判定。实际新增后补登记，未倒称创建前登记。"
+    },
+    {
+      "source": "tests/contract/check-stage-steps.test.mjs",
+      "destination": "tests/contract/check-stage-steps.test.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "P1 checker 公开投影与真实 CLI 的五阶段映射、缺步、删标记和只读边界契约测试。",
+      "owner": "C09 P1 oracle owner",
+      "consumer": "P1 gate_cmd 的 vitest 定向执行",
+      "module_consumers": [],
+      "named_data_readers": ["specs/workflowhub-ui-frontend-c09-baseline-preparation-20261025/phases/P1-步骤检查器报出缺口.md"],
+      "delete_condition": "checker 被替代且对应行为断言由替代公开接缝完整承接后删除。",
+      "retention_basis": "ORACLE-P1-STAGE-STEPS；新增后按已扩写集补登记，不替代独立审查。"
+    },
+    {
+      "source": "tests/contract/run-checks-zero-attestation.test.mjs",
+      "destination": "tests/contract/run-checks-zero-attestation.test.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "P1 零留痕/部分留痕逐项报告及真实 CLI 非法输入错误出口测试。",
+      "owner": "C09 P1 oracle owner",
+      "consumer": "P1 gate_cmd 的 vitest 定向执行",
+      "module_consumers": [],
+      "named_data_readers": ["specs/workflowhub-ui-frontend-c09-baseline-preparation-20261025/phases/P1-步骤检查器报出缺口.md"],
+      "delete_condition": "stepCoverageExit 报告职责退役且对应行为由具名替代测试完整承接后删除。",
+      "retention_basis": "ORACLE-P1-STAGE-STEPS；直接消费 stepCoverageExit 与真实 run-checks CLI，新增后补登记。"
+    },
+    {
       "source": "Improvements.md",
       "destination": "specs/Improvements.md",
       "status": "move",
