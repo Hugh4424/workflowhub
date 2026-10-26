@@ -3,7 +3,7 @@
 读者：make-decision 主会话、build-plan 与 build-code 作者，以及回读验收和风险的 verify-code 作者。
 读完要能：定位真实需求、已确认决定、写入范围、验收索引与原件；区分示例、实际事实和缺口。
 
-本任务当前材料唯一权威是认证 worktree 的 `specs/workflowhub-ui-frontend-c09-baseline-preparation-20261025/decision-log.md`。
+本任务已交付材料位于目标仓的 `specs/archive/workflowhub-ui-frontend-c09-baseline-preparation-20261025/decision-log.md`；外置任务事实与不可变原件仍按原路径回读。
 
 ## 任务身份
 

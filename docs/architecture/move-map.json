@@ -27,7 +27,7 @@
       "owner": "C09 P1 oracle owner",
       "consumer": "P1 gate_cmd 的 vitest 定向执行",
       "module_consumers": [],
-      "named_data_readers": ["specs/workflowhub-ui-frontend-c09-baseline-preparation-20261025/phases/P1-步骤检查器报出缺口.md"],
+      "named_data_readers": ["specs/archive/workflowhub-ui-frontend-c09-baseline-preparation-20261025/phases/P1-步骤检查器报出缺口.md"],
       "delete_condition": "checker 被替代且对应行为断言由替代公开接缝完整承接后删除。",
       "retention_basis": "ORACLE-P1-STAGE-STEPS；新增后按已扩写集补登记，不替代独立审查。"
     },
@@ -40,7 +40,7 @@
       "owner": "C09 P1 oracle owner",
       "consumer": "P1 gate_cmd 的 vitest 定向执行",
       "module_consumers": [],
-      "named_data_readers": ["specs/workflowhub-ui-frontend-c09-baseline-preparation-20261025/phases/P1-步骤检查器报出缺口.md"],
+      "named_data_readers": ["specs/archive/workflowhub-ui-frontend-c09-baseline-preparation-20261025/phases/P1-步骤检查器报出缺口.md"],
       "delete_condition": "stepCoverageExit 报告职责退役且对应行为由具名替代测试完整承接后删除。",
       "retention_basis": "ORACLE-P1-STAGE-STEPS；直接消费 stepCoverageExit 与真实 run-checks CLI，新增后补登记。"
     },

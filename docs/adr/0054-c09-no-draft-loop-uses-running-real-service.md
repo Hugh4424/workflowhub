@@ -18,6 +18,6 @@ C09 前期准备要在没有设计稿的情况下，锁定一条真实业务闭�
 
 ## 依据
 
-- 用户真实选择与风险上下文：`specs/workflowhub-ui-frontend-c09-baseline-preparation-20261025/decision-log.md` 的「真实问答（批次与结论）」与 D-004。
+- 用户真实选择与风险上下文：`specs/archive/workflowhub-ui-frontend-c09-baseline-preparation-20261025/decision-log.md` 的「真实问答（批次与结论）」与 D-004。
 - PaperBuilder 现状与候选：本任务派发记录 D9 回传，真实服务 `:5176`、真实库 19G、三条候选与回滚限制。
 - 发布 PRD 第 372、376、382 行对无稿真实业务与“必要外部授权不由本 PRD 预给”的要求。

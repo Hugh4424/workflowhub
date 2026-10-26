@@ -601,7 +601,7 @@ workspace 取认证 worktree；service 与 route 的实际运行/释放事实读
 
 ### 全局验证策略
 
-- **验证策略**：修复包用契约测试与真实回放（合成材料、零留痕材料、真实历史日志）；C09 侧用真实命令与真实服务，每条 AC 有可重放命令或人工读回。静态合同用 `node tools/cli/run-checks.mjs --material-root=<认证 worktree 的 specs/workflowhub-ui-frontend-c09-baseline-preparation-20261025>`。
+- **验证策略**：修复包用契约测试与真实回放（合成材料、零留痕材料、真实历史日志）；C09 侧用真实命令与真实服务，每条 AC 有可重放命令或人工读回。静态合同用 `node tools/cli/run-checks.mjs --material-root=<目标仓的 specs/archive/workflowhub-ui-frontend-c09-baseline-preparation-20261025>`。
 - **RED/GREEN 设计**：每个行为 Task 在 Phase 卡里写同一条 `gate_cmd`，RED 是具名断言失败、GREEN 是同断言通过；未执行不宣称 RED/GREEN。非行为 Task（纯文档）按 G-2 写具名客观替代与风险。
 - **最终聚合**：唯一末 Phase `P11` 逐条消费前十个 Phase 的原件，补必要未闭环 case，逐 AC 一条结论；不重跑全量。
 - **不能证明的内容**：结构合同通过不证明语义、不证明真实环境健康、不证明 C09 效果达标。
@@ -787,7 +787,7 @@ workspace 取认证 worktree；service 与 route 的实际运行/释放事实读
 
 - **既有行为**：`npm run check` 聚合 markdownlint、`verify-structure.mjs` 与 `run-checks.mjs`；`run-checks` 对材料做机械合同检查
 - **本需求影响**：只改零留痕与单条留痕的判定口径，聚合出口与退出语义保持；新增检查器是独立命令，不进既有聚合
-- **回归路径**：改动后跑一次 `node tools/cli/run-checks.mjs --material-root=<认证 worktree 的 specs/workflowhub-ui-frontend-c09-baseline-preparation-20261025>`，核既有检查项与新增项都能读
+- **回归路径**：改动后跑一次 `node tools/cli/run-checks.mjs --material-root=<目标仓的 specs/archive/workflowhub-ui-frontend-c09-baseline-preparation-20261025>`，核既有检查项与新增项都能读
 - **验收**：AC-11
 
 - **可能受冲击的业务规则**：`steps.json` 增加映射键后，既有读取方若按固定键遍历需保持兼容；`SKILL.md` 加段不得改动既有步骤编号与顺序
