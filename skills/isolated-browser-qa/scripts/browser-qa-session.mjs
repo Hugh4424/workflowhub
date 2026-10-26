@@ -482,11 +482,12 @@ export async function runRegisteredScript(page,id,args={}) {
         value=[];
       }else{
         if(!Array.isArray(args.elements)||args.elements.length>1000)throw new Error('INVALID_COLLECTION_ELEMENTS');
+        const viewport_observed={width:window.innerWidth,height:window.innerHeight};
         value=args.elements.map(({selector,properties=[]})=>{
           if(typeof selector!=='string'||!selector||!Array.isArray(properties)||properties.length>1000)throw new Error('INVALID_COLLECTION_ELEMENT');
           const element=document.querySelector(selector);if(!element)throw new Error('ELEMENT_NOT_FOUND:'+selector);
           const box=element.getBoundingClientRect();if(!box.width||!box.height)throw new Error('ELEMENT_NOT_RENDERED:'+selector);
-          const computed=getComputedStyle(element);return {selector,structure:{tag:element.tagName,text:element.textContent},rendered:{styles:Object.fromEntries(properties.map(key=>[key,computed.getPropertyValue(key)])),box:{x:box.x,y:box.y,width:box.width,height:box.height}},declared:{style:element.getAttribute('style')}};
+          const computed=getComputedStyle(element);return {selector,viewport_observed,structure:{tag:element.tagName,text:element.textContent},rendered:{styles:Object.fromEntries(properties.map(key=>[key,computed.getPropertyValue(key)])),box:{x:box.x,y:box.y,width:box.width,height:box.height}},declared:{style:element.getAttribute('style')}};
         });
       }
       if(observer.takeRecords().length)throw new Error('READ_ONLY_MUTATION_DETECTED');
