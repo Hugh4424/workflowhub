@@ -172,17 +172,29 @@ export async function collectDesignSource(plan,context) {
 }
 
 import {readFileSync,realpathSync} from 'node:fs';
-import {resolve,relative} from 'node:path';
+import {resolve,relative,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
-export function readPlan(path,{probe=false}={}) {
+function assertFrozenChecklistBinding(plan,scope,baseDir=process.cwd()) {
+  const ref=plan?.probe_ref;
+  if(!text(ref))throw failure('FORMAL_PLAN_FREEZE_BINDING_REQUIRED');
+  const probePath=resolve(baseDir,ref);
+  let record;try{record=JSON.parse(readFileSync(probePath,'utf8'));}catch(error){throw failure('FROZEN_CHECKLIST_BINDING_UNREADABLE',{original_error:error.message});}
+  if(record?.exit_code!==0||record.signal||record.timed_out||record.cancelled||!text(record.output_ref))throw failure('FROZEN_CHECKLIST_PROBE_FAILED');
+  let output;try{output=readFileSync(resolve(dirname(probePath),record.output_ref),'utf8');}catch(error){throw failure('FROZEN_CHECKLIST_OUTPUT_UNREADABLE',{original_error:error.message});}
+  const rows=String(output).split('\n').map(row=>{try{return JSON.parse(row);}catch{return null;}}).filter(row=>row?.probe===true);
+  if(rows.length!==1||!Array.isArray(rows[0].observed_ids)||rows[0].failures?.length)throw failure('FROZEN_CHECKLIST_PROBE_INVALID');
+  const expected=scope.checklist.map(entry=>entry.id),observed=rows[0].observed_ids;
+  if(observed.length!==expected.length||new Set(observed).size!==observed.length||observed.some((id,index)=>id!==expected[index]))throw failure('FROZEN_CHECKLIST_BINDING_MISMATCH');
+  return probePath;
+}
+export function readPlan(path,{probe=false,assetReader=readSourceAsset}={}) {
   let plan;try{plan=JSON.parse(readFileSync(resolve(path),'utf8'));}catch(error){throw failure('PLAN_JSON_UNREADABLE',{original_error:error.message});}
   let scope;try{scope=freezeChecklist(plan);}catch(error){throw failure('INVALID_COLLECTION_PLAN',{original_error:error.message});}
-  if(!probe&&!plan.scope.frozen_at)throw failure('FORMAL_PLAN_NOT_FROZEN');
+  if(!probe){if(!plan.scope.frozen_at)throw failure('FORMAL_PLAN_NOT_FROZEN');assertFrozenChecklistBinding(plan,scope,dirname(resolve(path)));}
   if(!plan.source||!plan.norm_basis||!inputKeys.every(key=>plan.inputs?.[key]))throw failure('INVALID_COLLECTION_PLAN');
   const assetSource=['figma_export','screenshot'].includes(plan.source.type);
   if(plan.source.type&&!['runnable_page','figma_export','screenshot'].includes(plan.source.type))throw failure('UNSUPPORTED_SOURCE_TYPE');
-  if(assetSource)for(const entry of scope.checklist)readSourceAsset(plan.source,entry);
-  if(['figma_export','screenshot'].includes(plan.source.type)){for(const entry of scope.checklist)readSourceAsset(plan.source,entry);return {...plan,scope};}
+  if(assetSource){for(const entry of scope.checklist)assetReader(plan.source,entry);return {...plan,scope};}
   const origins=new Set();
   for(const page of scope.pages){let url;try{url=new URL(page.url);}catch{throw failure('INVALID_PAGE_URL');}if(!['http:','https:'].includes(url.protocol)||url.username||url.password||url.search)throw failure('INVALID_PAGE_URL');origins.add(url.origin);if(!text(page.state_check?.selector)||!text(page.state_check?.text))throw failure('STATE_CONTRACT_REQUIRED');for(const action of page.actions||[])if(action.type!=='click'||!text(action.selector)||Object.keys(action).some(key=>!['type','selector'].includes(key)))throw failure('INVALID_PREPARATION_ACTION');}
   if(origins.size!==1)throw failure('COLLECTION_ORIGIN_MISMATCH');
@@ -206,7 +218,7 @@ async function egoContext(plan,task,env) {
       const captured=await task.captureCommand({cwd:process.cwd(),slug:'design-source-observation',argv:['ego-browser','nodejs','-e',script],timeoutMs:30000});
       const command={id:captured.receipt_ref,cwd:captured.cwd,argv:captured.argv,exit_code:captured.exit_code,signal:captured.signal,timed_out:captured.timed_out,cancelled:captured.cancelled,started_at:captured.started_at,output_ref:captured.output_ref};
       const bytes=taskReader(task)(captured.output_ref);
-      if(captured.exit_code||captured.signal||captured.timed_out||captured.cancelled){const category=/ELEMENT_NOT_RENDERED|ZERO_SIZE/.test(bytes)?'element_unrendered':/ELEMENT_NOT_FOUND|No element found|waiting for selector/i.test(bytes)?'element_missing':'engine';const error=failure(bytes.trim()||'COLLECTION_COMMAND_FAILED',{category,command});cache.set(key,{error});throw error;}
+      if(captured.exit_code||captured.signal||captured.timed_out||captured.cancelled){const category=/STATE_NOT_OBSERVED/.test(bytes)?'state_unverified':/ELEMENT_NOT_RENDERED|ZERO_SIZE/.test(bytes)?'element_unrendered':/ELEMENT_NOT_FOUND|No element found|waiting for selector/i.test(bytes)?'element_missing':'engine';const error=failure(bytes.trim()||'COLLECTION_COMMAND_FAILED',{category,command});cache.set(key,{error});throw error;}
       cache.set(key,{command,bytes});
     }
     if(cache.get(key).error)throw cache.get(key).error;
