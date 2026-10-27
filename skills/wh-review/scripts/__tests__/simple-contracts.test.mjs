@@ -292,10 +292,14 @@ describe("simple wh-review contracts", () => {
       },
     }, dependencies);
     expect(result).toMatchObject({
-      status: "available",
+      status: "available-with-failures",
       dispatch_state: "dispatched",
       minimum_heterologous: 1,
     });
+    expect(result.provider_results).toEqual(expect.arrayContaining([
+      expect.objectContaining({provider: blockedProvider, status: "failed", error: expect.objectContaining({code: "PROVIDER_HEALTH_FAILED", cause_code: "ACTIVE_PROBE_FAILED"})}),
+      expect.objectContaining({provider: healthyProvider, status: "completed", parse_outcome: "ok"}),
+    ]));
     expect(result.error?.code).not.toBe("REVIEW_THRESHOLD_INVALID");
     expect(calls).toEqual(["run"]);
   });
@@ -457,7 +461,9 @@ describe("simple wh-review contracts", () => {
     };
     const assertWh = (text) => {
       expect(text).toContain("wh-review 执行 make-decision 方向/细节、build-plan 合并及 build-prd 文档审查");
-      expect(text).toContain("代码审查正常由 OCR 执行");
+      expect(text).toContain("低风险独立子代理");
+      expect(text).toContain("高风险或影响说不清外部 OCR");
+      expect(text).toContain("verify-code 终末整卡固定外部 OCR 全审");
       expect(text).toContain("每次代码调用读取本文件 Long-review 等待方法，不因此改用 wh-review 执行");
       for (const stage of ["build-code", "verify-code"])
         expect(text).toContain(`workflows/${stage}/SKILL.md`);
@@ -495,7 +501,7 @@ describe("simple wh-review contracts", () => {
       expect(() => section(workflow.replace("## OCR 能力与缺省记录\n", "## Other\n"), "OCR 能力与缺省记录")).toThrow();
     }
     for (const stage of ["build-code", "verify-code"])
-      expect(() => assertWh(wh.replace(`workflows/${stage}/SKILL.md`, "missing-pointer"))).toThrow();
+      expect(() => assertWh(wh.replaceAll(`workflows/${stage}/SKILL.md`, "missing-pointer"))).toThrow();
     expect(() => assertWh(wh.replace("保留检测输出与原始失败", "只保留成功输出"))).toThrow();
     expect(() => assertPolicy(undefined)).toThrow();
   });

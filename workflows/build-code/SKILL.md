@@ -122,3 +122,43 @@ authorize只记录/消费已有授权。每次Git前用 `runtime/interface/git-a
 每 Phase 审后提交与 norm-sync 后，由本阶段主会话在同一事件现场调用 answer-as-page 的共同入口，event 为 `phase-closed`；使用当前认证任务根、实际 run-checks stdout 原件和同名任务库输出页。无需 caller 手拼 pageData，失败保原件与「未自动打开」真实原因。尚未到真实时点就保 incomplete 与负责主会话，不能用手动预演冒事件触发。
 
 最后 Phase 收口后同入口用 `build-code-ended` 刷新环 1–9，环 10 只取报告 skipped；stage-close 完成后由原调用方用 `stage-closed` 与新报告补终态。六事件、派生/比较与旧件保全规则只在 skills/answer-as-page/SKILL.md「驾驶舱自动派生与事件」维护；页面不写 task facts，不代当前阶段事实。
+
+## 最后 Phase：终末承接
+
+复杂任务最后 Phase 使用本节覆盖方法8、10、12的终末执行：本 Phase 常规审查与整 stage 终末审查合为同一轮外部 OCR，不先 phase 再 terminal 双审；其它 Phase 原方法保持。最后 Phase 不为任何 AC 做首次判定，只对账。冻结仅固定审查对象，允许有效 finding 修复及定向复验，不重派正常审查。
+
+1. 冻结实现
+2. spec-analyze
+3. AC/证据对账表
+4. 终末独立审查
+5. 修 finding 并定向复验
+6. 测试充分性与验收对象
+7. UI/浏览器终验
+8. 最终 AC 对账和报告
+9. norm-sync/reflection/成本/页面
+
+第4段调用 stage=build-code、review_scope=terminal、subject_kind=worktree、phase_id=null；base 为任务起点提交，head 为冻结实现，审查整份交付 diff。路由 single_round；原 verify-code 调用兼容保留。每路原件/实际执行者/失败/覆盖限制分别保存；finding 回原实施会话，独立同源补充不冒异源。缺材料保 unknown/unavailable/incomplete，不作继续工作的许可证。
+
+| 编号（原判据） | 并入位置 | 执行者 | 证据 | 验收 |
+| --- | --- | --- | --- | --- |
+| RP-01 来源与架构机会（原判据：方法 1 首句按 project-norm-init 读适用源并核 owner/版本/consumer；「一次架构机会」只引既有原件、无则记未知） | 段 1 冻结实现 | 主会话读源，独立执行者复核 | 规范源读回（路径/稳定节/version/owner/consumer）；架构评估原件引用或 unknown | 每类有真实来源；缺源只停依赖该规则的判断；不出现第二次架构评估 |
+| RP-02 冻结实现（原判据：方法 1 核真实 worktree/branch/HEAD、写集与来源，真实命令留回执，按 stage-handoff 回读交接、材料疑点交原作者、旧对象只读） | 段 1 冻结实现 | 主会话；开发子代理提供交付 diff | 冻结 HEAD 与交付 base/head 读回、写集清单、captureCommand 回执、handoff 回读件 | 冻结审查对象后不扩大范围；有效 finding 修复保新 diff 和定向复验；diff 边界可回读；疑点有 owner；旧原件未改写 |
+| RP-03 执行事实核对（原判据：方法 1 读真实入口/消费者/diff/完整 AC/build-code 原件，分清已跑、未跑、失败、不可用与覆盖限制） | 段 2 spec-analyze | 主会话；测试子代理供原件 | 五态清单（AC → 原件 → 状态 → 覆盖率限制） | 每条有状态与原因；未跑不写成通过；缺原件保持 incomplete/unavailable |
+| RP-04 理由与约束回源（原判据：方法 1 追问 why 时沿 git blame/log 与原决定逐环读理由与反证；按 knowledge-graph 有界回源领域与历史约束） | 段 2 spec-analyze | 独立执行者 | blame/log 读回与图查询原件；事实、竞争假设与 unknown 分栏 | 读不到写缺口与原因；不拿最新提交或自报轨迹当理由 |
+| RP-05 需求链抽查（原判据：方法 1 从原始需求→decision-log 裁决→spec FR/AC→phases 索引与物理Phase正文→实现与测试/质量原件逐项打开） | 段 2 spec-analyze | 主会话 | 抽查清单（每环真实路径与读回结果） | 每一环实际打开；缺索引/正文留 unknown/unavailable，不猜路径 |
+| RP-06 终末独立审查（原判据：方法 2 按 wh-review Long-review 发起一次终末独立代码审查并正常使用 OCR；每路原始 findings 或真实失败/取消/unavailable 均可定位） | 段 4 终末独立审查 | 外部 OCR 以终末身份执行；主会话发起并存原件 | 每路终态/失败原件、实际执行者、覆盖限制、含整份交付 diff 的调用参数 | 身份 `build-code/terminal` 可调用；范围是整份交付 diff；路由为 single_round；至少一路终态或如实记 unavailable |
+| RP-07 审查原件保全（原判据：方法 3 保留每路 findings、执行者、错误、取消与覆盖限制，迟到 findings 交同一回调，build-code Phase 审查不得充当终末第二次独立审查） | 段 4 终末独立审查 | 主会话 | provider 原始件、迟到 finding 记录、来源标注 | 各终态分别可定位；失败不被成功路漂白；Phase 审查不被冒记为终末审查 |
+| RP-08 测试面与检查可信度（原判据：方法 4 每 Phase 一行「声明面→原件 path/cwd/argv/exit/原始输出→已跑/未跑」；测试充分性节核断言/替身、缺 RED、受控变异与 diff 五类削弱） | 段 6 测试充分性与验收对象 | 测试子代理 | 逐 Phase 测试面表；削弱清单与原始读数 | 每个未跑面写阻碍、可跑条件与 owner；缺表保持 incomplete/inadequate |
+| RP-09 风险选样与三值结论（原判据：方法 4 按金钱、隐私权限、不可逆后果、外部副作用、跨 Phase 旅程、失败恢复风险独立选样，分别给 business_effect、semantic_test_adequacy、code_review） | 段 6 测试充分性与验收对象 | 独立执行者 | 选样表与逐 case/AC 的已查/未查理由 | 三类结论各有证据；缺数据/权限保持 unknown/unavailable，不按 provider coverage 推导 |
+| RP-10 验收对象检查（原判据：方法 4 按 spec 唯一 checkAcceptanceObject 与 check-acceptance-object.mjs 实跑，exit 0、1、2 分开记） | 段 6 测试充分性与验收对象 | 主会话 | 命令 argv/cwd/exit 原件、解析对象与来源文件 | exit 0 只证结构与来源文件存在；exit 1/2 分开记，不冒业务效果 |
+| RP-11 AC/证据对账表（原判据：方法 4 逐 Phase 核 Done 承接 AC 的编号、runtime/evidence/acceptance-evidence-validator.mjs 现成 8 值档位与具名 ref；AC 归属按 spec 正文） | 段 3 AC/证据对账表 | 主会话 | 对账表（AC → 承接 Phase → 8 值档位 → 具名 ref） | 每条 AC 有编号、档位与 ref；缺首判的 AC 记缺口并回 owner，不补签 |
+| RP-12 finding 处置（原判据：方法 5 与 7 逐条判断 finding，有效问题回原实施会话，无法解决列影响/证据/owner/选项，accepted_risk 需已有用户真实决定，不改写原 review） | 段 5 修 finding 并定向复验 | 主会话；修复回原实施会话 | finding 原文与处置表（fixed、rejected_invalid、accepted_risk、needs_human） | 每条有原文与处置；不改写原 review；严重问题不留给用户承担 |
+| RP-13 定向复验（原判据：方法 6 对新修复和真实疑点只做必要定向复验，先列 file/case 集合，记录实际 command/exit/raw，不重派第二次正常审查） | 段 5 修 finding 并定向复验 | 原实施会话修复，独立执行者复验 | 复验命令原件与恢复结果 | 只跑受影响集合；无改动或无疑点有说明；不重做全量上游 |
+| RP-14 UI/浏览器终验（原判据：方法 8 之后的 UI 段按专业源与设计源核对，按 isolated-browser-qa 消费页面、console 与 a11y；缺工具或入口记 unknown/unavailable） | 段 7 UI/浏览器终验 | 独立执行者（浏览器 QA） | 页面、console、a11y、截图与 not_observed 原因 | 非 UI 写集给 N/A 理由；缺工具/入口记 unavailable；不把未观察当视觉通过 |
+| RP-15 最终 AC 对账与报告（原判据：方法 4 末段完整串演只复核沿途结论并补必要未闭环 case、不新增全量重跑、不作任何 AC 首次判定点；方法 7 逐 AC 结果保留处置） | 段 8 最终 AC 对账和报告 | 主会话 | 逐 AC 结论表与未闭环 case 清单；十环报告消费记录 | 每条 AC 指向承接 Phase 的原始结论；缺口逐条列；不出现新的首判 |
+| RP-16 收口与成本页面（原判据：方法 7 尾按 answer-as-page 刷新页面，环 1–9 真实结论、环 10 记 skipped；方法 8 按 stage-reflection 阶段收口、内部发布并读回最终报告；成本在 stage 末只记一次；收口前执行 norm-sync） | 段 9 norm-sync/reflection/成本/页面 | 主会话；独立上下文核成本读数 | 收口与最终报告读回件、成本读数、页面与同名侧车、norm-sync 回执 | 成本同窗口只记一次；环 10 为 skipped；norm-sync 有真实回执；缺口如实保留 |
+
+
+终末第8段由当前主会话经认证 task.appendRecord 保存不可变普通 final-report.md，以实际 ref 交回关闭 reader；同字节复用，不同字节沿现有递增命名保新原件。报告包含任务/材料/HEAD身份、逐 AC 档位与原件 ref、六项结论、未完成项的真实尝试/owner/恢复条件、终末审查原件和失败。功能验收记录、代码审查回执、独立人读功能判断分别引用；business_effect、semantic_test_adequacy、code_review 不互相推导。缺口不得写成完成，缺证据 ref 明列未知。
+
+本节覆盖旧步骤12的最后阶段输出：不再产出 stage-handoff，不引导进入 verify-code 下一阶段；最终报告承担人读关闭记录。第9段补充保存新报告原件，不覆写旧报告。成本只在整个 stage 末记一次，norm-sync/reflection 沿既有方法；关闭/PR后按实际结果刷新页面与侧车，交付前环10为 skipped。用户额外要求的人读续接指针不变为默认产品流程、机器门或新增 stage。

@@ -47,7 +47,8 @@
       "enum": [
         "phase",
         "integration",
-        null
+        null,
+        "terminal"
       ]
     },
     "subject_kind": {
@@ -1359,6 +1360,134 @@
                       "pass",
                       "pass_with_findings"
                     ]
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "review_scope": {
+            "const": "terminal"
+          }
+        },
+        "required": [
+          "review_scope"
+        ]
+      },
+      "then": {
+        "required": [
+          "conclusion",
+          "coverage",
+          "subject_kind",
+          "phase_id",
+          "stage"
+        ],
+        "properties": {
+          "conclusion": {
+            "enum": [
+              "pass_with_findings",
+              "needs_revision",
+              "reject",
+              "inconclusive"
+            ]
+          },
+          "coverage": {
+            "type": "object",
+            "required": [
+              "findings_state",
+              "providers_completed",
+              "providers_failed"
+            ],
+            "properties": {
+              "findings_state": {
+                "enum": [
+                  "findings_returned",
+                  "no_findings_returned"
+                ]
+              },
+              "providers_completed": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "providers_failed": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false
+          },
+          "verdict": false,
+          "subject_kind": {
+            "const": "worktree"
+          },
+          "phase_id": {
+            "type": "null"
+          },
+          "stage": {
+            "const": "build-code"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "findings": {
+                  "type": "array",
+                  "maxItems": 0
+                }
+              },
+              "required": [
+                "findings"
+              ]
+            },
+            "then": {
+              "properties": {
+                "conclusion": {
+                  "not": {
+                    "enum": [
+                      "pass",
+                      "pass_with_findings"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "findings": {
+                  "type": "array",
+                  "contains": {
+                    "type": "object",
+                    "properties": {
+                      "severity": {
+                        "enum": [
+                          "major",
+                          "blocking"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "severity"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "findings"
+              ]
+            },
+            "then": {
+              "properties": {
+                "conclusion": {
+                  "not": {
+                    "const": "pass_with_findings"
                   }
                 }
               }

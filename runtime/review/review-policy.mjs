@@ -4,7 +4,13 @@ import matrix from "./stage-materials.json" with { type: "json" };
 const FORMAL_STAGES = FORMAL_DEVELOPMENT_STAGE_SET;
 const REVIEW_KINDS = new Set(["build_prd"]);
 const REVIEW_TRACKS = new Set(["direction", "detail"]);
-const REVIEW_SCOPES = new Set(["phase"]);
+export const TERMINAL_REVIEW_SCOPE = "terminal";
+const REVIEW_SCOPES = new Set(["phase", TERMINAL_REVIEW_SCOPE]);
+
+export function requiredReviewMode(input) {
+  const identity = reviewIdentityFromInput(input);
+  return identity.stage === "verify-code" || identity.reviewScope === TERMINAL_REVIEW_SCOPE ? "single_round" : "full_only";
+}
 
 function coalesceReviewField(input, snake, camel) {
   const snakeValue = input?.[snake];
@@ -42,7 +48,7 @@ export function assertReviewIdentity(input = {}) {
     throw new TypeError(`${stage} does not use a review track`);
   }
   if (stage === "build-code") {
-    if (reviewScope !== null && reviewScope !== undefined && !REVIEW_SCOPES.has(reviewScope)) throw new TypeError("build-code requires phase review_scope; integration review is retired");
+    if (reviewScope !== null && reviewScope !== undefined && !REVIEW_SCOPES.has(reviewScope)) throw new TypeError("build-code requires phase or terminal review_scope; integration review is retired");
   } else if (reviewScope !== null && reviewScope !== undefined) {
     throw new TypeError(`${stage} does not use review_scope`);
   }
@@ -76,7 +82,7 @@ export function reviewRuleFor(stage, track = null, reviewScope = null) {
   }
   if (stage === "build-code") {
     const scope = reviewScope ?? "phase";
-    if (scope !== "phase") throw new Error("MATERIAL_INCOMPLETE: ordinary integration review is retired; use the current phase review");
+    if (!REVIEW_SCOPES.has(scope)) throw new Error("MATERIAL_INCOMPLETE: ordinary integration review is retired; use the current phase review");
     const rule = stageRule.profiles?.[scope];
     if (!rule) throw new Error(`MATERIAL_INCOMPLETE: build-code has no ${scope} material profile`);
     return rule;
@@ -131,8 +137,8 @@ export function reviewTierFor(readings) {
       if (typeof value.status !== "string") throw new TypeError(`${key} status must be a named fact`);
     }
   }
-  // Existing terminal identity stays authoritative until its owning migration.
-  if (identity.stage !== "build-code") return REVIEW_EXECUTORS.external;
+  // Terminal full-delivery review always uses external OCR, even for a low-risk diff.
+  if (identity.stage !== "build-code" || identity.reviewScope === TERMINAL_REVIEW_SCOPE) return REVIEW_EXECUTORS.external;
   const lowRisk = TIER_RISK_FACES.every(face => readings.risks?.[face] === "none")
     && readings.scope?.singleModule === true && readings.scope?.knownDirectConsumers === true
     && TIER_DIMENSIONS.every(dimension => tierDimensionReadable(readings.readings?.[dimension], dimension));

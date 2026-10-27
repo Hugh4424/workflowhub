@@ -26,7 +26,7 @@
     "review_kind": { "enum": [null] },
     "subject_kind": { "enum": ["worktree", "phase"] },
     "phase_id": { "type": ["string", "null"], "minLength": 1 },
-    "review_scope": { "enum": ["phase", "integration", null] },
+    "review_scope": { "enum": ["phase", "integration", "terminal", null] },
     "base_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
     "candidate_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
     "source": {
@@ -411,6 +411,9 @@
     "if": { "type": "object", "properties": { "terminal_status": { "const": "semantic" } }, "required": ["terminal_status"] },
     "then": { "properties": { "error": { "type": "null" } } },
     "else": { "properties": { "error": { "type": "object" } } }
+  }, {
+    "if": { "properties": { "review_scope": { "const": "terminal" } }, "required": ["review_scope"] },
+    "then": { "properties": { "stage": { "const": "build-code" }, "subject_kind": { "const": "worktree" }, "phase_id": { "type": "null" } }, "required": ["stage", "subject_kind", "phase_id"] }
   }],
   "additionalProperties": false
 }

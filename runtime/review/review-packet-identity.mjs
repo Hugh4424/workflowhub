@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 import { AUTHENTICATED_EVIDENCE_PATH, providerMaterialEntries, providerMaterialPath, redactProviderHostPaths } from "./provider-material-projection.mjs";
 import { compactVerifyCodeMaterials } from "./review-input-bounds.mjs";
-import { reviewIdentityFromInput } from "./review-policy.mjs";
+import { reviewIdentityFromInput, TERMINAL_REVIEW_SCOPE } from "./review-policy.mjs";
 // P9/T019 (D-029): the build-spec focus text remains historical data, not an active review identity.
 // reviewIdentityFromInput already rejects retired build-spec requests; keep that refusal unchanged.
 // Retain the old value until a later complete real-task observation confirms historical attribution
@@ -12,6 +12,7 @@ const REVIEW_FOCUS = Object.freeze({
   "make-decision/detail": "Check scope, complete user flow, pages, data states, success and failure boundaries, acceptance, non-goals, deferred work, risks, and unnecessary complexity.",
   "build-spec": "Check requirement coverage, user journey, states, failure recovery, testable acceptance, and scope.",
   "build-plan": "Check dependencies, implementation order, real consumers, verification, recovery, and unnecessary work.",
+  [`build-code/${TERMINAL_REVIEW_SCOPE}`]: "Review the complete delivery diff, full applicable AC, real consumers, lifecycle, concurrency, failures and test strength.",
   "build-code/phase": "Check the submitted implementation material for correctness, real consumers, failure paths, tests, and unnecessary code.",
   "build-code/integration": "Focus on the final current worktree implementation, the complete user flow, cross-Phase seams, real interfaces, state transitions, failure recovery, necessity, and actionable major or blocking risks. The host validates AC bindings separately; do not report missing or unknown task rows, receipts, snapshots, lineage, or evidence metadata unless it directly causes or conceals a user-visible behavior failure. Do not replay Phase history, cumulative diffs, or require a provider pass.",
   "verify-code": "Check the submitted implementation and test code for correctness, real consumer seams, lifecycle/concurrency and security risks, failure boundaries, and test strength. When authenticated-evidence.json is supplied for a reviewed_execution-bound request, use it only to compare code/test claims with recorded execution and identify false-green behavior. Review acceptance artifacts for AC coverage, evidence completeness, and false-green claims alongside the implementation and tests. Do not report release/close status as code findings.",
@@ -115,7 +116,7 @@ export function reviewPacketMaterialId(input, { instructionText = null, compactM
     : typeof instructionText === "function" ? instructionText(input) : instructionText;
   if (typeof instruction !== "string" || instruction.length === 0) throw new TypeError("review packet instructions are required");
   let packetMaterials = input.materials;
-  if (identity.stage === "verify-code") {
+  if (identity.stage === "verify-code" || identity.reviewScope === TERMINAL_REVIEW_SCOPE) {
     packetMaterials = compactMaterials(input.materials).materials;
   }
   const instructionBytes = Buffer.from(`${redactProviderHostPaths(instruction)}\n`, "utf8");

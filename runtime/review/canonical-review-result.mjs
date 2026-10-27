@@ -229,8 +229,8 @@ export function aggregateCanonicalProviderResults(providerResults, minimumReview
   return { status: "available", valid, findings, adjudication };
 }
 
-// Host-owned verify-code conclusion: findings-only provider output never supplies it.
-export function deriveVerifyCodeConclusion({ status, provider_results, findings } = {}) {
+// Host-owned terminal conclusion: findings-only provider output never supplies it.
+export function deriveTerminalConclusion({ status, provider_results, findings } = {}) {
   if (!["available", "available-with-failures", "unavailable", "incomplete"].includes(status)
       || !Array.isArray(provider_results) || !Array.isArray(findings)
       || provider_results.some((member) => !member || typeof member !== "object" || Array.isArray(member)
@@ -253,6 +253,8 @@ export function deriveVerifyCodeConclusion({ status, provider_results, findings 
       : findings.some((finding) => finding.severity === "major") ? "needs_revision" : "pass_with_findings";
   return { conclusion, coverage };
 }
+
+export const deriveVerifyCodeConclusion = deriveTerminalConclusion;
 
 export function conservativelyAssessUnattestedAnchors(items) {
   return items.map((item) => ({

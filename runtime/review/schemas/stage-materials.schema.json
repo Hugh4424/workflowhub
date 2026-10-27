@@ -20,7 +20,8 @@
         "build-plan",
         "build-code/phase",
         "verify-code",
-        "build-prd"
+        "build-prd",
+        "build-code/terminal"
       ],
       "properties": {
         "make-decision/direction": {
@@ -39,6 +40,9 @@
           "$ref": "#/$defs/surface"
         },
         "build-prd": {
+          "$ref": "#/$defs/surface"
+        },
+        "build-code/terminal": {
           "$ref": "#/$defs/surface"
         }
       },
@@ -332,11 +336,15 @@
         "profiles": {
           "type": "object",
           "required": [
-            "phase"
+            "phase",
+            "terminal"
           ],
           "properties": {
             "phase": {
               "$ref": "#/$defs/phaseRule"
+            },
+            "terminal": {
+              "$ref": "#/$defs/rule"
             }
           },
           "additionalProperties": false
