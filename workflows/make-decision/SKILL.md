@@ -198,11 +198,11 @@ build-code 无 phase_progress 游标或游标缺失/过期时，按当前工作�
 
 ## 人为门与审查点
 
-下列五阶段审查点属于复杂路线；小改动无独立审查轴，普通路线在本阶段逐模块收敛后做一次方案审（detail 轨）、整次实施做一次实现审，规划只审方向与任务卡，分别按子流程执行，不将复杂路线的每Phase审查叠加给轻档。
+下列三阶段审查点属于复杂路线；小改动无独立审查轴，普通路线在本阶段逐模块收敛后做一次方案审（detail 轨）、整次实施做一次实现审，规划只审方向与任务卡，分别按子流程执行，不将复杂路线的每Phase审查叠加给轻档。
 
 - confirm：本阶段、build-plan 和 build-prd 收口时，记录用户对实际展示材料的真实答复；未答不算同意。
 - authorize：只在 commit、push、merge、archive、cleanup 等不可逆 Git/交付动作前，使用 `runtime/interface/git-authorize.mjs`，执行前核对授权动作、分支与当前 HEAD；HEAD 不一致时拒绝消费旧记录；已有用户授权覆盖当前动作和范围时，按当前 HEAD 重新记录并消费，未覆盖的新增动作或范围才需用户决定。方向确认不授权这些动作，不能声称尚未发生的授权已经完成。
-- 三个必留审查点：build-plan 的 wh-review 合并审查、build-code 每 Phase 的 OCR 审查、verify-code 终末 OCR 审查。本阶段方向/细节及 build-prd 文档建议仍由 wh-review 执行，不另建全 Phase 集成审查。
+- 三个必留审查点：build-plan 的 wh-review 合并审查、build-code 每 Phase 的 OCR 审查、build-code 终末 OCR 审查。本阶段方向/细节及 build-prd 文档建议仍由 wh-review 执行，不另建全 Phase 集成审查。
 
 ## 安全写入与收口
 

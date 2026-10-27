@@ -5,7 +5,7 @@ description: 规划、实施或验收需读取设计、前端、后端、接口�
 
 # Project Norm Init
 
-在 build-plan 设计准备、build-code 每Phase开工及 verify-code 验收对象准备时，按实际职责读取设计/前端/后端/接口/验收五类规范；UI细分仍保下列八类职责。build-prd 作者经现有 readiness/render 方法消费本入口的来源指针。它是 no stage、no gate 的可搬运方法，不执行产品 UI、不打 quality score。
+在 build-plan 设计准备、build-code 每Phase开工及 build-code 终末 验收对象准备时，按实际职责读取设计/前端/后端/接口/验收五类规范；UI细分仍保下列八类职责。build-prd 作者经现有 readiness/render 方法消费本入口的来源指针。它是 no stage、no gate 的可搬运方法，不执行产品 UI、不打 quality score。
 
 ## 规范职责
 
@@ -42,7 +42,7 @@ description: 规划、实施或验收需读取设计、前端、后端、接口�
 
 1. **定位范围**：沿原始需求、现路由/组件事实和已确认计划核 ui/non_ui/backend/fullstack；来源不足写 unknown，不凭调用者标签绕过实际 UI 范围。使用现 workflow 的 UI 条件指针，不修改其五个实际 trigger。完成时，范围、依据及每项未读面可定位。
 2. **按类取源**：对五类及适用UI八子类分别选当前内容起点，而非让一个技能实现三条生成入口。new 从用户/项目维护者已确认的真实目标、受众、方向、栈和范围取源；已有可信规范先核原条款、版本、适用、冲突及 consumer；已有实现读取真实路由、组件、CSS、交互/工程证据，区分 verified/inferred/unknown，不能从当前代码推出应然标准。完成时，各类来源或具名缺口、影响与提供者可读；缺真实新项目输入保 design-incomplete，不用 fixture 充第三真实例，不重新索取已决定保留的缺口。
-   缺源写法与 build-plan、verify-code、frontend-testing 消费方对应，逐类记录，不由单类缺口冻结其它适用类：
+   缺源写法与 build-plan、build-code 终末、frontend-testing 消费方对应，逐类记录，不由单类缺口冻结其它适用类：
    - `missing`：应有而无可读来源。例如本次需要组件合同却无来源可指，依赖它的组件选择仍缺依据；由该组件/规范原 owner 提供来源，当前接线者保具体缺件与影响，不用空骨架补齐。
    - `stale`：来源存在但版本、作用域或内容与当前实现不符。例如布局来源仍描述已迁走的区域，当前布局判断保冲突及影响；由原布局/规范 owner 核对依据并处置，当前接线者不从实现直接倒填应然规则。
    - `unknown`：尚未核实，不能确定是否缺失或过期。例如来源版本或真实 consumer 尚未回读，相关适用性仍未证实；由当前接线者核实具体来源并联系原 owner，缺输入/权限时点名提供者，不把未观察当缺失或通过。

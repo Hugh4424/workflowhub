@@ -32,7 +32,7 @@ Version: 1.9.3
 
 ### F4 质量靠异源审查与人，finding 不锁死修复
 
-- **定义**：质量保证依靠独立来源的审查加最终人工把关，不把 reviewer verdict 当阶段 pass gate。一般 finding、invalid、unavailable 或 timeout 如实记录；build-code、verify-code 对已认证的 `actionable + major|blocking` 问题自动优先修复，不增设中间风险确认，不得阻止继续修复同一任务。
+- **定义**：质量保证依靠独立来源的审查加最终人工把关，不把 reviewer verdict 当阶段 pass gate。一般 finding、invalid、unavailable 或 timeout 如实记录；build-code 对已认证的 `actionable + major|blocking` 问题自动优先修复，不增设中间风险确认，不得阻止继续修复同一任务。
 - **最佳实践解释**：review 是必须真实执行或如实 unavailable 的质量工作，不是开始工作的许可证。严重问题处置约束完成/交接结论，不冻结修复活动，不改写原 verdict，也不制造 pass。
 - **正例**：审查发现重大问题后继续在同一任务修复；确实无法解决时保留 incomplete，并在最终 close 的可审查结果中展示证据、影响和后果，不能自行接受风险或宣称完成。
 - **反例**：provider 不可用就卡死编码；或把 review 删除成可省略步骤、把风险接受写成 reviewer 已通过。
@@ -53,7 +53,7 @@ Version: 1.9.3
 
 ### F7 两道人为门与不可逆操作授权
 
-- **定义**：make-decision 的方向选择与 build-plan 的实施计划选择发生在实施前；用户授权任务进入 build-code、verify-code 后，授权持续覆盖任务内实施、验证、审查、修复及交付必要的 commit/push/merge，不再逐动作申请。仅最终 close（含归档、删除任务分支/工作区及交付清理）前取得一次确认。真实原话、来源与动作范围照实记录。
+- **定义**：make-decision 的方向选择与 build-plan 的实施计划选择发生在实施前；用户授权任务进入 build-code 后，授权持续覆盖任务内实施、验证、审查、修复及交付必要的 commit/push/merge，不再逐动作申请。仅最终 close（含归档、删除任务分支/工作区及交付清理）前取得一次确认。真实原话、来源与动作范围照实记录。
 - **最佳实践解释**：阶段切换、接续和 HEAD 变化不撤销已有任务授权。Git 动作前自动核范围、分支和当前 HEAD，并用已有 git-authorize record/consume，不把记录工具变成提问门。质量不足或真实外部条件缺失如实报告，继续可执行部分，不以日常确认解决内部流程问题。
 - **正例**：计划已授权后自动实施、定向复验、审查、修复及正常 Git 交付；最终 close 前统一展示实际结果、质量限制和操作范围，确认一次。
 - **反例**：把阶段审查 PASS 当操作授权，或把 accepted_risk 机器字段当用户真实决定。
@@ -93,7 +93,7 @@ Version: 1.9.3
 - **定义**：质量事实自动采集并浮现，不作为开始或继续修复的许可证；但阶段必须真实完成其声明的测试、逐 AC 判断、独立审查（或真实 unavailable）和交接，缺项时不得宣称完成。已认证的 serious finding 按 F4 处置。
 - **最佳实践解释**：去掉“先补证据才能干活”的死锁，不等于删除质量工作。记录代替普遍阻断，完成判据防止假绿。
 - **正例**：审查失败后立即继续同任务修复；修复完成后只重跑受影响测试，并用当前证据更新 AC 与完成结论。
-- **反例**：一发现问题就新建任务；或只读当前材料、跑几项局部测试便宣布 build-code/verify-code 完成。
+- **反例**：一发现问题就新建任务；或只读当前材料、跑几项局部测试便宣布 build-code 完成。
 
 ### Q2 工作依据、写入保护与完成结论分离
 
@@ -169,7 +169,7 @@ Version: 1.9.3
 
 ## 治理实施边界（不新增宪法条款）
 
-当前主会话执行阶段，外部 Stage Agent、session、bridge 或 stage outcome 不作前置条件。公共入口只有 doctor/status/run/review/verify/confirm/authorize 七类；其它实现可以私有复用，不能变成公共流程节点。post 材料与 task facts 为当前依据；pre/history 四材料、旧记录和报告只读。三审查点是 build-plan 合并、build-code 每 Phase、verify-code 终末；文档由 wh-review 执行，代码由 OCR；OCR 不可用（命令不存在（ENOENT）或版本低于1.12.9）如实记 unavailable/unknown，不换执行者，保留检测输出与原始失败；版本检测其它错误不推断未安装。architect-code-review 是同源补充轴，独立执行，与 OCR 可用性无关；已装 OCR 失败、超时、取消、无效输出、零成功路或空 findings 均保留原始事实。
+当前主会话执行阶段，外部 Stage Agent、session、bridge 或 stage outcome 不作前置条件。公共入口只有 doctor/status/run/review/verify/confirm/authorize 七类；其它实现可以私有复用，不能变成公共流程节点。post 材料与 task facts 为当前依据；pre/history 四材料、旧记录和报告只读。三审查点是 build-plan 合并、build-code 每 Phase、build-code 终末；文档由 wh-review 执行，代码由 OCR；OCR 不可用（命令不存在（ENOENT）或版本低于1.12.9）如实记 unavailable/unknown，不换执行者，保留检测输出与原始失败；版本检测其它错误不推断未安装。architect-code-review 是同源补充轴，独立执行，与 OCR 可用性无关；已装 OCR 失败、超时、取消、无效输出、零成功路或空 findings 均保留原始事实。
 
 报告只留原始件，不保存整棵目录/工作树快照或镜像。当前 build-code stage row 可保存一个 phase_progress 游标，只定位位置、不证明完成、不形成历史序列；材料提交变化时 stale，纯代码提交不使它 stale。严重 finding 先修复或由人明确承担具体风险；风险选择不改写原 review 事实。stage-handoff 是新唯一的人读 Markdown，不是身份对象图或写入许可。
 

@@ -81,6 +81,6 @@ evidence_kind 只用 direct、machine、inferred：direct 有直接源码/材料
 直接或机器证据可供逐项处理；单个 inferred 严重问题保持需核实，不能凭置信度制造裁决。
 空 findings 只表示本轮没有提出具体问题；可用传输、空发现与最终质量结论分别记事实。
 当前正式审查点为 make-decision、build-plan 和代码审查；build-code 只用当前 phase，
-verify-code 审当前最终 worktree，不新建 integration 审查或重新启用旧集成步骤。
+build-code 终末 审当前最终 worktree，不新建 integration 审查或重新启用旧集成步骤。
 主会话逐条处置发现。拒绝错误 finding 应说明证据；接受风险需真实回复及具体影响/后果，
 不能凭标签代替人类决定。发现、处置和未覆盖范围是普通事实，不构成机器放行步骤。

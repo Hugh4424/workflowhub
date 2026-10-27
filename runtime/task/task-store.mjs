@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { FORMAL_DEVELOPMENT_STAGE_SET } from "../stage/stage-registry.mjs";
 import { constants, closeSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, readdirSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
@@ -8,7 +9,7 @@ const STAGES = FORMAL_DEVELOPMENT_STAGE_SET;
 export const TASK_RECORD_KINDS = Object.freeze(["stage", "close_action"]);
 export const STAGE_ROW_KEYS = Object.freeze([
   "record_kind", "task_id", "stage", "source", "created_at", "review_origin", "review_result_ref",
-  "finding_dispositions", "spec_analyze", "evidence", "serious_issue_disposition", "close_action", "handoff", "material_bytes",
+  "finding_dispositions", "spec_analyze", "evidence", "serious_issue_disposition", "close_action", "handoff", "material_bytes", "terminal_assessment_ref",
 ]);
 export const REVIEW_ORIGINS = Object.freeze(["conducted", "unavailable", "not_run", "same_source_degraded", "dispatched_uncollected"]);
 export const CLOSE_ACTIONS = Object.freeze(["delivery_committed", "archive", "merge", "push", "worktree_cleanup", "task_branch_pushed", "pull_request_opened"]);
@@ -87,6 +88,12 @@ function currentRow(input,identity,now) {
   }
   if(row.evidence.value!==null){if(!Array.isArray(row.evidence.value)||!row.evidence.value.length||row.evidence.value.some(entry=>!plain(entry)||!text(entry.command)||!Number.isInteger(entry.exit_code)||!text(entry.failure_signature)))throw new TypeError("evidence must carry actual command, exit_code, failure_signature");}
   if(Object.hasOwn(input,"phase_progress")){if(row.record_kind!=="stage"||row.stage!=="build-code")throw new TypeError("phase_progress is only a build-code cursor");validateCursor(input.phase_progress);row.phase_progress=input.phase_progress;}
+  if(Object.hasOwn(input,"terminal_assessment_ref")){
+    const ref=input.terminal_assessment_ref;
+    if(row.record_kind!=="stage"||row.stage!=="build-code"||!plain(ref)||Object.keys(ref).sort().join("\0")!=="ref\0sha256"||typeof ref.ref!=="string"||!ref.ref.startsWith("quality/evidence/")||ref.ref.includes("\\")||ref.ref.split("/").some(p=>!p||p==="."||p==="..")||!/^([a-f0-9]{64})$/.test(ref.sha256??""))throw new TypeError("terminal_assessment_ref requires a build-code evidence ref and sha256");
+    if(createHash("sha256").update(readFile(join(identity.root,ref.ref))).digest("hex")!==ref.sha256)throw new Error("terminal_assessment_ref sha256 mismatch");
+    row.terminal_assessment_ref={ref:ref.ref,sha256:ref.sha256};
+  }
   return row;
 }
 export async function writeStageRow(taskRoot,input,options={}) {

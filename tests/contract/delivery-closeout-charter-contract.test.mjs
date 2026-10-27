@@ -11,7 +11,7 @@ const read = path => (existsSync(resolve(ROOT, path)) ? readFileSync(resolve(ROO
 const has = (body, token) => body.includes(token);
 const CHARTER = 'docs/delivery-closeout-charter.md';
 const FIVE = ['领域词表', '工作区与任务', '人读交接', '阶段收口', '交付说明'];
-const STAGE_NAMES = ['make-decision', 'build-plan', 'build-code', 'verify-code', 'build-prd'];
+const STAGE_NAMES = ['make-decision', 'build-plan', 'build-code', 'build-prd'];
 const RESIDENT = ['AGENTS.md', 'CLAUDE.md', 'GLOSSARY.md'];
 
 describe('ORACLE-P3-CHARTER delivery and closeout charter contract', () => {
@@ -34,9 +34,9 @@ describe('ORACLE-P3-CHARTER delivery and closeout charter contract', () => {
     expect(closeRow.length, 'the charter carries a close row').toBeGreaterThan(0);
     const joined = closeRow.join('\n');
     expect(has(joined, 'build-prd'), 'the close row lists build-prd').toBe(true);
-    expect(has(joined, 'verify-code'), 'the close row lists verify-code').toBe(true);
+    expect(has(joined, 'build-code'), 'the close row lists terminal build-code').toBe(true);
     expect(has(joined, 'make-decision'), 'the close row lists make-decision').toBe(true);
-    for (const stage of STAGE_NAMES.filter(value => value !== 'build-prd' && value !== 'verify-code' && value !== 'make-decision')) {
+    for (const stage of STAGE_NAMES.filter(value => value !== 'build-prd' && value !== 'build-code' && value !== 'make-decision')) {
       expect(has(joined, stage), `the close row must not list ${stage}`).toBe(false);
     }
   });

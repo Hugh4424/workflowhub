@@ -13,11 +13,11 @@ description: Review an implementation diff for correctness, lifecycle, security,
 - `dsh-prose-standard`：检查改动的注释、错误文本、提示词和说明是否完整、准确、放置合理；
 - `dsh-trim-cot-leakage`：删除设计过程、PR 编排和审查过程泄漏到产品文本中的叙述。
 
-四项 lens 在同一次审查中读取，不各发一次 provider 调用。本技能用于显式诊断、历史结果解读和宿主显式派发的同源补充。正常流程由 build-code 对每个 Phase 发起一次 OCR 审查，随后完成最终聚合测试与逐 AC 判断；verify-code 对最终 worktree 发起一次 OCR 独立审查。补充不是终末 OCR 的替代，也不增加正常 OCR 轮次。
+四项 lens 在同一次审查中读取，不各发一次 provider 调用。本技能用于显式诊断、历史结果解读和宿主显式派发的同源补充。正常流程由 build-code 对每个 Phase 发起一次 OCR 审查，随后完成最终聚合测试与逐 AC 判断；build-code 终末 对最终 worktree 发起一次 OCR 独立审查。补充不是终末 OCR 的替代，也不增加正常 OCR 轮次。
 
 ## 边界
 
-本技能读取调用方指定的当前 diff、真实消费者与验收原件，返回独立审查发现。本技能作为同源补充轴独立执行，与 OCR 可用性无关；正常代码审查按 `workflows/verify-code/SKILL.md`、`workflows/build-code/SKILL.md` 执行；文档审查仍由 wh-review 负责。
+本技能读取调用方指定的当前 diff、真实消费者与验收原件，返回独立审查发现。本技能作为同源补充轴独立执行，与 OCR 可用性无关；正常代码审查按 `workflows/build-code/SKILL.md#最后-phase终末承接`、`workflows/build-code/SKILL.md` 执行；文档审查仍由 wh-review 负责。
 
 历史 integration/OCR 结果只读保留，不能冒充当前审查。缺少旧 receipt 不妨碍检查当前代码，但未执行、取消或不可用不能写成空 findings。OCR 已安装但运行失败时保留 unavailable 原因，不换执行者。push、merge 与发布按实际授权独立处理。
 
@@ -54,7 +54,7 @@ description: Review an implementation diff for correctness, lifecycle, security,
 
 主 Agent 负责修复和处置，每条 finding 只能是 `fixed`、`rejected_invalid`、`accepted_risk` 或 `needs_human`；原始 finding 必须保留，不把审查失败改写为空 findings，也不要求第二次 review 来证明材料完整。
 
-普通 verify-code 的 OCR 审查与定向复验遵守当前 workflow 的一次审查合同。已装 OCR 失败、超时或取消时仍可处理宿主明确派发的安全同源补充，但保留原失败/unavailable；补充不改 OCR 身份、不替其结果、不计异源 quorum，也不追加 OCR 轮次。同源补充轴的范围与目标只取上述当前 workflow。
+普通 build-code 终末 的 OCR 审查与定向复验遵守当前 workflow 的一次审查合同。已装 OCR 失败、超时或取消时仍可处理宿主明确派发的安全同源补充，但保留原失败/unavailable；补充不改 OCR 身份、不替其结果、不计异源 quorum，也不追加 OCR 轮次。同源补充轴的范围与目标只取上述当前 workflow。
 
 ## 同源补充的镜头与记录
 
@@ -64,12 +64,12 @@ description: Review an implementation diff for correctness, lifecycle, security,
 
 ## 其他 Harness skill 的边界
 
-- `dsh-pre-push-checks`：只有用户明确授权 push 时，才作为 push 前最小检查；不进入 verify-code，也不把 push 当作 review 结论。
-- `dsh-merging-stacked-prs`：负责已授权的远端 stacked-PR merge；不在 verify-code 修改远端状态。
+- `dsh-pre-push-checks`：只有用户明确授权 push 时，才作为 push 前最小检查；不进入 build-code 终末，也不把 push 当作 review 结论。
+- `dsh-merging-stacked-prs`：负责已授权的远端 stacked-PR merge；不在 build-code 终末 修改远端状态。
 - `dsh-doc-site-sync`：只有改动确实涉及 docs site 映射时才单独执行；不作为每次代码审查的固定动作。
 - `dsh-translate-docs`：只有用户明确要求翻译时才执行；不因发现文档改动自动触发。
 - `dsh-archive-agent-notes`：只处理 Agent Notes 归档；不参与代码质量裁决。
-- `record-browser-gif`：只有用户明确要求 UI 交互录制时才执行；GIF 不是 verify-code 交付证据或通过条件。
+- `record-browser-gif`：只有用户明确要求 UI 交互录制时才执行；GIF 不是 build-code 终末 交付证据或通过条件。
 
 该适配保留上游代码审查、简化、文档和 prose 规则，供独立调用与历史解读；正式 review publication 只取当前 workflow 分工下真实执行路径的原结果，补充不冒正式 OCR。需要迭代这些 lens 时核其固定来源、本地偏离与更新，不自动追上游 HEAD。
 

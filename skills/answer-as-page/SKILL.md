@@ -51,7 +51,7 @@ caller给真实问题、材料/任务事实/测试/审查/真实改动清单、�
 
 节点digest比对才高亮；顶部「本次更新」可跳，「我看过了」清除，该节点再变则再现。已读仅本地偏好，key含稳定task身份/stable_id/content_digest，不靠file路径隔离、不存任务状态；存储失败明示未持久保存。只报实际QA刷新效果，不推广未观察浏览器。事件页以认证taskIdentity的URL fragment及任务库根为稳定身份：同任务标签已存在则导航到本次真实HTML并刷新，无匹配才新开；不同任务不复用，历史HTML不修改。macOS默认Chromium系浏览器使用原生标签API并读回URL，权限拒绝/不可查询/无确认结果明确报未自动打开，不以system open退出0冒复用成功；非mac宿主复用能力未提供时如实报告。裸opener与显式DATA旧入口保留。权限/能力缺失报「未自动打开」。QA禁附着用户Chrome，先isolated-browser-qa，页面/viewport/Preview/截图/行为各保原件。设计确认不代视觉通过；首个真实页由用户判断，未答不冒通过。
 
-共同刷新：caller在真实事件执行 `node tools/cli/run-checks.mjs --task-path <认证任务根>` 存stdout完整报告；比字节，同则复用ref、异则保旧件另存，不覆盖既有final-chain-report.json。输入报告/decision-log绝对路径/sha256、输出目录/HTML名/同名侧车；沿上文串行安全发布/读回。DATA.rings只抄报告rings[]，派生结论/依据/证据类型/是否计入分母/备注，不判定/写报告；缺报告/缺环显示「缺口：报告未提供第 N 环」，provenance报「报告缺失：final-chain-report.json 未取得」；输入错误报具体缺口，无新事实不凑次数。normal原出页条件已触发或当前页存在才在逐AC后、物理交付/PR完成后各刷新，否则具名说明；complex由verify-code caller沿同接口/时点，planning沿原出页/交接，small默认不调用，不互增阶段行。
+共同刷新：caller在真实事件执行 `node tools/cli/run-checks.mjs --task-path <认证任务根>` 存stdout完整报告；比字节，同则复用ref、异则保旧件另存，不覆盖既有final-chain-report.json。输入报告/decision-log绝对路径/sha256、输出目录/HTML名/同名侧车；沿上文串行安全发布/读回。DATA.rings只抄报告rings[]，派生结论/依据/证据类型/是否计入分母/备注，不判定/写报告；缺报告/缺环显示「缺口：报告未提供第 N 环」，provenance报「报告缺失：final-chain-report.json 未取得」；输入错误报具体缺口，无新事实不凑次数。normal原出页条件已触发或当前页存在才在逐AC后、物理交付/PR完成后各刷新，否则具名说明；complex由build-code 终末 caller沿同接口/时点，planning沿原出页/交接，small默认不调用，不互增阶段行。
 
 ## 回灌安全
 
@@ -63,7 +63,7 @@ caller给真实问题、材料/任务事实/测试/审查/真实改动清单、�
 
 只改方法、不搬上游打包程序。首个真实页不满足用户、考虑退回renderer时，先报约+977KB、三层许可（两文本未随包发布）、黑盒不可重建/自修；补许可/真实决定后评估，模板绿不默认回退，数字仅作来源对照。ADR-012/研究原件两历史先例：每阶段一页装置按迁移表全删；监控页生成者被删、页面陈旧33天，承诺的退役提示条实测不存在。材料枚举测试固定白名单、不扫目录，新增页不自动报警；禁第二进度权威，允许只读派生。
 
-生成入口由 caller 在「共同刷新」执行，唯一消费者是阶段主会话与 verify-code，owner 为本技能维护者；等价宿主原生入口接管且正文改指它，或技能退役时删除薄脚本。
+生成入口由 caller 在「共同刷新」执行，唯一消费者是阶段主会话与 build-code 终末，owner 为本技能维护者；等价宿主原生入口接管且正文改指它，或技能退役时删除薄脚本。
 
 1. 已安装分发从 installedRunner 根目录调用下列入口；Runner 与 Skill Bundle 按现安装合同同根安装，静态 runtime 依赖由 Runner 发布闭包承接。事件 caller 在真实时点运行 `node skills/answer-as-page/scripts/render-answer-page.mjs --task-path <认证任务根> --report <run-checks stdout 报告路径> --out-dir <认证任务根>/quality/evidence/<页面目录> --html <名称>.html --event <下表事件>`。脚本只消费已存报告，不代跑检查；无 `--data` 时从认证任务自动派生。原显式 caller 可保留 `--data <完整DATA.json>` 并走 `renderAnswerPage`，事件入口只取当前任务真实材料，不接手拼数据。
 2. event可省out-dir/html，默认本任务`quality/evidence/cockpit/overview.html`；显式输出仍允许不可变命名，浏览器按taskIdentity跨本任务HTML名复用，不要求caller手工统一路径。`refreshAnswerPage` 首次或实质变化经 `open-page.mjs` 调系统默认浏览器；模块测试可注入 `open`。同指纹与逐类摘要不变写「无实质变化」，不重复打开。页在而侧车缺失/非法写「比较基准缺失」，按首次处理。打开失败保页面并返回 `opened:false`、`open_reason=未自动打开: 真实原因`；生成成功不冒已打开。原 `renderAnswerPage` 显式 caller 的 `open` true/抛错/非 true 语义不变。
@@ -93,3 +93,5 @@ CLI 的认证任务位置由 `openTask` 与 `openCurrentTaskWorkspace` 既有own
 | `stage-closed` | stage-close 完成后，原调用方以新报告补第 10 环终态 |
 
 事件由上述主会话时点调用同一 CLI；没有常驻监听、定时器或第二生产调用者。真实 source→调用→生成/打开原件才证明触发；命令存在和方法文字不证明事件已发生。`build-code-ended` 遇报告第十环不是 skipped 明确拒绝，不改报告；stage-close 未发生时不预演真实终态。 `stage-closed` 在发布前拒绝缺第十环或仍为 skipped 的旧报告；合法非 skipped 状态原样显示，不把 incomplete/unavailable 改成 completed。浏览器验收沿 isolated-browser-qa 的隔离 HTTP 路线，系统打开退出与隔离 DOM/截图分别保事实。
+
+终末状态视图：存在当前 build-code 的 terminal_assessment_ref 时，builder 经实际 stageRuntimeCliMain public status（manifest身份、绝对task-path、认证cwd）读取唯一质量投影；归一为内存 DATA.stageStatus，顶部/阶段栏/主对象同源展示原件、覆盖与缺项。Task implementation 与 acceptance 仍各读原事实。无新引用保既有P5投影，原status失败明确暴露；renderer不读评定raw自评，不改facts、不猜最新报告。

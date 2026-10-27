@@ -29,7 +29,7 @@ version: 1.0.0
 
 按 `skill-deps.yaml` 直接读 spec-prd、wh-review 及人读 handoff 方法；需要 UI 时读现有 UI 方法，而不是新建内容作者、dispatcher 或审查系统。问答和确认由主会话执行，内容与有边界的研究可按项目分工委派，独立文档建议不由实施者自判。
 
-confirm 用于 make-decision/build-plan/build-prd 收口，保存用户对实际展示内容的真实答复；此处的最终稿确认不是第三次内容调用。authorize 仅在不可逆 Git/交付动作前，通过 `runtime/interface/git-authorize.mjs` 核动作、分支和当前 HEAD；HEAD 不一致时拒绝消费旧记录，已有用户授权覆盖动作和范围时按当前 HEAD 重新记录并消费，未覆盖的新增动作或范围才需用户决定；阶段确认不授权 commit/push/merge/archive/cleanup。三必留审查点为 build-plan wh-review 合并、build-code 每 Phase OCR、verify-code 终末 OCR；本工作流文档建议仍由 wh-review 按分工执行。
+confirm 用于 make-decision/build-plan/build-prd 收口，保存用户对实际展示内容的真实答复；此处的最终稿确认不是第三次内容调用。authorize 仅在不可逆 Git/交付动作前，通过 `runtime/interface/git-authorize.mjs` 核动作、分支和当前 HEAD；HEAD 不一致时拒绝消费旧记录，已有用户授权覆盖动作和范围时按当前 HEAD 重新记录并消费，未覆盖的新增动作或范围才需用户决定；阶段确认不授权 commit/push/merge/archive/cleanup。三必留审查点为 build-plan wh-review 合并、build-code 每 Phase OCR、build-code 终末 OCR；本工作流文档建议仍由 wh-review 按分工执行。
 
 ## 安全写入与收口
 

@@ -433,9 +433,9 @@ function ruleForIdentity(stage, reviewTrack, reviewScope, reviewKind = null) {
   return ruleFor(reviewKind === "build_prd" ? "build-prd" : reviewKind ?? stage, reviewTrack, reviewKind ? null : reviewScope);
 }
 
-function stagePlanFor(stage, track, reviewKind = null) {
+function stagePlanFor(stage, track, reviewKind = null, reviewScope = null) {
   if (reviewKind === "build_prd") return skillPlan.non_stage?.build_prd;
-  const stagePlan = skillPlan.stages[stage];
+  const stagePlan = skillPlan.stages[stage === "build-code" && reviewScope === TERMINAL_REVIEW_SCOPE ? "build-code/terminal" : stage];
   return stage === "make-decision" ? stagePlan?.tracks?.[track] : stagePlan;
 }
 
@@ -493,12 +493,13 @@ function buildPlanUiFacts(materials) {
   return gaps.length ? { applicability: "unknown", gaps } : { applicability: scopes.some(value => value === true) ? "ui" : "non_ui", gaps };
 }
 
-function selectReviewerSkills(stage, track, reviewKind, uiScope, materials, codePacket = false) {
-  const plan = stagePlanFor(stage, track, reviewKind);
+function selectReviewerSkills(stage, track, reviewKind, uiScope, materials, codePacket = false, reviewScope = null) {
+  const plan = stagePlanFor(stage, track, reviewKind, reviewScope);
   if (!plan) throw new Error(`MATERIAL_INCOMPLETE: no review skill plan for ${stage}/${track ?? "default"}`);
   const ui = stage === "build-plan" && reviewKind === null ? buildPlanUiFacts(materials) : null;
   const includeUi = ui ? ui.applicability === "ui" : uiScope === true;
-  const plans = codePacket ? [plan, stagePlanFor("build-code", null), stagePlanFor("verify-code", null)] : [plan];
+  const plans = codePacket ? [stagePlanFor("build-code", null), stagePlanFor("build-code", null, null, TERMINAL_REVIEW_SCOPE)] : [plan];
+  if(plans.some(value=>!value || !Array.isArray(value.required_skills) || value.required_skills.length===0))throw new Error("MATERIAL_INCOMPLETE: missing required phase/terminal skill plan");
   const skills = [...new Set(plans.flatMap(value => [...(value.required_skills ?? []), ...(includeUi ? (value.optional_skills ?? []).filter(({ when }) => when === "ui").map(({ name }) => name) : [])]))];
   return { skills, ui };
 }
@@ -560,7 +561,7 @@ function stageReviewFocus(stage, track, reviewScope, reviewKind = null, directio
 const PACKET_BOUND_CODEX_READ_EXCEPTION = "Codex only when the host transport has demonstrated native hard packet filesystem, tool and environment boundaries: read-only file-view commands such as cat, sed or rg may read manifest-listed paths in this packet. This is not general shell permission. Writes, Git, network, parent/host materials, Agent/subagent and wait/poll remain prohibited. Minimal runtime read exceptions exist only to run the tools, never as review materials.";
 
 export function reviewInstructionsFor(stage, track = null, uiScope = false, reviewScope = null, reviewKind = null, directionMode = "full", role = null, candidateExperiment = false, navigation = null) {
-  const selection = selectReviewerSkills(stage, track, reviewKind, uiScope, undefined);
+  const selection = selectReviewerSkills(stage, track, reviewKind, uiScope, undefined, false, reviewScope);
   return renderReviewInstructionsFor(stage, track, uiScope, reviewScope, reviewKind, directionMode, role, candidateExperiment, navigation, selection);
 }
 
@@ -738,9 +739,9 @@ export function buildReviewMaterials({attachmentRoot,reviewDataRoot,stage,review
   try {
     const documentFace=surface==="document"&&stage==="build-code";
     const codePacket=["build-code","verify-code"].includes(stage)&&!documentFace;
-    const selection=selectReviewerSkills(stage,reviewTrack,reviewKind,uiScope,filtered.materials,codePacket);
+    const selection=selectReviewerSkills(stage,reviewTrack,reviewKind,uiScope,filtered.materials,codePacket,reviewScope);
     const instructionSelection=stage==="build-plan" && reviewKind===null
-      ? selection : selectReviewerSkills(stage,reviewTrack,reviewKind,uiScope,filtered.materials);
+      ? selection : selectReviewerSkills(stage,reviewTrack,reviewKind,uiScope,filtered.materials,false,reviewScope);
     const instruction=documentFace
       ? `Review stage build-code; subject_kind=phase; review_scope=phase; phase_id=${phaseId ?? "not supplied"}; surface=document. This is the current Phase's document review, not a build-plan stage result or an OCR code review. Read the complete submitted specification, Phase material, method/contract documents and metadata. Apply contracts/build-plan.md as the existing document review lens: requirement-to-implementation-to-consumer-to-verification, dependencies, boundary, recovery and necessity. The actual stage remains build-code. Do not evaluate unsubmitted code or demand snapshot/hash/receipt/lineage permits. Read manifest-declared reviewer skills and contracts/provider-protocol.md. Report only concrete delivery findings with relative file/line anchors and genuine serious evidence. Findings, including empty findings, are advice only; missing quality stays unknown and provider/transport/parse failure remains unavailable/incomplete. Do not access repository files, Git, general shell, network or host paths. ${PACKET_BOUND_CODEX_READ_EXCEPTION} Return exactly one findings JSON.\n`
       : renderReviewInstructionsFor(stage,reviewTrack,uiScope,reviewScope,reviewKind,stage==="make-decision"&&reviewTrack==="direction"?"combined":"full",role,false,{entries:providerMaterialEntries({stage,review_track:reviewTrack,review_scope:reviewScope,review_kind:reviewKind,activation_cohort:activationCohort,materials:filtered.materials}),codePacket,diffBytes:source?.diffPath ? reviewMaterialBytes("changes.diff",readRegisteredFile(source.diffPath,"supplied diff")).length : null},instructionSelection);

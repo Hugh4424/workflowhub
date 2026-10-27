@@ -1,5 +1,5 @@
 // ORACLE-COCKPIT-GEN: P5/T006. Independent oracle: p5-independent-oracle-tcr original.
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtempSync, realpathSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -32,7 +32,7 @@ const data=path=>JSON.parse(/const DATA = (\{[\s\S]*?\n?\});/.exec(readFileSync(
 // Executes the actual emitted template consumers; this is not DOM/click or CSS coverage.
 function templateView(path, expression) {
  const script=/<script>([\s\S]*?)<\/script>/.exec(readFileSync(path,'utf8'))[1];
- return runInNewContext(script+'\nconst ui={sources:new Set(),srcRows:new Set(),plan:false,fileFold:false};let sel="progress";const hist=[];const CHANGED=new Set(),RELATED=new Set();\n'+expression);
+ return runInNewContext(script+'\nconst ui={sources:new Set(),srcRows:new Set(),plan:false,fileFold:false};let sel="progress";const hist=[];const CHANGED=new Set(),RELATED=new Set();let storageError="";\n'+expression);
 }
 
 // Normalize only actual relation endpoints to independent business identities; internal ID encoding is unconstrained.
@@ -708,4 +708,90 @@ test('ORACLE-COCKPIT-GEN correction: refreshing selects the actually changed Tas
 });
 test('ORACLE-COCKPIT-GEN correction: authenticated successful Git commit is Phase evidence without a fixed manifest shape',async()=>{
  const f=await sourceCardFixture(),task=openTask(f.taskPath,{projectName:'Demo',taskId:'cockpit'}),work=join(f.material,'../..');execFileSync('git',['add','.'],{cwd:work});execFileSync('git',['commit','-qm','fixture planning materials'],{cwd:work});const phase=join(f.material,'phases/P1-cards.md');writeFileSync(phase,readFileSync(phase,'utf8').replace('读取真实失败原件','读取并保存真实失败原件'));execFileSync('git',['add','.'],{cwd:work});const commit=await task.captureCommand({cwd:work,slug:'actual-phase-commit',argv:['git','commit','-m','delivered a sourced phase change'],timeoutMs:10000});expect(commit.exit_code).toBe(0);const {buildPageData}=await import('../../skills/answer-as-page/scripts/build-page-data.mjs'),d=(await buildPageData(f)).pageData,t=d.objects.find(o=>o.source_id==='T001');expect(t.status.text).toContain('已提交');expect(t.status.text).not.toContain('验收通过');expect(t.src.some(s=>s.path===commit.receipt_ref)).toBe(true);
+});
+
+
+test('terminal public status is the same finite DTO in stagebar, top and primary while Task facts stay separate',async()=>{
+ const f=await fixture(),manifest=JSON.parse(readFileSync(join(f.taskPath,'task.json'),'utf8')),task=openTask(f.taskPath,{projectName:manifest.project_name,taskId:manifest.task_id});
+ const indexPath=join(f.material,'phases/index.md');writeFileSync(indexPath,readFileSync(indexPath,'utf8').replace('| P1 | phases/P1-真实交付.md |','| `P1` | `phases/P1-真实交付.md` |'));
+ const assessment=await task.appendRecord({dir:'quality/evidence',slug:'incomplete-terminal-original',ext:'json',bytes:JSON.stringify({task_id:manifest.task_id,stage:'build-code',reader:{identity:'not-bound'}})});
+ const {createHash}=await import('node:crypto'),{writeStageRow}=await import('../../runtime/task/task-store.mjs');
+ await writeStageRow(f.taskPath,{stage:'build-code',source:'owned-terminal-projection',phase_progress:{phase_id:'P1',task_id:'T007',phases_head:'a'.repeat(40),base_head:'b'.repeat(40),recorded_at:'2026-10-27T00:00:00Z'},terminal_assessment_ref:{ref:assessment.slice(f.taskPath.length+1),sha256:createHash('sha256').update(readFileSync(assessment)).digest('hex')}});
+ vi.stubEnv('WORKFLOWHUB_TASK_DIR',join(f.taskPath,'../../../..'));
+ let result;try{result=await renderAnswerPage({...f,open:false});}finally{vi.unstubAllEnvs();}const d=data(result.htmlPath);
+ expect(d.stageStatus.task_id).toBe(manifest.task_id);expect(d.stageStatus.quality_status).toBe('incomplete');expect(d.stageStatus.label).toContain('有缺口');
+ for(const call of ['progressHtml()','headerHtml()','sel=DATA.currentObjectId;mainHtml()'])expect(templateView(result.htmlPath,call)).toContain('最终复验有缺口');
+ const target=d.objects.find(o=>o.kind==='task');expect(target.acceptance.text).not.toContain('最终复验通过');
+});
+
+
+test('installed Runner, alias and library read the same public terminal DTO against the owned registered task',async()=>{
+ const f=await fixture(),manifest=JSON.parse(readFileSync(join(f.taskPath,'task.json'),'utf8')),task=openTask(f.taskPath,{projectName:manifest.project_name,taskId:manifest.task_id});
+ const index=join(f.material,'phases/index.md');writeFileSync(index,readFileSync(index,'utf8').replace('| P1 | phases/P1-真实交付.md |','| `P1` | `phases/P1-真实交付.md` |'));
+ const {createHash}=await import('node:crypto'),{writeStageRow}=await import('../../runtime/task/task-store.mjs');
+ const original=await task.appendRecord({dir:'quality/evidence',slug:'portable-incomplete-terminal',ext:'json',bytes:JSON.stringify({task_id:manifest.task_id,stage:'build-code'})});
+ await writeStageRow(f.taskPath,{stage:'build-code',source:'owned-portable-terminal',phase_progress:{phase_id:'P1',task_id:'T007',phases_head:'a'.repeat(40),base_head:'b'.repeat(40),recorded_at:'2026-10-27T00:00:00Z'},terminal_assessment_ref:{ref:original.slice(f.taskPath.length+1),sha256:createHash('sha256').update(readFileSync(original)).digest('hex')}});
+ const owned=join(f.taskPath,'../../../../..'),runnerRoot=join(owned,'runner'),skillBundleRoot=join(owned,'bundle'),home=join(owned,'home');mkdirSync(home);
+ const {buildRunnerRelease,installRunnerRelease}=await import('../../runtime/distribution/runner-release.mjs'),{buildSkillBundleRelease}=await import('../../runtime/distribution/skill-bundle-release.mjs');
+ const packageRoot=realpathSync(new URL('../../',import.meta.url).pathname);
+ await buildSkillBundleRelease({packageRoot,outputDir:skillBundleRoot});await buildRunnerRelease({packageRoot,outputDir:runnerRoot});
+ const env={PATH:process.env.PATH,HOME:home,XDG_CONFIG_HOME:join(home,'.config'),WORKFLOWHUB_TASK_DIR:join(f.taskPath,'../../../..'),GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null'};
+ const installed=installRunnerRelease({releaseRoot:runnerRoot,skillBundleRoot,env});expect(installed.status).toBe(0);
+ const entry=join(runnerRoot,'skills/answer-as-page/scripts/render-answer-page.mjs'),work=manifest.workspace_root,out=join(f.taskPath,'quality/evidence/portable-pages'),alias=join(owned,'page-alias.mjs');symlinkSync(entry,alias);
+ const direct=(script,name)=>JSON.parse(execFileSync(process.execPath,[script,'--task-path',f.taskPath,'--report',f.reportPath,'--out-dir',out,'--html',name],{cwd:work,env,encoding:'utf8',timeout:15000}));
+ const first=direct(entry,'direct.html'),second=direct(alias,'alias.html');
+ const library=`import{renderAnswerPage}from ${JSON.stringify(new URL('file://'+entry).href)};console.log(JSON.stringify(await renderAnswerPage({...JSON.parse(process.argv[1]),open:()=>false})));`;
+ const third=JSON.parse(execFileSync(process.execPath,['--input-type=module','-e',library,JSON.stringify({taskPath:f.taskPath,reportPath:f.reportPath,outDir:out,htmlName:'library.html'})],{cwd:work,env,encoding:'utf8',timeout:15000}));
+ const projections=[first,second,third].map(result=>data(result.htmlPath).stageStatus);expect(projections[0].quality_status).toBe('incomplete');expect(projections[1]).toEqual(projections[0]);expect(projections[2]).toEqual(projections[0]);
+ for(const result of[first,second,third])expect(result.opened).toBe(false);
+},60000);
+
+
+// This is an owned synthetic task with real captures, not an independent
+// terminal verdict for the repository under development.
+test('finite pass from real public status reaches all three rendered stage consumers maps only explicit AC relations and preserves separate implementation',async()=>{
+ const f=await sourceCardFixture(),m=JSON.parse(readFileSync(join(f.taskPath,'task.json'),'utf8')),task=openTask(f.taskPath,{projectName:m.project_name,taskId:m.task_id}),work=m.workspace_root;
+ const {createHash}=await import('node:crypto'),h=b=>createHash('sha256').update(b).digest('hex'),{writeStageRow}=await import('../../runtime/task/task-store.mjs');
+ const index=join(f.material,'phases/index.md');writeFileSync(index,readFileSync(index,'utf8').replace(/\| (P[0-9]+) \| (phases\/[^ |]+\.md) \|/g,'| `$1` | `$2` |'));
+ const phase=join(f.material,'phases/P1-cards.md');writeFileSync(phase,readFileSync(phase,'utf8').replace('R-001 / FR-CARD-001 / AC-DEMO-001','R-001 / FR-CARD-001 / AC-DEMO-001 / AC-DEMO-002'));
+ const builder=new URL('../../skills/answer-as-page/scripts/build-page-data.mjs',import.meta.url).href,options={taskPath:f.taskPath,reportPath:f.reportPath};
+ const source=`import assert from 'node:assert/strict';import{buildPageData}from ${JSON.stringify(builder)};const r=await buildPageData(${JSON.stringify(options)});assert.ok(r.pageData.objects.some(o=>o.kind==='task'&&/缺|未/.test(o.acceptance.text)));console.log(JSON.stringify({task_id:'cockpit',missing_is_explicit:true}));`;
+ writeFileSync(join(work,'controlled-page-assertion.mjs'),source);
+ const execution=await task.captureCommand({cwd:work,slug:'page-missing-business',argv:[process.execPath,'controlled-page-assertion.mjs']});expect(execution.exit_code).toBe(0);
+ const semantic=await task.captureCommand({cwd:work,slug:'page-missing-semantic',argv:[process.execPath,'--test','controlled-page-assertion.mjs']});expect(semantic.exit_code).toBe(0);
+ const local=p=>({ref:p.slice(f.taskPath.length+1),sha256:h(readFileSync(p))}),save=async(slug,value)=>local(await task.appendRecord({dir:'quality/evidence',slug,ext:'json',bytes:typeof value==='string'?value:JSON.stringify(value)}));
+ const identity={task_id:'cockpit',stage:'build-code'},materials=['decision-log.md','spec.md','phases/index.md','phases/P1-cards.md','phases/P2-cards.md'].map(p=>'specs/cockpit/'+p),hashes=paths=>paths.map(path=>({path,sha256:h(readFileSync(join(work,path)))}));
+ const report=await save('finite-unique-final-report','# cockpit\nstage: build-code\nControlled gap display only; Task acceptance is still missing.\n');
+ const acIds=['AC-DEMO-001','AC-DEMO-002'],acs=await save('finite-first-ac-original',{...identity,acceptance:acIds.map(id=>({id,result:'pass',refs:[local(execution.receipt_ref)],basis:'Actual owned page exposes absent acceptance; does not assert product completion'}))});
+ const {recordSimpleReviewRequest}=await import('../../runtime/review/review-record-route.mjs');
+ const canonical=await recordSimpleReviewRequest({taskDir:f.taskPath,request:{stage:'build-code',review_scope:'terminal',subject_kind:'worktree',phase_id:null,materials:{}},runRound:async()=>({status:'available',executor:'ocr',provider_results:[{provider:'owned-synthetic',status:'completed',parse_outcome:'ok',raw_output:JSON.stringify({findings:[]})}],findings:[]})});
+ const rawReview=local(canonical.path),canonicalOriginal=JSON.parse(readFileSync(canonical.path,'utf8')),provider_raw_refs=canonicalOriginal.provider_results.flatMap(p=>[p.raw_output_ref,...(p.evidence_refs??[])]).filter(Boolean).map(ref=>local(join(f.taskPath,ref)));
+ const raw={...identity,provider_raw_refs,final_report:report,materials:hashes(materials),implementation:hashes(['changed.txt','controlled-page-assertion.mjs']),acceptance:acIds.map(id=>({id,result:'pass',refs:[acs],current_applicability:{basis:'Same controlled missing-data criterion; current native page assertions preserve explicit gaps',refs:[local(semantic.receipt_ref)]}})),business_effect:{result:'pass',covered_ac_ids:acIds,refs:[local(execution.output_ref)],proofs:[{receipt:local(execution.receipt_ref),output:local(execution.output_ref),inputs:hashes(['changed.txt','specs/cockpit/spec.md'])}],coverage_limits:['Controlled missing-data page only']},semantic_test_adequacy:{result:'pass',covered_ac_ids:acIds,refs:[local(semantic.output_ref)],proofs:[{receipt:local(semantic.receipt_ref),output:local(semantic.output_ref),inputs:hashes(['controlled-page-assertion.mjs']),test_sources:hashes(['controlled-page-assertion.mjs'])}],coverage_limits:['One missing-data assertion']},review:rawReview,finding_dispositions:[],boundary_checks:{}};
+ const review_coverage_closure={review_ref:rawReview,result:'pass',covered_gaps:['review:inconclusive'],refs:[local(execution.receipt_ref),local(semantic.receipt_ref)],basis:'Independent synthetic reader explicitly checked canonical zero-finding coverage against native missing-data business and semantic execution; this finite criterion does not assert product completion'};
+ raw.review_coverage_closure=review_coverage_closure;
+ const dispatch=await save('finite-public-dispatch',{...identity,role:'terminal-assessor',agent_thread_id:'synthetic-reader',implementation_authors:['synthetic-developer'],context_mode:'none'});
+ async function publish(value){const rawText=JSON.stringify(value),raw_ref=await save('finite-independent-raw',rawText),final=await save('finite-public-final',{agent_thread_id:'synthetic-reader',public_text:rawText}),delivery=await save('finite-public-delivery',{agent_thread_id:'synthetic-reader',public_text:rawText}),source_ref=await save('finite-public-bindings',{dispatch,final,delivery});return save('finite-assessment-provenance',{...identity,raw_ref,reader:{identity:'synthetic-reader',source_ref}});}
+ const terminal_assessment_ref=await publish(raw);
+ await writeStageRow(f.taskPath,{stage:'build-code',source:'owned-finite-terminal',review_origin:'conducted',review_result_ref:rawReview.ref,phase_progress:{phase_id:'P1',task_id:'T001',phases_head:'a'.repeat(40),base_head:'b'.repeat(40),recorded_at:'2026-10-27T00:00:00Z'},terminal_assessment_ref});
+ vi.stubEnv('WORKFLOWHUB_TASK_DIR',join(f.taskPath,'../../../..'));let result;try{result=await renderAnswerPage({...f,open:false});}finally{vi.unstubAllEnvs();}
+ const d=data(result.htmlPath);expect(d.stageStatus.quality_status,JSON.stringify(d.stageStatus)).toBe('pass');expect(d.stageStatus.quality.terminal_assessment.review_conclusion).toBe('inconclusive');
+ const header=templateView(result.htmlPath,'headerHtml()');expect(header).toContain('build-code');expect(header).not.toMatch(/[（(]\s*[）)]/);expect(templateView(result.htmlPath,'progressHtml()')).not.toContain('当前Task交付与验收分别查看');
+ for(const expr of ['progressHtml()','headerHtml()','sel=DATA.currentObjectId;mainHtml()'])expect(templateView(result.htmlPath,expr)).toContain('最终复验通过');
+ for(const object of d.objects.filter(o=>['task','wp','req'].includes(o.kind)))expect(object.acceptance.text,object.id).toBe('验收已通过');
+ expect(d.objects.find(o=>o.kind==='task').implementation.text).toContain('当前游标');
+ delete raw.review_coverage_closure;const noClosure=await publish(raw);await writeStageRow(f.taskPath,{stage:'build-code',source:'owned-finite-terminal',review_origin:'conducted',review_result_ref:rawReview.ref,terminal_assessment_ref:noClosure});vi.stubEnv('WORKFLOWHUB_TASK_DIR',join(f.taskPath,'../../../..'));let uncovered;try{uncovered=await renderAnswerPage({...f,htmlName:'uncovered.html',open:false});}finally{vi.unstubAllEnvs();}expect(data(uncovered.htmlPath).stageStatus.quality_status).toBe('incomplete');for(const expr of ['progressHtml()','headerHtml()','sel=DATA.currentObjectId;mainHtml()'])expect(templateView(uncovered.htmlPath,expr)).toContain('最终复验有缺口');raw.review_coverage_closure=review_coverage_closure;
+ raw.acceptance[1].result='missing';raw.acceptance[1].refs=[await save('finite-missing-ac-original',{...identity,id:'AC-DEMO-002',result:'missing',reason:'Controlled missing independent evidence'})];
+ const partial=await publish(raw);await writeStageRow(f.taskPath,{stage:'build-code',source:'owned-finite-terminal',review_origin:'conducted',review_result_ref:rawReview.ref,phase_progress:{phase_id:'P1',task_id:'T001',phases_head:'a'.repeat(40),base_head:'b'.repeat(40),recorded_at:'2026-10-27T00:00:00Z'},terminal_assessment_ref:partial});
+ vi.stubEnv('WORKFLOWHUB_TASK_DIR',join(f.taskPath,'../../../..'));let partialResult;try{partialResult=await renderAnswerPage({...f,htmlName:'partial.html',open:false});}finally{vi.unstubAllEnvs();}
+ const partialData=data(partialResult.htmlPath);expect(partialData.stageStatus.quality_status).toBe('incomplete');
+ expect(partialData.objects.find(o=>o.source_id==='T001').acceptance.text).toBe('部分通过 · 仍有缺口');expect(partialData.objects.find(o=>o.source_id==='T002').acceptance.text).toBe('验收未完成');
+ expect(partialData.objects.find(o=>o.source_id==='WP1').acceptance.text).toBe('验收已通过');expect(partialData.objects.find(o=>o.source_id==='WP2').acceptance.text).toBe('验收未完成');
+ expect(partialData.objects.find(o=>o.kind==='req'&&o.declared_wp_ids?.includes('WP1')).acceptance.text).toBe('验收已通过');expect(partialData.objects.find(o=>o.kind==='req'&&o.declared_wp_ids?.includes('WP2')).acceptance.text).toBe('验收未完成');
+ if(process.env.P10_QA_TASK_ROOT){
+  const archive=openTask(process.env.P10_QA_TASK_ROOT,{projectName:'workflowhub',taskId:'workflowhub-build-code-efficiency-verify-merge-20261026'});
+  const html=await archive.appendRecord({dir:'quality/evidence',slug:'p10-finite-status-fixture-preview',ext:'html',bytes:readFileSync(result.htmlPath)});
+  const nodes=await archive.appendRecord({dir:'quality/evidence',slug:'p10-finite-status-fixture-nodes',ext:'json',bytes:readFileSync(result.nodesPath)});
+  const partialHtml=await archive.appendRecord({dir:'quality/evidence',slug:'p10-partial-status-fixture-preview',ext:'html',bytes:readFileSync(partialResult.htmlPath)});
+  console.log('P10_QA_FIXTURE_PREVIEW '+JSON.stringify({html,nodes,partialHtml,scope:'owned synthetic gap-display task; not actual WorkflowHub terminal acceptance',cleanup:'fixture removed by afterEach; standalone HTML retained for visual QA'}));
+ }
 });

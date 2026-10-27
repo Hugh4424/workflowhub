@@ -8,6 +8,7 @@ import { openTask } from '../../../runtime/task/task-handle.mjs';
 import { openCurrentTaskWorkspace } from '../../../runtime/task/workspace.mjs';
 import { readTaskFacts } from '../../../runtime/task/task-store.mjs';
 import { validatePostPhaseContract } from '../../../runtime/stage/stage-content-contracts.mjs';
+import { stageRuntimeCliMain } from '../../../tools/cli/stage-runtime.mjs';
 
 export const KIND_SOURCES = Object.freeze({req:'decision-log.md / raw-requirements',spec:'spec.md',dec:'decision-log.md',goal:'decision-log.md',wp:'decision-log.md',ires:'quality/evidence/research',eres:'quality/evidence/research / spec.md',phase:'phases/index.md',task:'phases/P*.md / facts.jsonl',file:'git diff baseline_commit..HEAD',test:'quality/tests',review:'quality/reviews',acc:'spec.md / Appendix A',risk:'spec.md / decision-log.md',pr:'report / ring 10'});
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -318,7 +319,40 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
  const businessTitle=/^- \*\*功能名\*\*[:：]\s*(.+)$/m.exec(spec??'')?.[1]??/^#\s+(?:功能规格[:：]\s*)?(.+)$/m.exec(spec??'')?.[1]??manifest.task_id;
  const stageNames={'make-decision':'定方向','build-plan':'写计划','build-code':'写代码'},stageId=positionRow?.stage,stageLabel=stageId?(stageNames[stageId]??stageId)+(cursor?' · '+[cursor.phase_id,cursor.task_id].filter(Boolean).join(' / '):''):'当前位置未取得';
  const stages=Object.entries(stageNames).map(([id,name])=>({id,name:id+' · '+name,state:id===stageId?'now':'todo',label:id===stageId?'当前':id==='make-decision'&&decision?'已有决策材料':id==='build-plan'&&spec&&index?'已有计划材料':'阶段结论未记录',hint:id===stageId?[cursor?.phase_id,cursor?.task_id].filter(Boolean).join(' / '):'材料存在不代阶段完成'}));
- const pageData={task:businessTitle,taskIdentity:`${manifest.project_name}/${manifest.task_id}`,stageLabel,sourceDir:material,stages,currentObjectId:objects.find(o=>o.kind==='task'&&o.source_id===cursor?.task_id)?.id??null,initialSelection:objects.find(o=>o.kind==='task'&&o.source_id===cursor?.task_id)?.id??'progress',hasPhase:objects.some(o=>o.kind==='phase'),objects,edges,sideEdges,phaseTasks,progress:{reqIds:objects.filter(o=>o.kind==='req').map(o=>o.id),unlinkedTaskIds:objects.filter(o=>o.kind==='task'&&!o.phase).map(o=>o.id)},changedChips:[],initialChanged:[]};
+ // Preserve ordinary P5 projections when no terminal original was supplied.
+ // Only the public runtime derives quality; this adapter maps its DTO to view text.
+ let stageStatus=null;
+ if(rows.some(row=>row.stage==='build-code'&&row.terminal_assessment_ref)){
+  const current=await stageRuntimeCliMain(['status','--action=begin','--stage=build-code',`--project=${manifest.project_name}`,`--task=${manifest.task_id}`,`--task-path=${task.taskPath}`],{cwd:root});
+  if(current.task_id!==manifest.task_id||current.stage!=='build-code')throw Error('public status task/stage differs from page identity');
+  const q=current.quality_status,assessment=current.quality?.terminal_assessment;
+  if(!['pass','unknown','incomplete','unavailable'].includes(q))throw Error('public status quality is unavailable or invalid');
+  const closed=q==='pass'&&current.quality?.terminal_assessment_ref;
+  stageStatus={task_id:current.task_id,stage:current.stage,work_status:current.work_status,quality_status:q,quality:current.quality,label:closed?'最终复验通过':q==='unavailable'?'最终复验不可用':'最终复验有缺口',tone:closed?'ok':'unk',sources:assessment?.evidence_refs??[],gaps:assessment?.gaps??[]};
+  const build=stages.find(stage=>stage.id==='build-code');build.state=closed?'done':'now';build.label=stageStatus.label;build.hint=[cursor?.phase_id,cursor?.task_id].filter(Boolean).join(' / ');
+  for(const stage of stages)if(stage.id!=='build-code'&&stage.state==='now')stage.state='todo';
+  // Explicit AC relations consume the already verified runtime DTO. Stage
+  // aggregates never fill an object's missing or foreign AC association.
+  const acs=new Map((assessment?.acceptance??[]).map(value=>[value.id,value]));
+  function acceptanceView(declared){
+   if(!Array.isArray(declared)||declared.length===0)return {text:'未关联验收',tone:'unk',claims:[]};
+   const claims=declared.map(id=>acs.get(id));
+   if(claims.some(value=>!value))return {text:'关联验收不在当前分母',tone:'unk',claims:claims.filter(Boolean)};
+   const passed=claims.filter(value=>value.result==='pass').length;
+   return {text:passed===claims.length?'验收已通过':claims.some(value=>value.result==='fail')?'验收未通过':passed?'部分通过 · 仍有缺口':'验收未完成',tone:passed===claims.length?'ok':claims.some(value=>value.result==='fail')?'fail':'unk',claims};
+  }
+  for(const t of objects.filter(o=>o.kind==='task')){const a=acceptanceView(t.ac_ids);t.acceptance={text:a.text,results:a.claims};t.status={text:t.implementation.text+' · '+a.text,tone:a.tone};}
+  for(const wp of packages){const a=acceptanceView(wp.ac_ids);wp.acceptance={text:a.text,results:a.claims};wp.status={text:(wp.planSummary?'方案已定':'工作包已记录')+' · '+a.text,tone:a.tone};}
+  for(const req of objects.filter(o=>o.kind==='req')){
+   const declared=req.declared_wp_ids??[],owners=declared.map(id=>packages.find(wp=>wp.source_id===id));
+   const mapped=declared.length>0&&owners.every(wp=>Array.isArray(wp?.ac_ids)&&wp.ac_ids.length>0)?[...new Set(owners.flatMap(wp=>wp.ac_ids))]:[];
+   const a=acceptanceView(mapped);req.acceptance={text:a.text,results:a.claims};req.status={text:(req.source==='原件未取得'||req.status.text==='缺'?'缺：原话来源未取得':'需求已记录')+' · '+a.text,tone:a.tone};
+  }
+  for(const o of objects.filter(o=>o.kind==='acc')){const claim=acs.get(o.source_id);if(claim)o.status={text:claim.result==='pass'?'验收已通过':claim.result==='fail'?'验收未通过':'验收未完成',tone:claim.result==='pass'?'ok':claim.result==='fail'?'fail':'unk'};}
+  for(const o of objects.filter(o=>['req','wp','task'].includes(o.kind)))for(const claim of o.acceptance?.results??[])for(const ref of claim.refs??[])o.src.push(source(join(task.taskPath,ref.ref),'public status 已核AC原件 '+claim.id));
+  fingerprints.terminal_status_sha256=hash(JSON.stringify(stageStatus));
+ }
+ const pageData={task:businessTitle,taskIdentity:`${manifest.project_name}/${manifest.task_id}`,stageLabel:stageStatus?stageStatus.stage+' · '+stageNames[stageStatus.stage]:stageLabel,...(stageStatus?{stageStatus}:{}),sourceDir:material,stages,currentObjectId:objects.find(o=>o.kind==='task'&&o.source_id===cursor?.task_id)?.id??null,initialSelection:objects.find(o=>o.kind==='task'&&o.source_id===cursor?.task_id)?.id??'progress',hasPhase:objects.some(o=>o.kind==='phase'),objects,edges,sideEdges,phaseTasks,progress:{reqIds:objects.filter(o=>o.kind==='req').map(o=>o.id),unlinkedTaskIds:objects.filter(o=>o.kind==='task'&&!o.phase).map(o=>o.id)},changedChips:[],initialChanged:[]};
  return {pageData,report,decisionLogPath:decisionPath,decisionMissing:decision===null,workspaceRoot:root,taskIdentity:task.identity,sourceFingerprint:fingerprints,factsProvenance:{ref:factsPath,sha256:factsHash},excludedCommandRefs,gaps:objects.filter(o=>o.status.text==='缺').map(o=>({kind:o.kind,reason:o.title})),factsRows:rows.length,contractFacts:contract.facts,contractErrors:contract.errors};
 }
 export async function main(argv=process.argv.slice(2)){if(argv.length!==4||argv[0]!=='--task-path'||argv[2]!=='--report')throw Error('usage: --task-path <absolute root> --report <report>');return buildPageData({taskPath:argv[1],reportPath:argv[3]});}

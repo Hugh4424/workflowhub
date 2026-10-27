@@ -397,7 +397,7 @@ ID、文件名或绿色测试名出现但没有具体行为、负例与原文强
 - **验证策略**：feature行为示例：一个CLI配置功能域的错误传播；实际任务按Phase重判。用非法配置第7行与合法配置对照，检查错误位置、退出码和原始输出；不证明外部环境
 - **RED/GREEN 设计**：示例命令 `node --test tests/config-load.test.mjs`：同一ORACLE-CONFIG-ERROR，RED为具名目标失败、GREEN退出0；未执行不宣称RED/GREEN，实际命令由Phase核实
 - **最终聚合**：由验收Phase逐条消费加载/CLI证据核对AC-DOMAIN-001；本模板不宣称执行结果
-- **不能证明的内容**：不证明真实仓库路径存在、完整生产流程或当前质量通过；build-plan核实入口，verify-code独立核对效果
+- **不能证明的内容**：不证明真实仓库路径存在、完整生产流程或当前质量通过；build-plan核实入口，build-code 终末独立核对效果
 
 每个 Phase `phases/P<n>.md` 指向本节和全局目标的稳定锚点，不复制全局设计；
 每个 Task 再写自己的第一步代码动作、同命令 RED/GREEN 和失败 oracle。

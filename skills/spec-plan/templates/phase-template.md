@@ -255,7 +255,7 @@
 
 **Done 逐条档位**：契约头 `Done` 逐条列每条承接 AC 编号、一个现成档位与一条具名证据指针。档位只引用 `runtime/evidence/acceptance-evidence-validator.mjs` 的 `ACCEPTANCE_RESULTS` 既有词表，不复制新词表。承接 AC 未达成时写具体原因、所需条件与具名 owner，不写成 pass；独立审查者按本 Phase 的实际 diff 与承接 AC 核对证据形式和覆盖限制。
 
-本节是人读写作下限，不是门、不阻断同 task 修复、不改 status/quality 状态，不新增字段、枚举或校验器。实施者、每 Phase 独立审查者与 verify-code 终末复核者沿 AC 原判据消费现有原件；没有相应事实时如实保留缺口。
+本节是人读写作下限，不是门、不阻断同 task 修复、不改 status/quality 状态，不新增字段、枚举或校验器。实施者、每 Phase 独立审查者与 build-code 终末复核者沿 AC 原判据消费现有原件；没有相应事实时如实保留缺口。
 
 build-code 结束统一提醒逐条列 `incomplete：AC-…；试过=<命令与原 ref>；卡在=<真实条件>；谁提供=<真实对象>；恢复条件=<可观察条件>`。无真实尝试原 ref 不得记 incomplete；缺尝试写 unavailable 与原因。可带缺口进 stage-close；最终报告逐条列缺口，不宣称完成。
 

@@ -6,7 +6,7 @@ version: 1.0.0
 
 # Design Source Extraction
 
-给 build-plan 设计源准备读者、build-code 实施者与 verify-code 独立检查者使用。输入是当前 task、已确认范围、设计来源和适用规范；输出为任务证据区单份 `design-source-extraction.json`。不生成人读视图；需要查看时临时只读查询该 JSON，不保存第二份派生文件。
+给 build-plan 设计源准备读者、build-code 实施者与 build-code 终末 独立检查者使用。输入是当前 task、已确认范围、设计来源和适用规范；输出为任务证据区单份 `design-source-extraction.json`。不生成人读视图；需要查看时临时只读查询该 JSON，不保存第二份派生文件。
 
 ## 执行与边界
 

@@ -439,14 +439,14 @@ describe("simple wh-review contracts", () => {
       expect(reviewerSkills, executionSkill).not.toContain(executionSkill);
 
     expect(plan.stages).not.toHaveProperty("build-spec");
-    for(const stage of ["build-plan","build-code","verify-code"])expect(plan.stages[stage].required_skills.length).toBeGreaterThan(0);
+    for(const stage of ["build-plan","build-code","build-code/terminal"])expect(plan.stages[stage].required_skills.length).toBeGreaterThan(0);
 
   });
 
   it("uses the current OCR contract and only missing-install fallback", () => {
     const plan = readJson(join(root, "wh-review/stage-skill-plan.json"));
-    expect(plan.stages["verify-code"].required_skills).toEqual(["review"]);
-    for (const stage of ["build-code", "verify-code"])
+    expect(plan.stages["build-code/terminal"].required_skills).toEqual(["review"]);
+    for (const stage of ["build-code", "build-code/terminal"])
       for (const skill of plan.stages[stage].required_skills)
         expect(existsSync(join(root, skill, "SKILL.md"))).toBe(true);
 
@@ -463,10 +463,10 @@ describe("simple wh-review contracts", () => {
       expect(text).toContain("wh-review 执行 make-decision 方向/细节、build-plan 合并及 build-prd 文档审查");
       expect(text).toContain("低风险独立子代理");
       expect(text).toContain("高风险或影响说不清外部 OCR");
-      expect(text).toContain("verify-code 终末整卡固定外部 OCR 全审");
+      expect(text).toContain("build-code 终末整卡固定外部 OCR 全审");
       expect(text).toContain("每次代码调用读取本文件 Long-review 等待方法，不因此改用 wh-review 执行");
-      for (const stage of ["build-code", "verify-code"])
-        expect(text).toContain(`workflows/${stage}/SKILL.md`);
+      expect(text).toContain("workflows/build-code/SKILL.md");
+      expect(text).toContain("workflows/build-code/SKILL.md#最后-phase终末承接");
       for (const wording of ["不换执行者", "同源补充轴", "独立执行", "与 OCR 可用性无关", "保留检测输出与原始失败"])
         expect(text).toContain(wording);
       const waiting = section(text, "Long-review host convention");
@@ -483,7 +483,7 @@ describe("simple wh-review contracts", () => {
     };
     const wh = readFileSync(join(root, "wh-review/SKILL.md"), "utf8");
     assertWh(wh);
-    for (const stage of ["build-code", "verify-code"]) {
+    for (const stage of ["build-code"]) {
       const workflow = readFileSync(join(projectRoot, "workflows", stage, "SKILL.md"), "utf8");
       const policy = section(workflow, "OCR 能力与缺省记录");
       assertPolicy(policy);
@@ -500,8 +500,8 @@ describe("simple wh-review contracts", () => {
       }
       expect(() => section(workflow.replace("## OCR 能力与缺省记录\n", "## Other\n"), "OCR 能力与缺省记录")).toThrow();
     }
-    for (const stage of ["build-code", "verify-code"])
-      expect(() => assertWh(wh.replaceAll(`workflows/${stage}/SKILL.md`, "missing-pointer"))).toThrow();
+    for (const pointer of ["workflows/build-code/SKILL.md", "workflows/build-code/SKILL.md#最后-phase终末承接"])
+      expect(() => assertWh(wh.replaceAll(pointer, "missing-pointer"))).toThrow();
     expect(() => assertWh(wh.replace("保留检测输出与原始失败", "只保留成功输出"))).toThrow();
     expect(() => assertPolicy(undefined)).toThrow();
   });

@@ -22,7 +22,7 @@ _Avoid_: 主仓目录、源码副本、按日期或人名的分支名。
 **业务仓**：承载真实业务内容、由用户维护的仓库，与工具仓分开；经验文件写在业务仓自己的 `specs/` 下。
 _Avoid_: 把别项目的经验写回工具仓、把工具仓当默认承接者。
 
-**开发阶段**：组织方向、计划、实施和验证职责的开发工作窗口，当前 post 开发路线为 make-decision → build-plan → build-code → verify-code。
+**开发阶段**：组织方向、计划、实施和验证职责的开发工作窗口，当前 post 开发路线为 make-decision → build-plan → build-code。
 _Avoid_: Phase、任意工具调用、把历史五段标签当成当前五个活跃开发阶段。
 
 **build-prd 规划工作流**：消费已确认方向、形成任务地图及完整产品需求的独立规划路线，不新增正式开发阶段或替代当前开发材料。
@@ -122,7 +122,7 @@ _Avoid_: 从实施重新算期望、把环境或收集错误当目标失败；�
 _Avoid_: 工作许可证、摘要替原件、镜像数量证明质量；保留规则见[宪法 F6/F9](<CONSTITUTION.md#L47-L73>)。
 
 **逐 AC 业务效果**：对每条验收条件的实际用户结果作出的有源判断，区分真实效果、模拟、未执行和覆盖限制。
-_Avoid_: 用代码审查结论或测试数量代替业务验收；职责见[verify-code](<workflows/verify-code/SKILL.md#L18-L22>)。
+_Avoid_: 用代码审查结论或测试数量代替业务验收；职责见[build-code 终末](<workflows/build-code/SKILL.md#最后-phase终末承接>)。
 
 **真实使用方**：某能力确实会被一条非测试、非声明的真实路径调用（某个步骤或入口在正常运行时走到它），且该路径可被真实执行一次并留下原件。
 _Avoid_: 把文件存在、依赖声明、测试调用或审查引用当作真实使用方；判据出处见 [N3 决策日志](<specs/archive/n3-review-test-diagnosis-qa-20261016/decision-log.md>) 的 D-012，用于判定外部采用项是「接线」还是「只写方法并如实记未生效」。
@@ -174,13 +174,13 @@ _Avoid_: 仅凭 mock、HTTP 200、成功提示或流程端到端验证宣称业�
 ### 独立质量判断
 
 **独立审查与三审查点**：独立审查是由独立来源和上下文观察交付质量的工作；开发的三个保留审查点是计划合并、每 Phase 代码审查和终末代码审查。
-_Avoid_: 实施者自判、同源补充冒异源、review pass 充操作授权；执行分工见[build-code](<workflows/build-code/SKILL.md#L42-L54>)和[verify-code](<workflows/verify-code/SKILL.md#L36-L38>)。
+_Avoid_: 实施者自判、同源补充冒异源、review pass 充操作授权；执行分工见[build-code](<workflows/build-code/SKILL.md#L42-L54>)和[build-code 终末](<workflows/build-code/SKILL.md#最后-phase终末承接>)。
 
 **finding（发现）**：有原始来源、具体依据和影响的审查发现；有效单源问题不会因独立来源数量不足而失去意义。
 _Avoid_: 覆盖未知伪造问题、空 findings 证明全部正确。
 
 **发现处置与风险承担**：发现处置说明问题已修、无效、待人决定或具名风险被真实接受的状态；风险承担必须绑定具体发现及用户真实选择。
-_Avoid_: 作者自行接受严重风险、修改原审查结论来宣布修复；处置见[build-code](<workflows/build-code/SKILL.md#L34>)和[verify-code](<workflows/verify-code/SKILL.md#L19-L22>)。
+_Avoid_: 作者自行接受严重风险、修改原审查结论来宣布修复；处置见[build-code](<workflows/build-code/SKILL.md#L34>)和[build-code 终末](<workflows/build-code/SKILL.md#最后-phase终末承接>)。
 
 ### 确认、授权与收口
 
@@ -194,7 +194,7 @@ _Avoid_: 内容存在即授权、每次日常提交重新询问、泛化授权�
 _Avoid_: authorize 作为提问门、旧 HEAD 记录充当前操作授权；方法见[build-code](<workflows/build-code/SKILL.md#L72-L74>)。
 
 **阶段收口与物理 close**：阶段收口是每个阶段结束时由主会话发起的收尾动作，归纳已做、问题与经验，记录阶段成本，并发布人读交接；物理 close 只指归档、删除与交付清理，须展示具体结果与范围后取得真实确认，完成陈述不能代替该确认。
-_Avoid_: 把阶段收口当新阶段、质量结论或删除动作；把已实施、已审、已发布、Git 交付与归档删除混成一个“完成”；规则见[verify-code](<workflows/verify-code/SKILL.md#L44-L50>)和[标准工作流](<docs/standard-workflow.md>)。
+_Avoid_: 把阶段收口当新阶段、质量结论或删除动作；把已实施、已审、已发布、Git 交付与归档删除混成一个“完成”；规则见[build-code 终末](<workflows/build-code/SKILL.md#最后-phase终末承接>)和[标准工作流](<docs/standard-workflow.md>)。
 
 ### 接续、复盘与方法来源
 
@@ -253,7 +253,7 @@ _Avoid_: 对仅改编或手工整理的内容算指纹、把指纹当成上游�
 
 ## Flagged ambiguities
 
-- **“五段”**：旧标签 make-decision/intake、build-spec/design、build-plan/plan、build-code/apply、verify-code/test-acceptance 的历史含义保留；当前 post 开发路线为四阶段，build-spec 属 pre/history，build-prd 是独立规划工作流。此区分不更改全仓历史标题或重定义运行阶段。
+- **“五段”**：旧标签 make-decision/intake、build-spec/design、build-plan/plan、build-code/apply、verify-code/test-acceptance 的历史含义保留；当前 post 开发路线为三阶段，build-spec 属 pre/history，build-prd 是独立规划工作流。此区分不更改全仓历史标题或重定义运行阶段。
 - **“Task”**：本表以“任务”指业务身份，以“实施 Task”指 Phase 内交付卡；讨论归属不明时先定位所指对象。
 - **“收口”**：可能被读成每阶段末动作或物理关闭；本表区分**阶段收口**（每阶段末收尾动作，产出经验与交接）与**物理 close**（归档、删除与交付清理），两者不互相代替。
 - **“确认/授权”**：内容确认、任务行动授权与 Git 授权记录分属不同含义；是否覆盖某个新增动作需读原用户答复及范围，不从术语定义推定。

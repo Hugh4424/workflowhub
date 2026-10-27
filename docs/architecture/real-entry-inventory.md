@@ -50,7 +50,7 @@
 
 | 接口面 | 文件名与结构 / 返回字段 | 生产者与当前实现状态 | 消费者 |
 | --- | --- | --- | --- |
-| 入口清单 | `docs/architecture/real-entry-inventory.md`；显式入口、间接入口、未跑过入口，每条为入口命令、类型、证据、最后实跑 | CARD-04 P1/T002；本文件登记，不代表各路由均已实跑 | `verify-code`、后续 CARD 的入口核查、未来 CI 接线；**CARD-10** 总集成验收消费者 |
+| 入口清单 | `docs/architecture/real-entry-inventory.md`；显式入口、间接入口、未跑过入口，每条为入口命令、类型、证据、最后实跑 | CARD-04 P1/T002；本文件登记，不代表各路由均已实跑 | `build-code 终末`、后续 CARD 的入口核查、未来 CI 接线；**CARD-10** 总集成验收消费者 |
 | acceptanceChain 行 | `buildPostAcceptanceChainRows` 返回逐 AC 行；真实行标识字段为 `acceptance_criterion_id`，并保留 `source_ids`、`decision_ids`、`fr_ids`、`task_ids`、`evidence_refs`、`review_ref`、`coverage_limits`、`task_id`、`material_revision`、`snapshot_tree`、`producer_stage` 等身份/既有行字段。缺真实映射或引用则写明 `coverage_limits`，不得假填 | CARD-04 P4/T006；`runtime/stage/stage-runner.mjs` 已导出 `buildPostAcceptanceChainRows`，`currentPostBuildCodeSpecAnalyze` 已调用；现有实现与局部检查不证明 P4 正式完成、逐 AC 业务效果或跨卡消费通过。`task_ids` 沿 CARD-05 路线派生，`review_ref` 仍待实证 | build-code 的 `currentPostBuildCodeSpecAnalyze` 与阶段质量消费者；CARD-05、CARD-07 对齐方；**CARD-10** 总集成验收消费者 |
 | 报告事实层 | `stage-end-report-facts.v1`：`schema_version`、`not_done[]`、`route_applicability[]`、`executions[]`、`coverage_limits[]`、`exceptions[]`、`sources[]`。`not_done` 的机器状态只用 `missing`、`inconsistent`、`incomplete`、`failed`、`unavailable`；声明类留在后两栏 | CARD-04 P5/T007；`runtime/stage/stage-end-report.mjs` 已有 `buildStageEndReportFacts`、`renderStageEndReport`、`collectStageEndReportFacts` 三个导出；转换器实现不证明 P5/T008 的真实报告来源、正式 Phase 或整卡完成 | stage 末报告和人工交接；CARD-05、CARD-07 对齐方；**CARD-10** 总集成验收消费者 |
 

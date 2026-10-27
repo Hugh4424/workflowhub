@@ -6,7 +6,7 @@ const read = path => readFileSync(new URL(path, root), 'utf8');
 const taskPath = 'tests/fixtures/light-route-controlled/tasks.json';
 const bookPath = 'docs/research/n8-four-level-acceptance-runbook.md';
 const levels = ['small', 'normal', 'complex', 'planning'];
-const stageMap = {small:['make-decision'],normal:['make-decision'],complex:['make-decision','build-plan','build-code','verify-code'],planning:['make-decision']};
+const stageMap = {small:['make-decision'],normal:['make-decision'],complex:['make-decision','build-plan','build-code'],planning:['make-decision']};
 const nonempty = value => expect(typeof value === 'string' && value.trim().length > 0).toBe(true);
 function contract(book) {
  const blocks = [...book.matchAll(/```json\s*\n([\s\S]*?)\n```/g)].map(match => JSON.parse(match[1]));

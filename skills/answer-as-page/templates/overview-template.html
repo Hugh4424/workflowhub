@@ -437,7 +437,7 @@ b{font-weight:700}
 
 .report-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:24px}.report-status{border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:12px}.report-status-head{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:13px;font-weight:600}.report-details{margin-top:8px;font-size:12px}.report-details pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px}.task-materials,.raw-quote{margin-top:20px;font-size:13px}.task-materials>summary,.raw-quote>summary{cursor:pointer;color:var(--sub);margin-bottom:12px}.task-materials .lane-items{display:grid;gap:8px}.src-body,.srow-body,.hero-summary,.hero-quote{overflow-wrap:anywhere}.task-phase-entry{display:grid;gap:8px}.task-phase-link{justify-self:start;border:1px solid var(--line);border-radius:6px;background:var(--surface);padding:6px 8px;color:var(--sub)}
 @media(max-width:767px){.body{flex-direction:column}.side{width:100%;max-height:30%;border-right:0;border-bottom:1px solid var(--line)}.scroller{min-height:0}.main{padding:16px 16px 48px;overflow-wrap:anywhere}.objcard{flex-wrap:wrap}.objcard-body{flex-basis:calc(100% - 60px)}.objcard>.tag{margin-left:48px;max-width:calc(100% - 48px);height:auto;min-height:22px;white-space:normal;overflow-wrap:anywhere}.foot-dir{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
-.overview-columns{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.overview-group{min-width:0}.overview-group h4{margin:0 0 12px}.objcard.is-related{outline:2px solid var(--kc);outline-offset:1px}@media(max-width:767px){.overview-columns{grid-template-columns:1fr}}
+.terminal-stage-status{margin-bottom:16px;overflow-wrap:anywhere}.overview-columns .objcard{width:100%;min-width:0;flex-wrap:wrap}.overview-columns .objcard-body{min-width:0;flex:1 1 120px}.overview-columns .objcard>.tag{max-width:100%;height:auto;white-space:normal;overflow-wrap:anywhere}.task-phase-entry{min-width:0}.overview-columns{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.overview-group{min-width:0}.overview-group h4{margin:0 0 12px}.objcard.is-related{outline:2px solid var(--kc);outline-offset:1px}@media(max-width:767px){.overview-columns{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -1059,6 +1059,10 @@ function flowCells(id) {
     '</div>';
   }).join('');
 }
+function stageStatusHtml() {
+  const status=DATA.stageStatus;if(!status)return '';
+  return '<section class="report-status terminal-stage-status"><div class="report-status-head"><span>整阶段</span>'+tag(status.label,status.tone)+'</div><details class="report-details"><summary>查看依据</summary>'+((status.gaps||[]).length?'<ul>'+status.gaps.map(function(g){return '<li>'+esc(g)+'</li>';}).join('')+'</ul>':'')+((status.sources||[]).map(function(r){return '<p>'+esc(r.ref)+' '+esc(r.sha256||'原hash未提供')+'</p>';}).join(''))+'<p>'+esc((status.quality?.terminal_assessment?.coverage_limits||[]).join('；'))+'</p></details></section>';
+}
 function progressHtml() {
   const flow = DATA.stages.map(function (s, i) {
     return '<div class="flow-item">' +
@@ -1069,7 +1073,7 @@ function progressHtml() {
       (i < DATA.stages.length - 1 ? '<span class="sep" aria-hidden="true">›</span>' : '') +
     '</div>';
   }).join('');
-  return '<div class="flow">' + flow + '</div>' +
+  return stageStatusHtml() + '<div class="flow">' + flow + '</div>' +
     '<section class="section"><h3 class="section-title">需求进展 · 工作包与任务</h3><div class="overview-columns">'+['req','wp','task'].map(function(kind){const ids=IDS.filter(function(id){return OBJ[id].kind===kind;});return '<section class="overview-group"><h4>'+esc(DATA.kinds[kind].label)+' · '+ids.length+'</h4><div class="lane-items">'+ids.map(function(id){return objCard(id,{overview:true,current:focusedObjectId()===id,changed:CHANGED.has(id),logic:isRelated(id)?relationLogic(focusedObjectId(),id):''});}).join('')+'</div></section>';}).join('')+'</div>'+
     '</section><details class="check-details"><summary>检查详情</summary><section class="report-grid">'+CORE.map(function(_,i){return reportRingHtml(i+1);}).join('')+'</section></details>';
 }
@@ -1108,6 +1112,8 @@ function headerRightHtml() {
 function headerHtml() {
   const now = DATA.stages.filter(function (s) { return s.state === 'now'; })[0];
   const c = taskCounts();
+  const actual=DATA.stages.find(function(s){return s.id===DATA.stageStatus?.stage;})||now;
+  const hint=actual?.hint||'';
   const stages = DATA.stages.map(function (st, i) {
     return '<li>' +
       '<div class="hstage is-' + st.state + '"' + (st.state === 'now' ? ' aria-current="step"' : '') + '>' +
@@ -1119,7 +1125,7 @@ function headerHtml() {
   }).join('');
   return '<div class="hdr-task">' +
       '<h1 class="hdr-task-name">' + esc(DATA.task) + '</h1>' +
-      '<div class="hdr-task-sub">当前阶段：<b>' + esc(DATA.stageLabel) + '</b>（' + esc(now ? now.hint : '') + '）</div>' +
+      '<div class="hdr-task-sub">当前阶段：<b>' + esc(DATA.stageLabel) + '</b>' + (hint ? '（'+esc(hint)+'）' : '') + (DATA.stageStatus ? ' '+tag(DATA.stageStatus.label,DATA.stageStatus.tone) : '') + '</div>' +
     '</div>' +
     '<ol class="hdr-stages" aria-label="任务阶段">' + stages + '</ol>' +
     '<details class="hdr-counts"><summary>Task 共 ' + c.total + ' 个 · 状态</summary>' +
@@ -1135,7 +1141,7 @@ function mainHtml() {
 
   }
   const o = OBJ[sel];
-  return toolbar + heroHtml(o) + contraHtml(o) + (o.kind==='task'?extrasHtml(o):'') + (o.noChain ? '' : chainHtml(o)) + (o.kind==='task'?'':extrasHtml(o)) + sourcesHtml(o) + (['req','wp','task'].includes(o.kind)?materialIssueHtml()+taskMaterialsHtml():'');
+  return toolbar + stageStatusHtml() + heroHtml(o) + contraHtml(o) + (o.kind==='task'?extrasHtml(o):'') + (o.noChain ? '' : chainHtml(o)) + (o.kind==='task'?'':extrasHtml(o)) + sourcesHtml(o) + (['req','wp','task'].includes(o.kind)?materialIssueHtml()+taskMaterialsHtml():'');
 }
 </script>
 <script>

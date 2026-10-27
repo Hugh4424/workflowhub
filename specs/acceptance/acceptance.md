@@ -1,10 +1,10 @@
 # WorkflowHub 验收
 
-版本/最后更新：2026-10-25。作用域：本项目当前任务。owner：当前task验收与专业质量owner；consumer：独立测试、OCR和verify-code执行者。
+版本/最后更新：2026-10-25。作用域：本项目当前任务。owner：当前task验收与专业质量owner；consumer：独立测试、OCR和build-code 终末执行者。
 
 ## 依据与职责
 
-[标准工作方法](../../docs/standard-workflow.md#build-code-测试与质量)、[verify-code](../../workflows/verify-code/SKILL.md#方法)、当前task spec Appendix A为原判据。
+[标准工作方法](../../docs/standard-workflow.md#build-code-测试与质量)、[build-code 终末](../../workflows/build-code/SKILL.md#最后-phase终末承接)、当前task spec Appendix A为原判据。
 
 本件是专业规则读法与最小适用边界，不替代原字段、业务需求、判据或执行记录。
 
@@ -14,7 +14,7 @@
 
 ## 真实consumer与接缝
 
-build-code各Phase作者交原件；独立测试及verify-code从当前spec/Phase、真实实现和原始质量记录逐面核对。
+build-code各Phase作者交原件；独立测试及build-code 终末从当前spec/Phase、真实实现和原始质量记录逐面核对。
 
 ## 反例与核对
 

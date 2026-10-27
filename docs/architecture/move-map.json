@@ -23,7 +23,7 @@
       "destination": "runtime/stage/stage-registry.mjs",
       "status": "retain",
       "role": "production",
-      "responsibility": "P6/T008阶段名单唯一可执行来源，P9/T011收敛正式开发3集与含独立规划的工作流4集；零runtime依赖，导出当前阶段名、供两处历史读取的退役build-spec值及供host-config被动读取的已知退役verify-code常量；该常量不进任何当前身份集合，原host配置不改写，旧provider不解析/不执行；历史facts原样读取，不新增阶段或公共行为。",
+      "responsibility": "P6/T008阶段名单唯一可执行来源，P9/T011收敛正式开发3集与含独立规划的工作流4集；零runtime依赖，导出当前阶段名、供两处历史读取的退役build-spec值及供host-config被动读取的已知退役build-code终末常量；该常量不进任何当前身份集合，原host配置不改写，旧provider不解析/不执行；历史facts原样读取，不新增阶段或公共行为。",
       "owner": "阶段运行时",
       "consumer": "16个既有模块/CLI读取名字与集合以校验当前阶段、计算终末范围、读取历史顺序或分发技能；P8–P11作者承接注册表。",
       "module_consumers": [
@@ -306,7 +306,7 @@
       "role": "production",
       "responsibility": "既有模块／资源职责；不从登记新增能力",
       "owner": "原路径维护 owner；P7 仅登记现职责",
-      "consumer": "当前直接模块消费者：metrics/adapters/host-adapter.mjs, tests/metrics-smoke.test.mjs, tests/metrics-taskhandle-v2.test.mjs, workflows/verify-code/metrics-writer.mjs",
+      "consumer": "当前直接模块消费者：metrics/adapters/host-adapter.mjs, tests/metrics-smoke.test.mjs, tests/metrics-taskhandle-v2.test.mjs, workflows/build-code终末/metrics-writer.mjs",
       "module_consumers": [
         "metrics/adapters/host-adapter.mjs",
         "tests/metrics-smoke.test.mjs",
@@ -608,9 +608,9 @@
       "destination": "runtime/interface/run-command.mjs",
       "status": "retain",
       "role": "production",
-      "responsibility": "② 命令采集：workflows/verify-code/capture、workflows/build-code/capture、tools/cli/stage-runtime",
+      "responsibility": "② 命令采集：workflows/build-code终末/capture、workflows/build-code/capture、tools/cli/stage-runtime",
       "owner": "B0/P1 / MT-1-004",
-      "consumer": "当前直接模块消费者：tests/contract/acceptance-execution-medium.test.mjs, tests/contract/narrow-tool-run-command.test.mjs, tests/contract/ocr-review-contract-bundle.test.mjs, tools/cli/stage-runtime.mjs, workflows/build-code/capture.mjs, workflows/build-code/targeted-capture.mjs, workflows/verify-code/capture.mjs",
+      "consumer": "当前直接模块消费者：tests/contract/acceptance-execution-medium.test.mjs, tests/contract/narrow-tool-run-command.test.mjs, tests/contract/ocr-review-contract-bundle.test.mjs, tools/cli/stage-runtime.mjs, workflows/build-code/capture.mjs, workflows/build-code/targeted-capture.mjs, workflows/build-code终末/capture.mjs",
       "module_consumers": [
         "tests/contract/acceptance-execution-medium.test.mjs",
         "tests/contract/narrow-tool-run-command.test.mjs",
@@ -723,7 +723,7 @@
       "role": "production",
       "responsibility": "OCR 结果落盘（parse+聚合）由本文件承接；P8：deriveTerminalConclusion从原provider状态/findings派生宿主审查结论与覆盖，不判AC；旧deriveVerifyCodeConclusion保持同函数别名。 旧verify reader迁完后由P11退役旧身份，owner不变。",
       "owner": "B4/P5 / MT-1-045",
-      "consumer": "当前直接模块消费者：skills/wh-review/scripts/__tests__/review-runner.test.mjs, skills/wh-review/scripts/review-result.mjs, skills/wh-review/scripts/simple-review-runner.mjs；P8：review-record-route对terminal和旧verify-code记录调用同一producer。",
+      "consumer": "当前直接模块消费者：skills/wh-review/scripts/__tests__/review-runner.test.mjs, skills/wh-review/scripts/review-result.mjs, skills/wh-review/scripts/simple-review-runner.mjs；P8：review-record-route对terminal和旧build-code终末记录调用同一producer。",
       "module_consumers": [
         "skills/wh-review/scripts/__tests__/review-runner.test.mjs",
         "skills/wh-review/scripts/review-result.mjs",
@@ -824,7 +824,7 @@
       "destination": "runtime/review/review-packet-identity.mjs",
       "status": "retain",
       "role": "production",
-      "responsibility": "包路径/材料白名单读取辅助（哈希身份删除后）；P8：terminal审查重点与compactVerifyCodeMaterials共同参与原packet材料身份计算；旧verify-code路径保持。 旧verify reader迁完后由P11退役旧身份，owner不变。",
+      "responsibility": "包路径/材料白名单读取辅助（哈希身份删除后）；P8：terminal审查重点与compactVerifyCodeMaterials共同参与原packet材料身份计算；旧build-code终末路径保持。 旧verify reader迁完后由P11退役旧身份，owner不变。",
       "owner": "B4/P5 / MT-1-051",
       "consumer": "当前直接模块消费者：runtime/review/ocr-delegation-adapter.mjs, skills/wh-review/scripts/__tests__/simple-review-runner.test.mjs, skills/wh-review/scripts/review-materials.mjs, skills/wh-review/scripts/simple-review-runner.mjs, tests/contract/ocr-delegation-adapter.test.mjs, tests/contract/ocr-delegation-route.test.mjs, tests/contract/ocr-production-cutover.test.mjs, tools/cli/stage-runtime.mjs；P8：review-materials及现有packet身份调用方传terminal身份与材料。",
       "module_consumers": [
@@ -846,7 +846,7 @@
       "destination": "runtime/review/review-policy.mjs",
       "status": "retain",
       "role": "production",
-      "responsibility": "wh-review 文档面 + OCR 代码面的审查身份/规则（本文件）；P8：校验build-code/terminal并从身份派生single_round；原phase缺省及verify-code校验保持。 旧verify reader迁完后由P11退役旧身份，owner不变。",
+      "responsibility": "wh-review 文档面 + OCR 代码面的审查身份/规则（本文件）；P8：校验build-code/terminal并从身份派生single_round；原phase缺省及build-code终末校验保持。 旧verify reader迁完后由P11退役旧身份，owner不变。",
       "owner": "B4/P5 / MT-1-052",
       "consumer": "当前直接模块消费者：runtime/review/review-packet-identity.mjs, runtime/review/review-record-route.mjs, runtime/review/review-route-identity.mjs, skills/wh-review/scripts/review-materials.mjs, skills/wh-review/scripts/review-runner.mjs, skills/wh-review/scripts/review-semantic-projection.mjs, skills/wh-review/scripts/simple-review-runner.mjs, skills/wh-review/scripts/third-review-host-config.mjs, skills/wh-review/scripts/wh-review-cli.mjs；P8：review-packet-identity、review-record-route和review-materials读取身份/材料规则；ocr-delegation-adapter读取requiredReviewMode。",
       "module_consumers": [
@@ -941,7 +941,7 @@
       "destination": "runtime/review/schemas/result.schema.json",
       "status": "retain",
       "role": "production",
-      "responsibility": "原结果schema增加terminal身份必需conclusion/coverage及worktree/null分支，旧verify-code分支原字节保留。",
+      "responsibility": "原结果schema增加terminal身份必需conclusion/coverage及worktree/null分支，旧build-code终末分支原字节保留。",
       "owner": "B4/P5 / MT-5-002",
       "consumer": "runtime/review/schema-validator.mjs直接读取并编译result；terminal-chain对真实record结果与缺结论/覆盖反例调用validateSchema。",
       "module_consumers": [],
@@ -1296,7 +1296,7 @@
       "role": "production",
       "responsibility": "facts.jsonl + phase_progress 单行游标唯一写者（本文件）",
       "owner": "B4/P5 / MT-1-082",
-      "consumer": "当前直接模块消费者：core/task-close.mjs, scripts/__tests__/task-bootstrap.test.mjs, tests/contract/post-build-plan-missing-index.test.mjs, tests/contract/stalled-consumer-delta.test.mjs, tests/contract/status-derivation.test.mjs, tests/contract/zero-machine-gate-advancement.test.mjs, tests/integration/minimal-task-storage.test.mjs, tools/cli/stage-runtime.mjs, tools/cli/task-bootstrap.mjs",
+      "consumer": "当前直接模块消费者：core/task-close.mjs, scripts/__tests__/task-bootstrap.test.mjs, tests/contract/post-build-plan-missing-index.test.mjs, tests/contract/stalled-consumer-delta.test.mjs, tests/contract/status-derivation.test.mjs, tests/contract/zero-machine-gate-advancement.test.mjs, tests/integration/minimal-task-storage.test.mjs, tools/cli/stage-runtime.mjs, tools/cli/task-bootstrap.mjs；P10终末独立原件→既有public status→同一页面DTO的真实producer/reader",
       "module_consumers": [
         "core/task-close.mjs",
         "scripts/__tests__/task-bootstrap.test.mjs",
@@ -1321,7 +1321,7 @@
       "role": "production",
       "responsibility": "① 范围核对 + worktree 清理执行器（本文件与 runtime/interface/workspace-check.mjs 分工）",
       "owner": "B4/P5 / MT-1-085",
-      "consumer": "当前直接模块消费者：core/__tests__/workspace-manager.test.mjs, metrics/collector.mjs, runtime/stage/stage-context.mjs, skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs, tests/close/close-authorization-outcome-ref-guard.test.mjs, tests/contract/build-code-change-scope.test.mjs, tests/contract/card03-review-orchestration.test.mjs, tests/contract/ocr-delegation-route.test.mjs, tests/contract/ocr-production-cutover.test.mjs, tests/contract/ocr-review-contract-bundle.test.mjs, tests/contract/workspace-binding.test.mjs, tests/contract/workspace-cleanup.test.mjs, tests/contract/zero-machine-gate-advancement.test.mjs, workflows/build-code/change-scope.mjs；当前人读方法消费者：docs/standard-workflow.md 的默认安全收口直接调用 inspectWorktreeCleanup/createTaskWorktreeRemoval，workflows/verify-code/SKILL.md 与 skills/stage-handoff/SKILL.md 在最终 close/保留事项触发读取该方法；不恢复旧 close graph 或自动分支事务",
+      "consumer": "当前直接模块消费者：core/__tests__/workspace-manager.test.mjs, metrics/collector.mjs, runtime/stage/stage-context.mjs, skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs, tests/close/close-authorization-outcome-ref-guard.test.mjs, tests/contract/build-code-change-scope.test.mjs, tests/contract/card03-review-orchestration.test.mjs, tests/contract/ocr-delegation-route.test.mjs, tests/contract/ocr-production-cutover.test.mjs, tests/contract/ocr-review-contract-bundle.test.mjs, tests/contract/workspace-binding.test.mjs, tests/contract/workspace-cleanup.test.mjs, tests/contract/zero-machine-gate-advancement.test.mjs, workflows/build-code/change-scope.mjs；当前人读方法消费者：docs/standard-workflow.md 的默认安全收口直接调用 inspectWorktreeCleanup/createTaskWorktreeRemoval，workflows/build-code终末/SKILL.md 与 skills/stage-handoff/SKILL.md 在最终 close/保留事项触发读取该方法；不恢复旧 close graph 或自动分支事务",
       "module_consumers": [
         "core/__tests__/workspace-manager.test.mjs",
         "metrics/collector.mjs",
@@ -2692,7 +2692,7 @@
       "role": "production",
       "responsibility": "当前 spec.md 唯一模板资源，spec-specify 作者人读消费；C01 P5 将验收对象局部 checker 置于该既有模板，由 P4/P5 已声明 reader 接线，当前尚未产生该区块，不宣已运行。",
       "owner": "spec-specify/templates 原 owner / C01 P5 T005；P3 只登记已有模板资源，不写 producer",
-      "consumer": "现 skills/spec-specify/SKILL.md 模板作者；已存在的 acceptance-object-required-fields 测试直接读取此模板并报告当前缺失。build-plan/verify-code 对象块真实消费仍待 P4/P5，不能用本登记冒运行效果。",
+      "consumer": "现 skills/spec-specify/SKILL.md 模板作者；已存在的 acceptance-object-required-fields 测试直接读取此模板并报告当前缺失。build-plan/build-code终末 对象块真实消费仍待 P4/P5，不能用本登记冒运行效果。",
       "module_consumers": [],
       "named_data_readers": [
         "skills/spec-specify/SKILL.md",
@@ -3493,7 +3493,7 @@
       "role": "production",
       "responsibility": "七类公共入口后端 = 窄工具①~④ + human-confirm：doctor→① + 存储报告；status→读 task.json/facts.jsonl/游标 + 材料存在性（质量缺失显示 unknown/incomplete）；run:draft→③；verify→②；confirm→human-confirm；authorize→④；review:record→审查链（ADR-018/019/021）；N3 P2仅在真实code bundle生成后、provider准备前向现public review host提供onReviewMaterials只读成员观察，原signal取消与review owner原件/dispose复用；027已证invoke覆盖host取消，现process/host两signal合并，默认无host不变，不新增公共动作。",
       "owner": "B4/P5 / MT-2-022；N3 P2原生产owner仅承接材料观察窄修",
-      "consumer": "当前直接模块消费者：tests/contract/card03-review-orchestration.test.mjs, tests/contract/code-review-ocr.test.mjs, tests/contract/doctor-interface.test.mjs, tests/contract/ocr-delegation-route.test.mjs, tests/contract/ocr-production-cutover.test.mjs, tests/contract/ocr-review-contract-bundle.test.mjs, tests/contract/review-public-entrypoints.test.mjs, tests/contract/runtime-facade.test.mjs, tests/contract/stage-progress-contract.test.mjs, tests/contract/write-identity-workspace.test.mjs；P8原dispatcher在stageRuntimeCliMain相同argv/认证cwd下预读完整B/C包后abort原signal；tests/contract/n3-review-material-observer.test.mjs定向消费实际材料、取消/失败与默认route。",
+      "consumer": "当前直接模块消费者：tests/contract/card03-review-orchestration.test.mjs, tests/contract/code-review-ocr.test.mjs, tests/contract/doctor-interface.test.mjs, tests/contract/ocr-delegation-route.test.mjs, tests/contract/ocr-production-cutover.test.mjs, tests/contract/ocr-review-contract-bundle.test.mjs, tests/contract/review-public-entrypoints.test.mjs, tests/contract/runtime-facade.test.mjs, tests/contract/stage-progress-contract.test.mjs, tests/contract/write-identity-workspace.test.mjs；P8原dispatcher在stageRuntimeCliMain相同argv/认证cwd下预读完整B/C包后abort原signal；tests/contract/n3-review-material-observer.test.mjs定向消费实际材料、取消/失败与默认route。；P10终末独立原件→既有public status→同一页面DTO的真实producer/reader",
       "module_consumers": [
         "tests/contract/card03-review-orchestration.test.mjs",
         "tests/contract/code-review-ocr.test.mjs",
@@ -4653,7 +4653,7 @@
       "role": "test",
       "responsibility": "真实公共CLI规划/普通八场景行为oracle；测试文件在位，受控消费者断言不冒历史23AC通过",
       "owner": "CARD10/P2/T009 runtime_route；登记owner card10_contract",
-      "consumer": "真实CLI消费者测试：tools/cli/stage-runtime.mjs的run/status/doctor及既有七public入口；独立verify-code消费唯一执行原件，不以目录登记或测试结果作为阶段许可",
+      "consumer": "真实CLI消费者测试：tools/cli/stage-runtime.mjs的run/status/doctor及既有七public入口；独立build-code终末消费唯一执行原件，不以目录登记或测试结果作为阶段许可",
       "module_consumers": [],
       "named_data_readers": [
         "tools/cli/stage-runtime.mjs"
@@ -4668,7 +4668,7 @@
       "role": "test",
       "responsibility": "当前七类阶段/材料义务的四卡角色完整消费与单作者/只读分析者同材料共存的有限真实CLI行为测试；语义判断由独立实际方法读回",
       "owner": "CARD10/P4/T011–T012；同文件串行唯一实施owner；静态设计登记由当前材料owner维护",
-      "consumer": "预期由定向Vitest命令 npx vitest run tests/e2e/card-10-current-contract-e2e.test.mjs 消费；独立verify-code读真实执行原件；静态职责登记不证明功能验证",
+      "consumer": "预期由定向Vitest命令 npx vitest run tests/e2e/card-10-current-contract-e2e.test.mjs 消费；独立build-code终末读真实执行原件；静态职责登记不证明功能验证",
       "module_consumers": [],
       "named_data_readers": [],
       "delete_condition": "现行对应契约退役且经独立审查的替代已承接全部真实场景后删除；不因登记生成阶段许可",
@@ -4699,7 +4699,7 @@
       "role": "test",
       "responsibility": "runConfiguredOcrHostReview native guard/MCP → rawOutputSink → coverage/recovery 的局部读取、重试、失败/取消/清理事实回归",
       "owner": "workflowhub-card05-stage-defect-audit-20261012 P10 / 预写测试作者；生产实现者不得弱化冻结oracle",
-      "consumer": "Vitest定向命令 ./node_modules/.bin/vitest run tests/contract/card05-native-observation-target.test.mjs --poolOptions.forks.singleFork --no-fileParallelism；verify-code读取同命令原始执行事实",
+      "consumer": "Vitest定向命令 ./node_modules/.bin/vitest run tests/contract/card05-native-observation-target.test.mjs --poolOptions.forks.singleFork --no-fileParallelism；build-code终末读取同命令原始执行事实",
       "module_consumers": [],
       "named_data_readers": [],
       "delete_condition": "现契约退役或经独立审查的等效现consumer测试已覆盖全部所承接场景后删除重复测试；不删除历史RED/原始证据，不新增推进门",
@@ -4712,7 +4712,7 @@
       "role": "test",
       "responsibility": "public verify/capture → receipt/raw/facts.jsonl 精确三键与 source/cursor 保全回归",
       "owner": "workflowhub-card05-stage-defect-audit-20261012 P11/A / 预写测试作者；生产实现者不得弱化冻结oracle",
-      "consumer": "Vitest定向命令 ./node_modules/.bin/vitest run tests/contract/stage-evidence-contract.test.mjs --poolOptions.forks.singleFork --no-fileParallelism；verify-code读取同命令原始执行事实",
+      "consumer": "Vitest定向命令 ./node_modules/.bin/vitest run tests/contract/stage-evidence-contract.test.mjs --poolOptions.forks.singleFork --no-fileParallelism；build-code终末读取同命令原始执行事实",
       "module_consumers": [],
       "named_data_readers": [],
       "delete_condition": "现契约退役或经独立审查的等效现consumer测试已覆盖全部所承接场景后删除重复测试；不删除历史RED/原始证据，不新增推进门",
@@ -4725,7 +4725,7 @@
       "role": "test",
       "responsibility": "phase-template 完整四份作者示例 → validatePostPhaseContract → bundle/source.json 消费回归",
       "owner": "workflowhub-card05-stage-defect-audit-20261012 P11/B / 预写测试作者；生产实现者不得弱化冻结oracle",
-      "consumer": "Vitest定向命令 ./node_modules/.bin/vitest run tests/contract/card05-author-material-consumer.test.mjs --poolOptions.forks.singleFork --no-fileParallelism；verify-code读取同命令原始执行事实",
+      "consumer": "Vitest定向命令 ./node_modules/.bin/vitest run tests/contract/card05-author-material-consumer.test.mjs --poolOptions.forks.singleFork --no-fileParallelism；build-code终末读取同命令原始执行事实",
       "module_consumers": [],
       "named_data_readers": [],
       "delete_condition": "现契约退役或经独立审查的等效现consumer测试已覆盖全部所承接场景后删除重复测试；不删除历史RED/原始证据，不新增推进门",
@@ -4814,7 +4814,7 @@
       "role": "production",
       "responsibility": "关闭方法与其可搬运 bundle 改名；沿用原授权、质量、PR、归档与安全清理边界。",
       "owner": "P7/T009 stage-close owner",
-      "consumer": "make-decision、build-prd、verify-code 的 skill-deps；local-skill-resolver 与 portable bundle consumer。",
+      "consumer": "make-decision、build-prd、build-code终末 的 skill-deps；local-skill-resolver 与 portable bundle consumer。",
       "module_consumers": [],
       "named_data_readers": [
         "workflows/verify-code/SKILL.md",
@@ -4831,7 +4831,7 @@
       "role": "production",
       "responsibility": "关闭方法与其可搬运 bundle 改名；沿用原授权、质量、PR、归档与安全清理边界。",
       "owner": "P7/T009 stage-close owner",
-      "consumer": "make-decision、build-prd、verify-code 的 skill-deps；local-skill-resolver 与 portable bundle consumer。",
+      "consumer": "make-decision、build-prd、build-code终末 的 skill-deps；local-skill-resolver 与 portable bundle consumer。",
       "module_consumers": [],
       "named_data_readers": [
         "runtime/adapters/local-skill-resolver.mjs",
@@ -4940,7 +4940,7 @@
       "role": "test",
       "responsibility": "N2清单路径、名称、来源、依赖、单技能搬运及只报告边界的目标行为Oracle；供既有定向测试消费。",
       "owner": "N2 build-plan oracle owner；build-code只读消费冻结断言",
-      "consumer": "本卡具名Phase的定向Vitest命令及verify-code独立读回；普通质量事实，不作阶段许可证。",
+      "consumer": "本卡具名Phase的定向Vitest命令及build-code终末独立读回；普通质量事实，不作阶段许可证。",
       "module_consumers": [],
       "named_data_readers": [],
       "delete_condition": "当前Oracle职责退役或经独立审查的替代测试完整承接，且冻结变更遵既有TCR后由原owner删除；历史RED与测试原件保留。",
@@ -5071,7 +5071,7 @@
       "role": "test_only",
       "responsibility": "N3 build-plan预写冻结oracle；Vitest runSimpleReview真实依赖注入入口；detail每配置路线一次且direction保留配对",
       "owner": "N3独立测试作者；冻结后修改须TCR与独立审查",
-      "consumer": "P3/T003实施者、末Phase与verify-code独立验收者",
+      "consumer": "P3/T003实施者、末Phase与build-code终末独立验收者",
       "module_consumers": [
         "tests/review/n3-detail-single-dispatch.test.mjs"
       ],
@@ -5086,7 +5086,7 @@
       "role": "test_only",
       "responsibility": "N3 build-plan预写冻结oracle；Node受控进程/会话夹具经真实cleanup入口；取消、隔离回收与清理负例",
       "owner": "N3独立测试作者；冻结后修改须TCR与独立审查",
-      "consumer": "P7/T007实施者、末Phase与verify-code独立验收者",
+      "consumer": "P7/T007实施者、末Phase与build-code终末独立验收者",
       "module_consumers": [
         "tests/integration/n3-browser-session-lifecycle.node-test.mjs"
       ],
@@ -5101,7 +5101,7 @@
       "role": "test_only",
       "responsibility": "N3 build-plan预写只读票据边界oracle；仅经现有context/runner接缝使用受控CDP样本，不接触真实凭据",
       "owner": "N3独立浏览器测试作者；冻结修改须TCR",
-      "consumer": "P7/T007与P8/verify-code验收者",
+      "consumer": "P7/T007与P8/build-code终末验收者",
       "module_consumers": [
         "tests/integration/n3-browser-ticket-boundary.node-test.mjs"
       ],
@@ -5442,7 +5442,7 @@
       "role": "production",
       "responsibility": "已确认单文件驾驶舱骨架：caller填真实数据；追溯、折叠、高亮显示偏好",
       "owner": "N6 P5/T005唯一writer；后续技能维护者",
-      "consumer": "当前任务驾驶舱页面生成者与用户",
+      "consumer": "当前任务驾驶舱页面生成者与用户；P10终末独立原件→既有public status→同一页面DTO的真实producer/reader",
       "module_consumers": [],
       "named_data_readers": [
         "skills/answer-as-page/skill-bundle.json"
@@ -5457,7 +5457,7 @@
       "role": "test_only",
       "responsibility": "N6终末104发现的定向行为回归：真实模板script经Node VM核决策sideEdges与既有edges并存、缺任务身份或节点摘要时不读共享已读键、合法已读隔离及真实测试说明；不证明浏览器或视觉效果。",
       "owner": "N6 verify-code独立测试作者；生产修复由root移交的verify_owner串行承担",
-      "consumer": "verify-code定向命令 node node_modules/vitest/vitest.mjs run tests/contract/n6-terminal-review-fixes.test.mjs；独立修复验收者读取其原始RED/GREEN。",
+      "consumer": "build-code终末定向命令 node node_modules/vitest/vitest.mjs run tests/contract/n6-terminal-review-fixes.test.mjs；独立修复验收者读取其原始RED/GREEN。",
       "module_consumers": [],
       "named_data_readers": [],
       "delete_condition": "上述真实模板消费者退役且经独立审查确认等强正反回归已承接后删除；原始审查、RED/GREEN及失败保留。",
@@ -5639,9 +5639,9 @@
       "destination": "tests/contract/verify-code-page-refresh.test.mjs",
       "status": "add",
       "role": "test",
-      "responsibility": "ORACLE-P6-REFRESH与ORACLE-P6-DEBT结构合同/受控文档反例：verify-code两处刷新文字接线、步骤身份/证据形状、decision-log日期主题接收与五行表/四字段ADR/N8唯一级别来源保全；不证明真实刷新。",
+      "responsibility": "ORACLE-P6-REFRESH与ORACLE-P6-DEBT结构合同/受控文档反例：build-code终末两处刷新文字接线、步骤身份/证据形状、decision-log日期主题接收与五行表/四字段ADR/N8唯一级别来源保全；不证明真实刷新。",
       "owner": "N9 P6/T011首写、T012同writer追加；后续P6测试维护者",
-      "consumer": "P6契约头literal gate显式由Vitest执行本文件，独立验收者读182/185原件；测试直接读取verify-code SKILL/steps及decision-log模板/SKILL，不是生产运行时consumer。",
+      "consumer": "P6契约头literal gate显式由Vitest执行本文件，独立验收者读182/185原件；测试直接读取build-code终末 SKILL/steps及decision-log模板/SKILL，不是生产运行时consumer。",
       "module_consumers": [],
       "named_data_readers": [],
       "delete_condition": "对应合同被真实决定退役，或经独立审查的等强度oracle完整承接真实消费者后由P6测试owner处置；不因预算或Phase结束删除，原RED/GREEN保留。",
@@ -5667,7 +5667,7 @@
       "role": "test",
       "responsibility": "N10 P1 检查器输入、报告与公共退出语义的受控行为oracle；普通测试事实，不作阶段许可证。",
       "owner": "N10 P1 oracle/实施维护者；冻结后变更遵现有TCR",
-      "consumer": "specs/archive/n10-finite-check-wiring-20261020/phases/ 中P1具名gate_cmd与verify-code独立复核通过Vitest显式消费本测试；当前可读预写测试，不以登记冒执行通过。",
+      "consumer": "specs/archive/n10-finite-check-wiring-20261020/phases/ 中P1具名gate_cmd与build-code终末独立复核通过Vitest显式消费本测试；当前可读预写测试，不以登记冒执行通过。",
       "module_consumers": [],
       "named_data_readers": [],
       "delete_condition": "经独立审查的替代测试完整承接上述行为与失败边界后由原owner退役；原始RED及历史引用保留。",
@@ -5680,7 +5680,7 @@
       "role": "test",
       "responsibility": "N10 P2 来源登记、声明出口、决定与索引、vendor漂移、bundle指针、空来源、总检查传递的受控行为oracle；普通测试事实，不作阶段许可证。",
       "owner": "N10 P2 oracle/实施维护者；冻结后变更遵现有TCR",
-      "consumer": "specs/archive/n10-finite-check-wiring-20261020/phases/ 中P2具名gate_cmd与verify-code独立复核通过Vitest显式消费本测试；当前可读预写测试，不以登记冒执行通过。",
+      "consumer": "specs/archive/n10-finite-check-wiring-20261020/phases/ 中P2具名gate_cmd与build-code终末独立复核通过Vitest显式消费本测试；当前可读预写测试，不以登记冒执行通过。",
       "module_consumers": [],
       "named_data_readers": [],
       "delete_condition": "经独立审查的替代测试完整承接上述行为与失败边界后由原owner退役；原始RED及历史引用保留。",
@@ -5706,7 +5706,7 @@
       "role": "test",
       "responsibility": "N10 P4 固定19行可读接线/人工边界、真实N6断言四态变异及P2具名登记读回的定向oracle；不证明宿主已执行方法、不作阶段许可证。",
       "owner": "N10 P4 实施/oracle owner；冻结后变更遵既有TCR",
-      "consumer": "P4 Phase gate_cmd通过Vitest显式执行本文件，verify-code与独立审查者读其原始输出；本文件readRow读取fixture所列当前源，T018复制真实N6测试并调用真实Vitest/生产checker，T019读取catalog/notice/spec。",
+      "consumer": "P4 Phase gate_cmd通过Vitest显式执行本文件，build-code终末与独立审查者读其原始输出；本文件readRow读取fixture所列当前源，T018复制真实N6测试并调用真实Vitest/生产checker，T019读取catalog/notice/spec。",
       "module_consumers": [],
       "named_data_readers": [],
       "delete_condition": "经独立审查的等强度替代完整承接读回/负例/恢复边界后原owner退役；历史原件与已引用执行输出保留。",
@@ -5734,7 +5734,7 @@
       "role": "test",
       "responsibility": "P5 T022/T024有限来源处置、唯一方法落点及13份本地原文字节读回oracle；只记测试事实。",
       "owner": "N10 P5 oracle/实施维护者；冻结后修改遵现有TCR",
-      "consumer": "P5具名gate_cmd与verify-code通过Vitest显式消费本测试；P7沿原件复核，不以登记冒执行通过。",
+      "consumer": "P5具名gate_cmd与build-code终末通过Vitest显式消费本测试；P7沿原件复核，不以登记冒执行通过。",
       "module_consumers": [],
       "named_data_readers": [],
       "delete_condition": "经独立审查的替代测试完整承接具名行为及失败边界后由原owner退役；保原始RED/GREEN与历史引用。",
@@ -5747,7 +5747,7 @@
       "role": "test",
       "responsibility": "P5 T023真实N9 CLI稳定接口、同一具名环正反恢复及输入错误oracle；不实现十环。",
       "owner": "N10 P5 oracle/实施维护者；冻结后修改遵现有TCR",
-      "consumer": "P5具名gate_cmd与verify-code通过Vitest显式消费本测试；P7沿原件复核，不以登记冒执行通过。",
+      "consumer": "P5具名gate_cmd与build-code终末通过Vitest显式消费本测试；P7沿原件复核，不以登记冒执行通过。",
       "module_consumers": [],
       "named_data_readers": [],
       "delete_condition": "经独立审查的替代测试完整承接具名行为及失败边界后由原owner退役；保原始RED/GREEN与历史引用。",
@@ -5760,7 +5760,7 @@
       "role": "production",
       "responsibility": "N8归档摘要与五处降档的有源更正；替代直接修改只读归档",
       "owner": "N10/P6原实施owner",
-      "consumer": "N8维护者、下一任务主会话、tests/contract/n10-process-repair.test.mjs与verify-code",
+      "consumer": "N8维护者、下一任务主会话、tests/contract/n10-process-repair.test.mjs与build-code终末",
       "module_consumers": [],
       "named_data_readers": [
         "tests/contract/n10-process-repair.test.mjs"
@@ -5775,7 +5775,7 @@
       "role": "test",
       "responsibility": "ORACLE-N10-PROCESS-REPAIR静态合同与可证伪负例；不产生运行许可",
       "owner": "N10/P6原实施owner",
-      "consumer": "P6/T026–T032执行者、P7验收与verify-code",
+      "consumer": "P6/T026–T032执行者、P7验收与build-code终末",
       "module_consumers": [],
       "named_data_readers": [],
       "delete_condition": "仅当该合同/更正职责被经独立审查的唯一替代承接且无当前消费者时退役；历史证据不删覆。",
@@ -5788,7 +5788,7 @@
       "role": "test",
       "responsibility": "P7/T033原36AC验收：消费P1–P6首次原件与后修，执行必要CLI闭环及SET4/5，保原始输出和诚实档位，不新增runtime判据。",
       "owner": "N10/P7/T033唯一作者；T034只读执行",
-      "consumer": "P7/T034、verify-code与维护者显式执行Phase gate_cmd，读取既有Appendix A与外置任务原件，输出逐AC原件及聚合供用户复核。",
+      "consumer": "P7/T034、build-code终末与维护者显式执行Phase gate_cmd，读取既有Appendix A与外置任务原件，输出逐AC原件及聚合供用户复核。",
       "module_consumers": [],
       "named_data_readers": [
         "specs/archive/n10-finite-check-wiring-20261020/phases/P7-全AC验收.md"
@@ -5803,7 +5803,7 @@
       "role": "documentation",
       "responsibility": "P7/T033验收入口的命令、输入、owner、时点、证据、清理与未覆盖说明；不复制AC正文或保存第二进度。",
       "owner": "N10/P7/T033唯一作者；T034只读执行",
-      "consumer": "P7/T034、verify-code和后续维护者按本文定位唯一测试入口与已有原件，执行或复核36AC；用户读取限制。",
+      "consumer": "P7/T034、build-code终末和后续维护者按本文定位唯一测试入口与已有原件，执行或复核36AC；用户读取限制。",
       "module_consumers": [],
       "named_data_readers": [
         "specs/archive/n10-finite-check-wiring-20261020/phases/P7-全AC验收.md"
@@ -6049,7 +6049,7 @@
       "role": "production",
       "responsibility": "P8限定CLI只读hash-pinned P7历史业务语料；分母从已绑定manifest/preflight实际inventory互核，不把当前formal集合套给历史八格、不调用退役stage；匿名双序native packet判定、原件replay与实际transport成本字段读取；复用既有可信profile/native driver和task证据，不新增runtime命令或成本账本。",
       "owner": "N11/P8 实施者；维护者为用户",
-      "consumer": "P8/T019执行者实际调用prepare/judge/replay；tests/contract/n11-pairwise-judge.test.mjs直调公开函数与CLI；用户和verify-code按判定原件复算。",
+      "consumer": "P8/T019执行者实际调用prepare/judge/replay；tests/contract/n11-pairwise-judge.test.mjs直调公开函数与CLI；用户和build-code终末按判定原件复算。",
       "module_consumers": [
         "tests/contract/n11-pairwise-judge.test.mjs"
       ],
@@ -6096,7 +6096,7 @@
       "role": "documentation",
       "responsibility": "判定口径、54/23 逐项复核与成本四组说明",
       "owner": "N11/P8 实施者；维护者为用户",
-      "consumer": "P8执行者串行写判定/54与23逐项复核和成本节；用户与verify-code读取限定范围、原始判定及缺口，P9后继仅消费引用，不预称已读。",
+      "consumer": "P8执行者串行写判定/54与23逐项复核和成本节；用户与build-code终末读取限定范围、原始判定及缺口，P9后继仅消费引用，不预称已读。",
       "module_consumers": [],
       "named_data_readers": [
         "specs/n11-same-condition-eval-20261022/phases/P8-判定与成本.md"
@@ -6111,7 +6111,7 @@
       "role": "documentation",
       "responsibility": "四段真实小任务串演与全 AC 原件导航",
       "owner": "N11/P9 实施者；维护者为用户",
-      "consumer": "verify-code 复核者逐条核对本任务验收原件",
+      "consumer": "build-code终末 复核者逐条核对本任务验收原件",
       "module_consumers": [],
       "named_data_readers": [
         "specs/n11-same-condition-eval-20261022/phases/P9-整合端到端验收.md"
@@ -6246,7 +6246,7 @@
       "role": "production",
       "responsibility": "C01 P7/T017 已批准薄CLI：main(argv)复用唯一Markdown checkAcceptanceObject处理结构，从--spec验收对象JSON取输入；--check-sources保绝对/./../及无空白、冒号、井号的目录相对路径自动检查，裸文件名仅由调用内可选context.file_source_keys选择才stat。未选裸词/普通正文保留，不猜文件意图；不新增CLI flag、持久schema或第二producer。",
       "owner": "Copernicus为本任务P7/T017+T018同一原代码writer，已完成并冻结CLI/spec/verify-code三repo源；Kant唯一维护本CLI登记和P7/index必要材料；Curie只T019两外置准备原件，不写spec/verify-code。",
-      "consumer": "唯一生产consumer为workflows/verify-code/SKILL.md现第4步验收对象命令及相邻context说明。129在真实WH cwd逐字执行当前步骤，$1绑定当前认证spec、$2绑定原330 context（含file_source_keys），exit0；当前target/caller实际回读与验证见332。旧098/019只证当时源码/输入，不冒当前实现证据；不代表整个verify-code阶段运行或已发行。冻结tests仅验证reader。",
+      "consumer": "唯一生产consumer为workflows/build-code终末/SKILL.md现第4步验收对象命令及相邻context说明。129在真实WH cwd逐字执行当前步骤，$1绑定当前认证spec、$2绑定原330 context（含file_source_keys），exit0；当前target/caller实际回读与验证见332。旧098/019只证当时源码/输入，不冒当前实现证据；不代表整个build-code终末阶段运行或已发行。冻结tests仅验证reader。",
       "module_consumers": [],
       "named_data_readers": [
         "workflows/verify-code/SKILL.md"
@@ -6261,7 +6261,7 @@
       "role": "production",
       "responsibility": "五类规范薄入口与既有bundle，承接旧ui-project-init；不成为专业规则writer。",
       "owner": "P2/T002 project-norm-init及目标项目专业owner",
-      "consumer": "build-plan及make-decision/build-code/verify-code现规范reader；resolver与portable publisher",
+      "consumer": "build-plan及make-decision/build-code/build-code终末现规范reader；resolver与portable publisher",
       "module_consumers": [],
       "named_data_readers": [
         "AGENTS.md"
@@ -6276,7 +6276,7 @@
       "role": "production",
       "responsibility": "五类规范薄入口与既有bundle，承接旧ui-project-init；不成为专业规则writer。",
       "owner": "P2/T002 project-norm-init及目标项目专业owner",
-      "consumer": "build-plan及make-decision/build-code/verify-code现规范reader；resolver与portable publisher",
+      "consumer": "build-plan及make-decision/build-code/build-code终末现规范reader；resolver与portable publisher",
       "module_consumers": [],
       "named_data_readers": [
         "AGENTS.md"
@@ -6291,7 +6291,7 @@
       "role": "production",
       "responsibility": "五类规范中对应专业正文的样张；不持有目标项目事实。",
       "owner": "P2/T002 project-norm-init及目标项目专业owner",
-      "consumer": "build-plan及make-decision/build-code/verify-code现规范reader；resolver与portable publisher",
+      "consumer": "build-plan及make-decision/build-code/build-code终末现规范reader；resolver与portable publisher",
       "module_consumers": [],
       "named_data_readers": [
         "skills/project-norm-init/SKILL.md",
@@ -6307,7 +6307,7 @@
       "role": "production",
       "responsibility": "五类规范中对应专业正文的样张；不持有目标项目事实。",
       "owner": "P2/T002 project-norm-init及目标项目专业owner",
-      "consumer": "build-plan及make-decision/build-code/verify-code现规范reader；resolver与portable publisher",
+      "consumer": "build-plan及make-decision/build-code/build-code终末现规范reader；resolver与portable publisher",
       "module_consumers": [],
       "named_data_readers": [
         "skills/project-norm-init/SKILL.md",
@@ -6323,7 +6323,7 @@
       "role": "production",
       "responsibility": "五类规范中对应专业正文的样张；不持有目标项目事实。",
       "owner": "P2/T002 project-norm-init及目标项目专业owner",
-      "consumer": "build-plan及make-decision/build-code/verify-code现规范reader；resolver与portable publisher",
+      "consumer": "build-plan及make-decision/build-code/build-code终末现规范reader；resolver与portable publisher",
       "module_consumers": [],
       "named_data_readers": [
         "skills/project-norm-init/SKILL.md",
@@ -6339,7 +6339,7 @@
       "role": "production",
       "responsibility": "五类规范中对应专业正文的样张；不持有目标项目事实。",
       "owner": "P2/T002 project-norm-init及目标项目专业owner",
-      "consumer": "build-plan及make-decision/build-code/verify-code现规范reader；resolver与portable publisher",
+      "consumer": "build-plan及make-decision/build-code/build-code终末现规范reader；resolver与portable publisher",
       "module_consumers": [],
       "named_data_readers": [
         "skills/project-norm-init/SKILL.md",
@@ -6355,7 +6355,7 @@
       "role": "production",
       "responsibility": "五类规范中对应专业正文的样张；不持有目标项目事实。",
       "owner": "P2/T002 project-norm-init及目标项目专业owner",
-      "consumer": "build-plan及make-decision/build-code/verify-code现规范reader；resolver与portable publisher",
+      "consumer": "build-plan及make-decision/build-code/build-code终末现规范reader；resolver与portable publisher",
       "module_consumers": [],
       "named_data_readers": [
         "skills/project-norm-init/SKILL.md",
@@ -6371,7 +6371,7 @@
       "role": "production",
       "responsibility": "五类规范中对应专业正文的样张；不持有目标项目事实。",
       "owner": "P2/T002 project-norm-init及目标项目专业owner",
-      "consumer": "build-plan及make-decision/build-code/verify-code现规范reader；resolver与portable publisher",
+      "consumer": "build-plan及make-decision/build-code/build-code终末现规范reader；resolver与portable publisher",
       "module_consumers": [],
       "named_data_readers": [
         "skills/project-norm-init/SKILL.md",
@@ -6387,7 +6387,7 @@
       "role": "production",
       "responsibility": "五类规范中对应专业正文的样张；不持有目标项目事实。",
       "owner": "P2/T002 project-norm-init及目标项目专业owner",
-      "consumer": "build-plan及make-decision/build-code/verify-code现规范reader；resolver与portable publisher",
+      "consumer": "build-plan及make-decision/build-code/build-code终末现规范reader；resolver与portable publisher",
       "module_consumers": [],
       "named_data_readers": [
         "skills/project-norm-init/SKILL.md",
@@ -6403,7 +6403,7 @@
       "role": "production",
       "responsibility": "五类规范中对应专业正文的样张；不持有目标项目事实。",
       "owner": "P2/T002 project-norm-init及目标项目专业owner",
-      "consumer": "build-plan及make-decision/build-code/verify-code现规范reader；resolver与portable publisher",
+      "consumer": "build-plan及make-decision/build-code/build-code终末现规范reader；resolver与portable publisher",
       "module_consumers": [],
       "named_data_readers": [
         "skills/project-norm-init/SKILL.md",
@@ -6419,7 +6419,7 @@
       "role": "production",
       "responsibility": "五类规范中对应专业正文的样张；不持有目标项目事实。",
       "owner": "P2/T002 project-norm-init及目标项目专业owner",
-      "consumer": "build-plan及make-decision/build-code/verify-code现规范reader；resolver与portable publisher",
+      "consumer": "build-plan及make-decision/build-code/build-code终末现规范reader；resolver与portable publisher",
       "module_consumers": [],
       "named_data_readers": [
         "skills/project-norm-init/SKILL.md",
@@ -6435,7 +6435,7 @@
       "role": "production",
       "responsibility": "五类规范中对应专业正文的样张；不持有目标项目事实。",
       "owner": "P2/T002 project-norm-init及目标项目专业owner",
-      "consumer": "build-plan及make-decision/build-code/verify-code现规范reader；resolver与portable publisher",
+      "consumer": "build-plan及make-decision/build-code/build-code终末现规范reader；resolver与portable publisher",
       "module_consumers": [],
       "named_data_readers": [
         "skills/project-norm-init/SKILL.md",
@@ -6451,7 +6451,7 @@
       "role": "production",
       "responsibility": "五类规范中对应专业正文的样张；不持有目标项目事实。",
       "owner": "P2/T002 project-norm-init及目标项目专业owner",
-      "consumer": "build-plan及make-decision/build-code/verify-code现规范reader；resolver与portable publisher",
+      "consumer": "build-plan及make-decision/build-code/build-code终末现规范reader；resolver与portable publisher",
       "module_consumers": [],
       "named_data_readers": [
         "skills/project-norm-init/SKILL.md",
@@ -6647,7 +6647,7 @@
       "role": "production",
       "responsibility": "规范同步方法/五类主题路由/现bundle；复用项目共同锁和安全写，不建运行时同步引擎或进度账本。",
       "owner": "norm-sync专业规范同步owner",
-      "consumer": "build-code每Phase收口、verify-code终末、stage-reflection写经验前、stage-close任务收口前；T003 PB证据归属应用、T004/T005顺序生产消费。",
+      "consumer": "build-code每Phase收口、build-code终末终末、stage-reflection写经验前、stage-close任务收口前；T003 PB证据归属应用、T004/T005顺序生产消费。",
       "module_consumers": [],
       "named_data_readers": [
         "workflows/build-code/skill-deps.yaml",
@@ -6664,7 +6664,7 @@
       "role": "production",
       "responsibility": "规范同步方法/五类主题路由/现bundle；复用项目共同锁和安全写，不建运行时同步引擎或进度账本。",
       "owner": "norm-sync专业规范同步owner",
-      "consumer": "build-code每Phase收口、verify-code终末、stage-reflection写经验前、stage-close任务收口前；T003 PB证据归属应用、T004/T005顺序生产消费。",
+      "consumer": "build-code每Phase收口、build-code终末终末、stage-reflection写经验前、stage-close任务收口前；T003 PB证据归属应用、T004/T005顺序生产消费。",
       "module_consumers": [],
       "named_data_readers": [
         "workflows/build-code/skill-deps.yaml",
@@ -6681,7 +6681,7 @@
       "role": "production",
       "responsibility": "规范同步方法/五类主题路由/现bundle；复用项目共同锁和安全写，不建运行时同步引擎或进度账本。",
       "owner": "norm-sync专业规范同步owner",
-      "consumer": "build-code每Phase收口、verify-code终末、stage-reflection写经验前、stage-close任务收口前；T003 PB证据归属应用、T004/T005顺序生产消费。",
+      "consumer": "build-code每Phase收口、build-code终末终末、stage-reflection写经验前、stage-close任务收口前；T003 PB证据归属应用、T004/T005顺序生产消费。",
       "module_consumers": [],
       "named_data_readers": [
         "workflows/build-code/skill-deps.yaml",
@@ -6732,7 +6732,7 @@
       "role": "production",
       "responsibility": "P1设计源提炼输入/单JSON产物/未知与定向阻断方法；不替代readiness或规范owner批准。",
       "owner": "design-source-extraction方法维护者（当前维护者用户）",
-      "consumer": "build-plan设计准备、build-code实施、verify-code独立验收的UI且合法可读设计源reader；具体输入/产物/错误沿原技能和各当前Phase，不新增public入口。",
+      "consumer": "build-plan设计准备、build-code实施、build-code终末独立验收的UI且合法可读设计源reader；具体输入/产物/错误沿原技能和各当前Phase，不新增public入口。",
       "module_consumers": [],
       "named_data_readers": [
         "workflows/build-plan/SKILL.md",
@@ -6749,7 +6749,7 @@
       "role": "production",
       "responsibility": "P3真实冻结清单采集与唯一产物validator/private CLI；复用P2固定注册读入口，不提供任意eval。",
       "owner": "design-source-extraction方法维护者（当前维护者用户）",
-      "consumer": "build-plan设计准备、build-code实施、verify-code独立验收的UI且合法可读设计源reader；具体输入/产物/错误沿原技能和各当前Phase，不新增public入口。",
+      "consumer": "build-plan设计准备、build-code实施、build-code终末独立验收的UI且合法可读设计源reader；具体输入/产物/错误沿原技能和各当前Phase，不新增public入口。",
       "module_consumers": [
         "tests/contract/design-source-extraction-collect.test.mjs"
       ],
@@ -6768,7 +6768,7 @@
       "role": "production",
       "responsibility": "P4八类规范对账方法，消费原来源与提炼事实，四态和规范缺陷分责；不提供生产validator。",
       "owner": "design-source-extraction方法维护者（当前维护者用户）",
-      "consumer": "build-plan设计准备、build-code实施、verify-code独立验收的UI且合法可读设计源reader；具体输入/产物/错误沿原技能和各当前Phase，不新增public入口。",
+      "consumer": "build-plan设计准备、build-code实施、build-code终末独立验收的UI且合法可读设计源reader；具体输入/产物/错误沿原技能和各当前Phase，不新增public入口。",
       "module_consumers": [],
       "named_data_readers": [
         "workflows/build-plan/SKILL.md",
@@ -6785,7 +6785,7 @@
       "role": "production",
       "responsibility": "P5派生对照/隔离消费/独立实测回填方法；局部分母与全局分开，不把文档oracle冒真实运行。",
       "owner": "design-source-extraction方法维护者（当前维护者用户）",
-      "consumer": "build-plan设计准备、build-code实施、verify-code独立验收的UI且合法可读设计源reader；具体输入/产物/错误沿原技能和各当前Phase，不新增public入口。",
+      "consumer": "build-plan设计准备、build-code实施、build-code终末独立验收的UI且合法可读设计源reader；具体输入/产物/错误沿原技能和各当前Phase，不新增public入口。",
       "module_consumers": [],
       "named_data_readers": [
         "workflows/build-plan/SKILL.md",
@@ -6834,7 +6834,7 @@
       "role": "production",
       "responsibility": "从认证任务材料、facts、真实diff与测试审查原件只读派生驾驶舱pageData",
       "owner": "answer-as-page 技能维护者；维护者为用户",
-      "consumer": "skills/answer-as-page/scripts/render-answer-page.mjs 的无 pageData 路径",
+      "consumer": "skills/answer-as-page/scripts/render-answer-page.mjs 的无 pageData 路径；P10终末独立原件→既有public status→同一页面DTO的真实producer/reader",
       "module_consumers": [
         "skills/answer-as-page/scripts/render-answer-page.mjs"
       ],
@@ -6875,6 +6875,38 @@
       ],
       "delete_condition": "只有改名合同及当前消费者全部退役且测试owner独立审查同意时删除；原执行证据保留。",
       "retention_basis": "复用vitest与现有resolver，不验证真实close/PR/归档/清理，不新增生产控制面。"
+    },
+    {
+      "source": "tests/contract/stage-materials.test.mjs",
+      "destination": "tests/contract/stage-materials.test.mjs",
+      "status": "retain",
+      "role": "test_only",
+      "content_change": "test_only",
+      "responsibility": "P10当前材料三阶段与同Phase真实review包消费合同",
+      "owner": "当前方法及独立测试owner",
+      "consumer": "P10目标RED/GREEN与下游独立审查者",
+      "module_consumers": [],
+      "named_data_readers": [
+        "npx vitest run tests/contract/stage-materials.test.mjs"
+      ],
+      "delete_condition": "原合同由独立验证的替代测试完整承接且无当前消费者后删除。",
+      "retention_basis": "AC-MERGE-005 / AC-CLOSE-001"
+    },
+    {
+      "source": "tests/contract/stage-close-pr-contract.test.mjs",
+      "destination": "tests/contract/stage-close-pr-contract.test.mjs",
+      "status": "retain",
+      "role": "test_only",
+      "content_change": "test_only",
+      "responsibility": "P10本地PR三段/标题/拒绝合同",
+      "owner": "当前方法及独立测试owner",
+      "consumer": "P10目标RED/GREEN与下游独立审查者",
+      "module_consumers": [],
+      "named_data_readers": [
+        "npx vitest run tests/contract/stage-close-pr-contract.test.mjs"
+      ],
+      "delete_condition": "原合同由独立验证的替代测试完整承接且无当前消费者后删除。",
+      "retention_basis": "AC-MERGE-005 / AC-CLOSE-001"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

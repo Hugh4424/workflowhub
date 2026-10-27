@@ -9,7 +9,7 @@ description: 单点小改动在定方向内完成方案、一次确认、实施�
 
 先只读根 SKILL「入口路由」及 decision-log.md「级别与路线」，选中本路线后执行以下步骤；不重跑复杂15步。流程步骤、实施/审查、收口、验收各在到达时重新读取同一节，缺失按复杂并记具体缺口与owner，不把推荐当用户授权。七项事实与风险来源沿入口函数，级别不写入新字段。
 
-本路线所有方案、确认、实施、测试、适用审查与收口都在 make-decision 内完成，只写 make-decision 一行阶段事实；不写 build-code/verify-code 阶段行。spec、独立 Phase 与纯指针 phases/index.md 是材料，不是阶段执行。复用 spec-specify/spec-plan 原方法，按 AGENTS post 材料覆盖条款写入；不得新增运行时 Phase 数量 gate。
+本路线所有方案、确认、实施、测试、适用审查与收口都在 make-decision 内完成，只写 make-decision 一行阶段事实；不写 build-code 阶段行。spec、独立 Phase 与纯指针 phases/index.md 是材料，不是阶段执行。复用 spec-specify/spec-plan 原方法，按 AGENTS post 材料覆盖条款写入；不得新增运行时 Phase 数量 gate。
 
 不写死问题数或轮数，收敛以真实未决清零为准；零未决写来源与理由，跳过是不调用，不用空跑或复制技能充数。每项未知保实际缺口与下一owner。
 

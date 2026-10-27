@@ -45,10 +45,10 @@ Phase 内的 Task 是 task graph，不是可任意跳过依赖的步骤表。选
    自动恢复不设次数或时长上限；审查并发、轮次和时长仍受该节排除行保护。无新事实不是完成，不能据此声明 Phase 完成或质量通过。
    本 Phase 收口时，契约头 `Done` 逐条承接 AC：每条写 AC 编号、一个上述现成 8 值档位和一条具名证据指针，并在现有正文写「本 Phase 自带判据小结」：自己验了什么（附本 Phase `gate_cmd` 原件）、没验什么（逐条带档位）、未验项所需条件与具名 owner。逐条记录、实际审查事实和本 Phase 提交分别可定位，才完成本 Phase 的收口工作；档位不要求全部为 pass。
    AC 的判定归属由 spec 的 AC 正文决定：实读判定方式、时点、执行 owner、所需条件和成功失败信号，不由依赖链位置决定。未参与该 AC 判定的 Phase 不得为该条写 pass，下游不得替上游补签。承接 AC 未达成时，按 `docs/standard-workflow.md`「专业质量」的「带欠账完成」口径显著标注、逐条保留缺口；继续同任务修复与后续安全部分。
-10. 所有实施任务结束后，按计划执行一次最终聚合，逐 AC 消费沿途已产生的结论原件，对账实现、真实效果、测试和未覆盖项。末 Phase 保留完整端到端串演，只作复核与必要未闭环 case 补充，不得成为任何 AC 的首次结论产生点；首次结论仍按 spec 的 AC 正文归属各承接 Phase。默认只跑本任务范围内与本次改动相关的测试；判断不了影响面时用最小可证伪集合并记录未知影响面。全局重跑仅在改动对象是流程本身且局部无法证明时执行一次，事先说明范围与理由。没有新改动、失败或疑点时不重复运行。最终聚合不证明 review pass，也不替代独立审查。 最后 Phase 实际运行 `node tools/cli/run-checks.mjs --task-path <当前认证任务根>`，保存一份 stdout 原件供十环对账；环1–9取真实状态，环10在build-code记 `skipped`，stage-close后由原调用方补终态。exit 0 不证明步骤齐全，逐项读取报告的 `missing_steps`，不改 final-chain 原职责。
+10. 所有实施任务结束后，按计划执行一次最终聚合，逐 AC 消费沿途已产生的结论原件，对账实现、真实效果、测试和未覆盖项。末 Phase 保留完整端到端串演，只作复核与必要未闭环 case 补充，业务、实现与效果 AC 的首次结论仍按 spec 正文归属承接 Phase；仅需完整最终产物才能检查的 AC-BOUND-001/002 在最终边界首次独立判定，其余 AC 不得延期。默认只跑本任务范围内与本次改动相关的测试；判断不了影响面时用最小可证伪集合并记录未知影响面。全局重跑仅在改动对象是流程本身且局部无法证明时执行一次，事先说明范围与理由。没有新改动、失败或疑点时不重复运行。最终聚合不证明 review pass，也不替代独立审查。 最后 Phase 实际运行 `node tools/cli/run-checks.mjs --task-path <当前认证任务根>`，保存一份 stdout 原件供十环对账；环1–9取真实状态，环10在build-code记 `skipped`，stage-close后由原调用方补终态。exit 0 不证明步骤齐全，逐项读取报告的 `missing_steps`，不改 final-chain 原职责。
      对账由独立上下文实跑一次项目声明的会话用量命令，当场展示时间窗/分账/计数，不落派生文件；finding修复仅复验受影响file/case并说明理由。
 11. 用 spec-analyze 对照原始需求、当前材料、实现、测试、发现处置与用户可见结果。实施/事实问题在本阶段修，方向和作者材料仍交对应 owner。缺项明确写未启动、未执行、失败、不适用、unknown 或 unavailable，不用产物存在代替完成条件。
-12. 整个 stage 末由当前主会话按 `skills/stage-reflection/SKILL.md`「方法」「用户选择后的归口」「判断词表与完成检查」执行阶段收口，内部发布并读回交接，说明交付行为、实际测试/AC限制、原始发现与处置、风险及 verify-code 下一步。局部 Phase 摘要不触发 stage-end 或固定复盘。结束时按 spec 模板验收流程统一提醒每条 incomplete 的真实尝试 ref、阻塞条件、提供者与恢复条件；最终报告逐条列缺口，不宣称完成。
+12. 整个 stage 末由当前主会话按 `skills/stage-reflection/SKILL.md`「方法」「用户选择后的归口」「判断词表与完成检查」执行阶段收口，保存并读回最终报告，说明交付行为、实际测试/AC限制、原始发现与处置、风险及关闭方法下一步。局部 Phase 摘要不触发 stage-end 或固定复盘。结束时按 spec 模板验收流程统一提醒每条 incomplete 的真实尝试 ref、阻塞条件、提供者与恢复条件；最终报告逐条列缺口，不宣称完成。
     人读结论用达成／未达成（写明下一步）／退役；退役须有真实退出决定，不用模糊延期替代。
 
 阶段收口中的成本：执行 `skills/stage-reflection/SKILL.md`「方法」第 3 步的 measure-main-agent-cost 入口及完整来源、窗口、失败和删除前留账边界；本阶段只在整个 stage 末触发一次 `measure-main-agent-cost --record`，首笔带 `--start-ref` 指向真实开工事件；同一计量窗口不重复，不每 Phase 触发。Phase 收口尚看不到完整墙钟与等待，不能切碎窗口重复记成本。受控 old/new 比较只读复算原生会话，不追加账本；真实 stage 末成本与未闭环 AC 仍由原 owner 回核。
@@ -95,11 +95,11 @@ Phase 内的 Task 是 task graph，不是可任意跳过依赖的步骤表。选
 
 用户授权进入实施或选定方向与实施计划后，持续覆盖本task实施、验证、独立审查、修复及交付必要commit/push/merge；阶段切换/新会话/handoff不重置。直接执行，不再要日常确认/本地提交授权/技术验收确认/用户承担严重风险；不借此扩方向/范围。真实平台限制、方向无法解决或外部条件缺失据实报告，继续可执行部分，不加人工gate。
 
-一个 Phase 的实施、针对性测试、独立审查与 finding 修复全部完成后，在本 Phase 提交一次；审查在提交前进行。verify-code 结束时完成全部提交与合并，最终 close 仍只确认一次。
+一个 Phase 的实施、针对性测试、独立审查与 finding 修复全部完成后，在本 Phase 提交一次；审查在提交前进行。build-code 终末结束时完成全部提交与合并，最终 close 仍只确认一次。
 
 authorize只记录/消费已有授权。每次Git前用 `runtime/interface/git-authorize.mjs` 按真实原话/来源、动作/范围、分支/HEAD record/consume；build-code commit两步显式同传 `phase: "build-code"`（CLI `--phase build-code`），绑当前task/分支/整阶段，同阶段共用grant，既有consumed保实际HEAD/次数，grant不改。其它阶段、旧无phase、push/merge/pr严格匹配HEAD，变化须重核记录、不消费旧HEAD。仅最终close（归档/分支与worktree删除/交付清理）前展示实际结果、质量限制和范围，取得一次确认后按范围执行；持续授权不含整树丢弃、强推、任务外改动。
 
-三审查点是 build-plan 的 wh-review 合并、每 Phase 按风险选择执行者的独立代码审查、verify-code 终末外部 OCR 全审；文档建议仍按 wh-review 分工。review/test/history 是质量事实，缺失不能冒充完成，也不禁止同任务安全修复。实施者不自审自判质量。
+三审查点是 build-plan 的 wh-review 合并、每 Phase 按风险选择执行者的独立代码审查、build-code 终末外部 OCR 全审；文档建议仍按 wh-review 分工。review/test/history 是质量事实，缺失不能冒充完成，也不禁止同任务安全修复。实施者不自审自判质量。
 
 ## 使用技能与收口
 
@@ -125,7 +125,7 @@ authorize只记录/消费已有授权。每次Git前用 `runtime/interface/git-a
 
 ## 最后 Phase：终末承接
 
-复杂任务最后 Phase 使用本节覆盖方法8、10、12的终末执行：本 Phase 常规审查与整 stage 终末审查合为同一轮外部 OCR，不先 phase 再 terminal 双审；其它 Phase 原方法保持。最后 Phase 不为任何 AC 做首次判定，只对账。冻结仅固定审查对象，允许有效 finding 修复及定向复验，不重派正常审查。
+复杂任务最后 Phase 使用本节覆盖方法8、10、12的终末执行：本 Phase 常规审查与整 stage 终末审查合为同一轮外部 OCR，不先 phase 再 terminal 双审；其它 Phase 原方法保持。最后 Phase 对账沿途结论；仅 AC-BOUND-001/002 因依赖完整最终字节，在此作最终边界首次独立判定。冻结仅固定审查对象，允许有效 finding 修复及定向复验，不重派正常审查。
 
 1. 冻结实现
 2. spec-analyze
@@ -137,7 +137,7 @@ authorize只记录/消费已有授权。每次Git前用 `runtime/interface/git-a
 8. 最终 AC 对账和报告
 9. norm-sync/reflection/成本/页面
 
-第4段调用 stage=build-code、review_scope=terminal、subject_kind=worktree、phase_id=null；base 为任务起点提交，head 为冻结实现，审查整份交付 diff。路由 single_round；原 verify-code 调用兼容保留。每路原件/实际执行者/失败/覆盖限制分别保存；finding 回原实施会话，独立同源补充不冒异源。缺材料保 unknown/unavailable/incomplete，不作继续工作的许可证。
+第4段调用 stage=build-code、review_scope=terminal、subject_kind=worktree、phase_id=null；base 为任务起点提交，head 为冻结实现，审查整份交付 diff。路由 single_round；旧 verify-code 记录只读保留，当前调用只用终末身份。每路原件/实际执行者/失败/覆盖限制分别保存；finding 回原实施会话，独立同源补充不冒异源。缺材料保 unknown/unavailable/incomplete，不作继续工作的许可证。
 
 | 编号（原判据） | 并入位置 | 执行者 | 证据 | 验收 |
 | --- | --- | --- | --- | --- |
@@ -155,10 +155,50 @@ authorize只记录/消费已有授权。每次Git前用 `runtime/interface/git-a
 | RP-12 finding 处置（原判据：方法 5 与 7 逐条判断 finding，有效问题回原实施会话，无法解决列影响/证据/owner/选项，accepted_risk 需已有用户真实决定，不改写原 review） | 段 5 修 finding 并定向复验 | 主会话；修复回原实施会话 | finding 原文与处置表（fixed、rejected_invalid、accepted_risk、needs_human） | 每条有原文与处置；不改写原 review；严重问题不留给用户承担 |
 | RP-13 定向复验（原判据：方法 6 对新修复和真实疑点只做必要定向复验，先列 file/case 集合，记录实际 command/exit/raw，不重派第二次正常审查） | 段 5 修 finding 并定向复验 | 原实施会话修复，独立执行者复验 | 复验命令原件与恢复结果 | 只跑受影响集合；无改动或无疑点有说明；不重做全量上游 |
 | RP-14 UI/浏览器终验（原判据：方法 8 之后的 UI 段按专业源与设计源核对，按 isolated-browser-qa 消费页面、console 与 a11y；缺工具或入口记 unknown/unavailable） | 段 7 UI/浏览器终验 | 独立执行者（浏览器 QA） | 页面、console、a11y、截图与 not_observed 原因 | 非 UI 写集给 N/A 理由；缺工具/入口记 unavailable；不把未观察当视觉通过 |
-| RP-15 最终 AC 对账与报告（原判据：方法 4 末段完整串演只复核沿途结论并补必要未闭环 case、不新增全量重跑、不作任何 AC 首次判定点；方法 7 逐 AC 结果保留处置） | 段 8 最终 AC 对账和报告 | 主会话 | 逐 AC 结论表与未闭环 case 清单；十环报告消费记录 | 每条 AC 指向承接 Phase 的原始结论；缺口逐条列；不出现新的首判 |
+| RP-15 最终 AC 对账与报告（原判据：方法 4 末段完整串演只复核沿途结论并补必要未闭环 case、不新增全量重跑、不作任何 AC 首次判定点；方法 7 逐 AC 结果保留处置） | 段 8 最终 AC 对账和报告 | 主会话 | 逐 AC 结论表与未闭环 case 清单；十环报告消费记录 | 每条 AC 指向承接 Phase 的原始结论；缺口逐条列；仅 AC-BOUND-001/002 在最终边界首判，其余引用各 Phase 原首判 |
 | RP-16 收口与成本页面（原判据：方法 7 尾按 answer-as-page 刷新页面，环 1–9 真实结论、环 10 记 skipped；方法 8 按 stage-reflection 阶段收口、内部发布并读回最终报告；成本在 stage 末只记一次；收口前执行 norm-sync） | 段 9 norm-sync/reflection/成本/页面 | 主会话；独立上下文核成本读数 | 收口与最终报告读回件、成本读数、页面与同名侧车、norm-sync 回执 | 成本同窗口只记一次；环 10 为 skipped；norm-sync 有真实回执；缺口如实保留 |
 
 
 终末第8段由当前主会话经认证 task.appendRecord 保存不可变普通 final-report.md，以实际 ref 交回关闭 reader；同字节复用，不同字节沿现有递增命名保新原件。报告包含任务/材料/HEAD身份、逐 AC 档位与原件 ref、六项结论、未完成项的真实尝试/owner/恢复条件、终末审查原件和失败。功能验收记录、代码审查回执、独立人读功能判断分别引用；business_effect、semantic_test_adequacy、code_review 不互相推导。缺口不得写成完成，缺证据 ref 明列未知。
 
 本节覆盖旧步骤12的最后阶段输出：不再产出 stage-handoff，不引导进入 verify-code 下一阶段；最终报告承担人读关闭记录。第9段补充保存新报告原件，不覆写旧报告。成本只在整个 stage 末记一次，norm-sync/reflection 沿既有方法；关闭/PR后按实际结果刷新页面与侧车，交付前环10为 skipped。用户额外要求的人读续接指针不变为默认产品流程、机器门或新增 stage。
+
+### 测试充分性与检查可信度
+
+核断言/替身、缺RED与原件时，读[backend-testing「行为测试与证伪」](../../skills/backend-testing/SKILL.md#行为测试与证伪)及同文件「执行事实」，沿其TCR/冻结保护与失败分类执行。新增/扩展检查用同判据：合法pass→仅受控违规改变后目标fail→恢复同合法输入pass，核argv/cwd/raw、exit/signal/timeout及恢复字节；同字节复用原件。违规仍绿报具名遗漏case，恢复未通过incomplete；不以方法读回冒检查器接线。适用代码改动做受控行为变异（如取反新增条件），目标断言须fail再恢复，不拿字符串变异充数；无新增/扩展检查按真实diff写N/A，只免执行，仍消费完整正反输入。
+
+错在范围修：检查错时修检查本身或收窄其范围，不绕过检查、不在上下游加豁免。通过太易时先查观察方法：核断言、替身与夹具是否真能失败，再动实现。检查可信度的三值结论分为已验证/未验证/无法判断，不把未知写成通过；不替换 AC 的既有结果档位。同一修正复发时，把教训落为具名检查，先在有源真实历史错误上失败，再验证当前修复。
+
+依赖升级先读changelog，major另读migration notes；逐项或具理由关联小组升级，同一受影响行为前后验证。核直接/传递lockfile diff，包管理器生成、不手改；安装成功、缺notes/lockfile/前后行为不能当完成。无升级给实际diff依据，不凑依赖。
+
+逐项报告diff五类削弱的路径/来源/理由：阈值/严重级降低；新增.skip、删case/唯一结果断言；@ts-ignore/eslint-disable/istanbul ignore等静音；抛错stub/空catch/TODO代实现；无真实决定的新allow/exception。等价重构/收紧不误报，旧有源例外按原范围；exit0不盖无源削弱。
+
+读producer原报告、输入数/范围：exit0或ALL CHECKS PASSED不盖report-only漂移，零输入不证覆盖；exit2、null/缺件、未跑/环境失败保exit/signal/timeout、未达断言、owner/恢复条件，不写clean。历史target存在不证行为，step方法非命令，validator事实非自动阻断；合法advisory不当故障。不改工具退出语义/加Block或质量对象。
+
+### 终末独立原件的保存与公共 status 消费
+
+最终报告先保存生成时事实；AC-BOUND-002 的后置检查尚未发生时明确 pending。fresh 独立 reader 用 none 上下文读取该唯一报告、当前材料/实施字节、每 AC 原始结论、真实业务效果、测试/断言与执行回执、原 provider raw 和每条 finding 的独立修复复验。原报告不因后置检查重写，不为追验生产 report2；报告本身有实质错误时保 finding 并正常修新原件。原 AC 首判格式和旧原件不改。
+
+先产独立 raw JSON，最低事实沿当前 Phase 的 typed contract：task_id/stage、final_report、materials/implementation 的实际路径与 hash、acceptance 的完整 AC 分母和原件、business_effect/semantic_test_adequacy、原 review、finding_dispositions、boundary_checks。两维各列 covered_ac_ids、result、refs、coverage_limits 与 proofs；proofs 中 receipt/output 是同一次真实 capture 的原件引用，inputs 为实际源/输入路径和 hash，semantic 另给该真实命令消费的 test_sources 断言源路径/hash。exit0、任意文本、文件在场、空 findings 或 fixed 字符串均不代语义判断；语义归独立 raw，机器只核来源、身份、范围和字节链。
+
+caller 随后机械保存 provenance 封套，只含 task_id、stage、raw_ref 与 reader，不复制 raw 结论。reader.identity 是实际 agent thread，reader.source_ref 指已合法归档的公开绑定原件；绑定列 dispatch/final/delivery 三个 ref/hash。dispatch 原件列 task_id、stage=build-code、role=terminal-assessor、agent_thread_id、context_mode=none 与实际 implementation_authors，reader 不得属于实施作者。final/delivery 的 agent_thread_id 一致，public_text 与独立 raw 原始字节逐字一致；不依赖用户目录私有 session 或导出 analysis。独立 finding verifier 用 role=finding-verifier 的实际派发来源，结论指原 finding ID、原 review ref/hash、实际受影响路径、当前实现 hash 和执行 proof refs。来源未产生或不可证保持 unknown/incomplete，不伪造公开绑定。
+
+主会话通过现 run --action=execute --stage=build-code 的输入 terminal_assessment_ref:{ref,sha256} 保存封套引用；它与 phase_progress 输入互斥，同一 build-code-row 锁保原 cursor、evidence、review 和非空字段。原 public status --action=begin 只读计算；无新引用沿旧 readiness/quality，坏引用、坏 JSON/I/O 明确暴露。质量闭合只在独立原件、当前全写集和全部必要面严格相符时投影 pass，原 review 的 needs_revision/inconclusive 及失败、覆盖限制分列，不被改成通过。同字节审后 commit 不导致 stale；新增或变化字节缺独立 proof 不冒 current。status 不保存完成对象，也不成为修复、Git 或 close 许可证。
+
+页面 producer 仅调用同一个 public status，使用 manifest 身份、绝对 task-path 和认证 cwd，stageStatus 是内存 DTO。顶部、阶段栏、主对象视图显示同一有限结论和原件；Task 自己的交付与验收独立呈现。无新引用保持原页面投影，调用错误明确显示，不用十环 completed 猜终末 pass。
+
+首判来源与当前适用分开：acceptance 的原 refs 保其当时快照/版本与 immutable verdict，不将历史方法全文件 hash 强等当前。当前终末 raw 每条 current_applicability 写 basis 与 refs，说明原判据现在为何仍适用、已做哪些必要补充；当前 materials/implementation、真实修复范围与 proof 源字节才须对应当前。无关段落演进不抹原首判，真正功能规则改变而缺适用或独立补证仍 incomplete。删除实现路径以 deleted:true、sha256:null、base_sha256 保存已认证基线原字节与当前真实缺席事实，不伪造现存文件。
+
+有效 finding 的 fixed 须有实际 fix 与独立复验；rejected_invalid 须有同原 finding/review 的独立无效性解释和来源，不造修复。两者都保原发现字节，accepted_risk 不能由本投影自动推导。终末独立 reader 同次核修复可复用自己真实 terminal-assessor 的 pre-dispatch 身份作为 proof 来源；已验证公开 raw 必须在 finding_verification_attestations 中逐条列 finding_id 与准确 proof_ref:{ref,sha256}，不能只靠身份相同。不为同次判断另造一次 dispatch、审查或自引用 hash 循环。
+
+原 canonical provider 的 path-only raw/evidence_refs 仍保旧字节；fresh 独立 raw 用 provider_raw_refs 的 ref/sha256 明确所读每份原始字节，不能只证路径存在或忽略同 provider 的补充流。status 返回逐 AC 已核结果、原件与当前适用说明供页面按显式 ac_ids/工作包映射展示；汇总 pass 不填未关联对象，已关联对象也不永久停留旧卡未判定。
+
+AC-BOUND-002 无环顺序：唯一 final-report 先保生成时 pending → fresh reader 实读该报告与本任务额外 continuation 精确字节，先保存本来必需的 BOUND002 独立首判原件（不回指未来 assessment）→ 同一 reader 的整体 raw 在 acceptance 引用该原件 → caller 归档实际公开派发/child final/parent delivery，再机械封套 → run 保存引用，status 读回。只有 AC-BOUND-001/002 允许在最终边界首判，业务 AC 不借后置检查延期或补签。
+
+BOUND001 首判可在报告前形成，不要求它回填未来 final-report hash；BOUND002 后置原件必须指实际 final_report，额外 continuation 用 continuation:{ref,sha256} 指定并校字节。两项都保真实 typed verdict 与当前适用说明，不要求补签旧首判。
+
+不同 finding verifier 的 proof 原件保持不变。独立 raw 在 finding_verification_completions 逐项列 proof_ref、reader_identity、source_ref；外侧 source_ref 指 dispatch/final/delivery 的 ref/hash，dispatch 必须与 proof.reader.source_ref 的实际派发一致。公开 final/delivery 的同一 public_text 必须是该 proof 精确原字节，或真实产物回执 JSON（task_id、stage、agent_thread_id、artifact_ref 精确指该 proof ref/hash）。只有 dispatch 不证明实际复验完成；外侧绑定由 raw 引用，proof 不回指后产绑定，避免自 hash 循环。
+
+原审查 inconclusive、逐 provider 未读/undetermined 材料或失败路均保原件和限制。独立 raw 的 review_coverage_closure 须明确 result、review_ref、basis、covered_gaps 和 refs；covered_gaps 逐项对应 review:<原结论>、coverage:<provider>:<原材料路径>、provider:<原失败 provider ID> 的真实缺口分母，不漏项、不加异源项。refs 必须绑定当前业务与语义 proof 已实际捕获并核验的 receipts；独立 reader 说明这些原件为何闭合对应范围，不能用笼统 pass、exit0 或无关文本替代。缺闭合时整体 incomplete，原 review 结论及限制不变。
+
+既有 JSON 首判按同对象精确 AC 读 id/acceptance_criterion_id/criterion_id/ac 或 task 的明确 AC 分词，typed 结果读 result/conclusion/tier/independent_status；同对象显式身份或结果冲突按不一致保留，不把顶层 pass 扩散到子 AC，也不解释 Markdown 为机器 verdict。历史原件不重写。

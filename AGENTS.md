@@ -11,7 +11,7 @@
 ## 给 agent 的规则
 
 - 改动须符合宪法，逐条对照 [constitution-checklist.md](constitution-checklist.md)。
-- 已授权 build-code/verify-code 自动实施、验证、审查、修复及必要 Git 交付，不重复日常确认；动作前读 [标准工作方法“当前路线”](docs/standard-workflow.md#当前路线) 的持续授权、record/consume 与 HEAD 条件，最终 close 依其唯一范围确认和安全收口边界；无法修复/验证的部分保真，不自动接受严重风险。
+- 已授权 build-code 自动实施、验证、审查、修复及必要 Git 交付，不重复日常确认；动作前读 [标准工作方法“当前路线”](docs/standard-workflow.md#当前路线) 的持续授权、record/consume 与 HEAD 条件，最终 close 依其唯一范围确认和安全收口边界；无法修复/验证的部分保真，不自动接受严重风险。
 - 重活交子代理，主上下文只收摘要。
 - 全仓 grep、测试/RED/GREEN、多文件对标、反向引用扫描默认由子代理执行，主上下文只收路径、exit_code、结论清单；一两行可讲清的微动作除外。
 - 技能可独立调用、搬运，不绑定单一宿主。
@@ -44,7 +44,7 @@
 - 例外只有用户或 CI 守卫明确要求；例外命令必须在执行证据中写清原因和范围。
 - 依据：[docs/standard-workflow.md](docs/standard-workflow.md) 的 build-code 测试与质量段；本条是执行纪律，不是新的 stage、gate 或质量结论。
 
-核测试/检查读数时读 `workflows/verify-code/SKILL.md`「测试充分性与检查可信度」；设计oracle/替身或分类候选时读 `skills/backend-testing/SKILL.md`「行为测试与证伪」「执行事实」。
+核测试/检查读数时读 `workflows/build-code/SKILL.md#最后-phase终末承接`「测试充分性与检查可信度」；设计oracle/替身或分类候选时读 `skills/backend-testing/SKILL.md`「行为测试与证伪」「执行事实」。
 
 ### 证据硬规则
 
@@ -88,17 +88,17 @@
 
 | 类别 | 实质来源与用途 | 时机／owner与consumer |
 | --- | --- | --- |
-| 设计 | [原八类职责](skills/project-norm-init/SKILL.md#规范职责)、[来源准备](skills/design-source-readiness/SKILL.md)、[页面组件词汇](skills/answer-as-page/SKILL.md#组件词汇与取舍)及[驾驶舱合同](skills/answer-as-page/SKILL.md#当前任务驾驶舱)；结构样式归[原模板](skills/answer-as-page/templates/overview-template.html) | 出页/设计准备；原设计内容owner；make-decision/verify-code页面caller及render-answer-page模板reader |
+| 设计 | [原八类职责](skills/project-norm-init/SKILL.md#规范职责)、[来源准备](skills/design-source-readiness/SKILL.md)、[页面组件词汇](skills/answer-as-page/SKILL.md#组件词汇与取舍)及[驾驶舱合同](skills/answer-as-page/SKILL.md#当前任务驾驶舱)；结构样式归[原模板](skills/answer-as-page/templates/overview-template.html) | 出页/设计准备；原设计内容owner；make-decision/build-code 终末页面caller及render-answer-page模板reader |
 | 前端 | [组件质量](skills/frontend-component-quality/SKILL.md)、[前端测试](skills/frontend-testing/SKILL.md)、[页面DATA与输出合同](skills/answer-as-page/SKILL.md#依赖与边界)、[回灌安全](skills/answer-as-page/SKILL.md#回灌安全) | 交互准备/验收；原方法/renderer owner；阶段caller与render-answer-page.mjs；导航不改HTML/renderer |
 | 后端 | [入口](specs/backend/README.md) → [架构](specs/backend/architecture.md) | 模块/依赖/存储选择前；运行时架构owner；实现与审查者 |
 | 接口 | [入口](specs/api/README.md) → [合同](specs/api/contract.md) | public调用/校验/错误选择前；原public owner；CLI/task调用者 |
-| 验收 | [入口](specs/acceptance/README.md) → [规范](specs/acceptance/acceptance.md) | oracle/用例准备前；task及质量owner；独立测试/OCR/verify-code |
+| 验收 | [入口](specs/acceptance/README.md) → [规范](specs/acceptance/acceptance.md) | oracle/用例准备前；task及质量owner；独立测试/OCR/build-code 终末 |
 
 ## 当前目录职责
 
 - `runtime/`：生产运行时；按 `interface/`、`stage/`、`task/`、`evidence/`、`review/`、`adapters/`、`distribution/`、`schemas/` 分区。
 - `tools/cli/`：人工或 CI 调用的命令行工具，不承载运行时状态。
-- `skills/`：可搬运技能；`workflows/`：五阶段入口；`config/`：配置；`tests/`：跨模块和集成测试。
+- `skills/`：可搬运技能；`workflows/`：三阶段入口；`config/`：配置；`tests/`：跨模块和集成测试。
 - `core/`、`scripts/`、顶层 `schemas/`：历史兼容区。未列入 move-map 的文件保持原位，未经证明不得新增能力。
 - `docs/architecture/move-map.json` 是本次目录迁移的唯一事实；新增文件必须先登记职责和消费者。
 - `node_modules/` 仅为本地/CI 安装产物，不提交、不作为运行时来源。
@@ -120,7 +120,7 @@
 
 ## vNext 永久实施边界
 
-- post 的 `make-decision` 允许写读 `decision-log.md`、`spec.md`、纯指针 `phases/index.md` 与索引内独立 Phase；这是对 N6「只许 decision-log」材料边界的显式覆盖，用于轻档在同一阶段完成规格与实施，理由与影响见 [ADR-0051](docs/adr/0051-light-tasks-complete-inside-make-decision.md)。允许集合不改变复杂流程的必需材料或阶段身份。`build-plan` 写承载全局实现设计的 `spec.md`、独立 `phases/P<n>.md` 和纯指针 `phases/index.md`，不双写 `plan.md/tasks.md`；`build-code`、`verify-code` 消费当前材料和 task facts。pre/history 仍按 `decision-log.md/spec.md/plan.md/tasks.md` 旧四材料读取。材料形态变化不新增 stage、gate 或第二套进度权威。
+- post 的 `make-decision` 允许写读 `decision-log.md`、`spec.md`、纯指针 `phases/index.md` 与索引内独立 Phase；这是对 N6「只许 decision-log」材料边界的显式覆盖，用于轻档在同一阶段完成规格与实施，理由与影响见 [ADR-0051](docs/adr/0051-light-tasks-complete-inside-make-decision.md)。允许集合不改变复杂流程的必需材料或阶段身份。`build-plan` 写承载全局实现设计的 `spec.md`、独立 `phases/P<n>.md` 和纯指针 `phases/index.md`，不双写 `plan.md/tasks.md`；`build-code` 消费当前材料和 task facts。pre/history 仍按 `decision-log.md/spec.md/plan.md/tasks.md` 旧四材料读取。材料形态变化不新增 stage、gate 或第二套进度权威。
 - vNext task 目录只保留 `task.json`、`facts.jsonl`、`quality/reviews/`、`quality/tests/`、`index.json` 及必要的 `quality/evidence/`；C6 规定移除 active `quality/verify.v1` object graph、`product_release` 与 `status_groups`，不创建旧 accepted、run、receipt、review-flow 或独立进度对象。`facts.jsonl` 现有 build-code stage row 可原位保存一个当前 `phase_progress` 游标；现有 `run` 写入、`status` 读取。游标只定位续跑位置，不证明完成、不阻止继续，也不保存历史序列；材料版本变化时读为 stale，代码快照变化本身不使它 stale。`specs/archive/**`、`docs/research/**` 只读保留。
 - 禁止 successor/predecessor、selector、snapshot lineage、phase 历史 trace、historical correction、replacement review、reopen、rebind、continuation、recovery、checkpoint permit；旧记录只读，不作为新 task writer。唯一进度例外是上述单行当前游标，不另建 projection 或账本。
 - review、test、evidence、history、inventory、complexity 都是事实，不是继续工作的许可证；`unknown`、`unavailable`、`incomplete` 不能阻止同 task 修复，但缺失质量事实不能被宣称为完成。

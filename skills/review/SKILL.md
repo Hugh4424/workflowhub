@@ -43,7 +43,7 @@ For repeated failure, identify the shared assumption, a packet fact that could f
 
 For architectural changes, investigate Shallow module, Information leakage, Temporal decomposition, Pass-through method, Split ownership, Two ways to do one task, Importable internals and Hand-synced list. For each retain evidence, no evidence or inapplicability; labels are leads, not findings or grounds to reject approved Phases. Compare ownership/writers, wire exposure, change surface and failure preservation of structurally different alternatives. Renames/identical wrappers do not qualify. Source proves no opportunity; missing source means unknown. Reuse this task's one architecture opportunity; add no interface/review round.
 
-For tests/checks/escalation, host supplies the complete `workflows/verify-code/SKILL.md`「测试充分性与检查可信度」. Apply its positive/negative inputs; missing text is missing source, not permission to leave the packet.
+For tests/checks/escalation, host supplies the complete `workflows/build-code/SKILL.md#最后-phase终末承接`「测试充分性与检查可信度」. Apply its positive/negative inputs; missing text is missing source, not permission to leave the packet.
 
 ## Evidence handling
 
@@ -65,4 +65,4 @@ Return exactly one JSON object: `{ "findings": [...] }`. Use packet paths/true l
 
 ## 同仓方法依赖
 
-`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md`、`skills/spec-specify/SKILL.md`；按上述条件提供可读原件。
+`workflows/build-code/SKILL.md`、`workflows/build-code/SKILL.md#最后-phase终末承接`、`skills/spec-specify/SKILL.md`；按上述条件提供可读原件。

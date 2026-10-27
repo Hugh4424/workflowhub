@@ -238,7 +238,8 @@ function buildDefaultPrDescription(c, { baseline, source, head, base }) {
   const spec = readFile(c.worktree, `specs/${c.manifest.task_id}/spec.md`).toString("utf8");
   if (!spec.trim()) throw failure("PR_DESCRIPTION_INCOMPLETE", "task spec is empty; a source-defined PR description is unavailable");
   const titles = git(c.worktree, ["log", "--format=%s", `${baseline}..${source.head}`]).split("\n").filter(Boolean);
-  const originalTitle = titles[0] ?? `Deliver ${c.manifest.task_id}`;
+  const sourceTitle = titles[0] ?? `Deliver ${c.manifest.task_id}`;
+  const originalTitle = /^(feat|fix|docs|test|chore|refactor)\([^()\s]+\): \S/.test(sourceTitle) ? sourceTitle : `chore(${c.manifest.task_id}): ${sourceTitle}`;
   const title = Buffer.byteLength(originalTitle, "utf8") <= PR_TITLE_BYTES ? originalTitle : `${utf8Prefix(originalTitle, PR_TITLE_BYTES - 3)}...`;
   const changes = git(c.worktree, ["diff", "--no-ext-diff", "--no-textconv", "--name-status", baseline, "--"]);
   const patch = git(c.worktree, ["diff", "--no-ext-diff", "--no-textconv", "--unified=3", baseline, "--"]);
@@ -252,7 +253,7 @@ function buildDefaultPrDescription(c, { baseline, source, head, base }) {
   const fullSource = `\nFull source: task specs/${c.manifest.task_id}/spec.md; tests and failures in the existing task facts.jsonl evidence references.\nExact committed diff: git diff --no-ext-diff --no-textconv --binary ${baseline} ${source.head} --\n${source.changes.length ? `Pending source at preparation (not a committed snapshot): git diff --no-ext-diff --no-textconv --binary ${baseline} --\nPending paths are declared in this displayed plan; untracked bytes require those original paths.\n` : ""}Previews below are source excerpts, not complete functional acceptance.\n`;
   const parts = [summary, titles.map(value => `- ${value}`).join("\n"), before || "unavailable — no removed text in the actual diff",
     after || "unavailable — no added text in the actual diff", evidence, pending, changes || "unavailable — no tracked changes against the actual base"];
-  const render = values => `## Summary\n${values[0]}\nTask: ${c.manifest.task_id}.\n${values[1]}\n\n## Evidence\nBefore (${baseline}):\n${values[2]}\nAfter (${source.head} plus current worktree):\n${values[3]}\n${values[4]}${values[5]}\n${fullSource}\n## Merge Danger\nDoor: publish ${head} and open a PR into ${base} before the displayed merge/archive/push/owned-cleanup actions; each irreversible action still requires native authorization.\nBlast Radius: actual changed paths below; runtime/remote effects outside this diff remain unverified.\n${values[6]}\n`;
+  const render = values => `## Summary\n${values[0]}\nTask: ${c.manifest.task_id}.\n${values[1]}\n\n## Evidence\nBefore (${baseline}):\n${values[2]}\nAfter (${source.head} plus current worktree):\n${values[3]}\n${values[4]}${values[5]}\n${fullSource}\n## Merge Danger\nDoor: two-way for source commits by revert; one-way for remote publication and owned cleanup; publish ${head} and open a PR into ${base} before the displayed merge/archive/push/owned-cleanup actions; each irreversible action still requires native authorization.\nBlast Radius: actual changed paths below; runtime/remote effects outside this diff remain unverified.\n${values[6]}\n`;
   let body = render(parts);
   if (Buffer.byteLength(body, "utf8") > PR_BODY_BYTES) {
     const fixed = Buffer.byteLength(render(parts.map(() => "")), "utf8");
@@ -264,12 +265,21 @@ function buildDefaultPrDescription(c, { baseline, source, head, base }) {
   return { title, body };
 }
 function validatePrTitle(title) {
-  if (typeof title !== "string" || !title.trim()) throw failure("PR_DESCRIPTION_INCOMPLETE", "PR title must be nonempty text");
+  if (typeof title !== "string" || !/^(feat|fix|docs|test|chore|refactor)\([^()\s]+\): \S[^\r\n]*$/.test(title) || /^(?:update stuff|changes|misc)[.! ]*$/i.test(title.split(": ").slice(1).join(": ").trim())) throw failure("PR_DESCRIPTION_INCOMPLETE", "PR title requires type(scope): concrete domain summary");
   if (Buffer.byteLength(title, "utf8") > PR_TITLE_BYTES) throw failure("PR_DESCRIPTION_TOO_LARGE", "PR title exceeds the conservative 255 UTF-8 byte policy; supply a shorter title");
 }
 function validatePrDescription(body) {
   if (typeof body === "string" && Buffer.byteLength(body, "utf8") > PR_BODY_BYTES) throw failure("PR_DESCRIPTION_TOO_LARGE", "PR body exceeds the conservative 65535 UTF-8 byte policy; supply a shorter description");
-  if (typeof body !== "string" || !/^[ \t]*(?:\*\*)?Door(?:\*\*)?[ \t]*:[ \t]*[^ \t\r\n][^\r\n]*$/mi.test(body) || !/^[ \t]*(?:\*\*)?Blast Radius(?:\*\*)?[ \t]*:[ \t]*[^ \t\r\n][^\r\n]*$/mi.test(body)) throw failure("PR_DESCRIPTION_INCOMPLETE", "explicit PR body requires separate nonempty Door and Blast Radius fields");
+  const incomplete=()=>{throw failure("PR_DESCRIPTION_INCOMPLETE", "PR body requires Summary, Before/After Evidence and Merge Danger with separate Door and Blast Radius fields");};
+  if(typeof body!=="string")incomplete();
+  const headings=[...body.matchAll(/^## (Summary|Evidence|Merge Danger)[ \t]*$/gm)];
+  if(headings.map(m=>m[1]).join("|")!=="Summary|Evidence|Merge Danger")incomplete();
+  const sections=headings.map((m,i)=>body.slice(m.index+m[0].length,headings[i+1]?.index??body.length).trim());
+  if(sections.some(text=>!text))incomplete();
+  const before=/^[ \t]*(?:- )?Before(?:[ \t]*\([^\r\n]*\))?[ \t]*:/m.exec(sections[1]),after=/^[ \t]*(?:- )?After(?:[ \t]*\([^\r\n]*\))?[ \t]*:/m.exec(sections[1]);
+  if(!before||!after||before.index>=after.index||!sections[1].slice(before.index+before[0].length,after.index).trim()||!sections[1].slice(after.index+after[0].length).trim())incomplete();
+  if(!/^[ \t]*(?:\*\*)?Door(?:\*\*)?[ \t]*:[ \t]*(?:one-way|two-way)\b[^\r\n]*$/mi.test(sections[2])||!/^[ \t]*(?:\*\*)?Blast Radius(?:\*\*)?[ \t]*:[ \t]*[^ \t\r\n][^\r\n]*$/mi.test(sections[2]))incomplete();
+  if(/^[ \t]*(?:\*\*)?(?:Door|Blast Radius)(?:\*\*)?[ \t]*:/mi.test(sections[0]+"\n"+sections[1]))incomplete();
 }
 function preparePr(c, input, fields) {
   if (input !== undefined && (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).some(key => !["enabled", "title", "body"].includes(key))

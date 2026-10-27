@@ -16,7 +16,7 @@ post 任务的当前正文必须写入认证 worktree 的 `specs/<task-id>/decis
 
 ## 写作步骤
 
-写 decision-log 或改写本方法前，先读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一正文；保原步骤、条件、权限、失败强度和受保护字面。服务于材料作者及后续 build-plan/build-code/verify-code 读者，缺源如实 `unavailable`，不复制规范。
+写 decision-log 或改写本方法前，先读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一正文；保原步骤、条件、权限、失败强度和受保护字面。服务于材料作者及后续 build-plan/build-code 读者，缺源如实 `unavailable`，不复制规范。
 
 1. 读取原始需求、已确认答复、约束、调研/Grill/独立发现的真实来源。记录任务类型（规划任务/普通任务）；缺失或矛盾写 unknown，不按路径或旧任务猜类型。
 2. 选择最小需求框架：功能用背景→问题→目标→方案→验收→扩展；研究用问题→论断→证据→裁决。混合任务只在既有节点挂研究子项，不另建需求账本。
