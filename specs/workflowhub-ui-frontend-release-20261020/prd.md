@@ -579,6 +579,168 @@ C03依赖C04的条件分支只在确需新提炼输出时启用；已有可核�
 
 旧E1～E6/E9/E10的无限像素完美、新stage/gate/第五材料、整族vendor、大实验平台、n=1统计显著、重复母方向访谈、相对改善冒绝对达标、擅改设计等排除继续有效。E7的P1失败全后续暂停已退出；E8不采用旧Board/Vite，仍两页Next，源码比较按U010。旧ADR0024不新增，术语及规范职责仍完整承接。
 
+### 外部引用逐项台账
+
+本节是计划台账，记录每张卡引什么与当前落点；来源、版本、许可唯一读 `skills/catalog.yaml`。本节按原引用行计数为①8、②23、③23、④66，共120行；独名118。②第22行的三个原名合为一个概念行，第23行保留“等”；跨组重复保留。原件标称124与实列差异回本任务 `quality/evidence/research/2026-10-27-external-citation-inventory.md`「计数缺陷」，不补造缺名。
+
+台账中的 catalog 文件链接均可回读：具名记录只表示该范围的登记；“未登记”明确表示文件中没有该项记录，链接不代表已采用。落点“拟／未取得”不表示文件或章节已存在。四项 C03 派生参考登记在catalog现有 capability_decisions 分区，以 absorbed 表示概念已写进P6真实方法；不新增四个生产技能，也不表示完整外部能力可用。
+
+#### ① 整包搬迁（8行）
+
+| 稳定ID | 所属卡 | 能力原名 | 引用方式 | 落点（文件＋稳定节） | owner | 现状 | catalog指针 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| C03-REF-I-01 | C06（未立项） | web-design-guidelines | 条件采用完整包；未引入 | 拟 skills/external/<能力名>/；目录未形成，稳定节未取得 | C06 owner | 完整包未落地；8包合计0/8 | [catalog](../../skills/catalog.yaml)（完整包未登记） |
+| C03-REF-I-02 | C06（未立项） | better-ui | 条件采用完整包；未引入 | 拟 skills/external/<能力名>/；目录未形成，稳定节未取得 | C06 owner | 完整包未落地；8包合计0/8；C03概念已落P6，非整包 | [catalog](../../skills/catalog.yaml)（capability_decisions[name=c03-external-better-ui]；仅C03派生参考，完整包未登记） |
+| C03-REF-I-03 | C06（未立项） | animate | 条件采用完整包；未引入 | 拟 skills/external/<能力名>/；目录未形成，稳定节未取得 | C06 owner | 完整包未落地；8包合计0/8 | [catalog](../../skills/catalog.yaml)（完整包未登记） |
+| C03-REF-I-04 | C06（未立项） | review-animations | 条件采用完整包；未引入 | 拟 skills/external/<能力名>/；目录未形成，稳定节未取得 | C06 owner | 完整包未落地；8包合计0/8 | [catalog](../../skills/catalog.yaml)（完整包未登记） |
+| C03-REF-I-05 | C06（未立项） | iterate-until-verified | 条件采用完整包；未引入 | 拟 skills/external/<能力名>/；目录未形成，稳定节未取得 | C06 owner | 完整包未落地；8包合计0/8 | [catalog](../../skills/catalog.yaml)（完整包未登记） |
+| C03-REF-I-06 | C06（未立项） | landing-page | 条件采用完整包；未引入 | 拟 skills/external/<能力名>/；目录未形成，稳定节未取得 | C06 owner | 完整包未落地；8包合计0/8 | [catalog](../../skills/catalog.yaml)（完整包未登记） |
+| C03-REF-I-07 | C06（未立项） | vercel-react-view-transitions | 条件采用完整包；未引入 | 拟 skills/external/<能力名>/；目录未形成，稳定节未取得 | C06 owner | 完整包未落地；8包合计0/8 | [catalog](../../skills/catalog.yaml)（完整包未登记） |
+| C03-REF-I-08 | C06（未立项） | vercel-react-best-practices（ADR-0016 既定，不计入 124） | 条件采用完整包；未引入 | 拟 skills/external/<能力名>/；目录未形成，稳定节未取得 | C06 owner | 完整包未落地；8包合计0/8；21行派生摘要已在，不能替完整源 | [catalog](../../skills/catalog.yaml)（skills[name=frontend-component-quality]仅派生摘要；完整包未登记） |
+
+#### ② 概念并入（23行）
+
+| 稳定ID | 所属卡 | 能力原名 | 引用方式 | 落点（文件＋稳定节） | owner | 现状 | catalog指针 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| C03-REF-II-01 | C05 | impeccable | 概念并入（原规划）；未整体并入 | 原拟宿主 ui-visual-fidelity；稳定节未取得 | C05 owner | 宿主缺失；概念并入未证实 | [catalog](../../skills/catalog.yaml)（该概念项未登记） |
+| C03-REF-II-02 | C03 | better-accessibility | 只借本次明确概念；不搬整包 | skills/frontend-component-quality/SKILL.md — ### 两条链资产检查（C03） | C03 owner | P6原创资产段已落地；其余宿主并入未完成 | [catalog](../../skills/catalog.yaml)（capability_decisions[name=c03-external-better-accessibility]；仅C03派生参考，其余宿主并入未完成） |
+| C03-REF-II-03 | C03／C07 | interface-review | 只借本次明确概念；不搬整包 | skills/frontend-component-quality/SKILL.md — ### 两条链资产检查（C03） | C03 owner；C07仅按需消费 | P6原创资产段已落地；其余宿主并入未完成 | [catalog](../../skills/catalog.yaml)（capability_decisions[name=c03-external-interface-review]；仅C03派生参考，其余宿主并入未完成） |
+| C03-REF-II-04 | C05 | design-first-ui-prompting | 概念并入（原规划）；未整体并入 | 原拟宿主 ui-project-init；稳定节未取得 | C05 owner | 宿主缺失；概念并入未证实 | [catalog](../../skills/catalog.yaml)（该概念项未登记） |
+| C03-REF-II-05 | C03 | vercel-composition-patterns | 只借本次明确概念；不搬整包 | skills/frontend-component-quality/SKILL.md — ### 两条链资产检查（C03） | C03 owner | P6原创资产段已落地；其余宿主并入未完成 | [catalog](../../skills/catalog.yaml)（capability_decisions[name=c03-external-vercel-composition-patterns]；仅C03派生参考，其余宿主并入未完成） |
+| C03-REF-II-06 | C05／C06（C06未立项） | animation-vocabulary | 概念并入（原规划）；未整体并入 | 原拟宿主 animate（不独立）；稳定节未取得 | C05 owner | 宿主缺失（归①）；概念并入未证实 | [catalog](../../skills/catalog.yaml)（该概念项未登记） |
+| C03-REF-II-07 | 无承接卡＋建议 C06 owner | emil-design-eng | 概念并入（原规划）；未整体并入 | 原拟宿主 frontend-component-quality／animate；稳定节未取得 | 建议 C06 owner | 宿主存在／缺失；概念并入未证实 | [catalog](../../skills/catalog.yaml)（该概念项未登记） |
+| C03-REF-II-08 | 无承接卡＋建议 C06 owner | animation-systems | 概念并入（原规划）；未整体并入 | 原拟宿主 frontend-component-quality；稳定节未取得 | 建议 C06 owner | 宿主存在；概念并入未证实 | [catalog](../../skills/catalog.yaml)（该概念项未登记） |
+| C03-REF-II-09 | C05 | better-colors | 概念并入（原规划）；未整体并入 | 原拟宿主 ui-project-init（Design.md 模板）；稳定节未取得 | C05 owner | 宿主缺失；概念并入未证实 | [catalog](../../skills/catalog.yaml)（该概念项未登记） |
+| C03-REF-II-10 | C05 | better-typography | 概念并入（原规划）；未整体并入 | 原拟宿主 ui-project-init；稳定节未取得 | C05 owner | 宿主缺失；概念并入未证实 | [catalog](../../skills/catalog.yaml)（该概念项未登记） |
+| C03-REF-II-11 | C05 | better-layout | 概念并入（原规划）；未整体并入 | 原拟宿主 ui-project-init＋frontend-testing；稳定节未取得 | C05 owner | 宿主缺失／存在；概念并入未证实 | [catalog](../../skills/catalog.yaml)（该概念项未登记） |
+| C03-REF-II-12 | 无承接卡＋建议 C06 owner | tailwind-design-system | 概念并入（原规划）；未整体并入 | 原拟宿主 ui-project-init；稳定节未取得 | 建议 C06 owner | 宿主缺失；概念并入未证实 | [catalog](../../skills/catalog.yaml)（该概念项未登记） |
+| C03-REF-II-13 | 无承接卡＋建议 C06 owner | tailwindcss | 概念并入（原规划）；未整体并入 | 原拟宿主 ui-project-init；稳定节未取得 | 建议 C06 owner | 宿主缺失；概念并入未证实 | [catalog](../../skills/catalog.yaml)（该概念项未登记） |
+| C03-REF-II-14 | 无承接卡＋建议 C06 owner | better-interface | 概念并入（原规划）；未整体并入 | 原拟宿主 frontend-component-quality／wh-review；稳定节未取得 | 建议 C06 owner | 宿主存在；概念并入未证实 | [catalog](../../skills/catalog.yaml)（该概念项未登记） |
+| C03-REF-II-15 | 无承接卡＋建议 C06 owner | better-writing | 概念并入（原规划）；未整体并入 | 原拟宿主 frontend-component-quality＋ui-project-init；稳定节未取得 | 建议 C06 owner | 宿主存在／缺失；概念并入未证实 | [catalog](../../skills/catalog.yaml)（该概念项未登记） |
+| C03-REF-II-16 | 无承接卡＋建议 C06 owner | 主题组共性（概念行，非技能） | 概念并入（原规划）；未整体并入 | 原拟宿主 ui-project-init；稳定节未取得 | 建议 C06 owner | 宿主缺失；概念并入未证实 | [catalog](../../skills/catalog.yaml)（该概念项未登记） |
+| C03-REF-II-17 | 无承接卡＋建议 C06 owner | webgl-landing-steering | 概念并入（原规划）；未整体并入 | 原拟宿主 frontend-prototype-render；稳定节未取得 | 建议 C06 owner | 宿主存在；概念并入未证实 | [catalog](../../skills/catalog.yaml)（该概念项未登记） |
+| C03-REF-II-18 | 无承接卡＋建议 C06 owner | add-shader-cursor-trail | 概念并入（原规划）；未整体并入 | 原拟宿主 frontend-component-quality；稳定节未取得 | 建议 C06 owner | 宿主存在（与④重复）；概念并入未证实 | [catalog](../../skills/catalog.yaml)（该概念项未登记） |
+| C03-REF-II-19 | 无承接卡＋建议 C06 owner | beam-glow-states | 概念并入（原规划）；未整体并入 | 原拟宿主 frontend-component-quality；稳定节未取得 | 建议 C06 owner | 宿主存在（③不计）；概念并入未证实 | [catalog](../../skills/catalog.yaml)（该概念项未登记） |
+| C03-REF-II-20 | 无承接卡＋建议 C06 owner | optimize-web-animations | 概念并入（原规划）；未整体并入 | 原拟宿主 isolated-browser-qa；稳定节未取得 | 建议 C06 owner | 宿主存在；概念并入未证实 | [catalog](../../skills/catalog.yaml)（该概念项未登记） |
+| C03-REF-II-21 | 无承接卡＋建议 C06 owner | stitched-full-page-capture | 概念并入（原规划）；未整体并入 | 原拟宿主 isolated-browser-qa；稳定节未取得 | 建议 C06 owner | 宿主存在；概念并入未证实 | [catalog](../../skills/catalog.yaml)（该概念项未登记） |
+| C03-REF-II-22 | 无承接卡＋建议 C06 owner | nested-container-frames／solar-duotone-bold／number-details | 概念并入（原规划）；未整体并入 | 原拟宿主 ui-project-init；稳定节未取得 | 建议 C06 owner | 宿主缺失；概念并入未证实 | [catalog](../../skills/catalog.yaml)（该概念项未登记） |
+| C03-REF-II-23 | 无承接卡＋建议 C06 owner | pointer-trail-emitter 等 | 概念并入（原规划）；未整体并入 | 原拟宿主 技能写作规范（无对应目录）；稳定节未取得 | 建议 C06 owner | 宿主无宿主（与④重复）；概念并入未证实 | [catalog](../../skills/catalog.yaml)（该概念项未登记） |
+
+#### ③ 辅助参考（23行）
+
+| 稳定ID | 所属卡 | 能力原名 | 引用方式 | 落点（文件＋稳定节） | owner | 现状 | catalog指针 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| C03-REF-III-01 | 无承接卡＋建议 C05 owner | threejs | 辅助参考；明确专项需要时再判断 | 未取得（宿主与稳定节待原owner确认） | 建议 C05 owner（专项采用者） | 仅参考名单；实际采用未取得；不进默认加载链 | [catalog](../../skills/catalog.yaml)（该参考项未登记） |
+| C03-REF-III-02 | 无承接卡＋建议 C05 owner | threejs-animation | 辅助参考；明确专项需要时再判断 | 未取得（宿主与稳定节待原owner确认） | 建议 C05 owner（专项采用者） | 仅参考名单；实际采用未取得；不进默认加载链 | [catalog](../../skills/catalog.yaml)（该参考项未登记） |
+| C03-REF-III-03 | 无承接卡＋建议 C05 owner | globe-gl | 辅助参考；明确专项需要时再判断 | 未取得（宿主与稳定节待原owner确认） | 建议 C05 owner（专项采用者） | 仅参考名单；实际采用未取得；不进默认加载链 | [catalog](../../skills/catalog.yaml)（该参考项未登记） |
+| C03-REF-III-04 | 无承接卡＋建议 C05 owner | css-alpha-masking | 辅助参考；明确专项需要时再判断 | 未取得（宿主与稳定节待原owner确认） | 建议 C05 owner（专项采用者） | 仅参考名单；实际采用未取得；不进默认加载链 | [catalog](../../skills/catalog.yaml)（该参考项未登记） |
+| C03-REF-III-05 | 无承接卡＋建议 C05 owner | css-border-gradient | 辅助参考；明确专项需要时再判断 | 未取得（宿主与稳定节待原owner确认） | 建议 C05 owner（专项采用者） | 仅参考名单；实际采用未取得；不进默认加载链 | [catalog](../../skills/catalog.yaml)（该参考项未登记） |
+| C03-REF-III-06 | 无承接卡＋建议 C05 owner | progressive-blur | 辅助参考；明确专项需要时再判断 | 未取得（宿主与稳定节待原owner确认） | 建议 C05 owner（专项采用者） | 仅参考名单；实际采用未取得；不进默认加载链 | [catalog](../../skills/catalog.yaml)（该参考项未登记） |
+| C03-REF-III-07 | 无承接卡＋建议 C05 owner | scroll-progress-timeline | 辅助参考；明确专项需要时再判断 | 未取得（宿主与稳定节待原owner确认） | 建议 C05 owner（专项采用者） | 仅参考名单；实际采用未取得；不进默认加载链 | [catalog](../../skills/catalog.yaml)（该参考项未登记） |
+| C03-REF-III-08 | 无承接卡＋建议 C05 owner | gsap | 辅助参考；明确专项需要时再判断 | 未取得（宿主与稳定节待原owner确认） | 建议 C05 owner（专项采用者） | 仅参考名单；实际采用未取得；不进默认加载链 | [catalog](../../skills/catalog.yaml)（该参考项未登记） |
+| C03-REF-III-09 | 无承接卡＋建议 C05 owner | unsplash-asset-images | 辅助参考；明确专项需要时再判断 | 未取得（宿主与稳定节待原owner确认） | 建议 C05 owner（专项采用者） | 仅参考名单；实际采用未取得；不进默认加载链 | [catalog](../../skills/catalog.yaml)（该参考项未登记） |
+| C03-REF-III-10 | 无承接卡＋建议 C05 owner | tailwind-4-docs | 辅助参考；明确专项需要时再判断 | 未取得（宿主与稳定节待原owner确认） | 建议 C05 owner（专项采用者） | 仅参考名单；实际采用未取得；不进默认加载链 | [catalog](../../skills/catalog.yaml)（该参考项未登记） |
+| C03-REF-III-11 | 无承接卡＋建议 C05 owner | improve-animations | 辅助参考；明确专项需要时再判断 | 未取得（宿主与稳定节待原owner确认） | 建议 C05 owner（专项采用者） | 仅参考名单；实际采用未取得；不进默认加载链 | [catalog](../../skills/catalog.yaml)（该参考项未登记） |
+| C03-REF-III-12 | 无承接卡＋建议 C05 owner | dark-glass-clean-layout | 辅助参考；明确专项需要时再判断 | 未取得（宿主与稳定节待原owner确认） | 建议 C05 owner（专项采用者） | 仅参考名单；实际采用未取得；不进默认加载链 | [catalog](../../skills/catalog.yaml)（该参考项未登记） |
+| C03-REF-III-13 | 无承接卡＋建议 C05 owner | framed-tech-dark-border-gradient | 辅助参考；明确专项需要时再判断 | 未取得（宿主与稳定节待原owner确认） | 建议 C05 owner（专项采用者） | 仅参考名单；实际采用未取得；不进默认加载链 | [catalog](../../skills/catalog.yaml)（该参考项未登记） |
+| C03-REF-III-14 | 无承接卡＋建议 C05 owner | glass-dark-ui | 辅助参考；明确专项需要时再判断 | 未取得（宿主与稳定节待原owner确认） | 建议 C05 owner（专项采用者） | 仅参考名单；实际采用未取得；不进默认加载链 | [catalog](../../skills/catalog.yaml)（该参考项未登记） |
+| C03-REF-III-15 | 无承接卡＋建议 C05 owner | blue-laser-clean-glass-layout | 辅助参考；明确专项需要时再判断 | 未取得（宿主与稳定节待原owner确认） | 建议 C05 owner（专项采用者） | 仅参考名单；实际采用未取得；不进默认加载链 | [catalog](../../skills/catalog.yaml)（该参考项未登记） |
+| C03-REF-III-16 | 无承接卡＋建议 C05 owner | dark-blue-contrasting-clean | 辅助参考；明确专项需要时再判断 | 未取得（宿主与稳定节待原owner确认） | 建议 C05 owner（专项采用者） | 仅参考名单；实际采用未取得；不进默认加载链 | [catalog](../../skills/catalog.yaml)（该参考项未登记） |
+| C03-REF-III-17 | 无承接卡＋建议 C05 owner | dither-laser-dark-mode | 辅助参考；明确专项需要时再判断 | 未取得（宿主与稳定节待原owner确认） | 建议 C05 owner（专项采用者） | 仅参考名单；实际采用未取得；不进默认加载链 | [catalog](../../skills/catalog.yaml)（该参考项未登记） |
+| C03-REF-III-18 | 无承接卡＋建议 C05 owner | framed-grid-layout | 辅助参考；明确专项需要时再判断 | 未取得（宿主与稳定节待原owner确认） | 建议 C05 owner（专项采用者） | 仅参考名单；实际采用未取得；不进默认加载链 | [catalog](../../skills/catalog.yaml)（该参考项未登记） |
+| C03-REF-III-19 | 无承接卡＋建议 C05 owner | mesh-gradient-dark-blue-clean | 辅助参考；明确专项需要时再判断 | 未取得（宿主与稳定节待原owner确认） | 建议 C05 owner（专项采用者） | 仅参考名单；实际采用未取得；不进默认加载链 | [catalog](../../skills/catalog.yaml)（该参考项未登记） |
+| C03-REF-III-20 | 无承接卡＋建议 C05 owner | split-layout-technical | 辅助参考；明确专项需要时再判断 | 未取得（宿主与稳定节待原owner确认） | 建议 C05 owner（专项采用者） | 仅参考名单；实际采用未取得；不进默认加载链 | [catalog](../../skills/catalog.yaml)（该参考项未登记） |
+| C03-REF-III-21 | 无承接卡＋建议 C05 owner | technical-wireframe-info-layout | 辅助参考；明确专项需要时再判断 | 未取得（宿主与稳定节待原owner确认） | 建议 C05 owner（专项采用者） | 仅参考名单；实际采用未取得；不进默认加载链 | [catalog](../../skills/catalog.yaml)（该参考项未登记） |
+| C03-REF-III-22 | 无承接卡＋建议 C05 owner | container-lines | 辅助参考；明确专项需要时再判断 | 未取得（宿主与稳定节待原owner确认） | 建议 C05 owner（专项采用者） | 仅参考名单；实际采用未取得；不进默认加载链 | [catalog](../../skills/catalog.yaml)（该参考项未登记） |
+| C03-REF-III-23 | 无承接卡＋建议 C05 owner | corner-diagonals | 辅助参考；明确专项需要时再判断 | 未取得（宿主与稳定节待原owner确认） | 建议 C05 owner（专项采用者） | 仅参考名单；实际采用未取得；不进默认加载链 | [catalog](../../skills/catalog.yaml)（该参考项未登记） |
+
+#### ④ 不引入（66行）
+
+| 稳定ID | 所属卡 | 能力原名 | 引用方式 | 落点（文件＋稳定节） | owner | 现状 | catalog指针 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| C03-REF-IV-01 | 无承接卡＋建议 C05 owner | agency-grid-layout-minimal | 不引入（原排除组：营销皮肤／浅色系统） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；与深色数据密集后台方向冲突 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-02 | 无承接卡＋建议 C05 owner | blue-cloudy-clean-modern | 不引入（原排除组：营销皮肤／浅色系统） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；与深色数据密集后台方向冲突 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-03 | 无承接卡＋建议 C05 owner | book-serif-index | 不引入（原排除组：营销皮肤／浅色系统） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；与深色数据密集后台方向冲突 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-04 | 无承接卡＋建议 C05 owner | clean-minimal-beige-light-mode | 不引入（原排除组：营销皮肤／浅色系统） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；与深色数据密集后台方向冲突 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-05 | 无承接卡＋建议 C05 owner | documentary-brutalist-agency | 不引入（原排除组：营销皮肤／浅色系统） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；与深色数据密集后台方向冲突 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-06 | 无承接卡＋建议 C05 owner | editorial-portfolio-chapters | 不引入（原排除组：营销皮肤／浅色系统） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；与深色数据密集后台方向冲突 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-07 | 无承接卡＋建议 C05 owner | editorial-service-booking | 不引入（原排除组：营销皮肤／浅色系统） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；与深色数据密集后台方向冲突 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-08 | 无承接卡＋建议 C05 owner | editorial-tech | 不引入（原排除组：营销皮肤／浅色系统） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；与深色数据密集后台方向冲突 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-09 | 无承接卡＋建议 C05 owner | funky-purple-container-tech | 不引入（原排除组：营销皮肤／浅色系统） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；与深色数据密集后台方向冲突 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-10 | 无承接卡＋建议 C05 owner | glass-dark-mode-clock | 不引入（原排除组：营销皮肤／浅色系统） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；与深色数据密集后台方向冲突 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-11 | 无承接卡＋建议 C05 owner | high-contrast-skeuomorphic-clean | 不引入（原排除组：营销皮肤／浅色系统） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；与深色数据密集后台方向冲突 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-12 | 无承接卡＋建议 C05 owner | image-first-grid-layout | 不引入（原排除组：营销皮肤／浅色系统） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；与深色数据密集后台方向冲突 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-13 | 无承接卡＋建议 C05 owner | light-mode-paper-technical | 不引入（原排除组：营销皮肤／浅色系统） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；与深色数据密集后台方向冲突 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-14 | 无承接卡＋建议 C05 owner | liquid-metal-border | 不引入（原排除组：营销皮肤／浅色系统） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；与深色数据密集后台方向冲突 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-15 | 无承接卡＋建议 C05 owner | nested-container-clean-agency | 不引入（原排除组：营销皮肤／浅色系统） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；与深色数据密集后台方向冲突 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-16 | 无承接卡＋建议 C05 owner | orange-clean-paper-saas | 不引入（原排除组：营销皮肤／浅色系统） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；与深色数据密集后台方向冲突 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-17 | 无承接卡＋建议 C05 owner | skeuomorphic-ui | 不引入（原排除组：营销皮肤／浅色系统） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；与深色数据密集后台方向冲突 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-18 | 无承接卡＋建议 C05 owner | corner-lasers | 不引入（原排除组：营销皮肤／浅色系统） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；与深色数据密集后台方向冲突 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-19 | 无承接卡＋建议 C05 owner | pricing-page | 不引入（原排除组：营销皮肤／浅色系统） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；与深色数据密集后台方向冲突 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-20 | 无承接卡＋建议 C05 owner | product-proof-saas | 不引入（原排除组：营销皮肤／浅色系统） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；与深色数据密集后台方向冲突 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-21 | 无承接卡＋建议 C05 owner | company-logos | 不引入（原排除组：营销皮肤／浅色系统） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；与深色数据密集后台方向冲突 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-22 | 无承接卡＋建议 C05 owner | 3d-web-experience | 不引入（原排除组：装饰特效／3D） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；零装饰预算 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-23 | 无承接卡＋建议 C05 owner | webgl-3d-object | 不引入（原排除组：装饰特效／3D） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；零装饰预算 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-24 | 无承接卡＋建议 C05 owner | vantajs | 不引入（原排除组：装饰特效／3D） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；零装饰预算 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-25 | 无承接卡＋建议 C05 owner | cobejs | 不引入（原排除组：装饰特效／3D） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；零装饰预算 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-26 | 无承接卡＋建议 C05 owner | matterjs | 不引入（原排除组：装饰特效／3D） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；零装饰预算 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-27 | 无承接卡＋建议 C05 owner | globe-particles | 不引入（原排除组：装饰特效／3D） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；零装饰预算 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-28 | 无承接卡＋建议 C05 owner | background-grid-webgl | 不引入（原排除组：装饰特效／3D） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；零装饰预算 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-29 | 无承接卡＋建议 C05 owner | bright-green-tech-system-webgl | 不引入（原排除组：装饰特效／3D） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；零装饰预算 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-30 | 无承接卡＋建议 C05 owner | webgl-laser | 不引入（原排除组：装饰特效／3D） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；零装饰预算 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-31 | 无承接卡＋建议 C05 owner | build-threejs-scroll-worlds | 不引入（原排除组：装饰特效／3D） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；零装饰预算 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-32 | 无承接卡＋建议 C05 owner | atmosphere-background | 不引入（原排除组：装饰特效／3D） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；零装饰预算 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-33 | 无承接卡＋建议 C05 owner | ambient-section-particles | 不引入（原排除组：装饰特效／3D） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；零装饰预算 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-34 | 无承接卡＋建议 C05 owner | dither-background | 不引入（原排除组：装饰特效／3D） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；零装饰预算 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-35 | 无承接卡＋建议 C05 owner | gooey-blob-system | 不引入（原排除组：装饰特效／3D） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；零装饰预算 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-36 | 无承接卡＋建议 C05 owner | falling-leaves | 不引入（原排除组：装饰特效／3D） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；零装饰预算 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-37 | 无承接卡＋建议 C05 owner | marquee-loop | 不引入（原排除组：装饰特效／3D） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；零装饰预算 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-38 | 无承接卡＋建议 C05 owner | masked-reveal | 不引入（原排除组：装饰特效／3D） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；零装饰预算 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-39 | 无承接卡＋建议 C05 owner | reveal-hover-effect | 不引入（原排除组：装饰特效／3D） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；零装饰预算 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-40 | 无承接卡＋建议 C05 owner | pointer-trail-emitter | 不引入（原排除组：装饰特效／3D） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；零装饰预算 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-41 | 无承接卡＋建议 C05 owner | add-shader-cursor-trail | 不引入（原排除组：装饰特效／3D） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；零装饰预算 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-42 | 无承接卡＋建议 C05 owner | add-mouse-driven-orbit | 不引入（原排除组：装饰特效／3D） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；零装饰预算 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-43 | 无承接卡＋建议 C05 owner | shaders-cursor-ripples | 不引入（原排除组：装饰特效／3D） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；零装饰预算 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-44 | 无承接卡＋建议 C05 owner | build-interactive-particle-trail | 不引入（原排除组：装饰特效／3D） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；零装饰预算 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-45 | 无承接卡＋建议 C05 owner | build-wireframe-scan-reveal | 不引入（原排除组：装饰特效／3D） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；零装饰预算 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-46 | 无承接卡＋建议 C05 owner | staggered-word-reveal | 不引入（原排除组：滚动叙事） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；原件未给逐组理由 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-47 | 无承接卡＋建议 C05 owner | scroll-scrubbed-word-reveal | 不引入（原排除组：滚动叙事） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；原件未给逐组理由 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-48 | 无承接卡＋建议 C05 owner | scroll-scrubbed-visual-sequence | 不引入（原排除组：滚动叙事） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；原件未给逐组理由 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-49 | 无承接卡＋建议 C05 owner | scroll-world-storytelling | 不引入（原排除组：滚动叙事） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；原件未给逐组理由 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-50 | 无承接卡＋建议 C05 owner | cinematic-scroll-storytelling | 不引入（原排除组：滚动叙事） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；原件未给逐组理由 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-51 | 无承接卡＋建议 C05 owner | cinematic-gsap-lenis-motion-system | 不引入（原排除组：滚动叙事） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；原件未给逐组理由 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-52 | 无承接卡＋建议 C05 owner | gsap-scrolltrigger-storytelling | 不引入（原排除组：滚动叙事） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；原件未给逐组理由 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-53 | 无承接卡＋建议 C05 owner | gsap-framer-scroll-animation | 不引入（原排除组：滚动叙事） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；原件未给逐组理由 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-54 | 无承接卡＋建议 C05 owner | animation-on-scroll | 不引入（原排除组：滚动叙事） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；原件未给逐组理由 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-55 | 无承接卡＋建议 C05 owner | build-awwwards-quality-sites | 不引入（原排除组：滚动叙事） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；原件未给逐组理由 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-56 | 无承接卡＋建议 C05 owner | implement-fog-of-war | 不引入（原排除组：滚动叙事） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；原件未给逐组理由 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-57 | 无承接卡＋建议 C05 owner | performance-profiling | 不引入（原排除组：平台／依赖错配） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；Apple 原生 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-58 | 无承接卡＋建议 C05 owner | unicorn-studio | 不引入（原排除组：平台／依赖错配） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；绑 SaaS | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-59 | 无承接卡＋建议 C05 owner | aura-asset-images | 不引入（原排除组：平台／依赖错配） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；外链清单易腐坏 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-60 | 无承接卡＋建议 C05 owner | web-component-design | 不引入（原排除组：平台／依赖错配） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；三框架混合过浅 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-61 | 无承接卡＋建议 C05 owner | beautiful-shadows | 不引入（原排除组：平台／依赖错配） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；黑投影深色无效 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-62 | 无承接卡＋建议 C05 owner | gradient | 不引入（原排除组：平台／依赖错配） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；亮色模板 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-63 | 无承接卡＋建议 C05 owner | find-animation-opportunities | 不引入（原排除组：平台／依赖错配） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；并入 improve | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-64 | 无承接卡＋建议 C05 owner | apple-design | 不引入（原排除组：镜像缺失无法登记） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；镜像仓目录不存在，无法深读 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-65 | 无承接卡＋建议 C05 owner | css-animations | 不引入（原排除组：镜像缺失无法登记） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；镜像仓目录不存在，无法深读 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+| C03-REF-IV-66 | 无承接卡＋建议 C05 owner | vercel-react-native-skills | 不引入（原排除组：镜像缺失无法登记） | 不适用（不落地；原排除清单） | 建议 C05 owner（原排除决定维护者） | 不引入；镜像仓目录不存在，无法深读 | [catalog](../../skills/catalog.yaml)（该排除项未登记） |
+
+#### 卡 × 能力反查
+
+- C03：①02 better-ui 仅资产概念、②02 better-accessibility、②03 interface-review、②05 vercel-composition-patterns；①08 的既有21行摘要仅派生参考。五项落点见组件质量方法的“两条链资产检查（C03）”及 React/Next lens，不冒完整源。
+- C05：②01／04／06／09／10／11；C06：①全部8项，②06与C05共享采用边界。C07：②03仅后续按需方法。无承接卡共103行（②14、③23、④66），保“无承接卡＋建议owner”；建议不等于已分配。
+- C01三包、C02四项、C04自建技能不属于这120行分母；其既有落点按原卡与catalog核。现有审计中C01、C02均为部分，C04自建已落地；本节不把旧“已完成”续写为当前全通过。原审计为本任务 `quality/evidence/research/2026-10-27-external-adoption-audit.md`。C08／C09不新增外部包；C10按当前各卡台账核对。
+- ①完整包0/8，均由未立项C06承接；③多数宿主未取得；②缺 ui-project-init、ui-visual-fidelity、verify-change 三个宿主目录，其影响逐行保留。不在本卡补建。
+
+#### 新增或变更外部内容时谁写哪一处
+
+1. 采用卡 writer 先读真实来源与当前方法，再在本节加或改能力行，填齐八字段；缺件写未取得或无承接卡＋建议owner。检查：`rg -n "C03-REF-|外部引用逐项台账" specs/workflowhub-ui-frontend-release-20261020/prd.md`，逐组核对分母与原件。
+2. 来源登记 owner 在唯一机器权威 `skills/catalog.yaml` 登记来源坐标、采用版本与许可，区分本次取回坐标和历史绑定；缺事实保 unknown。整包沿既有 capability_decisions 的整包记录（例如 spec-driven-production），方法派生沿现有方法／能力决定落真实消费者；形状冲突交原 owner，不造独立技能。检查：`node --input-type=module -e "import fs from 'node:fs'; import yaml from 'js-yaml'; console.log(yaml.load(fs.readFileSync('skills/catalog.yaml','utf8')).schema_version)"`，再具名回读真实项；解析成功不证明权利。
+3. 方法 owner 在 `skills/reuse-registry.md` 加调用场景与正文／台账指针，现有行直接更新；来源、版本、许可仍回catalog。检查：`rg -n "外部引用登记方法|frontend-component-quality" skills/reuse-registry.md`，实际打开目标。
+4. 规范索引 owner 只在 `AGENTS.md` 加用途、读取时机、owner及consumer导航；已有同义行复用。检查：`rg -n "外部引用" AGENTS.md`。`docs/reuse-registry.md` 已跳转人读索引与catalog，保持原跳转。
+
+各处承担不同角色：PRD是计划台账，catalog是唯一来源机器权威，registry是方法指针，AGENTS是导航。新增或变更只改各自需要的内容；不把同一份来源事实抄四份，不以四个文件都有字样代替真实采用。完整包与派生参考分开：既有 react-best-practices 的21行摘要仅供只读参考，完整70规则义务仍归C06。
+
 ### 四对象16格与三端一致性
 
 | 对象 | 整理 | 实际应用 | 更新 | 独立验证与真实消费 |
