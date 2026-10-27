@@ -85,7 +85,7 @@ description: 单点小改动在定方向内完成方案、一次确认、实施�
 
 ### 9. `closeout` — 物理交付
 
-**产物**：实施和目标测试完成且无未决失败/越界后，调用 stage-closeout，读当前spec组PR正文，按授权执行提交、PR、合并；最终归档/清理前展示实际范围并取得原方法要求的一次真实确认。
+**产物**：实施和目标测试完成且无未决失败/越界后，调用 stage-close，读当前spec组PR正文，按授权执行提交、PR、合并；最终归档/清理前展示实际范围并取得原方法要求的一次真实确认。
 
 **进入下一步条件**：物理交付前再读级别与路线、spec和测试原件，确认stage随实际make-decision；反思交接已可独立读回，操作/失败/清理逐项保真，未授权或失败项保持未执行。
 
@@ -127,7 +127,7 @@ description: 单点小改动在定方向内完成方案、一次确认、实施�
 | `stage-handoff` | 必需 | stage-reflection 内部发布并独立读回同一份交接，不重复发布。 |
 | `resolving-merge-conflicts` | 按需 | 已授权物理交付遇真实merge/rebase冲突时读；无冲突不调用。 |
 
-材料作者另须在写方案步骤读 skills/spec-plan/SKILL.md 原 Phase+纯指针索引方法；它不替换31分母。 answer-as-page 与 stage-closeout 也不替换原31分母：前者按下节出页条件消费；后者在最后一步物理交付消费 skills/stage-closeout/SKILL.md，授权与最终close确认沿原owner。
+材料作者另须在写方案步骤读 skills/spec-plan/SKILL.md 原 Phase+纯指针索引方法；它不替换31分母。 answer-as-page 与 stage-close 也不替换原31分母：前者按下节出页条件消费；后者在最后一步物理交付消费 skills/stage-close/SKILL.md，授权与最终close确认沿原owner。
 
 ## 驾驶舱
 

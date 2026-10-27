@@ -76,7 +76,7 @@ UI 适用时沿 `skills/isolated-browser-qa/SKILL.md` 消费页面、console 与
 
 用户已授权任务进入实施，或已选择方向与实施计划后，该授权持续覆盖本 task 范围内的验证、独立审查、修复及完成交付必要的 commit、push、merge；阶段切换、新会话和 handoff 不重置授权。本阶段直接执行，不要求日常确认、本地提交授权、技术验收确认或用户承担严重风险；新增方向或任务范围不能据此擅自扩大。能通过真实入口观察的业务效果自动验证；确实依赖真人、缺权限、数据或外部服务的部分，列清所需条件、操作、成功/失败恢复判据和应回传证据，保持 unknown/unavailable/incomplete，继续其它验证，不将其变成中间确认门或推导为业务通过。真实平台权限限制与无法解决的方向问题同样如实报告。 失败重试按 `AGENTS.md`「卡住与升级」及 `docs/standard-workflow.md`「stage 结束」实际执行适用/排除、零重试、新事实判定与升级；收到答复按当前材料续跑，不新建任务或账本。
 
-Git授权/物理收口唯一执行 `skills/stage-closeout/SKILL.md`，不保第二实现/旧plan续跑。主会话核真实授权/范围/当前验证结果后交共享方法；已有授权供记录/消费，不再提问。普通Git前按其record/consume动作/分支/HEAD、保scoped例外；必要commit/push/merge沿持续授权，无技术验收确认。整树丢弃、强推、任务外改动除外。最终close归档/删除/清理先展示实际结果/质量限制/目标范围/具名例外，取得一次真实范围确认；未答/拒绝不执行该范围。含PR立即展示真实URL、同流续已授权动作，不等新答复、不复旧close plan。三审查点保build-plan wh-review合并、build-code每Phase OCR、本阶段终末OCR，不复全Phase集成审查。
+Git授权/物理收口唯一执行 `skills/stage-close/SKILL.md`，不保第二实现/旧plan续跑。主会话核真实授权/范围/当前验证结果后交共享方法；已有授权供记录/消费，不再提问。普通Git前按其record/consume动作/分支/HEAD、保scoped例外；必要commit/push/merge沿持续授权，无技术验收确认。整树丢弃、强推、任务外改动除外。最终close归档/删除/清理先展示实际结果/质量限制/目标范围/具名例外，取得一次真实范围确认；未答/拒绝不执行该范围。含PR立即展示真实URL、同流续已授权动作，不等新答复、不复旧close plan。三审查点保build-plan wh-review合并、build-code每Phase OCR、本阶段终末OCR，不复全Phase集成审查。
 
 ## 使用技能与安全收口
 
@@ -84,7 +84,7 @@ Git授权/物理收口唯一执行 `skills/stage-closeout/SKILL.md`，不保第�
 
 按 `skill-deps.yaml` 直接读取方法；真实消费者检查、定向验证和独立审查按项目分工委派，主会话负责发现处置、用户选择与总结。技能与工具缺失如实说明，不能增加公共命令或新状态对象。原子写入、共享记录冲突保护与工作区核对分别使用现有窄工具，失败保持可见；历史原件只读。
 
-授权验证/修复后，主会话实际读并执行 `skills/stage-closeout/SKILL.md` 共享收口，由其委派knowledge-graph更新并分别回读代码图/文档图真实状态、费用答复、未完项；代码成功不代文档更新。质量结论/finding处置/正式task facts/handoff仍归主会话；共享方法缺失/调用失败记unavailable、交原owner，不复制旧方法兜底，不以缺质量冻结同task修复或冒已交付。
+授权验证/修复后，主会话实际读并执行 `skills/stage-close/SKILL.md` 共享收口，由其委派knowledge-graph更新并分别回读代码图/文档图真实状态、费用答复、未完项；代码成功不代文档更新。质量结论/finding处置/正式task facts/handoff仍归主会话；共享方法缺失/调用失败记unavailable、交原owner，不复制旧方法兜底，不以缺质量冻结同task修复或冒已交付。
 
 阶段末主会话只执行一次 `skills/stage-handoff/SKILL.md`「信息来源」「回读结果」「结束条件与边界」，保存交接并报告实际不可变绝对路径：材料现状、代码、真实检查、风险/下一步、默认安全收口路径、任务分支、待最终确认动作及具名保留原因。执行不是门，但须实际执行/回报；缺失写原因/影响，披露不代完成，不要求固定机器复盘/交接认证。正式阶段事实仍由公共流程处理，实现/质量/业务验收/发布/物理close分别报、不互代。确认后逐项回读执行结果，保旧raw/review原件，不恢复旧close plan或新增公共节点。局部 Phase 摘要不触发收口，原失败与缺口可见，持续授权不代候选采纳。
 

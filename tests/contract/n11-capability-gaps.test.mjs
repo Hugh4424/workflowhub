@@ -38,10 +38,10 @@ describe('ORACLE-N11-RESEARCH-RUN no-results schema mapping',()=>{
  });
 });
 describe('ORACLE-N11-IMPROVEMENTS',()=>{
- it('requires module headings, readback heading check and migration at both consumers',()=>{for(const p of ['skills/stage-reflection/SKILL.md','skills/stage-closeout/SKILL.md']){const t=read(p);expect(sectionRule(t),'task-number headings and no heading readback must fail').toBe(true);expect(sectionRule(t.replaceAll('禁止用任务编号','允许用任务编号'))).toBe(false);expect(sectionRule(t.replace(/写后读回[^。\n]*核对节名/g,'只读旧内容'))).toBe(false);expect(sectionRule(t.replaceAll('待迁移','旧条目'))).toBe(false);} const headings=read('specs/Improvements.md').split('\n').filter(l=>/^## .*N(?:9|10|11)/.test(l));expect(headings).toHaveLength(7);});
+ it('requires module headings, readback heading check and migration at both consumers',()=>{for(const p of ['skills/stage-reflection/SKILL.md','skills/stage-close/SKILL.md']){const t=read(p);expect(sectionRule(t),'task-number headings and no heading readback must fail').toBe(true);expect(sectionRule(t.replaceAll('禁止用任务编号','允许用任务编号'))).toBe(false);expect(sectionRule(t.replace(/写后读回[^。\n]*核对节名/g,'只读旧内容'))).toBe(false);expect(sectionRule(t.replaceAll('待迁移','旧条目'))).toBe(false);} const headings=read('specs/Improvements.md').split('\n').filter(l=>/^## .*N(?:9|10|11)/.test(l));expect(headings).toHaveLength(7);});
 });
 describe('ORACLE-N11-ARCHIVE-RUN',()=>{
- it('requires executable prepare -> authorization -> execute -> readback and named fallback',()=>{const t=read('skills/stage-closeout/SKILL.md');expect(archiveFacts(t),'human prose alone is not executable archive').toBe(true);expect(archiveFacts(t.replace(/node tools\/cli\/task-close\.mjs (?:prepare|execute)/g,'git mv'))).toBe(false);});
+ it('requires executable prepare -> authorization -> execute -> readback and named fallback',()=>{const t=read('skills/stage-close/SKILL.md');expect(archiveFacts(t),'human prose alone is not executable archive').toBe(true);expect(archiveFacts(t.replace(/node tools\/cli\/task-close\.mjs (?:prepare|execute)/g,'git mv'))).toBe(false);});
  it('real CLI rejects missing confirmation-ref before execution',async()=>{const dir=temp(),repo=join(dir,'repo');mkdirSync(repo);execFileSync('git',['init','-q',repo]);const t=await createTask({storageRoot:dir,manifest:{schema_version:'1.0.0',activation_cohort:'post',execution_mode:'per_invocation',record_model:'vnext-single-write',project_name:'workflowhub',task_id:'p4-close',created_at:'2026-10-23T00:00:00.000Z',target_repo_root:repo,issue_ids:[],inputs:{}}});const p=spawnSync(process.execPath,[join(root,'tools/cli/task-close.mjs'),'execute','--project=workflowhub','--task=p4-close','--task-path='+t.taskPath,'--plan-ref=quality/evidence/absent.json'],{cwd:repo,encoding:'utf8'});expect(p.status).not.toBe(0);expect(p.stderr).toContain('--confirmation-ref is required');});
 });
 
@@ -133,7 +133,7 @@ describe('P4-S1 attribute input boundary',()=>{
  it('preserves real business and actual report ring display references',async()=>{const run=await capability('skills/answer-as-page/scripts/render-answer-page.mjs','renderAnswerPage','renderer missing');const f=pageFixture();f.pageData.initialChanged=['r1','ring:1'];f.pageData.changedChips=[{id:'ring:1',text:'真实ring更新'}];const r=await run(f);expect(emittedData(r.htmlPath).initialChanged).toEqual(['r1','ring:1']);});
 });
 describe('P4-S2 documented authorization chain',()=>{
- it('documents manual-close with only confirmed commit merge archive',()=>{const text=read('skills/stage-closeout/SKILL.md');expect(text).toMatch(/task-close\.mjs manual-close[^\n]*--plan-ref=[^\n]*--confirmation-ref=[^\n]*--operations='\["commit","merge","archive"\]'/);});
+ it('documents manual-close with only confirmed commit merge archive',()=>{const text=read('skills/stage-close/SKILL.md');expect(text).toMatch(/task-close\.mjs manual-close[^\n]*--plan-ref=[^\n]*--confirmation-ref=[^\n]*--operations='\["commit","merge","archive"\]'/);});
 });
 
 describe('P4-S2 full documented CLI chain',()=>{

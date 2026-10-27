@@ -115,7 +115,7 @@
     {
       "step_id": 11,
       "step_slug": "closeout",
-      "observable_result": "物理交付：实现与适用审查结束、有效finding处置后调用 stage-closeout；PR正文读当前spec，按授权执行提交/PR/合并，最终归档清理前展示实际范围并沿原owner取得一次真实确认。 条件：收口执行者再读级别与路线与真实测试/审查原件，确认stage随实际make-decision；交接可独立读回，物理交付与反思分开，失败/未执行/清理分别说明。 判定消费：SKILL.md#步骤 第11步；原件：授权/PR/merge/末范围确认、真实页面/侧车ref。",
+      "observable_result": "物理交付：实现与适用审查结束、有效finding处置后调用 stage-close；PR正文读当前spec，按授权执行提交/PR/合并，最终归档清理前展示实际范围并沿原owner取得一次真实确认。 条件：收口执行者再读级别与路线与真实测试/审查原件，确认stage随实际make-decision；交接可独立读回，物理交付与反思分开，失败/未执行/清理分别说明。 判定消费：SKILL.md#步骤 第11步；原件：授权/PR/merge/末范围确认、真实页面/侧车ref。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",

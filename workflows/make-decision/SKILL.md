@@ -250,7 +250,7 @@ build-code 无 phase_progress 游标或游标缺失/过期时，按当前工作�
 | `stage-handoff` | 必需 | stage-reflection 内部发布并独立读回同一份交接，不重复发布。 |
 | `resolving-merge-conflicts` | 跳过 | 本路线只交方向材料；有另行真实Git授权且冲突时才由交付owner消费，不自动物理交付。 |
 
-本阶段不加载后继实施设计方法全文。 answer-as-page 与 stage-closeout 也不替换原31分母：前者按下节出页条件消费；本阶段无物理交付，不调用 stage-closeout。
+本阶段不加载后继实施设计方法全文。 answer-as-page 与 stage-close 也不替换原31分母：前者按下节出页条件消费；本阶段无物理交付，不调用 stage-close。
 
 ## 驾驶舱
 

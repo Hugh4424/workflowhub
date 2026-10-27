@@ -9,7 +9,7 @@ description: 每Phase收口、终末验证、写经验或任务收口前，将�
 
 ## 触发与路由
 
-交付后从首次可用起，在build-code每个Phase收口处理该Phase不同的已验证变化；verify-code终末、stage-reflection写经验前和stage-closeout任务收口前再核同一变化。不可推迟到整个build-code结束，也不为重复触发制造第二有效条款。
+交付后从首次可用起，在build-code每个Phase收口处理该Phase不同的已验证变化；verify-code终末、stage-reflection写经验前和stage-close任务收口前再核同一变化。不可推迟到整个build-code结束，也不为重复触发制造第二有效条款。
 
 每次先读 [主题路由](references/routes.md) 选择原专业owner与真实consumer。P1/P2等方法尚未可用的早期建设，只在本方法可用后读其真实旧验证/未同步ref，按当前before处理，保真实晚于旧收口的时点；不能倒称早期已调用。没有适用新变化时写具名无变化与来源，不建候选或进度账本。
 

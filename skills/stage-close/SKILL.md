@@ -1,5 +1,5 @@
 ---
-name: stage-closeout
+name: stage-close
 description: 阶段已交付或用户要求独立收尾时，统一提交、PR、合并、推送、归档和工作区清理；先委派图更新，逐动作核已有授权，最终删除前确认一次真实范围。
 ---
 
@@ -135,7 +135,7 @@ worktree确认已移除后，在目标repo按独立cleanup步骤授权，普通`
 
 ## 保全来源与迭代
 
-来源权威：[catalog](../catalog.yaml#skills.stage-closeout)；本便携小卡非权威；单技能副本缺catalog时向来源维护者取登记。
+来源权威：[catalog](../catalog.yaml#skills.stage-close)；本便携小卡非权威；单技能副本缺catalog时向来源维护者取登记。
 交付内容取backnotprop/pstack的`skills/poteto-mode/playbooks/opening-a-pr.md`，2026-10-14固定研究成员SHA256 `931070f5674e81a191277253d4e02b1c45d091b223f93bf506d3896a428a5967`，commit unknown；只取三项含义，不搬强制ready、提交格式、六段模板、自动盯PR及上游reset/forge策略。
 
 本方法抽取verify-code的授权/安全收口与standard-workflow当前默认安全收口，保build-prd稿件确认不授Git权；主线差异预检按本地用户要求补入，冲突处理复用`skills/resolving-merge-conflicts/SKILL.md`已有方法。原文中的same plan/confirmation仅保其“真实PR先回URL、同流续跑”行为，由当前真实输入和窄工具消费承接，不恢复旧plan/confirmation执行对象。caller的审查点、质量、交接、真实最终选择及阶段正式事实保持原owner；两caller接线由各Phase实施。

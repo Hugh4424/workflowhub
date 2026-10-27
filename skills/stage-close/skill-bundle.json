@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "skill": "stage-closeout",
+  "skill": "stage-close",
   "files": [
     "SKILL.md"
   ]

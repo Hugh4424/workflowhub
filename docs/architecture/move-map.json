@@ -3792,7 +3792,7 @@
       "destination": "workflows/make-decision/skill-deps.yaml",
       "status": "retain",
       "role": "production",
-      "responsibility": "make-decision 的条件技能/能力声明；answer-as-page按出页条件、stage-closeout仅轻档物理交付触发。",
+      "responsibility": "make-decision 的条件技能/能力声明；answer-as-page按出页条件、stage-close仅轻档物理交付触发。",
       "owner": "make-decision workflow owner；N8/P5唯一持笔，后继P6串行承接",
       "consumer": "runtime/stage/stage-skill-runtime.mjs 的loadStageSkillManifest/resolveStageSkillPackages、doctor与当前流程执行者按条件读取原技能。",
       "module_consumers": [],
@@ -4751,7 +4751,7 @@
       "role": "production",
       "responsibility": "图查询、正常增量更新、建图和降级的唯一方法owner；成本/版本/冲突/来源边界在同方法内。",
       "owner": "P2/T002 knowledge-graph owner",
-      "consumer": "五阶段主会话与stage-closeout；各caller接线由P3—P7承接，此条不声称已发生调用。",
+      "consumer": "五阶段主会话与stage-close；各caller接线由P3—P7承接，此条不声称已发生调用。",
       "module_consumers": [],
       "named_data_readers": [
         "skills/catalog.yaml",
@@ -4796,35 +4796,35 @@
     },
     {
       "source": "skills/stage-closeout/SKILL.md",
-      "destination": "skills/stage-closeout/SKILL.md",
-      "status": "retain",
+      "destination": "skills/stage-close/SKILL.md",
+      "status": "move",
       "role": "production",
-      "responsibility": "共享Git/物理收口方法；图更新消费knowledge-graph，不重新裁定阶段质量。P3 owner实施，登记不表示已创建/已验收。",
-      "owner": "P3/T003 stage-closeout owner",
-      "consumer": "verify-code/build-prd caller由P5/P6接线；用户明确独立调用。",
+      "responsibility": "关闭方法与其可搬运 bundle 改名；沿用原授权、质量、PR、归档与安全清理边界。",
+      "owner": "P7/T009 stage-close owner",
+      "consumer": "make-decision、build-prd、verify-code 的 skill-deps；local-skill-resolver 与 portable bundle consumer。",
       "module_consumers": [],
       "named_data_readers": [
         "workflows/verify-code/SKILL.md",
         "workflows/build-prd/SKILL.md",
         "skills/catalog.yaml"
       ],
-      "delete_condition": "职责被独立审查的替代承接且实际具名consumer为零时由对应owner移除；不因登记或暂未接线自动删除。",
+      "delete_condition": "只有关闭方法及其真实 caller 全部退役时删除；旧路径已迁移，不保留兼容副本。",
       "retention_basis": "承接两caller原有重复收口正文；不替代authorize/close底层owner，不新增执行账本。"
     },
     {
       "source": "skills/stage-closeout/skill-bundle.json",
-      "destination": "skills/stage-closeout/skill-bundle.json",
-      "status": "retain",
+      "destination": "skills/stage-close/skill-bundle.json",
+      "status": "move",
       "role": "production",
-      "responsibility": "既有分发形状打包共享收口正文，P3 owner实施。",
-      "owner": "P3/T003 stage-closeout owner",
-      "consumer": "既有local-skill-resolver与catalog技能分发。",
+      "responsibility": "关闭方法与其可搬运 bundle 改名；沿用原授权、质量、PR、归档与安全清理边界。",
+      "owner": "P7/T009 stage-close owner",
+      "consumer": "make-decision、build-prd、verify-code 的 skill-deps；local-skill-resolver 与 portable bundle consumer。",
       "module_consumers": [],
       "named_data_readers": [
         "runtime/adapters/local-skill-resolver.mjs",
         "skills/catalog.yaml"
       ],
-      "delete_condition": "职责被独立审查的替代承接且实际具名consumer为零时由对应owner移除；不因登记或暂未接线自动删除。",
+      "delete_condition": "只有关闭方法及其真实 caller 全部退役时删除；旧路径已迁移，不保留兼容副本。",
       "retention_basis": "复用bundle resolver；不生成第二份收口实现。"
     },
     {
@@ -6634,7 +6634,7 @@
       "role": "production",
       "responsibility": "规范同步方法/五类主题路由/现bundle；复用项目共同锁和安全写，不建运行时同步引擎或进度账本。",
       "owner": "norm-sync专业规范同步owner",
-      "consumer": "build-code每Phase收口、verify-code终末、stage-reflection写经验前、stage-closeout任务收口前；T003 PB证据归属应用、T004/T005顺序生产消费。",
+      "consumer": "build-code每Phase收口、verify-code终末、stage-reflection写经验前、stage-close任务收口前；T003 PB证据归属应用、T004/T005顺序生产消费。",
       "module_consumers": [],
       "named_data_readers": [
         "workflows/build-code/skill-deps.yaml",
@@ -6651,7 +6651,7 @@
       "role": "production",
       "responsibility": "规范同步方法/五类主题路由/现bundle；复用项目共同锁和安全写，不建运行时同步引擎或进度账本。",
       "owner": "norm-sync专业规范同步owner",
-      "consumer": "build-code每Phase收口、verify-code终末、stage-reflection写经验前、stage-closeout任务收口前；T003 PB证据归属应用、T004/T005顺序生产消费。",
+      "consumer": "build-code每Phase收口、verify-code终末、stage-reflection写经验前、stage-close任务收口前；T003 PB证据归属应用、T004/T005顺序生产消费。",
       "module_consumers": [],
       "named_data_readers": [
         "workflows/build-code/skill-deps.yaml",
@@ -6668,7 +6668,7 @@
       "role": "production",
       "responsibility": "规范同步方法/五类主题路由/现bundle；复用项目共同锁和安全写，不建运行时同步引擎或进度账本。",
       "owner": "norm-sync专业规范同步owner",
-      "consumer": "build-code每Phase收口、verify-code终末、stage-reflection写经验前、stage-closeout任务收口前；T003 PB证据归属应用、T004/T005顺序生产消费。",
+      "consumer": "build-code每Phase收口、verify-code终末、stage-reflection写经验前、stage-close任务收口前；T003 PB证据归属应用、T004/T005顺序生产消费。",
       "module_consumers": [],
       "named_data_readers": [
         "workflows/build-code/skill-deps.yaml",
@@ -6847,6 +6847,21 @@
       ],
       "delete_condition": "唯一消费者由经独立审查的替代承接或该技能退役时删除；保留原证据与历史页。",
       "retention_basis": "P5/T006/T007 批准写集；已实读 renderer 的 main/renderAnswerPage 与当前技能命令。复用原认证task与发布锁，不增加进度权威。"
+    },
+    {
+      "source": "tests/contract/stage-close-rename.test.mjs",
+      "destination": "tests/contract/stage-close-rename.test.mjs",
+      "status": "retain",
+      "role": "test_only",
+      "responsibility": "ORACLE-CLOSE-RENAME：新技能身份、真实caller/resolver/portable闭包、活动旧引用与隔离反例。",
+      "owner": "P7/T009 test owner；冻结后按具名TCR修改",
+      "consumer": "P7改名验证与独立审查者；不是阶段推进许可。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/workflowhub-build-code-efficiency-verify-merge-20261026/phases/P7-关闭技能改名.md"
+      ],
+      "delete_condition": "只有改名合同及当前消费者全部退役且测试owner独立审查同意时删除；原执行证据保留。",
+      "retention_basis": "复用vitest与现有resolver，不验证真实close/PR/归档/清理，不新增生产控制面。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

@@ -3,8 +3,8 @@ skills:
   - name: knowledge-graph
     path: skills/knowledge-graph/SKILL.md
     trigger: stage_opening_and_inspect_real_entry_and_tests
-  - name: stage-closeout
-    path: skills/stage-closeout/SKILL.md
+  - name: stage-close
+    path: skills/stage-close/SKILL.md
     trigger: authorized_verification_delivery_and_final_scope_cleanup
   - name: isolated-browser-qa
     path: skills/isolated-browser-qa/SKILL.md

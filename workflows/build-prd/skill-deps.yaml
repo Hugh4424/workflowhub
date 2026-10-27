@@ -3,8 +3,8 @@ skills:
   - name: knowledge-graph
     path: skills/knowledge-graph/SKILL.md
     trigger: stage_opening_and_existing_source_research
-  - name: stage-closeout
-    path: skills/stage-closeout/SKILL.md
+  - name: stage-close
+    path: skills/stage-close/SKILL.md
     trigger: confirmed_final_prd_authorized_delivery_and_final_scope_cleanup
   - name: spec-prd
     path: skills/spec-prd/SKILL.md

@@ -20,7 +20,7 @@
 | --- | --- | --- |
 | stage-reflection | 阶段结束发现实际过程问题，需要提出有来源的复盘改进候选。 | [读取正文](stage-reflection/SKILL.md) |
 | stage-handoff | 阶段结束写人读交接，或接续时回读真实材料、事实与未完事项。 | [读取正文](stage-handoff/SKILL.md) |
-| stage-closeout | 阶段交付后整理Git、图与收口事实；最终归档或删除按实际授权处理。 | [读取正文](stage-closeout/SKILL.md) |
+| stage-close | 阶段交付后整理Git、图与收口事实；最终归档或删除按实际授权处理。 | [读取正文](stage-close/SKILL.md) |
 | knowledge-graph | 开工与设计依据准备时以合法全文作采用判断；查询领域/历史经验、定位影响，或按许可更新图。 | [读取正文](knowledge-graph/SKILL.md)；[任务判断方法](knowledge-graph/references/knowledge-reuse.md) |
 | anysearch | 需要联网检索、核事实或读取外部页面。 | [读取正文](anysearch/SKILL.md) |
 | decision-log | 把已确认方向写为唯一决策与需求记录。 | [读取正文](decision-log/SKILL.md) |
@@ -163,7 +163,7 @@
 | n7-ketchup | `skills/stage-handoff/SKILL.md; AGENTS.md` | P1 quality/tests/2026-10-18-038-p1-independent-method-readback.md；P3 quality/tests/2026-10-18-077-p3-independent-consumer-readback.md；凭证正例为受控假设 |
 | n7-reflect | `skills/stage-reflection/SKILL.md; specs/Improvements.md` | P1 quality/tests/2026-10-18-038-p1-independent-method-readback.md；P2 quality/tests/2026-10-18-059-p2-independent-complete-readback.json；首验适用条件未齐保持incomplete，见quality/tests/2026-10-18-p6-six-adoptions.md |
 | n7-recall | `skills/stage-reflection/SKILL.md; specs/Improvements.md` | P1 quality/tests/2026-10-18-038-p1-independent-method-readback.md；P2 quality/tests/2026-10-18-059-p2-independent-complete-readback.json；仅具名后继读取，不外推未来任务 |
-| n7-opening-a-pr | `skills/stage-closeout/SKILL.md` | P4 quality/tests/2026-10-18-081-p4-controlled-delivery-materials.json及quality/tests/2026-10-18-083-p4-delivery-note-green.json、quality/tests/2026-10-18-084-p4-closeout-protection-green.json；独立首验为quality/evidence/2026-10-18-050-p4-independent-first-consumer.json、quality/evidence/2026-10-18-055-p4-compression-consumer.json；受控首验不冒真实PR，后续实际PR另见quality/tests/2026-10-19-022-ac010-real-pr-independent-consumer.md |
+| n7-opening-a-pr | `skills/stage-close/SKILL.md` | P4 quality/tests/2026-10-18-081-p4-controlled-delivery-materials.json及quality/tests/2026-10-18-083-p4-delivery-note-green.json、quality/tests/2026-10-18-084-p4-closeout-protection-green.json；独立首验为quality/evidence/2026-10-18-050-p4-independent-first-consumer.json、quality/evidence/2026-10-18-055-p4-compression-consumer.json；受控首验不冒真实PR，后续实际PR另见quality/tests/2026-10-19-022-ac010-real-pr-independent-consumer.md |
 
 历史原件根：`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n7-route-delivery-closeout-experience-20261018/`。六项采用/排除判据只读回 `specs/archive/n7-route-delivery-closeout-experience-20261018/decision-log.md` 的 D-017 和 spec AC-013；历史六项汇总原件 `quality/tests/2026-10-18-p6-six-adoptions.md` 保留 reflect incomplete 与受控首验限制，不把补登记冒整体验收。
 

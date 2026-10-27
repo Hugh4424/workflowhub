@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 
 const ROOT = resolve(import.meta.dirname, '../..');
 const read = path => (existsSync(resolve(ROOT, path)) ? readFileSync(resolve(ROOT, path), 'utf8') : null);
-const CLOSEOUT = 'skills/stage-closeout/SKILL.md';
+const CLOSEOUT = 'skills/stage-close/SKILL.md';
 const BUILD_CODE = 'workflows/build-code/SKILL.md';
 const has = (body, token) => body.includes(token);
 
@@ -37,6 +37,7 @@ describe('ORACLE-P4-DELIVERY-NOTE delivery note content contract', () => {
     const refs = [...new Set(body.match(/skills\/[a-z][a-z0-9-]*\/SKILL\.md/gu) ?? [])].sort();
     expect(refs).toEqual([
       'skills/knowledge-graph/SKILL.md',
+      'skills/norm-sync/SKILL.md',
       'skills/resolving-merge-conflicts/SKILL.md',
       'skills/spec-specify/SKILL.md',
     ]);

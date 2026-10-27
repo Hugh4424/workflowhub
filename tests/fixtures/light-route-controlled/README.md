@@ -50,6 +50,6 @@ tasks数组四个goal仅演示路线，不是可归因的同范围组。真正pa
 
 ## 清理
 
-记录本次实际创建路径、Git身份和task原件；先保测试、审查、用户选择及失败，再按原stage-closeout最终范围确认，只处理本次具名owned合成repo/worktree/bare及任务分支。N8/main、历史task、其他任务和原始证据保留。不得git clean、整树删除或rm -rf变量清理；未获授权记待处理owner，不报已清理。
+记录本次实际创建路径、Git身份和task原件；先保测试、审查、用户选择及失败，再按原stage-close最终范围确认，只处理本次具名owned合成repo/worktree/bare及任务分支。N8/main、历史task、其他任务和原始证据保留。不得git clean、整树删除或rm -rf变量清理；未获授权记待处理owner，不报已清理。
 
 流程及31/54逐项来源见 docs/research/n8-four-level-acceptance-runbook.md；tasks.json仅是受控输入与预期调用，不是执行记录或第二进度账本。

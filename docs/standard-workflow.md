@@ -8,7 +8,7 @@ WorkflowHub 主会话按认证工作区当前材料执行。post 材料为 decis
 
 方向与计划按用户真实答复执行，已有授权有效。主会话组织交互、按工作类型派重活到独立上下文，修复回原实施者，不整份继承父上下文；实现者不自判独立审查或人把关，普通小修不重复全范围审查。
 
-已授权任务进入 build-code/verify-code 后，自动实施、验证、审查、修复及交付必要的 commit/push/merge；切阶段/会话/handoff 不重置授权，不重问本地提交、日常技术验收或风险承担确认。Phase 实施、针对性测试、独立审查及 finding 修复全完成后，本 Phase 审后提交一次；verify-code 结束时完成全部提交与合并。authorize 复用真实授权来源，操作前核范围/分支/当前 HEAD 并 record/consume；build-code commit 显式同传 phase=build-code，绑当前 task、分支和阶段，同阶段共用授权；实际 HEAD/每次消费保在既有 consumed 原件，授权原件不改。其它阶段、旧无 phase 记录及 push/merge/pr 仍严格匹配原 HEAD。真正执行关闭时，先按下节核工作区与任务范围，再读 [关闭方法](../skills/stage-closeout/SKILL.md)第6节「最终归档和清理前一次真实范围确认」与第7节「安全移除、分支删除与逐项读回」；只有取得其要求的最终范围确认才执行归档/删除/交付清理。无法修复/验证的事项如实保留，继续可执行部分，不自行 accepted_risk 或伪造通过。
+已授权任务进入 build-code/verify-code 后，自动实施、验证、审查、修复及交付必要的 commit/push/merge；切阶段/会话/handoff 不重置授权，不重问本地提交、日常技术验收或风险承担确认。Phase 实施、针对性测试、独立审查及 finding 修复全完成后，本 Phase 审后提交一次；verify-code 结束时完成全部提交与合并。authorize 复用真实授权来源，操作前核范围/分支/当前 HEAD 并 record/consume；build-code commit 显式同传 phase=build-code，绑当前 task、分支和阶段，同阶段共用授权；实际 HEAD/每次消费保在既有 consumed 原件，授权原件不改。其它阶段、旧无 phase 记录及 push/merge/pr 仍严格匹配原 HEAD。真正执行关闭时，先按下节核工作区与任务范围，再读 [关闭方法](../skills/stage-close/SKILL.md)第6节「最终归档和清理前一次真实范围确认」与第7节「安全移除、分支删除与逐项读回」；只有取得其要求的最终范围确认才执行归档/删除/交付清理。无法修复/验证的事项如实保留，继续可执行部分，不自行 accepted_risk 或伪造通过。
 
 ## 工作区与任务
 
@@ -18,7 +18,7 @@ WorkflowHub 主会话按认证工作区当前材料执行。post 材料为 decis
 
 收尾按「当前路线」的持续授权及关闭方法第6/7节执行。默认收口已交付任务材料与 task-owned 工作区/任务分支；main 与 existing workspace 保留。未知、私有、未交付字节及旧备忘逐件按该方法保管或确认可弃，保护具名例外，不惯例保留整个已安全交付 worktree；本次执行备忘从创建即用已认证 task.appendRecord({dir,slug,ext,bytes}) 外置任务库（底层复用现有 appendRecord）。默认策略不代当前删除确认，也不解除另有来源的 packet TTL 延期。安全移除、普通分支删除、`--force`／`-D`／强推禁项与失败读回均以该方法第7节为正文，不另设删除器或许可。
 
-真正执行关闭并生成交付说明时，读 [关闭方法第4节「提交、推送任务分支与PR」](../skills/stage-closeout/SKILL.md#4-提交推送任务分支与pr)的交付说明内容合同；本处只给调用条件。
+真正执行关闭并生成交付说明时，读 [关闭方法第4节「提交、推送任务分支与PR」](../skills/stage-close/SKILL.md#4-提交推送任务分支与pr)的交付说明内容合同；本处只给调用条件。
 
 ## build-code 测试与质量
 

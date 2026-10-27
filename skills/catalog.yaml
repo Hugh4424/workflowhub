@@ -191,8 +191,8 @@ skills:
     dependency_closure: &deps_spec_specify ["skills/spec-specify"]
 
     update_policy: 随 stage-handoff 方法、safe-write appendRecord 发布与回读边界和五阶段挂载合同一并审查
-  - name: stage-closeout
-    path: skills/stage-closeout/SKILL.md
+  - name: stage-close
+    path: skills/stage-close/SKILL.md
     local_version: 1.1.0
     last_reviewed_at: '2026-10-16'
     status: native
@@ -793,11 +793,11 @@ skills:
     design_idea: 只恢复 task 分支，不接管 target 合并和推送
     standalone: true
     used_by_stages: [build-prd, verify-code]
-    consumer: skills/stage-closeout/SKILL.md (target-branch sync conflicts); core/task-close.mjs:1411 (merge conflict error path)
+    consumer: skills/stage-close/SKILL.md (target-branch sync conflicts); core/task-close.mjs:1411 (merge conflict error path)
     upstream: []
-    local_changes: WorkflowHub close 冲突恢复约束；由stage-closeout在目标分支同步预演发现冲突时复用；消费者为skills/stage-closeout/SKILL.md与core/task-close.mjs:1411
+    local_changes: WorkflowHub close 冲突恢复约束；由stage-close在目标分支同步预演发现冲突时复用；消费者为skills/stage-close/SKILL.md与core/task-close.mjs:1411
     dependency_closure: []
-    update_policy: 随 stage-closeout 目标分支同步和 verify-code close 合同变更审查
+    update_policy: 随 stage-close 目标分支同步和 verify-code close 合同变更审查
   - name: debate
     local_version: 1.0.0
     last_reviewed_at: '2026-07-14'
@@ -2817,7 +2817,7 @@ capability_decisions:
     purpose: N7既有消费者的来源登记修复，不新增技能或方法行为
     design_idea: "Descriptions — Scope含故意不做；Blast Radius含相关已知红代价；Verification每条真实路径与结果"
     used_by_stages: [build-prd, verify-code]
-    local_path: skills/stage-closeout/SKILL.md
+    local_path: skills/stage-close/SKILL.md
     upstream:
       - github_url: https://github.com/backnotprop/pstack
         license: MIT
