@@ -1,9 +1,9 @@
-import { FORMAL_DEVELOPMENT_STAGES, RETIRED_STAGE_BUILD_SPEC } from "../../../runtime/stage/stage-registry.mjs";
+import { FORMAL_DEVELOPMENT_STAGES, RETIRED_STAGE_BUILD_SPEC, RETIRED_STAGE_VERIFY_CODE } from "../../../runtime/stage/stage-registry.mjs";
 import { existsSync, lstatSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
-import { reviewIdentityFromInput } from "../../../runtime/review/review-policy.mjs";
+import { requiredReviewMode, reviewIdentityFromInput } from "../../../runtime/review/review-policy.mjs";
 const SHA256_HEX = /^[a-f0-9]{64}$/;
 
 export const PACKET_SOURCE_PREFIX = ".wh-review-packets";
@@ -376,6 +376,7 @@ export function validateAllWhReviewRoutes(whReview) {
 }
 
 function whReviewPolicy(value, { requestedStage = null, requestedTrack = null, requestedReviewKind = null } = {}) {
+  if (requestedStage === RETIRED_STAGE_VERIFY_CODE) throw new Error("workflowhub host review stage is retired and cannot be requested");
   if (value === undefined) return null;
   if (!value || typeof value !== "object" || Array.isArray(value) || value.version !== 2 || !value.stages || typeof value.stages !== "object" || Array.isArray(value.stages)) throw new Error("workflowhub host wh_review must be version 2 with stages");
   if (Object.hasOwn(value, "profiles")) throw new Error("workflowhub host wh_review.profiles is not supported; migrate provider definitions to 3rd-review config");
@@ -384,6 +385,8 @@ function whReviewPolicy(value, { requestedStage = null, requestedTrack = null, r
   const configuredStages = { ...value.stages };
   const stages = {};
   for (const [stage, configured] of Object.entries(configuredStages)) {
+    // Preserve the user's original config bytes, but do not normalize, validate providers, or expose this passive entry as a current route.
+    if (stage === RETIRED_STAGE_VERIFY_CODE) continue;
     if (!REVIEW_STAGES.has(stage)) throw new Error("workflowhub host wh_review.stages." + stage + " is unsupported");
     if (stage === "make-decision") {
       if (!configured || typeof configured !== "object" || Array.isArray(configured)) {
@@ -535,7 +538,7 @@ export function resolveTrustedReviewRoute(whReview, stage, reviewTrack = null, r
   if (!configured) return null;
   if (stage !== "make-decision") {
     validateWhReviewRoute(whReview, stage, null);
-    return routeWithProfilePriorities(configured, whReview.profiles);
+    return routeWithProfilePriorities({ ...configured, mode: stage === "build-code" ? requiredReviewMode({ stage, review_scope: reviewScope }) : configured.mode }, whReview.profiles);
   }
   if (!DECISION_TRACKS.has(reviewTrack)) throw new Error("make-decision wh_review route requires direction or detail review_track");
   if (!configured[reviewTrack]) return null;

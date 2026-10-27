@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { STAGE, FORMAL_DEVELOPMENT_STAGES } from '../../runtime/stage/stage-registry.mjs';
+import { STAGE, FORMAL_DEVELOPMENT_STAGES, RETIRED_STAGE_VERIFY_CODE } from '../../runtime/stage/stage-registry.mjs';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync, existsSync, lstatSync, realpathSync } from 'node:fs';
@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { runPacketBoundCodexReview } from '../../runtime/review/ocr-delegation-adapter.mjs';
 import { loadTrustedThirdReviewConfig, selectTrustedReviewProviderSelection } from '../../skills/wh-review/scripts/third-review-host-config.mjs';
 
+// Current-registry metadata for its existing consistency consumer; it is not this historical corpus inventory.
 export const STAGES = FORMAL_DEVELOPMENT_STAGES;
 const TASK_ROOT = '/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n11-same-condition-eval-20261022';
 export const DEFAULT_MANIFEST = `${TASK_ROOT}/quality/evidence/2026-10-23-250-p7-eight-cell-actual-manifest.json`;
@@ -22,14 +23,22 @@ function p7Manifest(file = DEFAULT_MANIFEST) {
   const manifest = JSON.parse(original(file, MANIFEST_HASH));
   const preflight = JSON.parse(original(manifest.preflight_ref, manifest.preflight_sha256));
   assert.equal(preflight.task, 'n11-same-condition-eval-20261022');
-  assert.deepEqual(manifest.runs.map(r => `${r.side}/${r.stage}`).sort(), ['baseline', 'candidate'].flatMap(side => STAGES.map(stage => `${side}/${stage}`)).sort(), 'eight-cell denominator');
-  return { manifest, preflight };
+  // This hash-pinned P7 corpus is historical input, never a current stage invocation list.
+  const stages = manifest.coverage_boundary?.stages;
+  assert.ok(Array.isArray(stages) && stages.length > 0 && new Set(stages).size === stages.length, 'historical stage inventory');
+  const expected = ['baseline','candidate'].flatMap(side => stages.map(stage => `${side}/${stage}`)).sort();
+  for (const [label,cells] of [['runs',manifest.runs],['preflight',preflight.cells],['denominator',manifest.denominator]]) {
+    const keys = cells.map(cell => `${cell.side}/${cell.stage}`);
+    assert.equal(new Set(keys).size,keys.length, `${label} duplicate historical cell`);
+    assert.deepEqual(keys.sort(),expected, `${label} historical cell inventory`);
+  }
+  return { manifest, preflight, stages };
 }
 
 /** Read the frozen P7 index and its actual source/result/output chain. Never filter by quality status. */
 export function loadPair({ manifestFile = DEFAULT_MANIFEST, stage } = {}) {
-  assert.ok(STAGES.includes(stage), 'unknown stage');
-  const { manifest, preflight } = p7Manifest(manifestFile);
+  const { manifest, preflight, stages } = p7Manifest(manifestFile);
+  assert.ok(stages.includes(stage), 'unknown historical stage cell');
   const sides = ['baseline', 'candidate'].map(side => {
     const run = manifest.runs.find(r => r.side === side && r.stage === stage);
     const cell = preflight.cells.find(c => c.side === side && c.stage === stage);
@@ -71,10 +80,10 @@ export function loadPair({ manifestFile = DEFAULT_MANIFEST, stage } = {}) {
   const fixture = JSON.parse(original(preflight.inputRefs.find(r => r.path.endsWith('fixed-upstream-n11-v2.json')).path, sides[0].conditions.fixture));
   return { stage, status: sides.every(s => s.status === 'available') ? 'available' : 'inconclusive', sides,
     context: { stage, requirement, response, common_business_requirements: fixture.current_materials.requirements,
-      stage_goal: { 'make-decision': 'Judge requirement discussion, choices, confirmation and coverage; extra planning is not a different task.', 'build-plan': 'Judge the complete plan and all indexed Phases against the public business requirements.', 'build-code': 'Judge actual implementation and tests against the common public specification; distinguish observed tests from claims.', 'verify-code': 'Judge verification findings, acceptance reports and their cited probes against the public fixed code and requirements.' }[stage],
-      public_contract: [STAGE.BUILD_CODE,STAGE.VERIFY_CODE].includes(stage) ? fixture.current_materials.materials : null,
-      public_fixed_code: stage === 'verify-code' ? fixture.current_materials.verify_code_source.files.map(f => ({ name: f.workspace_ref, content: original(resolve(manifest.modeltest_root, f.source_ref), f.sha256).toString('utf8') })) : null,
-      coverage_limit: 'Content comparison of the explicitly included terminal-time artifacts only. Missing references are explicit. No new execution, no formal stage acceptance, no unseen-file correctness claim.' } };
+      stage_goal: { 'make-decision': 'Judge requirement discussion, choices, confirmation and coverage; extra planning is not a different task.', 'build-plan': 'Judge the complete plan and all indexed Phases against the public business requirements.', 'build-code': 'Judge actual implementation and tests against the common public specification; distinguish observed tests from claims.', [RETIRED_STAGE_VERIFY_CODE]: 'Judge historical verification findings and acceptance reports against the fixed historical code and requirements; do not invoke a retired stage.' }[stage],
+      public_contract: (stage === STAGE.BUILD_CODE || stage === RETIRED_STAGE_VERIFY_CODE) ? fixture.current_materials.materials : null,
+      public_fixed_code: stage === RETIRED_STAGE_VERIFY_CODE ? fixture.current_materials.verify_code_source.files.map(f => ({ name: f.workspace_ref, content: original(resolve(manifest.modeltest_root, f.source_ref), f.sha256).toString('utf8') })) : null,
+      coverage_limit: 'Read-only hash-pinned historical P7 cells; labels do not authorize a current stage invocation. Content comparison of the explicitly included terminal-time artifacts only. Missing references are explicit. No new execution, no formal stage acceptance, no unseen-file correctness claim.' } };
 }
 
 /** Explicit audited files plus their bounded direct evidence links; never walk a directory. */
@@ -243,7 +252,8 @@ export function decidePair(rows, binding = null) {
 
 /** Fixed four-pair denominator, including pairs missing an answer. */
 export function prepareAll({ manifestFile = DEFAULT_MANIFEST, loader = loadPair } = {}) {
-  return STAGES.map(stage => {
+  const {stages} = p7Manifest(manifestFile);
+  return stages.map(stage => {
     try { const pair = loader({ manifestFile, stage }); return pair.status === 'available' ? { stage, status: 'available', ...anonymizePair(pair) } : { stage, status: 'inconclusive', reason: 'missing P7 answer', sources: pair.sides }; }
     catch (error) { return { stage, status: 'inconclusive', reason: error.message }; }
   });
@@ -251,8 +261,8 @@ export function prepareAll({ manifestFile = DEFAULT_MANIFEST, loader = loadPair 
 
 /** No imputation, no cross-cohort join; actual transport facts are the only numeric source. */
 export function joinCostFacts({ manifestFile = DEFAULT_MANIFEST } = {}) {
-  const { manifest } = p7Manifest(manifestFile);
-  return STAGES.map(stage => ({ stage, sides: ['baseline','candidate'].map(side => {
+  const { manifest, stages } = p7Manifest(manifestFile);
+  return stages.map(stage => ({ stage, sides: ['baseline','candidate'].map(side => {
     const run = manifest.runs.find(r => r.side === side && r.stage === stage);
     const transport = JSON.parse(original(run.transport_ref, run.transport_sha256));
     const fact = (value, pointer) => Number.isFinite(value) && value >= 0 ? { status: 'available', value, source_ref: run.transport_ref, source_sha256: run.transport_sha256, pointer } : { status: 'unavailable', value: null, source_ref: run.transport_ref, pointer, reason: 'field not reported' };

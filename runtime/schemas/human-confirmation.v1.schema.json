@@ -6,7 +6,7 @@
   "properties": {
     "schema_version": { "const": "human-confirmation.v1" },
     "task_id": { "type": "string", "minLength": 1 },
-    "stage": { "enum": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"] },
+    "stage": { "enum": ["make-decision", "build-spec", "build-plan", "build-code"] },
     "attempt_ref": { "type": "string", "pattern": "^attempt-[0-9]{4}\\.json$" },
     "decision": { "enum": ["accepted", "rejected"] },
     "confirmed_at": { "type": "string", "format": "date-time" },

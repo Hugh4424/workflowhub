@@ -26,7 +26,6 @@
         "make-decision",
         "build-plan",
         "build-code",
-        "verify-code",
         "build-prd"
       ]
     },
@@ -1270,104 +1269,7 @@
         }
       }
     },
-    {
-      "if": {
-        "properties": {
-          "stage": {
-            "const": "verify-code"
-          },
-          "version": {
-            "const": "wh-review-result.v1"
-          }
-        },
-        "required": [
-          "stage",
-          "version"
-        ],
-        "anyOf": [
-          {
-            "required": [
-              "conclusion"
-            ]
-          },
-          {
-            "required": [
-              "coverage"
-            ]
-          }
-        ]
-      },
-      "then": {
-        "required": [
-          "conclusion",
-          "coverage"
-        ],
-        "properties": {
-          "conclusion": {
-            "enum": [
-              "pass",
-              "pass_with_findings",
-              "needs_revision",
-              "reject",
-              "inconclusive"
-            ]
-          },
-          "coverage": {
-            "type": "object",
-            "required": [
-              "findings_state",
-              "providers_completed",
-              "providers_failed"
-            ],
-            "properties": {
-              "findings_state": {
-                "enum": [
-                  "findings_returned",
-                  "no_findings_returned"
-                ]
-              },
-              "providers_completed": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "providers_failed": {
-                "type": "integer",
-                "minimum": 0
-              }
-            },
-            "additionalProperties": false
-          },
-          "verdict": false
-        },
-        "allOf": [
-          {
-            "if": {
-              "properties": {
-                "findings": {
-                  "type": "array",
-                  "maxItems": 0
-                }
-              },
-              "required": [
-                "findings"
-              ]
-            },
-            "then": {
-              "properties": {
-                "conclusion": {
-                  "not": {
-                    "enum": [
-                      "pass",
-                      "pass_with_findings"
-                    ]
-                  }
-                }
-              }
-            }
-          }
-        ]
-      }
-    },
+
     {
       "if": {
         "properties": {

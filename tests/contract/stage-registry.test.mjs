@@ -7,8 +7,8 @@ import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const registryPath = join(root, 'runtime/stage/stage-registry.mjs');
 // Independent pre-migration contract values, never derived from the registry under test.
-const formal = ['make-decision', 'build-plan', 'build-code', 'verify-code'];
-const workflow = ['make-decision', 'build-plan', 'build-code', 'verify-code', 'build-prd'];
+const formal = ['make-decision', 'build-plan', 'build-code'];
+const workflow = ['make-decision', 'build-plan', 'build-code', 'build-prd'];
 const readers = [
  'runtime/stage/stage-context.mjs', 'runtime/task/task-store.mjs',
  'runtime/review/review-policy.mjs', 'runtime/task/final-chain.mjs',
@@ -33,18 +33,18 @@ async function registry() {
  expect(existsSync(registryPath), 'ORACLE-STAGE-REGISTRY: stage registry must exist before import').toBe(true);
  return import(registryPath);
 }
-test('ORACLE-STAGE-REGISTRY: one registry exports six symbols and all 16 readers import it', async () => {
+test('ORACLE-STAGE-REGISTRY: one registry preserves six exports plus one passive retired identity and all 16 readers import it', async () => {
  const values = await registry();
- expect(Object.keys(values).sort()).toEqual(['STAGE','FORMAL_DEVELOPMENT_STAGES','WORKFLOW_STAGES','FORMAL_DEVELOPMENT_STAGE_SET','WORKFLOW_STAGE_SET','RETIRED_STAGE_BUILD_SPEC'].sort());
+ expect(Object.keys(values).sort()).toEqual(['STAGE','FORMAL_DEVELOPMENT_STAGES','WORKFLOW_STAGES','FORMAL_DEVELOPMENT_STAGE_SET','WORKFLOW_STAGE_SET','RETIRED_STAGE_BUILD_SPEC','RETIRED_STAGE_VERIFY_CODE'].sort());
  expect(source('runtime/stage/stage-registry.mjs')).not.toMatch(/\b(?:import|export)\s[^;]*\bfrom\s|\bimport\s*\(/);
  for (const reader of readers) {
   expect(source(reader), `${reader}: registry import`).toMatch(/import\s*\{[^}]+\}\s*from\s*["'][^"']*stage-registry\.mjs["']/);
   assertNoStageCopies(source(reader), reader);
  }
 });
-test('formal four, workflow five and retired identity preserve literal pre-migration contracts', async () => {
+test('formal three, workflow four and retired identity preserve current write and historical-read boundaries', async () => {
  const values = await registry();
- expect(values.STAGE).toEqual({MAKE_DECISION:'make-decision',BUILD_PLAN:'build-plan',BUILD_CODE:'build-code',VERIFY_CODE:'verify-code',BUILD_PRD:'build-prd'});
+ expect(values.STAGE).toEqual({MAKE_DECISION:'make-decision',BUILD_PLAN:'build-plan',BUILD_CODE:'build-code',BUILD_PRD:'build-prd'});
  expect(values.FORMAL_DEVELOPMENT_STAGES).toEqual(formal);
  expect(values.WORKFLOW_STAGES).toEqual(workflow);
  expect([...values.FORMAL_DEVELOPMENT_STAGE_SET]).toEqual(formal);
@@ -52,6 +52,9 @@ test('formal four, workflow five and retired identity preserve literal pre-migra
  expect(values.FORMAL_DEVELOPMENT_STAGE_SET.has('build-prd')).toBe(false);
  expect(values.WORKFLOW_STAGE_SET.has('build-prd')).toBe(true);
  expect(values.RETIRED_STAGE_BUILD_SPEC).toBe('build-spec');
+ expect(values.RETIRED_STAGE_VERIFY_CODE).toBe('verify-code');
+ expect(values.FORMAL_DEVELOPMENT_STAGE_SET.has(values.RETIRED_STAGE_VERIFY_CODE)).toBe(false);
+ expect(values.WORKFLOW_STAGE_SET.has(values.RETIRED_STAGE_VERIFY_CODE)).toBe(false);
  expect(values.WORKFLOW_STAGE_SET.has('build-spec')).toBe(false);
  for (const name of [...workflow, 'build-spec']) {
   expect([...source('runtime/stage/stage-registry.mjs').matchAll(new RegExp(`["']${name}["']`, 'g'))]).toHaveLength(1);
@@ -69,7 +72,8 @@ test('scoped scanner rejects a temporary duplicate and an unauthorized retired l
 test('five public behavior comparisons preserve accept/reject results', async () => {
  await registry();
  const {assertReviewIdentity} = await import('../../runtime/review/review-policy.mjs');
- expect(assertReviewIdentity({stage:'verify-code'})).toEqual({stage:'verify-code',reviewTrack:null,reviewScope:null,reviewKind:null});
+ expect(() => assertReviewIdentity({stage:'verify-code'})).toThrow(/unknown review stage/);
+ expect(assertReviewIdentity({stage:'build-code',review_scope:'phase'})).toEqual({stage:'build-code',reviewTrack:null,reviewScope:'phase',reviewKind:null});
  expect(() => assertReviewIdentity({stage:'not-a-stage'})).toThrow(/unknown review stage/);
  const {deriveSeriousReviewPause} = await import('../../runtime/review/stage-review-disposition.mjs');
  expect(deriveSeriousReviewPause({taskId:'p6',stage:'build-prd',reviewAttempt:{}})).toEqual({status:'unavailable',task_id:'p6',stage:'build-prd',findings:[]});

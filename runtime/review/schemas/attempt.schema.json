@@ -21,7 +21,7 @@
     "version": { "const": "wh-review-attempt.v1" },
     "attempt_id": { "type": "string", "minLength": 1 },
     "task_id": { "type": "string", "minLength": 1 },
-    "stage": { "enum": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"] },
+    "stage": { "enum": ["make-decision", "build-spec", "build-plan", "build-code"] },
     "review_track": { "enum": ["direction", "detail", null] },
     "review_kind": { "enum": [null] },
     "subject_kind": { "enum": ["worktree", "phase"] },

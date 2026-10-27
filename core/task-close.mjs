@@ -1,4 +1,4 @@
-import { STAGE } from "../runtime/stage/stage-registry.mjs";
+import { STAGE, RETIRED_STAGE_VERIFY_CODE } from "../runtime/stage/stage-registry.mjs";
 import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync } from "node:fs";
@@ -389,8 +389,10 @@ export async function prepareDeliveryClosePlan({ taskDir, delivery = {}, closeMo
 // Facts are passive historical input: only actual stage rows determine close identity.
 export function closeConfirmationStage(taskDir) {
   const stages = new Set(readTaskFacts(taskDir).filter(row => row.record_kind === "stage").map(row => row.stage));
-  for (const stage of [STAGE.VERIFY_CODE, STAGE.BUILD_PRD, STAGE.MAKE_DECISION]) if (stages.has(stage)) return stage;
-  throw failure("CLOSE_CONFIRMATION_STAGE_UNAVAILABLE", "close confirmation requires an actual verify-code, build-prd or make-decision stage fact");
+  for (const stage of [STAGE.BUILD_CODE, STAGE.BUILD_PRD, STAGE.BUILD_PLAN, STAGE.MAKE_DECISION]) if (stages.has(stage)) return stage;
+  // Historical stage labels remain passive input; a terminal-only old task belongs to the current implementation route.
+  if (stages.has(RETIRED_STAGE_VERIFY_CODE)) return STAGE.BUILD_CODE;
+  throw failure("CLOSE_CONFIRMATION_STAGE_UNAVAILABLE", "close confirmation requires an actual task stage fact");
 }
 export async function confirmClosePlan({ taskDir, planRef, outcome = "confirmed", replyText } = {}) {
   assertPostWriter(taskDir);
@@ -419,8 +421,7 @@ function acceptedConfirmation(c, planRef, confirmationRef, expectedPlan) {
   // Old confirmation originals are read in place; new writes use evidence only.
   const value = JSON.parse(readFile(root, resolve(confirmationRef).slice(root.length + 1)));
   const stage = closeConfirmationStage(c.taskDir);
-  // Planning confirmations written by the former owner remain read-only originals.
-  const matchesStage = value.stage === stage || (stage === "build-prd" && value.stage === "verify-code");
+  const matchesStage = value.stage === stage || value.stage === RETIRED_STAGE_VERIFY_CODE;
   if (value.decision !== "confirmed" || !matchesStage || !value.reply || !Array.isArray(value.material_refs) || !value.material_refs.includes(planRef)) throw failure("CONFIRMATION_REJECTED", "confirmed verbatim user reply for this plan is required");
   const fragments = value.material_refs.filter(ref => typeof ref === "string" && ref.startsWith(`${planRef}#`));
   const bindings = fragments.filter(ref => ref.startsWith(`${planRef}#sha256=`));

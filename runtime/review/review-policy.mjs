@@ -9,7 +9,7 @@ const REVIEW_SCOPES = new Set(["phase", TERMINAL_REVIEW_SCOPE]);
 
 export function requiredReviewMode(input) {
   const identity = reviewIdentityFromInput(input);
-  return identity.stage === "verify-code" || identity.reviewScope === TERMINAL_REVIEW_SCOPE ? "single_round" : "full_only";
+  return identity.reviewScope === TERMINAL_REVIEW_SCOPE ? "single_round" : "full_only";
 }
 
 function coalesceReviewField(input, snake, camel) {

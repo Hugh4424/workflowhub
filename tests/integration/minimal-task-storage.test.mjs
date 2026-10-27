@@ -75,6 +75,6 @@ describe("minimal current task storage",()=>{
   for(const bad of[{...row(),review_origin:"conducted"},{...row(),close_action:{value:null}},{...row(),close_action:{value:{action:"push",result:"no"}}},{...row(),phase_progress:{phase_id:"P1",task_id:"T001",material_revision:"retired",recorded_at:"2026-10-03T00:00:00Z"}},...['layer_states','material_digest','snapshot_tree','selector'].map(key=>({...row(),[key]:"retired"}))]){await expect(writeStageRow(root,bad)).rejects.toThrow(/reference|reason|close action|phase_progress|unsupported fields/);expect(readFileSync(path)).toEqual(before);}
  });
  it("writes the two current stage rows without creating an index or status projection",async()=>{
-  const{root}=await fixture();await writeStageRow(root,row());await writeStageRow(root,row("verify-code"));expect(readTaskFacts(root).map(value=>value.stage)).toEqual(["build-code","verify-code"]);expect(readdirSync(root).sort()).toEqual(["facts.jsonl","quality","task.json"]);
+  const{root}=await fixture();await writeStageRow(root,row());await writeStageRow(root,row("build-plan"));expect(readTaskFacts(root).map(value=>value.stage)).toEqual(["build-code","build-plan"]);expect(readdirSync(root).sort()).toEqual(["facts.jsonl","quality","task.json"]);
  });
 });

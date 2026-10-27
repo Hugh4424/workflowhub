@@ -55,7 +55,7 @@ describe("runtime facade", () => {
   test("workflow prose cannot document a private runtime route", async () => {
     const forbidden = /--operation=|capture-tests|publish-(?:phase|acceptance|verify|content)/;
     const documentedRoutes = new Set();
-    for (const stage of ["make-decision", "build-prd", "build-plan", "build-code", "verify-code"]) {
+    for (const stage of ["make-decision", "build-prd", "build-plan", "build-code"]) {
       const prompt = fs.readFileSync(path.join(ROOT, "workflows", stage, "SKILL.md"), "utf8");
       const commands = [...prompt.matchAll(/stage-runtime\.mjs\s+([a-z-]+)/g)].map((match) => match[1]);
       expect(commands.every((command) => RUNTIME_BEHAVIORS.includes(command))).toBe(true);

@@ -298,7 +298,7 @@ export function checkSkillConsistency(root) {
     for (const track of ["direction", "detail"]) compare("make-decision", track,
       manifest.contracts?.["make-decision"]?.required_skills_by_track?.[track],
       plan.stages?.["make-decision"]?.tracks?.[track]?.required_skills);
-    for (const stage of [STAGE.BUILD_PLAN, STAGE.BUILD_CODE, STAGE.VERIFY_CODE]) compare(stage, null,
+    for (const stage of [STAGE.BUILD_PLAN, STAGE.BUILD_CODE]) compare(stage, null,
       manifest.contracts?.[stage]?.required_skills, plan.stages?.[stage]?.required_skills);
     compare("build-prd", null, manifest.contracts?.["build-prd"]?.required_skills,
       plan.non_stage?.build_prd?.required_skills);

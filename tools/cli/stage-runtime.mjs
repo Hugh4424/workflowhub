@@ -356,9 +356,8 @@ function deriveIdentityFromAuthenticatedWorktree(cwd, env) {
 
 function isTaskBoundBuildCodeReviewRequest(request) {
   const scope = request?.review_scope ?? request?.reviewScope ?? null;
-  if (request?.stage === "verify-code") return scope === null;
   return request?.stage === "build-code"
-    && (scope === "phase" || scope === "integration");
+    && (scope === "phase" || scope === "terminal");
 }
 
 function isNormalOcrCodeReviewRequest(request) {
@@ -366,8 +365,8 @@ function isNormalOcrCodeReviewRequest(request) {
   const kind = request?.review_kind ?? request?.reviewKind ?? null;
   const track = request?.review_track ?? request?.reviewTrack ?? null;
   return track === null && kind === null && (
-    (request?.stage === "build-code" && (scope === "phase" || scope === "integration"))
-    || (request?.stage === "verify-code" && scope === null));
+    (request?.stage === "build-code" && (scope === "phase" || scope === "terminal"))
+);
 }
 
 function ocrReviewInstructionsFor(request) {
@@ -375,7 +374,7 @@ function ocrReviewInstructionsFor(request) {
     request.review_scope ?? request.reviewScope ?? null, request.review_kind ?? request.reviewKind ?? null, "full", null, true);
   return [
     `OCR code review: ${request.stage}/${request.phase_id ?? request.phaseId ?? "worktree"}.`,
-    "Read the complete contracts/build-code.md, contracts/verify-code.md, contracts/provider-protocol.md and manifest-declared lens skill bodies. Apply the actual stage's reviewer contract and the review focus below; the other code contract supplies the adjacent review boundary.",
+    "Read the complete contracts/build-code.md, contracts/provider-protocol.md and manifest-declared lens skill bodies. Apply the actual stage's reviewer contract and the review focus below; the build-code contract contains both phase and terminal boundaries.",
     "Start with source.json, diff-index.json when present, review-instructions.md and full acceptance-criteria text. The complete diff content is in all manifest-declared per-file patch shards listed in diff-index.json; small packets instead contain changes.diff. Read the complete navigation first, then the relevant full patches and current implementation/consumer/test files according to real entry points, risk and changed interfaces. Do not blindly cat a cumulative diff or every historical/deleted body. Deleted and historical patches remain fully available by index reference and must be read when a concrete removal, consumer or security claim requires them. No diff section is omitted, summarized instead of supplied, or truncated; never infer a source line from a shard line. Do not replace required bodies with summaries or truncate contracts.",
     "When a changed file in the current diff also serves as a fixed reviewer body, its identical manifest entry serves both roles. Review the complete bytes as changed implementation source as well as reviewer instructions; neither role is omitted.",
     focus,
@@ -430,9 +429,9 @@ function writeOcrCurrentMaterialProjection(bundleRoot, projected, evidence) {
 }
 
 function projectOcrCodeReviewBundle(built, attachmentRoot, request, source) {
-  const selected = built.manifest.filter(({ path }) => path !== "packet-plan.json" && path !== "manifest.json");
+  const selected = built.manifest.filter(({ path }) => path !== "packet-plan.json" && path !== "manifest.json" && path !== "contracts/verify-code.md");
   const paths = new Set(selected.map(({ path }) => path));
-  for (const path of ["contracts/build-code.md", "contracts/verify-code.md", "contracts/provider-protocol.md", "skills/simplicity-guard/SKILL.md", "skills/review/SKILL.md"]) {
+  for (const path of ["contracts/build-code.md", "contracts/provider-protocol.md", "skills/simplicity-guard/SKILL.md", "skills/review/SKILL.md"]) {
     if (!paths.has(path)) throw new Error(`OCR packet is missing its required reviewer body: ${path}`);
   }
   if (!paths.has("review-instructions.md") || !paths.has("source.json")
@@ -678,7 +677,7 @@ export function prepareTaskBoundBuildCodeReviewBundle(context, request, {
   if (!isTaskBoundBuildCodeReviewRequest(request)) throw new TypeError("task-bound build-code review request required");
   const reviewScope = request.review_scope ?? request.reviewScope;
   const candidateExperiment = isNormalOcrCodeReviewRequest(request);
-  if (candidateExperiment && request.stage === "verify-code") {
+  if (candidateExperiment && reviewScope === "terminal") {
     validateVerifyAcceptanceSummary(request.materials?.acceptance_criteria);
   }
   const trusted = loadConfig({ requestedStage: request.stage, requestedTrack: request.review_track ?? request.reviewTrack ?? null,
@@ -689,7 +688,7 @@ export function prepareTaskBoundBuildCodeReviewBundle(context, request, {
     includeDiff: true, taskId: context.task.identity.taskId,
     ...(cursorDiffBase === null ? {} : { baselineCommit: cursorDiffBase }) });
   try {
-    const changedPaths = request.stage === 'verify-code' ? source.changedPaths : undefined;
+    const changedPaths = reviewScope === 'terminal' ? source.changedPaths : undefined;
     const compacted = compactVerifyCodeMaterials(request.materials, { changedPaths });
     const selectedSource = phaseReviewSourceProjection(context, request, source, trusted.attachmentRoot,scope);
     const built = buildMaterials({
@@ -1205,7 +1204,7 @@ async function recordTaskReview(context, input, values, services = {}) {
     const original=input.request;
     if(original.stage!==undefined && original.stage!==values.stage) throw new TypeError("review request stage differs from CLI stage");
     const request={...original,stage:values.stage,activation_cohort:context.manifest.activation_cohort ?? "pre"};
-    const isPhase=values.stage==="build-code" && (request.review_kind ?? request.reviewKind ?? null)===null;
+    const isPhase=values.stage==="build-code" && (request.review_kind ?? request.reviewKind ?? null)===null && (request.review_scope ?? request.reviewScope ?? "phase") === "phase";
     if(isPhase) {
       request.review_scope=request.review_scope ?? request.reviewScope ?? "phase";
       request.phase_id=request.phase_id ?? request.phaseId ?? values["phase-id"] ?? null;
@@ -1213,7 +1212,7 @@ async function recordTaskReview(context, input, values, services = {}) {
     }
     const reviewReadScope=trustedReviewReadScope(context,request,typeof services.resolveReviewReadScope==='function' ? services.resolveReviewReadScope({task:context.task,workspace:context.workspace,stage:request.stage,phaseId:request.phase_id??null}) : undefined);
     request.materials = resolveMaterialRefs(context, request.materials,reviewReadScope);
-    const codeSurface=[STAGE.BUILD_CODE,STAGE.VERIFY_CODE].includes(request.stage)
+    const codeSurface=request.stage === STAGE.BUILD_CODE
       && (request.review_kind ?? request.reviewKind ?? null)===null && request.surface!=="document";
     if(codeSurface)request.surface="code";
     // Reader-only storage-root adaptation: the authenticated workspace is never mutated or published as this root.
@@ -1272,7 +1271,7 @@ async function recordTaskReview(context, input, values, services = {}) {
 
 export async function stageRuntimeMain(argv = process.argv.slice(2), { services = {}, cwd = process.cwd() } = {}) {
   const { command, values } = parseArgs(argv);
-  if (!WORKFLOW_STAGES.includes(values.stage)) throw new TypeError("a current five-stage --stage is required");
+  if (!WORKFLOW_STAGES.includes(values.stage)) throw new TypeError("a current workflow --stage is required");
   const common = ["stage", "project", "task", "task-path"];
   const options = {
     doctor: common, status: [...common, "reason"], artifact: [...common, "name", "input"],
@@ -1369,7 +1368,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     const isClosePlanRef = ref => typeof ref === "string"
       && dirname(resolve(context.workspace.worktreeRoot, ref)) === closeDir
       && /^\d{4}-\d{2}-\d{2}-\d{3}-close-plan\.json(?:#.*)?$/.test(basename(ref));
-    if ([STAGE.VERIFY_CODE, STAGE.MAKE_DECISION].includes(values.stage) && Array.isArray(refs) && refs.some(isClosePlanRef)) {
+    if ([STAGE.BUILD_CODE, STAGE.BUILD_PRD, STAGE.MAKE_DECISION].includes(values.stage) && Array.isArray(refs) && refs.some(isClosePlanRef)) {
       if (refs.length !== 1) throw new TypeError("close confirmation requires exactly one plan reference");
       if (refs[0].includes("#") || !isAbsolute(refs[0]) || resolve(refs[0]) !== refs[0]) throw new TypeError("close confirmation requires a canonical plain plan path without fragments");
       if (Object.keys(fields).some(key => !["stage", "decision", "reply", "materialRefs"].includes(key))) throw new TypeError("close confirmation contains unsupported fields");

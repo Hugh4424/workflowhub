@@ -40,7 +40,7 @@ function choice(f,level){
 }
 function timing(f,reached=true){const ref='quality/evidence/timing.json';put(f.taskPath,ref,{task_id:f.id,stage:'make-decision',timing_verified:true,reached,reader:'independent fixture reader',observation:'受控交付时点，PR原件缺失'});put(f.taskPath,'facts.jsonl',JSON.stringify({record_kind:'stage',task_id:f.id,stage:'make-decision',source:ref,evidence:{value:[]}})+'\n');}
 function routes(f,level){
- const stages=level==='complex'?['make-decision','build-plan','build-code','verify-code']:['make-decision'];const expected=[];
+ const stages=level==='complex'?['make-decision','build-plan','build-code']:['make-decision'];const expected=[];
  for(const stage of stages){const source=`workflows/${stage}/steps.json`;
   let manifest=JSON.parse(get(ROOT,source));
   if(stage==='make-decision'&&level!=='complex'){const flow=`workflows/make-decision/flows/${level}/steps.json`;put(f.repo,source,manifest);manifest=JSON.parse(get(ROOT,flow));put(f.repo,flow,manifest);expected.push(...manifest.steps.map(step=>[flow,step.step_slug]));}
@@ -172,7 +172,7 @@ import {runPortableWorkflow} from '../../runtime/task/portable-workflow-run.mjs'
 import {writeStageRow} from '../../runtime/task/task-store.mjs';
 import {summarizeWorkflow} from '../../runtime/task/final-chain.mjs';
 function currentOwnerFixture(level){
- const f=fixture(level==='planning'?'planning-no-code-pr':`level-${level}`);choice(f,level);const keys=routes(f,level),stages=level==='complex'?['make-decision','build-plan','build-code','verify-code']:['make-decision'];
+ const f=fixture(level==='planning'?'planning-no-code-pr':`level-${level}`);choice(f,level);const keys=routes(f,level),stages=level==='complex'?['make-decision','build-plan','build-code']:['make-decision'];
  put(f.materialRoot,'step-consumer-design.md',keys.map(([source,step_slug])=>`| [controlled](<../../${source}#L7>) \`${step_slug}\` | result | source；human | owner |`).join('\n')+'\n');
  const expected=keys.map(([source,step_slug])=>({source,step_slug,owner_ref:join(dirname(source),'SKILL.md')+'#'+(source.includes('/flows/')?'步骤':'方法')}));
  for(const method of new Set(expected.map(row=>row.owner_ref.split('#')[0])))put(f.repo,method,get(ROOT,method));

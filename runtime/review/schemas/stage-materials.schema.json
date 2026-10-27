@@ -19,7 +19,6 @@
         "make-decision/detail",
         "build-plan",
         "build-code/phase",
-        "verify-code",
         "build-prd",
         "build-code/terminal"
       ],
@@ -36,9 +35,6 @@
         "build-code/phase": {
           "$ref": "#/$defs/surface"
         },
-        "verify-code": {
-          "$ref": "#/$defs/surface"
-        },
         "build-prd": {
           "$ref": "#/$defs/surface"
         },
@@ -53,8 +49,7 @@
       "required": [
         "make-decision",
         "build-plan",
-        "build-code",
-        "verify-code"
+        "build-code"
       ],
       "properties": {
         "make-decision": {
@@ -87,9 +82,6 @@
         },
         "build-code": {
           "$ref": "#/$defs/buildCodeProfiles"
-        },
-        "verify-code": {
-          "$ref": "#/$defs/rule"
         }
       },
       "additionalProperties": false

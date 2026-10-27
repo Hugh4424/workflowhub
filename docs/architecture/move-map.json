@@ -6,11 +6,24 @@
   "generated_from": "当前迁移表保留分类、已改接真实相对模块 consumer 与显式数据 reader；不保存整树快照或 hash 清单",
   "entries": [
     {
+      "source": "tests/contract/stage-mechanism.test.mjs",
+      "destination": "tests/contract/stage-mechanism.test.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "P9/T011 ORACLE-STAGE-MECHANISM：formal三阶段写入、历史facts读取、当前close身份、真实public CLI终末包与host mode、环9完整证明与反例；受控transport不证明外部OCR质量。",
+      "owner": "P9机制实现与独立验收owner",
+      "consumer": "P9目标RED/GREEN、P10/P11迁移作者与独立审查者",
+      "module_consumers": [],
+      "named_data_readers": ["npx vitest run tests/contract/stage-mechanism.test.mjs"],
+      "delete_condition": "相同公开接缝与历史读写边界已由独立验证替代测试完整承接且无当前消费者后删除。",
+      "retention_basis": "AC-ROUTE-002 / AC-MERGE-004；不新增运行时状态。"
+    },
+    {
       "source": "runtime/stage/stage-registry.mjs",
       "destination": "runtime/stage/stage-registry.mjs",
       "status": "retain",
       "role": "production",
-      "responsibility": "P6/T008阶段名单唯一可执行来源；零runtime依赖，导出阶段名、正式开发4集、全部工作流5集及仅供两处历史读取的退役build-spec值；不改变阶段分支或公共行为。",
+      "responsibility": "P6/T008阶段名单唯一可执行来源，P9/T011收敛正式开发3集与含独立规划的工作流4集；零runtime依赖，导出当前阶段名、供两处历史读取的退役build-spec值及供host-config被动读取的已知退役verify-code常量；该常量不进任何当前身份集合，原host配置不改写，旧provider不解析/不执行；历史facts原样读取，不新增阶段或公共行为。",
       "owner": "阶段运行时",
       "consumer": "16个既有模块/CLI读取名字与集合以校验当前阶段、计算终末范围、读取历史顺序或分发技能；P8–P11作者承接注册表。",
       "module_consumers": [
@@ -33,7 +46,7 @@
       ],
       "named_data_readers": [],
       "delete_condition": "阶段集合已有另一个经独立验证的唯一干净定义点、全部现读取方被承接且无读者需要本文件后删除；不得保并存副本。",
-      "retention_basis": "FR-STAGE-001 / AC-STAGE-001；替代原15个副本模块/16处名单字面量的执行来源，final-chain改读具名单名常量；schema/材料矩阵与历史research-report不在本Phase迁移。"
+      "retention_basis": "FR-STAGE-001 / AC-STAGE-001 / AC-ROUTE-002 / AC-MERGE-004；P9同步写schema、材料矩阵及当前CLI/host/final-chain真实消费者，旧research-report与历史任务原件只读。"
     },
     {
       "source": "tests/contract/auto-recovery.test.mjs",
@@ -6034,7 +6047,7 @@
       "destination": "tools/cli/n11-pairwise-judge.mjs",
       "status": "add",
       "role": "production",
-      "responsibility": "P8限定CLI读取P7真实stage业务产物、匿名双序native packet判定、原件replay与实际transport成本字段读取；复用既有可信profile/native driver和task证据，不新增runtime命令或成本账本。",
+      "responsibility": "P8限定CLI只读hash-pinned P7历史业务语料；分母从已绑定manifest/preflight实际inventory互核，不把当前formal集合套给历史八格、不调用退役stage；匿名双序native packet判定、原件replay与实际transport成本字段读取；复用既有可信profile/native driver和task证据，不新增runtime命令或成本账本。",
       "owner": "N11/P8 实施者；维护者为用户",
       "consumer": "P8/T019执行者实际调用prepare/judge/replay；tests/contract/n11-pairwise-judge.test.mjs直调公开函数与CLI；用户和verify-code按判定原件复算。",
       "module_consumers": [
