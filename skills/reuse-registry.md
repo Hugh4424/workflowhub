@@ -54,7 +54,7 @@
 | design-source-extraction | 设计源准备后、实施前提炼机器JSON；按五类输入缺项、四态与过期记录供规划/实施/独立检查消费；不晋升规范。 | [读取正文](design-source-extraction/SKILL.md) |
 | design-source-readiness | 核对已有设计材料是否能供当前动作使用，并显露缺源或冲突。 | [读取正文](design-source-readiness/SKILL.md) |
 | frontend-prototype-render | 用真实组件输入渲染任务原型，提供预览与截图。 | [读取正文](frontend-prototype-render/SKILL.md) |
-| frontend-component-quality | 实现或审查组件的真实consumer、状态、ViewModel、样式与复用边界。 | [读取正文](frontend-component-quality/SKILL.md) |
+| frontend-component-quality | 实现或审查组件的真实consumer、状态、ViewModel、样式与复用边界；外部引用与派生参考回catalog对应记录。 | [读取正文](frontend-component-quality/SKILL.md) |
 | third-review | 明确调用通用异源CLI审查器，保原始意见和失败诊断。 | [读取正文](third-review/SKILL.md) |
 
 ## N4既有方法采用索引
@@ -172,3 +172,7 @@
 figure-it-out 的采用、固定字节与未证实项见 [catalog.yaml](catalog.yaml) 的 `figure-it-out` 条目；正文落点为 [verify-code 的检查可信度段](../workflows/verify-code/SKILL.md#测试充分性与检查可信度)，[stage-reflection](stage-reflection/SKILL.md) 只放指针，正文接线与首验归 P5/T021。本节只导航。
 
 | norm-sync | 每Phase收口、终末验证、写经验及任务收口前同步已独立验证变化；拒写不足项并保partial恢复。 | [读取正文](norm-sync/SKILL.md) |
+
+## 外部引用登记方法
+
+新增或变更外部内容时，采用卡writer读[PRD逐项台账与角色分工](../specs/workflowhub-ui-frontend-release-20261020/prd.md#新增或变更外部内容时谁写哪一处)，先定位真实采用范围与消费者；登记owner写[catalog](catalog.yaml)，方法owner维护正文与本索引，规范owner维护AGENTS导航。C03方法读[两条链资产检查](frontend-component-quality/SKILL.md#两条链资产检查c03)；本索引只导航，不转述来源、版本、许可或落地状态。
