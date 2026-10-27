@@ -1102,3 +1102,5 @@ P10/T013同次接通既有 `core/task-close.mjs` preparePr真实consumer：当�
 P11/T014原owner定向补漏按卡唯一40路径与三个不重叠writer执行；旧stage可调用能力必须退役、方法/真实caller同次接通，合法历史/退役常量/拒绝旧请求与原错误合同不作清字目标。原RED/Frozen/DO NOT TOUCH及独立TCR要求保持，P11唯一外审覆盖最终总diff；Multica仅本地consumer，不触外部系统。当前只修计划，不签任何未执行验收。
 
 AC-ROUTE-003“当前引用”按P11卡263澄清：实际可调用旧stage/当前方法职责及真实consumer，不以任意测试字符串计数代行为。已查纯legacy路径helper、明确拒旧负例、未迁旧positive与范围外未知分列保真，非本期gate不冒历史合法或当前质量；真实入口旧请求必须拒绝，未读caller不泛豁免、不为消字迁全历史tests。新scanner仍先精确独立TCR。
+
+P12聚合前原P5 owner有界修既有单Task来源reader，精确两路径build-page-data.mjs/cockpit-autogen.test.mjs（全局已有）；支持已声明phase/task/materials.phase/implementation与真实commit绑定，planner_only不冒实施，多Phase提交不批量完成；原COCK首判归属及immutable原件不变，不新状态账本/协议/样式。修后独立补证纳入P12唯一terminal审，完整范围/正反沿P12卡同名节。
