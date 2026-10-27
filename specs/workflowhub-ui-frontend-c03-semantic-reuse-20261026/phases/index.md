@@ -10,7 +10,7 @@
 | `P1` | `phases/P1-四类对象台账.md` | `L0 — 结果与变更` | `PB/specs/design/components.md`；`PB/specs/design/layouts.md`；`quality/evidence/P1-ledger.json`；`quality/tests/c03-evidence-check.mjs`；`quality/tests/fixtures/c03-ledger-missing-field.json` | `none` | P2、P3、P6（本卡内）；C06（跨卡，登记边） |
 | `P2` | `phases/P2-两条链复用与组合.md` | `L0 — 结果与变更` | `PB/frontend/src/workbench-screen.tsx`；`PB/frontend/src/business-log-page.tsx`；`PB/frontend/src/ui/workbench-page.css`；`PB/frontend/src/ui/business-log-page.css`；`PB/frontend/src/workbench-screen.test.tsx`；`PB/frontend/src/business-log-page.test.tsx` | `P1` | P3、P4（本卡内）；C06（跨卡，登记边） |
 | `P3` | `phases/P3-静态反例.md` | `L0 — 结果与变更` | `quality/evidence/P3-counterexamples.json`；`quality/tests/c03-evidence-check.mjs` | `P2` | P4 |
-| `P4` | `phases/P4-页面层验收.md` | `L0 — 结果与变更` | `quality/evidence/P4-page.json`；`quality/tests/c03-browser-assertions.mjs` | `P3` | P5（本卡内）；C06（跨卡） |
+| `P4` | `phases/P4-页面层验收.md` | `L0 — 结果与变更` | `quality/evidence/P4-page.json`；`quality/tests/c03-browser-assertions.mjs`；`PB/frontend/src/workbench-screen.tsx`；`PB/frontend/src/workbench-screen.lifecycle.test.tsx`；`PB/frontend/src/ui/workbench-page.css` | `P3` | P5（本卡内）；C06（跨卡） |
 | `P5` | `phases/P5-交下游受影响对象.md` | `L0 — 结果与变更` | `quality/evidence/P5-handoff.json` | `P2、P4` | C08（跨卡，登记边） |
 | `P6` | `phases/P6-共享资产检查段.md` | `L0 — 结果与变更` | `WH/skills/frontend-component-quality/SKILL.md`；`quality/evidence/P6-shared-segment.json` | `P1` | 实施者、C06（跨卡） |
 | `P7` | `phases/P7-外部引用台账与登记.md` | `L0 — 结果与变更` | `quality/evidence/P7-external.json`；`WH/specs/workflowhub-ui-frontend-release-20261020/prd.md`；`WH/skills/catalog.yaml`；`WH/skills/reuse-registry.md`；`WH/AGENTS.md` | `P6、P5` | 实施者；C06／规范同步（G-18 承接方）；C05、C10 |

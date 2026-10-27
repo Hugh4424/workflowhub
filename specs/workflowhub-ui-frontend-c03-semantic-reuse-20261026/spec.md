@@ -472,7 +472,7 @@ PaperBuilder 前端已有 81 个生产组件、约 10 条路由和 37 个设计�
   - PaperBuilder 发布流程配置与 `pnpm-lock.yaml`。
 - **全局依赖**：`PB` 工作树必须在 P1 开工前存在，命令 `git -C /Users/Hugh/Hugh/Project/PaperBuilder worktree add -b task/PaperBuilder/workflowhub-ui-frontend-c03-semantic-reuse-20261026 /Users/Hugh/Hugh/Project/PaperBuilder-workflowhub-ui-frontend-c03-semantic-reuse-20261026 c9d17631`；基线必须是 `c9d17631`，未提交的 8 项不进分支。
 - **文件归属**：`PB` 两条链的每个文件在任一时刻只有一个持笔者（P2）；`WH/skills/frontend-component-quality/SKILL.md` 只由 P6 写；P1 只读 `PB/specs/design/*` 以外的代码。
-- **共享路径定序**：`PB/frontend/src/workbench-screen.tsx`、`business-log-page.tsx` 由 P2 先写，P4 只读并取证，P5 只读引用；P1 写 `PB/specs/design/components.md`、`layouts.md`，P2 只读它们补台账不重复写。
+- **共享路径定序**：两条链由原P2 producer先写，P4验收writer对PB只读并取证，P5只读引用。当前P4的036实际恢复失败所引窄修待独立材料确认：仅原P2 implement独占workbench-screen.tsx及workbench-screen.lifecycle.test.tsx，交回后P4验收者再复验；这是同一producer职责，不整体放开P4源码写权，不重开P2／改AC。P1写PB/specs/design/components.md、layouts.md，P2只读它们补台账不重复写。
 - **回滚与恢复**：改动只落在独立分支；回滚＝在该分支上 `git checkout -- <该文件>` 或 revert 单次提交，不丢弃其它改动、不改历史。
 
 ### 需求到任务追踪
