@@ -584,6 +584,7 @@ req→WP→Task仅按材料显式命名空间ID/ref及WP→AC→Task声明的可
 - `skills/wh-review/contracts/verify-code.md`
 - `skills/wh-review/manifest.json`
 - `skills/wh-review/scripts/__tests__/simple-contracts.test.mjs`
+- `skills/wh-review/scripts/__tests__/third-review-host-config.test.mjs`
 - `skills/wh-review/scripts/review-materials.mjs`
 - `skills/wh-review/scripts/third-review-host-config.mjs`
 - `skills/wh-review/skill-bundle.json`
