@@ -6,6 +6,21 @@
   "generated_from": "当前迁移表保留分类、已改接真实相对模块 consumer 与显式数据 reader；不保存整树快照或 hash 清单",
   "entries": [
     {
+      "source": "tests/acceptance/final-account.test.mjs",
+      "destination": "tests/acceptance/final-account.test.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "P12/T015 ORACLE-FINAL-ACCOUNT：只读当前主会话唯一JSON final-report及逐AC原件，核30条分母、身份/冻结HEAD、六项结论、三条结果信号与真实缺口；owned负例不冒本任务报告验收。",
+      "owner": "P12终末对账实施与独立验证owner",
+      "consumer": "当前build-code终末主会话与独立测试reader；stage-close调用方读取真实报告前的定向检查",
+      "module_consumers": [],
+      "named_data_readers": [
+        "npx vitest run tests/acceptance/final-account.test.mjs"
+      ],
+      "delete_condition": "本任务终末对账职责已被独立验证的现有消费者完整承接且本入口无当前消费者后删除。",
+      "retention_basis": "AC逐条对账与ORACLE-FINAL-ACCOUNT；不产报告、不首签上游、不新增生产状态/协议/推进门。"
+    },
+    {
       "source": "tests/contract/stage-id-removal.test.mjs",
       "destination": "tests/contract/stage-id-removal.test.mjs",
       "status": "retain",

@@ -51,8 +51,9 @@ describe('ORACLE-REVIEW-TIER controlled fixtures', () => {
     input.readings.size.raw='100\t100\truntime/example/p1.mjs';expect(policy.reviewTierFor(input)).toBe('外部 OCR');
   });
   it('fixes the existing terminal review identity to external OCR and preserves its identity guard', () => {
-    const input=low();input.identity={stage:'verify-code'};expect(policy.reviewTierFor(input)).toBe('外部 OCR');
-    input.identity={stage:'build-code',review_scope:'terminal'};expect(()=>policy.reviewTierFor(input)).toThrow(/phase/);
+    const input=low();input.identity={stage:'verify-code'};expect(()=>policy.reviewTierFor(input)).toThrow(/unknown review stage/);
+    input.identity={stage:'build-code',review_scope:'terminal'};expect(policy.reviewTierFor(input)).toBe('外部 OCR');
+    input.identity={stage:'build-code',review_scope:'integration'};expect(()=>policy.reviewTierFor(input)).toThrow(/integration review is retired/);
   });
   it('routes missing, unread and binary dimensions externally', () => {
     for(const field of ['paths','impact','size']) {
@@ -70,11 +71,11 @@ describe('ORACLE-REVIEW-TIER controlled fixtures', () => {
   it('rejects missing executor/source/readings, false OCR identities and invented provider results', () => {
     for(const field of ['executor','source','input']) {const record=independent();delete record[field];expect(()=>policy.assertReviewTierRecord(record)).toThrow();}
     for(const extra of [{identity:'ocr'},{provider_results:[]},{source:{dispatch_identity:'reviewer',context_isolation:'none',identity:'ocr'}},{source:{dispatch_identity:'reviewer',context_isolation:'all'}}]) expect(()=>policy.assertReviewTierRecord({...independent(),...extra})).toThrow();
-    const record=external({...low(),identity:{stage:'verify-code'}});delete record.provider_results;expect(()=>policy.assertReviewTierRecord(record)).toThrow(/terminal/);
+    const record=external({...low(),identity:{stage:'build-code',review_scope:'terminal'}});delete record.provider_results;expect(()=>policy.assertReviewTierRecord(record)).toThrow(/terminal/);
   });
   it('preserves ENOENT and low-version OCR detection without replacing the executor or inventing results', () => {
     for(const reason of ['ENOENT','OCR version 1.12.8 is below 1.12.9']) {
-      const record={executor:'外部 OCR',input:{...low(),identity:{stage:'verify-code'}},source:{route:'configured/single_round'},status:'unavailable',reason,detection_output_ref:'quality/tests/ocr-version.output',failure_ref:'quality/tests/ocr-failure.json'};
+      const record={executor:'外部 OCR',input:{...low(),identity:{stage:'build-code',review_scope:'terminal'}},source:{route:'configured/single_round'},status:'unavailable',reason,detection_output_ref:'quality/tests/ocr-version.output',failure_ref:'quality/tests/ocr-failure.json'};
       expect(policy.assertReviewTierRecord(record).executor).toBe('外部 OCR');
       expect(record.provider_results).toBeUndefined();
       expect(()=>policy.assertReviewTierRecord({...record,detection_output_ref:''})).toThrow(/detection/);
@@ -177,11 +178,11 @@ describe('independent finding regression: nested scoring and published T02 evide
 describe('P1 independent supplement findings',()=>{
   it('accepts only actual provider terminal statuses, keeping timeout categories separate',()=>{
     for(const status of ['timed_out','unavailable','running']) {
-      const record=external({...low(),identity:{stage:'verify-code'}});record.provider_results[0].status=status;
+      const record=external({...low(),identity:{stage:'build-code',review_scope:'terminal'}});record.provider_results[0].status=status;
       expect(()=>policy.assertReviewTierRecord(record)).toThrow(/terminal/);
     }
     for(const status of ['completed','failed','cancelled']) {
-      const record=external({...low(),identity:{stage:'verify-code'}});record.provider_results[0].status=status;
+      const record=external({...low(),identity:{stage:'build-code',review_scope:'terminal'}});record.provider_results[0].status=status;
       expect(policy.assertReviewTierRecord(record)).toBe(record);
     }
   });

@@ -33,10 +33,11 @@ function declaresPackageSet(text,count){
  return number===count;
 }
 function bullets(text){
- const lines=(text??'').split(/\n|(?=\d+[）)])/u),numbered=lines.some(line=>/^\s*\d+[）)]/.test(line));
+ const circled=/^\s*[①-⑳]/u.test(text??''),stepStart=circled?/^\s*[①-⑳]/u:/^\s*\d+[）)]/;
+ const lines=(text??'').split(circled?/\n|(?=[①-⑳])/u:/\n|(?=\d+[）)])/u),numbered=lines.some(line=>stepStart.test(line));
  if(!numbered)return (text??'').trim().split(/\n\s*\n/)[0].split('\n').filter(line=>!/^\s*[|#]/.test(line)).map(line=>line.replace(/^\s*[-*]\s*/,'').trim()).filter(Boolean);
  const steps=[];let continuing=false;
- for(const line of lines){const value=line.trim();if(/^\d+[）)]/.test(value)){steps.push(value);continuing=true;}else if(!value||/^[|#]/.test(value)||/^(?:附件|说明)[：:]/.test(value)){continuing=false;}else if(continuing)steps[steps.length-1]+=' '+value;}
+ for(const line of lines){const value=line.trim();if(stepStart.test(value)){steps.push(value);continuing=true;}else if(!value||/^[|#]/.test(value)||/^(?:附件|说明)[：:]/.test(value)){continuing=false;}else if(continuing)steps[steps.length-1]+=' '+value;}
  return steps;
 }
 
@@ -107,7 +108,8 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
  const rows=facts===null?[]:readTaskFacts(task.taskPath);
  const factsPath=join(task.taskPath,'facts.jsonl'),factsHash=fingerprints[factsPath]??'missing';
  delete fingerprints[factsPath];
- const positionRow=rows.find(row=>row.phase_progress||row.handoff||row.close_action),cursor=rows.find(row=>row.stage==='build-code')?.phase_progress;
+ const cursorRow=rows.find(row=>row.stage==='build-code'&&/^P[1-9][0-9]*$/.test(row.phase_progress?.phase_id??'')&&/^T[0-9]{3,}$/.test(row.phase_progress?.task_id??''));
+ const positionRow=cursorRow??rows.findLast(row=>row.handoff?.value||row.close_action?.value),cursor=cursorRow?.phase_progress;
  // These are the only fact fields consumed by the task-node display below.
  fingerprints.facts_cursor_sha256=hash(JSON.stringify({phase_id:cursor?.phase_id??null,task_id:cursor?.task_id??null,stage:positionRow?.stage??null}));
  const objects=[],phaseTasks={};
@@ -243,7 +245,7 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
   for(const name of readdirSync(phaseDirectory).filter(name=>/^P\d+[^/\\]*\.md$/.test(name))){const ref='phases/'+name;if(!Object.hasOwn(phaseInputs,ref))phaseInputs[ref]=read(join(phaseDirectory,name));}
  }
  const contract=validatePostPhaseContract({spec:spec??'',index:index??'',phases:phaseInputs});
- const phaseRows=contract.facts?.phase_rows??[],phaseRecords=new Map(),phaseCommits=new Map(),acceptanceClaims=new Map();
+ const phaseRows=contract.facts?.phase_rows??[],phaseRecords=new Map(),phaseCommits=new Map(),taskCommitProofs=new Map(),acceptanceClaims=new Map();
  const committed=commit=>{if(!/^[a-f0-9]{40}$/i.test(commit??''))return false;try{execFileSync('git',['merge-base','--is-ancestor',commit,'HEAD'],{cwd:root,stdio:'ignore'});return true;}catch{return false;}};
  for(const row of phaseRows){
   const text=phaseInputs[row.path],path=join(material,row.path);if(!text)continue;
@@ -273,7 +275,24 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
    if(kind==='test'&&record.exit_code===0&&!record.truncated&&typeof record.cwd==='string'&&resolve(record.cwd)===root&&Array.isArray(record.argv)&&/^(?:.*\/)?git$/.test(record.argv[0])){
     let commit=record.argv.includes('diff-tree')?record.argv.find(arg=>/^[a-f0-9]{40}$/i.test(arg)):undefined;
     if(record.argv[1]==='commit'&&record.output_ref){const ref=isAbsolute(record.output_ref)?relative(task.taskPath,record.output_ref).split(sep).join('/'):record.output_ref,output=task.readRecordBytes(ref).toString('utf8'),abbreviated=/^\[[^\n]* ([a-f0-9]{7,40})\]/m.exec(output)?.[1];if(abbreviated){try{commit=execFileSync('git',['rev-parse','--verify',abbreviated+'^{commit}'],{cwd:root,encoding:'utf8',stdio:['ignore','pipe','ignore']}).trim();}catch{}}}
-    if(committed(commit)){const changed=execFileSync('git',['diff-tree','--no-commit-id','--name-only','-z','-r',commit],{cwd:root}).toString().split('\0'),touched=phaseRows.filter(row=>changed.includes(relative(root,join(material,row.path)).split(sep).join('/')));if(touched.length===1&&!phaseCommits.has(touched[0].id))phaseCommits.set(touched[0].id,{commit,path});}
+    if(committed(commit)){const changed=execFileSync('git',['diff-tree','--no-commit-id','--name-only','-z','-r',commit],{cwd:root}).toString().split('\0'),touched=phaseRows.filter(row=>changed.includes(relative(root,join(material,row.path)).split(sep).join('/')));const materialPrefix=relative(root,material).split(sep).join('/')+'/';
+     const hasImplementation=touched.length===1&&changed.some(file=>file&&!file.startsWith(materialPrefix)&&touched[0].write_set.some(scope=>file===scope||file.startsWith(scope.replace(/\/$/,'')+'/')));
+     if(hasImplementation&&!phaseCommits.has(touched[0].id))phaseCommits.set(touched[0].id,{commit,path});
+     // A single-Task original can bind its own implementation even when the
+     // same commit includes explicitly declared planner-only material edits.
+     const localPath=value=>typeof value==='string'&&value.length>0&&!isAbsolute(value)&&!value.includes('\\')&&!value.includes('\0')&&value.split('/').every(part=>part&&part!=='.'&&part!=='..');
+     for(const row of touched){
+      const entry=phaseRecords.get(row.id),original=entry?.record,own=relative(root,join(material,row.path)).split(sep).join('/'),implementation=original?.implementation,planner=original?.materials?.planner_only;
+      if(row.task_ids?.length!==1||original?.task!==row.task_ids[0]||original?.materials?.phase!==own||!Array.isArray(implementation)||!implementation.length||!Array.isArray(planner)||!planner.every(localPath))continue;
+      const allowed=new Set([own,...planner]);let verified=true;
+      for(const item of implementation){
+       if(!localPath(item?.path)||!/^[a-f0-9]{64}$/i.test(item.sha256??'')||!changed.includes(item.path)){verified=false;break;}
+       allowed.add(item.path);
+       try{if(hash(execFileSync('git',['show',commit+':'+item.path],{cwd:root,env,maxBuffer:16*1024*1024}))!==item.sha256){verified=false;break;}}catch{verified=false;break;}
+      }
+      if(verified&&changed.filter(Boolean).every(file=>allowed.has(file))&&!taskCommitProofs.has(original.task))taskCommitProofs.set(original.task,{commit,path});
+     }
+}
    }
    if(kind==='test'&&!isTestReceipt(record,declaredGates)){delete fingerprints[path];excludedCommandRefs.push(path);continue;}count++;
    if(kind==='test'){
@@ -307,10 +326,10 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
  // Existing declared originals supply claims, not a new mandatory Phase manifest protocol.
  const acceptanceFor=acIds=>{const claims=(acIds??[]).flatMap(ac=>acceptanceClaims.get(ac)??[]),covered=(acIds??[]).filter(ac=>acceptanceClaims.has(ac));if(!claims.length)return {text:'验收结论未记录',tone:'unk'};const conflict=(acIds??[]).some(ac=>new Set((acceptanceClaims.get(ac)??[]).map(c=>c.tier)).size>1);if(conflict)return {text:'验收记录不一致',tone:'fail',claims};if(covered.length===(acIds??[]).length&&claims.every(c=>c.tier==='pass'))return {text:'验收通过（原件）',tone:'ok',claims};return {text:'验收待完成（原件：'+[...new Set(claims.map(c=>c.tier))].join('、')+'）',tone:'unk',claims};};
  for(const t of objects.filter(o=>o.kind==='task'&&o.source_id)){
-  const phase=objects.find(o=>o.id===t.phase),entry=phaseRecords.get(phase?.source_id),record=entry?.record,commits=(record?.diffs??[]).map(d=>d.reviewed_head??d.commit??d.head).filter(committed),taskClaim=record?.task_ids?.includes(t.source_id)&&commits.length,phaseProof=phaseCommits.get(phase?.source_id),current=cursor?.task_id===t.source_id&&cursor?.phase_id===phase?.source_id;
-  const text=taskClaim?'已交付（具名记录）':phaseProof?'已提交（Phase范围）':current?'当前游标（执行位置）':'实施结论未记录',acceptance=acceptanceFor(t.ac_ids);
-  t.implementation={text,scope:taskClaim?'Task':phaseProof?'Phase':'position',...(taskClaim?{commit:commits.at(-1)}:phaseProof?{commit:phaseProof.commit}:{})};t.acceptance={text:acceptance.text};t.status={text:text+' · '+acceptance.text,tone:current?'accent':acceptance.tone};
-  if(entry)t.src.push(source(entry.path,'已记录的实施/验收结论；不从测试exit推断'));if(phaseProof)t.src.push(source(phaseProof.path,'真实Phase交付提交；不代Task逐项验收'));
+  const phase=objects.find(o=>o.id===t.phase),entry=phaseRecords.get(phase?.source_id),record=entry?.record,commits=(record?.diffs??[]).map(d=>d.reviewed_head??d.commit??d.head).filter(committed),taskClaim=record?.task_ids?.includes(t.source_id)&&commits.length,phaseProof=phaseCommits.get(phase?.source_id),taskProof=taskCommitProofs.get(t.source_id),current=cursor?.task_id===t.source_id&&cursor?.phase_id===phase?.source_id;
+  const text=taskClaim?'已交付（具名记录）':taskProof?'已提交（具名Task原件）':phaseProof?'已提交（Phase范围）':current?'当前游标（执行位置）':'实施结论未记录',acceptance=acceptanceFor(t.ac_ids);
+  t.implementation={text,scope:taskClaim||taskProof?'Task':phaseProof?'Phase':'position',...(taskClaim?{commit:commits.at(-1)}:taskProof?{commit:taskProof.commit}:phaseProof?{commit:phaseProof.commit}:{})};t.acceptance={text:acceptance.text};t.status={text:text+' · '+acceptance.text,tone:current?'accent':acceptance.tone};
+  if(entry)t.src.push(source(entry.path,'已记录的实施/验收结论；不从测试exit推断'));if(phaseProof)t.src.push(source(phaseProof.path,'真实Phase交付提交；不代Task逐项验收'));if(taskProof)t.src.push(source(taskProof.path,'真实提交与具名Task实施路径逐字绑定；不代验收'));
  }
  for(const wp of packages){if(wp.status.text==='缺')continue;const a=acceptanceFor(wp.ac_ids);wp.status={text:(wp.planSummary?'方案已定':'工作包已记录')+' · '+a.text,tone:a.tone};for(const path of new Set((a.claims??[]).map(c=>c.path)))wp.src.push(source(path,'显式AC的既有验收结论'));}
  for(const req of objects.filter(o=>o.kind==='req'&&o.status.text!=='缺'))req.status={text:'需求已记录'+(req.unresolved_refs?.length?' · 归属未取得：'+req.unresolved_refs.join('、'):''),tone:'unk'};

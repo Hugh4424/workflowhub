@@ -159,9 +159,9 @@ authorize只记录/消费已有授权。每次Git前用 `runtime/interface/git-a
 | RP-16 收口与成本页面（原判据：方法 7 尾按 answer-as-page 刷新页面，环 1–9 真实结论、环 10 记 skipped；方法 8 按 stage-reflection 阶段收口、内部发布并读回最终报告；成本在 stage 末只记一次；收口前执行 norm-sync） | 段 9 norm-sync/reflection/成本/页面 | 主会话；独立上下文核成本读数 | 收口与最终报告读回件、成本读数、页面与同名侧车、norm-sync 回执 | 成本同窗口只记一次；环 10 为 skipped；norm-sync 有真实回执；缺口如实保留 |
 
 
-终末第8段由当前主会话经认证 task.appendRecord 保存不可变普通 final-report.md，以实际 ref 交回关闭 reader；同字节复用，不同字节沿现有递增命名保新原件。报告包含任务/材料/HEAD身份、逐 AC 档位与原件 ref、六项结论、未完成项的真实尝试/owner/恢复条件、终末审查原件和失败。功能验收记录、代码审查回执、独立人读功能判断分别引用；business_effect、semantic_test_adequacy、code_review 不互相推导。缺口不得写成完成，缺证据 ref 明列未知。
+终末第8段由当前主会话经认证 task.appendRecord 保存一个不可变普通 final-report 原件（纯 JSON，或 Markdown 内唯一机验 JSON 数据段；扩展名与实际内容一致，含人读六项结论，以实际 ref 为准），交回关闭 reader；不要求双格式或双报告，同字节复用。报告包含任务/材料/HEAD身份、逐 AC 档位与原件 ref、六项结论、未完成项的真实尝试/owner/恢复条件、终末审查原件和失败。功能验收记录、代码审查回执、独立人读功能判断分别引用；business_effect、semantic_test_adequacy、code_review 不互相推导。缺口不得写成完成，缺证据 ref 明列未知。
 
-本节覆盖旧步骤12的最后阶段输出：不再产出 stage-handoff，不引导进入 verify-code 下一阶段；最终报告承担人读关闭记录。第9段补充保存新报告原件，不覆写旧报告。成本只在整个 stage 末记一次，norm-sync/reflection 沿既有方法；关闭/PR后按实际结果刷新页面与侧车，交付前环10为 skipped。用户额外要求的人读续接指针不变为默认产品流程、机器门或新增 stage。
+本节覆盖旧步骤12的最后阶段输出：不再产出 stage-handoff，不引导进入 verify-code 下一阶段；最终报告承担人读关闭记录。第9段保存成本、页面、交付等实际后置独立事实与十环检查报告，不机械生成第二份整体 final-report；仅整体报告有实质内容错误时，沿既有递增命名保存修订的新不可变原件并保留旧件。成本只在整个 stage 末记一次，norm-sync/reflection 沿既有方法；关闭/PR后按实际结果刷新页面与侧车，交付前环10为 skipped。用户额外要求的人读续接指针不变为默认产品流程、机器门或新增 stage。
 
 ### 测试充分性与检查可信度
 
@@ -209,4 +209,4 @@ BOUND001 首判可在报告前形成，不要求它回填未来 final-report has
 
 原审查 inconclusive、逐 provider 未读/undetermined 材料或失败路均保原件和限制。独立 raw 的 review_coverage_closure 须明确 result、review_ref、basis、covered_gaps 和 refs；covered_gaps 逐项对应 review:<原结论>、coverage:<provider>:<原材料路径>、provider:<原失败 provider ID> 的真实缺口分母，不漏项、不加异源项。refs 必须绑定当前业务与语义 proof 已实际捕获并核验的 receipts；独立 reader 说明这些原件为何闭合对应范围，不能用笼统 pass、exit0 或无关文本替代。缺闭合时整体 incomplete，原 review 结论及限制不变。
 
-既有 JSON 首判按同对象精确 AC 读 id/acceptance_criterion_id/criterion_id/ac 或 task 的明确 AC 分词，typed 结果读 result/conclusion/tier/independent_status；同对象显式身份或结果冲突按不一致保留，不把顶层 pass 扩散到子 AC，也不解释 Markdown 为机器 verdict。历史原件不重写。
+既有 JSON 首判按同对象精确 AC 读 id/acceptance_criterion_id/criterion_id/ac/ac_id 或 task 的明确 AC 分词，typed 结果读 result/conclusion/tier/independent_status；同对象显式身份或结果冲突按不一致保留，不把顶层 pass 扩散到子 AC，也不解释 Markdown 为机器 verdict。历史原件不重写。

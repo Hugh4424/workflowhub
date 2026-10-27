@@ -11,7 +11,7 @@ describe('terminal chain',()=>{
  it('selects all terminal delivery paths and preserves phase/legacy selection',()=>{const sections=[{path:'runtime/a.mjs'},{path:'docs/method.md'},{path:'tests/a.test.mjs'}];expect([...materials.selectTerminalDiffPaths(sections,'build-code','terminal')]).toEqual(sections.map(x=>x.path));expect(materials.selectTerminalDiffPaths(sections,'build-code','phase')).toBe(null);expect(materials.selectVerifyCodeDiffPaths(sections,'build-code')).toBe(null);});
  it('keeps host conclusion semantics and alias',()=>{expect(conclusion.deriveTerminalConclusion).toBe(conclusion.deriveVerifyCodeConclusion);expect(conclusion.deriveTerminalConclusion({status:'available',provider_results:[{provider:'owned',status:'completed',parse_outcome:'ok'}],findings:[]})).toMatchObject({conclusion:'inconclusive',coverage:{providers_completed:1,providers_failed:0}});});
  it('registers matrix and all three schema surfaces',()=>{const matrix=json('runtime/review/stage-materials.json');expect(matrix.surfaces['build-code/terminal'].contract).toBe(matrix.surfaces['build-code/phase'].contract);expect(policy.reviewRuleFor('build-code',null,'terminal')).toEqual({"source_bundle":"diff","required":["changed_files","implementation_assessment","test_context","open_risks","review_instructions"],"optional":["approved_spec","architect_assessment","context_map","acceptance_criteria","acceptance_evidence","evidence_map","final_test_summary","quality_verify","requirement_replay"],"generated":["review_instructions"],"forbidden":[]});for(const name of ['attempt','result'])expect(json(`runtime/review/schemas/${name}.schema.json`).properties.review_scope.enum).toContain('terminal');expect(json('runtime/review/schemas/stage-materials.schema.json').properties.surfaces.required).toContain('build-code/terminal');});
- it('carries sixteen complete responsibilities, nine ordered segments and final report',()=>{const body=read('workflows/build-code/SKILL.md');for(let i=1;i<=16;i++)expect(body).toMatch(new RegExp('\\| RP-'+String(i).padStart(2,'0')+'[^\\n]+\\|[^\\n]+\\|[^\\n]+\\|[^\\n]+\\|'));const segments=['冻结实现','spec-analyze','AC/证据对账表','终末独立审查','修 finding 并定向复验','测试充分性与验收对象','UI/浏览器终验','最终 AC 对账和报告','norm-sync/reflection/成本/页面'];const start=body.indexOf('## 最后 Phase：终末承接');expect(start).toBeGreaterThan(0);let last=start;for(const [i,s]of segments.entries()){const pos=body.indexOf(`${i+1}. ${s}`,last);expect(pos).toBeGreaterThan(last);last=pos;}const checkFirstJudgment = value => { expect(value).toContain('最后 Phase 对账沿途结论；仅 AC-BOUND-001/002 因依赖完整最终字节，在此作最终边界首次独立判定。'); expect(value).toContain('业务、实现与效果 AC 的首次结论仍按 spec 正文归属承接 Phase'); expect(value).toContain('其余 AC 不得延期'); }; checkFirstJudgment(body); for (const [before, after] of [['AC-BOUND-001/002 因依赖完整最终字节', 'AC-BOUND-001/002/AC-MERGE-001 因依赖完整最终字节'], ['其余 AC 不得延期', '其余 AC 可延期']]) { const mutant = body.replace(before, after); expect(mutant).not.toBe(body); expect(() => checkFirstJudgment(mutant)).toThrow(); }expect(body).toContain('final-report.md');expect(body).toContain('不再产出 stage-handoff');});
+ it('carries sixteen complete responsibilities, nine ordered segments and final report',()=>{const body=read('workflows/build-code/SKILL.md');for(let i=1;i<=16;i++)expect(body).toMatch(new RegExp('\\| RP-'+String(i).padStart(2,'0')+'[^\\n]+\\|[^\\n]+\\|[^\\n]+\\|[^\\n]+\\|'));const segments=['冻结实现','spec-analyze','AC/证据对账表','终末独立审查','修 finding 并定向复验','测试充分性与验收对象','UI/浏览器终验','最终 AC 对账和报告','norm-sync/reflection/成本/页面'];const start=body.indexOf('## 最后 Phase：终末承接');expect(start).toBeGreaterThan(0);let last=start;for(const [i,s]of segments.entries()){const pos=body.indexOf(`${i+1}. ${s}`,last);expect(pos).toBeGreaterThan(last);last=pos;}const checkFirstJudgment = value => { expect(value).toContain('最后 Phase 对账沿途结论；仅 AC-BOUND-001/002 因依赖完整最终字节，在此作最终边界首次独立判定。'); expect(value).toContain('业务、实现与效果 AC 的首次结论仍按 spec 正文归属承接 Phase'); expect(value).toContain('其余 AC 不得延期'); }; checkFirstJudgment(body); for (const [before, after] of [['AC-BOUND-001/002 因依赖完整最终字节', 'AC-BOUND-001/002/AC-MERGE-001 因依赖完整最终字节'], ['其余 AC 不得延期', '其余 AC 可延期']]) { const mutant = body.replace(before, after); expect(mutant).not.toBe(body); expect(() => checkFirstJudgment(mutant)).toThrow(); }expect(body).toContain('保存一个不可变普通 final-report 原件');expect(body).toContain('不再产出 stage-handoff');});
  it('preserves full terminal contract in build contract and phase boundary',()=>{const body=read('skills/wh-review/contracts/build-code.md');for(const term of ['material_coverage','read_confirmed','discarded_facts','implementation_assessment','test_context','open_risks','1.12.9','root_cause','single_round','整份交付 diff'])expect(body).toContain(term);expect(body).toContain('本 Phase');});
 });
 
@@ -58,11 +58,40 @@ it('preserves all terminal paths and patch bytes through large diff sharding',()
  try{const index=JSON.parse(readFileSync(join(packet.bundleRoot,'diff-index.json'),'utf8'));expect(index.changes.map(x=>x.path)).toEqual(paths);const bytes=index.changes.flatMap(x=>x.shards.map(s=>readFileSync(join(packet.bundleRoot,s.ref),'utf8'))).join('');expect(bytes).toBe(diff);}finally{packet.dispose();}
 });
 
-it('rejects method variants that lose report evidence or substitute a handoff',()=>{
+it('rejects method variants that lose the single immutable report contract',()=>{
  const body=read('workflows/build-code/SKILL.md');
- const check=text=>{expect(text).toContain('不可变普通 final-report.md');expect(text).toContain('逐 AC 档位与原件 ref');expect(text).toContain('缺口不得写成完成');expect(text).toContain('不再产出 stage-handoff');};
+ const obligations=[
+  '经认证 task.appendRecord 保存一个不可变普通 final-report 原件',
+  '纯 JSON，或 Markdown 内唯一机验 JSON 数据段；扩展名与实际内容一致，含人读六项结论，以实际 ref 为准',
+  '不要求双格式或双报告，同字节复用',
+  '逐 AC 档位与原件 ref',
+  '缺口不得写成完成',
+  '不再产出 stage-handoff',
+  '第9段保存成本、页面、交付等实际后置独立事实与十环检查报告，不机械生成第二份整体 final-report',
+  '仅整体报告有实质内容错误时，沿既有递增命名保存修订的新不可变原件并保留旧件'
+ ];
+ const check=text=>{for(const obligation of obligations)expect(text).toContain(obligation);expect(text).not.toContain('第9段补充保存新报告原件');};
  check(body);
- for(const [before,after]of [['不可变普通 final-report.md','不可变普通 stage-handoff.md'],['逐 AC 档位与原件 ref','只有汇总计数'],['缺口不得写成完成','缺口也写完成']]){const mutant=body.replace(before,after);expect(mutant).not.toBe(body);expect(()=>check(mutant)).toThrow();}
+ const mutations=[
+  ['经认证 task.appendRecord','未经认证直接写文件'],
+  ['保存一个不可变普通 final-report 原件','保存可覆盖的普通 stage-handoff 原件'],
+  ['纯 JSON，或 Markdown 内唯一机验 JSON 数据段','纯 JSON，且 Markdown 内唯一机验 JSON 数据段'],
+  ['唯一机验 JSON 数据段','多个机验 JSON 数据段'],
+  ['唯一机验 JSON 数据段','普通人读段落'],
+  ['扩展名与实际内容一致','扩展名任意'],
+  ['含人读六项结论','只含机器计数'],
+  ['不要求双格式或双报告','必须双格式和双报告'],
+  ['同字节复用','同字节另写副本'],
+  ['逐 AC 档位与原件 ref','只有汇总计数'],
+  ['缺口不得写成完成','缺口也写完成'],
+  ['不再产出 stage-handoff','另行产出 stage-handoff'],
+  ['实际后置独立事实与十环检查报告','更新整体报告正文'],
+  ['不机械生成第二份整体 final-report','机械生成第二份整体 final-report'],
+  ['仅整体报告有实质内容错误时','每次后置事实变化时'],
+  ['保存修订的新不可变原件并保留旧件','覆写原报告并删除旧件']
+ ];
+ for(const [before,after]of mutations){const mutant=body.replace(before,after);expect(mutant).not.toBe(body);expect(()=>check(mutant)).toThrow();}
+ expect(()=>check(body+'\n第9段补充保存新报告原件，不覆写旧报告。')).toThrow();
 });
 
 function lowRiskReview(scope='terminal') {

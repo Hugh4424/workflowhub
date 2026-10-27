@@ -526,6 +526,8 @@ req→WP→Task仅按材料显式命名空间ID/ref及WP→AC→Task声明的可
 
 **修改或删除（精确路径；逐 Phase 决定具体动作）**
 
+
+
 - `skills/frontend-component-quality/SKILL.md`（P11原owner定向补漏）
 - `skills/spec-prd/templates/prd-template.md`（P11原owner定向补漏）
 - `skills/frontend-prototype-render/SKILL.md`（P11原owner定向补漏）
@@ -1104,3 +1106,13 @@ P11/T014原owner定向补漏按卡唯一40路径与三个不重叠writer执行�
 AC-ROUTE-003“当前引用”按P11卡263澄清：实际可调用旧stage/当前方法职责及真实consumer，不以任意测试字符串计数代行为。已查纯legacy路径helper、明确拒旧负例、未迁旧positive与范围外未知分列保真，非本期gate不冒历史合法或当前质量；真实入口旧请求必须拒绝，未读caller不泛豁免、不为消字迁全历史tests。新scanner仍先精确独立TCR。
 
 P12聚合前原P5 owner有界修既有单Task来源reader，精确两路径build-page-data.mjs/cockpit-autogen.test.mjs（全局已有）；支持已声明phase/task/materials.phase/implementation与真实commit绑定，planner_only不冒实施，多Phase提交不批量完成；原COCK首判归属及immutable原件不变，不新状态账本/协议/样式。修后独立补证纳入P12唯一terminal审，完整范围/正反沿P12卡同名节。
+
+P12增量4→9接原终末084与补充348有效根因修复，新增build-code方法/terminal-chain测试、stage-runtime/status-derivation、review-tier测试五已全局存在路径。原P10/P8/P1/P5按P12卡唯一写主和精确独立TCR执行，不恢复旧stage、不弱判据。唯一JSON报告必须真实身份/源码/材料/AC原始绑定、禁止自证与冲突取pass、BOUND002真实报告后独立原件闭合，不能默认额外handoff。whole-terminal190分母及原084reject不变，修后仅独立定向复验，不新外审/状态/gate/ledger。
+
+P12写集9→11最小接通默认public review producer的source原字节保全：新增既有review-record-route异常保存分支与ocr-production-cutover测试，原P10 owner独占，CLI已在scope。正常/异常均保真实source_ref及失败/原canonical，不依赖customobserver、不信provider映射、不新模块/schema/命令/manifest或进度权威。详P12卡同名节；原084与物理来源限制不覆写。
+
+### P12实施读回与自然末时点（2026-10-28材料冻结）
+
+本段纠正上文规划形成时“尚未实施/HTML或首判未取得”的当前读法，不改Appendix A或历史决定。RESULT002已有原P4独立046，RESULT003已有原P3独立006；P5页面已有原332、134广旅程与137/535两缺陷复验，原缺陷/覆盖保留。P10既有终末reader/source保全已实施并由417定向20case当前hash验证；原P5当前位置418为3case、原方法唯一报告086为2case、原P12 alias399为2case，分别引用而不叠加数量判质量。原084仍reject，同源348及修复原件保真，修后独立证明不冒原外审重读。11源码写集及实际命令/限制唯一回P12卡“实施与定向复验实际小结”。
+
+此时唯一实际JSON final-report与实际全gate、原P4阶段末一次成本/统一提醒、原P5 ended/closed、两条独立BOUND仍按真实后置顺序执行，不在材料冻结时预签。root继续已有授权内工作；后置证明只写现任务证据，原报告保生成时事实，最终独立原件/人答并列闭合，不机械生成第二报告。源码修复可用不等stage完成；Git交付、release与物理close分别读实际事实。知识更新由唯一图owner处理，542候选失败及原件保留，受阻来源不prune/不盖成功；文档prompt未取仍unavailable，不由本段宣称代码/文档全量更新。

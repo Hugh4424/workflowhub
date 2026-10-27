@@ -26,7 +26,7 @@ import { confirmClosePlan } from "../../core/task-close.mjs";
 import { validateTaskId } from "../../runtime/task/task-identity.mjs";
 import { resolveStorageRoot, resolveStorageRootDetails } from "../../runtime/evidence/storage-root.mjs";
 import { AUTHENTICATED_EVIDENCE_PATH, redactProviderHostPaths } from "../../runtime/review/provider-material-projection.mjs";
-import { authenticatedEvidenceBytes } from "../../runtime/review/review-packet-identity.mjs";
+import { deliveredMaterialId, authenticatedEvidenceBytes } from "../../runtime/review/review-packet-identity.mjs";
 import { runSimpleReview, validateReviewSupplement, validateReviewCallerMaterials } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 import { prepareConfiguredOcrHostContext, runConfiguredOcrHostReview, runOcrDelegationRound, detectOcr } from "../../runtime/review/ocr-delegation-adapter.mjs";
 import { compactReviewDiff, compactVerifyCodeMaterials, gitDiffPath, verifyCodeChangedPaths } from "../../runtime/review/review-input-bounds.mjs";
@@ -1208,23 +1208,23 @@ function terminalAssessmentQuality(context, row) {
     const values=list(value,label);requireFact(values.length>0,`${label}: no original evidence`);
     return values.map(ref=>{try{return {ref,raw:read(ref)};}catch(error){if(error.code==="ENOENT"){gaps.push(`${label}: missing ${ref?.ref}`);return {ref,raw:null};}throw error;}});
   };
-  let terminalReaderBound=false;
-  const independent = (reader,label,proofRef=null,findingId=null) => {
+  let terminalReaderBound=false,terminalReaderDispatch=null;
+  const independent = (reader,label,proofRef=null,findingId=null,boundary=null) => {
     if (!plain(reader)||typeof reader.identity!=="string"||!reader.identity.trim()||!reader.source_ref) {gaps.push(`${label}: missing independently bound reader`);return false;}
     const readerBinding=json(reader.source_ref);
     const dispatch=readerBinding.dispatch ? json(readerBinding.dispatch) : readerBinding;
-    const terminal=label === "terminal reader";
+    const terminal=label === "terminal reader";if(terminal)terminalReaderDispatch=dispatch;
     const sameReader=!terminal&&reader.identity===envelope.reader?.identity;
-    const roleMatches=terminal ? dispatch.role==="terminal-assessor" : dispatch.role==="finding-verifier" || dispatch.role==="terminal-assessor"&&sameReader;
+    const roleMatches=terminal||boundary ? dispatch.role==="terminal-assessor" : dispatch.role==="finding-verifier" || dispatch.role==="terminal-assessor"&&sameReader;
     const ok=identity(dispatch)&&roleMatches&&dispatch.agent_thread_id===reader.identity
       &&dispatch.context_mode==="none"&&Array.isArray(dispatch.implementation_authors)&&dispatch.implementation_authors.length>0
       &&!dispatch.implementation_authors.includes(reader.identity);
     requireFact(ok,`${label}: task/role/thread/independent dispatch binding missing`);
     if(sameReader){
-      const attested=terminalReaderBound&&(a.finding_verification_attestations??[]).some(v=>v.finding_id===findingId&&sameReference(v.proof_ref,proofRef));
+      const attested=terminalReaderBound&&(boundary ? boundary.result==="pass"&&(boundary.refs??[]).some(ref=>sameReference(ref,proofRef)) : (a.finding_verification_attestations??[]).some(v=>(v.finding_pointer??v.finding_id)===findingId&&sameReference(v.proof_ref,proofRef)));
       return requireFact(ok&&attested,`${label}: terminal raw lacks exact finding proof attestation`);
     }
-    const completion=terminal?null:(a.finding_verification_completions??[]).filter(v=>v.reader_identity===reader.identity&&sameReference(v.proof_ref,proofRef));
+    const completion=terminal?null:boundary ? (boundary.completion_ref?[{source_ref:boundary.completion_ref}]:[]) : (a.finding_verification_completions??[]).filter(v=>v.reader_identity===reader.identity&&sameReference(v.proof_ref,proofRef));
     if(!terminal&&!requireFact(completion.length===1,`${label}: missing unique public completion`))return false;
     const binding=terminal?readerBinding:json(completion[0].source_ref);
     if(!terminal&&!requireFact(sameReference(binding.dispatch,readerBinding.dispatch??reader.source_ref),`${label}: public completion dispatch differs`))return false;
@@ -1242,9 +1242,20 @@ function terminalAssessmentQuality(context, row) {
     return requireFact(ok&&completed,`${label}: public final/delivery mismatch`);
   };
   terminalReaderBound=independent(envelope.reader,"terminal reader");
+  requireFact(a.result==="pass","terminal reader: no independent aggregate pass verdict");
+  requireFact(Array.isArray(terminalReaderDispatch?.input_refs)&&terminalReaderDispatch.input_refs.some(ref=>sameReference(ref,a.final_report)),"terminal reader: actual dispatch did not include this report");
   let report=null;
-  if (a.final_report) report=read(a.final_report); else gaps.push("final report: missing unique ref/hash");
-  if(report!==null) requireFact(report.includes(context.identity.taskId)&&report.includes("build-code"),"final report: missing task/stage binding");
+  if(a.final_report){
+    const text=read(a.final_report);let format="json";
+    try{report=JSON.parse(text);}catch{
+      format="md";
+      const blocks=[...text.matchAll(/^ {0,3}(`{3,}|~{3,})json[ \t]*\r?\n([\s\S]*?)\r?\n\1[ \t]*$/gm)];
+      if(blocks.length===1)try{report=JSON.parse(blocks[0][2]);}catch{}
+    }
+    requireFact(plain(report),"final report: requires one JSON object or one Markdown machine JSON segment");
+    requireFact(format==="json"?a.final_report.ref.endsWith(".json"):/\.(md|markdown)$/.test(a.final_report.ref),"final report: extension differs from actual format");
+    if(report!==null)requireFact(identity(report),"final report: wrong task/stage identity");
+  }else gaps.push("final report: missing unique ref/hash");
   const materialFiles=materialFilesForCohort(context.manifest.activation_cohort??"pre",thinMaterials(context));
   const workspaceFile=(path)=>{
     if(typeof path!=="string"||isAbsolute(path)||path.includes("\\")||path.split("/").some(p=>!p||p==="."||p===".."))throw new TypeError("invalid terminal source path");
@@ -1276,23 +1287,48 @@ function terminalAssessmentQuality(context, row) {
   const spec=context.artifacts.read("spec.md"),appendix=spec.split(/^##\s+Appendix A.*$/m)[1]??"";
   const acIds=[...new Set([...appendix.matchAll(/^\s*(?:-\s*(?:\[[ xX]\]\s*)?\*\*(AC-[A-Za-z0-9][A-Za-z0-9_-]*)\*\*|###\s+(AC-[A-Za-z0-9][A-Za-z0-9_-]*)\b|\|\s*`?(AC-[A-Za-z0-9][A-Za-z0-9_-]*)`?\s*\|)/gm)].map(m=>m[1]??m[2]??m[3]))];
   requireFact(acIds.length>0,"acceptance: current spec has no readable declared AC denominator");
+  const results=new Set(["pass","fail","inconclusive","deferred","missing","inconsistent","incomplete","unavailable"]);
+  if(plain(report)){
+    checkPaths(report.materials,"final report materials",materialPaths);
+    requireFact(Array.isArray(report.acceptance)&&report.acceptance.map(v=>v?.id).sort().join("\0")===[...acIds].sort().join("\0")&&report.acceptance.every(v=>results.has(v?.result)),"final report: AC denominator or typed result differs");
+    requireFact(Array.isArray(report.six_conclusions)&&report.six_conclusions.length===6&&report.six_conclusions.every(v=>typeof v==="string"&&v.trim()),"final report: six human conclusions missing");
+    const request=report.continuation_request;
+    requireFact(plain(request)&&typeof request.requested==="boolean","final report: continuation request is not declared");
+    if(request?.requested===true){if(reference(request.source_ref))read(request.source_ref);else gaps.push("final report: requested continuation has no actual user source");}
+    else requireFact(request?.requested===false&&typeof request.reason==="string"&&request.reason.trim(),"final report: no-continuation reason missing");
+    if(requireFact(/^[a-f0-9]{40,64}$/.test(report.head??""),"final report: invalid source HEAD")){
+      try{
+        requireFact(git(["rev-parse","--verify",`${report.head}^{commit}`]).trim()===report.head,"final report: HEAD is not a commit");
+        git(["merge-base","--is-ancestor",context.workspace.baselineCommit,report.head]);git(["merge-base","--is-ancestor",report.head,"HEAD"]);
+        const treePaths=git(["diff","--name-only","-z",context.workspace.baselineCommit,report.head,"--"]).split("\0").filter(p=>p&&!materialPaths.includes(p));
+        requireFact([...treePaths].sort().join("\0")===[...implementationPaths].sort().join("\0"),"final report: HEAD tree source denominator differs");
+        for(const entry of [...(a.implementation??[]),...(report.materials??[])]){
+          const exists=git(["ls-tree","-z",report.head,"--",entry.path]).length>0;
+          if(entry.deleted===true)requireFact(!exists,`final report: HEAD tree deletion differs ${entry.path}`);
+          else if(requireFact(exists,`final report: HEAD tree lacks ${entry.path}`)){
+            const bytes=execFileSync("git",["show",`${report.head}:${entry.path}`],{cwd:context.workspace.worktreeRoot,env:gitMetadataEnvironment(),stdio:["ignore","pipe","pipe"],maxBuffer:Math.max(1,workspaceFile(entry.path)?.length??0)});
+            requireFact(sha256(bytes)===entry.sha256,`final report: HEAD tree bytes differ ${entry.path}`);
+          }
+        }
+      }catch{gaps.push("final report: HEAD is foreign, unavailable or not bound to this task snapshot");}
+    }
+  }
   const sourceCurrent=gaps.length===0;
   const projectedAcceptance=[];
   const entries=list(a.acceptance,"acceptance");
   requireFact(entries.map(v=>v?.id).sort().join("\0")===[...acIds].sort().join("\0"),"acceptance: denominator missing, duplicated, or foreign AC");
-  const results=new Set(["pass","fail","inconclusive","deferred","missing","inconsistent","incomplete","unavailable"]);
   function originalVerdict(value,id){
     if(!plain(value))return null;
     if(value.task_id!==undefined&&value.task_id!==context.identity.taskId||value.stage!==undefined&&value.stage!=="build-code")return null;
-    const identifiers=[value.id,value.acceptance_criterion_id,value.criterion_id,value.ac].filter(v=>v!==undefined);
+    const identifiers=[value.id,value.acceptance_criterion_id,value.criterion_id,value.ac,value.ac_id].filter(v=>v!==undefined);
     if(typeof value.task==="string"&&value.task.split(/[^A-Za-z0-9_-]+/).some(v=>v.startsWith("AC-")))identifiers.push(value.task);
     const matches=v=>typeof v==="string"&&(v===id||v.split(/[^A-Za-z0-9_-]+/).includes(id));
+    const found=[];
     if(identifiers.some(matches)){
       const verdicts=[value.result,value.conclusion,value.tier,value.independent_status].filter(v=>v!==undefined);
       if(identifiers.some(v=>!matches(v))||verdicts.some(v=>!results.has(v))||new Set(verdicts).size>1)return "inconsistent";
-      if(verdicts.length)return verdicts[0];
+      if(verdicts.length)found.push(verdicts[0]);
     }
-    const found=[];
     for(const v of Object.values(value))for(const child of Array.isArray(v)?v:plain(v)?[v]:[]){const verdict=originalVerdict(child,id);if(verdict!==null)found.push(verdict);}
     if(found.length)return new Set(found).size===1?found[0]:"inconsistent";
     return null;
@@ -1304,8 +1340,15 @@ function terminalAssessmentQuality(context, row) {
     requireFact(typeof entry?.current_applicability?.basis==="string"&&entry.current_applicability.basis.trim().length>0,`acceptance ${entry?.id}: current applicability not independently explained`);
     readRefs(entry?.current_applicability?.refs,`acceptance ${entry?.id} current applicability`);
     const sources=readRefs(entry?.refs,`acceptance ${entry?.id}`);
-    requireFact(sources.some(({raw})=>{if(raw===null)return false;try{return originalVerdict(JSON.parse(raw),entry.id)===entry.result;}catch{return false;}}),`acceptance ${entry?.id}: no matching original typed criterion verdict`);
-    if(acIds.includes(entry?.id))projectedAcceptance.push({id:entry.id,result:sourceCurrent&&gaps.length===before?entry.result:"incomplete",refs:entry.refs??[],current_applicability:entry.current_applicability??null});
+    const verdicts=[];
+    for(const {ref,raw} of sources){
+      if(!requireFact(ref.ref!==a.final_report?.ref&&ref.sha256!==a.final_report?.sha256,`acceptance ${entry.id}: final report cannot be its own upstream verdict`))continue;
+      if(raw!==null)try{const verdict=originalVerdict(JSON.parse(raw),entry.id);if(verdict!==null)verdicts.push(verdict);}catch{}
+    }
+    const conflicting=verdicts.includes("inconsistent")||new Set(verdicts).size>1;
+    requireFact(!conflicting,`acceptance ${entry.id}: inconsistent applicable original verdicts`);
+    requireFact(verdicts.length>0&&verdicts.every(v=>v===entry.result),`acceptance ${entry.id}: no agreed original typed criterion verdict`);
+    if(acIds.includes(entry?.id))projectedAcceptance.push({id:entry.id,result:conflicting?"inconsistent":sourceCurrent&&gaps.length===before?entry.result:"incomplete",refs:entry.refs??[],current_applicability:entry.current_applicability??null});
     if(entry?.result!=="pass")gaps.push(`acceptance ${entry?.id}: ${entry?.result??"unknown"}`);
   }
   for(const id of acIds)if(!projectedAcceptance.some(v=>v.id===id))projectedAcceptance.push({id,result:"missing",refs:[],current_applicability:null});
@@ -1353,8 +1396,9 @@ function terminalAssessmentQuality(context, row) {
       }
       if(p.status!=="completed"||(p.parse_outcome??p.execution?.parse_outcome)!=="ok")coverage.push(`provider ${p.provider??p.id}: ${p.status??"unknown"}`);
     }
+    const findings=list(review.findings,"review findings");
     const reviewGaps=[];
-    if(review.conclusion!=="needs_revision"&&review.conclusion!=="pass")reviewGaps.push(`review:${review.conclusion??"unknown"}`);
+    if(review.conclusion!=="needs_revision"&&review.conclusion!=="pass"&&!(review.conclusion==="reject"&&findings.length>0))reviewGaps.push(`review:${review.conclusion??"unknown"}`);
     for(const member of Array.isArray(review.material_coverage)?review.material_coverage:[])for(const item of [...(member.unread??[]),...(member.undetermined??[])])reviewGaps.push(`coverage:${member.provider}:${item}`);
     for(const provider of providers)if(provider.status!=="completed"||(provider.parse_outcome??provider.execution?.parse_outcome)!=="ok")reviewGaps.push(`provider:${provider.provider??provider.id}`);
     if(reviewGaps.length){
@@ -1365,10 +1409,34 @@ function terminalAssessmentQuality(context, row) {
       const closureRefs=readRefs(closure?.refs,"review coverage closure");
       requireFact(closure?.result==="pass"&&sameReference(closure?.review_ref,a.review)&&typeof closure?.basis==="string"&&closure.basis.trim().length>0&&JSON.stringify(expected)===JSON.stringify(covered)&&receipts.length>=2&&receipts.every(ref=>closureRefs.some(v=>sameReference(v.ref,ref)))&&closureRefs.every(v=>receipts.some(ref=>sameReference(v.ref,ref))),"terminal review: unconfirmed coverage lacks independent current scope closure");
     }
-    const findings=list(review.findings,"review findings"),dispositions=list(a.finding_dispositions,"finding dispositions");
+    const dispositions=list(a.finding_dispositions,"finding dispositions");
     requireFact(dispositions.length===findings.length,"findings: disposition denominator differs");
-    for(const f of findings){
-      const id=f.finding_id??f.id,ds=dispositions.filter(d=>d.finding_id===id);
+    const sourceRef=review.source_ref??a.review_source_ref;
+    let reviewedSource=null,sourceBound=false;
+    if(sourceRef){
+      try{
+        const bytes=read(sourceRef,null),manifest=review.ocr?.manifest,entry=Array.isArray(manifest)?manifest.filter(v=>v.path==="source.json"):[];
+        reviewedSource=JSON.parse(bytes);
+        sourceBound=requireFact(entry.length===1&&entry[0].bytes===bytes.length&&entry[0].sha256===sha256(bytes)&&deliveredMaterialId(manifest)===review.request?.material_id&&reviewedSource.captured_head===review.request?.subject?.head_commit&&reviewedSource.baseline_commit===review.request?.subject?.base_commit,"terminal review: original source packet identity differs");
+        if(review.source_ref&&a.review_source_ref)requireFact(sameReference(review.source_ref,a.review_source_ref),"terminal review: raw source override differs from canonical");
+      }catch(error){gaps.push(`terminal review: source binding unavailable: ${error.message}`);}
+    }
+    const originalSnapshot=f=>Object.fromEntries(["provider","path","line","issue"].map(k=>[k,f[k]??null]));
+    const locatorMatches=(value,f,index)=>{
+      const explicit=f.finding_id??f.id,pointer=`/findings/${index}`;
+      if(value.finding_pointer!==undefined)return value.finding_pointer===pointer&&plain(value.original_finding)&&Object.keys(value.original_finding).sort().join("\0")==="issue\0line\0path\0provider"&&Object.entries(originalSnapshot(f)).every(([key,item])=>value.original_finding[key]===item)&&(value.finding_id===undefined||value.finding_id===explicit);
+      return typeof explicit==="string"&&value.finding_id===explicit;
+    };
+    const originalPath=path=>{
+      if(!path.startsWith("repos/"))return path;
+      if(!sourceBound)return null;
+      const repos=(reviewedSource.repositories??[]).filter(repo=>repo.id==="wh"&&path.startsWith(`repos/${repo.id}/`)&&repo.captured_head===reviewedSource.captured_head&&repo.baseline_commit===reviewedSource.baseline_commit&&repo.selected_paths?.includes(path)&&repo.changed_paths?.includes(path));
+      const file=path.slice("repos/wh/".length);
+      const entries=(review.ocr?.manifest??[]).filter(v=>v.path===path);
+      return repos.length===1&&entries.length===1&&review.request?.subject?.changed_files?.includes(file)&&implementationPaths.has(file)?file:null;
+    };
+    for(const [index,f] of findings.entries()){
+      const id=f.finding_id??f.id??`/findings/${index}`,ds=dispositions.filter(d=>locatorMatches(d,f,index));
       if(!requireFact(typeof id==="string"&&ds.length===1,`finding ${id}: missing unique disposition`))continue;
       const d=ds[0];requireFact(sameReference(d.original_review_ref,a.review),`finding ${id}: original review mismatch`);
       const rejected=d.status==="rejected_invalid";
@@ -1377,9 +1445,9 @@ function terminalAssessmentQuality(context, row) {
       const verifications=readRefs(d.verification_refs,`finding ${id} independent verification`);
       const paths=list(d.affected_paths,`finding ${id} affected paths`);
       const originalPaths=Array.isArray(f.affected_paths)?f.affected_paths:typeof f.file==="string"?[f.file]:typeof f.path==="string"?[f.path]:typeof f.location?.path==="string"?[f.location.path]:[];
-      requireFact(originalPaths.length>0&&originalPaths.every(p=>paths.includes(p))&&(rejected||paths.every(p=>implementationPaths.has(p))),`finding ${id}: affected scope missing/foreign or differs from original finding`);
+      requireFact(originalPaths.length>0&&originalPaths.every(p=>paths.includes(originalPath(p)))&&(rejected||paths.every(p=>implementationPaths.has(p))),`finding ${id}: affected scope missing/foreign or differs from original finding`);
       requireFact(verifications.some(({raw,ref})=>{if(raw===null)return false;let proof;try{proof=JSON.parse(raw);}catch{return false;}
-        if(!identity(proof)||proof.finding_id!==id||proof.result!=="pass"||!sameReference(proof.original_review_ref,a.review)||!independent(proof.reader,`finding ${id} verifier`,ref,id))return false;
+        if(!identity(proof)||!locatorMatches(proof,f,index)||proof.result!=="pass"||!sameReference(proof.original_review_ref,a.review)||!independent(proof.reader,`finding ${id} verifier`,ref,id))return false;
         if(rejected&&!requireFact(proof.disposition==="rejected_invalid"&&typeof proof.reason==="string"&&proof.reason.trim().length>0,`finding ${id}: invalidity not independently explained`))return false;
         readRefs(proof.refs,`finding ${id} proof execution`);checkPaths(proof.implementation,`finding ${id} proof`,paths);return true;
       }),`finding ${id}: no bound independent current-byte verification`);
@@ -1392,10 +1460,20 @@ function terminalAssessmentQuality(context, row) {
     if(!acIds.includes(id))continue;
     requireFact(b?.result==="pass",`${id}: no independent final boundary check`);
     const proofs=readRefs(b?.refs,id);
-    requireFact(proofs.some(({raw})=>{if(!raw)return false;try{const v=JSON.parse(raw);if(originalVerdict(v,id)!=="pass")return false;
+    requireFact(proofs.some(({raw,ref})=>{if(!raw)return false;try{const v=JSON.parse(raw);if(originalVerdict(v,id)!=="pass")return false;
       if(id==="AC-BOUND-001")return true;
-      if(v.continuation)read(v.continuation);
-      return identity(v)&&sameReference(v.final_report,a.final_report);}catch{return false;}}),`${id}: actual final report ref/hash not independently checked`);
+      if(!identity(v)||!sameReference(v.final_report,a.final_report)||!independent(v.reader,"post-report reader",ref,id,b))return false;
+      const readerBinding=json(v.reader.source_ref),dispatch=readerBinding.dispatch?json(readerBinding.dispatch):readerBinding;
+      const inputs=Array.isArray(dispatch.input_refs)?dispatch.input_refs:[];
+      if(!requireFact(inputs.some(value=>sameReference(value,a.final_report)),`${id}: actual dispatch did not include this report`))return false;
+      const request=report?.continuation_request;
+      if(request?.requested===true){
+        if(!requireFact(reference(v.continuation)&&sameReference(v.continuation_request_source,request.source_ref),`${id}: requested continuation or user source missing`))return false;
+        read(v.continuation);
+        if(!requireFact(inputs.some(value=>sameReference(value,v.continuation))&&inputs.some(value=>sameReference(value,request.source_ref)),`${id}: actual dispatch did not include requested continuation/source`))return false;
+      }
+      return request?.requested===true||request?.requested===false;
+    }catch{return false;}}),`${id}: actual post-report independent readback not established`);
   }
   return {status:gaps.length?"incomplete":"pass",terminal_assessment_ref:row.terminal_assessment_ref,
     acceptance:projectedAcceptance,acceptance_denominator:acIds,final_report:a.final_report??null,review_conclusion:review?.conclusion??null,review_result_ref:a.review??null,
@@ -1473,26 +1551,39 @@ async function recordTaskReview(context, input, values, services = {}) {
       const onProviderHealth=services.onOcrProviderHealth ?? writeOcrProviderHealthDiagnostic;
       if(typeof onProviderHealth!=="function")throw new TypeError("OCR health observer must be a function");
       const ocrRunner=services.runOcrDelegationRound;
-      let bundle;
+      let bundle,sourceMetadata=null;
+      const retainSource=result=>sourceMetadata?{...result,...sourceMetadata,ocr:{...result.ocr,...sourceMetadata.ocr}}:result;
       try {
-        try{bundle=prepareTaskBoundBuildCodeReviewBundle(context,current,{reviewReadScope});}catch(error){return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:error.code??"ROUTE_UNAVAILABLE",message:redactProviderHostPaths(String(error.message)),diagnostic:{field:"materials/route",expected:"current task-bound materials and trusted route",actual:"invalid",next_action:"repair the reported input or route before dispatch"}}};}
+        try{bundle=prepareTaskBoundBuildCodeReviewBundle(context,current,{reviewReadScope});}catch(error){return retainSource({status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:error.code??"ROUTE_UNAVAILABLE",message:redactProviderHostPaths(String(error.message)),diagnostic:{field:"materials/route",expected:"current task-bound materials and trusted route",actual:"invalid",next_action:"repair the reported input or route before dispatch"}}});}
+        const sourceBytes=readPlainInputFile(join(bundle.bundleRoot,"source.json"),"review source",null),sourceEntries=(bundle.manifest??bundle.deliveryManifest).filter(v=>v.path==="source.json");
+        if(sourceEntries.length!==1||sourceEntries[0].bytes!==sourceBytes.length||sourceEntries[0].sha256!==sha256(sourceBytes))throw new Error("review source bytes differ from packet manifest");
+        const digest=sha256(sourceBytes),reviewsDir=join(context.task.taskPath,"quality/reviews");let sourceRef=null;
+        for(const name of existsSync(reviewsDir)?readdirSync(reviewsDir):[]){
+          if(!name.endsWith(".json"))continue;
+          const prior=JSON.parse(context.task.readRecordBytes(`quality/reviews/${name}`).toString("utf8"));
+          if(prior.task_id!==context.identity.taskId||prior.source_ref?.sha256!==digest)continue;
+          const priorBytes=context.task.readRecordBytes(prior.source_ref.ref);
+          if(priorBytes.equals(sourceBytes)){sourceRef=prior.source_ref;break;}
+        }
+        if(!sourceRef){const path=await context.task.appendRecord({dir:"quality/evidence",slug:"review-source",ext:"json",bytes:sourceBytes});sourceRef={ref:relative(context.task.taskPath,path).split("\\").join("/"),sha256:digest};}
+        sourceMetadata={source_ref:sourceRef,material_id:bundle.materialId,ocr:{manifest:bundle.manifest??bundle.deliveryManifest}};
         if (services.onReviewMaterials !== undefined) {
           await observeReviewMaterials(bundle, services.onReviewMaterials, options.signal);
           if (options.signal?.aborted) throw Object.assign(new Error("review cancelled after material observation"), { code: "REVIEW_CANCELLED", dispatch_state: "blocked_before_dispatch" });
         }
         let trustedContext;
         try{trustedContext=prepareConfiguredOcrHostContext(current);}catch(error){
-          return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:error.code??"ROUTE_UNAVAILABLE",message:redactProviderHostPaths(String(error.message)),diagnostic:{field:"route/provider_selection",expected:"one current trusted code route and valid provider configuration",actual:"invalid",next_action:"repair current route/configuration before dispatch"}}};
+          return retainSource({status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:error.code??"ROUTE_UNAVAILABLE",message:redactProviderHostPaths(String(error.message)),diagnostic:{field:"route/provider_selection",expected:"one current trusted code route and valid provider configuration",actual:"invalid",next_action:"repair current route/configuration before dispatch"}}});
         }
         let subset;
         try{subset=await validateReviewSupplement(current,{providers:trustedContext.selection.providers,materialId:bundle.materialId,taskId:context.task.identity.taskId,readRecord:readSupplementRecord});}
-        catch(error){return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:error.code,message:error.message,diagnostic:error.diagnostic}};}
+        catch(error){return retainSource({status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:error.code,message:error.message,diagnostic:error.diagnostic}});}
         if(current.only_providers!==undefined){
           const selected=new Set(subset),original=trustedContext.selection,filterMap=map=>map?Object.fromEntries(Object.entries(map).filter(([key])=>selected.has(key))):map;
           // Only selection is narrowed. Preserve the full trusted configuration SHA and route identity drift checks.
           trustedContext={...trustedContext,selection:{...original,providers:subset,eligibleProfiles:original.eligibleProfiles.filter(p=>selected.has(p)),requestedProfiles:original.requestedProfiles.filter(p=>selected.has(p)),requestedProfileSpecs:original.requestedProfileSpecs.filter(p=>selected.has(typeof p==="string"?p:p.provider??p.id)),provider_identities:filterMap(original.provider_identities),provider_models:filterMap(original.provider_models)}};
         }
-        if(typeof ocrRunner==="function")return {...await ocrRunner(current,{...options,onProviderHealth,bundle,trustedContext}),executor:"ocr"};
+        if(typeof ocrRunner==="function")return retainSource({...await ocrRunner(current,{...options,onProviderHealth,bundle,trustedContext}),executor:"ocr"});
         const result=await runOcrDelegationRound(current,{buildBundle:()=>bundle,signal:options.signal,
           onProviderResult: async ({ result: providerResult }) => {
             // The host has already persisted each original stream before settling.
@@ -1502,8 +1593,8 @@ async function recordTaskReview(context, input, values, services = {}) {
           executor:params=>runConfiguredOcrHostReview(params,{trustedContext,sourceBundle:bundle,onProviderHealth,
             onProviderResult:params.onProviderResult,
             rawOutputSink:async (hint,bytes,metadata={})=>options.onProviderOutput({provider:metadata.provider ?? "ocr",role:null,channel:metadata.stream ?? "raw-output",output:bytes})})});
-        return {...result,executor:"ocr"};
-      } finally {bundle?.dispose();}
+        return retainSource({...result,executor:"ocr"});
+      } catch(error){if(sourceMetadata)Object.assign(error,sourceMetadata);throw error;} finally {bundle?.dispose();}
     };
     const saved=await recordSimpleReviewRequest({taskDir:context.task.taskPath,request,runRound:runner,signal:services.reviewSignal ?? null});
     if(typeof saved.result_ref!=="string"||!/^quality\/reviews\/[^/\\]+\.json$/.test(saved.result_ref))throw new Error("saved review artifact reference is invalid");
