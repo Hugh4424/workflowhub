@@ -297,6 +297,8 @@ WorkflowHub 现在有五个阶段：make-decision、build-plan、build-code、ve
   - **依据**：`U-015`、`F6`
   - **场景**：SCN-005
   - **验收**：AC-COCK-002
+P5展示澄清（用户当前明确选择）：15kind是可追溯内容词汇，不是15类目录。左侧恰为原始需求req、工作包wp、Task三类及原进度入口；右侧消费真实业务对象和关系，沿最初模板的卡片布局。需求、包、Task各有标题/结果或短状态/关联卡；十环用紧凑状态卡；缺数据用短卡态与来源抽屉说明，不隐藏缺失，也不常驻堆教程、重复免责声明、整份JSON或长路径。详路径、指纹、原报告及完整正文折叠查阅。不能用metadata/前言/导航行冒业务标题，不能以15kind集合或侧车存在代替真实对象完整与页面消费。最初模板来自commit `0fafcb865040c5756cb7e746fbde15c115c02f2b`，唯一已认证原件 `quality/evidence/p5-originals/2026-10-27-009-original-cockpit-template-0fafcb86.html`，SHA256 `1ca1fcb5660ac818f2a39cefc749085b6fb8691d98fbac7bc1551c7d817f2cc0`；d5636412已含解释文字改动，不作最初模板来源。P5负责该完整修复，FR及30条AC原范围保留，事件、安全、只读与十环时点不变。
+
 - **FR-COCK-003**：页面只读派生，不写任务状态、不做第二进度；环 1–9 在 build-code 最后 Phase 刷新，环 10 记 `skipped`，stage-close 完成后由调用方补终态，关联 SCN-005、AC-COCK-003
   - **范围边界**：环 10 不在 build-code 内做；不新增页面权威
   - **依据**：`F1`、`F6`
@@ -470,6 +472,14 @@ WorkflowHub 现在有五个阶段：make-decision、build-plan、build-code、ve
 终末主合同复用 `skills/wh-review/contracts/build-code.md`，按review_scope区分phase/terminal；P8保全旧终末全部条款，P11同步迁走双加载/manifest/bundle后退旧verify合同，真实consumer与负例见两卡。
 
 阶段名单只从 `stage-registry.mjs` 出 → 各模块与 CLI 读取 → 写入时校验、读取时放宽。终末审查身份由 `review-policy.mjs` 校验，`stage-materials.json` 提供材料矩阵，`wh-review` 打包，`ocr-delegation-adapter.mjs` 选路由。证据与游标仍由 `task-store.mjs` 与 `task-handle.mjs` 承担，不新增第二写路径。驾驶舱从 `render-answer-page.mjs` 出发，新增一个只读派生器把当前材料、task facts、真实 diff、测试与审查原件转成 15 类节点，再由渲染器写 HTML 与侧车。
+
+**驾驶舱对象与关系消费（P5已有写集内修复）**
+
+数据producer沿当前具名材料/索引读取真实需求身份及原话；本任务主需求卡集合明确采用后建索引R-001至R-013共13项，逐项保命名空间及raw:5/7/9来源，索引只导航且其历史状态不是当前事实。v1主文R-001至R-006仅为来源对照及明确映射的别名，不重复增加6卡、不按同号猜合并；同原件段支持多条已声明需求，不按行号自行去重或拆新卡，摘要不冒逐字原话。逐工作包标题段提取目标/边界/做法；当前任务WP1–WP7必须逐一存在。Task仅取索引中真实Phase文件的严格 `### Tnnn — 标题`，当前应T001–T015，不吸补充说明/测试变更请求；FR、AC只取唯一正文定义和Appendix A，不取导航或映射行当对象内容。对象ID、标题、短结论、归属和src逐项可回指真实段落，缺字段标缺，不用kind首匹配凑一条。
+
+req→WP→Task仅按材料显式命名空间ID/ref及WP→AC→Task声明的可回指join建立有向追溯；goal/dec/ires/eres等依据关系只在明确采用时接sideEdges。Phase→Task沿已知包含关系；文件改动/测试原件可作明确归属Task的上下文，不能凭同Task推逐文件覆盖。未知归属保持短态或任务级卡，不按位置、标题词猜或全连接。复用现pageData、renderer组件与材料合同reader，不增加永久索引、第二进度或新runtime控制面；只用15类词汇与原十环。
+
+三类详情的有源消费：req呈真实需求摘要/原话入口、明确工作包卡与采用依据；wp呈目标/边界/方案、相关规格/AC/Phase/Task及风险卡；task呈任务结果/步骤、所属Phase、声明文件与实际改动分开、测试/审查/验收卡。其它kind在这些详情内按真实关系消费；未归属对象以明确任务级/归属未取得卡展示，不冒当前req/wp/task的依赖。所有细节保来源抽屉，不以造边解决可达性。已确认三类目录优先于此前15类侧栏误判。
 
 **接口与失败语义**
 
@@ -895,6 +905,7 @@ node tools/cli/check-skill-consistency.mjs --root "$PWD"
 通过：15 类节点齐全且各有来源指针；十环齐全；缺数据节点显示"缺"。
 失败：节点靠手拼；或缺失节点被编造内容。
 证据：P5 证据路径下的页面、节点来源表与缺数据场景截图。
+说明：本条15类指有源内容词汇，目录仍为req/wp/task三类＋原进度入口。逐节点核对必须核实际具名身份、数量、标题/内容、归属与来源，并从三类主详情的卡片/来源抽屉实际消费；不是只核DATA.kind集合。缺失/归属未知用短卡态，不伪关系或伪通过；P5按最初模板与两viewport验收，旧15类侧栏/边恒空断言沿本卡窄TCR纠正，不改变本条原成功失败口径。
 
 - [ ] **AC-COCK-003**：页面只读派生，不写任务状态、不做第二进度；环 1–9 在 build-code 最后 Phase 刷新，环 10 记 `skipped`，stage-close 完成后由调用方补终态。判定方式：机器可判。
 验证：P5 实施者把环 10 时点写进方法并留调用方；验证者核对 build-code 内环 10 为 `skipped`，且页面不写任何 task facts。

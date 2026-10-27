@@ -23,7 +23,7 @@ async function fixture(){
  writeFileSync(join(work,'changed.txt'),'real diff');git(work,['add','.']);git(work,['commit','-qm','real change']);
  await task.appendRecord({dir:'quality/tests',slug:'actual-test',ext:'json',bytes:JSON.stringify({argv:['node','test'],exit_code:0})});await task.appendRecord({dir:'quality/reviews',slug:'actual-review',ext:'json',bytes:JSON.stringify({status:'completed',findings:[]})});
  const reportPath=join(root,'report.json');writeFileSync(reportPath,JSON.stringify({task_id:'cockpit',rings:Array.from({length:10},(_,i)=>({ring:i+1,name:['原始需求','decision-log','调研方案','方案','spec','phase','代码实现','测试验证','最终审查','提交 PR'][i],state:i===9?'skipped':'incomplete',basis:[],applicability:'required',evidence_type:[],counted_in_denominator:true,conflict:null}))}));
- return {taskPath:task.taskPath,reportPath,outDir:join(root,'pages'),htmlName:'cockpit.html',material};
+ return {taskPath:task.taskPath,reportPath,outDir:join(task.taskPath,'quality/evidence/pages'),htmlName:'cockpit.html',material};
 }
 const data=path=>JSON.parse(/const DATA = (\{[\s\S]*?\n?\});/.exec(readFileSync(path,'utf8'))[1]);
 test('ORACLE-COCKPIT-EVENT: six events use one entry; first/change opens, identical skips, errors remain visible',async()=>{

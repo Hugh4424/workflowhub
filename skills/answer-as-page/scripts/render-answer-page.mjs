@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { readFileSync, mkdirSync, lstatSync, unlinkSync } from 'node:fs';
+import { readFileSync, mkdirSync, lstatSync, unlinkSync, realpathSync } from 'node:fs';
 import { resolve, basename, dirname, join, relative, isAbsolute, sep, extname } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { runInNewContext } from 'node:vm';
 import { writeFileAtomic, createFileOnce } from '../../../runtime/interface/safe-write.mjs';
@@ -154,15 +154,16 @@ async function publishPair(directory, htmlName, html, nodesName, nodes, preserve
 }
 
 export async function renderAnswerPage({ taskPath, reportPath, decisionLogPath, pageData, outDir, htmlName, open, now = new Date() } = {}) {
-  let derived;
+  let derived, taskOutput;
   if (pageData === undefined && taskPath) {
     derived = await buildPageData({ taskPath, reportPath });
     pageData = derived.pageData;
     decisionLogPath = derived.decisionLogPath;
     if (outDir) {
       const within = (root, path) => { const rel = relative(root, resolve(path)); return rel === '' || rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel); };
-      if (within(derived.workspaceRoot, outDir) || ['quality/tests','quality/reviews','quality/evidence/research'].some(dir => within(join(taskPath, dir), outDir))) {
-        throw Error('derived output must remain outside the repository and research/test/review source directories');
+      taskOutput = openTask(resolve(taskPath), derived.taskIdentity);
+      if (!within(join(taskOutput.taskPath,'quality/evidence'),outDir) || within(derived.workspaceRoot, outDir) || within(taskOutput.manifest.target_repo_root,outDir) || within(join(taskPath,'quality/evidence/research'),outDir)) {
+        throw Error('derived output must remain in authenticated task quality/evidence outside repository and research sources');
       }
     }
   }
@@ -190,18 +191,18 @@ export async function renderAnswerPage({ taskPath, reportPath, decisionLogPath, 
   const data = {
     ...content, kinds: vocabulary.kinds, flowKinds: vocabulary.flowKinds, lanes: vocabulary.lanes,
     provenance: `本页是只读派生视图，不是权威；报告 sha256=${rawReportHash} ref=${reportPath}；${decision === null ? `decision-log 缺失 ref=${decisionLogPath}；字节/行数未取得` : `decision-log sha256=${decisionHash} ref=${decisionLogPath}；字节=${decision.length}；行数=${decision.toString('utf8').split('\n').length}`}；${derived ? `facts 原件 sha256=${derived.factsProvenance.sha256} ref=${derived.factsProvenance.ref}（原字节仅溯源，游标位置参与实变）；` : ''}生成=${sidecar.generated_at}`,
-    rings: report.rings, ringNodes: sidecar.nodes, ...(derived ? { sourceFingerprint: fingerprint } : {}),
+    rings: report.rings, ringNodes: sidecar.nodes, ...(derived ? { sourceFingerprint: fingerprint, contractErrors: derived.contractErrors } : {}),
   };
   const json = JSON.stringify(data).replaceAll('<', '\\u003c').replaceAll('\u2028', '\\u2028').replaceAll('\u2029', '\\u2029');
   const title = content.task.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('\"', '&quot;').replaceAll("'", '&#39;');
   if ((template.match(/<title>[^<]*<\/title>/g) ?? []).length !== 1) throw Error('template title replacement unavailable');
   const html = template.replace(match[0], () => `const DATA = ${json};`).replace(/<title>[^<]*<\/title>/, () => `<title>${title}</title>`);
   const directory = resolve(outDir);
-  mkdirSync(directory, { recursive: true });
+  if(taskOutput){
+    const ref=relative(taskOutput.taskPath,directory);let parent=taskOutput.taskPath;
+    for(const part of ref.split(sep)){parent=join(parent,part);let stat;try{stat=lstatSync(parent);}catch(error){if(error.code!=='ENOENT')throw error;mkdirSync(parent);stat=lstatSync(parent);}if(stat.isSymbolicLink()||!stat.isDirectory())throw Error('output directory alias rejected');}
+  }else mkdirSync(directory, { recursive: true });
   const nodesName = htmlName.replace(/\.html$/, '.nodes.json');
-  const outputRef = derived ? relative(resolve(taskPath), directory) : '';
-  const taskOutput = derived && (outputRef === `quality${sep}evidence` || outputRef.startsWith(`quality${sep}evidence${sep}`))
-    ? openTask(resolve(taskPath), derived.taskIdentity) : undefined;
   const publication = await publishPair(directory, htmlName, html, nodesName, `${JSON.stringify(sidecar, null, 2)}\n`, Boolean(derived), taskOutput);
   const htmlPath = join(directory, htmlName), nodesPath = join(directory, nodesName);
   try {
@@ -263,6 +264,8 @@ export async function main(argv = process.argv.slice(2)) {
     taskPath: values['task-path'], ...(values.data ? { pageData: JSON.parse(readFileSync(values.data, 'utf8')) } : {}), outDir: values['out-dir'], htmlName: values.html,
   });
 }
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+let directEntry = false;
+if(process.argv[1]){try{directEntry=realpathSync(fileURLToPath(import.meta.url))===realpathSync(resolve(process.argv[1]));}catch(error){if(error.code!=='ENOENT')throw error;}}
+if (directEntry) {
   main().then(r => console.log(JSON.stringify(r))).catch(e => { console.error(e.message); process.exitCode = 1; });
 }

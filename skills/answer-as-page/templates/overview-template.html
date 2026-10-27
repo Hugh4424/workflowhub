@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>给导出功能加上失败重试 · 流程追踪</title>
 <style>
-/* 基础：颜色、字体、重置（对应 src/index.css 的 @theme 与 preflight） */
+/* ============================================================
+   基础：颜色、字体、重置（对应 src/index.css 的 @theme 与 preflight）
+   ============================================================ */
 :root{
   --page:#f5f6f8;
   --surface:#ffffff;
@@ -18,7 +20,7 @@
   --warm-soft:#fff4d9;
   --fail:#b53d42;
   --fail-soft:#fff0f0;
-  --unk:#596577;
+  --unk:#687486;
   --unk-soft:#f0f2f5;
   --ok:#277353;
   --ok-soft:#edf7f1;
@@ -38,7 +40,7 @@ body{
 button{font:inherit;color:inherit;background:transparent;border:0;padding:0;margin:0;cursor:pointer;text-align:left}
 ol,ul{margin:0;padding:0;list-style:none}
 p{margin:0}
-h1,h2,h3{margin:0;font-size:inherit;font-weight:inherit}
+h2,h3{margin:0;font-size:inherit;font-weight:inherit}
 code{font-family:var(--mono)}
 b{font-weight:700}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -47,13 +49,17 @@ b{font-weight:700}
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{transition:none;animation:none;scroll-behavior:auto}
 }
+
 /* 图标 */
 .icon{display:block;flex-shrink:0}
 .kt{color:var(--kc)}
 .icon-white{color:#ffffff}
 .chev{display:block;flex-shrink:0;transition:transform .15s}
 .chev.is-open{transform:rotate(90deg)}
-/* 外壳：页头 / 左右分栏 / 页脚 */
+
+/* ============================================================
+   外壳：页头 / 左右分栏 / 页脚
+   ============================================================ */
 .app{display:flex;height:100%;flex-direction:column;background:var(--page);color:var(--ink)}
 .hdr{
   display:flex;height:56px;flex:0 0 auto;align-items:center;gap:16px;
@@ -72,7 +78,7 @@ b{font-weight:700}
 .hstage.is-now{background:var(--ink);color:#fff}
 .hstage.is-todo{border:1px dashed #c4cbd6;color:var(--sub)}
 .sep{color:var(--unk)}
-.hdr-counts{font-size:11px;line-height:14px;color:var(--sub);flex-shrink:1;max-width:330px}
+.hdr-counts{font-size:12px;line-height:16px;color:var(--sub);flex-shrink:1}
 .fail-strong{font-weight:500;color:var(--fail)}
 .hdr-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex-shrink:0}
 .hdr-live-label{font-size:12px;font-weight:500;color:var(--warm)}
@@ -84,6 +90,7 @@ b{font-weight:700}
 .btn-seen{height:28px;border-radius:6px;border:1px solid var(--line);background:var(--surface);padding:0 12px;font-size:13px;font-weight:500}
 .btn-seen:hover{background:var(--page)}
 .hdr-readonly{font-size:12px;color:var(--sub)}
+
 .body{position:relative;display:flex;min-height:0;flex:1}
 .side{
   display:flex;flex-direction:column;min-height:0;width:340px;flex:0 0 auto;
@@ -97,8 +104,11 @@ b{font-weight:700}
   border-top:1px solid var(--line);background:var(--surface);padding:0 16px;
   font-size:12px;color:var(--sub);
 }
-.foot-dir{margin-left:auto;color:var(--unk)}
-/* 左栏目录 */
+.foot-label{flex-shrink:0;white-space:nowrap}.foot-dir{margin-left:auto;color:var(--unk);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ============================================================
+   左栏目录
+   ============================================================ */
 .nav-progress{
   display:flex;min-height:36px;width:100%;align-items:center;gap:8px;
   border-radius:8px;padding:0 10px;font-size:14px;font-weight:600;color:var(--ink);
@@ -111,6 +121,7 @@ b{font-weight:700}
 .nav-count{font-size:12px;color:var(--sub)}
 .nav-list{display:flex;flex-direction:column;gap:2px}
 .nav-note{margin:16px 0 0;padding:0 4px;font-size:12px;line-height:18px;color:var(--unk)}
+
 .navrow{
   display:block;width:100%;border-radius:8px;border-left:3px solid transparent;
   padding:6px 10px;color:var(--ink);
@@ -137,7 +148,10 @@ b{font-weight:700}
 .nst.tone-fail{background:var(--fail-soft);color:var(--fail)}
 .nst.tone-unk{background:var(--unk-soft);color:var(--unk)}
 .nst.is-active{background:#fff;color:var(--ink)}
-/* 标签 / 状态 / 类型 chip */
+
+/* ============================================================
+   标签 / 状态 / 类型 chip
+   ============================================================ */
 .tag{
   display:inline-flex;align-items:center;gap:4px;height:22px;flex-shrink:0;
   white-space:nowrap;border-radius:4px;padding:0 10px;font-size:12px;line-height:18px;
@@ -149,6 +163,7 @@ b{font-weight:700}
 .tag-unk{background:var(--unk-soft);color:var(--unk)}
 .tag-accent{background:var(--accent-soft);color:var(--accent)}
 .tag-warm{background:var(--warm-soft);color:var(--warm)}
+
 .chip{
   display:inline-flex;height:24px;flex-shrink:0;align-items:center;gap:4px;
   white-space:nowrap;border-radius:4px;padding:0 8px;
@@ -158,17 +173,22 @@ b{font-weight:700}
 .chip-solid{background:var(--kc);color:#fff}
 .chip-outline{border:1px solid var(--kc);background:#fff;color:var(--kc)}
 .chip-dashed{border:1px dashed var(--kc);background:#fff;color:var(--kc);font-family:var(--mono)}
+
 /* 状态文字色 */
 .t-ok{color:var(--ok)}
 .t-accent{color:var(--accent)}
 .t-unk{color:var(--unk)}
 .t-fail{color:var(--fail)}
 .t-warm{color:var(--warm)}
-/* 详情页：工具条 / Hero */
+
+/* ============================================================
+   详情页：工具条 / Hero
+   ============================================================ */
 .toolbar{display:flex;min-height:32px;align-items:center;gap:12px;margin-bottom:16px}
 .backbtn{height:32px;border-radius:6px;padding:0 4px;font-size:13px;color:var(--accent)}
 .backbtn:hover{text-decoration:underline}
 .page-h2{margin:0 0 20px;font-size:28px;font-weight:700;line-height:36px;outline-offset:4px}
+
 .hero{
   border:1px solid var(--line);border-top:5px solid var(--kc);border-radius:12px;
   padding:24px;background:var(--surface);
@@ -207,6 +227,7 @@ b{font-weight:700}
 .stat-num{font-size:34px;font-weight:700;line-height:40px}
 .stat-label{font-size:13px;font-weight:600}
 .hero-explain{margin-top:16px;font-size:15px;line-height:24px;color:var(--ink)}
+
 /* 两份记录对不上 */
 .contra{margin-top:24px;border:1px solid rgba(181,61,66,.4);border-radius:10px;background:var(--surface);padding:16px}
 .contra-head{display:flex;align-items:center;gap:6px;margin:0 0 12px;font-size:13px;font-weight:600;color:var(--fail)}
@@ -218,7 +239,10 @@ b{font-weight:700}
 .contra-cell.fail .contra-k{color:var(--fail)}
 .contra-v{margin:0;font-size:15px;font-weight:600;color:var(--ink)}
 .contra-cell.fail .contra-v{color:var(--fail)}
-/* 逻辑链条 */
+
+/* ============================================================
+   逻辑链条
+   ============================================================ */
 .chain{margin-top:36px}
 .chain h3{margin:0 0 4px;font-size:18px;font-weight:600;line-height:28px;color:var(--ink)}
 .chain .lead{margin:0 0 20px;font-size:13px;line-height:22px;color:var(--sub)}
@@ -243,6 +267,7 @@ b{font-weight:700}
 }
 .lane-pos.is-cur{background:var(--ink);color:#fff}
 .lane-items{display:flex;flex-direction:column;gap:8px}
+
 .gapbox{
   display:flex;align-items:flex-start;gap:4px;border-radius:6px;
   border:1px dashed rgba(181,61,66,.6);background:var(--fail-soft);
@@ -253,7 +278,10 @@ b{font-weight:700}
   border-radius:6px;border:1px dashed #c4cbd6;background:var(--unk-soft);
   padding:16px;font-size:14px;line-height:22px;color:var(--sub);
 }
-/* 卡片 / 文件折叠 / 计划文件 */
+
+/* ============================================================
+   卡片 / 文件折叠 / 计划文件
+   ============================================================ */
 .objcard{
   display:flex;width:100%;align-items:center;gap:12px;
   border:1px solid var(--line);border-left:5px solid var(--kc);border-radius:8px;
@@ -280,6 +308,7 @@ b{font-weight:700}
   flex:0 0 auto;border-radius:4px;background:var(--ink);padding:0 8px;
   font-size:12px;font-weight:600;line-height:20px;color:#fff;
 }
+
 .objchip{
   display:flex;width:100%;flex-direction:column;align-items:flex-start;gap:2px;
   border:1px solid var(--line);border-left:4px solid var(--kc);border-radius:6px;
@@ -298,6 +327,7 @@ b{font-weight:700}
 .objchip-name{min-width:0;flex:1;font-size:12.5px;font-weight:600;line-height:18px;color:var(--ink)}
 .objchip-name.mono{font-family:var(--mono);font-size:12px}
 .objchip-status{display:flex;align-items:center;gap:4px;padding-left:19px;font-size:11px;font-weight:500;line-height:16px}
+
 .filefold{border:1px solid var(--line);border-left:5px solid var(--kc);border-radius:8px;background:var(--surface)}
 .filefold-head{display:flex;width:100%;align-items:center;gap:12px;padding:12px 16px;text-align:left}
 .filefold-icon{
@@ -307,6 +337,7 @@ b{font-weight:700}
 .filefold-title{flex:1;font-size:15px;font-weight:600;color:var(--ink)}
 .filefold-hint{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--sub)}
 .filefold-body{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding:12px}
+
 .planbtn{
   display:flex;align-items:center;gap:8px;border:1px dashed var(--kc);border-radius:6px;
   background:var(--surface);padding:8px 12px;font-size:14px;font-weight:500;color:var(--ink);
@@ -318,7 +349,10 @@ b{font-weight:700}
   background:var(--surface);padding:4px 8px;font-family:var(--mono);font-size:12px;color:var(--sub);
 }
 .planchip .note{font-family:var(--sans);font-size:11px;color:var(--unk)}
-/* 分区 / 步骤 / 失败项 / 来源 */
+
+/* ============================================================
+   分区 / 步骤 / 失败项 / 来源
+   ============================================================ */
 .section{margin-top:36px}
 .section-title{
   display:flex;align-items:baseline;gap:8px;margin:0 0 12px;
@@ -340,6 +374,7 @@ b{font-weight:700}
 }
 .mono13{font-family:var(--mono);font-size:13px}
 .failitem .msg{font-size:13px;font-weight:500}
+
 .sources{margin-top:40px;border-top:1px solid var(--line);padding-top:12px}
 .src-toggle{display:flex;align-items:center;gap:6px;border-radius:3px;font-size:12px;color:var(--sub)}
 .src-toggle:hover{color:var(--ink)}
@@ -362,7 +397,10 @@ b{font-weight:700}
 .srow-body p{margin:0}
 .srow-body .p2{margin-top:4px}
 .mono-ink{font-family:var(--mono);font-size:12px;line-height:18px;color:var(--ink);word-break:break-all;user-select:all}
-/* 进度总览 */
+
+/* ============================================================
+   进度总览
+   ============================================================ */
 .flow{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px}
 .flow-item{display:flex;align-items:center;gap:8px}
 .flow-box{border:1px solid var(--line);border-radius:8px;padding:8px 16px}
@@ -387,30 +425,18 @@ b{font-weight:700}
 .dash{padding:6px 8px;font-size:12px;color:var(--unk)}
 .unlinked{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:12px;font-size:13px;color:var(--sub)}
 .slot{width:150px}
-/* 断点（源设计：nav=900 / md=768 / lg=1024 / xl=1280 / 2xl=1536） */
+
+/* ============================================================
+   断点（源设计：nav=900 / md=768 / lg=1024 / xl=1280 / 2xl=1536）
+   ============================================================ */
 @media (min-width:1280px){ .side{width:400px} }
 @media (max-width:1279px){ .hdr-counts{display:none} }
 @media (max-width:1023px){ .hdr-live-label,.chip-live{display:none} }
 @media (max-width:767px){ .hdr-stages{display:none} }
 @media (max-width:899px){ .main{padding:20px 20px 64px} }
-.hero-cell p,.src-body,.srow-body,.hero-note,.hero-explain,[data-report-ring] dd,details.panel p{overflow-wrap:anywhere}.hdr-readonly{white-space:nowrap} details.panel{padding:12px;font-size:12px;line-height:1.7} details.panel summary{cursor:pointer} .thead,.trow{grid-template-columns:repeat(3,minmax(0,1fr))}
-.hdr-task{flex:1 1 180px;min-width:130px;max-width:240px}.hdr-stages{flex-shrink:0}.hstage,.hdr-stages li{white-space:nowrap}.hdr-counts{position:relative;flex:0 0 auto;max-width:none;white-space:nowrap}.hdr-counts summary{cursor:pointer}.hdr-count-body{position:absolute;top:24px;right:0;min-width:240px;background:var(--surface);padding:12px;border:1px solid var(--line);box-shadow:0 4px 14px #0001;z-index:30;line-height:1.8}.hdr-right{flex-shrink:1;min-width:0;gap:6px}.hdr-update-chips{display:flex;gap:6px;overflow-x:auto;max-width:220px;min-width:42px}.hdr-update-chips .chip-live{flex:0 0 auto}.hdr-live-label,.btn-seen,.hdr-readonly{flex-shrink:0;white-space:nowrap}
-.hero,.hero-grid,.hero-cell,.hero-quote,.hero-finding{min-width:0}.hero h2,.hero-summary,.hero-file-note,.finding-v{overflow-wrap:anywhere;word-break:normal;min-width:0}
-.basis-group+.basis-group{margin-top:16px}.basis-group h4{margin:0 0 8px;font-size:13px;line-height:20px;font-weight:600;color:var(--sub)}.chain-attachment{margin-top:12px;padding:8px 0 0;border-top:1px solid var(--line)}.attachment-label{font-size:12px;line-height:18px;color:var(--sub);margin-bottom:6px}.attachment-label span{font-size:11px;margin-left:4px}.chain-attachment .objcard{padding:8px 12px;border-left-width:3px;gap:8px}.chain-attachment .objcard-title{font-size:13px;line-height:20px}.chain-attachment .objcard-line{font-size:11px;line-height:17px}.chain-attachment .objcard-label{font-size:11px}.chain-attachment .objcard-icon .icon{width:15px;height:15px}.chain-attachment .tag{font-size:11px}
-.task-phase-entry{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}.task-phase-link{border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:var(--surface);font-size:12px;white-space:nowrap;color:var(--sub)}
 
-@media (max-width:767px){
-  .body{flex-direction:column}
-  .side{width:100%;max-height:30%;border-right:0;border-bottom:1px solid var(--line)}
-  .scroller{min-height:0}
-  .main{padding:16px 16px 48px;overflow-wrap:anywhere}
-  .foot-dir{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .objcard{flex-wrap:wrap}
-  .objcard-body{flex-basis:calc(100% - 60px)}
-  .objcard>.tag{margin-left:48px;max-width:calc(100% - 48px);height:auto;min-height:22px;white-space:normal;overflow-wrap:anywhere}
-  .task-phase-entry{grid-template-columns:minmax(0,1fr)}
-  .task-phase-link{justify-self:start}
-}
+.report-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:24px}.report-status{border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:12px}.report-status-head{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:13px;font-weight:600}.report-details{margin-top:8px;font-size:12px}.report-details pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px}.task-materials,.raw-quote{margin-top:20px;font-size:13px}.task-materials>summary,.raw-quote>summary{cursor:pointer;color:var(--sub);margin-bottom:12px}.task-materials .lane-items{display:grid;gap:8px}.src-body,.srow-body,.hero-summary,.hero-quote{overflow-wrap:anywhere}.task-phase-entry{display:grid;gap:8px}.task-phase-link{justify-self:start;border:1px solid var(--line);border-radius:6px;background:var(--surface);padding:6px 8px;color:var(--sub)}
+@media(max-width:767px){.body{flex-direction:column}.side{width:100%;max-height:30%;border-right:0;border-bottom:1px solid var(--line)}.scroller{min-height:0}.main{padding:16px 16px 48px;overflow-wrap:anywhere}.objcard{flex-wrap:wrap}.objcard-body{flex-basis:calc(100% - 60px)}.objcard>.tag{margin-left:48px;max-width:calc(100% - 48px);height:auto;min-height:22px;white-space:normal;overflow-wrap:anywhere}.foot-dir{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 </style>
 </head>
 <body>
@@ -425,7 +451,7 @@ b{font-weight:700}
     </div>
   </div>
   <footer class="foot">
-    只读：这里只呈现任务记录，不做审批，也不会改动任何状态
+    <span class="foot-label">任务材料</span>
     <span class="foot-dir" id="foot-dir"></span>
   </footer>
 </div>
@@ -511,7 +537,7 @@ const DATA = {
     ['d1', 'wp1'], ['d2', 'wp2'], ['d2', 'wp3'],
   ],
   flowKinds: ['req', 'wp', 'task', 'file', 'test'],
-  lanes: ['spec', 'review', 'pr', 'req', 'ires', 'eres', 'goal', 'dec', 'wp', 'risk', 'phase', 'task', 'file', 'test', 'acc'],
+  lanes: ['req', 'ires', 'eres', 'goal', 'dec', 'wp', 'risk', 'spec', 'phase', 'task', 'file', 'test', 'review', 'acc', 'pr'],
   phaseTasks: { p1: ['task1', 'task2'], p2: ['task3', 'task4', 'task5'] },
   changedChips: [
     { label: '重试状态面板', id: 'task3' },
@@ -611,19 +637,22 @@ const RING_BY_ID=Object.fromEntries((DATA.ringNodes||[]).map(n=>[n.stable_id,{id
 function reportRingHtml(ring) {
 const r=(DATA.rings||[]).find(row=>row.ring===ring);
 const mark=CHANGED.has('ring:'+ring)?tag('有更新','warm'):'';
-if (!r) return '<div data-report-ring="'+ring+'" class="gap">'+mark+'缺口：报告未提供第 '+ring+' 环</div>';
+if (!r) return '<article class="report-status" data-report-ring="'+ring+'"><span>'+esc(RING_NAMES[ring-1])+'</span><span class="tag tag-unk">缺口：报告未提供第 '+ring+' 环</span></article>';
 const own=k=>Object.prototype.hasOwnProperty.call(r,k);
 const gaps=['ring','name','applicability','state','evidence_type','basis','counted_in_denominator','conflict'].filter(k=>!own(k)).map(k=>k+'字段缺失');
 const basisGap=!own('basis')?'依据字段缺失':!Array.isArray(r.basis)?'依据字段格式不符':r.state==='completed'&&!r.basis.length?'完成声明缺依据':'';
 if(basisGap)gaps.push(basisGap);
 const states={completed:'已完成',skipped:'尚未执行',not_applicable:'不适用',incomplete:'未完成',unavailable:'未取得'};
 const declared=states[r.state]||'未取得：报告状态未知';
-return '<section data-report-ring="'+ring+'"><h4>'+esc(r.name)+mark+'</h4><dl>'+[
-  ['结论',gaps.length?'报告声明：'+declared+'；字段缺口：'+gaps.join('；'):declared],
-  ['依据',basisGap||JSON.stringify(r.basis)], ['证据类型',r.evidence_type==null?'未取得':JSON.stringify(r.evidence_type)],
-  ['是否计入分母',r.counted_in_denominator===true?'是':r.counted_in_denominator===false?'否':'未取得'],
-  ['备注',!own('conflict')?'冲突字段未取得':r.conflict===null?'无冲突；适用性：'+JSON.stringify(r.applicability==null?'未取得':r.applicability):JSON.stringify(r.conflict)]
-].map(pair=>'<dt>'+pair[0]+'</dt><dd>'+esc(pair[1])+'</dd>').join('')+'</dl></section>';
+const facts=[
+ ['结论',gaps.length?'报告声明：'+declared+'；字段缺口：'+gaps.join('；'):declared],
+ ['依据',basisGap||JSON.stringify(r.basis)],['证据类型',r.evidence_type==null?'未取得':JSON.stringify(r.evidence_type)],
+ ['是否计入分母',r.counted_in_denominator===true?'是':r.counted_in_denominator===false?'否':'未取得'],
+ ['备注',!own('conflict')?'冲突字段未取得':r.conflict===null?'无冲突；适用性：'+JSON.stringify(r.applicability==null?'未取得':r.applicability):JSON.stringify(r.conflict)]
+];
+return '<article class="report-status" data-report-ring="'+ring+'"><div class="report-status-head"><span>'+esc(r.name)+'</span>'+tag(gaps.length?'报告待核':declared,gaps.length?'fail':r.state==='completed'?'ok':r.state==='incomplete'?'fail':'unk')+mark+'</div>'+
+'<details class="report-details"><summary>依据与原报告</summary><dl class="report-fields">'+facts.map(function(pair){return '<dt>'+esc(pair[0])+'</dt><dd>'+esc(pair[1])+'</dd>';}).join('')+'</dl><details><summary>原 JSON</summary><pre>'+esc(JSON.stringify(r,null,2))+'</pre></details></details></article>';
+
 }
 function chainFor(id) {
   const o = OBJ[id];
@@ -652,6 +681,9 @@ function chainFor(id) {
     if ((t.kind === 'risk' || t.kind === 'acc') && S.has(t.of)) S.add(x);
     if (DATA.hasPhase && t.kind === 'task' && S.has(x) && t.phase) S.add(t.phase);
   });
+  // FR/AC cards join only their explicitly declared Task or work-package context.
+  DATA.edges.forEach(function(edge){if(S.has(edge[1]) && OBJ[edge[0]].kind==='spec')S.add(edge[0]);});
+  IDS.forEach(function(id){if((OBJ[id].owners||[]).some(function(owner){return S.has(owner);}))S.add(id);});
   const basisKinds = ['goal', 'dec'];
   return CORE.map(function (kind) {
     const groupKinds = kind === 'dec' ? basisKinds : kind === 'ires' ? ['ires','eres'] : [];
@@ -714,7 +746,7 @@ const num = function (id) { return OBJ[id].label.replace(/\D+/g, ''); };
 function hintOf(id) {
  const o=OBJ[id];
  const ws = Array.from(descendants([id])).filter(function(x){return OBJ[x].kind === 'wp';});
- if(o.kind === 'req') return [[ws.length ? '→ '+ws.length+' 个工作包' : '缺：没有工作包',ws.length?'plain':'fail']];
+ if(o.kind === 'req') return [[ws.length ? '来源相关 · '+ws.length+' 个工作包' : '工作包关联未明确',ws.length?'plain':'fail']];
  if(o.kind === 'wp') { const ts=kids(id).filter(function(x){return OBJ[x].kind==='task';});return [[ts.length?'→ '+ts.length+' 个 Task':'缺 Task',ts.length?'plain':'fail']]; }
  return o.phase && OBJ[o.phase] ? [[OBJ[o.phase].label,'plain']] : [];
 }
@@ -747,7 +779,7 @@ function navRow(id) {
   '</button>';
 }
 function sidebarHtml() {
-  const groups = Object.keys(DATA.kinds).filter(function (kind) { return IDS.some(function (id) { return OBJ[id].kind === kind; }); }).map(function (kind) {
+  const groups = ['req', 'wp', 'task'].map(function (kind) {
     return { kind: kind, ids: IDS.filter(function (i) { return OBJ[i].kind === kind; }) };
   });
   const hasUpdate = CHANGED.size > 0;
@@ -765,7 +797,7 @@ function sidebarHtml() {
       '<div class="nav-list">' + g.ids.map(navRow).join('') + '</div>' +
     '</section>';
   }).join('') +
-  '<p class="nav-note">点选一项查看内容与来源路径。浅蓝底只表示材料中已取得的上下游关系；没有关系时不作推断。</p>';
+  '';
 }
 /* 卡片 */
 function objChip(id, opt) {
@@ -789,14 +821,15 @@ function objCard(id, opt) {
   const k = DATA.kinds[o.kind];
   const label = (o.kind === 'phase' || o.kind === 'risk') ? o.label : k.label;
   const phaseLabel = o.kind === 'task' && o.phase && OBJ[o.phase] ? ' · ' + OBJ[o.phase].label : '';
-  const line = opt2.line !== undefined && opt2.line !== null ? opt2.line : (o.summary || o.finding || o.detail);
+  const cardTitle = opt2.title || o.title;
+  const line = opt2.line !== undefined && opt2.line !== null ? opt2.line : (o.kind === 'task' && Object.prototype.hasOwnProperty.call(o,'goal') ? o.goal : o.summary || o.finding || o.detail);
   const cls = 'objcard k-' + o.kind + (cur ? ' is-current' : '') + (chg ? ' is-changed' : '');
   const card = '<button type="button" data-go="' + id + '"' + (cur ? ' aria-current="page"' : '') + ' class="' + cls + '">' +
     '<span class="objcard-icon' + (o.kind === 'task' ? ' task-icon' : '') + '">' + icon(o.kind, 18) + '</span>' +
     '<span class="objcard-body">' +
       '<span class="objcard-label">' + esc(label + phaseLabel) + '</span>' +
-      '<span class="objcard-title' + (o.kind === 'file' ? ' mono' : '') + '">' + esc(o.title) + '</span>' +
-      (line ? '<span class="objcard-line">' + esc(line) + '</span>' : '') +
+      '<span class="objcard-title' + (o.kind === 'file' ? ' mono' : '') + '">' + esc(cardTitle) + '</span>' +
+      (line && line !== cardTitle ? '<span class="objcard-line">' + esc(line) + '</span>' : '') +
     '</span>' +
     (cur ? '<span class="objcard-cur">当前</span>' : '') +
     (o.status ? statusTag(o.status) : '') +
@@ -812,7 +845,7 @@ function heroHtml(o) {
   const k = DATA.kinds[o.kind];
   const changed = CHANGED.has(o.id);
   const head = '<div class="hero-head">' + kindChip(o.kind) +
-    (o.kind === 'phase' ? '<span class="hero-phase">' + esc(o.label) + '</span>' : '') +
+    (o.source_id ? '<span class="hero-phase">' + esc(o.source_id) + '</span>' : o.kind === 'phase' ? '<span class="hero-phase">' + esc(o.label) + '</span>' : '') +
     (o.status ? statusTag(o.status) : '') +
     (changed ? tag('有更新', 'warm') : '') +
   '</div>';
@@ -821,30 +854,33 @@ function heroHtml(o) {
     return '<h2 tabindex="-1" class="' + cls + '">' + esc(text) + '</h2>';
   };
   if (o.kind === 'req') {
+    const indexed = /^后建索引 /.test(o.source_id || '');
     return '<div class="' + wrap + '">' + head +
+      (indexed ? tag('归纳', 'unk') : '') +
       '<div class="hero-quote">' +
         '<span class="hero-quote-icon">' + icon('req', 28) + '</span>' +
-        title('h2-xl', o.quote || o.title) +
+        title('h2-xl', indexed ? o.title : o.quote || o.title) +
       '</div>' +
-      '<p class="hero-note">需求条目（含归纳，非全部逐字） · 来自 ' + esc(o.source || (o.src || []).map(function (s) { return s.name; }).join('；') || '来源未取得') + '</p>' +
+      (o.summary && o.summary !== o.title ? '<p class="hero-summary">'+esc(o.summary)+'</p>' : '') +
+      (indexed ? '<details class="raw-quote"><summary>用户原话 · '+esc(o.source || '来源未取得')+'</summary><p>'+esc(o.quote || '原话未取得')+'</p></details>' : o.source ? '<p class="hero-note">'+esc(o.source)+'</p>' : '') +
     '</div>';
   }
   if (o.kind === 'ires' || o.kind === 'eres') {
     return '<div class="' + wrap + '">' + head + title('h2-lg', o.title) +
       '<div class="hero-finding">' +
         '<div class="finding-k">调研结论</div>' +
-        '<p class="finding-v">' + esc(o.finding || '调研结论未取得；下方仅展示已有来源指针') + '</p>' +
+        '<p class="finding-v">' + esc(o.finding || '调研结论未取得') + '</p>' +
       '</div>' +
       '<p class="hero-note small">' +
-        (o.origin ? esc(o.origin) : '原件与范围见下方来源；本页不据指针推断已查阅外部原文') +
+        (o.origin ? esc(o.origin) : '来源指针 · 未抓取外部原文') +
       '</p>' +
     '</div>';
   }
   if (o.kind === 'dec') {
     return '<div class="' + wrap + '">' + head + title('h2-xl', o.title) +
       '<div class="hero-grid">' +
-        '<div class="hero-cell soft"><div class="cell-k">决定了什么</div><p class="cell-v">' + esc(o.detail || '决定细节未取得；请查阅下方原件') + '</p></div>' +
-        '<div class="hero-cell page"><div class="cell-k sub">为什么这样定</div><p class="cell-v-sm">' + esc(o.why || '决定理由未取得；请查阅下方原件') + '</p></div>' +
+        '<div class="hero-cell soft"><div class="cell-k">决定了什么</div><p class="cell-v">' + esc(o.detail || '细节未取得') + '</p></div>' +
+        '<div class="hero-cell page"><div class="cell-k sub">为什么这样定</div><p class="cell-v-sm">' + esc(o.why || '决定理由未取得') + '</p></div>' +
       '</div>' +
     '</div>';
   }
@@ -876,8 +912,9 @@ function heroHtml(o) {
       '<p class="hero-explain">' + esc(o.explain || o.summary || '测试解释未取得；结果以原件为准') + '</p>' +
     '</div>';
   }
+  const summary = o.kind === 'task' && Object.prototype.hasOwnProperty.call(o,'goal') ? o.goal : o.summary;
   return '<div class="' + wrap + '">' + head + title('h2-xl', o.title) +
-    (o.summary ? '<p class="hero-summary">' + esc(o.summary) + '</p>' : '') +
+    (summary && summary !== o.title ? '<p class="hero-summary">' + esc(summary) + '</p>' : '') +
   '</div>';
 }
 /* 两份记录对不上 */
@@ -899,53 +936,25 @@ function fileFoldHtml(ids, current) {
   '</div>';
 }
 function chainHtml(o) {
-  const lanes = chainFor(o.id);
-  const ringNames = Object.fromEntries(CORE.map(function(k,i){return [k,RING_NAMES[i]];}));
-  const basisNames = { ires: '内部调研', eres: '外部调研', goal: '目标', dec: '决策' };
-  const cur = ANCHOR[o.kind] || 0;
-  const ownerTasks = (o.kind === 'file' || o.kind === 'test') ? Array.from(ancestors([o.id])).filter(function (id) { return OBJ[id].kind === 'task'; }) : [];
-  const directPair = DATA.edges.some(function (edge) {
-    return (edge[0] === o.id && OBJ[edge[1]].kind === (o.kind === 'file' ? 'test' : 'file')) ||
-      (edge[1] === o.id && OBJ[edge[0]].kind === (o.kind === 'file' ? 'test' : 'file'));
-  });
-  const contextNote = ownerTasks.length ? '<p class="hero-note" data-task-context>本 Task（' + ownerTasks.map(function (id) { return esc(OBJ[id].label); }).join('、') + '）实际改动与执行测试；' + (directPair ? '有直接文件—测试关联，覆盖范围仍以测试原件为准。' : '逐文件测试映射未知，不代表这些测试逐文件覆盖。') + '</p>' : '';
-  const isAttached = o.kind === 'risk';
-  const cards = function (ids) { return ids.map(function (id) {
-    const item = OBJ[id];
-    const line = item.kind === 'dec' ? decLine(id) : item.kind === 'test' ? testLine(id) : undefined;
-    return objCard(id, { current: id === o.id, changed: CHANGED.has(id), line: line });
-  }).join(''); };
-  return '<section class="chain">' +
-    '<h3>逻辑链条：从原始需求到落地</h3>' +
-    '<p class="lead">每一环都是平级对象，按「' + RING_NAMES.join(' → ') + '」从上往下排；黑框是你现在看的这一项。</p>' +
-    contextNote + '<ol>' + lanes.map(function (lane, i) {
-      const current = !isAttached && i === cur;
-      const pos = current ? '当前这一环' : i < cur ? '上游' : '下游';
-      let body;
-      if (lane.groups.length) {
-        body = lane.groups.map(function (group) {
-          return '<section class="basis-group" data-basis-group="' + group.kind + '">' +
-            '<h4>' + basisNames[group.kind] + '</h4><div class="lane-items">' + cards(group.items) + '</div></section>';
-        }).join('');
-      } else if (lane.kind === 'file' && lane.items.length) {
-        body = fileFoldHtml(lane.items, o.id);
-      } else {
-        body = '<div class="lane-items">' + cards(lane.items) +
-          (!lane.items.length ? (lane.gapTone === 'fail' ? gapBox(lane.gap) : emptyBox(lane.gap)) : '') + '</div>';
-      }
-      const attached = (lane.attachments || []).map(function (extra) {
-        const label = DATA.kinds[extra.kind].label;
-        return '<aside class="chain-attachment" data-attachment="' + extra.kind + '"><div class="attachment-label">' + label +
-          ' <span>' + extra.items.length + ' 项</span></div><div class="lane-items">' + cards(extra.items) + '</div></aside>';
-      }).join('');
-      return '<li class="lane" data-ring="' + lane.kind + '">' +
-        '<div class="lane-rail"><span class="lane-dot k-' + lane.kind + (current ? ' is-cur' : '') + '">' + icon(lane.kind, 20) + '</span>' +
-          (i === lanes.length - 1 ? '' : '<span class="lane-line" aria-hidden="true"></span>') + '</div>' +
-        '<div class="lane-body"><div class="lane-head"><span class="lane-label k-' + lane.kind + '">' + ringNames[lane.kind] + '</span>' +
-          (lane.items.length ? '<span class="lane-count">' + lane.items.length + ' 项</span>' : '') +
-          '<span class="lane-pos' + (current ? ' is-cur' : '') + '">' + pos + '</span></div>' + reportRingHtml(i+1) + body + attached + '</div></li>';
-    }).join('') + '</ol></section>';
+  const lanes=chainFor(o.id).filter(function(lane){return lane.items.concat((lane.attachments||[]).flatMap(function(a){return a.items;})).some(function(id){return id!==o.id;});});
+  const cards=function(ids){return ids.filter(function(id){return id!==o.id;}).map(function(id){return objCard(id,Object.assign({changed:CHANGED.has(id)},o.kind==='wp'&&OBJ[id].kind==='goal'&&OBJ[id].title===o.summary?{title:'查看目标来源',line:''}:{}));}).join('');};
+  const content=lanes.map(function(lane,index){
+    const ids=lane.items.filter(function(id){return id!==o.id;}),attached=(lane.attachments||[]).filter(function(a){return a.items.some(function(id){return id!==o.id;});});
+    return '<li class="lane"><div class="lane-rail"><span class="lane-dot k-'+lane.kind+'">'+icon(lane.kind,20)+'</span>'+(index<lanes.length-1?'<span class="lane-line"></span>':'')+'</div><div class="lane-body"><div class="lane-head"><span class="lane-label">'+esc(DATA.kinds[lane.kind].label)+'</span><span class="lane-count">'+ids.length+' 项</span></div><div class="lane-items">'+(lane.kind==='file'&&ids.length?fileFoldHtml(ids,o.id):cards(ids))+'</div>'+attached.map(function(a){return '<div class="chain-attachment"><h4>'+esc(DATA.kinds[a.kind].label)+'</h4><div class="lane-items">'+cards(a.items)+'</div></div>';}).join('')+'</div></li>';
+  }).join('');
+  return (content?'<section class="chain"><h3>相关内容</h3><ol>'+content+'</ol></section>':'')+'<details class="task-materials"><summary>十环状态</summary><div class="report-grid">'+CORE.map(function(_,i){return reportRingHtml(i+1);}).join('')+'</div></details>';
 }
+
+function taskMaterialsHtml(){
+ const materialIds=IDS.filter(function(id){return OBJ[id].scope==='task';});
+ if(!materialIds.length)return '';
+ return '<details class="task-materials"><summary>任务资料 · '+materialIds.length+' 项 <span class="tag tag-unk">归属未取得</span></summary><div class="lane-items">'+materialIds.map(function(id){return objCard(id);}).join('')+'</div></details>';
+}
+function materialIssueHtml(){
+ const errors=DATA.contractErrors||[];
+ return errors.length?'<details class="task-materials"><summary>材料校验 <span class="tag tag-unk">'+errors.length+' 项待核</span></summary><ul>'+errors.map(function(error){return '<li>'+esc(error)+'</li>';}).join('')+'</ul></details>':'';
+}
+
 /* 计划动的文件（和真实改动分栏） */
 function planHtml(files) {
   const open = ui.plan;
@@ -964,7 +973,7 @@ function extrasHtml(o) {
   let out = '';
   if (o.items) {
     out += '<section class="section">' +
-      '<h3 class="section-title">这一项要做到<span class="count">' + o.items.length + '</span></h3>' +
+      '<h3 class="section-title">'+(o.kind==='task'?'任务内容':'这一项要做到')+'<span class="count">' + o.items.length + '</span></h3>' +
       '<div class="panel"><ol class="steps">' + o.items.map(function (t, i) {
         return '<li><span class="step-num k-' + o.kind + '">' + (i + 1) + '</span>' + esc(t) + '</li>';
       }).join('') + '</ol></div>' +
@@ -972,7 +981,7 @@ function extrasHtml(o) {
   }
   if (o.plan) {
     out += '<section class="section">' +
-      '<h3 class="section-title">计划动的文件<span class="hint">还没改，和链条里「文件」的真实改动分开</span></h3>' +
+      '<h3 class="section-title">声明文件</h3>' +
       planHtml(o.plan) +
     '</section>';
   }
@@ -991,9 +1000,9 @@ function sourceRow(s, i, ownerKey) {
   if (open) {
     body = '<div id="src-panel-' + key + '" aria-live="polite" class="srow-body">' +
       '<p>' + (state === 'ok'
-        ? '当前预览无法直接打开本地原件。请按下方路径查阅。'
+        ? '原件路径'
         : state === 'stale'
-          ? '指针失效：原件中未找到目标标题或编号。其余内容继续显示。'
+          ? '指针失效：目标未找到'
           : '来源不可读：权限不足。') + '</p>' +
       '<p class="p2">路径：<code class="mono-ink">' + esc(s.path) + '</code></p>' +
       (state === 'unreadable'
@@ -1045,9 +1054,9 @@ function progressHtml() {
       (i < DATA.stages.length - 1 ? '<span class="sep" aria-hidden="true">›</span>' : '') +
     '</div>';
   }).join('');
-  return '<section class="panel"><h3>十环报告（只读派生）</h3>'+CORE.map(function(_,i){return reportRingHtml(i+1);}).join('')+'</section><div class="flow">' + flow + '</div>' +
+  return '<div class="flow">' + flow + '</div>' +
     '<section class="section">' +
-      '<h3 class="section-title">每条原始需求走到了哪一步<span class="hint">一行一条；虚线红框 = 这一环缺</span></h3>' +
+      '<h3 class="section-title">需求进展</h3>' +
       '<div class="panel flush"><div class="scroll-thin table-scroll"><div class="table-inner">' +
         '<div class="thead">' + PROGRESS_KINDS.map(function (k) { return kindChip(k); }).join('') + '</div>' +
         DATA.progress.reqIds.map(function (r) {
@@ -1059,7 +1068,7 @@ function progressHtml() {
           return '<div class="slot">' + objChip(t) + '</div>';
         }).join('') +
       '</div>' +
-    '</section>';
+    '</section><details class="check-details"><summary>检查详情</summary><section class="report-grid">'+CORE.map(function(_,i){return reportRingHtml(i+1);}).join('')+'</section></details>';
 }
 function riskInventoryHtml() {
   const inv=DATA.riskInventory;
@@ -1090,7 +1099,7 @@ function headerRightHtml() {
     }).join('') + '</span>';
     out += '<button type="button" data-seen class="btn-seen">我看过了</button>';
   }
-  out += '<span class="hdr-readonly">只读派生 · 非权威</span>' + (storageError ? '<span role="alert" class="fail-strong">' + esc(storageError) + '</span>' : '');
+  out += (storageError ? '<span role="alert" class="fail-strong">' + esc(storageError) + '</span>' : '');
   return out;
 }
 function headerHtml() {
@@ -1118,14 +1127,12 @@ function mainHtml() {
   const back = hist.length ? '<button type="button" data-back class="backbtn">← 返回上一对象</button>' : '';
   const toolbar = '<div class="toolbar">' + back + '</div>';
   if (sel === 'progress') {
-    return toolbar + '<h2 tabindex="-1" class="page-h2">进度总览</h2>' +
-      '<p class="hero-note">本页是只读派生视图，不是权威。权威为当前材料与 task facts。</p>' +
-      '<details class="panel"><summary>来源指纹与本次状态</summary><p>' + esc(DATA.rings ? (/报告 sha256=[a-f0-9]{64}(?![a-f0-9])/i.test(DATA.provenance || '') && /decision-log sha256=[a-f0-9]{64}(?![a-f0-9])/i.test(DATA.provenance || '') ? DATA.provenance : '缺口：报告或decision-log指纹未取得') : '报告缺失：final-chain-report.json 未取得') + '</p><p>' + esc(DATA.comparisonNote || '比较基准缺失') + '</p><p>机械比对管不住措辞漂移，不能替代独立效果验收。</p></details>' + progressHtml() +
-      '<section class="section"><h3 class="section-title">任务实际交付与验收在哪</h3><div class="panel">' +
-      IDS.filter(function(id){return OBJ[id].kind === 'task';}).map(function(id){const t=OBJ[id];return '<div class="hero-cell">'+objChip(id)+'<p>'+esc(t.summary)+'</p>'+sourcesHtml(t)+'</div>';}).join('')+'</div></section>' + riskInventoryHtml();
+    return toolbar+'<h2 tabindex="-1" class="page-h2">进度总览</h2>'+progressHtml()+materialIssueHtml()+taskMaterialsHtml()+
+      '<details class="task-materials"><summary>来源指纹与本次状态</summary><p>'+esc(DATA.rings ? (/报告 sha256=[a-f0-9]{64}(?![a-f0-9])/i.test(DATA.provenance||'') && /decision-log sha256=[a-f0-9]{64}(?![a-f0-9])/i.test(DATA.provenance||'') ? DATA.provenance : '缺口：报告或decision-log指纹未取得') : '报告缺失：final-chain-report.json 未取得')+'</p></details>';
+
   }
   const o = OBJ[sel];
-  return toolbar + heroHtml(o) + contraHtml(o) + (o.noChain ? '' : chainHtml(o)) + extrasHtml(o) + sourcesHtml(o);
+  return toolbar + heroHtml(o) + contraHtml(o) + (o.kind==='task'?extrasHtml(o):'') + (o.noChain ? '' : chainHtml(o)) + (o.kind==='task'?'':extrasHtml(o)) + sourcesHtml(o) + (['req','wp','task'].includes(o.kind)?materialIssueHtml()+taskMaterialsHtml():'');
 }
 </script>
 <script>

@@ -179,7 +179,7 @@ P4/T005 是 AC-COST-001、AC-RESULT-001 的 producer；P12 仅消费。T005 先�
 
 当前实读受保护路径：`tests/contract/measure-main-agent-cost.node-test.mjs`。此逐路径清单补齐前文按数量的简述；各文件的原 ORACLE 与负例强度保持。路径/名称常量按卡中具名范围处理，任何断言表达式、判定或评分变化先在本卡 TCR 字段写旧/新断言、原因与旧失败ref，并取得独立审查原件；未取得只停该断言改动，不改保护标记求绿。本轮不修改测试；实施者不能凭本清单自行放宽 AC。
 
-### T004 当前任务三条实际 AC 抽查输入
+#### T004 当前任务三条实际 AC 抽查输入
 
 下列是本任务既有 AC 的证据计划，不改 spec Appendix A 的成功/失败条件。提供者是本次真实角色，取得时点区分本 Phase 与真实 stage 末；独立测试者据原件判断，不凭本表自签通过。
 
@@ -193,7 +193,7 @@ incomplete：AC-ACCEPT-002；试过=npx vitest run tests/contract/acceptance-pla
 #### AC-EVID-002
 证据计划：判什么=facts只有一条当前phase_progress且无历史序列；怎么判=独立测试者重放evidence-manifest具名fixture的两个Phase并读facts；证据从哪来=本Phase后续唯一清单的cursor_ref与具名测试原件，当前测试未实施；谁提供=P4开发/root/p4_execution提供复用既有task-store的fixture（不改store），独立/root/p4_independent_test执行读回；何时能拿到=T005开发完成并独立测试回报时；成本类别=临时post task命令级；拿不到怎么办=保未取得与原P4开发修复owner，不另建游标或改判据
 
-### T005 测试变更请求（待独立审查，不授权改断言）
+#### T005 测试变更请求（待独立审查，不授权改断言）
 
 - **范围**：仅 `tests/contract/measure-main-agent-cost.node-test.mjs` 的 Codex 调用计数与 fresh child 出生证明；既有 token 累计差分、DSH 与缺报反例保持。
 - **旧行为原件**：`quality/tests/2026-10-26-132-p4-t005-frozen-old-counts-both-cases.output` 与同名 `.json`；真实命令 `node --test --test-name-pattern "WINDOW Codex cumulative same-thread delta|COUNTS mixed" tests/contract/measure-main-agent-cost.node-test.mjs` 退出 0，两case通过，只证明旧断言当前成立，不称新行为 RED。早次130仅命中mixed一case，保历史，不冒两case覆盖。新断言 RED 在独立批准后执行并留原件。

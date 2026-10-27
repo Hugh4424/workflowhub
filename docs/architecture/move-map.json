@@ -51,8 +51,15 @@
       "responsibility": "P1 只读五阶段 observable_result 映射并投影 runFinalChainCheck 的既有证据判定；报告模块八项结构、状态、原ref，不新增步骤判定生产者或持久状态。",
       "owner": "C09 P1 唯一实施 writer；后续归 CLI owner",
       "consumer": "四份 workflow SKILL 收口命令与 tests/contract/check-stage-steps.test.mjs 的公开入口/真实CLI场景",
-      "module_consumers": ["tests/contract/check-stage-steps.test.mjs"],
-      "named_data_readers": ["workflows/make-decision/SKILL.md", "workflows/build-plan/SKILL.md", "workflows/build-code/SKILL.md", "workflows/verify-code/SKILL.md"],
+      "module_consumers": [
+        "tests/contract/check-stage-steps.test.mjs"
+      ],
+      "named_data_readers": [
+        "workflows/make-decision/SKILL.md",
+        "workflows/build-plan/SKILL.md",
+        "workflows/build-code/SKILL.md",
+        "workflows/verify-code/SKILL.md"
+      ],
       "delete_condition": "五阶段主会话不再消费，或 final-chain 直接提供同等清单并改接全部消费者时删除。",
       "retention_basis": "spec FR-REPAIR-002/004 与 P1/T002；承接缺失只读报告，不替代 runtime 判定。实际新增后补登记，未倒称创建前登记。"
     },
@@ -65,7 +72,9 @@
       "owner": "C09 P1 oracle owner",
       "consumer": "P1 gate_cmd 的 vitest 定向执行",
       "module_consumers": [],
-      "named_data_readers": ["specs/archive/workflowhub-ui-frontend-c09-baseline-preparation-20261025/phases/P1-步骤检查器报出缺口.md"],
+      "named_data_readers": [
+        "specs/archive/workflowhub-ui-frontend-c09-baseline-preparation-20261025/phases/P1-步骤检查器报出缺口.md"
+      ],
       "delete_condition": "checker 被替代且对应行为断言由替代公开接缝完整承接后删除。",
       "retention_basis": "ORACLE-P1-STAGE-STEPS；新增后按已扩写集补登记，不替代独立审查。"
     },
@@ -78,7 +87,9 @@
       "owner": "C09 P1 oracle owner",
       "consumer": "P1 gate_cmd 的 vitest 定向执行",
       "module_consumers": [],
-      "named_data_readers": ["specs/archive/workflowhub-ui-frontend-c09-baseline-preparation-20261025/phases/P1-步骤检查器报出缺口.md"],
+      "named_data_readers": [
+        "specs/archive/workflowhub-ui-frontend-c09-baseline-preparation-20261025/phases/P1-步骤检查器报出缺口.md"
+      ],
       "delete_condition": "stepCoverageExit 报告职责退役且对应行为由具名替代测试完整承接后删除。",
       "retention_basis": "ORACLE-P1-STAGE-STEPS；直接消费 stepCoverageExit 与真实 run-checks CLI，新增后补登记。"
     },
@@ -1052,9 +1063,11 @@
       "role": "production",
       "responsibility": "现行合同面（本文件，拆分后保留 post phase/decision/交互 IO 合同文本）",
       "owner": "B4/P5 / MT-1-063",
-      "consumer": "当前直接模块消费者：tests/acceptance/card-02-current.mjs, tools/cli/stage-runtime.mjs",
+      "consumer": "当前直接模块消费者：skills/answer-as-page/scripts/build-page-data.mjs, tests/acceptance/card-02-current.mjs, tests/contract/cockpit-autogen.test.mjs, tools/cli/stage-runtime.mjs",
       "module_consumers": [
+        "skills/answer-as-page/scripts/build-page-data.mjs",
         "tests/acceptance/card-02-current.mjs",
+        "tests/contract/cockpit-autogen.test.mjs",
         "tools/cli/stage-runtime.mjs"
       ],
       "named_data_readers": [],

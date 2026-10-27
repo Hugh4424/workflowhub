@@ -39,11 +39,11 @@ caller给真实问题、材料/任务事实/测试/审查/真实改动清单、�
 
 ## 当前任务驾驶舱
 
-驾驶舱展示需求详情/设计/进度及来源、调研、决定、任务、实现、测试、缺口。权威为材料与task facts；沿「分工与出页」五类真实输入填DATA，示例不作事实。
+驾驶舱左侧只列原始需求、工作包、Task，右侧按所选对象展示真实业务卡与来源抽屉。需求保摘要与逐字引文的区别、来源编号的命名空间；工作包读严格标题与目标/边界/方案，Task身份复用validatePostPhaseContract的phase_rows并读取严格卡正文。卡片只接显式ID/ref关系，无归属的研究/执行原件放任务级折叠区，不冒采用或覆盖。权威为材料与task facts，示例不作事实。
 
 主链十环：原始需求→decision-log→调研方案→方案→spec→phase→代码实现→测试验证→最终审查→提交 PR。15类节点含保留的task/acc，二者非主链；task挂phase、acc不冒最终审查。节点追真实源；缺环标「缺」，未产生写「尚未产生＋到时会填什么」。实现依真实diff，声称不符时并列。每任务一行，状态/验收原件分列；方向→工作包/决定，计划→spec/Phase，实施→实际交付，验收→原件。原owner给更新时点/内容，本技能不改流程、不建进度投影。
 
-生成前逐个校验稳定编号/标题目标；失效标「指针失效」但页可读，全页无行号。顶部写「本页是只读派生视图，不是权威」，保decision-log的sha256/字节/行数、生成时间及当前步骤；provenance字符串含报告 sha256=<64位十六进制>、decision-log sha256=<64位十六进制>及两原件ref。生成后报告指纹、决定编号集合、工作包数、验收条数与锚点exit；比对不管措辞漂移，不作门。
+生成前逐个校验稳定编号/标题目标；失效标「指针失效」但页可读。主内容保短标题、业务结论与短状态，十环用紧凑状态卡；原报告依据/冲突/JSON、长路径和来源指纹按需展开，不常驻教程或重复免责声明。来源抽屉保decision-log的sha256/字节/行数、生成时间与当前步骤；provenance字符串含报告 sha256=<64位十六进制>、decision-log sha256=<64位十六进制>及两原件ref。生成后报告指纹、决定编号集合、工作包数、验收条数与锚点exit；比对不管措辞漂移，不作门。
 
 页与同名.nodes.json放caller指定任务库证据目录，不进仓库/分支写集。同一owner串行在骨架确认、每包细化、方向/范围/验收实变、Phase定稿/收口前更新；措辞/指针变化不生成。先读旧页/侧车，不盖未读件、不建current索引。侧车仅{schema,generated_at,source_fingerprint,nodes:[{stable_id,content_digest}]}，只增ring:1…10，DATA.ringNodes承其摘要；缺失/不同步报比较基准缺失，首版不伪造全变。报告/失败/历史件immutable；派生页/缓存沿已定规则安全写，中断保旧件并报告，不冒同步成功。模板替换经确认及独立读回，旧页/侧车沿任务规则移只读历史、留原ref，不静默删。
 
@@ -57,13 +57,13 @@ caller给真实问题、材料/任务事实/测试/审查/真实改动清单、�
 
 ## 依赖与边界
 
-写作读 skills/spec-specify/SKILL.md「技能写作规范（WR001）」唯一正文，不复制。生成用本包templates/overview-template.html，无外部依赖；独立浏览器验收读 skills/isolated-browser-qa/SKILL.md。来源/U1–U13取舍唯一登记在skills/catalog.yaml及skills/reuse-registry.md。
+写作读 skills/spec-specify/SKILL.md「技能写作规范（WR001）」唯一正文，不复制。生成用本包templates/overview-template.html；自动派生依赖受支持的Runner安装闭包，不能只孤立复制技能目录；独立浏览器验收读 skills/isolated-browser-qa/SKILL.md。来源/U1–U13取舍唯一登记在skills/catalog.yaml及skills/reuse-registry.md。
 
 只改方法、不搬上游打包程序。首个真实页不满足用户、考虑退回renderer时，先报约+977KB、三层许可（两文本未随包发布）、黑盒不可重建/自修；补许可/真实决定后评估，模板绿不默认回退，数字仅作来源对照。ADR-012/研究原件两历史先例：每阶段一页装置按迁移表全删；监控页生成者被删、页面陈旧33天，承诺的退役提示条实测不存在。材料枚举测试固定白名单、不扫目录，新增页不自动报警；禁第二进度权威，允许只读派生。
 
 生成入口由 caller 在「共同刷新」执行，唯一消费者是阶段主会话与 verify-code，owner 为本技能维护者；等价宿主原生入口接管且正文改指它，或技能退役时删除薄脚本。
 
-1. 事件 caller 在真实时点运行 `node skills/answer-as-page/scripts/render-answer-page.mjs --task-path <认证任务根> --report <run-checks stdout 报告路径> --out-dir <证据目录> --html <名称>.html --event <下表事件>`。脚本只消费已存报告，不代跑检查；无 `--data` 时从认证任务自动派生。原显式 caller 可保留 `--data <完整DATA.json>` 并走 `renderAnswerPage`，事件入口只取当前任务真实材料，不接手拼数据。
+1. 已安装分发从 installedRunner 根目录调用下列入口；Runner 与 Skill Bundle 按现安装合同同根安装，静态 runtime 依赖由 Runner 发布闭包承接。事件 caller 在真实时点运行 `node skills/answer-as-page/scripts/render-answer-page.mjs --task-path <认证任务根> --report <run-checks stdout 报告路径> --out-dir <认证任务根>/quality/evidence/<页面目录> --html <名称>.html --event <下表事件>`。脚本只消费已存报告，不代跑检查；无 `--data` 时从认证任务自动派生。原显式 caller 可保留 `--data <完整DATA.json>` 并走 `renderAnswerPage`，事件入口只取当前任务真实材料，不接手拼数据。
 2. `refreshAnswerPage` 首次或实质变化经 `open-page.mjs` 调系统默认浏览器；模块测试可注入 `open`。同指纹与逐类摘要不变写「无实质变化」，不重复打开。页在而侧车缺失/非法写「比较基准缺失」，按首次处理。打开失败保页面并返回 `opened:false`、`open_reason=未自动打开: 真实原因`；生成成功不冒已打开。原 `renderAnswerPage` 显式 caller 的 `open` true/抛错/非 true 语义不变。
 3. 读回 HTML 与 `.nodes.json`，核对四个键与 `nodes[].stable_id/content_digest`；未自动打开时写「未自动打开」与原因。
 

@@ -66,6 +66,7 @@ const RUNNER_ENTRYPOINTS = Object.freeze([
   // the existing Skill entrypoint in the Runner release so callers execute it
   // from the Runner root rather than an isolated agent home.
   "skills/wh-review/scripts/wh-review-cli.mjs",
+  "skills/answer-as-page/scripts/render-answer-page.mjs",
 ]);
 
 // These files are data dependencies of the public entrypoint closure. Keep
