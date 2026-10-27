@@ -522,6 +522,8 @@ req→WP→Task仅按材料显式命名空间ID/ref及WP→AC→Task声明的可
 - `tests/contract/stage-registry.test.mjs`
 - `tests/contract/terminal-chain.test.mjs`
 
+- `tests/contract/status-derivation.test.mjs`（既有CLI/status行为测试，P10首次终末原件consumer）
+
 **修改或删除（精确路径；逐 Phase 决定具体动作）**
 
 - `AGENTS.md`
@@ -1080,3 +1082,9 @@ node tools/cli/check-skill-consistency.mjs --root "$PWD"
 ### 当前任务终末时点澄清
 
 本任务以上两条具名边界例外明确覆盖当前 `workflows/build-code/SKILL.md` 及P8旧绝对“任何AC不得末Phase首判”句；P10/T012负责在原方法owner正文同步，当前计划修复不提前改生产方法。其余AC仍由原承接Phase聚合前真实执行、独立判定；P8既有接口验收与历史证据不重签。四条当前首判原件均未取得，不把计划归属当执行事实。
+
+### P10/T012终末质量事实的唯一status consumer补缺
+
+FR-MERGE-001/002与AC-MERGE-001/002已有终末16职责要求不变。当前status只按单review投影incomplete、work_status只表材料ready，缺综合独立终末原件reader；P10同方法producer首次接通。唯一可选stage事实 `terminal_assessment_ref:{ref,sha256}` 由现run互斥输入保存，由现status读取已有独立reader普通原件及唯一不可变final-report；完整严格合同/具名RED/GREEN见P10/T012同名节，不在spec复制字段规则。选择原row白名单/私有校验，不改未被此路径消费的旧facts-subschema，不新完成对象/公共命令/状态机/历史账本。status只投影不作推进或交付许可证；旧原review结论、provider原件与覆盖限制保留，修后独立复验闭合与原外审结论分列，不自动accepted_risk。P9原三根因实现、其他stage和无ref旧回退不受本新增consumer影响。本节为root已决定的必要缺口修复，不改变业务FR/AC成功阈值；当前未实施、未生成原件、未验收。原两个生产路径全局已存在，只补既有status测试一条精确路径。
+
+P10终末status的真实下游同时接通原通用监控builder→原模板：builder调用既有公共status得到归一DTO，阶段栏/顶部/linked primary显示同一有限结论，Task原交付/验收分列；renderer十环report不被伪作task_status。无新终末ref保持P5已验证原投影，不复制裁决、不读最新报告猜状态。三既有精确路径及安装Runner/注册taskpath/具名渲染正反验证见P10/T012“同一status DTO接通通用监控页面”，全局路径已存在不重复登记。
