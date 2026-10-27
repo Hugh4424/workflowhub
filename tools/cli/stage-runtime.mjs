@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { STAGE, WORKFLOW_STAGES } from "../../runtime/stage/stage-registry.mjs";
 
 import { closeSync, fstatSync, openSync, constants as fsConstants, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -1212,7 +1213,7 @@ async function recordTaskReview(context, input, values, services = {}) {
     }
     const reviewReadScope=trustedReviewReadScope(context,request,typeof services.resolveReviewReadScope==='function' ? services.resolveReviewReadScope({task:context.task,workspace:context.workspace,stage:request.stage,phaseId:request.phase_id??null}) : undefined);
     request.materials = resolveMaterialRefs(context, request.materials,reviewReadScope);
-    const codeSurface=["build-code","verify-code"].includes(request.stage)
+    const codeSurface=[STAGE.BUILD_CODE,STAGE.VERIFY_CODE].includes(request.stage)
       && (request.review_kind ?? request.reviewKind ?? null)===null && request.surface!=="document";
     if(codeSurface)request.surface="code";
     // Reader-only storage-root adaptation: the authenticated workspace is never mutated or published as this root.
@@ -1271,7 +1272,7 @@ async function recordTaskReview(context, input, values, services = {}) {
 
 export async function stageRuntimeMain(argv = process.argv.slice(2), { services = {}, cwd = process.cwd() } = {}) {
   const { command, values } = parseArgs(argv);
-  if (!["make-decision", "build-plan", "build-code", "verify-code", "build-prd"].includes(values.stage)) throw new TypeError("a current five-stage --stage is required");
+  if (!WORKFLOW_STAGES.includes(values.stage)) throw new TypeError("a current five-stage --stage is required");
   const common = ["stage", "project", "task", "task-path"];
   const options = {
     doctor: common, status: [...common, "reason"], artifact: [...common, "name", "input"],
@@ -1368,7 +1369,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     const isClosePlanRef = ref => typeof ref === "string"
       && dirname(resolve(context.workspace.worktreeRoot, ref)) === closeDir
       && /^\d{4}-\d{2}-\d{2}-\d{3}-close-plan\.json(?:#.*)?$/.test(basename(ref));
-    if (["verify-code", "make-decision"].includes(values.stage) && Array.isArray(refs) && refs.some(isClosePlanRef)) {
+    if ([STAGE.VERIFY_CODE, STAGE.MAKE_DECISION].includes(values.stage) && Array.isArray(refs) && refs.some(isClosePlanRef)) {
       if (refs.length !== 1) throw new TypeError("close confirmation requires exactly one plan reference");
       if (refs[0].includes("#") || !isAbsolute(refs[0]) || resolve(refs[0]) !== refs[0]) throw new TypeError("close confirmation requires a canonical plain plan path without fragments");
       if (Object.keys(fields).some(key => !["stage", "decision", "reply", "materialRefs"].includes(key))) throw new TypeError("close confirmation contains unsupported fields");

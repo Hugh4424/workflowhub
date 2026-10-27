@@ -1,10 +1,11 @@
+import { WORKFLOW_STAGE_SET } from "./stage-registry.mjs";
 import { ArtifactDir } from "../evidence/artifact-dir.mjs";
 import { resolveCanonicalTaskPath } from "../task/load-config.mjs";
 import { openTask } from "../task/task-handle.mjs";
 import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../task/workspace.mjs";
 import { inspectWorkspace } from "../interface/workspace-check.mjs";
 
-const STAGES = new Set(["make-decision", "build-plan", "build-code", "verify-code", "build-prd"]);
+const STAGES = WORKFLOW_STAGE_SET;
 export { assertWorkspace } from "../task/workspace.mjs";
 
 async function bindWorkspace(context, workspace) {

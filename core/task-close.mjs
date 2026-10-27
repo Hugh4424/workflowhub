@@ -1,3 +1,4 @@
+import { STAGE } from "../runtime/stage/stage-registry.mjs";
 import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync } from "node:fs";
@@ -388,7 +389,7 @@ export async function prepareDeliveryClosePlan({ taskDir, delivery = {}, closeMo
 // Facts are passive historical input: only actual stage rows determine close identity.
 export function closeConfirmationStage(taskDir) {
   const stages = new Set(readTaskFacts(taskDir).filter(row => row.record_kind === "stage").map(row => row.stage));
-  for (const stage of ["verify-code", "build-prd", "make-decision"]) if (stages.has(stage)) return stage;
+  for (const stage of [STAGE.VERIFY_CODE, STAGE.BUILD_PRD, STAGE.MAKE_DECISION]) if (stages.has(stage)) return stage;
   throw failure("CLOSE_CONFIRMATION_STAGE_UNAVAILABLE", "close confirmation requires an actual verify-code, build-prd or make-decision stage fact");
 }
 export async function confirmClosePlan({ taskDir, planRef, outcome = "confirmed", replyText } = {}) {

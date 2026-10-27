@@ -6,6 +6,36 @@
   "generated_from": "当前迁移表保留分类、已改接真实相对模块 consumer 与显式数据 reader；不保存整树快照或 hash 清单",
   "entries": [
     {
+      "source": "runtime/stage/stage-registry.mjs",
+      "destination": "runtime/stage/stage-registry.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "P6/T008阶段名单唯一可执行来源；零runtime依赖，导出阶段名、正式开发4集、全部工作流5集及仅供两处历史读取的退役build-spec值；不改变阶段分支或公共行为。",
+      "owner": "阶段运行时",
+      "consumer": "16个既有模块/CLI读取名字与集合以校验当前阶段、计算终末范围、读取历史顺序或分发技能；P8–P11作者承接注册表。",
+      "module_consumers": [
+        "runtime/stage/stage-context.mjs",
+        "runtime/task/task-store.mjs",
+        "runtime/review/review-policy.mjs",
+        "runtime/task/final-chain.mjs",
+        "runtime/task/final-chain-runner.mjs",
+        "runtime/evidence/workflow-evolution.mjs",
+        "runtime/distribution/skill-bundle-release.mjs",
+        "runtime/review/stage-review-disposition.mjs",
+        "tools/cli/stage-runtime.mjs",
+        "tools/cli/check-skill-consistency.mjs",
+        "tools/cli/check-stage-steps.mjs",
+        "tools/cli/measure-main-agent-cost.mjs",
+        "tools/cli/n11-pairwise-judge.mjs",
+        "tools/cli/smoke-local-skill-dispatch.mjs",
+        "core/task-close.mjs",
+        "skills/wh-review/scripts/third-review-host-config.mjs"
+      ],
+      "named_data_readers": [],
+      "delete_condition": "阶段集合已有另一个经独立验证的唯一干净定义点、全部现读取方被承接且无读者需要本文件后删除；不得保并存副本。",
+      "retention_basis": "FR-STAGE-001 / AC-STAGE-001；替代原15个副本模块/16处名单字面量的执行来源，final-chain改读具名单名常量；schema/材料矩阵与历史research-report不在本Phase迁移。"
+    },
+    {
       "source": "tests/contract/auto-recovery.test.mjs",
       "destination": "tests/contract/auto-recovery.test.mjs",
       "status": "retain",

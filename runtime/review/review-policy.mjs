@@ -1,6 +1,7 @@
+import { FORMAL_DEVELOPMENT_STAGE_SET } from "../stage/stage-registry.mjs";
 import matrix from "./stage-materials.json" with { type: "json" };
 
-const FORMAL_STAGES = new Set(["make-decision", "build-plan", "build-code", "verify-code"]);
+const FORMAL_STAGES = FORMAL_DEVELOPMENT_STAGE_SET;
 const REVIEW_KINDS = new Set(["build_prd"]);
 const REVIEW_TRACKS = new Set(["direction", "detail"]);
 const REVIEW_SCOPES = new Set(["phase"]);

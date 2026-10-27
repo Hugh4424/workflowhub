@@ -1,3 +1,4 @@
+import { STAGE, WORKFLOW_STAGES } from "../../runtime/stage/stage-registry.mjs";
 import fs from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
@@ -10,7 +11,7 @@ import { validatePostPhaseContract } from "../../runtime/stage/stage-content-con
 
 // T016: finite, read-only development facts consumed by run-checks and --root
 // fixture checks. No Runner dispatch, progress authority, or history scanner.
-const STAGES = ["make-decision", "build-plan", "build-code", "verify-code", "build-prd"];
+const STAGES = WORKFLOW_STAGES;
 const CATALOG = "skills/catalog.yaml";
 const MANIFEST = "skills/wh-review/manifest.json";
 
@@ -297,7 +298,7 @@ export function checkSkillConsistency(root) {
     for (const track of ["direction", "detail"]) compare("make-decision", track,
       manifest.contracts?.["make-decision"]?.required_skills_by_track?.[track],
       plan.stages?.["make-decision"]?.tracks?.[track]?.required_skills);
-    for (const stage of ["build-plan", "build-code", "verify-code"]) compare(stage, null,
+    for (const stage of [STAGE.BUILD_PLAN, STAGE.BUILD_CODE, STAGE.VERIFY_CODE]) compare(stage, null,
       manifest.contracts?.[stage]?.required_skills, plan.stages?.[stage]?.required_skills);
     compare("build-prd", null, manifest.contracts?.["build-prd"]?.required_skills,
       plan.non_stage?.build_prd?.required_skills);

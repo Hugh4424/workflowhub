@@ -1,3 +1,4 @@
+import { FORMAL_DEVELOPMENT_STAGES, RETIRED_STAGE_BUILD_SPEC } from "../../../runtime/stage/stage-registry.mjs";
 import { existsSync, lstatSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
@@ -196,7 +197,7 @@ function command(value) {
   throw new Error("workflowhub host third_review.command must be a command string or non-empty argv array");
 }
 
-const REVIEW_STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
+const REVIEW_STAGES = new Set([FORMAL_DEVELOPMENT_STAGES[0], RETIRED_STAGE_BUILD_SPEC, ...FORMAL_DEVELOPMENT_STAGES.slice(1)]);
 const DECISION_TRACKS = new Set(["direction", "detail"]);
 const NON_STAGE_REVIEW_KINDS = new Set(["build_prd"]);
 const REVIEW_MODES = new Set(["single_round", "adaptive", "full_only", "full_on_structural_rework"]);

@@ -1,3 +1,4 @@
+import { FORMAL_DEVELOPMENT_STAGES, WORKFLOW_STAGES } from "../stage/stage-registry.mjs";
 import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { createHash } from "node:crypto";
@@ -607,7 +608,7 @@ function workflowReport(repo, taskPath, materialRoot, level, facts, actualComman
   const selected = [];
   const skillRows = new Map(), skillConflicts = new Set();
   const declarations = stepObligationDeclarations(materialRoot);
-  const stages = ["make-decision","build-plan","build-code","verify-code","build-prd"];
+  const stages = WORKFLOW_STAGES;
   const actualStages = facts.filter(row=>row.record_kind === "stage").map(row=>({stage:row.stage,ref:"facts.jsonl"}));
   let portableUnknown=false;
   const terminalRefs=[...new Set(facts.flatMap(row=>[String(row.source??"").split(";")[0].trim(),...(row.evidence?.value??[]).map(entry=>entry.ref??entry.receipt_ref)]).filter(ref=>typeof ref === "string" && ref.startsWith("quality/evidence/portable-workflow-outcomes/build-prd/terminal/")))];
@@ -672,7 +673,7 @@ function workflowReport(repo, taskPath, materialRoot, level, facts, actualComman
       }
     }
   }
-  const declaredStages = level.value === "complex" ? ["make-decision","build-plan","build-code","verify-code"] : ["make-decision"];
+  const declaredStages = level.value === "complex" ? [...FORMAL_DEVELOPMENT_STAGES] : [FORMAL_DEVELOPMENT_STAGES[0]];
   if (actualStages.some(row=>row.stage === "build-prd")) declaredStages.push("build-prd");
   const knownActual = [...new Set(actualStages.map(row=>row.stage))];
   stageScope.declared = declaredStages;

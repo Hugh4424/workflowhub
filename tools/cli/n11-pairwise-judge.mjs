@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { STAGE, FORMAL_DEVELOPMENT_STAGES } from '../../runtime/stage/stage-registry.mjs';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync, existsSync, lstatSync, realpathSync } from 'node:fs';
@@ -7,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { runPacketBoundCodexReview } from '../../runtime/review/ocr-delegation-adapter.mjs';
 import { loadTrustedThirdReviewConfig, selectTrustedReviewProviderSelection } from '../../skills/wh-review/scripts/third-review-host-config.mjs';
 
-export const STAGES = ['make-decision', 'build-plan', 'build-code', 'verify-code'];
+export const STAGES = FORMAL_DEVELOPMENT_STAGES;
 const TASK_ROOT = '/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n11-same-condition-eval-20261022';
 export const DEFAULT_MANIFEST = `${TASK_ROOT}/quality/evidence/2026-10-23-250-p7-eight-cell-actual-manifest.json`;
 const MANIFEST_HASH = 'fb5f71582529e348902ee6719175ad10648f3b21fff28d10f1290940da740a40';
@@ -71,7 +72,7 @@ export function loadPair({ manifestFile = DEFAULT_MANIFEST, stage } = {}) {
   return { stage, status: sides.every(s => s.status === 'available') ? 'available' : 'inconclusive', sides,
     context: { stage, requirement, response, common_business_requirements: fixture.current_materials.requirements,
       stage_goal: { 'make-decision': 'Judge requirement discussion, choices, confirmation and coverage; extra planning is not a different task.', 'build-plan': 'Judge the complete plan and all indexed Phases against the public business requirements.', 'build-code': 'Judge actual implementation and tests against the common public specification; distinguish observed tests from claims.', 'verify-code': 'Judge verification findings, acceptance reports and their cited probes against the public fixed code and requirements.' }[stage],
-      public_contract: ['build-code','verify-code'].includes(stage) ? fixture.current_materials.materials : null,
+      public_contract: [STAGE.BUILD_CODE,STAGE.VERIFY_CODE].includes(stage) ? fixture.current_materials.materials : null,
       public_fixed_code: stage === 'verify-code' ? fixture.current_materials.verify_code_source.files.map(f => ({ name: f.workspace_ref, content: original(resolve(manifest.modeltest_root, f.source_ref), f.sha256).toString('utf8') })) : null,
       coverage_limit: 'Content comparison of the explicitly included terminal-time artifacts only. Missing references are explicit. No new execution, no formal stage acceptance, no unseen-file correctness claim.' } };
 }

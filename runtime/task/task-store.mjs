@@ -1,9 +1,10 @@
+import { FORMAL_DEVELOPMENT_STAGE_SET } from "../stage/stage-registry.mjs";
 import { constants, closeSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, readdirSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import { withLock } from "../interface/record-lock.mjs";
 import { createFileOnce, writeFileAtomic } from "../interface/safe-write.mjs";
 
-const STAGES = new Set(["make-decision", "build-plan", "build-code", "verify-code"]);
+const STAGES = FORMAL_DEVELOPMENT_STAGE_SET;
 export const TASK_RECORD_KINDS = Object.freeze(["stage", "close_action"]);
 export const STAGE_ROW_KEYS = Object.freeze([
   "record_kind", "task_id", "stage", "source", "created_at", "review_origin", "review_result_ref",

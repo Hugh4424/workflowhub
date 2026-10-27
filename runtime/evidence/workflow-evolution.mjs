@@ -1,3 +1,4 @@
+import { FORMAL_DEVELOPMENT_STAGES, RETIRED_STAGE_BUILD_SPEC } from "../stage/stage-registry.mjs";
 /** Read-only historical observations/candidates and ordinary quality-tax projection. */
 import { createHash } from "node:crypto";
 import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, realpathSync } from "node:fs";
@@ -7,7 +8,7 @@ import { openTask } from "../task/task-handle.mjs";
 // Removing either would change upstream_omission:build-spec from attributed to unknown.
 // Retain them until a later complete real-task observation confirms unchanged historical attribution
 // and retired-review refusal; that observation is not complete in this task. Owner: P9/T019.
-const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
+const STAGES = [FORMAL_DEVELOPMENT_STAGES[0], RETIRED_STAGE_BUILD_SPEC, ...FORMAL_DEVELOPMENT_STAGES.slice(1)];
 const STAGE_INDEX = new Map(STAGES.map((value, index) => [value, index]));
 const WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const SCHEMA_VERSION = "workflow-evolution.v1";
@@ -60,7 +61,7 @@ function requiredString(value, name) {
 
 function attribution(stage, value) {
   const raw = typeof value === "string" ? value : "";
-  const match = /^upstream_omission:(make-decision|build-spec|build-plan|build-code|verify-code)$/.exec(raw);
+  const match = new RegExp(`^upstream_omission:(${STAGES.join("|")})$`).exec(raw);
   if (!match) return { status: "unknown", reason: raw ? "invalid_attribution" : "missing_attribution" };
   if ((STAGE_INDEX.get(match[1]) ?? Infinity) >= (STAGE_INDEX.get(stage) ?? -1)) return { status: "unknown", reason: "stage_order" };
   return { status: "attributed", stage: match[1] };
