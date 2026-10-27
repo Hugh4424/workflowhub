@@ -1122,8 +1122,8 @@ skills:
         path: skills/react-best-practices/AGENTS.md
         skill_url: https://github.com/vercel-labs/agent-skills/blob/dd089a8c752c966dee8bf0f27cb625ba193ffd9e/skills/react-best-practices/AGENTS.md
         adopted:
-          - skills/react-best-practices/AGENTS.md#1-eliminating-waterfalls — 从消除串行请求建议提炼组件质量检查，保留真实依赖顺序
-          - skills/react-best-practices/AGENTS.md#2-bundle-size-optimization — 从包体积建议提炼窄客户端边界与按需加载审查，收益仍须实测
+          - skills/frontend-component-quality/upstream/react-best-practices/AGENTS.md#eliminating-waterfalls — 本地21行派生参考的消除串行请求摘要，保留真实依赖顺序；不冒完整源
+          - skills/frontend-component-quality/upstream/react-best-practices/AGENTS.md#bundle-size-optimization — 本地21行派生参考的客户端边界与按需加载摘要，收益仍须实测；不冒完整源
     local_changes: 公开唯一组件质量入口；Vercel 只读为 React/Next 内部 lens；owner 是 UI 交付合同；delete-condition consumer 迁移后
     dependency_closure: *deps_spec_ui
     update_policy: 只比较固定 Vercel commit 的上游变化，人工升级并保留 LICENSE/UPSTREAM
@@ -2832,3 +2832,86 @@ capability_decisions:
     local_changes: "未采用，consumer-only观察登记；快照文件SHA256 63e724b308f355f9940fa6753a6fa728d7c5c0df2104742fa1000019e11b17cd，采用快照坐标1f0f9c3bac03c4297f6fc8f7644fa412eda57085来自source-originals索引，未将既有纪律冒充新采用；消费者是AGENTS.md派发与回传及deep-research方法作者，不补许可出口，不写absorbed；上游许可链未独立核实；owner为派发与研究方法维护者。"
     dependency_closure: []
     update_policy: 仅保观察与未采用理由；无维护用途或经独立审查替代承接全部消费者后退役，保历史原件。
+
+  # C03 method-only derivations; these are capability decisions, not four runnable skills.
+  # upstream.commit is historical-adoption binding (unknown); fixed skill_url is this retrieval coordinate only.
+  - name: c03-external-better-ui
+    status: absorbed
+    purpose: C03两条链资产选择的概念参考
+    design_idea: 保留项目既有组件与视觉语汇；不采用像素数值与光学阈值
+    used_by_stages:
+      - build-plan
+      - build-code
+    local_path: skills/frontend-component-quality/SKILL.md
+    upstream:
+      - github_url: https://github.com/vaferkhanom/Website-skills
+        commit: unknown
+        commit_url: https://github.com/vaferkhanom/Website-skills/commit/24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e
+        path: better-ui/SKILL.md
+        skill_url: https://github.com/vaferkhanom/Website-skills/blob/24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e/better-ui/SKILL.md
+        license: unknown
+        adopted:
+          - SKILL.md intro — preserve project component library/tokens/density → skills/frontend-component-quality/SKILL.md 的“### 两条链资产检查（C03）”；仅原创概念表述
+    local_changes: 本次P6首次写入的具体概念：保留项目既有组件与视觉语汇；不采用像素数值与光学阈值。本地方法为原创表述，不复制核心段落、不搬整包。取回坐标是镜像 24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e；不是历史采用pin，也未证明原作者仓与镜像的历史绑定。镜像frontmatter声称MIT，完整许可原件及采用时期权利范围未取得，license保unknown；不据该声称扩复制或分发。稳定本地节为“### 两条链资产检查（C03）”。owner＝frontend-component-quality方法维护者；consumer＝本卡实施者与C06只读资产输入；C06语义变更交回本卡owner另立卡。
+    dependency_closure: []
+    update_policy: 维护者点名时按固定skill_url与真实采用范围比较；不自动追HEAD。取得许可及历史原件后分别核当前坐标、历史绑定与权利；经独立审查的替代方法承接全部消费者且无正文引用后，由原owner删除本条并保历史原件。
+  - name: c03-external-better-accessibility
+    status: absorbed
+    purpose: C03两条链资产选择的概念参考
+    design_idea: 保留组件语义、键盘入口与可达操作；不冒无障碍验收
+    used_by_stages:
+      - build-plan
+      - build-code
+    local_path: skills/frontend-component-quality/SKILL.md
+    upstream:
+      - github_url: https://github.com/vaferkhanom/Website-skills
+        commit: unknown
+        commit_url: https://github.com/vaferkhanom/Website-skills/commit/24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e
+        path: better-accessibility/SKILL.md
+        skill_url: https://github.com/vaferkhanom/Website-skills/blob/24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e/better-accessibility/SKILL.md
+        license: unknown
+        adopted:
+          - SKILL.md Core Principles 1–4 — semantics and keyboard → skills/frontend-component-quality/SKILL.md 的“### 两条链资产检查（C03）”；仅原创概念表述
+    local_changes: 本次P6首次写入的具体概念：保留组件语义、键盘入口与可达操作；不冒无障碍验收。本地方法为原创表述，不复制核心段落、不搬整包。取回坐标是镜像 24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e；不是历史采用pin，也未证明原作者仓与镜像的历史绑定。镜像frontmatter声称MIT，完整许可原件及采用时期权利范围未取得，license保unknown；不据该声称扩复制或分发。稳定本地节为“### 两条链资产检查（C03）”。owner＝frontend-component-quality方法维护者；consumer＝本卡实施者与C06只读资产输入；C06语义变更交回本卡owner另立卡。
+    dependency_closure: []
+    update_policy: 维护者点名时按固定skill_url与真实采用范围比较；不自动追HEAD。取得许可及历史原件后分别核当前坐标、历史绑定与权利；经独立审查的替代方法承接全部消费者且无正文引用后，由原owner删除本条并保历史原件。
+  - name: c03-external-interface-review
+    status: absorbed
+    purpose: C03两条链资产选择的概念参考
+    design_idea: 按真实消费者限定范围并读删除侧；不采用其评审格式、严重度或裁决机制
+    used_by_stages:
+      - build-plan
+      - build-code
+    local_path: skills/frontend-component-quality/SKILL.md
+    upstream:
+      - github_url: https://github.com/vaferkhanom/Website-skills
+        commit: unknown
+        commit_url: https://github.com/vaferkhanom/Website-skills/commit/24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e
+        path: interface-review/SKILL.md
+        skill_url: https://github.com/vaferkhanom/Website-skills/blob/24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e/interface-review/SKILL.md
+        license: unknown
+        adopted:
+          - SKILL.md Core Principles 1,3,4 — scope/consumers/removed side → skills/frontend-component-quality/SKILL.md 的“### 两条链资产检查（C03）”；仅原创概念表述
+    local_changes: 本次P6首次写入的具体概念：按真实消费者限定范围并读删除侧；不采用其评审格式、严重度或裁决机制。本地方法为原创表述，不复制核心段落、不搬整包。取回坐标是镜像 24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e；不是历史采用pin，也未证明原作者仓与镜像的历史绑定。镜像frontmatter声称MIT，完整许可原件及采用时期权利范围未取得，license保unknown；不据该声称扩复制或分发。稳定本地节为“### 两条链资产检查（C03）”。owner＝frontend-component-quality方法维护者；consumer＝本卡实施者与C06只读资产输入；C06语义变更交回本卡owner另立卡。
+    dependency_closure: []
+    update_policy: 维护者点名时按固定skill_url与真实采用范围比较；不自动追HEAD。取得许可及历史原件后分别核当前坐标、历史绑定与权利；经独立审查的替代方法承接全部消费者且无正文引用后，由原owner删除本条并保历史原件。
+  - name: c03-external-vercel-composition-patterns
+    status: absorbed
+    purpose: C03两条链资产选择的概念参考
+    design_idea: 按职责、状态归属和插槽组合；不整体搬8条规则或React19用法
+    used_by_stages:
+      - build-plan
+      - build-code
+    local_path: skills/frontend-component-quality/SKILL.md
+    upstream:
+      - github_url: https://github.com/vaferkhanom/Website-skills
+        commit: unknown
+        commit_url: https://github.com/vaferkhanom/Website-skills/commit/24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e
+        path: vercel-composition-patterns/SKILL.md
+        skill_url: https://github.com/vaferkhanom/Website-skills/blob/24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e/vercel-composition-patterns/SKILL.md
+        license: unknown
+        adopted:
+          - SKILL.md introduction/When to Apply/Quick Reference — composition and state ownership → skills/frontend-component-quality/SKILL.md 的“### 两条链资产检查（C03）”；仅原创概念表述
+    local_changes: 本次P6首次写入的具体概念：按职责、状态归属和插槽组合；不整体搬8条规则或React19用法。本地方法为原创表述，不复制核心段落、不搬整包。取回坐标是镜像 24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e；不是历史采用pin，也未证明原作者仓与镜像的历史绑定。镜像frontmatter声称MIT，完整许可原件及采用时期权利范围未取得，license保unknown；不据该声称扩复制或分发。稳定本地节为“### 两条链资产检查（C03）”。owner＝frontend-component-quality方法维护者；consumer＝本卡实施者与C06只读资产输入；C06语义变更交回本卡owner另立卡。
+    dependency_closure: []
+    update_policy: 维护者点名时按固定skill_url与真实采用范围比较；不自动追HEAD。取得许可及历史原件后分别核当前坐标、历史绑定与权利；经独立审查的替代方法承接全部消费者且无正文引用后，由原owner删除本条并保历史原件。

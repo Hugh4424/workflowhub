@@ -28,6 +28,16 @@ scan config 和 route/import/lazy/CSS/data 的逐项 support matrix；输出按�
 人工体验/视觉语义只追加 `source=human`，不能覆盖扫描原始项；没有真实 consumer 时保留
 `unknown`，不能声称 component map 已完整。
 
+### 两条链资产检查（C03）
+
+**适用范围**：回测工作台与业务日志两条链，分别核前端组件、前端布局、设计组件、设计布局。开工读当前任务的 `quality/evidence/P1-ledger.json` 对象与 `mapping`，沿条目回读真实实现、消费者及设计源；用途、约束、变体与插槽以条目语义为准，同名不等于同义。台账是唯一对象清单，本段只提供检查方法。
+
+**检查规则**：对每个选择记 `reuse`、`compose` 或 `gap`，分别说明用途依据、真实使用点、消费者与未知。用途、约束及合法变体已有对应且保留状态与插槽时选 `reuse`；现有对象需按布局组合且各自职责、状态归属仍明确时选 `compose`；两者都不能满足的具体语义缺失才记 `gap`，定位最小缺口及影响。回测链按台账区分曲线共享实现、绩效组合与声明的静态扫描范围内未见生产渲染、动态字符串／生成代码／跨项目运行时使用仍未知的旧表单；业务日志链按台账核页面、视图、行与详情浮层的职责及键盘入口，不用截图相似替代用途与真实调用。资产选择沿用项目组件、样式与交互语义；组合保留已有状态和可达操作，读改动两侧防止删掉合法分支。这里的三选一是资产判断，既有 Map 的 `action` 字段及其要求仍照上文记录。
+
+**未知与缺失**：查不到的用途、消费者、合法配法或来源写 `unknown`／`unavailable`，附原因、已查范围与应补证的对象 owner；不能推成零消费者、允许删除或已批准复用。台账缺任一链的资产语义时交回台账作者，已有可定位部分继续如实记录；精确 props/API 与 token/CSS 数值回各自原源。
+
+**来源与偏离**：对象依据只取当前任务 P1 台账及其原文引用。概念参考分别来自 [better-ui](https://github.com/vaferkhanom/Website-skills/blob/24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e/better-ui/SKILL.md) 的既有组件与视觉语汇保留、[better-accessibility](https://github.com/vaferkhanom/Website-skills/blob/24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e/better-accessibility/SKILL.md) 的语义与键盘操作、[interface-review](https://github.com/vaferkhanom/Website-skills/blob/24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e/interface-review/SKILL.md) 的消费者范围与删除侧读回、[vercel-composition-patterns](https://github.com/vaferkhanom/Website-skills/blob/24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e/vercel-composition-patterns/SKILL.md) 的按职责组合。该 commit 仅标本次可读镜像坐标，历史采用绑定与完整许可原件未取得，维持原缺口；本段原创表述，不复制其核心段落。既有 React/Next 参考仍只读下节及随包21行派生摘要，不视为完整上游。偏离：不写像素阈值、token 数值或精确 API，不引整包、不新增检查器；资产检查不能冒充浏览器、可访问性或工程验收通过。C06 只读引用本段资产输入，语义变更交回本卡 owner 另立卡。
+
 ## React/Next lens
 
 当技术栈确认是 React/Next 时，只读使用随包固定的 Vercel MIT `react-best-practices` compiled guide；它提供性能和组件边界建议，不拥有 WorkflowHub 结果，也不独立触发阶段或 gate。非 React/Next 或技术栈未知时写 `N/A + reason`。每次迭代只检查固定上游是否有新版本，升级需人工比较并保留 `LICENSE`/`UPSTREAM`。

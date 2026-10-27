@@ -93,6 +93,7 @@
 | 后端 | [入口](specs/backend/README.md) → [架构](specs/backend/architecture.md) | 模块/依赖/存储选择前；运行时架构owner；实现与审查者 |
 | 接口 | [入口](specs/api/README.md) → [合同](specs/api/contract.md) | public调用/校验/错误选择前；原public owner；CLI/task调用者 |
 | 验收 | [入口](specs/acceptance/README.md) → [规范](specs/acceptance/acceptance.md) | oracle/用例准备前；task及质量owner；独立测试/OCR/build-code 终末 |
+| 外部引用 | [逐项台账与角色分工](specs/workflowhub-ui-frontend-release-20261020/prd.md#外部引用逐项台账)、[整包记录样张](skills/external/README.md) | 新增或变更外部内容前；采用卡与登记owner；实施者、后续卡及独立reader |
 
 ## 当前目录职责
 

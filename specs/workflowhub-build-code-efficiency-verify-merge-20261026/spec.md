@@ -526,6 +526,8 @@ req→WP→Task仅按材料显式命名空间ID/ref及WP→AC→Task声明的可
 
 **修改或删除（精确路径；逐 Phase 决定具体动作）**
 
+- `tests/contract/ui-skill-contract.test.mjs`（P12必要C03主线同步；test待独立精确TCR）
+
 
 
 - `skills/frontend-component-quality/SKILL.md`（P11原owner定向补漏）
@@ -1116,3 +1118,5 @@ P12写集9→11最小接通默认public review producer的source原字节保全�
 本段纠正上文规划形成时“尚未实施/HTML或首判未取得”的当前读法，不改Appendix A或历史决定。RESULT002已有原P4独立046，RESULT003已有原P3独立006；P5页面已有原332、134广旅程与137/535两缺陷复验，原缺陷/覆盖保留。P10既有终末reader/source保全已实施并由417定向20case当前hash验证；原P5当前位置418为3case、原方法唯一报告086为2case、原P12 alias399为2case，分别引用而不叠加数量判质量。原084仍reject，同源348及修复原件保真，修后独立证明不冒原外审重读。11源码写集及实际命令/限制唯一回P12卡“实施与定向复验实际小结”。
 
 此时唯一实际JSON final-report与实际全gate、原P4阶段末一次成本/统一提醒、原P5 ended/closed、两条独立BOUND仍按真实后置顺序执行，不在材料冻结时预签。root继续已有授权内工作；后置证明只写现任务证据，原报告保生成时事实，最终独立原件/人答并列闭合，不机械生成第二报告。源码修复可用不等stage完成；Git交付、release与物理close分别读实际事实。知识更新由唯一图owner处理，542候选失败及原件保留，受阻来源不prune/不盖成功；文档prompt未取仍unavailable，不由本段宣称代码/文档全量更新。
+
+P12必要主线C03整合主动写集11→16，精确补AGENTS/catalog/frontend-component-quality/reuse四原owner路径及ui-skill-contract既有测试（独立保护分类＋精确TCR批准后才可改）。目标PRD与11件archive只保main继承原bytes，不属本Task新feature/主动source；完整最终diff仍保覆盖。原报告/清单/上游Phase与AC判据不改，无外部采用/付费或新状态/gate/账本；现原C03两链方法不强加本Task额外对象台账，权利unknown保原源。完整范围和归口见P12卡同名节。
