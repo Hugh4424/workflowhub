@@ -9,7 +9,7 @@ import { execFileSync } from "node:child_process";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const read = path => readFileSync(resolve(ROOT, path), "utf8");
 const SPEC = "specs/archive/n10-finite-check-wiring-20261020/spec.md";
-const POINTER = "../../workflows/verify-code/SKILL.md#测试充分性与检查可信度";
+const POINTER = "../../workflows/build-code/SKILL.md#测试充分性与检查可信度";
 const ANCHORS = ["错在范围修", "观察方法", "三值结论", "具名检查"];
 const DISPOSITIONS = ["已生效读回", "本次接线验证", "未完成", "不采用"];
 
@@ -51,7 +51,7 @@ function assertFigureItOutLanding({ verifyCode, stageReflection }) {
   const section = verifyCode.split("### 测试充分性与检查可信度\n")[1]?.split(/^## /m)[0];
   assert.ok(section, "named authoritative section");
   for (const anchor of ANCHORS) {
-    assert.ok(section.includes(anchor), `verify-code missing ${anchor}`);
+    assert.ok(section.includes(anchor), `build-code terminal missing ${anchor}`);
     assert.ok(!stageReflection.includes(anchor), `reflection duplicated ${anchor}`);
   }
   assert.ok(section.includes("已验证/未验证/无法判断"));
@@ -66,7 +66,7 @@ function assertFigureItOutLanding({ verifyCode, stageReflection }) {
   const routing = stageReflection.split("## 用户选择后的归口\n")[1]?.split(/^## /m)[0];
   const checks = routing?.split("检查：")[1]?.split("经验与判断待办：")[0];
   assert.ok(checks?.split("\n").includes(links[0]), "pointer belongs to routing checks");
-  assert.ok(links[0].startsWith("机械检查出现可疑通过或同类修正再次发生时，读取 [verify-code 检查可信度方法](" + POINTER + ")"), "approved conditional positive read");
+  assert.ok(links[0].startsWith("机械检查出现可疑通过或同类修正再次发生时，读取 [build-code 终末 检查可信度方法](" + POINTER + ")"), "approved conditional positive read");
 }
 
 describe("ORACLE-N10-FINITE-SET T022", () => {
@@ -84,7 +84,7 @@ describe("ORACLE-N10-FINITE-SET T022", () => {
   });
 
   it("[AC-SET-2] reads four rules from one authority and a single conditional reflection pointer", () => {
-    const input = { verifyCode: read("workflows/verify-code/SKILL.md"), stageReflection: read("skills/stage-reflection/SKILL.md") };
+    const input = { verifyCode: "### 测试充分性与检查可信度\n" + read("workflows/build-code/SKILL.md").split("### 测试充分性与检查可信度\n")[1]?.split(/^## /m)[0], stageReflection: read("skills/stage-reflection/SKILL.md") };
     assertFigureItOutLanding(input);
     for (const anchor of ANCHORS) expect(() => assertFigureItOutLanding({ ...input, verifyCode: input.verifyCode.replace(anchor, "removed") })).toThrow();
     // TCR2 protects only the approved literal rules; no claim of language understanding.
@@ -102,7 +102,7 @@ describe("ORACLE-N10-FINITE-SET T022", () => {
       ["missing-suspicious", "机械检查出现可疑通过或", ""],
       ["missing-recurrence", "或同类修正再次发生", ""],
       ["and-condition", "可疑通过或同类修正", "可疑通过且同类修正"],
-      ["negative-read", "时，读取 [verify-code", "时，无需读取 [verify-code"],
+      ["negative-read", "时，读取 [build-code 终末", "时，无需读取 [build-code 终末"],
     ]) {
       assert.ok(input.stageReflection.includes(from), name + " mutation target");
       expect.soft(() => assertFigureItOutLanding({ ...input, stageReflection: input.stageReflection.replace(from, to) }), name).toThrow();

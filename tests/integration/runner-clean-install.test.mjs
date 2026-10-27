@@ -31,7 +31,7 @@ describe("current Runner and Skill Bundle joint installation",()=>{
   const previous=await old.buildSkillBundleRelease({packageRoot:ROOT,outputDir:path.join(f.root,"prior-default")});
   expect(f.bundle.files.map(row=>row.path).sort()).toEqual(previous.files.map(row=>row.path).sort());
   const {resolvePortableStageFiles}=await import("../../runtime/distribution/skill-bundle-release.mjs");
-  for(const stage of ["make-decision","build-plan","build-code","verify-code"]){
+  for(const stage of ["make-decision","build-plan","build-code"]){
    const local=resolvePortableStageFiles({packageRoot:ROOT,stage});
    expect(local.files).toContain(`workflows/${stage}/SKILL.md`);
    expect(local.files).toContain("skills/spec-specify/templates/spec-template.md");

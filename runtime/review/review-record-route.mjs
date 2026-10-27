@@ -253,7 +253,7 @@ export async function recordSimpleReviewRequest({taskDir,request,runRound=runSim
       material_coverage:providers.map(member=>providerCoverage(member,materialKeys)),
       ...((result.discarded_facts?.length || discardedFacts.length) ? {discarded_facts:[...(result.discarded_facts ?? []),...discardedFacts]} : {}),
       ...(signal?.aborted ? {status:providers.some(member=>member.status === "completed" && (member.parse_outcome ?? member.execution?.parse_outcome) === "ok") ? "available-with-failures" : "unavailable",error:{code:"REVIEW_CANCELLED",message:"review cancelled; settled provider facts retained"}} : {}),authoritative:false};
-    if(tuple.stage==="verify-code" || tuple.review_scope===TERMINAL_REVIEW_SCOPE) {
+    if(tuple.review_scope===TERMINAL_REVIEW_SCOPE) {
       const {conclusion,coverage}=deriveTerminalConclusion({status:record.status,provider_results:providers,findings});
       Object.assign(record,{conclusion,coverage});
     }

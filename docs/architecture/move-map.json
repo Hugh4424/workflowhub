@@ -6,6 +6,21 @@
   "generated_from": "当前迁移表保留分类、已改接真实相对模块 consumer 与显式数据 reader；不保存整树快照或 hash 清单",
   "entries": [
     {
+      "source": "tests/contract/stage-id-removal.test.mjs",
+      "destination": "tests/contract/stage-id-removal.test.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "P11/T014 ORACLE-STAGE-ID-REMOVAL：旧可调用入口与合同退役、当前引用扫描、历史读取及写入拒绝、phase/terminal真实包消费与登记收口。",
+      "owner": "P11身份删除与独立验收owner",
+      "consumer": "P11定向验证与P12终末对账作者",
+      "module_consumers": [],
+      "named_data_readers": [
+        "npx vitest run tests/contract/stage-id-removal.test.mjs"
+      ],
+      "delete_condition": "对应行为被独立验证的替代测试完整承接且无当前消费者后删除。",
+      "retention_basis": "AC-ROUTE-003；不新增生产状态、协议或控制面。"
+    },
+    {
       "source": "tests/contract/stage-mechanism.test.mjs",
       "destination": "tests/contract/stage-mechanism.test.mjs",
       "status": "retain",
@@ -14,7 +29,9 @@
       "owner": "P9机制实现与独立验收owner",
       "consumer": "P9目标RED/GREEN、P10/P11迁移作者与独立审查者",
       "module_consumers": [],
-      "named_data_readers": ["npx vitest run tests/contract/stage-mechanism.test.mjs"],
+      "named_data_readers": [
+        "npx vitest run tests/contract/stage-mechanism.test.mjs"
+      ],
       "delete_condition": "相同公开接缝与历史读写边界已由独立验证替代测试完整承接且无当前消费者后删除。",
       "retention_basis": "AC-ROUTE-002 / AC-MERGE-004；不新增运行时状态。"
     },
@@ -23,9 +40,9 @@
       "destination": "runtime/stage/stage-registry.mjs",
       "status": "retain",
       "role": "production",
-      "responsibility": "P6/T008阶段名单唯一可执行来源，P9/T011收敛正式开发3集与含独立规划的工作流4集；零runtime依赖，导出当前阶段名、供两处历史读取的退役build-spec值及供host-config被动读取的已知退役build-code终末常量；该常量不进任何当前身份集合，原host配置不改写，旧provider不解析/不执行；历史facts原样读取，不新增阶段或公共行为。",
+      "responsibility": "P6/T008阶段名单唯一可执行来源，P9/T011收敛正式开发3集与含独立规划的工作流4集；零runtime依赖，导出当前阶段名、供两处历史读取的退役build-spec值及供host-config被动读取的RETIRED_STAGE_VERIFY_CODE被动常量；该常量不进任何当前身份集合，原host配置不改写，旧provider不解析/不执行；历史facts原样读取，不新增阶段或公共行为。",
       "owner": "阶段运行时",
-      "consumer": "16个既有模块/CLI读取名字与集合以校验当前阶段、计算终末范围、读取历史顺序或分发技能；P8–P11作者承接注册表。",
+      "consumer": "16个既有模块/CLI读取名字与集合以校验当前阶段、计算终末范围、读取历史顺序或分发技能；P8–P11作者承接注册表；Multica本地同步脚本经显式repo的所选main commit读取WORKFLOW_STAGES，不从dirty/cwd或第二枚举取值",
       "module_consumers": [
         "runtime/stage/stage-context.mjs",
         "runtime/task/task-store.mjs",
@@ -44,7 +61,9 @@
         "core/task-close.mjs",
         "skills/wh-review/scripts/third-review-host-config.mjs"
       ],
-      "named_data_readers": [],
+      "named_data_readers": [
+        "skills/workflowhub-multica-sync/scripts/multica-skill-sync.mjs"
+      ],
       "delete_condition": "阶段集合已有另一个经独立验证的唯一干净定义点、全部现读取方被承接且无读者需要本文件后删除；不得保并存副本。",
       "retention_basis": "FR-STAGE-001 / AC-STAGE-001 / AC-ROUTE-002 / AC-MERGE-004；P9同步写schema、材料矩阵及当前CLI/host/final-chain真实消费者，旧research-report与历史任务原件只读。"
     },
@@ -100,8 +119,7 @@
       "named_data_readers": [
         "workflows/make-decision/SKILL.md",
         "workflows/build-plan/SKILL.md",
-        "workflows/build-code/SKILL.md",
-        "workflows/verify-code/SKILL.md"
+        "workflows/build-code/SKILL.md"
       ],
       "delete_condition": "五阶段主会话不再消费，或 final-chain 直接提供同等清单并改接全部消费者时删除。",
       "retention_basis": "spec FR-REPAIR-002/004 与 P1/T002；承接缺失只读报告，不替代 runtime 判定。实际新增后补登记，未倒称创建前登记。"
@@ -306,12 +324,11 @@
       "role": "production",
       "responsibility": "既有模块／资源职责；不从登记新增能力",
       "owner": "原路径维护 owner；P7 仅登记现职责",
-      "consumer": "当前直接模块消费者：metrics/adapters/host-adapter.mjs, tests/metrics-smoke.test.mjs, tests/metrics-taskhandle-v2.test.mjs, workflows/build-code终末/metrics-writer.mjs",
+      "consumer": "当前直接模块消费者：metrics/adapters/host-adapter.mjs, tests/metrics-taskhandle-v2.test.mjs, workflows/build-code/metrics-writer.mjs",
       "module_consumers": [
         "metrics/adapters/host-adapter.mjs",
-        "tests/metrics-smoke.test.mjs",
         "tests/metrics-taskhandle-v2.test.mjs",
-        "workflows/verify-code/metrics-writer.mjs"
+        "workflows/build-code/metrics-writer.mjs"
       ],
       "named_data_readers": [],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
@@ -617,8 +634,7 @@
         "tests/contract/ocr-review-contract-bundle.test.mjs",
         "tools/cli/stage-runtime.mjs",
         "workflows/build-code/capture.mjs",
-        "workflows/build-code/targeted-capture.mjs",
-        "workflows/verify-code/capture.mjs"
+        "workflows/build-code/targeted-capture.mjs"
       ],
       "named_data_readers": [],
       "delete_condition": "被经独立审查的替代实现取代且现有直接 API/CLI 消费者完成改接后删除；对应旧消费链按冻结迁移表的实际批次处置（含 P5 改接/删除与 P7 保留/MOVE），不泛称全部旧文件在 P5 删除。",
@@ -1229,7 +1245,7 @@
       "role": "production",
       "responsibility": "task.json 读写 + 记录层路径防护（本文件）",
       "owner": "B4/P5 / MT-1-078",
-      "consumer": "当前直接模块消费者：core/__tests__/invocation-identity.test.mjs, core/__tests__/workspace-manager.test.mjs, core/task-close.mjs, metrics/collector.mjs, runtime/evidence/workflow-evolution.mjs, runtime/stage/stage-context.mjs, skills/wh-review/scripts/__tests__/review-writer-taskhandle.test.mjs, skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs, tests/close/close-authorization-outcome-ref-guard.test.mjs, tests/contract/build-code-change-scope.test.mjs, tests/contract/card03-review-orchestration.test.mjs, tests/contract/doctor-storage-consistency.test.mjs, tests/contract/ocr-delegation-route.test.mjs, tests/contract/ocr-production-cutover.test.mjs, tests/contract/ocr-review-contract-bundle.test.mjs, tests/contract/post-build-plan-missing-index.test.mjs, tests/contract/research-report-current.test.mjs, tests/contract/review-history-canonical-reader.test.mjs, tests/contract/stage-context-workspace-degrade.test.mjs, tests/contract/status-derivation.test.mjs, tests/contract/task-close-cli-resolution.test.mjs, tests/contract/task-handle.test.mjs, tests/contract/workspace-binding.test.mjs, tests/contract/zero-machine-gate-advancement.test.mjs, tests/integration/minimal-task-storage.test.mjs, tests/metrics-smoke.test.mjs, tests/metrics-taskhandle-v2.test.mjs, tests/review/dsh-code-review-publication.test.mjs, tests/review/ocr-ac002-007-experiments.test.mjs, tests/review/review-foreign-pair-history.test.mjs, tests/review/review-managed-lifecycle.test.mjs, tests/review/review-record-route.test.mjs, tools/cli/stage-runtime.mjs",
+      "consumer": "当前直接模块消费者：core/__tests__/invocation-identity.test.mjs, core/__tests__/workspace-manager.test.mjs, core/task-close.mjs, metrics/collector.mjs, runtime/evidence/workflow-evolution.mjs, runtime/stage/stage-context.mjs, skills/wh-review/scripts/__tests__/review-writer-taskhandle.test.mjs, skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs, tests/close/close-authorization-outcome-ref-guard.test.mjs, tests/contract/build-code-change-scope.test.mjs, tests/contract/card03-review-orchestration.test.mjs, tests/contract/doctor-storage-consistency.test.mjs, tests/contract/ocr-delegation-route.test.mjs, tests/contract/ocr-production-cutover.test.mjs, tests/contract/ocr-review-contract-bundle.test.mjs, tests/contract/post-build-plan-missing-index.test.mjs, tests/contract/research-report-current.test.mjs, tests/contract/review-history-canonical-reader.test.mjs, tests/contract/stage-context-workspace-degrade.test.mjs, tests/contract/status-derivation.test.mjs, tests/contract/task-close-cli-resolution.test.mjs, tests/contract/task-handle.test.mjs, tests/contract/workspace-binding.test.mjs, tests/contract/zero-machine-gate-advancement.test.mjs, tests/integration/minimal-task-storage.test.mjs, tests/metrics-taskhandle-v2.test.mjs, tests/review/dsh-code-review-publication.test.mjs, tests/review/ocr-ac002-007-experiments.test.mjs, tests/review/review-foreign-pair-history.test.mjs, tests/review/review-managed-lifecycle.test.mjs, tests/review/review-record-route.test.mjs, tools/cli/stage-runtime.mjs",
       "module_consumers": [
         "core/__tests__/invocation-identity.test.mjs",
         "core/__tests__/workspace-manager.test.mjs",
@@ -1256,7 +1272,6 @@
         "tests/contract/workspace-binding.test.mjs",
         "tests/contract/zero-machine-gate-advancement.test.mjs",
         "tests/integration/minimal-task-storage.test.mjs",
-        "tests/metrics-smoke.test.mjs",
         "tests/metrics-taskhandle-v2.test.mjs",
         "tests/review/dsh-code-review-publication.test.mjs",
         "tests/review/ocr-ac002-007-experiments.test.mjs",
@@ -1539,7 +1554,7 @@
       "named_data_readers": [
         "skills/catalog.yaml"
       ],
-      "delete_condition": "remove when verify-code and all explicit callers retire the Architect-Code-Review contract",
+      "delete_condition": "remove when build-code终末 and all explicit callers retire the Architect-Code-Review contract",
       "retention_basis": "MT-3-005 / NARROW"
     },
     {
@@ -1552,7 +1567,7 @@
       "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
       "module_consumers": [],
       "named_data_readers": [],
-      "delete_condition": "remove with retirement of the Architect-Code-Review skill and its verify-code consumer",
+      "delete_condition": "remove with retirement of the Architect-Code-Review skill and its build-code终末 consumer",
       "retention_basis": "MT-3-006 / NARROW"
     },
     {
@@ -1572,7 +1587,7 @@
         "skills/fullstack-slice-testing/SKILL.md",
         "skills/testing-system-blueprint/SKILL.md",
         "skills/spec-plan/templates/phase-template.md",
-        "workflows/verify-code/SKILL.md"
+        "workflows/build-code/SKILL.md"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
       "retention_basis": "既有保留生产路径；本次仅归位说明；P4方法采用既有owner，无新增runtime/schema/双写；无当前consumer且经独立审查替代后退役"
@@ -1823,8 +1838,7 @@
         "skills/reuse-registry.md",
         "tests/contract/ui-skill-contract.test.mjs",
         "workflows/build-code/skill-deps.yaml",
-        "workflows/build-plan/skill-deps.yaml",
-        "workflows/verify-code/skill-deps.yaml"
+        "workflows/build-plan/skill-deps.yaml"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
       "retention_basis": "既有保留生产路径；本次仅归位说明"
@@ -2401,7 +2415,7 @@
         "tests/contract/ocr-review-contract-bundle.test.mjs",
         "tests/contract/review-materials-contract.test.mjs",
         "tools/cli/stage-runtime.mjs",
-        "workflows/verify-code/SKILL.md"
+        "workflows/build-code/SKILL.md"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
       "retention_basis": "既有保留生产路径；本次仅归位说明；N3 P2/T002来源采用及原consumer首验，不新增runtime/schema/账本；P4方法采用既有owner，无新增runtime/schema/双写；无当前consumer且经独立审查替代后退役"
@@ -2495,8 +2509,7 @@
         "skills/catalog.yaml",
         "workflows/build-code/skill-deps.yaml",
         "workflows/build-plan/skill-deps.yaml",
-        "workflows/make-decision/skill-deps.yaml",
-        "workflows/verify-code/skill-deps.yaml"
+        "workflows/make-decision/skill-deps.yaml"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
       "retention_basis": "MT-3-036 / NARROW"
@@ -2736,9 +2749,7 @@
         "workflows/build-prd/SKILL.md",
         "workflows/build-prd/skill-deps.yaml",
         "workflows/make-decision/SKILL.md",
-        "workflows/make-decision/skill-deps.yaml",
-        "workflows/verify-code/SKILL.md",
-        "workflows/verify-code/skill-deps.yaml"
+        "workflows/make-decision/skill-deps.yaml"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
       "retention_basis": "既有保留生产路径；本次仅归位说明"
@@ -2947,8 +2958,7 @@
         "workflows/build-code/skill-deps.yaml",
         "workflows/build-plan/skill-deps.yaml",
         "workflows/build-prd/skill-deps.yaml",
-        "workflows/make-decision/skill-deps.yaml",
-        "workflows/verify-code/skill-deps.yaml"
+        "workflows/make-decision/skill-deps.yaml"
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
       "retention_basis": "MT-3-067 / NARROW；N3 P2/T002来源采用及原consumer首验，不新增runtime/schema/账本"
@@ -3028,22 +3038,6 @@
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
       "retention_basis": "MT-3-078 / NARROW；N3 P2/T002来源采用及原consumer首验，不新增runtime/schema/账本"
-    },
-    {
-      "source": "skills/wh-review/contracts/verify-code.md",
-      "destination": "skills/wh-review/contracts/verify-code.md",
-      "status": "retain",
-      "role": "production",
-      "responsibility": "OCR reviewer 合同（ADR-021）",
-      "owner": "B4/P5 / MT-3-079",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
-      "named_data_readers": [
-        "skills/wh-review/scripts/review-materials.mjs",
-        "tests/contract/verify-architect-acceptance.test.mjs"
-      ],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "MT-3-079 / NARROW"
     },
     {
       "source": "skills/wh-review/contracts/workflowhub-result.v1.json",
@@ -3368,7 +3362,7 @@
       "destination": "skills/workflowhub-multica-sync/scripts/multica-skill-sync.mjs",
       "status": "retain",
       "role": "production",
-      "responsibility": "宿主读",
+      "responsibility": "本地显式repo/main的stage-registry与技能快照、prompt/binding/唯一同步计划；stage从所选已提交唯一权威读取；搬运不依赖仓库相对runtime；旧stage不可同步或绑定，旧在线对象只记观察。",
       "owner": "B3/P4 / MT-3-065",
       "consumer": "当前直接模块消费者：tests/workflowhub-multica-sync.test.mjs",
       "module_consumers": [
@@ -3838,101 +3832,6 @@
       ],
       "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
       "retention_basis": "MT-3-124 / NARROW；N8/P5本地消费者接线，分发发布未在范围内。"
-    },
-    {
-      "source": "workflows/verify-code/SKILL.md",
-      "destination": "workflows/verify-code/SKILL.md",
-      "status": "retain",
-      "role": "production",
-      "responsibility": "宿主读（纯方法说明）；N3 P4 P4唯一测试充分性与检查可信度方法：pass/fail/pass、变异、升级与读数",
-      "owner": "B2/P3 / MT-3-146",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor；N3 P4 verify-code读者与review按条件同包消费完整正反方法",
-      "module_consumers": [],
-      "named_data_readers": [
-        ".planning/2026-09-16-eliminate-external-stage-agent/findings.md",
-        "skills/architect-code-review/SKILL.md",
-        "skills/catalog.yaml",
-        "skills/wh-review/scripts/review-materials.mjs",
-        "tests/contract/verify-architect-acceptance.test.mjs",
-        "skills/review/SKILL.md",
-        "AGENTS.md"
-      ],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "MT-3-146 / NARROW；P4方法采用既有owner，无新增runtime/schema/双写；无当前consumer且经独立审查替代后退役"
-    },
-    {
-      "source": "workflows/verify-code/capture.mjs",
-      "destination": "workflows/verify-code/capture.mjs",
-      "status": "retain",
-      "role": "production",
-      "responsibility": "窄工具②",
-      "owner": "B4/P5 / MT-3-149",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
-      "named_data_readers": [],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "MT-3-149 / NARROW"
-    },
-    {
-      "source": "workflows/verify-code/isolated-browser-qa.md",
-      "destination": "workflows/verify-code/isolated-browser-qa.md",
-      "status": "retain",
-      "role": "production",
-      "responsibility": "历史职责已退役；浏览器 QA 由 canonical skills/isolated-browser-qa/SKILL.md 承接",
-      "owner": "B3/P4 / MT-3-154；N3 退役执行由当前用户授权",
-      "consumer": "已退役；无当前直接模块消费者；现行 build-code/verify-code 均改读 canonical skill",
-      "module_consumers": [],
-      "named_data_readers": [],
-      "delete_condition": "已由 canonical skills/isolated-browser-qa/SKILL.md 承接并经 N3 定向核对零 active consumer；用户于 2026-10-16 明确授权删除旧副本，删除已在当前 worktree 执行；不因本登记产生未来消费或历史原件删除许可",
-      "retention_basis": "MT-3-154 / SURVIVOR；退役事实来源：N3 用户授权与旧副本 SHA256 45d9ea4b8f5ef292123050b0bfeacd32ac52d1691ef6a07fc608c4189eb10bad；canonical replacement=skills/isolated-browser-qa/SKILL.md；删除日期=2026-10-16；删除 commit=未提交（当前 worktree HEAD 0c43823c67f701fbb4bea349a52d09c8302d5ed3）"
-    },
-    {
-      "source": "workflows/verify-code/metrics-writer.mjs",
-      "destination": "workflows/verify-code/metrics-writer.mjs",
-      "status": "retain",
-      "role": "production",
-      "responsibility": "Card-09 写入量（待确认）",
-      "owner": "B6/P7 / MT-3-152",
-      "consumer": "当前直接模块消费者：tests/metrics-smoke.test.mjs",
-      "module_consumers": [
-        "tests/metrics-smoke.test.mjs"
-      ],
-      "named_data_readers": [],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "MT-3-152 / SURVIVOR"
-    },
-    {
-      "source": "workflows/verify-code/skill-deps.yaml",
-      "destination": "workflows/verify-code/skill-deps.yaml",
-      "status": "retain",
-      "role": "production",
-      "responsibility": "同 125",
-      "owner": "B2/P3 / MT-3-148",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
-      "named_data_readers": [
-        ".planning/2026-09-16-eliminate-external-stage-agent/findings.md",
-        "skills/wh-review/scripts/review-materials.mjs"
-      ],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "MT-3-148 / NARROW"
-    },
-    {
-      "source": "workflows/verify-code/steps.json",
-      "destination": "workflows/verify-code/steps.json",
-      "status": "retain",
-      "role": "production",
-      "responsibility": "同 124",
-      "owner": "B2/P3 / MT-3-147",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
-      "named_data_readers": [
-        ".planning/2026-09-16-eliminate-external-stage-agent/findings.md",
-        "skills/wh-review/__tests__/human-brief-behavioral.test.mjs",
-        "skills/wh-review/scripts/review-materials.mjs"
-      ],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "MT-3-147 / NARROW"
     },
     {
       "source": "tests/contract/research-report-current.test.mjs",
@@ -4817,7 +4716,7 @@
       "consumer": "make-decision、build-prd、build-code终末 的 skill-deps；local-skill-resolver 与 portable bundle consumer。",
       "module_consumers": [],
       "named_data_readers": [
-        "workflows/verify-code/SKILL.md",
+        "workflows/build-code/SKILL.md",
         "workflows/build-prd/SKILL.md",
         "skills/catalog.yaml"
       ],
@@ -4962,8 +4861,7 @@
       "named_data_readers": [
         "workflows/make-decision/SKILL.md",
         "workflows/build-plan/SKILL.md",
-        "workflows/build-code/SKILL.md",
-        "workflows/verify-code/SKILL.md"
+        "workflows/build-code/SKILL.md"
       ],
       "delete_condition": "职责被正式替代且全部真实consumer改接后删除；历史原件保留",
       "retention_basis": "specs/n1-main-agent-cost-20261015/spec.md 合同8；P1/T001。替代临时测量，不新增runtime公共命令/常驻服务/进度对象"
@@ -5328,7 +5226,7 @@
       "module_consumers": [],
       "named_data_readers": [
         "skills/spec-analyze/SKILL.md",
-        "workflows/verify-code/SKILL.md"
+        "workflows/build-code/SKILL.md"
       ],
       "delete_condition": "该方法消费者由独立审查替代承接且零当前消费时由原owner退役登记；保来源与历史原件。",
       "retention_basis": "当前目标与调用处已实读；仅既有方法增量/复用，无新技能或控制面。"
@@ -5633,19 +5531,6 @@
       "named_data_readers": [],
       "delete_condition": "该行为职责退役或独立oracle经审查完整替代后由原测试owner处置；冻结断言变化须TCR及独立审查。",
       "retention_basis": "ORACLE-P2-CHAIN及P2 T003/T004/T005；保原RED/GREEN/测试修正TCR，不新增运行时。"
-    },
-    {
-      "source": "tests/contract/verify-code-page-refresh.test.mjs",
-      "destination": "tests/contract/verify-code-page-refresh.test.mjs",
-      "status": "add",
-      "role": "test",
-      "responsibility": "ORACLE-P6-REFRESH与ORACLE-P6-DEBT结构合同/受控文档反例：build-code终末两处刷新文字接线、步骤身份/证据形状、decision-log日期主题接收与五行表/四字段ADR/N8唯一级别来源保全；不证明真实刷新。",
-      "owner": "N9 P6/T011首写、T012同writer追加；后续P6测试维护者",
-      "consumer": "P6契约头literal gate显式由Vitest执行本文件，独立验收者读182/185原件；测试直接读取build-code终末 SKILL/steps及decision-log模板/SKILL，不是生产运行时consumer。",
-      "module_consumers": [],
-      "named_data_readers": [],
-      "delete_condition": "对应合同被真实决定退役，或经独立审查的等强度oracle完整承接真实消费者后由P6测试owner处置；不因预算或Phase结束删除，原RED/GREEN保留。",
-      "retention_basis": "N9 P6/T011–T012与563实际consumer；新test已创建后才补登记的顺序遗漏保真；复用唯一move-map，不新增控制面。"
     },
     {
       "source": "tests/contract/final-chain-negatives.test.mjs",
@@ -6249,9 +6134,9 @@
       "consumer": "唯一生产consumer为workflows/build-code终末/SKILL.md现第4步验收对象命令及相邻context说明。129在真实WH cwd逐字执行当前步骤，$1绑定当前认证spec、$2绑定原330 context（含file_source_keys），exit0；当前target/caller实际回读与验证见332。旧098/019只证当时源码/输入，不冒当前实现证据；不代表整个build-code终末阶段运行或已发行。冻结tests仅验证reader。",
       "module_consumers": [],
       "named_data_readers": [
-        "workflows/verify-code/SKILL.md"
+        "workflows/build-code/SKILL.md"
       ],
-      "delete_condition": "仅当现verify-code验收对象动作已由经独立审查的替代入口承接、实际CLI caller全部改接并由维护owner退役时移除薄CLI，同步移除该步调用与原登记；Markdown唯一producer不复制/不删除，历史失败与运行原件保留。",
+      "delete_condition": "仅当现build-code终末验收对象动作已由经独立审查的替代入口承接、实际CLI caller全部改接并由维护owner退役时移除薄CLI，同步移除该步调用与原登记；Markdown唯一producer不复制/不删除，历史失败与运行原件保留。",
       "retention_basis": "332原件及当前CLI全文、verify-code实际步骤已实读；target sha256=8aeefff69f8bd19ac01dc791c4b63a15d902a46fe9efa9176678ec92c2989492，caller sha256=bc55eb81896c7483e2d5993e2817919e3de3fe9070aa10664727580adbe77528。125失败是无./目录相对路径specs/design/not-there.md被漏查；128相同冻结六例命令恢复exit0；127十四正文/文件/错误边界exit0；129当前caller新执行exit0，native复用同字节126.output但不借旧退出事实。自动本地路径与显式keys并集检查，空keys不禁自动路径；裸LICENSE未选保正文、选定才stat；非法keys/type/duplicate报2，缺文件/非文件报key/path及1；无候选明确stderr，URL不作本地检查。仅结构及所选文件存在，不授权UI/数据/服务/权限或认证语义。095/099/019/310/330/125/126等旧原件保各自时点，不作新源码证明；不改producer/oracle，不新增机制或进度权威。删除/替代仍沿本项原条件；后续target/caller不可读即停本项确认交原owner。"
     },
     {
@@ -6651,7 +6536,6 @@
       "module_consumers": [],
       "named_data_readers": [
         "workflows/build-code/skill-deps.yaml",
-        "workflows/verify-code/skill-deps.yaml",
         "skills/catalog.yaml"
       ],
       "delete_condition": "四现owner被经独立审查替代完整承接、bundle/caller迁接且无实际consumer后同批退役；历史delta原件保留。",
@@ -6668,7 +6552,6 @@
       "module_consumers": [],
       "named_data_readers": [
         "workflows/build-code/skill-deps.yaml",
-        "workflows/verify-code/skill-deps.yaml",
         "skills/catalog.yaml"
       ],
       "delete_condition": "四现owner被经独立审查替代完整承接、bundle/caller迁接且无实际consumer后同批退役；历史delta原件保留。",
@@ -6685,7 +6568,6 @@
       "module_consumers": [],
       "named_data_readers": [
         "workflows/build-code/skill-deps.yaml",
-        "workflows/verify-code/skill-deps.yaml",
         "skills/catalog.yaml"
       ],
       "delete_condition": "四现owner被经独立审查替代完整承接、bundle/caller迁接且无实际consumer后同批退役；历史delta原件保留。",
@@ -6736,8 +6618,7 @@
       "module_consumers": [],
       "named_data_readers": [
         "workflows/build-plan/SKILL.md",
-        "workflows/build-code/SKILL.md",
-        "workflows/verify-code/SKILL.md"
+        "workflows/build-code/SKILL.md"
       ],
       "delete_condition": "经独立审查的替代完整承接真实consumer、迁接现deps/bundle且无当前消费者后由原owner同批退役；历史task原件不删覆。",
       "retention_basis": "C04P6T011/T012登记此前P1-P5实际交付，唯一bundle承接现resolver；不是质量、许可或方法实际执行的证明。style-ref-gen未采用，版本/归档/权利分开；不建立替代selector或第二权威。"
@@ -6755,8 +6636,7 @@
       ],
       "named_data_readers": [
         "workflows/build-plan/SKILL.md",
-        "workflows/build-code/SKILL.md",
-        "workflows/verify-code/SKILL.md"
+        "workflows/build-code/SKILL.md"
       ],
       "delete_condition": "经独立审查的替代完整承接真实consumer、迁接现deps/bundle且无当前消费者后由原owner同批退役；历史task原件不删覆。",
       "retention_basis": "C04P6T011/T012登记此前P1-P5实际交付，唯一bundle承接现resolver；不是质量、许可或方法实际执行的证明。style-ref-gen未采用，版本/归档/权利分开；不建立替代selector或第二权威。"
@@ -6772,8 +6652,7 @@
       "module_consumers": [],
       "named_data_readers": [
         "workflows/build-plan/SKILL.md",
-        "workflows/build-code/SKILL.md",
-        "workflows/verify-code/SKILL.md"
+        "workflows/build-code/SKILL.md"
       ],
       "delete_condition": "经独立审查的替代完整承接真实consumer、迁接现deps/bundle且无当前消费者后由原owner同批退役；历史task原件不删覆。",
       "retention_basis": "C04P6T011/T012登记此前P1-P5实际交付，唯一bundle承接现resolver；不是质量、许可或方法实际执行的证明。style-ref-gen未采用，版本/归档/权利分开；不建立替代selector或第二权威。"
@@ -6789,8 +6668,7 @@
       "module_consumers": [],
       "named_data_readers": [
         "workflows/build-plan/SKILL.md",
-        "workflows/build-code/SKILL.md",
-        "workflows/verify-code/SKILL.md"
+        "workflows/build-code/SKILL.md"
       ],
       "delete_condition": "经独立审查的替代完整承接真实consumer、迁接现deps/bundle且无当前消费者后由原owner同批退役；历史task原件不删覆。",
       "retention_basis": "C04P6T011/T012登记此前P1-P5实际交付，唯一bundle承接现resolver；不是质量、许可或方法实际执行的证明。style-ref-gen未采用，版本/归档/权利分开；不建立替代selector或第二权威。"

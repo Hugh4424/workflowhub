@@ -533,7 +533,15 @@ describe("simple wh-review contracts", () => {
     }), validate.errors).toBe(true);
   });
 
-  it("keeps actual stage contracts packet-only and findings advisory",()=>{for(const stage of ["make-decision","build-plan","build-code","verify-code"]){const contract=readFileSync(join(root,"wh-review/contracts",stage+".md"),"utf8");expect(contract).toContain("findings");expect(contract).toMatch(/bundle|packet|包内/);expect(contract).toMatch(/unavailable|不可用/);expect(contract).toMatch(/不.*(?:完成|通过)|不是.*门/);expect(contract).toContain("宿主");}const plan=readJson(join(root,"wh-review/stage-skill-plan.json"));expect(plan.stages).not.toHaveProperty("build-spec");});
+  it("keeps actual stage contracts packet-only and findings advisory",()=>{
+    const assertPolicy=contract=>{expect(contract).toBeDefined();expect(contract).toContain("findings");expect(contract).toMatch(/bundle|packet|包内/);expect(contract).toMatch(/unavailable|不可用/);expect(contract).toMatch(/不.*(?:完成|通过)|不是.*门/);expect(contract).toContain("宿主");};
+    for(const stage of ["make-decision","build-plan","build-code"])assertPolicy(readFileSync(join(root,"wh-review/contracts",stage+".md"),"utf8"));
+    const method=readFileSync(join(root,"wh-review/contracts/build-code.md"),"utf8");
+    const terminal=method.split("## review_scope=terminal — 终末完整合同\n")[1];
+    assertPolicy(terminal);
+    for(const pattern of [/findings/g,/bundle|packet|包内/g,/unavailable|不可用/g,/不.*(?:完成|通过)|不是.*门/g,/宿主/g]){const mutant=terminal.replace(pattern,"");expect(mutant).not.toBe(terminal);expect(()=>assertPolicy(mutant)).toThrow();}
+    const plan=readJson(join(root,"wh-review/stage-skill-plan.json"));expect(plan.stages).not.toHaveProperty("build-spec");
+  });
 
   it("requires physical blind visibility and one request per role",()=>{const contract=readFileSync(join(root,"wh-review/contracts/make-decision.md"),"utf8");for(const phrase of ["每 role 一次公共 wh-review 请求","不循环取得空 findings","reconstruct","reveal","challenge","重建包不交付已定材料","只有收到有效重建才创建揭示包"])expect(contract).toContain(phrase);});
 

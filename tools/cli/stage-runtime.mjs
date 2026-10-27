@@ -429,7 +429,7 @@ function writeOcrCurrentMaterialProjection(bundleRoot, projected, evidence) {
 }
 
 function projectOcrCodeReviewBundle(built, attachmentRoot, request, source) {
-  const selected = built.manifest.filter(({ path }) => path !== "packet-plan.json" && path !== "manifest.json" && path !== "contracts/verify-code.md");
+  const selected = built.manifest.filter(({ path }) => path !== "packet-plan.json" && path !== "manifest.json");
   const paths = new Set(selected.map(({ path }) => path));
   for (const path of ["contracts/build-code.md", "contracts/provider-protocol.md", "skills/simplicity-guard/SKILL.md", "skills/review/SKILL.md"]) {
     if (!paths.has(path)) throw new Error(`OCR packet is missing its required reviewer body: ${path}`);

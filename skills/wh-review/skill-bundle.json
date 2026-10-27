@@ -8,7 +8,6 @@
     "contracts/build-prd.md",
     "contracts/make-decision.md",
     "contracts/provider-protocol.md",
-    "contracts/verify-code.md",
     "contracts/workflowhub-result.v1.json",
     "contracts/workflowhub-result.v2.json",
     "contracts/workflowhub-result.v3.json",

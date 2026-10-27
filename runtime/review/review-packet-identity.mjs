@@ -15,7 +15,6 @@ const REVIEW_FOCUS = Object.freeze({
   [`build-code/${TERMINAL_REVIEW_SCOPE}`]: "Review the complete delivery diff, full applicable AC, real consumers, lifecycle, concurrency, failures and test strength.",
   "build-code/phase": "Check the submitted implementation material for correctness, real consumers, failure paths, tests, and unnecessary code.",
   "build-code/integration": "Focus on the final current worktree implementation, the complete user flow, cross-Phase seams, real interfaces, state transitions, failure recovery, necessity, and actionable major or blocking risks. The host validates AC bindings separately; do not report missing or unknown task rows, receipts, snapshots, lineage, or evidence metadata unless it directly causes or conceals a user-visible behavior failure. Do not replay Phase history, cumulative diffs, or require a provider pass.",
-  "verify-code": "Check the submitted implementation and test code for correctness, real consumer seams, lifecycle/concurrency and security risks, failure boundaries, and test strength. When authenticated-evidence.json is supplied for a reviewed_execution-bound request, use it only to compare code/test claims with recorded execution and identify false-green behavior. Review acceptance artifacts for AC coverage, evidence completeness, and false-green claims alongside the implementation and tests. Do not report release/close status as code findings.",
 });
 
 const PACKET_REVIEW_BOUNDARY = "This is heterologous advice only. Review only the submitted material; do not access Workspace, TaskHandle, Git, repository files, shell, network, or host paths.";
@@ -116,7 +115,7 @@ export function reviewPacketMaterialId(input, { instructionText = null, compactM
     : typeof instructionText === "function" ? instructionText(input) : instructionText;
   if (typeof instruction !== "string" || instruction.length === 0) throw new TypeError("review packet instructions are required");
   let packetMaterials = input.materials;
-  if (identity.stage === "verify-code" || identity.reviewScope === TERMINAL_REVIEW_SCOPE) {
+  if (identity.reviewScope === TERMINAL_REVIEW_SCOPE) {
     packetMaterials = compactMaterials(input.materials).materials;
   }
   const instructionBytes = Buffer.from(`${redactProviderHostPaths(instruction)}\n`, "utf8");

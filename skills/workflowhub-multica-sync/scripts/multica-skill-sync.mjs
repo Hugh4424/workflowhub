@@ -7,7 +7,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import yaml from "js-yaml";
 
-const STAGES = ["make-decision", "build-plan", "build-code", "verify-code", "build-prd"];
+const RETIRED_STAGE_VERIFY_CODE = "verify-code";
 const STAGE_SUPPORT_FILES = ["skill-deps.yaml", "steps.json"];
 const CORE_AGENTS = {
   "工头": { stage: null },
@@ -15,7 +15,7 @@ const CORE_AGENTS = {
   "PRD Builder": { stage: "build-prd" },
   "Plan Builder": { stage: "build-plan" },
   "Code Builder": { stage: "build-code" },
-  "Code Verifier": { stage: "verify-code" },
+  "Code Verifier": { stage: "build-code" },
   Coder: { stage: "build-code" },
 };
 const MANAGED_CATALOG_STATUSES = new Set(["native", "adopted", "adapted"]);
@@ -26,7 +26,7 @@ const LEGACY_PROMPT_MARKERS = [
   /必须验证[^\n]*runner_root/i,
   /把已验证的 `runner_root` 设为/i,
 ];
-const CURRENT_PROMPT_BLOCK = "0. `workflowhub-context.root` 只是存储根。读取当前任务的 `decision-log.md`、`spec.md`、独立 `phases/P<n>.md`、纯指针 `phases/index.md` 与 task facts，按实际材料和事实继续同任务。post 五阶段为 `make-decision`、`build-plan`、`build-code`、`verify-code`、`build-prd`；build-plan 承担产品规格与实现设计，build-prd 承担产品表达。只使用公共入口 `doctor`、`status`、`run`、`review`、`verify`、`confirm`、`authorize`；`prepare`、`start-run`、`publish-*`、`record-*`、`recover-*`、`rebind-*`、`phase-*` 仅为私有实现。不要从 root、task_path、cwd 或业务仓猜执行环境，也不要复制宿主文件到目标仓。已有用户授权覆盖当前动作与范围时，针对当前 HEAD 记录并消费不可逆授权；HEAD 不一致拒绝旧记录，新增未覆盖动作才询问用户。测试和审查只产生真实事实，缺失、失败和未执行如实披露，不作为继续修复的许可证。";
+const CURRENT_PROMPT_BLOCK = "0. `workflowhub-context.root` 只是存储根。读取当前任务的 `decision-log.md`、`spec.md`、独立 `phases/P<n>.md`、纯指针 `phases/index.md` 与 task facts，按实际材料和事实继续同任务。复杂任务三阶段为 `make-decision`、`build-plan`、`build-code`，终末独立验收由 build-code 最后 Phase 承接；独立 `build-prd` 承担产品表达与规划。build-plan 承担产品规格与实现设计。只使用公共入口 `doctor`、`status`、`run`、`review`、`verify`、`confirm`、`authorize`；`prepare`、`start-run`、`publish-*`、`record-*`、`recover-*`、`rebind-*`、`phase-*` 仅为私有实现。不要从 root、task_path、cwd 或业务仓猜执行环境，也不要复制宿主文件到目标仓。已有用户授权覆盖当前动作与范围时，针对当前 HEAD 记录并消费不可逆授权；HEAD 不一致拒绝旧记录，新增未覆盖动作才询问用户。测试和审查只产生真实事实，缺失、失败和未执行如实披露，不作为继续修复的许可证。";
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 class SyncError extends Error {
@@ -93,9 +93,12 @@ function resolveMainRef(repo, timeoutMs) {
 }
 function verifyMainSnapshot(repo, mainCommit, timeoutMs, mainRef = "main") {
   try {
-    const mainTree = git(repo, ["rev-parse", `${mainRef}^{tree}`], timeoutMs).trim();
-    git(repo, ["ls-tree", "-r", "--full-tree", mainRef], timeoutMs);
-    git(repo, ["fsck", "--connectivity-only", "--no-reflogs", "--no-dangling", mainRef], timeoutMs);
+    const selectedCommit = git(repo, ["rev-parse", `${mainRef}^{commit}`], timeoutMs).trim();
+    if (selectedCommit !== mainCommit) throw new SyncError("GIT_MAIN_UNREADABLE", "所选 main commit 与实际 ref 不一致");
+    const mainTree = git(repo, ["rev-parse", `${mainCommit}^{tree}`], timeoutMs).trim();
+    git(repo, ["ls-tree", "-r", "--full-tree", mainCommit], timeoutMs);
+    git(repo, ["fsck", "--connectivity-only", "--no-reflogs", "--no-dangling", mainCommit], timeoutMs);
+    for (const stage of stagesFromMain(repo, timeoutMs, mainCommit)) for (const file of ['SKILL.md', ...STAGE_SUPPORT_FILES]) mainBytes(repo, `workflows/${stage}/${file}`, timeoutMs, mainCommit);
     return { main_commit: mainCommit, main_tree: mainTree };
   } catch (error) {
     throw new SyncError("GIT_MAIN_UNREADABLE", `main 快照无法完整读取：${error.message}`, error);
@@ -138,13 +141,49 @@ function mainText(repo, relativePath, timeoutMs, mainRef = "main") { return main
 function mainPaths(repo, prefix, timeoutMs, mainRef = "main") {
   return git(repo, ["ls-tree", "-r", "--name-only", mainRef, "--", prefix], timeoutMs).split("\n").map(value => value.trim()).filter(Boolean);
 }
+// Read only the literal data declarations owned by the selected main snapshot.
+// No repository module is imported or evaluated, including top-level code.
+function stagesFromMain(repo, timeoutMs, mainRef = "main") {
+  if (typeof repo !== "string" || !path.isAbsolute(repo)) throw new SyncError("REQUEST_INVALID", "stage 同步必须给出真实 repo 路径");
+  let data = mainText(repo, "runtime/stage/stage-registry.mjs", timeoutMs, mainRef)
+    .replace(/^\s*\/\/[^\n]*$/gm, "");
+  const invalid = () => { throw new SyncError("REQUEST_INVALID", "main stage-registry 含不支持的表达式或非字面量数据；拒绝执行仓库代码"); };
+  const take = (name, expression) => {
+    const matches = [...data.matchAll(new RegExp("\\bexport\\s+const\\s+" + name + "\\s*=\\s*" + expression + "\\s*;", "g"))];
+    if (matches.length !== 1) invalid();
+    data = data.replace(matches[0][0], "");
+    return matches[0][1];
+  };
+  const items = body => { const values=body.split(',').map(value=>value.trim());if(values.at(-1)==='')values.pop();if(!values.length||values.some(value=>!value))invalid();return values; };
+  const stageData = Object.create(null);
+  for (const entry of items(take('STAGE', 'Object\\.freeze\\(\\s*\\{([^{}]*)\\}\\s*\\)'))) {
+    const match=entry.match(/^([A-Z][A-Z0-9_]*)\s*:\s*(['"])([a-z][a-z0-9-]*)\2$/);
+    if(!match||Object.hasOwn(stageData,match[1]))invalid();
+    stageData[match[1]]=match[3];
+  }
+  const values = (body, formal = null) => items(body).flatMap(value => {
+    if(value==='...FORMAL_DEVELOPMENT_STAGES'&&formal)return formal;
+    const match=value.match(/^STAGE\.([A-Z][A-Z0-9_]*)$/);
+    if(!match||!Object.hasOwn(stageData,match[1]))invalid();
+    return stageData[match[1]];
+  });
+  const formal=values(take('FORMAL_DEVELOPMENT_STAGES','Object\\.freeze\\(\\s*\\[([^\\[\\]]*)\\]\\s*\\)'));
+  const stages=values(take('WORKFLOW_STAGES','Object\\.freeze\\(\\s*\\[([^\\[\\]]*)\\]\\s*\\)'),formal);
+  take('FORMAL_DEVELOPMENT_STAGE_SET','new\\s+Set\\(\\s*FORMAL_DEVELOPMENT_STAGES\\s*\\)');
+  take('WORKFLOW_STAGE_SET','new\\s+Set\\(\\s*WORKFLOW_STAGES\\s*\\)');
+  take('RETIRED_STAGE_BUILD_SPEC',"(['\"])[a-z][a-z0-9-]*\\1");
+  take('RETIRED_STAGE_VERIFY_CODE',"(['\"])[a-z][a-z0-9-]*\\1");
+  if(data.trim())invalid();
+  if (!stages.length || new Set(stages).size !== stages.length || stages.includes(RETIRED_STAGE_VERIFY_CODE)) throw new SyncError("REQUEST_INVALID", "main stage-registry 仍含退役阶段或无有效当前阶段；先交付当前阶段权威再同步");
+  return stages;
+}
 function catalog(repo, timeoutMs, mainRef = "main") { return yaml.load(mainText(repo, "skills/catalog.yaml", timeoutMs, mainRef)); }
 function catalogEntries(repo, timeoutMs, mainRef = "main") { return (catalog(repo, timeoutMs, mainRef).skills ?? []).filter(entry => MANAGED_CATALOG_STATUSES.has(entry.status) && entry.path); }
 function catalogEntry(repo, name, timeoutMs, mainRef = "main") { return catalogEntries(repo, timeoutMs, mainRef).find(entry => entry.name === name) ?? null; }
 
 function managedSkillNames(repo, timeoutMs, mainRef = "main") {
   const names = new Set(catalogEntries(repo, timeoutMs, mainRef).map(entry => entry.name));
-  for (const stage of STAGES) for (const dependency of stageDependencies(repo, stage, timeoutMs, mainRef)) names.add(dependency);
+  for (const stage of stagesFromMain(repo, timeoutMs, mainRef)) for (const dependency of stageDependencies(repo, stage, timeoutMs, mainRef)) names.add(dependency);
   return [...names].sort();
 }
 
@@ -282,10 +321,12 @@ function snapshotHash(report) {
 function audit({ repo, profile, workspace, timeoutMs }) {
   const statusText = git(repo, ["status", "--porcelain"], timeoutMs);
   const branch = git(repo, ["branch", "--show-current"], timeoutMs).trim();
-  const { ref: mainRef, commit: mainCommit } = resolveMainRef(repo, timeoutMs);
-  const mainSnapshot = verifyMainSnapshot(repo, mainCommit, timeoutMs, mainRef);
+  const { ref: selectedRef, commit: mainCommit } = resolveMainRef(repo, timeoutMs);
+  const mainSnapshot = verifyMainSnapshot(repo, mainCommit, timeoutMs, selectedRef);
+  const mainRef = mainCommit;
   let originMain = null;
   try { originMain = git(repo, ["rev-parse", "origin/main"], timeoutMs).trim(); } catch {}
+  const STAGES = stagesFromMain(repo, timeoutMs, mainRef);
   const scopeFiles = ["skills/catalog.yaml", ...STAGES.flatMap(stage => STAGE_SUPPORT_FILES.map(file => `workflows/${stage}/${file}`))]
     .map(relativePath => ({ path: relativePath, sha256: sha(mainBytes(repo, relativePath, timeoutMs, mainRef)) }));
   const externalNames = externalSkillNames(repo, timeoutMs, mainRef);
@@ -381,20 +422,25 @@ function auditExitCode(summary) {
 }
 
 function buildActionPlan(report) {
+  const stages = report.skills.some(item => item.kind === "stage") ? stagesFromMain(report.repo, DEFAULT_TIMEOUT_MS, report.snapshot?.main_commit ?? report.summary?.main_commit ?? "main") : [];
   const plan = [];
   for (const item of report.skills) {
     if (item.status === "external_unmanaged") continue;
+    if (item.name === RETIRED_STAGE_VERIFY_CODE || item.kind === 'stage' && !stages.includes(item.name)) throw new SyncError('REQUEST_INVALID', `不可同步退役或未知阶段：${item.name}`);
     if (item.status === "missing_online") plan.push({ action: "create_skill", name: item.name, path: item.path });
     else if (item.primary_mismatch) plan.push({ action: "update_skill", name: item.name, path: item.path });
     for (const file of item.files.missing ?? []) plan.push({ action: "upsert_file", name: item.name, path: file });
     for (const file of item.files.mismatched ?? []) plan.push({ action: "upsert_file", name: item.name, path: file });
     for (const file of item.files.extra ?? []) plan.push({ action: "delete_unreferenced_extra_file", name: item.name, path: file });
   }
-  for (const binding of report.retired_bindings ?? []) plan.push({ action: "unbind_retired_skill", agent: binding.agent_name, skill: binding.skill_name });
-  for (const name of report.retired_online_skills ?? []) plan.push({ action: "delete_retired_skill", name });
+  for (const binding of report.retired_bindings ?? []) if (binding.skill_name !== RETIRED_STAGE_VERIFY_CODE) plan.push({ action: "unbind_retired_skill", agent: binding.agent_name, skill: binding.skill_name });
+  for (const name of report.retired_online_skills ?? []) if (name !== RETIRED_STAGE_VERIFY_CODE) plan.push({ action: "delete_retired_skill", name });
   for (const item of report.agents) {
     if (item.prompt?.legacy?.length || item.prompt?.missing_current?.length) plan.push({ action: "update_agent_prompt", agent: item.name });
-    for (const name of item.binding?.missing ?? []) plan.push({ action: "bind_skill", agent: item.name, skill: name });
+    for (const name of item.binding?.missing ?? []) {
+      if (name === RETIRED_STAGE_VERIFY_CODE) throw new SyncError("REQUEST_INVALID", `不可绑定退役阶段：${name}`);
+      plan.push({ action: "bind_skill", agent: item.name, skill: name });
+    }
   }
   return plan;
 }

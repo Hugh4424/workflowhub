@@ -6,9 +6,8 @@ const read=p=>readFileSync(join(ROOT,p),"utf8");
 describe("ORACLE-EXTRACT-WIRE",()=>{
   it("wire:build-plan-reads",()=>{expect(read("workflows/build-plan/SKILL.md")).toContain("design-source-extraction");});
   it("wire:build-code-reads",()=>{expect(read("workflows/build-code/SKILL.md")).toContain("design-source-extraction");});
-  it("wire:verify-code-reads",()=>{expect(read("workflows/verify-code/SKILL.md")).toContain("design-source-extraction");});
   it("register:move-map-entry",()=>{const mm=JSON.parse(read("docs/architecture/move-map.json"));const rows=Array.isArray(mm)?mm:mm.entries??[];expect(JSON.stringify(rows)).toContain("design-source-extraction");});
-  it("register:skill-deps",()=>{for(const p of ["workflows/build-plan/skill-deps.yaml","workflows/build-code/skill-deps.yaml","workflows/verify-code/skill-deps.yaml"])expect(read(p),`${p} must list design-source-extraction`).toContain("design-source-extraction");});
+  it("register:skill-deps",()=>{for(const p of ["workflows/build-plan/skill-deps.yaml","workflows/build-code/skill-deps.yaml"])expect(read(p),`${p} must list design-source-extraction`).toContain("design-source-extraction");});
   it("register:catalog-and-registry",()=>{expect(read("skills/catalog.yaml")).toContain("design-source-extraction");expect(read("skills/reuse-registry.md")).toContain("design-source-extraction");});
   it("external:records",()=>{const s=read("skills/design-source-extraction/SKILL.md");expect(s).toMatch(/0\.6\.0\.16|ego lite/);expect(s).toMatch(/style-ref-gen/);});
 });
@@ -19,7 +18,7 @@ const {tmpdir}=await import('node:os');
 const yaml=(await import('js-yaml')).default;
 const {loadStageSkillManifest}=await import('../../runtime/stage/stage-skill-runtime.mjs');
 const {resolveSkillPackage}=await import('../../runtime/adapters/local-skill-resolver.mjs');
-const stages=['build-plan','build-code','verify-code'];
+const stages=['build-plan','build-code'];
 const assets=['SKILL.md','scripts/collect-design-source.mjs','references/norm-alignment.md','references/isolated-consumption.md'];
 const producers=[...assets.map(p=>'skills/design-source-extraction/'+p),'skills/design-source-extraction/skill-bundle.json'];
 const dependency=stage=>{

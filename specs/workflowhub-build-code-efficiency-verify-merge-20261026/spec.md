@@ -526,6 +526,14 @@ req→WP→Task仅按材料显式命名空间ID/ref及WP→AC→Task声明的可
 
 **修改或删除（精确路径；逐 Phase 决定具体动作）**
 
+- `skills/frontend-component-quality/SKILL.md`（P11原owner定向补漏）
+- `skills/spec-prd/templates/prd-template.md`（P11原owner定向补漏）
+- `skills/frontend-prototype-render/SKILL.md`（P11原owner定向补漏）
+- `skills/workflowhub-multica-sync/SKILL.md`（P11原owner定向补漏）
+- `skills/workflowhub-multica-sync/scripts/multica-skill-sync.mjs`（P11原owner定向补漏）
+- `tests/workflowhub-multica-sync.test.mjs`（P11原owner定向补漏）
+- `skills/wh-review/scripts/simple-review-runner.mjs`（P11原owner定向补漏）
+
 - `AGENTS.md`
 - `CLAUDE.md`
 - `CONSTITUTION.md`
@@ -777,9 +785,9 @@ node tools/cli/check-skill-consistency.mjs --root "$PWD"
 失败：仍能按 verify-code 写入新阶段；或读旧任务报错。
 证据：P9 证据路径下的枚举原始输出、测试回执与旧任务读取结果。
 
-- [ ] **AC-ROUTE-003**：工作树里没有 verify-code 的可调用入口：目录删除、当前引用清零，而旧任务材料仍能只读读出。判定方式：机器可判。
+- [ ] **AC-ROUTE-003**：工作树里没有 verify-code 的可调用入口：目录删除、当前可调用身份与误导性方法引用迁完，而旧任务材料仍能只读读出。判定方式：机器可判。
 验证：P11 实施者在真实工作树做全仓引用扫描并跑具名测试；验证者重放同一扫描，并实际读取一个旧任务的 verify-code 材料。
-通过：`workflows/verify-code` 目录不存在；当前范围内命中为 0；旧任务 material 读取成功。
+通过：`workflows/verify-code` 目录不存在；当前旧stage可调用入口、并存枚举和误导性方法职责为0；旧请求实际拒绝，旧任务material只读读取成功。被动退役常量、固定历史inventory、拒绝旧请求的测试/错误字面按具名用途保留，不要求全树字面0、不加目录豁免。
 失败：仍有可调用入口；或删掉历史材料导致旧任务不可读。
 证据：P11 证据路径下的扫描输出、测试回执与旧任务读取原件。
 
@@ -1090,3 +1098,7 @@ FR-MERGE-001/002与AC-MERGE-001/002已有终末16职责要求不变。当前stat
 P10终末status的真实下游同时接通原通用监控builder→原模板：builder调用既有公共status得到归一DTO，阶段栏/顶部/linked primary显示同一有限结论，Task原交付/验收分列；renderer十环report不被伪作task_status。无新终末ref保持P5已验证原投影，不复制裁决、不读最新报告猜状态。三既有精确路径及安装Runner/注册taskpath/具名渲染正反验证见P10/T012“同一status DTO接通通用监控页面”，全局路径已存在不重复登记。
 
 P10/T013同次接通既有 `core/task-close.mjs` preparePr真实consumer：当前默认稿已具三段/BeforeAfter，补现validator字段归Merge Danger、标题及Door分类的实际校验缺口；具名owned prepareDeliveryClosePlan正反测试沿P10既有stage-close-pr-contract/TCR，保历史原件/授权与close语义。全局core路径已存在，索引仅P10补该原owner，不新增parser或公共接口。
+
+P11/T014原owner定向补漏按卡唯一40路径与三个不重叠writer执行；旧stage可调用能力必须退役、方法/真实caller同次接通，合法历史/退役常量/拒绝旧请求与原错误合同不作清字目标。原RED/Frozen/DO NOT TOUCH及独立TCR要求保持，P11唯一外审覆盖最终总diff；Multica仅本地consumer，不触外部系统。当前只修计划，不签任何未执行验收。
+
+AC-ROUTE-003“当前引用”按P11卡263澄清：实际可调用旧stage/当前方法职责及真实consumer，不以任意测试字符串计数代行为。已查纯legacy路径helper、明确拒旧负例、未迁旧positive与范围外未知分列保真，非本期gate不冒历史合法或当前质量；真实入口旧请求必须拒绝，未读caller不泛豁免、不为消字迁全历史tests。新scanner仍先精确独立TCR。

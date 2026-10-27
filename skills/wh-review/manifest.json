@@ -51,19 +51,16 @@
         "plan-eng-review"
       ],
       "optional_skills": [
-        { "name": "plan-design-review", "when": "ui" }
+        {
+          "name": "plan-design-review",
+          "when": "ui"
+        }
       ]
     },
     "build-code": {
       "path": "contracts/build-code.md",
       "required_skills": [
         "simplicity-guard",
-        "review"
-      ]
-    },
-    "verify-code": {
-      "path": "contracts/verify-code.md",
-      "required_skills": [
         "review"
       ]
     },

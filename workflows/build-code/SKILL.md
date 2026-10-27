@@ -165,6 +165,14 @@ authorize只记录/消费已有授权。每次Git前用 `runtime/interface/git-a
 
 ### 测试充分性与检查可信度
 
+执行验收对象检查时，读取 `skills/spec-specify/templates/spec-template.md` 的唯一 `checkAcceptanceObject(input, context={})` producer，不在本方法复制checker。将当前spec的真实「验收对象」与本次实际context交给既有CLI运行：
+
+```bash
+node tools/cli/check-acceptance-object.mjs --spec specs/<task-id>/spec.md --context <本次实际context.json> --check-sources
+```
+
+`--spec` 指当前认证工作树的实际规格；`--context` 指本次真实sources及UI适用性/CLI来源映射，按已读spec与实际输入生成，不能用示例替代。没有context时不伪造文件；按实际条件省略可选参数并披露未检查的来源。`--check-sources` 仅核已选择本地源文件，不证明浏览器、服务健康或业务效果。保存实际argv/cwd、验收对象/context原ref、原始输出与退出码：0只证最小对象/所查来源通过，1记录具名缺项或缺源，2记录输入/节/producer等执行错误；未执行保持未验证，不用该检查作为继续修复的许可证。
+
 核断言/替身、缺RED与原件时，读[backend-testing「行为测试与证伪」](../../skills/backend-testing/SKILL.md#行为测试与证伪)及同文件「执行事实」，沿其TCR/冻结保护与失败分类执行。新增/扩展检查用同判据：合法pass→仅受控违规改变后目标fail→恢复同合法输入pass，核argv/cwd/raw、exit/signal/timeout及恢复字节；同字节复用原件。违规仍绿报具名遗漏case，恢复未通过incomplete；不以方法读回冒检查器接线。适用代码改动做受控行为变异（如取反新增条件），目标断言须fail再恢复，不拿字符串变异充数；无新增/扩展检查按真实diff写N/A，只免执行，仍消费完整正反输入。
 
 错在范围修：检查错时修检查本身或收窄其范围，不绕过检查、不在上下游加豁免。通过太易时先查观察方法：核断言、替身与夹具是否真能失败，再动实现。检查可信度的三值结论分为已验证/未验证/无法判断，不把未知写成通过；不替换 AC 的既有结果档位。同一修正复发时，把教训落为具名检查，先在有源真实历史错误上失败，再验证当前修复。

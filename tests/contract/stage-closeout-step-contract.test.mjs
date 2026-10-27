@@ -17,7 +17,6 @@ const STAGES = [
   { stage: 'make-decision', count: 15 },
   { stage: 'build-plan', count: 12 },
   { stage: 'build-code', count: 12 },
-  { stage: 'verify-code', count: 8 },
   { stage: 'build-prd', count: 6 },
 ];
 
@@ -69,12 +68,12 @@ describe('ORACLE-P1-CLOSEOUT-STEP stage closeout step and method contract', () =
     const skills = yaml.load(catalog).skills;
     const byName = name => skills.find(entry => entry.name === name);
     expect(new Set(byName('stage-reflection').used_by_stages)).toEqual(
-      new Set(['build-code', 'build-plan', 'build-prd', 'make-decision', 'verify-code']),
+      new Set(['build-code', 'build-plan', 'build-prd', 'make-decision']),
     );
     expect(new Set(byName('stage-handoff').used_by_stages)).toEqual(
-      new Set(['make-decision', 'build-prd', 'build-plan', 'build-code', 'verify-code']),
+      new Set(['make-decision', 'build-prd', 'build-plan', 'build-code']),
     );
-    expect(new Set(byName('stage-close').used_by_stages)).toEqual(new Set(['build-prd', 'verify-code', 'make-decision']));
+    expect(new Set(byName('stage-close').used_by_stages)).toEqual(new Set(['build-prd', 'make-decision']));
     expect(byName('stage-reflection').dependency_closure).toContain('skills/stage-handoff');
     expect(byName('stage-close').dependency_closure.slice().sort()).toEqual([
       'skills/knowledge-graph', 'skills/norm-sync', 'skills/resolving-merge-conflicts', 'skills/spec-specify',
