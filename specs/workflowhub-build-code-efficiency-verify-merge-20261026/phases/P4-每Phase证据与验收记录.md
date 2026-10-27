@@ -15,7 +15,7 @@
 - **oracle**：ORACLE-EVIDENCE-PHASE
 - **evidence_path**：`quality/evidence/workflowhub-build-code-efficiency-verify-merge-20261026/P4-evidence-phase.json`
 - **STOP**：清单与 `facts.jsonl` 现单行游标或既有 `captureCommand` 回执矛盾、七字段落点与 `runtime/stage/stage-content-contracts.mjs` 的字段名冲突、成本账本出现污染首行、或额外游标限制让既有续跑测试变红时停该处；材料是本卡、`spec.md` 的对应 AC 与真实字节；修复回 T004/T005 原实施 owner 与 build-plan 作者；不改 AC、oracle 或写集求绿。
-- **覆盖 AC**：AC-ACCEPT-001、AC-ACCEPT-002、AC-EVID-001、AC-EVID-002、AC-EVID-003、AC-COST-001、AC-RESULT-001
+- **覆盖 AC**：AC-ACCEPT-001、AC-ACCEPT-002、AC-EVID-001、AC-EVID-002、AC-EVID-003、AC-COST-001、AC-RESULT-001、AC-RESULT-002
 - **Done**：按独立质量owner本次真实消息逐条回填：AC-ACCEPT-001 `pass`（026及144/148三实际AC读回）；AC-ACCEPT-002 `incomplete`（129/131真实尝试及当前缺口记录，真实stage末统一提醒/报告尚未发生，由主会话/root提供、原P4开发回核，出现真实逐条缺口报告后恢复）；AC-EVID-001 `pass`（145独立fixture/143 native三回执与两物理输出，仅受控夹具，162/163全stage真实重复执行偏差另保）；AC-EVID-002 `pass`（145受控P6→P7、单row五字段与拒history）；AC-EVID-003 `pass`（read-trace001及002指针勘误与当前核正材料表，仅本开发公开88命令/40读点，其他actor全集unknown）；AC-COST-001 `incomplete`（两真实样本不代stage记账/末Phase十环，阶段主会话提供真实单次账本及末Phase消费原件，原P4开发届时回核）；AC-RESULT-001 `pass`（两冻结JSON、151/152/154/155及新reader复算143，限相同fixed workunit五实际数可复算可比，不作因果/整体收益）。现有具名原件见下方逐AC表；尚未创建的最终质量原件不预填。
 
 ## 工作包声明（人读事实）
@@ -125,7 +125,7 @@ T004 → T005，串行。T005 消费 T004 的七字段与 `incomplete` 格式，
 
 ### T004 — 逐条证据计划与缺口记录
 
-- **来源 / FR / AC**：`U-011`「每条承接 AC 写清判什么、怎么判、证据从哪来、谁提供、何时能拿到、成本类别、拿不到怎么办」、`U-014`「`incomplete` 必须有真实尝试证据与恢复条件，build-code 结束统一提醒」、`U-022`「可带缺口进 stage-close，但最终报告逐条列缺口、不宣称完成」；`FR-ACCEPT-001`、`FR-ACCEPT-002`；`AC-ACCEPT-001`、`AC-ACCEPT-002`。
+- **来源 / FR / AC**：`U-011`「每条承接 AC 写清判什么、怎么判、证据从哪来、谁提供、何时能拿到、成本类别、拿不到怎么办」、`U-014`「`incomplete` 必须有真实尝试证据与恢复条件，build-code 结束统一提醒」、`U-022`「可带缺口进 stage-close，但最终报告逐条列缺口、不宣称完成」；`FR-ACCEPT-001`、`FR-ACCEPT-002`；`AC-ACCEPT-001`、`AC-ACCEPT-002`。 补充承接 `AC-RESULT-002`（真实执行要求见下节，原成功/失败判据不变）。
 - **证据计划**：判什么=每条承接 AC 的可观察结果；怎么判=AC 的判定方式加所属 Phase 的 `gate_cmd`；证据从哪来=AC「证据」行与 Phase 清单条目；谁提供=Phase 实施者、独立审查者与用户；何时能拿到=Phase 执行时与 stage 收口；成本类别=命令级、受控运行级、真实环境级或人在场级；拿不到怎么办=AC「失败」行加 `incomplete` 四件。
 - **文件 / 符号**：`skills/spec-specify/templates/spec-template.md`（符号：Appendix A 每条 AC 的「证据」行与「验收流程」）；`skills/spec-plan/templates/phase-template.md`（符号：Tnnn 卡的「来源 / FR / AC」后新增「证据计划」字段、「停止 / 恢复」）；`workflows/build-plan/SKILL.md`（符号：「方法」第 7、9 步）；`tests/contract/acceptance-plan.test.mjs`（符号：ORACLE-ACCEPT-PLAN 测试块）。
 - **动作**：① 在 spec 模板的每条 AC「证据」行后加一行 `证据计划：判什么=…；怎么判=…；证据从哪来=…；谁提供=…；何时能拿到=…；成本类别=…；拿不到怎么办=…`，值写真实对象与时点，七项缺一不算填写；七个字段分别落在既有节：首句、判定方式与「验证」、「证据」、执行 owner、「验证」时点、「测试标准」测试面、「失败」与 `incomplete`。② 在 spec 模板「验收流程」加 `incomplete` 记录格式：`incomplete：AC-…；试过=<命令与原 ref>；卡在=<真实条件>；谁提供=<真实对象>；恢复条件=<可观察条件>`；无「试过」原 ref 不得记 `incomplete`，可以带缺口进 stage-close，但最终报告逐条列缺口、不写完成。③ 在 phase 模板 T 卡「来源 / FR / AC」后加「证据计划」一栏，七项按本卡既有节取值：判什么→来源 / FR / AC；怎么判→测试层级 / 技能与 RED/GREEN 门禁命令；证据从哪来→证据与契约头 `evidence_path`；谁提供→输入；何时能拿到→依赖与输入；成本类别→场景 / 夹具或服务；拿不到怎么办→停止 / 恢复与覆盖上限；并在模板的「字段说明」表加一行「证据计划」，写作下限写清这七项指向本卡既有节。④ 在 phase 模板的收口正文写清：build-code 结束统一提醒逐条列 `incomplete`，每条带尝试 ref、阻塞条件、提供者与恢复条件；最终报告逐条列缺口、不宣称完成。⑤ 在 `workflows/build-plan/SKILL.md` 第 7 步要求每条承接 AC 落七字段、缺一项不得开工；第 9 步自查七字段与 `incomplete` 记录，缺项进本轮盘点事实。⑥ 先写 `tests/contract/acceptance-plan.test.mjs`：读两个模板真实字节与一张夹具 Phase 卡，逐条断言七标签、`incomplete` 四件与「无尝试 ref 拒绝」的负例。不新增检查器，不建第二份验收计划。
@@ -274,3 +274,15 @@ incomplete：AC-ACCEPT-002；试过=npx vitest run tests/contract/acceptance-pla
 - 全局权威：`spec.md` 的「实现设计（全局权威）」、Appendix A 七条 AC 与「需求到任务追踪」P4 两行。
 - 上游事实：decision-log 的 `U-011`、`U-014`、`U-017`、`U-022`、`F7`、`F8`；P3 的 Phase 卡与 `incomplete` 分诊表。
 - 本 Phase 只写本文件；代码、测试与真实 RED/GREEN 由 build-code 按两张卡落地。
+
+### 聚合前原owner回核：AC-RESULT-002（T004）
+
+由本Phase原evidence owner 在P12真实聚合前选一个真实Phase承接AC逐条标本地可判／需人／需外部，实际尝试本地检查并记录incomplete原因与恢复条件，独立验证者核标注与真实命令回执一致。沿spec该AC原通过／失败判据，保存实际执行原件及独立首判，交P12引用。当前首判原件未取得、未执行本项；既有Done结论仅保原覆盖范围，不追签本条、不修改旧manifest或历史验收。此项只补原Task的结果检查职责，不新增Task、生产写集、gate或进度对象；原owner不可用须如实披露，不由P12代签。
+
+#### 2026-10-27 实际回核事实（仅 AC-RESULT-002）
+
+AC-RESULT-002：pass。上段“首判原件未取得、未执行”是本次回核前状态；本次原 P4/T004 owner 已对真实 P9 的 AC-ROUTE-002、AC-MERGE-004 分别标注“本地可判”，实际尝试具名 gate、一致性 CLI、真实旧任务 readTaskFacts 与十一类消费者精确路径扫描，记录缺口原因、提供者和恢复条件。独立首判为 `quality/reviews/2026-10-27-046-p4-result002-independent-first-acceptance.json`（sha256 `7ea29e8dea67ccaa159bc7d22988ae39851d7c4a17d8ea0e289c7a1d609f4f8c`）；执行读回为 `quality/evidence/2026-10-27-165-p4-result002-final-real-attempt-readback.json`（sha256 `44f2e2a96ed902137dafdd83f31f6be161badb52c9a792b9743b351687a1b2cf`），其中原失败与纠正分别回引163/164，不覆写旧原件。
+
+实际回执：`quality/tests/2026-10-27-309-p4-result002-p9-gate.json`（exit 0，8/8）；`quality/tests/2026-10-27-310-p4-result002-consistency.json`（exit 0，仍有85行report-only）；`quality/tests/2026-10-27-311-p4-result002-real-history.json`（exit 0，真实c04旧verify-code事实/确认可读且前后hash相同）；`quality/tests/2026-10-27-312-p4-result002-eleven-consumers.json`、`quality/tests/2026-10-27-313-p4-result002-eleven-consumers-corrected.json`（均exit 1，分别是非持久扫描表达式的EISDIR与误计Markdown分隔行，不是产品RED）；`quality/tests/2026-10-27-314-p4-result002-eleven-data-rows.json`（exit 0，十一类、23个实际文件）。原输出由各回执的output_ref唯一定位。
+
+通过范围只到“分类、真实尝试、缺口归口与独立核对”；不替 AC-MERGE-004 签通过，其catalog/方法/文档迁移缺口仍由P9/P10/P11对应owner承接。163的 `source_before.head` 实为gitdir文本，commit身份未取得，不把该字段作为版本证据；沿046核定的材料hash与实际回执作窄结论。AC-ACCEPT-002的真实stage末统一提醒/最终缺口报告、AC-COST-001的真实stage末一次记账/十环消费仍保原欠账，未在本次关闭；原历史Done及P4 manifest不变。

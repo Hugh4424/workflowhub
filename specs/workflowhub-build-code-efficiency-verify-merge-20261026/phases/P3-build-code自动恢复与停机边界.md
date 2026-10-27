@@ -13,7 +13,7 @@
 - **oracle**：ORACLE-AUTO-RECOVERY
 - **evidence_path**：`quality/evidence/workflowhub-build-code-efficiency-verify-merge-20261026/2026-10-26-003-p3-observed-recovery-evidence.json`
 - **STOP**：分诊表缺类、第 9 步与表处置不一致、四个文件仍留自动恢复或审查的固定次数/时长上限句（第二次触发、用户独占阻塞问一次、外部不可重试零重试及3–5竞争假设不属于该上限，原规则与断言保留）、或既有契约词被改红时停该路径；保原字节与失败输出，回 T003 动作逐项核，单源表只留 `AGENTS.md` 一张；不改测试断言、不删类求绿；仍不一致交 build-plan owner。
-- **覆盖 AC**：AC-RECOVER-001、AC-RECOVER-002
+- **覆盖 AC**：AC-RECOVER-001、AC-RECOVER-002、AC-RESULT-003
 - **Done**：AC-RECOVER-001 与 AC-RECOVER-002 各写一个档位与一条证据指针；`npx vitest run tests/contract/auto-recovery.test.mjs` 退出 0；四场景处置、原失败保留与不问人三项有具名断言；既有 n11 词组与 `3–5` 断言仍绿；缺一不记 pass。 实际独立回读：**AC-RECOVER-001 — pass**，证据 `quality/evidence/p3-agent-replay/2026-10-26-032-independent-four-case-real-observation.json`（case A）；**AC-RECOVER-002 — pass**，证据 `quality/evidence/p3-agent-replay/2026-10-26-032-independent-four-case-real-observation.json`（四类受控注入）。两项档位均沿 `quality/reviews/2026-10-26-021-p3-independent-final-quality-readback.json` 的独立判断，只在该原四类受控注入范围成立；B/C/D业务仍incomplete，真实外部权限与未来普遍恢复不在此pass内。
 
 ## 工作包声明（人读事实）
@@ -143,7 +143,7 @@ S1 就是 AC-RECOVER-001 的受控注入：测试用三条具名断言分别证�
 
 ### T003 — 自动换路径与四类分诊
 
-- **来源 / FR / AC**：`U-003`「止损原则，不扩成总时长或固定审查预算」、`U-009`「撤回固定时长，不设固定时间」、`U-013`「AC 改动停问；先查根因、简化验收，实在无解再要真实资源」、`F3`「三类停收窄为改 AC 或方向、用户独占阻塞资源、严重风险；其余缺资源记 incomplete 继续」、`OI-003`；`FR-RECOVER-001`「同一失败反复或一轮没有新事实时先停重复动作，自动深研、换假设或方法或独立上下文、修正 Phase 内任务并继续，原失败原件保留」、`FR-RECOVER-002`「只有三类才停，其余缺资源记 incomplete 继续，不设次数或时长上限」；`AC-RECOVER-001`、`AC-RECOVER-002`。
+- **来源 / FR / AC**：`U-003`「止损原则，不扩成总时长或固定审查预算」、`U-009`「撤回固定时长，不设固定时间」、`U-013`「AC 改动停问；先查根因、简化验收，实在无解再要真实资源」、`F3`「三类停收窄为改 AC 或方向、用户独占阻塞资源、严重风险；其余缺资源记 incomplete 继续」、`OI-003`；`FR-RECOVER-001`「同一失败反复或一轮没有新事实时先停重复动作，自动深研、换假设或方法或独立上下文、修正 Phase 内任务并继续，原失败原件保留」、`FR-RECOVER-002`「只有三类才停，其余缺资源记 incomplete 继续，不设次数或时长上限」；`AC-RECOVER-001`、`AC-RECOVER-002`。 补充承接 `AC-RESULT-003`（真实执行要求见下节，原成功/失败判据不变）。
 - **输入**：`spec.md` 的 FR 与 AC 原文、`skills/spec-plan/templates/phase-template.md` 的字段说明、P2/T002 交付的三角色与七步顺序、四个文件与 move-map 的改前真实字节；四场景由测试作者独立写死。无外部提供者、无真实凭据需求，输入全部来自本任务既有材料。
 - **文件 / 符号**：`workflows/build-code/SKILL.md`；`docs/standard-workflow.md`；`AGENTS.md`；`skills/diagnosing-bugs/SKILL.md`；`docs/architecture/move-map.json`；`tests/contract/auto-recovery.test.mjs`；`tests/contract/n11-acceptance-rules.test.mjs`（仅第91行样本reader路径字面）。符号面：`AGENTS.md`「卡住与升级」的三列分诊表与三类停句；`workflows/build-code/SKILL.md` 第 9 步的处置序列与自述行；`docs/standard-workflow.md`「stage 结束」的引用段；`skills/diagnosing-bugs/SKILL.md` 第 1、3 节的换假设与四类分诊；move-map 两条目的 `responsibility`、`owner`、`consumer`；新测试的四个场景常量与检查器。
 - **动作**：①`AGENTS.md`「卡住与升级」把「连续无新事实即停重复续跑，按上条报告」改成「先停重复动作，再查根因、看验收或测试是否过度复杂、给更简单替代；仍有解就自动深研、换假设或方法或独立上下文、修正 Phase 内任务并继续，原失败原件保留；无新事实不是完成」；加三列四行分诊表、三类停、不设次数或时长上限；外部不可重试（许可或授权被拒绝、权限不足、密钥失效、输入非法、真实资源或环境不存在）零重试，立即报告并停该路径，其余安全工作继续，用户给新答复即复位，时间不构成复位条件；把「立即报告并给可直接回复的选项」收窄为「阻塞声明交付或 AC 判定时才按用户独占阻塞问一次，其余记 `incomplete` 并在 Phase 记录里报告」。②`docs/standard-workflow.md`「stage 结束」把「无新事实则停止重复、不自动续跑空转」与「换独立上下文重开、仍出现则升级问人」换成指向同一张表的三类停与无上限换路径；保留「时长本身永远不构成停止条件，时间不构成复位条件」、未取得答复不算同意、provider 排除句；不复写表。③`workflows/build-code/SKILL.md` 第 2 步加一句「同一失败第二次出现或一轮没有新事实时，先回第 9 步停重复动作再查根因」；第 5 步外部不可重试句改为按第 9 步四类分诊落位；第 9 步把重试自述段改成六段序列：停重复并写自述行 → 三检查 → 换路径清单（深研、换假设、换方法、换独立上下文、修正 Phase 内任务拆分/顺序/依赖/实现路线/测试路线/证据补齐）→ 四类分诊落位 → 外部零重试与用户新答复复位 → 无上限声明与「无新事实不是完成」，并写死不新建任务、不建第二个账本、不覆盖原失败原件。④`skills/diagnosing-bugs/SKILL.md` 第 1 节「回路无法建立…交还控制」改成四类分诊，保留「禁止猜测修复」；第 3 节删掉按失败次数停并交人工裁决的句子，改为同一失败或一轮无新事实时先停重复、再换竞争假设或探针或独立上下文继续，原失败与探针输出保留，不设次数上限；保留「3–5」个竞争假设与「一次只测一个变量」。⑤`docs/architecture/move-map.json` 的 `skills/diagnosing-bugs/SKILL.md` 条目 `responsibility` 加「自动恢复的换假设/换方法/换上下文与保留原失败」、`consumer` 加「方法 9 自动换路径」、`owner` 加 `P3/T003`；`workflows/build-code/SKILL.md` 条目 `responsibility` 写明方法 2 诊断与方法 9 自动恢复；两条的 `delete_condition` 与 `retention_basis` 原义不改。⑥先写 `tests/contract/auto-recovery.test.mjs`：读四个文件与 move-map 的真实字节，解析 `AGENTS.md` 分诊表，比对硬编码的四场景期望；做上限词扫描、既有契约词保留断言、内存变异反向用例。⑦按本卡窄TCR仅修 `tests/contract/n11-acceptance-rules.test.mjs` 第91行：`specs/n11-same-condition-eval-20261022/spec.md` → `specs/archive/n11-same-condition-eval-20261022/spec.md`；不改read helper、describe/it、required四词、missing检查器、expect或变异负例，不复制/创建/改写归档样本，不skip/catch ENOENT或返回默认空串。改后先核diff除该literal外逐字相同，再按“相邻契约保留”原命令复验；暴露其它失败回原作者，不扩大此TCR。
@@ -217,3 +217,14 @@ S1 就是 AC-RECOVER-001 的受控注入：测试用三条具名断言分别证�
 - **未验条件及owner**：真实外部能力须用户/实际资源owner提供真实权限、资源和范围，由主会话组织实际验收；provider/成本与未来会话效果由后继任务执行者提供相应真实输入和原件，本Phase不承诺。catalog既有“三次失败停止”仍由catalog owner承接，不清退原未决。
 - **规范同步**：实际 `quality/evidence/2026-10-26-115-p3-norm-sync-no-extra-delta-readback.json` 核定无额外专业delta；现有唯一分诊表及原专业指针承接，未空写规范/索引或经验，不把四受控case升级成真实外部能力规范。
 - **开发最终确认**：已收到独立测试109/032及审查021两方明确报告，均已实际回读；两条020finding由独立来源判fixed，无待实施修复项、无未解释测试失败。七实施路径、冻结19断言、归档、index/P11保持本轮既有字节；本次只补卡事实。当前证据仍仅003，未建新manifest；P3审后commit尚未执行，不填未来SHA/ref。本作者停写交主会话核四项后提交。
+
+### 聚合前原owner回核：AC-RESULT-003（T003）
+
+由本Phase原recovery owner 在P12真实聚合前任选T02十三Phase真实静态表标注计数或受控无新事实注入，说明选择理由，记录真实计数／换路径次数与是否回用户，由独立验证者核原件；不得把旧四replay或材料测试直接当本条通过。沿spec该AC原通过／失败判据，保存实际执行原件及独立首判，交P12引用。当前首判原件未取得、未执行本项；既有Done结论仅保原覆盖范围，不追签本条、不修改旧manifest或历史验收。此项只补原Task的结果检查职责，不新增Task、生产写集、gate或进度对象；原owner不可用须如实披露，不由P12代签。
+
+#### AC-RESULT-003 实际首判回读（本次新增事实）
+
+- **AC-RESULT-003 — pass（限本次受控注入）**：独立首判原件 `quality/evidence/p3-result003/2026-10-27-006-independent-ac-result003-first-verdict.json`，SHA256 `4b7d068778aa15fb056e05b6d89415354aa8db0e7bee4ca18fd66ef85a632cbd`；实际执行与计数原件 `quality/evidence/p3-result003/2026-10-27-005-actual-injection-count-readback.json`，SHA256 `8ab9d10fe7a1eba3aad7d1213667830776abb0859521171efb7d1f54dcfffeb6`。选择新的受控无新事实注入而非T02历史静态表，避免估算历史重复次数；不复用旧四replay验收冒签。
+- **真实计数与效果**：初始宿主同失败注入2次（`quality/tests/2026-10-27-315-p3-agent-replay-verify.json`、`quality/tests/2026-10-27-316-p3-agent-replay-verify.json`，两份原输出逐字相同）；新actor实际路径切换1次、交接后旧失败重试0次、业务verify1次（`quality/tests/2026-10-27-317-p3-agent-replay-verify.json`，exit0、`{"total":6}`）；独立安全工作成功（`quality/tests/2026-10-27-318-p3-agent-replay-safe.json`，exit0、safe marker实际字节可读）。
+- **是否回用户**：question、owner、risk-request及其它用户决策工具/消息均0，未回用户索取决定；完成后向父代理交结果不算决策请求。006独立读取全部7次公开工具调用、native315–318及前后app/保护输入字节后复算，不只信question_count或actor自报。
+- **覆盖限制**：初始两失败由宿主预注入，不证明actor自主决定最初重复；部分源读取输出截断，仅所见相关段落与版本绑定可核；只覆盖这一个有限本地可选资源场景，不保证未来全部失败、无限时长恢复、真人权限/provider/外部能力或成本改善，不写“已消除”。独立首判只由P12引用，不扩大原恢复目标；上段“未取得/未执行”为本次执行前的规划事实，原规则、历史Done、manifest与旧验收原件保持不改。
