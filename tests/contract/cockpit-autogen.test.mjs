@@ -4,6 +4,7 @@ import { mkdtempSync, realpathSync, mkdirSync, writeFileSync, readFileSync, rmSy
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
+import { runInNewContext } from 'node:vm';
 import { createTask, openTask } from '../../runtime/task/task-handle.mjs';
 import { renderAnswerPage } from '../../skills/answer-as-page/scripts/render-answer-page.mjs';
 const roots=[];
@@ -26,6 +27,43 @@ async function fixture(){
  return {taskPath:task.taskPath,reportPath,outDir:join(root,'pages'),htmlName:'cockpit.html',material};
 }
 const data=path=>JSON.parse(/const DATA = (\{[\s\S]*?\n?\});/.exec(readFileSync(path,'utf8'))[1]);
+// Executes the actual emitted template consumers; this is not DOM/click or CSS coverage.
+function templateView(path, expression) {
+ const script=/<script>([\s\S]*?)<\/script>/.exec(readFileSync(path,'utf8'))[1];
+ return runInNewContext(script+'\nconst ui={sources:new Set(),srcRows:new Set(),plan:false,fileFold:false};let sel="progress";const hist=[];const CHANGED=new Set(),RELATED=new Set();\n'+expression);
+}
+test('ORACLE-COCKPIT-GEN: navigation consumers expose every real object without inventing edges',async()=>{
+ const f=await fixture(),r=await renderAnswerPage(f),d=data(r.htmlPath);
+ const sidebar=templateView(r.htmlPath,'sidebarHtml()');
+ const ids=[...sidebar.matchAll(/data-go="([^"]+)"/g)].map(m=>m[1]).filter(id=>id!=='progress');
+ expect([...new Set(ids)].sort()).toEqual(d.objects.map(o=>o.id).sort());
+ expect(new Set(d.objects.filter(o=>ids.includes(o.id)).map(o=>o.kind))).toEqual(new Set(['req','spec','dec','goal','wp','ires','eres','phase','task','file','test','review','acc','risk','pr']));
+ expect(d.edges).toEqual([]);expect(d.sideEdges).toEqual([]);
+});
+test('ORACLE-COCKPIT-GEN: expanded source consumer displays actual source classification and paths',async()=>{
+ const f=await fixture(),r=await renderAnswerPage(f),d=data(r.htmlPath);
+ for(const o of d.objects){
+  const panel=templateView(r.htmlPath,`ui.sources.add(encodeURIComponent(${JSON.stringify(o.id)}));OBJ[${JSON.stringify(o.id)}].src.forEach((s,i)=>ui.srcRows.add(encodeURIComponent(${JSON.stringify(o.id)})+'-'+i));sourcesHtml(OBJ[${JSON.stringify(o.id)}])`);
+  expect(panel).not.toContain('undefined');
+  for(const s of o.src){
+   const expected=s.path.endsWith('task.json')?'任务元数据':s.path.endsWith('facts.jsonl')?'任务事实':s.path.includes('/quality/tests')?'测试记录':s.path.includes('/quality/reviews')?'审查记录':s.path.includes('/quality/evidence/research')?'调研原件':s.path===f.reportPath?'十环报告':'任务材料';
+   expect(s.kind).toBe(expected);expect(panel).toContain(expected);expect(panel).toContain(s.path);expect(panel).toContain(s.loc);expect(panel).toContain(s.name);
+  }
+ }
+ const req=d.objects.find(o=>o.kind==='req');expect(req.status.text).toBe('缺');expect(req.src[0].path).toBe(join(f.material,'decision-log.md'));expect(req.summary).toContain('原件');
+});
+test('ORACLE-COCKPIT-GEN: reachable hero consumers preserve real summaries without undefined fields',async()=>{
+ const f=await fixture(),r=await renderAnswerPage(f),d=data(r.htmlPath);
+ for(const o of d.objects){const hero=templateView(r.htmlPath,`heroHtml(OBJ[${JSON.stringify(o.id)}])`);expect(hero).not.toContain('undefined');expect(hero).toContain(o.title);}
+ expect(templateView(r.htmlPath,'heroHtml(OBJ[DATA.objects.find(o=>o.kind==="dec").id])')).toContain('决定理由未取得');
+ expect(templateView(r.htmlPath,'heroHtml(OBJ[DATA.objects.find(o=>o.kind==="eres").id])')).toContain('调研结论未取得');
+ expect(templateView(r.htmlPath,'heroHtml({...OBJ[DATA.objects.find(o=>o.kind==="dec").id],detail:"独立具名决定",why:"独立具名理由"})')).toContain('独立具名理由');
+ expect(templateView(r.htmlPath,'heroHtml({...OBJ[DATA.objects.find(o=>o.kind==="ires").id],finding:"已有具名研究结论",origin:"已有具名研究范围"})')).toContain('已有具名研究结论');
+});
+test('ORACLE-COCKPIT-GEN: complete selected detail consumer has no undefined source or chain fields',async()=>{
+ const f=await fixture(),r=await renderAnswerPage(f),d=data(r.htmlPath);
+ for(const o of d.objects){const main=templateView(r.htmlPath,`sel=${JSON.stringify(o.id)};mainHtml()`);expect(main).not.toContain('undefined');expect(main).toContain(o.title);}
+});
 test('ORACLE-COCKPIT-GEN: task root alone derives 15 sourced kinds, ten exact rings and real diff',async()=>{
  const f=await fixture();f.outDir=join(f.taskPath,'quality/evidence/cockpit');const facts=readFileSync(join(f.taskPath,'facts.jsonl'));const r=await renderAnswerPage(f),d=data(r.htmlPath);
  expect(new Set(d.objects.map(o=>o.kind)).size).toBe(15);expect(d.rings).toEqual(JSON.parse(readFileSync(f.reportPath)).rings);

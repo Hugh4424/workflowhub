@@ -84,7 +84,7 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
  // These are the only fact fields consumed by the task-node display below.
  fingerprints.facts_cursor_sha256=hash(JSON.stringify({phase_id:cursor?.phase_id??null,task_id:cursor?.task_id??null}));
  const objects=[],phaseTasks={};
- const source=(path,loc)=>({name:relative(root,path)||path,path,loc});
+ const source=(path,loc)=>({kind:path.endsWith('task.json')?'任务元数据':path.endsWith('facts.jsonl')?'任务事实':path.includes(`${sep}raw-requirements${sep}`)?'原始需求':path.includes(`${sep}quality${sep}tests`)?'测试记录':path.includes(`${sep}quality${sep}reviews`)?'审查记录':path.includes(`${sep}quality${sep}evidence${sep}research`)?'调研原件':path===resolve(reportPath)?'十环报告':'任务材料',name:relative(root,path)||path,path,loc});
  const metadata=join(task.taskPath,'task.json');
  function node(kind,title,path,loc,{missing=false,id,phase,summary}={}){
   const object={id:id??`${kind}-${objects.filter(o=>o.kind===kind).length+1}`,kind,title:short(title),short:short(title),label:short(title),summary:summary??short(title),src:[source(path??metadata,loc??KIND_SOURCES[kind])],status:{text:missing?'缺':kind==='pr'?'尚未产生；到 stage-close 后补':'有来源；结论见原件',tone:'unk'}};

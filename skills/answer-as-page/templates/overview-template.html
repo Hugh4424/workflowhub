@@ -405,6 +405,11 @@ b{font-weight:700}
   .scroller{min-height:0}
   .main{padding:16px 16px 48px;overflow-wrap:anywhere}
   .foot-dir{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .objcard{flex-wrap:wrap}
+  .objcard-body{flex-basis:calc(100% - 60px)}
+  .objcard>.tag{margin-left:48px;max-width:calc(100% - 48px);height:auto;min-height:22px;white-space:normal;overflow-wrap:anywhere}
+  .task-phase-entry{grid-template-columns:minmax(0,1fr)}
+  .task-phase-link{justify-self:start}
 }
 </style>
 </head>
@@ -742,7 +747,7 @@ function navRow(id) {
   '</button>';
 }
 function sidebarHtml() {
-  const groups = ['req', 'wp', 'task'].map(function (kind) {
+  const groups = Object.keys(DATA.kinds).filter(function (kind) { return IDS.some(function (id) { return OBJ[id].kind === kind; }); }).map(function (kind) {
     return { kind: kind, ids: IDS.filter(function (i) { return OBJ[i].kind === kind; }) };
   });
   const hasUpdate = CHANGED.size > 0;
@@ -760,7 +765,7 @@ function sidebarHtml() {
       '<div class="nav-list">' + g.ids.map(navRow).join('') + '</div>' +
     '</section>';
   }).join('') +
-  '<p class="nav-note">点选一项，浅蓝底的就是它的上游和下游。目标、调研、决策、文件、测试在详情页的逻辑链条里。</p>';
+  '<p class="nav-note">点选一项查看内容与来源路径。浅蓝底只表示材料中已取得的上下游关系；没有关系时不作推断。</p>';
 }
 /* 卡片 */
 function objChip(id, opt) {
@@ -800,7 +805,7 @@ function objCard(id, opt) {
 }
 const testLine = function (id) { return OBJ[id].summary || OBJ[id].explain || '尚未取得测试结果'; };
 const decLine = function (id) {
-  return OBJ[id].detail + '；因为' + OBJ[id].why;
+  return (OBJ[id].detail || '决定细节未取得') + '；' + (OBJ[id].why ? '因为' + OBJ[id].why : '决定理由未取得；请查阅来源原件');
 };
 /* Hero */
 function heroHtml(o) {
@@ -821,31 +826,31 @@ function heroHtml(o) {
         '<span class="hero-quote-icon">' + icon('req', 28) + '</span>' +
         title('h2-xl', o.quote || o.title) +
       '</div>' +
-      '<p class="hero-note">需求条目（含归纳，非全部逐字） · 来自 ' + esc(o.source) + '</p>' +
+      '<p class="hero-note">需求条目（含归纳，非全部逐字） · 来自 ' + esc(o.source || (o.src || []).map(function (s) { return s.name; }).join('；') || '来源未取得') + '</p>' +
     '</div>';
   }
   if (o.kind === 'ires' || o.kind === 'eres') {
     return '<div class="' + wrap + '">' + head + title('h2-lg', o.title) +
       '<div class="hero-finding">' +
         '<div class="finding-k">调研结论</div>' +
-        '<p class="finding-v">' + esc(o.finding) + '</p>' +
+        '<p class="finding-v">' + esc(o.finding || '调研结论未取得；下方仅展示已有来源指针') + '</p>' +
       '</div>' +
       '<p class="hero-note small">' +
-        (o.kind === 'ires' ? '查的是我们自己的代码和数据' : '查的是外部资料和同类做法') + ' · ' + esc(o.origin) +
+        (o.origin ? esc(o.origin) : '原件与范围见下方来源；本页不据指针推断已查阅外部原文') +
       '</p>' +
     '</div>';
   }
   if (o.kind === 'dec') {
     return '<div class="' + wrap + '">' + head + title('h2-xl', o.title) +
       '<div class="hero-grid">' +
-        '<div class="hero-cell soft"><div class="cell-k">决定了什么</div><p class="cell-v">' + esc(o.detail) + '</p></div>' +
-        '<div class="hero-cell page"><div class="cell-k sub">为什么这样定</div><p class="cell-v-sm">' + esc(o.why) + '</p></div>' +
+        '<div class="hero-cell soft"><div class="cell-k">决定了什么</div><p class="cell-v">' + esc(o.detail || '决定细节未取得；请查阅下方原件') + '</p></div>' +
+        '<div class="hero-cell page"><div class="cell-k sub">为什么这样定</div><p class="cell-v-sm">' + esc(o.why || '决定理由未取得；请查阅下方原件') + '</p></div>' +
       '</div>' +
     '</div>';
   }
   if (o.kind === 'file') {
     return '<div class="' + wrap + '">' + head + title('h2-lg h2-mono', o.title) +
-      '<p class="hero-file-note">' + esc(o.note) + '</p>' +
+      '<p class="hero-file-note">' + esc(o.note || o.summary || '文件说明未取得；请查阅真实 diff') + '</p>' +
     '</div>';
   }
   if (o.kind === 'test') {
@@ -868,7 +873,7 @@ function heroHtml(o) {
           '<div class="stat-label">' + esc(s.label) + '</div>' +
         '</div>';
       }).join('') + '</div>' +
-      '<p class="hero-explain">' + esc(o.explain) + '</p>' +
+      '<p class="hero-explain">' + esc(o.explain || o.summary || '测试解释未取得；结果以原件为准') + '</p>' +
     '</div>';
   }
   return '<div class="' + wrap + '">' + head + title('h2-xl', o.title) +
