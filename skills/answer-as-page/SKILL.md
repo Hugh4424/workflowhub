@@ -47,7 +47,9 @@ caller给真实问题、材料/任务事实/测试/审查/真实改动清单、�
 
 页与同名.nodes.json放caller指定任务库证据目录，不进仓库/分支写集。同一owner串行在骨架确认、每包细化、方向/范围/验收实变、Phase定稿/收口前更新；措辞/指针变化不生成。先读旧页/侧车，不盖未读件、不建current索引。侧车仅{schema,generated_at,source_fingerprint,nodes:[{stable_id,content_digest}]}，只增ring:1…10，DATA.ringNodes承其摘要；缺失/不同步报比较基准缺失，首版不伪造全变。报告/失败/历史件immutable；派生页/缓存沿已定规则安全写，中断保旧件并报告，不冒同步成功。模板替换经确认及独立读回，旧页/侧车沿任务规则移只读历史、留原ref，不静默删。
 
-节点digest比对才高亮；顶部「本次更新」可跳，「我看过了」清除，该节点再变则再现。已读仅本地偏好，key含稳定task身份/stable_id/content_digest，不靠file路径隔离、不存任务状态；存储失败明示未持久保存。只报实际QA刷新效果，不推广未观察浏览器。展示先刷新同名真实页标签，无才新开；权限/能力缺失报「未自动打开」。QA禁附着用户Chrome，先isolated-browser-qa，页面/viewport/Preview/截图/行为各保原件。设计确认不代视觉通过；首个真实页由用户判断，未答不冒通过。
+实施与验收分开：只消费Phase卡实际执行结论、其具名原件与认证Git提交证据；Phase有交付提交不冒某Task逐项验收，test退出0与游标之前不证明完成。需求已记录/工作包方案已定与验收档位分别展示，原件未取得或冲突保持明确短态。顶部固定展示make-decision/build-plan/build-code，材料存在不冒阶段完成。总览按三类各列全部对象一次（含孤立与多对多），选择与左栏共用同一有向显式关系；相关对象写来源链/AC映射，不经共同证据推全连接。
+
+节点digest比对才高亮；顶部「本次更新」可跳，「我看过了」清除，该节点再变则再现。已读仅本地偏好，key含稳定task身份/stable_id/content_digest，不靠file路径隔离、不存任务状态；存储失败明示未持久保存。只报实际QA刷新效果，不推广未观察浏览器。事件页以认证taskIdentity的URL fragment及任务库根为稳定身份：同任务标签已存在则导航到本次真实HTML并刷新，无匹配才新开；不同任务不复用，历史HTML不修改。macOS默认Chromium系浏览器使用原生标签API并读回URL，权限拒绝/不可查询/无确认结果明确报未自动打开，不以system open退出0冒复用成功；非mac宿主复用能力未提供时如实报告。裸opener与显式DATA旧入口保留。权限/能力缺失报「未自动打开」。QA禁附着用户Chrome，先isolated-browser-qa，页面/viewport/Preview/截图/行为各保原件。设计确认不代视觉通过；首个真实页由用户判断，未答不冒通过。
 
 共同刷新：caller在真实事件执行 `node tools/cli/run-checks.mjs --task-path <认证任务根>` 存stdout完整报告；比字节，同则复用ref、异则保旧件另存，不覆盖既有final-chain-report.json。输入报告/decision-log绝对路径/sha256、输出目录/HTML名/同名侧车；沿上文串行安全发布/读回。DATA.rings只抄报告rings[]，派生结论/依据/证据类型/是否计入分母/备注，不判定/写报告；缺报告/缺环显示「缺口：报告未提供第 N 环」，provenance报「报告缺失：final-chain-report.json 未取得」；输入错误报具体缺口，无新事实不凑次数。normal原出页条件已触发或当前页存在才在逐AC后、物理交付/PR完成后各刷新，否则具名说明；complex由verify-code caller沿同接口/时点，planning沿原出页/交接，small默认不调用，不互增阶段行。
 
@@ -64,7 +66,7 @@ caller给真实问题、材料/任务事实/测试/审查/真实改动清单、�
 生成入口由 caller 在「共同刷新」执行，唯一消费者是阶段主会话与 verify-code，owner 为本技能维护者；等价宿主原生入口接管且正文改指它，或技能退役时删除薄脚本。
 
 1. 已安装分发从 installedRunner 根目录调用下列入口；Runner 与 Skill Bundle 按现安装合同同根安装，静态 runtime 依赖由 Runner 发布闭包承接。事件 caller 在真实时点运行 `node skills/answer-as-page/scripts/render-answer-page.mjs --task-path <认证任务根> --report <run-checks stdout 报告路径> --out-dir <认证任务根>/quality/evidence/<页面目录> --html <名称>.html --event <下表事件>`。脚本只消费已存报告，不代跑检查；无 `--data` 时从认证任务自动派生。原显式 caller 可保留 `--data <完整DATA.json>` 并走 `renderAnswerPage`，事件入口只取当前任务真实材料，不接手拼数据。
-2. `refreshAnswerPage` 首次或实质变化经 `open-page.mjs` 调系统默认浏览器；模块测试可注入 `open`。同指纹与逐类摘要不变写「无实质变化」，不重复打开。页在而侧车缺失/非法写「比较基准缺失」，按首次处理。打开失败保页面并返回 `opened:false`、`open_reason=未自动打开: 真实原因`；生成成功不冒已打开。原 `renderAnswerPage` 显式 caller 的 `open` true/抛错/非 true 语义不变。
+2. event可省out-dir/html，默认本任务`quality/evidence/cockpit/overview.html`；显式输出仍允许不可变命名，浏览器按taskIdentity跨本任务HTML名复用，不要求caller手工统一路径。`refreshAnswerPage` 首次或实质变化经 `open-page.mjs` 调系统默认浏览器；模块测试可注入 `open`。同指纹与逐类摘要不变写「无实质变化」，不重复打开。页在而侧车缺失/非法写「比较基准缺失」，按首次处理。打开失败保页面并返回 `opened:false`、`open_reason=未自动打开: 真实原因`；生成成功不冒已打开。原 `renderAnswerPage` 显式 caller 的 `open` true/抛错/非 true 语义不变。
 3. 读回 HTML 与 `.nodes.json`，核对四个键与 `nodes[].stable_id/content_digest`；未自动打开时写「未自动打开」与原因。
 
 原显式数据入口由 caller 从当前材料、facts、实际diff与执行原件提供完整 `pageData`（CLI `--data`），含真实task/taskIdentity/stageLabel/stages、15类词汇内有源objects、edges/sideEdges、phaseTasks及progress；保持原类型、来源和阶段语义，不为凑齐词汇造实例。缺完整输入明确报错。`rings[]` 只作为检查环与侧车摘要，不能代任务数据、变造acc或req。输出对在既有本地锁内先读旧件/拒目录及别名，再安全写并读回；次发布失败恢复本次实际改动，遇并发新身份或字节保留新件并明确报告恢复不完整，不覆盖未知版本。

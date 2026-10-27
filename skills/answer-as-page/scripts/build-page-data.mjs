@@ -106,9 +106,9 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
  const rows=facts===null?[]:readTaskFacts(task.taskPath);
  const factsPath=join(task.taskPath,'facts.jsonl'),factsHash=fingerprints[factsPath]??'missing';
  delete fingerprints[factsPath];
- const cursor=rows.find(row=>row.stage==='build-code')?.phase_progress;
+ const positionRow=rows.find(row=>row.phase_progress||row.handoff||row.close_action),cursor=rows.find(row=>row.stage==='build-code')?.phase_progress;
  // These are the only fact fields consumed by the task-node display below.
- fingerprints.facts_cursor_sha256=hash(JSON.stringify({phase_id:cursor?.phase_id??null,task_id:cursor?.task_id??null}));
+ fingerprints.facts_cursor_sha256=hash(JSON.stringify({phase_id:cursor?.phase_id??null,task_id:cursor?.task_id??null,stage:positionRow?.stage??null}));
  const objects=[],phaseTasks={};
  const source=(path,loc)=>({kind:path.endsWith('task.json')?'任务元数据':path.endsWith('facts.jsonl')?'任务事实':path.includes(`${sep}raw-requirements${sep}`)?'原始需求':path.includes(`${sep}quality${sep}tests`)?'测试记录':path.includes(`${sep}quality${sep}reviews`)?'审查记录':path.includes(`${sep}quality${sep}evidence${sep}research`)?'调研原件':path===resolve(reportPath)?'十环报告':'任务材料',name:relative(root,path)||path,path,loc});
  const metadata=join(task.taskPath,'task.json');
@@ -242,10 +242,13 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
   for(const name of readdirSync(phaseDirectory).filter(name=>/^P\d+[^/\\]*\.md$/.test(name))){const ref='phases/'+name;if(!Object.hasOwn(phaseInputs,ref))phaseInputs[ref]=read(join(phaseDirectory,name));}
  }
  const contract=validatePostPhaseContract({spec:spec??'',index:index??'',phases:phaseInputs});
- const phaseRows=contract.facts?.phase_rows??[];
+ const phaseRows=contract.facts?.phase_rows??[],phaseRecords=new Map(),phaseCommits=new Map(),acceptanceClaims=new Map();
+ const committed=commit=>{if(!/^[a-f0-9]{40}$/i.test(commit??''))return false;try{execFileSync('git',['merge-base','--is-ancestor',commit,'HEAD'],{cwd:root,stdio:'ignore'});return true;}catch{return false;}};
  for(const row of phaseRows){
   const text=phaseInputs[row.path],path=join(material,row.path);if(!text)continue;
   for(const match of text.matchAll(/\*\*(?:gate_cmd|RED\/GREEN 门禁命令)\*\*[:：]\s*`([^`]+)`/gu))declaredGates.add(match[1]);
+  const evidenceRef=/^\s*-\s*\*\*evidence_path\*\*[:：]\s*`([^`]+)`/m.exec(text)?.[1];
+  if(evidenceRef?.startsWith('quality/')&&evidenceRef.endsWith('.json')){const evidencePath=task.recordPath(evidenceRef),raw=read(evidencePath,true);delete fingerprints[evidencePath];if(raw!==null){const record=JSON.parse(raw);if((record.phase_id??record.phase)===row.id){phaseRecords.set(row.id,{record,path:evidencePath});for(const claim of Array.isArray(record.acceptance)?record.acceptance:Array.isArray(record.ac_results)?record.ac_results:[]){const ac=claim.ac??claim.id,tier=claim.tier??claim.result;if(ac&&typeof tier==='string'){const list=acceptanceClaims.get(ac)??[];list.push({tier,path:evidencePath});acceptanceClaims.set(ac,list);}}}}}
   const header=text.split('\n').find(line=>/^# /.test(line))??row.id,p=node('phase',header,path,'Phase '+row.id,{id:'phase-'+row.id,summary:'契约原件'});p.source_id=row.id;p.label=row.id;phaseTasks[p.id]=[];
   const l1=sections(text,2).find(block=>/^L1\b/.test(block.heading));
   for(const block of sections(l1?.body??text,3).filter(block=>/^T\d{3,}\s+[—–-]\s+\S/.test(block.heading))){
@@ -265,7 +268,13 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
  for(const [kind,dir] of [['test','quality/tests'],['review','quality/reviews']]) {
   const directory=join(task.taskPath,dir),candidates=files(directory).filter(path=>path.endsWith('.json'));let count=0;
   for(const path of candidates){
-   const record=JSON.parse(read(path));if(kind==='test'&&!isTestReceipt(record,declaredGates)){delete fingerprints[path];excludedCommandRefs.push(path);continue;}count++;
+   const record=JSON.parse(read(path));
+   if(kind==='test'&&record.exit_code===0&&!record.truncated&&typeof record.cwd==='string'&&resolve(record.cwd)===root&&Array.isArray(record.argv)&&/^(?:.*\/)?git$/.test(record.argv[0])){
+    let commit=record.argv.includes('diff-tree')?record.argv.find(arg=>/^[a-f0-9]{40}$/i.test(arg)):undefined;
+    if(record.argv[1]==='commit'&&record.output_ref){const ref=isAbsolute(record.output_ref)?relative(task.taskPath,record.output_ref).split(sep).join('/'):record.output_ref,output=task.readRecordBytes(ref).toString('utf8'),abbreviated=/^\[[^\n]* ([a-f0-9]{7,40})\]/m.exec(output)?.[1];if(abbreviated){try{commit=execFileSync('git',['rev-parse','--verify',abbreviated+'^{commit}'],{cwd:root,encoding:'utf8',stdio:['ignore','pipe','ignore']}).trim();}catch{}}}
+    if(committed(commit)){const changed=execFileSync('git',['diff-tree','--no-commit-id','--name-only','-z','-r',commit],{cwd:root}).toString().split('\0'),touched=phaseRows.filter(row=>changed.includes(relative(root,join(material,row.path)).split(sep).join('/')));if(touched.length===1&&!phaseCommits.has(touched[0].id))phaseCommits.set(touched[0].id,{commit,path});}
+   }
+   if(kind==='test'&&!isTestReceipt(record,declaredGates)){delete fingerprints[path];excludedCommandRefs.push(path);continue;}count++;
    if(kind==='test'){
     const command=record.argv.join(' '),o=node('test',command,path,'原始执行回执',{id:'test-'+hash(path).slice(0,16),summary:`退出 ${record.exit_code}；${record.timed_out?'超时；':''}${record.cancelled?'已取消；':''}原始执行记录；未分类原件另存`});
     o.src.push(source(directory,'普通/未分类命令原件目录；不计作上述测试结果'));
@@ -294,10 +303,22 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
  for(const wp of packages)for(const research of objects.filter(o=>['ires','eres'].includes(o.kind)&&o.record_ref&&(wp.adopted_refs??[]).includes(relative(task.taskPath,o.record_ref).split(sep).join('/'))))edge(sideEdges,research.id,wp.id);
  for(const t of objects.filter(o=>o.kind==='task'))for(const test of objects.filter(o=>o.kind==='test'&&o.command&&t.gate_commands?.includes(o.command)))edge(edges,t.id,test.id);
  for(const risk of objects.filter(o=>o.kind==='risk'))risk.owners=[...packages.filter(wp=>(risk.related_wp_ids??[]).includes(wp.source_id)||risk.ac_ids?.some(id=>wp.ac_ids?.includes(id))).map(o=>o.id),...objects.filter(o=>o.kind==='task'&&risk.ac_ids?.some(id=>o.ac_ids?.includes(id))).map(o=>o.id)];
+ // Existing declared originals supply claims, not a new mandatory Phase manifest protocol.
+ const acceptanceFor=acIds=>{const claims=(acIds??[]).flatMap(ac=>acceptanceClaims.get(ac)??[]),covered=(acIds??[]).filter(ac=>acceptanceClaims.has(ac));if(!claims.length)return {text:'验收结论未记录',tone:'unk'};const conflict=(acIds??[]).some(ac=>new Set((acceptanceClaims.get(ac)??[]).map(c=>c.tier)).size>1);if(conflict)return {text:'验收记录不一致',tone:'fail',claims};if(covered.length===(acIds??[]).length&&claims.every(c=>c.tier==='pass'))return {text:'验收通过（原件）',tone:'ok',claims};return {text:'验收待完成（原件：'+[...new Set(claims.map(c=>c.tier))].join('、')+'）',tone:'unk',claims};};
+ for(const t of objects.filter(o=>o.kind==='task'&&o.source_id)){
+  const phase=objects.find(o=>o.id===t.phase),entry=phaseRecords.get(phase?.source_id),record=entry?.record,commits=(record?.diffs??[]).map(d=>d.reviewed_head??d.commit??d.head).filter(committed),taskClaim=record?.task_ids?.includes(t.source_id)&&commits.length,phaseProof=phaseCommits.get(phase?.source_id),current=cursor?.task_id===t.source_id&&cursor?.phase_id===phase?.source_id;
+  const text=taskClaim?'已交付（具名记录）':phaseProof?'已提交（Phase范围）':current?'当前游标（执行位置）':'实施结论未记录',acceptance=acceptanceFor(t.ac_ids);
+  t.implementation={text,scope:taskClaim?'Task':phaseProof?'Phase':'position',...(taskClaim?{commit:commits.at(-1)}:phaseProof?{commit:phaseProof.commit}:{})};t.acceptance={text:acceptance.text};t.status={text:text+' · '+acceptance.text,tone:current?'accent':acceptance.tone};
+  if(entry)t.src.push(source(entry.path,'已记录的实施/验收结论；不从测试exit推断'));if(phaseProof)t.src.push(source(phaseProof.path,'真实Phase交付提交；不代Task逐项验收'));
+ }
+ for(const wp of packages){if(wp.status.text==='缺')continue;const a=acceptanceFor(wp.ac_ids);wp.status={text:(wp.planSummary?'方案已定':'工作包已记录')+' · '+a.text,tone:a.tone};for(const path of new Set((a.claims??[]).map(c=>c.path)))wp.src.push(source(path,'显式AC的既有验收结论'));}
+ for(const req of objects.filter(o=>o.kind==='req'&&o.status.text!=='缺'))req.status={text:'需求已记录'+(req.unresolved_refs?.length?' · 归属未取得：'+req.unresolved_refs.join('、'):''),tone:'unk'};
+ fingerprints.phase_statuses_sha256=hash(JSON.stringify(objects.filter(o=>['req','wp','task'].includes(o.kind)).map(o=>({id:o.id,status:o.status,implementation:o.implementation,acceptance:o.acceptance}))));
  const linked=new Set([...edges,...sideEdges].flat());for(const o of objects)if(!linked.has(o.id)&&!o.owners?.length&&!['req','wp','task','phase'].includes(o.kind))o.scope='task';
  const businessTitle=/^- \*\*功能名\*\*[:：]\s*(.+)$/m.exec(spec??'')?.[1]??/^#\s+(?:功能规格[:：]\s*)?(.+)$/m.exec(spec??'')?.[1]??manifest.task_id;
- const stageLabel=cursor?'写代码 · '+[cursor.phase_id,cursor.task_id].filter(Boolean).join(' / '):'当前位置未取得';
- const pageData={task:businessTitle,taskIdentity:`${manifest.project_name}/${manifest.task_id}`,stageLabel,sourceDir:material,stages:[{name:cursor?'写代码':'位置未取得',hint:cursor?[cursor.phase_id,cursor.task_id].filter(Boolean).join(' / '):'当前游标未取得',state:'now'}],hasPhase:objects.some(o=>o.kind==='phase'),objects,edges,sideEdges,phaseTasks,progress:{reqIds:objects.filter(o=>o.kind==='req').map(o=>o.id),unlinkedTaskIds:objects.filter(o=>o.kind==='task'&&!o.phase).map(o=>o.id)},changedChips:[],initialChanged:[]};
+ const stageNames={'make-decision':'定方向','build-plan':'写计划','build-code':'写代码'},stageId=positionRow?.stage,stageLabel=stageId?(stageNames[stageId]??stageId)+(cursor?' · '+[cursor.phase_id,cursor.task_id].filter(Boolean).join(' / '):''):'当前位置未取得';
+ const stages=Object.entries(stageNames).map(([id,name])=>({id,name:id+' · '+name,state:id===stageId?'now':'todo',label:id===stageId?'当前':id==='make-decision'&&decision?'已有决策材料':id==='build-plan'&&spec&&index?'已有计划材料':'阶段结论未记录',hint:id===stageId?[cursor?.phase_id,cursor?.task_id].filter(Boolean).join(' / '):'材料存在不代阶段完成'}));
+ const pageData={task:businessTitle,taskIdentity:`${manifest.project_name}/${manifest.task_id}`,stageLabel,sourceDir:material,stages,currentObjectId:objects.find(o=>o.kind==='task'&&o.source_id===cursor?.task_id)?.id??null,initialSelection:objects.find(o=>o.kind==='task'&&o.source_id===cursor?.task_id)?.id??'progress',hasPhase:objects.some(o=>o.kind==='phase'),objects,edges,sideEdges,phaseTasks,progress:{reqIds:objects.filter(o=>o.kind==='req').map(o=>o.id),unlinkedTaskIds:objects.filter(o=>o.kind==='task'&&!o.phase).map(o=>o.id)},changedChips:[],initialChanged:[]};
  return {pageData,report,decisionLogPath:decisionPath,decisionMissing:decision===null,workspaceRoot:root,taskIdentity:task.identity,sourceFingerprint:fingerprints,factsProvenance:{ref:factsPath,sha256:factsHash},excludedCommandRefs,gaps:objects.filter(o=>o.status.text==='缺').map(o=>({kind:o.kind,reason:o.title})),factsRows:rows.length,contractFacts:contract.facts,contractErrors:contract.errors};
 }
 export async function main(argv=process.argv.slice(2)){if(argv.length!==4||argv[0]!=='--task-path'||argv[2]!=='--report')throw Error('usage: --task-path <absolute root> --report <report>');return buildPageData({taskPath:argv[1],reportPath:argv[3]});}

@@ -84,7 +84,7 @@ function callerData(pageData, vocabulary, rings) {
 }
 
 // One caller-owned pair under the existing local lock. No new transaction state.
-async function publishPair(directory, htmlName, html, nodesName, nodes, preserveHistory = false, taskOutput) {
+async function publishPair(directory, htmlName, html, nodesName, nodes, preserveHistory = false, taskOutput, prepareHtml) {
   return withLock(directory, `answer-page-${digest(htmlName).slice(0, 16)}`, async () => {
     const write = (name, bytes) => taskOutput
       ? taskOutput.writeRecordAtomic(relative(taskOutput.taskPath, join(directory, name)), bytes)
@@ -109,6 +109,7 @@ async function publishPair(directory, htmlName, html, nodesName, nodes, preserve
           && typeof oldData.provenance === 'string' && oldData.provenance.includes(`生成=${oldSidecar.generated_at}`);
       } catch { /* Invalid old comparison bytes remain history; refresh reports the missing baseline. */ }
     }
+    if(prepareHtml)files[1].bytes=Buffer.from(prepareHtml(files[1].before?.bytes.toString('utf8')));
     const history = [];
     if (preserveHistory && files.some(file => file.before && !file.before.bytes.equals(file.bytes))) {
       for (const file of files) {
@@ -203,7 +204,18 @@ export async function renderAnswerPage({ taskPath, reportPath, decisionLogPath, 
     for(const part of ref.split(sep)){parent=join(parent,part);let stat;try{stat=lstatSync(parent);}catch(error){if(error.code!=='ENOENT')throw error;mkdirSync(parent);stat=lstatSync(parent);}if(stat.isSymbolicLink()||!stat.isDirectory())throw Error('output directory alias rejected');}
   }else mkdirSync(directory, { recursive: true });
   const nodesName = htmlName.replace(/\.html$/, '.nodes.json');
-  const publication = await publishPair(directory, htmlName, html, nodesName, `${JSON.stringify(sidecar, null, 2)}\n`, Boolean(derived), taskOutput);
+  const prepareHtml=derived?previousHtml=>{
+    let previous;try{previous=JSON.parse(/const DATA = (\{[\s\S]*?\n?\});/.exec(previousHtml??'')?.[1]);}catch{}
+    const comparable=o=>{const {src,contentDigest,...business}=o;return business;};
+    const old=new Map((previous?.objects??[]).map(o=>[o.id,digest(JSON.stringify(comparable(o)))]));
+    data.objects=data.objects.map(o=>({...o,contentDigest:digest(JSON.stringify(comparable(o)))}));
+    data.initialChanged=previous?data.objects.filter(o=>old.get(o.id)!==o.contentDigest).map(o=>o.id):[];
+    const principal=data.initialChanged.filter(id=>data.objects.some(o=>o.id===id&&['req','wp','task'].includes(o.kind)));
+    data.initialSelection=principal.includes(data.currentObjectId)?data.currentObjectId:principal.at(-1)??data.currentObjectId??'progress';
+    data.changedChips=data.initialChanged.map(id=>({id,label:data.objects.find(o=>o.id===id).short}));
+    const encoded=JSON.stringify(data).replaceAll('<','\\u003c').replaceAll('\u2028','\\u2028').replaceAll('\u2029','\\u2029');return html.replace(/const DATA = (\{[\s\S]*?\n?\});/,()=>`const DATA = ${encoded};`);
+  }:undefined;
+  const publication = await publishPair(directory, htmlName, html, nodesName, `${JSON.stringify(sidecar, null, 2)}\n`, Boolean(derived), taskOutput,prepareHtml);
   const htmlPath = join(directory, htmlName), nodesPath = join(directory, nodesName);
   try {
     if (typeof open !== 'function') throw Error('缺宿主浏览器能力');
@@ -224,6 +236,8 @@ export async function refreshAnswerPage({ event, open = openInSystemBrowser, ...
     if (event === 'build-code-ended' && ring10?.state !== 'skipped') throw Error('build-code-ended requires report ring 10 state=skipped; caller must supply the real report');
     if (event === 'stage-closed' && (!ring10 || ring10.state === 'skipped' || !RING_STATES.includes(ring10.state))) throw Error('stage-closed requires report ring 10 with a valid non-skipped final state; caller must supply the new report');
   }
+  options.outDir??=join(resolve(options.taskPath),'quality/evidence/cockpit');
+  options.htmlName??='overview.html';
   // Rendering owns the pair lock and returns the old observation from that same lock.
   const result = await renderAnswerPage({ ...options, open: undefined });
   const current = JSON.parse(readFileSync(result.nodesPath, 'utf8'));
@@ -241,8 +255,10 @@ export async function refreshAnswerPage({ event, open = openInSystemBrowser, ...
   const response = { ...published, event, changed, source_fingerprint: current.source_fingerprint };
   if (!changed) return { ...response, opened: false, open_reason: '无实质变化' };
   try {
-    if (await open(result.htmlPath) !== true) throw Error('宿主未打开');
-    return { ...response, opened: true, open_reason: baselineMissing ? '比较基准缺失；按首次打开' : result.hadHtml ? '实质变化' : '首次生成' };
+    const manifest=open===openInSystemBrowser?JSON.parse(readFileSync(join(options.taskPath,'task.json'),'utf8')):null;
+    const confirmation=manifest?await open(result.htmlPath,{taskIdentity:manifest.project_name+'/'+manifest.task_id,taskRoot:options.taskPath}):await open(result.htmlPath);
+    if (manifest?confirmation?.opened!==true:confirmation!==true) throw Error('宿主未打开');
+    return { ...response, ...(manifest?{open_action:confirmation.action,browser:confirmation.browser}:{}), opened: true, open_reason: baselineMissing ? '比较基准缺失；按首次打开' : result.hadHtml ? '实质变化' : '首次生成' };
   } catch (error) { return { ...response, opened: false, open_reason: `未自动打开: ${error.message}` }; }
 }
 
