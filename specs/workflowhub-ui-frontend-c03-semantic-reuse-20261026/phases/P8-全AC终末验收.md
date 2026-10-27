@@ -167,3 +167,18 @@
 - 上游证据：`quality/evidence/P1-ledger.json`、`P2-reuse.json`、`P3-counterexamples.json`、`P4-page.json`、`P5-handoff.json`、`P6-shared-segment.json`、`P7-external.json`
 - 档位词表：`runtime/evidence/acceptance-evidence-validator.mjs:6`
 - 验收资产治理：`docs/architecture/test-asset-governance-rules.md#验收标准可执行形式der-01der-11r-001fr-16ac-16`
+
+## 本次实施事实（2026-10-27；独立终审待做）
+
+- 已按上游七Phase最终交付原件逐项核入口；P7最终301绑定WH aba6ca6e/PB f2009120。八条AC在各自限定范围的首验结论及限制汇入P8三件，不改上游原件。
+- 缺AC-C03-6负例真实exit1且点名缺项；正式表结构exit0。唯一执行原件：`quality/evidence/2026-10-27-302-p8-review-ready-execution.json`。GREEN仅证明结构，不证明验收真假。
+- P1/P2历史原件与P4最终源码、P5四项当前定位共同承接；AC3静态四类与第五页面类joined；AC4原完整212/224＋修后受影响250/051/052，不冒修后新全13case。
+- 没有新代码或未闭环页面case；未重跑浏览器或全量测试。readiness记录真实当前版本及旧端口已停止，不宣称当前页面服务在线。
+- 新增三证据与负例夹具；独立Spec、Standards与一次official审查待做，尚未提交、未签整个build-code成功、未进入verify-code。
+
+## 审后收口事实（2026-10-27）
+
+- 八条AC各自在限定范围pass，原件`quality/evidence/P8-acceptance.json`；085独立全需求Spec分析、086 Standards及091正式两路completed/parseok/findings[]均已取得。provider覆盖undetermined/read_confirmed null保留，不以空findings冒完整读取。
+- 302及原384负例exit1／385结构exit0保留；本次仅补真实审查refs后必要复验`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c03-semantic-reuse-20261026/quality/tests/2026-10-27-389-p8-post-review-final-structure.json`，exit0。未重跑浏览器、无关负例或official。
+- 终末norm-sync原件`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c03-semantic-reuse-20261026/quality/evidence/norm-deltas/2026-10-27-014-p8-terminal-post-review-no-change.json`：既有P6/P7原规范已承接，无新增专业规则；WH/PB Improvements不改，历史未决不清。
+- Phase审后限定提交本卡；index/spec及上游证据不变，GLOSSARY原dirty保留，PB无变化。最终Git与P8/T014游标回读以任务库final-delivery原件为准；本段不签整个stage成功、不进入verify-code或close。
