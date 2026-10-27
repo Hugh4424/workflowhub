@@ -5538,15 +5538,16 @@
       "role": "production",
       "responsibility": "十环顺序、10×4适用矩阵、级别解析、逐环证据谓词与完成率、逐步骤事实与独立分母；纯声明/纯函数，不读文件、不写任务库",
       "owner": "N9 build-code P1；T001首写、T002追加谓词",
-      "consumer": "runtime/task/final-chain-runner.mjs 读取当前材料后调用纯判据、逐步骤选择及两个分母；tests/contract/final-chain-declarations.test.mjs 独立纯函数oracle。",
+      "consumer": "runtime/task/final-chain-runner.mjs 读取当前材料后调用纯判据、逐步骤选择及两个分母；tests/contract/final-chain-declarations.test.mjs 独立纯函数oracle。 P5 render-answer-page.mjs 只读 RING_STATES 检查 stage-closed 输入终态，不重写报告。",
       "module_consumers": [
         "runtime/task/final-chain-runner.mjs",
         "tests/contract/final-chain-declarations.test.mjs",
-        "tests/contract/evidence-manifest.test.mjs"
+        "tests/contract/evidence-manifest.test.mjs",
+        "skills/answer-as-page/scripts/render-answer-page.mjs"
       ],
       "named_data_readers": [],
       "delete_condition": "职责被经独立审查的替代完整承接且真实消费者为零时由原owner删除；冻结断言变更按TCR。后续consumer链：P2 runner → P3负例 → P5/P6页面与刷新；仅在实际接线后更新consumer",
-      "retention_basis": "本Phase唯一声明与谓词producer；矩阵不散在run-checks与页面两处；不替代现有进度/质量owner"
+      "retention_basis": "本Phase唯一声明与谓词producer；矩阵不散在run-checks与页面两处；不替代现有进度/质量owner P5 实际导入既有状态词表，避免页面另建枚举；不改十环判据或进度 writer。"
     },
     {
       "source": "runtime/task/final-chain-runner.mjs",
@@ -5958,15 +5959,17 @@
       "destination": "skills/answer-as-page/scripts/render-answer-page.mjs",
       "status": "add",
       "role": "production",
-      "responsibility": "将 caller 提供的真实报告渲染为 HTML 与既有侧车",
+      "responsibility": "认证任务自动派生或保留显式caller pageData渲染，六事件通过唯一refreshAnswerPage发布页面与侧车并按实变打开",
       "owner": "N11/P4 实施者；维护者为用户",
-      "consumer": "skills/answer-as-page/SKILL.md 的出页 caller（P4/T008 待接线）",
-      "module_consumers": [],
+      "consumer": "skills/answer-as-page/SKILL.md 出页caller；build-code/build-plan/make-decision normal 的具名事件时点",
+      "module_consumers": [
+        "skills/answer-as-page/SKILL.md"
+      ],
       "named_data_readers": [
         "specs/n11-same-condition-eval-20261022/phases/P4-流程能力缺口.md"
       ],
       "delete_condition": "只有具名职责退役、真实消费者已由经审查的替代承接且用户授权删除时移除；历史执行与失败原件保留。",
-      "retention_basis": "N11/P4 已批准 Phase 中的新增路径预登记；P1 已实读 specs/n11-same-condition-eval-20261022/phases/P4-流程能力缺口.md 的路径与调用安排。当前文件尚未实现；仅登记批准的职责和拟接线消费者，不宣称 active 或已执行。 不新增控制面、不替代任务 facts。"
+      "retention_basis": "P5实际承接原renderer；原main为唯一生产脚本入口，方法caller按六事件传入真实时点。旧N11预登记保历史，不作当前完成证据。"
     },
     {
       "source": "skills/deep-research/scripts/research-run.mjs",
@@ -6767,6 +6770,40 @@
       ],
       "delete_condition": "风险审查选择由经独立验证的替代入口承接且全部夹具与来源负例迁移后删除。",
       "retention_basis": "P1/T001，FR-REVIEW-001/002；复用review-policy唯一入口，无公共命令或schema新增。"
+    },
+    {
+      "source": "skills/answer-as-page/scripts/build-page-data.mjs",
+      "destination": "skills/answer-as-page/scripts/build-page-data.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "从认证任务材料、facts、真实diff与测试审查原件只读派生驾驶舱pageData",
+      "owner": "answer-as-page 技能维护者；维护者为用户",
+      "consumer": "skills/answer-as-page/scripts/render-answer-page.mjs 的无 pageData 路径",
+      "module_consumers": [
+        "skills/answer-as-page/scripts/render-answer-page.mjs"
+      ],
+      "named_data_readers": [
+        "specs/workflowhub-build-code-efficiency-verify-merge-20261026/phases/P5-驾驶舱自动生成与事件刷新.md"
+      ],
+      "delete_condition": "唯一消费者由经独立审查的替代承接或该技能退役时删除；保留原证据与历史页。",
+      "retention_basis": "P5/T006/T007 批准写集；已实读 renderer 的 main/renderAnswerPage 与当前技能命令。复用原认证task与发布锁，不增加进度权威。"
+    },
+    {
+      "source": "skills/answer-as-page/scripts/open-page.mjs",
+      "destination": "skills/answer-as-page/scripts/open-page.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "对已生成真实常规文件调用平台系统默认浏览器；失败明确抛出",
+      "owner": "answer-as-page 技能维护者；维护者为用户",
+      "consumer": "skills/answer-as-page/scripts/render-answer-page.mjs 的 refreshAnswerPage",
+      "module_consumers": [
+        "skills/answer-as-page/scripts/render-answer-page.mjs"
+      ],
+      "named_data_readers": [
+        "specs/workflowhub-build-code-efficiency-verify-merge-20261026/phases/P5-驾驶舱自动生成与事件刷新.md"
+      ],
+      "delete_condition": "唯一消费者由经独立审查的替代承接或该技能退役时删除；保留原证据与历史页。",
+      "retention_basis": "P5/T006/T007 批准写集；已实读 renderer 的 main/renderAnswerPage 与当前技能命令。复用原认证task与发布锁，不增加进度权威。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

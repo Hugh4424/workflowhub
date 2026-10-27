@@ -4,7 +4,9 @@
   "files": [
     "SKILL.md",
     "templates/overview-template.html",
-    "scripts/render-answer-page.mjs"
+    "scripts/render-answer-page.mjs",
+    "scripts/build-page-data.mjs",
+    "scripts/open-page.mjs"
   ],
   "sources": [
     {

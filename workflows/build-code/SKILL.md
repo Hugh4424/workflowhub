@@ -116,3 +116,9 @@ authorize只记录/消费已有授权。每次Git前用 `runtime/interface/git-a
 吸收 [mattpocock/skills](https://github.com/mattpocock/skills) 固定 commit `b0618bc436ad893b3c5e84e55fba86586d34a404` 的 `skills/engineering/implement-spec/SKILL.md`（task graph/context pointers）、`skills/engineering/tdd/SKILL.md`（纵切与独立 oracle）、`skills/engineering/code-review/SKILL.md`（Standards/Spec 分轴）及 `skills/engineering/pr/SKILL.md`（描述三段）。写作参考 `skills/productivity/writing-for-agents/SKILL.md`、`SKILL-MECHANICS.md` 与其 docs。
 
 本地偏离：当前 spec/Phase 与 task facts 代替外部 tracker、setup 命令、integration/worktree 自动编排；原十二步、冻结 oracle、授权、真实失败及独立审查保留。补充同源不冒异源，PR 实现由既有 close owner 承接，回退政策仍按本文件现条款。迭代时核上述固定子文件与上游更新/更优候选，先说明实际差异与本地偏离，再决定采用；不自动追 HEAD。方法接收真实项目材料、允许写目标和宿主能力，不绑定本任务路径或账号。
+
+## 驾驶舱刷新
+
+每 Phase 审后提交与 norm-sync 后，由本阶段主会话在同一事件现场调用 answer-as-page 的共同入口，event 为 `phase-closed`；使用当前认证任务根、实际 run-checks stdout 原件和同名任务库输出页。无需 caller 手拼 pageData，失败保原件与「未自动打开」真实原因。尚未到真实时点就保 incomplete 与负责主会话，不能用手动预演冒事件触发。
+
+最后 Phase 收口后同入口用 `build-code-ended` 刷新环 1–9，环 10 只取报告 skipped；stage-close 完成后由原调用方用 `stage-closed` 与新报告补终态。六事件、派生/比较与旧件保全规则只在 skills/answer-as-page/SKILL.md「驾驶舱自动派生与事件」维护；页面不写 task facts，不代当前阶段事实。

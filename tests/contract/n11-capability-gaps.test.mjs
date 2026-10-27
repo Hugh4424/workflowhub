@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { existsSync, readFileSync, writeFileSync, mkdtempSync, mkdirSync, realpathSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdtempSync, mkdirSync, realpathSync, rmSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -149,4 +149,20 @@ describe('P4-S2 full documented CLI chain',()=>{
 
  const p=spawnSync(process.execPath,[join(root,'tools/cli/task-close.mjs'),'execute','--project=workflowhub','--task='+id,'--task-path='+task.taskPath,'--plan-ref='+prepared.plan_ref,'--confirmation-ref='+confirmed.confirmation_ref,'--until=archive'],{cwd:wt,encoding:'utf8'});expect(p.status,p.stderr).toBe(0);const result=JSON.parse(p.stdout);expect(result.archive).toBe(true);expect(result.merge).toBe(true);expect(result.readback.facts.archive).toBe(true);expect(result.readback.facts.merge).toBe(true);expect(result.stopped_at).toBe('archive');expect(git(repo,['ls-tree','-r','--name-only','HEAD','--','specs/archive/'+id])).toContain('specs/archive/'+id+'/spec.md');expect(readFileSync(join(repo,'specs/archive',id,'spec.md'),'utf8')).toBe('# Exact fixture material\n');expect(readFileSync(join(wt,'specs',id,'spec.md'),'utf8')).toBe('# Exact fixture material\n');expect(existsSync(wt)).toBe(true);const status=cli('status',['--plan-ref='+prepared.plan_ref]);expect(status.facts.archive).toBe(true);expect(status.facts.merge).toBe(true);expect(status.facts.push).not.toBe(true);expect(status.facts.cleanup).not.toBe(true);expect(git(bare,['rev-parse','main'])).not.toBe(git(repo,['rev-parse','main']));
  },15000);
+});
+
+// P5 append-only: original ORACLE-N11-PAGE-OPEN true/throw/non-true assertions remain intact.
+describe('ORACLE-N11-PAGE-OPEN event default system opener',()=>{
+ it('runs the actual default opener process and preserves its nonzero failure',async()=>{
+  const dir=temp(),repo=join(dir,'repo'),work=join(dir,'work'),store=join(dir,'store');mkdirSync(repo);mkdirSync(store);
+  const git=(cwd,args)=>execFileSync('git',args,{cwd,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();git(repo,['init','-q','-b','main']);git(repo,['config','user.name','Test']);git(repo,['config','user.email','test@example.invalid']);writeFileSync(join(repo,'baseline'),'real');git(repo,['add','.']);git(repo,['commit','-qm','baseline']);const baseline=git(repo,['rev-parse','HEAD']);git(repo,['worktree','add','-qb','cockpit-default-open',work]);
+  const task=await createTask({storageRoot:store,manifest:{schema_version:'1.0.0',project_name:'Demo',task_id:'cockpit-default',created_at:'2026-10-27T00:00:00Z',target_repo_root:repo,workspace_mode:'existing',workspace_root:work,baseline_commit:baseline,activation_cohort:'post',execution_mode:'per_invocation',record_model:'vnext-single-write',issue_ids:[],inputs:{}}});
+  const material=join(work,'specs/cockpit-default');mkdirSync(material,{recursive:true});writeFileSync(join(material,'decision-log.md'),'# 目标\nU-001 保留真实打开结果\n');writeFileSync(join(material,'spec.md'),'# 功能需求\nFR-ONE\n## Appendix A\nAC-ONE\n');
+  const reportPath=join(dir,'report.json');writeFileSync(reportPath,JSON.stringify({task_id:'cockpit-default',rings:[{ring:10,name:'提交 PR',state:'skipped'}]}));const bin=join(dir,'bin');mkdirSync(bin);const log=join(dir,'opened-path');const command=process.platform==='darwin'?'open':'xdg-open',script=join(bin,command);
+  writeFileSync(script,`#!/bin/sh\nprintf '%s\\n' "$1" > "$COCKPIT_OPEN_LOG"\nexit 0\n`);chmodSync(script,0o700);
+  const module=join(root,'skills/answer-as-page/scripts/render-answer-page.mjs');const code=`import {refreshAnswerPage} from ${JSON.stringify(pathToFileURL(module).href)}; console.log(JSON.stringify(await refreshAnswerPage(JSON.parse(process.argv[1]))));`;
+  const invoke=htmlName=>JSON.parse(execFileSync(process.execPath,['--input-type=module','-e',code,JSON.stringify({taskPath:task.taskPath,reportPath,outDir:join(dir,'pages'),htmlName,event:'phase-closed'})],{encoding:'utf8',env:{...process.env,PATH:bin+':'+process.env.PATH,COCKPIT_OPEN_LOG:log}}));
+  const opened=invoke('first.html');expect(opened.opened).toBe(true);expect(readFileSync(log,'utf8')).toBe(opened.htmlPath+'\n');
+  writeFileSync(script,'#!/bin/sh\necho controlled-process-failure >&2\nexit 9\n');const failed=invoke('failed.html');expect(failed.opened).toBe(false);expect(failed.open_reason).toContain('未自动打开');expect(failed.open_reason).toContain('exit=9');expect(existsSync(failed.htmlPath)).toBe(true);
+ });
 });

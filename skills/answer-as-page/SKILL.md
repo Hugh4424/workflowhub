@@ -63,14 +63,31 @@ caller给真实问题、材料/任务事实/测试/审查/真实改动清单、�
 
 生成入口由 caller 在「共同刷新」执行，唯一消费者是阶段主会话与 verify-code，owner 为本技能维护者；等价宿主原生入口接管且正文改指它，或技能退役时删除薄脚本。
 
-1. 运行 `node skills/answer-as-page/scripts/render-answer-page.mjs --task-path <认证任务根> --report <run-checks stdout 报告路径> --out-dir <证据目录> --html <名称>.html --data <caller完整DATA.json>`。脚本只消费已存 `rings[]` 与 decision-log，不代跑检查。
-2. 用宿主浏览器能力打开生成的 HTML；模块 caller 可注入 `open`，CLI 缺宿主能力时明确返回 `opened:false`，不得据生成成功宣称已打开。
+1. 事件 caller 在真实时点运行 `node skills/answer-as-page/scripts/render-answer-page.mjs --task-path <认证任务根> --report <run-checks stdout 报告路径> --out-dir <证据目录> --html <名称>.html --event <下表事件>`。脚本只消费已存报告，不代跑检查；无 `--data` 时从认证任务自动派生。原显式 caller 可保留 `--data <完整DATA.json>` 并走 `renderAnswerPage`，事件入口只取当前任务真实材料，不接手拼数据。
+2. `refreshAnswerPage` 首次或实质变化经 `open-page.mjs` 调系统默认浏览器；模块测试可注入 `open`。同指纹与逐类摘要不变写「无实质变化」，不重复打开。页在而侧车缺失/非法写「比较基准缺失」，按首次处理。打开失败保页面并返回 `opened:false`、`open_reason=未自动打开: 真实原因`；生成成功不冒已打开。原 `renderAnswerPage` 显式 caller 的 `open` true/抛错/非 true 语义不变。
 3. 读回 HTML 与 `.nodes.json`，核对四个键与 `nodes[].stable_id/content_digest`；未自动打开时写「未自动打开」与原因。
 
-本入口由 caller 从当前材料、facts、实际diff与执行原件提供完整 `pageData`（CLI `--data`），含真实task/taskIdentity/stageLabel/stages、15类词汇内有源objects、edges/sideEdges、phaseTasks及progress；保持原类型、来源和阶段语义，不为凑齐词汇造实例。缺完整输入明确报错。`rings[]` 只作为检查环与侧车摘要，不能代任务数据、变造acc或req。输出对在既有本地锁内先读旧件/拒目录及别名，再安全写并读回；次发布失败恢复本次实际改动，遇并发新身份或字节保留新件并明确报告恢复不完整，不覆盖未知版本。
+原显式数据入口由 caller 从当前材料、facts、实际diff与执行原件提供完整 `pageData`（CLI `--data`），含真实task/taskIdentity/stageLabel/stages、15类词汇内有源objects、edges/sideEdges、phaseTasks及progress；保持原类型、来源和阶段语义，不为凑齐词汇造实例。缺完整输入明确报错。`rings[]` 只作为检查环与侧车摘要，不能代任务数据、变造acc或req。输出对在既有本地锁内先读旧件/拒目录及别名，再安全写并读回；次发布失败恢复本次实际改动，遇并发新身份或字节保留新件并明确报告恢复不完整，不覆盖未知版本。
 
 CLI 的认证任务位置由 `openTask` 与 `openCurrentTaskWorkspace` 既有owner读回；regular任务不得把target_repo_root主仓当当前任务材料路径，缺registration或身份不符明确失败，不回落main。
 
 完整caller须保模板实际消费字段：每节点有源title与展示派生short（可同title），phase/risk有label；stages有name/hint/state，changedChips/initialChanged是首版可为空的展示偏好数组，提供items/plan时须数组。缺必读字段生成前明确拒绝；15类词汇无源不凑实例。生成件的HTML title从真实task做HTML escape后替换，protected模板原文件字节不改，不注入脚本。
 
 输入边界：业务对象 ID 和所有引用使用安全 ASCII 标识符 `[A-Za-z0-9][A-Za-z0-9_.:-]*`，拒绝 `__proto__`、`prototype`、`constructor`；业务对象不得占用 `ring:`。kind 使用模板已知类型；stage.state 仅 `done/now/todo`，status 若提供须为非空对象，text 为字符串，tone 仅 `ok/accent/fail/unk`。phase、边、phaseTasks、progress 引用须对应真实已声明对象与类型关系；initialChanged 和 changedChips.id 允许已声明业务对象或当前报告实际存在的 ring ID，不能引用未出现的 ring。非法输入在 HTML 与侧车落盘前明确报错。
+
+## 驾驶舱自动派生与事件
+
+`build-page-data.mjs` 从 task.json 认证当前 linked worktree，读取 decision-log/spec/纯指针索引与其 Phase 卡、facts、真实 `git diff --name-only -z <baseline_commit>..HEAD`、测试审查与研究原件。15 类来源沿 P5 的来源表：req 沿当前材料与既有需求索引的真实引用读取 raw-requirements 原件，dec/goal/wp 取 decision-log，spec/acc/risk 取 spec，phase/task 取索引/卡/facts，file 取 diff，ires/eres 取研究与补充材料，test/review 取原件，pr 取报告第十环。需求索引仅导航，不代原文、不新建索引；原始需求原件缺失时 req 标缺并保留合法决定来源。外部研究仅认可定位外部来源指针，标题或内部清单保持缺；有 URL 不冒已抓取、已核权利或原文质量通过。读取目录根、递归目录与 task 原件均沿真实 task 边界拒绝 alias/越界，不吞成缺。每类有非空来源指针；缺项写「缺：具体原件」，来源指向存在的任务元数据并标明缺什么；未发生写「尚未产生＋到时补什么」。不从示例造事实，不写 task facts。
+
+十环原样取报告；侧车仍四键，派生路径的 source_fingerprint 含材料摘要，nodes 只含 stable_id/content_digest，追加 kind:<kind> 摘要。 测试数量仅含可识别运行器或当前材料 Phase 字面 gate 的执行收据；普通命令与未分类验证不计数，原件目录仍给来源，不据此声明所有测试已覆盖或通过。facts 原字节 hash 只作溯源，实变只取页面消费的当前 phase/task 游标位置；纯观察回执、时间和 source/evidence 指针不当业务进展。发布沿同名本地锁串行；替换前将读到的旧 HTML 与旧侧车分别以原字节摘要命名保留，同字节复用。新发布失败仍沿原恢复规则保未知新版本。页面与历史均在调用方任务库输出目录，仓库模板保持原组件与视觉。
+
+| 事件 | 真实 caller 时点 |
+| --- | --- |
+| `skeleton-confirmed` | make-decision 骨架确认；复杂任务 build-plan 开工按已确认骨架补首次生成 |
+| `package-converged` | 每工作包进入 decision-log 收敛后 |
+| `direction-scope-acceptance-changed` | 用户确认的方向/范围/验收实变进入材料；plan 定稿的实变 |
+| `phase-closed` | build-code 每 Phase 审后提交与 norm-sync 后 |
+| `build-code-ended` | 最后 Phase 收口后，报告环 1–9 按事实、第 10 环为 skipped |
+| `stage-closed` | stage-close 完成后，原调用方以新报告补第 10 环终态 |
+
+事件由上述主会话时点调用同一 CLI；没有常驻监听、定时器或第二生产调用者。真实 source→调用→生成/打开原件才证明触发；命令存在和方法文字不证明事件已发生。`build-code-ended` 遇报告第十环不是 skipped 明确拒绝，不改报告；stage-close 未发生时不预演真实终态。 `stage-closed` 在发布前拒绝缺第十环或仍为 skipped 的旧报告；合法非 skipped 状态原样显示，不把 incomplete/unavailable 改成 completed。浏览器验收沿 isolated-browser-qa 的隔离 HTTP 路线，系统打开退出与隔离 DOM/截图分别保事实。

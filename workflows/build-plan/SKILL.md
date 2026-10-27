@@ -57,3 +57,7 @@ confirm 发生在 make-decision、build-plan 和 build-prd 收口，保留用户
 参考 [mattpocock/skills](https://github.com/mattpocock/skills) 固定 commit `b0618bc436ad893b3c5e84e55fba86586d34a404` 的 `skills/engineering/to-spec/SKILL.md`、`to-tickets/SKILL.md` 与 `tdd/SKILL.md`（由 spec-specify/spec-plan 原 owner 承接）；写作来源为 `skills/productivity/writing-for-agents/SKILL.md`、`SKILL-MECHANICS.md` 与 docs。固定来源是方法依据，不证明本次已获得行为效果。
 
 本地保当前材料 owner、原步骤、真实用户回复、原失败与独立审查；只吸收适用方法，拒绝外置 tracker、GitHub ticket API、宿主 setup/Skill 硬依赖和第二进度权威。旧 bridge/外部 session 只读保历史 provenance，不作 active 执行、复盘、交接或 close 的门。方法接收真实项目材料、允许路径与宿主已批准的能力，缺源或能力如实报错，不绑定任务绝对路径或账号。迭代时核上述具名子文件的更新及更优候选，说明真实源差、本地偏离与采用理由，不自动追 HEAD。
+
+## 驾驶舱交接
+
+开工读取已确认骨架后，由本阶段主会话按 skills/answer-as-page/SKILL.md 共同入口用 `skeleton-confirmed` 补首次生成，传认证任务根、实际报告与任务库输出路径，不手拼 pageData。plan 定稿有方向/范围/验收实变时，同入口用 `direction-scope-acceptance-changed`；只改措辞/指针不触发。环状态只取报告，本阶段不预填完成；交给 build-code 后逐 Phase 审后提交与 norm-sync 的事件由该 caller 接手。旧页/侧车、失败与未自动打开沿同一技能规则保留。

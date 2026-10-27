@@ -103,7 +103,7 @@ description: 普通任务在定方向内完成方案审、一次确认、实施�
 
 **进入下一步条件**：收口执行者再读级别与路线与真实测试/审查原件，确认stage随实际make-decision；交接可独立读回，物理交付与反思分开，失败/未执行/清理分别说明。
 
-物理交付/PR完成后在同一出页条件下按 skills/answer-as-page/SKILL.md 同一共同接口第二次核对并刷新页面与同名侧车、保旧件；仍属make-decision，不新增verify-code阶段或审查。环10只取报告事实，无真实交付声明不伪填PR，声明待交付时记skipped。
+物理交付/PR完成后在同一出页条件下按 skills/answer-as-page/SKILL.md 同一共同接口用 `stage-closed` 与新报告第二次核对并刷新页面与同名侧车、保旧件；仍属make-decision，不新增verify-code阶段或审查。环10只取报告事实，无真实交付声明不伪填PR，声明待交付时记skipped。
 
 ## 技能清单
 
@@ -149,7 +149,7 @@ description: 普通任务在定方向内完成方案审、一次确认、实施�
 
 到达出页条件时调用 skills/answer-as-page/SKILL.md 原方法：三个以上相关概念、分支、多维对比或层级关系适合出页；没有这些信息形状时记录未触发理由。符合条件才由本流程主会话作为生成 owner 调用，不以示例数据或产物存在冒真实生成。
 
-出页后四类更新时点为：骨架确认后、每细化完一包、方向/范围/验收实质变化、Phase 定稿或收口前；只改措辞或指针不生成。路径由调用者指定，默认任务库证据区 overview-<date>.html 与同名 .nodes.json；同一页面 owner 串行更新，先读旧页/侧车，安全原子写，中断保旧件与真实失败。
+出页后骨架确认用 `skeleton-confirmed`，每包进入 decision-log 收敛后用 `package-converged`，用户确认的方向/范围/验收实变与 Phase 定稿实变用 `direction-scope-acceptance-changed`；Phase 审后提交与 norm-sync 后用 `phase-closed`。由本流程主会话在真实时点调用 answer-as-page 同一事件入口，不手拼 pageData；只改措辞或指针不生成。路径由调用者指定，默认任务库证据区 overview-<date>.html 与同名 .nodes.json；同一页面 owner 串行更新，先读旧页/侧车，安全原子写，中断保旧件与真实失败。
 
 页面按skills/answer-as-page/SKILL.md 原 owner 的当前页面结构读取当前材料、task facts、测试、审查、真实改动；缺环标「缺」，未产生写「尚未产生＋到时会填什么」。顶部显示 decision-log 的 sha256/字节/行数指纹、时间与当前步骤。页面是只读派生，不新增进度账本，不反写任务事实；来源、比较基准或工具缺失如实记录。生成/QA 仍沿 answer-as-page 与 isolated-browser-qa 的真实场景；未生成不报页面通过。
 
