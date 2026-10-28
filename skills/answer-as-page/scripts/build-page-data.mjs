@@ -326,7 +326,15 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
  // Existing declared originals supply claims, not a new mandatory Phase manifest protocol.
  const acceptanceFor=acIds=>{const claims=(acIds??[]).flatMap(ac=>acceptanceClaims.get(ac)??[]),covered=(acIds??[]).filter(ac=>acceptanceClaims.has(ac));if(!claims.length)return {text:'验收结论未记录',tone:'unk'};const conflict=(acIds??[]).some(ac=>new Set((acceptanceClaims.get(ac)??[]).map(c=>c.tier)).size>1);if(conflict)return {text:'验收记录不一致',tone:'fail',claims};if(covered.length===(acIds??[]).length&&claims.every(c=>c.tier==='pass'))return {text:'验收通过（原件）',tone:'ok',claims};return {text:'验收待完成（原件：'+[...new Set(claims.map(c=>c.tier))].join('、')+'）',tone:'unk',claims};};
  for(const t of objects.filter(o=>o.kind==='task'&&o.source_id)){
-  const phase=objects.find(o=>o.id===t.phase),entry=phaseRecords.get(phase?.source_id),record=entry?.record,commits=(record?.diffs??[]).map(d=>d.reviewed_head??d.commit??d.head).filter(committed),taskClaim=record?.task_ids?.includes(t.source_id)&&commits.length,phaseProof=phaseCommits.get(phase?.source_id),taskProof=taskCommitProofs.get(t.source_id),current=cursor?.task_id===t.source_id&&cursor?.phase_id===phase?.source_id;
+  const phase=objects.find(o=>o.id===t.phase),entry=phaseRecords.get(phase?.source_id),record=entry?.record;
+  const diffs=record?.diffs;
+  let commitClaims=[];
+  if(Array.isArray(diffs))commitClaims=diffs.map(d=>d.reviewed_head??d.commit??d.head);
+  else if(diffs!==undefined&&diffs!==null){
+   if(typeof diffs!=='object'||typeof diffs.reviewed_implementation_commit!=='string')throw Error('Phase evidence diffs invalid: '+entry.path);
+   commitClaims=[diffs.reviewed_implementation_commit];
+  }
+  const commits=commitClaims.filter(committed),taskClaim=record?.task_ids?.includes(t.source_id)&&commits.length,phaseProof=phaseCommits.get(phase?.source_id),taskProof=taskCommitProofs.get(t.source_id),current=cursor?.task_id===t.source_id&&cursor?.phase_id===phase?.source_id;
   const text=taskClaim?'已交付（具名记录）':taskProof?'已提交（具名Task原件）':phaseProof?'已提交（Phase范围）':current?'当前游标（执行位置）':'实施结论未记录',acceptance=acceptanceFor(t.ac_ids);
   t.implementation={text,scope:taskClaim||taskProof?'Task':phaseProof?'Phase':'position',...(taskClaim?{commit:commits.at(-1)}:taskProof?{commit:taskProof.commit}:phaseProof?{commit:phaseProof.commit}:{})};t.acceptance={text:acceptance.text};t.status={text:text+' · '+acceptance.text,tone:current?'accent':acceptance.tone};
   if(entry)t.src.push(source(entry.path,'已记录的实施/验收结论；不从测试exit推断'));if(phaseProof)t.src.push(source(phaseProof.path,'真实Phase交付提交；不代Task逐项验收'));if(taskProof)t.src.push(source(taskProof.path,'真实提交与具名Task实施路径逐字绑定；不代验收'));

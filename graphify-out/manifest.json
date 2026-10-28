@@ -11436,9 +11436,9 @@
     "semantic_hash": ""
   },
   "skills/answer-as-page/scripts/build-page-data.mjs": {
-    "mtime": 1793137383.875716,
-    "seen": 1793138272.039993,
-    "ast_hash": "84272cb93275a74a36511ed728030eaa",
+    "mtime": 1793145718.0813508,
+    "seen": 1793145762.784394,
+    "ast_hash": "fc2e0e9678db87910dee001e47007448",
     "semantic_hash": ""
   },
   "skills/answer-as-page/scripts/open-page.mjs": {
@@ -11496,9 +11496,9 @@
     "semantic_hash": ""
   },
   "tests/contract/cockpit-autogen.test.mjs": {
-    "mtime": 1793137348.0310752,
-    "seen": 1793138272.040003,
-    "ast_hash": "ea7306aa2191d78749c1306c42862311",
+    "mtime": 1793145431.675799,
+    "seen": 1793145762.7843971,
+    "ast_hash": "c2b1eca994a4035e428e280645e56119",
     "semantic_hash": ""
   },
   "tests/contract/cockpit-event.test.mjs": {

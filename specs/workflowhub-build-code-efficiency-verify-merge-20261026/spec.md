@@ -1120,3 +1120,8 @@ P12写集9→11最小接通默认public review producer的source原字节保全�
 此时唯一实际JSON final-report与实际全gate、原P4阶段末一次成本/统一提醒、原P5 ended/closed、两条独立BOUND仍按真实后置顺序执行，不在材料冻结时预签。root继续已有授权内工作；后置证明只写现任务证据，原报告保生成时事实，最终独立原件/人答并列闭合，不机械生成第二报告。源码修复可用不等stage完成；Git交付、release与物理close分别读实际事实。知识更新由唯一图owner处理，542候选失败及原件保留，受阻来源不prune/不盖成功；文档prompt未取仍unavailable，不由本段宣称代码/文档全量更新。
 
 P12必要主线C03整合主动写集11→16，精确补AGENTS/catalog/frontend-component-quality/reuse四原owner路径及ui-skill-contract既有测试（独立保护分类＋精确TCR批准后才可改）。目标PRD与11件archive只保main继承原bytes，不属本Task新feature/主动source；完整最终diff仍保覆盖。原报告/清单/上游Phase与AC判据不改，无外部采用/付费或新状态/gate/账本；现原C03两链方法不强加本Task额外对象台账，权利unknown保原源。完整范围和归口见P12卡同名节。
+
+
+### P12真实phase-closed读取故障的有界修复登记
+
+603/610真实执行发现当前builder只按array读取既有P12清单的合法diffs对象。原P5本轮会话不可用，none作者cockpit_current_fix在本Phase既有两路径实现兼容，481请求/485初次源码与612目标RED、613/614作者执行结果见P12卡晚到故障节。独立615虽7/7仍保487旧array可选链吞null发现；现原作者去三处可选链，独立 `quality/evidence/2026-10-28-299-p12-diffs-object-final-independent-result.json` 已核原问题fixed、无open finding，004为7/7、005当前stage-position为3/3、exit0。此有限修复证明不冒COCK终末AC、实际页面或stage成功。16主动source范围、AC判据、旧139与旧manifest不变。此次真实源码修复后的scope/报告应保旧另存正确内容，区别于自然pending后置事实；当前index已含两路径故不改。最终norm按独立已验证结果核现条款，不新增规则/门/账本。

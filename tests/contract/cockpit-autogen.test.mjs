@@ -840,3 +840,17 @@ test('ORACLE-COCKPIT-GEN planning-only commit: three material edits never prove 
 test('ORACLE-COCKPIT-GEN circled Task actions: all seven bodies survive embedded numeric parentheses and semicolons',async()=>{
  const f=await sourceCardFixture(),phase=join(f.material,'phases/P1-cards.md'),expected=['①写对账测试，保留 ORACLE-RESULT-002（2） 原义；不把编号当新步骤。','②消费可达性原件 RESULT002；缺件保持缺。','③消费真实计数 RESULT003；不得补签。','④登记现有测试 owner 与 consumer。','⑤保存最终 JSON 原件；路径与 hash 逐字回读。','⑥独立读取该 ref，保留参数 sample(3） 与失败输出。','⑦交关闭 reader；本步骤不提前归档。'];writeFileSync(phase,readFileSync(phase,'utf8').replace('1）读取真实失败原件。\n2）核对保存后的来源指针。',expected.join('')));const {buildPageData}=await import('../../skills/answer-as-page/scripts/build-page-data.mjs'),built=await buildPageData(f),target=built.pageData.objects.find(o=>o.source_id==='T001');expect(target.items).toEqual(expected);expect(target.summary).toContain(expected[0]);expect(target.summary).toContain(expected[6]);expect(target.src.some(s=>s.path===phase)).toBe(true);
 });
+
+for(const variant of ['object','array','unreachable','invalid-string','invalid-object'])test('phase diffs shape: '+variant,async()=>{
+ const f=await sourceCardFixture(),task=openTask(f.taskPath,{projectName:'Demo',taskId:'cockpit'}),work=join(f.material,'../..'),ref='quality/evidence/observed-phase-diffs.json';
+ writeFileSync(join(work,'owned-T001.mjs'),'export const result=1;\n');execFileSync('git',['add','.'],{cwd:work});execFileSync('git',['commit','-qm','actual owned implementation and materials'],{cwd:work});
+ const head=execFileSync('git',['rev-parse','HEAD'],{cwd:work,encoding:'utf8'}).trim();
+ const diffs=variant==='array'?[{commit:head}]:variant==='invalid-string'?'invalid':variant==='invalid-object'?{paths:[]}:{base_commit:head,reviewed_implementation_commit:variant==='unreachable'?'f'.repeat(40):head,paths:['owned-T001.mjs']};
+ await task.createRecord(ref,JSON.stringify({phase_id:'P1',task_ids:['T001'],diffs}));
+ const phase=join(f.material,'phases/P1-cards.md');writeFileSync(phase,readFileSync(phase,'utf8').replace('quality/tests/cards.output',ref));
+ if(variant.startsWith('invalid')){await expect(renderAnswerPage(f)).rejects.toThrow('Phase evidence diffs invalid: '+join(f.taskPath,ref));return;}
+ const result=await renderAnswerPage(f),d=data(result.htmlPath),owned=d.objects.find(o=>o.source_id==='T001'),other=d.objects.find(o=>o.source_id==='T002');
+ if(variant==='unreachable'){expect(owned.implementation.text).not.toContain('已交付');expect(owned.implementation.commit).toBeUndefined();}
+ else{expect(owned.implementation.text).toBe('已交付（具名记录）');expect(owned.implementation.commit).toBe(head);}
+ expect(other.implementation.text).not.toBe('已交付（具名记录）');expect(owned.acceptance.text).toBe('验收结论未记录');
+});
