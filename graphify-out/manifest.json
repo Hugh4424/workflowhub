@@ -3924,9 +3924,9 @@
     "semantic_hash": ""
   },
   "tests/contract/ocr-production-cutover.test.mjs": {
-    "mtime": 1793137951.2055585,
-    "seen": 1793138272.040013,
-    "ast_hash": "dcc219dcd5d0588596dfe64ed2a54663",
+    "mtime": 1793151208.4731534,
+    "seen": 1793151397.882432,
+    "ast_hash": "20351a2e45ed18f22f7224e3924e3baf",
     "semantic_hash": ""
   },
   "tests/contract/ocr-review-contract-bundle.test.mjs": {
@@ -11490,9 +11490,9 @@
     "semantic_hash": ""
   },
   "tests/contract/check-stage-steps.test.mjs": {
-    "mtime": 1793027960.4495382,
-    "seen": 1793138272.040002,
-    "ast_hash": "7e14d421b349ff1df8f637db12fdb7e4",
+    "mtime": 1793151208.4735212,
+    "seen": 1793151397.882435,
+    "ast_hash": "6d068fa201727392de0a790b71fabde1",
     "semantic_hash": ""
   },
   "tests/contract/cockpit-autogen.test.mjs": {

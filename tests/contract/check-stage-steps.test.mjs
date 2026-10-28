@@ -42,7 +42,7 @@ describe('ORACLE-P1-STAGE-STEPS checker', () => {
       put(task, 'facts.jsonl', '');
       put(materials, 'decision-log.md', '# Complete decision body\n## 级别与路线\n- 推荐级别：复杂\n## 工作包与决定\n' + firstDecision + '清单：`quality/evidence/decision-log-refs/controlled-convergence-checklist.md`\n');
       put(materials, 'phases/index.md', '# Pure pointer index\n');
-      for (const stage of ['make-decision', 'build-plan', 'build-code', 'verify-code', 'build-prd']) {
+      for (const stage of ['make-decision', 'build-plan', 'build-code', 'build-prd']) {
         put(repo, `workflows/${stage}/steps.json`, readFileSync(resolve(`workflows/${stage}/steps.json`), 'utf8'));
       }
       put(task, 'quality/evidence/decision-log-refs/controlled-convergence-checklist.md', validOne);
@@ -98,8 +98,8 @@ describe('ORACLE-P1-STAGE-STEPS checker', () => {
       expect(incompleteText).toContain('1 controlled：待收敛');
       expect(incompleteText).toContain('  边界：缺项；present=false');
       expect(incompleteText).toContain('收敛 complete=false；gaps=["1 controlled"]');
-      expect(JSON.parse(second.stdout).stages[4]).toMatchObject({ mapping: '未配置' });
-      expect(JSON.parse(second.stdout).stages[4].steps[0]).toMatchObject({ judgment: '映射未配置', evidence_location: null });
+      expect(JSON.parse(second.stdout).stages[3]).toMatchObject({ mapping: '未配置' });
+      expect(JSON.parse(second.stdout).stages[3].steps[0]).toMatchObject({ judgment: '映射未配置', evidence_location: null });
       const decisionPath = join(materials, 'decision-log.md');
       const decision = readFileSync(decisionPath, 'utf8');
       const ref = 'quality/evidence/decision-log-refs/controlled-convergence-checklist.md';
@@ -125,12 +125,12 @@ describe('ORACLE-P1-STAGE-STEPS checker', () => {
       expect(JSON.parse(invoke().stdout).convergence.complete).toBe(false);
     } finally { rmSync(root, { recursive: true }); }
   });
-  it('reports the actual five mapping manifests independently of evidence availability', () => {
+  it('reports the actual four mapping manifests independently of evidence availability', () => {
     expect(checker.runStageStepsCheck, 'report checker public entry is available').toBeTypeOf('function');
     const report = checker.runStageStepsCheck({ taskPath: resolve('/nonexistent/p1-controlled-task'), repoRoot: resolve('.') });
     expect(report.stages.map(row => [row.stage, row.mapping, row.steps.length])).toEqual([
       ['make-decision', '已配置', 15], ['build-plan', '已配置', 12],
-      ['build-code', '已配置', 12], ['verify-code', '已配置', 8], ['build-prd', '已配置', 6],
+      ['build-code', '已配置', 12], ['build-prd', '已配置', 6],
     ]);
     expect(report.errors.join('\n')).toContain('task.json');
     expect(report.stages[0].steps[7]).toMatchObject({ judgment: '未留痕' });
@@ -233,9 +233,9 @@ function assertP1TextContract(methods, template) {
 // P1-TEXT-GUARD-END
 
 describe('P1 execution discipline text contract', () => {
-  const methods=Object.fromEntries(['make-decision','build-plan','build-code','verify-code'].map(stage=>[stage,readFileSync(resolve(`workflows/${stage}/SKILL.md`),'utf8')]));
+  const methods=Object.fromEntries(['make-decision','build-plan','build-code'].map(stage=>[stage,readFileSync(resolve(`workflows/${stage}/SKILL.md`),'utf8')]));
   const template=readFileSync(resolve('skills/decision-log/templates/decision-log-template.md'),'utf8');
-  it('reads the real four methods and the single table-external template pointer', () => {
+  it('reads the real three methods and the single table-external template pointer', () => {
     expect(()=>assertP1TextContract(methods,template)).not.toThrow();
   });
   it('rejects each removed discipline and each wrong stage command', () => {

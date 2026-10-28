@@ -1133,3 +1133,8 @@ P12必要主线C03整合主动写集11→16，精确补AGENTS/catalog/frontend-c
 
 
 用户312通用消费补证：独立330/044证明原builder最小no-codecursor修复及两个不同官方Task的public无--data生成；最终template a823、builder d2e、test8d77及方法ee81的具体hash与独立final-qa SHA8398d762fce6c8d65c15b20329834ac7639b40da8cf41c62b2174e96f56854e8回P12卡。root334保051/052公共重生与单件HTML/nodes原件；不搬当前Task样本作为通用保证。324现source/caller与分发链要求合并更新primary后symlink未来读取才生效，复制安装/既载缓存另需显式更新，当前PR19未merge；不新增自更新机制。独立视觉未覆盖完整WCAG/性能/穷举键盘或全部最终A/current重跑，图部分历史/文档缺口与原失败保真；不据本段签stage完成或授Git。
+
+
+### P12终末测试消费者修复范围（18→19，独立受影响结果已取得）
+
+终末独立实读发现cutover仍把退役verify-code身份期待为外部OCR，以及check-stage-steps测试fixture/collection仍读取已删除verify-code步骤/方法，后者整文件ENOENT；main继承同字节不免除本任务删除入口所影响的真实consumer。P12仅新增已有 `tests/contract/check-stage-steps.test.mjs`，原 `tests/contract/ocr-production-cutover.test.mjs` 已在允许集合，19主动source路径沿P12契约头与index。当前替代writer只持两测试；精确冻结断言迁移须具体TCR及独立核准，不删失败断言/弱化本意，当前有效build-prd规划例外保留，不机械删为正式三阶段。346精确TCR经独立003先核准后apply，独立354原件核085 cutover2/2（11非选中）、086 steps受影响整文件26/26 exit0且无open；具体hash和完整保护条件回P12同名节。原081目标断言失败、082 collection ENOENT分别保留，不冒全仓回归或新外审；当前规范已覆盖，无新增专业条款。详细原故障/owner/边界回P12同名节。不改runtime/方法/HTML、原AC、旧报告002/manifest或已记成本，不重视觉；最终全diff数量以实际源核，不抄旧count，不新增控制面。

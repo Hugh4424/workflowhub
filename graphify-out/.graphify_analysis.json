@@ -14194,7 +14194,7 @@
     {
       "type": "bridge_node",
       "question": "Why does `vitest` connect `Community 0` to `Community 1`, `Community 2`, `Community 3`, `Community 4`, `Community 5`, `Community 6`, `Community 8`, `Community 9`, `Community 11`, `Community 12`, `Community 14`, `Community 15`, `Community 16`, `Community 17`, `Community 22`, `Community 23`, `Community 24`, `Community 25`, `Community 32`, `Community 37`, `Community 52`, `Community 70`, `Community 71`, `Community 73`, `Community 83`, `Community 96`, `Community 111`, `Community 120`, `Community 131`, `Community 132`, `Community 142`, `Community 143`, `Community 159`, `Community 162`, `Community 173`, `Community 179`, `Community 180`, `Community 185`, `Community 186`, `Community 193`, `Community 201`, `Community 203`, `Community 206`, `Community 208`, `Community 209`, `Community 211`, `Community 212`, `Community 216`, `Community 217`, `Community 225`, `Community 233`, `Community 234`, `Community 238`, `Community 239`, `Community 240`, `Community 241`, `Community 242`, `Community 245`, `Community 246`, `Community 247`, `Community 248`, `Community 250`, `Community 253`, `Community 263`, `Community 264`, `Community 265`, `Community 272`, `Community 274`, `Community 284`, `Community 285`, `Community 296`, `Community 297`, `Community 300`, `Community 301`, `Community 303`, `Community 313`, `Community 314`, `Community 315`, `Community 316`, `Community 317`, `Community 322`, `Community 323`, `Community 345`, `Community 351`, `Community 353`, `Community 366`, `Community 367`, `Community 368`, `Community 369`, `Community 371`, `Community 373`, `Community 385`, `Community 386`, `Community 387`, `Community 388`, `Community 391`, `Community 406`, `Community 407`, `Community 408`, `Community 409`, `Community 413`, `Community 424`, `Community 425`, `Community 426`, `Community 437`, `Community 438`, `Community 439`, `Community 466`?",
-      "why": "High betweenness centrality (0.022) - this node is a cross-community bridge."
+      "why": "High betweenness centrality (0.023) - this node is a cross-community bridge."
     },
     {
       "type": "isolated_nodes",
@@ -14214,7 +14214,7 @@
     },
     {
       "type": "bridge_node",
-      "question": "Why does `appendRecord()` connect `Community 70` to `Community 1`, `Community 2`, `Community 3`, `Community 4`, `Community 200`, `Community 179`, `Community 212`, `Community 159`?",
+      "question": "Why does `validatePostPhaseContract()` connect `Community 71` to `Community 226`, `Community 2`, `Community 6`, `Community 41`, `Community 208`, `Community 240`, `Community 18`, `Community 180`, `Community 246`, `Community 24`?",
       "why": "High betweenness centrality (0.011) - this node is a cross-community bridge."
     },
     {
