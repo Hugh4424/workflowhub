@@ -9,6 +9,8 @@ description: 文档审查保留真实发现与失败；代码调用读取 Long-r
 
 wh-review 执行 make-decision 方向/细节、build-plan 合并及 build-prd 文档审查。复杂任务 build-code 每 Phase 一次独立代码审查，按 `docs/standard-workflow.md`「三审查点与结论真实性」的 U-020 授权与 `runtime/review/review-policy.mjs` 的 `reviewTierFor` 选择执行者；低风险独立子代理，高风险或影响说不清外部 OCR，build-code 终末整卡固定外部 OCR 全审。小改动与普通任务审查方式不变；每次代码调用读取本文件 Long-review 等待方法，不因此改用 wh-review 执行。OCR 不可用（命令不存在（ENOENT）或版本低于1.12.9）如实记 unavailable/unknown，不换执行者，保留检测输出与原始失败；版本检测其它错误不推断未安装。architect-code-review 是同源补充轴，独立执行，与 OCR 可用性无关；已装 OCR 失败、超时、取消、无效输出、零成功路或空 findings 均保留原始事实。具体 Phase/终末审查范围与补充派发读取当前 `workflows/build-code/SKILL.md` 或 `workflows/build-code/SKILL.md#最后-phase终末承接`。
 
+镜头沿现 `stage-skill-plan.json`：build-plan 合并审查的三个 lens 为 review、simplicity-guard、plan-eng-review，UI 条件另取 plan-design-review；build-code 取其自身登记的 simplicity-guard/review，终末取 review，不把计划三镜头搬成新的代码审查点。每 Phase 同源 Standards/Spec 两面必派互不继承上下文的独立执行者；只消费 `workflows/build-code/SKILL.md`「同源补充轴」与「Phase 三角色与七步顺序」的唯一派发规则，不能用一人两栏或实施者自审替代。review_host 只做 OCR 长等待宿主；真实失败与覆盖仍按本文件原合同保存。任务用户明确的轮次限制只约束该任务，已返回意见后修复与定向复验不新派正常审查；不因修后未重审宣称通过。
+
 stage-skill-plan.json 仍在本技能原路径提供 required_skills/optional_skills：文档组包读者和 OCR 合同/lens 适配读者复用这些声明。它是选材，不是另一个调度器或审查点；不会把它搬入 runtime/review。历史 build-spec 登记退出当前调用，旧集成审查不恢复为正常节点。
 
 ## Input
