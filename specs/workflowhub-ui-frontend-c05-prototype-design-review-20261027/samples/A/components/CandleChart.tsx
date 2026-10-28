@@ -119,6 +119,9 @@ export default function CandleChart({ overlay }: { overlay?: FootprintOverlay } 
   const priceLabels = [29990, 30005.75, 30010, 30020, 30040, 30050, 30060, 30070].map(sourcePrice)
   const maxVol = Math.max(...candles.map((c) => c.vol))
   const last = candles[count - 1]
+  const quoteY = y(sourcePrice(30040))
+  const quoteTagY = overlay && Math.abs(quoteY - y(overlay.entry)) < 18 ? y(overlay.entry) - 18 : quoteY
+  const tagCenters = [y(sourcePrice(30005.75)), quoteTagY, ...(overlay ? [y(overlay.tp), y(overlay.entry), y(overlay.sl)] : [])]
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -127,7 +130,7 @@ export default function CandleChart({ overlay }: { overlay?: FootprintOverlay } 
         {priceLabels.map((p, gi) => (
           <g key={gi}>
             <line x1={0} x2={plotRight} y1={y(p)} y2={y(p)} stroke="rgba(255,255,255,0.028)" />
-            <text x={plotRight + 6} y={y(p) + 3} fill="#64748b" fontSize="8.5" fontFamily="JetBrains Mono">{p.toFixed(2)}</text>
+            <text x={plotRight + 6} y={y(p) + 3} visibility={tagCenters.some(center => Math.abs(y(p) - center) < 16) ? "hidden" : undefined} fill="#94a3b8" fontSize="8.5" fontFamily="JetBrains Mono">{p.toFixed(2)}</text>
           </g>
         ))}
 
@@ -160,7 +163,7 @@ export default function CandleChart({ overlay }: { overlay?: FootprintOverlay } 
               {/* per-bar background box */}
               <rect x={cx - half} y={y(c.h)} width={cw} height={Math.max(1, y(c.l) - y(c.h))} fill="rgba(148,163,184,0.05)" />
               {/* wick */}
-              <rect x={cx - wickW / 2} y={y(c.h)} width={wickW} height={Math.max(1, y(c.l) - y(c.h))} fill={up ? "rgba(34,197,94,0.55)" : "rgba(239,68,68,0.55)"} />
+
               {/* footprint clusters: left = green delta, right = blue volume */}
               {c.rows.map((r, ri) => {
                 const ry = y(r.price) - rh / 2
@@ -173,6 +176,8 @@ export default function CandleChart({ overlay }: { overlay?: FootprintOverlay } 
                   </g>
                 )
               })}
+              {/* Keep the high/low wick above translucent footprint cells. */}
+              <rect x={cx - wickW / 2} y={y(c.h)} width={wickW} height={Math.max(1, y(c.l) - y(c.h))} fill={up ? "#64df95" : "#ff8aa1"} />
               {/* candle body */}
               <rect
                 x={cx - bodyW / 2}
@@ -180,6 +185,7 @@ export default function CandleChart({ overlay }: { overlay?: FootprintOverlay } 
                 width={bodyW}
                 height={Math.max(1.5, Math.abs(y(c.o) - y(c.c)))}
                 fill={up ? "#22c55e" : "#ef4444"}
+                stroke={up ? "#64df95" : "#fda4af"} strokeWidth="1"
               />
               {/* POC orange line */}
               <line x1={cx - half} x2={cx + half} y1={y(c.poc)} y2={y(c.poc)} stroke="#f59e0b" strokeWidth={Math.max(2.5, rh * 0.7)} strokeLinecap="butt" />
@@ -205,8 +211,9 @@ export default function CandleChart({ overlay }: { overlay?: FootprintOverlay } 
         <line x1={0} x2={plotRight} y1={y(sourcePrice(30040))} y2={y(sourcePrice(30040))} stroke="#f59e0b" strokeWidth="0.8" strokeDasharray="4 4" />
         <rect x={plotRight} y={y(sourcePrice(30005.75)) - 8} width={62} height={16} fill="#3b4252" />
         <text x={plotRight + 31} y={y(sourcePrice(30005.75)) + 3} fill="#e5e9f0" fontSize="8.5" fontFamily="JetBrains Mono" textAnchor="middle">{sourcePrice(30005.75).toFixed(2)}</text>
-        <rect x={plotRight} y={y(sourcePrice(30040)) - 8} width={62} height={16} fill="#f59e0b" />
-        <text x={plotRight + 31} y={y(sourcePrice(30040)) + 3} fill="#0a0e16" fontSize="8.5" fontFamily="JetBrains Mono" textAnchor="middle" fontWeight="600">{MOCK_NQ_QUOTE.toFixed(2)}</text>
+        {quoteTagY !== quoteY && <path d={`M${plotRight - 4},${quoteY} H${plotRight} V${quoteTagY}`} fill="none" stroke="#f59e0b" strokeWidth="1" />}
+        <rect x={plotRight} y={quoteTagY - 8} width={62} height={16} fill="#f59e0b" />
+        <text x={plotRight + 31} y={quoteTagY + 3} fill="#0a0e16" fontSize="8.5" fontFamily="JetBrains Mono" textAnchor="middle" fontWeight="600">{MOCK_NQ_QUOTE.toFixed(2)}</text>
 
         {/* ─── Live position / TP / SL overlay (right-side tags only) ── */}
         {overlay && (
