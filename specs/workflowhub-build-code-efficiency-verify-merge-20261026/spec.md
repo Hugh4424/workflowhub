@@ -1138,3 +1138,8 @@ P12必要主线C03整合主动写集11→16，精确补AGENTS/catalog/frontend-c
 ### P12终末测试消费者修复范围（18→19，独立受影响结果已取得）
 
 终末独立实读发现cutover仍把退役verify-code身份期待为外部OCR，以及check-stage-steps测试fixture/collection仍读取已删除verify-code步骤/方法，后者整文件ENOENT；main继承同字节不免除本任务删除入口所影响的真实consumer。P12仅新增已有 `tests/contract/check-stage-steps.test.mjs`，原 `tests/contract/ocr-production-cutover.test.mjs` 已在允许集合，19主动source路径沿P12契约头与index。当前替代writer只持两测试；精确冻结断言迁移须具体TCR及独立核准，不删失败断言/弱化本意，当前有效build-prd规划例外保留，不机械删为正式三阶段。346精确TCR经独立003先核准后apply，独立354原件核085 cutover2/2（11非选中）、086 steps受影响整文件26/26 exit0且无open；具体hash和完整保护条件回P12同名节。原081目标断言失败、082 collection ENOENT分别保留，不冒全仓回归或新外审；当前规范已覆盖，无新增专业条款。详细原故障/owner/边界回P12同名节。不改runtime/方法/HTML、原AC、旧报告002/manifest或已记成本，不重视觉；最终全diff数量以实际源核，不抄旧count，不新增控制面。
+
+
+### P12 R10真实交付consumer修复范围（19→21，当前源码独立结果已取得）
+
+沿用户“所有任务正确状态”，真实report115/Git363/native077/108/109/110/111揭示R10 reader遗漏独立PR事实、误绑历史PRhead等于最新修复head，并从Task repo猜fallback base而非真实merge.cwd目标。P12仅新增已有 `runtime/task/final-chain-runner.mjs` 与 `tests/contract/final-chain-runner.test.mjs` 至21source；原P7/P10职责、不新文件/schema/API/ledger，final-chain.mjs暂不改。当前runner e520/test f296已实施；独立373核131当前source16/16（248非选中）、132实际已交付91db的R10 completed，终末增量007 pass/noopen并核006fixed。当前未提交fix不冒已交付，其他ring unavailable不由此闭合。原115/097/117fixture/118RED/123fixture/129RED及127有限通过保留，131才最终源码语义证据；369/005只迁真实target fixture方向，四旧assert不变。具体精确hash/原件/反例沿P12同名节，现专业合同已承接，无新规范条款；图133/134仅两AST，历史文档/metrics partial保。历史PRhead须属当前Task及真实merge输入祖先，PRmerge须在认证target；最新Task HEAD未合入target不能靠旧Git成功冒完成，target branch/base从真实target/receipt CWD取，不猜Task或硬码main。保错误repo/head/base、失败命令与缺PR反例，不改冻结旧assert、不增许可门。具体归口/限制沿P12同名节；UI主线a823不动，旧report004/manifest/实际Git原件、facts、成本不改。

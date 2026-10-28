@@ -11424,9 +11424,9 @@
     "semantic_hash": ""
   },
   "runtime/task/final-chain-runner.mjs": {
-    "mtime": 1793112046.597002,
-    "seen": 1793138272.039992,
-    "ast_hash": "8c6eff1530064435e9d346eb5ee6ab3d",
+    "mtime": 1793154662.1255682,
+    "seen": 1793154966.98267,
+    "ast_hash": "9c6b3a9aabdb6a2fc4a0f4238e9351c5",
     "semantic_hash": ""
   },
   "runtime/task/final-chain.mjs": {
@@ -11544,9 +11544,9 @@
     "semantic_hash": ""
   },
   "tests/contract/final-chain-runner.test.mjs": {
-    "mtime": 1793108238.58786,
-    "seen": 1793138272.0400069,
-    "ast_hash": "9b2a8390ddc676c0e7f3d00aa27338f3",
+    "mtime": 1793154640.6611288,
+    "seen": 1793154966.982673,
+    "ast_hash": "4c36088bf7728d59264717b6bb8433a0",
     "semantic_hash": ""
   },
   "tests/contract/knowledge-reuse-norm-wiring.test.mjs": {
