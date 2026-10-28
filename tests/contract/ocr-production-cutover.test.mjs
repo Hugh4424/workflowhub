@@ -417,7 +417,7 @@ describe('P1 tier boundary: terminal full review remains external even when Phas
     expect(reviewTierFor(input)).toBe('独立子代理');
     expect(()=>assertReviewTierRecord({executor:'独立子代理',input,identity:'ocr',source:{dispatch_identity:'owned-reader',context_isolation:'none'}})).toThrow(/OCR/);
     input.risks.publicContractCriticalPath='present';expect(reviewTierFor(input)).toBe('外部 OCR');
-    input.risks.publicContractCriticalPath='none';input.identity={stage:'verify-code'};expect(reviewTierFor(input)).toBe('外部 OCR');
+    input.risks.publicContractCriticalPath='none';input.identity={stage:'build-code',review_scope:'terminal'};expect(reviewTierFor(input)).toBe('外部 OCR');
     const record={executor:'外部 OCR',input,status:'unavailable',reason:'ENOENT',source:{route:'configured/single_round'},detection_output_ref:'quality/tests/version.output',failure_ref:'quality/tests/failure.json'};
     expect(assertReviewTierRecord(record)).toBe(record);expect(record.provider_results).toBeUndefined();
   });
