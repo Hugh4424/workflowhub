@@ -1125,3 +1125,11 @@ P12必要主线C03整合主动写集11→16，精确补AGENTS/catalog/frontend-c
 ### P12真实phase-closed读取故障的有界修复登记
 
 603/610真实执行发现当前builder只按array读取既有P12清单的合法diffs对象。原P5本轮会话不可用，none作者cockpit_current_fix在本Phase既有两路径实现兼容，481请求/485初次源码与612目标RED、613/614作者执行结果见P12卡晚到故障节。独立615虽7/7仍保487旧array可选链吞null发现；现原作者去三处可选链，独立 `quality/evidence/2026-10-28-299-p12-diffs-object-final-independent-result.json` 已核原问题fixed、无open finding，004为7/7、005当前stage-position为3/3、exit0。此有限修复证明不冒COCK终末AC、实际页面或stage成功。16主动source范围、AC判据、旧139与旧manifest不变。此次真实源码修复后的scope/报告应保旧另存正确内容，区别于自然pending后置事实；当前index已含两路径故不改。最终norm按独立已验证结果核现条款，不新增规则/门/账本。
+
+
+### 用户312驾驶舱视觉修复的现范围
+
+原用户312明确要求标题/长状态可读、间距对齐、总览与详情十环默认展开、减少冗余微文案并保a11y。P12主动写集16→18，仅新增既有template与answer-as-page方法路径；方法仅确需同步默认展开/补充信息合同，既有cockpit-autogen测试除313精确默认open期待外尾追加，其余旧断言由独立323核保。后续跨任务B合法plan无codecursor实际触发空hint，仍在原builder允许路径最小修复，不新增Task或状态；原AC与五功能/左侧三类/卡片详情/三stage/高亮/自动刷新不变。before三尺寸真实症状及修前失败保留；现最终独立final-qa原件已核当前/A/B有界覆盖，B最终长词/深选主入口1440/390真实pointer通过，当前/A未冒最后微改后的全套重跑。具体版本、反例、a11y未覆盖与038 detector degraded非gate沿P12卡最终实际结果。具体单writer、正反边界、风险与结果读取沿P12卡“用户312视觉清晰度修复”节，不增加控制面或第二PRD。原报告/manifest/facts由各真实owner按内容变化保全，PR19合并当前暂停，本登记不授Git/破坏性动作。
+
+
+用户312通用消费补证：独立330/044证明原builder最小no-codecursor修复及两个不同官方Task的public无--data生成；最终template a823、builder d2e、test8d77及方法ee81的具体hash与独立final-qa SHA8398d762fce6c8d65c15b20329834ac7639b40da8cf41c62b2174e96f56854e8回P12卡。root334保051/052公共重生与单件HTML/nodes原件；不搬当前Task样本作为通用保证。324现source/caller与分发链要求合并更新primary后symlink未来读取才生效，复制安装/既载缓存另需显式更新，当前PR19未merge；不新增自更新机制。独立视觉未覆盖完整WCAG/性能/穷举键盘或全部最终A/current重跑，图部分历史/文档缺口与原失败保真；不据本段签stage完成或授Git。

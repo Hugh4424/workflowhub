@@ -345,7 +345,7 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
  const linked=new Set([...edges,...sideEdges].flat());for(const o of objects)if(!linked.has(o.id)&&!o.owners?.length&&!['req','wp','task','phase'].includes(o.kind))o.scope='task';
  const businessTitle=/^- \*\*功能名\*\*[:：]\s*(.+)$/m.exec(spec??'')?.[1]??/^#\s+(?:功能规格[:：]\s*)?(.+)$/m.exec(spec??'')?.[1]??manifest.task_id;
  const stageNames={'make-decision':'定方向','build-plan':'写计划','build-code':'写代码'},stageId=positionRow?.stage,stageLabel=stageId?(stageNames[stageId]??stageId)+(cursor?' · '+[cursor.phase_id,cursor.task_id].filter(Boolean).join(' / '):''):'当前位置未取得';
- const stages=Object.entries(stageNames).map(([id,name])=>({id,name:id+' · '+name,state:id===stageId?'now':'todo',label:id===stageId?'当前':id==='make-decision'&&decision?'已有决策材料':id==='build-plan'&&spec&&index?'已有计划材料':'阶段结论未记录',hint:id===stageId?[cursor?.phase_id,cursor?.task_id].filter(Boolean).join(' / '):'材料存在不代阶段完成'}));
+ const stages=Object.entries(stageNames).map(([id,name])=>({id,name:id+' · '+name,state:id===stageId?'now':'todo',label:id===stageId?'当前':id==='make-decision'&&decision?'已有决策材料':id==='build-plan'&&spec&&index?'已有计划材料':'阶段结论未记录',hint:id===stageId?(cursor?[cursor.phase_id,cursor.task_id].join(' / '):'当前记录阶段：'+name+(id==='build-code'?'；Phase / Task 位置未记录':'')):'材料存在不代阶段完成'}));
  // Preserve ordinary P5 projections when no terminal original was supplied.
  // Only the public runtime derives quality; this adapter maps its DTO to view text.
  let stageStatus=null;

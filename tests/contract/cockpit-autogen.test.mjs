@@ -642,7 +642,7 @@ test('ORACLE-COCKPIT-GEN preview batch: declared seven-package source collection
 });
 test('ORACLE-COCKPIT-GEN preview batch: business matrix leads, identical goal appears once and Task steps lead evidence',async()=>{
  const f=await primaryCardsFixture(),r=await renderAnswerPage(f),d=data(r.htmlPath),progress=templateView(r.htmlPath,'progressHtml()');
- expect(progress.indexOf('需求进展')).toBeLessThan(progress.indexOf('检查详情'));expect(progress.slice(0,progress.indexOf('检查详情'))).not.toContain('data-report-ring');expect(progress).toContain('<details class="check-details">');
+ expect(progress.indexOf('需求进展')).toBeLessThan(progress.indexOf('检查详情'));expect(progress.slice(0,progress.indexOf('检查详情'))).not.toContain('data-report-ring');expect(progress).toContain('<details class="check-details" open>');
  const wp=d.objects.find(o=>o.source_id==='WP4'),main=templateView(r.htmlPath,`sel=${JSON.stringify(wp.id)};mainHtml()`),goal=wp.summary;
  expect(main.split(goal).length-1).toBe(1);const goalNode=d.objects.find(o=>o.kind==='goal'&&o.owner===wp.id);expect(main).toContain('data-go="'+goalNode.id+'"');
  const t=d.objects.find(o=>o.source_id==='T006'),hero=templateView(r.htmlPath,`heroHtml(OBJ[${JSON.stringify(t.id)}])`),detail=templateView(r.htmlPath,`sel=${JSON.stringify(t.id)};mainHtml()`);
@@ -853,4 +853,25 @@ for(const variant of ['object','array','unreachable','invalid-string','invalid-o
  if(variant==='unreachable'){expect(owned.implementation.text).not.toContain('已交付');expect(owned.implementation.commit).toBeUndefined();}
  else{expect(owned.implementation.text).toBe('已交付（具名记录）');expect(owned.implementation.commit).toBe(head);}
  expect(other.implementation.text).not.toBe('已交付（具名记录）');expect(owned.acceptance.text).toBe('验收结论未记录');
+});
+
+ test('visual refinement: both ten-ring sections start expanded and sidebar keeps full business titles',async()=>{
+ const f=await sourceCardFixture(),r=await renderAnswerPage(f),d=data(r.htmlPath),target=d.objects.find(o=>o.kind==='task'),progress=templateView(r.htmlPath,'progressHtml()'),detail=templateView(r.htmlPath,`chainHtml(OBJ[${JSON.stringify(target.id)}])`);
+ expect(progress).toContain('<details class="check-details" open>');expect(detail).toContain('<details class="task-materials" open>');
+ const nav=templateView(r.htmlPath,`OBJ[${JSON.stringify(target.id)}].title='完整业务标题不应被状态遮挡或裁剪';OBJ[${JSON.stringify(target.id)}].short='被截短的旧标题';sidebarHtml()`);
+ expect(nav).toContain('完整业务标题不应被状态遮挡或裁剪');expect(nav).toContain('navrow-meta');
+ expect(templateView(r.htmlPath,'progressHtml()')).not.toContain('class="flow"');
+ const header=templateView(r.htmlPath,'headerHtml()');for(const stage of ['make-decision','build-plan','build-code'])expect(header).toContain('>'+stage+'</div>');
+ });
+
+test('visual refinement: Phase navigation shares Task card boundary and overview summary preserves detail',async()=>{
+ const f=await sourceCardFixture(),r=await renderAnswerPage(f),d=data(r.htmlPath),task=d.objects.find(o=>o.kind==='task'),wp=d.objects.find(o=>o.kind==='wp');
+ const card=templateView(r.htmlPath,`objCard(${JSON.stringify(task.id)},{overview:true})`);expect(card).toContain('class="task-phase-entry k-task"');expect(card).toContain('</button><div class="task-card-footer"><button');expect(card).toContain('data-go="'+task.phase+'"');
+ const summary='完整业务摘要'.repeat(30),overview=templateView(r.htmlPath,`OBJ[${JSON.stringify(wp.id)}].summary=${JSON.stringify(summary)};objCard(${JSON.stringify(wp.id)},{overview:true})`),detail=templateView(r.htmlPath,`OBJ[${JSON.stringify(wp.id)}].summary=${JSON.stringify(summary)};heroHtml(OBJ[${JSON.stringify(wp.id)}])`);
+ expect(overview).toContain('objcard-line overview-summary');expect(overview).toContain(summary);expect(detail).toContain(summary);
+});
+
+for(const stage of ['make-decision','build-plan','build-code'])test('stage without code cursor: '+stage,async()=>{
+ const f=await sourceCardFixture(),{writeStageRow}=await import('../../runtime/task/task-store.mjs');await writeStageRow(f.taskPath,{stage,source:'Actual recorded stage without execution cursor',handoff:{value:'quality/evidence/actual-stage-handoff.md',reason:null}});
+ const r=await renderAnswerPage(f),d=data(r.htmlPath),current=d.stages.find(s=>s.id===stage);expect(current.state).toBe('now');expect(current.hint).toBe('当前记录阶段：'+({'make-decision':'定方向','build-plan':'写计划','build-code':'写代码'}[stage])+(stage==='build-code'?'；Phase / Task 位置未记录':''));expect(d.currentObjectId).toBeNull();expect(d.objects.filter(o=>o.kind==='task').every(o=>!o.status.text.includes('已交付'))).toBe(true);
 });
