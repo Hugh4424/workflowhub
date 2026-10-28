@@ -565,7 +565,7 @@ test('ORACLE-COCKPIT-GEN: recursive research symlink is rejected without consumi
 
 // New product oracle: actual authenticated source sample, fixed independent identities below.
 async function primaryCardsFixture(){
- const f=await fixture(),base=join(process.cwd(),'specs/workflowhub-build-code-efficiency-verify-merge-20261026');
+ const f=await fixture(),base=join(process.cwd(),'specs/archive/workflowhub-build-code-efficiency-verify-merge-20261026');
  const originals='/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-build-code-efficiency-verify-merge-20261026/quality/evidence';
  for(const name of ['spec.md','decision-log.md'])writeFileSync(join(f.material,name),readFileSync(join(base,name)));
  rmSync(join(f.material,'phases'),{recursive:true});mkdirSync(join(f.material,'phases'));

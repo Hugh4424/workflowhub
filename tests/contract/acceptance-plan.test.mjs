@@ -46,7 +46,7 @@ describe('ORACLE-ACCEPT-PLAN', () => {
   });
 
   it('three current task AC samples name actual providers and preserve the stage-end gap', () => {
-    const base = 'specs/workflowhub-build-code-efficiency-verify-merge-20261026/';
+    const base = 'specs/archive/workflowhub-build-code-efficiency-verify-merge-20261026/';
     const phase = read(base + 'phases/P4-每Phase证据与验收记录.md');
     const spec = read(base + 'spec.md');
     const gap = phase.split('\n').find(line => line.startsWith('incomplete：AC-ACCEPT-002；'));

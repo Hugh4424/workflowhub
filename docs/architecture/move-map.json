@@ -6732,7 +6732,7 @@
         "skills/answer-as-page/scripts/render-answer-page.mjs"
       ],
       "named_data_readers": [
-        "specs/workflowhub-build-code-efficiency-verify-merge-20261026/phases/P5-驾驶舱自动生成与事件刷新.md"
+        "specs/archive/workflowhub-build-code-efficiency-verify-merge-20261026/phases/P5-驾驶舱自动生成与事件刷新.md"
       ],
       "delete_condition": "唯一消费者由经独立审查的替代承接或该技能退役时删除；保留原证据与历史页。",
       "retention_basis": "P5/T006/T007 批准写集；已实读 renderer 的 main/renderAnswerPage 与当前技能命令。复用原认证task与发布锁，不增加进度权威。"
@@ -6749,7 +6749,7 @@
         "skills/answer-as-page/scripts/render-answer-page.mjs"
       ],
       "named_data_readers": [
-        "specs/workflowhub-build-code-efficiency-verify-merge-20261026/phases/P5-驾驶舱自动生成与事件刷新.md"
+        "specs/archive/workflowhub-build-code-efficiency-verify-merge-20261026/phases/P5-驾驶舱自动生成与事件刷新.md"
       ],
       "delete_condition": "唯一消费者由经独立审查的替代承接或该技能退役时删除；保留原证据与历史页。",
       "retention_basis": "P5/T006/T007 批准写集；已实读 renderer 的 main/renderAnswerPage 与当前技能命令。复用原认证task与发布锁，不增加进度权威。"
@@ -6764,7 +6764,7 @@
       "consumer": "P7改名验证与独立审查者；不是阶段推进许可。",
       "module_consumers": [],
       "named_data_readers": [
-        "specs/workflowhub-build-code-efficiency-verify-merge-20261026/phases/P7-关闭技能改名.md"
+        "specs/archive/workflowhub-build-code-efficiency-verify-merge-20261026/phases/P7-关闭技能改名.md"
       ],
       "delete_condition": "只有改名合同及当前消费者全部退役且测试owner独立审查同意时删除；原执行证据保留。",
       "retention_basis": "复用vitest与现有resolver，不验证真实close/PR/归档/清理，不新增生产控制面。"

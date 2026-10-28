@@ -14187,11 +14187,11 @@
     {
       "type": "bridge_node",
       "question": "Why does `vitest` connect `Community 0` to `Community 1`, `Community 2`, `Community 3`, `Community 4`, `Community 5`, `Community 6`, `Community 8`, `Community 9`, `Community 11`, `Community 12`, `Community 13`, `Community 14`, `Community 15`, `Community 16`, `Community 17`, `Community 18`, `Community 22`, `Community 23`, `Community 24`, `Community 25`, `Community 26`, `Community 42`, `Community 43`, `Community 44`, `Community 55`, `Community 74`, `Community 84`, `Community 86`, `Community 132`, `Community 141`, `Community 142`, `Community 143`, `Community 155`, `Community 156`, `Community 157`, `Community 165`, `Community 175`, `Community 182`, `Community 183`, `Community 184`, `Community 189`, `Community 197`, `Community 204`, `Community 208`, `Community 210`, `Community 211`, `Community 212`, `Community 214`, `Community 218`, `Community 227`, `Community 231`, `Community 237`, `Community 238`, `Community 241`, `Community 242`, `Community 243`, `Community 244`, `Community 245`, `Community 249`, `Community 252`, `Community 261`, `Community 263`, `Community 271`, `Community 281`, `Community 282`, `Community 286`, `Community 292`, `Community 295`, `Community 296`, `Community 308`, `Community 309`, `Community 310`, `Community 311`, `Community 316`, `Community 317`, `Community 319`, `Community 339`, `Community 343`, `Community 344`, `Community 358`, `Community 359`, `Community 360`, `Community 361`, `Community 362`, `Community 364`, `Community 377`, `Community 378`, `Community 379`, `Community 380`, `Community 385`, `Community 398`, `Community 399`, `Community 400`, `Community 402`, `Community 404`, `Community 405`, `Community 408`, `Community 409`, `Community 420`, `Community 421`, `Community 422`, `Community 432`, `Community 436`, `Community 461`, `Community 462`?",
-      "why": "High betweenness centrality (0.020) - this node is a cross-community bridge."
+      "why": "High betweenness centrality (0.023) - this node is a cross-community bridge."
     },
     {
       "type": "isolated_nodes",
-      "question": "What connects `ADR-0002`, `ADR-0021`, `markdownlint-cli2` to the rest of the system?",
+      "question": "What connects `ADR-0002`, `markdownlint-cli2`, `./skills/answer-as-page/scripts/render-answer-page.mjs` to the rest of the system?",
       "why": "1994 weakly-connected nodes found - possible documentation gaps or missing edges."
     },
     {
@@ -14208,7 +14208,7 @@
     {
       "type": "bridge_node",
       "question": "Why does `appendRecord()` connect `Community 43` to `Community 2`, `Community 3`, `Community 9`, `Community 203`, `Community 143`, `Community 212`, `Community 183`, `Community 26`, `Community 247`?",
-      "why": "High betweenness centrality (0.015) - this node is a cross-community bridge."
+      "why": "High betweenness centrality (0.016) - this node is a cross-community bridge."
     },
     {
       "type": "low_cohesion",

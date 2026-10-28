@@ -11472,9 +11472,9 @@
     "semantic_hash": ""
   },
   "tests/contract/acceptance-plan.test.mjs": {
-    "mtime": 1793055225.1091816,
-    "seen": 1793138272.040001,
-    "ast_hash": "ea6f6af3c05b339af999deae249e3c4a",
+    "mtime": 1793166373.693527,
+    "seen": 1793166404.563825,
+    "ast_hash": "2dfb8c8f6b6cb8ebe6e5af0abcfca893",
     "semantic_hash": ""
   },
   "tests/contract/answer-as-page-skill.test.mjs": {
@@ -11496,9 +11496,9 @@
     "semantic_hash": ""
   },
   "tests/contract/cockpit-autogen.test.mjs": {
-    "mtime": 1793162454.0947332,
-    "seen": 1793162699.751872,
-    "ast_hash": "a334ac7e464fdc201b8d9d81006670ae",
+    "mtime": 1793166373.6940145,
+    "seen": 1793166404.563829,
+    "ast_hash": "f7f4b7628e95a650e3f8f07b4fe7bcf1",
     "semantic_hash": ""
   },
   "tests/contract/cockpit-event.test.mjs": {
