@@ -1143,3 +1143,12 @@ P12必要主线C03整合主动写集11→16，精确补AGENTS/catalog/frontend-c
 ### P12 R10真实交付consumer修复范围（19→21，当前源码独立结果已取得）
 
 沿用户“所有任务正确状态”，真实report115/Git363/native077/108/109/110/111揭示R10 reader遗漏独立PR事实、误绑历史PRhead等于最新修复head，并从Task repo猜fallback base而非真实merge.cwd目标。P12仅新增已有 `runtime/task/final-chain-runner.mjs` 与 `tests/contract/final-chain-runner.test.mjs` 至21source；原P7/P10职责、不新文件/schema/API/ledger，final-chain.mjs暂不改。当前runner e520/test f296已实施；独立373核131当前source16/16（248非选中）、132实际已交付91db的R10 completed，终末增量007 pass/noopen并核006fixed。当前未提交fix不冒已交付，其他ring unavailable不由此闭合。原115/097/117fixture/118RED/123fixture/129RED及127有限通过保留，131才最终源码语义证据；369/005只迁真实target fixture方向，四旧assert不变。具体精确hash/原件/反例沿P12同名节，现专业合同已承接，无新规范条款；图133/134仅两AST，历史文档/metrics partial保。历史PRhead须属当前Task及真实merge输入祖先，PRmerge须在认证target；最新Task HEAD未合入target不能靠旧Git成功冒完成，target branch/base从真实target/receipt CWD取，不猜Task或硬码main。保错误repo/head/base、失败命令与缺PR反例，不改冻结旧assert、不增许可门。具体归口/限制沿P12同名节；UI主线a823不动，旧report004/manifest/实际Git原件、facts、成本不改。
+
+
+### P12终末真实公开交付合同补充（原21source内）
+
+实际独立raw399为156270字节，要求其单条逐字公开final不能可靠交付；不是缺独立结论或可用摘要替代原文。精确 `quality/evidence/2026-10-28-400-p12-terminal-artifact-receipt-exact-tcr.json`（SHA `322e0f3f5e25af0fbdc961819ce8a14dea076e5fa3259fb2f8d0792a72904c8b`）已经独立 `quality/reviews/2026-10-28-009-terminal-artifact-receipt-exact-tcr-review.json`（SHA `f4119385b7adee24c9651069a01e06035e95bf988712ae8419e99fe09910c455`）批准精确变更。公开final/delivery保两种真实交付：原独立raw完整字节；或真实artifact receipt JSON，含精确 `task_id`、`stage`、`agent_thread_id`、`artifact_ref:{ref,sha256}`，artifact_ref必须等于terminal封套的raw_ref，thread必须等于实际独立dispatch reader。final/delivery两处public_text仍逐字一致，实际actor身份检查保留。
+
+receipt仅改变大原件的公开交付表示；raw仍实际可读、核SHA256，全部独立来源、当前材料/源码、语义、分母及最终交付检查保持。不接受仅路径、摘要、错task/stage/thread/ref/hash、两处交付不等或raw篡改。沿已有finding-verifier receipt形状，不新增API/schema/持久对象/state/gate或质量许可，全文正例和原冻结assert保留。当前只有TCR批准事实，RED/GREEN、独立受影响结果与最终source/图冻结尚未取得，不预绿；旧raw399/旧报告与manifest保历史，本轮不产新报告。
+
+只涉及原允许的stage-runtime/status-derivation测试/build-code方法，材料仅spec/P12，index纯指针不改；真实scope/norm在源码与图最终冻结后再读，不先报当前整阶段质量或交付完成。
