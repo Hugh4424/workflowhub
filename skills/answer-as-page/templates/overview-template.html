@@ -427,7 +427,7 @@ b{font-weight:700}
 .unlinked{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:12px;font-size:13px;color:var(--sub)}
 .slot{width:150px}
 
-.info-tip{position:relative;display:inline-flex}.info-tip button{display:flex;align-items:center;justify-content:center;width:24px;height:24px;color:var(--sub)}.info-tip [role="tooltip"]{display:none;position:absolute;z-index:10;top:100%;left:0;width:max-content;max-width:240px;padding:8px 12px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);font-size:12px;box-shadow:0 3px 12px rgba(24,33,47,.12)}.source-info button{width:auto;gap:6px}.source-info [role="tooltip"]{top:auto;bottom:100%;max-width:min(480px,calc(100vw - 32px));white-space:normal;overflow-wrap:anywhere}.info-tip:hover [role="tooltip"],.info-tip:focus-within [role="tooltip"]{display:block}
+.info-tip{position:relative;display:inline-flex}.info-tip button{display:flex;align-items:center;justify-content:center;width:24px;height:24px;color:var(--sub)}.info-tip [role="tooltip"]{display:none;position:absolute;z-index:10;top:100%;left:0;width:max-content;max-width:240px;padding:8px 12px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);font-size:12px;box-shadow:0 3px 12px rgba(24,33,47,.12)}.acceptance-info{display:inline}.acceptance-info button{display:inline-flex;vertical-align:middle}.acceptance-info [role="tooltip"]{position:static;width:auto;max-width:none;margin-top:8px;white-space:normal;overflow-wrap:anywhere}.source-info button{width:auto;gap:6px}.source-info [role="tooltip"]{top:auto;bottom:100%;max-width:min(480px,calc(100vw - 32px));white-space:normal;overflow-wrap:anywhere}.info-tip:hover [role="tooltip"],.info-tip:focus-within [role="tooltip"]{display:block}
 /* ============================================================
    断点（源设计：nav=900 / md=768 / lg=1024 / xl=1280 / 2xl=1536）
    ============================================================ */
@@ -865,6 +865,7 @@ function heroHtml(o) {
         title('h2-xl', indexed ? o.title : o.quote || o.title) +
       '</div>' +
       (o.summary && o.summary !== o.title ? '<p class="hero-summary">'+esc(o.summary)+'</p>' : '') +
+      (o.acceptance ? '<p class="hero-note">代码验收：'+esc(o.acceptance.text.replace(/^代码验收/,''))+(o.acceptance.reason?'<span class="info-tip acceptance-info"><button type="button" aria-label="代码验收适用说明" aria-describedby="'+esc(o.id)+'-acceptance-tip"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 7v4M8 4.5v1"/></svg></button><span role="tooltip" id="'+esc(o.id)+'-acceptance-tip">'+esc(o.acceptance.reason)+'</span></span>':'')+'</p>':'') +
       (indexed ? '<details class="raw-quote"><summary>用户原话 · '+esc(o.source || '来源未取得')+'</summary><p>'+esc(o.quote || '原话未取得')+'</p></details>' : o.source ? '<p class="hero-note">'+esc(o.source)+'</p>' : '') +
     '</div>';
   }

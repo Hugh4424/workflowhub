@@ -11,21 +11,21 @@ import { createTask, openTask } from '../../runtime/task/task-handle.mjs';
 import { renderAnswerPage } from '../../skills/answer-as-page/scripts/render-answer-page.mjs';
 const roots=[];
 afterEach(()=>{for(const root of roots.splice(0))rmSync(root,{recursive:true,force:true});});
-async function fixture(){
+async function fixture(taskId='cockpit'){
  const root=realpathSync(mkdtempSync(join(tmpdir(),'cockpit-gen-')));roots.push(root);
  const repo=join(root,'repo'),work=join(root,'work');mkdirSync(repo);
  const git=(cwd,args)=>execFileSync('git',args,{cwd,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
  git(repo,['init','-q','-b','main']);git(repo,['config','user.name','Cockpit Test']);git(repo,['config','user.email','test@example.invalid']);writeFileSync(join(repo,'base.txt'),'baseline');git(repo,['add','.']);git(repo,['commit','-qm','baseline']);const base=git(repo,['rev-parse','HEAD']);git(repo,['worktree','add','-qb','test-cockpit',work]);
  mkdirSync(join(root,'store'));
- const task=await createTask({storageRoot:join(root,'store'),manifest:{schema_version:'1.0.0',project_name:'Demo',task_id:'cockpit',created_at:'2026-10-27T00:00:00Z',target_repo_root:repo,workspace_mode:'existing',workspace_root:work,baseline_commit:base,activation_cohort:'post',execution_mode:'per_invocation',record_model:'vnext-single-write',issue_ids:[],inputs:{}}});
+ const task=await createTask({storageRoot:join(root,'store'),manifest:{schema_version:'1.0.0',project_name:'Demo',task_id:taskId,created_at:'2026-10-27T00:00:00Z',target_repo_root:repo,workspace_mode:'existing',workspace_root:work,baseline_commit:base,activation_cohort:'post',execution_mode:'per_invocation',record_model:'vnext-single-write',issue_ids:[],inputs:{}}});
  writeFileSync(join(task.taskPath,'facts.jsonl'),'');
- const material=join(work,'specs/cockpit');mkdirSync(join(material,'phases'),{recursive:true});
+ const material=join(work,'specs',taskId);mkdirSync(join(material,'phases'),{recursive:true});
  writeFileSync(join(material,'decision-log.md'),'# 当前决策\n## 目标\n让失败可见\n- U-001 用户要求保留真实失败\n## WP1\n只读页面\n');
  writeFileSync(join(material,'spec.md'),"# 真实驾驶舱\n## 功能需求\nFR-ONE 只读生成\n- **FR-CARD-001**: R-001; 只读生成，缺数据标缺。\n\n## 实现设计（全局权威）\n### 代码锚点\n`phases/P1-真实交付.md`: Task T007 material; `owned-T007.mjs`: symbol result.\n### 接口与失败语义\n只读页面，失败保原件。\n### 全局验证策略\n`node custom-oracle.mjs` proves the fixture source condition only.\n### 需求到任务追踪\n| Source | FR | AC | Phase/Task | oracle |\n| --- | --- | --- | --- | --- |\n| R-001 | FR-CARD-001 | AC-CARD-001 | P1/T007 | ORACLE-CARDS |\n\n## Appendix A\n- [ ] **AC-ONE**：缺数据标缺\n- **AC-CARD-001**: 缺数据标缺。\n## 风险\n风险：缺少原件\n");
  writeFileSync(join(material,'phases/index.md'),"# Index\n## Execution Index\n| 阶段 | 权威引用 | 语义锚点 | 写入集 | 依赖 | 消费者 |\n| --- | --- | --- | --- | --- | --- |\n| P1 | phases/P1-真实交付.md | L0 — 来源卡片 | `owned-T007.mjs` | none | reader |\n");writeFileSync(join(material,'phases/P1-真实交付.md'),contractPhase('P1',[{id:'T007',title:'真实交付',acs:['AC-CARD-001']}]).replaceAll('node --version','node custom-oracle.mjs').replace('1）读取真实失败原件。\n2）核对保存后的来源指针。','只读页面'));
  writeFileSync(join(work,'changed.txt'),'real diff');git(work,['add','.']);git(work,['commit','-qm','real change']);
  await task.appendRecord({dir:'quality/tests',slug:'actual-test',ext:'json',bytes:JSON.stringify({argv:['node','--test','example.test.mjs'],exit_code:0})});await task.appendRecord({dir:'quality/reviews',slug:'actual-review',ext:'json',bytes:JSON.stringify({status:'completed',findings:[]})});
- const reportPath=join(root,'report.json');writeFileSync(reportPath,JSON.stringify({task_id:'cockpit',rings:Array.from({length:10},(_,i)=>({ring:i+1,name:['原始需求','decision-log','调研方案','方案','spec','phase','代码实现','测试验证','最终审查','提交 PR'][i],state:i===9?'skipped':'incomplete',basis:[],applicability:'required',evidence_type:[],counted_in_denominator:true,conflict:null}))}));
+ const reportPath=join(root,'report.json');writeFileSync(reportPath,JSON.stringify({task_id:taskId,rings:Array.from({length:10},(_,i)=>({ring:i+1,name:['原始需求','decision-log','调研方案','方案','spec','phase','代码实现','测试验证','最终审查','提交 PR'][i],state:i===9?'skipped':'incomplete',basis:[],applicability:'required',evidence_type:[],counted_in_denominator:true,conflict:null}))}));
  return {taskPath:task.taskPath,reportPath,outDir:join(task.taskPath,'quality/evidence/pages'),htmlName:'cockpit.html',material};
 }
 const data=path=>JSON.parse(/const DATA = (\{[\s\S]*?\n?\});/.exec(readFileSync(path,'utf8'))[1]);
@@ -401,8 +401,8 @@ function contractPhase(phase, cards) {
  }).join('\n\n');
  return '# Phase '+phase+' — 来源卡片\n\n- **Global spec**: `spec.md#实现设计全局权威`\n- **Write set**: '+files.map(x=>'`'+x+'`').join('; ')+'\n- **Dependency**: none\n- **Consumer**: reader\n- **gate_cmd**: `'+command+'`\n- **oracle**: ORACLE-CARDS\n- **evidence_path**: `quality/tests/cards.output`\n- **STOP**: Preserve missing input and failure.\n- **Done**: Real card source and actual result.\n\n## L0 — 来源卡片\n\nFR-CARD-001 / '+cards.flatMap(t=>t.acs).join(' / ')+'\n\n## L1 — executable contract\n\n'+tasks+'\n\n## L2 — reference\n\nControlled source fixture.\n';
 }
-async function sourceCardFixture(truth=SMALL_CARD_TRUTH,{orphan=false,missingRaw=false}={}) {
- const f=await fixture(),task=openTask(f.taskPath,{projectName:'Demo',taskId:'cockpit'});
+async function sourceCardFixture(truth=SMALL_CARD_TRUTH,{orphan=false,missingRaw=false,taskId='cockpit'}={}) {
+ const f=await fixture(taskId),task=openTask(f.taskPath,{projectName:'Demo',taskId});
  const rawRef='quality/evidence/raw-requirements/card-source.md',indexRef='quality/evidence/decision-log-refs/requirement-index.md';
  const rawPath=join(f.taskPath,rawRef);
  if(!missingRaw)await task.createRecord(rawRef,truth.raw.replaceAll('\\n','\n'));
@@ -874,4 +874,36 @@ test('visual refinement: Phase navigation shares Task card boundary and overview
 for(const stage of ['make-decision','build-plan','build-code'])test('stage without code cursor: '+stage,async()=>{
  const f=await sourceCardFixture(),{writeStageRow}=await import('../../runtime/task/task-store.mjs');await writeStageRow(f.taskPath,{stage,source:'Actual recorded stage without execution cursor',handoff:{value:'quality/evidence/actual-stage-handoff.md',reason:null}});
  const r=await renderAnswerPage(f),d=data(r.htmlPath),current=d.stages.find(s=>s.id===stage);expect(current.state).toBe('now');expect(current.hint).toBe('当前记录阶段：'+({'make-decision':'定方向','build-plan':'写计划','build-code':'写代码'}[stage])+(stage==='build-code'?'；Phase / Task 位置未记录':''));expect(d.currentObjectId).toBeNull();expect(d.objects.filter(o=>o.kind==='task').every(o=>!o.status.text.includes('已交付'))).toBe(true);
+});
+
+for(const indexed of [true,false])for(const mode of ['direct','wp','noncode','missing-source','wrong-namespace','related','mixed','missing'])test('requirement handling source: '+(indexed?'indexed':'plain')+' '+mode,async()=>{
+ const taskId=indexed?'req-indexed-alpha':'req-plain-beta',truth={...SMALL_CARD_TRUTH,requirements:SMALL_CARD_TRUTH.requirements.map(r=>({...r,landing:mode==='related'?'相关 WP2':'未声明归属'}))},f=await sourceCardFixture(truth,{taskId}),task=openTask(f.taskPath,{projectName:'Demo',taskId});
+ if(!indexed){const path=join(f.material,'decision-log.md');writeFileSync(path,readFileSync(path,'utf8').replace(/^需求索引：.*\n/m,'')+'\n## 原始需求\n| 编号 | 摘要 | 原件 | 落点 |\n| --- | --- | --- | --- |\n'+truth.requirements.map(r=>'| '+r.id+' | '+r.title+' | 原件:'+r.line+' | '+r.landing+' |').join('\n')+'\n');}
+ const sourceRef='quality/evidence/req-handling.md';await task.createRecord(sourceRef,'持续处理的受控来源声明；不自称独立代码验收。\n');
+ const own=indexed?'后建 R-001':'R-001',name=mode==='wrong-namespace'?(indexed?'v1主文 R-001':'后建 R-001'):own,landing=mode==='wp'?'WP1':mode==='related'?'依赖 WP2；相关 AC-DEMO-002':['mixed','missing'].includes(mode)?'AC-DEMO-001、AC-DEMO-002':mode==='noncode'?'前序沟通处理':'AC-DEMO-001',reason=mode==='noncode'?'不适用代码AC；持续沟通约束不冒完成':'仅明确验收落点；未取得部分保留',path=join(f.material,'spec.md');
+ writeFileSync(path,readFileSync(path,'utf8')+'\n### 需求处理\n| 来源 | 原义 | 落点 | 状态 | 结论来源ref | 代码AC适用说明 |\n| --- | --- | --- | --- | --- | --- |\n| '+name+' | 受控原始需求 | '+landing+' | 持续执行 | `'+(mode==='missing-source'?'quality/evidence/missing-source.md':sourceRef)+'` | '+reason+' |\n');
+ const ref='quality/evidence/req-ac-results.json';await task.createRecord(ref,JSON.stringify({phase_id:'P1',acceptance:[{ac:'AC-DEMO-001',tier:'pass'},...(mode==='missing'?[]:[{ac:'AC-DEMO-002',tier:mode==='mixed'?'fail':'pass'}])]}));const phase=join(f.material,'phases/P1-cards.md');writeFileSync(phase,readFileSync(phase,'utf8').replace('quality/tests/cards.output',ref));
+ const result=await renderAnswerPage(f),d=data(result.htmlPath),req=d.objects.find(o=>o.source_id===(indexed?'后建索引 R-001':'R-001'));
+ if(mode==='wrong-namespace'){expect(req.implementation).toBeUndefined();expect(req.acceptance.text).not.toContain('验收通过');return;}
+ expect(req.implementation.text).toContain('材料记载：持续执行');expect(req.status.text).toBe(req.implementation.text);expect(req.src.some(s=>s.path===path&&s.loc.includes(req.source_id))).toBe(true);
+ if(mode==='missing-source')expect(req.implementation.text).toContain('结论来源未取得');
+ else expect(req.src.some(s=>s.path===join(f.taskPath,sourceRef))).toBe(true);
+ if(['direct','wp','missing-source'].includes(mode))expect(req.acceptance.text).toContain('验收通过');
+ if(mode==='noncode')expect(req.acceptance.text).toBe('代码验收不适用（来源说明）');
+ if(mode==='related'){expect(req.ac_ids??[]).toEqual([]);expect(req.declared_wp_ids).toEqual([]);expect(req.acceptance.text).toBe('代码验收未取得');}
+ if(mode==='mixed'){expect(req.acceptance.text).toContain('fail');expect(req.acceptance.text).not.toContain('验收通过');}
+ if(mode==='missing'){expect(req.acceptance.text).toContain('待完成');expect(req.acceptance.text).not.toContain('验收通过');}
+ const hero=templateView(result.htmlPath,'heroHtml(OBJ['+JSON.stringify(req.id)+'])');expect(hero).toContain('代码验收：');expect(hero).toContain('aria-label="代码验收适用说明"');
+});
+
+test('requirement source file references exclude JSON pointers without hiding missing files',async()=>{
+ const f=await sourceCardFixture(SMALL_CARD_TRUTH,{taskId:'req-pointer-gamma'}),task=openTask(f.taskPath,{projectName:'Demo',taskId:'req-pointer-gamma'}),ref='quality/evidence/real-processing.md';await task.createRecord(ref,'实际处理来源声明，不代独立pass。\n');const path=join(f.material,'spec.md');writeFileSync(path,readFileSync(path,'utf8')+'\n### 需求处理\n| 来源 | 原义 | 落点 | 状态 | 结论来源ref | 代码AC适用说明 |\n| --- | --- | --- | --- | --- | --- |\n| 后建 R-001 | 受控需求 | 前序处理 | 持续执行 | `'+ref+'` §1；报告指针 `/acceptance/0` | 不适用代码AC |\n');
+ const rendered=await renderAnswerPage(f),req=data(rendered.htmlPath).objects.find(o=>o.source_id==='后建索引 R-001');expect(req.implementation.text).toBe('材料记载：持续执行');expect(req.src.some(s=>s.path===join(f.taskPath,ref))).toBe(true);
+});
+
+for(const kind of ['partial','mixed','range-chain'])test('requirement AC denominator rejects partial shorthand '+kind,async()=>{
+ const f=await sourceCardFixture({...SMALL_CARD_TRUTH,requirements:SMALL_CARD_TRUTH.requirements.map(r=>({...r,landing:'未声明归属'}))},{taskId:'req-partial-shorthand'}),task=openTask(f.taskPath,{projectName:'Demo',taskId:'req-partial-shorthand'}),source='quality/evidence/partial-processing.md';await task.createRecord(source,'受控真实材料声明，不代独立验收。\n');
+ const spec=join(f.material,'spec.md'),landing=kind==='mixed'?'AC-DEMO-001、AC-DEMO-002/003':kind==='range-chain'?'AC-DEMO-001至AC-DEMO-002至AC-OTHER-003':'AC-DEMO-001/002';writeFileSync(spec,readFileSync(spec,'utf8')+'\n- **AC-OTHER-003**: controlled final endpoint, not an invented range denominator.\n\n### 需求处理\n| 来源 | 原义 | 落点 | 状态 | 结论来源ref | 代码AC适用说明 |\n| --- | --- | --- | --- | --- | --- |\n| 后建 R-001 | 受控需求 | '+landing+' | 本规格承接 | `'+source+'` | 原有全部分母不得缩减 |\n');
+ const ref='quality/evidence/partial-ac-results.json';await task.createRecord(ref,JSON.stringify({phase_id:'P1',acceptance:[{ac:'AC-DEMO-001',tier:'pass'},...(kind==='mixed'?[{ac:'AC-DEMO-002',tier:'fail'}]:kind==='range-chain'?[{ac:'AC-DEMO-002',tier:'pass'},{ac:'AC-OTHER-003',tier:'pass'}]:[])]}));const phase=join(f.material,'phases/P1-cards.md');writeFileSync(phase,readFileSync(phase,'utf8').replace('quality/tests/cards.output',ref));
+ const rendered=await renderAnswerPage(f),req=data(rendered.htmlPath).objects.find(o=>o.source_id==='后建索引 R-001');expect(req.acceptance.text).toBe('验收归属未取得');expect(req.acceptance.text).not.toContain('验收通过');expect(req.status.text).toBe('材料记载：本规格承接');if(kind==='mixed')expect(req.acceptance.results.some(claim=>claim.tier==='fail')).toBe(true);
 });

@@ -24,6 +24,7 @@ function sections(text, level) {
 function fields(body){const result={};let key;for(const line of (body??'').split('\n')){const m=/^\s*-\s*\*\*([^*]+)\*\*[:：]\s*(.*)$/.exec(line);if(m){key=m[1];result[key]=m[2];}else if(/^#/.test(line)){key=undefined;}else if(key){if(key==='动作'||key==='Action')result[key]+='\n'+line;else if(line.trim())result[key]+=' '+line.trim();}}return result;}
 const cells=line=>line.trim().replace(/^\||\|$/g,'').split('|').map(value=>value.trim().replace(/`/g,''));
 const ids=(text,pattern)=>[...new Set((text??'').match(pattern)??[])];
+const explicitPackageIds=value=>/^\s*WP\d+(?:\s*[,、，/]\s*WP\d+)*\s*$/.test(value??'')?ids(value,/WP\d+/g):[];
 // A collection reference is meaningful only when its stated quantity matches the sourced set.
 function declaresPackageSet(text,count){
  if(/(?:全部|所有)工作包/.test(text))return true;
@@ -153,7 +154,7 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
    const sourceId='后建索引 '+row[0];if(objects.some(o=>o.source_id===sourceId))throw Error('duplicate requirement identity: '+sourceId);
    const {raw,lineNumber,quote}=rawReference(row[2]);
    const req=node('req',row[1],raw?.path??metadata,raw?`line:${lineNumber}`:'原话来源未明确或未取得',{missing:!quote,id:'req-index-'+row[0],summary:row[1]});
-   Object.assign(req,{source_id:sourceId,label:sourceId,short:sourceId+' · '+short(row[1]),quote:quote??'',source:raw?'用户原始需求':'原件未取得',declared_wp_ids:ids(row[3],/WP\d+/g),aliases:[...requirementAliases].filter(([,targets])=>targets.includes(row[0])).map(([alias])=>'v1主文 '+alias)});
+   Object.assign(req,{source_id:sourceId,label:sourceId,short:sourceId+' · '+short(row[1]),quote:quote??'',source:raw?'用户原始需求':'原件未取得',declared_wp_ids:explicitPackageIds(row[3]),aliases:[...requirementAliases].filter(([,targets])=>targets.includes(row[0])).map(([alias])=>'v1主文 '+alias)});
    req.src=[...(raw?[source(raw.path,`line:${lineNumber}；逐字原话`)]:[source(metadata,'原话来源未明确或未取得')]),source(requirementIndex.path,`line:${lineIndex+1}；${sourceId} 摘要（非逐字）`)];
   }
   // The alias table follows the primary table; resolve only its explicit crosswalk.
@@ -164,7 +165,7 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
   for(const [offset,line]of (requirements?.body??'').split('\n').entries()){
    if(!/^\s*\|/.test(line))continue;const row=cells(line);if(!/^R-\d{3}[a-z]*$/.test(row[0])||row.length<4)continue;
    const {raw,lineNumber,quote}=rawReference(row[2]),req=node('req',row[1],raw?.path??decisionPath,raw?`line:${lineNumber}`:'原话来源未明确或未取得',{id:'req-'+row[0],missing:!quote,summary:row[1]});
-   Object.assign(req,{source_id:row[0],label:row[0],quote:quote??'',source:quote?'用户原始需求':'原话未取得',declared_wp_ids:ids(row[3],/WP\d+/g)});
+   Object.assign(req,{source_id:row[0],label:row[0],quote:quote??'',source:quote?'用户原始需求':'原话未取得',declared_wp_ids:explicitPackageIds(row[3])});
    req.src=[source(decisionPath,`line:${requirements.line+offset+1}；${row[0]} 来源与落点`),...(raw?[source(raw.path,`line:${lineNumber}；逐字原话`)]:[])];
   }
  }
@@ -311,6 +312,45 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
  const edges=[],sideEdges=[];
  const edge=(list,a,b)=>{if(a&&b&&a!==b&&!list.some(pair=>pair[0]===a&&pair[1]===b))list.push([a,b]);};
  const criterionIds=text=>{const found=ids(text,/AC-[A-Z]+-\d{3}/g);for(const m of (text??'').matchAll(/(AC-[A-Z]+-)(\d{3})\s*至\s*\1(\d{3})/g)){const first=Number(m[2]),last=Number(m[3]);if(last-first<100&&last>=first)for(let n=first;n<=last;n++)found.push(m[1]+String(n).padStart(3,'0'));}return [...new Set(found)];};
+ // Requirement processing declarations and code acceptance are separate sourced facts.
+ const handling=new Map();let handlingColumns=null;
+ for(const [lineIndex,line]of (spec??'').split('\n').entries()){
+  if(!/^\s*\|/.test(line)){handlingColumns=null;continue;}
+  const row=cells(line),rawCells=line.trim().replace(/^\||\|$/g,'').split('|').map(value=>value.trim());
+  if(['来源','落点','状态','结论来源ref','代码AC适用说明'].every(name=>row.includes(name))){handlingColumns=Object.fromEntries(row.map((name,index)=>[name,index]));continue;}
+  if(!handlingColumns||row.every(value=>/^[-: ]+$/.test(value)))continue;
+  const field=name=>row[handlingColumns[name]]??'',sourceNames=[];
+  for(const match of field('来源').matchAll(/后建(?:索引)?\s*((?:R-\d{3}[a-z]*(?:\s*[、，,]\s*)?)+)/g))sourceNames.push(...ids(match[1],/R-\d{3}[a-z]*/g).map(id=>'后建索引 '+id));
+  if(/^R-\d{3}[a-z]*(?:\s*[,、，/]\s*R-\d{3}[a-z]*)*\s*$/.test(field('来源')))sourceNames.push(...ids(field('来源'),/R-\d{3}[a-z]*/g));
+  for(const req of objects.filter(value=>value.kind==='req'&&sourceNames.includes(value.source_id))){
+   const refs=[...(rawCells[handlingColumns['结论来源ref']]??'').matchAll(/`([^`]+)`/g)].map(match=>match[1]).filter(ref=>/\.[A-Za-z][A-Za-z0-9]*(?:#[^\s]*)?$/.test(ref)),missing=[];
+   for(const ref of refs){
+    const fileRef=ref.split('#')[0];
+    if(isAbsolute(fileRef)||fileRef.includes('\\')||fileRef.split('/').some(part=>!part||part==='.'||part==='..')){missing.push(ref);continue;}
+    const path=fileRef.startsWith('quality/')?task.recordPath(fileRef):fileRef==='task.json'?metadata:join(material,fileRef);
+    if(read(path,true)===null)missing.push(ref);else req.src.push(source(path,'需求处理声明来源；'+ref));
+   }
+   req.src.push(source(specPath,'line:'+(lineIndex+1)+'；'+req.source_id+' 处理声明与代码验收适用说明'));
+   const record={state:field('状态'),reason:field('代码AC适用说明'),missing:!refs.length?['结论来源ref未取得']:missing};
+   const records=handling.get(req.id)??[];records.push(record);handling.set(req.id,records);
+   const landing=field('落点');if(!/依赖|相关|来源/.test(landing)){
+    record.unsupportedAC=/AC-/.test(landing)&&(!/^AC-[A-Z]+-\d{3}(?:\s*至\s*AC-[A-Z]+-\d{3})?(?:\s*[、，,;/]\s*AC-[A-Z]+-\d{3}(?:\s*至\s*AC-[A-Z]+-\d{3})?)*$/.test(landing.trim())||[...landing.matchAll(/(AC-[A-Z]+-)(\d{3})\s*至\s*(AC-[A-Z]+-)(\d{3})/g)].some(match=>match[1]!==match[3]||Number(match[4])<Number(match[2])||Number(match[4])-Number(match[2])>=100));
+    req.ac_ids=[...new Set([...(req.ac_ids??[]),...criterionIds(landing)])];req.declared_wp_ids=[...new Set([...(req.declared_wp_ids??[]),...explicitPackageIds(landing)])];
+   }
+  }
+ }
+ for(const req of objects.filter(value=>value.kind==='req')){
+  const records=handling.get(req.id);if(!records)continue;
+  const states=[...new Set(records.map(record=>record.state).filter(Boolean))],missing=records.flatMap(record=>record.missing);
+  req.implementation={text:states.length===1?'材料记载：'+states[0]:states.length?'处理声明不一致：'+states.join(' / '):'处理声明未取得'};
+  if(missing.length)req.implementation.text+=' · 结论来源未取得：'+missing.join('、');
+  req.acceptance={text:'代码验收未取得',results:[],reason:[...new Set(records.map(record=>record.reason).filter(Boolean))].join('；')};
+ }
+ const requirementMapping=req=>{const owners=(req.declared_wp_ids??[]).map(id=>packages.find(wp=>wp.source_id===id));return {complete:owners.every(wp=>Array.isArray(wp?.ac_ids)&&wp.ac_ids.length>0)&&!(handling.get(req.id)??[]).some(record=>record.unsupportedAC),ids:[...new Set([...(req.ac_ids??[]),...owners.flatMap(wp=>wp?.ac_ids??[])])]};};
+ const setRequirementAcceptance=(req,a,mapping)=>{
+  const reason=req.acceptance?.reason??'',text=!mapping.complete?'验收归属未取得':mapping.ids.length?a.text:reason?(/不(?:直接)?适用代码AC|无本任务代码AC/.test(reason)?'代码验收不适用（来源说明）':'代码验收未取得'):a.text;
+  req.acceptance={text,results:a.claims??[],...(reason?{reason}:{})};req.status={text:req.implementation?.text??((req.source==='原件未取得'||req.status.text==='缺'?'缺：原话来源未取得':'需求已记录')+' · '+text),tone:req.implementation?'unk':a.tone};
+ };
  const wpMappings=sections(spec,3).filter(block=>/^\s*\|\s*WP\d+\b.*AC-[A-Z]+-\d{3}/m.test(block.body));
  for(const req of objects.filter(o=>o.kind==='req'))for(const wpId of req.declared_wp_ids??[]){const wp=packages.find(o=>o.source_id===wpId);if(wp)edge(edges,req.id,wp.id);else{req.status.text=req.status.text==='缺'?'缺':'归属未取得';req.unresolved_refs=[...(req.unresolved_refs??[]),wpId];}}
  for(const line of wpMappings.flatMap(block=>block.body.split('\n'))){if(!/^\s*\|\s*WP\d+\b/.test(line))continue;const row=cells(line),wp=packages.find(o=>o.source_id===/^WP\d+/.exec(row[0])?.[0]);if(!wp)continue;const acs=criterionIds(row[1]);wp.ac_ids=acs;wp.src.push(source(specPath,`${wp.source_id} → ${acs.join('、')} 显式映射`));for(const t of objects.filter(o=>o.kind==='task'&&o.ac_ids?.some(id=>acs.includes(id))))edge(edges,wp.id,t.id);for(const a of objects.filter(o=>o.kind==='acc'&&acs.includes(o.source_id))){a.owners=[...(a.owners??[]),wp.id];}}
@@ -340,7 +380,7 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
   if(entry)t.src.push(source(entry.path,'已记录的实施/验收结论；不从测试exit推断'));if(phaseProof)t.src.push(source(phaseProof.path,'真实Phase交付提交；不代Task逐项验收'));if(taskProof)t.src.push(source(taskProof.path,'真实提交与具名Task实施路径逐字绑定；不代验收'));
  }
  for(const wp of packages){if(wp.status.text==='缺')continue;const a=acceptanceFor(wp.ac_ids);wp.status={text:(wp.planSummary?'方案已定':'工作包已记录')+' · '+a.text,tone:a.tone};for(const path of new Set((a.claims??[]).map(c=>c.path)))wp.src.push(source(path,'显式AC的既有验收结论'));}
- for(const req of objects.filter(o=>o.kind==='req'&&o.status.text!=='缺'))req.status={text:'需求已记录'+(req.unresolved_refs?.length?' · 归属未取得：'+req.unresolved_refs.join('、'):''),tone:'unk'};
+ for(const req of objects.filter(o=>o.kind==='req')){const mapping=requirementMapping(req);setRequirementAcceptance(req,acceptanceFor(mapping.ids),mapping);}
  fingerprints.phase_statuses_sha256=hash(JSON.stringify(objects.filter(o=>['req','wp','task'].includes(o.kind)).map(o=>({id:o.id,status:o.status,implementation:o.implementation,acceptance:o.acceptance}))));
  const linked=new Set([...edges,...sideEdges].flat());for(const o of objects)if(!linked.has(o.id)&&!o.owners?.length&&!['req','wp','task','phase'].includes(o.kind))o.scope='task';
  const businessTitle=/^- \*\*功能名\*\*[:：]\s*(.+)$/m.exec(spec??'')?.[1]??/^#\s+(?:功能规格[:：]\s*)?(.+)$/m.exec(spec??'')?.[1]??manifest.task_id;
@@ -371,9 +411,7 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
   for(const t of objects.filter(o=>o.kind==='task')){const a=acceptanceView(t.ac_ids);t.acceptance={text:a.text,results:a.claims};t.status={text:t.implementation.text+' · '+a.text,tone:a.tone};}
   for(const wp of packages){const a=acceptanceView(wp.ac_ids);wp.acceptance={text:a.text,results:a.claims};wp.status={text:(wp.planSummary?'方案已定':'工作包已记录')+' · '+a.text,tone:a.tone};}
   for(const req of objects.filter(o=>o.kind==='req')){
-   const declared=req.declared_wp_ids??[],owners=declared.map(id=>packages.find(wp=>wp.source_id===id));
-   const mapped=declared.length>0&&owners.every(wp=>Array.isArray(wp?.ac_ids)&&wp.ac_ids.length>0)?[...new Set(owners.flatMap(wp=>wp.ac_ids))]:[];
-   const a=acceptanceView(mapped);req.acceptance={text:a.text,results:a.claims};req.status={text:(req.source==='原件未取得'||req.status.text==='缺'?'缺：原话来源未取得':'需求已记录')+' · '+a.text,tone:a.tone};
+   const mapping=requirementMapping(req);setRequirementAcceptance(req,acceptanceView(mapping.ids),mapping);
   }
   for(const o of objects.filter(o=>o.kind==='acc')){const claim=acs.get(o.source_id);if(claim)o.status={text:claim.result==='pass'?'验收已通过':claim.result==='fail'?'验收未通过':'验收未完成',tone:claim.result==='pass'?'ok':claim.result==='fail'?'fail':'unk'};}
   for(const o of objects.filter(o=>['req','wp','task'].includes(o.kind)))for(const claim of o.acceptance?.results??[])for(const ref of claim.refs??[])o.src.push(source(join(task.taskPath,ref.ref),'public status 已核AC原件 '+claim.id));
