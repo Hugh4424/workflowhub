@@ -1233,10 +1233,8 @@ function terminalAssessmentQuality(context, row) {
     let outputMatches=false;
     if(typeof final.public_text==="string"){
       if(terminal)outputMatches=rawVerdictBytes!==null&&Buffer.from(final.public_text,"utf8").equals(rawVerdictBytes);
-      else{
-        outputMatches=Buffer.from(final.public_text,"utf8").equals(read(proofRef,null));
-        if(!outputMatches)try{const receipt=JSON.parse(final.public_text);outputMatches=identity(receipt)&&receipt.agent_thread_id===reader.identity&&sameReference(receipt.artifact_ref,proofRef);}catch{}
-      }
+      else outputMatches=Buffer.from(final.public_text,"utf8").equals(read(proofRef,null));
+      if(!outputMatches)try{const receipt=JSON.parse(final.public_text);outputMatches=identity(receipt)&&receipt.agent_thread_id===reader.identity&&sameReference(receipt.artifact_ref,terminal?envelope.raw_ref:proofRef);}catch{}
     }
     const completed=final.agent_thread_id===reader.identity&&delivery.agent_thread_id===reader.identity&&typeof final.public_text==="string"&&final.public_text===delivery.public_text&&outputMatches;
     return requireFact(ok&&completed,`${label}: public final/delivery mismatch`);

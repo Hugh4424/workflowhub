@@ -4038,9 +4038,9 @@
     "semantic_hash": "989528b02d9e86041368a3224c2989b4"
   },
   "tests/contract/status-derivation.test.mjs": {
-    "mtime": 1793138872.814703,
-    "seen": 1793139094.954746,
-    "ast_hash": "85ca55d6e74d2ba8a4267b76cff6c3ff",
+    "mtime": 1793158784.2671938,
+    "seen": 1793159003.352244,
+    "ast_hash": "42f3abbcc6b4d8d7fd416e17bb0def09",
     "semantic_hash": ""
   },
   "tests/contract/task-close-cli-resolution.test.mjs": {
@@ -4374,9 +4374,9 @@
     "semantic_hash": ""
   },
   "tools/cli/stage-runtime.mjs": {
-    "mtime": 1793138892.909543,
-    "seen": 1793139094.954742,
-    "ast_hash": "0ca78955c71cb666bae94a8aa0dc92c8",
+    "mtime": 1793158814.9959826,
+    "seen": 1793159003.35224,
+    "ast_hash": "366cf388c89a824fb20ecaede55357eb",
     "semantic_hash": ""
   },
   "tools/cli/task-bootstrap.mjs": {
