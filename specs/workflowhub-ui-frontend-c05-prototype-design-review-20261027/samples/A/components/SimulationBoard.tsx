@@ -759,7 +759,12 @@ function RunDrawer({ sim, onClose, onOpenWorkbench }: { sim: Simulation; onClose
               导出
             </button>
             {running && sim.status !== "stopping" && (
-              <button className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3.5 py-1.5 text-[12px] font-medium text-amber-200 hover:bg-amber-500/20">正常停止</button>
+              <>
+                <button disabled={!hasWorkbench(sim.id)} onClick={() => onOpenWorkbench(sim.id)}
+                  title={hasWorkbench(sim.id) ? undefined : "该模拟暂无工作台数据"}
+                  className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3.5 py-1.5 text-[12px] font-medium text-amber-200 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50">前往工作台正常停止</button>
+                {!hasWorkbench(sim.id) && <span className="text-[11px] text-amber-200">该模拟暂无工作台数据，无法前往工作台正常停止</span>}
+              </>
             )}
           </div>
           {terminal && !exportable && <div className="mt-1.5 text-[11px] text-slate-600">该 run_kind 导出禁用</div>}

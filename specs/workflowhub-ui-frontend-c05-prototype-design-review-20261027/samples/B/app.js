@@ -7,6 +7,8 @@
   const instruments = { NQ: ['纳斯达克100', 'NQZ6', '21,430.25'], GC: ['黄金', 'GCZ6', null], ES: ['标普500', 'ESZ6', '5,734.50'], CL: ['原油', 'CLX6', '68.72'], ZN: ['10年期国债', 'ZNZ6', '112.125'] };
   const words = { requested: '已发出 · 等待生效', confirmed: '读回确认已清仓', failed: '未生效', unknown: '结果未知', partial: '部分成功 · 存在未生效/结果未知' };
   const resultWords = { waiting: '等待读回', confirmed: '已清仓', failed: '未生效', unknown: '结果未知' };
+  const readbackStatuses = { unknown: 'unknown', partial: 'partial', error: 'failed' };
+  const partialResults = { '4821': 'confirmed', '7204': 'failed', '9043': 'unknown' };
   const descriptions = { loading: '正在加载品种监控…', empty: '暂无品种数据', error: '平台读取失败；本地模拟命令可查看失败读回。', cancel: '取消反馈场景：确认前取消不创建命令；已发送请求不能由本地关闭撤销。', permission: '权限边界演示：许可与账户关系分开显示。', duplicate: '重复意图仅生成一条命令；查询原命令不重发。', partial: '部分结果按账户分别读回，未确认持仓保留。', unknown: '结果未知时只查询原命令，不自动重发。' };
   const params = new URL(location.href).searchParams;
   const scenario = scenarios.includes(params.get('state')) ? params.get('state') : 'default';
@@ -20,7 +22,13 @@
   const relation = value => value === 'leader' ? '主账户（leader）' : '跟随账户（follower）';
   const quantity = value => value === null ? '未提供' : `${value} 手`;
   function gate(symbol) {
-    const reason = role === 'follower' ? '当前本地跟随账户视角为只读；不是生产RBAC' : permission === 'deny' ? '许可拒绝，不能发送' : permission === 'missing' ? '许可未提供，无法确认可发送' : symbol === 'GC' ? 'GC受控拒绝场景，不发送' : permission === 'close_only' ? '仅允许平仓，不允许开仓' : '允许平仓';
+    let reason;
+    if (role === 'follower') reason = '当前本地跟随账户视角为只读；不是生产RBAC';
+    else if (permission === 'deny') reason = '许可拒绝，不能发送';
+    else if (permission === 'missing') reason = '许可未提供，无法确认可发送';
+    else if (symbol === 'GC') reason = 'GC受控拒绝场景，不发送';
+    else if (permission === 'close_only') reason = '仅允许平仓，不允许开仓';
+    else reason = '允许平仓';
     return { canClose: role !== 'follower' && ['allow', 'close_only'].includes(permission) && symbol !== 'GC', reason };
   }
   function accountRows(rows, results = false) {
@@ -102,9 +110,9 @@
     const generation = state.generation;
     const settle = () => {
       if (generation !== state.generation || !state.commands.includes(command)) return;
-      command.status = scenario === 'unknown' ? 'unknown' : scenario === 'partial' ? 'partial' : scenario === 'error' ? 'failed' : 'confirmed';
-      command.accounts = command.accounts.map((account, index) => {
-        const result = command.status === 'partial' ? index === 0 ? 'confirmed' : index === 1 ? 'failed' : 'unknown' : command.status;
+      command.status = readbackStatuses[scenario] ?? 'confirmed';
+      command.accounts = command.accounts.map(account => {
+        const result = command.status === 'partial' ? partialResults[account.id] : command.status;
         return { ...account, result, quantity: result === 'confirmed' ? 0 : account.quantity, proof: result === 'confirmed' ? `MOCK-PROOF-${command.id}-${account.id}` : null };
       });
       command.pending = false; command.revision++; renderPanel();
