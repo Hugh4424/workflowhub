@@ -540,17 +540,28 @@ function deliveryInput(facts, taskId, read, actualCommands, declared, limits, re
       }
     } else limits.push(`${eventRef}: delivery timing original identity/observation is not reliably established`);
   }
+  const prRows=facts.filter(value=>value.record_kind === "close_action" && value.stage === "close" && value.close_action?.action === "pull_request_opened");
   for (const row of facts.filter(value=>value.record_kind === "close_action" && value.stage === "close" && value.close_action?.action === "merge")) {
     const action = row.close_action, source = read(action.ref);
     if (!source.verified || !text(action.result)) continue;
     let merge;
     try { merge = JSON.parse(source.raw); } catch { continue; }
-    if (!Array.isArray(merge.argv) || !/\bgit\b.*\bmerge\b/.test(merge.argv.join(" ")) || merge.exit_code !== 0 || merge.signal || merge.timed_out || merge.cancelled || merge.truncated || ![repo,targetRepo].includes(resolve(merge.cwd ?? ""))) continue;
+    if (!Array.isArray(merge.argv) || !/\bgit\b.*\bmerge\b/.test(merge.argv.join(" ")) || merge.exit_code !== 0 || merge.signal || merge.timed_out || merge.cancelled || merge.truncated || resolve(merge.cwd ?? "")!==resolve(targetRepo)) continue;
     const mergeOutput = read(merge.output_ref,merge.output_sha256);
     if (!mergeOutput.verified) continue;
-    Object.assign(delivery,{declared:true,reached:true,timing_verified:true,timing_ref:action.ref});
     const expectedNumber = action.result.match(/PR\s*#?\s*(\d+)/i)?.[1];
     const expectedHead = action.result.match(/\b[a-f0-9]{40}\b/i)?.[0];
+    let currentDelivered=false;
+    try {
+      const oid=(cwd,name)=>execFileSync("git",["rev-parse","--verify",name],{cwd,encoding:"utf8",stdio:["ignore","pipe","pipe"]}).trim();
+      const taskHead=oid(repo,"HEAD"),targetHead=oid(targetRepo,"HEAD");
+      if(/^[a-f0-9]{40}$/i.test(expectedHead??"")){
+        execFileSync("git",["merge-base","--is-ancestor",expectedHead,taskHead],{cwd:repo,stdio:"ignore"});
+        execFileSync("git",["merge-base","--is-ancestor",taskHead,targetHead],{cwd:repo,stdio:"ignore"});
+        currentDelivered=true;
+        Object.assign(delivery,{declared:true,reached:true,timing_verified:true,timing_ref:action.ref});
+      }
+    } catch { /* An earlier merge cannot override the current explicit timing observation. */ }
     const handoffRefs = [];
     for (const stage of facts.filter(value=>value.record_kind === "stage" && text(value.handoff?.value))) {
       const handoff=read(stage.handoff.value);
@@ -562,7 +573,7 @@ function deliveryInput(facts, taskId, read, actualCommands, declared, limits, re
       handoffRefs.push(...body.split("\n").filter(line=>/PR/.test(line)).flatMap(line=>[...line.matchAll(/(?:`)?(quality\/tests\/[^`\s、，；;]+\.json)(?:`)?/g)].map(match=>match[1])));
     }
     const commandRefs=actualCommands.filter(entry=>/\bgh\s+pr\s+view\b/.test(entry.command) && entry.exit_code === 0).map(entry=>entry.ref);
-    for (const ref of [...new Set([...receiptPointers(row.source),...handoffRefs,...commandRefs])]) {
+    for (const ref of [...new Set([...receiptPointers(row.source),...prRows.map(value=>value.close_action.ref),...handoffRefs,...commandRefs])]) {
       const original = read(ref);
       if (!original.verified) continue;
       let receipt;
@@ -577,12 +588,27 @@ function deliveryInput(facts, taskId, read, actualCommands, declared, limits, re
         const expectedRepo = remote.replace(/\/$/,"");
         const boundRepo = typeof pr.url === "string" && pr.url.startsWith(`${expectedRepo}/pull/`) && pr.url.endsWith(`/pull/${pr.number}`);
         const boundTask = text(pr.headRefName) && pr.headRefName.endsWith(`/${taskId}`);
-        const boundHead = text(expectedHead) && (pr.headRefOid === expectedHead || pr.mergeCommit?.oid === expectedHead);
-        let expectedBase=merge.argv.find(arg=>/^origin\/[^/]+$/.test(arg))?.slice("origin/".length);
-        if (!expectedBase) { try { expectedBase=execFileSync("git",["branch","--show-current"],{cwd:repo,encoding:"utf8",stdio:["ignore","pipe","pipe"]}).trim(); } catch { /* No base source means unavailable. */ } }
+        let expectedBase;
+        try { expectedBase=execFileSync("git",["branch","--show-current"],{cwd:targetRepo,encoding:"utf8",stdio:["ignore","pipe","pipe"]}).trim(); } catch { /* No authenticated target branch means unavailable. */ }
         const boundBase=text(expectedBase) && pr.baseRefName === expectedBase;
+        const oid=(cwd,name)=>execFileSync("git",["rev-parse","--verify",name],{cwd,encoding:"utf8",stdio:["ignore","pipe","pipe"]}).trim();
+        const ancestor=(a,b)=>{if(!/^[a-f0-9]{40}$/i.test(a??"")||!/^[a-f0-9]{40}$/i.test(b??""))return false;try{execFileSync("git",["merge-base","--is-ancestor",a,b],{cwd:repo,stdio:"ignore"});return true;}catch{return false;}};
+        const taskHead=oid(repo,"HEAD"),targetHead=oid(merge.cwd,"HEAD");
+        const directHead=text(expectedHead) && (pr.headRefOid === expectedHead || pr.mergeCommit?.oid === expectedHead) && (ancestor(taskHead,pr.headRefOid)||ancestor(taskHead,pr.mergeCommit?.oid));
+        // A previous merged PR remains its own delivery identity. A later ordinary
+        // correction must independently reach the authenticated target and remote.
+        const originalPR=prRows.find(value=>value.close_action.ref===ref && value.close_action.result?.match(/\b[a-f0-9]{40}\b/i)?.[0]===pr.headRefOid);
+        let appendedHead=false;
+        if(originalPR&&boundBase&&merge.argv.includes(expectedHead)&&ancestor(pr.headRefOid,expectedHead)&&ancestor(pr.mergeCommit?.oid,targetHead)){
+          const remoteHead=oid(merge.cwd,"refs/remotes/origin/"+expectedBase);
+          const pushRefs=facts.filter(value=>value.record_kind==="close_action"&&value.stage==="close"&&value.close_action?.action==="push").map(value=>value.close_action.ref);
+          const pushed=actualCommands.find(command=>pushRefs.includes(command.ref)&&command.verified&&command.exit_code===0&&resolve(command.receipt.cwd)===resolve(merge.cwd)&&command.receipt.argv.includes("push")&&command.receipt.argv.includes("origin")&&command.receipt.argv.some(arg=>arg==='HEAD:refs/heads/'+expectedBase||arg===expectedBase));
+          appendedHead=Boolean(pushed)&&ancestor(taskHead,remoteHead)&&ancestor(pr.mergeCommit?.oid,remoteHead);
+          if(appendedHead)delivery.push={...pushed};
+        }
+        const boundHead=currentDelivered&&(directHead||appendedHead);
         if (pr.state !== "MERGED" || !Number.isFinite(Date.parse(pr.mergedAt)) || !/^[a-f0-9]{40}$/i.test(pr.mergeCommit?.oid ?? "") || !boundRepo || !boundTask || !boundHead || !boundBase || expectedNumber && Number(expectedNumber) !== pr.number) { limits.push(`${ref}: PR repository/head/base/task/merge identity or state is not bound to the actual close source`); continue; }
-        delivery.pr = {...fileEvidence(ref,original.raw),number:pr.number,url:pr.url,head:pr.headRefName,base:pr.baseRefName,fields:{task_id:taskId,merge_ref:action.ref,pr_number:pr.number},basis:[fileEvidence(action.ref,source.raw),fileEvidence(ref,original.raw),fileEvidence(receipt.output_ref,output.raw)]};
+        delivery.pr = {...fileEvidence(ref,original.raw),number:pr.number,url:pr.url,head:pr.headRefName,base:pr.baseRefName,fields:{task_id:taskId,merge_ref:action.ref,pr_number:pr.number},basis:[fileEvidence(action.ref,source.raw),fileEvidence(ref,original.raw),fileEvidence(receipt.output_ref,output.raw),...(appendedHead?[delivery.push]:[])]};
       } catch { limits.push(`${ref}: PR original is not a readable JSON result`); }
     }
   }

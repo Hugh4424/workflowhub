@@ -634,15 +634,19 @@ describe('final-chain report actual diff conflict',()=>{
 });
 async function closeMergeFixture({withPR=true}={}) {
   const f=taskFixture();implementation(f);writerIdentity(f);git(f,['branch','-M','task/workflowhub/owned-task']);git(f,['remote','add','origin','https://github.com/owned/fixture.git']);
-  const head=git(f,['rev-parse','HEAD']);
+  const head=git(f,['rev-parse','HEAD']),primary=join(f.root,'primary');
+  git(f,['worktree','add','-qb','main',primary,'HEAD^']);
+  const manifest=JSON.parse(readFileSync(join(f.taskPath,'task.json'),'utf8'));put(f.taskPath,'task.json',{...manifest,target_repo_root:primary});
+  const native=spawnSync('git',['merge','--no-ff',head,'-m','Merge owned task'],{cwd:primary,encoding:'utf8'});expect(native.status,native.stderr).toBe(0);
+  const merged=spawnSync('git',['rev-parse','HEAD'],{cwd:primary,encoding:'utf8'}).stdout.trim();
   const mergeRef='quality/tests/owned-merge.json';
-  put(f.taskPath,mergeRef,{argv:['git','merge','--ff-only','origin/main'],cwd:f.repo,exit_code:0,signal:null,timed_out:false,cancelled:false,truncated:false,output_ref:join(f.taskPath,'quality/tests/owned-merge.output')});
-  put(f.taskPath,'quality/tests/owned-merge.output','Controlled merge observation; non-network fixture.\n');
+  put(f.taskPath,mergeRef,{argv:['git','merge','--no-ff',head,'-m','Merge owned task'],cwd:primary,exit_code:0,signal:null,timed_out:false,cancelled:false,truncated:false,output_ref:join(f.taskPath,'quality/tests/owned-merge.output')});
+  put(f.taskPath,'quality/tests/owned-merge.output',native.stdout+native.stderr);
   const evidence=[];let source=`Controlled delivered task; receipt: ${mergeRef}; output: quality/tests/owned-merge.output`;
   if(withPR){
     const ref='quality/tests/pr-post-merge.json',output='quality/tests/pr-post-merge.output',argv=['gh','pr','view','12','--repo','owned/fixture','--json','number,url,state,mergedAt,mergeCommit,headRefName,headRefOid,baseRefName,baseRefOid'];
     put(f.taskPath,ref,{argv,cwd:f.repo,exit_code:0,signal:null,timed_out:false,cancelled:false,truncated:false,started_at:'2026-10-20T00:00:00Z',ended_at:'2026-10-20T00:00:01Z',output_ref:join(f.taskPath,output)});
-    put(f.taskPath,output,{number:12,url:'https://github.com/owned/fixture/pull/12',state:'MERGED',mergedAt:'2026-10-20T00:00:00Z',mergeCommit:{oid:head},headRefName:'task/workflowhub/owned-task',headRefOid:head,baseRefName:'main',baseRefOid:head});
+    put(f.taskPath,output,{number:12,url:'https://github.com/owned/fixture/pull/12',state:'MERGED',mergedAt:'2026-10-20T00:00:00Z',mergeCommit:{oid:merged},headRefName:'task/workflowhub/owned-task',headRefOid:head,baseRefName:'main',baseRefOid:head});
     evidence.push({command:'gh pr view 12 and git remote branch readback after merge',exit_code:0,failure_signature:`PR MERGED; readback receipts ${ref} and siblings.`});source+=`; receipt: ${ref}; output: ${output}`;
   }
   await writeStageRow(f.taskPath,{record_kind:'close_action',stage:'close',source,close_action:{action:'merge',result:`Controlled task PR #12 merged with head ${head}.`,ref:mergeRef},evidence:{value:evidence.length?evidence:null,reason:evidence.length?'Actual-shape controlled PR original.':'PR original unavailable; merge event still observed.'}});
@@ -1606,4 +1610,53 @@ describe('final-chain shared evidence and method obligations',()=>{
     const active=(await report(f)).workflow_steps.find(row=>row.source===source&&row.step_slug===slug);
     expect(active).toMatchObject({human_required:true,program_required:true});
   });
+});
+
+async function appendedMergedPRFixture() {
+ const f=taskFixture();implementation(f);writerIdentity(f);git(f,['branch','-M','task/workflowhub/owned-task']);
+ const primary=join(f.root,'primary'),remote=join(f.root,'origin.git'),prHead=git(f,['rev-parse','HEAD']);
+ const run=(cwd,argv)=>{const r=spawnSync(argv[0],argv.slice(1),{cwd,encoding:'utf8'});expect(r.status,r.stderr).toBe(0);return r;};
+ run(f.root,['git','init','--bare','-q',remote]);git(f,['remote','add','origin',remote]);git(f,['worktree','add','-qb','release-target',primary,'HEAD^']);
+ const native=(name,cwd,argv)=>{const r=run(cwd,argv),ref='quality/tests/'+name+'.json',out='quality/tests/'+name+'.output';put(f.taskPath,out,(r.stdout??'')+(r.stderr??''));put(f.taskPath,ref,{argv,cwd,exit_code:r.status,signal:r.signal,timed_out:false,cancelled:false,truncated:false,output_ref:join(f.taskPath,out)});return ref;};
+ native('original-pr-merge',primary,['git','merge','--no-ff',prHead,'-m','Merge owned PR']);const prMerge=run(primary,['git','rev-parse','HEAD']).stdout.trim();
+ const prRef='quality/tests/original-pr.json',prOut='quality/tests/original-pr.output';put(f.taskPath,prRef,{argv:['gh','pr','view','12'],cwd:primary,exit_code:0,signal:null,timed_out:false,cancelled:false,truncated:false,output_ref:join(f.taskPath,prOut)});
+ put(f.taskPath,prOut,{number:12,url:remote.replace(/\.git$/,'')+'/pull/12',state:'MERGED',mergedAt:'2026-10-20T00:00:00Z',mergeCommit:{oid:prMerge},headRefName:'task/workflowhub/owned-task',headRefOid:prHead,baseRefName:'release-target',baseRefOid:prMerge});
+ await writeStageRow(f.taskPath,{record_kind:'close_action',stage:'close',source:prRef,close_action:{action:'pull_request_opened',result:'PR #12 merged from '+prHead,ref:prRef}});
+ put(f.repo,'owned.mjs','export const observed = "follow-up correction";\n');git(f,['add','owned.mjs']);git(f,['commit','-qm','owned post-PR fix']);const fix=git(f,['rev-parse','HEAD']);
+ const mergeRef=native('followup-merge',primary,['git','merge','--no-ff',fix,'-m','Merge ordinary owned fix']);
+ await writeStageRow(f.taskPath,{record_kind:'close_action',stage:'close',source:mergeRef,close_action:{action:'merge',result:'Ordinary merge of '+fix+' into target; historical PR #12 unchanged',ref:mergeRef}});
+ const pushRef=native('followup-push',primary,['git','push','origin','HEAD:refs/heads/release-target']);
+ await writeStageRow(f.taskPath,{record_kind:'close_action',stage:'close',source:pushRef,close_action:{action:'push',result:'Pushed owned target correction',ref:pushRef},evidence:{value:[{command:'git push origin HEAD:refs/heads/release-target',exit_code:0,failure_signature:'none',ref:pushRef}]}});
+ const manifest=JSON.parse(readFileSync(join(f.taskPath,'task.json'),'utf8'));put(f.taskPath,'task.json',{...manifest,target_repo_root:primary});
+ return {...f,primary,prHead,prMerge,fix,prRef,prOut,mergeRef,pushRef};
+}
+describe('merged PR followed by ordinary task correction',()=>{
+ it('keeps both delivery identities across different Task and target worktrees with native no-ff and push',async()=>{
+  const f=await appendedMergedPRFixture(),before=readFileSync(join(f.taskPath,'facts.jsonl'),'utf8'),value=await report(f);expect(ringAt(value,10).state,JSON.stringify(value.limits)).toBe('completed');expect(JSON.stringify(ringAt(value,10).basis)).toContain('original-pr');expect(JSON.stringify(ringAt(value,10).basis)).toContain('followup-merge');expect(readFileSync(join(f.taskPath,'facts.jsonl'),'utf8')).toBe(before);
+ });
+ it.each(['foreign-repo','unrelated-head','wrong-base','failed-push','missing-pr-source','failed-merge','undelivered-new-head','undelivered-before-timing','local-merge-not-pushed','task-worktree-sync'])('rejects %s without discarding the real delivered merge',async(mode)=>{
+  const f=await appendedMergedPRFixture(),pr=JSON.parse(readFileSync(join(f.taskPath,f.prOut),'utf8'));
+  if(mode==='undelivered-new-head'||mode==='undelivered-before-timing'){put(f.repo,'owned.mjs','export const observed = \"not delivered\";\n');git(f,['add','owned.mjs']);git(f,['commit','-qm','undelivered new task commit']);}
+  if(mode==='undelivered-before-timing'){const decision=readFileSync(join(f.materialRoot,'decision-log.md'),'utf8');put(f.materialRoot,'decision-log.md',decision+'\n## 交付声明\n声明要做：本任务提交 PR。\n');const ref='quality/evidence/current-delivery-timing.json';put(f.taskPath,ref,{task_id:'owned-task',stage:'build-code',timing_verified:true,reached:false,reader:'Owned current source observer',observation:'尚未到交付时点：当前修复尚未合入'});await writeStageRow(f.taskPath,{stage:'build-code',source:ref});}
+  if(mode==='foreign-repo')pr.url='https://foreign.invalid/repo/pull/12';
+  if(mode==='unrelated-head')pr.headRefOid='f'.repeat(40);
+  if(mode==='wrong-base')pr.baseRefName='wrong-target';
+  put(f.taskPath,f.prOut,pr);
+  if(mode==='missing-pr-source')put(f.taskPath,f.prRef,'unreadable original');
+  if(mode==='local-merge-not-pushed'){
+   put(f.repo,'owned.mjs','export const observed = "local target only";\n');git(f,['add','owned.mjs']);git(f,['commit','-qm','new correction not pushed']);const head=git(f,['rev-parse','HEAD']),argv=['git','merge','--no-ff',head,'-m','Local correction only'],native=spawnSync(argv[0],argv.slice(1),{cwd:f.primary,encoding:'utf8'});expect(native.status,native.stderr).toBe(0);
+   const ref='quality/tests/local-only-merge.json',out='quality/tests/local-only-merge.output';put(f.taskPath,out,native.stdout+native.stderr);put(f.taskPath,ref,{argv,cwd:f.primary,exit_code:0,signal:null,timed_out:false,cancelled:false,truncated:false,output_ref:join(f.taskPath,out)});await writeStageRow(f.taskPath,{record_kind:'close_action',stage:'close',source:ref,close_action:{action:'merge',result:'Ordinary local-only merge of '+head,ref}});
+  }
+  if(mode==='task-worktree-sync'){const receipt=JSON.parse(readFileSync(join(f.taskPath,f.mergeRef),'utf8'));put(f.taskPath,f.mergeRef,{...receipt,cwd:f.repo,argv:['git','merge','--ff-only','origin/release-target']});}
+  if(mode==='failed-push'||mode==='failed-merge'){const ref=mode==='failed-push'?f.pushRef:f.mergeRef,receipt=JSON.parse(readFileSync(join(f.taskPath,ref),'utf8'));put(f.taskPath,ref,{...receipt,exit_code:1});}
+  const current=ringAt(await report(f),10);expect(current.state).not.toBe('completed');if(mode==='undelivered-before-timing')expect(current.state).toBe('skipped');
+ });
+});
+
+it('rejects stale direct PR merge facts when a later Task commit reaches only the local target',async()=>{
+ const f=await appendedMergedPRFixture();
+ await writeStageRow(f.taskPath,{record_kind:'close_action',stage:'close',source:'quality/tests/original-pr-merge.json',close_action:{action:'merge',result:'Original PR #12 merged from '+f.prHead,ref:'quality/tests/original-pr-merge.json'}});
+ put(f.repo,'owned.mjs','export const observed = "new local-only correction with old delivery facts";\n');git(f,['add','owned.mjs']);git(f,['commit','-qm','new correction after original delivery']);const current=git(f,['rev-parse','HEAD']);
+ const merge=spawnSync('git',['merge','--no-ff',current,'-m','Local only; original delivery facts untouched'],{cwd:f.primary,encoding:'utf8'});expect(merge.status,merge.stderr).toBe(0);
+ const before=readFileSync(join(f.taskPath,'facts.jsonl'),'utf8');expect(ringAt(await report(f),10).state).not.toBe('completed');expect(readFileSync(join(f.taskPath,'facts.jsonl'),'utf8')).toBe(before);
 });
