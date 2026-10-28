@@ -429,7 +429,7 @@ function RowMenu({ sim, isRunning, wb, linked, eligible, onOutlet, onOpenWorkben
             </div>
           ) : (
             <>
-              <button role="menuitem" onClick={() => { onViewDetail(sim); close() }} className={item}>查看详情</button>
+              <button role="menuitem" onClick={() => { ref.current?.querySelector<HTMLButtonElement>("button[aria-expanded]")?.focus(); onViewDetail(sim); close() }} className={item}>查看详情</button>
               {!isRunning && wb && <button role="menuitem" onClick={() => { onOpenWorkbench(sim.id); close() }} className={item}>打开工作台</button>}
               {linked ? (
                 <button role="menuitem" onClick={() => { setOutlet(sim.contract.slice(0, 2), null); close() }} className={item}>断开信号出口</button>
@@ -664,12 +664,33 @@ const EXEC_SIM001: LineNode[] = [
 
 function RunDrawer({ sim, onClose, onOpenWorkbench }: { sim: Simulation; onClose: () => void; onOpenWorkbench: (id: string) => void }) {
   const closeRef = useRef<HTMLButtonElement>(null)
+  const dialogRef = useRef<HTMLDialogElement>(null)
   useEffect(() => {
+    const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const dialog = dialogRef.current
+    dialog?.showModal()
+    const containTab = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Tab" || !dialog) return
+      const controls = Array.from(dialog.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])'))
+        .filter(control => control.getClientRects().length > 0)
+      const first = controls[0], last = controls[controls.length - 1]
+      if (!first || !last) return
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    dialog?.addEventListener("keydown", containTab)
     closeRef.current?.focus()
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [onClose])
+    return () => {
+      dialog?.removeEventListener("keydown", containTab)
+      dialog?.close()
+      if (trigger?.isConnected) trigger.focus()
+    }
+  }, [])
 
   // Footprint 重建 / 保留窗口状态（Task 2）—— 全部内联进现有区块
   // Footprint / 保留窗口状态 —— 与工作台监控浮窗「分区 2」同一状态源
@@ -707,8 +728,10 @@ function RunDrawer({ sim, onClose, onOpenWorkbench }: { sim: Simulation; onClose
     { state: "confirmed", text: "止盈止损挂单中" }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label="运行详情">
-      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+    <dialog ref={dialogRef} className="fixed inset-0 z-50 flex justify-end backdrop:bg-black/60" role="dialog" aria-label="运行详情"
+      style={{ margin: 0, padding: 0, border: 0, maxWidth: "none", maxHeight: "none", width: "100vw", height: "100dvh", background: "transparent" }}
+      onCancel={event => { event.preventDefault(); onClose() }}>
+      <div className="absolute inset-0" onClick={onClose} />
       <div className="relative flex h-full w-full max-w-[520px] flex-col border-l border-white/[0.08] bg-[#0a0d14] shadow-2xl">
 
         {/* ── Header (always visible) ── */}
@@ -719,6 +742,7 @@ function RunDrawer({ sim, onClose, onOpenWorkbench }: { sim: Simulation; onClose
                 <span className="text-[14px] font-semibold text-slate-100">运行详情</span>
                 <StatusBadge status={sim.status} />
               </div>
+              <p className="mt-1 text-[12px] text-slate-200" style={{ overflowWrap: "anywhere" }}>{sim.name}</p>
               <div className="mt-1 truncate font-mono text-[12px] text-slate-400" title={sim.runId ?? undefined}>
                 {sim.runId ?? "尚未产生 run"}
                 {terminal && <span className="text-slate-600"> · {endReason}</span>}
@@ -937,7 +961,7 @@ function RunDrawer({ sim, onClose, onOpenWorkbench }: { sim: Simulation; onClose
           </EvSection>
         </div>
       </div>
-    </div>
+    </dialog>
   )
 }
 

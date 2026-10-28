@@ -757,9 +757,9 @@ C05 build-code 要取得的结果（本阶段只计划、不执行）：
 
 | 组/阶段 | Phase 与任务 | 可并行条件 | 共享路径与顺序 | 合并点/回退 | 首判 AC |
 | --- | --- | --- | --- | --- | --- |
-| 组 1 | P1/T001 与 P2/T002 | 写集互斥；各有独立输入、测试、审查；共享只读源不构成依赖 | `move-map.json` 归 P3；P1/P2 其余路径不重叠 | P3 开工前汇合；冲突回原 writer 并改串行 | 13、14（P1）；15、16（P2） |
-| 阶段 2 | P3/T003 → T004、T005 | T003 先交方法与外部采用；T004/T005 写集互斥，由同一 P3 开发顺序执行 | `build-plan/SKILL.md`、`build-code/SKILL.md` 由 P1/P2 先写、P3 后写；样本 A/B 各自根目录 | T003 完成后进样本；样本失败回对应任务；方法缺陷回 T003 | 1、10、11、12（T003）；2（T004）；3（T005）；4–9（T004/T005） |
-| 阶段 3 | P4/T006 | 依赖 P1–P3 全部当前原件 | 只写覆盖测试 `tests/contract/c05-final-coverage.test.mjs` 与证据；上游只读 | 全 18 条 AC 终验；缺口回对应 Phase owner，不补签 | 全 18 条终末；17 在此首判 |
+| 组 1 | P1/T001 与 P2/T002 | 写集互斥；各有独立输入、测试、审查；共享只读源不构成依赖 | `move-map.json` 归 P3；P1/P2 其余路径不重叠 | P3 开工前汇合；冲突回原 writer 并改串行 | 13、14（P1）；15、16 的规则正反例/受控重放（P2，真实效果在 P4 首判） |
+| 阶段 2 | P3/T003 → T004、T005 | T003 先交方法与外部采用；T004/T005 写集互斥，由同一 P3 开发顺序执行 | `build-plan/SKILL.md`、`build-code/SKILL.md` 由 P1/P2 先写、P3 后写；样本 A/B 各自根目录 | T003 完成后进样本；样本失败回对应任务；方法缺陷回 T003 | 1、10、11（T003）；12 的规则准备（T003）/首次使用首判（T005）；2（T004）；3（T005）；4–9（T004/T005） |
+| 阶段 3 | P4/T006 | 依赖 P1–P3 全部当前原件 | 只写覆盖测试 `tests/contract/c05-final-coverage.test.mjs` 与证据；上游只读 | 全 18 条 AC 终验；缺口回对应 Phase owner，不补签 | 全 18 条终末；15、16 的真实并发/派发效果及 17 在此首判 |
 | 同一 Phase 的审查/测试 | 每 Phase | 开发明确完成后；两方只读 | 各自原件；不改代码/测试/材料；Standards/Spec 独立 | 两方明确回报后开发最后确认；迟到 finding 回原开发 | 按各 Phase |
 
 P1 与 P2 可以同组并行，不是因为“编号相邻”，而是因为：P1 只改计划/模板/分析/决策模板，P2 只改派发/审查/标准工作方法；两者写集互斥，输入都来自当前 decision 与真实方法，验收分别由独立作者/审计者判。P1/P2 不共享可变文件；`docs/architecture/move-map.json` 归 P3 在两者汇合后独占 append，因此 P1/P2 可真正并行。
@@ -786,12 +786,12 @@ index 必须有两段：`## Execution Index`（5/6 列机器可读，只放 Phas
 | CARD-C05-WP8 | FR-C05-012 / AC-C05-012 | P3/T005（ORACLE-COPY-DESIGN，首次使用观察）；P3/T003 只准备规则 | P4/T006（ORACLE-FINAL-COVERAGE） | 无稿作者、审查者、设计 owner | ui-gate 七项与首次使用观察未执行 |
 | CARD-C05-WP6/7 | FR-C05-013 / AC-C05-013 | P1/T001（ORACLE-PLAN-AUTHORING） | P4/T006（ORACLE-FINAL-COVERAGE） | 后续 build-plan 作者、reader | 真实作者完整产物待执行 |
 | CARD-C05-WP6/7 | FR-C05-014 / AC-C05-014 | P1/T001（ORACLE-PLAN-PRESERVATION） | P4/T006（ORACLE-FINAL-COVERAGE） | 独立下游读者、spec-analyze | 同尺独立消费未执行 |
-| CARD-C05-WP9 | FR-C05-015 / AC-C05-015 | P2/T002（ORACLE-PARALLEL-BOUNDARY） | P4/T006（ORACLE-FINAL-COVERAGE） | build-code 主会话、各 Phase 开发 | 实际正反例待执行 |
-| CARD-C05-WP10 | FR-C05-016 / AC-C05-016 | P2/T002（ORACLE-DISPATCH-QUALITY） | P4/T006（ORACLE-FINAL-COVERAGE） | 主会话、审查/测试 | 实际执行审计待 P4 |
+| CARD-C05-WP9 | FR-C05-015 / AC-C05-015 | P2/T002（ORACLE-PARALLEL-BOUNDARY，只判规则正反例）；P4/T006 首判实际并发是否成立 | P4/T006（ORACLE-FINAL-COVERAGE） | build-code 主会话、各 Phase 开发 | 实际正反例待执行 |
+| CARD-C05-WP10 | FR-C05-016 / AC-C05-016 | P2/T002（ORACLE-DISPATCH-QUALITY，只判规则与受控重放）；P4/T006 首判真实派发/修复效果 | P4/T006（ORACLE-FINAL-COVERAGE） | 主会话、审查/测试 | 实际执行审计待 P4 |
 | CARD-C05-WP10 | FR-C05-017 / AC-C05-017 | P2/T002（ORACLE-DISPATCH-QUALITY，仅准备事件来源）；P4/T006（ORACLE-COST-FACTS） | P4/T006（ORACLE-FINAL-COVERAGE） | 用户、后续效率改进 | 真实事件与分账未取得 |
 | CARD-C05-WP6/7/10；PRD-C05 | FR-C05-018 / AC-C05-018 | P1/T001（ORACLE-PLAN-AUTHORING；只判计划承接） | P4/T006（ORACLE-FINAL-COVERAGE；完整 AC） | 用户、关闭 reader、C06、C09 | 终末报告与计划确认未发生 |
 
-数量不是配额。表里“首判”只表示最早承接该 AC 的 Phase/Task；AC18 在 P1 只判“三阶段/终末计划已承接”，完整结果只在 P4 判；AC17 只在 P4 首判，P2 只准备事件来源；AC15/16 在 P2 判规则与受控重放，实际执行审计在 P4 终末。任何 AC 在 P4 之前都不能被宣整体通过。
+数量不是配额。表里“首判”只表示最早承接该 AC 的 Phase/Task；AC18 在 P1 只判“三阶段/终末计划已承接”，完整结果只在 P4 判；AC17 只在 P4 首判，P2 只准备事件来源；AC15/16 在 P2 只判规则正反例与受控重放，真实并发/派发效果在 P4 首判并终末复核。任何 AC 在 P4 之前都不能被宣整体通过。
 
 ### 全局验证策略
 
@@ -851,24 +851,101 @@ index 必须有两段：`## Execution Index`（5/6 列机器可读，只放 Phas
 
 ### 验收对象
 
-当前 C05 只改流程、技能和模板，没有产品 UI 改动；本阶段不制作原型、不启动服务或浏览器。以下对象描述 build-code 样本的验收面，是计划对象，不是已执行结果：
+当前对象为本Task的A/B轻量静态mock样本及其流程/技能改动。以下是已实际启动过的可复现入口配置和具名观察范围；服务均已关闭，不代表当前在线、完整验收或真实业务通过。端口可在复现时改为空闲端口。
 
 ```json
 {
   "workspace": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-ui-frontend-c05-prototype-design-review-20261027",
-  "service": null,
-  "route": ["/", "/simulation", "/workbench?simId=sim-001", "/live"],
-  "state": {"execution": "not_run", "scope": "SimulationBoard、SimWorkbench 与 /live 四步；全状态见场景 1、2 与状态表"},
-  "viewport": null,
+  "service": [
+    {
+      "sample": "A",
+      "cwd": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A",
+      "argv": [
+        "python3",
+        "-m",
+        "http.server",
+        "53301",
+        "--bind",
+        "127.0.0.1"
+      ],
+      "url": "http://127.0.0.1:53301/index.html",
+      "evidence": "quality/evidence/2026-10-28-605-c07-late-clean-smoke-terminal.json"
+    },
+    {
+      "sample": "B",
+      "cwd": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/B",
+      "argv": [
+        "python3",
+        "-m",
+        "http.server",
+        "53302",
+        "--bind",
+        "127.0.0.1"
+      ],
+      "url": "http://127.0.0.1:53302/index.html",
+      "evidence": "quality/evidence/2026-10-28-605-c07-late-clean-smoke-terminal.json"
+    }
+  ],
+  "route": [
+    "http://127.0.0.1:53301/index.html?state=default#simulation",
+    "http://127.0.0.1:53301/index.html?state=default#workbench?simId=sim-001",
+    "http://127.0.0.1:53302/index.html?state=partial&permission=close_only&role=leader"
+  ],
+  "state": {
+    "execution": "部分已执行；以下仅受控mock浏览器事实，不是全部验收通过",
+    "scope": "A记录/同id工作台与B详情、确认、命令历史/读回/台账；10态原矩阵保历史，当前仅具名受影响复验",
+    "states": [
+      "default",
+      "loading",
+      "empty",
+      "error",
+      "cancel",
+      "boundary",
+      "permission",
+      "duplicate",
+      "partial",
+      "unknown"
+    ],
+    "current_refs": [
+      "quality/tests/2026-10-28-423-c07-late-clean-a-smoke.json",
+      "quality/tests/2026-10-28-426-c07-late-clean-b-smoke.json",
+      "quality/tests/2026-10-28-407-p4-gate-independent-partial.json",
+      "quality/tests/2026-10-28-409-p4-gate-independent-deny.json",
+      "quality/tests/2026-10-28-482-p4-a-focus-loop-targeted-green.json"
+    ],
+    "not_verified": [
+      "file双击",
+      "原生浏览器200%缩放/完整辅助技术",
+      "当前全部状态×三宽重新执行",
+      "真实后端/交易/权限/存储"
+    ]
+  },
+  "viewport": [
+    {
+      "width": 1440,
+      "height": 900,
+      "evidence": "quality/tests/2026-10-28-423-c07-late-clean-a-smoke.json"
+    },
+    {
+      "width": 1024,
+      "height": 900,
+      "evidence": "quality/tests/2026-10-28-304-p3-static-independent-a-records-1024.json"
+    },
+    {
+      "width": 640,
+      "height": 900,
+      "evidence": "quality/tests/2026-10-28-395-p4-late-independent-a-640.json"
+    }
+  ],
   "owner": "用户"
 }
 ```
 
-- `workspace` 来自本次开工授权；业务 route 来自 016 的测试输入合同（`/simulation`、`/workbench?simId=sim-001`、`/live`）。
-- `service` 为 null：本阶段不启动 UI 服务；由 P3/T004、T005 开发提供各样本实际服务启动配置与 URL，独立测试在各样本浏览器验收前读回核实并补齐。未取得时保持 unavailable，相关样本 AC 不判通过。
-- `viewport` 尚未取得：未来样本覆盖 1440/1024/640 三宽；由 P3/T004、T005 开发和独立测试在各样本浏览器验收前提供并核实实际或明确规定的完整视口尺寸（宽与高），来源为实际采集记录或明确的验收尺寸规定，不凭宽度推高。未取得时保持 unavailable，相关样本 AC 不判通过。
-- `execution=not_run`：本阶段没有独立执行事实；字段齐备不判页面通过。
-- 三源适用性：`raw_requirement` 为真（两页 + `/live` 的 UI 请求）；`project_inventory` 为真（设计源/PB/目标骨架）；`planned_or_changed_frontend_fact` 为样本计划，尚无实现 diff。`checkAcceptanceObject` 只核最小对象/来源，不证明环境健康或业务效果。
+- `workspace` 为认证worktree；`service` 是各样本目录中实际运行过的Python标准库HTTP启动配置，URL和关闭事实见605及421/423/426原件。它不是后端服务、真实账户权限或持久化；无需npm/Next消费者运行层。
+- `route` 是各样本根目录下实际index.html入口；A逻辑页用hash，simId只取workbench hash内层，B使用同一静态文件及query，旧/simulation、/workbench、/live不作为当前HTTP根绝对路由。
+- 三宽1440×900、1024×900、640×900来自上述具名原执行；原状态矩阵与当前受影响复验分开，不把旧原件当新字节全量通过。720×450 stress仅为另一次实际CSS布局压力，见482；不能代原生200%缩放。
+- `state.execution` 分开mock已跑范围与未验证面；文件/字段齐只证明对象可定位，不证明页面效果。最新独立原件591/593与A焦点独立复验须按各自实际版本消费；482为开发自验，不能替独立质量。
+- 三源适用性均为UI：原需求要求两路页面；现A/B README及固定提交有真实静态页面；本spec对应当前样本事实。检查器仅核对象与来源，不判运行健康或18条AC。
 
 ### 18 条验收导航（对照表）
 
