@@ -31,7 +31,9 @@ Input is the current decision/scope and named source material supplied by build-
 
 Read the caller-supplied current decision and necessary source material. Supplied packets are convenient reading subsets, not snapshot/hash authorization. Missing load-bearing source is unavailable with the specific gap; retain only source-supported direction. New spec.md includes a regenerable non-authoritative 材料导航 with section/summary/read timing pointers.
 
-Use `templates/spec-template.md`. Produce a testable, readable specification
+Use `templates/spec-template.md`. Its ten numbered reader groups run from problem and sources through scenarios, facts, scope, requirements/modules, global design, acceptance, testing, and risk/handoff. Keep the machine-readable implementation-design H2/H3 and sole Appendix A alongside that narrative. Each group opens with its reader question. Each requirement states the actor/scenario, real inputs, observable result, failure, consumer and evidence type; do not replace those with an ID list. Recover omitted rollback, unresolved-input owner, sample boundary and final-acceptance handoff at their existing owners rather than creating another document.
+
+Produce a testable, readable specification
 covering user outcomes, urgency, scope, scenarios, edge states, requirements,
 assumptions, risks, acceptance, business impact, regression paths, explicit
 exclusions, and the global implementation-design section. Keep the quick-read
