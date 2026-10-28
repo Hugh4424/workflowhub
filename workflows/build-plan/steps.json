@@ -49,7 +49,7 @@
     {
       "step_id": 5,
       "step_slug": "conditional-ui-readiness",
-      "observable_result": "分组：写spec与UI准备；适用UI的真实设计来源、原型/预览和消费者可读；非UI有理由，缺失或冲突保持unknown。 判定消费：SKILL.md#方法 第5步；原件：raw/inventory/accepted-plan、专业源读取、真实预览。",
+      "observable_result": "分组：写spec与UI准备；适用UI的真实设计来源、原型/预览和消费者可读；非UI有理由，缺失或冲突保持unknown。 判定消费：SKILL.md#方法 第5步；原件：raw/inventory/accepted-plan、专业源读取、真实预览。 两路输入、任务目录真实代码原型、八维独立设计审查及修后复验、当前完整展示与真实答复分别有原件；无稿文案与Figma提示词消费同一规则，缺项不假通过。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",

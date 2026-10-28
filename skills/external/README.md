@@ -251,3 +251,13 @@
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+
+## C05 两路设计方法
+
+逐件来源/固定版本/权利唯一回catalog的c05-ui-designer-*及c05-playbook-*；本节只导航。十一件已按本任务用户明确个人研究用途复制，五Apache保原文/本地适配和通知，另外六件保固定原文，source/target绑定见本任务180原件；不冒已获grant或用目录/数量代效果。现同目录两个skill-bundle只列实际资源，扁平resolveSkillPackage不支持nested family，后续作者显式沿本页逐文件读取，不冒已安装成功。
+
+UI Designer：design-brief供build-plan/原型取已定意图；information-architecture供区域/导航/增长；design-tokens供单owner值映射；frontend-design供实际组件；ui-interaction-states供状态/恢复；ui-accessibility-review供证据级和键盘/辅助技术边界；design-review供独立审查并实际读同一ui-copy-discipline。Playbook：00供spec的六层完整任务；02仅场景选型参考，当前非CloudAI故其专用模板选择不适用，不冒42模板已获得；09仅结构真歧义时比较必要变体，不强多稿；08供finding回源和修复建议，不冒UES/11评分实现。调用者先读本地实际全文，再在本任务记录具体输入/产物/适用或不适用理由。
+
+外部目录/访谈/工具默认由当前已批准任务输入与隔离QA覆盖，文案只读ui-copy-discipline单一原文；具体源/版本/更新比较/错误沿catalog及任务原件，源站404不报无更新。
+
+本次真实下游消费补充：任务原件168/169/170/173/174保三个完整输入及Figma十项/六概念/C02；217逐字读取新增六本地方法后给出状态转移、a11y证据级、六层规格、选择边界、三结构比较与issue回源。它们证明具名作者消费，不冒独立样本QA、用户接受或全项AC通过。

@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "skill": "ui-designer",
+  "files": [
+    "design-brief/SKILL.md",
+    "information-architecture/SKILL.md",
+    "design-tokens/SKILL.md",
+    "frontend-design/SKILL.md",
+    "design-review/SKILL.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
+    "frontend-design/LICENSE.txt",
+    "ui-interaction-states/SKILL.md",
+    "ui-accessibility-review/SKILL.md"
+  ],
+  "sources": []
+}

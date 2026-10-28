@@ -6,6 +6,36 @@
   "generated_from": "当前迁移表保留分类、已改接真实相对模块 consumer 与显式数据 reader；不保存整树快照或 hash 清单",
   "entries": [
     {
+      "source": "tests/contract/plan-authoring-compatibility.test.mjs",
+      "destination": "tests/contract/plan-authoring-compatibility.test.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "build-plan预写测试：完整作者材料通过现有Phase parser与index reader消费，核原六列索引之外的并行导航不改变Task/写集/追踪，具名坏输入保持失败；只证结构兼容，不证明方法效果。",
+      "owner": "C05 build-plan独立测试作者",
+      "consumer": "本次spec/Phase作者和后续独立测试者读取真实parser/index返回，核完整样例、旁路并行导航与unindexed边界；实际执行原件归task facts，本登记不证明方法效果。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "node node_modules/vitest/vitest.mjs run tests/contract/plan-authoring-compatibility.test.mjs"
+      ],
+      "delete_condition": "此组织兼容面被独立验证的现有测试完整承接且本入口无当前消费者后删除。",
+      "retention_basis": "当前build-plan测试授权；仅新增具名测试，复用生产reader，不修改runtime或冻结旧测试。"
+    },
+    {
+      "source": "tests/e2e/prototype-design-journey.sh",
+      "destination": "tests/e2e/prototype-design-journey.sh",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "真实Next.js mock原型的simulation/workbench/live浏览器正反场景；复用现isolated-browser-qa单引擎生命周期，核归档/返回、取消、防重复、只读/权限、requested与读回、未知/部分结果；不访问真实后端、不自启浏览器或服务。",
+      "owner": "C05 build-plan独立测试作者",
+      "consumer": "独立QA在原型ready后经既有browser-qa-context.sh --run调用此已预写场景，传真实服务URL/视口及认证task根；仅语法已检查，实际浏览器/清理结果须读task原件，不由登记推定。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "bash tests/e2e/prototype-design-journey.sh"
+      ],
+      "delete_condition": "三页mock旅程由独立验证的既有浏览器场景完整承接且本脚本无当前消费者后删除。",
+      "retention_basis": "PRD C05及用户本阶段真实原型展示要求；本脚本只是场景，不新增QA平台、服务、后台调度或真实交易。"
+    },
+    {
       "source": "tests/acceptance/final-account.test.mjs",
       "destination": "tests/acceptance/final-account.test.mjs",
       "status": "retain",
@@ -6800,6 +6830,704 @@
       ],
       "delete_condition": "原合同由独立验证的替代测试完整承接且无当前消费者后删除。",
       "retention_basis": "AC-MERGE-005 / AC-CLOSE-001"
+    },
+    {
+      "source": "tests/contract/c05-phase-navigation.test.mjs",
+      "destination": "tests/contract/c05-phase-navigation.test.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "C05 P1具名方法/消费结构与失败路径；执行事实另读任务原件，不证明业务/视觉效果。",
+      "owner": "C05 P1原开发与独立测试作者",
+      "consumer": "P1独立测试者与后续方法reader核真实输入/断言输出",
+      "module_consumers": [],
+      "named_data_readers": [
+        "node node_modules/vitest/vitest.mjs run tests/contract/c05-phase-navigation.test.mjs"
+      ],
+      "delete_condition": "当前消费者被经独立验证替代完整承接后由原owner删除。",
+      "retention_basis": "C05原批准Phase逐件写集；只登记具名测试，非新控制面。"
+    },
+    {
+      "source": "tests/contract/dispatch-quality.test.mjs",
+      "destination": "tests/contract/dispatch-quality.test.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "C05 P2具名方法/消费结构与失败路径；执行事实另读任务原件，不证明业务/视觉效果。",
+      "owner": "C05 P2原开发与独立测试作者",
+      "consumer": "P2独立测试者与后续方法reader核真实输入/断言输出",
+      "module_consumers": [],
+      "named_data_readers": [
+        "node node_modules/vitest/vitest.mjs run tests/contract/dispatch-quality.test.mjs"
+      ],
+      "delete_condition": "当前消费者被经独立验证替代完整承接后由原owner删除。",
+      "retention_basis": "C05原批准Phase逐件写集；只登记具名测试，非新控制面。"
+    },
+    {
+      "source": "tests/contract/ui-source-consumption.test.mjs",
+      "destination": "tests/contract/ui-source-consumption.test.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "C05 P3具名方法/消费结构与失败路径；执行事实另读任务原件，不证明业务/视觉效果。",
+      "owner": "C05 P3原开发与独立测试作者",
+      "consumer": "P3独立测试者与后续方法reader核真实输入/断言输出",
+      "module_consumers": [],
+      "named_data_readers": [
+        "node node_modules/vitest/vitest.mjs run tests/contract/ui-source-consumption.test.mjs"
+      ],
+      "delete_condition": "当前消费者被经独立验证替代完整承接后由原owner删除。",
+      "retention_basis": "C05原批准Phase逐件写集；只登记具名测试，非新控制面。"
+    },
+    {
+      "source": "tests/contract/prototype-design-review.test.mjs",
+      "destination": "tests/contract/prototype-design-review.test.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "C05 P3具名方法/消费结构与失败路径；执行事实另读任务原件，不证明业务/视觉效果。",
+      "owner": "C05 P3原开发与独立测试作者",
+      "consumer": "P3独立测试者与后续方法reader核真实输入/断言输出",
+      "module_consumers": [],
+      "named_data_readers": [
+        "node node_modules/vitest/vitest.mjs run tests/contract/prototype-design-review.test.mjs"
+      ],
+      "delete_condition": "当前消费者被经独立验证替代完整承接后由原owner删除。",
+      "retention_basis": "C05原批准Phase逐件写集；只登记具名测试，非新控制面。"
+    },
+    {
+      "source": "tests/contract/c05-final-coverage.test.mjs",
+      "destination": "tests/contract/c05-final-coverage.test.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "C05 P4具名方法/消费结构与失败路径；执行事实另读任务原件，不证明业务/视觉效果。",
+      "owner": "C05 P4原开发与独立测试作者",
+      "consumer": "P4独立测试者与后续方法reader核真实输入/断言输出",
+      "module_consumers": [],
+      "named_data_readers": [
+        "node node_modules/vitest/vitest.mjs run tests/contract/c05-final-coverage.test.mjs"
+      ],
+      "delete_condition": "当前消费者被经独立验证替代完整承接后由原owner删除。",
+      "retention_basis": "C05原批准Phase逐件写集；只登记具名测试，非新控制面。"
+    },
+    {
+      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/EquityCurve.tsx",
+      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/EquityCurve.tsx",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "C05有稿样本真实source组件/图表/hover静态依赖；受控fixture隔离生产副作用",
+      "owner": "P3/T004",
+      "consumer": "SimulationBoard/SimWorkbench/PerfBlocks/RunTimeline actual static imports",
+      "module_consumers": [],
+      "named_data_readers": [
+        "npm --prefix specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A run build"
+      ],
+      "delete_condition": "两页无consumer且经独立验证替代承接后原owner删除",
+      "retention_basis": "已授权完整AC2源码适配；本次有源闭包精确登记，不是新平台"
+    },
+    {
+      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/CandleChart.tsx",
+      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/CandleChart.tsx",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "C05有稿样本真实source组件/图表/hover静态依赖；受控fixture隔离生产副作用",
+      "owner": "P3/T004",
+      "consumer": "SimulationBoard/SimWorkbench/PerfBlocks/RunTimeline actual static imports",
+      "module_consumers": [],
+      "named_data_readers": [
+        "npm --prefix specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A run build"
+      ],
+      "delete_condition": "两页无consumer且经独立验证替代承接后原owner删除",
+      "retention_basis": "已授权完整AC2源码适配；本次有源闭包精确登记，不是新平台"
+    },
+    {
+      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/slotState.ts",
+      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/slotState.ts",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "C05有稿样本真实source组件/图表/hover静态依赖；受控fixture隔离生产副作用",
+      "owner": "P3/T004",
+      "consumer": "SimulationBoard/SimWorkbench/PerfBlocks/RunTimeline actual static imports",
+      "module_consumers": [],
+      "named_data_readers": [
+        "npm --prefix specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A run build"
+      ],
+      "delete_condition": "两页无consumer且经独立验证替代承接后原owner删除",
+      "retention_basis": "已授权完整AC2源码适配；本次有源闭包精确登记，不是新平台"
+    },
+    {
+      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/systemState.ts",
+      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/systemState.ts",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "C05有稿样本真实source组件/图表/hover静态依赖；受控fixture隔离生产副作用",
+      "owner": "P3/T004",
+      "consumer": "SimulationBoard/SimWorkbench/PerfBlocks/RunTimeline actual static imports",
+      "module_consumers": [],
+      "named_data_readers": [
+        "npm --prefix specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A run build"
+      ],
+      "delete_condition": "两页无consumer且经独立验证替代承接后原owner删除",
+      "retention_basis": "已授权完整AC2源码适配；本次有源闭包精确登记，不是新平台"
+    },
+    {
+      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/store.ts",
+      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/store.ts",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "C05有稿样本真实source组件/图表/hover静态依赖；受控fixture隔离生产副作用",
+      "owner": "P3/T004",
+      "consumer": "SimulationBoard/SimWorkbench/PerfBlocks/RunTimeline actual static imports",
+      "module_consumers": [],
+      "named_data_readers": [
+        "npm --prefix specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A run build"
+      ],
+      "delete_condition": "两页无consumer且经独立验证替代承接后原owner删除",
+      "retention_basis": "已授权完整AC2源码适配；本次有源闭包精确登记，不是新平台"
+    },
+    {
+      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/data.ts",
+      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/data.ts",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "C05有稿样本真实source组件/图表/hover静态依赖；受控fixture隔离生产副作用",
+      "owner": "P3/T004",
+      "consumer": "SimulationBoard/SimWorkbench/PerfBlocks/RunTimeline actual static imports",
+      "module_consumers": [],
+      "named_data_readers": [
+        "npm --prefix specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A run build"
+      ],
+      "delete_condition": "两页无consumer且经独立验证替代承接后原owner删除",
+      "retention_basis": "已授权完整AC2源码适配；本次有源闭包精确登记，不是新平台"
+    },
+    {
+      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/shared.tsx",
+      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/shared.tsx",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "C05有稿样本真实source组件/图表/hover静态依赖；受控fixture隔离生产副作用",
+      "owner": "P3/T004",
+      "consumer": "SimulationBoard/SimWorkbench/PerfBlocks/RunTimeline actual static imports",
+      "module_consumers": [],
+      "named_data_readers": [
+        "npm --prefix specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A run build"
+      ],
+      "delete_condition": "两页无consumer且经独立验证替代承接后原owner删除",
+      "retention_basis": "已授权完整AC2源码适配；本次有源闭包精确登记，不是新平台"
+    },
+    {
+      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/demoUniverse.ts",
+      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/demoUniverse.ts",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "C05有稿样本真实source组件/图表/hover静态依赖；受控fixture隔离生产副作用",
+      "owner": "P3/T004",
+      "consumer": "SimulationBoard/SimWorkbench/PerfBlocks/RunTimeline actual static imports",
+      "module_consumers": [],
+      "named_data_readers": [
+        "npm --prefix specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A run build"
+      ],
+      "delete_condition": "两页无consumer且经独立验证替代承接后原owner删除",
+      "retention_basis": "已授权完整AC2源码适配；本次有源闭包精确登记，不是新平台"
+    },
+    {
+      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/status.tsx",
+      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/status.tsx",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "C05有稿样本真实source组件/图表/hover静态依赖；受控fixture隔离生产副作用",
+      "owner": "P3/T004",
+      "consumer": "SimulationBoard/SimWorkbench/PerfBlocks/RunTimeline actual static imports",
+      "module_consumers": [],
+      "named_data_readers": [
+        "npm --prefix specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A run build"
+      ],
+      "delete_condition": "两页无consumer且经独立验证替代承接后原owner删除",
+      "retention_basis": "已授权完整AC2源码适配；本次有源闭包精确登记，不是新平台"
+    },
+    {
+      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/postcss.config.mjs",
+      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/postcss.config.mjs",
+      "status": "retired",
+      "role": "test",
+      "responsibility": "C05有稿样本真实source组件/图表/hover静态依赖；受控fixture隔离生产副作用",
+      "owner": "P3/T004",
+      "consumer": "历史来源追溯；当前静态consumer见新增index/JS/CSS",
+      "module_consumers": [],
+      "named_data_readers": [
+        "npm --prefix specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A run build"
+      ],
+      "delete_condition": "两页无consumer且经独立验证替代承接后原owner删除",
+      "retention_basis": "004/005静态迁移删除原Next壳；旧原件与369哈希保历史，静态入口承接当前consumer"
+    },
+    {
+      "source": "skills/ui-copy-discipline/SKILL.md",
+      "destination": "skills/ui-copy-discipline/SKILL.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "单一用户文案规则与四消费者读回",
+      "owner": "P3/T003方法与采用维护者",
+      "consumer": "后续build-plan/原型/独立设计审查作者从原入口读取当前完整输入，产物与缺口留本任务原件；资源清单不代实际安装",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/frontend-prototype-render/SKILL.md",
+        "skills/plan-design-review/SKILL.md"
+      ],
+      "delete_condition": "实际consumer由经独立验证替代完整承接且原owner决定退役后删除；保历史原件",
+      "retention_basis": "原已批准P3/T003写集及用户个人研究继续复制的真实决定；本次补登记非新能力"
+    },
+    {
+      "source": "skills/ui-copy-discipline/skill-bundle.json",
+      "destination": "skills/ui-copy-discipline/skill-bundle.json",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "单一用户文案规则与四消费者读回",
+      "owner": "P3/T003方法与采用维护者",
+      "consumer": "后续build-plan/原型/独立设计审查作者从原入口读取当前完整输入，产物与缺口留本任务原件；资源清单不代实际安装",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/frontend-prototype-render/SKILL.md",
+        "skills/plan-design-review/SKILL.md"
+      ],
+      "delete_condition": "实际consumer由经独立验证替代完整承接且原owner决定退役后删除；保历史原件",
+      "retention_basis": "原已批准P3/T003写集及用户个人研究继续复制的真实决定；本次补登记非新能力"
+    },
+    {
+      "source": "skills/figma-make-prompt/SKILL.md",
+      "destination": "skills/figma-make-prompt/SKILL.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "真实业务输入到十项Figma提示词与消费读回",
+      "owner": "P3/T003方法与采用维护者",
+      "consumer": "后续build-plan/原型/独立设计审查作者从原入口读取当前完整输入，产物与缺口留本任务原件；资源清单不代实际安装",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/frontend-prototype-render/SKILL.md",
+        "skills/plan-design-review/SKILL.md"
+      ],
+      "delete_condition": "实际consumer由经独立验证替代完整承接且原owner决定退役后删除；保历史原件",
+      "retention_basis": "原已批准P3/T003写集及用户个人研究继续复制的真实决定；本次补登记非新能力"
+    },
+    {
+      "source": "skills/figma-make-prompt/skill-bundle.json",
+      "destination": "skills/figma-make-prompt/skill-bundle.json",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "真实业务输入到十项Figma提示词与消费读回",
+      "owner": "P3/T003方法与采用维护者",
+      "consumer": "后续build-plan/原型/独立设计审查作者从原入口读取当前完整输入，产物与缺口留本任务原件；资源清单不代实际安装",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/frontend-prototype-render/SKILL.md",
+        "skills/plan-design-review/SKILL.md"
+      ],
+      "delete_condition": "实际consumer由经独立验证替代完整承接且原owner决定退役后删除；保历史原件",
+      "retention_basis": "原已批准P3/T003写集及用户个人研究继续复制的真实决定；本次补登记非新能力"
+    },
+    {
+      "source": "skills/external/ui-designer/design-brief/SKILL.md",
+      "destination": "skills/external/ui-designer/design-brief/SKILL.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部design-brief方法正文及具名本地适配；不以目录数冒效果",
+      "owner": "P3/T003方法与采用维护者",
+      "consumer": "后续build-plan/原型/独立设计审查作者从原入口读取当前完整输入，产物与缺口留本任务原件；资源清单不代实际安装",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/external/README.md",
+        "skills/frontend-prototype-render/SKILL.md",
+        "skills/plan-design-review/SKILL.md"
+      ],
+      "delete_condition": "实际consumer由经独立验证替代完整承接且原owner决定退役后删除；保历史原件",
+      "retention_basis": "原已批准P3/T003写集及用户个人研究继续复制的真实决定；本次补登记非新能力"
+    },
+    {
+      "source": "skills/external/ui-designer/information-architecture/SKILL.md",
+      "destination": "skills/external/ui-designer/information-architecture/SKILL.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部information-architecture方法正文及具名本地适配；不以目录数冒效果",
+      "owner": "P3/T003方法与采用维护者",
+      "consumer": "后续build-plan/原型/独立设计审查作者从原入口读取当前完整输入，产物与缺口留本任务原件；资源清单不代实际安装",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/external/README.md",
+        "skills/frontend-prototype-render/SKILL.md",
+        "skills/plan-design-review/SKILL.md"
+      ],
+      "delete_condition": "实际consumer由经独立验证替代完整承接且原owner决定退役后删除；保历史原件",
+      "retention_basis": "原已批准P3/T003写集及用户个人研究继续复制的真实决定；本次补登记非新能力"
+    },
+    {
+      "source": "skills/external/ui-designer/design-tokens/SKILL.md",
+      "destination": "skills/external/ui-designer/design-tokens/SKILL.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部design-tokens方法正文及具名本地适配；不以目录数冒效果",
+      "owner": "P3/T003方法与采用维护者",
+      "consumer": "后续build-plan/原型/独立设计审查作者从原入口读取当前完整输入，产物与缺口留本任务原件；资源清单不代实际安装",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/external/README.md",
+        "skills/frontend-prototype-render/SKILL.md",
+        "skills/plan-design-review/SKILL.md"
+      ],
+      "delete_condition": "实际consumer由经独立验证替代完整承接且原owner决定退役后删除；保历史原件",
+      "retention_basis": "原已批准P3/T003写集及用户个人研究继续复制的真实决定；本次补登记非新能力"
+    },
+    {
+      "source": "skills/external/ui-designer/frontend-design/SKILL.md",
+      "destination": "skills/external/ui-designer/frontend-design/SKILL.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部frontend-design方法正文及具名本地适配；不以目录数冒效果",
+      "owner": "P3/T003方法与采用维护者",
+      "consumer": "后续build-plan/原型/独立设计审查作者从原入口读取当前完整输入，产物与缺口留本任务原件；资源清单不代实际安装",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/external/README.md",
+        "skills/frontend-prototype-render/SKILL.md",
+        "skills/plan-design-review/SKILL.md"
+      ],
+      "delete_condition": "实际consumer由经独立验证替代完整承接且原owner决定退役后删除；保历史原件",
+      "retention_basis": "原已批准P3/T003写集及用户个人研究继续复制的真实决定；本次补登记非新能力"
+    },
+    {
+      "source": "skills/external/ui-designer/ui-interaction-states/SKILL.md",
+      "destination": "skills/external/ui-designer/ui-interaction-states/SKILL.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部ui-interaction-states方法正文及具名本地适配；不以目录数冒效果",
+      "owner": "P3/T003方法与采用维护者",
+      "consumer": "后续build-plan/原型/独立设计审查作者从原入口读取当前完整输入，产物与缺口留本任务原件；资源清单不代实际安装",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/external/README.md",
+        "skills/frontend-prototype-render/SKILL.md",
+        "skills/plan-design-review/SKILL.md"
+      ],
+      "delete_condition": "实际consumer由经独立验证替代完整承接且原owner决定退役后删除；保历史原件",
+      "retention_basis": "原已批准P3/T003写集及用户个人研究继续复制的真实决定；本次补登记非新能力"
+    },
+    {
+      "source": "skills/external/ui-designer/ui-accessibility-review/SKILL.md",
+      "destination": "skills/external/ui-designer/ui-accessibility-review/SKILL.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部ui-accessibility-review方法正文及具名本地适配；不以目录数冒效果",
+      "owner": "P3/T003方法与采用维护者",
+      "consumer": "后续build-plan/原型/独立设计审查作者从原入口读取当前完整输入，产物与缺口留本任务原件；资源清单不代实际安装",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/external/README.md",
+        "skills/frontend-prototype-render/SKILL.md",
+        "skills/plan-design-review/SKILL.md"
+      ],
+      "delete_condition": "实际consumer由经独立验证替代完整承接且原owner决定退役后删除；保历史原件",
+      "retention_basis": "原已批准P3/T003写集及用户个人研究继续复制的真实决定；本次补登记非新能力"
+    },
+    {
+      "source": "skills/external/ui-designer/design-review/SKILL.md",
+      "destination": "skills/external/ui-designer/design-review/SKILL.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部design-review方法正文及具名本地适配；不以目录数冒效果",
+      "owner": "P3/T003方法与采用维护者",
+      "consumer": "后续build-plan/原型/独立设计审查作者从原入口读取当前完整输入，产物与缺口留本任务原件；资源清单不代实际安装",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/external/README.md",
+        "skills/frontend-prototype-render/SKILL.md",
+        "skills/plan-design-review/SKILL.md"
+      ],
+      "delete_condition": "实际consumer由经独立验证替代完整承接且原owner决定退役后删除；保历史原件",
+      "retention_basis": "原已批准P3/T003写集及用户个人研究继续复制的真实决定；本次补登记非新能力"
+    },
+    {
+      "source": "skills/external/playbook/00-ux-spec-skill.md",
+      "destination": "skills/external/playbook/00-ux-spec-skill.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定公开短方法00-ux-spec-skill供原型/规格/独立审查作者显式消费",
+      "owner": "P3/T003方法与采用维护者",
+      "consumer": "后续build-plan/原型/独立设计审查作者从原入口读取当前完整输入，产物与缺口留本任务原件；资源清单不代实际安装",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/external/README.md"
+      ],
+      "delete_condition": "实际consumer由经独立验证替代完整承接且原owner决定退役后删除；保历史原件",
+      "retention_basis": "原已批准P3/T003写集及用户个人研究继续复制的真实决定；本次补登记非新能力"
+    },
+    {
+      "source": "skills/external/playbook/02-cloudai-picker-skill.md",
+      "destination": "skills/external/playbook/02-cloudai-picker-skill.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定公开短方法02-cloudai-picker-skill供原型/规格/独立审查作者显式消费",
+      "owner": "P3/T003方法与采用维护者",
+      "consumer": "后续build-plan/原型/独立设计审查作者从原入口读取当前完整输入，产物与缺口留本任务原件；资源清单不代实际安装",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/external/README.md"
+      ],
+      "delete_condition": "实际consumer由经独立验证替代完整承接且原owner决定退役后删除；保历史原件",
+      "retention_basis": "原已批准P3/T003写集及用户个人研究继续复制的真实决定；本次补登记非新能力"
+    },
+    {
+      "source": "skills/external/playbook/09-variant-skill.md",
+      "destination": "skills/external/playbook/09-variant-skill.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定公开短方法09-variant-skill供原型/规格/独立审查作者显式消费",
+      "owner": "P3/T003方法与采用维护者",
+      "consumer": "后续build-plan/原型/独立设计审查作者从原入口读取当前完整输入，产物与缺口留本任务原件；资源清单不代实际安装",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/external/README.md"
+      ],
+      "delete_condition": "实际consumer由经独立验证替代完整承接且原owner决定退役后删除；保历史原件",
+      "retention_basis": "原已批准P3/T003写集及用户个人研究继续复制的真实决定；本次补登记非新能力"
+    },
+    {
+      "source": "skills/external/playbook/08-evaluator-rubric.md",
+      "destination": "skills/external/playbook/08-evaluator-rubric.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定公开短方法08-evaluator-rubric供原型/规格/独立审查作者显式消费",
+      "owner": "P3/T003方法与采用维护者",
+      "consumer": "后续build-plan/原型/独立设计审查作者从原入口读取当前完整输入，产物与缺口留本任务原件；资源清单不代实际安装",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/external/README.md"
+      ],
+      "delete_condition": "实际consumer由经独立验证替代完整承接且原owner决定退役后删除；保历史原件",
+      "retention_basis": "原已批准P3/T003写集及用户个人研究继续复制的真实决定；本次补登记非新能力"
+    },
+    {
+      "source": "skills/external/ui-designer/skill-bundle.json",
+      "destination": "skills/external/ui-designer/skill-bundle.json",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "已选方法真实资源清单/原许可证与来源通知；非安装或质量事实",
+      "owner": "P3/T003方法与采用维护者",
+      "consumer": "后续build-plan/原型/独立设计审查作者从原入口读取当前完整输入，产物与缺口留本任务原件；资源清单不代实际安装",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/external/README.md",
+        "skills/catalog.yaml"
+      ],
+      "delete_condition": "实际consumer由经独立验证替代完整承接且原owner决定退役后删除；保历史原件",
+      "retention_basis": "原已批准P3/T003写集及用户个人研究继续复制的真实决定；本次补登记非新能力"
+    },
+    {
+      "source": "skills/external/playbook/skill-bundle.json",
+      "destination": "skills/external/playbook/skill-bundle.json",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "已选方法真实资源清单/原许可证与来源通知；非安装或质量事实",
+      "owner": "P3/T003方法与采用维护者",
+      "consumer": "后续build-plan/原型/独立设计审查作者从原入口读取当前完整输入，产物与缺口留本任务原件；资源清单不代实际安装",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/external/README.md",
+        "skills/catalog.yaml"
+      ],
+      "delete_condition": "实际consumer由经独立验证替代完整承接且原owner决定退役后删除；保历史原件",
+      "retention_basis": "原已批准P3/T003写集及用户个人研究继续复制的真实决定；本次补登记非新能力"
+    },
+    {
+      "source": "skills/external/ui-designer/LICENSE",
+      "destination": "skills/external/ui-designer/LICENSE",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "已选方法真实资源清单/原许可证与来源通知；非安装或质量事实",
+      "owner": "P3/T003方法与采用维护者",
+      "consumer": "后续build-plan/原型/独立设计审查作者从原入口读取当前完整输入，产物与缺口留本任务原件；资源清单不代实际安装",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/external/README.md",
+        "skills/catalog.yaml"
+      ],
+      "delete_condition": "实际consumer由经独立验证替代完整承接且原owner决定退役后删除；保历史原件",
+      "retention_basis": "原已批准P3/T003写集及用户个人研究继续复制的真实决定；本次补登记非新能力"
+    },
+    {
+      "source": "skills/external/ui-designer/frontend-design/LICENSE.txt",
+      "destination": "skills/external/ui-designer/frontend-design/LICENSE.txt",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "已选方法真实资源清单/原许可证与来源通知；非安装或质量事实",
+      "owner": "P3/T003方法与采用维护者",
+      "consumer": "后续build-plan/原型/独立设计审查作者从原入口读取当前完整输入，产物与缺口留本任务原件；资源清单不代实际安装",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/external/README.md",
+        "skills/catalog.yaml"
+      ],
+      "delete_condition": "实际consumer由经独立验证替代完整承接且原owner决定退役后删除；保历史原件",
+      "retention_basis": "原已批准P3/T003写集及用户个人研究继续复制的真实决定；本次补登记非新能力"
+    },
+    {
+      "source": "skills/external/ui-designer/THIRD_PARTY_NOTICES.md",
+      "destination": "skills/external/ui-designer/THIRD_PARTY_NOTICES.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "已选方法真实资源清单/原许可证与来源通知；非安装或质量事实",
+      "owner": "P3/T003方法与采用维护者",
+      "consumer": "后续build-plan/原型/独立设计审查作者从原入口读取当前完整输入，产物与缺口留本任务原件；资源清单不代实际安装",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/external/README.md",
+        "skills/catalog.yaml"
+      ],
+      "delete_condition": "实际consumer由经独立验证替代完整承接且原owner决定退役后删除；保历史原件",
+      "retention_basis": "原已批准P3/T003写集及用户个人研究继续复制的真实决定；本次补登记非新能力"
+    },
+    {
+      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/.gitignore",
+      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/.gitignore",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "本受控Next样本仅隔离安装/构建产物，避免混入源码交付",
+      "owner": "P3对应样本作者",
+      "consumer": "Git状态/后续样本作者；不更改全仓或共享Git设置",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/README.md"
+      ],
+      "delete_condition": "对应样本退役且无当前consumer时随样本删除",
+      "retention_basis": "当前原授权真实Next构建样本所需局部housekeeping；不删现生成物"
+    },
+    {
+      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/B/.gitignore",
+      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/B/.gitignore",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "本受控Next样本仅隔离安装/构建产物，避免混入源码交付",
+      "owner": "P3对应样本作者",
+      "consumer": "Git状态/后续样本作者；不更改全仓或共享Git设置",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/B/README.md"
+      ],
+      "delete_condition": "对应样本退役且无当前consumer时随样本删除",
+      "retention_basis": "当前原授权真实Next构建样本所需局部housekeeping；不删现生成物"
+    },
+    {
+      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/index.html",
+      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/index.html",
+      "status": "add",
+      "role": "test",
+      "responsibility": "轻量静态样本入口/原生交互/样式，承接当前真实mock行为",
+      "owner": "P3/T004",
+      "consumer": "A普通浏览器/静态HTTP及build.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "普通静态服务或本地HTML；作者另node build.mjs"
+      ],
+      "delete_condition": "本样本不再有当前设计/独立验收/C07消费者且被验证替代后由原owner移除",
+      "retention_basis": "用户004/005轻量静态选择；当前有界样本，无新框架/gate/控制面"
+    },
+    {
+      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/build.mjs",
+      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/build.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "A轻量作者转换：esbuild/PostCSS生成静态IIFE/CSS；不是消费者服务",
+      "owner": "P3/T004",
+      "consumer": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/package.json build script",
+      "module_consumers": [],
+      "named_data_readers": [
+        "普通静态服务或本地HTML；作者另node build.mjs"
+      ],
+      "delete_condition": "本样本不再有当前设计/独立验收/C07消费者且被验证替代后由原owner移除",
+      "retention_basis": "用户004/005轻量静态选择；当前有界样本，无新框架/gate/控制面"
+    },
+    {
+      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/app/main.tsx",
+      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/app/main.tsx",
+      "status": "add",
+      "role": "test",
+      "responsibility": "轻量静态样本入口/原生交互/样式，承接当前真实mock行为",
+      "owner": "P3/T004",
+      "consumer": "A普通浏览器/静态HTTP及build.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "普通静态服务或本地HTML；作者另node build.mjs"
+      ],
+      "delete_condition": "本样本不再有当前设计/独立验收/C07消费者且被验证替代后由原owner移除",
+      "retention_basis": "用户004/005轻量静态选择；当前有界样本，无新框架/gate/控制面"
+    },
+    {
+      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/assets/app.js",
+      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/assets/app.js",
+      "status": "add",
+      "role": "test",
+      "responsibility": "A预编译静态发布文件；保React交互，浏览器零npm消费",
+      "owner": "P3/T004",
+      "consumer": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/index.html",
+      "module_consumers": [],
+      "named_data_readers": [
+        "普通静态服务或本地HTML；作者另node build.mjs"
+      ],
+      "delete_condition": "本样本不再有当前设计/独立验收/C07消费者且被验证替代后由原owner移除",
+      "retention_basis": "用户004/005轻量静态选择；当前有界样本，无新框架/gate/控制面"
+    },
+    {
+      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/assets/styles.css",
+      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/assets/styles.css",
+      "status": "add",
+      "role": "test",
+      "responsibility": "A预编译静态发布文件；保React交互，浏览器零npm消费",
+      "owner": "P3/T004",
+      "consumer": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/index.html",
+      "module_consumers": [],
+      "named_data_readers": [
+        "普通静态服务或本地HTML；作者另node build.mjs"
+      ],
+      "delete_condition": "本样本不再有当前设计/独立验收/C07消费者且被验证替代后由原owner移除",
+      "retention_basis": "用户004/005轻量静态选择；当前有界样本，无新框架/gate/控制面"
+    },
+    {
+      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/B/index.html",
+      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/B/index.html",
+      "status": "add",
+      "role": "test",
+      "responsibility": "轻量静态样本入口/原生交互/样式，承接当前真实mock行为",
+      "owner": "P3/T005",
+      "consumer": "B index.html普通浏览器/静态HTTP",
+      "module_consumers": [],
+      "named_data_readers": [
+        "普通静态服务或本地HTML，零包管理器"
+      ],
+      "delete_condition": "本样本不再有当前设计/独立验收/C07消费者且被验证替代后由原owner移除",
+      "retention_basis": "用户004/005轻量静态选择；当前有界样本，无新框架/gate/控制面"
+    },
+    {
+      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/B/styles.css",
+      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/B/styles.css",
+      "status": "add",
+      "role": "test",
+      "responsibility": "轻量静态样本入口/原生交互/样式，承接当前真实mock行为",
+      "owner": "P3/T005",
+      "consumer": "B index.html普通浏览器/静态HTTP",
+      "module_consumers": [],
+      "named_data_readers": [
+        "普通静态服务或本地HTML，零包管理器"
+      ],
+      "delete_condition": "本样本不再有当前设计/独立验收/C07消费者且被验证替代后由原owner移除",
+      "retention_basis": "用户004/005轻量静态选择；当前有界样本，无新框架/gate/控制面"
+    },
+    {
+      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/B/app.js",
+      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/B/app.js",
+      "status": "add",
+      "role": "test",
+      "responsibility": "轻量静态样本入口/原生交互/样式，承接当前真实mock行为",
+      "owner": "P3/T005",
+      "consumer": "B index.html普通浏览器/静态HTTP",
+      "module_consumers": [],
+      "named_data_readers": [
+        "普通静态服务或本地HTML，零包管理器"
+      ],
+      "delete_condition": "本样本不再有当前设计/独立验收/C07消费者且被验证替代后由原owner移除",
+      "retention_basis": "用户004/005轻量静态选择；当前有界样本，无新框架/gate/控制面"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

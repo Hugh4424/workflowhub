@@ -67,6 +67,8 @@ JSON：
 
 ## 边界
 
+作为 `skills/plan-design-review/SKILL.md` 八维中组件/布局的实际消费方，沿上文Map和两条链资产检查回读真实wrapper/API、slot、状态/样式owner与消费者，检查任务声明视口的增长、滚动、浮层和关闭/焦点边界。精确值与合法配法回各原源；把组件名列入表不等于调用本方法或浏览器通过，未验证适用项保缺口。业务/视觉/交互/用户答复仍由各原owner判断，不复制第二八维规范。
+
 本技能不重新设计视觉、不调用浏览器。沿 `skills/project-norm-init/SKILL.md` 的「规范职责」取本动作适用专业源的组件/布局/工程/质量规则，各类真实path/稳定节、version/作用域、owner/consumer 和缺口可定位；任务状态和实际测试结论留当前 task spec/facts，不写成专业规则或旧 Experience.md 历史。build-plan 只设计地图，build-code 按真实 diff 回填并调用具体 testing skill，build-code 的终末独立执行者检查真实 consumer、兼容性和 CSS/token 泄漏；不新增独立阶段。
 
 ## 固定来源与偏离

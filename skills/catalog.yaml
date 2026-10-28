@@ -2915,3 +2915,229 @@ capability_decisions:
     local_changes: 本次P6首次写入的具体概念：按职责、状态归属和插槽组合；不整体搬8条规则或React19用法。本地方法为原创表述，不复制核心段落、不搬整包。取回坐标是镜像 24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e；不是历史采用pin，也未证明原作者仓与镜像的历史绑定。镜像frontmatter声称MIT，完整许可原件及采用时期权利范围未取得，license保unknown；不据该声称扩复制或分发。稳定本地节为“### 两条链资产检查（C03）”。owner＝frontend-component-quality方法维护者；consumer＝本卡实施者与C06只读资产输入；C06语义变更交回本卡owner另立卡。
     dependency_closure: []
     update_policy: 维护者点名时按固定skill_url与真实采用范围比较；不自动追HEAD。取得许可及历史原件后分别核当前坐标、历史绑定与权利；经独立审查的替代方法承接全部消费者且无正文引用后，由原owner删除本条并保历史原件。
+
+  - name: ui-copy-discipline
+    path: skills/ui-copy-discipline/SKILL.md
+    local_version: 1.0.0
+    status: native
+    standalone: true
+    metrics_enabled: true
+    purpose: 单一用户文案原文与四消费者/首次使用核对
+    used_by_stages: [build-plan, build-code]
+    upstream: []
+    local_changes: owner=T003方法维护者；consumer=frontend-prototype-render、plan-design-review及后续UI作者；实际输入/产物和缺口留当前任务原件；无新增stage或许可链。
+    dependency_closure: []
+    update_policy: 当前消费者合同变化时由原owner手工对比；无消费者且经独立验证替代完整承接后删除。
+  - name: figma-make-prompt
+    path: skills/figma-make-prompt/SKILL.md
+    local_version: 1.0.0
+    status: native
+    standalone: true
+    metrics_enabled: true
+    purpose: 真实业务输入到十项完整提示词及下游消费
+    used_by_stages: [build-plan, build-code]
+    upstream: []
+    local_changes: owner=T003方法维护者；consumer=frontend-prototype-render、plan-design-review及后续UI作者；实际输入/产物和缺口留当前任务原件；无新增stage或许可链。
+    dependency_closure: ["skills/ui-copy-discipline"]
+    update_policy: 当前消费者合同变化时由原owner手工对比；无消费者且经独立验证替代完整承接后删除。
+  - name: c05-ui-designer-design-brief
+    path: skills/external/ui-designer/design-brief/SKILL.md
+    local_version: 1.0.0
+    status: absorbed
+    standalone: false
+    metrics_enabled: false
+    purpose: 已核许可的局部方法采用；本地适配保原文并注明覆盖
+    used_by_stages: [build-plan, build-code]
+    upstream:
+      - github_url: https://modelscope.cn/skills/WenjiaWang/ui-designer
+        commit: c7317a841b6427360bc1b94151a03cf023e6643e
+        path: skills/design-brief/SKILL.md
+        skill_url: https://modelscope.cn/skills/WenjiaWang/ui-designer/resolve/c7317a841b6427360bc1b94151a03cf023e6643e/skills/design-brief/SKILL.md
+        license: Apache-2.0
+        adopted: ["全文方法及本地适配，consumer=原型作者/独立审查者；完整消费仍须当前任务原件"]
+    local_changes: owner=T003采用维护者；consumer=build-plan第5步、frontend-prototype-render、plan-design-review；范围/来源见external/README和任务137至157原件；不将ModelScope固定URL当历史整包绑定。
+    dependency_closure: ["skills/external/ui-designer/LICENSE","skills/external/ui-designer/THIRD_PARTY_NOTICES.md"]
+    update_policy: 采用前、维护者点名或源变化时手工核固定与当前同路径；失败保unavailable/原件，不报无更新，不自动追HEAD；当前consumer被独立验证的替代完整承接后由原owner决定删除。
+  - name: c05-ui-designer-information-architecture
+    path: skills/external/ui-designer/information-architecture/SKILL.md
+    local_version: 1.0.0
+    status: absorbed
+    standalone: false
+    metrics_enabled: false
+    purpose: 已核许可的局部方法采用；本地适配保原文并注明覆盖
+    used_by_stages: [build-plan, build-code]
+    upstream:
+      - github_url: https://modelscope.cn/skills/WenjiaWang/ui-designer
+        commit: c7317a841b6427360bc1b94151a03cf023e6643e
+        path: skills/information-architecture/SKILL.md
+        skill_url: https://modelscope.cn/skills/WenjiaWang/ui-designer/resolve/c7317a841b6427360bc1b94151a03cf023e6643e/skills/information-architecture/SKILL.md
+        license: Apache-2.0
+        adopted: ["全文方法及本地适配，consumer=原型作者/独立审查者；完整消费仍须当前任务原件"]
+    local_changes: owner=T003采用维护者；consumer=build-plan第5步、frontend-prototype-render、plan-design-review；范围/来源见external/README和任务137至157原件；不将ModelScope固定URL当历史整包绑定。
+    dependency_closure: ["skills/external/ui-designer/LICENSE","skills/external/ui-designer/THIRD_PARTY_NOTICES.md"]
+    update_policy: 采用前、维护者点名或源变化时手工核固定与当前同路径；失败保unavailable/原件，不报无更新，不自动追HEAD；当前consumer被独立验证的替代完整承接后由原owner决定删除。
+  - name: c05-ui-designer-design-tokens
+    path: skills/external/ui-designer/design-tokens/SKILL.md
+    local_version: 1.0.0
+    status: absorbed
+    standalone: false
+    metrics_enabled: false
+    purpose: 已核许可的局部方法采用；本地适配保原文并注明覆盖
+    used_by_stages: [build-plan, build-code]
+    upstream:
+      - github_url: https://modelscope.cn/skills/WenjiaWang/ui-designer
+        commit: c7317a841b6427360bc1b94151a03cf023e6643e
+        path: skills/design-tokens/SKILL.md
+        skill_url: https://modelscope.cn/skills/WenjiaWang/ui-designer/resolve/c7317a841b6427360bc1b94151a03cf023e6643e/skills/design-tokens/SKILL.md
+        license: Apache-2.0
+        adopted: ["全文方法及本地适配，consumer=原型作者/独立审查者；完整消费仍须当前任务原件"]
+    local_changes: owner=T003采用维护者；consumer=build-plan第5步、frontend-prototype-render、plan-design-review；范围/来源见external/README和任务137至157原件；不将ModelScope固定URL当历史整包绑定。
+    dependency_closure: ["skills/external/ui-designer/LICENSE","skills/external/ui-designer/THIRD_PARTY_NOTICES.md"]
+    update_policy: 采用前、维护者点名或源变化时手工核固定与当前同路径；失败保unavailable/原件，不报无更新，不自动追HEAD；当前consumer被独立验证的替代完整承接后由原owner决定删除。
+  - name: c05-ui-designer-frontend-design
+    path: skills/external/ui-designer/frontend-design/SKILL.md
+    local_version: 1.0.0
+    status: absorbed
+    standalone: false
+    metrics_enabled: false
+    purpose: 已核许可的局部方法采用；本地适配保原文并注明覆盖
+    used_by_stages: [build-plan, build-code]
+    upstream:
+      - github_url: https://modelscope.cn/skills/WenjiaWang/ui-designer
+        commit: c7317a841b6427360bc1b94151a03cf023e6643e
+        path: skills/frontend-design/SKILL.md
+        skill_url: https://modelscope.cn/skills/WenjiaWang/ui-designer/resolve/c7317a841b6427360bc1b94151a03cf023e6643e/skills/frontend-design/SKILL.md
+        license: Apache-2.0
+        adopted: ["全文方法及本地适配，consumer=原型作者/独立审查者；完整消费仍须当前任务原件"]
+    local_changes: owner=T003采用维护者；consumer=build-plan第5步、frontend-prototype-render、plan-design-review；范围/来源见external/README和任务137至157原件；不将ModelScope固定URL当历史整包绑定。
+    dependency_closure: ["skills/external/ui-designer/LICENSE","skills/external/ui-designer/THIRD_PARTY_NOTICES.md","skills/external/ui-designer/frontend-design/LICENSE.txt"]
+    update_policy: 采用前、维护者点名或源变化时手工核固定与当前同路径；失败保unavailable/原件，不报无更新，不自动追HEAD；当前consumer被独立验证的替代完整承接后由原owner决定删除。
+  - name: c05-ui-designer-ui-interaction-states
+    path: skills/external/ui-designer/ui-interaction-states/SKILL.md
+    local_version: 1.0.0
+    status: absorbed
+    standalone: false
+    metrics_enabled: false
+    purpose: 原文已按用户明确个人研究用途复制；grant unknown仅事实，不作施工/功能门
+    used_by_stages: [build-plan, build-code]
+    upstream:
+      - github_url: https://modelscope.cn/skills/WenjiaWang/ui-designer
+        commit: c7317a841b6427360bc1b94151a03cf023e6643e
+        path: skills/ui-interaction-states/SKILL.md
+        skill_url: https://modelscope.cn/skills/WenjiaWang/ui-designer/resolve/c7317a841b6427360bc1b94151a03cf023e6643e/skills/ui-interaction-states/SKILL.md
+        license: unknown
+        adopted: ["原文复制并供具名consumer读取；实际效果/完整验收另读原件，不以复制数判通过"]
+    local_changes: owner=T003采用维护者；consumer=build-plan第5步、frontend-prototype-render、plan-design-review；范围/来源见external/README和任务137至157原件；不将ModelScope固定URL当历史整包绑定。
+    dependency_closure: []
+    update_policy: 采用前、维护者点名或源变化时手工核固定与当前同路径；失败保unavailable/原件，不报无更新，不自动追HEAD；当前consumer被独立验证的替代完整承接后由原owner决定删除。
+  - name: c05-ui-designer-ui-accessibility-review
+    path: skills/external/ui-designer/ui-accessibility-review/SKILL.md
+    local_version: 1.0.0
+    status: absorbed
+    standalone: false
+    metrics_enabled: false
+    purpose: 原文已按用户明确个人研究用途复制；grant unknown仅事实，不作施工/功能门
+    used_by_stages: [build-plan, build-code]
+    upstream:
+      - github_url: https://modelscope.cn/skills/WenjiaWang/ui-designer
+        commit: c7317a841b6427360bc1b94151a03cf023e6643e
+        path: skills/ui-accessibility-review/SKILL.md
+        skill_url: https://modelscope.cn/skills/WenjiaWang/ui-designer/resolve/c7317a841b6427360bc1b94151a03cf023e6643e/skills/ui-accessibility-review/SKILL.md
+        license: unknown
+        adopted: ["原文复制并供具名consumer读取；实际效果/完整验收另读原件，不以复制数判通过"]
+    local_changes: owner=T003采用维护者；consumer=build-plan第5步、frontend-prototype-render、plan-design-review；范围/来源见external/README和任务137至157原件；不将ModelScope固定URL当历史整包绑定。
+    dependency_closure: []
+    update_policy: 采用前、维护者点名或源变化时手工核固定与当前同路径；失败保unavailable/原件，不报无更新，不自动追HEAD；当前consumer被独立验证的替代完整承接后由原owner决定删除。
+  - name: c05-ui-designer-design-review
+    path: skills/external/ui-designer/design-review/SKILL.md
+    local_version: 1.0.0
+    status: absorbed
+    standalone: false
+    metrics_enabled: false
+    purpose: 已核许可的局部方法采用；本地适配保原文并注明覆盖
+    used_by_stages: [build-plan, build-code]
+    upstream:
+      - github_url: https://modelscope.cn/skills/WenjiaWang/ui-designer
+        commit: c7317a841b6427360bc1b94151a03cf023e6643e
+        path: skills/design-review/SKILL.md
+        skill_url: https://modelscope.cn/skills/WenjiaWang/ui-designer/resolve/c7317a841b6427360bc1b94151a03cf023e6643e/skills/design-review/SKILL.md
+        license: Apache-2.0
+        adopted: ["全文方法及本地适配，consumer=原型作者/独立审查者；完整消费仍须当前任务原件"]
+    local_changes: owner=T003采用维护者；consumer=build-plan第5步、frontend-prototype-render、plan-design-review；范围/来源见external/README和任务137至157原件；不将ModelScope固定URL当历史整包绑定。
+    dependency_closure: ["skills/external/ui-designer/LICENSE","skills/external/ui-designer/THIRD_PARTY_NOTICES.md"]
+    update_policy: 采用前、维护者点名或源变化时手工核固定与当前同路径；失败保unavailable/原件，不报无更新，不自动追HEAD；当前consumer被独立验证的替代完整承接后由原owner决定删除。
+  - name: c05-playbook-00-ux-spec-skill
+    path: skills/external/playbook/00-ux-spec-skill.md
+    local_version: 1.0.0
+    status: absorbed
+    standalone: false
+    metrics_enabled: false
+    purpose: 固定公开短方法原文复制，按用户明确个人研究用途承接；不冒完整模板/评分包
+    used_by_stages: [build-plan]
+    upstream:
+      - github_url: https://github.com/Alibaba-Cloud-Design/vibe-designing-playbook
+        commit: c7096e9aeee6bfa4fd3266274d321107e426185d
+        path: public/attachments/00-ux-spec-skill.md
+        skill_url: https://github.com/Alibaba-Cloud-Design/vibe-designing-playbook/blob/c7096e9aeee6bfa4fd3266274d321107e426185d/public/attachments/00-ux-spec-skill.md
+        license: unknown
+        adopted: [完整公开短方法原文供规格/原型/审查作者消费]
+    local_changes: owner=T003采用维护者；consumer=规格/原型/独立审查作者；157保历史事实，当前个人研究决定见任务human-confirmations003；不以登记数冒真实效果。
+    dependency_closure: []
+    update_policy: 维护者点名时核同路径/固定pin与当前原文及grant；失败保原件不报无更新；无consumer且有经验证替代后由原owner删除。
+  - name: c05-playbook-02-cloudai-picker-skill
+    path: skills/external/playbook/02-cloudai-picker-skill.md
+    local_version: 1.0.0
+    status: absorbed
+    standalone: false
+    metrics_enabled: false
+    purpose: 固定公开短方法原文复制，按用户明确个人研究用途承接；不冒完整模板/评分包
+    used_by_stages: [build-plan]
+    upstream:
+      - github_url: https://github.com/Alibaba-Cloud-Design/vibe-designing-playbook
+        commit: c7096e9aeee6bfa4fd3266274d321107e426185d
+        path: public/attachments/02-cloudai-picker-skill.md
+        skill_url: https://github.com/Alibaba-Cloud-Design/vibe-designing-playbook/blob/c7096e9aeee6bfa4fd3266274d321107e426185d/public/attachments/02-cloudai-picker-skill.md
+        license: unknown
+        adopted: [完整公开短方法原文供规格/原型/审查作者消费]
+    local_changes: owner=T003采用维护者；consumer=规格/原型/独立审查作者；157保历史事实，当前个人研究决定见任务human-confirmations003；不以登记数冒真实效果。
+    dependency_closure: []
+    update_policy: 维护者点名时核同路径/固定pin与当前原文及grant；失败保原件不报无更新；无consumer且有经验证替代后由原owner删除。
+  - name: c05-playbook-09-variant-skill
+    path: skills/external/playbook/09-variant-skill.md
+    local_version: 1.0.0
+    status: absorbed
+    standalone: false
+    metrics_enabled: false
+    purpose: 固定公开短方法原文复制，按用户明确个人研究用途承接；不冒完整模板/评分包
+    used_by_stages: [build-plan]
+    upstream:
+      - github_url: https://github.com/Alibaba-Cloud-Design/vibe-designing-playbook
+        commit: c7096e9aeee6bfa4fd3266274d321107e426185d
+        path: public/attachments/09-variant-skill.md
+        skill_url: https://github.com/Alibaba-Cloud-Design/vibe-designing-playbook/blob/c7096e9aeee6bfa4fd3266274d321107e426185d/public/attachments/09-variant-skill.md
+        license: unknown
+        adopted: [完整公开短方法原文供规格/原型/审查作者消费]
+    local_changes: owner=T003采用维护者；consumer=规格/原型/独立审查作者；157保历史事实，当前个人研究决定见任务human-confirmations003；不以登记数冒真实效果。
+    dependency_closure: []
+    update_policy: 维护者点名时核同路径/固定pin与当前原文及grant；失败保原件不报无更新；无consumer且有经验证替代后由原owner删除。
+  - name: c05-playbook-08-evaluator-rubric
+    path: skills/external/playbook/08-evaluator-rubric.md
+    local_version: 1.0.0
+    status: absorbed
+    standalone: false
+    metrics_enabled: false
+    purpose: 固定公开短方法原文复制，按用户明确个人研究用途承接；不冒完整模板/评分包
+    used_by_stages: [build-plan]
+    upstream:
+      - github_url: https://github.com/Alibaba-Cloud-Design/vibe-designing-playbook
+        commit: c7096e9aeee6bfa4fd3266274d321107e426185d
+        path: public/attachments/08-evaluator-rubric.md
+        skill_url: https://github.com/Alibaba-Cloud-Design/vibe-designing-playbook/blob/c7096e9aeee6bfa4fd3266274d321107e426185d/public/attachments/08-evaluator-rubric.md
+        license: unknown
+        adopted: [完整公开短方法原文供规格/原型/审查作者消费]
+    local_changes: owner=T003采用维护者；consumer=规格/原型/独立审查作者；157保历史事实，当前个人研究决定见任务human-confirmations003；不以登记数冒真实效果。
+    dependency_closure: []
+    update_policy: 维护者点名时核同路径/固定pin与当前原文及grant；失败保原件不报无更新；无consumer且有经验证替代后由原owner删除。
+
+# C05本次更新观测：task quality/tests/120–122-p3-current-ref-*，Playbook/Website-skills当前ref等于采用pin。
+# ui-designer当前HEAD与pin不同，但七件当前URL均404，正文比较unavailable，详task176及后续判读原件；不能报无更新/正文不同，不自动升级。
