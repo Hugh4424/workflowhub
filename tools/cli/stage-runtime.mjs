@@ -1261,7 +1261,26 @@ function terminalAssessmentQuality(context, row) {
     try{return readPlainInputFile(file,"terminal source",null);}catch(error){if(error.code==="ENOENT")return null;throw error;}
   };
   const git=args=>execFileSync("git",args,{cwd:context.workspace.worktreeRoot,env:gitMetadataEnvironment(),encoding:"utf8",stdio:["ignore","pipe","pipe"]});
-  const deletedPaths=new Set(git(["diff","--name-only","-z","--diff-filter=D",context.workspace.baselineCommit,"--"]).split("\0").filter(Boolean));
+  // Task creation may precede stage authorization and include other tasks'
+  // history. Only a genuine earliest build-code authorization can narrow that
+  // implementation boundary; later approvals never reset it.
+  let implementationBase=context.workspace.baselineCommit;
+  try{
+    const directory=context.task.recordPath("quality/evidence/human-confirmations");
+    let names;try{names=readdirSync(directory);}catch(error){if(error.code!=="ENOENT")throw error;names=[];}
+    const authorizations=names.filter(name=>/^[A-Za-z0-9][A-Za-z0-9._-]*\.json$/.test(name)).map(name=>JSON.parse(context.task.readRecord(`quality/evidence/human-confirmations/${name}`))).filter(value=>value?.stage==="build-code"&&value.decision==="authorized");
+    if(authorizations.length){
+      if(authorizations.some(value=>typeof value.created_at!=="string"||!/^\d{4}-\d\d-\d\dT/.test(value.created_at)||!Number.isFinite(Date.parse(value.created_at))))throw Error("authorization creation time unavailable");
+      authorizations.sort((a,b)=>Date.parse(a.created_at)-Date.parse(b.created_at));
+      const first=authorizations[0],earliest=authorizations.filter(value=>Date.parse(value.created_at)===Date.parse(first.created_at)),materialRoot=join(context.workspace.worktreeRoot,"specs",context.identity.taskId);
+      if(new Set(earliest.map(value=>value.head)).size!==1)throw Error("earliest authorization is ambiguous");
+      if(earliest.some(value=>!plain(value)||typeof value.reply!=="string"||!value.reply.trim()||value.task_id!==undefined&&value.task_id!==context.identity.taskId||value.project_name!==undefined&&value.project_name!==context.manifest.project_name||!Array.isArray(value.material_refs)||!value.material_refs.includes(join(materialRoot,"spec.md"))||!value.material_refs.every(path=>typeof path==="string"&&isAbsolute(path)&&resolve(path)===path&&path.startsWith(materialRoot+"/"))))throw Error("authorization task materials differ");
+      if(!/^[a-f0-9]{40,64}$/.test(first.head??"")||git(["rev-parse","--verify",`${first.head}^{commit}`]).trim()!==first.head)throw Error("authorization head is not a commit");
+      git(["merge-base","--is-ancestor",context.workspace.baselineCommit,first.head]);git(["merge-base","--is-ancestor",first.head,"HEAD"]);
+      implementationBase=first.head;
+    }
+  }catch(error){gaps.push(`implementation base: ${error.message}; retained task baseline`);}
+  const deletedPaths=new Set(git(["diff","--name-only","-z","--diff-filter=D",implementationBase,"--"]).split("\0").filter(Boolean));
   const checkPaths=(values,label,expected=null)=>{
     const paths=list(values,label),seen=new Set();
     for(const entry of paths){
@@ -1271,7 +1290,7 @@ function terminalAssessmentQuality(context, row) {
       if(entry.deleted===true){
         const reallyDeleted=raw===null&&deletedPaths.has(entry.path);
         requireFact(reallyDeleted,`${label}: deletion does not match actual diff ${entry.path}`);
-        if(reallyDeleted){const original=execFileSync("git",["show",`${context.workspace.baselineCommit}:${entry.path}`],{cwd:context.workspace.worktreeRoot,env:gitMetadataEnvironment(),stdio:["ignore","pipe","pipe"]});requireFact(sha256(original)===entry.base_sha256,`${label}: deletion base bytes differ ${entry.path}`);}
+        if(reallyDeleted){const original=execFileSync("git",["show",`${implementationBase}:${entry.path}`],{cwd:context.workspace.worktreeRoot,env:gitMetadataEnvironment(),stdio:["ignore","pipe","pipe"]});requireFact(sha256(original)===entry.base_sha256,`${label}: deletion base bytes differ ${entry.path}`);}
       }else requireFact(raw!==null&&sha256(raw)===entry.sha256,`${label}: changed or missing ${entry.path}`);
     }
     if(expected)requireFact([...expected].sort().join("\0")===[...seen].sort().join("\0"),`${label}: current path denominator differs; missing=${[...expected].filter(p=>!seen.has(p)).join(",")}; extra=${[...seen].filter(p=>!expected.includes?.(p)&&!expected.has?.(p)).join(",")}`);
@@ -1279,7 +1298,7 @@ function terminalAssessmentQuality(context, row) {
   };
   const materialPaths=materialFiles.map(p=>`specs/${context.identity.taskId}/${p}`);
   checkPaths(a.materials,"materials",materialPaths);
-  const changed=new Set([...git(["diff","--name-only","-z",context.workspace.baselineCommit,"--"]).split("\0"),...git(["ls-files","--others","--exclude-standard","-z"]).split("\0")].filter(Boolean));
+  const changed=new Set([...git(["diff","--name-only","-z",implementationBase,"--"]).split("\0"),...git(["ls-files","--others","--exclude-standard","-z"]).split("\0")].filter(Boolean));
   const implementationPaths=new Set([...changed].filter(p=>!materialPaths.includes(p)));
   checkPaths(a.implementation,"implementation",implementationPaths);
   const spec=context.artifacts.read("spec.md"),appendix=spec.split(/^##\s+Appendix A.*$/m)[1]??"";
@@ -1297,8 +1316,8 @@ function terminalAssessmentQuality(context, row) {
     if(requireFact(/^[a-f0-9]{40,64}$/.test(report.head??""),"final report: invalid source HEAD")){
       try{
         requireFact(git(["rev-parse","--verify",`${report.head}^{commit}`]).trim()===report.head,"final report: HEAD is not a commit");
-        git(["merge-base","--is-ancestor",context.workspace.baselineCommit,report.head]);git(["merge-base","--is-ancestor",report.head,"HEAD"]);
-        const treePaths=git(["diff","--name-only","-z",context.workspace.baselineCommit,report.head,"--"]).split("\0").filter(p=>p&&!materialPaths.includes(p));
+        git(["merge-base","--is-ancestor",implementationBase,report.head]);git(["merge-base","--is-ancestor",report.head,"HEAD"]);
+        const treePaths=git(["diff","--name-only","-z",implementationBase,report.head,"--"]).split("\0").filter(p=>p&&!materialPaths.includes(p));
         requireFact([...treePaths].sort().join("\0")===[...implementationPaths].sort().join("\0"),"final report: HEAD tree source denominator differs");
         for(const entry of [...(a.implementation??[]),...(report.materials??[])]){
           const exists=git(["ls-tree","-z",report.head,"--",entry.path]).length>0;
@@ -1415,9 +1434,14 @@ function terminalAssessmentQuality(context, row) {
       try{
         const bytes=read(sourceRef,null),manifest=review.ocr?.manifest,entry=Array.isArray(manifest)?manifest.filter(v=>v.path==="source.json"):[];
         reviewedSource=JSON.parse(bytes);
-        sourceBound=requireFact(entry.length===1&&entry[0].bytes===bytes.length&&entry[0].sha256===sha256(bytes)&&deliveredMaterialId(manifest)===review.request?.material_id&&reviewedSource.captured_head===review.request?.subject?.head_commit&&reviewedSource.baseline_commit===review.request?.subject?.base_commit,"terminal review: original source packet identity differs");
+        const subject=review.request?.subject;
+        const sourceIdentity=plain(reviewedSource)&&/^[a-f0-9]{40,64}$/.test(reviewedSource.captured_head??"")&&/^[a-f0-9]{40,64}$/.test(reviewedSource.baseline_commit??"")&&Array.isArray(reviewedSource.repositories);
+        // source.json is the canonical packet DTO. Some callers also supply a
+        // subject; when present its claims must agree, never override the DTO.
+        sourceBound=requireFact(entry.length===1&&entry[0].bytes===bytes.length&&entry[0].sha256===sha256(bytes)&&deliveredMaterialId(manifest)===review.request?.material_id&&sourceIdentity&&(subject===undefined||plain(subject)&&reviewedSource.captured_head===subject.head_commit&&reviewedSource.baseline_commit===subject.base_commit&&Array.isArray(subject.changed_files)),"terminal review: original source packet identity differs");
+        if(sourceBound){git(["cat-file","-e",`${reviewedSource.captured_head}^{commit}`]);git(["cat-file","-e",`${reviewedSource.baseline_commit}^{commit}`]);git(["merge-base","--is-ancestor",reviewedSource.baseline_commit,reviewedSource.captured_head]);git(["merge-base","--is-ancestor",reviewedSource.captured_head,"HEAD"]);}
         if(review.source_ref&&a.review_source_ref)requireFact(sameReference(review.source_ref,a.review_source_ref),"terminal review: raw source override differs from canonical");
-      }catch(error){gaps.push(`terminal review: source binding unavailable: ${error.message}`);}
+      }catch(error){sourceBound=false;gaps.push(`terminal review: source binding unavailable: ${error.message}`);}
     }
     const originalSnapshot=f=>Object.fromEntries(["provider","path","line","issue"].map(k=>[k,f[k]??null]));
     const locatorMatches=(value,f,index)=>{
@@ -1431,7 +1455,7 @@ function terminalAssessmentQuality(context, row) {
       const repos=(reviewedSource.repositories??[]).filter(repo=>repo.id==="wh"&&path.startsWith(`repos/${repo.id}/`)&&repo.captured_head===reviewedSource.captured_head&&repo.baseline_commit===reviewedSource.baseline_commit&&repo.selected_paths?.includes(path)&&repo.changed_paths?.includes(path));
       const file=path.slice("repos/wh/".length);
       const entries=(review.ocr?.manifest??[]).filter(v=>v.path===path);
-      return repos.length===1&&entries.length===1&&review.request?.subject?.changed_files?.includes(file)&&implementationPaths.has(file)?file:null;
+      return repos.length===1&&entries.length===1&&(review.request?.subject===undefined||review.request.subject.changed_files.includes(file))&&implementationPaths.has(file)?file:null;
     };
     for(const [index,f] of findings.entries()){
       const id=f.finding_id??f.id??`/findings/${index}`,ds=dispositions.filter(d=>locatorMatches(d,f,index));

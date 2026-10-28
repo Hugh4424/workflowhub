@@ -19,7 +19,7 @@ description: 每阶段结束由主会话发起阶段收口：归纳、分类归�
 
 成本边界：执行前核工具真实路径/版本与依赖闭包、认证 checkout、外置 task 访问及原主会话身份。现工具接受三正式stage及build-prd成本标签；后者不新增正式stage。build-prd材料未供为unavailable、无审查事实为no_stage_fact；exit1但已发布的缺报行报告实际窗口与缺口，未发布才写“本阶段无记录”及原因。真实三阶段留账/来源未齐仍incomplete。
 
-首次记录附已有真实开工事件 `--start-ref=<原件绝对路径>#seq=<用户事件seq>` 或 Codex 的 `#item_id=<URI编码UserMessage.id>`，已有账行不重置起点。首笔缺少/格式非法/未唯一匹配的 start-ref 必须 fail-closed（exit 2，不创建账行）；源文件不可读或解析失败必须 fail-closed（exit 1，不创建账行），不发布污染首行。若已有且仅有一行历史坏首行（from 与起点来源均为 `unavailable:task_start_unavailable`），只允许显式合法 start-ref 窄范围重开，保留旧字节并从真实起点重测，不用坏行 until/boundary；其它已有账行仍拒绝重置。需明确源复跑可附 `--session=<原件绝对路径>`；无参仅用原主会话实际环境及父记录明确后代，不能让子代理环境、工具 cwd 或根 SESSION_ID 冒当前主会话。
+首次记录附已有真实开工事件 `--start-ref=<原件绝对路径>#seq=<用户事件seq>` 或 Codex 的 `#item_id=<URI编码UserMessage.id>`，已有账行不重置起点。build-code 由原生 Goal 启动时，可显式用 `#goal_created_at=<创建秒数>&authorization=<URI编码任务内确认ref>&sha256=<确认原件hash>`，取真实 `thread_goal_updated` 初始事件和本任务已有授权原件；不能把 Goal 包装消息伪称 UserMessage。CLI 核任务、主线程、授权目标与邻接 turn，缺失或歧义仍拒绝首行；已有账行不重置起点。首笔缺少/格式非法/未唯一匹配的 start-ref 必须 fail-closed（exit 2，不创建账行）；源文件不可读或解析失败必须 fail-closed（exit 1，不创建账行），不发布污染首行。若已有且仅有一行历史坏首行（from 与起点来源均为 `unavailable:task_start_unavailable`），只允许显式合法 start-ref 窄范围重开，保留旧字节并从真实起点重测，不用坏行 until/boundary；其它已有账行仍拒绝重置。需明确源复跑可附 `--session=<原件绝对路径>`；无参仅用原主会话实际环境及父记录明确后代，不能让子代理环境、工具 cwd 或根 SESSION_ID 冒当前主会话。
 
 读回任务根 `main-agent-cost.md` 的新增 27 列行、旧字节前缀、实际 from/until、来源与缺报。未触发、读取/锁/写入/取消失败都保 CLI 原件并披露实际原因；可写缺口行按实际内容报告，留账失败不阻塞收尾。若将删除唯一工具 worktree，先在工具与原身份可访问时 record 并读回账本，再按既有授权清理；不从已删除入口补记，不假定存续 repo 有同版闭包。交接明确实际 until 之后的物理清理、交接发布与最终回复未计入该笔。成本由主会话在本步骤触发，交接方法只负责发布，不新增共享 writer。
 

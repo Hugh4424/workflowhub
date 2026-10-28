@@ -56,7 +56,7 @@ async function terminalFixture(options){
  const findingPath=options?.packet?(options.packetForeignPath?'repos/foreign/answer.mjs':'repos/wh/answer.mjs'):'answer.mjs';
  const finding={...(options?.idless?{}:{id:'F1'}),provider:'owned-fixture',severity:options?.blocking?'blocking':'major',path:findingPath,line:1,affected_paths:[findingPath],issue:'Owned before repair returns 0 instead of 42',recommendation:'Return 42',evidence_kind:'direct',evidence:'Observed owned program stdout is 0',root_cause:'Owned literal is zero'};
  const submittedFindings=options?.twoFindings?[finding,{...finding,issue:'A second actual observation still sees zero instead of the expected42'}]:[finding];
- const recorded=await recordSimpleReviewRequest({taskDir:f.task.taskPath,request:{stage:'build-code',review_scope:'terminal',subject_kind:'worktree',phase_id:null,materials:{},...(packetState.subject?{subject:packetState.subject}:{})},runRound:async()=>({status:'available',executor:'ocr',...(packetState.manifest?{material_id:packetState.material_id,ocr:{manifest:packetState.manifest},...(options.canonicalSource?{source_ref:packetState.source_ref}:{})}:{}),provider_results:[{provider:'owned-fixture',status:'completed',parse_outcome:'ok',raw_output:JSON.stringify({findings:submittedFindings})}],findings:submittedFindings})});
+ const recorded=await recordSimpleReviewRequest({taskDir:f.task.taskPath,request:{stage:'build-code',review_scope:'terminal',subject_kind:'worktree',phase_id:null,materials:{},...(packetState.subject&&!options?.packetWithoutSubject?{subject:packetState.subject}:{})},runRound:async()=>({status:'available',executor:'ocr',...(packetState.manifest?{material_id:packetState.material_id,ocr:{manifest:packetState.manifest},...(options.canonicalSource?{source_ref:packetState.source_ref}:{})}:{}),provider_results:[{provider:'owned-fixture',status:'completed',parse_outcome:'ok',raw_output:JSON.stringify({findings:submittedFindings})}],findings:submittedFindings})});
  const review={ref:recorded.result_ref,sha256:h(readFileSync(recorded.path))},reviewOriginal=JSON.parse(readFileSync(recorded.path,'utf8'));
  expect(reviewOriginal.conclusion).toBe(options?.blocking?'reject':'needs_revision');
  const originalFinding=i=>Object.fromEntries(['provider','path','line','issue'].map(key=>[key,reviewOriginal.findings[i][key]??null]));
@@ -140,4 +140,38 @@ it.each(['receipt','wrong-task','wrong-stage','wrong-thread','wrong-ref','wrong-
  if(kind==='raw-tamper')writeFileSync(join(x.f.task.taskPath,envelope.raw_ref.ref),Buffer.concat([rawBefore,Buffer.from(' ')]));
  expect(x.run(ref).ok).toBe(true);const result=status(x.f);expect(result.ok?result.value.quality_status:'incomplete',JSON.stringify(result)).toBe(kind==='receipt'?'pass':'incomplete');
  if(kind!=='raw-tamper')expect(readFileSync(join(x.f.task.taskPath,envelope.raw_ref.ref))).toEqual(rawBefore);
+});
+
+
+// Additional native producer seams only: existing assertions and old fixture
+// behavior stay unchanged. Authorization is a stage start, not a new manifest.
+async function authorizedStageBoundaryFixture(){
+ const x=await terminalFixture(),f=x.f,originalHead=git(f.worktree,['rev-parse','HEAD']);
+ git(f.worktree,['checkout','-qb','authorized-stage-source','main']);writeFileSync(join(f.worktree,'historical-unrelated.txt'),'already existed before stage authorization\n');git(f.worktree,['add','.']);git(f.worktree,['commit','-qm','unrelated earlier task change']);
+ const authorizationHead=git(f.worktree,['rev-parse','HEAD']);git(f.worktree,['merge','--no-edit',originalHead]);x.refreshReport();
+ const dir=join(f.task.taskPath,'quality/evidence/human-confirmations');mkdirSync(dir,{recursive:true});
+ const authorization={stage:'build-code',decision:'authorized',reply:'Implement the approved task in its own checkout',material_refs:x.materialPaths.map(p=>join(f.worktree,p)),head:authorizationHead,created_at:'2026-10-03T01:00:00Z'};
+ const initial=join(dir,'2026-10-03-001-build-code-authorized.json');writeFileSync(initial,JSON.stringify(authorization));
+ writeFileSync(join(dir,'2026-10-03-002-later-scope-approved.json'),JSON.stringify({...authorization,decision:'scope-approved',head:git(f.worktree,['rev-parse','HEAD']),created_at:'2026-10-03T02:00:00Z'}));
+ writeFileSync(join(dir,'2026-10-03-003-later-authorized.json'),JSON.stringify({...authorization,head:git(f.worktree,['rev-parse','HEAD']),created_at:'2026-10-03T03:00:00Z'}));
+ return {...x,authorization,authorizationHead,initial};
+}
+it('stage authorization baseline uses earliest actual authorized head without rebinding the task manifest or later reset',async()=>{
+ const x=await authorizedStageBoundaryFixture(),before=readFileSync(join(x.f.task.taskPath,'task.json'));expect(x.run(x.publish()).ok).toBe(true);const r=status(x.f);expect(r.ok,JSON.stringify(r)).toBe(true);expect(r.value.quality_status,JSON.stringify(r.value.quality.terminal_assessment?.gaps)).toBe('pass');expect(readFileSync(join(x.f.task.taskPath,'task.json'))).toEqual(before);
+});
+it.each(['foreign-task','invalid-head','ambiguous-earliest'])('stage authorization baseline rejects %s rather than choosing a narrower later head',async(kind)=>{
+ const x=await authorizedStageBoundaryFixture();if(kind==='foreign-task')x.authorization.material_refs=[join(x.f.worktree,'specs/foreign-task/spec.md')];if(kind==='invalid-head')x.authorization.head='f'.repeat(40);writeFileSync(x.initial,JSON.stringify(x.authorization));if(kind==='ambiguous-earliest')writeFileSync(join(x.f.task.taskPath,'quality/evidence/human-confirmations/2026-10-03-004-ambiguous-authorized.json'),JSON.stringify({...x.authorization,head:git(x.f.worktree,['rev-parse','HEAD'])}));expect(x.run(x.publish()).ok).toBe(true);const r=status(x.f);expect(r.value.quality_status).toBe('incomplete');expect(r.value.quality.terminal_assessment.gaps.some(g=>g.startsWith('implementation base:'))).toBe(true);
+});
+it('stage authorization baseline retains a new change to a previously unrelated path in the current denominator',async()=>{
+ const x=await authorizedStageBoundaryFixture();writeFileSync(join(x.f.worktree,'historical-unrelated.txt'),'changed during current stage rework\n');x.refreshReport();expect(x.run(x.publish()).ok).toBe(true);const r=status(x.f);expect(r.value.quality_status).toBe('incomplete');expect(r.value.quality.terminal_assessment.gaps.some(g=>g.startsWith('implementation: current path denominator differs')&&g.includes('historical-unrelated.txt'))).toBe(true);
+});
+it('canonical source DTO binds actual manifest and material_id without inventing request.subject',async()=>{
+ const x=await terminalFixture({packet:true,canonicalSource:true,packetWithoutSubject:true,idless:true});const original=JSON.parse(readFileSync(join(x.f.task.taskPath,x.review.ref),'utf8'));expect(original.request.subject).toBeUndefined();expect(x.run(x.publish()).ok).toBe(true);const r=status(x.f);expect(r.value.quality_status,JSON.stringify(r.value.quality.terminal_assessment?.gaps)).toBe('pass');
+});
+it.each(['material-id','changed-source','raw-override'])('canonical source DTO rejects %s using the original packet binding',async(kind)=>{
+ const x=await terminalFixture({packet:true,canonicalSource:true,packetWithoutSubject:true,idless:true});
+ if(kind==='material-id'){const p=join(x.f.task.taskPath,x.review.ref),r=JSON.parse(readFileSync(p,'utf8'));r.request.material_id='0'.repeat(64);writeFileSync(p,JSON.stringify(r));x.review.sha256=createHash('sha256').update(readFileSync(p)).digest('hex');}
+ if(kind==='changed-source'){const p=join(x.f.task.taskPath,x.packetState.source_ref.ref);writeFileSync(p,readFileSync(p,'utf8')+' ');}
+ if(kind==='raw-override')x.raw.review_source_ref=x.save('forged-source-override.json',x.packetState.source);
+ expect(x.run(x.publish()).ok).toBe(true);const r=status(x.f);expect(r.value.quality_status).toBe('incomplete');const gaps=r.value.quality.terminal_assessment.gaps;expect(gaps.some(g=>g.includes(kind==='raw-override'?'raw source override differs':kind==='changed-source'?'source binding unavailable':'original source packet identity differs'))).toBe(true);
 });

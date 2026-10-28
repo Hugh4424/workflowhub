@@ -515,8 +515,15 @@ function taskFor(args) {
  return openTask(taskPath,{projectName:args.project,taskId:args.task});
 }
 function parseSelector(value) {
- const match=typeof value==='string'&&value.match(/^(.*)#(seq|item_id)=(.*)$/s);
+ const match=typeof value==='string'&&value.match(/^(.*)#(seq|item_id|goal_created_at)=(.*)$/s);
  if(!match||!isAbsolute(match[1]))throw new TypeError('invalid start selector');
+ if(match[2]==='goal_created_at') {
+  const goal=match[3].match(/^(\d+)&authorization=([^&]+)&sha256=([a-f0-9]{64})$/);
+  if(!goal||!validNumber(Number(goal[1])))throw new TypeError('invalid native Goal selector');
+  let authorizationRef;try{authorizationRef=decodeURIComponent(goal[2]);}catch{throw new TypeError('invalid native Goal authorization ref');}
+  if(!/^quality\/evidence\/human-confirmations\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/.test(authorizationRef)||authorizationRef.includes('..'))throw new TypeError('invalid native Goal authorization ref');
+  return {sourcePath:match[1],kind:'goal_created_at',value:Number(goal[1]),authorizationRef,authorizationSha256:goal[3]};
+ }
  if(match[2]==='seq') {
   if(!/^\d+$/.test(match[3])||!validNumber(Number(match[3])))throw new TypeError('invalid seq selector');
   return {sourcePath:match[1],kind:'seq',value:Number(match[3])};
@@ -525,9 +532,32 @@ function parseSelector(value) {
  if(!id||/[\x00-\x1f\x7f/\\]/.test(id))throw new TypeError('invalid item_id selector');
  return {sourcePath:match[1],kind:'item_id',value:id};
 }
-function startFrom(ref,sources) {
+// Native Goal creation is selected explicitly and bound to this task's existing
+// authorization. Goal updates, synthetic user wrappers and subagent callers are
+// not substitutes for the original creation event.
+function nativeGoalStart(selector,source,{task,stage,workspaceRoot}={}) {
+ const invalid=message=>({from:null,issue:{code:'task_start_unavailable',sourcePath:selector.sourcePath,message:'native Goal start: '+message,expected:false}});
+ const records=source?.records??[],header=records[0],thread=process.env.CODEX_THREAD_ID||process.env.CODEX_SESSION_ID;
+ if(!task||stage!=='build-code'||!workspaceRoot||process.env.DSH_SESSION_ID||!thread||header?.type!=='session_meta'||header.payload?.id!==thread||header.payload?.parent_thread_id||header.payload?.source?.subagent)return invalid('current main thread identity is not bound');
+ const ownedRoots=new Set([realpathSync(task.manifest.target_repo_root),realpathSync(workspaceRoot)]);
+ const ownedCwd=value=>{if(typeof value!=='string'||!isAbsolute(value))return false;try{return ownedRoots.has(realpathSync(value));}catch(error){if(error.code==='ENOENT')return false;throw error;}};
+ if(!ownedCwd(header.payload.cwd))return invalid('source repository identity differs from task');
+ const candidates=records.filter(r=>r.type==='event_msg'&&r.payload?.type==='thread_goal_updated'&&r.payload.goal?.createdAt===selector.value&&r.payload.goal.updatedAt===selector.value&&r.payload.goal.status==='active'&&r.payload.goal.tokensUsed===0&&r.payload.goal.timeUsedSeconds===0);
+ if(candidates.length!==1)return invalid('selector must match exactly one initial creation event');
+ const event=candidates[0],p=event.payload,goal=p.goal,index=records.indexOf(event),started=records[index+1],context=records[index+2],turn=started?.payload,attribution=turn?.turn_attribution;
+ if(p.threadId!==thread||goal.threadId!==thread||!validNumber(recordTime(event))||Math.floor(recordTime(event)/1000)!==selector.value)return invalid('goal thread or creation timestamp differs');
+ if(started?.type!=='event_msg'||turn?.type!=='task_started'||turn.started_at!==selector.value||!validCodexTurnId(turn.turn_id)||turn.root_turn_id!==turn.turn_id||attribution?.turn_id!==turn.turn_id||attribution.root_turn_id!==turn.turn_id||attribution.turn_trigger!=='goal'||attribution.parent_turn_id!==null||attribution.initiating_agent_path!==null||context?.type!=='turn_context'||context.payload?.turn_id!==turn.turn_id||context.payload?.root_turn_id!==turn.turn_id||!ownedCwd(context.payload?.cwd)||!validNumber(recordTime(started))||recordTime(started)<recordTime(event)||!validNumber(recordTime(context))||recordTime(context)<recordTime(started))return invalid('adjacent goal-triggered main turn is not bound');
+ const authorizationBytes=task.readRecordBytes(selector.authorizationRef);
+ if(hash(authorizationBytes)!==selector.authorizationSha256)return invalid('authorization hash differs');
+ const authorization=JSON.parse(authorizationBytes.toString('utf8')),materials=authorization.material_refs,materialRoot=join(workspaceRoot,'specs',task.identity.taskId),specPath=join(materialRoot,'spec.md');
+ const objective=value=>typeof value==='string'?value.replaceAll('\\n','\n').trim():'';
+ if(authorization.stage!==stage||authorization.decision!=='authorized'||authorization.task_id!==undefined&&authorization.task_id!==task.identity.taskId||authorization.project_name!==undefined&&authorization.project_name!==task.identity.projectName||!Array.isArray(materials)||!materials.includes(specPath)||!materials.every(path=>typeof path==='string'&&isAbsolute(path)&&resolve(path)===path&&path.startsWith(materialRoot+sep))||!objective(goal.objective)||objective(goal.objective)!==objective(authorization.reply))return invalid('task, stage or authorized objective differs');
+ return {from:iso(recordTime(event))};
+}
+function startFrom(ref,sources,context) {
  if(!ref)return {from:null,issue:{code:'task_start_unavailable',message:'first record has no authoritative start-ref',expected:false}};
  const selector=parseSelector(ref),source=sources.find(s=>s.sourcePath===selector.sourcePath);
+ if(selector.kind==='goal_created_at')return nativeGoalStart(selector,source,context);
  const matches=(source?.records??[]).filter(r=>selector.kind==='seq'
   ?r.type==='user/message'&&r.seq===selector.value
   :r.type==='event_msg'&&r.payload?.type==='item_completed'&&r.payload?.item?.type==='UserMessage'&&r.payload.item.id===selector.value);
@@ -668,7 +698,7 @@ function ledgerRow(args,result,startRef) {
 }
 async function recordMeasurement(args,signal) {
  const task=taskFor(args);if(task.manifest.activation_cohort!=='post')throw new Error('pre/history task is read-only');
- authenticatedWorkspace(task);let publicationState='not_published',publicationWarning=null;
+ const workspaceRoot=authenticatedWorkspace(task);let publicationState='not_published',publicationWarning=null;
  try {
   return await task.withRecordLock('main-agent-cost',async()=>{
    signal.throwIfAborted();let old='';try{old=task.readRecord('main-agent-cost.md');}catch(error){if(error.code!=='ENOENT')throw error;}
@@ -701,7 +731,8 @@ async function recordMeasurement(args,signal) {
     const selected=sources.find(source=>source.sourcePath===selector.sourcePath);
     if(selected?.readIssue)throw new Error((reopen?'ledger reopen':'first record')+' start-ref unavailable: '+selected.readIssue.message);
    }
-   const start=reopen?startFrom(startRef,sources):last?{from:last[3]}:startFrom(startRef,sources);
+   const startContext={task,stage:args.stage,workspaceRoot};
+   const start=reopen?startFrom(startRef,sources,startContext):last?{from:last[3]}:startFrom(startRef,sources,startContext);
    if(!last&&start.issue){
     if(loadIssue||sources.some(source=>source.readIssue))throw new Error('first record start-ref unavailable: '+start.issue.message);
     throw Object.assign(new TypeError(start.issue.message),{argumentError:true});
