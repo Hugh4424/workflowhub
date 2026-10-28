@@ -1008,20 +1008,23 @@ node tools/cli/check-skill-consistency.mjs --root "$PWD"
 
 ### 后建索引 R-001…R-013 与 v1 主文 R-001…R-006
 
-| 来源 | 原义 | 落点 | 状态 |
-| --- | --- | --- | --- |
-| v1 R-001 / 后建 R-001 | 两任务设计、执行、验收、修复的严重问题与耗时痛点 | 第 1 节「需求解释」；复盘已在 make-decision 完成 | 已消费，不重复调研 |
-| v1 R-002 / 后建 R-002、R-004 | 查清 build-code 长耗时与 token 浪费根因 | 第 1 节的五个放大器；PFACT-004 明确只到机制线索 | 只作设计输入，不承诺定论 |
-| 后建 R-003 | 每任务至少四个子代理做四类研究 | make-decision 的执行事实 | 前序已完成 |
-| v1 R-003 / 后建 R-005 | 优化 WorkflowHub 避免同类复发 | 全部 12 个 Phase | 本规格承接 |
-| 后建 R-006 / v1 R-004 | verify-code 全部工作迁入末 Phase，含验证、全局审查、架构师审查、修复、测试 | AC-MERGE-001、AC-MERGE-003 | 本规格承接 |
-| 后建 R-007 | 少一个 stage，末尾无 handoff | AC-ROUTE-002、AC-ROUTE-003、AC-MERGE-002 | 本规格承接 |
-| 后建 R-008 / v1 R-005 | 查可行性及 build-plan、build-code 的修改 | 实现设计的「接口与失败语义」三条硬冲突 | 本规格承接 |
-| 后建 R-009 / v1 R-006 | 先 worktree、从 make-decision 起、不跳阶段 | 任务身份：认证 worktree 与 `task/workflowhub/...` 分支 | 已发生 |
-| 后建 R-010 | 内外研究、大纲、发散、逐模块 Talk、方案与验收收敛 | make-decision 的交付 | 前序已完成 |
-| 后建 R-011 | 中文大白话、Talk/Grill 用提问工具、说明选项后果风险 | 本阶段的沟通方式；材料本身保持合同语言 | 持续执行 |
-| 后建 R-012 | 方向与细节异源建议各一次，细节须在收敛后 | 方向建议已做；本次细节只做一次独立合并审查，终末再做一次外部审查 | 本阶段执行 |
-| 后建 R-013 | 确认后停下汇报内容、进度、下一步并给 handoff 路径 | 本阶段收口时执行 | 本阶段执行 |
+| 来源 | 原义 | 落点 | 状态 | 结论来源ref | 代码AC适用说明 |
+| --- | --- | --- | --- | --- | --- |
+| v1 R-001 / 后建 R-001 | 两任务设计、执行、验收、修复的严重问题与耗时痛点 | 第 1 节「需求解释」；复盘已在 make-decision 完成 | 已消费，不重复调研 | `quality/evidence/handoff/2026-10-26-001-make-decision-handoff.md` §3；`quality/evidence/research/2026-10-26-001-bounded-factual-corrections.md` 第1–5点 | 前序复盘交付声明，不直接适用代码AC；保有界研究限制 |
+| v1 R-002 / 后建 R-002 | 研究两个指定会话及两套计划材料 | 第 1 节的五个放大器；PFACT-004 明确只到机制线索 | 只作设计输入，不承诺定论 | `quality/evidence/research/session-metrics-primary.md` §时间窗及原始文件；`quality/evidence/research/2026-10-26-001-bounded-factual-corrections.md` 第3、5点 | 前序指定会话研究；设计输入，不承诺完整去重、净浪费或历史版本定论 |
+| v1 R-002 / 后建 R-004 | 查清 build-code 长耗时与 token 浪费根因 | 第 1 节的五个放大器；PFACT-004 明确只到机制线索 | 只作设计输入，不承诺定论 | `decision-log.md` §未决项单表 OI-008；`quality/evidence/research/2026-10-26-001-bounded-factual-corrections.md` 第1–5点 | 研究partial：净等待、去重及历史规则绑定未全核；不适用代码AC，不以方向建议冒根因定论 |
+| 后建 R-003 | 每任务至少四个子代理做四类研究 | make-decision 的执行事实 | 前序已完成 | `quality/evidence/handoff/2026-10-26-001-make-decision-handoff.md` §3（该前序原件§3记两任务8份复盘，不在本表重签各actor） | 前序已完成是原材料声明；本表不新增独立pass，未逐actor核四类委派，不适用代码AC |
+| v1 R-003 / 后建 R-005 | 优化 WorkflowHub 避免同类复发 | 全部 12 个 Phase | 本规格承接 | 本规格 §实现设计（全局权威）及 `phases/index.md` 的12个Phase指针；`quality/evidence/handoff/2026-10-26-001-make-decision-handoff.md` §2有限目标 | 全部Phase是实施承接，非本需求专属独立完成判词；专属聚合结论未取得，不能用全WP/全30AC替代 |
+| 后建 R-006 / v1 R-004 | verify-code 全部工作迁入末 Phase，含验证、全局审查、架构师审查、修复、测试 | AC-MERGE-001、AC-MERGE-003 | 本规格承接 | `quality/reviews/2026-10-27-065-p7-p8-p9-original-ac-attribution.json`；实际报告006 `/acceptance/5`、`/acceptance/7` | 仅AC-MERGE-001、AC-MERGE-003；沿原有限独立首判，当前适用另核 |
+| 后建 R-007 | 少一个 stage，末尾无 handoff | AC-ROUTE-002、AC-ROUTE-003、AC-MERGE-002 | 本规格承接 | `quality/reviews/2026-10-27-068-p9-route002-independent-actual-readback.json`；`quality/reviews/2026-10-27-079-p11-manifest-original-ac-independent-readback.json`；`quality/reviews/2026-10-27-069-p8-merge002-independent-sample-readback.json` | 仅AC-ROUTE-002、AC-ROUTE-003、AC-MERGE-002；默认无handoff与用户额外人读交接分开 |
+| 后建 R-008 / v1 R-005 | 查可行性及 build-plan、build-code 的修改 | 实现设计的「接口与失败语义」三条硬冲突 | 本规格承接 | 本规格 §实现设计「接口与失败语义」；`decision-log.md` §未决项单表 OI-007 | 前序可行性及设计承接；未声明精确代码AC映射，不以WP5全部AC代判 |
+| 后建 R-009 / v1 R-006 | 先 worktree、从 make-decision 起、不跳阶段 | 任务身份：认证 worktree 与 `task/workflowhub/...` 分支 | 已发生 | `task.json` 的task_id/baseline_commit/target_repo_root；`quality/evidence/handoff/2026-10-26-001-make-decision-handoff.md` §3 | 启动身份/前序路线事实，不直接适用代码AC；worktree存在不独证全程未跳阶段 |
+| 后建 R-010 | 内外研究、大纲、发散、逐模块 Talk、方案与验收收敛 | make-decision 的交付 | 前序已完成 | `decision-log.md` §未决项单表 OI-011及来源限制；`quality/evidence/handoff/2026-10-26-001-make-decision-handoff.md` §3 | 前序研究/收敛声明，不直接适用代码AC；完整Talk工具返回未取得，保原限制 |
+| 后建 R-011 | 中文大白话、Talk/Grill 用提问工具、说明选项后果风险 | 本阶段的沟通方式；材料本身保持合同语言 | 持续执行 | `quality/evidence/decision-log-refs/requirement-index.md` 后建R-011；本规格本行 | 持续沟通约束，无本任务代码AC替代；材料不代真实问答，不声称穷尽核验或完成 |
+| 后建 R-012 | 方向与细节异源建议各一次，细节须在收敛后 | 方向建议已做；本次细节只做一次独立合并审查，终末再做一次外部审查 | 本阶段执行 | `decision-log.md` §未决项单表 OI-011/OI-013；`quality/evidence/handoff/2026-10-26-001-make-decision-handoff.md` §3 | 方向/细节各一次是前序声明；少读为持续约束，完整时序工具证据未取得。旧索引“两审未执行”仅历史，不覆写 |
+| 后建 R-013 | 确认后停下汇报内容、进度、下一步并给 handoff 路径 | 本阶段收口时执行 | 本阶段执行 | `quality/evidence/handoff/2026-10-26-001-make-decision-handoff.md`；`quality/evidence/2026-10-28-407-receipt-handoff-publication-readback.json`（绑定实际handoff002/报告006） | 阶段交接交付，不适用代码AC；407发布时unverified事实保留，已发布不预签本轮后续收口/停止/未来交接 |
+
+本表的外置ref以认证任务库为根；“实际报告006”指 `quality/evidence/workflowhub-build-code-efficiency-verify-merge-20261026/2026-10-28-006-final-report.json`。原状态词保原意；来源声明不冒独立验收，持续约束不转换成完成。后建索引仅来源导航，共同来源/aliases不构成WP或全AC所有权。
 
 ### U-001…U-022
 
