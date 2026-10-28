@@ -94,32 +94,6 @@
         "css_token_owner"
       ]
     },
-    "verify-code": {
-      "contract": "contracts/verify-code.md",
-      "problem_order": [
-        "implementation",
-        "consumer",
-        "correctness",
-        "lifecycle_security",
-        "test_strength"
-      ],
-      "semantic_fields": [
-        "changed_files",
-        "acceptance_criteria",
-        "implementation_assessment",
-        "test_context",
-        "open_risks",
-        "architect_assessment",
-        "ui_applicability",
-        "ui_contract",
-        "component_quality_map",
-        "real_consumer",
-        "state_owner",
-        "typed_view_model",
-        "css_token_owner",
-        "design_alignment"
-      ]
-    },
     "build-prd": {
       "contract": "contracts/build-prd.md",
       "problem_order": [
@@ -142,6 +116,32 @@
         "delivery_facts",
         "analysis_facts",
         "reflection_facts"
+      ]
+    },
+    "build-code/terminal": {
+      "contract": "contracts/build-code.md",
+      "problem_order": [
+        "implementation",
+        "consumer",
+        "correctness",
+        "lifecycle_security",
+        "test_strength"
+      ],
+      "semantic_fields": [
+        "changed_files",
+        "acceptance_criteria",
+        "implementation_assessment",
+        "test_context",
+        "open_risks",
+        "architect_assessment",
+        "ui_applicability",
+        "ui_contract",
+        "component_quality_map",
+        "real_consumer",
+        "state_owner",
+        "typed_view_model",
+        "css_token_owner",
+        "design_alignment"
       ]
     }
   },
@@ -297,33 +297,33 @@
             "test_summary"
           ],
           "forbidden": []
+        },
+        "terminal": {
+          "source_bundle": "diff",
+          "required": [
+            "changed_files",
+            "implementation_assessment",
+            "test_context",
+            "open_risks",
+            "review_instructions"
+          ],
+          "optional": [
+            "approved_spec",
+            "architect_assessment",
+            "context_map",
+            "acceptance_criteria",
+            "acceptance_evidence",
+            "evidence_map",
+            "final_test_summary",
+            "quality_verify",
+            "requirement_replay"
+          ],
+          "generated": [
+            "review_instructions"
+          ],
+          "forbidden": []
         }
       }
-    },
-    "verify-code": {
-      "source_bundle": "diff",
-      "required": [
-        "changed_files",
-        "implementation_assessment",
-        "test_context",
-        "open_risks",
-        "review_instructions"
-      ],
-      "optional": [
-        "approved_spec",
-        "architect_assessment",
-        "context_map",
-        "acceptance_criteria",
-        "acceptance_evidence",
-        "evidence_map",
-        "final_test_summary",
-        "quality_verify",
-        "requirement_replay"
-      ],
-      "generated": [
-        "review_instructions"
-      ],
-      "forbidden": []
     }
   }
 }

@@ -9,7 +9,7 @@ import yaml from "js-yaml";
 import { checkSkillConsistency } from "../../tools/cli/check-skill-consistency.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const STAGES = ["make-decision", "build-plan", "build-code", "verify-code", "build-prd"];
+const STAGES = ["make-decision", "build-plan", "build-code", "build-prd"];
 const PIN = "a".repeat(40);
 const SNAPSHOT = "1f0f9c3bac03c4297f6fc8f7644fa412eda57085";
 const roots = [];
@@ -27,7 +27,7 @@ function sourceFixture() {
   const script = "export const fixture = 1;\n";
   const upstream = { github_url: "https://github.com/example/source", commit: PIN, license: "MIT", path: "scripts/sample.mjs", adopted: ["sample behavior"], content_sha256: hash(script) };
   const entry = { name: "sample", path: "skills/sample/SKILL.md", status: "adapted", used_by_stages: STAGES, upstream: [upstream] };
-  const decision = { name: "sample-use", status: "absorbed", local_path: "skills/sample/SKILL.md", used_by_stages: ["verify-code"], upstream: [{ github_url: upstream.github_url, commit: PIN, path: "SKILL.md", license: "MIT" }] };
+  const decision = { name: "sample-use", status: "absorbed", local_path: "skills/sample/SKILL.md", used_by_stages: ["build-code"], upstream: [{ github_url: upstream.github_url, commit: PIN, path: "SKILL.md", license: "MIT" }] };
   const catalog = { projects: { sample: { github_url: upstream.github_url, commit: PIN } }, skills: [entry, { name: "debate", status: "retired", retirement_reason: "fixture retirement" }], capability_decisions: [decision] };
   const f = { root, catalog, entry, decision, upstream };
   saveCatalog(f);
@@ -95,12 +95,17 @@ function assertRestored(f, file, mutate, expected, expectedExit = 0) {
 }
 
 describe("ORACLE-N10-SOURCE-REGISTRY", () => {
-  it("[AC-SOURCE-1] real repository has one honest source summary, one bundle information line and zero findings", () => {
+  it("[AC-SOURCE-1] real repository has one honest source summary, one bundle information line and two existing license-unknown reports", () => {
     const result = checkSkillConsistency(ROOT);
     expect(result.failures).toEqual([]);
-    expect(findings(result.reports)).toEqual([]);
+    // KR-EVID-001: preserve two pre-existing license gaps; do not certify distribution rights.
+    // Baseline original: quality/tests/2026-10-27-367-p10-head-catalog-existing-license-unknown.json.
+    expect(findings(result.reports)).toEqual([
+      "source-registry spec-driven-production upstream license missing; report-only",
+      "source-registry material-agent-readiness-eval-markdown upstream license missing; report-only",
+    ]);
     expect(sourceLines(result.reports).filter(line => line.startsWith("source-registry summary "))).toHaveLength(1);
-    expect(sourceLines(result.reports).find(line => line.startsWith("source-registry summary "))).toMatch(/findings=0; report-only$/u);
+    expect(sourceLines(result.reports).find(line => line.startsWith("source-registry summary "))).toMatch(/findings=2; report-only$/u);
     expect(sourceLines(result.reports).filter(line => line.includes("self-referential catalog pointers"))).toHaveLength(1);
     for (const line of sourceLines(result.reports)) expect(line).toMatch(/; report-only$/u);
     expect(runChecker(ROOT).status).toBe(0);
@@ -216,7 +221,7 @@ describe("ORACLE-N10-SOURCE-REGISTRY", () => {
     const catalog = yaml.load(read(ROOT, "skills/catalog.yaml").toString());
     const decisions = catalog.capability_decisions;
     const figure = decisions.filter(d => d.name === "figure-it-out"); expect(figure).toHaveLength(1);
-    expect(figure[0]).toMatchObject({ status: "absorbed", used_by_stages: ["verify-code"], local_path: "workflows/verify-code/SKILL.md; skills/stage-reflection/SKILL.md" });
+    expect(figure[0]).toMatchObject({ status: "absorbed", used_by_stages: ["build-code"], local_path: "workflows/build-code/SKILL.md; skills/stage-reflection/SKILL.md" });
     expect(figure[0].upstream[0]).toMatchObject({ commit: "unresolved-pstack-content-snapshot", license: "MIT", path: "skills/figure-it-out/SKILL.md" });
     expect(figure[0].local_changes).toContain("d9574cc24929773d5c23f40626ae1e09660afddd7de48e08dd6494d9fff9bbf0");
     const swarm = decisions.filter(d => d.name === "swarm"); expect(swarm).toHaveLength(1); expect(swarm[0]).toMatchObject({ status: "watch", used_by_stages: [] });

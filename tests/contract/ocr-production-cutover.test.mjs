@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -114,7 +114,10 @@ const args=process.argv.slice(2);
 if(args[0]==="--version")console.log("1.12.9");
 else if(args[1]==="preview"){
  const fs=require("node:fs"),path=require("node:path"),files=[];
- function walk(dir,depth=0){if(depth>32)throw new Error("owned packet depth exceeded");for(const item of fs.readdirSync(dir,{withFileTypes:true})){if(item.name===".git")continue;const file=path.join(dir,item.name),st=fs.lstatSync(file);if(st.isSymbolicLink())throw new Error("owned packet alias");if(st.isDirectory())walk(file,depth+1);else if(st.isFile()){if(st.nlink!==1||files.length>=512)throw new Error("owned packet file limit or link");files.push({path:path.relative(process.cwd(),file).split(path.sep).join("/")});}}}
+ // createTrackedTempDir (runtime/interface/temp-dir.mjs) owns this exact management marker.
+ // Production materializeAndInspect resets it before --commit HEAD preview; materialManifest excludes it.
+ // This owned CLI simulates the preview; real packet Git/manifest/host-selector behavior is asserted below.
+ function walk(dir,depth=0){if(depth>32)throw new Error("owned packet depth exceeded");for(const item of fs.readdirSync(dir,{withFileTypes:true})){if(item.name===".git"||item.name===".workflowhub-temp.json")continue;const file=path.join(dir,item.name),st=fs.lstatSync(file);if(st.isSymbolicLink())throw new Error("owned packet alias");if(st.isDirectory())walk(file,depth+1);else if(st.isFile()){if(st.nlink!==1||files.length>=512)throw new Error("owned packet file limit or link");files.push({path:path.relative(process.cwd(),file).split(path.sep).join("/")});}}}
  walk(process.cwd());console.log(JSON.stringify({reviewable_files:files}));
 }
 else if(args[1]==="rule")console.log(JSON.stringify({rules:[{path:"README.md",rule:"Owned packet inspection."}]}));
@@ -164,6 +167,21 @@ function reviewResultFor(request) {
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
 
 describe("OCR production cutover defaults", () => {
+  it("keeps ordinary preview payloads and exact alias, hardlink and file-count guards", async () => {
+    const state = await fixture();
+    const cwd = join(state.root, "owned-preview-guard-input"); mkdirSync(cwd);
+    const payload = join(cwd, ".ordinary-payload.json"); writeFileSync(payload, '{"ordinary":true}');
+    writeFileSync(join(cwd, ".workflowhub-temp.json"), '{"owner":"owned-test-marker"}');
+    const preview = () => execFileSync(join(state.bin, "ocr"), ["delegate", "preview"], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    expect(JSON.parse(preview()).reviewable_files).toEqual([{ path: ".ordinary-payload.json" }]);
+    const alias = join(cwd, "ordinary-alias"); symlinkSync(payload, alias);
+    expect(preview).toThrow(/owned packet alias/); unlinkSync(alias);
+    const hardlink = join(cwd, "ordinary-hardlink"); linkSync(payload, hardlink);
+    expect(preview).toThrow(/owned packet file limit or link/); unlinkSync(hardlink);
+    for (let i = 0; i < 512; i += 1) writeFileSync(join(cwd, `ordinary-${i}.txt`), "ordinary");
+    expect(preview).toThrow(/owned packet file limit or link/);
+  });
+
   it("delivers reviewed execution evidence in the OCR manifest and direct provider packet", async () => {
     const state = await fixture();
     writeFileSync(join(state.workspace.worktreeRoot, "README.md"), "reviewed execution source\n");
@@ -193,12 +211,23 @@ describe("OCR production cutover defaults", () => {
     let receivedBytes = null;
     let receivedCurrentMaterial = null;
     let receivedInstructions = null;
+    let metadataContractObserved = false;
     try {
       expect(bundle.manifest).toContainEqual({ path: "authenticated-evidence.json", bytes: expectedBytes.length,
         sha256: createHash("sha256").update(expectedBytes).digest("hex") });
       const result = await withRuntimeEnvironment(state, () => runOcrDelegationRound(request, {
         buildBundle: () => bundle,
-        executor: ({ request: delegated, packet }) => runConfiguredOcrHostReview({ request: delegated, packet }, {
+        executor: async ({ request: delegated, packet }) => {
+          const metadata = JSON.parse(readFileSync(join(packet.root, ".workflowhub-temp.json"), "utf8"));
+          expect(metadata.owner).toBe("workflowhub-temp-dir-v1");
+          const committed = git(packet.root, ["ls-tree", "-r", "--name-only", "HEAD"]).split("\n");
+          expect(committed).not.toContain(".workflowhub-temp.json");
+          expect(committed).toContain("authenticated-evidence.json");
+          expect(packet.manifest.map(entry => entry.path)).not.toContain(".workflowhub-temp.json");
+          expect(packet.manifest.map(entry => entry.path)).toContain("authenticated-evidence.json");
+          expect(packet.preview.reviewable_files.map(entry => entry.path)).not.toContain(".workflowhub-temp.json");
+          expect(packet.preview.reviewable_files.map(entry => entry.path)).toContain("authenticated-evidence.json");
+          const options = {
           trustedContext: {
             trusted: { config: "unused" }, route: { minimum_heterologous: 1 },
             selection: { providers: ["kimi/reviewer"], eligibleProfiles: ["kimi/reviewer"],
@@ -213,8 +242,19 @@ describe("OCR production cutover defaults", () => {
             return { status: "completed", output: JSON.stringify({ role: "assistant",
               content: [{ type: "text", text: '{"findings":[]}' }] }) };
           },
-        }),
+          };
+          let rejectedProviderCalls = 0;
+          const invalidPacket = { ...packet, preview: { ...packet.preview,
+            reviewable_files: [...packet.preview.reviewable_files, { path: ".workflowhub-temp.json" }] } };
+          await expect(runConfiguredOcrHostReview({ request: delegated, packet: invalidPacket }, {
+            ...options, providerExecutor: async () => { rejectedProviderCalls += 1; throw new Error("unmanifested management marker reached provider"); },
+          })).rejects.toMatchObject({ code: "OCR_PACKET_MANIFEST_MISMATCH" });
+          expect(rejectedProviderCalls).toBe(0);
+          metadataContractObserved = true;
+          return runConfiguredOcrHostReview({ request: delegated, packet }, options);
+        },
       }));
+      expect(metadataContractObserved).toBe(true);
       expect(receivedBytes).toEqual(expectedBytes);
       expect(receivedCurrentMaterial).toBe("# Current decision\n");
       expect(receivedInstructions).toContain("use it only to check whether current code and test claims match the recorded execution and to identify false-green behavior");
@@ -367,4 +407,31 @@ describe("OCR production cutover defaults", () => {
     expect(calls).toEqual({ocr:0,legacy:0});expect(state.task.readRecord("facts.jsonl")).toBe(before);
     expect(existsSync(join(state.taskDir,"quality","reviews"))).toBe(false);
   });
+});
+
+// P1 additive tier boundary; existing provider failure and unavailable assertions stay unchanged.
+import { reviewTierFor, assertReviewTierRecord } from '../../runtime/review/review-policy.mjs';
+describe('P1 tier boundary: terminal full review remains external even when Phase facts are low risk', () => {
+  it('separates independent Phase review from external OCR identity', () => {
+    const input={identity:{stage:'build-code',review_scope:'phase'},risks:{permissionsSecurity:'none',dataMigrationIrreversible:'none',sharedStateConcurrency:'none',publicContractCriticalPath:'none',realExternalDependency:'none'},scope:{singleModule:true,knownDirectConsumers:true},readings:{paths:{status:'read',raw:'owned/module.mjs'},impact:{status:'read',raw:'owned named consumer'},size:{status:'read',raw:'1\t0\towned/module.mjs'}}};
+    expect(reviewTierFor(input)).toBe('独立子代理');
+    expect(()=>assertReviewTierRecord({executor:'独立子代理',input,identity:'ocr',source:{dispatch_identity:'owned-reader',context_isolation:'none'}})).toThrow(/OCR/);
+    input.risks.publicContractCriticalPath='present';expect(reviewTierFor(input)).toBe('外部 OCR');
+    input.risks.publicContractCriticalPath='none';input.identity={stage:'verify-code'};expect(reviewTierFor(input)).toBe('外部 OCR');
+    const record={executor:'外部 OCR',input,status:'unavailable',reason:'ENOENT',source:{route:'configured/single_round'},detection_output_ref:'quality/tests/version.output',failure_ref:'quality/tests/failure.json'};
+    expect(assertReviewTierRecord(record)).toBe(record);expect(record.provider_results).toBeUndefined();
+  });
+});
+
+it.each(['available','throw','repeat'])('retains actual source bytes through public record and bundle dispose %s',async(mode)=>{
+ const state=await fixture(),previousHome=process.env.HOME,previousXdg=process.env.XDG_CONFIG_HOME;process.env.HOME=state.home;process.env.XDG_CONFIG_HOME=join(state.home,'.config');
+ try{
+  for(const name of ['missing-ocr-provider','missing-wh-review-broker'])writeFileSync(join(state.root,name),'#!/bin/sh\nexit 97\n',{mode:0o700});
+  const input=join(state.root,'source-retention-input.json');writeFileSync(input,JSON.stringify({request:{stage:'build-code',review_scope:'phase',subject_kind:'phase',phase_id:'P3',surface:'code',host_provider:'codex/luna',subject:{base_commit:state.workspace.baselineCommit,head_commit:git(state.worktreeRoot,['rev-parse','HEAD']),changed_files:['README.md']},materials:{approved_spec:'Owned actual source preservation',acceptance_criteria:'AC-1: preserve actual source bytes',test_evidence:'Owned controlled lifecycle only'}}}));
+  let calls=0,bundleRoot,sourceBytes,sourceManifest;
+  const call=()=>withRuntimeEnvironment(state,()=>stageRuntimeCliMain(['review','--action=record','--stage=build-code','--project=workflowhub','--task='+state.taskId,'--task-path='+state.taskDir,'--input='+input],{cwd:state.worktreeRoot,services:{onOcrProviderHealth:()=>{},runReviewRound:async()=>{throw new Error('Unexpected fallback provider');},runOcrDelegationRound:async(request,options)=>{calls++;bundleRoot=options.bundle.bundleRoot;sourceBytes=readFileSync(join(bundleRoot,'source.json'));sourceManifest=options.bundle.manifest??options.bundle.deliveryManifest;expect(sourceBytes.length).toBeGreaterThan(0);if(mode==='throw')throw Object.assign(new Error('Owned configured executor failed after source capture'),{code:'OWNED_SOURCE_PROVIDER_FAILURE'});const result=reviewResultFor(request);return{...result,material_id:options.bundle.materialId,ocr:{...result.ocr,manifest:sourceManifest},provider_results:result.provider_results.map(p=>({...p,parse_outcome:'ok',raw_output:JSON.stringify({findings:[]})}))};}}}));
+  const saved=await call(),record=JSON.parse(state.task.readRecord(saved.result_ref));expect(calls).toBe(1);expect(existsSync(bundleRoot)).toBe(false);expect(record.source_ref,'default source original must not depend on a custom observer').toMatchObject({ref:expect.stringMatching(/^quality\/evidence\//),sha256:createHash('sha256').update(sourceBytes).digest('hex')});expect(state.task.readRecordBytes(record.source_ref.ref)).toEqual(sourceBytes);const source=JSON.parse(state.task.readRecordBytes(record.source_ref.ref));expect(source.captured_head).toBe(git(state.worktreeRoot,['rev-parse','HEAD']));expect(source.baseline_commit).toBe(state.workspace.baselineCommit);expect(source.repositories).toBeUndefined();expect(record.ocr.manifest.find(v=>v.path==='source.json').sha256).toBe(record.source_ref.sha256);
+  if(mode==='throw'){expect(record.status).toBe('unavailable');expect(record.error.code).toBe('OWNED_SOURCE_PROVIDER_FAILURE');}else expect(record.status).toBe('available');
+  if(mode==='repeat'){const again=await call(),next=JSON.parse(state.task.readRecord(again.result_ref));expect(next.source_ref).toEqual(record.source_ref);expect(calls).toBe(2);}
+ }finally{if(previousHome===undefined)delete process.env.HOME;else process.env.HOME=previousHome;if(previousXdg===undefined)delete process.env.XDG_CONFIG_HOME;else process.env.XDG_CONFIG_HOME=previousXdg;}
 });

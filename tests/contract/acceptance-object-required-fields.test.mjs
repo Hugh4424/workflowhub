@@ -40,7 +40,7 @@ test('ORACLE-C01-ACCEPTANCE owner defaults visibly to user and supplied owner is
 test('ORACLE-C01-ACCEPTANCE all missing fields are reported in stable independent-source order', () => {
   expect(producer()({})).toMatchObject({ ok: false, missing_fields: fields });
 });
-test.each(['../../workflows/build-plan/SKILL.md', '../../workflows/verify-code/SKILL.md'])('ORACLE-C01-ACCEPTANCE method %s names actual template producer and real execution input', path => {
+test.each(['../../workflows/build-plan/SKILL.md', '../../workflows/build-code/SKILL.md'])('ORACLE-C01-ACCEPTANCE method %s names actual template producer and real execution input', path => {
   const method = readFileSync(new URL(path, import.meta.url), 'utf8');
   expect(method, 'method must consume the unique producer, not define another checker').toContain('checkAcceptanceObject');
   expect(method).toContain('skills/spec-specify/templates/spec-template.md');

@@ -1,9 +1,11 @@
+import { FORMAL_DEVELOPMENT_STAGES, WORKFLOW_STAGES } from "../stage/stage-registry.mjs";
 import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
+import { redactProviderHostPaths } from "../review/provider-material-projection.mjs";
 import { loadPortableWorkflowManifest, stateForStepResults, validateStepResults } from "./portable-workflow-run.mjs";
 import { RINGS, resolveLevel, evaluateRing, summarize, evaluateWorkflowSteps, summarizeWorkflow } from "./final-chain.mjs";
 
@@ -377,15 +379,34 @@ function tracking(spec) {
     const values = cells(line); return Object.fromEntries(["source","fr_ac","phase_task","oracle"].map((key,index)=>[key,indexes[index] < 0 ? "" : values[indexes[index]]]));
   });
 }
-function currentReview(facts, taskPath, materialRoot, taskId, level, changed, limits, expectedPhases) {
-  const refs = facts.map(row=>row.review_result_ref?.value).filter(text);
-  let candidate;
-  const phaseReviews = new Set();
+function currentReview(facts, taskPath, materialRoot, taskId, level, changed, limits, expectedPhases, phaseBodies, sourceRepo) {
+  const selectedRefs = facts.map(row=>row.review_result_ref?.value).filter(text);
+  const selected = new Set(selectedRefs);
+  // The ordinary producer appends flat immutable phase results, not an index or additional stage rows.
+  // Enumerate only expected current phase filenames; filenames select candidates, JSON and originals prove identity.
+  const phaseRefs = names(taskPath,"quality/reviews",limits).filter(ref=>{
+    const match = /\/\d{4}-\d{2}-\d{2}-\d{3,}-build-code-phase-(p[1-9][0-9]*)\.json$/.exec(ref);
+    return match && expectedPhases.includes(match[1].toUpperCase());
+  }).sort((left,right)=>{
+    const a = /\/(\d{4}-\d{2}-\d{2})-(\d+)-/.exec(left), b = /\/(\d{4}-\d{2}-\d{2})-(\d+)-/.exec(right);
+    return a[1].localeCompare(b[1]) || Number(a[2]) - Number(b[2]);
+  });
+  const phaseScopes = new Map(phaseBodies.map(({ref,raw})=>{
+    const id = ref.match(/\/P([0-9]+)/)?.[1];
+    const declaration = raw.match(/\*\*(?:Write set|写入集)\*\*\s*[:：]\s*([^\n]+)/)?.[1];
+    return [`P${id}`,declaration ? [...declaration.matchAll(/`([^`]+)`/g)].map(match=>match[1]) : []];
+  }));
+  const refs = [...new Set([...phaseRefs,...selectedRefs])];
+  let candidate, candidateSuccessful = false;
+  const phaseReviews = new Map();
   for (const ref of refs) {
+    // Selection itself supersedes the old observation, including unreadable or malformed latest originals.
+    if (phaseRefs.includes(ref)) phaseReviews.set(/-phase-(p[1-9][0-9]*)\.json$/.exec(ref)[1].toUpperCase(),false);
     const source = readSource(ref,taskPath,materialRoot,limits);
     if (!source.verified) continue;
     let value;
     try { value = JSON.parse(source.raw); } catch { continue; }
+    if (!object(value)) continue;
     const providers = (Array.isArray(value.provider_results) ? value.provider_results : []).map(provider => {
       const raw = readSource(provider.raw_output_ref,taskPath,materialRoot,limits,provider.raw_output_sha256);
       return {provider:provider.provider,status:provider.status,parse_outcome:provider.parse_outcome ?? provider.execution?.parse_outcome,raw_ref:provider.raw_output_ref,readable:raw.verified};
@@ -396,9 +417,38 @@ function currentReview(facts, taskPath, materialRoot, taskId, level, changed, li
     const current = Array.isArray(declared) && changed.length > 0 && declared.length === changed.length && declared.every(path=>changed.includes(path));
     const identity = value.task_id === taskId && request?.stage === value.stage && request?.review_scope === value.review_scope && request?.subject_kind === value.subject_kind && request?.phase_id === value.phase_id && request?.review_kind === value.review_kind && request?.surface === value.surface;
     const successful = providers.some(provider=>provider.status === "completed" && provider.parse_outcome === "ok" && provider.readable && materialCoverage.some(coverage=>coverage.provider === provider.provider && ["read","unread","undetermined"].every(key=>Array.isArray(coverage[key]))));
-    if (identity && successful && value.stage === "build-code" && value.subject_kind === "phase" && text(value.phase_id)) phaseReviews.add(value.phase_id);
-    candidate = {...fileEvidence(ref,source.raw),...value,providers,material_coverage:materialCoverage,independent:identity,current_scope:current,final:value.stage === "verify-code" && ["task","stage","delivery"].includes(value.review_scope),phase_reviews_verified:expectedPhases.length > 0 && expectedPhases.every(phase=>phaseReviews.has(phase))};
+    if (phaseRefs.includes(ref)) {
+      const filenamePhase = /-phase-(p[1-9][0-9]*)\.json$/.exec(ref)?.[1]?.toUpperCase();
+      const allowed = phaseScopes.get(filenamePhase) ?? [];
+      const declaredScope = Array.isArray(declared) && declared.length > 0 && allowed.length > 0
+        && declared.every(path=>text(path) && !isAbsolute(path) && allowed.some(pattern=>scopeContains(pattern,path)));
+      // Later originals replace only this phase's observation; failed/unknown latest facts never fall back to older success.
+      phaseReviews.set(filenamePhase, value.version === "wh-review-result.v1" && identity && successful && declaredScope
+        && ["available","available-with-failures"].includes(value.status)
+        && value.stage === "build-code" && value.review_scope === "phase" && value.subject_kind === "phase"
+        && value.review_kind === null && value.phase_id === filenamePhase);
+    }
+    if (!selected.has(ref)) continue;
+    candidateSuccessful = successful && ["available","available-with-failures"].includes(value.status);
+    candidate = {...fileEvidence(ref,source.raw),...value,providers,material_coverage:materialCoverage,independent:identity,current_scope:current,final:value.stage === "build-code" && value.review_scope === "terminal" && value.subject_kind === "worktree" && value.phase_id === null && value.review_kind === null,phase_reviews_verified:false};
+    if (candidate.final && (!identity || !current || !candidateSuccessful)) candidate.unavailable = true;
     candidate.basis = [{...fileEvidence(ref,source.raw),provider_results:providers,material_coverage:materialCoverage,discarded_facts:value.discarded_facts}];
+  }
+  if (candidate) {
+    const last = expectedPhases.at(-1), lastScope = phaseScopes.get(last) ?? [];
+    const lastChanges = changed.filter(path=>lastScope.some(pattern=>scopeContains(pattern,path)));
+    const manifest = candidate.ocr?.manifest;
+    // A combined terminal may own the indexed last Phase only when its actual input contains that Phase's current changed source.
+    // Existing explicit failed/unknown last-Phase observations remain; no implicit disposition or fabricated phase review is written.
+    const terminalLast = !phaseReviews.has(last) && candidate.final && candidate.independent && candidate.current_scope && candidateSuccessful
+      && lastChanges.length > 0 && Array.isArray(manifest) && lastChanges.every(path=>{
+        try {
+          const projected = redactProviderHostPaths(readOriginal(sourceRepo,path));
+          return manifest.some(entry=>object(entry) && (entry.path === path || typeof entry.path === "string" && entry.path.startsWith("repos/") && entry.path.split("/").slice(2).join("/") === path)
+            && entry.sha256 === hash(projected) && entry.bytes === Buffer.byteLength(projected));
+        } catch (error) { limits.push(`${path}: combined last-Phase source input unavailable: ${error.message}`); return false; }
+      });
+    candidate.phase_reviews_verified = expectedPhases.length > 0 && expectedPhases.every(phase=>phaseReviews.get(phase) === true || phase === last && terminalLast);
   }
   return candidate ?? {readable:false,unavailable:true};
 }
@@ -607,7 +657,7 @@ function workflowReport(repo, taskPath, materialRoot, level, facts, actualComman
   const selected = [];
   const skillRows = new Map(), skillConflicts = new Set();
   const declarations = stepObligationDeclarations(materialRoot);
-  const stages = ["make-decision","build-plan","build-code","verify-code","build-prd"];
+  const stages = WORKFLOW_STAGES;
   const actualStages = facts.filter(row=>row.record_kind === "stage").map(row=>({stage:row.stage,ref:"facts.jsonl"}));
   let portableUnknown=false;
   const terminalRefs=[...new Set(facts.flatMap(row=>[String(row.source??"").split(";")[0].trim(),...(row.evidence?.value??[]).map(entry=>entry.ref??entry.receipt_ref)]).filter(ref=>typeof ref === "string" && ref.startsWith("quality/evidence/portable-workflow-outcomes/build-prd/terminal/")))];
@@ -672,7 +722,7 @@ function workflowReport(repo, taskPath, materialRoot, level, facts, actualComman
       }
     }
   }
-  const declaredStages = level.value === "complex" ? ["make-decision","build-plan","build-code","verify-code"] : ["make-decision"];
+  const declaredStages = level.value === "complex" ? [...FORMAL_DEVELOPMENT_STAGES] : [FORMAL_DEVELOPMENT_STAGES[0]];
   if (actualStages.some(row=>row.stage === "build-prd")) declaredStages.push("build-prd");
   const knownActual = [...new Set(actualStages.map(row=>row.stage))];
   stageScope.declared = declaredStages;
@@ -756,7 +806,7 @@ export function runFinalChainCheck({taskPath,materialRoot} = {}) {
   const rawEvidence = exactRaw ? [exactRaw.evidence].filter(item=>item.verified) : rawRefs.map(({root,ref})=>fileEvidence(ref,optional(root,ref,limits))).filter(item=>item.verified);
   const decisionCheck = decisionOriginal(actualCommands,materialRoot,decisionLog,limits,[materialRepo,manifest.target_repo_root],taskPath);
   const ordinaryContract = contractOriginal(facts,read,materialRoot,spec,phaseIndex,phases,limits,actualCommands);
-  const review = currentReview(facts,taskPath,materialRoot,taskId,level,changed,limits,phaseRefs.map(ref=>ref.match(/\/P(\d+)/)?.[1]).filter(Boolean).map(id=>`P${id}`));
+  const review = currentReview(facts,taskPath,materialRoot,taskId,level,changed,limits,phaseRefs.map(ref=>ref.match(/\/P(\d+)/)?.[1]).filter(Boolean).map(id=>`P${id}`),phases,repo);
   const explicitResearchRefs = decisionLog.split("\n").filter(line=>/研究|调研|research/i.test(line)).flatMap(line=>[...line.matchAll(/`([^`\n]+\.md)`/g)].map(match=>plainRef(match[1]))).filter(ref=>ref.startsWith("quality/evidence/") || isAbsolute(ref) && inside(taskPath,ref));
   const researchRefs = [...new Set(explicitResearchRefs)];
   const researchSources = researchRefs.map(ref=>read(ref)).filter(source=>source.verified);

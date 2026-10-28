@@ -200,8 +200,8 @@ test("UI support skills declare their real stage consumers without a parallel UI
       reviewed_at: "2026-08-22",
       review_outcome: "accepted",
       adopted: [
-        "skills/react-best-practices/AGENTS.md#1-eliminating-waterfalls — 从消除串行请求建议提炼组件质量检查，保留真实依赖顺序",
-        "skills/react-best-practices/AGENTS.md#2-bundle-size-optimization — 从包体积建议提炼窄客户端边界与按需加载审查，收益仍须实测"
+        "skills/frontend-component-quality/upstream/react-best-practices/AGENTS.md#eliminating-waterfalls — 本地21行派生参考的消除串行请求摘要，保留真实依赖顺序；不冒完整源",
+        "skills/frontend-component-quality/upstream/react-best-practices/AGENTS.md#bundle-size-optimization — 本地21行派生参考的客户端边界与按需加载摘要，收益仍须实测；不冒完整源"
       ],
       path: "skills/react-best-practices/AGENTS.md",
       skill_url: "https://github.com/vercel-labs/agent-skills/blob/dd089a8c752c966dee8bf0f27cb625ba193ffd9e/skills/react-best-practices/AGENTS.md",

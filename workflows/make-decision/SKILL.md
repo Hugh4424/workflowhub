@@ -198,11 +198,11 @@ build-code 无 phase_progress 游标或游标缺失/过期时，按当前工作�
 
 ## 人为门与审查点
 
-下列五阶段审查点属于复杂路线；小改动无独立审查轴，普通路线在本阶段逐模块收敛后做一次方案审（detail 轨）、整次实施做一次实现审，规划只审方向与任务卡，分别按子流程执行，不将复杂路线的每Phase审查叠加给轻档。
+下列三阶段审查点属于复杂路线；小改动无独立审查轴，普通路线在本阶段逐模块收敛后做一次方案审（detail 轨）、整次实施做一次实现审，规划只审方向与任务卡，分别按子流程执行，不将复杂路线的每Phase审查叠加给轻档。
 
 - confirm：本阶段、build-plan 和 build-prd 收口时，记录用户对实际展示材料的真实答复；未答不算同意。
 - authorize：只在 commit、push、merge、archive、cleanup 等不可逆 Git/交付动作前，使用 `runtime/interface/git-authorize.mjs`，执行前核对授权动作、分支与当前 HEAD；HEAD 不一致时拒绝消费旧记录；已有用户授权覆盖当前动作和范围时，按当前 HEAD 重新记录并消费，未覆盖的新增动作或范围才需用户决定。方向确认不授权这些动作，不能声称尚未发生的授权已经完成。
-- 三个必留审查点：build-plan 的 wh-review 合并审查、build-code 每 Phase 的 OCR 审查、verify-code 终末 OCR 审查。本阶段方向/细节及 build-prd 文档建议仍由 wh-review 执行，不另建全 Phase 集成审查。
+- 三个必留审查点：build-plan 的 wh-review 合并审查、build-code 每 Phase 的 OCR 审查、build-code 终末 OCR 审查。本阶段方向/细节及 build-prd 文档建议仍由 wh-review 执行，不另建全 Phase 集成审查。
 
 ## 安全写入与收口
 
@@ -250,7 +250,7 @@ build-code 无 phase_progress 游标或游标缺失/过期时，按当前工作�
 | `stage-handoff` | 必需 | stage-reflection 内部发布并独立读回同一份交接，不重复发布。 |
 | `resolving-merge-conflicts` | 跳过 | 本路线只交方向材料；有另行真实Git授权且冲突时才由交付owner消费，不自动物理交付。 |
 
-本阶段不加载后继实施设计方法全文。 answer-as-page 与 stage-closeout 也不替换原31分母：前者按下节出页条件消费；本阶段无物理交付，不调用 stage-closeout。
+本阶段不加载后继实施设计方法全文。 answer-as-page 与 stage-close 也不替换原31分母：前者按下节出页条件消费；本阶段无物理交付，不调用 stage-close。
 
 ## 驾驶舱
 

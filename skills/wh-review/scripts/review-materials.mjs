@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { redactProviderHostPaths, providerMaterialEntries, providerMaterialPath } from "../../../runtime/review/provider-material-projection.mjs";
 import { deliveredMaterialId } from "../../../runtime/review/review-packet-identity.mjs";
 import { gitDiffPath } from "../../../runtime/review/review-input-bounds.mjs";
-import { assertReviewIdentity, reviewIdentityFromInput, reviewRuleFor } from "../../../runtime/review/review-policy.mjs";
+import { assertReviewIdentity, reviewIdentityFromInput, reviewRuleFor, TERMINAL_REVIEW_SCOPE } from "../../../runtime/review/review-policy.mjs";
 import stageMaterials from "../../../runtime/review/stage-materials.json" with { type: "json" };
 const here=dirname(fileURLToPath(import.meta.url));
 const skillPlan=JSON.parse(readFileSync(resolve(here,"..","stage-skill-plan.json"),"utf8"));
@@ -57,7 +57,7 @@ const VERIFY_CODE_EXCLUDED_PATH_SEGMENTS = new Set([
 ]);
 const VERIFY_CODE_TEST_PATH_SEGMENTS = new Set(["test", "tests", "__tests__", "spec", "specs"]);
 
-// verify-code reviews the current implementation, not every test, fixture,
+// Terminal review examines the current implementation, not every test, fixture,
 // report, and workflow note changed while the task was being executed. Keep
 // the production seams complete and deliver the directly relevant contract
 // tests; all other changed paths remain represented by bounded summaries and
@@ -75,12 +75,12 @@ const VERIFY_CODE_FULL_DIFF_FILES = new Set([
   "skills/catalog.yaml",
   "skills/wh-review/SKILL.md",
   "skills/wh-review/contracts/provider-protocol.md",
-  "skills/wh-review/contracts/verify-code.md",
+  "skills/wh-review/contracts/build-code.md",
   "skills/wh-review/skill-bundle.json",
   "runtime/review/stage-materials.json",
-  "workflows/verify-code/SKILL.md",
-  "workflows/verify-code/skill-deps.yaml",
-  "workflows/verify-code/steps.json",
+  "workflows/build-code/SKILL.md",
+  "workflows/build-code/skill-deps.yaml",
+  "workflows/build-code/steps.json",
 ]);
 const VERIFY_CODE_RELEVANT_TEST_FILES = new Set([
   "tests/contract/ocr-delegation-adapter.test.mjs",
@@ -91,7 +91,7 @@ const VERIFY_CODE_RELEVANT_TEST_FILES = new Set([
   "tests/contract/verify-architect-acceptance.test.mjs",
   "tests/stage-review-cost-policy.test.mjs",
 ]);
-// The current verify-code OCR surface is the host/provider boundary and its
+// The terminal OCR surface is the host/provider boundary and its
 // authenticated execution consumer. Other implementation changes remain in
 // the canonical diff index and summaries; sending every historical task
 // helper/test implementation to a provider turns a code review into a bulk
@@ -101,7 +101,7 @@ const VERIFY_CODE_REVIEW_SURFACE_PREFIXES = [
   "tools/cli/stage-runtime.mjs",
   "skills/wh-review/scripts/review-materials.mjs",
   "skills/wh-review/scripts/simple-review-runner.mjs",
-  "workflows/verify-code/",
+  "workflows/build-code/",
 ];
 /**
  * Large Phase packets keep the implementation and workflow boundaries that
@@ -142,13 +142,19 @@ export function verifyCodeDiffDeliveryForPath(path) {
   return typeof path === "string" && !excludedVerifyCodePath(path) && (VERIFY_CODE_RELEVANT_TEST_FILES.has(path)
     || VERIFY_CODE_FULL_DIFF_FILES.has(path)
     || VERIFY_CODE_FULL_DIFF_PREFIXES.some((prefix) => path.startsWith(prefix))
-    // verify-code is used by projects outside WorkflowHub too.  A project
+    // Terminal review is used by projects outside WorkflowHub too.  A project
     // path must not fall back to a summary merely because it is not in this
     // runtime's own prefix list; otherwise the provider receives no code
     // anchor for the actual subject under review.
     || classifyReviewableCodePath(path) !== null)
     ? "included"
     : "summary";
+}
+
+// Declarative terminal=complete-packet seam; diff presentation never filters paths.
+export function selectTerminalDiffPaths(sections, stage, reviewScope) {
+  if(stage !== "build-code" || reviewScope !== TERMINAL_REVIEW_SCOPE) return null;
+  return new Set(sections.map(section => section.path));
 }
 
 export function selectVerifyCodeDiffPaths(sections, stage) {
@@ -223,12 +229,12 @@ export function validateDirectionReviewInput({ materials } = {}) {
 
 export function validateVerifyAcceptanceSummary(value, { expectedCriterionIds = null } = {}) {
   const raw = Buffer.isBuffer(value) ? value.toString("utf8") : typeof value === "string" ? value : JSON.stringify(value);
-  if (typeof raw !== "string" || raw.trim() === "") throw new Error("MATERIAL_INCOMPLETE: verify-code acceptance_criteria is empty");
+  if (typeof raw !== "string" || raw.trim() === "") throw new Error("MATERIAL_INCOMPLETE: terminal acceptance_criteria is empty");
   const text = raw.trim();
   let parsed = null;
   try { parsed = JSON.parse(text); } catch { /* Markdown summaries are also supported. */ }
   if (/"criteria"\s*:\s*\[\s*\]/i.test(text) || /"acceptance_criteria"\s*:\s*\[\s*\]/i.test(text)) {
-    throw new Error("MATERIAL_INCOMPLETE: verify-code acceptance_criteria contains an empty criteria list");
+    throw new Error("MATERIAL_INCOMPLETE: terminal acceptance_criteria contains an empty criteria list");
   }
   const candidateArrays = [];
   if (Array.isArray(parsed)) candidateArrays.push(parsed);
@@ -239,21 +245,21 @@ export function validateVerifyAcceptanceSummary(value, { expectedCriterionIds = 
   }
   for (const entries of candidateArrays) {
     if (!Array.isArray(entries) || entries.length === 0) {
-      throw new Error("MATERIAL_INCOMPLETE: verify-code acceptance_criteria must contain current AC entries");
+      throw new Error("MATERIAL_INCOMPLETE: terminal acceptance_criteria must contain current AC entries");
     }
     if (entries.some((entry) => {
       if (typeof entry === "string") return !ACCEPTANCE_ID.test(entry);
       return !entry || typeof entry !== "object" || !ACCEPTANCE_ID.test(String(entry.acceptance_criterion_id ?? entry.id ?? ""));
     })) {
-      throw new Error("MATERIAL_INCOMPLETE: verify-code acceptance_criteria entries must identify ACs");
+      throw new Error("MATERIAL_INCOMPLETE: terminal acceptance_criteria entries must identify ACs");
     }
   }
-  if (!ACCEPTANCE_ID.test(text)) throw new Error("MATERIAL_INCOMPLETE: verify-code acceptance_criteria must name current ACs");
+  if (!ACCEPTANCE_ID.test(text)) throw new Error("MATERIAL_INCOMPLETE: terminal acceptance_criteria must name current ACs");
   if (Array.isArray(expectedCriterionIds) && expectedCriterionIds.length > 0) {
     const actual = [...new Set([...text.matchAll(ACCEPTANCE_IDS)].map(([id]) => id.toUpperCase()))].sort();
     const expected = [...new Set(expectedCriterionIds.map((id) => String(id).toUpperCase()))].sort();
     if (actual.length !== expected.length || actual.some((id, index) => id !== expected[index])) {
-      throw new Error(`MATERIAL_INCOMPLETE: verify-code acceptance_criteria does not match current spec AC set (expected ${expected.join(", ")}, received ${actual.join(", ")})`);
+      throw new Error(`MATERIAL_INCOMPLETE: terminal acceptance_criteria does not match current spec AC set (expected ${expected.join(", ")}, received ${actual.join(", ")})`);
     }
   }
   return true;
@@ -427,9 +433,9 @@ function ruleForIdentity(stage, reviewTrack, reviewScope, reviewKind = null) {
   return ruleFor(reviewKind === "build_prd" ? "build-prd" : reviewKind ?? stage, reviewTrack, reviewKind ? null : reviewScope);
 }
 
-function stagePlanFor(stage, track, reviewKind = null) {
+function stagePlanFor(stage, track, reviewKind = null, reviewScope = null) {
   if (reviewKind === "build_prd") return skillPlan.non_stage?.build_prd;
-  const stagePlan = skillPlan.stages[stage];
+  const stagePlan = skillPlan.stages[stage === "build-code" && reviewScope === TERMINAL_REVIEW_SCOPE ? "build-code/terminal" : stage];
   return stage === "make-decision" ? stagePlan?.tracks?.[track] : stagePlan;
 }
 
@@ -487,17 +493,18 @@ function buildPlanUiFacts(materials) {
   return gaps.length ? { applicability: "unknown", gaps } : { applicability: scopes.some(value => value === true) ? "ui" : "non_ui", gaps };
 }
 
-function selectReviewerSkills(stage, track, reviewKind, uiScope, materials, codePacket = false) {
-  const plan = stagePlanFor(stage, track, reviewKind);
+function selectReviewerSkills(stage, track, reviewKind, uiScope, materials, codePacket = false, reviewScope = null) {
+  const plan = stagePlanFor(stage, track, reviewKind, reviewScope);
   if (!plan) throw new Error(`MATERIAL_INCOMPLETE: no review skill plan for ${stage}/${track ?? "default"}`);
   const ui = stage === "build-plan" && reviewKind === null ? buildPlanUiFacts(materials) : null;
   const includeUi = ui ? ui.applicability === "ui" : uiScope === true;
-  const plans = codePacket ? [plan, stagePlanFor("build-code", null), stagePlanFor("verify-code", null)] : [plan];
+  const plans = codePacket ? [stagePlanFor("build-code", null), stagePlanFor("build-code", null, null, TERMINAL_REVIEW_SCOPE)] : [plan];
+  if(plans.some(value=>!value || !Array.isArray(value.required_skills) || value.required_skills.length===0))throw new Error("MATERIAL_INCOMPLETE: missing required phase/terminal skill plan");
   const skills = [...new Set(plans.flatMap(value => [...(value.required_skills ?? []), ...(includeUi ? (value.optional_skills ?? []).filter(({ when }) => when === "ui").map(({ name }) => name) : [])]))];
   return { skills, ui };
 }
 
-function reviewSurfaceFor(stage, track, reviewScope, reviewKind) {
+export function reviewSurfaceFor(stage, track, reviewScope, reviewKind) {
   if (reviewKind === "build_prd") return "build-prd";
   if (stage === "make-decision") return `${stage}/${track ?? ""}`;
   if (stage === "build-code") return `${stage}/${reviewScope ?? "phase"}`;
@@ -545,7 +552,7 @@ function stageReviewFocus(stage, track, reviewScope, reviewKind = null, directio
   if (stage === "build-code" && reviewScope === "integration") {
     return `Focus on the final current worktree implementation, the complete user flow, cross-Phase seams, real interfaces, state transitions, failure recovery, necessity, and actionable major or blocking risks. The host validates AC bindings separately; do not report missing or unknown task rows, receipts, snapshots, lineage, or evidence metadata unless it directly causes or conceals a user-visible behavior failure. Do not replay Phase history, cumulative diffs, or require a provider pass.${ordered}`;
   }
-  if (stage === "verify-code") {
+  if (stage === "build-code" && reviewScope === TERMINAL_REVIEW_SCOPE) {
     return `Focus on the current code diff, real entry points, direct consumers, lifecycle and failure paths, security boundaries, test strength, and open implementation risks. If authenticated-evidence.json is supplied for a reviewed_execution-bound request, use it only to check whether current code and test claims match the recorded execution and to identify false-green behavior. Do not audit evidence completeness or turn missing evidence into a code finding or stage gate; report code findings only.${ordered}`;
   }
   return "Focus on the supplied stage subject, its contract, and its evidence; report advice only.";
@@ -554,7 +561,7 @@ function stageReviewFocus(stage, track, reviewScope, reviewKind = null, directio
 const PACKET_BOUND_CODEX_READ_EXCEPTION = "Codex only when the host transport has demonstrated native hard packet filesystem, tool and environment boundaries: read-only file-view commands such as cat, sed or rg may read manifest-listed paths in this packet. This is not general shell permission. Writes, Git, network, parent/host materials, Agent/subagent and wait/poll remain prohibited. Minimal runtime read exceptions exist only to run the tools, never as review materials.";
 
 export function reviewInstructionsFor(stage, track = null, uiScope = false, reviewScope = null, reviewKind = null, directionMode = "full", role = null, candidateExperiment = false, navigation = null) {
-  const selection = selectReviewerSkills(stage, track, reviewKind, uiScope, undefined);
+  const selection = selectReviewerSkills(stage, track, reviewKind, uiScope, undefined, false, reviewScope);
   return renderReviewInstructionsFor(stage, track, uiScope, reviewScope, reviewKind, directionMode, role, candidateExperiment, navigation, selection);
 }
 
@@ -566,11 +573,11 @@ function renderReviewInstructionsFor(stage, track, uiScope, reviewScope, reviewK
   const uiNote = selection.ui?.applicability === "unknown"
     ? `UI applicability unknown: ${selection.ui.gaps.join("; ")}. Keep the default reviewer lenses; these source gaps are not non-UI/N/A, a quality pass, or a review admission gate. Review supplied facts for scope and semantic consistency.`
     : selection.ui ? `UI applicability: ${selection.ui.applicability}, based on all three supplied source facts. Source references locate content, not certify semantic truth.` : "";
-  if (["build-code", "verify-code"].includes(stage) && selectedSkills.length === 0) throw new Error(`MATERIAL_INCOMPLETE: ${stage} requires explicit reviewer skills`);
+  if ((stage === "build-code") && selectedSkills.length === 0) throw new Error(`MATERIAL_INCOMPLETE: ${stage} requires explicit reviewer skills`);
   const scope = reviewKind ?? (stage === "make-decision" ? `${stage}/${track}` : stage === "build-code" ? `${stage}/${reviewScope ?? "phase"}` : stage);
   const blind = stage === "make-decision" && track === "direction" && directionMode === "reconstruct"
     ? "The bundle intentionally contains no proposed solution. Judge only the requirement, facts, constraints, and decision direction."
-    : stage === "verify-code"
+    : (stage === "build-code" && reviewScope === TERMINAL_REVIEW_SCOPE)
     ? "Judge only the supplied implementation and code-review contract; the upstream stage materials are context, not a verification target."
     : "Judge the supplied stage artifact against its requirements, contract, and evidence.";
   const skillInstruction = selectedSkills.length ? `Read these manifest-declared reviewer skills before reviewing: ${selectedSkills.map((name) => `skills/${name}/SKILL.md`).join(", ")}.` : "No reviewer skills are declared for this stage.";
@@ -578,20 +585,22 @@ function renderReviewInstructionsFor(stage, track, uiScope, reviewScope, reviewK
   const stageFocus = stageReviewFocus(stage, track, reviewScope, reviewKind, directionMode, role);
   const verifyBound = reviewKind === "build_prd"
     ? "This is one dedicated non-stage build-prd review. Do not substitute a formal stage review, persist a canonical stage attempt/result, demand a provider verdict, or repeat an unchanged review."
-    : stage === "verify-code"
+    : (stage === "build-code" && reviewScope === TERMINAL_REVIEW_SCOPE)
     ? "This is one bounded post-repair code review. Inspect the current diff, implementation assessment, real entry points and consumers, relevant test context, lifecycle and failure paths, security boundaries, and open implementation risks. When authenticated-evidence.json is supplied, use it only to check code/test execution claims for false-green behavior; do not audit completeness. Do not demand a full evidence tree, acceptance replay, material completeness, historical replay, provider pass, or another review; report only findings that can affect code delivery."
     : `${blind} ${reviewInstruction}`;
   const adviceBoundary = "Every stage produces heterologous advice as a quality fact only; this is advice only, not a completion license. An unavailable or non-terminal provider result is not advice, not empty findings, and not pass. Do not keep calling the broker to obtain pass or empty findings.";
   const buildCodeBoundary = stage === "build-code" && reviewKind === null
     ? "For build-code, record this review's real findings and transport status as advice. Downstream finding disposition and repairs continue through the manifest; they do not dispatch this completed review step again or seek a clean/provider-pass result."
     : "";
-  const subjectReading = reviewKind === "build_prd"
+  const subjectReading = stage === "build-code" && reviewScope === TERMINAL_REVIEW_SCOPE
+    ? "Read the entire delivery diff from task baseline to frozen implementation head, full applicable AC and supplied execution context. This is one terminal review, not a Phase diff."
+    : reviewKind === "build_prd"
     ? "Read the complete PRD, parent decision, task map, design facts, quality facts, and any declared source/confirmation/delivery facts; do not infer missing materials or read a repository."
     : stage === "build-code" && reviewScope === "integration" && candidateExperiment
     ? "For this isolated OCR candidate integration, read the complete current worktree diff together with the final current worktree subject, full acceptance criteria, relevant test outcome, and selected implementation context. AC bindings and evidence-ledger details are host-only and are not review targets."
     : stage === "build-code" && reviewScope === "integration"
     ? "For ordinary integration, read the final current worktree subject, compact behavior requirements, relevant test outcome, and selected implementation context. No changes.diff is supplied. AC bindings and evidence-ledger details are host-only and are not review targets."
-    : candidateExperiment && ["build-code", "verify-code"].includes(stage)
+    : candidateExperiment && (stage === "build-code")
     ? "This isolated OCR candidate packet includes the full acceptance-criteria text; read it in full and do not substitute a compact map summary."
     : stage === "make-decision" && track === "direction" && directionMode === "reconstruct"
     ? "Read only the raw requirement and objective facts; the current choice is intentionally absent."
@@ -604,12 +613,12 @@ function renderReviewInstructionsFor(stage, track, uiScope, reviewScope, reviewK
     ? ` This is the paired ${role} role; preserve pair_id and role provenance, and report only this role's independent advice.`
     : "";
   const findingBudget = "按根因合并同类问题；不要把同一个问题重复写成多条 finding，也不要重复描述 provider、packet、snapshot、receipt 或审查流程。每条 finding 只写最小必要的 issue、root_cause、recommendation 和一到两句可复核 evidence；不要输出推理过程、背景复述或长篇总结。不要为了凑数量少报真正独立的交付风险。";
-  const candidateOcrToolBoundaries = candidateExperiment && ["build-code", "verify-code"].includes(stage)
+  const candidateOcrToolBoundaries = candidateExperiment && (stage === "build-code")
     ? " Do not invoke Agent, subagent, child-agent, or other agent tools. Do not wait for or poll agents, sessions, or processes; do not invoke wait/poll tools."
     : "";
   // Presentation only; paths derive from the same material projection and normalized diff bytes.
   const nav=[];
-  if(navigation && ["build-code","verify-code"].includes(stage)) {
+  if(navigation && (stage === "build-code")) {
     const paths=new Map(navigation.entries.map(([key,value],index)=>[key,navigation.codePacket&&key==="acceptance_criteria" ? `requirements/acceptance_criteria.${typeof value==="string"?"md":"json"}` : providerMaterialPath(key,index,redactProviderHostPaths(value))]));
     const refs=keys=>keys.filter(key=>paths.has(key)).map(key=>"\x60"+paths.get(key)+"\x60").join("、");
     nav.push("先读风险与验收："+refs(["approved_spec","draft_spec","open_risks","acceptance_criteria"]));
@@ -711,6 +720,7 @@ function writeReviewDiff(write, raw) {
 
 export function buildReviewMaterials({attachmentRoot,reviewDataRoot,stage,reviewTrack=null,reviewScope=null,reviewKind=null,materials,source=null,role=null,uiScope=false,activationCohort="pre",authenticated_evidence=undefined,surface=null,phaseId=null}={}) {
   const identity=reviewIdentityFromInput({stage,review_track:reviewTrack,review_scope:reviewScope,review_kind:reviewKind});
+  if(reviewScope===TERMINAL_REVIEW_SCOPE && (phaseId!==null || surface==="document" || !source?.diffPath || !/^[a-f0-9]{40,64}$/.test(source.baseCommit ?? "") || !/^[a-f0-9]{40,64}$/.test(source.capturedHead ?? ""))) throw new Error("MATERIAL_INCOMPLETE: terminal requires whole delivery diff, task base/frozen head, worktree subject and null phase_id");
   const rule=identity.stage==="build-plan"&&activationCohort==="post" ? stageMaterials.stages["build-plan"].profiles.post : ruleForIdentity(identity.stage,identity.reviewTrack,identity.reviewScope,identity.reviewKind);
   assertPlainMaterials(materials);const filtered=validateMaterialAllowlist(rule,materials);
   if(stage==="make-decision" && reviewTrack==="direction") validateDirectionReviewInput({materials});
@@ -728,10 +738,10 @@ export function buildReviewMaterials({attachmentRoot,reviewDataRoot,stage,review
   };
   try {
     const documentFace=surface==="document"&&stage==="build-code";
-    const codePacket=["build-code","verify-code"].includes(stage)&&!documentFace;
-    const selection=selectReviewerSkills(stage,reviewTrack,reviewKind,uiScope,filtered.materials,codePacket);
+    const codePacket=(stage === "build-code")&&!documentFace;
+    const selection=selectReviewerSkills(stage,reviewTrack,reviewKind,uiScope,filtered.materials,codePacket,reviewScope);
     const instructionSelection=stage==="build-plan" && reviewKind===null
-      ? selection : selectReviewerSkills(stage,reviewTrack,reviewKind,uiScope,filtered.materials);
+      ? selection : selectReviewerSkills(stage,reviewTrack,reviewKind,uiScope,filtered.materials,false,reviewScope);
     const instruction=documentFace
       ? `Review stage build-code; subject_kind=phase; review_scope=phase; phase_id=${phaseId ?? "not supplied"}; surface=document. This is the current Phase's document review, not a build-plan stage result or an OCR code review. Read the complete submitted specification, Phase material, method/contract documents and metadata. Apply contracts/build-plan.md as the existing document review lens: requirement-to-implementation-to-consumer-to-verification, dependencies, boundary, recovery and necessity. The actual stage remains build-code. Do not evaluate unsubmitted code or demand snapshot/hash/receipt/lineage permits. Read manifest-declared reviewer skills and contracts/provider-protocol.md. Report only concrete delivery findings with relative file/line anchors and genuine serious evidence. Findings, including empty findings, are advice only; missing quality stays unknown and provider/transport/parse failure remains unavailable/incomplete. Do not access repository files, Git, general shell, network or host paths. ${PACKET_BOUND_CODEX_READ_EXCEPTION} Return exactly one findings JSON.\n`
       : renderReviewInstructionsFor(stage,reviewTrack,uiScope,reviewScope,reviewKind,stage==="make-decision"&&reviewTrack==="direction"?"combined":"full",role,false,{entries:providerMaterialEntries({stage,review_track:reviewTrack,review_scope:reviewScope,review_kind:reviewKind,activation_cohort:activationCohort,materials:filtered.materials}),codePacket,diffBytes:source?.diffPath ? reviewMaterialBytes("changes.diff",readRegisteredFile(source.diffPath,"supplied diff")).length : null},instructionSelection);
@@ -740,7 +750,6 @@ export function buildReviewMaterials({attachmentRoot,reviewDataRoot,stage,review
     if(typeof contract!=="string" || !/^contracts\/[a-z0-9-]+\.md$/.test(contract))throw new Error(`MATERIAL_INCOMPLETE: missing contract for ${surfaceName}`);
     write(contract,readRegisteredFile(resolve(here,"..",contract),contract));
     write("contracts/provider-protocol.md",readRegisteredFile(resolve(here,"..","contracts","provider-protocol.md"),"provider-protocol.md"));
-    if(codePacket)for(const name of ["build-code.md","verify-code.md"]){const path=`contracts/${name}`;if(!entries.some(entry=>entry.path===path))write(path,readRegisteredFile(resolve(here,"..","contracts",name),path));}
     for(const name of selection.skills) {
       if(typeof name!=="string" || !/^[a-z0-9][a-z0-9-]*$/.test(name))throw new Error("MATERIAL_INCOMPLETE: unsafe skill name");
       write(`skills/${name}/SKILL.md`,readRegisteredFile(resolve(workflowhubSkills,name,"SKILL.md"),name));
@@ -749,7 +758,7 @@ export function buildReviewMaterials({attachmentRoot,reviewDataRoot,stage,review
     if(codePacket&&source)write("source.json",{captured_head:source.capturedHead,baseline_commit:source.baseCommit,...(source.repositories===undefined ? {} : {repositories:source.repositories}),...(source.contract_facts===undefined ? {} : {contract_facts:source.contract_facts})});
     if(source?.diffPath)writeReviewDiff(write,readRegisteredFile(source.diffPath,"supplied diff"));
     if(authenticated_evidence!==undefined)write("authenticated-evidence.json",authenticated_evidence);
-    const manifest={version:1,stage,review_scope:reviewScope,subject_kind:reviewScope==="phase" ? "phase" : "document",phase_id:phaseId,surface:surface ?? reviewKind ?? stage,files:[...entries]};write("manifest.json",JSON.stringify(manifest,null,2)+"\n");
+    const manifest={version:1,stage,review_scope:reviewScope,subject_kind:reviewScope==="phase" ? "phase" : reviewScope===TERMINAL_REVIEW_SCOPE ? "worktree" : "document",phase_id:phaseId,surface:surface ?? reviewKind ?? stage,files:[...entries]};write("manifest.json",JSON.stringify(manifest,null,2)+"\n");
     return {bundleRoot,attachmentRoot:base,sourcePrefix:relative(base,bundleRoot).split("\\").join("/"),materialId:deliveredMaterialId(entries),deliveryManifest:entries.map(({path,bytes,sha256})=>({path,bytes,sha256})),discarded_facts:filtered.discarded_facts,dispose(){rmSync(bundleRoot,{recursive:true,force:true});}};
   } catch(error){rmSync(bundleRoot,{recursive:true,force:true});throw error;}
 }

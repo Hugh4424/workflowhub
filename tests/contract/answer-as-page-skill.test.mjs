@@ -40,7 +40,12 @@ test('core: N6 page skill: bundle distributes portable skill metadata without bu
   expect(bundle.schema_version).toBe(1);
   expect(bundle.skill).toBe('answer-as-page');
   expect(files).toContain('SKILL.md');
-  expect(files.filter(path => /\.(?:mjs|cjs|js)$/u.test(path)), 'the upstream renderer is excluded').toEqual([]);
+  const allowedScripts = ['scripts/render-answer-page.mjs', 'scripts/build-page-data.mjs', 'scripts/open-page.mjs'];
+  expect(files.filter(path => /\.(?:mjs|cjs|js)$/u.test(path)).sort()).toEqual([...allowedScripts].sort());
+  for (const file of files) {
+    expect(file).not.toMatch(/^(?:[A-Za-z]:|\/)|(?:^|\/)\.\.(?:\/|$)/u);
+    expect(existsSync(join(root, 'skills/answer-as-page', file))).toBe(true);
+  }
   expect(() => validateSkillBundle(root, bundlePath, skillPath)).not.toThrow();
 });
 

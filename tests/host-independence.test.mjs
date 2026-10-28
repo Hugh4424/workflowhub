@@ -15,7 +15,6 @@ const workflowStages = [
   "make-decision",
   "build-plan",
   "build-code",
-  "verify-code",
   "build-prd",
 ];
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { WORKFLOW_STAGES } from '../../runtime/stage/stage-registry.mjs';
 // Report-only consumer of the existing final-chain evidence producer.
 import { readFileSync, realpathSync } from 'node:fs';
 import { resolve, dirname, relative, isAbsolute } from 'node:path';
@@ -6,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { runFinalChainCheck } from '../../runtime/task/final-chain-runner.mjs';
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const stages = ['make-decision', 'build-plan', 'build-code', 'verify-code', 'build-prd'];
+const stages = WORKFLOW_STAGES;
 export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = repository, stage } = {}) {
   const errors = [];
   let evidence = [];

@@ -93,7 +93,7 @@
     {
       "step_id": 9,
       "step_slug": "closeout",
-      "observable_result": "物理交付：实施和目标测试完成且无未决失败/越界后，调用 stage-closeout，读当前spec组PR正文，按授权执行提交、PR、合并；最终归档/清理前展示实际范围并取得原方法要求的一次真实确认。 条件：物理交付前再读级别与路线、spec和测试原件，确认stage随实际make-decision；反思交接已可独立读回，操作/失败/清理逐项保真，未授权或失败项保持未执行。 判定消费：SKILL.md#步骤 第9步；原件：PR/merge/Git授权consume、最终确认及清理回执。",
+      "observable_result": "物理交付：实施和目标测试完成且无未决失败/越界后，调用 stage-close，读当前spec组PR正文，按授权执行提交、PR、合并；最终归档/清理前展示实际范围并取得原方法要求的一次真实确认。 条件：物理交付前再读级别与路线、spec和测试原件，确认stage随实际make-decision；反思交接已可独立读回，操作/失败/清理逐项保真，未授权或失败项保持未执行。 判定消费：SKILL.md#步骤 第9步；原件：PR/merge/Git授权consume、最终确认及清理回执。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",

@@ -1,3 +1,4 @@
+import { FORMAL_DEVELOPMENT_STAGES } from "../stage/stage-registry.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,7 +9,7 @@ import { createSkillBundleContract } from "../interface/runner-contract.mjs";
 import { validateSkillBundle } from "../adapters/local-skill-resolver.mjs";
 import { resolveStageSkillPackages } from "../stage/stage-skill-runtime.mjs";
 
-const STAGES = Object.freeze(["make-decision", "build-plan", "build-code", "verify-code"]);
+const STAGES = FORMAL_DEVELOPMENT_STAGES;
 const PORTABLE_WORKFLOW_KIND = "portable_workflow";
 const REQUIRED_PORTABLE_WORKFLOW = Object.freeze({
   component_id: "build-prd",

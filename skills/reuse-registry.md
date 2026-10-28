@@ -8,8 +8,7 @@
 | --- | --- | --- |
 | make-decision | 调研并确认方向。 | [读取正文](../workflows/make-decision/SKILL.md) |
 | build-plan | 把已确认方向写成规格与独立Phase计划。 | [读取正文](../workflows/build-plan/SKILL.md) |
-| build-code | 按当前Phase实施、验证和修复。 | [读取正文](../workflows/build-code/SKILL.md) |
-| verify-code | 独立核实现、实际效果及剩余缺口；测试/检查/依赖升级读正文唯一可信度方法。 | [读取正文](../workflows/verify-code/SKILL.md) |
+| build-code | 按当前Phase实施、验证和修复，最后Phase独立核实际效果与剩余缺口。 | [读取正文](../workflows/build-code/SKILL.md) |
 | build-prd | 整理已确认方向的产品表达与任务组PRD。 | [读取正文](../workflows/build-prd/SKILL.md) |
 
 ## 技能入口
@@ -20,7 +19,7 @@
 | --- | --- | --- |
 | stage-reflection | 阶段结束发现实际过程问题，需要提出有来源的复盘改进候选。 | [读取正文](stage-reflection/SKILL.md) |
 | stage-handoff | 阶段结束写人读交接，或接续时回读真实材料、事实与未完事项。 | [读取正文](stage-handoff/SKILL.md) |
-| stage-closeout | 阶段交付后整理Git、图与收口事实；最终归档或删除按实际授权处理。 | [读取正文](stage-closeout/SKILL.md) |
+| stage-close | 阶段交付后整理Git、图与收口事实；最终归档或删除按实际授权处理。 | [读取正文](stage-close/SKILL.md) |
 | knowledge-graph | 开工与设计依据准备时以合法全文作采用判断；查询领域/历史经验、定位影响，或按许可更新图。 | [读取正文](knowledge-graph/SKILL.md)；[任务判断方法](knowledge-graph/references/knowledge-reuse.md) |
 | anysearch | 需要联网检索、核事实或读取外部页面。 | [读取正文](anysearch/SKILL.md) |
 | decision-log | 把已确认方向写为唯一决策与需求记录。 | [读取正文](decision-log/SKILL.md) |
@@ -35,13 +34,13 @@
 | spec-plan | 把实现设计写入规格，拆成各自可交付的Phase。 | [读取正文](spec-plan/SKILL.md) |
 | spec-analyze | 阶段结束核需求、材料、实现与证据是否一致。 | [读取正文](spec-analyze/SKILL.md) |
 | architect-code-review | 审查实现的正确性、生命周期、接口消费者与测试强度。 | [读取正文](architect-code-review/SKILL.md) |
-| workflowhub-host-protocol | 查当前会话如何执行五阶段、记录事实及说明完成边界。 | [读取正文](workflowhub-host-protocol/SKILL.md) |
+| workflowhub-host-protocol | 查当前会话如何执行三阶段、记录事实及说明完成边界。 | [读取正文](workflowhub-host-protocol/SKILL.md) |
 | workflowhub-multica-sync | 明确要求核对或同步本机main与Multica的技能和agent配置。 | [读取正文](workflowhub-multica-sync/SKILL.md) |
 | wh-review | 审查材料位/配置路线、ARTIFACT + CONTRACT、身份与覆盖/三条件结论；方法来源读catalog的N3 absorbed条目。 | [读取正文](wh-review/SKILL.md) |
 | plan-ceo-review | 只读审查产品前提、范围、替代方案与交付风险。 | [读取正文](plan-ceo-review/SKILL.md) |
 | plan-design-review | 只读审查UI信息架构、状态、无障碍及响应布局。 | [读取正文](plan-design-review/SKILL.md) |
 | plan-eng-review | 只读审查工程顺序、接口、失败路径与验证设计。 | [读取正文](plan-eng-review/SKILL.md) |
-| review | 只读审查正确性、范围、证据和未决风险；测试可信度沿verify正文条件指针。 | [读取正文](review/SKILL.md) |
+| review | 只读审查正确性、范围、证据和未决风险；测试可信度沿[build-code终末正文](../workflows/build-code/SKILL.md#测试充分性与检查可信度)条件指针。 | [读取正文](review/SKILL.md) |
 | resolving-merge-conflicts | 已在合并中遇到冲突，需要按真实目标解冲突。 | [读取正文](resolving-merge-conflicts/SKILL.md) |
 | diagnosing-bugs | build-code失败分支实读；复现/最小化/探针后修根因，输出与页面信任边界和性能方法唯一正文；两来源见catalog。 | [读取正文](diagnosing-bugs/SKILL.md) |
 | test-routing-advisor | 按真实changed files选择simple、feature或fullstack测试路线；本身不执行测试。 | [读取正文](test-routing-advisor/SKILL.md) |
@@ -73,7 +72,7 @@
 | unslop | 人读跨语言表面痕迹并保意义，不作评分或风格门 | `skills/spec-specify/SKILL.md` |
 | build-the-lever | 手工独立oracle与worker产物逐项对照；worker不改自身验收契约/保留标签，标签回真实产物，不冻全树 | `workflows/build-plan/SKILL.md` |
 | minimize-reader-load | 复用WR001与材料指针降低追溯负担，重复项不加同义权威 | `skills/spec-plan/SKILL.md` |
-| why | 代码anchor→git历史/原决定→竞争假设与unknown，三处真实方法消费 | `skills/decision-log/SKILL.md`；`skills/spec-analyze/SKILL.md`；`workflows/verify-code/SKILL.md` |
+| why | 代码anchor→git历史/原决定→竞争假设与unknown，三处真实方法消费 | `skills/decision-log/SKILL.md`；`skills/spec-analyze/SKILL.md`；`workflows/build-code/SKILL.md#最后-phase终末承接` |
 | multi-phase-plan.md | spec-plan作者收口实际消费既有无状态合同校验与现reports，缺验收例/占位可见，语义不明unknown，原退出语义不变 | `skills/spec-plan/templates/phase-template.md` |
 | refactoring.md | 结构改动先pin行为契约；typecheck/lint不算pin，无第二oracle | `skills/spec-plan/SKILL.md` |
 | hillclimb.md | 独立oracle区分好坏、error/work明确单位、重复观测/噪声与停止；无固定次数门/loop账本 | `skills/spec-plan/templates/phase-template.md` |
@@ -163,13 +162,13 @@
 | n7-ketchup | `skills/stage-handoff/SKILL.md; AGENTS.md` | P1 quality/tests/2026-10-18-038-p1-independent-method-readback.md；P3 quality/tests/2026-10-18-077-p3-independent-consumer-readback.md；凭证正例为受控假设 |
 | n7-reflect | `skills/stage-reflection/SKILL.md; specs/Improvements.md` | P1 quality/tests/2026-10-18-038-p1-independent-method-readback.md；P2 quality/tests/2026-10-18-059-p2-independent-complete-readback.json；首验适用条件未齐保持incomplete，见quality/tests/2026-10-18-p6-six-adoptions.md |
 | n7-recall | `skills/stage-reflection/SKILL.md; specs/Improvements.md` | P1 quality/tests/2026-10-18-038-p1-independent-method-readback.md；P2 quality/tests/2026-10-18-059-p2-independent-complete-readback.json；仅具名后继读取，不外推未来任务 |
-| n7-opening-a-pr | `skills/stage-closeout/SKILL.md` | P4 quality/tests/2026-10-18-081-p4-controlled-delivery-materials.json及quality/tests/2026-10-18-083-p4-delivery-note-green.json、quality/tests/2026-10-18-084-p4-closeout-protection-green.json；独立首验为quality/evidence/2026-10-18-050-p4-independent-first-consumer.json、quality/evidence/2026-10-18-055-p4-compression-consumer.json；受控首验不冒真实PR，后续实际PR另见quality/tests/2026-10-19-022-ac010-real-pr-independent-consumer.md |
+| n7-opening-a-pr | `skills/stage-close/SKILL.md` | P4 quality/tests/2026-10-18-081-p4-controlled-delivery-materials.json及quality/tests/2026-10-18-083-p4-delivery-note-green.json、quality/tests/2026-10-18-084-p4-closeout-protection-green.json；独立首验为quality/evidence/2026-10-18-050-p4-independent-first-consumer.json、quality/evidence/2026-10-18-055-p4-compression-consumer.json；受控首验不冒真实PR，后续实际PR另见quality/tests/2026-10-19-022-ac010-real-pr-independent-consumer.md |
 
 历史原件根：`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/n7-route-delivery-closeout-experience-20261018/`。六项采用/排除判据只读回 `specs/archive/n7-route-delivery-closeout-experience-20261018/decision-log.md` 的 D-017 和 spec AC-013；历史六项汇总原件 `quality/tests/2026-10-18-p6-six-adoptions.md` 保留 reflect incomplete 与受控首验限制，不把补登记冒整体验收。
 
 ## N10有限检查来源
 
-figure-it-out 的采用、固定字节与未证实项见 [catalog.yaml](catalog.yaml) 的 `figure-it-out` 条目；正文落点为 [verify-code 的检查可信度段](../workflows/verify-code/SKILL.md#测试充分性与检查可信度)，[stage-reflection](stage-reflection/SKILL.md) 只放指针，正文接线与首验归 P5/T021。本节只导航。
+figure-it-out 的采用、固定字节与未证实项见 [catalog.yaml](catalog.yaml) 的 `figure-it-out` 条目；正文落点为 [build-code 终末 的检查可信度段](../workflows/build-code/SKILL.md#测试充分性与检查可信度)，[stage-reflection](stage-reflection/SKILL.md) 只放指针，正文接线与首验归 P5/T021。本节只导航。
 
 | norm-sync | 每Phase收口、终末验证、写经验及任务收口前同步已独立验证变化；拒写不足项并保partial恢复。 | [读取正文](norm-sync/SKILL.md) |
 

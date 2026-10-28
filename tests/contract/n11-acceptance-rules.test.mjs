@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 
 const read = path => readFileSync(new URL('../../' + path, import.meta.url), 'utf8');
-const rules = ['skills/test-routing-advisor/SKILL.md', 'workflows/verify-code/SKILL.md', 'workflows/build-code/SKILL.md', 'docs/standard-workflow.md', 'skills/spec-plan/templates/phase-template.md'];
+const rules = ['skills/test-routing-advisor/SKILL.md', 'workflows/build-code/SKILL.md', 'docs/standard-workflow.md', 'skills/spec-plan/templates/phase-template.md'];
 const templates = ['skills/spec-specify/templates/spec-template.md', 'skills/spec-plan/templates/phase-template.md'];
 const additions = [
   'tests/contract/n11-acceptance-rules.test.mjs', 'tests/contract/n11-discussion-quality.test.mjs',
@@ -48,10 +48,10 @@ describe('ORACLE-N11-ACCEPT-SCOPE', () => {
     expect(scopeErrors(text), path).toEqual([]);
     for (const term of ['最小可证伪集合', '未知影响面', '全局重跑', '一次', '事先说明']) expect(text, `${path}: ${term}`).toContain(term);
   });
-  for (const path of ['workflows/verify-code/SKILL.md', 'workflows/build-code/SKILL.md', 'docs/standard-workflow.md']) it(`${path}: Phase-owned AC scope`, () => {
+  for (const path of ['workflows/build-code/SKILL.md', 'docs/standard-workflow.md']) it(`${path}: Phase-owned AC scope`, () => {
     expect(read(path)).toContain('本 Phase 承接 AC 与声明测试面');
   });
-  for (const path of ['workflows/verify-code/SKILL.md', 'skills/spec-plan/templates/phase-template.md']) it(`${path}: skipped acceptance remains in denominator`, () => {
+  for (const path of ['skills/spec-plan/templates/phase-template.md']) it(`${path}: skipped acceptance remains in denominator`, () => {
     const text = read(path);
     for (const term of ['unverified', '原因与影响面', '留在分母']) expect(text).toContain(term);
   });
@@ -88,7 +88,7 @@ describe('ORACLE-N11-ASSET-FIRST', () => {
 // Checks the designated FR body only; duplicate mentions elsewhere cannot fill a gap.
 describe('ORACLE-N11-ASSET-FIRST authoritative prohibition presence (approved TCR)', () => {
   const required = ['不新造评测台', '不扫宿主会话', '不恢复旧 snapshot 兼容桥', '不建常驻 eval 技能'];
-  const fr = read('specs/n11-same-condition-eval-20261022/spec.md').split('\n').find(line => line.startsWith('- **FR-ACCEPT-005**：'));
+  const fr = read('specs/archive/n11-same-condition-eval-20261022/spec.md').split('\n').find(line => line.startsWith('- **FR-ACCEPT-005**：'));
   const missing = text => required.filter(term => !text.includes(term));
   it('reads all four prohibitions from the actual FR-ACCEPT-005 body', () => {
     expect(typeof fr).toBe('string');
@@ -103,7 +103,6 @@ describe('ORACLE-N11-ASSET-FIRST authoritative prohibition presence (approved TC
 // Text presence and controlled record checks are distinct; neither is a runtime writer.
 describe('ORACLE-N11-ACCEPT-SCOPE ORACLE-N11-SKIP-VISIBLE', () => {
   const ruleSources = [
-    ['workflows/verify-code/SKILL.md', '   按本 Phase 承接 AC 与声明测试面核对，'],
     ['skills/spec-plan/templates/phase-template.md', '默认只跑本任务范围内受影响测试，'],
   ];
   const constraints = ['unverified', '原因', '影响面', '留在分母'];

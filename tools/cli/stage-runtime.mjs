@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { STAGE, WORKFLOW_STAGES } from "../../runtime/stage/stage-registry.mjs";
 
 import { closeSync, fstatSync, openSync, constants as fsConstants, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -25,7 +26,7 @@ import { confirmClosePlan } from "../../core/task-close.mjs";
 import { validateTaskId } from "../../runtime/task/task-identity.mjs";
 import { resolveStorageRoot, resolveStorageRootDetails } from "../../runtime/evidence/storage-root.mjs";
 import { AUTHENTICATED_EVIDENCE_PATH, redactProviderHostPaths } from "../../runtime/review/provider-material-projection.mjs";
-import { authenticatedEvidenceBytes } from "../../runtime/review/review-packet-identity.mjs";
+import { deliveredMaterialId, authenticatedEvidenceBytes } from "../../runtime/review/review-packet-identity.mjs";
 import { runSimpleReview, validateReviewSupplement, validateReviewCallerMaterials } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 import { prepareConfiguredOcrHostContext, runConfiguredOcrHostReview, runOcrDelegationRound, detectOcr } from "../../runtime/review/ocr-delegation-adapter.mjs";
 import { compactReviewDiff, compactVerifyCodeMaterials, gitDiffPath, verifyCodeChangedPaths } from "../../runtime/review/review-input-bounds.mjs";
@@ -355,9 +356,8 @@ function deriveIdentityFromAuthenticatedWorktree(cwd, env) {
 
 function isTaskBoundBuildCodeReviewRequest(request) {
   const scope = request?.review_scope ?? request?.reviewScope ?? null;
-  if (request?.stage === "verify-code") return scope === null;
   return request?.stage === "build-code"
-    && (scope === "phase" || scope === "integration");
+    && (scope === "phase" || scope === "terminal");
 }
 
 function isNormalOcrCodeReviewRequest(request) {
@@ -365,8 +365,8 @@ function isNormalOcrCodeReviewRequest(request) {
   const kind = request?.review_kind ?? request?.reviewKind ?? null;
   const track = request?.review_track ?? request?.reviewTrack ?? null;
   return track === null && kind === null && (
-    (request?.stage === "build-code" && (scope === "phase" || scope === "integration"))
-    || (request?.stage === "verify-code" && scope === null));
+    (request?.stage === "build-code" && (scope === "phase" || scope === "terminal"))
+);
 }
 
 function ocrReviewInstructionsFor(request) {
@@ -374,7 +374,7 @@ function ocrReviewInstructionsFor(request) {
     request.review_scope ?? request.reviewScope ?? null, request.review_kind ?? request.reviewKind ?? null, "full", null, true);
   return [
     `OCR code review: ${request.stage}/${request.phase_id ?? request.phaseId ?? "worktree"}.`,
-    "Read the complete contracts/build-code.md, contracts/verify-code.md, contracts/provider-protocol.md and manifest-declared lens skill bodies. Apply the actual stage's reviewer contract and the review focus below; the other code contract supplies the adjacent review boundary.",
+    "Read the complete contracts/build-code.md, contracts/provider-protocol.md and manifest-declared lens skill bodies. Apply the actual stage's reviewer contract and the review focus below; the build-code contract contains both phase and terminal boundaries.",
     "Start with source.json, diff-index.json when present, review-instructions.md and full acceptance-criteria text. The complete diff content is in all manifest-declared per-file patch shards listed in diff-index.json; small packets instead contain changes.diff. Read the complete navigation first, then the relevant full patches and current implementation/consumer/test files according to real entry points, risk and changed interfaces. Do not blindly cat a cumulative diff or every historical/deleted body. Deleted and historical patches remain fully available by index reference and must be read when a concrete removal, consumer or security claim requires them. No diff section is omitted, summarized instead of supplied, or truncated; never infer a source line from a shard line. Do not replace required bodies with summaries or truncate contracts.",
     "When a changed file in the current diff also serves as a fixed reviewer body, its identical manifest entry serves both roles. Review the complete bytes as changed implementation source as well as reviewer instructions; neither role is omitted.",
     focus,
@@ -431,7 +431,7 @@ function writeOcrCurrentMaterialProjection(bundleRoot, projected, evidence) {
 function projectOcrCodeReviewBundle(built, attachmentRoot, request, source) {
   const selected = built.manifest.filter(({ path }) => path !== "packet-plan.json" && path !== "manifest.json");
   const paths = new Set(selected.map(({ path }) => path));
-  for (const path of ["contracts/build-code.md", "contracts/verify-code.md", "contracts/provider-protocol.md", "skills/simplicity-guard/SKILL.md", "skills/review/SKILL.md"]) {
+  for (const path of ["contracts/build-code.md", "contracts/provider-protocol.md", "skills/simplicity-guard/SKILL.md", "skills/review/SKILL.md"]) {
     if (!paths.has(path)) throw new Error(`OCR packet is missing its required reviewer body: ${path}`);
   }
   if (!paths.has("review-instructions.md") || !paths.has("source.json")
@@ -677,7 +677,7 @@ export function prepareTaskBoundBuildCodeReviewBundle(context, request, {
   if (!isTaskBoundBuildCodeReviewRequest(request)) throw new TypeError("task-bound build-code review request required");
   const reviewScope = request.review_scope ?? request.reviewScope;
   const candidateExperiment = isNormalOcrCodeReviewRequest(request);
-  if (candidateExperiment && request.stage === "verify-code") {
+  if (candidateExperiment && reviewScope === "terminal") {
     validateVerifyAcceptanceSummary(request.materials?.acceptance_criteria);
   }
   const trusted = loadConfig({ requestedStage: request.stage, requestedTrack: request.review_track ?? request.reviewTrack ?? null,
@@ -688,7 +688,7 @@ export function prepareTaskBoundBuildCodeReviewBundle(context, request, {
     includeDiff: true, taskId: context.task.identity.taskId,
     ...(cursorDiffBase === null ? {} : { baselineCommit: cursorDiffBase }) });
   try {
-    const changedPaths = request.stage === 'verify-code' ? source.changedPaths : undefined;
+    const changedPaths = reviewScope === 'terminal' ? source.changedPaths : undefined;
     const compacted = compactVerifyCodeMaterials(request.materials, { changedPaths });
     const selectedSource = phaseReviewSourceProjection(context, request, source, trusted.attachmentRoot,scope);
     const built = buildMaterials({
@@ -1176,8 +1176,326 @@ function thinMaterials(context) {
   return materials;
 }
 
+// This reader projects independently produced ordinary facts. It never changes
+// the canonical review, originals, cursor, or delivery authorization.
+function terminalAssessmentQuality(context, row) {
+  if (!row?.terminal_assessment_ref) return null;
+  const gaps = [], coverage = [], refs = [];
+  const requireFact = (condition, message) => { if (!condition) gaps.push(message); return condition; };
+  const plain = v => v !== null && typeof v === "object" && !Array.isArray(v);
+  const reference = value => plain(value) && Object.keys(value).sort().join("\0") === "ref\0sha256"
+    && typeof value.ref === "string" && /^quality\/(evidence|reviews|tests)\//.test(value.ref)
+    && !value.ref.includes("\\") && !value.ref.split("/").some(p => !p || p === "." || p === "..") && /^[a-f0-9]{64}$/.test(value.sha256 ?? "");
+  const read = (value,encoding="utf8") => {
+    if (!reference(value)) throw new TypeError("invalid terminal evidence reference");
+    const bytes = context.task.readRecordBytes(value.ref);
+    if (sha256(bytes) !== value.sha256) throw new Error(`terminal evidence sha256 mismatch: ${value.ref}`);
+    refs.push(value);return encoding===null?bytes:bytes.toString(encoding);
+  };
+  const json = value => JSON.parse(read(value));
+  const sameReference=(a,b)=>reference(a)&&reference(b)&&a.ref===b.ref&&a.sha256===b.sha256;
+  const identity = value => value?.task_id === context.identity.taskId && value?.stage === "build-code";
+  const envelope = json(row.terminal_assessment_ref);
+  requireFact(Object.keys(envelope).every(k=>["task_id","stage","raw_ref","reader"].includes(k)),"assessment provenance: conclusions must come only from independent raw");
+  if(envelope.task_id!==context.identity.taskId||envelope.stage!=="build-code")throw new Error("assessment provenance differs from current task/stage identity");
+  const rawVerdictBytes = envelope.raw_ref ? read(envelope.raw_ref,null) : null;
+  const rawVerdict = rawVerdictBytes===null ? null : rawVerdictBytes.toString("utf8");
+  const a = rawVerdict === null ? envelope : JSON.parse(rawVerdict);
+  requireFact(rawVerdict !== null,"terminal reader: missing original independent verdict");
+  if (!identity(a)) throw new Error("terminal assessment differs from current task/stage identity");
+  const list = (value,label) => { if (!Array.isArray(value)) { gaps.push(`${label}: missing array`);return []; } return value; };
+  const readRefs = (value,label) => {
+    const values=list(value,label);requireFact(values.length>0,`${label}: no original evidence`);
+    return values.map(ref=>{try{return {ref,raw:read(ref)};}catch(error){if(error.code==="ENOENT"){gaps.push(`${label}: missing ${ref?.ref}`);return {ref,raw:null};}throw error;}});
+  };
+  let terminalReaderBound=false,terminalReaderDispatch=null;
+  const independent = (reader,label,proofRef=null,findingId=null,boundary=null) => {
+    if (!plain(reader)||typeof reader.identity!=="string"||!reader.identity.trim()||!reader.source_ref) {gaps.push(`${label}: missing independently bound reader`);return false;}
+    const readerBinding=json(reader.source_ref);
+    const dispatch=readerBinding.dispatch ? json(readerBinding.dispatch) : readerBinding;
+    const terminal=label === "terminal reader";if(terminal)terminalReaderDispatch=dispatch;
+    const sameReader=!terminal&&reader.identity===envelope.reader?.identity;
+    const roleMatches=terminal||boundary ? dispatch.role==="terminal-assessor" : dispatch.role==="finding-verifier" || dispatch.role==="terminal-assessor"&&sameReader;
+    const ok=identity(dispatch)&&roleMatches&&dispatch.agent_thread_id===reader.identity
+      &&dispatch.context_mode==="none"&&Array.isArray(dispatch.implementation_authors)&&dispatch.implementation_authors.length>0
+      &&!dispatch.implementation_authors.includes(reader.identity);
+    requireFact(ok,`${label}: task/role/thread/independent dispatch binding missing`);
+    if(sameReader){
+      const attested=terminalReaderBound&&(boundary ? boundary.result==="pass"&&(boundary.refs??[]).some(ref=>sameReference(ref,proofRef)) : (a.finding_verification_attestations??[]).some(v=>(v.finding_pointer??v.finding_id)===findingId&&sameReference(v.proof_ref,proofRef)));
+      return requireFact(ok&&attested,`${label}: terminal raw lacks exact finding proof attestation`);
+    }
+    const completion=terminal?null:boundary ? (boundary.completion_ref?[{source_ref:boundary.completion_ref}]:[]) : (a.finding_verification_completions??[]).filter(v=>v.reader_identity===reader.identity&&sameReference(v.proof_ref,proofRef));
+    if(!terminal&&!requireFact(completion.length===1,`${label}: missing unique public completion`))return false;
+    const binding=terminal?readerBinding:json(completion[0].source_ref);
+    if(!terminal&&!requireFact(sameReference(binding.dispatch,readerBinding.dispatch??reader.source_ref),`${label}: public completion dispatch differs`))return false;
+    if(!binding.final||!binding.delivery){gaps.push(`${label}: incomplete public delivery binding`);return false;}
+    const final=json(binding.final),delivery=json(binding.delivery);
+    let outputMatches=false;
+    if(typeof final.public_text==="string"){
+      if(terminal)outputMatches=rawVerdictBytes!==null&&Buffer.from(final.public_text,"utf8").equals(rawVerdictBytes);
+      else{
+        outputMatches=Buffer.from(final.public_text,"utf8").equals(read(proofRef,null));
+        if(!outputMatches)try{const receipt=JSON.parse(final.public_text);outputMatches=identity(receipt)&&receipt.agent_thread_id===reader.identity&&sameReference(receipt.artifact_ref,proofRef);}catch{}
+      }
+    }
+    const completed=final.agent_thread_id===reader.identity&&delivery.agent_thread_id===reader.identity&&typeof final.public_text==="string"&&final.public_text===delivery.public_text&&outputMatches;
+    return requireFact(ok&&completed,`${label}: public final/delivery mismatch`);
+  };
+  terminalReaderBound=independent(envelope.reader,"terminal reader");
+  requireFact(a.result==="pass","terminal reader: no independent aggregate pass verdict");
+  requireFact(Array.isArray(terminalReaderDispatch?.input_refs)&&terminalReaderDispatch.input_refs.some(ref=>sameReference(ref,a.final_report)),"terminal reader: actual dispatch did not include this report");
+  let report=null;
+  if(a.final_report){
+    const text=read(a.final_report);let format="json";
+    try{report=JSON.parse(text);}catch{
+      format="md";
+      const blocks=[...text.matchAll(/^ {0,3}(`{3,}|~{3,})json[ \t]*\r?\n([\s\S]*?)\r?\n\1[ \t]*$/gm)];
+      if(blocks.length===1)try{report=JSON.parse(blocks[0][2]);}catch{}
+    }
+    requireFact(plain(report),"final report: requires one JSON object or one Markdown machine JSON segment");
+    requireFact(format==="json"?a.final_report.ref.endsWith(".json"):/\.(md|markdown)$/.test(a.final_report.ref),"final report: extension differs from actual format");
+    if(report!==null)requireFact(identity(report),"final report: wrong task/stage identity");
+  }else gaps.push("final report: missing unique ref/hash");
+  const materialFiles=materialFilesForCohort(context.manifest.activation_cohort??"pre",thinMaterials(context));
+  const workspaceFile=(path)=>{
+    if(typeof path!=="string"||isAbsolute(path)||path.includes("\\")||path.split("/").some(p=>!p||p==="."||p===".."))throw new TypeError("invalid terminal source path");
+    const file=join(context.workspace.worktreeRoot,path);
+    try{return readPlainInputFile(file,"terminal source",null);}catch(error){if(error.code==="ENOENT")return null;throw error;}
+  };
+  const git=args=>execFileSync("git",args,{cwd:context.workspace.worktreeRoot,env:gitMetadataEnvironment(),encoding:"utf8",stdio:["ignore","pipe","pipe"]});
+  const deletedPaths=new Set(git(["diff","--name-only","-z","--diff-filter=D",context.workspace.baselineCommit,"--"]).split("\0").filter(Boolean));
+  const checkPaths=(values,label,expected=null)=>{
+    const paths=list(values,label),seen=new Set();
+    for(const entry of paths){
+      if(!plain(entry)||typeof entry.path!=="string"||!(entry.deleted===true&&entry.sha256===null&&/^[a-f0-9]{64}$/.test(entry.base_sha256??"")||entry.deleted===undefined&&/^[a-f0-9]{64}$/.test(entry.sha256??"")))throw new TypeError(`invalid ${label} path/hash`);
+      requireFact(!seen.has(entry.path),`${label}: duplicate ${entry.path}`);seen.add(entry.path);
+      const raw=workspaceFile(entry.path);
+      if(entry.deleted===true){
+        const reallyDeleted=raw===null&&deletedPaths.has(entry.path);
+        requireFact(reallyDeleted,`${label}: deletion does not match actual diff ${entry.path}`);
+        if(reallyDeleted){const original=execFileSync("git",["show",`${context.workspace.baselineCommit}:${entry.path}`],{cwd:context.workspace.worktreeRoot,env:gitMetadataEnvironment(),stdio:["ignore","pipe","pipe"]});requireFact(sha256(original)===entry.base_sha256,`${label}: deletion base bytes differ ${entry.path}`);}
+      }else requireFact(raw!==null&&sha256(raw)===entry.sha256,`${label}: changed or missing ${entry.path}`);
+    }
+    if(expected)requireFact([...expected].sort().join("\0")===[...seen].sort().join("\0"),`${label}: current path denominator differs; missing=${[...expected].filter(p=>!seen.has(p)).join(",")}; extra=${[...seen].filter(p=>!expected.includes?.(p)&&!expected.has?.(p)).join(",")}`);
+    return paths;
+  };
+  const materialPaths=materialFiles.map(p=>`specs/${context.identity.taskId}/${p}`);
+  checkPaths(a.materials,"materials",materialPaths);
+  const changed=new Set([...git(["diff","--name-only","-z",context.workspace.baselineCommit,"--"]).split("\0"),...git(["ls-files","--others","--exclude-standard","-z"]).split("\0")].filter(Boolean));
+  const implementationPaths=new Set([...changed].filter(p=>!materialPaths.includes(p)));
+  checkPaths(a.implementation,"implementation",implementationPaths);
+  const spec=context.artifacts.read("spec.md"),appendix=spec.split(/^##\s+Appendix A.*$/m)[1]??"";
+  const acIds=[...new Set([...appendix.matchAll(/^\s*(?:-\s*(?:\[[ xX]\]\s*)?\*\*(AC-[A-Za-z0-9][A-Za-z0-9_-]*)\*\*|###\s+(AC-[A-Za-z0-9][A-Za-z0-9_-]*)\b|\|\s*`?(AC-[A-Za-z0-9][A-Za-z0-9_-]*)`?\s*\|)/gm)].map(m=>m[1]??m[2]??m[3]))];
+  requireFact(acIds.length>0,"acceptance: current spec has no readable declared AC denominator");
+  const results=new Set(["pass","fail","inconclusive","deferred","missing","inconsistent","incomplete","unavailable"]);
+  if(plain(report)){
+    checkPaths(report.materials,"final report materials",materialPaths);
+    requireFact(Array.isArray(report.acceptance)&&report.acceptance.map(v=>v?.id).sort().join("\0")===[...acIds].sort().join("\0")&&report.acceptance.every(v=>results.has(v?.result)),"final report: AC denominator or typed result differs");
+    requireFact(Array.isArray(report.six_conclusions)&&report.six_conclusions.length===6&&report.six_conclusions.every(v=>typeof v==="string"&&v.trim()),"final report: six human conclusions missing");
+    const request=report.continuation_request;
+    requireFact(plain(request)&&typeof request.requested==="boolean","final report: continuation request is not declared");
+    if(request?.requested===true){if(reference(request.source_ref))read(request.source_ref);else gaps.push("final report: requested continuation has no actual user source");}
+    else requireFact(request?.requested===false&&typeof request.reason==="string"&&request.reason.trim(),"final report: no-continuation reason missing");
+    if(requireFact(/^[a-f0-9]{40,64}$/.test(report.head??""),"final report: invalid source HEAD")){
+      try{
+        requireFact(git(["rev-parse","--verify",`${report.head}^{commit}`]).trim()===report.head,"final report: HEAD is not a commit");
+        git(["merge-base","--is-ancestor",context.workspace.baselineCommit,report.head]);git(["merge-base","--is-ancestor",report.head,"HEAD"]);
+        const treePaths=git(["diff","--name-only","-z",context.workspace.baselineCommit,report.head,"--"]).split("\0").filter(p=>p&&!materialPaths.includes(p));
+        requireFact([...treePaths].sort().join("\0")===[...implementationPaths].sort().join("\0"),"final report: HEAD tree source denominator differs");
+        for(const entry of [...(a.implementation??[]),...(report.materials??[])]){
+          const exists=git(["ls-tree","-z",report.head,"--",entry.path]).length>0;
+          if(entry.deleted===true)requireFact(!exists,`final report: HEAD tree deletion differs ${entry.path}`);
+          else if(requireFact(exists,`final report: HEAD tree lacks ${entry.path}`)){
+            const bytes=execFileSync("git",["show",`${report.head}:${entry.path}`],{cwd:context.workspace.worktreeRoot,env:gitMetadataEnvironment(),stdio:["ignore","pipe","pipe"],maxBuffer:Math.max(1,workspaceFile(entry.path)?.length??0)});
+            requireFact(sha256(bytes)===entry.sha256,`final report: HEAD tree bytes differ ${entry.path}`);
+          }
+        }
+      }catch{gaps.push("final report: HEAD is foreign, unavailable or not bound to this task snapshot");}
+    }
+  }
+  const sourceCurrent=gaps.length===0;
+  const projectedAcceptance=[];
+  const entries=list(a.acceptance,"acceptance");
+  requireFact(entries.map(v=>v?.id).sort().join("\0")===[...acIds].sort().join("\0"),"acceptance: denominator missing, duplicated, or foreign AC");
+  function originalVerdict(value,id){
+    if(!plain(value))return null;
+    if(value.task_id!==undefined&&value.task_id!==context.identity.taskId||value.stage!==undefined&&value.stage!=="build-code")return null;
+    const identifiers=[value.id,value.acceptance_criterion_id,value.criterion_id,value.ac,value.ac_id].filter(v=>v!==undefined);
+    if(typeof value.task==="string"&&value.task.split(/[^A-Za-z0-9_-]+/).some(v=>v.startsWith("AC-")))identifiers.push(value.task);
+    const matches=v=>typeof v==="string"&&(v===id||v.split(/[^A-Za-z0-9_-]+/).includes(id));
+    const found=[];
+    if(identifiers.some(matches)){
+      const verdicts=[value.result,value.conclusion,value.tier,value.independent_status].filter(v=>v!==undefined);
+      if(identifiers.some(v=>!matches(v))||verdicts.some(v=>!results.has(v))||new Set(verdicts).size>1)return "inconsistent";
+      if(verdicts.length)found.push(verdicts[0]);
+    }
+    for(const v of Object.values(value))for(const child of Array.isArray(v)?v:plain(v)?[v]:[]){const verdict=originalVerdict(child,id);if(verdict!==null)found.push(verdict);}
+    if(found.length)return new Set(found).size===1?found[0]:"inconsistent";
+    return null;
+  }
+  for(const entry of entries){
+    const before=gaps.length;
+    requireFact(results.has(entry?.result),`acceptance ${entry?.id}: invalid typed result`);
+    requireFact(entries.filter(v=>v?.id===entry?.id).length===1,`acceptance ${entry?.id}: duplicated original`);
+    requireFact(typeof entry?.current_applicability?.basis==="string"&&entry.current_applicability.basis.trim().length>0,`acceptance ${entry?.id}: current applicability not independently explained`);
+    readRefs(entry?.current_applicability?.refs,`acceptance ${entry?.id} current applicability`);
+    const sources=readRefs(entry?.refs,`acceptance ${entry?.id}`);
+    const verdicts=[];
+    for(const {ref,raw} of sources){
+      if(!requireFact(ref.ref!==a.final_report?.ref&&ref.sha256!==a.final_report?.sha256,`acceptance ${entry.id}: final report cannot be its own upstream verdict`))continue;
+      if(raw!==null)try{const verdict=originalVerdict(JSON.parse(raw),entry.id);if(verdict!==null)verdicts.push(verdict);}catch{}
+    }
+    const conflicting=verdicts.includes("inconsistent")||new Set(verdicts).size>1;
+    requireFact(!conflicting,`acceptance ${entry.id}: inconsistent applicable original verdicts`);
+    requireFact(verdicts.length>0&&verdicts.every(v=>v===entry.result),`acceptance ${entry.id}: no agreed original typed criterion verdict`);
+    if(acIds.includes(entry?.id))projectedAcceptance.push({id:entry.id,result:conflicting?"inconsistent":sourceCurrent&&gaps.length===before?entry.result:"incomplete",refs:entry.refs??[],current_applicability:entry.current_applicability??null});
+    if(entry?.result!=="pass")gaps.push(`acceptance ${entry?.id}: ${entry?.result??"unknown"}`);
+  }
+  for(const id of acIds)if(!projectedAcceptance.some(v=>v.id===id))projectedAcceptance.push({id,result:"missing",refs:[],current_applicability:null});
+  for(const dimension of ["business_effect","semantic_test_adequacy"]){
+    const facet=a[dimension];requireFact(facet?.result==="pass",`${dimension}: not pass`);readRefs(facet?.refs,dimension);
+    requireFact(Array.isArray(facet?.coverage_limits),`${dimension}: coverage unknown`);coverage.push(...(facet?.coverage_limits??[]));
+    requireFact(Array.isArray(facet?.covered_ac_ids)&&[...facet.covered_ac_ids].sort().join("\0")===[...acIds].sort().join("\0"),`${dimension}: declared AC scope differs`);
+    const proofs=list(facet?.proofs,`${dimension} execution proofs`);
+    requireFact(proofs.length>0,`${dimension}: no native execution/source proof`);
+    for(const proof of proofs){
+      if(!proof?.receipt||!proof?.output){gaps.push(`${dimension}: missing receipt/output pair`);continue;}
+      const receipt=json(proof.receipt),output=read(proof.output);
+      requireFact(receipt.cwd===context.workspace.worktreeRoot&&Array.isArray(receipt.argv)&&receipt.argv.length>0&&receipt.exit_code===0&&!receipt.signal&&!receipt.timed_out&&!receipt.cancelled&&!receipt.truncated&&Number.isFinite(Date.parse(receipt.started_at))&&Number.isFinite(Date.parse(receipt.ended_at)),`${dimension}: not an intact successful native command receipt`);
+      const outputPath=typeof receipt.output_ref==="string"?(isAbsolute(receipt.output_ref)?receipt.output_ref:join(context.task.taskPath,receipt.output_ref)):null;
+      requireFact(outputPath===join(context.task.taskPath,proof.output.ref)&&output.length>0,`${dimension}: receipt does not bind actual output original`);
+      const inputs=checkPaths(proof.inputs,`${dimension} execution inputs`);requireFact(inputs.length>0,`${dimension}: missing source/input binding`);
+      if(dimension==="semantic_test_adequacy"){
+        const tests=checkPaths(proof.test_sources,`${dimension} assertion sources`);
+        requireFact(tests.length>0&&tests.every(test=>(receipt.argv??[]).some(arg=>typeof arg==="string"&&(arg===test.path||resolve(receipt.cwd??"/",arg)===join(context.workspace.worktreeRoot,test.path)))),`${dimension}: actual command does not consume declared assertion sources`);
+      }
+    }
+  }
+  let review=null;
+  if(a.review)review=json(a.review);else gaps.push("terminal review: missing original");
+  if(review){
+    requireFact(a.review.ref.startsWith("quality/reviews/")&&review.version==="wh-review-result.v1"&&review.authoritative===false,"terminal review: not the saved canonical producer artifact");
+    requireFact(identity(review)&&review.review_scope==="terminal","terminal review: wrong identity or scope");
+    const currentReview=typeof row.review_result_ref==="string"?row.review_result_ref:row.review_result_ref?.value;
+    requireFact(row.review_origin==="conducted"&&currentReview===a.review.ref,"terminal review: current published review differs from assessed original");
+    const providers=list(review.provider_results,"providers");
+    requireFact(providers.some(p=>p.status==="completed"&&(p.parse_outcome??p.execution?.parse_outcome)==="ok"),"providers: no completed parsed source");
+    for(const p of providers){
+      const originalRefs=[p.raw_ref,p.raw_output_ref,p.raw_response_ref,p.output_ref,...(p.evidence_refs??[])].filter(value=>value!==undefined&&value!==null);
+      requireFact(originalRefs.length>0,`provider ${p.provider??p.id}: missing raw original`);
+      for(const raw of originalRefs){
+        if(reference(raw)){read(raw);continue;}
+        if(typeof raw!=="string"){gaps.push(`provider ${p.provider??p.id}: unbound raw original`);continue;}
+        const relativeRef=isAbsolute(raw)?relative(context.task.taskPath,raw).split("\\").join("/"):raw;
+        const bound=(a.provider_raw_refs??[]).find(value=>reference(value)&&value.ref===relativeRef);
+        if(bound){read(bound);continue;}
+        // Old canonical records own path-only raw refs. The fresh independent
+        // verdict must bind their actual bytes; presence alone is insufficient.
+        try{context.task.readRecordBytes(relativeRef);}catch(error){if(error.code==="ENOENT")gaps.push(`provider ${p.provider??p.id}: missing raw`);else throw error;}
+        gaps.push(`provider ${p.provider??p.id}: raw sha256 not independently bound ${relativeRef}`);
+      }
+      if(p.status!=="completed"||(p.parse_outcome??p.execution?.parse_outcome)!=="ok")coverage.push(`provider ${p.provider??p.id}: ${p.status??"unknown"}`);
+    }
+    const findings=list(review.findings,"review findings");
+    const reviewGaps=[];
+    if(review.conclusion!=="needs_revision"&&review.conclusion!=="pass"&&!(review.conclusion==="reject"&&findings.length>0))reviewGaps.push(`review:${review.conclusion??"unknown"}`);
+    for(const member of Array.isArray(review.material_coverage)?review.material_coverage:[])for(const item of [...(member.unread??[]),...(member.undetermined??[])])reviewGaps.push(`coverage:${member.provider}:${item}`);
+    for(const provider of providers)if(provider.status!=="completed"||(provider.parse_outcome??provider.execution?.parse_outcome)!=="ok")reviewGaps.push(`provider:${provider.provider??provider.id}`);
+    if(reviewGaps.length){
+      const closure=a.review_coverage_closure;
+      const expected=[...new Set(reviewGaps)].sort();
+      const covered=Array.isArray(closure?.covered_gaps)?[...closure.covered_gaps].sort():[];
+      const receipts=[...(a.business_effect?.proofs??[]),...(a.semantic_test_adequacy?.proofs??[])].map(v=>v.receipt);
+      const closureRefs=readRefs(closure?.refs,"review coverage closure");
+      requireFact(closure?.result==="pass"&&sameReference(closure?.review_ref,a.review)&&typeof closure?.basis==="string"&&closure.basis.trim().length>0&&JSON.stringify(expected)===JSON.stringify(covered)&&receipts.length>=2&&receipts.every(ref=>closureRefs.some(v=>sameReference(v.ref,ref)))&&closureRefs.every(v=>receipts.some(ref=>sameReference(v.ref,ref))),"terminal review: unconfirmed coverage lacks independent current scope closure");
+    }
+    const dispositions=list(a.finding_dispositions,"finding dispositions");
+    requireFact(dispositions.length===findings.length,"findings: disposition denominator differs");
+    const sourceRef=review.source_ref??a.review_source_ref;
+    let reviewedSource=null,sourceBound=false;
+    if(sourceRef){
+      try{
+        const bytes=read(sourceRef,null),manifest=review.ocr?.manifest,entry=Array.isArray(manifest)?manifest.filter(v=>v.path==="source.json"):[];
+        reviewedSource=JSON.parse(bytes);
+        sourceBound=requireFact(entry.length===1&&entry[0].bytes===bytes.length&&entry[0].sha256===sha256(bytes)&&deliveredMaterialId(manifest)===review.request?.material_id&&reviewedSource.captured_head===review.request?.subject?.head_commit&&reviewedSource.baseline_commit===review.request?.subject?.base_commit,"terminal review: original source packet identity differs");
+        if(review.source_ref&&a.review_source_ref)requireFact(sameReference(review.source_ref,a.review_source_ref),"terminal review: raw source override differs from canonical");
+      }catch(error){gaps.push(`terminal review: source binding unavailable: ${error.message}`);}
+    }
+    const originalSnapshot=f=>Object.fromEntries(["provider","path","line","issue"].map(k=>[k,f[k]??null]));
+    const locatorMatches=(value,f,index)=>{
+      const explicit=f.finding_id??f.id,pointer=`/findings/${index}`;
+      if(value.finding_pointer!==undefined)return value.finding_pointer===pointer&&plain(value.original_finding)&&Object.keys(value.original_finding).sort().join("\0")==="issue\0line\0path\0provider"&&Object.entries(originalSnapshot(f)).every(([key,item])=>value.original_finding[key]===item)&&(value.finding_id===undefined||value.finding_id===explicit);
+      return typeof explicit==="string"&&value.finding_id===explicit;
+    };
+    const originalPath=path=>{
+      if(!path.startsWith("repos/"))return path;
+      if(!sourceBound)return null;
+      const repos=(reviewedSource.repositories??[]).filter(repo=>repo.id==="wh"&&path.startsWith(`repos/${repo.id}/`)&&repo.captured_head===reviewedSource.captured_head&&repo.baseline_commit===reviewedSource.baseline_commit&&repo.selected_paths?.includes(path)&&repo.changed_paths?.includes(path));
+      const file=path.slice("repos/wh/".length);
+      const entries=(review.ocr?.manifest??[]).filter(v=>v.path===path);
+      return repos.length===1&&entries.length===1&&review.request?.subject?.changed_files?.includes(file)&&implementationPaths.has(file)?file:null;
+    };
+    for(const [index,f] of findings.entries()){
+      const id=f.finding_id??f.id??`/findings/${index}`,ds=dispositions.filter(d=>locatorMatches(d,f,index));
+      if(!requireFact(typeof id==="string"&&ds.length===1,`finding ${id}: missing unique disposition`))continue;
+      const d=ds[0];requireFact(sameReference(d.original_review_ref,a.review),`finding ${id}: original review mismatch`);
+      const rejected=d.status==="rejected_invalid";
+      requireFact(d.status==="fixed"||rejected,`finding ${id}: unresolved; risk acceptance not inferred`);
+      if(!rejected)readRefs(d.fix_refs,`finding ${id} fix`);
+      const verifications=readRefs(d.verification_refs,`finding ${id} independent verification`);
+      const paths=list(d.affected_paths,`finding ${id} affected paths`);
+      const originalPaths=Array.isArray(f.affected_paths)?f.affected_paths:typeof f.file==="string"?[f.file]:typeof f.path==="string"?[f.path]:typeof f.location?.path==="string"?[f.location.path]:[];
+      requireFact(originalPaths.length>0&&originalPaths.every(p=>paths.includes(originalPath(p)))&&(rejected||paths.every(p=>implementationPaths.has(p))),`finding ${id}: affected scope missing/foreign or differs from original finding`);
+      requireFact(verifications.some(({raw,ref})=>{if(raw===null)return false;let proof;try{proof=JSON.parse(raw);}catch{return false;}
+        if(!identity(proof)||!locatorMatches(proof,f,index)||proof.result!=="pass"||!sameReference(proof.original_review_ref,a.review)||!independent(proof.reader,`finding ${id} verifier`,ref,id))return false;
+        if(rejected&&!requireFact(proof.disposition==="rejected_invalid"&&typeof proof.reason==="string"&&proof.reason.trim().length>0,`finding ${id}: invalidity not independently explained`))return false;
+        readRefs(proof.refs,`finding ${id} proof execution`);checkPaths(proof.implementation,`finding ${id} proof`,paths);return true;
+      }),`finding ${id}: no bound independent current-byte verification`);
+      requireFact(Array.isArray(d.coverage_limits),`finding ${id}: coverage unknown`);coverage.push(...(d.coverage_limits??[]));
+    }
+    for(const member of Array.isArray(review.material_coverage)?review.material_coverage:[])coverage.push(...(member.unread??[]),...(member.undetermined??[]));
+  }
+  for(const id of ["AC-BOUND-001","AC-BOUND-002"]){
+    const b=a.boundary_checks?.[id];
+    if(!acIds.includes(id))continue;
+    requireFact(b?.result==="pass",`${id}: no independent final boundary check`);
+    const proofs=readRefs(b?.refs,id);
+    requireFact(proofs.some(({raw,ref})=>{if(!raw)return false;try{const v=JSON.parse(raw);if(originalVerdict(v,id)!=="pass")return false;
+      if(id==="AC-BOUND-001")return true;
+      if(!identity(v)||!sameReference(v.final_report,a.final_report)||!independent(v.reader,"post-report reader",ref,id,b))return false;
+      const readerBinding=json(v.reader.source_ref),dispatch=readerBinding.dispatch?json(readerBinding.dispatch):readerBinding;
+      const inputs=Array.isArray(dispatch.input_refs)?dispatch.input_refs:[];
+      if(!requireFact(inputs.some(value=>sameReference(value,a.final_report)),`${id}: actual dispatch did not include this report`))return false;
+      const request=report?.continuation_request;
+      if(request?.requested===true){
+        if(!requireFact(reference(v.continuation)&&sameReference(v.continuation_request_source,request.source_ref),`${id}: requested continuation or user source missing`))return false;
+        read(v.continuation);
+        if(!requireFact(inputs.some(value=>sameReference(value,v.continuation))&&inputs.some(value=>sameReference(value,request.source_ref)),`${id}: actual dispatch did not include requested continuation/source`))return false;
+      }
+      return request?.requested===true||request?.requested===false;
+    }catch{return false;}}),`${id}: actual post-report independent readback not established`);
+  }
+  return {status:gaps.length?"incomplete":"pass",terminal_assessment_ref:row.terminal_assessment_ref,
+    acceptance:projectedAcceptance,acceptance_denominator:acIds,final_report:a.final_report??null,review_conclusion:review?.conclusion??null,review_result_ref:a.review??null,
+    coverage_limits:[...new Set(coverage)],gaps,evidence_refs:refs};
+}
+
+async function writeTerminalAssessmentReference(context, reference) {
+  return withLock(context.task.taskPath,"workflowhub-build-code-row",async()=>{
+    if(!reference||Object.keys(reference).sort().join("\0")!=="ref\0sha256"||typeof reference.ref!=="string"||!reference.ref.startsWith("quality/evidence/")||reference.ref.includes("\\")||reference.ref.split("/").some(p=>!p||p==="."||p==="..")||!/^[a-f0-9]{64}$/.test(reference.sha256??""))throw new TypeError("terminal_assessment_ref must contain a safe evidence ref and sha256");
+    const raw=context.task.readRecordBytes(reference.ref);
+    if(sha256(raw)!==reference.sha256)throw new Error("terminal_assessment_ref sha256 mismatch");
+    const original=JSON.parse(raw.toString("utf8"));
+    if(original.task_id!==context.identity.taskId||original.stage!=="build-code")throw new Error("terminal assessment differs from current task/stage identity");
+    const old=readTaskFacts(context.task.taskPath).find(r=>r.record_kind==="stage"&&r.stage==="build-code");
+    const fields=old?Object.fromEntries([...STAGE_ROW_KEYS,"phase_progress"].filter(k=>Object.hasOwn(old,k)).map(k=>[k,old[k]])):{stage:"build-code",source:"terminal-assessment-reference"};
+    const saved=await writeStageRow(context.task.taskPath,{...fields,terminal_assessment_ref:reference});
+    return {status:"recorded",task_id:context.identity.taskId,stage:"build-code",terminal_assessment_ref:reference,ref:saved.ref,authoritative:false};
+  });
+}
+
 function thinQuality(context, row) {
-  if (!row || row.source === PHASE_PROGRESS_ONLY_SOURCE || row.review_origin === "not_run") return "unknown";
+  if (!row || row.review_origin === "not_run") return "unknown";
   if (row.review_origin === "unavailable") return "unavailable";
   const ref = typeof row.review_result_ref === "string" ? row.review_result_ref : row.review_result_ref?.value;
   if (typeof ref !== "string" || !ref.startsWith("quality/reviews/") || isAbsolute(ref) || ref.split(/[\\/]/).some(part => part === ".." || part === "")) return "unknown";
@@ -1204,7 +1522,7 @@ async function recordTaskReview(context, input, values, services = {}) {
     const original=input.request;
     if(original.stage!==undefined && original.stage!==values.stage) throw new TypeError("review request stage differs from CLI stage");
     const request={...original,stage:values.stage,activation_cohort:context.manifest.activation_cohort ?? "pre"};
-    const isPhase=values.stage==="build-code" && (request.review_kind ?? request.reviewKind ?? null)===null;
+    const isPhase=values.stage==="build-code" && (request.review_kind ?? request.reviewKind ?? null)===null && (request.review_scope ?? request.reviewScope ?? "phase") === "phase";
     if(isPhase) {
       request.review_scope=request.review_scope ?? request.reviewScope ?? "phase";
       request.phase_id=request.phase_id ?? request.phaseId ?? values["phase-id"] ?? null;
@@ -1212,7 +1530,7 @@ async function recordTaskReview(context, input, values, services = {}) {
     }
     const reviewReadScope=trustedReviewReadScope(context,request,typeof services.resolveReviewReadScope==='function' ? services.resolveReviewReadScope({task:context.task,workspace:context.workspace,stage:request.stage,phaseId:request.phase_id??null}) : undefined);
     request.materials = resolveMaterialRefs(context, request.materials,reviewReadScope);
-    const codeSurface=["build-code","verify-code"].includes(request.stage)
+    const codeSurface=request.stage === STAGE.BUILD_CODE
       && (request.review_kind ?? request.reviewKind ?? null)===null && request.surface!=="document";
     if(codeSurface)request.surface="code";
     // Reader-only storage-root adaptation: the authenticated workspace is never mutated or published as this root.
@@ -1233,26 +1551,39 @@ async function recordTaskReview(context, input, values, services = {}) {
       const onProviderHealth=services.onOcrProviderHealth ?? writeOcrProviderHealthDiagnostic;
       if(typeof onProviderHealth!=="function")throw new TypeError("OCR health observer must be a function");
       const ocrRunner=services.runOcrDelegationRound;
-      let bundle;
+      let bundle,sourceMetadata=null;
+      const retainSource=result=>sourceMetadata?{...result,...sourceMetadata,ocr:{...result.ocr,...sourceMetadata.ocr}}:result;
       try {
-        try{bundle=prepareTaskBoundBuildCodeReviewBundle(context,current,{reviewReadScope});}catch(error){return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:error.code??"ROUTE_UNAVAILABLE",message:redactProviderHostPaths(String(error.message)),diagnostic:{field:"materials/route",expected:"current task-bound materials and trusted route",actual:"invalid",next_action:"repair the reported input or route before dispatch"}}};}
+        try{bundle=prepareTaskBoundBuildCodeReviewBundle(context,current,{reviewReadScope});}catch(error){return retainSource({status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:error.code??"ROUTE_UNAVAILABLE",message:redactProviderHostPaths(String(error.message)),diagnostic:{field:"materials/route",expected:"current task-bound materials and trusted route",actual:"invalid",next_action:"repair the reported input or route before dispatch"}}});}
+        const sourceBytes=readPlainInputFile(join(bundle.bundleRoot,"source.json"),"review source",null),sourceEntries=(bundle.manifest??bundle.deliveryManifest).filter(v=>v.path==="source.json");
+        if(sourceEntries.length!==1||sourceEntries[0].bytes!==sourceBytes.length||sourceEntries[0].sha256!==sha256(sourceBytes))throw new Error("review source bytes differ from packet manifest");
+        const digest=sha256(sourceBytes),reviewsDir=join(context.task.taskPath,"quality/reviews");let sourceRef=null;
+        for(const name of existsSync(reviewsDir)?readdirSync(reviewsDir):[]){
+          if(!name.endsWith(".json"))continue;
+          const prior=JSON.parse(context.task.readRecordBytes(`quality/reviews/${name}`).toString("utf8"));
+          if(prior.task_id!==context.identity.taskId||prior.source_ref?.sha256!==digest)continue;
+          const priorBytes=context.task.readRecordBytes(prior.source_ref.ref);
+          if(priorBytes.equals(sourceBytes)){sourceRef=prior.source_ref;break;}
+        }
+        if(!sourceRef){const path=await context.task.appendRecord({dir:"quality/evidence",slug:"review-source",ext:"json",bytes:sourceBytes});sourceRef={ref:relative(context.task.taskPath,path).split("\\").join("/"),sha256:digest};}
+        sourceMetadata={source_ref:sourceRef,material_id:bundle.materialId,ocr:{manifest:bundle.manifest??bundle.deliveryManifest}};
         if (services.onReviewMaterials !== undefined) {
           await observeReviewMaterials(bundle, services.onReviewMaterials, options.signal);
           if (options.signal?.aborted) throw Object.assign(new Error("review cancelled after material observation"), { code: "REVIEW_CANCELLED", dispatch_state: "blocked_before_dispatch" });
         }
         let trustedContext;
         try{trustedContext=prepareConfiguredOcrHostContext(current);}catch(error){
-          return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:error.code??"ROUTE_UNAVAILABLE",message:redactProviderHostPaths(String(error.message)),diagnostic:{field:"route/provider_selection",expected:"one current trusted code route and valid provider configuration",actual:"invalid",next_action:"repair current route/configuration before dispatch"}}};
+          return retainSource({status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:error.code??"ROUTE_UNAVAILABLE",message:redactProviderHostPaths(String(error.message)),diagnostic:{field:"route/provider_selection",expected:"one current trusted code route and valid provider configuration",actual:"invalid",next_action:"repair current route/configuration before dispatch"}}});
         }
         let subset;
         try{subset=await validateReviewSupplement(current,{providers:trustedContext.selection.providers,materialId:bundle.materialId,taskId:context.task.identity.taskId,readRecord:readSupplementRecord});}
-        catch(error){return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:error.code,message:error.message,diagnostic:error.diagnostic}};}
+        catch(error){return retainSource({status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:error.code,message:error.message,diagnostic:error.diagnostic}});}
         if(current.only_providers!==undefined){
           const selected=new Set(subset),original=trustedContext.selection,filterMap=map=>map?Object.fromEntries(Object.entries(map).filter(([key])=>selected.has(key))):map;
           // Only selection is narrowed. Preserve the full trusted configuration SHA and route identity drift checks.
           trustedContext={...trustedContext,selection:{...original,providers:subset,eligibleProfiles:original.eligibleProfiles.filter(p=>selected.has(p)),requestedProfiles:original.requestedProfiles.filter(p=>selected.has(p)),requestedProfileSpecs:original.requestedProfileSpecs.filter(p=>selected.has(typeof p==="string"?p:p.provider??p.id)),provider_identities:filterMap(original.provider_identities),provider_models:filterMap(original.provider_models)}};
         }
-        if(typeof ocrRunner==="function")return {...await ocrRunner(current,{...options,onProviderHealth,bundle,trustedContext}),executor:"ocr"};
+        if(typeof ocrRunner==="function")return retainSource({...await ocrRunner(current,{...options,onProviderHealth,bundle,trustedContext}),executor:"ocr"});
         const result=await runOcrDelegationRound(current,{buildBundle:()=>bundle,signal:options.signal,
           onProviderResult: async ({ result: providerResult }) => {
             // The host has already persisted each original stream before settling.
@@ -1262,16 +1593,29 @@ async function recordTaskReview(context, input, values, services = {}) {
           executor:params=>runConfiguredOcrHostReview(params,{trustedContext,sourceBundle:bundle,onProviderHealth,
             onProviderResult:params.onProviderResult,
             rawOutputSink:async (hint,bytes,metadata={})=>options.onProviderOutput({provider:metadata.provider ?? "ocr",role:null,channel:metadata.stream ?? "raw-output",output:bytes})})});
-        return {...result,executor:"ocr"};
-      } finally {bundle?.dispose();}
+        return retainSource({...result,executor:"ocr"});
+      } catch(error){if(sourceMetadata)Object.assign(error,sourceMetadata);throw error;} finally {bundle?.dispose();}
     };
-    return recordSimpleReviewRequest({taskDir:context.task.taskPath,request,runRound:runner,signal:services.reviewSignal ?? null});
+    const saved=await recordSimpleReviewRequest({taskDir:context.task.taskPath,request,runRound:runner,signal:services.reviewSignal ?? null});
+    if(typeof saved.result_ref!=="string"||!/^quality\/reviews\/[^/\\]+\.json$/.test(saved.result_ref))throw new Error("saved review artifact reference is invalid");
+    const bytes=context.task.readRecordBytes(saved.result_ref),artifact=JSON.parse(bytes.toString("utf8")),digest=sha256(bytes);
+    const expected={stage:values.stage,review_track:request.review_track??request.reviewTrack??null,review_kind:request.review_kind??request.reviewKind??null,review_scope:request.review_scope??request.reviewScope??null,phase_id:request.phase_id??request.phaseId??null,subject_kind:request.subject_kind??((request.review_scope??request.reviewScope)==="terminal"?"worktree":(request.review_scope??request.reviewScope)==="phase"?"phase":"document")};
+    if(artifact.task_id!==context.identity.taskId||artifact.authoritative!==false||Object.entries(expected).some(([key,value])=>artifact[key]!==value)||!Array.isArray(artifact.provider_results)||!Array.isArray(artifact.findings))throw new Error("saved review artifact differs from authenticated task subject");
+    await withLock(context.task.taskPath,`workflowhub-${values.stage}-row`,async()=>{
+      if(sha256(context.task.readRecordBytes(saved.result_ref))!==digest)throw new Error("saved review artifact changed before publication");
+      const old=readTaskFacts(context.task.taskPath).find(row=>row.record_kind==="stage"&&row.stage===values.stage);
+      const fields=old?Object.fromEntries([...STAGE_ROW_KEYS,"phase_progress"].filter(key=>Object.hasOwn(old,key)).map(key=>[key,old[key]])):{stage:values.stage,source:"review-record"};
+      await writeStageRow(context.task.taskPath,{...fields,review_origin:"conducted",review_result_ref:saved.result_ref});
+      const row=readTaskFacts(context.task.taskPath).find(row=>row.record_kind==="stage"&&row.stage===values.stage);
+      if(row?.review_result_ref!==saved.result_ref)throw new Error("saved review publication readback differs");
+    });
+    return saved;
 }
 
 
 export async function stageRuntimeMain(argv = process.argv.slice(2), { services = {}, cwd = process.cwd() } = {}) {
   const { command, values } = parseArgs(argv);
-  if (!["make-decision", "build-plan", "build-code", "verify-code", "build-prd"].includes(values.stage)) throw new TypeError("a current five-stage --stage is required");
+  if (!WORKFLOW_STAGES.includes(values.stage)) throw new TypeError("a current workflow --stage is required");
   const common = ["stage", "project", "task", "task-path"];
   const options = {
     doctor: common, status: [...common, "reason"], artifact: [...common, "name", "input"],
@@ -1299,10 +1643,11 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     const row = rows.find((value) => value.record_kind === "stage" && value.stage === values.stage) ?? null;
     const currentCursor = rows.find((value) => value.record_kind === "stage" && value.stage === "build-code")?.phase_progress ?? null;
     const phasesHead = cohort === "post" ? currentPhaseMaterialsHead(context) : null;
-    const qualityStatus = thinQuality(context, row);
+    const assessment = values.stage === "build-code" ? terminalAssessmentQuality(context, row) : null;
+    const qualityStatus = assessment?.status ?? thinQuality(context, row);
     return { task_id: context.task.identity.taskId, stage: values.stage, work_status: missing.length ? "not_ready" : "ready",
       readiness_source: "current-material-presence", missing_materials: missing, quality_status: qualityStatus,
-      quality: { status: qualityStatus, review_origin: row?.review_origin ?? "not_run", review_result_ref: row?.review_result_ref ?? null },
+      quality: { status: qualityStatus, review_origin: row?.review_origin ?? "not_run", review_result_ref: row?.review_result_ref ?? null, ...(assessment ? {terminal_assessment:assessment,terminal_assessment_ref:row.terminal_assessment_ref} : {}) },
       materials: Object.fromEntries(Object.entries(materials).map(([file, value]) => [file, value !== null])),
       ...(values.stage === "build-code" ? { phase_progress: derivePhaseProgressStatus({ cursor: currentCursor, currentPhasesHead: phasesHead }) } : {}),
       facts: rows, workspace: context.physical, target_workspace: context.targetStatus,
@@ -1368,7 +1713,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     const isClosePlanRef = ref => typeof ref === "string"
       && dirname(resolve(context.workspace.worktreeRoot, ref)) === closeDir
       && /^\d{4}-\d{2}-\d{2}-\d{3}-close-plan\.json(?:#.*)?$/.test(basename(ref));
-    if (["verify-code", "make-decision"].includes(values.stage) && Array.isArray(refs) && refs.some(isClosePlanRef)) {
+    if ([STAGE.BUILD_CODE, STAGE.BUILD_PRD, STAGE.MAKE_DECISION].includes(values.stage) && Array.isArray(refs) && refs.some(isClosePlanRef)) {
       if (refs.length !== 1) throw new TypeError("close confirmation requires exactly one plan reference");
       if (refs[0].includes("#") || !isAbsolute(refs[0]) || resolve(refs[0]) !== refs[0]) throw new TypeError("close confirmation requires a canonical plain plan path without fragments");
       if (Object.keys(fields).some(key => !["stage", "decision", "reply", "materialRefs"].includes(key))) throw new TypeError("close confirmation contains unsupported fields");
@@ -1390,6 +1735,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       const result = await runPortableWorkflow({ task: context.task, worktreeRoot: context.workspace.worktreeRoot, input });
       return { ...result, exit_code: result.state === "failed" ? 1 : 0 };
     }
+    if(input && values.stage === "build-code" && Object.keys(input).join("\0") === "terminal_assessment_ref") return writeTerminalAssessmentReference(context,input.terminal_assessment_ref);
     if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).join("\0") !== "phase_progress" || values.stage !== "build-code") {
       throw new TypeError("run --action=execute only records the existing build-code phase_progress cursor; official stage execution is retired");
     }
@@ -1439,7 +1785,7 @@ export async function stageRuntimeCliMain(argv = process.argv.slice(2), {
   if (behavior === "--help" || behavior === "help") {
     return {
       behaviors: ["doctor", "status", "run", "review", "verify", "confirm", "authorize"],
-      run_execute: "build-code: phase_progress cursor only; build-prd: supplied step outcomes require an explicit planning task type for writes; no input returns not-started/ref=null without writing; records do not certify business or quality success; no official stage execution",
+      run_execute: "build-code: mutually exclusive phase_progress cursor or terminal_assessment_ref ordinary original reference only; build-prd: supplied step outcomes require an explicit planning task type for writes; no input returns not-started/ref=null without writing; records do not certify business or quality success; no official stage execution",
       actions: {
         doctor: ["workspace"],
         status: ["begin", "repair"],

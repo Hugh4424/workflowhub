@@ -1,3 +1,4 @@
+import { FORMAL_DEVELOPMENT_STAGES } from "../../runtime/stage/stage-registry.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -6,7 +7,7 @@ import {
   resolveStageSkillPackages,
 } from "../../runtime/stage/stage-skill-runtime.mjs";
 
-const STAGES = ["make-decision", "build-plan", "build-code", "verify-code"];
+const STAGES = FORMAL_DEVELOPMENT_STAGES;
 
 function isInside(root, candidate) {
   return candidate === root || candidate.startsWith(`${root}${path.sep}`);

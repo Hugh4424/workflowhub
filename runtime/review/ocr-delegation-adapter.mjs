@@ -1,3 +1,4 @@
+import { requiredReviewMode, TERMINAL_REVIEW_SCOPE } from "./review-policy.mjs";
 import { StringDecoder } from "node:string_decoder";
 import agNativeAdapter from "../../skills/third-review/lib/adapters/antigravity.mjs";
 import { createHealthRunner } from "../../skills/third-review/lib/health-runner.mjs";
@@ -42,8 +43,8 @@ export function isCandidateOcrReviewRequest(request) {
   const scope = request?.review_scope ?? request?.reviewScope ?? null;
   const reviewKind = request?.review_kind ?? request?.reviewKind ?? null;
   return request?.candidate_experiment === true
-    && ((request?.stage === "build-code" && reviewKind === null && (scope === "phase" || scope === "integration"))
-      || (request?.stage === "verify-code" && scope === null));
+    && request?.stage === "build-code" && reviewKind === null
+    && (["phase", TERMINAL_REVIEW_SCOPE].includes(scope) || scope === "integration");
 }
 
 function safeText(value, limit = 240) {
@@ -610,10 +611,9 @@ function loadTrustedOcrConfig({ requestedStage = null } = {}) {
   return { config, attachmentRoot, whReview, requestedStage };
 }
 
-function resolveTrustedOcrRoute(whReview, stage, reviewTrack, reviewKind, reviewScope) {
-  if (!whReview || reviewTrack !== null || (reviewKind !== null
-      || (stage === "build-code" && reviewScope !== "phase" && reviewScope !== "integration")
-      || (stage !== "build-code" && (stage !== "verify-code" || reviewScope !== null)))) return null;
+export function resolveTrustedOcrRoute(whReview, stage, reviewTrack, reviewKind, reviewScope) {
+  if (!whReview || stage !== "build-code" || reviewTrack !== null || reviewKind !== null
+      || !["phase", TERMINAL_REVIEW_SCOPE, "integration"].includes(reviewScope)) return null;
   const configured = whReview.stages[stage];
   if (!configured) return null;
   const label = `workflowhub host wh_review.stages.${stage}`;
@@ -624,8 +624,10 @@ function resolveTrustedOcrRoute(whReview, stage, reviewTrack, reviewKind, review
       || Object.keys(configured).some((key) => !["initial", "closure", "mode"].includes(key))) {
     throw new Error(`${label} is invalid`);
   }
-  const requiredMode = stage === "build-code" ? "full_only" : "single_round";
-  if ((configured.mode ?? "adaptive") !== requiredMode || configured.closure !== undefined) {
+  const requiredMode = stage === "build-code" && reviewScope === "integration"
+    ? "full_only" // Preserve the existing isolated candidate route; no active integration identity is added.
+    : requiredReviewMode({stage, review_scope: reviewScope});
+  if (!["full_only", "single_round"].includes(configured.mode) || configured.closure !== undefined) {
     throw new Error(`${label}.mode must be ${requiredMode}`);
   }
   if (!Array.isArray(configured.initial) || configured.initial.length === 0
@@ -2078,8 +2080,9 @@ export async function runConfiguredOcrHostReview({ request, packet, signal = nul
   if (rawOutputSink !== null && typeof rawOutputSink !== "function") {
     throw new TypeError("OCR rawOutputSink must be a function");
   }
-  if (rawOutputSink && !["build-code", "verify-code"].includes(request.stage)) {
-    throw new TypeError("OCR raw output stage must be build-code or verify-code");
+  // This entry can receive a prepared context directly, bypassing route resolution.
+  if (request.stage !== "build-code") {
+    throw new TypeError("OCR review stage must be build-code");
   }
   if (!Number.isSafeInteger(healthPollMs) || healthPollMs < 1) {
     throw new TypeError("OCR healthPollMs must be a positive safe integer");

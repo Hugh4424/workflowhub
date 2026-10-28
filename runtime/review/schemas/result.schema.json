@@ -26,7 +26,6 @@
         "make-decision",
         "build-plan",
         "build-code",
-        "verify-code",
         "build-prd"
       ]
     },
@@ -47,7 +46,8 @@
       "enum": [
         "phase",
         "integration",
-        null
+        null,
+        "terminal"
       ]
     },
     "subject_kind": {
@@ -1269,42 +1269,29 @@
         }
       }
     },
+
     {
       "if": {
         "properties": {
-          "stage": {
-            "const": "verify-code"
-          },
-          "version": {
-            "const": "wh-review-result.v1"
+          "review_scope": {
+            "const": "terminal"
           }
         },
         "required": [
-          "stage",
-          "version"
-        ],
-        "anyOf": [
-          {
-            "required": [
-              "conclusion"
-            ]
-          },
-          {
-            "required": [
-              "coverage"
-            ]
-          }
+          "review_scope"
         ]
       },
       "then": {
         "required": [
           "conclusion",
-          "coverage"
+          "coverage",
+          "subject_kind",
+          "phase_id",
+          "stage"
         ],
         "properties": {
           "conclusion": {
             "enum": [
-              "pass",
               "pass_with_findings",
               "needs_revision",
               "reject",
@@ -1336,7 +1323,16 @@
             },
             "additionalProperties": false
           },
-          "verdict": false
+          "verdict": false,
+          "subject_kind": {
+            "const": "worktree"
+          },
+          "phase_id": {
+            "type": "null"
+          },
+          "stage": {
+            "const": "build-code"
+          }
         },
         "allOf": [
           {
@@ -1359,6 +1355,41 @@
                       "pass",
                       "pass_with_findings"
                     ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "findings": {
+                  "type": "array",
+                  "contains": {
+                    "type": "object",
+                    "properties": {
+                      "severity": {
+                        "enum": [
+                          "major",
+                          "blocking"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "severity"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "findings"
+              ]
+            },
+            "then": {
+              "properties": {
+                "conclusion": {
+                  "not": {
+                    "const": "pass_with_findings"
                   }
                 }
               }

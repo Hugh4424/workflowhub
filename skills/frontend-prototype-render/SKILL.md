@@ -5,7 +5,7 @@ description: Render one task-scoped UI prototype from real component inputs and 
 
 # Frontend Prototype Render
 
-build-plan UI 分支与 build-prd 条件设计分支调用：用真实组件和 fixture 生成可展示原型，再取得用户对展示稿的真实答复。产品页面实现、验收仍由 build-code/verify-code 承担；no stage、no gate、无第二设计权威。
+build-plan UI 分支与 build-prd 条件设计分支调用：用真实组件和 fixture 生成可展示原型，再取得用户对展示稿的真实答复。产品页面实现、各Phase独立验收及最后Phase终末独立核对均由 build-code 承担；no stage、no gate、无第二设计权威。
 
 ## 方法
 

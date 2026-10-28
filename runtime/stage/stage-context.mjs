@@ -1,10 +1,11 @@
+import { WORKFLOW_STAGE_SET } from "./stage-registry.mjs";
 import { ArtifactDir } from "../evidence/artifact-dir.mjs";
 import { resolveCanonicalTaskPath } from "../task/load-config.mjs";
 import { openTask } from "../task/task-handle.mjs";
 import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../task/workspace.mjs";
 import { inspectWorkspace } from "../interface/workspace-check.mjs";
 
-const STAGES = new Set(["make-decision", "build-plan", "build-code", "verify-code", "build-prd"]);
+const STAGES = WORKFLOW_STAGE_SET;
 export { assertWorkspace } from "../task/workspace.mjs";
 
 async function bindWorkspace(context, workspace) {
@@ -15,7 +16,7 @@ async function bindWorkspace(context, workspace) {
 
 /** Ordinary task identity and current physical workspace; no execution/outcome object graph. */
 export async function bootstrapStage(stage, options = {}) {
-  if (!STAGES.has(stage)) throw new TypeError(`unsupported stage: ${stage}`);
+  if (typeof stage !== "string" || !stage.trim() || !STAGES.has(stage) && options.readOnly !== true) throw new TypeError(`unsupported stage: ${stage}`);
   const allowed = new Set(["projectName", "taskId", "taskPath", "env", "home", "readOnly"]);
   if (Object.keys(options).some(key => !allowed.has(key))) throw new TypeError("unsupported stage context option");
   const { projectName, taskId, taskPath, env, home, readOnly = false } = options;

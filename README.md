@@ -21,10 +21,9 @@ npm install
 | make-decision | 用户目标与方向收敛，写 decision-log.md |
 | build-spec | pre/history 的设计方法只读留存 |
 | build-plan | post 全局 spec 设计与独立 Phase 计划 |
-| build-code | 当前 Phase 实施、受影响测试和独立审查 |
-| verify-code | 当前交付终末独立核对和逐 AC 判断 |
+| build-code | 当前 Phase 实施、受影响测试和独立审查；最后 Phase 做终末独立核对和逐 AC 判断 |
 
-post 日常路线 make-decision → build-plan → build-code → verify-code。两道人为门是方向与计划选择；三审查点为 build-plan 合并、build-code 每 Phase、verify-code 终末。文档审查 wh-review，代码审查 OCR，OCR 不可用（命令不存在（ENOENT）或版本低于1.12.9）如实记 unavailable/unknown，不换执行者，保留检测输出与原始失败；版本检测其它错误不推断未安装。architect-code-review 是同源补充轴，独立执行，与 OCR 可用性无关；已装 OCR 失败、超时、取消、无效输出、零成功路或空 findings 均保留原始事实。独立数量不足、provider 失败或质量缺失如实披露，不丢有效发现、不冒通过。
+post 日常路线 make-decision → build-plan → build-code。两道人为门是方向与计划选择；三审查点为 build-plan 合并、build-code 每 Phase、build-code 终末。文档审查 wh-review，代码审查 OCR，OCR 不可用（命令不存在（ENOENT）或版本低于1.12.9）如实记 unavailable/unknown，不换执行者，保留检测输出与原始失败；版本检测其它错误不推断未安装。architect-code-review 是同源补充轴，独立执行，与 OCR 可用性无关；已装 OCR 失败、超时、取消、无效输出、零成功路或空 findings 均保留原始事实。独立数量不足、provider 失败或质量缺失如实披露，不丢有效发现、不冒通过。
 
 ## 七类公共工具
 

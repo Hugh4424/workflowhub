@@ -127,7 +127,9 @@ test('WINDOW Codex cumulative same-thread delta ignores usage, turn usage and fa
  assert.equal(r.status,'available');const a=r.sessions[0];assert.equal(a.sessionId,'fixture-codex-1');assert.equal(a.parentSessionId,'fixture-codex-3');
  for(const [key,value]of Object.entries({inputTokens:186557,outputTokens:259,cacheReadTokens:173568,cacheWriteTokens:0,reasoningTokens:88}))available(r.totals.usage[key],value);
  available(r.totals.wallMs,54845);available(r.totals.activeUnionMs,7328);available(r.totals.waitingMs,47517);available(r.totals.counts.codexResponseItems,7);available(r.totals.counts.turns,2);
- for(const key of ['toolCalls','subagentCalls','commandCalls'])missing(r.totals.counts[key],'unsupported_in_this_task');
+ for(const key of ['toolCalls','commandCalls'])missing(r.totals.counts[key],'unsupported_in_this_task');
+ unavailable(r.totals.counts.subagentCalls);
+ assert.equal(r.sessions[0].counts.subagentCalls.reason,'incomplete_count_source');
  const point=a.cumulativePoints.find(x=>x.metric==='inputTokens');assert.ok(point);assert.equal(point.threadId,'fixture-codex-1');assert.equal(point.series,'token_usage_record.thread_token_usage');assert.equal(point.from.value,84812);assert.equal(point.until.value,271369);assert.equal(point.from.at,'2026-10-02T23:03:07.086Z');assert.equal(point.until.at,'2026-10-02T23:04:01.929Z');assert.ok(point.from.eventRef);assert.ok(point.until.eventRef);
 });
 test('WINDOW Codex fallback selected only when preferred cumulative series entirely absent',async()=>{
@@ -289,6 +291,13 @@ for(const[name,mutate]of mutations)freshChildTest('fresh child fail closed: '+na
 freshChildTest('fresh child before window without real baseline cannot use birth zero',()=>{const s=sources();s[1].records.splice(2,1);s[1].records.forEach((r,i)=>r.ordinal=i);unavailable(f(s,{window:{from:t(4),until:t(6),includeFrom:false}}));});
 freshChildTest('cyclic parent ancestry never proves fresh history',()=>{const s=sources();s[0].records[0].payload.parent_thread_id='child';s[0].records[0].payload.source={subagent:{thread_spawn:{parent_thread_id:'child',agent_path:'/root/parent'}}};unavailable(f(s,opts));});
 
+freshChildTest('observed 0.164 exact version retains original birth proof',()=>{const s=sources();for(const x of s)x.records[0].payload.cli_version='0.164.0-alpha.11.1';assert.deepEqual(child(f(s,opts)).usage.inputTokens,{status:'available',value:11});});
+for(const [name,mutate] of mutations)freshChildTest('observed 0.164 keeps negative proof: '+name,()=>{const s=sources();for(const x of s)x.records[0].payload.cli_version='0.164.0-alpha.11.1';mutate(s);unavailable(f(s,opts));});
+
+freshChildTest('P4 proof context excludes parent from measured totals',()=>{const [parent,own]=sources();const r=f([own],{...opts,proofSources:[parent]});assert.equal(r.sessions.length,1);assert.equal(r.sessions[0].sessionId,'child');assert.deepEqual(r.totals.usage.inputTokens,{status:'available',value:11});assert.deepEqual(r.totals.usage.outputTokens,{status:'available',value:11});assert.deepEqual(r.totals.wallMs,{status:'available',value:4000});assert.deepEqual(r.totals.counts.codexResponseItems,{status:'available',value:0});assert.deepEqual(r.totals.counts.subagentCalls,{status:'available',value:0});assert.ok(r.issues.some(i=>i.code==='birth_proof_source'&&i.sourcePath===parent.sourcePath&&i.expected));});
+for(const [name,mutate] of mutations)freshChildTest('P4 proof context keeps negative proof: '+name,()=>{const s=sources();mutate(s);const own=s.find(x=>x.records[0]?.payload?.id==='child');if(!own)return;const r=f([own],{...opts,proofSources:s.filter(x=>x!==own)});assert.equal(r.sessions.length,1);assert.equal(r.sessions[0].usage.inputTokens.status,'unavailable');});
+freshChildTest('P4 explicit measured parent and child remain aggregated',()=>{const s=sources();const r=f(s,{...opts,proofSources:[]});assert.equal(r.sessions.length,2);assert.deepEqual(r.totals.usage.inputTokens,{status:'available',value:23});});
+
 freshChildTest('trusted parent may not issue spawn before its own header birth',()=>{const s=sources();s[0].records[0].timestamp=t(5);unavailable(f(s,opts));});
 
 }
@@ -415,6 +424,52 @@ test('FRESH-CHILD-COPY CLI keeps headerless failed copy and blocks inferred chil
   available(r.sessions[0].usage.inputTokens,22);available(r.sessions[1].usage.inputTokens,11);available(r.totals.usage.inputTokens,33);
   assert.equal(r.status,'available');assert.equal(JSON.stringify(s),before);
  });
+
+// P4 Standards135 / exact TCR007 independently approved030.
+const desktopCount=(s,w=opts)=>f(s,w).sessions.find(x=>x.sessionId==='root').counts.subagentCalls;
+test('P4 DESKTOP COUNTS existing complete single spawn is one own invocation',()=>{
+ const s=sources(),before=JSON.stringify(s),r=f(s,opts);
+ available(r.sessions[0].counts.subagentCalls,1);available(r.sessions[1].counts.subagentCalls,0);available(r.totals.counts.subagentCalls,1);
+ available(r.totals.usage.inputTokens,33);assert.equal(JSON.stringify(s),before);
+});
+test('P4 DESKTOP COUNTS repeated source copies and same completion identity count once',()=>{
+ const s=sources();available(f([...s,...structuredClone(s)],opts).totals.counts.subagentCalls,1);
+ const duplicate=structuredClone(s[0].records[6]);s[0].records.splice(7,0,duplicate);s[0].records.forEach((r,i)=>r.ordinal=i);
+ available(desktopCount(s),1);
+});
+test('P4 DESKTOP COUNTS one exec wrapper can contain two actual invocation identities',()=>{
+ const s=sources(),root=s[0];
+ root.records[5].payload.input='const briefs = [{message: '+JSON.stringify('owned task')+', reasoning_effort: "high"}, {message: '+JSON.stringify('second task')+', reasoning_effort: "high"}];\nconst spawned = await Promise.all(briefs.map(b => tools.multi_agent_v1__spawn_agent({message: b.message, reasoning_effort: b.reasoning_effort, fork_context: false})));\nfor (const item of spawned) text(item);';
+ const second=structuredClone(root.records[6]);second.payload.item={...second.payload.item,id:'exec-2',receiver_thread_ids:['child2'],receiver_agents:[{thread_id:'child2',agent_nickname:'Second'}],prompt:'second task'};
+ root.records.splice(7,0,second);root.records.find(r=>r.payload?.type==='custom_tool_call_output').payload.output.push({type:'input_text',text:'{"agent_id":"child2","nickname":"Second"}'});root.records.forEach((r,i)=>r.ordinal=i);
+ available(desktopCount(s),2);
+});
+test('P4 DESKTOP COUNTS trusted failed attempt counts but missing failed identity does not become zero',()=>{
+ const failureShape=()=>{const s=sources();s[0].records[6].payload.item.status='failed';s[0].records[6].payload.item.receiver_thread_ids=[];s[0].records[6].payload.item.receiver_agents=[];s[0].records[7].payload.output=[{type:'input_text',text:'Script completed\nWall time 0.1 seconds\nOutput:\n'},{type:'input_text',text:'{"error":"constructed spawn rejection"}'}];return [s[0]];};
+ const failed=failureShape();available(desktopCount(failed),1);
+ const unknown=failureShape();delete unknown[0].records[6].payload.item.id;unavailable(desktopCount(unknown));
+});
+for(const [name,mutate]of [
+ ['missing exec call identity',s=>{delete s[0].records[5].payload.call_id;}],
+ ['missing completion',s=>{s[0].records.splice(6,1);s[0].records.forEach((r,i)=>r.ordinal=i);}],
+ ['missing output',s=>{s[0].records.splice(7,1);s[0].records.forEach((r,i)=>r.ordinal=i);}],
+ ['wrong sender',s=>{s[0].records[6].payload.item.sender_thread_id='other';}],
+ ['wrong turn',s=>{s[0].records[6].payload.turn_id='other-turn';}],
+ ['unknown exec expression',s=>{s[0].records[5].payload.input='await tools.multi_agent_v1__spawn_agent(dynamicInput);';}],
+ ['conflicting completion identity',s=>{const c=structuredClone(s[0].records[6]);c.payload.item.prompt='other task';s[0].records.splice(7,0,c);s[0].records.forEach((r,i)=>r.ordinal=i);}],
+ ['conflicting exec identity',s=>{const c=structuredClone(s[0].records[5]);c.payload.input='changed input';s[0].records.splice(6,0,c);s[0].records.forEach((r,i)=>r.ordinal=i);}]
+])test('P4 DESKTOP COUNTS insufficient or conflicting proof: '+name,()=>{const s=sources();mutate(s);unavailable(desktopCount(s));});
+test('P4 DESKTOP COUNTS original initiation boundary excludes completed earlier-window attempts',()=>{
+ available(desktopCount(sources(),{window:{from:at(6),until:at(13),includeFrom:false}}),0);
+ available(desktopCount(sources(),{window:{from:at(5),until:at(13),includeFrom:false}}),1);
+ unavailable(desktopCount(sources(),{window:{from:at(-1),until:at(6),includeFrom:false}}));
+});
+test('P4 DESKTOP COUNTS native and desktop forms combine without double-counting the same stable invocation',()=>{
+ const distinct=sources();distinct[0].records.splice(6,0,row(6,6,'response_item',{type:'function_call',namespace:'collaboration',name:'followup_task',call_id:'native-distinct',arguments:'{}'}));distinct[0].records.forEach((r,i)=>r.ordinal=i);available(desktopCount(distinct),2);
+ const same=sources();same[0].records.splice(6,0,row(6,6,'response_item',{type:'function_call',namespace:'collaboration',name:'spawn_agent',call_id:'exec-1',arguments:'{}'}));same[0].records.forEach((r,i)=>r.ordinal=i);available(desktopCount(same),1);
+ const conflict=sources();conflict[0].records.splice(6,0,row(6,6,'response_item',{type:'function_call',namespace:'collaboration',name:'followup_task',call_id:'exec-1',arguments:'{}'}));conflict[0].records.forEach((r,i)=>r.ordinal=i);unavailable(desktopCount(conflict));
+ const wrongNamespace=sources();wrongNamespace[0].records.splice(6,0,row(6,6,'response_item',{type:'function_call',namespace:'other',name:'spawn_agent',call_id:'native-other',arguments:'{}'}));wrongNamespace[0].records.forEach((r,i)=>r.ordinal=i);available(desktopCount(wrongNamespace),1);
+});
  const negatives=[
   ['root 2ms',s=>{s[0].records[1].timestamp=at(2);},'root'],
   ['root negative gap',s=>{s[0].records[1].timestamp=at(-1);},'root'],
@@ -447,3 +502,59 @@ test('FRESH-CHILD-COPY CLI keeps headerless failed copy and blocks inferred chil
  for(const[label,mutate,id]of negatives)test('COST202 rejects '+label,()=>{const s=sources();mutate(s);const r=f(s,opts);unavailable(r.sessions.find(x=>x.sessionId===id).usage.inputTokens);});
  test('COST202 an output after cutoff cannot prove fresh child birth',()=>{const r=f(sources(),{window:{from:at(-1),until:at(8),includeFrom:false}});unavailable(r.sessions[1].usage.inputTokens);});
 }
+
+// P4 reviewed TCR022: constructed counting cases, not benchmark evidence.
+{
+const f=await measure(),at=n=>new Date(Date.UTC(2026,9,26,0,0,n)).toISOString();
+const row=(ordinal,n,type,payload)=>({ordinal,timestamp:at(n),type,payload});
+const u=n=>({input_tokens:n,output_tokens:n,cached_input_tokens:0,cache_write_input_tokens:0,reasoning_output_tokens:0});
+const call=(id,name='spawn_agent',namespace='collaboration',args='{}')=>({type:'function_call',namespace,name,call_id:id,arguments:args});
+function complete(calls=[]){return {sourcePath:'/constructed/p4-counts.jsonl',records:[row(0,0,'session_meta',{id:'p4-counts'}),row(1,1,'token_usage_record',{thread_id:'p4-counts',thread_token_usage:u(10)}),...calls.map((p,i)=>row(i+2,2,'response_item',p)),row(calls.length+2,3,'token_usage_record',{thread_id:'p4-counts',thread_token_usage:u(20)})]};}
+const opts=window(at(1),at(3));
+test('P4 COUNTS complete zero differs from incomplete source',()=>{
+ const s=complete();available(f([s],opts).totals.counts.subagentCalls,0);
+ s.records[1].ordinal=8;unavailable(f([s],opts).totals.counts.subagentCalls);
+ const broken=complete();broken.readIssue={code:'source_read_failed',sourcePath:broken.sourcePath,message:'constructed missing tail',expected:false};unavailable(f([broken],opts).totals.counts.subagentCalls);
+});
+test('P4 COUNTS spawn and followup deduplicate stable calls and exclude messaging',()=>{
+ const s=complete([call('a'),call('b','followup_task'),call('c','send_message'),call('d','spawn_agent','other'),call('a')]);
+ const r=f([s],opts);available(r.totals.counts.subagentCalls,2);available(r.totals.counts.turns,0);available(r.totals.counts.codexResponseItems,5);missing(r.totals.counts.dshSteps,'not_applicable');
+ available(f([s,structuredClone(s)],opts).totals.counts.subagentCalls,2);
+});
+test('P4 COUNTS missing and conflicting stable IDs stay unavailable',()=>{
+ unavailable(f([complete([call(undefined)])],opts).totals.counts.subagentCalls);
+ unavailable(f([complete([call('a'),call('a','followup_task')])],opts).totals.counts.subagentCalls);
+});
+test('P4 COUNTS outside-window prior call does not count twice',()=>{
+ const s=complete([call('a')]);s.records[2].timestamp=at(1);available(f([s],opts).totals.counts.subagentCalls,0);
+});
+}
+
+// P4 exact CLI proof-context assertions, not applied; built-in constructed fixtures only.
+for(const variant of ['valid','missing parent','wrong parent id','parent gap','wrong spawn','failed parent copy','conflicting parent copy','cycle','damaged unrelated sibling','explicit parent and child'])test('P4 PROOF CLI '+variant,t=>{
+ const root=scratch(t),leaf=join(root,'sessions','2026','10','18');mkdirSync(leaf,{recursive:true});
+ const parent='01a14c6d-0000-7000-8000-000000000001',child='01a14c6e-0000-7000-8000-000000000002',sibling='01a14c6f-0000-7000-8000-000000000003';
+ const at=n=>'2026-10-18T00:00:0'+n+'.000Z',u=n=>({input_tokens:n,output_tokens:n,cached_input_tokens:n,cache_write_input_tokens:0,reasoning_output_tokens:n});
+ const row=(ordinal,n,type,payload)=>({ordinal,timestamp:at(n),type,payload});
+ const pr=[row(0,0,'session_meta',{id:parent,history_mode:'paginated',cli_version:'0.164.0-alpha.11.1',source:'vscode'}),row(1,1,'token_usage_record',{thread_id:parent,thread_token_usage:u(10)}),row(2,2,'response_item',{type:'function_call',namespace:'collaboration',name:'spawn_agent',call_id:'proof-spawn',arguments:'{"fork_turns":"none"}'}),row(3,2,'event_msg',{type:'item_completed',item:{type:'SubAgentActivity',kind:'started',id:'proof-spawn',agent_thread_id:child,agent_path:'/root/proof'}}),row(4,6,'token_usage_record',{thread_id:parent,thread_token_usage:u(22)})];
+ const cr=[row(0,3,'session_meta',{id:child,parent_thread_id:parent,history_mode:'paginated',cli_version:'0.164.0-alpha.11.1',source:{subagent:{thread_spawn:{parent_thread_id:parent,agent_path:'/root/proof'}}}}),row(1,3,'event_msg',{type:'task_started',turn_id:'child-turn'}),row(2,4,'token_usage_record',{thread_id:child,thread_token_usage:u(7)}),row(3,5,'token_usage_record',{thread_id:child,thread_token_usage:u(11)})];
+ if(variant==='wrong parent id')pr[0].payload.id='other';
+ if(variant==='parent gap')pr[2].ordinal=8;
+ if(variant==='wrong spawn')pr[2].payload.arguments='{"fork_turns":"all"}';
+ if(variant==='cycle'){pr[0].payload.parent_thread_id=child;pr[0].payload.source={subagent:{thread_spawn:{parent_thread_id:child,agent_path:'/root/cycle'}}};}
+ if(variant==='damaged unrelated sibling'){pr.splice(4,0,row(4,3,'event_msg',{type:'item_completed',item:{type:'SubAgentActivity',kind:'started',id:'sibling-spawn',agent_thread_id:sibling,agent_path:'/root/sibling'}}));pr.at(-1).ordinal=5;writeFileSync(join(leaf,'rollout-broken-'+sibling+'.jsonl'),'{not-json}\n');}
+ const parentPath=join(leaf,'rollout-parent-'+parent+'.jsonl');if(variant!=='missing parent')put(leaf,'rollout-parent-'+parent+'.jsonl',pr);
+ if(variant==='failed parent copy')writeFileSync(join(leaf,'rollout-bad-copy-'+parent+'.jsonl'),'{not-json}\n');
+ if(variant==='conflicting parent copy'){const copy=structuredClone(pr);copy[2].payload.arguments='{"fork_turns":"all"}';put(leaf,'rollout-conflicting-'+parent+'.jsonl',copy);}
+ const childPath=put(leaf,'rollout-child-'+child+'.jsonl',cr);
+ const args=['--session='+childPath,'--from='+at(2),'--until='+at(6)];if(variant==='explicit parent and child')args.push('--session='+parentPath);
+ const r=run(args,{env:{CODEX_HOME:root}});assert.notEqual(r.status,2,r.stderr);assert.equal(r.signal,null);
+ const detail=r.stdout.split('\n').find(line=>line.startsWith('会话明细：'));assert.ok(detail,r.stdout+r.stderr);const sessions=JSON.parse(detail.slice('会话明细：'.length));
+ const good=['valid','damaged unrelated sibling','explicit parent and child'].includes(variant);
+ assert.equal(sessions.length,variant==='explicit parent and child'?2:1);assert.ok(sessions.some(s=>s.sessionId===child));
+ if(good){
+  assert.equal(r.status,0,r.stdout+r.stderr);
+  assert.match(r.stdout,/^wallMs \(ms\): 4000$/m);assert.match(r.stdout,new RegExp('^inputTokens \\(token\\): '+(variant==='explicit parent and child'?23:11)+'$','m'));assert.match(r.stdout,new RegExp('^outputTokens \\(token\\): '+(variant==='explicit parent and child'?23:11)+'$','m'));assert.match(r.stdout,/^codexResponseItems \(次\): 0$/m);assert.match(r.stdout,/^subagentCalls \(次\): 0$/m);
+  if(variant!=='explicit parent and child'){assert.deepEqual(sessions.map(s=>s.sessionId),[child]);assert.ok(r.stdout.includes(parentPath));assert.match(r.stdout,/birth_proof_source/);}
+ }else{assert.equal(r.status,1,r.stdout+r.stderr);assert.equal(sessions[0].usage.inputTokens.status,'unavailable');assert.match(r.stdout,/^inputTokens \(token\): unavailable:/m);}
+});

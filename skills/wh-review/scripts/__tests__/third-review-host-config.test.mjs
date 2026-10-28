@@ -558,3 +558,46 @@ describe("trusted third-review host configuration", () => {
   });
 
 });
+
+// P9: one validated global route supplies two identity-derived effective modes.
+it("derives the terminal effective mode without changing the configured phase route",()=>{
+ const policy={stages:{"build-code":{initial:["codex/owned"],mode:"full_only"}}};
+ const original=structuredClone(policy);
+ expect(resolveTrustedReviewRoute(policy,"build-code",null,null,"terminal")).toEqual({initial:["codex/owned"],mode:"single_round"});
+ expect(resolveTrustedReviewRoute(policy,"build-code",null,null,"phase")).toEqual({initial:["codex/owned"],mode:"full_only"});
+ expect(policy).toEqual(original);
+ for(const mode of ["adaptive","full_on_structural_rework","single_round"])expect(()=>resolveTrustedReviewRoute({stages:{"build-code":{initial:["codex/owned"],mode}}},"build-code",null,null,"terminal")).toThrow(/full_only/);
+ expect(()=>resolveTrustedReviewRoute(policy,"build-code",null,null,"unknown")).toThrow();
+});
+
+it("reads a current route beside an unparsed retired host entry without rewriting its bytes",()=>{
+ const {hostConfig}=configuredRoot(),host=JSON.parse(readFileSync(hostConfig,'utf8'));
+ host.wh_review={version:2,stages:{'build-code':{initial:['codex'],mode:'full_only'},'verify-code':{initial:['unknown-retired-provider'],mode:'not-an-active-mode',retired_unknown_shape:true}}};
+ writeFileSync(hostConfig,JSON.stringify(host));const before=readFileSync(hostConfig);
+ const loaded=loadTrustedThirdReviewConfig({hostConfigPath:hostConfig,requestedStage:'build-code'});
+ expect(resolveTrustedReviewRoute(loaded.whReview,'build-code',null,null,'terminal')).toMatchObject({initial:['codex'],mode:'single_round'});
+ expect(resolveTrustedReviewRoute(loaded.whReview,'build-code',null,null,'phase')).toMatchObject({mode:'full_only'});
+ expect(loaded.whReview.stages).not.toHaveProperty('verify-code');
+ expect(readFileSync(hostConfig)).toEqual(before);
+});
+
+it("refuses a requested retired identity and unknown host keys while preserving passive old bytes",()=>{
+ const {hostConfig}=configuredRoot(),host=JSON.parse(readFileSync(hostConfig,'utf8'));
+ host.wh_review={version:2,stages:{'build-code':{initial:['codex'],mode:'full_only'},'verify-code':{initial:['unknown-retired-provider'],mode:'not-an-active-mode'}}};
+ writeFileSync(hostConfig,JSON.stringify(host));const original=readFileSync(hostConfig);
+ expect(()=>loadTrustedThirdReviewConfig({hostConfigPath:hostConfig,requestedStage:'verify-code'})).toThrow(/unsupported|retired|unknown review stage/);
+ expect(()=>resolveTrustedReviewRoute({stages:{}},'verify-code')).toThrow(/unknown review stage/);
+ host.wh_review.stages['unknown-stage']={initial:['codex'],mode:'single_round'};writeFileSync(hostConfig,JSON.stringify(host));const unknown=readFileSync(hostConfig);
+ expect(()=>loadTrustedThirdReviewConfig({hostConfigPath:hostConfig,requestedStage:'build-code'})).toThrow(/unknown-stage.*unsupported/);
+ expect(readFileSync(hostConfig)).toEqual(unknown);
+ writeFileSync(hostConfig,original);
+});
+
+it("does not substitute a retired provider route when the requested current route is absent",()=>{
+ const {hostConfig}=configuredRoot(),host=JSON.parse(readFileSync(hostConfig,'utf8'));
+ host.wh_review={version:2,stages:{'verify-code':{initial:['unknown-retired-provider'],mode:'not-an-active-mode'}}};
+ writeFileSync(hostConfig,JSON.stringify(host));const before=readFileSync(hostConfig);
+ const loaded=loadTrustedThirdReviewConfig({hostConfigPath:hostConfig,requestedStage:'build-code'});
+ expect(resolveTrustedReviewRoute(loaded.whReview,'build-code',null,null,'terminal')).toBe(null);
+ expect(readFileSync(hostConfig)).toEqual(before);
+});

@@ -1,3 +1,4 @@
+import { STAGE } from "../stage/stage-registry.mjs";
 const RINGS = Object.freeze(["\u539F\u59CB\u9700\u6C42", "decision-log", "\u8C03\u7814\u65B9\u6848", "\u65B9\u6848", "spec", "phase", "\u4EE3\u7801\u5B9E\u73B0", "\u6D4B\u8BD5\u9A8C\u8BC1", "\u6700\u7EC8\u5BA1\u67E5", "\u63D0\u4EA4 PR"].map((name, i) => Object.freeze({ ring: i + 1, name })));
 const RING_STATES = Object.freeze(["completed", "skipped", "not_applicable", "incomplete", "unavailable"]);
 const LEVELS = Object.freeze(["small", "normal", "complex", "planning"]);
@@ -207,7 +208,7 @@ function evaluateRing(bundle = {}, ring, level) {
       && ["read", "unread", "undetermined"].every((key) => Array.isArray(coverage[key]) && coverage[key].every(text)));
     const providerOK = providers.some((p) => p?.status === "completed" && p.parse_outcome === "ok" && text(p.raw_ref) && p.readable === true && coverageOK(p));
     const identityOK = text(bundle.task_id) && item.task_id === bundle.task_id && item.independent === true && item.current_scope === true && ["code", "implementation", "delivery"].includes(item.surface);
-    const scopeOK = level.value === "normal" ? item.stage === "build-code" && item.review_scope === "phase" && item.subject_kind === "phase" && item.review_kind === null && item.phase_id === null : item.final === true && item.phase_reviews_verified === true && ["task", "delivery", "stage"].includes(item.review_scope);
+    const scopeOK = level.value === "normal" ? item.stage === STAGE.BUILD_CODE && item.review_scope === "phase" && item.subject_kind === "phase" && item.review_kind === null && item.phase_id === null : item.final === true && item.phase_reviews_verified === true && (["task", "delivery", "stage"].includes(item.review_scope) || item.stage === STAGE.BUILD_CODE && item.review_scope === "terminal" && item.subject_kind === "worktree" && item.phase_id === null && item.review_kind === null);
     if (!identityOK || !scopeOK || !providerOK) {
       state = "unavailable";
       notes.push("\u73AF 9 \u4E0D\u53EF\u673A\u5224\uFF1A\u5B8C\u6574\u8EAB\u4EFD\u3001\u5F53\u524D\u8303\u56F4\u3001\u539F\u59CB\u610F\u89C1\u6216\u8986\u76D6\u4E8B\u5B9E\u672A\u53D6\u5F97");
@@ -249,7 +250,7 @@ function evaluateWorkflowSteps({ steps, evidence = [], level, stageScope } = {})
     if (step.source === rootSource) return level.value === "complex";
     const flow = step.source.match(/^workflows\/make-decision\/flows\/([^/]+)\/steps\.json$/);
     if (flow) return flow[1] === level.value && !(level.value === "complex" && hasRoot);
-    if (step.stage === "build-prd" && level.value === "planning") return stageScope?.actual?.some((stage) => (stage?.stage ?? stage) === "build-prd") === true;
+    if (step.stage === STAGE.BUILD_PRD && level.value === "planning") return stageScope?.actual?.some((stage) => (stage?.stage ?? stage) === "build-prd") === true;
     return !step.route || step.route === level.value;
   });
   const seen = /* @__PURE__ */ new Set();

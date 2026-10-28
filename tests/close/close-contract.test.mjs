@@ -20,7 +20,7 @@ function fixture({existing=false,remoteTask=true}={}){
   const source=`specs/${id}`;mkdirSync(join(worktree,source),{recursive:true});writeFileSync(join(worktree,source,"decision-log.md"),"# Decision\n");writeFileSync(join(worktree,source,"spec.md"),"# Spec\n");
   git(worktree,["add",source]);git(worktree,["commit","-qm","materials"]);if(remoteTask)git(worktree,["push","-q","origin",branch]);
   writeFileSync(join(taskDir,"task.json"),JSON.stringify({schema_version:"1.0.0",project_name:"workflowhub",task_id:id,created_at:"2026-10-02T00:00:00Z",target_repo_root:repo,record_model:"vnext-single-write",activation_cohort:"post",...(existing?{workspace_mode:"existing",workspace_root:worktree}:{})})+"\n");
-  writeFileSync(join(taskDir,"facts.jsonl"),JSON.stringify({record_kind:"stage",task_id:id,stage:"verify-code",source:"owned-close-fixture",created_at:"2026-10-20T00:00:00Z"})+"\n");
+  writeFileSync(join(taskDir,"facts.jsonl"),JSON.stringify({record_kind:"stage",task_id:id,stage:"build-code",source:"owned-close-fixture",created_at:"2026-10-20T00:00:00Z"})+"\n");
   return {base,repo,bare,worktree,id,taskDir,branch,source,delivery:{remote:"origin",target_branch:"main",task_branch:branch,spec_source_path:source,spec_archive_path:`specs/archive/${id}`}};
 }
 async function prepare(s,mode){return prepareDeliveryClosePlan({taskDir:s.taskDir,delivery:s.delivery,...(mode?{closeMode:mode}:{})});}
@@ -222,9 +222,9 @@ it("P10 native public six actions bind real TASK and MAIN grants to cwd HEAD and
   const materials=join(wt,"specs",taskId);mkdirSync(materials,{recursive:true});writeFileSync(join(materials,"decision-log.md"),"# Decision\n\n## 任务身份\n- **任务类型**：普通任务\n");writeFileSync(join(materials,"spec.md"),"# Owned native authorization boundary\n");
   const evidence=join(taskDir,"quality","evidence");mkdirSync(evidence,{recursive:true});
   const scopeRef=join(evidence,"native-actions.md");writeFileSync(scopeRef,"Owned native TASK commit/push/pr and MAIN merge/archive/push/cleanup scope. No live GH or mother-task action.\n");
-  const common=["--stage=verify-code","--project=workflowhub",`--task=${taskId}`];
+  const common=["--stage=build-code","--project=workflowhub",`--task=${taskId}`];
   const confirmation=await stageRuntimeCliMain(["confirm","--action=decision",...common,"--decision=confirmed","--reply-text=Owned fixture native scope only, not live delivery.",`--material-ref=${scopeRef}`],{cwd:wt});
-  owned(confirmation.path);expect(JSON.parse(readFileSync(confirmation.path,"utf8"))).toMatchObject({stage:"verify-code",decision:"confirmed",material_refs:[scopeRef],head:localGit(wt,["rev-parse","HEAD"])});
+  owned(confirmation.path);expect(JSON.parse(readFileSync(confirmation.path,"utf8"))).toMatchObject({stage:"build-code",decision:"confirmed",material_refs:[scopeRef],head:localGit(wt,["rev-parse","HEAD"])});
   // First target is owner-defined five -> six; only pr is added, not native push-task.
   const help=await stageRuntimeCliMain(["--help"]);
   expect(help.actions.authorize).toEqual(["commit","push","merge","archive","cleanup","pr"]);
@@ -272,7 +272,7 @@ it("P10 native retry rejects MAIN cwd reuse of TASK consumption at the same HEAD
   const boot=await bootstrapTask({project:"workflowhub",task:taskId,"target-repo":repo},{env:process.env,home}),taskDir=boot.task_path,wt=boot.workspace.worktree_root;owned(taskDir);owned(wt);
   const head=localGit(wt,["rev-parse","HEAD"]);expect(localGit(repo,["rev-parse","HEAD"])).toBe(head);expect(localGit(wt,["branch","--show-current"])).toBe(branch);expect(localGit(repo,["branch","--show-current"])).toBe("main");
   const evidence=join(taskDir,"quality","evidence");mkdirSync(evidence,{recursive:true});const scopeRef=join(evidence,"native-retry-scope.md");writeFileSync(scopeRef,"Owned TASK native push authorization only; no actual push or live task closure.\n");
-  const common=["--stage=verify-code","--project=workflowhub",`--task=${taskId}`];
+  const common=["--stage=build-code","--project=workflowhub",`--task=${taskId}`];
   const confirmation=await stageRuntimeCliMain(["confirm","--action=decision",...common,"--decision=confirmed","--reply-text=Owned fixture TASK native retry scope only.",`--material-ref=${scopeRef}`],{cwd:wt});owned(confirmation.path);
   const grant=await stageRuntimeCliMain(["authorize","--action=push",...common,`--subject-ref=${confirmation.path}`],{cwd:wt});owned(grant.path);
   const authDir=join(evidence,"git-authorizations"),stepId=`${scopeRef}:push-task`,grantBytes=readFileSync(grant.path);
@@ -320,7 +320,7 @@ it("P10 native task-owned retry rejects foreign repository at the same branch an
   const taskCommon=realpathSync(resolve(wt,localGit(wt,["rev-parse","--git-common-dir"]))),foreignCommon=realpathSync(resolve(foreign,localGit(foreign,["rev-parse","--git-common-dir"])));
   expect(taskCommon).not.toBe(foreignCommon);expect(localGit(wt,["branch","--show-current"])).toBe(branch);
   const evidence=join(taskDir,"quality","evidence");mkdirSync(evidence,{recursive:true});const scopeRef=join(evidence,"native-task-scope.md");writeFileSync(scopeRef,"Owned authenticated task repository native push scope only. No actual push or GH.\n");
-  const common=["--stage=verify-code","--project=workflowhub",`--task=${taskId}`];const confirmation=await stageRuntimeCliMain(["confirm","--action=decision",...common,"--decision=confirmed","--reply-text=Owned fixture task repository scope only.",`--material-ref=${scopeRef}`],{cwd:wt});owned(confirmation.path);
+  const common=["--stage=build-code","--project=workflowhub",`--task=${taskId}`];const confirmation=await stageRuntimeCliMain(["confirm","--action=decision",...common,"--decision=confirmed","--reply-text=Owned fixture task repository scope only.",`--material-ref=${scopeRef}`],{cwd:wt});owned(confirmation.path);
   const grant=await stageRuntimeCliMain(["authorize","--action=push",...common,`--subject-ref=${confirmation.path}`],{cwd:wt});owned(grant.path);
   const authDir=join(taskDir,"quality","evidence","git-authorizations"),grantBytes=readFileSync(grant.path),stepId=`${scopeRef}:push-task`;expect(dirname(grant.path)).toBe(authDir);expect(JSON.parse(grantBytes)).toMatchObject({operation:"push",branch,head,confirmation_ref:confirmation.path});
   const consume=cwd=>{owned(cwd);return spawnSync(process.execPath,[authCli,"consume","--operation","push","--dir",authDir,"--step-id",stepId],{cwd,env:process.env,encoding:"utf8",stdio:["ignore","pipe","pipe"]});};
@@ -354,7 +354,7 @@ it("P10 native exact authorization reference consumes A without spending later c
   const boot=await bootstrapTask({project:"workflowhub",task:taskId,"target-repo":repo},{env:process.env,home}),taskDir=boot.task_path,wt=boot.workspace.worktree_root;owned(taskDir);owned(wt);
   const head=localGit(wt,["rev-parse","HEAD"]);expect(localGit(wt,["branch","--show-current"])).toBe(branch);
   const evidence=join(taskDir,"quality","evidence");mkdirSync(evidence,{recursive:true});const scopeRef=join(evidence,"native-exact-scope.md");writeFileSync(scopeRef,"Owned TASK native A selection only; B separate consent must remain unused. No Git push.\n");
-  const common=["--stage=verify-code","--project=workflowhub",`--task=${taskId}`],authDir=join(evidence,"git-authorizations");
+  const common=["--stage=build-code","--project=workflowhub",`--task=${taskId}`],authDir=join(evidence,"git-authorizations");
   const makeGrant=async(label)=>{const confirmation=await stageRuntimeCliMain(["confirm","--action=decision",...common,"--decision=confirmed",`--reply-text=Owned fixture ${label} consent only.`,`--material-ref=${scopeRef}`],{cwd:wt});owned(confirmation.path);const grant=await stageRuntimeCliMain(["authorize","--action=push",...common,`--subject-ref=${confirmation.path}`],{cwd:wt});owned(grant.path);return{confirmation,grant,bytes:readFileSync(grant.path)};};
   const a=await makeGrant("A"),b=await makeGrant("B");expect(a.confirmation.path).not.toBe(b.confirmation.path);expect(a.grant.path).not.toBe(b.grant.path);
   expect(JSON.parse(a.bytes)).toMatchObject({operation:"push",branch,head,confirmation_ref:a.confirmation.path});expect(JSON.parse(b.bytes)).toMatchObject({operation:"push",branch,head,confirmation_ref:b.confirmation.path});
@@ -390,7 +390,7 @@ it("P10 native exact authorization rejects a hard-linked original task grant", a
   localGit(repo,["init","-q","-b","main"]);localGit(repo,["config","user.name","Owned hardlink grants"]);localGit(repo,["config","user.email","fixture@local.invalid"]);localGit(repo,["config","commit.gpgsign","false"]);const hooks=join(root,"hooks");mkdirSync(hooks);localGit(repo,["config","core.hooksPath",hooks]);writeFileSync(join(repo,"README.md"),"owned hardlink baseline\n");localGit(repo,["add","README.md"]);localGit(repo,["commit","-qm","base"]);
   const boot=await bootstrapTask({project:"workflowhub",task:taskId,"target-repo":repo},{env:process.env,home}),taskDir=boot.task_path,wt=boot.workspace.worktree_root;owned(taskDir);owned(wt);
   const head=localGit(wt,["rev-parse","HEAD"]),evidence=join(taskDir,"quality","evidence");mkdirSync(evidence,{recursive:true});const scopeRef=join(evidence,"native-hardlink-scope.md");writeFileSync(scopeRef,"Owned singly linked original TASK grant only; no Git push.\n");
-  const common=["--stage=verify-code","--project=workflowhub",`--task=${taskId}`],confirmation=await stageRuntimeCliMain(["confirm","--action=decision",...common,"--decision=confirmed","--reply-text=Owned fixture single-link grant scope only.",`--material-ref=${scopeRef}`],{cwd:wt});owned(confirmation.path);
+  const common=["--stage=build-code","--project=workflowhub",`--task=${taskId}`],confirmation=await stageRuntimeCliMain(["confirm","--action=decision",...common,"--decision=confirmed","--reply-text=Owned fixture single-link grant scope only.",`--material-ref=${scopeRef}`],{cwd:wt});owned(confirmation.path);
   const grant=await stageRuntimeCliMain(["authorize","--action=push",...common,`--subject-ref=${confirmation.path}`],{cwd:wt});owned(grant.path);const grantBytes=readFileSync(grant.path),original=lstatSync(grant.path);expect(original.isFile()).toBe(true);expect(original.isSymbolicLink()).toBe(false);expect(original.nlink).toBe(1);
   const alias=join(root,"owned-grant-hardlink.json");expect(dirname(resolve(alias))).toBe(root);linkSync(grant.path,alias);owned(alias);
   const linked=lstatSync(grant.path),aliasStat=lstatSync(alias);expect(linked.nlink).toBe(2);expect(aliasStat.nlink).toBe(2);expect({dev:aliasStat.dev,ino:aliasStat.ino}).toEqual({dev:original.dev,ino:original.ino});expect(readFileSync(alias)).toEqual(grantBytes);

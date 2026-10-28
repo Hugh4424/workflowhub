@@ -9,7 +9,7 @@ description: 单点小改动在定方向内完成方案、一次确认、实施�
 
 先只读根 SKILL「入口路由」及 decision-log.md「级别与路线」，选中本路线后执行以下步骤；不重跑复杂15步。流程步骤、实施/审查、收口、验收各在到达时重新读取同一节，缺失按复杂并记具体缺口与owner，不把推荐当用户授权。七项事实与风险来源沿入口函数，级别不写入新字段。
 
-本路线所有方案、确认、实施、测试、适用审查与收口都在 make-decision 内完成，只写 make-decision 一行阶段事实；不写 build-code/verify-code 阶段行。spec、独立 Phase 与纯指针 phases/index.md 是材料，不是阶段执行。复用 spec-specify/spec-plan 原方法，按 AGENTS post 材料覆盖条款写入；不得新增运行时 Phase 数量 gate。
+本路线所有方案、确认、实施、测试、适用审查与收口都在 make-decision 内完成，只写 make-decision 一行阶段事实；不写 build-code 阶段行。spec、独立 Phase 与纯指针 phases/index.md 是材料，不是阶段执行。复用 spec-specify/spec-plan 原方法，按 AGENTS post 材料覆盖条款写入；不得新增运行时 Phase 数量 gate。
 
 不写死问题数或轮数，收敛以真实未决清零为准；零未决写来源与理由，跳过是不调用，不用空跑或复制技能充数。每项未知保实际缺口与下一owner。
 
@@ -85,7 +85,7 @@ description: 单点小改动在定方向内完成方案、一次确认、实施�
 
 ### 9. `closeout` — 物理交付
 
-**产物**：实施和目标测试完成且无未决失败/越界后，调用 stage-closeout，读当前spec组PR正文，按授权执行提交、PR、合并；最终归档/清理前展示实际范围并取得原方法要求的一次真实确认。
+**产物**：实施和目标测试完成且无未决失败/越界后，调用 stage-close，读当前spec组PR正文，按授权执行提交、PR、合并；最终归档/清理前展示实际范围并取得原方法要求的一次真实确认。
 
 **进入下一步条件**：物理交付前再读级别与路线、spec和测试原件，确认stage随实际make-decision；反思交接已可独立读回，操作/失败/清理逐项保真，未授权或失败项保持未执行。
 
@@ -127,7 +127,7 @@ description: 单点小改动在定方向内完成方案、一次确认、实施�
 | `stage-handoff` | 必需 | stage-reflection 内部发布并独立读回同一份交接，不重复发布。 |
 | `resolving-merge-conflicts` | 按需 | 已授权物理交付遇真实merge/rebase冲突时读；无冲突不调用。 |
 
-材料作者另须在写方案步骤读 skills/spec-plan/SKILL.md 原 Phase+纯指针索引方法；它不替换31分母。 answer-as-page 与 stage-closeout 也不替换原31分母：前者按下节出页条件消费；后者在最后一步物理交付消费 skills/stage-closeout/SKILL.md，授权与最终close确认沿原owner。
+材料作者另须在写方案步骤读 skills/spec-plan/SKILL.md 原 Phase+纯指针索引方法；它不替换31分母。 answer-as-page 与 stage-close 也不替换原31分母：前者按下节出页条件消费；后者在最后一步物理交付消费 skills/stage-close/SKILL.md，授权与最终close确认沿原owner。
 
 ## 驾驶舱
 

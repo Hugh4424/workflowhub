@@ -94,8 +94,8 @@ test('ORACLE-P7-ACCEPT a spec without an acceptance-object section fails loudly 
   expect(result.stderr).toMatch(/验收对象/u);
 });
 
-test('ORACLE-P7-ACCEPT verify-code names the actual command and input', () => {
-  const method = readFileSync(join(root, 'workflows/verify-code/SKILL.md'), 'utf8');
+test('ORACLE-P7-ACCEPT build-code terminal names the actual command and input', () => {
+  const method = readFileSync(join(root, 'workflows/build-code/SKILL.md'), 'utf8');
   expect(method).toContain('tools/cli/check-acceptance-object.mjs');
   expect(method).toContain('验收对象');
 });

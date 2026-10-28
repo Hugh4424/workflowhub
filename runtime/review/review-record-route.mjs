@@ -4,9 +4,9 @@ import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { withLock } from "../interface/record-lock.mjs";
 import { appendRecord } from "../interface/safe-write.mjs";
 import { createTaskDiskWriteExecutor } from "../evidence/disk-budget.mjs";
-import { reviewIdentityFromInput } from "./review-policy.mjs";
+import { reviewIdentityFromInput, TERMINAL_REVIEW_SCOPE } from "./review-policy.mjs";
 import { parseReviewerOutput } from "./review-output.mjs";
-import { deriveVerifyCodeConclusion } from "./canonical-review-result.mjs";
+import { deriveTerminalConclusion } from "./canonical-review-result.mjs";
 import { redactProviderHostPaths } from "./provider-material-projection.mjs";
 import { runSimpleReview } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 
@@ -39,8 +39,9 @@ function subject(request) {
   const phase=request.phase_id ?? request.phaseId ?? null;
   const scope=identity.stage==="build-code" && identity.reviewKind===null ? identity.reviewScope ?? "phase" : identity.reviewScope;
   if(scope==="phase" && identity.reviewKind===null && (phase !== null && !/^P[1-9][0-9]*$/.test(phase) || request.subject_kind!==undefined && request.subject_kind!=="phase")) throw coded("REVIEW_SUBJECT_INVALID","phase review requires a concrete phase_id and subject_kind=phase");
+  if(scope===TERMINAL_REVIEW_SCOPE && (phase!==null || request.subject_kind!==undefined && request.subject_kind!=="worktree")) throw coded("REVIEW_SUBJECT_INVALID","terminal review requires subject_kind=worktree and phase_id=null");
   return {stage:identity.stage,review_track:identity.reviewTrack,review_kind:identity.reviewKind,review_scope:scope,
-    subject_kind:scope==="phase" ? "phase" : request.subject_kind ?? "document",phase_id:phase,surface:request.surface ?? null};
+    subject_kind:scope==="phase" ? "phase" : scope===TERMINAL_REVIEW_SCOPE ? "worktree" : request.subject_kind ?? "document",phase_id:phase,surface:request.surface ?? null};
 }
 function reportedUsage(value) {
   return value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length > 0 ? value : null;
@@ -205,7 +206,7 @@ export async function recordSimpleReviewRequest({taskDir,request,runRound=runSim
       return relative(root,path).split("\\").join("/");
     };
     try { result=await runRound({...request,...tuple,...structuredClone(submittedSubject)},{...(signal ? {signal} : {}),onProviderOutput,taskId:manifest.task_id}); }
-    catch(error) { result={status:"unavailable",outcome:"unavailable",dispatch_state:error.dispatch_state ?? "unknown",provider_results:Array.isArray(error.provider_results)?error.provider_results:[],findings:Array.isArray(error.findings)?error.findings:[],error:{code:error.code ?? "REVIEW_ERROR",message:redactProviderHostPaths(String(error.message ?? error))}}; }
+    catch(error) { result={...(error.source_ref?{source_ref:error.source_ref,material_id:error.material_id,ocr:error.ocr}:{}),status:"unavailable",outcome:"unavailable",dispatch_state:error.dispatch_state ?? "unknown",provider_results:Array.isArray(error.provider_results)?error.provider_results:[],findings:Array.isArray(error.findings)?error.findings:[],error:{code:error.code ?? "REVIEW_ERROR",message:redactProviderHostPaths(String(error.message ?? error))}}; }
     if(!result || typeof result!=="object" || !["available","available-with-failures","unavailable","incomplete"].includes(result.status)) throw coded("REVIEW_RESULT_INVALID","runner returned no observable result status");
     for(const key of ["stage","review_scope","review_track","review_kind","subject_kind","phase_id","surface"]) if(result[key]!==undefined && result[key]!==tuple[key]) throw coded("REVIEW_SUBJECT_MISMATCH",`runner result differs in ${key}`);
     if (Array.isArray(result.findings) && Array.isArray(result.provider_results)) result={...result,findings:result.findings.filter(finding=>!result.provider_results.some(member=>member.provider===finding.provider && member.identity_authenticated===false))};
@@ -252,8 +253,8 @@ export async function recordSimpleReviewRequest({taskDir,request,runRound=runSim
       material_coverage:providers.map(member=>providerCoverage(member,materialKeys)),
       ...((result.discarded_facts?.length || discardedFacts.length) ? {discarded_facts:[...(result.discarded_facts ?? []),...discardedFacts]} : {}),
       ...(signal?.aborted ? {status:providers.some(member=>member.status === "completed" && (member.parse_outcome ?? member.execution?.parse_outcome) === "ok") ? "available-with-failures" : "unavailable",error:{code:"REVIEW_CANCELLED",message:"review cancelled; settled provider facts retained"}} : {}),authoritative:false};
-    if(tuple.stage==="verify-code") {
-      const {conclusion,coverage}=deriveVerifyCodeConclusion({status:record.status,provider_results:providers,findings});
+    if(tuple.review_scope===TERMINAL_REVIEW_SCOPE) {
+      const {conclusion,coverage}=deriveTerminalConclusion({status:record.status,provider_results:providers,findings});
       Object.assign(record,{conclusion,coverage});
     }
     const path=await appendRecord(dir,slug,"json",JSON.stringify(record,null,2)+"\n",{performWrite});

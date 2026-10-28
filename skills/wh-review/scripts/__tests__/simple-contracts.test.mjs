@@ -292,10 +292,14 @@ describe("simple wh-review contracts", () => {
       },
     }, dependencies);
     expect(result).toMatchObject({
-      status: "available",
+      status: "available-with-failures",
       dispatch_state: "dispatched",
       minimum_heterologous: 1,
     });
+    expect(result.provider_results).toEqual(expect.arrayContaining([
+      expect.objectContaining({provider: blockedProvider, status: "failed", error: expect.objectContaining({code: "PROVIDER_HEALTH_FAILED", cause_code: "ACTIVE_PROBE_FAILED"})}),
+      expect.objectContaining({provider: healthyProvider, status: "completed", parse_outcome: "ok"}),
+    ]));
     expect(result.error?.code).not.toBe("REVIEW_THRESHOLD_INVALID");
     expect(calls).toEqual(["run"]);
   });
@@ -435,14 +439,14 @@ describe("simple wh-review contracts", () => {
       expect(reviewerSkills, executionSkill).not.toContain(executionSkill);
 
     expect(plan.stages).not.toHaveProperty("build-spec");
-    for(const stage of ["build-plan","build-code","verify-code"])expect(plan.stages[stage].required_skills.length).toBeGreaterThan(0);
+    for(const stage of ["build-plan","build-code","build-code/terminal"])expect(plan.stages[stage].required_skills.length).toBeGreaterThan(0);
 
   });
 
   it("uses the current OCR contract and only missing-install fallback", () => {
     const plan = readJson(join(root, "wh-review/stage-skill-plan.json"));
-    expect(plan.stages["verify-code"].required_skills).toEqual(["review"]);
-    for (const stage of ["build-code", "verify-code"])
+    expect(plan.stages["build-code/terminal"].required_skills).toEqual(["review"]);
+    for (const stage of ["build-code", "build-code/terminal"])
       for (const skill of plan.stages[stage].required_skills)
         expect(existsSync(join(root, skill, "SKILL.md"))).toBe(true);
 
@@ -457,10 +461,12 @@ describe("simple wh-review contracts", () => {
     };
     const assertWh = (text) => {
       expect(text).toContain("wh-review 执行 make-decision 方向/细节、build-plan 合并及 build-prd 文档审查");
-      expect(text).toContain("代码审查正常由 OCR 执行");
+      expect(text).toContain("低风险独立子代理");
+      expect(text).toContain("高风险或影响说不清外部 OCR");
+      expect(text).toContain("build-code 终末整卡固定外部 OCR 全审");
       expect(text).toContain("每次代码调用读取本文件 Long-review 等待方法，不因此改用 wh-review 执行");
-      for (const stage of ["build-code", "verify-code"])
-        expect(text).toContain(`workflows/${stage}/SKILL.md`);
+      expect(text).toContain("workflows/build-code/SKILL.md");
+      expect(text).toContain("workflows/build-code/SKILL.md#最后-phase终末承接");
       for (const wording of ["不换执行者", "同源补充轴", "独立执行", "与 OCR 可用性无关", "保留检测输出与原始失败"])
         expect(text).toContain(wording);
       const waiting = section(text, "Long-review host convention");
@@ -477,7 +483,7 @@ describe("simple wh-review contracts", () => {
     };
     const wh = readFileSync(join(root, "wh-review/SKILL.md"), "utf8");
     assertWh(wh);
-    for (const stage of ["build-code", "verify-code"]) {
+    for (const stage of ["build-code"]) {
       const workflow = readFileSync(join(projectRoot, "workflows", stage, "SKILL.md"), "utf8");
       const policy = section(workflow, "OCR 能力与缺省记录");
       assertPolicy(policy);
@@ -494,13 +500,13 @@ describe("simple wh-review contracts", () => {
       }
       expect(() => section(workflow.replace("## OCR 能力与缺省记录\n", "## Other\n"), "OCR 能力与缺省记录")).toThrow();
     }
-    for (const stage of ["build-code", "verify-code"])
-      expect(() => assertWh(wh.replace(`workflows/${stage}/SKILL.md`, "missing-pointer"))).toThrow();
+    for (const pointer of ["workflows/build-code/SKILL.md", "workflows/build-code/SKILL.md#最后-phase终末承接"])
+      expect(() => assertWh(wh.replaceAll(pointer, "missing-pointer"))).toThrow();
     expect(() => assertWh(wh.replace("保留检测输出与原始失败", "只保留成功输出"))).toThrow();
     expect(() => assertPolicy(undefined)).toThrow();
   });
 
-  it("validates the real stage matrix and protects blind direction fields",()=>{const matrix=readJson(join(runtimeReviewRoot,"stage-materials.json"));const validate=validator("stage-materials.schema.json");expect(validate(matrix),JSON.stringify(validate.errors)).toBe(true);const direction=matrix.stages["make-decision"].tracks.direction;expect(direction.required).toEqual(expect.arrayContaining(["raw_requirement","objective_facts","convergence_outline"]));expect(direction.forbidden).toEqual(expect.arrayContaining(["proposed_solution","decision_log","spec","plan","changes_diff"]));expect(matrix.stages["build-code"].profiles).not.toHaveProperty("integration");expect(matrix.stages["build-plan"].profiles.post.required).toEqual(expect.arrayContaining(["draft_spec","phase_authorities","phase_index"]));expect(matrix.stages["verify-code"].required).toEqual(expect.arrayContaining(["changed_files","implementation_assessment","test_context","open_risks"]));});
+  it("validates the real stage matrix and protects blind direction fields",()=>{const matrix=readJson(join(runtimeReviewRoot,"stage-materials.json"));const validate=validator("stage-materials.schema.json");expect(validate(matrix),JSON.stringify(validate.errors)).toBe(true);const direction=matrix.stages["make-decision"].tracks.direction;expect(direction.required).toEqual(expect.arrayContaining(["raw_requirement","objective_facts","convergence_outline"]));expect(direction.forbidden).toEqual(expect.arrayContaining(["proposed_solution","decision_log","spec","plan","changes_diff"]));expect(matrix.stages["build-code"].profiles).not.toHaveProperty("integration");expect(matrix.stages["build-plan"].profiles.post.required).toEqual(expect.arrayContaining(["draft_spec","phase_authorities","phase_index"]));expect(matrix.stages["build-code"].profiles.terminal.required).toEqual(expect.arrayContaining(["changed_files","implementation_assessment","test_context","open_risks"]));});
 
   it("removes retired mini-task matrix, plan and contract assets", () => {
     const matrix=readJson(join(runtimeReviewRoot,"stage-materials.json"));
@@ -527,7 +533,15 @@ describe("simple wh-review contracts", () => {
     }), validate.errors).toBe(true);
   });
 
-  it("keeps actual stage contracts packet-only and findings advisory",()=>{for(const stage of ["make-decision","build-plan","build-code","verify-code"]){const contract=readFileSync(join(root,"wh-review/contracts",stage+".md"),"utf8");expect(contract).toContain("findings");expect(contract).toMatch(/bundle|packet|包内/);expect(contract).toMatch(/unavailable|不可用/);expect(contract).toMatch(/不.*(?:完成|通过)|不是.*门/);expect(contract).toContain("宿主");}const plan=readJson(join(root,"wh-review/stage-skill-plan.json"));expect(plan.stages).not.toHaveProperty("build-spec");});
+  it("keeps actual stage contracts packet-only and findings advisory",()=>{
+    const assertPolicy=contract=>{expect(contract).toBeDefined();expect(contract).toContain("findings");expect(contract).toMatch(/bundle|packet|包内/);expect(contract).toMatch(/unavailable|不可用/);expect(contract).toMatch(/不.*(?:完成|通过)|不是.*门/);expect(contract).toContain("宿主");};
+    for(const stage of ["make-decision","build-plan","build-code"])assertPolicy(readFileSync(join(root,"wh-review/contracts",stage+".md"),"utf8"));
+    const method=readFileSync(join(root,"wh-review/contracts/build-code.md"),"utf8");
+    const terminal=method.split("## review_scope=terminal — 终末完整合同\n")[1];
+    assertPolicy(terminal);
+    for(const pattern of [/findings/g,/bundle|packet|包内/g,/unavailable|不可用/g,/不.*(?:完成|通过)|不是.*门/g,/宿主/g]){const mutant=terminal.replace(pattern,"");expect(mutant).not.toBe(terminal);expect(()=>assertPolicy(mutant)).toThrow();}
+    const plan=readJson(join(root,"wh-review/stage-skill-plan.json"));expect(plan.stages).not.toHaveProperty("build-spec");
+  });
 
   it("requires physical blind visibility and one request per role",()=>{const contract=readFileSync(join(root,"wh-review/contracts/make-decision.md"),"utf8");for(const phrase of ["每 role 一次公共 wh-review 请求","不循环取得空 findings","reconstruct","reveal","challenge","重建包不交付已定材料","只有收到有效重建才创建揭示包"])expect(contract).toContain(phrase);});
 

@@ -218,7 +218,8 @@ describe('ORACLE-FLOW-STEPS: preserved complex and explicit route contracts', ()
     has(b[5].body,/方案审/,'plan review at 6'); has(b[5].body,/细节|detail/,'existing detail track'); has(b[6].body,/确认/,'confirmation at 7'); has(b[7].body,/实施/,'implementation at 8'); has(b[8].body,/实现审|代码审/,'review at 9');
     expect(steps('normal').steps.filter(s=>s.step_slug==='implementation-review')).toHaveLength(1);
     for(const re of [/N6/,/两次/,/降级|跳过/,/理由|方案即|确认方案/,/整次实施.{0,12}一次/,/build-code/,/provider/,/spec/,/AC/,/测试.{0,12}(原件|回执|证据)/,/真实\s*diff|真实改动/,/声明写集|声明.{0,6}写集/,/不写.{0,15}build-code.{0,12}阶段行/,/报告.{0,20}差异/,/主动.{0,16}(调用|执行|发起|审)/,/失败/,/暂停.{0,12}物理交付/]) has(doc,re,'normal review and honest stage identity');
-    for(const re of [/task_id/,/stage\s*[:=]\s*[`'"]?build-code/,/review_scope\s*[:=]\s*[`'"]?phase/,/subject_kind\s*[:=]\s*[`'"]?phase/,/review_kind\s*[:=]\s*[`'"]?null/,/phase_id\s*[:=]\s*[`'"]?null/,/review --action=record --stage=build-code/,/verify-code/]) has(doc,re,'P2 whole-implementation full tuple and existing review entry');
+    for(const re of [/task_id/,/stage\s*[:=]\s*[`'"]?build-code/,/review_scope\s*[:=]\s*[`'"]?phase/,/subject_kind\s*[:=]\s*[`'"]?phase/,/review_kind\s*[:=]\s*[`'"]?null/,/phase_id\s*[:=]\s*[`'"]?null/,/review --action=record --stage=build-code/]) has(doc,re,'P2 whole-implementation full tuple and existing review entry');
+    expect(doc).not.toMatch(/\bverify-code\b/);
     has(doc,/不裁|不按.{0,8}Phase|整.{0,8}diff/,'whole implementation must not be cropped to a Phase');
     has(doc,/审查记录.{0,18}build-code/,'review record identity'); has(doc,/任务阶段.{0,15}(定方向|make-decision)/,'task stage remains decision');
   });

@@ -1,13 +1,15 @@
 ---
-name: stage-closeout
+name: stage-close
 description: 阶段已交付或用户要求独立收尾时，统一提交、PR、合并、推送、归档和工作区清理；先委派图更新，逐动作核已有授权，最终删除前确认一次真实范围。
 ---
 
 # Stage Closeout
 
-共享收尾方法供verify-code、build-prd、make-decision及独立宿主直接调用。make-decision 的轻档在实施与适用审查完成后触发物理交付；小改动按其已确认路线无独立审查轴。反思收口在前、物理交付在后。caller保留方向/稿件确认、质量裁决、正式task facts、reflection和stage-handoff；本方法消费当前真实来源并回实际交付结果，不生成第二套close plan、状态账本、public API或Git执行器。
+共享收尾方法供build-code 终末、build-prd、make-decision及独立宿主直接调用。make-decision 的轻档在实施与适用审查完成后触发物理交付；小改动按其已确认路线无独立审查轴。反思收口在前、物理交付在后。caller保留方向/稿件确认、质量裁决、正式task facts、reflection和stage-handoff；本方法消费当前真实来源并回实际交付结果，不生成第二套close plan、状态账本、public API或Git执行器。
 
 ## 1. 核输入与未完成范围
+
+复杂任务的 build-code caller 提供唯一实际 final-report 的 ref/sha256，不猜最新文件。关闭 reader 先逐项读任务/材料/HEAD 身份、各 AC 原档位、未完成项与真实尝试、独立终末原件和失败；缺 ref、错任务或有缺口却声称全部完成时，明确缺口并交原 owner 修正，不宣称通过。报告生成时的 BOUND002 pending 可由后置独立原件指同一报告精确字节闭合，原报告不覆写。status 的有限投影不替代此读取，也不是 Git 或清理授权。
 
 写PR/交付说明前，先读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一正文，再执行本方法的写作动作；消费者是PR 读者与交付验收者。缺源如实 `unavailable`，此处只落实到达条件，不复制规范或改变原授权、失败与收口步骤。
 
@@ -23,7 +25,7 @@ description: 阶段已交付或用户要求独立收尾时，统一提交、PR�
 
 ## 2. 逐动作核授权，复用现有record/consume
 
-build-prd最终稿确认只批准内容，**不授权commit/push/merge/archive/cleanup**；先查是否另有对应动作/范围真实授权。build-code/verify-code已有任务授权持续覆盖范围内必要commit/push/merge，不因阶段/新会话/HEAD变化重复提问。授权未含新增动作、目标或范围时只停该动作并向执行主会话说明所缺决定，其余安全工作继续。审查结果、fixture回复与机器默认值不能冒用户授权。
+build-prd最终稿确认只批准内容，**不授权commit/push/merge/archive/cleanup**；先查是否另有对应动作/范围真实授权。build-code已有任务授权持续覆盖范围内必要commit/push/merge，不因阶段/新会话/HEAD变化重复提问。授权未含新增动作、目标或范围时只停该动作并向执行主会话说明所缺决定，其余安全工作继续。审查结果、fixture回复与机器默认值不能冒用户授权。
 
 每次实际Git动作前，在**将执行该动作的仓库cwd**重新读branch/HEAD，核真实授权原文/ref和本次路径/远端范围，随后经已认证TaskHandle同进程调用已有 `runtime/interface/git-authorize.mjs`，使task evidence预算与真实cwd一起承接；不process.chdir、不父进程check后spawn绕写。形状如下，变量均来自上述真实输入，不拼入待执行shell代码：
 
@@ -54,7 +56,27 @@ openTask从已定位包的runtime/task/task-handle.mjs导入，taskRoot/projectN
 交付说明只在真正执行关闭的阶段生成。据真实task/spec、已验AC与未验项、base到task HEAD提交/diff、facts及测试原ref成稿。
 
 - **Default**：普通 PR 正文读当前 task 的 `spec.md`；未传`delivery.pr`或body时复用close owner的`buildDefaultPrDescription`；来源、helper或环境probe缺失/不可读写明缺口，不编内容或宣称已生成。默认稿同按下列合同读回补缺。
-- **Explicit**：body须有`Door`、`Blast Radius`两个独立非空行；缺项报`PR_DESCRIPTION_INCOMPLETE`，交producer补齐。
+- **Explicit**：正文须按下列三个标题组织，缺段或缺字段报 `PR_DESCRIPTION_INCOMPLETE`，交 producer 补齐；Default 同一合同。
+
+```markdown
+## Summary
+
+<用最小视图说明关键变化：伪代码、调用树、组件树、文件树或 diff 草图>
+
+## Evidence
+
+- Before: <一条具体改前输出、失败或原件 ref>
+- After: <一条具体改后输出、通过或原件 ref>
+
+## Merge Danger
+
+Door: <one-way 或 two-way>
+Blast Radius: <一个词说明影响面>
+
+<可选：合并影响与未核风险>
+```
+
+本地标题规则：`type(scope): summary`；type 取 feat、fix、docs、test、chore、refactor，scope 取真实模块或任务短名，summary 用 GLOSSARY.md 领域语言。`update stuff`、changes、misc 等无具体变化的标题不合格，交 producer 重写。不写前言，正文简短；缺 Before/After 或 Merge Danger、字段跑到该段之外同样报 PR_DESCRIPTION_INCOMPLETE。上述标题与拒绝规则是本地补充，不归因上游。
 - **Environment**：支持时默认PR，仅明确`enabled: false`主动退出；不支持保原因与描述退commit。旧stored plan缺pr沿旧序兼容；生成描述不证明push、PR或读回，动作沿第2节授权。
 
 沿Summary／Evidence／Merge Danger承载：
@@ -135,13 +157,37 @@ worktree确认已移除后，在目标repo按独立cleanup步骤授权，普通`
 
 ## 保全来源与迭代
 
-来源权威：[catalog](../catalog.yaml#skills.stage-closeout)；本便携小卡非权威；单技能副本缺catalog时向来源维护者取登记。
+来源权威：[catalog](../catalog.yaml#skills.stage-close)；本便携小卡非权威；单技能副本缺catalog时向来源维护者取登记。
 交付内容取backnotprop/pstack的`skills/poteto-mode/playbooks/opening-a-pr.md`，2026-10-14固定研究成员SHA256 `931070f5674e81a191277253d4e02b1c45d091b223f93bf506d3896a428a5967`，commit unknown；只取三项含义，不搬强制ready、提交格式、六段模板、自动盯PR及上游reset/forge策略。
 
-本方法抽取verify-code的授权/安全收口与standard-workflow当前默认安全收口，保build-prd稿件确认不授Git权；主线差异预检按本地用户要求补入，冲突处理复用`skills/resolving-merge-conflicts/SKILL.md`已有方法。原文中的same plan/confirmation仅保其“真实PR先回URL、同流续跑”行为，由当前真实输入和窄工具消费承接，不恢复旧plan/confirmation执行对象。caller的审查点、质量、交接、真实最终选择及阶段正式事实保持原owner；两caller接线由各Phase实施。
+本方法抽取原 verify-code（历史）的授权/安全收口与standard-workflow当前默认安全收口，保build-prd稿件确认不授Git权；主线差异预检按本地用户要求补入，冲突处理复用`skills/resolving-merge-conflicts/SKILL.md`已有方法。原文中的same plan/confirmation仅保其“真实PR先回URL、同流续跑”行为，由当前真实输入和窄工具消费承接，不恢复旧plan/confirmation执行对象。caller的审查点、质量、交接、真实最终选择及阶段正式事实保持原owner；两caller接线由各Phase实施。
 
 修改本方法时读取项目`skills/spec-specify/SKILL.md`的「技能写作规范（WR001）」唯一规范，逐项核任务身份、质量限制、授权/HEAD、目标分支独有改动与同步决策、冲突处理、图更新、PR、归档、push、worktree/本地远端分支清理和结果读回的保全。方法接收真实项目输入与已有工具能力，不绑定账号/任务绝对路径，不打包第二Git executor；工具不支持保unavailable，回原owner修，不新增控制面。
 
 ## 同仓方法依赖
 
 `skills/knowledge-graph/SKILL.md`、`skills/spec-specify/SKILL.md`、`skills/resolving-merge-conflicts/SKILL.md`、`skills/norm-sync/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。
+
+本次 PR 正文结构来源：mattpocock/skills 固定 commit `b0618bc436ad893b3c5e84e55fba86586d34a404` 的 `skills/engineering/pr/SKILL.md`，2026-10-27 读取固定 URL 全文；只取三段及两条 Merge Danger 字段与简短领域表达，截图偏好不成为硬要求。来源 metadata 保留 show-me、Dex Horthy、Humanlayer 与 https://github.com/humanlayer/skills/blob/main/plugins/show-me/skills/show-me/SKILL.md。该文件同固定 URL 的 MIT License：Copyright (c) 2026 Matt Pocock；复制或实质采用部分保留版权和许可声明，使用、复制、修改、合并、发布、分发、再许可及出售权限按其 MIT 原文，按原文 AS IS、无担保及责任条件。当前归档是完整 web response；raw Git blob hash 与整包历史归档绑定 unknown，不外推历史包权利。
+
+本次所采用正文的 MIT notice（仅上述固定文件本次采用范围）：
+
+```text
+Copyright (c) 2026 Matt Pocock
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```

@@ -12,7 +12,7 @@ import {
 import { buildReviewMaterials, materialAllowlistForRule, materialForbiddenMessage, reviewInstructionsFor as canonicalReviewInstructionsFor,
   validateMaterialAllowlist } from "./review-materials.mjs";
 import { providerAdapter } from "../../../runtime/review/canonical-review-result.mjs";
-import { reviewIdentityFromInput, reviewRuleFor } from "../../../runtime/review/review-policy.mjs";
+import { reviewIdentityFromInput, reviewRuleFor, TERMINAL_REVIEW_SCOPE } from "../../../runtime/review/review-policy.mjs";
 import { AUTHENTICATED_EVIDENCE_PATH, providerMaterialEntries, providerMaterialPath, redactProviderHostPaths, reviewActivationCohort } from "../../../runtime/review/provider-material-projection.mjs";
 import { reviewPacketMaterialId, deliveredMaterialId, authenticatedEvidenceBytes as canonicalAuthenticatedEvidenceBytes } from "../../../runtime/review/review-packet-identity.mjs";
 import { resolveReviewRouteIdentity } from "../../../runtime/review/review-route-identity.mjs";
@@ -111,7 +111,6 @@ const FOCUS = Object.freeze({
   "build-code/phase": "Check the submitted implementation material for correctness, real consumers, failure paths, tests, and unnecessary code.",
   "build-code/integration": "Focus on the final current worktree implementation, the complete user flow, cross-Phase seams, real interfaces, state transitions, failure recovery, necessity, and actionable major or blocking risks. The host validates AC bindings separately; do not report missing or unknown task rows, receipts, snapshots, lineage, or evidence metadata unless it directly causes or conceals a user-visible behavior failure. Do not replay Phase history, cumulative diffs, or require a provider pass.",
   "build-code": "Check the submitted implementation material for correctness, real consumers, failure paths, tests, and unnecessary code.",
-  "verify-code": "Check the submitted implementation and test code for correctness, real consumer seams, lifecycle/concurrency and security risks, failure boundaries, and test strength. When authenticated-evidence.json is supplied for a reviewed_execution-bound request, use it only to compare code/test claims with recorded execution and identify false-green behavior. Review acceptance artifacts for AC coverage, evidence completeness, and false-green claims alongside the implementation and tests. Do not report release/close status as code findings.",
   build_prd: "Review only the complete PRD materials (decision log, PRD, task map, design facts, quality facts, and declared supporting facts) for coverage, task ownership, handoff, acceptance, and necessity. This is report-only advice for the non-formal build-prd surface; do not treat it as a formal stage, verdict, completion, or release authorization.",
 });
 
@@ -591,7 +590,7 @@ export function simpleReviewProviderMaterialId(input) {
     review_kind: identity.reviewKind,
   };
   providerInput = projectRunnerMaterials(providerInput).input;
-  if (providerInput.stage === "verify-code") {
+  if (identity.reviewScope === TERMINAL_REVIEW_SCOPE) {
     const projection = compactVerifyCodeMaterials(providerInput.materials);
     if (projection.diff !== null) providerInput = { ...providerInput, materials: projection.materials };
   }
@@ -611,7 +610,7 @@ export function createSimpleReviewPacket(input) {
   if (!input.materials || typeof input.materials !== "object" || Array.isArray(input.materials) || Object.keys(input.materials).length === 0) throw new TypeError("materials are required");
   validateDirectPacketMaterials(identity, input.materials);
   providerMaterialEntries(input);
-  const values = identity.stage === "verify-code" ? compactVerifyCodeMaterials(input.materials).materials : input.materials;
+  const values = identity.reviewScope === TERMINAL_REVIEW_SCOPE ? compactVerifyCodeMaterials(input.materials).materials : input.materials;
   const materials = Object.entries(values).map(([key, value]) => {
     const projected = redactProviderHostPaths(value);
     const bytes = materialBytes(projected);
@@ -656,7 +655,7 @@ export async function dispatchFrozenProviderInput({ bytes, attachmentRoot, clien
       materials: restored.materials,
       prompt: restored.prompt,
       reviewMode: restored.review_mode,
-      surface: restored.packet.surface ?? (["build-code", "verify-code"].includes(restored.packet.stage) ? "code" : "document"),
+      surface: restored.packet.surface ?? (restored.packet.stage === "build-code" ? "code" : "document"),
       minimumHeterologous: SIMPLE_REVIEW_QUORUM,
       strictProtocol: true,
     });
@@ -978,7 +977,7 @@ async function runStaticPreflight(input, {
 }
 
 function callerOwnedPreflightInput(input) {
-  if (input.stage !== "verify-code" || input.reviewed_execution === undefined) return input;
+  if (input.stage !== "build-code" || (input.review_scope ?? input.reviewScope) !== TERMINAL_REVIEW_SCOPE || input.reviewed_execution === undefined) return input;
   // The host adds runtime_* materials after authenticating the execution
   // binding. They are frozen provider evidence, not caller-owned review
   // fields; validate the caller contract without dropping them from the
@@ -1300,7 +1299,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
     }), pair, { material_id: null });
   }
   let reviewInput = canonicalInput;
-  if (canonicalInput.stage === "verify-code") {
+  if (identity.reviewScope === TERMINAL_REVIEW_SCOPE) {
     const projection = compactVerifyCodeMaterials(canonicalInput.materials);
     reviewInput = projection.diff === null ? canonicalInput : { ...canonicalInput, materials: projection.materials };
   }
@@ -1462,7 +1461,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
           minimumHeterologous: minimum,
           reviewMode: route.mode,
           reviewFlow: canonicalInput.review_flow ?? canonicalInput.reviewFlow ?? null,
-          surface: canonicalInput.surface ?? (["build-code", "verify-code"].includes(canonicalInput.stage) ? "code" : "document"),
+          surface: canonicalInput.surface ?? (canonicalInput.stage === "build-code" ? "code" : "document"),
           nativePacketFallback: dependencies.nativePacketFallback === true,
           ...(signal === null ? {} : { signal }),
         });
@@ -1530,7 +1529,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
           // reconstruct -> reveal -> challenge flow. Omitting it here would let
           // the unmanaged path silently downgrade the governed flow.
           reviewFlow: canonicalInput.review_flow ?? canonicalInput.reviewFlow ?? null,
-          surface: canonicalInput.surface ?? (["build-code", "verify-code"].includes(canonicalInput.stage) ? "code" : "document"),
+          surface: canonicalInput.surface ?? (canonicalInput.stage === "build-code" ? "code" : "document"),
           nativePacketFallback: dependencies.nativePacketFallback === true,
           strictProtocol: true,
           ...pairFields(pair),

@@ -20,12 +20,12 @@ describe('ORACLE-KG-STAGE portable stage discovery', () => {
     validateSkillBundle(root, 'skills/knowledge-graph/skill-bundle.json', graph[0].path);
     expect(prompt, `ORACLE-KG-STAGE:${stage}: host cannot discover the declared method`).toContain(graph[0].path);
     if (stage === 'build-prd' || stage === 'verify-code') {
-      const closeout = manifest.skills.filter(skill => skill.name === 'stage-closeout');
+      const closeout = manifest.skills.filter(skill => skill.name === 'stage-close');
       expect(closeout, `ORACLE-KG-STAGE:${stage}: shared closeout is unreachable`).toHaveLength(1);
-      expect(closeout[0].path).toBe('skills/stage-closeout/SKILL.md');
+      expect(closeout[0].path).toBe('skills/stage-close/SKILL.md');
       expect(typeof closeout[0].trigger).toBe('string');
       expect(closeout[0].trigger.trim().length).toBeGreaterThan(0);
-      validateSkillBundle(root, 'skills/stage-closeout/skill-bundle.json', closeout[0].path);
+      validateSkillBundle(root, 'skills/stage-close/skill-bundle.json', closeout[0].path);
       expect(prompt).toContain(closeout[0].path);
     }
   });

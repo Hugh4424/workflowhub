@@ -44,10 +44,10 @@ JSON 报告中的 `plan` 是唯一执行计划。它按 main 实际声明的方�
 
 脚本必须从 `main` 读取以下内容：
 
-1. 五个正式阶段：`make-decision`、`build-plan`、`build-code`、`verify-code`、`build-prd` 的 `SKILL.md`、`skill-deps.yaml` 和 `steps.json`。SKILL.md 是方法，skill-deps 只含 name/path/trigger 与能力检测，steps 只含 step_id/step_slug/observable_result；审计应核实际发布文件，而非恢复旧consumer/bundle/owner或线性步骤认证。
-2. 五个阶段 `skill-deps.yaml` 声明的全部 WorkflowHub 依赖技能。
-3. `skills/catalog.yaml` 中状态为 `native`、`adopted`、`adapted` 的全部技能，以及五个阶段依赖到但未列入目录的技能；每个技能的 `SKILL.md` 和 `skill-bundle.json` 配套文件都要核对。状态为 `absorbed` 的远程同名技能要单独列为可清理旧资源，不能混入外部技能。
-4. 七个核心 agent：工头、Decision Maker、PRD Builder、Plan Builder、Code Builder、Code Verifier、Coder 的 Multica 提示词和技能绑定。
+1. 三个正式阶段 `make-decision`、`build-plan`、`build-code` 与独立规划方法 `build-prd` 的 `SKILL.md`、`skill-deps.yaml` 和 `steps.json`。SKILL.md 是方法，skill-deps 只含 name/path/trigger 与能力检测，steps 只含 step_id/step_slug/observable_result；审计应核实际发布文件，而非恢复旧consumer/bundle/owner或线性步骤认证。
+2. 上述三阶段与独立规划方法的 `skill-deps.yaml` 声明的全部 WorkflowHub 依赖技能。
+3. `skills/catalog.yaml` 中状态为 `native`、`adopted`、`adapted` 的全部技能，以及上述方法依赖到但未列入目录的技能；每个技能的 `SKILL.md` 和 `skill-bundle.json` 配套文件都要核对。状态为 `absorbed` 的远程同名技能要单独列为可清理旧资源，不能混入外部技能。
+4. 七个核心 agent：工头、Decision Maker、PRD Builder、Plan Builder、Code Builder、Code Verifier、Coder 的 Multica 提示词和技能绑定。Code Verifier 承担 build-code 终末独立审查职责，不产生独立阶段；角色存在不授权本次修改远端。
 
 外部技能（例如 `anysearch`、`caveman`）只检查是否被使用或绑定，不从网络或不固定的 `main/latest` 自动覆盖；默认保留，不被删除。目录中标为 `adopted` 的技能只报告差异，不能由本技能写入或删除。
 
@@ -61,7 +61,7 @@ JSON 报告中的 `plan` 是唯一执行计划。它按 main 实际声明的方�
 - bundle 中声明但 Multica 缺失的配套文件。
 - Multica 额外保留的配套文件；只有主技能正文明确引用的额外文件保留，其余旧重复包才进入删除计划。
 - 阶段 agent 缺少的依赖技能、错误绑定的技能、重复绑定。
-- agent 提示词中的旧 runner 门禁、旧宿主模式或 launcher 前置、旧迁移要求，以及与当前五阶段材料、主会话直接执行和七个公共入口不一致的内容。
+- agent 提示词中的旧 runner 门禁、旧宿主模式或 launcher 前置、旧迁移要求，以及与当前三阶段及独立规划方法材料、主会话直接执行和七个公共入口不一致的内容。
 - agent 额外技能、重复技能和不属于本阶段的错误绑定；这些只报告，不能自动删除。
 - 工作树未提交修改、`main` 与 `origin/main` 是否一致、实际声明文件是否可读和完整。
 - 唯一计划将清理的已吸收旧技能、旧 agent 绑定和无引用托管附件；外部技能保留清单。
@@ -78,7 +78,7 @@ Multica CLI 无法连接、workspace 不明确、读取超时或配套文件读�
 
 审计结束后只停一次，给用户一张确认卡。确认卡必须展示本次 `snapshot`、唯一动作计划、后果和风险：
 
-- 同步五个阶段的 `SKILL.md`、`skill-deps.yaml`、`steps.json`。
+- 同步三个正式阶段与独立规划方法的 `SKILL.md`、`skill-deps.yaml`、`steps.json`。
 - 同步本地目录管理的技能正文和 bundle 文件。
 - 补齐 7 个核心 agent 的当前绑定和宿主协议提示词。
 - 删除已证明无引用的旧重复附件和已吸收技能；保留正文明确引用的附件与外部技能。
@@ -96,7 +96,7 @@ Multica CLI 无法连接、workspace 不明确、读取超时或配套文件读�
 5. 删除动作计划中明确列出的无引用额外配套文件；正文明确引用的额外文件只报告、不删除。
 6. 清理目录中标记为 `absorbed` 且当前没有保留理由的远程技能；先从所有 agent 解绑，再删除技能并回读。外部技能（包括 `caveman`）不删除。
 7. 为七个核心 agent 添加缺失的阶段依赖技能；只移除动作计划列出的已吸收旧绑定，不修改外部绑定。
-8. 更新提示词时保留角色职责；有旧 runner 门禁就替换，没有可识别旧块但缺新版协议时才在前面补入当前协议块。当前协议读取五阶段方法及认证 worktree 的 `decision-log.md`、`spec.md`、独立 `phases/P<n>.md`、纯指针 `phases/index.md` 与 task facts，由阶段主会话直接执行。只使用 `doctor`、`status`、`run`、`review`、`verify`、`confirm`、`authorize` 七个公共入口；不从 root、task_path、cwd 或业务仓猜执行环境。已有用户授权覆盖本次动作与范围时，针对当前 HEAD 记录并消费不可逆授权；HEAD 不一致就拒绝旧记录，新增未覆盖动作才询问用户。执行事实只作真实审计记录，不决定业务结果，也不成为继续修复的许可证。
+8. 更新提示词时保留角色职责；有旧 runner 门禁就替换，没有可识别旧块但缺新版协议时才在前面补入当前协议块。当前协议读取三个正式阶段与独立规划方法及认证 worktree 的 `decision-log.md`、`spec.md`、独立 `phases/P<n>.md`、纯指针 `phases/index.md` 与 task facts，由阶段主会话直接执行。只使用 `doctor`、`status`、`run`、`review`、`verify`、`confirm`、`authorize` 七个公共入口；不从 root、task_path、cwd 或业务仓猜执行环境。已有用户授权覆盖本次动作与范围时，针对当前 HEAD 记录并消费不可逆授权；HEAD 不一致就拒绝旧记录，新增未覆盖动作才询问用户。执行事实只作真实审计记录，不决定业务结果，也不成为继续修复的许可证。
 9. 每次 mutation 后立即回读；每次 CLI 调用必须有超时；删除命令即使返回纯文本，也以退出码加回读确认，不把纯文本误报成失败。失败立即停止并保留已完成动作，不自动换 profile、workspace、runtime 或 provider。
 10. 最后重新运行 audit，必须报告：主文件实际内容、阶段方法/依赖/清单、普通技能配套文件、agent 提示词、技能绑定、已吸收旧技能和清理结果。
 

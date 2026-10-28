@@ -93,7 +93,7 @@
     {
       "step_id": 9,
       "step_slug": "implementation-review",
-      "observable_result": "整次实现审一次：主动调用现有 review --action=record --stage=build-code 入口发起代码审，直接复用 workflows/build-code/SKILL.md 的审查面、材料与 provider；整次实施一次，不按 Phase 分审或裁剪整工作区真实 diff。输入含当前spec、完整AC/验收、目标测试回执/原件、真实改动路径与diff、声明写集、阶段合同及所需镜头。 条件：请求/结果绑定同一 task_id；stage=build-code、review_scope=phase、subject_kind=phase、review_kind=null、phase_id=null，保持P2窄fulltuple，不省略身份冒null。审查记录挂 build-code 名下且落 quality/reviews；任务阶段仍是 make-decision，不写 build-code 阶段行，也不写 verify-code 阶段行。报告写清差异：「审查面是 build-code，任务阶段没跑 build-code」。按原build-code同次OCR与Standards/Spec补充方法保存各轴原件/失败/覆盖，不新增mini规则或逐Phase审查点；有效finding修复回原实施者，仅复验受影响case。 判定消费：SKILL.md#步骤 第9步；原件：quality/reviews原件、stage evidence指针、OCR/Standards/Spec。",
+      "observable_result": "整次实现审一次：主动调用现有 review --action=record --stage=build-code 入口发起代码审，直接复用 workflows/build-code/SKILL.md 的审查面、材料与 provider；整次实施一次，不按 Phase 分审或裁剪整工作区真实 diff。输入含当前spec、完整AC/验收、目标测试回执/原件、真实改动路径与diff、声明写集、阶段合同及所需镜头。 条件：请求/结果绑定同一 task_id；stage=build-code、review_scope=phase、subject_kind=phase、review_kind=null、phase_id=null，保持P2窄fulltuple，不省略身份冒null。审查记录挂 build-code 名下且落 quality/reviews；任务阶段仍是 make-decision，不写 build-code 阶段行。报告写清差异：「审查面是 build-code，任务阶段没跑 build-code」。按原build-code同次OCR与Standards/Spec补充方法保存各轴原件/失败/覆盖，不新增mini规则或逐Phase审查点；有效finding修复回原实施者，仅复验受影响case。 判定消费：SKILL.md#步骤 第9步；原件：quality/reviews原件、stage evidence指针、OCR/Standards/Spec。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -115,7 +115,7 @@
     {
       "step_id": 11,
       "step_slug": "closeout",
-      "observable_result": "物理交付：实现与适用审查结束、有效finding处置后调用 stage-closeout；PR正文读当前spec，按授权执行提交/PR/合并，最终归档清理前展示实际范围并沿原owner取得一次真实确认。 条件：收口执行者再读级别与路线与真实测试/审查原件，确认stage随实际make-decision；交接可独立读回，物理交付与反思分开，失败/未执行/清理分别说明。 判定消费：SKILL.md#步骤 第11步；原件：授权/PR/merge/末范围确认、真实页面/侧车ref。",
+      "observable_result": "物理交付：实现与适用审查结束、有效finding处置后调用 stage-close；PR正文读当前spec，按授权执行提交/PR/合并，最终归档清理前展示实际范围并沿原owner取得一次真实确认。 条件：收口执行者再读级别与路线与真实测试/审查原件，确认stage随实际make-decision；交接可独立读回，物理交付与反思分开，失败/未执行/清理分别说明。 判定消费：SKILL.md#步骤 第11步；原件：授权/PR/merge/末范围确认、真实页面/侧车ref。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",

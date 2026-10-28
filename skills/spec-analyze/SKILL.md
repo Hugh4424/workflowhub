@@ -13,7 +13,7 @@ description: Report-only final consistency analysis from original requirements t
 - post build-plan：原始声明只读作来源；当前 decision-log、spec（产品与全局实现设计）、每个独立 Phase 与纯指针 index 是实际输入。历史 pre plan/tasks 只读，build-spec 不再是当前阶段。
 - build-code：当前材料、实际实现、受影响测试与验收原件。没有实际结果就说明未执行/unknown，不由声明反推。
 - build-prd：当前已确认方向、实际展示 PRD/任务地图与真实答复；只检查已产生的规划材料，不编实现验收。
-- verify-code：实际代码质量由终末独立代码审查负责；本技能不增加一个 provider 审查点。
+- build-code 终末：实际代码质量由终末独立代码审查负责；本技能不增加一个 provider 审查点。
 
 post build-plan 报告来源到当前材料的具体对应与差异事实，包括结构、引用、原需求遗漏线索和行为表述冲突；独立合并审查裁定需求语义与质量。reported 只表示本分析执行了，不表示语义一致或审查通过。
 

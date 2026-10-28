@@ -49,7 +49,7 @@ For every new AC, use four plain, unindented labels in this exact order:
 `验证：`, `通过：`, `失败：`, `证据：`. Each label's body must be non-empty;
 do not use bullet/bold legacy labels such as `- **验证方法**`. A line whose
 entire content is `TBD`, `TODO`, or `待填写` is invalid. `证据：` declares the
-expected evidence type or artifact only; verify-code supplies execution facts.
+expected evidence type or artifact only; build-code 终末 supplies execution facts.
 
 ## 叙事写作与读回
 
@@ -114,7 +114,7 @@ When make-decision authorizes a scope revision that changes product behavior,
 the owning spec-authoring stage re-reads the current cohort materials and updates
 only affected FR/AC/source bindings plus the revision note. Preserve old facts
 as history; do not silently turn a task finding into an upstream decision or use
-`build-spec` to invent the missing choice. Build-code and verify-code report a
+`build-spec` to invent the missing choice. Build-code and build-code 终末 report a
 material gap to this owner; they do not rewrite `spec.md` themselves.
 
 Include module, entity, data-lifecycle, and compatibility contracts at the

@@ -9,7 +9,7 @@ description: 普通任务在定方向内完成方案审、一次确认、实施�
 
 先只读根 SKILL「入口路由」及 decision-log.md「级别与路线」，选中本路线后执行以下步骤；不重跑复杂15步。流程步骤、实施/审查、收口、验收各在到达时重新读取同一节，缺失按复杂并记具体缺口与owner，不把推荐当用户授权。七项事实与风险来源沿入口函数，级别不写入新字段。
 
-本路线所有方案、确认、实施、测试、适用审查与收口都在 make-decision 内完成，只写 make-decision 一行阶段事实；不写 build-code 阶段行，也不写 verify-code 阶段行。spec、独立 Phase 与纯指针 phases/index.md 是材料，不是阶段执行。复用 spec-specify/spec-plan 原方法，按 AGENTS post 材料覆盖条款写入；不得新增运行时 Phase 数量 gate。
+本路线所有方案、确认、实施、测试、适用审查与收口都在 make-decision 内完成，只写 make-decision 一行阶段事实；不写 build-code 阶段行。spec、独立 Phase 与纯指针 phases/index.md 是材料，不是阶段执行。复用 spec-specify/spec-plan 原方法，按 AGENTS post 材料覆盖条款写入；不得新增运行时 Phase 数量 gate。
 
 不写死问题数或轮数，收敛以真实未决清零为准；零未决写来源与理由，跳过是不调用，不用空跑或复制技能充数。每项未知保实际缺口与下一owner。
 
@@ -87,7 +87,7 @@ description: 普通任务在定方向内完成方案审、一次确认、实施�
 
 **产物**：主动调用现有 review --action=record --stage=build-code 入口发起代码审，直接复用 workflows/build-code/SKILL.md 的审查面、材料与 provider；整次实施一次，不按 Phase 分审或裁剪整工作区真实 diff。输入含当前spec、完整AC/验收、目标测试回执/原件、真实改动路径与diff、声明写集、阶段合同及所需镜头。
 
-**进入下一步条件**：请求/结果绑定同一 task_id；stage=build-code、review_scope=phase、subject_kind=phase、review_kind=null、phase_id=null，保持P2窄fulltuple，不省略身份冒null。审查记录挂 build-code 名下且落 quality/reviews；任务阶段仍是 make-decision，不写 build-code 阶段行，也不写 verify-code 阶段行。报告写清差异：「审查面是 build-code，任务阶段没跑 build-code」。按原build-code同次OCR与Standards/Spec补充方法保存各轴原件/失败/覆盖，不新增mini规则或逐Phase审查点；有效finding修复回原实施者，仅复验受影响case。
+**进入下一步条件**：请求/结果绑定同一 task_id；stage=build-code、review_scope=phase、subject_kind=phase、review_kind=null、phase_id=null，保持P2窄fulltuple，不省略身份冒null。审查记录挂 build-code 名下且落 quality/reviews；任务阶段仍是 make-decision，不写 build-code 阶段行。报告写清差异：「审查面是 build-code，任务阶段没跑 build-code」。按原build-code同次OCR与Standards/Spec补充方法保存各轴原件/失败/覆盖，不新增mini规则或逐Phase审查点；有效finding修复回原实施者，仅复验受影响case。
 
 ### 10. `reflect-and-handoff` — 一致性核对与反思收口
 
@@ -99,11 +99,11 @@ description: 普通任务在定方向内完成方案审、一次确认、实施�
 
 ### 11. `closeout` — 物理交付
 
-**产物**：实现与适用审查结束、有效finding处置后调用 stage-closeout；PR正文读当前spec，按授权执行提交/PR/合并，最终归档清理前展示实际范围并沿原owner取得一次真实确认。
+**产物**：实现与适用审查结束、有效finding处置后调用 stage-close；PR正文读当前spec，按授权执行提交/PR/合并，最终归档清理前展示实际范围并沿原owner取得一次真实确认。
 
 **进入下一步条件**：收口执行者再读级别与路线与真实测试/审查原件，确认stage随实际make-decision；交接可独立读回，物理交付与反思分开，失败/未执行/清理分别说明。
 
-物理交付/PR完成后在同一出页条件下按 skills/answer-as-page/SKILL.md 同一共同接口第二次核对并刷新页面与同名侧车、保旧件；仍属make-decision，不新增verify-code阶段或审查。环10只取报告事实，无真实交付声明不伪填PR，声明待交付时记skipped。
+物理交付/PR完成后在同一出页条件下按 skills/answer-as-page/SKILL.md 同一共同接口用 `stage-closed` 与新报告第二次核对并刷新页面与同名侧车、保旧件；仍属make-decision，不新增阶段或审查。环10只取报告事实，无真实交付声明不伪填PR，声明待交付时记skipped。
 
 ## 技能清单
 
@@ -143,13 +143,15 @@ description: 普通任务在定方向内完成方案审、一次确认、实施�
 | `stage-handoff` | 必需 | stage-reflection 内部发布并独立读回同一份交接，不重复发布。 |
 | `resolving-merge-conflicts` | 按需 | 已授权物理交付遇真实merge/rebase冲突时读；无冲突不调用。 |
 
-材料作者另须在写方案步骤读 skills/spec-plan/SKILL.md 原 Phase+纯指针索引方法；它不替换31分母。 answer-as-page 与 stage-closeout 也不替换原31分母：前者按下节出页条件消费；后者在最后一步物理交付消费 skills/stage-closeout/SKILL.md，授权与最终close确认沿原owner。
+材料作者另须在写方案步骤读 skills/spec-plan/SKILL.md 原 Phase+纯指针索引方法；它不替换31分母。 answer-as-page 与 stage-close 也不替换原31分母：前者按下节出页条件消费；后者在最后一步物理交付消费 skills/stage-close/SKILL.md，授权与最终close确认沿原owner。
 
 ## 驾驶舱
 
+刷新时点：骨架确认后、每细化完一包、方向/范围/验收发生实质变化、Phase定稿收口前；使用同一页面owner串行刷新。
+
 到达出页条件时调用 skills/answer-as-page/SKILL.md 原方法：三个以上相关概念、分支、多维对比或层级关系适合出页；没有这些信息形状时记录未触发理由。符合条件才由本流程主会话作为生成 owner 调用，不以示例数据或产物存在冒真实生成。
 
-出页后四类更新时点为：骨架确认后、每细化完一包、方向/范围/验收实质变化、Phase 定稿或收口前；只改措辞或指针不生成。路径由调用者指定，默认任务库证据区 overview-<date>.html 与同名 .nodes.json；同一页面 owner 串行更新，先读旧页/侧车，安全原子写，中断保旧件与真实失败。
+出页后骨架确认用 `skeleton-confirmed`，每包进入 decision-log 收敛后用 `package-converged`，用户确认的方向/范围/验收实变与 Phase 定稿实变用 `direction-scope-acceptance-changed`；Phase 审后提交与 norm-sync 后用 `phase-closed`。由本流程主会话在真实时点调用 answer-as-page 同一事件入口，不手拼 pageData；只改措辞或指针不生成。路径由调用者指定，默认任务库证据区 overview-<date>.html 与同名 .nodes.json；同一页面 owner 串行更新，先读旧页/侧车，安全原子写，中断保旧件与真实失败。
 
 页面按skills/answer-as-page/SKILL.md 原 owner 的当前页面结构读取当前材料、task facts、测试、审查、真实改动；缺环标「缺」，未产生写「尚未产生＋到时会填什么」。顶部显示 decision-log 的 sha256/字节/行数指纹、时间与当前步骤。页面是只读派生，不新增进度账本，不反写任务事实；来源、比较基准或工具缺失如实记录。生成/QA 仍沿 answer-as-page 与 isolated-browser-qa 的真实场景；未生成不报页面通过。
 

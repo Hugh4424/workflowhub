@@ -92,7 +92,7 @@ test('ORACLE-C02-NORM-SYNC-WIRING', () => {
   // Inspect that existing declaration, then consume the real portable closure;
   // neither assertion claims the natural-language call was actually executed.
   const catalog = yaml.load(readFileSync(resolve(packageRoot, 'skills/catalog.yaml'), 'utf8'));
-  for (const owner of ['stage-reflection', 'stage-closeout']) {
+  for (const owner of ['stage-reflection', 'stage-close']) {
     const registrations = catalog.skills.filter(entry => entry.name === owner);
     expect(registrations, `${owner}: one existing declaration owner`).toHaveLength(1);
     expect(registrations[0].dependency_closure, `${owner}: declare the indirect norm-sync dependency`).toContain('skills/norm-sync');

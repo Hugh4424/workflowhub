@@ -58,8 +58,8 @@
       "lens_dispatch": "delegated",
       "delivery_mode": "file_only"
     },
-    "verify-code": {
-      "logical_skill_id": "wh-review/verify-code",
+    "build-code/terminal": {
+      "logical_skill_id": "wh-review/build-code/terminal",
       "required_skills": [
         "review"
       ],

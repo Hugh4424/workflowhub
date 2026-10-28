@@ -110,7 +110,7 @@ function choice(f,level,{choiceRef='quality/evidence/choice.md',entryRef='qualit
   return {choiceRef,entryRef};
 }
 function controlledWorkflow(f) {
-  const names=['make-decision','build-plan','build-code','verify-code','build-prd'];
+  const names=['make-decision','build-plan','build-code','build-prd'];
   const make = (stage,slug)=>({schema_version:'2.0.0',stage_slug:stage,steps:[{step_id:1,step_slug:slug,observable_result:`Human reads the owned observation. 判定消费：workflows/${stage}/SKILL.md#方法；原件：当前stage evidence`,completion_evidence:[{kind:'phase_task_facts',uri_or_path:'facts.jsonl'}]}]});
   for(const name of names) { put(f.repo,`workflows/${name}/steps.json`,make(name,'shared-slug')); put(f.repo,`workflows/${name}/SKILL.md`,'# Owned method\n## 方法\n独立读者核实际输入及输出；缺输入不能通过。\n'); put(f.repo,`workflows/${name}/skill-deps.yaml`,'skills: []\n'); }
   const root=make('make-decision','root-only'); root.flows={};
@@ -526,7 +526,7 @@ function actualWorkflowSources(f,level) {
   const source='workflows/make-decision/steps.json', root=JSON.parse(readFileSync(join(ROOT,source),'utf8'));
   put(f.repo,source,JSON.stringify(root));
   if(level!=='complex')put(f.repo,root.flows[level].steps,readFileSync(join(ROOT,root.flows[level].steps),'utf8'));
-  else for(const stage of ['build-plan','build-code','verify-code'])put(f.repo,`workflows/${stage}/steps.json`,readFileSync(join(ROOT,`workflows/${stage}/steps.json`),'utf8'));
+  else for(const stage of ['build-plan','build-code'])put(f.repo,`workflows/${stage}/steps.json`,readFileSync(join(ROOT,`workflows/${stage}/steps.json`),'utf8'));
   return level==='complex'?source:root.flows[level].steps;
 }
 async function nativeProducerFixture() {
@@ -607,11 +607,11 @@ describe('final-chain report real stage denominator sources',()=>{
     expect(m.declared_stages).toEqual(['make-decision']);expect(m.actual_stages.map(r=>typeof r==='string'?r:r.stage)).toEqual(['make-decision']);
     expect(m.stage_source_refs).toContain('facts.jsonl');
   });
-  it('uses four confirmed complex formal sources and actual rows, without turning flows or unstarted build-prd into stages',async()=>{
+  it('uses three confirmed complex formal sources and actual rows, without turning flows or unstarted build-prd into stages',async()=>{
     const f=taskFixture();writerIdentity(f);choice(f,'complex');actualWorkflowSources(f,'complex');
-    const expected=['make-decision','build-plan','build-code','verify-code'];
+    const expected=['make-decision','build-plan','build-code'];
     for(const stage of expected)await writeStageRow(f.taskPath,{stage,source:'quality/evidence/choice.md'});
-    const value=await report(f),m=value.workflow_metrics;expect([...m.declared_stages].sort()).toEqual([...expected].sort());expect(m.stage_skip_denominator).toBe(4);expect(m.stage_skip_rate).toBe(0);
+    const value=await report(f),m=value.workflow_metrics;expect([...m.declared_stages].sort()).toEqual([...expected].sort());expect(m.stage_skip_denominator).toBe(3);expect(m.stage_skip_rate).toBe(0);
     expect(m.declared_stages).not.toContain('build-prd');
   });
   it('keeps absent route/actual identity unknown without a persisted candidate or skip field',async()=>{
@@ -947,7 +947,7 @@ async function handoffPRFixture() {
   await writeStageRow(f.taskPath,{...close,source:'Controlled same-task physical merge completion, exact readback is in the named verify-code handoff.'});
   const ref='quality/evidence/handoff/owned-verify-code-handoff.md',head=git(f,['rev-parse','HEAD']);
   put(f.taskPath,ref,`# Stage Handoff\n任务：owned-task\n项目：workflowhub\n阶段：verify-code\n仓库：${f.repo}\n分支：task/workflowhub/owned-task\nHEAD：${head}\n## 当前结果\nPR #12 已合并，质量仍incomplete；物理交付不等于质量通过。\n## 核心方案\n仅复用同任务、同仓库、head/base匹配的PR原件。\nPR实际返回：\`quality/tests/pr-post-merge.json\`；原输出：\`quality/tests/pr-post-merge.output\`。\n`);
-  await writeStageRow(f.taskPath,{stage:'verify-code',source:'Controlled final readback and handoff',handoff:{value:ref,reason:'Actual-shape ordinary task-bound handoff points to exact PR receipt.'}});
+  await writeStageRow(f.taskPath,{stage:'build-code',source:'Controlled final readback and handoff',handoff:{value:ref,reason:'Actual-shape ordinary task-bound handoff points to exact PR receipt.'}});
   return {...f,handoffRef:ref};
 }
 describe('final-chain report nested close handoff PR chain',()=>{
@@ -1069,7 +1069,7 @@ Task root：${f.taskPath}
 PR #12 创建、合并与合并后远端读回见 quality/tests/pr-post-merge.json。物理交付不改变质量结论。
 `);
   const handoff={value:join(f.taskPath,handoffRef),reason:'Final task-bound verify-code handoff; ordinary source reference.'};
-  await writeStageRow(f.taskPath,{stage:'verify-code',source:'Controlled ordinary handoff',handoff});
+  await writeStageRow(f.taskPath,{stage:'build-code',source:'Controlled ordinary handoff',handoff});
   await writeStageRow(f.taskPath,{...merge,source:'Controlled physical main fast-forward; PR original is in final handoff.',close_action:{...merge.close_action,result:`Local main fast-forwarded to merged PR #12 commit ${head}; remote main matches.`},handoff,evidence:{value:[{command:'Local main fast-forward',exit_code:0,failure_signature:'git merge --ff-only origin/main exit0; local main now equals merged PR commit; receipt quality/tests/owned-merge.json'}]}});
   await writeStageRow(f.taskPath,{record_kind:'close_action',stage:'close',source:'Controlled physical cleanup',close_action:{action:'worktree_cleanup',result:'Confirmed task worktree and task branches removed; active specifications and external evidence preserved.'},handoff});
   return {...f,handoffRef};
@@ -1113,7 +1113,7 @@ describe('final-chain report canonical main historical diff visibility',()=>{
   });
   it('does not infer a historical merge from root equality alone and restores explicit physical facts',async()=>{
     const f=await canonicalMainDiffFixture(),path=join(f.taskPath,'facts.jsonl'),raw=readFileSync(path,'utf8');
-    const rows=raw.trim().split('\n').map(JSON.parse);writeFileSync(path,rows.filter(r=>r.record_kind!=='close_action'&&r.stage!=='verify-code').map(JSON.stringify).join('\n')+'\n');
+    const rows=raw.trim().split('\n').map(JSON.parse);writeFileSync(path,rows.filter(r=>r.record_kind!=='close_action'&&r.stage!=='build-code').map(JSON.stringify).join('\n')+'\n');
     const unknown=await report(f);expect(ringAt(unknown,7).state).toBe('incomplete');expect(JSON.stringify(ringAt(unknown,7))).toContain('after-task-main.mjs');
     expect(unknown.limits.some(note=>/已合并主仓|merged historical task/i.test(note))).toBe(false);
     writeFileSync(path,raw);const restored=await report(f);expect(ringAt(restored,7).state).toBe('incomplete');expect(restored.limits.join(' ')).toMatch(/后续提交|已合并主仓|later.main|historical.*diff/i);
@@ -1126,7 +1126,8 @@ async function fallbackPRFixture({separate=false}={}) {
   if(separate){put(f.taskPath,out,readFileSync(join(f.taskPath,'quality/tests/pr-post-merge.output'),'utf8'));const r=JSON.parse(readFileSync(join(f.taskPath,'quality/tests/pr-post-merge.json'),'utf8'));r.output_ref=join(f.taskPath,out);put(f.taskPath,ref,r);}
   const receipt=JSON.parse(readFileSync(join(f.taskPath,ref),'utf8'));
   // No declared hashes are stale: each controlled receipt points to its actual readable output.
-  await writeStageRow(f.taskPath,{stage:'build-code',source:`Controlled non-network gh fixture; receipt: ${ref}; output: ${out}`,evidence:{value:[{command:JSON.stringify(receipt.argv),exit_code:0,receipt_ref:ref,output_ref:out,failure_signature:'Controlled actual-shape non-network PR readback'}]}});
+  const current=readFileSync(join(f.taskPath,'facts.jsonl'),'utf8').trim().split('\n').map(JSON.parse).find(row=>row.record_kind==='stage'&&row.stage==='build-code');
+  await writeStageRow(f.taskPath,{...current,stage:'build-code',source:`Controlled non-network gh fixture; receipt: ${ref}; output: ${out}`,evidence:{value:[{command:JSON.stringify(receipt.argv),exit_code:0,receipt_ref:ref,output_ref:out,failure_signature:'Controlled actual-shape non-network PR readback'}]}});
   return {...f,prRef:ref,prOutput:out};
 }
 describe('final-chain report actual gh fallback identity',()=>{
@@ -1280,7 +1281,7 @@ describe('final-chain report ordinary contract actual execution source',()=>{
 async function actualPortableBranchFixture(level='complex',{invoke=true}={}) {
   const f=taskFixture();writerIdentity(f);choice(f,level);actualWorkflowSources(f,level);
   put(f.repo,'workflows/build-prd/steps.json',readFileSync(join(ROOT,'workflows/build-prd/steps.json'),'utf8'));
-  const stages=level==='complex'?['make-decision','build-plan','build-code','verify-code']:['make-decision'];
+  const stages=level==='complex'?['make-decision','build-plan','build-code']:['make-decision'];
   for(const stage of stages)await writeStageRow(f.taskPath,{stage,source:'quality/evidence/choice.md'});
   const task={taskPath:f.taskPath,identity:{taskId:'owned-task'}};
   const result=await kernel.runPortableWorkflow({task,worktreeRoot:f.repo,...(invoke?{input:{task_id:'owned-task',workflow:'build-prd',step_results:[]}}:{})});
@@ -1299,8 +1300,8 @@ describe('final-chain report actual portable branch stage denominator',()=>{
     const f=await actualPortableBranchFixture('planning',{invoke:false});expect(f.portable).toEqual({state:'not-started',ref:null,terminal:null});const value=await report(f);expect(value.workflow_metrics.stage_skip_denominator).toBe(1);expect(value.workflow_metrics.actual_stages.map(r=>typeof r==='string'?r:r.stage)).not.toContain('build-prd');
   });
   it('keeps a missing formal stage unknown even when a real portable terminal is linked',async()=>{
-    const f=await actualPortableBranchFixture(),path=join(f.taskPath,'facts.jsonl'),raw=readFileSync(path,'utf8');writeFileSync(path,raw.trim().split('\n').map(JSON.parse).filter(row=>row.stage!=='verify-code').map(JSON.stringify).join('\n')+'\n');
-    expect((await report(f)).workflow_metrics.stage_skip_denominator).toBeNull();writeFileSync(path,raw);expect((await report(f)).workflow_metrics.stage_skip_denominator).toBe(5);
+    const f=await actualPortableBranchFixture(),path=join(f.taskPath,'facts.jsonl'),raw=readFileSync(path,'utf8');writeFileSync(path,raw.trim().split('\n').map(JSON.parse).filter(row=>row.stage!=='build-code').map(JSON.stringify).join('\n')+'\n');
+    expect((await report(f)).workflow_metrics.stage_skip_denominator).toBeNull();writeFileSync(path,raw);expect((await report(f)).workflow_metrics.stage_skip_denominator).toBe(f.formalStages.length+1);
   });
 });
 
@@ -1516,7 +1517,7 @@ describe('final-chain multi-stage sourced skill observations and conflicts',()=>
   it('merges two actual stage observations without hiding an active obligation or conflicting originals',async()=>{
     const f=taskFixture();writerIdentity(f);choice(f,'complex');controlledWorkflow(f);
     const source='skills/stage-handoff/SKILL.md',slug='stage-handoff';
-    for(const stage of ['build-code','verify-code']) put(f.repo,`workflows/${stage}/skill-deps.yaml`,readFileSync(join(ROOT,`workflows/${stage}/skill-deps.yaml`),'utf8'));
+    for(const stage of ['build-code','build-plan']) put(f.repo,`workflows/${stage}/skill-deps.yaml`,readFileSync(join(ROOT,`workflows/${stage}/skill-deps.yaml`),'utf8'));
     put(f.repo,source,readFileSync(join(ROOT,source),'utf8'));
     const dependency='workflows/build-code/skill-deps.yaml';
     const request=put(f.repo,'review-condition.json',{requested:false});
@@ -1533,12 +1534,12 @@ describe('final-chain multi-stage sourced skill observations and conflicts',()=>
     expect(rows).toHaveLength(1);expect(rows[0].state).toBe('not_applicable');
     const observe=async requested=>{
       put(f.repo,'review-condition.json',{requested});
-      const actual=await captureCommand({cwd:f.repo,recordDir:join(f.taskPath,'quality/tests'),slug:'actual-verify-condition',argv:[process.execPath,script,join(f.repo,'workflows/verify-code/skill-deps.yaml'),request]});
+      const actual=await captureCommand({cwd:f.repo,recordDir:join(f.taskPath,'quality/tests'),slug:'actual-verify-condition',argv:[process.execPath,script,join(f.repo,'workflows/build-plan/skill-deps.yaml'),request]});
       expect(actual.exit_code).toBe(0);
-      return {command:JSON.stringify(actual.argv),exit_code:actual.exit_code,failure_signature:'Actual verify-code condition observation',receipt_ref:actual.receipt_ref,output_ref:actual.output_ref,...JSON.parse(readFileSync(actual.output_ref,'utf8'))};
+      return {command:JSON.stringify(actual.argv),exit_code:actual.exit_code,failure_signature:'Actual build-plan condition observation',receipt_ref:actual.receipt_ref,output_ref:actual.output_ref,...JSON.parse(readFileSync(actual.output_ref,'utf8'))};
     };
     const active=await observe(true);
-    const bind=async entries=>{await writeStageRow(f.taskPath,{stage:'verify-code',source:'workflows/verify-code/skill-deps.yaml; '+entries.map(item=>item.receipt_ref).join('; '),evidence:{value:entries}});return (await report(f)).workflow_steps.filter(row=>row.source===source&&row.step_slug===slug);};
+    const bind=async entries=>{await writeStageRow(f.taskPath,{stage:'build-plan',source:'workflows/build-plan/skill-deps.yaml; '+entries.map(item=>item.receipt_ref).join('; '),evidence:{value:entries}});return (await report(f)).workflow_steps.filter(row=>row.source===source&&row.step_slug===slug);};
     const merged=await bind([active]);expect(merged).toHaveLength(1);expect(merged[0]).toMatchObject({trigger:true,executed:false,state:'unavailable'});
     const inactive=await observe(false);const restored=await bind([inactive]);expect(restored).toHaveLength(1);expect(restored[0].state).toBe('not_applicable');
     const conflicting=await bind([active,inactive]);expect(conflicting).toHaveLength(1);expect(conflicting[0].state).toBe('incomplete');

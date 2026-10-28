@@ -141,8 +141,7 @@
         "stages": [
           "make-decision",
           "build-plan",
-          "build-code",
-          "verify-code"
+          "build-code"
         ],
         "steps": [
           "load-context",
@@ -203,13 +202,6 @@
           {
             "stage": "build-code",
             "record_command": "node \"$WH_TOOL/tools/cli/measure-main-agent-cost.mjs\" --project=workflowhub --task=\"$SYNTH_TASK\" --stage=build-code --record",
-            "start_event_ref_rule": "继承整个task原task_start_ref及上一账行until；已有ledger不传新的start-ref，跨stage不重新起点。真实账行原ref未产生则保持缺，不造事件。",
-            "ledger_row_refs_rule": "main-agent-cost.md 每笔真实行与JSON/output原ref，全部尝试/行、失败取消及重做多行保留，不限制每stage一行或总共四行",
-            "from_until_rule": "连续同task ledger窗口；首笔真实task-start，后续from=上一账行until，跨stage也继承上一until；非重叠且缺口/异步边界如实披露，不伪造连续实值"
-          },
-          {
-            "stage": "verify-code",
-            "record_command": "node \"$WH_TOOL/tools/cli/measure-main-agent-cost.mjs\" --project=workflowhub --task=\"$SYNTH_TASK\" --stage=verify-code --record",
             "start_event_ref_rule": "继承整个task原task_start_ref及上一账行until；已有ledger不传新的start-ref，跨stage不重新起点。真实账行原ref未产生则保持缺，不造事件。",
             "ledger_row_refs_rule": "main-agent-cost.md 每笔真实行与JSON/output原ref，全部尝试/行、失败取消及重做多行保留，不限制每stage一行或总共四行",
             "from_until_rule": "连续同task ledger窗口；首笔真实task-start，后续from=上一账行until，跨stage也继承上一until；非重叠且缺口/异步边界如实披露，不伪造连续实值"

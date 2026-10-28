@@ -98,7 +98,7 @@ CARD-001 — 非法配置错误定位；下列16字段示范该卡增量，不�
 - **局部风险**：CLI可能丢失确定位置；用第7行非法配置检查；无法确定行号时如实unknown
 - **可后置技术项**：热更新不在范围，示例ADR-001明确非目标；不是未说明的后续承诺
 - **最小读取集**：示例 src/config/load.ts 与 src/cli/main.ts 的错误分支、既有schema和所属Phase；真实路径待核实
-- **五阶段开工说明**：make-decision核方向；post的build-plan核来源/设计/Phase；build-code按授权实施；verify-code独立核对；旧build-spec只读留存，不重新启动
+- **三阶段开工说明**：make-decision核方向；post的build-plan核来源/设计/Phase；build-code按授权实施，各Phase独立验收，最后Phase承接终末独立核对；build-prd仍是独立规划方法，不列正式阶段；旧build-spec只读留存，不重新启动
 
 每字段只写该卡增量；实测与取证引用原始件路径，不粘贴全文。
 

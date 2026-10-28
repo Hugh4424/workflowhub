@@ -139,7 +139,7 @@ skills:
     metrics_enabled: true
     purpose: 每阶段结束由主会话发起收口，归纳归口、记成本后内部发布并读回交接
     design_idea: 以可见事实收口；机械候选走结构检查，经验与待办归业务仓specs，成本同窗口一次，失败与未知如实交接，不生成质量裁决或推进门
-    used_by_stages: &stages_code_plan_prd_decision_verify ["build-code","build-plan","build-prd","make-decision","verify-code"]
+    used_by_stages: &stages_code_plan_prd_decision_verify ["build-code","build-plan","build-prd","make-decision"]
     upstream:
       - <<: &matt_b061_review_20261016
           github_url: &matt_repo https://github.com/mattpocock/skills
@@ -185,14 +185,14 @@ skills:
     metrics_enabled: false
     purpose: 收口内部发布的人读派生视图，仍可按原件路径单独读取续接
     design_idea: 保13区块和appendRecord create-only发布读回；核心方案含改动/故意未改/风险，用户动作项只列用户独占事项，缺口与硬缺陷分别披露
-    used_by_stages: &stages_decision_prd_plan_code_verify ["make-decision","build-prd","build-plan","build-code","verify-code"]
+    used_by_stages: &stages_decision_prd_plan_code_verify ["make-decision","build-prd","build-plan","build-code"]
     upstream: []
     local_changes: 复用原发布owner、四类来源和七阶段值；收口调用者提供结果，交接独立读取；不新增writer、facts字段、schema、公共命令或持久对象
     dependency_closure: &deps_spec_specify ["skills/spec-specify"]
 
-    update_policy: 随 stage-handoff 方法、safe-write appendRecord 发布与回读边界和五阶段挂载合同一并审查
-  - name: stage-closeout
-    path: skills/stage-closeout/SKILL.md
+    update_policy: 随 stage-handoff 方法、safe-write appendRecord 发布与回读边界和三阶段挂载合同一并审查
+  - name: stage-close
+    path: skills/stage-close/SKILL.md
     local_version: 1.1.0
     last_reviewed_at: '2026-10-16'
     status: native
@@ -200,9 +200,9 @@ skills:
     standalone: true
     purpose: 三阶段caller及独立宿主共用当前授权范围内的Git与物理收尾方法
     design_idea: 先委派知识更新，逐动作record/consume，PR先回真实URL同流续跑；先核目标分支独有变化并判断是否同步及处理冲突，合并隐含的源分支删除纳入一次最终范围确认
-    used_by_stages: [build-prd, verify-code, make-decision]
+    used_by_stages: [build-prd, make-decision]
     upstream: []
-    local_changes: 抽取既有安全收口方法；保质量与事实caller owner、普通Git和workspace窄工具，不恢复close-plan或新增执行器；按用户指出的缺口新增目标分支独有提交/路径核对，按任务依赖决定是否同步，冲突复用既有解决方法；PR合并可能自动删除源分支时纳入同一物理范围确认；来源为本仓verify-code授权/安全收口、docs/standard-workflow.md和resolving-merge-conflicts方法；本仓方法抽取，不伪造GitHub外源。
+    local_changes: 抽取既有安全收口方法；保质量与事实caller owner、普通Git和workspace窄工具，不恢复close-plan或新增执行器；按用户指出的缺口新增目标分支独有提交/路径核对，按任务依赖决定是否同步，冲突复用既有解决方法；PR合并可能自动删除源分支时纳入同一物理范围确认；来源为本仓原verify-code（历史）授权/安全收口、docs/standard-workflow.md和resolving-merge-conflicts方法；本仓方法抽取，不伪造GitHub外源。
     dependency_closure: ["skills/knowledge-graph","skills/spec-specify","skills/resolving-merge-conflicts","skills/norm-sync"]
 
     update_policy: 随授权/工作区owner、知识方法、目标基线差异判断、PR合并副作用和两真实caller消费一并审查；内容确认不冒Git授权，未知字节保留
@@ -238,7 +238,7 @@ skills:
     local_changes: 包装graphify现有CLI/库，保原查询/更新/降级；新增references/knowledge-reuse.md原创任务判断方法及两workflow真实入口，复用bundle。Design-wiki许可unknown仅重写方法，不复制原文/源码；不采用其候选存储/命令/站点，不建新runtime adapter/门/API key/hook/记忆回写。图工具原方法/许可绑定unknown仍交来源维护者。
     dependency_closure: *deps_spec_specify
 
-    update_policy: 随当前CLI和cache/build/export边界及五阶段真实consumer一起审查；失配保unavailable，不自动升级。知识方法owner在采用前/迭代/维护计划触发时沿顶部手动核对入口，对ModelScope真实metadata和raw当前/固定逐采用文件比较；HTTP/JSON/exit分判，失败unknown不报无更新，不自动追HEAD。附件职责被独立审查替代且两caller/bundle迁接后同批退役；历史证据保留。
+    update_policy: 随当前CLI和cache/build/export边界及三阶段真实consumer一起审查；失配保unavailable，不自动升级。知识方法owner在采用前/迭代/维护计划触发时沿顶部手动核对入口，对ModelScope真实metadata和raw当前/固定逐采用文件比较；HTTP/JSON/exit分判，失败unknown不报无更新，不自动追HEAD。附件职责被独立审查替代且两caller/bundle迁接后同批退役；历史证据保留。
   - name: anysearch
     path: skills/anysearch/SKILL.md
     local_version: 1.0.0
@@ -606,9 +606,9 @@ skills:
     metrics_enabled: true
     purpose: 前四 stage 的收尾检查与质量事实契约；post build-plan 仅结构报告，语义由现有 merged review 和 finding dispositions 负责
     design_idea: report-only packet lens with existing atomic quality publication
-    used_by_stages: [build-code, build-plan, make-decision, verify-code]
+    used_by_stages: [build-code, build-plan, make-decision]
     upstream: []
-    local_changes: workflowhub 原生 report-only validator/lens；make-decision、build-spec（pre）、build-code 和 pre build-plan 保持既有 stage-end 语义检查与质量事实契约；post build-plan 仅报告材料结构，语义由现有 merged review 和 finding dispositions 负责；verify-code 的代码审查由 OCR delegation 执行；现有 stage publication 是唯一写入路径，原子写入 quality/facts 与 acceptance evidence；当前 build-plan consumer 仍使用 planning_artifacts packet projection 和 contract tests，runtime 在既有 stage outcome 中认证 packet/result 与当前快照、材料、analyzer step、spec-analyze skill 的绑定；检查实际语义、场景、oracle、产物和 fresh evidence，不把编号或文件存在当作证明；结果复用既有 quality-fact 路径；DEFER/OPEN 按条目上下文检查 handoff；不直接改四份材料、不创建第二 store、projection 或门禁；six-part summary 随现有 stage outcome 交接；finding 先在当前 stage 修复并重跑；unavailable 不等于 pass；没有 runtime work gate、provider pass predicate 或新质量 gate，但缺失或不一致会如实降低当前 stage quality；当现有 consumer 移除且无历史材料引用时删除
+    local_changes: workflowhub 原生 report-only validator/lens；make-decision、build-spec（pre）、build-code 和 pre build-plan 保持既有 stage-end 语义检查与质量事实契约；post build-plan 仅报告材料结构，语义由现有 merged review 和 finding dispositions 负责；build-code 终末代码审查由 OCR delegation 执行；现有 stage publication 是唯一写入路径，原子写入 quality/facts 与 acceptance evidence；当前 build-plan consumer 仍使用 planning_artifacts packet projection 和 contract tests，runtime 在既有 stage outcome 中认证 packet/result 与当前快照、材料、analyzer step、spec-analyze skill 的绑定；检查实际语义、场景、oracle、产物和 fresh evidence，不把编号或文件存在当作证明；结果复用既有 quality-fact 路径；DEFER/OPEN 按条目上下文检查 handoff；不直接改四份材料、不创建第二 store、projection 或门禁；six-part summary 随现有 stage outcome 交接；finding 先在当前 stage 修复并重跑；unavailable 不等于 pass；没有 runtime work gate、provider pass predicate 或新质量 gate，但缺失或不一致会如实降低当前 stage quality；当现有 consumer 移除且无历史材料引用时删除
     dependency_closure: *deps_spec_specify
     update_policy: 随 review packet schema 变更审查
   - name: architect-code-review
@@ -617,10 +617,10 @@ skills:
     last_reviewed_at: '2026-09-25'
     status: adapted
     metrics_enabled: true
-    purpose: 可选的独立代码 diff 诊断与历史 Architect 审查解读；普通 build-code/verify-code 审查由 OCR delegation 执行
+    purpose: 可选的独立代码 diff 诊断与历史 Architect 审查解读；普通 build-code 审查由 OCR delegation 执行
     design_idea: correctness、lifecycle、security、consumer fit 和真实测试强度
     standalone: true
-    used_by_stages: &stages_code_verify ["build-code","verify-code"]
+    used_by_stages: &stages_code ["build-code"]
     upstream:
       - <<: &dsh_99f6_review_20260714
           github_url: https://github.com/deepseek-ai/deepseek-harness
@@ -667,7 +667,7 @@ skills:
     design_idea: 宿主适配层只负责可见性、交接和恢复，不进入 WorkflowHub 阶段门禁
     used_by_stages: []
     upstream: []
-    local_changes: 宿主直接调度五阶段 portable package；删除 host bridge、receipt 门禁和评论状态机，保留 worktree 隔离与真实通知；N2 P3更正无源adapted误登记：原始本仓登记：55e56137d76cd18da54c66a3f53bea576d01231c:skills/catalog.yaml仅含host-protocol(native/upstream[])；fe991fac228f954b9a066989dcda162adaef2f38:skills/catalog.yaml两项均native/upstream[]，sync首次新增于fe991fac；upstream仍空，无伪造外源。
+    local_changes: 宿主直接调度三阶段 portable package；删除 host bridge、receipt 门禁和评论状态机，保留 worktree 隔离与真实通知；N2 P3更正无源adapted误登记：原始本仓登记：55e56137d76cd18da54c66a3f53bea576d01231c:skills/catalog.yaml仅含host-protocol(native/upstream[])；fe991fac228f954b9a066989dcda162adaef2f38:skills/catalog.yaml两项均native/upstream[]，sync首次新增于fe991fac；upstream仍空，无伪造外源。
     dependency_closure: ["skills/architect-code-review","skills/stage-handoff","skills/wh-review"]
 
     update_policy: 修订宿主边界或 WorkflowHub close 合同时重新审查
@@ -691,11 +691,11 @@ skills:
     last_reviewed_at: "2026-07-14"
     status: native
     metrics_enabled: true
-    purpose: make-decision/build-spec/build-plan 的 authoring review；普通 build-code/verify-code 代码审查由 OCR delegation 执行
+    purpose: make-decision/build-spec/build-plan 的 authoring review；普通 build-code 代码审查由 OCR delegation 执行
     design_idea: frozen materials、一次新的 3rd-review public run、attempt/result、verify-final
     used_by_stages: *stages_code_plan_prd_decision_verify
     upstream: []
-    local_changes: authoring review 保留既有 public run；正常 build-code 每 Phase 一次 OCR，最终 aggregate 与逐 AC 结果后由 verify-code 对最终 worktree 做一次 OCR；历史 integration 事实只读；两次代码审查由现有 review/run receipt 消费；保留路径安全与原始 provenance；来源为本仓既有review-record-route及provider协议，本文不将宿主工具声明当外部文本来源。
+    local_changes: authoring review 保留既有 public run；正常 build-code 每 Phase 一次 OCR，最终 aggregate 与逐 AC 结果后由 build-code 终末对最终 worktree 做一次 OCR；历史 integration 事实只读；两次代码审查由现有 review/run receipt 消费；保留路径安全与原始 provenance；来源为本仓既有review-record-route及provider协议，本文不将宿主工具声明当外部文本来源。
     dependency_closure: ["skills/intake-decision-review","skills/plan-ceo-review","skills/plan-design-review","skills/plan-eng-review","skills/review","skills/simplicity-guard","skills/spec-specify"]
     update_policy: 只通过本地合同和异源审查演进，禁止第二 review 路径
   - name: plan-ceo-review
@@ -792,12 +792,12 @@ skills:
     purpose: 在 close 阶段 task 分支内解决 Git 合并冲突
     design_idea: 只恢复 task 分支，不接管 target 合并和推送
     standalone: true
-    used_by_stages: [build-prd, verify-code]
-    consumer: skills/stage-closeout/SKILL.md (target-branch sync conflicts); core/task-close.mjs:1411 (merge conflict error path)
+    used_by_stages: [build-prd]
+    consumer: skills/stage-close/SKILL.md (target-branch sync conflicts); core/task-close.mjs:1411 (merge conflict error path)
     upstream: []
-    local_changes: WorkflowHub close 冲突恢复约束；由stage-closeout在目标分支同步预演发现冲突时复用；消费者为skills/stage-closeout/SKILL.md与core/task-close.mjs:1411
+    local_changes: WorkflowHub close 冲突恢复约束；由stage-close在目标分支同步预演发现冲突时复用；消费者为skills/stage-close/SKILL.md与core/task-close.mjs:1411
     dependency_closure: []
-    update_policy: 随 stage-closeout 目标分支同步和 verify-code close 合同变更审查
+    update_policy: 随 stage-close 目标分支同步和 build-code 终末 close 合同变更审查
   - name: debate
     local_version: 1.0.0
     last_reviewed_at: '2026-07-14'
@@ -832,7 +832,7 @@ skills:
     status: adapted
     metrics_enabled: false
     purpose: 用可重复证据定位根因后单点修复
-    design_idea: 快反馈、缩小复现、竞争假设、探针验证、三次失败停止
+    design_idea: 快反馈、缩小复现、竞争假设、探针验证、同一失败或无新事实自动换路径
     standalone: true
     used_by_stages: &stages_build_code ["build-code"]
     upstream:
@@ -972,7 +972,7 @@ skills:
     purpose: 隔离 profile 执行 UI 验收并清理
     design_idea: session/profile/cleanup 全部封装，保留证据
     standalone: true
-    used_by_stages: *stages_code_verify
+    used_by_stages: *stages_code
     upstream:
       - kind: user-provided-local-source
         path: isolated-browser-qa
@@ -980,7 +980,7 @@ skills:
         authorization_basis: user explicitly supplied local source and authorized migration into workflowhub
         reviewed_at: '2026-07-14'
         review_outcome: accepted
-    local_changes: 搬入完整闭包；去个人绝对路径；owner 是 isolated browser QA，consumer 是官方 build-code controlled QA seam 与 verify-code；一次 invocation 按当前 task/spec/Phase 记录各适用专业来源/版本/作用域与 service/API/DTO identity，pre/history snapshot 只读保留，blocked/unknown 保留 failure_reason，取消和 cleanup 必须可见；新增两个私有helper承接现context --run生命周期与memory-only票据，不新增公共Runner；delete-condition 为 browser QA 路由退役或被唯一替代；本地来源snapshot_sha256缺失，采集字节及原位置unknown；owner来源维护者需权利人提供原件与可核快照，当前保既有授权，不补假commit/hash。
+    local_changes: 搬入完整闭包；去个人绝对路径；owner 是 isolated browser QA，consumer 是官方 build-code controlled QA seam 与 build-code 终末；一次 invocation 按当前 task/spec/Phase 记录各适用专业来源/版本/作用域与 service/API/DTO identity，pre/history snapshot 只读保留，blocked/unknown 保留 failure_reason，取消和 cleanup 必须可见；新增两个私有helper承接现context --run生命周期与memory-only票据，不新增公共Runner；delete-condition 为 browser QA 路由退役或被唯一替代；本地来源snapshot_sha256缺失，采集字节及原位置unknown；owner来源维护者需权利人提供原件与可核快照，当前保既有授权，不补假commit/hash。
     dependency_closure: ["skills/spec-specify", "skills/diagnosing-bugs"]
     update_policy: 保本地来源unknown边界；新增三来源固定commit/包SHA及采用章节见本catalog的N3 P7 absorbed条目，逐源比较consumer与本地偏离，不自动追HEAD。
   - name: project-norm-init
@@ -992,11 +992,11 @@ skills:
     purpose: 为三种真实起点定位适用专业来源并接线原专业 owner
     design_idea: new/legacy 按类复用真实源、缺口局部显露、实际 consumer 与适用范围可读
     standalone: true
-    used_by_stages: [build-plan, build-code, verify-code]
+    used_by_stages: [build-plan, build-code]
     upstream: []
     local_changes: |
       WorkflowHub 原生薄入口；owner 是五类专业规范接线维护者，各类规则仍归原专业owner。local_version沿既有2.0.0，不把本次审查日期冒新发行版本。
-      consumer 为 workflows/build-plan/SKILL.md 的既有UI trigger及设计/测试蓝图前非UI显式读取、workflows/build-code/SKILL.md每Phase接口/测试选择前、workflows/verify-code/SKILL.md终末验收准备；build-prd经readiness/render间接读同一来源指针，不据此增加直接运行路由。
+      consumer 为 workflows/build-plan/SKILL.md 的既有UI trigger及设计/测试蓝图前非UI显式读取、workflows/build-code/SKILL.md每Phase接口/测试选择前、workflows/build-code/SKILL.md终末验收准备；build-prd经readiness/render间接读同一来源指针，不据此增加直接运行路由。
       五类规范、原八UI子类职责及三起点只引用 skills/project-norm-init/SKILL.md「规范职责/非UI规范与索引/方法」，各正文仍归原专业 owner；
       delete-condition 为所有上述真实直接与间接consumer均由已审替代方法承接后。SDD、markdown 材料子技能及 design-tokens
       已由 C01 复制入库，登记见 catalog 同名 absorbed 条目与 skills/external/README.md；
@@ -1067,9 +1067,9 @@ skills:
     purpose: 设计源准备后提炼单份机器JSON，供规划、实施与独立检查回读
     design_idea: 五类输入定向阻断、八类规范四态对账、渲染与声明分开、失败保真
     standalone: true
-    used_by_stages: [build-plan, build-code, verify-code]
+    used_by_stages: [build-plan, build-code]
     upstream: []
-    local_changes: WorkflowHub原生字段与方法契约；owner为设计源提炼方法维护者，consumer为build-plan设计源准备读者、build-code实施者与verify-code独立检查者；P1只交契约，采集/对账/消费/三阶段接线由后续Phase承接，不以登记冒真实执行；不替代readiness、不自动晋升规范；delete-condition为经独立审查的替代者完整承接真实consumer。外部工具只沿isolated-browser-qa既有入口，固定参考ego lite 0.6.0.16与agent-browser 0.36.0，许可和归档绑定未核部分unknown；style-ref-gen因许可未声明不采用，不复制外部内容。
+    local_changes: WorkflowHub原生字段与方法契约；owner为设计源提炼方法维护者，consumer为build-plan设计源准备读者、build-code实施者与build-code终末独立检查者；P1只交契约，采集/对账/消费/三阶段接线由后续Phase承接，不以登记冒真实执行；不替代readiness、不自动晋升规范；delete-condition为经独立审查的替代者完整承接真实consumer。外部工具只沿isolated-browser-qa既有入口，固定参考ego lite 0.6.0.16与agent-browser 0.36.0，许可和归档绑定未核部分unknown；style-ref-gen因许可未声明不采用，不复制外部内容。
     dependency_closure: ["skills/project-norm-init", "skills/design-source-readiness", "skills/isolated-browser-qa", "skills/spec-specify"]
     update_policy: 来源版本、规范版本或结构变化时重提炼；升级外部工具先给差异并取得用户决定，不自动追HEAD；任务明细保原证据区，规范晋升归原owner
   - name: design-source-readiness
@@ -1112,7 +1112,6 @@ skills:
     used_by_stages:
       - build-plan
       - build-code
-      - verify-code
     upstream:
       - github_url: https://github.com/vercel-labs/agent-skills
         commit: dd089a8c752c966dee8bf0f27cb625ba193ffd9e
@@ -1176,7 +1175,7 @@ skills:
     standalone: true
     purpose: 每Phase及终末/经验/任务收口将独立验证变化写回唯一规范与索引
     design_idea: 锁外核证；项目同root/name锁内before/delta先行，有序写入与after匹配补偿
-    used_by_stages: [build-code, verify-code]
+    used_by_stages: [build-code]
     upstream: []
     local_changes: 原生方法复用record-lock/safe-write/task handle，不导入同步引擎；owner为规范同步维护者，consumer为build-code每Phase、verify终末、reflection经验前、closeout任务前；保未解判断与独立质量，不建候选/状态/历史账本。
     dependency_closure: ["skills/spec-specify"]
@@ -1192,7 +1191,6 @@ capability_decisions:
     - make-decision
     - build-plan
     - build-code
-    - verify-code
     local_path: tools/cli/measure-main-agent-cost.mjs
     upstream:
     - github_url: https://github.com/addyosmani/agent-skills
@@ -1209,7 +1207,6 @@ capability_decisions:
     - make-decision
     - build-plan
     - build-code
-    - verify-code
     local_path: tools/cli/measure-main-agent-cost.mjs
     upstream:
     - github_url: https://github.com/addyosmani/agent-skills
@@ -1226,7 +1223,6 @@ capability_decisions:
     - make-decision
     - build-plan
     - build-code
-    - verify-code
     local_path: runtime/interface/safe-write.mjs
     upstream:
     - github_url: https://github.com/addyosmani/agent-skills
@@ -1243,7 +1239,6 @@ capability_decisions:
     - make-decision
     - build-plan
     - build-code
-    - verify-code
     local_path: skills/reuse-registry.md
     upstream:
     - github_url: https://github.com/addyosmani/agent-skills
@@ -1282,7 +1277,7 @@ capability_decisions:
     status: absorbed
     purpose: 离线读取规范分责、来源组织与更新方法
     design_idea: 复制完整固定文字闭包，沿现 spec/Phase/facts 分责，不搬六材料双写或重开状态
-    used_by_stages: [build-plan, build-code, verify-code]
+    used_by_stages: [build-plan, build-code]
     local_path: skills/external/spec-driven-production
     upstream:
       - path: .
@@ -1294,7 +1289,7 @@ capability_decisions:
     status: absorbed
     purpose: 离线读取材料GUIDE/AUDIT原方法与完整资源
     design_idea: 只取markdown子技能完整闭包，评分不作产品通过或阶段许可，脚本入库不执行
-    used_by_stages: [build-plan, build-code, verify-code]
+    used_by_stages: [build-plan, build-code]
     local_path: skills/external/material-agent-readiness-eval-markdown
     upstream:
       - path: skills/material-agent-readiness-eval-markdown
@@ -1306,7 +1301,7 @@ capability_decisions:
     status: absorbed
     purpose: 离线读取视觉token组织方法，真实值仍由项目原owner负责
     design_idea: 单文件方法保原字节，不复制项目token值，不强双主题或默认断点
-    used_by_stages: [build-plan, build-code, verify-code]
+    used_by_stages: [build-plan, build-code]
     local_path: skills/external/design-tokens
     upstream:
       - github_url: https://github.com/julianoczkowski/designer-skills
@@ -1376,16 +1371,15 @@ capability_decisions:
         review_outcome: accepted
         path: skills/requesting-code-review
         skill_url: https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/requesting-code-review
-    local_changes: authoring review 方法曾由 wh-review V4 吸收；当前 build-code/verify-code 的正式代码审查走 OCR review --action=record，不调用该历史 skill
+    local_changes: authoring review 方法曾由 wh-review V4 吸收；当前 build-code 的正式代码审查走 OCR review --action=record，不调用该历史 skill
     dependency_closure: []
     update_policy: rejected as runtime skill；禁止第二 review flow
   - name: superpowers-verification-before-completion
     status: absorbed
     purpose: 完成前 fresh verification
     design_idea: 声明完成必须绑定新鲜证据
-    used_by_stages:
-      - verify-code
-    local_path: workflows/verify-code/SKILL.md
+    used_by_stages: [build-code]
+    local_path: workflows/build-code/SKILL.md
     upstream:
       - github_url: https://github.com/obra/superpowers
         commit: d884ae04edebef577e82ff7c4e143debd0bbec99
@@ -1402,9 +1396,8 @@ capability_decisions:
     status: absorbed
     purpose: 开发分支收尾
     design_idea: 验证、人工 merge、worktree 清理
-    used_by_stages:
-      - verify-code
-    local_path: workflows/verify-code/SKILL.md
+    used_by_stages: [build-code]
+    local_path: workflows/build-code/SKILL.md
     upstream:
       - github_url: https://github.com/obra/superpowers
         commit: d884ae04edebef577e82ff7c4e143debd0bbec99
@@ -1444,7 +1437,6 @@ capability_decisions:
       - make-decision
       - build-plan
       - build-code
-      - verify-code
     local_path: workflows
     upstream:
       - github_url: https://github.com/Hugh4424/AgentHub
@@ -1466,7 +1458,6 @@ capability_decisions:
       - make-decision
       - build-plan
       - build-code
-      - verify-code
     local_path: workflows
     upstream:
       - github_url: https://github.com/Hugh4424/AgentHub
@@ -1697,7 +1688,7 @@ capability_decisions:
         review_outcome: accepted
         path: skills/engineering/prototype/SKILL.md
         skill_url: https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/prototype/SKILL.md
-    local_changes: 当前五阶段没有独立触发和消费合同
+    local_changes: 当前三阶段没有独立触发和消费合同
     dependency_closure: []
     update_policy: 出现真实高不确定触发合同后再评估
   - name: matt-implement
@@ -1785,9 +1776,8 @@ capability_decisions:
     status: absorbed
     purpose: standalone distributable 发布前检查
     design_idea: clean build、入口、依赖、安装 smoke、撤回路径
-    used_by_stages:
-      - verify-code
-    local_path: workflows/verify-code/SKILL.md
+    used_by_stages: [build-code]
+    local_path: workflows/build-code/SKILL.md
     upstream:
       - github_url: https://github.com/garrytan/gstack
         commit: 7c9df1c568a9ea745508f679a329332b2c338063
@@ -1815,7 +1805,7 @@ capability_decisions:
         review_outcome: accepted
         path: canary/SKILL.md
         skill_url: https://github.com/garrytan/gstack/blob/7c9df1c568a9ea745508f679a329332b2c338063/canary/SKILL.md
-    local_changes: 当前五阶段没有 deploy-observe workflow
+    local_changes: 当前三阶段没有 deploy-observe workflow
     dependency_closure: []
     update_policy: 未来独立 deploy-observe workflow 建立后重评
   - name: n3-doubt-driven-development
@@ -1826,7 +1816,6 @@ capability_decisions:
       - make-decision
       - build-plan
       - build-code
-      - verify-code
     local_path: skills/wh-review/SKILL.md; skills/wh-review/contracts/provider-protocol.md; skills/review/SKILL.md
     upstream:
       - github_url: https://github.com/addyosmani/agent-skills
@@ -1851,7 +1840,6 @@ capability_decisions:
       - make-decision
       - build-plan
       - build-code
-      - verify-code
     local_path: skills/wh-review/SKILL.md; skills/wh-review/contracts/provider-protocol.md; skills/review/SKILL.md; skills/simplicity-guard/SKILL.md; skills/decision-log/SKILL.md; AGENTS.md
     upstream:
       - github_url: https://github.com/backnotprop/pstack
@@ -1878,7 +1866,6 @@ capability_decisions:
       - make-decision
       - build-plan
       - build-code
-      - verify-code
     local_path: skills/wh-review/SKILL.md; skills/wh-review/contracts/provider-protocol.md; skills/review/SKILL.md
     upstream:
       - github_url: https://github.com/backnotprop/pstack
@@ -1904,7 +1891,6 @@ capability_decisions:
       - make-decision
       - build-plan
       - build-code
-      - verify-code
     local_path: skills/wh-review/SKILL.md; skills/wh-review/contracts/provider-protocol.md; skills/review/SKILL.md
     upstream:
       - github_url: https://github.com/backnotprop/pstack
@@ -1930,7 +1916,6 @@ capability_decisions:
       - make-decision
       - build-plan
       - build-code
-      - verify-code
     local_path: skills/wh-review/SKILL.md; skills/wh-review/contracts/provider-protocol.md; skills/review/SKILL.md
     upstream:
       - github_url: https://github.com/backnotprop/pstack
@@ -1956,7 +1941,6 @@ capability_decisions:
       - make-decision
       - build-plan
       - build-code
-      - verify-code
     local_path: skills/wh-review/SKILL.md; skills/wh-review/contracts/provider-protocol.md; skills/review/SKILL.md
     upstream:
       - github_url: https://github.com/backnotprop/pstack
@@ -1982,7 +1966,6 @@ capability_decisions:
       - make-decision
       - build-plan
       - build-code
-      - verify-code
     local_path: skills/wh-review/SKILL.md; skills/wh-review/contracts/provider-protocol.md; skills/review/SKILL.md
     upstream:
       - github_url: https://github.com/backnotprop/pstack
@@ -2004,7 +1987,7 @@ capability_decisions:
     status: absorbed
     purpose: N3 P4测试证伪与检查可信度方法
     design_idea: "仓内具名命令、纵切RED/GREEN、真实优先替身和无新信息不重跑"
-    used_by_stages: [build-plan, build-code, verify-code]
+    used_by_stages: [build-plan, build-code]
     local_path: "skills/backend-testing/SKILL.md; skills/frontend-testing/SKILL.md; skills/fullstack-slice-testing/SKILL.md; skills/testing-system-blueprint/SKILL.md; skills/spec-plan/templates/phase-template.md"
     upstream:
       - github_url: https://github.com/addyosmani/agent-skills
@@ -2024,7 +2007,7 @@ capability_decisions:
     status: absorbed
     purpose: N3 P4测试证伪与检查可信度方法
     design_idea: "具体输入/独立结果、undefined反事实及absence配presence；合法交互与缺省逐case保留"
-    used_by_stages: [build-plan, build-code, verify-code]
+    used_by_stages: [build-plan, build-code]
     local_path: "skills/backend-testing/SKILL.md; skills/frontend-testing/SKILL.md; skills/fullstack-slice-testing/SKILL.md; skills/testing-system-blueprint/SKILL.md; skills/spec-plan/templates/phase-template.md"
     upstream:
       - github_url: https://github.com/backnotprop/pstack
@@ -2042,8 +2025,8 @@ capability_decisions:
     status: absorbed
     purpose: N3 P4测试证伪与检查可信度方法
     design_idea: "逐项读回五类削弱与真实来源/理由；未知非clean，不加Block"
-    used_by_stages: [build-plan, build-code, verify-code]
-    local_path: "workflows/verify-code/SKILL.md; skills/review/SKILL.md; AGENTS.md"
+    used_by_stages: [build-plan, build-code]
+    local_path: "workflows/build-code/SKILL.md; skills/review/SKILL.md; AGENTS.md"
     upstream:
       - github_url: https://github.com/addyosmani/agent-skills
         commit: aeac41d4d005999432bb7312f7ff06383a91d59d
@@ -2062,8 +2045,8 @@ capability_decisions:
     status: absorbed
     purpose: N3 P4测试证伪与检查可信度方法
     design_idea: "同一检查合法pass/违规目标fail/恢复pass；不安装TS工具或改N10接线"
-    used_by_stages: [build-plan, build-code, verify-code]
-    local_path: "workflows/verify-code/SKILL.md; skills/review/SKILL.md; AGENTS.md"
+    used_by_stages: [build-plan, build-code]
+    local_path: "workflows/build-code/SKILL.md; skills/review/SKILL.md; AGENTS.md"
     upstream:
       - github_url: https://github.com/mattpocock/skills
         commit: b0618bc436ad893b3c5e84e55fba86586d34a404
@@ -2082,8 +2065,8 @@ capability_decisions:
     status: absorbed
     purpose: N3 P4测试证伪与检查可信度方法
     design_idea: "受控行为变异存活即finding；条件式依赖notes、前后行为与直接/传递lockfile读回"
-    used_by_stages: [build-plan, build-code, verify-code]
-    local_path: "workflows/verify-code/SKILL.md; skills/review/SKILL.md; AGENTS.md"
+    used_by_stages: [build-plan, build-code]
+    local_path: "workflows/build-code/SKILL.md; skills/review/SKILL.md; AGENTS.md"
     upstream:
       - github_url: https://github.com/addyosmani/agent-skills
         commit: aeac41d4d005999432bb7312f7ff06383a91d59d
@@ -2102,7 +2085,7 @@ capability_decisions:
     status: absorbed
     purpose: N3 P4测试证伪与检查可信度方法
     design_idea: "Implementation-coupled/Tautological/Horizontal slicing只在backend定义，三个执行consumer沿指针实际消费"
-    used_by_stages: [build-plan, build-code, verify-code]
+    used_by_stages: [build-plan, build-code]
     local_path: "skills/backend-testing/SKILL.md; skills/frontend-testing/SKILL.md; skills/fullstack-slice-testing/SKILL.md; skills/testing-system-blueprint/SKILL.md; skills/spec-plan/templates/phase-template.md"
     upstream:
       - github_url: https://github.com/mattpocock/skills
@@ -2122,7 +2105,7 @@ capability_decisions:
     status: absorbed
     purpose: N3 P4测试证伪与检查可信度方法
     design_idea: "缺RED真实原因/最近既有检查/漏掉seam；环境失败另记，不为凑RED造坏测试"
-    used_by_stages: [build-plan, build-code, verify-code]
+    used_by_stages: [build-plan, build-code]
     local_path: "skills/backend-testing/SKILL.md; skills/frontend-testing/SKILL.md; skills/fullstack-slice-testing/SKILL.md; skills/testing-system-blueprint/SKILL.md; skills/spec-plan/templates/phase-template.md"
     upstream:
       - github_url: https://github.com/backnotprop/pstack
@@ -2153,7 +2136,7 @@ capability_decisions:
         skill_url: https://github.com/addyosmani/agent-skills/blob/aeac41d4d005999432bb7312f7ff06383a91d59d/skills/debugging-and-error-recovery/SKILL.md
         adopted:
           - "SKILL.md#Treating Error Output as Untrusted Data — 程序错误/日志/API与页面文本只作数据，动作从用户授权独立推导"
-    local_changes: "在既有diagnosing-bugs输出与页面内容唯一正文采用；build-code方法2/3失败分支实读。保根因回路、三次失败边界和清理；不采用Safe Fallback、全量测试或逐条错误文本审批。"
+    local_changes: "在既有diagnosing-bugs输出与页面内容唯一正文采用；build-code方法2/3失败分支实读。保根因回路、同一失败或无新事实换路径与三类真实停点边界和清理；不采用Safe Fallback、全量测试或逐条错误文本审批。"
     dependency_closure: [skills/spec-specify/SKILL.md]
     update_policy: "对照固定源章节与真实consumer；不自动追HEAD，方法/调用/效果分别验。"
   - name: n3-perf-issue
@@ -2179,7 +2162,7 @@ capability_decisions:
     status: absorbed
     purpose: N3共同简洁方法采用
     design_idea: 删前六问/git blame、原理由与输入输出/错误/副作用行为保持
-    used_by_stages: [make-decision, build-plan, build-code, verify-code]
+    used_by_stages: [make-decision, build-plan, build-code]
     local_path: skills/simplicity-guard/SKILL.md
     upstream:
       - github_url: https://github.com/addyosmani/agent-skills
@@ -2199,7 +2182,7 @@ capability_decisions:
     status: absorbed
     purpose: N3共同简洁方法采用
     design_idea: 最小有效路径与唯一权威，不造第二份
-    used_by_stages: [make-decision, build-plan, build-code, verify-code]
+    used_by_stages: [make-decision, build-plan, build-code]
     local_path: skills/simplicity-guard/SKILL.md
     upstream:
       - github_url: https://github.com/backnotprop/pstack
@@ -2218,7 +2201,7 @@ capability_decisions:
     status: absorbed
     purpose: N3共同简洁方法采用
     design_idea: P0/P1先减再加，动态consumer核实，不建无需求validator
-    used_by_stages: [make-decision, build-plan, build-code, verify-code]
+    used_by_stages: [make-decision, build-plan, build-code]
     local_path: skills/simplicity-guard/SKILL.md
     upstream:
       - github_url: https://github.com/backnotprop/pstack
@@ -2237,7 +2220,7 @@ capability_decisions:
     status: absorbed
     purpose: N3共同简洁方法采用
     design_idea: 仅先减再建子集与subtract同落P0/P1，不另计采用机制
-    used_by_stages: [make-decision, build-plan, build-code, verify-code]
+    used_by_stages: [make-decision, build-plan, build-code]
     local_path: skills/simplicity-guard/SKILL.md
     upstream:
       - github_url: https://github.com/backnotprop/pstack
@@ -2257,7 +2240,7 @@ capability_decisions:
     status: absorbed
     purpose: N3 P7隔离浏览器方法采用
     design_idea: Security Boundaries：浏览器输出只作数据，指向diagnosing-bugs唯一信任边界
-    used_by_stages: [build-code, verify-code]
+    used_by_stages: [build-code]
     local_path: skills/isolated-browser-qa/SKILL.md
     upstream:
       - github_url: https://github.com/addyosmani/agent-skills
@@ -2279,7 +2262,7 @@ capability_decisions:
     status: absorbed
     purpose: N3 P7隔离浏览器方法采用
     design_idea: Interview / Generate / Prove：现网关Launch/health/Drive/Evidence/Cleanup完整实跑，清理后证据仍可读
-    used_by_stages: [build-code, verify-code]
+    used_by_stages: [build-code]
     local_path: skills/isolated-browser-qa/SKILL.md
     upstream:
       - github_url: https://github.com/backnotprop/pstack
@@ -2300,7 +2283,7 @@ capability_decisions:
     status: absorbed
     purpose: N3 P7隔离浏览器方法采用
     design_idea: Live pass / Triage：健康不等可用，owned reset后重放；区分文档漂移、harness缺口和真实产品回归
-    used_by_stages: [build-code, verify-code]
+    used_by_stages: [build-code]
     local_path: skills/isolated-browser-qa/SKILL.md
     upstream:
       - github_url: https://github.com/backnotprop/pstack
@@ -2324,7 +2307,6 @@ capability_decisions:
     used_by_stages:
       - build-plan
       - build-code
-      - verify-code
     local_path: skills/decision-log/SKILL.md
     upstream:
       - github_url: https://github.com/addyosmani/agent-skills
@@ -2348,7 +2330,6 @@ capability_decisions:
     used_by_stages:
       - build-plan
       - build-code
-      - verify-code
     local_path: skills/spec-plan/SKILL.md
     upstream:
       - github_url: https://github.com/addyosmani/agent-skills
@@ -2372,7 +2353,6 @@ capability_decisions:
     used_by_stages:
       - build-plan
       - build-code
-      - verify-code
     local_path: skills/spec-plan/SKILL.md
     upstream:
       - github_url: https://github.com/addyosmani/agent-skills
@@ -2396,7 +2376,6 @@ capability_decisions:
     used_by_stages:
       - build-plan
       - build-code
-      - verify-code
     local_path: skills/spec-plan/templates/phase-template.md
     upstream:
       - github_url: https://github.com/addyosmani/agent-skills
@@ -2420,7 +2399,6 @@ capability_decisions:
     used_by_stages:
       - build-plan
       - build-code
-      - verify-code
     local_path: skills/deep-research/SKILL.md
     upstream:
       - github_url: https://github.com/addyosmani/agent-skills
@@ -2444,7 +2422,6 @@ capability_decisions:
     used_by_stages:
       - build-plan
       - build-code
-      - verify-code
     local_path: skills/spec-specify/templates/spec-template.md
     upstream:
       - github_url: https://github.com/addyosmani/agent-skills
@@ -2468,7 +2445,6 @@ capability_decisions:
     used_by_stages:
       - build-plan
       - build-code
-      - verify-code
     local_path: skills/spec-specify/SKILL.md; skills/decision-log/templates/decision-log-template.md; skills/spec-specify/templates/spec-template.md; skills/spec-plan/templates/phase-template.md; skills/spec-prd/templates/prd-template.md
     upstream:
       - github_url: https://github.com/backnotprop/pstack
@@ -2490,7 +2466,6 @@ capability_decisions:
     used_by_stages:
       - build-plan
       - build-code
-      - verify-code
     local_path: skills/spec-specify/SKILL.md
     upstream:
       - github_url: https://github.com/backnotprop/pstack
@@ -2512,7 +2487,6 @@ capability_decisions:
     used_by_stages:
       - build-plan
       - build-code
-      - verify-code
     local_path: workflows/build-plan/SKILL.md
     upstream:
       - github_url: https://github.com/backnotprop/pstack
@@ -2534,7 +2508,6 @@ capability_decisions:
     used_by_stages:
       - build-plan
       - build-code
-      - verify-code
     local_path: skills/spec-plan/SKILL.md
     upstream:
       - github_url: https://github.com/backnotprop/pstack
@@ -2556,8 +2529,7 @@ capability_decisions:
     used_by_stages:
       - build-plan
       - build-code
-      - verify-code
-    local_path: skills/decision-log/SKILL.md; skills/spec-analyze/SKILL.md; workflows/verify-code/SKILL.md
+    local_path: skills/decision-log/SKILL.md; skills/spec-analyze/SKILL.md; workflows/build-code/SKILL.md
     upstream:
       - github_url: https://github.com/backnotprop/pstack
         license: MIT
@@ -2578,7 +2550,6 @@ capability_decisions:
     used_by_stages:
       - build-plan
       - build-code
-      - verify-code
     local_path: skills/spec-plan/templates/phase-template.md
     upstream:
       - github_url: https://github.com/backnotprop/pstack
@@ -2600,7 +2571,6 @@ capability_decisions:
     used_by_stages:
       - build-plan
       - build-code
-      - verify-code
     local_path: skills/spec-plan/SKILL.md
     upstream:
       - github_url: https://github.com/backnotprop/pstack
@@ -2622,7 +2592,6 @@ capability_decisions:
     used_by_stages:
       - build-plan
       - build-code
-      - verify-code
     local_path: skills/spec-plan/templates/phase-template.md
     upstream:
       - github_url: https://github.com/backnotprop/pstack
@@ -2644,7 +2613,6 @@ capability_decisions:
     used_by_stages:
       - build-plan
       - build-code
-      - verify-code
     local_path: skills/wh-review/contracts/provider-protocol.md; docs/architecture/test-asset-governance-rules.md
     upstream:
       - github_url: https://github.com/backnotprop/pstack
@@ -2661,13 +2629,12 @@ capability_decisions:
     update_policy: 按固定本地原件逐项比source/本地偏离；不自动追HEAD；被独立审查替代且零consumer后退役，历史原件保留。
   - name: n5-dispatch-and-return
     status: absorbed
-    purpose: 五阶段派发与回传共用合同及研究消费者对齐
+    purpose: 三阶段派发与回传共用合同及研究消费者对齐
     design_idea: brief随活缩放，任务重点靠后；上游原件指针中继，六项事实回传，授权和失败边界保全
     used_by_stages:
       - make-decision
       - build-plan
       - build-code
-      - verify-code
     local_path: AGENTS.md; skills/deep-research/SKILL.md
     upstream:
       - github_url: https://github.com/addyosmani/agent-skills
@@ -2705,7 +2672,6 @@ capability_decisions:
       - make-decision
       - build-plan
       - build-code
-      - verify-code
     local_path: AGENTS.md
     upstream:
       - github_url: https://github.com/backnotprop/pstack
@@ -2724,7 +2690,7 @@ capability_decisions:
     status: absorbed
     purpose: N7既有消费者的来源登记修复，不新增技能或方法行为
     design_idea: "Change Summaries — 改动、故意未改及理由、潜在风险与影响面"
-    used_by_stages: [make-decision, build-prd, build-plan, build-code, verify-code]
+    used_by_stages: [make-decision, build-prd, build-plan, build-code]
     local_path: skills/stage-handoff/SKILL.md; AGENTS.md
     upstream:
       - github_url: https://github.com/addyosmani/agent-skills
@@ -2744,7 +2710,7 @@ capability_decisions:
     status: absorbed
     purpose: N7既有消费者的来源登记修复，不新增技能或方法行为
     design_idea: "Steps 2/4/5 — 报告与实施分权；机制承接后删覆盖散文；未覆盖规则保留"
-    used_by_stages: [make-decision, build-prd, build-plan, build-code, verify-code]
+    used_by_stages: [make-decision, build-prd, build-plan, build-code]
     local_path: skills/stage-reflection/SKILL.md
     upstream:
       - github_url: https://github.com/backnotprop/pstack
@@ -2762,7 +2728,7 @@ capability_decisions:
     status: absorbed
     purpose: N7既有消费者的来源登记修复，不新增技能或方法行为
     design_idea: "Gather what changed / Write the reply — 用户独占动作、推荐理由不答后果、unknown、真实链接及事实不重复"
-    used_by_stages: [make-decision, build-prd, build-plan, build-code, verify-code]
+    used_by_stages: [make-decision, build-prd, build-plan, build-code]
     local_path: skills/stage-handoff/SKILL.md; AGENTS.md
     upstream:
       - github_url: https://github.com/backnotprop/pstack
@@ -2780,7 +2746,7 @@ capability_decisions:
     status: absorbed
     purpose: N7既有消费者的来源登记修复，不新增技能或方法行为
     design_idea: "Structural enforcement check / Apply；references/synthesizer.md接受判据 — 结构优先、批准与落账分开、改变下次行动且未被覆盖才收"
-    used_by_stages: [make-decision, build-prd, build-plan, build-code, verify-code]
+    used_by_stages: [make-decision, build-prd, build-plan, build-code]
     local_path: skills/stage-reflection/SKILL.md; specs/Improvements.md
     upstream:
       - github_url: https://github.com/backnotprop/pstack
@@ -2798,7 +2764,7 @@ capability_decisions:
     status: absorbed
     purpose: N7既有消费者的来源登记修复，不新增技能或方法行为
     design_idea: "Before you start or resume / Sweep the shared record / Output contract — 默认回读相关经验与原源；闭合状态普通文字明确"
-    used_by_stages: [make-decision, build-prd, build-plan, build-code, verify-code]
+    used_by_stages: [make-decision, build-prd, build-plan, build-code]
     local_path: skills/stage-reflection/SKILL.md; specs/Improvements.md
     upstream:
       - github_url: https://github.com/backnotprop/pstack
@@ -2816,8 +2782,8 @@ capability_decisions:
     status: absorbed
     purpose: N7既有消费者的来源登记修复，不新增技能或方法行为
     design_idea: "Descriptions — Scope含故意不做；Blast Radius含相关已知红代价；Verification每条真实路径与结果"
-    used_by_stages: [build-prd, verify-code]
-    local_path: skills/stage-closeout/SKILL.md
+    used_by_stages: [build-prd]
+    local_path: skills/stage-close/SKILL.md
     upstream:
       - github_url: https://github.com/backnotprop/pstack
         license: MIT
@@ -2835,8 +2801,8 @@ capability_decisions:
     status: absorbed
     purpose: 检查本身证伪与检查可信度方法
     design_idea: 检查错在其范围修；通过太易先疑观测法；复发修正落具名检查
-    used_by_stages: [verify-code]
-    local_path: "workflows/verify-code/SKILL.md; skills/stage-reflection/SKILL.md"
+    used_by_stages: [build-code]
+    local_path: "workflows/build-code/SKILL.md; skills/stage-reflection/SKILL.md"
     upstream:
       - github_url: https://github.com/backnotprop/pstack
         commit: unresolved-pstack-content-snapshot
@@ -2847,7 +2813,7 @@ capability_decisions:
           - "S1:41 检查错误在其范围修，不绕过或增加下游豁免"
           - "S1:40 通过太易先查观察方法"
           - "S1:50 复发修正落具名检查"
-    local_changes: "固定文件 SHA256 d9574cc24929773d5c23f40626ae1e09660afddd7de48e08dd6494d9fff9bbf0；记录包 SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8 未复现、不作内容坐标；Git commit unknown，main仅为取回坐标、非固定revision；MIT为本地LICENSE所示，上游许可链未独立核实。正文落verify-code检查可信度段，stage-reflection只放指针；P5/T021负责正文接线与首验，当前登记不证明方法生效；17行表由P5标本次接线验证。owner为verify-code与stage-reflection方法维护者；只有经独立审查的替代方法承接全部消费者且无正文引用后退役，历史原件保留。"
+    local_changes: "固定文件 SHA256 d9574cc24929773d5c23f40626ae1e09660afddd7de48e08dd6494d9fff9bbf0；记录包 SHA256 f08746cbd6067834e095332d0a25bdec65529dcfc436809c2cb419717d0363b8 未复现、不作内容坐标；Git commit unknown，main仅为取回坐标、非固定revision；MIT为本地LICENSE所示，上游许可链未独立核实。正文落build-code终末检查可信度段，stage-reflection只放指针；P5/T021负责正文接线与首验，当前登记不证明方法生效；17行表由P5标本次接线验证。owner为build-code终末与stage-reflection方法维护者；只有经独立审查的替代方法承接全部消费者且无正文引用后退役，历史原件保留。"
     dependency_closure: []
     update_policy: 按固定文件快照逐项比对，不追HEAD，不用记录包hash冒Git绑定；P5正文与首验未完成前不宣称生效。
   - name: swarm
@@ -2876,7 +2842,6 @@ capability_decisions:
     used_by_stages:
       - build-plan
       - build-code
-      - verify-code
     local_path: skills/frontend-component-quality/SKILL.md
     upstream:
       - github_url: https://github.com/vaferkhanom/Website-skills
@@ -2897,7 +2862,6 @@ capability_decisions:
     used_by_stages:
       - build-plan
       - build-code
-      - verify-code
     local_path: skills/frontend-component-quality/SKILL.md
     upstream:
       - github_url: https://github.com/vaferkhanom/Website-skills
@@ -2918,7 +2882,6 @@ capability_decisions:
     used_by_stages:
       - build-plan
       - build-code
-      - verify-code
     local_path: skills/frontend-component-quality/SKILL.md
     upstream:
       - github_url: https://github.com/vaferkhanom/Website-skills
@@ -2939,7 +2902,6 @@ capability_decisions:
     used_by_stages:
       - build-plan
       - build-code
-      - verify-code
     local_path: skills/frontend-component-quality/SKILL.md
     upstream:
       - github_url: https://github.com/vaferkhanom/Website-skills
