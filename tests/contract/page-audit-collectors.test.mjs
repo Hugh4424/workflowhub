@@ -1,13 +1,15 @@
-import {describe,it,expect} from 'vitest';
+import {describe,it,expect,vi} from 'vitest';
 import {spawn} from 'node:child_process';
 import {createServer} from 'node:http';
 import {createHash} from 'node:crypto';
-import {mkdtemp,readFile,writeFile,access,rm} from 'node:fs/promises';
+import {mkdtemp,readFile,writeFile,access,rm,readdir,stat,lstat,symlink} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createContext,runInContext} from 'node:vm';
 import {collect as collectPerformance,runCli as runPerfCli,collectPerf as collectPerfDocument} from '../../skills/frontend-testing/scripts/collect-perf.mjs';
+import {writeAtomic,runCollectorCli} from '../../skills/frontend-testing/scripts/collect-console.mjs';
 import {connectCdp} from '../../skills/isolated-browser-qa/scripts/browser-qa-tickets.mjs';
+import {selectBrowserEngine} from '../../skills/isolated-browser-qa/scripts/browser-qa-session.mjs';
 import {validateSkillBundle} from '../../runtime/adapters/local-skill-resolver.mjs';
 
 const identity={PAGE_AUDIT_WORKSPACE:'/owned/workspace',PAGE_AUDIT_SERVICE:'http://app.test',PAGE_AUDIT_ROUTE:'/audit',PAGE_AUDIT_OBJECT_VERSION:'v1',PAGE_AUDIT_ENGINE_SESSION:'owned-session',BROWSER_QA_ENGINE:'agent-browser'};
@@ -140,4 +142,45 @@ describe('ORACLE-C07-COLLECT boundary inputs',()=>{
   it('observed-viewport-mismatch-stops-the-object',async()=>{const r=await run('console',{observedViewport:'1280x720@1'});expect(r.code).toBe(0);expect(r.doc.failures[0].class).toBe('IDENTITY_MISMATCH');expect(r.doc.items).toEqual([]);});
   it('observed-dpr-is-retained',async()=>{const r=await run('console',{observedViewport:'1440x900@2'});expect(r.doc.failures).toEqual([]);expect(r.doc.object.viewport).toBe('1440x900@2');});
   it('invalid-argument-exits-two-before-CDP-or-output',async()=>{const dir=await mkdtemp(join(tmpdir(),'c07-invalid-')),p=await peer(),out=join(dir,'out.json');try{const r=await launch('console',out,p.endpoint,{},['--unknown','value']).result;expect(r.code).toBe(2);expect(await exists(out)).toBe(false);expect(p.connections).toBe(0);expect(r.stderr).toContain('E_ARGUMENT');}finally{await p.close();await rm(dir,{recursive:true,force:true});}});
+});
+
+
+describe('ORACLE-C07-COLLECT original publication',()=>{
+  it('publish:module-cli-new-and-identical-complete-bytes-reuse-original',async()=>{
+    const dir=await mkdtemp(join(tmpdir(),'c07-publication-')),out=join(dir,'out.json'),argv=['--cdp-url','ws://127.0.0.1:1/devtools/browser/synthetic','--out',out,'--viewport','1440x900','--state','default'],doc={engine:'agent-browser',observed_at:'2026-10-30T00:00:00.000Z',object:{workspace:'/owned/workspace',service:'http://app.test',route:'/audit',object_version:'v1',engine_session:'owned-session',state:'default',viewport:'1440x900@1',engine:'agent-browser'},items:[],failures:[]};let calls=0;const fixed=async()=>{calls++;return doc;};
+    try{expect(await runCollectorCli(argv,identity,fixed)).toBe(0);const before=await stat(out,{bigint:true}),bytes=await readFile(out);expect(bytes.toString()).toBe(JSON.stringify(doc)+'\n');expect(await runCollectorCli(argv,identity,fixed)).toBe(0);const after=await stat(out,{bigint:true});expect(await readFile(out)).toEqual(bytes);expect(after.ino).toBe(before.ino);expect(after.mtimeNs).toBe(before.mtimeNs);expect(calls).toBe(2);expect(await readdir(dir)).toEqual(['out.json']);}finally{await rm(dir,{recursive:true,force:true});}
+  });
+  it('publish:concurrent-identical-complete-bytes-both-reuse-one-file',async()=>{
+    const dir=await mkdtemp(join(tmpdir(),'c07-publication-')),out=join(dir,'out.json'),doc={items:[13,26,39],failures:[]};
+    try{const results=await Promise.allSettled([writeAtomic(out,doc),writeAtomic(out,doc)]);expect(results.map(r=>r.status)).toEqual(['fulfilled','fulfilled']);expect((await readFile(out)).toString()).toBe('{"items":[13,26,39],"failures":[]}\n');expect((await stat(out)).nlink).toBe(1);expect(await readdir(dir)).toEqual(['out.json']);}finally{await rm(dir,{recursive:true,force:true});}
+  });
+  it('publish:failed-exclusive-temp-open-does-not-remove-a-borrowed-file',async()=>{
+    const dir=await mkdtemp(join(tmpdir(),'c07-publication-')),out=join(dir,'out.json'),borrowed=out+'.'+process.pid+'.controlled-publication-collision.tmp',bytes=Buffer.from('preexisting borrowed temporary bytes');await writeFile(borrowed,bytes,{flag:'wx'});const uuid=vi.spyOn(crypto,'randomUUID').mockReturnValue('controlled-publication-collision');
+    try{await expect(writeAtomic(out,{items:[]})).rejects.toMatchObject({code:'EEXIST'});expect(await readFile(borrowed)).toEqual(bytes);expect(await exists(out)).toBe(false);expect(await readdir(dir)).toEqual([borrowed.slice(dir.length+1)]);}finally{uuid.mockRestore();await rm(dir,{recursive:true,force:true});}
+  });
+  it('publish:symlink-original-preserved-with-native-cause-and-own-temp-clean',async()=>{
+    const dir=await mkdtemp(join(tmpdir(),'c07-publication-')),out=join(dir,'out.json'),original=join(dir,'original.json'),bytes=Buffer.from('{"items":[]}\n');await writeFile(original,bytes,{flag:'wx'});await symlink(original,out);
+    try{await expect(writeAtomic(out,{items:[]})).rejects.toMatchObject({code:'ELOOP',cause:{code:'EEXIST'}});expect((await lstat(out)).isSymbolicLink()).toBe(true);expect(await readFile(original)).toEqual(bytes);expect((await readdir(dir)).sort()).toEqual(['original.json','out.json']);}finally{await rm(dir,{recursive:true,force:true});}
+  });
+  it('publish:actual-cli-concurrent-different-documents-have-one-winner',async()=>{
+    const dir=await mkdtemp(join(tmpdir(),'c07-publication-')),out=join(dir,'out.json'),p=await peer();
+    try{const jobs=[launch('console',out,p.endpoint),launch('console',out,p.endpoint,{BROWSER_QA_ENGINE:'ego'})],results=await Promise.all(jobs.map(j=>j.result)),after=await readFile(out,'utf8');console.log(JSON.stringify({case:'two actualCLI differentengine docs',exits:results.map(r=>r.code),final_engine:JSON.parse(after).engine}));expect(results.map(r=>r.code).sort()).toEqual([0,1]);const winner=results.find(r=>r.code===0),loser=results.find(r=>r.code===1);expect(after).toBe(winner.stdout);expect(JSON.parse(loser.stderr).errors[0].code).toBe('E_WRITE');expect(loser.stdout).toBe('');expect(await readdir(dir)).toEqual(['out.json']);}finally{await p.close();await rm(dir,{recursive:true,force:true});}
+  });
+  it('publish:actual-cli-existing-different-bytes-keeps-original',async()=>{
+    const dir=await mkdtemp(join(tmpdir(),'c07-publication-')),out=join(dir,'out.json'),p=await peer(),original=Buffer.from('{"previous":"immutable-original"}\n');
+    try{await writeFile(out,original,{flag:'wx'});const r=await launch('console',out,p.endpoint).result,after=await readFile(out);console.log(JSON.stringify({case:'existingdifferent actualCLI',exit:r.code,old_sha256:createHash('sha256').update(original).digest('hex'),after_sha256:createHash('sha256').update(after).digest('hex'),overwritten:!original.equals(after)}));expect(r.code,r.stderr).toBe(1);expect(JSON.parse(r.stderr).errors[0].code).toBe('E_WRITE');expect(r.stdout).toBe('');expect(after).toEqual(original);expect(await readdir(dir)).toEqual(['out.json']);}finally{await p.close();await rm(dir,{recursive:true,force:true});}
+  });
+});
+
+
+describe('ORACLE-C07-COLLECT supported engine',()=>{
+  it.each(['network','overflow','perf','a11y'])('engine:gateway-browser-use-preserved-in-%s',async dim=>{
+    const selected=await selectBrowserEngine({BROWSER_QA_ENGINE:'browser-use'},{probe:async()=>{throw Error('explicit engine must not probe');}}),r=await run(dim,{}, {BROWSER_QA_ENGINE:selected.engine});expect(r.code,r.stderr).toBe(0);expect(r.doc.engine).toBe('browser-use');expect(r.doc.object.engine).toBe('browser-use');expect(r.doc.failures).toEqual([]);expect(r.connections).toBe(1);if(dim==='network')expect(r.doc.items).toContainEqual(expect.objectContaining({event:'Network.loadingFailed',errorText:'controlled-failure'}));if(dim==='overflow')expect(r.doc.items).toContainEqual({scrollWidth:1500,clientWidth:1440});if(dim==='perf')expect(r.doc.items[0].perf.nav.ttfb).toEqual({runs:[10,20,30],median:20});if(dim==='a11y')expect(r.doc.items).toContainEqual({node_id:'n1',role:'button',name:'Save',focusable:true});
+  });
+  it.each(['unlisted-engine','constructor','__proto__'])('engine:unsupported-%s-does-not-become-an-identity',async engine=>{
+    const r=await run('console',{}, {BROWSER_QA_ENGINE:engine});expect(r.doc.engine).toBe(null);expect(r.doc.object.engine).toBe(null);expect(r.doc.failures).toContainEqual({class:'IDENTITY_MISMATCH',detail:'Missing identity coordinate: engine'});expect(r.doc.items).toEqual([]);expect(r.connections).toBe(0);
+  });
+  it('engine:gateway-browser-use-reaches-actual-console-cli',async()=>{
+    const selected=await selectBrowserEngine({BROWSER_QA_ENGINE:'browser-use'},{probe:async()=>{throw Error('explicit engine must not probe');}});expect(selected.engine).toBe('browser-use');const r=await run('console',{}, {BROWSER_QA_ENGINE:selected.engine});expect(r.code,r.stderr).toBe(0);expect(r.doc.engine).toBe('browser-use');expect(r.doc.object.engine).toBe('browser-use');expect(r.doc.failures).toEqual([]);expect(r.connections).toBe(1);expect(r.doc.items.some(x=>x.type==='error')).toBe(true);
+  });
 });

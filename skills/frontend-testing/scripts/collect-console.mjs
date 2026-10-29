@@ -1,4 +1,5 @@
-import {readFile,writeFile,rename,unlink} from 'node:fs/promises';
+import {readFile,writeFile,open,link,lstat,unlink} from 'node:fs/promises';
+import {constants} from 'node:fs';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {connectCdp,validateEndpoint} from '../../isolated-browser-qa/scripts/browser-qa-tickets.mjs';
@@ -9,9 +10,40 @@ const fail=(kind,detail)=>Object.assign(new Error(detail),{kind});
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const identityKeys={workspace:'PAGE_AUDIT_WORKSPACE',service:'PAGE_AUDIT_SERVICE',route:'PAGE_AUDIT_ROUTE',object_version:'PAGE_AUDIT_OBJECT_VERSION',engine_session:'PAGE_AUDIT_ENGINE_SESSION'};
 export async function writeAtomic(path,value) {
-  const target=resolve(path),temporary=target+'.'+process.pid+'.'+crypto.randomUUID()+'.tmp';
-  try {await writeFile(temporary,JSON.stringify(value)+'\n',{flag:'wx'});await rename(temporary,target);}
-  finally {await unlink(temporary).catch(e=>{if(e.code!=='ENOENT')throw e;});}
+  const target=resolve(path),temporary=target+'.'+process.pid+'.'+crypto.randomUUID()+'.tmp',bytes=Buffer.from(JSON.stringify(value)+'\n');
+  const sameFile=(a,b)=>a.dev===b.dev&&a.ino===b.ino;
+  let file,identity,problem;
+  try {
+    if(!Number.isInteger(constants.O_NOFOLLOW))throw new Error('Evidence output requires O_NOFOLLOW');
+    file=await open(temporary,'wx');identity=await file.stat({bigint:true});
+    await file.writeFile(bytes);await file.close();file=undefined;
+    const ready=await lstat(temporary,{bigint:true});
+    if(ready.isSymbolicLink()||!sameFile(ready,identity))throw new Error('Temporary evidence file ownership changed');
+    // A hard link atomically creates the target without replacing an original.
+    try {await link(temporary,target);}
+    catch(publicationError) {
+      if(publicationError.code!=='EEXIST')throw publicationError;
+      let existing,comparisonError;
+      try {
+        existing=await open(target,constants.O_RDONLY|constants.O_NOFOLLOW);
+        const before=await existing.stat({bigint:true});
+        if(!before.isFile())throw publicationError;
+        const prior=await existing.readFile(),after=await existing.stat({bigint:true}),named=await lstat(target,{bigint:true});
+        if(!prior.equals(bytes)||!sameFile(before,after)||!sameFile(after,named)||named.isSymbolicLink()||before.size!==after.size||before.mtimeNs!==after.mtimeNs)throw publicationError;
+      }catch(error){comparisonError=error;}
+      finally {try{await existing?.close();}catch(error){comparisonError??=error;}}
+      if(comparisonError){if(comparisonError!==publicationError&&comparisonError.cause===undefined)comparisonError.cause=publicationError;throw comparisonError;}
+    }
+  }catch(error){problem=error;}
+  finally {
+    try{await file?.close();}catch(error){problem??=error;}
+    if(identity)try{
+      const named=await lstat(temporary,{bigint:true});
+      if(named.isSymbolicLink()||!sameFile(named,identity))throw new Error('Temporary evidence file ownership changed; not removed');
+      await unlink(temporary);
+    }catch(error){if(error.code!=='ENOENT')problem??=error;}
+  }
+  if(problem)throw problem;
 }
 export async function evaluate(call,expression) {
   const result=await call('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});
@@ -45,7 +77,7 @@ function addFailure(doc,kind,detail){if(!doc.failures.some(f=>f.class===kind&&f.
 const routeMatches=(url,route)=>{try{const parsed=new URL(url);return /^https?:\/\//.test(route)?parsed.href===new URL(route).href:parsed.pathname+parsed.search+parsed.hash===route;}catch{return false;}};
 export async function collectWith(config,env,observe) {
   validateConfig(config,env);
-  const engine={'ego-lite':'ego',ego:'ego','agent-browser':'agent-browser'}[env.BROWSER_QA_ENGINE]??null;
+  const engine=new Map([['ego-lite','ego'],['ego','ego'],['agent-browser','agent-browser'],['browser-use','browser-use']]).get(env.BROWSER_QA_ENGINE)??null;
   const object={...Object.fromEntries(Object.entries(identityKeys).map(([k,v])=>[k,env[v]])),state:config.state??null,viewport:config.viewport?config.viewport+'@1':null,engine};
   const doc={engine,observed_at:new Date().toISOString(),object,items:[],failures:[]};
   for(const key of ['state','viewport','engine'])if(object[key]===null)addFailure(doc,'IDENTITY_MISMATCH','Missing identity coordinate: '+key);
