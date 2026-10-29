@@ -11,7 +11,7 @@ import { validateAcceptanceEvidence } from '../../runtime/evidence/acceptance-ev
 
 const taskId = 'workflowhub-ui-frontend-c05-prototype-design-review-20261027';
 const repo = fileURLToPath(new URL('../../', import.meta.url));
-const materialRoot = `specs/${taskId}/`;
+const materialRoot = `specs/archive/${taskId}/`;
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const text = value => typeof value === 'string' && value.trim().length > 0;

@@ -6907,8 +6907,8 @@
       "retention_basis": "C05原批准Phase逐件写集；只登记具名测试，非新控制面。"
     },
     {
-      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/EquityCurve.tsx",
-      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/EquityCurve.tsx",
+      "source": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/EquityCurve.tsx",
+      "destination": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/EquityCurve.tsx",
       "status": "retain",
       "role": "test",
       "responsibility": "C05有稿样本真实source组件/图表/hover静态依赖；受控fixture隔离生产副作用",
@@ -6916,14 +6916,14 @@
       "consumer": "SimulationBoard/SimWorkbench/PerfBlocks/RunTimeline actual static imports",
       "module_consumers": [],
       "named_data_readers": [
-        "npm --prefix specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A run build"
+        "npm --prefix specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A run build"
       ],
       "delete_condition": "两页无consumer且经独立验证替代承接后原owner删除",
       "retention_basis": "已授权完整AC2源码适配；本次有源闭包精确登记，不是新平台"
     },
     {
-      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/CandleChart.tsx",
-      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/CandleChart.tsx",
+      "source": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/CandleChart.tsx",
+      "destination": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/CandleChart.tsx",
       "status": "retain",
       "role": "test",
       "responsibility": "C05有稿样本真实source组件/图表/hover静态依赖；受控fixture隔离生产副作用",
@@ -6931,14 +6931,14 @@
       "consumer": "SimulationBoard/SimWorkbench/PerfBlocks/RunTimeline actual static imports",
       "module_consumers": [],
       "named_data_readers": [
-        "npm --prefix specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A run build"
+        "npm --prefix specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A run build"
       ],
       "delete_condition": "两页无consumer且经独立验证替代承接后原owner删除",
       "retention_basis": "已授权完整AC2源码适配；本次有源闭包精确登记，不是新平台"
     },
     {
-      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/slotState.ts",
-      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/slotState.ts",
+      "source": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/slotState.ts",
+      "destination": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/slotState.ts",
       "status": "retain",
       "role": "test",
       "responsibility": "C05有稿样本真实source组件/图表/hover静态依赖；受控fixture隔离生产副作用",
@@ -6946,14 +6946,14 @@
       "consumer": "SimulationBoard/SimWorkbench/PerfBlocks/RunTimeline actual static imports",
       "module_consumers": [],
       "named_data_readers": [
-        "npm --prefix specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A run build"
+        "npm --prefix specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A run build"
       ],
       "delete_condition": "两页无consumer且经独立验证替代承接后原owner删除",
       "retention_basis": "已授权完整AC2源码适配；本次有源闭包精确登记，不是新平台"
     },
     {
-      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/systemState.ts",
-      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/systemState.ts",
+      "source": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/systemState.ts",
+      "destination": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/systemState.ts",
       "status": "retain",
       "role": "test",
       "responsibility": "C05有稿样本真实source组件/图表/hover静态依赖；受控fixture隔离生产副作用",
@@ -6961,14 +6961,14 @@
       "consumer": "SimulationBoard/SimWorkbench/PerfBlocks/RunTimeline actual static imports",
       "module_consumers": [],
       "named_data_readers": [
-        "npm --prefix specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A run build"
+        "npm --prefix specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A run build"
       ],
       "delete_condition": "两页无consumer且经独立验证替代承接后原owner删除",
       "retention_basis": "已授权完整AC2源码适配；本次有源闭包精确登记，不是新平台"
     },
     {
-      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/store.ts",
-      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/store.ts",
+      "source": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/store.ts",
+      "destination": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/store.ts",
       "status": "retain",
       "role": "test",
       "responsibility": "C05有稿样本真实source组件/图表/hover静态依赖；受控fixture隔离生产副作用",
@@ -6976,14 +6976,14 @@
       "consumer": "SimulationBoard/SimWorkbench/PerfBlocks/RunTimeline actual static imports",
       "module_consumers": [],
       "named_data_readers": [
-        "npm --prefix specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A run build"
+        "npm --prefix specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A run build"
       ],
       "delete_condition": "两页无consumer且经独立验证替代承接后原owner删除",
       "retention_basis": "已授权完整AC2源码适配；本次有源闭包精确登记，不是新平台"
     },
     {
-      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/data.ts",
-      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/data.ts",
+      "source": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/data.ts",
+      "destination": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/data.ts",
       "status": "retain",
       "role": "test",
       "responsibility": "C05有稿样本真实source组件/图表/hover静态依赖；受控fixture隔离生产副作用",
@@ -6991,14 +6991,14 @@
       "consumer": "SimulationBoard/SimWorkbench/PerfBlocks/RunTimeline actual static imports",
       "module_consumers": [],
       "named_data_readers": [
-        "npm --prefix specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A run build"
+        "npm --prefix specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A run build"
       ],
       "delete_condition": "两页无consumer且经独立验证替代承接后原owner删除",
       "retention_basis": "已授权完整AC2源码适配；本次有源闭包精确登记，不是新平台"
     },
     {
-      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/shared.tsx",
-      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/shared.tsx",
+      "source": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/shared.tsx",
+      "destination": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/shared.tsx",
       "status": "retain",
       "role": "test",
       "responsibility": "C05有稿样本真实source组件/图表/hover静态依赖；受控fixture隔离生产副作用",
@@ -7006,14 +7006,14 @@
       "consumer": "SimulationBoard/SimWorkbench/PerfBlocks/RunTimeline actual static imports",
       "module_consumers": [],
       "named_data_readers": [
-        "npm --prefix specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A run build"
+        "npm --prefix specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A run build"
       ],
       "delete_condition": "两页无consumer且经独立验证替代承接后原owner删除",
       "retention_basis": "已授权完整AC2源码适配；本次有源闭包精确登记，不是新平台"
     },
     {
-      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/demoUniverse.ts",
-      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/demoUniverse.ts",
+      "source": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/demoUniverse.ts",
+      "destination": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/demoUniverse.ts",
       "status": "retain",
       "role": "test",
       "responsibility": "C05有稿样本真实source组件/图表/hover静态依赖；受控fixture隔离生产副作用",
@@ -7021,14 +7021,14 @@
       "consumer": "SimulationBoard/SimWorkbench/PerfBlocks/RunTimeline actual static imports",
       "module_consumers": [],
       "named_data_readers": [
-        "npm --prefix specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A run build"
+        "npm --prefix specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A run build"
       ],
       "delete_condition": "两页无consumer且经独立验证替代承接后原owner删除",
       "retention_basis": "已授权完整AC2源码适配；本次有源闭包精确登记，不是新平台"
     },
     {
-      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/status.tsx",
-      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/status.tsx",
+      "source": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/status.tsx",
+      "destination": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/status.tsx",
       "status": "retain",
       "role": "test",
       "responsibility": "C05有稿样本真实source组件/图表/hover静态依赖；受控fixture隔离生产副作用",
@@ -7036,14 +7036,14 @@
       "consumer": "SimulationBoard/SimWorkbench/PerfBlocks/RunTimeline actual static imports",
       "module_consumers": [],
       "named_data_readers": [
-        "npm --prefix specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A run build"
+        "npm --prefix specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A run build"
       ],
       "delete_condition": "两页无consumer且经独立验证替代承接后原owner删除",
       "retention_basis": "已授权完整AC2源码适配；本次有源闭包精确登记，不是新平台"
     },
     {
-      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/postcss.config.mjs",
-      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/postcss.config.mjs",
+      "source": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/postcss.config.mjs",
+      "destination": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/postcss.config.mjs",
       "status": "retired",
       "role": "test",
       "responsibility": "C05有稿样本真实source组件/图表/hover静态依赖；受控fixture隔离生产副作用",
@@ -7051,7 +7051,7 @@
       "consumer": "历史来源追溯；当前静态consumer见新增index/JS/CSS",
       "module_consumers": [],
       "named_data_readers": [
-        "npm --prefix specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A run build"
+        "npm --prefix specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A run build"
       ],
       "delete_condition": "两页无consumer且经独立验证替代承接后原owner删除",
       "retention_basis": "004/005静态迁移删除原Next壳；旧原件与369哈希保历史，静态入口承接当前consumer"
@@ -7380,8 +7380,8 @@
       "retention_basis": "原已批准P3/T003写集及用户个人研究继续复制的真实决定；本次补登记非新能力"
     },
     {
-      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/.gitignore",
-      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/.gitignore",
+      "source": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/.gitignore",
+      "destination": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/.gitignore",
       "status": "retain",
       "role": "test",
       "responsibility": "本受控Next样本仅隔离安装/构建产物，避免混入源码交付",
@@ -7389,14 +7389,14 @@
       "consumer": "Git状态/后续样本作者；不更改全仓或共享Git设置",
       "module_consumers": [],
       "named_data_readers": [
-        "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/README.md"
+        "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/README.md"
       ],
       "delete_condition": "对应样本退役且无当前consumer时随样本删除",
       "retention_basis": "当前原授权真实Next构建样本所需局部housekeeping；不删现生成物"
     },
     {
-      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/B/.gitignore",
-      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/B/.gitignore",
+      "source": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/B/.gitignore",
+      "destination": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/B/.gitignore",
       "status": "retain",
       "role": "test",
       "responsibility": "本受控Next样本仅隔离安装/构建产物，避免混入源码交付",
@@ -7404,14 +7404,14 @@
       "consumer": "Git状态/后续样本作者；不更改全仓或共享Git设置",
       "module_consumers": [],
       "named_data_readers": [
-        "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/B/README.md"
+        "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/B/README.md"
       ],
       "delete_condition": "对应样本退役且无当前consumer时随样本删除",
       "retention_basis": "当前原授权真实Next构建样本所需局部housekeeping；不删现生成物"
     },
     {
-      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/index.html",
-      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/index.html",
+      "source": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/index.html",
+      "destination": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/index.html",
       "status": "add",
       "role": "test",
       "responsibility": "轻量静态样本入口/原生交互/样式，承接当前真实mock行为",
@@ -7425,13 +7425,13 @@
       "retention_basis": "用户004/005轻量静态选择；当前有界样本，无新框架/gate/控制面"
     },
     {
-      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/build.mjs",
-      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/build.mjs",
+      "source": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/build.mjs",
+      "destination": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/build.mjs",
       "status": "add",
       "role": "test",
       "responsibility": "A轻量作者转换：esbuild/PostCSS生成静态IIFE/CSS；不是消费者服务",
       "owner": "P3/T004",
-      "consumer": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/package.json build script",
+      "consumer": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/package.json build script",
       "module_consumers": [],
       "named_data_readers": [
         "普通静态服务或本地HTML；作者另node build.mjs"
@@ -7440,8 +7440,8 @@
       "retention_basis": "用户004/005轻量静态选择；当前有界样本，无新框架/gate/控制面"
     },
     {
-      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/app/main.tsx",
-      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/app/main.tsx",
+      "source": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/app/main.tsx",
+      "destination": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/app/main.tsx",
       "status": "add",
       "role": "test",
       "responsibility": "轻量静态样本入口/原生交互/样式，承接当前真实mock行为",
@@ -7455,13 +7455,13 @@
       "retention_basis": "用户004/005轻量静态选择；当前有界样本，无新框架/gate/控制面"
     },
     {
-      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/assets/app.js",
-      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/assets/app.js",
+      "source": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/assets/app.js",
+      "destination": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/assets/app.js",
       "status": "add",
       "role": "test",
       "responsibility": "A预编译静态发布文件；保React交互，浏览器零npm消费",
       "owner": "P3/T004",
-      "consumer": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/index.html",
+      "consumer": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/index.html",
       "module_consumers": [],
       "named_data_readers": [
         "普通静态服务或本地HTML；作者另node build.mjs"
@@ -7470,13 +7470,13 @@
       "retention_basis": "用户004/005轻量静态选择；当前有界样本，无新框架/gate/控制面"
     },
     {
-      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/assets/styles.css",
-      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/assets/styles.css",
+      "source": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/assets/styles.css",
+      "destination": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/assets/styles.css",
       "status": "add",
       "role": "test",
       "responsibility": "A预编译静态发布文件；保React交互，浏览器零npm消费",
       "owner": "P3/T004",
-      "consumer": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/index.html",
+      "consumer": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/index.html",
       "module_consumers": [],
       "named_data_readers": [
         "普通静态服务或本地HTML；作者另node build.mjs"
@@ -7485,8 +7485,8 @@
       "retention_basis": "用户004/005轻量静态选择；当前有界样本，无新框架/gate/控制面"
     },
     {
-      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/B/index.html",
-      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/B/index.html",
+      "source": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/B/index.html",
+      "destination": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/B/index.html",
       "status": "add",
       "role": "test",
       "responsibility": "轻量静态样本入口/原生交互/样式，承接当前真实mock行为",
@@ -7500,8 +7500,8 @@
       "retention_basis": "用户004/005轻量静态选择；当前有界样本，无新框架/gate/控制面"
     },
     {
-      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/B/styles.css",
-      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/B/styles.css",
+      "source": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/B/styles.css",
+      "destination": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/B/styles.css",
       "status": "add",
       "role": "test",
       "responsibility": "轻量静态样本入口/原生交互/样式，承接当前真实mock行为",
@@ -7515,8 +7515,8 @@
       "retention_basis": "用户004/005轻量静态选择；当前有界样本，无新框架/gate/控制面"
     },
     {
-      "source": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/B/app.js",
-      "destination": "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/B/app.js",
+      "source": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/B/app.js",
+      "destination": "specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/B/app.js",
       "status": "add",
       "role": "test",
       "responsibility": "轻量静态样本入口/原生交互/样式，承接当前真实mock行为",
