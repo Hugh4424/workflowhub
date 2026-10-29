@@ -83,6 +83,83 @@
       "retention_basis": "C07 P7 T019/T020 approved fixture; byte facts do not prove authenticity, license or page coverage."
     },
     {
+      "source": "skills/frontend-testing/scripts/run-page-audit.mjs",
+      "destination": "skills/frontend-testing/scripts/run-page-audit.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "T012/T013 编排身份、单导航窗口、真实perf模块动作及标准报告和失败传播",
+      "owner": "C07 P5 唯一开发writer / frontend-testing编排维护者",
+      "consumer": "tests/contract/page-audit-runner.test.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "tests/contract/page-audit-runner.test.mjs"
+      ],
+      "delete_condition": "本具名职责由经独立验证的既有替代完整承接且实际消费者改接后删除；保留原执行和失败证据。",
+      "retention_basis": "C07 P5 T012/T013/T014原批准写集；只承载现有调用者，不新增公共命令、schema、状态或登记层。"
+    },
+    {
+      "source": "skills/frontend-testing/scripts/check-norm-consumption.mjs",
+      "destination": "skills/frontend-testing/scripts/check-norm-consumption.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "T014 对显式judgments引用核原规范节及元数据，输出三键事实并供runner降未测",
+      "owner": "C07 P5 唯一开发writer / frontend-testing编排维护者",
+      "consumer": "skills/frontend-testing/scripts/run-page-audit.mjs",
+      "module_consumers": [
+        "skills/frontend-testing/scripts/run-page-audit.mjs"
+      ],
+      "named_data_readers": [
+        "skills/frontend-testing/scripts/run-page-audit.mjs"
+      ],
+      "delete_condition": "本具名职责由经独立验证的既有替代完整承接且实际消费者改接后删除；保留原执行和失败证据。",
+      "retention_basis": "C07 P5 T012/T013/T014原批准写集；只承载现有调用者，不新增公共命令、schema、状态或登记层。"
+    },
+    {
+      "source": "tests/contract/page-audit-runner.test.mjs",
+      "destination": "tests/contract/page-audit-runner.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "P5真实CLI/模块编排及四类失败的定向契约测试",
+      "owner": "C07 P5 唯一开发writer / frontend-testing编排维护者",
+      "consumer": "node node_modules/vitest/vitest.mjs run tests/contract/page-audit-runner.test.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "node node_modules/vitest/vitest.mjs run tests/contract/page-audit-runner.test.mjs"
+      ],
+      "delete_condition": "本具名职责由经独立验证的既有替代完整承接且实际消费者改接后删除；保留原执行和失败证据。",
+      "retention_basis": "C07 P5 T012/T013/T014原批准写集；只承载现有调用者，不新增公共命令、schema、状态或登记层。"
+    },
+    {
+      "source": "tests/contract/page-audit-consumption.test.mjs",
+      "destination": "tests/contract/page-audit-consumption.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "P5规范三键事实及真实报告未测消费的定向契约测试",
+      "owner": "C07 P5 唯一开发writer / frontend-testing编排维护者",
+      "consumer": "node node_modules/vitest/vitest.mjs run tests/contract/page-audit-consumption.test.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "node node_modules/vitest/vitest.mjs run tests/contract/page-audit-consumption.test.mjs"
+      ],
+      "delete_condition": "本具名职责由经独立验证的既有替代完整承接且实际消费者改接后删除；保留原执行和失败证据。",
+      "retention_basis": "C07 P5 T012/T013/T014原批准写集；只承载现有调用者，不新增公共命令、schema、状态或登记层。"
+    },
+    {
+      "source": "tests/fixtures/page-audit/runner/judgments.json",
+      "destination": "tests/fixtures/page-audit/runner/judgments.json",
+      "status": "add",
+      "role": "test",
+      "responsibility": "P5判定与规范引用输入样张，不包含可执行动作或真实业务数据",
+      "owner": "C07 P5 唯一开发writer / frontend-testing编排维护者",
+      "consumer": "tests/contract/page-audit-runner.test.mjs; tests/contract/page-audit-consumption.test.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "tests/contract/page-audit-runner.test.mjs; tests/contract/page-audit-consumption.test.mjs"
+      ],
+      "delete_condition": "本具名职责由经独立验证的既有替代完整承接且实际消费者改接后删除；保留原执行和失败证据。",
+      "retention_basis": "C07 P5 T012/T013/T014原批准写集；只承载现有调用者，不新增公共命令、schema、状态或登记层。"
+    },
+    {
       "source": "skills/spec-plan/scripts/check-reader-record.mjs",
       "destination": "skills/spec-plan/scripts/check-reader-record.mjs",
       "status": "add",

@@ -1,0 +1,22 @@
+{
+  "criteria": [
+    {"id":"business","dimension":"业务任务","state":"未测","evidence":[],"untested_reason":"示例输入；尚未执行具体页面任务及可观察终态，不证明真实业务。","cited_norms":[{"ref":"skills/frontend-testing/references/page-audit.md#业务任务脚本","version":"1.0.0","owner":"frontend-testing 方法维护者","consumer":"business：按页面任务与真实终态判读，mock不冒业务覆盖"}]},
+    {"id":"navigation","dimension":"IA 导航","state":"未测","evidence":[],"untested_reason":"示例输入；实际导航与返回任务尚未独立判定。","cited_norms":[{"ref":"skills/frontend-testing/references/page-audit.md#八维骨架","version":"1.0.0","owner":"frontend-testing 方法维护者","consumer":"navigation：保入口、顺序与返回的证据边界"}]},
+    {"id":"interaction","dimension":"交互状态","state":"未测","evidence":[],"untested_reason":"示例输入；动作由实际页面任务作者通过程序式入口提供，不由此JSON执行。","cited_norms":[{"ref":"skills/frontend-testing/references/page-audit.md#八维骨架","version":"1.0.0","owner":"frontend-testing 方法维护者","consumer":"interaction：交互状态与运行性能分别保原观察和unknown"}]},
+    {"id":"data","dimension":"内容数据","state":"未测","evidence":[],"untested_reason":"示例输入；缺值、长值及真实数据边界尚未独立判定。","cited_norms":[{"ref":"skills/frontend-testing/references/page-audit.md#四态","version":"1.0.0","owner":"frontend-testing 方法维护者","consumer":"data：不把缺值补零或将未测折成通过"}]},
+    {"id":"visual","dimension":"视觉规范","state":"未测","evidence":[],"untested_reason":"示例输入；尚无本次对象的设计源与视觉独立判定。","cited_norms":[{"ref":"skills/plan-design-review/SKILL.md#check","version":"unknown","owner":"设计审查方法 owner","consumer":"visual：回原八维及真实设计源核对"}]},
+    {"id":"layout","dimension":"响应式布局","state":"未测","evidence":[],"untested_reason":"示例输入；原始几何不代响应式效果判定。","cited_norms":[{"ref":"skills/frontend-testing/references/page-audit.md#规范来源","version":"1.0.0","owner":"frontend-testing 方法维护者","consumer":"layout：核实际来源与最小读取清单"}]},
+    {"id":"a11y","dimension":"无障碍","state":"未测","evidence":[],"untested_reason":"示例输入；AX树不代键盘、焦点与辅助技术的实际复验。","cited_norms":[{"ref":"skills/isolated-browser-qa/SKILL.md#output-contract","version":"unknown","owner":"QA 网关 owner","consumer":"a11y：沿真实隔离QA输出与未覆盖事实"}]},
+    {"id":"handoff","dimension":"真实代码交接","state":"未测","evidence":[],"untested_reason":"示例输入；声明身份不等于代码、构建与页面已独立绑定。","cited_norms":[{"ref":"skills/frontend-testing/SKILL.md#build-code-实际消费","version":"unknown","owner":"前端测试方法 owner","consumer":"handoff：核实际页面、版本、代码与证据对应"}]}
+  ],
+  "norm_candidates": [
+    "skills/frontend-testing/references/page-audit.md#规范来源",
+    "skills/frontend-testing/references/page-audit.md#八维骨架",
+    "skills/frontend-testing/references/page-audit.md#四态",
+    "skills/frontend-testing/references/page-audit.md#业务任务脚本",
+    "skills/plan-design-review/SKILL.md#check",
+    "skills/isolated-browser-qa/SKILL.md#output-contract",
+    "skills/frontend-testing/SKILL.md#build-code-实际消费",
+    "skills/project-norm-init/SKILL.md#规范职责"
+  ]
+}
