@@ -35,6 +35,7 @@ UI 实施先消费当前真实答复所批准原型与设计基准：沿build-pl
 6. 对声明的 command/service 验收执行真实场景，逐项对照 oracle、可观察效果与失败反例。记录每条 AC 的实际结果、原始输出、输入/环境和覆盖限制；真实服务缺失、未执行、部分或不可用保持原样，模拟效果不冒充外部效果。
    验收证据人读词表为 pass/fail/inconclusive/deferred/missing/inconsistent/incomplete/unavailable，来源 `runtime/evidence/acceptance-evidence-validator.mjs:6`；本词表只约束人读措辞，不改变现有 writer。未达成如实记为未达成并进失败事实清单，这一条不新增任何推进前置。
 7. 检查实际 diff 与声明写集、真实消费者、接口两端、状态、错误传播、并发原子性和资源释放。UI 按组件质量地图与真实页面验证状态和 DTO→ViewModel，浏览器 QA 先读取并执行 `skills/isolated-browser-qa/SKILL.md`，保留隔离、取消和自建资源清理事实。 仅声明写集没有任何浏览器可见面时，记 `N/A — 理由` 并引用写集；已声明适用而缺工具时记 unavailable。QA engine、route/场景、截图路径或 not_observed 的真实原因保在唯一原 ref，不伪造浏览器通过。来源、样本、场景、浏览器或截图缺失不宣称 UI 完成。
+   凡页面、路由、组件、样式改动或声明 UI 交付，冻结前必须执行页面审计；适用性不确定时按适用处理。
    UI 适用时，先读 `skills/project-norm-init/SKILL.md` 的「规范职责」，再取本步适用的具体来源：③组件读 `specs/design/components.md`，独立工程正文确需时另读 `specs/frontend/components.md`，否则读 `specs/frontend/frontend.md`；④布局读 `specs/design/layouts.md`，独立工程正文确需时另读 `specs/frontend/layouts.md`，否则读 `specs/frontend/frontend.md`；⑤通用交互读 `specs/design/interaction.md`，控件内合同引用组件源；⑧质量判据确需独立正文时读 `specs/design/quality.md`，工程/运行共用 `specs/frontend/ui-quality.md`。路径相对目标项目根，同职责等价实质源优先，八类不是强制八文件。以该「规范职责」表为准，本处路径随表更新；逐类保实际路径/稳定节、version/作用域、owner/consumer、适用规则及 missing/stale/unknown 的影响与承接者，不把当前代码反推为应然标准，不把读取冒成方法调用或实际页面验证。
    本 Phase 涉及 UI 且有合法可读设计源时，在实施前读取 `skills/design-source-extraction/SKILL.md` 与任务原 ref 的 `design-source-extraction.json`；以 `items` 原值和证据、`pending_review` 待议与 `low_fidelity.blocked_scope` 作为实施输入，按 `references/isolated-consumption.md` 保初始 missing、独立实测与回填，不把待议当批准。按实际当前上下文核 `freshness`：unknown 不补默认 current，stale 通过已有 `node skills/design-source-extraction/scripts/collect-design-source.mjs --plan <已认证冻结plan>` 重提炼，依赖项未补齐保影响、无关项继续。仅消费已核 source 与范围；默认 ego 复用模式失败明确报错，不隐式启动备用浏览器/窗口，显式引擎沿原 isolated-browser-qa 合同。非 UI 保原专业源流程，不强制提炼。
 8. 每次挑审先实际消费 `docs/standard-workflow.md` 的「三审查点与结论真实性」，主会话提交其要求的三维原始依据并记录应用与缺料回退。每个 Phase 对当前 diff、本 Phase 承接 AC 与声明测试面、实际执行原件和审查重点发起一次独立代码审查：按上述标准工作方法的用户 U-020 授权规则，用 `reviewTierFor` 选择低风险独立子代理或高风险/影响说不清的外部 OCR；终末整卡固定外部 OCR 全审。先读取 `skills/wh-review/SKILL.md` 的「Long-review host convention」。审查记录正文用 `assertReviewTierRecord` 核执行者、来源与三维读数；独立子代理留派发身份与上下文隔离，不写 `ocr` 身份或伪造 `provider_results`；外部 OCR 留 route/provider 原ref与真实终态，不可用时仍保检测输出、原始失败与原执行者，口径见下节。同时显式派一次独立上下文的同源补充审查，方法见「同源补充轴」。各轴真实终态、原件与覆盖限制可定位才算完成本次审查工作；没有额外全 Phase 集成审查点，不为追空 findings 重派未变范围。
@@ -133,6 +134,21 @@ authorize只记录/消费已有授权。每次Git前用 `runtime/interface/git-a
 
 复杂任务最后 Phase 使用本节覆盖方法8、10、12的终末执行：本 Phase 常规审查与整 stage 终末审查合为同一轮外部 OCR，不先 phase 再 terminal 双审；其它 Phase 原方法保持。最后 Phase 对账沿途结论；仅 AC-BOUND-001/002 因依赖完整最终字节，在此作最终边界首次独立判定。冻结仅固定审查对象，允许有效 finding 修复及定向复验，不重派正常审查。
 
+冻结前，开发必须按 `skills/frontend-testing/references/page-audit.md` 完成页面审计并回读报告原件。
+用 `node skills/frontend-testing/scripts/check-page-audit.mjs --input <report.json>` 校验形状；退出 0 仅证明形状。
+逐项核四态、真实 `{ref, sha256}` 证据和 `coverage_limits[]`，不以校验退出代替页面判断。
+身份块 `object` 逐项核 `workspace`、`service`、`route`、`state`、`viewport`、`engine`、`engine_session`、`object_version`。
+缺项具名保留，适用项缺证据或覆盖不得写通过。
+`summary.overall` 非通过时按 finding 处置；冻结只固定审查对象。
+
+开发先定位页面、元素、状态、视口、身份、根因与 owner，再路由、最小修复、独立复验。
+设计问题回设计 owner，代码问题回有权写的副本；同一独立角色复验原问题与受影响回归，开发者不自签。
+局部最多三轮，一轮无新增通过项即停重复审计，保原因、缺口与下一路径。
+预算停止不当通过或失败；任务恢复按方法 9 分诊、换路继续，不由此新增整个任务的次数或时长上限。
+
+终末只复核四项：审计报告、修复记录、受影响面回归、独立复验证据，不重跑全量。
+沿途未闭环项逐条保留并定向复验，不把终末复核用作首次页面审计。
+
 1. 冻结实现
 2. spec-analyze
 3. AC/证据对账表
@@ -160,7 +176,7 @@ authorize只记录/消费已有授权。每次Git前用 `runtime/interface/git-a
 | RP-11 AC/证据对账表（原判据：方法 4 逐 Phase 核 Done 承接 AC 的编号、runtime/evidence/acceptance-evidence-validator.mjs 现成 8 值档位与具名 ref；AC 归属按 spec 正文） | 段 3 AC/证据对账表 | 主会话 | 对账表（AC → 承接 Phase → 8 值档位 → 具名 ref） | 每条 AC 有编号、档位与 ref；缺首判的 AC 记缺口并回 owner，不补签 |
 | RP-12 finding 处置（原判据：方法 5 与 7 逐条判断 finding，有效问题回原实施会话，无法解决列影响/证据/owner/选项，accepted_risk 需已有用户真实决定，不改写原 review） | 段 5 修 finding 并定向复验 | 主会话；修复回原实施会话 | finding 原文与处置表（fixed、rejected_invalid、accepted_risk、needs_human） | 每条有原文与处置；不改写原 review；严重问题不留给用户承担 |
 | RP-13 定向复验（原判据：方法 6 对新修复和真实疑点只做必要定向复验，先列 file/case 集合，记录实际 command/exit/raw，不重派第二次正常审查） | 段 5 修 finding 并定向复验 | 原实施会话修复，独立执行者复验 | 复验命令原件与恢复结果 | 只跑受影响集合；无改动或无疑点有说明；不重做全量上游 |
-| RP-14 UI/浏览器终验（原判据：方法 8 之后的 UI 段按专业源与设计源核对，按 isolated-browser-qa 消费页面、console 与 a11y；缺工具或入口记 unknown/unavailable） | 段 7 UI/浏览器终验 | 独立执行者（浏览器 QA） | 页面、console、a11y、截图与 not_observed 原因 | 非 UI 写集给 N/A 理由；缺工具/入口记 unavailable；不把未观察当视觉通过 |
+| RP-14 UI/浏览器终验（原判据：方法 8 之后的 UI 段按专业源与设计源核对，按 isolated-browser-qa 消费页面、console 与 a11y；缺工具或入口记 unknown/unavailable） | 段 7 UI/浏览器终验 | 独立执行者（浏览器 QA） | 页面、console、a11y、截图与 not_observed 原因 | 非 UI 写集给 N/A 理由；缺工具/入口记 unavailable；不把未观察当视觉通过；终末只复核四项：审计报告、修复记录、受影响面回归、独立复验证据，不重跑全量 |
 | RP-15 最终 AC 对账与报告（原判据：方法 4 末段完整串演只复核沿途结论并补必要未闭环 case、不新增全量重跑、不作任何 AC 首次判定点；方法 7 逐 AC 结果保留处置） | 段 8 最终 AC 对账和报告 | 主会话 | 逐 AC 结论表与未闭环 case 清单；十环报告消费记录 | 每条 AC 指向承接 Phase 的原始结论；缺口逐条列；仅 AC-BOUND-001/002 在最终边界首判，其余引用各 Phase 原首判 |
 | RP-16 收口与成本页面（原判据：方法 7 尾按 answer-as-page 刷新页面，环 1–9 真实结论、环 10 记 skipped；方法 8 按 stage-reflection 阶段收口、内部发布并读回最终报告；成本在 stage 末只记一次；收口前执行 norm-sync） | 段 9 norm-sync/reflection/成本/页面 | 主会话；独立上下文核成本读数 | 收口与最终报告读回件、成本读数、页面与同名侧车、norm-sync 回执 | 成本同窗口只记一次；环 10 为 skipped；norm-sync 有真实回执；缺口如实保留 |
 

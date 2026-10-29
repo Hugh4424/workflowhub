@@ -1528,6 +1528,8 @@ function SimWorkbenchInner({ simId, onBack }: { simId: string; onBack: () => voi
   const [detailOpen, setDetailOpen] = useState(true)
   const narrow = useNarrow()
   const [pane, setPane] = useState<"chart" | "orders" | "detail">("chart")
+  const panelId = useId()
+  const panelTabs = [["chart", "图表"], ["orders", "订单"], ["detail", "详情"]] as const
   const fp = useFootprint()
   const [detailTab, setDetailTab] = useState(DETAIL_TABS[0])
   const [stopConfirm, setStopConfirm] = useState<"normal" | "emergency" | null>(null)
@@ -1698,17 +1700,44 @@ function SimWorkbenchInner({ simId, onBack }: { simId: string; onBack: () => voi
       )}
 
       {/* ─── Main body ───────────────────────────────────────────── */}
-      <div className={`min-h-0 flex-1 overflow-hidden ${narrow ? "flex flex-col" : "grid grid-cols-[1fr_360px]"}`}>
 
         {/* 窄屏：图表 / 订单 / 详情 分段切换，一次只显示一个面板 */}
         {narrow && (
-          <div role="tablist" aria-label="工作台面板" className="flex shrink-0 gap-1 border-b border-white/[0.06] bg-[#080b11] p-2">
-            {([["chart", "图表"], ["orders", "订单"], ["detail", "详情"]] as const).map(([k, l]) => (
-              <button key={k} role="tab" aria-selected={pane === k} onClick={() => setPane(k)}
+          <div role="tablist" aria-label="工作台面板" className="flex shrink-0 gap-1 border-b border-white/[0.06] bg-[#080b11] p-2"
+            onKeyDown={event => {
+              if (event.altKey || event.ctrlKey || event.metaKey || event.nativeEvent.isComposing) return
+              const tabs = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('button[role="tab"]')]
+              const index = tabs.indexOf(event.target as HTMLButtonElement)
+              if (index < 0) return
+              let next: number
+              switch (event.key) {
+                case "ArrowRight": next = (index + 1) % panelTabs.length; break
+                case "ArrowLeft": next = (index + panelTabs.length - 1) % panelTabs.length; break
+                case "Home": next = 0; break
+                case "End": next = panelTabs.length - 1; break
+                default: return
+              }
+              event.preventDefault()
+              setPane(panelTabs[next][0])
+              tabs[next].focus()
+            }}>
+            {panelTabs.map(([k, l]) => (
+              <button key={k} id={`${panelId}-tab-${k}`} role="tab" aria-controls={`${panelId}-panel-${k}`} aria-selected={pane === k} tabIndex={pane === k ? 0 : -1} onClick={() => setPane(k)}
                 className={`flex-1 whitespace-nowrap rounded-md px-3 py-1.5 text-[12px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-sky-500/50 ${pane === k ? "bg-sky-500/15 text-sky-300" : "text-slate-400 hover:text-slate-200"}`}>{l}</button>
             ))}
           </div>
         )}
+
+        {/* 未激活内容仍按原分支卸载，只保隐藏关联目标。 */}
+        {narrow && panelTabs.filter(([key]) => key !== pane).map(([key]) => (
+          <div key={key} id={`${panelId}-panel-${key}`} role="tabpanel" aria-labelledby={`${panelId}-tab-${key}`} hidden />
+        ))}
+
+      <div id={narrow ? `${panelId}-panel-${pane}` : undefined}
+        role={narrow ? "tabpanel" : undefined}
+        aria-labelledby={narrow ? `${panelId}-tab-${pane}` : undefined}
+        tabIndex={narrow ? 0 : undefined}
+        className={`min-h-0 flex-1 overflow-hidden ${narrow ? "flex flex-col" : "grid grid-cols-[1fr_360px]"}`}>
 
         {/* ─── Left: chart + order panel ───────────────────────── */}
         {(!narrow || pane !== "detail") && (

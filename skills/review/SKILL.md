@@ -53,6 +53,24 @@ Material roles, actual identity/route, coverage and the three conditions for an 
 
 Finding fields: `severity`, `path`, optional `line`, `issue`, `root_cause`, `recommendation`, `evidence_kind`, `evidence`. Do not add `axis`, `visibility`, `anchor`, `consequence`, or `correction` fields.
 
+## 页面审计摘要消费
+
+审查者回读报告原件；摘要只作证据指针。
+先核对象 `object` 的 `workspace`、`service`、`route`、`state`、`viewport`、`engine`、`engine_session`、`object_version`。
+对象身份缺项写具体字段、提供者与影响，不填默认值。
+再核唯一结果项名 `criteria[]`、覆盖边界 `coverage_limits[]` 与总评 `summary.overall`。
+四态逐项读：通过要可回读的 `evidence` 数组及 `{ref, sha256}`，失败保原事实与理由。
+未测要 `untested_reason`、缺项和恢复条件；不适用要理由与依据。
+`coverage_limits[]` 非空时不得读成通过；形状合法不代证据、对象绑定或页面结论。
+
+逐项追溯资产来源与许可、代码组件或 Storybook、真实页面与状态。
+设计源缺失时列缺口，按对象适用性记未测或不适用加依据。
+Storybook 未覆盖须列组件、状态、入口和恢复条件，不吞成通过。
+
+finding 通过既有 `evidence` 字段引用上述原件，沿用原白名单和单一 JSON 结果。
+不新增字段或第二对象；审查发现仍按原 Result 返回。
+终末只复核四项：审计报告、修复记录、受影响面回归、独立复验证据，不重跑全量。
+
 ## Result
 
 Return exactly one JSON object: `{ "findings": [...] }`. Use packet paths/true lines in allowed fields. Do not return `verdict`, `summary`, checklist fields or a second object.

@@ -7704,6 +7704,38 @@
       ],
       "delete_condition": "本样本不再有当前设计/独立验收/C07消费者且被验证替代后由原owner移除",
       "retention_basis": "用户004/005轻量静态选择；当前有界样本，无新框架/gate/控制面"
+    },
+    {
+      "source": "tests/contract/page-audit-report-consumption.test.mjs",
+      "destination": "tests/contract/page-audit-report-consumption.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "P4 报告接线、摘要消费与四态/身份/覆盖边界静态契约；内存反例拒绝全量复核、第二结果键、额外 finding 字段及 13 步骤，不证明真实页面验收。",
+      "owner": "C07 P4 唯一开发writer / build-code及review方法owner",
+      "consumer": "node node_modules/vitest/vitest.mjs run tests/contract/page-audit-report-consumption.test.mjs；P4开发及后置独立测试执行者",
+      "module_consumers": [],
+      "named_data_readers": [
+        "node node_modules/vitest/vitest.mjs run tests/contract/page-audit-report-consumption.test.mjs",
+        "P4开发及后置独立测试执行者"
+      ],
+      "delete_condition": "本职责已由经独立验证的替代承接且当前消费者改接后删除；冻结失败与历史原件保留。",
+      "retention_basis": "P4 T009/T010/T011及主会话本次必要单条登记授权；沿既有Vitest路径发现，不增加运行入口或控制面。"
+    },
+    {
+      "source": "tests/fixtures/page-audit/controlled-work.html",
+      "destination": "tests/fixtures/page-audit/controlled-work.html",
+      "status": "add",
+      "role": "test",
+      "responsibility": "由P3 tests/fixtures/page-audit/controlled-page.html初始化的单文件受控工作副本；只在初始化核同字节，随后承接P8九类同对象检出、P4真实源码修复与原独立角色复验，不证明真实产品通过。",
+      "owner": "C07 P4 唯一开发writer；按P8原生finding修该源",
+      "consumer": "specs/workflowhub-ui-frontend-c07-real-page-verification-20261028/phases/P8-全AC终验.md T023：原独立验收角色服务此文件、真实执行九类并路由P4；修复后重载同一对象复验。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "P8 T023原独立验收角色：九类原生检出、同对象复验与受影响回归",
+        "P4原开发角色：按P8具名finding最小修复本单文件并留版本链"
+      ],
+      "delete_condition": "本受控演练职责与当前P8消费者均由经独立验证的替代承接后由原owner删除；P3 canonical、defects、校准页和已引用修复/失败历史保留。",
+      "retention_basis": "主会话2026-10-30授权及179材料澄清，承接U31/U35/U44/U58与AC-C07-3/5同对象演练；不复制目录、不建新registry、bridge、global state或永久同字节断言。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"
