@@ -2003,3 +2003,23 @@ C05 本身不能当已闭环，C07 也不替它补历史欠账。
 - 原件：`reviews/2026-10-28-010-make-decision-detail.json`（细节审查）。
 
 （以上路径相对任务库根；前缀约定见「名词约定」。）
+
+### 八、审查实跑发现：规格根本没进包
+
+2026-10-29 复查那次 build-plan 审查，发现一个结构问题。
+
+请求件把三个键写成描述符：`raw_requirement`（PRD）、`draft_spec`（规格）、`phase_index`（索引），内容是 `{ref, sha256}`。
+组包器把描述符原样投递；provider 又没有仓库读权限，无法按路径读文件。
+于是包里真正有内容的只有三样：验收判据、11 份 Phase 正文、项目清单。
+
+后果：
+
+- 审查从头到尾没读到规格，也没读到 PRD 与索引；它审的是 11 张 Phase。
+- 三个 provider 各只花 4 到 10 万 token，因为可读内容就是 Phase 正文（约 578 KB）加两份短材料。
+- `material_coverage` 里 `raw_requirement` 与 `acceptance_criteria` 记 undetermined，是诚实的；`draft_spec` 记「已读」则是自报，实际没有内容可读。
+
+决定：
+
+1. 面向 provider 的材料必须是内容，只有 `ref` 视为未投递；组包后做完整性检查，每个 required 键的 inline 内容不得少于 1 KB。
+2. 覆盖按包里真实字节判，不按 provider 自报。
+3. 这条写进 P10/T033 的必含表与测试四例。
