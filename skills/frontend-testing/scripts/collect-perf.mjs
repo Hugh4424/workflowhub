@@ -14,9 +14,9 @@ export function collect({nav={},measures=null,longTasks=null}={}) {
   if(Array.isArray(longTasks)&&longTasks.every(t=>numeric(t.duration))){const long=longTasks.map(t=>t.duration).filter(n=>n>50);output.long_tasks={count:long.length,max_ms:long.length?Math.max(...long):'unknown'};}
   return output;
 }
-function loaded(cdp,sessionId) {
+function loaded(cdp,sessionId,frame,seen) {
   let settle;const promise=new Promise(resolve=>{settle=resolve;});
-  const remove=cdp.onEvent(e=>{if(e.sessionId===sessionId&&e.method==='Page.loadEventFired')settle(true);});
+  const remove=cdp.onEvent(e=>{const p=e.params;if(e.sessionId===sessionId&&e.method==='Page.lifecycleEvent'&&p?.name==='load'&&p.frameId===frame.id&&typeof p.loaderId==='string'&&p.loaderId&&p.loaderId!==frame.loaderId&&!seen.has(p.loaderId))settle(p.loaderId);});
   const disconnected=cdp.onDisconnect(()=>settle(false));const timer=setTimeout(()=>settle(false),3000);
   return {promise,close(){clearTimeout(timer);remove();disconnected();settle(false);}};
 }
@@ -56,13 +56,26 @@ export const collectPerf=(config,env,runTask)=>collectWith(config,env,async({cdp
       if(runTask)facts.measures=observation.measures;
       facts.longTasks=observation.long_tasks;
     }catch(error){if(isDisconnected())throw error;doc.failures.push(failure('TOOL_ERROR',error.message));}
+    await call('Page.setLifecycleEventsEnabled',{enabled:true});
+    const seen=new Set();
     for(let run=0;run<3;run++){
-      const load=loaded(cdp,sessionId);
+      const frame=(await call('Page.getFrameTree'))?.frameTree?.frame;
+      if(!frame?.id||!frame.loaderId)throw new Error('Navigation frame identity unavailable');
+      seen.add(frame.loaderId);
+      const load=loaded(cdp,sessionId,frame,seen);
       try {
         const navigation=await call('Page.navigate',{url:target.url});
         if(navigation.errorText)throw new Error('Navigation failed');
-        if(!await load.promise)throw new Error('Navigation load observation unavailable');
-        const values=await evaluate("(()=>{const n=performance.getEntriesByType('navigation')[0];return n?{ttfb:n.responseStart-n.requestStart,domContentLoadedEventEnd:n.domContentLoadedEventEnd,loadEventEnd:n.loadEventEnd}:null;})()");
+        // CDP omits loaderId for a same-document navigation. Reload that same
+        // validated document; a fragment transition alone is never a sample.
+        if(!navigation.loaderId)await call('Page.reload',{loaderId:frame.loaderId});
+        const loaderId=await load.promise;
+        if(!loaderId||navigation.loaderId&&navigation.loaderId!==loaderId)throw new Error('Navigation load observation unavailable');
+        const values=await evaluate("(()=>{const n=performance.getEntriesByType('navigation')[0];return n?{url:location.href,ttfb:n.responseStart-n.requestStart,domContentLoadedEventEnd:n.domContentLoadedEventEnd,loadEventEnd:n.loadEventEnd}:null;})()");
+        const current=(await call('Page.getFrameTree'))?.frameTree?.frame;
+        if(current?.id!==frame.id||current.loaderId!==loaderId)throw new Error('Navigation document changed during observation');
+        if(values&&values.url!==target.url)throw Object.assign(new Error('Navigation receiver differs from validated target'),{kind:'IDENTITY_MISMATCH'});
+        seen.add(loaderId);
         for(const key of timingKeys)if(numeric(values?.[key]))facts.nav[key].push(values[key]);
       }finally{load.close();}
     }
