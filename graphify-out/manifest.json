@@ -420,9 +420,9 @@
     "semantic_hash": "68f3f9a8ae0e7b70e78a93ba3307c6da"
   },
   "docs/architecture/move-map.json": {
-    "mtime": 1792142292.3315535,
-    "seen": 1792160033.7633018,
-    "ast_hash": "13d9399a119d3aa8083e45f2f1acb66e",
+    "mtime": 1793190738.9661546,
+    "seen": 1793240055.833691,
+    "ast_hash": "aff58e9c4b7198a3b2e61fc46060d355",
     "semantic_hash": ""
   },
   "docs/architecture/retention-manifest.json": {
@@ -4038,9 +4038,9 @@
     "semantic_hash": "989528b02d9e86041368a3224c2989b4"
   },
   "tests/contract/status-derivation.test.mjs": {
-    "mtime": 1793158784.2671938,
-    "seen": 1793159003.352244,
-    "ast_hash": "42f3abbcc6b4d8d7fd416e17bb0def09",
+    "mtime": 1793229433.9678922,
+    "seen": 1793240055.833717,
+    "ast_hash": "1db5e1b3ee7625b9bce0f04afba210bb",
     "semantic_hash": ""
   },
   "tests/contract/task-close-cli-resolution.test.mjs": {
@@ -4374,9 +4374,9 @@
     "semantic_hash": ""
   },
   "tools/cli/stage-runtime.mjs": {
-    "mtime": 1793158814.9959826,
-    "seen": 1793159003.35224,
-    "ast_hash": "366cf388c89a824fb20ecaede55357eb",
+    "mtime": 1793229541.381351,
+    "seen": 1793240055.8337212,
+    "ast_hash": "352f13c22606f0c95898efcc977ef481",
     "semantic_hash": ""
   },
   "tools/cli/task-bootstrap.mjs": {
@@ -4446,9 +4446,9 @@
     "semantic_hash": "bfda2bde59ba93fd8c8ef20e2e6197e6"
   },
   "workflows/build-plan/steps.json": {
-    "mtime": 1792128941.3873217,
-    "seen": 1792160033.76333,
-    "ast_hash": "23fbd08ffb6603e06761b68e0a5851f1",
+    "mtime": 1793178533.0709758,
+    "seen": 1793240055.8337212,
+    "ast_hash": "56a99419d8dc47b37030757c798d6af8",
     "semantic_hash": ""
   },
   "workflows/build-prd/steps.json": {
@@ -4458,9 +4458,9 @@
     "semantic_hash": "a714ebc76409d69e5da2c88174b7b856"
   },
   "workflows/make-decision/steps.json": {
-    "mtime": 1792128941.3879025,
-    "seen": 1792160033.7633312,
-    "ast_hash": "b53bed195441734006e25a7735627c60",
+    "mtime": 1793178533.0708563,
+    "seen": 1793240055.833722,
+    "ast_hash": "9a7637efaf5c2469b7e9016123525dc7",
     "semantic_hash": ""
   },
   ".planning/2026-09-09-build-spec-and-build-plan/build-code-P1-phase-card.md": {
@@ -11400,15 +11400,15 @@
     "semantic_hash": ""
   },
   "tests/integration/main-agent-cost-closeout.node-test.mjs": {
-    "mtime": 1793123508.5504727,
-    "seen": 1793138272.04002,
-    "ast_hash": "df5a3c7abb788eb7fa6bb18d1dfa1253",
+    "mtime": 1793227940.3450153,
+    "seen": 1793240055.833719,
+    "ast_hash": "a4b30959f8da90d39213a8937b376c60",
     "semantic_hash": ""
   },
   "tools/cli/measure-main-agent-cost.mjs": {
-    "mtime": 1793096590.871142,
-    "seen": 1793138272.040023,
-    "ast_hash": "71d9ba8fa6b7cff5bc441325ed5cd595",
+    "mtime": 1793227961.5620859,
+    "seen": 1793240055.83372,
+    "ast_hash": "6d5b4b7c1d4d2e20240d3f0b3744b940",
     "semantic_hash": ""
   },
   "tests/n2-skill-catalog-portability.test.mjs": {
@@ -11436,9 +11436,9 @@
     "semantic_hash": ""
   },
   "skills/answer-as-page/scripts/build-page-data.mjs": {
-    "mtime": 1793162473.2672327,
-    "seen": 1793162699.751869,
-    "ast_hash": "088f7689e8fc8ee8518fed8133122cd1",
+    "mtime": 1793227196.7698483,
+    "seen": 1793240055.833695,
+    "ast_hash": "7df2e0ecf65b15cddd0ff585ae3cb089",
     "semantic_hash": ""
   },
   "skills/answer-as-page/scripts/open-page.mjs": {
@@ -11496,9 +11496,9 @@
     "semantic_hash": ""
   },
   "tests/contract/cockpit-autogen.test.mjs": {
-    "mtime": 1793166373.6940145,
-    "seen": 1793166404.563829,
-    "ast_hash": "f7f4b7628e95a650e3f8f07b4fe7bcf1",
+    "mtime": 1793227160.7477844,
+    "seen": 1793240055.8337128,
+    "ast_hash": "d846b809df02696e88ead3999f49cf20",
     "semantic_hash": ""
   },
   "tests/contract/cockpit-event.test.mjs": {
@@ -11685,6 +11685,192 @@
     "mtime": 1793112196.0755439,
     "seen": 1793138272.040023,
     "ast_hash": "405f090bb7ea9ebdc9c67731e163c264",
+    "semantic_hash": ""
+  },
+  "skills/external/playbook/skill-bundle.json": {
+    "mtime": 1793180417.1612198,
+    "seen": 1793240055.833697,
+    "ast_hash": "ee2f05b895f5324600cee0dd04465a96",
+    "semantic_hash": ""
+  },
+  "skills/external/ui-designer/skill-bundle.json": {
+    "mtime": 1793180417.1615317,
+    "seen": 1793240055.833698,
+    "ast_hash": "828c08fbe69f0cbf039dc496dfc66f74",
+    "semantic_hash": ""
+  },
+  "skills/figma-make-prompt/skill-bundle.json": {
+    "mtime": 1793178533.0704696,
+    "seen": 1793240055.833698,
+    "ast_hash": "d83122fe42d07d1c86b307f3b9bb1e9c",
+    "semantic_hash": ""
+  },
+  "skills/ui-copy-discipline/skill-bundle.json": {
+    "mtime": 1793178533.0704174,
+    "seen": 1793240055.833699,
+    "ast_hash": "f900edd814cc2ac71fff34dd1b5411eb",
+    "semantic_hash": ""
+  },
+  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/app/main.tsx": {
+    "mtime": 1793190877.5211346,
+    "seen": 1793240055.8337002,
+    "ast_hash": "8042b020261723c671348e5efa5b8e15",
+    "semantic_hash": ""
+  },
+  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/assets/app.js": {
+    "mtime": 1793234334.1359122,
+    "seen": 1793240055.8337002,
+    "ast_hash": "d20eea05fe3c46ca87f3d8870d955ab7",
+    "semantic_hash": ""
+  },
+  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/build.mjs": {
+    "mtime": 1793190877.5249279,
+    "seen": 1793240055.8337011,
+    "ast_hash": "4edb4d2ff464b4d8969515fdbc168a10",
+    "semantic_hash": ""
+  },
+  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/CandleChart.tsx": {
+    "mtime": 1793230040.0862672,
+    "seen": 1793240055.8337011,
+    "ast_hash": "d2ce44e05a551391473dc2915ad9e407",
+    "semantic_hash": ""
+  },
+  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/EquityCurve.tsx": {
+    "mtime": 1793179631.2919717,
+    "seen": 1793240055.8337018,
+    "ast_hash": "7629111add05c8919075e8ff68f3dd09",
+    "semantic_hash": ""
+  },
+  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/PerfBlocks.tsx": {
+    "mtime": 1793179631.2938101,
+    "seen": 1793240055.8337028,
+    "ast_hash": "98976dda4ee7bffbc1b18bd6cfa1b360",
+    "semantic_hash": ""
+  },
+  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/RunTimeline.tsx": {
+    "mtime": 1793179631.2940116,
+    "seen": 1793240055.8337028,
+    "ast_hash": "75e5026f6c5f4991b1ce979dd611252b",
+    "semantic_hash": ""
+  },
+  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/SimWorkbench.tsx": {
+    "mtime": 1793195984.9577408,
+    "seen": 1793240055.833704,
+    "ast_hash": "8341ebb83e7c15ddde412ef0a8915d3a",
+    "semantic_hash": ""
+  },
+  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/SimulationBoard.tsx": {
+    "mtime": 1793234330.7603445,
+    "seen": 1793240055.833705,
+    "ast_hash": "b58c463a100b55b720b7f6346723d6e4",
+    "semantic_hash": ""
+  },
+  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/data.ts": {
+    "mtime": 1793179631.2926047,
+    "seen": 1793240055.833705,
+    "ast_hash": "4aac2f4d4113e748e82d3cd148bd9a11",
+    "semantic_hash": ""
+  },
+  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/demoUniverse.ts": {
+    "mtime": 1793179631.2928035,
+    "seen": 1793240055.833706,
+    "ast_hash": "837dd87017ed1bff73766b57e8a0f563",
+    "semantic_hash": ""
+  },
+  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/shared.tsx": {
+    "mtime": 1793179631.2927043,
+    "seen": 1793240055.833707,
+    "ast_hash": "246ef9433a624ec6445b98bed16acd96",
+    "semantic_hash": ""
+  },
+  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/status.tsx": {
+    "mtime": 1793179631.2930195,
+    "seen": 1793240055.833707,
+    "ast_hash": "ecb7dbf4ffcf6a2229a48fbe27d8ccbf",
+    "semantic_hash": ""
+  },
+  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/store.ts": {
+    "mtime": 1793179959.5653038,
+    "seen": 1793240055.833708,
+    "ast_hash": "ecc1216846a272137f276c190f927a52",
+    "semantic_hash": ""
+  },
+  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/slotState.ts": {
+    "mtime": 1793179631.2922614,
+    "seen": 1793240055.833708,
+    "ast_hash": "d4a463a144288d4ab87397c96684a149",
+    "semantic_hash": ""
+  },
+  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/systemState.ts": {
+    "mtime": 1793179631.2923682,
+    "seen": 1793240055.833709,
+    "ast_hash": "08339ca8a831fed878cbbac75816f921",
+    "semantic_hash": ""
+  },
+  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/lib/fixtures.ts": {
+    "mtime": 1793185807.880591,
+    "seen": 1793240055.8337102,
+    "ast_hash": "f98d64950a46bb4c5f68c73b421db97e",
+    "semantic_hash": ""
+  },
+  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/lib/mock-state.ts": {
+    "mtime": 1793184159.4078693,
+    "seen": 1793240055.8337102,
+    "ast_hash": "35032f8de984cef7f82093e611e68ac9",
+    "semantic_hash": ""
+  },
+  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/package.json": {
+    "mtime": 1793190877.5166652,
+    "seen": 1793240055.8337111,
+    "ast_hash": "1bf9c131bb268ff81bfb2f4dfc66106c",
+    "semantic_hash": ""
+  },
+  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/B/app.js": {
+    "mtime": 1793205094.3207486,
+    "seen": 1793240055.8337111,
+    "ast_hash": "4bde73c3e4c425ef58b092496a7a73c5",
+    "semantic_hash": ""
+  },
+  "tests/contract/c05-final-coverage.test.mjs": {
+    "mtime": 1793200009.4383574,
+    "seen": 1793240055.8337111,
+    "ast_hash": "1b8c81f44bf724275bce589704d8a24d",
+    "semantic_hash": ""
+  },
+  "tests/contract/c05-phase-navigation.test.mjs": {
+    "mtime": 1793173340.6479716,
+    "seen": 1793240055.833712,
+    "ast_hash": "89902a44a5e3761a7d21aa096463cc09",
+    "semantic_hash": ""
+  },
+  "tests/contract/dispatch-quality.test.mjs": {
+    "mtime": 1793175650.9094548,
+    "seen": 1793240055.8337128,
+    "ast_hash": "5dbbed318a36aca5754accc5511137d6",
+    "semantic_hash": ""
+  },
+  "tests/contract/plan-authoring-compatibility.test.mjs": {
+    "mtime": 1793173340.647744,
+    "seen": 1793240055.833714,
+    "ast_hash": "bbd87dfe71a24cc931bf6de460008e70",
+    "semantic_hash": ""
+  },
+  "tests/contract/prototype-design-review.test.mjs": {
+    "mtime": 1793178335.0605285,
+    "seen": 1793240055.833714,
+    "ast_hash": "6f16df61a8b91ca4f0c50faf17b8c53a",
+    "semantic_hash": ""
+  },
+  "tests/contract/ui-source-consumption.test.mjs": {
+    "mtime": 1793178335.057975,
+    "seen": 1793240055.833717,
+    "ast_hash": "8a1af29cde5ebb42b490960d7e03b781",
+    "semantic_hash": ""
+  },
+  "tests/e2e/prototype-design-journey.sh": {
+    "mtime": 1793192320.1644745,
+    "seen": 1793240055.833718,
+    "ast_hash": "47132251647db4f620bf48b7ad04b2b2",
     "semantic_hash": ""
   }
 }
