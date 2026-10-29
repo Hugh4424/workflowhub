@@ -1,909 +1,2005 @@
-# 决策日志（decision-log）— C07 真实页面验证与定向回修
+# 决策日志 — C07 真实页面验证与定向回修
 
-任务：workflowhub-ui-frontend-c07-real-page-verification-20261028。本件是 make-decision 的当前决定正文（草稿），读者为 build-plan、build-code 与回读验收/风险的材料读者。下列内容按模板节序组织；引用的过程原件集中在任务库 `quality/evidence/decision-log-refs/`，基准目录见文末 `## 外置事实索引`。
+这份日志只做一件事：记下 C07 定过什么、为什么这么定、否掉了什么。
+它不写怎么做，也不写已完成；实施与验证在后面的阶段。
+读者有三拨：写 spec 与 Phase 的人、照做的人、回读验收与风险的人。
 
-- **版本与替代**：本稿为 v14（发布前草稿），替代同日 v13 草稿 `drafts/2026-10-28-c07-decision-log-draft-v13.md`（其发布件 124485 字节、sha256 `3b808ec1b5693547e6c997691134d90c5f1f0190d52cdb482c7a49923f3c7d83`）。替代理由：C05 已合并（HEAD c8874449）并归档，样本 A/B 可用；用户给 8 项选择（版本/接收方/许可/失败表达/200%+AT/M10/批准变更/提交）；新增 M10 并逐条更新对象与外部内容事实。D-001～D-040 保留，新增 D-041/D-042。
+## 这份日志给谁看、怎么读？
 
-## 任务身份
+先看「工作包与决定」：十个包，每个包一组决定，一共 42 条。
+每条决定写六件事：问题、候选、选择、理由、证据、影响。
+候选至少两个，被否掉的也写出来，并写清为什么被否。
+证据只写原件路径与行号；用户答复写 Talk 编号，例如 Talk:B2。
+影响写清要改哪些文件、落到哪些 Phase。
+要核编号，翻附录 A；机器要的取值与追踪，在附录 B。
 
-- **任务类型**：普通任务（非规划任务）。
-- **入口规模与路线评估**：见本日志 `## 级别与路线` 的唯一入口事实及原 ref；本节不复制入口取值。
-- **任务**：workflowhub-ui-frontend-c07-real-page-verification-20261028；目标仓 `/Users/Hugh/Hugh/Project/workflowhub`（认证 worktree 见任务身份核验与 task.json）；任务库根见文末基准目录。
-- **当前阶段**：make-decision（复杂路线），本件只给方向、材料与写集方向，不做实施。
+### 大纲地图
+
+- 这是什么任务、按什么标准走：任务身份
+- 为什么按复杂任务做：级别与路线
+- 原来要求做成什么：原始需求（43 条）
+- 用户后来改了什么：需求变更记录（64 条答复）
+- 十个包各定了什么：工作包与决定（决定 1～42）
+- 审查说了什么：方向审查、细节审查、C05 交付后评估
+- 材料和审查为什么没起作用：10 月 29 日追加
+- 还有什么没定：未决项（23 条）与已定项
+- 要改哪些文件、不做什么、怎么算通过：下面三节
+- 哪里会出错、退役了什么、原件在哪：再下面三节
+- 这份日志自己改过什么：变更记录
+- 编号怎么对、机器怎么读：附录 A、附录 B
+
+### 名词约定
+
+- 工作包：一组相关决定的集合，用 ①～⑩ 编号，不按时间排。
+- 决定：一次取舍。正文写「决定 n」，机器编号在附录 A。
+- 答复：用户的一句话选择或纠正。正文写「答复 n」。
+- 需求：发布计划对本任务的要求。正文写「需求 n」，共 43 条。
+- 验收：可观察的通过条件。正文写「验收 n」，共 7 条。
+- 未决：还没定的事。正文写「未决 n」，附谁定、不定的后果。
+- Phase：本任务把实施切成 11 段，每段一个文件（P1～P11）。
+- 四态：检查结果只有通过、失败、未测、不适用四种，没有第五种。
+- 八维：C05 定下的页面检查八个维度，是唯一骨架。
+- 九维：发布计划点名的九个视觉项，作第 5 维的子检查，不另立体系。
+- 限定通过：只在部分范围通过（例如只看首屏）却记成通过，属于假绿。
+- 原件：可直接回读的证据文件，带路径与行号；本件只引不抄。
+- 任务库：`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/`
+  `tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028`。
+- 正文写 `research/…` 指任务库 `quality/evidence/research/…`。
+- `build-plan/…` 指 `quality/evidence/build-plan/…`；
+  `refs/…` 指 `quality/evidence/decision-log-refs/…`。
+- `reviews/…` 指 `quality/reviews/…`；
+  `entry/…` 指 `quality/evidence/entry-evaluation/…`。
+- 这几条短写法只为不撑破行宽；完整路径在表格与「原件在哪」一节。
+- 调研原件按日期序号简称：001～005 是 `research/2026-10-28-00x-…`，
+  009～012 是 `research/2026-10-29-00x-…`，021～047 是 `build-plan/…`。
+
+## 这是什么任务、按什么标准走？
+
+这是一次「先建能力、再验证真实页面」的任务，不是修某个具体页面。
+它按 WorkflowHub 的复杂路线走：先定方向与写集，再分段实施。
+所以这份日志只到方向、边界与验收映射，不含代码与命令。
+
+### 任务身份
+
+- **任务类型**：普通任务。
+- **任务**：workflowhub-ui-frontend-c07-real-page-verification-20261028。
+- **目标仓**：`/Users/Hugh/Hugh/Project/workflowhub`（认证 worktree 见 task.json）。
+- **任务库根**：`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/`
+  `tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028`。
+- **当前阶段**：make-decision（复杂路线），只给方向、材料与写集方向。
+- **入口规模与路线评估**：取值只在「级别与路线」一节，本节不复制。
+
+校验器用，人可跳过：任务类型一行，普通任务；级别与路线的机器读法见附录 B。
 
 ## 级别与路线
 
-- **入口评估真实返回（单份原 ref）**：`quality/evidence/entry-evaluation/2026-10-28-001-entry-evaluation.json`（任务库根相对；绝对路径见文末索引）。该件是原始返回的唯一保存处，本节日志不复制 raw、不另存副本。
-  - `called_at`：2026-10-28T07:19:03.712Z。
-  - 调用命令（原值）：`node --input-type=module -e "import {evaluateEntryRoute} from ./workflows/make-decision/scripts/entry-evaluation.mjs"`。
-  - 输入 8 键：`boundary_clear=false`、`single_outcome=false`、`limited_impact=false`、`major_architecture=false`、`migration=false`、`permission=false`、`security=false`、`user_requested=false`。
-  - 返回：`status="paused"`；`reason="mini-task suitability is not established"`；`expanded_risks=[]`；`choices=["shrink-scope","create-ordinary-five-stage-task"]`；`returned.flags` 七项全为 false（同上七项，不含 user_requested）；`returned.user_requested=false`。
-- **推荐级别：复杂。** 理由逐条有据：
-  - 43 条 R-C07 跨判据、采集、分级、回修、报告五类交付，单份产出无法覆盖 AC-C07-1～7；见 `quality/evidence/research/2026-10-28-001-c07-requirements-external.md` 第 3 节。
-  - 至少涉及 4 处共享方法文件（`skills/plan-design-review/SKILL.md`、`skills/frontend-testing/SKILL.md`、`skills/review/SKILL.md`、`workflows/build-code/SKILL.md`），要按 owner 串行与 norm-sync 回写。
-  - 交付含真实浏览器采集、事实/归因/处置三层、独立复验闭环，必须有独立执行者与多轮交接（`2026-10-28-002-c07-internal-capability.md` 第 2/5 节）。
-  - 入口评估已否掉 mini-task 前提三项（boundary_clear / single_outcome / limited_impact 均为 false）；同时 major_architecture / migration / permission / security 均 false，说明不属架构、迁移、授权或安全类，也不需要另立新阶段。
-- **用户实际答复（逐字短引，不代拟）**：
-  - 任务启动（第一条消息）："按WorkflowHub 标准 开始这个复杂任务，先创建worktree，基于原始需求，和我一起进行详细的内外部调研……"（Talk:H1，原件 `quality/evidence/decision-log-refs/talk/2026-10-28-c07-direction.md`）。这是任务启动时的方向声明，不是对 paused 两个拆分选项的正式选择。
-  - "不是修复某个页面，而是为workflowhub设计完整的能力……还要考虑如何进行这些事情？什么时候进行？"（Talk:B2）。
-  - "按这个骨架继续"（Talk:C3）。
-  - **更正（保留旧文与理由）**：v2 曾写"用户未使用'复杂任务'字样"，该说法不实——用户第一条消息即使用了"这个复杂任务"的描述。旧稿保留在 v2 草稿原件，本稿不静默覆盖。
-  - **说明**：用户使用了"这个复杂任务"的描述；**2026-10-28 进一步正式选择"继续复杂路线"（Talk:N2），并正式选定任务级别"复杂"（Talk:O1）**，不 shrink-scope、不改普通五阶段；入口评估的 paused 是输入事实，不是选择；OPEN-01 由此 confirmed。按 H1/B2 排除"单页修复"性质、按 C3 确认按主会话展示的路线骨架继续；原 paused 事实与两个选项保留为历史，不删除。
-- **paused 的拆分路线**：入口评估给出的 `shrink-scope` 与 `create-ordinary-five-stage-task` 两条路线已向用户展示并获真实选择（继续复杂路线，Talk:N2）；证据保留原 paused 返回与两个选项，OPEN-01 置 confirmed。建议不等于许可——本条确认来自用户答复，不是代理推断。
-- **历史**：本任务首次入口评估，无覆盖旧/新级别的历史；`user_requested=false` 如实保留。
+为什么要按复杂任务做？因为 43 条要求横跨判据、采集、分级、回修、报告五类，
+单份产出覆盖不了 7 条验收；而且至少四处共享方法文件要按 owner 串行回写。
 
-## 大纲地图
+### 入口评估说了什么
 
-- 任务身份
-- 级别与路线
-- 原始需求
-- 需求变更记录
-- 工作包与决定
-- 要改哪些文件
-- 范围与非目标
-- 验收面
-- 未决项
-- 风险与延期交接
-- 退役登记
-- 外置事实索引
+入口评估返回「暂停」，理由是小任务前提不成立，并列出两条拆分路线。
+它不构成级别选择，也不构成许可；级别由用户另行选定。
 
-**P0 在场状态**（模板选节指引，不是新字段）：任务身份 written；大纲地图 written；原始需求＋需求变更记录 written；工作包与决定 written（10 包；①②③⑤⑦⑧ 方向已确认，⑥ 规则已定、细节待收敛，④ 待模块收敛）；要改哪些文件 written（方向级）；范围与非目标 written；验收面 written（草案映射，不写通过）；未决项 written（27 条）；风险与延期交接 written；用户答复来源与原件导航 written；退役登记 written（无）。
+- 原件：`quality/evidence/entry-evaluation/2026-10-28-001-entry-evaluation.json`。
+- 该件是原始返回的唯一保存处，本节不复制 raw、不另存副本。
+- `called_at`：2026-10-28T07:19:03.712Z。
+- 调用命令（原文照抄，作为命令不受行宽限制）：
 
-## 原始需求
+```
+node --input-type=module -e "import {evaluateEntryRoute} from ./workflows/make-decision/scripts/entry-evaluation.mjs"
+```
 
-下表迁自 001 报告第 3 节的 43 条 R-C07，只留 source_id、一句原义、来源与落点/缺口。逐字短引、类型、依赖与备注见同目录 `quality/evidence/decision-log-refs/requirement-index.md` 第 1–6 节。用户补充 U-C07-01～15 属需求变更，最小决定见下一节。
+- 输入八键：`boundary_clear=false`、`single_outcome=false`、
+  `limited_impact=false`、`major_architecture=false`、`migration=false`、
+  `permission=false`、`security=false`、`user_requested=false`。
+- 返回：`status="paused"`。
+- 返回：`reason="mini-task suitability is not established"`。
+- 返回：`expanded_risks=[]`。
+- 返回：`choices=["shrink-scope","create-ordinary-five-stage-task"]`。
+- 返回：`returned.flags` 七项全为 false（同上七项，不含 user_requested）。
+- 返回：`returned.user_requested=false`。
 
-| source_id | 一句原义 | 来源 | 落点/缺口 |
+### 为什么判「复杂」
+
+- 43 条要求跨判据、采集、分级、回修、报告五类交付，单份产出覆盖不了 7 条验收。
+- 涉及至少四处共享方法文件：`skills/plan-design-review/SKILL.md`、
+  `skills/frontend-testing/SKILL.md`、`skills/review/SKILL.md`、
+  `workflows/build-code/SKILL.md`，要按 owner 串行并走 norm-sync 回写。
+- 交付含真实浏览器采集、事实/归因/处置三层、独立复验闭环，
+  必须有独立执行者与多轮交接。
+- 入口评估已否掉小任务前提三项（边界清楚、单一结果、影响有限均为 false）；
+  架构、迁移、授权、安全四项均为 false，说明不属那四类，也不必另立新阶段。
+- 依据原件：`research/2026-10-28-001-c07-requirements-external.md` 第 3 节、
+  `research/2026-10-28-002-c07-internal-capability.md` 第 2/5 节。
+
+### 用户怎么说的
+
+- 任务启动第一句：「按WorkflowHub 标准 开始这个复杂任务，先创建worktree，
+  基于原始需求，和我一起进行详细的内外部调研……」（Talk:H1）。
+  这句是启动时的方向声明，不是对两个拆分选项的正式选择。
+- 「不是修复某个页面，而是为workflowhub设计完整的能力……还要考虑如何进行这些事情？什么时候进行？」
+  （Talk:B2）。
+- 「按这个骨架继续」（Talk:C3）。
+- 2026-10-28 正式选「继续复杂路线」（Talk:N2），并选定任务级别「复杂」（Talk:O1）：
+  不 shrink-scope、不改普通五阶段。
+- 对照原件：`quality/evidence/decision-log-refs/talk/2026-10-28-c07-direction.md`。
+
+### 两条拆分路线去哪了
+
+- `shrink-scope` 与 `create-ordinary-five-stage-task` 两条路线已向用户展示，
+  用户选了继续复杂路线（Talk:N2）；两条选项保留为历史，不删。
+- 暂停事实本身保留：它是输入，不是失败；建议也不等于许可。
+- 建议不构成许可——本条的级别确认来自用户答复，不是代理推断。
+- 更正留档：早前草稿写过「用户未使用复杂任务字样」，该说法不实，
+  用户第一句就写了「这个复杂任务」；旧稿留在草稿原件里，本稿不静默覆盖。
+- 本任务只做过一次入口评估，没有旧级别被覆盖，故不记覆盖历史。
+  `user_requested=false` 如实保留。
+
+校验器用，人可跳过：本节只放入口评估与级别；标题约定见附录 B。
+
+## 原来要求做成什么？
+
+发布计划在 C07 卡上写了 43 条要求：6 条结果与重心、7 条范围、
+5 条流程、6 条功能、9 条验收、10 条判定器与依赖边界。
+下面一条一行，只写原义与落点；逐字短引与类型见需求索引。
+
+- 来源列只写 `prd.md:行`，指目标仓
+  `specs/workflowhub-ui-frontend-release-20261020/prd.md`。
+- 落点只写工作包与决定编号；缺口指还没人接的那部分。
+- 逐字短引、类型、依赖与备注在
+  `quality/evidence/decision-log-refs/requirement-index.md` 第 1～6 节。
+
+| 需求 | 原来要求什么 | 来源 | 落在哪 |
 | --- | --- | --- | --- |
-| R-C07-01 | 交付可执行多维判据 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:326 | 工作包③（待收敛） |
-| R-C07-02 | 交付真实隔离采集与对照 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:326 | 工作包④＋D-027～D-030（失败语义待收敛） |
-| R-C07-03 | 交付范围及失败表达 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:326 | 工作包②⑦（待收敛） |
-| R-C07-04 | 问题可定位、责任回修、独立复验 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:326 | 工作包⑥＋D-010 |
-| R-C07-05 | 产品验收者与"现 verify-code"消费 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:326 | 工作包⑦（接点重指 build-code 终末段 7） |
-| R-C07-06 | 能对现有真实产品独立验收 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:326 | 工作包①＋D-031/D-032＋缺口：C05 交付 commit/tag/运行命令与合并时点（OPEN-02） |
-| R-C07-07 | 分资产本身与真实页面使用两层 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:327 | 工作包③＋D-011 |
-| R-C07-08 | 视觉九维逐项点名 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:327 | 工作包③＋D-011/D-012（九维来源已定） |
-| R-C07-09 | 体验/行为/a11y/性能/任务成功与视觉分开 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:327 | 工作包③＋D-031/D-017＋缺口：真实后端业务与对象（OPEN-11） |
-| R-C07-10 | 覆盖 S5 全部适用状态/压力/环境项 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:327 | 工作包③ |
-| R-C07-11 | 交付报告表达与消费接口 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:327 | 工作包⑦ |
-| R-C07-12 | 不预定旧 schema 名、不新建评测/报告平台 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:327 | 范围与非目标（边界已写）；D-008 |
-| R-C07-13 | 不擅自动修源设计 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:327 | 工作包⑥＋范围与非目标 |
-| R-C07-14 | 核对象健康与身份→备数据→采集→对照→分级定位→最小修复→复验与回归 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:328 | 工作包④⑥ |
-| R-C07-15 | 每个判据有执行方法、成功/失败条件、原始证据、责任 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:328 | 工作包③＋D-007 |
-| R-C07-16 | 未见/未测与缺陷分开；工具异常不回空结果 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:328 | 工作包⑤＋D-007 |
-| R-C07-17 | 模糊反馈先定位页面/元素/状态再动作 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:328 | 工作包⑥ |
-| R-C07-18 | 责任路由：设计归 C05、代码归 C06、运行诊断与复验归 C07 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:130 | 工作包⑥＋缺口：C06 未立项（OPEN-12） |
-| R-C07-19 | F1：九维与各质量面有可执行清单/报告表达，接入 frontend-testing/verify-code | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:329 | 工作包⑦⑧ |
-| R-C07-20 | F2：URL/源/状态/viewport/工作区/服务可核；console/network/overflow/焦点/清理可见 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:329 | 工作包④＋D-027（engine-fallback 进身份块） |
-| R-C07-21 | F3：严重度/低保真/缺证据/预算停止沿 S5；MINOR 批量真实确认 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:329 | 工作包⑤⑥⑦＋D-009/D-025/D-026＋冲突：S5 原文待判断（OPEN-16） |
-| R-C07-22 | F4：数值与独立观察互补；体验可证伪任务；性能分别实测 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:329 | 工作包③⑤ |
-| R-C07-23 | F5：定位反馈、路由责任修复、独立复验、局部三轮/停滞 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:329 | 工作包⑥＋D-010 |
-| R-C07-24 | F6：若采用 UES，先修证据绑定/严格输入/未知保留/子失败传播 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:329 | 缺口：UES 采用范围（OPEN-10） |
-| R-C07-25 | AC-1：九维与适用面逐项判据/原始结果/未覆盖；截图/首屏/总分/story 不替全部 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:330 | 工作包③④＋D-007/D-011 |
-| R-C07-26 | AC-2：错环境/未启动报不一致或 unavailable；未跑视觉标 incomplete；旧截图/空输出冒 pass 即失败 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:330 | 工作包④⑤＋D-007 |
-| R-C07-27 | AC-3：64 位哈希浮窗/长文本/窄容器/缩放/遮挡/hover 桥/键盘焦点/减少动效/错误权限重复操作等反例有检测与修复 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:330 | 工作包③⑥ |
-| R-C07-28 | AC-4：同一数值 diff 同标尺可重复同级；有 CRITICAL/MODERATE 负例；模型分歧保留复核 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:330 | 工作包⑤＋D-009/D-013＋缺口：负例样例与刻度待产（OPEN-07） |
-| R-C07-29 | AC-5：定位后修复、独立复验与回归、三轮/停滞、原型问题回设计 owner | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:330 | 工作包⑥＋D-010 |
-| R-C07-30 | AC-6：unknown/空 false null/失联采集/证据错配不聚合；所选链失败传播须验 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:330 | 工作包⑤＋D-007/D-012 |
-| R-C07-31 | AC-7：Figma 资产/代码组件/页面布局与操作分别可追溯；Storybook 未覆盖不吞 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:330 | 工作包③＋D-007/D-014＋缺口：无资产（OPEN-15） |
-| R-C07-32 | AC-4 补充：明显偏差但任务可完成仍 MODERATE | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:332 | 工作包⑤＋D-009 |
-| R-C07-33 | AC-5 补充：预算停止与四类原因分开，未测不计通过 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:332 | 工作包⑤＋D-007 |
-| R-C07-34 | 判定器：真实浏览器动作/渲染、数值几何、console/network、性能原件、任务真值与负例；布尔判据不等于新 gate | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:333 | 工作包④⑤ |
-| R-C07-35 | 准备依赖：真实运行对象+授权+S5 范围/判据 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:334 | 工作包①＋D-031/D-032＋缺口：C05 交付合同与合并时点（OPEN-02） |
-| R-C07-36 | 实现依赖：C01/C03、现隔离 QA/frontend-testing/fullstack-slice-testing/浏览器引擎；C06 非硬前置 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:335 | 工作包①②④⑧＋D-020～D-030（不新建第二套浏览器栈） |
-| R-C07-37 | 验收依赖：具名真实产品、可复核案例、原 owner 修复、独立复验；不等 C09 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:336 | 工作包①⑥＋D-031/D-032＋缺口：C06 真实业务与修复承接（OPEN-12） |
-| R-C07-38 | 合并依赖：引用契约已交付；同测试方法按运行判据 owner 串行 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:337 | 工作包⑧＋风险表 |
-| R-C07-39 | 共享责任：C07 owns 采集/评价/定位/复验；修复归原 owner；事实 writer 唯一 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:338 | 工作包①②＋D-008/D-010 |
-| R-C07-40 | 局部风险：首屏代业务、假绑定、聚合吞 unknown、模拟角色冒真人；缺值不默认 0 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:340 | 工作包⑤＋D-007 |
-| R-C07-41 | 可后置：AEM/大评测平台/全自动评分不做；九维/判据/采集失败/定向修复/真实消费不得后置 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:341 | 范围与非目标 |
-| R-C07-42 | 最小读取集按 NAV-C07；不全读评测套件、不凭 CLI 成功推覆盖 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:342 | 本任务材料与 001 覆盖节 |
-| R-C07-43 | 先锁范围与判据、逐块实测、质量未知不伪造通过、不新增恢复状态机 | /Users/Hugh/Hugh/Project/workflowhub/specs/workflowhub-ui-frontend-release-20261020/prd.md:343 | 工作包⑦＋范围与非目标 |
+| 需求 1 | 交付可执行的多维判据 | prd.md:326 | 工作包③（待收敛） |
+| 需求 2 | 交付真实隔离采集与对照 | prd.md:326 | 工作包④＋决定 24～27（失败语义待收敛） |
+| 需求 3 | 交付范围与失败表达 | prd.md:326 | 工作包②⑦（待收敛） |
+| 需求 4 | 问题可定位、责任回修、独立复验 | prd.md:326 | 工作包⑥＋决定 11 |
+| 需求 5 | 产品验收者与「现 verify-code」消费 | prd.md:326 | 工作包⑦（接点重指 build-code 终末段 7） |
+| 需求 6 | 能对现有真实产品独立验收 | prd.md:326 | 工作包①＋决定 5、6；交付已确认，剩复制留痕（未决 21） |
+| 需求 7 | 分「资产本身」与「真实页面使用」两层 | prd.md:327 | 工作包③＋决定 12 |
+| 需求 8 | 视觉九维逐项点名 | prd.md:327 | 工作包③＋决定 12、13（九维来源已定） |
+| 需求 9 | 体验/行为/a11y/性能/任务成功与视觉分开 | prd.md:327 | 工作包③＋决定 5、15＋缺口：真实后端业务（未决 9） |
+| 需求 10 | 覆盖 S5 全部适用状态/压力/环境项 | prd.md:327 | 工作包③ |
+| 需求 11 | 交付报告表达与消费接口 | prd.md:327 | 工作包⑦ |
+| 需求 12 | 不预定旧 schema 名、不新建评测/报告平台 | prd.md:327 | 范围与非目标；决定 9 |
+| 需求 13 | 不擅自动修源设计 | prd.md:327 | 工作包⑥＋范围与非目标 |
+| 需求 14 | 核对象健康与身份→备数据→采集→对照→分级定位→最小修复→复验 | prd.md:328 | 工作包④⑥ |
+| 需求 15 | 每个判据有执行方法、成功/失败条件、原始证据、责任 | prd.md:328 | 工作包③＋决定 8 |
+| 需求 16 | 未见/未测与缺陷分开；工具异常不回空结果 | prd.md:328 | 工作包⑤＋决定 8 |
+| 需求 17 | 模糊反馈先定位页面/元素/状态再动作 | prd.md:328 | 工作包⑥ |
+| 需求 18 | 责任路由：设计归 C05、代码归 C06、运行诊断与复验归 C07 | prd.md:130 | 工作包⑥＋缺口：C06 未立项（未决 22） |
+| 需求 19 | 九维与各质量面有可执行清单/报告，接入 frontend-testing | prd.md:329 | 工作包⑦⑧ |
+| 需求 20 | URL/源/状态/viewport/工作区/服务可核，console 等可见 | prd.md:329 | 工作包④＋决定 24（回退事实进身份块） |
+| 需求 21 | 严重度/低保真/缺证据/预算停止沿 S5，MINOR 批量真实确认 | prd.md:329 | 工作包⑤⑥⑦＋决定 10/30/31＋冲突（未决 15） |
+| 需求 22 | 数值与独立观察互补；体验用可证伪任务；性能分别实测 | prd.md:329 | 工作包③⑤ |
+| 需求 23 | 定位反馈、路由责任修复、独立复验、局部三轮/停滞 | prd.md:329 | 工作包⑥＋决定 11 |
+| 需求 24 | 若采用 UES，先修证据绑定/严格输入/未知保留/子失败传播 | prd.md:329 | 缺口：UES 采用范围（未决 10） |
+| 需求 25 | 九维与适用面逐项判据/原始结果/未覆盖说明 | prd.md:330 | 工作包③④＋决定 8、12 |
+| 需求 26 | 错环境/未启动报不一致或不可用；未跑视觉标未测 | prd.md:330 | 工作包④⑤＋决定 8 |
+| 需求 27 | 哈希浮窗/长文本/窄容器/缩放/遮挡/键盘焦点等反例要检测与修复 | prd.md:330 | 工作包③⑥ |
+| 需求 28 | 同一数值差异同标尺可重复同级，有负例，分歧保留复核 | prd.md:330 | 工作包⑤＋决定 10、28＋缺口：样例与刻度（未决 7） |
+| 需求 29 | 定位后修复、独立复验与回归、三轮/停滞、原型问题回设计 owner | prd.md:330 | 工作包⑥＋决定 11 |
+| 需求 30 | unknown/空值/失联采集/证据错配不聚合成高分 | prd.md:330 | 工作包⑤＋决定 8、13 |
+| 需求 31 | Figma 资产/代码组件/页面布局与操作分别可追溯 | prd.md:330 | 工作包③＋决定 8、14＋缺口：无资产（未决 11） |
+| 需求 32 | 明显偏差但任务可完成仍按重要级，不因可操作降级 | prd.md:332 | 工作包⑤＋决定 10 |
+| 需求 33 | 预算停止与四类原因分开，未测不计通过 | prd.md:332 | 工作包⑤＋决定 8 |
+| 需求 34 | 判定器：真实动作/数值几何/console/性能原件/任务真值；不等于新 gate | prd.md:333 | 工作包④⑤ |
+| 需求 35 | 准备依赖：真实运行对象＋授权＋S5 范围与判据 | prd.md:334 | 工作包①＋决定 5、6；剩复制留痕（未决 21）与业务（未决 22） |
+| 需求 36 | 实现依赖：C01/C03、现隔离 QA、实际浏览器引擎；C06 非硬前置 | prd.md:335 | 工作包①②④⑧＋决定 21～27（不建第二套浏览器栈） |
+| 需求 37 | 验收依赖：具名真实产品、可复核案例、原 owner 修复、独立复验 | prd.md:336 | 工作包①⑥＋决定 5、6＋缺口：C06 业务承接（未决 22） |
+| 需求 38 | 合并依赖：引用契约已交付；同测试方法按运行判据 owner 串行 | prd.md:337 | 工作包⑧＋风险节 |
+| 需求 39 | 共享责任：C07 owns 采集/评价/定位/复验；修复归原 owner | prd.md:338 | 工作包①②＋决定 9、11 |
+| 需求 40 | 首屏代业务、假绑定、聚合吞 unknown、模拟角色冒真人；缺值不默认 0 | prd.md:340 | 工作包⑤＋决定 8 |
+| 需求 41 | 可后置 AEM/大评测平台/全自动评分；九维等五项不得后置 | prd.md:341 | 范围与非目标 |
+| 需求 42 | 最小读取集按 NAV-C07；不全读评测套件、不凭 CLI 成功推覆盖 | prd.md:342 | 本任务材料与调研报告覆盖节 |
+| 需求 43 | 先锁范围与判据、逐块实测、质量未知不伪造通过、不新增恢复状态机 | prd.md:343 | 工作包⑦＋范围与非目标 |
 
-## 需求变更记录
+校验器用，人可跳过：本节 43 条，来源列同指一份 PRD；
+编号对照见附录 A 表 A1，逐条落点见附录 B。
 
-下表是本日志对 56 条用户补充（U）的最小决定与指针。**完整逐字短引、类型与依赖见 `quality/evidence/decision-log-refs/requirement-index.md` 第 7 节与 Talk 原件**；本任务不另存同名 `requirement-change-log.md` 副本，两处原件即唯一来源。Talk 原件的消息 ID 与到达时刻未取得，已在原件中如实标注，本表不补造。
+## 用户后来改了什么？
 
-| U 编号 | 最小决定 | 受影响落点 | 原件指针 |
+用户在过程中给了 64 次答复：有的补要求，有的推翻代理的判断，有的直接定选项。
+下面一条一行，只写这条答复的最小决定与落点；逐字短引在需求索引第 7 节。
+
+- 答复 1～58 的原件是 Talk 批次原件，路径见本节末。
+- 答复 59～64 的原件是本日志「材料和审查为什么没起作用」一节的记录。
+- 答复 57、58 原先只登记在需求索引里，本次补进本表。
+- 答复 14 已被答复 20 关闭：九维来源已定，不再是「待调研/自建」。
+- Talk 原件的消息 ID 与到达时刻未取得，原件里已如实标注，本表不补造。
+
+| 答复 | 用户要什么（最小决定） | 落在哪 | 原件 |
 | --- | --- | --- | --- |
-| U-C07-01 | 交付含"真实检查并回修"，不是纯判据文档 | 工作包①③ | Talk:B2／requirement-index §7 |
-| U-C07-02 | 浏览器只经 isolated-browser-qa 静默驱动；链不可用如实标 | 工作包④；OPEN-05 | Talk:A1 |
-| U-C07-03 | 报告须含多维结果、根因与责任、修复记录、独立复验、失败与未覆盖 | 工作包⑦；验收面 | Talk:A2 |
-| U-C07-04 | 正式验证在 C07 的 build-code 阶段；C05 完成后合并进来再验真实页面 | 工作包②⑦；风险表 | Talk:B1 |
-| U-C07-05 | C07 是"为 workflowhub 设计完整能力"，不是单页修复；须交代怎么做、何时做 | 工作包①；D-006 | Talk:B2 |
-| U-C07-06 | 测试/审查子代理执行，结果回 phase 开发者修复；能力与规范须通用、被真实消费 | 工作包⑥⑧；D-003/D-004/D-010 | Talk:B3 |
-| U-C07-07 | 方法归属：plan-design-review 扩成设计/页面两模式 | 工作包⑧；D-004 | Talk:C1 |
-| U-C07-08 | 强制范围：所有有浏览器可见面的任务都强制走 | 工作包⑦；D-005 | Talk:C2 |
-| U-C07-09 | 路线基线：按主会话展示的骨架继续 | 工作包①；D-006 | Talk:C3 |
-| U-C07-10 | 检查项结果取四态（通过/失败/未测/不适用）；未测算通过即失败；不适用须有据 | 工作包②；D-007 | Talk:D1 |
-| U-C07-11 | 问题记录沿用现 finding 字段；页面/状态/视口/对象身份进证据文字；不新开材料键、不新增第二套 schema | 工作包②；D-008 | Talk:D2 |
-| U-C07-12 | 严重度沿用三档映射；处置沿用现有词；复验结果单独记 | 工作包②⑤；D-009 | Talk:D3 |
-| U-C07-13 | 执行者必须是测试或审查子代理，开发者不自审；复验同一独立角色；两模式共用契约 | 工作包②⑥；D-010 | Talk:D4 |
-| U-C07-14 | 九维来源/是否复用 C05 设计判断**未定**；先调研 C05 判据并复用现成标准，不新造 | 工作包③⑧；OPEN-06 | Talk:E1 |
-| U-C07-15 | 视觉偏差用项目 token/刻度+明确例子+校准负例定级 | 工作包⑤；D-009 | Talk:E2 |
-| U-C07-16 | 页面检查只有一套标准：C05 八维为骨架，PRD 九维作第 5 维子检查，与第 3/6/7 维边界写死防重复计数 | 工作包③；D-011 | Talk:F1 |
-| U-C07-17 | 取值口径复用 design-source-extraction 的 property/declared/rendered/comparison，不新建 schema；补五项属性口径属补充 | 工作包③；D-012 | Talk:F2 |
-| U-C07-18 | 校准负例至少三条（字体/间距/颜色偏差仍可用→重要/MODERATE），同一偏差同标尺重复跑同级 | 工作包⑤；D-013；验收面 | Talk:F3 |
-| U-C07-19 | 无设计源/基准时只判能判的，还原度写"不适用+理由"，不声称视觉还原已验 | 工作包③⑤；D-014 | Talk:F4 |
-| U-C07-20 | 九维来源已定，不再是"待调研/自建"；回应并关闭 OPEN-06 | 未决项；D-011/D-012 | Talk:F5 |
-| U-C07-21 | 性能放第 3 维下作页面模式子组"运行性能"（首屏+交互耗时）；页面模式第 3 维称"交互、状态与运行性能"，设计模式仍"交互与状态"、性能不适用 | 工作包③⑤⑦；D-015 | Talk:G1 |
-| U-C07-22 | 第 7 维保持可访问性、不塞性能；颜色/图标/状态与第 7 维边界按映射（对比度、可访问名、焦点归第 7 维） | 工作包③；D-016/D-018 | Talk:G2 |
-| U-C07-23 | 业务操作用页面任务脚本+可观察终态，每步有操作/终态/错误/权限/取消/恢复判据；C05 mock 上的真实后端业务写"未覆盖" | 工作包③⑤⑥⑦；D-017 | Talk:G3 |
-| U-C07-24 | 九维→八维映射按给定表；主维判成败、副维只补证据、不重复计数 | 工作包③；D-018 | Talk:G4 |
-| U-C07-25 | 第 8 维页面模式只核对象与代码/版本对应；交接受理面不适用写"不适用+理由" | 工作包③；D-019 | Talk:G5 |
-| U-C07-26 | 任务启动声明：按标准开始这个复杂任务、先建 worktree、与用户一起做详细内外部调研；属启动方向，不是 paused 选项选择 | 级别与路线；OPEN-01 | Talk:H1 |
-| U-C07-27 | 验证对象选"C05 正在做的原型样本"：真实页面对象是 C05 完成并合并进来的页面；撤回草稿不算；C07 不改 C05 worktree，只在自身 build-code 合并后验 | 工作包①；D-020/D-021；OPEN-02 | Talk:H1（H2 见 B1/U-04） |
-| U-C07-28 | 保留 isolated-browser-qa，不退役 | 工作包④；D-022 | Talk:I1 |
-| U-C07-29 | 默认引擎用 ego-lite；本机没有 ego 时才用 agent-browser | 工作包④；D-023（回退条件由 U-33/D-027 细化为「装了没开也回退」） | Talk:I2 |
-| U-C07-30 | 简化网关：ego-browser 能承担的大部分交给它，不为 agent-browser 保留用不上的生命周期；QA 合同不可替代部分保留；ego-browser 实际用法与简化后目标结构待诊断报告 | 工作包④；D-024；OPEN-05/13 | Talk:I3 |
-| U-C07-31 | build-code 页面检查应全自动，不让用户参与确认，由流程按规范判断如何继续 | 工作包⑤⑥⑦；D-025 | Talk:J1 |
-| U-C07-32 | 不要确认（不逐项也不批量要用户签） | 工作包⑤⑥⑦；D-025/D-026；OPEN-16 | Talk:J2 |
-| U-C07-33 | 回退口径：接受 ego 可见窗口；ego 在跑就用 ego；装了没开→回退 agent-browser 并记 engine-fallback；选定后失败不切换 | 工作包④；D-027 | Talk:K1 |
-| U-C07-34 | 简化力度选「保守简化」：保留回退并修 bug、browser-use 降可选/legacy、删/压专属长流程、新增 ego 主流程与五类薄脚本、C05 旧脚本渐进迁移、消费者不断、不新建第二套栈 | 工作包④；D-030 | Talk:K2 |
-| U-C07-35 | 对象路径选「两条腿」：受控测试页建能力 + C05 收口前交付可写可核版本样本、C07 合并到自有工作区做页面层验收；交不出记 unavailable/incomplete | 工作包①；D-031/D-032；OPEN-21 | Talk:L1 |
-| U-C07-36 | 确认收尾六项：修复归属、受控测试页、强制触发、规范消费、外部内容、报告与接入 | 工作包①③⑤⑦；D-032～D-037 | Talk:M1 |
-| U-C07-37 | ego 是用户本机授权工具，记下授权继续用 | 工作包④；D-028 补注；OPEN-17 保留 | Talk:N1 |
-| U-C07-38 | 入口路线正式选「继续复杂路线」，不 shrink-scope、不改普通五阶段 | 级别与路线；OPEN-01 confirmed | Talk:N2 |
-| U-C07-39 | 任务级别正式选「复杂」 | 级别与路线；OPEN-01 confirmed | Talk:O1 |
-| U-C07-40 | make-decision 流程有问题，要求把 9 条改进并入当前任务 | 工作包⑨；D-038/D-039 | Talk:O2/O3 |
-| U-C07-41 | 新流程：分级后、大纲前必须问一次要不要做内外部调研并记录 | 工作包⑨；OPEN-22 | Talk:P1 |
-| U-C07-42 | 调研决策答复「够了，按现有调研定大纲」：不再追加；缺口留在 OPEN/风险，不称全覆盖 | 工作包⑨；OPEN-22 confirmed | Talk:Q1 |
-| U-C07-43 | 正式页面审计放代码冻结前、最后开发阶段收口；终末审查只复核 | 工作包⑦；D-002 改写；OPEN-03 confirmed | Talk:R1 |
-| U-C07-44 | C05 样本合并后实现修复由 C07 全改（工作副本/C07 分支），C05 owner 收清单交接，独立复验同角色 | 工作包①⑥；D-032 改写；OPEN-12 confirmed/OPEN-24 | Talk:R2 |
-| U-C07-45 | M9 流程修复留在 C07 实施（例外），owner=当前主会话，build-code 实施，决策阶段不改技能 | 工作包⑨；D-038/D-039 补注；OPEN-23 | Talk:R3 |
-| U-C07-46 | 终末只复核审计报告+修复记录+受影响面回归+独立复验证据，不重跑全量审计 | 工作包⑦；D-002 补；AC-5/6；OPEN-03 | Talk:S1 |
-| U-C07-47 | C05 正在开发；用户用提示器通知 C05 开发 agent 准备样本并随任务交付 | 工作包①；D-040；handoff 提醒件；OPEN-02/24 | Talk:S2 |
-| U-C07-48 | 最终确认=阶段收口（保存确认/核对读回 GLOSSARY/生成读回 handoff/发绝对路径），不是进入下一阶段许可；不得催下一阶段 | 工作包⑨；D-038/D-039；OPEN-25 | Talk:T1 |
-| U-C07-49 | 对象版本钉 9efb7e57；be7a5673 作废；c887 与 9efb 样本字节相同但 C05 认可绑 41eae967，引用分开 | 工作包①⑩；D-020/D-042 | Talk:U1 |
-| U-C07-50 | 问题清单交用户/设计 owner + 归档留证；C07 只做复现/独立验收 | 工作包⑥；D-032 | Talk:U2 |
-| U-C07-51 | 本地使用可复制（个人研究）；6 件 grant unknown 只影响对外分发；不写已获 grant | 工作包③；D-036 | Talk:U3 |
-| U-C07-52 | 不继承/不引用 C05 17 pass、效果达标、已闭环；只按自己 AC；根因归 M10 | 工作包⑩；D-040 | Talk:U4 |
-| U-C07-53 | 200% 缩放+键盘/焦点必测；AT 未测不作必测门 | 工作包③；D-034 | Talk:U5 |
-| U-C07-54 | 新增 M10 交付证据与防假绿（P0/P1/P2） | 工作包⑩；D-041/D-042 | Talk:U6 |
-| U-C07-55 | 批准后 UI 行为变更：登记差异并取得同意，不默认重展示；批准/交付版本分开 | 工作包⑩；D-042 | Talk:U7 |
-| U-C07-56 | C07 材料提交到 C07 分支；主会话稍后执行、不 push；提交前不写已提交 | 工作包⑨；D-038 | Talk:U8 |
-
-## 工作包与决定
-
-本任务收敛为 10 个工作包。①②③⑤⑦⑧ 方向已确认（② 的模块一契约、③ 的视觉骨架与取值口径由用户选定）；⑥ 的规则已定、细节待模块收敛；④ 的采集细节待模块收敛（本阶段不写结论，只登记要定的问题）。五行表"批次"指本任务材料批次：001～005 为调研原件，`Talk` 为用户答复原件，`DL` 为本日志。
-
-### 工作包 ① — 定位与形态
-
-- **复杂度**：复杂（跨对象、交付形态与时机，含用户选择）
-- **要交付什么**：把 C07 从"一个页面的修复任务"定成 workflowhub 可复用的"真实页面验证/设计审计能力"，写清交付形态、验证对象与时机；对象取 C05 开发完成并合并进来的原型样本（D-020），C07 不改 C05 worktree、撤回草稿不算验收对象（D-021）；消费者为 build-plan、后续有浏览器可见面的任务与 C05/C06 交接。来源 U-C07-04/U-C07-05/U-C07-09/U-C07-27、R-C07-06/R-C07-35/R-C07-39。
-
-| 段 | 模块记录（批次 M1-1～M1-5） |
-| --- | --- |
-| 调研 | 结论：仓内无通用九维/采集能力、verify-code 已退役；原件：`quality/evidence/research/2026-10-28-002-c07-internal-capability.md`；调研决策：内部+外部+专项（复杂模块不得空）；批次 M1-1 |
-| 发散 | 结论：只扩 frontend-testing、新建技能包、方法+薄脚本+接线三条路；原件：`quality/evidence/research/2026-10-28-005-workflowhub-test-review-integration.md` 第 2 节；批次 M1-2 |
-| 收敛 | 结论：取方法+薄脚本+现有阶段接线，对象取两条腿（D-001/D-006/D-031/D-032）；原件：本日志 D-001/D-031；批次 M1-3 |
-| 就地讨论 | 结论：用户定"不是修页面、要通用、何时验、对象两条腿"（Talk:B2/C3/H1/L1）；原件：Talk 批次 0/B/C/H/L；批次 M1-4 |
-| 定验收 | 结论：形态可执行、脚本可校验、接线可消费、对象两条腿；原件：本日志 M1 五段与 D-031；批次 M1-5 |
-#### D-001 — 交付形态取"能力方法+薄校验脚本"，不新建技能包与平台
-
-- **做什么**：把判据写成一处方法正文，配一个只校验形状的薄脚本（身份块、维度必填、四态枚举、证据 ref、未测理由；拒绝总分与 unknown 聚合），并接到既有 frontend-testing/build-code/review 上。依据 U-C07-06"不要每个任务都新建一种"、005 第 2 节的做法对比、002 第 7 节的"不新增第二证据库/公共命令"边界。
-- **不做什么**：不新建独立技能包、不新增公共命令或 runtime 公共面、不新建报告平台/第二证据库、不把九维判据复制进各任务 spec。
-- **风险**：薄脚本只证形状不证实效，容易被当成质量通过；缓解=脚本输出不进入 AC 判定，只作接线与形状事实（OPEN-03/OPEN-14 继续承接）。判据只有一处，改错影响所有消费者；缓解=方法 owner 与 norm-sync 回写。
-- **改动**：`skills/plan-design-review/SKILL.md`（方法归属，D-004 另定）、`skills/frontend-testing/*`（判据与脚本落点待收敛）、`skills/review/SKILL.md` 与 `workflows/build-code/SKILL.md`（消费与触发）。唯一写主由 build-plan 的写集指派；本阶段只给方向。
-
-#### D-006 — 路线基线按主会话展示的骨架继续
-
-- **做什么**：本任务按 make-decision 复杂路线的 12 节骨架推进，材料形态与本日志一致；依据 Talk:C3"按这个骨架继续"。
-- **不做什么**：不据此声称用户已选择入口评估的 `create-ordinary-five-stage-task`，也不把骨架确认当作对任何判据细节的确认。
-- **风险**：骨架确认与路线确认易混；若后续用户选 `shrink-scope`，本日志工作包需重排。缓解=OPEN-01 在第 8/13 步同批展示拆分路线后按真实答复调整。
-- **改动**：材料形态（本日志、requirement-index、coverage-matrix、Talk）；不改代码。
-
-#### D-020 — 验证对象钉 C05 样本 `9efb7e57`（A/B），be7a5673 作废
-
-- **做什么**：C07 真实验收对象钉 C05 合并后的样本 `9efb7e577a62d36393caedfb30fc35bf3cb80834`（A/B 两套）；路径 `specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A|B`。A 运行文件：`A/index.html`（sha256 `fa35dedb…`）、`A/assets/app.js`（`2f6c12d5be76…`，442619 B，构建产物与源码逐字节一致）、`A/assets/styles.css`（`99c22f99…`）；B：`B/index.html`（`38b20b2f…`）、`B/app.js`（`a9821904…`）、`B/styles.css`（`ee996492…`）。六运行文件合计 525142 B（058 口径）；767 的 525086 B 是 41eae 口径，勿混。`be7a5673` 作废（少 41eae/9efb 两次修复）；`c887` 与 `9efb` 样本字节相同，但 C05 认可绑 `41eae967`，引用时分开写。依据 Talk:U1、`quality/evidence/research/2026-10-29-010-c05-sample-usability.md`。
-- **不做什么**：不用 `be7a5673`、不混两个口径、不把交付 HEAD 与批准版本写成一个；不声称样本等于真实产品（mock）。
-- **风险**：版本指针漂移；缓解=对象版本三件套（D-042）与复制留痕（OPEN-21）。
-- **改动**：对象与版本声明；**改写旧 D-020（旧文"取 C05 合并后样本"保留在 v13 及之前草稿）**。
-
-
-#### D-021 — C05 归档只读；取用=复制到 C07 自有可写位置并提交
-
-- **做什么**：`specs/archive/**` 只读；C07 取用样本的方式是把 A/B 复制到 C07 自有可写位置并提交（记 commit+sha256+时点），不在归档原地改。依据 Talk:U1/U8、研究 011。
-- **不做什么**：不改归档、不在归档里修问题、不把复制当"已交付"。
-- **风险**：复制字节漂移；缓解=复制后校验 sha256 并留痕（OPEN-21）。
-- **改动**：取用与提交写法；**改写旧 D-021（旧文"不改 C05 worktree、合并后验"保留在 v13 及之前草稿）**。
-
-
-#### D-031 — 对象路径：C05 已交付并合并（1c0948c3/c53c8ecd），两条腿保留
-
-- **做什么**：C05 已交付并合并（`1c0948c3`/`c53c8ecd`），A/B 样本可用（研究 010）；C07 取用=复制到自有可写位置并提交（D-021）；受控测试页（D-033）作为第一腿继续，C05 样本为第二腿（已可用）。依据 Talk:U1、研究 010/011。
-- **不做什么**：不把已交付当"已验证"；不因可用就继承 C05 的 pass；不做真实业务写。
-- **风险**：样本 mock、无真实后端；缓解=业务真值等 C06，C07 只按自己 AC。
-- **改动**：对象状态与两腿写法；**改写旧 D-031（旧文"两条腿、C05 未交付时 fallback"保留在 v13 及之前草稿）**。
-
-
-#### D-032 — C05 样本合并后 C07 全改（用户例外）；问题清单交用户/设计 owner
-
-- **做什么**：C05 样本合并进 C07 后，C07 自有副本是工作副本；代码/布局/状态实现问题全部在 C07 完成并提交到 C07 分支；**C05 owner 已关闭，问题清单交用户/设计 owner 并归档留证**；C07 只做自己的复现/独立验收；独立复验由测试/审查子代理做。依据 Talk:U2、R2/D-032 原例外。
-- **不做什么**：不改 C05 原工作区/归档、不做真实业务写；不把问题清单发给已关闭的 C05 owner；不写成 PRD:130 原分工——这是用户选择的例外。
-- **风险**：接收方变为用户/设计 owner，响应可能延迟；缓解=归档留证+OPEN-24 跟踪；批准漂移登记（D-042）。
-- **改动**：交接对象、清单与复验记录；**本条改写旧 D-032 的接收方（C05 owner→用户/设计 owner）**。
-
-
-#### D-040 — C05 已交付/已合并；提醒件与 fallback 保留为历史
-
-- **做什么**：C05 样本已交付并合并（`1c0948c3`/`c53c8ecd`；交付指针 058/9efb），提醒件 `quality/evidence/handoff/c05-sample-delivery-notice.md` 保留为历史；C07 取用=复制到自有可写位置并提交（D-021）；OPEN-02 置 confirmed。依据 Talk:U1/U2、研究 010/011。
-- **不做什么**：不声称"样本已验证"；不继承 C05 的 17 pass/效果达标/已闭环（Talk:U4）；不写"样本未交付"（已交付）。
-- **风险**：把交付当验证；缓解=C07 只按自己 AC，业务真值等 C06。
-- **改动**：交付状态与 OPEN；**改写旧 D-040（旧文"交不出记未测"的 fallback 保留在 v13 及之前草稿，作为历史分支）**。
-
-
-### 工作包 ② — 共用契约（模块一，已有用户选择）
-
-- **复杂度**：复杂（跨审查/报告/两模式）
-- **要交付什么**：一份审计结果契约：检查项结果、问题记录、严重度与处置、执行者与复验规则；供页面模式与设计模式共用，供 build-code 审查材料与 final-report 直接消费。来源 U-C07-03/U-C07-06、R-C07-03/R-C07-12/R-C07-39、Talk:D1～D4。
-
-| 段 | 模块记录（批次 M2-1～M2-5） |
-| --- | --- |
-| 调研 | 结论：现 finding 字段、处置词与严重度映射已在审查侧；原件：`quality/evidence/research/2026-10-28-005-workflowhub-test-review-integration.md` 第 5.3 节；调研决策：内部（复用现字段，无需外部）；批次 M2-1 |
-| 发散 | 结论：新建页面审计 schema 与复用现字段两条路；原件：本日志 D-008；批次 M2-2 |
-| 收敛 | 结论：复用现字段、结果四态、执行独立、复验同角色（D-007～D-010）；原件：本日志 D-007/D-010；批次 M2-3 |
-| 就地讨论 | 结论：用户模块一 4 条选择并收尾确认；原件：Talk:D1～D4、Talk:M1；批次 M2-4 |
-| 定验收 | 结论：契约可校验、两模式共用、脚本只证形状；原件：本日志 M2 五段；批次 M2-5 |
-#### D-007 — 检查项结果取四态，未测算通过即失败
-
-- **做什么**：机器字段使用既有 8 值 validator 词汇（pass/fail/incomplete/inconclusive/deferred/missing/inconsistent/unavailable）；报告展示按四态分组（通过/失败/未测/不适用）；**pass 仅当全范围通过**，任何具名范围（如"仅首屏""仅桌面""仅 A 样本"）一律记 incomplete；禁止"限定 pass"；映射只在本决定写一次；未测不得计为通过；"不适用"必须给出依据；`check-page-audit` 只校验机器字段，不判展示文本。依据 Talk:D1。这是 PRD AC-C07-2/6 与本能力的最小防吞线，也是 C07 对现有 8 值人读词表的落地映射（通过↔pass、失败↔fail、未测↔incomplete/unavailable/missing/inconclusive 的具体原因在证据文字）。
-- **不做什么**：不把"未测"当失败也不当通过（两者都错）；不用总分/百分比/跨维聚合替代四态；不允许"不适用"不带依据，也不允许整页"不适用"吞掉应有覆盖。
-- **风险**：四态与既有 8 值词表的映射如果不写清，会形成第二套状态语义。缓解=映射只在本决定说明一次，报告正文仍写 8 值原词与原因，不新增枚举。
-- **改动**：方法正文的结果列与薄脚本的枚举校验（落点见要改文件表）；不新增字段/状态。
-
-#### D-008 — 问题记录沿用现有审查 finding 字段，不新开材料键
-
-- **做什么**：问题记录直接用现审查字段：严重度、源码锚点、问题、建议、证据、根因；页面/状态/视口/对象身份写进证据文字，不新增结构化槽位。依据 Talk:D2，现 `review-output` 只接受 repo 相对 path（005:27）。
-- **不做什么**：不新开材料键、不新增第二套页面审计 schema、不把审计写成 provider_results 或冒充 OCR 身份；不为审计复制一份 finding 账本。
-- **风险**：页面问题常无单一源码锚点，硬塞 path 会失真；缓解=以最近源码文件为锚点，route/state/viewport 放证据文字（与 005 第 5.3 节一致）。字段不足以表达时先记缺口交方法 owner，不私扩字段。
-- **改动**：报告与审查材料写法；无 schema 变更。唯一写主=方法正文 owner。
-
-#### D-009 — 严重度沿用三档映射，处置沿用现有词，复验单独记
-
-- **做什么**：严重度沿用现映射（阻断／重要／次要，对应 review 侧 critical→blocking、moderate→major、minor→minor）；处置沿用现有词（已修／驳回／接受风险／需人定／用户已定）；复验结果单独记，不写回原 finding 正文当作处置。定级依据已确认：视觉偏差用**项目 token/刻度 + 明确例子 + 校准负例**定级，不引外部评分线。依据 Talk:D3、Talk:E2、PRD:128、PRD:330 AC-4。
-- **不做什么**：不自造像素百分比门槛、不用工具 threshold 当严重度、不把 MINOR 当绿、不以"仍能操作"无据降级。
-- **风险**：校准负例尚未产出，同一 diff 可能两次不同级；缓解=OPEN-07 要求先备负例并记录两次定级；负例不足时该面保持 incomplete，不出级别。
-- **改动**：分级规则与例子集（写进方法正文）；复验记录的存放沿用现值（审计包内独立列/既有 review 链），不新增账本。
-
-#### D-010 — 执行者必须是测试或审查子代理，开发者不自审，两模式共用契约
-
-- **做什么**：执行者限定为测试或审查子代理；开发者不能自审；复验由同一独立角色完成；设计模式与页面模式共用本契约，设计模式没有 URL/console 时写"不适用+理由"。依据 Talk:D4；补强 D-003 的角色与回路结论（不替代）。
-- **不做什么**：不让开发者自签复验、不让 OCR 凭截图重判视觉、不为设计模式另建一套字段或结果语义；设计模式也不得凭无运行事实签"页面通过"。
-- **风险**：独立执行者与终末 OCR 是两条事实，若混写会重复或互相当证据；缓解=两者并排保留、不取平均，各自引用原件。
-- **改动**：派发与审查口径（review 必读镜头 + build-code 触发段）；不改执行器与工具。
-
-*本包待模块收敛的问题*：无（模块一 4 条已由用户选定）。审计包与脚本字段级方案交 spec。
-
-### 工作包 ③ — 判据矩阵
-
-- **复杂度**：复杂（九维/八维/属性口径/外部方法）
-- **要交付什么**：以 C05 八维为唯一骨架的页面检查标准：九维不另立体系，整组作为第 5 维「视觉与规范」的子检查，并按 D-018 映射表分散归属；性能作为第 3 维「交互、状态与运行性能」下的「运行性能」子组（D-015）；第 7 维只含可访问性（D-016）；第 8 维页面模式收窄为对象与代码/版本对应（D-019）。另含体验/行为/a11y/组件/布局/业务任务成功逐项判据、状态×视口×压力矩阵、适用性与反例要求；消费者为执行者、审查者与 final-report。来源 R-C07-01/R-07/R-08/R-09/R-10/R-15、U-C07-01/U-C07-14/U-C07-16/U-C07-17/U-C07-19/U-C07-21～U-C07-25。
-
-| 段 | 模块记录（批次 M3-1～M3-5） |
-| --- | --- |
-| 调研 | 结论：九维只有名单、外部无公开标准、C05 八维只在计划层；原件：`quality/evidence/research/2026-10-28-003-c07-external-methods.md` 第 1 节；调研决策：内部+外部（复杂模块不得空，开局决策 Talk:Q1 已覆盖）；批次 M3-1 |
-| 发散 | 结论：自建九维体系、九维作 C05 第 5 维子检查、只借外部概念三条路；原件：本日志 D-011 候选说明；批次 M3-2 |
-| 收敛 | 结论：八维骨架+九维子检查+映射+属性口径+性能归第 3 维+第 8 维收缩（D-011/D-012/D-014/D-015/D-016/D-018/D-019），外部只借方法（D-036）、判据引规范来源（D-035）；原件：本日志 D-011～D-019；批次 M3-3 |
-| 就地讨论 | 结论：用户给出视觉/交互性能/映射表答复并收尾确认；原件：Talk:E1、F1～F5、G1～G5、M1；批次 M3-4 |
-| 定验收 | 结论：逐维判据、适用性有据、无源不冒还原度、映射不重复计数；原件：本日志 M3 五段；批次 M3-5 |
-#### D-011 — 页面检查只有一套标准：C05 八维为骨架，九维作第 5 维子检查
-
-- **做什么**：页面检查以 C05 现版八维为唯一骨架（现名：①业务任务②IA导航③交互状态④内容数据⑤**视觉规范**⑥响应式布局⑦无障碍⑧真实代码交接；现文 `skills/plan-design-review/SKILL.md:24-53`，63 行含 10 项反例）；PRD 九维不另立体系，整体作为第 5 维的子检查：几何承接 layout/spacing/shadows/borders/radius，token/渲染承接 typography/colors，组件承接 icons/states。第 5 维与第 3 维（状态行为）、第 6 维（响应式布局）、第 7 维（可访问性/对比/焦点）写死边界与归属，同一问题只记一次。依据 Talk:F1；C05 八维原文见 `2026-10-28-004-c05-design-audit-generalization.md` 第 1 节。
-- **不做什么**：不把九维当独立维度体系、不与八维并列成 17 项、不让同一视觉问题在第 3/6/7 维重复计数；不改 C05 的八维定义（那是设计侧原文，本任务只引用）。
-- **风险**：边界写不死时同一问题会在多维多记，缺陷数虚高；或反过来漏记。缓解=边界与"归属唯一维度"写进判据包，finding 去重按根因；由 build-plan 在判据表中逐条落。
-- **改动**：判据正文（八维骨架、九维子检查映射、边界表）；不新增字段或第二套维度。
-
-#### D-012 — 九维取值口径复用 design-source-extraction 的四项，补五项属性口径
-
-- **做什么**：九维的取值口径直接复用 `design-source-extraction` 的 property／declared／rendered／comparison 四项，不新建 schema；C05 未覆盖的 spacing/shadows/borders/radius/icons 补属性取值口径（取哪些 CSS 属性、在哪个状态/视口取），属补充不属新标准。依据 Talk:F2、002:24。
-- **不做什么**：不新增第二套采集/对照 schema、不改 C04 契约语义、不把补充口径写成新标准或新评分。
-- **风险**：补充口径若与 C04 字段冲突，会出现两套写法；缓解=只在 C04 四项内扩展属性清单，冲突交 C04 方法 owner。
-- **改动**：判据正文的属性清单与状态/视口取法；不改 collector 代码（如需改，另按 C04 owner 串行）。
-
-#### D-014 — 无设计源/基准时只判能判的，还原度写"不适用+理由"
-
-- **做什么**：无设计源或无可核基准时，只判可判的（项目规范、token、内部一致性、状态、布局），设计还原度写"不适用+理由"，不得声称视觉还原已验。依据 Talk:F4、D-007 的四态与"不适用须有据"。
-- **不做什么**：不把"无源"写成通过、不用内部一致性冒充还原度、不用截图对照冒设计基准。
-- **风险**：无源对象可能被整体标不适用而逃过其它检查；缓解=逐维判适用性，只有还原度一项不适用，其余照判。
-- **改动**：判据正文的适用性规则与报告写法。
-
-#### D-015 — 性能放第 3 维下的"运行性能"子组，不单设维度
-
-- **做什么**：性能放在第 3 维"交互与状态"下，作为页面模式子组"运行性能"，取首屏与交互耗时；页面模式第 3 维称"交互、状态与运行性能"，下分"行为/状态"与"运行性能"两组；设计模式第 3 维仍叫"交互与状态"，性能写"不适用+理由"。不单独设维度，也不放第 7 维。依据 Talk:G1。
-- **不做什么**：不新增第 10 个独立维度、不把性能塞进可访问性、不在设计模式造性能结论。
-- **风险**：页面模式与设计模式第 3 维名称不同，易被当成两套骨架；缓解=在方法正文写明"同一维、页面模式多一个运行性能子组"，并以 D-018 映射表统一归属。
-- **改动**：判据正文的维度命名、子组与适用性；报告呈现按第 3 维两组列。
-
-#### D-016 — 第 7 维保持可访问性，不塞性能；颜色/图标/状态按映射归位
-
-- **做什么**：第 7 维只含可访问性；九维中颜色、图标、状态与第 7 维的边界按 D-018 映射表：对比度、可访问名、焦点归第 7 维，其余归主/副维度。依据 Talk:G2。
-- **不做什么**：不把性能并入第 7 维、不让同一问题在第 5 维与第 7 维各记一次。
-- **风险**：对比度问题易同时算颜色偏差与 a11y；缓解=按 D-018 归第 7 维主判、第 5 维只作证据。
-- **改动**：判据正文的第 7 维范围与归属表。
-
-#### D-018 — 九维到八维映射表与"主维判成败、副维只补证据"
-
-- **做什么**：把映射表写进判据包：layout→⑥主/⑤副；typography→⑤；colors→⑤主/⑦副；spacing→⑤主/⑥副；shadows/borders/radius→⑤；icons→⑤主/⑦副；states→③主/⑤副/⑦副（⑤=视觉规范；⑥=响应式布局；⑦=无障碍；③=交互状态，按 C05 现名）。每项按"主维度判成败、副维度只补证据、不重复计数"执行；主维失败即该项失败，副维不再单独计缺陷。依据 Talk:G4。
-- **不做什么**：不把副维证据升级为第二处失败点、不重复计数、不按维数加权算总分。
-- **风险**：映射表未逐条落正文时，执行者仍会随手归维；缓解=build-plan 把表逐条落判据正文与 finding 字段说明。
-- **改动**：判据正文映射表、finding 的维度归属写法；不新增字段。
-
-#### D-019 — 第 8 维页面模式只核对象与代码/版本对应
-
-- **做什么**：第 8 维"真实代码与交接"在页面模式只核验收对象与代码/版本（工作区、commit、构建、route 与代码的对应）；交接受理面不适用的写"不适用+理由"。依据 Talk:G5。
-- **不做什么**：不在页面模式重做设计交接审查、不把设计阶段的交接结论当页面通过、不因第 8 维收缩而放过对象身份核验。
-- **风险**：第 8 维收缩后对象与版本对应可能被跳过；缓解=对象身份块属最小必填（D-007 不适用须有据）。
-- **改动**：判据正文第 8 维范围；报告写"不适用+理由"。
-
-#### D-035 — 每个判据必须引用读取的规范/token 来源，缺失或过期即未测
-
-- **做什么**：每个判据必须引用它实际读取的规范/token 来源（路径/节/版本）；来源缺失或过期→记未测，不得判通过；报告列"本次实际读了哪些规范、用在哪"；发现规范缺口→交 norm-sync/C08 更新，后续任务再消费。依据 Talk:L1 附带的规范消费要求。
-- **不做什么**：不引用未读过的规范、不用过期版本判通过、不在本任务私改规范；不把"规范存在"当"规范在用"。
-- **风险**：规范来源多时报告变长；缓解=只列本次实际消费的条目与用法，不复制正文。
-- **改动**：判据正文的来源列与报告"规范消费"节；规范更新走 norm-sync/C08（⑧）。
-
-#### D-036 — 外部内容已整件落地；本地研究使用/复制可以，不对内对外分发
-
-- **做什么**：11 件外部内容 + LICENSE 已整件落地（catalog 记 absorbed；5 件 Apache、6 件 grant unknown）；本地研究使用/复制可以（AGENTS 已记个人研究用途；Talk:U3），不再逐任务问；对对外分发/再发布保持禁用。依据 Talk:U3、研究 011、catalog。
-- **不做什么**：不写"grant 已获"、不对外分发/再发布、不因本地可用就改许可登记；不把 6 件 unknown 写成已取得。
-- **风险**：许可状态误读；缓解=保留 grant unknown 事实与 catalog 记录。
-- **改动**：外部内容前提与许可写法；**删除旧前提"只借概念/未引入"，旧文保留在 v13 及之前草稿**。
-
-
-### 工作包 ④ — 真实采集
-
-- **复杂度**：复杂（引擎、回退、许可与失败语义）
-- **要交付什么**：唯一的真实采集入口（保留 isolated-browser-qa；默认 ego，装了没开回退 agent-browser 并记 engine-fallback；选定后失败不切），最小身份块（URL/route、viewport/DPR、引擎与版本、回退事实、commit、数据/角色、时间、artifact），console/network/overflow/焦点与清理事实，采集失败语义；网关按「保守简化」重构为 ego 主流程 + agent-browser 回退附录（D-030），薄采集脚本由 C07 建；消费者为执行者与复验者。来源 R-C07-02/R-14/R-20、U-C07-02/U-C07-28～30/U-C07-33/U-C07-34。
-
-| 段 | 模块记录（批次 M4-1～M4-5） |
-| --- | --- |
-| 调研 | 结论：网关已建、agent-browser 必崩根因已定位、ego 可用证据齐全；原件：`quality/evidence/research/2026-10-28-007-browser-collection-diagnosis.md` 第 2/3 节；调研决策：内部+外部+专项（开局决策 Talk:Q1 覆盖）；批次 M4-1 |
-| 发散 | 结论：修 agent-browser、默认 ego、另建栈三条路；原件：007 报告第 5 节；批次 M4-2 |
-| 收敛 | 结论：保留网关、默认 ego+装了没开回退、修身份 bug、保守简化（D-027～D-030）；原件：本日志 D-027/D-030；批次 M4-3 |
-| 就地讨论 | 结论：用户定回退口径、简化力度并授权本机 ego；原件：Talk:I1～I3、K1～K2、N1；批次 M4-4 |
-| 定验收 | 结论：身份块可核、失败如实、选定后不切换；原件：本日志 M4 五段；批次 M4-5 |
-
-#### D-022 — 保留 isolated-browser-qa，不退役
-
-- **做什么**：继续以 isolated-browser-qa 作为唯一浏览器入口与证据网关（引擎选择、session 生命周期、截图/快照、清理与 Output Contract）；依据 Talk:I1、U-C07-02。
-- **不做什么**：不退役、不换第二套浏览器栈、不绕过网关直连浏览器。
-- **风险**：网关当前不可用会把整条采集链堵死；缓解=D-023 的默认/回退顺序与 OPEN-05 的根因调查。
-- **改动**：方法正文与采集身份块；入口代码是否改由诊断后定。
-
-#### D-023 — 默认引擎用 ego-lite，本机没有 ego 时才回退 agent-browser
-
-- **做什么**：引擎选择顺序固定为"默认 ego-lite；本机没有 ego 时才用 agent-browser"，选择的引擎与版本写进采集身份块；依据 Talk:I2，与既有单引擎单会话规则一致。
-- **不做什么**：不在同一 run 混用两引擎、不静默换引擎冒充同一事实、不是"agent-browser 已退役"（它仍是本机无 ego 时的回退）。
-- **风险**：ego-lite 与 agent-browser 的读数差异会带来证据不可比；缓解=身份块记引擎与版本，跨引擎不直接比较，失败按 OPEN-13 的边界记。
-- **改动**：引擎选择与身份块写法；具体判定点（何时算"本机没有 ego"）归 OPEN-13。
-
-#### D-024 — 简化方向：ego-browser 能承担的不重复，QA 合同保留
-
-- **做什么**：方向是简化 isolated-browser-qa：ego-browser 技能能承担的大部分能力交给它，不为 agent-browser 保留一堆用不上的生命周期；QA 合同里不可替代的部分（隔离、单引擎单会话、证据与清理、Output Contract）保留。需要给出 ego-browser 的实际用法（不是只比较）与简化后的目标结构。依据 Talk:I3。
-- **不做什么**：**不写成"简化已完成"**；不在诊断报告回来前删改代码或合同字段；不借简化之名退役网关或降低证据要求。
-- **风险**：简化过头会丢掉不可替代的隔离/清理语义；缓解=先诊断、后删改清单，删改逐条给替代与影响。
-- **改动**：方向进材料；具体删改清单、ego-browser 用法与目标结构待浏览器诊断报告（OPEN-05/13），本阶段不动代码。
-
-#### D-027 — 默认 ego-lite；装了没开回退 agent-browser 并记 engine-fallback；选定后失败不切
-
-- **做什么**：默认用 ego-lite；ego 在跑就直接用；ego 已安装但没在跑时回退 agent-browser，并记录 `engine-fallback`（from/to/reason/probe）；选定后失败不切换引擎。接受 ego 的可见窗口/光标与可能的焦点影响；需要完全静默时用 agent-browser。依据 Talk:K1、007 报告 §C/§0，与既有单引擎单会话规则一致。**本条细化 D-023 的回退条件**：把「本机没有 ego」扩展为「会话当时 ego 未在跑」；D-023 的编号与其余内容保留，不删除旧条目。
-- **不做什么**：不在同一 run 混用两引擎、不静默换引擎冒充同一事实、不在选定后自动切换、不是"agent-browser 已退役"（它仍是回退引擎）。
-- **风险**：ego 可见窗口/焦点影响会干扰人工观察与并发；缓解=静默场景显式用 agent-browser，并在报告记录引擎与回退事实。
-- **改动**：引擎选择与身份块写法；`session.mjs` 的回退判据与 `EGO_NOT_RUNNING` 语义（build-plan 落写集）。
-
-#### D-028 — 保留 isolated-browser-qa，理由是其六项独有能力
-
-- **做什么**：保留网关，不退役；理由是 QA 合同里不可替代的六项独有能力：视口 CDP、computed style、boundingBox、语义快照、整页截图、finish 清理。依据 Talk:I1、007 报告 §A/§E；ego 已有 C09 三段 exit0 原件证明可采。用户 2026-10-28 确认"ego 是我本机授权工具，记下授权继续用"（Talk:N1）——这是**本机授权**，不写成项目许可登记，许可未登记仍见 OPEN-17。
-- **不做什么**：不把能力交回 ego 技能后连合同一起退役；不新建第二套浏览器栈。
-- **风险**：保留网关会继续承担维护成本；缓解=保守简化（D-030）只压缩专属长流程，不删合同能力。
-- **改动**：SKILL 的能力边界与合同节；脚本层删改见 D-030。
-
-#### D-029 — 修 agent-browser 身份 bug，作为回退可用性
-
-- **做什么**：修 `RECEIVER_IDENTITY_CHANGED`：根因是第一次 `get cdp-url` 时 Chrome 以新 pid/新 profile 重启，runner 在 `session.mjs:525` 抓身份、`:526` 调 cdp-url、`:531-532` 复查必然不等；修法为把 `ownedReceiver` 移到 `get cdp-url` 之后重解析（或改判据为"daemon 行未变 + 重解析 browser 行与当前 CDP 端点一致"），并处理 `rows`/`plain` 两次 ps 快照的第二层缺陷；验证=同一探针复跑 + 一次真实 `--run`。依据 007 报告 §2。
-- **不做什么**：不动宿主/引擎、不换浏览器栈、不把修 bug 当"回退可用已证"（真实 `--run` 尚未复验）。
-- **风险**：复查语义变弱可能放过真换身份；缓解=保留端点一致性校验与失败码，复验在 build-code。
-- **改动**：`skills/isolated-browser-qa/scripts/browser-qa-session.mjs`（`:525-534` 段）；测试同步见 OPEN-19。
-
-#### D-030 — 简化力度取「保守简化」：ego 主流程 + agent-browser 回退附录
-
-- **做什么**：按「保守简化」重构网关：保留 agent-browser 回退并修身份 bug；browser-use 降为可选/legacy 保留；删掉/压缩 agent-browser 专属的长流程与重复说明；新增 ego 主流程（context→doctor→确认 ego 在跑→TaskSpace→采集→finish）与五类薄采集脚本（console/network/overflow/perf/a11y，由 C07 建，不另起浏览器栈）；C05 旧 QA 脚本逐步迁移、不一次删；现有消费者不断。依据 Talk:K2、007 报告 §B/§F。
-- **不做什么**：不把"保守简化"写成已完成；不删 `browser-qa-tickets.mjs` 的导出（`session.mjs:9` 依赖 makeScope/safeError/validateEndpoint/connectCdp）；不一次性删 C05 脚本；不新建第二套浏览器栈或第二证据库。
-- **风险**：删/压专属长流程可能碰坏回退路径；缓解=先保导出与回退、再删说明，逐项给替代；C05 旧脚本在 ego 下会断（OPEN-18），迁移前保持只读。
-- **改动**：`skills/isolated-browser-qa/SKILL.md`、`scripts/browser-qa-session.mjs`（裁 runNativeQa/身份复查顺序）、`scripts/browser-qa-tickets.mjs`（仅保导出与可选票据）、`scripts/browser-qa-cleanup.sh`（裁 browser-use 分支）、`tests/contract/browser-engine-selection.test.mjs`；薄脚本路径待 build-plan。
-
-*给用户的说明*：验证页面时默认用 ego 浏览器（会显示窗口和光标，可能抢焦点）；如果 ego 已经开着就直接用；装了没开就用 agent-browser，并在报告里记一笔"从 ego 回退"；选定后失败也不会偷偷换引擎；需要完全静默时用 agent-browser。这里不会再问你"用哪个引擎"。
-
-*本包待模块收敛的问题（不写结论）*：`RECEIVER_IDENTITY_CHANGED` 的修法与复验与是否在 C07 内修；采集是场景脚本还是可复用薄工具；console/network 是否结构化记录；overflow/焦点/减少动效的读取方式；截图与清理的最小集。默认/回退的判定点与失败边界（OPEN-13）；ego-browser 的实际用法与简化后目标结构（D-024）待诊断报告。
-
-### 工作包 ⑤ — 判定与分级
-
-- **复杂度**：复杂（分级/负例/自动化/业务终态）
-- **要交付什么**：把采集事实变成四态结果与三级严重度，含未知不聚合、预算停止四分类、模型观察分歧保留、校准负例，以及业务任务的页面任务脚本与可观察终态判定（D-017）；性能按第 3 维运行性能子组判定（D-015）；消费者为执行者、审查者、用户确认。来源 R-C07-16/R-21/R-22/R-28/R-30/R-32/R-33/R-40、U-C07-12/U-C07-15/U-C07-18/U-C07-21/U-C07-23。
-
-| 段 | 模块记录（批次 M5-1～M5-5） |
-| --- | --- |
-| 调研 | 结论：三档定义在 PRD:128、未测算通过是最大失败模式、无现有分级器；原件：`quality/evidence/research/2026-10-28-003-c07-external-methods.md` 第 9 节；调研决策：内部+外部（对齐开局 Talk:Q1）；批次 M5-1 |
-| 发散 | 结论：定量阈值、定性三级+负例、外部评分线三条路；原件：本日志 D-009 候选说明；批次 M5-2 |
-| 收敛 | 结论：四态、三档映射、负例≥3、自动判定、业务终态、受控测试页（D-007/D-009/D-013/D-017/D-025/D-026/D-033）；原件：本日志 D-025/D-033；批次 M5-3 |
-| 就地讨论 | 结论：用户定模块一契约、定级依据、负例要求、业务终态与"不要确认"；原件：Talk:D1～D4、E2、F3、G3、J1～J2、M1；批次 M5-4 |
-| 定验收 | 结论：同 diff 同级、三条负例、MINOR 规则化、业务终态可观察；原件：本日志 M5 五段；批次 M5-5 |
-#### D-013 — 校准负例至少三条，同一偏差同标尺重复跑同级
-
-- **做什么**：判据包与验收面至少放三条校准负例：明显字体、间距、颜色偏差但任务仍可用 → 定为重要/MODERATE；同一偏差用同一标尺重复跑两次须得同级。依据 Talk:F3、PRD:330 AC-4、D-009 的定级依据。
-- **不做什么**：不以"任务还能操作"降为 MINOR、不以一次结果定级、不把工具 threshold 当严重度、不引外部评分线。
-- **风险**：三条样例只覆盖字体/间距/颜色，挡不住布局崩坏类误判；缓解=执行时按需补同类负例（补不等于改标准），缺则记缺口。
-- **改动**：判据包负例节与验收面 AC-C07-4 的可观察用例；不新增 schema。
-
-#### D-017 — 业务操作用"页面任务脚本+可观察终态"
-
-- **做什么**：业务操作采用页面任务脚本加可观察终态：每步写清操作、页面终态、错误/权限/取消/恢复判据；B 的十态/permission/role 可作 unknown 合法输入，**不可作业务真值**；成功由终态与任务真值判定，不由 HTTP 200、截图或 toast 判定。C05 模拟页面上的真实后端业务写"未覆盖"，不得冒充。依据 Talk:G3、PRD:329 F4、S7 业务 E2E 定义。
-- **不做什么**：不在 mock 页面造真实业务成功、不用同一脚本重复真实业务写、不把"页面能点"当业务完成。
-- **风险**：终态判据写得松会把失败吞成成功；缓解=每步给可观察终态与失败/取消/恢复判据，缺真实后端时明确写"未覆盖"。
-- **改动**：判据正文的业务任务脚本节与报告"未覆盖"写法；执行按对象在 build-code 阶段落。
-
-#### D-025 — 页面自动检查全自动运行，MINOR 由规则判定，不要求用户确认
-
-- **做什么**：开发实施阶段（build-code）的页面自动检查全自动运行；小毛病（MINOR）不要求用户逐项或批量确认，由检查流程按明确规则判定：能按项目规范/token/校准负例判定的，直接判"该修"或"可接受"并写入报告。报告必须写清哪些小毛病按什么规则接受，**不得写"用户已确认/已签字"**；没有真人确认就不能声称有。依据 Talk:J1/J2（"build-code应该是一个全自动流程，不要让我来参与确认""不要确认"）。
-- **不做什么**：不把自动判定写成用户确认；不在没有规则依据时放行；不因自动化而降低判据或吞掉失败。
-- **风险**：自动判定可能自我放宽（尤其 MINOR 边界）；缓解=规则与校准负例成文（D-009/D-013），报告逐项写规则，独立审查可复核"这条为什么接受"。
-- **改动**：判据与报告写法（第 ⑤⑦ 包）；不改 PRD/S5 原文（冲突由 OPEN-16 承接）。
-
-#### D-026 — 最小打扰：只升级会改变方向/范围/验收或要用户担风险的事
-
-- **做什么**：只有"判不了的"或"会改变方向/范围/验收/需要用户承担风险"的事项才升级给用户，并尽量攒到一次说，不逐条打扰；其余按 D-025 自动判定。依据 Talk:J1/J2。
-- **不做什么**：不把普通 MINOR 或已有规则可判的偏差升级成用户确认；不以"攒一次"为由隐瞒已发现缺陷；不把升级当默认动作。
-- **风险**：攒批会延迟真正需要用户的事；缓解=升级项分级（方向/范围/验收/风险四类）并给"不问会怎样"的一句话影响。
-- **改动**：派发/交接与报告写法；升级清单随报告给出。
-
-*给用户的说明*：在"开发实施（build-code）"这个阶段，页面检查会自动跑，不需要你参与；小毛病（不影响关键任务完成的细微偏差）由检查流程按项目规范和校准例子判断该修还是可接受，并写进报告；只有"规则判不了，或者会改变方向、范围、验收、要你承担风险"的事才会找你，而且会尽量一次说完。不问你的后果是：这类小毛病不会被说成"你已确认"，报告里只写"按某规则接受"；如果你不认可某条规则，可以只看报告里被点名的规则，不需要逐条签。
-
-#### D-033 — 受控测试页：C07 自建少量页面/状态，预置已知缺陷用于校准与闭环
-
-- **做什么**：C07 自建少量测试页/状态，预置已知视觉、可访问性、性能、交互缺陷，用于校准负例与"发现→修复→复验"闭环；校准可借 C05 已修缺陷的形态，但缺陷本身由 C07 自建；不新建平台，只作测试资产；已知缺陷必须可复现、可修、可复验。依据 Talk:L1、D-013 校准负例要求。
-- **不做什么**：不把测试页当产品页验收、不新建评测平台、不让预置缺陷变成"必过样例"；测试资产不进产品代码路径。
-- **风险**：自建页与真实页面差异大，能力可能只在样例上成立；缓解=C05 正式样本作为第二腿（D-031），两腿结果分开记录。
-- **改动**：测试资产目录（路径 build-plan 定）与校准负例清单；不新增 runtime 能力。
-
-*本包剩余待收敛的问题（不写结论）*：三条负例的具体页面/状态/取值样例；项目 token/刻度的取值来源与容差；性能采集方法与原始值/unknown 表达（位置已由 D-015 定，方法归 OPEN-08）；模型分歧的复核记录形式；预算停止的执行分类词；业务任务脚本与真实后端对象（OPEN-11）。自动判定规则清单与升级边界（D-025/D-026 只给原则，细则归 build-plan）。
-
-### 工作包 ⑥ — 回修闭环
-
-- **复杂度**：复杂（跨角色/复验/修复归属）
-- **要交付什么**：定位→责任路由→最小修复→独立复验→三轮/停滞的执行规则与角色分工；消费者为开发、审查、测试与主会话。来源 R-C07-04/R-17/R-18/R-23/R-29、U-C07-06/U-C07-13。
-
-| 段 | 模块记录（批次 M6-1～M6-5） |
-| --- | --- |
-| 调研 | 结论：回修规则唯一在 PRD:130、finding 处置四态已有、C06 未立项；原件：`quality/evidence/research/2026-10-28-002-c07-internal-capability.md` 第 4 节；调研决策：内部（规则已在仓内，无需外部）；批次 M6-1 |
-| 发散 | 结论：新增修复状态机、复用现处置词、C07 自己修三条路；原件：本日志 D-003 候选说明；批次 M6-2 |
-| 收敛 | 结论：复用现循环、执行独立、复验同角色、修复归 C07 自有副本（D-003/D-010/D-032）；原件：本日志 D-010/D-032；批次 M6-3 |
-| 就地讨论 | 结论：用户定执行角色、复验规则与修复归属；原件：Talk:B3、D4、L1、M1；批次 M6-4 |
-| 定验收 | 结论：原问题+回归复验、轮次可解释、不反改判据；原件：本日志 M6 五段；批次 M6-5 |
-#### D-003 — 由测试或审查子代理执行，结果回 phase 开发者修复
-
-- **做什么**：页面验证/设计审计由测试或审查子代理独立执行，结果回报 phase 开发者子代理修复，修复后复验原问题与相关回归。依据 Talk:B3；与 build-code 三角色与七步时序一致（005:33-35）。
-- **不做什么**：不让开发者执行并自评、不让主会话代跑测试、不把审计变成第四条审查线或新 gate。
-- **风险**：终末时若无独立执行者，审计会退化成开发自证；缓解=不可用时记 unavailable 并披露执行者身份，不用自证冒充。
-- **改动**：build-code 的派发与审查材料口径（工作包⑦写集）。
-
-- **业务操作约束**：业务步骤由 D-017 的页面任务脚本执行，每步有终态与错误/权限/取消/恢复判据；C05 模拟页面上的真实后端业务写"未覆盖"；不得以自动重试重复真实业务写（PRD:130）。
-- **自动化约束**：页面检查在 build-code 内全自动运行，开发者/执行者按规则判定，不向用户逐条或批量要确认（D-025）；只把改变方向/范围/验收/风险的事项攒批升级（D-026）。
-
-*本包待模块收敛的问题（不写结论）*：C06 缺失时谁修代码、C07 是否仅诊断不修；复验执行者在终末的确定方式；finding 跨 phase 的迟到处理；业务终态判据按对象写（OPEN-11）。
-
-### 工作包 ⑦ — 报告与接入
-
-- **复杂度**：复杂（报告表达/材料键/触发/审查分工）
-- **要交付什么**：报告表达（按八维骨架逐项档位+证据 ref+未覆盖；页面模式第 3 维分行为/状态与运行性能两组，D-015）、消费接口（审查材料、final-report AC 行）与触发段（build-code 何时强制走）；C05 mock 上的真实后端业务必须在报告中写"未覆盖"（D-017）；小毛病按规则接受时写明规则、不得写"用户已确认/已签字"（D-025）；消费者为 build-code 主会话/审查者、产品验收者。来源 R-C07-05/R-11/R-19/R-43、U-C07-03/U-C07-04/U-C07-08/U-C07-21/U-C07-23。
-
-| 段 | 模块记录（批次 M7-1～M7-5） |
-| --- | --- |
-| 调研 | 结论：build-code 已有 UI 终验与 RP-14、材料白名单只认 test_evidence/test_context；原件：`quality/evidence/research/2026-10-28-005-workflowhub-test-review-integration.md` 第 1 节；调研决策：内部（接线面在仓内）；批次 M7-1 |
-| 发散 | 结论：新建报告平台、嵌既有材料、独立证据目录三条路；原件：本日志 D-002 候选说明；批次 M7-2 |
-| 收敛 | 结论：嵌既有材料、冻结前正式审计+终末复核+阶段内冒烟、可见面强制、报告四态与分工（D-002/D-005/D-034/D-037）；原件：本日志 D-034/D-037；批次 M7-3 |
-| 就地讨论 | 结论：用户定"何时验、哪些强制走、报告不写用户已确认"；原件：Talk:B1、C2、M1、J1～J2；批次 M7-4 |
-| 定验收 | 结论：报告可被现链路消费、AC 行有真实 ref、无面才 N/A；原件：本日志 M7 五段；批次 M7-5 |
-#### D-002 — 时机取「代码冻结前、最后开发阶段收口时」正式审计，终末只复核
-
-- **做什么**：正式页面审计放在代码冻结前、最后一个开发阶段收口时执行；终末审查只复核，不再首次执行审计。依据 Talk:R1、U-C07-43；理由：冻结后无法回修，闭环（发现→修复→复验）不可执行。
-- **不做什么**：不在冻结后首次跑审计、不把终末复核当首次执行、不为审计新增 stage/gate。
-- **风险**：阶段收口时问题集中暴露；缓解=阶段内可选冒烟提前暴露（D-034），正式审计只做一次。
-- **改动**：`workflows/build-code/SKILL.md` 终末段与方法段；精确行由 build-plan 定。**本条改写旧 D-002（旧文"终末正式+阶段内冒烟"保留在 v10 及之前草稿）**。
-- **终末复核方式（Talk:S1/U-46）**：冻结前审计发现的问题修完后，终末只复核"审计报告+修复记录+受影响面回归+独立复验证据"四项，**不重跑全量审计**；缺任一项则该项记未测/不完整，不写"终末全量复跑"。
-
-#### D-005 — 强制范围取"所有有浏览器可见面的任务"
-
-- **做什么**：凡是声明写集含浏览器可见面的任务都强制走本能力；触发按写集与可运行 route/service 判断，不按调用者标签或"看起来像 UI"。无面才 N/A 并引写集。依据 Talk:C2；与 build-code 既有 UI 终验触发口径一致（005:39）。
-- **不做什么**：不扩大到无浏览器面任务、不把 N/A 当默认、不由调用者自报豁免。
-- **风险**：强制后每任务多一次采集+脚本+复验，成本上升；缓解=审计包只做一次、按页面范围复用，冒烟从简；成本风险记入风险表。
-- **改动**：`workflows/build-code/SKILL.md` 触发段与 `skill-deps.yaml`（待定）；方法正文的适用性写法。
-
-#### D-034 — 强制触发按改动面与交付声明判定，不确定默认走
-
-- **做什么**：所有有浏览器可见面的任务都走；判定=改动页面/路由/组件/样式文件，或任务声明 UI/页面交付；不确定时默认走；纯后端/文档/配置任务可豁免但须写理由。正式审计在终末，阶段内可选冒烟。依据 Talk:L1 附带要求、D-005/D-002。
-- **不做什么**：不按调用者标签或"看起来像 UI"判断、不把豁免当默认、不因强制而新增 stage/gate。
-- **风险**：不确定时默认走会抬高成本；缓解=冒烟从简、审计包按页面范围复用。
-- **改动**：`workflows/build-code/SKILL.md` 触发段与 `skill-deps.yaml`；本条细化 D-005 的判定口径。
-
-#### D-037 — 报告与接入：四态逐项+证据 ref+未覆盖，不写"用户已确认小毛病"
-
-- **做什么**：报告逐项+证据 ref+未覆盖（机器字段用 8 值 validator 词汇、展示按四态分组，映射只写一次；pass 仅全范围，禁限定 pass）；写引擎/工具/会话/视口/状态与未测原因；审计摘要放现有 `test_evidence`/`test_context`，不新开材料键；报告不写"用户已确认小毛病"；与 OCR/审查分工：浏览器执行者产事实，OCR/审查做判断。依据 Talk:L1 附带要求、D-007/D-008/D-025、005 报告接入结论。
-- **不做什么**：不新开材料键/报告平台、不让 OCR 凭截图重判视觉、不把自动判定写成用户确认。
-- **风险**：摘要内联在既有材料里容易漏字段；缓解=薄脚本校验形状（四态/证据/未测理由）。
-- **改动**：报告写法与审查材料口径；`skills/review/SKILL.md` 消费规则。
-
-*本包待模块收敛的问题（不写结论）*：审查材料键（test_evidence/test_context）如何承载审计摘要；report 的 AC 行格式；是否改 skill-deps trigger（审计时机已由 D-002/Talk:R1 定，不再问）。
-
-### 工作包 ⑧ — 规范复用与能力自验
-
-- **复杂度**：复杂（方法归属/规范消费/复用证明）
-- **要交付什么**：方法与规范只存一处、被真实消费的证明、与 C05 的共用边界、能力自验（接线契约测试）；消费者为后续 UI 任务、C05/C08、发布验收。来源 U-C07-06/U-C07-07/U-C07-14、R-C07-19/R-38。
-
-| 段 | 模块记录（批次 M8-1～M8-5） |
-| --- | --- |
-| 调研 | 结论：plan-design-review 仍 file-only、C05 升级未生效；原件：`quality/evidence/research/2026-10-28-004-c05-design-audit-generalization.md` 第 4 节；调研决策：内部+外部（C05 判据与外部方法，对齐开局 Talk:Q1）；批次 M8-1 |
-| 发散 | 结论：C07 新建页面方法、扩两模式、只写 frontend-testing 三条路；原件：本日志 D-004 候选说明；批次 M8-2 |
-| 收敛 | 结论：扩 plan-design-review 两模式、共用清单一处、规范消费可核（D-004/D-035/D-036）；原件：本日志 D-004/D-035；批次 M8-3 |
-| 就地讨论 | 结论：用户定方法归属、要求通用可复用、规范要真被消费；原件：Talk:B3、C1、M1；批次 M8-4 |
-| 定验收 | 结论：同文件两模式、无重复正文、被下游引用、规范消费有记录；原件：本日志 M8 五段；批次 M8-5 |
-#### D-004 — 在 C05 现版 `plan-design-review`（63 行八维）上扩页面模式，不重写八维
-
-- **做什么**：`skills/plan-design-review/SKILL.md` 已被 C05 改为 63 行八维（含 10 项反例，现文 `:24-53`）；C07 在现版上扩页面模式，共用契约与清单一处；写集按现行号。依据 Talk:U3/研究 011、D-038。
-- **不做什么**：不重写八维、不覆盖 C05 现版、不另建第二技能。
-- **风险**：同文件后续冲突；缓解=写入前读现版并记来源（OPEN-04 写入顺序部分已关闭）。
-- **改动**：`skills/plan-design-review/SKILL.md` 页面模式节；**改写旧 D-004（旧文"扩两模式"保留，八维现名/行号以本版为准）**。
-
-
-### 工作包 ⑨ — make-decision 流程修复
-
-- **要交付什么**：把用户 9 条流程要求落成 make-decision 的可执行修复计划（文件、顺序、验收、运行清单），供后续任务不再跳步；消费者为 make-decision 作者与后续任务。来源 U-C07-40/U-C07-41/U-C07-42（Talk:O2/O3/P1/Q1）。
-- **复杂度**：复杂（跨技能/模板/阶段方法，含顺序与可核性要求）。
-
-| 段 | 本模块记录 |
-| --- | --- |
-| 调研 | 结论：现流程缺开局分级问答、调研决策、逐模块台账与即时落盘的强制点；原件：`workflows/make-decision/SKILL.md`、`steps.json`、`skills/decision-log/templates/decision-log-template.md`；调研决策：对齐开局答复（够了，Talk:Q1），本模块为流程修复自身，所需依据均为内部原件，无需模块级补调研；批次 M9-1 |
-| 发散 | 结论：三条路——只改模板、只改 SKILL、模板+SKILL+steps+运行清单一起改；原件：`workflows/make-decision/steps.json` 现状；批次 M9-2 |
-| 收敛 | 结论：取第三条，但只改方法与模板、不改 runtime、不新增 stage/gate；原件：D-038/D-039；批次 M9-3 |
-| 就地讨论 | 结论：用户明确"当前make-decision流程有问题…一起改进"，并要求开局问调研、逐模块收敛、不抢跑；原件：Talk:O2/O3/P1/Q1；批次 M9-4 |
-| 定验收 | 结论：七项可核（四级选择、调研决策、大纲确认、模块台账与即时落盘、细节审查前检查、grill/GLOSSARY、无新 gate）；原件：本包"验收"节；批次 M9-5 |
-
-**用户 9 条要求（修复范围）**：
-1. 开局四级选择（含推荐与理由）。
-2. 分级后、设计大纲前必须问一次"这次要不要做内外部调研"（内部/内部+外部/跳过+理由），记录范围、为什么、跳过会缺什么、谁决定。
+| 答复 1 | 交付含「真实检查并回修」，不是纯判据文档 | 工作包①③ | Talk:B2 |
+| 答复 2 | 浏览器只经 isolated-browser-qa 静默驱动；链不可用如实标 | 工作包④；未决 2 | Talk:A1 |
+| 答复 3 | 报告须含多维结果、根因与责任、修复记录、独立复验、失败与未覆盖 | 工作包⑦；验收节 | Talk:A2 |
+| 答复 4 | 正式验证在 build-code 阶段；C05 完成后合并进来再验真实页面 | 工作包②⑦；风险节 | Talk:B1 |
+| 答复 5 | C07 是为 workflowhub 设计完整能力，不是单页修复；要交代怎么做、何时做 | 工作包①；决定 2 | Talk:B2 |
+| 答复 6 | 测试/审查子代理执行，结果回 phase 开发者修；能力与规范须通用、被真实消费 | 工作包⑥⑧；决定 11、33 | Talk:B3 |
+| 答复 7 | 方法归属：把 plan-design-review 扩成设计/页面两模式 | 工作包⑧；决定 38 | Talk:C1 |
+| 答复 8 | 强制范围：所有有浏览器可见面的任务都强制走 | 工作包⑦；决定 35 | Talk:C2 |
+| 答复 9 | 路线基线：按主会话展示的骨架继续 | 工作包①；决定 2 | Talk:C3 |
+| 答复 10 | 结果取四态；未测算通过即失败；不适用须有据 | 工作包②；决定 8 | Talk:D1 |
+| 答复 11 | 问题记录沿用现 finding 字段；页面/状态/视口/身份进证据文字；不新开材料键 | 工作包②；决定 9 | Talk:D2 |
+| 答复 12 | 严重度沿用三档映射；处置沿用现词；复验结果单独记 | 工作包②⑤；决定 10 | Talk:D3 |
+| 答复 13 | 执行者须测试或审查子代理，开发者不自审；复验同一独立角色；两模式共契约 | 工作包②⑥；决定 11 | Talk:D4 |
+| 答复 14 | 九维来源未定；先调研 C05 判据并复用现成标准，不新造 | 工作包③⑧；由答复 20 关闭 | Talk:E1 |
+| 答复 15 | 视觉偏差用项目 token/刻度＋明确例子＋校准负例定级 | 工作包⑤；决定 10 | Talk:E2 |
+| 答复 16 | 页面检查只有一套标准：C05 八维为骨架，九维作第 5 维子检查 | 工作包③；决定 12 | Talk:F1 |
+| 答复 17 | 取值口径复用 design-source-extraction 四项，不新建 schema；补五项属性口径 | 工作包③；决定 13 | Talk:F2 |
+| 答复 18 | 校准负例至少三条；同一偏差同标尺重复跑须同级 | 工作包⑤；决定 28；验收 4 | Talk:F3 |
+| 答复 19 | 无设计源时只判能判的，还原度写「不适用＋理由」，不声称已验 | 工作包③⑤；决定 14 | Talk:F4 |
+| 答复 20 | 九维来源已定，不再是「待调研/自建」；关闭对应未决 | 决定 12、13 | Talk:F5 |
+| 答复 21 | 性能放第 3 维下的子组「运行性能」；设计模式第 3 维仍只叫「交互与状态」 | 工作包③⑤⑦；决定 15 | Talk:G1 |
+| 答复 22 | 第 7 维保持可访问性、不塞性能；对比度/可访问名/焦点归第 7 维 | 工作包③；决定 16、17 | Talk:G2 |
+| 答复 23 | 业务操作用页面任务脚本＋可观察终态；mock 上的真实后端业务写「未覆盖」 | 工作包③⑤⑥⑦；决定 29 | Talk:G3 |
+| 答复 24 | 九维到八维映射按给定表；主维判成败、副维只补证据、不重复计数 | 工作包③；决定 17 | Talk:G4 |
+| 答复 25 | 第 8 维页面模式只核对象与代码/版本对应；不适用的写「不适用＋理由」 | 工作包③；决定 18 | Talk:G5 |
+| 答复 26 | 任务启动声明：按标准开始这个复杂任务、先建 worktree、一起做详细调研 | 级别与路线；不是选项选择 | Talk:H1 |
+| 答复 27 | 验证对象选「C05 正在做的原型样本」；撤回草稿不算；C07 不改 C05 worktree | 工作包①；决定 3、4 | Talk:H1（H2 见答复 4） |
+| 答复 28 | 保留 isolated-browser-qa，不退役 | 工作包④；决定 21 | Talk:I1 |
+| 答复 29 | 默认引擎用 ego-lite；本机没有 ego 时才用 agent-browser | 工作包④；决定 22（回退条件由答复 33 细化） | Talk:I2 |
+| 答复 30 | 简化网关：能交给 ego-browser 的交给它；QA 合同不可替代部分保留 | 工作包④；决定 23；未决 2、5 | Talk:I3 |
+| 答复 31 | build-code 页面检查应全自动，不让用户参与确认 | 工作包⑤⑥⑦；决定 30 | Talk:J1 |
+| 答复 32 | 不要确认：既不逐项，也不批量要用户签 | 工作包⑤⑥⑦；决定 30、31；未决 15 | Talk:J2 |
+| 答复 33 | 回退口径：ego 在跑就用；装了没开回退并记 engine-fallback；选定后失败不切 | 工作包④；决定 24 | Talk:K1 |
+| 答复 34 | 简化力度选「保守简化」：保留回退并修 bug，browser-use 降可选/legacy | 工作包④；决定 27 | Talk:K2 |
+| 答复 35 | 对象路径选「两条腿」：受控页建能力＋C05 收口前交付样本；交不出记未测 | 工作包①；决定 5、6；未决 21 | Talk:L1 |
+| 答复 36 | 确认收尾六项：修复归属、受控页、强制触发、规范消费、外部内容、报告接入 | 工作包①③⑤⑦；决定 6～20、32～37 | Talk:M1 |
+| 答复 37 | ego 是用户本机授权工具，记下授权继续用 | 工作包④；决定 25 补注；未决 6 | Talk:N1 |
+| 答复 38 | 入口路线正式选「继续复杂路线」，不 shrink-scope、不改普通五阶段 | 级别与路线；已定 | Talk:N2 |
+| 答复 39 | 任务级别正式选「复杂」 | 级别与路线；已定 | Talk:O1 |
+| 答复 40 | make-decision 流程有问题，要求把 9 条改进并入当前任务 | 工作包⑨；决定 39、40 | Talk:O2/O3 |
+| 答复 41 | 新流程：分级后、大纲前必须问一次要不要做内外部调研并记录 | 工作包⑨；已定 | Talk:P1 |
+| 答复 42 | 调研决策答「够了，按现有调研定大纲」；缺口留未决与风险，不称全覆盖 | 工作包⑨；已定 | Talk:Q1 |
+| 答复 43 | 正式页面审计放代码冻结前、最后开发阶段收口；终末审查只复核 | 工作包⑦；决定 34 | Talk:R1 |
+| 答复 44 | C05 样本合并后实现修复由 C07 全改；C05 owner 收清单交接；独立复验同角色 | 工作包①⑥；决定 6；未决 17 | Talk:R2 |
+| 答复 45 | M9 流程修复留在 C07 实施（例外），owner 是当前主会话，决策阶段不改技能 | 工作包⑨；决定 39、40；未决 16 | Talk:R3 |
+| 答复 46 | 终末只复核四项：审计报告、修复记录、受影响面回归、独立复验证据 | 工作包⑦；决定 34；验收 5、6 | Talk:S1 |
+| 答复 47 | C05 正在开发；用户用提示器通知 C05 开发 agent 准备样本并随任务交付 | 工作包①；决定 7；未决 21、17 | Talk:S2 |
+| 答复 48 | 最终确认＝阶段收口，不是下一阶段许可；不得催下一阶段 | 工作包⑨；决定 39、40；未决 18 | Talk:T1 |
+| 答复 49 | 对象版本钉 9efb7e57；be7a5673 作废；c887 与 9efb 字节同但绑 41eae967，分开写 | 工作包①⑩；决定 3、42 | Talk:U1 |
+| 答复 50 | 问题清单交用户/设计 owner＋归档留证；C07 只做复现与独立验收 | 工作包⑥；决定 6 | Talk:U2 |
+| 答复 51 | 本地使用可复制（个人研究）；6 件 grant unknown 只影响对外分发；不写已获 grant | 工作包③；决定 20 | Talk:U3 |
+| 答复 52 | 不继承、不引用 C05 的 17 项限定通过、效果达标、已闭环；只按自己验收 | 工作包⑩；决定 7 | Talk:U4 |
+| 答复 53 | 200% 缩放＋键盘/焦点必测；读屏未测不作必测门 | 工作包③；决定 36；验收 3 | Talk:U5 |
+| 答复 54 | 新增 M10 交付证据与防假绿（P0/P1/P2） | 工作包⑩；决定 41、42 | Talk:U6 |
+| 答复 55 | 批准后 UI 行为变更：登记差异并取得同意，不默认重展示；两版本分开 | 工作包⑩；决定 42 | Talk:U7 |
+| 答复 56 | C07 材料提交到 C07 分支；主会话稍后执行、不 push；提交前不写已提交 | 工作包⑨；决定 39 | Talk:U8 |
+| 答复 57 | 收尾校验并入「批准绑定/报告重签发」，不新开阶段校验 | 工作包⑩；决定 41、42 | Talk:V1 |
+| 答复 58 | 受控页真注入、200%/键盘、读屏与直接打开文件升最高优先级；读屏作证据不作门 | 工作包⑩；决定 41；验收 3 | Talk:V2 |
+| 答复 59 | 材料改进「完全没有实现」，三份材料仍啰嗦、黑话多、结构乱；要彻底解决 | 追加节；追加决定 1～3 | 本日志追加节 |
+| 答复 60 | 这些工作放 C07 里作为一个 task 或 phase，不在 build-plan 做开发 | 追加节；P9 | 本日志追加节 |
+| 答复 61 | 允许修改两条冻结契约测试里的字面断言 | 追加节；P11 | `quality/evidence/human-confirmations/2026-10-29-001-allow-frozen-assertion-change.md` |
+| 答复 62 | 不能只在阶段末检查，写时就防；阶段末由没参与写作的独立子代理核对 | 追加节；P9 | 本日志追加节 |
+| 答复 63 | spec 与 Phase 要让空白上下文子代理拿到项目知识、任务上下文与执行计划 | 追加节；P9、P10 | 本日志追加节 |
+| 答复 64 | STE100 与 ISO 24495 的要求有没有告诉写文档的子代理？单行一千字谁都读不动 | 追加节；P9 写作契约 | 本日志追加节 |
+
+Talk 原件路径：`quality/evidence/decision-log-refs/talk/2026-10-28-c07-direction.md`。
+逐字短引、类型与依赖：`quality/evidence/decision-log-refs/requirement-index.md` 第 7 节。
+本任务不另存同名的 `requirement-change-log.md`；上面两处原件即唯一来源。
+
+校验器用，人可跳过：本节 64 条，全部有落点；答复 14 已被答复 20 关闭；
+编号对照见附录 A 表 A2。
+
+## 工作包与决定：十个包各自定了什么？
+
+十个包按「问题同类」分组，不按时间顺序；每个包先写它要定什么，再写决定。
+包内每条决定都按六件事写：问题、候选、选择、理由、证据、影响。
+包的顺序是：定位、契约、判据、采集、判定、回修、报告、规范、流程、防假绿。
+①②③⑤⑦⑧ 的方向已由用户确认；⑥ 规则已定、细节待收敛；④ 细节待模块收敛。
+下表「批次」是材料批次：001～005 是调研原件，Talk 是用户答复，DL 是本日志。
+
+### 工作包 ① — 定位与形态：这活到底是什么？
+
+这个包把 C07 从「修一个页面」定成「一套可复用的真实页面验证能力」。
+要回答四件事：交付什么形态、对象是谁、对象从哪来、谁改谁修。
+消费者是 build-plan、后续有浏览器可见面的任务，以及 C05/C06 的交接。
+
+| 段（批次） | 结论 | 原件 |
+| --- | --- | --- |
+| 调研（M1-1） | 仓内没有通用九维与采集能力，verify-code 已退役；调研发法是内部＋外部＋专项，复杂模块不得空 | `quality/evidence/research/2026-10-28-002-c07-internal-capability.md` |
+| 发散（M1-2） | 三条路：只扩 frontend-testing、新建技能包、方法＋薄脚本＋接线 | `quality/evidence/research/2026-10-28-005-workflowhub-test-review-integration.md` 第 2 节 |
+| 收敛（M1-3） | 取方法＋薄脚本＋现有阶段接线，对象取两条腿 | 本日志决定 1、5 |
+| 就地讨论（M1-4） | 用户定四件事：不是修页面、要通用、何时验、对象两条腿 | Talk 批次 0/B/C/H/L |
+| 定验收（M1-5） | 形态可执行、脚本可校验、接线可消费、对象两条腿 | 本包五段与决定 5 |
+
+#### 决定 1 — 写成一处方法加一个薄校验脚本，不新建技能包
+
+**问题**：这套能力用什么形态交付？
+**候选**：① 只扩既有前端测试技能；② 新建独立技能包。
+**候选**：③ 一处方法正文＋薄校验脚本，接到现有阶段。
+**选择**：③。薄脚本只校验形状：身份块、维度必填、四态枚举、
+证据引用、未测理由；它拒绝总分，也拒绝把 unknown 聚合掉。
+**理由**：现成技能已被真实消费，另建包会多一处要维护的重复正文；
+依据是用户「不要每个任务都新建一种」，以及 005 第 2 节的三条路比价。
+**证据**：原件：`research/2026-10-28-005-workflowhub-test-review-integration.md`。
+**证据**：原件：`research/2026-10-28-002-c07-internal-capability.md` 第 7 节；Talk:B3。
+**影响**：要改 `skills/frontend-testing/*`（判据与脚本落点待收敛）、
+`skills/review/SKILL.md`、`workflows/build-code/SKILL.md`；落 P1、P4。
+不新增公共命令、不建报告平台与第二证据库、不把判据复制进各任务 spec。
+风险：薄脚本只证形状，容易被当成质量通过；缓解是脚本不参与验收判定。
+
+#### 决定 2 — 路线基线就按已展示的 12 节骨架继续
+
+**问题**：本任务按哪条路线推进材料？
+**候选**：① 改用入口评估给的 `shrink-scope`；② 改走普通五阶段。
+**候选**：③ 按主会话展示的 12 节骨架，走复杂路线。
+**选择**：③。材料形态与本日志一致，后续材料沿用同一骨架。
+**理由**：用户明确说「按这个骨架继续」（Talk:C3），
+后来又正式选定复杂路线（Talk:N2），两条都指向 ③。
+**证据**：Talk:C3、Talk:N2；原件：`refs/talk/2026-10-28-c07-direction.md`。
+**影响**：只改材料形态（本日志、需求索引、覆盖矩阵、Talk 批次），不改代码。
+风险：骨架确认容易与路线确认混为一谈；若改走 shrink-scope，工作包需重排。
+
+#### 决定 3 — 验收对象钉在 `9efb7e57` 的 A/B 两套样本上
+
+**问题**：真实验收对象取哪个版本？
+**候选**：① `be7a5673`；② `c887`（与 9efb 字节相同）；③ `9efb7e57`。
+**选择**：③，取 C05 合并后的 A/B 两套样本，提交 `9efb7e577a62d36393caedfb30fc35bf3cb80834`。
+**理由**：`be7a5673` 少 `41eae` 与 `9efb` 两次修复；`c887` 虽与 9efb 字节相同，
+但 C05 认可绑定的是 `41eae967`，两个版本引用时必须分开写。
+**证据**：Talk:U1；原件：`research/2026-10-29-010-c05-sample-usability.md`。
+**影响**：对象与版本声明。样本路径在 C05 归档：
+`specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/`
+`samples/A|B`（A 与 B 两套）。
+A 三个运行文件与 sha256：`A/index.html` `fa35dedb…`、
+`A/assets/app.js` `2f6c12d5be76…`（442619 B，构建产物与源码逐字节一致）、
+`A/assets/styles.css` `99c22f99…`。
+B 三个：`B/index.html` `38b20b2f…`、`B/app.js` `a9821904…`、
+`B/styles.css` `ee996492…`。
+六个运行文件合计 525142 B（058 口径）；767 的 525086 B 是 41eae 口径，勿混。
+不声称样本等于真实产品——它是 mock。
+
+#### 决定 4 — 归档只读；取用就是复制到 C07 自有位置再提交
+
+**问题**：C05 归档里的样本怎么取用？
+**候选**：① 在归档目录原地改；② 只读引用、不复制；③ 复制到自有可写位置再提交。
+**选择**：③。`specs/archive/**` 只读，复制后记 commit、sha256 与时点。
+**理由**：归档是历史原件，原地改会毁证据；只读引用又承载不了后续修复。
+**证据**：Talk:U1、Talk:U8；原件：`research/2026-10-29-011-c07-decision-impact.md`。
+**影响**：取用与提交写法；落 P1、P8。不改归档、不在归档里修问题。
+风险：复制可能字节漂移，复制后校验 sha256 并留痕（未决 21）。
+
+#### 决定 5 — 对象走两条腿：自建受控页加 C05 真实样本
+
+**问题**：验证对象走哪条路？
+**候选**：① 只等 C05 交付样本；② 只用 C07 自建受控测试页。
+**候选**：③ 两条腿：受控页先建能力，C05 样本作第二腿。
+**选择**：③。C05 已交付并合并（`1c0948c3`/`c53c8ecd`），第二腿已经成立。
+**理由**：受控页保证能力建得起来、验得动；真实样本保证能力不只活在样例上。
+**证据**：Talk:L1、Talk:U1；原件：`research/2026-10-29-010-c05-sample-usability.md`。
+**影响**：对象状态与两腿写法。不把「已交付」当「已验证」，不继承 C05 的通过结论。
+风险：样本是 mock、没有真实后端；业务真值等 C06（未决 22）。
+
+#### 决定 6 — 样本合并后 C07 全改，问题清单交用户与设计 owner
+
+**问题**：C05 样本合并进来后，问题由谁修、清单交给谁？
+**候选**：① 按发布计划分工交回 C05 owner；② C07 只诊断、不修。
+**候选**：③ C07 在自有工作副本里全改，清单交用户与设计 owner。
+**选择**：③。这是用户对 PRD:130 分工的明确例外，不是代理自行扩大权限。
+**理由**：C05 owner 已关闭，交回去没人接；C07 手上有工作副本，也要独立复验。
+**证据**：Talk:U2、Talk:R2；原件：`research/2026-10-29-011-c07-decision-impact.md`。
+**影响**：交接对象、清单与复验记录；落 P1、P8。
+不改 C05 原工作区与归档，也不做真实业务写。
+风险：接收方变成用户、响应可能延迟；归档留证并用未决 17 跟踪。
+
+#### 决定 7 — 交付状态改记「已交付并合并」，旧 fallback 转历史
+
+**问题**：C05 的交付状态记成什么？
+**候选**：① 继续记「未交付」，保留 fallback；② 记「已交付并合并」，fallback 转历史。
+**选择**：②。交付指针 058，合并提交 `1c0948c3`/`c53c8ecd`。
+**理由**：事实已经变了，继续写「未交付」会让后续阶段按错的起点做。
+**证据**：Talk:U1、Talk:U2。
+原件：`quality/evidence/handoff/c05-sample-delivery-notice.md`。
+**影响**：交付状态；原 OPEN-02 转已定（见「已定项」）；提醒件保留为历史，不删。
+不写「样本已验证」，也不继承 C05 的 17 项限定通过与效果达标结论。
+
+本包还悬着的问题：复制留痕（未决 21）、C06 真实业务承接（未决 22）。
+打包的问题已由决定 1～7 收口，没有再开新问题。
+
+校验器用，人可跳过：本包决定 1～7；需求 6、35、36、37；答复 4、5、9、27、35、47、49、50。
+
+### 工作包 ② — 共用契约：页面模式和设计模式共用哪套结果？
+
+这个包只定一件事：审计结果长什么样，两种模式共用。
+契约含四块：检查项结果、问题记录、严重度与处置、执行者与复验规则。
+消费者是 build-code 的审查材料与最终报告；它们不该各写一套。
+
+| 段（批次） | 结论 | 原件 |
+| --- | --- | --- |
+| 调研（M2-1） | 现 finding 字段、处置词与严重度映射已在审查侧，不必新建；调研发法是内部（复用现字段，无需外部） | `quality/evidence/research/2026-10-28-005-workflowhub-test-review-integration.md` 第 5.3 节 |
+| 发散（M2-2） | 两条路：新建页面审计 schema，或复用现字段 | 本日志决定 9 |
+| 收敛（M2-3） | 复用现字段、结果四态、执行独立、复验同角色 | 本日志决定 8～11 |
+| 就地讨论（M2-4） | 用户在模块一做了 4 条选择并确认收尾 | Talk:D1～D4、Talk:M1 |
+| 定验收（M2-5） | 契约可校验、两模式共用、脚本只证形状 | 本包五段 |
+
+#### 决定 8 — 结果取四态，未测算通过就算失败
+
+**问题**：一个检查项的结果有几种、怎么记？
+**候选**：① 沿现有 8 值词表直接展示；② 只留通过/失败两态。
+**候选**：③ 展示用四态，机器字段仍用 8 值。
+**选择**：③。四态是通过、失败、未测、不适用；机器字段沿用既有 8 值词汇：
+pass、fail、incomplete、inconclusive、deferred、missing、inconsistent、unavailable。
+**理由**：两态会把「没测」挤成「失败」或「通过」，两种都错；8 值又太细，
+读报告的人分不清。映射只在本条写一次，报告正文仍写原词与原因。
+**证据**：Talk:D1。
+原件：`research/2026-10-28-005-workflowhub-test-review-integration.md` 第 5.3 节。
+**影响**：判据正文的结果列与薄脚本的枚举校验；落 P1、P4。
+「通过」仅当全范围通过；任何具名范围（只看首屏、只看桌面、只看 A 样本）
+一律记未测，禁止限定通过；「不适用」必须给依据。
+薄脚本只校验机器字段，不判展示文本。
+风险：四态与 8 值两套语义若写不清会分裂；缓解是映射只此一处，不新增枚举。
+
+#### 决定 9 — 问题记录沿用现有 finding 字段，不新开材料键
+
+**问题**：页面问题记在哪、用什么字段？
+**候选**：① 新建一套页面审计 schema；② 复用现有审查 finding 字段。
+**选择**：②。字段仍是严重度、源码锚点、问题、建议、证据、根因；
+页面、状态、视口、对象身份写进证据文字。
+**理由**：现审查链路已被消费，新 schema 会造出第二份 finding 账本；
+且现有 `review-output` 只接受仓库相对路径，硬造结构化槽位会被下游拒绝。
+**证据**：Talk:D2。
+原件：`research/2026-10-28-005-workflowhub-test-review-integration.md` 第 5 节。
+该件第 27 行记着：现有输出只接受仓库相对路径。
+**影响**：报告与审查材料写法；落 P1、P4；无 schema 变更，唯一写主是方法正文 owner。
+不新开材料键、不写成 provider_results、不冒充 OCR 身份。
+风险：页面问题常没有单一源码锚点，硬塞路径会失真；
+缓解是以最近源码文件为锚点，路由、状态、视口放证据文字。
+
+#### 决定 10 — 严重度沿用三档，处置沿用现词，复验另记
+
+**问题**：严重度分几档、处置用哪些词、复验记哪里？
+**候选**：① 自造像素百分比门槛；② 引外部评分线；③ 沿用现映射并按项目刻度定级。
+**选择**：③。三档是阻断、重要、次要，对应审查侧的 critical、
+moderate、minor；处置用现有五个词：已修、驳回、接受风险、需人定、用户已定。
+**理由**：现词已被审查与报告消费，换词会让历史 finding 读不通；
+定级依据用项目 token 与刻度＋明确例子＋校准负例，不引外部评分线。
+**证据**：Talk:D3、Talk:E2；原件：PRD `prd.md:128`、`prd.md:330`。
+**影响**：分级规则与例子集写进方法正文；落 P1。
+复验结果单独记，不写回原 finding 正文当处置。
+风险：校准负例还没产出，同一差异可能两次不同级；
+缓解是先备负例并记录两次定级，负例不足时该面保持未测、不出级别（未决 7）。
+
+#### 决定 11 — 执行者只能是测试或审查子代理，开发者不自审
+
+**问题**：谁来执行检查、谁来复验？
+**候选**：① 开发者自己执行并自评；② 主会话代跑；③ 测试或审查子代理执行，复验同一角色。
+**选择**：③。设计模式与页面模式共用这套契约；设计模式没有 URL 与 console 时，
+写「不适用＋理由」，不凭无运行事实签页面通过。
+**理由**：自评会把「发现」和「验收」合成一个人，等于没有独立结论；
+主会话代跑则绕开 build-code 的三角色分工。
+**证据**：Talk:D4。
+原件：`research/2026-10-28-005-workflowhub-test-review-integration.md` 第 1 节。
+**影响**：派发与审查口径（审查必读镜头＋build-code 触发段）；落 P4。
+不改执行器与工具，也不新增第四条审查线。
+风险：独立执行者与终末审查是两条事实，混写会互相顶替；
+缓解是两者并排保留、不取平均，各自引原件。
+
+本包还悬着的问题：审查材料键怎么承载审计摘要（未决 13）。
+
+校验器用，人可跳过：本包决定 8～11；需求 3、4、12、15、16、23、25、26、30、31、33、39、40；
+答复 3、6、10、11、12、13、22、30。
+
+### 工作包 ③ — 判据矩阵：一套标准怎么盖住九个视觉项？
+
+这个包定页面检查的唯一一套标准：以 C05 八维为骨架，九维不另立体系。
+还要定四件事：九维取值怎么取、性能放哪、第 7 维装什么、第 8 维收到多窄。
+消费者是执行者、审查者与最终报告；它们都按同一张矩阵说话。
+
+| 段（批次） | 结论 | 原件 |
+| --- | --- | --- |
+| 调研（M3-1） | 九维只有一份名单、外部没有公开标准、C05 八维只停在计划层；调研发法是内部加外部（复杂模块不得空，开局决策已覆盖） | `quality/evidence/research/2026-10-28-003-c07-external-methods.md` 第 1 节 |
+| 发散（M3-2） | 三条路：自建九维体系、九维作第 5 维子检查、只借外部概念 | 本日志决定 12 |
+| 收敛（M3-3） | 八维骨架＋九维子检查＋映射＋属性口径＋性能归第 3 维＋第 8 维收缩 | 本日志决定 12～18 |
+| 就地讨论（M3-4） | 用户给出视觉、交互性能、映射表三组答复并确认收尾 | Talk:E1、F1～F5、G1～G5、M1 |
+| 定验收（M3-5） | 逐维判据、适用性有据、无源不冒还原度、映射不重复计数 | 本包五段 |
+
+#### 决定 12 — 页面检查只有一套标准：C05 八维做骨架
+
+**问题**：九维和 C05 八维谁是骨架？
+**候选**：① 自建九维体系；② 九维作第 5 维的子检查，八维做骨架；③ 只借外部概念。
+**选择**：②。八维现名是：①业务任务 ②信息架构与导航 ③交互与状态
+④内容与数据 ⑤视觉与规范 ⑥响应式布局 ⑦无障碍 ⑧真实代码与交接。
+现文在 `skills/plan-design-review/SKILL.md:24-53`，63 行含 10 项反例。
+**理由**：两套骨架并列会让同一问题算两次；八维已在计划层被引用，
+九维恰好能装进第 5 维：几何接布局与间距，token 与渲染接字体与颜色，
+组件接图标与状态。
+**证据**：Talk:F1。
+原件：`research/2026-10-28-004-c05-design-audit-generalization.md` 第 1 节。
+**影响**：判据正文的骨架节、九维子检查映射、边界表；落 P1。
+不改 C05 的八维定义——那是设计侧原文，本任务只引用。
+风险：边界写不死时同一问题会在多维多记，缺陷数虚高；
+缓解是把归属唯一维度写进判据包，finding 去重按根因。
+
+#### 决定 13 — 取值口径复用四件套，缺的五项补属性口径
+
+**问题**：九维的取值怎么取，要不要新建 schema？
+**候选**：① 新建一套采集与对照 schema；② 复用设计源提取的四项口径再补缺。
+**选择**：②。四项是 property、declared、rendered、comparison；
+C05 没覆盖的间距、阴影、边框、圆角、图标，补「取哪些 CSS 属性、
+在哪个状态与视口取」。
+**理由**：C04 的契约已经交付且在被消费，第二套 schema 会产生两份真相；
+补属性清单属于扩展，不属于新标准。
+**证据**：Talk:F2；原件：`research/2026-10-28-002-c07-internal-capability.md` 第 2 节。
+**影响**：判据正文的属性清单与状态/视口取法；落 P1。
+不改 C04 契约语义；若补充口径与 C04 字段冲突，交 C04 方法 owner。
+风险：冲突时会出现两套写法；缓解是只在四项内扩属性清单。
+
+#### 决定 14 — 没有设计源时只判能判的，还原度写不适用
+
+**问题**：对象没有设计稿或基准时怎么判？
+**候选**：① 用内部一致性冒充还原度；② 用截图对照冒设计基准；③ 只判能判的。
+**选择**：③。能判的是项目规范、token、内部一致性、状态与布局；
+设计还原度写「不适用＋理由」，不得声称视觉还原已验。
+**理由**：没有基准就没有还原度的判据，硬判等于造结论。
+**证据**：Talk:F4；原件：本日志决定 8 的四态与「不适用须有据」。
+**影响**：判据正文的适用性规则与报告写法；落 P1。
+风险：无源对象可能被整体标不适用、逃过其它检查；
+缓解是逐维判适用性，只有还原度一项不适用，其余照判。
+
+#### 决定 15 — 性能放第 3 维下的「运行性能」子组
+
+**问题**：性能放在哪个维度？
+**候选**：① 单设第 10 个维度；② 塞进第 7 维可访问性；③ 作第 3 维的子组。
+**选择**：③。页面模式的第 3 维叫「交互、状态与运行性能」，
+下分「行为与状态」和「运行性能」两组，取首屏与交互耗时。
+设计模式的第 3 维仍叫「交互与状态」，性能写「不适用＋理由」。
+**理由**：性能是交互过程的一部分，和状态一起读才有意义；单设维度会让
+两套骨架并列，塞进可访问性则会污染第 7 维的边界。
+**证据**：Talk:G1；原件：本日志决定 17 的映射表。
+**影响**：判据正文的维度命名、子组与适用性；报告按第 3 维两组列；落 P1、P4。
+风险：两种模式的第 3 维名称不同，容易被当成两套骨架；
+缓解是在方法正文写明「同一维，页面模式多一个运行性能子组」。
+
+#### 决定 16 — 第 7 维只装可访问性，不塞性能
+
+**问题**：颜色、图标、状态这些问题归第 7 维还是第 5 维？
+**候选**：① 第 7 维统收颜色、图标、状态与性能；② 第 7 维只留可访问性。
+**选择**：②。对比度、可访问名、键盘焦点归第 7 维；其余按决定 17 的映射归主副维。
+**理由**：第 7 维一旦收进视觉项，同一问题就会在第 5 维与第 7 维各记一次。
+**证据**：Talk:G2；原件：本日志决定 17。
+**影响**：判据正文的第 7 维范围与归属表；落 P1。
+风险：对比度问题天然横跨颜色与可访问性；
+缓解是归第 7 维主判、第 5 维只作证据，不重复计数。
+
+#### 决定 17 — 映射表写死：主维判成败，副维只补证据
+
+**问题**：九维怎么落到八维，重复计数怎么防？
+**候选**：① 九维与八维并列成 17 项；② 按维数加权算总分；③ 一张映射表加主副维规则。
+**选择**：③。表是：布局→⑥主/⑤副；字体→⑤；颜色→⑤主/⑦副；
+间距→⑤主/⑥副；阴影/边框/圆角→⑤；图标→⑤主/⑦副；
+状态→③主/⑤副/⑦副（⑤视觉与规范、⑥响应式布局、⑦无障碍、③交互与状态）。
+**理由**：主维判成败、副维只补证据，同一问题只有一个失败点；
+加权总分则会把「没测」洗成「分数还行」。
+**证据**：Talk:G4；原件：本日志决定 12 的边界表。
+**影响**：判据正文映射表、finding 的维度归属写法；落 P1；不新增字段。
+风险：映射没落正文时执行者会随手归维；
+缓解是 build-plan 把表逐条落进判据正文与字段说明。
+
+#### 决定 18 — 第 8 维在页面模式只核对象与代码版本对应
+
+**问题**：第 8 维「真实代码与交接」在页面模式核什么？
+**候选**：① 照设计模式全文重做交接审查；② 只核对象与代码/版本对应。
+**选择**：②。核的是工作区、commit、构建、路由与代码的对应；
+交接受理面不适用时写「不适用＋理由」。
+**理由**：页面模式的验收对象是运行中的页面，不是设计交接文档；
+重做全文会让第 8 维变成第二份设计审查。
+**证据**：Talk:G5；原件：本日志决定 8 的「不适用须有据」。
+**影响**：判据正文第 8 维范围；报告写「不适用＋理由」；落 P1。
+风险：收缩后对象与版本对应可能被跳过；
+缓解是对象身份块属最小必填，缺了就是未测。
+
+#### 决定 19 — 每个判据必须引它实际读过的规范来源
+
+**问题**：判据怎么证明自己用的是现行规范，而不是过期版本？
+**候选**：① 只写「按项目规范」；② 每个判据引路径、节与版本，缺失即未测。
+**选择**：②。报告另列一节「本次实际读了哪些规范、用在哪」。
+**理由**：规范存在不等于规范在用；没有来源列的判据无法核对用的是哪一版。
+**证据**：Talk:L1 附带的规范消费要求；原件：本日志决定 12 的骨架来源。
+**影响**：判据正文的来源列与报告的规范消费节；落 P1、P5。
+规范缺口交 norm-sync 与 C08 更新，不在本任务私改规范。
+风险：来源多时报告变长；缓解是只列本次实际消费的条目与用法，不抄正文。
+
+#### 决定 20 — 外部内容已整件落地；本地可复制，对外禁分发
+
+**问题**：外部内容与许可现在算什么状态？
+**候选**：① 继续写「只借概念、未引入」；② 写「许可已获」；③ 记已落地并分开两件事。
+**选择**：③。11 件外部内容加 LICENSE 已整件落地，目录记 absorbed；
+其中 5 件 Apache、6 件许可未知；本地研究使用与复制可以做，对外分发与再发布禁用。
+**理由**：C07 已在用这些方法，写「未引入」不实；写「许可已获」也不实，
+6 件仍是未知。两件事分开记，才不会互相冒充。
+**证据**：Talk:U3；原件：`research/2026-10-29-011-c07-decision-impact.md`。
+**影响**：外部内容前提与许可写法；落 P1。
+不写「许可已获」、不对外分发、不因本地可用就改许可登记。
+风险：许可状态被误读；缓解是保留「许可未知」事实与目录记录。
+
+本包还悬着的问题：定级刻度与三条负例样例（未决 7）、
+规范被真实消费怎么证明（未决 12）、无 Figma 与 Storybook 时的依据写法（未决 11）。
+
+校验器用，人可跳过：本包决定 12～20；需求 1、7、8、9、10、19、22、25、28、31、36、38；
+答复 14～25、51。
+
+### 工作包 ④ — 真实采集：用哪个浏览器、怎么算采到了？
+
+这个包定唯一的真实采集入口与它的失败语义。
+要定四件事：网关留不留、默认哪个引擎、回退怎么记、简化做到哪一步。
+消费者是执行者与复验者；他们靠同一份身份块判断「这次读数算不算数」。
+
+| 段（批次） | 结论 | 原件 |
+| --- | --- | --- |
+| 调研（M4-1） | 网关已建、agent-browser 必崩的根因已定位、ego 可用证据齐全；调研发法是内部加外部加专项（开局决策已覆盖） | `quality/evidence/research/2026-10-28-007-browser-collection-diagnosis.md` 第 2/3 节 |
+| 发散（M4-2） | 三条路：修 agent-browser、默认 ego、另建一套栈 | `quality/evidence/research/2026-10-28-007-browser-collection-diagnosis.md` 第 5 节 |
+| 收敛（M4-3） | 保留网关、默认 ego＋装了没开回退、修身份 bug、保守简化 | 本日志决定 24～27 |
+| 就地讨论（M4-4） | 用户定回退口径、简化力度，并授权本机使用 ego | Talk:I1～I3、K1～K2、N1 |
+| 定验收（M4-5） | 身份块可核、失败如实、选定后不切换 | 本包五段 |
+
+#### 决定 21 — 保留 isolated-browser-qa，当唯一入口
+
+**问题**：浏览器入口留一条还是拆成几条？
+**候选**：① 退役网关，让每个技能直连浏览器；② 另建一套采集栈；③ 保留网关做唯一入口。
+**选择**：③。网关继续管引擎选择、会话生命周期、截图与快照、清理与输出契约。
+**理由**：隔离、单引擎单会话、证据与清理这四件事没有第二个地方承担；
+拆开就是四条链路各写一套清理逻辑。
+**证据**：Talk:I1；原件：本日志决定 25 的六项能力。
+**影响**：方法正文与采集身份块；落 P2；入口代码改不改由诊断结论定。
+风险：网关当前不可用会把整条采集链堵死；
+缓解是决定 22 的默认与回退顺序，加上未决 2 的根因收尾。
+
+#### 决定 22 — 默认 ego-lite，本机没有 ego 才退回 agent-browser
+
+**问题**：默认用哪个引擎？
+**候选**：① 默认 agent-browser；② 默认 ego-lite，没有 ego 时回退。
+**选择**：②。选中的引擎与版本写进采集身份块。
+**理由**：agent-browser 在本机会崩，默认它等于默认不可用；
+ego-lite 已被证明能采（C09 三段 exit0 原件）。
+**证据**：Talk:I2；原件：本日志决定 25。
+**影响**：引擎选择与身份块写法；落 P2。
+不在同一次运行里混用两个引擎，也不静默换引擎冒充同一事实。
+风险：两个引擎读数不同，证据不可比；
+缓解是身份块记引擎与版本，跨引擎不直接比较（未决 1）。
+
+#### 决定 23 — 简化方向：能交给 ego-browser 的交出去，合同留住
+
+**问题**：网关要不要简化、简化到哪？
+**候选**：① 不动；② 全删 agent-browser 相关；③ 能交的交出去，不可替代的保留。
+**选择**：③。ego-browser 技能能承担的大部分交给它；
+不为 agent-browser 保留用不上的生命周期；隔离、单引擎单会话、
+证据与清理、输出契约保留。
+**理由**：网关里有一半代码在伺候一个会崩的引擎；
+但合同里那四件事换不来，删了就没有替代。
+**证据**：Talk:I3。
+原件：`research/2026-10-28-007-browser-collection-diagnosis.md` 第 3 节。
+**影响**：方向进材料；落 P2；本阶段不动代码。
+不写成「简化已完成」，诊断报告回来前不删改合同字段。
+风险：简化过头会丢掉隔离与清理语义；
+缓解是先诊断、后出删改清单，删改逐条给替代与影响。
+
+#### 决定 24 — 装了没开也回退，并记 engine-fallback
+
+**问题**：什么情况算「本机没有 ego」、回退怎么留证？
+**候选**：① 只有没安装才回退（决定 22 的原口径）；② 会话当时没在跑就回退。
+**选择**：②。ego 在跑就直接用；装了没开就回退 agent-browser，
+并记 `engine-fallback` 四要素：from、to、reason、probe。
+**理由**：用户实际遇到的是「装了没开」，按安装与否判断等于让任务卡住；
+回退留证才能让复验者知道这次读数换过引擎。
+**证据**：Talk:K1。
+原件：`research/2026-10-28-007-browser-collection-diagnosis.md` 第 2 节。
+**影响**：引擎选择、身份块写法，以及 `session.mjs` 的回退判据与
+`EGO_NOT_RUNNING` 语义；落 P2。
+接受 ego 会显示窗口与光标、可能影响焦点；要完全静默时显式用 agent-browser。
+选定引擎后失败也不再切换，避免一次运行里出现两份互不可比的读数。
+引擎怎么选不再问用户，报告里只写这次用了哪个。
+风险：可见窗口会干扰人工观察与并发；缓解是静默场景显式换引擎并记录事实。
+
+#### 决定 25 — 保留网关，理由是它有六项别处没有的能力
+
+**问题**：既然 ego 也能采，网关还有什么必须保留的？
+**候选**：① 能力交回 ego 技能后连合同一起退役；② 保留网关与六项合同能力。
+**选择**：②。六项是：视口 CDP、computed style、boundingBox、
+语义快照、整页截图、finish 清理。
+**理由**：这六项是判据正文要的原始读数；ego 技能没有对应的合同承诺，
+退役后它们会散落到各处脚本里。
+**证据**：Talk:I1、Talk:N1。
+原件：`research/2026-10-28-007-browser-collection-diagnosis.md` 第 2 节。
+**影响**：技能的边界节与合同节；落 P2；脚本层删改见决定 27。
+用户说「ego 是我本机授权工具」——这是本机授权，不写成项目许可登记；
+许可未登记这件事留在未决 6。
+风险：保留网关要继续付维护成本；缓解是保守简化只压专属长流程，不删合同能力。
+
+#### 决定 26 — 修身份 bug，让回退引擎真的可用
+
+**问题**：`RECEIVER_IDENTITY_CHANGED` 修不修、怎么修？
+**候选**：① 不改，只记失败；② 把 `ownedReceiver` 移到取 CDP 地址之后重解析；
+③ 放宽带宽，只核对 daemon 行未变。
+**选择**：②为主、③为备。根因是第一次执行 `get cdp-url` 时 Chrome 以新进程、
+新配置目录重启；runner 在 `session.mjs:525` 抓身份、`:526` 取地址、
+`:531-532` 复查，三次必然不相等。
+**理由**：抓身份早于取地址，等于拿旧身份核对新进程；
+把抓取挪到取地址之后，身份与端点就来自同一次解析。
+**证据**：原件：`research/2026-10-28-007-browser-collection-diagnosis.md` 第 2 节。
+**影响**：`skills/isolated-browser-qa/scripts/browser-qa-session.mjs` 的
+`:525-534` 段；落 P2；测试同步见未决 3。
+还要处理 `rows` 与 `plain` 两次进程快照带来的第二层缺陷；
+验证方式是同一探针复跑，加一次真实 `--run`（未决 2）。
+不动宿主与引擎、不换浏览器栈；修完也不写「回退已证可用」。
+风险：复查语义放宽可能放过真的换了身份；
+缓解是保留端点一致性校验与失败码，复验放 build-code。
+
+#### 决定 27 — 简化力度取「保守简化」：ego 主流程加回退附录
+
+**问题**：简化一次做到位，还是保守推进？
+**候选**：① 激进简化：删掉 agent-browser 全部路径；② 保守简化：留回退、压长流程。
+**选择**：②。保留回退并修身份 bug；browser-use 降为可选、按历史保留；
+删掉或压缩 agent-browser 专属的长流程与重复说明；
+新增 ego 主流程（取上下文→体检→确认 ego 在跑→建任务空间→采集→收尾），
+再加五类薄采集脚本：console、network、overflow、perf、a11y，由 C07 建。
+**理由**：回退路径是唯一的降级手段，一次删干净就没有退路；
+C05 旧 QA 脚本还在被用，只能逐步迁移。
+**证据**：Talk:K2。
+原件：`research/2026-10-28-007-browser-collection-diagnosis.md` 第 3 节。
+**影响**：要改 `skills/isolated-browser-qa/SKILL.md`、`scripts/browser-qa-session.mjs`
+（裁原生 QA 与身份复查顺序）、`scripts/browser-qa-tickets.mjs`（只保导出与可选票据）、
+`scripts/browser-qa-cleanup.sh`（裁 browser-use 分支）、
+`tests/contract/browser-engine-selection.test.mjs`；薄脚本路径待 build-plan；落 P2。
+不整删 `browser-qa-tickets.mjs` 的导出：`session.mjs:9` 依赖它的
+makeScope、safeError、validateEndpoint、connectCdp；不一次删 C05 脚本；
+不新建第二套浏览器栈或第二证据库。
+风险：删压长流程会碰坏回退路径；缓解是先保导出与回退、再删说明，逐项给替代。
+
+本包还悬着的问题：回退判定点与失败边界（未决 1）、身份 bug 复验（未决 2）、
+测试同步清单（未决 3）、五类薄脚本路径（未决 4）、C05 旧脚本迁移（未决 5）、
+ego 许可登记（未决 6）。
+还没定的细项：身份 bug 修不修在 C07 内、采集写场景脚本还是薄工具、
+console 与 network 是否结构化记录、溢出与焦点与减少动效怎么读、
+截图与清理的最小集、ego-browser 的实际用法与简化后目标结构。
+
+校验器用，人可跳过：本包决定 21～27；需求 2、14、20、36；答复 2、28、29、30、33、34、37。
+
+### 工作包 ⑤ — 判定与分级：采到的事实怎么变成结论？
+
+这个包把采集事实变成四态结果与三级严重度，并挡住两种假绿：
+把没测算通过、把多来源聚合成一个高分。
+还要定业务操作怎么算成功、小毛病要不要找人确认。
+消费者是执行者、审查者，以及要接受结论的用户。
+
+| 段（批次） | 结论 | 原件 |
+| --- | --- | --- |
+| 调研（M5-1） | 三档定义在 PRD:128；未测算通过是最大失败模式；仓内没有现成分级器；调研发法是内部加外部（对齐开局决策） | `quality/evidence/research/2026-10-28-003-c07-external-methods.md` 第 9 节 |
+| 发散（M5-2） | 三条路：定量阈值、定性三级加负例、外部评分线 | 本日志决定 10 |
+| 收敛（M5-3） | 四态、三档映射、负例至少三条、自动判定、业务终态、受控测试页 | 本日志决定 30、32 |
+| 就地讨论（M5-4） | 用户定模块一契约、定级依据、负例要求、业务终态与「不要确认」 | Talk:D1～D4、E2、F3、G3、J1～J2、M1 |
+| 定验收（M5-5） | 同差异同级、三条负例、小毛病规则化、业务终态可观察 | 本包五段 |
+
+#### 决定 28 — 至少三条校准负例，同一差异同标尺须同级
+
+**问题**：怎么证明定级不是拍脑袋？
+**候选**：① 只写分级原则、不给样例；② 给三条校准负例并规定可重复性。
+**选择**：②。三条是明显的字体偏差、间距偏差、颜色偏差，
+三者都「任务仍可完成」，仍定为重要级；同一差异用同一标尺跑两次须同级。
+**理由**：没有负例，分级就没有可核的锚点；没有可重复性，
+同一处问题两次会得出两个级别。
+**证据**：Talk:F3；原件：PRD `prd.md:330`；本日志决定 10 的定级依据。
+**影响**：判据包的负例节与验收 4 的可观察用例；落 P1、P3；不新增 schema。
+不以「任务还能操作」降为次要，不以一次结果定级，
+不把工具阈值当严重度，不引外部评分线。
+风险：三条样例只覆盖字体、间距、颜色，挡不住布局崩坏类误判；
+缓解是执行时按需补同类负例（补不等于改标准），缺就记缺口（未决 7）。
+
+#### 决定 29 — 业务操作按页面任务脚本加可观察终态判成败
+
+**问题**：业务操作怎么算成功？
+**候选**：① 看 HTTP 200；② 看截图或提示条；③ 按终态与任务真值判定。
+**选择**：③。每步写清操作、页面终态，以及错误、权限、取消、恢复四类判据。
+**理由**：200 与截图都只说明「请求回来了」，不说明用户的任务做成了；
+B 样本上的十态、权限、角色只能当未测的合法输入，不能当业务真值。
+**证据**：Talk:G3；原件：PRD `prd.md:329`，S7 业务定义在 `prd.md:155-161`。
+**影响**：判据正文的业务任务脚本节与报告的「未覆盖」写法；落 P1。
+C05 模拟页面上的真实后端业务一律写「未覆盖」，不得冒充；
+不用同一脚本重复真实业务写；不把页面能点当业务完成。
+风险：终态判据写松会把失败吞成成功；
+缓解是每步给可观察终态与失败、取消、恢复判据。
+
+#### 决定 30 — 页面检查全自动跑，小毛病按规则判、不要用户确认
+
+**问题**：小毛病要不要找用户逐项或批量确认？
+**候选**：① 逐项确认；② 发布计划写的批量真实确认；③ 按规则自动判定。
+**选择**：③。能按项目规范、token、校准负例判定的，直接判「该修」或「可接受」，
+并写进报告；报告必须写明按哪条规则接受，不得写「用户已确认」或「已签字」。
+**理由**：用户两次明确说不要确认（「全自动流程」「不要确认」）；
+发布计划那句批量确认与本决定冲突，冲突如实登记，不改 PRD。
+**证据**：Talk:J1、Talk:J2；原件：PRD `prd.md:128`、`prd.md:329`。
+**影响**：判据与报告写法（工作包⑤⑦）；落 P1、P4；冲突见未决 15。
+不把自动判定写成用户确认；没有规则依据时不放行；
+不因自动化降低判据或吞掉失败。
+用户不必逐条签；不认可某条规则时，只看报告里点名的规则。
+风险：自动判定会自我放宽，尤其在小毛病边界；
+缓解是规则与校准负例成文，报告逐项写规则，独立审查可复核「这条为什么接受」。
+
+#### 决定 31 — 只升级四类事，并攒到一次说
+
+**问题**：什么情况才打扰用户？
+**候选**：① 每发现一条就问；② 全部自己定；③ 只在四类事上升级并攒批。
+**选择**：③。四类是：判不了的、会改方向的、会改范围或验收的、要用户担风险的。
+**理由**：逐条问会把全自动变成人肉审批；全部自己定则会把风险决定藏起来。
+**证据**：Talk:J1、Talk:J2；原件：本日志决定 30。
+**影响**：派发、交接与报告写法；升级清单随报告给出；落 P4。
+不把普通小毛病或已有规则可判的偏差升级成确认；
+不以「攒一次」为由隐瞒已发现的缺陷。
+风险：攒批会延迟真正需要用户的事；
+缓解是升级项按四类分级，每条附一句「不问会怎样」。
+
+#### 决定 32 — C07 自建受控测试页，预置已知缺陷
+
+**问题**：能力先在什么页面上验？
+**候选**：① 只等真实页面；② 新建评测平台；③ 自建少量测试页并预置已知缺陷。
+**选择**：③。预置视觉、可访问性、性能、交互四类缺陷，
+用于校准与「发现→修复→复验」闭环；可借 C05 已修缺陷的形态，
+但缺陷本身由 C07 自建；已知缺陷必须可复现、可修、可复验。
+**理由**：真实页面还没到手，能力不能空等；借形态不等于借结论，
+缺陷要自己造才敢说自己能发现。
+**证据**：Talk:L1；原件：本日志决定 28。
+**影响**：测试资产目录（路径由 build-plan 定）与校准负例清单；落 P3。
+不把测试页当产品页验收、不新建评测平台、不让预置缺陷变成必过样例、
+测试资产不进产品代码路径。
+风险：自建页与真实页面差异大，能力可能只在样例上成立；
+缓解是 C05 正式样本作第二腿（决定 5），两腿结果分开记录。
+
+本包还悬着的问题：三条负例的具体样例与刻度取值（未决 7）、
+性能采集方法与未知值表达（未决 8）、业务真值与真实后端（未决 9）。
+还没定的细项：项目 token 与刻度的取值来源和容差、模型分歧的复核记录形式、
+预算停止的执行分类词、自动判定规则清单与升级边界（决定 30、31 只给原则）。
+
+校验器用，人可跳过：本包决定 28～32；需求 9、21、22、28、29、33、43；
+答复 18、23、31、32、35、53。
+
+### 工作包 ⑥ — 回修闭环：发现问题之后谁修、谁复验？
+
+这个包定一条闭环：定位、路由责任、最小修复、独立复验、三轮或停滞就停。
+它不改角色分工，只把「发现的人不修、修的人不自证」写成规则。
+消费者是开发、审查、测试与主会话。
+
+| 段（批次） | 结论 | 原件 |
+| --- | --- | --- |
+| 调研（M6-1） | 回修规则只有 PRD:130 一条；finding 处置四态已有；C06 未立项；调研发法是内部（规则已在仓内，无需外部） | `quality/evidence/research/2026-10-28-002-c07-internal-capability.md` 第 4 节 |
+| 发散（M6-2） | 三条路：新增修复状态机、复用现处置词、C07 自己修 | 本日志决定 33 |
+| 收敛（M6-3） | 复用现循环、执行独立、复验同角色、修复归 C07 自有副本 | 本日志决定 6、11、33 |
+| 就地讨论（M6-4） | 用户定执行角色、复验规则与修复归属 | Talk:B3、D4、L1、M1 |
+| 定验收（M6-5） | 原问题与回归都复验、轮次可解释、不反改判据 | 本包五段 |
+
+#### 决定 33 — 检查由测试或审查子代理做，结果回开发者修
+
+**问题**：页面验证谁来执行、结果交给谁？
+**候选**：① 开发者自己执行并自评；② 新建第四条审查线；③ 独立角色执行、回开发者修。
+**选择**：③。测试或审查子代理独立执行，结果回报 phase 开发者子代理修复，
+修完复验原问题与相关回归。
+**理由**：这与 build-code 的三角色与七步顺序一致，不额外造流程；
+开发者自评等于让出题人自己判卷。
+**证据**：Talk:B3。
+原件：`research/2026-10-28-005-workflowhub-test-review-integration.md` 第 1 节。
+该件第 33–35 行写三角色与七步时序。
+**影响**：build-code 的派发与审查材料口径；落 P4。
+业务步骤按决定 29 的页面任务脚本执行，每步有终态与四类判据；
+页面检查在 build-code 内全自动跑，只把四类事攒批升级（决定 30、31）。
+风险：终末没有独立执行者时，审计会退化成开发自证；
+缓解是不可用时记「未取得」并披露执行者身份，不拿自证冒充。
+
+本包还悬着的问题：C06 缺位时谁修代码（未决 22）、
+问题清单交付与交接细节（未决 17）、迟到 finding 怎么处理（未决 13）。
+还没定的细项：复验执行者在终末怎么确定、业务终态判据按对象怎么写。
+
+校验器用，人可跳过：本包决定 33；需求 4、13、14、17、18、23、27、29、37；答复 6、13、44、50。
+
+### 工作包 ⑦ — 报告与接入：结论写成什么、接到哪里？
+
+这个包定三件事：报告长什么样、谁来消费、什么时候强制跑。
+报告按八维逐项给档位、证据引用与未覆盖说明；接入点放在既有材料里。
+消费者是 build-code 主会话与审查者，以及产品验收者。
+
+| 段（批次） | 结论 | 原件 |
+| --- | --- | --- |
+| 调研（M7-1） | build-code 已有 UI 终验与 RP-14；材料白名单只认 test_evidence 与 test_context；调研发法是内部（接线面在仓内） | `quality/evidence/research/2026-10-28-005-workflowhub-test-review-integration.md` 第 1 节 |
+| 发散（M7-2） | 三条路：新建报告平台、嵌进既有材料、另开独立证据目录 | 本日志决定 37 |
+| 收敛（M7-3） | 嵌既有材料、冻结前正式审计＋终末复核、可见面强制、报告四态与分工 | 本日志决定 34～37 |
+| 就地讨论（M7-4） | 用户定何时验、哪些强制走、报告不写「用户已确认」 | Talk:B1、C2、M1、J1～J2 |
+| 定验收（M7-5） | 报告可被现链路消费、验收行有真实引用、无面才写不适用 | 本包五段 |
+
+#### 决定 34 — 正式审计放代码冻结前，终末只复核四项
+
+**问题**：页面审计在什么时候正式做？
+**候选**：① 终末第一次做；② 每个阶段都做；③ 冻结前做一次，终末只复核。
+**选择**：③。正式审计放在代码冻结前、最后一个开发阶段收口时；
+终末只复核四样东西：审计报告、修复记录、受影响面回归、独立复验证据。
+**理由**：冻结后就改不动了，闭环（发现→修复→复验）只能空转；
+每阶段都做则成本翻倍，且阶段内页面还在变。
+**证据**：Talk:R1、Talk:S1；原件：PRD `prd.md:328`。
+**影响**：`workflows/build-code/SKILL.md` 的终末段与方法段，精确行由 build-plan 定；落 P4。
+终末缺任一项就记未测或不完整，不写「终末全量复跑」；不为审计新增阶段或 gate。
+阶段内可选冒烟提前暴露问题，正式审计只做一次。
+风险：阶段收口时问题集中暴露；缓解是冒烟提前、审计范围由冻结前那次固定。
+（本条改写了旧决定：旧文写「终末正式审计＋阶段内冒烟」，已作废。）
+
+#### 决定 35 — 有浏览器可见面的任务都强制走
+
+**问题**：哪些任务必须走这套检查？
+**候选**：① 按调用者标签判断；② 由任务自报要不要走；③ 按写集有没有可见面判断。
+**选择**：③。声明写集含浏览器可见面的任务都强制走；
+没有可见面才写不适用，并引写集作依据。
+**理由**：标签与自报都能绕过检查；写集是可核的声明，骗不了人。
+**证据**：Talk:C2。
+原件：`research/2026-10-28-005-workflowhub-test-review-integration.md` 第 1 节。
+**影响**：`workflows/build-code/SKILL.md` 触发段与 `skill-deps.yaml`（是否改待定）；
+方法正文的适用性写法；落 P4。
+不扩大到无浏览器面的任务，不把不适用当默认。
+风险：强制后每个任务多一次采集、脚本与复验，成本上升；
+缓解是审计包一次一页复用、冒烟从简。
+
+#### 决定 36 — 触发按改动面与交付声明判定，拿不准就走
+
+**问题**：具体怎么判一个任务算不算有可见面？
+**候选**：① 只看调用者标签；② 只在任务自称是 UI 任务时才走；③ 按改动面加交付声明。
+**选择**：③。改了页面、路由、组件、样式文件，或任务声明交付 UI 与页面，就走；
+拿不准时默认走；纯后端、文档、配置任务可豁免，但必须写理由。
+**理由**：②会把「改了样式却没说」的任务漏掉；③的三条都能从材料里核。
+**证据**：Talk:L1 附带要求；原件：本日志决定 35。
+**影响**：`workflows/build-code/SKILL.md` 触发段与 `skill-deps.yaml`；落 P4。
+不新增阶段或 gate；本条是决定 35 的判定口径细化。
+风险：拿不准就走会抬高成本；缓解是冒烟从简、审计包按页面范围复用。
+
+#### 决定 37 — 报告逐项给证据，摘要嵌既有材料
+
+**问题**：报告写成什么、放在哪、不写什么？
+**候选**：① 新建报告平台；② 另开独立证据目录；③ 嵌进既有审查材料。
+**选择**：③。报告按八维逐项给档位、证据引用与未覆盖说明；
+机器字段用 8 值词表，展示按四态分组，映射只写一次；
+写清引擎、工具、会话、视口、状态与未测原因。
+审计摘要放进现有的 test_evidence 与 test_context，不新开材料键。
+**理由**：白名单只认这两个键，新键会被链路直接忽略；
+另开证据目录则会造出第二份真相。
+**证据**：Talk:L1 附带要求。
+原件：`research/2026-10-28-005-workflowhub-test-review-integration.md` 第 1 节。
+**影响**：报告写法与审查材料口径、`skills/review/SKILL.md` 的消费规则；落 P4。
+不写「用户已确认小毛病」；不让 OCR 凭截图重判视觉；
+分工是浏览器执行者产事实，OCR 与审查做判断。
+风险：摘要内联在既有材料里容易漏字段；缓解是薄脚本校验形状。
+
+本包还悬着的问题：审查材料键怎么承载摘要、验收行格式、是否改触发配置（未决 13）。
+
+校验器用，人可跳过：本包决定 34～37；需求 5、11、19、21、43；答复 3、4、8、31、32、43、46。
+
+### 工作包 ⑧ — 规范复用与能力自验：方法放哪、怎么证明在用？
+
+这个包定方法归属：一份正文、两处模式、被下游真实引用。
+还要定规则：规范只存一处，判据引它实际读过的版本。
+消费者是后续有页面可见面的任务、C05 与 C08、发布验收。
+
+| 段（批次） | 结论 | 原件 |
+| --- | --- | --- |
+| 调研（M8-1） | plan-design-review 仍是「只有文件、没有模式」；C05 的八维升级没有生效；调研发法是内部加外部（C05 判据与外部方法） | `quality/evidence/research/2026-10-28-004-c05-design-audit-generalization.md` 第 4 节 |
+| 发散（M8-2） | 三条路：C07 新建页面方法、扩两模式、只写 frontend-testing | 本日志决定 38 |
+| 收敛（M8-3） | 扩 plan-design-review 两模式、共用清单一处、规范消费可核 | 本日志决定 19、20、38 |
+| 就地讨论（M8-4） | 用户定方法归属，要求通用可复用，规范要真被消费 | Talk:B3、C1、M1 |
+| 定验收（M8-5） | 同文件两模式、无重复正文、被下游引用、规范消费有记录 | 本包五段 |
+
+#### 决定 38 — 在 C05 现版技能上扩页面模式，不重写八维
+
+**问题**：页面检查的方法写在哪、要不要另建一份？
+**候选**：① C07 新建页面检查方法；② 另写一份到 frontend-testing；③ 扩现有技能两模式。
+**选择**：③。`skills/plan-design-review/SKILL.md` 已被 C05 改成 63 行八维、
+含 10 项反例（现文 `:24-53`）；C07 在现版上扩页面模式，契约与清单只写一处。
+**理由**：同一件事写成两份，下一任务就会引用旧的那份；
+两模式共用契约还能省掉一套字段。
+**证据**：Talk:C1、Talk:U3。
+原件：`research/2026-10-28-004-c05-design-audit-generalization.md` 第 4 节。
+**影响**：`skills/plan-design-review/SKILL.md` 的页面模式节；落 P1。
+写集按现行号，不重写八维、不覆盖 C05 现版、不另建第二个技能。
+风险：同一文件后续可能被再次改动；缓解是写入前读现版并记来源（未决 14）。
+
+本包还悬着的问题：两模式第 3 维名称差异的写法（未决 14）、
+规范被真实消费的证明方式（未决 12）。
+
+校验器用，人可跳过：本包决定 38；需求 19、38；答复 6、7、36。
+
+### 工作包 ⑨ — make-decision 流程修复：这十条要求怎么落地？
+
+这个包把用户提的流程要求落成 make-decision 的可执行修复计划。
+它只规划文件、顺序、验收与运行清单，实施放在 C07 的 build-code。
+消费者是 make-decision 的作者与后续任务；它要防的是「再跳步」。
+
+| 段（批次） | 结论 | 原件 |
+| --- | --- | --- |
+| 调研（M9-1） | 现流程缺四个强制点：开局分级问答、调研决策、逐模块台账、即时落盘；调研发法对齐开局答复（够了），本模块依据都在内部原件 | `workflows/make-decision/SKILL.md`、`workflows/make-decision/steps.json`、`skills/decision-log/templates/decision-log-template.md` |
+| 发散（M9-2） | 三条路：只改模板、只改 SKILL、模板＋SKILL＋steps＋运行清单一起改 | `workflows/make-decision/steps.json` |
+| 收敛（M9-3） | 取第三条，但只改方法与模板，不改 runtime、不新增阶段或 gate | 本日志决定 39、40 |
+| 就地讨论（M9-4） | 用户说「当前make-decision流程有问题…一起改进」，要求开局问调研、逐模块收敛、不抢跑 | Talk:O2/O3/P1/Q1 |
+| 定验收（M9-5） | 八项可核：四级选择、调研决策、大纲确认、模块台账、审查前检查、对抗追问与术语表、无新 gate、收口与下一阶段分开 | 本包验收段 |
+
+#### 决定 39 — 范围取方法加模板，实现在 C07 做
+
+**问题**：这十条流程要求改哪些文件、在哪个阶段实施？
+**候选**：① 只改模板；② 只改 SKILL；③ 模板＋SKILL＋steps＋运行清单一起改。
+**选择**：③。要改 `workflows/make-decision/SKILL.md`、
+`workflows/make-decision/steps.json`、
+`skills/decision-log/templates/decision-log-template.md`，
+必要时加 `docs/standard-workflow.md`；实现放 C07 的 build-code，本阶段只规划。
+**理由**：只改模板会留下「步骤顺序没变」；只改 SKILL 则模板仍在教旧写法。
+**证据**：Talk:O2/O3、Talk:R3；原件：`workflows/make-decision/steps.json`。
+**影响**：上述四个文件；落 P6。
+不改 runtime、不新增阶段、gate 或第二进度、不改事实 schema、
+不在决策阶段改技能文件；不把模板改动变成对旧任务的追溯改写。
+这是对 PRD:338「跨任务规范改 C08」的明确例外：
+用户选了 M9 留在 C07（答复 45），owner 是当前主会话，审查按共享文件审查。
+风险：模板与步骤变更影响所有任务的材料形状；
+缓解是向后兼容旧材料、旧决定编号不重排、用现有步骤校验器核。
+
+#### 决定 40 — 每个模块五段记录，写完立即发布并读回
+
+**问题**：台账怎么记、什么时候记？
+**候选**：① 全部做完再一次性写；② 每模块一段、写完立即发布并读回。
+**选择**：②。每模块按调研、发散、收敛、就地讨论、定验收五段记，
+每格一句结论加原件指针加模块批次号；简单无歧义直接定并告知，不重复问已定的事；
+只有会改方向、范围、验收或风险的复杂歧义才单独标出交用户。
+**理由**：攒到最后会丢中间结论，也会让「顺序偏差」无处可查；
+写完就读回，才能发现材料没落盘。
+**证据**：Talk:O2/O3；原件：本日志每个工作包的五段表。
+**影响**：模板的模块台账节与 SKILL 的执行顺序；落 P6。
+运行清单在「确认→收口→交接」处写硬顺序：先收口当前阶段，
+再让用户决定下一阶段，不得自动建议或催促。
+风险：模块多时频繁发布成本高；缓解是按模块小步提交，优先正确性与可读回。
+
+**用户第一次给九条要求（答复 40），后来补第十条（答复 48）**：
+1. 开局四级选择，含推荐与理由。
+2. 分级后、大纲前必须问一次要不要做内外部调研（内部、内部加外部、跳过加理由），
+   并记录范围、为什么、跳过会缺什么、谁决定。
 3. 大纲确认后才做方向审查。
-4. 逐模块收敛：只问复杂歧义；简单直接定并告知。
-5. 复杂模块判断内外部调研；模块调研格要与开局调研决策对得上。
+4. 逐模块收敛：只问复杂歧义，简单直接定并告知。
+5. 复杂模块判断要不要做内外部调研；模块调研格要与开局调研决策对得上。
 6. 所有模块收敛后才做细节审查。
-7. 细节审查后 grill 并更新 GLOSSARY。
-8. 每步/每模块立即写 decision-log 并读回。
+7. 细节审查后做对抗式追问，并更新术语表（GLOSSARY）。
+8. 每步、每模块立即写决策日志并读回。
 9. 根因与运行清单，防止跳步。
-10. 最终确认与收口分离于下一阶段：确认=阶段收口（保存真实确认、核对/读回 GLOSSARY、生成并读回 handoff、把 handoff 绝对路径交付用户）；确认选项/收尾文案不得写"进入 build-plan/开始下一阶段"；下一阶段何时开始由用户决定。
+10. 最终确认与下一阶段分开：确认＝阶段收口（保存真实确认、核对并读回术语表、
+    生成并读回 handoff、把 handoff 绝对路径交付用户）；
+    确认文案不得写「进入 build-plan」或「开始下一阶段」，下一阶段何时开始由用户定。
 
 **本任务实际调研清单（按新要求补记）**：
-- 内部：PRD/S5–S7/前序卡（C01/C03/C05/C09）、仓库能力与接入点、浏览器链与失败事实、C05 生命周期与交付状态。
-- 外部：九维/a11y/性能/行为方法与工具、许可与版本。
-- 专项：C05 视觉判据通用化、浏览器采集诊断、C05 → C07 交付路径。
-- **顺序偏差**：实际调研做在"分级后先问调研决策"这一步之前；该步没有按序执行，现已补问并取得答复（Talk:Q1）。缺口（外部工具许可、ego 登记、UES 完整闭包）保留在 OPEN/风险，**不写成全覆盖**。
+- 内部：发布计划与 S5–S7、前序卡（C01、C03、C05、C09）、仓库能力与接入点、
+  浏览器链与失败事实、C05 生命周期与交付状态。
+- 外部：九维、可访问性、性能、行为方法与工具，以及它们的许可与版本。
+- 专项：C05 视觉判据通用化、浏览器采集诊断、C05 到 C07 的交付路径。
+- 顺序偏差：实际调研做在「分级后先问调研决策」之前，该步没有按序执行；
+  现已补问并取得答复（Talk:Q1）。缺口（外部工具许可、ego 登记、
+  未采用工具集的完整闭包）留在未决与风险里，不写成全覆盖。
 
-**大纲确认（2026-10-28）**：最终大纲按 9 块定稿：M1 定位与形态、M2 共用契约、M3 判据矩阵、M4 真实采集、M5 判定与分级、M6 回修闭环、M7 报告与接入、M8 规范复用与能力自验、M9 make-decision 流程修复。用户已用"按现有调研定大纲"真实答复（Talk:Q1）；**不算方向审查通过**。
+**大纲确认（2026-10-28）**：最终大纲按九块定稿：
+定位与形态、共用契约、判据矩阵、真实采集、判定与分级、回修闭环、
+报告与接入、规范复用与能力自验、流程修复。
+用户用「按现有调研定大纲」答复（Talk:Q1）；这不算方向审查通过。
 
-**修正后的执行顺序**：分级（复杂，已选）→ 调研决策（够了，已答）→ 大纲确认（已答）→ 方向审查（用现有结果，记顺序偏差）→ 逐模块台账（进行中，每块写完读回）→ 正式细节审查（待台账齐）→ grill + GLOSSARY → 最终确认。后续不得再抢跑。
+**修正后的执行顺序**：分级（复杂，已选）→ 调研决策（够了，已答）→
+大纲确认（已答）→ 方向审查（用现有结果，记顺序偏差）→ 逐模块台账
+（进行中，每块写完读回）→ 正式细节审查（待台账齐）→ 对抗追问与术语表 →
+最终确认。后续不得再抢跑。
 
-**根因记录（U-C07-48）**：主会话把"最终确认"误当成"进入 build-plan 的许可"，示例确认文案也带有同样倾向；正确硬顺序是"先收口当前阶段，再让用户决定下一阶段"，不得自动建议或催促。收口动作=保存用户真实确认、核对/读回 GLOSSARY、生成并读回 handoff、把 handoff 绝对路径交付用户；**确认不是下一阶段入口**。
-#### D-038 — make-decision 流程修复的范围与边界
+**根因（答复 48）**：主会话把「最终确认」误当成「进入 build-plan 的许可」，
+示例确认文案也带同样倾向；正确的硬顺序是先收口当前阶段，再让用户决定下一阶段。
+收口动作＝保存用户真实确认、核对并读回术语表、生成并读回 handoff、
+把 handoff 绝对路径交付用户；确认不是下一阶段的入口。
 
-- **做什么**：按用户 10 条要求改 `workflows/make-decision/SKILL.md`、`steps.json`、`skills/decision-log/templates/decision-log-template.md`（必要时 `docs/standard-workflow.md`），把开局分级问答、开局调研决策、大纲确认、方向审查时点、逐模块台账、细节审查前检查、grill/GLOSSARY、即时落盘与运行清单、**最终确认=阶段收口（含 GLOSSARY 与 handoff，不催下一阶段）**写进方法与模板；实现放 C07 build-code，本阶段只规划。
-- **不做什么**：不改 runtime、不新增 stage/gate/第二进度、不改 facts schema、不在 make-decision 实施；不把模板改动变成对旧任务的追溯改写。**例外说明（用户选择，Talk:R3）**：PRD:338 要求跨任务规范改变转 C08，本条是用户明确选择的例外——M9 留在 C07 实施，owner=当前主会话，实施在 C07 build-code，审查按共享文件审查；C07 决策阶段只按新纪律执行，不改技能文件。
-- **风险**：模板与 steps 变更影响所有任务的材料形状；缓解=向后兼容旧材料、旧决定编号不重排、用现有 check-stage-steps 校验，变更需读回旧任务抽样。
-- **改动**：上述方法与模板文件；唯一写主由 build-plan 指派。
-
-#### D-039 — 逐模块收敛与即时落盘纪律
-
-- **做什么**：每模块按"调研→发散→收敛→就地讨论→定验收"五段记录，每格一句结论+原件指针+模块批次号；简单无歧义直接定并告知，不重复问已定的事；只有会改变方向/范围/验收/风险的复杂歧义才单独标出待用户；每模块写完立即发布 decision-log 并读回，不攒到最后；运行清单在"确认→收口→交接"处写硬顺序（先收口当前阶段，再让用户决定下一阶段），不得自动建议/催促。
-- **不做什么**：不批量攒写、不以"调研已做"默认、不重开已确认讨论、不把简单问题升级成用户问答。
-- **风险**：模块多时频繁发布成本高；缓解=按模块小步提交，优先正确性与可回读，不牺牲顺序。
-- **改动**：模板的模块台账节与 SKILL 的执行顺序；实现随 D-038 一起在 build-code 落。
-
-**验收（七项可核）**：
+**验收（八项可核）**：
 1. 开局四级选择有真实问答与记录（本任务：复杂，Talk:O1）。
-2. 开局调研决策有真实问答与记录，不能空（本任务：够了，Talk:Q1；OPEN-22 关闭）；模块调研格能与开局决策对上，模块级补/跳写理由。
+2. 开局调研决策有真实问答与记录，不能空（本任务：够了，Talk:Q1）。
 3. 大纲确认有真实答复与原 ref（Talk:Q1），方向审查在其后才合规（本任务记顺序偏差）。
-4. 逐模块台账可核：每块五段表、批次号、四字段决定齐；每块写完有发布读回字节。
-5. 细节审查前检查：所有模块收敛、台账齐；提前执行记为已停止、无结论。
-6. grill 后 GLOSSARY 有更新并可读回（本任务待做）。
-7. 无新 stage/gate/第二进度；运行清单可核。
-8. 未来任务的最终确认选项/收口清单可核：确认=阶段收口（保存确认/GLOSSARY 读回/handoff 生成读回/绝对路径交付），不含"进入下一阶段"；下一阶段由用户决定。
+4. 逐模块台账可核：每块五段表、批次号、四要素决定齐，每块写完有发布读回。
+5. 细节审查前检查：所有模块收敛、台账齐；提前执行的记为已停止、无结论。
+6. 对抗追问后术语表有更新并可读回（本任务待做）。
+7. 无新阶段、gate 或第二进度；运行清单可核。
+8. 未来任务的最终确认选项可核：确认等于收口，不含「进入下一阶段」。
 
-*本包待问的歧义*：无待问（调研已答、大纲已确认）。*缺口*：外部工具许可、ego 登记、UES 完整闭包保留在 OPEN/风险。
+本包待问的歧义：无（调研已答、大纲已确认）。
+缺口：外部工具许可、ego 登记、未采用工具集的完整闭包，保留在未决与风险里。
 
-### 工作包 ⑩ — 交付证据与防假绿（M10）
+校验器用，人可跳过：本包决定 39～40；需求 38、43；答复 40、41、42、45、48、56。
 
-- **要交付什么**：把 C05 暴露的三类系统性问题（限定 pass 非法、覆盖无回执/终态丢失、gate 全树相等死锁）落成 C07 的防假绿能力：判据三态化、对象版本三件套、引用越界检测、gate 谓词、冻结判据自哈希；消费者为 build-code 终末、审查者与后续任务。来源 U-C07-54、研究 009/011/012。
-- **复杂度**：复杂（跨判据、版本、gate、报告与登记）。
+### 工作包 ⑩ — 交付证据与防假绿：怎么防止自己骗自己？
 
-| 段 | 模块记录（批次 M10-1～M10-5） |
-| --- | --- |
-| 调研 | 结论：C05 11 条部分需求无一条"未实现"，欠在可核闭合；三系统性问题根因已定位；原件：`quality/evidence/research/2026-10-29-012-c05-root-cause.md` 第 2 节；调研决策：内部+外部（C05 原件与提交，复杂模块不得空），批次 M10-1 |
-| 发散 | 结论：只改报告、只改 gate、判据/版本/gate/报告一起改三条路；原件：研究 012 第 2 节；批次 M10-2 |
-| 收敛 | 结论：取第三条，P0 先做五项结构能力、P1/P2 分级；不新增 stage/gate/第二证据库（D-041/D-042）；批次 M10-3 |
-| 就地讨论 | 结论：用户选定 M10 范围与批准变更规则；原件：Talk:U6/U7；批次 M10-4 |
-| 定验收 | 结论：P0 五项可核、P1/P2 有去向；C07 不修 C05 历史欠账；批次 M10-5 |
+这个包把 C05 暴露的三类问题落成 C07 的防假绿能力：
+限定通过非法、覆盖没有回执、gate 在整树相等上死锁。
+做法分 P0、P1、P2 三级，P0 不完就不能说防假绿成立。
+消费者是 build-code 终末、审查者与后续任务。
 
-**P0（必须先做）**：①判据三态化（pass 仅全范围；具名范围一律 incomplete；禁"限定 pass"）；②对象版本三件套（commit+sha256+时点，变则 stale）；③引用越界检测（原件自述"不能证明/未执行"不得据此 pass，除非人工 override 记录）；④gate 谓词=材料身份+尾随白名单+rename 等价；⑤冻结判据自哈希进报告。
-**P1**：S6 事件台账前置；批准绑定版本+变更登记；审查覆盖回执/终态保存；报告重签发 delta。
-**P2**：受控页真注入反例；深度面显式化；规范消费登记（C08）。
-**边界**：不新增 stage/gate/第二证据库；实现放 build-code，decision 只规划。
+| 段（批次） | 结论 | 原件 |
+| --- | --- | --- |
+| 调研（M10-1） | C05 的 11 条部分需求没有一条是「未实现」，欠的是可核闭合；三类问题根因已定位 | `quality/evidence/research/2026-10-29-012-c05-root-cause.md` 第 2 节 |
+| 发散（M10-2） | 三条路：只改报告、只改 gate、判据与版本与 gate 与报告一起改 | `quality/evidence/research/2026-10-29-012-c05-root-cause.md` 第 2 节 |
+| 收敛（M10-3） | 取第三条，P0 先做五项结构能力，P1 与 P2 分级 | 本日志决定 41 |
+| 就地讨论（M10-4） | 用户选定 M10 范围与批准变更规则 | Talk:U6、Talk:U7 |
+| 定验收（M10-5） | P0 五项可核、P1 与 P2 有去向；C07 不修 C05 历史欠账 | 本包 P0 段 |
 
-#### D-041 — M10 范围与防假绿 P0/P1/P2
+#### 决定 41 — 防假绿取 P0 五项、P1 四项、P2 三项
 
-- **做什么**：按 P0 五项、P1 四项、P2 三项落 M10；P0 未完成前不得声称防假绿成立；实现放 C07 build-code。依据 Talk:U6、研究 012。
-- **不做什么**：不新增 stage/gate/第二证据库、不修 C05 历史欠账、不把 C05 的 17 pass 当输入。
-- **风险**：P0 判据改口径会牵动现有 AC 与报告；缓解=先三态化再改 gate，逐项留 delta。
-- **改动**：M10 薄脚本/测试/报告契约路径待 build-plan（OPEN-26）。
+**问题**：防假绿做到哪一级、先做哪些？
+**候选**：① 只改报告口径；② 只改 gate 谓词；③ 判据、版本、gate、报告一起改并分级。
+**选择**：③。P0 五项先做：
+①判据三态化（通过仅全范围，具名范围一律记未测，禁限定通过）；
+②对象版本三件套（commit＋sha256＋时点，变则失效）；
+③引用越界检测（原件自述「不能证明」「未执行」不得据此判通过，
+除非有人工覆盖记录）；④gate 谓词＝材料身份＋尾随白名单＋改名等价；
+⑤冻结判据自哈希进报告。
+**理由**：C05 的三类问题都出在「口径」与「绑定」上，不在报告排版；
+只改一处会留下另一处照旧。
+**证据**：Talk:U6；原件：`research/2026-10-29-012-c05-root-cause.md` 第 2 节。
+**影响**：P1 四项是 S6 事件台账前置、批准绑定版本加变更登记、
+审查覆盖回执与终态保存、报告重签发差异；P2 三项是受控页真注入反例、
+深度面显式化、规范消费登记（交 C08）；路径待 build-plan；落 P7。
+不新增阶段、gate 或第二证据库，不修 C05 历史欠账，不把 C05 的 17 项限定通过当输入。
+风险：P0 改判据口径会牵动现有验收与报告；
+缓解是先三态化再改 gate，逐项留差异。
 
-#### D-042 — 对象版本三件套与批准/交付版本分离；批准后变更登记同意
+#### 决定 42 — 版本三件套，批准版与交付版分开写
 
-- **做什么**：所有对象与报告绑定 commit+sha256+时点，变则 stale；批准版本（41eae967）与交付版本（9efb7e57）分开写；批准后 UI 行为变更=登记差异并取得同意，不默认重展示（必要时用户要求再重展示）。依据 Talk:U1/U7、研究 011。
-- **不做什么**：不把两版本写成一个、不默认重展示、不静默改已批准行为。
-- **风险**：批准漂移仍可能；缓解=变更登记+同意记录+版本三件套。
-- **改动**：报告/材料版本块与变更登记写法；OPEN-27。
+**问题**：对象版本、批准版本与交付版本怎么绑？
+**候选**：① 只记一个版本号；② 记三件套并把两个版本分开；
+③ 批准后行为变了就重新展示。
+**选择**：②。所有对象与报告绑定 commit、sha256、时点三件套，变则失效；
+批准版本是 `41eae967`，交付版本是 `9efb7e57`，两处引用分开写；
+批准后 UI 行为有变更时，只登记差异并取得同意，不默认重新展示。
+**理由**：一个版本号说不清「批准的」和「交付的」差在哪；
+默认重展示等于把已批准的东西又变成新的。
+**证据**：Talk:U1、Talk:U7；原件：`research/2026-10-29-011-c07-decision-impact.md`。
+**影响**：报告与材料的版本块、变更登记写法；落 P7；实现方式见未决 20。
+不把两个版本写成一个，不默认重展示，不静默改已批准的行为。
+风险：批准状态仍可能漂移；缓解是变更登记、同意记录加三件套。
 
-### 方向审查处置（2026-10-28）
+本包还悬着的问题：P0 脚本与报告契约的路径（未决 19）、
+批准绑定与变更登记的实现方式（未决 20）。
 
-- **审查原件**：`quality/reviews/2026-10-28-005-make-decision-direction.json`（47281 字节、sha256 `e78e6edf541cf9cce9d1cb4633de9eb0f1e04039ee6c34f67ec2f61b75ebde26`）；同目录另有 4 份 provider raw output（`2026-10-28-001..004-*.output`）。
-- **审查事实（如实保留，不当通过）**：status=`available-with-failures`；outcome=`partial`；error.code=`REVIEW_NO_SEMANTIC_RESULT`（"paired review is incomplete; 10 findings remain available"）；`authoritative=false`。provider：antigravity/flash 与 codex/luna 各 2 次 completed/ok；kimi/coding 2 次 failed/`PROVIDER_OUTPUT_INVALID`。`material_coverage` 中 raw_requirement 对三家均 `undetermined`，**不能声称三份材料都被读过**。findings 共 10 条。
-- **处置口径**：只用现有 fixed／rejected_invalid／accepted_risk／needs_human；不改 originals、不把 partial 写成空 findings 或通过。
+校验器用，人可跳过：本包决定 41～42；需求 28、30、43；答复 49、52、54、55、57、58。
 
-| 审查 finding（按原件顺序） | 严重度 | 摘要 | 处置 | 去向/依据 |
+## 方向审查说了什么、我们怎么处置？
+
+方向审查只做到「部分」：原件记的是部分完成，10 条 finding 全有处置。
+它不能当通过用——三份材料是否被读过，原件写的是「未判定」。
+
+- 原件：`reviews/2026-10-28-005-make-decision-direction.json`（47281 字节）。
+- 该件 sha256：`e78e6edf541cf9cce9d1cb4633de9eb0f1e04039ee6c34f67ec2f61b75ebde26`。
+- 同目录另有 4 份提供方原始输出（`2026-10-28-001..004-*.output`）。
+- 审查事实：状态 `available-with-failures`、结论 `partial`、
+  错误码 `REVIEW_NO_SEMANTIC_RESULT`（原文：paired review is incomplete;
+  10 findings remain available）、`authoritative=false`。
+- 提供方：antigravity/flash 与 codex/luna 各 2 次 completed/ok；
+  kimi/coding 2 次 failed，错误码 `PROVIDER_OUTPUT_INVALID`。
+- 覆盖：原始需求对三家都是「未判定」，所以不能说三份材料都被读过。
+
+处置只用四个词：已修、判为无效、接受风险、需人定。
+不改原件，也不把「部分」写成「没有 finding」或「通过」。
+
+| finding | 严重度 | 摘要 | 处置 | 去向与依据 |
 | --- | --- | --- | --- | --- |
-| DR-01 | blocking | Q-01 仍把"C05 收口后页面是否存在"当未决前提，未对上 C05 原型已撤回、不合并的事实 | fixed | D-031 两条腿解耦：C05 只作可选可写样本，不是前提 |
-| DR-02 | blocking | Q-03 只谈 ego 的 GUI/许可，漏了 agent-browser 必崩，浏览器运行时会死锁 | fixed（部分保留） | D-027（默认 ego/回退）+ D-029（修身份 bug）；许可风险仍 OPEN-17，不写"已获许可" |
-| DR-03 | major | Q-07/Q-12 抽象成规范复用与审查接入，漏了 verify-code 已退役 | fixed | D-002/D-034/D-037 已落 build-code 终末；PRD 旧文字冲突保留 OPEN-16，不改 PRD |
-| DR-04 | major | Q-14 只把入口 paused 当来源，未把两个分支立为收敛问题 | fixed | 用户已正式选择继续复杂路线（Talk:N2），OPEN-01 confirmed |
-| DR-05 | major | 未提供已选方向/备选/理由/关键假设，无法对照原始需要挑战 | fixed | 正式细节审查（010）已对完整方向/备选做挑战；方向审查仍 partial、顺序偏差保留；**不写方向审查通过** |
-| DR-06 | blocking | Q-12 漏了 verify-code 退役的接口冲突 | fixed | 同 DR-03；D-037 与 build-code 终末接线 |
-| DR-07 | major | Q-03 把静默与 GUI 工具平级取舍，违背未登记许可工具禁入，也漏了 agent-browser 修复边界 | fixed（部分保留） | D-027/D-029 + 用户本机授权（Talk:N1）；许可登记仍 OPEN-17 |
-| DR-08 | major | Q-14 未把入口 paused 的二选一作为启动前提 | fixed | 同 DR-04；原 paused 事实保留 |
-| DR-09 | minor | Q-01 把 C05 页面预设为验收前提，与撤回事实和通用能力目标相抵触 | fixed | 同 DR-01 |
-| DR-10 | major | objective_facts F-22 把决定材料划出引用范围，reveal 无法被挑战 | fixed | 同 DR-05；细节审查 010 已补 reveal 挑战；不写成用户接受风险 |
+| DR-01 | 阻断 | 仍把「C05 收口后页面是否存在」当未决前提，没对上原型已撤回 | 已修 | 决定 5 的两条腿解耦：C05 只作可选可写样本，不是前提 |
+| DR-02 | 阻断 | 只谈 ego 的窗口与许可，漏了 agent-browser 必崩，浏览器运行时会死锁 | 已修（部分保留） | 决定 24（默认 ego 与回退）加决定 26（修身份 bug）；许可风险仍在未决 6 |
+| DR-03 | 重要 | 把接入抽象成规范复用，漏了 verify-code 已退役 | 已修 | 决定 34、36、37 落到 build-code 终末；PRD 旧文字冲突留未决 15，不改 PRD |
+| DR-04 | 重要 | 只把入口返回当来源，没把两条拆分路线立成待收敛问题 | 已修 | 用户已选继续复杂路线（Talk:N2），该未决转已定 |
+| DR-05 | 重要 | 没给已选方向、备选、理由与关键假设，无法对照原始需要挑战 | 已修 | 细节审查已对完整方向与备选做挑战；方向审查仍为部分，顺序偏差保留；不写方向审查通过 |
+| DR-06 | 阻断 | 漏了 verify-code 退役带来的接口冲突 | 已修 | 同 DR-03；决定 37 与 build-code 终末接线 |
+| DR-07 | 重要 | 把静默与有窗口的工具平级取舍，违背未登记许可工具禁入，也漏了回退修复边界 | 已修（部分保留） | 决定 24、26 加用户本机授权（Talk:N1）；许可登记仍未决 6 |
+| DR-08 | 重要 | 没把入口返回的二选一当启动前提 | 已修 | 同 DR-04；原暂停事实保留 |
+| DR-09 | 次要 | 把 C05 页面预设为验收前提，与撤回事实和通用能力目标相抵触 | 已修 | 同 DR-01 |
+| DR-10 | 重要 | 把决定材料划出引用范围，导致决定无法被挑战 | 已修 | 同 DR-05；细节审查已补挑战；不写成用户接受风险 |
 
-- **说明**：DR-05/DR-10 已由细节审查 010 补齐挑战，处置由 accepted_risk 改为 fixed；方向审查仍 partial、authoritative=false、顺序偏差保留，不冒充完整方向审查。
-- **顺序偏差（如实记录）**：本次方向审查在"最终大纲确认"与"逐模块台账"之前执行，不符合用户本轮新增流程要求的时点；其 10 条 finding 与处置保留为参考，**不得当作合规时点上的方向审查**，后续以确认后的最终大纲为准再行核对。
-- **提前细节审查（已停止）**：在模块未收敛时启动的细节审查已被主会话停止，**无结果**；不得写成"通过/不通过"，也不产生质量结论；正式细节审查待模块台账齐后另做一次（见工作包⑨）。
-- **不得声称**：方向审查"通过""无 findings"或三份材料都被读。partial 终态与 provider 失败保留在本节与原 ref。
+- 说明：DR-05 与 DR-10 已由细节审查补齐挑战，处置由「接受风险」改为「已修」；
+  方向审查仍为部分、`authoritative=false`、顺序偏差保留，不冒充完整方向审查。
+- 顺序偏差：本次方向审查做在「最终大纲确认」与「逐模块台账」之前，
+  不符合用户本轮新增的时点要求；10 条 finding 与处置保留为参考，
+  不得当合规时点上的方向审查，后续以确认后的大纲为准再核对。
+- 提前细节审查（已停止）：模块还没收敛时启动的那次细节审查已被主会话停止，
+  没有结果；不得写成通过或不通过，也不产生质量结论。
+- 不得声称：方向审查通过、没有 finding、三份材料都被读过。
 
-### 细节审查处置（2026-10-28）
+校验器用，人可跳过：本节 10 条 finding，全部有处置。
+机器字段：`status`、`outcome`、`error.code`、`authoritative`、`material_coverage`。
 
-- **审查原件**：`quality/reviews/2026-10-28-010-make-decision-detail.json`（23149 字节、sha256 `05aa16046b93a5ceefcd973bbe0b26a596db7542d154d02873fdf04868e1ca8a`）；同目录 007/008/009 provider raw output 一并登记。
-- **审查事实**：status=`available`、outcome=`completed`、`authoritative=false`（普通记录固定值，非失败）；3/3 provider completed（kimi 3 条、antigravity 5 条、codex 4 条）；findings 12 条；`material_coverage` 只确认 `approved_direction`（kimi 另读 context_map），`raw_requirement`/`evidence_map` 多路 `undetermined`——**不得写"全覆盖/通过"**。
+## 细节审查说了什么、我们怎么处置？
 
-| finding | 摘要 | 处置 | 证据/下一步 |
+细节审查完整跑完三家提供方，12 条 finding 全部处置。
+覆盖仍然不全：只有「已批准方向」被确认读过，另两份材料多路未判定。
+
+- 原件：`reviews/2026-10-28-010-make-decision-detail.json`（23149 字节）。
+- 该件 sha256：`05aa16046b93a5ceefcd973bbe0b26a596db7542d154d02873fdf04868e1ca8a`。
+- 同目录另存 3 份提供方原始输出。
+- 审查事实：状态 `available`、结论 `completed`、`authoritative=false`
+  （这是普通记录的固定值，不是失败）；3/3 提供方完成
+  （kimi 3 条、antigravity 5 条、codex 4 条）；finding 12 条。
+- 覆盖：只确认「已批准方向」，kimi 另读了上下文映射；
+  原始需求与证据映射多路未判定——不得写全覆盖或通过。
+
+| finding | 摘要 | 处置 | 证据与下一步 |
 | --- | --- | --- | --- |
-| F1 | OPEN-05 仍写"根因未查"、把是否修留给诊断，和 D-029 已定根因/修法冲突 | fixed | OPEN-05 改为"根因已定位（007 §2）、修法已定（D-029）；剩余同一探针复跑+一次真实 --run 待验证" |
-| F2 | 正文/P0/矩阵仍写 8 个工作包 | fixed | 全部改 9 包，补工作包⑨状态 |
-| F3 | U-C07-40 写"8 条要求" | fixed | 改为"9 条要求"，与工作包⑨ 1～9 一致 |
-| F4 | 要改文件表停留在早期草稿，未覆盖 D-027～D-030 | fixed | 文件表拆到 SKILL/session/tickets/cleanup/contract/C05 迁移；OPEN-05 与风险表同步 |
-| F5 | 正式审计在终末，修复闭环脱离 phase 开发者 | fixed by user | 审计移至代码冻结前、最后开发阶段收口（Talk:R1/D-002），终末只复核 |
-| F6 | 四态枚举与"8 值原词"定义冲突 | fixed | 机器字段=四态枚举；展示文本可带 8 值原词+原因；映射只写一次；`check-page-audit` 只校验机器字段（D-007/D-037 对齐） |
-| F7 | C07 全改与 PRD:130"修复归原 owner"矛盾 | fixed by user | D-032 改写为对 PRD:130 的明确例外；补"C07 改动如何交付/原 owner 如何收到/独立复验"一段 |
-| F10 | D-032 的修复归属与 D-003/R-C07-18 的修复角色冲突 | fixed by user | 同 F7；D-032 明确例外，复验由测试/审查子代理执行 |
-| F8 | M9 在 C07 实施与 PRD:338"跨任务规范改 C08"冲突 | fixed by user | D-038 补例外说明：owner=当前主会话、build-code 实施、共享文件审查；OPEN-23 登记例外 |
-| F9 | 仍写 8 包；风险表把 C05 当唯一对象 | fixed | 改 9 包；风险表分"受控测试页（第一腿）"与"C05 可选样本（第二腿）" |
-| F11 | 引用 S5 但未落成可测验收 | fixed | 验收面新增 S5 停止/低保真条件节（对应 AC-C07-5/AC-C07-6） |
-| F12 | DR-05/DR-10 记 accepted_risk 但无用户签认 | fixed | 改为 fixed（细节审查 010 已做完整挑战）；方向审查 partial/顺序偏差保留；不写"用户已接受风险" |
+| F1 | 未决项仍写「根因未查」，与决定 26 已定根因与修法冲突 | 已修 | 未决 2 改为「根因已定位、修法已定；剩探针复跑加一次真实运行」 |
+| F2 | 正文与矩阵仍写 8 个工作包 | 已修 | 全部改 9 包，补第 9 包状态 |
+| F3 | 答复 40 写成「8 条要求」 | 已修 | 改为 9 条，与工作包⑨ 1～9 一致 |
+| F4 | 文件表停在早期草稿，没覆盖 21～27 与 34～37 | 已修 | 文件表拆到技能、会话脚本、票据脚本、清理脚本、契约测试、C05 迁移 |
+| F5 | 正式审计放终末，修复闭环脱离 phase 开发者 | 用户已修 | 审计移到代码冻结前、最后开发阶段收口（Talk:R1、决定 34），终末只复核 |
+| F6 | 四态枚举与「8 值原词」定义冲突 | 已修 | 机器字段用四态枚举，展示可带原词与原因；映射只写一次 |
+| F7 | C07 全改与「修复归原 owner」矛盾 | 用户已修 | 决定 6 改写为对 PRD:130 的明确例外，并补交付、接收与独立复验 |
+| F8 | 流程修复留 C07 与「跨任务规范改 C08」矛盾 | 用户已修 | 决定 39 补例外说明；未决 16 登记例外 |
+| F9 | 仍写 8 包；风险表把 C05 当唯一对象 | 已修 | 改 9 包；风险表分受控页（第一腿）与 C05 样本（第二腿） |
+| F10 | 修复归属与执行角色冲突 | 用户已修 | 同 F7；决定 6 明确例外，复验由测试或审查子代理做 |
+| F11 | 引用 S5 却没落成可测验收 | 已修 | 验收节新增 S5 停止与低保真条件（对应验收 5、6） |
+| F12 | DR-05 与 DR-10 记「接受风险」但无用户签认 | 已修 | 改为已修；方向审查的部分与顺序偏差保留；不写用户已接受风险 |
 
-- **边界**：所有处置只用 fixed/rejected_invalid/accepted_risk/needs_human；本次无 accepted_risk（除已确认风险外）。**不写"细节审查通过"**；`authoritative=false` 与覆盖未定保留。
+- 边界：处置只用已修、判为无效、接受风险、需人定四个词；本次没有「接受风险」。
+  不写「细节审查通过」；`authoritative=false` 与覆盖未定如实保留。
 
-### C05 交付后评估（2026-10-29）
+校验器用，人可跳过：本节 12 条 finding，全部有处置；覆盖未定 2 项保留。
+机器字段：`material_coverage` 里的 `approved_direction` 为已确认，
+`raw_requirement` 与 `evidence_map` 为未判定，原值是 `undetermined`。
 
-- **四份报告（ref/sha256）**：
-  - `quality/evidence/research/2026-10-29-009-c05-requirements-vs-commits.md`（14382 B，sha256 `26938c31…`）：18 需求 7 已实现/11 部分/0 缺失；C05 终末报告 head `9efb7e57` 记 17 限定 pass + AC009 fail；`code_review: incomplete`；独立终读 incomplete；报告 head 与交付 HEAD `c8874449` 差 42 路径，gate 结构上过不了。
-  - `quality/evidence/research/2026-10-29-010-c05-sample-usability.md`（10261 B，sha256 `8e59f4bc…`）：A/B 可用；A 构建产物与源码逐字节一致、B 零安装；均 mock；版本指针需钉 `9efb7e57`。
-  - `quality/evidence/research/2026-10-29-011-c07-decision-impact.md`（17837 B，sha256 `2ec5d3ac…`）：C07 对象/版本/路径/外部内容四处前提更新；C07 材料未合入 main（`?? specs/…`、`M GLOSSARY.md`）。
-  - `quality/evidence/research/2026-10-29-012-c05-root-cause.md`（21846 B，sha256 `86ded454…`）：11 部分=验收口径 3/流程版本绑定 3/测量登记 2/验证深度 2/实现承接 1；三系统性问题；C07 能解决 5 类结构成因、缓解 3 类、不能修历史欠账。
-- **结论**：样本可用、C05 不能当已闭环；C07 不继承/不引用 C05 17 pass 或效果达标；C07 只按自己 AC，M10 承接防复发；C07 不替 C05 补完历史欠账。
-- **不得引用**：C05 17 pass、效果达标、已闭环；不得说 C07 替 C05 补完。
+## C05 交付后，哪些判断变了？
 
-## 要改哪些文件
+变了四处：对象从「等交付」变成「已合并可用」，版本要钉住，
+外部内容已落地，材料仍没合进主仓。
+C05 本身不能当已闭环，C07 也不替它补历史欠账。
 
-下表只写已知目标方向；**精确写集、行与符号由 build-plan 写出**。状态列区分"方向已确认"与"待收敛"；未确认路径不当作已定。
+| 报告原件（任务库相对） | 字节与 sha256 前缀 | 结论 |
+| --- | --- | --- |
+| `quality/evidence/research/2026-10-29-009-c05-requirements-vs-commits.md` | 14382 B、`26938c31…` | 18 项需求：7 项已实现、11 项部分、0 项缺失；终末报告记 17 项限定通过与 1 项失败；`code_review: incomplete`；报告头与交付头差 42 条路径，gate 结构上过不了 |
+| `quality/evidence/research/2026-10-29-010-c05-sample-usability.md` | 10261 B、`8e59f4bc…` | A、B 两套可用；A 的构建产物与源码逐字节一致，B 零安装；两套都是 mock；版本指针需钉住 |
+| `quality/evidence/research/2026-10-29-011-c07-decision-impact.md` | 17837 B、`2ec5d3ac…` | 对象、版本、路径、外部内容四处前提更新；C07 材料未合入主仓（`?? specs/…`、`M GLOSSARY.md`） |
+| `quality/evidence/research/2026-10-29-012-c05-root-cause.md` | 21846 B、`86ded454…` | 11 项部分需求的成因分布；三类系统性问题；C07 能解决 5 类结构成因、缓解 3 类、修不了历史欠账 |
+
+- 结论：样本可用，但 C05 不能当已闭环；C07 不继承、不引用它的 17 项限定通过，
+  也不引用「效果达标」；C07 只按自己的验收，防复发由工作包⑩承接。
+- 不得引用：C05 的 17 项限定通过、效果达标、已闭环；
+  也不得说 C07 替 C05 补完。
+
+校验器用，人可跳过：本节 4 份报告，字节与哈希前缀已登记；细节见各原件。
+
+## 材料和审查为什么没起作用？（10 月 29 日追加）
+
+原因是质量要求只停在档案里：可复用层没有检查点，审查又看不到方案。
+这一节记用户的六条新指示、支撑它们的调研事实，以及七条追加决定。
+本节的决定编号自成一列（追加决定 1～7），不与前面 42 条混编。
+
+触发是答复 59～64；它们的原文与落点见「用户后来改了什么」一节。
+
+### 调研事实（原件在 `build-plan/`）
+
+- 材料现状（021）：11 个文件、3970 行、98006 汉字。
+  内部编号 2687 个；spec 每 22 个汉字一个编号，是 C05 的 4.2 倍。
+  89% 的编号当场没有解释；24 张卡共 484 个字段，其中 46 个是逐字常量。
+  五条核心事实被重述 187 行，占非空白字符 13.4%；
+  决策日志 28 个小节里 0 个写过「本节回答什么」。
+- 根因链（022、024）：C05 那 17 条要求的核心一句是「文档为读者写」，
+  它从未进入可复用层（skills、workflows、docs、tests、runtime 全 0 命中）；
+  材料形状停在三个提交（08-05、09-22、10-23）。
+  「读者」不是执行位：主会话读回传、作者读模板、实施者拿指针 brief
+  后自己开写两万字、审查只看到包且禁入仓库、用户只回十几个字。
+- 标准落地（030）：STE100 与 ISO 24495 的要求原文有 18 处，
+  但标准名只出现在 ADR 与上游归档；skills、workflows、AGENTS.md 按名 0 命中。
+  三份材料 2798 句，366 句超 60 字（13.1%），最长 496 字；
+  P1 最差（31.4%）；10 个高频词里 8 个首现没有解释。
+- 可行性（025）：把字段搬进附录不成立（29 处报错）；删 5 个机器不读的字段成立；
+  正文前置成立；82 个契约测试读 md、56 个含中文字面，S 类可迁且迁移后仍红，
+  M 类约六成迁后不红。
+- 校验器原型（027）：只靠字面硬错不成立——C05（6 卡）与 C07（30 卡）
+  卡内正文段落都是 0；`activation_cohort` 不能当开关。
+- 审查实况（032、033）：正式入口 11 条 finding 全是包内一致性；
+  原始需求与验收标准在三路提供方上都是未判定；
+  决策日志被 post 剖面明文禁止进包。
+  五条真问题里 4 条本来可以发现，三路合计只命中 1 条。
+- 跨阶段（038）：make-decision 审工作（85% 方案类）；
+  build-plan 正式入口审自洽（63% 结构类）；
+  build-code 审差异与测试文本，需求成立性 0 条。
+- 阶段末核对（029）：spec-analyze 只在 make-decision 跑过一次，
+  build-plan 第 11 步 0 次可核原件；六类检查里不含可读性。
+- 红队（031）：当时只有校验器一处能改字节，且默认关闭；
+  最危险的是「机制没上线却记为已解决」。
+- C05 格式考古（041）：spec 十节、Phase 九节、任务卡十七字段带阅读分组、
+  为读者写五条、简明语言 12 条；C05 自己诊断过「把模板当标题清单」。
+
+### 追加决定 1～7
+
+- **追加决定 1**：质量要求要进可复用层，而且必须有失败面；
+  只有建议、没有检查点的，不算解决。
+- **追加决定 2**：校验器默认收紧（必填），只有读归档材料时显式传诊断模式；
+  按材料路径识别，不用队列标签当开关。
+- **追加决定 3**：写作时就防。作者开工前读一页写作契约：
+  五问、禁止模式、四条硬指标（单行不超过 300 字、单句不超过 60 字、
+  缩写首现解释、每节开头一句结论）。
+  STE100 与 ISO 24495 的 19 条可检查规则并进写作规则集，作第 13 条，
+  不新建第二份规范。
+- **追加决定 4**：审查要审方案。需求进包；四轴是需求成立性、验收充分性、
+  方案合理性、可执行性；两路分工；每条 finding 带替代方案与覆盖范围。
+- **追加决定 5**：阶段末兜底。spec-analyze 六类之后加第七类「读者可用」，
+  接进 build-plan 第 11 步；收口前对当前 spec 与全部 Phase 真跑一次。
+- **追加决定 6**：不动四样东西：页面审计的 7 条验收、既有阶段与 gate、
+  公共命令七类、C05 历史材料。
+- **追加决定 7（补充）**：审查材料装反了，要换。
+  查证：build-plan post 剖面的必填项含原始需求（PRD 全文 202573 字节），
+  禁止项却含已批准规格（就是决策日志）；8 个合法键里没有决策日志的位置。
+  这是分层遗留：post 用草稿规格取代 pre 的已批准规格，
+  决策日志从来没有独立键。
+  决定：加一个决策基线键并列为必填；原始需求改可选，且默认只投 PRD 的
+  C07 卡摘录；审查轴换成四轴；文本自洽交给脚本；
+  finding 必须带替代方案与覆盖范围；STE100 与 ISO 只落核心思想、不写标准名；
+  用当前材料重跑验证。
+
+### 落地与边界
+
+- 原件：`quality/evidence/build-plan/2026-10-29-026-decision-authoring-quality.md`，
+  即 DEC-AUTH-001；
+台账是 `quality/evidence/build-plan/2026-10-29-043-requirements-ledger.md`。
+- 任务分三个 Phase：`phases/P9-材料为读者写.md`（T025–T032）、
+`phases/P10-让审查判方案.md`（T033–T035）、
+`phases/P11-去字面断言.md`（T036）。
+- 新增五项未决：登记、影响面、成本、翻转条件、新答复进索引（未决 23）。
+- 诚实边界一：调研只到可测形状与文档事实，没有做人类读者实验。
+- 诚实边界二：P9 方案在红队下只评「部分能」——
+  能提高下一份材料写好的概率，不能保证不再复发。
+- 台账：本轮每条要求、每份调研、每个决定都登记在
+  `build-plan/2026-10-29-043-requirements-ledger.md`，
+  四张表分别是用户原始要求 27 条、调研结论 12 条、决定 7 条、未处理与风险 7 条；
+  收口前由 spec-analyze 逐行核对。
+
+| 件 | 完整路径 |
+| --- | --- |
+| 决定原件（DEC-AUTH-001） | `quality/evidence/build-plan/2026-10-29-026-decision-authoring-quality.md` |
+| 本轮台账 | `quality/evidence/build-plan/2026-10-29-043-requirements-ledger.md` |
+
+校验器用，人可跳过：本节 7 条追加决定、10 条调研事实；5 项未决合并记为未决 23；
+台账行数以 043 件为准。
+
+## 未决项：还有什么没定、谁定、不定会怎样？
+
+还有 23 件事没定：其中 11 件是方法细节，6 件是路径与写集，6 件要用户或别的 owner 拍板。
+每条写三行：问题、谁定、不定的后果；没有这三行就不算登记完。
+已定的旧未决项不混在这里，它们在下一节。
+
+- **未决 1｜采集失败语义与回退判定点**（原 OPEN-13）
+  - 问题：未启动、失联、工具异常、身份不符各报什么，已观察的事实怎么留；
+    何时算「本机没有 ego」，回退之后失败又怎么记。
+  - 谁定：判据 owner 在 build-plan 定，采集包承接，诊断报告补回退边界。
+  - 不定的后果：判定点不清，两条腿的读数都不可复现，页面层只能记未测。
+- **未决 2｜身份 bug 的复验收尾**（原 OPEN-05）
+  - 问题：修法已定（决定 26），还差同一探针复跑，加一次真实 `--run`。
+  - 谁定：build-code 复验，工具 owner 配合。
+  - 不定的后果：不修完，回退引擎仍不可用，所有样本只能跑在 ego 上。
+- **未决 3｜引擎与简化的测试同步**（原 OPEN-19）
+  - 问题：契约测试与 `references/agent-browser.md` 要跟着改；顺序是先改测试，再删分支。
+  - 谁定：工具 owner 在 build-plan 写同步清单。
+  - 不定的后果：先删分支后改测试，会出现假绿。
+- **未决 4｜五类薄采集脚本的路径与登记**（原 OPEN-20）
+  - 问题：console、network、overflow、perf、a11y 五个脚本放哪、谁消费。
+  - 谁定：build-plan 定路径与登记。
+  - 不定的后果：路径不定，采集器散落在各 Phase 脚本里，没法复用。
+- **未决 5｜C05 旧 QA 脚本迁移**（原 OPEN-18）
+  - 问题：C05 那批 agent-browser 专用脚本切到 ego 会断，要有人迁。
+  - 谁定：工具 owner 或 C08；C05 owner 已关闭。
+  - 不定的后果：旧脚本在 ego 下静默失败，迁移前只能保持只读。
+- **未决 6｜ego 的许可登记**（原 OPEN-17）
+  - 问题：用户说它是本机授权工具，但本机授权不等于项目许可登记。
+  - 谁定：用户与目录、发布 owner。
+  - 不定的后果：对外分发时无法证明许可来源。
+- **未决 7｜定级刻度与三条负例样例**（原 OPEN-07）
+  - 问题：负例要义已定，具体样例、刻度与容差还没产。
+  - 谁定：判据 owner 在 build-plan 备样例，spec 落取值。
+  - 不定的后果：同级可重复无法证明，这一面只能保持未测。
+- **未决 8｜性能采集方法与未知值表达**（原 OPEN-08）
+  - 问题：位置与分组已定，采集方法、样本数、「只报原始值加未知」够不够仍未定。
+  - 谁定：判据 owner 在 build-plan 写方法。
+  - 不定的后果：性能项要么判不出，要么被判成假通过。
+- **未决 9｜业务真值与具名对象**（原 OPEN-11）
+  - 问题：业务判定形态已定，缺具名对象、真实后端与逐页终态脚本。
+  - 谁定：主会话与用户定对象；build-code 按对象写脚本。
+  - 不定的后果：业务操作只能写「未覆盖」，验收 5 无法完整举证。
+- **未决 10｜外部工具集的采用范围**（原 OPEN-10）
+  - 问题：整包采用、只用窄工具、还是只做研究；是否接受先修缺陷与许可不明。
+  - 谁定：用户；主会话给代价对比。
+  - 不定的后果：默认只借方法，可能重复造轮子。
+- **未决 11｜无 Figma 与 Storybook 时的依据写法**（原 OPEN-15）
+  - 问题：两者的不适用依据怎么写才算可核。
+  - 谁定：设计资产 owner 与 C05 确认。
+  - 不定的后果：验收 7 只能写未测。
+- **未决 12｜规范被真实消费怎么证明**（原 OPEN-14）
+  - 问题：怎样算规范在用，而不只是存在于仓库里。
+  - 谁定：主会话与规范 owner 在 build-plan 定。
+  - 不定的后果：判据写完可能变货架，下一任务重造一套。
+- **未决 13｜审查材料键与验收行格式**（原 OPEN-03 剩余）
+  - 问题：审计摘要怎么进 test_evidence 与 test_context，报告验收行什么格式，
+    是否改触发配置。时机与复核方式已定（决定 34），只剩接线细节。
+  - 谁定：build-plan 落写集。
+  - 不定的后果：报告写好了却进不了链路。
+- **未决 14｜两模式第 3 维名称差异的写法**（原 OPEN-04 剩余）
+  - 问题：页面模式叫「交互、状态与运行性能」，设计模式叫「交互与状态」，
+    怎么写得不像两套骨架。
+  - 谁定：build-plan 在现版技能上扩写时定。
+  - 不定的后果：读者会以为有两套维度体系。
+- **未决 15｜发布计划 S5 的批量确认口径**（原 OPEN-16）
+  - 问题：S5 要求小毛病批量真实确认，用户已定自动判定（决定 30）。
+  - 谁定：发布计划 owner，也就是用户。
+  - 不定的后果：后续验收可能按旧口径判「缺确认」。
+- **未决 16｜流程修复留 C07 的例外登记**（原 OPEN-23）
+  - 问题：跨任务规范本应转 C08，这次留在 C07（答复 45）。
+  - 谁定：主会话在发布计划与规范 owner 处登记。
+  - 不定的后果：后验收可能判为违规。
+- **未决 17｜C07 修复的交付与交接**（原 OPEN-24）
+  - 问题：C07 分支提交、问题清单交用户与设计 owner 并归档、独立复验细节。
+  - 谁定：build-plan 落写集，交付后执行。
+  - 不定的后果：清单交不出去，修复等于没有回执。
+- **未决 18｜make-decision 收口动作清单**（原 OPEN-25）
+  - 问题：保存确认、读回术语表、生成 handoff 并交付绝对路径，这几步的落写集未定。
+  - 谁定：build-plan 落写集。
+  - 不定的后果：收口仍靠人记，容易再被当成下一阶段入口。
+- **未决 19｜防假绿脚本与报告契约的路径**（原 OPEN-26）
+  - 问题：P0 五项的脚本、测试与报告契约路径未定。
+  - 谁定：build-plan 落写集。
+  - 不定的后果：P0 只能停在口头，进不了 gate。
+- **未决 20｜批准绑定与变更登记的实现**（原 OPEN-27）
+  - 问题：用台账还是用字段承载批准绑定与变更登记。
+  - 谁定：build-plan 落写集。
+  - 不定的后果：批准漂移仍无法追溯。
+- **未决 21｜复制留痕**（原 OPEN-21 剩余）
+  - 问题：样本复制到自有位置后要做 sha256 校验并留痕。
+  - 谁定：主会话在 C07 收口前执行。
+  - 不定的后果：字节漂移时证据对不上。
+- **未决 22｜C06 真实业务后置**（原 OPEN-12 剩余）
+  - 问题：C06 未立项，真实后端业务与代码修复的承接仍缺位。
+  - 谁定：用户与 C06 owner。
+  - 不定的后果：业务类验收只能记未覆盖。
+- **未决 23｜追加决定的五项未决**（原 OPEN-28～32）
+  - 问题：材料质量七条决定的登记、影响面、成本、翻转条件，
+    以及答复 59～64 还没进需求索引。
+  - 谁定：主会话在 build-plan 落写集时一并定。
+  - 不定的后果：改进没有影响面与翻转条件，没法判断何时该回退。
+
+校验器用，人可跳过：本节 23 条，逐条有 owner 与后果；编号对照见附录 A 表 A5。
+
+## 哪些原来没定的已经定了？
+
+八条原来挂着的事已经有答复，编号保留，理由是查历史时还要找得到。
+它们不再算未决，但也不是「已验收」——验收在 build-code。
+每条只写结论、决定与答复，不重复未决节的内容。
+
+- **已定 1｜入口路线**（原 OPEN-01）：用户正式选继续复杂路线，不 shrink-scope。
+  答复 38、39；见「级别与路线」。
+- **已定 2｜C05 交付与合并**（原 OPEN-02）：已交付并合并
+  （`1c0948c3`/`c53c8ecd`，交付指针 058）；取用方式见决定 4。
+- **已定 3｜审计时机与终末复核方式**（原 OPEN-03 的时机部分）：
+  冻结前正式审计、终末只复核四项；答复 43、46，决定 34。
+  接线细节仍未决 13。
+- **已定 4｜九维来源**（原 OPEN-06）：八维做骨架、九维作第 5 维子检查、
+  取值复用四项口径；答复 20，决定 12、13。
+- **已定 5｜小毛病确认**（原 OPEN-09）：用户不要确认，改按规则自动判定；
+  答复 31、32，决定 30。S5 冲突仍未决 15。
+- **已定 6｜修复归属**（原 OPEN-12 的归属部分）：C05 样本合并后由 C07 全改；
+  答复 44，决定 6。C06 业务仍未决 22。
+- **已定 7｜对象路径**（原 OPEN-21 的两条腿部分）：受控页加 C05 样本；
+  答复 35，决定 5。复制留痕仍未决 21。
+- **已定 8｜开局调研决策**（原 OPEN-22）：用户答「够了，按现有调研定大纲」；
+  答复 42，见工作包⑨。
+
+校验器用，人可跳过：本节 8 条，均已对应答复与决定；编号对照见附录 A 表 A5。
+
+## 要改哪些文件？
+
+一共 22 处要动，另有一组明确不动的边界。
+下表只给方向与状态，精确写集、行与符号由 build-plan 写出。
+「方向已确认」不等于「已经改完」；标「待收敛」的路径不算已定。
 
 | 文件 | 改什么 | 工作包 | 决定 | 状态 |
 | --- | --- | --- | --- | --- |
-| `skills/plan-design-review/SKILL.md` | **在 C05 现版（63 行八维 :24-53）上扩页面模式，禁重写八维** | ⑧ | D-004 | 方向已确认；写入前读现版 |
-| `skills/frontend-testing/SKILL.md` | 增加页面审计的适用性、结果四态、报告口径指针 | ③⑦ | D-001/D-007 | 落点待收敛（与 plan-design-review 分工） |
-| `skills/frontend-testing/references/page-audit.md`（新，名待定） | 判据与反例唯一正文：八维骨架＋九维子检查与映射表＋属性口径＋第 3 维运行性能子组＋业务任务脚本节＋三条负例 | ③⑤ | D-001/D-011/D-012/D-013/D-014/D-015/D-016/D-017/D-018/D-019 | 方向已确认；逐条映射与样例待 build-plan |
-| `skills/frontend-testing/scripts/check-page-audit.mjs`（新，名待定，薄） | 只校验形状：四态枚举、必填、证据 ref、未测理由；拒绝总分与 unknown 聚合 | ② | D-001/D-007 | 待收敛 |
-| `skills/review/SKILL.md` | 审查必读镜头：材料含审计摘要时的消费规则与边界 | ⑦ | D-003/D-010 | 待收敛（是否改镜头，OPEN-03） |
-| `workflows/build-code/SKILL.md` | 触发段（可见面强制）、冻结前正式审计与终末复核段、方法段引用审计包与复验 | ⑦ | D-002/D-005 | 方向已确认；行与措辞待 build-plan |
-| `workflows/make-decision/SKILL.md` | 开局四级选择、开局调研决策、大纲确认、方向审查时点、逐模块台账、细节审查前检查、grill/GLOSSARY、运行清单 | ⑨ | D-038/D-039 | 方向已确认；实现待 build-code |
-| `workflows/make-decision/steps.json` | 步骤与可核运行清单（不新增 stage/gate） | ⑨ | D-038 | 方向已确认；实现待 build-code |
-| `skills/decision-log/templates/decision-log-template.md` | 模块台账/五段表/即时落盘/调研决策的模板要求 | ⑨ | D-038/D-039 | 方向已确认；实现待 build-code |
-| `docs/standard-workflow.md`（必要时） | 一句话说明修复范围与不新增 gate | ⑨ | D-038 | 待 build-plan 判断是否必要 |
-| `skills/isolated-browser-qa/SKILL.md` | 保守简化：ego 主流程 + agent-browser 回退附录，保留 QA 合同 | ④ | D-027/D-028/D-030 | 方向已确认；删改待 build-plan |
-| `skills/isolated-browser-qa/scripts/browser-qa-session.mjs` | 裁 runNativeQa/身份复查顺序；修 `:525-534` 身份 bug | ④ | D-029/D-030 | 方向已确认；真实 `--run` 复验待做 |
-| `skills/isolated-browser-qa/scripts/browser-qa-tickets.mjs` | 仅保导出与可选票据，不整删（`session.mjs:9` 依赖） | ④ | D-030 | 方向已确认 |
-| `skills/isolated-browser-qa/scripts/browser-qa-cleanup.sh` | 裁 browser-use 分支 | ④ | D-030 | 方向已确认 |
-| `tests/contract/browser-engine-selection.test.mjs` | 同步 ego 优先/回退与 reference 断言 | ④ | D-027/D-030 | 待 build-plan 与测试同步（OPEN-19） |
-| C05 `tests/e2e/prototype-design-journey.sh`（C05 owner 迁移，C07 不改） | agent-browser 专用场景迁移为 ego 脚本 | ④ | D-030 | 迁移归 C05 owner（OPEN-18） |
-| `workflows/build-code/skill-deps.yaml` | trigger 是否增加 page audit | ⑦ | D-005 | 未确认（OPEN-03） |
-| `tests/contract/`（新增文件，名待定） | 接线契约：脚本拒 unknown 聚合/缺证据；方法正文含指针；审查镜头含消费规则 | ⑧ | D-001 | 待收敛 |
-| C07 受控测试页/校准负例资产（目录与文件名待 build-plan 定） | 预置已知视觉/可访问性/性能/交互缺陷，供校准与发现→修复→复验闭环 | ③⑤ | D-031/D-033 | 方向已确认；路径待 build-plan |
-| `GLOSSARY.md`（worktree 根） | 新增「设计审计与页面验收」10 词与「决策流程与台账」7 词（含限定 pass、对象版本三件套），并把「流程修复」同步为 11 条 | ⑨③⑩ | D-038/D-040/D-041/D-042 | **本阶段已写入；后续 merge 落地** |
-| C07 材料与 `GLOSSARY.md`（工作树未跟踪/未提交部分） | 提交到 C07 分支（不 push）；提交前不写"已提交" | ⑨ | D-038 | 用户授权；主会话稍后执行 |
-| M10 薄脚本/测试/报告契约（路径待 build-plan） | 判据三态、版本三件套、越界检测、gate 谓词、自哈希 | ⑩ | D-041/D-042 | 方向已确认；路径待 build-plan（OPEN-26） |
-| **不改**：`runtime/**`、`tools/cli` 公共命令、`runtime/review/stage-materials.json`、facts/review schema、C05 材料 | 边界 | — | — | 已确认边界 |
+| `skills/plan-design-review/SKILL.md` | 在 C05 现版（63 行八维，`:24-53`）上扩页面模式，禁重写八维 | ⑧ | 决定 38 | 方向已确认；写入前读现版 |
+| `skills/frontend-testing/SKILL.md` | 增加适用性、结果四态、报告口径的指针 | ③⑦ | 决定 1、8 | 待收敛（与 plan-design-review 的分工） |
+| `skills/frontend-testing/references/page-audit.md`（新，名待定） | 判据与反例的唯一正文：八维骨架＋九维子检查与映射表＋属性口径＋运行性能子组＋业务任务脚本＋三条负例 | ③⑤ | 决定 1、12～18、29 | 方向已确认；逐条映射与样例待 build-plan |
+| `skills/frontend-testing/scripts/check-page-audit.mjs`（新，薄） | 只校验形状：四态枚举、必填、证据引用、未测理由；拒绝总分与未知值聚合 | ② | 决定 1、8 | 待收敛 |
+| `skills/review/SKILL.md` | 审查必读镜头：材料含审计摘要时的消费规则与边界 | ⑦ | 决定 11、37 | 待收敛（未决 13） |
+| `workflows/build-code/SKILL.md` | 触发段、冻结前正式审计段、终末复核段、方法段的审计包引用 | ⑦ | 决定 34、35 | 方向已确认；行与措辞待 build-plan |
+| `workflows/make-decision/SKILL.md` | 开局分级、开局调研决策、大纲确认、方向审查时点、逐模块台账、审查前检查、对抗追问与术语表、运行清单 | ⑨ | 决定 39、40 | 方向已确认；实现待 build-code |
+| `workflows/make-decision/steps.json` | 步骤与可核运行清单（不新增阶段或 gate） | ⑨ | 决定 39 | 方向已确认；实现待 build-code |
+| `skills/decision-log/templates/decision-log-template.md` | 模块台账、五段表、即时落盘、调研决策的模板要求 | ⑨ | 决定 39、40 | 方向已确认；实现待 build-code |
+| `docs/standard-workflow.md`（必要时） | 一句话说明修复范围与不新增 gate | ⑨ | 决定 39 | 待 build-plan 判断是否必要 |
+| `skills/isolated-browser-qa/SKILL.md` | 保守简化：ego 主流程加回退附录，保留质量合同 | ④ | 决定 24、25、27 | 方向已确认；删改待 build-plan |
+| `skills/isolated-browser-qa/scripts/browser-qa-session.mjs` | 裁原生 QA 与身份复查顺序；修 `:525-534` 身份 bug | ④ | 决定 26、27 | 方向已确认；真实 `--run` 复验待做 |
+| `skills/isolated-browser-qa/scripts/browser-qa-tickets.mjs` | 只保导出与可选票据，不整删（`session.mjs:9` 依赖） | ④ | 决定 27 | 方向已确认 |
+| `skills/isolated-browser-qa/scripts/browser-qa-cleanup.sh` | 裁掉 browser-use 分支 | ④ | 决定 27 | 方向已确认 |
+| `tests/contract/browser-engine-selection.test.mjs` | 同步 ego 优先与回退、引用断言 | ④ | 决定 24、27 | 待 build-plan 与测试同步（未决 3） |
+| C05 `tests/e2e/prototype-design-journey.sh`（C05 owner 迁移，C07 不改） | agent-browser 专用场景迁成 ego 脚本 | ④ | 决定 27 | 迁移归工具 owner 或 C08（未决 5） |
+| `workflows/build-code/skill-deps.yaml` | trigger 是否增加页面审计 | ⑦ | 决定 35 | 未确认（未决 13） |
+| `tests/contract/`（新增，名待定） | 接线契约：脚本拒未知值聚合与缺证据、正文含指针、审查镜头含消费规则 | ⑧ | 决定 1 | 待收敛 |
+| C07 受控测试页与校准负例资产（目录与文件名待定） | 预置已知视觉、可访问性、性能、交互缺陷，供校准与闭环 | ③⑤ | 决定 5、32 | 方向已确认；路径待 build-plan |
+| `GLOSSARY.md`（worktree 根） | 新增「设计审计与页面验收」10 词与「决策流程与台账」7 词（含限定通过、对象版本三件套），并把「流程修复」同步为 11 条 | ⑨③⑩ | 决定 39、7、41、42 | 本阶段已写入；后续 merge 落地 |
+| C07 材料与 `GLOSSARY.md` 的未跟踪、未提交部分 | 提交到 C07 分支（不 push）；提交前不写「已提交」 | ⑨ | 决定 39 | 用户授权；主会话稍后执行 |
+| M10 薄脚本、测试与报告契约（路径待定） | 判据三态、版本三件套、越界检测、gate 谓词、自哈希 | ⑩ | 决定 41、42 | 方向已确认；路径待 build-plan（未决 19） |
 
-## 范围与非目标
+**不动的边界**：`runtime/**`、`tools/cli` 的公共命令、
+`runtime/review/stage-materials.json`、事实与审查的 schema、C05 既有材料。
+这几处一动就是新控制面或新进度权威，不属于本任务。
 
-- **目标**：让 workflowhub 具备一套可复用、可执行、被真实消费的真实页面验证/设计审计能力，能在真实浏览器与页面里查出视觉、交互、a11y、性能、组件、布局与业务操作问题，并把问题送回原 owner 修复后独立复验。
-- **范围**：判据与契约、采集接线、分级与报告表达、回修闭环、接入 build-code 与审查、规范复用；本阶段只做方向与材料，实施在后续阶段。
-- **非目标**（逐条理由与去向）：
-  - 不新建评测/报告平台、第二证据库或新 stage：PRD:327/338 与 AGENTS 永久边界；去向=复用现有证据 writer 与 final-report。
-  - 现在不修 C05 页面：用户明确"具体验证在 C07 的 build-code 阶段，C05 开发完成合并进来再验"（Talk:B1）；对象选择（Talk:H1）不等于同意修改 C05（D-021），C07 不改 C05 worktree；去向=按该时机在后续阶段验，C05 材料只读。
-  - 不在 C05 的 mock 上冒充真实后端业务：C05 原型自标 MOCK、不连交易平台（002:126）；去向=业务成功真值等真实对象，OPEN-11。
-  - 不整包采用 UES/Playbook/外部平台：未声明许可、评分未校准（003:75）；去向=只借方法，采用范围 OPEN-10。
-  - Storybook/Figma 无资产处只能写"不适用+依据"：001:188、002:30；去向=OPEN-15，不用截图冒资产事实。
-  - C05 与 C07 可能改同一技能文件时串行写：PRD:184；去向=OPEN-04，写入前读当前版本。
-  - 本阶段不跑浏览器/测试、不装包、不改 C05、不做 Git 写：本任务边界。
-  - 九维不另立体系：页面检查只有一套标准，九维作 C05 第 5 维子检查（D-011）；去向=判据矩阵，不新增第二套维度。
-  - 不退役 isolated-browser-qa、不把网关简化当已完成：保留网关（D-022），简化只是方向、删改清单与 ego-browser 用法待诊断（D-024/OPEN-05）；去向=诊断后由工具 owner 定。
-  - 不改 C05 原工作区与只读归档：实现修复只在 C07 合并后的自有副本改（D-032）；不在 C05 mock 上做真实业务写；C05 交付不出时页面层记 unavailable/incomplete（D-031）。
-  - 不静默改发布计划 S5：用户的「不要确认」（D-025）与 S5「MINOR 批量真实确认」冲突，本任务按用户决定执行并登记 OPEN-16；不改 PRD，不声称发布级批准。
-- **Supersedes**：无；本任务未替代任何此前决定。入口评估的 `shrink-scope` 路线未被采用，但也不是被"替代"的决定——它尚未展示给用户（OPEN-01）。
+校验器用，人可跳过：本节 22 处改动加 1 组不动边界；写集由 build-plan 落 spec 与 Phase。
 
-## 验收面
+## 不做什么？
 
-本表是 make-decision 到 build-plan 的交接索引：完整判据的唯一权威在 spec 的 `## Appendix A`，两处 AC 编号同号。本阶段**不写通过**；下表是草案映射，"细节待模块收敛"。
+不做四类东西：新平台、新阶段、替 C05 补历史、冒充真实业务。
+每条都写了理由与去向，不是为了显得克制，而是这些地方一破就是新控制面。
 
-| AC 编号 | 可观察用例 | 成功条件 | 失败条件 | 证据 | 承接负责人 | 对应 UC |
-| --- | --- | --- | --- | --- | --- | --- |
-| AC-C07-1 | 对真实页面逐维取证并给未覆盖说明 | 以 C05 八维为骨架、九维按映射表归入主/副维度（D-011/D-018），逐项有判据、原始结果与未覆盖说明；第 3 维按行为/状态与运行性能两组（D-015）；不能用截图/首屏/总分/story 替全部；无源时还原度写“不适用+理由”（D-014） | 任一维无结果、以聚合分或组件 story 代替、未覆盖未说明 | unavailable：本阶段未执行；后续由采集与审计包原件承接 | build-plan 判据同号；build-code 执行与独立审查 | UC-C07-1 |
-| AC-C07-2 | 错环境/未启动/未跑视觉时的报告 | 报具体不一致或 unavailable；未跑视觉落"未测"；旧截图/空输出不能通过 | 错环境被报通过、空输出当 pass、未跑视觉记通过 | unavailable：未执行；采集 readiness 与回执待产 | build-plan；build-code | UC-C07-2 |
-| AC-C07-3 | 压力与交互反例的真实检测与修复 | 适用反例（哈希浮窗/长文本/窄容器/缩放/遮挡/hover 桥/键盘焦点/减少动效/错误权限重复操作）有检测与修复证据；states 归第 3 维主判、第 5/7 维只补证据（D-018）；不适用有依据 | 机械造状态、只造不修、合法例无依据 | unavailable：未执行；反例集与修复记录待产 | build-plan；build-code；原 owner 修复 | UC-C07-3 |
-| AC-C07-4 | 同一 diff 两次定级与负例校准 | 同标尺同 diff 两次同级；至少有明显字体/间距/颜色偏差三条负例且仍按重要/MODERATE（D-013）；MINOR 由规则判定并写明规则、不要求用户签认（D-025）；模型分歧保留复核 | 两次不同级、无负例即当门槛、分歧被平均成通过 | unavailable：未执行；三条负例样例与刻度待产（OPEN-07） | build-plan；判据 owner | UC-C07-4 |
-| AC-C07-5 | 模糊反馈→定位→修复→独立复验 | 定位到页面/元素/状态与 owner；业务步骤按页面任务脚本+可观察终态判定（D-017）；修复后原问题与相关回归由同一独立角色复验；终末只复核四项（D-002/S1），不重跑全量；轮次/停滞可解释 | 反复猜修、自签复验、无新增通过仍继续、原型问题不回设计 owner、C05 mock 业务冒真实后端 | unavailable：未执行；闭环记录待产 | build-code 三角色；主会话 | UC-C07-5 |
-| AC-C07-6 | 含 unknown/非法值/失联采集的输入 | 不聚合为高分/通过；四态保留；所选链的失败传播经验证；C05 交不出时页面层记未测/不可用（D-040），不用受控页冒真实页面 | 聚合吞 unknown、空值当 0、失联采集出正常报告 | unavailable：未执行；薄脚本与审计包待产 | build-plan；build-code | UC-C07-6 |
-| AC-C07-7 | 资产层与页面层分别可追溯 | Figma 资产（或"不适用+依据"）、代码组件 API/状态/焦点、页面布局与真实操作分别可追溯；第 8 维页面模式只核对象与代码/版本对应（D-019）；Storybook 未覆盖不被吞 | 用 story 冒页面、region 关闭/context 未就绪被当通过、无资产不写依据或无源却声称视觉还原已验（D-014） | unavailable：未执行；无 Figma/Storybook 资产（OPEN-15） | build-plan；C05/设计资产 owner | UC-C07-7 |
+- **目标**：让 workflowhub 有一套可复用、可执行、被真实消费的真实页面验证能力；
+  能在真实浏览器与页面里查出视觉、交互、可访问性、性能、组件、布局与业务问题，
+  并把问题送回原 owner 修复后独立复验。
+- **范围**：判据与契约、采集接线、分级与报告表达、回修闭环、接入 build-code
+  与审查、规范复用。本阶段只做方向与材料，实施在后续阶段。
+- **非目标 1｜不新建评测平台、报告平台、第二证据库或新阶段**：
+  发布计划与本仓永久边界都禁止；去向是复用现有证据写入方与最终报告。
+- **非目标 2｜现在不修 C05 页面**：用户明确「具体验证在 C07 的 build-code 阶段，
+  C05 开发完成合并进来再验」（Talk:B1）；选了对象不等于同意改 C05（决定 4），
+  C07 不改 C05 工作区；去向是按该时机在后续阶段验，C05 材料只读。
+- **非目标 3｜不在 C05 的 mock 上冒充真实后端业务**：C05 原型自标 mock、
+  不连交易平台；去向是业务真值等真实对象（未决 9）。
+- **非目标 4｜不整包采用外部工具集**：许可未声明、评分未校准；
+  去向是只借方法，采用范围见未决 10。
+- **非目标 5｜无资产处只写「不适用＋依据」**：Figma 与 Storybook 当前都没有资产；
+  去向见未决 11，不用截图冒资产事实。
+- **非目标 6｜同文件串行写**：C05 与 C07 可能改同一技能文件（PRD:184）；
+  去向是写入前读当前版本，见未决 14。
+- **非目标 7｜本阶段不跑浏览器、不跑测试、不装包、不改 C05、不做 Git 写**：
+  这是本任务的边界，不是能力边界。
+- **非目标 8｜九维不另立体系**：页面检查只有一套标准（决定 12）；
+  去向是判据矩阵，不新增第二套维度。
+- **非目标 9｜不退役网关、不把简化当已完成**：网关保留（决定 21），
+  简化只是方向，删改清单与 ego-browser 用法待诊断（决定 23、未决 2）。
+- **非目标 10｜不改 C05 原工作区与只读归档**：实现修复只在 C07 合并后的
+  自有副本改（决定 6）；不在 mock 上做真实业务写；交不出时页面层记未测。
+- **非目标 11｜不静默改发布计划 S5**：用户的「不要确认」（决定 30）与 S5 的
+  「小毛病批量真实确认」冲突，本任务按用户决定执行并登记（未决 15）；
+  不改 PRD，也不声称拿到发布级批准。
+- **替代关系**：本任务没有替代任何此前的决定；入口评估给的 shrink-scope
+  路线没被采用，但它不是被「替代」的决定，只是没被选。
 
-- **UC 说明**：本任务不另建用例账本，UC 与 AC 同号同源（UC-C07-1～7 即上表七条可观察场景）。
-- **覆盖结论（草案）**：43 条 R 与 56 条 U 逐项有落点或有缺口+owner，明细见 `quality/evidence/decision-log-refs/coverage-matrix-5d.md`（99 行，7 行带缺口）。本阶段：无执行事实、无通过结论；模块一（共用契约）、判据矩阵（视觉、交互/性能/业务）、验证对象与对象路径（两条腿）、浏览器架构与回退口径、简化力度、MINOR 自动判定已由用户选定（D-007～D-037）；C05 交付合同（OPEN-02）与网关清单/迁移待核实。不得据此表声称覆盖完成或 AC 通过。
+校验器用，人可跳过：本节 1 条目标、1 条范围、11 条非目标、1 条替代关系。
 
-**S5 停止与低保真条件（F11 落实，对应 AC-C07-5/AC-C07-6）**：
-- LOW_FIDELITY 或真实可执行提取质量分低于 0.8 时，必须取得设计 owner 的实际裁决；评分模型不可用不假给分。
-- 一份判据/一次对照只能一处分级来源，不造分、不补分。
-- 修复局部最多三轮；一轮无新增通过项即停并说明原因、缺口与下一条路径。
-- 工具失败、产品缺陷、资料不足、权限不足、预算停止分开记录，不互相代替；未执行项保持未测，不计通过。
+## 怎么算通过？（验收面 7 条）
 
-## 未决项
+七条验收都还没有执行，本阶段一条都不写通过。
+这张表是交给 build-plan 的索引：判据的完整正文在 spec 的 `## Appendix A`，两处同号。
+「证据」列现在写的都是「未取得」或「待产」，因为这一阶段没有跑过任何检查。
 
-| OI 编号 | 问题与来源 | 状态与处置 | 解决者与下一步 |
+| 验收 | 可观察用例 | 成功条件 | 失败条件 | 证据 | 负责人 |
+| --- | --- | --- | --- | --- | --- |
+| 验收 1 | 对真实页面逐维取证并给未覆盖说明 | 八维做骨架、九维按映射归主副维（决定 12、17），逐项有判据、原始结果与未覆盖；第 3 维分行为与状态、运行性能两组（决定 15）；不能用截图、首屏、总分或组件 story 替全部；无源时还原度写「不适用＋理由」（决定 14） | 任一维无结果、以聚合分或组件 story 代替、未覆盖没说明 | 未取得：本阶段没执行；后续由采集与审计包原件承接 | build-plan 判据同号；build-code 执行与独立审查 |
+| 验收 2 | 错环境、未启动、没跑视觉时的报告 | 报具体不一致或不可用；没跑视觉落未测；旧截图与空输出不能通过 | 错环境被报通过、空输出当通过、没跑视觉记通过 | 未取得：没执行；采集就绪与回执待产 | build-plan；build-code |
+| 验收 3 | 压力与交互反例的真实检测与修复 | 适用反例（哈希浮窗、长文本、窄容器、缩放、遮挡、悬停桥、键盘焦点、减少动效、错误权限重复操作）有检测与修复证据；状态归第 3 维主判、第 5 与第 7 维只补证据（决定 17）；不适用有依据；200% 缩放与键盘焦点必测（答复 53） | 机械造状态、只造不修、合法例无依据 | 未取得：没执行；反例集与修复记录待产 | build-plan；build-code；原 owner 修复 |
+| 验收 4 | 同一差异两次定级与负例校准 | 同标尺同差异两次同级；至少三条负例（字体、间距、颜色偏差）仍按重要级（决定 28）；小毛病按规则判定并写明规则、不要求用户签认（决定 30）；模型分歧保留复核 | 两次不同级、没负例就设门槛、分歧被平均成通过 | 未取得：没执行；三条负例样例与刻度待产（未决 7） | build-plan；判据 owner |
+| 验收 5 | 模糊反馈→定位→修复→独立复验 | 定位到页面、元素、状态与 owner；业务步骤按页面任务脚本加可观察终态判定（决定 29）；修复后原问题与相关回归由同一独立角色复验；终末只复核四项、不重跑全量（决定 34、答复 46）；轮次与停滞可解释 | 反复猜修、自签复验、无新增通过仍继续、原型问题不回设计 owner、mock 上的业务冒真实后端 | 未取得：没执行；闭环记录待产 | build-code 三角色；主会话 |
+| 验收 6 | 含未知值、非法值、失联采集的输入 | 不聚合为高分或通过；四态保留；所选链的失败传播经验证；C05 交不出时页面层记未测或不可用，不用受控页冒真实页面 | 聚合吞掉未知值、空值当 0、失联采集出正常报告 | 未取得：没执行；薄脚本与审计包待产 | build-plan；build-code |
+| 验收 7 | 资产层与页面层分别可追溯 | Figma 资产（或「不适用＋依据」）、代码组件的接口与状态与焦点、页面布局与真实操作分别可追溯；第 8 维页面模式只核对象与代码版本对应（决定 18）；Storybook 未覆盖不被吞 | 用 story 冒页面、区域关闭或上下文未就绪被当通过、没资产不写依据、无源却声称视觉还原已验 | 未取得：没执行；没有 Figma 与 Storybook 资产（未决 11） | build-plan；设计资产 owner |
+
+- **用例说明**：本任务不另建用例账本，用例与验收同号同源
+  （用例 1～7 就是上表七条可观察场景）。
+- **覆盖结论（草案）**：43 条需求全部有落点或有缺口与 owner；答复 1～58 在
+  `refs/coverage-matrix-5d.md` 里逐项有落点（99 行，其中 7 行带缺口）；
+  答复 59～64 还没进索引与矩阵（未决 23）。
+  本阶段没有执行事实，也没有通过结论；不得据此表声称覆盖完成或验收通过。
+
+**发布计划 S5 的停止与低保真条件（对应验收 5、6）**：
+- 低保真，或真实可执行提取的质量分低于 0.8 时，必须取得设计 owner 的实际裁决；
+  评分模型不可用时不假给分。
+- 一份判据或一次对照只能有一处分级来源，不造分、不补分。
+- 修复局部最多三轮；一轮没有新增通过项就停，并说明原因、缺口与下一条路。
+- 工具失败、产品缺陷、资料不足、权限不足、预算停止分开记录，不互相代替；
+  没执行的项保持未测，不计通过。
+
+校验器用，人可跳过：本节 7 条验收、1 条用例说明、1 条覆盖结论、4 条停止条件；
+与 spec 附录 A 同号。
+
+## 哪里会出错？（风险与延期交接）
+
+23 处风险，多数是「拿没测当通过」和「两处口径不一致」。
+每条写触发与后果、处理阶段与 owner、来源；风险不是门，它是交接清单。
+
+| 风险 | 触发与后果 | 处理阶段与 owner | 来源 |
 | --- | --- | --- | --- |
-| OPEN-01 | 入口评估返回 paused，`shrink-scope`／`create-ordinary-five-stage-task` 两条拆分路线（`quality/evidence/entry-evaluation/2026-10-28-001-entry-evaluation.json`） | **confirmed**：用户已正式选择「继续复杂路线」（Talk:N2），不 shrink-scope、不改普通五阶段；原 paused 事实与选项保留为历史 | 用户已定；build-plan 按复杂路线继续 |
-| OPEN-02 | C05 样本交付与合并（R-C07-06/R-35） | **confirmed**：C05 已交付并合并（`1c0948c3`/`c53c8ecd`；交付指针 058/`9efb7e57`）；后续取用=复制到 C07 自有位置并提交（D-021） | 主会话在 C07 收口前复制/固定并记 commit+sha |
-| OPEN-03 | 方法在 build-code 的接线位置：审查材料键与技能触发是否改 | **confirmed**：正式审计在代码冻结前、最后开发阶段收口；**终末复核方式已定**（只复核四项、不重跑全量，Talk:S1/D-002）；剩余接线细节归 build-plan | build-plan 落写集；不再问时机与复核方式 |
-| OPEN-04 | C05 同文件写冲突（PRD:184、004:116） | **写入顺序部分关闭**：C05 已改完 `plan-design-review`（63 行八维 :24-53），C07 在现版上扩页面模式（D-004）；剩两模式第 3 维名称差异的写法 | build-plan 在现版上扩，写入前读现版 |
-| OPEN-05 | agent-browser 身份错误（`RECEIVER_IDENTITY_CHANGED`）的验证收尾 | open；根因已定位（007 §2）、修法已定（D-029，`ownedReceiver` 移到 `get cdp-url` 之后重解析）；剩余=同一探针复跑＋一次真实 `--run` | build-code 复验；工具 owner 配合 |
-| OPEN-06 | 九维来源与是否复用 C05 设计判断（Talk:E1、004:116） | **confirmed**：用户已答复（Talk:F1/F2/F5）——八维为骨架、九维作第 5 维子检查、取值复用 C04 口径；决定见 D-011/D-012。本条不再开放，保留编号与理由 | 用户已定；build-plan 落判据正文 |
-| OPEN-07 | 视觉偏差定级的具体刻度与容差：定级方式与负例要义已确认（D-009/D-013：至少三条、同标尺重复同级），具体样例与取值未产 | open；样例进判据包、取值归 spec | 判据 owner 在 build-plan 备样例；spec 落取值 |
-| OPEN-08 | 性能采集方法与原始值/unknown 表达：位置与分组已由 D-015 定（第 3 维运行性能、首屏+交互耗时），采集方法、样本数与"只报原始值+unknown"是否足够未定（004:104 建议允许） | open；方法须可复现 | 判据 owner 在 build-plan 写方法；spec 落判定口径 |
-| OPEN-09 | MINOR 批量确认的时点、范围与确认人（PRD:128） | **confirmed（用户已决定）**：用户明确不要确认（Talk:J1/J2），MINOR 改由规则自动判定（D-025），不再逐项或批量确认；保留编号与理由 | 用户已定；build-plan 落规则清单 |
-| OPEN-16 | 与发布计划 S5「MINOR 不算绿，逐项容忍清单一批展示并取得涵盖各项的真实确认」（PRD:128）的冲突：本任务按用户决定改为自动规则判定（D-025/D-026） | open；当前按用户决定执行，但不写成本能力已获发布级批准，也不静默改 PRD | 发布计划 owner（用户）决定：统一修改 S5 口径，或把本能力登记为例外；主会话在下一次发布计划更新时提出 |
-| OPEN-17 | ego 许可/分发未登记（007 报告 §4） | open；用户已确认 ego 是本机授权工具（Talk:N1），但**不等于项目许可登记**，许可未登记风险保留 | 用户与 catalog/发布 owner 决定是否登记 |
-| OPEN-18 | C05 的 agent-browser 专用 QA 场景脚本切 ego 后会断，需迁移（007 报告 §E） | open；C05 owner 已关闭，迁移归工具 owner/C08；C07 不改 C05 工作区 | 工具 owner 或 C08 承接迁移；迁移前保持只读 |
-| OPEN-19 | `tests/contract/browser-engine-selection.test.mjs` 与 `references/agent-browser.md` 等需随引擎/简化同步改 | open；删分支或改断言前先改测试，避免假绿 | 工具 owner 在 build-plan 写同步清单 |
-| OPEN-20 | 五类薄采集脚本（console/network/overflow/perf/a11y）的具体路径、登记与 consumer 待 build-plan | open；D-030 只定"由 C07 建、不另起栈" | build-plan 定路径与登记；不新增公共命令 |
-| OPEN-22 | 开局调研决策的补问答复（分级后、大纲前该步未按序执行） | **confirmed**：用户答复「够了，按现有调研定大纲」（Talk:Q1）；不再追加调研，缺口留在 OPEN/风险 | 用户已答；build-plan 按此定大纲 |
-| OPEN-23 | M9 流程修正在 C07 实施属 PRD:338「跨任务规范改 C08」的例外，需登记 | open；D-038/D-039 保留；owner=当前主会话 | 主会话在发布计划/规范 owner 处登记例外；build-code 实施 |
-| OPEN-26 | M10 的薄脚本/测试/报告契约路径与写集待 build-plan | open；D-041 只定 P0/P1/P2 | build-plan 落写集 |
-| OPEN-27 | 批准绑定版本与变更登记的实现方式（台账/字段）待 build-plan | open；D-042 只定规则 | build-plan 落写集 |
-| OPEN-25 | make-decision 收口动作清单（保存确认、GLOSSARY 读回、handoff 生成与绝对路径交付）待 build-plan 落写集 | open；U-48/D-038 已定原则；本阶段未执行 confirm/收口 | build-plan 落写集；收口在用户确认后执行 |
-| OPEN-24 | C07 修复的交付与交接：C07 分支提交、问题清单交**用户/设计 owner**（C05 owner 已关闭）+归档、独立复验细节 | open；D-032/D-040 已定原则；样本已交付（1c0948c3/c53c8ecd） | build-plan 落写集；交付后执行交接与复验 |
-| OPEN-21 | C05 收口后页面是否存在/可运行/可长期取用；C05→C07 的交付合同（用户疑问）；**复制留痕待做**（复制后 sha256 校验） | **confirmed（用户已决定）**：取「两条腿」——受控测试页先建能力，C05 收口前交付可写可核版本样本并合并到 C07 自有副本（D-031）；旧 D-020/D-021 保留并修正取用假设。仍待 C05 owner 实际执行交付 | 用户已定；C05 owner 执行交付，C07 在收口前合并/固定 |
-| OPEN-10 | UES/外部内容采用范围：整包/窄工具/仅研究，是否接受先修缺陷与许可不明（003:75） | open；默认只借方法 | 用户决定；主会话给代价对比 |
-| OPEN-11 | 业务操作 oracle：形态已由 D-017 定（页面任务脚本+可观察终态），仍缺具名对象、真实后端与逐页脚本化终态（001:111、002:68） | open；C05 mock 的真实后端业务写"未覆盖" | 主会话与用户定对象；build-code 按对象写脚本 |
-| OPEN-12 | C06 未立项：真实后端业务仍后置（001:263） | **confirmed（修复归属部分）**：C05 合并样本的实现修复由 C07 全改（Talk:R2/D-032，对 PRD:130 的例外）；C06 的真实业务仍后置 | 用户已定；C06 业务真值另见 OPEN-11 |
-| OPEN-13 | 采集失败语义细节：未启动/失联/工具异常/身份不符各报什么、如何保留已观察；**默认/回退的判定点与失败边界待定**（何时算"本机没有 ego"、回退后失败怎么记） | open；先定语义与判定点再写视觉判据 | 判据 owner 在 build-plan 定；采集包承接；诊断报告补回退边界 |
-| OPEN-14 | 规范货架与"被真实消费"的证明：怎样算规范在用而不只是存在 | open；D-001 只定形态 | 主会话与规范 owner 在 build-plan 定证明方式 |
-| OPEN-15 | Figma/Storybook 无资产的 N/A 依据写法（001:188、002:30） | open；D-007 给了"不适用须有据"的形式 | 设计资产 owner 与 C05 确认；spec 落写法 |
-
-## 风险与延期交接
-
-| 内容 | 触发与后果 | 处理阶段与 owner | 来源 |
-| --- | --- | --- | --- |
-| C05 依赖（已解除） | C05 已交付/合并（1c0948c3/c53c8ecd）；历史 fallback 保留，不再阻塞 | 按 D-020/D-021 复制并提交；版本三件套绑定 | OPEN-02 confirmed |
-| 浏览器链不可用/回退边界不清 | agent-browser 身份错误未解，或"本机没有 ego"的判定点不清，导致采集在任何引擎上都不可复现 | 诊断报告定根因与回退边界；C07 先定失败语义并保其它面继续 | OPEN-05/13、D-023/D-024、002:14 |
-| 同文件写冲突 | plan-design-review / frontend-testing / review / build-code 任一处被 C05/C06/C08 同时改，产生重复或覆盖 | 按 owner 串行；写入前读当前版本并记录来源 | OPEN-04、PRD:184 |
-| 维度重复计数或错归 | 同一问题在第 5 维与第 3/6/7 维各记一次（含性能塞进第 7 维、业务失败记成视觉），缺陷数虚高或互相顶替 | 按 D-011/D-016/D-018 写死归属与主/副维；finding 去重按根因 | D-011/D-016/D-018 |
-| 强制范围成本 | 所有可见面任务都多一次采集+脚本+复验，任务时长上升；可能被调用方规避 | 审计包一次一页复用、冒烟从简；由 D-005 触发口径约束 | 风险由 D-005 引入 |
-| 负例不足 | 三条负例要义已定（D-013），但具体样例未产，同级可重复仍无法证明 | build-plan 备样例；不足则该面 incomplete | OPEN-07、003:48 |
-| 规范不用（货架化） | 判据写好后无人引用，下一任务重新造一套，违背用户"不要建了规范一直放着" | 消费方写死三处、AC 行引用审计包、下一任务复用检查 | U-C07-06、005:53 |
-| 受控测试页（第一腿）覆盖有限 | 自建页与真实页面差异大，能力可能只在样例上成立 | 受控页先保证能力可建可验；C05 样本只作可选第二腿（D-031），两腿结果分开记 | 工作包⑤/⑨、D-033 |
-| C05 样本（第二腿）交付不确定 | C05 收口后页面若被清理或不可运行，第二腿不可用，页面层只能记未测 | 交付合同/可消费性待 C05 owner（OPEN-02/21）；不把 C05 写成唯一对象 | OPEN-02/21、D-031 |
-| C05 交付失败 | C05 不能在收口前交付可写、可核版本的样本，页面层验收只能记 unavailable/incomplete，不能伪造 | 按 D-031 记 unavailable/incomplete 并用受控测试页继续能力验证；不开绿灯 | OPEN-02、D-031 |
-| 审计时机早于冻结的边界 | 正式审计放冻结前，若阶段收口仍改动代码，审计结果会过期 | 冻结前审计+终末复核（D-002）；改代码需复跑受影响审计 | D-002、Talk:R1 |
-| 修复/流程两处例外 | C07 全改（PRD:130 例外）与 M9 留 C07（PRD:338 例外）各自偏离发布计划分工，未登记会被后验收判为违规 | 按 Talk:R2/R3 执行并登记 OPEN-23/24；问题清单交原 owner、独立复验 | OPEN-23/24、D-032/D-038 |
-| 方向审查 partial / provider 失败 | 审查 outcome=partial、kimi/coding 两次 PROVIDER_OUTPUT_INVALID、raw_requirement 覆盖 undetermined；若当成通过会掩盖未审部分 | 保留原 ref 与失败；补挑战交细节审查；不换执行者、不写通过 | 2026-10-28-005 方向审查原件；DR-05/DR-10 |
-| 收口被误写成下一阶段入口 | 最终确认被当成进入 build-plan 的许可，导致催下一阶段、跳过 GLOSSARY/handoff 收口 | 确认=阶段收口（保存确认/GLOSSARY/handoff/路径交付）；下一阶段由用户决定；文案不得催 | U-C07-48、D-038/D-039 |
-| 引用 C05 pass 冒自己通过 | 把 C05 17 限定 pass/效果达标当 C07 通过，或据 C05 报告推定自己 AC 过 | 禁止；C07 只按自己 AC；M10 引用越界检测 | U-C07-52、D-041 |
-| 复制字节漂移 | 从归档复制到 C07 可写位置时字节变化，后续证据对不上 | 复制后 sha256 校验并留痕（OPEN-21） | D-021 |
-| 批准版本漂移 | 批准绑 41eae967、交付 9efb7e57；行为变更未登记就重展示/实现 | 登记差异并取得同意（D-042）；两版本分开写 | U-C07-55、D-042 |
-| gate 全树相等死锁 | 全树相等谓词在尾随/rename 场景必失败或无限等 | M10 P0 gate 谓词=材料身份+尾随白名单+rename 等价 | D-041、研究 012 |
-| 终末只复核不重跑 | 终末只核四项，若冻结前审计范围不足或修复漏项，可能放过问题 | 复核四项必须齐（报告/修复/回归/复验）；缺项记未测；审计范围由冻结前那次固定 | D-002、Talk:S1 |
-| 流程顺序偏差 | 方向审查早于最终大纲与模块台账、提前细节审查已启动过；若当成合规结果会掩盖时点错误 | 记顺序偏差与「已停止」，不作结论；正式细节审查待台账齐 | 工作包⑨、方向审查处置节 |
-| S5 与用户决定冲突 | 本能力按「不确认」执行，但发布计划 S5 仍写「MINOR 批量真实确认」，后续验收可能按旧口径判缺确认 | 发布计划 owner（用户）决定统一改 S5 或登记例外；本任务报告只写规则、不写已确认 | OPEN-16、PRD:128 |
-| 真实对象授权缺失 | 没有具名产品与授权，AC-1～7 全链无法开始 | 主会话取授权；未取得前只做方法与契约 | OPEN-02、001:283 |
-| 业务真值缺位 | 业务操作成功只能靠 200/截图，易冒通过 | 等真实对象与 oracle；缺时记 incomplete | OPEN-11、003:80 |
+| C05 依赖（已解除） | C05 已交付并合并（`1c0948c3`/`c53c8ecd`）；历史 fallback 保留，不再阻塞 | 按决定 3、4 复制并提交，绑版本三件套 | 已定 2 |
+| 浏览器链不可用或回退边界不清 | 身份错误没修完，或「本机没有 ego」的判定点不清，采集在任何引擎上都不可复现 | 诊断报告定根因与回退边界；C07 先定失败语义，其余面继续 | 未决 1、2；决定 22、23 |
+| 同文件写冲突 | 技能或方法文件被 C05、C06、C08 同时改，产生重复或覆盖 | 按 owner 串行；写入前读当前版本并记来源 | 未决 14；PRD:184 |
+| 维度重复计数或错归 | 同一问题在第 5 维与第 3、6、7 维各记一次，缺陷数虚高或互相顶替 | 按决定 12、16、17 写死归属与主副维；finding 去重按根因 | 决定 12、16、17 |
+| 强制范围抬高成本 | 所有可见面任务都多一次采集、脚本与复验，任务时长上升，可能被调用方规避 | 审计包一次一页复用、冒烟从简；由决定 35 的触发口径约束 | 决定 35 |
+| 负例不足 | 三条负例只有要义、没有样例，同级可重复仍无法证明 | build-plan 备样例；不足则该面记未测 | 未决 7 |
+| 规范不用（货架化） | 判据写好后没人引用，下一任务重造一套 | 消费方写死三处、验收行引用审计包、下一任务复用检查 | 答复 6 |
+| 受控测试页覆盖有限 | 自建页与真实页面差异大，能力可能只在样例上成立 | 受控页先保证能力可建可验；C05 样本只作第二腿（决定 5），两腿分开记 | 决定 5、32 |
+| C05 样本交付与可运行性 | 收口后页面若被清理或跑不起来，第二腿不可用 | 收口前由主会话核可运行性（未决 21）；不把 C05 写成唯一对象 | 已定 7；决定 5 |
+| C05 交付失败 | 交不出可写可核的版本，页面层验收只能记不可用 | 按决定 5 记不可用，用受控页继续验证能力；不开绿灯 | 决定 5 |
+| 审计早于冻结的边界 | 审计放冻结前，若收口仍改代码，审计结果会过期 | 冻结前审计加终末复核（决定 34）；改代码要复跑受影响面 | 决定 34、答复 43 |
+| 修复与流程两处例外 | C07 全改、流程修复留 C07 各自偏离发布计划分工，未登记会被判违规 | 按答复 44、45 执行并登记（未决 16、17）；清单交原 owner、独立复验 | 决定 6、39 |
+| 方向审查部分完成 | 审查结论是部分完成、一路提供方两次输出无效、原始需求覆盖未判定；当成通过会掩盖未审部分 | 保留原件与失败；补挑战交细节审查；不换执行者、不写通过 | 方向审查原件；DR-05、DR-10 |
+| 收口被误写成下一阶段入口 | 最终确认被当成进入 build-plan 的许可，导致催下一阶段、跳过术语表与 handoff | 确认等于收口（保存确认、读回术语表、生成并读回 handoff、交付路径）；下一阶段由用户决定 | 答复 48；决定 39、40 |
+| 引用 C05 通过结论冒自己通过 | 把 C05 的 17 项限定通过与效果达标当 C07 通过 | 禁止；C07 只按自己验收；M10 做引用越界检测 | 答复 52；决定 41 |
+| 复制字节漂移 | 从归档复制到可写位置时字节变化，后续证据对不上 | 复制后校验 sha256 并留痕（未决 21） | 决定 4 |
+| 批准版本漂移 | 批准绑 `41eae967`、交付是 `9efb7e57`；行为变更没登记就重展示 | 登记差异并取得同意（决定 42）；两版本分开写 | 答复 55；决定 42 |
+| gate 整树相等死锁 | 整树相等的谓词在尾随、改名场景必失败或无限等 | M10 的 P0 把谓词改成材料身份加尾随白名单加改名等价 | 决定 41；根因报告 |
+| 终末只复核不重跑 | 终末只核四项，若冻结前审计范围不足或修复漏项，可能放过问题 | 四项必须齐（报告、修复、回归、复验）；缺项记未测；审计范围由冻结前那次固定 | 决定 34、答复 46 |
+| 流程顺序偏差 | 方向审查早于大纲与模块台账，提前细节审查启动过；当成合规结果会掩盖时点错误 | 记顺序偏差与「已停止」，不作结论；正式细节审查待台账齐 | 工作包⑨、方向审查节 |
+| S5 与用户决定冲突 | 本能力按「不确认」执行，发布计划 S5 仍写批量真实确认，后续验收可能按旧口径判缺确认 | 发布计划 owner（用户）决定统一改 S5 或登记例外；报告只写规则、不写已确认 | 未决 15；PRD:128 |
+| 真实对象授权缺失 | 没有具名产品与授权，七条验收全链无法开始 | 主会话取授权；未取得前只做方法与契约 | 已定 2；调研报告 |
+| 业务真值缺位 | 业务操作成功只能靠 200 与截图判断，容易冒通过 | 等真实对象与判定器（未决 9）；缺时记未测 | 未决 9；外部方法报告 |
 
 ### 质量边界
 
-材料、实施、测试、独立审查与物理交付分别报告；本阶段只有材料，实施/测试/审查均为未执行，保留具体缺口。用户确认只引用 Talk 原件；对话中的转达不等于逐字确认，逐字缺口已标。用户答复的消息 ID 与到达时刻未取得，属材料缺口，不补造。
+材料、实施、测试、独立审查与物理交付分开报告。
+本阶段只有材料：实施、测试、审查都是未执行，缺口如实保留。
+用户确认只引答复原件；对话里的转达不算逐字确认，逐字缺口已标。
+用户答复的消息 ID 与到达时刻没取得，属材料缺口，不补造。
+本任务没有确立「高风险用户可见事实」分类，故不写该项；
+若后续确立，按模板单行的形状补，并引真实来源。
 
-- 本例未确立"高风险用户可见事实"分类，故不写 high_risk_fact 行；如后续确立，按模板单行形状补，并引真实来源。
+## 退役了什么？
 
-## 退役登记
+没有退役任何需求、验收、阶段或材料。
+本任务只新增与扩展方法和接线；唯一相关的退役是 verify-code，
+它由 2026-10-26 的发布决定退役，不属本任务，这里也不重复登记。
 
-| 日期 | 哪张（R/FR/AC/Phase/材料） | 为什么退役 | 谁决定 | 原来的需求编号 |
+| 日期 | 退役对象 | 为什么退役 | 谁决定 | 原编号 |
 | --- | --- | --- | --- | --- |
-| — | 本任务无退役对象 | 本任务只新增/扩展方法与接线，未取消或删除任何需求、AC、阶段或材料；旧 `verify-code` 阶段由 2026-10-26 发布决定退役，不属本任务，也不在本任务重复登记 | 无（本任务无退役决定） | 无退役需求 |
+| — | 本任务无退役对象 | 只新增与扩展方法、接线，没取消或删除任何需求、验收、阶段与材料 | 无（本任务没有退役决定） | 无 |
 
-## 外置事实索引
+校验器用，人可跳过：本节 0 条退役，1 条说明；verify-code 的退役另属发布决定。
 
-步骤证据清单指针：本阶段 `workflows/make-decision/steps.json`（仓内 `/Users/Hugh/Hugh/Project/workflowhub/workflows/make-decision/steps.json`）。
+## 原件在哪、怎么取？（外置事实索引）
 
-基准目录＝任务库根 `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028`（绝对路径）；下列路径相对该目录解析，不能按 worktree cwd 解析。任务事实在 `task.json`（`baseline_commit=84361c4566df451d92389f0011fbaeb34b7e68e1`）与 `facts.jsonl`（当前 0 字节，无阶段事实）。
+本日志只引原件，不抄原件；要回读时按下面两张表找。
+第一张说哪一节给谁用、什么留在正文；第二张说每个原件什么时候该读。
+所有路径相对任务库根，不能按工作区当前目录解析。
 
-| 当前节／内容族 | 下游何处用 | 主文与原件分工 |
+- 任务事实在 `task.json`：`baseline_commit` 是
+  `84361c4566df451d92389f0011fbaeb34b7e68e1`。
+- `facts.jsonl` 当前 0 字节，没有阶段事实。
+- 步骤证据清单的指针是 `/Users/Hugh/Hugh/Project/workflowhub/`
+  `workflows/make-decision/steps.json`。
+- 授权核对应引 `quality/evidence/human-confirmations/` 与
+  `quality/evidence/git-authorizations/`；本任务两个目录都没有提供，
+  属未取得，授权缺口由未决 21 承接。
+- 本任务不产生第二份 Talk 记录，也不产生第二份覆盖矩阵。
+
+| 节 | 下游怎么用 | 什么留在正文 |
 | --- | --- | --- |
-| 任务身份 | build-plan 读类型与根 | 类型/阶段留主文，身份核验沿 task.json |
-| 级别与路线 | 流程/实施审查/收口/验收前读唯一入口事实 | 返回取值、逐项来源与用户答复只在本节；工作包只引用 |
-| 大纲地图 | build-plan 定位输入 | 顶层标题及顺序留主文 |
-| 原始需求 | spec-analyze 核原义；spec 写来源与验收边界 | 43 条原义与落点留主文，逐字与索引指 requirement-index |
-| 需求变更记录 | build-plan 取真实选择；作者回读变更 | 每 U 最小决定与指针留主文，逐字指 Talk 与 requirement-index §7 |
-| 工作包与决定 | build-plan 拆结果与唯一 writer | 方向、四字段、待收敛问题留主文；过程争论指调研原件 |
-| 要改哪些文件 | build-plan 分写集 | 方向与状态留主文，精确写集由 build-plan 落 spec/phases |
-| 范围与非目标 | build-plan 继承边界 | 当前取舍与理由留主文 |
-| 验收面 | spec 承接同号 Appendix A | AC 表留主文，逐项覆盖指 coverage-matrix |
-| 未决项 | build-plan 处理未决输入 | 问题/状态/owner/下一步留主文 |
-| 风险与延期交接 | spec-analyze 核风险与延期边界 | 触发/后果/阶段/owner 留主文 |
+| 任务身份 | build-plan 读类型与根 | 类型与阶段留正文，身份核验沿 `task.json` |
+| 级别与路线 | 流程、实施、审查、收口、验收前读唯一入口事实 | 返回取值与用户答复留在本节，工作包只引用 |
+| 原始需求 | spec-analyze 核原义，spec 写来源与验收边界 | 43 条原义与落点留正文，逐字与索引指需求索引 |
+| 需求变更记录 | build-plan 取真实选择，作者回读变更 | 每条的最小决定与指针留正文，逐字指 Talk 与索引 |
+| 工作包与决定 | build-plan 拆结果、定唯一写主 | 方向、六要素、待收敛问题留正文，过程争论指调研原件 |
+| 要改哪些文件 | build-plan 分写集 | 方向与状态留正文，精确写集由 build-plan 落 spec 与 Phase |
+| 不做什么 | build-plan 继承边界 | 当前取舍与理由留正文 |
+| 验收面 | spec 承接同号附录 | 验收表留正文，逐项覆盖指覆盖矩阵 |
+| 未决项 | build-plan 处理未决输入 | 问题、owner、后果留正文 |
+| 风险与延期交接 | spec-analyze 核风险与延期边界 | 触发、后果、阶段、owner 留正文 |
 | 退役登记 | build-plan 继承退出决定 | 本任务无退役，留结论与理由 |
-| 外置事实索引 | 定位来源 | 基准目录与 ref 留主文，原件不复制 |
 
-| 原件定位（相对任务库根） | 到达条件 | 主文留什么 |
+| 原件（相对任务库根） | 什么时候读 | 正文留什么 |
 | --- | --- | --- |
-| `quality/evidence/research/2026-10-28-001-c07-requirements-external.md` | 写 ADR 的为什么、核需求与外部内容来源时读 | 43 条 R 的原义与来源 |
-| `quality/evidence/research/2026-10-28-002-c07-internal-capability.md` | 核现有能力、入口、证据 writer 与对象时读 | 能力矩阵结论与缺口 |
-| `quality/evidence/research/2026-10-28-003-c07-external-methods.md` | 核九维/截图/a11y/性能等外部方法与许可时读 | 方法边界与版本事实 |
-| `quality/evidence/research/2026-10-28-004-c05-design-audit-generalization.md` | 核 C05 判据复用与通用化边界时读 | 通用/专用判定与待定问题 |
-| `quality/evidence/research/2026-10-28-005-workflowhub-test-review-integration.md` | 核 build-code/审查接入与去重边界时读 | 接入结论与文件级方向 |
-| `quality/evidence/research/2026-10-28-007-browser-collection-diagnosis.md` | 核浏览器根因、ego 可用性证据、能力矩阵与简化清单时读 | 根因、六项能力、保守简化依据 |
-| `quality/evidence/entry-evaluation/2026-10-28-001-entry-evaluation.json` | 需要入口评估原始返回时读 | 级别与路线节的取值 |
-| `quality/evidence/decision-log-refs/requirement-index.md` | 按 R/U 编号定位原义、逐字短引与依赖时读 | source_id、原义与落点 |
-| `quality/evidence/decision-log-refs/coverage-matrix-5d.md` | 收口核所有 R/U 的事实/处置/落点或缺口时读 | 验收面的覆盖结论与缺口 |
-| `quality/evidence/decision-log-refs/talk/2026-10-28-c07-direction.md` | 回读用户哪一批答复说过什么时读 | 批次号与结论 |
-| `quality/evidence/decision-log-refs/drafts/2026-10-28-c07-decision-log-draft.md` | 核对 v1 发布件（53300 字节、sha256 4ba2bfa8…）与 v2 的差异时读 | v1 的 D-001～D-010、U-001～015 原文 |
-| `quality/evidence/decision-log-refs/drafts/2026-10-28-c07-decision-log-draft-v2.md` | 核对 v2 发布件（59771 字节、sha256 d90b7c86…）与 v3 的差异时读 | v2 的 D-001～D-014、U-001～020 原文 |
-| `quality/evidence/decision-log-refs/drafts/2026-10-28-c07-decision-log-draft-v3.md` | 核对 v3 发布件（67974 字节、sha256 715ffb65…）与 v4 的差异时读 | v3 的 D-001～D-019、U-001～027 原文 |
-| `quality/evidence/decision-log-refs/drafts/2026-10-28-c07-decision-log-draft-v4.md` | 核对 v4 发布件（70836 字节、sha256 bf6976c4…）与 v5 的差异时读 | v4 的 D-001～D-021、U-001～027 原文 |
-| `quality/evidence/decision-log-refs/drafts/2026-10-28-c07-decision-log-draft-v5.md` | 核对 v5 发布件（75266 字节、sha256 95ebfb9b…）与 v6 的差异时读 | v5 的 D-001～D-024、U-001～030 原文 |
-| `quality/evidence/decision-log-refs/drafts/2026-10-28-c07-decision-log-draft-v6.md` | 核对 v6 发布件（79856 字节、sha256 f351de48…）与 v7 的差异时读 | v6 的 D-001～D-026、U-001～032 原文 |
-| `quality/evidence/decision-log-refs/drafts/2026-10-28-c07-decision-log-draft-v7.md` | 核对 v7 发布件（86783 字节、sha256 3e51d542…）与 v8 的差异时读 | v7 的 D-001～D-030、U-001～035 原文 |
-| `quality/evidence/decision-log-refs/drafts/2026-10-28-c07-decision-log-draft-v8.md` | 核对 v8 发布件（94561 字节、sha256 457c5e54…）与 v9 的差异时读 | v8 的 D-001～D-037、U-001～036 原文 |
-| `quality/evidence/decision-log-refs/drafts/2026-10-28-c07-decision-log-draft-v9.md` | 核对 v9 发布件（100143 字节、sha256 3399b326…）与 v10 的差异时读 | v9 的 D-001～D-037、U-001～038 原文 |
-| `quality/evidence/decision-log-refs/drafts/2026-10-28-c07-decision-log-draft-v10.md` | 核对 v10 发布件（111853 字节、sha256 3d733282…）与 v11 的差异时读 | v10 的 D-001～D-039、U-001～042 原文 |
-| `quality/evidence/decision-log-refs/drafts/2026-10-28-c07-decision-log-draft-v11.md` | 核对 v11 发布件（119486 字节、sha256 4a6ad22e…）与 v12 的差异时读 | v11 的 D-001～D-039、U-001～045 原文 |
-| `quality/evidence/decision-log-refs/drafts/2026-10-28-c07-decision-log-draft-v12.md` | 核对 v12 发布件（122349 字节、sha256 7416d270…）与 v13 的差异时读 | v12 的 D-001～D-040、U-001～047 原文 |
-| `quality/evidence/decision-log-refs/drafts/2026-10-28-c07-decision-log-draft-v13.md` | 核对 v13 发布件（124485 字节、sha256 3b808ec1…）与 v14 的差异时读 | v13 的 D-001～D-040、U-001～048 原文 |
-| `quality/evidence/decision-log-refs/drafts/2026-10-28-c07-decision-log-draft-v14.md` | 核对本件发布前草稿时读 | 无（与发布件同源） |
-| `specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/`（C05 归档，含 samples/A\|B） | 取用样本时读；只读，复制到 C07 自有位置再改 | 归档路径与 A/B 样本；不原地改 |
-| `quality/evidence/research/2026-10-29-009-c05-requirements-vs-commits.md`（14382 B） | 核 C05 18 需求/17 限定 pass/AC009 fail 时读 | 7/11/0 与 11 部分事实 |
-| `quality/evidence/research/2026-10-29-010-c05-sample-usability.md`（10261 B） | 核 A/B 可用性与版本指针时读 | 9efb；A 可复现、B 零安装 |
-| `quality/evidence/research/2026-10-29-011-c07-decision-impact.md`（17837 B） | 核 C07 决策影响与材料未合入时读 | 对象/版本/路径/外部内容更新 |
-| `quality/evidence/research/2026-10-29-012-c05-root-cause.md`（21846 B） | 核 11 部分根因与 M10 设计时读 | 三系统性问题；5 解决/3 缓解/不能修历史 |
-| `quality/evidence/handoff/c05-sample-delivery-notice.md`（2752 字节） | 由用户转给 C05 开发 agent、准备样本交付时读 | 交付清单与 C07 交付/修复/复验承诺；不是交付凭证 |
-| `quality/evidence/review-materials/direction/`（raw_requirement、objective_facts、convergence_outline、request.json） | 方向审查时读 | 只有原始要求、客观事实与未决问题；不含决定/推荐 |
-| `quality/reviews/2026-10-28-005-make-decision-direction.json`（及同目录 006/007～009 raw output） | 回读方向/细节审查事实、finding 与 provider 失败时读 | 方向审查 partial、10 条 DR；细节审查 12 条 F |
-| `quality/reviews/2026-10-28-010-make-decision-detail.json`（23149 字节） | 回读细节审查 finding、覆盖与 provider 结果时读 | 12 条 F 处置与"未全覆盖"事实 |
-| `quality/evidence/review-materials/detail/`（raw_requirement、request.json） | 细节审查时读 | 请求与原始要求；当前方向/索引/矩阵按 ref+sha 引用 |
+| `quality/evidence/research/2026-10-28-001-c07-requirements-external.md` | 写决定的「为什么」、核需求与外部内容来源时 | 43 条需求的原义与来源 |
+| `quality/evidence/research/2026-10-28-002-c07-internal-capability.md` | 核现有能力、入口、证据写入方与对象时 | 能力矩阵结论与缺口 |
+| `quality/evidence/research/2026-10-28-003-c07-external-methods.md` | 核九维、截图、可访问性、性能等外部方法与许可时 | 方法边界与版本事实 |
+| `quality/evidence/research/2026-10-28-004-c05-design-audit-generalization.md` | 核 C05 判据复用与通用化边界时 | 通用与专用的判定、待定问题 |
+| `quality/evidence/research/2026-10-28-005-workflowhub-test-review-integration.md` | 核 build-code 与审查接入、去重边界时 | 接入结论与文件级方向 |
+| `quality/evidence/research/2026-10-28-007-browser-collection-diagnosis.md` | 核浏览器根因、ego 可用证据、能力矩阵与简化清单时 | 根因、六项能力、保守简化依据 |
+| `quality/evidence/entry-evaluation/2026-10-28-001-entry-evaluation.json` | 需要入口评估原始返回时 | 级别与路线一节的取值 |
+| `quality/evidence/decision-log-refs/requirement-index.md` | 按需求或答复编号定位原义、逐字短引与依赖时 | 编号、原义与落点 |
+| `quality/evidence/decision-log-refs/coverage-matrix-5d.md` | 收口核所有需求与答复的事实、处置、落点或缺口时 | 验收面的覆盖结论与缺口 |
+| `quality/evidence/decision-log-refs/talk/2026-10-28-c07-direction.md` | 回读用户哪一批答复说过什么时 | 批次号与结论 |
+| `quality/evidence/decision-log-refs/drafts/` | 核对历版草稿时（清单见变更记录） | 各版的编号范围 |
+| `specs/archive/workflowhub-ui-frontend-c05-prototype-design-review-20261027/` | 取用样本时；只读，先复制到 C07 自有位置 | 归档路径与 A、B 两套样本 |
+| `quality/evidence/research/2026-10-29-009-c05-requirements-vs-commits.md` | 核 C05 的 18 项需求、17 项限定通过与失败项时 | 7 项实现、11 项部分的事实 |
+| `quality/evidence/research/2026-10-29-010-c05-sample-usability.md` | 核 A、B 两套可用性与版本指针时 | 9efb 指针、A 可复现、B 零安装 |
+| `quality/evidence/research/2026-10-29-011-c07-decision-impact.md` | 核 C07 决策影响与材料未合入时 | 对象、版本、路径、外部内容的更新 |
+| `quality/evidence/research/2026-10-29-012-c05-root-cause.md` | 核 11 项部分需求的成因与 M10 设计时 | 三类系统性问题、5 解决 3 缓解 |
+| `quality/evidence/handoff/c05-sample-delivery-notice.md` | 由用户转给 C05 开发 agent 准备样本时 | 交付清单与承诺；不是交付凭证 |
+| `quality/evidence/build-plan/` | 核材料质量、审查有效性、格式标准时 | 只引编号与结论，不抄正文 |
+| `quality/evidence/review-materials/direction/` | 方向审查时 | 只有原始要求、客观事实与未决问题，不含决定与推荐 |
+| `quality/reviews/2026-10-28-005-make-decision-direction.json` | 回读方向审查事实、finding 与提供方失败时 | 部分完成的终态与 10 条 finding |
+| `quality/reviews/2026-10-28-010-make-decision-detail.json` | 回读细节审查 finding、覆盖与提供方结果时 | 12 条 finding 的处置与「未全覆盖」 |
+| `quality/evidence/review-materials/detail/` | 细节审查时 | 请求与原始要求；方向、索引、矩阵按引用与哈希 |
 
-核对实际授权时，引用任务库 `quality/evidence/human-confirmations/`、`quality/evidence/git-authorizations/`；本任务两目录均未提供（未取得），授权缺口由 OPEN-02 承接。本任务不产生第二份 Talk 或第二份覆盖矩阵。
+校验器用，人可跳过：本节 11 行分工、22 个原件路径；都在任务库根下。
+
+## 这份日志改过什么？（变更记录）
+
+这份日志改过十四版草稿，之后又追加过一轮，本次按格式标准重写了一遍。
+改的是写法与结构，事实没删：对象、版本、金额、提交、finding、风险都还在。
+历版草稿原件在 `refs/drafts/`，文件名形如
+`drafts/2026-10-28-c07-decision-log-draft-vN.md`（N 从 1 到 14）。
+下表只记字节、哈希前缀与编号范围。
+
+| 版本 | 字节 | sha256 前缀 | 决定范围 | 答复范围 |
+| --- | --- | --- | --- | --- |
+| v1 | 53300 | `4ba2bfa8…` | 决定 1～10 | 答复 1～15 |
+| v2 | 59771 | `d90b7c86…` | 决定 1～14 | 答复 1～20 |
+| v3 | 67974 | `715ffb65…` | 决定 1～19 | 答复 1～27 |
+| v4 | 70836 | `bf6976c4…` | 决定 1～21 | 答复 1～27 |
+| v5 | 75266 | `95ebfb9b…` | 决定 1～24 | 答复 1～30 |
+| v6 | 79856 | `f351de48…` | 决定 1～26 | 答复 1～32 |
+| v7 | 86783 | `3e51d542…` | 决定 1～30 | 答复 1～35 |
+| v8 | 94561 | `457c5e54…` | 决定 1～37 | 答复 1～36 |
+| v9 | 100143 | `3399b326…` | 决定 1～37 | 答复 1～38 |
+| v10 | 111853 | `3d733282…` | 决定 1～39 | 答复 1～42 |
+| v11 | 119486 | `4a6ad22e…` | 决定 1～39 | 答复 1～45 |
+| v12 | 122349 | `7416d270…` | 决定 1～40 | 答复 1～47 |
+| v13 | 124485 | `3b808ec1b5693547e6c997691134d90c5f1f0190d52cdb482c7a49923f3c7d83` | 决定 1～40 | 答复 1～48 |
+| v14 | 发布前草稿，与发布件同源 | — | 决定 1～40 | 答复 1～48 |
+
+- **v14 为什么替代 v13**：C05 已合并（HEAD `c8874449`）并归档，A、B 两套样本可用；
+  用户给了 8 项选择（版本、接收方、许可、失败表达、200% 与读屏、M10、
+  批准后变更、提交）；新增 M10 并逐条更新对象与外部内容事实；
+  保留决定 1～40，新增决定 41、42。
+- **v14 之后的追加**：只有一轮——材料质量与审查有效性（追加决定 1～7）。
+  原文自称「第 20 版之后的追加」，但第 15～20 版没有单独的草稿原件，
+  这里不补造版本号；防假绿那一轮（决定 41、42）已包含在 v14 里。
+- **本次重写（2026-10-29）**：按「决策日志专用规范 v1」重写。
+  正文改用中文编号，内部编号退到附录；每条决定补齐六要素；
+  工作包 ①～⑩ 的分组、49 处原件指针、42 条决定、64 条答复、43 条需求全部保留。
+  不设目标行数，也没为了变短删掉候选、证据与影响。
+- **没做的事**：没有改 spec、Phase、测试与代码；没有做 Git 写；
+  没有把旧编号重排；没有删任何一条历史事实。
+
+## 附录 A 编号怎么对？
+
+正文只写中文编号，机器编号只出现在这里。
+六张表分别是：决定、答复、需求、验收、未决与已定、追加决定。
+查表方法：正文看到「决定 17」，在 A1 查同一行即得 `D-018`。
+
+### D-001 — 表 A1：决定编号对照（42 行）
+
+- 做什么：把 42 条决定的中文编号逐行对到机器编号与所属工作包。
+- 不做什么：不重复决定正文，也不在这里新增或改写任何决定。
+- 风险：编号错位会让下游按错号查正文。
+- 改动：只在本次重写新增对照表，原编号不改。
+
+| 决定 | 机器编号 | 工作包 |
+| --- | --- | --- |
+| 决定 1 | D-001 | ① |
+| 决定 2 | D-006 | ① |
+| 决定 3 | D-020 | ① |
+| 决定 4 | D-021 | ① |
+| 决定 5 | D-031 | ① |
+| 决定 6 | D-032 | ① |
+| 决定 7 | D-040 | ① |
+| 决定 8 | D-007 | ② |
+| 决定 9 | D-008 | ② |
+| 决定 10 | D-009 | ② |
+| 决定 11 | D-010 | ② |
+| 决定 12 | D-011 | ③ |
+| 决定 13 | D-012 | ③ |
+| 决定 14 | D-014 | ③ |
+| 决定 15 | D-015 | ③ |
+| 决定 16 | D-016 | ③ |
+| 决定 17 | D-018 | ③ |
+| 决定 18 | D-019 | ③ |
+| 决定 19 | D-035 | ③ |
+| 决定 20 | D-036 | ③ |
+| 决定 21 | D-022 | ④ |
+| 决定 22 | D-023 | ④ |
+| 决定 23 | D-024 | ④ |
+| 决定 24 | D-027 | ④ |
+| 决定 25 | D-028 | ④ |
+| 决定 26 | D-029 | ④ |
+| 决定 27 | D-030 | ④ |
+| 决定 28 | D-013 | ⑤ |
+| 决定 29 | D-017 | ⑤ |
+| 决定 30 | D-025 | ⑤ |
+| 决定 31 | D-026 | ⑤ |
+| 决定 32 | D-033 | ⑤ |
+| 决定 33 | D-003 | ⑥ |
+| 决定 34 | D-002 | ⑦ |
+| 决定 35 | D-005 | ⑦ |
+| 决定 36 | D-034 | ⑦ |
+| 决定 37 | D-037 | ⑦ |
+| 决定 38 | D-004 | ⑧ |
+| 决定 39 | D-038 | ⑨ |
+| 决定 40 | D-039 | ⑨ |
+| 决定 41 | D-041 | ⑩ |
+| 决定 42 | D-042 | ⑩ |
+
+### 表 A2 答复 1～64
+
+| 答复 | 机器编号 | 原件 |
+| --- | --- | --- |
+| 答复 1 | U-C07-01 | Talk:B2 |
+| 答复 2 | U-C07-02 | Talk:A1 |
+| 答复 3 | U-C07-03 | Talk:A2 |
+| 答复 4 | U-C07-04 | Talk:B1 |
+| 答复 5 | U-C07-05 | Talk:B2 |
+| 答复 6 | U-C07-06 | Talk:B3 |
+| 答复 7 | U-C07-07 | Talk:C1 |
+| 答复 8 | U-C07-08 | Talk:C2 |
+| 答复 9 | U-C07-09 | Talk:C3 |
+| 答复 10 | U-C07-10 | Talk:D1 |
+| 答复 11 | U-C07-11 | Talk:D2 |
+| 答复 12 | U-C07-12 | Talk:D3 |
+| 答复 13 | U-C07-13 | Talk:D4 |
+| 答复 14 | U-C07-14 | Talk:E1 |
+| 答复 15 | U-C07-15 | Talk:E2 |
+| 答复 16 | U-C07-16 | Talk:F1 |
+| 答复 17 | U-C07-17 | Talk:F2 |
+| 答复 18 | U-C07-18 | Talk:F3 |
+| 答复 19 | U-C07-19 | Talk:F4 |
+| 答复 20 | U-C07-20 | Talk:F5 |
+| 答复 21 | U-C07-21 | Talk:G1 |
+| 答复 22 | U-C07-22 | Talk:G2 |
+| 答复 23 | U-C07-23 | Talk:G3 |
+| 答复 24 | U-C07-24 | Talk:G4 |
+| 答复 25 | U-C07-25 | Talk:G5 |
+| 答复 26 | U-C07-26 | Talk:H1 |
+| 答复 27 | U-C07-27 | Talk:H1 |
+| 答复 28 | U-C07-28 | Talk:I1 |
+| 答复 29 | U-C07-29 | Talk:I2 |
+| 答复 30 | U-C07-30 | Talk:I3 |
+| 答复 31 | U-C07-31 | Talk:J1 |
+| 答复 32 | U-C07-32 | Talk:J2 |
+| 答复 33 | U-C07-33 | Talk:K1 |
+| 答复 34 | U-C07-34 | Talk:K2 |
+| 答复 35 | U-C07-35 | Talk:L1 |
+| 答复 36 | U-C07-36 | Talk:M1 |
+| 答复 37 | U-C07-37 | Talk:N1 |
+| 答复 38 | U-C07-38 | Talk:N2 |
+| 答复 39 | U-C07-39 | Talk:O1 |
+| 答复 40 | U-C07-40 | Talk:O2/O3 |
+| 答复 41 | U-C07-41 | Talk:P1 |
+| 答复 42 | U-C07-42 | Talk:Q1 |
+| 答复 43 | U-C07-43 | Talk:R1 |
+| 答复 44 | U-C07-44 | Talk:R2 |
+| 答复 45 | U-C07-45 | Talk:R3 |
+| 答复 46 | U-C07-46 | Talk:S1 |
+| 答复 47 | U-C07-47 | Talk:S2 |
+| 答复 48 | U-C07-48 | Talk:T1 |
+| 答复 49 | U-C07-49 | Talk:U1 |
+| 答复 50 | U-C07-50 | Talk:U2 |
+| 答复 51 | U-C07-51 | Talk:U3 |
+| 答复 52 | U-C07-52 | Talk:U4 |
+| 答复 53 | U-C07-53 | Talk:U5 |
+| 答复 54 | U-C07-54 | Talk:U6 |
+| 答复 55 | U-C07-55 | Talk:U7 |
+| 答复 56 | U-C07-56 | Talk:U8 |
+| 答复 57 | U-C07-57 | Talk:V1 |
+| 答复 58 | U-C07-58 | Talk:V2 |
+| 答复 59 | U-C07-59 | 本日志追加节 |
+| 答复 60 | U-C07-60 | 本日志追加节 |
+| 答复 61 | U-C07-61 | 追加节与人工确认件 |
+| 答复 62 | U-C07-62 | 本日志追加节 |
+| 答复 63 | U-C07-63 | 本日志追加节 |
+| 答复 64 | U-C07-64 | 本日志追加节 |
+
+### 表 A3 需求 1～43
+
+| 需求 | 机器编号 | 需求 | 机器编号 |
+| --- | --- | --- | --- |
+| 需求 1 | R-C07-01 | 需求 23 | R-C07-23 |
+| 需求 2 | R-C07-02 | 需求 24 | R-C07-24 |
+| 需求 3 | R-C07-03 | 需求 25 | R-C07-25 |
+| 需求 4 | R-C07-04 | 需求 26 | R-C07-26 |
+| 需求 5 | R-C07-05 | 需求 27 | R-C07-27 |
+| 需求 6 | R-C07-06 | 需求 28 | R-C07-28 |
+| 需求 7 | R-C07-07 | 需求 29 | R-C07-29 |
+| 需求 8 | R-C07-08 | 需求 30 | R-C07-30 |
+| 需求 9 | R-C07-09 | 需求 31 | R-C07-31 |
+| 需求 10 | R-C07-10 | 需求 32 | R-C07-32 |
+| 需求 11 | R-C07-11 | 需求 33 | R-C07-33 |
+| 需求 12 | R-C07-12 | 需求 34 | R-C07-34 |
+| 需求 13 | R-C07-13 | 需求 35 | R-C07-35 |
+| 需求 14 | R-C07-14 | 需求 36 | R-C07-36 |
+| 需求 15 | R-C07-15 | 需求 37 | R-C07-37 |
+| 需求 16 | R-C07-16 | 需求 38 | R-C07-38 |
+| 需求 17 | R-C07-17 | 需求 39 | R-C07-39 |
+| 需求 18 | R-C07-18 | 需求 40 | R-C07-40 |
+| 需求 19 | R-C07-19 | 需求 41 | R-C07-41 |
+| 需求 20 | R-C07-20 | 需求 42 | R-C07-42 |
+| 需求 21 | R-C07-21 | 需求 43 | R-C07-43 |
+| 需求 22 | R-C07-22 | — | — |
+
+### 表 A4 验收 1～7
+
+| 验收 | 机器编号 | 判据正文位置 |
+| --- | --- | --- |
+| 验收 1 | AC-C07-1 | spec 附录 A 同号 |
+| 验收 2 | AC-C07-2 | spec 附录 A 同号 |
+| 验收 3 | AC-C07-3 | spec 附录 A 同号 |
+| 验收 4 | AC-C07-4 | spec 附录 A 同号 |
+| 验收 5 | AC-C07-5 | spec 附录 A 同号 |
+| 验收 6 | AC-C07-6 | spec 附录 A 同号 |
+| 验收 7 | AC-C07-7 | spec 附录 A 同号 |
+
+### 表 A5 未决与已定 1～31
+
+| 正文编号 | 原编号 | 状态 |
+| --- | --- | --- |
+| 未决 1 | OPEN-13 | 开放 |
+| 未决 2 | OPEN-05 | 开放 |
+| 未决 3 | OPEN-19 | 开放 |
+| 未决 4 | OPEN-20 | 开放 |
+| 未决 5 | OPEN-18 | 开放 |
+| 未决 6 | OPEN-17 | 开放 |
+| 未决 7 | OPEN-07 | 开放 |
+| 未决 8 | OPEN-08 | 开放 |
+| 未决 9 | OPEN-11 | 开放 |
+| 未决 10 | OPEN-10 | 开放 |
+| 未决 11 | OPEN-15 | 开放 |
+| 未决 12 | OPEN-14 | 开放 |
+| 未决 13 | OPEN-03（剩余部分） | 开放 |
+| 未决 14 | OPEN-04（剩余部分） | 开放 |
+| 未决 15 | OPEN-16 | 开放 |
+| 未决 16 | OPEN-23 | 开放 |
+| 未决 17 | OPEN-24 | 开放 |
+| 未决 18 | OPEN-25 | 开放 |
+| 未决 19 | OPEN-26 | 开放 |
+| 未决 20 | OPEN-27 | 开放 |
+| 未决 21 | OPEN-21（剩余部分） | 开放 |
+| 未决 22 | OPEN-12（剩余部分） | 开放 |
+| 未决 23 | OPEN-28～32 | 开放（五项合并登记） |
+| 已定 1 | OPEN-01 | 已定 |
+| 已定 2 | OPEN-02 | 已定 |
+| 已定 3 | OPEN-03（时机部分） | 已定 |
+| 已定 4 | OPEN-06 | 已定 |
+| 已定 5 | OPEN-09 | 已定 |
+| 已定 6 | OPEN-12（归属部分） | 已定 |
+| 已定 7 | OPEN-21（两条腿部分） | 已定 |
+| 已定 8 | OPEN-22 | 已定 |
+
+### 表 A6 追加决定 1～7
+
+| 追加决定 | 原件 | 逐条页码 |
+| --- | --- | --- |
+| 追加决定 1～6 | `build-plan/2026-10-29-026-decision-authoring-quality.md`（DEC-AUTH-001）与其依据件 | 未取得，不作断言 |
+| 追加决定 7 | 本日志「材料和审查为什么没起作用」一节的补充决定段 | 就是本节上一段 |
+
+追加决定 1～6 的依据件不止一件：材料现状指 021，根因指 022 与 024，
+标准落地指 030，可行性指 025，校验器原型指 027，审查实况指 032 与 033，
+跨阶段指 038，阶段末核对指 029，红队指 031，格式考古指 041。
+这些编号是 `build-plan/` 下的日期序号；逐条对应关系未在原件里逐条标注，
+本表不补造页码，读者按追加节的引用回读。
+
+## 附录 B 机器追踪（校验器用，人可跳过）
+
+这一节只给机器与人核对用；读正文的人可以停在这里。
+它写四件事：条数、标题约定、缺项、主要原件。
+
+### 条数
+
+| 项 | 条数 | 说明 |
+| --- | --- | --- |
+| 需求 | 43 | 全部有落点或有缺口与 owner |
+| 答复 | 64 | 全部有落点；答复 14 由答复 20 关闭 |
+| 决定 | 42 | 每条六要素齐；草案与选型都在正文 |
+| 追加决定 | 7 | 另一列编号，不与决定 1～42 混编 |
+| 未决 | 23 | 每条有 owner 与后果 |
+| 已定 | 8 | 原编号保留，可查历史 |
+| 验收 | 7 | 与 spec 附录 A 同号 |
+| 工作包 | 10 | ①～⑩ |
+| 原件指针 | 57 | 正文里的「原件：」行（要求不少于 49） |
+
+### 标题约定（改这份日志时别破）
+
+- `### 任务身份`：保留这几个字，阶段检查按它读任务类型，全文只能有一个。
+- `## 级别与路线`：保留这几个字，阶段检查按它找级别与入口事实。
+- `## 未决项`：保留开头这几个字，终末检查按它读方向性未知。
+- 决定用「#### 决定 n — 一句话」；机器编号只出现在附录 A。
+- 未决用「未决 n」，已定用「已定 n」；原编号只在附录 A 表 A5。
+- 正文不出现需求、答复、决定、验收的机器编号；表格里也不出现。
+
+### 缺项与例外
+
+- 答复 59～64 还没进需求索引与覆盖矩阵（未决 23）。
+- 覆盖矩阵当前是 58 条答复、99 行，其中 7 行带缺口。
+- 未决 23 是五项合并登记（原 OPEN-28～32），逐项编号对应关系未取得。
+- 本任务没有「高风险用户可见事实」分类，故没有这一行。
+- 级别与路线仍是散文，没有机器可读的级别声明块；这是本任务的已知缺口，
+  不补造。
+
+### 主要原件
+
+- 原件：`refs/requirement-index.md`（需求与答复的逐字索引）。
+- 原件：`refs/coverage-matrix-5d.md`（逐条落点与缺口）。
+- 原件：`refs/talk/2026-10-28-c07-direction.md`（用户答复批次）。
+- 原件：`entry/2026-10-28-001-entry-evaluation.json`（入口评估原始返回）。
+- 原件：`reviews/2026-10-28-005-make-decision-direction.json`（方向审查）。
+- 原件：`reviews/2026-10-28-010-make-decision-detail.json`（细节审查）。
+
+（以上路径相对任务库根；前缀约定见「名词约定」。）

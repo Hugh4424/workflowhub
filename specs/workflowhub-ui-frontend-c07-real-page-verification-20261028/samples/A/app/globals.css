@@ -1,0 +1,58 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: #06080d;
+  color: #e5e9f0;
+  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Hide scrollbars until scrolling */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 8px;
+}
+*:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(120, 140, 170, 0.28);
+}
+
+/* Sample controls have a single owner and do not restyle the source surface. */
+.prototype-controls{display:flex;flex-wrap:wrap;align-items:center;gap:16px;padding:10px 20px;border-bottom:1px solid #1e293b;background:#080b11;font-size:12px}.prototype-controls label{display:flex;align-items:center;gap:8px}.prototype-controls select,.prototype-controls button,.demo-scenario button{padding:8px 12px;border:1px solid #334155;border-radius:6px;background:#101723;color:#e2e8f0}.demo-scenario{padding:16px 24px;border-inline-start:3px solid #38bdf8}.demo-scenario p{margin:8px 0}.source-prototype :focus-visible{outline:2px solid #38bdf8;outline-offset:3px}@media(prefers-reduced-motion:reduce){.source-prototype *{animation:none!important;transition:none!important}}
+
+/* Observed sample audit158: retain source geometry, lift readable secondary text and white action contrast. */
+.source-prototype .text-slate-500,.source-prototype .text-slate-600,.source-prototype .text-slate-700{color:#94a3b8}
+.source-prototype .bg-sky-500.text-white{background-color:#0369a1}
+
+/* The sample chrome consumes space; the original workbench owns the remaining viewport. */
+body>nav{display:flex;flex-wrap:wrap;align-items:center;gap:20px;padding:8px 20px;border-bottom:1px solid #1e293b;font-size:12px;background:#06080d}body>nav a{color:#e2e8f0;text-decoration:none}body>nav span{color:#94a3b8}
+body:has([data-sample-view="workbench"]){display:flex;flex-direction:column;height:100dvh;overflow:hidden}
+body:has([data-sample-view="workbench"])>nav{flex-shrink:0}
+.source-prototype[data-sample-view="workbench"]{display:flex;flex-direction:column;flex:1;min-height:0}
+.source-prototype[data-sample-view="workbench"]>.prototype-controls{flex-shrink:0}
+.source-prototype[data-sample-view="workbench"]>.h-screen{height:auto;flex:1;min-height:0}
+
+body:has([data-sample-view="workbench"])>#root{display:flex;flex-direction:column;flex:1;height:auto;min-height:0}
