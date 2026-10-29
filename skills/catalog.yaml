@@ -567,7 +567,7 @@ skills:
         skill_url: *matt_writing_mechanics_url
         adopted:
           - skills/productivity/writing-for-agents/SKILL-MECHANICS.md#invocation — 调用与路由边界
-    local_changes: post cohort 只写 spec.md 实现设计与独立 phases/P<n>.md；旧 plan 模板仅历史只读，不纳入可分发 bundle；consumer 为 build-code 和 spec-analyze；owner 为 build-plan；测试为 post-cohort-authoring-files；当 Phase 作者机制被审查后的替代机制取代时删除
+    local_changes: post cohort 只写 spec.md 实现设计与独立 phases/P<n>.md；旧 plan 模板仅历史只读，不纳入可分发 bundle；owner 为 build-plan。现有 bundle 增 check-reader-record（第11步核七段/五问/命令退出的记录形态）、check-authoring-budget（逐材料只报告结构读数，超预算仍退0）、authoring-contract（第6/7步作者与brief实际读取），consumer 为 build-plan作者、独立冷读者、build-code和spec-analyze。测试为 post-cohort-authoring-files及C07七个具名authoring契约测试；当这三职责由独立验证的既有替代完整承接且本附件无真实消费者时删除相应附件/指针，保历史原件；不新增控制面或质量裁决
     dependency_closure: ["skills/simplicity-guard","skills/spec-specify"]
 
     update_policy: 比较 Spec Kit 与 Superpowers planning 变更，只吸收不重复编排的规则

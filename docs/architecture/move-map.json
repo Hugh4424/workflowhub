@@ -6,6 +6,167 @@
   "generated_from": "当前迁移表保留分类、已改接真实相对模块 consumer 与显式数据 reader；不保存整树快照或 hash 清单",
   "entries": [
     {
+      "source": "skills/spec-plan/scripts/check-reader-record.mjs",
+      "destination": "skills/spec-plan/scripts/check-reader-record.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "T025 七段/五问/命令退出的形状检查，合法0、缺口2、不可读1；不裁定复述质量。",
+      "owner": "C07 P9 唯一开发writer / build-plan作者方法owner",
+      "consumer": "workflows/build-plan/SKILL.md 第11步：独立读者保存记录后以其实际路径执行此CLI；tests/contract/reader-record.test.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "workflows/build-plan/SKILL.md 第11步：独立读者保存记录后以其实际路径执行此CLI",
+        "tests/contract/reader-record.test.mjs"
+      ],
+      "delete_condition": "本具名职责经独立验证由既有替代完整承接且当前消费者均改接后删除；历史原件与冻结失败保留。",
+      "retention_basis": "C07 P9 T025/026/027/029/030/031/032与主会话明确批准的必要登记补集；不新增阶段、公共命令或持久控制面。"
+    },
+    {
+      "source": "skills/spec-plan/scripts/check-authoring-budget.mjs",
+      "destination": "skills/spec-plan/scripts/check-authoring-budget.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "T029 对显式输入材料报告结构读数，超预算仍退0；不评分、不接CI失败。",
+      "owner": "C07 P9 唯一开发writer / build-plan作者方法owner",
+      "consumer": "workflows/build-plan/SKILL.md 第11步：作者逐件传当前spec及每张Phase路径；skills/spec-analyze/SKILL.md 第七类：消费读数和覆盖限制；tests/contract/authoring-budget.test.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "workflows/build-plan/SKILL.md 第11步：作者逐件传当前spec及每张Phase路径",
+        "skills/spec-analyze/SKILL.md 第七类：消费读数和覆盖限制",
+        "tests/contract/authoring-budget.test.mjs"
+      ],
+      "delete_condition": "本具名职责经独立验证由既有替代完整承接且当前消费者均改接后删除；历史原件与冻结失败保留。",
+      "retention_basis": "C07 P9 T025/026/027/029/030/031/032与主会话明确批准的必要登记补集；不新增阶段、公共命令或持久控制面。"
+    },
+    {
+      "source": "skills/spec-plan/references/authoring-contract.md",
+      "destination": "skills/spec-plan/references/authoring-contract.md",
+      "status": "add",
+      "role": "production",
+      "responsibility": "T031 一页作者开工契约，五问与好坏对照；十九规则唯一回WR001/Q13。",
+      "owner": "C07 P9 唯一开发writer / build-plan作者方法owner",
+      "consumer": "workflows/build-plan/SKILL.md 第6/7步：作者读取、写五问答案并随brief附路径；tests/contract/authoring-contract.test.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "workflows/build-plan/SKILL.md 第6/7步：作者读取、写五问答案并随brief附路径",
+        "tests/contract/authoring-contract.test.mjs"
+      ],
+      "delete_condition": "本具名职责经独立验证由既有替代完整承接且当前消费者均改接后删除；历史原件与冻结失败保留。",
+      "retention_basis": "C07 P9 T025/026/027/029/030/031/032与主会话明确批准的必要登记补集；不新增阶段、公共命令或持久控制面。"
+    },
+    {
+      "source": "tests/contract/reader-record.test.mjs",
+      "destination": "tests/contract/reader-record.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "C07 P9具名作者契约测试；分别核真实CLI、当前材料、模板与原合同边界，不证明页面验收或独立冷读效果。",
+      "owner": "C07 P9 唯一开发writer / build-plan作者方法owner",
+      "consumer": "node node_modules/vitest/vitest.mjs run tests/contract/reader-record.test.mjs；P9 开发及后置独立测试执行者",
+      "module_consumers": [],
+      "named_data_readers": [
+        "node node_modules/vitest/vitest.mjs run tests/contract/reader-record.test.mjs",
+        "P9 开发及后置独立测试执行者"
+      ],
+      "delete_condition": "本具名职责经独立验证由既有替代完整承接且当前消费者均改接后删除；历史原件与冻结失败保留。",
+      "retention_basis": "C07 P9 T025/026/027/029/030/031/032与主会话明确批准的必要登记补集；不新增阶段、公共命令或持久控制面。"
+    },
+    {
+      "source": "tests/contract/phase-contract-prose.test.mjs",
+      "destination": "tests/contract/phase-contract-prose.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "C07 P9具名作者契约测试；分别核真实CLI、当前材料、模板与原合同边界，不证明页面验收或独立冷读效果。",
+      "owner": "C07 P9 唯一开发writer / build-plan作者方法owner",
+      "consumer": "node node_modules/vitest/vitest.mjs run tests/contract/phase-contract-prose.test.mjs；P9 开发及后置独立测试执行者",
+      "module_consumers": [],
+      "named_data_readers": [
+        "node node_modules/vitest/vitest.mjs run tests/contract/phase-contract-prose.test.mjs",
+        "P9 开发及后置独立测试执行者"
+      ],
+      "delete_condition": "本具名职责经独立验证由既有替代完整承接且当前消费者均改接后删除；历史原件与冻结失败保留。",
+      "retention_basis": "C07 P9 T025/026/027/029/030/031/032与主会话明确批准的必要登记补集；不新增阶段、公共命令或持久控制面。"
+    },
+    {
+      "source": "tests/contract/authoring-shape.test.mjs",
+      "destination": "tests/contract/authoring-shape.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "C07 P9具名作者契约测试；分别核真实CLI、当前材料、模板与原合同边界，不证明页面验收或独立冷读效果。",
+      "owner": "C07 P9 唯一开发writer / build-plan作者方法owner",
+      "consumer": "node node_modules/vitest/vitest.mjs run tests/contract/authoring-shape.test.mjs；P9 开发及后置独立测试执行者",
+      "module_consumers": [],
+      "named_data_readers": [
+        "node node_modules/vitest/vitest.mjs run tests/contract/authoring-shape.test.mjs",
+        "P9 开发及后置独立测试执行者"
+      ],
+      "delete_condition": "本具名职责经独立验证由既有替代完整承接且当前消费者均改接后删除；历史原件与冻结失败保留。",
+      "retention_basis": "C07 P9 T025/026/027/029/030/031/032与主会话明确批准的必要登记补集；不新增阶段、公共命令或持久控制面。"
+    },
+    {
+      "source": "tests/contract/authoring-budget.test.mjs",
+      "destination": "tests/contract/authoring-budget.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "C07 P9具名作者契约测试；分别核真实CLI、当前材料、模板与原合同边界，不证明页面验收或独立冷读效果。",
+      "owner": "C07 P9 唯一开发writer / build-plan作者方法owner",
+      "consumer": "node node_modules/vitest/vitest.mjs run tests/contract/authoring-budget.test.mjs；P9 开发及后置独立测试执行者",
+      "module_consumers": [],
+      "named_data_readers": [
+        "node node_modules/vitest/vitest.mjs run tests/contract/authoring-budget.test.mjs",
+        "P9 开发及后置独立测试执行者"
+      ],
+      "delete_condition": "本具名职责经独立验证由既有替代完整承接且当前消费者均改接后删除；历史原件与冻结失败保留。",
+      "retention_basis": "C07 P9 T025/026/027/029/030/031/032与主会话明确批准的必要登记补集；不新增阶段、公共命令或持久控制面。"
+    },
+    {
+      "source": "tests/contract/phase-prose.test.mjs",
+      "destination": "tests/contract/phase-prose.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "C07 P9具名作者契约测试；分别核真实CLI、当前材料、模板与原合同边界，不证明页面验收或独立冷读效果。",
+      "owner": "C07 P9 唯一开发writer / build-plan作者方法owner",
+      "consumer": "node node_modules/vitest/vitest.mjs run tests/contract/phase-prose.test.mjs；P9 开发及后置独立测试执行者",
+      "module_consumers": [],
+      "named_data_readers": [
+        "node node_modules/vitest/vitest.mjs run tests/contract/phase-prose.test.mjs",
+        "P9 开发及后置独立测试执行者"
+      ],
+      "delete_condition": "本具名职责经独立验证由既有替代完整承接且当前消费者均改接后删除；历史原件与冻结失败保留。",
+      "retention_basis": "C07 P9 T025/026/027/029/030/031/032与主会话明确批准的必要登记补集；不新增阶段、公共命令或持久控制面。"
+    },
+    {
+      "source": "tests/contract/authoring-contract.test.mjs",
+      "destination": "tests/contract/authoring-contract.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "C07 P9具名作者契约测试；分别核真实CLI、当前材料、模板与原合同边界，不证明页面验收或独立冷读效果。",
+      "owner": "C07 P9 唯一开发writer / build-plan作者方法owner",
+      "consumer": "node node_modules/vitest/vitest.mjs run tests/contract/authoring-contract.test.mjs；P9 开发及后置独立测试执行者",
+      "module_consumers": [],
+      "named_data_readers": [
+        "node node_modules/vitest/vitest.mjs run tests/contract/authoring-contract.test.mjs",
+        "P9 开发及后置独立测试执行者"
+      ],
+      "delete_condition": "本具名职责经独立验证由既有替代完整承接且当前消费者均改接后删除；历史原件与冻结失败保留。",
+      "retention_basis": "C07 P9 T025/026/027/029/030/031/032与主会话明确批准的必要登记补集；不新增阶段、公共命令或持久控制面。"
+    },
+    {
+      "source": "tests/contract/spec-analyze-classes.test.mjs",
+      "destination": "tests/contract/spec-analyze-classes.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "C07 P9具名作者契约测试；分别核真实CLI、当前材料、模板与原合同边界，不证明页面验收或独立冷读效果。",
+      "owner": "C07 P9 唯一开发writer / build-plan作者方法owner",
+      "consumer": "node node_modules/vitest/vitest.mjs run tests/contract/spec-analyze-classes.test.mjs；P9 开发及后置独立测试执行者",
+      "module_consumers": [],
+      "named_data_readers": [
+        "node node_modules/vitest/vitest.mjs run tests/contract/spec-analyze-classes.test.mjs",
+        "P9 开发及后置独立测试执行者"
+      ],
+      "delete_condition": "本具名职责经独立验证由既有替代完整承接且当前消费者均改接后删除；历史原件与冻结失败保留。",
+      "retention_basis": "C07 P9 T025/026/027/029/030/031/032与主会话明确批准的必要登记补集；不新增阶段、公共命令或持久控制面。"
+    },
+    {
       "source": "tests/contract/make-decision-flow.test.mjs",
       "destination": "tests/contract/make-decision-flow.test.mjs",
       "status": "add",

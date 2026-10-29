@@ -444,8 +444,51 @@ function reconcileWriteSetDiff({ phaseRows, phase_id, changeScope, reviewReadSco
     coverage_limit: "Caller-supplied current-Phase baseline scope only; external write surfaces are not covered" });
 }
 
-export function validatePostPhaseContract({ spec, index, phases, reviewReadScope, changeScope, phase_id } = {}) {
+function missingTaskField(value) {
+  const normalized = String(value ?? '').replace(/[*_`]/g, '').trim();
+  return !normalized || /^(?:TBD|TODO|待补充|\[|N\/A\s*$)/i.test(normalized);
+}
+
+// A narrow fallback for an omitted label, not a general language classifier.
+function hasTaskProseAction(prose, files) {
+  const targets = inlinePaths(files ?? '').filter(path => /[/.]/.test(path));
+  const declared = String(files ?? '').match(/(?:\bsymbols?|符号)\s*[:：]\s*([^;；\n]+)/i)?.[1] ?? '';
+  const symbols = declared.replace(/[`*]/g, '').split(/[,，、]/).map(name => name.trim())
+    .filter(name => /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(name))
+    .map(name => new RegExp(`(?:^|[^\\w$])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=$|[^\\w$])`));
+  return prose.split(/[;；,，。\n]|\b(?:and|but|however|then)\b|但是|但|并且|同时|随后|然后|并/i).some(clause => {
+    const affirmative = clause
+      .replace(/\b(?:do not|don't|must not|never)\b.*$/i, '')
+      .replace(/(?:不得|禁止|无需|不必|不要|不)(?:需要)?\s*(?:读取|修改|写入|编写|删除|替换|新增|实现|校验|验证|检查|保存).*$/, '');
+    return (targets.some(target => affirmative.includes(target)) || symbols.some(symbol => symbol.test(affirmative)))
+      && /(?:读取|修改|写入|编写|删除|替换|新增|实现|校验|验证|检查|保存|read\b|write\b|change\b|replace\b|implement\b)/i.test(affirmative);
+  });
+}
+
+// Count reader prose, excluding fields, tables, quoted source and fenced examples.
+function taskCardProse(body) {
+  let fence = null;
+  return body.replace(/<!--[\s\S]*?-->/g, '').split(/\r?\n/).filter(line => {
+    const marker = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    if (fence) {
+      if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length
+          && /^[ \t]*$/.test(marker[2])) fence = null;
+      return false;
+    }
+    if (marker && (marker[1][0] !== '`' || !marker[2].includes('`'))) {
+      fence = marker[1];
+      return false;
+    }
+    return /\S/.test(line) && !/^(?:\s|[-*+>#|]|\d+[.)、）])/.test(line)
+      && !/^(?:机器字段|校验器用|人可跳过)/.test(line);
+  }).join('\n');
+}
+
+export function validatePostPhaseContract({ spec, index, phases, reviewReadScope, changeScope, phase_id, prose_contract, material_path } = {}) {
   const errors = [];
+  const proseMode = prose_contract ?? (/(?:^|[/\\])archive(?:[/\\]|$)/.test(material_path ?? '') ? 'diagnostic' : 'required');
+  if (!['diagnostic', 'required'].includes(proseMode)) errors.push('prose_contract must be diagnostic or required');
+  const fieldGaps = [], cardProseGaps = [];
   if (!nonEmptyString(spec)) errors.push("spec.md content is required");
   if (!nonEmptyString(index)) errors.push("phases/index.md content is required");
   if (!phases || typeof phases !== "object" || Array.isArray(phases)) errors.push("independent Phase files are required");
@@ -584,11 +627,21 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
         "Evidence", "STOP / recovery", "Coverage limit", "Done",
       ];
       const fields = Object.fromEntries(required.map((field) => [field, fieldValue(cardBody, field)]));
+      const prose = taskCardProse(cardBody);
+      if (!prose) {
+        cardProseGaps.push(`${expectedPath} ${taskId}`);
+        if (proseMode === 'required') commandError(`${expectedPath} ${taskId} task card requires reader prose`);
+      }
       for (const field of required) {
         const value = fields[field];
-        if (!value || /^(?:TBD|TODO|待补充|\[|N\/A\s*$)/i.test(value)) {
-          commandError(`${expectedPath} ${taskId} task card missing concrete ${field}`);
+        if (missingTaskField(value)) {
+          fieldGaps.push(Object.freeze({ phase_id: expectedId, task_id: taskId, path: expectedPath, field }));
         }
+      }
+      // A missing label alone is advisory; an absent actual action remains a
+      // real failure. Navigation outside this Task cannot supply its action.
+      if (missingTaskField(fields.Action) && !hasTaskProseAction(prose, fields['Files / symbols'])) {
+        commandError(`${expectedPath} ${taskId} task card missing concrete Action`);
       }
       const cardFrs = identifiers(fields["Source / FR / AC"] ?? "", /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g);
       const cardAcs = identifiers(fields["Source / FR / AC"] ?? "", ACCEPTANCE_CRITERION_ID);
@@ -774,6 +827,9 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
   for (const id of acceptedAcs) if (!coveredAcs.includes(id)) errors.push(`AC has no executable Phase task coverage: ${id}`);
   if (acceptedFrs.length === 0 || acceptedAcs.length === 0) errors.push("spec.md requires accepted FR and AC definitions");
   const facts = Object.freeze({
+    prose_mode: proseMode,
+    field_gaps: Object.freeze(fieldGaps),
+    card_prose_gaps: Object.freeze(cardProseGaps),
     write_set_reconciliation: reconcileWriteSetDiff({ phaseRows, phase_id, changeScope, reviewReadScope, selectedPhaseScopeValid }),
     phase_count: phaseRows.length,
     task_count: [...new Set(phaseRows.flatMap((row) => row.task_ids))].length,
