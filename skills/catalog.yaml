@@ -941,6 +941,15 @@ skills:
           - packages/core/agenthub/skills/frontend-testing/SKILL.md#工作流（六步闭环） — 采用frontend-testing的测试分责、真实输入/输出与覆盖限制；不采用安装、全量扫描或release gate
     local_changes: 保留状态/交互维度、UI phase/task 字段和失败证据；owner 是 build-code 前端测试路由，consumer 是真实 UI changed files；适用 UI attempt 经官方 build-code seam 一次调用 isolated-browser-qa，绑定 Design/Experience、service/API/DTO identity 和 cleanup；截图或 browser pass 不变成普遍 gate；不新增 Runner；delete-condition 为 frontend-testing 退役且无阶段引用；2026-10-16固定258f5a2的LICENSE实际为modified Apache-2.0，含第三方hosted/embedded商业服务授权及frontend logo/copyright条件；旧MIT登记不实。抽取技能文字的适用性unknown，由来源维护者向权利owner核具体grant，当前不扩采用/分发范围，不视为已接受附加条款。
     dependency_closure: ["skills/isolated-browser-qa","skills/spec-specify","skills/project-norm-init","skills/backend-testing"]
+    page_audit:
+      criterion: skills/frontend-testing/references/page-audit.md
+      checker: skills/frontend-testing/scripts/check-page-audit.mjs
+      owner: frontend-testing
+      consumers: ["page collectors", "report consumers", "plan-design-review page mode"]
+      scope: 唯一页面判据与局部结构CLI；不证明页面事实、完整身份或正式证据hash
+      replacement: 承接本技能及plan-design-review页面模式的共用判据，不替换八维原文或浏览器网关
+      tests: tests/contract/page-audit-wiring.test.mjs
+      delete_condition: 经已审替代实现完整承接且无现消费者后移除
 
     update_policy: 随前端测试和 browser 证据合同人工比较
   - name: fullstack-slice-testing

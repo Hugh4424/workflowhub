@@ -2,7 +2,9 @@
   "schema_version": 1,
   "skill": "frontend-testing",
   "files": [
-    "SKILL.md"
+    "SKILL.md",
+    "references/page-audit.md",
+    "scripts/check-page-audit.mjs"
   ],
   "sources": [
     {
