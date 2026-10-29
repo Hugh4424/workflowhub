@@ -1,7 +1,7 @@
 import {channel} from 'node:diagnostics_channel';
 import {AsyncLocalStorage} from 'node:async_hooks';
 const connectionContext=new AsyncLocalStorage();
-// CDP payloads and connection capabilities stay in this process's memory.
+// Shared gateway/collector transport; CDP payloads and capabilities stay in process memory.
 export function safeError(code, method) { const e = new Error(code); e.code = code; e.method = method; return e; }
 export function validateEndpoint(value, role = 'source') {
   const code = role === 'receiver' ? 'INVALID_RECEIVER_ENDPOINT' : 'INVALID_SOURCE_ENDPOINT';

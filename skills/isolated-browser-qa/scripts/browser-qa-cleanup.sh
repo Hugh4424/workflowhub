@@ -13,7 +13,7 @@ case "$ENGINE" in
     printf 'reason=finish_once_on_normal_completion_only\n' >&2
     exit 1
     ;;
-  agent-browser|browser-use) ;;
+  agent-browser) ;;
   *)
     printf 'unsupported_cleanup_engine=%s\n' "$ENGINE" >&2
     exit 64
@@ -81,18 +81,6 @@ def lsof_pids_for_path(path: Path) -> set[int]:
         return set()
     return {int(line.strip()) for line in output.splitlines() if line.strip().isdigit()}
 
-browser_use_roots = {
-    row["pid"]
-    for row in rows
-    if re.search(rf"browser_use\.skill_cli\.(server|daemon) --session {re.escape(session)}(\s|$)", row["command"])
-}
-
-all_browser_use_roots = {
-    row["pid"]
-    for row in rows
-    if "browser_use.skill_cli.server" in row["command"] or "browser_use.skill_cli.daemon" in row["command"]
-}
-
 playwright_mcp_roots = {
     row["pid"]
     for row in rows
@@ -139,7 +127,7 @@ initial_identities = start_identities()
 def extract_user_data_dir(command):
     match = re.search(r"--user-data-dir=(\"[^\"]+\"|'[^']+'|[^ ]+)", command)
     return match.group(1).strip("\"'") if match else None
-owned_roots = agent_browser_roots if engine == "agent-browser" else browser_use_roots
+owned_roots = agent_browser_roots
 owned_pids = set(owned_roots)
 for root_pid in owned_roots:
     owned_pids.update(descendants(root_pid))
@@ -152,11 +140,6 @@ try:
 except (OSError, subprocess.TimeoutExpired):
     close_error = True
 kill_pids = set()
-if engine in ("browser-use", "all"):
-    for root_pid in browser_use_roots:
-        kill_pids.add(root_pid)
-        kill_pids.update(descendants(root_pid))
-
 if engine in ("agent-browser", "all"):
     for root_pid in agent_browser_roots:
         kill_pids.add(root_pid)
@@ -205,8 +188,6 @@ for row in active_rows:
 
 patterns = (
     "agent-browser-chrome-",
-    "browser-use-user-data-dir-",
-    "browser-use-downloads-",
     "playwright-artifacts-",
 )
 
@@ -256,18 +237,6 @@ if agent_browser_pid_file.exists():
         if row and is_agent_browser_command(row["command"]):
             final_session_root_pids.add(pid)
 
-browser_use_session_residual = sum(
-    1
-    for row in final_rows
-    if "browser_use.skill_cli" in row["command"] and f"--session {session}" in row["command"]
-)
-
-browser_use_global_residual = sum(
-    1
-    for row in final_rows
-    if "browser_use.skill_cli" in row["command"] or "browser-use-user-data-dir-" in row["command"]
-)
-
 agent_browser_session_residual = sum(
     1
     for row in final_rows
@@ -307,8 +276,6 @@ if not final_session_root_pids:
 print(f"cleanup_engine={engine}")
 print(f"agent_browser_session_residual_processes={agent_browser_session_residual}")
 print(f"agent_browser_global_residual_processes={agent_browser_global_residual}")
-print(f"browser_use_session_residual_processes={browser_use_session_residual}")
-print(f"browser_use_global_residual_processes={browser_use_global_residual}")
 print(f"playwright_mcp_residual_processes={playwright_mcp_residual}")
 print(f"browser_residual_tmp_dirs={residual_tmp_dirs}")
 print(f"browser_removed_tmp_dirs={removed_dirs}")
@@ -318,8 +285,6 @@ print(f"owned_profile_residual_dirs={owned_profile_residual}")
 
 exit_code = int(metadata_error or owned_profile_residual > 0)
 if agent_browser_session_residual > 0:
-    exit_code = 1
-if browser_use_session_residual > 0:
     exit_code = 1
 
 

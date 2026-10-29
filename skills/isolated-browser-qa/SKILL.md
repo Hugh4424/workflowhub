@@ -5,8 +5,7 @@ description: >
   staging, and active-development web checks. Trigger it for browser testing,
   page acceptance, screenshot acceptance, flow reproduction, UI bug checks,
   localhost inspection, and post-change verification. Default to ego-lite
-  in an owned TaskSpace of the already open instance when explicitly requested by the caller. That mode fails explicitly without implicitly starting another browser. Missing-executable selection facts retain the agent-browser fallback for callers that allow a new isolated browser. Use browser-use only for isolated Browser Use Cloud, Python-agent workflows,
-  or browser-use-specific tasks.
+  when its existing instance is running; auto records an agent-browser fallback before launch when ego is missing or not running. Explicit existing-ego requests fail without starting another browser.
   Choose exactly one engine per QA run, run only that engine, repair only that
   engine, and stop with a clear blocker instead of mixing browser tools.
 allowed-tools: Bash(agent-browser:*), Bash(browser-use:*), Bash(bash:*), Bash(command:*), Bash(curl:*), Bash(node:*), Bash(python3:*), Bash(ps:*), Bash(lsof:*)
@@ -18,7 +17,7 @@ This skill is the browser QA gateway for local, preview, and staging checks.
 
 ## Core Rules
 
-Use one selected engine and one owned session throughout the run. For an explicit existing-ego request, own one new TaskSpace; browser-use is only for its explicitly required isolated capabilities. Repair that engine, preserving failures, then stop if blocked. Resolve bundled scripts from the loaded skill, clean before/after and verify owned residue; leave user browsers, app services and worktrees running. Auth details belong in references/auth.md; never auto-attach user Chrome/main profiles. Playwright MCP and switching engines are excluded.
+Use one selected engine and one owned session throughout the run. For an explicit existing-ego request, own one new TaskSpace; Repair that engine, preserving failures, then stop if blocked. Resolve bundled scripts from the loaded skill, clean before/after and verify owned residue; leave user browsers, app services and worktrees running. Auth details belong in references/auth.md; never auto-attach user Chrome/main profiles. Playwright MCP and switching engines are excluded.
 
 ## When To Use
 
@@ -26,7 +25,7 @@ Use for localhost/preview/staging/deployed-page tests, screenshots, DOM/flow acc
 
 ## Engine Router
 
-For that explicit request select ego-lite through the same --run entry and existing app; select agent-browser explicitly for its isolated interactive refs, screenshots and browser inspection. The existing-ego mode never starts another browser on acquisition failure. Select browser-use only for its required isolated Cloud/Python-agent/template capabilities. Selection is exclusive after launch. Outer isolation, permissions, navigation and scenario failures never trigger another engine; Playwright MCP remains excluded.
+ego 在跑就用；装了没开回退 agent-browser；选定后失败不切换。The single selectBrowserEngine entry owns auto discovery: only missing executable or observed not-running permits fallback, emitted once as engine-fallback with from, to, reason and probe before launch. Probe errors remain failures. Explicit engine requests bypass discovery; explicit ego acquisition never launches a backup. Browser-use is legacy: its retained native branch owns its lifecycle and cleanup. Outer isolation, permissions, navigation and scenario failures never trigger another engine; Playwright MCP remains excluded.
 
 ## Standard Workflow
 
@@ -37,17 +36,19 @@ Resolve SKILL_DIR from the directory of the actually loaded SKILL.md, independen
 ```bash
 SKILL_DIR="${workflowhub_package_root:?resolve from the loaded skill location}/skills/isolated-browser-qa"
 export BROWSER_QA_ENGINE="${BROWSER_QA_ENGINE:-auto}"
-eval "$(bash "$SKILL_DIR/scripts/browser-qa-context.sh" "$BROWSER_QA_TARGET_URL")"
+set -e
+context_exports="$(bash "$SKILL_DIR/scripts/browser-qa-context.sh" "$BROWSER_QA_TARGET_URL")"
+eval "$context_exports"
 ```
 
-Default context prints nonsecret engine/session/host/allowed-domains/auth/profile metadata. For a cancellable lifecycle use that same entry:
+Context-only auto discovery deliberately rejects fallback instead of exporting an implicit backup; use the direct --run entry below for the auto lifecycle and its recorded fallback. Context prints nonsecret engine/session/host/allowed-domains/auth/profile metadata. For a cancellable lifecycle use that same entry:
 
 ```bash
 bash "$SKILL_DIR/scripts/browser-qa-context.sh" --run --url "$BROWSER_QA_TARGET_URL" \
   --evidence-dir "$BROWSER_QA_EVIDENCE_DIR" -- bash "$BROWSER_QA_SCENARIO_SCRIPT"
 ```
 
-Evidence must be outside temporary browser roots. Scenario inherits the owned session. For agent-browser/browser-use, runner strips source capabilities, launches native blank and caches owned CDP before target work, then finally closes receiver/cleans on success, failure and cancel. Existing ego instead follows the TaskSpace lifecycle below. Caller preserves actual exit (cancel 130/143) and rereads named evidence with size/hash after cleanup. --run is private, not another WorkflowHub command.
+Evidence must be outside temporary browser roots. Scenario inherits the owned session. For agent-browser, runner strips source capabilities, launches native blank and caches owned CDP before target work, then finally closes receiver/cleans on success, failure and cancel. Existing ego instead follows the TaskSpace lifecycle below. Caller preserves actual exit (cancel 130/143) and rereads named evidence with size/hash after cleanup. --run is private, not another WorkflowHub command.
 
 ### 2. Doctor
 
@@ -61,7 +62,7 @@ Guide/dependency failure is unavailable; repair only that engine. Doctor does no
 
 ### 3. Cleanup Before Launch
 
-For agent-browser/browser-use use this owned-instance cleanup. Existing ego has no instance launch or pre-run cleanup; follow its TaskSpace lifecycle below.
+For agent-browser use this owned-instance cleanup. Existing ego has no instance launch or pre-run cleanup; follow its TaskSpace lifecycle below.
 
 ```bash
 bash "$SKILL_DIR/scripts/browser-qa-cleanup.sh" "$BROWSER_QA_SESSION" "$BROWSER_QA_ENGINE"
@@ -81,17 +82,13 @@ agent-browser --session "$BROWSER_QA_SESSION" snapshot -i -c
 
 Use fresh snapshot refs for click/fill/press. Read references/agent-browser.md for ready, console/errors, screenshot/a11y and controlled reset observations.
 
-### 5. Launch With `browser-use`
-
-Select `BROWSER_QA_ENGINE=browser-use` and Step 1's `--run`. Read references/browser-use.md for native dependencies, scenario CLI and failure boundaries before driving.
-
 ### 6. Repair Selected Engine
 
 Preserve prior evidence, reset only this owned session and repeat the original action headless once. Use headed only for requested visual debugging, CAPTCHA/MFA/SSO or observed headless mismatch; follow platform confirmation rules. If still blocked, report selected engine, symptom, attempts and reason; do not switch. Read references/fallback.md for doc drift versus harness gap versus product failure.
 
 ### 7. Finish Cleanly
 
-For agent-browser/browser-use use this cleanup. Existing ego follows normal finish versus error/control-loss retention below.
+For agent-browser use this cleanup. Existing ego follows normal finish versus error/control-loss retention below.
 
 ```bash
 bash "$SKILL_DIR/scripts/browser-qa-cleanup.sh" "$BROWSER_QA_SESSION" "$BROWSER_QA_ENGINE"
@@ -124,12 +121,10 @@ When a named target already has dry-run/test mode, read its promise and caller, 
 - `scripts/browser-qa-context.sh`: exports context or delegates `--run` to the private lifecycle helper.
 - `scripts/browser-qa-session.mjs`: owns launch, cancellation, scenario and finally cleanup.
 - `scripts/browser-qa-tickets.mjs`: validates scope and transfers target cookies only in memory.
-- `scripts/browser-qa-browser-use.py`: native parser/handler adapter and scenario CLI, owned by session.mjs.
 - `scripts/browser-qa-doctor.sh`: checks selected engine prerequisites.
 - `scripts/browser-qa-cleanup.sh`: closes the selected engine session without stopping app services.
 - `scripts/cleanup-browser-qa.sh`: compatibility wrapper for older calls.
 - `references/agent-browser.md`: agent-browser command workflow.
-- `references/browser-use.md`: browser-use-specific workflow.
 - `references/auth.md`: login and profile policy.
 - `references/fallback.md`: selected-engine repair policy.
 

@@ -81,7 +81,7 @@ async function ownedReceiver(env,session,signal) {
   if(signal?.aborted)throw safeError('CANCELLED');
   const root=rows.find(r=>Number(r.split(/\s+/)[0])===pid);
   if(!root||!/(agent-browser|browser_use\.skill_cli)/.test(root))throw safeError('RECEIVER_OWNERSHIP_INVALID');
-  const plain=(await command(['ps','-axo','pid=,ppid=,command='],env,{signal})).stdout.split('\n').map(r=>r.trim().split(/\s+/));
+  const plain=rows.map(r=>r.split(/\s+/));
   const owned=new Set([pid]);let changed=true;while(changed){changed=false;for(const r of plain)if(owned.has(Number(r[1]))&&!owned.has(Number(r[0]))){owned.add(Number(r[0]));changed=true;}}
   const profile=plain.find(r=>owned.has(Number(r[0]))&&r.join(' ').includes('--user-data-dir='));
   if(!profile)throw safeError('RECEIVER_PROFILE_MISSING');
@@ -432,12 +432,20 @@ export async function selectBrowserEngine(env=process.env,{probe}={}) {
   const requested=env.BROWSER_QA_ENGINE||'auto';
   if(!['auto','ego-lite','agent-browser','browser-use'].includes(requested))throw safeError('UNSUPPORTED_ENGINE');
   if(requested!=='auto')return {engine:requested,fallbacks:[]};
-  const detect=probe||(async()=>{for(const root of (env.PATH||'').split(delimiter)){if(!root)continue;try{await access(join(root,'ego-browser'),constants.X_OK);return {available:true};}catch(error){if(!['ENOENT','ENOTDIR'].includes(error.code))throw error;}}return {available:false,reason:'executable-missing'};});
+  const detect=probe||(async()=>{
+    for(const root of (env.PATH||'').split(delimiter)){
+      if(!root)continue;
+      try{await access(join(root,'ego-browser'),constants.X_OK);}catch(error){if(['ENOENT','ENOTDIR'].includes(error.code))continue;throw error;}
+      let running;try{running=await egoAlreadyRunning(env);}catch(error){if(['EACCES','CANCELLED'].includes(error.code))throw error;throw safeError('ENGINE_PROBE_UNAVAILABLE');}
+      return {available:true,running,...(!running?{reason:'not-running'}:{})};
+    }
+    return {available:false,reason:'executable-missing'};
+  });
   const result=await detect(),fallbacks=[];
-  if(!result||typeof result.available!=='boolean')throw safeError('ENGINE_PROBE_INVALID');
+  if(!result||typeof result.available!=='boolean'||(result.running!==undefined&&typeof result.running!=='boolean'))throw safeError('ENGINE_PROBE_INVALID');
   if(!result.available&&!['ENOENT','executable-missing'].includes(result.reason))throw safeError(result.reason==='EACCES'?'EACCES':'ENGINE_PROBE_UNAVAILABLE');
-  if(result.available)return {engine:'ego-lite',fallbacks};
-  recordEngineFallback(fallbacks,'ego-lite executable unavailable before launch',result);
+  if(result.available&&result.running!==false)return {engine:'ego-lite',fallbacks};
+  recordEngineFallback(fallbacks,result.available?'ego-lite not running before launch':'ego-lite executable unavailable before launch',result);
   return {engine:'agent-browser',fallbacks};
 }
 const registeredScripts=Object.freeze(['design-source-read-v1','design-source-prepare-v1']);
@@ -502,7 +510,6 @@ export async function runBrowserQa(args=process.argv.slice(2),inputEnv=process.e
   const scope=makeScope(url,site);const mode=env.BROWSER_QA_AUTH_MODE||'none';
   const selection=await selectBrowserEngine(env);let engine=selection.engine;
   for(const fact of selection.fallbacks)console.log(JSON.stringify(fact));
-  if((env.BROWSER_QA_ENGINE||'auto')==='auto'&&selection.fallbacks.length)throw safeError('EGO_EXISTING_MODE_NO_IMPLICIT_LAUNCH');
   if(!['ego-lite','agent-browser','browser-use'].includes(engine))throw safeError('UNSUPPORTED_ENGINE');
   if(!['none','read-only-ticket-export'].includes(mode))throw safeError('UNSUPPORTED_AUTH_MODE');
   if(mode==='read-only-ticket-export'&&!sourceInput)throw safeError('SOURCE_UNAVAILABLE');
@@ -522,10 +529,10 @@ export async function runBrowserQa(args=process.argv.slice(2),inputEnv=process.e
     const launch=engine==='agent-browser'?[engine,'--session',session,'--allowed-domains',allowed,'--content-boundaries','open']:[engine,'--session',session,'open'];
     const opened=await command(launch,env,{signal:aborter.signal});if(opened.code)throw safeError('ENGINE_LAUNCH_FAILED');
     {
-      const ownership=await ownedReceiver(env,session,aborter.signal);
       const cdp=await command([engine,'--session',session,'get','cdp-url'],env,{signal:aborter.signal});
       let endpoint=cdp.stdout.trim();try{const parsed=JSON.parse(endpoint);endpoint=parsed.data?.url||parsed.data?.cdpUrl||parsed.data||parsed.url||endpoint;}catch{}
       endpoint=validateEndpoint(endpoint,'receiver');
+      const ownership=await ownedReceiver(env,session,aborter.signal);
       receiver=await connectCdp(endpoint,{signal:aborter.signal,closeOnAbort:false});
       if(aborter.signal.aborted)throw safeError('CANCELLED');
       const identities=(await command(['ps','-axo','pid=,ppid=,lstart=,command='],env,{signal:aborter.signal})).stdout.split('\n').map(r=>r.trim());
