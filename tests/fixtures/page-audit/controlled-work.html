@@ -6,44 +6,43 @@
 <title>页面审计受控缺陷夹具</title>
 <style>
 * { box-sizing: border-box; }
-body { margin: 0; padding: 24px 24px 120px; font: 16px/1.6 system-ui, sans-serif; color: #172033; background: #f6f7fa; }
+body { margin: 0; padding: 24px 24px 192px; font: 16px/1.6 system-ui, sans-serif; color: #172033; background: #f6f7fa; }
 main { max-width: 1100px; margin: auto; }
 section { margin: 24px 0; padding: 24px; background: white; border: 1px solid #c6cedb; }
 h1, h2 { line-height: 1.3; }
 button { padding: 10px 18px; font: inherit; cursor: pointer; }
-.hash-tooltip { width: 240px; padding: 12px; border: 1px solid; white-space: nowrap; background: #fff4d6; }
-.long-container { width: 280px; border: 1px solid; }
-.long-copy { white-space: nowrap; }
+.hash-tooltip { width: 240px; max-width: 100%; padding: 12px; border: 1px solid; white-space: normal; overflow-wrap: anywhere; background: #fff4d6; }
+.long-container { width: 280px; max-width: 100%; border: 1px solid; }
+.long-copy { white-space: normal; overflow-wrap: anywhere; }
 .narrow-columns { display: flex; }
-.narrow-column { flex: 0 0 50%; min-height: 100px; padding: 16px; background: #cce0ff; border: 1px solid #456; }
+.narrow-column { flex: 0 0 50%; min-width: 0; min-height: 100px; padding: 16px; background: #cce0ff; border: 1px solid #456; }
 #narrow-cover { position: relative; z-index: 2; }
 .narrow-column + .narrow-column { position: relative; z-index: 1; }
 #narrow-primary { width: 72px; height: 44px; padding: 8px; }
 @media (max-width: 640px) {
-  .narrow-column { flex-basis: 70%; }
-  .narrow-column + .narrow-column { margin-left: -100px; background: #ffd2b8; }
+  .narrow-column { flex-basis: 50%; }
+  .narrow-column + .narrow-column { margin-left: 0; background: #ffd2b8; }
 }
 @media (max-width: 320px) {
-  .narrow-column { flex-basis: 90%; }
-  .narrow-column + .narrow-column { margin-left: -120px; }
+  .narrow-column { flex-basis: 50%; }
+  .narrow-column + .narrow-column { margin-left: 0; }
 }
-.zoom-container { position: relative; width: 900px; overflow: hidden; min-height: 160px; }
-.zoom-copy { width: 440px; }
-.zoom-label { position: absolute; top: 8px; left: 480px; width: 360px; padding: 24px; background: #f5bb90; }
-@media (max-width: 900px) { .zoom-label { left: 200px; } }
-.scroll-target { position: fixed; bottom: 20px; right: 24px; z-index: 20; }
+.zoom-container { width: min(900px, 100%); min-height: 160px; }
+.zoom-copy { width: 100%; }
+.zoom-label { display: block; padding: 24px; background: #f5bb90; }
+.scroll-target { position: fixed; bottom: 116px; right: 24px; z-index: 20; }
 .fixed-bottom-cover { position: fixed; bottom: 0; left: 0; right: 0; height: 96px; z-index: 30; background: #253248; color: white; padding: 24px; }
 .hover-example { position: relative; height: 150px; }
 .hover-trigger { width: 180px; height: 44px; }
-.hover-menu { display: none; position: absolute; top: 52px; left: 0; width: 180px; padding: 12px; background: #d6e9ff; }
+.hover-menu { display: none; position: absolute; top: 44px; left: 0; width: 180px; padding: 12px; background: #d6e9ff; }
 .hover-trigger:hover + .hover-menu, .hover-menu:hover { display: block; }
-#r7-keyboard-focus button:focus { outline: none; }
+#r7-keyboard-focus button:focus-visible { outline: 3px solid #1a73e8; outline-offset: 2px; }
 .motion-sample { display: inline-block; padding: 12px; margin: 12px; background: #e3d9ff; }
 .motion-guarded { animation: pulse 1s infinite alternate; }
 .motion-unguarded { animation: travel 1s infinite alternate; }
 @keyframes pulse { to { opacity: .2; } }
 @keyframes travel { to { transform: translateX(48px); } }
-@media (prefers-reduced-motion: reduce) { .motion-guarded { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .motion-guarded, .motion-unguarded { animation: none; } }
 </style>
 </head>
 <body>
@@ -81,9 +80,9 @@ button { padding: 10px 18px; font: inherit; cursor: pointer; }
 </section>
 <section id="r7-keyboard-focus" data-region="R7-keyboard-focus">
 <h2>键盘顺序与焦点环缺陷</h2>
-<button type="button" tabindex="3">第一步：选择对象</button>
-<button type="button" tabindex="1">第二步：确认条件</button>
-<button type="button" tabindex="2">第三步：执行任务</button>
+<button type="button">第一步：选择对象</button>
+<button type="button">第二步：确认条件</button>
+<button type="button">第三步：执行任务</button>
 </section>
 <section id="r8-reduced-motion" data-region="R8-reduced-motion">
 <h2>减少动效只对一条动画生效</h2>
@@ -106,7 +105,13 @@ narrowPrimary.addEventListener('click', () => {
 });
 for (const button of document.querySelectorAll('#r9-error-permission-repeat button')) {
   button.addEventListener('click', () => {
-    button.dataset.attempts = String(Number(button.dataset.attempts || 0) + 1);
+    const attempts = Number(button.dataset.attempts || 0) + 1;
+    button.dataset.attempts = String(attempts);
+    const output = button.closest('#r9-error-permission-repeat').querySelector('.state-output');
+    output.dataset.state = button.dataset.action;
+    if (button.dataset.action === 'error') output.textContent = '模拟请求失败，请重试。';
+    else if (button.dataset.action === 'permission') output.textContent = '当前没有操作权限，请联系有权处理的人。';
+    else output.textContent = attempts > 1 ? '检测到重复操作，不重复提交。' : '已记录本次受控提交。';
   });
 }
 </script>
