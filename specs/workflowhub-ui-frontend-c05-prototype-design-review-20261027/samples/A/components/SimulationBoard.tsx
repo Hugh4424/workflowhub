@@ -489,8 +489,10 @@ function Tip({ label, children }: { label: React.ReactNode; children: React.Reac
         {label}
       </button>
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-1 w-[280px] rounded-lg border border-white/[0.08] bg-[#0a0d14] p-3 text-left shadow-2xl">
-          {children}
+        <div className="absolute right-0 top-full z-50 w-[280px]" style={{ paddingTop: 4 }}>
+          <div className="rounded-lg border border-white/[0.08] bg-[#0a0d14] p-3 text-left shadow-2xl">
+            {children}
+          </div>
         </div>
       )}
     </span>
