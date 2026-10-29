@@ -50,6 +50,7 @@
         "necessity"
       ],
       "semantic_fields": [
+        "decision_baseline",
         "raw_requirement",
         "approved_spec",
         "draft_spec",
@@ -252,7 +253,7 @@
         "post": {
           "source_bundle": "none",
           "required": [
-            "raw_requirement",
+            "decision_baseline",
             "draft_spec",
             "acceptance_criteria",
             "phase_authorities",
@@ -260,6 +261,7 @@
             "review_instructions"
           ],
           "optional": [
+            "raw_requirement",
             "context_map",
             "evidence_map"
           ],

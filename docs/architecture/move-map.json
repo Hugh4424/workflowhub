@@ -7736,6 +7736,51 @@
       ],
       "delete_condition": "本受控演练职责与当前P8消费者均由经独立验证的替代承接后由原owner删除；P3 canonical、defects、校准页和已引用修复/失败历史保留。",
       "retention_basis": "主会话2026-10-30授权及179材料澄清，承接U31/U35/U44/U58与AC-C07-3/5同对象演练；不复制目录、不建新registry、bridge、global state或永久同字节断言。"
+    },
+    {
+      "source": "skills/spec-plan/scripts/build-decision-baseline.mjs",
+      "destination": "skills/spec-plan/scripts/build-decision-baseline.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "从显式决策日志与既有规格主题分组生成有源决策摘要；只返回投递文本与原件坐标，不保存第二决定权威。",
+      "owner": "C07 P10 唯一开发writer / 原build-plan审查方法owner",
+      "consumer": "tests/contract/review-decision-baseline.test.mjs；P10 T035当前材料请求作者调用CLI并将stdout放入decision_baseline。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "tests/contract/review-decision-baseline.test.mjs；P10 T035当前材料请求作者调用CLI并将stdout放入decision_baseline。"
+      ],
+      "delete_condition": "本具名消费者已由经独立验证的既有实现完整承接且调用方改接后删除；历史审查与失败原件保留。",
+      "retention_basis": "C07 P10 T033–T035及主会话2026-10-30正式交棒；复用既有review owner，不新增公共节点、账本或许可。"
+    },
+    {
+      "source": "tests/contract/review-decision-baseline.test.mjs",
+      "destination": "tests/contract/review-decision-baseline.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "在真实请求/packet接缝验证基线投递、缺件拒绝、历史兼容、原ref owner与错误哈希拒绝；模拟transport不冒模型效果。",
+      "owner": "C07 P10 唯一开发writer / 原build-plan审查方法owner",
+      "consumer": "P10开发与独立测试通过本Phase具名vitest gate运行。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "P10开发与独立测试通过本Phase具名vitest gate运行。"
+      ],
+      "delete_condition": "本具名消费者已由经独立验证的既有实现完整承接且调用方改接后删除；历史审查与失败原件保留。",
+      "retention_basis": "C07 P10 T033–T035及主会话2026-10-30正式交棒；复用既有review owner，不新增公共节点、账本或许可。"
+    },
+    {
+      "source": "tests/contract/review-axes-contract.test.mjs",
+      "destination": "tests/contract/review-axes-contract.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "通过真实runSimpleReview观察两路实际packet和错误/空发现保真；已知缺陷模型效果沿T035真实原件另判。",
+      "owner": "C07 P10 唯一开发writer / 原build-plan审查方法owner",
+      "consumer": "P10开发与独立测试通过本Phase具名vitest gate运行。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "P10开发与独立测试通过本Phase具名vitest gate运行。"
+      ],
+      "delete_condition": "本具名消费者已由经独立验证的既有实现完整承接且调用方改接后删除；历史审查与失败原件保留。",
+      "retention_basis": "C07 P10 T033–T035及主会话2026-10-30正式交棒；复用既有review owner，不新增公共节点、账本或许可。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

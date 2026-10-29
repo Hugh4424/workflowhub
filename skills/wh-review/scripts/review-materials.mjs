@@ -18,6 +18,38 @@ function sha256(bytes){return createHash("sha256").update(bytes).digest("hex");}
 function materialBytes(value){if(Buffer.isBuffer(value)||value instanceof Uint8Array)return Buffer.from(value);if(typeof value==="string")return Buffer.from(value,"utf8");return Buffer.from(JSON.stringify(value,null,2)+"\n","utf8");}
 function materialPresent(value){return typeof value==="string" ? value.trim().length>0 : value!==undefined&&value!==null;}
 export const PHASE_DIFF_INLINE_LIMIT_BYTES = 288 * 1024;
+
+// The runner owns requests; buildReviewMaterials remains the low-level packet
+// transport used by existing callers. References are resolved by the public
+// task owner before this boundary, never by a second filesystem reader here.
+export function validateBuildPlanRequest(input) {
+  if (input.stage !== "build-plan" || (input.activation_cohort ?? input.activationCohort ?? "pre") !== "post") return;
+  const materials = input.materials;
+  assertPlainMaterials(materials);
+  const legacy = input.legacy === true || Object.hasOwn(input, "request_version");
+  const required = stageMaterials.stages["build-plan"].profiles.post.required;
+  if (!legacy) {
+    for (const key of required) {
+      if (key === "review_instructions") continue;
+      const value = materials[key];
+      const descriptor = value && typeof value === "object" && (Object.hasOwn(value, "ref") || Object.hasOwn(value, "sha256"));
+      const nonTextBaseline = key === "decision_baseline" && typeof value !== "string";
+      if (nonTextBaseline || !materialPresent(value) || descriptor || materialBytes(redactProviderHostPaths(value)).length < 1024) {
+        throw Object.assign(new Error(`MATERIAL_MISSING: ${key} requires inline content of at least 1024 bytes`), { code: "MATERIAL_MISSING" });
+      }
+    }
+    if (materialBytes(materials.decision_baseline).length > 60 * 1024) throw Object.assign(new Error("MATERIAL_TOO_LARGE: decision_baseline exceeds 60 KiB"), { code: "MATERIAL_TOO_LARGE" });
+    if (materials.raw_requirement !== undefined && materialBytes(materials.raw_requirement).length > 10 * 1024) throw Object.assign(new Error("MATERIAL_TOO_LARGE: raw_requirement must be a bounded excerpt of at most 10 KiB"), { code: "MATERIAL_TOO_LARGE" });
+  } else {
+    for (const [key, value] of Object.entries(materials)) {
+      if (value && typeof value === "object" && (Object.hasOwn(value, "ref") || Object.hasOwn(value, "sha256"))) {
+        throw Object.assign(new Error(`MATERIAL_MISSING: ${key} reference must be resolved by the public review owner before packet delivery`), { code: "MATERIAL_MISSING" });
+      }
+    }
+    if (!materialPresent(materials.decision_baseline)) console.warn("LEGACY_DECISION_BASELINE_MISSING: supplied historical request has no decision baseline; review coverage is limited");
+  }
+}
+
 const PHASE_DIFF_SHARD_TARGET_BYTES = 96 * 1024;
 const FULL_PHASE_DIFF_PREFIXES = [
   "runtime/",
@@ -544,6 +576,12 @@ function stageReviewFocus(stage, track, reviewScope, reviewKind = null, directio
     return `Focus on traceability from the approved decision to user behavior, states, boundaries, interfaces, objective acceptance, and AC 可判断性与验收盲区. Explicitly check 横向第三路、隐藏前提、防虚假共识、纵向否定. Do not re-decide product direction or plan implementation work.${ordered}`;
   }
   if (stage === "build-plan") {
+    if (role === "red" || role === "blue") {
+      const focus = role === "red"
+        ? "role=red (A): 需求成立性 — compare each accepted requirement and user reply in decision_baseline with the submitted design; 验收充分性 — seek counterexamples where the proposed tests pass but the promised behavior fails. Judge only these two axes."
+        : "role=blue (B): 方案合理性 — challenge assumptions, dependencies, shared writers, rollback and unnecessary mechanisms; 可执行性 — trace a new reader's first concrete edit, command, oracle and failure recovery. Judge only these two axes and propose a smaller viable alternative.";
+      return `For post build-plan, judge the proposal against decision_baseline, draft_spec, acceptance_criteria and the complete physical Phase authorities. ${focus} Text alignment, identifier and shape checks belong to the existing scripts, not model findings. Alternative solutions are allowed within the accepted direction; cite the accepted decision rather than treating internal consistency as sufficiency. The Phase index remains pointers only. Review is advice, never permission to proceed.`;
+    }
     return `For post, focus on whether the current draft spec and each independent Phase execute the accepted decision in dependency order, with real consumers and test or evidence oracles; the Phase index must remain pointers only. For pre/history, inspect the legacy approved spec, plan and tasks. Do not add requirements or treat review as permission to proceed.${ordered}`;
   }
   if (stage === "build-code" && reviewScope === "phase") {
@@ -612,7 +650,9 @@ function renderReviewInstructionsFor(stage, track, uiScope, reviewScope, reviewK
   const roleBoundary = stage === "make-decision" && ["direction", "detail"].includes(track) && role
     ? ` This is the paired ${role} role; preserve pair_id and role provenance, and report only this role's independent advice.`
     : "";
-  const findingBudget = "按根因合并同类问题；不要把同一个问题重复写成多条 finding，也不要重复描述 provider、packet、snapshot、receipt 或审查流程。每条 finding 只写最小必要的 issue、root_cause、recommendation 和一到两句可复核 evidence；不要输出推理过程、背景复述或长篇总结。不要为了凑数量少报真正独立的交付风险。";
+  const findingBudget = stage === "build-plan" && role !== null
+    ? "每条 finding 给五项：锚点用 path/line，问题用 issue，依据在 root_cause/evidence 引用决定基线或可核原文，替代方案写 recommendation，覆盖范围也写 evidence，说明审到与未审到的对象。按根因合并，保留独立风险。合法空 findings 不代表全覆盖；不要编造发现或新增 JSON 字段，不输出 verdict、summary 或检查清单。"
+    : "按根因合并同类问题；不要把同一个问题重复写成多条 finding，也不要重复描述 provider、packet、snapshot、receipt 或审查流程。每条 finding 只写最小必要的 issue、root_cause、recommendation 和一到两句可复核 evidence；不要输出推理过程、背景复述或长篇总结。不要为了凑数量少报真正独立的交付风险。";
   const candidateOcrToolBoundaries = candidateExperiment && (stage === "build-code")
     ? " Do not invoke Agent, subagent, child-agent, or other agent tools. Do not wait for or poll agents, sessions, or processes; do not invoke wait/poll tools."
     : "";
@@ -718,13 +758,15 @@ function writeReviewDiff(write, raw) {
     captured_diff_bytes:raw.length, captured_diff_sha256:sha256(raw), changes});
 }
 
-export function buildReviewMaterials({attachmentRoot,reviewDataRoot,stage,reviewTrack=null,reviewScope=null,reviewKind=null,materials,source=null,role=null,uiScope=false,activationCohort="pre",authenticated_evidence=undefined,surface=null,phaseId=null}={}) {
+export function buildReviewMaterials({attachmentRoot,reviewDataRoot,stage,reviewTrack=null,reviewScope=null,reviewKind=null,materials,source=null,role=null,uiScope=false,activationCohort="pre",authenticated_evidence=undefined,surface=null,phaseId=null,legacy=false,...requestMetadata}={}) {
   const identity=reviewIdentityFromInput({stage,review_track:reviewTrack,review_scope:reviewScope,review_kind:reviewKind});
   if(reviewScope===TERMINAL_REVIEW_SCOPE && (phaseId!==null || surface==="document" || !source?.diffPath || !/^[a-f0-9]{40,64}$/.test(source.baseCommit ?? "") || !/^[a-f0-9]{40,64}$/.test(source.capturedHead ?? ""))) throw new Error("MATERIAL_INCOMPLETE: terminal requires whole delivery diff, task base/frozen head, worktree subject and null phase_id");
   const rule=identity.stage==="build-plan"&&activationCohort==="post" ? stageMaterials.stages["build-plan"].profiles.post : ruleForIdentity(identity.stage,identity.reviewTrack,identity.reviewScope,identity.reviewKind);
   assertPlainMaterials(materials);const filtered=validateMaterialAllowlist(rule,materials);
   if(stage==="make-decision" && reviewTrack==="direction") validateDirectionReviewInput({materials});
-  const generated=new Set(rule.generated ?? []);const missing=(rule.required ?? []).filter(key=>!generated.has(key)&&!materialPresent(filtered.materials[key]));
+  const legacyBuildPlan=stage==="build-plan"&&activationCohort==="post"&&(legacy===true||Object.hasOwn(requestMetadata,"request_version"));
+  const generated=new Set(rule.generated ?? []);const missing=(rule.required ?? []).filter(key=>!generated.has(key)&&!materialPresent(filtered.materials[key])&&!(legacyBuildPlan&&key==="decision_baseline"));
+  const legacyNote=legacyBuildPlan&&!materialPresent(filtered.materials.decision_baseline) ? "\nLEGACY_DECISION_BASELINE_MISSING: this historical request has no decision baseline; requirement coverage remains limited.\n" : "";
   const base=resolve(attachmentRoot ?? reviewDataRoot);if(realpathSync(base)!==base||!lstatSync(base).isDirectory())throw new Error("MATERIAL_INCOMPLETE: attachment root must be a real directory");
   const packetParent=join(base,".wh-review-packets");mkdirSync(packetParent,{recursive:true});if(realpathSync(packetParent)!==packetParent)throw new Error("MATERIAL_INCOMPLETE: packet path alias");
   const bundleRoot=mkdtempSync(join(packetParent,"review-"));const entries=[];
@@ -739,16 +781,18 @@ export function buildReviewMaterials({attachmentRoot,reviewDataRoot,stage,review
   try {
     const documentFace=surface==="document"&&stage==="build-code";
     const codePacket=(stage === "build-code")&&!documentFace;
-    const selection=selectReviewerSkills(stage,reviewTrack,reviewKind,uiScope,filtered.materials,codePacket,reviewScope);
+    const baseSelection=selectReviewerSkills(stage,reviewTrack,reviewKind,uiScope,filtered.materials,codePacket,reviewScope);
+    const selection=stage==="build-plan"&&role!==null ? {...baseSelection,skills:[...new Set([...baseSelection.skills,"spec-specify"])]} : baseSelection;
     const instructionSelection=stage==="build-plan" && reviewKind===null
       ? selection : selectReviewerSkills(stage,reviewTrack,reviewKind,uiScope,filtered.materials,false,reviewScope);
     const instruction=documentFace
       ? `Review stage build-code; subject_kind=phase; review_scope=phase; phase_id=${phaseId ?? "not supplied"}; surface=document. This is the current Phase's document review, not a build-plan stage result or an OCR code review. Read the complete submitted specification, Phase material, method/contract documents and metadata. Apply contracts/build-plan.md as the existing document review lens: requirement-to-implementation-to-consumer-to-verification, dependencies, boundary, recovery and necessity. The actual stage remains build-code. Do not evaluate unsubmitted code or demand snapshot/hash/receipt/lineage permits. Read manifest-declared reviewer skills and contracts/provider-protocol.md. Report only concrete delivery findings with relative file/line anchors and genuine serious evidence. Findings, including empty findings, are advice only; missing quality stays unknown and provider/transport/parse failure remains unavailable/incomplete. Do not access repository files, Git, general shell, network or host paths. ${PACKET_BOUND_CODEX_READ_EXCEPTION} Return exactly one findings JSON.\n`
       : renderReviewInstructionsFor(stage,reviewTrack,uiScope,reviewScope,reviewKind,stage==="make-decision"&&reviewTrack==="direction"?"combined":"full",role,false,{entries:providerMaterialEntries({stage,review_track:reviewTrack,review_scope:reviewScope,review_kind:reviewKind,activation_cohort:activationCohort,materials:filtered.materials}),codePacket,diffBytes:source?.diffPath ? reviewMaterialBytes("changes.diff",readRegisteredFile(source.diffPath,"supplied diff")).length : null},instructionSelection);
-    write("review-instructions.md",instruction+(missing.length ? `\nSupplied material is incomplete: ${missing.join(", ")}. Missing quality is unknown, not a pass.\n` : ""));
+    write("review-instructions.md",instruction+legacyNote+(missing.length ? `\nSupplied material is incomplete: ${missing.join(", ")}. Missing quality is unknown, not a pass.\n` : ""));
     const surfaceName=surface==="document"&&stage==="build-code" ? "build-plan" : reviewSurfaceFor(stage,reviewTrack,reviewScope,reviewKind);const contract=stageMaterials.surfaces?.[surfaceName]?.contract;
     if(typeof contract!=="string" || !/^contracts\/[a-z0-9-]+\.md$/.test(contract))throw new Error(`MATERIAL_INCOMPLETE: missing contract for ${surfaceName}`);
     write(contract,readRegisteredFile(resolve(here,"..",contract),contract));
+    if(stage==="build-plan"&&role!==null)write("contracts/authoring-contract.md",readRegisteredFile(resolve(workflowhubSkills,"spec-plan/references/authoring-contract.md"),"authoring-contract.md"));
     write("contracts/provider-protocol.md",readRegisteredFile(resolve(here,"..","contracts","provider-protocol.md"),"provider-protocol.md"));
     for(const name of selection.skills) {
       if(typeof name!=="string" || !/^[a-z0-9][a-z0-9-]*$/.test(name))throw new Error("MATERIAL_INCOMPLETE: unsafe skill name");

@@ -7,6 +7,7 @@
     "templates/index-template.md",
     "scripts/check-reader-record.mjs",
     "scripts/check-authoring-budget.mjs",
+    "scripts/build-decision-baseline.mjs",
     "references/authoring-contract.md"
   ],
   "sources": [
