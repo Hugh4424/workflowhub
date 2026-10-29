@@ -6,6 +6,21 @@
   "generated_from": "当前迁移表保留分类、已改接真实相对模块 consumer 与显式数据 reader；不保存整树快照或 hash 清单",
   "entries": [
     {
+      "source": "tests/contract/make-decision-flow.test.mjs",
+      "destination": "tests/contract/make-decision-flow.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "C07 P6九条固定名、动作与位置的静态契约，保十五步身份和阶段标识；不证明真实问答、审查、领域读回或交接执行。",
+      "owner": "C07 P6 唯一开发writer",
+      "consumer": "P6开发与独立测试执行冻结gate_cmd读取方法、步骤表、模板和标准方法；审查者核定向RED/GREEN原件。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "node node_modules/vitest/vitest.mjs run tests/contract/make-decision-flow.test.mjs"
+      ],
+      "delete_condition": "该合同由独立验证的既有测试完整承接且本入口无消费者后删除；历史执行原件保留。",
+      "retention_basis": "P6/T015–T017明确新增测试；主会话允许必要最小登记，未新增运行时机制。"
+    },
+    {
       "source": "tests/contract/plan-authoring-compatibility.test.mjs",
       "destination": "tests/contract/plan-authoring-compatibility.test.mjs",
       "status": "retain",

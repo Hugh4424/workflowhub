@@ -10,6 +10,8 @@ WorkflowHub 主会话按认证工作区当前材料执行。post 材料为 decis
 
 已授权任务进入 build-code 后，自动实施、验证、审查、修复及交付必要的 commit/push/merge；切阶段/会话/handoff 不重置授权，不重问本地提交、日常技术验收或风险承担确认。Phase 实施、针对性测试、独立审查及 finding 修复全完成后，本 Phase 审后提交一次；build-code 终末结束时完成全部提交与合并。authorize 复用真实授权来源，操作前核范围/分支/当前 HEAD 并 record/consume；build-code commit 显式同传 phase=build-code，绑当前 task、分支和阶段，同阶段共用授权；实际 HEAD/每次消费保在既有 consumed 原件，授权原件不改。其它阶段、旧无 phase 记录及 push/merge/pr 仍严格匹配原 HEAD。真正执行关闭时，先按下节核工作区与任务范围，再读 [关闭方法](../skills/stage-close/SKILL.md)第6节「最终归档和清理前一次真实范围确认」与第7节「安全移除、分支删除与逐项读回」；只有取得其要求的最终范围确认才执行归档/删除/交付清理。无法修复/验证的事项如实保留，继续可执行部分，不自行 accepted_risk 或伪造通过。
 
+make-decision 最终确认＝阶段收口，具体动作沿其方法与决策日志模板；下一阶段由用户决定，不催下一阶段。
+
 ## 工作区与任务
 
 建任务用 `tools/cli/task-bootstrap.mjs` 的 `--project`、`--task`、`--target-repo`。task id 默认决定同级 `<repo>-<task-id>` 工作区与 `task/<project>/<task-id>` 分支；路径和分支须同时不存在才从目标仓当前 HEAD 创建，同时存在则核绑定，单边存在报冲突。显式 `--workspace-root` 或目标本身已是注册 linked worktree 时沿 existing 工作区及真实分支，不另建或改分支。按返回的 `task_path`、`workspace` 核实际路径/分支/基线；接续用 `--task-path` 打开原任务，核 manifest 身份、cohort 与真实绑定。pre/history 只读，不按 cwd 猜身份或改元数据求通过。

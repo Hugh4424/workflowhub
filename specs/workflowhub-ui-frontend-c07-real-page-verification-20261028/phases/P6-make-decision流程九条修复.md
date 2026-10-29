@@ -53,7 +53,7 @@
 - **evidence_path**：`quality/evidence/build-code/P6-make-decision-flow.json`。
 - **覆盖 AC**：AC-C07-5（借用，验收 1）。
 - **STOP**：见「风险、回滚、停点」的风险一条与停点三条，逐条写处置与回原 owner。
-- **Done**：一条验收记未执行；完成条件与恢复条件见「完成与交接」。
+- **Done**：P6/T015/T016/T017 Done；本Phase自带门禁与独立修后复验通过，四条原发现均fixed且无open finding。承接AC-C07-5为unavailable（仅形态借用，不承接页面首判）；原ref、覆盖限制与最终确认见「完成与交接」及「审后最后确认」。未stage/commit。
 
 ### 开始前要读什么
 
@@ -78,8 +78,8 @@
 
 修改四处，都是就地追加：
 - workflows/make-decision/SKILL.md，九条固定名与动作句，不动 15 步结构。
-- workflows/make-decision/steps.json，第 1、3、5、7、9、10、11、13、15 步
-  的观察结果与完成证据追加同义句，步骤数不变。
+- workflows/make-decision/steps.json，第 1、2、3、5、7、9、10、11、13、15 步
+  的观察结果追加固定名、动作与原件描述；完成证据保原kind/uri_or_path身份数组，步骤数不变。
 - skills/decision-log/templates/decision-log-template.md，验收面末尾三行，
   外置事实索引一行指针。
 - docs/standard-workflow.md，当前路线段加一句「最终确认＝阶段收口」。
@@ -105,16 +105,16 @@
 | `SKILL.md:82-95` 第 3 步 | 含 `调研决策`；三选一；跳过必须给理由 | 预写测试 entry 组第 2 例 |
 | `SKILL.md:131-136` 第 5 步 | 含 `大纲确认`，说明确认骨架不是最终方向 | 预写测试 entry 组第 3 例 |
 | `SKILL.md:141-147` 第 7 步 | 含 `方向审查时点`，位置在大纲确认后、逐模块收敛前 | 预写测试 entry 组第 4 例 |
-| `steps.json` 第 1、3、5、7 步 | 两字段含同一固定名 | 步骤表 15 步是唯一分母 |
+| `steps.json` 第 1、3、5、7 步 | observable_result含固定名、动作与原件描述；completion_evidence保原身份 | 步骤表 15 步是唯一分母 |
 | 既有结构 | 七条推荐顺序与四级表三列结构一字不动 | 契约决定 11 |
 
 四处怎么落：
 - 入口路由节：四级表前加一句，按入口事实推荐一档，用户可覆盖。
-- 第 3 步：内部、内部加外部、跳过加理由，三选一，写进当前日志。
+- 第 2 步产出大纲前先真实提问调研三选一并等待答复，未答不出大纲；第 3 步回读该答复及范围、为什么、跳过缺口、决定者与原ref，再按该选择执行。
 - 第 5 步：大纲确认，与第 13 步分工一句话说清。
 - 第 7 步：方向审查时点，不改文档审查接口。
 
-步骤表四步的观察结果与完成证据各补一句同义字段。
+步骤表四步的observable_result补固定名、动作与原件描述，completion_evidence保原身份数组。
 
 跑：node node_modules/vitest/vitest.mjs run tests/contract/make-decision-flow.test.mjs -t "entry"
 看到：退出 0；四条固定名按节各命中一次；四步字段同步。
@@ -124,10 +124,10 @@
 
 机器字段（校验器用，人可跳过）：
 - **来源 / FR / AC**：U-C07-40、U-C07-41、U-C07-42、D-038；FR-C07-023；AC-C07-5。
-- **文件 / 符号**：`workflows/make-decision/SKILL.md`（修改；符号：`## 入口路由` 内四个固定名 `开局四级选择`、`调研决策`、`大纲确认`、`方向审查时点`）；`workflows/make-decision/steps.json`（修改；符号 `step_slug`、`observable_result`、`completion_evidence`）。
-- **动作**：四个指定节各加一个固定名与一句动作，同步步骤表四步两字段。
+- **文件 / 符号**：`workflows/make-decision/SKILL.md`（修改；符号：`## 入口路由` 内四个固定名 `开局四级选择`、`调研决策`、`大纲确认`、`方向审查时点`）；`workflows/make-decision/steps.json`（修改；符号 `observable_result`；保 `step_slug` 与 `completion_evidence` 身份）。
+- **动作**：四个指定节各加一个固定名与一句动作，同步步骤表四步观察结果，完成证据保原身份。
 - **输入**：入口路由现状与四级表、步骤表四步现状。
-- **输出 / 失败**：四条固定名各在其节且步骤表同步；落错节或只改正文即判红。
+- **输出 / 失败**：四条固定名各在其节且步骤表观察结果同步、完成证据身份不变；落错节、漏动作/原件描述或只改正文即判红。
 - **边界 / 禁止改动**：不改子流程；不改第 1 步入口评估调用；不新增步骤；不改四级表三列结构。
 - **依赖**：`none`。
 - **测试层级 / 技能**：定向契约测试，按二级标题切节；主技能为规格写作技能。
@@ -145,7 +145,7 @@
 ### T016 — 任务 2：逐模块台账与细节审查前检查可核
 
 这张卡给两处判断各起一个固定名，并把停点写成可执行的句子。
-一处是逐模块台账：每包一行，状态只取已答、事实可定、待你定。
+一处是逐模块台账：每包一行，五类分析答复只取已答、事实可定、待你定；包级收敛列沿原检查器已收敛语义，不能混填。
 另一处是细节审查前检查：先跑步骤检查器，有未收敛的包就停。
 停不是失败也不是通过，恢复条件是收敛后重跑。
 
@@ -153,7 +153,7 @@
 
 | 位置 | 必须出现什么 | 出处 |
 | --- | --- | --- |
-| `SKILL.md:153-167` 第 9 步 | 含 `逐模块台账`；每包一行与三种状态取值 | 预写测试 ledger 组第 1 例 |
+| `SKILL.md:153-167` 第 9 步 | 含 `逐模块台账`；每包一行、三种分析答复取值与独立包级收敛语义 | 预写测试 ledger 组第 1 例 |
 | `SKILL.md:153-167` 第 10 步 | 含 `细节审查前检查` 与「未收敛即停」句 | 预写测试 ledger 组第 2 例 |
 | `SKILL.md:210` | 检查器命令字面唯一：`node tools/cli/check-stage-steps.mjs --stage=make-decision --task-path=<任务目录>` | 预写测试 ledger 组第 3 例 |
 | `steps.json` 第 9、10 步 | 两处固定名与停点一句 | 步骤表 15 步是唯一分母 |
@@ -174,8 +174,8 @@
 
 机器字段（校验器用，人可跳过）：
 - **来源 / FR / AC**：R-C07-23、U-C07-40、D-038；FR-C07-025；AC-C07-5。
-- **文件 / 符号**：`workflows/make-decision/SKILL.md`（修改；符号 `逐模块台账`、`细节审查前检查`）；`workflows/make-decision/steps.json`（修改；符号 `steps[8]`、`steps[9]` 的两字段）。
-- **动作**：两处判断各加固定名与可执行停点句，同步步骤表两处字段。
+- **文件 / 符号**：`workflows/make-decision/SKILL.md`（修改；符号 `逐模块台账`、`细节审查前检查`）；`workflows/make-decision/steps.json`（修改；符号 `steps[8]`、`steps[9]` 的observable_result；completion_evidence保原身份）。
+- **动作**：两处判断各加固定名与可执行停点句，同步步骤表两处observable_result，完成证据保原身份。
 - **输入**：第 9 步的五段小表与八项指针、第 10 步现文、检查器调用句。
 - **输出 / 失败**：两处固定名各在其节、停点含停与恢复条件；停点含糊即判红。
 - **边界 / 禁止改动**：不新增检查器参数；不改检查器；不改第 9 步五段顺序与包边界判据。
@@ -226,7 +226,7 @@
 
 机器字段（校验器用，人可跳过）：
 - **来源 / FR / AC**：U-C07-48、U-C07-40、D-038；FR-C07-028；AC-C07-5。
-- **文件 / 符号**：`workflows/make-decision/SKILL.md`（修改；符号 `grill 与领域词表读回`、`可核运行清单`、`最终确认＝阶段收口`）；`workflows/make-decision/steps.json`（修改；符号 `steps[10]`、`steps[12]`、`steps[14]`）；`skills/decision-log/templates/decision-log-template.md`（修改；符号 `确认原件`、`GLOSSARY 读回`、`handoff 绝对路径`）；`docs/standard-workflow.md`（修改；符号 `## 当前路线` 一句）。
+- **文件 / 符号**：`workflows/make-decision/SKILL.md`（修改；符号 `grill 与领域词表读回`、`可核运行清单`、`最终确认＝阶段收口`）；`workflows/make-decision/steps.json`（修改；符号 `steps[10]`、`steps[12]`、`steps[14]` 的observable_result；completion_evidence保原身份）；`skills/decision-log/templates/decision-log-template.md`（修改；符号 `确认原件`、`GLOSSARY 读回`、`handoff 绝对路径`）；`docs/standard-workflow.md`（修改；符号 `## 当前路线` 一句）。
 - **动作**：加读回句、15 行清单与收口三处口径，清单与步骤表双向对齐。
 - **输入**：第 11 步与领域维护段、收口段、模板两节、标准方法当前路线段。
 - **输出 / 失败**：三处同名同义、清单 15 行对齐；漏行或留待填即判红。
@@ -242,7 +242,7 @@
 - **证据**：`quality/evidence/build-code/P6-make-decision-flow.json`。
 - **停止 / 恢复**：模板被别人改过就停，读回当前字节后重写三行，不覆盖他人改动。
 - **覆盖上限**：不证明词表读回与交接真发生过；只证明三处口径在场且一致。
-- **完成**：一条命令重放；三处收口、清单 15 行、标准方法一句三项命中。
+- **完成**：一条命令重放；三处收口、清单 15 行、标准方法一句三项命中；步骤观察结果承载固定名、动作与原件描述，完成证据保原身份。
 
 ### 写主与并行
 
@@ -275,14 +275,50 @@
 
 ### 完成与交接
 
-一条验收记「未执行」，原因与恢复条件写清。
-- 验收 1（定位、最小修复、独立复验）：未执行，计划期只有计划，
-  契约测试尚未写入；恢复条件是 build-code 真跑门禁并落九组断言原件。
+AC-C07-5：unavailable（借用形态；本Phase不承接页面首次判定，页面AC由P8按spec判定器与真实页面原件首判；不以本静态契约代签）。
+- T015/T016/T017真实目标RED分别为quality/tests/2026-10-29-017-p6-entry-red.json、019-p6-ledger-red.json、020-p6-closeout-red.json，均exit 1且命中目标缺固定名/收口/清单断言。
+- TCR后对应GREEN为026-p6-entry-green-tcr.json、027-p6-ledger-green-tcr.json、028-p6-closeout-green-tcr.json，均exit 0；全卡gate原ref为quality/tests/2026-10-29-029-p6-full-target-green.json。
+- 本 Phase 自带判据小结：pass。九条方法/步骤观察结果/模板口径与15行逐字清单、原15步身份/四键/证据身份、同函数反例与真实runStageStepsCheck合法完成/待定/恢复/缺证据均实际验证。独立修后门禁quality/tests/2026-10-29-071-p6-independent-fix-target.json：34/34、exit0；072-p6-independent-fix-adjacent.json：12项通过/72项未选、exit0，无全量回归。未验真实Talk、真实领域写入/读回、真实阶段handoff与页面效果，不由本静态写集证明。独立审查033/host048/baseline050保修前036/ef7身份与失败覆盖；039/040四条原发现由原Spec056/Standards057定向事实回报核实，均fixed。
 
 完成条件：九组断言在真跑里先红后绿；步骤数仍 15、阶段标识未变；
 命令与退出码原件在场；独立审查按实际改动核写集。
 交接：步骤检查器继续只读步骤表，不因本 Phase 改退出语义；
 方法读者按九个固定名回读，材料作者不再重述九条。
+
+### 测试变更请求 — P6 证据身份兼容（ORACLE-P6-MAKE-DECISION-FLOW 不变）
+
+- 原断言：synced(id,name) 要求 observable_result 与 JSON.stringify(completion_evidence) 均包含固定名；entry 已真实 RED/GREEN，原件 quality/tests/2026-10-29-017-p6-entry-red.json 与 018-p6-entry-green.json。
+- 拟改断言：observable_result 包含该步固定名、独立字面动作与原件说明；completion_evidence 精确等于原 kind/uri_or_path 身份数组；每步恰四个原键，15个原 step_id/step_slug 与 stage_slug 不变。
+- why：P6“双字段追加”是实现设计；用户决定39/40只要求方法、步骤、模板与清单同步。三个旧冻结oracle深等原证据数组；新增描述与四键限制冲突。check-stage-steps:28-35只从observable_result解析“判定消费：…；原件：…”，不能破坏既有证据身份来满足作者假设。
+- 反例保全：删/挪固定名、漏动作或原件说明均红；改证据kind/path、增加证据项/步键、改15步/slug均红。新增定向负例验证上述检查确能失败，恢复合法输入通过。
+- 影响面：只本新测试的synced同步断言及新增负例；不改既有冻结tests、不改AC/FR/spec/decision-log/公共consumer；正文与observable保固定名/动作、证据身份复原。
+- 来源：当前主会话采用独立契约reader c8562066-a30f-459c-87ea-4989c37c86a5 的回源建议并允许本Phase澄清；原计划owner会话不可用，不冒其答复。独立建议原ref：quality/evidence/build-code/2026-10-29-020-p6-independent-contract-reader-advice.md；原件由主会话保存。
+- 处置：已实读独立针对TCR建议quality/evidence/build-code/2026-10-29-021-p6-tcr-independent-advice.md，并按主会话许可实施；原synced双字段含名与ledger恢复句位于completion的假设已替换为observable动作/原件检查及completion精确身份，完整同函数反例通过。原019不可变TCR保留；本建议不冒正式Phase质量裁决，正常审查仍仅后置一轮OCR及Standards/Spec。
+
+### 规则锚与材料变更影响
+
+- 规则锚：decision-log.md「决定 39 — 范围取方法加模板，实现在 C07 做」「决定 40 — 每个模块五段记录，写完立即发布并读回」；spec.md「6.0 四张流程改造卡不承接页面验收」首句“P6、P9、P10、P11 改的是 workflowhub 自身的流程与材料，不是页面能力。”；本卡T015/T016/T017。
+- 材料变更影响：仅本Phase双字段实施设计的兼容澄清、TCR、执行与Done事实；不改全局spec/decision-log/index、FR/AC及页面验收归属。
+
+### 审查后受影响集合与测试变更请求 — P6 调研时点及原收敛语义
+
+- 依据原件：quality/evidence/build-code/2026-10-29-039-p6-same-source-spec-original.md（Spec#1/#2/#3三条major，各保其原文）；040-p6-same-source-standards-original.md（Standards#1一条major，单列来源不合并丢弃）。same_source_degraded非OCR，Standards缺WR001/backend-testing正文属于原覆盖限制，未补造审查通过。主会话本次明确允许按这四条建议修复；OCR仍消费036冻结包，未取消/重发。
+- 受影响文件：workflows/make-decision/SKILL.md第2/3/9步与运行清单；workflows/make-decision/steps.json第2/3/9步observable；tests/contract/make-decision-flow.test.mjs；本Phase卡/TCR/必要执行证据。模板/标准方法不需改，原checker/旧冻结tests/AC/FR/方向不改。
+- 受影响case：entry调研决策与新增大纲前真实提问/等待/四项记录/第3步回读；ledger台账与新增分析三值/原包state及复杂模块调研格对齐；15行runlist；checkSynced/checkManifest反例。原27项保留，唯一既有期望调整如下。
+- 改前：syncContracts[9] action为“每包一行，状态只取已答／事实可定／待你定”，把分析三值误当包state。改后：“每包一行，五类分析答复只取已答／事实可定／待你定”；新增断言包状态沿原检查器已收敛语义、三值不填包状态列、有待你定不报已收敛。
+- 既有第3步选项/跳过理由断言及其observable旧动作保持；新增同一正式检查函数明确分级答复后、大纲前提问等待，未答不产大纲，级别答复不替调研答复，四项记录及原ref可回读，复杂包内/外需要判断、开局原ref对齐、差异理由/决定来源复用现调研格。
+- 保反例：删等待、问答移到大纲后、级别答复代调研答复、删四项记录/原ref、第三步未消费、复杂包缺开局引用/本包判断/差异理由/决定来源均由正式同一check函数拒绝；原名字/动作/原件/证据身份/15步/四键反例继续。真实runStageStepsCheck输入完整八格且包state已收敛应complete=true，改待你定/待收敛应false，恢复应true；不以模拟状态替真人语义。
+- TCR理由与不弱化：独立Spec#2及Standards#1明确要求同步受影响断言并保原consumer；替换的是错误落点，不删三值义务，增加行为正反证明。Spec#1/#3增强原缺失覆盖。独立依据就是本轮039/040正式建议，按主会话授权不重开正常审查；不同于原建议的额外契约更改先回核。
+- 处置起点为四条待修复，原文唯一ref不可变；现四条均已按原建议实施修复，060目标RED→063同命令GREEN，064全卡34项通过、066必要相邻命名case通过。逐条开发处置原ref：/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/2026-10-29-051-p6-review-fix-dispositions.md；原独立测试071/072与原Spec056/Standards057已明确回报，四条分源fixed，原始审查/TCR/RED仍保留。OCR033已终态，仅针对修前036对象且保provider失败与覆盖限制；开发最后确认不冒独立质量通过，未stage/commit。
+
+### 审后最后确认
+
+- 无open finding：Spec#1/#2/#3与Standards#1分别fixed，处置原ref：/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/2026-10-29-061-p6-final-finding-dispositions.json。
+- 无未解释测试失败：017/019/020与060为预期目标RED；后续GREEN及独立071/072通过，原失败不删改。
+- Phase Done：T015/T016/T017行为与本Phase自带判据已完成；本开发据独立结果最后确认，不自签独立审查或页面质量。
+- AC齐：唯一借用AC-C07-5为unavailable，原因、原ref、覆盖上限及P8真实页面承接如上，不伪造页面通过。
+- norm-sync已实际执行：项目realpath根共同norm-sync锁核四原权威源及AGENTS指针，已独立验证变化均已承接，具名无变化；原ref：quality/evidence/norm-deltas/2026-10-29-002-p6-norm-sync-no-change.json。无新增重复规范、索引或经验条目。
+- 交付边界：当前无stage/commit/push/merge/close；等待主会话串行Git轮次，仅提交本Phase七路径。P1/P8其它dirty不纳本Phase。
 
 ## L2 — 可删除参考
 
