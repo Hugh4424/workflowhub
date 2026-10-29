@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>页面审计受控缺陷夹具</title>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; padding: 24px 24px 120px; font: 16px/1.6 system-ui, sans-serif; color: #172033; background: #f6f7fa; }
+main { max-width: 1100px; margin: auto; }
+section { margin: 24px 0; padding: 24px; background: white; border: 1px solid #c6cedb; }
+h1, h2 { line-height: 1.3; }
+button { padding: 10px 18px; font: inherit; cursor: pointer; }
+.hash-tooltip { width: 240px; padding: 12px; border: 1px solid; white-space: nowrap; background: #fff4d6; }
+.long-container { width: 280px; border: 1px solid; }
+.long-copy { white-space: nowrap; }
+.narrow-columns { display: flex; }
+.narrow-column { flex: 0 0 50%; min-height: 100px; padding: 16px; background: #cce0ff; border: 1px solid #456; }
+#narrow-cover { position: relative; z-index: 2; }
+.narrow-column + .narrow-column { position: relative; z-index: 1; }
+#narrow-primary { width: 72px; height: 44px; padding: 8px; }
+@media (max-width: 640px) {
+  .narrow-column { flex-basis: 70%; }
+  .narrow-column + .narrow-column { margin-left: -100px; background: #ffd2b8; }
+}
+@media (max-width: 320px) {
+  .narrow-column { flex-basis: 90%; }
+  .narrow-column + .narrow-column { margin-left: -120px; }
+}
+.zoom-container { position: relative; width: 900px; overflow: hidden; min-height: 160px; }
+.zoom-copy { width: 440px; }
+.zoom-label { position: absolute; top: 8px; left: 480px; width: 360px; padding: 24px; background: #f5bb90; }
+@media (max-width: 900px) { .zoom-label { left: 200px; } }
+.scroll-target { position: fixed; bottom: 20px; right: 24px; z-index: 20; }
+.fixed-bottom-cover { position: fixed; bottom: 0; left: 0; right: 0; height: 96px; z-index: 30; background: #253248; color: white; padding: 24px; }
+.hover-example { position: relative; height: 150px; }
+.hover-trigger { width: 180px; height: 44px; }
+.hover-menu { display: none; position: absolute; top: 52px; left: 0; width: 180px; padding: 12px; background: #d6e9ff; }
+.hover-trigger:hover + .hover-menu, .hover-menu:hover { display: block; }
+#r7-keyboard-focus button:focus { outline: none; }
+.motion-sample { display: inline-block; padding: 12px; margin: 12px; background: #e3d9ff; }
+.motion-guarded { animation: pulse 1s infinite alternate; }
+.motion-unguarded { animation: travel 1s infinite alternate; }
+@keyframes pulse { to { opacity: .2; } }
+@keyframes travel { to { transform: translateX(48px); } }
+@media (prefers-reduced-motion: reduce) { .motion-guarded { animation: none; } }
+</style>
+</head>
+<body>
+<main>
+<h1>页面审计受控缺陷夹具</h1>
+<p>本页只提供九类已知缺陷。结构合同不证明浏览器检测、真实页面或修复结果。</p>
+<section id="r1-hash-tooltip" data-region="R1-hash-tooltip">
+<h2>哈希浮窗溢出</h2>
+<p>64 字符哈希种子（9efb7e57 重复八次）整体再重复八次，共 512 字符；浮窗固定宽度且不换行。</p>
+<div class="hash-tooltip" role="tooltip">9efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e579efb7e57</div>
+</section>
+<section id="r2-long-text" data-region="R2-long-text">
+<h2>长中文文本撑破容器</h2>
+<div class="long-container"><p class="long-copy">这是一条用于页面审计的受控长中文任务说明，包含错误处理、权限校验、重复提交和恢复路径。任务说明必须完整可读，但这里故意不换行，让内容持续超出定宽容器。</p></div>
+</section>
+<section id="r3-narrow" data-region="R3-narrow">
+<h2>窄屏两列重叠</h2>
+<p>在 640px 与 320px 断点先量两列交集，再检查主按钮中心的实际命中与指针点击计数；这里未执行浏览器验证。</p>
+<div class="narrow-columns"><div id="narrow-cover" class="narrow-column">任务条件：确认当前对象、权限与状态。</div><div class="narrow-column"><button id="narrow-primary" type="button" data-clicks="0">确认</button><p>前列显式较高层级；真实遮挡结果仍待命中测试。</p></div></div>
+</section>
+<section id="r4-zoom" data-region="R4-zoom">
+<h2>200% 缩放遮挡正文</h2>
+<div class="zoom-container"><p class="zoom-copy">将浏览器从基准 1440px 视口缩放至 200%。固定像素容器仍保留 900px 宽度，绝对定位标签进入正文区域，遮住此任务说明与必要条件。</p><span class="zoom-label">绝对定位标签：必须先阅读任务条件</span></div>
+</section>
+<section id="r5-scroll-occlude" data-region="R5-scroll-occlude">
+<h2>固定底栏遮挡主操作</h2>
+<p>滚动后主操作仍固定在窗口底部，其命中区被更高层级底栏接管。</p>
+<button id="scroll-primary" class="scroll-target" type="button">提交受控任务</button>
+<div id="scroll-cover" class="fixed-bottom-cover">固定底栏：覆盖主操作命中区</div>
+</section>
+<section id="r6-hover-bridge" data-region="R6-hover-bridge">
+<h2>悬停菜单缺桥接区域</h2>
+<div class="hover-example"><button class="hover-trigger" type="button">悬停打开菜单</button><div class="hover-menu"><button type="button">执行菜单操作</button></div></div>
+<p>触发区高 44px，菜单从 52px 开始，间隔 8px 会让菜单消失。</p>
+</section>
+<section id="r7-keyboard-focus" data-region="R7-keyboard-focus">
+<h2>键盘顺序与焦点环缺陷</h2>
+<button type="button" tabindex="3">第一步：选择对象</button>
+<button type="button" tabindex="1">第二步：确认条件</button>
+<button type="button" tabindex="2">第三步：执行任务</button>
+</section>
+<section id="r8-reduced-motion" data-region="R8-reduced-motion">
+<h2>减少动效只对一条动画生效</h2>
+<span class="motion-sample motion-guarded">遵守减少动效</span>
+<span class="motion-sample motion-unguarded">仍持续移动</span>
+</section>
+<section id="r9-error-permission-repeat" data-region="R9-error-permission-repeat">
+<h2>错误、权限与重复操作缺反馈</h2>
+<p>三个按钮分别模拟失败、无权限与重复提交；故意不更新状态文案。</p>
+<button type="button" data-action="error">模拟请求失败</button>
+<button type="button" data-action="permission">模拟无权限</button>
+<button type="button" data-action="repeat">模拟重复提交</button>
+<p class="state-output" aria-live="polite"></p>
+</section>
+</main>
+<script>
+const narrowPrimary = document.getElementById('narrow-primary');
+narrowPrimary.addEventListener('click', () => {
+  narrowPrimary.dataset.clicks = String(Number(narrowPrimary.dataset.clicks) + 1);
+});
+for (const button of document.querySelectorAll('#r9-error-permission-repeat button')) {
+  button.addEventListener('click', () => {
+    button.dataset.attempts = String(Number(button.dataset.attempts || 0) + 1);
+  });
+}
+</script>
+</body>
+</html>

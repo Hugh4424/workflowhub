@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>间距校准负例</title>
+<style>
+body { margin: 32px; font-family: system-ui, sans-serif; color: #172033; }
+.samples { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.sample { display: grid; grid-template-columns: repeat(3, 1fr); padding: 16px; border: 1px solid #aab4c5; }
+.sample span { padding: 8px; background: #dbe7f5; }
+</style>
+</head>
+<body>
+<main data-calibration="spacing-gap" data-expected-severity="IMPORTANT">
+<h1>间距校准负例</h1>
+<p>同组三格从 16px gap 变为 8px：差 8px，50% token。期望 IMPORTANT。</p>
+<div class="samples">
+<div><h2>基线 16px</h2><div class="sample" data-role="baseline" style="gap:16px"><span>对象</span><span>条件</span><span>结果</span></div></div>
+<div><h2>观测 8px</h2><div class="sample" data-role="observed" style="gap:8px"><span>对象</span><span>条件</span><span>结果</span></div></div>
+</div>
+<button type="button">确认当前对象</button>
+<p>仅为静态校准资产；没有运行真实页面或重复定级。</p>
+</main>
+</body>
+</html>

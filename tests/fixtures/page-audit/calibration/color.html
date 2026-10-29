@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>颜色校准负例</title>
+<style>
+body { margin: 32px; font-family: system-ui, sans-serif; color: #172033; }
+.samples { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.sample { padding: 24px; border: 1px solid #aab4c5; font-size: 24px; background: white; }
+</style>
+</head>
+<body>
+<main data-calibration="text-color" data-expected-severity="IMPORTANT">
+<h1>颜色校准负例</h1>
+<p>同文案从 #1A73E8 变为 #3A83E8；按批准刻度标注色差约 4.0（ΔE2000）。期望 IMPORTANT。</p>
+<div class="samples">
+<div><h2>基线 #1A73E8</h2><p class="sample" data-role="baseline" style="color:#1A73E8">任务条件已核对，请确认当前对象。</p></div>
+<div><h2>观测 #3A83E8</h2><p class="sample" data-role="observed" style="color:#3A83E8">任务条件已核对，请确认当前对象。</p></div>
+</div>
+<button type="button">确认当前对象</button>
+<p>仅为静态校准资产；标注不是本次渲染或色差实测结果。</p>
+</main>
+</body>
+</html>

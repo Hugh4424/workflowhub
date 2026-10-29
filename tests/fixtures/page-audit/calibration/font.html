@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>字体校准负例</title>
+<style>
+body { margin: 32px; font-family: system-ui, sans-serif; color: #172033; }
+.samples { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.sample { padding: 24px; border: 1px solid #aab4c5; line-height: 1.6; }
+</style>
+</head>
+<body>
+<main data-calibration="font-size" data-expected-severity="IMPORTANT">
+<h1>字体校准负例</h1>
+<p>同文案从 20px 变为 17px：差 3px，15%。期望 IMPORTANT；任务仍可完成不代表偏差可忽略。</p>
+<div class="samples">
+<div><h2>基线 20px</h2><p class="sample" data-role="baseline" style="font-size:20px">任务条件已核对，请确认当前对象。</p></div>
+<div><h2>观测 17px</h2><p class="sample" data-role="observed" style="font-size:17px">任务条件已核对，请确认当前对象。</p></div>
+</div>
+<button type="button">确认当前对象</button>
+<p>仅为静态校准资产；没有运行真实页面或重复定级。</p>
+</main>
+</body>
+</html>
