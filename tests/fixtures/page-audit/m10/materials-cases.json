@@ -1,0 +1,9 @@
+{
+  "cases": [
+    {"id":"legal","exit":0,"originals":{"raw.txt":"alpha"},"materials":[{"material_id":"m1","ref":"raw.txt"}]},
+    {"id":"renamed","exit":0,"originals":{"renamed.txt":"alpha"},"materials":[{"material_id":"m1","ref":"renamed.txt"}],"previous":[{"material_id":"m1","ref":"old.txt","content":"alpha"}]},
+    {"id":"bytes_changed","exit":2,"originals":{"raw.txt":"bravo"},"materials":[{"material_id":"m1","ref":"raw.txt"}],"previous":[{"material_id":"m1","ref":"raw.txt","content":"alpha"}]},
+    {"id":"added_removed","exit":2,"originals":{"new.txt":"bravo"},"materials":[{"material_id":"m2","ref":"new.txt"}],"previous":[{"material_id":"m1","ref":"old.txt","content":"alpha"}]},
+    {"id":"extra_field","exit":2,"originals":{"raw.txt":"alpha"},"materials":[{"material_id":"m1","ref":"raw.txt","permission":"not-a-license"}]}
+  ]
+}

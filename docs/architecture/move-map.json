@@ -6,6 +6,83 @@
   "generated_from": "当前迁移表保留分类、已改接真实相对模块 consumer 与显式数据 reader；不保存整树快照或 hash 清单",
   "entries": [
     {
+      "source": "skills/frontend-testing/scripts/check-report-quotes.mjs",
+      "destination": "skills/frontend-testing/scripts/check-report-quotes.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "C07 T018 compare explicit quotations with original source windows and validate the existing five-field override",
+      "owner": "C07 P7 unique development writer / frontend-testing method maintainer",
+      "consumer": "tests/contract/page-audit-m10.test.mjs; C07 P8 quotation acceptance reader",
+      "module_consumers": [],
+      "named_data_readers": [
+        "tests/contract/page-audit-m10.test.mjs",
+        "specs/workflowhub-ui-frontend-c07-real-page-verification-20261028/phases/P8-全AC终验.md"
+      ],
+      "delete_condition": "Remove after this responsibility is retired or a verified replacement takes over all actual consumers; retain original execution and failure evidence.",
+      "retention_basis": "C07 P7 T018 approved source/quote CLI; no report DTO, resolver, permission or quality mechanism."
+    },
+    {
+      "source": "skills/frontend-testing/scripts/check-version-binding.mjs",
+      "destination": "skills/frontend-testing/scripts/check-version-binding.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "C07 T019 check explicit five-field identities, rename equivalence, material deltas and criteria byte digest",
+      "owner": "C07 P7 unique development writer / frontend-testing method maintainer",
+      "consumer": "tests/contract/page-audit-m10.test.mjs; C07 P8 material-binding acceptance reader",
+      "module_consumers": [],
+      "named_data_readers": [
+        "tests/contract/page-audit-m10.test.mjs",
+        "specs/workflowhub-ui-frontend-c07-real-page-verification-20261028/phases/P8-全AC终验.md"
+      ],
+      "delete_condition": "Remove after this responsibility is retired or a verified replacement takes over all actual consumers; retain original execution and failure evidence.",
+      "retention_basis": "C07 P7 T019 approved input; no changes to P5 report fields, packet identity, freshness gates or public commands."
+    },
+    {
+      "source": "tests/contract/page-audit-m10.test.mjs",
+      "destination": "tests/contract/page-audit-m10.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "ORACLE-P7-M10 public quotation and binding CLI outcomes with independent positive and negative inputs",
+      "owner": "C07 P7 unique development writer",
+      "consumer": "node node_modules/vitest/vitest.mjs run tests/contract/page-audit-m10.test.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "node node_modules/vitest/vitest.mjs run tests/contract/page-audit-m10.test.mjs"
+      ],
+      "delete_condition": "Remove only when the behavior is retired or equivalent independent assertions move to a verified replacement.",
+      "retention_basis": "C07 P7 T018-T020 original gate and RED/GREEN target; no frozen neighboring tests changed."
+    },
+    {
+      "source": "tests/fixtures/page-audit/m10/quote-cases.json",
+      "destination": "tests/fixtures/page-audit/m10/quote-cases.json",
+      "status": "add",
+      "role": "test",
+      "responsibility": "T020 three synthetic quotation calibration cases, five token classes and two override samples",
+      "owner": "C07 P7 unique development writer",
+      "consumer": "tests/contract/page-audit-m10.test.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "tests/contract/page-audit-m10.test.mjs"
+      ],
+      "delete_condition": "Remove when the calibration behavior is retired or equivalent cases are consumed by a verified replacement.",
+      "retention_basis": "C07 P7 T020 approved synthetic fixture; no C05 data or rights claim."
+    },
+    {
+      "source": "tests/fixtures/page-audit/m10/materials-cases.json",
+      "destination": "tests/fixtures/page-audit/m10/materials-cases.json",
+      "status": "add",
+      "role": "test",
+      "responsibility": "T020 synthetic byte originals for legal, renamed, changed, added/removed and extra-field inputs",
+      "owner": "C07 P7 unique development writer",
+      "consumer": "tests/contract/page-audit-m10.test.mjs",
+      "module_consumers": [],
+      "named_data_readers": [
+        "tests/contract/page-audit-m10.test.mjs"
+      ],
+      "delete_condition": "Remove when the binding behavior is retired or equivalent cases are consumed by a verified replacement.",
+      "retention_basis": "C07 P7 T019/T020 approved fixture; byte facts do not prove authenticity, license or page coverage."
+    },
+    {
       "source": "skills/spec-plan/scripts/check-reader-record.mjs",
       "destination": "skills/spec-plan/scripts/check-reader-record.mjs",
       "status": "add",

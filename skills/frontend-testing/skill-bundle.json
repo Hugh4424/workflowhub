@@ -9,7 +9,9 @@
     "scripts/collect-network.mjs",
     "scripts/collect-overflow.mjs",
     "scripts/collect-perf.mjs",
-    "scripts/collect-a11y.mjs"
+    "scripts/collect-a11y.mjs",
+    "scripts/check-report-quotes.mjs",
+    "scripts/check-version-binding.mjs"
   ],
   "sources": [
     {
