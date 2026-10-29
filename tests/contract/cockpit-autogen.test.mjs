@@ -907,3 +907,32 @@ for(const kind of ['partial','mixed','range-chain'])test('requirement AC denomin
  const ref='quality/evidence/partial-ac-results.json';await task.createRecord(ref,JSON.stringify({phase_id:'P1',acceptance:[{ac:'AC-DEMO-001',tier:'pass'},...(kind==='mixed'?[{ac:'AC-DEMO-002',tier:'fail'}]:kind==='range-chain'?[{ac:'AC-DEMO-002',tier:'pass'},{ac:'AC-OTHER-003',tier:'pass'}]:[])]}));const phase=join(f.material,'phases/P1-cards.md');writeFileSync(phase,readFileSync(phase,'utf8').replace('quality/tests/cards.output',ref));
  const rendered=await renderAnswerPage(f),req=data(rendered.htmlPath).objects.find(o=>o.source_id==='后建索引 R-001');expect(req.acceptance.text).toBe('验收归属未取得');expect(req.acceptance.text).not.toContain('验收通过');expect(req.status.text).toBe('材料记载：本规格承接');if(kind==='mixed')expect(req.acceptance.results.some(claim=>claim.tier==='fail')).toBe(true);
 });
+
+// Ordinary Phase diff facts are not a commit-proof schema. A readable execution
+// checklist must not block page derivation or fabricate Task delivery evidence.
+test('ORACLE-COCKPIT-GEN ordinary diff facts remain readable without claiming a reviewed commit',async()=>{
+ const f=await sourceCardFixture(),task=openTask(f.taskPath,{projectName:'Demo',taskId:'cockpit'}),ref='quality/evidence/ordinary-diff-facts.json';
+ await task.createRecord(ref,JSON.stringify({phase_id:'P1',task_ids:['T001'],diffs:{paths:['owned-T001.mjs','"specs/Phase-\\346.md"'],numstat:'1\t0\towned-T001.mjs\n',untracked:[{path:'local-input.txt',lines:1}],ref:'quality/tests/actual-diff.output'}}));
+ const phase=join(f.material,'phases/P1-cards.md');writeFileSync(phase,readFileSync(phase,'utf8').replace('quality/tests/cards.output',ref));
+ const {buildPageData}=await import('../../skills/answer-as-page/scripts/build-page-data.mjs');
+ const d=(await buildPageData(f)).pageData,t=d.objects.find(o=>o.source_id==='T001');
+ expect(t.implementation.text).toBe('实施结论未记录');expect(t.implementation.commit).toBeUndefined();
+ expect(t.acceptance.text).toBe('验收结论未记录');expect(t.src.some(s=>s.path===join(f.taskPath,ref))).toBe(true);
+});
+test.each([23,'not-an-object'])('ORACLE-COCKPIT-GEN malformed explicit commit claim remains an error %s',async(invalid)=>{
+ const f=await sourceCardFixture(),task=openTask(f.taskPath,{projectName:'Demo',taskId:'cockpit'}),ref='quality/evidence/invalid-diff-claim.json';
+ await task.createRecord(ref,JSON.stringify({phase_id:'P1',task_ids:['T001'],diffs:invalid===23?{reviewed_implementation_commit:23}:invalid}));
+ const phase=join(f.material,'phases/P1-cards.md');writeFileSync(phase,readFileSync(phase,'utf8').replace('quality/tests/cards.output',ref));
+ const {buildPageData}=await import('../../skills/answer-as-page/scripts/build-page-data.mjs');
+ await expect(buildPageData(f)).rejects.toThrow('Phase evidence diffs invalid');
+});
+test('ORACLE-COCKPIT-GEN unreachable explicit commit claim is visibly rejected without delivery fallback',async()=>{
+ const f=await sourceCardFixture(),task=openTask(f.taskPath,{projectName:'Demo',taskId:'cockpit'}),ref='quality/evidence/unreachable-explicit-diff.json',work=join(f.material,'../..');
+ execFileSync('git',['add','.'],{cwd:work});execFileSync('git',['commit','-qm','initial phase materials'],{cwd:work});
+ await task.createRecord(ref,JSON.stringify({phase_id:'P1',task_ids:['T001'],diffs:{reviewed_implementation_commit:'f'.repeat(40),paths:['owned-T001.mjs']}}));
+ const phase=join(f.material,'phases/P1-cards.md');writeFileSync(phase,readFileSync(phase,'utf8').replace('quality/tests/cards.output',ref));
+ writeFileSync(join(work,'owned-T001.mjs'),'export const result=42;\n');execFileSync('git',['add','.'],{cwd:work});
+ const receipt=await task.captureCommand({cwd:work,slug:'real-phase-commit-before-invalid-claim',argv:['git','commit','-m','real owned phase implementation'],timeoutMs:10000});expect(receipt.exit_code).toBe(0);
+ const {buildPageData}=await import('../../skills/answer-as-page/scripts/build-page-data.mjs'),d=(await buildPageData(f)).pageData,t=d.objects.find(o=>o.source_id==='T001');
+ expect(t.implementation.text).toBe('提交声明无效（未核实）');expect(t.implementation.commit).toBeUndefined();expect(t.status.tone).toBe('fail');
+});

@@ -18,6 +18,8 @@ Phase 内的 Task 是 task graph，不是可任意跳过依赖的步骤表。选
 
 ## 方法
 
+UI 实施先消费当前真实答复所批准原型与设计基准：沿build-plan交回的源码、展示范围、组件/token/布局映射、源缺陷与批准偏差定位本次改动；未答不代批准，不无据重画或把另一稿答复搬来。基准缺项只限制依赖范围，其余安全工作继续；需要变更方向/AC交原owner。实现后的UI终验沿下文第7步、`skills/frontend-prototype-render/SKILL.md`及`skills/plan-design-review/SKILL.md`，不以原型批准冒最终业务验收。
+
 1. 核真实工作区/分支/状态、当前Phase与写集。接续时实际按 `skills/stage-handoff/SKILL.md` 回读交接路径、当前材料/task facts、有源工作陈述、四类信息、证据及未完事项；同task沿原授权续跑，缺失/错task如实说明，旧对象只读。记录所依业务规则、接口、FR/AC、consumer、范围、测试路线与停止条件。动手前实读引用项目受保护类别；未声明只查一次并存事实。依真实授权分别核“包含此改动”与“超出写集”，各用已认证task.appendRecord({dir,slug,ext,bytes})存一原件（复用现appendRecord原子底座），列来源、具体路径/符号、原文锚，不增字段/账本。受保护且授权未含或越界只停该处并指出缺确认，其它安全工作继续；纯文档/注释/测试夹具越界沿已授权方向继续并登记。来源和写集均可定位才完成范围核对；完成只据本Phase实际交付/执行原件。
    Phase Card 里再写两行版本锚（给人看的绑定，不是 machine gate）：
    - 规则锚：本 Phase 依赖的业务规则，逐条写「文件 + 章节标题逐字」或「FR/AC 编号 + 该段首句逐字」。锚只绑定所依段落；其它段落变化不构成本 Phase 事实作废的理由。
@@ -65,6 +67,8 @@ Phase 内的 Task 是 task graph，不是可任意跳过依赖的步骤表。选
 
 宿主执行同源补充时，向两个互不继承对方上下文的独立执行者同时提供上述共同材料，并分别给 Standards 规范/baseline 或 Spec 来源。执行者只返回原文，不写文件；宿主按当前 workflow 保存单份原件，在 Standards / Spec 两栏分别展示发现、范围和不可用原因，只汇总各栏数量及各栏最严重问题，不合并、不重排名、不选跨轴赢家。同源补充标为 same_source_degraded，不替代 OCR、不计异源 quorum；OCR 与补充也并排保留，各路失败、取消与迟到有效发现不被成功路覆盖。
 
+Standards 与 Spec 是每 Phase 必派的两个独立补充执行者，不是三角色之外的常驻身份或人数上限。三角色描述职责；review_host 只做 OCR 长等待宿主，不裁决质量、不实施、不替代两个补充面。brief 八节和六项回传只取 `AGENTS.md`「派发与回传」；不在这里复制第二份派发合同。
+
 现 stage row 保留真实 OCR 的 `review_origin`、失败及 `review_result_ref`；补充引用放既有 evidence/普通说明，不覆盖 OCR identity、不新增字段。单独读回补充事实时，`review_origin: same_source_degraded` 的 `review_result_ref.value` 为 `null` 且有 reason，原件仍由普通引用定位。已装 OCR 失败、超时或取消不被补充轴洗成通过；补充缺失、失败、取消、迟到 finding 各保原事实，继续安全修复，未测来源或空 findings 不冒成功。
 
 ## PR 描述方法
@@ -88,6 +92,8 @@ Phase 内的 Task 是 task graph，不是可任意跳过依赖的步骤表。选
 每轮审后一次提交：开发完成、审查与测试回报无进一步 finding、目标测试与证据齐后，由开发子代理在本 Phase 提交一次；最终 Phase 的最终提交在终末审查与修复之后；push/merge/PR/归档/清理归 stage-close。
 
 迟到 finding：重开同一 Phase，回同一开发子代理修，审查与测试只复验受影响面；不得丢弃，也不得只带到期终审。该轮同样先取得两方适用回报、开发最后确认及四项核对，再追加一次审后提交。同一 Phase 保持同一开发上下文；原会话不可用须披露，沿当前材料重核受影响范围并保留原失败，不静默换写主。
+
+一张 brief、一次收尾沿 `AGENTS.md`：同一范围已返回建议后，修复回原开发，受影响方按既有断言和实际差异复验，不以重派正常审查追空 findings。具体任务用户明确限定轮次时保存该原话与范围并遵守，不扩成其它任务的永久上限；修复、定向测试及只读事实回报继续，不把一轮限制写成质量通过。迟到有效 finding 仍按上段回同一开发处理。
 
 ## 人为门与审查点
 

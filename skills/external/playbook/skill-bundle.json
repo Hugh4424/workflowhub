@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "skill": "playbook",
+  "files": [
+    "00-ux-spec-skill.md",
+    "02-cloudai-picker-skill.md",
+    "09-variant-skill.md",
+    "08-evaluator-rubric.md"
+  ],
+  "sources": []
+}

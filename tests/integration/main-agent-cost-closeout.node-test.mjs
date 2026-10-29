@@ -296,3 +296,50 @@ test('LEDGER cancel after own lock acquisition aborts real decompression and lea
  const header=JSON.stringify(f.records[0])+'\n',body=f.records.slice(1).map(JSON.stringify).join('\n')+'\n';writeFileSync(plain,header+body.repeat(5000));const packed=spawnSync('zstd',['-q','-c',plain]);assert.equal(packed.status,0,'real zstd prerequisite');writeFileSync(compressed,packed.stdout);const sourceBefore=hash(readFileSync(compressed));f.session=compressed;
  const active=spawnRecord(f),lock=join(f.taskPath,'.main-agent-cost.lock');const deadline=Date.now()+3000;while(!existsSync(lock)&&Date.now()<deadline)await new Promise(resolve=>setTimeout(resolve,2));assert.ok(existsSync(lock),'target must acquire owned record lock before cancellation');active.child.kill('SIGTERM');const r=await active.done;assert.equal(r.status,1,'SIGTERM converted to runtime cancellation');assert.equal(existsSync(lock),false,'own lock released');const now=readLedger(f);assert.ok(now.raw.startsWith(old.raw));assert.ok(now.rows.length===old.rows.length||now.rows.length===old.rows.length+1,'zero publication or one complete publication');if(now.rows.length===old.rows.length+1)assert.match(r.stdout+r.stderr,/已发布|published/i);assert.equal(hash(readFileSync(compressed)),sourceBefore);assert.equal(readdirSync(f.taskPath).some(name=>/\.tmp(?:-|$)/.test(name)),false);
 });
+
+// Native Goal creation is a distinct authoritative host event, never a
+// synthetic UserMessage. All identities and bytes below are constructed fixtures
+// matching the native thread_goal_updated -> task_started -> turn_context shape.
+function nativeGoalFixture(t){
+ const f=setup(t),c=codexMain(f),createdAt=Math.floor(Date.parse(c.records[1].timestamp)/1000),objective='按照workflowhub标准执行build-code；保留未完成事实。';
+ c.records[1]={...c.records[1],payload:{type:'thread_goal_updated',threadId:c.id,goal:{threadId:c.id,objective,status:'active',createdAt,updatedAt:createdAt,tokensUsed:0,timeUsedSeconds:0}}};
+ c.records[2]={...c.records[2],timestamp:c.records[1].timestamp,payload:{type:'task_started',turn_id:'constructed-turn-1',root_turn_id:'constructed-turn-1',started_at:createdAt,turn_attribution:{turn_id:'constructed-turn-1',root_turn_id:'constructed-turn-1',turn_trigger:'goal',parent_turn_id:null,initiating_agent_path:null}}};
+ c.records[3]={...c.records[3],timestamp:c.records[1].timestamp,payload:{turn_id:'constructed-turn-1',root_turn_id:'constructed-turn-1',cwd:f.workspace}};
+ const authorizationRef='quality/evidence/human-confirmations/native-goal-authorized.json',authorization={stage:'build-code',decision:'authorized',reply:objective,material_refs:[join(f.materials,'spec.md')],created_at:c.records[1].timestamp};
+ const persist=()=>{c.records.forEach((r,i)=>r.ordinal=i);put(c.path,c.records);const bytes=JSON.stringify(authorization)+'\n',file=join(f.taskPath,authorizationRef);mkdirSync(dirname(file),{recursive:true});writeFileSync(file,bytes);return c.path+'#goal_created_at='+createdAt+'&authorization='+encodeURIComponent(authorizationRef)+'&sha256='+hash(bytes);};
+ const invoke=selector=>run(f,['--project=cost-project','--task=cost-task','--stage=build-code','--record','--session='+c.path,'--start-ref='+selector],c.env);
+ return {f,c,createdAt,authorization,authorizationRef,persist,invoke};
+}
+test('START GOAL initial native event binds the real task authorization and fixed ledger without resetting an existing start',t=>{
+ const x=nativeGoalFixture(t),selector=x.persist(),r=x.invoke(selector);
+ assert.match(r.stdout,/已发布一条任务账本记录/,r.stderr);assert.ok(r.status===0||r.status===1,'real measurement may retain independent source gaps');
+ const first=readLedger(x.f);assert.equal(first.rows.length,1);assert.equal(first.rows[0][2],'2026-10-02T23:02:22.379Z');assert.equal(first.rows[0][4],selector);assert.equal(first.rows[0].length,27);
+ const refused=x.invoke(selector);assert.equal(refused.status,2,refused.stderr);assert.match(refused.stderr,/start-ref cannot reset an existing ledger/);assert.equal(readFileSync(x.f.ledger,'utf8'),first.raw);
+});
+for(const variant of ['authorization-task','authorization-task-id','authorization-project','authorization-stage','authorization-decision','authorization-path-escape','objective','header-thread','payload-thread','nested-thread','caller-thread','subagent','not-creation-update','initial-counters','inactive','duplicate','not-adjacent','turn-trigger','turn-identity','foreign-cwd','authorization-hash','illegal-fragment','system-wrapper'])test('START GOAL rejects '+variant+' without publishing a first row',t=>{
+ const x=nativeGoalFixture(t),{c,f}=x;
+ if(variant==='authorization-task')x.authorization.material_refs=[join(f.workspace,'specs/other-task/spec.md')];
+ if(variant==='authorization-task-id')x.authorization.task_id='other-task';
+ if(variant==='authorization-project')x.authorization.project_name='other-project';
+ if(variant==='authorization-decision')x.authorization.decision='scope-approved';
+ if(variant==='authorization-path-escape')x.authorization.material_refs.push(f.materials+'/../other-task/spec.md');
+ if(variant==='authorization-stage')x.authorization.stage='build-plan';
+ if(variant==='objective')x.authorization.reply+=' changed scope';
+ if(variant==='header-thread')c.records[0].payload.id='01a0feda-b95f-7163-a9c1-0ea058d0fa96';
+ if(variant==='payload-thread')c.records[1].payload.threadId='foreign-thread';
+ if(variant==='nested-thread')c.records[1].payload.goal.threadId='foreign-thread';
+ if(variant==='caller-thread')c.env.CODEX_THREAD_ID='01a0feda-b95f-7163-a9c1-0ea058d0fa96';
+ if(variant==='subagent')c.records[0].payload.parent_thread_id='parent-thread';
+ if(variant==='not-creation-update')c.records[1].payload.goal.updatedAt++;
+ if(variant==='initial-counters')c.records[1].payload.goal.tokensUsed=1;
+ if(variant==='inactive')c.records[1].payload.goal.status='paused';
+ if(variant==='duplicate')c.records.splice(2,0,structuredClone(c.records[1]));
+ if(variant==='not-adjacent')c.records.splice(2,0,{timestamp:c.records[1].timestamp,type:'event_msg',payload:{type:'unrelated-event'}});
+ if(variant==='turn-trigger')c.records[2].payload.turn_attribution.turn_trigger='user';
+ if(variant==='turn-identity')c.records[3].payload.root_turn_id='foreign-turn';
+ if(variant==='foreign-cwd')c.records[3].payload.cwd=f.root;
+ if(variant==='system-wrapper')c.records[1]={...c.records[1],type:'response_item',payload:{type:'message',role:'user',content:[{type:'input_text',text:JSON.stringify(c.records[1].payload)}]}};
+ let selector=x.persist();if(variant==='authorization-hash')selector=selector.replace(/sha256=[a-f0-9]{64}$/,'sha256='+'0'.repeat(64));
+ if(variant==='illegal-fragment')selector=selector.replace('#goal_created_at=','#unknown_goal=');
+ const r=x.invoke(selector);assert.equal(r.status,2,variant+' '+r.stderr+'\n'+r.stdout);assert.equal(existsSync(f.ledger),false,variant+' must not publish');
+});

@@ -5,7 +5,7 @@
     {
       "step_id": 1,
       "step_slug": "load-context",
-      "observable_result": "原始需求、任务类型、事实、假设、非目标和未决问题在同一决策日志可读；缺失和冲突有具体说明。用户痛点、完整旅程和成功失败边界得到区分；模糊需求有多个候选角度和可推翻依据。首次 U／OI 写入前已实读 decision-log 来源与未决问题方法，coverage 收口前已读同 owner；首次结构化提问前已读 Talk 与宿主问答契约，实际读取位置与先后可定位，读后未做如实记未执行；无可用工具发同内容文本卡并记录本轮降级为文本提问与真实原因，未答不代答。 普通执行目标已实际调用 workflows/make-decision/scripts/entry-evaluation.mjs 的 evaluateEntryRoute；真实返回、逐项依据与缺口在原决定可读，paused 同批展示可选拆分路线。 判定消费：SKILL.md#方法 第1步；原件：decision级别节、需求索引与入口返回原ref。",
+      "observable_result": "原始需求、任务类型、事实、假设、非目标和未决问题在同一决策日志可读；缺失和冲突有具体说明。用户痛点、完整旅程和成功失败边界得到区分；模糊需求有多个候选角度和可推翻依据。首次 U／OI 写入前已实读 decision-log 来源与未决问题方法，coverage 收口前已读同 owner；首次结构化提问前已读 Talk 与宿主问答契约，实际读取位置与先后可定位，读后未做如实记未执行；无可用工具发同内容文本卡并记录本轮降级为文本提问与真实原因，未答不代答。 普通执行目标已实际调用 workflows/make-decision/scripts/entry-evaluation.mjs 的 evaluateEntryRoute；真实返回、逐项依据与缺口在原决定可读，paused 同批展示可选拆分路线。 判定消费：SKILL.md#方法 第1步；原件：decision级别节、需求索引与入口返回原ref。 UI工作包三源raw_requirement/project_inventory/planned_or_changed_frontend_fact、页面/路径/owner/状态×视口与有稿/无稿交接可读；非UI有真实理由。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",

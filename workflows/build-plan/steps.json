@@ -5,7 +5,7 @@
     {
       "step_id": 1,
       "step_slug": "read-current-materials",
-      "observable_result": "当前决策、真实来源和已存在材料可读；需求、风险、非目标及已接受不做事项均有可追溯去向。 判定消费：SKILL.md#方法 第1步；原件：当前材料、条件原件、逐来源映射。",
+      "observable_result": "分组：读懂需求；当前决策、真实来源和已存在材料可读；需求、风险、非目标及已接受不做事项均有可追溯去向。 判定消费：SKILL.md#方法 第1步；原件：当前材料、条件原件、逐来源映射。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -16,7 +16,7 @@
     {
       "step_id": 2,
       "step_slug": "conditional-light-research",
-      "observable_result": "影响实现的消费者、接口、状态和失败边界有真实依据；研究跳过或不可用的原因可读。 deep-research 轻研究分支返回真实内存结果，不冒深正式报告；spec-plan 生成唯一纯指针索引并按真实附件与 bundle 登记取模板。 判定消费：SKILL.md#方法 第2/7步；原件：轻研究内存结果或唯一研究ref、origin、phases/index.md、skills/spec-plan/skill-bundle.json现有附件登记。",
+      "observable_result": "分组：读懂需求；影响实现的消费者、接口、状态和失败边界有真实依据；研究跳过或不可用的原因可读。 deep-research 轻研究分支返回真实内存结果，不冒深正式报告；spec-plan 生成唯一纯指针索引并按真实附件与 bundle 登记取模板。 判定消费：SKILL.md#方法 第2/7步；原件：轻研究内存结果或唯一研究ref、origin、phases/index.md、skills/spec-plan/skill-bundle.json现有附件登记。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -27,7 +27,7 @@
     {
       "step_id": 3,
       "step_slug": "spec-clarify",
-      "observable_result": "影响结果的规格歧义有真实问题/答复或待答说明；方向变化交make-decision，不猜用户决定。 判定消费：SKILL.md#方法 第3步；原件：spec-clarify问题/答复与真实草稿变更。",
+      "observable_result": "分组：读懂需求；影响结果的规格歧义有真实问题/答复或待答说明；方向变化交make-decision，不猜用户决定。 判定消费：SKILL.md#方法 第3步；原件：spec-clarify问题/答复与真实草稿变更。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -38,7 +38,7 @@
     {
       "step_id": 4,
       "step_slug": "spec-specify",
-      "observable_result": "同一spec.md描述产品旅程、状态、异常、FR及唯一AC，逐条给场景、结果和通过/失败条件。 判定消费：SKILL.md#方法 第4步；原件：spec完整正文及原需来源。",
+      "observable_result": "分组：写spec与UI准备；同一spec.md描述产品旅程、状态、异常、FR及唯一AC，逐条给场景、结果和通过/失败条件。 判定消费：SKILL.md#方法 第4步；原件：spec完整正文及原需来源。 十组叙事各回答读者问题；每需求的真实输入、消费者、失败与证据可定位。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -49,7 +49,7 @@
     {
       "step_id": 5,
       "step_slug": "conditional-ui-readiness",
-      "observable_result": "适用UI的真实设计来源、原型/预览和消费者可读；非UI有理由，缺失或冲突保持unknown。 判定消费：SKILL.md#方法 第5步；原件：raw/inventory/accepted-plan、专业源读取、真实预览。",
+      "observable_result": "分组：写spec与UI准备；适用UI的真实设计来源、原型/预览和消费者可读；非UI有理由，缺失或冲突保持unknown。 判定消费：SKILL.md#方法 第5步；原件：raw/inventory/accepted-plan、专业源读取、真实预览。 两路输入、任务目录真实代码原型、八维独立设计审查及修后复验、当前完整展示与真实答复分别有原件；无稿文案与Figma提示词消费同一规则，缺项不假通过。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -60,7 +60,7 @@
     {
       "step_id": 6,
       "step_slug": "spec-plan",
-      "observable_result": "同一spec写全局实现设计，独立Phase写实际写集、接口、任务、失败与回退边界；共享写集分工清晰。 判定消费：SKILL.md#方法 第6步；原件：spec全局设计、独立Phase、纯指针index。",
+      "observable_result": "分组：拆Phase与全局设计；同一spec写全局实现设计，独立Phase写实际写集、接口、任务、失败与回退边界；共享写集分工清晰。 判定消费：SKILL.md#方法 第6步；原件：spec全局设计、独立Phase、纯指针index。 Phase九组人读内容、逐文件责任、共享先后/回滚与index独立人读导航可读。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -71,7 +71,7 @@
     {
       "step_id": 7,
       "step_slug": "testing-system-blueprint",
-      "observable_result": "每Task有风险、场景、oracle、针对性命令、原始证据位置和覆盖限制；行为RED只认目标断言真实失败。 判定消费：SKILL.md#方法 第7/8步；原件：Phase卡、checkAcceptanceObject实际输入/返回、目标RED或G2原件。",
+      "observable_result": "分组：测试与验证设计；每Task有风险、场景、oracle、针对性命令、原始证据位置和覆盖限制；行为RED只认目标断言真实失败。 判定消费：SKILL.md#方法 第7/8步；原件：Phase卡、checkAcceptanceObject实际输入/返回、目标RED或G2原件。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -86,7 +86,7 @@
     {
       "step_id": 8,
       "step_slug": "test-routing-advisor",
-      "observable_result": "实际行为风险对应一条具体测试路线；纯方法G-2读回或不适用原因明确，未运行不称RED。 判定消费：SKILL.md#方法 第7/8步；原件：test-routing原结果、声明测试面与理由。",
+      "observable_result": "分组：测试与验证设计；实际行为风险对应一条具体测试路线；纯方法G-2读回或不适用原因明确，未运行不称RED。 判定消费：SKILL.md#方法 第7/8步；原件：test-routing原结果、声明测试面与理由。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -101,7 +101,7 @@
     {
       "step_id": 9,
       "step_slug": "merged-review",
-      "observable_result": "wh-review在独立上下文对同一规格/Phase做合并建议，原始发现、provider失败和覆盖限制可读。 判定消费：SKILL.md#方法 第9步；原件：review包、provider/raw、失败与coverage。",
+      "observable_result": "分组：独立审查与处置；wh-review在独立上下文对同一规格/Phase做合并建议，原始发现、provider失败和覆盖限制可读。 判定消费：SKILL.md#方法 第9步；原件：review包、provider/raw、失败与coverage。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -116,7 +116,7 @@
     {
       "step_id": 10,
       "step_slug": "main-agent-disposes-findings",
-      "observable_result": "每条发现有修复、附证误报、用户明确风险选择或待决处置，严重问题的影响和负责人可读。 判定消费：SKILL.md#方法 第10步；原件：原findings和逐项处置/受影响修订。",
+      "observable_result": "分组：独立审查与处置；每条发现有修复、附证误报、用户明确风险选择或待决处置，严重问题的影响和负责人可读。 判定消费：SKILL.md#方法 第10步；原件：原findings和逐项处置/受影响修订。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -127,7 +127,7 @@
     {
       "step_id": 11,
       "step_slug": "final-spec-analyze",
-      "observable_result": "原需求、决策、spec、每Phase与索引的语义、边界和测试充分性核对，缺口不由绿灯或文件存在代填。 判定消费：SKILL.md#方法 第11步；原件：spec-analyze完整原件与具名修复范围。",
+      "observable_result": "分组：回核与收口；原需求、决策、spec、每Phase与索引的语义、边界和测试充分性核对，缺口不由绿灯或文件存在代填。 判定消费：SKILL.md#方法 第11步；原件：spec-analyze完整原件与具名修复范围。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -138,7 +138,7 @@
     {
       "step_id": 12,
       "step_slug": "closeout",
-      "observable_result": "主会话先取得当前计划的真实确认，未答保草稿；按stage-reflection收口：依次归纳、分类归口、记录阶段成本、发布、报告，内部发布并独立读回stage-handoff。成本沿 measure-main-agent-cost 的来源与窗口边界，同一窗口一次，未触发/失败写本阶段无记录及真实原因；Phase摘要不另触发，不新增stage、字段、writer或关闭许可。 判定消费：SKILL.md#方法 第12步；原件：human确认、成本原件、handoff独立读回。",
+      "observable_result": "分组：回核与收口；主会话先取得当前计划的真实确认，未答保草稿；按stage-reflection收口：依次归纳、分类归口、记录阶段成本、发布、报告，内部发布并独立读回stage-handoff。成本沿 measure-main-agent-cost 的来源与窗口边界，同一窗口一次，未触发/失败写本阶段无记录及真实原因；Phase摘要不另触发，不新增stage、字段、writer或关闭许可。 判定消费：SKILL.md#方法 第12步；原件：human确认、成本原件、handoff独立读回。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",

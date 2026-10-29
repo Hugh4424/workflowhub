@@ -10,6 +10,19 @@ version: 4.1.0
 
 消费当前 `decision-log.md` 和真实需求来源，编写同一 `spec.md` 的产品规格与全局实现设计、独立 `phases/P<n>.md` 和纯指针 `phases/index.md`。索引不能替代 Phase 正文，post 不双写 plan/tasks；pre 历史材料只读。本阶段不重新进行方向 Talk/Grill，不替用户决定新方向，不实施生产代码。材料有歧义走本阶段 spec-clarify，方向变化回 make-decision；无关的安全规划可以继续。
 
+## 六段阅读顺序
+
+本节回答：谁先交什么、哪里可以并行、哪些问题回原 owner；原 12 个 step_id 与 slug 保持。
+
+1. 读懂需求（步骤 1–3）：需求审读者核来源、轻研究与歧义，主会话接用户答复；缺口回原来源或决定 owner。
+2. 写 spec 与 UI 准备（步骤 4–5）：spec 作者写十组叙事与唯一判据，原型作者处理适用 UI 输入；同文件由一个 writer 写，独立路径才并行。
+3. 拆 Phase 与全局设计（步骤 6）：Phase 作者写九组人读内容、完整任务卡与纯指针 index；全局设计仍写同一 spec，与上一步按共享文件定序。
+4. 测试与验证设计（步骤 7–8）：测试作者给真实输入、oracle、失败与证据计划；可与无共享写入的 Phase 设计并行，不能用环境失败冒目标 RED。
+5. 独立审查与处置（步骤 9–10）：审查者对当前完整材料提出建议，主会话处置；严重未修风险由用户作真实选择，provider 失败保持原限制。
+6. 回核与收口（步骤 11–12）：独立读者与主会话回核六类语义、实际可读/可执行及缺口，取得用户当前计划确认后交接、记成本；未答不填同意。
+
+分组只导航下文原步骤，不新增执行节点。每份材料先回答读者的问题，再放必要字段；文档读者能复述做什么/为什么/下一步/失败怎么办，工程师能试写并执行才是效果证据，格式检查只证兼容。
+
 ## 方法
 
 写spec、Phase 与 index前，先读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一正文，再调用本流程对应的材料作者；缺源如实 `unavailable`，保留原问答、确认、权限和失败边界，不复制规范。
@@ -21,6 +34,8 @@ version: 4.1.0
 3. 通过 spec-clarify 澄清影响结果的规格歧义。独立问题合问，有依赖的等真实回复；主会话保存问题、真实答复和影响，未答不默认同意。不为规划另开方向 Talk 或第二决策日志。
 4. 用 spec-specify 写产品叙事、用户旅程、状态与异常行为、FR 和唯一验收条款。明确每条验收的场景、可观察结果、通过和失败条件；保持 decision-log 的取舍与退役决定，不自动补做已经退出的需求。
 5. UI 适用时沿 `skills/project-norm-init/SKILL.md` 的「规范职责」定位并读取本动作适用的专业源及实际页面/组件消费者；按类记真实路径/稳定节、version/作用域、owner/consumer、适用规则与缺源/冲突影响。读取等价实质源而非强制默认文件或旧 Design.md/Experience.md 两份 active 规范；本次业务行为仍沿当前 task spec/API、值/API事实引用原源。单类 missing/stale 不使其它类失效，缺口交该原 owner，不复制八类正文或新造 binding schema。需要时使用 project-norm-init、design-source-readiness、frontend-prototype-render 和设计审查方法。展示真实原型或标明预览缺失，不能把静态稿或截图名称当交互验证。非 UI 写原因，来源冲突保持 unknown；UI 选择在现有计划确认中呈现，不新建阶段或确认槽。 UI 适用性按三个来源的证据合并，不按调用者标签：`raw_requirement` 是用户原始页面/交互/非 UI 请求，`project_inventory` 是当前路由、前端技术与组件/消费者事实，`planned_or_changed_frontend_fact` 是已接受计划或实际前端改动；`source_reasons` 写显式事实，不新增必填字段。
+   UI 两路输入、原型位置、独立设计审查、当前展示答复、证据与失败的完整方法沿 `skills/frontend-prototype-render/SKILL.md` 与 `skills/plan-design-review/SKILL.md` 消费；通用原型位于 `specs/<task>/prototype/`，受控样本按其已确认 Phase 的专属路径。两路能力及实际样本由对应方法 owner 承接，本段只指向职责，不以预览名称冒实测。
+   本步原型作者实际执行上述两路方法：有稿五输入与范围/映射/缺陷先于实现，无稿需求/真实语义/许可/合成数据先于原创；必要Figma Make提示词读取 `skills/figma-make-prompt/SKILL.md`。完成可运行原型后交未参与实现者作八维独立设计审查、修复并复验，再展示当前完整范围取得用户真实答复；未答/拒绝/工具失败保对应未完成，不以静态稿或提示词代原型。C05受控样本专属位置 `specs/<task>/samples/A` 与 `samples/B`；只在本任务指定的验证Phase执行，不改通用原型位置或12个step身份。
    UI 且已有合法可读设计源时，完成 design-source-readiness 后读取 `skills/design-source-extraction/SKILL.md`，沿任务原 ref 消费单份机器产物 `design-source-extraction.json`（原件可带日期，不复制重命名）。将 `source`、`scope`、`norm_basis`、`items` 与实际证据用于本 spec 设计依据及 Phase 输入；声明、渲染值与待议规范分开。按 `references/norm-alignment.md`、`references/isolated-consumption.md` 对账与交接，不用模板占位或原型值当产品规范。核 `freshness` 与当前来源/规范/结构；unknown 补具名材料，stale 先沿已有 `node skills/design-source-extraction/scripts/collect-design-source.mjs --plan <已认证冻结plan>` 重提炼，未执行保未执行。非 UI 或无合法设计源说明适用范围与缺口，不给其它任务增加提炼门。
 6. 全局设计与测试蓝图选择前，实际按 `skills/project-norm-init/SKILL.md` 的“非UI规范与索引”读取本次适用后端/接口/验收源；缺源/过期/冲突给原owner与影响，仅暂停依赖该规则的选择，其余继续，不把unknown记N/A。选择足够简单的方案：先复用，再窄扩展，确有真实收益才新机制。非平凡工作先手工完成一单元作为独立 oracle，再复用最小可重跑工具/委派方法处理同单元并逐项对照；标签须回到对应真实产物、输入与原判据，不能只比数量。worker允许写集排除自身验收契约与保留标签；实施后核这些原件未改，不能修改判据换绿，不声称仅有DO NOT TOUCH就已建立物理隔离；只冻结相关契约而非全树。简单动作直接完成，不造无消费者框架。用 spec-plan 在同一 spec 写全局接口、数据流、兼容、风险、回退和文件边界，再写独立 Phase。边界由可独立交付验收单元决定，写集是申报结果；同一并行批次须有独立输入且同路径互斥，跨批次同路径须有真实依赖边定序，在相邻 Phase 边界点名先写者、后写者与依据。共享接口变化先重排分工，不让两个代理同时改同一文件。 Phase 拆分粒度以 `spec-plan` 的 `phase-template.md`「判定规则」全集（拆与并两半）唯一为准，本 workflow 不复述、不软化。校验器报写集重复时，按 ADR-0036 消费既有治理文件豁免与已按 Dependency 串行的判定，核实际依赖与声明；原失败或缺口如实记 `open`，不为此改运行时规则或新增豁免种类。
 7. 每条承接 AC 按 spec 模板与 Phase 卡的证据计划落七字段，七项取真实对象与时点，缺一项不得开工；不另建验收计划。为每个任务写清目标、真实输入/消费者、允许路径/符号、禁止范围、步骤、完成条件、失败信号与恢复办法、成本假设。testing-system-blueprint 设计风险、场景、oracle、证据与覆盖限制；项目在任务「测试标准」及每张 Phase/Task 自行声明测试面、逐面测或不测的理由，每个要测的面与覆盖 AC 指向该 Phase 一条可执行命令；浏览器可见面未列浏览器端到端时给具名理由。test-routing-advisor 只作技术路线预判，选择主 concrete testing skill，不替项目定义测试面。验收对象、输入、执行 owner 与时点按 `skills/spec-plan/SKILL.md` 的「Test design and quality」落进现 AC/Task 正文；需要对象检查时，读取 `skills/spec-specify/templates/spec-template.md` 中唯一 `checkAcceptanceObject` 的完整可执行代码块，从当前 spec 的既有验收对象区块取得真实输入，沿模板「验收对象」唯一合同复用第5步三源事实并实际读取其引用材料，核角色、理由与范围冲突，将三源适用性和已读材料作为本次 context 传给同一函数；直接执行验收对象检查并保存对象输入、三源引用/读取范围/hash、返回与执行原件，不在本 workflow 定义或复制另一个 checker。模板 producer 未交付、无法提取或执行失败时，具体记 producer/source/执行失败、影响与原 owner，未运行不宣缺项行为通过；对象检查不证明环境健康或业务运行。可执行产物按同节规划唯一末 Phase 全 AC 验收，纯文档按该处具名豁免。独立 Phase 写完后读取并执行 `skills/spec-plan/SKILL.md` 的「## Pure pointer index」生成纯指针索引；消费它按实际附件存在与 bundle 登记选择模板的条件，不新建薄调用或在此复制索引规范。执行进度留在任务事实而非材料正文。 每条需求在 spec 与 Task 卡必须落成「动作＋命令＋期望」三件套，缺任一不得进入 Task 卡、不得开工；命令写成可直接执行的整条命令，期望写退出码或可观察结果。开工前按 `skills/spec-plan/SKILL.md` 的红测归因要求写清每条红测属于目标行为失败、夹具或环境失败、本来就通过哪一种；只写命令与期望退出码不算写完。

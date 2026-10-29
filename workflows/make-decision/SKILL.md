@@ -90,6 +90,7 @@ build-code 无 phase_progress 游标或游标缺失/过期时，按当前工作�
 下方两行只显露各步骤原有产物与前提，是可发现性改进，不是新 gate 或审批；细则仍在同一步正文及所指原专业方法。十五步由真实主会话执行，公共 run --action=execute 不会自动执行 make-decision 或代填完成；材料渲染、问题生成与原件保存均不冒真人答复。
 
 1. `load-context`：
+   UI 工作包按 raw_requirement（原始页面/交互要求）、project_inventory（真实路由/组件/栈）、planned_or_changed_frontend_fact（已接受计划或前端变更）三源识别，记录页面、路径、owner、状态×视口及真实理由。缺来源保unknown，不因调用者标签当非UI；真实非UI写理由。有稿/无稿分路及合法设计基准交build-plan第5步，原型、独立设计审查和当前展示答复由该步骤调用既有方法承接，不新增stage/gate或确认槽。
    **本步产物**：decision-log.md 中的真实原话、痛点、任务类型、事实/假设、范围/非目标与未决项；逐字 R/U、Talk 与覆盖事实沿现唯一原件 ref。
    **进下一步前**：按真实任务类型和下文分诊/来源方法处理；类型冲突只暂停相关问题，类型变更逐项重处理。真人未答不代填；领域变动沿上方原 owner 写入读回或有源 no change。
 

@@ -22,6 +22,8 @@ A superseded full-text body does not stay in this file either; the superseded te
 
 Each Phase owns L0 outcome, executable human-readable L1 contract, removable L2 reference, exact write set, dependency, test design and oracle, coverage limit, STOP condition, done evidence, and rollback.
 
+Use the template's nine reader groups: outcome, basic contract, reason/decisions, required reading, files/tasks, writer/parallel ownership, verification, risk/recovery, and completion/handoff. Each section answers its reader question in prose before the necessary fields. Per exact path, explain the change, sole writer, real consumer and dependency; distinguish writable, read-only, prohibited and pending-authority surfaces. At a shared-path boundary name earlier and later writers, the handed-back current state, the real dependency and conflict owner. Give an actual rollback or repair route that preserves unrelated work and original failures. The final Phase consumes prior originals and handles unresolved cases; it must not replace a local first acceptance with a later signature.
+
 Within L1, write an executable card for **every** Task using `templates/phase-template.md`. One Task is one user-perceivable delivery increment: consecutive steps of the same deliverable belong in one card's step sequence, not in separate cards. A one-line task list or Phase-level command is not a substitute for task inputs, exact code anchors/actions, outputs, paired RED/GREEN, failure oracle, evidence, and recovery. Keep actual execution status in task facts; authored cards describe intent, not invented completion.
 
 Task IDs are unique across the entire task, not per Phase. Assign `T001`, `T002`, … in `phases/index.md` Phase order and within-Phase execution order; the next Phase continues after the previous Phase's last ID. A Task dependency may name only an earlier Phase or already-defined Task. Continue the global sequence in every Phase.
@@ -67,6 +69,8 @@ G-2 for pure documentation or exploratory work permits N/A only with a concrete 
 计划里每一条红测都必须同时写下归因：目标行为失败 / 夹具或环境失败 / 本来就通过；只写命令与期望退出码不算写完。
 
 Cross-check the original requirement, decision, `spec.md`, every `phases/P<n>.md`, and generated `phases/index.md` for omissions, contradictions, cycles, duplicated bodies, boundary widening, and two-way traceability. Perform an execution dry-run on each Task card: can an implementer using only current spec, index, and that Phase identify the first symbol to inspect, the first edit, target RED, GREEN, negative case, and recovery without inventing a product choice? Repair any no. Independent findings review and final `spec-analyze` are quality facts, not work permits. Preserve partial and unavailable facts honestly; repair valid findings in this task.
+
+核模板改造效果的完整作者消费时，由未参与实现的作者取得调用者提供的真实受控需求、来源与运行原件，直接使用 spec 模板十组正文、Phase 模板九组内容和 index 模板创作完整产物；涉及的状态、验收对象、材料导航、逐文件责任、共享写主/并行、风险/回滚与未决均实际填写，确实不适用则给来源与理由。试写保留独立作者身份、每份唯一原件和逻辑材料引用映射，再交现 reader；读者按当前 AC 回答首改、输入、判定和失败恢复，工程师执行其中一条有实际断言且无生产副作用的命令。既有四块示例只测 reader 兼容，替换其路径/符号不能证明新版完整结构被消费。原输入已经满足目标时记本来通过，不回退原件造 RED；目标值错误、类型错误与导入失败分开记录。此处落实原 Task 的消费义务，不新增阶段、运行入口或审查轮。
 
 作者收口实际消费既有无状态 `validatePostPhaseContract({spec,index,phases})` 与 `checkSkillConsistency(root)`：前者按原 `{ok,errors,facts}` 返回机械合同缺项，后者只沿现 `reports` 报告可判缺例/占位、不可判散文保持 unknown；缺验收例先定位真实 Task 与原文，不用编号或模板在场冒完整。缺例用占位明示时应在现报告可见，整段语义缺失而工具不能判时由独立读者报告该缺口；不新增校验器、状态或持久报告对象，不改变任何原退出语义，也不把 reports 升为许可。开头仍让读者能定位交付结果与真实依赖。
 
