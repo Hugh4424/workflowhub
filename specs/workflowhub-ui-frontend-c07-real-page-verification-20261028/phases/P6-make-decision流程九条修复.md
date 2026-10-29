@@ -50,7 +50,7 @@
 - **消费者**：tools/cli/check-stage-steps.mjs
 - **gate_cmd**：`node node_modules/vitest/vitest.mjs run tests/contract/make-decision-flow.test.mjs`。
 - **oracle**：ORACLE-P6-MAKE-DECISION-FLOW。
-- **evidence_path**：`quality/evidence/build-code/P6-make-decision-flow.json`。
+- **evidence_path**：`quality/evidence/build-code/2026-10-29-070-p6-execution-checklist-format-corrected.json`。
 - **覆盖 AC**：AC-C07-5（借用，验收 1）。
 - **STOP**：见「风险、回滚、停点」的风险一条与停点三条，逐条写处置与回原 owner。
 - **Done**：P6/T015/T016/T017 Done；本Phase自带门禁与独立修后复验通过，四条原发现均fixed且无open finding。承接AC-C07-5为unavailable（仅形态借用，不承接页面首判）；原ref、覆盖限制与最终确认见「完成与交接」及「审后最后确认」。未stage/commit。
@@ -274,6 +274,8 @@
 - 被要求改子流程：停，记无消费者依据，回原负责人。
 
 ### 完成与交接
+
+冻结历史清单 `quality/evidence/build-code/P6-make-decision-flow.json`（sha256 e4169860971eb54201e17250c6e47de5f12f376fcdc4aa220df7b3eb3862d22f）缺少consumer要求的diffs.paths而不可消费，当前由上方唯一evidence_path所指append-only格式纠正原件承接真实七路径/numstat及已发生提交事实；旧原件与既有旧引用保留只读，格式可消费不冒业务通过。
 
 AC-C07-5：unavailable（借用形态；本Phase不承接页面首次判定，页面AC由P8按spec判定器与真实页面原件首判；不以本静态契约代签）。
 - T015/T016/T017真实目标RED分别为quality/tests/2026-10-29-017-p6-entry-red.json、019-p6-ledger-red.json、020-p6-closeout-red.json，均exit 1且命中目标缺固定名/收口/清单断言。
