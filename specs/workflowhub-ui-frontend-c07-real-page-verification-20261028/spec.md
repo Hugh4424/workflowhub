@@ -8,7 +8,7 @@
 
 **给谁用。** 三类人。实施者按它写判据与脚本；独立测试或审查子代理按它取证与判定；build-code 终末与产品验收者按它消费报告。
 
-**现在到哪。** 材料齐了：本文件、11 个 Phase、35 张任务卡已落盘，执行顺序权威是 `phases/index.md` 的六批次。
+**现在到哪。** 材料齐了：本文件、11 个 Phase、35 张任务卡已落盘，执行顺序权威是 `phases/index.md` 的七批次。
 代码一行没写，浏览器一次没跑。
 两条冻结契约测试当前是 RED。`page-audit-shape.test.mjs` 7 failed；
 `page-audit-doc-contract.test.mjs` 11 failed。
@@ -129,7 +129,7 @@
 1. 真实页面逐维取证：每维有判据、原始结果与未覆盖说明。
 2. 采集与身份对得上：错工作区、错服务、错状态或未启动，都能报具体不一致或 unavailable。
 3. 适用反例有检测与真实修复；200% 缩放与键盘、焦点顺序必测。
-4. 分级可重复：同一明确数值 diff 用同一标尺得出同一档；至少三条校准负例。
+4. 分级可重复：同一明确数值 diff 用同一标尺得出同一档；校准集是三条还原偏差负例加一条阻断档负例。
 5. 回修闭环：模糊反馈先定位再修；修复后由同一独立角色复验；轮次与停滞可解释。
 6. 失败不伪装成通过：unknown、非法耗时、失联采集、证据错配都不聚合成高分或通过。
 7. 对象两条腿可追溯：资产层、代码组件层、页面布局与真实操作分别可追溯。
@@ -316,7 +316,7 @@ node skills/frontend-testing/scripts/collect-network.mjs --cdp-url http://127.0.
 # 期望：failures[0].class 属四类之一，且不以空 items 冒正常（当前 RED：脚本未实现）
 # 需求 12：对象版本与六哈希
 shasum -a 256 specs/workflowhub-ui-frontend-c07-real-page-verification-20261028/samples/{A/index.html,A/assets/app.js,A/assets/styles.css,B/index.html,B/app.js,B/styles.css}
-# 期望：六行 sha256 与钉版逐项相等，六文件合计 525142 B（实测退出 0）
+# 期望：六行 sha256 与钉版逐项相等，六文件合计 525142 B（复制时实测退出 0；P4 修复一处后，被修文件改记修前与修后两个哈希，其余五件仍与钉版相等）
 ```
 
 **失败怎样。** 入口与引擎：绕过网关直连浏览器、同一 run 混用两引擎、静默换引擎冒充同一事实、把回退当"已可用已证"。
@@ -346,8 +346,8 @@ MINOR 由规则判定，不要求用户签认，报告只写"按某规则接受"
 # 需求 13：三档与处置词
 node -e "const p=require('node:fs').readFileSync('skills/frontend-testing/references/page-audit.md','utf8');for(const k of ['BLOCKER','IMPORTANT','MINOR'])if(!p.includes(k))throw new Error('missing '+k);console.log('ok')"
 # 期望：stdout ok（当前 RED：判据包未实现）
-# 需求 14：三条校准负例页
-node -e "const fs=require('node:fs');for(const f of ['font','spacing','color'])if(!fs.existsSync('tests/fixtures/page-audit/calibration/'+f+'.html'))throw new Error('missing '+f);console.log('ok')"
+# 需求 14：四条校准负例页（三重要一阻断）
+node -e "const fs=require('node:fs');for(const f of ['font','spacing','color','blocker'])if(!fs.existsSync('tests/fixtures/page-audit/calibration/'+f+'.html'))throw new Error('missing '+f);console.log('ok')"
 # 期望：stdout ok（当前 RED：tests/fixtures/page-audit/ 未建）
 # 需求 14：六个刻度值
 node -e "const d=require('node:fs').readFileSync('tests/fixtures/page-audit/defects.json','utf8');for(const v of ['20px','17px','16px','8px','#1A73E8','#3A83E8'])if(!d.includes(v))throw new Error('missing '+v);console.log('ok')"
@@ -581,12 +581,12 @@ P7、P8（P4 只接修复段，它的覆盖验收仍是 5 与 7，不占卡号�
 
 **验收 4 要的是：** 同一明确数值 diff 用同一标尺重复跑得同级；MINOR 由规则判定。
 
-场景：3。同一明确数值 diff 用同一标尺跑两次；三条校准负例是明显字体、间距、颜色偏差但任务仍可用。
-通过：两次得同级；三条负例都落重要档并写明依据；小偏差清单逐项有处置。
+场景：3。同一明确数值 diff 用同一标尺跑两次；校准集是四条负例——三条是明显字体、间距、颜色偏差且任务仍可用，一条是主操作命中区被全屏遮罩接管、任务做不完。
+通过：两次得同级；三条还原负例都落重要档、阻断负例落阻断档，各自写明依据；阻断档的依据是可操作性事实（`elementFromPoint` 落在遮罩），不是像素百分比；小偏差清单逐项有处置。
 MINOR 逐项写明"按某规则接受"，全文没有"用户已确认、已签字"；分歧项有复核记录，未被平均成通过。
 失败：两次不同级仍称可重复；没有负例就当门槛；以"任务仍能完成"把明显偏差降为 MINOR。
 把工具 threshold 当严重度；把自动判定写成用户确认；分歧被平均成通过；自造像素百分比门槛。
-证据：两次定级记录、三条负例结果、MINOR 规则清单与逐项引用、分歧复核记录。
+证据：两次定级记录、四条负例结果（含阻断档的命中测试输出）、MINOR 规则清单与逐项引用、分歧复核记录。
 判定与承接：ORACLE-C07-4／ORACLE-C07-GRADE；判据 owner 备样例，独立执行者跑两次；承接 P1、P3、P8。
 组名与用例见附录 C。
 拿不到怎么办：OPEN-07 未解时该面记 incomplete，不出级别。
@@ -669,12 +669,13 @@ viewport 主测 `1440x900`，另测 `1024x768`、`640x960` 与 200% 缩放（必
 - 常规：`tests/contract/page-audit-doc-contract.test.mjs` 与
   `page-audit-shape.test.mjs` 是冻结契约，文件头写着"assertion changes require an
   independently reviewed TCR"；第 3.3 节的范围外条款与第 4 节的失败条件都按这条写。门禁读它们的是 P1（两份都读）、
-  P4 与 P9（读 doc-contract）；P11 是唯一改它们的地方。
+  P4（读 doc-contract）；P11 是唯一改它们的地方。
 - 例外：P11 按用户 2026-10-29 的书面允许改四份契约测试的字面断言——`page-audit-doc-contract.test.mjs`、
   `acceptance-plan.test.mjs`、`n11-plan-quality.test.mjs`、
   `n11-acceptance-rules.test.mjs`，只迁 S 类（模板、表格、错误码这类有明确结构的东西），M 类不迁。允许原件是
   `quality/evidence/human-confirmations/2026-10-29-001-allow-frozen-assertion-change.md`；P11 卡内还要求独立审查意见，两者缺一不得改。
-- 连带义务：P11 改断言后，P1、P4、P9 的门禁要按新断言重跑并各自重签发证据；P8 的七行档位若引用过"旧断言下的绿"，同样重签。P11
+- 连带义务：P11 改断言后，P1、P4 的门禁（含 doc-contract）要按新断言逐条重跑并各自重签证据；P9 的门禁不含这四份冻结测试，仍重跑一次并重签，理由是改断言后上一轮的绿不能当现行结论；P8 的七行档位若引用过"旧断言下的绿"，同样重签。三条重跑命令逐字写在
+  `phases/P11-去字面断言.md` 的「改完重跑早先门禁并重签证据」，重签产物落 `quality/evidence/build-code/P11-resign/`（三份加一份 manifest，旧证据标 `superseded_by` 不删）。P11
   之前取得的绿记为"旧断言下的绿"，不得当作现行结论。
 - 边界：例外只覆盖断言的字面形式，不覆盖判据语义；P11 不得借迁移缩小覆盖范围、不得删 M 类断言、不得换 oracle 凑绿。
 
@@ -694,8 +695,8 @@ viewport 主测 `1440x900`，另测 `1024x768`、`640x960` 与 200% 缩放（必
 ## 6. 计划
 
 本节回答：十一个 Phase、35 张任务卡谁先谁后、每张卡交付什么、并行与汇合在哪。
-执行顺序与依赖只认 `phases/index.md`：六批次依次是（一）P6、P1；（二）P9、P2；（三）P10、P3；（四）P4、P5；（五）P7、
-P11；（六）P8。同批次可并行，跨批次按依赖边串行，逐条边见索引表的「依赖」列；本节不另写一套顺序。
+执行顺序与依赖只认 `phases/index.md`：七批次依次是（一）P6、P1；（二）P9、P2；（三）P10、P3；（四）P4；（五）P5（待 P4
+完成后）；（六）P7、P11；（七）P8。同批次可并行，跨批次按依赖边串行，逐条边见索引表的「依赖」列；本节不另写一套顺序。
 共享路径按依赖边串行：`skills/frontend-testing/skill-bundle.json` 由 P1、P2、P5、P7 依次追加；
 `docs/architecture/move-map.json` 由 P5、P7 依次登记；
 `skills/decision-log/templates/decision-log-template.md` 由 P6 先写、P9 后写。
@@ -721,10 +722,10 @@ P11；（六）P8。同批次可并行，跨批次按依赖边串行，逐条边
 ### 计划 3 · P3 受控测试页与校准负例
 
 本节回答：这张卡交付什么、依赖谁、去哪读。
-结果：受控页装齐九类缺陷，三条校准负例可回读。
+结果：受控页装齐九类缺陷，四条校准负例可回读，其中一条是阻断档。
 依赖：P1。
 读者入口：`phases/P3-受控测试页与校准负例.md`。
-卡：T007 九类预置缺陷，清单按五个字段可机读；T008 三条负例页与自洽契约测试，六个刻度值可回读。
+卡：T007 九类预置缺陷，清单按五个字段可机读；T008 四条负例页（三重要一阻断）与自洽契约测试，六个刻度值可回读。
 
 ### 计划 4 · P4 报告接入与回修闭环
 
@@ -830,7 +831,7 @@ finding 类型，还是 0 就判未成立。
 | 11 | `tests/contract/page-audit-shape.test.mjs` | 9566 B／160 行（未跟踪） | 目标路径 `:16`；`--input` 子进程 `:35`；退出码契约 `:6`；六码用例 `:91-139`；合法例 `:141-159` | 冻结，DO NOT TOUCH |
 | 12 | `tests/contract/page-audit-doc-contract.test.mjs` | 6901 B／114 行（未跟踪） | 判据包路径 `:13`；九维 `:16`；四态 `:17`；失败四类 `:18`；校准负例 `:19`；映射表 `:41-52`；必测门 `:68-78`；接线 `:104-113` | 冻结，DO NOT TOUCH |
 
-待新建（尚无锚点，只有约定路径）：`skills/frontend-testing/references/page-audit.md`、`check-page-audit.mjs`、五个 `collect-*.mjs`、`run-page-audit.mjs`、`tests/fixtures/page-audit/`（受控页、`defects.json`、三条校准页）。
+待新建（尚无锚点，只有约定路径）：`skills/frontend-testing/references/page-audit.md`、`check-page-audit.mjs`、五个 `collect-*.mjs`、`run-page-audit.mjs`、`tests/fixtures/page-audit/`（受控页、`defects.json`、四条校准页）。
 前两个路径已被冻结测试钉死（`page-audit-doc-contract.test.mjs:13`、`page-audit-shape.test.mjs:16`），其余由各 Phase 命令消费。
 其余 consumer 与逐字读取事实在 `2026-10-29-003-code-anchors-and-consumers.md` 表一与 §2。
 
@@ -843,17 +844,17 @@ finding 类型，还是 0 就判未成立。
 - **校验器 CLI**：`node skills/frontend-testing/scripts/check-page-audit.mjs --input <report.json>`。退出 `0` 表示形状合法，`2` 表示驳回，其它非零是脚本自身失败，不得当驳回结论。
 - **校验器输出**：stdout 恰好一行 JSON，形如 `{"ok":bool,"errors":[{"code":"E_...","path":"...","message":"..."}]}`。
 - **六类必驳码**：`E_TOTAL_SCORE`、`E_MISSING_EVIDENCE`、`E_MISSING_UNTESTED_REASON`、`E_LIMITED_PASS`、`E_UNKNOWN_AGGREGATED`、`E_STATE_OUT_OF_ENUM`。
-- **五个采集器 CLI**：`node <script> --cdp-url <url> --out <json> [--viewport WxH] [--state <名>]`；统一输出 `{"engine","observed_at","object","items","failures"}`；`failures[].class` 属四类。
+- **五个采集器 CLI**：`node <script> --cdp-url <url> --out <json> [--viewport WxH] [--state <名>]`；统一输出 `{"engine","observed_at","object","items","failures"}`；`failures[].class` 属四类；五个身份值由编排器经五个 `PAGE_AUDIT_*` 环境变量传入，不占命令行参数；缺任一项在连接 CDP 前退 2、不写件、不置 `null`（见 P5「编排器到采集器的身份传递」）。`collect-console`、`collect-network` 另认 `PAGE_AUDIT_WINDOW_DIR`、`PAGE_AUDIT_TARGET_ID`、`PAGE_AUDIT_WINDOW_ID` 三个环境变量，用于同一次导航窗口（见 P5「同一次导航的采集窗口」）。
 - **失败到状态的映射**：`NOT_STARTED`（服务或页面未起）到 unavailable 加对象未就绪；`UNREACHABLE`（CDP 失联）到未测并保留已观察。
 - **同上的两类**：`TOOL_ERROR`（脚本自异常）到 unavailable，且不得写"未测"；`IDENTITY_MISMATCH`（receiver 身份不符）到 unavailable 加修复指引。四类都不吞已观察事实，也不返回空结果冒正常。
-- **编排器 CLI**：`node skills/frontend-testing/scripts/run-page-audit.mjs --cdp-url <url> --state <名> --viewport WxH --out <json>`，另加五个身份参数 `--workspace`、`--service`、`--route`、`--object-version`、`--engine-session` 与四个可选参数 `--engine`、`--probe-cmd`、`--collector-root`、`--judgments`；**参数表唯一权威是 `phases/P5-审计编排入口与规范消费证明.md` 的「命令行参数分三层」**，本文件只留参数名，不复写取值规则。串五个采集器、补身份块、调校验器；身份缺项退出 2，不写报告，退出码其余部分与校验器同义。
-- **报告形状**：`{object, criteria[], coverage_limits[], summary:{overall}}`；`criteria[]` 项是 `{id, dimension, state, evidence:[{ref}], untested_reason?}`；`state` 属四态。不新增 schema 文件，不写 `visual-diff-report.v1` 旧名。
+- **编排器 CLI**：`node skills/frontend-testing/scripts/run-page-audit.mjs --cdp-url <url> --state <名> --viewport WxH --out <json>`，另加五个身份参数 `--workspace`、`--service`、`--route`、`--object-version`、`--engine-session` 与三个可选参数 `--engine`、`--collector-root`、`--judgments`；**参数表唯一权威是 `phases/P5-审计编排入口与规范消费证明.md` 的「命令行参数分三层」**，本文件只留参数名，不复写取值规则。串五个采集器、补身份块、调校验器；五个身份值由编排器从命令行解析后逐个注入五个采集器子进程的五个环境变量（名称、对象键与判据见 P5 的「编排器到采集器的身份传递」），缺任一项退出 2、零采集器调用、不写报告；console 与 network 不各跑一次：编排器先并发起两个采集器，两个 ready 后对同一页面目标发唯一一次导航，再用 `finish` 同时收尾，两份输出以同一 `loader_id` 证明同一次导航（见 P5「同一次导航的采集窗口」）；overflow、perf、a11y 依次各一次；退出码其余部分与校验器同义。
+- **报告形状**：`{object, criteria[], coverage_limits[], summary:{overall}}`；`criteria[]` 项是 `{id, dimension, state, evidence:[{ref, sha256}], untested_reason?}`；`state` 属四态。证据项统一带 `ref` 与 `sha256`，与 `runtime/evidence/acceptance-evidence-validator.mjs` 的 `{ref, sha256}` 消费合同一致；不新增 schema 文件，不写 `visual-diff-report.v1` 旧名。
 - **引擎选择与回退判定点**：`selectBrowserEngine` `:431-442` 先按显式值直返，不探测；`auto` 下探测 PATH 的 `ego-browser`，失败原因 `executable-missing`。
 - **回退记录**：ego 在跑直接用；装了没开回退 agent-browser 并记 `engine-fallback{from,to,reason,probe}`（`recordEngineFallback` `:427-430`）；选定后失败不切换。探测失败按 `TOOL_ERROR` 记，不静默回退。
 - **口径裁定**：现实现 `browser-qa-session.mjs:505` 与冻结断言在 `auto` 且有 fallback 时抛 `EGO_EXISTING_MODE_NO_IMPLICIT_LAUNCH`，与 U-C07-33、D-027 冲突。裁定是按用户决定改实现，不改用户决定，且先改测试断言再改实现（OPEN-19）。
 - **历史约束**：ADR-0031 身份检查不得降级；ADR-0048 隔离与票据禁区不得删；ADR-0033 不许总结或漂白失败；ADR-0055 终末只在 build-code 末 Phase；ADR-0044 禁配对评审；ADR-0047 不设成本上限。
 - **身份块最小集**：前四项是 workspace、service、route、state。后四项是 viewport、engine、engine_session、object_version。缺项报具体缺项，不填默认值。
-- **数据与生命周期**：一次采集对应一个对象与一个状态，跨状态不合并；每次重采不缓存；截图与 JSON 必须同一时点。
+- **数据与生命周期**：一次采集对应一个对象与一个状态，跨状态不合并；每次重采不缓存；截图与 JSON 必须同一时点。console 与 network 共用一次导航窗口：先两个 ready、再唯一一次导航、最后同时收尾；窗口内不重试、不补第二次导航。
 - **同上**：缺失或迟到按四类失败映射为 unavailable 或未测，不补默认值；报告落 `quality/evidence/` 即不可变，重签发是新增原件并保留旧件。
 - **清理**：采集会话在 finish 时清理；ego 分支不能用 `cleanup.sh`（其 `:10-15` 明确拒清理），以 finish 回执为等价物。
 - **证据落点约束**：AC 证据 ref 必须形如 `quality/evidence/...` 且带 `sha256`（`runtime/evidence/acceptance-evidence-validator.mjs:5`、`:35`）。因此报告本体只落 `quality/evidence/`，审查侧只以材料指针出现，不新增 finding 字段。
@@ -873,7 +874,7 @@ finding 类型，还是 0 就判未成立。
 | R-C07-02、R-C07-03、R-C07-14、R-C07-16、R-C07-20、R-C07-30 | FR-C07-009、FR-C07-010、FR-C07-011 | AC-C07-1、AC-C07-2、AC-C07-6 | P2/T005 | ORACLE-C07-COLLECT | 任务 2：五个薄采集脚本，统一输出与四类失败语义 |
 | R-C07-02、R-C07-20、R-C07-36 | FR-C07-008、FR-C07-010 | AC-C07-2 | P2/T006 | ORACLE-C07-COLLECT | 任务 3：网关保守简化与登记 |
 | R-C07-27、U-C07-58 | FR-C07-013、FR-C07-032 | AC-C07-3 | P3/T007 | ORACLE-C07-FIXTURES | 任务 1：受控页装齐九类预置缺陷，清单按五个字段可机读 |
-| R-C07-28、R-C07-32、U-C07-53 | FR-C07-014 | AC-C07-4 | P3/T008 | ORACLE-C07-FIXTURES | 任务 2：三条校准负例页与自洽契约测试，六个刻度值可回读 |
+| R-C07-28、R-C07-32、U-C07-53 | FR-C07-014 | AC-C07-4 | P3/T008 | ORACLE-C07-FIXTURES | 任务 2：四条校准负例页（三重要一阻断）与自洽契约测试，六个刻度值可回读 |
 | R-C07-05、U-C07-43 | FR-C07-028、FR-C07-026、FR-C07-023、FR-C07-025、FR-C07-006 | AC-C07-5 | P4/T009 | ORACLE-C07-WIRING | 任务 1：build-code 触发句、冻结前审计段与终末四项复核可回读 |
 | R-C07-31、R-C07-39 | FR-C07-032、FR-C07-027 | AC-C07-7 | P4/T010 | ORACLE-C07-WIRING | 任务 2：review 镜头有一节可执行的页面审计摘要消费规则 |
 | R-C07-29、R-C07-30、U-C07-52 | FR-C07-031、FR-C07-028、FR-C07-024 | AC-C07-5、AC-C07-6、AC-C07-7 | P4/T011 | ORACLE-C07-WIRING | 任务 3：报告表达与消费的静态契约测试 |
@@ -888,7 +889,7 @@ finding 类型，还是 0 就判未成立。
 | R-C07-30、R-C07-40、U-C07-58 | FR-C07-032 | AC-C07-6、AC-C07-3 | P7/T020 | ORACLE-P7-M10 | 任务 3：三例校准、覆盖样张与证据指针 |
 | R-C07-35、R-C07-05 | FR-C07-005、FR-C07-028 | AC-C07-5、AC-C07-1 | P8/T021 | ORACLE-P8-ACCEPTANCE | 任务 1：入口准则与两份就绪件可读 |
 | R-C07-25、R-C07-26、R-C07-30 | FR-C07-003、FR-C07-009、FR-C07-031、FR-C07-018、FR-C07-019、FR-C07-021 | AC-C07-1、AC-C07-2、AC-C07-6 | P8/T022 | ORACLE-P8-ACCEPTANCE | 任务 2：三条验收的离线可重放判据 |
-| R-C07-27、R-C07-31、U-C07-53、U-C07-58 | FR-C07-001、FR-C07-012、FR-C07-027、FR-C07-020 | AC-C07-3、AC-C07-7、AC-C07-5 | P8/T023 | ORACLE-P8-ACCEPTANCE | 任务 3：需真实环境与用户在场的未闭环 case |
+| R-C07-27、R-C07-31、U-C07-53、U-C07-58 | FR-C07-001、FR-C07-012、FR-C07-027、FR-C07-020 | AC-C07-3、AC-C07-4、AC-C07-7、AC-C07-5 | P8/T023 | ORACLE-P8-ACCEPTANCE | 任务 3：需真实环境与用户在场的未闭环 case（第七组为两次定级） |
 | R-C07-28、R-C07-31 | FR-C07-004、FR-C07-013、FR-C07-032、FR-C07-022 | AC-C07-4、AC-C07-7、AC-C07-6 | P8/T024 | ORACLE-P8-ACCEPTANCE | 任务 4：七行档位、六项结论与五项回写 |
 | U-C07-40 | FR-C07-032 | AC-C07-5 | P9/T025 | ORACLE-C07-AUTHORING | 读者检查进第 11 步，且有固定记录形态 |
 | U-C07-40 | FR-C07-032 | AC-C07-5 | P9/T026 | ORACLE-C07-AUTHORING | 校验器分三态推进：先留痕，再对当前材料收紧，最后翻转默认 |
@@ -915,7 +916,7 @@ P9 的 8 行来源都用 U-C07-40。原因是 DEC-AUTH-001 尚未登记进 requi
 - **面 4 文档读回**：证据是读回记录（读者身份、读回文本、复述要点）；人工判断，不作机器门。
 - **面 5 结构检查**：证据是退出码与输出；不能证明判据语义、脚本行为或任一判据达成。
 - **读回命令**：`grep -n '^- \*\*AC-C07-' specs/workflowhub-ui-frontend-c07-real-page-verification-20261028/spec.md`，打印七条判据行，供独立读者逐条复述。
-- **编排入口**：`node skills/frontend-testing/scripts/run-page-audit.mjs --cdp-url <url> --state default --viewport 1440x900 --out <json>`，先补五个身份参数 `--workspace`、`--service`、`--route`、`--object-version`、`--engine-session`（参数与取值规则见 `phases/P5-审计编排入口与规范消费证明.md` 的参数表，两处指同一个接口）；缺身份项退出 2，不给默认值；退出码其余部分与校验器同义。
+- **编排入口**：`node skills/frontend-testing/scripts/run-page-audit.mjs --cdp-url <url> --state default --viewport 1440x900 --out <json>`，先补五个身份参数 `--workspace`、`--service`、`--route`、`--object-version`、`--engine-session`（参数与取值规则见 `phases/P5-审计编排入口与规范消费证明.md` 的参数表，两处指同一个接口），五个身份值逐个传给五个采集器；console 与 network 同窗口并发、两 ready 后唯一一次导航（协议见 P5「同一次导航的采集窗口」）；缺任一项退出 2、零采集器调用、不写报告（传递通道见 P5「编排器到采集器的身份传递」），不给默认值；退出码其余部分与校验器同义。
 - **合法与非法对照**：`check-page-audit.mjs --input report.valid.json` 退出 0；同一脚本跑 `report.invalid.json` 退出 2，错误码属六类。两侧当前均 RED。
 - **RED 与 GREEN**：RED 已录，exit 1、18 failed，原件是 `quality/tests/2026-10-29-001-build-plan-page-audit-red.txt`。GREEN 判定是同一命令、同一文件退出 0 且断言清单全过，不得换 oracle 或缩小范围凑绿。
 - **最终聚合**：末验收 Phase 逐条消费第 5 节判据与面 1、面 3 的原件；`run-checks` 只作结构支撑。
@@ -1153,7 +1154,7 @@ T025 到 T032。
   英文编号退到附录 A、B、C。追踪表与实现设计不动。
   对照记录在 `2026-10-29-050-spec-id-strip.md`。
 - 本版（2026-10-29 第二轮）：按独立审查 `2026-10-29-048-new-standard-review.md` §3 的七条阻断项修计划面——
-  11 个 Phase、35 张任务卡与六批次顺序收成一套，补第 5.9 节的冻结断言例外登记，
+  11 个 Phase、35 张任务卡与当时的六批次顺序收成一套，补第 5.9 节的冻结断言例外登记，
   编排入口参数改为引用 P5 参数表，回修改归 P4 的自有副本；
   逐条记录在 `2026-10-29-049-blocker-fixes.md`。32 条需求、7 条判据不变，追踪表仍 35 行。
 - 本版（2026-10-29）：按 `2026-10-29-034-rewrite-design.md` 重排结构与措辞；

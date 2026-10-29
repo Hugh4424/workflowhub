@@ -8,7 +8,7 @@
 | --- | --- | --- | --- | --- | --- |
 | `P1` | `phases/P1-判据与共用契约.md` | `L0 — 结果与变更` | `skills/frontend-testing/references/page-audit.md`、`skills/frontend-testing/scripts/check-page-audit.mjs`、`skills/frontend-testing/SKILL.md`、`skills/frontend-testing/skill-bundle.json`、`skills/catalog.yaml`、`skills/plan-design-review/SKILL.md`、`tests/contract/page-audit-wiring.test.mjs` | none | Phase 2 的五个采集器、Phase 4 的报告解析。 |
 | `P2` | `phases/P2-真实采集与失败语义.md` | `L0 — 结果与变更` | `skills/isolated-browser-qa/SKILL.md`、`skills/isolated-browser-qa/scripts/browser-qa-session.mjs`、`skills/isolated-browser-qa/scripts/browser-qa-tickets.mjs`、`skills/isolated-browser-qa/scripts/browser-qa-cleanup.sh`、`skills/isolated-browser-qa/references/agent-browser.md`、`skills/isolated-browser-qa/references/fallback.md`、`skills/isolated-browser-qa/skill-bundle.json`、`tests/contract/browser-engine-selection.test.mjs`、`skills/frontend-testing/scripts/collect-console.mjs`、`skills/frontend-testing/scripts/collect-network.mjs`、`skills/frontend-testing/scripts/collect-overflow.mjs`、`skills/frontend-testing/scripts/collect-perf.mjs`、`skills/frontend-testing/scripts/collect-a11y.mjs`、`skills/frontend-testing/skill-bundle.json`、`tests/contract/page-audit-collectors.test.mjs` | P1 | P5 与 P8 |
-| `P3` | `phases/P3-受控测试页与校准负例.md` | `L0 — 结果与变更` | `tests/fixtures/page-audit/controlled-page.html`、`tests/fixtures/page-audit/defects.json`、`tests/fixtures/page-audit/calibration/font.html`、`tests/fixtures/page-audit/calibration/spacing.html`、`tests/fixtures/page-audit/calibration/color.html`、`tests/contract/page-audit-fixtures.test.mjs` | P1 | P8（末验收 Phase 的受控页注入与终验串演） |
+| `P3` | `phases/P3-受控测试页与校准负例.md` | `L0 — 结果与变更` | `tests/fixtures/page-audit/controlled-page.html`、`tests/fixtures/page-audit/defects.json`、`tests/fixtures/page-audit/calibration/font.html`、`tests/fixtures/page-audit/calibration/spacing.html`、`tests/fixtures/page-audit/calibration/color.html`、`tests/fixtures/page-audit/calibration/blocker.html`、`tests/contract/page-audit-fixtures.test.mjs` | P1 | P8（末验收 Phase 的受控页注入与终验串演） |
 | `P4` | `phases/P4-报告接入与回修闭环.md` | `L0 — 结果与变更` | `workflows/build-code/SKILL.md`、`workflows/build-code/skill-deps.yaml`、`skills/review/SKILL.md`、`tests/contract/page-audit-report-consumption.test.mjs`、`specs/workflowhub-ui-frontend-c07-real-page-verification-20261028/samples/A/index.html`、`specs/workflowhub-ui-frontend-c07-real-page-verification-20261028/samples/A/assets/app.js`、`specs/workflowhub-ui-frontend-c07-real-page-verification-20261028/samples/A/assets/styles.css`、`specs/workflowhub-ui-frontend-c07-real-page-verification-20261028/samples/B/index.html`、`specs/workflowhub-ui-frontend-c07-real-page-verification-20261028/samples/B/app.js`、`specs/workflowhub-ui-frontend-c07-real-page-verification-20261028/samples/B/styles.css` | P1 | P5、P8（P5 读接线措辞，P8 按终末四项复核取证） |
 | `P5` | `phases/P5-审计编排入口与规范消费证明.md` | `L0 — 结果与变更` | `skills/frontend-testing/scripts/run-page-audit.mjs`、`skills/frontend-testing/scripts/check-norm-consumption.mjs`、`tests/contract/page-audit-runner.test.mjs`、`tests/contract/page-audit-consumption.test.mjs`、`tests/fixtures/page-audit/runner/judgments.json`、`skills/frontend-testing/skill-bundle.json`、`docs/architecture/move-map.json` | P1、P2、P4 | P7 与 P8。 |
 | `P6` | `phases/P6-make-decision流程九条修复.md` | `L0 — 结果与变更` | `workflows/make-decision/SKILL.md`、`workflows/make-decision/steps.json`、`skills/decision-log/templates/decision-log-template.md`、`docs/standard-workflow.md`、`tests/contract/make-decision-flow.test.mjs` | none | tools/cli/check-stage-steps.mjs |
@@ -25,9 +25,12 @@
 - 批次一（可并行）：P6 make-decision 修复（无依赖）、P1 判据与契约（无依赖）。
 - 批次二：P9 材料为读者写（依赖 P6）、P2 真实采集（依赖 P1）。
 - 批次三：P10 审查改造（依赖 P9）、P3 受控测试页（依赖 P1）。
-- 批次四：P4 报告接入（依赖 P1、P2）、P5 编排入口（依赖 P1、P2、P4）。
-- 批次五：P7 防假绿（依赖 P1、P2、P4、P5）、P11 去字面断言（依赖 P1）。
-- 批次六（最后）：P8 全 AC 终验（依赖 P1 到 P7 与 P9 到 P11）。
+- 批次四：P4 报告接入（依赖 P1）。
+- 批次五：P5 编排入口（依赖 P1、P2、P4，待批次四的 P4 完成后执行）。
+- 批次六：P7 防假绿（依赖 P1、P2、P4、P5）、P11 去字面断言（依赖 P1）。
+- 批次七（最后）：P8 全 AC 终验（依赖 P1–P7；P9–P11 先于本批完成，先后由批次顺序表达，见下方依赖列说明）。
+
+依赖列的格式约束：依赖列只写编号比本 Phase 更早的 Phase。P9–P11 的编号大于 8，写进 P8 的依赖列会被契约校验判为非法引用（`dependency must match the index and reference only earlier Phase IDs`），所以 P8 与 P9–P11 的先后只由批次顺序表达：P9 在批次二、P10 在批次三、P11 在批次六，都先于本批；P8 收口前必须确认 P9–P11 已交付。
 
 每批做完即提交 main，先做完的批次不等待后面的批次。
 
