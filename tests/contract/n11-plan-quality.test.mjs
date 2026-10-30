@@ -32,7 +32,7 @@ describe('ORACLE-N11-CRITERIA-LOCK',()=>{
  });
  for(const field of ['RED/GREEN gate_cmd','expected_exit']) it('rejects missing '+field,()=>{
   const good=authorExampleMaterials();expect(validatePostPhaseContract(good).errors).toEqual([]);
-  expect(validatePostPhaseContract(mutatePhaseField(good,field)).errors.some(e=>e.includes('missing concrete '+field))).toBe(true);
+  expect(validatePostPhaseContract(mutatePhaseField(good,field)).facts.field_gaps).toContainEqual({phase_id:'P1',task_id:'T001',path:phasePath,field});
  });
 });
 const scopeFact=paths=>({status:'recorded',changed_paths:paths});

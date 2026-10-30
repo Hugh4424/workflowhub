@@ -10,7 +10,7 @@ import {
   selectTrustedReviewProviderSelection,
 } from "./third-review-host-config.mjs";
 import { buildReviewMaterials, materialAllowlistForRule, materialForbiddenMessage, reviewInstructionsFor as canonicalReviewInstructionsFor,
-  validateMaterialAllowlist } from "./review-materials.mjs";
+  validateMaterialAllowlist, validateBuildPlanRequest } from "./review-materials.mjs";
 import { providerAdapter } from "../../../runtime/review/canonical-review-result.mjs";
 import { reviewIdentityFromInput, reviewRuleFor, TERMINAL_REVIEW_SCOPE } from "../../../runtime/review/review-policy.mjs";
 import { AUTHENTICATED_EVIDENCE_PATH, providerMaterialEntries, providerMaterialPath, redactProviderHostPaths, reviewActivationCohort } from "../../../runtime/review/provider-material-projection.mjs";
@@ -466,6 +466,7 @@ function buildBundle(attachmentRoot,input) {
   return buildReviewMaterials({attachmentRoot,stage:input.stage,reviewTrack:input.review_track ?? input.reviewTrack ?? null,
     reviewScope:input.review_scope ?? input.reviewScope ?? null,reviewKind:input.review_kind ?? input.reviewKind ?? null,
     role:input.role ?? null,uiScope:input.ui_scope===true,activationCohort:reviewActivationCohort(input),materials:input.materials,surface:input.surface ?? null,phaseId:input.phase_id ?? null,
+    legacy:input.legacy===true,...(Object.hasOwn(input,"request_version") ? {request_version:input.request_version} : {}),
     ...(input.authenticated_evidence===undefined ? {} : {authenticated_evidence:input.authenticated_evidence})});
 }
 
@@ -816,9 +817,13 @@ function staticReviewRule(input) {
   const stage = reviewKind === "build_prd" ? "build-prd" : reviewKind ?? input.stage;
   const track = reviewKind === null ? (input.review_track ?? input.reviewTrack ?? null) : null;
   const scope = reviewKind === null ? (input.review_scope ?? input.reviewScope ?? null) : null;
-  return stage === "build-plan" && reviewActivationCohort(input) === "post"
-    ? stageMaterials.stages["build-plan"].profiles.post
-    : reviewRuleFor(stage, track, scope);
+  if (stage === "build-plan" && reviewActivationCohort(input) === "post") {
+    const rule = stageMaterials.stages["build-plan"].profiles.post;
+    return input.legacy === true || Object.hasOwn(input, "request_version")
+      ? { ...rule, required: rule.required.filter(key => key !== "decision_baseline"), optional: [...rule.optional, "decision_baseline"] }
+      : rule;
+  }
+  return reviewRuleFor(stage, track, scope);
 }
 
 /** Fix the existing direction protocol at the actual stage/track boundary. */
@@ -1930,13 +1935,21 @@ function combinePairedResults(input, pairId, roleResults) {
 }
 
 export async function runSimpleReview(input, dependencies = {}) {
-  if (!isPairedMakeDecisionInput(input)) {
+  try { if (input) validateBuildPlanRequest(input); }
+  catch (error) {
+    return blockedPreflight(input, error.code ?? "MATERIAL_INCOMPLETE", error.message,
+      preflightDiagnostic({ field: "materials", expected: "complete inline build-plan request", actual: "missing, unresolved or out of bounds", nextAction: "supply accepted decisions and complete current material through the existing public ref owner" }), null, { material_id: null });
+  }
+  const pairedBuildPlan = input?.stage === "build-plan" && reviewActivationCohort(input) === "post"
+    && input.legacy !== true && !Object.hasOwn(input, "request_version")
+    && input.pair_id === undefined && input.pairId === undefined && input.role === undefined;
+  if (!pairedBuildPlan && !isPairedMakeDecisionInput(input)) {
     const pair = input?.pair_id && input?.role ? { pair_id: input.pair_id, role: input.role } : null;
     return runSimpleReviewSingle(input, dependencies, pair);
   }
   const pairId = dependencies.pairId ?? dependencies.pair_id ?? randomUUID();
   const roleResults = await Promise.all(["red", "blue"].map((role) => runSimpleReviewSingle(
-    input,
+    pairedBuildPlan ? { ...input, role } : input,
     dependencies,
     { pair_id: pairId, role },
   )));

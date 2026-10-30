@@ -571,7 +571,7 @@ async function primaryCardsFixture(){
  rmSync(join(f.material,'phases'),{recursive:true});mkdirSync(join(f.material,'phases'));
  const phases={};for(const name of readdirSync(join(base,'phases'))){if(name!=='index.md'&&!/^P\d+.*\.md$/.test(name))continue;const bytes=readFileSync(join(base,'phases',name),'utf8').replace(/^### (T\d{3}(?!\s+[—–-]\s+)[^\n]*)$/gm,'#### $1');writeFileSync(join(f.material,'phases',name),bytes);if(name!=='index.md')phases['phases/'+name]=bytes;}
  for(const ref of ['raw-requirements/2026-10-26-user-request.md','decision-log-refs/requirement-index.md']){const target=join(f.taskPath,'quality/evidence',ref);mkdirSync(join(target,'..'),{recursive:true});writeFileSync(target,readFileSync(join(originals,ref)));}
- const checked=validatePostPhaseContract({spec:readFileSync(join(f.material,'spec.md'),'utf8'),index:readFileSync(join(f.material,'phases/index.md'),'utf8'),phases});
+ const checked=validatePostPhaseContract({spec:readFileSync(join(f.material,'spec.md'),'utf8'),index:readFileSync(join(f.material,'phases/index.md'),'utf8'),phases,material_path:base});
  expect(checked.errors, 'fixture must be a real legal post Phase contract, not a target RED').toEqual([]);
  expect(checked.facts.task_count).toBe(15);
  return f;

@@ -127,7 +127,7 @@ consequence, mitigation or STOP, handling stage, and verification. Open
 questions name affected IDs, owner, impact, handling stage, and close condition
 or STOP. Ambiguity is marked; it is not guessed.
 
-Before writing, remove authoring comments, placeholders, empty headings, empty tables, and filler. Use at most five columns in a table and keep prose out of table cells. Apply the single-authority rules and 「技能写作规范（WR001）」 below.
+Before writing, remove authoring comments, placeholders, empty headings, empty tables, and filler. Choose table columns for the actual comparison and keep explanatory prose outside table cells; do not impose a column quota. Apply the single-authority rules and 「技能写作规范（WR001）」 below.
 
 Write only the named artifact `spec.md`. Return requirement count, ambiguity
 count, and a short checklist as structured output. Do not run Git commands or
@@ -147,7 +147,7 @@ discover files. Missing input/callback fails loud.
 
 ## 技能写作规范（WR001）
 
-本节是 agent 文档写作的唯一规范层；本技能的 single-authority 规则是 spec 的具体落点，其它技能在创建或改写 agent 方法、写四类材料（decision-log、spec、Phase+index、PRD）或阶段报告/交接、阶段反思、PR/交付说明前指向这里，不复制本节或新建第四规范对象。规范指引写法，不产生质量 gate。检核以下 Q01–Q12，逐条给出真实范围、依据与未观测；原步骤与条件的保全表和实际方法消费分别记录，字面禁区按真实 source 正负断言/guard 原样保留。
+本节是 agent 文档写作的唯一规范层；本技能的 single-authority 规则是 spec 的具体落点，其它技能在创建或改写 agent 方法、写四类材料（decision-log、spec、Phase+index、PRD）或阶段报告/交接、阶段反思、PR/交付说明前指向这里，不复制本节或新建第四规范对象。规范指引写法，不产生质量 gate。检核以下 Q01–Q13，逐条给出真实范围、依据与未观测；原步骤与条件的保全表和实际方法消费分别记录，字面禁区按真实 source 正负断言/guard 原样保留。
 
 1. **Q01 — Load**：逐行区分 context load（description/常驻指针）与 cognitive load（人记材料/触发条件），说明该行为何值得；人作选择所需认知成本不是一概消除的目标。description 是常驻 context pointer：引领词前置，每真实分支一个触发，去身份复述；model-invoked 保可发现 description，只有确实仅人触发才用 user-invoked，router 只能提示其它 user-invoked，不能代调用。
 2. **Q02 — Disclosure**：每分支都要的步骤内联，仅部分分支所需参考置于条件指针后。指针同时说明材料和到达条件；必需材料触发弱时先锐化指针再考虑内联。档内步骤、档内参考、外链参考按需分层，不把 live 步骤藏到无人会读的链接。
@@ -160,7 +160,28 @@ discover files. Missing input/callback fails loud.
 9. **Q09 — Environment**：可从一个真实文件或命令发现的脚本/配置/目录事实留给环境；只缓存无法直接发现的约定、理由或坑。被锁字面、机器标题/标签及受保护依赖的实读声明是例外，保其真实来源，不把路径存在当完成。
 10. **Q10 — No-op**：逐句问删除后相对当前模型默认行为会否变化。真正 no-op 删除整句而非修词，记录删除理由与含义保全落点；模型默认有争议就保留待相关真实 case 有/无句消费验证，不凭全文相似、行数或主观风格裁定。弱引领词先换更强且有行为锚的词。
 11. **Q11 — Sediment**：核每句与当前行为相关性，清已过时、被替代或从未相关的层；来源、决定与失败原件留历史原ref，不覆写过去或把未知写已解决。
-12. **Q12 — Sprawl**：即使每行活且唯一仍过长时，按真实分支/序列渐进披露，保执行链与到达条件。没有行数配额，也没有靠长度证明质量的自动 eval；手跑文档并用 duplication/sediment/no-op/sprawl/premature completion 词表定位失败。字符/句长预算只有具源依据才采用，无依据保 unknown；表达整理逐核心保全与有限无回归，新行为用对应目标 case，不强求赢家。未测行为/真人量如实未观测，不采集或估算输出用量。
+12. **Q12 — Sprawl**：即使每行活且唯一仍过长时，按真实分支/序列渐进披露，保执行链与到达条件。没有行数配额，也没有靠长度证明质量的自动 eval；手跑文档并用 duplication/sediment/no-op/sprawl/premature completion 词表定位失败。字符、句长、行数、段数与材料数量不设人工质量门；表达整理逐核心保全与有限无回归，新行为用对应目标 case，不强求赢家。未测行为/真人量如实未观测，不采集或估算输出用量。
+
+13. **Q13 — 读者可用**：作者开工前按下列十九条自查，记录真实例外；这是本地写作规则，不冒标准原文或自动评分。完整性、实际语义与真实消费决定材料是否可用；解释首现缩写，在节首回答读者问题，不设字数或材料数量配额；引用、命令与锁定合同保原字节并注明例外。读数只报告，实际语义由独立读者回读。
+    - S1：一句只交代一个指令，连续动作按执行顺序分句。
+    - S2：按真实含义组织句子，引用与精确命令保原义；不设句长拒绝条件。
+    - S3：一句围绕一个对象，复杂并列拆句或用表。
+    - S4：先写谁做什么；强调受事时仍点明施动者。
+    - S5：用具体动词表达动作，删不增加含义的名词化表达。
+    - S6：同一概念使用同一称谓，不靠同义词轮换。
+    - S7：拆开连续修饰的名词链，让对象与动作可定位。
+    - S8：非通用缩写首现给全称，已有术语表时给直达指针。
+    - S9：数字写单位及依据；机器编号和路径按原合同保留。
+    - S10：未参与写作的人复述目标、理由、下一步与失败恢复，保原答。
+    - I1：每节说明读者要用它完成什么决定或动作。
+    - I2：不影响执行的说明按 Q10 删除；必要边界保留。
+    - I3：每节开头先给结论及本节回答的问题。
+    - I4：同一含义只在其 owner 处定义，别处给条件指针。
+    - I5：真实冷读定位首改文件与命令；时间只报实际观察。
+    - I6：高频专业词解释首现，核实际术语表缺口。
+    - I7：句长与术语同义同时核，不能以一种读数代另一项。
+    - I8：工程师按完整材料试写或执行实际命令，保输入、cwd、退出与原件；未执行明写。
+    - I9：失败段写信号、回原谁修、什么条件可恢复。
 
 跨语言写作先选本节实际用途（解释、操作或查阅），同一术语保持同义、指代可唯一回指，一次说清一个动作；逐句检查无依据的意义拔高、三段式凑齐、同义词轮换、破折号/冒号连接和加粗堆叠等表面痕迹，仅在不损含义时改写。痕迹是人读线索，不是禁词表、字数门或自动评分；润色逐条保决定、量词、限制、权限和失败条件，历史术语只解释，不批量清洗。
 
