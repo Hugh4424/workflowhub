@@ -1268,7 +1268,7 @@ function terminalAssessmentQuality(context, row) {
   try{
     const directory=context.task.recordPath("quality/evidence/human-confirmations");
     let names;try{names=readdirSync(directory);}catch(error){if(error.code!=="ENOENT")throw error;names=[];}
-    const authorizations=names.filter(name=>/^[A-Za-z0-9][A-Za-z0-9._-]*\.json$/.test(name)).map(name=>JSON.parse(context.task.readRecord(`quality/evidence/human-confirmations/${name}`))).filter(value=>value?.stage==="build-code"&&value.decision==="authorized");
+    const authorizations=names.filter(name=>/^[A-Za-z0-9][A-Za-z0-9._-]*\.json$/.test(name)).map(name=>JSON.parse(context.task.readRecord(`quality/evidence/human-confirmations/${name}`))).filter(value=>value?.stage==="build-code"&&["authorized","approve"].includes(value.decision));
     if(authorizations.length){
       if(authorizations.some(value=>typeof value.created_at!=="string"||!/^\d{4}-\d\d-\d\dT/.test(value.created_at)||!Number.isFinite(Date.parse(value.created_at))))throw Error("authorization creation time unavailable");
       authorizations.sort((a,b)=>Date.parse(a.created_at)-Date.parse(b.created_at));
@@ -1435,10 +1435,17 @@ function terminalAssessmentQuality(context, row) {
         const bytes=read(sourceRef,null),manifest=review.ocr?.manifest,entry=Array.isArray(manifest)?manifest.filter(v=>v.path==="source.json"):[];
         reviewedSource=JSON.parse(bytes);
         const subject=review.request?.subject;
-        const sourceIdentity=plain(reviewedSource)&&/^[a-f0-9]{40,64}$/.test(reviewedSource.captured_head??"")&&/^[a-f0-9]{40,64}$/.test(reviewedSource.baseline_commit??"")&&Array.isArray(reviewedSource.repositories);
+        const sourceIdentity=plain(reviewedSource)&&/^[a-f0-9]{40,64}$/.test(reviewedSource.captured_head??"")&&/^[a-f0-9]{40,64}$/.test(reviewedSource.baseline_commit??"")&&(!Object.hasOwn(reviewedSource,"repositories")||Array.isArray(reviewedSource.repositories));
         // source.json is the canonical packet DTO. Some callers also supply a
         // subject; when present its claims must agree, never override the DTO.
-        sourceBound=requireFact(entry.length===1&&entry[0].bytes===bytes.length&&entry[0].sha256===sha256(bytes)&&deliveredMaterialId(manifest)===review.request?.material_id&&sourceIdentity&&(subject===undefined||plain(subject)&&reviewedSource.captured_head===subject.head_commit&&reviewedSource.baseline_commit===subject.base_commit&&Array.isArray(subject.changed_files)),"terminal review: original source packet identity differs");
+        // Legacy direct paths omit repositories; repos/ paths still require
+        // their original repository mapping below.
+        // Subject is ordinary producer provenance: only its explicit identity
+        // claims constrain the independently authenticated source DTO.
+        const subjectMatches=subject===undefined||plain(subject)
+          &&[["head",reviewedSource.captured_head],["head_commit",reviewedSource.captured_head],["base",reviewedSource.baseline_commit],["base_commit",reviewedSource.baseline_commit]].every(([key,expected])=>!Object.hasOwn(subject,key)||subject[key]===expected)
+          &&(!Object.hasOwn(subject,"changed_files")||Array.isArray(subject.changed_files)&&subject.changed_files.every(file=>typeof file==="string"));
+        sourceBound=requireFact(entry.length===1&&entry[0].bytes===bytes.length&&entry[0].sha256===sha256(bytes)&&deliveredMaterialId(manifest)===review.request?.material_id&&sourceIdentity&&subjectMatches,"terminal review: original source packet identity differs");
         if(sourceBound){git(["cat-file","-e",`${reviewedSource.captured_head}^{commit}`]);git(["cat-file","-e",`${reviewedSource.baseline_commit}^{commit}`]);git(["merge-base","--is-ancestor",reviewedSource.baseline_commit,reviewedSource.captured_head]);git(["merge-base","--is-ancestor",reviewedSource.captured_head,"HEAD"]);}
         if(review.source_ref&&a.review_source_ref)requireFact(sameReference(review.source_ref,a.review_source_ref),"terminal review: raw source override differs from canonical");
       }catch(error){sourceBound=false;gaps.push(`terminal review: source binding unavailable: ${error.message}`);}
@@ -1455,7 +1462,7 @@ function terminalAssessmentQuality(context, row) {
       const repos=(reviewedSource.repositories??[]).filter(repo=>repo.id==="wh"&&path.startsWith(`repos/${repo.id}/`)&&repo.captured_head===reviewedSource.captured_head&&repo.baseline_commit===reviewedSource.baseline_commit&&repo.selected_paths?.includes(path)&&repo.changed_paths?.includes(path));
       const file=path.slice("repos/wh/".length);
       const entries=(review.ocr?.manifest??[]).filter(v=>v.path===path);
-      return repos.length===1&&entries.length===1&&(review.request?.subject===undefined||review.request.subject.changed_files.includes(file))&&implementationPaths.has(file)?file:null;
+      return repos.length===1&&entries.length===1&&(!Object.hasOwn(review.request?.subject??{},"changed_files")||review.request.subject.changed_files.includes(file))&&implementationPaths.has(file)?file:null;
     };
     for(const [index,f] of findings.entries()){
       const id=f.finding_id??f.id??`/findings/${index}`,ds=dispositions.filter(d=>locatorMatches(d,f,index));
