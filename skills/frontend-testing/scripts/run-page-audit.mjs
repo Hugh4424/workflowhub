@@ -32,7 +32,7 @@ export function readIdentity(argv){
   return values;
 }
 export async function lockEngine(values,env,{probe}={}){
-  const local={...env};if(values['--engine']!==undefined)local.BROWSER_QA_ENGINE=values['--engine'];else delete local.BROWSER_QA_ENGINE;
+  const local={...env};if(values['--engine']!==undefined)local.BROWSER_QA_ENGINE=values['--engine'];
   try{return await selectBrowserEngine(local,{probe});}catch(error){error.exitCode=2;throw error;}
 }
 export async function runPageAudit(argv,{env=process.env,cwd=process.cwd(),probe,runTask,windowTimeoutMs}={}){
@@ -148,7 +148,10 @@ export function mergeJudgments(criteria,observations,refs,{interrupted=false}={}
     const interactionDeclared=/交互|interaction/i.test(c.dimension)||(/perf|performance|运行性能/i.test(c.dimension)&&!/导航|navigation|ttfb|domContentLoadedEventEnd|loadEventEnd/i.test(c.dimension));
     const unknownInteraction=interactionDeclared&&selected.length===1&&selected[0]==='perf'&&observations.perf?.items.some(item=>item.perf?.interaction.status==='unknown');
     if(c.state!=='失败'&&(unreachable||unknownNav||unknownInteraction)){c.state='未测';c.untested_reason=unreachable?'采集失联：保留已观察，后续采集未执行；提供者为采集执行者，恢复同一对象后重跑':[unknownNav?'导航性能未测：三次观测存在缺失；由采集执行者恢复同一对象后补齐并重跑':null,unknownInteraction?'交互未测：未提供任务动作或实际耗时缺失；由页面任务作者提供可等待真实终态的闭包并补观测后重跑':null].filter(Boolean).join('；');}
-    if(c.state==='通过'&&!docs.some(d=>d?.items.length))throw fault('E_PASS_WITHOUT_OBSERVATION',c.id,'A pass has no observation',2);
+    if(c.state==='通过'&&!docs.some(d=>d?.items.length)){
+      if(!selected.length&&Array.isArray(original.evidence)&&original.evidence.length){c.state='未测';c.untested_reason=[c.untested_reason,'本项无对应采集观察；外部证据的对象绑定与判据覆盖未核实；由调用方及原独立执行者（独立页面验收者）核实当前对象、业务终态与判据覆盖，补证后恢复，不能用其它维观测替代'].filter(Boolean).join('；');}
+      else throw fault('E_PASS_WITHOUT_OBSERVATION',c.id,'A pass has no observation',2);
+    }
     return c;
   });
 }
@@ -156,7 +159,7 @@ async function collectAudit(values,selection,{env,cwd,runTask,windowTimeoutMs=50
   const out=resolve(cwd,values['--out']);
   const input=values['--judgments']?JSON.parse(await readFile(resolve(cwd,values['--judgments']),'utf8')):{criteria:bone.map((dimension,i)=>({id:'dimension-'+(i+1),dimension,state:'未测',evidence:[],untested_reason:'未提供判定文件；由页面执行者提供判定与来源后重跑'})),norm_candidates:[]};
   if(!Array.isArray(input.criteria)||!input.criteria.length)throw fault('E_USAGE','--judgments','Judgment input must have criteria[]');
-  const originalErrors=collectErrors(input).filter(e=>['E_STATE_OUT_OF_ENUM','E_TOTAL_SCORE'].includes(e.code));
+  const originalErrors=collectErrors(input).filter(e=>['E_STATE_OUT_OF_ENUM','E_TOTAL_SCORE'].includes(e.code)||(input.coverage_limits!==undefined&&e.code==='E_REPORT_SHAPE'&&e.path.startsWith('$.coverage_limits')));
   if(originalErrors.length){const e=fault('E_REPORT_REJECTED','--judgments','Original judgment violates frozen shape rules',2);e.errors=originalErrors;throw e;}
   for(const [i,c]of input.criteria.entries())if(Array.isArray(c?.evidence))for(const [j,e]of c.evidence.entries())if(!text(e?.ref)||typeof e.sha256!=='string'||!/^[a-f0-9]{64}$/i.test(e.sha256))throw fault('E_MISSING_EVIDENCE',`$.criteria[${i}].evidence[${j}]`,'Formal producer requires ref and sha256; original byte/object verification remains with the evidence consumer',2);
   if(await exists(out))throw fault('E_OUTPUT_EXISTS','--out','Report original already exists; choose a new report path');
@@ -193,7 +196,7 @@ async function collectAudit(values,selection,{env,cwd,runTask,windowTimeoutMs=50
     const facts=await checkNormConsumption(input,{cwd}),normPath=join(dir,'norm-facts.json'),normBytes=JSON.stringify(facts)+'\n';
     await writeFile(normPath,normBytes,{flag:'wx'});
     const normEvidence={ref:relative(evidenceRoot,normPath).split(sep).join('/'),sha256:sha(normBytes)};
-    const criteria=applyNormFacts(mergeJudgments(input.criteria,observations,refs,{interrupted}),facts).map(c=>({...c,evidence:[...(c.evidence??[]),normEvidence,...(windowEvidence?[windowEvidence]:[])]})),coverage_limits=[];
+    const criteria=applyNormFacts(mergeJudgments(input.criteria,observations,refs,{interrupted}),facts).map(c=>({...c,evidence:[...(c.evidence??[]),normEvidence,...(windowEvidence?[windowEvidence]:[])]})),coverage_limits=[...(input.coverage_limits??[])];
     if(interrupted)coverage_limits.push('采集失联：仅保留已观察；后续采集未执行，恢复同一对象后重跑');
     if(criteria.some(c=>c.state==='未测'))coverage_limits.push('存在未测检查项；退出 0 仅表示报告形状合法');
     if(observations.perf?.items.some(i=>Object.values(i.perf?.nav??{}).some(value=>value.median==='unknown')))coverage_limits.push('导航性能未测：三次观测存在缺失，保原始unknown；由采集执行者恢复同一对象后补齐重跑');
