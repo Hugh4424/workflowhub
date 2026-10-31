@@ -118,6 +118,7 @@ authorize只记录/消费已有授权。每次Git前用 `runtime/interface/git-a
 ## 写作与固定来源
 
 改写 agent 方法时，若 `skills/spec-specify/SKILL.md` 已有「技能写作规范（WR001）」节，读取该唯一规范并逐项保全；规范尚未到位时保留当前方法与调用者提供的写作源，不猜新规则。
+本阶段写出的材料（Phase 正文、审查与测试事实、交接、最终报告）形状按同一文件的「材料写作标准（唯一）」执行；此处不复述。
 
 吸收 [mattpocock/skills](https://github.com/mattpocock/skills) 固定 commit `b0618bc436ad893b3c5e84e55fba86586d34a404` 的 `skills/engineering/implement-spec/SKILL.md`（task graph/context pointers）、`skills/engineering/tdd/SKILL.md`（纵切与独立 oracle）、`skills/engineering/code-review/SKILL.md`（Standards/Spec 分轴）及 `skills/engineering/pr/SKILL.md`（描述三段）。写作参考 `skills/productivity/writing-for-agents/SKILL.md`、`SKILL-MECHANICS.md` 与其 docs。
 

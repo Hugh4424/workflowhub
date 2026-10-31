@@ -16,6 +16,9 @@ function has(s, re, why) { expect(s, why).toMatch(re); }
 function section(s, title) { const lines=s.split('\n'); const start=lines.findIndex(l => /^#{1,6} /.test(l) && l.includes(title)); expect(start,`section ${title}`).toBeGreaterThanOrEqual(0); const rank=lines[start].match(/^#+/)[0].length; let end=start+1; while(end<lines.length && !new RegExp(`^#{1,${rank}} `).test(lines[end])) end++; return lines.slice(start,end).join('\n'); }
 function blocks(s) { return [...s.matchAll(/^###\s+(\d+)[.、．]\s+([^\n]+)\n([\s\S]*?)(?=^###\s+\d+[.、．]|^##\s|$(?![\s\S]))/gm)].map(m=>({id:Number(m[1]),title:m[2],body:m[3]})); }
 function ordered(s, patterns) { let i=-1; for(const re of patterns) { const tail=s.slice(i+1); const m=re.exec(tail); expect(m,`ordered contract ${re}`).not.toBeNull(); i+=1+m.index+m[0].length; } }
+// Only the skill applicability matrix defines one row per skill; other tables
+// (e.g. the step projection list) may legitimately repeat a skill name.
+function skillMatrixRows(doc) { const lines=doc.split('\n'); const start=lines.findIndex(l => /^\|\s*技能\s*\|\s*适用\s*\|/.test(l)); expect(start,'skill applicability matrix header').toBeGreaterThanOrEqual(0); const rows=[]; for(let i=start+2;i<lines.length && lines[i].startsWith('|');i+=1) rows.push(lines[i]); return rows; }
 const shared31 = ['mini-task','talk-with-zhipeng','decision-log','deep-research','anysearch','grill-with-docs','spec-clarify','spec-specify','spec-prd','spec-analyze','testing-system-blueprint','test-routing-advisor','backend-testing','frontend-testing','fullstack-slice-testing','isolated-browser-qa','project-norm-init','design-source-readiness','frontend-prototype-render','frontend-component-quality','wh-review','intake-decision-review','plan-ceo-review','review','simplicity-guard','plan-design-review','architect-code-review','diagnosing-bugs','stage-reflection','stage-handoff','resolving-merge-conflicts'];
 const complexBaseline = [
   {
@@ -236,8 +239,9 @@ describe('ORACLE-FLOW-STEPS: per-flow original skill denominator and cockpit own
     test(`${level}: all original 31 skills have an explicit status and reason, without duplicate definitions`, () => {
       const doc=text(level); expect(shared31).toHaveLength(31);
       for(const category of ['必需','按需','跳过']) expect(doc).toContain(category);
+      const matrix=skillMatrixRows(doc);
       for(const name of shared31) {
-        const rows=doc.split('\n').filter(l=>l.startsWith('|') && new RegExp('`'+name+'`').test(l));
+        const rows=matrix.filter(l=>new RegExp('`'+name+'`').test(l));
         expect(rows,`${level}/${name}: one explicit matrix row`).toHaveLength(1);
         has(rows[0],/必需|按需|跳过/,`${name}: selected applicability`);
         const cells=rows[0].split('|').map(x=>x.trim()).filter(Boolean); expect(cells.length,`${name}: status plus actual trigger/reason`).toBeGreaterThanOrEqual(3); expect(cells.at(-1).replace(/[`—-]/g,'').trim().length,`${name}: nonempty trigger or skip reason`).toBeGreaterThan(2);

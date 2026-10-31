@@ -189,7 +189,7 @@ async function runMaterialChecks(root) {
       try { for (const path of phaseFilesFromIndex(inspection.files["phases/index.md"])) phases[path] = inspection.files[path]; }
       catch { /* The reader and validator retain the named index error below. */ }
     }
-    const result = validatePostPhaseContract({ spec: inspection.files["spec.md"], index: inspection.files["phases/index.md"], phases });
+    const result = validatePostPhaseContract({ spec: inspection.files["spec.md"], index: inspection.files["phases/index.md"], phases, material_path: root });
     const errors = [...inspection.errors, ...result.errors, ...triageSkipReasons(phases)];
     for (const error of errors) console.log(`[run-checks][material] ${root} ${error}`);
     if (errors.length) { console.log(`[run-checks][material] errors=${errors.length}`); return false; }

@@ -296,3 +296,141 @@ describe('module range admission before expansion', () => {
     }
   }));
 });
+
+describe('current-shape 工作包 N / 决定 N mapping', () => {
+  function currentShapeFixture(check) {
+    return convergenceFixture(({ task, materials, ref, put, invoke }) => {
+      const mapping = '## 旧编号对照\n| 正文编号 | 旧编号 | 说明 |\n| --- | --- | --- |\n| 工作包 1 | WP1 | controlled |\n| 决定 1 | D-001 | controlled |\n';
+      const decision = `# Controlled\n- 推荐级别：复杂\n### 工作包 1：controlled\n- **要交付什么**：受控结果；消费者是 controlled consumer。\n#### 决定 1：controlled decision\n- **做什么**：读取受控原件并报告缺口。\n- **不做什么**：不写运行时。\n- **风险**：缺证据误报。\n| AC-01 | 受控结果可回读 | 目标内容明确 |\n| OI-001 | 待独立核对 | owner：受控维护者 |\n细化：\`quality/evidence/decision-log-refs/controlled-module-details.md\`\n${mapping}\n清单：\`${ref}\`\n`;
+      put(materials, 'decision-log.md', decision);
+      const row = validOne.replaceAll('D-001', '决定 1');
+      check({ task, materials, ref, put, invoke, decision, row });
+    });
+  }
+  it('maps 工作包 1 and 决定 1 through 旧编号对照 and resolves all eight fields', () => currentShapeFixture(({ task, ref, put, invoke, row }) => {
+    put(task, ref, row);
+    const report = invoke();
+    expect(report.errors).toEqual([]);
+    expect(report.convergence.complete).toBe(true);
+    expect(report.modules.map(module => module.fields.map(field => field.present))).toEqual([Array(8).fill(true)]);
+  }));
+  it('reports a missing 决定 1 mapping instead of silently skipping the field', () => currentShapeFixture(({ task, materials, ref, put, invoke, row, decision }) => {
+    put(task, ref, row);
+    // Rewrite without the decision row. The fixture's check callback owns the
+    // material root, so the decision is re-put here with the same checklist.
+    const withoutDecision = decision.replace('| 决定 1 | D-001 | controlled |\n', '');
+    put(materials, 'decision-log.md', withoutDecision);
+    const report = invoke();
+    expect(report.errors.join('\n')).toContain('决定 1');
+    expect(report.convergence.gaps).toContain('决定 1 未取得旧编号映射或正文');
+    expect(report.convergence.complete).toBe(false);
+  }));
+  it('recognizes 工作包 1 without a mapping row instead of treating the module set as empty', () => currentShapeFixture(({ task, materials, ref, put, invoke, row, decision }) => {
+    put(task, ref, row);
+    const withoutPackage = decision.replace('| 工作包 1 | WP1 | controlled |\n', '');
+    put(materials, 'decision-log.md', withoutPackage);
+    const report = invoke();
+    expect(report.errors.join('\n')).not.toContain('未取得 WP 旧编号映射');
+    expect(report.convergence.expected_modules).toEqual(['1']);
+    expect(report.convergence.complete).toBe(true);
+  }));
+  it('keeps an explicit mapping when it names a different WP id', () => currentShapeFixture(({ task, materials, ref, put, invoke, row, decision }) => {
+    put(task, ref, row.replace('| 1 controlled |', '| 7 controlled |'));
+    put(materials, 'decision-log.md', decision.replace('| 工作包 1 | WP1 | controlled |', '| 工作包 1 | WP7 | controlled |'));
+    const report = invoke();
+    expect(report.convergence.expected_modules).toEqual(['7']);
+    expect(report.convergence.complete).toBe(true);
+  }));
+});
+
+describe('WPn package table behavior', () => {
+  it('keeps the archived WPn fields unchanged', () => convergenceFixture(({ invoke }) => {
+    const report = invoke();
+    expect(report.convergence).toEqual({
+      source: 'quality/evidence/decision-log-refs/controlled-convergence-checklist.md',
+      expected_modules: ['1', '2'],
+      complete: true,
+      gaps: [],
+    });
+    expect(report.modules.map(module => [module.name, module.state, module.fields.map(field => field.present)])).toEqual([
+      ['1 controlled', '已收敛', Array(8).fill(true)],
+      ['2 second', '已收敛', Array(8).fill(true)],
+    ]);
+    expect(report.level).toBe('- 推荐级别：复杂');
+    expect(report.errors).toEqual([]);
+  }));
+  it('reads the hyphenated WP-n heading form', () => convergenceFixture(({ task, materials, ref, put, invoke }) => {
+    const decision = `# Controlled\n- 推荐级别：复杂\n#### WP-3 — controlled\n- **结果与消费者**：受控结果；消费者是 controlled consumer。\n#### D-001 — controlled decision\n- **做什么**：读取受控原件并报告缺口。\n- **不做什么**：不写运行时。\n- **风险**：缺证据误报。\n| AC-01 | 受控结果可回读 | 目标内容明确 |\n| OI-001 | 待独立核对 | owner：受控维护者 |\n细化：\`quality/evidence/decision-log-refs/controlled-module-details.md\`\n清单：\`${ref}\`\n`;
+    put(materials, 'decision-log.md', decision);
+    put(task, ref, validOne.replace('| 1 controlled |', '| 3 controlled |'));
+    const report = invoke();
+    expect(report.convergence.expected_modules).toEqual(['3']);
+    expect(report.convergence.complete).toBe(true);
+  }));
+});
+
+describe('Chinese-numbered 工作包 package table', () => {
+  function chinesePackageFixture(heading, row, check) {
+    return convergenceFixture(({ task, materials, ref, put, invoke }) => {
+      const decision = `# Controlled\n- 推荐级别：复杂\n${heading}\n- **要交付什么**：受控结果；消费者是 controlled consumer。\n#### D-001 — controlled decision\n- **做什么**：读取受控原件并报告缺口。\n- **不做什么**：不写运行时。\n- **风险**：缺证据误报。\n| AC-01 | 受控结果可回读 | 目标内容明确 |\n| OI-001 | 待独立核对 | owner：受控维护者 |\n细化：\`quality/evidence/decision-log-refs/controlled-module-details.md\`\n清单：\`${ref}\`\n`;
+      put(materials, 'decision-log.md', decision);
+      put(task, ref, row);
+      check({ task, materials, ref, put, invoke, decision });
+    });
+  }
+  const rowFor = id => validOne.replace('| 1 controlled |', `| ${id} controlled |`);
+  it.each([
+    ['Arabic', '### 工作包 1 — controlled', '1'],
+    ['circled one', '### 工作包 ① — controlled', '1'],
+    ['circled ten', '### 工作包 ⑩ — controlled', '10'],
+    ['Chinese one', '### 工作包 一 — controlled', '1'],
+    ['Chinese ten', '### 工作包 十 — controlled', '10'],
+    ['full-width parentheses', '### 工作包（1）— controlled', '1'],
+    ['full-width parentheses Chinese', '### 工作包（一）— controlled', '1'],
+    ['ASCII parentheses circled', '### 工作包(②) — controlled', '2'],
+    ['colon separator', '### 工作包 3：controlled', '3'],
+    ['bare', '### 工作包 4', '4'],
+    ['bold', '**工作包 5 — controlled**', '5'],
+  ])('reads %s heading as a package', (_label, heading, id) => chinesePackageFixture(heading, rowFor(id), ({ invoke }) => {
+    const report = invoke();
+    expect(report.convergence.expected_modules).toEqual([id]);
+    expect(report.convergence.complete).toBe(true);
+    expect(report.errors).toEqual([]);
+    expect(report.modules.map(module => module.fields.map(field => field.present))).toEqual([Array(8).fill(true)]);
+  }));
+  it('mixes WPn and Chinese headings without double counting', () => convergenceFixture(({ task, materials, ref, put, invoke }) => {
+    const decision = `# Controlled\n- 推荐级别：复杂\n#### WP1 — controlled\n- **结果与消费者**：受控结果；消费者是 controlled consumer。\n#### D-001 — controlled decision\n- **做什么**：读取受控原件并报告缺口。\n- **不做什么**：不写运行时。\n- **风险**：缺证据误报。\n| AC-01 | 受控结果可回读 | 目标内容明确 |\n| OI-001 | 待独立核对 | owner：受控维护者 |\n### 工作包 2 — second\n- **结果与消费者**：受控第二结果；消费者是 WP1。\n#### D-002 — second decision\n- **做什么**：准备第二输入。\n- **不做什么**：不变更第一输入。\n- **风险**：输入缺失。\n细化：\`quality/evidence/decision-log-refs/controlled-module-details.md\`\n清单：\`${ref}\`\n`;
+    put(materials, 'decision-log.md', decision);
+    put(task, ref, validOne + validTwo);
+    const report = invoke();
+    expect(report.convergence.expected_modules).toEqual(['1', '2']);
+    expect(report.convergence.complete).toBe(true);
+    expect(report.modules.map(module => module.name)).toEqual(['1 controlled', '2 second']);
+  }));
+  it('does not count the same package twice when both forms name it', () => convergenceFixture(({ materials, decision, put, invoke }) => {
+    put(materials, 'decision-log.md', decision.replace('#### WP2 — second', '#### WP2 — second\n### 工作包 2 — duplicate'));
+    const report = invoke();
+    expect(report.convergence.expected_modules).toEqual(['1', '2']);
+    expect(report.errors.join('\n')).not.toContain('权威模块集合未取得或重复');
+  }));
+  it('still reports duplicate Chinese package headings as an unusable package set', () => chinesePackageFixture('### 工作包 1 — controlled', rowFor('1'), ({ materials, put, invoke, decision }) => {
+    put(materials, 'decision-log.md', decision.replace('### 工作包 1 — controlled', '### 工作包 1 — controlled\n### 工作包 1 — duplicate'));
+    const report = invoke();
+    expect(report.convergence.expected_modules).toEqual(['1', '1']);
+    expect(report.convergence.gaps).toContain('权威模块集合未取得或重复');
+    expect(report.errors.join('\n')).toContain('decision-log.md: 权威模块集合未取得或重复');
+  }));
+  it('does not treat prose or mapping-table rows as package headings', () => convergenceFixture(({ materials, decision, put, invoke }) => {
+    put(materials, 'decision-log.md', decision.replace('#### WP1 — controlled', '### 结果 — controlled').replace('#### WP2 — second', '### 第二结果 — second') + '\n正文提到 工作包 1 — 旧映射见附录。\n\n| 工作包 1 | WP1 | controlled |\n');
+    const report = invoke();
+    expect(report.convergence.expected_modules).toEqual([]);
+    expect(report.convergence.gaps).toContain('权威模块集合未取得或重复');
+  }));
+  it('still requires a package table when neither form exists', () => convergenceFixture(({ materials, decision, put, invoke }) => {
+    put(materials, 'decision-log.md', decision.replace('#### WP1 — controlled', '### 结果 — controlled').replace('#### WP2 — second', '### 第二结果 — second'));
+    const report = invoke();
+    expect(report.convergence.expected_modules).toEqual([]);
+    expect(report.convergence.complete).toBe(false);
+    expect(report.errors.join('\n')).toContain('decision-log.md: 权威模块集合未取得或重复');
+  }));
+});

@@ -52,7 +52,9 @@ function authorMaterials() {
     phases: Object.fromEntries(phaseExamples.map(example => [example.path, blocks[example.name]])) };
 }
 function changeTaskField(materials, example, field, mode) {
-  const body = materials.phases[example.path], at = body.indexOf('### ' + example.task_id);
+  const body = materials.phases[example.path];
+  const card = body.indexOf(`- **任务编号**：${example.task_id}`);
+  const at = card < 0 ? -1 : body.lastIndexOf('### ', card);
   if (at < 0) throw new Error('missing source task ' + example.task_id);
   const task = body.slice(at), line = task.split('\n').find(value => value.startsWith('- **' + field + '**'));
   if (!line) throw new Error('missing source field ' + field);

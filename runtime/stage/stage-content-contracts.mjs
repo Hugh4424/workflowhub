@@ -164,6 +164,46 @@ function markdownSections(document, level, prefix = "") {
   }));
 }
 
+// New-shape materials collect machine fields under one level-two heading.
+// The heading is a location, never a new pass/fail condition; documents
+// without it keep every existing reading byte for byte.
+const MACHINE_FIELDS_HEADING = /^##\s+(?:机器字段|校验器字段|Machine fields?)(?:\s*[（(][^）)\n]*[）)])?\s*$/i;
+
+function machineFieldsBlock(document) {
+  const lines = String(document ?? "").split(/\r?\n/);
+  const start = lines.findIndex((line) => MACHINE_FIELDS_HEADING.test(line));
+  if (start < 0) return null;
+  let end = lines.length;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (/^##\s+/.test(lines[index])) { end = index; break; }
+  }
+  return { start, end, body: lines.slice(start + 1, end).join("\n").trim() };
+}
+
+function machineFieldsSection(document) {
+  return machineFieldsBlock(document)?.body ?? null;
+}
+
+function withoutMachineFields(document) {
+  const block = machineFieldsBlock(document);
+  if (!block) return String(document ?? "");
+  const lines = String(document ?? "").split(/\r?\n/);
+  return [...lines.slice(0, block.start), ...lines.slice(block.end)].join("\n");
+}
+
+// Existing declarations stay authoritative in their old region; the explicit
+// machine block is appended so a new-shape file can declare them at its end.
+function phaseAuthorityBody(body) {
+  const text = String(body ?? "");
+  const machine = machineFieldsSection(text);
+  const base = text.split(/^##\s+L2\b|^###\s+T\d{3,}\b/m, 1)[0];
+  if (machine === null) return base;
+  const authority = /^##\s+L1\b/m.test(text)
+    ? base
+    : text.split(/^##\s+L2\b|^###\s+(?:T\d{3,}\b|任务\s*\d+\s*[:：])/m, 1)[0];
+  return `${authority}\n${machine}`;
+}
+
 function unsafeWritePath(path, reviewReadScope) {
   if (path.startsWith("/") && reviewReadScope) {
     if (resolve(path) !== path || /[\\\0*?\[\]{}]/.test(path)) return true;
@@ -270,7 +310,7 @@ function executionIndexRows(document, errors, reviewReadScope, invalidDependency
 
 function phaseWriteSet(body) {
   // Phase declarations precede executable task cards and removable L2 reference.
-  const authority = body.split(/^##\s+L2\b|^###\s+T\d{3,}\b/m, 1)[0];
+  const authority = phaseAuthorityBody(body);
   const declaredPaths = (value) => {
     let quoted = false;
     for (let index = 0; index < value.length; index += 1) {
@@ -280,8 +320,8 @@ function phaseWriteSet(body) {
     return inlinePaths(value);
   };
   const lines = authority.split(/\r?\n/);
-  const bullet = lines.map((line) => fieldValue(line, "Write set")).find((value) => value !== null);
-  if (bullet !== undefined) return declaredPaths(bullet);
+  const bullet = fieldValue(authority, "Write set");
+  if (bullet !== null) return declaredPaths(bullet);
   const labels = new Set(["Write set", ...(FIELD_LABEL_ALIASES["Write set"] ?? [])]);
   for (const [index, line] of lines.entries()) {
     if (/^\s*\|/.test(line)) {
@@ -394,10 +434,30 @@ function sameIds(left, right) {
 }
 
 function fieldValue(body, field) {
-  return String(body ?? "").match(new RegExp(
-    `^\\s*-\\s+\\*\\*(?:${labelAlternation(field)})\\*\\*\\s*[:：]\\s*(.+?)\\s*$`,
-    "mi",
-  ))?.[1]?.trim() ?? null;
+  const lines = String(body ?? "").split(/\r?\n/);
+  const pattern = new RegExp(
+    `^\\s*-\\s+\\*\\*(?:${labelAlternation(field)})\\*\\*\\s*[:：]\\s*(.*)$`,
+  );
+  for (let index = 0; index < lines.length; index += 1) {
+    const match = pattern.exec(lines[index]);
+    if (!match) continue;
+    const first = match[1].trim();
+    // A continuation is a continuation, not a substitute for an empty or
+    // placeholder first-line value.
+    if (!first) return null;
+    if (/^(?:TBD|TODO|待补充|待补|待定|\[[^\]]*(?:占位|填写)[^\]]*\]|\{[^{}]*\})$/i.test(first.replace(/[*_`]/g, "").trim())) return null;
+    const parts = [first];
+    for (let next = index + 1; next < lines.length; next += 1) {
+      const line = lines[next];
+      if (!line.trim()) break;
+      if (/^\s*#{1,6}\s/.test(line)) break;
+      if (/^\s*-\s+\*\*/.test(line)) break;
+      if (!/^\s+/.test(line)) break;
+      parts.push(line.trim());
+    }
+    return parts.join(" ").trim();
+  }
+  return null;
 }
 
 function analyzeMarkdownTableCells(line) {
@@ -491,13 +551,32 @@ function taskCardProse(body) {
     && !/^(?:机器字段|校验器用|人可跳过)/.test(line)).join('\n');
 }
 
+function taskCardId(card, allowLocator = false) {
+  const headingId = card.heading.match(/^(T\d{3,})\s+[—–-]\s+\S/)?.[1];
+  if (headingId) return headingId;
+  if (!allowLocator) return null;
+  // A reader-facing card heading uses the Chinese task number; the stable
+  // machine id stays inside the card-end field block.
+  return card.body.match(/^\s*-\s+\*\*(?:任务编号|任务号|Task id)\*\*\s*[:：]\s*(T\d{3,})\s*$/mi)?.[1] ?? null;
+}
+
 function phaseTaskCards(body) {
   const visible = taskSourceLines(body, true);
   const headingSource = body.split(/\r?\n/).map((line, i) =>
     (!visible[i]?.trim() && /^#{1,3}\s/.test(line)) ? line.replace(/^#+/, marks => ' '.repeat(marks.length)) : line).join('\n');
-  const l1 = headingSource.split(/^##\s+L1\b[^\n]*\n/m)[1]?.split(/^##\s+L2\b/m)[0] ?? '';
-  return markdownSections(l1, 3).filter(({ heading }) => /^T\d+\b/.test(heading))
-    .map(card => ({ ...card, taskId: card.heading.match(/^(T\d{3,})\s+[—–-]\s+\S/)?.[1], prose: taskCardProse(card.body) }));
+  let region = "";
+  const hasL1 = /^##\s+L1\b/m.test(headingSource);
+  const newShape = !hasL1 && machineFieldsSection(body) !== null;
+  if (hasL1) {
+    region = headingSource.split(/^##\s+L1\b[^\n]*\n/m)[1]?.split(/^##\s+L2\b/m)[0] ?? '';
+  } else if (newShape) {
+    // Explicit new shape: cards may live after the narrative, outside L1.
+    // The fallback never applies to a document without the machine block.
+    region = withoutMachineFields(headingSource);
+  }
+  return markdownSections(region, 3)
+    .filter(({ heading }) => newShape ? /^(?:T\d+\b|任务\s*\d+\s*[:：])/.test(heading) : /^T\d+\b/.test(heading))
+    .map(card => ({ ...card, taskId: taskCardId(card, newShape), prose: taskCardProse(card.body) }));
 }
 
 // Drafts may lack a complete material set; declared L1 Task cards still need prose.
@@ -574,11 +653,22 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
       scopeValid = false;
     }
     for (const heading of ["L0", "L1", "L2"]) {
-      if (!new RegExp(`^##\\s+${heading}\\b`, "m").test(body)) errors.push(`${expectedPath} is missing ${heading}`);
+      if (machineFieldsSection(body) === null && !new RegExp(`^##\\s+${heading}\\b`, "m").test(body)) errors.push(`${expectedPath} is missing ${heading}`);
     }
     const declaredWriteSet = phaseWriteSet(body);
-    const authorityBody = body.split(/^##\s+L2\b|^###\s+T\d{3,}\b/m, 1)[0];
-    const declaration = fieldValue(authorityBody, "Write set");
+    const machineBlock = machineFieldsBlock(body);
+    if (machineBlock && body.split(/\r?\n/).slice(machineBlock.start + 1)
+      .some((line) => /^###\s+(?:T\d{3,}\b|任务\s*\d+\s*[:：])/.test(line))) {
+      errors.push(`${expectedPath} task cards must appear before the file-end machine block`);
+    }
+    const authorityBody = phaseAuthorityBody(body);
+    const authorityFields = withoutMachineFields(authorityBody);
+    const machineBody = machineFieldsSection(body) ?? "";
+    // Phase-level fields come only from the pre-card declaration region or the
+    // file-end machine block. A same-named field inside a task card never
+    // supplies a Phase-level value.
+    const phaseField = (name) => fieldValue(machineBody, name) ?? fieldValue(authorityFields, name);
+    const declaration = phaseField("Write set");
     const explicitNone = EXPLICIT_EMPTY_WRITE_SET.test(declaration ?? "");
     if (EMPTY_WRITE_SET_PREFIX.test(declaration ?? "") && !explicitNone) {
       errors.push(`${expectedPath} Write set none declaration is invalid`);
@@ -605,7 +695,7 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
       if (owner) errors.push(`${expectedPath} write set duplicates ${path} owned by ${owner}`);
       writeOwners.set(identity, [...owners, expectedPath]);
     }
-    const dependencyText = fieldValue(body, "Dependency");
+    const dependencyText = phaseField("Dependency");
     const dependency = dependencyText?.match(/`([^`]+)`/)?.[1] ?? dependencyText ?? null;
     const phaseDependencies = WITHOUT_PREDECESSOR.test(dependency ?? "") ? [] : identifiers(dependency ?? "", /\bP\d+\b/g);
     const indexDependencies = WITHOUT_PREDECESSOR.test(row.dependency ?? "") ? [] : identifiers(row.dependency ?? "", /\bP\d+\b/g);
@@ -615,17 +705,17 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
         || phaseDependencies.some((id) => !(rows ?? []).some((candidate) => candidate.phase === id && candidate.position < row.position))) {
       dependencyError(`${expectedPath} dependency must match the index and reference only earlier Phase IDs`);
     }
-    if (!fieldValue(body, "Global spec")?.includes("spec.md")) errors.push(`${expectedPath} requires a stable spec.md pointer`);
-    const consumer = fieldValue(body, "Consumer")?.replace(/[。；;\s]+$/u, "").trim();
+    if (!phaseField("Global spec")?.includes("spec.md")) errors.push(`${expectedPath} requires a stable spec.md pointer`);
+    const consumer = phaseField("Consumer")?.replace(/[。；;\s]+$/u, "").trim();
     if (!consumer || consumer !== row.consumer?.replace(/[。；;\s]+$/u, "").trim()) {
       errors.push(`${expectedPath} consumer differs from Phase index`);
     }
-    const command = fieldValue(body, "gate_cmd");
-    const oracle = fieldValue(body, "oracle");
+    const command = phaseField("gate_cmd");
+    const oracle = phaseField("oracle");
     if (!hasExecutableCommand(command) || !/^ORACLE-[A-Z0-9-]+/.test(oracle ?? "")) {
       commandError(`${expectedPath} requires an executable gate_cmd and oracle`);
     }
-    if (!fieldValue(body, "STOP") || !fieldValue(body, "Done") || !fieldValue(body, "evidence_path")) {
+    if (!phaseField("STOP") || !phaseField("Done") || !phaseField("evidence_path")) {
       errors.push(`${expectedPath} requires STOP, Done, and evidence_path`);
     }
     const frs = identifiers(body, /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g);
@@ -776,7 +866,7 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
       }
       taskCards.push(Object.freeze({ id: taskId, phase: expectedId, frs: Object.freeze(cardFrs), acs: Object.freeze(cardAcs), oracle: fields["GREEN oracle"] ?? null, dependency: fields.Dependency ?? "" }));
     }
-    const taskIds = cards.map(({ heading }) => heading.match(/^(T\d{3,})\b/)?.[1]).filter(Boolean);
+    const taskIds = cards.map(({ heading, taskId }) => heading.match(/^(T\d{3,})\b/)?.[1] ?? taskId).filter(Boolean);
     if (expectedId === phase_id) selectedPhaseScopeValid = scopeValid;
     phaseRows.push(Object.freeze({ id: expectedId, path: expectedPath, write_set: Object.freeze(scopeValid ? declaredWriteSet : []), dependency, frs: Object.freeze(frs), acs: Object.freeze(acs), task_ids: Object.freeze(taskIds), command, oracle }));
   }

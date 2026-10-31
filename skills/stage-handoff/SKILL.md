@@ -9,7 +9,7 @@ description: 阶段收口内部发布当前、可复制的人读交接，保留�
 
 ## 方法
 
-写阶段报告/交接前，先读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一正文，再执行本方法的写作动作；消费者是接收交接的用户与下游新会话。缺源如实 `unavailable`，此处只落实到达条件，不复制规范或改变原授权、失败与收口步骤。
+写阶段报告/交接前，先读取 `skills/spec-specify/SKILL.md` 的「材料写作标准（唯一）」与 Q01–Q13 唯一正文，再执行本方法的写作动作；消费者是接收交接的用户与下游新会话。缺源如实 `unavailable`，此处只落实到达条件，不复制规范或改变原授权、失败与收口步骤。
 
 1. 先确定当前 task、stage 与对象范围。只对当前新流程任务执行下列写入动作；旧任务、未完成旧任务及历史对象保持只读，不修改或删除其文件，不产出新交接或兼容链。身份或范围无法确定时披露缺口，继续安全读取，不猜作当前任务。post 读取 decision-log、spec、相关独立 Phase 与指针 index，以及已发生的任务、测试、独立审查和 Git 事实；历史 plan/tasks 只读。尚未产生的下游材料写 not_applicable，应有却不可读的材料写具体失败，不借旧任务或旧交接补齐。
 2. 按下表定位四类信息，并给出有实际 source 指针的阶段工作陈述。仅使用 not-started、in-progress、succeeded、failed、blocked、unverified、abandoned 七值。build-code 的 `succeeded` 前置条件是 user case 全部执行完、宿主侧结论已算出、证据指针已写；验收 phase（Phase）未完成不得写 `succeeded`，未满足这些条件只能写 `unverified` 或 `blocked`，并说明具体原因；这约束完成陈述，不阻断同 task 修复。missing、unavailable、incomplete 等质量缺口另述，不转成 succeeded、blocked 或第八状态；游标、ready 值或命令 exit0 不能推定阶段成功。succeeded 须按当前 stage 合同，由当前实际交付、适用质量和现有事实支持；有既定方向或计划确认步骤的 stage 还须引用该 stage 的真实确认。build-code 在已确认方向和计划的授权范围内，依其当前合同核对实际交付、适用质量及无未处置严重问题等现有事实，不新增本阶段日常确认；上游确认不能单独推定当前 stage succeeded，工作完成陈述不代替人类业务验收或 Git 授权。依据不足时说明无法确定；源值非法则保留原值和来源作为问题，不采用它作合法阶段值，也不反写源 stage 状态。

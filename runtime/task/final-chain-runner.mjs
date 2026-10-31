@@ -14,6 +14,79 @@ const object = value => value !== null && typeof value === "object" && !Array.is
 const hash = raw => createHash("sha256").update(raw).digest("hex");
 const inside = (root, path) => { const rel = relative(root, path); return rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel); };
 const section = (raw, title) => raw.match(new RegExp(`^#{2,3} ${title}[^\\n]*\\n([\\s\\S]*?)(?=^#{1,3} |$(?![\\s\\S]))`, "m"))?.[1] ?? "";
+// Current materials rename some reader headings to questions; archived materials
+// keep the old literal titles. Each group accepts the archived and current title,
+// so neither shape is judged by a heading the material never used.
+const DECISION_LOG_REQUIRED_HEADINGS = Object.freeze([
+  Object.freeze(["任务身份"]),
+  Object.freeze(["原始需求"]),
+  Object.freeze(["工作包与决定", "每包交付什么，为什么这样定？"]),
+  Object.freeze(["未决项", "还有什么没定，谁来定？"]),
+]);
+const SPEC_REQUIRED_HEADINGS = Object.freeze([
+  Object.freeze(["功能需求", "一页看懂：谁要什么结果，怎么算通过？"]),
+  Object.freeze(["验收流程", "做成什么样？"]),
+  Object.freeze(["测试标准", "测试计划是什么？"]),
+  Object.freeze(["架构边界", "实现设计（全局权威）"]),
+]);
+const requiredHeadingsPresent = (raw, groups) => groups.every(titles => titles.some(title => String(raw ?? "").includes(title)));
+// Ring 2 counts decisions from the material itself. Archived material names each
+// decision in a 3-4 level ADR-/D- heading; current material writes "#### 决定 N"
+// headings and keeps the machine id only in the 旧编号对照 appendix. Old heading
+// occurrences stay counted exactly as before. A current decision linked to a
+// machine id already counted above is the same decision and is not added twice;
+// an unmapped 决定 N still counts and is reported as missing a mapping instead of
+// collapsing the tally to zero.
+export function countDecisionLogDecisions(raw) {
+  const decisionLog = String(raw ?? "");
+  const machineIds = [...decisionLog.matchAll(/^#{3,4}\s+((?:D|ADR)-\d+)/gm)].map(match => match[1]);
+  const currentIds = [...new Set([...decisionLog.matchAll(/^#{3,4}\s+决定\s*(\d+)(?=\s|[:：—–-]|$)/gm)].map(match => String(Number(match[1]))))];
+  const mappings = [];
+  let inAppendix = false, appendixLevel = 0, inFence = false;
+  for (const line of decisionLog.split("\n")) {
+    if (/^\s*(?:`{3,}|~{3,})/.test(line)) { inFence = !inFence; continue; }
+    if (inFence) continue;
+    const heading = /^(#{1,6})\s+(.+?)(?:\s+#+)?\s*$/.exec(line);
+    if (heading) {
+      if (inAppendix && heading[1].length <= appendixLevel) inAppendix = false;
+      if (!inAppendix && /旧编号对照/.test(heading[2])) { inAppendix = true; appendixLevel = heading[1].length; }
+      continue;
+    }
+    if (!inAppendix || !/^\s*\|/.test(line)) continue;
+    const values = line.trim().replace(/^\||\|$/g, "").split("|").map(value => value.replace(/\*\*|`/g, "").trim());
+    const label = values.find(value => /^决定\s*\d+$/.test(value));
+    const machine = values.find(value => /^(?:ADR|D)-\d+$/.test(value));
+    if (label && machine) mappings.push([String(Number(label.match(/\d+/)[0])), machine]);
+  }
+  const parent = new Map();
+  const find = node => {
+    if (!parent.has(node)) parent.set(node, node);
+    let root = node;
+    while (parent.get(root) !== root) root = parent.get(root);
+    while (parent.get(node) !== root) { const next = parent.get(node); parent.set(node, root); node = next; }
+    return root;
+  };
+  const machineKey = id => { const [, prefix, digits] = /^(ADR|D)-(\d+)$/.exec(id); return `${prefix}-${Number(digits)}`; };
+  for (const [label, machine] of mappings) {
+    const currentRoot = find(`决定:${label}`), machineRoot = find(`编号:${machineKey(machine)}`);
+    if (currentRoot !== machineRoot) parent.set(currentRoot, machineRoot);
+  }
+  const covered = new Set(machineIds.map(id => find(`编号:${machineKey(id)}`)));
+  const linked = new Set();
+  let extra = 0;
+  for (const [label] of mappings) {
+    const root = find(`决定:${label}`);
+    if (covered.has(root) || linked.has(root)) continue;
+    linked.add(root);
+    extra += 1;
+  }
+  const unmapped = currentIds.filter(id => !mappings.some(([label]) => label === id));
+  extra += unmapped.length;
+  return {decision_count: machineIds.length + extra, current: currentIds.length > 0, unmapped};
+}
+const decisionObservation = ({decision_count,current,unmapped}) => current
+  ? {decision_count,decision_mapping_missing:unmapped.length > 0,decision_unmapped:unmapped.map(id => `决定 ${id}`)}
+  : {decision_count};
 const cells = line => line.trim().split("|").slice(1, -1).map(value => value.trim().replace(/^`|`$/g, ""));
 const plainRef = value => value?.trim().replace(/^<|>$/g, "").replace(/^`|`$/g, "").split("#")[0];
 
@@ -311,7 +384,8 @@ function contractOriginal(facts, read, materialRoot, spec, phaseIndex, phases, l
 }
 function decisionOriginal(commands, materialRoot, decisionLog, limits, repoRoots, taskPath) {
   const packageRoot=resolve(dirname(fileURLToPath(import.meta.url)),"../.."),checkerRelative="tools/cli/check-decision-log-chain.mjs";
-  const target=join(materialRoot,"decision-log.md"),scans=new Map();
+  const target=join(materialRoot,"decision-log.md"),scans=new Map(),decisions=countDecisionLogDecisions(decisionLog);
+  if(decisions.current && decisions.unmapped.length) limits.push(`decision-log: ${decisions.unmapped.length} 个「决定 N」标题在「旧编号对照」中缺 ADR-/D- 映射；已按标题计入，不静默按 0`);
   const candidates=commands.filter(command=>command.command.includes("check-decision-log-chain.mjs"));
   for(const command of candidates.slice().reverse()) {
     const argv=command.receipt.argv,entryIndex=argv[1] === "--" ? 2 : 1,entry=argv[entryIndex],profile=argv.slice(entryIndex+1);
@@ -348,12 +422,15 @@ function decisionOriginal(commands, materialRoot, decisionLog, limits, repoRoots
         && signature.input_path === inputPath && /^[a-f0-9]{64}$/.test(signature.input_sha256??"") && /^[a-f0-9]{64}$/.test(signature.checker_sha256??"")
         && signature.input_sha256 === hash(inputBytes) && signature.checker_sha256 === hash(checkerBytes);
       const advisory=/\[check-decision-log-chain\] advisory complete: \d+ warning\(s\), non-blocking, exit 0/.test(command.output);
-      if(!bound || !advisory || (kind === "decision-log" && /unknown\.decision_entries|no decision entries|coverage is unavailable/i.test(command.output))) {
+      // A current-shape log with 决定 N headings is counted by this tally even
+      // when the checker cannot map it; keep the bound advisory instead of
+      // reporting the scan itself as unavailable.
+      if(!bound || !advisory || (kind === "decision-log" && !decisions.current && /unknown\.decision_entries|no decision entries|coverage is unavailable/i.test(command.output))) {
         limits.push(`${command.ref}: execution-time input/source binding or recognized scan unavailable; no current-byte backfill`);
         observation={readable:false,unavailable:true,basis:[command,{ref:inputPath,notes:["execution signature missing, conflicting, mismatched or scan unavailable"]}]};
       } else observation={...command,basis:[command,fileEvidence(entryPath,checkerBytes),fileEvidence(inputPath,inputBytes)]};
     }
-    if(kind === "decision-log")return {...observation,nonempty:decisionLog.trim().length>0,scan_count:1,decision_count:[...decisionLog.matchAll(/^#{3,4}\s+(?:D|ADR)-\d+/gm)].length,required_sections_present:["任务身份","原始需求","工作包与决定","未决项"].every(title=>decisionLog.includes(title))};
+    if(kind === "decision-log")return {...observation,nonempty:decisionLog.trim().length>0,scan_count:1,...decisionObservation(decisions),required_sections_present:requiredHeadingsPresent(decisionLog,DECISION_LOG_REQUIRED_HEADINGS)};
     scans.set(kind,observation);
     if(scans.size === 2)break;
   }
@@ -363,8 +440,8 @@ function decisionOriginal(commands, materialRoot, decisionLog, limits, repoRoots
   const failed=selected.find(item=>item.exit_code !== 0);
   if(failed)return {...failed,basis};
   return {...selected[0],nonempty:typeof decisionLog === "string" && decisionLog.trim().length>0,scan_count:scans.size,
-    decision_count:[...String(decisionLog).matchAll(/^#{3,4}\s+(?:D|ADR)-\d+/gm)].length,
-    required_sections_present:scans.size === 2 && ["任务身份","原始需求","工作包与决定","未决项"].every(title=>String(decisionLog).includes(title)),
+    ...decisionObservation(decisions),
+    required_sections_present:scans.size === 2 && requiredHeadingsPresent(decisionLog,DECISION_LOG_REQUIRED_HEADINGS),
     basis:[...basis,fileEvidence("decision-log.md",decisionLog)]};
 }
 
@@ -852,12 +929,12 @@ export function runFinalChainCheck({taskPath,materialRoot} = {}) {
     2:decisionCheck,
     3:research,
     4:spec === null ? {readable:false,unavailable:true} : {...fileEvidence("spec.md",spec),rows:table,rows_readable:true},
-    5:spec === null || !ordinaryContract || ordinaryContract.unavailable ? {readable:false,unavailable:true} : {...fileEvidence("spec.md",spec),nonempty:spec.trim().length>0,scan_count:ordinaryContract.scan_count,required_sections_present:["功能需求","验收流程","测试标准","架构边界"].every(title=>spec.includes(title)),contract_ok:ordinaryContract.contract_ok,basis:[fileEvidence("spec.md",spec),ordinaryContract]},
+    5:spec === null || !ordinaryContract || ordinaryContract.unavailable ? {readable:false,unavailable:true} : {...fileEvidence("spec.md",spec),nonempty:spec.trim().length>0,scan_count:ordinaryContract.scan_count,required_sections_present:requiredHeadingsPresent(spec,SPEC_REQUIRED_HEADINGS),contract_ok:ordinaryContract.contract_ok,basis:[fileEvidence("spec.md",spec),ordinaryContract]},
     6:phaseIndex === null ? {readable:false,unavailable:true} : {...fileEvidence("phases/index.md",phaseIndex),phase_refs:phaseRefs},
     7:diff ?? {readable:false,unavailable:true},8:test ?? {readable:false,unavailable:true},9:review,
   };
   if (delivery.conflict && delivery.pr?.verified) rings[10]={...delivery.pr,conflict:delivery.conflict};
-  const unknown = section(decisionLog,"未决项");
+  const unknown = section(decisionLog,"未决项") || section(decisionLog,"还有什么没定，谁来定？");
   const bundle = {task_id:taskId,rings,...sets,directionChangingUnknown:/无真实未知|无未决|全部已解决/.test(unknown) ? false : unknown.trim() ? true : undefined,delivery};
   for (const [number,item] of Object.entries(rings)) {
     if (item.verified && text(item.ref) && !item.ref.startsWith("git:")) rings[number] = checkedOriginal(item,taskId,taskPath,materialRoot,limits,`ring-${number}`,number === "1" ? exactRaw?.scope : undefined);
