@@ -14,6 +14,12 @@ function sourceLines(text) {
     return { text, index, visible: !/^(?: {0,3}>| {4}|\t)/.test(text) };
   });
 }
+// The current decision-log template asks the reader question
+// 「后来改了什么，原件在哪里？」; archived logs use the shorter legacy titles.
+// Keep the same semantic boundary: only these reply-section questions match.
+function replyHeading(title) {
+  return /^(?:需求变更记录|用户后来改了什么|后来改了什么(?:[，,]\s*原件在哪里)?)[？?]?$/.test(String(title ?? '').trim());
+}
 function tableCells(line) {
   const cells = []; let start = 0, escaped = false;
   const text = line.trim();
@@ -39,7 +45,7 @@ function rows(text, kind) {
     if (heading) {
       table = null;
       const requirements = /^(?:原始需求|原来要求做成什么)[？?]?$/.test(heading[2]);
-      const replies = /^(?:需求变更记录|用户后来改了什么)[？?]?$/.test(heading[2]);
+      const replies = replyHeading(heading[2]);
       if ((kind === '需求' && requirements) || (kind === '答复' && replies)) sectionDepth = heading[1].length;
       else if (requirements || replies || (sectionDepth && heading[1].length <= sectionDepth)) sectionDepth = null;
       continue;
@@ -82,7 +88,7 @@ function sourceContext(text, excluded, ref, kind = null) {
     if (heading && (!section || heading[1].length <= section)) {
       flush();
       const requirements = /^(?:原始需求|原来要求做成什么)[？?]?$/.test(heading[2]);
-      const replies = /^(?:需求变更记录|用户后来改了什么)[？?]?$/.test(heading[2]);
+      const replies = replyHeading(heading[2]);
       const identity = kind === null && heading[2] === '任务身份';
       section = (identity || (kind !== '答复' && requirements) || (kind !== '需求' && replies)) ? heading[1].length : null;
       continue;
@@ -102,7 +108,7 @@ function groups(spec, replies) {
     const cells = tableCells(line);
     if (cells[0] === '组' && cells[2]?.includes('用户答复')) { inThemeTable = true; continue; }
     if (!inThemeTable || cells.every(cell => /^:?-+:?$/.test(cell))) continue;
-    const ids = cells[2]?.match(/\bU-(?:[A-Z0-9]+-)*\d+\b/g) ?? (/用户答复\s+\d/.test(cells[2] ?? '') ? (cells[2].match(/\d+/g) ?? []).map(Number) : []);
+    const ids = cells[2]?.match(/\bU-(?:[A-Z0-9]+-)*\d+\b/g) ?? (/(?:用户答复|答复)\s*\d/.test(cells[2] ?? '') ? (cells[2].match(/\d+/g) ?? []).map(Number) : []);
     if (!ids.length) throw new Error('BASELINE_SOURCE_INVALID: reply theme has no supplied source IDs');
     result.push({ title: cells[0], ids });
   }
