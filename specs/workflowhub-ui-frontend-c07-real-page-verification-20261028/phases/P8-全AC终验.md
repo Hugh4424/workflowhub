@@ -1186,7 +1186,7 @@ HTTP 三文件原字节等于磁盘，原生无障碍当前状态与页面地址
 - **消费者**：skills/stage-close/SKILL.md
 - **gate_cmd**：`node node_modules/vitest/vitest.mjs run tests/contract/page-audit-acceptance.test.mjs`
 - **oracle**：ORACLE-P8-ACCEPTANCE
-- **evidence_path**：`planned: quality/evidence/build-code/P8-acceptance.json`（未生成，Phase 完成前补齐；唯一证据指针；七条逐条的 `per_ac[]` 在这里读）。运行期执行清单 `quality/evidence/build-code/P8-execution-checklist.json` 只是它的别名视图，不是第二条 `evidence_path`，只放命令、失败关联与 `phase_progress` 游标，不另立第二权威。
+- **evidence_path**：`../../Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/P8-acceptance.json`（相对仓库根，上跳两级进入任务库根；10-30 原件只在任务库，不在仓库 quality/；唯一证据指针；七条逐条的 `per_ac[]` 在这里读）。运行期执行清单 `../../Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/P8-execution-checklist.json` 只是它的别名视图，不是第二条 `evidence_path`，只放命令、失败关联与 `phase_progress` 游标，不另立第二权威。
 - **STOP**：任一验收缺证据时写未完成或未取得加缺口、条件与负责方；不改判据、不删用例、不重跑到绿、不写回规格；真实环境条目缺真实对象、引擎或必要输入时按该条实际缺口记录，用户不在场不算缺口也不等签核（答复 31、32；规格「交付 8」第 1391 行）；判据需变更时停该条并交规格负责人；前序原件缺失时回对应阶段修复，不补造。
 - **覆盖 AC**：AC-C07-1、AC-C07-2、AC-C07-3、AC-C07-4、AC-C07-5、AC-C07-6、AC-C07-7
 - **Done**：七条逐条列出编号、档位与证据指针：AC-C07-1 逐维可重放（`P8-acceptance.json` 的 `per_ac[0]`）；AC-C07-2 身份不一致（`per_ac[1]`）；AC-C07-3 反例与修复（`per_ac[2]` 加原始输出目录）；AC-C07-4 两次同级（`per_ac[3]` 加两次原始输出）；AC-C07-5 定位与复验（`per_ac[4]` 加分流清单）；AC-C07-6 不聚合（`per_ac[5]`）；AC-C07-7 三面可追溯（`per_ac[6]`）。每条只能是判过（给档位与具名证据）或未取得加原因、条件与负责方；七组无原始输出的对应验收不得记通过；七条全未取得时本阶段记未完成，不收口、不写完成，也不以计划期未执行为共同原因；结构组退出 0 不满足本项。

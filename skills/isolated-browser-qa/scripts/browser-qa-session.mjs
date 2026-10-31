@@ -449,6 +449,8 @@ export async function selectBrowserEngine(env=process.env,{probe}={}) {
   return {engine:'agent-browser',fallbacks};
 }
 const registeredScripts=Object.freeze(['design-source-read-v1','design-source-prepare-v1']);
+// Fixed facts are a closed name set; coordinates stay bounded data.
+const registeredFacts=Object.freeze(['scroll','hit-test','reduced-motion','active-element']);
 export function assertRegisteredScript(id) {
   // unregistered identifiers are rejected before executor access.
   if(!registeredScripts.includes(id))throw safeError('UNREGISTERED_SCRIPT');
@@ -458,7 +460,9 @@ export async function runRegisteredScript(page,id,args={}) {
   assertRegisteredScript(id); // Reject before any page call; no arbitrary strings.
   const isPrepare=id==='design-source-prepare-v1';
   const validObject=args&&typeof args==='object'&&!Array.isArray(args);
-  const validRead=validObject&&Object.keys(args).every(key=>key==='elements')&&Array.isArray(args.elements)&&args.elements.length<=1000&&args.elements.every(item=>item&&typeof item==='object'&&!Array.isArray(item)&&Object.keys(item).every(key=>['selector','properties'].includes(key))&&typeof item.selector==='string'&&!!item.selector&&Array.isArray(item.properties)&&item.properties.length<=1000&&item.properties.every(key=>typeof key==='string'&&!!key));
+  const boundedCoordinate=value=>Number.isFinite(value)&&value>=0&&value<=1000000;
+  const validPoint=value=>Boolean(value)&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).length===2&&boundedCoordinate(value.x)&&boundedCoordinate(value.y);
+  const validRead=validObject&&Object.keys(args).every(key=>key==='elements')&&Array.isArray(args.elements)&&args.elements.length<=1000&&args.elements.every(item=>item&&typeof item==='object'&&!Array.isArray(item)&&Object.keys(item).every(key=>['selector','properties','facts','point'].includes(key))&&typeof item.selector==='string'&&!!item.selector&&Array.isArray(item.properties)&&item.properties.length<=1000&&item.properties.every(key=>typeof key==='string'&&!!key)&&(item.facts===undefined||Array.isArray(item.facts)&&item.facts.length<=registeredFacts.length&&item.facts.every(key=>registeredFacts.includes(key))&&new Set(item.facts).size===item.facts.length)&&(item.point===undefined||Boolean(item.facts?.includes('hit-test'))&&validPoint(item.point)));
   const validPrepare=validObject&&Object.keys(args).every(key=>key==='actions')&&Array.isArray(args.actions)&&args.actions.length<=100&&args.actions.every(action=>action&&typeof action==='object'&&!Array.isArray(action)&&Object.keys(action).every(key=>['type','selector'].includes(key))&&action.type==='click'&&typeof action.selector==='string'&&!!action.selector);
   if(!(isPrepare?validPrepare:validRead))throw safeError('INVALID_COLLECTION_ARGUMENTS');
   return page.evaluate(({id,args})=>{
@@ -490,12 +494,33 @@ export async function runRegisteredScript(page,id,args={}) {
         value=[];
       }else{
         if(!Array.isArray(args.elements)||args.elements.length>1000)throw new Error('INVALID_COLLECTION_ELEMENTS');
-        const viewport_observed={width:window.innerWidth,height:window.innerHeight};
-        value=args.elements.map(({selector,properties=[]})=>{
+        const viewport_observed={width:window.innerWidth,height:window.innerHeight},factNames=['scroll','hit-test','reduced-motion','active-element'];
+        value=args.elements.map(({selector,properties=[],facts=[],point})=>{
           if(typeof selector!=='string'||!selector||!Array.isArray(properties)||properties.length>1000)throw new Error('INVALID_COLLECTION_ELEMENT');
+          if(!Array.isArray(facts)||facts.length>factNames.length||new Set(facts).size!==facts.length||!facts.every(key=>factNames.includes(key)))throw new Error('INVALID_COLLECTION_FACTS');
+          if(point!==undefined&&(!facts.includes('hit-test')||!point||typeof point!=='object'||Array.isArray(point)||Object.keys(point).some(key=>!['x','y'].includes(key))||!Number.isFinite(point.x)||point.x<0||point.x>1000000||!Number.isFinite(point.y)||point.y<0||point.y>1000000))throw new Error('INVALID_COLLECTION_POINT');
           const element=document.querySelector(selector);if(!element)throw new Error('ELEMENT_NOT_FOUND:'+selector);
           const box=element.getBoundingClientRect();if(!box.width||!box.height)throw new Error('ELEMENT_NOT_RENDERED:'+selector);
-          const computed=getComputedStyle(element);return {selector,viewport_observed,structure:{tag:element.tagName,text:element.textContent},rendered:{styles:Object.fromEntries(properties.map(key=>[key,computed.getPropertyValue(key)])),box:{x:box.x,y:box.y,width:box.width,height:box.height}},declared:{style:element.getAttribute('style')}};
+          const computed=getComputedStyle(element);
+          const observation={selector,viewport_observed,structure:{tag:element.tagName,text:element.textContent},rendered:{styles:Object.fromEntries(properties.map(key=>[key,computed.getPropertyValue(key)])),box:{x:box.x,y:box.y,width:box.width,height:box.height}},declared:{style:element.getAttribute('style')}};
+          if(facts.length){
+            const collected={};
+            for(const fact of facts){
+              if(fact==='scroll')collected.scroll={scrollWidth:element.scrollWidth,clientWidth:element.clientWidth};
+              else if(fact==='hit-test'){
+                const at=point||{x:box.x+box.width/2,y:box.y+box.height/2},target=document.elementFromPoint(at.x,at.y);
+                collected.hit_test={point:{x:at.x,y:at.y},target:target?{id:target.id,tag:target.tagName,class_name:target.getAttribute('class')}:null,inside_selected:Boolean(target&&element.contains(target))};
+              }else if(fact==='reduced-motion'){
+                const media=window.matchMedia('(prefers-reduced-motion: reduce)');
+                collected.reduced_motion={media:media.media,matches:media.matches};
+              }else if(fact==='active-element'){
+                const active=document.activeElement,style=active?getComputedStyle(active):null;
+                collected.active_element={id:active?active.id:null,tag:active?active.tagName:null,outlineStyle:style?style.outlineStyle:null,selected:active===element};
+              }
+            }
+            observation.facts=collected;
+          }
+          return observation;
         });
       }
       if(observer.takeRecords().length)throw new Error('READ_ONLY_MUTATION_DETECTED');

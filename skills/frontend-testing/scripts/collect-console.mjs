@@ -75,6 +75,55 @@ function validateConfig(config,env) {
 }
 function addFailure(doc,kind,detail){if(!doc.failures.some(f=>f.class===kind&&f.detail===detail))doc.failures.push(failure(kind,detail));}
 const routeMatches=(url,route)=>{try{const parsed=new URL(url);return /^https?:\/\//.test(route)?parsed.href===new URL(route).href:parsed.pathname+parsed.search+parsed.hash===route;}catch{return false;}};
+const parseUrl=value=>{try{return new URL(value);}catch{return null;}};
+const observedRoute=url=>{const parsed=parseUrl(url);return parsed?parsed.pathname+parsed.search+parsed.hash:url;};
+// Identity is compared, never echoed. Each coordinate the page can report is
+// checked against its declaration before any dimension collects; a coordinate
+// with no observation source stays unknown and is never counted as verified.
+const unknownReason={
+  workspace:'the page reports no filesystem origin for its bytes; the collector cwd is a different fact',
+  object_version:'the pinned object hash is derived by the orchestrator from served bytes; the page exposes no version stamp',
+  engine_session:'the session name is a gateway-owned pid/profile binding; the browser protocol reports no session id',
+  engine:'the declared engine id and the browser product are different namespaces',
+  state:'the observed URL carries no state parameter',
+  service:'the declared service is not a parseable http(s) origin'};
+// A declared service is either a URL (it must name the audited origin) or a human
+// label (the page cannot be matched to it). A string with a URL shape that does not
+// parse is a broken declaration, not a label, so it is reported instead of ignored.
+const serviceShape=value=>typeof value!=='string'?null:/^[a-z][a-z0-9+.-]*:\/\//i.test(value)?'url':/^[a-z0-9.-]+:\d+(\/.*)?$/i.test(value)?'host-port':'label';
+export function compareIdentity(declared={},observation={}) {
+  const value=path=>declared[path]??null,page=parseUrl(observation.url),
+    declaredService=typeof declared.service==='string'?declared.service:'',service=parseUrl(declaredService),
+    serviceLooksLikeUrl=['url','host-port'].includes(serviceShape(declaredService)),
+    observedState=page?page.searchParams.get('state'):null,
+    observedViewport=typeof observation.viewport==='string'&&/^\d+x\d+@[0-9.]+$/.test(observation.viewport)?observation.viewport:null,
+    row=(path,observed,matches)=>{const declaredValue=value(path);
+      if(declaredValue===null||observed===null)return {path,declared:declaredValue,observed,result:'unknown',reason:unknownReason[path]};
+      return {path,declared:declaredValue,observed,result:matches?'match':'mismatch'};};
+  const serviceRow=(()=>{
+    const declaredValue=value('service');
+    if(declaredValue===null||!page)return {path:'service',declared:declaredValue,observed:page?page.origin:null,result:'unknown',reason:unknownReason.service};
+    if(!service)return {path:'service',declared:declaredValue,observed:page.origin,result:serviceLooksLikeUrl?'mismatch':'unknown',
+      reason:serviceLooksLikeUrl?'declared service has a URL shape but is not a parseable http(s) URL; it cannot name the audited origin':unknownReason.service};
+    const opaque=service.origin==='null';
+    return {path:'service',declared:declaredValue,observed:page.origin,result:!opaque&&service.origin===page.origin?'match':'mismatch',
+      ...(opaque?{reason:'declared service parses as a URI with an opaque origin; it cannot name an http(s) origin'}:{})};
+  })();
+  const comparisons=[
+    row('workspace',null,false),
+    serviceRow,
+    row('route',page?page.pathname+page.search+page.hash:null,Boolean(page&&routeMatches(observation.url,declared.route))),
+    row('object_version',null,false),
+    row('engine_session',null,false),
+    row('state',observedState,observedState!==null&&String(declared.state)===observedState),
+    row('viewport',observedViewport,Boolean(observedViewport&&declared.viewport&&observedViewport.split('@')[0]===declared.viewport.split('@')[0])),
+    row('engine',null,false)];
+  // The --viewport argument carries no device pixel ratio, so the verdict compares
+  // WxH only. A differing observed dpr is recorded on the row instead of hidden.
+  const viewportRow=comparisons.find(c=>c.path==='viewport'),declaredDpr=String(declared.viewport??'').split('@')[1],observedDpr=String(observedViewport??'').split('@')[1];
+  if(viewportRow.result==='match'&&declaredDpr&&observedDpr&&declaredDpr!==observedDpr)viewportRow.note='declared dpr '+declaredDpr+' but observed dpr '+observedDpr+'; the viewport argument carries no dpr, so only WxH is compared';
+  return {comparisons,verdict:comparisons.some(c=>c.result==='mismatch')?'mismatch':comparisons.every(c=>c.result==='match')?'match':'unknown',mismatches:comparisons.filter(c=>c.result==='mismatch')};
+}
 export async function collectWith(config,env,observe) {
   validateConfig(config,env);
   const engine=new Map([['ego-lite','ego'],['ego','ego'],['agent-browser','agent-browser'],['browser-use','browser-use']]).get(env.BROWSER_QA_ENGINE)??null;
@@ -98,15 +147,16 @@ export async function collectWith(config,env,observe) {
     const pages=targets.filter(t=>t.type==='page');
     if(!pages.length)throw fail('NOT_STARTED','Page target not started');
     const matches=pages.filter(t=>routeMatches(t.url,object.route)&&(!env.PAGE_AUDIT_TARGET_ID||t.targetId===env.PAGE_AUDIT_TARGET_ID));
-    if(matches.length!==1)throw fail('IDENTITY_MISMATCH','Expected one receiver target for declared route; repair the owned target');
+    if(matches.length!==1)throw fail('IDENTITY_MISMATCH','route: declared '+JSON.stringify(object.route)+' but observed '+JSON.stringify(pages.map(page=>observedRoute(page.url)))+'; expected exactly one receiver target');
     const target=matches[0];
-    try{if(new URL(target.url).origin!==new URL(object.service).origin)throw fail('IDENTITY_MISMATCH','Receiver service differs; repair service identity');}catch(error){if(error.kind)throw error;}
+    try{if(new URL(target.url).origin!==new URL(object.service).origin)throw fail('IDENTITY_MISMATCH','service: declared '+JSON.stringify(object.service)+' but observed '+JSON.stringify(new URL(target.url).origin));}catch(error){if(error.kind)throw error;}
     const attached=await cdp.call('Target.attachToTarget',{targetId:target.targetId,flatten:true});
     if(!attached?.sessionId)throw fail('TOOL_ERROR','CDP target attachment missing session');
     const sessionId=attached.sessionId,call=(method,params={})=>cdp.call(method,params,sessionId);
     const observed=await evaluate(call,"({url:location.href,viewport:innerWidth+'x'+innerHeight+'@'+(devicePixelRatio||1)})");
     if(!observed||typeof observed.url!=='string'||typeof observed.viewport!=='string'||!/^\d+x\d+@[0-9.]+$/.test(observed.viewport))throw fail('TOOL_ERROR','Receiver identity observation missing');
-    if(!routeMatches(observed.url,object.route)||observed.viewport.split('@')[0]!==config.viewport)throw fail('IDENTITY_MISMATCH','Receiver route or viewport differs; repair the owned target');
+    const identity=compareIdentity(object,{url:observed.url,viewport:observed.viewport}),mismatch=identity.mismatches[0];
+    if(mismatch)throw fail('IDENTITY_MISMATCH',mismatch.path+': declared '+JSON.stringify(mismatch.declared)+' but observed '+JSON.stringify(mismatch.observed));
     object.viewport=observed.viewport;
     await observe({cdp,call,sessionId,target,doc,env,config,evaluate:expression=>evaluate(call,expression),isDisconnected:()=>disconnected});
   }catch(error){

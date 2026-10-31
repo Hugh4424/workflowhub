@@ -1,0 +1,43 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-ui-frontend-c07-real-page-verification-20261028
+
+ ✓ tests/contract/phase-contract-prose.test.mjs (49 tests) 75ms
+ ✓ tests/contract/material-workspace.test.mjs (14 tests) 93ms
+ ✓ tests/contract/zero-machine-gate-advancement.test.mjs (5 tests) 5910ms
+   ✓ current ordinary facts have no machine completion permit > exposes corrupt actual facts JSON without accepting or replacing the original bytes 968ms
+   ✓ current ordinary facts have no machine completion permit > keeps a physically missing current material visible as not_ready rather than a completion diagnostic 1000ms
+   ✓ current ordinary facts have no machine completion permit > rejects a retired aggregate/receipt progress input before modifying any task facts: {"interaction_aggregate":{"snapshot_tree":"ffffffffffffffffffffffffffffffffffffffff","decision":{}}} 948ms
+   ✓ current ordinary facts have no machine completion permit > rejects a retired aggregate/receipt progress input before modifying any task facts: {"receipts":{"interaction":"quality/evidence/interactions/retired.json"}} 1010ms
+   ✓ current ordinary facts have no machine completion permit > records a legitimate navigation cursor without manufacturing stage completion or available quality 1984ms
+ ✓ tests/contract/reader-record.test.mjs (16 tests) 587ms
+ ✓ tests/contract/authoring-shape.test.mjs (5 tests) 10ms
+ ✓ tests/contract/authoring-contract.test.mjs (4 tests) 2ms
+ ✓ tests/contract/authoring-budget.test.mjs (4 tests) 159ms
+ ✓ tests/contract/spec-analyze-classes.test.mjs (3 tests) 1ms
+ ✓ tests/contract/light-material-set.test.mjs (19 tests) 32748ms
+   ✓ ORACLE-LIGHT-MATERIALS > writes and reads real light spec/Phase artifacts while material publication creates no stage facts 6712ms
+   ✓ ORACLE-LIGHT-MATERIALS > publishes a newly authored decision-log in worktree specs, never task storage 727ms
+   ✓ ORACLE-LIGHT-MATERIALS > keeps build-plan artifact ownership and rejects missing-index light Phase publication 1742ms
+   ✓ public Phase draft reader prose > ORACLE-P9-NO-METRIC publishes a complete short card without a prose length quota 721ms
+   ✓ public Phase draft reader prose > ORACLE-P9-NO-METRIC publishes a complete long card without a prose length quota 698ms
+   ✓ public Phase draft reader prose > ORACLE-P9-FENCED-HEADINGS keeps example Task and L2 headings inside a legal card 1242ms
+   ✓ public Phase draft reader prose > keeps symbolic link errors ahead of prose errors 681ms
+   ✓ public Phase draft reader prose > keeps hard link errors ahead of prose errors 685ms
+   ✓ public Phase draft reader prose > does not relax unsafe names or the make-decision index boundary 3896ms
+   ✓ public Phase draft reader prose > preserves legal drafts and rejects named field/example-only cards in make-decision 5055ms
+   ✓ public Phase draft reader prose > preserves legal drafts and rejects named field/example-only cards in build-plan 5021ms
+   ✓ public Phase draft reader prose > rejects a bad new named Phase without creating its material directory 712ms
+   ✓ public Phase draft reader prose > ORACLE-P9-NAMED-PHASE publishes a named build-plan Phase before its index exists 697ms
+   ✓ public Phase draft reader prose > ORACLE-P9-PUBLIC-PROSE rejects field-only cards before replacing make-decision material 1753ms
+   ✓ public Phase draft reader prose > ORACLE-P9-PUBLIC-PROSE rejects field-only cards before replacing build-plan material 1763ms
+ ❯ tests/contract/phase-prose.test.mjs (2 tests | 2 failed) 58ms
+   × phase prose: each of the current thirty-five cards has independent reader prose 34ms
+     → expected 36 to be 35 // Object.is equality
+   × phase prose: deleting real prose while preserving all machine fields is rejected 24ms
+     → expected true to be false // Object.is equality
+
+ Test Files  1 failed | 9 passed (10)
+      Tests  2 failed | 119 passed (121)
+   Start at  12:07:12
+   Duration  33.07s (transform 75ms, setup 0ms, collect 160ms, tests 39.64s, environment 1ms, prepare 228ms)
+

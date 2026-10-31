@@ -1,0 +1,139 @@
+{
+ "phase": "P9",
+ "date": "2026-10-31",
+ "acceptance": "AC-C07-010",
+ "tier": "incomplete",
+ "phase_done": "incomplete",
+ "material": {
+  "path": "quality/evidence/build-code/2026-10-31-p9-closeout/phase-fragment.md",
+  "bytes": 28902,
+  "sha256": "87448f78ac59a113da4f64d7797085c49cd9b2f2f9f3030b23ab9f55c2e5b48e",
+  "before": {
+   "path": "quality/evidence/build-code/2026-10-31-p12-writeside-experiment/phase-fragment.md",
+   "bytes": 18811,
+   "sha256": "a5ab881f4d163b60a7c34bfbe621291dcba2b9782f72d649060624b3c0024afa"
+  }
+ },
+ "originals": [
+  {
+   "path": "quality/evidence/build-code/2026-10-31-p12-writeside-experiment/phase-fragment.md",
+   "bytes": 18811,
+   "sha256": "a5ab881f4d163b60a7c34bfbe621291dcba2b9782f72d649060624b3c0024afa",
+   "role": "改前原件，未改"
+  },
+  {
+   "path": "quality/evidence/build-code/2026-10-31-p9-material-revision/original-need.md",
+   "bytes": 1183,
+   "sha256": "a563c55380fdf0b2a8db0c36c89bf160efcf376f252ee1c5649869af5a431f19",
+   "role": "原始需求 R-001 逐字，读者输入"
+  },
+  {
+   "path": "quality/evidence/build-code/2026-10-31-p12-blind-judgment/consumer-record.md",
+   "bytes": 7062,
+   "sha256": "eb0e8e651d0d4d2ce6d491b3535f6b826325384e849c131c54501ac830b15689",
+   "role": "消费者一次使用，只作第二条旁证"
+  }
+ ],
+ "readers": [
+  {
+   "file": "reader-verdict-1.md",
+   "followable": "能：改哪一节、A/B 路径、两条命令、九个判定器、人读项都给出行号",
+   "first_change": "能：P11 七槽与 spec 的 P1 行",
+   "adjudication": "文本层没有；已裁断项单列七条；有两处表述瑕疵（41 应为 43；先写 P11 再说不改，与第 158 行相反）",
+   "verdict": "三件都过"
+  },
+  {
+   "file": "reader-verdict-2.md",
+   "followable": "能：动作、路径、命令与 145 只作对照都写明",
+   "first_change": "能：P11 验收七槽与 spec 的 P1 行",
+   "adjudication": "文本层没有；已裁断项单列四条",
+   "verdict": "三件都过"
+  }
+ ],
+ "criteria": {
+  "followable": {
+   "verdict": "pass_text",
+   "evidence": "reader-verdict-1.md / reader-verdict-2.md"
+  },
+  "no_author_help": {
+   "verdict": "pass_proxy",
+   "evidence": "consumer-record.md（代码交付，非验收节；只此一条旁证）"
+  },
+  "no_adjudication": {
+   "verdict": "fail_fact_level",
+   "evidence": "材料「四个文件里八个具名块」与四文件实有 10 个 describe 块不符；读者未跑命令，撞不上"
+  }
+ },
+ "gaps_closed": [
+  "A/B 原件路径",
+  "判定器清单九项",
+  "原件只保留一种规则",
+  "判定者输入与问题对齐"
+ ],
+ "review": {
+  "file": "same-source-review.md",
+  "opinions": [
+   "门禁 2 红成立（不绿）：「修法两行」不成立——第 8 行仍含 (?=^### T026)，只换标题仍不匹配",
+   "三问成立（有保留）：答案具体带行号；verdict-1 引错行 41→43、顺序与 158 行相反；「没有矛盾」只在文本层成立（八个具名块实为 10 个 describe）",
+   "模板在场：基本成立；available 只在「读者说得出」这一自定判据内成立，上限未写「读者未跑命令、未核路径」"
+  ]
+ },
+ "residuals": [
+  "材料第 111/235 行「八个具名块」计数不实：四文件实有 10 个 describe 块（8 个 ORACLE- 命名 + 2 个 page-audit 承载 ORACLE-PAGE-AUDIT-DOC）；改法：写成 10 块承载 9 个判定器",
+  "reader-verdict-1 两处引文/顺序瑕疵，不重写原答，只在收口注明",
+  "本轮未改材料字节（免得读者原答失效），下一版改一句后可让读者加 --reporter=verbose 数块后重读三问"
+ ],
+ "gate": {
+  "cmd": "node node_modules/vitest/vitest.mjs run tests/contract/reader-record.test.mjs tests/contract/phase-contract-prose.test.mjs tests/contract/authoring-shape.test.mjs tests/contract/authoring-budget.test.mjs tests/contract/phase-prose.test.mjs tests/contract/authoring-contract.test.mjs tests/contract/spec-analyze-classes.test.mjs tests/contract/light-material-set.test.mjs tests/contract/material-workspace.test.mjs tests/contract/zero-machine-gate-advancement.test.mjs",
+  "before": {
+   "exit": 1,
+   "tests": 103,
+   "failed": 3,
+   "passed": 100,
+   "files": [
+    "phase-contract-prose.test.mjs(1)",
+    "phase-prose.test.mjs(2)"
+   ]
+  },
+  "now": {
+   "exit": 1,
+   "tests": 121,
+   "failed": 2,
+   "passed": 119,
+   "files": [
+    "phase-prose.test.mjs(2)"
+   ],
+   "final_run": true
+  },
+  "self_healed": "11:23 的 e97e2810 同步 phase-contract-prose.test.mjs，修好其中 1 红；其余 2 红未自愈",
+  "root_cause": "11:23 材料重写后两处断言没跟上：task_count 35→36（P12 补卡）；删正文变体按 ### T025 与 (?=^### T026) 两个定位点找位置，标题改为 ### 任务 1/2 后成为空操作",
+  "fix": "tests/contract/phase-prose.test.mjs 第 7 行 35→36；第 8 行两个定位点 ### T025→### 任务 1、### T026→### 任务 2（三处）；只换标题仍红，见 gate-root-cause-probe-2.txt",
+  "evidence": [
+   "p9-gate.*",
+   "p9-gate-after-edit.*",
+   "final-p9-gate.*",
+   "gate-root-cause-probe.txt",
+   "gate-root-cause-probe-2.txt"
+  ],
+  "last_run": "final4-p9-gate.*"
+ },
+ "main_validator": {
+  "cmd": "node /Users/Hugh/Hugh/Project/workflowhub/tools/cli/run-checks.mjs --material-root <材料根>",
+  "exit": 0,
+  "facts": "phase_count=12 task_count=36 errors=0"
+ },
+ "limits": [
+  "消费者记录只作旁证",
+  "材料是提议、未在真实任务执行",
+  "只判这一版字节",
+  "两位读者没跑命令、没核路径与计数",
+  "机制侧 2 红未修",
+  "待原测试者 0e7d26f1 复验"
+ ],
+ "p9_phase_file": {
+  "path": "specs/workflowhub-ui-frontend-c07-real-page-verification-20261028/phases/P9-材料为读者写.md",
+  "bytes": 97747,
+  "sha256": "be157670f72572819779452e5e9a846f5ac6e60b7ddc0d9386b9c7f409d82e2c"
+ },
+ "next": "下一版材料把那句计数改成「10 个 describe 块承载 9 个判定器」，读者加 --reporter=verbose 数块后重读三问；P9 写主改那三处定位后重跑门禁；原测试者复验后做规范同步与唯一提交。"
+}
