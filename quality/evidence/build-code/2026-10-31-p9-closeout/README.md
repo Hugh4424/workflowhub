@@ -22,6 +22,13 @@
 | `main-validator.*` | 主仓校验器整集输出与退出码 |
 | `final-p9-gate.*` / `final-main-validator.*` | 全部改完后的最后一次同命令重跑：门禁 2 红 119 绿、退出 1；校验器退出 0 |
 | `gate-fix.*` / `validator-fix.*` | 修好两处断言后的同命令重跑：门禁 121 测全绿、退出 0；校验器退出 0 |
+| `phase-fragment-v2.md` | 改正版片段：29159 字节、291 行、`7a4e6d7ff214db0570bc8c794326c27dd48d1aee93c3e3e858b124bd501fd8e7`；只改计数 4 处，其余一字不动 |
+| `phase-fragment-v2-diff.md` | v1→v2 的改前/改后逐字原文、改动行号（111–112、221、235–236）与理由 |
+| `reader-instruction-v2.md` | 派给 v2 新读者的原文 |
+| `reader-verdict-v2.md` | v2 新读者原答：第 1、3 问过，第 2 问报两处要自裁 |
+| `phase-fragment-v3.md` | 再改正版：30078 字节、292 行、`11476ca21ef0efaaa4fd8110973a489cb57b1e187422ebc13bec514af12beb22`；只修 v2 复验报的两处 |
+| `phase-fragment-v3-diff.md` | v2→v3 的改动、理由与十个 describe 块的 file:line |
+| `reader-verdict-v3.md` | 同一读者受影响复验：两条都已解决 |
 | `closeout.json` | 档位、三问结论、缺口、门禁事实与限制的机器可读记录 |
 
 ## 门禁：3 红只剩 2 红
@@ -73,10 +80,45 @@
   恢复原字节后 2 测全绿（退出 0）。
 - **主仓校验器复跑**：退出 0，`phase_count=12 task_count=36 errors=0`、`ALL CHECKS PASSED`，
   原件 `validator-fix.stdout.txt`、`validator-fix.stderr.txt`、`validator-fix.exit`。
-- **勘误（原件未改）**：本目录 `phase-fragment.md`（28902 字节、`87448f78…`）第 111–113、221、235–236 行
+- **勘误（原件未改）**：本目录 `phase-fragment.md`（28902 字节、`87448f78…`）第 111–112、221、235–236 行
   写「八个具名块」，实数是**四个测试文件里 10 个 describe 块承载 9 个判定器**
   （8 个 `ORACLE-` 命名 + 2 个 `page-audit` 块承载 `ORACLE-PAGE-AUDIT-DOC`；
   `ORACLE-C07-TCR` 由四文件门禁整体承载，不另设块）；逐块清单见 `gate-root-cause-probe-2.txt`。
   该文件是两位读者读过的字节版，sha256 被本目录与 P9 卡多处引用，读者原答按行号引用它，
   按证据规则不覆写；更正落在 `specs/workflowhub-ui-frontend-c07-real-page-verification-20261028/phases/P9-材料为读者写.md`
   第 951–953 行与本补记。要彻底收干净，另做一份改正版片段并记改前/改后，或让一位读者按勘误重读三问。
+
+## 补记二（v2 改正版与重读结果）
+
+按「不改被读字节、另出改正版」的办法补齐计数：
+
+- **v1 不动**：`phase-fragment.md` 28902 字节、291 行、`87448f78…`；两位读者原答的行号引用继续有效。
+- **v2 只改计数**：`phase-fragment-v2.md` 29159 字节、291 行、
+  `sha256 7a4e6d7ff214db0570bc8c794326c27dd48d1aee93c3e3e858b124bd501fd8e7`；
+  改 111–112、221、235–236 共 4 处，逐字改动见 `phase-fragment-v2-diff.md`。
+- **重读**：一位 fresh-context 新读者只读 `phase-fragment-v2.md`、原始需求 R-001 与 `reader-instruction-v2.md`，
+  不看旧原答；原答落 `reader-verdict-v2.md`。结果：第 1 问能、第 3 问能，**第 2 问有**——
+  ① 片段既是 `AC-EFFECT-001` 的 P1 行、又要落进 P11 的七槽，哪句进哪份没说死；
+  ② 正文说 10 个 describe 块，判定器表只有 9 行、只数得出 8 个具名块。
+- **档位**：`AC-C07-010` 仍记 `incomplete`。计数错已在 v2 闭合，但按材料自己的「不用自己裁断」判据，
+  新读者仍要自裁两处，故不记 `available`。
+- **下一步**：把两处改掉再让一位新读者重读：① 写明哪些文字进 P11 七槽、哪一行进 spec；
+  ② 判定器表逐块列出 10 个 describe 块或加块数列。
+
+## 补记三（v3 与 `available`）
+
+v2 重读报的两处按受影响修复处理，v1、v2 都不动，另出 v3：
+
+- **v3 只改那两处**：`phase-fragment-v3.md` 30078 字节、292 行、
+  `sha256 11476ca21ef0efaaa4fd8110973a489cb57b1e187422ebc13bec514af12beb22`；改前/改后与块数出处见 `phase-fragment-v3-diff.md`。
+  - 归属：加「本片段是示范，不是交付」，写明 P11 七槽只取「这一 Phase 怎么验收？」一节正文，spec 只加一行 P1 登记，P1 专属句不整段搬进 P11。
+  - 块数：判定器表加「块数」列（0/2/1/1/1/3/2，SKIP-VISIBLE 与 TIER-MINIMAL 共用 ACCEPT-SCOPE 的块），
+    表下写明按文件 2+1+2+5=10、按判定器九个、`ORACLE-C07-TCR` 是整组判定无自己的块、块数不是效果证明；
+    用例 1 不再另报总数，改为按表逐行核九个判定器。十个 describe 名的 file:line 见 v3-diff。
+- **复验方式**：只请上一位 v2 读者在原会话复核这两条（受影响复验，不重读全篇），原答 `reader-verdict-v3.md`，结论「两条都已解决」。
+- **定档**：`AC-C07-010` 记 `available`。依据是 v3 字节；v1 两位读者的原答（`87448f78…`）作历史保留，v2 重读原答（`7a4e6d7f…`）留作过程记录。
+- **一条非阻断建议**：读者建议 178 行补「不含 P1 归属句」；不影响定档，留给下一版。
+- **不冒充独立测试**：本轮 121 绿与主仓校验器退出 0 是自跑事实；独立测试仍待原测试者 0e7d26f1 复验。
+- **主仓校验器分层事实**：本卡修完后整集跑过一次退出 0（`validator-fix.*`，`ALL CHECKS PASSED`）；
+  13:12 复跑整集退出 1，唯一错误是 P3 缺 `quality/evidence/build-code/P3-real-page-2026-10-31-readback.json`
+  （P3 由他人并发修改，不在本卡写集），P9 段无错误；原件 `validator-recheck.stdout.txt`、`validator-recheck.exit`。

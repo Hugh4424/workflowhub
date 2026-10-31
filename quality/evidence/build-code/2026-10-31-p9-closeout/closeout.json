@@ -2,8 +2,8 @@
  "phase": "P9",
  "date": "2026-10-31",
  "acceptance": "AC-C07-010",
- "tier": "incomplete",
- "phase_done": "incomplete",
+ "tier": "available",
+ "phase_done": "available",
  "material": {
   "path": "quality/evidence/build-code/2026-10-31-p9-closeout/phase-fragment.md",
   "bytes": 28902,
@@ -143,20 +143,100 @@
    "tests": 121,
    "failed": 0,
    "passed": 121,
-   "evidence": ["gate-fix.stdout.txt", "gate-fix.stderr.txt", "gate-fix.exit"]
+   "evidence": [
+    "gate-fix.stdout.txt",
+    "gate-fix.stderr.txt",
+    "gate-fix.exit"
+   ]
   },
   "main_validator": {
    "exit": 0,
    "facts": "phase_count=12 task_count=36 errors=0",
-   "evidence": ["validator-fix.stdout.txt", "validator-fix.stderr.txt", "validator-fix.exit"]
+   "evidence": [
+    "validator-fix.stdout.txt",
+    "validator-fix.stderr.txt",
+    "validator-fix.exit"
+   ]
   },
   "tests_fixed": "tests/contract/phase-prose.test.mjs 第 7 行 35→36；第 8 行定位改为 (^### 任务 1：…)([\\s\\S]*?)(?=^### 任务 2：)，并加 expect(i.phases[path]).not.toBe(source) 守卫，定位再失效会立刻红；删正文探针仍报 phases/P9-材料为读者写.md T025 task card requires reader prose",
   "p9_phase_file": {
-   "bytes": 98663,
-   "sha256": "1f20d93b5f38844dd9aa2bf3f0b47bf3cd2532d657ae6404be5160e5a71e2de8"
+   "bytes": 99303,
+   "sha256": "cd5db849556d752690b435536ccb6a7f6eb97c18affb14bdf4423dd733a5e0ea"
   },
-  "erratum": "phase-fragment.md 第 111–113、221、235–236 行「八个具名块」实为 10 个 describe 块承载 9 个判定器；原件是两位读者读过的字节版，按证据规则未改，更正见 P9 卡第 951–953 行与 README 补记",
-  "tier": "仍 incomplete：被读原件那句旧计数仍在（原件未改），见 P9 完成节未解项一"
+  "erratum": "phase-fragment.md 第 111–112、221、235–236 行「八个具名块」实为 10 个 describe 块承载 9 个判定器；原件是两位读者读过的字节版，按证据规则未改，更正见 P9 卡第 951–953 行与 README 补记",
+  "tier": "仍 incomplete：见 v2.tier（计数已在 v2 闭合；v2 新读者第 2 问报两处要自裁）"
  },
- "next": "下一版材料把那句计数改成「10 个 describe 块承载 9 个判定器」（或另做一份改正版片段并记改前/改后），读者加 --reporter=verbose 数块后重读三问；门禁已 121 绿、主仓校验器退出 0；原测试者 0e7d26f1 复验后做规范同步与唯一提交。"
+ "v2": {
+  "at": "2026-10-31",
+  "why": "v1 的计数与四文件实数不符，但 v1 是两位读者读过的字节版，按证据规则不改；另出只改计数的改正版",
+  "material": {
+   "path": "quality/evidence/build-code/2026-10-31-p9-closeout/phase-fragment-v2.md",
+   "bytes": 29159,
+   "lines": 291,
+   "sha256": "7a4e6d7ff214db0570bc8c794326c27dd48d1aee93c3e3e858b124bd501fd8e7",
+   "changed_lines_v1": [
+    111,
+    112,
+    221,
+    235,
+    236
+   ],
+   "diff": "phase-fragment-v2-diff.md",
+   "v1_untouched": {
+    "path": "quality/evidence/build-code/2026-10-31-p9-closeout/phase-fragment.md",
+    "bytes": 28902,
+    "lines": 291,
+    "sha256": "87448f78ac59a113da4f64d7797085c49cd9b2f2f9f3030b23ab9f55c2e5b48e"
+   }
+  },
+  "reader": {
+   "context": "fresh（不看旧原答、不跑命令）",
+   "instruction": "reader-instruction-v2.md",
+   "file": "reader-verdict-v2.md",
+   "q1_next_action": "能：七槽改哪、spec 加 P1 行、A/B 路径与两条命令都说得出，带行号",
+   "q2_adjudication": "有：① 片段既是 AC-EFFECT-001 的 P1 行又要落进 P11 七槽，哪句进哪份没说死；② 正文说 10 个 describe 块，判定器表只有 9 行、只数得出 8 个具名块",
+   "q3_ask_author": "能：unknown 都带 owner，不必问作者",
+   "conclusion": "有缺口：第 2 问"
+  },
+  "tier": "仍 incomplete：计数错已在 v2 闭合，但新读者第 2 问报两处要自裁，按材料自己的「不用自己裁断」判据不记 available",
+  "to_available": "① 写明哪些文字进 P11 七槽、哪一行进 spec；② 判定器表逐块列出 10 个 describe 块或加块数列；改完让一位新读者重读"
+ },
+ "next": "独立测试仍待原测试者 0e7d26f1 复验；规范同步与唯一提交在该复验后处理。本轮自跑 121 绿与校验器退出 0 不算独立测试。",
+ "v3": {
+  "at": "2026-10-31",
+  "why": "v2 重读报两处：片段是示范还是交付没说死；块数口径对不上。v1、v2 都不动，另出 v3。",
+  "material": {
+   "path": "quality/evidence/build-code/2026-10-31-p9-closeout/phase-fragment-v3.md",
+   "bytes": 30078,
+   "lines": 292,
+   "sha256": "11476ca21ef0efaaa4fd8110973a489cb57b1e187422ebc13bec514af12beb22",
+   "diff": "phase-fragment-v3-diff.md",
+   "changes": [
+    "头部加「本片段是示范，不是交付」并写明两处落点",
+    "边界句注明 AC 行进 spec 不进 P11",
+    "写集处限定只写本节正文",
+    "用例 1 改为按判定器表逐行核九个判定器，不再另报块数",
+    "判定器表加「块数」列（0/2/1/1/1/3/2）",
+    "表下写明按文件 2+1+2+5=10、C07-TCR 是整组判定、块数不是效果证明"
+   ]
+  },
+  "verify": {
+   "mode": "受影响复验（同一 v2 读者，不重读全篇）",
+   "file": "reader-verdict-v3.md",
+   "conclusion": "两条都已解决"
+  },
+  "tier": "available（依据 v3 字节；v1 两位读者原答作历史保留）",
+  "non_blocking": [
+   "读者建议 178 行补「不含 P1 归属句」，留给下一版"
+  ]
+ },
+ "main_validator_recheck": {
+  "exit": 1,
+  "error": "P3 phase evidence_path does not exist: quality/evidence/build-code/P3-real-page-2026-10-31-readback.json（P3 由他人并发修改，不在本卡写集）",
+  "p9_errors": 0,
+  "evidence": [
+   "validator-recheck.stdout.txt",
+   "validator-recheck.exit"
+  ]
+ }
 }
