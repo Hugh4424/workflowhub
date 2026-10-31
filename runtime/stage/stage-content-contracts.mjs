@@ -1,6 +1,6 @@
 // Current post Phase and ordinary decision-log text contracts.
 // Pure facts only: no retired appendices, hash-bound identities or stage-completion machines.
-import { statSync } from "node:fs";
+import { statSync, realpathSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
 const ACCEPTANCE_CRITERION_SOURCE = String.raw`AC(?:\d{1,3}|-\d{1,3}|(?:-[A-Z][A-Z0-9]*)+-\d{1,3})`;
@@ -275,7 +275,15 @@ function declaredEvidencePaths(value) {
     .filter((token) => token !== "" && !/\s/.test(token) && /[/\\.]/.test(token)))];
 }
 
-function checkEvidencePath(token, roots) {
+function taskEvidenceRoot(token, taskRecordRoot) {
+  if (!token.startsWith("quality/") || token.includes("\\") || token.includes("\0")
+    || token.split("/").some(part => !part || part === "." || part === "..")
+    || typeof taskRecordRoot !== "string" || !isAbsolute(taskRecordRoot)) return null;
+  try { return statSync(taskRecordRoot).isDirectory() ? resolve(taskRecordRoot) : null; }
+  catch { return null; }
+}
+
+function checkEvidencePath(token, roots, taskRecordRoot) {
   if (isAbsolute(token)) {
     try {
       return statSync(token).isFile()
@@ -290,6 +298,16 @@ function checkEvidencePath(token, roots) {
     try {
       if (statSync(candidate).isFile()) return Object.freeze({ status: "verified", resolved: candidate });
     } catch { /* keep searching the remaining declared roots */ }
+  }
+  const taskRoot = taskEvidenceRoot(token, taskRecordRoot);
+  if (taskRoot && !roots.includes(taskRoot)) {
+    const candidate = resolve(taskRoot, token);
+    try {
+      const realRoot = realpathSync(taskRoot), realCandidate = realpathSync(candidate);
+      const rel = relative(realRoot, realCandidate);
+      const contained = rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
+      if (contained && statSync(realCandidate).isFile()) return Object.freeze({ status: "verified", resolved: candidate, resolution_source: "task_root" });
+    } catch { /* Keep the original missing evidence result, including escaping links. */ }
   }
   return Object.freeze({ status: "missing", reason: "not found under any declared root" });
 }
@@ -650,7 +668,7 @@ export function phaseTaskProseGaps(body) {
   return phaseTaskCards(body).filter(card => card.taskId && !card.prose).map(card => card.taskId);
 }
 
-export function validatePostPhaseContract({ spec, index, phases, reviewReadScope, changeScope, phase_id, prose_contract, material_path } = {}) {
+export function validatePostPhaseContract({ spec, index, phases, reviewReadScope, changeScope, phase_id, prose_contract, material_path, task_record_root } = {}) {
   const errors = [];
   const proseMode = prose_contract ?? (/(?:^|[/\\])archive(?:[/\\]|$)/.test(material_path ?? '') ? 'diagnostic' : 'required');
   if (!['diagnostic', 'required'].includes(proseMode)) errors.push('prose_contract must be diagnostic or required');
@@ -803,17 +821,18 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
         }));
       }
       for (const token of declaredPaths) {
-        if (!isAbsolute(token) && evidenceRoots.length === 0) {
+        if (!isAbsolute(token) && evidenceRoots.length === 0 && !taskEvidenceRoot(token, task_record_root)) {
           evidenceFacts.unverified.push(Object.freeze({
             phase_id: expectedId, path: token,
             reason: "no readable material, repository, or task root",
           }));
           continue;
         }
-        const checked = checkEvidencePath(token, evidenceRoots);
+        const checked = checkEvidencePath(token, evidenceRoots, task_record_root);
         if (checked.status === "verified") {
           evidenceFacts.verified.push(Object.freeze({
             phase_id: expectedId, path: token, resolved: checked.resolved,
+            ...(checked.resolution_source ? { resolution_source: checked.resolution_source } : {}),
           }));
           continue;
         }
@@ -827,9 +846,11 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
           continue;
         }
         evidenceFacts.missing.push(Object.freeze({ phase_id: expectedId, path: token }));
+        const taskRoot = taskEvidenceRoot(token, task_record_root);
+        const searchedRoots = taskRoot ? [...new Set([...evidenceRoots, taskRoot])] : evidenceRoots;
         const searched = isAbsolute(token)
           ? "absolute path checked directly"
-          : `searched roots: ${evidenceRoots.join(", ")}`;
+          : `searched roots: ${searchedRoots.join(", ")}`;
         errors.push(`${expectedPath} evidence_path does not exist: ${token} (${searched})`);
       }
     }

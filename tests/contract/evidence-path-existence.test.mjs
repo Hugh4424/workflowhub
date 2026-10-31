@@ -2,7 +2,8 @@
 // `planned:` gap, and an unmarked missing path that must fail. Archive material
 // keeps its existing diagnostic behavior.
 import { afterEach, expect, test } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -172,3 +173,68 @@ test("relative evidence resolves through the authenticated worktree and task roo
   ].sort());
 });
 
+
+// The extra root comes from the actual task record; it is not a replacement for
+// reviewReadScope.taskRoot and cannot reorder existing repository/material roots.
+test('task-record fallback: quality path only in task record passes and records its source',()=>{
+  const materials=withEvidence(examples(),phaseEvidence),root=material(materials),taskRoot=join(dirname(root),'task');
+  putFile(taskRoot,'quality/tests/owned-behavior.output');putFile(taskRoot,'quality/evidence/owned-document-readback.md');
+  const input={...materials,material_path:root,task_record_root:taskRoot},result=validatePostPhaseContract(input);
+  expect(result.errors).toEqual([]);expect(result.facts.evidence_paths.verified).toHaveLength(2);
+  expect(result.facts.evidence_paths.verified.every(v=>v.resolution_source==='task_root')).toBe(true);
+  expect(result.facts.evidence_paths.verified[0].resolved).toBe(join(taskRoot,'quality/tests/owned-behavior.output'));
+  putFile(root,'quality/tests/owned-behavior.output');
+  const primary=validatePostPhaseContract(input).facts.evidence_paths.verified.find(v=>v.phase_id==='P1');
+  expect(primary.resolved).toBe(join(root,'quality/tests/owned-behavior.output'));expect(primary.resolution_source).toBeUndefined();
+});
+test('task-record fallback: missing in both roots remains the original named missing error',()=>{
+  const materials=withEvidence(examples(),phaseEvidence),root=material(materials),taskRoot=join(dirname(root),'task');mkdirSync(taskRoot);
+  const result=validatePostPhaseContract({...materials,material_path:root,task_record_root:taskRoot});
+  expect(result.ok).toBe(false);expect(result.facts.evidence_paths.missing_count).toBe(2);
+  expect(result.errors.join('\n')).toContain('evidence_path does not exist: quality/tests/owned-behavior.output');
+  expect(result.errors.join('\n')).toContain(taskRoot);
+});
+test('task-record fallback: non-quality and ../../Knowledge paths keep byte-identical old results',()=>{
+  const container=realpathSync(mkdtempSync(join(tmpdir(),'evidence-path-old-roots-')));roots.push(container);
+  const worktree=join(container,'Project','repo'),root=join(worktree,'specs','owned-task'),taskRoot=join(container,'Knowledge','Projects','demo','tasks','owned-task');
+  mkdirSync(root,{recursive:true});putFile(worktree,'docs/repo-only.md');putFile(taskRoot,'docs/repo-only.md');putFile(taskRoot,'docs/task-only.md');putFile(taskRoot,'quality/legacy.md');
+  const legacy='../../Knowledge/Projects/demo/tasks/owned-task/quality/legacy.md',quote=String.fromCharCode(96);
+  for(const first of ['docs/repo-only.md','docs/task-only.md']){
+    const materials=withEvidence(examples(),p=>quote+(p.includes('P1-')?first:legacy)+quote),input={...materials,material_path:root};
+    const before=validatePostPhaseContract(input),after=validatePostPhaseContract({...input,task_record_root:taskRoot});
+    expect(JSON.stringify(after)).toBe(JSON.stringify(before));
+    expect(after.facts.evidence_paths.verified.find(v=>v.phase_id==='P2').resolved).toBe(join(taskRoot,'quality/legacy.md'));
+    expect(after.facts.evidence_paths.missing_count).toBe(first==='docs/task-only.md'?1:0);
+  }
+});
+test('task-record fallback: actual CLI discovers only its canonical manifest and registered worktree',()=>{
+  const container=realpathSync(mkdtempSync(join(tmpdir(),'evidence-path-task-cli-')));roots.push(container);
+  const repo=join(container,'repo'),worktree=join(container,'repo-owned-task'),storage=join(container,'storage'),taskRoot=join(storage,'Projects','demo','tasks','owned-task');
+  const env={...process.env,WORKFLOWHUB_TASK_DIR:storage,XDG_CONFIG_HOME:join(container,'config')};delete env.RUN_CHECKS_FORCE_FAIL_CHECKER;for(const key of Object.keys(env))if(key.startsWith('GIT_'))delete env[key];
+  const git=(cwd,args)=>{const r=spawnSync('git',args,{cwd,env,encoding:'utf8'});expect(r.status,r.stderr).toBe(0);return r.stdout.trim();};
+  git(container,['init',repo]);git(repo,['-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','--allow-empty','-m','fixture']);
+  const baseline=git(repo,['rev-parse','HEAD']);git(repo,['worktree','add','-b','task/demo/owned-task',worktree,'HEAD']);
+  const root=join(worktree,'specs','owned-task'),materials=withEvidence(examples(),phaseEvidence);mkdirSync(join(root,'phases'),{recursive:true});
+  writeFileSync(join(root,'spec.md'),materials.spec);writeFileSync(join(root,'phases/index.md'),materials.index);for(const [path,body]of Object.entries(materials.phases))writeFileSync(join(root,path),body);
+  putFile(taskRoot,'quality/tests/owned-behavior.output');putFile(taskRoot,'quality/evidence/owned-document-readback.md');
+  writeFileSync(join(taskRoot,'task.json'),JSON.stringify({schema_version:'1.0.0',project_name:'demo',task_id:'owned-task',target_repo_root:repo,activation_cohort:'post',baseline_commit:baseline}));
+  const cli=fileURLToPath(new URL('../../tools/cli/run-checks.mjs',import.meta.url)),r=spawnSync(process.execPath,[cli,'--material-root',root],{cwd:worktree,env,encoding:'utf8',timeout:30000});
+  expect(r.status,r.stdout+r.stderr).toBe(0);expect(r.stdout).toContain('resolution_source=task_root');expect(r.stdout).toContain(taskRoot);
+});
+
+for(const kind of ['file','directory'])test('task-root containment: '+kind+' symlink outside the task root is rejected',()=>{
+  const materials=withEvidence(examples(),phaseEvidence),root=material(materials),taskRoot=join(dirname(root),'task'),outside=join(dirname(root),'outside');
+  putFile(outside,'owned-behavior.output');putFile(taskRoot,'quality/evidence/owned-document-readback.md');
+  if(kind==='file'){mkdirSync(join(taskRoot,'quality/tests'),{recursive:true});symlinkSync(join(outside,'owned-behavior.output'),join(taskRoot,'quality/tests/owned-behavior.output'));}
+  else symlinkSync(outside,join(taskRoot,'quality/tests'),'dir');
+  const candidate=join(taskRoot,'quality/tests/owned-behavior.output');expect(realpathSync(candidate)).toBe(join(outside,'owned-behavior.output'));
+  const result=validatePostPhaseContract({...materials,material_path:root,task_record_root:taskRoot});expect(result.ok).toBe(false);expect(result.errors.join('\n')).toContain('evidence_path does not exist: quality/tests/owned-behavior.output');
+});
+test('task-root containment: a symlink resolving inside the task root remains valid',()=>{
+  const materials=withEvidence(examples(),phaseEvidence),root=material(materials),taskRoot=join(dirname(root),'task');putFile(taskRoot,'safe/inside.output');putFile(taskRoot,'quality/evidence/owned-document-readback.md');mkdirSync(join(taskRoot,'quality/tests'),{recursive:true});symlinkSync(join(taskRoot,'safe/inside.output'),join(taskRoot,'quality/tests/owned-behavior.output'));
+  const result=validatePostPhaseContract({...materials,material_path:root,task_record_root:taskRoot});expect(result.errors).toEqual([]);expect(result.facts.evidence_paths.verified.find(v=>v.phase_id==='P1')).toMatchObject({resolved:join(taskRoot,'quality/tests/owned-behavior.output'),resolution_source:'task_root'});
+});
+test('task-root containment: existing roots retain their original priority and link behavior',()=>{
+  const materials=withEvidence(examples(),phaseEvidence),root=material(materials),outside=join(dirname(root),'outside'),taskRoot=join(dirname(root),'task');putFile(outside,'owned-behavior.output');putFile(root,'quality/evidence/owned-document-readback.md');mkdirSync(join(root,'quality/tests'),{recursive:true});symlinkSync(join(outside,'owned-behavior.output'),join(root,'quality/tests/owned-behavior.output'));putFile(taskRoot,'quality/tests/owned-behavior.output');
+  const input={...materials,material_path:root},before=validatePostPhaseContract(input),after=validatePostPhaseContract({...input,task_record_root:taskRoot});expect(after.errors).toEqual([]);expect(JSON.stringify(after)).toBe(JSON.stringify(before));expect(after.facts.evidence_paths.verified[0].resolution_source).toBeUndefined();
+});

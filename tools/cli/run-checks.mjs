@@ -24,7 +24,7 @@ import { validateContract } from "../../runtime/evidence/validate-contract.mjs";
 import { CORE_FIELDS, validateRecord } from "../../metrics/record-schema.mjs";
 import { GAP, SIX_KEYS, validateExecutionRecord } from "../../metrics/execution-record.mjs";
 import { validateKnowledgeCard } from "../../metrics/knowledge-card.mjs";
-import { resolve, dirname, isAbsolute } from "node:path";
+import { resolve, dirname, isAbsolute, basename, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -224,6 +224,30 @@ function logEvidencePathSummary(facts) {
   );
 }
 
+// Material-only callers have no task flag. A recorded task branch supplies the
+// identity; the existing manifest/workspace owners must authenticate the match.
+// Failure leaves the original missing-path result; never scan or guess roots.
+async function materialTaskRecordRoot(materialRoot) {
+  const root = resolve(materialRoot), specsAt = root.lastIndexOf(`${sep}specs${sep}`);
+  if (specsAt < 1) return undefined;
+  const worktreeRoot = root.slice(0, specsAt), env = { ...process.env };
+  for (const key of Object.keys(env)) if (key.startsWith("GIT_")) delete env[key];
+  const branch = spawnSync("git", ["branch", "--show-current"], { cwd: worktreeRoot, env, encoding: "utf8" });
+  if (branch.status !== 0) return undefined;
+  const identity = /^task\/([^/]+)\/([^/]+)$/.exec(branch.stdout.trim());
+  if (!identity || identity[2] !== basename(root)) return undefined;
+  try {
+    const { resolveCanonicalTaskPath } = await import("../../runtime/task/load-config.mjs");
+    const { openTask } = await import("../../runtime/task/task-handle.mjs");
+    const { openCurrentTaskWorkspace } = await import("../../runtime/task/workspace.mjs");
+    const resolution = resolveCanonicalTaskPath({ project: identity[1], task: identity[2] });
+    const task = openTask(resolution.taskPath, resolution.project, resolution.task);
+    const workspace = await openCurrentTaskWorkspace(task);
+    if (root !== resolve(workspace.worktreeRoot, "specs", task.identity.taskId)) return undefined;
+    return task.taskPath;
+  } catch { return undefined; }
+}
+
 async function runMaterialChecks(root, { stage } = {}) {
   try {
     const rootStat = statSync(root);
@@ -268,7 +292,15 @@ async function runMaterialChecks(root, { stage } = {}) {
       try { for (const path of phaseFilesFromIndex(inspection.files["phases/index.md"])) phases[path] = inspection.files[path]; }
       catch { /* The reader and validator retain the named index error below. */ }
     }
-    const result = validatePostPhaseContract({ spec: inspection.files["spec.md"], index: inspection.files["phases/index.md"], phases, material_path: root });
+    const input = { spec: inspection.files["spec.md"], index: inspection.files["phases/index.md"], phases, material_path: root };
+    let result = validatePostPhaseContract(input);
+    if (result.facts?.evidence_paths?.missing?.some(item => item.path.startsWith("quality/"))) {
+      const taskRoot = await materialTaskRecordRoot(root);
+      if (taskRoot) result = validatePostPhaseContract({ ...input, task_record_root: taskRoot });
+    }
+    for (const item of result.facts?.evidence_paths?.verified ?? []) {
+      if (item.resolution_source === "task_root") console.log(`[run-checks][material] resolution_source=task_root phase=${item.phase_id} path=${item.path} resolved=${item.resolved}`);
+    }
     const errors = [...inspection.errors, ...result.errors, ...triageSkipReasons(phases)];
     for (const error of errors) console.log(`[run-checks][material] ${root} ${error}`);
     if (errors.length) {
