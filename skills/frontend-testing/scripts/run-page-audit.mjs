@@ -39,7 +39,7 @@ export async function runPageAudit(argv,{env=process.env,cwd=process.cwd(),probe
   try{
     const values=readIdentity(argv),selection=await lockEngine(values,env,{probe});
     return await collectAudit(values,selection,{env,cwd,runTask,windowTimeoutMs});
-  }catch(error){return {code:error.exitCode??1,ok:false,outcome:'unavailable',errors:error.errors??[{code:error.code??'E_AUDIT_TOOL_ERROR',path:error.path??'$',message:error.message+(error.originals?'; originals: '+error.originals:'')}],...(error.observations?{observations:error.observations}:{})};}
+  }catch(error){return {code:error.exitCode??1,ok:false,outcome:'unavailable',errors:(error.errors??[{code:error.code??'E_AUDIT_TOOL_ERROR',path:error.path??'$',message:error.message}]).map(e=>({...e,message:e.message+(error.originals?'; originals: '+error.originals:'')})),...(error.observations?{observations:error.observations}:{})};}
 }
 const dimensions=['console','network','overflow','perf','a11y'];
 const bone=['业务任务','IA 导航','交互状态','内容数据','视觉规范','响应式布局','无障碍','真实代码交接'];
@@ -56,10 +56,12 @@ function launch(script,config,env,cwd){
   job.result=new Promise(resolve=>{child.on('error',error=>{job.error=error;});child.on('close',(code,signal)=>{clearTimeout(timer);job.done=true;resolve({code,signal});});});return job;
 }
 function documentFailure(doc,dimension){
+  const errors=[];
   for(const f of doc.failures){
     const code={NOT_STARTED:'E_COLLECT_NOT_STARTED',TOOL_ERROR:'E_COLLECT_TOOL_ERROR',IDENTITY_MISMATCH:'E_COLLECT_IDENTITY_MISMATCH'}[f.class];
-    if(code)throw fault(code,dimension,f.detail+(f.class==='IDENTITY_MISMATCH'?'; compare declared and observed identity in the collector original; reacquire matching endpoint/identity through the QA gateway before retry':''),2);
+    if(code)errors.push({code,path:dimension,message:f.detail+(f.class==='IDENTITY_MISMATCH'?'; compare declared and observed identity in the collector original; reacquire matching endpoint/identity through the QA gateway before retry':'')});
   }
+  if(errors.length)throw Object.assign(fault(errors[0].code,dimension,errors[0].message,2),{errors});
 }
 async function readDocument(job,path,dimension){
   const status=await job.result;
