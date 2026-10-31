@@ -1,0 +1,77 @@
+{
+  "phase": "P9",
+  "date": "2026-10-31",
+  "acceptance": "AC-C07-010",
+  "tier": "incomplete",
+  "reused_originals": [
+    {
+      "path": "quality/evidence/build-code/2026-10-31-p12-writeside-experiment/phase-fragment.md",
+      "bytes": 18811,
+      "sha256": "a5ab881f4d163b60a7c34bfbe621291dcba2b9782f72d649060624b3c0024afa"
+    },
+    {
+      "path": "quality/evidence/build-code/2026-10-31-p12-writeside-experiment/spec-fragment.md",
+      "bytes": 20380,
+      "sha256": "40e8748baad0cf3e6bac4cd3281dc1cea1a5464fe906b4e68d83ff456bb762df"
+    },
+    {
+      "path": "quality/evidence/build-code/2026-10-31-p12-writeside-experiment/decision-log-fragment.md",
+      "bytes": 12868,
+      "sha256": "92cf57331005b31613378dd1a8f856c02f0f261055edcd96a9c223b616292a6c"
+    },
+    {
+      "path": "quality/evidence/build-code/2026-10-31-p12-blind-judgment/consumer-record.md",
+      "bytes": 7062,
+      "sha256": "eb0e8e651d0d4d2ce6d491b3535f6b826325384e849c131c54501ac830b15689"
+    },
+    {
+      "path": "quality/evidence/build-code/2026-10-31-p12-blind-judgment/pilot-requirement.md",
+      "bytes": 626,
+      "sha256": "156b20d7cb8afb8348c556a90b5af9b6851fb2459436b901caa548085641c4f4"
+    },
+    {
+      "path": "quality/evidence/build-code/2026-10-31-p12-blind-judgment/judge-verdict.md",
+      "bytes": 10436,
+      "sha256": "bba46970fb66a26993ad539fbc9d63a4e71dae50bc1241ccfa79b3983e2e7a21"
+    }
+  ],
+  "readers": [
+    {
+      "file": "reader-verdict.md",
+      "conclusion": "有缺口：三件",
+      "followable": "不能：缺门禁命令与 A/B 路径",
+      "first_change": "指不出：只有 specs/<task-id>/phases/P1-试点验收.md 占位，缺真实 task-id 与试点身份",
+      "adjudication": "有：判定器清单漏项"
+    },
+    {
+      "file": "reader-verdict-2.md",
+      "conclusion": "有缺口：第三件三处",
+      "followable": "能，但命令与路径 unknown",
+      "first_change": "能，靠 150-152 行上下文；<task-id> 未填",
+      "adjudication": "有：判定器清单、原件用后删除与保留、判定者读门禁输出"
+    }
+  ],
+  "criteria": {
+    "followable": {
+      "verdict": "fail_stricter",
+      "reason": "一位读者判不能，一位判方法层能说清但命令与路径 unknown；按较严的记不能"
+    },
+    "no_author_help": {
+      "verdict": "pass_proxy",
+      "reason": "consumer-record.md 写明一次使用、没向作者提问；它消费的是代码交付，不是验收节"
+    },
+    "no_adjudication": {
+      "verdict": "fail",
+      "unadjudicated": [
+        "判据要求绿而错通过判定器，用例 1 与反向场景 1 的清单漏掉它",
+        "A/B 原件用后删除与 A/B 原件保留两处互斥",
+        "判定者只读验收与原需，却要答门禁为何区分不了"
+      ]
+    }
+  },
+  "next": {
+    "who": "原作者或主会话派的材料作者",
+    "how_long": "约一小时",
+    "recovery": "补齐真实 task-id、试点 Phase 文件与门禁命令，并裁断三处矛盾；用同一三问重读，三问都有具体答案才改档"
+  }
+}

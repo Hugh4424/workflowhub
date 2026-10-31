@@ -1,0 +1,10 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-ui-frontend-c07-real-page-verification-20261028
+
+ ✓ tests/contract/make-decision-flow.test.mjs (34 tests) 162ms
+
+ Test Files  1 passed (1)
+      Tests  34 passed (34)
+   Start at  09:11:58
+   Duration  275ms (transform 41ms, setup 0ms, collect 11ms, tests 162ms, environment 0ms, prepare 30ms)
+

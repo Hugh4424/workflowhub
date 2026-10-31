@@ -1,0 +1,5 @@
+I couldn't read the packet, so I have no review to give. Every read of `manifest.json` and `review-instructions.md` was denied by the packet-boundary hook ("The packet boundary permits only exact current regular-file reads"). That covers a directory listing, absolute paths in both listed workspaces, and the relative path `manifest.json`.
+
+I stopped there and did not look for another way in. I haven't read any submitted material, so I won't invent findings.
+
+To retry, I need the exact file path or paths the hook allows, such as the exact packet-root file names.

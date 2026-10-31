@@ -1,0 +1,180 @@
+{
+  "schema": "p10-real-review-run.v1",
+  "executed_at_local": "2026-10-30T23:34:06+08:00..23:42:10+08:00",
+  "entry": "node skills/wh-review/scripts/wh-review-cli.mjs run <request.json>",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-ui-frontend-c07-real-page-verification-20261028",
+  "request": "quality/evidence/build-code/2026-10-30-p10-real-review/request.json",
+  "exit_code": 0,
+  "stdout": "quality/evidence/build-code/2026-10-30-p10-real-review/review-result.json",
+  "stderr_bytes": 0,
+  "status": "available-with-failures",
+  "dispatch_state": "dispatched",
+  "pair_status": "partial",
+  "outcome": "partial",
+  "pair_id": "5373a0d9-e7aa-4ec7-968b-ceaa2eca31f2",
+  "material_id": "579bce7f52428ad4de4f0d4b47416f443162a2ce7006e8782b1888fade2bd749",
+  "findings_merged": 17,
+  "roles": {
+    "red": {
+      "status": "available-with-failures",
+      "findings": 7,
+      "providers": [
+        {
+          "provider": "kimi/pro",
+          "status": "completed",
+          "parse_outcome": "ok",
+          "error": null,
+          "coverage": {
+            "provider": "kimi/pro",
+            "read": [
+              "draft_spec",
+              "phase_authorities"
+            ],
+            "unread": [],
+            "undetermined": [
+              "decision_baseline",
+              "acceptance_criteria",
+              "phase_index"
+            ]
+          }
+        },
+        {
+          "provider": "antigravity/flash",
+          "status": "failed",
+          "parse_outcome": "ok",
+          "error": "PUBLIC_RESULT_INVALID",
+          "coverage": {
+            "provider": "antigravity/flash",
+            "read": [],
+            "unread": [],
+            "undetermined": [
+              "decision_baseline",
+              "draft_spec",
+              "acceptance_criteria",
+              "phase_authorities",
+              "phase_index"
+            ]
+          }
+        },
+        {
+          "provider": "codex/sol",
+          "status": "completed",
+          "parse_outcome": "ok",
+          "error": null,
+          "coverage": {
+            "provider": "codex/sol",
+            "read": [
+              "phase_authorities"
+            ],
+            "unread": [],
+            "undetermined": [
+              "decision_baseline",
+              "draft_spec",
+              "acceptance_criteria",
+              "phase_index"
+            ]
+          }
+        },
+        {
+          "provider": "antigravity/sonnet",
+          "status": "failed",
+          "parse_outcome": "ok",
+          "error": "OUTPUT_INVALID",
+          "coverage": {
+            "provider": "antigravity/sonnet",
+            "read": [],
+            "unread": [],
+            "undetermined": [
+              "decision_baseline",
+              "draft_spec",
+              "acceptance_criteria",
+              "phase_authorities",
+              "phase_index"
+            ]
+          }
+        }
+      ]
+    },
+    "blue": {
+      "status": "available-with-failures",
+      "findings": 10,
+      "providers": [
+        {
+          "provider": "kimi/pro",
+          "status": "completed",
+          "parse_outcome": "ok",
+          "error": null,
+          "coverage": {
+            "provider": "kimi/pro",
+            "read": [
+              "phase_authorities"
+            ],
+            "unread": [],
+            "undetermined": [
+              "decision_baseline",
+              "draft_spec",
+              "acceptance_criteria",
+              "phase_index"
+            ]
+          }
+        },
+        {
+          "provider": "antigravity/flash",
+          "status": "completed",
+          "parse_outcome": "ok",
+          "error": null,
+          "coverage": {
+            "provider": "antigravity/flash",
+            "read": [
+              "phase_authorities"
+            ],
+            "unread": [],
+            "undetermined": [
+              "decision_baseline",
+              "draft_spec",
+              "acceptance_criteria",
+              "phase_index"
+            ]
+          }
+        },
+        {
+          "provider": "codex/sol",
+          "status": "completed",
+          "parse_outcome": "ok",
+          "error": null,
+          "coverage": {
+            "provider": "codex/sol",
+            "read": [
+              "phase_authorities"
+            ],
+            "unread": [],
+            "undetermined": [
+              "decision_baseline",
+              "draft_spec",
+              "acceptance_criteria",
+              "phase_index"
+            ]
+          }
+        },
+        {
+          "provider": "antigravity/sonnet",
+          "status": "failed",
+          "parse_outcome": "ok",
+          "error": "OUTPUT_INVALID",
+          "coverage": {
+            "provider": "antigravity/sonnet",
+            "read": [],
+            "unread": [],
+            "undetermined": [
+              "decision_baseline",
+              "draft_spec",
+              "acceptance_criteria",
+              "phase_authorities",
+              "phase_index"
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

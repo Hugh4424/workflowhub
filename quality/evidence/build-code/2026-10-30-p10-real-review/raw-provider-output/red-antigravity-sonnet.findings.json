@@ -1,0 +1,8 @@
+{
+  "note": "NOT a provider result. The extractor matched the inline code span {\"findings\": []} inside the provider's prose refusal. The provider returned no findings object.",
+  "provider": "antigravity/sonnet",
+  "role": "red",
+  "status": "failed",
+  "parse_outcome": "invalid",
+  "actual_response": "见 red-antigravity-sonnet.response.txt：packet 边界 pre-tool hook 拒绝一切读取，provider 未读到任何材料。"
+}

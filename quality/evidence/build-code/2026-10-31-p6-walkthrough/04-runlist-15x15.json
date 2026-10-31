@@ -1,0 +1,11 @@
+{
+  "walked_at": "2026-10-31T01:11:58.656Z",
+  "runlist_rows": 15,
+  "manifest_steps": 15,
+  "order_equal": true,
+  "duplicates": 0,
+  "missing_in_runlist": [],
+  "extra_in_runlist": [],
+  "criterion_diffs": [],
+  "verdict": "runlist_matches_steps_15x15"
+}

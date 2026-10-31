@@ -1,0 +1,40 @@
+
+ RUN  v2.1.9 /private/tmp/p11-badinput-20261031
+
+ ❯ tests/contract/acceptance-plan.test.mjs (75 tests | 1 failed | 74 skipped) 12ms
+   × ORACLE-ACCEPT-PLAN > real templates and planning steps carry seven fields and truthful incomplete instructions 11ms
+     → skills/spec-plan/templates/phase-template.md: expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > real templates and planning steps carry seven fields and truthful incomplete instructions
+AssertionError: skills/spec-plan/templates/phase-template.md: expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   Object {
++     "field": "Test tier / skill",
++     "path": "phases/P1-行为结果.md",
++     "phase_id": "P1",
++     "task_id": "T001",
++   },
++ ]
+
+ ❯ tests/contract/acceptance-plan.test.mjs:73:47
+     71|         const result = validatePostPhaseContract(authorMaterials());
+     72|         expect(result.errors, path).toEqual([]);
+     73|         expect(result.facts.field_gaps, path).toEqual([]);
+       |                                               ^
+     74|       }
+     75|       for (const label of ['试过=', '卡在=', '谁提供=', '恢复条件=']) …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 74 skipped (75)
+   Start at  08:38:38
+   Duration  133ms (transform 24ms, setup 0ms, collect 28ms, tests 12ms, environment 0ms, prepare 25ms)
+

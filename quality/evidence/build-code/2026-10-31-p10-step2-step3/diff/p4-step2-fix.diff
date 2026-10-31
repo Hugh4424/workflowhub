@@ -1,0 +1,11 @@
+--- quality/evidence/build-code/2026-10-31-p10-step2-step3/before/P4-before-step2-fix.md	2026-10-31 08:12:22
++++ specs/workflowhub-ui-frontend-c07-real-page-verification-20261028/phases/P4-报告接入与回修闭环.md	2026-10-31 08:12:30
+@@ -291,7 +291,7 @@
+ P3 来源与初始工作文件都是 7257 字节，SHA256 都是：
+ `d896b96cb37565b122fa03f73aa8628e85a53d0978f48fe4cec7eac87e74305f`
+ 这只记录首次复制时的同字节事实，没有永久等值断言。
+-后续工作源按 P8 的真实发现改动。
++后续工作源按本 Phase 的九类检出改动。
+ 
+ 六条执行链，先写清谁在什么时候写：
+ 1. 本 Phase 只从 P3 的受控页取一个文件，初始化第 13 条并核字节相等。

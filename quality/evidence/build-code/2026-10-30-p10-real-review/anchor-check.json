@@ -1,0 +1,376 @@
+[
+  {
+    "n": 1,
+    "path": "materials/02-draft_spec.md",
+    "line": 1507,
+    "providers": [
+      "kimi/pro"
+    ],
+    "roles": [
+      "red"
+    ],
+    "resolved": true,
+    "total_lines": 2466,
+    "exists": true,
+    "anchor_text": "不用走，因为原始需求、项目清单与计划改动三个来源都为 false。",
+    "window": [
+      "## 为什么这份材料不走 UI 准备？",
+      "",
+      "不用走，因为原始需求、项目清单与计划改动三个来源都为 false。",
+      "",
+      "判定表与依据在 `2026-10-29-002-ui-applicability-and-norms.md` 第 1.1 节。"
+    ]
+  },
+  {
+    "n": 2,
+    "path": "requirements/phases/P5-审计编排入口与规范消费证明.md",
+    "line": 464,
+    "providers": [
+      "kimi/pro"
+    ],
+    "roles": [
+      "red"
+    ],
+    "resolved": true,
+    "total_lines": 1309,
+    "exists": true,
+    "anchor_text": "**身份传递。** 这五个值是 P2 采集器对象八键里不由 CDP 观察得到的那五项。",
+    "window": [
+      "| `--engine-session` | `PAGE_AUDIT_ENGINE_SESSION` | `engine_session` |",
+      "",
+      "**身份传递。** 这五个值是 P2 采集器对象八键里不由 CDP 观察得到的那五项。",
+      "采集器从这五个同名环境变量取值填入 `object`，命令行仍是四项；",
+      "加上命令行已有的 `state`、`viewport` 与引擎环境映射，`object` 八键齐。"
+    ]
+  },
+  {
+    "n": 3,
+    "path": "requirements/phases/P12-逐需验收与真实完成.md",
+    "line": 508,
+    "providers": [
+      "kimi/pro"
+    ],
+    "roles": [
+      "red"
+    ],
+    "resolved": true,
+    "total_lines": 705,
+    "exists": true,
+    "anchor_text": "- 成功：不用自己裁冲突就能接手，并能指出一处「全绿但漏原需」的漏洞。",
+    "window": [
+      "- 动作：只读材料，回答五问：原需在哪、第一步做什么、输入是什么、",
+      "  成功与失败怎么看、失败找谁。",
+      "- 成功：不用自己裁冲突就能接手，并能指出一处「全绿但漏原需」的漏洞。",
+      "- 失败：必须猜业务，或只能复述编号与路径，或说不出任何漏洞。",
+      "- 证据：读者身份、原答、指出的漏洞、作者是否因此改动、改动后是否重读。"
+    ]
+  },
+  {
+    "n": 4,
+    "path": "requirements/phases/P12-逐需验收与真实完成.md",
+    "line": 93,
+    "providers": [
+      "kimi/pro"
+    ],
+    "roles": [
+      "red"
+    ],
+    "resolved": true,
+    "total_lines": 705,
+    "exists": true,
+    "anchor_text": "- 动作：一位没参与写作的人照契约自己写一份 decision-log、spec 与 phase 片段。",
+    "window": [
+      "正例三（写作效果）。",
+      "- 输入：同一份原始需求原文，不给成品材料。",
+      "- 动作：一位没参与写作的人照契约自己写一份 decision-log、spec 与 phase 片段。",
+      "- 预期：片段里每条原需自带场景、环境与数据、预期与恢复，不是抄模板。",
+      "- 算通过：他的片段原件，并逐条核里面有没有长出可用的验收标准。"
+    ]
+  },
+  {
+    "n": 5,
+    "path": "requirements/phases/P12-逐需验收与真实完成.md",
+    "line": 523,
+    "providers": [
+      "kimi/pro"
+    ],
+    "roles": [
+      "red"
+    ],
+    "resolved": true,
+    "total_lines": 705,
+    "exists": true,
+    "anchor_text": "八份写入件里七份被这条命令读到；build-code 方法正文的契约测试现有红项，不列入。",
+    "window": [
+      "```",
+      "",
+      "八份写入件里七份被这条命令读到；build-code 方法正文的契约测试现有红项，不列入。",
+      "最后一条沿用原兼容检查；效果仍靠真实撰写与独立读者，落点见下面的证据落点。",
+      ""
+    ]
+  },
+  {
+    "n": 6,
+    "path": "requirements/phases/P12-逐需验收与真实完成.md",
+    "line": 509,
+    "providers": [
+      "codex/sol"
+    ],
+    "roles": [
+      "red"
+    ],
+    "resolved": true,
+    "total_lines": 705,
+    "exists": true,
+    "anchor_text": "- 失败：必须猜业务，或只能复述编号与路径，或说不出任何漏洞。",
+    "window": [
+      "  成功与失败怎么看、失败找谁。",
+      "- 成功：不用自己裁冲突就能接手，并能指出一处「全绿但漏原需」的漏洞。",
+      "- 失败：必须猜业务，或只能复述编号与路径，或说不出任何漏洞。",
+      "- 证据：读者身份、原答、指出的漏洞、作者是否因此改动、改动后是否重读。",
+      "- 边界：这一层只能人读，不能由命令代替；读不出漏洞时记未取得，不记通过。"
+    ]
+  },
+  {
+    "n": 7,
+    "path": "requirements/phases/P12-逐需验收与真实完成.md",
+    "line": 93,
+    "providers": [
+      "codex/sol"
+    ],
+    "roles": [
+      "red"
+    ],
+    "resolved": true,
+    "total_lines": 705,
+    "exists": true,
+    "anchor_text": "- 动作：一位没参与写作的人照契约自己写一份 decision-log、spec 与 phase 片段。",
+    "window": [
+      "正例三（写作效果）。",
+      "- 输入：同一份原始需求原文，不给成品材料。",
+      "- 动作：一位没参与写作的人照契约自己写一份 decision-log、spec 与 phase 片段。",
+      "- 预期：片段里每条原需自带场景、环境与数据、预期与恢复，不是抄模板。",
+      "- 算通过：他的片段原件，并逐条核里面有没有长出可用的验收标准。"
+    ]
+  },
+  {
+    "n": 8,
+    "path": "requirements/phases/P2-真实采集与失败语义.md",
+    "line": 458,
+    "providers": [
+      "kimi/pro"
+    ],
+    "roles": [
+      "blue"
+    ],
+    "resolved": true,
+    "total_lines": 889,
+    "exists": true,
+    "anchor_text": "- service 项分源保留：原 Phase 5 把五身份定义为非 CDP 观察的原样声明，没有 URL-only。",
+    "window": [
+      "- 归属按真实 requestId、loader、frame 与 executionContext 关联；旧请求晚返排除。",
+      "  归属未取得保 null 与 `IDENTITY_MISMATCH`，不重贴当前 loader。",
+      "- service 项分源保留：原 Phase 5 把五身份定义为非 CDP 观察的原样声明，没有 URL-only。",
+      "  具名标签与 parseable URI 分别有正反输入，不按字段名字强加 URL-only。",
+      "  原服务差异仍具名失败；标签未取得 origin 验证，不冒已验证。"
+    ]
+  },
+  {
+    "n": 9,
+    "path": "requirements/phases/P8-全AC终验.md",
+    "line": 655,
+    "providers": [
+      "kimi/pro"
+    ],
+    "roles": [
+      "blue"
+    ],
+    "resolved": true,
+    "total_lines": 1179,
+    "exists": true,
+    "anchor_text": "- **RED 目标失败**：ORACLE-P8-ACCEPTANCE 的验收 1 块：`expect(dimensions.every(d=>results.some(r=>r.dimension===d))).toBe(true)` 收到 false；`expect(NINE.every(d=>criteria.some(c=>c.subitem===d&&c.raw))).toBe(true)` 收到 false；`expect(cells.every(cell=>cell.state||cell.untested_reason)).toBe(true)` 收到 false；负例里 `expect(report.total_score).toBeUndefined()` 被 `E_TOTAL_SCORE` 提前拒；归因＝目标行为失败。",
+    "window": [
+      "- **RED/GREEN 门禁命令**：`node node_modules/vitest/vitest.mjs run tests/contract/page-audit-acceptance.test.mjs -t \"AC-C07-1\"`",
+      "- **预期退出码**：RED nonzero; GREEN 0。",
+      "- **RED 目标失败**：ORACLE-P8-ACCEPTANCE 的验收 1 块：`expect(dimensions.every(d=>results.some(r=>r.dimension===d))).toBe(true)` 收到 false；`expect(NINE.every(d=>criteria.some(c=>c.subitem===d&&c.raw))).toBe(true)` 收到 false；`expect(cells.every(cell=>cell.state||cell.untested_reason)).toBe(true)` 收到 false；负例里 `expect(report.total_score).toBeUndefined()` 被 `E_TOTAL_SCORE` 提前拒；归因＝目标行为失败。",
+      "- **GREEN 判定器**：ORACLE-P8-ACCEPTANCE；三块齐全、每题通过元素具名；八维、九维与覆盖三层各自可判；四类非法输入各不聚合；反向「缺未测理由仍绿」「九维缺一项仍绿」「耗时写 0 仍绿」「证据错配仍出结论」判红。",
+      "- **证据**：`P8-acceptance.json` 的三行；判什么＝验收 1、2、6 的机器可判部分各有具名通过元素；怎么判＝三个断言块；谁提供＝验收执行者；何时＝build-code 运行本阶段；成本＝命令级；拿不到＝记未取得并写缺哪个原件。计划期红未采集：`unavailable — 写作期不执行；落 quality/tests/<日期>-p8-ac1.*`。"
+    ]
+  },
+  {
+    "n": 10,
+    "path": "requirements/phases/P8-全AC终验.md",
+    "line": 463,
+    "providers": [
+      "kimi/pro"
+    ],
+    "roles": [
+      "blue"
+    ],
+    "resolved": true,
+    "total_lines": 1179,
+    "exists": true,
+    "anchor_text": "本阶段新增一个验收测试文件；为执行原字面判据，只额外改两个既有浏览器网关文件。",
+    "window": [
+      "## 每个文件由谁改，先做什么？",
+      "",
+      "本阶段新增一个验收测试文件；为执行原字面判据，只额外改两个既有浏览器网关文件。",
+      "",
+      "其余业务与采集产出路径仍只读；样本只读复验，改样本归回修阶段。"
+    ]
+  },
+  {
+    "n": 11,
+    "path": "requirements/phases/P12-逐需验收与真实完成.md",
+    "line": 523,
+    "providers": [
+      "kimi/pro"
+    ],
+    "roles": [
+      "blue"
+    ],
+    "resolved": true,
+    "total_lines": 705,
+    "exists": true,
+    "anchor_text": "八份写入件里七份被这条命令读到；build-code 方法正文的契约测试现有红项，不列入。",
+    "window": [
+      "```",
+      "",
+      "八份写入件里七份被这条命令读到；build-code 方法正文的契约测试现有红项，不列入。",
+      "最后一条沿用原兼容检查；效果仍靠真实撰写与独立读者，落点见下面的证据落点。",
+      ""
+    ]
+  },
+  {
+    "n": 12,
+    "path": "requirements/phases/P12-逐需验收与真实完成.md",
+    "line": 91,
+    "providers": [
+      "kimi/pro"
+    ],
+    "roles": [
+      "blue"
+    ],
+    "resolved": true,
+    "total_lines": 705,
+    "exists": true,
+    "anchor_text": "正例三（写作效果）。",
+    "window": [
+      "- 算通过：发现原文与位置可核，不是一句「没发现问题」。",
+      "",
+      "正例三（写作效果）。",
+      "- 输入：同一份原始需求原文，不给成品材料。",
+      "- 动作：一位没参与写作的人照契约自己写一份 decision-log、spec 与 phase 片段。"
+    ]
+  },
+  {
+    "n": 13,
+    "path": "requirements/phases/P11-去字面断言.md",
+    "line": 463,
+    "providers": [
+      "kimi/pro"
+    ],
+    "roles": [
+      "blue"
+    ],
+    "resolved": true,
+    "total_lines": 626,
+    "exists": true,
+    "anchor_text": "```sh",
+    "window": [
+      "Phase 9：",
+      "",
+      "```sh",
+      "node node_modules/vitest/vitest.mjs run tests/contract/reader-record.test.mjs tests/contract/phase-contract-prose.test.mjs tests/contract/authoring-shape.test.mjs tests/contract/authoring-budget.test.mjs tests/contract/phase-prose.test.mjs tests/contract/authoring-contract.test.mjs tests/contract/spec-analyze-classes.test.mjs",
+      "```"
+    ]
+  },
+  {
+    "n": 14,
+    "path": "requirements/phases/P8-全AC终验.md",
+    "line": 653,
+    "providers": [
+      "kimi/pro"
+    ],
+    "roles": [
+      "blue"
+    ],
+    "resolved": true,
+    "total_lines": 1179,
+    "exists": true,
+    "anchor_text": "- **RED/GREEN 门禁命令**：`node node_modules/vitest/vitest.mjs run tests/contract/page-audit-acceptance.test.mjs -t \"AC-C07-1\"`",
+    "window": [
+      "- **测试层级 / 技能**：定向契约测试（读原件加子进程）；预写测试＝本文件（作者＝验收执行者）；主技能 `skills/test-routing-advisor/SKILL.md`；测试变更请求＝none。",
+      "- **场景 / 夹具或服务**：正常＝前序原件齐、九维子项与覆盖矩阵齐；反向六例＝删 `untested_reason`、把 `TOOL_ERROR` 写成未测、加 `total_score`、删一个九维子项、把空或 `false` 或 `null` 耗时写成 0、把证据引用指到另一对象；接缝＝产出方是编排与证据阶段的输出和判据形状校验器，产物是逐条数组前三行，读取方是终末复核，分母是验收 1、2、6 的通过条件。",
+      "- **RED/GREEN 门禁命令**：`node node_modules/vitest/vitest.mjs run tests/contract/page-audit-acceptance.test.mjs -t \"AC-C07-1\"`",
+      "- **预期退出码**：RED nonzero; GREEN 0。",
+      "- **RED 目标失败**：ORACLE-P8-ACCEPTANCE 的验收 1 块：`expect(dimensions.every(d=>results.some(r=>r.dimension===d))).toBe(true)` 收到 false；`expect(NINE.every(d=>criteria.some(c=>c.subitem===d&&c.raw))).toBe(true)` 收到 false；`expect(cells.every(cell=>cell.state||cell.untested_reason)).toBe(true)` 收到 false；负例里 `expect(report.total_score).toBeUndefined()` 被 `E_TOTAL_SCORE` 提前拒；归因＝目标行为失败。"
+    ]
+  },
+  {
+    "n": 15,
+    "path": "requirements/phases/P8-全AC终验.md",
+    "line": 470,
+    "providers": [
+      "antigravity/flash"
+    ],
+    "roles": [
+      "blue"
+    ],
+    "resolved": true,
+    "total_lines": 1179,
+    "exists": true,
+    "anchor_text": "| `skills/isolated-browser-qa/scripts/browser-qa-session.mjs` | 在原同步守卫内补可选固定数据，供元素宽度、命中、减少动效与焦点采集 | 任务 3 的原判据采集 |",
+    "window": [
+      "| --- | --- | --- |",
+      "| `tests/contract/page-audit-acceptance.test.mjs` | 新增四个测试组：入口、三条离线块、真实环境、七行档位 | 本阶段门禁与阶段收口 |",
+      "| `skills/isolated-browser-qa/scripts/browser-qa-session.mjs` | 在原同步守卫内补可选固定数据，供元素宽度、命中、减少动效与焦点采集 | 任务 3 的原判据采集 |",
+      "| `skills/isolated-browser-qa/SKILL.md` | 说明同一份固定数据的边界 | 同上 |",
+      ""
+    ]
+  },
+  {
+    "n": 16,
+    "path": "requirements/phases/P4-报告接入与回修闭环.md",
+    "line": 292,
+    "providers": [
+      "antigravity/flash"
+    ],
+    "roles": [
+      "blue"
+    ],
+    "resolved": true,
+    "total_lines": 911,
+    "exists": true,
+    "anchor_text": "六条执行链，先写清谁在什么时候写：",
+    "window": [
+      "后续工作源按 P8 的真实发现改动。",
+      "",
+      "六条执行链，先写清谁在什么时候写：",
+      "1. 本 Phase 只从 P3 的受控页取一个文件，初始化第 13 条并核字节相等。",
+      "   来源页是 `tests/fixtures/page-audit/controlled-page.html`。"
+    ]
+  },
+  {
+    "n": 17,
+    "path": "requirements/phases/P12-逐需验收与真实完成.md",
+    "line": 508,
+    "providers": [
+      "codex/sol"
+    ],
+    "roles": [
+      "blue"
+    ],
+    "resolved": true,
+    "total_lines": 705,
+    "exists": true,
+    "anchor_text": "- 成功：不用自己裁冲突就能接手，并能指出一处「全绿但漏原需」的漏洞。",
+    "window": [
+      "- 动作：只读材料，回答五问：原需在哪、第一步做什么、输入是什么、",
+      "  成功与失败怎么看、失败找谁。",
+      "- 成功：不用自己裁冲突就能接手，并能指出一处「全绿但漏原需」的漏洞。",
+      "- 失败：必须猜业务，或只能复述编号与路径，或说不出任何漏洞。",
+      "- 证据：读者身份、原答、指出的漏洞、作者是否因此改动、改动后是否重读。"
+    ]
+  }
+]

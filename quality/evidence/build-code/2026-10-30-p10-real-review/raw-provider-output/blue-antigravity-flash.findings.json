@@ -1,0 +1,24 @@
+{
+  "findings": [
+    {
+      "severity": "major",
+      "path": "requirements/phases/P8-全AC终验.md",
+      "line": 470,
+      "issue": "P8 在正文改动表与机器块中将生产网关文件 skills/isolated-browser-qa/scripts/browser-qa-session.mjs 与 skills/isolated-browser-qa/SKILL.md 列为自身写入集（声称在原同步守卫内补可选固定数据以支持元素宽度、命中、动效与焦点采集），但在 P8 下属的四个任务卡（T021 至 T024）中，没有任何一张任务卡包含对这两个网关文件的实际修改路径、首改位置、命令或判定器（T021-T024 的文件/符号字段全为 tests/contract/page-audit-acceptance.test.mjs）。新读者执行 P8 时无法定位对网关文件的首改动作与恢复机制；同时，让全AC终验阶段（P8）作为跨批共享写者去修改已在 Phase 2 交付的生产/网关代码，违背了验收阶段独立只读验证的职责边界与合理性。",
+      "root_cause": "在规划 P8 真实环境用例执行时，为了满足元素宽度与焦点采集对固定数据的需要，临时将网关文件硬塞入 P8 的机器写入集，却既未在 P8 中拆解落实具体修改任务卡，也未将该网关数据采集能力归位到采集阶段（P2）。",
+      "recommendation": "将 skills/isolated-browser-qa/scripts/browser-qa-session.mjs 和 skills/isolated-browser-qa/SKILL.md 移出 P8 的写入集。若网关同步守卫与元素采集数据能力确需扩展，应在唯一的网关写主 Phase 2（真实采集与失败语义）中统一设计并提供；或者在 P8 中纯通过测试用例自身夹具/CDP 桩注入所需数据，保持 P8 纯粹只写验收测试与证据记录。",
+      "evidence_kind": "direct",
+      "evidence": "P8-全AC终验.md:470 声明『skills/isolated-browser-qa/scripts/browser-qa-session.mjs | 在原同步守卫内补可选固定数据，供元素宽度、命中、减少动效与焦点采集 | 任务 3 的原判据采集』，并在 :1170 列入写入集；但任务 3（T023，:726）的『文件 / 符号』仅有 tests/contract/page-audit-acceptance.test.mjs，且 :729 明确声明『边界 / 禁止改动：不改受控页与校准页；不改 C05 样本；不改规格正文...』，四张卡均无网关文件任务。覆盖范围：审阅 P8-全AC终验.md 全文四任务卡及其与 P2 写入集边界；未实际运行测试脚本。"
+    },
+    {
+      "severity": "major",
+      "path": "requirements/phases/P4-报告接入与回修闭环.md",
+      "line": 292,
+      "issue": "P4 在写入集中包含 tests/fixtures/page-audit/controlled-work.html 且正文明确声明直接从 P3 的 tests/fixtures/page-audit/controlled-page.html 复制初始化，但在 Phase 索引与 P4 正文声明中，P4 依赖仅声明了 P1，漏掉了直接前置生产者 P3。更严重的是，P4 设定了受控缺陷演练跨批来回调用：P4 只完成初始化，九类检出留待第七批的 P8 运行后『再路由回本 Phase 最小改该源码』，但 P4 排在第四批且在 P8 开工前必须交付交回，导致 P4 与 P8 之间出现跨批次的时间循环耦合与共享写者悬空。",
+      "root_cause": "试图在一个线性的 Phase 依赖批次（P4 在 Batch 4，P8 在 Batch 7）中构造跨阶段的双向回修演练闭环，既漏掉了对输入夹具生产者 P3 的前置依赖声明，又混淆了 Phase 的交付终态与后续验收阶段的执行时机。",
+      "recommendation": "在 phases/index.md 与 P4 依赖中补充声明 P3（以合法取得 controlled-page.html）；同时解耦 P4 与 P8 的回修闭环依赖：P4 专注完成样例 A 的真实代码缺陷修复（SimWorkbench.tsx），而 controlled-work.html 的受控演练修复可在 P4 内部完成自验证或明确将修后基线随 P4 一同交付，避免在 P8 运行时反向要求已交回的 P4 重新开工写文件。",
+      "evidence_kind": "direct",
+      "evidence": "P4-报告接入与回修闭环.md:292-298 规定：『1. 本 Phase 只从 P3 的受控页取一个文件，初始化第 13 条并核字节相等。来源页是 tests/fixtures/page-audit/controlled-page.html。 2. P8 在工作副本真实运行原九类...再路由回本 Phase。 3. 本 Phase 只按真实发现最小改该源码；P8 观察窗口内本 Phase 不写。』而 16-phase_index.md:79 P4 依赖仅有 P1，且 :27 规定『第七批开 P8，要等 P1 到 P7 交回』。覆盖范围：审阅 P4 与 P8 及 phase_index 的依赖和批次声明；未实际运行浏览器回修。"
+    }
+  ]
+}

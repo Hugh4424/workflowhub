@@ -1,0 +1,89 @@
+--- phase-fragment-v1.md	2026-10-31 09:07:14
++++ phase-fragment-v2.md	2026-10-31 09:18:06
+@@ -61,7 +61,7 @@
+        判前知道标签；
+        消费者是作者/实现者或只复述命令；
+        缺基线。
+-   - 三者缺一写 `incomplete` 与缺口；本节不另造验收编号。
++   - 判据、成功信号、失败信号三者缺一写 `incomplete` 与缺口；本节不另造验收编号。
+ 
+ 2. **场景**：正常场景和反向场景都要写清输入、动作与预期。
+    - **正常场景**：试点 Phase P11 的真实交付 A；
+@@ -85,12 +85,18 @@
+        本机认证 worktree，路径同任务根，当前 HEAD `48a15f02`（2026-10-31 实读），执行前核 `git status`；
+        A/B 各放仓外隔离 worktree，不用本工作树当 A/B；
+        若该 Phase 依赖真实外部服务或页面，按原条件执行并写明用户是否在场；
+-       盲判本身不需要用户在场，但需要独立判定者。
++       盲判本身不需要用户在场，但需要独立判定者；
++       消费者那一次默认也不需要用户在场；若 P11 的真实消费场景必须用户操作，按原条件执行并写明；是否需要用户由主会话派发时确认（owner=主会话），不留给读者猜。
+    - **数据**：真实交付 A、绿而错变体 B、原始需求逐字文本、门禁命令与原始输出（判定者可读，标签除外）、盲包、判定答卷、消费者场景输入与基线（若改既有行为）；
+        A 由实现者提供，B 由红队提供，标签由第三方随机编号，答卷由判定者写，消费者记录由消费者写。
+-   - **构造与清理**：A/B 各放隔离 worktree；
++   - **构造与清理**：A 取 P11 当前交付（仓内当前字节；P11 开发已完成，正式审测尚待派发，四文件门禁当前 145 通过），由 P11 实施者提供；
++       若 P11 未实施或 A 取不到，停，回 build-plan，不代做 A，记 `incomplete` 与恢复条件；
++       B 由红队在 A 的副本上只改一处用户可观察行为，使同一门禁仍全绿；
++       A/B 各复制到仓外隔离目录（可称 worktree，做法同 `quality/evidence/build-code/2026-10-31-p11-bad-input/runbook.sh` 的仓外副本），保留 `tests/`、`runtime/`、`skills/`、`workflows/`、`specs/` 等相对结构，`node_modules` 软链回仓根；
++       门禁 cwd=A/B 各自根目录；在任务根跑只测 A，不是对 B 的控制；
++       标签由第三方随机编号并封存；盲包=两份交付目录、验收节、原始需求、门禁命令与输出、清单（路径+sha256），不含标签映射；哈希用 `shasum -a 256`；拆封前判定者不看映射；
+        盲包与拆封记录由第三方保存；
+-       A/B 所在 worktree 随原件一并保留，不删除、不覆写；只关闭其中启动的服务；
++       A/B 所在目录随原件一并保留，不删除、不覆写；只关闭其中启动的服务；
+        A/B 原件、失败输出、答卷、消费者记录保留，不删不改。
+    - **拿不到时**：记 `unavailable` 或 `incomplete` 与原因，不写 `N/A` 蒙过去。
+    - **规模与脱敏**：判定对象是两份交付、一份原始需求和一次消费者场景，不是数据集；
+@@ -99,8 +105,8 @@
+ 
+ 4. **用例**：每条用例写编号、对应验收、执行命令或操作、预期结果与判定方式；命令不是判定器。
+    门禁命令与九个判定器的逐条清单在「怎么验证？」；用例 1 按那张表逐个跑，不按文件总数笼统算。
+-   - **用例 1（控制有效）**：对 B 跑 P11 的四文件门禁（命令见「怎么验证？」）与表列九个判定器；
+-       预期退出码 0，且九个判定器各有具名通过项；
++   - **用例 1（控制有效）**：对 B 跑 P11 的四文件门禁（命令见「怎么验证？」），并核表列九个判定器全部通过（八个具名块各有通过项；ORACLE-C07-TCR 由四文件门禁整体承载）；
++       预期退出码 0，且八个具名块各有具名通过项、C07-TCR 无红；
+        判定方式=原始输出、退出码与逐判定器通过项（`--reporter=verbose` 可看到每个具名块）。
+        若 B 失败（任一门禁或任一判定器红），控制无效，本 Phase 不能判效果。
+    - **用例 2（做对盲判）**：判定者只读验收、原始需求、A/B、门禁命令与原始输出（不含标签），先写「用户应看到什么」「哪类错必须被拒绝」和「门禁为何区分不了」，再标 A/B 并写理由；
+@@ -197,18 +203,19 @@
+ 
+ **门禁命令（真实可执行；2026-10-31 实跑）**
+ 
+-- 材料门禁（改完 P11 验收与 spec 行后跑；只证材料集仍可读，不证效果）：
++- 材料门禁（在任务根跑；改完 P11 验收与 spec 行后跑；只证材料集仍可读，不证效果）：
+   `node /Users/Hugh/Hugh/Project/workflowhub/tools/cli/run-checks.mjs --material-root /Users/Hugh/Hugh/Project/workflowhub-workflowhub-ui-frontend-c07-real-page-verification-20261028/specs/workflowhub-ui-frontend-c07-real-page-verification-20261028`
+-  看到：退出 0；`[run-checks][material] PASS ... phase_count=12 task_count=36 errors=0`；`ALL CHECKS PASSED`。
+-- 试点 Phase 门禁（P11 的 `gate_cmd`）：
++  看到：退出 0、`errors=0`、`ALL CHECKS PASSED`；`phase_count=12`、`task_count=36` 是 2026-10-31 改动前实读对照，不是通过条件；本次只改 P11 验收与 spec 一行，计数应不变，变了先查是否新增 Phase/Task。
++- 试点 Phase 门禁（P11 的 `gate_cmd`；在 A/B 各自根目录跑，`node_modules` 软链回仓根）：
+   `node node_modules/vitest/vitest.mjs run tests/contract/page-audit-doc-contract.test.mjs tests/contract/acceptance-plan.test.mjs tests/contract/n11-plan-quality.test.mjs tests/contract/n11-acceptance-rules.test.mjs`
+   看到：退出 0；`Test Files 4 passed (4)`、`Tests 145 passed (145)`。
++  核具名块：同一条命令后加 `--reporter=verbose`，看到每个 `describe` 名与通过项；默认输出只给文件级总数。
+ 
+-**P11 承接的判定器（逐条列全；B 必须全部通过）**
++**P11 承接的判定器（逐条列全；八个具名块 + 一个 Phase 级；B 必须全部通过）**
+ 
+ | 判定器 | 承载文件与具名块 | 判什么 |
+ | --- | --- | --- |
+-| `ORACLE-C07-TCR` | `phases/P11-去字面断言.md` 机器字段 `oracle` | P11 迁移整体：五条迁移断言各被单点坏输入判红、真实交付 94 通过 |
++| `ORACLE-C07-TCR` | `phases/P11-去字面断言.md` 机器字段 `oracle`；执行入口=下面四文件门禁（P11 的 `gate_cmd`），不另设测试文件 | P11 迁移整体：五条迁移断言各被单点坏输入判红、真实交付 94 通过 |
+ | `ORACLE-PAGE-AUDIT-DOC` | `tests/contract/page-audit-doc-contract.test.mjs`：`page-audit.md judgment pack`、`page-audit method wiring` | 判据正文十一节与两处方法接线 |
+ | `ORACLE-ACCEPT-PLAN` | `tests/contract/acceptance-plan.test.mjs`：`ORACLE-ACCEPT-PLAN` | 七字段证据计划与缺项 |
+ | `ORACLE-N11-CRITERIA-LOCK` | `tests/contract/n11-plan-quality.test.mjs`：`ORACLE-N11-CRITERIA-LOCK` | 三件套与判据锁 |
+@@ -218,8 +225,8 @@
+ | `ORACLE-N11-SKIP-VISIBLE` | 同文件：`ORACLE-N11-ACCEPT-SCOPE ORACLE-N11-SKIP-VISIBLE` | 跳过留在分母 |
+ | `ORACLE-N11-TIER-MINIMAL` | 同文件：`ORACLE-N11-ACCEPT-SCOPE ORACLE-N11-TIER-MINIMAL unknown fallback` | 未知边界不自动升全链路 |
+ 
+-- **按文件是四个、按具名块是九个**：P11 原文按测试文件称「四个判定器各有具名通过项」；本表把四个文件里的九个具名判定器块逐条列出，避免漏项。
+-- **两个集合别混**：`ORACLE-EFFECT-BLIND` 是本 Phase 判答卷的判定器，不参与「B 全绿」；上表九个是 P11 的判定器，B 必须全部通过。
++- **按文件是四个、按判定器是九个**：四个文件里八个具名块，加 P11 机器字段的 Phase 级 `ORACLE-C07-TCR`；C07-TCR 不另设测试，执行入口就是四文件门禁，不把它当第九个测试块。
++- **两个集合别混**：`ORACLE-EFFECT-BLIND` 是本 Phase 判答卷的判定器，不参与「B 全绿」；上表九个（八个具名块 + `ORACLE-C07-TCR`）是 P11 的判定器，B 必须全部通过。
+ 
+ | 目标 | 任务 | 角色 | gate_cmd 与预期退出码 | 判据与证据路径 |
+ | --- | --- | --- | --- | --- |
+@@ -266,7 +273,7 @@
+ - **消费者**: 最终验收 Phase 作者与 build-code 终末（必须与 `phases/index.md` 的 consumer 逐字一致；
+     index 未提供，unknown）
+ - **gate_cmd**: `node node_modules/vitest/vitest.mjs run tests/contract/page-audit-doc-contract.test.mjs tests/contract/acceptance-plan.test.mjs tests/contract/n11-plan-quality.test.mjs tests/contract/n11-acceptance-rules.test.mjs`
+-    （P11 门禁；预期退出 0、四文件 145 通过；只证控制有效，不证效果；语义判定仍 `只能人读`）
++    （P11 门禁；在 A/B 各自根目录跑，`node_modules` 软链回仓根；预期退出 0、四文件 145 通过；只证控制有效，不证效果；语义判定仍 `只能人读`）
+ - **oracle**: ORACLE-EFFECT-BLIND（判答卷必填项；不参与 B 的绿。P11 的九个判定器见「怎么验证？」表）
+ - **evidence_path**: `quality/evidence/workflowhub-ui-frontend-c07-real-page-verification-20261028/P1-effect/verdict.md`
+     （计划路径，未生成前按缺件记；owner=build-code 终末）

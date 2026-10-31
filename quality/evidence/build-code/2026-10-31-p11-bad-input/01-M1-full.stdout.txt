@@ -1,0 +1,149 @@
+
+ RUN  v2.1.9 /private/tmp/p11-badinput-20261031
+
+ ❯ tests/contract/acceptance-plan.test.mjs (75 tests | 29 failed) 66ms
+   × ORACLE-ACCEPT-PLAN > real templates and planning steps carry seven fields and truthful incomplete instructions 2ms
+     → invalid 成本类别
+   × ORACLE-ACCEPT-PLAN > rejects remove of the spec example's 判什么 1ms
+     → invalid 成本类别
+   × ORACLE-ACCEPT-PLAN > rejects rename of the spec example's 判什么 0ms
+     → invalid 成本类别
+   × ORACLE-ACCEPT-PLAN > rejects empty of the spec example's 判什么 0ms
+     → invalid 成本类别
+   × ORACLE-ACCEPT-PLAN > rejects placeholder of the spec example's 判什么 1ms
+     → invalid 成本类别
+   × ORACLE-ACCEPT-PLAN > rejects remove of the spec example's 怎么判 0ms
+     → invalid 成本类别
+   × ORACLE-ACCEPT-PLAN > rejects rename of the spec example's 怎么判 0ms
+     → invalid 成本类别
+   × ORACLE-ACCEPT-PLAN > rejects empty of the spec example's 怎么判 0ms
+     → invalid 成本类别
+   × ORACLE-ACCEPT-PLAN > rejects placeholder of the spec example's 怎么判 0ms
+     → invalid 成本类别
+   × ORACLE-ACCEPT-PLAN > rejects remove of the spec example's 证据从哪来 0ms
+     → invalid 成本类别
+   × ORACLE-ACCEPT-PLAN > rejects rename of the spec example's 证据从哪来 0ms
+     → invalid 成本类别
+   × ORACLE-ACCEPT-PLAN > rejects empty of the spec example's 证据从哪来 0ms
+     → invalid 成本类别
+   × ORACLE-ACCEPT-PLAN > rejects placeholder of the spec example's 证据从哪来 0ms
+     → invalid 成本类别
+   × ORACLE-ACCEPT-PLAN > rejects remove of the spec example's 谁提供 0ms
+     → invalid 成本类别
+   × ORACLE-ACCEPT-PLAN > rejects rename of the spec example's 谁提供 0ms
+     → invalid 成本类别
+   × ORACLE-ACCEPT-PLAN > rejects empty of the spec example's 谁提供 0ms
+     → invalid 成本类别
+   × ORACLE-ACCEPT-PLAN > rejects placeholder of the spec example's 谁提供 0ms
+     → invalid 成本类别
+   × ORACLE-ACCEPT-PLAN > rejects remove of the spec example's 何时能拿到 0ms
+     → invalid 成本类别
+   × ORACLE-ACCEPT-PLAN > rejects rename of the spec example's 何时能拿到 0ms
+     → invalid 成本类别
+   × ORACLE-ACCEPT-PLAN > rejects empty of the spec example's 何时能拿到 0ms
+     → invalid 成本类别
+   × ORACLE-ACCEPT-PLAN > rejects placeholder of the spec example's 何时能拿到 0ms
+     → invalid 成本类别
+   × ORACLE-ACCEPT-PLAN > rejects remove of the spec example's 成本类别 1ms
+     → expected '证据计划：判什么=本条首句的非法与合法配置结果；怎么判=验证中的ORACL…' not to be '证据计划：判什么=本条首句的非法与合法配置结果；怎么判=验证中的ORACL…' // Object.is equality
+   × ORACLE-ACCEPT-PLAN > rejects rename of the spec example's 成本类别 0ms
+     → expected '证据计划：判什么=本条首句的非法与合法配置结果；怎么判=验证中的ORACL…' not to be '证据计划：判什么=本条首句的非法与合法配置结果；怎么判=验证中的ORACL…' // Object.is equality
+   × ORACLE-ACCEPT-PLAN > rejects empty of the spec example's 成本类别 0ms
+     → expected '证据计划：判什么=本条首句的非法与合法配置结果；怎么判=验证中的ORACL…' not to be '证据计划：判什么=本条首句的非法与合法配置结果；怎么判=验证中的ORACL…' // Object.is equality
+   × ORACLE-ACCEPT-PLAN > rejects placeholder of the spec example's 成本类别 0ms
+     → expected '证据计划：判什么=本条首句的非法与合法配置结果；怎么判=验证中的ORACL…' not to be '证据计划：判什么=本条首句的非法与合法配置结果；怎么判=验证中的ORACL…' // Object.is equality
+   × ORACLE-ACCEPT-PLAN > rejects remove of the spec example's 拿不到怎么办 1ms
+     → expected [Function] to throw error including 'invalid 拿不到怎么办' but got 'invalid 成本类别'
+   × ORACLE-ACCEPT-PLAN > rejects rename of the spec example's 拿不到怎么办 0ms
+     → expected [Function] to throw error including 'invalid 拿不到怎么办' but got 'invalid 成本类别'
+   × ORACLE-ACCEPT-PLAN > rejects empty of the spec example's 拿不到怎么办 0ms
+     → expected [Function] to throw error including 'invalid 拿不到怎么办' but got 'invalid 成本类别'
+   × ORACLE-ACCEPT-PLAN > rejects placeholder of the spec example's 拿不到怎么办 0ms
+     → expected [Function] to throw error including 'invalid 拿不到怎么办' but got 'invalid 成本类别'
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 29 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > real templates and planning steps carry seven fields and truthful incomplete instructions
+Error: invalid 成本类别
+ ❯ readEvidenceFields tests/contract/acceptance-plan.test.mjs:14:110
+     12|   if (!line) throw new Error('missing evidence plan');
+     13|   const fields = Object.fromEntries(line.slice(line.indexOf('证据计划…
+     14|   for (const label of labels) if (!fields[label]?.trim() || /占位|待填…
+       |                                                                                                              ^
+     15|   return fields;
+     16| }
+ ❯ tests/contract/acceptance-plan.test.mjs:69:28
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/29]⎯
+
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > rejects remove of the spec example's 判什么
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > rejects rename of the spec example's 判什么
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > rejects empty of the spec example's 判什么
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > rejects placeholder of the spec example's 判什么
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > rejects remove of the spec example's 怎么判
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > rejects rename of the spec example's 怎么判
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > rejects empty of the spec example's 怎么判
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > rejects placeholder of the spec example's 怎么判
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > rejects remove of the spec example's 证据从哪来
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > rejects rename of the spec example's 证据从哪来
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > rejects empty of the spec example's 证据从哪来
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > rejects placeholder of the spec example's 证据从哪来
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > rejects remove of the spec example's 谁提供
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > rejects rename of the spec example's 谁提供
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > rejects empty of the spec example's 谁提供
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > rejects placeholder of the spec example's 谁提供
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > rejects remove of the spec example's 何时能拿到
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > rejects rename of the spec example's 何时能拿到
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > rejects empty of the spec example's 何时能拿到
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > rejects placeholder of the spec example's 何时能拿到
+Error: invalid 成本类别
+ ❯ readEvidenceFields tests/contract/acceptance-plan.test.mjs:14:110
+     12|   if (!line) throw new Error('missing evidence plan');
+     13|   const fields = Object.fromEntries(line.slice(line.indexOf('证据计划…
+     14|   for (const label of labels) if (!fields[label]?.trim() || /占位|待填…
+       |                                                                                                              ^
+     15|   return fields;
+     16| }
+ ❯ tests/contract/acceptance-plan.test.mjs:91:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/29]⎯
+
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > rejects remove of the spec example's 成本类别
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > rejects rename of the spec example's 成本类别
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > rejects empty of the spec example's 成本类别
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > rejects placeholder of the spec example's 成本类别
+AssertionError: expected '证据计划：判什么=本条首句的非法与合法配置结果；怎么判=验证中的ORACL…' not to be '证据计划：判什么=本条首句的非法与合法配置结果；怎么判=验证中的ORACL…' // Object.is equality
+ ❯ tests/contract/acceptance-plan.test.mjs:89:23
+     87|       const replacement = { remove: '', rename: 'unknown_' + label + '…
+     88|       const bad = source.replace(new RegExp(label + '=[^；\\n]*'), rep…
+     89|       expect(bad).not.toBe(source);
+       |                       ^
+     90|       expect(() => readEvidenceFields(bad)).toThrow('invalid ' + label…
+     91|       expect(Object.keys(readEvidenceFields(source))).toEqual(expect.a…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/29]⎯
+
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > rejects remove of the spec example's 拿不到怎么办
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > rejects rename of the spec example's 拿不到怎么办
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > rejects empty of the spec example's 拿不到怎么办
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > rejects placeholder of the spec example's 拿不到怎么办
+AssertionError: expected [Function] to throw error including 'invalid 拿不到怎么办' but got 'invalid 成本类别'
+
+Expected: "invalid 拿不到怎么办"
+Received: "invalid 成本类别"
+
+ ❯ tests/contract/acceptance-plan.test.mjs:90:45
+     88|       const bad = source.replace(new RegExp(label + '=[^；\\n]*'), rep…
+     89|       expect(bad).not.toBe(source);
+     90|       expect(() => readEvidenceFields(bad)).toThrow('invalid ' + label…
+       |                                             ^
+     91|       expect(Object.keys(readEvidenceFields(source))).toEqual(expect.a…
+     92|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/29]⎯
+
+ Test Files  1 failed (1)
+      Tests  29 failed | 46 passed (75)
+   Start at  08:38:37
+   Duration  191ms (transform 23ms, setup 0ms, collect 27ms, tests 66ms, environment 0ms, prepare 27ms)
+

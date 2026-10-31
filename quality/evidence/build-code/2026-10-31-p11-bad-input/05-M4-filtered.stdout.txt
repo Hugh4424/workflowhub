@@ -1,0 +1,38 @@
+
+ RUN  v2.1.9 /private/tmp/p11-badinput-20261031
+
+ ❯ tests/contract/n11-plan-quality.test.mjs (19 tests | 1 failed | 18 skipped) 11ms
+   × ORACLE-N11-CRITERIA-LOCK > rejects missing expected_exit 11ms
+     → expected [] to deep equally contain { phase_id: 'P1', …(3) }
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/n11-plan-quality.test.mjs > ORACLE-N11-CRITERIA-LOCK > rejects missing expected_exit
+AssertionError: expected [] to deep equally contain { phase_id: 'P1', …(3) }
+
+- Expected: 
+Object {
+  "field": "expected_exit",
+  "path": "phases/P1-行为结果.md",
+  "phase_id": "P1",
+  "task_id": "T001",
+}
+
++ Received: 
+Array []
+
+ ❯ tests/contract/n11-plan-quality.test.mjs:35:84
+     33|  for(const field of ['RED/GREEN gate_cmd','expected_exit']) it('reject…
+     34|   const good=authorExampleMaterials();expect(validatePostPhaseContract…
+     35|   expect(validatePostPhaseContract(mutatePhaseField(good,field)).facts…
+       |                                                                                    ^
+     36|  });
+     37| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 18 skipped (19)
+   Start at  08:38:40
+   Duration  154ms (transform 28ms, setup 0ms, collect 34ms, tests 11ms, environment 0ms, prepare 29ms)
+

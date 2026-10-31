@@ -1,0 +1,1 @@
+结构验收 PASS：宪法 22 条 + checklist 锚点全可达 + README 三段 + 文档三件 + GLOSSARY 术语/denylist 合规
