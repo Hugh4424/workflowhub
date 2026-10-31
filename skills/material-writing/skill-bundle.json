@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "skill": "material-writing",
+  "files": [
+    "SKILL.md"
+  ],
+  "sources": [
+    {
+      "path": "../catalog.yaml#skills.material-writing"
+    }
+  ]
+}

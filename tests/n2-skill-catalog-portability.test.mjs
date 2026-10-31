@@ -329,6 +329,23 @@ describe("ORACLE-N4-REPORT-ONLY writing reports", () => {
     expect(checkSkillConsistency(root).failures).toEqual([]);
   });
 
+  it("keeps indented machine-field continuations out of the wide prose line count", () => {
+    const root = fixture();
+    const path = AUTHORING_TEMPLATES[1];
+    const diagnostic = () => {
+      const reports = checkSkillConsistency(root).reports.filter(row => row.startsWith(`material-authoring ${path}:`) && row.includes("超80字正文行"));
+      expect(reports).toHaveLength(1);
+      return reports[0];
+    };
+    const field = `- **动作**：${"机".repeat(90)}\n  续行${"器".repeat(90)}\n`;
+    put(root, path, field);
+    expect(diagnostic()).toContain("超80字正文行=0");
+    put(root, path, `前文${"字".repeat(90)}\n` + field);
+    expect(diagnostic()).toContain("超80字正文行=1");
+    put(root, path, `- **动作**：短\n  续行${"器".repeat(90)}\n`);
+    expect(diagnostic()).toContain("超80字正文行=0");
+  });
+
   it("distinguishes a readable empty index from an unreadable template without inventing presence", () => {
     const root = fixture();
     put(root, indexPath, "");

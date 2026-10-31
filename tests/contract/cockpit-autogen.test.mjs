@@ -397,7 +397,7 @@ function contractPhase(phase, cards) {
    'RED/GREEN gate_cmd':'`'+command+'`',expected_exit:'RED nonzero; GREEN 0','RED target failure':'ORACLE-CARDS expected result 1; result 0 assertion fails.',
    'GREEN oracle':'ORACLE-CARDS actual result is 1.',Evidence:'Actual output and exit; no prefilled pass.','STOP / recovery':'Preserve failure and return to original developer.',
    'Coverage limit':'Local card fixture only, no real user completion.',Done:acs.join(', ')+' has actual result and evidence.'};
-  return '### '+t.id+' — '+t.title+'\n\n'+Object.entries(fields).map(([k,v])=>'- **'+k+'**: '+v).join('\n');
+  return '### '+t.id+' — '+t.title+'\n\n本卡交付「'+t.title+'」的可见结果，并保留失败时的原始错误。\n\n'+Object.entries(fields).map(([k,v])=>'- **'+k+'**: '+v).join('\n');
  }).join('\n\n');
  return '# Phase '+phase+' — 来源卡片\n\n- **Global spec**: `spec.md#实现设计全局权威`\n- **Write set**: '+files.map(x=>'`'+x+'`').join('; ')+'\n- **Dependency**: none\n- **Consumer**: reader\n- **gate_cmd**: `'+command+'`\n- **oracle**: ORACLE-CARDS\n- **evidence_path**: `quality/tests/cards.output`\n- **STOP**: Preserve missing input and failure.\n- **Done**: Real card source and actual result.\n\n## L0 — 来源卡片\n\nFR-CARD-001 / '+cards.flatMap(t=>t.acs).join(' / ')+'\n\n## L1 — executable contract\n\n'+tasks+'\n\n## L2 — reference\n\nControlled source fixture.\n';
 }
@@ -935,4 +935,97 @@ test('ORACLE-COCKPIT-GEN unreachable explicit commit claim is visibly rejected w
  const receipt=await task.captureCommand({cwd:work,slug:'real-phase-commit-before-invalid-claim',argv:['git','commit','-m','real owned phase implementation'],timeoutMs:10000});expect(receipt.exit_code).toBe(0);
  const {buildPageData}=await import('../../skills/answer-as-page/scripts/build-page-data.mjs'),d=(await buildPageData(f)).pageData,t=d.objects.find(o=>o.source_id==='T001');
  expect(t.implementation.text).toBe('提交声明无效（未核实）');expect(t.implementation.commit).toBeUndefined();expect(t.status.tone).toBe('fail');
+});
+
+test('ORACLE-COCKPIT-GEN new-shape materials keep packages, changes, decisions, tasks, risks and requirements', async () => {
+ const f=await fixture('new-shape-cockpit'),tpl=readFileSync('skills/spec-plan/templates/phase-template.md','utf8');
+ const block=name=>tpl.split(`<!-- card05-author-example:${name} -->`)[1].match(/```markdown\n([\s\S]*?)\n```/)[1];
+ const fill=text=>text.replaceAll('{{TASK_ID}}','new-shape-cockpit').replaceAll('{{TASK_ROOT}}','/owned/task').replaceAll('{{WORKTREE_ROOT}}','/owned/worktree');
+ const risk='\n## 有什么风险和未决？\n\n第一句回答：两条风险各有编号映射。\n\n- **风险 1**：真实导出丢失。\n- **未决 1**：真实加载入口未核实。\n';
+ const spec=fill(block('spec')).replace('- 验收 2 ↔ AC-EXAMPLE-002：文档复放判定。','- 验收 2 ↔ AC-EXAMPLE-002：文档复放判定。\n- 风险 1 ↔ RISK-01：真实导出丢失。\n- 未决 1 ↔ OPEN-01：真实加载入口未核实。')+risk;
+ const decision=`# 当前决策
+## 级别与路线
+- 推荐级别：复杂
+## 原始需求
+| source_id | 需求/约束 | 来源引用 | 落点 |
+| --- | --- | --- | --- |
+| R-001 | 让结果可判 | 示例需求；真实用户来源尚未提供 | 工作包 1 |
+| R-002 | 让说明可复放 | 示例需求；真实用户来源尚未提供 | 工作包 1 |
+## 每包交付什么，为什么这样定？
+### 工作包 1：示例结果
+本节回答：这包给谁什么结果。
+- **要交付什么**：模块结果与操作说明；消费者为独立读者。
+#### 决定 1：让下游取得方向
+本节回答：这项决定怎样让下游取得方向。
+- **做什么**：保留下游要用的方向与接口。
+- **不做什么**：不复制历史过程。
+- **风险**：来源缺失时保持 unknown。
+- **改动**：只改 src/owned.mjs。
+## 后来改了什么，原件在哪里？
+变更 1 最小决定：过程事实改为原件指针；受影响落点 工作包 1。
+## 还有什么没定，谁来定？
+| OI 编号 | 问题与来源 | 状态与处置 | 解决者与下一步 |
+| --- | --- | --- | --- |
+| OI-001 | 示例来源未提供 | open；保留缺口 | 主会话补来源 |
+## 旧编号对照
+| 正文编号 | 旧编号 | 说明 |
+| --- | --- | --- |
+| 需求 1 | R-001 | 示例需求 |
+| 需求 2 | R-002 | 示例需求 |
+| 工作包 1 | WP1 | 示例工作包 |
+| 决定 1 | ADR-001 | 示例决定 |
+| 变更 1 | U-001 | 示例变更 |
+| 未决 1 | OI-001 | 示例未决 |
+`;
+ writeFileSync(join(f.material,'spec.md'),spec);writeFileSync(join(f.material,'decision-log.md'),decision);
+ rmSync(join(f.material,'phases/P1-真实交付.md'),{force:true});
+ writeFileSync(join(f.material,'phases/index.md'),block('index')+'\n');
+ writeFileSync(join(f.material,'phases/P1-行为结果.md'),block('phase-behavior')+'\n');
+ writeFileSync(join(f.material,'phases/P2-文档核对.md'),block('phase-document')+'\n');
+ const {buildPageData}=await import('../../skills/answer-as-page/scripts/build-page-data.mjs'),built=await buildPageData({taskPath:f.taskPath,reportPath:f.reportPath});
+ expect(built.contractErrors).toEqual([]);
+ const kind=name=>built.pageData.objects.filter(object=>object.kind===name);
+ expect(kind('wp').map(object=>object.source_id)).toContain('WP1');
+ expect(kind('dec').map(object=>object.source_id)).toEqual(expect.arrayContaining(['ADR-001','U-001']));
+ expect(kind('task').map(object=>object.source_id)).toEqual(expect.arrayContaining(['T001','T002']));
+ expect(kind('risk').map(object=>object.source_id)).toEqual(expect.arrayContaining(['OI-001','RISK-01','OPEN-01']));
+ expect(kind('req').map(object=>object.source_id)).toEqual(expect.arrayContaining(['R-001','R-002']));
+});
+test('ORACLE-COCKPIT-GEN new-shape missing mappings stay visible as named gaps', async () => {
+ const f=await fixture('new-shape-missing'),tpl=readFileSync('skills/spec-plan/templates/phase-template.md','utf8');
+ const block=name=>tpl.split(`<!-- card05-author-example:${name} -->`)[1].match(/```markdown\n([\s\S]*?)\n```/)[1];
+ const fill=text=>text.replaceAll('{{TASK_ID}}','new-shape-missing').replaceAll('{{TASK_ROOT}}','/owned/task').replaceAll('{{WORKTREE_ROOT}}','/owned/worktree');
+ const risk='\n## 有什么风险和未决？\n\n第一句回答：两条风险没有编号映射。\n\n- **风险 1**：真实导出丢失。\n- **未决 1**：真实加载入口未核实。\n';
+ const spec=fill(block('spec'))+risk;
+ const decision=`# 当前决策
+## 级别与路线
+- 推荐级别：复杂
+## 原始需求
+| source_id | 需求/约束 | 来源引用 | 落点 |
+| --- | --- | --- | --- |
+| R-001 | 让结果可判 | 示例需求；真实用户来源尚未提供 | 工作包 1 |
+## 每包交付什么，为什么这样定？
+### 工作包 1：示例结果
+本节回答：这包给谁什么结果。
+- **要交付什么**：模块结果与操作说明；消费者为独立读者。
+#### 决定 1：让下游取得方向
+本节回答：这项决定怎样让下游取得方向。
+- **做什么**：保留下游要用的方向与接口。
+- **不做什么**：不复制历史过程。
+- **风险**：来源缺失时保持 unknown。
+- **改动**：只改 src/owned.mjs。
+## 后来改了什么，原件在哪里？
+变更 1 最小决定：过程事实改为原件指针；受影响落点 工作包 1。
+`;
+ writeFileSync(join(f.material,'spec.md'),spec);writeFileSync(join(f.material,'decision-log.md'),decision);
+ rmSync(join(f.material,'phases/P1-真实交付.md'),{force:true});
+ writeFileSync(join(f.material,'phases/index.md'),block('index')+'\n');
+ writeFileSync(join(f.material,'phases/P1-行为结果.md'),block('phase-behavior').replace('- **任务编号**：T001\n','')+'\n');
+ writeFileSync(join(f.material,'phases/P2-文档核对.md'),block('phase-document')+'\n');
+ const {buildPageData}=await import('../../skills/answer-as-page/scripts/build-page-data.mjs'),built=await buildPageData({taskPath:f.taskPath,reportPath:f.reportPath});
+ const reasons=built.gaps.map(gap=>gap.reason).join('\n');
+ expect(reasons).toContain('工作包 1');
+ expect(reasons).toContain('决定 1');
+ expect(reasons).toContain('变更 1');
+ expect(reasons).toContain('任务 1');
 });

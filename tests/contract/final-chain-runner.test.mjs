@@ -1,7 +1,7 @@
 // ORACLE-P2-CHAIN: N9 P2 T003/T004/T005, spec §7.1–7.3 and Appendix A.
 // Independent test owner; frozen build-prd/PLAN tests remain read-only.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, realpathSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, realpathSync, readFileSync, writeFileSync, mkdirSync, rmSync, cpSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,6 +13,7 @@ import { writeStageRow } from '../../runtime/task/task-store.mjs';
 import { captureCommand } from '../../runtime/interface/run-command.mjs';
 import { stageRuntimeCliMain } from '../../tools/cli/stage-runtime.mjs';
 import { evaluateWorkflowSteps, summarizeWorkflow } from '../../runtime/task/final-chain.mjs';
+import { countDecisionLogDecisions } from '../../runtime/task/final-chain-runner.mjs';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const roots = [];
 afterEach(() => { vi.restoreAllMocks(); for (const path of roots.splice(0)) rmSync(path, { recursive: true, force: true }); });
@@ -80,7 +81,18 @@ describe('final-chain kernel', () => {
 const NAMES=['原始需求','decision-log','调研方案','方案','spec','phase','代码实现','测试验证','最终审查','提交 PR'];
 const STATES=['completed','skipped','not_applicable','incomplete','unavailable'];
 const hash = text => createHash('sha256').update(text).digest('hex');
-async function report(options) { const api=await import('../../runtime/task/final-chain-runner.mjs'); return await api.runFinalChainCheck(options); }
+// Step definitions now come from the workflowhub install root by default. The
+// frozen fixtures kept their definitions inside their own repo, so they pass
+// that repo explicitly; production callers pass nothing and get the install.
+function definitionRootFor(options) {
+  if (options?.repo) return options.repo;
+  const materialRoot = String(options?.materialRoot ?? ''), at = materialRoot.lastIndexOf('/specs/');
+  return at > 0 ? materialRoot.slice(0, at) : ROOT;
+}
+async function report(options) {
+  const api=await import('../../runtime/task/final-chain-runner.mjs');
+  return await api.runFinalChainCheck(options?.workflowRoot === undefined ? {...options, workflowRoot:definitionRootFor(options)} : options);
+}
 function taskFixture({materials=true}={}) {
   const root=temporary(), taskPath=join(root,'task'), repo=join(root,'repo'), materialRoot=join(repo,'specs/owned-task');
   mkdirSync(materialRoot,{recursive:true});
@@ -220,9 +232,51 @@ describe('final-chain report',()=>{
     expect(m.declared_steps).toEqual(value.workflow_steps.map(({source,step_slug})=>({source,step_slug})));
     expect(m.step_attestation_denominator).not.toBe(53);expect(m.step_attestation_denominator).not.toBe(84);
   });
-  it('reports zero workflow input as null metrics and no completed workflow row',async()=>{
+  it('reports unreadable step definitions as undetermined with their reason instead of an empty list',async()=>{
     const f=taskFixture();const value=await report(f);
-    expect(value.workflow_steps).toEqual([]);expect(value.workflow_metrics).toBeNull();
+    expect(value.workflow_metrics).toBeNull();
+    expect(value.workflow_steps.map(row=>row.stage)).toEqual(['make-decision','build-plan','build-code']);
+    for(const row of value.workflow_steps){
+      expect(row).toMatchObject({state:'unavailable',judgment:'未判定',definition_status:'unreadable',step_slug:'<definition-unavailable>'});
+      expect(row.definition_reason).toContain('读不到步骤定义');
+    }
+    expect(value.limits.some(limit=>limit.startsWith('workflows/make-decision/steps.json: 读不到步骤定义'))).toBe(true);
+  });
+  it('reads step definitions from the installed workflowhub root, never from the business repo worktree',async()=>{
+    const f=taskFixture(),api=await import('../../runtime/task/final-chain-runner.mjs');
+    const declared=stage=>JSON.parse(readFileSync(join(ROOT,`workflows/${stage}/steps.json`),'utf8')).steps;
+    // The business repo has no workflows/ at all; the default root is this module's install.
+    const value=api.runFinalChainCheck({taskPath:f.taskPath,materialRoot:f.materialRoot});
+    const rows=value.workflow_steps.filter(row=>row.stage==='make-decision');
+    expect(rows.map(row=>row.step_slug)).toEqual(declared('make-decision').map(step=>step.step_slug));
+    expect(rows.some(row=>row.definition_status)).toBe(false);
+    expect(value.limits.join('\n')).not.toContain('读不到步骤定义');
+    expect(value.workflow_metrics?.step_attestation_denominator).toBe(['make-decision','build-plan','build-code'].reduce((total,stage)=>total+declared(stage).length,0));
+  });
+  it('prefers an explicit workflow root over the install location',async()=>{
+    const f=taskFixture();choice(f,'normal');controlledWorkflow(f);
+    const api=await import('../../runtime/task/final-chain-runner.mjs');
+    const value=api.runFinalChainCheck({taskPath:f.taskPath,materialRoot:f.materialRoot,workflowRoot:f.repo});
+    expect(value.workflow_steps.filter(row=>row.stage==='make-decision').map(row=>row.step_slug)).toEqual(['normal-only']);
+    expect(value.workflow_steps.some(row=>row.step_slug==='load-context')).toBe(false);
+  });
+  it('rejects a relative explicit workflow root instead of falling back to the business repo',async()=>{
+    const f=taskFixture(),api=await import('../../runtime/task/final-chain-runner.mjs');
+    expect(()=>api.runFinalChainCheck({taskPath:f.taskPath,materialRoot:f.materialRoot,workflowRoot:'workflows'})).toThrow(/workflowRoot must be absolute/);
+  });
+  it('keeps one unreadable stage undetermined while readable stages keep their real step rows',async()=>{
+    const f=taskFixture(),install=join(f.root,'install');cpSync(join(ROOT,'workflows'),join(install,'workflows'),{recursive:true});
+    rmSync(join(install,'workflows/make-decision/steps.json'));
+    const api=await import('../../runtime/task/final-chain-runner.mjs');
+    const value=api.runFinalChainCheck({taskPath:f.taskPath,materialRoot:f.materialRoot,workflowRoot:install});
+    const unreadable=value.workflow_steps.filter(row=>row.definition_status);
+    expect(unreadable.map(row=>row.stage)).toEqual(['make-decision']);
+    expect(unreadable[0].definition_reason).toContain(join(install,'workflows/make-decision/steps.json'));
+    const declared=stage=>JSON.parse(readFileSync(join(ROOT,`workflows/${stage}/steps.json`),'utf8')).steps.length;
+    expect(value.workflow_steps.filter(row=>row.stage==='build-plan')).toHaveLength(declared('build-plan'));
+    expect(value.workflow_steps.filter(row=>row.stage==='build-code')).toHaveLength(declared('build-code'));
+    expect(value.workflow_metrics.step_attestation_denominator).toBe(declared('build-plan')+declared('build-code'));
+    expect(value.workflow_metrics.declared_steps.some(row=>row.source==='workflows/make-decision/steps.json')).toBe(false);
   });
   it('distinguishes absent delivery declaration from a sourced no-delivery declaration',async()=>{
     const f=taskFixture();expect(ringAt(await report(f),10).state).toBe('unavailable');
@@ -725,12 +779,15 @@ describe('final-chain report explicit nested research source',()=>{
   });
 });
 
-async function ordinaryContractFixture() {
+async function ordinaryContractFixture({titles='archived'}={}) {
   const f=taskFixture();writerIdentity(f);choice(f,'normal');
   const command='node --test tests/owned.test.mjs';
-  const spec='# Controlled contract\n- **FR-001**：Visible owned result.\n- [ ] **AC-001 — visible result**\n  - **需求**：FR-001\n  - **通过条件**：visible result is returned.\n  - **失败条件**：result is lost.\n## 5. 功能需求\nFR-001 owns output.\n## 验收流程\nRead actual output.\n## 测试标准\nObserve success and failure.\n## 架构边界\nOnly owned source.\n## 实现设计（全局权威）\n### Code Anchors\n`README.md` owns visible output.\n### Interfaces and Failure Semantics\nReturn visible output and preserve failure.\n### Requirement-to-Task Trace\n| source | FR | AC | task | oracle |\n| --- | --- | --- | --- | --- |\n| R-001 | FR-001 | AC-001 | P1/T001 | ORACLE-P1 |\n### Global Verification Strategy\n`'+command+'`\n';
+  const sections=titles==='current'
+    ? '## 一页看懂：谁要什么结果，怎么算通过？\nFR-001 owns output.\n## 做成什么样？\nRead actual output.\n## 测试计划是什么？\nObserve success and failure.\n'
+    : '## 5. 功能需求\nFR-001 owns output.\n## 验收流程\nRead actual output.\n## 测试标准\nObserve success and failure.\n## 架构边界\nOnly owned source.\n';
+  const spec='# Controlled contract\n- **FR-001**：Visible owned result.\n- [ ] **AC-001 — visible result**\n  - **需求**：FR-001\n  - **通过条件**：visible result is returned.\n  - **失败条件**：result is lost.\n'+sections+'## 实现设计（全局权威）\n### Code Anchors\n`README.md` owns visible output.\n### Interfaces and Failure Semantics\nReturn visible output and preserve failure.\n### Requirement-to-Task Trace\n| source | FR | AC | task | oracle |\n| --- | --- | --- | --- | --- |\n| R-001 | FR-001 | AC-001 | P1/T001 | ORACLE-P1 |\n### Global Verification Strategy\n`'+command+'`\n';
   const index='# Phase index\n## Execution Index\n| phase | authority ref | semantic anchor | write set | dependency | consumer |\n| --- | --- | --- | --- | --- | --- |\n| `P1` | `phases/P1.md` | `phase-p1` | `README.md` | `none` | build-code |\n';
-  const phase=['# Phase P1 — owned result','- **Global spec**：`spec.md`','- **Write set**：`README.md`','- **Dependency**：none','- **Consumer**：build-code','## L0 — Outcome','- **gate_cmd**：`'+command+'`','- **expected_exit**：RED nonzero; GREEN 0','- **oracle**：ORACLE-P1','- **evidence_path**：quality/tests/owned.output','- **STOP**：preserve actual failure','- **Done**：real target result','## L1 — Contract','### T001 — deliver owned result','- **Source / FR / AC**：R-001 / FR-001 / AC-001','- **Files / symbols**：`README.md` symbol: N/A — fixture source text','- **Action**：return the owned result','- **Inputs**：owned input and a negative case','- **Outputs / failure**：visible output or explicit failure','- **Boundary / DO NOT TOUCH**：no external repository changes','- **Dependency**：none','- **Test tier / skill**：feature / backend-testing','- **Scenario / fixture or service**：owned local result','- **RED/GREEN gate_cmd**：`'+command+'`','- **expected_exit**：RED target nonzero; GREEN 0','- **RED target failure**：ORACLE-P1 assertion fails when result lost','- **GREEN oracle**：ORACLE-P1 visible output assertion','- **Evidence**：quality/tests/owned.output','- **STOP / recovery**：preserve failure and continue safe repair','- **Coverage limit**：no external provider quality','- **Done**：real result and evidence','## L2 — Removable reference','Owned fixture, not a workflow permit.',''].join('\n');
+  const phase=['# Phase P1 — owned result','- **Global spec**：`spec.md`','- **Write set**：`README.md`','- **Dependency**：none','- **Consumer**：build-code','## L0 — Outcome','- **gate_cmd**：`'+command+'`','- **expected_exit**：RED nonzero; GREEN 0','- **oracle**：ORACLE-P1','- **evidence_path**：quality/tests/owned.output','- **STOP**：preserve actual failure','- **Done**：real target result','## L1 — Contract','This Phase delivers one observable result and preserves explicit failure.','### T001 — deliver owned result','This card returns the observable owned result; missing input fails explicitly.','- **Source / FR / AC**：R-001 / FR-001 / AC-001','- **Files / symbols**：`README.md` symbol: N/A — fixture source text','- **Action**：return the owned result','- **Inputs**：owned input and a negative case','- **Outputs / failure**：visible output or explicit failure','- **Boundary / DO NOT TOUCH**：no external repository changes','- **Dependency**：none','- **Test tier / skill**：feature / backend-testing','- **Scenario / fixture or service**：owned local result','- **RED/GREEN gate_cmd**：`'+command+'`','- **expected_exit**：RED target nonzero; GREEN 0','- **RED target failure**：ORACLE-P1 assertion fails when result lost','- **GREEN oracle**：ORACLE-P1 visible output assertion','- **Evidence**：quality/tests/owned.output','- **STOP / recovery**：preserve failure and continue safe repair','- **Coverage limit**：no external provider quality','- **Done**：real result and evidence','## L2 — Removable reference','Owned fixture, not a workflow permit.',''].join('\n');
   put(f.materialRoot,'spec.md',spec);put(f.materialRoot,'phases/index.md',index);put(f.materialRoot,'phases/P1.md',phase);
   const script=put(f.root,'validatePostPhaseContract.mjs',`import{readFileSync}from'node:fs';import{join}from'node:path';import{validatePostPhaseContract}from${JSON.stringify(join(ROOT,'runtime/stage/stage-content-contracts.mjs'))};const root=process.argv[2],read=n=>readFileSync(join(root,n),'utf8');const result=validatePostPhaseContract({spec:read('spec.md'),index:read('phases/index.md'),phases:{'phases/P1.md':read('phases/P1.md')}});console.log(JSON.stringify(result));process.exitCode=result.ok?0:1;`);
   mkdirSync(join(f.taskPath,'quality/tests'),{recursive:true});
@@ -762,6 +819,13 @@ describe('final-chain report ordinary contract applicability',()=>{
     const value=await report(f);expect(ringAt(value,5).state).not.toBe('completed');
     expect(JSON.stringify([ringAt(value,5).basis,value.limits])).toMatch(/dependency|依赖|P999|无法|未取得|范围|适用/i);
   });
+  it('accepts the current question titles as well as the archived titles for the four spec reader sections',async()=>{
+    // Ring 5 completes only when all four required reader titles are present.
+    const archived=await ordinaryContractFixture({titles:'archived'});
+    expect(ringAt(await report(archived),5).state).toBe('completed');
+    const current=await ordinaryContractFixture({titles:'current'});
+    expect(ringAt(await report(current),5).state).toBe('completed');
+  });
 });
 
 // TCR259/263, independent264: only legal decision depth and observed Git paths.
@@ -775,6 +839,85 @@ describe('final-chain report legal decision heading depth',()=>{
     expect(receipt.exit_code).toBe(0);
     await writeStageRow(f.taskPath,{stage:'make-decision',source:`receipt: ${receipt.receipt_ref}; output: ${receipt.output_ref}`,evidence:{value:[{command:JSON.stringify(receipt.argv),exit_code:receipt.exit_code,failure_signature:'advisory actual nonempty file scan'}],reason:'Actual advisory checker, not an invented pass.'}});
     expect(ringAt(await report(f),2).state).toBe('completed');
+  });
+});
+describe('final-chain report current decision-log question titles',()=>{
+  async function titleFixture(unresolved='无真实未知。') {
+    const f=taskFixture();writerIdentity(f);
+    put(f.materialRoot,'decision-log.md',`# Controlled decision\n## 任务身份\n任务：owned-task\n## 原始需求\nR-001：实际原件与失败不伪造。\n## 每个包定了哪些决定？\n### 工作包 1 — owned result\n#### D-001 — owned bounded decision\n- **做什么**：只读真实原件。\n- **不做什么**：不虚构成功。\n- **风险**：来源不足必须暴露。\n- **改动**：只改当前已声明写集。\n- module: owned\n- requirement_ids: [R-001]\n- derived_from: []\n- artifacts: [owned.mjs]\n来源：quality/evidence/choice.md\n## 还有什么没定，谁来定？\n${unresolved}\n`);
+    choice(f,'small');
+    put(f.taskPath,'quality/evidence/choice.md','Controlled source: user chose bounded readback and preserving failures.\n');
+    const {captureCommand}=await import('../../runtime/interface/run-command.mjs');mkdirSync(join(f.taskPath,'quality/tests'),{recursive:true});
+    const receipt=await captureCommand({cwd:f.repo,recordDir:join(f.taskPath,'quality/tests'),slug:'owned-current-title-check',argv:[process.execPath,join(ROOT,'tools/cli/check-decision-log-chain.mjs'),'--file',join(f.materialRoot,'decision-log.md')]});
+    expect(receipt.exit_code).toBe(0);
+    await writeStageRow(f.taskPath,{stage:'make-decision',source:`receipt: ${receipt.receipt_ref}; output: ${receipt.output_ref}`,evidence:{value:[{command:JSON.stringify(receipt.argv),exit_code:receipt.exit_code,failure_signature:'advisory actual current-title scan'}],reason:'Actual advisory checker, not an invented pass.'}});
+    return f;
+  }
+  it('accepts the current question titles for the required decision-log sections',async()=>{
+    // Ring 2 completes only when all four required reader titles are present;
+    // ring 3 turns not_applicable only when the unresolved body is actually read.
+    const value=await report(await titleFixture()),ring=ringAt(value,2);
+    expect(ring.state).toBe('completed');
+    expect(ringAt(value,3).state).toBe('not_applicable');
+  });
+  it('still reads a real open item under the current unresolved title',async()=>{
+    const value=await report(await titleFixture('OI-1：真实来源未取得；主会话补原件。\n'));
+    expect(ringAt(value,3).state).toBe('unavailable');
+  });
+});
+describe('final-chain count current 决定 N headings and legacy mappings',()=>{
+  const log=mapped=>`# Controlled decision\n## 任务身份\n任务：owned-task\n## 原始需求\nR-001：实际原件与失败不伪造。\n## 工作包与决定\n### 工作包 1 — owned result\n#### 决定 1 — 只读真实原件\n#### 决定 2 — 保留失败\n## 未决项\n无真实未知。\n${mapped?`\n## 附录 A：旧编号对照\n\n| 决定 | 机器编号 | 工作包 |\n| --- | --- | --- |\n| 决定 1 | D-001 | 工作包 1 |\n| 决定 2 | ADR-002 | 工作包 1 |\n`:''}`;
+  async function currentFixture(mapped) {
+    const f=await boundDecisionScanFixture();
+    put(f.materialRoot,'decision-log.md',log(mapped));
+    await f.scan(f.decision);
+    return f;
+  }
+  it('counts mapped 决定 N once through the old-number appendix and keeps ring 2 completed',async()=>{
+    const f=await currentFixture(true),raw=readFileSync(join(f.materialRoot,'decision-log.md'),'utf8');
+    expect(countDecisionLogDecisions(raw)).toMatchObject({decision_count:2,current:true,unmapped:[]});
+    expect(ringAt(await report(f),2).state).toBe('completed');
+  });
+  it('counts unmapped 决定 N and reports the missing mapping instead of silently zero',async()=>{
+    const f=await currentFixture(false),raw=readFileSync(join(f.materialRoot,'decision-log.md'),'utf8');
+    const tally=countDecisionLogDecisions(raw);
+    expect(tally).toMatchObject({decision_count:2,current:true});
+    expect(tally.unmapped).toEqual(['1','2']);
+    const value=await report(f);
+    expect(ringAt(value,2).state).toBe('completed');
+    expect(JSON.stringify(value.limits)).toMatch(/旧编号对照|缺.*映射/);
+  });
+  it('does not double count one decision present as a heading, a 决定 N and a mapping row',()=>{
+    const mixed=['# Mixed material','## 工作包与决定','### D-001 — archived machine decision','#### 决定 1 — the same decision','## 附录 A：旧编号对照','| 决定 | 机器编号 |','| --- | --- |','| 决定 1 | D-001 |','| 决定 2 | ADR-002 |',''].join('\n');
+    expect(countDecisionLogDecisions(mixed)).toMatchObject({decision_count:2,current:true,unmapped:[]});
+  });
+  it('keeps a real archived decision-log at its exact old heading count',async()=>{
+    const archive=join(ROOT,'specs/archive/n9-final-chain-verification-20261020'),raw=readFileSync(join(archive,'decision-log.md'),'utf8');
+    const before=[...raw.matchAll(/^#{3,4}\s+(?:D|ADR)-\d+/gm)].length;
+    expect(before).toBe(13);
+    expect(countDecisionLogDecisions(raw)).toMatchObject({decision_count:before,current:false,unmapped:[]});
+    const f=await boundDecisionScanFixture(),receipt=await captureCommand({cwd:ROOT,recordDir:join(f.taskPath,'quality/tests'),slug:'archived-decision-scan',argv:[process.execPath,join(ROOT,'tools/cli/check-decision-log-chain.mjs'),'--file',join(archive,'decision-log.md')]});
+    expect(receipt.exit_code).toBe(0);
+    await writeStageRow(f.taskPath,{stage:'make-decision',source:`receipt: ${receipt.receipt_ref}; output: ${receipt.output_ref}`,evidence:{value:[{command:JSON.stringify(receipt.argv),exit_code:receipt.exit_code,receipt_ref:receipt.receipt_ref,output_ref:receipt.output_ref,failure_signature:'Actual archived decision-log scan'}],reason:'Real archived bytes under the old heading rule'}});
+    expect(ringAt(await report({...f,materialRoot:archive}),2).state).toBe('completed');
+  });
+});
+describe('final-chain current template title binding',()=>{
+  it('binds the accepted current titles to the real template headings',()=>{
+    const decision=readFileSync(join(ROOT,'skills/decision-log/templates/decision-log-template.md'),'utf8');
+    for(const title of ['## 每包交付什么，为什么这样定？','## 还有什么没定，谁来定？']) expect(decision).toContain(title);
+    const spec=readFileSync(join(ROOT,'skills/spec-specify/templates/spec-template.md'),'utf8');
+    for(const title of ['## 一页看懂：谁要什么结果，怎么算通过？','## 做成什么样？','## 测试计划是什么？','## 实现设计（全局权威）']) expect(spec).toContain(title);
+  });
+});
+describe('final-chain archived material title compatibility',()=>{
+  it('retains the archived decision-log and spec titles that the alias sets accept',()=>{
+    // The old-title branch above and the current-title branch both complete the
+    // same rings; this guard binds the real archive bytes to the archived names.
+    const base=join(ROOT,'specs/archive/workflowhub-build-code-efficiency-verify-merge-20261026');
+    const decision=readFileSync(join(base,'decision-log.md'),'utf8'),spec=readFileSync(join(base,'spec.md'),'utf8');
+    for(const title of ['工作包与决定','未决项']) expect(decision).toContain(title);
+    for(const title of ['功能需求','验收流程','测试标准','架构边界']) expect(spec).toContain(title);
   });
 });
 describe('final-chain report Unicode Git path identity',()=>{

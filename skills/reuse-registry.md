@@ -29,7 +29,8 @@
 | simplicity-guard | 同次包核最小路径、删前理由/行为、三问与有源归并；N3采用/排除读catalog absorbed来源，subtract/foundational同落P0/P1。 | [读取正文](simplicity-guard/SKILL.md) |
 | talk-with-zhipeng | 需要用户决定方向、风险或范围，组织真实问答。 | [读取正文](talk-with-zhipeng/SKILL.md) |
 | spec-prd | 把已确认方向写成任务组PRD与产品表达。 | [读取正文](spec-prd/SKILL.md) |
-| spec-specify | 从已确认决定起草规格与全局实现设计骨架，或查技能写作规范。 | [读取正文](spec-specify/SKILL.md) |
+| material-writing | 写任何材料前读唯一写作标准；写完最后一句后按「写完自检」逐条核。 | [读取正文](material-writing/SKILL.md) |
+| spec-specify | 从已确认决定起草规格与全局实现设计骨架，或查写作方法 Q01–Q13。 | [读取正文](spec-specify/SKILL.md) |
 | spec-clarify | 已有规格存在影响实施的歧义，需要澄清。 | [读取正文](spec-clarify/SKILL.md) |
 | spec-plan | 把实现设计写入规格，拆成各自可交付的Phase。 | [读取正文](spec-plan/SKILL.md) |
 | spec-analyze | 阶段结束核需求、材料、实现与证据是否一致。 | [读取正文](spec-analyze/SKILL.md) |

@@ -14,7 +14,10 @@ const roots=[];
 function temp(){const p=mkdtempSync(join(tmpdir(),"n10-material-"));roots.push(p);return p;}
 afterEach(()=>{for(const p of roots.splice(0))rmSync(p,{recursive:true,force:true});});
 function put(root,path,body){const target=join(root,path);mkdirSync(dirname(target),{recursive:true});writeFileSync(target,body);}
-function fixture(){const root=temp();const files=inspectMaterialWorkspace(N8).files;for(const [path,body] of Object.entries(files))put(root,path,body);return root;}
+// A copy of archived N8 keeps its archive identity in the path, so the material
+// contract applies the same diagnostic writing exemption as the archived original;
+// the copied bytes stay untouched.
+function fixture(){const root=join(temp(),"archive","n8-four-level-route-20261019");const files=inspectMaterialWorkspace(N8).files;for(const [path,body] of Object.entries(files))put(root,path,body);return root;}
 function run(args=[]){const env={...process.env};delete env.RUN_CHECKS_FORCE_FAIL_CHECKER;const argv=[process.execPath,join(ROOT,"tools/cli/run-checks.mjs"),...args];const r=spawnSync(argv[0],argv.slice(1),{cwd:ROOT,encoding:"utf8",env,timeout:30000});console.log(JSON.stringify({argv,cwd:ROOT,exit:r.status,stdout:r.stdout,stderr:r.stderr}));return {...r,output:`${r.stdout??""}${r.stderr??""}`};}
 describe("ORACLE-N10-MATERIAL-CONTRACT",()=>{
  it("T011 accepts real N8/N9 material and retains N2's two named errors",()=>{

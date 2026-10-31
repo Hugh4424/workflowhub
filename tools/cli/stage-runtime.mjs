@@ -14,9 +14,9 @@ import { bootstrapStage } from "../../runtime/stage/stage-context.mjs";
 import { openTask } from "../../runtime/task/task-handle.mjs";
 import { invokeRuntimeCommand, RUNTIME_BEHAVIORS } from "../../runtime/interface/runtime-facade.mjs";
 import { LOCAL_RUNNER_CONTRACT, LOCAL_SKILL_BUNDLE_CONTRACT } from "../../runtime/interface/runner-contract.mjs";
-import { readTaskTypeFromDecisionLog, validatePostPhaseContract } from "../../runtime/stage/stage-content-contracts.mjs";
+import { readTaskTypeFromDecisionLog, validatePostPhaseContract, phaseTaskProseGaps } from "../../runtime/stage/stage-content-contracts.mjs";
 import { projectPortableWorkflowStatus, runPortableWorkflow } from "../../runtime/task/portable-workflow-run.mjs";
-import { CURRENT_MATERIAL_FILES, materialFilesForCohort, phaseFilesFromIndex } from "../../runtime/task/material-workspace.mjs";
+import { CURRENT_MATERIAL_FILES, materialFilesForCohort, phaseFilesFromIndex, isPhaseMaterialFile } from "../../runtime/task/material-workspace.mjs";
 import { readTaskFacts, STAGE_ROW_KEYS, writeStageRow } from "../../runtime/task/task-store.mjs";
 import { inspectWorkspace } from "../../runtime/interface/workspace-check.mjs";
 import { captureCommand } from "../../runtime/interface/run-command.mjs";
@@ -39,8 +39,6 @@ const DESIGN_ARTIFACTS = Object.freeze({
   "build-plan": new Set(["plan.md", "tasks.md"]),
 });
 
-const POST_PHASE_ARTIFACT = /^phases\/P[1-9][0-9]*\.md$/;
-
 const PHASE_PROGRESS_ONLY_SOURCE = "phase-progress-cursor";
 
 function isDesignArtifact(stage, name, activationCohort = "pre", materials = {}) {
@@ -48,7 +46,7 @@ function isDesignArtifact(stage, name, activationCohort = "pre", materials = {})
     return materialFilesForCohort(activationCohort, materials, { stage }).includes(name);
   }
   if (stage === "build-plan" && activationCohort === "post") {
-    return name === "spec.md" || name === "phases/index.md" || POST_PHASE_ARTIFACT.test(name ?? "");
+    return name === "spec.md" || name === "phases/index.md" || isPhaseMaterialFile(name);
   }
   return DESIGN_ARTIFACTS[stage]?.has(name) ?? false;
 }
@@ -1693,7 +1691,13 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       throw new TypeError("portable build-prd writes require an explicit planning task type in the current decision-log");
     }
     const relativeName = values.name;
-    await context.artifacts.writeAtomic(relativeName, readFileSync(values.input));
+    const bytes = readFileSync(values.input);
+    if (context.manifest.activation_cohort === "post" && isPhaseMaterialFile(relativeName)) {
+      context.artifacts.path(relativeName);
+      const gaps = phaseTaskProseGaps(bytes.toString("utf8"));
+      if (gaps.length) throw new TypeError(`${relativeName} ${gaps.join(", ")} task card requires reader prose`);
+    }
+    await context.artifacts.writeAtomic(relativeName, bytes);
     return { artifact_ref: context.artifacts.reference(relativeName) };
   }
   if (command === "capture-tests") {

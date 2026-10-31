@@ -1,5 +1,5 @@
 import { FORMAL_DEVELOPMENT_STAGES, WORKFLOW_STAGES } from "../stage/stage-registry.mjs";
-import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, readdirSync, realpathSync } from "node:fs";
+import { closeSync, constants, existsSync, fstatSync, lstatSync, openSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
@@ -14,6 +14,80 @@ const object = value => value !== null && typeof value === "object" && !Array.is
 const hash = raw => createHash("sha256").update(raw).digest("hex");
 const inside = (root, path) => { const rel = relative(root, path); return rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel); };
 const section = (raw, title) => raw.match(new RegExp(`^#{2,3} ${title}[^\\n]*\\n([\\s\\S]*?)(?=^#{1,3} |$(?![\\s\\S]))`, "m"))?.[1] ?? "";
+// Current materials rename some reader headings to questions; archived materials
+// keep the old literal titles. Each group accepts the archived and current title,
+// so neither shape is judged by a heading the material never used.
+// 决定标题只认新节名与更早的 工作包与决定。
+const DECISION_LOG_REQUIRED_HEADINGS = Object.freeze([
+  Object.freeze(["任务身份"]),
+  Object.freeze(["原始需求"]),
+  Object.freeze(["工作包与决定", "每个包定了哪些决定？"]),
+  Object.freeze(["未决项", "还有什么没定，谁来定？"]),
+]);
+const SPEC_REQUIRED_HEADINGS = Object.freeze([
+  Object.freeze(["功能需求", "一页看懂：谁要什么结果，怎么算通过？"]),
+  Object.freeze(["验收流程", "做成什么样？"]),
+  Object.freeze(["测试标准", "测试计划是什么？"]),
+  Object.freeze(["架构边界", "实现设计（全局权威）"]),
+]);
+const requiredHeadingsPresent = (raw, groups) => groups.every(titles => titles.some(title => String(raw ?? "").includes(title)));
+// Ring 2 counts decisions from the material itself. Archived material names each
+// decision in a 3-4 level ADR-/D- heading; current material writes "#### 决定 N"
+// headings and keeps the machine id only in the 旧编号对照 appendix. Old heading
+// occurrences stay counted exactly as before. A current decision linked to a
+// machine id already counted above is the same decision and is not added twice;
+// an unmapped 决定 N still counts and is reported as missing a mapping instead of
+// collapsing the tally to zero.
+export function countDecisionLogDecisions(raw) {
+  const decisionLog = String(raw ?? "");
+  const machineIds = [...decisionLog.matchAll(/^#{3,4}\s+((?:D|ADR)-\d+)/gm)].map(match => match[1]);
+  const currentIds = [...new Set([...decisionLog.matchAll(/^#{3,4}\s+决定\s*(\d+)(?=\s|[:：—–-]|$)/gm)].map(match => String(Number(match[1]))))];
+  const mappings = [];
+  let inAppendix = false, appendixLevel = 0, inFence = false;
+  for (const line of decisionLog.split("\n")) {
+    if (/^\s*(?:`{3,}|~{3,})/.test(line)) { inFence = !inFence; continue; }
+    if (inFence) continue;
+    const heading = /^(#{1,6})\s+(.+?)(?:\s+#+)?\s*$/.exec(line);
+    if (heading) {
+      if (inAppendix && heading[1].length <= appendixLevel) inAppendix = false;
+      if (!inAppendix && /旧编号对照/.test(heading[2])) { inAppendix = true; appendixLevel = heading[1].length; }
+      continue;
+    }
+    if (!inAppendix || !/^\s*\|/.test(line)) continue;
+    const values = line.trim().replace(/^\||\|$/g, "").split("|").map(value => value.replace(/\*\*|`/g, "").trim());
+    const label = values.find(value => /^决定\s*\d+$/.test(value));
+    const machine = values.find(value => /^(?:ADR|D)-\d+$/.test(value));
+    if (label && machine) mappings.push([String(Number(label.match(/\d+/)[0])), machine]);
+  }
+  const parent = new Map();
+  const find = node => {
+    if (!parent.has(node)) parent.set(node, node);
+    let root = node;
+    while (parent.get(root) !== root) root = parent.get(root);
+    while (parent.get(node) !== root) { const next = parent.get(node); parent.set(node, root); node = next; }
+    return root;
+  };
+  const machineKey = id => { const [, prefix, digits] = /^(ADR|D)-(\d+)$/.exec(id); return `${prefix}-${Number(digits)}`; };
+  for (const [label, machine] of mappings) {
+    const currentRoot = find(`决定:${label}`), machineRoot = find(`编号:${machineKey(machine)}`);
+    if (currentRoot !== machineRoot) parent.set(currentRoot, machineRoot);
+  }
+  const covered = new Set(machineIds.map(id => find(`编号:${machineKey(id)}`)));
+  const linked = new Set();
+  let extra = 0;
+  for (const [label] of mappings) {
+    const root = find(`决定:${label}`);
+    if (covered.has(root) || linked.has(root)) continue;
+    linked.add(root);
+    extra += 1;
+  }
+  const unmapped = currentIds.filter(id => !mappings.some(([label]) => label === id));
+  extra += unmapped.length;
+  return {decision_count: machineIds.length + extra, current: currentIds.length > 0, unmapped};
+}
+const decisionObservation = ({decision_count,current,unmapped}) => current
+  ? {decision_count,decision_mapping_missing:unmapped.length > 0,decision_unmapped:unmapped.map(id => `决定 ${id}`)}
+  : {decision_count};
 const cells = line => line.trim().split("|").slice(1, -1).map(value => value.trim().replace(/^`|`$/g, ""));
 const plainRef = value => value?.trim().replace(/^<|>$/g, "").replace(/^`|`$/g, "").split("#")[0];
 
@@ -311,7 +385,8 @@ function contractOriginal(facts, read, materialRoot, spec, phaseIndex, phases, l
 }
 function decisionOriginal(commands, materialRoot, decisionLog, limits, repoRoots, taskPath) {
   const packageRoot=resolve(dirname(fileURLToPath(import.meta.url)),"../.."),checkerRelative="tools/cli/check-decision-log-chain.mjs";
-  const target=join(materialRoot,"decision-log.md"),scans=new Map();
+  const target=join(materialRoot,"decision-log.md"),scans=new Map(),decisions=countDecisionLogDecisions(decisionLog);
+  if(decisions.current && decisions.unmapped.length) limits.push(`decision-log: ${decisions.unmapped.length} 个「决定 N」标题在「旧编号对照」中缺 ADR-/D- 映射；已按标题计入，不静默按 0`);
   const candidates=commands.filter(command=>command.command.includes("check-decision-log-chain.mjs"));
   for(const command of candidates.slice().reverse()) {
     const argv=command.receipt.argv,entryIndex=argv[1] === "--" ? 2 : 1,entry=argv[entryIndex],profile=argv.slice(entryIndex+1);
@@ -348,12 +423,15 @@ function decisionOriginal(commands, materialRoot, decisionLog, limits, repoRoots
         && signature.input_path === inputPath && /^[a-f0-9]{64}$/.test(signature.input_sha256??"") && /^[a-f0-9]{64}$/.test(signature.checker_sha256??"")
         && signature.input_sha256 === hash(inputBytes) && signature.checker_sha256 === hash(checkerBytes);
       const advisory=/\[check-decision-log-chain\] advisory complete: \d+ warning\(s\), non-blocking, exit 0/.test(command.output);
-      if(!bound || !advisory || (kind === "decision-log" && /unknown\.decision_entries|no decision entries|coverage is unavailable/i.test(command.output))) {
+      // A current-shape log with 决定 N headings is counted by this tally even
+      // when the checker cannot map it; keep the bound advisory instead of
+      // reporting the scan itself as unavailable.
+      if(!bound || !advisory || (kind === "decision-log" && !decisions.current && /unknown\.decision_entries|no decision entries|coverage is unavailable/i.test(command.output))) {
         limits.push(`${command.ref}: execution-time input/source binding or recognized scan unavailable; no current-byte backfill`);
         observation={readable:false,unavailable:true,basis:[command,{ref:inputPath,notes:["execution signature missing, conflicting, mismatched or scan unavailable"]}]};
       } else observation={...command,basis:[command,fileEvidence(entryPath,checkerBytes),fileEvidence(inputPath,inputBytes)]};
     }
-    if(kind === "decision-log")return {...observation,nonempty:decisionLog.trim().length>0,scan_count:1,decision_count:[...decisionLog.matchAll(/^#{3,4}\s+(?:D|ADR)-\d+/gm)].length,required_sections_present:["任务身份","原始需求","工作包与决定","未决项"].every(title=>decisionLog.includes(title))};
+    if(kind === "decision-log")return {...observation,nonempty:decisionLog.trim().length>0,scan_count:1,...decisionObservation(decisions),required_sections_present:requiredHeadingsPresent(decisionLog,DECISION_LOG_REQUIRED_HEADINGS)};
     scans.set(kind,observation);
     if(scans.size === 2)break;
   }
@@ -363,8 +441,8 @@ function decisionOriginal(commands, materialRoot, decisionLog, limits, repoRoots
   const failed=selected.find(item=>item.exit_code !== 0);
   if(failed)return {...failed,basis};
   return {...selected[0],nonempty:typeof decisionLog === "string" && decisionLog.trim().length>0,scan_count:scans.size,
-    decision_count:[...String(decisionLog).matchAll(/^#{3,4}\s+(?:D|ADR)-\d+/gm)].length,
-    required_sections_present:scans.size === 2 && ["任务身份","原始需求","工作包与决定","未决项"].every(title=>String(decisionLog).includes(title)),
+    ...decisionObservation(decisions),
+    required_sections_present:scans.size === 2 && requiredHeadingsPresent(decisionLog,DECISION_LOG_REQUIRED_HEADINGS),
     basis:[...basis,fileEvidence("decision-log.md",decisionLog)]};
 }
 
@@ -679,8 +757,45 @@ function methodObligationFlags(materialRoot, source, step, declarations) {
   return {human_required:true,program_required:false};
 }
 
-function workflowReport(repo, taskPath, materialRoot, level, facts, actualCommands, read, limits) {
+// Step definitions, flow manifests, methods and stage skill declarations belong
+// to the installed workflowhub package, never to the project being checked.
+// Walk up from this module so nested install layouts also work. A business repo
+// worktree is not a fallback: its absence of workflows/ is the normal case.
+function installedWorkflowRoot(start) {
+  for (let current = resolve(start); ; current = dirname(current)) {
+    if (existsSync(join(current, "workflows"))) return current;
+    if (dirname(current) === current) return null;
+  }
+}
+
+function resolveWorkflowRoot(explicit) {
+  if (explicit === undefined) return installedWorkflowRoot(dirname(fileURLToPath(import.meta.url)));
+  if (typeof explicit !== "string" || !isAbsolute(explicit)) throw new TypeError("final-chain workflowRoot must be absolute");
+  return resolve(explicit);
+}
+
+// A definition failure is not missing evidence. It becomes its own reported row
+// so no consumer can read an empty/short step list as "the step was not done".
+function unreadableDefinitionRow(stage, route, source, reason, definitionRoot) {
+  return {
+    source,
+    stage,
+    route,
+    step_slug: "<definition-unavailable>",
+    state: "unavailable",
+    judgment: "未判定",
+    definition_status: "unreadable",
+    definition_reason: reason,
+    basis: [{evidence_level:null, ref:definitionRoot ? join(definitionRoot,source) : null, note:reason}],
+    limits: [reason],
+    human: [],
+    program: [],
+  };
+}
+
+function workflowReport(definitionRoot, taskPath, materialRoot, level, facts, actualCommands, read, limits) {
   const selected = [];
+  const definitionRows = [];
   const skillRows = new Map(), skillConflicts = new Set();
   const declarations = stepObligationDeclarations(materialRoot);
   const stages = WORKFLOW_STAGES;
@@ -704,22 +819,31 @@ function workflowReport(repo, taskPath, materialRoot, level, facts, actualComman
     const rootSource = `workflows/${stage}/steps.json`;
     let root, source = rootSource;
     try {
-      root = loadPortableWorkflowManifest({worktreeRoot:repo,workflow:stage,read:path=>readOriginal(repo,relative(repo,path))});
+      if (!definitionRoot) throw Error("workflowhub 安装根未取得：从模块位置向上未找到含 workflows/ 的目录，且不回退到业务仓 worktree");
+      root = loadPortableWorkflowManifest({worktreeRoot:definitionRoot,workflow:stage,read:path=>readOriginal(definitionRoot,relative(definitionRoot,path))});
       if (stage === "make-decision" && level.value !== "complex") {
         const flow = root.flows?.[level.value];
         source = typeof flow === "string" ? flow : flow?.steps;
         if (!text(source) || !source.startsWith(`workflows/make-decision/flows/${level.value}/`)) throw Error("selected flow source is unavailable or outside the declared flow");
-        root = loadPortableWorkflowManifest({worktreeRoot:repo,workflow:stage,read:()=>readOriginal(repo,source)});
+        root = loadPortableWorkflowManifest({worktreeRoot:definitionRoot,workflow:stage,read:()=>readOriginal(definitionRoot,source)});
       }
-    } catch (error) { limits.push(`${rootSource}: ${error.message}`); continue; }
+    } catch (error) {
+      const failedSource = text(source) ? source : rootSource;
+      const reason = `读不到步骤定义（workflowhub 安装根 ${definitionRoot ?? "未取得"}；${failedSource}）：${error.message}；步骤是否完成未判定，不按「未留痕」报告`;
+      // The stage-root prefix stays stable for readers that key on it, while the
+      // reason names the exact file (root manifest or selected flow manifest).
+      limits.push(`${rootSource}: ${reason}`);
+      definitionRows.push(unreadableDefinitionRow(stage,level.value,failedSource,reason,definitionRoot));
+      continue;
+    }
     loadedStages.add(stage);
     routeSources.push(source);
     for (const step of root.steps) {
       let ownerRef = step.observable_result.match(/判定消费[：:]\s*([^；;\n]+)/)?.[1]?.trim() ?? null;
-      if (ownerRef) { const originalOwner=ownerRef; ownerRef=criterionRef(repo,originalOwner,source,limits); if (!ownerRef) limits.push(`${originalOwner}: owner 判据 anchor/定位未取得；交原方法reader`); }
+      if (ownerRef) { const originalOwner=ownerRef; ownerRef=criterionRef(definitionRoot,originalOwner,source,limits); if (!ownerRef) limits.push(`${originalOwner}: owner 判据 anchor/定位未取得；交原方法reader`); }
       selected.push({...step,source,stage,route:level.value,owner_ref:ownerRef,...methodObligationFlags(materialRoot,source,step,declarations),applicability:"required"});
     }
-    const dependencies = optional(repo,`workflows/${stage}/skill-deps.yaml`,limits);
+    const dependencies = definitionRoot ? optional(definitionRoot,`workflows/${stage}/skill-deps.yaml`,limits) : null;
     if (dependencies !== null) {
       let blocks;
       try {
@@ -755,7 +879,6 @@ function workflowReport(repo, taskPath, materialRoot, level, facts, actualComman
   stageScope.verified = !portableUnknown && level.declared === true && declaredStages.every(stage=>loadedStages.has(stage) && knownActual.includes(stage));
   stageScope.source_refs = ["facts.jsonl",...routeSources,...terminalRefs];
   if (!stageScope.verified) limits.push("阶段候选或实际行来源不充分；缺阶段行不推未调用，stage_skip_rate保持null");
-  if (!selected.length) return {workflow_steps:[],workflow_metrics:null};
   const evidence = [...skillConflicts].map(key=>{const step=skillRows.get(key).step;return {source:step.source,step_slug:step.step_slug,conflict:true};});
   for (const row of facts) for (const entry of row.evidence?.value ?? []) {
     const command = actualCommands.find(item=>item.ref === (entry.receipt_ref ?? entry.ref));
@@ -768,11 +891,14 @@ function workflowReport(repo, taskPath, materialRoot, level, facts, actualComman
       evidence.push({source:declaredSource,step_slug:slug,human:{...original,ref:entry.ref,readable:true,verified:true}});
     } else limits.push(`${entry.ref}: human source/slug identity not established; original ref retained`);
   }
-  const rows = evaluateWorkflowSteps({steps:selected,evidence,level,stageScope});
-  return {workflow_steps:rows,workflow_metrics:summarizeWorkflow(rows,stageScope)};
+  // Definition failures stay outside the evaluated step denominator: an unknown
+  // manifest cannot declare steps, so counting its sentinel as one step would
+  // invent a fact. The sentinel row above carries the undetermined status.
+  const rows = selected.length ? evaluateWorkflowSteps({steps:selected,evidence,level,stageScope}) : [];
+  return {workflow_steps:[...rows,...definitionRows],workflow_metrics:rows.length ? summarizeWorkflow(rows,stageScope) : null};
 }
 
-export function runFinalChainCheck({taskPath,materialRoot} = {}) {
+export function runFinalChainCheck({taskPath,materialRoot,workflowRoot} = {}) {
   const limits = [];
   let manifest;
   try {
@@ -788,6 +914,10 @@ export function runFinalChainCheck({taskPath,materialRoot} = {}) {
   }
   if (!isAbsolute(materialRoot ?? "")) throw TypeError("final-chain materialRoot must be absolute");
   materialRoot = resolve(materialRoot);
+  // An explicit root wins; otherwise the definitions come from the installed
+  // workflowhub package containing this module. The business repo is not a
+  // candidate: step definitions are not part of the checked project.
+  const definitionRoot = resolveWorkflowRoot(workflowRoot);
   const read = (ref,sha) => readSource(ref,taskPath,materialRoot,limits,sha);
   const decisionLog = optional(materialRoot,"decision-log.md",limits) ?? "";
   const spec = optional(materialRoot,"spec.md",limits);
@@ -852,12 +982,12 @@ export function runFinalChainCheck({taskPath,materialRoot} = {}) {
     2:decisionCheck,
     3:research,
     4:spec === null ? {readable:false,unavailable:true} : {...fileEvidence("spec.md",spec),rows:table,rows_readable:true},
-    5:spec === null || !ordinaryContract || ordinaryContract.unavailable ? {readable:false,unavailable:true} : {...fileEvidence("spec.md",spec),nonempty:spec.trim().length>0,scan_count:ordinaryContract.scan_count,required_sections_present:["功能需求","验收流程","测试标准","架构边界"].every(title=>spec.includes(title)),contract_ok:ordinaryContract.contract_ok,basis:[fileEvidence("spec.md",spec),ordinaryContract]},
+    5:spec === null || !ordinaryContract || ordinaryContract.unavailable ? {readable:false,unavailable:true} : {...fileEvidence("spec.md",spec),nonempty:spec.trim().length>0,scan_count:ordinaryContract.scan_count,required_sections_present:requiredHeadingsPresent(spec,SPEC_REQUIRED_HEADINGS),contract_ok:ordinaryContract.contract_ok,basis:[fileEvidence("spec.md",spec),ordinaryContract]},
     6:phaseIndex === null ? {readable:false,unavailable:true} : {...fileEvidence("phases/index.md",phaseIndex),phase_refs:phaseRefs},
     7:diff ?? {readable:false,unavailable:true},8:test ?? {readable:false,unavailable:true},9:review,
   };
   if (delivery.conflict && delivery.pr?.verified) rings[10]={...delivery.pr,conflict:delivery.conflict};
-  const unknown = section(decisionLog,"未决项");
+  const unknown = section(decisionLog,"未决项") || section(decisionLog,"还有什么没定，谁来定？");
   const bundle = {task_id:taskId,rings,...sets,directionChangingUnknown:/无真实未知|无未决|全部已解决/.test(unknown) ? false : unknown.trim() ? true : undefined,delivery};
   for (const [number,item] of Object.entries(rings)) {
     if (item.verified && text(item.ref) && !item.ref.startsWith("git:")) rings[number] = checkedOriginal(item,taskId,taskPath,materialRoot,limits,`ring-${number}`,number === "1" ? exactRaw?.scope : undefined);
@@ -868,6 +998,6 @@ export function runFinalChainCheck({taskPath,materialRoot} = {}) {
   if (review.unavailable || results[8].state === "unavailable") limits.push("环 9 不可机判：整次实现/交付身份、当前 diff 或真实 provider 原件未取得；交独立审查 reader");
   const mergeDeclared = facts.some(row=>row.record_kind === "close_action" && row.close_action?.action === "merge" && text(row.close_action.result));
   if (specsAt > 0) limits.push(mergeDeclared ? "已记录任务 merge 事实；已合并主仓的 baseline..HEAD 可能含后续提交，只按任务相关路径读回；此视野限制不缩减 outside 清单。" : "baseline..HEAD 是当前材料仓库视野，可能含后续变化；未取得任务合并事实，不据路径推断历史交付。");
-  const workflow = workflowReport(repo,taskPath,materialRoot,level,facts,actualCommands,read,limits);
+  const workflow = workflowReport(definitionRoot,taskPath,materialRoot,level,facts,actualCommands,read,limits);
   return {schema_version:"1.0.0",task_id:taskId,baseline_commit:manifest.baseline_commit ?? null,material_root:materialRoot,level,rings:results,...summarize(results),limits:[...new Set(limits)],chain_state:chain.state,...workflow};
 }

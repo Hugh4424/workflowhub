@@ -5,6 +5,10 @@ import { writeFileAtomic } from "../interface/safe-write.mjs";
 export const CURRENT_MATERIAL_FILES = Object.freeze(["decision-log.md", "spec.md", "phases/index.md"]);
 const PHASE_FILE = /^phases\/P([1-9][0-9]*)(?:-[^/\\.\s|`:\x00-\x1f]+)?\.md$/;
 
+export function isPhaseMaterialFile(name) {
+  return typeof name === 'string' && PHASE_FILE.test(name);
+}
+
 export function phaseFilesFromIndex(index) {
   if (typeof index !== "string" || index.trim() === "") throw new TypeError("post Phase index is missing");
   const lines = index.split(/\r?\n/);

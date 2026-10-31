@@ -6,6 +6,8 @@
  * This checker deliberately never becomes a gate: malformed or stale chain
  * fields are printed as advisory facts and the process exits 0.
  * Only local text structure and explicit current references are inspected.
+ * New-shape 决定 N headings map through the material's 旧编号对照; an unmapped
+ * block is reported as a warning, never silently treated as zero entries.
  */
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -20,6 +22,8 @@ const CURRENT_FIELDS = ["做什么", "不做什么", "风险", "改动"];
 const LEGACY_CHAIN_FIELDS = ["module", "requirement_ids", "derived_from", "artifacts"];
 const DECISION_ID = /^(?:ADR|D)-\d+$/;
 const REQUIREMENT_ID = /^R-\d+[a-z]?$/;
+const CURRENT_DECISION_HEADING = /^决定\s*(\d+)(?=\s|[:：—–-]|$)/;
+const DECISION_ID_MAPPING_HEADING = /旧编号对照/;
 
 function parseList(value) {
   const match = /^\[([^\]]*)\]$/.exec(value.trim().replaceAll("［", "[").replaceAll("］", "]"));
@@ -32,9 +36,54 @@ function warning(code, decision_id, field, message) {
   return { code, decision_id, field, message };
 }
 
-function decisionSections(markdown) {
+// New-shape bodies use 决定 N headings and keep the legacy ADR-/D- identity in
+// the material's 旧编号对照 table. Only that named section can establish the
+// mapping; a missing row stays visible instead of silently counting as zero.
+function decisionIdMappings(markdown) {
+  const mappings = new Map();
+  const lines = markdown.split("\n");
+  let fence = null;
+  let inSection = false;
+  let sectionLevel = 0;
+  for (const line of lines) {
+    const marker = /^\s*(`{3,}|~{3,})/.exec(line);
+    if (marker) {
+      if (!fence) fence = marker[1];
+      else if (marker[1][0] === fence[0] && marker[1].length >= fence.length) fence = null;
+      continue;
+    }
+    if (fence) continue;
+    const heading = /^(#{1,6})\s+(.+?)(?:\s+#+)?\s*$/.exec(line);
+    if (heading) {
+      if (inSection && heading[1].length <= sectionLevel) inSection = false;
+      if (!inSection && DECISION_ID_MAPPING_HEADING.test(heading[2])) {
+        inSection = true;
+        sectionLevel = heading[1].length;
+      }
+      continue;
+    }
+    if (!inSection) continue;
+    if (/^\s*\|/.test(line)) {
+      const cells = line.trim().replace(/^\||\|$/g, "").split("|")
+        .map((cell) => cell.replace(/\*\*|`/g, "").trim());
+      const label = cells.find((cell) => /^决定\s*\d+$/.test(cell));
+      const legacy = cells.find((cell) => DECISION_ID.test(cell));
+      if (label && legacy) {
+        mappings.set(label.replace(/\s+/g, " "), legacy);
+        continue;
+      }
+    }
+    const label = /决定\s*(\d+)/.exec(line);
+    const legacy = /(?:ADR|D)-\d+/.exec(line);
+    if (label && legacy) mappings.set(`决定 ${label[1]}`, legacy[0]);
+  }
+  return mappings;
+}
+
+function decisionSections(markdown, mappings = new Map()) {
   const lines = markdown.split("\n");
   const sections = [];
+  const unmapped = [];
   const headings = new Set();
   const sourceIds = new Set();
   let inFence = false;
@@ -51,11 +100,23 @@ function decisionSections(markdown) {
       headingLevel = heading[1].length;
       headings.add(heading[2]);
       const match = /^((?:N\d+|(?:ADR|D)-\d+))(?=\s|[—–-]|$)/.exec(heading[2]);
-      const decision = match && (heading[1].length === 3 || heading[1].length === 4);
+      const currentShape = !match && CURRENT_DECISION_HEADING.exec(heading[2]);
+      const decision = (match || currentShape) && (heading[1].length === 3 || heading[1].length === 4);
       if (current && (decision || heading[1].length <= current.level)) current = null;
       if (decision) {
-        current = { decision_id: match[1], level: heading[1].length, lines: [] };
-        sections.push(current);
+        if (match) {
+          current = { decision_id: match[1], level: heading[1].length, lines: [] };
+          sections.push(current);
+        } else {
+          const label = `决定 ${currentShape[1]}`;
+          const mapped = mappings.get(label);
+          if (mapped) {
+            current = { decision_id: mapped, level: heading[1].length, lines: [] };
+            sections.push(current);
+          } else {
+            unmapped.push({ label, line: index + 1 });
+          }
+        }
       }
     }
     // Only declarations in local headings, index rows or list entries are
@@ -67,7 +128,7 @@ function decisionSections(markdown) {
     }
     if (current && !heading) current.lines.push({ text: line, line: index + 1, parent: headingLevel === current.level });
   }
-  return { sections, headings, sourceIds };
+  return { sections, unmapped, headings, sourceIds };
 }
 
 // Only explicitly headed unit tables contribute unit warnings; they never
@@ -124,11 +185,20 @@ export function checkDecisionLogChain({ markdown, source_ref = "decision-log.md"
     };
   }
 
-  const { sections, headings, sourceIds } = decisionSections(markdown);
+  const mappings = decisionIdMappings(markdown);
+  const { sections, unmapped, headings, sourceIds } = decisionSections(markdown, mappings);
   const knownDecisions = new Set(sections.map(({ decision_id }) => decision_id));
   const warnings = unitWarnings(markdown);
   let recognizedFields = 0;
 
+  for (const { label, line } of unmapped) {
+    warnings.push(warning(
+      "missing_decision_id_mapping",
+      label,
+      "旧编号对照",
+      `${label} at line ${line} has no ADR-/D- mapping in 旧编号对照; chain coverage for this block is unavailable`,
+    ));
+  }
   if (sections.length === 0) {
     warnings.push(warning(
       "no_decision_entries",

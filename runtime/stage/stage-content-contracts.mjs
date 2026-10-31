@@ -1,6 +1,7 @@
 // Current post Phase and ordinary decision-log text contracts.
 // Pure facts only: no retired appendices, hash-bound identities or stage-completion machines.
-import { isAbsolute, relative, resolve } from "node:path";
+import { statSync } from "node:fs";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 
 const ACCEPTANCE_CRITERION_SOURCE = String.raw`AC(?:\d{1,3}|-\d{1,3}|(?:-[A-Z][A-Z0-9]*)+-\d{1,3})`;
 
@@ -164,6 +165,46 @@ function markdownSections(document, level, prefix = "") {
   }));
 }
 
+// New-shape materials collect machine fields under one level-two heading.
+// The heading is a location, never a new pass/fail condition; documents
+// without it keep every existing reading byte for byte.
+const MACHINE_FIELDS_HEADING = /^##\s+(?:机器字段|校验器字段|Machine fields?)(?:\s*[（(][^）)\n]*[）)])?\s*$/i;
+
+function machineFieldsBlock(document) {
+  const lines = String(document ?? "").split(/\r?\n/);
+  const start = lines.findIndex((line) => MACHINE_FIELDS_HEADING.test(line));
+  if (start < 0) return null;
+  let end = lines.length;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (/^##\s+/.test(lines[index])) { end = index; break; }
+  }
+  return { start, end, body: lines.slice(start + 1, end).join("\n").trim() };
+}
+
+function machineFieldsSection(document) {
+  return machineFieldsBlock(document)?.body ?? null;
+}
+
+function withoutMachineFields(document) {
+  const block = machineFieldsBlock(document);
+  if (!block) return String(document ?? "");
+  const lines = String(document ?? "").split(/\r?\n/);
+  return [...lines.slice(0, block.start), ...lines.slice(block.end)].join("\n");
+}
+
+// Existing declarations stay authoritative in their old region; the explicit
+// machine block is appended so a new-shape file can declare them at its end.
+function phaseAuthorityBody(body) {
+  const text = String(body ?? "");
+  const machine = machineFieldsSection(text);
+  const base = text.split(/^##\s+L2\b|^###\s+T\d{3,}\b/m, 1)[0];
+  if (machine === null) return base;
+  const authority = /^##\s+L1\b/m.test(text)
+    ? base
+    : text.split(/^##\s+L2\b|^###\s+(?:T\d{3,}\b|任务\s*\d+\s*[:：])/m, 1)[0];
+  return `${authority}\n${machine}`;
+}
+
 function unsafeWritePath(path, reviewReadScope) {
   if (path.startsWith("/") && reviewReadScope) {
     if (resolve(path) !== path || /[\\\0*?\[\]{}]/.test(path)) return true;
@@ -192,6 +233,71 @@ function writePathIdentity(path, scope) {
   }
   const evidence = scope.evidenceFiles?.find(({ref}) => path === resolve(scope.taskRoot ?? '/', ref));
   return evidence ? JSON.stringify(['task-evidence', evidence.ref]) : path;
+}
+
+const PLANNED_EVIDENCE_PATH = /^\s*(?:`+\s*)?planned\s*[:：]/i;
+
+// Evidence paths may be repository-relative, task-relative, or absolute. Reuse
+// the existing owners instead of a new resolver: authenticated repository
+// roots and the task root from reviewReadScope, plus the material root that
+// run-checks already passes. A material root under <repo>/specs/<task> also
+// contributes its repository parent, the same convention the final-chain
+// material reader uses.
+function evidenceSearchRoots(reviewReadScope, materialPath) {
+  const roots = [];
+  const add = (value) => {
+    if (typeof value !== "string" || value.trim() === "") return;
+    roots.push(resolve(value));
+  };
+  for (const repo of reviewReadScope?.repositories ?? []) add(repo?.sourceRoot);
+  add(reviewReadScope?.taskRoot);
+  if (nonEmptyString(materialPath)) {
+    const materialRoot = resolve(materialPath);
+    const specsAt = materialRoot.lastIndexOf(`${sep}specs${sep}`);
+    if (specsAt > 0) roots.push(materialRoot.slice(0, specsAt));
+    roots.push(materialRoot);
+  }
+  return [...new Set(roots)];
+}
+
+function readableEvidenceRoots(roots) {
+  return roots.filter((root) => {
+    try { return statSync(root).isDirectory(); } catch { return false; }
+  });
+}
+
+function declaredEvidencePaths(value) {
+  const text = String(value ?? "").trim();
+  const spans = inlinePaths(text);
+  const candidates = spans.length > 0 ? spans : [text.replace(/[（(][\s\S]*$/, "").trim()];
+  return [...new Set(candidates
+    .map((token) => token.replace(/^\s*(?:`+\s*)?planned\s*[:：]\s*/i, "").trim())
+    .filter((token) => token !== "" && !/\s/.test(token) && /[/\\.]/.test(token)))];
+}
+
+function checkEvidencePath(token, roots) {
+  if (isAbsolute(token)) {
+    try {
+      return statSync(token).isFile()
+        ? Object.freeze({ status: "verified", resolved: token })
+        : Object.freeze({ status: "missing", reason: "not a regular file" });
+    } catch (error) {
+      return Object.freeze({ status: "missing", reason: error.code ?? error.message });
+    }
+  }
+  for (const root of roots) {
+    const candidate = resolve(root, token);
+    try {
+      if (statSync(candidate).isFile()) return Object.freeze({ status: "verified", resolved: candidate });
+    } catch { /* keep searching the remaining declared roots */ }
+  }
+  return Object.freeze({ status: "missing", reason: "not found under any declared root" });
+}
+
+function plannedEvidence(value) {
+  if (PLANNED_EVIDENCE_PATH.test(value)) return true;
+  const [firstPath] = inlinePaths(value);
+  return firstPath !== undefined && PLANNED_EVIDENCE_PATH.test(firstPath);
 }
 
 function hasAffirmativeCodeWrite(action) {
@@ -270,7 +376,7 @@ function executionIndexRows(document, errors, reviewReadScope, invalidDependency
 
 function phaseWriteSet(body) {
   // Phase declarations precede executable task cards and removable L2 reference.
-  const authority = body.split(/^##\s+L2\b|^###\s+T\d{3,}\b/m, 1)[0];
+  const authority = phaseAuthorityBody(body);
   const declaredPaths = (value) => {
     let quoted = false;
     for (let index = 0; index < value.length; index += 1) {
@@ -280,8 +386,8 @@ function phaseWriteSet(body) {
     return inlinePaths(value);
   };
   const lines = authority.split(/\r?\n/);
-  const bullet = lines.map((line) => fieldValue(line, "Write set")).find((value) => value !== null);
-  if (bullet !== undefined) return declaredPaths(bullet);
+  const bullet = fieldValue(authority, "Write set");
+  if (bullet !== null) return declaredPaths(bullet);
   const labels = new Set(["Write set", ...(FIELD_LABEL_ALIASES["Write set"] ?? [])]);
   for (const [index, line] of lines.entries()) {
     if (/^\s*\|/.test(line)) {
@@ -394,10 +500,30 @@ function sameIds(left, right) {
 }
 
 function fieldValue(body, field) {
-  return String(body ?? "").match(new RegExp(
-    `^\\s*-\\s+\\*\\*(?:${labelAlternation(field)})\\*\\*\\s*[:：]\\s*(.+?)\\s*$`,
-    "mi",
-  ))?.[1]?.trim() ?? null;
+  const lines = String(body ?? "").split(/\r?\n/);
+  const pattern = new RegExp(
+    `^\\s*-\\s+\\*\\*(?:${labelAlternation(field)})\\*\\*\\s*[:：]\\s*(.*)$`,
+  );
+  for (let index = 0; index < lines.length; index += 1) {
+    const match = pattern.exec(lines[index]);
+    if (!match) continue;
+    const first = match[1].trim();
+    // A continuation is a continuation, not a substitute for an empty or
+    // placeholder first-line value.
+    if (!first) return null;
+    if (/^(?:TBD|TODO|待补充|待补|待定|\[[^\]]*(?:占位|填写)[^\]]*\]|\{[^{}]*\})$/i.test(first.replace(/[*_`]/g, "").trim())) return null;
+    const parts = [first];
+    for (let next = index + 1; next < lines.length; next += 1) {
+      const line = lines[next];
+      if (!line.trim()) break;
+      if (/^\s*#{1,6}\s/.test(line)) break;
+      if (/^\s*-\s+\*\*/.test(line)) break;
+      if (!/^\s+/.test(line)) break;
+      parts.push(line.trim());
+    }
+    return parts.join(" ").trim();
+  }
+  return null;
 }
 
 function analyzeMarkdownTableCells(line) {
@@ -465,23 +591,63 @@ function hasTaskProseAction(prose, files) {
   });
 }
 
-// Count reader prose, excluding fields, tables, quoted source and fenced examples.
-function taskCardProse(body) {
+// Shared visibility for prose and Phase/Task boundaries; null marks fenced lines.
+function taskSourceLines(body, preserveLines = false) {
   let fence = null;
-  return body.replace(/<!--[\s\S]*?-->/g, '').split(/\r?\n/).filter(line => {
+  const source = body.replace(/<!--[\s\S]*?-->/g, match => preserveLines ? match.replace(/[^\r\n]/g, ' ') : '');
+  return source.split(/\r?\n/).map(line => {
     const marker = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
     if (fence) {
       if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length
           && /^[ \t]*$/.test(marker[2])) fence = null;
-      return false;
+      return null;
     }
     if (marker && (marker[1][0] !== '`' || !marker[2].includes('`'))) {
       fence = marker[1];
-      return false;
+      return null;
     }
-    return /\S/.test(line) && !/^(?:\s|[-*+>#|]|\d+[.)、）])/.test(line)
-      && !/^(?:机器字段|校验器用|人可跳过)/.test(line);
-  }).join('\n');
+    return line;
+  });
+}
+
+// Count reader prose, excluding fields, tables, quoted source and fenced examples.
+function taskCardProse(body) {
+  return taskSourceLines(body).filter(line => line !== null && /\S/.test(line)
+    && !/^(?:\s|[-*+>#|]|\d+[.)、）])/.test(line)
+    && !/^(?:机器字段|校验器用|人可跳过)/.test(line)).join('\n');
+}
+
+function taskCardId(card, allowLocator = false) {
+  const headingId = card.heading.match(/^(T\d{3,})\s+[—–-]\s+\S/)?.[1];
+  if (headingId) return headingId;
+  if (!allowLocator) return null;
+  // A reader-facing card heading uses the Chinese task number; the stable
+  // machine id stays inside the card-end field block.
+  return card.body.match(/^\s*-\s+\*\*(?:任务编号|任务号|Task id)\*\*\s*[:：]\s*(T\d{3,})\s*$/mi)?.[1] ?? null;
+}
+
+function phaseTaskCards(body) {
+  const visible = taskSourceLines(body, true);
+  const headingSource = body.split(/\r?\n/).map((line, i) =>
+    (!visible[i]?.trim() && /^#{1,3}\s/.test(line)) ? line.replace(/^#+/, marks => ' '.repeat(marks.length)) : line).join('\n');
+  let region = "";
+  const hasL1 = /^##\s+L1\b/m.test(headingSource);
+  const newShape = !hasL1 && machineFieldsSection(body) !== null;
+  if (hasL1) {
+    region = headingSource.split(/^##\s+L1\b[^\n]*\n/m)[1]?.split(/^##\s+L2\b/m)[0] ?? '';
+  } else if (newShape) {
+    // Explicit new shape: cards may live after the narrative, outside L1.
+    // The fallback never applies to a document without the machine block.
+    region = withoutMachineFields(headingSource);
+  }
+  return markdownSections(region, 3)
+    .filter(({ heading }) => newShape ? /^(?:T\d+\b|任务\s*\d+\s*[:：])/.test(heading) : /^T\d+\b/.test(heading))
+    .map(card => ({ ...card, taskId: taskCardId(card, newShape), prose: taskCardProse(card.body) }));
+}
+
+// Drafts may lack a complete material set; declared L1 Task cards still need prose.
+export function phaseTaskProseGaps(body) {
+  return phaseTaskCards(body).filter(card => card.taskId && !card.prose).map(card => card.taskId);
 }
 
 export function validatePostPhaseContract({ spec, index, phases, reviewReadScope, changeScope, phase_id, prose_contract, material_path } = {}) {
@@ -506,6 +672,9 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
     errors.push("Phase index must remain pointer-only; command, oracle, and evidence belong to Phase files");
   }
   const phaseRows = [];
+  const archiveMaterial = /(?:^|[/\\])archive(?:[/\\]|$)/.test(material_path ?? "");
+  const evidenceRoots = readableEvidenceRoots(evidenceSearchRoots(reviewReadScope, material_path));
+  const evidenceFacts = { verified: [], planned: [], missing: [], unverified: [] };
   let selectedPhaseScopeValid = false;
   const indexedPaths = new Set();
   const writeOwners = new Map();
@@ -553,11 +722,22 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
       scopeValid = false;
     }
     for (const heading of ["L0", "L1", "L2"]) {
-      if (!new RegExp(`^##\\s+${heading}\\b`, "m").test(body)) errors.push(`${expectedPath} is missing ${heading}`);
+      if (machineFieldsSection(body) === null && !new RegExp(`^##\\s+${heading}\\b`, "m").test(body)) errors.push(`${expectedPath} is missing ${heading}`);
     }
     const declaredWriteSet = phaseWriteSet(body);
-    const authorityBody = body.split(/^##\s+L2\b|^###\s+T\d{3,}\b/m, 1)[0];
-    const declaration = fieldValue(authorityBody, "Write set");
+    const machineBlock = machineFieldsBlock(body);
+    if (machineBlock && body.split(/\r?\n/).slice(machineBlock.start + 1)
+      .some((line) => /^###\s+(?:T\d{3,}\b|任务\s*\d+\s*[:：])/.test(line))) {
+      errors.push(`${expectedPath} task cards must appear before the file-end machine block`);
+    }
+    const authorityBody = phaseAuthorityBody(body);
+    const authorityFields = withoutMachineFields(authorityBody);
+    const machineBody = machineFieldsSection(body) ?? "";
+    // Phase-level fields come only from the pre-card declaration region or the
+    // file-end machine block. A same-named field inside a task card never
+    // supplies a Phase-level value.
+    const phaseField = (name) => fieldValue(machineBody, name) ?? fieldValue(authorityFields, name);
+    const declaration = phaseField("Write set");
     const explicitNone = EXPLICIT_EMPTY_WRITE_SET.test(declaration ?? "");
     if (EMPTY_WRITE_SET_PREFIX.test(declaration ?? "") && !explicitNone) {
       errors.push(`${expectedPath} Write set none declaration is invalid`);
@@ -584,7 +764,7 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
       if (owner) errors.push(`${expectedPath} write set duplicates ${path} owned by ${owner}`);
       writeOwners.set(identity, [...owners, expectedPath]);
     }
-    const dependencyText = fieldValue(body, "Dependency");
+    const dependencyText = phaseField("Dependency");
     const dependency = dependencyText?.match(/`([^`]+)`/)?.[1] ?? dependencyText ?? null;
     const phaseDependencies = WITHOUT_PREDECESSOR.test(dependency ?? "") ? [] : identifiers(dependency ?? "", /\bP\d+\b/g);
     const indexDependencies = WITHOUT_PREDECESSOR.test(row.dependency ?? "") ? [] : identifiers(row.dependency ?? "", /\bP\d+\b/g);
@@ -594,26 +774,70 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
         || phaseDependencies.some((id) => !(rows ?? []).some((candidate) => candidate.phase === id && candidate.position < row.position))) {
       dependencyError(`${expectedPath} dependency must match the index and reference only earlier Phase IDs`);
     }
-    if (!fieldValue(body, "Global spec")?.includes("spec.md")) errors.push(`${expectedPath} requires a stable spec.md pointer`);
-    const consumer = fieldValue(body, "Consumer")?.replace(/[。；;\s]+$/u, "").trim();
+    if (!phaseField("Global spec")?.includes("spec.md")) errors.push(`${expectedPath} requires a stable spec.md pointer`);
+    const consumer = phaseField("Consumer")?.replace(/[。；;\s]+$/u, "").trim();
     if (!consumer || consumer !== row.consumer?.replace(/[。；;\s]+$/u, "").trim()) {
       errors.push(`${expectedPath} consumer differs from Phase index`);
     }
-    const command = fieldValue(body, "gate_cmd");
-    const oracle = fieldValue(body, "oracle");
+    const command = phaseField("gate_cmd");
+    const oracle = phaseField("oracle");
     if (!hasExecutableCommand(command) || !/^ORACLE-[A-Z0-9-]+/.test(oracle ?? "")) {
       commandError(`${expectedPath} requires an executable gate_cmd and oracle`);
     }
-    if (!fieldValue(body, "STOP") || !fieldValue(body, "Done") || !fieldValue(body, "evidence_path")) {
+    const evidenceValue = phaseField("evidence_path");
+    if (!phaseField("STOP") || !phaseField("Done") || !evidenceValue) {
       errors.push(`${expectedPath} requires STOP, Done, and evidence_path`);
+    } else if (plannedEvidence(evidenceValue)) {
+      // An explicit known gap is not a pass and not an error: it stays visible
+      // in facts so a planned path can never masquerade as generated evidence.
+      const [plannedPath = evidenceValue] = declaredEvidencePaths(evidenceValue);
+      evidenceFacts.planned.push(Object.freeze({
+        phase_id: expectedId, path: plannedPath, statement: evidenceValue,
+      }));
+    } else {
+      const declaredPaths = declaredEvidencePaths(evidenceValue);
+      if (declaredPaths.length === 0) {
+        evidenceFacts.unverified.push(Object.freeze({
+          phase_id: expectedId, path: null,
+          reason: "evidence_path declares no concrete path", statement: evidenceValue,
+        }));
+      }
+      for (const token of declaredPaths) {
+        if (!isAbsolute(token) && evidenceRoots.length === 0) {
+          evidenceFacts.unverified.push(Object.freeze({
+            phase_id: expectedId, path: token,
+            reason: "no readable material, repository, or task root",
+          }));
+          continue;
+        }
+        const checked = checkEvidencePath(token, evidenceRoots);
+        if (checked.status === "verified") {
+          evidenceFacts.verified.push(Object.freeze({
+            phase_id: expectedId, path: token, resolved: checked.resolved,
+          }));
+          continue;
+        }
+        if (archiveMaterial) {
+          // Archived material is historical: prose already accepts diagnostic
+          // mode there, and a missing old path must not become a new gate.
+          evidenceFacts.unverified.push(Object.freeze({
+            phase_id: expectedId, path: token,
+            reason: "archive material keeps historical evidence out of the current gate",
+          }));
+          continue;
+        }
+        evidenceFacts.missing.push(Object.freeze({ phase_id: expectedId, path: token }));
+        const searched = isAbsolute(token)
+          ? "absolute path checked directly"
+          : `searched roots: ${evidenceRoots.join(", ")}`;
+        errors.push(`${expectedPath} evidence_path does not exist: ${token} (${searched})`);
+      }
     }
     const frs = identifiers(body, /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g);
     const acs = identifiers(body, ACCEPTANCE_CRITERION_ID);
-    const l1 = body.split(/^##\s+L1\b[^\n]*\n/m)[1]?.split(/^##\s+L2\b/m)[0] ?? "";
-    const cards = markdownSections(l1, 3).filter(({ heading }) => /^T\d+\b/.test(heading));
+    const cards = phaseTaskCards(body);
     if (cards.length === 0) commandError(`${expectedPath} requires independent ### Tnnn task cards; one-line Tasks is insufficient`);
-    for (const { heading, body: cardBody } of cards) {
-      const taskId = heading.match(/^(T\d{3,})\s+[—–-]\s+\S/)?.[1];
+    for (const { body: cardBody, taskId, prose } of cards) {
       if (!taskId) {
         commandError(`${expectedPath} task card requires stable ### Tnnn — outcome heading`);
         continue;
@@ -627,7 +851,6 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
         "Evidence", "STOP / recovery", "Coverage limit", "Done",
       ];
       const fields = Object.fromEntries(required.map((field) => [field, fieldValue(cardBody, field)]));
-      const prose = taskCardProse(cardBody);
       if (!prose) {
         cardProseGaps.push(`${expectedPath} ${taskId}`);
         if (proseMode === 'required') commandError(`${expectedPath} ${taskId} task card requires reader prose`);
@@ -758,7 +981,7 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
       }
       taskCards.push(Object.freeze({ id: taskId, phase: expectedId, frs: Object.freeze(cardFrs), acs: Object.freeze(cardAcs), oracle: fields["GREEN oracle"] ?? null, dependency: fields.Dependency ?? "" }));
     }
-    const taskIds = cards.map(({ heading }) => heading.match(/^(T\d{3,})\b/)?.[1]).filter(Boolean);
+    const taskIds = cards.map(({ heading, taskId }) => heading.match(/^(T\d{3,})\b/)?.[1] ?? taskId).filter(Boolean);
     if (expectedId === phase_id) selectedPhaseScopeValid = scopeValid;
     phaseRows.push(Object.freeze({ id: expectedId, path: expectedPath, write_set: Object.freeze(scopeValid ? declaredWriteSet : []), dependency, frs: Object.freeze(frs), acs: Object.freeze(acs), task_ids: Object.freeze(taskIds), command, oracle }));
   }
@@ -838,6 +1061,24 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
     ac_coverage: Object.freeze({ accepted_count: acceptedAcs.length, covered_count: acceptedAcs.filter((id) => coveredAcs.includes(id)).length, accepted_ids: Object.freeze(acceptedAcs), covered_ids: Object.freeze(coveredAcs), deferred_ids: Object.freeze(deferredAcs) }),
     dependency_validation: Object.freeze({ valid: dependencyValid }),
     command_oracle_checks: Object.freeze({ valid: taskCards.length > 0 && commandOracleValid }),
+    evidence_paths: Object.freeze({
+      verified: Object.freeze(evidenceFacts.verified),
+      planned: Object.freeze(evidenceFacts.planned),
+      missing: Object.freeze(evidenceFacts.missing),
+      unverified: Object.freeze(evidenceFacts.unverified),
+      verified_count: evidenceFacts.verified.length,
+      planned_count: evidenceFacts.planned.length,
+      missing_count: evidenceFacts.missing.length,
+      unverified_count: evidenceFacts.unverified.length,
+      // A gate can pass with an explicitly planned gap; this boolean tells the
+      // two apart without turning the known gap into an error.
+      all_verified: evidenceFacts.verified.length > 0
+        && evidenceFacts.planned.length === 0
+        && evidenceFacts.missing.length === 0
+        && evidenceFacts.unverified.length === 0,
+      archive_diagnostic: archiveMaterial,
+    }),
+    evidence_path_summary: `${evidenceFacts.verified.length} verified; ${evidenceFacts.planned.length} planned; ${evidenceFacts.missing.length} missing; ${evidenceFacts.unverified.length} unverified`,
   });
   return Object.freeze({ ok: errors.length === 0, errors: Object.freeze(errors), facts });
 }

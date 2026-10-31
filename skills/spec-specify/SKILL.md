@@ -5,14 +5,15 @@ description: Draft the post-cohort product specification and global implementati
 
 # Spec Specify
 
-读者：build-plan 的产品规格作者。
-读完要能：定位本文件的责任、写作动作、来源与失败边界。
+读者：build-plan 的产品规格作者；读完要能定位本文件的责任、写作动作、来源与失败边界。
 
 ## Post-cohort specification contract
 
-写 spec 前，先读取本文件「技能写作规范（WR001）」唯一正文，再执行以下写作动作；消费者是产品规格作者与下游实施、独立验收读者。规范不可读时如实 `unavailable`，不以模板骨架代替读取。
+写 spec 前，先读取 `skills/material-writing/SKILL.md` 的「材料写作标准（唯一）」。
+再读本文件 Q01–Q13 唯一正文，然后执行以下写作动作。
+消费者是产品规格作者与下游实施、独立验收读者；规范不可读时如实 `unavailable`，不以模板骨架代替读取。
 
-本节回答：What the current spec owns and how build-plan authors it.
+Post-cohort `spec.md` owns both product behavior and the global implementation design, and `build-plan` authors it.
 
 For post-cohort authoring, `build-plan` invokes this skill. The output has a
 readable narrative spine and one `Appendix A` contract appendix. Appendix A is
@@ -31,7 +32,7 @@ Input is the current decision/scope and named source material supplied by build-
 
 Read the caller-supplied current decision and necessary source material. Supplied packets are convenient reading subsets, not snapshot/hash authorization. Missing load-bearing source is unavailable with the specific gap; retain only source-supported direction. New spec.md includes a regenerable non-authoritative 材料导航 with section/summary/read timing pointers.
 
-Use `templates/spec-template.md`. Its ten numbered reader groups run from problem and sources through scenarios, facts, scope, requirements/modules, global design, acceptance, testing, and risk/handoff. Keep the machine-readable implementation-design H2/H3 and sole Appendix A alongside that narrative. Each group opens with its reader question. Each requirement states the actor/scenario, real inputs, observable result, failure, consumer and evidence type; do not replace those with an ID list. Recover omitted rollback, unresolved-input owner, sample boundary and final-acceptance handoff at their existing owners rather than creating another document.
+Use `templates/spec-template.md`. Its reader-question sections run from 这是什么，给谁用？ through 有什么风险和未决？, covering the one-page outcome, requirements, acceptance, solution, Phase order, open items, global design, acceptance criteria, test plan, and risk/handoff. Keep `## 实现设计（全局权威）`, its four literal H3 names, and the sole Appendix A alongside that narrative. Each section opens with its reader question. Each requirement states the actor/scenario, real inputs, observable result, failure, consumer and evidence type; do not replace those with an ID list. Recover omitted rollback, unresolved-input owner, sample boundary and final-acceptance handoff at their existing owners rather than creating another document.
 
 Produce a testable, readable specification
 covering user outcomes, urgency, scope, scenarios, edge states, requirements,
@@ -57,7 +58,7 @@ expected evidence type or artifact only; build-code 终末 supplies execution fa
 
 从已确认来源合成，不重新访谈或替用户选择方向。引用外部来源时写清版本与回原文的直达链接；版本/签名类事实须实读依赖文件并写出处，取不到写 `unverified` 与具体来源缺口。推断就地紧跟一句“这是推断”及依据，不分小节、不加新符号约定；不要求所有断言都外部引用。先说明真实角色面临的问题、目标与结果，再连起场景、机制、取舍、失败和显式非目标；追踪字段跟在叙事后，不以 ID 清单代替行为解释。User Stories 的详细格式由产品需求 owner 承接，本步骤保现 PRD/decision 的目标权威。
 
-**验收对象**：在当前 `spec.md` 的「测试标准／验收对象」填写模板对象及真实来源，不新建独立材料。按模板「验收对象」唯一合同实际读原始要求、当前库存和已接受计划或实际前端改动，核角色、理由、范围冲突；复用三源适用性和已读材料构成本次调用 context。只有真实三源已核非 UI 才用模板的嵌套 CLI 对象，其余保原 Web 五项与具体缺口，不用示例或标签代来源。owner 空缺/空白仍显式为“用户”，已有 owner 和原输入保留；S5 其余设计、代码/URL、数据、权限沿任务合同，不把最小对象当完整 S5。
+**验收对象**：在当前 `spec.md` 的「验收对象是什么？」填写模板对象及真实来源，不新建独立材料。按模板「验收对象是什么？」唯一合同实际读原始要求、当前库存和已接受计划或实际前端改动，核角色、理由、范围冲突；复用三源适用性和已读材料构成本次调用 context。只有真实三源已核非 UI 才用模板的嵌套 CLI 对象，其余保原 Web 五项与具体缺口，不用示例或标签代来源。owner 空缺/空白仍显式为“用户”，已有 owner 和原输入保留；S5 其余设计、代码/URL、数据、权限沿任务合同，不把最小对象当完整 S5。
 
 需要对象检查时，读取 `skills/spec-specify/templates/spec-template.md` 内唯一 marker 后的完整可执行 `checkAcceptanceObject(input, context={})` JS 块，只移除该具名函数的 export 语法，在 Node VM 空上下文取得函数，传当前 spec 的真实对象与上述本次 context，保存对象输入、三源实际读取范围/引用/hash、返回及执行原件；已读材料复用原 ref，不复制大材料。checker 只留模板，不复制到生成 spec、本 Skill、workflow 或 test，不新增 runtime validator/command/schema/gate。marker 缺失/重复、无法导出或执行失败明确记录 source/producer、影响和原 owner；未执行不冒缺项已验证。`ok=false` 逐项报告 missing_fields 及取得条件；`ok=true` 只证明最小输入存在，配置服务/规定 viewport 不证明环境健康、UI或业务通过。写作完成以对象有实际来源或具名缺项、已有两个 workflow 能按原 producer 消费为准，实际方法/业务验证仍由其 owner 和最终验收者完成。
 
@@ -65,7 +66,7 @@ expected evidence type or artifact only; build-code 终末 supplies execution fa
 
 ## Artifact responsibility
 
-本节回答：Which file owns each product, design and execution fact.
+`spec.md` owns product behavior and global design, each Phase file owns its own delta, and execution facts stay with their Phase/task owners.
 
 For post-cohort work, `spec.md` owns product behavior **and global
 implementation design**: problem, scope, scenarios, PFACT, FR, AC,
@@ -103,7 +104,7 @@ boundary, and source → FR → AC → Phase/task → oracle trace. Apply the si
 
 ## Decision-log mapping and scope revision
 
-本节回答：How each changed requirement stays bound to its confirmed source.
+Every new or changed FR/AC keeps a compact source binding to the current `decision-log.md` and its load-bearing `ADR-` decision.
 
 For every new or changed FR/AC, preserve a compact source binding to the
 current `decision-log.md`: only R-, U-, PRD-, or CARD- source IDs as the
@@ -127,15 +128,21 @@ consequence, mitigation or STOP, handling stage, and verification. Open
 questions name affected IDs, owner, impact, handling stage, and close condition
 or STOP. Ambiguity is marked; it is not guessed.
 
-Before writing, remove authoring comments, placeholders, empty headings, empty tables, and filler. Use at most five columns in a table and keep prose out of table cells. Apply the single-authority rules and 「技能写作规范（WR001）」 below.
+Before writing, remove authoring comments, placeholders, empty headings, empty
+tables, and filler. Choose table columns for the actual comparison and keep
+explanatory prose outside table cells; do not impose a column quota. Apply the
+single-authority rules, the material-writing standard in
+`skills/material-writing/SKILL.md`, and Q01–Q13 below.
 
 Write only the named artifact `spec.md`. Return requirement count, ambiguity
 count, and a short checklist as structured output. Do not run Git commands or
 discover files. Missing input/callback fails loud.
 
+写完材料，按 `skills/material-writing/SKILL.md` 的「写完自检」逐条核；核不过就改，不交出去。
+
 ## Single-authority writing rules
 
-本节回答：How to write a readable spec without losing source meaning. 这是写作指引，不是质量门。
+Write the conclusion before evidence and keep each meaning in its own authority, so a readable spec keeps its source meaning. 这是写作指引，不是质量门。
 
 1. Write the conclusion before evidence and exceptions; keep one topic per paragraph and name actions directly.
 2. Keep AC criteria only in Appendix A; point to them from the narrative and the decision-log handoff index.
@@ -148,6 +155,42 @@ discover files. Missing input/callback fails loud.
 ## 技能写作规范（WR001）
 
 本节是 agent 文档写作的唯一规范层；本技能的 single-authority 规则是 spec 的具体落点，其它技能在创建或改写 agent 方法、写四类材料（decision-log、spec、Phase+index、PRD）或阶段报告/交接、阶段反思、PR/交付说明前指向这里，不复制本节或新建第四规范对象。规范指引写法，不产生质量 gate。检核以下 Q01–Q13，逐条给出真实范围、依据与未观测；原步骤与条件的保全表和实际方法消费分别记录，字面禁区按真实 source 正负断言/guard 原样保留。
+材料形状另见 `skills/material-writing/SKILL.md` 的「材料写作标准（唯一）」；本节只管写作方法。
+
+### 材料写作标准（唯一）
+
+正文在 `skills/material-writing/SKILL.md` 的「材料写作标准（唯一）」；本节不留正文。
+
+### 验收标准怎么写才可实现
+
+设计前必答五问；五问答不齐，这条验收就不能写。
+
+1. **谁做、做多久**：写执行者与预计工时。
+   合计超过本 Phase 剩余预算的验收，不许写。
+2. **靠什么资源**：写所需外部件与来源，再写缺了能否就地造、怎么造。
+   造不出来的外部件，不许写成通过条件。
+3. **范围是否只覆盖本 Phase 交付的东西**：写它证的是本 Phase 的哪个交付。
+   别 Phase 的产出写成供件，不写成承接；长期指标不当本 Phase 判据。
+4. **通过或不通过能不能在本次执行中真的观察到**：写观察方式、观察者与证据落点。
+   写不出怎么观察的，就不是验收，是愿望。
+5. **读者能不能照着做**：找没参与的独立执行单元读这条验收；不需要用户本人到场。
+   问他三件事：下一步你要做什么、在哪做、跑什么。
+   三问答不出，这条验收就没写完，补 task-id、文件路径或门禁命令。
+   实验原件保留还是用完删，只许写一种；两处相反就是自相矛盾，先统一。
+   这一问由作者自查，不是新增质量门；答不出就改材料。
+
+硬规则：一条验收如果在当前任务、当前资源、当前预算下不可能被判为通过，
+它就是错的验收，必须改写或删除，不许留着当 `incomplete` 的理由。
+
+可判为通过：执行者、成本、资源来源、观察方式四项都写清，第五问也答得出。
+不可判为通过（禁止）：
+
+- 依赖未取得且无法就地制造的样张。
+- 需要无限次重跑。
+- 需要别 Phase 的产出。
+- 判据本身无法观察。
+
+### 写作方法问题（Q01–Q13）
 
 1. **Q01 — Load**：逐行区分 context load（description/常驻指针）与 cognitive load（人记材料/触发条件），说明该行为何值得；人作选择所需认知成本不是一概消除的目标。description 是常驻 context pointer：引领词前置，每真实分支一个触发，去身份复述；model-invoked 保可发现 description，只有确实仅人触发才用 user-invoked，router 只能提示其它 user-invoked，不能代调用。
 2. **Q02 — Disclosure**：每分支都要的步骤内联，仅部分分支所需参考置于条件指针后。指针同时说明材料和到达条件；必需材料触发弱时先锐化指针再考虑内联。档内步骤、档内参考、外链参考按需分层，不把 live 步骤藏到无人会读的链接。
@@ -160,11 +203,11 @@ discover files. Missing input/callback fails loud.
 9. **Q09 — Environment**：可从一个真实文件或命令发现的脚本/配置/目录事实留给环境；只缓存无法直接发现的约定、理由或坑。被锁字面、机器标题/标签及受保护依赖的实读声明是例外，保其真实来源，不把路径存在当完成。
 10. **Q10 — No-op**：逐句问删除后相对当前模型默认行为会否变化。真正 no-op 删除整句而非修词，记录删除理由与含义保全落点；模型默认有争议就保留待相关真实 case 有/无句消费验证，不凭全文相似、行数或主观风格裁定。弱引领词先换更强且有行为锚的词。
 11. **Q11 — Sediment**：核每句与当前行为相关性，清已过时、被替代或从未相关的层；来源、决定与失败原件留历史原ref，不覆写过去或把未知写已解决。
-12. **Q12 — Sprawl**：即使每行活且唯一仍过长时，按真实分支/序列渐进披露，保执行链与到达条件。没有行数配额，也没有靠长度证明质量的自动 eval；手跑文档并用 duplication/sediment/no-op/sprawl/premature completion 词表定位失败。字符/句长预算只有具源依据才采用，无依据保 unknown；表达整理逐核心保全与有限无回归，新行为用对应目标 case，不强求赢家。未测行为/真人量如实未观测，不采集或估算输出用量。
+12. **Q12 — Sprawl**：即使每行活且唯一仍过长时，按真实分支/序列渐进披露，保执行链与到达条件。没有行数配额，也没有靠长度证明质量的自动 eval；手跑文档并用 duplication/sediment/no-op/sprawl/premature completion 词表定位失败。材料形状以「材料写作标准（唯一）」为准；字符数、行数、段数与材料数量不设人工质量门；行宽 80 字是作者要求，校验器只报读数、不作拒收或评分条件；表达整理逐核心保全与有限无回归，新行为用对应目标 case，不强求赢家。未测行为/真人量如实未观测，不采集或估算输出用量。
 
-13. **Q13 — 读者可用**：作者开工前按下列十九条自查，记录真实例外；这是本地写作规则，不冒标准原文或自动评分。四条作者指标是单行≤300字、单句≤60字、缩写首现解释、每节开头一句结论；引用、命令与锁定合同保原字节并注明例外。读数只报告，实际语义由独立读者回读。
+13. **Q13 — 读者可用**：作者开工前按下列十九条自查，记录真实例外；这是本地写作规则，不冒标准原文或自动评分。完整性、实际语义与真实消费决定材料是否可用；解释首现缩写，在节首回答读者问题，不设字数或材料数量配额；引用、命令与锁定合同保原字节并注明例外。读数只报告，实际语义由独立读者回读。
     - S1：一句只交代一个指令，连续动作按执行顺序分句。
-    - S2：正文单句≤60字；引用与精确命令单列例外，不改原义。
+    - S2：按真实含义组织句子，引用与精确命令保原义；行宽按材料写作标准第 5 条执行，不设句长拒收条件。
     - S3：一句围绕一个对象，复杂并列拆句或用表。
     - S4：先写谁做什么；强调受事时仍点明施动者。
     - S5：用具体动词表达动作，删不增加含义的名词化表达。
@@ -175,7 +218,7 @@ discover files. Missing input/callback fails loud.
     - S10：未参与写作的人复述目标、理由、下一步与失败恢复，保原答。
     - I1：每节说明读者要用它完成什么决定或动作。
     - I2：不影响执行的说明按 Q10 删除；必要边界保留。
-    - I3：每节开头先给结论及本节回答的问题。
+    - I3：每节标题就是读者的问题，开头第一句直接给答案。
     - I4：同一含义只在其 owner 处定义，别处给条件指针。
     - I5：真实冷读定位首改文件与命令；时间只报实际观察。
     - I6：高频专业词解释首现，核实际术语表缺口。
@@ -190,14 +233,17 @@ discover files. Missing input/callback fails loud.
 ## 固定来源与本地偏离
 
 来源权威：[catalog](../catalog.yaml#skills.spec-specify)；本便携小卡非权威；单技能副本缺catalog时向来源维护者取登记。
-来源线索：Matt writing-for-agents、SKILL-MECHANICS与to-spec；WR001 Q01–Q12及用户叙事的逐源章节回catalog。本地保留当前完整 spec 模板、Appendix A 独占验收、canonical IDs、PFACT 四状态互斥、FR 来源映射、十维状态与全局设计/Phase 职责。来源是判据，不是已经改善的证据。
+来源线索：Matt writing-for-agents、SKILL-MECHANICS与to-spec；WR001 Q01–Q13及用户叙事的逐源章节回catalog。本地保留当前完整 spec 模板、Appendix A 独占验收、canonical IDs、PFACT 四状态互斥、FR 来源映射、十维状态与全局设计/Phase 职责。来源是判据，不是已经改善的证据。
 
 本地不采用外部 tracker、ready-for-agent 标签、setup/宿主 Skill 依赖或另根材料；上游「不写具体路径」不覆盖本地经实读的工程锚/精确写集，User Stories 细节仍由产品需求 owner 负责。方法接收调用者材料与允许写目标，缺源/不安全目标/未知 profile 明确报错，不绑定任务路径或账号。迭代时核这些固定子文件的更新与更优候选，写源差与本地偏离后决定采用，不自动追 HEAD。
 
 ## 补充材料
 
-本节回答：Where to locate source reasoning and examples. Use the supplied current decision-log, source anchors and existing template; preserve historical material read-only.
+Source reasoning and examples come from the supplied current `decision-log.md`, source anchors and the existing template; historical material stays read-only.
 
 ## 同仓方法依赖
 
-`skills/decision-log/SKILL.md`、`skills/simplicity-guard/SKILL.md`、`skills/spec-plan/SKILL.md`；按上文及自带模板「测试标准」的实际条件读取，搬运时需同时提供或由调用者提供可读原件。
+`skills/material-writing/SKILL.md` 是本方法唯一写作标准来源。
+`skills/decision-log/SKILL.md` 与 `skills/simplicity-guard/SKILL.md` 按上文实际条件读取。
+`skills/spec-plan/SKILL.md` 按自带模板「测试计划是什么？」的实际条件读取。
+搬运时需同时提供或由调用者提供可读原件。

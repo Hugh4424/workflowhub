@@ -29,3 +29,22 @@ test('N16/N20 target: current template ADR four-parent shape is lawful and incom
   const old = checkDecisionLogChain({ markdown: '#### ADR-002 — 保留旧决定\n- **决定**：旧决定结果。\n- **为什么**：旧真实依据。\n- **否掉了什么**：旧替代。\n- **后果与风险**：旧特有风险。\n- **影响面**：旧文件。\n' });
   expect(old.recognized_blocks).toBe(1); expect(old.recognized_fields).toBe(5); expect(old.warnings).toEqual([]); advisory(old);
 });
+
+test('new-shape 决定 N maps through 旧编号对照; a missing mapping stays visible', () => {
+  // Reader-facing bodies now number decisions in Chinese; the legacy identity
+  // lives in the material's 旧编号对照 table. Unmapped blocks must not become
+  // a silent zero-entry result.
+  const body = '#### 决定 1：新形状决定\n- **做什么**：交给下游。\n- **不做什么**：不新增门。\n- **风险**：来源缺失由 owner 补。\n- **改动**：只改声明。\n';
+  const mapping = '\n### 旧编号对照\n\n| 正文编号 | 旧编号 | 说明 |\n| --- | --- | --- |\n| 决定 1 | ADR-001 | 示例 |\n';
+  const mapped = checkDecisionLogChain({ markdown: body + mapping });
+  expect(mapped.recognized_blocks).toBe(1);
+  expect(mapped.recognized_fields).toBe(4);
+  expect(mapped.warnings.some(w => w.code === 'missing_decision_id_mapping')).toBe(false);
+  expect(mapped.warnings.filter(w => w.code === 'missing_chain_field')).toEqual([]);
+  advisory(mapped);
+  const unmapped = checkDecisionLogChain({ markdown: body });
+  expect(unmapped.recognized_blocks).toBe(0);
+  expect(unmapped.warnings.some(w => w.code === 'missing_decision_id_mapping' && w.decision_id === '决定 1')).toBe(true);
+  expect(unmapped.warnings.some(w => w.code === 'no_decision_entries')).toBe(true);
+  advisory(unmapped);
+});

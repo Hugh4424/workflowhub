@@ -34,12 +34,10 @@ export function validateBuildPlanRequest(input) {
       const value = materials[key];
       const descriptor = value && typeof value === "object" && (Object.hasOwn(value, "ref") || Object.hasOwn(value, "sha256"));
       const nonTextBaseline = key === "decision_baseline" && typeof value !== "string";
-      if (nonTextBaseline || !materialPresent(value) || descriptor || materialBytes(redactProviderHostPaths(value)).length < 1024) {
-        throw Object.assign(new Error(`MATERIAL_MISSING: ${key} requires inline content of at least 1024 bytes`), { code: "MATERIAL_MISSING" });
+      if (nonTextBaseline || !materialPresent(value) || descriptor) {
+        throw Object.assign(new Error(`MATERIAL_MISSING: ${key} requires nonempty inline content`), { code: "MATERIAL_MISSING" });
       }
     }
-    if (materialBytes(materials.decision_baseline).length > 60 * 1024) throw Object.assign(new Error("MATERIAL_TOO_LARGE: decision_baseline exceeds 60 KiB"), { code: "MATERIAL_TOO_LARGE" });
-    if (materials.raw_requirement !== undefined && materialBytes(materials.raw_requirement).length > 10 * 1024) throw Object.assign(new Error("MATERIAL_TOO_LARGE: raw_requirement must be a bounded excerpt of at most 10 KiB"), { code: "MATERIAL_TOO_LARGE" });
   } else {
     for (const [key, value] of Object.entries(materials)) {
       if (value && typeof value === "object" && (Object.hasOwn(value, "ref") || Object.hasOwn(value, "sha256"))) {
