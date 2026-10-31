@@ -175,7 +175,7 @@ skills:
         adopted:
           - skills/principle-encode-lessons-in-structure/SKILL.md#encode-lessons-in-structure — 历史负例与结构护栏，原采集commit/时刻未知，不采用规则表/自动提交
     local_changes: 复用既有收口、交接与成本入口；保用户真选检查与人确认清理，直接落账与待批分开，业务仓specs经验按下一步加现象判重，无来源不编、越权不回落；不新增writer或控制面
-    dependency_closure: ["skills/spec-specify", "skills/stage-handoff", "skills/norm-sync"]
+    dependency_closure: ["skills/spec-specify", "skills/stage-handoff", "skills/norm-sync", "skills/material-writing"]
     update_policy: 迭代时核正文三个具名固定子文件与本地偏离、用户选择/check/prune消费者；pstack各文件内容pin不推原采集commit/时间或全仓基线，不自动追HEAD或以来源登记冒效果
   - name: stage-handoff
     path: skills/stage-handoff/SKILL.md
@@ -283,7 +283,7 @@ skills:
     used_by_stages: *stages_make_decision
     upstream: []
     local_changes: workflowhub 原生实现；当前交互真相仅为 decision-log.md 直接字段，make-decision 的完成与审查消费者不读取 interaction aggregate；历史 aggregate 只读保留，不新增独立 runtime；来源为本仓decision-log模板、make-decision与grill-with-docs领域方法；外源完整登记沿后者catalog条目，不重复登记为本技能外源。
-    dependency_closure: ["skills/grill-with-docs","skills/spec-specify"]
+    dependency_closure: ["skills/grill-with-docs","skills/spec-specify","skills/material-writing"]
     update_policy: 随 stage 合同变更审查
   - name: deep-research
     path: skills/deep-research/SKILL.md
@@ -430,7 +430,7 @@ skills:
         adopted:
           - skills/engineering/to-spec/SKILL.md#user-stories — 以真实角色、诉求、收益组织本技能User Stories；本地两步地图/详情和真实确认合同保留
     local_changes: workflowhub 原生可搬运内容技能；只写显式提供的单一 PRD 目标，不伪造平台、确认或交付事实；来源为本仓build-prd与prd-template.md职责/确认合同，既有User Stories方法吸收Matt to-spec#user-stories，完整来源在本条upstream；本次未新增第三方字节复制。
-    dependency_closure: ["skills/spec-specify","skills/stage-handoff","skills/project-norm-init"]
+    dependency_closure: ["skills/spec-specify","skills/stage-handoff","skills/project-norm-init","skills/material-writing"]
     update_policy: 随 PRD 模板、两步内容合同和 build-prd consumer 变更审查
   - name: spec-research
     local_version: 1.0.0
@@ -447,6 +447,19 @@ skills:
     local_changes: workflowhub 原生实现
     dependency_closure: []
     update_policy: 随内存研究接口变更审查
+  - name: material-writing
+    path: skills/material-writing/SKILL.md
+    local_version: 1.0.0
+    last_reviewed_at: '2026-10-31'
+    status: native
+    metrics_enabled: false
+    purpose: 所有写作材料的唯一形状标准与写完自检
+    design_idea: 标准从 spec-specify 移到通用位置，写文件前可发现，写完最后一句后自检
+    used_by_stages: []
+    upstream: []
+    local_changes: workflowhub 原生；从 skills/spec-specify/SKILL.md「材料写作标准（唯一）」原字节迁出十一条与编号对照表规则，只补写完自检九条；不新增校验器、机器必填字段、stage 或 gate。
+    dependency_closure: ["skills/spec-specify"]
+    update_policy: 随十一条、Q01–Q13 关系或自检清单变更一并审查；正文只在原标准 owner 确认后改动
   - name: spec-specify
     path: skills/spec-specify/SKILL.md
     local_version: 1.2.0
@@ -487,7 +500,7 @@ skills:
         adopted:
           - skills/engineering/to-spec/SKILL.md#user-stories — 需求叙事与用户结果；本地spec模板仍为唯一正文合同
     local_changes: post cohort 由 build-plan 写 spec.md 产品规格与全局实现设计，pre cohort 由 build-spec 读取旧材料；consumer 为 spec-plan、spec-analyze、build-code；owner 为 build-plan；测试为 post-cohort-spec-design-authority；当单一 spec 作者机制被审查后的替代机制取代时删除
-    dependency_closure: ["skills/decision-log","skills/simplicity-guard","skills/spec-plan"]
+    dependency_closure: ["skills/decision-log","skills/simplicity-guard","skills/spec-plan","skills/material-writing"]
 
     update_policy: 上游更新时从固定 commit 人工比较规格质量规则
   - name: spec-clarify
@@ -568,7 +581,7 @@ skills:
         adopted:
           - skills/productivity/writing-for-agents/SKILL-MECHANICS.md#invocation — 调用与路由边界
     local_changes: post cohort 只写 spec.md 实现设计与独立 phases/P<n>.md；旧 plan 模板仅历史只读，不纳入可分发 bundle；owner 为 build-plan。现有 bundle 增 check-reader-record（第11步核七段/五问/命令退出的记录形态）、check-authoring-budget（逐材料只报告结构读数，超预算仍退0）、authoring-contract（第6/7步作者与brief实际读取），consumer 为 build-plan作者、独立冷读者、build-code和spec-analyze。测试为 post-cohort-authoring-files及C07七个具名authoring契约测试；当这三职责由独立验证的既有替代完整承接且本附件无真实消费者时删除相应附件/指针，保历史原件；不新增控制面或质量裁决
-    dependency_closure: ["skills/simplicity-guard","skills/spec-specify"]
+    dependency_closure: ["skills/simplicity-guard","skills/spec-specify","skills/material-writing"]
 
     update_policy: 比较 Spec Kit 与 Superpowers planning 变更，只吸收不重复编排的规则
   - name: spec-tasks

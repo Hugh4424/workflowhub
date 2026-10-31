@@ -132,8 +132,59 @@ describe('ORACLE-P1-STAGE-STEPS checker', () => {
       ['make-decision', '已配置', 15], ['build-plan', '已配置', 12],
       ['build-code', '已配置', 12], ['build-prd', '已配置', 6],
     ]);
+    expect(report.stages.every(row => row.definition === 'available')).toBe(true);
     expect(report.errors.join('\n')).toContain('task.json');
     expect(report.stages[0].steps[7]).toMatchObject({ judgment: '未留痕' });
+  });
+});
+
+describe('step definition source and failure wording', () => {
+  const taskPath = root => join(root, 'missing-task');
+  const lineSaysUntraced = text => text.split('\n').some(line => /：未留痕/.test(line));
+  it('reads the installed workflow manifests when cwd has no workflows/', () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'p1-cwd-')));
+    try {
+      const business = join(root, 'business');
+      mkdirSync(join(business, 'workflows/build-code'), { recursive: true });
+      // A decoy next to the caller must not win over the installed package.
+      writeFileSync(join(business, 'workflows/build-code/steps.json'), '{"stage_slug":"build-code","steps":[]}\n');
+      const result = spawnSync(process.execPath, [entry, '--stage=build-code', `--task-path=${taskPath(root)}`, '--json'], { cwd: business, encoding: 'utf8' });
+      expect(result.status).toBe(0);
+      const report = JSON.parse(result.stdout);
+      const installed = JSON.parse(readFileSync(resolve('workflows/build-code/steps.json'), 'utf8'));
+      expect(report.stages).toHaveLength(1);
+      expect(report.stages[0]).toMatchObject({ stage: 'build-code', definition: 'available', mapping: '已配置' });
+      expect(report.stages[0].steps.map(step => step.step_slug)).toEqual(installed.steps.map(step => step.step_slug));
+      expect(result.stdout).not.toContain('读不到步骤定义');
+    } finally { rmSync(root, { recursive: true }); }
+  });
+  it('maps a producer definition failure to 未判定 wording, never a step verdict', () => {
+    expect(checker.producerDefinitionError(['workflows/make-decision/steps.json: steps manifest is unreadable: ENOENT', 'other'], 'make-decision'))
+      .toBe('steps manifest is unreadable: ENOENT');
+    expect(checker.producerDefinitionError(['workflows/build-plan/steps.json: other'], 'make-decision')).toBeNull();
+    expect(checker.producerDefinitionError(undefined, 'make-decision')).toBeNull();
+  });
+  it.each([
+    ['a missing manifest', null],
+    ['an invalid manifest', '{"stage_slug":"build-plan","steps":[]}\n'],
+  ])('names %s as unreadable instead of judging steps 未留痕', (_label, content) => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'p1-definition-')));
+    try {
+      const source = join(root, 'repo');
+      mkdirSync(join(source, 'workflows/build-plan'), { recursive: true });
+      if (content !== null) writeFileSync(join(source, 'workflows/build-plan/steps.json'), content);
+      const args = [entry, '--stage=build-plan', `--task-path=${taskPath(root)}`, `--repo-root=${source}`];
+      const result = spawnSync(process.execPath, [...args, '--json'], { encoding: 'utf8' });
+      expect(result.status).toBe(0);
+      const report = JSON.parse(result.stdout);
+      expect(report.stages[0]).toMatchObject({ stage: 'build-plan', definition: 'unavailable', mapping: '未配置', steps: [] });
+      expect(report.stages[0].definition_error).toContain('build-plan/steps.json');
+      expect(report.errors.join('\n')).toContain('读不到步骤定义');
+      const text = spawnSync(process.execPath, args, { encoding: 'utf8' }).stdout;
+      expect(text).toContain('读不到步骤定义');
+      expect(text).toContain('未判定');
+      expect(lineSaysUntraced(text)).toBe(false);
+    } finally { rmSync(root, { recursive: true }); }
   });
 });
 

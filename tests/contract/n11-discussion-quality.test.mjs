@@ -63,7 +63,9 @@ function coverageFixture(completed = []) {
 }
 function runCoverage(completed, check) {
   const f = coverageFixture(completed);
-  try { const result = spawnSync(process.execPath, [cli, '--task-path', f.task], { cwd: f.repo, encoding: 'utf8' }); expect(result.stderr).toBe(''); check(result, JSON.parse(result.stdout)); }
+  // The fixture's custom two-step manifest lives in its own repo, so the real
+  // CLI must be told explicitly to read definitions there instead of the install.
+  try { const result = spawnSync(process.execPath, [cli, '--task-path', f.task, '--workflow-root', f.repo], { cwd: f.repo, encoding: 'utf8' }); expect(result.stderr).toBe(''); check(result, JSON.parse(result.stdout)); }
   finally { rmSync(f.root, { recursive: true }); }
 }
 describe('ORACLE-N11-STEP-COVERAGE', () => {

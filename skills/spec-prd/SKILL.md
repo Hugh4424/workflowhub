@@ -17,7 +17,9 @@ spec-prd 是规划 prd.md 的唯一正文作者。build-prd 协调条件工作�
 
 ## 正常两步内容方法
 
-写 PRD 的大纲/地图或详情前，先读取 `skills/spec-specify/SKILL.md` 的「材料写作标准（唯一）」与 Q01–Q13 唯一正文，再按下列两步写作；消费者是 PRD 作者、后续任务作者与用户。缺源如实 `unavailable`，不复制规范。
+写 PRD 的大纲/地图或详情前，先读取 `skills/material-writing/SKILL.md` 的「材料写作标准（唯一）」。
+再读 `skills/spec-specify/SKILL.md` 的 Q01–Q13 唯一正文，然后按下列两步写作。
+消费者是 PRD 作者、后续任务作者与用户；缺源如实 `unavailable`，不复制规范。
 
 先展示任务地图，收到真实地图答复后再展开详情卡。
 
@@ -58,6 +60,8 @@ spec-prd 是规划 prd.md 的唯一正文作者。build-prd 协调条件工作�
 
 归档小修保留依据与影响；承诺有实质变化先展示前后差异并取得真实选择，再写变更说明和在途影响。保留历史决定、确认、审查、测试和 Git/物理事实；新任务记录采用的来源，现有在途任务不自动覆盖。交接分别说明规划、材料可用、开发、质量、附件和物理动作事实；阶段末的人读交接按 `skills/stage-handoff/SKILL.md` 方法执行，不创建第五材料、状态机或新 gate。
 
+写完材料，按 `skills/material-writing/SKILL.md` 的「写完自检」逐条核；核不过就改，不交出去。
+
 ## 可搬运调用边界
 
 独立内容调用只返回正文，不伪造 WorkflowHub identity、用户答复、map 或 final confirmation、写盘、发布、归档、provider 成功、host invocation、Git 结果或物理授权。No second dispatcher or writer, review gate or physical delivery controller; build-prd continues to coordinate the existing author.
@@ -84,4 +88,7 @@ User Stories 吸收 mattpocock/skills 固定 commit `b0618bc436ad893b3c5e84e55fb
 
 ## 同仓方法依赖
 
-`skills/spec-specify/SKILL.md`、`skills/stage-handoff/SKILL.md`、`skills/project-norm-init/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。
+`skills/material-writing/SKILL.md` 是本方法唯一写作标准来源。
+`skills/spec-specify/SKILL.md`、`skills/stage-handoff/SKILL.md` 按上文实际条件读取。
+`skills/project-norm-init/SKILL.md` 按上文实际条件读取。
+搬运时需同时提供或由调用者提供可读原件。

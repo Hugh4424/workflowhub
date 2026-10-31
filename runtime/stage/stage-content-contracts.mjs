@@ -1,6 +1,7 @@
 // Current post Phase and ordinary decision-log text contracts.
 // Pure facts only: no retired appendices, hash-bound identities or stage-completion machines.
-import { isAbsolute, relative, resolve } from "node:path";
+import { statSync } from "node:fs";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 
 const ACCEPTANCE_CRITERION_SOURCE = String.raw`AC(?:\d{1,3}|-\d{1,3}|(?:-[A-Z][A-Z0-9]*)+-\d{1,3})`;
 
@@ -232,6 +233,71 @@ function writePathIdentity(path, scope) {
   }
   const evidence = scope.evidenceFiles?.find(({ref}) => path === resolve(scope.taskRoot ?? '/', ref));
   return evidence ? JSON.stringify(['task-evidence', evidence.ref]) : path;
+}
+
+const PLANNED_EVIDENCE_PATH = /^\s*(?:`+\s*)?planned\s*[:：]/i;
+
+// Evidence paths may be repository-relative, task-relative, or absolute. Reuse
+// the existing owners instead of a new resolver: authenticated repository
+// roots and the task root from reviewReadScope, plus the material root that
+// run-checks already passes. A material root under <repo>/specs/<task> also
+// contributes its repository parent, the same convention the final-chain
+// material reader uses.
+function evidenceSearchRoots(reviewReadScope, materialPath) {
+  const roots = [];
+  const add = (value) => {
+    if (typeof value !== "string" || value.trim() === "") return;
+    roots.push(resolve(value));
+  };
+  for (const repo of reviewReadScope?.repositories ?? []) add(repo?.sourceRoot);
+  add(reviewReadScope?.taskRoot);
+  if (nonEmptyString(materialPath)) {
+    const materialRoot = resolve(materialPath);
+    const specsAt = materialRoot.lastIndexOf(`${sep}specs${sep}`);
+    if (specsAt > 0) roots.push(materialRoot.slice(0, specsAt));
+    roots.push(materialRoot);
+  }
+  return [...new Set(roots)];
+}
+
+function readableEvidenceRoots(roots) {
+  return roots.filter((root) => {
+    try { return statSync(root).isDirectory(); } catch { return false; }
+  });
+}
+
+function declaredEvidencePaths(value) {
+  const text = String(value ?? "").trim();
+  const spans = inlinePaths(text);
+  const candidates = spans.length > 0 ? spans : [text.replace(/[（(][\s\S]*$/, "").trim()];
+  return [...new Set(candidates
+    .map((token) => token.replace(/^\s*(?:`+\s*)?planned\s*[:：]\s*/i, "").trim())
+    .filter((token) => token !== "" && !/\s/.test(token) && /[/\\.]/.test(token)))];
+}
+
+function checkEvidencePath(token, roots) {
+  if (isAbsolute(token)) {
+    try {
+      return statSync(token).isFile()
+        ? Object.freeze({ status: "verified", resolved: token })
+        : Object.freeze({ status: "missing", reason: "not a regular file" });
+    } catch (error) {
+      return Object.freeze({ status: "missing", reason: error.code ?? error.message });
+    }
+  }
+  for (const root of roots) {
+    const candidate = resolve(root, token);
+    try {
+      if (statSync(candidate).isFile()) return Object.freeze({ status: "verified", resolved: candidate });
+    } catch { /* keep searching the remaining declared roots */ }
+  }
+  return Object.freeze({ status: "missing", reason: "not found under any declared root" });
+}
+
+function plannedEvidence(value) {
+  if (PLANNED_EVIDENCE_PATH.test(value)) return true;
+  const [firstPath] = inlinePaths(value);
+  return firstPath !== undefined && PLANNED_EVIDENCE_PATH.test(firstPath);
 }
 
 function hasAffirmativeCodeWrite(action) {
@@ -606,6 +672,9 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
     errors.push("Phase index must remain pointer-only; command, oracle, and evidence belong to Phase files");
   }
   const phaseRows = [];
+  const archiveMaterial = /(?:^|[/\\])archive(?:[/\\]|$)/.test(material_path ?? "");
+  const evidenceRoots = readableEvidenceRoots(evidenceSearchRoots(reviewReadScope, material_path));
+  const evidenceFacts = { verified: [], planned: [], missing: [], unverified: [] };
   let selectedPhaseScopeValid = false;
   const indexedPaths = new Set();
   const writeOwners = new Map();
@@ -715,8 +784,54 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
     if (!hasExecutableCommand(command) || !/^ORACLE-[A-Z0-9-]+/.test(oracle ?? "")) {
       commandError(`${expectedPath} requires an executable gate_cmd and oracle`);
     }
-    if (!phaseField("STOP") || !phaseField("Done") || !phaseField("evidence_path")) {
+    const evidenceValue = phaseField("evidence_path");
+    if (!phaseField("STOP") || !phaseField("Done") || !evidenceValue) {
       errors.push(`${expectedPath} requires STOP, Done, and evidence_path`);
+    } else if (plannedEvidence(evidenceValue)) {
+      // An explicit known gap is not a pass and not an error: it stays visible
+      // in facts so a planned path can never masquerade as generated evidence.
+      const [plannedPath = evidenceValue] = declaredEvidencePaths(evidenceValue);
+      evidenceFacts.planned.push(Object.freeze({
+        phase_id: expectedId, path: plannedPath, statement: evidenceValue,
+      }));
+    } else {
+      const declaredPaths = declaredEvidencePaths(evidenceValue);
+      if (declaredPaths.length === 0) {
+        evidenceFacts.unverified.push(Object.freeze({
+          phase_id: expectedId, path: null,
+          reason: "evidence_path declares no concrete path", statement: evidenceValue,
+        }));
+      }
+      for (const token of declaredPaths) {
+        if (!isAbsolute(token) && evidenceRoots.length === 0) {
+          evidenceFacts.unverified.push(Object.freeze({
+            phase_id: expectedId, path: token,
+            reason: "no readable material, repository, or task root",
+          }));
+          continue;
+        }
+        const checked = checkEvidencePath(token, evidenceRoots);
+        if (checked.status === "verified") {
+          evidenceFacts.verified.push(Object.freeze({
+            phase_id: expectedId, path: token, resolved: checked.resolved,
+          }));
+          continue;
+        }
+        if (archiveMaterial) {
+          // Archived material is historical: prose already accepts diagnostic
+          // mode there, and a missing old path must not become a new gate.
+          evidenceFacts.unverified.push(Object.freeze({
+            phase_id: expectedId, path: token,
+            reason: "archive material keeps historical evidence out of the current gate",
+          }));
+          continue;
+        }
+        evidenceFacts.missing.push(Object.freeze({ phase_id: expectedId, path: token }));
+        const searched = isAbsolute(token)
+          ? "absolute path checked directly"
+          : `searched roots: ${evidenceRoots.join(", ")}`;
+        errors.push(`${expectedPath} evidence_path does not exist: ${token} (${searched})`);
+      }
     }
     const frs = identifiers(body, /\bFR-(?:[A-Z][A-Z0-9]*-\d{3}|\d{1,3})\b/g);
     const acs = identifiers(body, ACCEPTANCE_CRITERION_ID);
@@ -946,6 +1061,24 @@ export function validatePostPhaseContract({ spec, index, phases, reviewReadScope
     ac_coverage: Object.freeze({ accepted_count: acceptedAcs.length, covered_count: acceptedAcs.filter((id) => coveredAcs.includes(id)).length, accepted_ids: Object.freeze(acceptedAcs), covered_ids: Object.freeze(coveredAcs), deferred_ids: Object.freeze(deferredAcs) }),
     dependency_validation: Object.freeze({ valid: dependencyValid }),
     command_oracle_checks: Object.freeze({ valid: taskCards.length > 0 && commandOracleValid }),
+    evidence_paths: Object.freeze({
+      verified: Object.freeze(evidenceFacts.verified),
+      planned: Object.freeze(evidenceFacts.planned),
+      missing: Object.freeze(evidenceFacts.missing),
+      unverified: Object.freeze(evidenceFacts.unverified),
+      verified_count: evidenceFacts.verified.length,
+      planned_count: evidenceFacts.planned.length,
+      missing_count: evidenceFacts.missing.length,
+      unverified_count: evidenceFacts.unverified.length,
+      // A gate can pass with an explicitly planned gap; this boolean tells the
+      // two apart without turning the known gap into an error.
+      all_verified: evidenceFacts.verified.length > 0
+        && evidenceFacts.planned.length === 0
+        && evidenceFacts.missing.length === 0
+        && evidenceFacts.unverified.length === 0,
+      archive_diagnostic: archiveMaterial,
+    }),
+    evidence_path_summary: `${evidenceFacts.verified.length} verified; ${evidenceFacts.planned.length} planned; ${evidenceFacts.missing.length} missing; ${evidenceFacts.unverified.length} unverified`,
   });
   return Object.freeze({ ok: errors.length === 0, errors: Object.freeze(errors), facts });
 }

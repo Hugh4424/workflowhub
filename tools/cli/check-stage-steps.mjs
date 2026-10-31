@@ -1,12 +1,21 @@
 #!/usr/bin/env node
 import { WORKFLOW_STAGES } from '../../runtime/stage/stage-registry.mjs';
 // Report-only consumer of the existing final-chain evidence producer.
-import { readFileSync, realpathSync } from 'node:fs';
-import { resolve, dirname, relative, isAbsolute } from 'node:path';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { resolve, dirname, relative, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runFinalChainCheck } from '../../runtime/task/final-chain-runner.mjs';
 
-const repository = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+// Step definitions belong to the installed workflowhub package, never to the
+// project being checked. Walk up from this file so nested install layouts also
+// work; the historical two-levels-up layout stays as the last resort.
+function installedWorkflowRoot(start) {
+  for (let current = resolve(start); ; current = dirname(current)) {
+    if (existsSync(join(current, 'workflows'))) return current;
+    if (dirname(current) === current) return resolve(start, '../..');
+  }
+}
+const repository = installedWorkflowRoot(dirname(fileURLToPath(import.meta.url)));
 const stages = WORKFLOW_STAGES;
 const MAPPING_HEADING = /旧编号对照|编号对照/;
 // Package headings are written as WPn in archived material and as Chinese
@@ -57,12 +66,23 @@ function legacyIdMappings(markdown) {
   }
   return mappings;
 }
+// The evidence producer reads step definitions from the installed workflowhub
+// package, or from the explicit --repo-root this checker passes through. When
+// that root has no workflows/<stage> it cannot define any step, so an empty
+// judgement means "definition unreadable", not "not done".
+export function producerDefinitionError(limits, name) {
+  const prefix = `workflows/${name}/steps.json: `;
+  const limit = (Array.isArray(limits) ? limits : []).find(value => typeof value === 'string' && value.startsWith(prefix));
+  return limit ? limit.slice(prefix.length) : null;
+}
 export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = repository, stage } = {}) {
   const errors = [];
   let evidence = [];
   let producerLimits = [];
   try {
-    const report = runFinalChainCheck({ taskPath, ...(materialRoot ? { materialRoot } : {}) });
+    // Pass the same explicit root this checker reads: --repo-root keeps its
+    // current meaning, and its default is the installed workflowhub package.
+    const report = runFinalChainCheck({ taskPath, ...(materialRoot ? { materialRoot } : {}), workflowRoot: resolve(repoRoot) });
     evidence = report.workflow_steps;
     producerLimits = report.limits ?? [];
     if (!materialRoot) materialRoot = report.material_root;
@@ -71,20 +91,34 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
   const reports = [];
   for (const name of stages.filter(name => !stage || name === stage)) {
     const source = `workflows/${name}/steps.json`;
+    const manifestPath = resolve(repoRoot, source);
+    let definitions;
     try {
-      const manifest = JSON.parse(readFileSync(resolve(repoRoot, source), 'utf8'));
+      const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
       if (manifest.stage_slug !== name || !Array.isArray(manifest.steps) || !manifest.steps.length) throw Error('invalid steps manifest');
-      const steps = manifest.steps.map(step => {
-        const mapping = /判定消费[：:]\s*([^；;\n]+)[；;]\s*原件[：:]\s*(\S[^\n]*)/.exec(step.observable_result ?? '');
-        const row = evidence.find(row => row.source === source && row.step_slug === step.step_slug);
-        return { stage: name, step_id: step.step_id, step_slug: step.step_slug, source,
-          evidence_location: mapping?.[2] ?? null, consumer: mapping?.[1] ?? null,
-          judgment: !mapping ? '映射未配置' : row?.state === 'completed' || row?.state === 'not_applicable' ? '已留痕' : '未留痕',
-          state: row?.state ?? 'unavailable', basis: row?.basis ?? [],
-          gap: !mapping ? `${source}#${step.step_slug} 缺判定消费/原件标记` : row ? (row.limits ?? []).join('；') : '既有步骤判定未取得；不据文件存在推定完成' };
-      });
-      reports.push({ stage: name, source, mapping: steps.every(row => row.consumer && row.evidence_location) ? '已配置' : '未配置', steps });
-    } catch (error) { errors.push(`${source}: ${error.message}`); reports.push({ stage: name, source, mapping: '未配置', steps: [] }); }
+      definitions = manifest.steps;
+    } catch (error) {
+      const detail = `${manifestPath}: ${error.message}`;
+      errors.push(`读不到步骤定义：${source}（${detail}）；步骤是否完成未判定，不按「未留痕」报告`);
+      reports.push({ stage: name, source, definition: 'unavailable', definition_error: detail, mapping: '未配置', steps: [] });
+      continue;
+    }
+    const producerFailure = producerDefinitionError(producerLimits, name);
+    const steps = definitions.map(step => {
+      const mapping = /判定消费[：:]\s*([^；;\n]+)[；;]\s*原件[：:]\s*(\S[^\n]*)/.exec(step.observable_result ?? '');
+      const identity = { stage: name, step_id: step.step_id, step_slug: step.step_slug, source,
+        evidence_location: mapping?.[2] ?? null, consumer: mapping?.[1] ?? null };
+      if (producerFailure) return { ...identity, judgment: '未判定', state: 'unavailable', basis: [],
+        gap: `读不到步骤定义：证据生产者未能从材料仓读取 ${source}；本条不是「步骤没做」` };
+      const row = evidence.find(row => row.source === source && row.step_slug === step.step_slug);
+      return { ...identity,
+        judgment: !mapping ? '映射未配置' : row?.state === 'completed' || row?.state === 'not_applicable' ? '已留痕' : '未留痕',
+        state: row?.state ?? 'unavailable', basis: row?.basis ?? [],
+        gap: !mapping ? `${source}#${step.step_slug} 缺判定消费/原件标记` : row ? (row.limits ?? []).join('；') : '步骤证据台账缺行：没有这一步的留痕原件；不能据此断定步骤没做' };
+    });
+    if (producerFailure) errors.push(`读不到步骤定义：${source} 的证据生产者读取失败（${producerFailure}）；留痕状态未判定`);
+    reports.push({ stage: name, source, definition: producerFailure ? 'unavailable' : 'available',
+      definition_error: producerFailure, mapping: steps.every(row => row.consumer && row.evidence_location) ? '已配置' : '未配置', steps });
   }
   if (stage && !stages.includes(stage)) errors.push(`未知阶段：${stage}`);
   let modules = [];
@@ -257,7 +291,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   if (json) console.log(JSON.stringify(report, null, 2));
   else {
     for (const row of report.stages) {
-      console.log(`${row.stage} 映射${row.mapping}`);
+      if (row.definition === 'unavailable') console.log(`${row.stage} 读不到步骤定义（${row.source}）：${row.definition_error}；步骤是否完成未判定，不按「未留痕」报告`);
+      else console.log(`${row.stage} 映射${row.mapping}`);
       for (const step of row.steps) console.log(`  ${step.step_id} ${step.step_slug}：${step.judgment}；证据位置：${step.evidence_location ?? '未配置'}；${step.gap}`);
     }
     for (const row of report.modules) {

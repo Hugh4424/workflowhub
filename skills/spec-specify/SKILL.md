@@ -9,7 +9,9 @@ description: Draft the post-cohort product specification and global implementati
 
 ## Post-cohort specification contract
 
-写 spec 前，先读取本文件「材料写作标准（唯一）」与 Q01–Q13 唯一正文，再执行以下写作动作；消费者是产品规格作者与下游实施、独立验收读者。规范不可读时如实 `unavailable`，不以模板骨架代替读取。
+写 spec 前，先读取 `skills/material-writing/SKILL.md` 的「材料写作标准（唯一）」。
+再读本文件 Q01–Q13 唯一正文，然后执行以下写作动作。
+消费者是产品规格作者与下游实施、独立验收读者；规范不可读时如实 `unavailable`，不以模板骨架代替读取。
 
 Post-cohort `spec.md` owns both product behavior and the global implementation design, and `build-plan` authors it.
 
@@ -126,11 +128,17 @@ consequence, mitigation or STOP, handling stage, and verification. Open
 questions name affected IDs, owner, impact, handling stage, and close condition
 or STOP. Ambiguity is marked; it is not guessed.
 
-Before writing, remove authoring comments, placeholders, empty headings, empty tables, and filler. Choose table columns for the actual comparison and keep explanatory prose outside table cells; do not impose a column quota. Apply the single-authority rules and the 「材料写作标准（唯一）」／Q01–Q13 below.
+Before writing, remove authoring comments, placeholders, empty headings, empty
+tables, and filler. Choose table columns for the actual comparison and keep
+explanatory prose outside table cells; do not impose a column quota. Apply the
+single-authority rules, the material-writing standard in
+`skills/material-writing/SKILL.md`, and Q01–Q13 below.
 
 Write only the named artifact `spec.md`. Return requirement count, ambiguity
 count, and a short checklist as structured output. Do not run Git commands or
 discover files. Missing input/callback fails loud.
+
+写完材料，按 `skills/material-writing/SKILL.md` 的「写完自检」逐条核；核不过就改，不交出去。
 
 ## Single-authority writing rules
 
@@ -147,32 +155,11 @@ Write the conclusion before evidence and keep each meaning in its own authority,
 ## 技能写作规范（WR001）
 
 本节是 agent 文档写作的唯一规范层；本技能的 single-authority 规则是 spec 的具体落点，其它技能在创建或改写 agent 方法、写四类材料（decision-log、spec、Phase+index、PRD）或阶段报告/交接、阶段反思、PR/交付说明前指向这里，不复制本节或新建第四规范对象。规范指引写法，不产生质量 gate。检核以下 Q01–Q13，逐条给出真实范围、依据与未观测；原步骤与条件的保全表和实际方法消费分别记录，字面禁区按真实 source 正负断言/guard 原样保留。
+材料形状另见 `skills/material-writing/SKILL.md` 的「材料写作标准（唯一）」；本节只管写作方法。
 
 ### 材料写作标准（唯一）
 
-这十一条是四类人读材料的形状标准，也是所有写材料技能的唯一来源；其它文件给条件指针，不复制正文。
-
-**作者必须做到，校验器只报告。** 十一条是作者必须达到的材料要求，不是可做可不做的建议。
-行宽、句长、重复与编号对照的自动检查只报读数，不因风格或长度拒收材料，也不新增写入拒绝条件；材料是否完成仍按既有合同判定。
-
-**三层关系与冲突规则。** 十一条＝材料形状；Q01–Q13＝写作方法问题；S1–S10／I1–I9＝Q13 下的自查清单。同一句出现冲突时，以十一条为准。
-
-1. 材料为读者写：先想清楚谁读、拿它做什么。
-2. 正文用中文编号：需求 1、验收 1、任务 1、步骤 1。
-3. 内部编号只出现在附录、机器字段、追踪表。
-4. 每节标题是读者问题，第一句就是答案本身；不加「第一句回答：」「本节回答：」这类标签，读者声明只保留最少一行。
-5. 一句一行，一行不超过 80 字；命令与表格行除外。
-6. 一段只讲一件事。
-7. 术语首现给一句解释，全文一个词；这是第 11 条的子集。
-8. 表格只放对照，不承载步骤。
-9. 机器字段集中在卡末，标「校验器用，人可跳过」；机器字段可以折行，续行缩进即可，校验器会合并续行，首行不得为空或占位。
-10. 不用 L0、L1、L2 这类标题；也不换一组层号代替人话标题。
-11. 不滥用黑话、术语和内部编号；没有背景知识的人也要能轻松读懂。
-
-第 4 条不覆盖机器逐字读取的标题与字段标签，那些按原合同保留并就地说明例外。
-
-编号对照表：每份材料恰好一张编号对照表，正文中文编号与机器编号逐行对应；漏建对照表＝材料未完成。
-位置：decision-log 的「旧编号对照」、spec 的 Appendix B、Phase 的卡内「任务 N」与任务编号。
+正文在 `skills/material-writing/SKILL.md` 的「材料写作标准（唯一）」；本节不留正文。
 
 ### 验收标准怎么写才可实现
 
@@ -186,7 +173,7 @@ Write the conclusion before evidence and keep each meaning in its own authority,
    别 Phase 的产出写成供件，不写成承接；长期指标不当本 Phase 判据。
 4. **通过或不通过能不能在本次执行中真的观察到**：写观察方式、观察者与证据落点。
    写不出怎么观察的，就不是验收，是愿望。
-5. **读者能不能照着做**：找一位没参与的人读这条验收。
+5. **读者能不能照着做**：找没参与的独立执行单元读这条验收；不需要用户本人到场。
    问他三件事：下一步你要做什么、在哪做、跑什么。
    三问答不出，这条验收就没写完，补 task-id、文件路径或门禁命令。
    实验原件保留还是用完删，只许写一种；两处相反就是自相矛盾，先统一。
@@ -256,4 +243,7 @@ Source reasoning and examples come from the supplied current `decision-log.md`, 
 
 ## 同仓方法依赖
 
-`skills/decision-log/SKILL.md`、`skills/simplicity-guard/SKILL.md`、`skills/spec-plan/SKILL.md`；按上文及自带模板「测试计划是什么？」的实际条件读取，搬运时需同时提供或由调用者提供可读原件。
+`skills/material-writing/SKILL.md` 是本方法唯一写作标准来源。
+`skills/decision-log/SKILL.md` 与 `skills/simplicity-guard/SKILL.md` 按上文实际条件读取。
+`skills/spec-plan/SKILL.md` 按自带模板「测试计划是什么？」的实际条件读取。
+搬运时需同时提供或由调用者提供可读原件。

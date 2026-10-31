@@ -7733,6 +7733,38 @@
       ],
       "delete_condition": "本具名消费者已由经独立验证的既有实现完整承接且调用方改接后删除；历史审查与失败原件保留。",
       "retention_basis": "C07 P10 T033–T035及主会话2026-10-30正式交棒；复用既有review owner，不新增公共节点、账本或许可。"
+    },
+    {
+      "source": "skills/material-writing/SKILL.md",
+      "destination": "skills/material-writing/SKILL.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "四类材料与一切人读文件的唯一写作标准正文（十一条、优先级、三层关系、编号对照表规则）与写完自检；原 skills/spec-specify/SKILL.md 该节改为指针。",
+      "owner": "用户 2026-10-31 指示的写作标准迁移；原标准 owner 为 spec-specify 维护者",
+      "consumer": "make-decision/build-plan/build-code 与 decision-log/spec-plan/spec-specify/spec-prd/stage-handoff/stage-reflection 的作者先读标准、写完按「写完自检」核；无当前模块消费者，不新增机器 reader。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/catalog.yaml"
+      ],
+      "delete_condition": "标准被另一唯一权威完整承接且全部条件指针改接后删除；本表不产生许可或未来消费。",
+      "retention_basis": "用户 2026-10-31 指示：标准从 spec-specify 移到通用位置，所有写作技能写完自检；原文逐字搬运。"
+    },
+    {
+      "source": "skills/material-writing/skill-bundle.json",
+      "destination": "skills/material-writing/skill-bundle.json",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "技能加载；声明本技能唯一 payload 为 SKILL.md，来源锚回 skills/catalog.yaml#skills.material-writing。",
+      "owner": "B5/P6 技能加载登记方式沿用；本次新技能由写作标准迁移登记",
+      "consumer": "tools/cli/run-checks.mjs 的 skill-static-deps 与 tools/cli/check-skill-consistency.mjs 读取本件与 catalog 登记；无其它模块消费者。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/catalog.yaml",
+        "tools/cli/run-checks.mjs",
+        "tools/cli/check-skill-consistency.mjs"
+      ],
+      "delete_condition": "技能加载职责被另一已登记机制完整承接后删除；本表不产生许可或未来消费。",
+      "retention_basis": "新技能按既有 skills/<name>/skill-bundle.json 登记方式加入；不新增加载器或第二权威。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

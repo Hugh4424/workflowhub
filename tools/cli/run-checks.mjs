@@ -2,6 +2,12 @@
  * Native aggregation of retained development checkers.
  * Blocking failures exit 1 and name each checker; decision-log chain is advisory.
  * RUN_CHECKS_FORCE_FAIL_CHECKER provides the existing failure-injection seam.
+ *
+ * Task report mode:
+ *   node tools/cli/run-checks.mjs --task-path <任务根> [--workflow-root <绝对路径>]
+ * --workflow-root explicitly names the step-definition root (it must be an
+ * absolute path). Without it the final-chain runner reads the installed
+ * workflowhub package; a relative value is rejected instead of falling back.
  */
 import { spawnSync } from "node:child_process";
 import { validateSkillBundle } from "../../runtime/adapters/local-skill-resolver.mjs";
@@ -18,6 +24,32 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "../..");
 const node = process.execPath;
+
+const USAGE = [
+  "usage:",
+  "  node tools/cli/run-checks.mjs",
+  "  node tools/cli/run-checks.mjs --material-root <绝对路径>",
+  "  node tools/cli/run-checks.mjs --task-path <任务根> [--workflow-root <绝对路径>]",
+  "  --workflow-root 显式指定步骤定义根，必须是绝对路径；缺省读取安装根。",
+].join("\n");
+
+// Task mode takes --task-path plus an optional explicit step-definition root.
+// Omitting --workflow-root keeps the installed-root resolution unchanged.
+function parseTaskArguments(args) {
+  const options = {};
+  for (let index = 0; index < args.length; index += 2) {
+    const name = args[index], value = args[index + 1];
+    if (!value || value.startsWith("-") || (name !== "--task-path" && name !== "--workflow-root")) return null;
+    if (name === "--task-path") {
+      if (options.taskPath) return null;
+      options.taskPath = value;
+    } else {
+      if (options.workflowRoot) return null;
+      options.workflowRoot = value;
+    }
+  }
+  return options.taskPath ? options : null;
+}
 
 function runChecker(checkerName, checkerArgs, localCheck) {
   const forceFailTarget = process.env.RUN_CHECKS_FORCE_FAIL_CHECKER;
@@ -166,6 +198,20 @@ async function runAggregate({ materialRoot } = {}) {
 const isMain = process.argv[1]
   && fileURLToPath(import.meta.url) === resolve(process.argv[1]);
 
+// A planned evidence path is an explicit known gap: not a failure, but it must
+// not hide behind errors=0. Missing paths already fail the validator below, and
+// this same line keeps their count visible next to the named errors.
+function logEvidencePathSummary(facts) {
+  // The validator returns facts: null for structural input errors; those errors
+  // are already printed, so there is no evidence breakdown to add.
+  const evidence = facts?.evidence_paths;
+  if (!evidence || (evidence.planned_count === 0 && evidence.missing_count === 0)) return;
+  console.log(
+    `[run-checks][material] 证据路径：${evidence.verified_count} 份已生成，`
+    + `${evidence.planned_count} 份 planned（未生成），${evidence.missing_count} 份缺失`,
+  );
+}
+
 async function runMaterialChecks(root) {
   try {
     const rootStat = statSync(root);
@@ -192,8 +238,13 @@ async function runMaterialChecks(root) {
     const result = validatePostPhaseContract({ spec: inspection.files["spec.md"], index: inspection.files["phases/index.md"], phases, material_path: root });
     const errors = [...inspection.errors, ...result.errors, ...triageSkipReasons(phases)];
     for (const error of errors) console.log(`[run-checks][material] ${root} ${error}`);
-    if (errors.length) { console.log(`[run-checks][material] errors=${errors.length}`); return false; }
+    if (errors.length) {
+      logEvidencePathSummary(result.facts);
+      console.log(`[run-checks][material] errors=${errors.length}`);
+      return false;
+    }
     console.log(`[run-checks][material] PASS ${root} phase_count=${result.facts.phase_count} task_count=${result.facts.task_count} errors=0`);
+    logEvidencePathSummary(result.facts);
     return true;
   } catch (error) { console.error(`[run-checks][material] cannot read material root ${root}: ${error.code ?? error.message}`); return false; }
 }
@@ -242,10 +293,19 @@ function triageSkipReasons(phases) {
 export function stepCoverageExit(report) {
   if (!Array.isArray(report?.workflow_steps)) throw new TypeError("workflow_steps report is required");
   const stages = new Map();
+  const definition_unavailable = [];
   for (const row of report.workflow_steps) {
     if (!row || typeof row.stage !== "string" || !row.stage || typeof row.source !== "string"
         || typeof row.step_slug !== "string" || typeof row.state !== "string") {
       throw new TypeError("workflow step identity/state is required");
+    }
+    // A definition failure is not a declared step. The final-chain runner keeps
+    // its <definition-unavailable> sentinel outside the evaluated denominator,
+    // so it must not be reported here as a missing (or unattested) step. Its
+    // stage stays visible below as undetermined, never as clean coverage.
+    if (row.definition_status === "unreadable") {
+      if (!definition_unavailable.includes(row.stage)) definition_unavailable.push(row.stage);
+      continue;
     }
     if (!stages.has(row.stage)) stages.set(row.stage, []);
     stages.get(row.stage).push(row);
@@ -260,20 +320,39 @@ export function stepCoverageExit(report) {
       if (state !== "completed" && state !== "not_applicable") missing_steps.push({ source, step_slug, state });
     }
   }
-  return { exit_code: 0, missing_steps, steps_unattested };
+  return {
+    exit_code: 0, missing_steps, steps_unattested,
+    ...(definition_unavailable.length ? {
+      definition_unavailable: {
+        stages: definition_unavailable,
+        summary: `${definition_unavailable.length} 个阶段未判定：读不到步骤定义`,
+      },
+    } : {}),
+  };
 }
 
 async function main() {
   const args = process.argv.slice(2);
   if (args.length === 0) return runAggregate();
   if (args.length === 2 && args[0] === "--material-root" && isAbsolute(args[1])) return runAggregate({ materialRoot: args[1] });
-  if (args.length !== 2 || args[0] !== "--task-path" || !args[1] || args[1].startsWith("-")) {
+  const options = parseTaskArguments(args);
+  if (!options) {
     console.error(`[run-checks] unsupported arguments: ${args.join(" ")}`);
+    console.error(USAGE);
+    process.exit(1);
+  }
+  // A relative definition root is an invocation error, never a silent fallback
+  // to the installed package: an explicit root either wins or is rejected.
+  if (options.workflowRoot !== undefined && !isAbsolute(options.workflowRoot)) {
+    console.error(`[run-checks] --workflow-root must be an absolute path: ${options.workflowRoot}`);
     process.exit(1);
   }
   try {
     const { runFinalChainCheck } = await import("../../runtime/task/final-chain-runner.mjs");
-    const report = runFinalChainCheck({ taskPath: resolve(args[1]) });
+    const report = runFinalChainCheck({
+      taskPath: resolve(options.taskPath),
+      ...(options.workflowRoot === undefined ? {} : { workflowRoot: options.workflowRoot }),
+    });
     const { exit_code, ...coverage } = stepCoverageExit(report);
     process.stdout.write(`${JSON.stringify({ ...report, ...coverage }, null, 2)}\n`);
     process.exitCode = exit_code;

@@ -1,7 +1,7 @@
 // ORACLE-P2-CHAIN: N9 P2 T003/T004/T005, spec §7.1–7.3 and Appendix A.
 // Independent test owner; frozen build-prd/PLAN tests remain read-only.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, realpathSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, realpathSync, readFileSync, writeFileSync, mkdirSync, rmSync, cpSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -81,7 +81,18 @@ describe('final-chain kernel', () => {
 const NAMES=['原始需求','decision-log','调研方案','方案','spec','phase','代码实现','测试验证','最终审查','提交 PR'];
 const STATES=['completed','skipped','not_applicable','incomplete','unavailable'];
 const hash = text => createHash('sha256').update(text).digest('hex');
-async function report(options) { const api=await import('../../runtime/task/final-chain-runner.mjs'); return await api.runFinalChainCheck(options); }
+// Step definitions now come from the workflowhub install root by default. The
+// frozen fixtures kept their definitions inside their own repo, so they pass
+// that repo explicitly; production callers pass nothing and get the install.
+function definitionRootFor(options) {
+  if (options?.repo) return options.repo;
+  const materialRoot = String(options?.materialRoot ?? ''), at = materialRoot.lastIndexOf('/specs/');
+  return at > 0 ? materialRoot.slice(0, at) : ROOT;
+}
+async function report(options) {
+  const api=await import('../../runtime/task/final-chain-runner.mjs');
+  return await api.runFinalChainCheck(options?.workflowRoot === undefined ? {...options, workflowRoot:definitionRootFor(options)} : options);
+}
 function taskFixture({materials=true}={}) {
   const root=temporary(), taskPath=join(root,'task'), repo=join(root,'repo'), materialRoot=join(repo,'specs/owned-task');
   mkdirSync(materialRoot,{recursive:true});
@@ -221,9 +232,51 @@ describe('final-chain report',()=>{
     expect(m.declared_steps).toEqual(value.workflow_steps.map(({source,step_slug})=>({source,step_slug})));
     expect(m.step_attestation_denominator).not.toBe(53);expect(m.step_attestation_denominator).not.toBe(84);
   });
-  it('reports zero workflow input as null metrics and no completed workflow row',async()=>{
+  it('reports unreadable step definitions as undetermined with their reason instead of an empty list',async()=>{
     const f=taskFixture();const value=await report(f);
-    expect(value.workflow_steps).toEqual([]);expect(value.workflow_metrics).toBeNull();
+    expect(value.workflow_metrics).toBeNull();
+    expect(value.workflow_steps.map(row=>row.stage)).toEqual(['make-decision','build-plan','build-code']);
+    for(const row of value.workflow_steps){
+      expect(row).toMatchObject({state:'unavailable',judgment:'未判定',definition_status:'unreadable',step_slug:'<definition-unavailable>'});
+      expect(row.definition_reason).toContain('读不到步骤定义');
+    }
+    expect(value.limits.some(limit=>limit.startsWith('workflows/make-decision/steps.json: 读不到步骤定义'))).toBe(true);
+  });
+  it('reads step definitions from the installed workflowhub root, never from the business repo worktree',async()=>{
+    const f=taskFixture(),api=await import('../../runtime/task/final-chain-runner.mjs');
+    const declared=stage=>JSON.parse(readFileSync(join(ROOT,`workflows/${stage}/steps.json`),'utf8')).steps;
+    // The business repo has no workflows/ at all; the default root is this module's install.
+    const value=api.runFinalChainCheck({taskPath:f.taskPath,materialRoot:f.materialRoot});
+    const rows=value.workflow_steps.filter(row=>row.stage==='make-decision');
+    expect(rows.map(row=>row.step_slug)).toEqual(declared('make-decision').map(step=>step.step_slug));
+    expect(rows.some(row=>row.definition_status)).toBe(false);
+    expect(value.limits.join('\n')).not.toContain('读不到步骤定义');
+    expect(value.workflow_metrics?.step_attestation_denominator).toBe(['make-decision','build-plan','build-code'].reduce((total,stage)=>total+declared(stage).length,0));
+  });
+  it('prefers an explicit workflow root over the install location',async()=>{
+    const f=taskFixture();choice(f,'normal');controlledWorkflow(f);
+    const api=await import('../../runtime/task/final-chain-runner.mjs');
+    const value=api.runFinalChainCheck({taskPath:f.taskPath,materialRoot:f.materialRoot,workflowRoot:f.repo});
+    expect(value.workflow_steps.filter(row=>row.stage==='make-decision').map(row=>row.step_slug)).toEqual(['normal-only']);
+    expect(value.workflow_steps.some(row=>row.step_slug==='load-context')).toBe(false);
+  });
+  it('rejects a relative explicit workflow root instead of falling back to the business repo',async()=>{
+    const f=taskFixture(),api=await import('../../runtime/task/final-chain-runner.mjs');
+    expect(()=>api.runFinalChainCheck({taskPath:f.taskPath,materialRoot:f.materialRoot,workflowRoot:'workflows'})).toThrow(/workflowRoot must be absolute/);
+  });
+  it('keeps one unreadable stage undetermined while readable stages keep their real step rows',async()=>{
+    const f=taskFixture(),install=join(f.root,'install');cpSync(join(ROOT,'workflows'),join(install,'workflows'),{recursive:true});
+    rmSync(join(install,'workflows/make-decision/steps.json'));
+    const api=await import('../../runtime/task/final-chain-runner.mjs');
+    const value=api.runFinalChainCheck({taskPath:f.taskPath,materialRoot:f.materialRoot,workflowRoot:install});
+    const unreadable=value.workflow_steps.filter(row=>row.definition_status);
+    expect(unreadable.map(row=>row.stage)).toEqual(['make-decision']);
+    expect(unreadable[0].definition_reason).toContain(join(install,'workflows/make-decision/steps.json'));
+    const declared=stage=>JSON.parse(readFileSync(join(ROOT,`workflows/${stage}/steps.json`),'utf8')).steps.length;
+    expect(value.workflow_steps.filter(row=>row.stage==='build-plan')).toHaveLength(declared('build-plan'));
+    expect(value.workflow_steps.filter(row=>row.stage==='build-code')).toHaveLength(declared('build-code'));
+    expect(value.workflow_metrics.step_attestation_denominator).toBe(declared('build-plan')+declared('build-code'));
+    expect(value.workflow_metrics.declared_steps.some(row=>row.source==='workflows/make-decision/steps.json')).toBe(false);
   });
   it('distinguishes absent delivery declaration from a sourced no-delivery declaration',async()=>{
     const f=taskFixture();expect(ringAt(await report(f),10).state).toBe('unavailable');
@@ -791,7 +844,7 @@ describe('final-chain report legal decision heading depth',()=>{
 describe('final-chain report current decision-log question titles',()=>{
   async function titleFixture(unresolved='无真实未知。') {
     const f=taskFixture();writerIdentity(f);
-    put(f.materialRoot,'decision-log.md',`# Controlled decision\n## 任务身份\n任务：owned-task\n## 原始需求\nR-001：实际原件与失败不伪造。\n## 每包交付什么，为什么这样定？\n### 工作包 1 — owned result\n#### D-001 — owned bounded decision\n- **做什么**：只读真实原件。\n- **不做什么**：不虚构成功。\n- **风险**：来源不足必须暴露。\n- **改动**：只改当前已声明写集。\n- module: owned\n- requirement_ids: [R-001]\n- derived_from: []\n- artifacts: [owned.mjs]\n来源：quality/evidence/choice.md\n## 还有什么没定，谁来定？\n${unresolved}\n`);
+    put(f.materialRoot,'decision-log.md',`# Controlled decision\n## 任务身份\n任务：owned-task\n## 原始需求\nR-001：实际原件与失败不伪造。\n## 每个包定了哪些决定？\n### 工作包 1 — owned result\n#### D-001 — owned bounded decision\n- **做什么**：只读真实原件。\n- **不做什么**：不虚构成功。\n- **风险**：来源不足必须暴露。\n- **改动**：只改当前已声明写集。\n- module: owned\n- requirement_ids: [R-001]\n- derived_from: []\n- artifacts: [owned.mjs]\n来源：quality/evidence/choice.md\n## 还有什么没定，谁来定？\n${unresolved}\n`);
     choice(f,'small');
     put(f.taskPath,'quality/evidence/choice.md','Controlled source: user chose bounded readback and preserving failures.\n');
     const {captureCommand}=await import('../../runtime/interface/run-command.mjs');mkdirSync(join(f.taskPath,'quality/tests'),{recursive:true});

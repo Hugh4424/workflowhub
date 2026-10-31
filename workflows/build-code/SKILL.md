@@ -118,7 +118,8 @@ authorize只记录/消费已有授权。每次Git前用 `runtime/interface/git-a
 ## 写作与固定来源
 
 改写 agent 方法时，若 `skills/spec-specify/SKILL.md` 已有「技能写作规范（WR001）」节，读取该唯一规范并逐项保全；规范尚未到位时保留当前方法与调用者提供的写作源，不猜新规则。
-本阶段写出的材料（Phase 正文、审查与测试事实、交接、最终报告）形状按同一文件的「材料写作标准（唯一）」执行；此处不复述。
+本阶段写出的材料（Phase 正文、审查与测试事实、交接、最终报告）形状按同一标准。
+该标准正文在 `skills/material-writing/SKILL.md` 的「材料写作标准（唯一）」；此处不复述。
 
 吸收 [mattpocock/skills](https://github.com/mattpocock/skills) 固定 commit `b0618bc436ad893b3c5e84e55fba86586d34a404` 的 `skills/engineering/implement-spec/SKILL.md`（task graph/context pointers）、`skills/engineering/tdd/SKILL.md`（纵切与独立 oracle）、`skills/engineering/code-review/SKILL.md`（Standards/Spec 分轴）及 `skills/engineering/pr/SKILL.md`（描述三段）。写作参考 `skills/productivity/writing-for-agents/SKILL.md`、`SKILL-MECHANICS.md` 与其 docs。
 
@@ -165,10 +166,11 @@ authorize只记录/消费已有授权。每次Git前用 `runtime/interface/git-a
 | RP-15 最终 AC 对账与报告（原判据：方法 4 末段完整串演只复核沿途结论并补必要未闭环 case、不新增全量重跑、不作任何 AC 首次判定点；方法 7 逐 AC 结果保留处置） | 段 8 最终 AC 对账和报告 | 主会话 | 逐 AC 结论表与未闭环 case 清单；十环报告消费记录 | 每条 AC 指向承接 Phase 的原始结论；缺口逐条列；仅 AC-BOUND-001/002 在最终边界首判，其余引用各 Phase 原首判 |
 | RP-16 收口与成本页面（原判据：方法 7 尾按 answer-as-page 刷新页面，环 1–9 真实结论、环 10 记 skipped；方法 8 按 stage-reflection 阶段收口、内部发布并读回最终报告；成本在 stage 末只记一次；收口前执行 norm-sync） | 段 9 norm-sync/reflection/成本/页面 | 主会话；独立上下文核成本读数 | 收口与最终报告读回件、成本读数、页面与同名侧车、norm-sync 回执 | 成本同窗口只记一次；环 10 为 skipped；norm-sync 有真实回执；缺口如实保留 |
 
-
 终末第8段由当前主会话经认证 task.appendRecord 保存一个不可变普通 final-report 原件（纯 JSON，或 Markdown 内唯一机验 JSON 数据段；扩展名与实际内容一致，含人读六项结论，以实际 ref 为准），交回关闭 reader；不要求双格式或双报告，同字节复用。报告包含任务/材料/HEAD身份、逐 AC 档位与原件 ref、六项结论、未完成项的真实尝试/owner/恢复条件、终末审查原件和失败。功能验收记录、代码审查回执、独立人读功能判断分别引用；business_effect、semantic_test_adequacy、code_review 不互相推导。缺口不得写成完成，缺证据 ref 明列未知。
 
 本节覆盖旧步骤12的最后阶段输出：不再产出 stage-handoff，不引导进入 verify-code 下一阶段；最终报告承担人读关闭记录。第9段保存成本、页面、交付等实际后置独立事实与十环检查报告，不机械生成第二份整体 final-report；仅整体报告有实质内容错误时，沿既有递增命名保存修订的新不可变原件并保留旧件。成本只在整个 stage 末记一次，norm-sync/reflection 沿既有方法；关闭/PR后按实际结果刷新页面与侧车，交付前环10为 skipped。用户额外要求的人读续接指针不变为默认产品流程、机器门或新增 stage。
+
+写完材料，按 `skills/material-writing/SKILL.md` 的「写完自检」逐条核；核不过就改，不交出去。
 
 ### 测试充分性与检查可信度
 

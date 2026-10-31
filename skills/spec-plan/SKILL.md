@@ -9,7 +9,9 @@ description: Author implementation design in spec.md and independent Phase files
 
 ## Post-cohort authoring contract
 
-写全局实现设计、Phase 或 index 前，先读取 `skills/spec-specify/SKILL.md` 的「材料写作标准（唯一）」与 Q01–Q13 唯一正文，再执行以下写作动作；消费者是计划作者与下游实施、独立验收读者。缺源如实 `unavailable`，不复制规范。
+写全局实现设计、Phase 或 index 前，先读取 `skills/material-writing/SKILL.md` 的「材料写作标准（唯一）」。
+再读 `skills/spec-specify/SKILL.md` 的 Q01–Q13 唯一正文，然后执行以下写作动作。
+消费者是计划作者与下游实施、独立验收读者；缺源如实 `unavailable`，不复制规范。
 
 Write one global implementation design in `spec.md`, then one independent Phase delta file per Phase, each pointing back to that global goal.
 
@@ -85,6 +87,8 @@ Return the actual spec/Phase paths and the design/verification limits. Read curr
 
 完成时核 index 与独立 Phase 一一对应、连续顺序、依赖可解析无环、各写集与其头一致，并返回行数和缺权威清单。可执行产物的末行指向「Test design and quality」所定唯一全 AC 验收 Phase；缺失时如实说明，纯文档按该节具名豁免。索引只引用实际 Phase，不承载验收正文，不把此义务写入校验器。缺失或歧义报 unavailable 与原 Phase owner，保现历史 pre/tasks 只读；不生成 fallback 正文或双写 tasks.md。
 
+写完材料，按 `skills/material-writing/SKILL.md` 的「写完自检」逐条核；核不过就改，不交出去。
+
 ## Writing rules
 
 Each Phase card carries only its own increment and points to shared definitions and the global design by anchor. 这是写作指引，不是质量门。
@@ -108,4 +112,6 @@ The shared specification and authoring examples are the current `spec.md` and th
 
 ## 同仓方法依赖
 
-`skills/simplicity-guard/SKILL.md`、`skills/spec-specify/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。
+`skills/material-writing/SKILL.md` 是本方法唯一写作标准来源。
+`skills/simplicity-guard/SKILL.md`、`skills/spec-specify/SKILL.md` 按上文实际条件读取。
+搬运时需同时提供或由调用者提供可读原件。

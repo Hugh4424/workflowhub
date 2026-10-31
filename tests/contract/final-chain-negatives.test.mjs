@@ -28,7 +28,7 @@ function fixture(name){
  git(repo,'init','-q');git(repo,'config','user.email','p3@fixture.invalid');git(repo,'config','user.name','P3 fixture');put(repo,'owned.txt','owned baseline\n');git(repo,'add','owned.txt');git(repo,'commit','-qm','owned baseline');
  return {root,taskPath,repo,materialRoot,id};
 }
-const report=f=>runFinalChainCheck({taskPath:f.taskPath,materialRoot:f.materialRoot});
+const report=f=>runFinalChainCheck({taskPath:f.taskPath,materialRoot:f.materialRoot,workflowRoot:f.repo});
 function rows(f,items=[],stages=['make-decision']){put(f.taskPath,'facts.jsonl',stages.map(stage=>JSON.stringify({record_kind:'stage',task_id:f.id,stage,evidence:{value:stage==='make-decision'?items:[]}})).join('\n')+'\n');}
 async function command(f,name,argv){mkdirSync(join(f.taskPath,'quality/tests'),{recursive:true});const result=await captureCommand({cwd:f.repo,recordDir:join(f.taskPath,'quality/tests'),slug:name,argv,timeoutMs:10000});return {ref:result.receipt_ref,receipt_ref:result.receipt_ref,command:JSON.stringify(argv),exit_code:result.exit_code};}
 function choice(f,level){
