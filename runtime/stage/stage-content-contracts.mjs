@@ -626,7 +626,7 @@ function taskCardId(card, allowLocator = false) {
   return card.body.match(/^\s*-\s+\*\*(?:任务编号|任务号|Task id)\*\*\s*[:：]\s*(T\d{3,})\s*$/mi)?.[1] ?? null;
 }
 
-function phaseTaskCards(body) {
+export function phaseTaskCards(body) {
   const visible = taskSourceLines(body, true);
   const headingSource = body.split(/\r?\n/).map((line, i) =>
     (!visible[i]?.trim() && /^#{1,3}\s/.test(line)) ? line.replace(/^#+/, marks => ' '.repeat(marks.length)) : line).join('\n');

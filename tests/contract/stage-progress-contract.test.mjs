@@ -23,6 +23,42 @@ describe("WorkflowHub current Git resume cursor contract", () => {
   });
 });
 
+describe("Reader-facing Task locator", () => {
+  const target = { phase_id: "P1", task_id: "T011" };
+  const withPhase = body => ({ ...POST_PHASE_MATERIALS, "phases/P1.md": body });
+  const readerCard = id => `# Phase P1\n\n### 任务 3：保留原任务\n\n执行当前任务。\n\n- **任务编号**：${id}\n\n## 机器字段\n\n- **Phase**：P1\n`;
+
+  it("resolves a reader-facing Task through an indexed named Phase", () => {
+    const ref = "phases/P1-reader-task.md";
+    const materials = {
+      "phases/index.md": POST_PHASE_MATERIALS["phases/index.md"].replace("phases/P1.md", ref),
+      [ref]: readerCard("T011"),
+    };
+    expect(phaseProgressTargetExists({ phase_id: "P1", task_id: "T011" }, materials)).toBe(true);
+    expect(phaseProgressTargetExists({ phase_id: "P1", task_id: "T999" }, materials)).toBe(false);
+    expect(phaseProgressTargetExists({ phase_id: "P2", task_id: "T011" }, materials)).toBe(false);
+  });
+
+  it("accepts the stable id field inside a reader-facing Task card", () => {
+    expect(phaseProgressTargetExists(target, withPhase(readerCard("T011")))).toBe(true);
+  });
+
+  it.each(["T011", "T011 — Legacy task"])("keeps the legacy heading %s", heading => {
+    expect(phaseProgressTargetExists(target, withPhase(`# Phase P1\n\n## L1 — Tasks\n\n### ${heading}\n`))).toBe(true);
+  });
+
+  it.each(["T0110", "XT011", "T011_extra", "T011.tail", "T011附注"])("does not match a partial stable id %s", id => {
+    expect(phaseProgressTargetExists(target, withPhase(readerCard(id)))).toBe(false);
+    expect(phaseProgressTargetExists(target, withPhase(`# Phase P1\n\n## L1 — Tasks\n\n### ${id} — Other task\n`))).toBe(false);
+  });
+
+  it("does not promote prose references or an id outside a Task card", () => {
+    expect(phaseProgressTargetExists(target, withPhase("# Phase P1\n\n## L1 — Tasks\n\n### T002 — Other task\n\nOnly refers to T011.\n"))).toBe(false);
+    expect(phaseProgressTargetExists(target, withPhase("# Phase P1\n\nOnly refers to T011.\n\n- **任务编号**：T011\n\n## 机器字段\n"))).toBe(false);
+    expect(phaseProgressTargetExists(target, withPhase("# Phase P1\n\n## L1 — Tasks\n\n```md\n### T011 — Example only\n```\n"))).toBe(false);
+  });
+});
+
 // T022 independent behavioral oracles: actual public run -> JSONL -> status.
 import assert from 'node:assert/strict';import {execFileSync,spawnSync}from'node:child_process';import{mkdirSync,mkdtempSync,writeFileSync,readFileSync,rmSync,realpathSync}from'node:fs';import{join}from'node:path';import{tmpdir}from'node:os';
 import { fileURLToPath } from 'node:url';

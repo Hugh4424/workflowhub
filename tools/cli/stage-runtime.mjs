@@ -14,7 +14,7 @@ import { bootstrapStage } from "../../runtime/stage/stage-context.mjs";
 import { openTask } from "../../runtime/task/task-handle.mjs";
 import { invokeRuntimeCommand, RUNTIME_BEHAVIORS } from "../../runtime/interface/runtime-facade.mjs";
 import { LOCAL_RUNNER_CONTRACT, LOCAL_SKILL_BUNDLE_CONTRACT } from "../../runtime/interface/runner-contract.mjs";
-import { readTaskTypeFromDecisionLog, validatePostPhaseContract, phaseTaskProseGaps } from "../../runtime/stage/stage-content-contracts.mjs";
+import { readTaskTypeFromDecisionLog, validatePostPhaseContract, phaseTaskCards, phaseTaskProseGaps } from "../../runtime/stage/stage-content-contracts.mjs";
 import { projectPortableWorkflowStatus, runPortableWorkflow } from "../../runtime/task/portable-workflow-run.mjs";
 import { CURRENT_MATERIAL_FILES, materialFilesForCohort, phaseFilesFromIndex, isPhaseMaterialFile } from "../../runtime/task/material-workspace.mjs";
 import { readTaskFacts, STAGE_ROW_KEYS, writeStageRow } from "../../runtime/task/task-store.mjs";
@@ -922,7 +922,10 @@ export function phaseProgressTargetExists(cursor, materials) {
   if (!cursor || typeof cursor !== "object" || !materials || typeof materials !== "object") return false;
   const ref = phaseFilesFromIndex(materials["phases/index.md"]).find(path => path.match(/^phases\/(P[1-9][0-9]*)(?:-|\.md$)/)?.[1] === cursor.phase_id);
   if (!ref || typeof materials[ref] !== "string") return false;
-  return materials[ref].split("\n").some((line) => /^###\s+T[0-9]{3,}\b/.test(line) && line.match(/^###\s+(T[0-9]{3,})\b/)[1] === cursor.task_id);
+  // Bare legacy T headings remain locators without the outcome required by the full contract.
+  return phaseTaskCards(materials[ref]).some(({ taskId, heading }) => taskId
+    ? taskId === cursor.task_id
+    : /^T[0-9]{3,}$/.test(heading) && heading === cursor.task_id);
 }
 
 export function derivePhaseProgressStatus({ cursor = null, currentPhasesHead = null } = {}) {
