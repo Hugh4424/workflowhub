@@ -1571,6 +1571,7 @@ gate 与冷读只证局部机制，接入、投递与实际效果分层保范围
   重签产物落 `quality/evidence/build-code/P11-resign/`（三份加一份 manifest，
   旧证据标 `superseded_by` 不删）。
   P11 之前取得的绿记为「旧断言下的绿」，不得当作现行结论。
+> 本段按用户 2026-10-31 裁定作废：与现行治理边界（禁止 resign/manifest/superseded_by 等谱系机制）冲突，不再要求重跑重签；待规格 owner 正式改写。
 - 边界：例外只覆盖断言的字面形式，不覆盖判据语义；P11 不得借迁移缩小覆盖范围、
   不得删 M 类断言、不得换 oracle 凑绿。
 
