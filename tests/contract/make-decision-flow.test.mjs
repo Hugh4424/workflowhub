@@ -30,6 +30,99 @@ const syncContracts = {
   13: ['approve-decision', '最终确认＝阶段收口', '确认原件由现human-confirm owner保存；下一阶段由用户决定', 'human-confirm原件'],
   15: ['closeout', '最终确认＝阶段收口', '生成并独立读回handoff，交付handoff 绝对路径；不催下一阶段', 'immutable handoff与读回'],
 };
+
+const syncEvidence = {
+  "1": [
+    {
+      "kind": "decision_log_section",
+      "uri_or_path": "decision-log.md#级别与路线"
+    },
+    {
+      "kind": "phase_task_facts",
+      "uri_or_path": "facts.jsonl"
+    }
+  ],
+  "3": [
+    {
+      "kind": "research_report",
+      "uri_or_path": "quality/evidence/research/"
+    },
+    {
+      "kind": "phase_task_facts",
+      "uri_or_path": "facts.jsonl"
+    }
+  ],
+  "5": [
+    {
+      "kind": "talk_original",
+      "uri_or_path": "quality/evidence/decision-log-refs/talk/"
+    },
+    {
+      "kind": "phase_task_facts",
+      "uri_or_path": "facts.jsonl"
+    }
+  ],
+  "7": [
+    {
+      "kind": "review",
+      "uri_or_path": "quality/reviews/"
+    },
+    {
+      "kind": "phase_task_facts",
+      "uri_or_path": "facts.jsonl"
+    }
+  ],
+  "9": [
+    {
+      "kind": "quality_evidence",
+      "uri_or_path": "quality/evidence/decision-log-refs/convergence-checklist.md"
+    },
+    {
+      "kind": "phase_task_facts",
+      "uri_or_path": "facts.jsonl"
+    }
+  ],
+  "10": [
+    {
+      "kind": "review",
+      "uri_or_path": "quality/reviews/"
+    },
+    {
+      "kind": "phase_task_facts",
+      "uri_or_path": "facts.jsonl"
+    }
+  ],
+  "11": [
+    {
+      "kind": "phase_task_facts",
+      "uri_or_path": "facts.jsonl"
+    }
+  ],
+  "13": [
+    {
+      "kind": "human_confirmation",
+      "uri_or_path": "quality/evidence/human-confirmations/"
+    },
+    {
+      "kind": "phase_task_facts",
+      "uri_or_path": "facts.jsonl"
+    }
+  ],
+  "15": [
+    {
+      "kind": "handoff",
+      "uri_or_path": "quality/evidence/handoff/"
+    },
+    {
+      "kind": "cost_ledger",
+      "uri_or_path": "main-agent-cost.md"
+    },
+    {
+      "kind": "phase_task_facts",
+      "uri_or_path": "facts.jsonl"
+    }
+  ]
+};
 // TCR: quality/evidence/build-code/2026-10-29-019-p6-tcr-evidence-identity.md
 // Independently advised by 020-p6-independent-contract-reader-advice.md and 021-p6-tcr-independent-advice.md.
 const checkSynced = (id, row) => {
@@ -43,10 +136,7 @@ const checkSynced = (id, row) => {
   expect(mapping, `step ${id} evidence mapping`).not.toBeNull();
   expect(mapping[1].trim()).toBe(`SKILL.md#方法 第${id}步`);
   expect(mapping[2], `step ${id} original description`).toContain(original);
-  const evidence = [{ kind: 'phase_task_facts', uri_or_path: 'facts.jsonl' }];
-  if (id === 3) evidence.push({ kind: 'quality_facts', uri_or_path: 'quality/evidence/' });
-  if (id === 7 || id === 10) evidence.push({ kind: 'review', uri_or_path: 'quality/reviews/' });
-  expect(row.completion_evidence, `step ${id} evidence identity`).toEqual(evidence);
+  expect(row.completion_evidence, `step ${id} evidence identity`).toEqual(syncEvidence[id]);
 };
 const synced = (id, name) => {
   expect(syncContracts[id][1]).toBe(name);
@@ -74,7 +164,7 @@ describe('TCR evidence compatibility counterexamples', () => {
     ['missing action', (row, id) => { row.observable_result = row.observable_result.replace(syncContracts[id][2], ''); }],
     ['missing original marker', row => { row.observable_result = row.observable_result.replace('原件：', '来源：'); }],
     ['empty original description', row => { row.observable_result = row.observable_result.replace(/原件：[^\n]*/, '原件：'); }],
-    ['wrong evidence kind', row => { row.completion_evidence[0].kind = 'review'; }],
+    ['wrong evidence kind', row => { row.completion_evidence[0].kind = row.completion_evidence[0].kind === 'review' ? 'phase_task_facts' : 'review'; }],
     ['wrong evidence path', row => { row.completion_evidence[0].uri_or_path = 'other.jsonl'; }],
     ['additional evidence', row => { row.completion_evidence.push({ kind: 'review', uri_or_path: 'quality/reviews/' }); }],
     ['additional step key', row => { row.gate = true; }],

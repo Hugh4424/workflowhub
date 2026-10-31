@@ -3,6 +3,12 @@
  * Blocking failures exit 1 and name each checker; decision-log chain is advisory.
  * RUN_CHECKS_FORCE_FAIL_CHECKER provides the existing failure-injection seam.
  *
+ * Material mode:
+ *   node tools/cli/run-checks.mjs --material-root <绝对路径> [--stage=make-decision]
+ * --stage only relaxes the make-decision post-phase input requirement: that
+ * stage has not produced spec.md/phases yet. Once either exists it is checked
+ * as before. Other stages and calls without --stage keep the old contract.
+ *
  * Task report mode:
  *   node tools/cli/run-checks.mjs --task-path <任务根> [--workflow-root <绝对路径>]
  * --workflow-root explicitly names the step-definition root (it must be an
@@ -28,27 +34,32 @@ const node = process.execPath;
 const USAGE = [
   "usage:",
   "  node tools/cli/run-checks.mjs",
-  "  node tools/cli/run-checks.mjs --material-root <绝对路径>",
+  "  node tools/cli/run-checks.mjs --material-root <绝对路径> [--stage=<阶段>]",
   "  node tools/cli/run-checks.mjs --task-path <任务根> [--workflow-root <绝对路径>]",
+  "  --material-root 与 --task-path 是两种模式，不能混用。",
+  "  --stage 只与 --material-root 同用：make-decision 阶段允许尚无 spec.md/phases。",
   "  --workflow-root 显式指定步骤定义根，必须是绝对路径；缺省读取安装根。",
 ].join("\n");
 
-// Task mode takes --task-path plus an optional explicit step-definition root.
-// Omitting --workflow-root keeps the installed-root resolution unchanged.
-function parseTaskArguments(args) {
+// One parser for both modes; mixed task/material arguments stay unsupported.
+function parseArguments(args) {
+  const keys = { "--task-path": "taskPath", "--workflow-root": "workflowRoot", "--material-root": "materialRoot", "--stage": "stage" };
   const options = {};
-  for (let index = 0; index < args.length; index += 2) {
-    const name = args[index], value = args[index + 1];
-    if (!value || value.startsWith("-") || (name !== "--task-path" && name !== "--workflow-root")) return null;
-    if (name === "--task-path") {
-      if (options.taskPath) return null;
-      options.taskPath = value;
-    } else {
-      if (options.workflowRoot) return null;
-      options.workflowRoot = value;
-    }
+  for (let index = 0; index < args.length; index += 1) {
+    let name = args[index], value;
+    if (typeof name !== "string" || !name.startsWith("--")) return null;
+    const equalAt = name.indexOf("=");
+    if (equalAt > 0) { value = name.slice(equalAt + 1); name = name.slice(0, equalAt); }
+    else { value = args[index + 1]; index += 1; }
+    const key = keys[name];
+    if (!key || !value || value.startsWith("-") || options[key]) return null;
+    options[key] = value;
   }
-  return options.taskPath ? options : null;
+  if (options.taskPath && options.materialRoot) return null;
+  if (options.workflowRoot && !options.taskPath) return null;
+  if (options.stage && !options.materialRoot) return null;
+  if (options.materialRoot && !isAbsolute(options.materialRoot)) return null;
+  return options;
 }
 
 function runChecker(checkerName, checkerArgs, localCheck) {
@@ -143,7 +154,7 @@ function checkSkillStaticDependencies() {
   return failures;
 }
 
-async function runAggregate({ materialRoot } = {}) {
+async function runAggregate({ materialRoot, stage } = {}) {
   const failures = [];
 
   // 1. check-anti-host (no args, scans core/**/*.mjs via scan-core-files)
@@ -179,12 +190,13 @@ async function runAggregate({ materialRoot } = {}) {
     console.error(`[run-checks] check-decision-log-chain advisory failed (exit ${decisionLogChainCode}); not added to failures`);
   }
 
-  const materialResult = materialRoot ? await runMaterialChecks(materialRoot) : true;
+  const materialResult = materialRoot ? await runMaterialChecks(materialRoot, { stage }) : true;
   if (materialResult === false) failures.push({ name: "material-contract", code: 1 });
   if (!materialRoot) console.error("[run-checks] material check not run: no --material-root");
 
   if (failures.length === 0) {
-    console.log(materialResult === null ? "[run-checks] material input absent; material check not run" : "[run-checks] ALL CHECKS PASSED");
+    if (materialResult === "partial") console.log("[run-checks] 可运行检查均通过；material 仅覆盖本次可检查范围，阶段完成未判");
+    else console.log(materialResult === null ? "[run-checks] material input absent; material check not run" : "[run-checks] ALL CHECKS PASSED");
     process.exit(0);
   } else {
     for (const f of failures) {
@@ -212,15 +224,24 @@ function logEvidencePathSummary(facts) {
   );
 }
 
-async function runMaterialChecks(root) {
+async function runMaterialChecks(root, { stage } = {}) {
   try {
     const rootStat = statSync(root);
-    if (rootStat.isFile() && rootStat.size === 0) { console.log(`[run-checks][material] ${root} 没有输入，未检查`); return null; }
+    const noInput = (why) => {
+      if (stage === "make-decision") {
+        console.log(`[run-checks][material] ${root} ${why}；make-decision 至少需要 decision-log.md`);
+        console.log("[run-checks][material] errors=1");
+        return false;
+      }
+      console.log(`[run-checks][material] ${root} 没有输入，未检查`);
+      return null;
+    };
+    if (rootStat.isFile() && rootStat.size === 0) return noInput("材料为空文件");
     if (!rootStat.isDirectory()) throw new Error("expected a directory or empty file");
     const { inspectMaterialWorkspace, phaseFilesFromIndex } = await import("../../runtime/task/material-workspace.mjs");
     const { validatePostPhaseContract } = await import("../../runtime/stage/stage-content-contracts.mjs");
     const inspection = inspectMaterialWorkspace(root);
-    if (!Object.keys(inspection.files).length && !inspection.errors.length) { console.log(`[run-checks][material] ${root} 没有输入，未检查`); return null; }
+    if (!Object.keys(inspection.files).length && !inspection.errors.length) return noInput("材料目录为空");
     const section = inspection.files["decision-log.md"]?.match(/^## 级别与路线\s*\n([\s\S]*?)(?=^## |$(?![\s\S]))/m)?.[1];
     const basis = section?.split(/\r?\n/).find(line => /^\s*-?\s*(?:\*\*)?推荐级别(?:\*\*)?[:：]\s*(轻档|普通|复杂)(?:任务)?(?:\s*(?:（[^）\n]*）|\([^\)\n]*\)))?[。.]?\s*$/.test(line));
     const light = basis && /[:：]\s*轻档/.test(basis);
@@ -228,7 +249,19 @@ async function runMaterialChecks(root) {
     const phaseDirectory = resolve(root, "phases");
     const hasPhase = existsSync(phaseDirectory) && readdirSync(phaseDirectory).some(name => /^P\d+.*\.md$/.test(name));
     if (light && !inspection.errors.length && !existsSync(resolve(root, "spec.md")) && !existsSync(resolve(root, "phases/index.md")) && !hasPhase) {
-      console.log(`[run-checks][material] ${root} 这个级别不适用这类材料`); return true;
+      console.log(`[run-checks][material] ${root} 这个级别不适用这类材料${stage ? '；本行不判阶段完成' : ''}`); return stage === 'make-decision' ? 'partial' : true;
+    }
+    // make-decision produces decision-log.md; spec.md and phases belong to the
+    // next stage. A missing post-phase contract here is the stage's normal
+    // input state, not a defect. Once spec/phases exist they are still checked.
+    const postPhaseMaterials = Boolean(inspection.files["spec.md"] || inspection.files["phases/index.md"] || hasPhase);
+    if (stage === "make-decision" && !postPhaseMaterials) {
+      const errors = [...inspection.errors];
+      if (!String(inspection.files["decision-log.md"] ?? "").trim()) errors.push("decision-log.md 未取得：make-decision 阶段至少要有一份可读决策日志");
+      for (const error of errors) console.log(`[run-checks][material] ${root} ${error}`);
+      if (errors.length) { console.log(`[run-checks][material] errors=${errors.length}`); return false; }
+      console.log(`[run-checks][material] ${root} stage=make-decision：本次只核 decision-log 可读与材料结构错误=0；未要求 spec.md/phases，不判阶段完成，也不证明步骤齐备`);
+      return 'partial';
     }
     const phases = {};
     if (inspection.files["phases/index.md"]) {
@@ -334,13 +367,23 @@ export function stepCoverageExit(report) {
 async function main() {
   const args = process.argv.slice(2);
   if (args.length === 0) return runAggregate();
-  if (args.length === 2 && args[0] === "--material-root" && isAbsolute(args[1])) return runAggregate({ materialRoot: args[1] });
-  const options = parseTaskArguments(args);
+  const options = parseArguments(args);
   if (!options) {
     console.error(`[run-checks] unsupported arguments: ${args.join(" ")}`);
     console.error(USAGE);
     process.exit(1);
   }
+  // Load the stage registry only when --stage is used, so the no-argument
+  // aggregate keeps its existing exact import closure.
+  if (options.stage) {
+    const { WORKFLOW_STAGE_SET } = await import("../../runtime/stage/stage-registry.mjs");
+    if (!WORKFLOW_STAGE_SET.has(options.stage)) {
+      console.error(`[run-checks] unsupported arguments: ${args.join(" ")}`);
+      console.error(USAGE);
+      process.exit(1);
+    }
+  }
+  if (!options.taskPath) return runAggregate({ materialRoot: options.materialRoot, stage: options.stage });
   // A relative definition root is an invocation error, never a silent fallback
   // to the installed package: an explicit root either wins or is rejected.
   if (options.workflowRoot !== undefined && !isAbsolute(options.workflowRoot)) {
