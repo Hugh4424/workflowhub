@@ -161,7 +161,7 @@ export async function collectWith(config,env,observe) {
     await observe({cdp,call,sessionId,target,doc,env,config,evaluate:expression=>evaluate(call,expression),isDisconnected:()=>disconnected});
   }catch(error){
     const kind=error.kind||(disconnected?'UNREACHABLE':!connected&&['CDP_CONNECT_FAILED','CDP_CONNECT_TIMEOUT'].includes(error.code)?'NOT_STARTED':'TOOL_ERROR');
-    if(!doc.failures.some(f=>f.class===kind))addFailure(doc,kind,error.message||error.code||'Collector error');
+    addFailure(doc,kind,error.message||error.code||'Collector error');
   }finally {finished=true;clearTimeout(timeout);cdp?.close();}
   return doc;
 }

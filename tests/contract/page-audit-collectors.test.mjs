@@ -7,7 +7,7 @@ import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createContext,runInContext} from 'node:vm';
 import {collect as collectPerformance,runCli as runPerfCli,collectPerf as collectPerfDocument} from '../../skills/frontend-testing/scripts/collect-perf.mjs';
-import {writeAtomic,runCollectorCli} from '../../skills/frontend-testing/scripts/collect-console.mjs';
+import {writeAtomic,runCollectorCli,compareIdentity} from '../../skills/frontend-testing/scripts/collect-console.mjs';
 import {connectCdp} from '../../skills/isolated-browser-qa/scripts/browser-qa-tickets.mjs';
 import {selectBrowserEngine} from '../../skills/isolated-browser-qa/scripts/browser-qa-session.mjs';
 import {validateSkillBundle} from '../../runtime/adapters/local-skill-resolver.mjs';
@@ -73,7 +73,7 @@ async function peer(options={}) {
     }});
   });
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const endpoint=`ws://127.0.0.1:${server.address().port}/devtools/browser/owned`;
-  function broadcast(){for(const socket of sockets){const sessionId=sessions.get(socket);event(socket,'Page.frameNavigated',{frame:{id:'frame-1',loaderId:'shared-loader',url:'http://app.test/audit'}},sessionId);event(socket,'Runtime.executionContextCreated',{context:{id:2,auxData:{frameId:'frame-1',isDefault:true}}},sessionId);event(socket,'Runtime.consoleAPICalled',{type:'error',executionContextId:2,args:[{type:'string',value:'window-error'}]},sessionId);event(socket,'Network.requestWillBeSent',{requestId:'r2',frameId:'frame-1',loaderId:'shared-loader',type:'Fetch',request:{url:'http://app.test/window-failure',method:'GET'}},sessionId);event(socket,'Network.loadingFailed',{requestId:'r2',errorText:'window-failure'},sessionId);if(options.lateNetwork){event(socket,'Network.responseReceived',{requestId:'old-request',loaderId:'initial',type:'Fetch',frameId:'frame-1',response:{url:'http://app.test/old',status:500}},sessionId);event(socket,'Network.loadingFailed',{requestId:'old-request',errorText:'old-window-failure'},sessionId);}if(options.unknownOwner)event(socket,'Network.loadingFailed',{requestId:'unobserved-request',errorText:'unknown-owner'},sessionId);}}
+  function broadcast(){for(const socket of sockets){const sessionId=sessions.get(socket);event(socket,'Page.frameNavigated',{frame:{id:'frame-1',loaderId:'shared-loader',url:'http://app.test/audit'}},sessionId);event(socket,'Runtime.executionContextCreated',{context:{id:2,auxData:{frameId:'frame-1',isDefault:true}}},sessionId);event(socket,'Runtime.consoleAPICalled',{type:'error',executionContextId:2,args:[{type:'string',value:'window-error'}]},sessionId);event(socket,'Network.requestWillBeSent',{requestId:'r2',frameId:'frame-1',loaderId:'shared-loader',type:'Fetch',request:{url:'http://app.test/window-failure',method:'GET'}},sessionId);event(socket,'Network.loadingFailed',{requestId:'r2',errorText:'window-failure'},sessionId);if(options.lateNetwork){event(socket,'Network.responseReceived',{requestId:'old-request',loaderId:'initial',type:'Fetch',frameId:'frame-1',response:{url:'http://app.test/old',status:500}},sessionId);event(socket,'Network.loadingFailed',{requestId:'old-request',errorText:'old-window-failure'},sessionId);}if(options.unknownOwner)event(socket,'Network.loadingFailed',{requestId:'unobserved-request',errorText:'unknown-owner'},sessionId);for(let i=2;i<=(options.unknownOwnerCount??1);i++)event(socket,'Network.loadingFailed',{requestId:'unobserved-request-'+i,errorText:'unknown-owner'},sessionId);if(options.secondLoader)event(socket,'Page.frameNavigated',{frame:{id:'frame-1',loaderId:'second-loader',url:'http://app.test/audit'}},sessionId);}}
   return {endpoint,http:`http://127.0.0.1:${server.address().port}/json/version`,calls,get connections(){return connections;},get navigations(){return nav;},trace,state,runTask:async({evaluate})=>{state.calls++;if(options.taskFails)throw Error('controlled task failure');if(options.seedDuringTask)await evaluate("performance.measure('c07:act',{start:0,duration:999})");await evaluate("(async()=>{document.querySelector('[data-task]').click();while(!globalThis.taskDone)await new Promise(resolve=>setTimeout(resolve,1));return true;})()");return 987654;},disconnect(){for(const socket of sockets)socket.destroy();},emitWindow:broadcast,async close(){page.close();for(const socket of sockets)socket.destroy();await new Promise(resolve=>server.close(resolve));}};
 }
 async function run(dim,options={},extra={}) {
@@ -136,6 +136,24 @@ describe('ORACLE-C07-COLLECT reviewed event boundary',()=>{
   it('ownership:unknown-request-never-gets-current-loader',async()=>{const r=await windowNetwork({unknownOwner:true});expect(r.code).toBe(0);expect(r.doc.failures.some(f=>f.class==='IDENTITY_MISMATCH')).toBe(true);expect(r.doc.items.find(i=>i.requestId==='unobserved-request')?.loader_id).toBeNull();});
   it('declaration:opaque-service-label-is-valid-and-preserved',async()=>{const label='frontend dev 5175 / API 5176',r=await run('console',{}, {PAGE_AUDIT_SERVICE:label});expect(r.code).toBe(0);expect(r.doc.object.service).toBe(label);expect(r.doc.failures).toEqual([]);});
   it('declaration:parseable-service-origin-mismatch-is-rejected',async()=>{const r=await run('console',{}, {PAGE_AUDIT_SERVICE:'http://other.test'});expect(r.doc.failures[0].class).toBe('IDENTITY_MISMATCH');expect(r.calls.some(c=>c.method==='Target.attachToTarget')).toBe(false);});
+});
+
+describe('ORACLE-C07-COLLECT detail preservation and unknown identity',()=>{
+  it('window:second-loader-detail-survives-an-earlier-identity-failure',async()=>{
+    const r=await windowNetwork({unknownOwner:true,unknownOwnerCount:2,secondLoader:true});
+    expect(r.code).toBe(0);
+    const details=r.doc.failures.filter(f=>f.class==='IDENTITY_MISMATCH').map(f=>f.detail);
+    expect(details).toContain('Event document ownership could not be observed');
+    expect(details).toContain('Window must contain exactly one main-frame loader');
+    expect(details.filter(d=>d==='Event document ownership could not be observed')).toHaveLength(1);
+  });
+  it('identity:missing-state-param-is-unknown-not-match',()=>{
+    const result=compareIdentity({state:'default'},{url:'http://app.test/audit',viewport:'1440x900@1'});
+    const row=result.comparisons.find(c=>c.path==='state');
+    expect(row.result).toBe('unknown');
+    expect(row.reason).toContain('state parameter');
+    expect(result.verdict).not.toBe('match');
+  });
 });
 
 describe('ORACLE-C07-COLLECT boundary inputs',()=>{
