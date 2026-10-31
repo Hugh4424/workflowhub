@@ -21,6 +21,7 @@
 | `gate-root-cause-probe.txt` | 根因探针：旧标题定位改不动字；现行标题删正文后校验器返回 `ok=false` |
 | `main-validator.*` | 主仓校验器整集输出与退出码 |
 | `final-p9-gate.*` / `final-main-validator.*` | 全部改完后的最后一次同命令重跑：门禁 2 红 119 绿、退出 1；校验器退出 0 |
+| `gate-fix.*` / `validator-fix.*` | 修好两处断言后的同命令重跑：门禁 121 测全绿、退出 0；校验器退出 0 |
 | `closeout.json` | 档位、三问结论、缺口、门禁事实与限制的机器可读记录 |
 
 ## 门禁：3 红只剩 2 红
@@ -60,3 +61,22 @@
 
 限制：只判这一版字节；两位读者都没跑命令、没核路径与计数；材料是提议、未在真实任务执行；
 不推页面验收、其它 Phase 与长期稳定性。Phase 自身也未收口：门禁 2 红、原测试者复验未到。
+
+## 补记（2026-10-31，后续修复与勘误）
+
+上面各节保留 11:53 当时的实况，不改写；这里补记此后发生的事，两者合起来才是当前状态。
+
+- **门禁两红已修**：`tests/contract/phase-prose.test.mjs` 第 7 行 `35`→`36`；第 8 行按现行标题定位
+  （`### 任务 1：…` 到 `### 任务 2：…`），并加一条「改不动就红」的守卫。同一条门禁重跑：
+  **121 测全绿、0 红、退出 0**，原件 `gate-fix.stdout.txt`、`gate-fix.stderr.txt`、`gate-fix.exit`。
+  删正文探针仍按预期报 `phases/P9-材料为读者写.md T025 task card requires reader prose`（退出 1），
+  恢复原字节后 2 测全绿（退出 0）。
+- **主仓校验器复跑**：退出 0，`phase_count=12 task_count=36 errors=0`、`ALL CHECKS PASSED`，
+  原件 `validator-fix.stdout.txt`、`validator-fix.stderr.txt`、`validator-fix.exit`。
+- **勘误（原件未改）**：本目录 `phase-fragment.md`（28902 字节、`87448f78…`）第 111–113、221、235–236 行
+  写「八个具名块」，实数是**四个测试文件里 10 个 describe 块承载 9 个判定器**
+  （8 个 `ORACLE-` 命名 + 2 个 `page-audit` 块承载 `ORACLE-PAGE-AUDIT-DOC`；
+  `ORACLE-C07-TCR` 由四文件门禁整体承载，不另设块）；逐块清单见 `gate-root-cause-probe-2.txt`。
+  该文件是两位读者读过的字节版，sha256 被本目录与 P9 卡多处引用，读者原答按行号引用它，
+  按证据规则不覆写；更正落在 `specs/workflowhub-ui-frontend-c07-real-page-verification-20261028/phases/P9-材料为读者写.md`
+  第 951–953 行与本补记。要彻底收干净，另做一份改正版片段并记改前/改后，或让一位读者按勘误重读三问。

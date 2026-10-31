@@ -127,13 +127,36 @@
   "材料是提议、未在真实任务执行",
   "只判这一版字节",
   "两位读者没跑命令、没核路径与计数",
-  "机制侧 2 红未修",
+  "机制侧 2 红已修好（121 绿、退出 0）；见 post_fix",
   "待原测试者 0e7d26f1 复验"
  ],
  "p9_phase_file": {
   "path": "specs/workflowhub-ui-frontend-c07-real-page-verification-20261028/phases/P9-材料为读者写.md",
   "bytes": 97747,
-  "sha256": "be157670f72572819779452e5e9a846f5ac6e60b7ddc0d9386b9c7f409d82e2c"
+  "sha256": "be157670f72572819779452e5e9a846f5ac6e60b7ddc0d9386b9c7f409d82e2c",
+  "note": "这是 11:53 收口时的字节；改后的字节见 post_fix.p9_phase_file"
  },
- "next": "下一版材料把那句计数改成「10 个 describe 块承载 9 个判定器」，读者加 --reporter=verbose 数块后重读三问；P9 写主改那三处定位后重跑门禁；原测试者复验后做规范同步与唯一提交。"
+ "post_fix": {
+  "at": "2026-10-31",
+  "gate": {
+   "exit": 0,
+   "tests": 121,
+   "failed": 0,
+   "passed": 121,
+   "evidence": ["gate-fix.stdout.txt", "gate-fix.stderr.txt", "gate-fix.exit"]
+  },
+  "main_validator": {
+   "exit": 0,
+   "facts": "phase_count=12 task_count=36 errors=0",
+   "evidence": ["validator-fix.stdout.txt", "validator-fix.stderr.txt", "validator-fix.exit"]
+  },
+  "tests_fixed": "tests/contract/phase-prose.test.mjs 第 7 行 35→36；第 8 行定位改为 (^### 任务 1：…)([\\s\\S]*?)(?=^### 任务 2：)，并加 expect(i.phases[path]).not.toBe(source) 守卫，定位再失效会立刻红；删正文探针仍报 phases/P9-材料为读者写.md T025 task card requires reader prose",
+  "p9_phase_file": {
+   "bytes": 98663,
+   "sha256": "1f20d93b5f38844dd9aa2bf3f0b47bf3cd2532d657ae6404be5160e5a71e2de8"
+  },
+  "erratum": "phase-fragment.md 第 111–113、221、235–236 行「八个具名块」实为 10 个 describe 块承载 9 个判定器；原件是两位读者读过的字节版，按证据规则未改，更正见 P9 卡第 951–953 行与 README 补记",
+  "tier": "仍 incomplete：被读原件那句旧计数仍在（原件未改），见 P9 完成节未解项一"
+ },
+ "next": "下一版材料把那句计数改成「10 个 describe 块承载 9 个判定器」（或另做一份改正版片段并记改前/改后），读者加 --reporter=verbose 数块后重读三问；门禁已 121 绿、主仓校验器退出 0；原测试者 0e7d26f1 复验后做规范同步与唯一提交。"
 }
