@@ -9,7 +9,7 @@ import {createHash} from 'node:crypto';
 import {connectCdp,validateEndpoint,makeScope,transferTargetCookies,safeError} from './browser-qa-tickets.mjs';
 const here=dirname(fileURLToPath(import.meta.url));
 const nativeHelper=join(here,'browser-qa-browser-use.py');
-function command(argv,env,{signal,inherit=false,outputSecrets,captureStderr=false}={}) {
+function command(argv,env,{signal,inherit=false,outputSecrets,captureStderr=false,outputOnFailure=false}={}) {
   if(signal?.aborted)return Promise.reject(safeError('CANCELLED'));
   return new Promise((resolve,reject)=>{
     // Ticket values may cross arbitrary chunk boundaries. Keep protected output
@@ -17,7 +17,7 @@ function command(argv,env,{signal,inherit=false,outputSecrets,captureStderr=fals
     const protectedOutput=inherit&&Boolean(outputSecrets?.size);
     const c=spawn(argv[0],argv.slice(1),{env,detached:true,stdio:inherit&&!protectedOutput?'inherit':[inherit?'inherit':'ignore','pipe','pipe']});
     const stdoutChunks=[],stderrChunks=[];
-    if(!inherit||protectedOutput){c.stdout.on('data',b=>stdoutChunks.push(b));if(protectedOutput||captureStderr)c.stderr.on('data',b=>stderrChunks.push(b));else c.stderr.resume();}
+    if(!inherit||protectedOutput){c.stdout.on('data',b=>stdoutChunks.push(b));if(protectedOutput||captureStderr||outputOnFailure)c.stderr.on('data',b=>stderrChunks.push(b));else c.stderr.resume();}
     let observeClose,cancellation,cleanupFailure;
     const childClosed=new Promise(resolve=>{observeClose=resolve;});
     const group=async()=>{
@@ -65,8 +65,8 @@ function command(argv,env,{signal,inherit=false,outputSecrets,captureStderr=fals
       signal?.removeEventListener('abort',abort);
       if(cleanupFailure){reject(cleanupFailure);return;}
       const stdout=Buffer.concat(stdoutChunks),stderr=Buffer.concat(stderrChunks);let resultCode=code??143;
-      if(protectedOutput){
-        const leaked=[...outputSecrets].some(value=>value&&(stdout.includes(Buffer.from(value))||stderr.includes(Buffer.from(value))));
+      if(protectedOutput||(outputOnFailure&&resultCode!==0)){
+        const leaked=[...(outputSecrets||[])].some(value=>value&&(stdout.includes(Buffer.from(value))||stderr.includes(Buffer.from(value))));
         if(leaked){console.error(JSON.stringify({error:'SECRET_OUTPUT_BLOCKED'}));resultCode=resultCode||1;}
         else{process.stdout.write(stdout);process.stderr.write(stderr);}
         resolve({code:resultCode,stdout:''});
@@ -548,19 +548,20 @@ export async function runBrowserQa(args=process.argv.slice(2),inputEnv=process.e
   await mkdir(resolve(evidence),{recursive:true});
   const ownedRoot=await mkdtemp(join(env.TMPDIR||tmpdir(),'whqa-'));
   Object.assign(env,{AGENT_BROWSER_SOCKET_DIR:ownedRoot,AGENT_BROWSER_HOME:ownedRoot});
-  const aborter=new AbortController();let cancelled=0;let source,receiver;let cleanupOwnership;let sourceCollision=false;let receiverDistinct=!sourceEndpoint;let code=1;const secrets=new Set();
+  const aborter=new AbortController();let cancelled=0;let source,receiver;let cleanupOwnership;let sourceCollision=false;let receiverDistinct=!sourceEndpoint;let code=1;const secrets=new Set(sourceEndpoint?[sourceEndpoint]:[]);
   const stop=s=>{cancelled=s==='SIGINT'?130:143;aborter.abort();};const int=()=>stop('SIGINT'),term=()=>stop('SIGTERM');process.on('SIGINT',int);process.on('SIGTERM',term);
   try {
     const launch=engine==='agent-browser'?[engine,'--session',session,'--allowed-domains',allowed,'--content-boundaries','open']:[engine,'--session',session,'open'];
-    const opened=await command(launch,env,{signal:aborter.signal});if(opened.code)throw safeError('ENGINE_LAUNCH_FAILED');
+    const opened=await command(launch,env,{signal:aborter.signal,outputOnFailure:true,outputSecrets:secrets});if(opened.code)throw safeError('ENGINE_LAUNCH_FAILED');
     {
       const cdp=await command([engine,'--session',session,'get','cdp-url'],env,{signal:aborter.signal});
       let endpoint=cdp.stdout.trim();try{const parsed=JSON.parse(endpoint);endpoint=parsed.data?.url||parsed.data?.cdpUrl||parsed.data||parsed.url||endpoint;}catch{}
       endpoint=validateEndpoint(endpoint,'receiver');
-      const ownership=await ownedReceiver(env,session,aborter.signal);
+      const identityEnv={...env,LC_ALL:'',LC_TIME:'C',LC_CTYPE:env.LC_ALL||env.LC_CTYPE||env.LANG||'C'};
+      const ownership=await ownedReceiver(identityEnv,session,aborter.signal);
       receiver=await connectCdp(endpoint,{signal:aborter.signal,closeOnAbort:false});
       if(aborter.signal.aborted)throw safeError('CANCELLED');
-      const identities=(await command(['ps','-axo','pid=,ppid=,lstart=,command='],env,{signal:aborter.signal})).stdout.split('\n').map(r=>r.trim());
+      const identities=(await command(['ps','-axo','pid=,ppid=,lstart=,command='],identityEnv,{signal:aborter.signal})).stdout.split('\n').map(r=>r.trim());
       if(!identities.includes(ownership.identity)||!ownership.profileIdentity||!identities.includes(ownership.profileIdentity))throw safeError('RECEIVER_IDENTITY_CHANGED');
       const start=row=>{const fields=row.trim().split(/\s+/);return /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)$/.test(fields[2]||'')?fields.slice(2,7).join(' '):'unknown';};
       cleanupOwnership={daemonPid:ownership.pid,daemonStart:start(ownership.identity),browserPid:ownership.profilePid,browserStart:start(ownership.profileIdentity)};

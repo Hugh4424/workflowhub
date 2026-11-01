@@ -75,8 +75,8 @@ function filesUnder(root) {
   if(!existsSync(root))return [];
   return readdirSync(root,{withFileTypes:true}).flatMap(e=>e.isDirectory()?filesUnder(join(root,e.name)):[join(root,e.name)]);
 }
-async function fixture({rejectSet=false,mode='success',cookies=samples()}={}) {
-  const root=mkdtempSync(join(tmpdir(),'n3-ticket-boundary-'));const bin=join(root,'bin');const evidence=join(root,'evidence');const temp=join(root,'temp');const home=join(root,'home');
+async function fixture({rejectSet=false,mode='success',cookies=samples(),launch='success',authMode=desiredMode,closeMode='normal',localized=false}={}) {
+  const root=mkdtempSync(join(tmpdir(),localized?'n3-ticket-boundary-界-':'n3-ticket-boundary-'));const bin=join(root,'bin');const evidence=join(root,'evidence');const temp=join(root,'temp');const home=join(root,'home');
   for(const p of [bin,evidence,temp,home])mkdirSync(p);
   const marker=join(root,'scenario-entered');const daemonStop=join(root,'daemon-stop');const ownedProfile=join(temp,'agent-browser-profile-fixture');mkdirSync(ownedProfile);
   const daemon=spawn(process.execPath,['-e',`
@@ -96,21 +96,26 @@ async function fixture({rejectSet=false,mode='success',cookies=samples()}={}) {
   const daemonDone=new Promise(resolve=>daemon.once('close',resolve));
   const source=await cdpServer('source',cookies);const receiver=await cdpServer('receiver',[],{rejectSet});
   const fake=join(bin,'agent-browser');
-  writeFileSync(fake,`#!${process.execPath}\nconst fs=require('node:fs'),p=require('node:path');const a=process.argv.slice(2);const s=a.includes('--session')?a[a.indexOf('--session')+1]:process.env.BROWSER_QA_SESSION;const run=process.env.AGENT_BROWSER_SOCKET_DIR||p.join(process.env.HOME,'.agent-browser');fs.mkdirSync(run,{recursive:true});if(a.includes('skills')){console.log('core full guide fixture');process.exit(0);}if(a.includes('open')){for(const ext of ['pid','sock','stream','config','engine','target','version'])fs.writeFileSync(p.join(run,s+'.'+ext),ext==='pid'?process.env.N3_DAEMON_PID:'fixture');console.log('opened');}else if(a.includes('cdp-url'))console.log(process.env.N3_RECEIVER_WS);else if(a.includes('close')){fetch(process.env.N3_RECEIVER_CONTROL,{method:'POST'}).then(()=>{fs.writeFileSync(process.env.N3_DAEMON_STOP,'stop');console.log('closed');});}else console.log('fixture');\n`,{mode:0o755});
+  const engineEvents=join(root,'engine-events.jsonl');writeFileSync(engineEvents,'');
+  writeFileSync(fake,'#!'+process.execPath+'\n'+"const fs=require('node:fs'),p=require('node:path');\nconst a=process.argv.slice(2),s=a.includes('--session')?a[a.indexOf('--session')+1]:process.env.BROWSER_QA_SESSION,run=process.env.AGENT_BROWSER_SOCKET_DIR||p.join(process.env.HOME,'.agent-browser');\nconst event=x=>fs.appendFileSync(process.env.N3_ENGINE_EVENTS,JSON.stringify(x)+'\\n');\nasync function main(){fs.mkdirSync(run,{recursive:true});if(a.includes('skills')){console.log('core full guide fixture');return 0;}\nif(a.includes('open')){for(const ext of ['pid','sock','stream','config','engine','target','version'])fs.writeFileSync(p.join(run,s+'.'+ext),ext==='pid'?process.env.N3_DAEMON_PID:'fixture');\n if(!a[a.indexOf('open')+1]){const input=fs.readFileSync(0,'utf8');event({kind:'launch',input,LC_ALL:process.env.LC_ALL,LC_CTYPE:process.env.LC_CTYPE});\n const mode=process.env.N3_LAUNCH;if(mode==='failure'){process.stdout.write('N3_LAUNCH_OUT\\0alpha\\n');process.stderr.write('N3_LAUNCH_ERR\\0beta\\n');return 37;}\n if(mode.startsWith('secret-')){const stream=mode==='secret-stdout'?process.stdout:process.stderr,other=mode==='secret-stdout'?process.stderr:process.stdout,value=process.env.N3_OUTPUT_SECRET;stream.write(value.slice(0,8));await new Promise(r=>setTimeout(r,70));stream.write(value.slice(8));other.write('N3_ORDINARY_STREAM_MUST_BE_BLOCKED\\n');return 37;}\n if(mode==='chatty'){process.stdout.write('N3_SUCCESS_OUT\\n');process.stderr.write('N3_SUCCESS_ERR\\n');}}\n console.log('opened');return 0;}\nif(a.includes('cdp-url')){console.log(process.env.N3_RECEIVER_WS);return 0;}\nif(a.includes('close')){event({kind:'close',LC_ALL:process.env.LC_ALL,LC_CTYPE:process.env.LC_CTYPE});if(process.env.N3_CLOSE==='failure')return 29;await fetch(process.env.N3_RECEIVER_CONTROL,{method:'POST'});fs.writeFileSync(process.env.N3_DAEMON_STOP,'stop');console.log('closed');return 0;}\nconsole.log('fixture');return 0;}\nmain().then(code=>process.exitCode=code).catch(()=>process.exitCode=71);\n",{mode:0o755});
   const scenario=join(root,'scenario.mjs');
-  writeFileSync(scenario,`import fs from 'node:fs';fs.writeFileSync(process.env.N3_MARKER,'entered');if(process.env.N3_SCENARIO==='failure')process.exit(23);if(process.env.N3_SCENARIO==='cancel')setTimeout(()=>fs.writeFileSync(process.env.N3_MARKER+'.late','late-artifact'),10000);\n`);
-  const env={...process.env,PATH:`${bin}:${process.env.PATH}`,HOME:home,TMPDIR:temp,BROWSER_QA_ENGINE:'agent-browser',BROWSER_QA_PROFILE_MAP:'/dev/null',BROWSER_QA_AUTH_MODE:desiredMode,
+  writeFileSync(scenario,`import fs from 'node:fs';fs.writeFileSync(process.env.N3_MARKER,'entered');fs.writeFileSync(process.env.N3_MARKER+'.stdin',fs.readFileSync(0));if(process.env.N3_SCENARIO==='failure')process.exit(23);if(process.env.N3_SCENARIO==='cancel')setTimeout(()=>fs.writeFileSync(process.env.N3_MARKER+'.late','late-artifact'),10000);\n`);
+  const env={...process.env,PATH:`${bin}:${process.env.PATH}`,HOME:home,TMPDIR:temp,BROWSER_QA_ENGINE:'agent-browser',BROWSER_QA_PROFILE_MAP:'/dev/null',BROWSER_QA_AUTH_MODE:authMode,N3_LAUNCH:launch,N3_CLOSE:closeMode,N3_ENGINE_EVENTS:engineEvents,N3_OUTPUT_SECRET:source.ws,
     BROWSER_QA_TICKET_SOURCE_WS:source.ws,BROWSER_QA_TICKET_TOP_LEVEL_SITE:'https://example.test',BROWSER_QA_TARGET_URL:target,BROWSER_QA_EVIDENCE_DIR:evidence,N3_DAEMON_PID:String(daemon.pid),N3_DAEMON_STOP:daemonStop,
     N3_RECEIVER_WS:receiver.ws,N3_RECEIVER_CONTROL:receiver.control,N3_MARKER:marker,N3_SCENARIO:mode};
-  const run=async({cancel=false}={})=>{
+  if(localized){Object.assign(env,{LC_ALL:'fr_FR.UTF-8',LC_TIME:'fr_FR.UTF-8',LC_CTYPE:'en_US.UTF-8',LANG:'C'});
+    const ps=String.raw`const{spawnSync}=require('node:child_process'),fs=require('node:fs');const r=spawnSync('/bin/ps',process.argv.slice(2),{env:process.env,encoding:'utf8'});let out=r.stdout||'';if(process.argv.join(' ').includes('lstart=')&&(process.env.LC_ALL||process.env.LC_TIME)!=='C')out=out.replace(/^(\s*\d+\s+\d+\s+)\S+/gm,'$1dim.');fs.appendFileSync(process.env.N3_ENGINE_EVENTS,JSON.stringify({kind:'ps',unicode:out.includes('界'),LC_ALL:process.env.LC_ALL,LC_TIME:process.env.LC_TIME,LC_CTYPE:process.env.LC_CTYPE})+'\n');process.stdout.write(out);process.stderr.write(r.stderr||'');process.exitCode=r.status??1;`;writeFileSync(join(bin,'ps'),'#!'+process.execPath+'\n'+ps,{mode:0o755});
+  }
+  const run=async({cancel=false,input=''}={})=>{
     const child=spawn('bash',[context,'--run','--url',target,'--evidence-dir',evidence,'--',process.execPath,scenario],{env});
+    child.stdin.end(input);
     const result=childResult(child);let finished=false;result.then(()=>finished=true);const deadline=Date.now()+3000;
     while(!finished&&!existsSync(marker)&&Date.now()<deadline)await pause(20);
     if(cancel&&existsSync(marker))child.kill('SIGTERM');
     const timer=setTimeout(()=>child.kill('SIGTERM'),5000);
     try{return {...await result,reached:existsSync(marker)||source.requests.includes('Storage.getCookies')};}finally{clearTimeout(timer);}
   };
-  return {root,evidence,temp,ownedProfile,marker,source,receiver,env,run,
+  return {root,evidence,temp,ownedProfile,marker,source,receiver,env,run,events:()=>readFileSync(engineEvents,'utf8').trim().split('\n').filter(Boolean).map(JSON.parse),
     close:async()=>{daemon.kill('SIGTERM');await daemonDone;await source.close();await receiver.close();rmSync(root,{recursive:true,force:true});}};
 }
 function requireReached(t,result) {
@@ -169,4 +174,23 @@ test('empty source cannot be represented as verified real-site login reuse',asyn
     assert.equal(f.receiver.received.flat().length,0);
     assert.equal(f.receiver.closed,true);
   }finally{await f.close();}
+});
+
+
+test('gateway:launch-failure-two-streams-preserve-bytes-and-finally',async()=>{
+ const f=await fixture({launch:'failure',authMode:'none'});try{const r=await f.run();assert.equal(r.code,1);assert.equal(r.reached,false);assert.equal(existsSync(f.marker),false);assert.equal(r.stdout.split('N3_LAUNCH_OUT\0alpha\n').length-1,1,'exact stdout bytes forwarded once');assert.equal(r.stderr.split('N3_LAUNCH_ERR\0beta\n').length-1,1,'exact stderr bytes forwarded once');assert.match(r.stderr,/ENGINE_LAUNCH_FAILED/);assert.equal(f.receiver.closed,true,'finally must invoke owned cleanup after failure');assert.match(r.stdout,/cleanup_engine=agent-browser/);}finally{await f.close();}
+});
+
+
+test('gateway:successful-launch-is-silent-and-ignores-nonempty-stdin',async()=>{
+ const f=await fixture({launch:'chatty',authMode:'none'});try{const r=await f.run({input:'NONEMPTY scenario input 界\n'});assert.equal(r.code,0,r.stderr);assert.equal(existsSync(f.marker),true);assert.equal(f.events().find(x=>x.kind==='launch').input,'','launch stdin is EOF');assert.equal(readFileSync(f.marker+'.stdin','utf8'),'NONEMPTY scenario input 界\n');assert.doesNotMatch(r.stdout+r.stderr,/N3_SUCCESS_OUT|N3_SUCCESS_ERR/);assert.equal(f.receiver.closed,true);}finally{await f.close();}
+});
+for(const stream of ['stdout','stderr'])test('gateway:known-source-capability-cross-chunks-blocks-both-'+stream,async()=>{
+ const f=await fixture({launch:'secret-'+stream});try{const r=await f.run();assert.equal(r.code,1);assert.equal(f.events().some(x=>x.kind==='launch'),true);assert.equal(existsSync(f.marker),false);assert.equal((r.stdout+r.stderr).includes(f.source.ws),false);assert.doesNotMatch(r.stdout+r.stderr,/N3_ORDINARY_STREAM_MUST_BE_BLOCKED/);assert.match(r.stderr,/SECRET_OUTPUT_BLOCKED/);assert.match(r.stderr,/ENGINE_LAUNCH_FAILED/);assert.match(r.stdout,/cleanup_incomplete=source_receiver_identity_unverified/);}finally{await f.close();}
+});
+test('gateway:scenario-nonzero-remains-exact-with-finally',async()=>{
+ const f=await fixture({mode:'failure',authMode:'none'});try{const r=await f.run();assert.equal(existsSync(f.marker),true);assert.equal(r.code,23);assert.equal(f.receiver.closed,true);assert.equal(existsSync(f.ownedProfile),false);}finally{await f.close();}
+});
+test('gateway:localized-ps-preserves-unicode-and-cleans-owned-worker',async()=>{
+ const f=await fixture({localized:true,authMode:'none',closeMode:'failure'});try{const r=await f.run();assert.equal(existsSync(f.marker),true);assert.equal(r.code,0,r.stderr+'\n'+r.stdout);assert.equal(existsSync(f.ownedProfile),false);assert.match(r.stdout,/graceful_close_failed=1/);const rows=f.events().filter(x=>x.kind==='ps');assert.ok(rows.some(x=>x.unicode),'real ps observed Unicode owned argv');for(const x of rows){assert.equal(x.LC_ALL,'');assert.equal(x.LC_TIME,'C');assert.equal(x.LC_CTYPE,'fr_FR.UTF-8');}assert.equal(f.events().find(x=>x.kind==='close').LC_ALL,'fr_FR.UTF-8','engine locale is untouched');}finally{await f.close();}
 });

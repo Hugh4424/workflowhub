@@ -30,6 +30,12 @@ import sys
 import time
 from pathlib import Path
 
+# Pin only ps date names; preserve the caller effective character locale.
+ps_env = dict(os.environ)
+ps_env["LC_CTYPE"] = os.environ.get("LC_ALL") or os.environ.get("LC_CTYPE") or os.environ.get("LANG") or "C"
+ps_env["LC_ALL"] = ""
+ps_env["LC_TIME"] = "C"
+
 session = sys.argv[1]
 engine = sys.argv[2]
 tmp_root = Path(sys.argv[3])
@@ -45,6 +51,7 @@ session_runtime_files = (
 ps_output = subprocess.check_output(
     ["ps", "-axo", "pid=,ppid=,command="],
     text=True,
+    env=ps_env,
 )
 
 rows = []
@@ -114,7 +121,7 @@ def descendants(root_pid: int) -> set[int]:
     return found
 
 def start_identities():
-    output = subprocess.check_output(["ps", "-axo", "pid=,ppid=,lstart=,command="], text=True)
+    output = subprocess.check_output(["ps", "-axo", "pid=,ppid=,lstart=,command="], text=True, env=ps_env)
     identities = {}
     for raw in output.splitlines():
         parts = raw.strip().split(None, 7)
@@ -148,7 +155,7 @@ if engine in ("agent-browser", "all"):
 # TERM only an authenticated main browser, not its entire process tree.
 kill_pids = {pid for pid in kill_pids if "--user-data-dir=" in by_pid[pid]["command"]}
 # Only exact authenticated roots may receive TERM; never sweep other engines.
-current_rows = subprocess.check_output(["ps", "-axo", "pid=,ppid=,command="], text=True)
+current_rows = subprocess.check_output(["ps", "-axo", "pid=,ppid=,command="], text=True, env=ps_env)
 current_commands = {}
 for raw in current_rows.splitlines():
     parts = raw.strip().split(None, 2)
@@ -168,6 +175,7 @@ time.sleep(0.15)
 active_ps_output = subprocess.check_output(
     ["ps", "-axo", "pid=,ppid=,command="],
     text=True,
+    env=ps_env,
 )
 active_rows = []
 for raw in active_ps_output.splitlines():
@@ -209,7 +217,7 @@ for value in owned_profiles:
         shutil.rmtree(child)
         removed_dirs += 1
 
-final_ps = subprocess.check_output(["ps", "-axo", "pid=,command="], text=True)
+final_ps = subprocess.check_output(["ps", "-axo", "pid=,command="], text=True, env=ps_env)
 final_rows = []
 excluded_pids = {os.getpid(), os.getppid()}
 for raw in final_ps.splitlines():
