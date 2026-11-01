@@ -143,17 +143,20 @@ function matchingDimensions(criterion){
 export function mergeJudgments(criteria,observations,refs,{interrupted=false}={}){
   return criteria.map(original=>{
     const c=structuredClone(original),selected=matchingDimensions(c),docs=selected.map(d=>observations[d]);
-    c.evidence=[...(c.evidence??[]),...selected.filter(d=>observations[d]?.items.length).map(d=>refs[d])];
+    const currentRefs=selected.filter(d=>observations[d]?.items.length).map(d=>refs[d]),callerRefs=c.evidence??[];
+    const unverified=callerRefs.filter(e=>!currentRefs.some(r=>r?.ref===e?.ref&&r?.sha256===e?.sha256));
+    c.evidence=[...callerRefs,...currentRefs];
+    const hasObservation=docs.some(d=>d?.items.length);
     const unreachable=interrupted||docs.some(d=>d?.failures.some(f=>f.class==='UNREACHABLE'));
     const navDeclared=/导航|navigation|ttfb|domContentLoadedEventEnd|loadEventEnd/i.test(c.dimension)||(/perf|performance|运行性能/i.test(c.dimension)&&!/交互|interaction/i.test(c.dimension));
     const unknownNav=navDeclared&&selected.includes('perf')&&observations.perf?.items.some(item=>Object.values(item.perf?.nav??{}).some(value=>value.median==='unknown'));
     const interactionDeclared=/交互|interaction/i.test(c.dimension)||(/perf|performance|运行性能/i.test(c.dimension)&&!/导航|navigation|ttfb|domContentLoadedEventEnd|loadEventEnd/i.test(c.dimension));
     const unknownInteraction=interactionDeclared&&selected.length===1&&selected[0]==='perf'&&observations.perf?.items.some(item=>item.perf?.interaction.status==='unknown');
     if(c.state!=='失败'&&(unreachable||unknownNav||unknownInteraction)){c.state='未测';c.untested_reason=unreachable?'采集失联：保留已观察，后续采集未执行；提供者为采集执行者，恢复同一对象后重跑':[unknownNav?'导航性能未测：三次观测存在缺失；由采集执行者恢复同一对象后补齐并重跑':null,unknownInteraction?'交互未测：未提供任务动作或实际耗时缺失；由页面任务作者提供可等待真实终态的闭包并补观测后重跑':null].filter(Boolean).join('；');}
-    if(c.state==='通过'&&!docs.some(d=>d?.items.length)){
-      if(!selected.length&&Array.isArray(original.evidence)&&original.evidence.length){c.state='未测';c.untested_reason=[c.untested_reason,'本项无对应采集观察；外部证据的对象绑定与判据覆盖未核实；由调用方及原独立执行者（独立页面验收者）核实当前对象、业务终态与判据覆盖，补证后恢复，不能用其它维观测替代'].filter(Boolean).join('；');}
-      else throw fault('E_PASS_WITHOUT_OBSERVATION',c.id,'A pass has no observation',2);
+    if(original.state==='通过'&&unverified.length){
+      c.state='未测';c.untested_reason=[c.untested_reason,!hasObservation?'本项无对应采集观察':null,'外部证据的对象绑定与判据覆盖未核实；外部证据未采用为当前对象通过依据；由调用方及原独立执行者（独立页面验收者）核实当前对象、业务终态与判据覆盖，补证后恢复，不能用其它维观测替代'].filter(Boolean).join('；');
     }
+    if(c.state==='通过'&&!hasObservation)throw fault('E_PASS_WITHOUT_OBSERVATION',c.id,'A pass has no observation',2);
     return c;
   });
 }
@@ -161,7 +164,7 @@ async function collectAudit(values,selection,{env,cwd,runTask,windowTimeoutMs=50
   const out=resolve(cwd,values['--out']);
   const input=values['--judgments']?JSON.parse(await readFile(resolve(cwd,values['--judgments']),'utf8')):{criteria:bone.map((dimension,i)=>({id:'dimension-'+(i+1),dimension,state:'未测',evidence:[],untested_reason:'未提供判定文件；由页面执行者提供判定与来源后重跑'})),norm_candidates:[]};
   if(!Array.isArray(input.criteria)||!input.criteria.length)throw fault('E_USAGE','--judgments','Judgment input must have criteria[]');
-  const originalErrors=collectErrors(input).filter(e=>['E_STATE_OUT_OF_ENUM','E_TOTAL_SCORE'].includes(e.code)||(input.coverage_limits!==undefined&&e.code==='E_REPORT_SHAPE'&&e.path.startsWith('$.coverage_limits')));
+  const originalErrors=collectErrors(input).filter(e=>['E_STATE_OUT_OF_ENUM','E_TOTAL_SCORE'].includes(e.code)||(input.coverage_limits!==undefined&&e.code==='E_REPORT_SHAPE'&&e.path.startsWith('$.coverage_limits'))||(e.code==='E_REPORT_SHAPE'&&/^\$\.criteria\[\d+\]\.evidence$/.test(e.path)));
   if(originalErrors.length){const e=fault('E_REPORT_REJECTED','--judgments','Original judgment violates frozen shape rules',2);e.errors=originalErrors;throw e;}
   for(const [i,c]of input.criteria.entries())if(Array.isArray(c?.evidence))for(const [j,e]of c.evidence.entries())if(!text(e?.ref)||typeof e.sha256!=='string'||!/^[a-f0-9]{64}$/i.test(e.sha256))throw fault('E_MISSING_EVIDENCE',`$.criteria[${i}].evidence[${j}]`,'Formal producer requires ref and sha256; original byte/object verification remains with the evidence consumer',2);
   if(await exists(out))throw fault('E_OUTPUT_EXISTS','--out','Report original already exists; choose a new report path');
