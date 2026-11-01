@@ -18,7 +18,7 @@ function policy(){
  const limit=/正文不超过\s*(\d+)\s*字/.exec(agents);
  return {brief:labels.filter(x=>eight.includes(x)),limit:limit?Number(limit[1]):Infinity,
  pointer:/超长[^\n]*5 行摘要/.test(agents),
- ready:/不得早于开发完成并明确通知/.test(method),
+ ready:/不得早于实现就绪并明确通知/.test(method),
  axes:/两个互不继承对方上下文的独立执行者/.test(method),
  late:/迟到 finding：重开同一 Phase，回同一开发子代理修/.test(method),
  unchanged:/三检查/.test(method),
@@ -54,7 +54,7 @@ function retryRules(e,reject){
 }
 function replay(events,p=policy()){
  const seen=new Map(),errors=[];let last=0;
- const requiresDone={start:'review/test starts before developer completion',axis:'supplement axis starts before developer completion',repair:'repair before developer completion',report:'report before developer completion','test-result':'test before developer completion',final:'final before developer completion'};
+ const requiresReady={start:'review/test starts before implementation-ready',axis:'supplement axis starts before implementation-ready',repair:'repair before implementation-ready',report:'report before implementation-ready','test-result':'test before implementation-ready',final:'final before implementation-ready'};
  for(const e of events){
   const reject=rule=>errors.push(`${e.phase??'packet'} event ${e.n}: ${rule}`);
   if(e.n<=last)reject('event order');last=e.n;
@@ -75,12 +75,22 @@ function replay(events,p=policy()){
    }
   }
   let s=seen.get(e.phase);
-  if(!s){s={writer:e.dev,done:false,reports:new Set(),axes:new Map(),open:new Set(),repair:0,validRetest:false};seen.set(e.phase,s);}
-  if(p.ready&&requiresDone[e.kind]&&!s.done)reject(requiresDone[e.kind]);
+  if(!s){s={writer:e.dev,ready:false,done:false,ac:false,reports:new Set(),axes:new Map(),open:new Set(),repair:0,validRetest:false};seen.set(e.phase,s);}
+  if(p.ready&&requiresReady[e.kind]&&!s.ready)reject(requiresReady[e.kind]);
   switch(e.kind){
+   case 'dev-ready':
+    if(s.writer&&e.dev&&e.dev!==s.writer)reject('unique writer: readiness changes Phase developer');
+    s.writer??=e.dev;s.ready=true;break;
    case 'dev-done':
     if(s.writer&&e.dev&&e.dev!==s.writer)reject('unique writer: completion changes Phase developer');
+    if(!s.ready)reject('developer completion before implementation-ready');
+    if(s.repair&&!s.validRetest)reject('developer completion without current post-repair independent result');
+    if(!s.reports.has('test')||!s.reports.has('review'))reject('developer completion before independent test/review reports');
+    for(const axis of ['Standards','Spec'])if(!s.axes.has(axis))reject(`developer completion before independent axis ${axis}`);
+    if(s.open.size)reject('developer completion with open finding');
+    if(!s.ac)reject(s.repair?'developer completion before affected AC re-confirmed after repair':'developer completion before applicable AC complete');
     s.writer??=e.dev;s.done=true;break;
+   case 'ac-complete':s.ac=true;break;
    case 'axis':
     if(p.axes&&(!e.session?.trim()||e.session===s.writer))reject('developer cannot execute independent Standards/Spec axis; distinct session required');
     if(p.axes&&[...s.axes.values()].includes(e.session))reject('Standards/Spec require independent sessions');
@@ -92,7 +102,7 @@ function replay(events,p=policy()){
    case 'finding':s.open.add(e.id);break;
    case 'repair':
     if(p.late&&(e.targetPhase!==e.phase||e.session!==s.writer))reject('finding must return to same Phase/developer');
-    s.open.delete(e.id);s.repair=e.n;s.reports.clear();s.validRetest=false;break;
+    s.open.delete(e.id);s.repair=e.n;s.reports.clear();s.validRetest=false;s.ac=false;break;
    case 'test-result':
     if(e.session===s.writer||e.receiptRef===e.devReceiptRef)reject('independent test receipt required');
     if(e.receiptAt<s.repair)reject('old receipt predates repair');
@@ -100,6 +110,9 @@ function replay(events,p=policy()){
     s.validRetest=Boolean(e.session&&e.session!==s.writer&&e.receiptRef&&e.receiptRef!==e.devReceiptRef&&e.receiptAt>=s.repair&&e.exit===0);break;
    case 'report':s.reports.add(e.role);break;
    case 'final':
+    if(!s.ready)reject('final before implementation-ready');
+    if(!s.done)reject('final before developer completion');
+    if(!s.ac)reject('final before applicable AC complete');
     if(s.repair&&!s.validRetest)reject('post-repair independent test result with current receipt required before final');
     if(p.axes)for(const axis of ['Standards','Spec'])if(!s.axes.has(axis))reject(`required independent axis ${axis} missing before final`);
     if(s.open.size)reject('open finding including late finding');
@@ -108,12 +121,13 @@ function replay(events,p=policy()){
  }
  return errors;
 }
-const trace=(extra=[])=>[{kind:'dev-done',phase:'P2',dev:'dev-2'},
+const trace=(extra=[])=>[{kind:'dev-ready',phase:'P2',dev:'dev-2'},
  {kind:'start',phase:'P2',role:'review'},{kind:'start',phase:'P2',role:'test'},
  {kind:'axis',phase:'P2',axis:'Standards',session:'standards-2'},
  {kind:'axis',phase:'P2',axis:'Spec',session:'spec-2'},
  {kind:'report',phase:'P2',role:'review'},{kind:'report',phase:'P2',role:'test'},
- ...extra,{kind:'final',phase:'P2'}].map((e,i)=>({...e,n:i+1}));
+ ...extra,{kind:'ac-complete',phase:'P2'},{kind:'dev-done',phase:'P2',dev:'dev-2'},
+ {kind:'final',phase:'P2'}].map((e,i)=>({...e,n:i+1}));
 const rejected=(events,why)=>expect(replay(events).join('\n')).toMatch(why);
 function fixture(){const base=mkdtempSync(join(tmpdir(),'dispatch-quality-'));dirs.push(base);mkdirSync(join(base,'work'));const path=join(base,'work','same.mjs');writeFileSync(path,'export const value=7;\n');return {base,path};}
 async function capturedIndependentResult(){
@@ -130,7 +144,8 @@ function independentParallelFixture(){
 }
 describe('ORACLE-DISPATCH-QUALITY controlled local trace',()=>{
  it('accepts seven-step notification/reports with independent axes',()=>expect(replay(trace())).toEqual([]));
- it.each(['review','test'])('rejects %s started before explicit developer completion',role=>{const t=trace();t.unshift({n:0,kind:'start',phase:'P2',role});t.forEach((e,i)=>e.n=i+1);rejected(t,/before developer completion/);});
+ it.each(['review','test'])('rejects %s started before explicit implementation-ready',role=>{const t=trace();t.unshift({n:0,kind:'start',phase:'P2',role});t.forEach((e,i)=>e.n=i+1);rejected(t,/before implementation-ready/);});
+ it.each(['review','test','Standards','Spec'])('allows %s after ready before developer completion',kind=>{const t=trace();const i=t.findIndex(e=>(kind==='Standards'||kind==='Spec')?(e.kind==='axis'&&e.axis===kind):(e.kind==='start'&&e.role===kind));const [e]=t.splice(i,1);t.splice(1,0,e);t.forEach((x,j)=>x.n=j+1);expect(replay(t)).toEqual([]);});
  it('rejects one executor producing both axis summaries',()=>{const t=trace();t.find(e=>e.axis==='Spec').session='standards-2';rejected(t,/independent sessions/);});
  it.each(['Standards','Spec','both'])('rejects missing required independent axis %s',axis=>{
   const events=trace().filter(e=>e.kind!=='axis'||(axis!=='both'&&e.axis!==axis));
@@ -144,11 +159,17 @@ describe('ORACLE-DISPATCH-QUALITY controlled local trace',()=>{
   rejected(trace([{kind:'write',phase:'P2',role:'dev',session:'other-developer'}]),/unique writer/);
   expect(replay(trace([{kind:'write',phase:'P2',role:'dev',session:'dev-2'}]))).toEqual([]);
  });
- it.each(['Standards','Spec'])('rejects early supplement axis %s before dev-done',axis=>{
+ it.each(['Standards','Spec'])('rejects early supplement axis %s before implementation-ready',axis=>{
   const events=trace();const index=events.findIndex(e=>e.kind==='axis'&&e.axis===axis);
   events.unshift(...events.splice(index,1));events.forEach((e,i)=>e.n=i+1);
-  rejected(events,/supplement axis starts before developer completion/);
+  rejected(events,/supplement axis starts before implementation-ready/);
  });
+ it('rejects developer completion before independent reports',()=>{const t=trace().filter(e=>e.kind!=='report');rejected(t,/developer completion before independent test\/review reports/);});
+ it('rejects developer completion before applicable AC complete',()=>{const t=trace().filter(e=>e.kind!=='ac-complete');rejected(t,/developer completion before applicable AC complete/);});
+ it('rejects final before developer completion',()=>{const t=trace().filter(e=>e.kind!=='dev-done');rejected(t,/final before developer completion/);});
+ it('rejects completion before current post-repair independent result',()=>{const t=trace();const i=t.findIndex(e=>e.kind==='ac-complete');t.splice(i+1,0,{kind:'finding',phase:'P2',id:'F-retest'},{kind:'repair',phase:'P2',id:'F-retest',targetPhase:'P2',session:'dev-2'});t.forEach((e,j)=>e.n=j+1);rejected(t,/post-repair independent/);});
+ it('rejects completion when affected AC is not re-confirmed after repair',()=>{const t=trace();const i=t.findIndex(e=>e.kind==='ac-complete');t.splice(i+1,0,{kind:'finding',phase:'P2',id:'F-ac'},{kind:'repair',phase:'P2',id:'F-ac',targetPhase:'P2',session:'dev-2'},{kind:'test-result',phase:'P2',session:'test-2',receiptRef:'retest-1',devReceiptRef:'dev-1',receiptAt:11,exit:0});t.forEach((e,j)=>e.n=j+1);rejected(t,/affected AC re-confirmed/);});
+ it('accepts repair retest and affected AC re-confirmation before completion',()=>{const t=trace();const i=t.findIndex(e=>e.kind==='ac-complete');t.splice(i+1,0,{kind:'finding',phase:'P2',id:'F-ok'},{kind:'repair',phase:'P2',id:'F-ok',targetPhase:'P2',session:'dev-2'},{kind:'test-result',phase:'P2',session:'test-2',receiptRef:'retest-ok',devReceiptRef:'dev-1',receiptAt:11,exit:0},{kind:'report',phase:'P2',role:'review'},{kind:'report',phase:'P2',role:'test'},{kind:'ac-complete',phase:'P2'});t.forEach((e,j)=>e.n=j+1);expect(replay(t)).toEqual([]);});
  it('rejects repair reports without an independent post-repair test result',()=>{
   rejected(trace([{kind:'finding',phase:'P2',id:'F-no-result'},
    {kind:'repair',phase:'P2',id:'F-no-result',targetPhase:'P2',session:'dev-2'},
