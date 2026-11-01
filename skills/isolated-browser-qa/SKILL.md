@@ -50,6 +50,10 @@ bash "$SKILL_DIR/scripts/browser-qa-context.sh" --run --url "$BROWSER_QA_TARGET_
 
 Evidence must be outside temporary browser roots. Scenario inherits the owned session. For agent-browser, runner strips source capabilities, launches native blank and caches owned CDP before target work, then finally closes receiver/cleans on success, failure and cancel. Existing ego instead follows the TaskSpace lifecycle below. Caller preserves actual exit (cancel 130/143) and rereads named evidence with size/hash after cleanup. --run is private, not another WorkflowHub command.
 
+For an explicitly authorized isolated exact-file experiment, read
+[the agent-browser experiment branch](references/agent-browser.md#isolated-exact-file-experiment)
+before setting candidate ENV or opening a file URI.
+
 ### 2. Doctor
 
 Before driving, check the selected engine:

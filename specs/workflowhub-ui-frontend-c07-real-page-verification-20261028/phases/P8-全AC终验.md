@@ -10,7 +10,54 @@
 表只放对照，不承载步骤；命令与表行不受一行 80 字限制。
 例外：`## 机器字段（校验器用，人可跳过）` 这个标题逐字保留。
 
-## 本轮真实页面实际验到了什么？
+## 2026-11-01当前七条功能验收结论是什么？
+
+原独立判读者已逐条判定七项原功能验收均为 pass；本写主消费其最终原件后同步本卡，不把功能验收改写成所有页面、对象认证或真实业务均通过。
+
+当前七行结论以[原独立二最终汇合004](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/P8-independent-grader-two/2026-11-01-004-grader2-final-ac3-and-seven-ac-verdict.md>)为准：16649字节，SHA256 `e82a9ea4baf393a16256b76a6a02673ae4e45da97e62ee0c78f8c1ae2d8e389c`。本写主已实际读完整报告，包括其逐项依据、影响面复用、失败与覆盖限制；不是只采父会话的状态转述。
+
+| 页面验收 | 当前功能档位 | 具名来源与适用范围 |
+| --- | --- | --- |
+| 一：逐维取证 | pass | 最终004逐项表的一，沿[原实质判读001](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/P8-independent-grader-two/2026-10-31-001-grader2-current-visual-flow-acceptance.md>)的16图、7流程、八维骨架与视觉九类；未知不被总分吞并，不等每页零缺陷。 |
+| 二：对象身份 | pass | 沿[原独立二002](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/P8-independent-grader-two/2026-11-01-002-grader2-ac2-current-scope-final-verdict.md>)的错对象、未启动与单引擎回退实证；未知对象字段仍未知，未认证成 match。 |
+| 三：反例与修复 | pass | 最终004新判：原200%与键盘焦点依据保原；[当前M6独立173](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/tests/2026-11-01-173-p8-ind1-m6-affected-final-readback.output>)补直接file、真实sim001点击、两资源响应体与一自控拒绝；[原M5独立139](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/tests/2026-11-01-139-p8-ind1-m5-file-final-readback.output>)中的B仅按未受影响范围复用，不冒M6新跑B。 |
+| 四：同尺定级 | pass | 最终004逐项表的四，沿原001的固定diff、同尺、两次独立分级；不因日期变化重做，也不扩大比较对象认证。 |
+| 五：修复复验 | pass | 最终004逐项表的五，沿原001的041/649→652→661/665修复与独立复验、九区10F2P/2P2P；限原受控校准对象，不冒真实后台闭环。 |
+| 六：未知不聚合 | pass | 沿[原独立二003](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/P8-independent-grader-two/2026-11-01-003-grader2-ac6-late-fix-final-verdict.md>)，真实未测/未采用与perf正控、原失败传播和后续字节承接分列；selected ref及SHA不构成对象或HTTP认证。 |
+| 七：三面追溯 | pass | 最终004逐项表的七，沿原001的六Buffer/hash、Map/no-store、实际frame/network/action与P7原范围；用户alias不冒真人签、算法修复或新业务授权。 |
+
+当前file组合绑定隔离候选M6：58409520字节，SHA256 `4671634d6e3ec96c166015857041f47d985cb0818ab045372c76eac5fe158883`；[研究交付完整078补丁](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/2026-11-01-078-p8-file-probe-m6.patch>)为54589字节，SHA256 `40df53e5839e96e825481953e3031fc688b28b8494ba5e729a591a286ac2edd2`。这是显式授权、auth none、fresh owned、六精确文件、非空域围栏下的实验能力，未安装或发布upstream。旧installed的No hostname失败及其原字节保留；不能由标签、补丁或新候选结果反签旧安装包。
+
+当前独立173为33710字节，SHA256 `9fb6b650c6eeedc69322c82cab9bb421627cec6ea3a52abf695a61664b857d2c`；它绑定自己的新runner/scenario及真实M6输入。真实file A载入、JS/CSS响应体等源、sim001点击到workbench、一自控越集CLI拒绝且frame不变、当前及原203精确PID/路径清理均有原件。开发[165正常链](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/tests/2026-11-01-165-p8-m6-normal-lowercase-real-file.json>)只证明载入/响应体/一拒/收尾，未点击，不冒独立173的交互。旧198与159标签失败保原；新202只加最终小写转换，原源审014机械核差异14字节，不反签旧caller。
+
+[163坏授权启动原件](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/tests/2026-11-01-163-p8-m6-badgrant-real-startup-public-stdio.output>)保留实际退出1、公开 `Symbolic links not authorized` 与 `ENGINE_LAUNCH_FAILED`，场景未进入。临时诊断模块及钩子已移除，错误由原CLI真实stdio经W到Task承接；不把CLI两流称作完整native IPC。两开发case与独立新case的自有服务、PID、socket/profile/root清理按各自原件分列；全局其它会话未动。
+
+[原源审M6汇合013](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/P8-file-source-review/2026-11-01-013-m6-affected-host-final.json>)保留两轴同源降级、provider未取得及partial覆盖，具体新finding为空；它不代当前组合运行，也不代P2质量。当前组合由独立173和最终004承接，不把零finding标签当七项pass的独立理由。P2脚本、cleanup及两项n3测试由原P2开发/独立来源交回，本P8未并行改其代码。
+
+对象认证中的unknown、真实AT未测、mock止于样本而非真实业务后台、worker/字体/TOCTOU、动态ENV撤权及跨daemon旋转未验证等限制继续有效。七项原功能pass不改变单对象报告的原incomplete、未测或预期失败，也不构成一般文件系统沙箱或安全结论。
+
+## 原四项任务的Done现在依据什么？
+
+本写主按原四张任务卡的完成条件核对交付，不用任务closed标签替证据，也不把不同owner、时点与调用方拼成一次新运行。
+
+- 任务一的两份原就绪件分别为[数据就绪件](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/P8-data-readiness.json>)与[环境就绪件](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/P8-environment-readiness.json>)。前者保原输入pass与六样本/修前后记录，后者保旧环境incomplete及具名缺口；状态合法与缺件具名不等全部环境已测。原entry缺件红679退出1，随后[原单件消费691](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/tests/2026-10-29-691-p8-original-consumer-complete-target.json>)退出0，均保原epoch。两件、词表与具名缺口对应任务一原Done；不覆盖旧环境状态。
+- 任务二的三层与非法输入由原重放判据承载；当前 `tests/contract/page-audit-acceptance.test.mjs` 中六个具名mutation分别断言缺理由、工具错误冒未测、总分、缺视觉项、未知改零和跨对象引用的对应错误。691保原单文件44项通过范围；它未逐六项打印，未记录当时源hash，不能宣称已逐条独立取日志、重建当时源字节或新跑当前57项。后续消费回修705→708、719→726及[原四项实际消费003](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/tests/2026-10-30-003-p8-final-actual-data-consumption.json>)按各自真实范围承接；当前功能充分性由独立二002、003、004判断，不由旧计数代签。
+- 任务三的注册事实有[原644红](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/tests/2026-10-29-644-p8-registered-facts-original-red.json>)退出1与[原646绿](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/tests/2026-10-29-646-p8-registered-facts-targeted-green.json>)退出0；646实际同时运行acceptance与engine-selection，筛选registered facts/guard/registration，总34pass/43skip，未到达项不冒通过。两份指定consumer回归分别由[原P2采集器651](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/tests/2026-10-29-651-p2-late-hash-nav-affected-green.json>)单件48pass/退出0，与[当前P5编排器113](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/tests/2026-11-01-113-p5-evidence-shape-runner-affected.json>)单件67项/退出0承接；原582与748亦保各自组合/筛选范围，不造同次P8双文件GREEN。七组输出与判定、两次独立分级、200%/键盘必测及读屏非门，依据原001与最终004的实质消费；file新增切片绑定173/139各自caller。不同epoch的稳定范围复用不等旧source反签新caller。
+- 任务四的七行、六项、复验、回写与禁词由本次当前摘要及最终004逐项引用承接：七功能pass与未测范围分列，修复/复验沿原001及当前173，失败与恢复保原。回写完成的是本卡当前结论、原因/范围和原件指针；原任务已明确任务事实库字段由stage-close写主落库，本卡不证明已落库，当前不执行该动作。四个原任务编号及Done原条未改，不增第五项或新门。
+
+本写主最后确认的四项为：已回报的当前范围无open finding；无未解释测试失败（159为已解释的取证标签缺陷、163及越集命令为预期非零，原错误保留）；Phase Done按原四任务及七项各有档位/具名证据核对；原七功能AC齐，由最终004给出全pass。源审的同源降级/partial与所有未验证通用能力仍照原件披露，不被这个四项确认覆盖。
+
+本轮W交付范围只有两指南、本卡与index中P8追加reference的残hunk；session的P8历史registered facts声明不扩为本轮脚本授权，P2回修及其提交由原P2来源保真。最终真实Git四路径diff、当前HEAD、结构微核与提交授权由父Git执行者提交前实际取得；本写主未运行Git或读Git对象，不将此未取字段预填成已核，也不在其后反链重写本卡。隔离D源码、078研究补丁和临时caller不进入W的四路径提交，不安装或发布upstream。当前卡片写窗到此结束，源码、指南、native与新caller均保持冻结。
+
+## 本次规范同步新增了第二份规则吗？
+
+没有。本次已实际读取 `skills/norm-sync/SKILL.md`、其 `references/routes.md`、`specs/acceptance/evidence.md` 的KR-EVID-001、`specs/acceptance/done.md` 的KR-DONE-001、实际AGENTS个人研究用途及 `skills/catalog.yaml` 中isolated-browser-qa原owner/consumer索引。已验证的有限实验说明落在原 `SKILL.md` 条件指针与唯一 `references/agent-browser.md`，没有另建规范正文、复制AGENTS规则、空delta或新ledger；无对应经验退役项，本次不清经验。个人研究授权不类推历史归档绑定或分发许可。
+
+当前主指南15078字节，SHA256 `2b6b8a4c028985a67bf792d44ee022ccddd718b5c79c14dc0fad393a458876a0`；参考指南5506字节，SHA256 `eef19fbf5522e58733c5bd875b39c5a342ecbc6680ead03be47672fb4f0a3547`。引用原专业源即可，不需新增索引权威。事实库字段落库归原stage-close写主；本卡不声称已落库，当前明确不执行stage-close，也不将该独占动作新设为P8功能验收前置。
+
+## 历史：2026-10-31真实页面当时验到了什么？
+
+以下旧表、118、e79及错误原件保留原epoch语义，不是上述2026-11-01当前七行档位；卡末原执行证据字段也保其历史绑定，不反写旧原件。
 
 本轮真实执行结束，直接文件入口存在实现缺口；七条当前档位不预支独立结论。
 
@@ -527,28 +574,31 @@ node node_modules/vitest/vitest.mjs run tests/contract/page-audit-acceptance.tes
 
 ## 每个文件由谁改，先做什么？
 
-本阶段新增一个验收测试文件；为执行原字面判据，只额外改两个既有浏览器网关文件。
+本阶段新增一个验收测试文件；原有两个网关文件的 registered facts 改动仍限原声明。本轮只追加 `references/agent-browser.md`，与 `SKILL.md` 一起说明受限 file 实验的使用范围，不扩会话脚本的代码写窗。
 
 其余业务与采集产出路径仍只读；样本只读复验，改样本归回修阶段。
 
 | 文件 | 改什么 | 后续消费者 |
 | --- | --- | --- |
 | `tests/contract/page-audit-acceptance.test.mjs` | 新增四个测试组：入口、三条离线块、真实环境、七行档位 | 本阶段门禁与阶段收口 |
-| `skills/isolated-browser-qa/scripts/browser-qa-session.mjs` | 在原同步守卫内补可选固定数据，供元素宽度、命中、减少动效与焦点采集 | 任务 3 的原判据采集 |
-| `skills/isolated-browser-qa/SKILL.md` | 说明同一份固定数据的边界 | 同上 |
+| `skills/isolated-browser-qa/scripts/browser-qa-session.mjs` | 在原同步守卫内补可选固定数据，供元素宽度、命中、减少动效与焦点采集；本轮不扩为 locale 或 stdout/stderr 回修 | 任务 3 的原判据采集 |
+| `skills/isolated-browser-qa/SKILL.md` | 保原固定数据边界，并指向本轮受限 file 实验说明 | 任务 3 的原判据采集与真实 file 验证调用方 |
+| `skills/isolated-browser-qa/references/agent-browser.md` | 说明候选实际版本与来源、固定授权及 fresh 会话限制、原 CLI file 对象与 HTTP 初始化的区别；不把标签或旧 installed 当能力证明 | 同上 |
 
-两个网关文件的首改位置与验证命令：
+本轮物理写主分开交接：P2 原开发独占 `browser-qa-session.mjs`、`browser-qa-cleanup.sh` 及 `tests/integration/n3-browser-ticket-boundary.node-test.mjs`、`tests/integration/n3-browser-session-lifecycle.node-test.mjs` 的脚本回修与行为测试；本 P8 的原指南开发只写上述两份指南。P2 脚本与测试的当前字节、执行和质量结果交回后，本阶段只读消费。索引列出历史 session 路径不构成本轮并发写授权。
+
+原固定事实采集的首改位置与验证命令：
 
 - `browser-qa-session.mjs` 的 `runRegisteredScript`：先改 `validRead` 白名单
   （`:461`），再改 `page.evaluate` 的 observation 分支（`:497`）。
   facts 只认 `scroll`、`hit-test`、`reduced-motion`、`active-element` 四个名。
-- `SKILL.md` 只补同一份固定数据的边界句，不改其它流程。
+- 两份指南只说明已取得的受限实验能力与真实调用，不写死隔离临时路径，不承诺动态 ENV 撤权或一般文件沙箱；规范和接口约束仍引用原来源，不复制成第二权威。
 - 首改测试组：`node node_modules/vitest/vitest.mjs run tests/contract/page-audit-acceptance.test.mjs -t "registered facts"`。
 - 受影响回归：同命令跑 `tests/contract/page-audit-collectors.test.mjs` 与
   `tests/contract/page-audit-runner.test.mjs`，两文件都退出 0 才收。
   独立测试者核两份退出码与输出，不只看本阶段新增组。
 
-三处只改到能执行原字面判据为止：
+上述路径只改到能执行原字面判据及本轮有限指南收净为止：
 
 - 不新增标识与表达式输入、身份通道、浏览器引擎或公共入口。
 - 没有固定数据的原读取与准备行为保留。
@@ -557,7 +607,7 @@ node node_modules/vitest/vitest.mjs run tests/contract/page-audit-acceptance.tes
 禁止改动：
 
 - 规格正文与前七个阶段的写入集。
-- 两个网关文件只改上面列出的首改点，不改其它导出与流程。
+- 会话脚本的 P8 改动仍只限上述 registered facts 首改点；本轮 locale、stdout/stderr、cleanup 和两项 n3 行为测试由 P2 原开发独占，本阶段不改这些代码或测试。两份指南只收净本节声明的说明，不改其它导出、接口与流程。
 - 冻结的契约测试、旧报告原件、归档与工作区、决策日志、任务事实库。
 - 六个样本运行文件、受控副本、原页、缺陷清单、四张校准页。
 
@@ -803,12 +853,12 @@ node node_modules/vitest/vitest.mjs run tests/contract/page-audit-acceptance.tes
 - **任务编号**：T023
 - **来源 / FR / AC**：R-C07-27、R-C07-31、U-C07-53、U-C07-58；D-033；FR-C07-001、FR-C07-012、FR-C07-027、FR-C07-020；AC-C07-3、AC-C07-4、AC-C07-7、AC-C07-5；可观察结果＝七组各有具名命令、预期、真实原始输出与组级判定；两次定级必须同级。
 - **输入**：契约分析 004 第 61 到 77 行的九类区域与期望档位；三条还原负例与一条阻断负例；规格验收 3（`spec.md:776-779`）的反例、状态与证据边界（只读分母）；规格「样本运行参数」（`spec.md:1585-1588`）；C05 六个运行文件；受控副本的初始化来源、前后源码版本链、最小差异与修复记录。
-- **文件 / 符号**：`tests/contract/page-audit-acceptance.test.mjs`（追加真实环境组与命令表；符号 `realEnvironment`）；`skills/isolated-browser-qa/scripts/browser-qa-session.mjs`（首改 `runRegisteredScript` 的 `validRead` 与 observation 分支）；`skills/isolated-browser-qa/SKILL.md`（固定数据边界句）。
+- **文件 / 符号**：`tests/contract/page-audit-acceptance.test.mjs`（追加真实环境组与命令表；符号 `realEnvironment`）；`skills/isolated-browser-qa/scripts/browser-qa-session.mjs`（仍仅原 `runRegisteredScript` 的 `validRead` 与 observation 分支，本轮脚本回修归 P2）；`skills/isolated-browser-qa/SKILL.md`（保固定数据边界并指向有限 file 实验说明）；`skills/isolated-browser-qa/references/agent-browser.md`（本轮仅真实候选来源、受限固定授权及 fresh 会话、原 CLI file 实测与 HTTP 初始化的说明）。
 - **动作**：①九类各写「注入命令、期望档位、复验命令」三行，标由独立验收执行子代理自动执行；先按首改位置补 facts 四名，再用 `-t "registered facts"` 验正反例；②200% 缩放与键盘焦点各一条命令与预期；③读屏只写证据行或未测，不设门；④用 `file://` 直接打开样本页并保存原始输出，作验收 3 的直接证据，未跑记未测；⑤C05 样本 A/B 写对象身份 `9efb7e577a62d36393caedfb30fc35bf3cb80834`（短号 `9efb7e57`）与「止于 mock、真实业务未覆盖」；⑥断言七组各有一条命令与预期；⑦本地服务沿用规格原文，编排入口照参数表补五个身份参数，两处指同一接口；⑧逐组真跑，原始输出落 `quality/evidence/build-code/P8-real-environment/`，C05 A/B 的失败行按四步出分流清单落其下 `triage/`；⑨九类读回修阶段交付的修前副本与修后文件，按原输入独立复验与回归，不代写；⑩第 7 组同一标尺、同一差异连跑两次，同级才记通过；⑪跑 P2 采集器与 P5 编排器两份受影响回归并保存退出码。
 - **输出 / 失败**：七组各一条具名命令与预期，七组真跑各一份原始输出与组级判定；失败＝缺 200% 或键盘、读屏当门、受控页写成产品通过、`file://` 未跑却写已验、只有命令文本没有原始输出、两次定级只跑一次或两次不同级仍写同级。
 - **边界 / 禁止改动**：不改受控页与校准页；不改 C05 样本；不改规格正文；九类修复不由本阶段写（写主回修阶段），本阶段只复验；不把模拟角色写成真人研究。
 - **依赖**：T022（同一文件串行；命令表引用验收 1、2、6 的就绪件）；P4（受控副本初始化、九类检出与修源、独立复验；本卡只读）。
-- **测试层级 / 技能**：真实环境级（写作期只写判据与命令，执行窗口是 build-code 运行本阶段）；预写测试＝本文件（作者＝验收执行者）；主技能 `skills/isolated-browser-qa/SKILL.md`；测试变更请求＝none。
+- **测试层级 / 技能**：真实环境级（写作期只写判据与命令，执行窗口是 build-code 运行本阶段）；预写测试＝本文件（作者＝验收执行者）；主技能 `skills/isolated-browser-qa/SKILL.md`；测试变更请求＝本轮 P8 指南不新增测试；`tests/integration/n3-browser-ticket-boundary.node-test.mjs` 与 `tests/integration/n3-browser-session-lifecycle.node-test.mjs` 的失败双流、秘密保护、locale 与所有权行为回修请求由 P2 原开发实施并交当前执行及独立质量原件，本 P8 只读消费，不并行写或以未到达的 skip 作通过。
 - **场景 / 夹具或服务**：受控副本九 region、四张校准页、C05 A/B 副本；执行窗口＝build-code 运行本阶段；执行者＝验收执行子代理；产出＝原始输出与组级判定；修复件＝回修阶段的同文件源码版本链，A/B 另列；清理＝引擎会话收尾与临时目录删除；接缝＝产出方是受控页与样本，产物是 `real_environment[]` 与采集原件，读取方是终末复核与产品验收者，分母是九类加四项深度面（`spec.md:1264-1266`）。
 - **RED/GREEN 门禁命令**：`node node_modules/vitest/vitest.mjs run tests/contract/page-audit-acceptance.test.mjs -t "real environment"`
 - **预期退出码**：RED nonzero; GREEN 0。
@@ -1250,12 +1300,12 @@ HTTP 三文件原字节等于磁盘，原生无障碍当前状态与页面地址
 写入集与依赖必须与 `phases/index.md` 逐条一致。
 
 - **全局规格**：`specs/workflowhub-ui-frontend-c07-real-page-verification-20261028/spec.md#appendix-a--验收判据唯一权威`（七条判据的唯一权威，只读）
-- **写入集**：`tests/contract/page-audit-acceptance.test.mjs`、`skills/isolated-browser-qa/scripts/browser-qa-session.mjs`、`skills/isolated-browser-qa/SKILL.md`
+- **写入集**：`tests/contract/page-audit-acceptance.test.mjs`、`skills/isolated-browser-qa/scripts/browser-qa-session.mjs`、`skills/isolated-browser-qa/SKILL.md`、`skills/isolated-browser-qa/references/agent-browser.md`
 - **依赖**：P1、P2、P3、P4、P5、P6、P7
 - **消费者**：skills/stage-close/SKILL.md
 - **gate_cmd**：`node node_modules/vitest/vitest.mjs run tests/contract/page-audit-acceptance.test.mjs`
 - **oracle**：ORACLE-P8-ACCEPTANCE
-- **evidence_path**：`../../Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/2026-10-31-118-p8-current-real-page-developer-results.json`（本轮唯一当前原件，七条 `per_ac[]`、六项、缺口、恢复与负责方在此。10-30固定 `P8-acceptance.json` 与 `P8-execution-checklist.json` 均为封存旧事实，不覆写、不作当前档位；旧测试仍硬定读旧件，结构退出0不能签当前，本轮未运行它。不是新增进度或第二账本。）
+- **evidence_path**：`../../Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/2026-10-31-118-p8-current-real-page-developer-results.json`（本轮唯一当前原件，七条 `per_ac[]`、六项、缺口、恢复与负责方在此。10-30固定 `quality/evidence/build-code/P8-acceptance.json` 与 `quality/evidence/build-code/P8-execution-checklist.json` 均为封存旧事实，不覆写、不作当前档位；旧测试仍硬定读旧件，结构退出0不能签当前，本轮未运行它。不是新增进度或第二账本。）
 - **STOP**：任一验收缺证据时写未完成或未取得加缺口、条件与负责方；不改判据、不删用例、不重跑到绿、不写回规格；真实环境条目缺真实对象、引擎或必要输入时按该条实际缺口记录，用户不在场不算缺口也不等签核（答复 31、32；规格「交付 8」第 1391 行）；判据需变更时停该条并交规格负责人；前序原件缺失时回对应阶段修复，不补造。
 - **覆盖 AC**：AC-C07-1、AC-C07-2、AC-C07-3、AC-C07-4、AC-C07-5、AC-C07-6、AC-C07-7
 - **Done**：七条逐条列出编号、档位与证据指针：AC-C07-1 逐维可重放（`2026-10-31-118-p8-current-real-page-developer-results.json` 的 `per_ac[0]`）；AC-C07-2 身份不一致（`per_ac[1]`）；AC-C07-3 反例与修复（`per_ac[2]` 加原始输出目录）；AC-C07-4 两次同级（`per_ac[3]` 加两次原始输出）；AC-C07-5 定位与复验（`per_ac[4]` 加分流清单）；AC-C07-6 不聚合（`per_ac[5]`）；AC-C07-7 三面可追溯（`per_ac[6]`）。每条只能是判过（给档位与具名证据）或未取得加原因、条件与负责方；七组无原始输出的对应验收不得记通过；七条全未取得时本阶段记未完成，不收口、不写完成，也不以计划期未执行为共同原因；结构组退出 0 不满足本项。
