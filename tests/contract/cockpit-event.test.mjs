@@ -28,7 +28,16 @@ async function fixture(){
 const data=path=>JSON.parse(/const DATA = (\{[\s\S]*?\n?\});/.exec(readFileSync(path,'utf8'))[1]);
 test('ORACLE-COCKPIT-EVENT: six events use one entry; first/change opens, identical skips, errors remain visible',async()=>{
  const f=await fixture();expect(typeof renderer.refreshAnswerPage,'event entry must exist').toBe('function');let opened=0;const open=async path=>{expect(existsSync(path)).toBe(true);opened++;return true;};
+ const issueLabels=Array.from({length:23},(_,i)=>`未决 ${i+1}`),decisionPath=join(f.material,'decision-log.md');
+ writeFileSync(decisionPath,readFileSync(decisionPath,'utf8')+'\n## 还有什么没定，谁来定？\n| 未决 | 问题与来源 | 状态与处置 | 下一步 |\n| --- | --- | --- | --- |\n'+issueLabels.map(label=>`| ${label} | 来源未取得 | unknown；保留缺口 | 原owner补证 |`).join('\n')+'\n');
+ const originalFacts=readFileSync(join(f.taskPath,'facts.jsonl'));
  const first=await renderer.refreshAnswerPage({...f,event:'skeleton-confirmed',open});expect(first.opened).toBe(true);expect(first.changed).toBe(true);expect(opened).toBe(1);
+ const shown=data(first.htmlPath),missing=shown.objects.filter(o=>o.kind==='risk'&&o.src.some(s=>s.path===decisionPath));
+ expect(missing.map(o=>o.source_id)).toEqual(issueLabels);
+ expect(new Set(shown.objects.map(o=>o.id)).size).toBe(shown.objects.length);
+ for(const o of missing){expect(o.id).toMatch(/^[A-Za-z0-9][A-Za-z0-9_.:-]*$/);expect(o.title).toBe(`缺：${o.source_id} 的 OI 编号映射`);expect(o.status).toEqual({text:'缺',tone:'unk'});expect(o.src[0].loc).toBe(o.source_id);}
+ expect(shown.rings).toEqual(JSON.parse(readFileSync(f.reportPath)).rings);
+ expect(readFileSync(join(f.taskPath,'facts.jsonl'))).toEqual(originalFacts);
  const same=await renderer.refreshAnswerPage({...f,event:'package-converged',open});expect(same.changed).toBe(false);expect(same.opened).toBe(false);expect(same.open_reason).toBe('无实质变化');expect(opened).toBe(1);
  writeFileSync(join(f.material,'decision-log.md'),'# 目标\n- U-003 实质变化\n');const changed=await renderer.refreshAnswerPage({...f,event:'direction-scope-acceptance-changed',open});expect(changed.changed).toBe(true);expect(opened).toBe(2);
  writeFileSync(join(f.material,'decision-log.md'),'# 目标\n- U-004 第二次实变\n');const facts=readFileSync(join(f.taskPath,'facts.jsonl'));const failed=await renderer.refreshAnswerPage({...f,event:'phase-closed',open:()=>{throw Error('controlled open denied');}});expect(failed.opened).toBe(false);expect(failed.open_reason).toContain('未自动打开: controlled open denied');expect(existsSync(failed.htmlPath)).toBe(true);expect(readFileSync(join(f.taskPath,'facts.jsonl'))).toEqual(facts);

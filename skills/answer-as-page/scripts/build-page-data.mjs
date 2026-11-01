@@ -300,7 +300,7 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
   let end=i+1;while(end<riskLines.length&&!/^-\s*\*\*(?:RISK|OPEN|风险|未决)(?=\s|\d|[:：])/.test(riskLines[end]))end++;
   const mapped=specMappings.get(`${n[1]} ${n[2]}`);
   if(!mapped||!/^(?:RISK|OPEN)-\d+$/.test(mapped)){
-   const missing=node('risk',`缺：${n[1]} ${n[2]} 的 RISK/OPEN 编号映射`,specPath,`line:${riskSection.line+i+1}；${n[1]} ${n[2]}`,{missing:true,id:`risk-missing-${n[2]}`,summary:`${n[1]} ${n[2]} 未取得 RISK/OPEN 旧编号映射`});missing.source_id=`${n[1]} ${n[2]}`;i=end-1;continue;
+   const missing=node('risk',`缺：${n[1]} ${n[2]} 的 RISK/OPEN 编号映射`,specPath,`line:${riskSection.line+i+1}；${n[1]} ${n[2]}`,{missing:true,id:'risk-missing-spec-'+hash(`${n[1]} ${n[2]}`).slice(0,16),summary:`${n[1]} ${n[2]} 未取得 RISK/OPEN 旧编号映射`});missing.source_id=`${n[1]} ${n[2]}`;i=end-1;continue;
   }
   const o=node('risk',n[3],specPath,`line:${riskSection.line+i+1}；${mapped}`,{id:'risk-'+mapped,summary:n[3]});
   Object.assign(o,{source_id:mapped,ac_ids:[],details:fields(riskLines.slice(i+1,end).join('\n'))});i=end-1;
@@ -310,7 +310,7 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
   if(!/^\s*\|\s*(?:OI-\d+|未决\s*\d+)/.test(line))continue;
   const row=cells(line),oi=/^OI-\d+/.exec(row[0])?.[0]??decisionMappings.get(row[0].replace(/\s+/g,' '));
   if(!oi||!/^OI-\d+$/.test(oi)){
-   const missing=node('risk',`缺：${row[0]} 的 OI 编号映射`,decisionPath,row[0],{missing:true,id:`risk-missing-${row[0]}`,summary:`${row[0]} 未取得 OI 旧编号映射`});missing.source_id=row[0];continue;
+   const missing=node('risk',`缺：${row[0]} 的 OI 编号映射`,decisionPath,row[0],{missing:true,id:'risk-missing-decision-'+hash(row[0]).slice(0,16),summary:`${row[0]} 未取得 OI 旧编号映射`});missing.source_id=row[0];continue;
   }
   const o=node('risk',row[1],decisionPath,row[0],{id:'risk-'+oi,summary:row[2]}),related=ids(row.slice(1).join(' '),/WP\d+/g);
   for(const m of row.slice(1).join(' ').matchAll(/工作包\s*(\d+)/g)){const wp=decisionMappings.get(`工作包 ${m[1]}`);if(wp)related.push(wp);}
