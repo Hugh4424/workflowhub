@@ -1642,17 +1642,33 @@ gate 与冷读只证局部机制，接入、投递与实际效果分层保范围
 
 ### 验收对象是什么？
 
-本任务不是产品 UI，走 CLI 对象分支，不用 Web 五项。
+本任务交付页面验证能力、方法与夹具，被验目标包含真实页面，按页面对象提供五项。
+下列JSON承载原样本B默认状态这一实例，不缩减样本A、受控页、其它状态或十一条验收。
 
-对象形状是 `workspace`、`state`、`cli.command`、`cli.entry_ref`、`cli.sample_ref`、
-`cli.oracle_ref` 与 `owner`。
-执行事实：`node /tmp/c07-acceptance-object-cli.mjs` 退出 0，返回
+这些值是原规格规定的待验参数，不冒充当前服务健康或页面身份已经观察匹配。
+工作区来自当前认证目录；服务与路由取本节已有样本参数。
+状态取「方案2」原采集命令的 `--state default`，视口取本节原主测尺寸。
+`owner` 未另行指定，输入保留null；唯一生产函数按原合同归一为「用户」，不认证角色或授权。
+
+| 数据项 | 真实来源与范围 |
+| --- | --- |
+| workspace | 当前认证工作区；样本服务目录另为本规格目录内的samples/B |
+| service、route | 本节原样本B服务配置与入口；页面文件为本规格目录内的samples/B/index.html |
+| state | 「方案2：真实采集与对象身份」原命令指定default；不是新观察结论 |
+| viewport | 本节原主测1440x900；其它规定视口与200%缩放仍保 |
+| owner | 原模板未提供时的默认合同；未取得新的负责人身份，不编造 |
+
+旧008记录当时 `node /tmp/c07-acceptance-object-cli.mjs` 退出 0，返回
 `{"ok": true, "missing_fields": []}`，`owner` 归一为「用户」。
-原件在 `quality/tests/2026-10-29-008-build-plan-acceptance-object-cli.json`；
-被取代件 007 是 UI 判定更正前的 Web 分支执行，保留不删。
-边界：`ok:true` 只证明最小字段齐备；它不读文件、不跑命令、不认证来源语义。
+原件仍在 `quality/tests/2026-10-29-008-build-plan-acceptance-object-cli.json`；
+007保其原Web分支与当时判词，两个旧原件均不覆盖。
+008只证当时给定输入与上下文的字段结构，不替当前含页面目标提供纯CLI豁免。
 
-样本运行参数：服务 `python3 -m http.server 8123 --bind 127.0.0.1`，cwd 是 `samples/B`；
+来源表供人回读，不代替命令的 `--context` 来源参数。
+`--check-sources` 只查调用时另给的本地来源；未给该参数数据时不冒称已查这些文件。
+`ok:true` 仍只证明最小字段齐备，不证明来源真值、环境可用或业务通过。
+
+样本运行参数：服务 `python3 -m http.server 8123 --bind 127.0.0.1`，cwd 是本规格目录内的 `samples/B`；
 样本 A 先 `npm ci` 再 `npm run build`。
 route 取 `/index.html`，A 另有 `#simulation` 与 `#workbench?simId=sim-001`。
 viewport 主测 `1440x900`，另测 `1024x768`、`640x960` 与 200% 缩放（必测）。
@@ -1662,6 +1678,22 @@ viewport 主测 `1440x900`，另测 `1024x768`、`640x960` 与 200% 缩放（必
 C05 归档与只读样本不动。
 A 的交互缺陷还要改它的源码 `samples/A/components/SimWorkbench.tsx`，再重建 `assets/app.js`；
 受控演练副本 `tests/fixtures/page-audit/controlled-work.html` 的写权与消费者见验收 3。
+
+以下机器标题由现有对象读取命令逐字定位，按写作标准的机器标题例外保留。
+其下JSON是校验器输入，人可跳过；对象数据独立于模板内唯一JS生产函数。
+
+#### 验收对象
+
+```json
+{
+  "workspace": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-ui-frontend-c07-real-page-verification-20261028",
+  "service": "http://127.0.0.1:8123",
+  "route": "/index.html",
+  "state": "default",
+  "viewport": "1440x900",
+  "owner": null
+}
+```
 
 ### 证据计划怎么写？
 
