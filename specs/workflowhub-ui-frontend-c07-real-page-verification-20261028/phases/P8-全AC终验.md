@@ -1,12 +1,13 @@
 # Phase P8 — 七条验收各有可重放判据与一个档位，未达成写缺口
 
-读者：本阶段的唯一写主、独立验收执行者与阶段收口读者。
-读完要能：说清七条页面验收各判到哪、缺什么，并按一条命令自己重放。
+本卡让最终执行者逐项回读七条页面功能结论及其证据范围。
+结论供任务收口使用，不把局部通过扩成所有页面或真实业务均通过。
 
-写作标准是用户 2026-10-30 给出的十条材料写作标准。
-唯一权威件是任务库的 2026-10-30-068 记录；与旧口径冲突时以它为准。
+当前写法沿`skills/material-writing/SKILL.md`的十一条与原Q写作方法。
+任务库2026-10-30-068保留为原始写作要求，不再充当当前规范的第二来源。
 每个二级标题是一个读者问题，第一句直接回答。
-正文用中文编号；机器编号只在两张对照表、卡末字段与文件末机器块。
+正文用中文编号；
+机器编号集中在文末唯一编号对照表、卡末字段与文件末机器块。
 表只放对照，不承载步骤；命令与表行不受一行 80 字限制。
 例外：`## 机器字段（校验器用，人可跳过）` 这个标题逐字保留。
 
@@ -14,7 +15,12 @@
 
 原独立判读者已逐条判定七项原功能验收均为 pass；本写主消费其最终原件后同步本卡，不把功能验收改写成所有页面、对象认证或真实业务均通过。
 
-当前七行结论以[原独立二最终汇合004](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/P8-independent-grader-two/2026-11-01-004-grader2-final-ac3-and-seven-ac-verdict.md>)为准：16649字节，SHA256 `e82a9ea4baf393a16256b76a6a02673ae4e45da97e62ee0c78f8c1ae2d8e389c`。本写主已实际读完整报告，包括其逐项依据、影响面复用、失败与覆盖限制；不是只采父会话的状态转述。
+当前七行结论以
+[原独立二最终汇合004](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/P8-independent-grader-two/2026-11-01-004-grader2-final-ac3-and-seven-ac-verdict.md>)
+为准：16649字节，SHA256
+`e82a9ea4baf393a16256b76a6a02673ae4e45da97e62ee0c78f8c1ae2d8e389c`。
+本写主已实际读完整报告，包括其逐项依据、影响面复用、失败与覆盖限制；
+不是只采父会话的状态转述。
 
 | 页面验收 | 当前功能档位 | 具名来源与适用范围 |
 | --- | --- | --- |
@@ -26,34 +32,120 @@
 | 六：未知不聚合 | pass | 沿[原独立二003](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/P8-independent-grader-two/2026-11-01-003-grader2-ac6-late-fix-final-verdict.md>)，真实未测/未采用与perf正控、原失败传播和后续字节承接分列；selected ref及SHA不构成对象或HTTP认证。 |
 | 七：三面追溯 | pass | 最终004逐项表的七，沿原001的六Buffer/hash、Map/no-store、实际frame/network/action与P7原范围；用户alias不冒真人签、算法修复或新业务授权。 |
 
-当前file组合绑定隔离候选M6：58409520字节，SHA256 `4671634d6e3ec96c166015857041f47d985cb0818ab045372c76eac5fe158883`；[研究交付完整078补丁](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/2026-11-01-078-p8-file-probe-m6.patch>)为54589字节，SHA256 `40df53e5839e96e825481953e3031fc688b28b8494ba5e729a591a286ac2edd2`。这是显式授权、auth none、fresh owned、六精确文件、非空域围栏下的实验能力，未安装或发布upstream。旧installed的No hostname失败及其原字节保留；不能由标签、补丁或新候选结果反签旧安装包。
+当前直接文件打开组合绑定隔离候选M6：58409520字节，SHA256
+`4671634d6e3ec96c166015857041f47d985cb0818ab045372c76eac5fe158883`；
+[研究交付完整078补丁](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/2026-11-01-078-p8-file-probe-m6.patch>)
+为54589字节，SHA256
+`40df53e5839e96e825481953e3031fc688b28b8494ba5e729a591a286ac2edd2`。
+这是显式授权、auth none、fresh owned、六精确文件、非空域围栏下的实验能力，未安装或发布upstream。
+旧installed的No hostname失败及其原字节保留；
+不能由标签、补丁或新候选结果反签旧安装包。
 
-当前独立173为33710字节，SHA256 `9fb6b650c6eeedc69322c82cab9bb421627cec6ea3a52abf695a61664b857d2c`；它绑定自己的新runner/scenario及真实M6输入。真实file A载入、JS/CSS响应体等源、sim001点击到workbench、一自控越集CLI拒绝且frame不变、当前及原203精确PID/路径清理均有原件。开发[165正常链](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/tests/2026-11-01-165-p8-m6-normal-lowercase-real-file.json>)只证明载入/响应体/一拒/收尾，未点击，不冒独立173的交互。旧198与159标签失败保原；新202只加最终小写转换，原源审014机械核差异14字节，不反签旧caller。
+当前独立173为33710字节，SHA256
+`9fb6b650c6eeedc69322c82cab9bb421627cec6ea3a52abf695a61664b857d2c`；
+它绑定自己的新runner/scenario及真实M6输入。
+真实file A载入、JS/CSS响应体等源、sim001点击到workbench、一自控越集CLI拒绝且frame不变、当前及原203精确PID/路径清理均有
+原件。
+开发
+[165正常链](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/tests/2026-11-01-165-p8-m6-normal-lowercase-real-file.json>)
+只证明载入/响应体/一拒/收尾，未点击，不冒独立173的交互。
+旧198与159标签失败保原；
+新202只加最终小写转换，原源审014机械核差异14字节，不反签旧caller。
 
-[163坏授权启动原件](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/tests/2026-11-01-163-p8-m6-badgrant-real-startup-public-stdio.output>)保留实际退出1、公开 `Symbolic links not authorized` 与 `ENGINE_LAUNCH_FAILED`，场景未进入。临时诊断模块及钩子已移除，错误由原CLI真实stdio经W到Task承接；不把CLI两流称作完整native IPC。两开发case与独立新case的自有服务、PID、socket/profile/root清理按各自原件分列；全局其它会话未动。
+[163坏授权启动原件](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/tests/2026-11-01-163-p8-m6-badgrant-real-startup-public-stdio.output>)
+保留实际退出1、公开 `Symbolic links not authorized` 与 `ENGINE_LAUNCH_FAILED`，场景未进入。
+临时诊断模块及钩子已移除，错误由原CLI真实stdio经W到Task承接；
+不把CLI两流称作完整native IPC。
+两开发case与独立新case的自有服务、PID、socket/profile/root清理按各自原件分列；
+全局其它会话未动。
 
-[原源审M6汇合013](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/P8-file-source-review/2026-11-01-013-m6-affected-host-final.json>)保留两轴同源降级、provider未取得及partial覆盖，具体新finding为空；它不代当前组合运行，也不代P2质量。当前组合由独立173和最终004承接，不把零finding标签当七项pass的独立理由。P2脚本、cleanup及两项n3测试由原P2开发/独立来源交回，本P8未并行改其代码。
+[原源审M6汇合013](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/P8-file-source-review/2026-11-01-013-m6-affected-host-final.json>)
+保留两轴同源降级、provider未取得及partial覆盖，具体新finding为空；
+它不代当前组合运行，也不代阶段2质量。
+当前组合由独立173和最终004承接，不把零finding标签当七项pass的独立理由。
+阶段2脚本、cleanup及两项n3测试由原阶段2开发/独立来源交回，本阶段8未并行改其代码。
 
-对象认证中的unknown、真实AT未测、mock止于样本而非真实业务后台、worker/字体/TOCTOU、动态ENV撤权及跨daemon旋转未验证等限制继续有效。七项原功能pass不改变单对象报告的原incomplete、未测或预期失败，也不构成一般文件系统沙箱或安全结论。
+对象认证中的unknown、真实辅助技术（AT）的读屏输出未测等限制继续有效。
+mock止于样本而非真实业务后台。
+worker/字体/TOCTOU、动态ENV撤权及跨 daemon 旋转仍未验证。
+七项原功能pass不改变单对象报告的原incomplete、未测或预期失败，也不构成一般文件系统沙箱或安全结论。
 
 ## 原四项任务的Done现在依据什么？
 
 本写主按原四张任务卡的完成条件核对交付，不用任务closed标签替证据，也不把不同owner、时点与调用方拼成一次新运行。
 
-- 任务一的两份原就绪件分别为[数据就绪件](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/P8-data-readiness.json>)与[环境就绪件](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/P8-environment-readiness.json>)。前者保原输入pass与六样本/修前后记录，后者保旧环境incomplete及具名缺口；状态合法与缺件具名不等全部环境已测。原entry缺件红679退出1，随后[原单件消费691](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/tests/2026-10-29-691-p8-original-consumer-complete-target.json>)退出0，均保原epoch。两件、词表与具名缺口对应任务一原Done；不覆盖旧环境状态。
-- 任务二的三层与非法输入由原重放判据承载；当前 `tests/contract/page-audit-acceptance.test.mjs` 中六个具名mutation分别断言缺理由、工具错误冒未测、总分、缺视觉项、未知改零和跨对象引用的对应错误。691保原单文件44项通过范围；它未逐六项打印，未记录当时源hash，不能宣称已逐条独立取日志、重建当时源字节或新跑当前57项。后续消费回修705→708、719→726及[原四项实际消费003](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/tests/2026-10-30-003-p8-final-actual-data-consumption.json>)按各自真实范围承接；当前功能充分性由独立二002、003、004判断，不由旧计数代签。
-- 任务三的注册事实有[原644红](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/tests/2026-10-29-644-p8-registered-facts-original-red.json>)退出1与[原646绿](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/tests/2026-10-29-646-p8-registered-facts-targeted-green.json>)退出0；646实际同时运行acceptance与engine-selection，筛选registered facts/guard/registration，总34pass/43skip，未到达项不冒通过。两份指定consumer回归分别由[原P2采集器651](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/tests/2026-10-29-651-p2-late-hash-nav-affected-green.json>)单件48pass/退出0，与[当前P5编排器113](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/tests/2026-11-01-113-p5-evidence-shape-runner-affected.json>)单件67项/退出0承接；原582与748亦保各自组合/筛选范围，不造同次P8双文件GREEN。七组输出与判定、两次独立分级、200%/键盘必测及读屏非门，依据原001与最终004的实质消费；file新增切片绑定173/139各自caller。不同epoch的稳定范围复用不等旧source反签新caller。
-- 任务四的七行、六项、复验、回写与禁词由本次当前摘要及最终004逐项引用承接：七功能pass与未测范围分列，修复/复验沿原001及当前173，失败与恢复保原。回写完成的是本卡当前结论、原因/范围和原件指针；原任务已明确任务事实库字段由stage-close写主落库，本卡不证明已落库，当前不执行该动作。四个原任务编号及Done原条未改，不增第五项或新门。
+- 任务一的两份原就绪件分别为
+  [数据就绪件](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/P8-data-readiness.json>)
+  与
+  [环境就绪件](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/P8-environment-readiness.json>)
+  。
+  前者保原输入pass与六样本/修前后记录，后者保旧环境incomplete及具名缺口；
+  状态合法与缺件具名不等全部环境已测。
+  原entry缺件红679退出1，随后
+  [原单件消费691](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/tests/2026-10-29-691-p8-original-consumer-complete-target.json>)
+  退出0，均保原epoch。
+  两件、词表与具名缺口对应任务一原Done；
+  不覆盖旧环境状态。
+- 任务二的三层与非法输入由原重放判据承载；
+  当前 `tests/contract/page-audit-acceptance.test.mjs` 中六个具名mutation分别断言缺理由、工具错误冒未测、总分、缺视觉项、未知改零和跨对象引用的对应错误。
+  691保原单文件44项通过范围；
+  它未逐六项打印，未记录当时源hash，不能宣称已逐条独立取日志、重建当时源字节或新跑当前57项。
+  后续消费回修705→708、719→726及
+  [原四项实际消费003](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/tests/2026-10-30-003-p8-final-actual-data-consumption.json>)
+  按各自真实范围承接；
+  当前功能充分性由独立二002、003、004判断，不由旧计数代签。
+- 任务三的注册事实有
+  [原644红](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/tests/2026-10-29-644-p8-registered-facts-original-red.json>)
+  退出1与
+  [原646绿](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/tests/2026-10-29-646-p8-registered-facts-targeted-green.json>)
+  退出0；
+  646实际同时运行acceptance与engine-selection，筛选registered facts/guard/registration，总34 pass/43 skip，未到达项不冒通过。
+  两份指定consumer回归分别由
+  [原P2采集器651](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/tests/2026-10-29-651-p2-late-hash-nav-affected-green.json>)
+  单件48pass/退出0，与
+  [当前P5编排器113](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/tests/2026-11-01-113-p5-evidence-shape-runner-affected.json>)
+  单件67项/退出0承接；
+  原582与748亦保各自组合/筛选范围，不造同次阶段8双文件GREEN。
+  七组输出与判定、两次独立分级、200%/键盘必测及读屏非门，依据原001与最终004的实质消费；
+  file新增切片绑定173/139各自caller。
+  不同epoch的稳定范围复用不等旧source反签新caller。
+- 任务四的七行、六项、复验、回写与禁词由本次当前摘要及最终004逐项引用承接：七功能pass与未测范围分列，修复/复验沿原001及当前173，失败与恢复保原。
+  回写完成的是本卡当前结论、原因/范围和原件指针；
+  原任务已明确任务事实库字段由stage-close写主落库，本卡不证明已落库，当前不执行该动作。
+  四个原任务编号及Done原条未改，不增第五项或新门。
 
-本写主最后确认的四项为：已回报的当前范围无open finding；无未解释测试失败（159为已解释的取证标签缺陷、163及越集命令为预期非零，原错误保留）；Phase Done按原四任务及七项各有档位/具名证据核对；原七功能AC齐，由最终004给出全pass。源审的同源降级/partial与所有未验证通用能力仍照原件披露，不被这个四项确认覆盖。
+本写主最后确认的四项为：已回报的当前范围无open finding；
+无未解释测试失败（159为已解释的取证标签缺陷、163及越集命令为预期非零，原错误保留）；
+Phase Done按原四任务及七项各有档位/具名证据核对；
+原七功能AC齐，由最终004给出全pass。
+源审的同源降级/partial与所有未验证通用能力仍照原件披露，不被这个四项确认覆盖。
 
-本轮W交付范围只有两指南、本卡与index中P8追加reference的残hunk；session的P8历史registered facts声明不扩为本轮脚本授权，P2回修及其提交由原P2来源保真。最终真实Git四路径diff、当前HEAD、结构微核与提交授权由父Git执行者提交前实际取得；本写主未运行Git或读Git对象，不将此未取字段预填成已核，也不在其后反链重写本卡。隔离D源码、078研究补丁和临时caller不进入W的四路径提交，不安装或发布upstream。当前卡片写窗到此结束，源码、指南、native与新caller均保持冻结。
+本轮W交付范围只有两指南、本卡与index中阶段8追加reference的残hunk；
+session的阶段8历史registered facts声明不扩为本轮脚本授权，阶段2回修及其提交由原阶段2来源保真。
+最终真实Git四路径diff、当前HEAD、结构微核与提交授权由父Git执行者提交前实际取得；
+本写主未运行Git或读Git对象，不将此未取字段预填成已核，也不在其后反链重写本卡。
+隔离D源码、078研究补丁和临时caller不进入W的四路径提交，不安装或发布upstream。
+当前卡片写窗到此结束，源码、指南、native与新caller均保持冻结。
 
 ## 本次规范同步新增了第二份规则吗？
 
-没有。本次已实际读取 `skills/norm-sync/SKILL.md`、其 `references/routes.md`、`specs/acceptance/evidence.md` 的KR-EVID-001、`specs/acceptance/done.md` 的KR-DONE-001、实际AGENTS个人研究用途及 `skills/catalog.yaml` 中isolated-browser-qa原owner/consumer索引。已验证的有限实验说明落在原 `SKILL.md` 条件指针与唯一 `references/agent-browser.md`，没有另建规范正文、复制AGENTS规则、空delta或新ledger；无对应经验退役项，本次不清经验。个人研究授权不类推历史归档绑定或分发许可。
+没有。
+本次已实际读取 `skills/norm-sync/SKILL.md`、其 `references/routes.md`、
+`specs/acceptance/evidence.md` 的KR-EVID-001、`specs/acceptance/done.md` 的
+KR-DONE-001、实际AGENTS个人研究用途及 `skills/catalog.yaml` 中isolated-browser-qa原
+owner/consumer索引。
+已验证的有限实验说明落在原 `SKILL.md` 条件指针与唯一 `references/agent-browser.md`，没有另建规范正文、复制AGENTS
+规则、空delta或新ledger；
+无对应经验退役项，本次不清经验。
+个人研究授权不类推历史归档绑定或分发许可。
 
-当前主指南15078字节，SHA256 `2b6b8a4c028985a67bf792d44ee022ccddd718b5c79c14dc0fad393a458876a0`；参考指南5506字节，SHA256 `eef19fbf5522e58733c5bd875b39c5a342ecbc6680ead03be47672fb4f0a3547`。引用原专业源即可，不需新增索引权威。事实库字段落库归原stage-close写主；本卡不声称已落库，当前明确不执行stage-close，也不将该独占动作新设为P8功能验收前置。
+当前主指南15078字节，SHA256
+`2b6b8a4c028985a67bf792d44ee022ccddd718b5c79c14dc0fad393a458876a0`；
+参考指南5506字节，SHA256
+`eef19fbf5522e58733c5bd875b39c5a342ecbc6680ead03be47672fb4f0a3547`。
+引用原专业源即可，不需新增索引权威。
+事实库字段落库归原stage-close写主；
+本卡不声称已落库，当前明确不执行stage-close，也不将该独占动作新设为阶段8功能验收前置。
 
 ## 历史：2026-10-31真实页面当时验到了什么？
 
@@ -61,7 +153,9 @@
 
 本轮真实执行结束，直接文件入口存在实现缺口；七条当前档位不预支独立结论。
 
-本轮唯一当前原件是[七行开发结果](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/2026-10-31-118-p8-current-real-page-developer-results.json>)，SHA256为
+本轮唯一当前原件是
+[七行开发结果](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/2026-10-31-118-p8-current-real-page-developer-results.json>)
+，SHA256为
 `916a4effca45aa300aa725d69b8219f713dbc512de1d450b75466de2d7223fa0`，21556字节。
 它含逐条证据、原因、恢复条件、负责方与六项结论；不是整体stage报告。
 旧固定质量件和旧执行清单均封存，不覆写、不据旧方法给当前网关签档位。
@@ -98,8 +192,10 @@ agent-browser --session whqa-9269f3eb-8763 open file:///Users/Hugh/Hugh/Project/
 原件083为4426字节，SHA256为
 `10cbbf7cb421c5c68d13febd12fe2aaf5a56adee9225dc8d8debc683143372a9`。
 当时文档仍为HTTP51410的owned-neutral.html；082截图只证明失败后中性页，不是file加载或模块CORS。
-B因同协议硬拒而未试，不是通过。没有改安全flag、网关、判据、换surface或以HTTP伪装file。
-实现恢复归原网关/CLI owner支持合规直接file；若要改判据，仅原规格owner决定，P8不能自决。
+B因同协议硬拒而未试，不是通过。
+没有改安全flag、网关、判据、换surface或以HTTP伪装file。
+实现恢复归原网关/CLIowner支持合规直接file；
+若要改判据，仅原规格owner决定，阶段8不能自决。
 
 真200%采用Chrome扩展原生chrome.tabs.setZoom/getZoom，不是Emulation.setPageScaleFactor。
 前已清除设备度量override；同自有tab1071029410原生因子1→2→1，CDP只读实际渲染并有PNG。
@@ -116,13 +212,15 @@ source/workspace/session/engine仍unknown；服务待发Buffer有pin，但没另
 真实AT朗读输出未取得：300只读探测为VoiceOver存在、未运行、AX trusted=true。
 没有全局启用、发AppleEvents或修改系统设置，DOM/AX树与TTS不冒真实读屏。
 恢复需要受控真实读屏会话和输出采集渠道；依规格高优先单列，不单独判验收三。
-真实业务后台未覆盖：A无后端，B不接平台/不发真实交易。B三账户proof、零手与灯只MOCK UI终态。
+真实业务后台未覆盖：A无后端，B不接平台/不发真实交易。
+B三账户proof、零手与灯只MOCK UI终态。
 恢复由原业务owner提供授权真实对象、后端/账号及业务真值，不将演练外推。
 
 原始数据索引086为35231字节，SHA256为
 `a52120ed19d67524b2c2fbdad709189403bcd16f14bce258239241a747ccf092`。
 当前108原件逐项bytes/SHA读回无差异；两owned session/profile残留0，49394/51410自有服务已停。
-全局/陌生浏览器、MCP、其它tmp未动。本轮无任何Git命令，也没有内部Git调用。
+全局/陌生浏览器、MCP、其它tmp未动。
+本轮无任何Git命令，也没有内部Git调用。
 父提供HEAD601863…未在本轮fresh核，不冒当前提交认证。
 下一消费者是父派本轮独立测试和一次OCR/同源补充；本开发停写后等原角色回报，不自派审查、不Git或stage-close。
 
@@ -156,7 +254,9 @@ source/workspace/session/engine仍unknown；服务待发Buffer有pin，但没另
 - **原校准事实**：旧四样例与两次同尺定级已有原件，原对象、原 hash、原档位不改。
   原专业008保其输入与非完全盲化限制，不签当前网关。
   本轮当前适用性与分级结论未取得，交独立角色按原尺判断。
-- **当前状态**：本轮真实采集与七行开发记录已形成；当前档位是未完成或无定论，见本轮原件。
+- **当前状态**：本轮真实采集与七行开发记录已形成；
+  2026-10-31开发记录当时的档位为未完成或无定论。
+当前功能结论见本文首节，旧失败仍按各自时点保留。
   验收3有直接文件实现缺口；本轮独立测试与审查尚未取得，不把旧原件原档位转当前。
 
 ## 这些词在这份文件里是什么意思？
@@ -186,31 +286,33 @@ source/workspace/session/engine仍unknown；服务待发Buffer有pin，但没另
 
 验收判的是七条页面验收各自有没有被真正执行过，不是收口清单跑没跑过。
 七条逐条要真实观察、真实证据与一个档位；结构组退出 0 不满足任何一条。
-本轮四条方法验收按规格 Appendix A 各自归属首判：八与十归 P12，九归 P11，十一归 P10；本阶段只交页面七条与所需原件，不代签。
+本轮四条方法验收按规格AppendixA各自归属首判：八与十归阶段12，九归阶段11，十一归阶段10；
+本阶段只交页面七条与所需原件，不代签。
 一个 Phase 只有在验收标准真的被满足后才能说开发完成；代码审查通过、测试全绿、结构检查通过，都不是完成条件。
-七槽逐条写实；RED/GREEN 表、覆盖上下限与命令细节留在「怎么验证？」，本节只指向它。
+七槽逐条写实；
+RED/GREEN 表、覆盖上下限与命令细节留在「怎么验证？」，本节只指向它。
 
 1. **验收标准**：七条逐条写判据、成功与失败。
    判据原文在「七条验收各看什么？」与规格 Appendix A，这里只补两种可观察信号。
-   - **验收 1（AC-C07-1）**：判据是九维与其它适用质量面逐项有判据、原始结果与未覆盖说明。
+   - **验收 1**：判据是九维与其它适用质量面逐项有判据、原始结果与未覆盖说明。
      成功是每维每子项带原始值且有采集引用，三宽乘十态每格是结果或未覆盖理由，无总分。
      失败是缺维无理由、出现总分、把未知折成 0，或只写「已检查」。
-   - **验收 2（AC-C07-2）**：判据是错工作区、服务、源或状态，或未启动时报具体不一致或未取得。
+   - **验收 2**：判据是错工作区、服务、源或状态，或未启动时报具体不一致或未取得。
      成功是报出具体字段与码，且不写出报告。
      失败是笼统报启动失败、静默回退，或身份缺项仍出报告。
-   - **验收 3（AC-C07-3）**：判据是适用反例有检测与真实修复，200% 与键盘焦点必测。
+   - **验收 3**：判据是适用反例有检测与真实修复，200%与键盘焦点必测。
      成功是九类在修前副本上可检出、修后文件上原问题消失，独立复验与回归通过。
      失败是只注入不修复，或缩放与键盘未测却记通过，或受控页结果冒产品通过。
-   - **验收 4（AC-C07-4）**：判据是同一明确数值差异用同一标尺两次同级，MINOR 由规则判。
+   - **验收 4**：判据是同一明确数值差异用同一标尺两次同级，MINOR由规则判。
      成功是两次原始输出同级，加四条校准负例。
      失败是只跑一次、两次不同级，或调阈值凑稳定。
-   - **验收 5（AC-C07-5）**：判据是模糊反馈定位后修复，独立复验与相关回归真跑。
+   - **验收 5**：判据是模糊反馈定位后修复，独立复验与相关回归真跑。
      成功是五段链路各有原件，原问题与回归用例都大于零，档位记满、部分或不。
      失败是未定位就改、拿修复者自述当复验，或回归没跑。
-   - **验收 6（AC-C07-6）**：判据是未知、空、假值、失联与证据错配不聚合成高分或通过。
+   - **验收 6**：判据是未知、空、假值、失联与证据错配不聚合成高分或通过。
      成功是四类非法输入各一例且都不聚合，另有一条未采用对照。
      失败是未知算 0、失联判通过，或错配证据仍出结论。
-   - **验收 7（AC-C07-7）**：判据是资产层、代码组件层、页面布局与真实操作分别可追溯。
+   - **验收 7**：判据是资产层、代码组件层、页面布局与真实操作分别可追溯。
      成功是三面各有一条锚，无资产处写不适用加依据。
      失败是用页面截图代资产层，或未覆盖被吞成通过。
    已经观察到哪几条、缺哪几条，只按逐条数组与补充材料读；本节不预填通过。
@@ -242,7 +344,8 @@ source/workspace/session/engine仍unknown；服务待发Buffer有pin，但没另
      视口 1440、1024、640，200% 缩放，键盘与读屏工具各按实测记录。
    - **数据**：样本 A 与 B 共六个运行文件；受控工作副本与原页、缺陷清单；
      四张校准页；未修复五件的钉版哈希与被修复件的修前修后哈希。
-   - **谁提供**：受控页与缺陷清单归 P3；修复与最小差异归回修阶段 P4；
+   - **谁提供**：受控页与缺陷清单归阶段3；
+     修复与最小差异归回修阶段（阶段4）；
      样本与钉版归样本 owner；两份就绪件由本阶段的验收执行者写。
    - **版本与来源**：样本对象身份
      `9efb7e577a62d36393caedfb30fc35bf3cb80834`（短号 `9efb7e57`）。
@@ -257,7 +360,9 @@ source/workspace/session/engine仍unknown；服务待发Buffer有pin，但没另
 4. **用例**：每条写编号、对应验收、命令或操作与判定方式；命令不是判定器。
    这六条是门禁用例与真跑组；验收用例仍是 UC-C07-1 到 UC-C07-7，不互相代替。
    - **用例 1（entry 组）**：对应七条的入口。
-     命令：`node node_modules/vitest/vitest.mjs run tests/contract/page-audit-acceptance.test.mjs -t "entry"`。
+     命令：
+     `node node_modules/vitest/vitest.mjs run tests/contract/page-audit-acceptance.test.mjs -t "entry"`
+     。
      预期：两份就绪件在场、状态合法、缺件具名到负责方。
      判定：入口组断言；它只判形状，不判任何页面事实。
    - **用例 2（离线三块）**：对应验收 1、2、6。
@@ -278,7 +383,8 @@ source/workspace/session/engine仍unknown；服务待发Buffer有pin，但没另
      预期：七行齐、档位在词表、非通过项有原因与负责方、禁词为零。
      判定：读逐条数组 `per_ac[]`；它不证明任何一条通过。
    - **用例 6（方法四条）**：对应方法验收的八到十一。
-     操作：八与十由 P12、九由 P11、十一由 P10 首判；本阶段只交页面七条原件，不代签方法验收。
+     操作：八与十由阶段12、九由阶段11、十一由阶段10首判；
+     本阶段只交页面七条原件，不代签方法验收。
      预期：本阶段不判、不代签、不另立标准。
 
 5. **谁判**：由与本阶段实现者不同上下文的人判。
@@ -296,11 +402,13 @@ source/workspace/session/engine仍unknown；服务待发Buffer有pin，但没另
    结论只改逐条数组与卡末「完成」，不改规格、不改前序契约头。
    修复者自己的声明不算复验证据。
 
-7. **承接**：结论记在 `quality/evidence/build-code/2026-10-31-118-p8-current-real-page-developer-results.json` 的 `per_ac[]`。
+7. **承接**：结论记在
+   `quality/evidence/build-code/2026-10-31-118-p8-current-real-page-developer-results.json`
+   的 `per_ac[]`。
    七行固定五个键：验收编号、档位、证据引用与哈希、原因、负责方。
    真实执行的原始输出在 `quality/evidence/build-code/P8-real-environment/`。
    下一消费者是阶段收口：它读七行写最终报告的验收行；用户读缺口清单。
-   本轮的方法四条由 P12 首判，本阶段不代签，也不改它的判据。
+   方法验收8、10由阶段12首判，9归阶段11、11归阶段10，本阶段不代签，也不改它的判据。
 
 ## 为什么现在做，依据是什么？
 
@@ -326,20 +434,21 @@ source/workspace/session/engine仍unknown；服务待发Buffer有pin，但没另
 七条各有组名、用例、判定器、一句判据、一组样例与一条证据，下表只做对照。
 
 判据正文在规格「做成什么样？」的同号条目，唯一权威在规格的 Appendix A。
-本表不复制通过条件，只把读者要找的六样东西排在一起。
+本表对照原判据定位、样例与证据；
+编号只在文末唯一对照表维护。
 
-| 验收 | 组名与 AC 编号 | 用例 | 判定器与审查件别名 | 判据（一句话） | 样例 | 证据 |
-| --- | --- | --- | --- | --- | --- | --- |
-| 验收 1 | AC-C07-1 | UC-C07-1 | ORACLE-C07-1（ORACLE-C07-COVERAGE） | 九维与其它适用质量面逐项有判据、原始结果与未覆盖说明 | 八维样张、九维子项、三宽乘十态 | 离线块加逐条数组第 1 行 |
-| 验收 2 | AC-C07-2 | UC-C07-2 | ORACLE-C07-2（ORACLE-C07-IDENTITY） | 身份对不上时报具体不一致或未取得 | 一处人为不一致、一处未启动、一次回退 | 离线块加逐条数组第 2 行 |
-| 验收 3 | AC-C07-3 | UC-C07-3 | ORACLE-C07-3（ORACLE-C07-STRESS） | 适用反例有检测与真实修复，200% 与键盘焦点必测 | 受控页九类反例、四张校准页、200% 与键盘焦点 | 原始输出目录加逐条数组第 3 行 |
-| 验收 4 | AC-C07-4 | UC-C07-4 | ORACLE-C07-4（ORACLE-C07-GRADE） | 同一明确数值差异用同一标尺两次同级 | 一处数值差异连跑两次，加四条校准负例 | 两次原始输出加逐条数组第 4 行 |
-| 验收 5 | AC-C07-5 | UC-C07-5 | ORACLE-C07-5（ORACLE-C07-LOOP） | 模糊反馈定位后修复，独立复验与相关回归真跑 | 一条模糊反馈走五段；A/B 失败行出分流清单 | 分流清单加逐条数组第 5 行 |
-| 验收 6 | AC-C07-6 | UC-C07-6 | ORACLE-C07-6（ORACLE-C07-NOAGG） | 四类非法输入不聚合成高分或通过 | 未知子项、空或假值耗时、失联采集、证据错配 | 离线块加逐条数组第 6 行 |
-| 验收 7 | AC-C07-7 | UC-C07-7 | ORACLE-C07-7（ORACLE-C07-TRACE） | 资产层、代码组件层、页面层分别可追溯 | 三面各一条；无资产处写不适用加依据 | 原始输出目录加逐条数组第 7 行 |
+| 验收 | 判据定位 | 样例 | 证据 |
+| --- | --- | --- | --- |
+| 验收 1 | 九维与其它适用质量面逐项有判据、原始结果与未覆盖说明 | 八维样张、九维子项、三宽乘十态 | 离线块加逐条数组第 1 行 |
+| 验收 2 | 身份对不上时报具体不一致或未取得 | 一处人为不一致、一处未启动、一次回退 | 离线块加逐条数组第 2 行 |
+| 验收 3 | 适用反例有检测与真实修复，200% 与键盘焦点必测 | 受控页九类反例、四张校准页、200% 与键盘焦点 | 原始输出目录加逐条数组第 3 行 |
+| 验收 4 | 同一明确数值差异用同一标尺两次同级 | 一处数值差异连跑两次，加四条校准负例 | 两次原始输出加逐条数组第 4 行 |
+| 验收 5 | 模糊反馈定位后修复，独立复验与相关回归真跑 | 一条模糊反馈走五段；A/B 失败行出分流清单 | 分流清单加逐条数组第 5 行 |
+| 验收 6 | 四类非法输入不聚合成高分或通过 | 未知子项、空或假值耗时、失联采集、证据错配 | 离线块加逐条数组第 6 行 |
+| 验收 7 | 资产层、代码组件层、页面层分别可追溯 | 三面各一条；无资产处写不适用加依据 | 原始输出目录加逐条数组第 7 行 |
 
-表里的判定器与用例，与规格 Appendix A 的同号条目逐字对应。
-本阶段只在自己的卡末与机器块写这些名字，不另造第二套。
+文末对照表里的判定器与用例，与规格 Appendix A 的同号条目逐字对应。
+机器编号、用例名与判定器别名集中在卡末字段和文末唯一对照表。
 七条不是七张卡：
 任务 1 定分母；任务 2 判验收 1、2、6 的机器可判部分；
 任务 3 判验收 3、5、7 里必须真实环境的那些；
@@ -443,7 +552,8 @@ C05 样本 A/B、业务止于 mock、两次定级。
 2. 缩放与键盘焦点各一条具名命令与预期；未测则验收 3 保持未测说明。
 3. 读屏只写证据行或未测，不作必测门。
 4. 用 `file://` 直接打开样本页，保存原始输出，作验收 3 的直接证据；未跑记未测。
-5. C05 样本 A/B 写对象身份 `9efb7e577a62d36393caedfb30fc35bf3cb80834`（短号 `9efb7e57`）与「止于 mock、真实业务未覆盖」。
+5. C05 样本 A/B 写对象身份 `9efb7e577a62d36393caedfb30fc35bf3cb80834`（短号 `9efb7e57`）与
+   「止于 mock、真实业务未覆盖」。
 6. 断言七组各有一条具名命令与预期；组级判定不是笼统通过。
 7. 真跑七组，原始输出落 `quality/evidence/build-code/P8-real-environment/`。
 
@@ -470,7 +580,7 @@ C05 样本 A/B、业务止于 mock、两次定级。
 
 原页、缺陷清单与四张校准页一个字节都不改；受控结果不冒真实页面通过。
 
-第 7 组两次定级这样跑：
+第7组两次定级这样跑：
 
 - 取同一处明确数值差异（受控页阶段的还原偏差，或 C05 样本实测差异）。
 - 同一标尺连跑两次，两次同级才记「通过」并附两次原始输出。
@@ -498,21 +608,25 @@ node node_modules/vitest/vitest.mjs run tests/contract/page-audit-acceptance.tes
 
 任务 4 把前面三张收成七行，每行一个档位与一条具名证据。
 
-非通过项写原因、条件与负责方，缺一不算写完；七条各自的「拿不到怎么办」给了缺口写法（`spec.md:750`、`:769`、`:797`、`:822`、`:849`、`:870`、`:889`）。
+非通过项写原因、条件与负责方，缺一不算写完；
+七条各自的「拿不到怎么办」给了缺口写法（`spec.md:750`、`:769`、`:797`、`:822`、`:849`、`:870`、`:889`）。
 它只写记录，不改判据、不改规格、不改前序文件的契约头。
 
 | AC 编号 | 八值档位 | 具名证据 |
 | --- | --- | --- |
-| AC-C07-1 | 未完成 incomplete | 本轮当前原件的 `per_ac[0]`；原因/条件/负责方同一行，旧原档位不转当前。 |
-| AC-C07-2 | 未完成 incomplete | 本轮当前原件的 `per_ac[1]`；原因/条件/负责方同一行，旧原档位不转当前。 |
-| AC-C07-3 | 未完成 incomplete | 本轮当前原件的 `per_ac[2]`；原因/条件/负责方同一行，旧原档位不转当前。 |
-| AC-C07-4 | 无定论 inconclusive | 本轮当前原件的 `per_ac[3]`；原因/条件/负责方同一行，旧原档位不转当前。 |
-| AC-C07-5 | 无定论 inconclusive | 本轮当前原件的 `per_ac[4]`；原因/条件/负责方同一行，旧原档位不转当前。 |
-| AC-C07-6 | 未完成 incomplete | 本轮当前原件的 `per_ac[5]`；原因/条件/负责方同一行，旧原档位不转当前。 |
-| AC-C07-7 | 无定论 inconclusive | 本轮当前原件的 `per_ac[6]`；原因/条件/负责方同一行，旧原档位不转当前。 |
+| AC-C07-1 | 未完成 incomplete | 旧118单对象报告的 `per_ac[0]`；原因、条件和负责方保原，当前七功能判读另见首节最终004。 |
+| AC-C07-2 | 未完成 incomplete | 旧118单对象报告的 `per_ac[1]`；原因、条件和负责方保原，当前七功能判读另见首节最终004。 |
+| AC-C07-3 | 未完成 incomplete | 旧118单对象报告的 `per_ac[2]`；原因、条件和负责方保原，当前七功能判读另见首节最终004。 |
+| AC-C07-4 | 无定论 inconclusive | 旧118单对象报告的 `per_ac[3]`；原因、条件和负责方保原，当前七功能判读另见首节最终004。 |
+| AC-C07-5 | 无定论 inconclusive | 旧118单对象报告的 `per_ac[4]`；原因、条件和负责方保原，当前七功能判读另见首节最终004。 |
+| AC-C07-6 | 未完成 incomplete | 旧118单对象报告的 `per_ac[5]`；原因、条件和负责方保原，当前七功能判读另见首节最终004。 |
+| AC-C07-7 | 无定论 inconclusive | 旧118单对象报告的 `per_ac[6]`；原因、条件和负责方保原，当前七功能判读另见首节最终004。 |
 
 逐条数组每行固定五个键：`{ac, state, evidence:{ref, sha256}, reason, owner}`。
-`ac` 是 AC 编号；`state` 只取八值之一；`evidence.ref` 走证据引用前缀，`evidence.sha256` 是原件哈希；`reason` 与 `owner` 在非通过项必填。
+`ac` 是 AC 编号；
+`state` 只取八值之一；
+`evidence.ref` 走证据引用前缀，`evidence.sha256` 是原件哈希；
+`reason` 与 `owner` 在非通过项必填。
 证据项的 `{ref, sha256}` 与验收证据校验器的消费合同一致。
 
 六项结论逐项写：
@@ -574,7 +688,10 @@ node node_modules/vitest/vitest.mjs run tests/contract/page-audit-acceptance.tes
 
 ## 每个文件由谁改，先做什么？
 
-本阶段新增一个验收测试文件；原有两个网关文件的 registered facts 改动仍限原声明。本轮只追加 `references/agent-browser.md`，与 `SKILL.md` 一起说明受限 file 实验的使用范围，不扩会话脚本的代码写窗。
+本阶段新增一个验收测试文件；
+原有两个网关文件的 registered facts 改动仍限原声明。
+本轮只追加 `references/agent-browser.md`，与 `SKILL.md` 一起说明受限 file 实验的使用范围，不扩会话脚本的代码写窗
+。
 
 其余业务与采集产出路径仍只读；样本只读复验，改样本归回修阶段。
 
@@ -585,7 +702,12 @@ node node_modules/vitest/vitest.mjs run tests/contract/page-audit-acceptance.tes
 | `skills/isolated-browser-qa/SKILL.md` | 保原固定数据边界，并指向本轮受限 file 实验说明 | 任务 3 的原判据采集与真实 file 验证调用方 |
 | `skills/isolated-browser-qa/references/agent-browser.md` | 说明候选实际版本与来源、固定授权及 fresh 会话限制、原 CLI file 对象与 HTTP 初始化的区别；不把标签或旧 installed 当能力证明 | 同上 |
 
-本轮物理写主分开交接：P2 原开发独占 `browser-qa-session.mjs`、`browser-qa-cleanup.sh` 及 `tests/integration/n3-browser-ticket-boundary.node-test.mjs`、`tests/integration/n3-browser-session-lifecycle.node-test.mjs` 的脚本回修与行为测试；本 P8 的原指南开发只写上述两份指南。P2 脚本与测试的当前字节、执行和质量结果交回后，本阶段只读消费。索引列出历史 session 路径不构成本轮并发写授权。
+本轮物理写主分开交接：阶段2原开发独占`browser-qa-session.mjs`、`browser-qa-cleanup.sh`及
+`tests/integration/n3-browser-ticket-boundary.node-test.mjs`、
+`tests/integration/n3-browser-session-lifecycle.node-test.mjs`的脚本回修与行为测试；
+本阶段8的原指南开发只写上述两份指南。
+阶段2脚本与测试的当前字节、执行和质量结果交回后，本阶段只读消费。
+索引列出历史session路径不构成本轮并发写授权。
 
 原固定事实采集的首改位置与验证命令：
 
@@ -593,7 +715,9 @@ node node_modules/vitest/vitest.mjs run tests/contract/page-audit-acceptance.tes
   （`:461`），再改 `page.evaluate` 的 observation 分支（`:497`）。
   facts 只认 `scroll`、`hit-test`、`reduced-motion`、`active-element` 四个名。
 - 两份指南只说明已取得的受限实验能力与真实调用，不写死隔离临时路径，不承诺动态 ENV 撤权或一般文件沙箱；规范和接口约束仍引用原来源，不复制成第二权威。
-- 首改测试组：`node node_modules/vitest/vitest.mjs run tests/contract/page-audit-acceptance.test.mjs -t "registered facts"`。
+- 首改测试组：
+  `node node_modules/vitest/vitest.mjs run tests/contract/page-audit-acceptance.test.mjs -t "registered facts"`
+  。
 - 受影响回归：同命令跑 `tests/contract/page-audit-collectors.test.mjs` 与
   `tests/contract/page-audit-runner.test.mjs`，两文件都退出 0 才收。
   独立测试者核两份退出码与输出，不只看本阶段新增组。
@@ -607,7 +731,9 @@ node node_modules/vitest/vitest.mjs run tests/contract/page-audit-acceptance.tes
 禁止改动：
 
 - 规格正文与前七个阶段的写入集。
-- 会话脚本的 P8 改动仍只限上述 registered facts 首改点；本轮 locale、stdout/stderr、cleanup 和两项 n3 行为测试由 P2 原开发独占，本阶段不改这些代码或测试。两份指南只收净本节声明的说明，不改其它导出、接口与流程。
+- 会话脚本的阶段8改动仍只限上述registered facts首改点；
+  本轮locale、stdout/stderr、cleanup和两项n3行为测试由阶段2原开发独占，本阶段不改这些代码或测试。
+  两份指南只收净本节声明的说明，不改其它导出、接口与流程。
 - 冻结的契约测试、旧报告原件、归档与工作区、决策日志、任务事实库。
 - 六个样本运行文件、受控副本、原页、缺陷清单、四张校准页。
 
@@ -689,20 +815,55 @@ node node_modules/vitest/vitest.mjs run tests/contract/page-audit-acceptance.tes
 **校验器用，人可跳过**
 
 - **任务编号**：T021
-- **来源 / FR / AC**：R-C07-35、R-C07-05；D-002；FR-C07-005、FR-C07-028；AC-C07-5、AC-C07-1；可观察结果＝入口四件逐条可核，两份就绪件各带合法状态；缺一项即未达成，不因测试退出 0 放过。
-- **输入**：前七个阶段的正文与证据路径；`001-c05-sample-copy-pin.json` 的钉版六哈希（未修复五件逐个比对，被修复件取修前修后）；`runtime/evidence/acceptance-evidence-validator.mjs:5-6`；由前七个阶段的原写主提供，取不到写未取得，不补造。
-- **文件 / 符号**：`tests/contract/page-audit-acceptance.test.mjs`（新增；符号 `describe("ORACLE-P8-ACCEPTANCE")`、`readEvidence`）。
-- **动作**：①核七份证据路径被真实引用；②写数据就绪件（未修复五件的钉版哈希、被修复件的修前修后哈希、受控页与四张校准页在场）；③写环境就绪件（引擎探测、node 与 vitest 版本、缩放与读屏工具）；④两份各写状态；⑤写授权边界五项；⑥入口组断言两份在场且状态在八值词表；⑦结果写入逐条数组前置段，不改前序文件。
+- **来源 / FR / AC**：R-C07-35、R-C07-05；
+  D-002；
+  FR-C07-005、FR-C07-028；
+  AC-C07-5、AC-C07-1；
+  可观察结果＝入口四件逐条可核，两份就绪件各带合法状态；
+  缺一项即未达成，不因测试退出 0 放过。
+- **输入**：前七个阶段的正文与证据路径；
+  `001-c05-sample-copy-pin.json` 的钉版六哈希（未修复五件逐个比对，被修复件取修前修后）；
+  `runtime/evidence/acceptance-evidence-validator.mjs:5-6`；
+  由前七个阶段的原写主提供，取不到写未取得，不补造。
+- **文件 / 符号**：`tests/contract/page-audit-acceptance.test.mjs`（新增；
+  符号 `describe("ORACLE-P8-ACCEPTANCE")`、`readEvidence`）。
+- **动作**：①核七份证据路径被真实引用；
+  ②写数据就绪件（未修复五件的钉版哈希、被修复件的修前修后哈希、受控页与四张校准页在场）；
+  ③写环境就绪件（引擎探测、node 与 vitest 版本、缩放与读屏工具）；
+  ④两份各写状态；
+  ⑤写授权边界五项；
+  ⑥入口组断言两份在场且状态在八值词表；
+  ⑦结果写入逐条数组前置段，不改前序文件。
 - **输出 / 失败**：两份就绪件齐、状态合法、缺件具名；失败＝就绪件缺失、状态用自造词、缺数据写成通过。
 - **边界 / 禁止改动**：不改 C05 归档与样本字节；不装包；不改规格正文；不改前七个阶段的契约头。
 - **依赖**：P1、P2、P3、P4、P5、P6、P7；本卡只读它们，不写。
-- **测试层级 / 技能**：定向契约测试加就绪件读回；预写测试＝本文件（作者＝验收执行者）；主技能 `skills/testing-system-blueprint/SKILL.md`；测试变更请求＝none。
-- **场景 / 夹具或服务**：正常＝前序原件齐、未修复五件与钉版一致、被修复件修前修后哈希齐；反向＝删一份就绪件、把状态写成 ok；接缝＝产出方是前七个阶段与样本目录，产物是两份就绪件 JSON，读取方是终末复核与阶段收口，分母是七条验收与六个对象文件。
+- **测试层级 / 技能**：定向契约测试加就绪件读回；
+  预写测试＝本文件（作者＝验收执行者）；
+  主技能 `skills/testing-system-blueprint/SKILL.md`；
+  测试变更请求＝none。
+- **场景 / 夹具或服务**：正常＝前序原件齐、未修复五件与钉版一致、被修复件修前修后哈希齐；
+  反向＝删一份就绪件、把状态写成 ok；
+  接缝＝产出方是前七个阶段与样本目录，产物是两份就绪件 JSON，读取方是终末复核与阶段收口，分母是七条验收与六个对象文件。
 - **RED/GREEN 门禁命令**：`node node_modules/vitest/vitest.mjs run tests/contract/page-audit-acceptance.test.mjs -t "entry"`
 - **预期退出码**：RED nonzero; GREEN 0。
-- **RED 目标失败**：ORACLE-P8-ACCEPTANCE 的 entry 组：就绪件未生成时 `expect(existsSync(dataReadiness)).toBe(true)` 断言失败；状态不在词表时 `expect(RESULTS).toContain(status)` 断言失败；归因＝目标行为失败，不是环境失败。
-- **GREEN 判定器**：ORACLE-P8-ACCEPTANCE；两件就绪件存在、状态合法、缺件具名到负责方；反向「缺数据写通过」判红；同命令退出 0 只证这一组。
-- **证据**：`quality/evidence/build-code/2026-10-31-118-p8-current-real-page-developer-results.json` 的 `source/observations/cleanup` 与两份旧就绪件的原scope；判什么＝前七个阶段的完成与写入集是否落地、两份就绪件是否有状态；怎么判＝入口组加两次读件；谁提供＝验收执行者；何时＝build-code 运行本阶段开工；成本＝命令级；拿不到＝记未取得并写缺件与负责方。计划期红未采集：`unavailable — 写作期不执行；真实红由 build-code 首次执行写入 quality/tests/<日期>-p8-entry.*`。
+- **RED 目标失败**：ORACLE-P8-ACCEPTANCE 的 entry 组：就绪件未生成时
+  `expect(existsSync(dataReadiness)).toBe(true)` 断言失败；
+  状态不在词表时 `expect(RESULTS).toContain(status)` 断言失败；
+  归因＝目标行为失败，不是环境失败。
+- **GREEN 判定器**：ORACLE-P8-ACCEPTANCE；
+  两件就绪件存在、状态合法、缺件具名到负责方；
+  反向「缺数据写通过」判红；
+  同命令退出 0 只证这一组。
+- **证据**： `quality/evidence/build-code/2026-10-31-118-p8-current-real-page-developer-results.json`
+  的 `source/observations/cleanup` 与两份旧就绪件的原scope；
+  判什么＝前七个阶段的完成与写入集是否落地、两份就绪件是否有状态；
+  怎么判＝入口组加两次读件；
+  谁提供＝验收执行者；
+  何时＝build-code 运行本阶段开工；
+  成本＝命令级；
+  拿不到＝记未取得并写缺件与负责方。
+  计划期红未采集：
+  `unavailable — 写作期不执行；真实红由 build-code 首次执行写入 quality/tests/<日期>-p8-entry.*`。
 - **覆盖上限**：只证明就绪件在场与形状，不证明数据可跑。
 - **停止 / 恢复**：未修复五件与钉版不一致，或被修复件缺修前／修后哈希时停，回回修阶段取留痕与差异，不改哈希断言；恢复后重跑入口组。
 - **完成**：一条命令重放；两份就绪件、状态词表、缺件具名三项命中；缺一件不算完成，写缺件与负责方。
@@ -770,21 +931,66 @@ node node_modules/vitest/vitest.mjs run tests/contract/page-audit-acceptance.tes
 **校验器用，人可跳过**
 
 - **任务编号**：T022
-- **来源 / FR / AC**：R-C07-25、R-C07-26、R-C07-30；D-007；FR-C07-003、FR-C07-009、FR-C07-031、FR-C07-018、FR-C07-019、FR-C07-021；AC-C07-1、AC-C07-2、AC-C07-6；可观察结果＝三条的机器可判部分各有具名通过元素，六条负例各判红。
-- **输入**：验收 1、2、6 的前序输出；`tests/contract/page-audit-shape.test.mjs` 的四态用例（第 141 起）；`tests/contract/page-audit-doc-contract.test.mjs:15` 的九维常量；编排阶段的报告样张与 `P5-orchestration.json`（含九维子项与覆盖矩阵）；证据阶段的引文与绑定输出；判据包与 `skills/frontend-testing/scripts/check-page-audit.mjs`。
-- **文件 / 符号**：`tests/contract/page-audit-acceptance.test.mjs`（追加三个断言块；符号 `replay`）。
-- **动作**：①写验收 1 八维：八维各有判据条目、每处缺失有 `untested_reason`、不出现 `total_score`；②写九维：布局、字体、颜色、间距、阴影、边框、圆角、图标、状态九项各有子项，`raw` 按字段存在与类型合法判（`null`、`undefined`、空串算缺，数值 0 与 `false` 是合法值），并各带采集引用，缺一项判红；③写覆盖：三宽 1440、1024、640 乘十态每格是结果或理由；④写验收 2：身份八字段、四类失败码、`engine_fallback` 四子字段；⑤写验收 6：四类非法输入各一例且都不聚合成通过，`TOOL_ERROR` 不出报告，另加一条未采用对照；⑥六条负例各判红；⑦结果写入逐条数组前三行，不改前序文件。
-- **输出 / 失败**：三块全绿、六条负例各判红；失败＝八维在但九维缺项、子项没有原始值、覆盖矩阵漏格不写理由、空或 `false` 或 `null` 耗时写成 0（真实 0 合法、未知写 0 判红）、证据引用指向别的对象仍出结论、断言只查存在、负例被放过。
+- **来源 / FR / AC**：R-C07-25、R-C07-26、R-C07-30；
+  D-007；
+  FR-C07-003、FR-C07-009、FR-C07-031、FR-C07-018、FR-C07-019、FR-C07-021；
+  AC-C07-1、AC-C07-2、AC-C07-6；
+  可观察结果＝三条的机器可判部分各有具名通过元素，六条负例各判红。
+- **输入**：验收 1、2、6 的前序输出；
+  `tests/contract/page-audit-shape.test.mjs` 的四态用例（第 141 起）；
+  `tests/contract/page-audit-doc-contract.test.mjs:15` 的九维常量；
+  编排阶段的报告样张与 `P5-orchestration.json`（含九维子项与覆盖矩阵）；
+  证据阶段的引文与绑定输出；
+  判据包与 `skills/frontend-testing/scripts/check-page-audit.mjs`。
+- **文件 / 符号**：`tests/contract/page-audit-acceptance.test.mjs`（追加三个断言块；
+  符号 `replay`）。
+- **动作**：①写验收 1 八维：八维各有判据条目、每处缺失有 `untested_reason`、不出现 `total_score`；
+  ②写九维：布局、字体、颜色、间距、阴影、边框、圆角、图标、状态九项各有子项，`raw` 按字段存在与类型合法判（`null`、`undefined`、空串算
+  缺，数值 0 与 `false` 是合法值），并各带采集引用，缺一项判红；
+  ③写覆盖：三宽 1440、1024、640 乘十态每格是结果或理由；
+  ④写验收 2：身份八字段、四类失败码、`engine_fallback` 四子字段；
+  ⑤写验收 6：四类非法输入各一例且都不聚合成通过，`TOOL_ERROR` 不出报告，另加一条未采用对照；
+  ⑥六条负例各判红；
+  ⑦结果写入逐条数组前三行，不改前序文件。
+- **输出 / 失败**：三块全绿、六条负例各判红；
+  失败＝八维在但九维缺项、子项没有原始值、覆盖矩阵漏格不写理由、空或 `false` 或 `null` 耗时写成 0（真实 0 合法、未知写 0 判红）、证据
+  引用指向别的对象仍出结论、断言只查存在、负例被放过。
 - **边界 / 禁止改动**：不改前序脚本与夹具；不改验收判据文本；不改规格正文。
 - **依赖**：T021（就绪件是分母，同一文件串行先写）。
-- **测试层级 / 技能**：定向契约测试（读原件加子进程）；预写测试＝本文件（作者＝验收执行者）；主技能 `skills/test-routing-advisor/SKILL.md`；测试变更请求＝none。
-- **场景 / 夹具或服务**：正常＝前序原件齐、九维子项与覆盖矩阵齐；反向六例＝删 `untested_reason`、把 `TOOL_ERROR` 写成未测、加 `total_score`、删一个九维子项、把空或 `false` 或 `null` 耗时写成 0（真实 0 合法、未知写 0 判红）、把证据引用指到另一对象；接缝＝产出方是编排与证据阶段的输出和判据形状校验器，产物是逐条数组前三行，读取方是终末复核，分母是验收 1、2、6 的通过条件。
+- **测试层级 / 技能**：定向契约测试（读原件加子进程）；
+  预写测试＝本文件（作者＝验收执行者）；
+  主技能 `skills/test-routing-advisor/SKILL.md`；
+  测试变更请求＝none。
+- **场景 / 夹具或服务**：正常＝前序原件齐、九维子项与覆盖矩阵齐；
+  反向六例＝删 `untested_reason`、把 `TOOL_ERROR` 写成未测、加 `total_score`、删一个九维子项、把空或
+  `false` 或 `null` 耗时写成 0（真实 0 合法、未知写 0 判红）、把证据引用指到另一对象；
+  接缝＝产出方是编排与证据阶段的输出和判据形状校验器，产物是逐条数组前三行，读取方是终末复核，分母是验收 1、2、6 的通过条件。
 - **RED/GREEN 门禁命令**：`node node_modules/vitest/vitest.mjs run tests/contract/page-audit-acceptance.test.mjs -t "AC-C07-[126]"`
 - **预期退出码**：RED nonzero; GREEN 0。
-- **RED 目标失败**：ORACLE-P8-ACCEPTANCE 的验收 1 块：`expect(dimensions.every(d=>results.some(r=>r.dimension===d))).toBe(true)` 收到 false；`expect(NINE.every(d=>criteria.some(c=>c.subitem===d&&c.raw!==undefined&&c.raw!==null&&c.raw!==""))).toBe(true)` 收到 false；`expect(cells.every(cell=>cell.state||cell.untested_reason)).toBe(true)` 收到 false；负例里 `expect(report.total_score).toBeUndefined()` 被 `E_TOTAL_SCORE` 提前拒；归因＝目标行为失败。
-- **GREEN 判定器**：ORACLE-P8-ACCEPTANCE；验收 1、2、6 三块各列出实际通过项、齐全、每题通过元素具名；八维、九维与覆盖三层各自可判；四类非法输入各不聚合；反向「缺未测理由仍绿」「九维缺一项仍绿」「耗时写 0 仍绿」「证据错配仍出结论」判红。
-- **证据**：`2026-10-31-118-p8-current-real-page-developer-results.json` 的三行；判什么＝验收 1、2、6 的机器可判部分各有具名通过元素；怎么判＝三个断言块；谁提供＝验收执行者；何时＝build-code 运行本阶段；成本＝命令级；拿不到＝记未取得并写缺哪个原件。计划期红未采集：`unavailable — 写作期不执行；落 quality/tests/<日期>-p8-ac1.*`。
-- **覆盖上限**：只判机器可判部分（八维与九维在场、`raw` 字段存在且类型合法、覆盖矩阵有格、四类非法输入不聚合）；页面真实结果、九维各自的语义判断与修复不在此列。
+- **RED 目标失败**：ORACLE-P8-ACCEPTANCE 的验收 1 块：
+  `expect(dimensions.every(d=>results.some(r=>r.dimension===d))).toBe(true)` 收到
+  false；
+  `expect(NINE.every(d=>criteria.some(c=>c.subitem===d&&c.raw!==undefined&&c.raw!==null&&c.raw!==""))).toBe(true)`
+  收到 false；
+  `expect(cells.every(cell=>cell.state||cell.untested_reason)).toBe(true)` 收到
+  false；
+  负例里 `expect(report.total_score).toBeUndefined()` 被 `E_TOTAL_SCORE` 提前拒；
+  归因＝目标行为失败。
+- **GREEN 判定器**：ORACLE-P8-ACCEPTANCE；
+  验收 1、2、6 三块各列出实际通过项、齐全、每题通过元素具名；
+  八维、九维与覆盖三层各自可判；
+  四类非法输入各不聚合；
+  反向「缺未测理由仍绿」「九维缺一项仍绿」「耗时写 0 仍绿」「证据错配仍出结论」判红。
+- **证据**：`2026-10-31-118-p8-current-real-page-developer-results.json` 的三行；
+  判什么＝验收 1、2、6 的机器可判部分各有具名通过元素；
+  怎么判＝三个断言块；
+  谁提供＝验收执行者；
+  何时＝build-code 运行本阶段；
+  成本＝命令级；
+  拿不到＝记未取得并写缺哪个原件。
+  计划期红未采集：`unavailable — 写作期不执行；落 quality/tests/<日期>-p8-ac1.*`。
+- **覆盖上限**：只判机器可判部分（八维与九维在场、`raw` 字段存在且类型合法、覆盖矩阵有格、四类非法输入不聚合）；
+  页面真实结果、九维各自的语义判断与修复不在此列。
 - **停止 / 恢复**：报告字段与断言不符时停，回对应阶段修复后重判，不改断言迁就实现；恢复后重跑本组。
 - **完成**：一条命令重放；三层与四类非法输入五项命中，六条负例各判红；缺一项不算完成。
 
@@ -851,23 +1057,100 @@ node node_modules/vitest/vitest.mjs run tests/contract/page-audit-acceptance.tes
 **校验器用，人可跳过**
 
 - **任务编号**：T023
-- **来源 / FR / AC**：R-C07-27、R-C07-31、U-C07-53、U-C07-58；D-033；FR-C07-001、FR-C07-012、FR-C07-027、FR-C07-020；AC-C07-3、AC-C07-4、AC-C07-7、AC-C07-5；可观察结果＝七组各有具名命令、预期、真实原始输出与组级判定；两次定级必须同级。
-- **输入**：契约分析 004 第 61 到 77 行的九类区域与期望档位；三条还原负例与一条阻断负例；规格验收 3（`spec.md:776-779`）的反例、状态与证据边界（只读分母）；规格「样本运行参数」（`spec.md:1585-1588`）；C05 六个运行文件；受控副本的初始化来源、前后源码版本链、最小差异与修复记录。
-- **文件 / 符号**：`tests/contract/page-audit-acceptance.test.mjs`（追加真实环境组与命令表；符号 `realEnvironment`）；`skills/isolated-browser-qa/scripts/browser-qa-session.mjs`（仍仅原 `runRegisteredScript` 的 `validRead` 与 observation 分支，本轮脚本回修归 P2）；`skills/isolated-browser-qa/SKILL.md`（保固定数据边界并指向有限 file 实验说明）；`skills/isolated-browser-qa/references/agent-browser.md`（本轮仅真实候选来源、受限固定授权及 fresh 会话、原 CLI file 实测与 HTTP 初始化的说明）。
-- **动作**：①九类各写「注入命令、期望档位、复验命令」三行，标由独立验收执行子代理自动执行；先按首改位置补 facts 四名，再用 `-t "registered facts"` 验正反例；②200% 缩放与键盘焦点各一条命令与预期；③读屏只写证据行或未测，不设门；④用 `file://` 直接打开样本页并保存原始输出，作验收 3 的直接证据，未跑记未测；⑤C05 样本 A/B 写对象身份 `9efb7e577a62d36393caedfb30fc35bf3cb80834`（短号 `9efb7e57`）与「止于 mock、真实业务未覆盖」；⑥断言七组各有一条命令与预期；⑦本地服务沿用规格原文，编排入口照参数表补五个身份参数，两处指同一接口；⑧逐组真跑，原始输出落 `quality/evidence/build-code/P8-real-environment/`，C05 A/B 的失败行按四步出分流清单落其下 `triage/`；⑨九类读回修阶段交付的修前副本与修后文件，按原输入独立复验与回归，不代写；⑩第 7 组同一标尺、同一差异连跑两次，同级才记通过；⑪跑 P2 采集器与 P5 编排器两份受影响回归并保存退出码。
-- **输出 / 失败**：七组各一条具名命令与预期，七组真跑各一份原始输出与组级判定；失败＝缺 200% 或键盘、读屏当门、受控页写成产品通过、`file://` 未跑却写已验、只有命令文本没有原始输出、两次定级只跑一次或两次不同级仍写同级。
-- **边界 / 禁止改动**：不改受控页与校准页；不改 C05 样本；不改规格正文；九类修复不由本阶段写（写主回修阶段），本阶段只复验；不把模拟角色写成真人研究。
+- **来源 / FR / AC**：R-C07-27、R-C07-31、U-C07-53、U-C07-58；
+  D-033；
+  FR-C07-001、FR-C07-012、FR-C07-027、FR-C07-020；
+  AC-C07-3、AC-C07-4、AC-C07-7、AC-C07-5；
+  可观察结果＝七组各有具名命令、预期、真实原始输出与组级判定；
+  两次定级必须同级。
+- **输入**：契约分析 004 第 61 到 77 行的九类区域与期望档位；
+  三条还原负例与一条阻断负例；
+  规格验收 3（`spec.md:776-779`）的反例、状态与证据边界（只读分母）；
+  规格「样本运行参数」（`spec.md:1585-1588`）；
+  C05 六个运行文件；
+  受控副本的初始化来源、前后源码版本链、最小差异与修复记录。
+- **文件 / 符号**：`tests/contract/page-audit-acceptance.test.mjs`（追加真实环境组与命令表；
+  符号 `realEnvironment`）；
+  `skills/isolated-browser-qa/scripts/browser-qa-session.mjs`（仍仅原
+  `runRegisteredScript` 的 `validRead` 与 observation 分支，本轮脚本回修归 P2）；
+  `skills/isolated-browser-qa/SKILL.md`（保固定数据边界并指向有限 file 实验说明）；
+  `skills/isolated-browser-qa/references/agent-browser.md`（本轮仅真实候选来源、受限固定授权及
+  fresh 会话、原 CLI file 实测与 HTTP 初始化的说明）。
+- **动作**：①九类各写「注入命令、期望档位、复验命令」三行，标由独立验收执行子代理自动执行；
+  先按首改位置补 facts 四名，再用 `-t "registered facts"` 验正反例；
+  ②200% 缩放与键盘焦点各一条命令与预期；
+  ③读屏只写证据行或未测，不设门；
+  ④用 `file://` 直接打开样本页并保存原始输出，作验收 3 的直接证据，未跑记未测；
+  ⑤C05 样本 A/B 写对象身份 `9efb7e577a62d36393caedfb30fc35bf3cb80834`（短号 `9efb7e57`）与
+  「止于 mock、真实业务未覆盖」；
+  ⑥断言七组各有一条命令与预期；
+  ⑦本地服务沿用规格原文，编排入口照参数表补五个身份参数，两处指同一接口；
+  ⑧逐组真跑，原始输出落 `quality/evidence/build-code/P8-real-environment/`，C05 A/B 的失败行按四步
+  出分流清单落其下 `triage/`；
+  ⑨九类读回修阶段交付的修前副本与修后文件，按原输入独立复验与回归，不代写；
+  ⑩第 7 组同一标尺、同一差异连跑两次，同级才记通过；
+  ⑪跑 P2 采集器与 P5 编排器两份受影响回归并保存退出码。
+- **输出 / 失败**：七组各一条具名命令与预期，七组真跑各一份原始输出与组级判定；
+  失败＝缺 200% 或键盘、读屏当门、受控页写成产品通过、`file://` 未跑却写已验、只有命令文本没有原始输出、两次定级只跑一次或两次不同级仍写同级。
+- **边界 / 禁止改动**：不改受控页与校准页；
+  不改 C05 样本；
+  不改规格正文；
+  九类修复不由本阶段写（写主回修阶段），本阶段只复验；
+  不把模拟角色写成真人研究。
 - **依赖**：T022（同一文件串行；命令表引用验收 1、2、6 的就绪件）；P4（受控副本初始化、九类检出与修源、独立复验；本卡只读）。
-- **测试层级 / 技能**：真实环境级（写作期只写判据与命令，执行窗口是 build-code 运行本阶段）；预写测试＝本文件（作者＝验收执行者）；主技能 `skills/isolated-browser-qa/SKILL.md`；测试变更请求＝本轮 P8 指南不新增测试；`tests/integration/n3-browser-ticket-boundary.node-test.mjs` 与 `tests/integration/n3-browser-session-lifecycle.node-test.mjs` 的失败双流、秘密保护、locale 与所有权行为回修请求由 P2 原开发实施并交当前执行及独立质量原件，本 P8 只读消费，不并行写或以未到达的 skip 作通过。
-- **场景 / 夹具或服务**：受控副本九 region、四张校准页、C05 A/B 副本；执行窗口＝build-code 运行本阶段；执行者＝验收执行子代理；产出＝原始输出与组级判定；修复件＝回修阶段的同文件源码版本链，A/B 另列；清理＝引擎会话收尾与临时目录删除；接缝＝产出方是受控页与样本，产物是 `real_environment[]` 与采集原件，读取方是终末复核与产品验收者，分母是九类加四项深度面（`spec.md:1264-1266`）。
+- **测试层级 / 技能**：真实环境级（写作期只写判据与命令，执行窗口是 build-code 运行本阶段）；
+  预写测试＝本文件（作者＝验收执行者）；
+  主技能 `skills/isolated-browser-qa/SKILL.md`；
+  测试变更请求＝本轮 P8 指南不新增测试；
+  `tests/integration/n3-browser-ticket-boundary.node-test.mjs` 与
+  `tests/integration/n3-browser-session-lifecycle.node-test.mjs` 的失败双流、秘密保护、
+  locale 与所有权行为回修请求由 P2 原开发实施并交当前执行及独立质量原件，本 P8 只读消费，不并行写或以未到达的 skip 作通过。
+- **场景 / 夹具或服务**：受控副本九 region、四张校准页、C05 A/B 副本；
+  执行窗口＝build-code 运行本阶段；
+  执行者＝验收执行子代理；
+  产出＝原始输出与组级判定；
+  修复件＝回修阶段的同文件源码版本链，A/B 另列；
+  清理＝引擎会话收尾与临时目录删除；
+  接缝＝产出方是受控页与样本，产物是 `real_environment[]` 与采集原件，读取方是终末复核与产品验收者，分母是九类加四项深度面（
+  `spec.md:1264-1266`）。
 - **RED/GREEN 门禁命令**：`node node_modules/vitest/vitest.mjs run tests/contract/page-audit-acceptance.test.mjs -t "real environment"`
 - **预期退出码**：RED nonzero; GREEN 0。
-- **RED 目标失败**：ORACLE-P8-ACCEPTANCE 的真实环境组：`expect(entries).toHaveLength(7)` 收到 0；`expect(entry.command).toMatch(/node |bash /)` 断言失败；归因＝目标行为失败。
-- **GREEN 判定器**：ORACLE-P8-ACCEPTANCE；`registered facts` 组正反例通过；P2 采集器与 P5 编排器两份受影响回归退出 0；七组各一条命令加预期与状态；七组真跑各有原始输出与组级判定；两次定级有两次原始输出且同级；200% 与键盘必测行在场；读屏不作门；反向「只有命令文本」「受控页当产品通过」「两跑只留一次」判红。
-- **证据**：`2026-10-31-118-p8-current-real-page-developer-results.json` 的 `observations` 与 `quality/evidence/build-code/P8-real-environment/` 原始输出；判什么＝九类、200% 与键盘、读屏证据行、`file://`、C05 A/B、业务止于 mock 各有具名命令、预期、真实输出与判定；怎么判＝清单逐条读回加原始输出存在性；谁提供＝独立于修复者的验收执行子代理；何时＝build-code 运行本阶段；成本＝真实环境级；拿不到＝保持未取得并写条件与负责方。计划期红未采集：`unavailable — 写作期不执行；落 quality/tests/<日期>-p8-real.*`。
-- **覆盖上限**：结构组只保证命令与预期在场；真跑由本卡在 build-code 窗口完成；没执行、没原始输出的组只记未取得；两次定级只证同级，不证标尺本身判得对（标尺归判据阶段与证据阶段）；修复本身与受控页事实分别归回修阶段与受控页阶段。
-- **停止 / 恢复**：真实对象、引擎或必要输入缺失时按实际缺口记未取得，写负责方与恢复条件；用户不在场本身不算缺口、也不等人签核（答复 31、32；决定 30；规格「交付 8」第 1391 行），只有确需真人原始反馈的条目才写缺那份反馈；受控副本缺初始化或同源修复版本时记未取得，写缺哪件与负责方（回修阶段），本阶段保已检出事实，不代写或改期望。
-- **完成**：一条命令重放；`registered facts` 组与两份受影响回归通过；七组命令与预期、七组真实输出与判定、两次定级同级、必测门、读屏非门五项命中；缺执行或只有命令文本不算完成。
+- **RED 目标失败**：ORACLE-P8-ACCEPTANCE 的真实环境组：`expect(entries).toHaveLength(7)` 收到
+  0；
+  `expect(entry.command).toMatch(/node |bash /)` 断言失败；
+  归因＝目标行为失败。
+- **GREEN 判定器**：ORACLE-P8-ACCEPTANCE；
+  `registered facts` 组正反例通过；
+  P2 采集器与 P5 编排器两份受影响回归退出 0；
+  七组各一条命令加预期与状态；
+  七组真跑各有原始输出与组级判定；
+  两次定级有两次原始输出且同级；
+  200% 与键盘必测行在场；
+  读屏不作门；
+  反向「只有命令文本」「受控页当产品通过」「两跑只留一次」判红。
+- **证据**：`2026-10-31-118-p8-current-real-page-developer-results.json` 的
+  `observations` 与 `quality/evidence/build-code/P8-real-environment/` 原始输出；
+  判什么＝九类、200% 与键盘、读屏证据行、`file://`、C05 A/B、业务止于 mock 各有具名命令、预期、真实输出与判定；
+  怎么判＝清单逐条读回加原始输出存在性；
+  谁提供＝独立于修复者的验收执行子代理；
+  何时＝build-code 运行本阶段；
+  成本＝真实环境级；
+  拿不到＝保持未取得并写条件与负责方。
+  计划期红未采集：`unavailable — 写作期不执行；落 quality/tests/<日期>-p8-real.*`。
+- **覆盖上限**：结构组只保证命令与预期在场；
+  真跑由本卡在 build-code 窗口完成；
+  没执行、没原始输出的组只记未取得；
+  两次定级只证同级，不证标尺本身判得对（标尺归判据阶段与证据阶段）；
+  修复本身与受控页事实分别归回修阶段与受控页阶段。
+- **停止 / 恢复**：真实对象、引擎或必要输入缺失时按实际缺口记未取得，写负责方与恢复条件；
+  用户不在场本身不算缺口、也不等人签核（答复 31、32；
+  决定 30；
+  规格「交付 8」第 1391 行），只有确需真人原始反馈的条目才写缺那份反馈；
+  受控副本缺初始化或同源修复版本时记未取得，写缺哪件与负责方（回修阶段），本阶段保已检出事实，不代写或改期望。
+- **完成**：一条命令重放；
+  `registered facts` 组与两份受影响回归通过；
+  七组命令与预期、七组真实输出与判定、两次定级同级、必测门、读屏非门五项命中；
+  缺执行或只有命令文本不算完成。
 
 ### 任务 4：七行档位、六项结论与五项回写
 
@@ -932,20 +1215,54 @@ node node_modules/vitest/vitest.mjs run tests/contract/page-audit-acceptance.tes
 **校验器用，人可跳过**
 
 - **任务编号**：T024
-- **来源 / FR / AC**：R-C07-28、R-C07-31；D-009、D-037；FR-C07-004、FR-C07-013、FR-C07-032、FR-C07-022；AC-C07-4、AC-C07-7、AC-C07-6；可观察结果＝七行各有编号、一个八值档位与一条具名证据；非通过项三项齐；禁词为零。
-- **输入**：任务 2 与任务 3 的七行草稿；证据阶段的校准与绑定输出；`skills/stage-close/SKILL.md:12` 的最终报告消费口径；由验收执行者汇总，缺行不补造。
-- **文件 / 符号**：`tests/contract/page-audit-acceptance.test.mjs`（追加七行组；符号 `verdictRows`）。
-- **动作**：①七行各写编号、一个八值档位、一条具名证据路径；②非通过项写原因、条件与负责方；③写六项结论；④写复验四项（原问题用例 `F2P` 与回归用例 `P2P` 各大于零，判定记 `FULL`、`PARTIAL` 或 `NO`）；⑤写五项回写（完成字段、逐条数组、本文件自一致、任务事实库 `facts.jsonl` 字段值交阶段收口写主落库、修复记录），本卡不直写 `facts.jsonl`、不写规格；⑥断言七行齐、档位在词表、无「已通过」「已闭环」「用户已确认」这类字样。
+- **来源 / FR / AC**：R-C07-28、R-C07-31；
+  D-009、D-037；
+  FR-C07-004、FR-C07-013、FR-C07-032、FR-C07-022；
+  AC-C07-4、AC-C07-7、AC-C07-6；
+  可观察结果＝七行各有编号、一个八值档位与一条具名证据；
+  非通过项三项齐；
+  禁词为零。
+- **输入**：任务 2 与任务 3 的七行草稿；
+  证据阶段的校准与绑定输出；
+  `skills/stage-close/SKILL.md:12` 的最终报告消费口径；
+  由验收执行者汇总，缺行不补造。
+- **文件 / 符号**：`tests/contract/page-audit-acceptance.test.mjs`（追加七行组；
+  符号 `verdictRows`）。
+- **动作**：①七行各写编号、一个八值档位、一条具名证据路径；
+  ②非通过项写原因、条件与负责方；
+  ③写六项结论；
+  ④写复验四项（原问题用例 `F2P` 与回归用例 `P2P` 各大于零，判定记 `FULL`、`PARTIAL` 或 `NO`）；
+  ⑤写五项回写（完成字段、逐条数组、本文件自一致、任务事实库 `facts.jsonl` 字段值交阶段收口写主落库、修复记录），本卡不直写
+  `facts.jsonl`、不写规格；
+  ⑥断言七行齐、档位在词表、无「已通过」「已闭环」「用户已确认」这类字样。
 - **输出 / 失败**：七行加六项加复验加回写齐；失败＝漏行、档位自造、把未完成写通过、出现禁词、写回规格。
 - **边界 / 禁止改动**：不改前七个阶段的契约头；不改验收判据；不改规格与决策日志。
 - **依赖**：T022、T023（七行来源，同一文件串行）。
-- **测试层级 / 技能**：定向契约测试加文本禁令扫描；预写测试＝本文件（作者＝验收执行者）；主技能 `skills/spec-specify/SKILL.md`（WR001）；测试变更请求＝none。
-- **场景 / 夹具或服务**：正常＝七行齐；反向＝删一行、写通过但证据缺、出现「已闭环」字样；接缝＝产出方是前两块与证据阶段输出，产物是逐条数组七行与完成字段，读取方是最终报告与阶段收口，分母是七条验收。
+- **测试层级 / 技能**：定向契约测试加文本禁令扫描；
+  预写测试＝本文件（作者＝验收执行者）；
+  主技能 `skills/spec-specify/SKILL.md`（WR001）；
+  测试变更请求＝none。
+- **场景 / 夹具或服务**：正常＝七行齐；
+  反向＝删一行、写通过但证据缺、出现「已闭环」字样；
+  接缝＝产出方是前两块与证据阶段输出，产物是逐条数组七行与完成字段，读取方是最终报告与阶段收口，分母是七条验收。
 - **RED/GREEN 门禁命令**：`node node_modules/vitest/vitest.mjs run tests/contract/page-audit-acceptance.test.mjs -t "verdicts"`
 - **预期退出码**：RED nonzero; GREEN 0。
-- **RED 目标失败**：ORACLE-P8-ACCEPTANCE 的七行组：`expect(rows.map(r=>r.ac)).toEqual(SEVEN)` 收到不足七行；非法样张（缺证据却写通过）未被拒时 `expect(verdicts(illegalFixture).ok).toBe(false)` 断言失败；归因＝目标行为失败。
-- **GREEN 判定器**：ORACLE-P8-ACCEPTANCE；七行齐、档位合法、非通过有原因与负责方、禁词为零、回写不触及规格；允许全部通过但每条须带具名证据；反向「缺行」「缺证据的通过」「禁词」「写回规格」判红。
-- **证据**：`2026-10-31-118-p8-current-real-page-developer-results.json` 的逐条数组；判什么＝七行档位与指针、六项结论、复验四项、五项回写；怎么判＝读逐条数组加五禁令扫描；谁提供＝验收执行者；何时＝build-code 运行本阶段收口；成本＝命令级；拿不到＝记未取得。计划期红未采集：`unavailable — 写作期不执行；落 quality/tests/<日期>-p8-verdicts.*`。
+- **RED 目标失败**：ORACLE-P8-ACCEPTANCE 的七行组：
+  `expect(rows.map(r=>r.ac)).toEqual(SEVEN)` 收到不足七行；
+  非法样张（缺证据却写通过）未被拒时 `expect(verdicts(illegalFixture).ok).toBe(false)` 断言失败；
+  归因＝目标行为失败。
+- **GREEN 判定器**：ORACLE-P8-ACCEPTANCE；
+  七行齐、档位合法、非通过有原因与负责方、禁词为零、回写不触及规格；
+  允许全部通过但每条须带具名证据；
+  反向「缺行」「缺证据的通过」「禁词」「写回规格」判红。
+- **证据**：`2026-10-31-118-p8-current-real-page-developer-results.json` 的逐条数组；
+  判什么＝七行档位与指针、六项结论、复验四项、五项回写；
+  怎么判＝读逐条数组加五禁令扫描；
+  谁提供＝验收执行者；
+  何时＝build-code 运行本阶段收口；
+  成本＝命令级；
+  拿不到＝记未取得。
+  计划期红未采集：`unavailable — 写作期不执行；落 quality/tests/<日期>-p8-verdicts.*`。
 - **覆盖上限**：只证明记录完整与禁令未破，不证明验收通过。
 - **停止 / 恢复**：七行中任一需改判据才能达成时，停该条并交规格负责人，不就地改判据；恢复后重跑本组。
 - **完成**：一条命令重放；七行、六项、复验、回写、禁词五项命中；缺一项不算完成。
@@ -961,7 +1278,9 @@ node node_modules/vitest/vitest.mjs run tests/contract/page-audit-acceptance.tes
 - 预期：退出 0；入口、三条离线判据、真实环境清单、七行档位四组全绿。
 - 判定器：结构组只判形状，名字在文件末机器块的判定器一行。
   七条各自的判定器见「七条验收各看什么？」的对照表，与规格逐字对应。
-- 证据落点：`quality/evidence/build-code/2026-10-31-118-p8-current-real-page-developer-results.json` 的逐条数组。
+- 证据落点：
+  `quality/evidence/build-code/2026-10-31-118-p8-current-real-page-developer-results.json`
+  的逐条数组。
   真实执行的原始输出在 `quality/evidence/build-code/P8-real-environment/`。
 - 收口条件：七条每条要么「判过了并给出档位与具名证据」，要么写「未取得」。
   后者要写原因、条件与负责方。
@@ -999,14 +1318,19 @@ node node_modules/vitest/vitest.mjs run tests/contract/page-audit-acceptance.tes
 
 - 前序阶段原件缺失：停该条，回对应阶段修复，不以本阶段的断言代替。
 - 判据需变更：停，交规格负责人取用户确认；不就地放宽，不由验收改规格。
-- 真实环境缺对象、引擎或必要输入：按实际缺口记录，写负责方与恢复条件；用户不在场本身不算缺口，也不等人签核——页面检查全自动（答复 31、32；决定 30），真实环境用例不以用户在场为前置（规格「交付 8」第 1391 行）。只有确需真人原始反馈的条目，才写缺那份反馈与负责方。
+- 真实环境缺对象、引擎或必要输入：按实际缺口记录，写负责方与恢复条件；
+  用户不在场本身不算缺口，也不等人签核——页面检查全自动（答复 31、32；
+  决定 30），真实环境用例不以用户在场为前置（规格「交付 8」第 1391 行）。
+  只有确需真人原始反馈的条目，才写缺那份反馈与负责方。
 - 真实执行缺原始输出：该组停，记未达成；不拿命令文本补。
 - 失败反复且没有新事实：按四类分诊处理，保留原失败原件。
 
 ## 补充材料：已有的执行事实与交接要点有哪些？
 
 本节是10-29/30原供件的历史事实：只其原对象、原hash、原档位，非当前566/3798方法签核。
-本轮七行、file缺口、真实命令与恢复条件以前面的当前记录为准；旧件不覆写。
+2026-10-31的七行、文件入口缺口、真实命令与恢复条件见前述历史记录；
+2026-11-01功能结论见本文首节；
+旧件不覆写。
 
 写作期已经发生过执行，本节按时间把原件、哈希、缺口与范围排清楚。
 
@@ -1152,7 +1476,7 @@ HTTP 三文件原字节等于磁盘，原生无障碍当前状态与页面地址
 不制造双整体报告、别名、新结构或复制包。
 
 旧已引用清单 `ef3f` 与卡片 `ea66` 的完整字节保为普通原件 002、003。
-旧原件 268 保留。
+旧原件268保留。
 旧原生审包仍是任务基准 843 到当时提交 `d112`，不回绑新提交。
 
 ### 本轮基点与规范同步做了什么？
@@ -1167,7 +1491,8 @@ HTTP 三文件原字节等于磁盘，原生无障碍当前状态与页面地址
 与 `337ff252…`（编排阶段）；按原提交读回只代表各自的源码封装。
 该轮的三个写入文件（两个网关文件与测试文件）仍是原字节；本轮改动只落专门质量件与元数据。
 
-受保护面在 2026-10-29 用 HEAD `fa56dbc6494cc9ccf1cc39b1486c1fd74be87fc2`（短号 `fa56dbc6`）只读实读：
+受保护面在 2026-10-29 用 HEAD `fa56dbc6494cc9ccf1cc39b1486c1fd74be87fc2`（短号 `fa56dbc6`
+）只读实读：
 规格「做成什么样？」的七条验收标题（`spec.md:730-889`）、验收证据校验器第 1 至 12 行、阶段收口技能第 1 至 16 行，三处都实读过。
 
 目录映射文件只保自己单一测试的登记，恢复提交时其余 502 项的值、顺序与格式。
@@ -1224,7 +1549,8 @@ HTTP 三文件原字节等于磁盘，原生无障碍当前状态与页面地址
 
 ## 验收 Phase 才能做的检查
 
-这一节只在唯一的末验收阶段填；七条自己的验收写在「这一 Phase 怎么验收？」。
+这一节只在唯一的末验收阶段填；
+七条自己的验收写在「这一 Phase 怎么验收？」。
 
 本节是附加检查，补的是前七个阶段做不了的四件事：
 入口准则、两份就绪件、授权边界与收口留痕。
@@ -1276,10 +1602,18 @@ HTTP 三文件原字节等于磁盘，原生无障碍当前状态与页面地址
 
 | 正文里写的 | 机器编号 | 主要出现在哪一节 |
 | --- | --- | --- |
-| 验收 1 到 7 | AC-C07-1 到 AC-C07-7 | 七条验收各看什么、两张对照表 |
-| 验收用例 1 到 7 | UC-C07-1 到 UC-C07-7 | 七条验收表 |
+| 验收 1、同号验收用例与判定器 | AC-C07-1；UC-C07-1；ORACLE-C07-1（ORACLE-C07-COVERAGE） | 七条验收表、卡末合同 |
+| 验收 2、同号验收用例与判定器 | AC-C07-2；UC-C07-2；ORACLE-C07-2（ORACLE-C07-IDENTITY） | 七条验收表、卡末合同 |
+| 验收 3、同号验收用例与判定器 | AC-C07-3；UC-C07-3；ORACLE-C07-3（ORACLE-C07-STRESS） | 七条验收表、卡末合同 |
+| 验收 4、同号验收用例与判定器 | AC-C07-4；UC-C07-4；ORACLE-C07-4（ORACLE-C07-GRADE） | 七条验收表、卡末合同 |
+| 验收 5、同号验收用例与判定器 | AC-C07-5；UC-C07-5；ORACLE-C07-5（ORACLE-C07-LOOP） | 七条验收表、卡末合同 |
+| 验收 6、同号验收用例与判定器 | AC-C07-6；UC-C07-6；ORACLE-C07-6（ORACLE-C07-NOAGG） | 七条验收表、卡末合同 |
+| 验收 7、同号验收用例与判定器 | AC-C07-7；UC-C07-7；ORACLE-C07-7（ORACLE-C07-TRACE） | 七条验收表、卡末合同 |
 | 门禁用例 1 到 6 | 无机器编号；按 `-t` 组名认 | 这一 Phase 怎么验收？ |
-| 任务 1 到 4 | T021 到 T024 | 每张任务卡 |
+| 任务 1 | T021 | 数据与环境就绪 |
+| 任务 2 | T022 | 机器可判的验收 |
+| 任务 3 | T023 | 真实环境执行与分流 |
+| 任务 4 | T024 | 最终七行回写 |
 | 结构判定器 | ORACLE-P8-ACCEPTANCE | 怎么验证、机器字段 |
 | 七条判定器 | ORACLE-C07-1 到 ORACLE-C07-7，审查件别名 ORACLE-C07-COVERAGE 等 | 七条验收表、卡末 |
 | 决定 8、10、30、32、34、37 | D-007、D-009、D-025、D-033、D-002、D-037 | 为什么现在做、依据 |
@@ -1299,13 +1633,39 @@ HTTP 三文件原字节等于磁盘，原生无障碍当前状态与页面地址
 本块只给机器读；人读正文已经回答同一件事，不复述。
 写入集与依赖必须与 `phases/index.md` 逐条一致。
 
-- **全局规格**：`specs/workflowhub-ui-frontend-c07-real-page-verification-20261028/spec.md#appendix-a--验收判据唯一权威`（七条判据的唯一权威，只读）
-- **写入集**：`tests/contract/page-audit-acceptance.test.mjs`、`skills/isolated-browser-qa/scripts/browser-qa-session.mjs`、`skills/isolated-browser-qa/SKILL.md`、`skills/isolated-browser-qa/references/agent-browser.md`
+- **全局规格**： `specs/workflowhub-ui-frontend-c07-real-page-verification-20261028/spec.md#appendix-a--验收判据唯一权威`
+  （七条判据的唯一权威，只读）
+- **写入集**：`tests/contract/page-audit-acceptance.test.mjs`、
+  `skills/isolated-browser-qa/scripts/browser-qa-session.mjs`、
+  `skills/isolated-browser-qa/SKILL.md`、
+  `skills/isolated-browser-qa/references/agent-browser.md`
 - **依赖**：P1、P2、P3、P4、P5、P6、P7
 - **消费者**：skills/stage-close/SKILL.md
 - **gate_cmd**：`node node_modules/vitest/vitest.mjs run tests/contract/page-audit-acceptance.test.mjs`
 - **oracle**：ORACLE-P8-ACCEPTANCE
-- **evidence_path**：`../../Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/2026-10-31-118-p8-current-real-page-developer-results.json`（本轮唯一当前原件，七条 `per_ac[]`、六项、缺口、恢复与负责方在此。10-30固定 `quality/evidence/build-code/P8-acceptance.json` 与 `quality/evidence/build-code/P8-execution-checklist.json` 均为封存旧事实，不覆写、不作当前档位；旧测试仍硬定读旧件，结构退出0不能签当前，本轮未运行它。不是新增进度或第二账本。）
-- **STOP**：任一验收缺证据时写未完成或未取得加缺口、条件与负责方；不改判据、不删用例、不重跑到绿、不写回规格；真实环境条目缺真实对象、引擎或必要输入时按该条实际缺口记录，用户不在场不算缺口也不等签核（答复 31、32；规格「交付 8」第 1391 行）；判据需变更时停该条并交规格负责人；前序原件缺失时回对应阶段修复，不补造。
+- **evidence_path**： `../../Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/2026-10-31-118-p8-current-real-page-developer-results.json`
+  （本轮唯一当前原件，七条 `per_ac[]`、六项、缺口、恢复与负责方在此。
+  10-30固定 `quality/evidence/build-code/P8-acceptance.json` 与
+  `quality/evidence/build-code/P8-execution-checklist.json` 均为封存旧事实，不覆写、不作当前档位；
+  旧测试仍硬定读旧件，结构退出0不能签当前，本轮未运行它。
+  不是新增进度或第二账本。
+  ）
+- **STOP**：任一验收缺证据时写未完成或未取得加缺口、条件与负责方；
+  不改判据、不删用例、不重跑到绿、不写回规格；
+  真实环境条目缺真实对象、引擎或必要输入时按该条实际缺口记录，用户不在场不算缺口也不等签核（答复 31、32；
+  规格「交付 8」第 1391 行）；
+  判据需变更时停该条并交规格负责人；
+  前序原件缺失时回对应阶段修复，不补造。
 - **覆盖 AC**：AC-C07-1、AC-C07-2、AC-C07-3、AC-C07-4、AC-C07-5、AC-C07-6、AC-C07-7
-- **Done**：七条逐条列出编号、档位与证据指针：AC-C07-1 逐维可重放（`2026-10-31-118-p8-current-real-page-developer-results.json` 的 `per_ac[0]`）；AC-C07-2 身份不一致（`per_ac[1]`）；AC-C07-3 反例与修复（`per_ac[2]` 加原始输出目录）；AC-C07-4 两次同级（`per_ac[3]` 加两次原始输出）；AC-C07-5 定位与复验（`per_ac[4]` 加分流清单）；AC-C07-6 不聚合（`per_ac[5]`）；AC-C07-7 三面可追溯（`per_ac[6]`）。每条只能是判过（给档位与具名证据）或未取得加原因、条件与负责方；七组无原始输出的对应验收不得记通过；七条全未取得时本阶段记未完成，不收口、不写完成，也不以计划期未执行为共同原因；结构组退出 0 不满足本项。
+- **Done**：七条逐条列出编号、档位与证据指针：AC-C07-1 逐维可重放（
+  `2026-10-31-118-p8-current-real-page-developer-results.json` 的 `per_ac[0]`）；
+  AC-C07-2 身份不一致（`per_ac[1]`）；
+  AC-C07-3 反例与修复（`per_ac[2]` 加原始输出目录）；
+  AC-C07-4 两次同级（`per_ac[3]` 加两次原始输出）；
+  AC-C07-5 定位与复验（`per_ac[4]` 加分流清单）；
+  AC-C07-6 不聚合（`per_ac[5]`）；
+  AC-C07-7 三面可追溯（`per_ac[6]`）。
+  每条只能是判过（给档位与具名证据）或未取得加原因、条件与负责方；
+  七组无原始输出的对应验收不得记通过；
+  七条全未取得时本阶段记未完成，不收口、不写完成，也不以计划期未执行为共同原因；
+  结构组退出 0 不满足本项。
