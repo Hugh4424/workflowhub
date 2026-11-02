@@ -107,7 +107,7 @@ export function openTask(taskPath, expected, expectedTaskId) {
     async appendRecord({dir,slug,ext,bytes}={}) { writable();recordPath(root,dir);if(!quality(dir))throw new TypeError('task append records belong to quality evidence/reviews/tests');parents(`${dir}/.directory-probe`);const path=await appendOrdinaryRecord(recordPath(root,dir),slug,ext,bytes,{performWrite});verify();return path; },
     async captureCommand({cwd,slug,argv,shell,timeoutMs,signal,resolveOutputRef}={}) { writable();parents('quality/tests/.directory-probe');return captureNativeCommand({cwd,recordDir:recordPath(root,'quality/tests'),slug,argv,shell,timeoutMs,signal,resolveOutputRef,performWrite}); },
     async recordConfirmation(fields,{cwd}={}) { writable();return recordHumanConfirmation(fields,{cwd,dir:taskEvidenceDir('human-confirmations'),lockDir:root,performWrite}); },
-    async recordGitAuthorization({cwd,operation,confirmationRef,phase}={}) { writable();const path=await recordGitGrant({cwd,operation,confirmationRef,phase,dir:taskEvidenceDir('git-authorizations'),lockDir:root,performWrite});return {path}; },
+    async recordGitAuthorization({cwd,operation,confirmationRef,phase,externalScope}={}) { writable();const path=await recordGitGrant({cwd,operation,confirmationRef,phase,externalScope,dir:taskEvidenceDir('git-authorizations'),lockDir:root,performWrite});return {path}; },
     async consumeGitAuthorization({cwd,operation,stepId,authorizationRef,phase}={}) { writable();return consumeGitGrant({cwd,operation,stepId,authorizationRef,phase,dir:taskEvidenceDir('git-authorizations'),lockDir:root,performWrite}); },
     async withRecordLock(name, fn, options = {}) { writable(); return withLock(root, name, fn, options); },
     listCanonicalReviewResultRefs() {

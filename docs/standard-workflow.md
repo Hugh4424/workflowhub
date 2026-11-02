@@ -10,6 +10,8 @@ WorkflowHub 主会话按认证工作区当前材料执行。post 材料为 decis
 
 已授权任务进入 build-code 后，自动实施、验证、审查、修复及交付必要的 commit/push/merge；切阶段/会话/handoff 不重置授权，不重问本地提交、日常技术验收或风险承担确认。Phase 实施、针对性测试、独立审查及 finding 修复全完成后，本 Phase 审后提交一次；build-code 终末结束时完成全部提交与合并。authorize 复用真实授权来源，操作前核范围/分支/当前 HEAD 并 record/consume；build-code commit 显式同传 phase=build-code，绑当前 task、分支和阶段，同阶段共用授权；实际 HEAD/每次消费保在既有 consumed 原件，授权原件不改。其它阶段、旧无 phase 记录及 push/merge/pr 仍严格匹配原 HEAD。真正执行关闭时，先按下节核工作区与任务范围，再读 [关闭方法](../skills/stage-close/SKILL.md)第6节「最终归档和清理前一次真实范围确认」与第7节「安全移除、分支删除与逐项读回」；只有取得其要求的最终范围确认才执行归档/删除/交付清理。无法修复/验证的事项如实保留，继续可执行部分，不自行 accepted_risk 或伪造通过。
 
+确有用户批准的外仓提交时，可信操作者先核原始问答与确认、被确认的当前任务 Phase 材料，以及唯一注册工作树、分支和 HEAD，以 `task.recordGitAuthorization` 的 `externalScope: { phaseId, materialRef, worktreeRoot, branch, head }` 和该确认原件显式记录 `build-code` 的 `commit`。精确目标及来源直接绑定现有 grant，不另设必需的持久授权对象。确认 decision 为 `cross-repo-auth` 或以 `-cross-repo-auth` 结尾，须真实对应用户同意；确认引用同一任务的一个原始问答和在确认 HEAD 上已索引的 Phase 材料。Phase 机器写入集中所有绝对路径须规范且属于该唯一外仓工作树，材料须有唯一的分支和 HEAD 声明与目标一致；有第二外仓、不规范路径或对账不明即拒绝。材料中的分散文本不是身份签名，具体目标与用户决定的关联由可信操作者核定。消费必须指定原 grant 的 `authorizationRef`，复核来源字节、仓库 common-dir、注册工作树、分支和 HEAD；HEAD 未变时同一动作可幂等重试；HEAD 变化（包括提交后）拒绝重新消费，另一动作不得复用。任务入口统一使用任务根锁，低层直接调用不得另选锁域。来源或身份漂移停止，不将外仓权限扩到 push、merge 或其他仓。此检查沿现有可信操作者如实记录模型；哈希用于发现记录后变化，不是人类身份签名，也不防同权限主体伪造。
+
 make-decision 最终确认＝阶段收口，具体动作沿其方法与决策日志模板；下一阶段由用户决定，不催下一阶段。
 
 ## 工作区与任务
