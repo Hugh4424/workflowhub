@@ -171,12 +171,22 @@ Appendix A 的每条验收写落点、验证、环境与数据、谁判、承接
 
 ### 验收对象是什么？
 
-验收对象是本任务的 workspace、service、route、state、viewport 与 owner，每项写明真实来源与未观察范围。
+验收对象按本任务真实待验目标填写下方JSON，并说明每项来源与未观察范围。
+生成spec.md时保留本节内的“验收对象”机器标题和json数据块，不能只交散文。
+该子标题由现有CLI逐字定位，按写作标准的机器标题例外保留；原问句标题供人阅读。
 
-以下 JSON 只示范数据形状，null 表示仍缺真实输入，不能把示例、占位文字或 unknown 填充冒可用对象。
-缺省或来源不完整时，最小五项仍为 workspace、service、route、state、viewport，依此顺序检查。
-workspace 来自认证工作区；service、route 来自真实服务配置或入口；state 来自实际待验状态；viewport 来自规定尺寸或真实观察。
-owner 未给、null 或空白时，执行结果明确为“用户”；已有非空 owner 原值保留。
+以下JSON只示范形状；null表示真实输入尚缺，生成时按当前目标替换，保留真实缺项。
+示例、占位文字与unknown填充不能冒充可用对象。
+页面目标或调用来源不完整时，仍按workspace、service、route、state、viewport五项检查。
+纯CLI目标仅按下方唯一生产函数的分支合同填写cli数据，并随调用交三类真实来源上下文。
+不能因交付的是脚本或文档，就把其中被验的页面目标声明为无UI。
+workspace来自认证工作区；service、route来自真实服务配置或入口；state来自实际待验状态。
+viewport来自规定尺寸或真实观察；规定目标不等于已认证的运行观察。
+owner未给、null或空白时，执行结果仍为“用户”；已有非空owner原值保留。
+
+机器区供校验器读取，人可跳过；实例数据与下方唯一生产函数分开维护。
+
+#### 验收对象
 
 ```json
 {

@@ -4,7 +4,8 @@ import {readFileSync,existsSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {resolveCanonicalTaskPath} from '../../runtime/task/load-config.mjs';
 import {openTask} from '../../runtime/task/task-handle.mjs';
-import {openCurrentTaskWorkspace} from '../../runtime/task/workspace.mjs';
+import {isAbsolute,relative,resolve,sep} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {collectErrors} from '../../skills/frontend-testing/scripts/check-page-audit.mjs';
 import {validateAcceptanceEvidence} from '../../runtime/evidence/acceptance-evidence-validator.mjs';
 import {mergeJudgments,lockEngine} from '../../skills/frontend-testing/scripts/run-page-audit.mjs';
@@ -105,6 +106,28 @@ function refOf(value){const {root}=taskEvidence();return value.startsWith(root+'
 const bytes=ref=>taskEvidence().task.readRecordBytes(refOf(ref));
 const json=ref=>JSON.parse(bytes(ref).toString('utf8'));
 const sha=value=>createHash('sha256').update(value).digest('hex');
+// Replay the recorded identity; a removed worktree is not a live authenticated workspace.
+function originalWorkspaceRoot(){
+  const ref='quality/tests/2026-11-01-229-c07-preclose-readonly-workspace';
+  const observation=json(ref+'.output'),receipt=json(ref+'.json'),{root,task}=taskEvidence();
+  expect(receipt.exit_code).toBe(0);expect(refOf(receipt.output_ref)).toBe(ref+'.output');
+  expect(observation.identity.taskId).toBe(TASK_ID);expect(observation.identity.taskPath).toBe(root);
+  expect(observation.identity.binding.targetRepoRoot).toBe(task.manifest.target_repo_root);
+  expect(observation.identity.binding.branch).toBe(`task/workflowhub/${TASK_ID}`);
+  const originalRoot=observation.identity.binding.worktreeRoot;
+  expect(json(AB+'2026-10-29-571-perf-fix-source-epoch.json').cwd).toBe(originalRoot);
+  return originalRoot;
+}
+function deliveredSource(originalPath){
+  const originalRoot=originalWorkspaceRoot();
+  const path=isAbsolute(originalPath)?relative(originalRoot,originalPath):originalPath;
+  if(isAbsolute(path)||path==='..'||path.startsWith('..'+sep)||path.includes('\\'))throw Error('source outside original C07 workspace');
+  const repoRoot=fileURLToPath(new URL('../../',import.meta.url));
+  if(path==='tests/fixtures/page-audit/controlled-work.html')return readFileSync(resolve(repoRoot,path));
+  const prefix=`specs/${TASK_ID}/`;
+  if(!path.startsWith(prefix))throw Error('source outside original C07 samples');
+  return readFileSync(resolve(repoRoot,`specs/archive/${TASK_ID}`,path.slice(prefix.length)));
+}
 const nonempty=value=>typeof value==='string'&&value.trim().length>0;
 function original(reference){
   if(!reference||!nonempty(reference.ref)||!/^[a-f0-9]{64}$/.test(reference.sha256??''))return false;
@@ -233,7 +256,7 @@ describe('ORACLE-P8-ACCEPTANCE entry',()=>{
     const data=json(BUILD+'P8-data-readiness.json'),env=json(BUILD+'P8-environment-readiness.json');
     expect(readinessProblems(data)).toEqual([]);expect(readinessProblems(env)).toEqual([]);
     expect(data.samples).toHaveLength(6);expect(data.phase_inputs.map(p=>p.phase_id)).toEqual(['P1','P2','P3','P4','P5','P6','P7','P9','P10','P11']);
-    for(const row of data.samples)expect(sha(readFileSync(row.path)),row.path).toBe(row.observed_sha256);
+    for(const row of data.samples)expect(sha(deliveredSource(row.path)),row.path).toBe(row.observed_sha256);
     expect(env.engine).toBe('agent-browser');expect(env.auth_mode).toBe('none');
   });
   it('rejects missing readiness and an asserted pass with explicit gaps',()=>{
@@ -279,20 +302,20 @@ describe('ORACLE-P8-ACCEPTANCE AC-C07-1 / AC-C07-2 / AC-C07-6 replay',()=>{
     for(const reference of references){expect(original(reference)).toBe(true);const value=json(reference.ref);expect(original(value.before.raw)).toBe(true);expect(original(value.after.raw)).toBe(true);expect(value.clickResult.hit.backendNodeId).toBeGreaterThan(0);expect(new URL(value.frame.frameTree.frame.url).searchParams.get('state')).toBe('default');}
   });
   it('AC-C07-2 compares the real control and all three wrong declarations against the same independent source truth',async()=>{
-    const {task}=taskEvidence(),workspace=await openCurrentTaskWorkspace(task),scope=json(FN+'browser-objectscope.json'),source=bytes(FN+'synthetic-page.html').toString('utf8');
+    const originalWorkspace=originalWorkspaceRoot(),scope=json(FN+'browser-objectscope.json'),source=bytes(FN+'synthetic-page.html').toString('utf8');
     const state=source.match(/data-state="([^"]+)"/)[1],control=json(FN+'native-console-control.json');
     const execution=json(FN+'executions.json').commands.find(c=>c.argv?.includes('--run')&&c.argv.includes(scope.url));
-    expect(execution.cwd).toBe(workspace.worktreeRoot);expect(scope.ready).toContain('state='+state);
+    expect(execution.cwd).toBe(originalWorkspace);expect(scope.ready).toContain('state='+state);
     expect(control.items.some(i=>i.stackTrace?.callFrames?.some(f=>f.url===scope.url))).toBe(true);
-    const url=new URL(scope.url),observed={workspace:workspace.worktreeRoot,service:url.origin,route:url.pathname+url.search+url.hash,state,object_version:'sha256:'+sha(bytes(FN+'synthetic-page.html')),engine_session:scope.engine_session,viewport:control.object.viewport,engine:control.engine};
+    const url=new URL(scope.url),observed={workspace:originalWorkspace,service:url.origin,route:url.pathname+url.search+url.hash,state,object_version:'sha256:'+sha(bytes(FN+'synthetic-page.html')),engine_session:scope.engine_session,viewport:control.object.viewport,engine:control.engine};
     const expected=[['native-console-control.json',[]],['native-wrong-workspace.json',['workspace']],['native-wrong-source.json',['object_version']],['native-wrong-state.json',['state']]];
-    for(const[name,differences]of expected){const doc=json(FN+name),mismatches=objectDiff(doc.object,observed);console.log(JSON.stringify({event:'P8_actual_object_consumption',source_ref:FN+name,declared:doc.object,observed,mismatches,basis:'Authenticated worktree + actual owned server response literal SHA + native body/console URL; GET bytes were not separately archived for this synthetic original.'}));expect(mismatches.map(m=>m.field)).toEqual(differences);}
+    for(const[name,differences]of expected){const doc=json(FN+name),mismatches=objectDiff(doc.object,observed);console.log(JSON.stringify({event:'P8_actual_object_consumption',source_ref:FN+name,declared:doc.object,observed,mismatches,basis:'Recorded pre-close workspace identity + archived original-byte replay; original owned-server observations retained; GET bytes were not separately archived for this synthetic original.'}));expect(mismatches.map(m=>m.field)).toEqual(differences);}
   });
   it('AC-C07-2 consumes actual formal producer references and rejects wrong bytes, unknown material and wrong collector scope',async()=>{
-    const workspace=await openCurrentTaskWorkspace(taskEvidence().task),epochRef=AB+'2026-10-29-571-perf-fix-source-epoch.json',epoch=json(epochRef),rows=json(AB+'2026-10-29-590-perf-fix-final-handoff.json').rows;
-    expect(epoch.cwd).toBe(workspace.worktreeRoot);for(const file of epoch.files)expect(sha(readFileSync(file.path))).toBe(file.sha256);
+    const originalWorkspace=originalWorkspaceRoot(),epochRef=AB+'2026-10-29-571-perf-fix-source-epoch.json',epoch=json(epochRef),rows=json(AB+'2026-10-29-590-perf-fix-final-handoff.json').rows;
+    expect(epoch.cwd).toBe(originalWorkspace);for(const file of epoch.files)expect(sha(deliveredSource(file.path))).toBe(file.sha256);
     for(const row of rows){
-      const report=json(AB+'perf-fixed-'+row.id+'-'+row.viewport.split('x')[0]+'-report.json'),url=new URL(row.full_url),observed={workspace:workspace.worktreeRoot,service:url.origin,route:url.pathname+url.search+url.hash,object_version:epoch.head+';six-sha256@'+epochRef,engine_session:row.engine_session,state:url.searchParams.get('state'),viewport:row.viewport,engine:'agent-browser'};
+      const report=json(AB+'perf-fixed-'+row.id+'-'+row.viewport.split('x')[0]+'-report.json'),url=new URL(row.full_url),observed={workspace:originalWorkspace,service:url.origin,route:url.pathname+url.search+url.hash,object_version:epoch.head+';six-sha256@'+epochRef,engine_session:row.engine_session,state:url.searchParams.get('state'),viewport:row.viewport,engine:'agent-browser'};
       expect(original(row.ledger)).toBe(true);expect(new Set(row.three_complete_document_samples.map(s=>s.loader_id)).size).toBe(3);expect(row.three_complete_document_samples.every(s=>s.full_url===row.full_url&&s.root)).toBe(true);
       expect(reportBindingProblems(report,observed,row.collectors)).toEqual([]);
       const wrongBytes=structuredClone(report);wrongBytes.criteria[0].evidence[0].sha256='0'.repeat(64);expect(reportBindingProblems(wrongBytes,observed,row.collectors)).toContain('E_BYTES_MISMATCH');
@@ -301,16 +324,16 @@ describe('ORACLE-P8-ACCEPTANCE AC-C07-1 / AC-C07-2 / AC-C07-6 replay',()=>{
     }
   });
   it('AC-C07-2 reuses the same objectDiff for independently observed HTTP/disk/native state control and three declaration negatives',async()=>{
-    const workspace=await openCurrentTaskWorkspace(taskEvidence().task),before=json(FN+'2026-10-29-010-b-native-object-truth-before.json');
+    const originalWorkspace=originalWorkspaceRoot(),before=json(FN+'2026-10-29-010-b-native-object-truth-before.json');
     const expected=[['011-b-http-scope-control',[]],['012-b-http-scope-wrongworkspace',['workspace']],['013-b-http-scope-wrongsource',['object_version']],['014-b-http-scope-wrongstate',['state']]];
     for(const[name,differences]of expected){const record=json(FN+'2026-10-29-'+name+'.json'),truth=record.observed_before,after=record.observed_after;
-      expect(truth.actual_cwd).toBe(workspace.worktreeRoot);expect(truth.workspace).toBe(workspace.worktreeRoot);expect(truth.frame_url).toBe(before.frame_url);
-      for(const source of[truth.source,after.source]){expect(source.files).toHaveLength(3);for(const file of source.files){expect(file.path.startsWith(workspace.worktreeRoot+'/specs/'+TASK_ID+'/samples/B/')).toBe(true);expect(file.status).toBe(200);expect(file.http_bytes).toBe(file.bytes);expect(file.http_sha256).toBe(sha(readFileSync(file.path)));expect(file.disk_sha256).toBe(file.http_sha256);}
+      expect(truth.actual_cwd).toBe(originalWorkspace);expect(truth.workspace).toBe(originalWorkspace);expect(truth.frame_url).toBe(before.frame_url);
+      for(const source of[truth.source,after.source]){expect(source.files).toHaveLength(3);for(const file of source.files){expect(file.path.startsWith(originalWorkspace+'/specs/'+TASK_ID+'/samples/B/')).toBe(true);expect(file.status).toBe(200);expect(file.http_bytes).toBe(file.bytes);expect(file.http_sha256).toBe(sha(deliveredSource(file.path)));expect(file.disk_sha256).toBe(file.http_sha256);}
         expect(source.object_version).toBe('sha256:'+sha(JSON.stringify(source.files.map(({path,bytes,disk_sha256})=>({path,bytes,sha256:disk_sha256})))));
       }
       const state=truth.scenario.ax.nodes.find(n=>n.role?.value==='combobox').value.value,afterState=after.scenario.ax.nodes.find(n=>n.role?.value==='combobox').value.value;expect(state).toBe('default');expect(afterState).toBe(state);expect(after.frame_url).toBe(truth.frame_url);
-      const url=new URL(truth.frame_url),observed={workspace:workspace.worktreeRoot,service:url.origin,route:url.pathname+url.search+url.hash,object_version:truth.source.object_version,engine_session:truth.session,state,viewport:truth.viewport,engine:'agent-browser'},mismatches=objectDiff(record.original_document.object,observed);
-      console.log(JSON.stringify({event:'P8_actual_HTTP_object_consumption',source_ref:FN+'2026-10-29-'+name+'.json',declared:record.original_document.object,observed,mismatches,basis:'Authenticated worktree/current disk bytes + independently archived actual HTTP hashes/bytes + native AX state and frame URL, all before/after stable.'}));expect(mismatches.map(m=>m.field)).toEqual(differences);
+      const url=new URL(truth.frame_url),observed={workspace:originalWorkspace,service:url.origin,route:url.pathname+url.search+url.hash,object_version:truth.source.object_version,engine_session:truth.session,state,viewport:truth.viewport,engine:'agent-browser'},mismatches=objectDiff(record.original_document.object,observed);
+      console.log(JSON.stringify({event:'P8_actual_HTTP_object_consumption',source_ref:FN+'2026-10-29-'+name+'.json',declared:record.original_document.object,observed,mismatches,basis:'Recorded pre-close workspace identity + archived same-byte source; independently archived original HTTP hashes/bytes and native AX state/frame URL retained; no current server observation claimed.'}));expect(mismatches.map(m=>m.field)).toEqual(differences);
     }
   });
   it('AC-C07-5 / 6 keeps trusted real task completion separate from unknown CLI clocks and real backend claims',()=>{
@@ -325,9 +348,9 @@ describe('ORACLE-P8-ACCEPTANCE AC-C07-1 / AC-C07-2 / AC-C07-6 replay',()=>{
   });
   it('AC-C07-7 consumes the actual asset/component/page trace without claiming external design parity',()=>{
     const trace=json(BUILD+'P8-raw-replay-report.json').trace_layers;
-    expect(trace.assets.length).toBeGreaterThan(0);for(const asset of trace.assets)expect(sha(readFileSync(asset.path))).toBe(asset.sha256);
-    const http=json(FN+'2026-10-29-010-b-native-object-truth-before.json').source.files.find(f=>f.path.endsWith('/B/styles.css'));expect(http.status).toBe(200);expect(http.byte_equal).toBe(true);expect(trace.assets.some(a=>a.sha256===http.http_sha256&&sha(readFileSync(a.path))===http.http_sha256)).toBe(true);
-    expect(trace.components).toHaveLength(1);const component=trace.components[0];expect(sha(readFileSync(component.path))).toBe(component.sha256);
+    expect(trace.assets.length).toBeGreaterThan(0);for(const asset of trace.assets)expect(sha(deliveredSource(asset.path))).toBe(asset.sha256);
+    const http=json(FN+'2026-10-29-010-b-native-object-truth-before.json').source.files.find(f=>f.path.endsWith('/B/styles.css'));expect(http.status).toBe(200);expect(http.byte_equal).toBe(true);expect(trace.assets.some(a=>a.sha256===http.http_sha256&&sha(deliveredSource(a.path))===http.http_sha256)).toBe(true);
+    expect(trace.components).toHaveLength(1);const component=trace.components[0];expect(sha(deliveredSource(component.path))).toBe(component.sha256);
     expect(json(component.source_fix).files.some(f=>f.path===component.path&&f.sha256===component.sha256)).toBe(true);
     expect(trace.pages).toHaveLength(3);for(const page of trace.pages){expect(original(page.raw)).toBe(true);expect(fields.every(key=>nonempty(page.object[key]))).toBe(true);}expect(trace.pages.some(p=>p.object.route.includes('#workbench'))).toBe(true);
   });
@@ -356,7 +379,7 @@ describe('ORACLE-P8-ACCEPTANCE AC-C07-1 / AC-C07-2 / AC-C07-6 replay',()=>{
 describe('ORACLE-P8-ACCEPTANCE real environment',()=>{
   it('consumes the original controlled repair/retest and normal regressions without expanding FULL beyond nine regions',()=>{
     const result=json(BUILD+'P8-real-environment/controlled/2026-10-29-041-p8-original-source-retest-and-regression-results.json');
-    expect(sha(readFileSync(result.object.source))).toBe(result.object.after_sha256);expect(result.object.before_sha256).not.toBe(result.object.after_sha256);
+    expect(sha(deliveredSource(result.object.source))).toBe(result.object.after_sha256);expect(result.object.before_sha256).not.toBe(result.object.after_sha256);
     expect(result.tests).toHaveLength(10);expect(result.tests.every(row=>row.state==='通过'&&Object.values(row.checks).every(value=>value===true))).toBe(true);expect(result.regressions).toHaveLength(2);expect(result.regressions.every(row=>row.state==='通过')).toBe(true);
     for(const reference of result.raws)expect(original(reference)).toBe(true);expect(result.retest).toMatchObject({F2P:10,P2P:2,coverage:'FULL'});expect(result.retest.denominator).toContain('Original nine controlled regions');
   });

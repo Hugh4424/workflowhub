@@ -1,13 +1,12 @@
 # Phase P6 — 九条流程缺口各有固定名与断言，且不新增 stage
 
-读者：本 Phase 的实施者、独立审查者，以及下游的步骤检查器使用者。
-读完要能：找到九条固定名落在哪一节、哪条命令判它、失败了交给谁。
+流程维护者按本卡修补九条缺口，并保留原步骤数和阶段边界。
+后续执行者据固定动作、原验收与真实原件决定下一步。
 
-> 写作标准：`skills/spec-specify/SKILL.md` 的「十条材料写作标准」。
+> 写作依据：`skills/material-writing/SKILL.md` 的「材料写作标准（唯一）」。
 > 二级标题都是读者问题，第一句直接回答；命令与表格行不受行宽限制。
 > 命令、路径、退出码、编号、哈希逐字保留，不因改写而改。
 
-先说明九个会反复出现的词。
 
 固定名：写死在方法正文里的一个短语，测试按它逐字命中，换个说法就不算。
 步骤表：`workflows/make-decision/steps.json`，15 步各写观察结果与完成证据。
@@ -54,7 +53,7 @@
 记录写进材料不等于完成：机器只报范围与在场，完成与否由独立判定。
 
 - **本 Phase 结果**：九条各有一个固定名、一句动作与一条断言，形状未变。
-- **非目标**：不改三个子流程的正文与步骤表，那是各自负责人的范围。
+- **非目标**：不改三个子流程的技能正文；步骤表仅按本卡对齐证据通道，那是各自负责人的范围。
 - **改动前**：九条动作真实发生过，却没有名字、没有证据、没有测试。
 - **改动后**：名字在指定节，观察结果有同步字段，断言钉住步骤数与阶段标识。
 - **与相邻 Phase 的边界**：上游没有；下游是步骤检查器，它继续只读步骤表。
@@ -62,7 +61,8 @@
 - **下一步**：交步骤检查器与后续材料作者，按九个固定名回读。
 - **动手前必读**：方法正文、步骤表、决策日志模板两处、标准工作方法一段。
 - **未决事实**：真实答复、词表读回与阶段交接按历史原件观察过，不是新事件；
-  第 5、6 条在本任务材料上读不回；页面效果仍未验。
+  首轮第5、6条在本任务材料上读不回；后到原走查中第5条生效，第6条部分可观察；
+  页面效果仍未验。
 
 ## 这一 Phase 怎么验收？
 
@@ -74,7 +74,8 @@
 
 - **谁做、做多久**：执行者是与本 Phase 实现者不同上下文的独立子代理。
   按下面四步走一次，预计 1 小时内：跑四条命令 2 分钟，读原件 40 分钟，
-  填九条表 10 分钟。观察者是同一子代理，判读者是另一个只读原件的上下文。
+  填九条表 10 分钟。
+  观察者是同一子代理，判读者是另一个只读原件的上下文。
 - **靠什么资源**：全用仓内与任务库已有的件，不需要用户再给任何输入。
   入口函数 `workflows/make-decision/scripts/entry-evaluation.mjs`；
   台账 `tools/cli/check-stage-steps.mjs`；方法与步骤表在 `workflows/make-decision/`；
@@ -82,7 +83,7 @@
   历史事件原件在任务库 `quality/evidence/` 下：入口返回、答复、审查、确认、交接。
   造不出来的不写成通过条件：真实页面效果、新一次真实用户答复都不在本 Phase。
 - **范围**：只证 make-decision 九条修复自己交付的效果。
-  不证页面（归 P8），不证采集器（归 P2），不证审查编排（归 P5）。
+  不证页面（归阶段8），不证采集器（归阶段2），不证审查编排（归阶段5）。
 - **怎么观察**：一次走查等于四条真命令加一张九条对照表。
   能重放的用真函数重放；不能重放的用户答复与收口事件，读真实不可变原件。
   证据落 `quality/evidence/build-code/2026-10-31-p6-walkthrough/`
@@ -98,7 +99,7 @@
 - 删「用户与下一消费者都确认能据此继续」：等于再要一次人工确认。
   改成下一消费者真读 15 步与固定名、命令退出 0，读得到就算接得住。
 
-1. **验收标准**：AC-C07-010 判一次真实走查里九条各自有没有效果。
+1. **验收标准**：验收10判一次真实走查里九条各自有没有效果。
    - **通过**：九条逐条有结论；其中至少 7 条当场观察到生效。
      分层的那条要分列哪层可、哪层不可，不许并成一句。
      读不回或分层受限的要归因清楚：工具缺陷就写谁修、为什么不现在改。
@@ -106,12 +107,13 @@
      台账、路由、停点三样要在原始输出里看得见，不能只在断言里成立。
    - **不通过**：九条只能靠断言成立；或为了凑数把读不到的写成生效。
    - **前置（不作完成条件）**：九组断言先红后绿、步骤数仍是 15、
-     清单与步骤表双向相等。它证明实现存在，不证明九条有效果。
+     清单与步骤表双向相等。
+     它证明实现存在，不证明九条有效果。
    - **本次结果**：8 条当场观察到生效、1 条部分可观察、0 条未生效、0 条观察不到。
      第 5 条在检查器修好后改记生效：包集合与 10 行清单都读回。
      第 6 条只到部分可观察：机读 gap 恒真、人读 partial 与集合差可用。
      档位 `available`；分层依据、缺陷与覆盖上限见第 4 槽用例 2、5 与第 6 槽。
-   - **不在此签的**：页面首判与任务档位由 P8 按规格判定器给，本节不代签。
+   - **不在此签的**：页面首判与任务档位由阶段8按规格判定器给，本节不代签。
 
 2. **场景**：一正两反，成本压到最低。
    - **正常**：按第 4 槽四条命令走一次，每条留原始输出与退出码。
@@ -123,14 +125,18 @@
    - 反向场景不另造样本文件：只读当前真实字节，或按上面的删行假设判。
 
 3. **环境与数据**：本机仓库工作树；node 与仓库内 vitest；数据全是真原件。
-   - **四条命令与退出码（2026-10-31 实测）**：
-     入口重放 `node …/w1-entry-route-replay.mjs` 退出 0；
-     台账 `node tools/cli/check-stage-steps.mjs --stage=make-decision --task-path=<任务目录>` 退出 0；
-     门禁 `node node_modules/vitest/vitest.mjs run tests/contract/make-decision-flow.test.mjs` 退出 0；
+   - **四条命令与退出码（2026-10-31 实测）**： 入口重放 `node …/w1-entry-route-replay.mjs` 退出 0；
+     台账
+     `node tools/cli/check-stage-steps.mjs --stage=make-decision --task-path=<任务目录>`
+     退出 0；
+     门禁
+     `node node_modules/vitest/vitest.mjs run tests/contract/make-decision-flow.test.mjs`
+     退出 0；
      清单 `node …/w4-runlist-check.mjs` 退出 0。
    - **数据**：方法正文、15 步步骤表、入口函数、检查器、契约测试；
      任务库里的入口返回原件、Talk 答复原件、方向审查原件、
-     确认原件与交接件。全部已在仓内或任务库内。
+     确认原件与交接件。
+     全部已在仓内或任务库内。
    - **谁提供**：材料由本 Phase 写主早先改定；事件原件由早先那次真实任务留下。
      本次走查不需要用户再提供任何东西。
    - **版本与来源**：走查头 `48a15f02`，2026-10-31 实读；步骤表 15 步。
@@ -191,7 +197,8 @@
 
 7. **承接**：结论记在机器块 `Done`、附录 E 与本次证据目录。
    原件：`06-walkthrough-ledger.json`（命令、退出码、哈希、九条结论）
-   与 `05-nine-rows.md`（九条对照表）。原发现处置在附录 C 与附录 D。
+   与 `05-nine-rows.md`（九条对照表）。
+   原发现处置在附录 C 与附录 D。
    下一消费者是步骤检查器：它继续只读步骤表，不因本 Phase 改退出语义。
    读者按九个固定名回读，拿 15 行清单与门禁原件。
    未签的部分在「这一 Phase 不签什么？」。
@@ -302,7 +309,8 @@
 - 三个任务串行：前两张卡改同一份正文与步骤表，同文件不同字段仍共享。
 - 第三张卡要用前两张卡定稿的步骤名，所以排在最后。
 - 十五个路径都由本 Phase 写字；两处后面还有写主，见索引的共享表。
-- 工具两件只由本 Phase 改；P12 不碰它们。
+- 工具两件只由本Phase改；
+  阶段12不碰它们。
 - 若步骤表与子流程的消费者报不一致：回本 Phase 修，不改子流程。
 
 - **读集**：方法正文、主步骤表、三张轻档表、决策日志模板两处、
@@ -540,7 +548,7 @@ node node_modules/vitest/vitest.mjs run tests/contract/make-decision-flow.test.m
 三张卡由同一位开发写手依次做完，没有跨 Phase 的并行写入。
 同文件不同字段仍共享：前两张卡都改正文与步骤表，按任务号串行。
 第三张卡依赖前两张卡定稿的步骤名，所以只能最后做。
-五个路径互不重叠，没有第二条协调路径。
+写入路径见本卡十五项清单，三张卡由同一写主串行，没有第二条协调路径。
 
 ## 怎么验证？
 
@@ -566,7 +574,7 @@ node node_modules/vitest/vitest.mjs run tests/contract/make-decision-flow.test.m
 独立修后门禁另有两条：
 `quality/tests/2026-10-29-071-p6-independent-fix-target.json` 为 34/34、退出 0；
 `quality/tests/2026-10-29-072-p6-independent-fix-adjacent.json` 为 12 项通过、
-72 项未选、退出 0。
+72项未选、退出0。
 
 完成条件：九条在一次真实走查里各有结论，其中至少 7 条当场观察到生效。
 读不回的要归因清楚：工具缺陷就写谁修、多久、怎么重判，不拿覆盖上限顶替。
@@ -617,15 +625,18 @@ sh quality/evidence/build-code/2026-10-31-p6-walkthrough/w0-walkthrough.sh
 
 - 步骤检查器继续只读步骤表；本 Phase 让它多读声明证据，退出语义不变。
 - 方法读者按九个固定名回读，材料作者不再重述九条。
-- 门禁与判据在「怎么验证？」；失败处置在「失败了怎么办？」。
-- 未签的部分在「这一 Phase 不签什么？」；执行事实在附录。
+- 门禁与判据在「怎么验证？」；
+  失败处置在「失败了怎么办？」。
+- 未签的部分在「这一 Phase 不签什么？」；
+  执行事实在附录。
 
 ## 这一 Phase 不签什么？
 
 不签页面验收，也不把静态契约当成页面通过。
 
 本卡承接的是材料读者可执行性，不是页面验收。
-这条验收由 P9 首判，P6 只交供件；页面七条验收由 P8 首判。
+材料可执行性的验收10由阶段12首判，阶段6与阶段9交供件。
+页面七条验收由阶段8首判。
 两者不互相代替，也不拿这里的走查替页面签档位。
 
 走查结论：九条里 8 条当场观察到生效，1 条部分可观察（第 6 条）。
@@ -651,7 +662,7 @@ Codex 0 读 26 未定，修后未重跑，所以不写全部通过。
 | 任务 1 | T015 |
 | 任务 2 | T016 |
 | 任务 3 | T017 |
-| 验收 1 | AC-C07-010 |
+| 验收 10 | AC-C07-010 |
 | 功能需求（任务 1） | FR-C07-023 |
 | 功能需求（任务 2） | FR-C07-025 |
 | 功能需求（任务 3） | FR-C07-028 |
@@ -683,7 +694,8 @@ Codex 0 读 26 未定，修后未重跑，所以不写全部通过。
 - 来源：当前主会话采用独立契约reader c8562066-a30f-459c-87ea-4989c37c86a5
   的回源建议并允许本Phase澄清；原计划owner会话不可用，不冒其答复。
   独立建议原ref：
-  quality/evidence/build-code/2026-10-29-020-p6-independent-contract-reader-advice.md；
+  quality/evidence/build-code/2026-10-29-020-p6-independent-contract-reader-advice.md
+  ；
   原件由主会话保存。
 - 处置：已实读独立针对TCR建议
   quality/evidence/build-code/2026-10-29-021-p6-tcr-independent-advice.md，
@@ -708,7 +720,8 @@ OCR仍消费036冻结包，未取消/重发。
   模板/标准方法不需改，原checker/旧冻结tests/AC/FR/方向不改。
 - 受影响case：entry调研决策与新增大纲前真实提问/等待/四项记录/第3步回读；
   ledger台账与新增分析三值/原包state及复杂模块调研格对齐；15行runlist；
-  checkSynced/checkManifest反例。原27项保留，唯一既有期望调整如下。
+  checkSynced/checkManifest反例。
+  原27项保留，唯一既有期望调整如下。
 - 改前：syncContracts[9] action为“每包一行，状态只取已答／事实可定／待你定”，
   把分析三值误当包state。
   改后：“每包一行，五类分析答复只取已答／事实可定／待你定”；
@@ -723,14 +736,16 @@ OCR仍消费036冻结包，未取消/重发。
   真实runStageStepsCheck输入完整八格且包state已收敛应complete=true，
   改待你定/待收敛应false，恢复应true；不以模拟状态替真人语义。
 - TCR理由与不弱化：独立Spec#2及Standards#1明确要求同步受影响断言并保原consumer；
-  替换的是错误落点，不删三值义务，增加行为正反证明。Spec#1/#3增强原缺失覆盖。
+  替换的是错误落点，不删三值义务，增加行为正反证明。
+  Spec#1/#3增强原缺失覆盖。
   独立依据就是本轮039/040正式建议，按主会话授权不重开正常审查；
   不同于原建议的额外契约更改先回核。
 - 处置起点为四条待修复，原文唯一ref不可变；
   现四条均已按原建议实施修复，060目标RED→063同命令GREEN，
   064全卡34项通过、066必要相邻命名case通过。
   逐条开发处置原ref：
-  /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/2026-10-29-051-p6-review-fix-dispositions.md；
+  /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/2026-10-29-051-p6-review-fix-dispositions.md
+  ；
   原独立测试071/072与原Spec056/Standards057已明确回报，四条分源fixed，
   原始审查/TCR/RED仍保留。OCR033已终态，仅针对修前036对象且保provider失败与覆盖限制；
   开发最后确认不冒独立质量通过，未stage/commit。
@@ -739,7 +754,8 @@ OCR仍消费036冻结包，未取消/重发。
 
 - 无open finding：Spec#1/#2/#3与Standards#1分别fixed，
   处置原ref：
-  /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/2026-10-29-061-p6-final-finding-dispositions.json。
+  /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c07-real-page-verification-20261028/quality/evidence/build-code/2026-10-29-061-p6-final-finding-dispositions.json
+  。
 - 无未解释测试失败：017/019/020与060为预期目标RED；
   后续GREEN及独立071/072通过，原失败不删改。
 - 实现就绪、待独立审测：T015/T016/T017行为与本Phase自带判据已就位；
@@ -752,7 +768,8 @@ OCR仍消费036冻结包，未取消/重发。
   原ref：quality/evidence/norm-deltas/2026-10-29-002-p6-norm-sync-no-change.json。
   无新增重复规范、索引或经验条目。
 - 交付边界：当前无stage/commit/push/merge/close；等待主会话串行Git轮次，
-  仅提交本Phase七路径。P1/P8其它dirty不纳本Phase。
+  仅提交本Phase七路径。
+  P1/P8其它dirty不纳本Phase。
 
 ### 附录 E — 执行事实与证据指针（原样保留，人可跳过）
 
@@ -815,6 +832,33 @@ AC-C07-010：unavailable（2026-10-29 时点；真实走查未做；九条效果
   原始输出 `01`～`04`、`exit-codes.json` 与三条可重放命令源。
 - 不改九条实现、不改检查器；三条缺陷与附带缺口记在九条表，交 owner。
 
+### 细节审查前检查这次补验到了哪一层？
+
+本次只补验三个受控样例中，读者能否对各自完整的一个候选工作包作出正确下一动作。
+样例是受控输入，不是新的真人答复或真实任务推进。
+独立测试先冻结源预期；匿名消费者只收到本例材料与机器报告，没有预期或结论标签。
+
+待答样例停在细节审查前，并给出要向原方向负责人提出的问题草稿。
+已答样例虽被机器记为五列格式未判，消费者仍据真实答复准备有限的整体细节审查输入。
+与原选择冲突的样例虽显示 `complete=true`，消费者仍停下并给出具体返修稿。
+可继续只到输入准备；
+正式投递、跨任务来源合法读取、生产实施与预算校准均未验证。
+
+消费者实际模型未知，新上下文不证明模型来源独立。
+真实参考任务只做只读可行性检查；九个包的二十项机读缺口不等于二十件事没做。
+原八条生效、一条部分可观察的历史结论保持。
+至少七条当场观察到生效，仍是原验收要求，不改分母。
+工具退出读数只作执行事实，效果结论据源预期与实际下一动作逐例比较。
+源预期、输入绑定、命令回执及比较见任务库原件：
+`quality/tests/2026-11-01-183-p6-effect-source-comparison.json`。
+匿名消费者原答见任务库原件：
+`quality/tests/2026-11-01-182-p6-effect-consumer-message.md`。
+这段有限供件已由原独测、两轴受影响审查和原作者最后确认。
+最后确认见任务库
+`quality/evidence/build-code/2026-11-01-104-p6-effect-final-originals-consumed.json`
+。
+该件只覆盖本段三种候选，不重签其余旧正文或全部九条的新效果。
+
 ### 附录 F — 规则锚、冻结读数与原参考（原样保留，人可跳过）
 
 - 规则锚：decision-log.md「决定 39 — 范围取方法加模板，实现在 C07 做」
@@ -844,7 +888,9 @@ AC-C07-010：unavailable（2026-10-29 时点；真实走查未做；九条效果
 
 ### 本 Phase 契约
 
-- **全局规格**：`specs/workflowhub-ui-frontend-c07-real-page-verification-20261028/spec.md#实现设计（全局权威）`；原指针 `spec.md#5-范围与非目标` 已在同轮 spec 重写后失效，逐字见附录 F。
+- **全局规格**： `specs/workflowhub-ui-frontend-c07-real-page-verification-20261028/spec.md#实现设计（全局权威）`
+  ；
+  原指针 `spec.md#5-范围与非目标` 已在同轮 spec 重写后失效，逐字见附录 F。
 - **写入集**：
   | 1 | `workflows/make-decision/SKILL.md` |
   | 2 | `workflows/make-decision/steps.json` |
@@ -865,15 +911,18 @@ AC-C07-010：unavailable（2026-10-29 时点；真实走查未做；九条效果
 - **消费者**：tools/cli/check-stage-steps.mjs
 - **gate_cmd**：`node node_modules/vitest/vitest.mjs run tests/contract/make-decision-flow.test.mjs`
 - **oracle**：ORACLE-P6-MAKE-DECISION-FLOW
-- **evidence_path**：`quality/evidence/build-code/2026-10-31-p6-walkthrough/06-walkthrough-ledger.json`
+- **evidence_path**： `quality/evidence/build-code/2026-10-31-p6-walkthrough/06-walkthrough-ledger.json`
   （含四条命令、退出码、哈希与九条结论；旧指针 070 件见附录 E，保留只读）
-- **覆盖 AC**：AC-C07-010（对象是材料读者可执行性；P9 首判，P6 只交供件）
+- **覆盖 AC**：AC-C07-010（对象是材料读者可执行性；P12首判，P6/P9交供件）
 - **STOP**：见「失败了怎么办？」的风险一条与停点三条，逐条写处置与回原 owner。
-- **Done**：P6/T015/T016/T017 完成（仅本 Phase 方法交付与 AC 供件范围）；原独立审查、测试及后到窄差异回报已汇合，原 writer 最后确认四项齐。
+- **Done**：P6/T015/T016/T017 完成（仅本 Phase 方法交付与 AC 供件范围）；
+  原独立审查、测试及后到窄差异回报已汇合，原 writer 最后确认四项齐。
   档位 `available` 只在上述覆盖范围内成立。
   九条走查结论不变：8 条当场生效、1 条部分可观察（第 6 条），不为凑 9/9 改口。
-  历史实施时 13 条开发源与纠正件 13/13 一致；当前 12/13 同字节，唯一 run-checks 材料路径差异归后续 P7，原两方已按精确差异与真实 CLI 原件窄确认。
-  目标有效发现无 open，无未解释的目标测试失败；历史 456 通过／4 项写集外 setup 失败未到目标，未做同输入基线对照，不称全绿或已证 baseline fail。
+  历史实施时 13 条开发源与纠正件 13/13 一致；
+  当前 12/13 同字节，唯一 run-checks 材料路径差异归后续 P7，原两方已按精确差异与真实 CLI 原件窄确认。
+  目标有效发现无 open，无未解释的目标测试失败；
+  历史 456 通过／4 项写集外 setup 失败未到目标，未做同输入基线对照，不称全绿或已证 baseline fail。
   历史保全：处置件 003 与回执 007 保留只读，纠正件另存 008-p6-final-correction；
   正式 OCR 原件仍是 008-build-code-phase-p6，状态 available-with-failures，
   AG 失败与覆盖限制保留，修后未重跑，不写全部通过。
@@ -886,5 +935,11 @@ AC-C07-010：unavailable（2026-10-29 时点；真实走查未做；九条效果
   机器只报范围与原件在场，做没做对由独立判定，留痕不自动记完成。
   本条是本任务对方法的实施验证，不替真实 C06 补做步骤。
   主仓校验器对当前材料 exit 0、errors=0；工作树自带的同名旧版会假报，别用它。
-  实施已由 b4af1c1dbed944ac24a091118f8f92805f3cc28b 交付；本次仅单卡最后确认，未作 Git/测试/provider/close。
-  最后确认原件：`quality/evidence/build-code/2026-11-01-058-p6-late-writer-final-confirmation.json`；本轮规范核对具名无变化：`quality/evidence/norm-deltas/2026-11-01-002-p6-late-final-norm-sync-no-change.json`。
+  实施已由 b4af1c1dbed944ac24a091118f8f92805f3cc28b 交付；
+  本次仅单卡最后确认，未作 Git/测试/provider/close。
+  最后确认原件：
+  `quality/evidence/build-code/2026-11-01-058-p6-late-writer-final-confirmation.json`
+  ；
+  本轮规范核对具名无变化：
+  `quality/evidence/norm-deltas/2026-11-01-002-p6-late-final-norm-sync-no-change.json`
+  。

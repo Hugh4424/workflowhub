@@ -990,6 +990,10 @@ test('ORACLE-COCKPIT-GEN new-shape materials keep packages, changes, decisions, 
  expect(kind('task').map(object=>object.source_id)).toEqual(expect.arrayContaining(['T001','T002']));
  expect(kind('risk').map(object=>object.source_id)).toEqual(expect.arrayContaining(['OI-001','RISK-01','OPEN-01']));
  expect(kind('req').map(object=>object.source_id)).toEqual(expect.arrayContaining(['R-001','R-002']));
+ const rendered=await renderAnswerPage(f),shown=data(rendered.htmlPath);
+ expect(shown.objects.map(o=>o.id)).toEqual(built.pageData.objects.map(o=>o.id));
+ expect(shown.objects.filter(o=>o.kind==='risk').map(o=>o.source_id)).toEqual(expect.arrayContaining(['OI-001','RISK-01','OPEN-01']));
+ expect(shown.rings).toEqual(JSON.parse(readFileSync(f.reportPath)).rings);
 });
 test('ORACLE-COCKPIT-GEN new-shape missing mappings stay visible as named gaps', async () => {
  const f=await fixture('new-shape-missing'),tpl=readFileSync('skills/spec-plan/templates/phase-template.md','utf8');
@@ -1017,7 +1021,9 @@ test('ORACLE-COCKPIT-GEN new-shape missing mappings stay visible as named gaps',
 ## 后来改了什么，原件在哪里？
 变更 1 最小决定：过程事实改为原件指针；受影响落点 工作包 1。
 `;
- writeFileSync(join(f.material,'spec.md'),spec);writeFileSync(join(f.material,'decision-log.md'),decision);
+ const issueLabels=Array.from({length:23},(_,i)=>`未决 ${i+1}`);
+ const issueTable='\n## 还有什么没定，谁来定？\n| 未决 | 问题与来源 | 状态与处置 | 下一步 |\n| --- | --- | --- | --- |\n'+issueLabels.map(label=>`| ${label} | 来源仍待核实 | unknown；保留缺口 | 原owner补来源 |`).join('\n')+'\n';
+ writeFileSync(join(f.material,'spec.md'),spec);writeFileSync(join(f.material,'decision-log.md'),decision+issueTable);
  rmSync(join(f.material,'phases/P1-真实交付.md'),{force:true});
  writeFileSync(join(f.material,'phases/index.md'),block('index')+'\n');
  writeFileSync(join(f.material,'phases/P1-行为结果.md'),block('phase-behavior').replace('- **任务编号**：T001\n','')+'\n');
@@ -1028,4 +1034,35 @@ test('ORACLE-COCKPIT-GEN new-shape missing mappings stay visible as named gaps',
  expect(reasons).toContain('决定 1');
  expect(reasons).toContain('变更 1');
  expect(reasons).toContain('任务 1');
+ const originalFacts=readFileSync(join(f.taskPath,'facts.jsonl'));
+ const rendered=await renderAnswerPage(f),shown=data(rendered.htmlPath);
+ expect(shown.objects).toHaveLength(built.pageData.objects.length);
+ expect(new Set(shown.objects.map(o=>o.id)).size).toBe(shown.objects.length);
+ expect(shown.objects.every(o=>/^[A-Za-z0-9][A-Za-z0-9_.:-]*$/.test(o.id))).toBe(true);
+ const missingIssues=shown.objects.filter(o=>o.kind==='risk'&&o.src.some(s=>s.path===join(f.material,'decision-log.md')));
+ expect(missingIssues.map(o=>o.source_id)).toEqual(issueLabels);
+ for(const issue of missingIssues){
+  expect(issue.title).toBe(`缺：${issue.source_id} 的 OI 编号映射`);
+  expect(issue.status).toEqual({text:'缺',tone:'unk'});
+  expect(issue.src[0].loc).toBe(issue.source_id);
+ }
+ const missingSpec=shown.objects.filter(o=>o.kind==='risk'&&o.src.some(s=>s.path===join(f.material,'spec.md')));
+ expect(missingSpec.map(o=>o.source_id)).toEqual(['风险 1','未决 1']);
+ expect(missingSpec.map(o=>o.status)).toEqual([{text:'缺',tone:'unk'},{text:'缺',tone:'unk'}]);
+ for(let i=0;i<shown.objects.length;i++){
+  const {id:beforeId,...before}=built.pageData.objects[i],{id:afterId,contentDigest,...after}=shown.objects[i];
+  expect(after).toEqual(before);
+ }
+ const sourceEnds=(objects,edges)=>{const byId=new Map(objects.map(o=>[o.id,JSON.stringify([o.kind,o.source_id,o.src])]));return edges.map(edge=>edge.map(id=>byId.get(id)));};
+ expect(sourceEnds(shown.objects,shown.edges)).toEqual(sourceEnds(built.pageData.objects,built.pageData.edges));
+ expect(sourceEnds(shown.objects,shown.sideEdges)).toEqual(sourceEnds(built.pageData.objects,built.pageData.sideEdges));
+ const firstBytes=readFileSync(rendered.htmlPath),firstNodes=readFileSync(rendered.nodesPath);
+ const again=await renderAnswerPage(f),second=data(again.htmlPath);
+ expect(second.objects.map(o=>o.id)).toEqual(shown.objects.map(o=>o.id));
+ expect(second.objects.filter(o=>o.kind==='risk').map(o=>[o.source_id,o.title,o.src,o.status])).toEqual(shown.objects.filter(o=>o.kind==='risk').map(o=>[o.source_id,o.title,o.src,o.status]));
+ expect(again.history).toHaveLength(2);
+ expect(readFileSync(again.history[0])).toEqual(firstNodes);expect(readFileSync(again.history[1])).toEqual(firstBytes);
+ expect(shown.rings).toEqual(JSON.parse(readFileSync(f.reportPath)).rings);
+ expect(readFileSync(join(f.taskPath,'facts.jsonl'))).toEqual(originalFacts);
+ expect(Object.keys(JSON.parse(readFileSync(rendered.nodesPath))).sort()).toEqual(['generated_at','nodes','schema','source_fingerprint']);
 });
