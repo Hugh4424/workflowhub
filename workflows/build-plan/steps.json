@@ -11,7 +11,9 @@
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-read-current-materials",
+      "requires_user_reply": false
     },
     {
       "step_id": 2,
@@ -22,7 +24,9 @@
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-conditional-light-research",
+      "requires_user_reply": false
     },
     {
       "step_id": 3,
@@ -33,7 +37,9 @@
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-spec-clarify",
+      "requires_user_reply": true
     },
     {
       "step_id": 4,
@@ -44,7 +50,9 @@
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-spec-specify",
+      "requires_user_reply": false
     },
     {
       "step_id": 5,
@@ -55,7 +63,9 @@
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-conditional-ui-readiness",
+      "requires_user_reply": false
     },
     {
       "step_id": 6,
@@ -66,7 +76,9 @@
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-spec-plan",
+      "requires_user_reply": false
     },
     {
       "step_id": 7,
@@ -81,7 +93,9 @@
           "kind": "test",
           "uri_or_path": "quality/tests/"
         }
-      ]
+      ],
+      "method_anchor": "step-testing-system-blueprint",
+      "requires_user_reply": false
     },
     {
       "step_id": 8,
@@ -96,7 +110,9 @@
           "kind": "test",
           "uri_or_path": "quality/tests/"
         }
-      ]
+      ],
+      "method_anchor": "step-test-routing-advisor",
+      "requires_user_reply": false
     },
     {
       "step_id": 9,
@@ -111,7 +127,9 @@
           "kind": "review",
           "uri_or_path": "quality/reviews/"
         }
-      ]
+      ],
+      "method_anchor": "step-merged-review",
+      "requires_user_reply": false
     },
     {
       "step_id": 10,
@@ -122,7 +140,9 @@
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-main-agent-disposes-findings",
+      "requires_user_reply": false
     },
     {
       "step_id": 11,
@@ -133,7 +153,9 @@
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-final-spec-analyze",
+      "requires_user_reply": false
     },
     {
       "step_id": 12,
@@ -144,7 +166,9 @@
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-closeout",
+      "requires_user_reply": true
     }
   ]
 }

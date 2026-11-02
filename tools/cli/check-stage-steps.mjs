@@ -5,6 +5,10 @@ import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, statSyn
 import { resolve, dirname, relative, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runFinalChainCheck } from '../../runtime/task/final-chain-runner.mjs';
+import { openTask } from '../../runtime/task/task-handle.mjs';
+import { execFileSync } from 'node:child_process';
+import { phaseFilesFromIndex } from '../../runtime/task/material-workspace.mjs';
+import { phaseTaskCards } from '../../runtime/stage/stage-content-contracts.mjs';
 
 // Step definitions belong to the installed workflowhub package, never to the
 // project being checked. Walk up from this file so nested install layouts also
@@ -127,21 +131,34 @@ function evidenceRootFor(ref, taskPath, materialRoot) {
   if (/^(?:quality\/|facts\.jsonl$|main-agent-cost\.md$)/.test(ref)) return { label: '任务', root: taskPath };
   return { label: '材料', root: materialRoot };
 }
-function readDeclaredEvidence(entry, { taskPath, materialRoot, shared = false } = {}) {
+function readDeclaredEvidence(entry, { taskPath, materialRoot, shared = false, identity = {}, namedOnly = false, taskId, source, stepSlug } = {}) {
   const kind = typeof entry?.kind === 'string' ? entry.kind : null;
   const raw = typeof entry?.uri_or_path === 'string' ? entry.uri_or_path.trim() : '';
   const sharedNote = shared ? '；同 stage 多步共用，通用留痕不归本步' : '';
   if (!raw) return { kind, ref: raw, present: false, reason: 'evidence 条目缺 uri_or_path' };
+  if (kind === 'task_original_ref') return { kind, ref: raw, present: false, reason: '现有 facts 的本步具名原件 ref 未取得；逻辑槽不是固定物理文件名' };
   if (FACTS_EVIDENCE(raw)) return { kind: kind ?? 'phase_task_facts', ref: raw, present: null, reason: 'facts 补充通道' };
   const hashAt = raw.indexOf('#');
   const ref = hashAt >= 0 ? raw.slice(0, hashAt) : raw;
   const anchor = hashAt >= 0 ? raw.slice(hashAt + 1).trim() : '';
-  if (!ref || ref.includes('\\') || ref.split('/').some(part => part === '..' || part === '.')) {
+  if (!ref || isAbsolute(ref) || ref.includes('\0') || ref.includes('\\') || ref.split('/').some(part => !part || part === '..' || part === '.')) {
+    // A trailing slash is a historical directory declaration, not a named
+    // current original. Preserve its navigation meaning below.
+    if (!(ref.endsWith('/') && !isAbsolute(ref) && !ref.includes('\0') && !ref.includes('\\') && ref.slice(0, -1).split('/').every(part => part && part !== '..' && part !== '.'))) {
     return { kind, ref: raw, present: false, reason: '原件路径越界或为空' };
+    }
   }
   const { label, root } = evidenceRootFor(ref, taskPath, materialRoot);
   if (typeof root !== 'string' || !root) return { kind, ref: raw, present: false, reason: `${label}根未取得，无法回读原件` };
   const named = resolve(root, ref);
+  // Check each component before opening it, so an ancestor symlink cannot
+  // cause a metadata probe outside the authenticated source root.
+  let cursor = root;
+  for (const component of ref.split('/').filter(Boolean)) {
+    cursor = join(cursor, component);
+    try { if (lstatSync(cursor).isSymbolicLink()) return { kind, ref: raw, present: false, reason: '原件路径含符号链接，可能越界' }; }
+    catch (error) { return { kind, ref: raw, present: false, reason: `原件不可读：${error.message}` }; }
+  }
   try { if (lstatSync(named).isSymbolicLink()) return { kind, ref: raw, present: false, reason: '原件是符号链接' }; }
   catch { return { kind, ref: raw, present: false, reason: `原件不存在：${ref}` }; }
   let path;
@@ -155,6 +172,7 @@ function readDeclaredEvidence(entry, { taskPath, materialRoot, shared = false } 
   catch (error) { return { kind, ref: raw, present: false, reason: `原件不可读：${error.message}` }; }
   if (stat.isDirectory()) {
     if (anchor) return { kind, ref: raw, present: false, reason: '目录不能带节锚点' };
+    if (namedOnly || Object.keys(identity).length) return { kind, ref: raw, present: false, reason: '目录仅作导航；本步具名当前原件未取得' };
     const present = directoryHasEvidence(path);
     return { kind, ref: raw, present, reason: present ? '目录内有非空原件' + sharedNote : '目录内没有非空原件' };
   }
@@ -163,6 +181,20 @@ function readDeclaredEvidence(entry, { taskPath, materialRoot, shared = false } 
   try { body = readFileSync(path, 'utf8'); }
   catch (error) { return { kind, ref: raw, present: false, reason: `原件不可读：${error.message}` }; }
   if (!anchor) {
+    // Identity is checked on structured task originals only when the caller
+    // supplies a current execution identity. Material prose is not a run receipt.
+    if (label === '任务' && ref.endsWith('.json') && Object.keys(identity).length) {
+      let original;
+      try { original = JSON.parse(body); }
+      catch { return { kind, ref: raw, present: false, reason: '身份原件不是有效 JSON' }; }
+      if (original.task_id !== undefined && original.task_id !== taskId) return { kind, ref: raw, present: false, reason: '原件属于另一任务' };
+      if (original.source !== undefined && source && original.source !== source || original.step_slug !== undefined && stepSlug && original.step_slug !== stepSlug) return { kind, ref: raw, present: false, reason: '原件属于另一步骤' };
+      for (const [key, expected] of Object.entries(identity)) {
+        const actual = key === 'phase' ? original.phase ?? original.phase_id : original[key];
+        if (actual !== expected) return { kind, ref: raw, present: false,
+          reason: `${key}=${actual ?? '未取得'}，当前为 ${expected}；旧或缺身份原件不算当前证据` };
+      }
+    }
     const present = body.trim().length > 0;
     return { kind, ref: raw, present, reason: present ? '文件非空' + sharedNote : '文件为空' };
   }
@@ -261,8 +293,39 @@ function levelAuthority(decision) {
   const collect = pattern => lines.map(line => ({ line: line.trim(), match: pattern.exec(line) })).filter(item => item.match).map(item => ({ line: item.line, level: LEVEL_NAMES[item.match[1]] }));
   return { body, choices: collect(choice), recommendations: collect(recommendation) };
 }
-export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = repository, stage } = {}) {
+// The producer tags accepted human originals as record_ref. Its diagnostic
+// notes also carry refs, but are never completion proofs.
+function completedHumanOriginals(row) {
+  return (row?.basis ?? []).filter(proof => proof.evidence_level === 'record_ref' && proof.conclusion === 'completed');
+}
+
+export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = repository, stage, step: selectedStep, card = false, runId, phase, commit, skipGap = null, inputErrors = [] } = {}) {
   const errors = [];
+  errors.push(...inputErrors);
+  const executionIdentity = { ...(runId ? { run_id: runId } : {}), ...(phase ? { phase } : {}), ...(commit ? { commit } : {}) };
+  let manifest = {}, factRows = [];
+  try {
+    manifest = JSON.parse(readFileSync(resolve(taskPath, 'task.json'), 'utf8'));
+    factRows = readFileSync(resolve(taskPath, 'facts.jsonl'), 'utf8').split(/\r?\n/).filter(line => line.trim()).map(line => JSON.parse(line));
+  } catch (error) { errors.push(`当前任务事实不可读：${error.message}`); }
+  // Existing facts carry the original ref and its source/step binding. Read
+  // that original, rather than copying appendRecord bytes to a fixed name.
+  const originalsFor = (name, source, slug) => factRows
+    .filter(row => row.task_id === manifest.task_id)
+    .flatMap(row => Array.isArray(row.evidence?.value) ? row.evidence.value : [])
+    .filter(entry => entry.source === source && entry.step_slug === slug && typeof entry.ref === 'string')
+    .map(entry => ({ kind: 'task_original', uri_or_path: entry.ref }));
+  const currentPhase = phase ?? factRows.find(row => row.task_id === manifest.task_id && row.stage === 'build-code')?.phase_progress?.phase_id;
+  let phaseRef;
+  if (currentPhase && materialRoot) {
+    try {
+      const index = readFileSync(resolve(materialRoot, 'phases/index.md'), 'utf8');
+      phaseRef = [...index.matchAll(/phases\/(P[1-9][0-9]*[^`\s|()[\]]*\.md)/g)]
+        .map(match => `phases/${match[1]}`).find(ref => new RegExp(`^phases/${currentPhase}(?:[-.]|$)`).test(ref));
+    } catch (error) { errors.push(`当前 Phase 指针不可读：${error.message}`); }
+  }
+  if ((selectedStep !== undefined || card) && !stage) errors.push('当前卡/按步检查需要显式 --stage');
+  if (selectedStep !== undefined && (!Number.isSafeInteger(selectedStep) || selectedStep < 1)) errors.push('--step 必须为正整数');
   const unmatchedInvalidations = [];
   let evidence = [];
   let producerLimits = [];
@@ -342,6 +405,10 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
       const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
       if (manifest.stage_slug !== name || !Array.isArray(manifest.steps) || !manifest.steps.length) throw Error('invalid steps manifest');
       definitions = manifest.steps;
+      if (selectedStep !== undefined && stage === name) {
+        if (!definitions.some(item => item.step_id === selectedStep)) errors.push(`${name} 不存在步骤 ${selectedStep}`);
+        definitions = definitions.filter(item => item.step_id <= selectedStep);
+      }
     } catch (error) {
       const detail = `${manifestPath}: ${error.message}`;
       errors.push(`读不到步骤定义：${source}（${detail}）；步骤是否完成未判定，不按「未留痕」报告`);
@@ -379,19 +446,30 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
     const producerFailure = producerDefinitionError(producerLimits, name);
     const steps = definitions.map(step => {
       const mapping = /判定消费[：:]\s*([^；;\n]+)[；;]\s*原件[：:]\s*([^。\n]+)/.exec(step.observable_result ?? '');
-      const declared = Array.isArray(step.completion_evidence) ? step.completion_evidence : [];
-      const checks = declared
+      const declared = (Array.isArray(step.completion_evidence) ? step.completion_evidence : []).map(entry => entry.uri_or_path === 'phases/{phase}.md'
+        ? { ...entry, uri_or_path: phaseRef ?? entry.uri_or_path } : entry);
+      const dynamic = originalsFor(name, source, step.step_slug);
+      const checks = [...declared.filter(entry => !dynamic.length || entry.kind !== 'task_original_ref'), ...dynamic]
         .filter(entry => !FACTS_EVIDENCE(entry?.uri_or_path))
-        .map(entry => readDeclaredEvidence(entry, { taskPath, materialRoot, shared: (declaredCounts.get(entry.uri_or_path) ?? 0) > 1 }));
+        .filter((entry, index, all) => all.findIndex(item => item.uri_or_path === entry.uri_or_path) === index)
+        .map(entry => readDeclaredEvidence(entry, { taskPath, materialRoot, shared: (declaredCounts.get(entry.uri_or_path) ?? 0) > 1, identity: executionIdentity,
+          namedOnly: card || selectedStep !== undefined, taskId: manifest.task_id, source, stepSlug: step.step_slug }));
       const factsDeclared = declared.some(entry => FACTS_EVIDENCE(entry?.uri_or_path));
       const original = checks.find(check => check.present === true) ?? null;
+      const declaredPhysical = declared.filter(entry => entry.kind !== 'task_original_ref' && !FACTS_EVIDENCE(entry.uri_or_path));
+      const declaredPhysicalMissing = declaredPhysical.length > 0 && !checks.some(check => check.present === true && declaredPhysical.some(entry => entry.uri_or_path === check.ref));
       const identity = { stage: name, step_id: step.step_id, step_slug: step.step_slug, source,
         evidence_location: mapping?.[2] ?? null, consumer: mapping?.[1] ?? null,
-        evidence: checks };
+        evidence: checks, result: step.observable_result, method_anchor: step.method_anchor ?? '方法', requires_user_reply: step.requires_user_reply === true };
       if (producerFailure) return { ...identity, judgment: '未判定', state: 'unavailable', basis: [],
         gap: `读不到步骤定义：证据生产者未能从材料仓读取 ${source}；本条不是「步骤没做」` };
       const row = evidence.find(row => row.source === source && row.step_slug === step.step_slug);
       const producerState = row?.state;
+      // A current trace cannot lend its identity to another original that the
+      // producer completed. The very same basis ref must pass current checks.
+      const producerCurrent = !Object.keys(executionIdentity).length || completedHumanOriginals(row).some(proof =>
+        typeof proof.ref === 'string' && checks.some(check => check.ref === proof.ref && check.present === true));
+      const currentProducerState = producerCurrent ? producerState : 'unavailable';
       const stale = invalidated.some(record => record.scope === name
         && (record.slugs.has(step.step_slug) || record.slugs.has(String(step.step_id))
           || record.ranges.some(range => step.step_id >= range.from && step.step_id <= range.to)));
@@ -403,10 +481,10 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
         gap: `${source}#${step.step_slug} 缺判定消费/原件标记` };
       // Only the existing final-chain producer can establish completion. A
       // readable artifact is trace, never a completion verdict.
-      if (producerState === 'completed') return { ...identity,
+      if (producerState === 'completed' && producerCurrent) return { ...identity,
         judgment: '已完成', state: 'completed', basis: row?.basis ?? [],
-        gap: original ? '' : `既有 producer 判完成；声明原件未取得：${checks.map(check => `${check.ref || '（缺路径）'}（${check.reason}）`).join('；') || '步骤表未声明'}；完成事实来自 producer，不证明本步语义` };
-      if (producerState === 'not_applicable') return { ...identity,
+        gap: original && !declaredPhysicalMissing ? '' : `既有 producer 判完成；声明原件未取得：${checks.filter(check => check.present !== true).map(check => `${check.ref || '（缺路径）'}（${check.reason}）`).join('；') || '步骤表未声明'}${original ? `；已沿实际 ref 读取 ${original.ref}` : ''}；完成事实来自 producer，不证明本步语义` };
+      if (producerState === 'not_applicable' && producerCurrent) return { ...identity,
         judgment: '不适用', state: 'not_applicable', basis: row?.basis ?? [],
         gap: '既有 producer 判不适用；本检查不另作完成判断' };
       const producerGap = (row?.limits ?? []).join('；');
@@ -417,7 +495,7 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
         ? `声明的原件不可回读：${checks.map(check => `${check.ref || '（缺路径）'}（${check.reason}）`).join('；')}`
         : '本步未取得可回读声明原件；机检未读到不证明未执行；自述不代原件';
       return { ...identity,
-        judgment: '未留痕', state: producerState ?? 'unavailable', basis: row?.basis ?? [],
+        judgment: '未留痕', state: currentProducerState ?? 'unavailable', basis: row?.basis ?? [],
         gap: `${missing}；facts 补充通道${factsDeclared ? (row ? `未判完成${producerGap ? `（${producerGap}）` : ''}` : '缺行') : '未声明'}` };
     });
     if (producerFailure) errors.push(`读不到步骤定义：${source} 的证据生产者读取失败（${producerFailure}）；留痕状态未判定`);
@@ -621,22 +699,163 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
   const invalidationLimit = unmatchedInvalidations.length
     ? `未知失效范围未判：${unmatchedInvalidations.join('、')}；未清除任何步骤的既有 producer 完成事实；该事实只作历史，不证明当前失效范围完成`
     : null;
-  return { stages: reports, modules, convergence, level, supersede: { source: 'decision-log.md', invalidated: invalidatedList }, errors,
+  const skipGaps = [];
+  // Ordinary immutable task originals are the sole source, never a cursor or
+  // a second step ledger. Completed producer facts can resolve a named gap.
+  try {
+    const dir = resolve(taskPath, 'quality/evidence');
+    const files = existsSync(dir) ? readdirSync(dir).filter(file => /-step-gap\.json$/.test(file)) : [];
+    const manifest = files.length ? JSON.parse(readFileSync(resolve(taskPath, 'task.json'), 'utf8')) : null;
+    const task = files.length ? openTask(resolve(taskPath), { projectName: manifest.project_name, taskId: manifest.task_id }) : null;
+    for (const file of files) {
+      const ref = `quality/evidence/${file}`;
+      const gap = JSON.parse(task.readRecord(ref));
+      if (gap.task_id !== manifest.task_id || (stage && gap.stage !== stage)) continue;
+      const row = evidence.find(row => row.source === `workflows/${gap.stage}/steps.json` && row.step_slug === gap.step_slug);
+      const stale = invalidated.some(record => record.scope === gap.stage
+        && (record.slugs.has(gap.step_slug) || record.slugs.has(String(gap.step_id))
+          || record.ranges.some(range => gap.step_id >= range.from && gap.step_id <= range.to)));
+      const gapIdentity = Object.fromEntries(['phase', 'commit', 'run_id'].filter(key => typeof gap[key] === 'string' && gap[key]).map(key => [key, gap[key]]));
+      const resolved = !stale && row?.state === 'completed' && Object.keys(gapIdentity).length > 0
+        && completedHumanOriginals(row).some(proof => {
+          if (typeof proof.ref !== 'string') return false;
+          try {
+            const original = JSON.parse(task.readRecord(proof.ref));
+            return original.task_id === gap.task_id && original.source === row.source && original.step_slug === gap.step_slug
+              && original.conclusion === 'completed'
+              && Object.entries(gapIdentity).every(([key, value]) => (key === 'phase' ? original.phase ?? original.phase_id : original[key]) === value)
+              && Number.isFinite(Date.parse(original.created_at)) && Date.parse(original.created_at) > Date.parse(gap.created_at);
+          } catch { return false; } // Missing proof retains the gap, never clears it.
+        });
+      if (!resolved) skipGaps.push({ ...gap, evidence_ref: ref });
+    }
+  } catch (error) { errors.push(`跳过缺口不可读：${error.message}`); }
+  const currentStage = reports.find(row => row.stage === stage);
+  const current = selectedStep !== undefined
+    ? currentStage?.steps.find(row => row.step_id === selectedStep)
+    : currentStage?.steps.find(row => !['completed', 'not_applicable'].includes(row.state));
+  const currentCard = card && current ? {
+    stage, step_id: current.step_id, step_slug: current.step_slug,
+    result: current.result ?? '按本步方法留下具名原件；未取得不能冒完成。',
+    entry: `先读本步方法；核对前置步骤具名原件与当前 ${runId ? `run ${runId}` : phase ? `Phase ${phase}` : commit ? `commit ${commit}` : '身份（尚未提供）'}，缺项如实记录。`,
+    stop: `${current.requires_user_reply ? '需要真实用户答复；未答停在本步。' : '缺少本步必需输入时停止该路径，保留原因、负责人和恢复条件。'}可读或 exit 0 不代表完成；按本步判据独立核对。`,
+    paths: [...new Set([`workflows/${stage}/SKILL.md#${current.method_anchor}`, current.source,
+      (current.evidence.find(item => item.present === true) ?? current.evidence.find(item => item.ref && !item.ref.endsWith('/') && item.kind !== 'task_original_ref'))?.ref].filter(Boolean))],
+    evidence: current.evidence.length ? current.evidence : [{ ref: current.evidence_location, present: false, reason: '尚未取得具名原件' }],
+    self_check: `node tools/cli/check-stage-steps.mjs --stage=${stage} --step=${current.step_id} --card --task-path=${taskPath}${materialRoot ? ` --material-root=${materialRoot}` : ''}${runId ? ` --run-id=${runId}` : ''}${phase ? ` --phase=${phase}` : ''}${commit ? ` --commit=${commit}` : ''}`,
+    requires_user_reply: current.requires_user_reply,
+  } : null;
+  if (currentCard) {
+    const readings = currentCard.paths.map(ref => {
+      const [file, anchor] = ref.split('#');
+      const root = file.startsWith('workflows/') ? repoRoot : evidenceRootFor(file, taskPath, materialRoot).root;
+      const checked = readDeclaredEvidence({ kind: 'reading_input', uri_or_path: file }, { taskPath, materialRoot: root, namedOnly: true });
+      if (!checked.present) return { ref, observed: false, bytes: null, reason: checked.reason };
+      try {
+        let body = readFileSync(resolve(root, file), 'utf8');
+        if (anchor) {
+          const lines = body.split(/\r?\n/);
+          const start = lines.findIndex(line => line.includes(`id="${anchor}"`));
+          if (start >= 0) {
+            const next = lines.findIndex((line, index) => index > start && /^(?:[0-9]+\. |#{1,6} )/.test(line));
+            body = lines.slice(start, next < 0 ? lines.length : next).join('\n');
+          } else {
+            body = sectionAfterHeading(body, anchor);
+            if (!body) throw Error('当前节不可读');
+          }
+        }
+        return { ref, observed: true, bytes: Buffer.byteLength(body), scope: anchor ? '本步节原文' : '所列文件原文' };
+      } catch (error) { return { ref, observed: false, bytes: null, reason: error.message }; }
+    });
+    currentCard.reading_baseline = {
+      paths: readings, path_count: readings.length, bytes: readings.reduce((sum, item) => sum + (item.bytes ?? 0), 0),
+      complete: readings.every(item => item.observed),
+      skips: { value: null, reason: '卡只能读到缺口原件，未观测任务全部实际跳步；由 Phase 执行原件提供' },
+      rework: { value: null, reason: '返工不是步骤持久状态；由本 Phase 实际失败与修复原件提供' },
+      phase_duration: { value: null, reason: 'Phase 尚未终结；由最终开工/结束事实计算，当前不造时长' },
+      limits: '本次实际读取的卡所列文件或节字节；不代表人类阅读耗时、全部前置或改善幅度。',
+    };
+  }
+  if (card && current && selectedStep === undefined) currentStage.steps = currentStage.steps.filter(row => row.step_id <= current.step_id);
+  return { stages: reports, ...(card ? { card: currentCard } : {}), skip_gap: skipGap,
+    closeout: { state: skipGaps.length || errors.some(error => error.startsWith('跳过缺口不可读')) ? 'incomplete' : 'unavailable', gaps: skipGaps,
+      reason: '收口必须逐项消费未清缺口；无跳过缺口也不证明步骤或阶段完成。' },
+    modules, convergence, level, supersede: { source: 'decision-log.md', invalidated: invalidatedList }, errors,
     limits: ['只报告映射、声明原件的可读性、既有 producer 判定与模块结构；不证明步骤完成或模块语义。未留痕只表示机检未读到声明原件，不证明步骤未执行；无持久原件的方法交既有 decision/GLOSSARY/ADR 原件由独立读者判断。失效步骤只按当前 decision-log 行读取，删行不重建历史。', ...(invalidationLimit ? [invalidationLimit] : []), ...producerLimits] };
+}
+
+function validateSkipIdentity(options, task) {
+  if (options.runId) throw Error('当前 run 身份 unavailable：没有现役运行编号权威，改用已核 Phase 或真实提交');
+  const cwd = options.materialRoot;
+  if (typeof cwd !== 'string') throw Error('当前身份 unavailable：需要真实材料根定位工作区');
+  const git = args => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  const root = git(['rev-parse', '--show-toplevel']);
+  if (options.commit) {
+    const head = git(['rev-parse', '--verify', 'HEAD^{commit}']);
+    if (!/^[a-f0-9]{40,64}$/.test(options.commit) || options.commit !== head) throw Error('提交身份 unavailable：必须等于真实工作区 HEAD');
+  }
+  if (options.phase) {
+    const rows = task.readRecord('facts.jsonl').split(/\r?\n/).filter(line => line.trim()).map(line => JSON.parse(line));
+    const cursor = rows.find(row => row.task_id === task.identity.taskId && row.record_kind === 'stage' && row.stage === 'build-code')?.phase_progress;
+    if (!cursor || cursor.phase_id !== options.phase) throw Error('Phase 身份 unavailable：未读到相同的既有当前 phase_progress');
+    const index = readFileSync(resolve(cwd, 'phases/index.md'), 'utf8');
+    const ref = phaseFilesFromIndex(index).find(ref => ref.match(/^phases\/(P[1-9][0-9]*)(?:-|\.md$)/)?.[1] === options.phase);
+    if (!ref || !readDeclaredEvidence({ uri_or_path: ref }, { taskPath: task.taskPath, materialRoot: cwd, namedOnly: true }).present) throw Error('Phase 身份 unavailable：当前索引或物理 Phase 不可读');
+    if (!phaseTaskCards(readFileSync(resolve(cwd, ref), 'utf8')).some(card => card.taskId === cursor.task_id || card.heading === cursor.task_id)) throw Error('Phase 身份 unavailable：当前任务不在物理 Phase');
+    const materialsHead = git(['-C', root, 'log', '-1', '--format=%H', '--', relative(root, resolve(cwd, 'spec.md')), relative(root, resolve(cwd, 'phases'))]);
+    if (!materialsHead || cursor.phases_head !== materialsHead) throw Error('Phase 身份 unavailable：既有游标与当前材料提交不符');
+  }
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const options = {};
+  const inputErrors = [];
   let json = false;
+  let skipStep, reason, owner, recovery;
   for (const arg of process.argv.slice(2)) {
     if (arg === '--json') { json = true; continue; }
-    const match = /^--(task-path|material-root|repo-root|stage)=(.+)$/.exec(arg);
-    if (!match) { console.error(`不支持参数：${arg}`); process.exitCode = 0; continue; }
-    options[{ 'task-path': 'taskPath', 'material-root': 'materialRoot', 'repo-root': 'repoRoot', stage: 'stage' }[match[1]]] = match[2];
+    if (arg === '--card') { options.card = true; continue; }
+    const match = /^--(task-path|material-root|repo-root|stage|step|run-id|phase|commit|skip-with-gap|reason|owner|recovery)=(.+)$/.exec(arg);
+    if (!match) { inputErrors.push(`不支持参数：${arg}`); continue; }
+    const [ , key, value] = match;
+    if (key === 'skip-with-gap') skipStep = Number(value);
+    else if (key === 'reason') reason = value.trim();
+    else if (key === 'owner') owner = value.trim();
+    else if (key === 'recovery') recovery = value.trim();
+    else options[{ 'task-path': 'taskPath', 'material-root': 'materialRoot', 'repo-root': 'repoRoot', stage: 'stage', step: 'step', 'run-id': 'runId', phase: 'phase', commit: 'commit' }[key]] = key === 'step' ? Number(value) : value;
   }
+  if (skipStep !== undefined) {
+    options.step = skipStep;
+    if (!reason || !owner || !recovery) inputErrors.push('显式跳过需要 reason（原因）、owner（负责人）和 recovery（恢复条件）');
+    if (!options.phase && !options.commit && !options.runId) inputErrors.push('跳过身份 unavailable：需要当前 --phase、--commit 或 --run-id；交阶段主会话恢复');
+    if (!options.stage || !stages.includes(options.stage) || !Number.isSafeInteger(skipStep) || skipStep < 1) inputErrors.push('跳过需要有效阶段和正整数步骤');
+    if (!inputErrors.length) {
+      try {
+        const before = runStageStepsCheck(options);
+        const row = before.stages.find(row => row.stage === options.stage);
+        const step = row?.steps.find(row => row.step_id === skipStep);
+        if (!step) throw Error('当前步骤定义不可读，不能记录跳过');
+        const manifest = JSON.parse(readFileSync(resolve(options.taskPath, 'task.json'), 'utf8'));
+        const task = openTask(resolve(options.taskPath), { projectName: manifest.project_name, taskId: manifest.task_id });
+        if (row.definition !== 'available' || before.errors.some(error => /当前任务事实不可读|读不到步骤定义|当前 Phase 指针不可读/.test(error))) throw Error('本步或身份来源 unavailable，不能记录跳过');
+        validateSkipIdentity(options, task);
+        const gap = { task_id: manifest.task_id, stage: options.stage, step_id: skipStep, step_slug: step.step_slug,
+          reason, owner, recovery, ...(options.phase ? { phase: options.phase } : {}),
+          ...(options.commit ? { commit: options.commit } : {}), ...(options.runId ? { run_id: options.runId } : {}), created_at: new Date().toISOString() };
+        const path = await task.appendRecord({ dir: 'quality/evidence', slug: 'step-gap', ext: 'json', bytes: JSON.stringify(gap, null, 2) + '\n' });
+        options.skipGap = { ...gap, evidence_ref: relative(task.taskPath, path) };
+        // Choosing the next card is a local reply only; no progress is written.
+        const full = runStageStepsCheck({ ...options, step: undefined, card: false });
+        options.step = full.stages.find(row => row.stage === options.stage)?.steps.find(row => row.step_id > skipStep)?.step_id ?? skipStep;
+      } catch (error) { inputErrors.push(`跳过未记录：${error.message}`); }
+    }
+  }
+  options.inputErrors = inputErrors;
   const report = runStageStepsCheck(options);
   if (json) console.log(JSON.stringify(report, null, 2));
   else {
+    if (report.card) console.log(JSON.stringify(report.card, null, 2));
+    console.log(`未清跳过缺口：${JSON.stringify(report.closeout)}`);
     console.log('判定：已完成＝既有 producer 判完成；已留痕＝声明原件可读但不判完成；待重做＝方向变更列出的失效步骤。');
     for (const row of report.stages) {
       if (row.definition === 'unavailable') console.log(`${row.stage} 读不到步骤定义（${row.source}）：${row.definition_error}；步骤是否完成未判定，不按「未留痕」报告`);
