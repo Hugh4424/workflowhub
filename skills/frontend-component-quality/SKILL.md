@@ -7,6 +7,12 @@ description: 为 UI phase 维护组件、状态、ViewModel 与 CSS/token 的可
 
 公开入口只有本技能。它输出 **Component Quality Map**，并核对目标项目当前源码中的真实消费者；真实盘点缺失时明确记 unknown/unavailable；不替代 frontend-testing，不创建新 stage、第二 workflow、第二 entrypoint、独立 evidence store 或质量 gate；它是 no stage、no gate 的质量 lens。
 
+## 触发与实现前就绪
+
+计划和实施先合看用户原始需求、项目真实前端库存与消费者、已接受计划或实际差异；页面、路由、组件或样式改动且有真实消费者时，实际执行 [实现就绪](references/implementation-readiness.md)。纯后端、纯文档或已证实无前端消费者时记 `N/A` 和依据，不建空表；消费者未知保 `unknown`，查明前停受影响路径，不当作无消费者。React/Next 规则只在技术栈确认时适用。
+
+UI 实施前按参考逐项核规范、资产、设计输入、检查命令与测试数据，填写来源、缺口和处置；记录缺失时先补记录。依据处置先补、继续或只停受影响路径。实现时继续使用下方 Map 和真实消费者，检查与独立审查沿各自方法留原件；读取参考或填表不等于完成消费或验收。
+
 ## Component Quality Map
 
 每个 UI phase 记录：
