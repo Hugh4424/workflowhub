@@ -5,22 +5,23 @@ description: 根据已确认方向分两步形成可维护的任务组 PRD，展
 
 # Spec PRD
 
-读者：build-prd 协调者与 PRD 内容作者。
-读完要能：定位本文件的责任、写作动作、来源与失败边界。
+读者：build-prd 协调者与 PRD 内容作者；读完要能定位本文件的责任、写作动作、来源与失败边界。
 
 spec-prd 是规划 prd.md 的唯一正文作者。build-prd 协调条件工作、展示与真实答复；其它阶段/子任务只读该 PRD，不代写它。独立调用可仅返回正文，尚未落盘就不能声称写盘、发布、归档或物理授权。
 
 ## 输入和写面
 
-本节回答：从哪里读取已确认方向，本技能能写哪份正文。
+从当前已确认的决定和必要原始来源读取方向，只写已授权的一份 `specs/<task-id>/prd.md`。
 
 读取当前已明确确认的决定及必要原始来源。引用外部来源时写清版本与回原文的直达链接；版本/签名类事实须实读依赖文件并写出处，取不到写 `unverified` 与具体来源缺口。写大纲/地图或按既有模板展开详情时，推断就地紧跟一句“这是推断”及依据，不分小节、不加新符号约定；不要求所有断言都外部引用。来源的文件路径、人读版本/节定位用于说明依据，不作四 revision/hash 认证；缺母决定、冲突来源或真实确认就返回具体缺口。只写已授权的一个 `specs/<task-id>/prd.md`，不写当前 spec/Phase/index、任务状态、review verdict 或 Git 事实。
 
 ## 正常两步内容方法
 
-写 PRD 的大纲/地图或详情前，先读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一正文，再按下列两步写作；消费者是 PRD 作者、后续任务作者与用户。缺源如实 `unavailable`，不复制规范。
+写 PRD 的大纲/地图或详情前，先读取 `skills/material-writing/SKILL.md` 的「材料写作标准（唯一）」。
+再读 `skills/spec-specify/SKILL.md` 的 Q01–Q13 唯一正文，然后按下列两步写作。
+消费者是 PRD 作者、后续任务作者与用户；缺源如实 `unavailable`，不复制规范。
 
-本节回答：先展示什么、在收到什么真实答复后展开详情。
+先展示任务地图，收到真实地图答复后再展开详情卡。
 
 1. 先写 outline/map：从已确认的完整用户旅程和需求整理结果导向任务地图。卡片按可独立观察的用户结果划分，说明责任 consumer、oracle、owner、共享定义、准备/实现/验收/合并四类依赖、排除理由。每条原需求有卡片落点或用户明确选择的排除；技术层列表不等于完整旅程覆盖。地图能审查后先展示并等待真实地图答复，未答/拒绝仍为 draft，不提前写详情。
 2. 用户确认实际展示地图后展开 detail cards：重读当前决定、来源、地图与答复的含义，变化影响已确认范围时先处理差异。UI 分支展示所有范围内页面、完整流程组、状态和 viewport 的真实设计，说明漏项；展示前的答复不算 design confirmation。non_ui 写事实理由，仅跳过 UI 分支。完成适用准备后按 [prd-template.md](templates/prd-template.md) 写共享定义和完整任务卡。
@@ -35,19 +36,19 @@ spec-prd 是规划 prd.md 的唯一正文作者。build-prd 协调条件工作�
 
 ## 最终展示确认
 
-本节回答：怎样记录用户对实际详情稿的选择。
+记录用户对实际详情稿的真实答复与文件/节路径，只有明确同意才写 final。
 
 详细 PRD 写成完整、可审查草稿后展示给用户，记录其对该展示稿的真实答复和实际文件/节路径。只有明确同意的内容可写 final。拒绝、未答、取消、确认的是另一稿、缺来源或冲突都保持 draft，列具体缺口与受影响范围。普通同方向修文不重问已有授权；改变已确认方向/范围/设计行为/验收，先准备更改稿再取得真实选择。没有四 revision 或 displayed_draft_hash 绑定，不把展示确认变成开发/交付许可证。
 
 ## 设计来源缺口
 
-本节回答：来源不足时保留什么缺口与责任。
+设计来源不足时保留具体缺口、影响与原 owner，不编责任人，也不推迟未受影响的规划。
 
 沿 `skills/project-norm-init/SKILL.md` 的「规范职责」定位本动作适用专业源；只读各类真实路径/稳定节、version/作用域、owner/consumer 与规则，给实际缺源/stale/冲突/不可读项列影响与原 owner，单类缺口不吞其它类。旧 Design.md/Experience.md 仅作真实历史/可信条款输入，不要求两份旧 active 文件；缺适用来源时记录真实任务级设计基线，给原规范责任卡明确 consumer、oracle、责任与缺口，不编责任人、任务号或视觉结果。依赖尚缺真实设计输入的部分保 draft，未受影响的已授权规划可继续；风险接受、提示词 acknowledgement 不等于真实设计或最终确认。
 
 ## 任务卡与子任务
 
-本节回答：每张卡如何保持完整，子任务如何消费最小范围。
+每张卡保留全部 16 字段并只写增量，子任务只消费自身最小读取集与必要共享定义。
 
 每张卡保留模板全部16字段：结果/consumer、范围、流程/状态、FR、AC及失败判据、oracle、准备/实现/验收/合并依赖、共享资源冲突与集成责任、来源/设计、局部风险、可后置技术项、最小读取集和五阶段开工说明。shared definitions 只写一次，用稳定标题/anchor 引用。
 
@@ -55,17 +56,19 @@ spec-prd 是规划 prd.md 的唯一正文作者。build-prd 协调条件工作�
 
 ## 维护与交接
 
-本节回答：变更承诺与物理动作分别留下什么事实。
+变更承诺先留前后差异与真实选择，物理动作留实际发生的事实，两类分开记录。
 
 归档小修保留依据与影响；承诺有实质变化先展示前后差异并取得真实选择，再写变更说明和在途影响。保留历史决定、确认、审查、测试和 Git/物理事实；新任务记录采用的来源，现有在途任务不自动覆盖。交接分别说明规划、材料可用、开发、质量、附件和物理动作事实；阶段末的人读交接按 `skills/stage-handoff/SKILL.md` 方法执行，不创建第五材料、状态机或新 gate。
 
+写完材料，按 `skills/material-writing/SKILL.md` 的「写完自检」逐条核；核不过就改，不交出去。
+
 ## 可搬运调用边界
 
-本节回答：独立内容调用能说什么、不能冒充什么。不伪造 WorkflowHub identity、用户答复、map 或 final confirmation、写盘、发布、归档、provider 成功、host invocation、Git 结果或物理授权。No second dispatcher or writer, review gate or physical delivery controller; build-prd continues to coordinate the existing author.
+独立内容调用只返回正文，不伪造 WorkflowHub identity、用户答复、map 或 final confirmation、写盘、发布、归档、provider 成功、host invocation、Git 结果或物理授权。No second dispatcher or writer, review gate or physical delivery controller; build-prd continues to coordinate the existing author.
 
 ## 编号写作规则
 
-本节回答：如何让任务卡完整又不重复。这是写作指引，不是质量门。
+每卡每字段只写增量，共享定义只写一次并用稳定锚点引用，任务卡因此既完整又不重复。这是写作指引，不是质量门。
 
 1. 每卡每字段只写增量；保留全部 16 字段，用结果、依据、例外与风险的顺序组织。
 2. 所有字段里的共享定义只写一次，用稳定标题/anchor 引用。
@@ -75,7 +78,7 @@ spec-prd 是规划 prd.md 的唯一正文作者。build-prd 协调条件工作�
 
 ## 补充材料
 
-本节回答：原始决定、确认与证据到哪里查。按模板导航和具名原件引用读取；不把共享材料复制为第二份权威。
+原始决定、确认与证据回当前 `decision-log.md`、真实答复原件和具名证据路径查；按模板导航与原件引用读取，不复制共享材料。
 
 创建或改写 agent 方法时，读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一规范；保原步骤、条件、权限、失败强度和受保护字面，缺源如实 unavailable，不复制规范。
 
@@ -85,4 +88,7 @@ User Stories 吸收 mattpocock/skills 固定 commit `b0618bc436ad893b3c5e84e55fb
 
 ## 同仓方法依赖
 
-`skills/spec-specify/SKILL.md`、`skills/stage-handoff/SKILL.md`、`skills/project-norm-init/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。
+`skills/material-writing/SKILL.md` 是本方法唯一写作标准来源。
+`skills/spec-specify/SKILL.md`、`skills/stage-handoff/SKILL.md` 按上文实际条件读取。
+`skills/project-norm-init/SKILL.md` 按上文实际条件读取。
+搬运时需同时提供或由调用者提供可读原件。

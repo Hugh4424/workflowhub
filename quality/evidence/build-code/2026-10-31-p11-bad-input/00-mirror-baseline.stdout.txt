@@ -1,0 +1,11 @@
+
+ RUN  v2.1.9 /private/tmp/p11-badinput-20261031
+
+ ✓ tests/contract/acceptance-plan.test.mjs (75 tests) 61ms
+ ✓ tests/contract/n11-plan-quality.test.mjs (19 tests) 223ms
+
+ Test Files  2 passed (2)
+      Tests  94 passed (94)
+   Start at  08:38:37
+   Duration  348ms (transform 28ms, setup 0ms, collect 57ms, tests 285ms, environment 0ms, prepare 56ms)
+

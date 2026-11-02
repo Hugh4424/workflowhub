@@ -15,6 +15,8 @@ build-code按真实changed files确认frontend/UI后覆盖默认态及loading/em
 
 ## build-code 实际消费
 
+页面、路由、组件、样式发生改动或任务声明 UI 交付（不确定默认适用）时，按[页面审计判据](references/page-audit.md)执行逐项审计，用[形状校验器](scripts/check-page-audit.mjs)核结构，结构合法不代表页面通过。
+
 主会话按changed files选一次路线；沿project-norm-init「规范职责」读适用规则，同份原证据关联UI适用、各源路径/稳定节、version/作用域、owner/consumer/census及AC。缺源/stale/冲突各给影响/原owner；单design_revision、旧Design.md/Experience.md不代全部来源，旧源仅有据历史/可信条款输入。业务状态/权限/取消恢复取当前spec/API，token/API引用原源；执行结果不回写规范。消费handler实件，未运行官方handler非前置；Skill声明/解析非执行，未触发/触发未执行/已执行分记。
 
 页面经isolated-browser-qa受控链调用一次，保service instance、API/DTO contract、隔离profile/invocation、viewport、console/network/focus/overflow、视觉/a11y/performance oracle、cleanup。fixture-only仅组件；服务身份不符/取消/browser或cleanup失败保failed/blocked/unknown，不用默认值改绿。

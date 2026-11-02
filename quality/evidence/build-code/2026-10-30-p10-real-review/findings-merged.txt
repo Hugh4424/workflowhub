@@ -1,0 +1,85 @@
+#1 [major] materials/02-draft_spec.md:1507 | providers: kimi/pro | roles: red
+  issue: 规格把三个 UI 事实源都判为 false 并选择 CLI 验收对象，但本包明确把这三个源标为 missing or malformed。未知被误转成非 UI，导致 Web 五项及真实缺口被跳过。
+  root_cause: 把 UI 事实缺失误当成非 UI 的否定证据，而不是保留 unknown 并补齐来源。
+  recommendation: 恢复 UI 适用性为 unknown，保留 Web 五项并逐项写明缺失事实、提供者与恢复条件；只有三个真实来源都核实为非 UI 后才能选择 CLI 分支。
+
+#2 [major] requirements/phases/P5-审计编排入口与规范消费证明.md:464 | providers: kimi/pro | roles: red
+  issue: workspace、service 等身份值只是调用方声明并被原样复制，没有与实际对象比较。声明了错误工作区或服务时，身份字段和传播测试仍可全绿，但报告不会报验收 2 要求的具体不一致。
+  root_cause: 设计把身份元数据传递误当成身份核验，缺少声明值与真实观察值的比较步骤。
+  recommendation: 在采集前由网关或页面目标取得实际 workspace、service、route、state，与声明值逐项比较；不符时按 IDENTITY_MISMATCH 退出且不写报告，并在输出中分别保留声明值和观察值。
+
+#3 [major] requirements/phases/P12-逐需验收与真实完成.md:508 | providers: kimi/pro | roles: red
+  issue: 真实写作效果的通过条件强制读者指出一处漏洞。材料若完整正确、没有可指出的漏洞反而会失败；指出一个无关瑕疵却可以满足该条件，不能证明材料可被正确接手。
+  root_cause: 把“必须发现缺陷”误作独立理解和证伪能力的代理指标，偏离 AC-C07-010 的可用性目标。
+  recommendation: 改为要求读者准确复述目标、依赖与否定边界，实际执行首个安全动作，并能拒绝预置的错误完成候选；真实发现的缺陷照常回修，但不设置必须发现缺陷的条件。
+
+#4 [major] requirements/phases/P12-逐需验收与真实完成.md:93 | providers: kimi/pro | roles: red
+  issue: 写作效果正例只要求 decision-log、spec 与 Phase 片段，未要求完整独立 Phase 集、P12 和纯指针索引。该场景可以通过，但 AC-C07-010 所要求的完整作者交付仍不存在。
+  root_cause: P12 把完整四类材料的真实消费缩成了局部片段试写，验收对象与已接受判据不一致。
+  recommendation: 将正例改为完整交付 decision-log、spec、独立 Phase 集（含 P12）与纯指针索引，由原规划 owner 合稿，再由另一名独立下游读者实际接手并执行安全动作。
+
+#5 [major] requirements/phases/P12-逐需验收与真实完成.md:523 | providers: kimi/pro | roles: red
+  issue: P12 的门禁明确排除 build-code 方法正文现有的红项，但该文件正是本 Phase 修改完成语义的核心消费者。其余检查与场景可以全绿，而 build-code 的既有契约仍然失败。
+  root_cause: 把已知失败的受影响检查移出验证集，而不是将其作为必须回修并重验的交付缺口。
+  recommendation: 把 build-code 相关契约测试纳入 P12 验证并保留当前红项；修复后按同一命令重跑。若暂不能修复，P12 必须保持未完成，不能用排除红项的方式形成兼容绿。
+
+#6 [major] requirements/phases/P12-逐需验收与真实完成.md:509 | providers: codex/sol | roles: red
+  issue: 写作效果验收把“说不出任何漏洞”直接判失败。即使材料完整正确、独立读者能正确接手并实际执行，也必须找出问题才能通过；修复后材料若已无该漏洞，复验又会失败。这会把发现数量变成质量门，诱导制造问题或反复换读者。
+  root_cause: 把“能拒绝错误的完成候选”的检测能力，替换成了“当前材料必须存在可报告漏洞”的结果要求，偏离决定 44 的实际接手与效果目标。
+  recommendation: 用预置错误候选验证读者能否拒绝错误，用当前材料的正确理解与实际操作验证可用性。当前材料允许无发现；修后复验应确认原问题消失及受影响面正常，不要求再发现漏洞。
+
+#7 [major] requirements/phases/P12-逐需验收与真实完成.md:93 | providers: codex/sol | roles: red
+  issue: 写作效果正例允许提交 decision-log、spec 与 Phase 的“片段”，并按片段中是否长出验收标准判通过。作者可以只写一个简单子题，避开当前 C07 完整来源中的依赖、后续更正与冲突，仍满足这条正例；这无法验证承诺的完整材料接手能力。
+  root_cause: P12 将完整作者消费缩成片段试写，未把 AC-C07-010 对完整输入、四类候选、合稿和下游实际消费的义务落实到效果正例。
+  recommendation: 把该正例改为消费当前 C07 完整输入，实际交付决定、规格、P12 与纯指针索引候选，由原规划 owner 合稿，再让另一独立读者执行相关动作。片段试写只记录其局部证明范围。
+
+#8 [major] requirements/phases/P2-真实采集与失败语义.md:458 | providers: kimi/pro | roles: blue
+  issue: 非删除类：五个身份值只作为声明复制进报告，缺少与实际对象的对照。编排器仅按 route 选择页面目标，因此错工作区、错服务、错对象版本不会因声明值本身被发现，验收 2 的人为不一致用例可能假绿。
+  root_cause: 设计把“声明身份”当成了“已核身份”。决定基线的需求 26 要求错工作区、服务、源或状态能报具体不一致；当前只实现了 route 目标匹配和声明值透传，没有为其余身份字段建立观察来源。
+  recommendation: 复用现有网关、静态服务健康检查和钉版哈希，对实际 URL、route、state、workspace、service 与 object_version 做最小比对，不新增认证框架。无法取得观察来源的字段必须让验收 2 保持未完成，而不是允许仅凭声明值通过。
+
+#9 [major] requirements/phases/P8-全AC终验.md:655 | providers: kimi/pro | roles: blue
+  issue: 非删除类：验收 1 的离线判定器要求九个子项都满足 `c.raw` 为真，既排除了合法的未测或不适用结果，也会拒绝真实数值 0。执行者只能伪造原始值，或让合法结果被误判失败。
+  root_cause: 判定器把“有原始结果或未覆盖理由”错误简化成“每项都有 truthy 原始值”，没有沿四态分别定义证据要求，也没有区分真实零值与缺值。
+  recommendation: 按状态写断言：通过的适用子项必须有原始值和采集引用；未测、不适用子项必须有对应理由和恢复条件。原始值应检查字段是否存在及类型是否合法，不能用 truthiness；明确允许有证据的数值 0。
+
+#10 [major] requirements/phases/P8-全AC终验.md:463 | providers: kimi/pro | roles: blue
+  issue: 非删除类：P8 在 P2、P5、P7 已交回后再次修改生产浏览器网关，却只运行新增的验收测试，没有安排对既有采集与编排消费者的受影响回归。可选 facts 的接入若在共享守卫、会话或恢复路径上引入回归，会在最终验收前失去既有保证。
+  root_cause: 共享文件的写主顺序只有前向交付，没有为后写者建立反向消费者复验。P8 同时是生产改动者和最终验收者，其门禁没有覆盖先前 Phase 的合同。
+  recommendation: 较小的做法是把这两项可选 facts 扩展前移到 P2，在 P5、P7 消费前完成。若必须留在 P8，则在七行档位定案前增加 P2 采集器和 P5 编排器的具名回归，并由独立消费者复验；不需要新增 Phase。
+
+#11 [major] requirements/phases/P12-逐需验收与真实完成.md:523 | providers: kimi/pro | roles: blue
+  issue: 非删除类：P12 修改 `workflows/build-code/SKILL.md`，却以“现有红项”为由把该文件的契约测试排除在门禁之外；同时已知阶段契约形状不兼容仍未形成具体交付前置。这样可以在自身写入面仍有已知失败时完成 P12。
+  root_cause: 验证范围绕开了已知失败，而不是先解决失败。P12 又禁止自己修改 runtime 和测试，却没有把所需兼容修复落实成有 owner、有先后、有恢复判据的前置交付。
+  recommendation: 在 P12 开工前列出阶段契约 owner 的兼容交接：提供新形状读法或完成合入，并用真实公开入口证明可读。将受影响的 build-code 契约测试纳入 P12 门禁；若现有红项与本改动无关，也要先由独立测试归因并由原 owner 闭环，不能直接过滤掉。
+
+#12 [major] requirements/phases/P12-逐需验收与真实完成.md:91 | providers: kimi/pro | roles: blue
+  issue: 非删除类：真实写作效果的预写场景只要求新作者交出 decision-log、spec 与 Phase 片段，场景 3 又退化为只读材料，均未覆盖 AC-C07-010 所要求的完整作者消费。即使场景全绿，也不能证明独立作者能交付决定、规格、P12 与纯指针索引候选。
+  root_cause: 验收场景把完整作者产物缩成了片段与读回，复用了较弱的冷读证据，未沿用作者开工契约要求的“真实新 Task、完整四件材料、另一独立读者实际动作”链路。
+  recommendation: 复用 P9 的完整作者消费作为最小场景：给独立作者同一份真实新 Task 输入，不预给设计答案，要求交出 decision-log、spec、P12 与纯指针索引四件候选；再由另一位读者对原需求、写集、前置和失败恢复逐项定位，并执行一个真实、无生产副作用的首步。
+
+#13 [major] requirements/phases/P11-去字面断言.md:463 | providers: kimi/pro | roles: blue
+  issue: 非删除类：P11 用于重签 P9 的命令只跑七个旧测试文件，漏掉当前 P9 门禁中的三个公开入口与材料工作区测试。该回执不能支持“P9 现行门禁已重跑”的结论，后续 P12 会继承未验证的公开写入口。
+  root_cause: 邻接命令保留了 P9 扩写集之前的七文件子集，没有随当前 P9 的 `gate_cmd` 更新。规格要求的重签对象是 P9 当前门禁，而不是任意受影响子集。
+  recommendation: 把 P11 的 P9 邻接命令替换为 P9 当前完整 `gate_cmd`，补跑 `light-material-set.test.mjs`、`material-workspace.test.mjs` 与 `zero-machine-gate-advancement.test.mjs`，并分别保存真实回执。无需新增测试或审查轮。
+
+#14 [minor] requirements/phases/P8-全AC终验.md:653 | providers: kimi/pro | roles: blue
+  issue: 非删除类：任务 2 声称一次重放验收 1、2、6 三个离线块，但门禁过滤条件只有 `AC-C07-1`。若另外两组按各自 AC 编号命名，它们会被过滤，任务级 GREEN 无法证明本卡分配的三条验收都已执行。
+  root_cause: 测试选择器只覆盖了三个独立验收块中的一个，命令与声明的覆盖范围不一致。
+  recommendation: 任务 2 改为运行整个验收测试文件，或使用能同时命中三组的过滤条件，例如 `-t "AC-C07-[126]"`，并在 GREEN 判定中分别列出三组的实际通过项。
+
+#15 [major] requirements/phases/P8-全AC终验.md:470 | providers: antigravity/flash | roles: blue
+  issue: P8 在正文改动表与机器块中将生产网关文件 skills/isolated-browser-qa/scripts/browser-qa-session.mjs 与 skills/isolated-browser-qa/SKILL.md 列为自身写入集（声称在原同步守卫内补可选固定数据以支持元素宽度、命中、动效与焦点采集），但在 P8 下属的四个任务卡（T021 至 T024）中，没有任何一张任务卡包含对这两个网关文件的实际修改路径、首改位置、命令或判定器（T021-T024 的文件/符号字段全为 tests/contract/page-audit-acceptance.test.mjs）。新读者执行 P8 时无法定位对网关文件的首改动作与恢复机制；同时，让全AC终验阶段（P8）作为跨批共享写者去修改已在 Phase 2 交付的生产/网关代码，违背了验收阶段独立只读验证的职责边界与合理性。
+  root_cause: 在规划 P8 真实环境用例执行时，为了满足元素宽度与焦点采集对固定数据的需要，临时将网关文件硬塞入 P8 的机器写入集，却既未在 P8 中拆解落实具体修改任务卡，也未将该网关数据采集能力归位到采集阶段（P2）。
+  recommendation: 将 skills/isolated-browser-qa/scripts/browser-qa-session.mjs 和 skills/isolated-browser-qa/SKILL.md 移出 P8 的写入集。若网关同步守卫与元素采集数据能力确需扩展，应在唯一的网关写主 Phase 2（真实采集与失败语义）中统一设计并提供；或者在 P8 中纯通过测试用例自身夹具/CDP 桩注入所需数据，保持 P8 纯粹只写验收测试与证据记录。
+
+#16 [major] requirements/phases/P4-报告接入与回修闭环.md:292 | providers: antigravity/flash | roles: blue
+  issue: P4 在写入集中包含 tests/fixtures/page-audit/controlled-work.html 且正文明确声明直接从 P3 的 tests/fixtures/page-audit/controlled-page.html 复制初始化，但在 Phase 索引与 P4 正文声明中，P4 依赖仅声明了 P1，漏掉了直接前置生产者 P3。更严重的是，P4 设定了受控缺陷演练跨批来回调用：P4 只完成初始化，九类检出留待第七批的 P8 运行后『再路由回本 Phase 最小改该源码』，但 P4 排在第四批且在 P8 开工前必须交付交回，导致 P4 与 P8 之间出现跨批次的时间循环耦合与共享写者悬空。
+  root_cause: 试图在一个线性的 Phase 依赖批次（P4 在 Batch 4，P8 在 Batch 7）中构造跨阶段的双向回修演练闭环，既漏掉了对输入夹具生产者 P3 的前置依赖声明，又混淆了 Phase 的交付终态与后续验收阶段的执行时机。
+  recommendation: 在 phases/index.md 与 P4 依赖中补充声明 P3（以合法取得 controlled-page.html）；同时解耦 P4 与 P8 的回修闭环依赖：P4 专注完成样例 A 的真实代码缺陷修复（SimWorkbench.tsx），而 controlled-work.html 的受控演练修复可在 P4 内部完成自验证或明确将修后基线随 P4 一同交付，避免在 P8 运行时反向要求已交回的 P4 重新开工写文件。
+
+#17 [major] requirements/phases/P12-逐需验收与真实完成.md:508 | providers: codex/sol | roles: blue
+  issue: 场景 3 把发现至少一处真实漏洞设为成功条件，把没有发现漏洞直接判失败或未取得。即使最终稿已修好、读者能正确接手，这套验法仍无法成功，反而诱导编造发现或不断返工。
+  root_cause: 把“能拒绝错误完成候选”的检出能力误写成“每次消费当前稿都必须发现错误”，混淆负控与正常输入的预期。
+  recommendation: 删除真实最终稿必须产出漏洞的条件。按 ADR-043、ADR-044，以读者实际完成接手动作及逐需对照判效果；检出能力沿用 P10 的具名缺陷样张单独验证，最终稿允许有明确覆盖限制的零发现。
+

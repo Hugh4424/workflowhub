@@ -1,0 +1,284 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-ui-frontend-c07-real-page-verification-20261028
+
+ ❯ tests/contract/phase-contract-prose.test.mjs (31 tests | 1 failed) 62ms
+   × validator records selected mode, current thirty-five task identities stay legal 31ms
+     → expected [ …(100) ] to deeply equal []
+ ✓ tests/contract/material-workspace.test.mjs (14 tests) 109ms
+ ✓ tests/contract/zero-machine-gate-advancement.test.mjs (5 tests) 5660ms
+   ✓ current ordinary facts have no machine completion permit > exposes corrupt actual facts JSON without accepting or replacing the original bytes 917ms
+   ✓ current ordinary facts have no machine completion permit > keeps a physically missing current material visible as not_ready rather than a completion diagnostic 928ms
+   ✓ current ordinary facts have no machine completion permit > rejects a retired aggregate/receipt progress input before modifying any task facts: {"interaction_aggregate":{"snapshot_tree":"ffffffffffffffffffffffffffffffffffffffff","decision":{}}} 930ms
+   ✓ current ordinary facts have no machine completion permit > rejects a retired aggregate/receipt progress input before modifying any task facts: {"receipts":{"interaction":"quality/evidence/interactions/retired.json"}} 950ms
+   ✓ current ordinary facts have no machine completion permit > records a legitimate navigation cursor without manufacturing stage completion or available quality 1933ms
+ ✓ tests/contract/reader-record.test.mjs (16 tests) 561ms
+ ✓ tests/contract/authoring-shape.test.mjs (5 tests) 6ms
+ ✓ tests/contract/authoring-contract.test.mjs (4 tests) 3ms
+ ✓ tests/contract/authoring-budget.test.mjs (4 tests) 156ms
+ ✓ tests/contract/spec-analyze-classes.test.mjs (3 tests) 2ms
+ ✓ tests/contract/light-material-set.test.mjs (19 tests) 31087ms
+   ✓ ORACLE-LIGHT-MATERIALS > writes and reads real light spec/Phase artifacts while material publication creates no stage facts 6431ms
+   ✓ ORACLE-LIGHT-MATERIALS > publishes a newly authored decision-log in worktree specs, never task storage 693ms
+   ✓ ORACLE-LIGHT-MATERIALS > keeps build-plan artifact ownership and rejects missing-index light Phase publication 1646ms
+   ✓ public Phase draft reader prose > ORACLE-P9-NO-METRIC publishes a complete short card without a prose length quota 662ms
+   ✓ public Phase draft reader prose > ORACLE-P9-NO-METRIC publishes a complete long card without a prose length quota 665ms
+   ✓ public Phase draft reader prose > ORACLE-P9-FENCED-HEADINGS keeps example Task and L2 headings inside a legal card 1163ms
+   ✓ public Phase draft reader prose > keeps symbolic link errors ahead of prose errors 676ms
+   ✓ public Phase draft reader prose > keeps hard link errors ahead of prose errors 624ms
+   ✓ public Phase draft reader prose > does not relax unsafe names or the make-decision index boundary 3716ms
+   ✓ public Phase draft reader prose > preserves legal drafts and rejects named field/example-only cards in make-decision 4713ms
+   ✓ public Phase draft reader prose > preserves legal drafts and rejects named field/example-only cards in build-plan 4626ms
+   ✓ public Phase draft reader prose > rejects a bad new named Phase without creating its material directory 672ms
+   ✓ public Phase draft reader prose > ORACLE-P9-NAMED-PHASE publishes a named build-plan Phase before its index exists 684ms
+   ✓ public Phase draft reader prose > ORACLE-P9-PUBLIC-PROSE rejects field-only cards before replacing make-decision material 1746ms
+   ✓ public Phase draft reader prose > ORACLE-P9-PUBLIC-PROSE rejects field-only cards before replacing build-plan material 1746ms
+ ❯ tests/contract/phase-prose.test.mjs (2 tests | 2 failed) 50ms
+   × phase prose: each of the current thirty-five cards has independent reader prose 30ms
+     → expected [ …(100) ] to deeply equal []
+   × phase prose: deleting real prose while preserving all machine fields is rejected 20ms
+     → expected [ …(100) ] to include 'phases/P9-材料为读者写.md T025 task card re…'
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/phase-contract-prose.test.mjs > validator records selected mode, current thirty-five task identities stay legal
+AssertionError: expected [ …(100) ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   "phases/P1-判据与共用契约.md is missing L0",
++   "phases/P1-判据与共用契约.md is missing L1",
++   "phases/P1-判据与共用契约.md is missing L2",
++   "phases/P1-判据与共用契约.md dependency must match the index and reference only earlier Phase IDs",
++   "phases/P1-判据与共用契约.md requires independent ### Tnnn task cards; one-line Tasks is insufficient",
++   "phases/P2-真实采集与失败语义.md is missing L0",
++   "phases/P2-真实采集与失败语义.md is missing L1",
++   "phases/P2-真实采集与失败语义.md is missing L2",
++   "phases/P2-真实采集与失败语义.md requires independent ### Tnnn task cards; one-line Tasks is insufficient",
++   "phases/P3-受控测试页与校准负例.md is missing L0",
++   "phases/P3-受控测试页与校准负例.md is missing L1",
++   "phases/P3-受控测试页与校准负例.md is missing L2",
++   "phases/P3-受控测试页与校准负例.md requires independent ### Tnnn task cards; one-line Tasks is insufficient",
++   "phases/P4-报告接入与回修闭环.md is missing L0",
++   "phases/P4-报告接入与回修闭环.md is missing L1",
++   "phases/P4-报告接入与回修闭环.md is missing L2",
++   "phases/P4-报告接入与回修闭环.md dependency must match the index and reference only earlier Phase IDs",
++   "phases/P4-报告接入与回修闭环.md requires independent ### Tnnn task cards; one-line Tasks is insufficient",
++   "phases/P5-审计编排入口与规范消费证明.md is missing L0",
++   "phases/P5-审计编排入口与规范消费证明.md is missing L1",
++   "phases/P5-审计编排入口与规范消费证明.md is missing L2",
++   "phases/P5-审计编排入口与规范消费证明.md dependency must match the index and reference only earlier Phase IDs",
++   "phases/P5-审计编排入口与规范消费证明.md requires independent ### Tnnn task cards; one-line Tasks is insufficient",
++   "phases/P6-make-decision流程九条修复.md is missing L0",
++   "phases/P6-make-decision流程九条修复.md is missing L1",
++   "phases/P6-make-decision流程九条修复.md is missing L2",
++   "phases/P6-make-decision流程九条修复.md requires independent ### Tnnn task cards; one-line Tasks is insufficient",
++   "phases/P7-交付证据与防假绿实现.md is missing L0",
++   "phases/P7-交付证据与防假绿实现.md is missing L1",
++   "phases/P7-交付证据与防假绿实现.md is missing L2",
++   "phases/P7-交付证据与防假绿实现.md dependency must match the index and reference only earlier Phase IDs",
++   "phases/P7-交付证据与防假绿实现.md requires independent ### Tnnn task cards; one-line Tasks is insufficient",
++   "phases/P8-全AC终验.md is missing L0",
++   "phases/P8-全AC终验.md is missing L1",
++   "phases/P8-全AC终验.md is missing L2",
++   "phases/P8-全AC终验.md requires independent ### Tnnn task cards; one-line Tasks is insufficient",
++   "phases/P9-材料为读者写.md is missing L0",
++   "phases/P9-材料为读者写.md is missing L1",
++   "phases/P9-材料为读者写.md is missing L2",
++   "phases/P9-材料为读者写.md dependency must match the index and reference only earlier Phase IDs",
++   "phases/P9-材料为读者写.md requires independent ### Tnnn task cards; one-line Tasks is insufficient",
++   "phases/P10-让审查判方案.md is missing L0",
++   "phases/P10-让审查判方案.md is missing L1",
++   "phases/P10-让审查判方案.md is missing L2",
++   "phases/P10-让审查判方案.md dependency must match the index and reference only earlier Phase IDs",
++   "phases/P10-让审查判方案.md requires independent ### Tnnn task cards; one-line Tasks is insufficient",
++   "phases/P11-去字面断言.md is missing L0",
++   "phases/P11-去字面断言.md is missing L1",
++   "phases/P11-去字面断言.md is missing L2",
++   "phases/P11-去字面断言.md requires independent ### Tnnn task cards; one-line Tasks is insufficient",
++   "phases/P12-逐需验收与真实完成.md is missing L0",
++   "phases/P12-逐需验收与真实完成.md is missing L1",
++   "phases/P12-逐需验收与真实完成.md is missing L2",
++   "phases/P12-逐需验收与真实完成.md requires independent ### Tnnn task cards; one-line Tasks is insufficient",
++   "FR has no executable Phase task coverage: FR-C07-001",
++   "FR has no executable Phase task coverage: FR-C07-002",
++   "FR has no executable Phase task coverage: FR-C07-003",
++   "FR has no executable Phase task coverage: FR-C07-004",
++   "FR has no executable Phase task coverage: FR-C07-005",
++   "FR has no executable Phase task coverage: FR-C07-006",
++   "FR has no executable Phase task coverage: FR-C07-007",
++   "FR has no executable Phase task coverage: FR-C07-008",
++   "FR has no executable Phase task coverage: FR-C07-009",
++   "FR has no executable Phase task coverage: FR-C07-010",
++   "FR has no executable Phase task coverage: FR-C07-011",
++   "FR has no executable Phase task coverage: FR-C07-012",
++   "FR has no executable Phase task coverage: FR-C07-013",
++   "FR has no executable Phase task coverage: FR-C07-014",
++   "FR has no executable Phase task coverage: FR-C07-015",
++   "FR has no executable Phase task coverage: FR-C07-016",
++   "FR has no executable Phase task coverage: FR-C07-017",
++   "FR has no executable Phase task coverage: FR-C07-018",
++   "FR has no executable Phase task coverage: FR-C07-019",
++   "FR has no executable Phase task coverage: FR-C07-020",
++   "FR has no executable Phase task coverage: FR-C07-021",
++   "FR has no executable Phase task coverage: FR-C07-022",
++   "FR has no executable Phase task coverage: FR-C07-023",
++   "FR has no executable Phase task coverage: FR-C07-024",
++   "FR has no executable Phase task coverage: FR-C07-025",
++   "FR has no executable Phase task coverage: FR-C07-026",
++   "FR has no executable Phase task coverage: FR-C07-027",
++   "FR has no executable Phase task coverage: FR-C07-028",
++   "FR has no executable Phase task coverage: FR-C07-029",
++   "FR has no executable Phase task coverage: FR-C07-030",
++   "FR has no executable Phase task coverage: FR-C07-031",
++   "FR has no executable Phase task coverage: FR-C07-032",
++   "FR has no executable Phase task coverage: FR-C07-033",
++   "FR has no executable Phase task coverage: FR-C07-034",
++   "FR has no executable Phase task coverage: FR-C07-035",
++   "AC has no executable Phase task coverage: AC-C07-1",
++   "AC has no executable Phase task coverage: AC-C07-2",
++   "AC has no executable Phase task coverage: AC-C07-3",
++   "AC has no executable Phase task coverage: AC-C07-4",
++   "AC has no executable Phase task coverage: AC-C07-5",
++   "AC has no executable Phase task coverage: AC-C07-6",
++   "AC has no executable Phase task coverage: AC-C07-7",
++   "AC has no executable Phase task coverage: AC-C07-008",
++   "AC has no executable Phase task coverage: AC-C07-009",
++   "AC has no executable Phase task coverage: AC-C07-010",
++   "AC has no executable Phase task coverage: AC-C07-011",
++ ]
+
+ ❯ tests/contract/phase-contract-prose.test.mjs:11:155
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests/contract/phase-prose.test.mjs > phase prose: each of the current thirty-five cards has independent reader prose
+AssertionError: expected [ …(100) ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   "phases/P1-判据与共用契约.md is missing L0",
++   "phases/P1-判据与共用契约.md is missing L1",
++   "phases/P1-判据与共用契约.md is missing L2",
++   "phases/P1-判据与共用契约.md dependency must match the index and reference only earlier Phase IDs",
++   "phases/P1-判据与共用契约.md requires independent ### Tnnn task cards; one-line Tasks is insufficient",
++   "phases/P2-真实采集与失败语义.md is missing L0",
++   "phases/P2-真实采集与失败语义.md is missing L1",
++   "phases/P2-真实采集与失败语义.md is missing L2",
++   "phases/P2-真实采集与失败语义.md requires independent ### Tnnn task cards; one-line Tasks is insufficient",
++   "phases/P3-受控测试页与校准负例.md is missing L0",
++   "phases/P3-受控测试页与校准负例.md is missing L1",
++   "phases/P3-受控测试页与校准负例.md is missing L2",
++   "phases/P3-受控测试页与校准负例.md requires independent ### Tnnn task cards; one-line Tasks is insufficient",
++   "phases/P4-报告接入与回修闭环.md is missing L0",
++   "phases/P4-报告接入与回修闭环.md is missing L1",
++   "phases/P4-报告接入与回修闭环.md is missing L2",
++   "phases/P4-报告接入与回修闭环.md dependency must match the index and reference only earlier Phase IDs",
++   "phases/P4-报告接入与回修闭环.md requires independent ### Tnnn task cards; one-line Tasks is insufficient",
++   "phases/P5-审计编排入口与规范消费证明.md is missing L0",
++   "phases/P5-审计编排入口与规范消费证明.md is missing L1",
++   "phases/P5-审计编排入口与规范消费证明.md is missing L2",
++   "phases/P5-审计编排入口与规范消费证明.md dependency must match the index and reference only earlier Phase IDs",
++   "phases/P5-审计编排入口与规范消费证明.md requires independent ### Tnnn task cards; one-line Tasks is insufficient",
++   "phases/P6-make-decision流程九条修复.md is missing L0",
++   "phases/P6-make-decision流程九条修复.md is missing L1",
++   "phases/P6-make-decision流程九条修复.md is missing L2",
++   "phases/P6-make-decision流程九条修复.md requires independent ### Tnnn task cards; one-line Tasks is insufficient",
++   "phases/P7-交付证据与防假绿实现.md is missing L0",
++   "phases/P7-交付证据与防假绿实现.md is missing L1",
++   "phases/P7-交付证据与防假绿实现.md is missing L2",
++   "phases/P7-交付证据与防假绿实现.md dependency must match the index and reference only earlier Phase IDs",
++   "phases/P7-交付证据与防假绿实现.md requires independent ### Tnnn task cards; one-line Tasks is insufficient",
++   "phases/P8-全AC终验.md is missing L0",
++   "phases/P8-全AC终验.md is missing L1",
++   "phases/P8-全AC终验.md is missing L2",
++   "phases/P8-全AC终验.md requires independent ### Tnnn task cards; one-line Tasks is insufficient",
++   "phases/P9-材料为读者写.md is missing L0",
++   "phases/P9-材料为读者写.md is missing L1",
++   "phases/P9-材料为读者写.md is missing L2",
++   "phases/P9-材料为读者写.md dependency must match the index and reference only earlier Phase IDs",
++   "phases/P9-材料为读者写.md requires independent ### Tnnn task cards; one-line Tasks is insufficient",
++   "phases/P10-让审查判方案.md is missing L0",
++   "phases/P10-让审查判方案.md is missing L1",
++   "phases/P10-让审查判方案.md is missing L2",
++   "phases/P10-让审查判方案.md dependency must match the index and reference only earlier Phase IDs",
++   "phases/P10-让审查判方案.md requires independent ### Tnnn task cards; one-line Tasks is insufficient",
++   "phases/P11-去字面断言.md is missing L0",
++   "phases/P11-去字面断言.md is missing L1",
++   "phases/P11-去字面断言.md is missing L2",
++   "phases/P11-去字面断言.md requires independent ### Tnnn task cards; one-line Tasks is insufficient",
++   "phases/P12-逐需验收与真实完成.md is missing L0",
++   "phases/P12-逐需验收与真实完成.md is missing L1",
++   "phases/P12-逐需验收与真实完成.md is missing L2",
++   "phases/P12-逐需验收与真实完成.md requires independent ### Tnnn task cards; one-line Tasks is insufficient",
++   "FR has no executable Phase task coverage: FR-C07-001",
++   "FR has no executable Phase task coverage: FR-C07-002",
++   "FR has no executable Phase task coverage: FR-C07-003",
++   "FR has no executable Phase task coverage: FR-C07-004",
++   "FR has no executable Phase task coverage: FR-C07-005",
++   "FR has no executable Phase task coverage: FR-C07-006",
++   "FR has no executable Phase task coverage: FR-C07-007",
++   "FR has no executable Phase task coverage: FR-C07-008",
++   "FR has no executable Phase task coverage: FR-C07-009",
++   "FR has no executable Phase task coverage: FR-C07-010",
++   "FR has no executable Phase task coverage: FR-C07-011",
++   "FR has no executable Phase task coverage: FR-C07-012",
++   "FR has no executable Phase task coverage: FR-C07-013",
++   "FR has no executable Phase task coverage: FR-C07-014",
++   "FR has no executable Phase task coverage: FR-C07-015",
++   "FR has no executable Phase task coverage: FR-C07-016",
++   "FR has no executable Phase task coverage: FR-C07-017",
++   "FR has no executable Phase task coverage: FR-C07-018",
++   "FR has no executable Phase task coverage: FR-C07-019",
++   "FR has no executable Phase task coverage: FR-C07-020",
++   "FR has no executable Phase task coverage: FR-C07-021",
++   "FR has no executable Phase task coverage: FR-C07-022",
++   "FR has no executable Phase task coverage: FR-C07-023",
++   "FR has no executable Phase task coverage: FR-C07-024",
++   "FR has no executable Phase task coverage: FR-C07-025",
++   "FR has no executable Phase task coverage: FR-C07-026",
++   "FR has no executable Phase task coverage: FR-C07-027",
++   "FR has no executable Phase task coverage: FR-C07-028",
++   "FR has no executable Phase task coverage: FR-C07-029",
++   "FR has no executable Phase task coverage: FR-C07-030",
++   "FR has no executable Phase task coverage: FR-C07-031",
++   "FR has no executable Phase task coverage: FR-C07-032",
++   "FR has no executable Phase task coverage: FR-C07-033",
++   "FR has no executable Phase task coverage: FR-C07-034",
++   "FR has no executable Phase task coverage: FR-C07-035",
++   "AC has no executable Phase task coverage: AC-C07-1",
++   "AC has no executable Phase task coverage: AC-C07-2",
++   "AC has no executable Phase task coverage: AC-C07-3",
++   "AC has no executable Phase task coverage: AC-C07-4",
++   "AC has no executable Phase task coverage: AC-C07-5",
++   "AC has no executable Phase task coverage: AC-C07-6",
++   "AC has no executable Phase task coverage: AC-C07-7",
++   "AC has no executable Phase task coverage: AC-C07-008",
++   "AC has no executable Phase task coverage: AC-C07-009",
++   "AC has no executable Phase task coverage: AC-C07-010",
++   "AC has no executable Phase task coverage: AC-C07-011",
++ ]
+
+ ❯ tests/contract/phase-prose.test.mjs:7:153
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  tests/contract/phase-prose.test.mjs > phase prose: deleting real prose while preserving all machine fields is rejected
+AssertionError: expected [ …(100) ] to include 'phases/P9-材料为读者写.md T025 task card re…'
+ ❯ tests/contract/phase-prose.test.mjs:8:401
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+ Test Files  2 failed | 8 passed (10)
+      Tests  3 failed | 100 passed (103)
+   Start at  08:49:21
+   Duration  31.39s (transform 68ms, setup 0ms, collect 150ms, tests 37.69s, environment 1ms, prepare 208ms)
+

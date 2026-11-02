@@ -1,0 +1,30 @@
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/phase-prose.test.mjs > phase prose: each of the current thirty-five cards has independent reader prose
+AssertionError: expected 36 to be 35 // Object.is equality
+
+- Expected
++ Received
+
+- 35
++ 36
+
+ ❯ tests/contract/phase-prose.test.mjs:7:192
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/contract/phase-prose.test.mjs > phase prose: deleting real prose while preserving all machine fields is rejected
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ tests/contract/phase-prose.test.mjs:8:372
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+

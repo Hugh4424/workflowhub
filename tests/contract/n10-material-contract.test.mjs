@@ -14,7 +14,10 @@ const roots=[];
 function temp(){const p=mkdtempSync(join(tmpdir(),"n10-material-"));roots.push(p);return p;}
 afterEach(()=>{for(const p of roots.splice(0))rmSync(p,{recursive:true,force:true});});
 function put(root,path,body){const target=join(root,path);mkdirSync(dirname(target),{recursive:true});writeFileSync(target,body);}
-function fixture(){const root=temp();const files=inspectMaterialWorkspace(N8).files;for(const [path,body] of Object.entries(files))put(root,path,body);return root;}
+// A copy of archived N8 keeps its archive identity in the path, so the material
+// contract applies the same diagnostic writing exemption as the archived original;
+// the copied bytes stay untouched.
+function fixture(){const root=join(temp(),"archive","n8-four-level-route-20261019");const files=inspectMaterialWorkspace(N8).files;for(const [path,body] of Object.entries(files))put(root,path,body);return root;}
 function run(args=[]){const env={...process.env};delete env.RUN_CHECKS_FORCE_FAIL_CHECKER;const argv=[process.execPath,join(ROOT,"tools/cli/run-checks.mjs"),...args];const r=spawnSync(argv[0],argv.slice(1),{cwd:ROOT,encoding:"utf8",env,timeout:30000});console.log(JSON.stringify({argv,cwd:ROOT,exit:r.status,stdout:r.stdout,stderr:r.stderr}));return {...r,output:`${r.stdout??""}${r.stderr??""}`};}
 describe("ORACLE-N10-MATERIAL-CONTRACT",()=>{
  it("T011 accepts real N8/N9 material and retains N2's two named errors",()=>{
@@ -64,6 +67,14 @@ describe("ORACLE-N10-MATERIAL-CONTRACT",()=>{
   const root=fixture();const paths=["spec.md",phaseFilesFromIndex(readFileSync(join(root,"phases/index.md"),"utf8"))[0],"phases/index.md"];
   for(const path of paths){const original=readFileSync(join(root,path));const body=original.toString();const damaged=path==="spec.md"?"":path==="phases/index.md"?body.replace(/^\| `P\d+`.*\n/gm,""):body.replace(/^## L1[^\n]*\n[\s\S]*?(?=^## |$(?![\s\S]))/m,"");expect(damaged).not.toBe(body);put(root,path,damaged);const bad=run(["--material-root",root]);expect(bad.status,bad.output).toBe(1);expect(bad.stdout).toContain(path);put(root,path,original);expect(readFileSync(join(root,path))).toEqual(original);expect(run(["--material-root",root]).status).toBe(0);}
  });
+ it("T014 fails a make-decision stage check when the material is empty",()=>{
+  for (const root of [temp(), (()=>{const p=join(temp(),"empty");writeFileSync(p,"");return p;})()]) {
+    const r=run(["--material-root",root,"--stage=make-decision"]);
+    expect(r.status,r.output).toBe(1);
+    expect(r.stdout).toContain("make-decision 至少需要 decision-log.md");
+    expect(r.stdout).not.toContain("[run-checks][material] PASS");
+  }
+ });
  it("T014 rejects a nonempty regular file root instead of classifying it as no input",()=>{
   const path=join(temp(),"spec.md");writeFileSync(path,"# Nonempty specification\n");const r=run(["--material-root",path]);expect(r.status,r.output).toBe(1);expect(r.output).toContain(path);expect(r.output).toContain("cannot read material root");expect(r.stdout).not.toContain("没有输入");expect(r.stdout).not.toContain("[run-checks][material] PASS");
  });
@@ -82,5 +93,18 @@ describe("ORACLE-N10-MATERIAL-CONTRACT",()=>{
  });
  it("T011 preserves safe reader failures instead of classifying unreadable input as empty",()=>{
   const root=temp();const target=join(temp(),"empty.md");writeFileSync(target,"");symlinkSync(target,join(root,"decision-log.md"));const r=run(["--material-root",root]);expect(r.status,r.output).toBe(1);expect(r.stdout).toContain("single-link regular file");expect(r.stdout).not.toContain("没有输入");
+ });
+});
+
+describe('ORACLE-MAKE-DECISION-MATERIAL-SCOPE',()=>{
+ it('T017 stage=make-decision without spec/phases reports partial scope, not a full pass',()=>{
+  const root=temp();put(root,'decision-log.md','## 级别与路线\n- 推荐级别：普通\n');
+  const partial=run(['--material-root',root,'--stage=make-decision']);
+  expect(partial.status,partial.output).toBe(0);
+  expect(partial.stdout).toContain('不判阶段完成');
+  expect(partial.stdout).toContain('material 仅覆盖本次可检查范围');
+  const old=run(['--material-root',root]);
+  expect(old.status,old.output).toBe(1);
+  expect(old.stdout).toContain('spec.md content is required');
  });
 });

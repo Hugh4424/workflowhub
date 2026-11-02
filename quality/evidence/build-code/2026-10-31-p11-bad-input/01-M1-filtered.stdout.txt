@@ -1,0 +1,27 @@
+
+ RUN  v2.1.9 /private/tmp/p11-badinput-20261031
+
+ ❯ tests/contract/acceptance-plan.test.mjs (75 tests | 1 failed | 74 skipped) 3ms
+   × ORACLE-ACCEPT-PLAN > real templates and planning steps carry seven fields and truthful incomplete instructions 2ms
+     → invalid 成本类别
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > real templates and planning steps carry seven fields and truthful incomplete instructions
+Error: invalid 成本类别
+ ❯ readEvidenceFields tests/contract/acceptance-plan.test.mjs:14:110
+     12|   if (!line) throw new Error('missing evidence plan');
+     13|   const fields = Object.fromEntries(line.slice(line.indexOf('证据计划…
+     14|   for (const label of labels) if (!fields[label]?.trim() || /占位|待填…
+       |                                                                                                              ^
+     15|   return fields;
+     16| }
+ ❯ tests/contract/acceptance-plan.test.mjs:69:28
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 74 skipped (75)
+   Start at  08:38:37
+   Duration  122ms (transform 23ms, setup 0ms, collect 28ms, tests 3ms, environment 0ms, prepare 25ms)
+

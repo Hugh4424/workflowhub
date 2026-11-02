@@ -1,0 +1,13 @@
+✔ fixture a returns its own stage (0.532708ms)
+✔ multi-line facts: last row decides, not the first row that carries a stage (0.805167ms)
+✔ empty facts file must raise, not fall back to a default stage (0.725375ms)
+✔ last row without stage must raise, not fall back to an earlier row (0.578416ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 43.550208
+exit_code=0

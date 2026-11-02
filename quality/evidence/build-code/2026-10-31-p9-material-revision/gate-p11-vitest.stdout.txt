@@ -1,0 +1,13 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-workflowhub-ui-frontend-c07-real-page-verification-20261028
+
+ ✓ tests/contract/n11-acceptance-rules.test.mjs (40 tests) 15ms
+ ✓ tests/contract/acceptance-plan.test.mjs (75 tests) 68ms
+ ✓ tests/contract/page-audit-doc-contract.test.mjs (11 tests) 3ms
+ ✓ tests/contract/n11-plan-quality.test.mjs (19 tests) 259ms
+
+ Test Files  4 passed (4)
+      Tests  145 passed (145)
+   Start at  09:03:18
+   Duration  575ms (transform 36ms, setup 0ms, collect 57ms, tests 345ms, environment 0ms, prepare 103ms)
+

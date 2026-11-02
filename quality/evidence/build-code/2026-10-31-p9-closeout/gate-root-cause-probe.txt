@@ -1,0 +1,5 @@
+$ node -e "<probe: delete T025 prose via current heading, then validate>"
+[stale locator ### T025] mutation changed bytes? false
+[current locator ### 任务 1] mutation changed bytes? true
+[validator after real deletion] ok= false errors= [ 'phases/P9-材料为读者写.md T025 task card requires reader prose' ]
+[baseline] ok= true task_count= 36

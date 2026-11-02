@@ -31,7 +31,7 @@
 
 ### 派发与回传
 
-复杂任务每 Phase 的三角色与唯一写主沿 [build-code「Phase 三角色与七步顺序」](workflows/build-code/SKILL.md#phase-三角色与七步顺序)：主会话先给开发 brief，开发完成并明确通知后才给审查和测试各自的只读 brief。开发是唯一 writer；审查与测试不改代码、测试、材料；只读执行并用既有 capture 保存回执，这不属于修改。审查、测试各自明确回报后开发才能最后确认；修复回原开发，受影响方重报。主会话只核无 open finding、无未解释测试失败、Phase Done、AC 齐四项，不写代码、不跑测试、不查细节 bug；开发每轮审后提交一次，迟到 finding 回同一 Phase/开发修复。
+复杂任务每 Phase 的三角色与唯一写主沿 [build-code「Phase 三角色与七步顺序」](workflows/build-code/SKILL.md#phase-三角色与七步顺序)：主会话先给开发 brief，实现就绪并明确通知后才给审查和测试各自的只读 brief；实现就绪不等于开发完成，完成语义见 docs/standard-workflow.md「专业质量」。开发是唯一 writer；审查与测试不改代码、测试、材料；只读执行并用既有 capture 保存回执，这不属于修改。审查、测试各自明确回报后开发才能最后确认；修复回原开发，受影响方重报。主会话只核无 open finding、无未解释测试失败、Phase Done、AC 齐四项，不写代码、不跑测试、不查细节 bug；开发每轮审后提交一次，迟到 finding 回同一 Phase/开发修复。
 
 一张 brief、一次收尾：开发、审查、测试各收一张职责内 brief；发现和必要澄清回原执行者同一会话，修复与受影响复验不算重开普通派发。八节 brief：做什么、为什么、读什么、只能改什么、怎么做、算做完、何时停、回什么。八节承载下面四要素及 context pointers；微动作仍可按下段压成一段，完整保留目标、边界、结果与回传，不为格式复述材料。
 

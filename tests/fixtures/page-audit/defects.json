@@ -1,0 +1,123 @@
+{
+  "schema_version": "1.0.0",
+  "page": "controlled-page.html",
+  "object": {
+    "kind": "controlled-fixture",
+    "object_version": "9efb7e57",
+    "coverage_limits": [
+      "预置缺陷结构；未运行浏览器、注入、修复或真实页面验收"
+    ]
+  },
+  "regions": [
+    {
+      "id": "r1-hash-tooltip",
+      "defect_id": "R1-hash-tooltip",
+      "selector": "#r1-hash-tooltip",
+      "expected_dimension": "overflow",
+      "expected_severity": "IMPORTANT",
+      "detection": "在 .hash-tooltip 比较 scrollWidth > clientWidth；64 字符种子（9efb7e57 重复八次）整体再重复八次，共 512 字符；计算 white-space 为 nowrap 时记录溢出量。"
+    },
+    {
+      "id": "r2-long-text",
+      "defect_id": "R2-long-text",
+      "selector": "#r2-long-text",
+      "expected_dimension": "layout",
+      "expected_severity": "IMPORTANT",
+      "detection": "比较 .long-copy.scrollWidth > .long-container.clientWidth，并核计算样式 whiteSpace=nowrap；越界即长文本缺陷。"
+    },
+    {
+      "id": "r3-narrow",
+      "defect_id": "R3-narrow",
+      "selector": "#r3-narrow",
+      "expected_dimension": "layout",
+      "expected_severity": "BLOCKER",
+      "detection": "分别在 640px 与 320px 视口将 R3 滚到可见中央；取两列 getBoundingClientRect，交集宽高均大于 0 只记录重叠。再取 #narrow-primary 中心，document.elementFromPoint(x,y) 须命中 #narrow-cover 或其后代；记录按钮 data-clicks 前值，以真实指针点击同一点后计数不增加才记录主操作被前列阻断。不得用 button.click() 或 dispatchEvent 证明遮挡；若命中按钮或计数增加，回 P3 修夹具，不以相交直接判阻断。此项浏览器命中与点击未执行，预置期望 BLOCKER 不代实测结果。"
+    },
+    {
+      "id": "r4-zoom",
+      "defect_id": "R4-zoom",
+      "selector": "#r4-zoom",
+      "expected_dimension": "layout",
+      "expected_severity": "BLOCKER",
+      "detection": "从 1440px 基准设浏览器缩放 200%，取 .zoom-label 与 .zoom-copy 矩形；交集宽高均大于 0 且 elementFromPoint 在正文交集点命中标签即遮挡。"
+    },
+    {
+      "id": "r5-scroll-occlude",
+      "defect_id": "R5-scroll-occlude",
+      "selector": "#r5-scroll-occlude",
+      "expected_dimension": "interaction",
+      "expected_severity": "BLOCKER",
+      "detection": "滚动到本区域后取 #scroll-primary 中心坐标，document.elementFromPoint(x,y) 命中 #scroll-cover 而非按钮，点击后按钮没有接收事件即主操作不可达。"
+    },
+    {
+      "id": "r6-hover-bridge",
+      "defect_id": "R6-hover-bridge",
+      "selector": "#r6-hover-bridge",
+      "expected_dimension": "interaction",
+      "expected_severity": "IMPORTANT",
+      "detection": "取触发区 bottom 与菜单 top：相差 8px；指针从按钮移到间隔中点后 .hover-menu 计算 display=none 即桥接断开。"
+    },
+    {
+      "id": "r7-keyboard-focus",
+      "defect_id": "R7-keyboard-focus",
+      "selector": "#r7-keyboard-focus",
+      "expected_dimension": "a11y",
+      "expected_severity": "BLOCKER",
+      "detection": "按 Tab 观察 document.activeElement：正 tabindex 依 1/2/3 而非 DOM 的 3/1/2；聚焦后 getComputedStyle(activeElement).outlineStyle=none 即无可见焦点环。"
+    },
+    {
+      "id": "r8-reduced-motion",
+      "defect_id": "R8-reduced-motion",
+      "selector": "#r8-reduced-motion",
+      "expected_dimension": "interaction",
+      "expected_severity": "IMPORTANT",
+      "detection": "以 matchMedia(\"(prefers-reduced-motion: reduce)\").matches=true 为输入，比较两动画计算 animationName；guarded=none 而 unguarded!=none 即偏好未全生效。"
+    },
+    {
+      "id": "r9-error-permission-repeat",
+      "defect_id": "R9-error-permission-repeat",
+      "selector": "#r9-error-permission-repeat",
+      "expected_dimension": "interaction",
+      "expected_severity": "IMPORTANT",
+      "detection": "依次点击 error、permission、repeat（repeat 再点一次）；dataset.attempts 增加而区域无 [data-state] 且 .state-output.textContent 为空即状态反馈缺失。"
+    }
+  ],
+  "calibration": [
+    {
+      "id": "font-size",
+      "path": "calibration/font.html",
+      "baseline": "20px",
+      "observed": "17px",
+      "metric": "font-size",
+      "threshold": "字号差 ≥ 2px 或 ≥ 15%；本例差 3px、15%",
+      "expected_severity": "IMPORTANT"
+    },
+    {
+      "id": "spacing-gap",
+      "path": "calibration/spacing.html",
+      "baseline": "16px",
+      "observed": "8px",
+      "metric": "gap",
+      "threshold": "间距差 ≥ 8px 或 ≥ 50% token；本例差 8px、50%",
+      "expected_severity": "IMPORTANT"
+    },
+    {
+      "id": "text-color",
+      "path": "calibration/color.html",
+      "baseline": "#1A73E8",
+      "observed": "#3A83E8",
+      "metric": "color",
+      "threshold": "ΔE2000 ≥ 3.0；批准刻度标注色差约 4.0，非本次实测",
+      "expected_severity": "IMPORTANT"
+    },
+    {
+      "id": "blocker-cover",
+      "path": "calibration/blocker.html",
+      "baseline": "#primary-action",
+      "observed": "#blocking-cover",
+      "metric": "hit-test",
+      "threshold": "elementFromPoint 命中非按钮即阻断",
+      "expected_severity": "BLOCKER"
+    }
+  ]
+}

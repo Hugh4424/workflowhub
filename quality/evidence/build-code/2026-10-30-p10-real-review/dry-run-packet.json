@@ -1,0 +1,132 @@
+{
+  "bundleRoot": "/private/var/folders/27/fkx5yqf96c13pfkc1w75xy840000gp/T/p10-attach-Ib6Sgg/.wh-review-packets/review-pZpKfC",
+  "materialId": "579bce7f52428ad4de4f0d4b47416f443162a2ce7006e8782b1888fade2bd749",
+  "files": [
+    {
+      "path": "review-instructions.md",
+      "bytes": 3484,
+      "sha256": "d24779458a5c6dedd2d28c66a2e9fa83d55901d3413a7a93713a20c76030564a"
+    },
+    {
+      "path": "contracts/build-plan.md",
+      "bytes": 4050,
+      "sha256": "932ef840c1b61be873ade854195994fce99cb506c05bc4cbb103be8c53f5a537"
+    },
+    {
+      "path": "contracts/authoring-contract.md",
+      "bytes": 4130,
+      "sha256": "c10c3574ad8eb06807d88a8d97a86b10133e6b489bed5f8731383e9e626c0408"
+    },
+    {
+      "path": "contracts/provider-protocol.md",
+      "bytes": 10579,
+      "sha256": "481895a9d8d3c22038108119c58604ea0d33f27a0a157c4bb41038fc170d815e"
+    },
+    {
+      "path": "skills/review/SKILL.md",
+      "bytes": 7772,
+      "sha256": "d0650d9fe6b9cf98d211059f9d4782a98e502393d1aeac6fdc1232649f0e5412"
+    },
+    {
+      "path": "skills/simplicity-guard/SKILL.md",
+      "bytes": 5774,
+      "sha256": "afdfb4a570305c6ee3c1937fe1bf25d4c9991e3275406220de1e6b3134eab3a1"
+    },
+    {
+      "path": "skills/plan-eng-review/SKILL.md",
+      "bytes": 7377,
+      "sha256": "b07680babc7f9d7e92b8407f692d41a83aa105250ff0aff18ba6aee311138bf1"
+    },
+    {
+      "path": "skills/spec-specify/SKILL.md",
+      "bytes": 23184,
+      "sha256": "4b58fdd955962c58f165544fe1040f67bf8e7459d624fe072eb515840ea0a5ad"
+    },
+    {
+      "path": "materials/01-decision_baseline.md",
+      "bytes": 91345,
+      "sha256": "b9250e38c8dcfd3c69a0bcab68bb4597d05322d6b73414c596c88b5017e000ce"
+    },
+    {
+      "path": "materials/02-draft_spec.md",
+      "bytes": 173023,
+      "sha256": "dbd70e13f2c4813dbc51049b4d6a94c8429258616c9ede601d27e8149a7dca0d"
+    },
+    {
+      "path": "materials/03-acceptance_criteria.md",
+      "bytes": 5832,
+      "sha256": "a5f80aa4224070bcdecb0ff44b76a1be91199dfe3290f75f7c98c039343d8b82"
+    },
+    {
+      "path": "requirements/phases/P1-判据与共用契约.md",
+      "bytes": 37645,
+      "sha256": "71ad5abec58ac23314b51077c18793c43d0080b11bf06dc738004d22e25102d8"
+    },
+    {
+      "path": "requirements/phases/P2-真实采集与失败语义.md",
+      "bytes": 72583,
+      "sha256": "833d9990460093f49cec15a1a1716e52d506ca11f732956200983c638984b335"
+    },
+    {
+      "path": "requirements/phases/P3-受控测试页与校准负例.md",
+      "bytes": 49401,
+      "sha256": "2fc5714449ca8e80d3c401422f0843fc5c84a3163c4b9649a09615396c1636f9"
+    },
+    {
+      "path": "requirements/phases/P4-报告接入与回修闭环.md",
+      "bytes": 60697,
+      "sha256": "6e0d4279ea74f2286bd6260e38099b8577b83925dd0b0bee89b9437752e33abe"
+    },
+    {
+      "path": "requirements/phases/P5-审计编排入口与规范消费证明.md",
+      "bytes": 91817,
+      "sha256": "8a677ff172a88caa440bf501d7657d0311b985d91c8ab9b88f1539b489f5173e"
+    },
+    {
+      "path": "requirements/phases/P6-make-decision流程九条修复.md",
+      "bytes": 47716,
+      "sha256": "a7ce1c5657f0d870783791c9f8498a5f5d319dca42387c57ab33a12b10af3471"
+    },
+    {
+      "path": "requirements/phases/P7-交付证据与防假绿实现.md",
+      "bytes": 43922,
+      "sha256": "7fe734c698640efcadfae250ead9758fb057cd2427062c84179431c4556715b6"
+    },
+    {
+      "path": "requirements/phases/P8-全AC终验.md",
+      "bytes": 89387,
+      "sha256": "3dcd74ca8c499a7d5301a39158daf2915c925d42b3d1105caca8491e7ad6d717"
+    },
+    {
+      "path": "requirements/phases/P9-材料为读者写.md",
+      "bytes": 88673,
+      "sha256": "f5718435d464ab03dbd8661dddb3a1abef680c64585f7c8f721a5a7d77aefe94"
+    },
+    {
+      "path": "requirements/phases/P10-让审查判方案.md",
+      "bytes": 66494,
+      "sha256": "cc5126c7b9473f31144ad9aff2b9da446d65d655f3ebde9eb2dbc75b03441f82"
+    },
+    {
+      "path": "requirements/phases/P11-去字面断言.md",
+      "bytes": 41294,
+      "sha256": "ca60d230ebbee7300c69375008350e231a8fdf1ea273b5da53783a5065bcd335"
+    },
+    {
+      "path": "requirements/phases/P12-逐需验收与真实完成.md",
+      "bytes": 51929,
+      "sha256": "74363f4004cf87c0195faa8c66d364b5997abfe7f315a1b174deb9abc46dc5f9"
+    },
+    {
+      "path": "materials/16-phase_index.md",
+      "bytes": 10935,
+      "sha256": "2ac8ff48896d87904385be069e58a40f1304b4a51916281b43effd97651cbe58"
+    },
+    {
+      "path": "manifest.json",
+      "bytes": 7332,
+      "sha256": "3f0041d958c6d4c70ac41796fe72eee6168954d1a67a048b1f511f2d1c42b1d4"
+    }
+  ],
+  "discarded": []
+}

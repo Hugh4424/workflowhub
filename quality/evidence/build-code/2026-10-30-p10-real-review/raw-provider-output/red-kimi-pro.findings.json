@@ -1,0 +1,54 @@
+{
+  "findings": [
+    {
+      "severity": "major",
+      "path": "materials/02-draft_spec.md",
+      "line": 1507,
+      "issue": "规格把三个 UI 事实源都判为 false 并选择 CLI 验收对象，但本包明确把这三个源标为 missing or malformed。未知被误转成非 UI，导致 Web 五项及真实缺口被跳过。",
+      "root_cause": "把 UI 事实缺失误当成非 UI 的否定证据，而不是保留 unknown 并补齐来源。",
+      "recommendation": "恢复 UI 适用性为 unknown，保留 Web 五项并逐项写明缺失事实、提供者与恢复条件；只有三个真实来源都核实为非 UI 后才能选择 CLI 分支。",
+      "evidence_kind": "direct",
+      "evidence": "review-instructions.md 明确 raw_requirement、project_inventory、planned_or_changed_frontend_fact 均缺失或 malformed，且不得据此记 non-UI/N/A；本文件 1505-1525 行却写“三个来源都为 false”，1584-1594 行进一步选择 CLI 对象。已核规格 UI 判定与验收对象两节；未核包外真实库存，故不能支持非 UI 结论。"
+    },
+    {
+      "severity": "major",
+      "path": "requirements/phases/P5-审计编排入口与规范消费证明.md",
+      "line": 464,
+      "issue": "workspace、service 等身份值只是调用方声明并被原样复制，没有与实际对象比较。声明了错误工作区或服务时，身份字段和传播测试仍可全绿，但报告不会报验收 2 要求的具体不一致。",
+      "root_cause": "设计把身份元数据传递误当成身份核验，缺少声明值与真实观察值的比较步骤。",
+      "recommendation": "在采集前由网关或页面目标取得实际 workspace、service、route、state，与声明值逐项比较；不符时按 IDENTITY_MISMATCH 退出且不写报告，并在输出中分别保留声明值和观察值。",
+      "evidence_kind": "direct",
+      "evidence": "P2 第 352-353 行规定五个变量“只当声明值填进 object，不猜、不派生”；P5 第 464-478 行同样只注入并逐字复制。P8 第 85-87、108-109 行却要求错工作区、错源能报具体不一致，现有链路无法保证这一行为。已核 P2 采集器、P5 编排与 P8 验收设计；未核包外实现，缺失的是方案中的观察与比较机制。"
+    },
+    {
+      "severity": "major",
+      "path": "requirements/phases/P12-逐需验收与真实完成.md",
+      "line": 508,
+      "issue": "真实写作效果的通过条件强制读者指出一处漏洞。材料若完整正确、没有可指出的漏洞反而会失败；指出一个无关瑕疵却可以满足该条件，不能证明材料可被正确接手。",
+      "root_cause": "把“必须发现缺陷”误作独立理解和证伪能力的代理指标，偏离 AC-C07-010 的可用性目标。",
+      "recommendation": "改为要求读者准确复述目标、依赖与否定边界，实际执行首个安全动作，并能拒绝预置的错误完成候选；真实发现的缺陷照常回修，但不设置必须发现缺陷的条件。",
+      "evidence_kind": "direct",
+      "evidence": "P12 第 508-511 行把“指出一处漏洞”列为成功，并把“说不出任何漏洞”列为失败；P9 第 93-94、133 行也有同一要求。AC-C07-010 只要求材料能支持正确决定和实际使用，没有缺陷数量要求。已核 P9、P12 与验收原文；未评估包外实际读者结果。"
+    },
+    {
+      "severity": "major",
+      "path": "requirements/phases/P12-逐需验收与真实完成.md",
+      "line": 93,
+      "issue": "写作效果正例只要求 decision-log、spec 与 Phase 片段，未要求完整独立 Phase 集、P12 和纯指针索引。该场景可以通过，但 AC-C07-010 所要求的完整作者交付仍不存在。",
+      "root_cause": "P12 把完整四类材料的真实消费缩成了局部片段试写，验收对象与已接受判据不一致。",
+      "recommendation": "将正例改为完整交付 decision-log、spec、独立 Phase 集（含 P12）与纯指针索引，由原规划 owner 合稿，再由另一名独立下游读者实际接手并执行安全动作。",
+      "evidence_kind": "direct",
+      "evidence": "P12 第 91-95 行只要求“decision-log、spec 与 phase 片段”，第 301-302 行再次只要求“写出片段”；materials/03-acceptance_criteria.md 第 50-53 行要求交出决定、规格、P12 与索引候选，且明确禁止用窄子题外推整张卡。已核 P12 场景、环境输入与 AC-C07-010；未核包外候选产物。"
+    },
+    {
+      "severity": "major",
+      "path": "requirements/phases/P12-逐需验收与真实完成.md",
+      "line": 523,
+      "issue": "P12 的门禁明确排除 build-code 方法正文现有的红项，但该文件正是本 Phase 修改完成语义的核心消费者。其余检查与场景可以全绿，而 build-code 的既有契约仍然失败。",
+      "root_cause": "把已知失败的受影响检查移出验证集，而不是将其作为必须回修并重验的交付缺口。",
+      "recommendation": "把 build-code 相关契约测试纳入 P12 验证并保留当前红项；修复后按同一命令重跑。若暂不能修复，P12 必须保持未完成，不能用排除红项的方式形成兼容绿。",
+      "evidence_kind": "direct",
+      "evidence": "P12 第 517-524 行写明八份写入件只有七份被门禁读取，build-code 方法正文因“现有红项”不列入；第 340-351 行又要求修改该文件以区分实现就绪与开发完成。AC-C07-009 要求全部适用标准有独立实际结果。已核 P12 写集、门禁和完成判据；未核包外红项内容，但其被排除在验收之外是直接事实。"
+    }
+  ]
+}

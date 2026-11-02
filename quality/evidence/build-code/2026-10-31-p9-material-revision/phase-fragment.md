@@ -1,0 +1,284 @@
+# Phase P1 — 试点 Phase 的验收能盲判效果
+
+读者：本 Phase 的实施者、独立判定者、消费者与最终验收 Phase 作者；读完要能判定试点 Phase 的验收是否真的能判效果。
+
+> 写作标准：`skills/spec-specify/SKILL.md` 的「材料写作标准（唯一）」。
+> 本片段只写一个试点 Phase，不写其余 Phase。真实身份已落，逐项如下；未指派的人名仍按 unknown 记，写 owner。
+>
+> - **任务根**：`/Users/Hugh/Hugh/Project/workflowhub-workflowhub-ui-frontend-c07-real-page-verification-20261028`。
+> - **任务 id**：`workflowhub-ui-frontend-c07-real-page-verification-20261028`。
+> - **材料根**：`<任务根>/specs/workflowhub-ui-frontend-c07-real-page-verification-20261028`。
+> - **试点 Phase**：`<材料根>/phases/P11-去字面断言.md`（下文简称 P11）。
+> - **编号别混**：本片段是 `AC-EFFECT-001` 的 P1 行（验收行号）；试点 Phase 是 P11（Phase 编号）。两套编号不同。
+> - **执行环境**：本机认证 worktree，路径同任务根；当前 HEAD `48a15f02`（2026-10-31 实读），执行前先核 `git status`；A/B 放仓外隔离 worktree。
+
+## 这一 Phase 交出什么？
+
+- **本 Phase 结果**：在真实试点 Phase P11 上，独立判定者只读验收、原始需求、A/B 与门禁输出（不读方案），就能拒绝绿而错、接受做对；
+    真实下游消费者用一次，得到要求的结果；
+    判定与观察留下可回读原件。
+- **术语**：绿而错是所有已列门禁与判定器都通过、用户可观察结果却错的交付；盲判是判定者不知道两份交付哪份是真的。
+- **非目标**：本 Phase 选择只覆盖试点一行，其余 Phase 由最终验收 Phase 逐行覆盖；
+    跨任务推广留给后续任务，因为本任务没有跨任务数据；
+    产品行为保持原样，因为本任务只改材料；
+    结果以盲判和消费者观察为准，因为字段齐全不能证明效果。
+- **改动前**：现有验收只列契约测试、门禁命令、判定器、断言和回归；判定者只能确认命令通过，不能确认用户结果对。
+- **改动后**：试点 Phase 的验收写清用户可观察结果、成功与失败信号、场景、环境与数据、绿而错对照、独立判定协议、消费者与效果观察；
+    判定者能在不知道标签时判效果。
+- **与相邻 Phase 的边界**：上游 build-plan 给试点 Phase 的原始需求、真实门禁和环境；
+    本 Phase 交 AC-EFFECT-001 的一行；
+    最终验收 Phase 对其余每个 Phase 重复同一协议，全部行齐才判 AC-EFFECT-001。
+- **主要风险**：绿而错变体构造无效或判定者宽松，测试退化成门禁检查；替代走法是红队独立构造、盲包、第三方拆封、理由必须引用用户可观察差异。
+- **下一步**：最终验收 Phase 逐 Phase 补行；任一 Phase 判不出效果即 AC 不通过。
+- **动手前必读**：原始需求 R-001 的逐字文本，在 `quality/evidence/build-code/2026-10-31-p12-writeside-experiment/decision-log-fragment.md` 的「原始需求」节；
+    试点 Phase P11 的材料与门禁，P11 文件见上，门禁命令见「怎么验证？」；
+    `skills/spec-plan/templates/phase-template.md` 的七槽；
+    `docs/architecture/test-asset-governance-rules.md` 的「验收标准可执行形式」节（实读存在，2026-10-31 核）。
+- **未决事实**：试点 Phase 已定为 P11，路径与门禁命令已给；
+    执行环境按本机认证 worktree，当前 HEAD `48a15f02`，执行前核 `git status`；
+    独立判定者、红队、第三方、消费者名字未定，owner=主会话派发时填；
+    是否需用户在场未定；
+    语义判定无命令可重放（模板冲突），只记 `只能人读`。
+
+## 这一 Phase 怎么验收？
+
+只跑门禁、契约测试、断言和回归仍会漏掉原始需求，因为绿而错会被放过；所以本节加盲判和消费者观察。
+
+1. **验收标准**：本 Phase 只承接 AC-EFFECT-001 的 P1 行，写成一句能判真假的话。
+   在试点 Phase P11 上，独立判定者只读验收、原始需求、A/B 与门禁命令和原始输出，就能拒绝绿而错、接受做对；真实下游消费者用一次，得到 P11 的原始需求要求的结果。
+   - **判据**：判定者在不知道两份交付标签时正确标出真实交付与绿而错变体，并说出用户可观察差异；
+       答卷同时写出门禁为何区分不了：指认门禁原始输出里哪一项只证明通过、没有覆盖该用户可观察差异；
+       绿而错变体必须通过 P11 已列的全部契约测试、门禁命令、「怎么验证？」表列九个判定器、断言和回归；
+       消费者在真实场景与数据中得到要求的结果，且不需要作者解释；
+       若改既有行为，有改动前基线；本任务产品行为保持原样，故本条当前不适用，不拿空基线充数。
+   - **本片段的选择（门禁为何区分不了由谁答）**：取「判定者判」这一种。理由：判定者是唯一同时看到 A/B 与用户可观察差异的角色；由实验设计者答等于自证。判定者可读门禁命令与原始输出（不含 A/B 标签），答卷必须写出这一问；实验设计者不再另答。
+   - **成功信号**：两份都判对，理由具体；控制有效；消费者完成且不求助作者；拆封记录证明判前不知道标签。
+   - **失败信号**：判错、全收或全拒；
+       理由只写「测试通过」「字段齐全」「退出码 0」；
+       答卷缺「门禁为何区分不了」或只复述退出码；
+       需要作者解释；
+       绿而错变体过不了门禁或表列任一判定器；
+       判前知道标签；
+       消费者是作者/实现者或只复述命令；
+       改既有行为却缺基线。
+   - 判据、成功信号、失败信号三者缺一写 `incomplete` 与缺口；本节不另造验收编号。
+
+2. **场景**：正常场景和反向场景都要写清输入、动作与预期。
+   - **正常场景**：试点 Phase P11 的真实交付 A；
+       输入是 P11 的真实数据与原始需求；
+       判定者只读验收、原始需求、A/B、门禁命令与原始输出（不含标签），消费者按同一场景用一次；
+       预期是 A 被接受、消费者得到要求的结果。
+   - **反向场景 1**：绿而错变体 B；
+       输入是同一场景与数据；
+       B 通过全部门禁、契约测试、「怎么验证？」表列九个判定器、断言和回归，但一个用户可观察结果错；
+       预期是 B 被拒绝，理由指出该结果错，并说明门禁区分不了。
+       只写「出错要报错」不算这个场景。
+   - **反向场景 2**：消费者是作者/实现者，或消费者只复述「命令通过」；预期是判失败，因为有效没有被独立观察。
+   - **反向场景 3**：判定者事先知道 A/B 标签，或作者在判前解释验收；预期是本次盲判无效，重做。
+   - **示意（不是真实试点材料）**：若试点 Phase 是页面，绿而错可以是选择器、契约测试全绿但显示硬编码占位数据；
+       若是文档，可以是章节、链接、lint 全绿但命令步骤让读者失败；
+       若是代码，可以是门禁全绿但一个用户可见分支被写死。
+       真实变体由红队按试点 Phase 选一个，不由作者指定。
+
+3. **环境与数据**：写用什么环境、什么数据、谁提供、版本或来源、如何构造与清理。
+   - **环境**：试点 Phase P11 的真实运行环境；
+       本机认证 worktree，路径同任务根，当前 HEAD `48a15f02`（2026-10-31 实读），执行前核 `git status`；
+       A/B 各放仓外隔离 worktree，不用本工作树当 A/B；
+       若该 Phase 依赖真实外部服务或页面，按原条件执行并写明用户是否在场；
+       盲判本身不需要用户在场，但需要独立判定者；
+       消费者那一次默认也不需要用户在场；若 P11 的真实消费场景必须用户操作，按原条件执行并写明；是否需要用户由主会话派发时确认（owner=主会话），不留给读者猜。
+   - **数据**：真实交付 A、绿而错变体 B、原始需求逐字文本、门禁命令与原始输出（判定者可读，标签除外）、盲包、判定答卷、消费者场景输入与基线（若改既有行为）；
+       A 由实现者提供，B 由红队提供，标签由第三方随机编号，答卷由判定者写，消费者记录由消费者写。
+   - **构造与清理**：A 取 P11 审测收口后的交付（P11 开发已完成，正式审测尚待派发；当前四文件门禁 145 通过只作预检，不作为 A 的最终字节），由 P11 实施者提供；
+       若 P11 未实施或 A 取不到，停，回 build-plan，不代做 A，记 `incomplete` 与恢复条件；
+       B 由红队在 A 的副本上只改一处用户可观察行为，使同一门禁仍全绿；
+       A/B 各复制到仓外隔离目录（可称 worktree，做法同 `quality/evidence/build-code/2026-10-31-p11-bad-input/runbook.sh` 的仓外副本），保留 `tests/`、`runtime/`、`skills/`、`workflows/`、`specs/` 等相对结构，`node_modules` 软链回仓根；
+       门禁 cwd=A/B 各自根目录；在任务根跑只测 A，不是对 B 的控制；
+       标签由第三方随机编号并封存；盲包=两份交付目录、验收节、原始需求、门禁命令与输出、清单（路径+sha256），不含标签映射；哈希用 `shasum -a 256`；拆封前判定者不看映射；
+       盲包与拆封记录由第三方保存；
+       A/B 所在目录随原件一并保留，不删除、不覆写；只关闭其中启动的服务；
+       A/B 原件、失败输出、答卷、消费者记录保留，不删不改。
+   - **拿不到时**：记 `unavailable` 或 `incomplete` 与原因，不写 `N/A` 蒙过去。
+   - **规模与脱敏**：判定对象是两份交付、一份原始需求和一次消费者场景，不是数据集；
+       规模与脱敏不适用，理由是本条不采集个人数据；
+       若试点 Phase 的真实数据含个人信息，按原 Phase 的脱敏要求执行，未核实记 unknown。
+
+4. **用例**：每条用例写编号、对应验收、执行命令或操作、预期结果与判定方式；命令不是判定器。
+   门禁命令与九个判定器的逐条清单在「怎么验证？」；用例 1 按那张表逐个跑，不按文件总数笼统算。
+   - **用例 1（控制有效）**：对 B 跑 P11 的四文件门禁（命令见「怎么验证？」），并核表列九个判定器全部通过（八个具名块各有通过项；ORACLE-C07-TCR 由四文件门禁整体承载）；
+       预期退出码 0，且八个具名块各有具名通过项、C07-TCR 无红；
+       判定方式=原始输出、退出码与逐判定器通过项（`--reporter=verbose` 可看到每个具名块）。
+       若 B 失败（任一门禁或任一判定器红），控制无效，本 Phase 不能判效果。
+   - **用例 2（做对盲判）**：判定者只读验收、原始需求、A/B、门禁命令与原始输出（不含标签），先写「用户应看到什么」「哪类错必须被拒绝」和「门禁为何区分不了」，再标 A/B 并写理由；
+       预期=A 对、B 错、理由具体、门禁缺口具体；
+       判定方式=ORACLE-EFFECT-BLIND 核查答卷必填项（标签、用户可观察差异、门禁为何区分不了），缺一项不算通过。
+   - **用例 3（消费者有效）**：消费者按场景与数据用一次，记录环境、输入、实际结果、是否求助作者、基线；
+       预期=得到要求的结果且不求助作者；
+       判定方式=消费者观察记录，不是再跑一遍门禁。
+   - **用例 4（盲判未泄露）**：第三方核对 A/B 标签封存时间、判定者答卷时间与判前接触记录；
+       预期=判前无标签泄露、无作者解释；
+       判定方式=拆封记录与会话记录。
+   - 用例 1 的命令只证明控制有效，不证明效果；用例 2/3 是语义判定，记 `只能人读`，不伪造命令。
+
+5. **谁判**：写独立测试或独立审查的执行者，必须与实现者不同上下文。
+   - **做对**：独立验收子代理或独立 provider，上下文与作者、实现者都不同；名字与 provider 未提供，owner=主会话派发时填。
+   - **有效**：该 Phase 的真实下游消费者，不是作者、实现者或判定者；名字未提供，owner=主会话派发时填。
+   - **控制与盲包**：红队造 B，第三方编号与拆封；两者都不是作者或实现者；第三方由主会话派独立子代理，名字派发时填，owner=主会话。
+   - **时点**：实现完成、审查问题修完之后才判；不留边写边判的结论。
+   - **边界**：判定者不改本 Phase 的验收标准或实现，只按原判据读真实产出（含门禁命令与原始输出，不含标签）；消费者不改验收，只记录实际使用。
+
+6. **失败回修与重验**：写失败信号、分诊、回哪个 owner 修。
+   - **控制无效**：B 过不了门禁或错得一眼可见；回红队重造，重验用例 1。
+   - **盲判泄露**：标签或作者解释提前暴露；回第三方重新编号，重验用例 2/4。
+   - **判不出效果**：判定者无法区分或理由只引命令/字段；回 Phase 作者补判据，不回实现者改代码；重验用例 2。
+   - **实现确实错**：A 在真实场景中错；回实现 owner 修，修后重验 A、B、消费者与受影响面。
+   - **消费者无法完成**：回该 Phase 的 owner 补场景、数据或基线；若仍无法完成，记 `incomplete` 与条件。
+   - 分诊者不是实现者；结论只按重验原件改，不按修复者自述改；用例与结论怎么更新、谁重报写进承接原件。
+
+7. **承接**：写本 Phase 的验收结论最终记到哪里。
+   - 判定答卷、A/B 原件与 sha256、红队说明、门禁原始输出、拆封记录、消费者观察记录，各留一份原件，放 `quality/evidence/workflowhub-ui-frontend-c07-real-page-verification-20261028/P1-effect/`；
+       该目录是计划路径，未生成前按缺件记；owner=build-code 终末。
+   - 结论写进任务事实库 `facts.jsonl` 的既有字段与 AC-EFFECT-001 的 P1 行；下一消费者读这一行拿到结论与缺口。
+   - 最终验收 Phase 读 P1 行、原件和未覆盖 Phase 清单，逐 Phase 补行；P1 通过不等于 AC 通过。
+
+## 为什么现在做，依据是什么？
+
+不现在改，Phase 验收会继续以门禁绿作为通过，原始需求里的「做没做对、有没有效果」没有落点。
+
+- **结果**：试点 Phase 的一行效果判据与原始记录。
+- **非目标**：其余 Phase、跨任务推广、产品行为改动。
+- **与其它 Phase 的区别**：本 Phase 只证试点一行；最终验收 Phase 证全部行。
+- **依据**：decision-log 需求 1/R-001；spec 的 AC-EFFECT-001；本片段是提议，未经真实确认，确认 owner=build-plan 写卡前交主会话确认，未确认前不改 P11 或 spec。
+
+## 开始前读什么？
+
+本节只列本 Phase 实际用到的锚点；没列进本表的材料不要凭印象引用。
+
+| 材料或锚点 | 本 Phase 用它做什么 | 读取时机 |
+| --- | --- | --- |
+| `quality/evidence/build-code/2026-10-31-p12-writeside-experiment/decision-log-fragment.md` 的「原始需求」节 | 核对效果判据的原义（R-001 逐字） | 开工前 |
+| `quality/evidence/build-code/2026-10-31-p12-writeside-experiment/spec-fragment.md` 的 Appendix A 与 `<材料根>/spec.md` 的 Appendix A | 读取 AC-EFFECT-001 的定义与拟登记位置 | 写卡前 |
+| P11（`<材料根>/phases/P11-去字面断言.md`）的材料与门禁命令 | 构造 A/B、跑控制有效性 | 开工前 |
+| `skills/spec-plan/templates/phase-template.md` 的七槽 | 写本节七槽 | 动笔前 |
+| `docs/architecture/test-asset-governance-rules.md` 的「验收标准可执行形式」节 | 核判定规则与好坏例 | 判定前；实读存在（2026-10-31） |
+
+## 每个文件由谁改，先做什么？
+
+本 Phase 的唯一 writer 是试点 Phase 的材料作者（build-plan 作者），独立判定者、红队、消费者只读并产出记录。
+
+- **修改**：`/Users/Hugh/Hugh/Project/workflowhub-workflowhub-ui-frontend-c07-real-page-verification-20261028/specs/workflowhub-ui-frontend-c07-real-page-verification-20261028/phases/P11-去字面断言.md` 的「这一 Phase 怎么验收？」七槽；
+    owner=build-plan。
+- **新增（提议）**：`<材料根>/spec.md` 的 Appendix A 登记 `AC-EFFECT-001` 的 P1 行；
+    该编号当前不在 C07 spec，定义见 `quality/evidence/build-code/2026-10-31-p12-writeside-experiment/spec-fragment.md` 的 Appendix A；只加这一行，不改现有 11 条 AC，owner=build-plan。
+- **新增**：`quality/evidence/workflowhub-ui-frontend-c07-real-page-verification-20261028/P1-effect/` 下的判定与观察原件；
+    由判定者、消费者、第三方产出，不是开发 writer 写的；
+    计划路径，未生成前按缺件记；owner=build-code 终末。
+- **不改**：试点 Phase 的产品代码、测试与断言；不改实现来让判定变绿。
+- **不改**：decision-log 的验收面；同号索引若需更新，回 make-decision owner，不在本 Phase 写，避免跨阶段双写。
+- **共享路径**：本 Phase 与试点 Phase 共享 `spec.md`；
+    试点 Phase 先写它自己的 AC，本 Phase 只加 P1 行；
+    前后 writer 与依赖见「依赖」。
+- **读集**：原始需求 R-001（`decision-log-fragment.md`）、`spec-fragment.md` 与 `<材料根>/spec.md` 的 AC-EFFECT-001、P11 材料与门禁、phase 模板七槽、test-asset-governance 节。
+- **定序写主**：同一并行批次内 `spec.md` 只有 build-plan 作者持笔；build-code 只读。
+- **接口符号清单**：N/A — 无共享代码接口；共享的是 AC 编号与证据路径。
+- **合并责任**：材料作者提交与冲突协调；失败换新执行者重做。
+- **progress_cursor**：只指向 `facts.jsonl` 的 `phase_progress`，本文件不保存进度值。
+
+**任务卡缺口（本片段不伪造卡片）**：任务卡的 RED/GREEN 门禁命令、预期退出码、ORACLE 与「完成」都要求一条可执行命令；
+    控制有效性已有真实门禁（见「怎么验证？」），但本 Phase 自己的判据是语义盲判，仍写不出 RED/GREEN 命令。
+    强行写会把判定降成脚本或字段检查，正好违背原始需求。
+    此处保留缺口，见「覆盖上限」。
+
+## 每张任务卡怎么写？
+
+本片段不展开任务卡；原因见上节「任务卡缺口」。
+任务卡的 18 个字段要求可执行 RED/GREEN 命令与退出码；本 Phase 的核心是语义盲判。
+硬写会把判定降成命令或字段检查，正好违背原始需求；保留该缺口，不用假卡片冒充完成。
+
+## 怎么验证？
+
+先说清用什么真实输入和同一判定器判目标 RED 与 GREEN，怎样留下原始证据；本节只写验证细节，验收七槽在上节。
+
+开工前四要素清单：逐条需求与承接验收写明验证层、命令或数据、预期结果、失败条件。四项缺一即未开工，不得用占位句补齐。
+
+**门禁命令（真实可执行；2026-10-31 实跑）**
+
+- 材料门禁（在任务根跑；改完 P11 验收与 spec 行后跑；只证材料集仍可读，不证效果）：
+  `node /Users/Hugh/Hugh/Project/workflowhub/tools/cli/run-checks.mjs --material-root /Users/Hugh/Hugh/Project/workflowhub-workflowhub-ui-frontend-c07-real-page-verification-20261028/specs/workflowhub-ui-frontend-c07-real-page-verification-20261028`
+  看到：退出 0、`errors=0`、`ALL CHECKS PASSED`；`phase_count=12`、`task_count=36` 是 2026-10-31 改动前实读对照，不是通过条件；本次只改 P11 验收与 spec 一行，计数应不变，变了先查是否新增 Phase/Task。
+- 试点 Phase 门禁（P11 的 `gate_cmd`；在 A/B 各自根目录跑，`node_modules` 软链回仓根）：
+  `node node_modules/vitest/vitest.mjs run tests/contract/page-audit-doc-contract.test.mjs tests/contract/acceptance-plan.test.mjs tests/contract/n11-plan-quality.test.mjs tests/contract/n11-acceptance-rules.test.mjs`
+  看到：退出 0；当前 `Test Files 4 passed (4)`、`Tests 145 passed (145)`（2026-10-31 实读）。145 是当前对照，不是锁定计数；P11 审测后按当前字节的实际通过数为准，门是退出 0。
+  核具名块：同一条命令后加 `--reporter=verbose`，看到每个 `describe` 名与通过项；默认输出只给文件级总数。
+
+**P11 承接的判定器（逐条列全；八个具名块 + 一个 Phase 级；B 必须全部通过）**
+
+| 判定器 | 承载文件与具名块 | 判什么 |
+| --- | --- | --- |
+| `ORACLE-C07-TCR` | `phases/P11-去字面断言.md` 机器字段 `oracle`；执行入口=下面四文件门禁（P11 的 `gate_cmd`），不另设测试文件 | P11 迁移整体：五条迁移断言各被单点坏输入判红、真实交付 94 通过 |
+| `ORACLE-PAGE-AUDIT-DOC` | `tests/contract/page-audit-doc-contract.test.mjs`：`page-audit.md judgment pack`、`page-audit method wiring` | 判据正文十一节与两处方法接线 |
+| `ORACLE-ACCEPT-PLAN` | `tests/contract/acceptance-plan.test.mjs`：`ORACLE-ACCEPT-PLAN` | 七字段证据计划与缺项 |
+| `ORACLE-N11-CRITERIA-LOCK` | `tests/contract/n11-plan-quality.test.mjs`：`ORACLE-N11-CRITERIA-LOCK` | 三件套与判据锁 |
+| `ORACLE-N11-WRITESET-DIFF` | 同文件：`ORACLE-N11-WRITESET-DIFF` | 写集差异与越界 |
+| `ORACLE-N11-ACCEPT-SCOPE` | `tests/contract/n11-acceptance-rules.test.mjs`：`ORACLE-N11-ACCEPT-SCOPE`（两处与 SKIP-VISIBLE、TIER-MINIMAL 合并命名） | 验收范围与例外 |
+| `ORACLE-N11-ASSET-FIRST` | 同文件：`ORACLE-N11-ASSET-FIRST`（含 `authoritative prohibition presence (approved TCR)`） | 资产先行与登记 |
+| `ORACLE-N11-SKIP-VISIBLE` | 同文件：`ORACLE-N11-ACCEPT-SCOPE ORACLE-N11-SKIP-VISIBLE` | 跳过留在分母 |
+| `ORACLE-N11-TIER-MINIMAL` | 同文件：`ORACLE-N11-ACCEPT-SCOPE ORACLE-N11-TIER-MINIMAL unknown fallback` | 未知边界不自动升全链路 |
+
+- **按文件是四个、按判定器是九个**：四个文件里八个具名块，加 P11 机器字段的 Phase 级 `ORACLE-C07-TCR`；C07-TCR 不另设测试，执行入口就是四文件门禁，不把它当第九个测试块。
+- **两个集合别混**：`ORACLE-EFFECT-BLIND` 是本 Phase 判答卷的判定器，不参与「B 全绿」；上表九个（八个具名块 + `ORACLE-C07-TCR`）是 P11 的判定器，B 必须全部通过。
+
+| 目标 | 任务 | 角色 | gate_cmd 与预期退出码 | 判据与证据路径 |
+| --- | --- | --- | --- | --- |
+| 控制有效：B 通过全部门禁与九个判定器 | 任务 1 | 控制 | 上条「试点 Phase 门禁」与 `0` | 全部门禁原始输出与逐判定器通过项 |
+| 盲包可复现 | 任务 1 | 准备 | 手工步骤：复制 A/B、随机编号、第三方封存；无现成脚本，不写假命令 | 包哈希（`shasum -a 256`）与拆封记录；owner=任务 1 执行者 |
+| 做对：判定者拒绝 B、接受 A | 任务 2 | 判定 | `unavailable — 只能人读` | ORACLE-EFFECT-BLIND 与判定答卷 |
+| 有效：消费者得到要求的结果 | 任务 2 | 消费者 | `unavailable — 真实场景操作，不是命令` | 消费者观察记录 |
+
+- **命令不是判定器**：用例 1 的命令只证明 B 在 P11 的门禁与九个判定器上全绿；
+    它不证明 B 对。
+    判定器 ORACLE-EFFECT-BLIND 必须要求答卷写出标签、用户可观察差异、门禁为何区分不了；
+    缺一项不算通过。
+- **覆盖上限**：只证试点 Phase P11 一行；
+    不证其余 Phase；
+    绿而错只代表红队想到的一种错法；
+    九个判定器只证它们各自声明的职责，不证所有错法；
+    消费者只代表一个真实场景；
+    语义判定不能一条命令重放；
+    不证长期用户效果。
+- **显式不覆盖**：其余 Phase、跨任务推广、产品行为改动、所有错法、统计置信度。
+- **失败了怎么办**：
+  - **风险**：B 太弱或太强、判定者宽松、盲判泄露、消费者不独立、只覆盖一个 Phase。
+  - **影响**：假通过，AC-EFFECT-001 的 P1 行不成立，最终验收 Phase 会重复错。
+  - **缓解**：红队独立、先证明 B 全绿、第三方编号与拆封、理由必须引用用户可观察差异、消费者不是作者/实现者。
+  - **回滚**：材料作者只撤回本 Phase 的验收 hunk，保留试点 Phase 的其它改动、原输入与失败原件；
+      基准是修改前的 `spec.md` 与 Phase 文件，恢复条件是判定结论被证伪。
+  - **补救与交接**：无法回滚时由材料作者修判据、红队重造 B、第三方重编号、消费者重做；下一消费者读新原件；恢复后定向复验用例 1–4。
+  - **触发条件**：B 未全绿（含表列任一判定器红）、判定者接受 B、盲判泄露、消费者只复述命令、任一行缺证据。
+
+## 下一消费者拿什么继续？
+
+执行后，下一消费者拿 P1 行、A/B 原件与 sha256、判定答卷、消费者记录、拆封记录、P11 门禁原始输出与九个判定器的逐项通过项，以及未覆盖 Phase 清单继续。
+执行前，本文件只交判据与缺口清单，不交通过结论；未执行项记 `incomplete` 与所需条件。
+
+## 机器字段（校验器用，人可跳过）
+
+本块是文件级契约，runtime 逐字读取。
+字段名与标签不可改名、不可翻译、不可缩写；写不出的值按缺口记，不写占位。
+
+- **全局规格**: `<材料根>/spec.md#Appendix-A`（全局目标与实现设计的唯一权威指针）
+- **写入集**: `<材料根>/phases/P11-去字面断言.md`；
+    `<材料根>/spec.md`（AC-EFFECT-001 的 P1 行，提议新增；owner=build-plan）
+- **依赖**: `none`（不依赖更早 Phase 的产品代码；判定时点等 P11 正式审测收口，见「构造与清理」）
+- **消费者**: 最终验收 Phase 作者与 build-code 终末（必须与 `phases/index.md` 的 consumer 逐字一致；
+    index 未提供，unknown，owner=build-plan 写卡前核；核不到停在该字段，不猜）
+- **gate_cmd**: `node node_modules/vitest/vitest.mjs run tests/contract/page-audit-doc-contract.test.mjs tests/contract/acceptance-plan.test.mjs tests/contract/n11-plan-quality.test.mjs tests/contract/n11-acceptance-rules.test.mjs`
+    （P11 门禁；在 A/B 各自根目录跑，`node_modules` 软链回仓根；预期退出 0；145 是当前对照，不锁计数；只证控制有效，不证效果；语义判定仍 `只能人读`）
+- **oracle**: ORACLE-EFFECT-BLIND（判答卷必填项；不参与 B 的绿。P11 的九个判定器见「怎么验证？」表）
+- **evidence_path**: `quality/evidence/workflowhub-ui-frontend-c07-real-page-verification-20261028/P1-effect/verdict.md`
+    （计划路径，未生成前按缺件记；owner=build-code 终末）
+- **STOP**: 判定者接受绿而错、B 未全绿（含表列任一判定器红）、盲判泄露、消费者只复述命令、改既有行为却缺基线，或缺证据时停下；
+    回材料作者、红队、第三方或实现 owner；
+    不改实现来让判定变绿。
+- **覆盖 AC**: AC-EFFECT-001（仅 P1 行；其余 Phase 行未覆盖）
+- **Done**: `incomplete — P1 行未执行：A/B、独立判定者、消费者与拆封记录尚未产出；语义判定只能人读，不能由一条命令重放；其余 Phase 行未覆盖。`

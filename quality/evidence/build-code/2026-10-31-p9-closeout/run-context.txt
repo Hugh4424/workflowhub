@@ -1,0 +1,36 @@
+# 运行现场快照（2026-10-31，最终字节）
+
+HEAD: e97e2810 2026-10-31 11:23:53 +0800
+
+## P9 与两份材料
+97747  be157670f72572819779452e5e9a846f5ac6e60b7ddc0d9386b9c7f409d82e2c  specs/workflowhub-ui-frontend-c07-real-page-verification-20261028/phases/P9-材料为读者写.md
+28902  87448f78ac59a113da4f64d7797085c49cd9b2f2f9f3030b23ab9f55c2e5b48e  quality/evidence/build-code/2026-10-31-p9-closeout/phase-fragment.md
+18811  a5ab881f4d163b60a7c34bfbe621291dcba2b9782f72d649060624b3c0024afa  quality/evidence/build-code/2026-10-31-p12-writeside-experiment/phase-fragment.md
+
+## 退出码（最终）
+final4-main-validator.exit -> VALIDATOR_EXIT=0
+final4-p9-gate.exit -> GATE_EXIT=1
+
+## 门禁红项（最终 121 测）
+   × phase prose: each of the current thirty-five cards has independent reader prose 42ms
+   × phase prose: deleting real prose while preserving all machine fields is rejected 24ms
+ Test Files  1 failed | 9 passed (10)
+      Tests  2 failed | 119 passed (121)
+
+## 主仓校验器（最终）
+[run-checks][material] PASS /Users/Hugh/Hugh/Project/workflowhub-workflowhub-ui-frontend-c07-real-page-verification-20261028/specs/workflowhub-ui-frontend-c07-real-page-verification-20261028 phase_count=12 task_count=36 errors=0
+[run-checks] ALL CHECKS PASSED
+
+## 写集（本轮 git status）
+ M skills/frontend-testing/scripts/collect-console.mjs
+ M skills/isolated-browser-qa/SKILL.md
+ M skills/isolated-browser-qa/scripts/browser-qa-session.mjs
+ M "specs/workflowhub-ui-frontend-c07-real-page-verification-20261028/phases/P1-\345\210\244\346\215\256\344\270\216\345\205\261\347\224\250\345\245\221\347\272\246.md"
+ M "specs/workflowhub-ui-frontend-c07-real-page-verification-20261028/phases/P2-\347\234\237\345\256\236\351\207\207\351\233\206\344\270\216\345\244\261\350\264\245\350\257\255\344\271\211.md"
+ M "specs/workflowhub-ui-frontend-c07-real-page-verification-20261028/phases/P3-\345\217\227\346\216\247\346\265\213\350\257\225\351\241\265\344\270\216\346\240\241\345\207\206\350\264\237\344\276\213.md"
+ M "specs/workflowhub-ui-frontend-c07-real-page-verification-20261028/phases/P4-\346\212\245\345\221\212\346\216\245\345\205\245\344\270\216\345\233\236\344\277\256\351\227\255\347\216\257.md"
+ M "specs/workflowhub-ui-frontend-c07-real-page-verification-20261028/phases/P5-\345\256\241\350\256\241\347\274\226\346\216\222\345\205\245\345\217\243\344\270\216\350\247\204\350\214\203\346\266\210\350\264\271\350\257\201\346\230\216.md"
+ M "specs/workflowhub-ui-frontend-c07-real-page-verification-20261028/phases/P7-\344\272\244\344\273\230\350\257\201\346\215\256\344\270\216\351\230\262\345\201\207\347\273\277\345\256\236\347\216\260.md"
+ M "specs/workflowhub-ui-frontend-c07-real-page-verification-20261028/phases/P8-\345\205\250AC\347\273\210\351\252\214.md"
+ M "specs/workflowhub-ui-frontend-c07-real-page-verification-20261028/phases/P9-\346\235\220\346\226\231\344\270\272\350\257\273\350\200\205\345\206\231.md"
+?? quality/evidence/build-code/2026-10-31-p9-closeout/

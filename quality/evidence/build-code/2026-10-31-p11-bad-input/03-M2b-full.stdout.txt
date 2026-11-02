@@ -1,0 +1,197 @@
+
+ RUN  v2.1.9 /private/tmp/p11-badinput-20261031
+
+ ❯ tests/contract/acceptance-plan.test.mjs (75 tests | 45 failed) 48ms
+   × ORACLE-ACCEPT-PLAN > real templates and planning steps carry seven fields and truthful incomplete instructions 11ms
+     → skills/spec-plan/templates/phase-template.md: expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T001: reports remove of duty field Source / FR / AC 2ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T001: reports rename of duty field Source / FR / AC 1ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T001: reports remove of duty field RED/GREEN gate_cmd 1ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T001: reports rename of duty field RED/GREEN gate_cmd 1ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T001: reports remove of duty field expected_exit 1ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T001: reports rename of duty field expected_exit 1ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T001: reports remove of duty field RED target failure 1ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T001: reports rename of duty field RED target failure 1ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T001: reports remove of duty field GREEN oracle 1ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T001: reports rename of duty field GREEN oracle 1ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T001: reports remove of duty field Scenario / fixture or service 1ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T001: reports rename of duty field Scenario / fixture or service 1ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T001: reports remove of duty field Evidence 1ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T001: reports rename of duty field Evidence 1ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T001: reports remove of duty field Inputs 1ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T001: reports rename of duty field Inputs 1ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T001: reports remove of duty field Dependency 1ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T001: reports rename of duty field Dependency 1ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T001: reports remove of duty field Test tier / skill 1ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T001: reports rename of duty field Test tier / skill 1ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T001: reports remove of duty field STOP / recovery 1ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T001: reports rename of duty field STOP / recovery 1ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T002: reports remove of duty field Source / FR / AC 1ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T002: reports rename of duty field Source / FR / AC 1ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T002: reports remove of duty field RED/GREEN gate_cmd 1ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T002: reports rename of duty field RED/GREEN gate_cmd 1ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T002: reports remove of duty field expected_exit 0ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T002: reports rename of duty field expected_exit 0ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T002: reports remove of duty field RED target failure 1ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T002: reports rename of duty field RED target failure 0ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T002: reports remove of duty field GREEN oracle 1ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T002: reports rename of duty field GREEN oracle 1ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T002: reports remove of duty field Scenario / fixture or service 1ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T002: reports rename of duty field Scenario / fixture or service 0ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T002: reports remove of duty field Evidence 0ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T002: reports rename of duty field Evidence 0ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T002: reports remove of duty field Inputs 0ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T002: reports rename of duty field Inputs 0ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T002: reports remove of duty field Dependency 0ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T002: reports rename of duty field Dependency 0ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T002: reports remove of duty field Test tier / skill 0ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T002: reports rename of duty field Test tier / skill 0ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T002: reports remove of duty field STOP / recovery 0ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+   × ORACLE-ACCEPT-PLAN > T002: reports rename of duty field STOP / recovery 1ms
+     → expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 45 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > real templates and planning steps carry seven fields and truthful incomplete instructions
+AssertionError: skills/spec-plan/templates/phase-template.md: expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   Object {
++     "field": "Test tier / skill",
++     "path": "phases/P1-行为结果.md",
++     "phase_id": "P1",
++     "task_id": "T001",
++   },
++ ]
+
+ ❯ tests/contract/acceptance-plan.test.mjs:73:47
+     71|         const result = validatePostPhaseContract(authorMaterials());
+     72|         expect(result.errors, path).toEqual([]);
+     73|         expect(result.facts.field_gaps, path).toEqual([]);
+       |                                               ^
+     74|       }
+     75|       for (const label of ['试过=', '卡在=', '谁提供=', '恢复条件=']) …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/45]⎯
+
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T001: reports remove of duty field Source / FR / AC
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T001: reports rename of duty field Source / FR / AC
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T001: reports remove of duty field RED/GREEN gate_cmd
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T001: reports rename of duty field RED/GREEN gate_cmd
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T001: reports remove of duty field expected_exit
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T001: reports rename of duty field expected_exit
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T001: reports remove of duty field RED target failure
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T001: reports rename of duty field RED target failure
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T001: reports remove of duty field GREEN oracle
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T001: reports rename of duty field GREEN oracle
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T001: reports remove of duty field Scenario / fixture or service
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T001: reports rename of duty field Scenario / fixture or service
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T001: reports remove of duty field Evidence
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T001: reports rename of duty field Evidence
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T001: reports remove of duty field Inputs
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T001: reports rename of duty field Inputs
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T001: reports remove of duty field Dependency
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T001: reports rename of duty field Dependency
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T001: reports remove of duty field Test tier / skill
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T001: reports rename of duty field Test tier / skill
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T001: reports remove of duty field STOP / recovery
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T001: reports rename of duty field STOP / recovery
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T002: reports remove of duty field Source / FR / AC
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T002: reports rename of duty field Source / FR / AC
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T002: reports remove of duty field RED/GREEN gate_cmd
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T002: reports rename of duty field RED/GREEN gate_cmd
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T002: reports remove of duty field expected_exit
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T002: reports rename of duty field expected_exit
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T002: reports remove of duty field RED target failure
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T002: reports rename of duty field RED target failure
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T002: reports remove of duty field GREEN oracle
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T002: reports rename of duty field GREEN oracle
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T002: reports remove of duty field Scenario / fixture or service
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T002: reports rename of duty field Scenario / fixture or service
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T002: reports remove of duty field Evidence
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T002: reports rename of duty field Evidence
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T002: reports remove of duty field Inputs
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T002: reports rename of duty field Inputs
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T002: reports remove of duty field Dependency
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T002: reports rename of duty field Dependency
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T002: reports remove of duty field Test tier / skill
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T002: reports rename of duty field Test tier / skill
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T002: reports remove of duty field STOP / recovery
+ FAIL  tests/contract/acceptance-plan.test.mjs > ORACLE-ACCEPT-PLAN > T002: reports rename of duty field STOP / recovery
+AssertionError: expected [ { phase_id: 'P1', …(3) } ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   Object {
++     "field": "Test tier / skill",
++     "path": "phases/P1-行为结果.md",
++     "phase_id": "P1",
++     "task_id": "T001",
++   },
++ ]
+
+ ❯ tests/contract/acceptance-plan.test.mjs:97:64
+     95|     for (const mode of ['remove', 'rename']) it(`${example.task_id}: r…
+     96|       const good = authorMaterials();
+     97|       expect(validatePostPhaseContract(good).facts.field_gaps).toEqual…
+       |                                                                ^
+     98|       const result = validatePostPhaseContract(changeTaskField(good, e…
+     99|       expect(result.facts.field_gaps).toContainEqual({
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/45]⎯
+
+ Test Files  1 failed (1)
+      Tests  45 failed | 30 passed (75)
+   Start at  08:38:39
+   Duration  175ms (transform 23ms, setup 0ms, collect 28ms, tests 48ms, environment 0ms, prepare 25ms)
+

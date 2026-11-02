@@ -23,7 +23,7 @@ These do not justify switching engines:
 
 ## Order
 
-Canonical Standard Workflow §6 owns repair order; keep this selected engine and owned session, preserve evidence and report the actual terminal blocker.
+Before launch, auto may record engine-fallback: `from` is ego-lite, `to` is agent-browser, `reason` states missing executable or not-running, and `probe` retains the observation. Probe exceptions and EACCES are TOOL_ERROR, never absence. Once selected, keep this selected engine and owned session, preserve evidence and report the actual terminal blocker.
 
 ## Report
 

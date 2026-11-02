@@ -16,11 +16,18 @@ function has(s, re, why) { expect(s, why).toMatch(re); }
 function section(s, title) { const lines=s.split('\n'); const start=lines.findIndex(l => /^#{1,6} /.test(l) && l.includes(title)); expect(start,`section ${title}`).toBeGreaterThanOrEqual(0); const rank=lines[start].match(/^#+/)[0].length; let end=start+1; while(end<lines.length && !new RegExp(`^#{1,${rank}} `).test(lines[end])) end++; return lines.slice(start,end).join('\n'); }
 function blocks(s) { return [...s.matchAll(/^###\s+(\d+)[.、．]\s+([^\n]+)\n([\s\S]*?)(?=^###\s+\d+[.、．]|^##\s|$(?![\s\S]))/gm)].map(m=>({id:Number(m[1]),title:m[2],body:m[3]})); }
 function ordered(s, patterns) { let i=-1; for(const re of patterns) { const tail=s.slice(i+1); const m=re.exec(tail); expect(m,`ordered contract ${re}`).not.toBeNull(); i+=1+m.index+m[0].length; } }
+// Only the skill applicability matrix defines one row per skill; other tables
+// (e.g. the step projection list) may legitimately repeat a skill name.
+function skillMatrixRows(doc) { const lines=doc.split('\n'); const start=lines.findIndex(l => /^\|\s*技能\s*\|\s*适用\s*\|/.test(l)); expect(start,'skill applicability matrix header').toBeGreaterThanOrEqual(0); const rows=[]; for(let i=start+2;i<lines.length && lines[i].startsWith('|');i+=1) rows.push(lines[i]); return rows; }
 const shared31 = ['mini-task','talk-with-zhipeng','decision-log','deep-research','anysearch','grill-with-docs','spec-clarify','spec-specify','spec-prd','spec-analyze','testing-system-blueprint','test-routing-advisor','backend-testing','frontend-testing','fullstack-slice-testing','isolated-browser-qa','project-norm-init','design-source-readiness','frontend-prototype-render','frontend-component-quality','wh-review','intake-decision-review','plan-ceo-review','review','simplicity-guard','plan-design-review','architect-code-review','diagnosing-bugs','stage-reflection','stage-handoff','resolving-merge-conflicts'];
 const complexBaseline = [
   {
     "step_slug": "load-context",
     "completion_evidence": [
+      {
+        "kind": "decision_log_section",
+        "uri_or_path": "decision-log.md#级别与路线"
+      },
       {
         "kind": "phase_task_facts",
         "uri_or_path": "facts.jsonl"
@@ -31,6 +38,10 @@ const complexBaseline = [
     "step_slug": "outline-hypothesis-talk",
     "completion_evidence": [
       {
+        "kind": "talk_original",
+        "uri_or_path": "quality/evidence/decision-log-refs/talk/"
+      },
+      {
         "kind": "phase_task_facts",
         "uri_or_path": "facts.jsonl"
       }
@@ -40,18 +51,22 @@ const complexBaseline = [
     "step_slug": "research-and-diverge",
     "completion_evidence": [
       {
-        "kind": "phase_task_facts",
-        "uri_or_path": "facts.jsonl"
+        "kind": "research_report",
+        "uri_or_path": "quality/evidence/research/"
       },
       {
-        "kind": "quality_facts",
-        "uri_or_path": "quality/evidence/"
+        "kind": "phase_task_facts",
+        "uri_or_path": "facts.jsonl"
       }
     ]
   },
   {
     "step_slug": "outline-revision-check",
     "completion_evidence": [
+      {
+        "kind": "quality_evidence",
+        "uri_or_path": "quality/evidence/decision-log-refs/requirement-index.md"
+      },
       {
         "kind": "phase_task_facts",
         "uri_or_path": "facts.jsonl"
@@ -62,6 +77,10 @@ const complexBaseline = [
     "step_slug": "outline-talk",
     "completion_evidence": [
       {
+        "kind": "talk_original",
+        "uri_or_path": "quality/evidence/decision-log-refs/talk/"
+      },
+      {
         "kind": "phase_task_facts",
         "uri_or_path": "facts.jsonl"
       }
@@ -70,6 +89,10 @@ const complexBaseline = [
   {
     "step_slug": "adversarial-direction-check",
     "completion_evidence": [
+      {
+        "kind": "command_receipt",
+        "uri_or_path": "quality/tests/"
+      },
       {
         "kind": "phase_task_facts",
         "uri_or_path": "facts.jsonl"
@@ -80,18 +103,22 @@ const complexBaseline = [
     "step_slug": "direction-advice",
     "completion_evidence": [
       {
-        "kind": "phase_task_facts",
-        "uri_or_path": "facts.jsonl"
-      },
-      {
         "kind": "review",
         "uri_or_path": "quality/reviews/"
+      },
+      {
+        "kind": "phase_task_facts",
+        "uri_or_path": "facts.jsonl"
       }
     ]
   },
   {
     "step_slug": "module-breadth-confirm",
     "completion_evidence": [
+      {
+        "kind": "talk_original",
+        "uri_or_path": "quality/evidence/decision-log-refs/talk/"
+      },
       {
         "kind": "phase_task_facts",
         "uri_or_path": "facts.jsonl"
@@ -102,6 +129,10 @@ const complexBaseline = [
     "step_slug": "module-convergence",
     "completion_evidence": [
       {
+        "kind": "quality_evidence",
+        "uri_or_path": "quality/evidence/decision-log-refs/convergence-checklist.md"
+      },
+      {
         "kind": "phase_task_facts",
         "uri_or_path": "facts.jsonl"
       }
@@ -111,12 +142,12 @@ const complexBaseline = [
     "step_slug": "detail-advice",
     "completion_evidence": [
       {
-        "kind": "phase_task_facts",
-        "uri_or_path": "facts.jsonl"
-      },
-      {
         "kind": "review",
         "uri_or_path": "quality/reviews/"
+      },
+      {
+        "kind": "phase_task_facts",
+        "uri_or_path": "facts.jsonl"
       }
     ]
   },
@@ -133,6 +164,10 @@ const complexBaseline = [
     "step_slug": "write-decision-draft",
     "completion_evidence": [
       {
+        "kind": "quality_draft",
+        "uri_or_path": "quality/evidence/decision-log-refs/drafts/"
+      },
+      {
         "kind": "phase_task_facts",
         "uri_or_path": "facts.jsonl"
       }
@@ -141,6 +176,10 @@ const complexBaseline = [
   {
     "step_slug": "approve-decision",
     "completion_evidence": [
+      {
+        "kind": "human_confirmation",
+        "uri_or_path": "quality/evidence/human-confirmations/"
+      },
       {
         "kind": "phase_task_facts",
         "uri_or_path": "facts.jsonl"
@@ -151,12 +190,12 @@ const complexBaseline = [
     "step_slug": "stage-end-spec-analyze",
     "completion_evidence": [
       {
-        "kind": "phase_task_facts",
-        "uri_or_path": "facts.jsonl"
+        "kind": "quality_evidence",
+        "uri_or_path": "quality/evidence/spec-analyze/"
       },
       {
-        "kind": "quality_facts",
-        "uri_or_path": "quality/evidence/"
+        "kind": "phase_task_facts",
+        "uri_or_path": "facts.jsonl"
       }
     ]
   },
@@ -164,13 +203,20 @@ const complexBaseline = [
     "step_slug": "closeout",
     "completion_evidence": [
       {
+        "kind": "handoff",
+        "uri_or_path": "quality/evidence/handoff/"
+      },
+      {
+        "kind": "cost_ledger",
+        "uri_or_path": "main-agent-cost.md"
+      },
+      {
         "kind": "phase_task_facts",
         "uri_or_path": "facts.jsonl"
       }
     ]
   }
-];
-describe('ORACLE-FLOW-STEPS: preserved complex and explicit route contracts', () => {
+];describe('ORACLE-FLOW-STEPS: preserved complex and explicit route contracts', () => {
   test('root keeps N6 15 slugs and artifact identities, including closeout', () => {
     const s=steps('complex'); expect(s.schema_version).toBe('2.0.0'); expect(s.stage_slug).toBe('make-decision');
     expect(s.steps.map(({step_slug,completion_evidence})=>({step_slug,completion_evidence}))).toEqual(complexBaseline);
@@ -195,7 +241,7 @@ describe('ORACLE-FLOW-STEPS: preserved complex and explicit route contracts', ()
       expect(s.stage_slug).toBe('make-decision'); expect(s.steps).toHaveLength(count); expect(bs).toHaveLength(count);
       expect(s.steps.map(x=>x.step_id)).toEqual(Array.from({length:count},(_,i)=>i+1));
       expect(new Set(s.steps.map(x=>x.step_slug)).size).toBe(count); expect(s.steps.at(-1).step_slug).toBe('closeout');
-      s.steps.forEach((step,i)=>{ expect(step.step_slug).toMatch(/^[a-z][a-z0-9-]+$/); expect(step.observable_result.trim()).not.toBe(''); expect(step.completion_evidence.length).toBeGreaterThan(0); for(const e of step.completion_evidence) { expect(e.kind).toBeTruthy(); expect(e.uri_or_path).toBeTruthy(); } expect(bs[i].id).toBe(i+1); expect(bs[i].title).toContain(step.step_slug); has(bs[i].body,/产物[^\n]*[：:][^\n]+/,'actual step output'); has(bs[i].body,/进入[^\n]*条件[^\n]*[：:][^\n]+/,'next step condition'); });
+      s.steps.forEach((step,i)=>{ expect(step.step_slug).toMatch(/^[a-z][a-z0-9-]+$/); expect(step.observable_result.trim()).not.toBe(''); expect(step.completion_evidence.length).toBeGreaterThan(0); for(const e of step.completion_evidence) { expect(e.kind).toBeTruthy(); expect(e.uri_or_path).toBeTruthy(); } expect(step.completion_evidence.some(e => e.uri_or_path !== 'facts.jsonl'), `${level} ${step.step_slug} declares a non-facts trace`).toBe(true); expect(bs[i].id).toBe(i+1); expect(bs[i].title).toContain(step.step_slug); has(bs[i].body,/产物[^\n]*[：:][^\n]+/,'actual step output'); has(bs[i].body,/进入[^\n]*条件[^\n]*[：:][^\n]+/,'next step condition'); });
       for(const re of [/调研/,/大纲/,/决策|决定/,/收敛/,/不.{0,8}(写死|限制|固定).{0,15}(问题|提问|问答|轮数)/,/未决.{0,8}清零/,/跳过.{0,12}(不调用|不执行)/]) has(doc,re,'common actions and real skip');
       expect(doc).not.toMatch(/(?:最多|至多|上限[为是：:]?)\s*[1-9一二三四五六七八九十]+\s*(?:个问题|轮问答|轮提问)/);
     });
@@ -236,8 +282,9 @@ describe('ORACLE-FLOW-STEPS: per-flow original skill denominator and cockpit own
     test(`${level}: all original 31 skills have an explicit status and reason, without duplicate definitions`, () => {
       const doc=text(level); expect(shared31).toHaveLength(31);
       for(const category of ['必需','按需','跳过']) expect(doc).toContain(category);
+      const matrix=skillMatrixRows(doc);
       for(const name of shared31) {
-        const rows=doc.split('\n').filter(l=>l.startsWith('|') && new RegExp('`'+name+'`').test(l));
+        const rows=matrix.filter(l=>new RegExp('`'+name+'`').test(l));
         expect(rows,`${level}/${name}: one explicit matrix row`).toHaveLength(1);
         has(rows[0],/必需|按需|跳过/,`${name}: selected applicability`);
         const cells=rows[0].split('|').map(x=>x.trim()).filter(Boolean); expect(cells.length,`${name}: status plus actual trigger/reason`).toBeGreaterThanOrEqual(3); expect(cells.at(-1).replace(/[`—-]/g,'').trim().length,`${name}: nonempty trigger or skip reason`).toBeGreaterThan(2);
@@ -473,4 +520,12 @@ describe('N10 direction review order',()=>{
     expect(directionOrderIssues(body,changed)).toContain('order');
     expect(directionOrderIssues(body,list)).toEqual([]);
   });
+  test('planning closeout declares no physical-delivery git authorization', () => {
+    const closeout = steps('planning').steps.find(step => step.step_slug === 'closeout');
+    expect(closeout.completion_evidence.map(entry => entry.uri_or_path)).toEqual([
+      'quality/evidence/handoff/',
+      'facts.jsonl',
+    ]);
+  });
+
 });

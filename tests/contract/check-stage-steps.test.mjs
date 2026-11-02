@@ -64,7 +64,7 @@ describe('ORACLE-P1-STAGE-STEPS checker', () => {
       put(task, 'facts.jsonl', JSON.stringify({ record_kind: 'stage', task_id: 'controlled', stage: 'make-decision', source: 'controlled test observations, not actual user approval', evidence: { value: entries } }) + '\n');
       const producer = () => runFinalChainCheck({ taskPath: task, materialRoot: materials });
       expect(producer().workflow_steps.filter(row => row.stage === 'make-decision').map(row => row.state)).toEqual(Array(15).fill('completed'));
-      expect(JSON.parse(invoke().stdout).stages[0].steps[7]).toMatchObject({ judgment: '已留痕', state: 'completed' });
+      expect(JSON.parse(invoke().stdout).stages[0].steps[7]).toMatchObject({ judgment: '已完成', state: 'completed' });
       const eighthPath = join(task, entries[7].ref), eighthBytes = readFileSync(eighthPath);
       rmSync(eighthPath);
       expect(producer().workflow_steps.filter(row => row.stage === 'make-decision').map(row => row.state)).toEqual([...Array(7).fill('completed'), 'unavailable', ...Array(7).fill('completed')]);
@@ -85,7 +85,7 @@ describe('ORACLE-P1-STAGE-STEPS checker', () => {
       expect(readFileSync(join(task, 'facts.jsonl'), 'utf8')).toBe(JSON.stringify({ record_kind: 'stage', task_id: 'controlled', stage: 'make-decision', source: 'controlled test observations, not actual user approval', evidence: { value: entries } }) + '\n');
       writeFileSync(eighthPath, eighthBytes);
       expect(producer().workflow_steps[7].state).toBe('completed');
-      expect(JSON.parse(invoke().stdout).stages[0].steps[7]).toMatchObject({ judgment: '已留痕', state: 'completed' });
+      expect(JSON.parse(invoke().stdout).stages[0].steps[7]).toMatchObject({ judgment: '已完成', state: 'completed' });
       const manifest = JSON.parse(readFileSync(join(repo, 'workflows/build-prd/steps.json'), 'utf8'));
       manifest.steps[0].observable_result = 'Controlled missing mapping marker';
       put(repo, 'workflows/build-prd/steps.json', manifest);
@@ -132,8 +132,59 @@ describe('ORACLE-P1-STAGE-STEPS checker', () => {
       ['make-decision', '已配置', 15], ['build-plan', '已配置', 12],
       ['build-code', '已配置', 12], ['build-prd', '已配置', 6],
     ]);
+    expect(report.stages.every(row => row.definition === 'available')).toBe(true);
     expect(report.errors.join('\n')).toContain('task.json');
     expect(report.stages[0].steps[7]).toMatchObject({ judgment: '未留痕' });
+  });
+});
+
+describe('step definition source and failure wording', () => {
+  const taskPath = root => join(root, 'missing-task');
+  const lineSaysUntraced = text => text.split('\n').some(line => /：未留痕/.test(line));
+  it('reads the installed workflow manifests when cwd has no workflows/', () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'p1-cwd-')));
+    try {
+      const business = join(root, 'business');
+      mkdirSync(join(business, 'workflows/build-code'), { recursive: true });
+      // A decoy next to the caller must not win over the installed package.
+      writeFileSync(join(business, 'workflows/build-code/steps.json'), '{"stage_slug":"build-code","steps":[]}\n');
+      const result = spawnSync(process.execPath, [entry, '--stage=build-code', `--task-path=${taskPath(root)}`, '--json'], { cwd: business, encoding: 'utf8' });
+      expect(result.status).toBe(0);
+      const report = JSON.parse(result.stdout);
+      const installed = JSON.parse(readFileSync(resolve('workflows/build-code/steps.json'), 'utf8'));
+      expect(report.stages).toHaveLength(1);
+      expect(report.stages[0]).toMatchObject({ stage: 'build-code', definition: 'available', mapping: '已配置' });
+      expect(report.stages[0].steps.map(step => step.step_slug)).toEqual(installed.steps.map(step => step.step_slug));
+      expect(result.stdout).not.toContain('读不到步骤定义');
+    } finally { rmSync(root, { recursive: true }); }
+  });
+  it('maps a producer definition failure to 未判定 wording, never a step verdict', () => {
+    expect(checker.producerDefinitionError(['workflows/make-decision/steps.json: steps manifest is unreadable: ENOENT', 'other'], 'make-decision'))
+      .toBe('steps manifest is unreadable: ENOENT');
+    expect(checker.producerDefinitionError(['workflows/build-plan/steps.json: other'], 'make-decision')).toBeNull();
+    expect(checker.producerDefinitionError(undefined, 'make-decision')).toBeNull();
+  });
+  it.each([
+    ['a missing manifest', null],
+    ['an invalid manifest', '{"stage_slug":"build-plan","steps":[]}\n'],
+  ])('names %s as unreadable instead of judging steps 未留痕', (_label, content) => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'p1-definition-')));
+    try {
+      const source = join(root, 'repo');
+      mkdirSync(join(source, 'workflows/build-plan'), { recursive: true });
+      if (content !== null) writeFileSync(join(source, 'workflows/build-plan/steps.json'), content);
+      const args = [entry, '--stage=build-plan', `--task-path=${taskPath(root)}`, `--repo-root=${source}`];
+      const result = spawnSync(process.execPath, [...args, '--json'], { encoding: 'utf8' });
+      expect(result.status).toBe(0);
+      const report = JSON.parse(result.stdout);
+      expect(report.stages[0]).toMatchObject({ stage: 'build-plan', definition: 'unavailable', mapping: '未配置', steps: [] });
+      expect(report.stages[0].definition_error).toContain('build-plan/steps.json');
+      expect(report.errors.join('\n')).toContain('读不到步骤定义');
+      const text = spawnSync(process.execPath, args, { encoding: 'utf8' }).stdout;
+      expect(text).toContain('读不到步骤定义');
+      expect(text).toContain('未判定');
+      expect(lineSaysUntraced(text)).toBe(false);
+    } finally { rmSync(root, { recursive: true }); }
   });
 });
 
@@ -142,7 +193,7 @@ function convergenceFixture(check) {
   const task = join(root, 'task'), materials = join(root, 'materials');
   const ref = 'quality/evidence/decision-log-refs/controlled-convergence-checklist.md';
   const put = (base, name, value) => { const path = join(base, name); mkdirSync(dirnameOf(path), { recursive: true }); writeFileSync(path, value); };
-  const decision = '# Controlled\n- 推荐级别：复杂\n' + firstDecision + secondDecision + `清单：\`${ref}\`\n`;
+  const decision = '# Controlled\n## 级别与路线\n- 推荐级别：复杂\n' + firstDecision + secondDecision + `清单：\`${ref}\`\n`;
   const invoke = () => { const result = spawnSync(process.execPath, [entry, `--task-path=${task}`, `--material-root=${materials}`, `--repo-root=${resolve('.')}`, '--json'], { encoding: 'utf8' }); expect(result.status).toBe(0); return JSON.parse(result.stdout); };
   try {
     put(task, 'task.json', JSON.stringify({ schema_version:'1.0.0', task_id:'controlled', target_repo_root:resolve('.'), baseline_commit:'HEAD', activation_cohort:'post' }));
@@ -295,4 +346,380 @@ describe('module range admission before expansion', () => {
       expect(report.convergence.complete).toBe(false);
     }
   }));
+});
+
+describe('current-shape 工作包 N / 决定 N mapping', () => {
+  function currentShapeFixture(check) {
+    return convergenceFixture(({ task, materials, ref, put, invoke }) => {
+      const mapping = '## 旧编号对照\n| 正文编号 | 旧编号 | 说明 |\n| --- | --- | --- |\n| 工作包 1 | WP1 | controlled |\n| 决定 1 | D-001 | controlled |\n';
+      const decision = `# Controlled\n- 推荐级别：复杂\n### 工作包 1：controlled\n- **要交付什么**：受控结果；消费者是 controlled consumer。\n#### 决定 1：controlled decision\n- **做什么**：读取受控原件并报告缺口。\n- **不做什么**：不写运行时。\n- **风险**：缺证据误报。\n| AC-01 | 受控结果可回读 | 目标内容明确 |\n| OI-001 | 待独立核对 | owner：受控维护者 |\n细化：\`quality/evidence/decision-log-refs/controlled-module-details.md\`\n${mapping}\n清单：\`${ref}\`\n`;
+      put(materials, 'decision-log.md', decision);
+      const row = validOne.replaceAll('D-001', '决定 1');
+      check({ task, materials, ref, put, invoke, decision, row });
+    });
+  }
+  it('maps 工作包 1 and 决定 1 through 旧编号对照 and resolves all eight fields', () => currentShapeFixture(({ task, ref, put, invoke, row }) => {
+    put(task, ref, row);
+    const report = invoke();
+    expect(report.errors).toEqual([]);
+    expect(report.convergence.complete).toBe(true);
+    expect(report.modules.map(module => module.fields.map(field => field.present))).toEqual([Array(8).fill(true)]);
+  }));
+  it('reports a missing 决定 1 mapping instead of silently skipping the field', () => currentShapeFixture(({ task, materials, ref, put, invoke, row, decision }) => {
+    put(task, ref, row);
+    // Rewrite without the decision row. The fixture's check callback owns the
+    // material root, so the decision is re-put here with the same checklist.
+    const withoutDecision = decision.replace('| 决定 1 | D-001 | controlled |\n', '');
+    put(materials, 'decision-log.md', withoutDecision);
+    const report = invoke();
+    expect(report.errors.join('\n')).toContain('决定 1');
+    expect(report.convergence.gaps).toContain('决定 1 未取得旧编号映射或正文');
+    expect(report.convergence.complete).toBe(false);
+  }));
+  it('recognizes 工作包 1 without a mapping row instead of treating the module set as empty', () => currentShapeFixture(({ task, materials, ref, put, invoke, row, decision }) => {
+    put(task, ref, row);
+    const withoutPackage = decision.replace('| 工作包 1 | WP1 | controlled |\n', '');
+    put(materials, 'decision-log.md', withoutPackage);
+    const report = invoke();
+    expect(report.errors.join('\n')).not.toContain('未取得 WP 旧编号映射');
+    expect(report.convergence.expected_modules).toEqual(['1']);
+    expect(report.convergence.complete).toBe(true);
+  }));
+  it('keeps an explicit mapping when it names a different WP id', () => currentShapeFixture(({ task, materials, ref, put, invoke, row, decision }) => {
+    put(task, ref, row.replace('| 1 controlled |', '| 7 controlled |'));
+    put(materials, 'decision-log.md', decision.replace('| 工作包 1 | WP1 | controlled |', '| 工作包 1 | WP7 | controlled |'));
+    const report = invoke();
+    expect(report.convergence.expected_modules).toEqual(['7']);
+    expect(report.convergence.complete).toBe(true);
+  }));
+});
+
+describe('WPn package table behavior', () => {
+  it('keeps the archived WPn fields unchanged', () => convergenceFixture(({ invoke }) => {
+    const report = invoke();
+    expect(report.convergence).toEqual({
+      source: 'quality/evidence/decision-log-refs/controlled-convergence-checklist.md',
+      expected_modules: ['1', '2'],
+      complete: true,
+      gaps: [],
+    });
+    expect(report.modules.map(module => [module.name, module.state, module.fields.map(field => field.present)])).toEqual([
+      ['1 controlled', '已收敛', Array(8).fill(true)],
+      ['2 second', '已收敛', Array(8).fill(true)],
+    ]);
+    expect(report.level).toBe('- 推荐级别：复杂');
+    expect(report.errors).toEqual([]);
+  }));
+  it('reads the hyphenated WP-n heading form', () => convergenceFixture(({ task, materials, ref, put, invoke }) => {
+    const decision = `# Controlled\n- 推荐级别：复杂\n#### WP-3 — controlled\n- **结果与消费者**：受控结果；消费者是 controlled consumer。\n#### D-001 — controlled decision\n- **做什么**：读取受控原件并报告缺口。\n- **不做什么**：不写运行时。\n- **风险**：缺证据误报。\n| AC-01 | 受控结果可回读 | 目标内容明确 |\n| OI-001 | 待独立核对 | owner：受控维护者 |\n细化：\`quality/evidence/decision-log-refs/controlled-module-details.md\`\n清单：\`${ref}\`\n`;
+    put(materials, 'decision-log.md', decision);
+    put(task, ref, validOne.replace('| 1 controlled |', '| 3 controlled |'));
+    const report = invoke();
+    expect(report.convergence.expected_modules).toEqual(['3']);
+    expect(report.convergence.complete).toBe(true);
+  }));
+});
+
+describe('Chinese-numbered 工作包 package table', () => {
+  function chinesePackageFixture(heading, row, check) {
+    return convergenceFixture(({ task, materials, ref, put, invoke }) => {
+      const decision = `# Controlled\n- 推荐级别：复杂\n${heading}\n- **要交付什么**：受控结果；消费者是 controlled consumer。\n#### D-001 — controlled decision\n- **做什么**：读取受控原件并报告缺口。\n- **不做什么**：不写运行时。\n- **风险**：缺证据误报。\n| AC-01 | 受控结果可回读 | 目标内容明确 |\n| OI-001 | 待独立核对 | owner：受控维护者 |\n细化：\`quality/evidence/decision-log-refs/controlled-module-details.md\`\n清单：\`${ref}\`\n`;
+      put(materials, 'decision-log.md', decision);
+      put(task, ref, row);
+      check({ task, materials, ref, put, invoke, decision });
+    });
+  }
+  const rowFor = id => validOne.replace('| 1 controlled |', `| ${id} controlled |`);
+  it.each([
+    ['Arabic', '### 工作包 1 — controlled', '1'],
+    ['circled one', '### 工作包 ① — controlled', '1'],
+    ['circled ten', '### 工作包 ⑩ — controlled', '10'],
+    ['Chinese one', '### 工作包 一 — controlled', '1'],
+    ['Chinese ten', '### 工作包 十 — controlled', '10'],
+    ['full-width parentheses', '### 工作包（1）— controlled', '1'],
+    ['full-width parentheses Chinese', '### 工作包（一）— controlled', '1'],
+    ['ASCII parentheses circled', '### 工作包(②) — controlled', '2'],
+    ['colon separator', '### 工作包 3：controlled', '3'],
+    ['bare', '### 工作包 4', '4'],
+    ['bold', '**工作包 5 — controlled**', '5'],
+  ])('reads %s heading as a package', (_label, heading, id) => chinesePackageFixture(heading, rowFor(id), ({ invoke }) => {
+    const report = invoke();
+    expect(report.convergence.expected_modules).toEqual([id]);
+    expect(report.convergence.complete).toBe(true);
+    expect(report.errors).toEqual([]);
+    expect(report.modules.map(module => module.fields.map(field => field.present))).toEqual([Array(8).fill(true)]);
+  }));
+  it('mixes WPn and Chinese headings without double counting', () => convergenceFixture(({ task, materials, ref, put, invoke }) => {
+    const decision = `# Controlled\n- 推荐级别：复杂\n#### WP1 — controlled\n- **结果与消费者**：受控结果；消费者是 controlled consumer。\n#### D-001 — controlled decision\n- **做什么**：读取受控原件并报告缺口。\n- **不做什么**：不写运行时。\n- **风险**：缺证据误报。\n| AC-01 | 受控结果可回读 | 目标内容明确 |\n| OI-001 | 待独立核对 | owner：受控维护者 |\n### 工作包 2 — second\n- **结果与消费者**：受控第二结果；消费者是 WP1。\n#### D-002 — second decision\n- **做什么**：准备第二输入。\n- **不做什么**：不变更第一输入。\n- **风险**：输入缺失。\n细化：\`quality/evidence/decision-log-refs/controlled-module-details.md\`\n清单：\`${ref}\`\n`;
+    put(materials, 'decision-log.md', decision);
+    put(task, ref, validOne + validTwo);
+    const report = invoke();
+    expect(report.convergence.expected_modules).toEqual(['1', '2']);
+    expect(report.convergence.complete).toBe(true);
+    expect(report.modules.map(module => module.name)).toEqual(['1 controlled', '2 second']);
+  }));
+  it('does not count the same package twice when both forms name it', () => convergenceFixture(({ materials, decision, put, invoke }) => {
+    put(materials, 'decision-log.md', decision.replace('#### WP2 — second', '#### WP2 — second\n### 工作包 2 — duplicate'));
+    const report = invoke();
+    expect(report.convergence.expected_modules).toEqual(['1', '2']);
+    expect(report.errors.join('\n')).not.toContain('权威模块集合未取得或重复');
+  }));
+  it('still reports duplicate Chinese package headings as an unusable package set', () => chinesePackageFixture('### 工作包 1 — controlled', rowFor('1'), ({ materials, put, invoke, decision }) => {
+    put(materials, 'decision-log.md', decision.replace('### 工作包 1 — controlled', '### 工作包 1 — controlled\n### 工作包 1 — duplicate'));
+    const report = invoke();
+    expect(report.convergence.expected_modules).toEqual(['1', '1']);
+    expect(report.convergence.gaps).toContain('权威模块集合未取得或重复');
+    expect(report.errors.join('\n')).toContain('decision-log.md: 权威模块集合未取得或重复');
+  }));
+  it('does not treat prose or mapping-table rows as package headings', () => convergenceFixture(({ materials, decision, put, invoke }) => {
+    put(materials, 'decision-log.md', decision.replace('#### WP1 — controlled', '### 结果 — controlled').replace('#### WP2 — second', '### 第二结果 — second') + '\n正文提到 工作包 1 — 旧映射见附录。\n\n| 工作包 1 | WP1 | controlled |\n');
+    const report = invoke();
+    expect(report.convergence.expected_modules).toEqual([]);
+    expect(report.convergence.gaps).toContain('权威模块集合未取得或重复');
+  }));
+  it('still requires a package table when neither form exists', () => convergenceFixture(({ materials, decision, put, invoke }) => {
+    put(materials, 'decision-log.md', decision.replace('#### WP1 — controlled', '### 结果 — controlled').replace('#### WP2 — second', '### 第二结果 — second'));
+    const report = invoke();
+    expect(report.convergence.expected_modules).toEqual([]);
+    expect(report.convergence.complete).toBe(false);
+    expect(report.errors.join('\n')).toContain('decision-log.md: 权威模块集合未取得或重复');
+  }));
+});
+
+// A readable original is a trace fact, not a completion verdict. Completion is
+// only the existing final-chain producer's completed state; these cases keep
+// the two layers separate without adding a new state or progress object.
+describe('declared originals are trace only', () => {
+  function traceCase({ evidence, material = '# Controlled\n', files = [], facts = '' }) {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'p1-trace-')));
+    const put = (base, path, value) => { const file = join(base, path); mkdirSync(join(file, '..'), { recursive: true }); writeFileSync(file, typeof value === 'string' ? value : JSON.stringify(value)); };
+    const repo = join(root, 'repo'), task = join(root, 'task'), materials = join(root, 'materials');
+    try {
+      put(repo, 'workflows/make-decision/SKILL.md', '# Controlled\n## 方法\nOwned observation.\n');
+      put(repo, 'workflows/make-decision/steps.json', { schema_version: '2.0.0', stage_slug: 'make-decision', steps: [{ step_id: 1, step_slug: 'case-step', observable_result: 'Controlled. 判定消费：workflows/make-decision/SKILL.md#方法；原件：controlled original', completion_evidence: evidence }] });
+      put(task, 'task.json', { schema_version: '1.0.0', task_id: 'trace-case', baseline_commit: 'HEAD', target_repo_root: repo, activation_cohort: 'post' });
+      put(task, 'facts.jsonl', facts);
+      put(materials, 'decision-log.md', material);
+      put(materials, 'step-consumer-design.md', '| [controlled](../../workflows/make-decision/steps.json#L1) `case-step` | observation | human | owner |');
+      for (const [path, value] of files) put(task, path, value);
+      const report = checker.runStageStepsCheck({ taskPath: task, materialRoot: materials, repoRoot: repo, stage: 'make-decision' });
+      return report.stages[0].steps[0];
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  }
+  const facts = { kind: 'phase_task_facts', uri_or_path: 'facts.jsonl' };
+  const human = { source: 'workflows/make-decision/steps.json', step_slug: 'case-step', reader: 'controlled independent reader', inputs: ['owned observation'], observation: 'Read the named controlled observation.', criteria_ref: 'workflows/make-decision/SKILL.md#方法', conclusion: 'completed', limits: [] };
+  const humanFacts = JSON.stringify({ record_kind: 'stage', task_id: 'trace-case', stage: 'make-decision', source: 'controlled', evidence: { value: [{ ref: 'quality/evidence/case.json', source: 'workflows/make-decision/steps.json', step_slug: 'case-step' }] } }) + '\n';
+
+  it('a readable original is 已留痕/unavailable, never completed', () => {
+    expect(traceCase({ evidence: [{ kind: 'decision_log_section', uri_or_path: 'decision-log.md#级别与路线' }, facts], material: '# C\n## 级别与路线\n真实记录。\n' })).toMatchObject({ judgment: '已留痕', state: 'unavailable' });
+  });
+  it('a self-report without the declared original is 未留痕', () => {
+    expect(traceCase({ evidence: [{ kind: 'decision_log_section', uri_or_path: 'decision-log.md#级别与路线' }, facts], material: '# C\n本步已完成。\n', facts: JSON.stringify({ record_kind: 'stage', task_id: 'trace-case', stage: 'make-decision', source: 'self report', note: '已完成' }) + '\n' })).toMatchObject({ judgment: '未留痕' });
+  });
+  it('an empty-shell section is 未留痕', () => {
+    expect(traceCase({ evidence: [{ kind: 'decision_log_section', uri_or_path: 'decision-log.md#级别与路线' }, facts], material: '# C\n## 级别与路线\n   \n' })).toMatchObject({ judgment: '未留痕' });
+  });
+  it('an unrelated research file is trace only', () => {
+    expect(traceCase({ evidence: [{ kind: 'research_report', uri_or_path: 'quality/evidence/research/' }, facts], files: [['quality/evidence/research/other-topic.json', { topic: 'unrelated' }]] })).toMatchObject({ judgment: '已留痕', state: 'unavailable' });
+  });
+  it('a stored user reply is trace only', () => {
+    expect(traceCase({ evidence: [{ kind: 'human_confirmation', uri_or_path: 'quality/evidence/human-confirmations/' }, facts], files: [['quality/evidence/human-confirmations/reply.json', { stage: 'make-decision', decision: 'approved', reply: '好' }]] })).toMatchObject({ judgment: '已留痕', state: 'unavailable' });
+  });
+  it('an old direction review is trace only', () => {
+    expect(traceCase({ evidence: [{ kind: 'review', uri_or_path: 'quality/reviews/' }, facts], files: [['quality/reviews/direction.json', { stage: 'make-decision', review_track: 'direction', status: 'available' }]] })).toMatchObject({ judgment: '已留痕', state: 'unavailable' });
+  });
+  function stageScopeCase(material) {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'p1-scope-')));
+    const put = (base, path, value) => { const file = join(base, path); mkdirSync(join(file, '..'), { recursive: true }); writeFileSync(file, typeof value === 'string' ? value : JSON.stringify(value)); };
+    const repo = join(root, 'repo'), task = join(root, 'task'), materials = join(root, 'materials');
+    try {
+      put(repo, 'workflows/make-decision/SKILL.md', '# C\n## 方法\nOwned.\n');
+      put(repo, 'workflows/build-code/SKILL.md', '# C\n## 方法\nOwned.\n');
+      const manifest = (stage, slug) => ({ schema_version: '2.0.0', stage_slug: stage, steps: [{ step_id: 1, step_slug: slug, observable_result: `Controlled. 判定消费：workflows/${stage}/SKILL.md#方法；原件：decision-log.md#级别与路线`, completion_evidence: [{ kind: 'decision_log_section', uri_or_path: 'decision-log.md#级别与路线' }, { kind: 'phase_task_facts', uri_or_path: 'facts.jsonl' }] }] });
+      put(repo, 'workflows/make-decision/steps.json', manifest('make-decision', 'case-step'));
+      put(repo, 'workflows/build-code/steps.json', manifest('build-code', 'first'));
+      put(task, 'task.json', { schema_version: '1.0.0', task_id: 'scope-case', baseline_commit: 'HEAD', target_repo_root: repo, activation_cohort: 'post' });
+      put(task, 'facts.jsonl', '');
+      put(materials, 'decision-log.md', material);
+      put(materials, 'step-consumer-design.md', '| [make](x) `case-step` | observation | human | owner |\n| [build](x) `first` | observation | human | owner |\n');
+      return checker.runStageStepsCheck({ taskPath: task, materialRoot: materials, repoRoot: repo });
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  }
+  it('scopes a numeric invalidation to its named stage and leaves another stage alone', () => {
+    const report = stageScopeCase('# C\n## 级别与路线\n- 推荐级别：复杂\n- 失效步骤：1；阶段：make-decision\n');
+    expect(report.stages.find(stage => stage.stage === 'make-decision').steps[0]).toMatchObject({ judgment: '待重做', state: 'incomplete' });
+    expect(report.stages.find(stage => stage.stage === 'build-code').steps[0].judgment).not.toBe('待重做');
+  });
+  it('reports an unknown invalidated slug instead of silently ignoring it', () => {
+    const report = stageScopeCase('# C\n## 级别与路线\n- 推荐级别：复杂\n- 失效步骤：no-such-step；阶段：make-decision\n');
+    expect(report.errors.join('\n')).toContain('未匹配当前阶段步骤表');
+    expect(report.limits.join('\n')).toContain('未知失效范围未判');
+    expect(report.stages.find(stage => stage.stage === 'make-decision').steps[0].judgment).not.toBe('待重做');
+  });
+  it('does not apply an invalidation without a recognizable stage', () => {
+    const report = stageScopeCase('# C\n## 级别与路线\n- 推荐级别：复杂\n- 失效步骤：1\n');
+    expect(report.errors.join('\n')).toContain('未写可识别阶段');
+    expect(report.stages.find(stage => stage.stage === 'make-decision').steps[0].judgment).not.toBe('待重做');
+  });
+  function levelCase(material) {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'p1-level-')));
+    const put = (base, path, value) => { const file = join(base, path); mkdirSync(join(file, '..'), { recursive: true }); writeFileSync(file, typeof value === 'string' ? value : JSON.stringify(value)); };
+    const task = join(root, 'task'), materials = join(root, 'materials');
+    try {
+      put(task, 'task.json', { schema_version: '1.0.0', task_id: 'level-case', baseline_commit: 'HEAD', target_repo_root: resolve('.'), activation_cohort: 'post' });
+      put(task, 'facts.jsonl', '');
+      put(materials, 'decision-log.md', material);
+      return checker.runStageStepsCheck({ taskPath: task, materialRoot: materials, repoRoot: resolve('.'), stage: 'make-decision' });
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  }
+  it('does not pick the first or last recommendation when the authority section conflicts', () => {
+    const report = levelCase('# C\n## 级别与路线\n- 推荐级别：轻档\n- 推荐级别：复杂\n');
+    expect(report.stages[0].definition).toBe('unavailable');
+    expect(report.errors.join('\n')).toContain('多个不同推荐');
+  });
+  it('does not trust a fenced-only declaration when no current choice exists outside fences', () => {
+    const report = levelCase('# C\n## 级别与路线\n```\n- 用户选择：轻档\n```\n');
+    expect(report.stages[0].source).toBe('workflows/make-decision/steps.json');
+  });
+  it('ignores a fenced level example and uses the single current recommendation', () => {
+    const report = levelCase('# C\n## 级别与路线\n```\n- 推荐级别：轻档\n```\n- 推荐级别：复杂\n');
+    expect(report.stages[0].source).toBe('workflows/make-decision/steps.json');
+    expect(report.level).toBe('- 推荐级别：复杂');
+  });
+  it('uses the existing 小改动 level name for the light flow', () => {
+    const report = levelCase('# C\n## 级别与路线\n- 推荐级别：小改动\n');
+    expect(report.stages[0].source).toContain('/flows/small/');
+    expect(report.stages[0].steps).toHaveLength(9);
+  });
+  it('keeps the complex fallback when no level is recorded', () => {
+    const report = levelCase('# C\n');
+    expect(report.stages[0].source).toBe('workflows/make-decision/steps.json');
+    expect(report.level).toContain('未读到级别事实');
+  });
+  it('does not treat a 级别与路线历史 heading as the current section', () => {
+    const report = levelCase('# C\n## 级别与路线历史\n- 推荐级别：轻档\n');
+    expect(report.stages[0].source).toBe('workflows/make-decision/steps.json');
+  });
+  it('reports conflicting user choices as unjudged', () => {
+    const report = levelCase('# C\n## 级别与路线\n- 推荐级别：复杂\n- 用户选择：轻档\n- 用户选择：复杂\n');
+    expect(report.stages[0].definition).toBe('unavailable');
+    expect(report.errors.join('\n')).toContain('多个不同用户选择');
+  });
+  function sharedTraceCase() {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'p1-shared-')));
+    const put = (base, path, value) => { const file = join(base, path); mkdirSync(join(file, '..'), { recursive: true }); writeFileSync(file, typeof value === 'string' ? value : JSON.stringify(value)); };
+    const repo = join(root, 'repo'), task = join(root, 'task'), materials = join(root, 'materials');
+    try {
+      put(repo, 'workflows/make-decision/SKILL.md', '# C\n## 方法\nOwned.\n');
+      const evidence = [{ kind: 'review', uri_or_path: 'quality/reviews/' }, { kind: 'phase_task_facts', uri_or_path: 'facts.jsonl' }];
+      put(repo, 'workflows/make-decision/steps.json', { schema_version: '2.0.0', stage_slug: 'make-decision', steps: [
+        { step_id: 1, step_slug: 'first', observable_result: 'Controlled. 判定消费：workflows/make-decision/SKILL.md#方法；原件：quality/reviews/', completion_evidence: evidence },
+        { step_id: 2, step_slug: 'second', observable_result: 'Controlled. 判定消费：workflows/make-decision/SKILL.md#方法；原件：quality/reviews/', completion_evidence: evidence },
+      ] });
+      put(task, 'task.json', { schema_version: '1.0.0', task_id: 'shared-case', baseline_commit: 'HEAD', target_repo_root: repo, activation_cohort: 'post' });
+      put(task, 'facts.jsonl', '');
+      put(task, 'quality/reviews/one.json', { stage: 'make-decision', status: 'available' });
+      put(materials, 'decision-log.md', '# C\n## 级别与路线\n- 推荐级别：复杂\n');
+      put(materials, 'step-consumer-design.md', '| [x](x) `first` | observation | human | owner |\n| [x](x) `second` | observation | human | owner |\n');
+      return checker.runStageStepsCheck({ taskPath: task, materialRoot: materials, repoRoot: repo, stage: 'make-decision' }).stages[0].steps;
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  }
+  it('labels a shared directory as generic trace rather than step-specific evidence', () => {
+    const steps = sharedTraceCase();
+    expect(steps).toHaveLength(2);
+    for (const step of steps) {
+      expect(step.judgment).toBe('已留痕');
+      expect(step.evidence[0].reason).toContain('多步共用');
+      expect(step.gap).toContain('共用目录/文件');
+    }
+  });
+  it('keeps a producer completed row complete when its declared physical piece is missing', () => {
+    const row = traceCase({ evidence: [{ kind: 'decision_log_section', uri_or_path: 'decision-log.md#级别与路线' }, facts], material: '# C\n', files: [['quality/evidence/case.json', human]], facts: humanFacts });
+    expect(row).toMatchObject({ judgment: '已完成', state: 'completed' });
+    expect(row.gap).toContain('声明原件未取得');
+  });
+  it('a historical-looking heading is not the declared section', () => {
+    expect(traceCase({ evidence: [{ kind: 'decision_log_section', uri_or_path: 'decision-log.md#级别与路线' }, facts], material: '# C\n## 级别与路线历史\n旧方向\n' })).toMatchObject({ judgment: '未留痕' });
+    expect(traceCase({ evidence: [{ kind: 'decision_log_section', uri_or_path: 'decision-log.md#级别与路线' }, facts], material: '# C\n## 级别与路线（历史）\n旧方向\n' })).toMatchObject({ judgment: '未留痕' });
+    expect(traceCase({ evidence: [{ kind: 'decision_log_section', uri_or_path: 'decision-log.md#级别与路线' }, facts], material: '# C\n## 级别与路线：走哪条路线？\n真实记录。\n' })).toMatchObject({ judgment: '已留痕' });
+  });
+  it('only the existing producer can establish completed', () => {
+    expect(traceCase({ evidence: [{ kind: 'decision_log_section', uri_or_path: 'decision-log.md#级别与路线' }, facts], material: '# C\n## 级别与路线\n真实记录。\n', files: [['quality/evidence/case.json', human]], facts: humanFacts })).toMatchObject({ judgment: '已完成', state: 'completed' });
+  });
+  it('reads numeric and multiple invalidation lines', () => {
+    const numeric = traceCase({ evidence: [{ kind: 'decision_log_section', uri_or_path: 'decision-log.md#级别与路线' }, facts], material: '# C\n## 级别与路线\n真实记录。\n- 失效步骤：1；阶段：make-decision\n', files: [['quality/evidence/case.json', human]], facts: humanFacts });
+    expect(numeric).toMatchObject({ judgment: '待重做', state: 'incomplete' });
+    const ranged = traceCase({ evidence: [{ kind: 'decision_log_section', uri_or_path: 'decision-log.md#级别与路线' }, facts], material: '# C\n## 级别与路线\n真实记录。\n- 失效步骤：1～2；阶段：make-decision\n', files: [['quality/evidence/case.json', human]], facts: humanFacts });
+    expect(ranged).toMatchObject({ judgment: '待重做', state: 'incomplete' });
+    const multiple = traceCase({ evidence: [{ kind: 'decision_log_section', uri_or_path: 'decision-log.md#级别与路线' }, facts], material: '# C\n## 级别与路线\n真实记录。\n- 失效步骤：other-step；阶段：make-decision\n- 失效步骤：case-step；阶段：make-decision\n', files: [['quality/evidence/case.json', human]], facts: humanFacts });
+    expect(multiple).toMatchObject({ judgment: '待重做', state: 'incomplete' });
+  });
+  it('an invalidated step cannot stay completed from old producer facts', () => {
+    const row = traceCase({ evidence: [{ kind: 'decision_log_section', uri_or_path: 'decision-log.md#级别与路线' }, facts], material: '# C\n## 级别与路线\n真实记录。\n- 失效步骤：case-step；阶段：make-decision\n', files: [['quality/evidence/case.json', human]], facts: humanFacts });
+    expect(row).toMatchObject({ judgment: '待重做', state: 'incomplete' });
+  });
+});
+
+describe('AC token boundaries, ranges and D-001 field scope', () => {
+  function acField(ac, acRows, fullReport = false) {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'p1-ac-')));
+    const put = (base, path, value) => { const file = join(base, path); mkdirSync(join(file, '..'), { recursive: true }); writeFileSync(file, typeof value === 'string' ? value : JSON.stringify(value)); };
+    const task = join(root, 'task'), materials = join(root, 'materials');
+    try {
+      put(task, 'task.json', { schema_version: '1.0.0', task_id: 'ac-case', baseline_commit: 'HEAD', target_repo_root: root, activation_cohort: 'post' });
+      put(task, 'facts.jsonl', '');
+      put(materials, 'decision-log.md', ['# C', '', '## 级别与路线', '- 推荐级别：复杂', '', '## 工作包与决定', '', '#### WP1 — controlled', '- **结果与消费者**：受控结果；消费者是 controlled consumer。', '', '#### D-001 — controlled decision', '- **做什么**：读取受控原件并报告缺口。', '- **不做什么**：不写运行时。', '- **风险**：缺证据误报。', '', ...acRows.map(row => `| ${row} | 受控结果可回读 | 目标内容明确 |`), '| OI-001 | 待独立核对 | owner：受控维护者 |', '', '## 旧编号对照', '| 决定 1 | D-001 |', '', '细化：`quality/evidence/decision-log-refs/module-details.md`', '清单：`quality/evidence/decision-log-refs/convergence-checklist.md`', ''].join('\n'));
+      put(task, 'quality/evidence/decision-log-refs/module-details.md', '# Details\n## 1 module\nread only.\n');
+      put(task, 'quality/evidence/decision-log-refs/convergence-checklist.md', `| 1 controlled | D-001 做什么 | D-001 不做什么 | D-001＋details§1 | ${ac} | D-001 风险 | 无 | controlled consumer | OI-001 | 已收敛 |\n`);
+      const report = checker.runStageStepsCheck({ taskPath: task, materialRoot: materials, repoRoot: resolve('.'), stage: 'make-decision' });
+      return fullReport ? report : report.modules[0]?.fields.find(field => field.name === '验收')?.present;
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  }
+  it.each([['AC-01', ['AC-01']], ['AC-C06-1', ['AC-C06-1']], ['AC-D01', ['AC-D01']]])('accepts legal %s', (ac, rows) => expect(acField(ac, rows)).toBe(true));
+  it.each([['AC-C06-1-junk', ['AC-C06-1']], ['AC-C06', ['AC-C06-1']], ['AC-C06-1～3 with one row', ['AC-C06-1']]])('rejects %s instead of truncating', (ac, rows) => expect(acField(ac, rows)).toBe(false));
+  it('expands a full range only when every endpoint row exists', () => {
+    expect(acField('AC-C06-1～3', ['AC-C06-1', 'AC-C06-2', 'AC-C06-3'])).toBe(true);
+    expect(acField('AC-C06-1～3', ['AC-C06-1', 'AC-C06-2'])).toBe(false);
+  });
+  it('a bare D-001 does not fill the acceptance field', () => {
+    expect(acField('D-001', ['AC-C06-1'])).toBe(false);
+    expect(acField('D-001＋AC-C06-1', ['AC-C06-1'])).toBe(true);
+  });  it('supports AC-D01 numeric-suffix ranges and rejects left-adjacent tokens', () => {
+    expect(acField('AC-D01～D03', ['AC-D01', 'AC-D02', 'AC-D03'])).toBe(true);
+    expect(acField('XAC-01', ['AC-01'])).toBe(false);
+    expect(acField('AC-C06-1＋AC-C06-1-junk', ['AC-C06-1'])).toBe(false);
+  });
+  it('rejects cross-prefix range ends and prefix-adjacent contamination', () => {
+    expect(acField('AC-D01～AC-X03', ['AC-D01', 'AC-D02', 'AC-D03'])).toBe(false);
+    expect(acField('AC-D01～AC-E03', ['AC-D01', 'AC-D02', 'AC-D03'])).toBe(false);
+    expect(acField('AC-C07-010～AC-OTHER-011', ['AC-C07-010', 'AC-C07-011'])).toBe(false);
+    expect(acField('AC-C07-010、prefixAC-C07-010', ['AC-C07-010'])).toBe(false);
+    expect(acField('AC-C07-010～AC-C07-011', ['AC-C07-010', 'AC-C07-011'])).toBe(true);
+    expect(acField('AC-C07-010', ['AC-C07-010'])).toBe(true);
+    const report = acField('AC-D01～AC-X03', ['AC-D01', 'AC-D02', 'AC-D03'], true);
+    expect(report.errors.join('\n')).toContain('AC-D01～AC-X03');
+    expect(report.convergence.complete).toBe(false);
+  });
+  it('treats Chinese decision references with the same field boundary as D ids', () => {
+    expect(acField('决定 1', ['AC-C06-1'])).toBe(false);
+    expect(acField('决定 1＋AC-C06-1', ['AC-C06-1'])).toBe(true);
+    expect(acField('决定 01＋AC-C06-1', ['AC-C06-1'])).toBe(true);
+  });
+
+});
+
+describe('light route reads its declared step table', () => {
+  it('uses flows/small/steps.json when the decision declares 轻档', () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'p1-light-')));
+    const put = (base, path, value) => { const file = join(base, path); mkdirSync(join(file, '..'), { recursive: true }); writeFileSync(file, typeof value === 'string' ? value : JSON.stringify(value)); };
+    const task = join(root, 'task'), materials = join(root, 'materials');
+    try {
+      put(task, 'task.json', { schema_version: '1.0.0', task_id: 'light-case', baseline_commit: 'HEAD', target_repo_root: root, activation_cohort: 'post' });
+      put(task, 'facts.jsonl', '');
+      put(materials, 'decision-log.md', '# C\n## 级别与路线\n- 推荐级别：轻档\n');
+      const report = checker.runStageStepsCheck({ taskPath: task, materialRoot: materials, repoRoot: resolve('.'), stage: 'make-decision' });
+      expect(report.stages[0].source).toBe('workflows/make-decision/flows/small/steps.json');
+      expect(report.stages[0].steps).toHaveLength(9);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
 });

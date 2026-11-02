@@ -31,6 +31,8 @@ UI 适用时，先读 `skills/project-norm-init/SKILL.md` 的「规范职责」�
 
 先声明证据级：静态图只支持设计意图；静态代码/file-only 只能核源码与缺证据，交互和视觉运行项保持未验证；实际打开的 HTML/CSS/原生 JS 静态页面属于可交互原型；file-only 指只看源码，不指无需框架。可交互原型按真实浏览器操作范围判断；生产页还须真实权限/数据条件。未参与实现的独立审查者逐面读源、运行、记录；适用缺证据不当通过，禁止总分吞未知。浏览器沿 `skills/isolated-browser-qa/SKILL.md`，不另起引擎/登录链。
 
+页面模式沿[页面审计判据](../frontend-testing/references/page-audit.md)逐项记录，必要时用[形状校验器](../frontend-testing/scripts/check-page-audit.mjs)核结构；设计模式按本节原维度和实际证据执行。
+
 八维分别判，逐维写输入、观察、证据与未覆盖项：
 
 - **业务任务**：任务/对象/许可/危险后果与完成信号是否真实一致，发出、等待、生效、失败、未知分开。

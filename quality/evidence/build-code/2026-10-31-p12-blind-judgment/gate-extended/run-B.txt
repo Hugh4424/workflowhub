@@ -1,0 +1,60 @@
+✔ fixture a returns its own stage (1.591834ms)
+✖ multi-line facts: last row decides, not the first row that carries a stage (1.49125ms)
+✖ empty facts file must raise, not fall back to a default stage (1.308084ms)
+✖ last row without stage must raise, not fall back to an earlier row (0.883917ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 1
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 45.238292
+
+✖ failing tests:
+
+test at gate/stage.test.mjs:27:1
+✖ multi-line facts: last row decides, not the first row that carries a stage (1.49125ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'build-code'
+  - 'review'
+  
+      at TestContext.<anonymous> (file:///private/tmp/p12-greenbutwrong/gate-extended/B/gate/stage.test.mjs:33:10)
+      at async Test.run (node:internal/test_runner/test:1125:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'build-code',
+    expected: 'review',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at gate/stage.test.mjs:37:1
+✖ empty facts file must raise, not fall back to a default stage (1.308084ms)
+  AssertionError [ERR_ASSERTION]: Missing expected rejection (isExplicitError).
+      at async TestContext.<anonymous> (file:///private/tmp/p12-greenbutwrong/gate-extended/B/gate/stage.test.mjs:39:3)
+      at async Test.run (node:internal/test_runner/test:1125:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at gate/stage.test.mjs:43:1
+✖ last row without stage must raise, not fall back to an earlier row (0.883917ms)
+  AssertionError [ERR_ASSERTION]: Missing expected rejection (isExplicitError).
+      at async TestContext.<anonymous> (file:///private/tmp/p12-greenbutwrong/gate-extended/B/gate/stage.test.mjs:49:3)
+      at async Test.run (node:internal/test_runner/test:1125:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    operator: 'rejects',
+    diff: 'simple'
+  }
+exit_code=1

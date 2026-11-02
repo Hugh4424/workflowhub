@@ -1,0 +1,11 @@
+--- /tmp/p11-badinput-20261031-pristine/phase-template.md.orig	2026-10-31 08:38:38
++++ /tmp/p11-badinput-20261031/skills/spec-plan/templates/phase-template.md	2026-10-31 08:38:38
+@@ -485,7 +485,7 @@
+ - **Outputs / failure**：Node import得到false；模块缺失、语法错或其它值均明确非零，不造成功。
+ - **Boundary / DO NOT TOUCH**：docs/owned.md及所有其它生产文件保持；不新增默认值、writer或外部副作用。
+ - **Dependency**：none
+-- **Test tier / skill**：feature / backend-testing；真实模块结果与失败面，UI/数据库/网络不涉及。
++- **Test tier / skill**：TODO
+ - **Scenario / fixture or service**：当前工作树模块为正例；独立临时源码中的true、字符串和缺导出为负例，检查后清理自建目录；临时反例不修改当前生产或原证据。
+ - **RED/GREEN gate_cmd**：`node --input-type=module -e "import { strict as assert } from 'node:assert'; import { owned } from './src/owned.mjs'; assert.equal(owned, false, 'ORACLE-EXAMPLE-BEHAVIOR');"`
+ - **expected_exit**：RED nonzero; GREEN 0；只有owned结果断言失败算目标RED，导入/环境失败另记。

@@ -5,14 +5,15 @@ description: Author implementation design in spec.md and independent Phase files
 
 # Spec Plan
 
-读者：build-plan 的工程设计与 Phase 作者。
-读完要能：定位本文件的责任、写作动作、来源与失败边界。
+读者：build-plan 的工程设计与 Phase 作者；读完要能定位本文件的责任、写作动作、来源与失败边界。
 
 ## Post-cohort authoring contract
 
-写全局实现设计、Phase 或 index 前，先读取 `skills/spec-specify/SKILL.md` 的「技能写作规范（WR001）」唯一正文，再执行以下写作动作；消费者是计划作者与下游实施、独立验收读者。缺源如实 `unavailable`，不复制规范。
+写全局实现设计、Phase 或 index 前，先读取 `skills/material-writing/SKILL.md` 的「材料写作标准（唯一）」。
+再读 `skills/spec-specify/SKILL.md` 的 Q01–Q13 唯一正文，然后执行以下写作动作。
+消费者是计划作者与下游实施、独立验收读者；缺源如实 `unavailable`，不复制规范。
 
-本节回答：How to write independent Phase deltas against one global spec.
+Write one global implementation design in `spec.md`, then one independent Phase delta file per Phase, each pointing back to that global goal.
 
 Read the confirmed `decision-log.md`, current `spec.md`, and verified current code facts. `spec.md` owns the global product contract **and implementation design**: code anchors, chosen solution, interfaces, global file boundary, dependency graph, source → FR → AC → Phase → oracle trace, risks, rollback, and testing strategy. Extend its implementation design section in place; preserve its product narrative and acceptance criteria.
 
@@ -20,11 +21,11 @@ This skill is the sole Phase engineering author. Write one independent `phases/P
 
 A superseded full-text body does not stay in this file either; the superseded text is carried by git and the existing archives, not by rewriting the live file in place. This skill also renders the pure pointer index after authoring the independent Phases; use the index method below. No post-cohort `plan.md` or `tasks.md` writer exists; pre-cohort and archived files are read-only.
 
-Each Phase owns L0 outcome, executable human-readable L1 contract, removable L2 reference, exact write set, dependency, test design and oracle, coverage limit, STOP condition, done evidence, and rollback.
+Each Phase owns a reader-facing outcome, an executable human-readable contract, removable reference material, exact write set, dependency, test design and oracle, coverage limit, STOP condition, done evidence, and rollback.
 
-Use the template's nine reader groups: outcome, basic contract, reason/decisions, required reading, files/tasks, writer/parallel ownership, verification, risk/recovery, and completion/handoff. Each section answers its reader question in prose before the necessary fields. Per exact path, explain the change, sole writer, real consumer and dependency; distinguish writable, read-only, prohibited and pending-authority surfaces. At a shared-path boundary name earlier and later writers, the handed-back current state, the real dependency and conflict owner. Give an actual rollback or repair route that preserves unrelated work and original failures. The final Phase consumes prior originals and handles unresolved cases; it must not replace a local first acceptance with a later signature.
+Use the template's reader-question sections: 写完之前先回答：这是一个能独立验收的结果吗？, 这份文件怎么用？, 这一 Phase 交出什么？, 为什么现在做，依据是什么？, 开始前读什么？, 每个文件由谁改，先做什么？, 怎么验证？, 下一消费者拿什么继续？, 验收 Phase 才能做的检查, and 每张任务卡怎么写？; 机器字段（校验器用，人可跳过） carries the literal field block, and 补充材料/完整作者材料示例 carry removable reference. Each section answers its reader question in prose before the necessary fields. Per exact path, explain the change, sole writer, real consumer and dependency; distinguish writable, read-only, prohibited and pending-authority surfaces. At a shared-path boundary name earlier and later writers, the handed-back current state, the real dependency and conflict owner. Give an actual rollback or repair route that preserves unrelated work and original failures. The final Phase consumes prior originals and handles unresolved cases; it must not replace a local first acceptance with a later signature.
 
-Within L1, write an executable card for **every** Task using `templates/phase-template.md`. One Task is one user-perceivable delivery increment: consecutive steps of the same deliverable belong in one card's step sequence, not in separate cards. A one-line task list or Phase-level command is not a substitute for task inputs, exact code anchors/actions, outputs, paired RED/GREEN, failure oracle, evidence, and recovery. Keep actual execution status in task facts; authored cards describe intent, not invented completion.
+Within the task-card section, write an executable card for **every** Task using `templates/phase-template.md`. One Task is one user-perceivable delivery increment: consecutive steps of the same deliverable belong in one card's step sequence, not in separate cards. A one-line task list or Phase-level command is not a substitute for task inputs, exact code anchors/actions, outputs, paired RED/GREEN, failure oracle, evidence, and recovery. Keep actual execution status in task facts; authored cards describe intent, not invented completion.
 
 Task IDs are unique across the entire task, not per Phase. Assign `T001`, `T002`, … in `phases/index.md` Phase order and within-Phase execution order; the next Phase continues after the previous Phase's last ID. A Task dependency may name only an earlier Phase or already-defined Task. Continue the global sequence in every Phase.
 
@@ -40,7 +41,7 @@ Task 卡描述 task graph：每张卡在现有依赖字段明确写 `blocked_by`
 
 ## Design and boundary
 
-本节回答：How to choose reuse and declare verified file/interface ownership.
+Choose reuse before narrow extension before new mechanism, and declare verified interfaces plus exact NEW, MODIFY and DO NOT TOUCH paths.
 
 Choose reuse, then narrow extension, then new mechanism with stated consumer, owner, test, and removal condition. Record verified interfaces and failure behavior. Unknown facts stay `unknown` with owner and next action. Declare global NEW, MODIFY, and DO NOT TOUCH exact paths in `spec.md`. Every Phase write set is a subset of that boundary. Phase boundaries must follow independently deliverable and verifiable units, not physical file ownership or technical layers; the write set declares the result of that decomposition. Order producers before consumers. Parallel work within one batch requires independent inputs and mutually exclusive write paths. Across batches, Phases may write the same path only with a real dependency edge fixing their order. Name the earlier writer, later writer and dependency basis at each shared-path Phase boundary; the earlier writer hands back the verified current state, or records unknown with the reason when it cannot be read, without blocking work. Declare individual paths, not directory-wide or glob write sets.
 
@@ -54,13 +55,15 @@ Trace every current source requirement, FR, and AC to a Phase, Task, and objecti
 
 ## Test design and quality
 
-本节回答：How to preserve target RED, paired GREEN and independent review facts.
+Author a real target test that fails before implementation, freeze it, then make the same assertion GREEN and keep both facts.
 
 For each applicable behavior change, build-plan authors a real executable test before implementation, runs its scoped `gate_cmd`, and preserves actual RED evidence. RED is valid only when the named target assertion fails, not setup/environment/configuration; a planned command or unrelated nonzero is not RED. Freeze that test and any scoring logic in DO NOT TOUCH. A later test change needs an explicit change request, reason, previous evidence, and independent review; build-code changes implementation to make the same test/oracle GREEN without silently relaxing assertions.
 
 Every behavior Task records project-declared testing surfaces, a reason for testing or excluding each surface, one executable Phase command for every tested surface and covered AC, a main concrete testing skill, scenario/input, fixture or service, expected exit, oracle, test path, actual RED ref or honest unavailable, GREEN evidence path, coverage limit, and STOP. Surfaces may be multiple; routing tiers are only a technical forecast, not the project's surface list. A browser-visible surface without browser end-to-end testing needs a named reason.
 
 按原 AC 的每个适用条件安排验收：在既有验收正文与 Task 的 Inputs / Scenario 中写清结果对象、真实 producer/consumer、具体输入及其提供者、执行 owner 和取得结果的时点。技术接线可在当前任务通过真实入口或具名受控反例核；自然语言质量由独立读者消费完整实际材料；真实用户效果仍需要其实际旅程和输入。同一个 AC 的技术子条件与整体效果分别给证据，全部适用条件满足才判该 AC 通过；来源送达、工具读取或结构检查不额外要求证明 provider 理解，也不能代替真实效果。
+
+每条验收先算成本、资源与范围三笔账；写不出谁做、多久、靠什么、怎么观察的验收不进 Phase 文件，细则见 `workflows/build-plan/SKILL.md` 的「设计每个 Phase 的验收」。
 
 计划确认前逐条展示本次无法闭环的具体条件、输入提供者与执行时点，同时保留当前能完成的技术和独立人读验收。未知落在缺输入的条件，不因部分真实效果要等后续任务而整批推迟。以下末 Phase 规则保原适用范围：可执行或混合交付除消费上游原件，还要执行必要未闭环 case；只读聚合只报告读回，不称端到端执行。纯文档/纯方法工作流沿下文 G-2 的具名豁免与风险、客观替代；不把此义务扩成所有任务一律实跑，不新增字段、状态或推进门。
 
@@ -70,7 +73,7 @@ G-2 for pure documentation or exploratory work permits N/A only with a concrete 
 
 Cross-check the original requirement, decision, `spec.md`, every `phases/P<n>.md`, and generated `phases/index.md` for omissions, contradictions, cycles, duplicated bodies, boundary widening, and two-way traceability. Perform an execution dry-run on each Task card: can an implementer using only current spec, index, and that Phase identify the first symbol to inspect, the first edit, target RED, GREEN, negative case, and recovery without inventing a product choice? Repair any no. Independent findings review and final `spec-analyze` are quality facts, not work permits. Preserve partial and unavailable facts honestly; repair valid findings in this task.
 
-核模板改造效果的完整作者消费时，由未参与实现的作者取得调用者提供的真实受控需求、来源与运行原件，直接使用 spec 模板十组正文、Phase 模板九组内容和 index 模板创作完整产物；涉及的状态、验收对象、材料导航、逐文件责任、共享写主/并行、风险/回滚与未决均实际填写，确实不适用则给来源与理由。试写保留独立作者身份、每份唯一原件和逻辑材料引用映射，再交现 reader；读者按当前 AC 回答首改、输入、判定和失败恢复，工程师执行其中一条有实际断言且无生产副作用的命令。既有四块示例只测 reader 兼容，替换其路径/符号不能证明新版完整结构被消费。原输入已经满足目标时记本来通过，不回退原件造 RED；目标值错误、类型错误与导入失败分开记录。此处落实原 Task 的消费义务，不新增阶段、运行入口或审查轮。
+核模板改造效果的完整作者消费时，由未参与实现的作者取得调用者提供的真实受控需求、来源与运行原件，直接使用 spec 模板的读者问题节（「这是什么，给谁用？」到「有什么风险和未决？」，含「实现设计（全局权威）」原词）、Phase 模板的读者问题节（「写完之前先回答：这是一个能独立验收的结果吗？」到「每张任务卡怎么写？」，含「机器字段（校验器用，人可跳过）」原词）和 index 模板创作完整产物；涉及的状态、验收对象、材料导航、逐文件责任、共享写主/并行、风险/回滚与未决均实际填写，确实不适用则给来源与理由。试写保留独立作者身份、每份唯一原件和逻辑材料引用映射，再交现 reader；读者按当前 AC 回答首改、输入、判定和失败恢复，工程师执行其中一条有实际断言且无生产副作用的命令。既有四块示例只测 reader 兼容，替换其路径/符号不能证明新版完整结构被消费。原输入已经满足目标时记本来通过，不回退原件造 RED；目标值错误、类型错误与导入失败分开记录。此处落实原 Task 的消费义务，不新增阶段、运行入口或审查轮。
 
 作者收口实际消费既有无状态 `validatePostPhaseContract({spec,index,phases})` 与 `checkSkillConsistency(root)`：前者按原 `{ok,errors,facts}` 返回机械合同缺项，后者只沿现 `reports` 报告可判缺例/占位、不可判散文保持 unknown；缺验收例先定位真实 Task 与原文，不用编号或模板在场冒完整。缺例用占位明示时应在现报告可见，整段语义缺失而工具不能判时由独立读者报告该缺口；不新增校验器、状态或持久报告对象，不改变任何原退出语义，也不把 reports 升为许可。开头仍让读者能定位交付结果与真实依赖。
 
@@ -80,13 +83,15 @@ Return the actual spec/Phase paths and the design/verification limits. Read curr
 
 独立 Phase 写完后，读取当前 decision-log、spec 与每个实际具名 `phases/P<n>-<结果短名>.md` 的契约头，渲染 `phases/index.md`。模板使用一次预置的条件指针：`templates/index-template.md` 已实际存在且已登记在本技能 `skill-bundle.json` 时使用该附件；附件不满足条件时如实报告具体缺口。所需附件不可读时报告 unavailable、具名 owner 与下一动作，不凭未来路径捏模板。
 
-每个连续有序的 Phase 恰一行；保 `## Execution Index` 与现行 `阶段` / `权威引用` 列，引用形如 `P1` → `phases/P1-配置错误定位.md`，指向实际文件；旧裸 P 路径只作兼容读入。每行只从契约头取 stable authority path、semantic anchor、exact write set、Phase dependency 与真实 downstream consumer，并与物理 Phase 对齐。它是可再生导航，不承载 L0/L1/L2、命令、oracle、证据路径、Task 程序、执行状态或完成权威；这些留原 owner。
+每个连续有序的 Phase 恰一行；保 `## Execution Index` 与现行 `阶段` / `权威引用` 列，引用形如 `P1` → `phases/P1-配置错误定位.md`，指向实际文件；旧裸 P 路径只作兼容读入。每行只从契约头取 stable authority path、semantic anchor、exact write set、Phase dependency 与真实 downstream consumer，并与物理 Phase 对齐。它是可再生导航，不承载人读正文、命令、oracle、证据路径、Task 程序、执行状态或完成权威；这些留原 owner。
 
 完成时核 index 与独立 Phase 一一对应、连续顺序、依赖可解析无环、各写集与其头一致，并返回行数和缺权威清单。可执行产物的末行指向「Test design and quality」所定唯一全 AC 验收 Phase；缺失时如实说明，纯文档按该节具名豁免。索引只引用实际 Phase，不承载验收正文，不把此义务写入校验器。缺失或歧义报 unavailable 与原 Phase owner，保现历史 pre/tasks 只读；不生成 fallback 正文或双写 tasks.md。
 
+写完材料，按 `skills/material-writing/SKILL.md` 的「写完自检」逐条核；核不过就改，不交出去。
+
 ## Writing rules
 
-本节回答：How each Phase stays complete without repeating the global contract. 这是写作指引，不是质量门。
+Each Phase card carries only its own increment and points to shared definitions and the global design by anchor. 这是写作指引，不是质量门。
 
 1. Each Task card writes only its own increment; reference shared definitions and global design by anchor.
 2. For agent-document writing, read the sole 「技能写作规范（WR001）」 section in `skills/spec-specify/SKILL.md` when present. Until that section is available, retain the current writing rules and supplied sources. Write the conclusion, then evidence, then exceptions and risks; use one topic per paragraph and name actions directly.
@@ -96,7 +101,7 @@ Return the actual spec/Phase paths and the design/verification limits. Read curr
 
 ## 补充材料
 
-本节回答：Where to locate the shared specification and authoring examples. Read the current spec and the existing phase template; use only verified source anchors.
+The shared specification and authoring examples are the current `spec.md` and the existing phase template; use only verified source anchors.
 
 ## 固定来源与本地偏离
 
@@ -107,4 +112,6 @@ Return the actual spec/Phase paths and the design/verification limits. Read curr
 
 ## 同仓方法依赖
 
-`skills/simplicity-guard/SKILL.md`、`skills/spec-specify/SKILL.md`；按上文实际条件读取，搬运时需同时提供或由调用者提供可读原件。
+`skills/material-writing/SKILL.md` 是本方法唯一写作标准来源。
+`skills/simplicity-guard/SKILL.md`、`skills/spec-specify/SKILL.md` 按上文实际条件读取。
+搬运时需同时提供或由调用者提供可读原件。

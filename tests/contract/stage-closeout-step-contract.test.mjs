@@ -27,7 +27,7 @@ describe('ORACLE-P1-CLOSEOUT-STEP stage closeout step and method contract', () =
       expect(manifest.steps.length, `${stage} step count stays ${count}`).toBe(count);
       expect(manifest.steps.map(step => step.step_id)).toEqual(Array.from({ length: count }, (_, index) => index + 1));
       expect(manifest.steps.at(-1).step_slug, `${stage} last step is the closeout step`).toBe('closeout');
-      expect(manifest.steps.at(-1).completion_evidence).toEqual([{ kind: 'phase_task_facts', uri_or_path: 'facts.jsonl' }]);
+      expect(manifest.steps.at(-1).completion_evidence).toEqual({ 'make-decision': [{'kind': 'handoff', 'uri_or_path': 'quality/evidence/handoff/'}, {'kind': 'cost_ledger', 'uri_or_path': 'main-agent-cost.md'}, {'kind': 'phase_task_facts', 'uri_or_path': 'facts.jsonl'}], 'build-plan': [{ kind: 'phase_task_facts', uri_or_path: 'facts.jsonl' }], 'build-code': [{ kind: 'phase_task_facts', uri_or_path: 'facts.jsonl' }], 'build-prd': [{ kind: 'phase_task_facts', uri_or_path: 'facts.jsonl' }] }[stage]);
     }
   });
 

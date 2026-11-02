@@ -1,0 +1,11 @@
+--- /tmp/p11-badinput-20261031-pristine/stage-content-contracts.mjs.orig	2026-10-31 08:38:39
++++ /tmp/p11-badinput-20261031/runtime/stage/stage-content-contracts.mjs	2026-10-31 08:38:39
+@@ -652,7 +652,7 @@
+       }
+       for (const field of required) {
+         const value = fields[field];
+-        if (missingTaskField(value)) {
++        if (missingTaskField(value) && field !== "RED/GREEN gate_cmd") {
+           fieldGaps.push(Object.freeze({ phase_id: expectedId, task_id: taskId, path: expectedPath, field }));
+         }
+       }

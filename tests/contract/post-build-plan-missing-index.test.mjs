@@ -86,6 +86,8 @@ const phase = (id, dependency, file, fr, ac) => thinPhase(id, dependency, file, 
   "## L2 — Removable reference",
   `### T00${id.slice(1)} — deliver ${file}
 
+本卡交付 ${ac} 的可见结果，并在隐藏输出时保留可重放的失败。
+
 - **Source / FR / AC**：R-00${id.slice(1)} / ${fr} / ${ac}。
 - **Files / symbols**：\`${file}\` symbol: ${id === "P1" ? "renderResult" : "reportError"}.
 - **Action**：Implement the observable result and preserve the negative path.

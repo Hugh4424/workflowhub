@@ -1,0 +1,17 @@
+$ node /tmp/p9probe.mjs
+[fix only ### T025 -> ### 任务 1, keep (?=^### T026)] changed bytes? false
+[fix both locators] changed bytes? true
+[validator after full fix] ok= false errors= [ 'phases/P9-材料为读者写.md T025 task card requires reader prose' ]
+[baseline] ok= true task_count= 36
+
+--- describe blocks actually in the four P11 gate files ---
+     1	describe('ORACLE-ACCEPT-PLAN'
+     2	describe('ORACLE-N11-ACCEPT-SCOPE ORACLE-N11-SKIP-VISIBLE'
+     3	describe('ORACLE-N11-ACCEPT-SCOPE ORACLE-N11-TIER-MINIMAL unknown fallback'
+     4	describe('ORACLE-N11-ACCEPT-SCOPE'
+     5	describe('ORACLE-N11-ASSET-FIRST authoritative prohibition presence (approved TCR)'
+     6	describe('ORACLE-N11-ASSET-FIRST'
+     7	describe('ORACLE-N11-CRITERIA-LOCK'
+     8	describe('ORACLE-N11-WRITESET-DIFF'
+     9	describe('page-audit method wiring'
+    10	describe('page-audit.md judgment pack'

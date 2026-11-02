@@ -11,7 +11,7 @@ skills:
     trigger: actual_backend_test
   - name: frontend-testing
     path: skills/frontend-testing/SKILL.md
-    trigger: actual_frontend_test
+    trigger: actual_frontend_test_or_browser_visible_page_audit
   - name: isolated-browser-qa
     path: skills/isolated-browser-qa/SKILL.md
     trigger: actual_browser_visible_phase_test

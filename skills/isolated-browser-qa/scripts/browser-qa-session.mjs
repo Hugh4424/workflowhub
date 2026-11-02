@@ -9,7 +9,7 @@ import {createHash} from 'node:crypto';
 import {connectCdp,validateEndpoint,makeScope,transferTargetCookies,safeError} from './browser-qa-tickets.mjs';
 const here=dirname(fileURLToPath(import.meta.url));
 const nativeHelper=join(here,'browser-qa-browser-use.py');
-function command(argv,env,{signal,inherit=false,outputSecrets,captureStderr=false}={}) {
+function command(argv,env,{signal,inherit=false,outputSecrets,captureStderr=false,outputOnFailure=false}={}) {
   if(signal?.aborted)return Promise.reject(safeError('CANCELLED'));
   return new Promise((resolve,reject)=>{
     // Ticket values may cross arbitrary chunk boundaries. Keep protected output
@@ -17,7 +17,7 @@ function command(argv,env,{signal,inherit=false,outputSecrets,captureStderr=fals
     const protectedOutput=inherit&&Boolean(outputSecrets?.size);
     const c=spawn(argv[0],argv.slice(1),{env,detached:true,stdio:inherit&&!protectedOutput?'inherit':[inherit?'inherit':'ignore','pipe','pipe']});
     const stdoutChunks=[],stderrChunks=[];
-    if(!inherit||protectedOutput){c.stdout.on('data',b=>stdoutChunks.push(b));if(protectedOutput||captureStderr)c.stderr.on('data',b=>stderrChunks.push(b));else c.stderr.resume();}
+    if(!inherit||protectedOutput){c.stdout.on('data',b=>stdoutChunks.push(b));if(protectedOutput||captureStderr||outputOnFailure)c.stderr.on('data',b=>stderrChunks.push(b));else c.stderr.resume();}
     let observeClose,cancellation,cleanupFailure;
     const childClosed=new Promise(resolve=>{observeClose=resolve;});
     const group=async()=>{
@@ -65,8 +65,8 @@ function command(argv,env,{signal,inherit=false,outputSecrets,captureStderr=fals
       signal?.removeEventListener('abort',abort);
       if(cleanupFailure){reject(cleanupFailure);return;}
       const stdout=Buffer.concat(stdoutChunks),stderr=Buffer.concat(stderrChunks);let resultCode=code??143;
-      if(protectedOutput){
-        const leaked=[...outputSecrets].some(value=>value&&(stdout.includes(Buffer.from(value))||stderr.includes(Buffer.from(value))));
+      if(protectedOutput||(outputOnFailure&&resultCode!==0)){
+        const leaked=[...(outputSecrets||[])].some(value=>value&&(stdout.includes(Buffer.from(value))||stderr.includes(Buffer.from(value))));
         if(leaked){console.error(JSON.stringify({error:'SECRET_OUTPUT_BLOCKED'}));resultCode=resultCode||1;}
         else{process.stdout.write(stdout);process.stderr.write(stderr);}
         resolve({code:resultCode,stdout:''});
@@ -81,7 +81,7 @@ async function ownedReceiver(env,session,signal) {
   if(signal?.aborted)throw safeError('CANCELLED');
   const root=rows.find(r=>Number(r.split(/\s+/)[0])===pid);
   if(!root||!/(agent-browser|browser_use\.skill_cli)/.test(root))throw safeError('RECEIVER_OWNERSHIP_INVALID');
-  const plain=(await command(['ps','-axo','pid=,ppid=,command='],env,{signal})).stdout.split('\n').map(r=>r.trim().split(/\s+/));
+  const plain=rows.map(r=>r.split(/\s+/));
   const owned=new Set([pid]);let changed=true;while(changed){changed=false;for(const r of plain)if(owned.has(Number(r[1]))&&!owned.has(Number(r[0]))){owned.add(Number(r[0]));changed=true;}}
   const profile=plain.find(r=>owned.has(Number(r[0]))&&r.join(' ').includes('--user-data-dir='));
   if(!profile)throw safeError('RECEIVER_PROFILE_MISSING');
@@ -432,15 +432,25 @@ export async function selectBrowserEngine(env=process.env,{probe}={}) {
   const requested=env.BROWSER_QA_ENGINE||'auto';
   if(!['auto','ego-lite','agent-browser','browser-use'].includes(requested))throw safeError('UNSUPPORTED_ENGINE');
   if(requested!=='auto')return {engine:requested,fallbacks:[]};
-  const detect=probe||(async()=>{for(const root of (env.PATH||'').split(delimiter)){if(!root)continue;try{await access(join(root,'ego-browser'),constants.X_OK);return {available:true};}catch(error){if(!['ENOENT','ENOTDIR'].includes(error.code))throw error;}}return {available:false,reason:'executable-missing'};});
+  const detect=probe||(async()=>{
+    for(const root of (env.PATH||'').split(delimiter)){
+      if(!root)continue;
+      try{await access(join(root,'ego-browser'),constants.X_OK);}catch(error){if(['ENOENT','ENOTDIR'].includes(error.code))continue;throw error;}
+      let running;try{running=await egoAlreadyRunning(env);}catch(error){if(['EACCES','CANCELLED'].includes(error.code))throw error;throw safeError('ENGINE_PROBE_UNAVAILABLE');}
+      return {available:true,running,...(!running?{reason:'not-running'}:{})};
+    }
+    return {available:false,reason:'executable-missing'};
+  });
   const result=await detect(),fallbacks=[];
-  if(!result||typeof result.available!=='boolean')throw safeError('ENGINE_PROBE_INVALID');
+  if(!result||typeof result.available!=='boolean'||(result.running!==undefined&&typeof result.running!=='boolean'))throw safeError('ENGINE_PROBE_INVALID');
   if(!result.available&&!['ENOENT','executable-missing'].includes(result.reason))throw safeError(result.reason==='EACCES'?'EACCES':'ENGINE_PROBE_UNAVAILABLE');
-  if(result.available)return {engine:'ego-lite',fallbacks};
-  recordEngineFallback(fallbacks,'ego-lite executable unavailable before launch',result);
+  if(result.available&&result.running!==false)return {engine:'ego-lite',fallbacks};
+  recordEngineFallback(fallbacks,result.available?'ego-lite not running before launch':'ego-lite executable unavailable before launch',result);
   return {engine:'agent-browser',fallbacks};
 }
 const registeredScripts=Object.freeze(['design-source-read-v1','design-source-prepare-v1']);
+// Fixed facts are a closed name set; coordinates stay bounded data.
+const registeredFacts=Object.freeze(['scroll','hit-test','reduced-motion','active-element']);
 export function assertRegisteredScript(id) {
   // unregistered identifiers are rejected before executor access.
   if(!registeredScripts.includes(id))throw safeError('UNREGISTERED_SCRIPT');
@@ -450,7 +460,9 @@ export async function runRegisteredScript(page,id,args={}) {
   assertRegisteredScript(id); // Reject before any page call; no arbitrary strings.
   const isPrepare=id==='design-source-prepare-v1';
   const validObject=args&&typeof args==='object'&&!Array.isArray(args);
-  const validRead=validObject&&Object.keys(args).every(key=>key==='elements')&&Array.isArray(args.elements)&&args.elements.length<=1000&&args.elements.every(item=>item&&typeof item==='object'&&!Array.isArray(item)&&Object.keys(item).every(key=>['selector','properties'].includes(key))&&typeof item.selector==='string'&&!!item.selector&&Array.isArray(item.properties)&&item.properties.length<=1000&&item.properties.every(key=>typeof key==='string'&&!!key));
+  const boundedCoordinate=value=>Number.isFinite(value)&&value>=0&&value<=1000000;
+  const validPoint=value=>Boolean(value)&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).length===2&&boundedCoordinate(value.x)&&boundedCoordinate(value.y);
+  const validRead=validObject&&Object.keys(args).every(key=>key==='elements')&&Array.isArray(args.elements)&&args.elements.length<=1000&&args.elements.every(item=>item&&typeof item==='object'&&!Array.isArray(item)&&Object.keys(item).every(key=>['selector','properties','facts','point'].includes(key))&&typeof item.selector==='string'&&!!item.selector&&Array.isArray(item.properties)&&item.properties.length<=1000&&item.properties.every(key=>typeof key==='string'&&!!key)&&(item.facts===undefined||Array.isArray(item.facts)&&item.facts.length<=registeredFacts.length&&item.facts.every(key=>registeredFacts.includes(key))&&new Set(item.facts).size===item.facts.length)&&(item.point===undefined||Boolean(item.facts?.includes('hit-test'))&&validPoint(item.point)));
   const validPrepare=validObject&&Object.keys(args).every(key=>key==='actions')&&Array.isArray(args.actions)&&args.actions.length<=100&&args.actions.every(action=>action&&typeof action==='object'&&!Array.isArray(action)&&Object.keys(action).every(key=>['type','selector'].includes(key))&&action.type==='click'&&typeof action.selector==='string'&&!!action.selector);
   if(!(isPrepare?validPrepare:validRead))throw safeError('INVALID_COLLECTION_ARGUMENTS');
   return page.evaluate(({id,args})=>{
@@ -482,12 +494,33 @@ export async function runRegisteredScript(page,id,args={}) {
         value=[];
       }else{
         if(!Array.isArray(args.elements)||args.elements.length>1000)throw new Error('INVALID_COLLECTION_ELEMENTS');
-        const viewport_observed={width:window.innerWidth,height:window.innerHeight};
-        value=args.elements.map(({selector,properties=[]})=>{
+        const viewport_observed={width:window.innerWidth,height:window.innerHeight},factNames=['scroll','hit-test','reduced-motion','active-element'];
+        value=args.elements.map(({selector,properties=[],facts=[],point})=>{
           if(typeof selector!=='string'||!selector||!Array.isArray(properties)||properties.length>1000)throw new Error('INVALID_COLLECTION_ELEMENT');
+          if(!Array.isArray(facts)||facts.length>factNames.length||new Set(facts).size!==facts.length||!facts.every(key=>factNames.includes(key)))throw new Error('INVALID_COLLECTION_FACTS');
+          if(point!==undefined&&(!facts.includes('hit-test')||!point||typeof point!=='object'||Array.isArray(point)||Object.keys(point).some(key=>!['x','y'].includes(key))||!Number.isFinite(point.x)||point.x<0||point.x>1000000||!Number.isFinite(point.y)||point.y<0||point.y>1000000))throw new Error('INVALID_COLLECTION_POINT');
           const element=document.querySelector(selector);if(!element)throw new Error('ELEMENT_NOT_FOUND:'+selector);
           const box=element.getBoundingClientRect();if(!box.width||!box.height)throw new Error('ELEMENT_NOT_RENDERED:'+selector);
-          const computed=getComputedStyle(element);return {selector,viewport_observed,structure:{tag:element.tagName,text:element.textContent},rendered:{styles:Object.fromEntries(properties.map(key=>[key,computed.getPropertyValue(key)])),box:{x:box.x,y:box.y,width:box.width,height:box.height}},declared:{style:element.getAttribute('style')}};
+          const computed=getComputedStyle(element);
+          const observation={selector,viewport_observed,structure:{tag:element.tagName,text:element.textContent},rendered:{styles:Object.fromEntries(properties.map(key=>[key,computed.getPropertyValue(key)])),box:{x:box.x,y:box.y,width:box.width,height:box.height}},declared:{style:element.getAttribute('style')}};
+          if(facts.length){
+            const collected={};
+            for(const fact of facts){
+              if(fact==='scroll')collected.scroll={scrollWidth:element.scrollWidth,clientWidth:element.clientWidth};
+              else if(fact==='hit-test'){
+                const at=point||{x:box.x+box.width/2,y:box.y+box.height/2},target=document.elementFromPoint(at.x,at.y);
+                collected.hit_test={point:{x:at.x,y:at.y},target:target?{id:target.id,tag:target.tagName,class_name:target.getAttribute('class')}:null,inside_selected:Boolean(target&&element.contains(target))};
+              }else if(fact==='reduced-motion'){
+                const media=window.matchMedia('(prefers-reduced-motion: reduce)');
+                collected.reduced_motion={media:media.media,matches:media.matches};
+              }else if(fact==='active-element'){
+                const active=document.activeElement,style=active?getComputedStyle(active):null;
+                collected.active_element={id:active?active.id:null,tag:active?active.tagName:null,outlineStyle:style?style.outlineStyle:null,selected:active===element};
+              }
+            }
+            observation.facts=collected;
+          }
+          return observation;
         });
       }
       if(observer.takeRecords().length)throw new Error('READ_ONLY_MUTATION_DETECTED');
@@ -502,7 +535,6 @@ export async function runBrowserQa(args=process.argv.slice(2),inputEnv=process.e
   const scope=makeScope(url,site);const mode=env.BROWSER_QA_AUTH_MODE||'none';
   const selection=await selectBrowserEngine(env);let engine=selection.engine;
   for(const fact of selection.fallbacks)console.log(JSON.stringify(fact));
-  if((env.BROWSER_QA_ENGINE||'auto')==='auto'&&selection.fallbacks.length)throw safeError('EGO_EXISTING_MODE_NO_IMPLICIT_LAUNCH');
   if(!['ego-lite','agent-browser','browser-use'].includes(engine))throw safeError('UNSUPPORTED_ENGINE');
   if(!['none','read-only-ticket-export'].includes(mode))throw safeError('UNSUPPORTED_AUTH_MODE');
   if(mode==='read-only-ticket-export'&&!sourceInput)throw safeError('SOURCE_UNAVAILABLE');
@@ -516,19 +548,20 @@ export async function runBrowserQa(args=process.argv.slice(2),inputEnv=process.e
   await mkdir(resolve(evidence),{recursive:true});
   const ownedRoot=await mkdtemp(join(env.TMPDIR||tmpdir(),'whqa-'));
   Object.assign(env,{AGENT_BROWSER_SOCKET_DIR:ownedRoot,AGENT_BROWSER_HOME:ownedRoot});
-  const aborter=new AbortController();let cancelled=0;let source,receiver;let cleanupOwnership;let sourceCollision=false;let receiverDistinct=!sourceEndpoint;let code=1;const secrets=new Set();
+  const aborter=new AbortController();let cancelled=0;let source,receiver;let cleanupOwnership;let sourceCollision=false;let receiverDistinct=!sourceEndpoint;let code=1;const secrets=new Set(sourceEndpoint?[sourceEndpoint]:[]);
   const stop=s=>{cancelled=s==='SIGINT'?130:143;aborter.abort();};const int=()=>stop('SIGINT'),term=()=>stop('SIGTERM');process.on('SIGINT',int);process.on('SIGTERM',term);
   try {
     const launch=engine==='agent-browser'?[engine,'--session',session,'--allowed-domains',allowed,'--content-boundaries','open']:[engine,'--session',session,'open'];
-    const opened=await command(launch,env,{signal:aborter.signal});if(opened.code)throw safeError('ENGINE_LAUNCH_FAILED');
+    const opened=await command(launch,env,{signal:aborter.signal,outputOnFailure:true,outputSecrets:secrets});if(opened.code)throw safeError('ENGINE_LAUNCH_FAILED');
     {
-      const ownership=await ownedReceiver(env,session,aborter.signal);
       const cdp=await command([engine,'--session',session,'get','cdp-url'],env,{signal:aborter.signal});
       let endpoint=cdp.stdout.trim();try{const parsed=JSON.parse(endpoint);endpoint=parsed.data?.url||parsed.data?.cdpUrl||parsed.data||parsed.url||endpoint;}catch{}
       endpoint=validateEndpoint(endpoint,'receiver');
+      const identityEnv={...env,LC_ALL:'',LC_TIME:'C',LC_CTYPE:env.LC_ALL||env.LC_CTYPE||env.LANG||'C'};
+      const ownership=await ownedReceiver(identityEnv,session,aborter.signal);
       receiver=await connectCdp(endpoint,{signal:aborter.signal,closeOnAbort:false});
       if(aborter.signal.aborted)throw safeError('CANCELLED');
-      const identities=(await command(['ps','-axo','pid=,ppid=,lstart=,command='],env,{signal:aborter.signal})).stdout.split('\n').map(r=>r.trim());
+      const identities=(await command(['ps','-axo','pid=,ppid=,lstart=,command='],identityEnv,{signal:aborter.signal})).stdout.split('\n').map(r=>r.trim());
       if(!identities.includes(ownership.identity)||!ownership.profileIdentity||!identities.includes(ownership.profileIdentity))throw safeError('RECEIVER_IDENTITY_CHANGED');
       const start=row=>{const fields=row.trim().split(/\s+/);return /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)$/.test(fields[2]||'')?fields.slice(2,7).join(' '):'unknown';};
       cleanupOwnership={daemonPid:ownership.pid,daemonStart:start(ownership.identity),browserPid:ownership.profilePid,browserStart:start(ownership.profileIdentity)};

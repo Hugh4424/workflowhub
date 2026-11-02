@@ -1,0 +1,12 @@
+{
+  "token_classes": ["否定", "限定", "未执行", "不能证明", "待补证"],
+  "calibration": [
+    {"source":"键盘操作未测，结果仅限静态结构。","quote":"键盘操作通过，结果静态结构。","exit":2,"verdict":"阻断","term_class":"未执行"},
+    {"source":"报告不能证明真实页面已修复，结果待补证。","quote":"真实页面已修复。","exit":2,"verdict":"阻断","term_class":"不能证明"},
+    {"source":"原件记录布局宽度为640像素。","quote":"原件记录布局宽度为640像素。","exit":0,"verdict":"允许","term_class":null}
+  ],
+  "overrides": [
+    {"source":"键盘操作未测。","quote":"键盘操作通过。","exit":0,"record":{"ref":"source.txt","quote":"键盘操作通过。","reason":"审查者解释本次引用用途与覆盖边界；不签页面验收。","signer":"synthetic-reviewer","expires_if":"原件字节或引用句改变"}},
+    {"source":"键盘操作未测。","quote":"键盘操作通过。","exit":2,"record":{"ref":"source.txt","quote":"键盘操作通过。","reason":"校准用缺签名记录","signer":"","expires_if":"原件字节或引用句改变"}}
+  ]
+}

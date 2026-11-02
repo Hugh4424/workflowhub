@@ -339,12 +339,25 @@ export function checkSkillConsistency(root) {
         return { line: index + 1, text: fence || /^\s*>/.test(text) ? "" : text };
       });
       const visible = lines.map(({ text }) => text).join("\n");
+      // The same optional machine block the material reader locates. Its
+      // absence keeps every existing template verdict unchanged.
+      const machineStart = lines.findIndex(({ text }) =>
+        /^##\s+(?:机器字段|校验器字段|Machine fields?)(?:\s*[（(][^）)\n]*[）)])?\s*$/i.test(text));
+      const machineBlock = machineStart < 0 ? "" : (() => {
+        const body = [];
+        for (let index = machineStart + 1; index < lines.length; index += 1) {
+          if (/^##\s/.test(lines[index].text)) break;
+          body.push(lines[index].text);
+        }
+        return body.join("\n").trim();
+      })();
       const missing = [];
       let indexUnknown = false;
       if (locator.endsWith("/phase-template.md")) {
-        if (!/^##\s+L2\b/m.test(visible)) missing.push("L2");
-        const authority = visible.split(/^##\s+L2\b|^###\s+T\d{3,}\b/m, 1)[0];
-        if (!/^\s*[-*]\s+\*\*(?:Write set|写入集|写集)\*\*\s*[:：]\s*\S/im.test(authority)) missing.push("写入集");
+        if (!/^##\s+L2\b/m.test(visible) && !machineBlock) missing.push("L2");
+        const authority = visible.split(/^##\s+L2\b|^###\s+(?:T\d{3,}\b|任务\s*\d+\s*[:：])/m, 1)[0];
+        const writeSet = /^\s*[-*]\s+\*\*(?:Write set|写入集|写集)\*\*\s*[:：]\s*\S/im;
+        if (!writeSet.test(authority) && !writeSet.test(machineBlock)) missing.push("写入集");
       }
       if (locator.endsWith("/index-template.md")) {
         // Reuse the production purity condition, including Chinese aliases;
@@ -363,17 +376,30 @@ export function checkSkillConsistency(root) {
       const mechanical = locator.endsWith("/phase-template.md") || locator.endsWith("/index-template.md");
       reports.push(`${prefix} 必留项 ${missing.length ? `缺失 ${missing.join("、")}` : indexUnknown ? "unknown — Execution Index 有表行但占位未判定" : mechanical ? "机器结构在场" : "unknown — 无机器可判声明"}; 散文必留声明 unknown／未覆盖，交独立人读; report-only`);
       const proseLines = [];
+      const wideProseLines = [];
+      // A machine-field block may wrap onto indented continuation lines. The
+      // start line is already excluded below; its indented continuations belong
+      // to the same machine field and must not count as wide prose. A blank or
+      // non-indented line ends the continuation.
+      let machineContinuation = false;
       for (const { line, text } of lines) {
         const prose = text.replace(/(`+)(.*?)\1/g, "");
         if (/^\s*#{1,6}\s*$/.test(text) && text.trim()) reports.push(`${prefix} 空标题 line=${line}; report-only`);
         if (/\bTBD\b|待补充|\{\{[^{}]+\}\}/u.test(prose)) reports.push(`${prefix} 占位 line=${line}; report-only`);
         // Headings, table rows and machine field literals are not prose.
-        if (/^\s*(?:#|\||[-*]\s+\*\*[^*]+\*\*\s*[:：])/.test(text)) continue;
-        proseLines.push(text.replace(/(`+)(.*?)\1/g, "\uE000"));
+        const machineField = /^\s*[-*]\s+\*\*[^*]+\*\*\s*[:：]/.test(text);
+        const continuation = machineContinuation && /^\s+\S/.test(text);
+        if (/^\s*(?:#|\||[-*]\s+\*\*[^*]+\*\*\s*[:：])/.test(text)) { machineContinuation = machineField; continue; }
+        machineContinuation = continuation || machineField;
+        const masked = text.replace(/(`+)(.*?)\1/g, "\uE000");
+        proseLines.push(masked);
+        if (!continuation) wideProseLines.push(masked);
       }
       const sentenceCounts = proseLines.join("\n").split(/[。！？]/u)
         .map(sentence => (sentence.match(/[\p{Script=Han}]|[A-Za-z0-9]+|\uE000/gu) ?? []).length).filter(count => count > 0);
-      reports.push(`${prefix} 句长参考 ${JSON.stringify(sentenceCounts)}; 汉字各1、连续拉丁/数字串1、行内代码1，排除机器字面/引用块/围栏; 校准 TP=unknown FP=unknown 分母=unknown（本检查未接入独立标注；校准见独立原件）；无句长门／评分; report-only`);
+      const wideLines = wideProseLines.filter(line => [...line].length > 80
+        && !/^\s*(?:node|npx|npm|pnpm|yarn|bun|git|bash|sh|python|pytest|go|cargo|make|\.\/)/.test(line)).length;
+      reports.push(`${prefix} 句长参考 ${JSON.stringify(sentenceCounts)}; 汉字各1、连续拉丁/数字串1、行内代码1，排除机器字面/引用块/围栏; 超80字正文行=${wideLines}（命令、表格与机器字段及其缩进续行不计，写作与阅读标准，不作拒收）; 校准 TP=unknown FP=unknown 分母=unknown（本检查未接入独立标注；校准见独立原件）；无句长门／评分; report-only`);
     } catch (error) {
       // Only this added read/report capability degrades. Catalog/bundle errors
       // and CLI argument/dependency failures keep their original blocking path.

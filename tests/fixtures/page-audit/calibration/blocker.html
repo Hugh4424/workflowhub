@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>主操作命中区阻断校准负例</title>
+<style>
+body { margin: 32px; font-family: system-ui, sans-serif; color: #172033; }
+#primary-action { position: relative; z-index: 1; margin: 48px; padding: 16px 24px; font: inherit; }
+#blocking-cover { position: fixed; inset: 0; z-index: 10; pointer-events: auto; background: rgba(32, 48, 72, .25); }
+</style>
+</head>
+<body>
+<main>
+<h1>主操作命中区被接管</h1>
+<p>基线主操作保留原生 Tab 焦点能力；观测态全屏遮罩接管指针命中区，期望 BLOCKER。</p>
+<button id="primary-action" type="button" data-calibration="blocker-cover" data-expected-severity="BLOCKER">完成受控任务</button>
+<p>在按钮中心调用 document.elementFromPoint(x, y)，观测目标应为 blocking-cover。仅保存夹具结构；实际命中与点击结果留给独立浏览器执行。</p>
+</main>
+<div id="blocking-cover" aria-hidden="true"></div>
+</body>
+</html>

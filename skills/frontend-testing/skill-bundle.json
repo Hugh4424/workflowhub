@@ -2,7 +2,18 @@
   "schema_version": 1,
   "skill": "frontend-testing",
   "files": [
-    "SKILL.md"
+    "SKILL.md",
+    "references/page-audit.md",
+    "scripts/check-page-audit.mjs",
+    "scripts/collect-console.mjs",
+    "scripts/collect-network.mjs",
+    "scripts/collect-overflow.mjs",
+    "scripts/collect-perf.mjs",
+    "scripts/collect-a11y.mjs",
+    "scripts/run-page-audit.mjs",
+    "scripts/check-norm-consumption.mjs",
+    "scripts/check-report-quotes.mjs",
+    "scripts/check-version-binding.mjs"
   ],
   "sources": [
     {

@@ -1,0 +1,17 @@
+{
+  "created_at": "2026-10-31T00:04:38.686Z",
+  "labels": {
+    "X": "B",
+    "Y": "A"
+  },
+  "deliveries": {
+    "A": {
+      "path": "/tmp/p12-greenbutwrong/deliveries/A/src/stage.mjs",
+      "sha256": "28b3ff4b80ef19e35fb52ff1d814711e7de9350085f9825cf0bb9d9c9da99e15"
+    },
+    "B": {
+      "path": "/tmp/p12-greenbutwrong/deliveries/B/src/stage.mjs",
+      "sha256": "2477d90b715008fb536efbc0f61371dc5a06149e33fc84b2040acb6fef8777e8"
+    }
+  }
+}

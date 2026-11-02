@@ -83,9 +83,11 @@ test('ORACLE-PLAN-AUTHORING navigation text cannot hide a missing actual Task ac
   expect(result.errors).toContain('phases/P1-行为结果.md T001 task card missing concrete Action');
 });
 
-test.each(['L1', 'L2'])('ORACLE-PLAN-AUTHORING identifies a missing %s heading in the complete author material', heading => {
+test.each(['L0', 'L1', 'L2'])('ORACLE-PLAN-AUTHORING identifies a missing %s heading when the new machine block is absent', heading => {
   const input = authorMaterials();
-  input.phases[phasePaths[0]] = input.phases[phasePaths[0]].replace(new RegExp(`^## ${heading}[^\\n]*\\n`, 'm'), '');
+  // New shape: the explicit machine block replaces the three required L headings.
+  // Removing it returns the material to the old shape, where each heading is required.
+  input.phases[phasePaths[0]] = input.phases[phasePaths[0]].replace(/^## 机器字段[^\n]*\n[\s\S]*$/m, '');
   const result = validatePostPhaseContract(input);
   expect(result.ok).toBe(false);
   expect(result.errors).toContain(`phases/P1-行为结果.md is missing ${heading}`);

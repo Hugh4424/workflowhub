@@ -21,6 +21,34 @@ function sections(text, level) {
  rows.forEach((line,index)=>{if(/^\s*```/.test(line)){fenced=!fenced;if(active)active.lines.push(line);return;}if(fenced){if(active)active.lines.push(line);return;}const h=/^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);if(h&&h[1].length<=level)active=null;if(h&&h[1].length===level){active={heading:h[2],line:index+1,lines:[]};result.push(active);}else if(active)active.lines.push(line);});
  return result.map(({lines,...section})=>({...section,body:lines.join('\n')}));
 }
+// New-shape materials keep legacy ids in a reader-visible mapping section.
+// Only that named section can establish a mapping; a missing row stays a gap.
+const MAPPING_HEADING = /旧编号对照|编号对照/;
+function legacyIdMappings(markdown) {
+ const mappings=new Map();let inSection=false,level=0,fence=false;
+ const labelSource=/^(?:决定|工作包|变更|用户答复|任务|需求|验收|未决|风险)\s*\d+$/;
+ const legacySource=/^(?:ADR-\d+|D-\d+|U-\d+|WP-?\d+|T\d{3,}|R-\d{3}[a-z]*|AC-[A-Z0-9-]+|OI-\d+|RISK-\d+|OPEN-\d+|UC-\d+)$/;
+ for(const line of (markdown??'').split('\n')){
+  const marker=/^\s*(`{3,}|~{3,})/.exec(line);
+  if(marker){if(!fence)fence=marker[1];else if(marker[1][0]===fence[0]&&marker[1].length>=fence.length)fence=null;continue;}
+  if(fence)continue;
+  const heading=/^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);
+  if(heading){if(inSection&&heading[1].length<=level)inSection=false;if(!inSection&&MAPPING_HEADING.test(heading[2])){inSection=true;level=heading[1].length;}continue;}
+  if(!inSection)continue;
+  let label=null,legacy=null;
+  if(/^\s*\|/.test(line)){
+   const row=line.trim().replace(/^\||\|$/g,'').split('|').map(value=>value.replace(/\*\*|`/g,'').trim());
+   label=row.find(value=>labelSource.test(value))??null;legacy=row.find(value=>legacySource.test(value))??null;
+  }
+  if(!label||!legacy){
+   const l=/(?:决定|工作包|变更|用户答复|任务|需求|验收|未决|风险)\s*(\d+)/.exec(line);
+   const g=/(?:ADR-\d+|D-\d+|U-\d+|WP-?\d+|T\d{3,}|R-\d{3}[a-z]*|AC-[A-Z0-9-]+|OI-\d+|RISK-\d+|OPEN-\d+|UC-\d+)/.exec(line);
+   if(l&&g){label=l[0].replace(/\s+/g,' ');legacy=g[0];}
+  }
+  if(label&&legacy)mappings.set(label.replace(/\s+/g,' '),legacy);
+ }
+ return mappings;
+}
 function fields(body){const result={};let key;for(const line of (body??'').split('\n')){const m=/^\s*-\s*\*\*([^*]+)\*\*[:：]\s*(.*)$/.exec(line);if(m){key=m[1];result[key]=m[2];}else if(/^#/.test(line)){key=undefined;}else if(key){if(key==='动作'||key==='Action')result[key]+='\n'+line;else if(line.trim())result[key]+=' '+line.trim();}}return result;}
 const cells=line=>line.trim().replace(/^\||\|$/g,'').split('|').map(value=>value.trim().replace(/`/g,''));
 const ids=(text,pattern)=>[...new Set((text??'').match(pattern)??[])];
@@ -106,6 +134,7 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
  const decisionPath=join(material,'decision-log.md'),specPath=join(material,'spec.md'),indexPath=join(material,'phases/index.md');
  const decision=read(decisionPath,true),spec=read(specPath,true),index=read(indexPath,true),facts=read(join(task.taskPath,'facts.jsonl'),true);
  // JSONL corruption is a real input error; the cursor is displayed, never changed here.
+ const decisionMappings=legacyIdMappings(decision),specMappings=legacyIdMappings(spec);
  const rows=facts===null?[]:readTaskFacts(task.taskPath);
  const factsPath=join(task.taskPath,'facts.jsonl'),factsHash=fingerprints[factsPath]??'missing';
  delete fingerprints[factsPath];
@@ -174,13 +203,38 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
   const req=node('req',title??decisionRequirement??'原始需求未取得',raw?.path??(decisionRequirement?decisionPath:metadata),raw?'原始逐字需求':'原始需求来源缺口',{missing:!raw,id:'req-1',summary:raw?title:'缺 quality/evidence/raw-requirements 原件'});
   Object.assign(req,{quote:title??'',source:raw?'用户原始需求':'原件未取得'});req.src.push(...routingOrigins.map(path=>source(path,'既有需求索引指针')));
  }
- const packages=[];
- for(const block of sections(decision,3).filter(block=>/^WP\d+\s+[—–-]\s+/.test(block.heading))){
-  const sourceId=/^WP\d+/.exec(block.heading)[0];if(packages.some(o=>o.source_id===sourceId))throw Error('duplicate work package: '+sourceId);
-  const f=fields(block.body),wp=node('wp',block.heading.replace(/^WP\d+\s+[—–-]\s+/,''),decisionPath,`line:${block.line}；${sourceId}`,{id:'wp-'+sourceId,summary:f['目标']??''});
-  Object.assign(wp,{source_id:sourceId,items:[f['边界'],f['已定做法']].filter(Boolean),goal:f['目标']??'',boundary:f['边界']??'',planSummary:f['已定做法']??'',adopted_refs:qualityRefs(block.body)});packages.push(wp);
-  if(f['目标']){const goal=node('goal',f['目标'],decisionPath,`line:${block.line}；${sourceId} 目标`,{id:'goal-'+sourceId});goal.owner=wp.id;}
-  if(f['已定做法']){const dec=node('dec',sourceId+' 已定做法',decisionPath,`line:${block.line}；${sourceId} 已定做法`,{id:'dec-'+sourceId});Object.assign(dec,{owner:wp.id,detail:f['已定做法'],why:f['理由']??'',summary:f['已定做法']});}
+ const packages=[],packageBlocks=[];
+ for(const block of sections(decision,3)){
+  const old=/^WP(\d+)\s+[—–-]\s+/.exec(block.heading);
+  if(old){packageBlocks.push({block,sourceId:`WP${old[1]}`,title:block.heading.replace(/^WP\d+\s+[—–-]\s+/,''),shape:'old'});continue;}
+  const n=/^工作包\s*(\d+)\s*[:：]/.exec(block.heading)?.[1];if(!n)continue;
+  const mapped=decisionMappings.get(`工作包 ${n}`);
+  if(!mapped||!/^WP-?\d+$/.test(mapped)){
+   const missing=node('wp',`缺：工作包 ${n} 的 WP 编号映射`,decisionPath,`line:${block.line}；工作包 ${n}`,{missing:true,id:`wp-missing-${n}`,summary:`工作包 ${n} 未取得 WP 旧编号映射`});
+   missing.source_id=`工作包 ${n}`;packages.push(missing);continue;
+  }
+  packageBlocks.push({block,sourceId:mapped.replace(/^WP-?/,'WP'),title:block.heading.replace(/^工作包\s*\d+\s*[:：]\s*/,''),shape:'new'});
+ }
+ for(const {block,sourceId,title,shape} of packageBlocks){
+  if(packages.some(o=>o.source_id===sourceId))throw Error('duplicate work package: '+sourceId);
+  const f=fields(block.body);
+  const goalText=shape==='new'?f['目标']??f['要交付什么']??'':f['目标'];
+  const boundaryText=shape==='new'?f['边界']??f['不做什么']??'':f['边界'];
+  const planText=shape==='new'?f['已定做法']??'':f['已定做法'];
+  const wp=node('wp',title,decisionPath,`line:${block.line}；${sourceId}`,{id:'wp-'+sourceId,summary:goalText??''});
+  Object.assign(wp,{source_id:sourceId,items:[boundaryText,planText].filter(Boolean),goal:goalText??'',boundary:boundaryText??'',planSummary:planText??'',adopted_refs:qualityRefs(block.body)});packages.push(wp);
+  if(goalText){const goal=node('goal',goalText,decisionPath,`line:${block.line}；${sourceId} 目标`,{id:'goal-'+sourceId});goal.owner=wp.id;}
+  if(planText){const dec=node('dec',sourceId+' 已定做法',decisionPath,`line:${block.line}；${sourceId} 已定做法`,{id:'dec-'+sourceId});Object.assign(dec,{owner:wp.id,detail:planText,why:f['理由']??'',summary:planText});}
+ }
+ for(const block of [...sections(decision,3),...sections(decision,4)].filter(block=>/^决定\s*\d+\s*[:：]/.test(block.heading))){
+  const n=/^决定\s*(\d+)\s*[:：]/.exec(block.heading)?.[1],mapped=decisionMappings.get(`决定 ${n}`);
+  if(!mapped||!/^(?:ADR|D)-\d+$/.test(mapped)){
+   const missing=node('dec',`缺：决定 ${n} 的 ADR/D 编号映射`,decisionPath,`line:${block.line}；决定 ${n}`,{missing:true,id:`dec-missing-${n}`,summary:`决定 ${n} 未取得 ADR/D 旧编号映射`});
+   missing.source_id=`决定 ${n}`;continue;
+  }
+  if(objects.some(o=>o.kind==='dec'&&o.id==='dec-'+mapped))continue;
+  const f=fields(block.body),dec=node('dec',block.heading.replace(/^决定\s*\d+\s*[:：]\s*/,''),decisionPath,`line:${block.line}；${mapped}`,{id:'dec-'+mapped,summary:f['做什么']??''});
+  Object.assign(dec,{source_id:mapped,detail:f['做什么']??'',why:f['为什么']??'',items:[f['不做什么']].filter(Boolean),owners:[]});
  }
  // Only explicit selected-decision originals supply named decisions and their affected packages.
  for(const ref of initialRefs.filter(ref=>/requirement-change-log.*\.md$/.test(ref))){
@@ -191,6 +245,29 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
    const detail=/^真实处置[：:]([^\n]+)/m.exec(block.body)?.[1]??'';
    const dec=node('dec',block.heading,path,`line:${block.line}；${/问题原文未取得/.test(block.body)?'问题原文未取得；':''}选中项逐字`,{id:'dec-'+sourceId,summary:detail});
    Object.assign(dec,{source_id:sourceId,items:selected,detail,why:'',owners:owners.map(wp=>wp.id)});
+  }
+ }
+ const changeSection=sections(decision,2).find(block=>/后来改了什么|需求变更/.test(block.heading));
+ if(changeSection){
+  const items=[];
+  for(const block of [...sections(changeSection.body,3),...sections(changeSection.body,4)]){
+   const match=/^(?:变更|用户答复)\s*(\d+)\s*[:：]/.exec(block.heading);if(!match)continue;
+   items.push({n:match[1],title:block.heading,body:block.body,line:changeSection.line+block.line});
+  }
+  for(const [offset,line] of changeSection.body.split('\n').entries()){
+   const match=/^(?:变更|用户答复)\s*(\d+)[^\n：:]*[：:]\s*(.+)$/.exec(line.trim());if(!match)continue;
+   if(items.some(item=>item.n===match[1]))continue;
+   items.push({n:match[1],title:line.trim().split(/[：:]/)[0],body:line,line:changeSection.line+offset+1});
+  }
+  for(const item of items){
+   const mapped=decisionMappings.get(`变更 ${item.n}`)??decisionMappings.get(`用户答复 ${item.n}`);
+   if(!mapped||!/^U-\d+$/.test(mapped)){
+    const missing=node('dec',`缺：变更 ${item.n} 的 U 编号映射`,decisionPath,`line:${item.line}；变更 ${item.n}`,{missing:true,id:`dec-missing-U-${item.n}`,summary:`变更 ${item.n} 未取得 U 旧编号映射`});
+    missing.source_id=`变更 ${item.n}`;continue;
+   }
+   if(objects.some(o=>o.kind==='dec'&&o.id==='dec-'+mapped))continue;
+   const dec=node('dec',item.title,decisionPath,`line:${item.line}；${mapped}`,{id:'dec-'+mapped,summary:item.title});
+   Object.assign(dec,{source_id:mapped,detail:item.body.trim(),items:[],owners:[]});
   }
  }
  if(!packages.length){const wp=section('wp',decision,decisionPath,/^#{1,3}\s+WP\d+\b/);packages.push(wp);section('goal',decision,decisionPath,/^#{1,3}\s+目标/);section('dec',decision,decisionPath,/U-\d+|ADR-|决定|决策/);}
@@ -211,15 +288,34 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
  }
  if(!objects.some(o=>o.kind==='spec'))node('spec','规格未取得',spec===null?metadata:specPath,'缺功能需求权威正文',{missing:true});
  if(!objects.some(o=>o.kind==='acc'))node('acc','验收条目未取得',spec===null?metadata:specPath,'缺Appendix A验收正文',{missing:true});
- const riskSection=sections(spec,2).find(block=>/风险、未决|风险与未决/.test(block.heading));
+ const riskSection=sections(spec,2).find(block=>/风险、未决|风险与未决|有什么风险和未决/.test(block.heading));
  const riskLines=(riskSection?.body??'').split('\n');
  for(let i=0;i<riskLines.length;i++){
-  const m=/^-\s*\*\*((?:RISK|OPEN)-\d+)\*\*[:：]\s*(.+)/.exec(riskLines[i]);if(!m)continue;
-  let end=i+1;while(end<riskLines.length&&!/^-\s*\*\*(?:RISK|OPEN)-/.test(riskLines[end]))end++;
-  const f=fields(riskLines.slice(i+1,end).join('\n')),o=node('risk',m[2],specPath,`line:${riskSection.line+i+1}；${m[1]}`,{id:'risk-'+m[1],summary:f['触发条件']??f['影响']??'触发条件未取得'});Object.assign(o,{source_id:m[1],ac_ids:ids(f['受影响 ID'],/AC-[A-Z0-9-]+/g),details:f});
+  const m=/^-\s*\*\*((?:RISK|OPEN)-\d+)\*\*[:：]\s*(.+)/.exec(riskLines[i]);
+  if(m){
+   let end=i+1;while(end<riskLines.length&&!/^-\s*\*\*(?:RISK|OPEN)-/.test(riskLines[end]))end++;
+   const f=fields(riskLines.slice(i+1,end).join('\n')),o=node('risk',m[2],specPath,`line:${riskSection.line+i+1}；${m[1]}`,{id:'risk-'+m[1],summary:f['触发条件']??f['影响']??'触发条件未取得'});Object.assign(o,{source_id:m[1],ac_ids:ids(f['受影响 ID'],/AC-[A-Z0-9-]+/g),details:f});continue;
+  }
+  const n=/^-\s*\*\*(风险|未决)\s*(\d+)\*\*[:：]\s*(.+)/.exec(riskLines[i]);if(!n)continue;
+  let end=i+1;while(end<riskLines.length&&!/^-\s*\*\*(?:RISK|OPEN|风险|未决)(?=\s|\d|[:：])/.test(riskLines[end]))end++;
+  const mapped=specMappings.get(`${n[1]} ${n[2]}`);
+  if(!mapped||!/^(?:RISK|OPEN)-\d+$/.test(mapped)){
+   const missing=node('risk',`缺：${n[1]} ${n[2]} 的 RISK/OPEN 编号映射`,specPath,`line:${riskSection.line+i+1}；${n[1]} ${n[2]}`,{missing:true,id:'risk-missing-spec-'+hash(`${n[1]} ${n[2]}`).slice(0,16),summary:`${n[1]} ${n[2]} 未取得 RISK/OPEN 旧编号映射`});missing.source_id=`${n[1]} ${n[2]}`;i=end-1;continue;
+  }
+  const o=node('risk',n[3],specPath,`line:${riskSection.line+i+1}；${mapped}`,{id:'risk-'+mapped,summary:n[3]});
+  Object.assign(o,{source_id:mapped,ac_ids:[],details:fields(riskLines.slice(i+1,end).join('\n'))});i=end-1;
  }
- const issues=sections(decision,2).find(block=>/^未决项$/.test(block.heading));
- for(const line of (issues?.body??'').split('\n')){if(!/^\s*\|\s*OI-\d+/.test(line))continue;const row=cells(line),o=node('risk',row[1],decisionPath,row[0],{id:'risk-'+row[0],summary:row[2]});Object.assign(o,{source_id:row[0],source_state:row[2],related_wp_ids:ids(row.slice(1).join(' '),/WP\d+/g)});o.status.text=/^(?:open|closed|confirmed)(?:（[^）]*）)?/.exec(row[2])?.[0]??'原状态未取得';}
+ const issues=sections(decision,2).find(block=>/^(?:未决项|还有什么没定)/.test(block.heading));
+ for(const line of (issues?.body??'').split('\n')){
+  if(!/^\s*\|\s*(?:OI-\d+|未决\s*\d+)/.test(line))continue;
+  const row=cells(line),oi=/^OI-\d+/.exec(row[0])?.[0]??decisionMappings.get(row[0].replace(/\s+/g,' '));
+  if(!oi||!/^OI-\d+$/.test(oi)){
+   const missing=node('risk',`缺：${row[0]} 的 OI 编号映射`,decisionPath,row[0],{missing:true,id:'risk-missing-decision-'+hash(row[0]).slice(0,16),summary:`${row[0]} 未取得 OI 旧编号映射`});missing.source_id=row[0];continue;
+  }
+  const o=node('risk',row[1],decisionPath,row[0],{id:'risk-'+oi,summary:row[2]}),related=ids(row.slice(1).join(' '),/WP\d+/g);
+  for(const m of row.slice(1).join(' ').matchAll(/工作包\s*(\d+)/g)){const wp=decisionMappings.get(`工作包 ${m[1]}`);if(wp)related.push(wp);}
+  Object.assign(o,{source_id:oi,source_state:row[2],related_wp_ids:[...new Set(related)]});o.status.text=/^(?:open|closed|confirmed)(?:（[^）]*）)?/.exec(row[2])?.[0]??'原状态未取得';
+ }
  if(!objects.some(o=>o.kind==='risk'))node('risk','风险原件待查',spec===null?metadata:specPath,'风险与未决节',{missing:!riskSection,summary:riskSection?'风险与未决条目见原件':'风险原件未取得'});
  function files(directory,{recursive=false}={}){
   let stat;try{stat=lstatSync(directory);}catch(error){if(error.code==='ENOENT')return [];throw error;}
@@ -254,10 +350,26 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
   const evidenceRef=/^\s*-\s*\*\*evidence_path\*\*[:：]\s*`([^`]+)`/m.exec(text)?.[1];
   if(evidenceRef?.startsWith('quality/')&&evidenceRef.endsWith('.json')){const evidencePath=task.recordPath(evidenceRef),raw=read(evidencePath,true);delete fingerprints[evidencePath];if(raw!==null){const record=JSON.parse(raw);if((record.phase_id??record.phase)===row.id){phaseRecords.set(row.id,{record,path:evidencePath});for(const claim of Array.isArray(record.acceptance)?record.acceptance:Array.isArray(record.ac_results)?record.ac_results:[]){const ac=claim.ac??claim.id,tier=claim.tier??claim.result;if(ac&&typeof tier==='string'){const list=acceptanceClaims.get(ac)??[];list.push({tier,path:evidencePath});acceptanceClaims.set(ac,list);}}}}}
   const header=text.split('\n').find(line=>/^# /.test(line))??row.id,p=node('phase',header,path,'Phase '+row.id,{id:'phase-'+row.id,summary:'契约原件'});p.source_id=row.id;p.label=row.id;phaseTasks[p.id]=[];
-  const l1=sections(text,2).find(block=>/^L1\b/.test(block.heading));
-  for(const block of sections(l1?.body??text,3).filter(block=>/^T\d{3,}\s+[—–-]\s+\S/.test(block.heading))){
-   const taskId=/^T\d{3,}/.exec(block.heading)[0];if(row.task_ids&&!row.task_ids.includes(taskId))continue;if(objects.some(o=>o.kind==='task'&&o.source_id===taskId))throw Error('duplicate strict Task identity: '+taskId);
-   const f=fields(block.body),action=f['动作']??f.Action??'',t=node('task',block.heading.replace(/^T\d{3,}\s+[—–-]\s+/,''),path,'### '+block.heading,{id:'task-'+taskId,phase:p.id,summary:action||'任务正文未取得'});
+  const l1=sections(text,2).find(block=>/^L1\b/.test(block.heading)),phaseMappings=legacyIdMappings(text),taskBlocks=[];
+  for(const block of sections(l1?.body??text,3)){
+   const old=/^T(\d{3,})\s+[—–-]\s+\S/.exec(block.heading);
+   if(old){taskBlocks.push({block,taskId:`T${old[1]}`,title:block.heading.replace(/^T\d{3,}\s+[—–-]\s+/,''),shape:'old'});continue;}
+   const n=/^任务\s*(\d+)\s*[:：]/.exec(block.heading)?.[1];if(!n)continue;
+   taskBlocks.push({block,n,title:block.heading.replace(/^任务\s*\d+\s*[:：]\s*/,''),shape:'new'});
+  }
+  for(const entry of taskBlocks){
+   const {block,title,shape}=entry;let taskId=entry.taskId;
+   if(shape==='new'){
+    const idField=fields(block.body)['任务编号'];
+    taskId=/^T\d{3,}$/.test(idField??'')?idField:phaseMappings.get(`任务 ${entry.n}`);
+   }
+   if(!taskId||!/^T\d{3,}$/.test(taskId)){
+    const missing=node('task',`缺：任务 ${entry.n} 的 T 编号映射`,path,'### '+block.heading,{missing:true,id:`task-missing-${entry.n}`,phase:p.id,summary:`任务 ${entry.n} 未取得 T 旧编号映射`});
+    missing.source_id=`任务 ${entry.n}`;phaseTasks[p.id].push(missing.id);continue;
+   }
+   if(row.task_ids&&!row.task_ids.includes(taskId))continue;
+   if(objects.some(o=>o.kind==='task'&&o.source_id===taskId))throw Error('duplicate strict Task identity: '+taskId);
+   const f=fields(block.body),action=f['动作']??f.Action??'',t=node('task',title,path,'### '+block.heading,{id:'task-'+taskId,phase:p.id,summary:action||'任务正文未取得'});
    Object.assign(t,{source_id:taskId,label:taskId,goal:f['目标']??f.Goal??'',items:bullets(action),plan:ids(f['文件 / 符号']??f['Files / symbols'],/[\p{L}\p{N}_.-]+(?:\/[\p{L}\p{N}_.-]+)*\.[A-Za-z0-9]+/gu),fr_ids:ids(f['来源 / FR / AC']??f['Source / FR / AC'],/FR-[A-Z0-9-]+/g),ac_ids:ids(f['来源 / FR / AC']??f['Source / FR / AC'],/AC-[A-Z0-9-]+/g),gate_commands:[...block.body.matchAll(/\*\*(?:RED\/GREEN 门禁命令|RED\/GREEN gate_cmd)\*\*[:：]\s*`([^`]+)`/g)].map(m=>m[1])});
    t.status.text=cursor?.task_id===taskId&&cursor?.phase_id===row.id?'当前游标':'结果未取得';phaseTasks[p.id].push(t.id);if(facts!==null)t.src.push(source(join(task.taskPath,'facts.jsonl'),'当前游标；不证明完成'));
   }
@@ -365,7 +477,7 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
  for(const risk of objects.filter(o=>o.kind==='risk'))risk.owners=[...packages.filter(wp=>(risk.related_wp_ids??[]).includes(wp.source_id)||risk.ac_ids?.some(id=>wp.ac_ids?.includes(id))).map(o=>o.id),...objects.filter(o=>o.kind==='task'&&risk.ac_ids?.some(id=>o.ac_ids?.includes(id))).map(o=>o.id)];
  // Existing declared originals supply claims, not a new mandatory Phase manifest protocol.
  const acceptanceFor=acIds=>{const claims=(acIds??[]).flatMap(ac=>acceptanceClaims.get(ac)??[]),covered=(acIds??[]).filter(ac=>acceptanceClaims.has(ac));if(!claims.length)return {text:'验收结论未记录',tone:'unk'};const conflict=(acIds??[]).some(ac=>new Set((acceptanceClaims.get(ac)??[]).map(c=>c.tier)).size>1);if(conflict)return {text:'验收记录不一致',tone:'fail',claims};if(covered.length===(acIds??[]).length&&claims.every(c=>c.tier==='pass'))return {text:'验收通过（原件）',tone:'ok',claims};return {text:'验收待完成（原件：'+[...new Set(claims.map(c=>c.tier))].join('、')+'）',tone:'unk',claims};};
- for(const t of objects.filter(o=>o.kind==='task'&&o.source_id)){
+ for(const t of objects.filter(o=>o.kind==='task'&&o.source_id&&o.status.text!=='缺')){
   const phase=objects.find(o=>o.id===t.phase),entry=phaseRecords.get(phase?.source_id),record=entry?.record;
   const diffs=record?.diffs;
   let commitClaims=[];
@@ -416,9 +528,9 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
    const passed=claims.filter(value=>value.result==='pass').length;
    return {text:passed===claims.length?'验收已通过':claims.some(value=>value.result==='fail')?'验收未通过':passed?'部分通过 · 仍有缺口':'验收未完成',tone:passed===claims.length?'ok':claims.some(value=>value.result==='fail')?'fail':'unk',claims};
   }
-  for(const t of objects.filter(o=>o.kind==='task')){const a=acceptanceView(t.ac_ids);t.acceptance={text:a.text,results:a.claims};t.status={text:t.implementation.text+' · '+a.text,tone:a.tone};}
-  for(const wp of packages){const a=acceptanceView(wp.ac_ids);wp.acceptance={text:a.text,results:a.claims};wp.status={text:(wp.planSummary?'方案已定':'工作包已记录')+' · '+a.text,tone:a.tone};}
-  for(const req of objects.filter(o=>o.kind==='req')){
+  for(const t of objects.filter(o=>o.kind==='task'&&o.status.text!=='缺')){const a=acceptanceView(t.ac_ids);t.acceptance={text:a.text,results:a.claims};t.status={text:t.implementation.text+' · '+a.text,tone:a.tone};}
+  for(const wp of packages.filter(wp=>wp.status.text!=='缺')){const a=acceptanceView(wp.ac_ids);wp.acceptance={text:a.text,results:a.claims};wp.status={text:(wp.planSummary?'方案已定':'工作包已记录')+' · '+a.text,tone:a.tone};}
+  for(const req of objects.filter(o=>o.kind==='req'&&o.status.text!=='缺')){
    const mapping=requirementMapping(req);setRequirementAcceptance(req,acceptanceView(mapping.ids),mapping);
   }
   for(const o of objects.filter(o=>o.kind==='acc')){const claim=acs.get(o.source_id);if(claim)o.status={text:claim.result==='pass'?'验收已通过':claim.result==='fail'?'验收未通过':'验收未完成',tone:claim.result==='pass'?'ok':claim.result==='fail'?'fail':'unk'};}

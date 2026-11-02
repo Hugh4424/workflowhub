@@ -4,7 +4,11 @@
   "files": [
     "SKILL.md",
     "templates/phase-template.md",
-    "templates/index-template.md"
+    "templates/index-template.md",
+    "scripts/check-reader-record.mjs",
+    "scripts/check-authoring-budget.mjs",
+    "scripts/build-decision-baseline.mjs",
+    "references/authoring-contract.md"
   ],
   "sources": [
     {

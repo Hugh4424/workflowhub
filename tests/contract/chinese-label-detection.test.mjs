@@ -16,6 +16,11 @@ function materials() {
   }
   return { spec: blocks.spec, index: blocks.index, phases: { [phase1]: blocks['phase-behavior'], 'phases/P2-文档核对.md': blocks['phase-document'] } };
 }
+function setPhaseField(text, name, value) {
+  const start = text.indexOf('## 机器字段');
+  expect(start, 'new-shape machine block').toBeGreaterThan(-1);
+  return text.slice(0, start) + text.slice(start).replace(new RegExp(`^- \\*\\*${name}\\*\\*：.*$`, 'm'), `- **${name}**：${value}`);
+}
 const purityError = 'Phase index must remain pointer-only; command, oracle, and evidence belong to Phase files';
 const labels = [['预期退出码', 'expected_exit'], ['门禁命令', 'gate_cmd'], ['判定器', 'oracle'], ['证据路径', 'evidence_path']];
 function check(m) { return validatePostPhaseContract(m); }
@@ -56,7 +61,7 @@ test.each(['- 预期退出码：0', '* 门禁命令: node check.mjs', '- 判定�
 });
 test('ORACLE-N4-LABEL-GATE actual dependency failure invalidates dependency facts', () => {
   const m = materials();
-  m.phases[phase1] = m.phases[phase1].replace('- **Dependency**：none', '- **Dependency**：P2');
+  m.phases[phase1] = setPhaseField(m.phases[phase1], 'Dependency', 'P2');
   const actual = check(m);
   expect(actual.errors).toContain(`${phase1} dependency must match the index and reference only earlier Phase IDs`);
   expect(actual.facts.dependency_validation.valid).toBe(false);
@@ -73,7 +78,7 @@ test('ORACLE-N4-LABEL-GATE actual oracle mismatch invalidates command facts', ()
 test.each(['P0', 'P00', 'P9'])('ORACLE-N4-LABEL-GATE unknown Phase dependency %s is rejected in matching index and body', (dependency) => {
   const m = materials();
   m.index = m.index.replace('| none | Node模块调用者与P2文档作者 |', `| ${dependency} | Node模块调用者与P2文档作者 |`);
-  m.phases[phase1] = m.phases[phase1].replace('- **Dependency**：none', `- **Dependency**：${dependency}`);
+  m.phases[phase1] = setPhaseField(m.phases[phase1], 'Dependency', dependency);
   const actual = check(m);
   expect(actual.errors).toContain(`${phase1} dependency must match the index and reference only earlier Phase IDs`);
   expect(actual.ok).toBe(false);
@@ -89,7 +94,9 @@ test('ORACLE-N4-LABEL-GATE dependency on a Phase missing from parsed rows is inv
 
 // P3-TCR-002: the leading dependency declaration may carry ownership prose.
 function setTaskDependency(m, path, task, value) {
-  const offset = m.phases[path].indexOf(`### ${task} `);
+  const card = m.phases[path].indexOf(`- **任务编号**：${task}`);
+  expect(card).toBeGreaterThan(-1);
+  const offset = m.phases[path].lastIndexOf('### ', card);
   expect(offset).toBeGreaterThan(-1);
   m.phases[path] = m.phases[path].slice(0, offset) + m.phases[path].slice(offset)
     .replace(/^- \*\*Dependency\*\*[:：].*$/m, `- **Dependency**：${value}`);

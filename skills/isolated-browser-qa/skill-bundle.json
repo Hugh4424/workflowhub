@@ -5,7 +5,6 @@
     "SKILL.md",
     "references/agent-browser.md",
     "references/auth.md",
-    "references/browser-use.md",
     "references/fallback.md",
     "scripts/browser-qa-cleanup.sh",
     "scripts/browser-qa-context.sh",
@@ -13,8 +12,8 @@
     "scripts/cleanup-browser-qa.sh",
     "scripts/cleanup-codex-qa.sh",
     "scripts/browser-qa-session.mjs",
-    "scripts/browser-qa-tickets.mjs",
-    "scripts/browser-qa-browser-use.py"
+    "scripts/browser-qa-browser-use.py",
+    "scripts/browser-qa-tickets.mjs"
   ],
   "sources": [
     {
