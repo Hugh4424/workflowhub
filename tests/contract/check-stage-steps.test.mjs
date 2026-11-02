@@ -723,3 +723,229 @@ describe('light route reads its declared step table', () => {
     } finally { rmSync(root, { recursive: true, force: true }); }
   });
 });
+
+// C06 P1/T001-T002 frozen oracle. The public seams are the checker CLI and the
+// three workflow method/step contracts; expected values come from D-026/D-032,
+// FR-C06-012 and AC-C06-7, not from the current implementation.
+// DO NOT TOUCH in this prewrite task: checker, steps, SKILL, spec/Phase/index,
+// final-chain-runner, task-store, run-checks, build-prd and every other test.
+function p1CurrentCardFixture({ singleStep = false } = {}) {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'p1-current-card-')));
+  const task = join(root, 'Projects/controlled/tasks/card-case');
+  const repo = join(root, 'repo'), materials = join(root, 'materials');
+  const put = (base, path, value) => {
+    const file = join(base, path);
+    mkdirSync(join(file, '..'), { recursive: true });
+    writeFileSync(file, typeof value === 'string' ? value : JSON.stringify(value));
+  };
+  const stages = ['make-decision', 'build-plan', 'build-code'];
+  for (const stage of stages) {
+    put(repo, `workflows/${stage}/SKILL.md`, readFileSync(resolve(`workflows/${stage}/SKILL.md`), 'utf8'));
+    put(repo, `workflows/${stage}/steps.json`, readFileSync(resolve(`workflows/${stage}/steps.json`), 'utf8'));
+  }
+  if (singleStep) {
+    put(repo, 'workflows/make-decision/steps.json', {
+      schema_version: '2.0.0', stage_slug: 'make-decision', steps: [{
+        step_id: 1, step_slug: 'current-step',
+        observable_result: 'Controlled current identity. 判定消费：SKILL.md#方法；原件：quality/evidence/steps/current.json',
+        completion_evidence: [
+          { kind: 'quality_evidence', uri_or_path: 'quality/evidence/steps/current.json' },
+          { kind: 'phase_task_facts', uri_or_path: 'facts.jsonl' },
+        ],
+      }],
+    });
+  }
+  put(task, 'task.json', {
+    schema_version: '1.0.0', project_name: 'controlled', task_id: 'card-case',
+    baseline_commit: 'HEAD', target_repo_root: repo, activation_cohort: 'post',
+  });
+  put(task, 'facts.jsonl', '');
+  put(materials, 'decision-log.md', '# Controlled\n## 级别与路线\n- 推荐级别：复杂\n');
+  put(materials, 'phases/index.md', '# Pure pointer index\n');
+  const mappings = [];
+  for (const stage of stages) {
+    const manifest = JSON.parse(readFileSync(join(repo, `workflows/${stage}/steps.json`), 'utf8'));
+    for (const step of manifest.steps) mappings.push(`| [controlled](../../workflows/${stage}/steps.json#L1) \`${step.step_slug}\` | observation | human | owner |`);
+  }
+  put(materials, 'step-consumer-design.md', mappings.join('\n'));
+  const invoke = args => {
+    const result = spawnSync(process.execPath, [
+      entry, `--task-path=${task}`, `--material-root=${materials}`, `--repo-root=${repo}`, ...args, '--json',
+    ], { cwd: repo, encoding: 'utf8' });
+    return { ...result, report: JSON.parse(result.stdout) };
+  };
+  return { root, task, repo, materials, put, invoke };
+}
+
+describe('ORACLE-P1-CARD current step public CLI contract', () => {
+  it.each([
+    [5, 'outline-talk', true],
+    [6, 'adversarial-direction-check', false],
+    [8, 'module-breadth-confirm', true],
+  ])('make-decision step %i projects only itself and prerequisites, with an executable card', (stepId, slug, needsReply) => {
+    const fixture = p1CurrentCardFixture();
+    try {
+      const result = fixture.invoke(['--stage=make-decision', `--step=${stepId}`, '--card', '--phase=P1']);
+      expect(result.status).toBe(0);
+      expect(result.report.stages).toHaveLength(1);
+      expect(result.report.stages[0].steps.map(step => step.step_id),
+        '--step must not expand the whole stage').toEqual(Array.from({ length: stepId }, (_, index) => index + 1));
+      const card = result.report.card;
+      expect(card).toMatchObject({ stage: 'make-decision', step_id: stepId, step_slug: slug });
+      for (const field of ['result', 'entry', 'stop', 'self_check']) {
+        expect(card[field], `card.${field} must be readable`).toEqual(expect.any(String));
+        expect(card[field].trim().length, `card.${field} must not be empty`).toBeGreaterThan(0);
+      }
+      expect(card.self_check).toContain(`--step=${stepId}`);
+      expect(card.paths.length).toBeGreaterThan(0);
+      expect(card.paths.length).toBeLessThanOrEqual(3);
+      expect(card.evidence.length).toBeGreaterThan(0);
+      expect(card.requires_user_reply).toBe(needsReply);
+    } finally { rmSync(fixture.root, { recursive: true, force: true }); }
+  });
+
+  it.each(['build-plan', 'build-code'])('%s step 1 also projects a readable current card', (stage) => {
+    const fixture = p1CurrentCardFixture();
+    try {
+      const result = fixture.invoke([`--stage=${stage}`, '--step=1', '--card', '--phase=P1']);
+      expect(result.status).toBe(0);
+      expect(result.report.card).toMatchObject({ stage, step_id: 1 });
+      expect(result.report.stages[0].steps.map(step => step.step_id),
+        '--step must not expand the whole stage').toEqual([1]);
+      expect(result.report.card.paths.length).toBeGreaterThan(0);
+      expect(result.report.card.paths.length).toBeLessThanOrEqual(3);
+    } finally { rmSync(fixture.root, { recursive: true, force: true }); }
+  });
+
+  it('rejects identical artifact bytes whose identity belongs to an old run', () => {
+    const fixture = p1CurrentCardFixture({ singleStep: true });
+    try {
+      const oldArtifact = {
+        task_id: 'card-case', run_id: 'old-run', step_slug: 'current-step',
+        artifact_sha: 'a'.repeat(64), created_at: '2026-11-01T00:00:00.000Z', observation: 'same bytes',
+      };
+      const oldBytes = JSON.stringify(oldArtifact);
+      fixture.put(fixture.task, 'quality/evidence/steps/current.json', oldBytes);
+      fixture.put(fixture.task, 'quality/evidence/steps/old-run-copy.json', oldBytes);
+      expect(readFileSync(join(fixture.task, 'quality/evidence/steps/current.json'), 'utf8'))
+        .toBe(readFileSync(join(fixture.task, 'quality/evidence/steps/old-run-copy.json'), 'utf8'));
+      const oldRun = fixture.invoke(['--stage=make-decision', '--step=1', '--run-id=current-run']);
+      expect(oldRun.status).toBe(0);
+      expect(oldRun.report.stages[0].steps[0].judgment,
+        'same bytes from old-run must not become current-run evidence').toBe('未留痕');
+      expect(oldRun.report.stages[0].steps[0].evidence[0].present).toBe(false);
+      expect(oldRun.report.stages[0].steps[0].evidence[0].reason).toContain('old-run');
+
+      fixture.put(fixture.task, 'quality/evidence/steps/current.json', {
+        ...oldArtifact, run_id: 'current-run', created_at: '2026-11-01T01:00:00.000Z',
+      });
+      const currentRun = fixture.invoke(['--stage=make-decision', '--step=1', '--run-id=current-run']);
+      expect(currentRun.status).toBe(0);
+      expect(currentRun.report.stages[0].steps[0].judgment).toBe('已留痕');
+      expect(currentRun.report.stages[0].steps[0].evidence[0].present).toBe(true);
+    } finally { rmSync(fixture.root, { recursive: true, force: true }); }
+  });
+
+  it('requires reason/owner/recovery for a skip and keeps its unresolved closeout gap incomplete at exit 0', () => {
+    const fixture = p1CurrentCardFixture();
+    const reason = '等待真实骨架答复';
+    const owner = '阶段主会话';
+    const recovery = '取得真实骨架答复后重跑第5步';
+    try {
+      const missingOwner = fixture.invoke([
+        '--stage=make-decision', '--skip-with-gap=5', `--reason=${reason}`, `--recovery=${recovery}`,
+        '--phase=P1', '--card',
+      ]);
+      expect(missingOwner.status).toBe(0);
+      expect(missingOwner.report.errors.join('\n')).toMatch(/owner|负责人/);
+      expect(missingOwner.report.card.step_id).toBe(5);
+      expect(missingOwner.report.skip_gap).toBeNull();
+
+      const skipped = fixture.invoke([
+        '--stage=make-decision', '--skip-with-gap=5', `--reason=${reason}`, `--owner=${owner}`,
+        `--recovery=${recovery}`, '--phase=P1', '--card',
+      ]);
+      expect(skipped.status).toBe(0);
+      expect(skipped.report.card.step_id).toBe(6);
+      expect(skipped.report.skip_gap).toMatchObject({
+        stage: 'make-decision', step_id: 5, step_slug: 'outline-talk', reason, owner, recovery, phase: 'P1',
+      });
+      const ref = skipped.report.skip_gap.evidence_ref;
+      expect(ref).toMatch(/^quality\/evidence\//);
+      const saved = JSON.parse(readFileSync(join(fixture.task, ref), 'utf8'));
+      expect(saved).toMatchObject({
+        task_id: 'card-case', stage: 'make-decision', step_id: 5, step_slug: 'outline-talk',
+        reason, owner, recovery, phase: 'P1',
+      });
+      expect(saved.created_at).toEqual(expect.any(String));
+      expect(skipped.report.closeout).toMatchObject({ state: 'incomplete' });
+      expect(skipped.report.closeout.gaps).toEqual(expect.arrayContaining([
+        expect.objectContaining({ step_id: 5, reason, owner, recovery }),
+      ]));
+
+      const closeoutReadback = fixture.invoke(['--stage=make-decision', '--step=6', '--card', '--phase=P1']);
+      expect(closeoutReadback.status).toBe(0);
+      expect(closeoutReadback.report.closeout.state,
+        'an unresolved named skip must not be closed as completed').toBe('incomplete');
+      expect(closeoutReadback.report.closeout.gaps).toEqual(expect.arrayContaining([
+        expect.objectContaining({ step_id: 5, evidence_ref: ref }),
+      ]));
+    } finally { rmSync(fixture.root, { recursive: true, force: true }); }
+  });
+});
+
+describe('ORACLE-P1-BASELINE material simplification and reading baseline', () => {
+  it('removes the duplicate make-decision observable-result table while retaining steps.json as authority', () => {
+    const skill = readFileSync(resolve('workflows/make-decision/SKILL.md'), 'utf8');
+    const manifest = JSON.parse(readFileSync(resolve('workflows/make-decision/steps.json'), 'utf8'));
+    expect(manifest.steps).toHaveLength(15);
+    expect(skill).not.toContain('可核运行清单：以下15行投影本阶段步骤表');
+    expect(skill).not.toContain('| step_slug | 完成判据（observable_result） |');
+    for (const step of manifest.steps) expect(skill).not.toContain(`| \`${step.step_slug}\` |`);
+  });
+
+  it('binds each of the seven build-code fact steps to named step-specific originals, never facts-only or generic directories', () => {
+    const manifest = JSON.parse(readFileSync(resolve('workflows/build-code/steps.json'), 'utf8'));
+    const expected = new Map([
+      [3, [/diff|commit/i]],
+      [6, [/acceptance|ac[-_]|ui/i]],
+      [7, [/diff[-_/]?scan|diff/i]],
+      [10, [/acceptance[-_/]?trace|ac[-_/]?trace/i]],
+      [11, [/spec[-_/]?analyze/i]],
+      [12, [/handoff/i]],
+    ]);
+    const first = manifest.steps.find(step => step.step_id === 1);
+    const firstNamed = (first.completion_evidence ?? []).filter(item =>
+      item.uri_or_path && item.uri_or_path !== 'facts.jsonl' && item.uri_or_path !== './facts.jsonl' && !item.uri_or_path.endsWith('/'));
+    expect(firstNamed.length, 'read-current-task-documents must not remain facts-only').toBeGreaterThan(0);
+    expect(firstNamed.length).toBeLessThanOrEqual(3);
+    for (const pattern of [/decision-log\.md/, /spec\.md/, /phases\/[^/]+\.md/]) {
+      expect(firstNamed.some(item => pattern.test(item.uri_or_path)),
+        `read-current-task-documents missing ${pattern}`).toBe(true);
+    }
+    for (const [stepId, patterns] of expected) {
+      const step = manifest.steps.find(item => item.step_id === stepId);
+      const named = (step.completion_evidence ?? []).filter(item =>
+        item.uri_or_path && item.uri_or_path !== 'facts.jsonl' && item.uri_or_path !== './facts.jsonl' && !item.uri_or_path.endsWith('/'));
+      expect(named.length, `${step.step_slug} must not remain facts-only or use a generic directory`).toBeGreaterThan(0);
+      expect(named.length, `${step.step_slug} declares at most three original paths`).toBeLessThanOrEqual(3);
+      for (const pattern of patterns) {
+        expect(named.some(item => pattern.test(item.uri_or_path)), `${step.step_slug} missing ${pattern}`).toBe(true);
+      }
+    }
+  });
+
+  it('requires five raw before/after baseline readings in every main-stage method without an improvement claim', () => {
+    for (const stage of ['make-decision', 'build-plan', 'build-code']) {
+      const skill = readFileSync(resolve(`workflows/${stage}/SKILL.md`), 'utf8');
+      const lines = skill.split(/\r?\n/).filter(line => line.startsWith('阅读基线：'));
+      expect(lines, `${stage} needs one explicit reading-baseline contract`).toHaveLength(1);
+      const line = lines[0] ?? '';
+      for (const field of ['路径', '字节', '跳步', '返工', 'Phase 时长', '前后', '原始读数']) {
+        expect(line, `${stage} baseline missing ${field}`).toContain(field);
+      }
+      expect(line).toMatch(/不宣称|只建立基线/);
+      expect(line, `${stage} baseline must not claim a percentage improvement`).not.toMatch(/\d+(?:\.\d+)?\s*%/);
+    }
+  });
+});
