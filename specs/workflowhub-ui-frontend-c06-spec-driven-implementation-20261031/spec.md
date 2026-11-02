@@ -667,22 +667,22 @@ Phase 卡引用原词并补精确命令，不建立第二份验收权威。
 验收对象同时包含 WorkflowHub 能力工作区和 PaperBuilder 验证切片。
 未形成的分支、服务与视口如实标未知，不用示例地址或尺寸填充。
 
+#### 验收对象
+
 ```json
 {
-  "workspace": {
-    "workflowhub": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-ui-frontend-c06-spec-driven-implementation-20261031",
-    "paperbuilder": "unknown — Phase 6 从 main 5bdf6f0b 建独立工作树后记录"
-  },
-  "service": "unknown — C06 代码级验收不预设浏览器服务；后续运行验收补真实入口",
+  "workspace": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-ui-frontend-c06-spec-driven-implementation-20261031",
+  "service": null,
   "route": "/business-logs",
   "state": "时间筛选默认、草稿、已应用、空、非法、单端、跨日、DST、错误焦点、重复操作与非就绪映射",
-  "viewport": "unknown — C06 未规定真实浏览器视口，由后续运行验收记录",
+  "viewport": null,
   "owner": "用户"
 }
 ```
 
-工作区来源是当前认证目录与决策日志的独立工作树决定。
-路由和状态来自已确认验证范围，服务与视口的缺口归未决 6。
+工作区来源是当前认证目录；PaperBuilder 实际工作树由 Phase 6 建立后记录，当前不写入对象冒充已知。
+路由和状态来自已确认验证范围；service 与 viewport 为 null，是尚未取得真实入口与规定视口的具名缺口，归未决 6。
+`checkAcceptanceObject` 会点名这两项，而不是把 unknown 字符串当可用对象。
 这份对象只界定验收身份，不证明服务健康、浏览器效果或业务通过。
 
 ### 证据计划怎么写？
