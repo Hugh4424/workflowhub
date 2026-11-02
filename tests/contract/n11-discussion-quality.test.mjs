@@ -100,7 +100,7 @@ describe('ORACLE-N11-STEP-COVERAGE', () => {
   }));
   it('retains the actual 15-step make-decision declaration and requires stage-end consumption', () => {
     expect(JSON.parse(read('workflows/make-decision/steps.json')).steps).toHaveLength(15);
-    const end = read('workflows/make-decision/SKILL.md').split('14. `stage-end-spec-analyze`：')[1].split('15. `closeout`：')[0];
+    const end = read('workflows/make-decision/SKILL.md').split('13. `stage-end-spec-analyze`：')[1].split('14. `approve-decision`：')[0];
     for (const term of ['node tools/cli/run-checks.mjs --task-path', 'missing_steps', 'incomplete']) expect(end).toContain(term);
   });
 });

@@ -54,6 +54,10 @@ describe("public vNext runtime cutover", () => {
             raw_requirement: "# Owned routing requirement\n",
             objective_facts: "# Owned routing facts\n",
             convergence_outline: "# Owned convergence outline\n",
+            current_selection: "# Owned routing selection\n",
+            alternatives: "# Owned routing alternatives\n",
+            selection_rationale: "# Owned routing rationale\n",
+            key_assumptions: "# Owned routing assumptions\n",
           },
         } };
         mkdirSync(missingTaskPath, { recursive: true });

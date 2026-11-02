@@ -156,8 +156,8 @@
           "detail-advice",
           "grill-with-docs",
           "write-decision-draft",
-          "approve-decision",
           "stage-end-spec-analyze",
+          "approve-decision",
           "closeout"
         ],
         "confirmations": 2,

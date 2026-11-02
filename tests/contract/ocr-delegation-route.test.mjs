@@ -847,7 +847,7 @@ describe("OCR delegation public review route", () => {
   it.each(surfaces)("ORACLE-P3-MATERIAL: %s projects actual material allowlist facts or rejects a retired identity",async(_surface,identity)=>{
     const state=await fixture();const input={attachmentRoot:state.root,stage:identity.stage,reviewTrack:identity.review_track??null,reviewScope:identity.review_scope??null,reviewKind:identity.review_kind??null,activationCohort:"post",materials:{implementation:"owned undeclared material"}};
     if(identity.stage==="make-decision"&&identity.review_track==="direction"){
-      input.materials={raw_requirement:"Need a bounded independent direction review",objective_facts:"Current fixture has a canonical registered task workspace",convergence_outline:"Compare viable bounded directions; scope expansion needs a fresh route choice"};
+      input.materials={raw_requirement:"Need a bounded independent direction review",objective_facts:"Current fixture has a canonical registered task workspace",convergence_outline:"Compare viable bounded directions; scope expansion needs a fresh route choice",current_selection:"Keep the bounded independent direction review",alternatives:"Skip direction review and go straight to detail",selection_rationale:"The independent review exposes direction risk before detail",key_assumptions:"The registered task workspace is the current subject"};
     }
     if(identity.stage==="build-plan"){
       const root=join(state.worktreeRoot,"specs",state.taskId);
@@ -867,7 +867,7 @@ describe("OCR delegation public review route", () => {
 
   it("rejects forbidden direction implementation material before a packet can be dispatched",async()=>{
     const state=await fixture();
-    expect(()=>buildReviewMaterials({attachmentRoot:state.root,stage:"make-decision",reviewTrack:"direction",materials:{raw_requirement:"Bounded direction",objective_facts:"Registered fixture",convergence_outline:"Compare scope",implementation:"forbidden implementation"}})).toThrow(/MATERIAL_INCOMPLETE.*forbidden implementation/);
+    expect(()=>buildReviewMaterials({attachmentRoot:state.root,stage:"make-decision",reviewTrack:"direction",materials:{raw_requirement:"Bounded direction",objective_facts:"Registered fixture",convergence_outline:"Compare scope",current_selection:"Bounded direction",alternatives:"Wider direction",selection_rationale:"Bounded scope keeps the change reversible",key_assumptions:"The fixture remains the current subject",implementation:"forbidden implementation"}})).toThrow(/MATERIAL_INCOMPLETE.*forbidden implementation/);
     expect(state.task.readRecord("facts.jsonl")).toBe("");expect(existsSync(join(state.taskDir,"quality","reviews"))).toBe(false);
   });
 

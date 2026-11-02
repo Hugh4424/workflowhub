@@ -466,7 +466,7 @@ describe("simple material-only review", () => {
       stage: "make-decision",
       review_track: reviewTrack,
       host_provider: "codex",
-      materials: { raw_requirement: "Review the complete user need.", objective_facts: "The configured provider boundary is controlled.", convergence_outline: "Preserve independent direction roles and explicit failures." },
+      materials: { raw_requirement: "Review the complete user need.", objective_facts: "The configured provider boundary is controlled.", convergence_outline: "Preserve independent direction roles and explicit failures.", current_selection: "Preserve independent red and blue direction roles.", alternatives: "Collapse direction into one unpaired review.", selection_rationale: "Independent roles expose disagreement before reveal.", key_assumptions: "Each role can still reconstruct from the same requirement and facts." },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
       resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
@@ -502,7 +502,7 @@ describe("simple material-only review", () => {
     roots.push(attachmentRoot);
     const dispatched = await runSimpleReview({
       stage: "make-decision", review_track: "direction", host_provider: "codex",
-      materials: { raw_requirement: "Review the complete user need.", objective_facts: "The configured provider boundary is controlled.", convergence_outline: "Preserve independent direction roles and explicit failures." },
+      materials: { raw_requirement: "Review the complete user need.", objective_facts: "The configured provider boundary is controlled.", convergence_outline: "Preserve independent direction roles and explicit failures.", current_selection: "Preserve independent red and blue direction roles.", alternatives: "Collapse direction into one unpaired review.", selection_rationale: "Independent roles expose disagreement before reveal.", key_assumptions: "Each role can still reconstruct from the same requirement and facts." },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
       resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
@@ -524,7 +524,7 @@ describe("simple material-only review", () => {
     roots.push(attachmentRoot);
     const blocked = await runSimpleReview({
       stage: "make-decision", review_track: "direction", host_provider: "codex",
-      materials: { raw_requirement: "Review the complete user need.", objective_facts: "The configured provider boundary is controlled.", convergence_outline: "Preserve independent direction roles and explicit failures." },
+      materials: { raw_requirement: "Review the complete user need.", objective_facts: "The configured provider boundary is controlled.", convergence_outline: "Preserve independent direction roles and explicit failures.", current_selection: "Preserve independent red and blue direction roles.", alternatives: "Collapse direction into one unpaired review.", selection_rationale: "Independent roles expose disagreement before reveal.", key_assumptions: "Each role can still reconstruct from the same requirement and facts." },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
       resolveRoute: () => ({ initial: [], mode: "single_round" }),
@@ -542,7 +542,7 @@ describe("simple material-only review", () => {
     roots.push(attachmentRoot);
     const result = await runSimpleReview({
       stage: "make-decision", review_track: "direction", host_provider: "codex",
-      materials: { raw_requirement: "Review the complete user need.", objective_facts: "The configured provider boundary is controlled.", convergence_outline: "Preserve independent direction roles and explicit failures." },
+      materials: { raw_requirement: "Review the complete user need.", objective_facts: "The configured provider boundary is controlled.", convergence_outline: "Preserve independent direction roles and explicit failures.", current_selection: "Preserve independent red and blue direction roles.", alternatives: "Collapse direction into one unpaired review.", selection_rationale: "Independent roles expose disagreement before reveal.", key_assumptions: "Each role can still reconstruct from the same requirement and facts." },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
       resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
@@ -568,7 +568,7 @@ describe("simple material-only review", () => {
     roots.push(attachmentRoot);
     const result = await runSimpleReview({
       stage: "make-decision", review_track: "direction", host_provider: "codex",
-      materials: { raw_requirement: "Review the complete user need.", objective_facts: "The configured provider boundary is controlled.", convergence_outline: "Preserve independent direction roles and explicit failures." },
+      materials: { raw_requirement: "Review the complete user need.", objective_facts: "The configured provider boundary is controlled.", convergence_outline: "Preserve independent direction roles and explicit failures.", current_selection: "Preserve independent red and blue direction roles.", alternatives: "Collapse direction into one unpaired review.", selection_rationale: "Independent roles expose disagreement before reveal.", key_assumptions: "Each role can still reconstruct from the same requirement and facts." },
     }, {
       pairId: "pair-material-mismatch",
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
@@ -605,7 +605,7 @@ describe("simple material-only review", () => {
     roots.push(attachmentRoot);
     const result = await runSimpleReview({
       stage: "make-decision", review_track: "direction", host_provider: "codex",
-      materials: { raw_requirement: "Review the complete user need.", objective_facts: "The configured provider boundary is controlled.", convergence_outline: "Preserve independent direction roles and explicit failures." },
+      materials: { raw_requirement: "Review the complete user need.", objective_facts: "The configured provider boundary is controlled.", convergence_outline: "Preserve independent direction roles and explicit failures.", current_selection: "Preserve independent red and blue direction roles.", alternatives: "Collapse direction into one unpaired review.", selection_rationale: "Independent roles expose disagreement before reveal.", key_assumptions: "Each role can still reconstruct from the same requirement and facts." },
     }, {
       pairId: `pair-${incompleteRole}-incomplete`,
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
@@ -637,7 +637,7 @@ describe("simple material-only review", () => {
     roots.push(attachmentRoot);
     const result = await runSimpleReview({
       stage: "make-decision", review_track: "direction", host_provider: "codex",
-      materials: { raw_requirement: "Review the complete user need.", objective_facts: "The configured provider boundary is controlled.", convergence_outline: "Preserve independent direction roles and explicit failures." },
+      materials: { raw_requirement: "Review the complete user need.", objective_facts: "The configured provider boundary is controlled.", convergence_outline: "Preserve independent direction roles and explicit failures.", current_selection: "Preserve independent red and blue direction roles.", alternatives: "Collapse direction into one unpaired review.", selection_rationale: "Independent roles expose disagreement before reveal.", key_assumptions: "Each role can still reconstruct from the same requirement and facts." },
     }, {
       pairId: "pair-provider-failure",
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),

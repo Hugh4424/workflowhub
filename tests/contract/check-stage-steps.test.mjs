@@ -303,6 +303,41 @@ describe('P1 execution discipline text contract', () => {
   });
 });
 
+describe('U-025 step-consumer declaration coverage', () => {
+  const canonical=readFileSync(resolve('workflows/make-decision/step-consumer-design.md'),'utf8');
+  const steps=JSON.parse(readFileSync(resolve('workflows/make-decision/steps.json'),'utf8')).steps;
+  it('covers every current stage step_slug in the canonical declaration', () => {
+    expect(canonical).toContain('来源 N9');
+    expect(canonical).toContain('按当前 steps.json 复核');
+    expect(canonical).toContain('覆盖全部 76 步');
+    expect(canonical).toContain('任务开工时复制到材料根');
+    const declared=new Set(canonical.split(/\r?\n/).filter(line=>line.startsWith('| [')).map(line=>{
+      const source=line.match(/((?:workflows)\/[^#>]+)#/)?.[1];
+      const slug=line.match(/\]\([^)]*\)\s*`([^`]+)`/)?.[1];
+      return source&&slug?`${source}\0${slug}`:null;
+    }).filter(Boolean));
+    expect(declared.size).toBe(76);
+    const manifests=[
+      ['workflows/make-decision/steps.json',15],
+      ['workflows/make-decision/flows/small/steps.json',9],
+      ['workflows/make-decision/flows/normal/steps.json',11],
+      ['workflows/make-decision/flows/planning/steps.json',11],
+      ['workflows/build-plan/steps.json',12],
+      ['workflows/build-code/steps.json',12],
+      ['workflows/build-prd/steps.json',6],
+    ];
+    let total=0;
+    for(const [source,count] of manifests){
+      const manifest=JSON.parse(readFileSync(resolve(source),'utf8')).steps;
+      expect(manifest).toHaveLength(count);
+      total+=manifest.length;
+      for(const step of manifest) expect(declared.has(`${source}\0${step.step_slug}`),`${source} ${step.step_slug}`).toBe(true);
+    }
+    expect(total).toBe(76);
+    expect(steps).toHaveLength(15);
+  });
+});
+
 describe('current module reference compatibility', () => {
   it('reads bold WP headings and includes this modules D consumer declarations', () => convergenceFixture(({materials,decision,task,ref,put,invoke}) => {
     put(materials,'decision-log.md',decision.replace('#### WP2 — second','**WP2 — second**').replace('- **风险**：缺证据误报。','- **风险**：缺证据误报。\n- **改动**：只读；消费者：specific reader、WP2。'));

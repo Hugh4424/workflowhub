@@ -154,6 +154,8 @@ describe("N3 P6 mini design lens boundary", () => {
     ["blind direction", () => ({stage: "make-decision", reviewTrack: "direction", materials: {
       raw_requirement: "R-1: user needs one small outcome", objective_facts: "Current tool has an existing packet builder",
       convergence_outline: "Question: what boundary is needed? Constraint: preserve the user's scope. Failure: scope expansion. Smaller reversible options remain open.",
+      current_selection: "Keep the existing packet builder", alternatives: "Add a second packet builder",
+      selection_rationale: "Reuse keeps the single packet owner", key_assumptions: "The current builder still satisfies the review contract",
     }}), false],
   ];
   it.each(controls)("preserves %s applicability", (_name, input, expectedLens) => {

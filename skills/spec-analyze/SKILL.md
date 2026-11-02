@@ -9,7 +9,7 @@ description: Report-only final consistency analysis from original requirements t
 
 ## 材料与责任
 
-- make-decision：原始需求、当前 decision-log、Talk/Grill/审查及本次真实确认。确认前准备可审稿；确认后的阶段末核对依当前 workflow 执行，改变已确认决定才返回准备与真实选择。
+- make-decision：原始需求、当前 decision-log、Talk/Grill/审查及决策草稿。确认前做阶段末核对，缺口和处置交最终确认；改变决定才返回准备与真实选择。
 - post build-plan：原始声明只读作来源；当前 decision-log、spec（产品与全局实现设计）、每个独立 Phase 与纯指针 index 是实际输入。历史 pre plan/tasks 只读，build-spec 不再是当前阶段。
 - build-code：当前材料、实际实现、受影响测试与验收原件。没有实际结果就说明未执行/unknown，不由声明反推。
 - build-prd：当前已确认方向、实际展示 PRD/任务地图与真实答复；只检查已产生的规划材料，不编实现验收。

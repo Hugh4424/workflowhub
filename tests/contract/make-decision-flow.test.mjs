@@ -22,12 +22,13 @@ const named = (body, name) => expect(body.split(name).length - 1, `one local ${n
 const syncContracts = {
   1: ['load-context', '开局四级选择', '按入口事实推荐一档并说明理由，用户可覆盖', 'decision级别节'],
   3: ['research-and-diverge', '调研决策', '内部、内部加外部、跳过加理由三选一；跳过必须给理由', 'canonical研究原件'],
-  5: ['outline-talk', '大纲确认', '只确认骨架，第13步确认最终方向、范围、验收与风险', '用户骨架确认'],
+  5: ['outline-talk', '大纲确认', '只确认骨架，第14步确认最终方向、范围、验收与风险', '用户骨架确认'],
   7: ['direction-advice', '方向审查时点', '大纲确认后、逐模块收敛前回读独立方向建议或真实不可用', 'review原件'],
   9: ['module-convergence', '逐模块台账', '每包一行，五类分析答复只取已答／事实可定／待你定', '每包五行表'],
   10: ['detail-advice', '细节审查前检查', '未收敛即停，记录缺项与owner，收敛后重跑', 'detail包delivery'],
   11: ['grill-with-docs', '领域词表读回', '已解决术语变更就地写入并读回，或给有来源的不变理由', 'decision/GLOSSARY/ADR原ref'],
-  13: ['approve-decision', '最终确认＝阶段收口', '确认原件由现human-confirm owner保存；下一阶段由用户决定', 'human-confirm原件'],
+  13: ['stage-end-spec-analyze', '只读一致性核对', '缺口保持可见', 'spec-analyze原件'],
+  14: ['approve-decision', '最终确认＝阶段收口', '确认原件由现human-confirm owner保存；下一阶段由用户决定', 'human-confirm原件'],
   15: ['closeout', '最终确认＝阶段收口', '生成并独立读回handoff，交付handoff 绝对路径；不催下一阶段', 'immutable handoff与读回'],
 };
 
@@ -100,6 +101,16 @@ const syncEvidence = {
   ],
   "13": [
     {
+      "kind": "quality_evidence",
+      "uri_or_path": "quality/evidence/spec-analyze/"
+    },
+    {
+      "kind": "phase_task_facts",
+      "uri_or_path": "facts.jsonl"
+    }
+  ],
+  "14": [
+    {
       "kind": "human_confirmation",
       "uri_or_path": "quality/evidence/human-confirmations/"
     },
@@ -149,7 +160,7 @@ const checkManifest = manifest => {
     [4, 'outline-revision-check'], [5, 'outline-talk'], [6, 'adversarial-direction-check'],
     [7, 'direction-advice'], [8, 'module-breadth-confirm'], [9, 'module-convergence'],
     [10, 'detail-advice'], [11, 'grill-with-docs'], [12, 'write-decision-draft'],
-    [13, 'approve-decision'], [14, 'stage-end-spec-analyze'], [15, 'closeout'],
+    [13, 'stage-end-spec-analyze'], [14, 'approve-decision'], [15, 'closeout'],
   ]);
   for (const row of manifest.steps) {
     expect(Object.keys(row).sort()).toEqual(['completion_evidence', 'observable_result', 'step_id', 'step_slug']);
@@ -208,7 +219,7 @@ describe('ORACLE-P6-MAKE-DECISION-FLOW structure', () => {
       [4, 'outline-revision-check'], [5, 'outline-talk'], [6, 'adversarial-direction-check'],
       [7, 'direction-advice'], [8, 'module-breadth-confirm'], [9, 'module-convergence'],
       [10, 'detail-advice'], [11, 'grill-with-docs'], [12, 'write-decision-draft'],
-      [13, 'approve-decision'], [14, 'stage-end-spec-analyze'], [15, 'closeout'],
+      [13, 'stage-end-spec-analyze'], [14, 'approve-decision'], [15, 'closeout'],
     ]);
     expect([...method.matchAll(/^\d+\. `/gm)]).toHaveLength(15);
   });
@@ -227,7 +238,7 @@ describe('closeout', () => {
     synced(11, '领域词表读回');
   });
   test('最终确认＝阶段收口 preserves confirmation, glossary and absolute handoff', () => {
-    const approval = stepBody(13), close = stepBody(15);
+    const approval = stepBody(14), close = stepBody(15);
     expect(approval).toContain('最终确认＝阶段收口');
     expect(approval).toContain('确认原件');
     expect(approval).toContain('下一阶段由用户决定');
@@ -235,7 +246,8 @@ describe('closeout', () => {
     expect(close).toContain('领域词表读回');
     expect(close).toContain('handoff 绝对路径');
     expect(close).toContain('不催下一阶段');
-    synced(13, '最终确认＝阶段收口');
+    synced(13, '只读一致性核对');
+    synced(14, '最终确认＝阶段收口');
     synced(15, '最终确认＝阶段收口');
   });
   test('template and current route have one sourced closeout interpretation', () => {
@@ -311,7 +323,7 @@ describe('entry', () => {
   test('大纲确认 confirms the skeleton separately from final direction', () => {
     const body = stepBody(5);
     named(body, '大纲确认');
-    expect(body).toMatch(/大纲确认[^\n]*骨架[^\n]*第13步[^\n]*最终方向/);
+    expect(body).toMatch(/大纲确认[^\n]*骨架[^\n]*第14步[^\n]*最终方向/);
     synced(5, '大纲确认');
   });
   test('方向审查时点 follows outline confirmation and precedes module convergence', () => {

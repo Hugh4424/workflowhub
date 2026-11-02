@@ -4,7 +4,7 @@ provider 只读取本次 bundle，不能访问真实仓库、Git、一般 shell�
 
 ## direction：先重建，再揭示，再挑战
 
-direction 轨输入由 `skills/wh-review/scripts/review-materials.mjs` 的 `validateDirectionReviewInput` 校验，并在 `buildReviewMaterials` 创建 packet 前调用。缺失或为空的必填材料、同轨非法 key 明确抛错；此轨不比较 decision-log 字节。
+direction 轨输入由 `skills/wh-review/scripts/review-materials.mjs` 的 `validateDirectionReviewInput` 校验，并在 `buildReviewMaterials` 创建 packet 前调用。`convergence_outline` 只放问题、约束、失败后果和较小可逆选项；同一请求还必须同时带已选方向 `current_selection`、备选方案 `alternatives`、选择理由 `selection_rationale` 和关键假设 `key_assumptions`。这四份揭示材料在 reveal 前不交付，但缺失它们不是“可选的简化”，而是请求不完整：公共审查入口直接失败并报“方向审查缺少揭示材料，challenge 无法执行”，不静默降级成盲审或省略 reveal。缺失或为空的必填材料、同轨非法 key 明确抛错；此轨不比较 decision-log 字节。
 
 每个请求保留 broker-owned direction-review.v1 内部顺序：reconstruct 只读原始需求、客观事实、硬约束、非目标、问题与未知；到 reveal 才读骨架级选择（方向、范围、非目标与已确认骨架）、备选方案、理由和独立重建；当前选择不含逐模块方案结论、字段级取舍或实现细节；challenge 检查选择、失败后果及更小可逆路径。不能用第二次 public request 假装同一请求中的 reveal 边界。安全原生 transport 也由现客户端在同一次请求内真实分段：重建包不交付已定材料，只有收到有效重建才创建揭示包，之后才创建挑战包。内部会话、取消、失败与 stdout/stderr 如实保留；不新增会话推进许可或持久进度对象。
 
@@ -24,4 +24,4 @@ questions-only 提供真实未决问题及来源，不能漏关键问题或用�
 
 使用 provider-protocol 的一个 findings JSON，保留实际严重证据、锚点、provider/role 来源和分歧。没有可信终态、坏 JSON、路径/协议错误、超时、取消等保留 unavailable/incomplete，不能改成无问题或通过。空 findings 不证明 checked_no_gap、逐条问题覆盖、阶段完成或用户批准。
 
-每个 finding 有具体处置和理由；accepted_risk 需要具体风险与真实用户回复，未答仍等待，不把既有实施授权当风险接收。确认前准备可审稿与一致性分析；既有人类确认是决定的最后一步，确认后只读核对实际决定，决定真实变化才重新展示选择。审查、附件 checksum、普通日期编号和历史报告均不成为继续工作的许可，也不替代真实交互。
+每个 finding 有具体处置和理由；accepted_risk 需要具体风险与真实用户回复，未答仍等待，不把既有实施授权当风险接收。确认前准备可审稿与一致性分析；阶段末 spec-analyze 先核决策草稿，缺口和处置交最终确认；既有人类确认是决定的最后一步，决定真实变化才重新展示选择。审查、附件 checksum、普通日期编号和历史报告均不成为继续工作的许可，也不替代真实交互。

@@ -22,7 +22,7 @@ async function dispatch(track) {
     review_track: track,
     materials: track === "detail"
       ? { raw_requirement: "Each configured reviewer examines the complete detail once.", approved_direction: "Keep direction paired; remove detail pairing." }
-      : { raw_requirement: "Review the user need independently.", objective_facts: "Two explicit profiles are configured.", convergence_outline: "Need, boundary, failure, and smaller reversible option.", current_selection: "Preserve independent red and blue direction roles." },
+      : { raw_requirement: "Review the user need independently.", objective_facts: "Two explicit profiles are configured.", convergence_outline: "Need, boundary, failure, and smaller reversible option.", current_selection: "Preserve independent red and blue direction roles.", alternatives: "Collapse direction into one unpaired review.", selection_rationale: "Independent roles expose disagreement before reveal.", key_assumptions: "Both profiles reconstruct from the same requirement and facts." },
   }, {
     loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
     resolveRoute: () => ({ initial: profiles, mode: "single_round", minimum_heterologous: 1 }),

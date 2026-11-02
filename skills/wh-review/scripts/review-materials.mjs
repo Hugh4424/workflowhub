@@ -17,6 +17,22 @@ export const RETIRED_MATERIAL_KEYS=new Set(["phase_coverage","seam_index","phase
 function sha256(bytes){return createHash("sha256").update(bytes).digest("hex");}
 function materialBytes(value){if(Buffer.isBuffer(value)||value instanceof Uint8Array)return Buffer.from(value);if(typeof value==="string")return Buffer.from(value,"utf8");return Buffer.from(JSON.stringify(value,null,2)+"\n","utf8");}
 function materialPresent(value){return typeof value==="string" ? value.trim().length>0 : value!==undefined&&value!==null;}
+// These reveal materials are part of the same direction request. The broker
+// keeps them hidden until reconstruct completes, but their absence is not a
+// simplification option: reveal has no content and challenge cannot run.
+const DIRECTION_REVEAL_MATERIALS = Object.freeze(["current_selection","alternatives","selection_rationale","key_assumptions"]);
+function materialValueMissing(value) {
+  if (!materialPresent(value)) return true;
+  return typeof value === "object" && !Buffer.isBuffer(value) && !(value instanceof Uint8Array)
+    && Object.keys(value).length === 0;
+}
+export function missingDirectionRevealMaterials(materials) {
+  if (!materials || typeof materials !== "object" || Array.isArray(materials)) return [...DIRECTION_REVEAL_MATERIALS];
+  return DIRECTION_REVEAL_MATERIALS.filter((key) => !Object.hasOwn(materials, key) || materialValueMissing(materials[key]));
+}
+export function directionRevealMaterialMessage(missing) {
+  return `方向审查缺少揭示材料，challenge 无法执行（缺少 ${missing.join("、")}）；同一请求必须同时提供已选方向、备选方案、选择理由和关键假设`;
+}
 export const PHASE_DIFF_INLINE_LIMIT_BYTES = 288 * 1024;
 
 // The runner owns requests; buildReviewMaterials remains the low-level packet
@@ -240,13 +256,17 @@ export function validateDirectionReviewInput({ materials } = {}) {
   const rule = reviewRuleFor("make-decision", "direction");
   const allowlist = materialAllowlistForRule(rule, { includeGenerated: false });
   const errors = [];
-  for (const key of allowlist.required.filter((key) => !allowlist.generated.includes(key))) {
+  // Reveal keys are required, but they are reported together as one explicit
+  // incomplete-request error instead of a generic per-key "missing <key>".
+  const revealGaps = missingDirectionRevealMaterials(materials);
+  for (const key of allowlist.required.filter((key) => !allowlist.generated.includes(key) && !DIRECTION_REVEAL_MATERIALS.includes(key))) {
     if (!Object.hasOwn(materials, key)) errors.push("missing " + key);
     else if (!materialPresent(materials[key])
         || (typeof materials[key] === "object" && Object.keys(materials[key]).length === 0)) {
       errors.push("empty " + key);
     }
   }
+  if (revealGaps.length) errors.push(directionRevealMaterialMessage(revealGaps));
   const forbidden = Object.keys(materials).filter((key) => !allowlist.legal.includes(key));
   if (forbidden.length) errors.push("forbidden " + forbidden.join(", ") + "; legal material keys: " + allowlist.legal.join(", "));
   if (errors.length) {
