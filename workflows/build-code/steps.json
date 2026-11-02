@@ -5,7 +5,7 @@
     {
       "step_id": 1,
       "step_slug": "read-current-task-documents",
-      "observable_result": "当前spec、物理Phase、索引与事实确定下一任务；真实工作区、分支、状态和写集已核，历史不作许可证。 判定消费：SKILL.md#方法 第1步；原件：当前spec/Phase、授权与写集核对原ref。",
+      "observable_result": "当前spec、物理Phase、索引与事实确定下一任务；真实工作区、分支、状态和写集已核，历史不作许可证。 判定消费：SKILL.md#方法 第1步；原件：当前spec/Phase、授权与写集核对原ref。 长任务消费已确认执行策略，记 execution_budget、retry_reserve、等待分账与检查点原ref；不新增游标字段或预算门。",
       "completion_evidence": [
         {
           "kind": "material",
@@ -81,7 +81,7 @@
     {
       "step_id": 5,
       "step_slug": "run-tests",
-      "observable_result": "按 Phase 每个声明的测试面逐面执行针对性命令，保存实际cwd/argv/exit、超时取消、原输出与清理；未跑写清哪一面／卡在哪／什么条件下能跑；真实场景对照oracle，失败不伪绿。 判定消费：SKILL.md#方法 第5/6步；原件：verify execute/run-command回执与原输出。",
+      "observable_result": "按 Phase 每个声明的测试面逐面执行针对性命令，保存实际cwd/argv/exit、超时取消、原输出与清理；未跑写清哪一面／卡在哪／什么条件下能跑；真实场景对照oracle，失败不伪绿。 判定消费：SKILL.md#方法 第5/6步；原件：verify execute/run-command回执与原输出。 沿长任务怎么控制保存事件等待、停扩/复盘、真实124/130及子孙清理、S/M/L与最终完整覆盖；开发期定向测试完成并明确就绪后，审查与独立测试按唯一七步顺序派发，可并行。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -149,7 +149,7 @@
     {
       "step_id": 9,
       "step_slug": "analyze-review-findings",
-      "observable_result": "原finding逐条处置，修复回原实施者并只复测受影响集合；严重未修风险取得用户具体选择。 判定消费：SKILL.md#方法 第9步；原件：原finding处置、受影响case输出、Phase Done。",
+      "observable_result": "原finding逐条处置，修复回原实施者并只复测受影响集合；严重未修风险取得用户具体选择。 判定消费：SKILL.md#方法 第9步；原件：原finding处置、受影响case输出、Phase Done。 独立oracle面并行只读测试与审查的两方实际回报汇合与受影响复验，开发最后确认；本步不作首次派发前置。 通用停止规则保provider/broker排除域；空心跳不续命，合法修复继续；冻结变更有请求/成本/独立批准/用户确认；大件指针与同字节provenance不丢身份。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",

@@ -16,6 +16,64 @@ Phase 内的 Task 是 task graph，不是可任意跳过依赖的步骤表。选
 
 派发按「## Task graph 与 context pointers」的 context pointers 义务执行，指向当前 spec、Phase/Task、研究原件与已有提交；摘要只补本次目标、允许写集、完成与停止条件，不复制指针已有的全文。重活在独立上下文完成，主会话收实际结果与原ref；修复回原实施会话。缺材料或宿主能力明确 unavailable，不凭指针存在猜内容。
 
+## 长任务怎么控制？
+
+沿 make-decision 已确认的执行策略开工；build-plan 与本阶段只消费，不补默认方向。
+每 Phase 记人读的
+`execution_budget={window_minutes,command_cap,wait_cap,retry_reserve}`，
+逐项注明来源、单位和重试预留，观察墙钟、活动、命令、轮询、阻塞及测试代理。
+用户等待、provider 审查等待、真实环境纯等待分账；真实环境操作仍算活动。
+缺值回原 owner，保 unknown；不用命令数量、代理数量或固定轮次作机器质量门。
+
+每三十分钟或五十命令对照一次预算与新增验收事实；数字只触发对照，不硬杀长测试。
+达到计划 1.5 倍先停扩，不新增任务或重复命令，先整理已有证据和下一动作。
+达到计划两倍或连续一个检查窗无新增验收事实，停当前空转路径并复盘：
+查根因、检查验收是否过度复杂、给最小替代，再按既有方向修复或拆分。
+不自动判失败，也不新增全任务硬上限；安全工作继续。
+只有改变验收或范围、用户独占阻塞的外部原件/凭证、不可逆动作或严重超授权风险才找人。
+普通测试失败、代理冲突与可修环境问题由主会话和原执行者处理。
+用户独占审批路径十五分钟未答记人读 awaiting_user，等待真实回复；
+其它路径不套审批等待上限，时间本身不是授权。
+
+在 Phase 边界、长命令前后与阻塞时，向既有事实/原件写检查点：
+目标、已完成、未完成、实际命令、证据指针、下一动作。
+检查点是可续接说明，不新增状态对象、历史游标或推进门。
+等待用事件通知与宿主完成回报，禁止 sleep/轮询空转。
+阻塞立即说明具体原因与恢复条件并通知主会话，不隔夜空等，不新建 blocked 状态。
+长步骤子代理每十五分钟回报阶段、预计完成和新工作事实；
+空心跳不能续命，两次无回报停该轴、核任务拥有的进程与资源，其它安全轴继续。
+宿主无事件或回收能力时记 unavailable，说明哪条路径未观察与恢复条件。
+
+普通命令显式 timeoutMs，通常三十分钟，真实环境命令通常九十分钟；
+真实输入需要更久时先沿已确认预算说明理由，不把建议时长变成全任务闸。
+超时、取消、输出与清理复用 task.captureCommand；
+只回收本任务拥有的 POSIX 进程组，观察真实子孙 PID、124/130 与延迟副作用。
+不新写看门狗或回收器，不碰他人进程；无回收能力保 unavailable。
+不可重试失败首次停该外部路径；同失败签名两轮无新事实停重复动作，
+第三轮需改变继续条件的新证据或既定批准，合法缺陷修复仍继续。
+以上通用超时、停止、心跳及回收规则不适用于审查 provider/broker：
+其不可用、失败、超时、取消、无效输出及空 findings 均按 wh-review 原合同，
+保原失败与执行者，不换执行者，不按上述时长或轮数停止审查。
+
+判据与 gate_cmd 冻结；变更先给请求、成本影响、独立批准及用户重新确认。
+不触碰判据/门禁的合法 bug 修复不受冻结挡住；测试变更仍沿第2步 TCR。
+按已确认 S/M/L 数据和真实影响选测，S/M 是快速反馈，
+最终声明的完整数据与全部验收覆盖仍须执行，不拿小样替代。
+开发期目标测试完成并明确就绪后，主会话按「Phase 三角色与七步顺序」派审查与只读测试，两者可并行；首次派发不等待审查或第9步完成。
+主会话按独立 oracle 验收面派只读测试：
+有两个以上可独立并行面至少两个代理，不足两个一个并写明理由。
+代理不共享写文件，主会话合并结果，冲突保留，修复回原开发并定向复验。
+
+证据先减少重复采集；大件只留内容哈希、外部指针和摘要，不重复落同型快照。
+磁盘压力先指针化/归档建议，不删除不同哈希或未经授权归档，不按份数凑数。
+采集空间检查沿当前已确认策略与既有 task handle 预算，不恢复历史库大小倍数门。
+同运行同字节且命令/退出一致才复用一个原件，并保全部 provenance；
+旧运行同字节不得冒当前执行，无法确定相等保新件与 unknown。
+每条证据由既有回执及其来源原件一起定位
+task_id、run_id（本次真实执行身份）、step_slug、artifact_sha、created_at；
+缺任一不得当当前证据，不改 native receipt/schema、不新增 run 对象或证据账本。
+具体保存与内容比较沿标准工作方法「证据只留原始件（同字节即同一事实）」。
+
 ## 方法
 
 UI 实施先消费当前真实答复所批准原型与设计基准：沿build-plan交回的源码、展示范围、组件/token/布局映射、源缺陷与批准偏差定位本次改动；未答不代批准，不无据重画或把另一稿答复搬来。基准缺项只限制依赖范围，其余安全工作继续；需要变更方向/AC交原owner。实现后的UI终验沿下文第7步、`skills/frontend-prototype-render/SKILL.md`及`skills/plan-design-review/SKILL.md`，不以原型批准冒最终业务验收。
@@ -31,7 +89,7 @@ UI 实施先消费当前真实答复所批准原型与设计基准：沿build-pl
 3. <a id="step-implement-change"></a>在允许文件/符号内做最小实现，错误明确暴露。计划缺口一次列清影响、风险与需 owner 回答的问题，规格/Phase 交 build-plan，方向交 make-decision；不自行改材料。先继续不受缺口影响的安全部分，未知范围留给具名 owner 核实。 本步完成以改动全部落在允许写集内且无吞掉的错误为准，越界或吞错即本步未完成；对应 Task 的目标行为交付也是本步完成条件，未交付即本步未完成。
 4. <a id="step-inspect-and-route-actual-tests"></a>在 `inspect-and-route-actual-tests` 原职责及实现前，独立执行者按 `skills/knowledge-graph/SKILL.md`：真实目标affected查波及面，按职责选完整ID explain既有实现；仅两个真实模块协作/依赖链才path，先消歧端点。随后首次定向读source_file/origin源码、标准/consumer，核图年龄/原命题；位置漂移/旧决定/未证关系保unknown，当前源纠正图。trace保查询→首次读源→改动，逐条说明新知与承接实现/边界；重复定位/无信号据实，不为凑收益造改动/依赖、不按前25冒相关。目标不存在exit4、歧义exit3、工具失败分记诊断/处置，安全编码继续；图不代oracle/测试/独立质量。
    对真实 changed files 用 test-routing-advisor 选择 simple/feature/fullstack，记录与计划相同或改变的理由。选择 backend-testing、frontend-testing 或 fullstack-slice-testing 中适用的一条具体路线，研究真实入口、权限、数据、并发、超时、取消和恢复边界。
-5. <a id="step-run-tests"></a>本 Phase 只多一份清单，实际按 `docs/standard-workflow.md`「每 Phase 一份执行清单」记录命令、失败、真实 diff、原件与材料指针，清单不是第二进度。测试子代理按当前 Phase 及 Task 声明的面，逐面把 `gate_cmd` 与 `RED/GREEN gate_cmd` 的字面命令提交现有 `verify --action=execute`，不能从 Phase 文本自动抓命令运行。跑声明的针对性命令和必要相邻检查，用已认证 `task.captureCommand`（底层唯一 `runtime/interface/run-command.mjs`）保存实际 cwd、argv、exit、signal、timeout/cancel、输出和清理事实，原始输出只存单份。证据去重与临时输出处理，实际读取并执行 `docs/standard-workflow.md`「证据只留原始件（同字节即同一事实）」；保本次真实immutable回执与正确output_ref。build-code 的实际整数回执由运行时汇总进现有 stage evidence；保已有非空事实与游标，更新游标也不把 evidence 回落为 null。未执行或无整数退出保原回执与具体原因，不捏 exit0；契约校验的 contract_ok、contract_error_count、errors 片段、AC/FR 覆盖与 command_oracle_checks 随现 source.json 送审，只记录事实、不作失败门。每个未跑面明写“哪一面／卡在哪／什么条件下能跑”，不能只有 unavailable 或 incomplete。只跑受影响测试，不用无范围全量回归代替；环境、收集和配置失败不当成目标 RED，exit0 不自动证明业务通过。 按 `AGENTS.md`「卡住与升级」的适用范围分类该失败信号；属于外部不可重试时第一次即零重试，按第 9 步的四类分诊落位，停该外部失败路径并记原因与恢复条件，其余安全工作继续。
+5. <a id="step-run-tests"></a>本 Phase 只多一份清单，实际按 `docs/standard-workflow.md`「每 Phase 一份执行清单」记录命令、失败、真实 diff、原件与材料指针，清单不是第二进度。开发先跑开发期定向测试；独立测试按唯一七步顺序在实现就绪并明确通知后派发，可与审查并行。测试子代理按当前 Phase 及 Task 声明的面，逐面把 `gate_cmd` 与 `RED/GREEN gate_cmd` 的字面命令提交现有 `verify --action=execute`，不能从 Phase 文本自动抓命令运行。跑声明的针对性命令和必要相邻检查，用已认证 `task.captureCommand`（底层唯一 `runtime/interface/run-command.mjs`）保存实际 cwd、argv、exit、signal、timeout/cancel、输出和清理事实，原始输出只存单份。证据去重与临时输出处理，实际读取并执行 `docs/standard-workflow.md`「证据只留原始件（同字节即同一事实）」；保本次真实immutable回执与正确output_ref。build-code 的实际整数回执由运行时汇总进现有 stage evidence；保已有非空事实与游标，更新游标也不把 evidence 回落为 null。未执行或无整数退出保原回执与具体原因，不捏 exit0；契约校验的 contract_ok、contract_error_count、errors 片段、AC/FR 覆盖与 command_oracle_checks 随现 source.json 送审，只记录事实、不作失败门。每个未跑面明写“哪一面／卡在哪／什么条件下能跑”，不能只有 unavailable 或 incomplete。只跑受影响测试，不用无范围全量回归代替；环境、收集和配置失败不当成目标 RED，exit0 不自动证明业务通过。 按 `AGENTS.md`「卡住与升级」的适用范围分类该失败信号；属于外部不可重试时第一次即零重试，按第 9 步的四类分诊落位，停该外部失败路径并记原因与恢复条件，其余安全工作继续。
 6. <a id="step-inspect-acceptance-and-ui"></a>对声明的 command/service 验收执行真实场景，逐项对照 oracle、可观察效果与失败反例。记录每条 AC 的实际结果、原始输出、输入/环境和覆盖限制；真实服务缺失、未执行、部分或不可用保持原样，模拟效果不冒充外部效果。
    验收证据人读词表为 pass/fail/inconclusive/deferred/missing/inconsistent/incomplete/unavailable，来源 `runtime/evidence/acceptance-evidence-validator.mjs:6`；本词表只约束人读措辞，不改变现有 writer。未达成如实记为未达成并进失败事实清单，这一条不新增任何推进前置。
 7. <a id="step-scan-diff"></a>检查实际 diff 与声明写集、真实消费者、接口两端、状态、错误传播、并发原子性和资源释放。UI 按组件质量地图与真实页面验证状态和 DTO→ViewModel，浏览器 QA 先读取并执行 `skills/isolated-browser-qa/SKILL.md`，保留隔离、取消和自建资源清理事实。 仅声明写集没有任何浏览器可见面时，记 `N/A — 理由` 并引用写集；已声明适用而缺工具时记 unavailable。QA engine、route/场景、截图路径或 not_observed 的真实原因保在唯一原 ref，不伪造浏览器通过。来源、样本、场景、浏览器或截图缺失不宣称 UI 完成。

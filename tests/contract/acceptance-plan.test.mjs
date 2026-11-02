@@ -447,3 +447,91 @@ describe('ORACLE-P3-CONTROL', () => {
     ], 'run-current').stored).toBe(2);
   });
 });
+
+// The same reader consumes actual method bytes, controlled missing-clause
+// variants, and restored bytes. It adds no production validator or budget gate.
+const controlClauses = {
+ checkpoint: /Phase 边界、长命令前后与阻塞时/,
+ checkpointContents: /目标、已完成、未完成、实际命令、证据指针、下一动作/,
+ eventWait: /等待用事件通知与宿主完成回报，禁止 sleep\/轮询空转/,
+ noFact: /达到计划两倍或连续一个检查窗无新增验收事实/,
+ providerExclusion: /以上通用超时、停止、心跳及回收规则不适用于审查 provider\/broker/,
+ finalData: /最终声明的完整数据与全部验收覆盖仍须执行/,
+ parallel: /有两个以上可独立并行面至少两个代理，不足两个一个并写明理由/,
+ pointer: /大件只留内容哈希、外部指针和摘要/,
+ identity: /task_id、run_id（本次真实执行身份）、step_slug、artifact_sha、created_at/,
+ separateWaits: /用户等待、provider 审查等待、真实环境纯等待分账/,
+ ownedOnly: /只回收本任务拥有的 POSIX 进程组/,
+ freeze: /变更先给请求、成本影响、独立批准及用户重新确认/,
+};
+function readControlMethod(text) {
+ for (const [key,clause] of Object.entries(controlClauses)) {
+  if (!clause.test(text)) throw new Error('missing control clause ' + key);
+ }
+ return 'usable';
+}
+function reviewWindow(observed) {
+ if (observed.elapsed >= observed.planned * 2 || observed.newAcceptanceFacts === 0) return 'review-current-path';
+ return 'continue';
+}
+describe('ORACLE-P3-CONTROL actual method negative controls', () => {
+ it('consumes the real method, rejects each removed clause, and accepts restored bytes', () => {
+  const source=read('workflows/build-code/SKILL.md');
+  expect(readControlMethod(source)).toBe('usable');
+  for (const [key,clause] of Object.entries(controlClauses)) {
+   const missing=source.replace(clause,'');
+   expect(missing,key).not.toBe(source);
+   expect(()=>readControlMethod(missing),key).toThrow('missing control clause '+key);
+   expect(readControlMethod(source),key).toBe('usable');
+  }
+ });
+ it('observes twice the plan or no new acceptance facts without declaring product failure', () => {
+  expect(readControlMethod(read('workflows/build-code/SKILL.md'))).toBe('usable');
+  expect(reviewWindow({elapsed:240,planned:120,newAcceptanceFacts:1})).toBe('review-current-path');
+  expect(reviewWindow({elapsed:30,planned:120,newAcceptanceFacts:0})).toBe('review-current-path');
+  expect(reviewWindow({elapsed:180,planned:120,newAcceptanceFacts:1})).toBe('continue');
+ });
+ it('wires the shared template, step evidence and standard back to the original method', () => {
+  const template=read('skills/spec-plan/templates/phase-template.md');
+  expect(template).toContain('workflows/build-code/SKILL.md#长任务怎么控制');
+  const steps=JSON.parse(read('workflows/build-code/steps.json')).steps;
+  expect(steps.find(step=>step.step_id===1).observable_result).toContain('execution_budget');
+  expect(steps.find(step=>step.step_id===9).observable_result).toContain('独立oracle面并行只读测试');
+  expect(steps.find(step=>step.step_id===9).observable_result).toContain('provider/broker排除域');
+  const standard=read('docs/standard-workflow.md');
+  expect(standard).toContain('../workflows/build-code/SKILL.md#长任务怎么控制');
+  expect(standard).toContain('审查 provider/broker 保 wh-review 排除域');
+ });
+});
+
+// Reads the actual method and its step projection; variants model contradictory ordering.
+function readPhaseSequence(method, steps) {
+ const step5 = steps.find(step => step.step_id === 5).observable_result;
+ const step9 = steps.find(step => step.step_id === 9).observable_result;
+ if (!step5.includes('开发期定向测试') || step5.includes('派发独立测试')) throw new Error('developer tests');
+ if (!method.includes('主会话再派审查与测试；两者可并行，不得早于实现就绪并明确通知')) throw new Error('ready and parallel dispatch');
+ if (!method.includes('首次派发不等待审查或第9步完成')) throw new Error('parallel dispatch without review wait');
+ if (!method.includes('开发在两方明确回报后，最后确认无待改项')) throw new Error('final confirmation');
+ if (!step9.includes('两方实际回报汇合与受影响复验') || !step9.includes('不作首次派发前置')) throw new Error('convergence');
+ if (step9.includes('第9步完成后才派发独立测试')) throw new Error('delayed dispatch');
+ return 'usable';
+}
+describe('ORACLE-P3-CONTROL sequence actual method negative controls', () => {
+ it('accepts actual order, rejects premature or delayed dispatch and missing convergence, then accepts restored input', () => {
+  const method = read('workflows/build-code/SKILL.md');
+  const steps = JSON.parse(read('workflows/build-code/steps.json')).steps;
+  expect(readPhaseSequence(method, steps)).toBe('usable');
+  const variants = [
+   [method.replace('不得早于实现就绪并明确通知', '可以早于实现就绪'), steps, 'ready and parallel dispatch'],
+   [method.replace('首次派发不等待审查或第9步完成', '首次派发等待审查或第9步完成'), steps, 'parallel dispatch without review wait'],
+   [method.replace('开发在两方明确回报后，最后确认无待改项', '开发直接确认无待改项'), steps, 'final confirmation'],
+   [method, steps.map(s => s.step_id === 5 ? {...s, observable_result: s.observable_result + '派发独立测试'} : s), 'developer tests'],
+   [method, steps.map(s => s.step_id === 9 ? {...s, observable_result: s.observable_result.replace('两方实际回报汇合与受影响复验', '')} : s), 'convergence'],
+   [method, steps.map(s => s.step_id === 9 ? {...s, observable_result: s.observable_result + '第9步完成后才派发独立测试'} : s), 'delayed dispatch'],
+  ];
+  for (const [alteredMethod, alteredSteps, reason] of variants) {
+   expect(() => readPhaseSequence(alteredMethod, alteredSteps), reason).toThrow(reason);
+   expect(readPhaseSequence(method, steps), reason).toBe('usable');
+  }
+ });
+});
