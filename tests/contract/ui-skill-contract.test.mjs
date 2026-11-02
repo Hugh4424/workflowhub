@@ -193,7 +193,9 @@ test("UI support skills declare their real stage consumers without a parallel UI
     assert.equal(dependency.trigger, trigger, `${skillName}: must retain its actual UI scope trigger`);
   }
 
-  const quality = entries.get("frontend-component-quality");
+  const qualityRegistrations = (catalog.skills ?? []).filter(entry => entry.name === "frontend-component-quality");
+  assert.equal(qualityRegistrations.length, 1, "frontend-component-quality: catalog registration must be unique");
+  const quality = qualityRegistrations[0];
   assert.deepEqual(quality.upstream, [
     {
       github_url: "https://github.com/vercel-labs/agent-skills",
@@ -203,11 +205,30 @@ test("UI support skills declare their real stage consumers without a parallel UI
       reviewed_at: "2026-08-22",
       review_outcome: "accepted",
       adopted: [
-        "skills/frontend-component-quality/upstream/react-best-practices/AGENTS.md#eliminating-waterfalls — 本地21行派生参考的消除串行请求摘要，保留真实依赖顺序；不冒完整源",
-        "skills/frontend-component-quality/upstream/react-best-practices/AGENTS.md#bundle-size-optimization — 本地21行派生参考的客户端边界与按需加载摘要，收益仍须实测；不冒完整源"
+        "skills/frontend-component-quality/upstream/react-best-practices/history/AGENTS-21lines.md#eliminating-waterfalls — 本地21行派生参考的消除串行请求摘要，保留真实依赖顺序；不冒完整源",
+        "skills/frontend-component-quality/upstream/react-best-practices/history/AGENTS-21lines.md#bundle-size-optimization — 本地21行派生参考的客户端边界与按需加载摘要，收益仍须实测；不冒完整源",
+        "skills/frontend-component-quality/upstream/react-best-practices/SKILL.md — 固定 76 文件规则闭包按 React/Next 条件只读；逐文件来源见 UPSTREAM.md"
       ],
       path: "skills/react-best-practices/AGENTS.md",
       skill_url: "https://github.com/vercel-labs/agent-skills/blob/dd089a8c752c966dee8bf0f27cb625ba193ffd9e/skills/react-best-practices/AGENTS.md",
+    },
+    {
+      github_url: "https://github.com/vercel-labs/web-interface-guidelines",
+      commit: "434b7f91364665f2f733b310ec54809bf8f37937",
+      commit_url: "https://github.com/vercel-labs/web-interface-guidelines/commit/434b7f91364665f2f733b310ec54809bf8f37937",
+      license: "MIT",
+      path: "command.md",
+      skill_url: "https://github.com/vercel-labs/web-interface-guidelines/blob/434b7f91364665f2f733b310ec54809bf8f37937/command.md",
+      adopted: ["skills/frontend-component-quality/upstream/web-design-guidelines/command.md — 固定规则体，按当前任务适用范围只读；不另建执行器"],
+    },
+    {
+      github_url: "https://github.com/jakubkrehel/skills",
+      commit: "1eb03d2b145df1c6cd84ab54a337600a2a379017",
+      commit_url: "https://github.com/jakubkrehel/skills/commit/1eb03d2b145df1c6cd84ab54a337600a2a379017",
+      license: "MIT",
+      path: "skills/better-ui",
+      skill_url: "https://github.com/jakubkrehel/skills/tree/1eb03d2b145df1c6cd84ab54a337600a2a379017/skills/better-ui",
+      adopted: ["skills/frontend-component-quality/upstream/better-ui/SKILL.md — 固定八文件规则；项目既有规范优先，不默认采用精确数值"],
     },
   ]);
 });
@@ -417,11 +438,15 @@ function p5RegularFiles(base, directory) {
 
 function assertP5Closure(base) {
   for (const spec of P5_PACKAGE_SPECS) {
-    const metadata = new Set(["UPSTREAM.md", ...(spec.name === "react-best-practices" ? ["LICENSE"] : [])]);
+    const metadata = new Set(["UPSTREAM.md", ...(spec.name === "react-best-practices" ? ["LICENSE", "history/AGENTS-21lines.md"] : [])]);
     const actualPaths = p5RegularFiles(base, spec.directory).filter(path => !metadata.has(path));
     assert.equal(actualPaths.length, spec.fileCount, `${spec.name}: fixed payload file count`);
     assert.deepEqual(actualPaths, spec.files.map(file => file.path).sort(), `${spec.name}: payload closure must contain exactly ${spec.fileCount} fixed files`);
   }
+  const historyPath = join(base, P5_PACKAGE_SPECS[0].directory, "history/AGENTS-21lines.md");
+  assert.ok(existsSync(historyPath), "react-best-practices: historical summary missing");
+  assert.ok(lstatSync(historyPath).isFile(), "react-best-practices: historical summary must be a regular file");
+  assert.equal(createHash("sha256").update(readFileSync(historyPath)).digest("hex"), "5e6f725360d43331346bf4562067f300b1e6c321758d9c4a182d90a3c644c761", "react-best-practices: historical summary sha256 mismatch");
   for (const spec of P5_PACKAGE_SPECS) {
     for (const file of spec.files) {
       const bytes = readFileSync(join(base, spec.directory, file.path));
@@ -459,6 +484,9 @@ function p5Fixture() {
       writeFileSync(path, "synthetic negative-control payload\n");
     }
   }
+  const historyPath = join(base, P5_PACKAGE_SPECS[0].directory, "history/AGENTS-21lines.md");
+  mkdirSync(dirname(historyPath), { recursive: true });
+  writeFileSync(historyPath, P5_SUMMARY_21_LINES);
   return base;
 }
 
@@ -468,9 +496,9 @@ function assertP5BundleDelivery(packageRoot) {
     manifestPath: "workflows/build-plan/skill-deps.yaml",
     dependency: { name: "frontend-component-quality", path: "skills/frontend-component-quality/SKILL.md" },
   });
-  const actual = resolved.resolved_bundle_paths.map(path => relative(resolved.package_root, path).split(sep).join("/")).sort();
+  const actual = resolved.resolved_bundle_paths.map(path => relative(dirname(resolved.resolved_skill_path), path).split(sep).join("/")).sort();
   assert.deepEqual(actual, P5_BUNDLE_FILES, "frontend-component-quality: resolved bundle closure mismatch");
-  const rule = resolved.resolved_bundle_paths.find(path => relative(resolved.package_root, path).split(sep).join("/") === P5_RULE_PATH);
+  const rule = resolved.resolved_bundle_paths.find(path => relative(dirname(resolved.resolved_skill_path), path).split(sep).join("/") === P5_RULE_PATH);
   assert.ok(rule, `frontend-component-quality: resolver did not deliver ${P5_RULE_PATH}`);
   const actualHash = createHash("sha256").update(readFileSync(rule)).digest("hex");
   assert.equal(actualHash, P5_RULE_SHA256, "frontend-component-quality: resolved rule bytes differ from the fixed source");

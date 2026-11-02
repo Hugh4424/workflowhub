@@ -1135,11 +1135,28 @@ skills:
         path: skills/react-best-practices/AGENTS.md
         skill_url: https://github.com/vercel-labs/agent-skills/blob/dd089a8c752c966dee8bf0f27cb625ba193ffd9e/skills/react-best-practices/AGENTS.md
         adopted:
-          - skills/frontend-component-quality/upstream/react-best-practices/AGENTS.md#eliminating-waterfalls — 本地21行派生参考的消除串行请求摘要，保留真实依赖顺序；不冒完整源
-          - skills/frontend-component-quality/upstream/react-best-practices/AGENTS.md#bundle-size-optimization — 本地21行派生参考的客户端边界与按需加载摘要，收益仍须实测；不冒完整源
-    local_changes: 公开唯一组件质量入口；Vercel 只读为 React/Next 内部 lens；owner 是 UI 交付合同；delete-condition consumer 迁移后
+          - skills/frontend-component-quality/upstream/react-best-practices/history/AGENTS-21lines.md#eliminating-waterfalls — 本地21行派生参考的消除串行请求摘要，保留真实依赖顺序；不冒完整源
+          - skills/frontend-component-quality/upstream/react-best-practices/history/AGENTS-21lines.md#bundle-size-optimization — 本地21行派生参考的客户端边界与按需加载摘要，收益仍须实测；不冒完整源
+          - skills/frontend-component-quality/upstream/react-best-practices/SKILL.md — 固定 76 文件规则闭包按 React/Next 条件只读；逐文件来源见 UPSTREAM.md
+      - github_url: https://github.com/vercel-labs/web-interface-guidelines
+        commit: 434b7f91364665f2f733b310ec54809bf8f37937
+        commit_url: https://github.com/vercel-labs/web-interface-guidelines/commit/434b7f91364665f2f733b310ec54809bf8f37937
+        license: MIT
+        path: command.md
+        skill_url: https://github.com/vercel-labs/web-interface-guidelines/blob/434b7f91364665f2f733b310ec54809bf8f37937/command.md
+        adopted:
+          - skills/frontend-component-quality/upstream/web-design-guidelines/command.md — 固定规则体，按当前任务适用范围只读；不另建执行器
+      - github_url: https://github.com/jakubkrehel/skills
+        commit: 1eb03d2b145df1c6cd84ab54a337600a2a379017
+        commit_url: https://github.com/jakubkrehel/skills/commit/1eb03d2b145df1c6cd84ab54a337600a2a379017
+        license: MIT
+        path: skills/better-ui
+        skill_url: https://github.com/jakubkrehel/skills/tree/1eb03d2b145df1c6cd84ab54a337600a2a379017/skills/better-ui
+        adopted:
+          - skills/frontend-component-quality/upstream/better-ui/SKILL.md — 固定八文件规则；项目既有规范优先，不默认采用精确数值
+    local_changes: 公开唯一组件质量入口；上游规则仅按适用条件只读，现有项目规范优先；web 与 better-ui 在各固定提交有 MIT LICENSE 原件，未新增本地 LICENSE；个人研究范围内复制，不推定其他分发权利。owner 是组件质量方法维护者；consumer 是 build-plan/build-code 前端实施者与 bundle resolver；delete-condition 所有当前 consumer 经独立验证的替代承接后。
     dependency_closure: *deps_spec_ui
-    update_policy: 只比较固定 Vercel commit 的上游变化，人工升级并保留 LICENSE/UPSTREAM
+    update_policy: 维护者按需分别比较三个固定来源与当前适用范围；人工审查后更新，保留已有 LICENSE 和各 UPSTREAM，不自动追 HEAD。
   - name: third-review
     path: skills/third-review/SKILL.md
     local_version: 4.0.0
