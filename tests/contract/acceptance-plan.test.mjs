@@ -164,9 +164,41 @@ function costPlan() {
     serial: ['AC-001'], parallel: [['AC-002', 'AC-003']], sharedPrepare: 10, retryReserve: 15,
     declaredTotal: 115, softMin: 120, hardMin: 240, softAction: '', hardConfirmation: '',
     finalSegments: splitHistoricalAC(),
+    taskShape: { acceptanceCount: 3, modules: ['cost-template'], dataBytes: 0,
+      longestTestMin: 1, externalInputs: [], dataTier: 'S', classification: '可直接做',
+      splitRequirement: { required: false, source: '本测试具名S合成形状' } },
+    acceptanceTestMapping: {
+      'AC-001': { testAgent: 'independent-config-test', oracle: 'ORACLE-CONFIG-ERROR', dataTier: 'S' },
+      'AC-002': { testAgent: 'independent-cost-test', oracle: 'ORACLE-COST-READBACK', dataTier: 'S' },
+      'AC-003': { testAgent: 'independent-budget-test', oracle: 'ORACLE-BUDGET-READBACK', dataTier: 'S' },
+    },
   };
 }
 function readCostPlan(plan) {
+  const shape = plan.taskShape;
+  if (!shape || typeof shape !== 'object' || Array.isArray(shape)) throw new Error('missing shape');
+  for (const field of ['acceptanceCount', 'modules', 'dataBytes', 'longestTestMin', 'externalInputs', 'dataTier']) {
+    if (!Object.hasOwn(shape, field) || shape[field] === null || shape[field] === undefined
+        || (typeof shape[field] === 'string' && !shape[field].trim())) throw new Error('missing shape ' + field);
+  }
+  if (![shape.acceptanceCount, shape.dataBytes, shape.longestTestMin].every(value => Number.isFinite(value) && value >= 0)
+      || !Array.isArray(shape.modules) || !shape.modules.length || !Array.isArray(shape.externalInputs)
+      || !['S', 'M', 'L'].includes(shape.dataTier)
+      || !['可直接做', '需拆分', '需用户确认的长跑'].includes(shape.classification)
+      || typeof shape.splitRequirement?.required !== 'boolean' || !shape.splitRequirement.source?.trim()) {
+    throw new Error('invalid shape');
+  }
+  // This checks the declared upstream requirement, never a numeric production threshold.
+  if (shape.splitRequirement.required && shape.classification !== '需拆分') throw new Error('declared shape requires split');
+  const mapping = plan.acceptanceTestMapping;
+  if (!mapping || typeof mapping !== 'object' || Array.isArray(mapping)) throw new Error('missing mapping');
+  for (const id of Object.keys(plan.costs)) {
+    if (!mapping[id]) throw new Error('missing mapping ' + id);
+    for (const field of ['testAgent', 'oracle', 'dataTier']) {
+      if (typeof mapping[id][field] !== 'string' || !mapping[id][field].trim()) throw new Error('missing mapping ' + id + ' ' + field);
+    }
+    if (!['S', 'M', 'L'].includes(mapping[id].dataTier)) throw new Error('invalid mapping dataTier ' + id);
+  }
   const costs = Object.fromEntries(Object.entries(plan.costs).map(([id, text]) => [id, readCostFields(text)]));
   const estimate = id => {
     if (!costs[id]) throw new Error('missing cost ' + id);
@@ -222,6 +254,8 @@ describe('ORACLE-P2-COST', () => {
     const overSoft = costPlan();
     overSoft.costs['AC-004'] = costLine(10);
     overSoft.serial.push('AC-004');
+    overSoft.taskShape.acceptanceCount = 4;
+    overSoft.acceptanceTestMapping['AC-004'] = { testAgent: 'independent-extra-test', oracle: 'ORACLE-EXTRA-COST', dataTier: 'S' };
     overSoft.declaredTotal = 125;
     expect(() => readCostPlan(overSoft)).toThrow('soft cap requires split or reduction');
     overSoft.softAction = 'split';
@@ -230,6 +264,8 @@ describe('ORACLE-P2-COST', () => {
     const overHard = costPlan();
     overHard.costs['AC-004'] = costLine(140);
     overHard.serial.push('AC-004');
+    overHard.taskShape.acceptanceCount = 4;
+    overHard.acceptanceTestMapping['AC-004'] = { testAgent: 'independent-extra-test', oracle: 'ORACLE-EXTRA-COST', dataTier: 'S' };
     overHard.declaredTotal = 255;
     overHard.softAction = 'split';
     expect(() => readCostPlan(overHard)).toThrow('hard cap confirmation required');
@@ -242,6 +278,51 @@ describe('ORACLE-P2-COST', () => {
     plan.finalSegments = [{ kind: 'cheap', acceptance: historicalAC }];
     expect(() => readCostPlan(plan)).toThrow('eleven AC require cheap and real-environment segments');
     plan.finalSegments = splitHistoricalAC();
+    expect(readCostPlan(plan)).toBe(115);
+  });
+
+  it('rejects a missing shape or each missing shape field and accepts restoration including zero data', () => {
+    const missing = costPlan();
+    delete missing.taskShape;
+    expect(() => readCostPlan(missing)).toThrow('missing shape');
+    for (const field of ['acceptanceCount', 'modules', 'dataBytes', 'longestTestMin', 'externalInputs', 'dataTier']) {
+      const plan = costPlan();
+      delete plan.taskShape[field];
+      expect(() => readCostPlan(plan), field).toThrow('missing shape ' + field);
+    }
+    const restored = costPlan();
+    expect(restored.taskShape.dataBytes).toBe(0);
+    expect(restored.taskShape.externalInputs).toEqual([]);
+    expect(readCostPlan(restored)).toBe(115);
+  });
+
+  it('rejects a missing mapping or each missing AC agent, oracle or data tier and accepts restoration', () => {
+    const missing = costPlan();
+    delete missing.acceptanceTestMapping;
+    expect(() => readCostPlan(missing)).toThrow('missing mapping');
+    for (const id of ['AC-001', 'AC-002', 'AC-003']) {
+      const plan = costPlan();
+      delete plan.acceptanceTestMapping[id];
+      expect(() => readCostPlan(plan), id).toThrow('missing mapping ' + id);
+      for (const field of ['testAgent', 'oracle', 'dataTier']) {
+        const incomplete = costPlan();
+        delete incomplete.acceptanceTestMapping[id][field];
+        expect(() => readCostPlan(incomplete), id + '/' + field).toThrow('missing mapping ' + id + ' ' + field);
+      }
+    }
+    expect(readCostPlan(costPlan())).toBe(115);
+  });
+
+  it('rejects only the wrong classification of the declared 189 file, 22GB, 3.7h split requirement', () => {
+    const plan = costPlan();
+    plan.taskShape = { acceptanceCount: 3, modules: Array.from({ length: 189 }, (_, i) => 'file-' + i),
+      dataBytes: 22000000000, longestTestMin: 222, externalInputs: [], dataTier: 'S',
+      classification: '需拆分', splitRequirement: { required: true,
+        source: 'P2 T003输出/失败：189文件、22GB、3.7h单测必须标需拆分；S为合成形状，无真实22GB数据' } };
+    expect(readCostPlan(plan)).toBe(115);
+    plan.taskShape.classification = '可直接做';
+    expect(() => readCostPlan(plan)).toThrow('declared shape requires split');
+    plan.taskShape.classification = '需拆分';
     expect(readCostPlan(plan)).toBe(115);
   });
 });
