@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { resolve } from 'node:path';
-import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, realpathSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, realpathSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -756,5 +756,508 @@ describe('light route reads its declared step table', () => {
       expect(report.stages[0].source).toBe('workflows/make-decision/flows/small/steps.json');
       expect(report.stages[0].steps).toHaveLength(9);
     } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+});
+
+// C06 P1/T001-T002 frozen oracle. The public seams are the checker CLI and the
+// three workflow method/step contracts; expected values come from D-026/D-032,
+// FR-C06-012 and AC-C06-7, not from the current implementation.
+// DO NOT TOUCH in this prewrite task: checker, steps, SKILL, spec/Phase/index,
+// final-chain-runner, task-store, run-checks, build-prd and every other test.
+function p1CurrentCardFixture({ singleStep = false } = {}) {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'p1-current-card-')));
+  const task = join(root, 'Projects/controlled/tasks/card-case');
+  const repo = join(root, 'repo'), materials = join(repo, 'specs/card-case');
+  const put = (base, path, value) => {
+    const file = join(base, path);
+    mkdirSync(join(file, '..'), { recursive: true });
+    writeFileSync(file, typeof value === 'string' ? value : JSON.stringify(value));
+  };
+  const stages = ['make-decision', 'build-plan', 'build-code'];
+  for (const stage of stages) {
+    put(repo, `workflows/${stage}/SKILL.md`, readFileSync(resolve(`workflows/${stage}/SKILL.md`), 'utf8'));
+    put(repo, `workflows/${stage}/steps.json`, readFileSync(resolve(`workflows/${stage}/steps.json`), 'utf8'));
+  }
+  if (singleStep) {
+    put(repo, 'workflows/make-decision/steps.json', {
+      schema_version: '2.0.0', stage_slug: 'make-decision', steps: [{
+        step_id: 1, step_slug: 'current-step',
+        observable_result: 'Controlled current identity. 判定消费：SKILL.md#方法；原件：quality/evidence/steps/current.json',
+        completion_evidence: [
+          { kind: 'quality_evidence', uri_or_path: 'quality/evidence/steps/current.json' },
+          { kind: 'phase_task_facts', uri_or_path: 'facts.jsonl' },
+        ],
+      }],
+    });
+  }
+  put(task, 'task.json', {
+    schema_version: '1.0.0', project_name: 'controlled', task_id: 'card-case',
+    baseline_commit: 'HEAD', target_repo_root: repo, activation_cohort: 'post',
+  });
+  put(task, 'facts.jsonl', '');
+  put(materials, 'decision-log.md', '# Controlled\n## 级别与路线\n- 推荐级别：复杂\n');
+  put(materials, 'spec.md', '# Controlled current specification\n');
+  put(materials, 'phases/index.md', '# Pure pointer index\n## Execution Index\n| 阶段 | 权威引用 |\n| --- | --- |\n| `P1` | `phases/P1-controlled.md` |\n');
+  put(materials, 'phases/P1-controlled.md', '# Phase P1\n## L1\n### T001\nControlled current task.\n');
+  const mappings = [];
+  for (const stage of stages) {
+    const manifest = JSON.parse(readFileSync(join(repo, `workflows/${stage}/steps.json`), 'utf8'));
+    for (const step of manifest.steps) mappings.push(`| [controlled](../../workflows/${stage}/steps.json#L1) \`${step.step_slug}\` | observation | human | owner |`);
+  }
+  put(materials, 'step-consumer-design.md', mappings.join('\n'));
+  // TCR-P1-001: enrich only fixture prerequisites. A successful skip now has
+  // tracked Phase material and the real existing current cursor, not a label.
+  for (const args of [['init', '-q'], ['add', '.'], ['-c', 'user.name=Controlled fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'Controlled current materials']]) {
+    const git = spawnSync('git', args, { cwd: repo, encoding: 'utf8' });
+    if (git.status !== 0) throw Error(`fixture git setup failed: ${git.stderr}`);
+  }
+  const head = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8' }).stdout.trim();
+  const cursor = { record_kind: 'stage', task_id: 'card-case', stage: 'build-code', phase_progress: {
+    phase_id: 'P1', task_id: 'T001', phases_head: head, base_head: head, recorded_at: new Date().toISOString(),
+  } };
+  put(task, 'facts.jsonl', JSON.stringify(cursor) + '\n');
+  const invoke = args => {
+    const result = spawnSync(process.execPath, [
+      entry, `--task-path=${task}`, `--material-root=${materials}`, `--repo-root=${repo}`, ...args, '--json',
+    ], { cwd: repo, encoding: 'utf8' });
+    return { ...result, report: JSON.parse(result.stdout) };
+  };
+  return { root, task, repo, materials, put, invoke, head, cursor };
+}
+
+describe('ORACLE-P1-CARD current step public CLI contract', () => {
+  it.each([
+    [5, 'outline-talk', true],
+    [6, 'adversarial-direction-check', false],
+    [8, 'module-breadth-confirm', true],
+  ])('make-decision step %i projects only itself and prerequisites, with an executable card', (stepId, slug, needsReply) => {
+    const fixture = p1CurrentCardFixture();
+    try {
+      const result = fixture.invoke(['--stage=make-decision', `--step=${stepId}`, '--card', '--phase=P1']);
+      expect(result.status).toBe(0);
+      expect(result.report.stages).toHaveLength(1);
+      expect(result.report.stages[0].steps.map(step => step.step_id),
+        '--step must not expand the whole stage').toEqual(Array.from({ length: stepId }, (_, index) => index + 1));
+      const card = result.report.card;
+      expect(card).toMatchObject({ stage: 'make-decision', step_id: stepId, step_slug: slug });
+      for (const field of ['result', 'entry', 'stop', 'self_check']) {
+        expect(card[field], `card.${field} must be readable`).toEqual(expect.any(String));
+        expect(card[field].trim().length, `card.${field} must not be empty`).toBeGreaterThan(0);
+      }
+      expect(card.self_check).toContain(`--step=${stepId}`);
+      expect(card.paths.length).toBeGreaterThan(0);
+      expect(card.paths.length).toBeLessThanOrEqual(3);
+      expect(card.evidence.length).toBeGreaterThan(0);
+      expect(card.requires_user_reply).toBe(needsReply);
+    } finally { rmSync(fixture.root, { recursive: true, force: true }); }
+  });
+
+  it.each(['build-plan', 'build-code'])('%s step 1 also projects a readable current card', (stage) => {
+    const fixture = p1CurrentCardFixture();
+    try {
+      const result = fixture.invoke([`--stage=${stage}`, '--step=1', '--card', '--phase=P1']);
+      expect(result.status).toBe(0);
+      expect(result.report.card).toMatchObject({ stage, step_id: 1 });
+      expect(result.report.stages[0].steps.map(step => step.step_id),
+        '--step must not expand the whole stage').toEqual([1]);
+      expect(result.report.card.paths.length).toBeGreaterThan(0);
+      expect(result.report.card.paths.length).toBeLessThanOrEqual(3);
+    } finally { rmSync(fixture.root, { recursive: true, force: true }); }
+  });
+
+  it('rejects identical artifact bytes whose identity belongs to an old run', () => {
+    const fixture = p1CurrentCardFixture({ singleStep: true });
+    try {
+      const oldArtifact = {
+        task_id: 'card-case', run_id: 'old-run', step_slug: 'current-step',
+        artifact_sha: 'a'.repeat(64), created_at: '2026-11-01T00:00:00.000Z', observation: 'same bytes',
+      };
+      const oldBytes = JSON.stringify(oldArtifact);
+      fixture.put(fixture.task, 'quality/evidence/steps/current.json', oldBytes);
+      fixture.put(fixture.task, 'quality/evidence/steps/old-run-copy.json', oldBytes);
+      expect(readFileSync(join(fixture.task, 'quality/evidence/steps/current.json'), 'utf8'))
+        .toBe(readFileSync(join(fixture.task, 'quality/evidence/steps/old-run-copy.json'), 'utf8'));
+      const oldRun = fixture.invoke(['--stage=make-decision', '--step=1', '--run-id=current-run']);
+      expect(oldRun.status).toBe(0);
+      expect(oldRun.report.stages[0].steps[0].judgment,
+        'same bytes from old-run must not become current-run evidence').toBe('未留痕');
+      expect(oldRun.report.stages[0].steps[0].evidence[0].present).toBe(false);
+      expect(oldRun.report.stages[0].steps[0].evidence[0].reason).toContain('old-run');
+
+      fixture.put(fixture.task, 'quality/evidence/steps/current.json', {
+        ...oldArtifact, run_id: 'current-run', created_at: '2026-11-01T01:00:00.000Z',
+      });
+      const currentRun = fixture.invoke(['--stage=make-decision', '--step=1', '--run-id=current-run']);
+      expect(currentRun.status).toBe(0);
+      expect(currentRun.report.stages[0].steps[0].judgment).toBe('已留痕');
+      expect(currentRun.report.stages[0].steps[0].evidence[0].present).toBe(true);
+    } finally { rmSync(fixture.root, { recursive: true, force: true }); }
+  });
+
+  it('requires reason/owner/recovery for a skip and keeps its unresolved closeout gap incomplete at exit 0', () => {
+    const fixture = p1CurrentCardFixture();
+    const reason = '等待真实骨架答复';
+    const owner = '阶段主会话';
+    const recovery = '取得真实骨架答复后重跑第5步';
+    try {
+      const missingOwner = fixture.invoke([
+        '--stage=make-decision', '--skip-with-gap=5', `--reason=${reason}`, `--recovery=${recovery}`,
+        '--phase=P1', '--card',
+      ]);
+      expect(missingOwner.status).toBe(0);
+      expect(missingOwner.report.errors.join('\n')).toMatch(/owner|负责人/);
+      expect(missingOwner.report.card.step_id).toBe(5);
+      expect(missingOwner.report.skip_gap).toBeNull();
+
+      const skipped = fixture.invoke([
+        '--stage=make-decision', '--skip-with-gap=5', `--reason=${reason}`, `--owner=${owner}`,
+        `--recovery=${recovery}`, '--phase=P1', '--card',
+      ]);
+      expect(skipped.status).toBe(0);
+      expect(skipped.report.card.step_id).toBe(6);
+      expect(skipped.report.skip_gap).toMatchObject({
+        stage: 'make-decision', step_id: 5, step_slug: 'outline-talk', reason, owner, recovery, phase: 'P1',
+      });
+      const ref = skipped.report.skip_gap.evidence_ref;
+      expect(ref).toMatch(/^quality\/evidence\//);
+      const saved = JSON.parse(readFileSync(join(fixture.task, ref), 'utf8'));
+      expect(saved).toMatchObject({
+        task_id: 'card-case', stage: 'make-decision', step_id: 5, step_slug: 'outline-talk',
+        reason, owner, recovery, phase: 'P1',
+      });
+      expect(saved.created_at).toEqual(expect.any(String));
+      expect(skipped.report.closeout).toMatchObject({ state: 'incomplete' });
+      expect(skipped.report.closeout.gaps).toEqual(expect.arrayContaining([
+        expect.objectContaining({ step_id: 5, reason, owner, recovery }),
+      ]));
+
+      const closeoutReadback = fixture.invoke(['--stage=make-decision', '--step=6', '--card', '--phase=P1']);
+      expect(closeoutReadback.status).toBe(0);
+      expect(closeoutReadback.report.closeout.state,
+        'an unresolved named skip must not be closed as completed').toBe('incomplete');
+      expect(closeoutReadback.report.closeout.gaps).toEqual(expect.arrayContaining([
+        expect.objectContaining({ step_id: 5, evidence_ref: ref }),
+      ]));
+    } finally { rmSync(fixture.root, { recursive: true, force: true }); }
+  });
+});
+
+describe('ORACLE-P1-BASELINE material simplification and reading baseline', () => {
+  it('removes the duplicate make-decision observable-result table while retaining steps.json as authority', () => {
+    const skill = readFileSync(resolve('workflows/make-decision/SKILL.md'), 'utf8');
+    const manifest = JSON.parse(readFileSync(resolve('workflows/make-decision/steps.json'), 'utf8'));
+    expect(manifest.steps).toHaveLength(15);
+    expect(skill).not.toContain('可核运行清单：以下15行投影本阶段步骤表');
+    expect(skill).not.toContain('| step_slug | 完成判据（observable_result） |');
+    for (const step of manifest.steps) expect(skill).not.toContain(`| \`${step.step_slug}\` |`);
+  });
+
+  it('binds each of the seven build-code fact steps to named step-specific originals, never facts-only or generic directories', () => {
+    const manifest = JSON.parse(readFileSync(resolve('workflows/build-code/steps.json'), 'utf8'));
+    const expected = new Map([
+      [3, [/diff|commit/i]],
+      [6, [/acceptance|ac[-_]|ui/i]],
+      [7, [/diff[-_/]?scan|diff/i]],
+      [10, [/acceptance[-_/]?trace|ac[-_/]?trace/i]],
+      [11, [/spec[-_/]?analyze/i]],
+      [12, [/handoff/i]],
+    ]);
+    const first = manifest.steps.find(step => step.step_id === 1);
+    const firstNamed = (first.completion_evidence ?? []).filter(item =>
+      item.uri_or_path && item.uri_or_path !== 'facts.jsonl' && item.uri_or_path !== './facts.jsonl' && !item.uri_or_path.endsWith('/'));
+    expect(firstNamed.length, 'read-current-task-documents must not remain facts-only').toBeGreaterThan(0);
+    expect(firstNamed.length).toBeLessThanOrEqual(3);
+    for (const pattern of [/decision-log\.md/, /spec\.md/, /phases\/[^/]+\.md/]) {
+      expect(firstNamed.some(item => pattern.test(item.uri_or_path)),
+        `read-current-task-documents missing ${pattern}`).toBe(true);
+    }
+    for (const [stepId, patterns] of expected) {
+      const step = manifest.steps.find(item => item.step_id === stepId);
+      const named = (step.completion_evidence ?? []).filter(item =>
+        item.uri_or_path && item.uri_or_path !== 'facts.jsonl' && item.uri_or_path !== './facts.jsonl' && !item.uri_or_path.endsWith('/'));
+      expect(named.length, `${step.step_slug} must not remain facts-only or use a generic directory`).toBeGreaterThan(0);
+      expect(named.length, `${step.step_slug} declares at most three original paths`).toBeLessThanOrEqual(3);
+      for (const pattern of patterns) {
+        expect(named.some(item => pattern.test(item.uri_or_path)), `${step.step_slug} missing ${pattern}`).toBe(true);
+      }
+    }
+  });
+
+  it('requires five raw before/after baseline readings in every main-stage method without an improvement claim', () => {
+    for (const stage of ['make-decision', 'build-plan', 'build-code']) {
+      const skill = readFileSync(resolve(`workflows/${stage}/SKILL.md`), 'utf8');
+      const lines = skill.split(/\r?\n/).filter(line => line.startsWith('阅读基线：'));
+      expect(lines, `${stage} needs one explicit reading-baseline contract`).toHaveLength(1);
+      const line = lines[0] ?? '';
+      for (const field of ['路径', '字节', '跳步', '返工', 'Phase 时长', '前后', '原始读数']) {
+        expect(line, `${stage} baseline missing ${field}`).toContain(field);
+      }
+      expect(line).toMatch(/不宣称|只建立基线/);
+      expect(line, `${stage} baseline must not claim a percentage improvement`).not.toMatch(/\d+(?:\.\d+)?\s*%/);
+    }
+  });
+});
+
+// TCR-P1-001 approved by original independent Spec reader, task original 026.
+// Existing ORACLE-P1 assertions above remain unchanged.
+describe('ORACLE-P1-CARD TCR-P1-001 current originals and unresolved gaps', () => {
+  async function gapOriginal(f, identity = { phase: 'P1' }) {
+    const { openTask } = await import('../../runtime/task/task-handle.mjs');
+    const task = openTask(f.task, { projectName: 'controlled', taskId: 'card-case' });
+    const gap = { task_id: 'card-case', stage: 'make-decision', step_id: 1, step_slug: 'current-step',
+      reason: 'missing current input', owner: 'controlled owner', recovery: 'provide current input',
+      created_at: '2026-01-01T00:00:00.000Z', ...identity };
+    const path = await task.appendRecord({ dir: 'quality/evidence', slug: 'step-gap', ext: 'json', bytes: JSON.stringify(gap) });
+    return { ...gap, evidence_ref: path.slice(f.task.length + 1) };
+  }
+  function completion(f, { phase = 'P1', invalidated = false } = {}) {
+    const ref = 'quality/evidence/2026-11-02-099-current-observation.json';
+    const source = 'workflows/make-decision/steps.json';
+    const human = { task_id: 'card-case', source, step_slug: 'current-step', phase,
+      reader: 'controlled independent reader', inputs: ['owned observation'], observation: 'Read current owned result.',
+      criteria_ref: 'workflows/make-decision/SKILL.md#方法', conclusion: 'completed', limits: [],
+      created_at: '2026-02-01T00:00:00.000Z' };
+    f.put(f.repo, 'workflows/make-decision/SKILL.md', '# Controlled\n## 方法\nOwned observation.\n');
+    f.put(f.materials, 'decision-log.md', '# Controlled\n## 级别与路线\n- 推荐级别：复杂\n' + (invalidated ? '- 失效步骤：current-step；阶段：make-decision\n' : ''));
+    f.put(f.materials, 'step-consumer-design.md', '| [controlled](../../workflows/make-decision/steps.json#L1) `current-step` | observation | human | owner |');
+    f.put(f.task, ref, human);
+    f.put(f.task, 'facts.jsonl', [f.cursor, { record_kind: 'stage', task_id: 'card-case', stage: 'make-decision', source: 'controlled',
+      evidence: { value: [{ ref, source, step_slug: 'current-step' }] } }].map(row => JSON.stringify(row)).join('\n') + '\n');
+    return ref;
+  }
+  it.each([['--phase=P2', { phase: 'P1' }], ['--commit=new-sha', { commit: 'old-sha' }], ['--run-id=new-run', { run_id: 'old-run' }]])('keeps unresolved original visible after %s', async (flag, identity) => {
+    const f = p1CurrentCardFixture({ singleStep: true });
+    try {
+      const gap = await gapOriginal(f, identity);
+      const result = f.invoke(['--stage=make-decision', '--step=1', flag]);
+      expect(result.status).toBe(0);
+      expect(result.report.closeout).toMatchObject({ state: 'incomplete', gaps: [expect.objectContaining({ evidence_ref: gap.evidence_ref, owner: gap.owner, recovery: gap.recovery })] });
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
+  });
+  it.each([['P0', false], ['P1', true]])('does not clear a current gap with producer completion phase=%s invalidated=%s', async (phase, invalidated) => {
+    const f = p1CurrentCardFixture({ singleStep: true });
+    try {
+      const gap = await gapOriginal(f);
+      completion(f, { phase, invalidated });
+      // A current trace is not the old producer's completion proof.
+      f.put(f.task, 'quality/evidence/steps/current.json', { task_id: 'card-case', step_slug: 'current-step', phase: 'P1', observation: 'Current readable trace only.' });
+      const producer = runFinalChainCheck({ taskPath: f.task, materialRoot: f.materials, workflowRoot: f.repo });
+      // This must hit the real producer-completed seam, not an unavailable fixture.
+      expect(producer.workflow_steps.find(row => row.step_slug === 'current-step').state).toBe('completed');
+      const result = f.invoke(['--stage=make-decision', '--step=1', '--phase=P1']);
+      expect(result.report.closeout.gaps).toEqual([expect.objectContaining({ evidence_ref: gap.evidence_ref })]);
+      expect(result.report.stages[0].steps[0].state).not.toBe('completed');
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
+  });
+  it.each([false, true])('rejects a producer note for current invalid trace even with self-declared completed=%s', async selfDeclared => {
+    const f = p1CurrentCardFixture({ singleStep: true });
+    try {
+      const gap = await gapOriginal(f);
+      completion(f, { phase: 'P0' });
+      const ref = 'quality/evidence/current-invalid-observation.json';
+      const source = 'workflows/make-decision/steps.json', step_slug = 'current-step';
+      f.put(f.task, ref, { task_id: 'card-case', source, step_slug, phase: 'P1',
+        observation: 'Current trace has no reader, inputs or criterion.', created_at: '2026-02-02T00:00:00.000Z',
+        ...(selfDeclared ? { conclusion: 'completed' } : {}) });
+      const facts = readFileSync(join(f.task, 'facts.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line));
+      facts.find(row => row.stage === 'make-decision').evidence.value.push({ ref, source, step_slug });
+      f.put(f.task, 'facts.jsonl', facts.map(row => JSON.stringify(row)).join('\n') + '\n');
+      const producer = runFinalChainCheck({ taskPath: f.task, materialRoot: f.materials, workflowRoot: f.repo });
+      const step = producer.workflow_steps.find(row => row.step_slug === step_slug);
+      expect(step.state).toBe('completed');
+      expect(step.basis).toEqual(expect.arrayContaining([expect.objectContaining({ ref, evidence_level: null })]));
+      const result = f.invoke(['--stage=make-decision', '--step=1', '--phase=P1', '--card']);
+      console.log(JSON.stringify({ case: 'invalid current human note cannot complete old producer result', selfDeclared,
+        projected: result.report.stages[0].steps[0].state, closeout: result.report.closeout }));
+      expect.soft(result.report.stages[0].steps[0].state).not.toBe('completed');
+      expect.soft(result.report.closeout.gaps).toEqual([expect.objectContaining({ evidence_ref: gap.evidence_ref })]);
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
+  });
+  it('clears only a matching current gap through its real producer original', async () => {
+    const f = p1CurrentCardFixture({ singleStep: true });
+    try {
+      await gapOriginal(f);
+      const ref = completion(f);
+      const result = f.invoke(['--stage=make-decision', '--step=1', '--phase=P1', '--card']);
+      expect(result.status).toBe(0);
+      expect(result.report.stages[0].steps[0]).toMatchObject({ state: 'completed' });
+      expect(result.report.card.evidence).toEqual(expect.arrayContaining([expect.objectContaining({ ref, present: true })]));
+      expect(result.report.closeout.gaps).toEqual([]);
+      expect(existsSync(join(f.task, 'quality/evidence/steps/current.json'))).toBe(false);
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
+  });
+  it.each(['--commit=does-not-exist', '--commit=' + '0'.repeat(40), '--phase=P999', '--run-id=made-up-run'])('refuses unverified skip identity %s without writing or advancing', flag => {
+    const f = p1CurrentCardFixture();
+    try {
+      const result = f.invoke(['--stage=make-decision', '--skip-with-gap=5', '--card', '--reason=missing input', '--owner=controlled owner', '--recovery=provide input', flag]);
+      expect(result.status).toBe(0);
+      expect(result.report.skip_gap).toBeNull();
+      expect(result.report.card.step_id).toBe(5);
+      expect(result.report.errors.join('\n')).toMatch(/身份|unavailable|HEAD|Phase|run/);
+      expect(result.report.closeout.gaps).toEqual([]);
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
+  });
+  it('accepts the actual temporary repository HEAD as a skip identity', () => {
+    const f = p1CurrentCardFixture();
+    try {
+      const result = f.invoke(['--stage=make-decision', '--skip-with-gap=5', '--card', '--reason=missing input', '--owner=controlled owner', '--recovery=provide input', `--commit=${f.head}`]);
+      expect(result.status).toBe(0);
+      expect(result.report.skip_gap).toMatchObject({ commit: f.head, step_id: 5 });
+      expect(result.report.card.step_id).toBe(6);
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
+  });
+  it('real step6 does not accept an unrelated old original in a generic directory', () => {
+    const f = p1CurrentCardFixture();
+    try {
+      f.put(f.task, 'quality/tests/unrelated.json', { task_id: 'another-task', run_id: 'old-run', observation: 'old' });
+      const result = f.invoke(['--stage=make-decision', '--step=6', '--card', '--run-id=current-run']);
+      expect(result.report.card.evidence.some(item => item.ref.endsWith('/') && item.present === true)).toBe(false);
+      expect(result.report.stages[0].steps.at(-1).judgment).toBe('未留痕');
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
+  });
+  it('real step6 consumes its unique current appendRecord ref and rejects changed task/step/phase identities', async () => {
+    const f = p1CurrentCardFixture();
+    try {
+      const { openTask } = await import('../../runtime/task/task-handle.mjs');
+      const task = openTask(f.task, { projectName: 'controlled', taskId: 'card-case' });
+      const source = 'workflows/make-decision/steps.json', step_slug = 'adversarial-direction-check';
+      const original = { task_id: 'card-case', source, step_slug, phase: 'P1', observation: 'Current step6 named controlled observation.' };
+      const path = await task.appendRecord({ dir: 'quality/evidence', slug: 'step6-observation', ext: 'json', bytes: JSON.stringify(original) });
+      const ref = path.slice(f.task.length + 1);
+      f.put(f.task, 'facts.jsonl', [f.cursor, { record_kind: 'stage', task_id: 'card-case', stage: 'make-decision',
+        evidence: { value: [{ ref, source, step_slug }] } }].map(row => JSON.stringify(row)).join('\n') + '\n');
+      const valid = f.invoke(['--stage=make-decision', '--step=6', '--card', '--phase=P1']);
+      expect(valid.report.card.paths).toContain(ref);
+      expect(valid.report.card.evidence).toEqual(expect.arrayContaining([expect.objectContaining({ ref, present: true })]));
+      expect(valid.report.stages[0].steps.at(-1).judgment).toBe('已留痕');
+      // Controlled negative inputs change only identity bytes at the same ref.
+      for (const changed of [{ task_id: 'other-task' }, { step_slug: 'other-step' }, { phase: 'P0' }]) {
+        f.put(f.task, ref, { ...original, ...changed });
+        const invalid = f.invoke(['--stage=make-decision', '--step=6', '--card', '--phase=P1']);
+        expect(invalid.report.card.evidence.find(item => item.ref === ref).present).toBe(false);
+        expect(invalid.report.stages[0].steps.at(-1).judgment).toBe('未留痕');
+      }
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
+  });
+  it.each(['absolute', 'parent', 'ancestor-symlink'])('does not accept external content through a %s original ref', mode => {
+    const f = p1CurrentCardFixture({ singleStep: true });
+    try {
+      f.put(f.root, 'outside.json', { task_id: 'card-case', run_id: 'current-run', observation: 'outside source' });
+      if (mode === 'ancestor-symlink') symlinkSync(f.root, join(f.materials, 'escape'));
+      const ref = mode === 'absolute' ? join(f.root, 'outside.json') : mode === 'parent' ? '../outside.json' : 'escape/outside.json';
+      const manifestPath = 'workflows/make-decision/steps.json';
+      const manifest = JSON.parse(readFileSync(join(f.repo, manifestPath), 'utf8'));
+      manifest.steps[0].completion_evidence = [{ kind: 'quality_evidence', uri_or_path: ref }];
+      f.put(f.repo, manifestPath, manifest);
+      const result = f.invoke(['--stage=make-decision', '--step=1', '--run-id=current-run']);
+      expect(result.report.stages[0].steps[0].evidence[0]).toMatchObject({ present: false });
+      expect(result.report.stages[0].steps[0].evidence[0].reason).toMatch(/越界|符号链接/);
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
+  });
+});
+
+describe('ORACLE-P1-BASELINE TCR-P1-001 actual current reading denominator', () => {
+  it.each([5, 6, 8])('measures actual step%i method sections and marks unobserved duration explicitly', stepId => {
+    const f = p1CurrentCardFixture();
+    try {
+      const inputs = new Map([
+        [5, '5. <a id="step-outline-talk"></a>Read the fifth controlled input.'],
+        [6, '6. <a id="step-adversarial-direction-check"></a>Read the sixth controlled input.'],
+        [8, '8. <a id="step-module-breadth-confirm"></a>Read the eighth controlled input.'],
+      ]);
+      f.put(f.repo, 'workflows/make-decision/SKILL.md', '# Controlled reader\n## 方法\n' + [...inputs.values()].join('\n') + '\n## End\n');
+      const result = f.invoke(['--stage=make-decision', `--step=${stepId}`, '--card', '--phase=P1']);
+      const baseline = result.report.card.reading_baseline;
+      expect(baseline).toMatchObject({ paths: expect.any(Array), path_count: expect.any(Number), bytes: expect.any(Number) });
+      expect(baseline.path_count).toBe(baseline.paths.length);
+      expect(baseline.path_count).toBeLessThanOrEqual(3);
+      expect(baseline.bytes).toBeGreaterThan(0);
+      const method = baseline.paths.find(item => item.ref.includes('SKILL.md#'));
+      expect(method).toMatchObject({ observed: true, bytes: expect.any(Number) });
+      expect(method.bytes).toBe(Buffer.byteLength(inputs.get(stepId)));
+      expect(baseline.bytes).toBe(Buffer.byteLength(inputs.get(stepId)) + Buffer.byteLength(readFileSync(join(f.repo, 'workflows/make-decision/steps.json'))));
+      expect(method.bytes).toBeLessThan(Buffer.byteLength(readFileSync(join(f.repo, 'workflows/make-decision/SKILL.md'))));
+      expect(baseline.phase_duration).toMatchObject({ value: null, reason: expect.any(String) });
+      expect(baseline.skips).toMatchObject({ value: null, reason: expect.any(String) });
+      expect(baseline.rework).toMatchObject({ value: null, reason: expect.any(String) });
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
+  });
+});
+
+
+describe('P7 terminal current-proof regression', () => {
+  function original(f, { markdown = false, identity = { phase: 'P1' }, source = 'workflows/make-decision/steps.json' } = {}) {
+    const ref = `quality/evidence/p7-current-proof.${markdown ? 'md' : 'json'}`;
+    const criteria = source.replace('steps.json', 'SKILL.md') + '#方法';
+    f.put(f.repo, source.replace('steps.json', 'SKILL.md'), '# Controlled\n## 方法\nOwned observation.\n');
+    f.put(f.materials, 'step-consumer-design.md', `| [controlled](../../${source}#L1) \`current-step\` | observation | human | owner |`);
+    const human = { task_id: 'card-case', source, step_slug: 'current-step', ...identity,
+      reader: 'independent fixture reader', inputs: ['owned source'], observation: 'Owned observation.',
+      criteria_ref: criteria, conclusion: 'completed', limits: [], created_at: '2026-01-02T00:00:00Z' };
+    f.put(f.task, ref, markdown ? [
+      `task_id: ${human.task_id}`, `source: ${source}`, 'step_slug: current-step',
+      ...Object.entries(identity).map(([key,value]) => `${key}: ${value}`),
+      '执行者: independent fixture reader', '实际输入: owned source', '实际观察: Owned observation.',
+      `原方法判据: ${criteria}`, '结论: completed', '限制: controlled fixture only',
+    ].join('\n') + '\n' : human);
+    f.put(f.task, 'facts.jsonl', [f.cursor, { record_kind: 'stage', task_id: 'card-case', stage: 'make-decision',
+      evidence: { value: [{ ref, source, step_slug: 'current-step' }] } }].map(row => JSON.stringify(row)).join('\n') + '\n');
+    const producer = runFinalChainCheck({ taskPath: f.task, materialRoot: f.materials, workflowRoot: f.repo });
+    expect(producer.workflow_steps.find(row => row.source === source && row.step_slug === 'current-step')?.state, JSON.stringify(producer.limits)).toBe('completed');
+    return ref;
+  }
+  it.each([
+    [[], { phase: 'P0' }],
+    [['--phase=P9'], { phase: 'P9' }],
+    [['--commit=' + 'f'.repeat(40)], { commit: 'f'.repeat(40) }],
+    [['--run-id=invented-run'], { run_id: 'invented-run' }],
+  ])('does not advance a current card with missing or unverified identity %j', (flags, identity) => {
+    const f = p1CurrentCardFixture({ singleStep: true });
+    try {
+      original(f, { identity });
+      const result = f.invoke(['--stage=make-decision', '--card', ...flags]);
+      expect(result.report.stages[0].steps[0].state).not.toBe('completed');
+      expect(result.report.card?.step_id).toBe(1);
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
+  });
+  it.each([['phase', 'P0', '--phase=P1'], ['commit', 'old-head', null], ['run_id', 'old-run', '--run-id=new-run']])('rejects old legitimate Markdown %s proof for a new identity', (field, value, flag) => {
+    const f = p1CurrentCardFixture({ singleStep: true });
+    try {
+      original(f, { markdown: true, identity: { [field]: value } });
+      const result = f.invoke(['--stage=make-decision', '--step=1', flag ?? '--commit=' + f.head]);
+      expect(result.report.stages[0].steps[0].state).not.toBe('completed');
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
+  });
+  it.each([false, true])('keeps a legitimate current proof usable, Markdown=%s', markdown => {
+    const f = p1CurrentCardFixture({ singleStep: true });
+    try {
+      original(f, { markdown });
+      const result = f.invoke(['--stage=make-decision', '--step=1', '--phase=P1']);
+      expect(result.report.stages[0].steps[0].state).toBe('completed');
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
+  });
+  it.each([['small', '小改动'], ['normal', '普通任务'], ['planning', '规划任务']])('clears an actual completed gap using the active %s flow source', async (flow, label) => {
+    const f = p1CurrentCardFixture({ singleStep: true });
+    try {
+      const source = `workflows/make-decision/flows/${flow}/steps.json`;
+      const definition = JSON.parse(readFileSync(join(f.repo, 'workflows/make-decision/steps.json'), 'utf8'));
+      f.put(f.repo, source, definition);
+      f.put(f.repo, 'workflows/make-decision/steps.json', { ...definition, flows: { [flow]: { steps: source } } });
+      const choiceRef = 'quality/evidence/p7-controlled-choice.md';
+      f.put(f.task, choiceRef, `受控夹具选择 ${flow}；不授权真实任务。\n`);
+      f.put(f.task, 'quality/evidence/p7-controlled-entry.json', { flags: { boundary_clear: true, single_outcome: true, limited_impact: true, major_architecture: false, migration: false, permission: false, security: false } });
+      const facts = { scope: 'bounded', change_kind: 'code', independent_units: 1, risk: 'bounded', credentials: false, dependencies: 'none', acceptance: 'observable test' };
+      f.put(f.materials, 'decision-log.md', `# Controlled\n## 级别与路线\n用户选择：${flow}\n原 ref：${choiceRef}\n入口返回原 ref：quality/evidence/p7-controlled-entry.json\n` + Object.entries(facts).map(([key, value]) => `${key}：${value}；来源：${choiceRef}`).join('\n') + '\n');
+      const { openTask } = await import('../../runtime/task/task-handle.mjs');
+      const task = openTask(f.task, { projectName: 'controlled', taskId: 'card-case' });
+      await task.appendRecord({ dir: 'quality/evidence', slug: 'step-gap', ext: 'json', bytes: JSON.stringify({
+        task_id: 'card-case', stage: 'make-decision', step_id: 1, step_slug: 'current-step', phase: 'P1',
+        reason: 'owned missing step', owner: 'fixture reader', recovery: 'supply same-flow completion', created_at: '2026-01-01T00:00:00Z',
+      }) });
+      original(f, { source });
+      const result = f.invoke(['--stage=make-decision', '--step=1', '--phase=P1']);
+      expect(result.report.stages[0].source).toBe(source);
+      expect(result.report.closeout.gaps).toEqual([]);
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
   });
 });

@@ -54,7 +54,7 @@
 | design-source-extraction | 设计源准备后、实施前提炼机器JSON；按五类输入缺项、四态与过期记录供规划/实施/独立检查消费；不晋升规范。 | [读取正文](design-source-extraction/SKILL.md) |
 | design-source-readiness | 核对已有设计材料是否能供当前动作使用，并显露缺源或冲突。 | [读取正文](design-source-readiness/SKILL.md) |
 | frontend-prototype-render | 用真实组件输入渲染任务原型，提供预览与截图。 | [读取正文](frontend-prototype-render/SKILL.md) |
-| frontend-component-quality | 实现或审查组件的真实consumer、状态、ViewModel、样式与复用边界；外部引用与派生参考回catalog对应记录。 | [读取正文](frontend-component-quality/SKILL.md) |
+| frontend-component-quality | 实现或审查组件的真实consumer、状态、ViewModel、样式与复用边界；按需读取随包界面规则；外部来源与权利回catalog对应记录。 | [读取正文](frontend-component-quality/SKILL.md) |
 | third-review | 明确调用通用异源CLI审查器，保原始意见和失败诊断。 | [读取正文](third-review/SKILL.md) |
 
 ## N4既有方法采用索引

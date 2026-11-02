@@ -10,6 +10,8 @@ WorkflowHub 主会话按认证工作区当前材料执行。post 材料为 decis
 
 已授权任务进入 build-code 后，自动实施、验证、审查、修复及交付必要的 commit/push/merge；切阶段/会话/handoff 不重置授权，不重问本地提交、日常技术验收或风险承担确认。Phase 实施、针对性测试、独立审查及 finding 修复全完成后，本 Phase 审后提交一次；build-code 终末结束时完成全部提交与合并。authorize 复用真实授权来源，操作前核范围/分支/当前 HEAD 并 record/consume；build-code commit 显式同传 phase=build-code，绑当前 task、分支和阶段，同阶段共用授权；实际 HEAD/每次消费保在既有 consumed 原件，授权原件不改。其它阶段、旧无 phase 记录及 push/merge/pr 仍严格匹配原 HEAD。真正执行关闭时，先按下节核工作区与任务范围，再读 [关闭方法](../skills/stage-close/SKILL.md)第6节「最终归档和清理前一次真实范围确认」与第7节「安全移除、分支删除与逐项读回」；只有取得其要求的最终范围确认才执行归档/删除/交付清理。无法修复/验证的事项如实保留，继续可执行部分，不自行 accepted_risk 或伪造通过。
 
+确有用户批准的外仓提交时，可信操作者先核原始问答与确认、被确认的当前任务 Phase 材料，以及唯一注册工作树、分支和 HEAD，以 `task.recordGitAuthorization` 的 `externalScope: { phaseId, materialRef, worktreeRoot, branch, head }` 和该确认原件显式记录 `build-code` 的 `commit`。精确目标及来源直接绑定现有 grant，不另设必需的持久授权对象。确认 decision 为 `cross-repo-auth` 或以 `-cross-repo-auth` 结尾，须真实对应用户同意；确认引用同一任务的一个原始问答和在确认 HEAD 上已索引的 Phase 材料。Phase 机器写入集中所有绝对路径须规范且属于该唯一外仓工作树，材料须有唯一的分支和 HEAD 声明与目标一致；有第二外仓、不规范路径或对账不明即拒绝。材料中的分散文本不是身份签名，具体目标与用户决定的关联由可信操作者核定。消费必须指定原 grant 的 `authorizationRef`，复核来源字节、仓库 common-dir、注册工作树、分支和 HEAD；HEAD 未变时同一动作可幂等重试；HEAD 变化（包括提交后）拒绝重新消费，另一动作不得复用。任务入口统一使用任务根锁，低层直接调用不得另选锁域。来源或身份漂移停止，不将外仓权限扩到 push、merge 或其他仓。此检查沿现有可信操作者如实记录模型；哈希用于发现记录后变化，不是人类身份签名，也不防同权限主体伪造。
+
 make-decision 最终确认＝阶段收口，具体动作沿其方法与决策日志模板；下一阶段由用户决定，不催下一阶段。
 
 ## 工作区与任务
@@ -28,10 +30,29 @@ make-decision 最终确认＝阶段收口，具体动作沿其方法与决策日
 
 复杂任务每 Phase 的开发是唯一 writer，审查与测试只读代码、测试与材料；测试经既有 capture 保存回执。完整顺序只以 [build-code「Phase 三角色与七步顺序」](../workflows/build-code/SKILL.md#phase-三角色与七步顺序) 为准：实现就绪并明确通知后才派审查与测试；实现就绪不等于开发完成，完成语义见「专业质量」，两方明确回报在开发最后确认前汇合，普通 finding 回原开发，修复后受影响方重报。主会话只核无 open finding、无未解释测试失败、Phase Done、AC 齐四项；每轮审后由开发提交一次，迟到 finding 重开同一 Phase、回同一开发，只复验受影响面。最终 Phase 提交在终末审查修复之后，push/merge/PR/归档/清理归 stage-close；本小节不改变审查分级、小改动与普通任务合同。
 
-
 只运行受影响针对性测试，禁止无范围全量 vitest/npm test/test:safe；例外须用户或 CI 明确要求。源与测试应验证真实效果、失败和取消，假 transport 不能证明实际模型或硬隔离。成功范围只因新变化、失败或未解疑点重跑，不按文件机械增审。
 
 文档面用 wh-review；复杂任务代码面按下节选择一次独立审查执行者，终末整卡固定外部 OCR 全审；小改动与普通任务的审查方式不变。外部 OCR OCR 不可用（命令不存在（ENOENT）或版本低于1.12.9）如实记 unavailable/unknown，不换执行者，保留检测输出与原始失败；版本检测其它错误不推断未安装。architect-code-review 是同源补充轴，独立执行，与 OCR 可用性无关；已装 OCR 失败、超时、取消、无效输出、零成功路或空 findings 均保留原始事实。三审查点保留，真实未执行或不足独立数量保持 unavailable/incomplete，有效单源发现原来源照留。原始失败、晚 raw、取消与来源不被摘要覆盖。
+
+### 长任务与证据边界
+
+执行策略沿 make-decision 已确认答复，开工记录 execution_budget 及重试预留。
+操作细则唯一读 [长任务怎么控制](../workflows/build-code/SKILL.md#长任务怎么控制)：
+检查点覆盖 Phase 边界、长命令前后和阻塞；等待用事件通知，不 sleep/轮询。
+墙钟、活动、用户等待、provider 审查等待和真实环境纯等待分别记录。
+预算 1.5 倍停扩、两倍或连续无新增验收事实停当前路径复盘，只作观察；
+不新增自动全任务硬上限，不按命令数硬杀合法修复或测试。
+审查 provider/broker 保 wh-review 排除域，通用超时/轮数/回收不改其等待或执行者。
+判据变更须请求、成本影响、独立批准与用户重新确认，合法缺陷修复继续。
+S/M 快速反馈不替代最终完整数据与验收；独立测试面按各自 oracle 并行，
+主会话合并结果并保冲突，不让多个代理写共享文件。
+
+大件证据留哈希、外部指针和摘要，磁盘压力不授权删除不同事实。
+来源原件与真实回执共同定位 task_id、run_id、step_slug、artifact_sha、created_at；
+缺身份不当当前执行，不增 run 对象、native schema 或证据账本。
+同运行同字节复用并保 provenance；旧运行同字节不能冒当前证据。
+空间检查消费当前策略及原 task handle 预算，不恢复历史库大小倍数门。
+保存、比较与保留仍以本文件「证据只留原始件」为唯一执行底座。
 
 ### 三审查点与结论真实性
 

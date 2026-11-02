@@ -13,8 +13,8 @@ function fiveErrors(talk, decision) {
   const errors = categories.filter(name => !body.includes(name));
   for (const term of ['已答', '事实可定', '待你定', '谁来定', '讨论前展示', '讨论后', '3–5', '确认']) if (!body.includes(term)) errors.push(term);
   for (const term of ['A 真实痛点', 'B 复杂度与 ROI', 'C 风险与影响范围', 'D 时机', '证据', '主观']) if (!body.includes(term)) errors.push(term);
-  for (const slug of ['9. `module-convergence`', '10. `detail-advice`']) {
-    const part = decision.slice(decision.indexOf(slug)).split(/\n\d+\. `/)[0];
+  for (const [slug, next] of [['`module-convergence`', '10'], ['`detail-advice`', '11']]) {
+    const part = decision.slice(decision.indexOf(slug)).split(new RegExp(`\n${next}\\. (?:<a id="[^"]+"><\\/a>)?\\x60`))[0];
     for (const term of ['五类', '骨架', '讨论前展示', '讨论后', '确认']) if (!part.includes(term)) errors.push(`${slug}: ${term}`);
   }
   return errors;
@@ -100,7 +100,7 @@ describe('ORACLE-N11-STEP-COVERAGE', () => {
   }));
   it('retains the actual 15-step make-decision declaration and requires stage-end consumption', () => {
     expect(JSON.parse(read('workflows/make-decision/steps.json')).steps).toHaveLength(15);
-    const end = read('workflows/make-decision/SKILL.md').split('13. `stage-end-spec-analyze`：')[1].split('14. `approve-decision`：')[0];
+    const end = read('workflows/make-decision/SKILL.md').split(/13\. (?:<a id="[^"]+"><\/a>)?`stage-end-spec-analyze`：/)[1].split(/14\. (?:<a id="[^"]+"><\/a>)?`approve-decision`：/)[0];
     for (const term of ['node tools/cli/run-checks.mjs --task-path', 'missing_steps', 'incomplete']) expect(end).toContain(term);
   });
 });

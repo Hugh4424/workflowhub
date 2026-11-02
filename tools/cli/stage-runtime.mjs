@@ -1275,12 +1275,71 @@ function terminalAssessmentQuality(context, row) {
       authorizations.sort((a,b)=>Date.parse(a.created_at)-Date.parse(b.created_at));
       const first=authorizations[0],earliest=authorizations.filter(value=>Date.parse(value.created_at)===Date.parse(first.created_at)),materialRoot=join(context.workspace.worktreeRoot,"specs",context.identity.taskId);
       if(new Set(earliest.map(value=>value.head)).size!==1)throw Error("earliest authorization is ambiguous");
-      if(earliest.some(value=>!plain(value)||typeof value.reply!=="string"||!value.reply.trim()||value.task_id!==undefined&&value.task_id!==context.identity.taskId||value.project_name!==undefined&&value.project_name!==context.manifest.project_name||!Array.isArray(value.material_refs)||!value.material_refs.includes(join(materialRoot,"spec.md"))||!value.material_refs.every(path=>typeof path==="string"&&isAbsolute(path)&&resolve(path)===path&&path.startsWith(materialRoot+"/"))))throw Error("authorization task materials differ");
+      const materialBindings=earliest.map(value=>{
+        if(!plain(value)||typeof value.reply!=="string"||!value.reply.trim()||value.task_id!==undefined&&value.task_id!==context.identity.taskId||value.project_name!==undefined&&value.project_name!==context.manifest.project_name||!Array.isArray(value.material_refs))throw Error("authorization task materials differ");
+        // Preserve the existing specification-reference contract. The alternate
+        // source is a trusted operator's transcription, not a host signature.
+        if(value.material_refs.includes(join(materialRoot,"spec.md"))&&value.material_refs.every(path=>typeof path==="string"&&isAbsolute(path)&&resolve(path)===path&&path.startsWith(materialRoot+"/")))return "spec";
+        if(value.material_refs.length!==1)throw Error("source-only authorization requires one original");
+        const path=value.material_refs[0],prefix=context.task.taskPath+"/";
+        if(typeof path!=="string"||!isAbsolute(path)||resolve(path)!==path||!path.startsWith(prefix))throw Error("source-only authorization path differs");
+        const ref=path.slice(prefix.length);
+        if(!/^quality\/evidence\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/.test(ref))throw Error("source-only authorization requires a task evidence original");
+        const source=JSON.parse(context.task.readRecord(ref));
+        if(!plain(source)||Object.keys(source).sort().join("\0")!==["goal_created_at","objective","source","thread_id"].join("\0")||source.source!=="user-provided active Codex goal"||typeof source.thread_id!=="string"||!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(source.thread_id)||source.objective!==value.reply||!Number.isSafeInteger(source.goal_created_at)||source.goal_created_at<=0)throw Error("source-only authorization objective or source differs");
+        // These are task-local ordinary records, read with the existing task
+        // handle's canonical-path/single-link checks. Never read private sessions
+        // or accept a capture's claimed host-verification summary as authority.
+        const starts=[];
+        for(const name of readdirSync(context.task.recordPath("quality/evidence")).filter(name=>/^[A-Za-z0-9][A-Za-z0-9._-]*\.json$/.test(name))){
+          // appendRecord preserves the task-start producer's slug. Also inspect
+          // top-level declarations in other readable originals: a different
+          // filename must not hide a second valid start. Nested/quoted records
+          // are context only, not another producer's top-level declaration.
+          const namedStart=/(?:^|-)task-start\.json$/.test(name);
+          let bytes,record;
+          try{bytes=context.task.readRecord(`quality/evidence/${name}`);}catch{
+            if(namedStart)throw Error("source-only task-start original is unreadable");
+            context.task.readRecord("task.json"); // Do not swallow a changed task identity.
+            continue; // Unrelated aliases are never followed by the task reader.
+          }
+          try{record=JSON.parse(bytes);}catch{
+            // Rejection probe only: native JSON decoding validates the string
+            // pair and its top-level prefix. Never salvage a broken original
+            // as an authorization fact or interpret nested/quoted context.
+            let declaredStart=namedStart;
+            if(!declaredStart)for(const match of bytes.matchAll(/("(?:[^"\\]|\\[\s\S])*")\s*:\s*("(?:[^"\\]|\\[\s\S])*")/g)){
+              try{
+                if(JSON.parse(match[1])!=="event"||JSON.parse(match[2])!=="task-start")continue;
+                const prefix=JSON.parse(bytes.slice(0,match.index+match[0].length)+"}");
+                if(plain(prefix)&&prefix.event==="task-start"){declaredStart=true;break;}
+              }catch{ /* Not a coherent top-level string declaration. */ }
+            }
+            if(declaredStart)throw Error("source-only task-start original is malformed");
+            continue; // Invalid unrelated outputs are not authorization inputs.
+          }
+          if(namedStart&&(!plain(record)||record.event!=="task-start"))throw Error("source-only task-start declaration differs");
+          if(plain(record)&&record.event==="task-start"){
+            if(!WORKFLOW_STAGES.includes(record.stage))throw Error("source-only task-start stage is invalid");
+            if(record.stage==="build-code")starts.push(record);
+          }
+        }
+        if(starts.length!==1)throw Error("source-only authorization task start is not unique");
+        const start=starts[0],started=typeof start.created_at==="string"&&/^\d{4}-\d\d-\d\dT/.test(start.created_at)?Date.parse(start.created_at):NaN;
+        if(start.task_id!==context.identity.taskId||start.cwd!==context.workspace.worktreeRoot||start.head!==value.head||!Number.isFinite(started)||source.goal_created_at*1000>started||started>Date.parse(value.created_at))throw Error("source-only authorization task/start/head/time differs");
+        if(!GIT_OID.test(value.head??"")||git(["cat-file","-t",`${value.head}:specs/${context.identity.taskId}/spec.md`]).trim()!=="blob")throw Error("source-only authorization specification missing at start");
+        return `source:${ref}\0${value.reply}`;
+      });
+      if(materialBindings.some(binding=>binding!=="spec")&&new Set(materialBindings).size!==1)throw Error("earliest source-only authorization is ambiguous");
       if(!/^[a-f0-9]{40,64}$/.test(first.head??"")||git(["rev-parse","--verify",`${first.head}^{commit}`]).trim()!==first.head)throw Error("authorization head is not a commit");
       git(["merge-base","--is-ancestor",context.workspace.baselineCommit,first.head]);git(["merge-base","--is-ancestor",first.head,"HEAD"]);
       implementationBase=first.head;
     }
-  }catch(error){gaps.push(`implementation base: ${error.message}; retained task baseline`);}
+  }catch{
+    // Parser and I/O messages may contain private source bytes or paths. Public
+    // status/page diagnostics disclose only this fixed boundary failure.
+    gaps.push("implementation base: authorization boundary could not be verified; retained task baseline");
+  }
   const deletedPaths=new Set(git(["diff","--name-only","-z","--diff-filter=D",implementationBase,"--"]).split("\0").filter(Boolean));
   const checkPaths=(values,label,expected=null)=>{
     const paths=list(values,label),seen=new Set();

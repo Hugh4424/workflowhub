@@ -284,7 +284,7 @@ describe('ORACLE-FLOW-STEPS: per-flow original skill denominator and cockpit own
       for(const category of ['必需','按需','跳过']) expect(doc).toContain(category);
       const matrix=skillMatrixRows(doc);
       for(const name of shared31) {
-        const rows=matrix.filter(l=>new RegExp('`'+name+'`').test(l));
+        const rows=matrix.filter(l=>new RegExp('(?:`'+name+'`|\\['+name+'\\])').test(l));
         expect(rows,`${level}/${name}: one explicit matrix row`).toHaveLength(1);
         has(rows[0],/必需|按需|跳过/,`${name}: selected applicability`);
         const cells=rows[0].split('|').map(x=>x.trim()).filter(Boolean); expect(cells.length,`${name}: status plus actual trigger/reason`).toBeGreaterThanOrEqual(3); expect(cells.at(-1).replace(/[`—-]/g,'').trim().length,`${name}: nonempty trigger or skip reason`).toBeGreaterThan(2);
@@ -410,7 +410,7 @@ describe('ORACLE-FLOW-STEPS appended TCR182/183: method consumption and canonica
   });
   test('root and D-0xx use one entry fact writer while preserving return/failure contracts',()=>{
     const doc=text('complex'), template=read('skills/decision-log/templates/decision-log-template.md');
-    const load=doc.match(/1\. `load-context`：[\s\S]*?(?=\n2\. `)/)?.[0] ?? '';
+    const load=doc.match(/1\. (?:<a id="[^"]+"><\/a>)?`load-context`：[\s\S]*?(?=\n2\. )/)?.[0] ?? '';
     expect(routeIssues(section(doc,'入口路由'),paragraph(load,'入口评估'),section(template,'级别与路线'),section(template,'D-0xx'))).toEqual([]);
   });
   for(const level of ['complex','small','normal','planning']) test(`${level}: each consumer reads canonical route at its own action boundary`,()=>{
@@ -504,7 +504,7 @@ describe('N10 direction review order',()=>{
     if(positions.some(i=>i<0)||positions.some((v,i)=>i>0&&v<=positions[i-1]))issues.push('text order');
     if(list.length!==15||list.some((v,i)=>v.step_id!==i+1))issues.push('step shape');
     if(indexes.some(i=>i<0)||indexes.some((v,i)=>i>0&&v<=indexes[i-1]))issues.push('order');
-    const part=n=>body.split(new RegExp('^'+n+'\\. `','m'))[1]?.split(/^\d+\. `/m)[0]??'';
+    const part=n=>body.split(new RegExp('^'+n+'\\. (?:<a id="[^"]+"></a>)?`','m'))[1]?.split(/^\d+\. (?:<a id="[^"]+"><\/a>)?`/m)[0]??'';
     if(!/只问方向轴与骨架/.test(part(5))||!/第 9 步/.test(part(5)))issues.push('outline scope');
     if(!/第 7 步方向审查已回读/.test(part(8))||!/未达不开始逐包收敛/.test(part(8)))issues.push('readback');
     return issues;
@@ -513,9 +513,9 @@ describe('N10 direction review order',()=>{
     const body=text('complex'),list=steps('complex').steps;
     expect(directionOrderIssues(body,list)).toEqual([]);
     for(const needle of ['只问方向轴与骨架','第 7 步方向审查已回读','未达不开始逐包收敛'])expect(directionOrderIssues(body.replace(needle,'已删除'),list).length).toBeGreaterThan(0);
-    const seven=body.match(/^7\. `direction-advice`：[\s\S]*?(?=^8\. `)/m)?.[0];
+    const seven=body.match(/^7\. (?:<a id="[^"]+"><\/a>)?`direction-advice`：[\s\S]*?(?=^8\. )/m)?.[0];
     expect(seven).toBeTruthy();
-    expect(directionOrderIssues(body.replace(seven,'').replace(/^10\. `/m,seven+'10. `'),list)).toContain('text order');
+    expect(directionOrderIssues(body.replace(seven,'').replace(/^10\. (?:<a id="[^"]+"><\/a>)?`/m,seven+'10. `'),list)).toContain('text order');
     const changed=structuredClone(list);[changed[6],changed[8]]=[changed[8],changed[6]];
     expect(directionOrderIssues(body,changed)).toContain('order');
     expect(directionOrderIssues(body,list)).toEqual([]);

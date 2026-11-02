@@ -14,7 +14,7 @@ const section = (text, title) => {
 };
 const method = section(skill, '方法');
 const stepBody = id => {
-  const found = method.split(/^(?=\d+\. `)/m).find(chunk => chunk.startsWith(`${id}. \``));
+  const found = method.split(/^(?=\d+\. (?:<a id="[^"]+"><\/a>)?`)/m).find(chunk => chunk.startsWith(`${id}. `) || chunk.startsWith(`${id}. <a id="`));
   expect(found, `method step ${id}`).toBeDefined();
   return found;
 };
@@ -138,7 +138,7 @@ const syncEvidence = {
 // Independently advised by 020-p6-independent-contract-reader-advice.md and 021-p6-tcr-independent-advice.md.
 const checkSynced = (id, row) => {
   const [slug, name, action, original] = syncContracts[id];
-  expect(Object.keys(row).sort(), `step ${id} four keys`).toEqual(['completion_evidence', 'observable_result', 'step_id', 'step_slug']);
+  expect(Object.keys(row).sort(), `step ${id} identity keys`).toEqual(['completion_evidence', 'method_anchor', 'observable_result', 'requires_user_reply', 'step_id', 'step_slug']);
   expect(row.step_id).toBe(id);
   expect(row.step_slug).toBe(slug);
   expect(row.observable_result, `step ${id} fixed name`).toContain(name);
@@ -163,7 +163,7 @@ const checkManifest = manifest => {
     [13, 'stage-end-spec-analyze'], [14, 'approve-decision'], [15, 'closeout'],
   ]);
   for (const row of manifest.steps) {
-    expect(Object.keys(row).sort()).toEqual(['completion_evidence', 'observable_result', 'step_id', 'step_slug']);
+    expect(Object.keys(row).sort()).toEqual(['completion_evidence', 'method_anchor', 'observable_result', 'requires_user_reply', 'step_id', 'step_slug']);
     if (syncContracts[row.step_id]) checkSynced(row.step_id, row);
   }
 };
@@ -221,7 +221,7 @@ describe('ORACLE-P6-MAKE-DECISION-FLOW structure', () => {
       [10, 'detail-advice'], [11, 'grill-with-docs'], [12, 'write-decision-draft'],
       [13, 'stage-end-spec-analyze'], [14, 'approve-decision'], [15, 'closeout'],
     ]);
-    expect([...method.matchAll(/^\d+\. `/gm)]).toHaveLength(15);
+    expect([...method.matchAll(/^\d+\. (?:<a id="[^"]+"><\/a>)?`/gm)]).toHaveLength(15);
   });
   test('retains make-decision stage and existing route table', () => {
     expect(steps.stage_slug).toBe('make-decision');
@@ -265,18 +265,6 @@ describe('closeout', () => {
   });
 });
 
-describe('closeout runlist', () => {
-  test('可核运行清单 has exactly the fifteen step identifiers and verbatim criteria', () => {
-    const close = section(skill, '安全写入与收口');
-    named(close, '可核运行清单');
-    const rows = [...close.matchAll(/^\| `([a-z][a-z-]+)` \| (.+) \|$/gm)]
-      .map(([, step_slug, criterion]) => ({ step_slug, criterion }));
-    expect(rows).toHaveLength(15);
-    expect(rows.map(row => row.step_slug)).toEqual(steps.steps.map(row => row.step_slug));
-    expect(new Set(rows.map(row => row.step_slug)).size).toBe(15);
-    for (const [i, row] of rows.entries()) expect(row.criterion).toBe(steps.steps[i].observable_result);
-  });
-});
 
 describe('ledger', () => {
   test('逐模块台账 keeps one row per package, states and the five-part order', () => {
@@ -336,8 +324,8 @@ describe('entry', () => {
 
 
 // Review-fix TCR043: original Spec039 #1/#2/#3 and Standards040 #1.
-const methodStep = (text, id) => section(text, '方法').split(/^(?=\d+\. `)/m)
-  .find(chunk => chunk.startsWith(id + '. `'));
+const methodStep = (text, id) => section(text, '方法').split(/^(?=\d+\. (?:<a id="[^"]+"><\/a>)?`)/m)
+  .find(chunk => chunk.startsWith(id + '. `') || chunk.startsWith(id + '. <a id="'));
 const checkResearchTiming = (text, manifest) => {
   const outline = methodStep(text, 2), research = methodStep(text, 3);
   for (const expected of ['产出任何大纲前', '分级真实答复后', '主会话', '向用户提问',

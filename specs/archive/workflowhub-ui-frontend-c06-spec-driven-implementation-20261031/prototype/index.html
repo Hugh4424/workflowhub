@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>业务日志高级时间筛选原型</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div id="root">
+    <div class="business-log-shell pb-ui-app" data-screen-label="业务日志">
+      <main class="business-log-main">
+        <section class="business-log-heading">
+          <div><h1 class="pb-ui-page-title">业务日志</h1></div>
+        </section>
+
+        <section class="business-log-filters" aria-label="业务日志筛选">
+          <div class="business-log-filter-toolbar">
+            <label class="business-log-filter-control">
+              <span>对象</span>
+              <select id="entity-type" class="business-log-filter-select" aria-label="对象">
+                <option value="">全部对象</option>
+                <option value="strategy">策略</option>
+                <option value="backtest">回测</option>
+                <option value="candidate">候选验证</option>
+                <option value="worker">Worker</option>
+                <option value="simulation">模拟</option>
+                <option value="data">数据</option>
+                <option value="ai">AI</option>
+              </select>
+            </label>
+            <label class="business-log-filter-control">
+              <span>结果</span>
+              <select id="outcome" class="business-log-filter-select" aria-label="结果">
+                <option value="">全部结果</option>
+                <option value="success">成功</option>
+                <option value="failure">失败</option>
+                <option value="neutral">记录</option>
+              </select>
+            </label>
+            <label class="business-log-filter-control business-log-filter-keyword">
+              <span class="sr-only">关键词</span>
+              <span class="search-icon" aria-hidden="true"></span>
+              <input id="keyword" class="input" aria-label="关键词" placeholder="搜索摘要、对象或错误码">
+            </label>
+            <button id="filter-toggle" class="pb-ui-action is-ghost business-log-filter-toggle" type="button" aria-expanded="false" aria-controls="advanced-fields" title="事件类型、动作与时间筛选">筛选</button>
+            <div id="list-count" class="business-log-list-count" role="status"><span>共 1 条</span></div>
+            <span id="apply-status" class="business-log-time-hint" role="status">未应用筛选变更</span>
+          </div>
+
+          <div id="advanced-fields" class="business-log-advanced-fields" hidden>
+            <label class="business-log-filter-control">
+              <span>事件类型</span>
+              <input id="event-type" class="business-log-filter-date-input" aria-label="事件类型" placeholder="如 backtest.completed">
+            </label>
+            <label class="business-log-filter-control">
+              <span>动作</span>
+              <select id="action" class="business-log-filter-select" aria-label="动作">
+                <option value="">全部动作</option>
+                <option value="created">created</option>
+                <option value="published">published</option>
+                <option value="deleted">deleted</option>
+                <option value="started">started</option>
+                <option value="completed">completed</option>
+                <option value="failed">failed</option>
+                <option value="cancelled">cancelled</option>
+                <option value="paused">paused</option>
+                <option value="resumed">resumed</option>
+                <option value="switched">switched</option>
+                <option value="abnormal_exit_detected">abnormal_exit_detected</option>
+              </select>
+            </label>
+            <p id="time-zone-hint" class="business-log-time-hint">本地时间；提交时转换为 UTC。</p>
+            <label class="business-log-filter-control business-log-filter-date">
+              <span>开始时间（本地时间）</span>
+              <input id="start-at" class="business-log-filter-date-input" type="datetime-local" aria-label="开始时间（本地时间）" aria-describedby="time-zone-hint time-error">
+            </label>
+            <label class="business-log-filter-control business-log-filter-date">
+              <span>结束时间（本地时间）</span>
+              <input id="end-at" class="business-log-filter-date-input" type="datetime-local" aria-label="结束时间（本地时间）" aria-describedby="time-zone-hint time-error">
+            </label>
+            <button id="apply-filters" class="pb-ui-action" type="button">查询</button>
+            <button id="reset-filters" class="pb-ui-action is-ghost business-log-reset" type="button">重置筛选</button>
+          </div>
+          <div id="time-error" class="business-log-inline-error business-log-time-error" role="alert" hidden></div>
+        </section>
+
+        <div id="state-container" hidden></div>
+        <div id="ready-content">
+          <div class="business-log-table-scroll">
+            <table class="business-log-table" aria-label="业务日志列表">
+              <thead>
+                <tr><th scope="col">时间（本地）</th><th scope="col">事件</th><th scope="col" class="business-log-mobile-secondary">对象</th><th scope="col">摘要</th><th scope="col">结果</th><th scope="col" class="business-log-mobile-secondary">来源</th></tr>
+              </thead>
+              <tbody>
+                <tr class="business-log-table-row" data-event-id="event-00000000000000000000000000000001" data-display-state="ready" tabindex="0" aria-label="日志样例：回测已完成">
+                  <td data-label="时间"><time id="fixture-time" datetime="2026-08-30T12:00:00Z" title="UTC 2026-08-30T12:00:00Z">2026-08-30T12:00:00Z</time></td>
+                  <td data-label="事件"><span class="business-log-business-label">回测 · 已完成</span></td>
+                  <td class="business-log-mobile-secondary" data-label="对象"><span class="business-log-entity-type">回测</span><code class="business-log-entity-id" title="run-1">run-1</code></td>
+                  <td data-label="摘要"><strong class="business-log-summary">回测已完成</strong></td>
+                  <td data-label="结果"><span class="business-log-outcome is-success">成功</span></td>
+                  <td class="business-log-mobile-secondary" data-label="来源"><code class="business-log-source">application</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="business-log-end">已经到达当前可读历史的末尾。</p>
+        </div>
+
+        <aside class="pb-card prototype-inspector" aria-labelledby="inspector-title">
+          <div class="pb-card-body">
+            <h2 id="inspector-title" class="pb-ui-section-title">原型检查器（非生产 UI）</h2>
+            <p class="pb-ui-body-text">本地 fixture 与查询预览；不发送 HTTP 请求。</p>
+            <label class="prototype-fixture-label" for="fixture-state">列表 fixture</label>
+            <select id="fixture-state" class="business-log-filter-select" aria-label="列表 fixture">
+              <option value="ready">ready</option>
+              <option value="loading">loading</option>
+              <option value="empty">empty</option>
+              <option value="filter_no_result">filter_no_result</option>
+              <option value="history_unavailable">history_unavailable</option>
+              <option value="error">error</option>
+            </select>
+            <p id="preview-status" class="pb-ui-label-text">初始查询预览（未发请求）</p>
+            <pre id="query-preview" aria-label="UTC 提交预览">{ "limit": 50 }</pre>
+          </div>
+        </aside>
+      </main>
+    </div>
+  </div>
+  <script src="./app.js"></script>
+</body>
+</html>

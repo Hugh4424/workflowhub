@@ -6,6 +6,1501 @@
   "generated_from": "当前迁移表保留分类、已改接真实相对模块 consumer 与显式数据 reader；不保存整树快照或 hash 清单",
   "entries": [
     {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/history/AGENTS-21lines.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/history/AGENTS-21lines.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "旧 21 行本地派生摘要的逐字节历史溯源；不作上游 payload 或规则源。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "catalog 旧摘要来源引用及 tests/contract/ui-skill-contract.test.mjs 历史字节校验；不进入 bundle。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/catalog.yaml",
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "历史来源责任由经独立验证的替代原件承接、所有引用迁移并由原 owner 决定后处理。",
+      "retention_basis": "C06 P5 用户 2026-11-02 历史路径决定；历史摘要不推定上游原文。"
+    },
+    {
+      "source": "skills/frontend-component-quality/references/implementation-readiness.md",
+      "destination": "skills/frontend-component-quality/references/implementation-readiness.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "前端实施前就绪方法；用于核对真实规范、设计源、检查和缺口。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/README.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/README.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/SKILL.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/SKILL.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/metadata.json",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/metadata.json",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/_sections.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/_sections.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/_template.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/_template.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/advanced-effect-event-deps.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/advanced-effect-event-deps.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/advanced-event-handler-refs.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/advanced-event-handler-refs.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/advanced-init-once.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/advanced-init-once.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/advanced-use-latest.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/advanced-use-latest.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/async-api-routes.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/async-api-routes.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/async-cheap-condition-before-await.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/async-cheap-condition-before-await.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/async-defer-await.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/async-defer-await.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/async-dependencies.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/async-dependencies.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/async-parallel.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/async-parallel.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/async-suspense-boundaries.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/async-suspense-boundaries.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/bundle-analyzable-paths.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/bundle-analyzable-paths.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/bundle-barrel-imports.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/bundle-barrel-imports.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/bundle-conditional.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/bundle-conditional.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/bundle-defer-third-party.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/bundle-defer-third-party.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/bundle-dynamic-imports.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/bundle-dynamic-imports.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/bundle-preload.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/bundle-preload.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/client-event-listeners.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/client-event-listeners.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/client-localstorage-schema.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/client-localstorage-schema.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/client-passive-event-listeners.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/client-passive-event-listeners.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/client-swr-dedup.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/client-swr-dedup.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/js-batch-dom-css.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/js-batch-dom-css.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/js-cache-function-results.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/js-cache-function-results.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/js-cache-property-access.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/js-cache-property-access.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/js-cache-storage.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/js-cache-storage.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/js-combine-iterations.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/js-combine-iterations.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/js-early-exit.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/js-early-exit.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/js-flatmap-filter.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/js-flatmap-filter.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/js-hoist-regexp.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/js-hoist-regexp.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/js-index-maps.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/js-index-maps.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/js-length-check-first.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/js-length-check-first.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/js-min-max-loop.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/js-min-max-loop.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/js-request-idle-callback.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/js-request-idle-callback.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/js-set-map-lookups.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/js-set-map-lookups.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/js-tosorted-immutable.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/js-tosorted-immutable.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/rendering-activity.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/rendering-activity.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/rendering-animate-svg-wrapper.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/rendering-animate-svg-wrapper.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/rendering-conditional-render.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/rendering-conditional-render.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/rendering-content-visibility.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/rendering-content-visibility.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/rendering-hoist-jsx.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/rendering-hoist-jsx.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/rendering-hydration-no-flicker.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/rendering-hydration-no-flicker.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/rendering-hydration-suppress-warning.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/rendering-hydration-suppress-warning.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/rendering-resource-hints.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/rendering-resource-hints.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/rendering-script-defer-async.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/rendering-script-defer-async.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/rendering-svg-precision.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/rendering-svg-precision.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/rendering-usetransition-loading.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/rendering-usetransition-loading.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/rerender-defer-reads.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/rerender-defer-reads.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/rerender-dependencies.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/rerender-dependencies.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/rerender-derived-state-no-effect.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/rerender-derived-state-no-effect.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/rerender-derived-state.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/rerender-derived-state.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/rerender-functional-setstate.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/rerender-functional-setstate.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/rerender-lazy-state-init.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/rerender-lazy-state-init.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/rerender-memo-with-default-value.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/rerender-memo-with-default-value.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/rerender-memo.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/rerender-memo.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/rerender-move-effect-to-event.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/rerender-move-effect-to-event.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/rerender-no-inline-components.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/rerender-no-inline-components.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/rerender-simple-expression-in-memo.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/rerender-simple-expression-in-memo.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/rerender-split-combined-hooks.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/rerender-split-combined-hooks.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/rerender-transitions.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/rerender-transitions.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/rerender-use-deferred-value.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/rerender-use-deferred-value.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/rerender-use-ref-transient-values.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/rerender-use-ref-transient-values.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/server-after-nonblocking.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/server-after-nonblocking.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/server-auth-actions.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/server-auth-actions.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/server-cache-lru.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/server-cache-lru.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/server-cache-react.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/server-cache-react.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/server-dedup-props.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/server-dedup-props.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/server-hoist-static-io.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/server-hoist-static-io.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/server-no-shared-module-state.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/server-no-shared-module-state.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/server-parallel-fetching.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/server-parallel-fetching.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/server-parallel-nested-fetching.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/server-parallel-nested-fetching.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/react-best-practices/rules/server-serialization.md",
+      "destination": "skills/frontend-component-quality/upstream/react-best-practices/rules/server-serialization.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/web-design-guidelines/command.md",
+      "destination": "skills/frontend-component-quality/upstream/web-design-guidelines/command.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/web-design-guidelines/UPSTREAM.md",
+      "destination": "skills/frontend-component-quality/upstream/web-design-guidelines/UPSTREAM.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/better-ui/SKILL.md",
+      "destination": "skills/frontend-component-quality/upstream/better-ui/SKILL.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/better-ui/agents/openai.yaml",
+      "destination": "skills/frontend-component-quality/upstream/better-ui/agents/openai.yaml",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/better-ui/animations.md",
+      "destination": "skills/frontend-component-quality/upstream/better-ui/animations.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/better-ui/enter-exit.md",
+      "destination": "skills/frontend-component-quality/upstream/better-ui/enter-exit.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/better-ui/icon-transitions.md",
+      "destination": "skills/frontend-component-quality/upstream/better-ui/icon-transitions.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/better-ui/icons.md",
+      "destination": "skills/frontend-component-quality/upstream/better-ui/icons.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/better-ui/performance.md",
+      "destination": "skills/frontend-component-quality/upstream/better-ui/performance.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/better-ui/surfaces.md",
+      "destination": "skills/frontend-component-quality/upstream/better-ui/surfaces.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
+      "source": "skills/frontend-component-quality/upstream/better-ui/UPSTREAM.md",
+      "destination": "skills/frontend-component-quality/upstream/better-ui/UPSTREAM.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "固定外部规则文件或来源清单；只读提供组件质量方法按适用范围查询。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "skills/frontend-component-quality/skill-bundle.json 经 runtime/adapters/local-skill-resolver.mjs 解析，供 build-plan/build-code 调用者按需读取；契约测试核闭包。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "现有真实消费者不再需要且经独立验证的替代承接后删除；保来源与历史事实。",
+      "retention_basis": "C06 P5 声明的技能打包读取；来源和权利以 catalog 与 UPSTREAM 为准。"
+    },
+    {
       "source": "tests/contract/plan-authoring-compatibility.test.mjs",
       "destination": "tests/contract/plan-authoring-compatibility.test.mjs",
       "status": "retain",
@@ -1874,19 +3369,17 @@
       "destination": "skills/frontend-component-quality/SKILL.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "既有模块／资源职责；不从登记新增能力",
-      "owner": "原路径维护 owner；P7 仅登记现职责",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
-      "named_data_readers": [
-        "skills/catalog.yaml",
-        "skills/reuse-registry.md",
-        "tests/contract/ui-skill-contract.test.mjs",
-        "workflows/build-code/skill-deps.yaml",
-        "workflows/build-plan/skill-deps.yaml"
+      "responsibility": "组件质量方法入口；按实际任务读取规则和就绪参考。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "runtime/adapters/local-skill-resolver.mjs 按 skill-bundle.json 解析文件；build-plan/build-code 的前端方法调用者按需读取，契约测试核路径与内容。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
       ],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "既有保留生产路径；本次仅归位说明"
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "当前消费者已由经独立验证的替代承接且原 owner 决定后删除；保留来源与历史事实。",
+      "retention_basis": "C06 P5 以现有组件质量入口与 resolver 承接固定规则；不新增执行器。"
     },
     {
       "source": "skills/frontend-component-quality/scripts/check-frontend-component-quality.mjs",
@@ -1908,41 +3401,51 @@
       "destination": "skills/frontend-component-quality/skill-bundle.json",
       "status": "retain",
       "role": "production",
-      "responsibility": "既有模块／资源职责；不从登记新增能力",
-      "owner": "原路径维护 owner；P7 仅登记现职责",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
+      "responsibility": "声明组件质量技能的便携文件清单，供现有解析器验证和解析。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "runtime/adapters/local-skill-resolver.mjs 按 skill-bundle.json 解析文件；build-plan/build-code 的前端方法调用者按需读取，契约测试核路径与内容。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
       "named_data_readers": [
         "tests/contract/ui-skill-contract.test.mjs"
       ],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "既有保留生产路径；本次仅归位说明"
+      "delete_condition": "当前消费者已由经独立验证的替代承接且原 owner 决定后删除；保留来源与历史事实。",
+      "retention_basis": "C06 P5 以现有组件质量入口与 resolver 承接固定规则；不新增执行器。"
     },
     {
       "source": "skills/frontend-component-quality/upstream/react-best-practices/AGENTS.md",
       "destination": "skills/frontend-component-quality/upstream/react-best-practices/AGENTS.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "既有模块／资源职责；不从登记新增能力",
-      "owner": "原路径维护 owner；P7 仅登记现职责",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
-      "named_data_readers": [],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "既有保留生产路径；本次仅归位说明"
+      "responsibility": "固定上游 React/Next 规则正文；按技术栈确认后只读参考。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "runtime/adapters/local-skill-resolver.mjs 按 skill-bundle.json 解析文件；build-plan/build-code 的前端方法调用者按需读取，契约测试核路径与内容。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "当前消费者已由经独立验证的替代承接且原 owner 决定后删除；保留来源与历史事实。",
+      "retention_basis": "C06 P5 以现有组件质量入口与 resolver 承接固定规则；不新增执行器。"
     },
     {
       "source": "skills/frontend-component-quality/upstream/react-best-practices/UPSTREAM.md",
       "destination": "skills/frontend-component-quality/upstream/react-best-practices/UPSTREAM.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "既有模块／资源职责；不从登记新增能力",
-      "owner": "原路径维护 owner；P7 仅登记现职责",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
-      "named_data_readers": [],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "既有保留生产路径；本次仅归位说明"
+      "responsibility": "固定 React/Next 上游来源、版本、逐文件哈希及许可边界。",
+      "owner": "frontend-component-quality 方法维护者",
+      "consumer": "runtime/adapters/local-skill-resolver.mjs 按 skill-bundle.json 解析文件；build-plan/build-code 的前端方法调用者按需读取，契约测试核路径与内容。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs"
+      ],
+      "named_data_readers": [
+        "tests/contract/ui-skill-contract.test.mjs"
+      ],
+      "delete_condition": "当前消费者已由经独立验证的替代承接且原 owner 决定后删除；保留来源与历史事实。",
+      "retention_basis": "C06 P5 以现有组件质量入口与 resolver 承接固定规则；不新增执行器。"
     },
     {
       "source": "skills/frontend-prototype-render/SKILL.md",

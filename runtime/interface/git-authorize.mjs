@@ -2,7 +2,7 @@ import {
   closeSync, constants, fstatSync, fsyncSync, linkSync, lstatSync, mkdirSync,
   openSync, readFileSync, readdirSync, realpathSync, renameSync, unlinkSync, writeFileSync,
 } from "node:fs";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { hostname } from "node:os";
 import { basename, dirname, isAbsolute, join, parse, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -474,6 +474,13 @@ function isTaskAuthorizationEndpoint(dir) {
     && basename(dirname(dirname(dir))) === "quality";
 }
 
+function authorizationLockDirectory(storage, cwd, lockDir) {
+  if (!isTaskAuthorizationEndpoint(storage)) return lockDir === undefined ? storage : resolve(cwd, lockDir);
+  const taskRoot = rootPath(dirname(dirname(dirname(storage))));
+  if (lockDir !== undefined && rootPath(resolve(cwd, lockDir)) !== taskRoot) throw failure("AUTH_SCOPE", "task authorization must use its task lock directory");
+  return taskRoot;
+}
+
 function assertTaskRepositoryScope(dir, cwd) {
   // This is the existing task-owned producer endpoint, not the generic
   // historical quality/authorizations directory. A broken manifest here
@@ -523,6 +530,73 @@ function assertScopedGrant(grant, taskScope, phase) {
   }
 }
 
+// The caller is the trusted operator who interprets the user's approval.
+// The persisted grant binds that interpretation to immutable source bytes and
+// live Git identity; local records are not signatures against that operator.
+function assertExternalScope(dir, cwd, confirmationRef, input) {
+  const invalid = message => { throw failure("AUTH_SCOPE", message); };
+  if (!isTaskAuthorizationEndpoint(dir) || !input || typeof input !== "object" || Array.isArray(input)
+      || Object.keys(input).sort().join(",") !== "branch,head,materialRef,phaseId,worktreeRoot") invalid("invalid external scope");
+  const taskRoot = rootPath(dirname(dirname(dirname(dir))));
+  const manifestTarget = destination(taskRoot, "task.json");
+  const manifest = JSON.parse(readTarget(manifestTarget).toString("utf8"));
+  const taskScope = assertTaskRepositoryScope(dir, manifest.target_repo_root);
+  if (typeof confirmationRef !== "string" || !isAbsolute(confirmationRef) || resolve(confirmationRef) !== confirmationRef
+      || dirname(confirmationRef) !== join(taskRoot, "quality", "evidence", "human-confirmations")) invalid("confirmation is outside the current task");
+  const confirmationTarget = destination(dirname(confirmationRef), basename(confirmationRef));
+  if (lstatSync(confirmationRef).nlink !== 1) invalid("confirmation must be a single-link original");
+  const confirmationBytes = readTarget(confirmationTarget);
+  const confirmation = JSON.parse(confirmationBytes.toString("utf8"));
+  if (confirmation.stage !== "build-code" || typeof confirmation.reply !== "string" || !confirmation.reply.trim()
+      || typeof confirmation.decision !== "string" || !/(?:^|-)cross-repo-auth$/.test(confirmation.decision)
+      || !Array.isArray(confirmation.material_refs) || !confirmation.material_refs.includes(input.materialRef)
+      || !/^[a-f0-9]{40,64}$/.test(confirmation.head ?? "")) invalid("confirmation does not bind approved task material");
+  const sources = confirmation.material_refs.filter(ref => typeof ref === "string" && isAbsolute(ref)
+    && resolve(ref) === ref && dirname(ref) === join(taskRoot, "quality", "evidence"));
+  if (sources.length !== 1) invalid("confirmation must reference one original task evidence source");
+  const sourceTarget = destination(dirname(sources[0]), basename(sources[0]));
+  if (lstatSync(sources[0]).nlink !== 1) invalid("confirmation source must be a single-link original");
+  const sourceBytes = readTarget(sourceTarget), source = JSON.parse(sourceBytes.toString("utf8"));
+  if (source.reply !== confirmation.reply || typeof source.question !== "string" || !source.question) invalid("confirmation source and reply differ");
+  if (!/^P[1-9][0-9]*$/.test(input.phaseId ?? "") || input.materialRef !== `specs/${manifest.task_id}/phases/${input.phaseId}-${basename(input.materialRef ?? "").slice(input.phaseId.length + 1)}`
+      || !/^P[1-9][0-9]*-[^/\\\0]+\.md$/.test(basename(input.materialRef ?? ""))) invalid("invalid Phase material reference");
+  if (typeof input.worktreeRoot !== "string" || !isAbsolute(input.worktreeRoot) || resolve(input.worktreeRoot) !== input.worktreeRoot
+      || rootPath(input.worktreeRoot) !== cwd || typeof input.branch !== "string" || !input.branch
+      || !/^[a-f0-9]{40,64}$/.test(input.head ?? "")) invalid("invalid external identity");
+  const env = { ...process.env }; for (const key of Object.keys(env)) if (key.startsWith("GIT_")) delete env[key]; env.GIT_OPTIONAL_LOCKS = "0";
+  const read = (root, args) => {
+    try { return execFileSync("git", args, { cwd: root, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trimEnd(); }
+    catch (cause) { throw Object.assign(failure("GIT_IDENTITY_UNAVAILABLE", "cannot read external authorization identity or approved material"), { cause }); }
+  };
+  const primary = taskScope.target_repo_root;
+  const material = path => {
+    try { return execFileSync("git", ["show", `${confirmation.head}:${path}`], { cwd: primary, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }); }
+    catch (cause) { throw Object.assign(failure("GIT_IDENTITY_UNAVAILABLE", "cannot read approved material"), { cause }); }
+  };
+  const phase = material(input.materialRef);
+  const index = material(`specs/${manifest.task_id}/phases/index.md`);
+  const indexed = `\`phases/${basename(input.materialRef)}\``;
+  if (!index.split(/\r?\n/).some(line => line.includes(`\`${input.phaseId}\``) && line.includes(indexed))) invalid("Phase not in approved index");
+  const field = phase.match(/^- \*\*写入集\*\*[:：]([^]*?)(?=\n- \*\*|(?![^]))/m)?.[1];
+  const declared = field ? [...field.matchAll(/`([^`]+)`/g)].map(match => match[1]) : [];
+  const absolute = declared.filter(isAbsolute);
+  const identities = [...phase.matchAll(/分支\s+`([^`]+)`\s*[、,，]\s*HEAD\s+`([a-f0-9]{8,64})`/g)];
+  if (!absolute.length || absolute.some(path => resolve(path) !== path || !path.startsWith(`${cwd}/`))
+      || declared.some(path => !isAbsolute(path) && (path.split('/').some(part => !part || part === '.' || part === '..') || path.includes('\\')))
+      || identities.length !== 1 || identities[0][1] !== input.branch || !input.head.startsWith(identities[0][2])) invalid("approved Phase has an ambiguous or noncanonical external target or Git identity");
+  const common = rootPath(resolve(cwd, read(cwd, ["rev-parse", "--git-common-dir"])));
+  const primaryCommon = rootPath(resolve(primary, read(primary, ["rev-parse", "--git-common-dir"])));
+  if (common === primaryCommon || rootPath(read(cwd, ["rev-parse", "--show-toplevel"])) !== cwd
+      || !read(cwd, ["worktree", "list", "--porcelain", "-z"]).split("\0").includes(`worktree ${cwd}`)) invalid("external worktree is not registered or is the task repository");
+  const identity = gitIdentity(cwd);
+  if (identity.branch !== input.branch || identity.head !== input.head) invalid("external branch or HEAD drifted");
+  if (!readTarget(confirmationTarget).equals(confirmationBytes) || !readTarget(sourceTarget).equals(sourceBytes)) invalid("confirmation source changed during authorization");
+  return { taskScope, external: { phase_id: input.phaseId, material_ref: input.materialRef, worktree_root: cwd,
+    common_dir: common, branch: input.branch, head: input.head, source_ref: sources[0], source_sha256: createHash("sha256").update(sourceBytes).digest("hex"),
+    confirmation_sha256: createHash("sha256").update(confirmationBytes).digest("hex"),
+    material_sha256: createHash("sha256").update(phase).digest("hex"), index_sha256: createHash("sha256").update(index).digest("hex") } };
+}
+
 function records(dir, operation) {
   const result = { authorizations: [], consumptions: [] };
   for (const name of readdirSync(dir).sort()) {
@@ -564,7 +638,7 @@ function records(dir, operation) {
   return result;
 }
 
-export async function record({ operation, confirmationRef, phase, cwd = process.cwd(), dir = join(cwd, "quality", "authorizations"), lockDir, performWrite } = {}) {
+export async function record({ operation, confirmationRef, phase, externalScope, cwd = process.cwd(), dir = join(cwd, "quality", "authorizations"), lockDir, performWrite } = {}) {
   requireOperation(operation);
   if (phase !== undefined && (operation !== "commit" || phase !== "build-code")) throw failure("AUTH_SCOPE", "reusable authorization requires explicit build-code commit scope");
   requiredText(confirmationRef, "CONFIRMATION_REFERENCE_REQUIRED", "confirmationRef");
@@ -575,14 +649,21 @@ export async function record({ operation, confirmationRef, phase, cwd = process.
   if (performWrite !== undefined && typeof performWrite !== "function") throw failure("INVALID_WRITE_EXECUTOR", "performWrite must be a function");
   performWrite ??= async (_request, actual) => actual();
   const storage = recordDirectory(dir);
-  return withLock(lockDir === undefined ? storage : resolve(cwd, lockDir), "git-authorize", () => {
-    const taskScope = phase !== undefined ? assertTaskRepositoryScope(storage, cwd) : undefined;
+  return withLock(authorizationLockDirectory(storage, cwd, lockDir), "git-authorize", () => {
+    if (externalScope !== undefined && (operation !== "commit" || phase !== "build-code")) throw failure("AUTH_SCOPE", "external scope requires build-code commit");
+    const scoped = externalScope === undefined ? undefined : assertExternalScope(storage, cwd, confirmationRef, externalScope);
+    const taskScope = scoped?.taskScope ?? (phase !== undefined ? assertTaskRepositoryScope(storage, cwd) : undefined);
     if (phase !== undefined && !taskScope) throw failure("AUTH_SCOPE", "reusable authorization requires the task-owned authorization endpoint");
     const { branch, head } = gitIdentity(cwd);
+    const publishWrite = scoped ? (request, actual) => performWrite(request, () => {
+      const checked = assertExternalScope(storage, cwd, confirmationRef, externalScope);
+      if (JSON.stringify(checked) !== JSON.stringify(scoped)) throw failure("AUTH_SCOPE", "external scope changed before grant publication");
+      return actual();
+    }) : performWrite;
     return appendRecord(storage, `authorize-${operation}`, "json", `${JSON.stringify({
       operation, branch, head, confirmation_ref: confirmationRef, created_at: new Date().toISOString(),
-      ...(phase !== undefined ? { phase, ...taskScope } : {}),
-    }, null, 2)}\n`, performWrite);
+      ...(phase !== undefined ? { phase, ...taskScope } : {}), ...(scoped ? { external_scope: scoped.external } : {}),
+    }, null, 2)}\n`, publishWrite);
   });
 }
 
@@ -597,8 +678,7 @@ export async function consume({ operation, stepId, authorizationRef, phase, cwd 
   if (performWrite !== undefined && typeof performWrite !== "function") throw failure("INVALID_WRITE_EXECUTOR", "performWrite must be a function");
   performWrite ??= async (_request, actual) => actual();
   const storage = recordDirectory(dir);
-  return withLock(lockDir === undefined ? storage : resolve(cwd, lockDir), "git-authorize", async () => {
-    const taskScope = assertTaskRepositoryScope(storage, cwd);
+  return withLock(authorizationLockDirectory(storage, cwd, lockDir), "git-authorize", async () => {
     const { authorizations, consumptions } = records(storage, operation);
     let selected;
     let verifySelected = () => {};
@@ -627,10 +707,29 @@ export async function consume({ operation, stepId, authorizationRef, phase, cwd 
         if (!current || !sameStorageFile(current, original) || current.nlink !== 1 || !readTarget(target).equals(bytes)) throw failure("AUTH_SCOPE", "exact authorization grant changed before consumption");
       };
     }
+    let taskScope, verifyExternal = () => {};
+    if (selected?.value.external_scope !== undefined) {
+      if (operation !== "commit" || phase !== "build-code") throw failure("AUTH_SCOPE", "external scope requires explicit build-code commit");
+      const external = selected.value.external_scope;
+      const checked = assertExternalScope(storage, cwd, selected.value.confirmation_ref, {
+        phaseId: external.phase_id, materialRef: external.material_ref, worktreeRoot: external.worktree_root,
+        branch: external.branch, head: external.head,
+      });
+      if (JSON.stringify(checked.external) !== JSON.stringify(external)) throw failure("AUTH_SCOPE", "external authorization source or repository changed");
+      taskScope = checked.taskScope;
+      verifyExternal = () => {
+        const current = assertExternalScope(storage, cwd, selected.value.confirmation_ref, {
+          phaseId: external.phase_id, materialRef: external.material_ref, worktreeRoot: external.worktree_root,
+          branch: external.branch, head: external.head,
+        });
+        if (JSON.stringify(current) !== JSON.stringify(checked)) throw failure("AUTH_SCOPE", "external authorization changed before consumption");
+      };
+    } else taskScope = assertTaskRepositoryScope(storage, cwd);
     const retry = consumptions.find((item) => item.value.step_id === stepId);
     if (retry) {
       if (selected && retry.value.authorization_ref !== selected.path) throw failure("AUTH_SCOPE", "retry is bound to a different original authorization reference");
       const grant = authorizations.find((item) => item.path === retry.value.authorization_ref);
+      if (grant?.value.external_scope !== undefined && (!selected || selected.path !== grant.path)) throw failure("AUTH_SCOPE", "external retries require their exact authorization reference");
       if (grant?.value.phase !== undefined) assertScopedGrant(grant.value, taskScope, phase);
       const current = gitIdentity(cwd);
       if (!grant || grant.value.operation !== operation || grant.value.branch !== current.branch) throw failure("AUTH_SCOPE", "current Git branch does not cover the previously consumed authorization");
@@ -641,8 +740,9 @@ export async function consume({ operation, stepId, authorizationRef, phase, cwd 
       return { ...retry.value, path: retry.path };
     }
     const used = new Set(consumptions.map((item) => item.value.authorization_ref));
+    if (selected?.value.external_scope !== undefined && used.has(selected.path)) throw failure("AUTHORIZATION_ALREADY_CONSUMED", "external authorization was already consumed by another step");
     if (selected && selected.value.phase === undefined && used.has(selected.path)) throw failure("AUTHORIZATION_ALREADY_CONSUMED", "exact authorization was already consumed by another step");
-    const candidates = authorizations.filter((item) => item.value.phase !== undefined || !used.has(item.path));
+    const candidates = authorizations.filter((item) => item.value.external_scope === undefined && (item.value.phase !== undefined || !used.has(item.path)));
     if (!selected && phase !== undefined && candidates.some(item => item.value.phase !== undefined)
       && candidates.some(item => item.value.phase === undefined)) throw failure("AUTH_SCOPE", "mixed scoped and legacy authorizations require an exact authorizationRef");
     const grant = selected ?? candidates.at(-1);
@@ -653,10 +753,13 @@ export async function consume({ operation, stepId, authorizationRef, phase, cwd 
     if ((selected || grant.value.phase !== undefined) && current.branch !== grant.value.branch) throw failure("AUTH_SCOPE", "authorization branch differs from the current Git branch");
     if (grant.value.phase === undefined && current.head !== grant.value.head) throw failure("AUTHORIZATION_HEAD_MISMATCH", `HEAD changed since authorization: ${grant.path}`);
     verifySelected();
+    const publishWrite = selected?.value.external_scope === undefined ? performWrite : (request, actual) => performWrite(request, () => {
+      verifyExternal(); verifySelected(); return actual();
+    });
     const path = await appendRecord(storage, `consumed-${operation}`, "json", `${JSON.stringify({
       operation, step_id: stepId, authorization_ref: grant.path, consumed_at: new Date().toISOString(),
       ...(grant.value.phase !== undefined ? { phase, branch: current.branch, head: current.head } : {}),
-    }, null, 2)}\n`, performWrite);
+    }, null, 2)}\n`, publishWrite);
     const value = JSON.parse(readTarget(destination(storage, basename(path))).toString("utf8"));
     return { ...value, path };
   });
