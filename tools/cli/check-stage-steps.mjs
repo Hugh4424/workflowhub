@@ -131,6 +131,28 @@ function evidenceRootFor(ref, taskPath, materialRoot) {
   if (/^(?:quality\/|facts\.jsonl$|main-agent-cost\.md$)/.test(ref)) return { label: '任务', root: taskPath };
   return { label: '材料', root: materialRoot };
 }
+// Read existing original identity fields; the completion verdict remains with
+// final-chain. Markdown proof and JSON proof must establish the same identity.
+function executionOriginalFields(body, ref) {
+  try {
+    const value = JSON.parse(body);
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw Error('身份原件不是对象');
+    return value;
+  } catch (error) {
+    if (ref.endsWith('.json')) throw Error(`身份原件不是有效 JSON：${error.message}`);
+    const allowed = new Set(['task_id', 'source', 'step_slug', 'phase', 'phase_id', 'commit', 'run_id', 'created_at', 'conclusion']);
+    const value = {};
+    for (const line of body.split(/\r?\n/)) {
+      const match = /^([A-Za-z_]+)\s*[:：]\s*(.+)$/.exec(line);
+      if (!match || !allowed.has(match[1])) continue;
+      const field = match[1], current = match[2].trim();
+      if (value[field] !== undefined && value[field] !== current) throw Error(`原件 ${field} 身份冲突`);
+      value[field] = current;
+    }
+    return value;
+  }
+}
+
 function readDeclaredEvidence(entry, { taskPath, materialRoot, shared = false, identity = {}, namedOnly = false, taskId, source, stepSlug } = {}) {
   const kind = typeof entry?.kind === 'string' ? entry.kind : null;
   const raw = typeof entry?.uri_or_path === 'string' ? entry.uri_or_path.trim() : '';
@@ -180,13 +202,11 @@ function readDeclaredEvidence(entry, { taskPath, materialRoot, shared = false, i
   let body;
   try { body = readFileSync(path, 'utf8'); }
   catch (error) { return { kind, ref: raw, present: false, reason: `原件不可读：${error.message}` }; }
-  if (!anchor) {
-    // Identity is checked on structured task originals only when the caller
-    // supplies a current execution identity. Material prose is not a run receipt.
-    if (label === '任务' && ref.endsWith('.json') && Object.keys(identity).length) {
+  // A section anchor or prose extension cannot bypass execution identity.
+  if (label === '任务' && Object.keys(identity).length) {
       let original;
-      try { original = JSON.parse(body); }
-      catch { return { kind, ref: raw, present: false, reason: '身份原件不是有效 JSON' }; }
+      try { original = executionOriginalFields(body, ref); }
+      catch (error) { return { kind, ref: raw, present: false, reason: error.message }; }
       if (original.task_id !== undefined && original.task_id !== taskId) return { kind, ref: raw, present: false, reason: '原件属于另一任务' };
       if (original.source !== undefined && source && original.source !== source || original.step_slug !== undefined && stepSlug && original.step_slug !== stepSlug) return { kind, ref: raw, present: false, reason: '原件属于另一步骤' };
       for (const [key, expected] of Object.entries(identity)) {
@@ -194,7 +214,8 @@ function readDeclaredEvidence(entry, { taskPath, materialRoot, shared = false, i
         if (actual !== expected) return { kind, ref: raw, present: false,
           reason: `${key}=${actual ?? '未取得'}，当前为 ${expected}；旧或缺身份原件不算当前证据` };
       }
-    }
+  }
+  if (!anchor) {
     const present = body.trim().length > 0;
     return { kind, ref: raw, present, reason: present ? '文件非空' + sharedNote : '文件为空' };
   }
@@ -315,6 +336,14 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
     .flatMap(row => Array.isArray(row.evidence?.value) ? row.evidence.value : [])
     .filter(entry => entry.source === source && entry.step_slug === slug && typeof entry.ref === 'string')
     .map(entry => ({ kind: 'task_original', uri_or_path: entry.ref }));
+  let currentIdentityAvailable = true;
+  if (card || selectedStep !== undefined) {
+    try {
+      if (!phase && !commit) throw Error('当前卡身份 unavailable：需要已核当前 Phase 或真实 HEAD；没有现役 run-id 权威');
+      const task = openTask(resolve(taskPath), { projectName: manifest.project_name, taskId: manifest.task_id });
+      validateSkipIdentity({ materialRoot, phase, commit, runId }, task);
+    } catch (error) { currentIdentityAvailable = false; errors.push(error.message); }
+  }
   const currentPhase = phase ?? factRows.find(row => row.task_id === manifest.task_id && row.stage === 'build-code')?.phase_progress?.phase_id;
   let phaseRef;
   if (currentPhase && materialRoot) {
@@ -467,8 +496,8 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
       const producerState = row?.state;
       // A current trace cannot lend its identity to another original that the
       // producer completed. The very same basis ref must pass current checks.
-      const producerCurrent = !Object.keys(executionIdentity).length || completedHumanOriginals(row).some(proof =>
-        typeof proof.ref === 'string' && checks.some(check => check.ref === proof.ref && check.present === true));
+      const producerCurrent = currentIdentityAvailable && (!Object.keys(executionIdentity).length || completedHumanOriginals(row).some(proof =>
+        typeof proof.ref === 'string' && checks.some(check => check.ref === proof.ref && check.present === true)));
       const currentProducerState = producerCurrent ? producerState : 'unavailable';
       const stale = invalidated.some(record => record.scope === name
         && (record.slugs.has(step.step_slug) || record.slugs.has(String(step.step_id))
@@ -711,7 +740,8 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
       const ref = `quality/evidence/${file}`;
       const gap = JSON.parse(task.readRecord(ref));
       if (gap.task_id !== manifest.task_id || (stage && gap.stage !== stage)) continue;
-      const row = evidence.find(row => row.source === `workflows/${gap.stage}/steps.json` && row.step_slug === gap.step_slug);
+      const activeSource = reports.find(report => report.stage === gap.stage)?.source;
+      const row = evidence.find(row => row.source === activeSource && row.step_slug === gap.step_slug);
       const stale = invalidated.some(record => record.scope === gap.stage
         && (record.slugs.has(gap.step_slug) || record.slugs.has(String(gap.step_id))
           || record.ranges.some(range => gap.step_id >= range.from && gap.step_id <= range.to)));
@@ -720,7 +750,7 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
         && completedHumanOriginals(row).some(proof => {
           if (typeof proof.ref !== 'string') return false;
           try {
-            const original = JSON.parse(task.readRecord(proof.ref));
+            const original = executionOriginalFields(task.readRecord(proof.ref), proof.ref);
             return original.task_id === gap.task_id && original.source === row.source && original.step_slug === gap.step_slug
               && original.conclusion === 'completed'
               && Object.entries(gapIdentity).every(([key, value]) => (key === 'phase' ? original.phase ?? original.phase_id : original[key]) === value)

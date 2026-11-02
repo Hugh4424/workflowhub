@@ -1148,3 +1148,81 @@ describe('ORACLE-P1-BASELINE TCR-P1-001 actual current reading denominator', () 
     } finally { rmSync(f.root, { recursive: true, force: true }); }
   });
 });
+
+
+describe('P7 terminal current-proof regression', () => {
+  function original(f, { markdown = false, identity = { phase: 'P1' }, source = 'workflows/make-decision/steps.json' } = {}) {
+    const ref = `quality/evidence/p7-current-proof.${markdown ? 'md' : 'json'}`;
+    const criteria = source.replace('steps.json', 'SKILL.md') + '#方法';
+    f.put(f.repo, source.replace('steps.json', 'SKILL.md'), '# Controlled\n## 方法\nOwned observation.\n');
+    f.put(f.materials, 'step-consumer-design.md', `| [controlled](../../${source}#L1) \`current-step\` | observation | human | owner |`);
+    const human = { task_id: 'card-case', source, step_slug: 'current-step', ...identity,
+      reader: 'independent fixture reader', inputs: ['owned source'], observation: 'Owned observation.',
+      criteria_ref: criteria, conclusion: 'completed', limits: [], created_at: '2026-01-02T00:00:00Z' };
+    f.put(f.task, ref, markdown ? [
+      `task_id: ${human.task_id}`, `source: ${source}`, 'step_slug: current-step',
+      ...Object.entries(identity).map(([key,value]) => `${key}: ${value}`),
+      '执行者: independent fixture reader', '实际输入: owned source', '实际观察: Owned observation.',
+      `原方法判据: ${criteria}`, '结论: completed', '限制: controlled fixture only',
+    ].join('\n') + '\n' : human);
+    f.put(f.task, 'facts.jsonl', [f.cursor, { record_kind: 'stage', task_id: 'card-case', stage: 'make-decision',
+      evidence: { value: [{ ref, source, step_slug: 'current-step' }] } }].map(row => JSON.stringify(row)).join('\n') + '\n');
+    const producer = runFinalChainCheck({ taskPath: f.task, materialRoot: f.materials, workflowRoot: f.repo });
+    expect(producer.workflow_steps.find(row => row.source === source && row.step_slug === 'current-step')?.state, JSON.stringify(producer.limits)).toBe('completed');
+    return ref;
+  }
+  it.each([
+    [[], { phase: 'P0' }],
+    [['--phase=P9'], { phase: 'P9' }],
+    [['--commit=' + 'f'.repeat(40)], { commit: 'f'.repeat(40) }],
+    [['--run-id=invented-run'], { run_id: 'invented-run' }],
+  ])('does not advance a current card with missing or unverified identity %j', (flags, identity) => {
+    const f = p1CurrentCardFixture({ singleStep: true });
+    try {
+      original(f, { identity });
+      const result = f.invoke(['--stage=make-decision', '--card', ...flags]);
+      expect(result.report.stages[0].steps[0].state).not.toBe('completed');
+      expect(result.report.card?.step_id).toBe(1);
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
+  });
+  it.each([['phase', 'P0', '--phase=P1'], ['commit', 'old-head', null], ['run_id', 'old-run', '--run-id=new-run']])('rejects old legitimate Markdown %s proof for a new identity', (field, value, flag) => {
+    const f = p1CurrentCardFixture({ singleStep: true });
+    try {
+      original(f, { markdown: true, identity: { [field]: value } });
+      const result = f.invoke(['--stage=make-decision', '--step=1', flag ?? '--commit=' + f.head]);
+      expect(result.report.stages[0].steps[0].state).not.toBe('completed');
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
+  });
+  it.each([false, true])('keeps a legitimate current proof usable, Markdown=%s', markdown => {
+    const f = p1CurrentCardFixture({ singleStep: true });
+    try {
+      original(f, { markdown });
+      const result = f.invoke(['--stage=make-decision', '--step=1', '--phase=P1']);
+      expect(result.report.stages[0].steps[0].state).toBe('completed');
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
+  });
+  it.each([['small', '小改动'], ['normal', '普通任务'], ['planning', '规划任务']])('clears an actual completed gap using the active %s flow source', async (flow, label) => {
+    const f = p1CurrentCardFixture({ singleStep: true });
+    try {
+      const source = `workflows/make-decision/flows/${flow}/steps.json`;
+      const definition = JSON.parse(readFileSync(join(f.repo, 'workflows/make-decision/steps.json'), 'utf8'));
+      f.put(f.repo, source, definition);
+      f.put(f.repo, 'workflows/make-decision/steps.json', { ...definition, flows: { [flow]: { steps: source } } });
+      const choiceRef = 'quality/evidence/p7-controlled-choice.md';
+      f.put(f.task, choiceRef, `受控夹具选择 ${flow}；不授权真实任务。\n`);
+      f.put(f.task, 'quality/evidence/p7-controlled-entry.json', { flags: { boundary_clear: true, single_outcome: true, limited_impact: true, major_architecture: false, migration: false, permission: false, security: false } });
+      const facts = { scope: 'bounded', change_kind: 'code', independent_units: 1, risk: 'bounded', credentials: false, dependencies: 'none', acceptance: 'observable test' };
+      f.put(f.materials, 'decision-log.md', `# Controlled\n## 级别与路线\n用户选择：${flow}\n原 ref：${choiceRef}\n入口返回原 ref：quality/evidence/p7-controlled-entry.json\n` + Object.entries(facts).map(([key, value]) => `${key}：${value}；来源：${choiceRef}`).join('\n') + '\n');
+      const { openTask } = await import('../../runtime/task/task-handle.mjs');
+      const task = openTask(f.task, { projectName: 'controlled', taskId: 'card-case' });
+      await task.appendRecord({ dir: 'quality/evidence', slug: 'step-gap', ext: 'json', bytes: JSON.stringify({
+        task_id: 'card-case', stage: 'make-decision', step_id: 1, step_slug: 'current-step', phase: 'P1',
+        reason: 'owned missing step', owner: 'fixture reader', recovery: 'supply same-flow completion', created_at: '2026-01-01T00:00:00Z',
+      }) });
+      original(f, { source });
+      const result = f.invoke(['--stage=make-decision', '--step=1', '--phase=P1']);
+      expect(result.report.stages[0].source).toBe(source);
+      expect(result.report.closeout.gaps).toEqual([]);
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
+  });
+});

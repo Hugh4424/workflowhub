@@ -592,7 +592,7 @@ AC-C06-1～9 全部在本卡验收；build-prd 不在本卡范围（不是批次
 | OI-023 | build-prd 卡不在本卡范围 | D-026 | 已定（范围） | AC7 | C06 + build-prd owner | 本卡覆盖 make-decision/build-plan/build-code；build-prd 后续同合同接入 |
 | OI-017 | 验收/gate 冻结与变更批准 owner | D-029 | 已定 | AC9 | 独立审查者 + 用户 | 实现开始后冻结；改需 CR/成本影响/独立批准 |
 | OI-018 | T03 只读回放证据范围 | D-031 | 待 build-plan | AC8/9 | C06 + 独立读者 | 用 P1/P3/P7 材料与回执；不重跑 T03 |
-| OI-019 | 证据预算配置 owner | D-030 | 已定 | AC9 | runtime/task owner + C06 | 按库大小×3 预检（D-033 保留采集前预检）；不足改归档，不中途 blocked |
+| OI-019 | 证据预算配置 owner | D-033（替代 D-030 旧执行细节） | 已定 | AC9 | runtime/task owner + C06 | 采集前沿当前已确认策略与既有 task handle 预算核空间，不恢复历史固定倍数门；磁盘压力先指针化/归档建议，保留不同事实 |
 
 ## 什么风险交给谁？
 
