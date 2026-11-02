@@ -210,3 +210,198 @@ it.each(['material-id','source-hash','wrong-ancestry','wrong-mapping','unregiste
  if(kind==='changed-source'){const p=join(x.f.task.taskPath,x.packetState.source_ref.ref);writeFileSync(p,readFileSync(p,'utf8')+' ');}
  const reviewBefore=readFileSync(join(x.f.task.taskPath,x.review.ref)),sourceBefore=readFileSync(join(x.f.task.taskPath,x.packetState.source_ref.ref));expect(x.run(x.publish()).ok).toBe(true);const r=status(x.f);expect(r.value.quality_status).toBe('incomplete');expect(r.value.quality.terminal_assessment.gaps.some(g=>/source packet identity|source binding unavailable|affected scope/.test(g))).toBe(true);expect(readFileSync(join(x.f.task.taskPath,x.review.ref))).toEqual(reviewBefore);expect(readFileSync(join(x.f.task.taskPath,x.packetState.source_ref.ref))).toEqual(sourceBefore);
 });
+
+
+// Source-only authorization uses the existing producers and public CLI. The
+// controlled goal is test input, not a claimed human/host authentication proof.
+async function sourceOnlyAuthorizationFixture() {
+ const x=await terminalFixture(),f=x.f,originalHead=git(f.worktree,['rev-parse','HEAD']);
+ const spec=readFileSync(join(f.materials,'spec.md'));
+ git(f.worktree,['checkout','-qb','source-only-stage-start','main']);
+ mkdirSync(f.materials,{recursive:true});writeFileSync(join(f.materials,'spec.md'),spec);
+ writeFileSync(join(f.worktree,'historical-unrelated.txt'),'already present at authorized stage start\n');
+ git(f.worktree,['add','.']);git(f.worktree,['commit','-qm','owned prior source and approved specification']);
+ const authorizationHead=git(f.worktree,['rev-parse','HEAD']);
+ const source={source:'user-provided active Codex goal',thread_id:'11111111-1111-4111-8111-111111111111',objective:'Implement the approved task in its own checkout',goal_created_at:Math.floor(Date.now()/1000)-1};
+ const sourcePath=await f.task.appendRecord({dir:'quality/evidence',slug:'build-code-user-authorization-source',ext:'json',bytes:JSON.stringify(source)});
+ const start={event:'task-start',task_id:taskId,stage:'build-code',created_at:new Date().toISOString(),cwd:f.worktree,head:authorizationHead,actor:'owned-stage-developer'};
+ const startPath=await f.task.appendRecord({dir:'quality/evidence',slug:'build-code-task-start',ext:'json',bytes:JSON.stringify(start)});
+ const confirmation=await f.task.recordConfirmation({stage:'build-code',decision:'authorized',reply:source.objective,materialRefs:[sourcePath]},{cwd:f.worktree});
+ expect(confirmation.head).toBe(authorizationHead);
+ git(f.worktree,['merge','--no-edit',originalHead]);x.refreshReport();
+ return {...x,authorizationHead,source,sourcePath,start,startPath,confirmation};
+}
+
+describe('source-only authorization baseline through the existing producer and public status',()=>{
+ it('uses the original source-bound start and preserves immutable originals without a new permission or later reset',async()=>{
+  const x=await sourceOnlyAuthorizationFixture(),f=x.f;
+  const watched=[join(f.task.taskPath,'task.json'),x.sourcePath,x.startPath,x.confirmation.path];
+  const before=watched.map(p=>readFileSync(p));
+  await f.task.recordConfirmation({stage:'build-code',decision:'authorized',reply:'A later implementation confirmation cannot reset the beginning',materialRefs:[join(f.materials,'spec.md')]},{cwd:f.worktree});
+  expect(x.run(x.publish()).ok).toBe(true);const factsBefore=readFileSync(join(f.task.taskPath,'facts.jsonl'));
+  const r=status(f);expect(r.ok,JSON.stringify(r)).toBe(true);
+  expect(r.value.quality_status,JSON.stringify(r.value.quality.terminal_assessment?.gaps)).toBe('pass');
+  expect(r.value.quality.terminal_assessment.gaps.some(g=>g.startsWith('implementation base:')||g.startsWith('implementation: current path denominator differs'))).toBe(false);
+  watched.forEach((p,i)=>expect(readFileSync(p)).toEqual(before[i]));
+  expect(readFileSync(join(f.task.taskPath,'facts.jsonl'))).toEqual(factsBefore);
+ });
+});
+
+
+const sourceOnlyFs=await import('node:fs');
+describe('source-only authorization baseline negative boundaries',()=>{
+ it.each(['missing-source','extra-source','outside-task','path-alias','source-symlink','source-hardlink','objective','source-kind','thread-id','goal-time','fractional-goal-time','missing-start','duplicate-start','start-symlink','start-hardlink','start-task','start-stage','start-cwd','start-head','start-after-confirmation','invalid-start-time','nonancestor','missing-historical-spec','ambiguous-earliest-head','ambiguous-earliest-source'])(
+  'rejects %s and keeps the task baseline instead of selecting a later valid approval',async(kind)=>{
+   const x=await sourceOnlyAuthorizationFixture(),f=x.f;
+   const confirmation=JSON.parse(readFileSync(x.confirmation.path,'utf8'));
+   const put=(path,value)=>writeFileSync(path,JSON.stringify(value));
+   if(kind==='missing-source')rmSync(x.sourcePath);
+   if(kind==='extra-source')confirmation.material_refs.push(x.sourcePath);
+   if(kind==='outside-task'){const outside=join(f.root,'outside-source.json');put(outside,x.source);confirmation.material_refs=[outside];}
+   if(kind==='path-alias')confirmation.material_refs=[join(f.task.taskPath,'quality')+'/evidence/../evidence/'+x.sourcePath.split('/').at(-1)];
+   // Publish through the real writers before introducing an invalid read alias;
+   // the disk-budget writer correctly refuses symlinks anywhere in its usage.
+   const deferredAliases=[];
+   for(const [label,path]of [['source',x.sourcePath],['start',x.startPath]]){
+    if(kind===label+'-symlink')deferredAliases.push(()=>{const actual=path+'.owned-original';sourceOnlyFs.renameSync(path,actual);sourceOnlyFs.symlinkSync(actual,path);});
+    if(kind===label+'-hardlink')sourceOnlyFs.linkSync(path,path+'.owned-link');
+   }
+   if(kind==='objective')put(x.sourcePath,{...x.source,objective:'Another task, with a different approved objective'});
+   if(kind==='source-kind')put(x.sourcePath,{...x.source,source:'capture summary claiming host verification'});
+   if(kind==='thread-id')put(x.sourcePath,{...x.source,thread_id:''});
+   if(kind==='goal-time')put(x.sourcePath,{...x.source,goal_created_at:Math.ceil(Date.parse(x.start.created_at)/1000)+1});
+   if(kind==='fractional-goal-time')put(x.sourcePath,{...x.source,goal_created_at:x.source.goal_created_at+0.5});
+   if(kind==='missing-start')rmSync(x.startPath);
+   if(kind==='duplicate-start')await f.task.appendRecord({dir:'quality/evidence',slug:'second-task-start',ext:'json',bytes:JSON.stringify(x.start)});
+   if(kind==='start-task')put(x.startPath,{...x.start,task_id:'another-task'});
+   if(kind==='start-stage')put(x.startPath,{...x.start,stage:'build-plan'});
+   if(kind==='start-cwd')put(x.startPath,{...x.start,cwd:f.repo});
+   if(kind==='start-head')put(x.startPath,{...x.start,head:git(f.worktree,['rev-parse','HEAD'])});
+   if(kind==='start-after-confirmation')put(x.startPath,{...x.start,created_at:new Date(Date.parse(confirmation.created_at)+1000).toISOString()});
+   if(kind==='invalid-start-time')put(x.startPath,{...x.start,created_at:'not an execution time'});
+   if(kind==='nonancestor'){
+    const spec=readFileSync(join(f.materials,'spec.md'));
+    git(f.worktree,['checkout','-qb','unrelated-source-authorization','main']);
+    mkdirSync(f.materials,{recursive:true});writeFileSync(join(f.materials,'spec.md'),spec);
+    git(f.worktree,['add','.']);git(f.worktree,['commit','-qm','owned divergent authorization candidate']);
+    confirmation.head=git(f.worktree,['rev-parse','HEAD']);git(f.worktree,['checkout','source-only-stage-start']);
+    put(x.startPath,{...x.start,head:confirmation.head});
+   }
+   if(kind==='missing-historical-spec'){confirmation.head=git(f.worktree,['rev-parse','main']);put(x.startPath,{...x.start,head:confirmation.head});}
+   if(kind==='ambiguous-earliest-head')put(join(f.task.taskPath,'quality/evidence/human-confirmations/2000-01-01-999-earliest-conflict.json'),{...confirmation,head:git(f.worktree,['rev-parse','HEAD'])});
+   if(kind==='ambiguous-earliest-source'){
+    const reply='Different original objective at the same earliest timestamp';
+    const path=await f.task.appendRecord({dir:'quality/evidence',slug:'other-authorization-source',ext:'json',bytes:JSON.stringify({...x.source,objective:reply})});
+    put(join(f.task.taskPath,'quality/evidence/human-confirmations/2000-01-01-999-earliest-conflict.json'),{...confirmation,reply,material_refs:[path]});
+   }
+   put(x.confirmation.path,confirmation);
+   await f.task.recordConfirmation({stage:'build-code',decision:'authorized',reply:'Later valid specification approval is not the original start',materialRefs:[join(f.materials,'spec.md')]},{cwd:f.worktree});
+   expect(x.run(x.publish()).ok).toBe(true);deferredAliases.forEach(apply=>apply());
+   const before=bytes(f),r=status(f);
+   expect(r.ok,JSON.stringify(r)).toBe(true);expect(r.value.quality_status).toBe('incomplete');
+   const gaps=r.value.quality.terminal_assessment.gaps;
+   expect(gaps.some(g=>g.startsWith('implementation base:')),JSON.stringify(gaps)).toBe(true);
+   expect(gaps.some(g=>g.startsWith('implementation: current path denominator differs')&&g.includes('historical-unrelated.txt')),JSON.stringify(gaps)).toBe(true);
+   expect(bytes(f)).toEqual(before);
+  });
+ it('keeps a previously unrelated path changed during this stage in the current denominator',async()=>{
+  const x=await sourceOnlyAuthorizationFixture();writeFileSync(join(x.f.worktree,'historical-unrelated.txt'),'changed during this stage\n');x.refreshReport();
+  expect(x.run(x.publish()).ok).toBe(true);const r=status(x.f),gaps=r.value.quality.terminal_assessment.gaps;
+  expect(r.value.quality_status).toBe('incomplete');expect(gaps.some(g=>g.startsWith('implementation base:'))).toBe(false);
+  expect(gaps.some(g=>g.startsWith('implementation: current path denominator differs')&&g.includes('historical-unrelated.txt'))).toBe(true);
+ });
+ it('preserves an independently incomplete aggregate after resolving only the source baseline',async()=>{
+  const x=await sourceOnlyAuthorizationFixture();x.raw.result='incomplete';x.raw.acceptance[0].result='incomplete';
+  expect(x.run(x.publish()).ok).toBe(true);const r=status(x.f),gaps=r.value.quality.terminal_assessment.gaps;
+  expect(r.value.quality_status).toBe('incomplete');expect(gaps.some(g=>g.startsWith('implementation base:')||g.startsWith('implementation: current path denominator differs'))).toBe(false);
+ });
+});
+
+
+describe('source-only task-start discovery and private diagnostics',()=>{
+ it.each(['unrelated-invalid-json','unrelated-symlink','unrelated-hardlink','nested-start','quoted-start'])(
+  'does not couple valid authorization to %s',async(kind)=>{
+   const x=await sourceOnlyAuthorizationFixture(),f=x.f;expect(x.run(x.publish()).ok).toBe(true);
+   const unrelated=join(f.task.taskPath,'quality/evidence/unrelated-provider-failure.json');
+   if(kind==='unrelated-invalid-json')writeFileSync(unrelated,'PRIVATE_SOURCE_SENTINEL_9351 not JSON');
+   if(kind==='unrelated-symlink'){const target=join(f.root,'owned-unrelated-private.json');writeFileSync(target,'PRIVATE_SOURCE_SENTINEL_9351');sourceOnlyFs.symlinkSync(target,unrelated);}
+   if(kind==='unrelated-hardlink'){const target=join(f.root,'owned-unrelated-private.json');writeFileSync(target,'PRIVATE_SOURCE_SENTINEL_9351');sourceOnlyFs.linkSync(target,unrelated);}
+   if(kind==='nested-start')writeFileSync(unrelated,JSON.stringify({nested:x.start}));
+   if(kind==='quoted-start')writeFileSync(unrelated,JSON.stringify({provider_text:JSON.stringify(x.start)}));
+   const before=bytes(f),r=status(f);expect(r.ok,JSON.stringify(r)).toBe(true);
+   expect(r.value.quality_status,JSON.stringify(r.value.quality.terminal_assessment?.gaps)).toBe('pass');
+   expect(JSON.stringify(r)).not.toMatch(/PRIVATE_SO|Unexpected token|not valid JSON/);
+   expect(bytes(f)).toEqual(before);
+  });
+ it.each(['damaged-start','damaged-original-source','odd-name-duplicate','escaped-key-duplicate','odd-name-damaged-start'])(
+  'keeps %s fail-closed without exposing original text',async(kind)=>{
+   const x=await sourceOnlyAuthorizationFixture(),f=x.f;expect(x.run(x.publish()).ok).toBe(true);
+   if(kind==='damaged-start')writeFileSync(x.startPath,'PRIVATE_SOURCE_SENTINEL_9351 not JSON');
+   if(kind==='damaged-original-source')writeFileSync(x.sourcePath,'PRIVATE_SOURCE_SENTINEL_9351 not JSON');
+   const other=join(f.task.taskPath,'quality/evidence/ordinary-looking-note.json');
+   if(kind==='odd-name-duplicate')writeFileSync(other,JSON.stringify(x.start));
+   if(kind==='escaped-key-duplicate')writeFileSync(other,JSON.stringify(x.start).replace('"event"','"ev\\u0065nt"'));
+   if(kind==='odd-name-damaged-start')writeFileSync(other,'{"event":"task-start", PRIVATE_SOURCE_SENTINEL_9351');
+   const before=bytes(f),r=status(f);expect(r.ok,JSON.stringify(r)).toBe(true);
+   expect(r.value.quality_status).toBe('incomplete');
+   expect(r.value.quality.terminal_assessment.gaps.some(g=>g.startsWith('implementation base:'))).toBe(true);
+   expect(JSON.stringify(r)).not.toMatch(/PRIVATE_SO|Unexpected token|not valid JSON/);
+   expect(bytes(f)).toEqual(before);
+  });
+});
+
+
+describe('source-only malformed JSON string declarations',()=>{
+ const cases=[
+  {name:'escaped top-level key',raw:'{"ev\\u0065nt":"task-start", PRIVATE_SOURCE_SENTINEL_9351',expected:'incomplete'},
+  {name:'escaped top-level value',raw:'{"event":"task\\u002dstart", PRIVATE_SOURCE_SENTINEL_9351',expected:'incomplete'},
+  {name:'escaped key and value',raw:'{"ev\\u0065nt":"task\\u002dstart", PRIVATE_SOURCE_SENTINEL_9351',expected:'incomplete'},
+  {name:'declaration after complete nested value',raw:'{"context":{"event":"other","items":[1,2]},"ev\\u0065nt":"task-start", PRIVATE_SOURCE_SENTINEL_9351',expected:'incomplete'},
+  {name:'damaged canonical candidate with invalid escape',raw:'{"ev\\qent":"task-start", PRIVATE_SOURCE_SENTINEL_9351',expected:'incomplete',canonical:true},
+  {name:'unrelated nested declaration before damaged tail',raw:'{"context":{"event":"task-start"}, PRIVATE_SOURCE_SENTINEL_9351',expected:'pass'},
+  {name:'unrelated quoted declaration before damaged tail',raw:'{"note":"\\"event\\":\\"task-start\\"", PRIVATE_SOURCE_SENTINEL_9351',expected:'pass'},
+  {name:'undecodable anonymous key escape',raw:'{"ev\\qent":"task-start", PRIVATE_SOURCE_SENTINEL_9351',expected:'pass'},
+  {name:'undecodable anonymous value escape',raw:'{"event":"task\\qstart", PRIVATE_SOURCE_SENTINEL_9351',expected:'pass'},
+  {name:'unrelated array context before damaged tail',raw:'[{"event":"task-start"}, PRIVATE_SOURCE_SENTINEL_9351',expected:'pass'},
+  {name:'complete escaped declaration with truncated outer object',raw:'{"ev\\u0065nt":"task-start"',expected:'incomplete'},
+  {name:'known escaped declaration before later invalid escape',raw:'{"ev\\u0065nt":"task-start","note":"\\q"',expected:'incomplete'},
+  {name:'deep context with truncated enclosing objects',raw:'{"outer":{"inner":{"ev\\u0065nt":"task-start"',expected:'pass'},
+ ];
+ it.each(cases)('$name has the declared boundary without disclosing original text',async({raw,expected,canonical})=>{
+  const x=await sourceOnlyAuthorizationFixture(),f=x.f;expect(x.run(x.publish()).ok).toBe(true);
+  const path=canonical?x.startPath:join(f.task.taskPath,'quality/evidence/ordinary-looking-prefix.json');writeFileSync(path,raw);
+  const before=bytes(f),r=status(f);expect(r.ok,JSON.stringify(r)).toBe(true);
+  expect(r.value.quality_status,JSON.stringify(r.value.quality.terminal_assessment?.gaps)).toBe(expected);
+  expect(r.value.quality.terminal_assessment.gaps.some(g=>g.startsWith('implementation base:'))).toBe(expected==='incomplete');
+  expect(JSON.stringify(r)).not.toMatch(/PRIVATE_SO|Unexpected token|not valid JSON/);
+  expect(bytes(f)).toEqual(before);
+ });
+});
+
+
+describe('source-only task-start stage declaration integrity',()=>{
+ const cases=[
+  {name:'missing stage',stage:undefined,expected:'incomplete'},
+  {name:'null stage',stage:null,expected:'incomplete'},
+  {name:'empty stage',stage:'',expected:'incomplete'},
+  {name:'whitespace stage',stage:' ',expected:'incomplete'},
+  {name:'numeric stage',stage:17,expected:'incomplete'},
+  {name:'object stage',stage:{},expected:'incomplete'},
+  {name:'array stage',stage:[],expected:'incomplete'},
+  {name:'unknown stage',stage:'unregistered-stage',expected:'incomplete'},
+  ...['make-decision','build-plan','build-prd'].flatMap(stage=>[
+   {name:`other legal stage ${stage}`,stage,expected:'pass'},
+   {name:`named other legal stage ${stage}`,stage,expected:'pass',canonical:true},
+  ]),
+ ];
+ it.each(cases)('$name preserves the start boundary without private diagnostics',async({stage,expected,canonical})=>{
+  const x=await sourceOnlyAuthorizationFixture(),f=x.f;expect(x.run(x.publish()).ok).toBe(true);
+  const record={...x.start,stage,note:'PRIVATE_SOURCE_SENTINEL_9351'};
+  await f.task.appendRecord({dir:'quality/evidence',slug:canonical?'other-task-start':'ordinary-stage-note',ext:'json',bytes:JSON.stringify(record)});
+  const before=bytes(f),r=status(f);expect(r.ok,JSON.stringify(r)).toBe(true);
+  expect(r.value.quality_status,JSON.stringify(r.value.quality.terminal_assessment?.gaps)).toBe(expected);
+  expect(r.value.quality.terminal_assessment.gaps.some(g=>g.startsWith('implementation base:'))).toBe(expected==='incomplete');
+  expect(JSON.stringify(r)).not.toMatch(/PRIVATE_SO|Unexpected token|not valid JSON/);
+  expect(bytes(f)).toEqual(before);
+ });
+});

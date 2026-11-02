@@ -1,0 +1,2 @@
+/* stylelint-disable-next-line declaration-no-important -- The third-party chart inline color must be overridden for the accessible contrast consumer. */
+.log-item { color: red !important; }

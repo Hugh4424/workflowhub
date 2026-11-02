@@ -7,6 +7,12 @@ description: 为 UI phase 维护组件、状态、ViewModel 与 CSS/token 的可
 
 公开入口只有本技能。它输出 **Component Quality Map**，并核对目标项目当前源码中的真实消费者；真实盘点缺失时明确记 unknown/unavailable；不替代 frontend-testing，不创建新 stage、第二 workflow、第二 entrypoint、独立 evidence store 或质量 gate；它是 no stage、no gate 的质量 lens。
 
+## 触发与实现前就绪
+
+计划和实施先合看用户原始需求、项目真实前端库存与消费者、已接受计划或实际差异；页面、路由、组件或样式改动且有真实消费者时，实际执行 [实现就绪](references/implementation-readiness.md)。纯后端、纯文档或已证实无前端消费者时记 `N/A` 和依据，不建空表；消费者未知保 `unknown`，查明前停受影响路径，不当作无消费者。React/Next 规则只在技术栈确认时适用。
+
+UI 实施前按参考逐项核规范、资产、设计输入、检查命令与测试数据，填写来源、缺口和处置；记录缺失时先补记录。依据处置先补、继续或只停受影响路径。实现时继续使用下方 Map 和真实消费者，检查与独立审查沿各自方法留原件；读取参考或填表不等于完成消费或验收。
+
 ## Component Quality Map
 
 每个 UI phase 记录：
@@ -36,11 +42,15 @@ scan config 和 route/import/lazy/CSS/data 的逐项 support matrix；输出按�
 
 **未知与缺失**：查不到的用途、消费者、合法配法或来源写 `unknown`／`unavailable`，附原因、已查范围与应补证的对象 owner；不能推成零消费者、允许删除或已批准复用。台账缺任一链的资产语义时交回台账作者，已有可定位部分继续如实记录；精确 props/API 与 token/CSS 数值回各自原源。
 
-**来源与偏离**：对象依据只取当前任务 P1 台账及其原文引用。概念参考分别来自 [better-ui](https://github.com/vaferkhanom/Website-skills/blob/24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e/better-ui/SKILL.md) 的既有组件与视觉语汇保留、[better-accessibility](https://github.com/vaferkhanom/Website-skills/blob/24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e/better-accessibility/SKILL.md) 的语义与键盘操作、[interface-review](https://github.com/vaferkhanom/Website-skills/blob/24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e/interface-review/SKILL.md) 的消费者范围与删除侧读回、[vercel-composition-patterns](https://github.com/vaferkhanom/Website-skills/blob/24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e/vercel-composition-patterns/SKILL.md) 的按职责组合。该 commit 仅标本次可读镜像坐标，历史采用绑定与完整许可原件未取得，维持原缺口；本段原创表述，不复制其核心段落。既有 React/Next 参考仍只读下节及随包21行派生摘要，不视为完整上游。偏离：不写像素阈值、token 数值或精确 API，不引整包、不新增检查器；资产检查不能冒充浏览器、可访问性或工程验收通过。C06 只读引用本段资产输入，语义变更交回本卡 owner 另立卡。
+**来源与偏离**：对象依据只取当前任务 P1 台账及其原文引用。概念参考分别来自 [better-ui](https://github.com/vaferkhanom/Website-skills/blob/24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e/better-ui/SKILL.md) 的既有组件与视觉语汇保留、[better-accessibility](https://github.com/vaferkhanom/Website-skills/blob/24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e/better-accessibility/SKILL.md) 的语义与键盘操作、[interface-review](https://github.com/vaferkhanom/Website-skills/blob/24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e/interface-review/SKILL.md) 的消费者范围与删除侧读回、[vercel-composition-patterns](https://github.com/vaferkhanom/Website-skills/blob/24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e/vercel-composition-patterns/SKILL.md) 的按职责组合。该 commit 仅标本次可读镜像坐标，历史采用绑定与完整许可原件未取得，维持原缺口；本段原创表述，不复制其核心段落。C03 当时的 React/Next 参考是21行派生摘要，不视为完整上游；摘要仅保存在源仓历史记录中，不随技能包提供，历史身份见随包 [UPSTREAM](upstream/react-best-practices/UPSTREAM.md)。当前固定源见下节。该 C03 概念段的偏离是不写像素阈值、token 数值或精确 API，不将镜像整包并入该段、不新增检查器；资产检查不能冒充浏览器、可访问性或工程验收通过。C06 只读引用本段资产输入，语义变更交回本卡 owner 另立卡。
+
+## 按需查阅界面规则
+
+界面实现或检查需要时，读取随包的 [Web Interface Guidelines](upstream/web-design-guidelines/command.md) 和 [better-ui](upstream/better-ui/SKILL.md)；仅取与实际页面、栈和任务相符的规则。项目已确认设计、组件、token 与交互约束优先，better-ui 的精确数值不是项目默认值；未复制的关联技能不视为可用。它们是只读参考，不新增执行器或验收结论，来源与权利边界回 catalog。
 
 ## React/Next lens
 
-当技术栈确认是 React/Next 时，只读使用随包固定的 Vercel MIT `react-best-practices` compiled guide；它提供性能和组件边界建议，不拥有 WorkflowHub 结果，也不独立触发阶段或 gate。非 React/Next 或技术栈未知时写 `N/A + reason`。每次迭代只检查固定上游是否有新版本，升级需人工比较并保留 `LICENSE`/`UPSTREAM`。
+当技术栈确认是 React/Next 时，按需只读随包固定的 [react-best-practices](upstream/react-best-practices/SKILL.md) 与其规则；它提供性能和组件边界建议，不拥有 WorkflowHub 结果，也不独立触发阶段或 gate。非 React/Next 或技术栈未知时写 `N/A + reason`。每次迭代只检查固定上游是否有新版本，升级需人工比较并保留 `LICENSE`/`UPSTREAM`。
 
 ## Static quality check
 
@@ -74,7 +84,7 @@ JSON：
 ## 固定来源与偏离
 
 来源权威：[catalog](../catalog.yaml#skills.frontend-component-quality)；本便携小卡非权威；单技能副本缺catalog时向来源维护者取登记。
-React/Next采用章节见catalog对应adopted。本地 Component Quality Map、真实 consumer census 与静态 CSS 检查仍归本技能；上游性能建议不替代浏览器验证。迭代按本节固定子文件核更新，保随包 LICENSE/UPSTREAM 并经人工比较，不自动追 HEAD。
+React/Next 固定规则与历史摘要的不同身份见 catalog 对应 adopted。本地 Component Quality Map、真实 consumer census 与静态 CSS 检查仍归本技能；上游性能建议不替代浏览器验证。迭代按本节固定子文件核更新，保随包 LICENSE/UPSTREAM 并经人工比较，不自动追 HEAD。
 
 ## 写作规范
 

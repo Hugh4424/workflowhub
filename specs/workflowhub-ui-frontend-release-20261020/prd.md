@@ -589,14 +589,14 @@ C03依赖C04的条件分支只在确需新提炼输出时启用；已有可核�
 
 | 稳定ID | 所属卡 | 能力原名 | 引用方式 | 落点（文件＋稳定节） | owner | 现状 | catalog指针 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| C03-REF-I-01 | C06（未立项） | web-design-guidelines | 条件采用完整包；未引入 | 拟 skills/external/<能力名>/；目录未形成，稳定节未取得 | C06 owner | 完整包未落地；8包合计0/8 | [catalog](../../skills/catalog.yaml)（完整包未登记） |
-| C03-REF-I-02 | C06（未立项） | better-ui | 条件采用完整包；未引入 | 拟 skills/external/<能力名>/；目录未形成，稳定节未取得 | C06 owner | 完整包未落地；8包合计0/8；C03概念已落P6，非整包 | [catalog](../../skills/catalog.yaml)（capability_decisions[name=c03-external-better-ui]；仅C03派生参考，完整包未登记） |
-| C03-REF-I-03 | C06（未立项） | animate | 条件采用完整包；未引入 | 拟 skills/external/<能力名>/；目录未形成，稳定节未取得 | C06 owner | 完整包未落地；8包合计0/8 | [catalog](../../skills/catalog.yaml)（完整包未登记） |
-| C03-REF-I-04 | C06（未立项） | review-animations | 条件采用完整包；未引入 | 拟 skills/external/<能力名>/；目录未形成，稳定节未取得 | C06 owner | 完整包未落地；8包合计0/8 | [catalog](../../skills/catalog.yaml)（完整包未登记） |
-| C03-REF-I-05 | C06（未立项） | iterate-until-verified | 条件采用完整包；未引入 | 拟 skills/external/<能力名>/；目录未形成，稳定节未取得 | C06 owner | 完整包未落地；8包合计0/8 | [catalog](../../skills/catalog.yaml)（完整包未登记） |
-| C03-REF-I-06 | C06（未立项） | landing-page | 条件采用完整包；未引入 | 拟 skills/external/<能力名>/；目录未形成，稳定节未取得 | C06 owner | 完整包未落地；8包合计0/8 | [catalog](../../skills/catalog.yaml)（完整包未登记） |
-| C03-REF-I-07 | C06（未立项） | vercel-react-view-transitions | 条件采用完整包；未引入 | 拟 skills/external/<能力名>/；目录未形成，稳定节未取得 | C06 owner | 完整包未落地；8包合计0/8 | [catalog](../../skills/catalog.yaml)（完整包未登记） |
-| C03-REF-I-08 | C06（未立项） | vercel-react-best-practices（ADR-0016 既定，不计入 124） | 条件采用完整包；未引入 | 拟 skills/external/<能力名>/；目录未形成，稳定节未取得 | C06 owner | 完整包未落地；8包合计0/8；21行派生摘要已在，不能替完整源 | [catalog](../../skills/catalog.yaml)（skills[name=frontend-component-quality]仅派生摘要；完整包未登记） |
+| C03-REF-I-01 | C06 | web-design-guidelines | 固定规则体只读参考 | `skills/frontend-component-quality/upstream/web-design-guidelines/command.md` | 组件质量方法 owner | C06 P5 已导入固定规则体；适用性依真实任务 | [catalog](../../skills/catalog.yaml)（frontend-component-quality upstream） |
+| C03-REF-I-02 | C06 | better-ui | 固定八文件只读参考 | `skills/frontend-component-quality/upstream/better-ui/SKILL.md` | 组件质量方法 owner | C06 P5 已导入固定包；不默认采用精确数值 | [catalog](../../skills/catalog.yaml)（frontend-component-quality upstream；C03 原概念项另保） |
+| C03-REF-I-03 | C06（未立项） | animate | 条件采用完整包；未引入 | 拟 skills/external/<能力名>/；目录未形成，稳定节未取得 | C06 owner | 完整包未落地；其余包未引入 | [catalog](../../skills/catalog.yaml)（完整包未登记） |
+| C03-REF-I-04 | C06（未立项） | review-animations | 条件采用完整包；未引入 | 拟 skills/external/<能力名>/；目录未形成，稳定节未取得 | C06 owner | 完整包未落地；其余包未引入 | [catalog](../../skills/catalog.yaml)（完整包未登记） |
+| C03-REF-I-05 | C06（未立项） | iterate-until-verified | 条件采用完整包；未引入 | 拟 skills/external/<能力名>/；目录未形成，稳定节未取得 | C06 owner | 完整包未落地；其余包未引入 | [catalog](../../skills/catalog.yaml)（完整包未登记） |
+| C03-REF-I-06 | C06（未立项） | landing-page | 条件采用完整包；未引入 | 拟 skills/external/<能力名>/；目录未形成，稳定节未取得 | C06 owner | 完整包未落地；其余包未引入 | [catalog](../../skills/catalog.yaml)（完整包未登记） |
+| C03-REF-I-07 | C06（未立项） | vercel-react-view-transitions | 条件采用完整包；未引入 | 拟 skills/external/<能力名>/；目录未形成，稳定节未取得 | C06 owner | 完整包未落地；其余包未引入 | [catalog](../../skills/catalog.yaml)（完整包未登记） |
+| C03-REF-I-08 | C06 | vercel-react-best-practices（ADR-0016 既定，不计入 124） | 条件采用固定完整源 | `skills/frontend-component-quality/upstream/react-best-practices/SKILL.md` | 组件质量方法 owner | C06 P5 固定 76 文件；旧21行摘要为独立历史件，不计 payload | [catalog](../../skills/catalog.yaml)（frontend-component-quality upstream） |
 
 #### ② 概念并入（23行）
 
@@ -730,7 +730,7 @@ C03依赖C04的条件分支只在确需新提炼输出时启用；已有可核�
 - C03：①02 better-ui 仅资产概念、②02 better-accessibility、②03 interface-review、②05 vercel-composition-patterns；①08 的既有21行摘要仅派生参考。五项落点见组件质量方法的“两条链资产检查（C03）”及 React/Next lens，不冒完整源。
 - C05：②01／04／06／09／10／11；C06：①全部8项，②06与C05共享采用边界。C07：②03仅后续按需方法。无承接卡共103行（②14、③23、④66），保“无承接卡＋建议owner”；建议不等于已分配。
 - C01三包、C02四项、C04自建技能不属于这120行分母；其既有落点按原卡与catalog核。现有审计中C01、C02均为部分，C04自建已落地；本节不把旧“已完成”续写为当前全通过。原审计为本任务 `quality/evidence/research/2026-10-27-external-adoption-audit.md`。C08／C09不新增外部包；C10按当前各卡台账核对。
-- ①完整包0/8，均由未立项C06承接；③多数宿主未取得；②缺 ui-project-init、ui-visual-fidelity、verify-change 三个宿主目录，其影响逐行保留。不在本卡补建。
+- ① web、better-ui 与 Vercel 固定源由 C06 导入，其余条目见逐项现状；③多数宿主未取得；②缺 ui-project-init、ui-visual-fidelity、verify-change 三个宿主目录，其影响逐行保留。不在本卡补建。
 
 #### 新增或变更外部内容时谁写哪一处
 
@@ -739,7 +739,7 @@ C03依赖C04的条件分支只在确需新提炼输出时启用；已有可核�
 3. 方法 owner 在 `skills/reuse-registry.md` 加调用场景与正文／台账指针，现有行直接更新；来源、版本、许可仍回catalog。检查：`rg -n "外部引用登记方法|frontend-component-quality" skills/reuse-registry.md`，实际打开目标。
 4. 规范索引 owner 只在 `AGENTS.md` 加用途、读取时机、owner及consumer导航；已有同义行复用。检查：`rg -n "外部引用" AGENTS.md`。`docs/reuse-registry.md` 已跳转人读索引与catalog，保持原跳转。
 
-各处承担不同角色：PRD是计划台账，catalog是唯一来源机器权威，registry是方法指针，AGENTS是导航。新增或变更只改各自需要的内容；不把同一份来源事实抄四份，不以四个文件都有字样代替真实采用。完整包与派生参考分开：既有 react-best-practices 的21行摘要仅供只读参考，完整70规则义务仍归C06。
+各处承担不同角色：PRD是计划台账，catalog是唯一来源机器权威，registry是方法指针，AGENTS是导航。新增或变更只改各自需要的内容；不把同一份来源事实抄四份，不以四个文件都有字样代替真实采用。完整包与派生参考分开：react-best-practices 的21行摘要是独立历史件，C06 固定源含70条规则；来源与权利以 catalog 为准。
 
 ### 四对象16格与三端一致性
 

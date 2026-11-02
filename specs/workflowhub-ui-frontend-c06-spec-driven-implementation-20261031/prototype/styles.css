@@ -1,0 +1,163 @@
+/* Values and selectors are derived from PaperBuilder commit 5bdf6f0b. */
+:root {
+  --pb-ui-surface: #0d111a;
+  --pb-ui-surface-raised: #0f141f;
+  --pb-ui-border: rgba(255, 255, 255, 0.12);
+  --pb-ui-text: #f1f5f9;
+  --pb-ui-muted: #94a3b8;
+  --pb-ui-focus: #38bdf8;
+  --pb-ui-radius: 8px;
+  --bg-app: #06080d;
+  --bg-surface: #0d111a;
+  --bg-elevated: #0f141f;
+  --bg-chart: #080b11;
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.12);
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-muted: #aeb1c5;
+  --text-dim: #62748e;
+  --text-faint: #45556c;
+  --up-green: #64df95;
+  --down-red: #ff8aa1;
+  --accent-blue: #91baff;
+  --warn-amber: #ffd166;
+  --font-mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+  --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  color-scheme: dark;
+}
+
+html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+body { background: var(--bg-app); color: var(--text-primary); font: 13px/1.5 var(--font-ui); }
+[hidden] { display: none !important; }
+
+.pb-ui-async-state {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 10px 12px;
+  color: var(--pb-ui-text);
+  border: 1px solid var(--pb-ui-border);
+  border-radius: var(--pb-ui-radius);
+  background: var(--pb-ui-surface);
+}
+.pb-ui-state-recovery { color: inherit; opacity: 0.82; }
+.pb-ui-page-title { margin: 0; color: var(--text-primary, var(--pb-ui-text)); font: 700 28px/1.25 var(--font-ui); }
+.pb-ui-section-title { margin: 0; color: var(--text-primary, var(--pb-ui-text)); font: 600 14px/1.35 var(--font-ui); }
+.pb-ui-body-text { color: var(--text-secondary, var(--pb-ui-text)); font: 400 13px/1.5 var(--font-ui); }
+.pb-ui-label-text { color: var(--text-muted, var(--pb-ui-muted)); font: 500 11px/1.35 var(--font-ui); }
+.pb-ui-async-state-warning { border-color: color-mix(in srgb, var(--warn-amber) 55%, transparent); }
+.pb-ui-async-state-danger { border-color: color-mix(in srgb, var(--down-red) 55%, transparent); }
+
+.pb-ui-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-sizing: border-box;
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+.pb-ui-action.is-ghost { border-color: var(--border-subtle); background: transparent; color: var(--text-secondary); }
+.pb-ui-action.is-ghost:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: color-mix(in srgb, var(--text-primary) 5%, transparent);
+  color: var(--text-primary);
+}
+.pb-ui-action:disabled { cursor: not-allowed; opacity: .55; }
+.pb-ui-action:focus-visible { outline: 2px solid var(--pb-ui-focus); outline-offset: 2px; }
+.pb-card { min-width: 0; border: 1px solid var(--border-subtle); border-radius: 12px; background: var(--bg-surface); }
+.pb-card-body { padding: 16px 20px; }
+
+.business-log-shell { height: 100%; min-height: 0; overflow: auto; background: var(--bg-app); color: var(--text-primary); }
+.business-log-main { width: min(1280px, calc(100% - 48px)); margin: 0 auto; padding: 30px 0 72px; }
+.business-log-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 18px; }
+.business-log-heading h1 { margin: 0; font-size: 28px; line-height: 1.25; }
+.business-log-filters { width: 100%; margin: 0 0 16px; }
+.business-log-filter-toolbar { display: grid; grid-template-columns: auto auto minmax(220px, 320px) auto minmax(0, 1fr); align-items: center; gap: 10px; }
+.business-log-advanced-fields:not([hidden]) { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 10px; }
+.business-log-filter-control { display: flex; flex: 0 1 auto; align-items: center; gap: 8px; min-width: 0; height: 36px; padding: 0 12px; border: 1px solid var(--border-subtle); border-radius: 8px; background: var(--bg-surface); color: var(--text-muted); font-size: 11px; }
+.business-log-filter-control:focus-within { border-color: var(--pb-ui-focus); }
+.business-log-filter-control:has([aria-invalid="true"]) { border-color: var(--down-red); }
+.business-log-filter-control > span:not(.search-icon) { flex: none; color: var(--text-muted); white-space: nowrap; }
+.business-log-filter-select, .business-log-filter-date-input { min-width: 0; height: 30px; min-height: 30px; padding: 0; border: 0; border-radius: 0; outline: 0; color: var(--text-primary); background: transparent; font: 12px var(--font-ui); }
+.business-log-filter-select { padding-right: 18px; }
+.business-log-filter-date { flex: 1 1 178px; max-width: 300px; }
+.business-log-filter-date-input { width: 100%; }
+.business-log-filter-keyword { position: relative; display: block; flex: 1 1 230px; min-width: 0; max-width: none; padding: 0; border: 0; background: transparent; }
+.business-log-filter-keyword .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.business-log-filter-keyword .input { display: block; box-sizing: border-box; width: 100%; height: 36px; min-height: 36px; padding: 0 10px 0 30px; border: 1px solid var(--border-subtle); border-radius: 4px; outline: 0; color: var(--text-primary); background: var(--bg-app); font: 12px var(--font-ui); }
+.business-log-filter-keyword .input:focus-visible { border-color: var(--pb-ui-focus); outline: 2px solid color-mix(in srgb, var(--pb-ui-focus) 20%, transparent); outline-offset: 1px; }
+.business-log-filter-keyword .search-icon { position: absolute; top: 11px; left: 11px; width: 12px; height: 12px; border: 1.5px solid var(--text-muted); border-radius: 50%; pointer-events: none; }
+.business-log-filter-keyword .search-icon::after { content: ""; position: absolute; right: -4px; bottom: -2px; width: 5px; height: 1.5px; background: var(--text-muted); transform: rotate(45deg); }
+.business-log-reset { align-self: center; height: 36px; min-height: 36px; white-space: nowrap; }
+.business-log-state { display: grid; gap: 8px; justify-items: start; margin: 30px 0; padding: 22px; }
+.business-log-state .pb-ui-action { min-height: 32px; padding: 0 10px; border: 1px solid var(--border-subtle); border-radius: 5px; color: var(--text-primary); background: var(--bg-surface); }
+.business-log-inline-error { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--down-red) 40%, transparent); border-radius: 6px; color: var(--down-red); background: color-mix(in srgb, var(--down-red) 8%, transparent); font-size: 11px; }
+.business-log-time-error { flex: 0 0 100%; margin: 0; }
+.business-log-time-hint { flex: 0 0 100%; margin: 0; color: var(--text-muted); font-size: 11px; }
+.business-log-list-count { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin: 0; color: var(--text-muted); font-size: 11px; text-align: right; }
+.business-log-filter-toolbar .business-log-list-count { justify-self: end; }
+.business-log-filter-toolbar .business-log-filter-keyword { width: 100%; }
+.business-log-filters .pb-ui-action { min-height: 34px; padding: 0 12px; font-size: 11px; }
+.business-log-filter-toggle { min-height: 36px; }
+.business-log-table-scroll { overflow-x: auto; border: 1px solid var(--border-subtle); border-radius: 8px; background: var(--bg-surface); }
+.business-log-table { width: 100%; min-width: 760px; border-collapse: collapse; font-size: 12px; }
+.business-log-table thead { color: var(--text-muted); font-size: 11px; text-align: left; }
+.business-log-table th { padding: 10px 14px; border-bottom: 1px solid var(--border-subtle); font-weight: 450; white-space: nowrap; }
+.business-log-table td { padding: 10px 14px; border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 65%, transparent); vertical-align: middle; }
+.business-log-table tbody tr:last-child td { border-bottom: 0; }
+.business-log-table-row { outline: 0; }
+.business-log-table-row:hover { background: var(--bg-elevated); }
+.business-log-table-row:focus-visible { outline: 2px solid var(--pb-ui-focus); outline-offset: -2px; }
+.business-log-table td time { color: var(--text-secondary); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.business-log-entity-id, .business-log-source { display: block; overflow: hidden; color: var(--text-secondary); font: 10px var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
+.business-log-entity-type { display: inline-flex; margin-top: 3px; color: var(--text-muted); font-size: 10px; }
+.business-log-summary { color: var(--text-primary); font-size: 12px; font-weight: 400; }
+.business-log-outcome { display: inline-flex; padding: 2px 7px; border-radius: 5px; font-size: 11px; }
+.business-log-outcome.is-success { color: var(--up-green); background: color-mix(in srgb, var(--up-green) 9%, transparent); }
+.business-log-business-label { color: var(--text-secondary); font-size: 12px; font-weight: 400; }
+.business-log-end { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 18px; color: var(--text-muted); font-size: 11px; }
+
+.prototype-inspector { margin-top: 24px; }
+.prototype-inspector .pb-card-body { display: grid; gap: 10px; justify-items: start; }
+.prototype-inspector p { margin: 0; }
+.prototype-fixture-label { color: var(--text-muted); font-size: 11px; }
+#fixture-state { min-width: 220px; padding: 6px 8px; border: 1px solid var(--border-subtle); border-radius: 4px; background: var(--bg-app); }
+#query-preview { box-sizing: border-box; width: 100%; min-height: 54px; margin: 0; padding: 10px 12px; overflow: auto; border: 1px solid var(--border-subtle); border-radius: 6px; color: var(--text-secondary); background: var(--bg-chart); font: 11px/1.5 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+@media (max-width: 920px) {
+  .business-log-filter-toolbar { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .business-log-filter-toolbar .business-log-filter-keyword { grid-column: 1; }
+  .business-log-filter-toggle { justify-self: end; }
+  .business-log-filter-toolbar .business-log-list-count { grid-column: 1 / -1; flex-wrap: wrap; }
+  .business-log-advanced-fields > .business-log-filter-control { flex: 1 1 160px; max-width: none; }
+}
+
+@media (max-width: 640px) {
+  .business-log-shell .business-log-main { width: calc(100% - 32px); padding-top: 24px; }
+  .business-log-heading h1 { font-size: 24px; }
+  .business-log-filter-toolbar { gap: 8px; }
+  .business-log-filter-control { padding-inline: 8px; }
+  .business-log-table-scroll { overflow-x: visible; }
+  .business-log-table { width: 100%; min-width: 0; table-layout: fixed; }
+  .business-log-table th, .business-log-table td { padding: 8px 6px; }
+  .business-log-table .business-log-mobile-secondary { display: none; }
+  .business-log-table td time { white-space: normal; overflow-wrap: anywhere; }
+  .business-log-business-label { display: block; font-size: 11px; line-height: 1.5; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pb-ui-action { transition: none; }
+}

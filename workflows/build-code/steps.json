@@ -5,13 +5,27 @@
     {
       "step_id": 1,
       "step_slug": "read-current-task-documents",
-      "observable_result": "当前spec、物理Phase、索引与事实确定下一任务；真实工作区、分支、状态和写集已核，历史不作许可证。 判定消费：SKILL.md#方法 第1步；原件：当前spec/Phase、授权与写集核对原ref。",
+      "observable_result": "当前spec、物理Phase、索引与事实确定下一任务；真实工作区、分支、状态和写集已核，历史不作许可证。 判定消费：SKILL.md#方法 第1步；原件：当前spec/Phase、授权与写集核对原ref。 长任务消费已确认执行策略，记 execution_budget、retry_reserve、等待分账与检查点原ref；不新增游标字段或预算门。",
       "completion_evidence": [
+        {
+          "kind": "material",
+          "uri_or_path": "decision-log.md"
+        },
+        {
+          "kind": "material",
+          "uri_or_path": "spec.md"
+        },
+        {
+          "kind": "material",
+          "uri_or_path": "phases/{phase}.md"
+        },
         {
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-read-current-task-documents",
+      "requires_user_reply": false
     },
     {
       "step_id": 2,
@@ -26,7 +40,9 @@
           "kind": "test",
           "uri_or_path": "quality/tests/"
         }
-      ]
+      ],
+      "method_anchor": "step-write-red-tests",
+      "requires_user_reply": false
     },
     {
       "step_id": 3,
@@ -34,10 +50,16 @@
       "observable_result": "允许范围内最小实现存在，错误明确暴露；计划/方向缺口交owner，未擅改作者材料或越界。 判定消费：SKILL.md#方法 第3步；原件：真实diff、源码与目标行为原件。",
       "completion_evidence": [
         {
+          "kind": "task_original_ref",
+          "uri_or_path": "facts.jsonl#diff-commit"
+        },
+        {
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-implement-change",
+      "requires_user_reply": false
     },
     {
       "step_id": 4,
@@ -52,12 +74,14 @@
           "kind": "test",
           "uri_or_path": "quality/tests/"
         }
-      ]
+      ],
+      "method_anchor": "step-inspect-and-route-actual-tests",
+      "requires_user_reply": false
     },
     {
       "step_id": 5,
       "step_slug": "run-tests",
-      "observable_result": "按 Phase 每个声明的测试面逐面执行针对性命令，保存实际cwd/argv/exit、超时取消、原输出与清理；未跑写清哪一面／卡在哪／什么条件下能跑；真实场景对照oracle，失败不伪绿。 判定消费：SKILL.md#方法 第5/6步；原件：verify execute/run-command回执与原输出。",
+      "observable_result": "按 Phase 每个声明的测试面逐面执行针对性命令，保存实际cwd/argv/exit、超时取消、原输出与清理；未跑写清哪一面／卡在哪／什么条件下能跑；真实场景对照oracle，失败不伪绿。 判定消费：SKILL.md#方法 第5/6步；原件：verify execute/run-command回执与原输出。 沿长任务怎么控制保存事件等待、停扩/复盘、真实124/130及子孙清理、S/M/L与最终完整覆盖；开发期定向测试完成并明确就绪后，审查与独立测试按唯一七步顺序派发，可并行。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -67,7 +91,9 @@
           "kind": "test",
           "uri_or_path": "quality/tests/"
         }
-      ]
+      ],
+      "method_anchor": "step-run-tests",
+      "requires_user_reply": false
     },
     {
       "step_id": 6,
@@ -75,10 +101,16 @@
       "observable_result": "每AC的实际效果/失败反例/未执行项可读；UI按真实消费者核对；声明写集含浏览器可见面时实际执行 isolated-browser-qa，在唯一原ref留engine、route／场景、截图路径或真实not_observed及原因、命令／输出／exit；只有声明写集不含任何浏览器可见面才用 N/A 并具名判断依据，适用但缺工具记unavailable与恢复条件；模拟或缺失不冒充通过。 判定消费：SKILL.md#方法 第6/7步；原件：AC实际/反例原件、engine/route/截图或not_observed。",
       "completion_evidence": [
         {
+          "kind": "task_original_ref",
+          "uri_or_path": "facts.jsonl#acceptance-ui"
+        },
+        {
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-inspect-acceptance-and-ui",
+      "requires_user_reply": false
     },
     {
       "step_id": 7,
@@ -86,10 +118,16 @@
       "observable_result": "实际diff、写集、接口两端、生命周期、权限、并发和恢复边界核对，有疑点保留真实发现。 判定消费：SKILL.md#方法 第7步；原件：git diff路径、实际consumer与边界观察。",
       "completion_evidence": [
         {
+          "kind": "task_original_ref",
+          "uri_or_path": "facts.jsonl#diff-scan"
+        },
+        {
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-scan-diff",
+      "requires_user_reply": false
     },
     {
       "step_id": 8,
@@ -104,12 +142,14 @@
           "kind": "review",
           "uri_or_path": "quality/reviews/"
         }
-      ]
+      ],
+      "method_anchor": "step-review-change",
+      "requires_user_reply": false
     },
     {
       "step_id": 9,
       "step_slug": "analyze-review-findings",
-      "observable_result": "原finding逐条处置，修复回原实施者并只复测受影响集合；严重未修风险取得用户具体选择。 判定消费：SKILL.md#方法 第9步；原件：原finding处置、受影响case输出、Phase Done。",
+      "observable_result": "原finding逐条处置，修复回原实施者并只复测受影响集合；严重未修风险取得用户具体选择。 判定消费：SKILL.md#方法 第9步；原件：原finding处置、受影响case输出、Phase Done。 独立oracle面并行只读测试与审查的两方实际回报汇合与受影响复验，开发最后确认；本步不作首次派发前置。 通用停止规则保provider/broker排除域；空心跳不续命，合法修复继续；冻结变更有请求/成本/独立批准/用户确认；大件指针与同字节provenance不丢身份。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -119,7 +159,9 @@
           "kind": "review",
           "uri_or_path": "quality/reviews/"
         }
-      ]
+      ],
+      "method_anchor": "step-analyze-review-findings",
+      "requires_user_reply": false
     },
     {
       "step_id": 10,
@@ -127,10 +169,16 @@
       "observable_result": "实施结束后一次声明的最终聚合与逐AC对账完成；实际结果、业务限制和未覆盖保持可见，不代表review pass。 判定消费：SKILL.md#方法 第10步；原件：既有AC证据、必要串演/未测条件。",
       "completion_evidence": [
         {
+          "kind": "task_original_ref",
+          "uri_or_path": "facts.jsonl#acceptance-trace"
+        },
+        {
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-run-final-aggregate-and-ac-trace",
+      "requires_user_reply": false
     },
     {
       "step_id": 11,
@@ -138,10 +186,16 @@
       "observable_result": "原需求、材料、实现、执行原件和发现处置对照；实施缺口同任务修，作者材料/方向问题仍交对应owner。 判定消费：SKILL.md#方法 第11步；原件：spec-analyze原件与分界处置。",
       "completion_evidence": [
         {
+          "kind": "task_original_ref",
+          "uri_or_path": "facts.jsonl#spec-analyze"
+        },
+        {
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-stage-end-spec-analyze",
+      "requires_user_reply": false
     },
     {
       "step_id": 12,
@@ -149,10 +203,16 @@
       "observable_result": "阶段末主会话按stage-reflection收口：依次归纳、分类归口、记录阶段成本、发布、报告，内部发布并独立读回stage-handoff。成本沿 measure-main-agent-cost 的来源与窗口边界，同一窗口一次，未触发/失败写本阶段无记录及真实原因；Phase摘要不另触发，不新增stage、字段、writer或关闭许可。 判定消费：SKILL.md#方法 第12步；原件：stage-reflection原件、handoff、实际阶段facts。",
       "completion_evidence": [
         {
+          "kind": "task_original_ref",
+          "uri_or_path": "facts.jsonl#handoff"
+        },
+        {
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-closeout",
+      "requires_user_reply": false
     }
   ]
 }

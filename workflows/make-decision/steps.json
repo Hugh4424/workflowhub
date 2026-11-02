@@ -15,7 +15,9 @@
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-load-context",
+      "requires_user_reply": true
     },
     {
       "step_id": 2,
@@ -30,7 +32,9 @@
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-outline-hypothesis-talk",
+      "requires_user_reply": true
     },
     {
       "step_id": 3,
@@ -45,7 +49,9 @@
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-research-and-diverge",
+      "requires_user_reply": false
     },
     {
       "step_id": 4,
@@ -60,7 +66,9 @@
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-outline-revision-check",
+      "requires_user_reply": false
     },
     {
       "step_id": 5,
@@ -75,7 +83,9 @@
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-outline-talk",
+      "requires_user_reply": true
     },
     {
       "step_id": 6,
@@ -90,7 +100,9 @@
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-adversarial-direction-check",
+      "requires_user_reply": false
     },
     {
       "step_id": 7,
@@ -105,7 +117,9 @@
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-direction-advice",
+      "requires_user_reply": false
     },
     {
       "step_id": 8,
@@ -120,7 +134,9 @@
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-module-breadth-confirm",
+      "requires_user_reply": true
     },
     {
       "step_id": 9,
@@ -135,7 +151,9 @@
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-module-convergence",
+      "requires_user_reply": true
     },
     {
       "step_id": 10,
@@ -150,7 +168,9 @@
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-detail-advice",
+      "requires_user_reply": false
     },
     {
       "step_id": 11,
@@ -161,7 +181,9 @@
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-grill-with-docs",
+      "requires_user_reply": true
     },
     {
       "step_id": 12,
@@ -176,7 +198,9 @@
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-write-decision-draft",
+      "requires_user_reply": false
     },
     {
       "step_id": 13,
@@ -191,7 +215,9 @@
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-approve-decision",
+      "requires_user_reply": true
     },
     {
       "step_id": 14,
@@ -206,7 +232,9 @@
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-stage-end-spec-analyze",
+      "requires_user_reply": false
     },
     {
       "step_id": 15,
@@ -225,7 +253,9 @@
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-closeout",
+      "requires_user_reply": false
     }
   ],
   "flows": {

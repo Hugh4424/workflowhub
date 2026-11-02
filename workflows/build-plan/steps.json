@@ -11,7 +11,9 @@
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-read-current-materials",
+      "requires_user_reply": false
     },
     {
       "step_id": 2,
@@ -22,7 +24,9 @@
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-conditional-light-research",
+      "requires_user_reply": false
     },
     {
       "step_id": 3,
@@ -33,7 +37,9 @@
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-spec-clarify",
+      "requires_user_reply": true
     },
     {
       "step_id": 4,
@@ -44,7 +50,9 @@
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-spec-specify",
+      "requires_user_reply": false
     },
     {
       "step_id": 5,
@@ -55,18 +63,22 @@
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-conditional-ui-readiness",
+      "requires_user_reply": false
     },
     {
       "step_id": 6,
       "step_slug": "spec-plan",
-      "observable_result": "分组：拆Phase与全局设计；同一spec写全局实现设计，独立Phase写实际写集、接口、任务、失败与回退边界；共享写集分工清晰。 判定消费：SKILL.md#方法 第6步；原件：spec全局设计、独立Phase、纯指针index。 Phase九组人读内容、逐文件责任、共享先后/回滚与index独立人读导航可读。",
+      "observable_result": "分组：拆Phase与全局设计；同一spec写全局实现设计，独立Phase写实际写集、接口、任务、失败与回退边界；共享写集分工清晰。 判定消费：SKILL.md#方法 第6步；原件：spec全局设计、独立Phase、纯指针index。 Phase九组人读内容、逐文件责任、共享先后/回滚与index独立人读导航可读。 成本证据：spec验收七字段及资源来源、Phase活动总账/phase_budget、已确认形状预检与验收→独立测试代理/判定器/数据层级映射；缺项回原owner。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-spec-plan",
+      "requires_user_reply": false
     },
     {
       "step_id": 7,
@@ -81,7 +93,9 @@
           "kind": "test",
           "uri_or_path": "quality/tests/"
         }
-      ]
+      ],
+      "method_anchor": "step-testing-system-blueprint",
+      "requires_user_reply": false
     },
     {
       "step_id": 8,
@@ -96,12 +110,14 @@
           "kind": "test",
           "uri_or_path": "quality/tests/"
         }
-      ]
+      ],
+      "method_anchor": "step-test-routing-advisor",
+      "requires_user_reply": false
     },
     {
       "step_id": 9,
       "step_slug": "merged-review",
-      "observable_result": "分组：独立审查与处置；wh-review在独立上下文对同一规格/Phase做合并建议，原始发现、provider失败和覆盖限制可读。 判定消费：SKILL.md#方法 第9步；原件：review包、provider/raw、失败与coverage。",
+      "observable_result": "分组：独立审查与处置；wh-review在独立上下文对同一规格/Phase做合并建议，原始发现、provider失败和覆盖限制可读。 判定消费：SKILL.md#方法 第9步；原件：review包、provider/raw、失败与coverage。 成本审查：核逐条成本与Phase公式、用户/审查/环境等待分账、超限拆分与真实决定；历史冲突不统一为活动成本。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -111,7 +127,9 @@
           "kind": "review",
           "uri_or_path": "quality/reviews/"
         }
-      ]
+      ],
+      "method_anchor": "step-merged-review",
+      "requires_user_reply": false
     },
     {
       "step_id": 10,
@@ -122,7 +140,9 @@
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-main-agent-disposes-findings",
+      "requires_user_reply": false
     },
     {
       "step_id": 11,
@@ -133,18 +153,22 @@
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-final-spec-analyze",
+      "requires_user_reply": false
     },
     {
       "step_id": 12,
       "step_slug": "closeout",
-      "observable_result": "分组：回核与收口；主会话先取得当前计划的真实确认，未答保草稿；按stage-reflection收口：依次归纳、分类归口、记录阶段成本、发布、报告，内部发布并独立读回stage-handoff。成本沿 measure-main-agent-cost 的来源与窗口边界，同一窗口一次，未触发/失败写本阶段无记录及真实原因；Phase摘要不另触发，不新增stage、字段、writer或关闭许可。 判定消费：SKILL.md#方法 第12步；原件：human确认、成本原件、handoff独立读回。",
+      "observable_result": "分组：回核与收口；主会话先取得当前计划的真实确认，未答保草稿；按stage-reflection收口：依次归纳、分类归口、记录阶段成本、发布、报告，内部发布并独立读回stage-handoff。成本沿 measure-main-agent-cost 的来源与窗口边界，同一窗口一次，未触发/失败写本阶段无记录及真实原因；Phase摘要不另触发，不新增stage、字段、writer或关闭许可。 判定消费：SKILL.md#方法 第12步；原件：human确认、成本原件、handoff独立读回。 确认展示：各Phase验收总额、软硬上限来源、拆分、等待分账、缺项与独立重算原件；仍超硬需真实确认，未答不自动批准。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
           "uri_or_path": "facts.jsonl"
         }
-      ]
+      ],
+      "method_anchor": "step-closeout",
+      "requires_user_reply": true
     }
   ]
 }

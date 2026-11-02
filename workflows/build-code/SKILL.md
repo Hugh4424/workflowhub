@@ -16,30 +16,89 @@ Phase 内的 Task 是 task graph，不是可任意跳过依赖的步骤表。选
 
 派发按「## Task graph 与 context pointers」的 context pointers 义务执行，指向当前 spec、Phase/Task、研究原件与已有提交；摘要只补本次目标、允许写集、完成与停止条件，不复制指针已有的全文。重活在独立上下文完成，主会话收实际结果与原ref；修复回原实施会话。缺材料或宿主能力明确 unavailable，不凭指针存在猜内容。
 
+## 长任务怎么控制？
+
+沿 make-decision 已确认的执行策略开工；build-plan 与本阶段只消费，不补默认方向。
+每 Phase 记人读的
+`execution_budget={window_minutes,command_cap,wait_cap,retry_reserve}`，
+逐项注明来源、单位和重试预留，观察墙钟、活动、命令、轮询、阻塞及测试代理。
+用户等待、provider 审查等待、真实环境纯等待分账；真实环境操作仍算活动。
+缺值回原 owner，保 unknown；不用命令数量、代理数量或固定轮次作机器质量门。
+
+每三十分钟或五十命令对照一次预算与新增验收事实；数字只触发对照，不硬杀长测试。
+达到计划 1.5 倍先停扩，不新增任务或重复命令，先整理已有证据和下一动作。
+达到计划两倍或连续一个检查窗无新增验收事实，停当前空转路径并复盘：
+查根因、检查验收是否过度复杂、给最小替代，再按既有方向修复或拆分。
+不自动判失败，也不新增全任务硬上限；安全工作继续。
+只有改变验收或范围、用户独占阻塞的外部原件/凭证、不可逆动作或严重超授权风险才找人。
+普通测试失败、代理冲突与可修环境问题由主会话和原执行者处理。
+用户独占审批路径十五分钟未答记人读 awaiting_user，等待真实回复；
+其它路径不套审批等待上限，时间本身不是授权。
+
+在 Phase 边界、长命令前后与阻塞时，向既有事实/原件写检查点：
+目标、已完成、未完成、实际命令、证据指针、下一动作。
+检查点是可续接说明，不新增状态对象、历史游标或推进门。
+等待用事件通知与宿主完成回报，禁止 sleep/轮询空转。
+阻塞立即说明具体原因与恢复条件并通知主会话，不隔夜空等，不新建 blocked 状态。
+长步骤子代理每十五分钟回报阶段、预计完成和新工作事实；
+空心跳不能续命，两次无回报停该轴、核任务拥有的进程与资源，其它安全轴继续。
+宿主无事件或回收能力时记 unavailable，说明哪条路径未观察与恢复条件。
+
+普通命令显式 timeoutMs，通常三十分钟，真实环境命令通常九十分钟；
+真实输入需要更久时先沿已确认预算说明理由，不把建议时长变成全任务闸。
+超时、取消、输出与清理复用 task.captureCommand；
+只回收本任务拥有的 POSIX 进程组，观察真实子孙 PID、124/130 与延迟副作用。
+不新写看门狗或回收器，不碰他人进程；无回收能力保 unavailable。
+不可重试失败首次停该外部路径；同失败签名两轮无新事实停重复动作，
+第三轮需改变继续条件的新证据或既定批准，合法缺陷修复仍继续。
+以上通用超时、停止、心跳及回收规则不适用于审查 provider/broker：
+其不可用、失败、超时、取消、无效输出及空 findings 均按 wh-review 原合同，
+保原失败与执行者，不换执行者，不按上述时长或轮数停止审查。
+
+判据与 gate_cmd 冻结；变更先给请求、成本影响、独立批准及用户重新确认。
+不触碰判据/门禁的合法 bug 修复不受冻结挡住；测试变更仍沿第2步 TCR。
+按已确认 S/M/L 数据和真实影响选测，S/M 是快速反馈，
+最终声明的完整数据与全部验收覆盖仍须执行，不拿小样替代。
+开发期目标测试完成并明确就绪后，主会话按「Phase 三角色与七步顺序」派审查与只读测试，两者可并行；首次派发不等待审查或第9步完成。
+主会话按独立 oracle 验收面派只读测试：
+有两个以上可独立并行面至少两个代理，不足两个一个并写明理由。
+代理不共享写文件，主会话合并结果，冲突保留，修复回原开发并定向复验。
+
+证据先减少重复采集；大件只留内容哈希、外部指针和摘要，不重复落同型快照。
+磁盘压力先指针化/归档建议，不删除不同哈希或未经授权归档，不按份数凑数。
+采集空间检查沿当前已确认策略与既有 task handle 预算，不恢复历史库大小倍数门。
+同运行同字节且命令/退出一致才复用一个原件，并保全部 provenance；
+旧运行同字节不得冒当前执行，无法确定相等保新件与 unknown。
+每条证据由既有回执及其来源原件一起定位
+task_id、run_id（本次真实执行身份）、step_slug、artifact_sha、created_at；
+缺任一不得当当前证据，不改 native receipt/schema、不新增 run 对象或证据账本。
+具体保存与内容比较沿标准工作方法「证据只留原始件（同字节即同一事实）」。
+
 ## 方法
 
 UI 实施先消费当前真实答复所批准原型与设计基准：沿build-plan交回的源码、展示范围、组件/token/布局映射、源缺陷与批准偏差定位本次改动；未答不代批准，不无据重画或把另一稿答复搬来。基准缺项只限制依赖范围，其余安全工作继续；需要变更方向/AC交原owner。实现后的UI终验沿下文第7步、`skills/frontend-prototype-render/SKILL.md`及`skills/plan-design-review/SKILL.md`，不以原型批准冒最终业务验收。
 
-1. 核真实工作区/分支/状态、当前Phase与写集。接续时实际按 `skills/stage-handoff/SKILL.md` 回读交接路径、当前材料/task facts、有源工作陈述、四类信息、证据及未完事项；同task沿原授权续跑，缺失/错task如实说明，旧对象只读。记录所依业务规则、接口、FR/AC、consumer、范围、测试路线与停止条件。动手前实读引用项目受保护类别；未声明只查一次并存事实。依真实授权分别核“包含此改动”与“超出写集”，各用已认证task.appendRecord({dir,slug,ext,bytes})存一原件（复用现appendRecord原子底座），列来源、具体路径/符号、原文锚，不增字段/账本。受保护且授权未含或越界只停该处并指出缺确认，其它安全工作继续；纯文档/注释/测试夹具越界沿已授权方向继续并登记。来源和写集均可定位才完成范围核对；完成只据本Phase实际交付/执行原件。
+1. <a id="step-read-current-task-documents"></a>核真实工作区/分支/状态、当前Phase与写集。接续时实际按 `skills/stage-handoff/SKILL.md` 回读交接路径、当前材料/task facts、有源工作陈述、四类信息、证据及未完事项；同task沿原授权续跑，缺失/错task如实说明，旧对象只读。记录所依业务规则、接口、FR/AC、consumer、范围、测试路线与停止条件。动手前实读引用项目受保护类别；未声明只查一次并存事实。依真实授权分别核“包含此改动”与“超出写集”，各用已认证task.appendRecord({dir,slug,ext,bytes})存一原件（复用现appendRecord原子底座），列来源、具体路径/符号、原文锚，不增字段/账本。受保护且授权未含或越界只停该处并指出缺确认，其它安全工作继续；纯文档/注释/测试夹具越界沿已授权方向继续并登记。来源和写集均可定位才完成范围核对；完成只据本Phase实际交付/执行原件。
    Phase Card 里再写两行版本锚（给人看的绑定，不是 machine gate）：
    - 规则锚：本 Phase 依赖的业务规则，逐条写「文件 + 章节标题逐字」或「FR/AC 编号 + 该段首句逐字」。锚只绑定所依段落；其它段落变化不构成本 Phase 事实作废的理由。
    - 材料变更影响：本次实施预计会改动 spec 与本 Phase 材料的哪些段落；不会改动的段落不在本 Phase 的审查与实现范围内。
    材料变化时按两行定位实际影响：无关变化继续并在 handoff 说明；所依段落变化才把受影响实施/测试/审查事实读为 stale 并重新核对。两行是人读解释，不作机器门。
    身份/材料/范围核对后，在每Phase开工、选择实现接口与测试路线前，实际按 `skills/project-norm-init/SKILL.md` 的“非UI规范与索引”读取适用后端/接口/验收源；保存路径/稳定节、version/作用域、owner/consumer及适用规则。缺源/过期/冲突只停依赖该规则的选择，其余继续；unknown不当N/A。随后独立执行者实际按 `skills/knowledge-graph/SKILL.md` 用本Phase职责/写集/consumer研究领域、历史决定/失败，再定向读源码。依该方法有界选source/完整ID、当前契约和独立历史两通道，保query/god及覆盖限制；主会话只收已回源少数结论、落点或重复/无信号。禁止先广读/实现再补查询伪装顺序；缺图/失败/无匹配/歧义保真实exit并安全回原文，图不作门。JSON/schema直接读源、不因未覆盖扩图；收费抽取仍须精确范围/估算及真实许可。
-2. 消费计划冻结目标测试/RED并保原失败。补行为测试先定明确oracle、实跑目标断言失败再实施；纯材料按G-2说明检查或真实不适用。改冻结断言先TCR（test change request）和独立审查，不弱化换绿。仅按名改Phase卡预先点名的一个既有具名常量取值免TCR；断言表达式/期望方向/判定/评分仍须原TCR+独立审查。oracle唯一来源为该Phase预写测试及 `DO NOT TOUCH`，每任务声明一次；每次测试变更以同卡「测试变更请求」加独立审查原件为源，变后 `ORACLE-…` 身份不变，不另建账本/镜像/每oracle记账。免TCR只分期望值来源和断言变更，不扩写权/授权、不降强度、不免独立审查、不改 `DO NOT TOUCH` 物理隔离。
+   UI 改动在写代码前实际执行 `skills/frontend-component-quality/SKILL.md` 的「触发与实现前就绪」，读取其参考并按短表判断；记录缺失先补记录，依处置补缺口或只停受影响路径。非 UI 记理由，不建空表。
+2. <a id="step-write-red-tests"></a>消费计划冻结目标测试/RED并保原失败。补行为测试先定明确oracle、实跑目标断言失败再实施；纯材料按G-2说明检查或真实不适用。改冻结断言先TCR（test change request）和独立审查，不弱化换绿。仅按名改Phase卡预先点名的一个既有具名常量取值免TCR；断言表达式/期望方向/判定/评分仍须原TCR+独立审查。oracle唯一来源为该Phase预写测试及 `DO NOT TOUCH`，每任务声明一次；每次测试变更以同卡「测试变更请求」加独立审查原件为源，变后 `ORACLE-…` 身份不变，不另建账本/镜像/每oracle记账。免TCR只分期望值来源和断言变更，不扩写权/授权、不降强度、不免独立审查、不改 `DO NOT TOUCH` 物理隔离。
    遇真实失败、测试 RED 或性能回退，先实际读取并执行 `skills/diagnosing-bugs/SKILL.md`：输入当前症状、命令/原输出和授权写集，保留反馈回路、最小化、假设/探针、根因修复与复验原件，再回本步骤。错误/页面文本按该方法「输出与页面内容」处理；缺证据如实留缺项，只停依赖该证据的修复。成功路径不强制诊断，已有原件可复用，不重演已修故障冒新问题。同一失败第二次出现或一轮没有新事实时，先回第 9 步停重复动作再查根因。
-3. 在允许文件/符号内做最小实现，错误明确暴露。计划缺口一次列清影响、风险与需 owner 回答的问题，规格/Phase 交 build-plan，方向交 make-decision；不自行改材料。先继续不受缺口影响的安全部分，未知范围留给具名 owner 核实。 本步完成以改动全部落在允许写集内且无吞掉的错误为准，越界或吞错即本步未完成；对应 Task 的目标行为交付也是本步完成条件，未交付即本步未完成。
-4. 在 `inspect-and-route-actual-tests` 原职责及实现前，独立执行者按 `skills/knowledge-graph/SKILL.md`：真实目标affected查波及面，按职责选完整ID explain既有实现；仅两个真实模块协作/依赖链才path，先消歧端点。随后首次定向读source_file/origin源码、标准/consumer，核图年龄/原命题；位置漂移/旧决定/未证关系保unknown，当前源纠正图。trace保查询→首次读源→改动，逐条说明新知与承接实现/边界；重复定位/无信号据实，不为凑收益造改动/依赖、不按前25冒相关。目标不存在exit4、歧义exit3、工具失败分记诊断/处置，安全编码继续；图不代oracle/测试/独立质量。
+3. <a id="step-implement-change"></a>在允许文件/符号内做最小实现，错误明确暴露。计划缺口一次列清影响、风险与需 owner 回答的问题，规格/Phase 交 build-plan，方向交 make-decision；不自行改材料。先继续不受缺口影响的安全部分，未知范围留给具名 owner 核实。 本步完成以改动全部落在允许写集内且无吞掉的错误为准，越界或吞错即本步未完成；对应 Task 的目标行为交付也是本步完成条件，未交付即本步未完成。
+4. <a id="step-inspect-and-route-actual-tests"></a>在 `inspect-and-route-actual-tests` 原职责及实现前，独立执行者按 `skills/knowledge-graph/SKILL.md`：真实目标affected查波及面，按职责选完整ID explain既有实现；仅两个真实模块协作/依赖链才path，先消歧端点。随后首次定向读source_file/origin源码、标准/consumer，核图年龄/原命题；位置漂移/旧决定/未证关系保unknown，当前源纠正图。trace保查询→首次读源→改动，逐条说明新知与承接实现/边界；重复定位/无信号据实，不为凑收益造改动/依赖、不按前25冒相关。目标不存在exit4、歧义exit3、工具失败分记诊断/处置，安全编码继续；图不代oracle/测试/独立质量。
    对真实 changed files 用 test-routing-advisor 选择 simple/feature/fullstack，记录与计划相同或改变的理由。选择 backend-testing、frontend-testing 或 fullstack-slice-testing 中适用的一条具体路线，研究真实入口、权限、数据、并发、超时、取消和恢复边界。
-5. 本 Phase 只多一份清单，实际按 `docs/standard-workflow.md`「每 Phase 一份执行清单」记录命令、失败、真实 diff、原件与材料指针，清单不是第二进度。测试子代理按当前 Phase 及 Task 声明的面，逐面把 `gate_cmd` 与 `RED/GREEN gate_cmd` 的字面命令提交现有 `verify --action=execute`，不能从 Phase 文本自动抓命令运行。跑声明的针对性命令和必要相邻检查，用已认证 `task.captureCommand`（底层唯一 `runtime/interface/run-command.mjs`）保存实际 cwd、argv、exit、signal、timeout/cancel、输出和清理事实，原始输出只存单份。证据去重与临时输出处理，实际读取并执行 `docs/standard-workflow.md`「证据只留原始件（同字节即同一事实）」；保本次真实immutable回执与正确output_ref。build-code 的实际整数回执由运行时汇总进现有 stage evidence；保已有非空事实与游标，更新游标也不把 evidence 回落为 null。未执行或无整数退出保原回执与具体原因，不捏 exit0；契约校验的 contract_ok、contract_error_count、errors 片段、AC/FR 覆盖与 command_oracle_checks 随现 source.json 送审，只记录事实、不作失败门。每个未跑面明写“哪一面／卡在哪／什么条件下能跑”，不能只有 unavailable 或 incomplete。只跑受影响测试，不用无范围全量回归代替；环境、收集和配置失败不当成目标 RED，exit0 不自动证明业务通过。 按 `AGENTS.md`「卡住与升级」的适用范围分类该失败信号；属于外部不可重试时第一次即零重试，按第 9 步的四类分诊落位，停该外部失败路径并记原因与恢复条件，其余安全工作继续。
-6. 对声明的 command/service 验收执行真实场景，逐项对照 oracle、可观察效果与失败反例。记录每条 AC 的实际结果、原始输出、输入/环境和覆盖限制；真实服务缺失、未执行、部分或不可用保持原样，模拟效果不冒充外部效果。
+5. <a id="step-run-tests"></a>本 Phase 只多一份清单，实际按 `docs/standard-workflow.md`「每 Phase 一份执行清单」记录命令、失败、真实 diff、原件与材料指针，清单不是第二进度。开发先跑开发期定向测试；独立测试按唯一七步顺序在实现就绪并明确通知后派发，可与审查并行。测试子代理按当前 Phase 及 Task 声明的面，逐面把 `gate_cmd` 与 `RED/GREEN gate_cmd` 的字面命令提交现有 `verify --action=execute`，不能从 Phase 文本自动抓命令运行。跑声明的针对性命令和必要相邻检查，用已认证 `task.captureCommand`（底层唯一 `runtime/interface/run-command.mjs`）保存实际 cwd、argv、exit、signal、timeout/cancel、输出和清理事实，原始输出只存单份。证据去重与临时输出处理，实际读取并执行 `docs/standard-workflow.md`「证据只留原始件（同字节即同一事实）」；保本次真实immutable回执与正确output_ref。build-code 的实际整数回执由运行时汇总进现有 stage evidence；保已有非空事实与游标，更新游标也不把 evidence 回落为 null。未执行或无整数退出保原回执与具体原因，不捏 exit0；契约校验的 contract_ok、contract_error_count、errors 片段、AC/FR 覆盖与 command_oracle_checks 随现 source.json 送审，只记录事实、不作失败门。每个未跑面明写“哪一面／卡在哪／什么条件下能跑”，不能只有 unavailable 或 incomplete。只跑受影响测试，不用无范围全量回归代替；环境、收集和配置失败不当成目标 RED，exit0 不自动证明业务通过。 按 `AGENTS.md`「卡住与升级」的适用范围分类该失败信号；属于外部不可重试时第一次即零重试，按第 9 步的四类分诊落位，停该外部失败路径并记原因与恢复条件，其余安全工作继续。
+6. <a id="step-inspect-acceptance-and-ui"></a>对声明的 command/service 验收执行真实场景，逐项对照 oracle、可观察效果与失败反例。记录每条 AC 的实际结果、原始输出、输入/环境和覆盖限制；真实服务缺失、未执行、部分或不可用保持原样，模拟效果不冒充外部效果。
    验收证据人读词表为 pass/fail/inconclusive/deferred/missing/inconsistent/incomplete/unavailable，来源 `runtime/evidence/acceptance-evidence-validator.mjs:6`；本词表只约束人读措辞，不改变现有 writer。未达成如实记为未达成并进失败事实清单，这一条不新增任何推进前置。
-7. 检查实际 diff 与声明写集、真实消费者、接口两端、状态、错误传播、并发原子性和资源释放。UI 按组件质量地图与真实页面验证状态和 DTO→ViewModel，浏览器 QA 先读取并执行 `skills/isolated-browser-qa/SKILL.md`，保留隔离、取消和自建资源清理事实。 仅声明写集没有任何浏览器可见面时，记 `N/A — 理由` 并引用写集；已声明适用而缺工具时记 unavailable。QA engine、route/场景、截图路径或 not_observed 的真实原因保在唯一原 ref，不伪造浏览器通过。来源、样本、场景、浏览器或截图缺失不宣称 UI 完成。
+7. <a id="step-scan-diff"></a>检查实际 diff 与声明写集、真实消费者、接口两端、状态、错误传播、并发原子性和资源释放。UI 按组件质量地图与真实页面验证状态和 DTO→ViewModel，浏览器 QA 先读取并执行 `skills/isolated-browser-qa/SKILL.md`，保留隔离、取消和自建资源清理事实。 仅声明写集没有任何浏览器可见面时，记 `N/A — 理由` 并引用写集；已声明适用而缺工具时记 unavailable。QA engine、route/场景、截图路径或 not_observed 的真实原因保在唯一原 ref，不伪造浏览器通过。来源、样本、场景、浏览器或截图缺失不宣称 UI 完成。
    凡页面、路由、组件、样式改动或声明 UI 交付，冻结前必须执行页面审计；适用性不确定时按适用处理。
    UI 适用时，先读 `skills/project-norm-init/SKILL.md` 的「规范职责」，再取本步适用的具体来源：③组件读 `specs/design/components.md`，独立工程正文确需时另读 `specs/frontend/components.md`，否则读 `specs/frontend/frontend.md`；④布局读 `specs/design/layouts.md`，独立工程正文确需时另读 `specs/frontend/layouts.md`，否则读 `specs/frontend/frontend.md`；⑤通用交互读 `specs/design/interaction.md`，控件内合同引用组件源；⑧质量判据确需独立正文时读 `specs/design/quality.md`，工程/运行共用 `specs/frontend/ui-quality.md`。路径相对目标项目根，同职责等价实质源优先，八类不是强制八文件。以该「规范职责」表为准，本处路径随表更新；逐类保实际路径/稳定节、version/作用域、owner/consumer、适用规则及 missing/stale/unknown 的影响与承接者，不把当前代码反推为应然标准，不把读取冒成方法调用或实际页面验证。
    本 Phase 涉及 UI 且有合法可读设计源时，在实施前读取 `skills/design-source-extraction/SKILL.md` 与任务原 ref 的 `design-source-extraction.json`；以 `items` 原值和证据、`pending_review` 待议与 `low_fidelity.blocked_scope` 作为实施输入，按 `references/isolated-consumption.md` 保初始 missing、独立实测与回填，不把待议当批准。按实际当前上下文核 `freshness`：unknown 不补默认 current，stale 通过已有 `node skills/design-source-extraction/scripts/collect-design-source.mjs --plan <已认证冻结plan>` 重提炼，依赖项未补齐保影响、无关项继续。仅消费已核 source 与范围；默认 ego 复用模式失败明确报错，不隐式启动备用浏览器/窗口，显式引擎沿原 isolated-browser-qa 合同。非 UI 保原专业源流程，不强制提炼。
-8. 每次挑审先实际消费 `docs/standard-workflow.md` 的「三审查点与结论真实性」，主会话提交其要求的三维原始依据并记录应用与缺料回退。每个 Phase 对当前 diff、本 Phase 承接 AC 与声明测试面、实际执行原件和审查重点发起一次独立代码审查：按上述标准工作方法的用户 U-020 授权规则，用 `reviewTierFor` 选择低风险独立子代理或高风险/影响说不清的外部 OCR；终末整卡固定外部 OCR 全审。先读取 `skills/wh-review/SKILL.md` 的「Long-review host convention」。审查记录正文用 `assertReviewTierRecord` 核执行者、来源与三维读数；独立子代理留派发身份与上下文隔离，不写 `ocr` 身份或伪造 `provider_results`；外部 OCR 留 route/provider 原ref与真实终态，不可用时仍保检测输出、原始失败与原执行者，口径见下节。同时显式派一次独立上下文的同源补充审查，方法见「同源补充轴」。各轴真实终态、原件与覆盖限制可定位才算完成本次审查工作；没有额外全 Phase 集成审查点，不为追空 findings 重派未变范围。
-9. 主会话保留每条 finding 原文和真实处置。有效问题回原实施会话自动修复，先列受影响 file/case，再只跑该集合并写实际结果；严重问题优先修复，不以请求用户承担风险代替修复。确实无法在当前任务范围内解决时，写清影响、证据、原因和剩余选项，继续不受影响的工作；未处理保持 incomplete。只有已有绑定该 finding 的用户真实决定才可记 accepted_risk，不能自行接受风险或伪造通过。
+8. <a id="step-review-change"></a>每次挑审先实际消费 `docs/standard-workflow.md` 的「三审查点与结论真实性」，主会话提交其要求的三维原始依据并记录应用与缺料回退。每个 Phase 对当前 diff、本 Phase 承接 AC 与声明测试面、实际执行原件和审查重点发起一次独立代码审查：按上述标准工作方法的用户 U-020 授权规则，用 `reviewTierFor` 选择低风险独立子代理或高风险/影响说不清的外部 OCR；终末整卡固定外部 OCR 全审。先读取 `skills/wh-review/SKILL.md` 的「Long-review host convention」。审查记录正文用 `assertReviewTierRecord` 核执行者、来源与三维读数；独立子代理留派发身份与上下文隔离，不写 `ocr` 身份或伪造 `provider_results`；外部 OCR 留 route/provider 原ref与真实终态，不可用时仍保检测输出、原始失败与原执行者，口径见下节。同时显式派一次独立上下文的同源补充审查，方法见「同源补充轴」。各轴真实终态、原件与覆盖限制可定位才算完成本次审查工作；没有额外全 Phase 集成审查点，不为追空 findings 重派未变范围。
+9. <a id="step-analyze-review-findings"></a>主会话保留每条 finding 原文和真实处置。有效问题回原实施会话自动修复，先列受影响 file/case，再只跑该集合并写实际结果；严重问题优先修复，不以请求用户承担风险代替修复。确实无法在当前任务范围内解决时，写清影响、证据、原因和剩余选项，继续不受影响的工作；未处理保持 incomplete。只有已有绑定该 finding 的用户真实决定才可记 accepted_risk，不能自行接受风险或伪造通过。
    同一失败反复或一轮没有新事实时，先停重复动作；恢复前自述一行并写进本 Phase 的 task facts：「自上次以来我改了什么：<一句话>；失败信号：与上次相同／已变」。
    三检查沿 `AGENTS.md`「卡住与升级」执行，完成检查后选择恢复方法，禁止猜测修复。
    换路径可自动深研、换假设、换方法、换独立上下文，或修正本 Phase 内任务拆分、顺序、依赖、实现路线、测试路线与证据补齐并继续；不改 AC、FR、oracle、写集、方向与验收对象，不新建任务、不建第二个账本、不覆盖原失败原件，失败命令、cwd、退出码与原始输出沿唯一原 ref 保留。
@@ -48,10 +107,10 @@ UI 实施先消费当前真实答复所批准原型与设计基准：沿build-pl
    自动恢复不设次数或时长上限；审查并发、轮次和时长仍受该节排除行保护。无新事实不是完成，不能据此声明 Phase 完成或质量通过。
    本 Phase 收口时，契约头 `Done` 逐条承接 AC：每条写 AC 编号、一个上述现成 8 值档位和一条具名证据指针，并在现有正文写「本 Phase 自带判据小结」：自己验了什么（附本 Phase `gate_cmd` 原件）、没验什么（逐条带档位）、未验项所需条件与具名 owner。逐条记录、实际审查事实和本 Phase 提交分别可定位，才完成本 Phase 的收口工作；档位不要求全部为 pass。
    AC 的判定归属由 spec 的 AC 正文决定：实读判定方式、时点、执行 owner、所需条件和成功失败信号，不由依赖链位置决定。未参与该 AC 判定的 Phase 不得为该条写 pass，下游不得替上游补签。承接 AC 未达成时，按 `docs/standard-workflow.md`「专业质量」的「带欠账完成」口径显著标注、逐条保留缺口；继续同任务修复与后续安全部分。
-10. 所有实施任务结束后，按计划执行一次最终聚合，逐 AC 消费沿途已产生的结论原件，对账实现、真实效果、测试和未覆盖项。末 Phase 保留完整端到端串演，只作复核与必要未闭环 case 补充，业务、实现与效果 AC 的首次结论仍按 spec 正文归属承接 Phase；仅需完整最终产物才能检查的 AC-BOUND-001/002 在最终边界首次独立判定，其余 AC 不得延期。默认只跑本任务范围内与本次改动相关的测试；判断不了影响面时用最小可证伪集合并记录未知影响面。全局重跑仅在改动对象是流程本身且局部无法证明时执行一次，事先说明范围与理由。没有新改动、失败或疑点时不重复运行。最终聚合不证明 review pass，也不替代独立审查。 最后 Phase 实际运行 `node tools/cli/run-checks.mjs --task-path <当前认证任务根>`，保存一份 stdout 原件供十环对账；环1–9取真实状态，环10在build-code记 `skipped`，stage-close后由原调用方补终态。exit 0 不证明步骤齐全，逐项读取报告的 `missing_steps`，不改 final-chain 原职责。
+10. <a id="step-run-final-aggregate-and-ac-trace"></a>所有实施任务结束后，按计划执行一次最终聚合，逐 AC 消费沿途已产生的结论原件，对账实现、真实效果、测试和未覆盖项。末 Phase 保留完整端到端串演，只作复核与必要未闭环 case 补充，业务、实现与效果 AC 的首次结论仍按 spec 正文归属承接 Phase；仅需完整最终产物才能检查的 AC-BOUND-001/002 在最终边界首次独立判定，其余 AC 不得延期。默认只跑本任务范围内与本次改动相关的测试；判断不了影响面时用最小可证伪集合并记录未知影响面。全局重跑仅在改动对象是流程本身且局部无法证明时执行一次，事先说明范围与理由。没有新改动、失败或疑点时不重复运行。最终聚合不证明 review pass，也不替代独立审查。 最后 Phase 实际运行 `node tools/cli/run-checks.mjs --task-path <当前认证任务根>`，保存一份 stdout 原件供十环对账；环1–9取真实状态，环10在build-code记 `skipped`，stage-close后由原调用方补终态。exit 0 不证明步骤齐全，逐项读取报告的 `missing_steps`，不改 final-chain 原职责。
      对账由独立上下文实跑一次项目声明的会话用量命令，当场展示时间窗/分账/计数，不落派生文件；finding修复仅复验受影响file/case并说明理由。
-11. 用 spec-analyze 对照原始需求、当前材料、实现、测试、发现处置与用户可见结果。实施/事实问题在本阶段修，方向和作者材料仍交对应 owner。缺项明确写未启动、未执行、失败、不适用、unknown 或 unavailable，不用产物存在代替完成条件。
-12. 整个 stage 末由当前主会话按 `skills/stage-reflection/SKILL.md`「方法」「用户选择后的归口」「判断词表与完成检查」执行阶段收口，保存并读回最终报告，说明交付行为、实际测试/AC限制、原始发现与处置、风险及关闭方法下一步。局部 Phase 摘要不触发 stage-end 或固定复盘。结束时按 spec 模板验收流程统一提醒每条 incomplete 的真实尝试 ref、阻塞条件、提供者与恢复条件；最终报告逐条列缺口，不宣称完成。
+11. <a id="step-stage-end-spec-analyze"></a>用 spec-analyze 对照原始需求、当前材料、实现、测试、发现处置与用户可见结果。实施/事实问题在本阶段修，方向和作者材料仍交对应 owner。缺项明确写未启动、未执行、失败、不适用、unknown 或 unavailable，不用产物存在代替完成条件。
+12. <a id="step-closeout"></a>整个 stage 末由当前主会话按 `skills/stage-reflection/SKILL.md`「方法」「用户选择后的归口」「判断词表与完成检查」执行阶段收口，保存并读回最终报告，说明交付行为、实际测试/AC限制、原始发现与处置、风险及关闭方法下一步。局部 Phase 摘要不触发 stage-end 或固定复盘。结束时按 spec 模板验收流程统一提醒每条 incomplete 的真实尝试 ref、阻塞条件、提供者与恢复条件；最终报告逐条列缺口，不宣称完成。
     人读结论用达成／未达成（写明下一步）／退役；退役须有真实退出决定，不用模糊延期替代。
 
 阶段收口中的成本：执行 `skills/stage-reflection/SKILL.md`「方法」第 3 步的 measure-main-agent-cost 入口及完整来源、窗口、失败和删除前留账边界；本阶段只在整个 stage 末触发一次 `measure-main-agent-cost --record`，首笔带 `--start-ref` 指向真实开工事件；同一计量窗口不重复，不每 Phase 触发。Phase 收口尚看不到完整墙钟与等待，不能切碎窗口重复记成本。受控 old/new 比较只读复算原生会话，不追加账本；真实 stage 末成本与未闭环 AC 仍由原 owner 回核。
@@ -237,3 +296,31 @@ BOUND001 首判可在报告前形成，不要求它回填未来 final-report has
 原审查 inconclusive、逐 provider 未读/undetermined 材料或失败路均保原件和限制。独立 raw 的 review_coverage_closure 须明确 result、review_ref、basis、covered_gaps 和 refs；covered_gaps 逐项对应 review:<原结论>、coverage:<provider>:<原材料路径>、provider:<原失败 provider ID> 的真实缺口分母，不漏项、不加异源项。refs 必须绑定当前业务与语义 proof 已实际捕获并核验的 receipts；独立 reader 说明这些原件为何闭合对应范围，不能用笼统 pass、exit0 或无关文本替代。缺闭合时整体 incomplete，原 review 结论及限制不变。
 
 既有 JSON 首判按同对象精确 AC 读 id/acceptance_criterion_id/criterion_id/ac/ac_id 或 task 的明确 AC 分词，typed 结果读 result/conclusion/tier/independent_status；同对象显式身份或结果冲突按不一致保留，不把顶层 pass 扩散到子 AC，也不解释 Markdown 为机器 verdict。历史原件不重写。
+
+## 当前步怎么执行？
+
+主会话从本阶段步骤表投影当前卡，只读本步和必要前置。
+调用检查器时显式给任务根、材料根、阶段和当前步；跳过使用可核当前 Phase 或真实 HEAD。
+
+`node tools/cli/check-stage-steps.mjs --stage=build-code --step=N --card --task-path=<任务根> --material-root=<材料根> --phase=<当前Phase>`
+
+卡给结果、进入与停止条件、最多三个读取位置、具名证据、自查命令和答复要求。
+步骤表的稳定锚直达本步正文；前置原件可读只表示留痕，完成仍按本步原判据。
+显式跳过用 `--skip-with-gap=N --reason=<原因> --owner=<负责人> --recovery=<恢复条件>`。
+检查器经现有任务句柄保存普通原件；缺字段或当前身份不可读时不记录、不前进。
+Phase 沿现有当前游标、索引、物理任务和材料提交核对；提交必须等于真实工作区 HEAD。
+运行编号当前没有可认证的现役权威，写跳过时改用上述身份，不猜默认编号。
+当前原件沿 facts 的本阶段 source、step_slug、实际 ref 逐件读回；目录只作导航。
+收口读同一报告的 `closeout.gaps`，逐项披露未清缺口和恢复条件，记未完成。
+缺口跨 Phase、提交和运行编号持续披露；只有既有完成生产者所引的本步同身份原件可解除。
+解除原件还须晚于缺口，当前方向未把本步列为失效；缺证明就保留缺口。
+检查器保持退出 0，只报事实，不建立步骤账本、游标或通用退出门。
+
+阅读基线：记录路径、字节、跳步、返工、Phase 时长的前后原始读数；只建立基线，不宣称改善。
+
+七个只记事实步骤读取步骤表中的具名原件；目录存在和 facts 行不能代替。
+首步读决策、规格及当前索引所指的物理 Phase；没有当前身份就记未取得。
+其余 facts.jsonl#职责名 是本步原件引用槽，不是固定文件或 Markdown 节锚。
+检查器沿既有 evidence 的 source、step_slug 和实际 ref 读取 appendRecord 唯一原件，
+再核任务、步骤和当前执行身份；缺引用或身份保未取得，不复制成固定名。
+末步的 handoff 只沿本阶段终末报告合同定位交回原件，不新增默认阶段交接。
