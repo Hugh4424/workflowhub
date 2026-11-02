@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ENGINE="${1:-${BROWSER_QA_ENGINE:-agent-browser}}"
+ENGINE="${1:-${BROWSER_QA_ENGINE:-ego-lite}}"
 
 status=0
 
