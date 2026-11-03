@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
 
 import { createSkillBundleContract } from "../interface/runner-contract.mjs";
-import { validateSkillBundle } from "../adapters/local-skill-resolver.mjs";
+import { validateSkillBundle, resolveSkillPackage } from "../adapters/local-skill-resolver.mjs";
 import { resolveStageSkillPackages } from "../stage/stage-skill-runtime.mjs";
 
 const STAGES = FORMAL_DEVELOPMENT_STAGES;
@@ -244,12 +244,12 @@ function validatePortableReleaseDeclarations(manifest, seen, root) {
   return [...declarations.values()];
 }
 
-function addSkillClosure(root, name, locators, visited, context = {}) {
-  if (visited.has(name)) return;
-  visited.add(name);
-  const base = `skills/${name}`;
-  const bundleLocator = `${base}/skill-bundle.json`;
-  const expectedSkillPath = `${base}/SKILL.md`;
+function addSkillClosure(root, name, locators, visited, context = {}, dependency = null) {
+  const bundleLocator = dependency?.bundle ?? `skills/${name}/skill-bundle.json`;
+  if (visited.has(bundleLocator)) return;
+  visited.add(bundleLocator);
+  const base = path.posix.dirname(bundleLocator);
+  const expectedSkillPath = dependency?.path ?? `${base}/SKILL.md`;
   const { bundle } = validateSkillBundle(root, bundleLocator, expectedSkillPath);
   locators.add(bundleLocator);
   for (const entry of bundle.files ?? []) {
@@ -258,9 +258,12 @@ function addSkillClosure(root, name, locators, visited, context = {}) {
     locators.add(locator);
   }
   if (context.localPayload) {
-    const registration = context.registry.get(name);
+    const registration = context.registry.get(expectedSkillPath);
     if (!registration) throw new Error(`skill has no catalog owner: ${name}`);
     for (const ref of registration.dependency_closure ?? []) {
+      // A catalog dependency may name a resource already declared in this exact
+      // bundle (for example its LICENSE); it is not another native skill.
+      if (String(ref).startsWith(`${base}/`) && locators.has(ref)) continue;
       const match = String(ref).match(/^skills\/([a-z][a-z0-9-]*)(?:\/SKILL\.md)?$/);
       if (!match) throw new Error(`invalid catalog dependency: ${name} -> ${ref}`);
       addSkillClosure(root, match[1], locators, visited, context);
@@ -321,7 +324,9 @@ function collectDeclaredClosure(root, { release = false, localPayload = false, s
   const context = { localPayload };
   if (localPayload) {
     const catalog = yaml.load(readStableFile(root, "skills/catalog.yaml", "skill registry").toString("utf8"));
-    context.registry = new Map((catalog.skills ?? []).map(entry => [entry.name, entry]));
+    // Native and adopted family members keep their existing catalog identity/owner.
+    context.registry = new Map([...(catalog.skills ?? []), ...(catalog.capability_decisions ?? [])]
+      .filter(entry => typeof entry.path === "string").map(entry => [entry.path, entry]));
     locators.add("skills/catalog.yaml");
   }
   const declaredPortableWorkflows = workflowDeclarations(root).portable
@@ -355,12 +360,13 @@ function collectDeclaredClosure(root, { release = false, localPayload = false, s
       if (release || localPayload || fs.existsSync(path.join(root, base, name))) locators.add(locator);
     }
     for (const dependency of manifest.skills ?? []) {
-      const bundleLocator = dependency?.bundle === undefined ? `skills/${dependency?.name}/skill-bundle.json` : dependency.bundle;
-      if (!dependency || !/^[a-z][a-z0-9-]*$/.test(dependency.name ?? "") || dependency.path !== `skills/${dependency.name}/SKILL.md`
-        || bundleLocator !== `skills/${dependency.name}/skill-bundle.json`) throw new Error(`skill dependency path/bundle does not match its declared name: ${workflow}`);
+      if (!dependency || !/^[a-z][a-z0-9-]*$/.test(dependency.name ?? ""))
+        throw new Error(`skill dependency path/bundle does not match its declared name: ${workflow}`);
+      // The resolver owns explicit flat/family identity and containment; publication
+      // consumes that exact declaration instead of reconstructing a second flat path.
+      resolveSkillPackage({ packageRoot: root, manifestPath: `${base}/skill-deps.yaml`, dependency });
       if (localPayload && !loaded.payloads.has(dependency.name)) throw new Error(`unresolved stage skill: ${workflow}/${dependency.name}`);
-      validateSkillBundle(root, bundleLocator, dependency.path);
-      addSkillClosure(root, dependency.name, locators, visitedSkills, context);
+      addSkillClosure(root, dependency.name, locators, visitedSkills, context, dependency);
     }
     for (const file of (localPayload ? declarationFiles.filter(file => file.endsWith(".md")) : ["SKILL.md"])) {
       const prompt = fs.readFileSync(path.join(root, base, file), "utf8");

@@ -76,9 +76,16 @@ export function validateSkillBundle(packageRoot, bundlePath, expectedSkillPath) 
   assertRelative(bundlePath);
   const root = fs.realpathSync(packageRoot);
   const skillsRoot = assertDirectory(root, "skills", "skills root");
-  const expectedName = expectedSkillPath.split("/").at(-2);
-  const expectedDir = path.join(root, "skills", expectedName);
-  const realExpectedDir = assertDirectory(path.join(root, "skills"), expectedName, `skill directory ${expectedName}`);
+  const directory = path.dirname(bundlePath);
+  const expectedName = path.basename(directory);
+  const expectedDir = path.resolve(root, directory);
+  if (!inside(path.join(root, "skills"), expectedDir) || expectedDir === path.join(root, "skills"))
+    throw new Error(`bundle must be inside a declared skill directory: ${bundlePath}`);
+  // Check every nested directory; a contained realpath does not authorize a symlink.
+  let parent = skillsRoot;
+  for (const segment of path.relative(path.join(root, "skills"), expectedDir).split(path.sep))
+    parent = assertDirectory(parent, segment, `skill directory ${segment}`);
+  const realExpectedDir = parent;
   const absoluteBundle = path.resolve(root, bundlePath);
   assertRegularContainedFile(expectedDir, realExpectedDir, absoluteBundle, `bundle ${bundlePath}`);
   const bundle = JSON.parse(fs.readFileSync(absoluteBundle, "utf8"));
@@ -109,9 +116,14 @@ export function resolveSkillPackage({ packageRoot, manifestPath, dependency }) {
   try {
     const bundle = dependency?.bundle === undefined ? `skills/${skill}/skill-bundle.json` : dependency.bundle;
     if (!skill || !dependency.path || !bundle) throw new Error("skill dependency is incomplete");
-    if (bundle !== `skills/${skill}/skill-bundle.json`)
+    const externalFamily = bundle === `skills/external/${skill}/skill-bundle.json`;
+    if (!externalFamily && bundle !== `skills/${skill}/skill-bundle.json`)
       throw new Error(`skill dependency bundle does not match its declared name: ${skill}`);
-    if (dependency.path !== `skills/${skill}/SKILL.md`)
+    if (externalFamily) {
+      assertRelative(dependency.path);
+      if (!dependency.path.startsWith(`skills/external/${skill}/`) || !dependency.path.endsWith(".md"))
+        throw new Error(`skill dependency path does not match its declared family: ${skill}`);
+    } else if (dependency.path !== `skills/${skill}/SKILL.md`)
       throw new Error(`skill dependency path does not match its declared name: ${skill}`);
     const root = fs.realpathSync(packageRoot);
     assertRelative(manifestPath);

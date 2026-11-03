@@ -58,6 +58,15 @@ skills:
     path: skills/design-source-extraction/SKILL.md
     trigger: ui_scope_readable_design_source_extraction
 
+  # workflows/build-plan/SKILL.md#step-conditional-ui-readiness -> skills/project-norm-init/SKILL.md#本地整包怎样读取：七UI方法与四playbook方法。
+  - name: ui-designer
+    path: skills/external/ui-designer/design-brief/SKILL.md
+    bundle: skills/external/ui-designer/skill-bundle.json
+    trigger: ui_scope
+  - name: playbook
+    path: skills/external/playbook/00-ux-spec-skill.md
+    bundle: skills/external/playbook/skill-bundle.json
+    trigger: ui_scope
 runtime_capabilities:
   - id: node
     kind: cli

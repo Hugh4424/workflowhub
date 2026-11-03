@@ -28,6 +28,24 @@ description: 规划、实施或验收需读取设计、前端、后端、接口�
 
 精确 token/CSS 数值、API、资产和上游原件留在原位，只引用。安全隐私、无障碍、国际化、响应式极值、性能及竞态横贯原专业 owner 和项目基础规范，不新增第九规范平台。旧 Design.md/Experience.md 可作为具名历史或可信条款输入；不能把旧两文件恢复为必需的统一 active 规范或把本任务进度、截图结论写进专业正文。
 
+## 本地整包怎样读取？
+
+已入库方法先从本地固定字节读取，原线上URL只作来源核对；每次仍记录实际输入、采用范围与未覆盖。
+
+- 意图与内容：`skills/external/ui-designer/design-brief/SKILL.md`。
+- 布局与导航：`skills/external/ui-designer/information-architecture/SKILL.md`。
+- token唯一active来源：`skills/external/design-tokens/SKILL.md`；`skills/external/ui-designer/design-tokens/SKILL.md`仅交叉核对，不作第二active。
+- 组件：`skills/external/ui-designer/frontend-design/SKILL.md`。
+- 状态与恢复：`skills/external/ui-designer/ui-interaction-states/SKILL.md`。
+- 无障碍证据：`skills/external/ui-designer/ui-accessibility-review/SKILL.md`。
+- 独立设计检查：`skills/external/ui-designer/design-review/SKILL.md`。
+- 六层需求：`skills/external/playbook/00-ux-spec-skill.md`。
+- 平台选型适用时：`skills/external/playbook/02-cloudai-picker-skill.md`；当前非CloudAI时保不适用，不冒模板覆盖。
+- 真结构歧义：`skills/external/playbook/09-variant-skill.md`。
+- 发现回源：`skills/external/playbook/08-evaluator-rubric.md`。
+
+这些是人工方法输入，不因bundle解析成功就称已运行或批准。需要本地包资源自检时，`python3 skills/external/spec-driven-production/scripts/check_skill.py skills/external/spec-driven-production`只查该固定包资源/链接/模板，不代目标文档或产品质量。
+
 ## 非UI规范与索引
 
 - 后端：从项目AGENTS到 `specs/backend/README.md` → `architecture.md`，核模块职责、依赖/存储边界、并发与失败owner；用当前架构/公开入口的实质源，不从HTTP存在推微服务。

@@ -5,7 +5,9 @@
     "SKILL.md",
     "scripts/collect-design-source.mjs",
     "references/norm-alignment.md",
-    "references/isolated-consumption.md"
+    "references/isolated-consumption.md",
+    "references/collection-plan.md",
+    "templates/collection-plan.example.json"
   ],
   "sources": []
 }

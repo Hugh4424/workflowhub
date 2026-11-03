@@ -233,7 +233,7 @@ async function egoContext(plan,task,env) {
 async function runCli(args,env=process.env) {
   const values=[...args];let planPath,validatePath,currentPath,scenario=false,probe=false;
   while(values.length){const arg=values.shift();if(arg==='--plan')planPath=values.shift();else if(arg==='--validate')validatePath=values.shift();else if(arg==='--current')currentPath=values.shift();else if(arg==='--workspace-scenario')scenario=true;else if(arg==='--probe')probe=true;else throw failure('INVALID_CLI_ARGUMENT');}
-  if(!planPath)throw failure('PLAN_ARGUMENT_REQUIRED');
+  if(!planPath)throw failure('PLAN_ARGUMENT_REQUIRED',{original_error:'Use --plan <task plan.json>; prepare execution/source/scope.checklist/norm_basis/inputs with references/collection-plan.md and templates/collection-plan.example.json; probe first, then bind frozen_at/probe_ref'});
   const plan=readPlan(planPath,{probe}),execution=plan.execution;
   if(!execution?.task_path||!execution.project_name||!execution.task_id)throw failure('PLAN_TASK_IDENTITY_REQUIRED');
   if(validatePath){

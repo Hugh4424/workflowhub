@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
 import Ajv2020 from "ajv/dist/2020.js";
 import { loadStageSkillManifest } from "../../runtime/stage/stage-skill-runtime.mjs";
-import { validateSkillBundle } from "../../runtime/adapters/local-skill-resolver.mjs";
+import { validateSkillBundle, resolveSkillPackage } from "../../runtime/adapters/local-skill-resolver.mjs";
 import { validatePostPhaseContract } from "../../runtime/stage/stage-content-contracts.mjs";
 
 // T016: finite, read-only development facts consumed by run-checks and --root
@@ -224,6 +224,11 @@ export function checkSkillConsistency(root) {
       sourceReport(`summary skills=${catalog.skills.length} adopted=${adopted.length} upstream_adopted=${upstreamAdopted} notice=${noticeError ? "unavailable" : "present"} decisions=${Array.isArray(decisions) ? decisions.length : 0} statuses=${statuses.absorbed}/${statuses.rejected}/${statuses.watch} registry_links=${registryLinks} vendored=${vendored} bundles=${bundles}/${withSources} findings=${count}`);
     } catch (error) { sourceReport(`来源段不可用: ${error.code ?? error.message}`); }
   }
+  // A portable native skill belongs to the existing catalog.skills producer.
+  for (const entry of catalog.capability_decisions ?? []) {
+    if (entry?.status === "native" && typeof entry.name === "string" && entry.path === `skills/${entry.name}/SKILL.md`)
+      fail(CATALOG, `native skill registered under capability_decisions: ${entry.name}; move the original entry to catalog.skills`);
+  }
   const registrations = new Map();
   const paths = new Set();
   for (const entry of catalog.skills) {
@@ -239,7 +244,19 @@ export function checkSkillConsistency(root) {
     paths.add(entry.path);
   }
   const payloads = new Set();
-  function consume(name, locator, source, stage) {
+  function consume(name, locator, source, stage, dependency = null) {
+    if (dependency?.bundle === `skills/external/${name}/skill-bundle.json`) {
+      try { resolveSkillPackage({ packageRoot: root, manifestPath: source, dependency }); }
+      catch (error) { fail(source, error.message); return; }
+      const matches = [...(catalog.skills ?? []), ...(catalog.capability_decisions ?? [])]
+        .filter(entry => entry.path === locator);
+      if (matches.length !== 1) { fail(source, `${CATALOG} requires one original registration for ${name}: ${locator}`); return; }
+      const registration = matches[0];
+      if (registration.status === "retired") { fail(source, `active reference to retired ${name}: ${locator}`); return; }
+      if (!actualStages.has(registration.name)) actualStages.set(registration.name, new Set());
+      actualStages.get(registration.name).add(stage);
+      return;
+    }
     const expected = `skills/${name}/SKILL.md`;
     if (typeof name !== "string" || !/^[a-z][a-z0-9-]*$/.test(name) || locator !== expected) {
       fail(source, `name/path mismatch ${name}: ${locator}; expected ${expected}`); return;
@@ -261,7 +278,7 @@ export function checkSkillConsistency(root) {
     let loaded;
     try { loaded = loadStageSkillManifest(root, stage); }
     catch (error) { fail(source, error.message); continue; }
-    for (const dep of loaded.manifest.skills) consume(dep.name, dep.path, source, stage);
+    for (const dep of loaded.manifest.skills) consume(dep.name, dep.path, source, stage, dep);
   }
   let manifest;
   let plan;

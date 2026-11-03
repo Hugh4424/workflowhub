@@ -3,6 +3,27 @@
 版本：1.0.0。owner：frontend-testing 方法维护者；consumer：页面采集器、编排器、plan-design-review 页面模式与报告读取者。
 本件是唯一判据正文；采集器产事实，形状校验器只核结构，独立执行者裁决页面，不以形状合法冒页面验收。
 
+## 报告怎样产生并核对？
+
+从本件判据与当前真实对象开始，先经 isolated-browser-qa 选择一个引擎和自有会话。
+对已选 agent-browser，在同一网关scenario内用 `agent-browser --session "$BROWSER_QA_SESSION" get cdp-url` 取得实际receiver端点；不是固定端口，不取用户浏览器端点。
+既有ego路径没有承诺同一CDP能力，未取得时保unavailable，不能因失败切引擎。
+
+逐字填当前身份后调用：
+`node skills/frontend-testing/scripts/run-page-audit.mjs --cdp-url "$CDP" --state "$STATE" --viewport "$VIEWPORT" --out "$REPORT" --workspace "$WORKSPACE" --service "$SERVICE" --route "$ROUTE" --object-version "$OBJECT_VERSION" --engine-session "$BROWSER_QA_SESSION" --engine "$BROWSER_QA_ENGINE"`
+其中workspace/service/route/object-version/session来自本次实际对象；out采用当前任务具名原件位置，旧报告不覆写。
+run-page-audit调用五采集器和规范消费检查，八项对象身份缺失拒2；失败/工具异常保原stdout及子原件，不能只留下成功报告。
+有报告后用同一 `node skills/frontend-testing/scripts/check-page-audit.mjs --input "$REPORT"` 核形状；0只证结构，不代页面通过。
+
+对报告的实际引用句运行 `node skills/frontend-testing/scripts/check-report-quotes.mjs --source "$REPORT" --quote "$QUOTE" --expect-source-sha256 "$REPORT_SHA256"`；批量引用改用--quotes显式JSON，窗口不唯一按--lines具名定位。
+0表示本次引用检查允许，2为限定类遗漏/哈希拒收，1为工具异常；不能丢失否定、未执行与覆盖限制。
+对本次真实材料身份清单运行 `node skills/frontend-testing/scripts/check-version-binding.mjs --materials "$MATERIALS" --criteria skills/frontend-testing/references/page-audit.md --expect-criteria-sha256 "$CRITERIA_SHA256"`。
+MATERIALS的每行含material_id/ref/sha256/bytes/role并绑定当前实际字节；批准/交付版本报告另按脚本现有version合同，未知不补值，身份数组不冒完整版本链。
+0仅证声明与字节关系，2为身份/版本/同意拒收，1为工具异常；不产生新任务授权。
+
+由独立执行者回读真实报告、原始子证据与两检查输出，逐项裁决；缺子件、失败、范围不足都保未测/incomplete。
+同一回修只复验原finding及受影响面，报告、修复记录与独立复验各留原件，历史不得覆盖。
+
 ## 八维骨架
 
 名称沿 [设计审查原文](../../plan-design-review/SKILL.md#check)，原文只读，页面模式分别交付：
