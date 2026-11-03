@@ -22,7 +22,7 @@ F04/F11/F12/F13 残余修了一轮。v1、v2 的原型与证据都保留，不�
 推荐用静态服务打开，便于截图与复现：
 
 ```bash
-cd specs/workflowhub-ui-frontend-c08-controlled-upgrade-20261102/prototype
+cd specs/archive/workflowhub-ui-frontend-c08-controlled-upgrade-20261102/prototype
 python3 -m http.server 8899 --bind 127.0.0.1
 # 浏览器打开 http://127.0.0.1:8899/index.html
 ```
@@ -278,7 +278,7 @@ spec 行号按 2026-11-02 20:37 读到的 `spec.md`（sha256 `1321a441…`）核
 
 ```bash
 # 1) 起临时静态服务（记录端口与 cwd）
-cd specs/workflowhub-ui-frontend-c08-controlled-upgrade-20261102/prototype
+cd specs/archive/workflowhub-ui-frontend-c08-controlled-upgrade-20261102/prototype
 python3 -m http.server 8899 --bind 127.0.0.1
 
 # 2) 用隔离浏览器会话打开（一次只用一个引擎）
