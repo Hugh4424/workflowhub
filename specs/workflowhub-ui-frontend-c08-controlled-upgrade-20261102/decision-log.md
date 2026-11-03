@@ -1113,3 +1113,10 @@ Lost in the Middle `https://arxiv.org/abs/2307.03172`。
 ### 追加决定 13：用户选择当前 PaperBuilder main（2026-11-03）
 
 用户逐字答复：“采用当前 main”。确认原件 `quality/evidence/human-confirmations/2026-11-02-003-build-code-baseline-current-main.json`。当前PB完整HEAD 5df81987031ad4f37716779a29feda901cfb9e59，主树干净（0项）；旧7723c321/97项是历史，不抹除旧记录。独立最小TCR意见009、漂移调查010承接事实刷新；入口1草稿编辑与成功应用查询分开，原重置清详情目标不变。只更新spec与P1/P2/P3失效环境和锚点，不改功能、AC、写集或覆盖上限；指定隔离树 /Users/Hugh/Hugh/Project/PaperBuilder-workflowhub-ui-frontend-c08-controlled-upgrade-20261102，分支 `task/paperbuilder/c08-spec-sync`。当前基线选择不证明任何功能或页面验收通过。
+
+### 追加决定 14：用户改为基础页面验收（2026-11-03）
+
+用户逐字答复：“没有，放弃台账页面验收，当前任务只用做基础页面验收即可，不用管任何真实数据、实盘模拟数据相关”。原始问答见 `quality/evidence/2026-11-03-102-c08-user-basic-page-acceptance-scope.json`。
+当前页面范围仅保留四个C03基础页面对象A-D；取消E台账页面验收及真实行情、实盘模拟、LIVE_SIM、平台凭据、正式worker/manifest匹配等数据资格前置。允许标明来源的受控数据、故障与长文案输入，仍须真实打开产品页面，核原状态、焦点、几何和错误/溢出判据，不用story替页面。
+台账已实现源码、五规范使用点与定向测试不删除；原30格矩阵、浏览器记录、真实NQ出处、失败与旧hook缺证均保留为历史原件，不倒写通过。当前基础范围用四对象乘六维24格承接，既有A-D与D长文案独立补证复用，不重跑全部页面。三条浏览器迟到竞态仍属层级覆盖上限，由既有定向测试承接；不新增视口或浏览器竞态要求。
+仅当前spec/P4与P6读取锚机械同步；真实问答、真实后续采用等治理验收不受本次行情数据范围取消影响。验收修改走本P4测试变更请求及独立范围核查，不新增用户确认；本决定不授push、merge、PR、close或清理用户资源。
