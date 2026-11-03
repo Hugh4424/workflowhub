@@ -5382,6 +5382,19 @@
       "retention_basis": "MT-3-124 / NARROW；N8/P5本地消费者接线，分发发布未在范围内。"
     },
     {
+      "source": "workflows/make-decision/step-consumer-design.md",
+      "destination": "workflows/make-decision/step-consumer-design.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "步骤消费者与完成判据声明；开工时复制到任务材料根，供 final-chain-runner 判 human/program 完成面。",
+      "owner": "make-decision workflow owner；C08/U-025 唯一持笔",
+      "consumer": "make-decision/build-plan/build-code/build-prd 开工协议复制到材料根；final-chain-runner 读取材料根副本；tests/contract/check-stage-steps.test.mjs 核 76 个 step_slug 覆盖。",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "全部 stage 不再需要 human/program 完成声明，或 runner 改读其他唯一来源后删除。",
+      "retention_basis": "C08 U-025；恢复已有步骤消费者完成通道，不新增 runner 或 gate。"
+    },
+    {
       "source": "tests/contract/research-report-current.test.mjs",
       "destination": "tests/contract/research-report-current.test.mjs",
       "status": "add",

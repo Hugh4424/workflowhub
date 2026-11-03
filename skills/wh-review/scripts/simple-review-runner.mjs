@@ -9,7 +9,7 @@ import {
   resolveTrustedReviewRoute,
   selectTrustedReviewProviderSelection,
 } from "./third-review-host-config.mjs";
-import { buildReviewMaterials, materialAllowlistForRule, materialForbiddenMessage, reviewInstructionsFor as canonicalReviewInstructionsFor,
+import { buildReviewMaterials, directionRevealMaterialMessage, materialAllowlistForRule, materialForbiddenMessage, missingDirectionRevealMaterials, reviewInstructionsFor as canonicalReviewInstructionsFor,
   validateMaterialAllowlist, validateBuildPlanRequest } from "./review-materials.mjs";
 import { providerAdapter } from "../../../runtime/review/canonical-review-result.mjs";
 import { reviewIdentityFromInput, reviewRuleFor, TERMINAL_REVIEW_SCOPE } from "../../../runtime/review/review-policy.mjs";
@@ -757,6 +757,17 @@ function runMaterialAllowlistPreflight(input, rule, pair = null, { rejectGenerat
       actual,
       nextAction: "remove the unknown, generated, or forbidden material and retry",
     }), pair);
+  }
+  const directionRevealGaps = input.stage === "make-decision"
+    && (input.review_track ?? input.reviewTrack ?? null) === "direction"
+    ? missingDirectionRevealMaterials(materials) : [];
+  if (directionRevealGaps.length > 0) {
+    return blockedPreflight(input, "MATERIAL_INCOMPLETE", directionRevealMaterialMessage(directionRevealGaps), preflightDiagnostic({
+      field: "current_selection/alternatives/selection_rationale/key_assumptions",
+      expected: "complete direction reveal material in the same request",
+      actual: `missing ${directionRevealGaps.join(", ")}`,
+      nextAction: "supply the selected direction, alternatives, rationale and key assumptions before dispatch",
+    }), pair, reviewActivationCohort(input) === "post" ? { material_id: null } : {});
   }
   const missing = required.find((key) => {
     // The task-bound integration bundle owns the honest fallback for missing

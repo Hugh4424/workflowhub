@@ -22,7 +22,7 @@ async function fixture(taskId='cockpit'){
  const material=join(work,'specs',taskId);mkdirSync(join(material,'phases'),{recursive:true});
  writeFileSync(join(material,'decision-log.md'),'# 当前决策\n## 目标\n让失败可见\n- U-001 用户要求保留真实失败\n## WP1\n只读页面\n');
  writeFileSync(join(material,'spec.md'),"# 真实驾驶舱\n## 功能需求\nFR-ONE 只读生成\n- **FR-CARD-001**: R-001; 只读生成，缺数据标缺。\n\n## 实现设计（全局权威）\n### 代码锚点\n`phases/P1-真实交付.md`: Task T007 material; `owned-T007.mjs`: symbol result.\n### 接口与失败语义\n只读页面，失败保原件。\n### 全局验证策略\n`node custom-oracle.mjs` proves the fixture source condition only.\n### 需求到任务追踪\n| Source | FR | AC | Phase/Task | oracle |\n| --- | --- | --- | --- | --- |\n| R-001 | FR-CARD-001 | AC-CARD-001 | P1/T007 | ORACLE-CARDS |\n\n## Appendix A\n- [ ] **AC-ONE**：缺数据标缺\n- **AC-CARD-001**: 缺数据标缺。\n## 风险\n风险：缺少原件\n");
- writeFileSync(join(material,'phases/index.md'),"# Index\n## Execution Index\n| 阶段 | 权威引用 | 语义锚点 | 写入集 | 依赖 | 消费者 |\n| --- | --- | --- | --- | --- | --- |\n| P1 | phases/P1-真实交付.md | L0 — 来源卡片 | `owned-T007.mjs` | none | reader |\n");writeFileSync(join(material,'phases/P1-真实交付.md'),contractPhase('P1',[{id:'T007',title:'真实交付',acs:['AC-CARD-001']}]).replaceAll('node --version','node custom-oracle.mjs').replace('1）读取真实失败原件。\n2）核对保存后的来源指针。','只读页面'));
+ writeFileSync(join(material,'phases/index.md'),"# Index\n## Execution Index\n| 阶段 | 权威引用 | 语义锚点 | 写入集 | 依赖 | 消费者 |\n| --- | --- | --- | --- | --- | --- |\n| `P1` | `phases/P1-真实交付.md` | L0 — 来源卡片 | `owned-T007.mjs` | none | reader |\n");writeFileSync(join(material,'phases/P1-真实交付.md'),contractPhase('P1',[{id:'T007',title:'真实交付',acs:['AC-CARD-001']}]).replaceAll('node --version','node custom-oracle.mjs').replace('1）读取真实失败原件。\n2）核对保存后的来源指针。','只读页面'));
  writeFileSync(join(work,'changed.txt'),'real diff');git(work,['add','.']);git(work,['commit','-qm','real change']);
  await task.appendRecord({dir:'quality/tests',slug:'actual-test',ext:'json',bytes:JSON.stringify({argv:['node','--test','example.test.mjs'],exit_code:0})});await task.appendRecord({dir:'quality/reviews',slug:'actual-review',ext:'json',bytes:JSON.stringify({status:'completed',findings:[]})});
  const reportPath=join(root,'report.json');writeFileSync(reportPath,JSON.stringify({task_id:taskId,rings:Array.from({length:10},(_,i)=>({ring:i+1,name:['原始需求','decision-log','调研方案','方案','spec','phase','代码实现','测试验证','最终审查','提交 PR'][i],state:i===9?'skipped':'incomplete',basis:[],applicability:'required',evidence_type:[],counted_in_denominator:true,conflict:null}))}));
@@ -418,7 +418,7 @@ async function sourceCardFixture(truth=SMALL_CARD_TRUTH,{orphan=false,missingRaw
  const phases=[...new Set(truth.tasks.map(t=>t.phase))];
  const indexRows=phases.map(phase=>{
   const cards=truth.tasks.filter(t=>t.phase===phase),name=phase+'-cards.md';writeFileSync(join(f.material,'phases',name),contractPhase(phase,cards));
-  return '| '+phase+' | phases/'+name+' | L0 — 来源卡片 | '+cards.map(t=>'`owned-'+t.id+'.mjs`').join('; ')+' | none | reader |';
+  return '| `'+phase+'` | `phases/'+name+'` | L0 — 来源卡片 | '+cards.map(t=>'`owned-'+t.id+'.mjs`').join('; ')+' | none | reader |';
  });
  writeFileSync(join(f.material,'phases/index.md'),'# Index\n\n## Execution Index\n\n| 阶段 | 权威引用 | 语义锚点 | 写入集 | 依赖 | 消费者 |\n| --- | --- | --- | --- | --- | --- |\n'+indexRows.join('\n')+'\n');
  // A supplemental heading must never become a third Task or a nav item.
@@ -543,8 +543,20 @@ test.each([
 test('ORACLE-COCKPIT-GEN: external supplement URL keeps a source pointer without pretending to fetch it',async()=>{
  const {buildPageData}=await import('../../skills/answer-as-page/scripts/build-page-data.mjs');const f=await fixture(),spec=join(f.material,'spec.md');writeFileSync(spec,'# 真实任务\n## 功能需求\nFR-ONE\n## 补充材料\n- [内部](decision-log.md)\n- [外部来源](https://authoritative.example/paper#section)\n');const external=(await buildPageData(f)).pageData.objects.find(o=>o.kind==='eres');expect(external.status.text).not.toBe('缺');expect(external.src.some(s=>s.path===spec&&s.loc.includes('https://authoritative.example/paper#section'))).toBe(true);expect(external.title+' '+external.summary).toContain('https://authoritative.example/paper#section');expect(external.summary).toContain('未抓取');
 });
+
+test('ORACLE-COCKPIT-GEN: only Phase authority cells are read while absolute non-authority paths preserve quality gaps',async()=>{
+ const {buildPageData}=await import('../../skills/answer-as-page/scripts/build-page-data.mjs');
+ const f=await fixture(),owned=join(f.material,'../../..');
+ const decoys=[join(owned,'PaperBuilder-owned/specs/P3-decoy.md'),join(f.taskPath,'quality/evidence/P4-decoy.md'),join(f.material,'phases/P3-decoy.md')];
+ for(const [i,path]of decoys.entries()){mkdirSync(join(path,'..'),{recursive:true});writeFileSync(path,'# DISTINCT NON-AUTHORITY DECOY '+i+'\nT999 must not be read as a Phase.\n');}
+ const index=join(f.material,'phases/index.md'),original=readFileSync(index,'utf8'),consumer=original.replace('L0 — 来源卡片','L0 — 来源卡片 `'+decoys[0]+'`').replace('| none | reader |','| none | `'+decoys[1]+'`; `'+decoys[2]+'` |');
+ const assertNotRead=built=>{for(const path of decoys){expect(Object.hasOwn(built.sourceFingerprint,path)).toBe(false);expect(built.pageData.objects.some(o=>o.src?.some(src=>src.path===path))).toBe(false);}expect(built.pageData.stageStatus?.quality_status).not.toBe('pass');};
+ writeFileSync(index,consumer);const legitimate=await buildPageData(f);expect(legitimate.pageData.objects.filter(o=>o.kind==='phase').map(o=>o.source_id)).toEqual(['P1']);expect(legitimate.pageData.objects.filter(o=>o.kind==='task').map(o=>o.source_id)).toEqual(['T007']);assertNotRead(legitimate);
+ writeFileSync(index,consumer.replace('`owned-T007.mjs`','`'+decoys[0]+'`'));const absolute=await buildPageData(f);expect(absolute.contractErrors.some(error=>error.includes('unsafe write set path: '+decoys[0]))).toBe(true);expect(absolute.pageData.objects.filter(o=>o.kind==='task'&&o.source_id)).toEqual([]);expect(absolute.pageData.objects.find(o=>o.kind==='task').status.text).toBe('缺');assertNotRead(absolute);
+});
+
 test('ORACLE-COCKPIT-GEN: phase index traversal and same-prefix siblings are rejected by the real derivation',async()=>{
- const {buildPageData}=await import('../../skills/answer-as-page/scripts/build-page-data.mjs');const f=await fixture();for(const ref of ['../P7-outside.md','../phases-evil/P7-outside.md']){writeFileSync(join(f.material,'phases/index.md'),'| Phase | 文件 |\n| P7 | `'+ref+'` |\n');await expect(buildPageData(f)).rejects.toThrow('phase index path escapes phases');}
+ const {buildPageData}=await import('../../skills/answer-as-page/scripts/build-page-data.mjs');const f=await fixture();for(const ref of ['../P7-outside.md','../phases-evil/P7-outside.md']){writeFileSync(join(f.material,'phases/index.md'),'# Index\n## Execution Index\n| Phase | Authority ref | Semantic anchor | Write set | Dependency | Consumer |\n| --- | --- | --- | --- | --- | --- |\n| `P7` | `'+ref+'` | boundary | `owned.mjs` | none | reader |\n');await expect(buildPageData(f)).rejects.toThrow('post Phase index row has mismatched Phase authority');}
 });
 
 test.each(['quality/tests','quality/reviews','quality/evidence/research'])('ORACLE-COCKPIT-GEN: source traversal root %s cannot alias outside the task',async ref=>{

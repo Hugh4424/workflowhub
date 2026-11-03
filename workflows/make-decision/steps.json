@@ -73,7 +73,7 @@
     {
       "step_id": 5,
       "step_slug": "outline-talk",
-      "observable_result": "同一日志中的骨架展示、既有攻击自查原件及用户对此骨架的真实答复或明确待答。 先执行原第6步的轻量攻击自查，再一次展示并等待用户真实回复；未答停草稿，旧答、推荐或模拟不代答。 本步只问方向轴与骨架；逐模块方案、字段级取舍留到第 9 步。 判定消费：SKILL.md#方法 第5步；原件：展示稿、自查原ref、用户骨架确认。 大纲确认：只确认骨架，第13步确认最终方向、范围、验收与风险。 留痕边界：Talk 目录不区分第5步骨架确认与第13步最终确认。",
+      "observable_result": "同一日志中的骨架展示、既有攻击自查原件及用户对此骨架的真实答复或明确待答。 先执行原第6步的轻量攻击自查，再一次展示并等待用户真实回复；未答停草稿，旧答、推荐或模拟不代答。 本步只问方向轴与骨架；逐模块方案、字段级取舍留到第 9 步。 判定消费：SKILL.md#方法 第5步；原件：展示稿、自查原ref、用户骨架确认。 大纲确认：只确认骨架，第14步确认最终方向、范围、验收与风险。 留痕边界：Talk 目录不区分第5步骨架确认与第14步最终确认。",
       "completion_evidence": [
         {
           "kind": "talk_original",
@@ -204,25 +204,8 @@
     },
     {
       "step_id": 13,
-      "step_slug": "approve-decision",
-      "observable_result": "一致性准备完成后的方向、范围（含第 1 步的独立可交付验收单元数与是否含需用户在场或真实凭证的动作）、风险和验收展示给用户并取得真实确认；拒绝或未答仍为草稿，不推断授权。 判定消费：SKILL.md#方法 第13步；原件：human-confirm原件与实际materialRefs。 最终确认＝阶段收口：确认原件由现human-confirm owner保存；下一阶段由用户决定。 留痕边界：确认目录含多类确认，不区分本步最终确认。",
-      "completion_evidence": [
-        {
-          "kind": "human_confirmation",
-          "uri_or_path": "quality/evidence/human-confirmations/"
-        },
-        {
-          "kind": "phase_task_facts",
-          "uri_or_path": "facts.jsonl"
-        }
-      ],
-      "method_anchor": "step-approve-decision",
-      "requires_user_reply": true
-    },
-    {
-      "step_id": 14,
       "step_slug": "stage-end-spec-analyze",
-      "observable_result": "spec-analyze对最终决策、真实问答/审查与本次实际确认作只读一致性核对；缺口保持可见，改变决定的修复先准备可审稿再重新确认，不新增审批或机器门。同时核对本次已解决术语的写入读回或 no change 理由。 判定消费：SKILL.md#方法 第14步；原件：spec-analyze原件、确认ref、术语读回。 留痕边界：spec-analyze 目录只证明有分析件，不证明本次核对结论。",
+      "observable_result": "对最终决策草稿、真实问答/审查作只读一致性核对；缺口保持可见；改变决定的修复先准备可审稿再交最终确认；已解决术语的写入读回或 no-change 理由可定位；不新增审批或机器门。 判定消费：SKILL.md#方法 第13步；原件：spec-analyze原件、决策草稿ref、术语读回。 留痕边界：spec-analyze 目录只证明有分析件，不证明本步确认前核对结论。",
       "completion_evidence": [
         {
           "kind": "quality_evidence",
@@ -237,9 +220,26 @@
       "requires_user_reply": false
     },
     {
+      "step_id": 14,
+      "step_slug": "approve-decision",
+      "observable_result": "一致性准备完成后，把方向/范围（含第 1 步的独立可交付验收单元数与是否需用户在场/真实凭证的动作）、风险、验收和 spec-analyze 缺口/处置展示给用户并取得真实确认；拒绝/未答仍为草稿。 判定消费：SKILL.md#方法 第14步；原件：human-confirm原件、materialRefs、spec-analyze ref。 最终确认＝阶段收口：确认原件由现human-confirm owner保存；下一阶段由用户决定。 留痕边界：确认目录含多类确认，不区分本步最终确认。",
+      "completion_evidence": [
+        {
+          "kind": "human_confirmation",
+          "uri_or_path": "quality/evidence/human-confirmations/"
+        },
+        {
+          "kind": "phase_task_facts",
+          "uri_or_path": "facts.jsonl"
+        }
+      ],
+      "method_anchor": "step-approve-decision",
+      "requires_user_reply": true
+    },
+    {
       "step_id": 15,
       "step_slug": "closeout",
-      "observable_result": "阶段末主会话按stage-reflection收口：依次归纳、分类归口、记录阶段成本、发布、报告，内部发布并独立读回stage-handoff。成本沿 measure-main-agent-cost 的来源与窗口边界，同一窗口一次，未触发/失败写本阶段无记录及真实原因；Phase摘要不另触发，不新增stage、字段、writer或关闭许可。 判定消费：SKILL.md#方法 第15步；原件：stage-reflection成本原件、immutable handoff与读回。 最终确认＝阶段收口：回读确认原件与领域词表读回事实，生成并独立读回handoff，交付handoff 绝对路径；不催下一阶段。 留痕边界：handoff 与成本件只证明留痕，不证明收口语义。",
+      "observable_result": "阶段末主会话按stage-reflection收口：依次归纳、分类归口、记录阶段成本、发布、报告，内部发布并独立读回stage-handoff。成本沿 measure-main-agent-cost 的来源与窗口边界，同一窗口一次，未触发/失败写本阶段无记录及真实原因；Phase摘要不另触发，不新增stage、字段、writer或关闭许可。 判定消费：SKILL.md#方法 第15步；原件：stage-reflection成本原件、immutable handoff与读回。 最终确认＝阶段收口：回读确认原件、spec-analyze 结果与领域词表读回事实，生成并独立读回handoff，交付handoff 绝对路径；不催下一阶段。 留痕边界：handoff 与成本件只证明留痕，不证明收口语义。",
       "completion_evidence": [
         {
           "kind": "handoff",

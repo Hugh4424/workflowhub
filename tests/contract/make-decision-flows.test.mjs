@@ -174,11 +174,11 @@ const complexBaseline = [
     ]
   },
   {
-    "step_slug": "approve-decision",
+    "step_slug": "stage-end-spec-analyze",
     "completion_evidence": [
       {
-        "kind": "human_confirmation",
-        "uri_or_path": "quality/evidence/human-confirmations/"
+        "kind": "quality_evidence",
+        "uri_or_path": "quality/evidence/spec-analyze/"
       },
       {
         "kind": "phase_task_facts",
@@ -187,11 +187,11 @@ const complexBaseline = [
     ]
   },
   {
-    "step_slug": "stage-end-spec-analyze",
+    "step_slug": "approve-decision",
     "completion_evidence": [
       {
-        "kind": "quality_evidence",
-        "uri_or_path": "quality/evidence/spec-analyze/"
+        "kind": "human_confirmation",
+        "uri_or_path": "quality/evidence/human-confirmations/"
       },
       {
         "kind": "phase_task_facts",
@@ -284,7 +284,7 @@ describe('ORACLE-FLOW-STEPS: per-flow original skill denominator and cockpit own
       for(const category of ['必需','按需','跳过']) expect(doc).toContain(category);
       const matrix=skillMatrixRows(doc);
       for(const name of shared31) {
-        const rows=matrix.filter(l=>new RegExp('`'+name+'`').test(l));
+        const rows=matrix.filter(l=>new RegExp('(?:`'+name+'`|\\['+name+'\\])').test(l));
         expect(rows,`${level}/${name}: one explicit matrix row`).toHaveLength(1);
         has(rows[0],/必需|按需|跳过/,`${name}: selected applicability`);
         const cells=rows[0].split('|').map(x=>x.trim()).filter(Boolean); expect(cells.length,`${name}: status plus actual trigger/reason`).toBeGreaterThanOrEqual(3); expect(cells.at(-1).replace(/[`—-]/g,'').trim().length,`${name}: nonempty trigger or skip reason`).toBeGreaterThan(2);
@@ -370,7 +370,7 @@ function routeIssues(entry, load, canonical, decision) {
   issues.push(...obligations(load,[[/evaluateEntryRoute/,'real entry function'],[/实际调用/,'actual invocation'],[/只写.{0,20}级别与路线/,'load writes canonical only'],[/工作包与决定[\s\S]*只.{0,8}引用/,'workpackage reference only'],[/不.{0,12}(?:复制|抄).{0,12}(?:取值|原值|返回)/,'no second values']], 'complex load'));
   for(const [s,label] of [[entry+'\n'+load,'root'],[canonical,'template']]) issues.push(...obligations(s,[
     [/未返回/,'absent response fields stay absent'],[/unassessed[\s\S]*owner/,'missing source unassessed owner'],[/未评估|未决/,'unavailable evaluation remains unresolved'],
-    [/paused[\s\S]*(?:第\s*8\s*步|第8)[\s\S]*(?:第\s*13\s*步|第13)[\s\S]*至少一条[\s\S]*拆分/,'paused displayed with split option at 8/13'],
+    [/paused[\s\S]*(?:第\s*8\s*步|第8)[\s\S]*(?:第\s*14\s*步|第14)[\s\S]*至少一条[\s\S]*拆分/,'paused displayed with split option at 8/14'],
     [/原\s*ref[\s\S]*(?:缺失|不可回读|不可得)[\s\S]*(?:缺口|原件不可得)/,'missing original is reported'],
     [/不.{0,12}(?:另存|复制)[\s\S]*raw|raw[\s\S]*不.{0,12}(?:另存|复制)/,'raw bytes single original'],
   ],label));
@@ -410,7 +410,7 @@ describe('ORACLE-FLOW-STEPS appended TCR182/183: method consumption and canonica
   });
   test('root and D-0xx use one entry fact writer while preserving return/failure contracts',()=>{
     const doc=text('complex'), template=read('skills/decision-log/templates/decision-log-template.md');
-    const load=doc.match(/1\. `load-context`：[\s\S]*?(?=\n2\. `)/)?.[0] ?? '';
+    const load=doc.match(/1\. (?:<a id="[^"]+"><\/a>)?`load-context`：[\s\S]*?(?=\n2\. )/)?.[0] ?? '';
     expect(routeIssues(section(doc,'入口路由'),paragraph(load,'入口评估'),section(template,'级别与路线'),section(template,'D-0xx'))).toEqual([]);
   });
   for(const level of ['complex','small','normal','planning']) test(`${level}: each consumer reads canonical route at its own action boundary`,()=>{
@@ -432,7 +432,7 @@ const clarifyLegalBody = `
 | \`spec-clarify\` | 必需 | 先读原方法后判触发。 |`;
 const clarifyLegalStep={observable_result:'实际读取 skills/spec-clarify/SKILL.md；已答分类与十维核对，无歧义 trigger=false，实际歧义等真实回复后续。'};
 const routeLegalWriter='级别与路线唯一写入 status/reason/expanded_risks/choices；boundary_clear/single_outcome/limited_impact/major_architecture/migration/permission/security；独立可交付验收单元数，用户在场或真实凭证，逐项来源、调用命令、返回原 ref。';
-const routeLegalFailures='未返回不补值；缺来源 unassessed 与 owner；不可用保持未评估/未决；paused 在第8步与第13步同批展示至少一条拆分建议；原 ref 缺失或不可回读时报原件不可得缺口，不另存或复制 raw。';
+const routeLegalFailures='未返回不补值；缺来源 unassessed 与 owner；不可用保持未评估/未决；paused 在第8步与第14步同批展示至少一条拆分建议；原 ref 缺失或不可回读时报原件不可得缺口，不另存或复制 raw。';
 const routeLegalEntry=`**唯一写入**：${routeLegalWriter}\n\n${routeLegalFailures}`;
 const routeLegalLoad='实际调用 evaluateEntryRoute，返回只写「级别与路线」；工作包与决定只引用 canonical 稳定锚与必要决定含义，不复制返回取值。'+routeLegalFailures;
 const routeLegalCanonical='## 级别与路线\n'+routeLegalWriter+routeLegalFailures;
@@ -504,7 +504,7 @@ describe('N10 direction review order',()=>{
     if(positions.some(i=>i<0)||positions.some((v,i)=>i>0&&v<=positions[i-1]))issues.push('text order');
     if(list.length!==15||list.some((v,i)=>v.step_id!==i+1))issues.push('step shape');
     if(indexes.some(i=>i<0)||indexes.some((v,i)=>i>0&&v<=indexes[i-1]))issues.push('order');
-    const part=n=>body.split(new RegExp('^'+n+'\\. `','m'))[1]?.split(/^\d+\. `/m)[0]??'';
+    const part=n=>body.split(new RegExp('^'+n+'\\. (?:<a id="[^"]+"></a>)?`','m'))[1]?.split(/^\d+\. (?:<a id="[^"]+"><\/a>)?`/m)[0]??'';
     if(!/只问方向轴与骨架/.test(part(5))||!/第 9 步/.test(part(5)))issues.push('outline scope');
     if(!/第 7 步方向审查已回读/.test(part(8))||!/未达不开始逐包收敛/.test(part(8)))issues.push('readback');
     return issues;
@@ -513,9 +513,9 @@ describe('N10 direction review order',()=>{
     const body=text('complex'),list=steps('complex').steps;
     expect(directionOrderIssues(body,list)).toEqual([]);
     for(const needle of ['只问方向轴与骨架','第 7 步方向审查已回读','未达不开始逐包收敛'])expect(directionOrderIssues(body.replace(needle,'已删除'),list).length).toBeGreaterThan(0);
-    const seven=body.match(/^7\. `direction-advice`：[\s\S]*?(?=^8\. `)/m)?.[0];
+    const seven=body.match(/^7\. (?:<a id="[^"]+"><\/a>)?`direction-advice`：[\s\S]*?(?=^8\. )/m)?.[0];
     expect(seven).toBeTruthy();
-    expect(directionOrderIssues(body.replace(seven,'').replace(/^10\. `/m,seven+'10. `'),list)).toContain('text order');
+    expect(directionOrderIssues(body.replace(seven,'').replace(/^10\. (?:<a id="[^"]+"><\/a>)?`/m,seven+'10. `'),list)).toContain('text order');
     const changed=structuredClone(list);[changed[6],changed[8]]=[changed[8],changed[6]];
     expect(directionOrderIssues(body,changed)).toContain('order');
     expect(directionOrderIssues(body,list)).toEqual([]);

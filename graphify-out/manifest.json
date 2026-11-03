@@ -420,9 +420,9 @@
     "semantic_hash": "68f3f9a8ae0e7b70e78a93ba3307c6da"
   },
   "docs/architecture/move-map.json": {
-    "mtime": 1793190738.9661546,
-    "seen": 1793240055.833691,
-    "ast_hash": "aff58e9c4b7198a3b2e61fc46060d355",
+    "mtime": 1793635106.1484423,
+    "seen": 1793689433.426234,
+    "ast_hash": "ef6dde23a96eb8c8a805f20035443b1b",
     "semantic_hash": ""
   },
   "docs/architecture/retention-manifest.json": {
@@ -804,10 +804,10 @@
     "semantic_hash": "4dd4b86c6f990687270acbc869b068a9"
   },
   "runtime/review/stage-materials.json": {
-    "mtime": 1792031544.2739258,
-    "seen": 1792054909.8531342,
-    "ast_hash": "bd90fbfa0e28759666102631f4a4ce26",
-    "semantic_hash": "bd90fbfa0e28759666102631f4a4ce26"
+    "mtime": 1793602277.9083788,
+    "seen": 1793689433.426239,
+    "ast_hash": "4ea3d42f2d8a3bc44947cd6d450e944b",
+    "semantic_hash": ""
   },
   "runtime/review/stage-review-disposition.mjs": {
     "mtime": 1793096590.867641,
@@ -1074,10 +1074,10 @@
     "semantic_hash": "7578e052ddabf34f8075e57eda750dbc"
   },
   "skills/isolated-browser-qa/scripts/browser-qa-cleanup.sh": {
-    "mtime": 1792031544.294275,
-    "seen": 1792054909.853153,
-    "ast_hash": "06552a44456d36d5de09047568ab6053",
-    "semantic_hash": "06552a44456d36d5de09047568ab6053"
+    "mtime": 1793634931.1406314,
+    "seen": 1793689433.426241,
+    "ast_hash": "a679d1f59f84e1a823129db4770795ee",
+    "semantic_hash": ""
   },
   "skills/isolated-browser-qa/scripts/browser-qa-context.sh": {
     "mtime": 1792031544.2943335,
@@ -1086,10 +1086,10 @@
     "semantic_hash": "6e33ff8fea21ce0c81a9d901ca78eda4"
   },
   "skills/isolated-browser-qa/scripts/browser-qa-doctor.sh": {
-    "mtime": 1792031544.294391,
-    "seen": 1792054909.853154,
-    "ast_hash": "df927109de91988d29a0f34ebdb92e71",
-    "semantic_hash": "df927109de91988d29a0f34ebdb92e71"
+    "mtime": 1793634931.140931,
+    "seen": 1793689433.426242,
+    "ast_hash": "48966664850650cc6a3531a9a79c66cd",
+    "semantic_hash": ""
   },
   "skills/isolated-browser-qa/scripts/cleanup-browser-qa.sh": {
     "mtime": 1792031544.2944846,
@@ -1902,10 +1902,10 @@
     "semantic_hash": "a9d52b18cefe5fb09118afc9c3ed6243"
   },
   "skills/wh-review/scripts/__tests__/make-decision-direction-reveal.test.mjs": {
-    "mtime": 1792031544.3713589,
-    "seen": 1792054909.8532128,
-    "ast_hash": "b0ff2f1af0d95c642dca067ad85fd53b",
-    "semantic_hash": "b0ff2f1af0d95c642dca067ad85fd53b"
+    "mtime": 1793683122.2346916,
+    "seen": 1793689433.426243,
+    "ast_hash": "c3ab8b3abd2464274212f27b4ec69432",
+    "semantic_hash": ""
   },
   "skills/wh-review/scripts/__tests__/material-redaction.test.mjs": {
     "mtime": 1792031544.3717992,
@@ -1962,9 +1962,9 @@
     "semantic_hash": "0e0f495794a3bc27c0baf13cfd1edca1"
   },
   "skills/wh-review/scripts/__tests__/simple-contracts.test.mjs": {
-    "mtime": 1793123508.55061,
-    "seen": 1793138272.039996,
-    "ast_hash": "9df5be83a605df0437b4fe303c6a685f",
+    "mtime": 1793602427.070055,
+    "seen": 1793689433.426243,
+    "ast_hash": "8765d2add2d1a8857a00dfda7245e32f",
     "semantic_hash": ""
   },
   "skills/wh-review/scripts/__tests__/simple-e2e-faults.test.mjs": {
@@ -1980,10 +1980,10 @@
     "semantic_hash": "b2e9295748deb18cf26135f47c278c68"
   },
   "skills/wh-review/scripts/__tests__/simple-review-runner.test.mjs": {
-    "mtime": 1792031544.3752604,
-    "seen": 1792054909.853218,
-    "ast_hash": "fc3871e2245c97189de94ccae01a5ba7",
-    "semantic_hash": "fc3871e2245c97189de94ccae01a5ba7"
+    "mtime": 1793602434.9366174,
+    "seen": 1793689433.426244,
+    "ast_hash": "001b1d066f15d06b103f13f367732606",
+    "semantic_hash": ""
   },
   "skills/wh-review/scripts/__tests__/third-review-host-config.test.mjs": {
     "mtime": 1793109363.0118728,
@@ -1998,15 +1998,15 @@
     "semantic_hash": "a6eede3fe4b75072b1be2bc2d08bfeff"
   },
   "skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs": {
-    "mtime": 1792031544.3760495,
-    "seen": 1792054909.85322,
-    "ast_hash": "967c834d065d835751a90ac18fa3d32b",
-    "semantic_hash": "967c834d065d835751a90ac18fa3d32b"
+    "mtime": 1793602448.591309,
+    "seen": 1793689433.426244,
+    "ast_hash": "4b1ff56f0e6bd6bce719f7889b11b895",
+    "semantic_hash": ""
   },
   "skills/wh-review/scripts/review-materials.mjs": {
-    "mtime": 1793123214.6140556,
-    "seen": 1793138272.0399969,
-    "ast_hash": "e9fbafe7df3d571a3c40df265134abdd",
+    "mtime": 1793683195.4915667,
+    "seen": 1793689433.4262452,
+    "ast_hash": "389addd893063a3eed3fff823c948bce",
     "semantic_hash": ""
   },
   "skills/wh-review/scripts/review-provider-client.mjs": {
@@ -2040,9 +2040,9 @@
     "semantic_hash": "e3816423140cf2dd2351011ce6f11538"
   },
   "skills/wh-review/scripts/simple-review-runner.mjs": {
-    "mtime": 1793124413.3715682,
-    "seen": 1793138272.0399969,
-    "ast_hash": "6516889a520bf0e45aafa1b45714ea49",
+    "mtime": 1793602348.0678341,
+    "seen": 1793689433.4262452,
+    "ast_hash": "808e9edf89bce97d49e8f1977d86e184",
     "semantic_hash": ""
   },
   "skills/wh-review/scripts/third-review-host-config.mjs": {
@@ -3918,9 +3918,9 @@
     "semantic_hash": ""
   },
   "tests/contract/ocr-delegation-route.test.mjs": {
-    "mtime": 1793032147.5151582,
-    "seen": 1793138272.040013,
-    "ast_hash": "d12086e475073b91cd81b80be7fda08b",
+    "mtime": 1793636294.9383438,
+    "seen": 1793689433.4262521,
+    "ast_hash": "a0379958f11aec13b01ab52b06100f5e",
     "semantic_hash": ""
   },
   "tests/contract/ocr-production-cutover.test.mjs": {
@@ -3978,10 +3978,10 @@
     "semantic_hash": "57b70fc79899fbec428beb7e73a079ac"
   },
   "tests/contract/review-materials-contract.test.mjs": {
-    "mtime": 1792031544.7305205,
-    "seen": 1792054909.853365,
-    "ast_hash": "d6ba91e4fa0489f601b18f8edf099626",
-    "semantic_hash": "d6ba91e4fa0489f601b18f8edf099626"
+    "mtime": 1793636256.892864,
+    "seen": 1793689433.4262521,
+    "ast_hash": "6f480f80d8ce68245a700ac50288837d",
+    "semantic_hash": ""
   },
   "tests/contract/review-public-entrypoints.test.mjs": {
     "mtime": 1792053835.4262204,
@@ -4146,10 +4146,10 @@
     "semantic_hash": "6082705a5e21128880a57b2e1dcc0cc2"
   },
   "tests/e2e/stage-runtime-five-stage-e2e.test.mjs": {
-    "mtime": 1792031544.7404022,
-    "seen": 1792054909.853378,
-    "ast_hash": "0383f3944d07671fc2d8214d7ff24a58",
-    "semantic_hash": "0383f3944d07671fc2d8214d7ff24a58"
+    "mtime": 1793603596.8073416,
+    "seen": 1793689433.426253,
+    "ast_hash": "3f121cc25f64aefea5b6750e7d0a8829",
+    "semantic_hash": ""
   },
   "tests/execution-record.test.mjs": {
     "mtime": 1792031544.7404869,
@@ -4458,9 +4458,9 @@
     "semantic_hash": "a714ebc76409d69e5da2c88174b7b856"
   },
   "workflows/make-decision/steps.json": {
-    "mtime": 1793178533.0708563,
-    "seen": 1793240055.833722,
-    "ast_hash": "9a7637efaf5c2469b7e9016123525dc7",
+    "mtime": 1793635122.5030954,
+    "seen": 1793689433.426255,
+    "ast_hash": "c7931b2bcded55df30626677707dda50",
     "semantic_hash": ""
   },
   ".planning/2026-09-09-build-spec-and-build-plan/build-code-P1-phase-card.md": {
@@ -5466,16 +5466,16 @@
     "semantic_hash": "7397eebe9b6f96cb40653b00c25a1b66"
   },
   "skills/decision-log/SKILL.md": {
-    "mtime": 1792031544.2856798,
-    "seen": 1792055790.2638998,
+    "mtime": 1793610005.4446487,
+    "seen": 1793689433.494344,
     "ast_hash": "85c3bfa9dcface0d37ba5d4ca2654600",
-    "semantic_hash": "85c3bfa9dcface0d37ba5d4ca2654600"
+    "semantic_hash": "f112a25e846cedbaa50af34f3b70b6f9"
   },
   "skills/decision-log/templates/decision-log-template.md": {
-    "mtime": 1792031544.2861824,
-    "seen": 1792055790.263901,
+    "mtime": 1793608872.7461877,
+    "seen": 1793689433.494345,
     "ast_hash": "59933dae440ac202a8844415cbb9dc82",
-    "semantic_hash": "59933dae440ac202a8844415cbb9dc82"
+    "semantic_hash": "afc3252e8816530ed76dc78b1c895d4b"
   },
   "skills/deep-research/SKILL.md": {
     "mtime": 1792031544.2868333,
@@ -5496,10 +5496,10 @@
     "semantic_hash": "9c664883347ca3407d17bb20baab8a3a"
   },
   "skills/frontend-component-quality/SKILL.md": {
-    "mtime": 1792031544.2889729,
-    "seen": 1792055790.263903,
+    "mtime": 1793676314.905574,
+    "seen": 1793689433.494346,
     "ast_hash": "fda7dd5f0e29e108a30df39fd58c9077",
-    "semantic_hash": "fda7dd5f0e29e108a30df39fd58c9077"
+    "semantic_hash": "2462f1f8f4be29068176edc8e470db10"
   },
   "skills/frontend-component-quality/upstream/react-best-practices/AGENTS.md": {
     "mtime": 1792031544.2892764,
@@ -5628,16 +5628,16 @@
     "semantic_hash": "b519a8cbbb8712b25769c7cbde491222"
   },
   "skills/spec-analyze/SKILL.md": {
-    "mtime": 1792031544.2991943,
-    "seen": 1792055790.263913,
+    "mtime": 1793610005.4081101,
+    "seen": 1793689433.494347,
     "ast_hash": "38a96f8e0f7ee1593be6c6d3a689a675",
-    "semantic_hash": "38a96f8e0f7ee1593be6c6d3a689a675"
+    "semantic_hash": "5f1ae8b0f8fbcdecee9a97ff3b02615a"
   },
   "skills/spec-analyze/packet-lens.md": {
-    "mtime": 1792031544.2996364,
-    "seen": 1792055790.2639139,
+    "mtime": 1793610005.4221416,
+    "seen": 1793689433.494347,
     "ast_hash": "edf89a33b56fefcc13eea5e64038a97b",
-    "semantic_hash": "edf89a33b56fefcc13eea5e64038a97b"
+    "semantic_hash": "ddf760017a6db6cdce66dd8314036e3c"
   },
   "skills/spec-clarify/SKILL.md": {
     "mtime": 1792031544.3005807,
@@ -5772,10 +5772,10 @@
     "semantic_hash": "a9fda771f7cb5d3b513a276846af1264"
   },
   "skills/wh-review/SKILL.md": {
-    "mtime": 1792031544.3646772,
-    "seen": 1792055790.263923,
+    "mtime": 1793602399.4677553,
+    "seen": 1793689433.494348,
     "ast_hash": "6508717e962d8b359c3331b1e8fac0ad",
-    "semantic_hash": "6508717e962d8b359c3331b1e8fac0ad"
+    "semantic_hash": "8dcd647981f84ff5c914ae6fdbd14d96"
   },
   "skills/wh-review/contracts/build-code.md": {
     "mtime": 1792031544.36584,
@@ -5796,10 +5796,10 @@
     "semantic_hash": "af4638feb0d26974315093ec4b09bbf0"
   },
   "skills/wh-review/contracts/make-decision.md": {
-    "mtime": 1792031544.3673425,
-    "seen": 1792055790.263925,
+    "mtime": 1793610005.4334757,
+    "seen": 1793689433.494348,
     "ast_hash": "5704b95c91eb90290c5de89b25923909",
-    "semantic_hash": "5704b95c91eb90290c5de89b25923909"
+    "semantic_hash": "1c8433b9bbdd1e4a6b2ec597fb85ef5f"
   },
   "skills/wh-review/contracts/provider-protocol.md": {
     "mtime": 1792031544.3686702,
@@ -11310,10 +11310,10 @@
     "semantic_hash": "3ee5ffd04fd6e8d289837d1232e1f9dc"
   },
   "workflows/make-decision/SKILL.md": {
-    "mtime": 1792031544.759622,
-    "seen": 1792055790.26437,
+    "mtime": 1793635189.2356203,
+    "seen": 1793689433.494355,
     "ast_hash": "16cc7bc89b2fd39bcd4643fef71ce777",
-    "semantic_hash": "16cc7bc89b2fd39bcd4643fef71ce777"
+    "semantic_hash": "2ae6a803e0e2124f958dfb9fb938046b"
   },
   "workflows/make-decision/skill-deps.yaml": {
     "mtime": 1792031544.7598646,
@@ -11436,9 +11436,9 @@
     "semantic_hash": ""
   },
   "skills/answer-as-page/scripts/build-page-data.mjs": {
-    "mtime": 1793227196.7698483,
-    "seen": 1793240055.833695,
-    "ast_hash": "7df2e0ecf65b15cddd0ff585ae3cb089",
+    "mtime": 1793687559.2005246,
+    "seen": 1793689433.42624,
+    "ast_hash": "29fc41a81a8a0c7819effcfb1b61f509",
     "semantic_hash": ""
   },
   "skills/answer-as-page/scripts/open-page.mjs": {
@@ -11490,15 +11490,15 @@
     "semantic_hash": ""
   },
   "tests/contract/check-stage-steps.test.mjs": {
-    "mtime": 1793151208.4735212,
-    "seen": 1793151397.882435,
-    "ast_hash": "6d068fa201727392de0a790b71fabde1",
+    "mtime": 1793635106.181085,
+    "seen": 1793689433.4262478,
+    "ast_hash": "087a472791268be98db7afe80029e35a",
     "semantic_hash": ""
   },
   "tests/contract/cockpit-autogen.test.mjs": {
-    "mtime": 1793227160.7477844,
-    "seen": 1793240055.8337128,
-    "ast_hash": "d846b809df02696e88ead3999f49cf20",
+    "mtime": 1793687513.311897,
+    "seen": 1793689433.4262478,
+    "ast_hash": "447d1ebbe772abe3a3e8cb3e40b32ef4",
     "semantic_hash": ""
   },
   "tests/contract/cockpit-event.test.mjs": {
@@ -11568,15 +11568,15 @@
     "semantic_hash": ""
   },
   "tests/contract/make-decision-flows.test.mjs": {
-    "mtime": 1793114998.1839929,
-    "seen": 1793138272.040009,
-    "ast_hash": "16dcbb48a61e453e7d48049631f7d6c6",
+    "mtime": 1793635314.1413293,
+    "seen": 1793689433.42625,
+    "ast_hash": "b4919d7e89dad754ff24baf3e3cf4eb7",
     "semantic_hash": ""
   },
   "tests/contract/n10-process-repair.test.mjs": {
-    "mtime": 1793114998.1798444,
-    "seen": 1793138272.04001,
-    "ast_hash": "e9f2beb457ba7287867fcfdcad6daba7",
+    "mtime": 1793635382.628248,
+    "seen": 1793689433.42625,
+    "ast_hash": "6214209384d8ed449cdab2e07450926d",
     "semantic_hash": ""
   },
   "tests/contract/n10-source-disposition.test.mjs": {
@@ -11604,9 +11604,9 @@
     "semantic_hash": ""
   },
   "tests/contract/n11-discussion-quality.test.mjs": {
-    "mtime": 1793027960.4503653,
-    "seen": 1793138272.040011,
-    "ast_hash": "be20b079c67730351deee50f64935724",
+    "mtime": 1793635382.6285117,
+    "seen": 1793689433.426251,
+    "ast_hash": "b05462b78847909c016e7847039770f1",
     "semantic_hash": ""
   },
   "tests/contract/phase-team.test.mjs": {
@@ -11711,126 +11711,6 @@
     "ast_hash": "f900edd814cc2ac71fff34dd1b5411eb",
     "semantic_hash": ""
   },
-  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/app/main.tsx": {
-    "mtime": 1793190877.5211346,
-    "seen": 1793240055.8337002,
-    "ast_hash": "8042b020261723c671348e5efa5b8e15",
-    "semantic_hash": ""
-  },
-  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/assets/app.js": {
-    "mtime": 1793234334.1359122,
-    "seen": 1793240055.8337002,
-    "ast_hash": "d20eea05fe3c46ca87f3d8870d955ab7",
-    "semantic_hash": ""
-  },
-  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/build.mjs": {
-    "mtime": 1793190877.5249279,
-    "seen": 1793240055.8337011,
-    "ast_hash": "4edb4d2ff464b4d8969515fdbc168a10",
-    "semantic_hash": ""
-  },
-  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/CandleChart.tsx": {
-    "mtime": 1793230040.0862672,
-    "seen": 1793240055.8337011,
-    "ast_hash": "d2ce44e05a551391473dc2915ad9e407",
-    "semantic_hash": ""
-  },
-  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/EquityCurve.tsx": {
-    "mtime": 1793179631.2919717,
-    "seen": 1793240055.8337018,
-    "ast_hash": "7629111add05c8919075e8ff68f3dd09",
-    "semantic_hash": ""
-  },
-  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/PerfBlocks.tsx": {
-    "mtime": 1793179631.2938101,
-    "seen": 1793240055.8337028,
-    "ast_hash": "98976dda4ee7bffbc1b18bd6cfa1b360",
-    "semantic_hash": ""
-  },
-  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/RunTimeline.tsx": {
-    "mtime": 1793179631.2940116,
-    "seen": 1793240055.8337028,
-    "ast_hash": "75e5026f6c5f4991b1ce979dd611252b",
-    "semantic_hash": ""
-  },
-  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/SimWorkbench.tsx": {
-    "mtime": 1793195984.9577408,
-    "seen": 1793240055.833704,
-    "ast_hash": "8341ebb83e7c15ddde412ef0a8915d3a",
-    "semantic_hash": ""
-  },
-  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/SimulationBoard.tsx": {
-    "mtime": 1793234330.7603445,
-    "seen": 1793240055.833705,
-    "ast_hash": "b58c463a100b55b720b7f6346723d6e4",
-    "semantic_hash": ""
-  },
-  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/data.ts": {
-    "mtime": 1793179631.2926047,
-    "seen": 1793240055.833705,
-    "ast_hash": "4aac2f4d4113e748e82d3cd148bd9a11",
-    "semantic_hash": ""
-  },
-  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/demoUniverse.ts": {
-    "mtime": 1793179631.2928035,
-    "seen": 1793240055.833706,
-    "ast_hash": "837dd87017ed1bff73766b57e8a0f563",
-    "semantic_hash": ""
-  },
-  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/shared.tsx": {
-    "mtime": 1793179631.2927043,
-    "seen": 1793240055.833707,
-    "ast_hash": "246ef9433a624ec6445b98bed16acd96",
-    "semantic_hash": ""
-  },
-  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/status.tsx": {
-    "mtime": 1793179631.2930195,
-    "seen": 1793240055.833707,
-    "ast_hash": "ecb7dbf4ffcf6a2229a48fbe27d8ccbf",
-    "semantic_hash": ""
-  },
-  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/live/store.ts": {
-    "mtime": 1793179959.5653038,
-    "seen": 1793240055.833708,
-    "ast_hash": "ecc1216846a272137f276c190f927a52",
-    "semantic_hash": ""
-  },
-  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/slotState.ts": {
-    "mtime": 1793179631.2922614,
-    "seen": 1793240055.833708,
-    "ast_hash": "d4a463a144288d4ab87397c96684a149",
-    "semantic_hash": ""
-  },
-  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/components/systemState.ts": {
-    "mtime": 1793179631.2923682,
-    "seen": 1793240055.833709,
-    "ast_hash": "08339ca8a831fed878cbbac75816f921",
-    "semantic_hash": ""
-  },
-  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/lib/fixtures.ts": {
-    "mtime": 1793185807.880591,
-    "seen": 1793240055.8337102,
-    "ast_hash": "f98d64950a46bb4c5f68c73b421db97e",
-    "semantic_hash": ""
-  },
-  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/lib/mock-state.ts": {
-    "mtime": 1793184159.4078693,
-    "seen": 1793240055.8337102,
-    "ast_hash": "35032f8de984cef7f82093e611e68ac9",
-    "semantic_hash": ""
-  },
-  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/A/package.json": {
-    "mtime": 1793190877.5166652,
-    "seen": 1793240055.8337111,
-    "ast_hash": "1bf9c131bb268ff81bfb2f4dfc66106c",
-    "semantic_hash": ""
-  },
-  "specs/workflowhub-ui-frontend-c05-prototype-design-review-20261027/samples/B/app.js": {
-    "mtime": 1793205094.3207486,
-    "seen": 1793240055.8337111,
-    "ast_hash": "4bde73c3e4c425ef58b092496a7a73c5",
-    "semantic_hash": ""
-  },
   "tests/contract/c05-final-coverage.test.mjs": {
     "mtime": 1793200009.4383574,
     "seen": 1793240055.8337111,
@@ -11872,5 +11752,119 @@
     "seen": 1793240055.833718,
     "ast_hash": "47132251647db4f620bf48b7ad04b2b2",
     "semantic_hash": ""
+  },
+  "specs/workflowhub-ui-frontend-c08-controlled-upgrade-20261102/prototype/prototype.js": {
+    "mtime": 1793683228.9381347,
+    "seen": 1793689433.426246,
+    "ast_hash": "5b15d0e37ce5765864795771162afbff",
+    "semantic_hash": ""
+  },
+  "tests/contract/browser-engine-selection.test.mjs": {
+    "mtime": 1793634939.1113696,
+    "seen": 1793689433.426247,
+    "ast_hash": "e17ec9dcc138fe27fd34fa7371caed09",
+    "semantic_hash": ""
+  },
+  "tests/contract/make-decision-flow.test.mjs": {
+    "mtime": 1793635275.3529263,
+    "seen": 1793689433.426249,
+    "ast_hash": "5a42e3539297c7af79e6e6b8016d76a2",
+    "semantic_hash": ""
+  },
+  "tests/contract/n11-review-channel.test.mjs": {
+    "mtime": 1793602513.3744125,
+    "seen": 1793689433.426251,
+    "ast_hash": "dfbeb6415eb781ed2fcefc2921a64325",
+    "semantic_hash": ""
+  },
+  "tests/fixtures/light-route-controlled/tasks.json": {
+    "mtime": 1793608872.74671,
+    "seen": 1793689433.426254,
+    "ast_hash": "bdafb1bfd9cd959cf5398bc7cb6beb5b",
+    "semantic_hash": ""
+  },
+  "tests/review/n3-detail-single-dispatch.test.mjs": {
+    "mtime": 1793602501.4131799,
+    "seen": 1793689433.426254,
+    "ast_hash": "c86860c025c371b565cf96e2e37e85eb",
+    "semantic_hash": ""
+  },
+  "specs/workflowhub-ui-frontend-c08-controlled-upgrade-20261102/decision-log.md": {
+    "mtime": 1793677940.109617,
+    "seen": 1793689433.494349,
+    "ast_hash": "",
+    "semantic_hash": "4c6cf90425654a315b8c58ba7d29df31"
+  },
+  "specs/workflowhub-ui-frontend-c08-controlled-upgrade-20261102/phases/P1-\u5f71\u54cd\u9762\u4e0e\u6d88\u8d39\u8005.md": {
+    "mtime": 1793663356.526446,
+    "seen": 1793689433.4943502,
+    "ast_hash": "",
+    "semantic_hash": "32adc98069e7dc7368b2a55c0132119d"
+  },
+  "specs/workflowhub-ui-frontend-c08-controlled-upgrade-20261102/phases/P2-\u4e94\u4efd\u89c4\u8303\u56de\u5199.md": {
+    "mtime": 1793665697.728158,
+    "seen": 1793689433.4943511,
+    "ast_hash": "",
+    "semantic_hash": "667e5495444ac7006e79bcb5958d7a68"
+  },
+  "specs/workflowhub-ui-frontend-c08-controlled-upgrade-20261102/phases/P3-\u4ee3\u7801\u4e0e\u6d4b\u8bd5\u540c\u6b65.md": {
+    "mtime": 1793684358.3469791,
+    "seen": 1793689433.4943511,
+    "ast_hash": "",
+    "semantic_hash": "ed47a29af7afa7a266425a2c58929700"
+  },
+  "specs/workflowhub-ui-frontend-c08-controlled-upgrade-20261102/phases/P4-\u72ec\u7acb\u5b9a\u5411\u590d\u9a8c.md": {
+    "mtime": 1793675385.643253,
+    "seen": 1793689433.4943519,
+    "ast_hash": "",
+    "semantic_hash": "6af311785b660fc8a7fdca89ad26d895"
+  },
+  "specs/workflowhub-ui-frontend-c08-controlled-upgrade-20261102/phases/P5-\u540e\u7eed\u4efb\u52a1\u4e0e\u9632\u8df3\u6b65.md": {
+    "mtime": 1793679026.894303,
+    "seen": 1793689433.4943519,
+    "ast_hash": "",
+    "semantic_hash": "26f446c310b60581b21cf3be38e8c936"
+  },
+  "specs/workflowhub-ui-frontend-c08-controlled-upgrade-20261102/phases/P6-\u6574\u5361\u9a8c\u6536\u4e0e\u4ea4\u63a5.md": {
+    "mtime": 1793679026.925075,
+    "seen": 1793689433.4943528,
+    "ast_hash": "",
+    "semantic_hash": "73f32c3c70f2e8d090965c650ae4e53a"
+  },
+  "specs/workflowhub-ui-frontend-c08-controlled-upgrade-20261102/phases/index.md": {
+    "mtime": 1793677940.0849245,
+    "seen": 1793689433.4943528,
+    "ast_hash": "",
+    "semantic_hash": "47d7988693a6e868b76253864a0c1d1f"
+  },
+  "specs/workflowhub-ui-frontend-c08-controlled-upgrade-20261102/prototype/README.md": {
+    "mtime": 1793622907.4804254,
+    "seen": 1793689433.494354,
+    "ast_hash": "",
+    "semantic_hash": "be961fe5aed2304611123976a5786921"
+  },
+  "specs/workflowhub-ui-frontend-c08-controlled-upgrade-20261102/prototype/index.html": {
+    "mtime": 1793622543.0766914,
+    "seen": 1793689433.494354,
+    "ast_hash": "",
+    "semantic_hash": "4290b103dd7d876453ec6966dd7f1803"
+  },
+  "specs/workflowhub-ui-frontend-c08-controlled-upgrade-20261102/spec.md": {
+    "mtime": 1793673244.582209,
+    "seen": 1793689433.494355,
+    "ast_hash": "",
+    "semantic_hash": "dcc93227190af5f6f2393aa2e99255e7"
+  },
+  "specs/workflowhub-ui-frontend-c08-controlled-upgrade-20261102/step-consumer-design.md": {
+    "mtime": 1793683228.937148,
+    "seen": 1793689433.494355,
+    "ast_hash": "",
+    "semantic_hash": "f700e8b46ba84defc39c5a9886866eff"
+  },
+  "workflows/make-decision/step-consumer-design.md": {
+    "mtime": 1793683228.9368947,
+    "seen": 1793689433.494356,
+    "ast_hash": "",
+    "semantic_hash": "adbcde21b3d7dc151d55bb04ddf65344"
   }
 }

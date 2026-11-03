@@ -4,7 +4,7 @@
 
 | 当前工作 | 最小读取材料 | 可报告范围 |
 | --- | --- | --- |
-| make-decision | 原始需求、decision-log、真实问答/Grill/审查、实际确认 | 当前决定及其来源/失败/范围一致性 |
+| make-decision | 原始需求、decision-log、真实问答/Grill/审查、决策草稿 | 当前决定及其来源/失败/范围一致性 |
 | post build-plan | 原始需求/真实答复与采用的来源、decision-log、spec、所有独立 Phase、纯指针 index | 来源→FR/AC→设计落点与遗漏/冲突事实、结构/依赖/索引；裁定归独立审查 |
 | build-code | 当前材料、实现、实际测试和验收原件 | 实际结果、材料与实现缺口及覆盖限制 |
 | build-prd | 已确认方向、实际 PRD/地图/展示与答复 | 已产规划材料的范围与真实选择 |

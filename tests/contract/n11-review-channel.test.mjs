@@ -16,7 +16,7 @@ function put(root,name,value){const path=join(root,name);mkdirSync(dirname(path)
 
 const roots=[];
 afterEach(()=>{ for (const root of roots.splice(0)) rmSync(root,{recursive:true,force:true}); });
-const input={stage:'make-decision',review_track:'direction',host_provider:'codex',materials:{raw_requirement:'Preserve usable review results.',objective_facts:'One selected route fails.',convergence_outline:'Expose partial coverage honestly.'}};
+const input={stage:'make-decision',review_track:'direction',host_provider:'codex',materials:{raw_requirement:'Preserve usable review results.',objective_facts:'One selected route fails.',convergence_outline:'Expose partial coverage honestly.',current_selection:'Keep the partial-coverage result.',alternatives:'Report only the successful route.',selection_rationale:'Partial coverage preserves the real failed source.',key_assumptions:'At least one provider returns usable findings.'}};
 // Current transport fixture: complete prose, no historical marker or fake authority.
 const postPhaseAuthority="# Phase P1\nphysical write set: src/app.mjs\n\n## Outcome and direct consumer\nThe application exposes one review subject containing the current plan and the physical Phase authority. The review provider consumes those bytes; it must not fetch a different source or substitute a pointer for the supplied authority.\n\n## Concrete work\nEdit the subject projection in src/app.mjs so the Phase member remains an independent attachment. Keep its relative member path and first heading unchanged. The execution index remains a pointer to that member. Preserve the acceptance and decision prose as separate submitted materials.\n\n## Verification\nExercise the real review runner with a controlled transport result. One selected provider returns a finding anchored on this first line; the sibling returns an explicit failure. Assert that the finding survives, the failed provider survives, and only the physically anchored material is reported read. Do not infer that the provider read the acceptance or the decision from mere delivery.\n\n## Failure and recovery\nChange the same finding to line 999. That location does not exist in this short authority, so the finding must be discarded and all submitted materials stay undetermined. A missing decision or incomplete new request must stop before transport. Restore the line and rerun the same consumer observation; do not change the parser or suppress the sibling failure.\n";
 const postInput={stage:'build-plan',activation_cohort:'post',materials:{
@@ -96,7 +96,7 @@ describe('ORACLE-N11-PARTIAL-REVIEW',()=>{
     const result=await runSimpleReview(input,setup({async runGroup(){return {runtimeId:'anchored-partial',outcome:'partial',providers:[{...success,output:JSON.stringify({findings:[finding]})},failure]};}}));
     expect(result.status).toBe('available-with-failures');
     expect(result.findings).toEqual([expect.objectContaining({provider:'model-a',issue:finding.issue})]);
-    expect(result.provider_results[0].material_coverage).toEqual({provider:'model-a',read:['raw_requirement'],unread:[],undetermined:['objective_facts','convergence_outline']});
+    expect(result.provider_results[0].material_coverage).toEqual({provider:'model-a',read:['raw_requirement'],unread:[],undetermined:['objective_facts','convergence_outline','current_selection','alternatives','selection_rationale','key_assumptions']});
   });
   it('maps an anchored post Phase authority finding to the top-level material coverage',async()=>{
     const result=await runSimpleReview(postInput,setup({async runGroup(){return {runtimeId:'post-authority-anchored',outcome:'partial',providers:[{...success,output:JSON.stringify({findings:[postPhaseAuthorityFinding]})},failure]};}}));
@@ -220,7 +220,7 @@ describe('P5 OCR regression oracles',()=>{
   it('merges only evidenced red and blue coverage through the canonical recorder',async()=>{
     const finding=path=>({severity:'minor',path,line:1,issue:'bounded evidence '+path,recommendation:'retain evidence',evidence_kind:'direct',evidence:'submitted material'});
     const result=await runSimpleReview(input,setup({async runGroup(request){return {runtimeId:'role-coverage',outcome:'partial',providers:[{...success,output:JSON.stringify({findings:[finding(request.role==='red'?'materials/01-raw_requirement.md':'materials/02-objective_facts.md')]})},failure]};}}));
-    const expected={provider:'model-a',read:['raw_requirement','objective_facts'],unread:[],undetermined:['convergence_outline']};
+    const expected={provider:'model-a',read:['raw_requirement','objective_facts'],unread:[],undetermined:['convergence_outline','current_selection','alternatives','selection_rationale','key_assumptions']};
     expect(result.provider_results[0].material_coverage).toEqual(expected);
     expect(result.role_results.red.provider_results[0].material_coverage.read).toEqual(['raw_requirement']);
     expect(result.role_results.blue.provider_results[0].material_coverage.read).toEqual(['objective_facts']);
@@ -246,7 +246,7 @@ describe('P5 OCR regression oracles',()=>{
   });
   it('does not promote a failed role claimed read to evidenced coverage',async()=>{
     const result=await runSimpleReview(input,setup({async runGroup(request){const failed=request.role==='red';return {runtimeId:'coverage-negative',outcome:failed?'partial':'completed',providers:[failed?{...failure,provider:'model-a',identity:success.identity,material_coverage:{provider:'model-a',read:['objective_facts'],unread:[],undetermined:[]}}:{...success,output:JSON.stringify({findings:[{severity:'minor',path:'materials/01-raw_requirement.md',line:1,issue:'real anchor',recommendation:'retain',evidence_kind:'direct',evidence:'real source'}]})},failure]};}}));
-    expect(result.provider_results[0].material_coverage).toEqual({provider:'model-a',read:['raw_requirement'],unread:[],undetermined:['objective_facts','convergence_outline']});
+    expect(result.provider_results[0].material_coverage).toEqual({provider:'model-a',read:['raw_requirement'],unread:[],undetermined:['objective_facts','convergence_outline','current_selection','alternatives','selection_rationale','key_assumptions']});
     expect(result.role_results.red.provider_results[0].status).toBe('failed');
   });
   it('keeps latest failure and identifies its actual checkpoint input, without falling back to old success',()=>{

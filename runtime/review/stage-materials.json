@@ -190,13 +190,13 @@
           "required": [
             "raw_requirement",
             "objective_facts",
-            "convergence_outline"
-          ],
-          "optional": [
+            "convergence_outline",
             "current_selection",
             "alternatives",
             "selection_rationale",
-            "key_assumptions",
+            "key_assumptions"
+          ],
+          "optional": [
             "independent_reconstruction",
             "direction_flow"
           ],

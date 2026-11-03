@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SESSION="${1:?session required}"
-ENGINE="${2:-${BROWSER_QA_ENGINE:-agent-browser}}"
+ENGINE="${2:-${BROWSER_QA_ENGINE:-ego-lite}}"
 TMP_ROOT="${TMPDIR:-/tmp}"
 AGENT_BROWSER_HOME="${AGENT_BROWSER_HOME:-$HOME/.agent-browser}"
 

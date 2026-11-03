@@ -29,7 +29,7 @@ stage-skill-plan.json 仍在本技能原路径提供 required_skills/optional_sk
 
 派发卫生：读取本次可信配置的 initial 实际路线，逐路派发并保留真实 adapter/source/model；未报 model 或模型族记 unknown。同一家族换 provider 键仍是同源，不用键名冒异源。只读探针的不可用、配额或包能力事实单列；不固定收到数量，不以异源下限取消来源，不由 workflow 输入改配置。
 
-材料位按 `runtime/review/stage-materials.json` 当前 stage/track 合同读取；direction 的 `raw_requirement` 是用户原始要求及来源，`objective_facts` 是可核对现状/限制及原件，`convergence_outline` 只列问题、约束、失败后果和较小可逆选项，不提前放当前选择或理由。三个键齐全或 hash 可验不证明三个角色齐；同字节填三位须报告角色未成立，不能只改标签或补 manifest。缺必要位报 MATERIAL_INCOMPLETE，派发前停该请求。detail 使用真实 `raw_requirement` 与 `approved_direction`，其余位沿当前合同，不新增必填键。
+材料位按 `runtime/review/stage-materials.json` 当前 stage/track 合同读取；direction 的 `raw_requirement` 是用户原始要求及来源，`objective_facts` 是可核对现状/限制及原件，`convergence_outline` 只列问题、约束、失败后果和较小可逆选项，不提前放当前选择或理由。但同一请求必须同时带已选方向 `current_selection`、备选方案 `alternatives`、选择理由 `selection_rationale` 和关键假设 `key_assumptions`；这四份揭示材料只在 reveal 后交付，缺它们不是“可选的简化”，是请求不完整，公共入口直接报“方向审查缺少揭示材料，challenge 无法执行”。七个键齐全或 hash 可验不证明三个角色齐；同字节填三位须报告角色未成立，不能只改标签或补 manifest。缺必要位报 MATERIAL_INCOMPLETE，派发前停该请求。detail 使用真实 `raw_requirement` 与 `approved_direction`，其余位沿当前合同，不新增必填键。
 
 调用方用现 `buildReviewMaterials` 核manifest、每份正文/来源及盲/揭示可见性；路径或嵌套ref不证正文送达。direction内部reconstruct→reveal→challenge按本次provider协议，只有盲包仅证重建。派发ARTIFACT + CONTRACT，排除实施者CLAIM/胜利摘要/自拟结论；处置回原件，可用Contract misread / Valid + actionable / Valid trade-off / Noise解释，不新增裁决枚举、轮次或provider替换。
 

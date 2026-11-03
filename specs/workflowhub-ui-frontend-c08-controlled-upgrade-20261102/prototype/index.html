@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>C08 五状态静态原型 v3 · 业务日志 / 工作台 / 浮层 / 实盘台账</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./prototype.css?v=2">
+</head>
+<body class="proto-body" data-proto-version="v3">
+
+<!--
+  这是 C08 build-plan 的 UI 原型（v3），不是产品页面，也不是实现。
+  只覆盖五个界面状态与它们的焦点、溢出、几何；数据全部为合成 fixture。
+  入口：同目录 index.html；说明与来源见同目录 README.md。
+  v2 按 2026-11-02 独立设计审查的 F01–F14 修订；v1 证据保留在任务库。
+-->
+
+<header class="proto-chrome" role="region" aria-label="原型工具条（非产品 UI）">
+  <div class="proto-chrome-top">
+    <span class="proto-brand">C08 原型 · 五状态 · v3</span>
+    <nav class="proto-tabs" id="proto-states" aria-label="状态切换">
+      <button type="button" class="proto-tab" data-state="A" aria-pressed="true">A 业务日志</button>
+      <button type="button" class="proto-tab" data-state="B" aria-pressed="false">B 工作台重试</button>
+      <button type="button" class="proto-tab" data-state="C" aria-pressed="false">C 浮层长错误</button>
+      <button type="button" class="proto-tab" data-state="D" aria-pressed="false">D 台账清筛选</button>
+      <button type="button" class="proto-tab" data-state="E" aria-pressed="false">E 台账长错误</button>
+    </nav>
+    <span class="proto-tag">静态原型 · 合成数据 · 非产品页面</span>
+  </div>
+
+  <div class="proto-caption" id="proto-caption">
+    <div class="proto-note-item"><b>问题</b><span>重置筛选后，上一事件的详情抽屉仍挂着。</span></div>
+    <div class="proto-note-item"><b>旧行为</b><span>重置只换查询，detailRecord 不清，抽屉继续显示旧事件。</span></div>
+    <div class="proto-note-item"><b>新行为</b><span>两个重置入口先清 detailRecord，再交回原重置；焦点归还沿 triggerRef。</span></div>
+    <div class="proto-note-item"><b>通过判据</b><span>点「重置筛选」后详情节点消失、筛选按重置后的值显示、焦点落到筛选控件。</span></div>
+  </div>
+
+  <div class="proto-obs" id="proto-obs" role="region" aria-label="原型观察台（非产品 UI）">
+    <div class="proto-obs-row">
+      <span class="proto-obs-item"><b>状态</b><span id="obs-state">A</span></span>
+      <span class="proto-obs-item"><b>视口</b><span id="obs-viewport">—</span></span>
+      <span class="proto-obs-item"><b>当前焦点</b><span id="obs-focus">—</span></span>
+      <span class="proto-obs-item"><b>页面横向溢出</b><span id="obs-overflow">—</span></span>
+    </div>
+    <div class="proto-obs-row">
+      <span class="proto-obs-item"><b>最近操作</b><span id="obs-action">—</span></span>
+      <span class="proto-obs-item"><b>度量</b><span id="obs-geometry">—</span></span>
+    </div>
+  </div>
+</header>
+
+<script>
+  /* N02：在舞台渲染前先发布工具条高度，避免窄窗直载时抽屉头被工具条盖住一帧 */
+  (function () {
+    var chrome = document.querySelector(".proto-chrome");
+    if (chrome) {
+      document.documentElement.style.setProperty("--proto-chrome-h", Math.ceil(chrome.getBoundingClientRect().height) + "px");
+    }
+  })();
+</script>
+
+<main id="proto-stage">
+
+  <!-- ===================== A 业务日志：列表 + 详情抽屉 ===================== -->
+  <section class="proto-state" data-state="A" aria-label="状态 A 业务日志">
+    <div class="proto-demo-bar" role="group" aria-label="原型演示操作（非产品控件）">
+      <span class="proto-demo-label">原型演示</span>
+      <button type="button" class="proto-demo-btn" data-demo="a-open">重新打开详情</button>
+      <button type="button" class="proto-demo-btn" data-demo="reset-state">重放本状态</button>
+      <span class="proto-demo-hint">点产品按钮「重置筛选」：筛选值回到默认、列表按新条件重算、抽屉关闭。</span>
+      <span class="proto-target-note" title="C08 允许的最小焦点修复；当前产品代码沿 triggerRef 回触发行">目标态：重置后焦点回筛选控件（需 C08 最小焦点修复；当前代码回触发行）</span>
+    </div>
+
+    <div class="business-log-shell pb-ui-app" data-screen-label="业务日志">
+      <main class="business-log-main">
+        <section class="business-log-heading">
+          <div><h1 class="pb-ui-page-title">业务日志</h1></div>
+          <code class="business-log-scope-id" title="backtest:bt-run-9f3a2c">backtest:bt-run-9f3a2c</code>
+        </section>
+
+        <section class="business-log-filters" aria-label="业务日志筛选">
+          <div class="business-log-filter-toolbar">
+            <label class="business-log-filter-control"><span>对象</span>
+              <select class="business-log-filter-select" id="filter-a-entity" aria-label="对象">
+                <option>全部对象</option><option selected>数据</option><option>回测</option><option>模拟</option>
+              </select>
+            </label>
+            <label class="business-log-filter-control"><span>结果</span>
+              <select class="business-log-filter-select" id="filter-a-outcome" aria-label="结果">
+                <option>全部结果</option><option selected>失败</option><option>成功</option>
+              </select>
+            </label>
+            <label class="business-log-filter-control business-log-filter-keyword"><span class="sr-only">关键词</span><span class="search-icon" aria-hidden="true"></span>
+              <input class="input" id="filter-a-keyword" aria-label="关键词" value="CHECKSUM" placeholder="搜索摘要、对象或错误码">
+            </label>
+            <button type="button" class="pb-ui-action is-ghost business-log-filter-toggle" id="toggle-advanced-a" aria-expanded="true" aria-controls="proto-advanced-a">筛选 · 4</button>
+            <div class="business-log-list-count" role="status"><span id="count-a">共 1 条</span></div>
+          </div>
+          <div id="proto-advanced-a" class="business-log-advanced-fields">
+            <label class="business-log-filter-control"><span>事件类型</span><input class="business-log-filter-date-input" id="filter-a-event-type" aria-label="事件类型" value="data.sync_failed"></label>
+            <label class="business-log-filter-control"><span>动作</span><select class="business-log-filter-select" id="filter-a-action" aria-label="动作"><option>全部动作</option><option selected>失败</option><option>已完成</option><option>已开始</option></select></label>
+            <label class="business-log-filter-control business-log-filter-date"><span>开始时间</span><input class="business-log-filter-date-input" type="datetime-local" id="filter-a-start" aria-label="开始时间" value="2026-11-01T00:00"></label>
+            <label class="business-log-filter-control business-log-filter-date"><span>结束时间</span><input class="business-log-filter-date-input" type="datetime-local" id="filter-a-end" aria-label="结束时间" value="2026-11-02T23:59"></label>
+            <button type="button" class="pb-ui-action is-ghost business-log-reset" id="reset-a">重置筛选</button>
+          </div>
+        </section>
+
+        <div class="business-log-table-scroll">
+          <table class="business-log-table" aria-label="业务日志列表">
+            <thead>
+              <tr><th scope="col">时间</th><th scope="col">事件</th><th scope="col" class="business-log-mobile-secondary">对象</th><th scope="col">摘要</th><th scope="col">结果</th><th scope="col" class="business-log-mobile-secondary">来源</th></tr>
+            </thead>
+            <tbody id="rows-a">
+              <tr class="business-log-table-row" tabindex="0"
+                  data-event-id="evt-a1b2c3d4-5e6f-47a8-9b0c-1d2e3f4a5b6c"
+                  data-entity="数据" data-outcome="失败" data-event-type="data.sync_failed" data-action="失败"
+                  data-time="2026-11-02T09:12:44+08:00"
+                  aria-label="打开日志详情：2026/11/2 09:12:44 数据同步失败">
+                <td data-label="时间"><time datetime="2026-11-02T09:12:44+08:00">2026/11/2 09:12:44</time></td>
+                <td data-label="事件"><span class="business-log-business-label">数据 · 失败</span></td>
+                <td class="business-log-mobile-secondary" data-label="对象"><span class="business-log-entity-type">数据</span><code class="business-log-entity-id" title="catalog:nq:20261101">catalog:nq:20261101</code></td>
+                <td data-label="摘要"><strong class="business-log-summary">数据同步失败：目录键 catalog:nq:20261101 校验不通过（DATA_SYNC_CHECKSUM_MISMATCH）</strong><span class="business-log-row-marker">过程未确认</span></td>
+                <td data-label="结果"><span class="business-log-outcome is-failure">失败</span></td>
+                <td class="business-log-mobile-secondary" data-label="来源"><code class="business-log-source">data-sync-worker</code></td>
+              </tr>
+              <tr class="business-log-table-row" tabindex="0" hidden
+                  data-event-id="evt-7c2e9f10-8a3b-4c5d-9e6f-0a1b2c3d4e5f"
+                  data-entity="数据" data-outcome="成功" data-event-type="data.sync_completed" data-action="已完成"
+                  data-time="2026-11-02T09:55:10+08:00"
+                  aria-label="打开日志详情：2026/11/2 09:55:10 数据同步完成">
+                <td data-label="时间"><time datetime="2026-11-02T09:55:10+08:00">2026/11/2 09:55:10</time></td>
+                <td data-label="事件"><span class="business-log-business-label">数据 · 已完成</span></td>
+                <td class="business-log-mobile-secondary" data-label="对象"><span class="business-log-entity-type">数据</span><code class="business-log-entity-id" title="catalog:nq:20261101">catalog:nq:20261101</code></td>
+                <td data-label="摘要"><strong class="business-log-summary">数据同步完成：catalog:nq:20261101 已写入 1,284 条</strong></td>
+                <td data-label="结果"><span class="business-log-outcome is-success">成功</span></td>
+                <td class="business-log-mobile-secondary" data-label="来源"><code class="business-log-source">data-sync-worker</code></td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="business-log-end" id="empty-a" hidden>当前筛选没有匹配记录。</p>
+        </div>
+        <p class="business-log-end">已经到达当前可读历史的末尾。</p>
+      </main>
+
+      <div class="pb-ui-drawer-layer" id="layer-a">
+        <aside class="pb-ui-drawer business-log-detail-drawer" role="region" aria-label="业务日志详情" aria-labelledby="drawer-a-title" tabindex="-1">
+          <header class="pb-ui-drawer-header">
+            <h2 id="drawer-a-title">日志详情</h2>
+            <button type="button" class="pb-ui-drawer-close" id="close-a" aria-label="关闭日志详情">×</button>
+          </header>
+          <div class="pb-ui-drawer-body">
+            <div class="business-log-detail-body">
+              <div class="business-log-detail-summary">
+                <span class="business-log-outcome is-failure" id="detail-a-outcome">失败</span>
+                <time id="detail-a-time" datetime="2026-11-02T09:12:44+08:00">2026/11/2 09:12:44</time>
+              </div>
+              <p class="business-log-detail-message" id="detail-a-message">数据同步失败：目录键 catalog:nq:20261101 校验不通过（错误码 DATA_SYNC_CHECKSUM_MISMATCH）。</p>
+              <section class="business-log-detail-section" aria-label="业务事件字段">
+                <h3>字段</h3>
+                <dl id="detail-a-fields"></dl>
+              </section>
+              <section class="business-log-detail-section" aria-label="相关对象">
+                <h3>相关对象</h3>
+                <div class="business-log-related-object"><span id="detail-a-related-label">数据 · catalog:nq:20261101</span><code id="detail-a-related-code">catalog.nq.20261101</code></div>
+                <button type="button" class="business-log-related-link" data-unwired data-unwired-name="查看对象业务日志">查看对象业务日志 → <span class="proto-unwired">未接线</span></button>
+              </section>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== B 工作台：定位失败 → 重试恢复抽屉 ===================== -->
+  <section class="proto-state" data-state="B" aria-label="状态 B 工作台定位失败后重试" hidden>
+    <div class="proto-demo-bar" role="group" aria-label="原型演示操作（非产品控件）">
+      <span class="proto-demo-label">原型演示</span>
+      <button type="button" class="proto-demo-btn" data-demo="b-fail">还原失败态</button>
+      <button type="button" class="proto-demo-btn" data-demo="reset-state">重放本状态</button>
+      <span class="proto-demo-hint">点图表错误块里的产品按钮「重试定位」：抽屉恢复、身份 position-2、焦点进抽屉。</span>
+    </div>
+
+    <main class="app pb-ui-app pb-ui-workbench-screen" data-screen-label="回测工作台" data-proto-b>
+      <div class="topbar">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <strong class="proto-b-brand">NQ 策略 · 回测复盘</strong>
+        <span class="proto-inline-tag">图表为占位，真实 Footprint 组件未复制</span>
+      </div>
+
+      <div class="main-grid">
+        <div class="left-column">
+          <section class="chart-panel" aria-label="图表">
+            <header class="chart-head">
+              <h2>价格与成交足迹</h2>
+              <span class="pb-ui-label-text">NQZ6 · 5 分钟 · run-4d20</span>
+            </header>
+            <div class="proto-chart" id="chart-b" role="img" aria-label="图表占位：NQZ6 5 分钟走势与两笔持仓标记">
+              <svg viewBox="0 0 800 320" preserveAspectRatio="none" aria-hidden="true">
+                <polyline class="proto-chart-line" points="0,240 60,220 120,232 180,190 240,200 300,160 360,175 420,140 480,155 540,120 600,135 660,100 720,112 800,86"></polyline>
+                <line class="proto-chart-rule" x1="0" y1="240" x2="800" y2="240"></line>
+                <line class="proto-chart-rule" x1="0" y1="160" x2="800" y2="160"></line>
+              </svg>
+              <span class="proto-chart-marker" style="left:38%;top:46%" aria-hidden="true">1</span>
+              <span class="proto-chart-marker is-loss" style="left:66%;top:28%" aria-hidden="true">2</span>
+              <span class="proto-chart-note">图表占位 · 真实 Footprint 未复制</span>
+            </div>
+            <div class="chart-focus-state" id="chart-error-b" role="alert">
+              <span>图表定位失败：未成交订单缺少撤单信号 K 线，无法定位到 position-2（已尝试 1 次）。</span>
+              <button type="button" class="btn btn-ghost" id="retry-b">重试定位</button>
+            </div>
+          </section>
+        </div>
+
+        <div class="side-column">
+          <section class="proto-panel" aria-label="订单复盘入口">
+            <h3>订单复盘</h3>
+            <ul class="proto-position-list">
+              <li><button type="button" data-open-position="position-1">position-1 · 多头 · +$286.00</button></li>
+              <li><button type="button" data-open-position="position-2">position-2 · 空头 · −$412.50</button></li>
+            </ul>
+            <p class="proto-panel-note">真实产品里这些行来自回测报告的 positions；原型只保留身份与点击。</p>
+          </section>
+        </div>
+      </div>
+
+      <div class="pb-ui-drawer-layer" id="layer-b" hidden>
+        <aside class="position-comment-drawer" role="region" aria-label="头寸 position-2 复盘" tabindex="-1">
+          <div class="position-comment-drawer-head">
+            <div>
+              <div class="drawer-head-title">
+                <h2>头寸复盘</h2>
+                <span class="drawer-result loss" id="detail-b-result">损单</span>
+                <strong id="detail-b-pnl">−$412.50</strong>
+              </div>
+              <div class="eyebrow">POSITION REVIEW</div>
+              <span class="drawer-position-id" id="detail-b-identity">position-2</span>
+            </div>
+            <div class="drawer-head-actions">
+              <div class="drawer-nav-group" aria-label="订单导航">
+                <button type="button" data-nav="prev">上一个</button>
+                <button type="button" data-nav="next">下一个</button>
+                <button type="button" data-nav="loss">下一个亏损单</button>
+              </div>
+            </div>
+            <button type="button" class="drawer-close" id="close-b" aria-label="关闭评论">×</button>
+          </div>
+          <div class="position-comment-drawer-body">
+            <div class="drawer-summary-grid" role="group" aria-label="头寸摘要">
+              <div><span>方向</span><strong id="detail-b-side">空头</strong></div>
+              <div><span>PnL</span><strong class="loss" id="detail-b-pnl-cell">−$412.50</strong></div>
+              <div><span>持仓时长</span><strong id="detail-b-holding">18 根 K</strong></div>
+              <div><span>退出原因</span><strong id="detail-b-exit">移动止损</strong></div>
+              <div><span>市场状态</span><strong id="detail-b-market">趋势</strong></div>
+              <div><span>进场分支</span><strong id="detail-b-entry">回调</strong></div>
+            </div>
+            <section class="drawer-section context-section" aria-label="交易上下文">
+              <div class="drawer-section-title"><h3>交易上下文 · 进场前 10 根 → 出场后 2 根</h3></div>
+              <div class="drawer-context drawer-context-grid">
+                <div class="drawer-context-visual proto-mini-footprint">足迹占位</div>
+                <div class="drawer-observations" role="group" aria-label="交易观察">
+                  <div><span>入场 Delta</span><strong id="detail-b-delta">−38</strong></div>
+                  <div><span>累计 Delta</span><strong id="detail-b-cum">−212</strong></div>
+                  <div><span>MAE / MFE</span><strong id="detail-b-maemfe">14 / 6 tick</strong></div>
+                </div>
+              </div>
+            </section>
+            <section class="drawer-section" aria-label="成交解释">
+              <div class="drawer-section-title"><h3>成交解释</h3></div>
+              <div class="explanation-cards">
+                <details class="explanation-card" open>
+                  <summary class="explanation-card-title">多空判断</summary>
+                  <div class="explanation-card-content" id="detail-b-explain-direction">日线趋势向上，但 5 分钟结构转弱，按规则允许逆势小仓。</div>
+                </details>
+                <details class="explanation-card" open>
+                  <summary class="explanation-card-title">入场策略</summary>
+                  <div class="explanation-card-content" id="detail-b-explain-entry">回调至前高下方 2 tick，出现卖压足迹后入场。</div>
+                </details>
+              </div>
+            </section>
+          </div>
+        </aside>
+      </div>
+    </main>
+  </section>
+
+  <!-- ===================== C 工作台 compact 浮层长错误 ===================== -->
+  <section class="proto-state" data-state="C" aria-label="状态 C 工作台浮层长错误" hidden>
+    <div class="proto-demo-bar" role="group" aria-label="原型演示操作（非产品控件）">
+      <span class="proto-demo-label">原型演示</span>
+      <button type="button" class="proto-demo-btn" data-demo="c-legacy" aria-pressed="false">显示旧行为</button>
+      <button type="button" class="proto-demo-btn" data-demo="c-new" aria-pressed="true">显示新行为</button>
+      <button type="button" class="proto-demo-btn" data-demo="reset-state">重放本状态</button>
+      <span class="proto-demo-hint">旧行为复刻「错误继承外层 nowrap」，用来看溢出；新行为是 C08 的唯一一条换行规则。</span>
+    </div>
+
+    <main class="app pb-ui-app pb-ui-workbench-screen" data-screen-label="回测工作台" data-proto-c>
+      <div class="topbar">
+        <strong class="proto-c-brand">NQ 策略 · 回测</strong>
+        <div class="topbar-actions">
+          <div class="backtest-top-controls backtest-top-controls-compact" role="group" aria-label="回测控制">
+            <button type="button" class="backtest-top-trigger" id="trigger-c" aria-expanded="true" aria-controls="popover-c">
+              <span>回测</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+            </button>
+            <div class="backtest-top-popover" id="popover-c">
+              <div class="backtest-popover-heading"><strong>回测窗口</strong><span>NQ · 本机数据</span></div>
+              <div class="backtest-popover-fields">
+                <label>开始时间<input type="datetime-local" aria-label="右上回测开始时间" value="2026-10-01T00:00"></label>
+                <label>结束时间<input type="datetime-local" aria-label="右上回测结束时间" value="2026-10-31T23:59"></label>
+              </div>
+              <p class="proto-popover-note"><span class="proto-unwired" title="改时间不会提交或重算">时间输入未接线</span></p>
+              <div class="backtest-popover-shift">
+                <span>最早完整月 · 已选 31 天</span>
+                <span class="proto-mini-btns">
+                  <button type="button" data-unwired data-unwired-name="窗口 −10 天">−10 天</button>
+                  <button type="button" data-unwired data-unwired-name="窗口 +10 天">+10 天</button>
+                  <span class="proto-unwired" title="±10 天按钮未接线，点击只写日志">未接线</span>
+                </span>
+              </div>
+              <div class="backtest-popover-actions">
+                <span title="只有价格实际穿过挂单价，才把挂单算作成交">成交方式：保守</span>
+                <button type="button" class="btn btn-blue" data-unwired data-unwired-name="开始回测">开始回测 <span class="proto-unwired">未接线</span></button>
+              </div>
+              <div class="backtest-top-error" id="error-c" role="alert">提交失败：风控模板 tpl-12 的止损距离 3.5 tick 低于合约最小 4 tick；保证金快照读取超时 30s；错误码 RISK_TEMPLATE_VALIDATION_TIMEOUT_20261102T091512Z_ACCOUNT_SNAPSHOT_UNAVAILABLE，请刷新后重试或改用保守模板。</div>
+              <div class="backtest-top-task-state" role="alert">
+                <strong>回测失败</strong>
+                <span>task-7c81 · run-4d20</span>
+                <span>RISK_TEMPLATE_REJECTED</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="proto-c-body">
+        <p class="proto-panel-note">浮层宽 300px（workbench-page.css:1922）；≤680px 时宽 min(300px, 100vw − 20px)（:2040）。长错误文本必须在这两个宽度内换行与任意断词。</p>
+      </div>
+    </main>
+  </section>
+
+  <!-- ===================== D 实盘台账：清除筛选后清详情与焦点返回 ===================== -->
+  <section class="proto-state" data-state="D" aria-label="状态 D 实盘台账清除筛选" hidden>
+    <div class="proto-demo-bar" role="group" aria-label="原型演示操作（非产品控件）">
+      <span class="proto-demo-label">原型演示</span>
+      <button type="button" class="proto-demo-btn" data-demo="d-open">重新打开详情</button>
+      <button type="button" class="proto-demo-btn" data-demo="reset-state">重放本状态</button>
+      <span class="proto-demo-hint">点产品按钮「清除筛选」：详情关闭、筛选重置、焦点回「时段筛选」（按 spec 的实盘 clear() 契约）。</span>
+    </div>
+
+    <div class="ll-root" data-proto-ledger>
+      <header class="ll-ledger-header">
+        <div class="ll-heading ll-page-head">
+          <div class="ll-page-title">
+            <h2>台账</h2>
+            <span class="lm-badge">只读 · 审计</span>
+          </div>
+          <span class="lm-muted">快照 2026-11-02 09:15 CT · 合成数据</span>
+        </div>
+      </header>
+
+      <section id="ledger-signals-d" aria-label="信号簿">
+        <div class="ll-heading"><span class="ll-heading-idx">②</span><h2>信号簿</h2></div>
+        <div class="ll-signal-filter-bar">
+          <div class="ll-filters">
+            <select aria-label="时段筛选" id="range-d"><option>今日</option><option selected>近 7 个时段</option></select>
+            <select aria-label="账户角色筛选" id="role-d">
+              <option value="all">账户角色 · 全部</option>
+              <option value="leader" selected>信号账户</option>
+              <option value="follower">跟单账户</option>
+              <option value="unknown">角色未提供</option>
+            </select>
+            <select aria-label="品种筛选" id="sym-d"><option>品种 · 全部</option><option selected>NQZ6</option></select>
+            <select aria-label="账户筛选" id="acct-d"><option>账户 · 全部</option><option selected>acct-7f3c</option></select>
+            <select aria-label="状态筛选" id="life-d"><option value="open" selected>全部未结状态</option><option value="all">全部（含已对平）</option></select>
+          </div>
+          <div class="ll-signal-secondary">
+            <span class="lm-muted" id="count-d">3 条</span>
+            <span class="proto-unwired" title="单个筛选控件不重新过滤；本状态只演示「清除筛选」">筛选未接线</span>
+            <button type="button" class="ll-weak-link" id="clear-d">清除筛选</button>
+          </div>
+        </div>
+
+        <div class="lm-panel ll-signal-scroll" role="region" aria-label="信号流水六列，横向滚动；点击或回车查看详情" tabindex="0">
+          <table class="pb-ui-table ll-signal-table" aria-label="信号流水">
+            <thead><tr><th scope="col">落盘（CT）</th><th scope="col">发出（CT）</th><th scope="col">品种</th><th scope="col">方向数量</th><th scope="col">账户</th><th scope="col">对账状态</th></tr></thead>
+            <tbody>
+              <tr class="ll-signal-row" tabindex="0" data-signal-id="sig-20261102-9f3a2c71-4d2b-4f1e-8a6c-0b7d9e4c1a55" aria-label="查看信号 sig-20261102-9f3a2c71-4d2b-4f1e-8a6c-0b7d9e4c1a55 详情">
+                <td><time datetime="2026-11-02T08:12:04-06:00">08:12:04</time></td>
+                <td><time datetime="2026-11-02T08:12:05-06:00">08:12:05</time></td>
+                <td>NQZ6</td>
+                <td class="ll-signal-direction lm-tone-ok">多 2</td>
+                <td title="acct-7f3c">··7f3c</td>
+                <td><span class="lm-badge lm-tone-ok">已发送</span><span class="ll-signal-detail-hint">查看详情 ›</span></td>
+              </tr>
+              <tr class="ll-signal-row" tabindex="0" data-signal-id="sig-20261102-4b8d1e26-7c90-4a35-b1f2-6d8e0c9a2b74" aria-label="查看信号 sig-20261102-4b8d1e26-7c90-4a35-b1f2-6d8e0c9a2b74 详情">
+                <td><time datetime="2026-11-02T08:31:47-06:00">08:31:47</time></td>
+                <td><time datetime="2026-11-02T08:31:48-06:00">08:31:48</time></td>
+                <td>NQZ6</td>
+                <td class="ll-signal-direction lm-tone-bad">空 1</td>
+                <td title="acct-2b91">··2b91</td>
+                <td><span class="lm-badge lm-tone-warn">待确认</span><span class="ll-signal-detail-hint">查看详情 ›</span></td>
+              </tr>
+              <tr class="ll-signal-row" tabindex="0" data-signal-id="sig-20261102-1a2b3c4d-5e6f-4788-99aa-bbccddeeff00" aria-label="查看信号 sig-20261102-1a2b3c4d-5e6f-4788-99aa-bbccddeeff00 详情">
+                <td><time datetime="2026-11-02T09:02:19-06:00">09:02:19</time></td>
+                <td><time datetime="2026-11-02T09:02:21-06:00">09:02:21</time></td>
+                <td>NQZ6</td>
+                <td class="ll-signal-direction lm-tone-ok">多 1</td>
+                <td title="acct-7f3c">··7f3c</td>
+                <td><span class="lm-badge lm-tone-muted">重复</span><span class="ll-signal-detail-hint">查看详情 ›</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <div class="pb-ui-drawer-layer" id="layer-d" hidden>
+        <aside class="pb-ui-drawer lm-drawer ll-drawer" role="region" aria-label="信号详情" tabindex="-1">
+          <header class="pb-ui-drawer-header">
+            <h2>信号详情</h2>
+            <button type="button" class="pb-ui-drawer-close" id="close-d" aria-label="关闭信号详情">×</button>
+          </header>
+          <div class="pb-ui-drawer-body">
+            <p class="ll-drawer-id ll-mono" id="detail-d-id">sig-20261102-9f3a2c71-4d2b-4f1e-8a6c-0b7d9e4c1a55</p>
+            <span class="lm-badge lm-tone-ok" id="detail-d-badge">已发送</span>
+            <p class="ll-drawer-readonly">只读 · 本抽屉无任何执行按钮</p>
+            <div class="ll-signal-identity">
+              <dl>
+                <dt>账户</dt><dd id="detail-d-account" title="acct-7f3c">··7f3c</dd>
+                <dt>品种</dt><dd id="detail-d-symbol">NQZ6</dd>
+                <dt>合约</dt><dd id="detail-d-contract">NQZ6</dd>
+                <dt>方向数量</dt><dd id="detail-d-direction">多 2</dd>
+                <dt>防重发判定</dt><dd id="detail-d-dedupe">未命中重复</dd>
+                <dt>当前判定时刻</dt><dd id="detail-d-judged">2026-11-02 08:12:05 CT</dd>
+              </dl>
+              <button type="button" class="lc-btn" id="detail-d-copy">复制信号 ID</button>
+              <p role="status" id="detail-d-copy-status"></p>
+            </div>
+            <h3 class="ll-detail-label">防重发双判依据</h3>
+            <div class="ll-dedupe-evidence">
+              <p class="ll-ev"><span>信号唯一 ID</span><span class="ll-mono lm-tone-ok" id="detail-d-dedupe-id">sig-20261102-9f3a2c71</span></p>
+              <p class="ll-ev"><span>本地已发送记录</span><span class="ll-mono lm-tone-ok" id="detail-d-sent">2026-11-02 08:12:05 已发送</span></p>
+            </div>
+            <h3 class="ll-detail-label">历次判定记录</h3>
+            <p class="ll-mono ll-judged" id="detail-d-judged-line">2026-11-02 08:12:05 CT · 已发送</p>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== E 实盘台账长错误（作用域限定换行） ===================== -->
+  <section class="proto-state" data-state="E" aria-label="状态 E 实盘台账长错误" hidden>
+    <div class="proto-demo-bar" role="group" aria-label="原型演示操作（非产品控件）">
+      <span class="proto-demo-label">原型演示</span>
+      <button type="button" class="proto-demo-btn" data-demo="e-legacy" aria-pressed="false">显示旧行为</button>
+      <button type="button" class="proto-demo-btn" data-demo="e-new" aria-pressed="true">显示新行为</button>
+      <button type="button" class="proto-demo-btn" data-demo="reset-state">重放本状态</button>
+      <span class="proto-demo-hint">新行为按 spec 的告警样式契约写成 `.ll-root .lg-warning`；下方「全站基线」块用同一段文本证明共享类未被改。</span>
+    </div>
+
+    <div class="ll-root" data-proto-ledger>
+      <header class="ll-ledger-header">
+        <div class="ll-heading ll-page-head">
+          <div class="ll-page-title">
+            <h2>台账</h2>
+            <span class="lm-badge">只读 · 审计</span>
+          </div>
+          <span class="lm-muted">快照 2026-11-02 09:15 CT · 合成数据</span>
+        </div>
+      </header>
+
+      <div class="lg-warning" id="warning-e" role="alert">对账读回异常：账户 acct-7f3c 的冻结帧缺少 signal_book_source_refs 与 frame_source_refs 的关联（reconciliation:signal_book_query），同时平台读回超时 30s；错误码 RECONCILIATION_READBACK_TIMEOUT_20261102T091512Z_SIGNAL_BOOK_SOURCE_REFS_MISSING；原命令收据已保留，恢复后按原 scope 重放。</div>
+
+      <section id="ledger-signals-e" aria-label="信号簿">
+        <div class="ll-heading"><span class="ll-heading-idx">②</span><h2>信号簿</h2></div>
+        <div class="ll-signal-filter-bar">
+          <div class="ll-filters">
+            <select aria-label="时段筛选"><option>今日</option></select>
+            <select aria-label="账户角色筛选"><option>账户角色 · 全部</option></select>
+            <select aria-label="品种筛选"><option>品种 · 全部</option></select>
+            <select aria-label="账户筛选"><option>账户 · 全部</option></select>
+            <select aria-label="状态筛选"><option>全部未结状态</option></select>
+          </div>
+          <div class="ll-signal-secondary">
+            <span class="lm-muted" id="count-e">1 条</span>
+            <span class="proto-unwired" title="本状态只展示长错误；筛选与详情未接线">筛选与详情未接线</span>
+          </div>
+        </div>
+        <div class="lm-panel ll-signal-scroll" role="region" aria-label="信号流水" tabindex="0">
+          <table class="pb-ui-table ll-signal-table" aria-label="信号流水">
+            <thead><tr><th scope="col">落盘（CT）</th><th scope="col">发出（CT）</th><th scope="col">品种</th><th scope="col">方向数量</th><th scope="col">账户</th><th scope="col">对账状态</th></tr></thead>
+            <tbody>
+              <tr class="ll-signal-row is-static" data-signal-id="sig-20261102-0a1b2c3d-4e5f-4061-8273-8495a6b7c8d9">
+                <td><time datetime="2026-11-02T09:02:19-06:00">09:02:19</time></td>
+                <td><time datetime="2026-11-02T09:02:21-06:00">09:02:21</time></td>
+                <td>NQZ6</td>
+                <td class="ll-signal-direction lm-tone-ok">多 1</td>
+                <td title="acct-7f3c">··7f3c</td>
+                <td><span class="lm-badge lm-tone-muted">待读回</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <div class="proto-baseline">
+      <p class="proto-demo-label">对照：全站 .lg-warning 基线（本次不改；长 token 仍不换行，属既有行为）</p>
+      <div class="lg-warning" id="warning-baseline" role="alert">对账读回异常：账户 acct-7f3c 的冻结帧缺少 signal_book_source_refs 与 frame_source_refs 的关联（reconciliation:signal_book_query），同时平台读回超时 30s；错误码 RECONCILIATION_READBACK_TIMEOUT_20261102T091512Z_SIGNAL_BOOK_SOURCE_REFS_MISSING；原命令收据已保留，恢复后按原 scope 重放。</div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="proto-foot">
+  <details>
+    <summary>机器可读事实（JSON，校验与复读用）</summary>
+    <pre id="proto-facts"></pre>
+  </details>
+  <details>
+    <summary>观察日志（最近 10 条）</summary>
+    <ol id="obs-log"></ol>
+  </details>
+  <p class="proto-foot-note">数据为合成 fixture，不含真实账户、密钥或产品运行数据。文案尽量沿用真实源；仍是演示值的地方已在 README 标明。本页不是产品页面，也不能替代 build-code 的真实页面与 Playwright 证据。</p>
+</footer>
+
+<script src="./prototype.js?v=7"></script>
+</body>
+</html>

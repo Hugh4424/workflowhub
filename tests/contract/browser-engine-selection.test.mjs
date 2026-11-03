@@ -11,6 +11,7 @@ describe("ORACLE-EXTRACT-ENTRY / ORACLE-EXTRACT-GUARD",()=>{
   it("engine:prefers-ego-lite",()=>{expect(read(session)).toMatch(/ego-?lite/i);});
   it("engine:fallback-recorded",()=>{expect(read(session)).toMatch(/fallback|engine_switch|回退/);});
   it("engine:shell-cases-synced",()=>{for(const p of [doctor,cleanup,context]){expect(read(p),`${p} must know ego-lite`).toMatch(/ego-?lite/i);}});
+  it("engine:shell-defaults-ego-lite",()=>{for(const p of [doctor,cleanup]){expect(read(p),`${p} default engine must be ego-lite`).toMatch(/BROWSER_QA_ENGINE:-ego-lite/);}expect(read(context),"context keeps auto discovery to ego-lite then documented fallback").toContain('BROWSER_QA_ENGINE:-auto');});
   it("guard:unregistered-rejected",()=>{expect(read(session)).toMatch(/unregistered|未登记|not-registered/);});
   it("guard:no-arbitrary-eval",()=>{const s=read(session);expect(s).not.toMatch(/eval\(/);});
   it("guard:reference-documents-get-styles",()=>{const ref=readFileSync(join(ROOT,"skills/isolated-browser-qa/references/agent-browser.md"),"utf8");expect(ref).toContain("get styles");expect(ref).toContain("get box");});

@@ -471,6 +471,10 @@ process.stdout.write(JSON.stringify({
       materials: {
         raw_requirement: "A bounded review recovery fixture.", objective_facts: "The task workspace and trusted route exist.",
         convergence_outline: "The fixture review converges on the configured direction.",
+        current_selection: "fixture choice",
+        alternatives: "Leave direction unrevealed and skip challenge.",
+        selection_rationale: "The configured direction keeps the reveal boundary executable.",
+        key_assumptions: "The trusted route exists and the provider boundary is controlled.",
       },
     }));
 
