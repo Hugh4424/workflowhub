@@ -108,3 +108,39 @@ test("delivers all four reveal materials in the direction packet before the brok
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+for (const key of REVEAL_KEYS) {
+  for (const [kind, empty] of [["string", ""], ["Buffer", Buffer.alloc(0)], ["Uint8Array", new Uint8Array(0)]]) {
+    test(`rejects empty ${kind} reveal bytes for ${key} at the packet boundary`, () => {
+      const materials = { ...MATERIALS, [key]: empty };
+      let created;
+      try {
+        // Check both public validation and the independently callable low-level packet builder.
+        const build = () => { created = packetFor(materials); };
+        expect(() => validateDirectionReviewInput({ materials })).toThrow(/方向审查缺少揭示材料，challenge 无法执行/);
+        expect(missingDirectionRevealMaterials(materials)).toEqual([key]);
+        expect(build).toThrow(/方向审查缺少揭示材料，challenge 无法执行/);
+      } finally {
+        if (created) {
+          created.packet.dispose();
+          rmSync(created.root, { recursive: true, force: true });
+        }
+      }
+    });
+  }
+}
+
+for (const [kind, bytes] of [["Buffer", Buffer.from("方案 A")], ["Uint8Array", new TextEncoder().encode("方案 A")]]) {
+  test(`preserves nonempty ${kind} reveal material support`, () => {
+    const materials = { ...MATERIALS, current_selection: bytes };
+    expect(missingDirectionRevealMaterials(materials)).toEqual([]);
+    expect(validateDirectionReviewInput({ materials })).toBe(true);
+    const { root, packet } = packetFor(materials);
+    try {
+      expect(packet.deliveryManifest.some(entry => entry.path.includes("current_selection"))).toBe(true);
+    } finally {
+      packet.dispose();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+}

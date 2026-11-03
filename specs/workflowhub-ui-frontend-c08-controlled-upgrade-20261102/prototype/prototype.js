@@ -21,9 +21,9 @@
 "use strict";
 
 (function () {
-  var STATES = ["A", "B", "C", "D", "E"];
+  const STATES = ["A", "B", "C", "D", "E"];
 
-  var CAPTIONS = {
+  const CAPTIONS = {
     A: [
       ["问题", "重置筛选后，上一事件的详情抽屉仍挂着。"],
       ["旧行为", "重置只换查询，detailRecord 不清，抽屉继续显示旧事件。"],
@@ -59,7 +59,7 @@
 
   /* ---------- 合成 fixture：每条可点记录都有完整内容 ---------- */
 
-  var A_RECORDS = {
+  const A_RECORDS = {
     "evt-a1b2c3d4-5e6f-47a8-9b0c-1d2e3f4a5b6c": {
       time: "2026/11/2 09:12:44",
       iso: "2026-11-02T09:12:44+08:00",
@@ -110,7 +110,7 @@
     }
   };
 
-  var D_SIGNALS = {
+  const D_SIGNALS = {
     "sig-20261102-9f3a2c71-4d2b-4f1e-8a6c-0b7d9e4c1a55": {
       state: "已发送", tone: "ok", account: "acct-7f3c", accountShort: "··7f3c",
       symbol: "NQZ6", contract: "NQZ6", direction: "多 2", directionTone: "ok",
@@ -131,7 +131,7 @@
     }
   };
 
-  var B_POSITIONS = {
+  const B_POSITIONS = {
     "position-1": {
       result: "赢单", tone: "win", pnl: "+$286.00", side: "多头", holding: "12 根 K",
       exit: "目标止盈", market: "趋势", entry: "突破", delta: "+41", cum: "+188",
@@ -148,15 +148,15 @@
     }
   };
 
-  var B_ORDER = ["position-1", "position-2"];
+  const B_ORDER = ["position-1", "position-2"];
 
-  var logEntries = [];
-  var current = "A";
-  var legacyC = false;
-  var legacyE = false;
-  var drawerCache = {};
-  var drawerTriggers = { A: null, B: null, D: null };
-  var currentB = "position-2";
+  const logEntries = [];
+  let current = "A";
+  let legacyC = false;
+  let legacyE = false;
+  const drawerCache = {};
+  const drawerTriggers = { A: null, B: null, D: null };
+  let currentB = "position-2";
 
   function $(sel, root) { return (root || document).querySelector(sel); }
   function $$(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
@@ -165,17 +165,17 @@
   function text(el, value) { if (el) el.textContent = value; }
 
   function describeFocus() {
-    var el = document.activeElement;
+    const el = document.activeElement;
     if (!el || el === document.body) return "body（无焦点）";
-    var tag = el.tagName.toLowerCase();
-    var id = el.id ? "#" + el.id : "";
-    var cls = "";
+    const tag = el.tagName.toLowerCase();
+    const id = el.id ? "#" + el.id : "";
+    let cls = "";
     if (el.classList && el.classList.length) {
-      var names = Array.prototype.filter.call(el.classList, function (name) { return name.indexOf("proto-") !== 0; }).slice(0, 2);
+      const names = Array.prototype.filter.call(el.classList, function (name) { return name.indexOf("proto-") !== 0; }).slice(0, 2);
       if (names.length) cls = "." + names.join(".");
     }
-    var label = el.getAttribute("aria-label");
-    var content = "";
+    const label = el.getAttribute("aria-label");
+    let content = "";
     if (el.tagName === "SELECT") {
       content = el.selectedOptions && el.selectedOptions[0] ? "选中「" + el.selectedOptions[0].textContent.trim() + "」" : "";
     } else {
@@ -186,7 +186,7 @@
   }
 
   function pageOverflow() {
-    var de = document.documentElement;
+    const de = document.documentElement;
     return Math.max(0, de.scrollWidth - de.clientWidth, document.body.scrollWidth - de.clientWidth);
   }
 
@@ -203,20 +203,20 @@
 
   function initDrawerCache() {
     ["A", "B", "D"].forEach(function (key) {
-      var layer = document.getElementById(layerId(key));
+      const layer = document.getElementById(layerId(key));
       drawerCache[key] = layer ? layer.querySelector("aside") : null;
       if (drawerCache[key]) drawerCache[key].setAttribute("data-drawer-key", key);
     });
   }
 
   function drawerNode(key) {
-    var layer = document.getElementById(layerId(key));
+    const layer = document.getElementById(layerId(key));
     return layer ? layer.querySelector('aside[data-drawer-key="' + key + '"]') : null;
   }
 
   function openDrawer(key, trigger) {
-    var layer = document.getElementById(layerId(key));
-    var aside = drawerNode(key) || drawerCache[key];
+    const layer = document.getElementById(layerId(key));
+    const aside = drawerNode(key) || drawerCache[key];
     if (!layer || !aside) return null;
     if (!aside.isConnected) layer.appendChild(aside);
     layer.hidden = false;
@@ -225,22 +225,22 @@
   }
 
   function focusDrawerClose(key) {
-    var aside = drawerNode(key);
+    const aside = drawerNode(key);
     if (!aside) return;
-    var close = aside.querySelector("header button, .drawer-close, .pb-ui-drawer-close");
+    const close = aside.querySelector("header button, .drawer-close, .pb-ui-drawer-close");
     if (close) focusEl(close);
   }
 
   function detachDrawer(key) {
-    var node = drawerNode(key);
+    const node = drawerNode(key);
     if (node && node.parentNode) node.parentNode.removeChild(node);
   }
 
   function restoreFocusFrom(key) {
-    var trigger = drawerTriggers[key];
-    var usable = trigger && trigger.isConnected && !trigger.disabled && trigger.getClientRects().length > 0;
+    const trigger = drawerTriggers[key];
+    const usable = trigger && trigger.isConnected && !trigger.disabled && trigger.getClientRects().length > 0;
     if (usable) { focusEl(trigger); return { target: "trigger", label: describeFocus() }; }
-    var heading = stateRoot(current) ? stateRoot(current).querySelector("h1, h2") : null;
+    const heading = stateRoot(current) ? stateRoot(current).querySelector("h1, h2") : null;
     if (heading) { heading.tabIndex = -1; focusEl(heading); return { target: "heading", label: describeFocus() }; }
     return { target: "none", label: describeFocus() };
   }
@@ -253,17 +253,17 @@
   }
 
   function closeDrawer(key, options) {
-    var opts = options || {};
-    var layer = document.getElementById(layerId(key));
+    const opts = options || {};
+    const layer = document.getElementById(layerId(key));
     if (!layer || layer.hidden) return { closed: false, focus: null };
     detachDrawer(key);
     layer.hidden = true;
-    var focusInfo = opts.restoreFocus !== false ? restoreFocusFrom(key) : null;
+    const focusInfo = opts.restoreFocus !== false ? restoreFocusFrom(key) : null;
     return { closed: true, focus: focusInfo };
   }
 
   function anyOpenDrawer() {
-    var layer = document.getElementById(layerId(current));
+    const layer = document.getElementById(layerId(current));
     if (!layer || layer.hidden) return null;
     if (layer.getClientRects().length === 0) return null;
     if (!layer.querySelector("aside")) return null;
@@ -271,9 +271,9 @@
   }
 
   function drawerStatesAll() {
-    var out = {};
+    const out = {};
     ["A", "B", "D"].forEach(function (key) {
-      var layer = document.getElementById(layerId(key));
+      const layer = document.getElementById(layerId(key));
       out[key] = {
         visible: !!layer && !layer.hidden,
         nodes: layer ? layer.querySelectorAll("aside").length : 0
@@ -285,9 +285,9 @@
   /* ---------- A：筛选、列表与详情 ---------- */
 
   function readFiltersA() {
-    var entity = $("#filter-a-entity").selectedOptions[0].textContent.trim();
-    var outcome = $("#filter-a-outcome").selectedOptions[0].textContent.trim();
-    var action = $("#filter-a-action").selectedOptions[0].textContent.trim();
+    const entity = $("#filter-a-entity").selectedOptions[0].textContent.trim();
+    const outcome = $("#filter-a-outcome").selectedOptions[0].textContent.trim();
+    const action = $("#filter-a-action").selectedOptions[0].textContent.trim();
     return {
       entity: entity === "全部对象" ? "" : entity,
       outcome: outcome === "全部结果" ? "" : outcome,
@@ -300,7 +300,7 @@
   }
 
   function dateInWindow(row, start, end) {
-    var t = Date.parse(row.dataset.time);
+    const t = Date.parse(row.dataset.time);
     if (!Number.isFinite(t)) return true;
     if (start && Number.isFinite(Date.parse(start)) && t < Date.parse(start)) return false;
     if (end && Number.isFinite(Date.parse(end)) && t > Date.parse(end)) return false;
@@ -308,11 +308,11 @@
   }
 
   function applyFiltersA() {
-    var q = readFiltersA();
-    var rows = $$("#rows-a .business-log-table-row");
-    var visible = 0;
+    const q = readFiltersA();
+    const rows = $$("#rows-a .business-log-table-row");
+    let visible = 0;
     rows.forEach(function (row) {
-      var ok = (!q.entity || q.entity === row.dataset.entity)
+      const ok = (!q.entity || q.entity === row.dataset.entity)
         && (!q.outcome || q.outcome === row.dataset.outcome)
         && (!q.keyword || row.textContent.toLowerCase().indexOf(q.keyword.toLowerCase()) !== -1)
         && (!q.eventType || q.eventType === row.dataset.eventType)
@@ -323,26 +323,26 @@
     });
     text($("#count-a"), "共 " + visible + " 条");
     $("#empty-a").hidden = visible !== 0;
-    var advancedActive = [q.eventType, q.action, q.start, q.end].filter(Boolean).length;
+    const advancedActive = [q.eventType, q.action, q.start, q.end].filter(Boolean).length;
     text($("#toggle-advanced-a"), advancedActive ? "筛选 · " + advancedActive : "筛选");
   }
 
   function renderADetail(record) {
-    var outcome = $("#detail-a-outcome");
+    const outcome = $("#detail-a-outcome");
     outcome.className = "business-log-outcome is-" + record.tone;
     text(outcome, record.outcome);
-    var timeEl = $("#detail-a-time");
+    const timeEl = $("#detail-a-time");
     timeEl.setAttribute("datetime", record.iso);
     text(timeEl, record.time);
     text($("#detail-a-message"), record.message);
-    var dl = $("#detail-a-fields");
+    const dl = $("#detail-a-fields");
     dl.textContent = "";
     record.fields.forEach(function (pair) {
-      var row = document.createElement("div");
+      const row = document.createElement("div");
       row.className = "business-log-detail-field";
-      var dt = document.createElement("dt");
+      const dt = document.createElement("dt");
       dt.textContent = pair[0];
-      var dd = document.createElement("dd");
+      const dd = document.createElement("dd");
       dd.textContent = pair[1];
       row.appendChild(dt);
       row.appendChild(dd);
@@ -353,7 +353,7 @@
   }
 
   function openA(row, focusClose) {
-    var record = A_RECORDS[row.dataset.eventId];
+    const record = A_RECORDS[row.dataset.eventId];
     if (!record) return;
     openDrawer("A", row);
     renderADetail(record);
@@ -383,7 +383,7 @@
     applyFiltersA();
     closeDrawer("A", { restoreFocus: false });
     focusEl($("#reset-a"));
-    var values = readFiltersA();
+    const values = readFiltersA();
     log("A 重置筛选：详情节点=0；筛选已按重置后的值显示（对象=" + (values.entity || "全部对象")
       + " / 结果=" + (values.outcome || "全部结果") + " / 关键词=空 / 事件类型=空 / 动作="
       + (values.action || "全部动作") + "）；列表显示 " + $$("#rows-a .business-log-table-row:not([hidden])").length
@@ -394,13 +394,13 @@
   /* ---------- D：信号详情 ---------- */
 
   function renderDDetail(id) {
-    var record = D_SIGNALS[id];
+    const record = D_SIGNALS[id];
     if (!record) return;
     text($("#detail-d-id"), id);
-    var badge = $("#detail-d-badge");
+    const badge = $("#detail-d-badge");
     badge.className = "lm-badge lm-tone-" + record.tone;
     text(badge, record.state);
-    var account = $("#detail-d-account");
+    const account = $("#detail-d-account");
     account.setAttribute("title", record.account);
     text(account, record.accountShort);
     text($("#detail-d-symbol"), record.symbol);
@@ -411,7 +411,7 @@
     text($("#detail-d-dedupe-id"), record.dedupeId);
     text($("#detail-d-sent"), record.sentLine);
     text($("#detail-d-judged-line"), record.judged + " · " + record.state);
-    var copy = $("#detail-d-copy");
+    const copy = $("#detail-d-copy");
     copy.disabled = !id;
     copy.dataset.signalId = id;
     text($("#detail-d-copy-status"), "");
@@ -440,17 +440,17 @@
   /* ---------- B：头寸抽屉与导航 ---------- */
 
   function renderBPosition(id) {
-    var record = B_POSITIONS[id];
+    const record = B_POSITIONS[id];
     if (!record) return;
     currentB = id;
-    var aside = drawerNode("B") || drawerCache.B;
+    const aside = drawerNode("B") || drawerCache.B;
     if (aside) aside.setAttribute("aria-label", "头寸 " + id + " 复盘");
     text($("#detail-b-identity"), id);
-    var result = $("#detail-b-result");
+    const result = $("#detail-b-result");
     result.className = "drawer-result " + record.tone;
     text(result, record.result);
     text($("#detail-b-pnl"), record.pnl);
-    var pnlCell = $("#detail-b-pnl-cell");
+    const pnlCell = $("#detail-b-pnl-cell");
     pnlCell.className = record.tone;
     text(pnlCell, record.pnl);
     text($("#detail-b-side"), record.side);
@@ -481,19 +481,19 @@
   /* ---------- 度量 ---------- */
 
   function drawerState(key) {
-    var layer = document.getElementById(layerId(key));
-    var visible = !!layer && !layer.hidden;
-    var nodes = layer ? layer.querySelectorAll("aside").length : 0;
+    const layer = document.getElementById(layerId(key));
+    const visible = !!layer && !layer.hidden;
+    const nodes = layer ? layer.querySelectorAll("aside").length : 0;
     return { visible: visible, nodes: nodes };
   }
 
   function measureA() {
-    var d = drawerState("A");
-    var values = $$('[aria-label="对象"],[aria-label="结果"],[aria-label="关键词"],[aria-label="事件类型"],[aria-label="动作"],[aria-label="开始时间"],[aria-label="结束时间"]', stateRoot("A"))
+    const d = drawerState("A");
+    const values = $$('[aria-label="对象"],[aria-label="结果"],[aria-label="关键词"],[aria-label="事件类型"],[aria-label="动作"],[aria-label="开始时间"],[aria-label="结束时间"]', stateRoot("A"))
       .map(function (el) { return el.getAttribute("aria-label") + "=" + el.value; }).join(" / ");
-    var visibleRows = $$("#rows-a .business-log-table-row:not([hidden])").length;
-    var drawer = drawerNode("A");
-    var width = d.visible && drawer ? Math.round(drawer.getBoundingClientRect().width) : 0;
+    const visibleRows = $$("#rows-a .business-log-table-row:not([hidden])").length;
+    const drawer = drawerNode("A");
+    const width = d.visible && drawer ? Math.round(drawer.getBoundingClientRect().width) : 0;
     return {
       text: "详情可见=" + (d.visible ? 1 : 0) + " · 抽屉节点=" + d.nodes + " · 宽=" + width + "px · 列表 " + visibleRows + " 条 · " + values,
       data: { drawerVisible: d.visible, drawerNodesInDom: d.nodes, drawerWidthPx: width, visibleRows: visibleRows, filterValues: values }
@@ -501,13 +501,13 @@
   }
 
   function measureB() {
-    var d = drawerState("B");
-    var drawer = drawerNode("B");
-    var chart = $("#chart-b");
-    var c = chart.getBoundingClientRect();
-    var dr = d.visible && drawer ? drawer.getBoundingClientRect() : null;
-    var overlap = dr ? Math.max(0, Math.min(c.right, dr.right) - Math.max(c.left, dr.left)) : 0;
-    var fraction = c.width ? (c.width - overlap) / c.width : 0;
+    const d = drawerState("B");
+    const drawer = drawerNode("B");
+    const chart = $("#chart-b");
+    const c = chart.getBoundingClientRect();
+    const dr = d.visible && drawer ? drawer.getBoundingClientRect() : null;
+    const overlap = dr ? Math.max(0, Math.min(c.right, dr.right) - Math.max(c.left, dr.left)) : 0;
+    const fraction = c.width ? (c.width - overlap) / c.width : 0;
     return {
       text: "详情可见=" + (d.visible ? 1 : 0) + " · 抽屉节点=" + d.nodes + " · 宽=" + (dr ? Math.round(dr.width) : 0) + "px · 图表可见比例=" + fraction.toFixed(2) + " · 身份=" + currentB,
       data: {
@@ -521,9 +521,9 @@
   }
 
   function measureC() {
-    var pop = $("#popover-c");
-    var err = $("#error-c");
-    var pw = Math.round(pop.getBoundingClientRect().width);
+    const pop = $("#popover-c");
+    const err = $("#error-c");
+    const pw = Math.round(pop.getBoundingClientRect().width);
     return {
       text: "浮层宽=" + pw + "px · 错误块 scrollWidth=" + err.scrollWidth + " / clientWidth=" + err.clientWidth + " · 浮层溢出差=" + (pop.scrollWidth - pop.clientWidth) + "px · 模式=" + (legacyC ? "旧行为" : "新行为"),
       data: {
@@ -538,10 +538,10 @@
   }
 
   function measureD() {
-    var d = drawerState("D");
-    var drawer = drawerNode("D");
-    var scroll = $(".ll-signal-scroll", stateRoot("D"));
-    var copy = $("#detail-d-copy");
+    const d = drawerState("D");
+    const drawer = drawerNode("D");
+    const scroll = $(".ll-signal-scroll", stateRoot("D"));
+    const copy = $("#detail-d-copy");
     return {
       text: "详情可见=" + (d.visible ? 1 : 0) + " · 抽屉节点=" + d.nodes + " · 宽=" + (d.visible && drawer ? Math.round(drawer.getBoundingClientRect().width) : 0) + "px · 时段=" + $("#range-d").selectedOptions[0].textContent.trim() + " · 账户角色=" + $("#role-d").value + " · 宽表局部横滚=" + Math.max(0, scroll.scrollWidth - scroll.clientWidth) + "px",
       data: {
@@ -557,9 +557,9 @@
   }
 
   function measureE() {
-    var warning = $("#warning-e");
-    var baseline = $("#warning-baseline");
-    var computed = window.getComputedStyle(warning);
+    const warning = $("#warning-e");
+    const baseline = $("#warning-baseline");
+    const computed = window.getComputedStyle(warning);
     return {
       text: "台账错误 scrollWidth=" + warning.scrollWidth + " / clientWidth=" + warning.clientWidth + " · max-width=" + computed.maxWidth + " · 基线块 scrollWidth=" + baseline.scrollWidth + " / clientWidth=" + baseline.clientWidth + " · 模式=" + (legacyE ? "旧行为" : "新行为"),
       data: {
@@ -576,17 +576,17 @@
     };
   }
 
-  var MEASURE = { A: measureA, B: measureB, C: measureC, D: measureD, E: measureE };
+  const MEASURE = { A: measureA, B: measureB, C: measureC, D: measureD, E: measureE };
 
   function refresh() {
-    var chrome = $(".proto-chrome");
-    var chromeHeight = chrome ? Math.round(chrome.getBoundingClientRect().height) : 0;
+    const chrome = $(".proto-chrome");
+    const chromeHeight = chrome ? Math.round(chrome.getBoundingClientRect().height) : 0;
     if (chrome) document.documentElement.style.setProperty("--proto-chrome-h", chromeHeight + "px");
-    var cssVarPx = Math.round(parseFloat(window.getComputedStyle(document.documentElement).getPropertyValue("--proto-chrome-h")) || 0);
-    var activeLayer = document.getElementById(layerId(current));
-    var drawerTopPx = activeLayer ? Math.round(activeLayer.getBoundingClientRect().top) : null;
-    var m = MEASURE[current]();
-    var overflow = pageOverflow();
+    const cssVarPx = Math.round(parseFloat(window.getComputedStyle(document.documentElement).getPropertyValue("--proto-chrome-h")) || 0);
+    const activeLayer = document.getElementById(layerId(current));
+    const drawerTopPx = activeLayer ? Math.round(activeLayer.getBoundingClientRect().top) : null;
+    const m = MEASURE[current]();
+    const overflow = pageOverflow();
     text($("#obs-state"), current);
     text($("#obs-viewport"), window.innerWidth + "×" + window.innerHeight);
     text($("#obs-focus"), describeFocus());
@@ -611,11 +611,11 @@
   }
 
   function renderLog() {
-    var ol = $("#obs-log");
+    const ol = $("#obs-log");
     if (!ol) return;
     ol.textContent = "";
     logEntries.slice(-10).forEach(function (entry) {
-      var li = document.createElement("li");
+      const li = document.createElement("li");
       li.textContent = entry;
       ol.appendChild(li);
     });
@@ -630,14 +630,14 @@
   /* ---------- 状态切换 ---------- */
 
   function renderCaption(key) {
-    var host = $("#proto-caption");
+    const host = $("#proto-caption");
     host.textContent = "";
     CAPTIONS[key].forEach(function (pair) {
-      var item = document.createElement("div");
+      const item = document.createElement("div");
       item.className = "proto-note-item";
-      var b = document.createElement("b");
+      const b = document.createElement("b");
       b.textContent = pair[0];
-      var span = document.createElement("span");
+      const span = document.createElement("span");
       span.textContent = pair[1];
       item.appendChild(b);
       item.appendChild(span);
@@ -692,7 +692,7 @@
       $("#acct-d").selectedIndex = 1;
       $("#life-d").selectedIndex = 0;
       $("#clear-d").hidden = false;
-      var firstRow = $(".ll-signal-row", stateRoot("D"));
+      const firstRow = $(".ll-signal-row", stateRoot("D"));
       openD(firstRow.dataset.signalId, firstRow, false);
     } else if (key === "E") {
       setLegacyE(false);
@@ -736,28 +736,28 @@
       });
     });
     $("#close-a").addEventListener("click", function () {
-      var result = closeDrawer("A", { restoreFocus: true });
+      const result = closeDrawer("A", { restoreFocus: true });
       log("A 关闭详情：抽屉节点已移除；焦点" + focusWord(result.focus) + "；" + (result.focus ? result.focus.label : "") + "（原型最小归还）");
       refresh();
     });
     $("#layer-a").addEventListener("click", function (event) {
       if (event.target !== event.currentTarget) return;
-      var result = closeDrawer("A", { restoreFocus: true });
+      const result = closeDrawer("A", { restoreFocus: true });
       log("A 点遮罩关闭：抽屉节点已移除；焦点" + focusWord(result.focus) + "；" + (result.focus ? result.focus.label : ""));
       refresh();
     });
     $("#reset-a").addEventListener("click", resetFiltersA);
     $("#toggle-advanced-a").addEventListener("click", function () {
-      var open = $("#toggle-advanced-a").getAttribute("aria-expanded") === "true";
+      const open = $("#toggle-advanced-a").getAttribute("aria-expanded") === "true";
       $("#proto-advanced-a").hidden = open;
       $("#toggle-advanced-a").setAttribute("aria-expanded", String(!open));
       log("A 筛选面板" + (open ? "收起" : "展开") + "：aria-expanded=" + String(!open));
       refresh();
     });
     ["entity", "outcome", "keyword", "event-type", "action", "start", "end"].forEach(function (name) {
-      var el = $("#filter-a-" + name);
+      const el = $("#filter-a-" + name);
       el.addEventListener(el.tagName === "SELECT" ? "change" : "input", function () {
-        var hadDrawer = drawerState("A").visible;
+        const hadDrawer = drawerState("A").visible;
         if (hadDrawer) closeDrawer("A", { restoreFocus: false });
         applyFiltersA();
         log("A 筛选变更：详情" + (hadDrawer ? "已清（真实 onFilterChange 先清 detailRecord）" : "保持关闭")
@@ -773,13 +773,13 @@
       refresh();
     });
     $("#close-b").addEventListener("click", function () {
-      var result = closeDrawer("B", { restoreFocus: true });
+      const result = closeDrawer("B", { restoreFocus: true });
       log("B 关闭抽屉：节点已移除；焦点" + focusWord(result.focus) + "；" + (result.focus ? result.focus.label : ""));
       refresh();
     });
     $("#layer-b").addEventListener("click", function (event) {
       if (event.target !== event.currentTarget) return;
-      var result = closeDrawer("B", { restoreFocus: true });
+      const result = closeDrawer("B", { restoreFocus: true });
       log("B 点遮罩关闭：节点已移除；焦点" + focusWord(result.focus) + "；" + (result.focus ? result.focus.label : ""));
       refresh();
     });
@@ -792,9 +792,9 @@
     });
     $$('[data-nav]').forEach(function (btn) {
       btn.addEventListener("click", function () {
-        var kind = btn.dataset.nav;
-        var index = B_ORDER.indexOf(currentB);
-        var next = kind === "prev" ? B_ORDER[(index - 1 + B_ORDER.length) % B_ORDER.length]
+        const kind = btn.dataset.nav;
+        const index = B_ORDER.indexOf(currentB);
+        const next = kind === "prev" ? B_ORDER[(index - 1 + B_ORDER.length) % B_ORDER.length]
           : kind === "loss" ? "position-2" : B_ORDER[(index + 1) % B_ORDER.length];
         renderBPosition(next);
         log("B 订单导航：" + kind + " → 身份=" + next + "；焦点留在导航按钮");
@@ -804,7 +804,7 @@
 
     /* C：浮层开关与旧/新行为 */
     $("#trigger-c").addEventListener("click", function () {
-      var open = $("#trigger-c").getAttribute("aria-expanded") === "true";
+      const open = $("#trigger-c").getAttribute("aria-expanded") === "true";
       $("#popover-c").hidden = open;
       $("#trigger-c").setAttribute("aria-expanded", String(!open));
       log("C 浮层" + (open ? "关闭" : "打开") + "：aria-expanded=" + String(!open));
@@ -824,13 +824,13 @@
       });
     });
     $("#close-d").addEventListener("click", function () {
-      var result = closeDrawer("D", { restoreFocus: true });
+      const result = closeDrawer("D", { restoreFocus: true });
       log("D 关闭详情：节点已移除；焦点" + focusWord(result.focus) + "；" + (result.focus ? result.focus.label : ""));
       refresh();
     });
     $("#layer-d").addEventListener("click", function (event) {
       if (event.target === event.currentTarget) {
-        var result = closeDrawer("D", { restoreFocus: true });
+        const result = closeDrawer("D", { restoreFocus: true });
         log("D 点遮罩关闭：节点已移除；焦点" + focusWord(result.focus) + "；" + (result.focus ? result.focus.label : ""));
         refresh();
       }
@@ -838,10 +838,10 @@
     $("#clear-d").addEventListener("click", clearFiltersD);
 
     $("#detail-d-copy").addEventListener("click", function () {
-      var button = $("#detail-d-copy");
-      var id = button.dataset.signalId;
+      const button = $("#detail-d-copy");
+      const id = button.dataset.signalId;
       if (!id) return;
-      var status = $("#detail-d-copy-status");
+      const status = $("#detail-d-copy-status");
       if (!navigator.clipboard || !navigator.clipboard.writeText) {
         text(status, "复制失败，请手动选择信号 ID");
         log("D 复制信号 ID：剪贴板不可用（原型如实报告）");
@@ -862,17 +862,17 @@
     /* Escape：关闭最上面的抽屉并归还焦点 */
     document.addEventListener("keydown", function (event) {
       if (event.key !== "Escape") return;
-      var key = anyOpenDrawer();
+      const key = anyOpenDrawer();
       if (!key) return;
       event.preventDefault();
-      var result = closeDrawer(key, { restoreFocus: true });
+      const result = closeDrawer(key, { restoreFocus: true });
       log(key + " Escape 关闭：节点已移除；焦点" + focusWord(result.focus) + "；" + (result.focus ? result.focus.label : "") + "（原型最小归还）");
       refresh();
     });
 
     /* 未接线控件：可见标记 + 明确日志，不假装执行 */
     document.addEventListener("click", function (event) {
-      var unwired = event.target.closest("[data-unwired]");
+      const unwired = event.target.closest("[data-unwired]");
       if (!unwired) return;
       event.preventDefault();
       log("原型未接线：" + (unwired.dataset.unwiredName || "该控件") + " 未执行（只作状态展示）");
@@ -882,11 +882,11 @@
 
     /* 演示栏 */
     document.addEventListener("click", function (event) {
-      var btn = event.target.closest("[data-demo]");
+      const btn = event.target.closest("[data-demo]");
       if (!btn) return;
-      var demo = btn.dataset.demo;
+      const demo = btn.dataset.demo;
       if (demo === "a-open") {
-        var row = $("#rows-a .business-log-table-row:not([hidden])");
+        const row = $("#rows-a .business-log-table-row:not([hidden])");
         if (!row) { log("A 重新打开详情：当前筛选没有可打开的行"); refresh(); return; }
         openA(row, true);
         log("A 重新打开详情：节点=1；焦点=关闭按钮");
@@ -894,7 +894,7 @@
         failB();
         log("B 还原失败态：错误块显示；抽屉可见=0、节点=0");
       } else if (demo === "d-open") {
-        var dRow = $('.ll-signal-row', stateRoot("D"));
+        const dRow = $('.ll-signal-row', stateRoot("D"));
         openD(dRow.dataset.signalId, dRow, true);
         log("D 重新打开详情：节点=1；焦点=关闭按钮");
       } else if (demo === "c-legacy") {
@@ -922,7 +922,7 @@
     }
     document.addEventListener("focusin", function () { text($("#obs-focus"), describeFocus()); });
     window.addEventListener("hashchange", function () {
-      var key = (window.location.hash || "").replace("#", "").toUpperCase();
+      const key = (window.location.hash || "").replace("#", "").toUpperCase();
       if (STATES.indexOf(key) !== -1 && key !== current) showState(key);
     });
   }
@@ -933,7 +933,7 @@
     /* 绑定后再摘下未打开状态的抽屉节点：B/D 初始就是关闭的，DOM 应与可见状态一致 */
     detachDrawer("B");
     detachDrawer("D");
-    var initial = (window.location.hash || "").replace("#", "").toUpperCase();
+    const initial = (window.location.hash || "").replace("#", "").toUpperCase();
     showState(STATES.indexOf(initial) !== -1 ? initial : "A");
   }
 

@@ -23,6 +23,7 @@ function materialPresent(value){return typeof value==="string" ? value.trim().le
 const DIRECTION_REVEAL_MATERIALS = Object.freeze(["current_selection","alternatives","selection_rationale","key_assumptions"]);
 function materialValueMissing(value) {
   if (!materialPresent(value)) return true;
+  if (Buffer.isBuffer(value) || value instanceof Uint8Array) return value.byteLength === 0;
   return typeof value === "object" && !Buffer.isBuffer(value) && !(value instanceof Uint8Array)
     && Object.keys(value).length === 0;
 }
