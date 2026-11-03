@@ -8,6 +8,7 @@ import { openTask } from '../../../runtime/task/task-handle.mjs';
 import { openCurrentTaskWorkspace } from '../../../runtime/task/workspace.mjs';
 import { readTaskFacts } from '../../../runtime/task/task-store.mjs';
 import { validatePostPhaseContract } from '../../../runtime/stage/stage-content-contracts.mjs';
+import { phaseFilesFromIndex } from '../../../runtime/task/material-workspace.mjs';
 import { stageRuntimeCliMain } from '../../../tools/cli/stage-runtime.mjs';
 
 export const KIND_SOURCES = Object.freeze({req:'decision-log.md / raw-requirements',spec:'spec.md',dec:'decision-log.md',goal:'decision-log.md',wp:'decision-log.md',ires:'quality/evidence/research',eres:'quality/evidence/research / spec.md',phase:'phases/index.md',task:'phases/P*.md / facts.jsonl',file:'git diff baseline_commit..HEAD',test:'quality/tests',review:'quality/reviews',acc:'spec.md / Appendix A',risk:'spec.md / decision-log.md',pr:'report / ring 10'});
@@ -332,15 +333,9 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
  const external=research.map(entry=>({...entry,urls:externalPointers(entry.text)})).filter(entry=>entry.urls.length);
  for(const entry of external){const o=node('eres',researchTitle(entry),entry.path,'外部来源指针',{summary:`${entry.urls.length} 个来源指针；未抓取外部原文`});Object.assign(o,{finding:finding(entry),origin:'本地研究原件；外部原文未抓取',record_ref:entry.path});o.src=entry.urls.map(url=>source(entry.path,`外部来源指针（未抓取）：${url}`));}
  if(!objects.some(o=>o.kind==='eres')){const urls=externalPointers(spec,true);if(urls.length){const o=node('eres','规格补充材料',specPath,'补充材料外部指针',{summary:urls[0]+'；未抓取原文'});o.src=urls.map(url=>source(specPath,`外部来源指针（未抓取）：${url}`));}else node('eres','外部来源未取得',spec===null?metadata:specPath,'缺可定位的外部来源指针',{missing:true});}
- const phasePaths=[...new Set([...index?.matchAll(/(?:\]\(|`)([^\s`|()]*P\d+[^\s`|()]*\.md)(?:\)|`)/g)??[]].map(m=>m[1]))];
+ const phasePaths=(()=>{try{return phaseFilesFromIndex(index??'');}catch(error){if(error instanceof TypeError&&['post Phase index is missing','post Phase index lacks Execution Index section'].includes(error.message))return [];throw error;}})();
  const declaredGates=new Set(),phaseInputs={};
  for(const ref of phasePaths){const phaseRoot=join(material,'phases'),path=resolve(phaseRoot,ref.replace(/^phases\//,'')),rel=relative(phaseRoot,path);if(rel===''||rel==='..'||rel.startsWith(`..${sep}`)||isAbsolute(rel))throw Error('phase index path escapes phases');const text=read(path,true);if(text!==null)phaseInputs['phases/'+rel.split(sep).join('/')]=text;}
- // Candidate bytes are not identities. The existing contract reader selects indexed paths/IDs.
- const phaseDirectory=join(material,'phases');
- if(existsSync(phaseDirectory)){
-  const stat=lstatSync(phaseDirectory);if(!stat.isDirectory()||stat.isSymbolicLink()||realpathSync(phaseDirectory)!==phaseDirectory)throw Error('phase source directory alias rejected');
-  for(const name of readdirSync(phaseDirectory).filter(name=>/^P\d+[^/\\]*\.md$/.test(name))){const ref='phases/'+name;if(!Object.hasOwn(phaseInputs,ref))phaseInputs[ref]=read(join(phaseDirectory,name));}
- }
  const contract=validatePostPhaseContract({spec:spec??'',index:index??'',phases:phaseInputs});
  const phaseRows=contract.facts?.phase_rows??[],phaseRecords=new Map(),phaseCommits=new Map(),taskCommitProofs=new Map(),acceptanceClaims=new Map();
  const committed=commit=>{if(!/^[a-f0-9]{40}$/i.test(commit??''))return false;try{execFileSync('git',['merge-base','--is-ancestor',commit,'HEAD'],{cwd:root,stdio:'ignore'});return true;}catch{return false;}};
