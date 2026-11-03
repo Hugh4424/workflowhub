@@ -31,6 +31,9 @@ export default defineConfig({
       // Vitest as empty suites.
       "tests/contract/ui-skill-contract.test.mjs",
       "tests/contract/frontend-component-quality-static.test.mjs",
+      // stylelint-fixtures 用 node:test 且要求 PAPERBUILDER_FRONTEND；Vitest 收集期
+      // 会把它当空套件并 throw，故排除；其证据命令仍由 node --test 直接调用。
+      "skills/frontend-component-quality/tests/stylelint-fixtures.test.mjs",
     ],
     // Fail the run when a filter matches no files, so a mis-typed path can never
     // produce a false-green exit 0 (see memory: vitest-run-path-false-green-exit0).
