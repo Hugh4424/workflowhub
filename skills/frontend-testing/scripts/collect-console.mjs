@@ -247,7 +247,7 @@ export async function ownedEgoContext(page,config,env) {
   };
   const observed=await read(),viewport=observed.facts.viewport;
   if(!Number.isFinite(viewport.width)||!Number.isFinite(viewport.height)||!Number.isFinite(viewport.dpr)||viewport.dpr<=0)throw fail('TOOL_ERROR','Registered viewport coordinates invalid');
-  const object={...Object.fromEntries(Object.entries(identityKeys).map(([key,name])=>[key,env[name]])),state:config.state,viewport:viewport.width+'x'+viewport.height+'@'+viewport.dpr,engine:'ego'};
+  const object={...Object.fromEntries(Object.entries(identityKeys).map(([key,name])=>[key,env[name]])),state:config.state,viewport:viewport.width+'x'+viewport.height+'@'+viewport.dpr,engine};
   const identity=compareIdentity({...object,viewport:config.viewport},{url,viewport:object.viewport});
   if(identity.mismatches.length)throw fail('IDENTITY_MISMATCH','Owned page '+identity.mismatches[0].path+' differs from declaration; no navigation issued');
   const allowed=new Set(['Page.enable','Runtime.enable','Network.enable','Page.getFrameTree','Accessibility.enable','Accessibility.getFullAXTree']);
@@ -277,7 +277,7 @@ export async function observeOwnedEgoReload(context,timeoutMs=5000) {
   }catch(error){if(error.kind)throw error;throw fail(navigated?'UNREACHABLE':'NOT_STARTED',error.message||'Owned page control lost');}
 }
 export async function collectOwnedEgoNavigation(context,timeoutMs=5000) {
-  const doc=()=>({engine:'ego',observed_at:new Date().toISOString(),object:{...context.object},items:[],failures:[]});
+  const doc=()=>({engine:context.object.engine,observed_at:new Date().toISOString(),object:{...context.object},items:[],failures:[]});
   const consoleDoc=doc(),networkDoc=doc();
   try {
     const window=await observeOwnedEgoReload(context,timeoutMs),contexts=new Map(),requests=new Map();let committed=false;

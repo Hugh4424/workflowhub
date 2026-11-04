@@ -199,7 +199,7 @@ async function collectAudit(values,selection,{env,cwd,runTask,windowTimeoutMs=50
     for(const dim of ['overflow','perf','a11y']){
       if(interrupted)break;
       if(owned){
-        const doc={engine:'ego',observed_at:new Date().toISOString(),object:{...owned.object},items:[],failures:[]};observations[dim]=doc;
+        const doc={engine:owned.object.engine,observed_at:new Date().toISOString(),object:{...owned.object},items:[],failures:[]};observations[dim]=doc;
         try{
           if(dim==='overflow')doc.items.push(normalizeOverflow((await owned.read()).facts.scroll));
           else if(dim==='a11y'){await owned.read();await owned.call('Accessibility.enable');const nodes=normalizeA11y(await owned.call('Accessibility.getFullAXTree'));await owned.read();doc.items.push(...nodes);}
@@ -212,7 +212,7 @@ async function collectAudit(values,selection,{env,cwd,runTask,windowTimeoutMs=50
       interrupted=observations[dim].failures.some(f=>f.class==='UNREACHABLE');
     }
     for(const [dim,doc]of Object.entries(observations))for(const [flag,key]of Object.entries(identityFlags))if(doc.object[key]!==values[flag])throw fault('E_COLLECT_IDENTITY_MISMATCH',key,'Collector '+dim+' differs from declared '+key+'; inspect '+paths[dim]+' and reacquire matching identity through the QA gateway',2);
-    const observedEngine=selection.engine==='ego-lite'?'ego':selection.engine;
+    const observedEngine=owned?selection.engine:(selection.engine==='ego-lite'?'ego':selection.engine);
     for(const [dim,doc]of Object.entries(observations))if(doc.object.state!==config.state||!doc.object.viewport?.startsWith(config.viewport+'@')||doc.object.engine!==observedEngine)throw fault('E_COLLECT_IDENTITY_MISMATCH',dim,'Observed state, viewport or engine differs; inspect '+paths[dim],2);
     const refs=Object.fromEntries(await Promise.all(Object.keys(observations).map(async d=>[d,{ref:relative(evidenceRoot,paths[d]).split(sep).join('/'),sha256:sha(await readFile(paths[d]))}])));
     let windowEvidence;
@@ -223,18 +223,18 @@ async function collectAudit(values,selection,{env,cwd,runTask,windowTimeoutMs=50
     const criteria=applyNormFacts(mergeJudgments(input.criteria,observations,refs,{interrupted}),facts).map(c=>({...c,evidence:[...(c.evidence??[]),normEvidence,...(windowEvidence?[windowEvidence]:[])]})),coverage_limits=[...(input.coverage_limits??[])];
     if(interrupted)coverage_limits.push('采集失联：仅保留已观察；后续采集未执行，恢复同一对象后重跑');
     if(criteria.some(c=>c.state==='未测'))coverage_limits.push('存在未测检查项；退出 0 仅表示报告形状合法');
+    if(owned)coverage_limits.push('溢出采集仅覆盖根元素 html 的 scrollWidth/clientWidth；未扫描后代或内部滚动容器，不能据此判全页布局无溢出');
     if(observations.perf?.items.some(i=>Object.values(i.perf?.nav??{}).some(value=>value.median==='unknown')))coverage_limits.push('导航性能未测：三次观测存在缺失，保原始unknown；由采集执行者恢复同一对象后补齐重跑');
     if(observations.perf?.items.some(i=>i.perf?.interaction.status==='unknown'))coverage_limits.push('交互性能未测：未提供动作或实际耗时缺失，不采信页面预置 measure');
     const object={...Object.fromEntries(Object.entries(identityFlags).map(([flag,key])=>[key,values[flag]])),state:config.state,viewport:observations.console?.object.viewport??config.viewport,engine:selection.engine};
     if(selection.fallbacks.length)object.engine_fallback=Object.fromEntries(['from','to','reason','probe'].map(k=>[k,selection.fallbacks[0][k]]));
     const report={object,criteria,coverage_limits,summary:{overall:coverage_limits.length?'incomplete':criteria.some(c=>c.state==='失败')?'fail':'pass'}};
-    await writeFile(out,JSON.stringify(report)+'\n',{flag:'wx'});
-    // Ego's Node-compatible host is an Electron helper, not a child Node CLI.
-    // Use the exact existing validator function on the published bytes; the raw
-    // endpoint route retains its original subprocess and command behavior.
-    const ownedErrors=egoPage?collectErrors(JSON.parse(await readFile(out,'utf8'))):null;
-    const checked=egoPage?{code:ownedErrors.length?2:0,stdout:JSON.stringify({errors:ownedErrors}),stderr:''}:await launchChecker(out,cwd);
-    if(checked.code!==0){if(!egoPage)await unlink(out);if(checked.code===2){const e=fault('E_REPORT_REJECTED','$','Shape validator rejected report',2);e.errors=JSON.parse(checked.stdout).errors;throw e;}throw fault('E_AUDIT_TOOL_ERROR','$','Shape validator failed: '+checked.stderr);}
+    const reportBytes=JSON.stringify(report)+'\n';
+    if(egoPage){const errors=collectErrors(JSON.parse(reportBytes));if(errors.length){const rejected=join(dir,'report-rejected.json');await writeFile(rejected,reportBytes,{flag:'wx'});const error=fault('E_REPORT_REJECTED','$','Shape validator rejected unpublished candidate; original: '+rejected,2);error.errors=errors;throw error;}}
+    await writeFile(out,reportBytes,{flag:'wx'});
+    // Owned bytes were validated before publication; the raw endpoint keeps
+    // its existing subprocess and cleanup contract unchanged.
+    if(!egoPage){const checked=await launchChecker(out,cwd);if(checked.code!==0){await unlink(out);if(checked.code===2){const e=fault('E_REPORT_REJECTED','$','Shape validator rejected report',2);e.errors=JSON.parse(checked.stdout).errors;throw e;}throw fault('E_AUDIT_TOOL_ERROR','$','Shape validator failed: '+checked.stderr);}}
     return {code:0,report,observations,evidence_refs:refs};
   }catch(error){error.observations=observations;error.originals=dir;throw error;}
 }

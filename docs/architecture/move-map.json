@@ -6589,7 +6589,7 @@
       "destination": "skills/isolated-browser-qa/scripts/browser-qa-session.mjs",
       "status": "retain",
       "role": "production",
-      "responsibility": "N3 P7已实现可取消隔离网关生命周期/finally，替代手工生命周期；私有helper，不新增公共runtime命令。；C09 P4 T016仅承接已授权owned Ego page的现审计采集，不探测endpoint、不增代理或审计器；原raw-CDP职责保留，不能以新route冒旧route已测。",
+      "responsibility": "N3 P7已实现可取消隔离网关生命周期/finally，替代手工生命周期；私有helper，不新增公共runtime命令。；C09 P4 T016仅承接已授权owned Ego page的现审计采集，不探测endpoint、不增代理或审计器；原raw-CDP职责保留，不能以新route冒旧route已测。；现registered read仅对INPUT补input_type只读事实，供同collector安全fill判断，不新增注册名或eval入口。",
       "owner": "isolated-browser-qa / N3 P7 T007",
       "consumer": "现browser-qa-context.sh --run exec本helper；runBrowserQa由冻结ticket test、skill-contract及真实owned Chrome场景消费。；当前run-page-audit模块调用共享collect-console的owned-page接缝，复用注册有限viewport/navigation只读事实；新行为测试tests/contract/c09-owned-ego-page-audit.test.mjs证边界。",
       "module_consumers": [
@@ -8190,9 +8190,9 @@
       "destination": "skills/design-source-extraction/scripts/collect-design-source.mjs",
       "status": "retain",
       "role": "production",
-      "responsibility": "P3真实冻结清单采集与唯一产物validator/private CLI；复用P2固定注册读入口，不提供任意eval。；C09 T012原52搜索实例消费goto后受控fill数据输入，显式SDK填INPUT/TEXTAREA，既有click/固定read/覆盖/probe合同保留，不开任意脚本或协议。",
+      "responsibility": "P3真实冻结清单采集与唯一产物validator/private CLI；复用P2固定注册读入口，不提供任意eval。；C09 T012原52搜索实例消费goto后受控fill数据输入，显式SDK填INPUT/TEXTAREA，既有click/固定read/覆盖/probe合同保留，不开任意脚本或协议。；终末迟到P4仅原egoContext从原plan按字节绑定读取fill动作，敏感type拒绝、argv不内联value、安全错误码，不加公共CLI/API。",
       "owner": "design-source-extraction方法维护者（当前维护者用户）",
-      "consumer": "build-plan设计准备、build-code实施、build-code终末独立验收的UI且合法可读设计源reader；具体输入/产物/错误沿原技能和各当前Phase，不新增public入口。；P4 T012真实搜索/无匹配实例，T013读取逐原ID多ref与缺口，T014读本次已确认原型；未将局部coverage冒N52整体。",
+      "consumer": "build-plan设计准备、build-code实施、build-code终末独立验收的UI且合法可读设计源reader；具体输入/产物/错误沿原技能和各当前Phase，不新增public入口。；P4 T012真实搜索/无匹配实例，T013读取逐原ID多ref与缺口，T014读本次已确认原型；未将局部coverage冒N52整体。；内部egoContext导出仅供追加受控transport测试c09-terminal-input-boundaries，生产唯一caller仍本模块runCli。",
       "module_consumers": [
         "tests/contract/design-source-extraction-collect.test.mjs"
       ],
@@ -9577,6 +9577,38 @@
       "named_data_readers": [],
       "delete_condition": "该真实consumer职责经独立验证替代承接且旧接缝退役后由原owner删除；保原RED",
       "retention_basis": "root本轮明确窄扩原T016能力；候选文件已读/private/tmp/c09-owned-ego-page-audit.test.mjs，现module caller/SDK guide真实读取，不新增公共命令或持久状态"
+    },
+    {
+      "source": "tests/contract/c09-terminal-owned-audit.test.mjs",
+      "destination": "tests/contract/c09-terminal-owned-audit.test.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "C09迟到P4 owned审计engine一致性/根范围/拒收原件/身份停止的追加未冻结行为测试，受控transport不冒真实浏览器",
+      "owner": "frontend-testing方法owner / C09唯一writer",
+      "consumer": "npx vitest run tests/contract/c09-terminal-owned-audit.test.mjs；直接调用runPageAudit/原validator，不改原Node专用冻结suite",
+      "module_consumers": [
+        "skills/frontend-testing/scripts/run-page-audit.mjs"
+      ],
+      "named_data_readers": [],
+      "delete_condition": "该审计职责被独立验证替代后由原owner退役；保原RED/失败原件",
+      "retention_basis": "终末014原1/2/3/5/7与root必要窄修授权；目标和153真实caller已读。首次写测试早于登记的执行偏差保真，此处承接现真实consumer，不倒称提前登记"
+    },
+    {
+      "source": "tests/contract/c09-terminal-input-boundaries.test.mjs",
+      "destination": "tests/contract/c09-terminal-input-boundaries.test.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "原有限fill输入/argv不留值/plan同字节、原型恢复标签与单一Node专用runner配置的追加行为测试；受控SDK/事件fixture非真实页面",
+      "owner": "C09原P4唯一writer / 原collector与prototype owner",
+      "consumer": "npx vitest run tests/contract/c09-terminal-input-boundaries.test.mjs；直接调用现egoContext/readPlan、原原型事件listener和现vitest config",
+      "module_consumers": [
+        "skills/design-source-extraction/scripts/collect-design-source.mjs"
+      ],
+      "named_data_readers": [
+        "vitest.config.mjs"
+      ],
+      "delete_condition": "对应实际consumer职责经独立验证替代后由owner退役；保原失败",
+      "retention_basis": "root终末必要窄修授权；完整private/tmp候选已读，现唯一runCli→egoContext及原Node --test回执048已核；egoContext导出仅内部测试接缝，非公共CLI/API"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

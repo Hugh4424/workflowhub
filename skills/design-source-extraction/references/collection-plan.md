@@ -34,3 +34,12 @@ stale 时回原冻结plan、核真实设计变更与受影响条目，再用同�
 
 0 只表示原collector当前覆盖/校验结果，不能代设计批准、整体视觉或业务验收；1保具名失败与缺口。
 探测、正式采集与validate分别保本次argv/cwd/exit/原件；没有执行就记未执行。
+
+## 有限fill怎样守住输入与证据边界？
+
+当前fill只接受已观察input_type为text/search的INPUT，或TEXTAREA。
+password、hidden、file及未知/未观察类型在page.fill前明确拒绝。
+动作仍来自原冻结plan；实际执行前核原文件同字节，argv只留路径与整体hash，
+不内联action.value；准备异常只保固定安全失败码，避免值随SDK异常回显。
+plan仍是原输入，不另建secret存储；调用者不得在设计采集plan写登录凭据。
+这只改同一egoContext/注册只读字段，不开放任意表达式、CDP或表单提交。

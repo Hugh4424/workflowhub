@@ -502,7 +502,7 @@ export async function runRegisteredScript(page,id,args={}) {
           const element=document.querySelector(selector);if(!element)throw new Error('ELEMENT_NOT_FOUND:'+selector);
           const box=element.getBoundingClientRect();if(!box.width||!box.height)throw new Error('ELEMENT_NOT_RENDERED:'+selector);
           const computed=getComputedStyle(element);
-          const observation={selector,viewport_observed,structure:{tag:element.tagName,text:element.textContent},rendered:{styles:Object.fromEntries(properties.map(key=>[key,computed.getPropertyValue(key)])),box:{x:box.x,y:box.y,width:box.width,height:box.height}},declared:{style:element.getAttribute('style')}};
+          const observation={selector,viewport_observed,structure:{tag:element.tagName,text:element.textContent,...(element.tagName==='INPUT'?{input_type:element.type}:{})},rendered:{styles:Object.fromEntries(properties.map(key=>[key,computed.getPropertyValue(key)])),box:{x:box.x,y:box.y,width:box.width,height:box.height}},declared:{style:element.getAttribute('style')}};
           if(facts.length){
             const collected={};
             for(const fact of facts){
