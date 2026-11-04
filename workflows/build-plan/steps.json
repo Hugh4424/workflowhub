@@ -44,7 +44,7 @@
     {
       "step_id": 4,
       "step_slug": "spec-specify",
-      "observable_result": "分组：写spec与UI准备；同一spec.md描述产品旅程、状态、异常、FR及唯一AC，逐条给场景、结果和通过/失败条件。 判定消费：SKILL.md#方法 第4步；原件：spec完整正文及原需来源。 十组叙事各回答读者问题；每需求的真实输入、消费者、失败与证据可定位。",
+      "observable_result": "分组：写spec与UI准备；先出 2–7 个阶段的阶段大纲并取得用户答复，确认后再写 spec（大纲与第 0 阶段规则见 SKILL.md#方法 与「执行建议写什么？」）。 同一spec.md描述产品旅程、状态、异常、FR及唯一AC，逐条给场景、结果和通过/失败条件。 判定消费：SKILL.md#方法 第4步；原件：阶段大纲答复、spec完整正文及原需来源。 十组叙事各回答读者问题；每需求的真实输入、消费者、失败与证据可定位。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -52,7 +52,7 @@
         }
       ],
       "method_anchor": "step-spec-specify",
-      "requires_user_reply": false
+      "requires_user_reply": true
     },
     {
       "step_id": 5,
@@ -83,7 +83,7 @@
     {
       "step_id": 7,
       "step_slug": "testing-system-blueprint",
-      "observable_result": "分组：测试与验证设计；每Task有风险、场景、oracle、针对性命令、原始证据位置和覆盖限制；行为RED只认目标断言真实失败。 判定消费：SKILL.md#方法 第7/8步；原件：Phase卡、checkAcceptanceObject实际输入/返回、目标RED或G2原件。",
+      "observable_result": "分组：测试与验证设计；每条验收按 SKILL.md#设计每个 Phase 的验收 写成一段，风险、场景、oracle、针对性命令、原始证据位置和覆盖限制可读；行为RED只认目标断言真实失败。 判定消费：SKILL.md#方法 第7/8步；原件：Phase卡、checkAcceptanceObject实际输入/返回、目标RED或G2原件。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -100,7 +100,7 @@
     {
       "step_id": 8,
       "step_slug": "test-routing-advisor",
-      "observable_result": "分组：测试与验证设计；实际行为风险对应一条具体测试路线；纯方法G-2读回或不适用原因明确，未运行不称RED。 判定消费：SKILL.md#方法 第7/8步；原件：test-routing原结果、声明测试面与理由。",
+      "observable_result": "分组：测试与验证设计；实际行为风险对应一条具体测试路线；验收段、判定器与证据对得上；纯方法G-2读回或不适用原因明确，未运行不称RED。 判定消费：SKILL.md#方法 第7/8步；原件：test-routing原结果、声明测试面与理由。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
