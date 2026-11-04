@@ -986,8 +986,8 @@ true 或非布尔值的受控错误输入触发结果断言失败。
 怎样算通过：真实导出严格等于布尔 false 且命令退出 0。
 故意弄坏一处：把导出改成 true 后同一命令必须非零且断言指向 false；
 删掉导出则模块链接时报导入失败、结果断言未到达。
-真跑还是替代：真跑，命令与退出码见「怎么验证？」；
-本示例未执行，不宣称 RED 或 GREEN。
+真跑还是替代：真跑；命令 `node --input-type=module -e "import('./src/owned.mjs').then(m => { if (m.owned !== false) process.exit(1); })"`，
+期望退出码 0；本示例未执行，不宣称 RED 或 GREEN。
 谁判与证据：未参与实现的独立执行单元在 Phase 1 开发完成且审查问题改完后判定；
 读 `src/owned.mjs` 当前字节、门禁命令与原始输出、验收 1 判据；
 结论记本卡「完成」字段与 `quality/tests/owned-behavior.output`。

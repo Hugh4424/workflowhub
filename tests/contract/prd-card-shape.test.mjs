@@ -64,11 +64,21 @@ describe('ORACLE-PRD-SHAPE', () => {
     ['typescript line number', '\nsrc/cli/main.ts:7\n'],
     ['tsx line number', '\nsrc/ui/view.tsx:9\n'],
     ['duplicate coverage matrix', '\n重复覆盖矩阵\n'],
-    ['missing single-card sample', '\n### 单卡样例：重复\n'],
   ];
   for (const [name, snippet] of injections) {
     it(`rejects injected legacy ${name}`, () => {
       expect(shapeIssues(read(templatePath) + snippet)).not.toEqual([]);
     });
   }
+
+  it('rejects a template with the single-card sample removed', () => {
+    const actual = read(templatePath);
+    const start = actual.indexOf('### 单卡样例');
+    const end = actual.indexOf('\n### ', start + 1);
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const missing = actual.slice(0, start) + actual.slice(end + 1);
+    expect(shapeIssues(missing)).not.toEqual([]);
+    expect(shapeIssues(actual)).toEqual([]);
+  });
 });
