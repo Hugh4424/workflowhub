@@ -16,7 +16,7 @@
     {
       "step_id": 2,
       "step_slug": "generate-outline-and-task-map",
-      "observable_result": "第一次spec-prd内容调用产大纲/任务地图，每需求有负责卡或明确排除；实际稿件已展示，未答仍为草稿。 判定消费：SKILL.md#方法 第2步；原件：prd地图实际稿、作者调用事实、来源覆盖。",
+      "observable_result": "第一次spec-prd内容调用产大纲与4列任务地图（任务/结果/依赖/波次），波次只排任务先后；每需求有负责卡或明确排除，实际稿件已展示，未答仍为草稿。 判定消费：SKILL.md#方法 第2步；原件：prd地图实际稿、作者调用事实、来源覆盖。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -38,7 +38,7 @@
     {
       "step_id": 4,
       "step_slug": "expand-single-prd",
-      "observable_result": "地图/设计真实答复后第二次同一spec-prd作者写完整PRD，来源/语义一致，缺口保留，不新增第三内容调用。 判定消费：SKILL.md#方法 第4步；原件：作者真实调用事实、同一prd与确认输入。",
+      "observable_result": "地图/设计真实答复后第二次同一spec-prd作者写完整PRD；一个作者写整个PRD文件，不按波次切作者，来源/语义一致，缺口保留，不新增第三内容调用。 判定消费：SKILL.md#方法 第4步；原件：作者真实调用事实、同一prd与确认输入。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -49,7 +49,7 @@
     {
       "step_id": 5,
       "step_slug": "review-and-confirm-final-draft",
-      "observable_result": "完整稿经wh-review文档建议和逐项处置，最终实际展示稿取得真实confirm；版本指代不清或未答保持draft。 判定消费：SKILL.md#方法 第5步；原件：wh-review原件/处置、最终稿、confirm ref。",
+      "observable_result": "完整稿只做一次审查（拆卡、实现可行性、范围、验收四件事），再经wh-review文档建议和逐项处置；最终实际展示稿取得真实confirm，版本指代不清或未答保持draft。 判定消费：SKILL.md#方法 第5步；原件：wh-review原件/处置、最终稿、confirm ref。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
