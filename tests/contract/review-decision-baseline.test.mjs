@@ -97,6 +97,21 @@ describe('ORACLE-C07-REVIEW materials', () => {
     expect(result).toContain('**理由**：避免丢失用户输入。');
   });
 
+
+  it('accepts exact authoring question heading and explicit current U absence with pointer', () => {
+    const source = decisionLog.replace('原来要求做成什么？', '原始需求：要解决什么？').replace(/## 用户后来改了什么？[\s\S]*?(?=## 工作包)/, '### 后来改了什么，原件在哪里？\n\n目前没有需求变更（U）。变更记录的唯一原件位置按「外置事实索引」放 \x60requirement-change-log.md\x60，当前尚无内容。\n');
+    const baseline = buildDecisionBaseline({decisionLog:source});
+    expect(baseline).toContain('需求（2 条');
+    expect(baseline).toContain('用户答复（0 条');
+    expect(baseline).toContain('取消后保留草稿');
+    expect(baseline).toContain('requirement-change-log.md');
+    for (const heading of ['原始需求索引：历史材料', '原始需求：历史材料']) expect(() => buildDecisionBaseline({decisionLog:source.replace('原始需求：要解决什么？', heading)})).toThrow(/BASELINE_SOURCE_INVALID/);
+    const absence = '目前没有需求变更（U）。变更记录的唯一原件位置按「外置事实索引」放 \x60requirement-change-log.md\x60，当前尚无内容。';
+    for (const fake of ['变更记录的唯一原件位置按「外置事实索引」放 \x60requirement-change-log.md\x60，当前尚无内容。', '> '+absence, '\x60\x60\x60md\n'+absence+'\n\x60\x60\x60', '历史记录：'+absence, '示例：'+absence, '“'+absence+'”']) expect(() => buildDecisionBaseline({decisionLog:source.replace(absence,fake)})).toThrow(/BASELINE_SOURCE_INVALID/);
+    expect(() => buildDecisionBaseline({decisionLog:source.replace(absence, '')+'\n## 外置事实索引\n'+absence})).toThrow(/BASELINE_SOURCE_INVALID/);
+    const withReply = source.replace(absence, absence+'\nU-001 用户实际要求保留草稿。');
+    expect(buildDecisionBaseline({decisionLog:withReply})).toContain('用户答复（1 条');
+  });
   it('accepts current template source IDs and paragraph replies without C07 numbering', () => {
     const source = `# 决策日志
 ## 原始需求
