@@ -1,7 +1,6 @@
 ---
 name: design-source-extraction
 description: 设计源准备后、实施前提炼可回读的机器JSON；来源、规范或结构变化时重新提炼，按缺项定向限制依赖步骤。
-version: 1.0.0
 ---
 
 # Design Source Extraction
