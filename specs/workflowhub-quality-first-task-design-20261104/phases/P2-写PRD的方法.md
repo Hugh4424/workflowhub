@@ -709,6 +709,27 @@ P3 的重写者、P4 的提交核对与后续维护者按本节接手。
   完成条件（只写效果）：AC-PRD-004 版本已升、清单两项在、两个退出码为 0、
   三个提交各自可核；AC-MIG-002 按原词表与补后词表都为零，删除证明三件齐。
 
+### 本 Phase 自带判据小结
+
+自己验了什么：
+
+- 两条 gate：`P2-test-gate.txt`（20 passed，exit 0）。
+- markdownlint 两文件：`P2-test-gate.txt`（0 error，exit 0）。
+- 三条结构命令：`P2-test-gate.txt`（T006/T007/T008 各 exit 0）。
+- 三类样例读者复读：`P2-reader-readback.md` 第 7 节逐类，结论见第 8 节。
+
+没验什么：
+
+- AC-PRD-004 的 n2：基线既有红 2 条（`17e78a09` 与 HEAD 同），见 `P2-version.txt`、`P2-test-ac.txt` §6。
+- 样例卡内 6 字段无测试守护，仅手工核；`prd-card-shape` 只守空卡段（`P2-test-ac.txt` §7）。
+- 拆卡样例的「四行验收：」是普通段落，不是标题；属模板表达取舍，未加机器断言。
+- 模板里的 Supersedes 是示例占位，属模板应然；真实任务须填 64 位哈希。
+
+未验项条件与 owner：
+
+- n2 基线红修复后重跑；owner＝主会话/相关源维护者。
+- 6 字段机器守护若被要求，需另加断言；owner＝P2 作者/测试上下文。
+
 ## 机器字段（校验器用，人可跳过）
 
 - **全局规格**: `spec.md#实现设计（全局权威）`
@@ -722,13 +743,17 @@ P3 的重写者、P4 的提交核对与后续维护者按本节接手。
   写入越出六条路径、验收判不出真假时停手；材料问题回本 Phase 作者修同一处，
   判据问题回规格作者，不扩写集、不改判定器求绿。
 - **覆盖 AC**: AC-PRD-001、AC-PRD-002、AC-PRD-003、AC-PRD-004、AC-MIG-002
-- **Done**: 前置（不作完成条件）：`gate_cmd` 与结构命令有真实输出，含 cwd、
-  退出码与原始输出；三个提交号、路径清单与父提交旧字节哈希在场；
-  清尾与测试改动清单在场。完成条件（只写效果）：AC-PRD-001 九类计数全零、
-  AC-PRD-002 五组读数与 6 步成立且无按波次分作者、AC-PRD-003 读者复述四行并判出负控、
-  AC-PRD-004 版本已升、两个退出码为 0、三个提交各自可核、
-  AC-MIG-002 两种词表都为零且删除证明三件齐；
-  只能人读且未执行时记 `incomplete` 并写判定者、协议与约定时点。
+- **Done**: 前置（不作完成条件）：两条 gate 真实输出（`P2-test-gate.txt`，20 passed）；
+  markdownlint 两文件 0 error（`P2-test-gate.txt`）；三条结构命令 exit 0（`P2-test-gate.txt`）；
+  四个提交号与各自路径：`629181f2`（模板/技能正文/新增测试）、`7fbbc692`（流程/步骤）、
+  `d8130a4c`（版本/清尾）、`38b467dd`（审后修复）；父提交旧字节哈希见 `P2-version.txt` 第四节；
+  清尾与测试改动清单见 `P2-delete-proof.txt`、`P2-test-change.txt`。
+  完成条件（逐条承接，格式为「AC 编号｜8 值档位｜具名证据指针」）：
+  - AC-PRD-001｜pass｜`quality/tests/P2-test-ac.txt` §7、`P2-reader-readback.md`
+  - AC-PRD-002｜pass｜`P2-prd-flow.txt`、`P2-test-gate.txt`
+  - AC-PRD-003｜pass｜`P2-reader-readback.md` 三类样例逐类节
+  - AC-PRD-004｜incomplete（n2 基线既有红 2 条，`17e78a09` 与 HEAD 同；owner＝主会话/相关源维护者；恢复条件＝基线红修复后重跑 n2）｜`P2-version.txt`、`P2-test-ac.txt`
+  - AC-MIG-002｜pass｜`P2-delete-proof.txt`
 
 ## 补充材料
 
