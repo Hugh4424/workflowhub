@@ -49,7 +49,7 @@
     {
       "step_id": 5,
       "step_slug": "review-and-confirm-final-draft",
-      "observable_result": "完整稿只做一次审查（拆卡、实现可行性、范围、验收四件事），再经wh-review文档建议和逐项处置；最终实际展示稿取得真实confirm，版本指代不清或未答保持draft。 判定消费：SKILL.md#方法 第5步；原件：wh-review原件/处置、最终稿、confirm ref。",
+      "observable_result": "完整稿只做一次审查，由wh-review执行并只审拆卡、实现可行性、范围、验收四件事，审查发现逐项处置；最终实际展示稿取得真实confirm，版本指代不清或未答保持draft。 判定消费：SKILL.md#方法 第5步；原件：wh-review原件/处置、最终稿、confirm ref。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
