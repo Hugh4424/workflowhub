@@ -752,7 +752,7 @@ P3 的重写者、P4 的提交核对与后续维护者按本节接手。
   - AC-PRD-001｜pass｜`quality/tests/P2-test-ac.txt` §7、`P2-reader-readback.md`
   - AC-PRD-002｜pass｜`P2-prd-flow.txt`、`P2-test-gate.txt`
   - AC-PRD-003｜pass｜`P2-reader-readback.md` 三类样例逐类节
-  - AC-PRD-004｜incomplete（n2 基线既有红 2 条，`17e78a09` 与 HEAD 同；owner＝主会话/相关源维护者；恢复条件＝基线红修复后重跑 n2）｜`P2-version.txt`、`P2-test-ac.txt`
+  - AC-PRD-004｜pass（n2 基线过时断言已按独立诊断修复（提交 `a8594082`），2026-11-04 22:45 复跑 n2 29 passed + wiring 18 passed，exit 0；版本 1.1.0/2026-11-04、bundle 两项不变）｜`quality/tests/P4-green.txt` 第五节、`P4-static.txt` 第八节
   - AC-MIG-002｜pass｜`P2-delete-proof.txt`
 
 ## 补充材料

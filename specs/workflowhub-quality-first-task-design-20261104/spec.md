@@ -884,11 +884,15 @@ Phase 机器字段的 oracle 是 Phase 级汇总名，每张卡的 oracle 必须
   关联 FR-BP-011；来源 A2、A4 与 R-001、决定 5。
   判定方式：机器可判；判定时点：P1 实现与独立审查改完之后。
   落点：P1/T004 与 `phases/P1-写计划的方法.md`。
-验证：读 `skills/spec-plan/templates/phase-template.md`：
-  8 个问题按序出现在机器块之前；`grep -c "校验器用，人可跳过"` 为 1；
-  17 个字段名各出现一次；`grep -n "### 任务 N"` 的示例卡仍有正文。
+验证：读 `skills/spec-plan/templates/phase-template.md` 的「卡段」（单张示例任务卡 `### 任务 1` 的机器块：从
+  `**校验器用，人可跳过**` 到下一个 `## ` 前）：
+  8 个问题按序出现在机器块之前；在该卡段内 `grep -c "校验器用，人可跳过"` 为 1、
+  17 个字段名各出现一次；整文件计数不作为判据；
+  17 个字段名以示例卡（`### 任务 1`）的英文标签为准；空卡的中文标签是另一套，不混用；
+  `grep -n "### 任务 N"` 的示例卡仍有正文。
   再跑 `npx vitest run tests/contract/phase-contract-prose.test.mjs tests/contract/card05-author-material-consumer.test.mjs`，
   退出 0。
+  口径修正：原文按整文件计数，与模板真实结构冲突（整文件 11 处，基线也 11；含表格、说明、标题与示例）；改为卡段口径，实现未变。
   ORACLE-BP-CARD-PROSE 核 8 问顺序、机器块标记唯一、字段名齐、两测试退出 0。
   环境与数据：认证 worktree、Node v24.14.0、仓库自带契约测试。
   谁判：未参与实现的独立执行单元，只读模板字节与测试输出。
