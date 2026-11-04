@@ -7,7 +7,17 @@
 
 从本件判据与当前真实对象开始，先经 isolated-browser-qa 选择一个引擎和自有会话。
 对已选 agent-browser，在同一网关scenario内用 `agent-browser --session "$BROWSER_QA_SESSION" get cdp-url` 取得实际receiver端点；不是固定端口，不取用户浏览器端点。
-既有ego路径没有承诺同一CDP能力，未取得时保unavailable，不能因失败切引擎。
+既有ego路径没有承诺可交给CLI的CDP receiver端点，未取得时不能伪造端点或切引擎。当前已有自有Ego page时，可在同一已授权网关scenario内调用原模块入口，不另建审计器：
+
+`import {runPageAudit} from './skills/frontend-testing/scripts/run-page-audit.mjs'`
+
+`await runPageAudit(args,{env:{BROWSER_QA_ENGINE:'ego-lite',BROWSER_QA_EGO_SPACE_ID:String(ownedSpaceId)},egoPage:ownedPage})`
+
+args仍显式提供下述八项当前身份，不传--cdp-url；ownedPage来自本次真实owned空间的p1，不能claim用户页面或猜空间ID。模块拒绝owned page与raw CDP endpoint混用，核页面路由及viewport/DPR，并在有限只读采集前后复核绑定；控制台/网络从当前导航订阅与主loader事实取，不把旧缓存事件当本次结果。现有注册只读事实及原console/a11y/overflow/performance normalizer复用，未加任意evaluate或endpoint探测。
+
+owned路径在实际Node内用同一报告validator核最终字节；SDK宿主execPath可能是helper而非Node，不能拿它重启CLI校验。外层需要CLI形状检查时使用外层真实Node。形状0仍不等页面验收；无独立判定输入的八维保持未测/incomplete，交互性能未知不补值。原raw CDP CLI入口保持原调用方式，owned路径的实际验证不能冒旧route的真实服务覆盖。
+
+SDK控制错误立即停止该owned浏览器路径，保原件，不自动重试、claim、新建空间、切引擎或finish；只有正常结束且可回读才报告清理成功。空间not found不能反推已finish或宿主回收原因。
 
 逐字填当前身份后调用：
 `node skills/frontend-testing/scripts/run-page-audit.mjs --cdp-url "$CDP" --state "$STATE" --viewport "$VIEWPORT" --out "$REPORT" --workspace "$WORKSPACE" --service "$SERVICE" --route "$ROUTE" --object-version "$OBJECT_VERSION" --engine-session "$BROWSER_QA_SESSION" --engine "$BROWSER_QA_ENGINE"`

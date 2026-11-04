@@ -6589,9 +6589,9 @@
       "destination": "skills/isolated-browser-qa/scripts/browser-qa-session.mjs",
       "status": "retain",
       "role": "production",
-      "responsibility": "N3 P7已实现可取消隔离网关生命周期/finally，替代手工生命周期；私有helper，不新增公共runtime命令。",
+      "responsibility": "N3 P7已实现可取消隔离网关生命周期/finally，替代手工生命周期；私有helper，不新增公共runtime命令。；C09 P4 T016仅承接已授权owned Ego page的现审计采集，不探测endpoint、不增代理或审计器；原raw-CDP职责保留，不能以新route冒旧route已测。",
       "owner": "isolated-browser-qa / N3 P7 T007",
-      "consumer": "现browser-qa-context.sh --run exec本helper；runBrowserQa由冻结ticket test、skill-contract及真实owned Chrome场景消费。",
+      "consumer": "现browser-qa-context.sh --run exec本helper；runBrowserQa由冻结ticket test、skill-contract及真实owned Chrome场景消费。；当前run-page-audit模块调用共享collect-console的owned-page接缝，复用注册有限viewport/navigation只读事实；新行为测试tests/contract/c09-owned-ego-page-audit.test.mjs证边界。",
       "module_consumers": [
         "skills/isolated-browser-qa/scripts/browser-qa-context.sh"
       ],
@@ -8190,15 +8190,16 @@
       "destination": "skills/design-source-extraction/scripts/collect-design-source.mjs",
       "status": "retain",
       "role": "production",
-      "responsibility": "P3真实冻结清单采集与唯一产物validator/private CLI；复用P2固定注册读入口，不提供任意eval。",
+      "responsibility": "P3真实冻结清单采集与唯一产物validator/private CLI；复用P2固定注册读入口，不提供任意eval。；C09 T012原52搜索实例消费goto后受控fill数据输入，显式SDK填INPUT/TEXTAREA，既有click/固定read/覆盖/probe合同保留，不开任意脚本或协议。",
       "owner": "design-source-extraction方法维护者（当前维护者用户）",
-      "consumer": "build-plan设计准备、build-code实施、build-code终末独立验收的UI且合法可读设计源reader；具体输入/产物/错误沿原技能和各当前Phase，不新增public入口。",
+      "consumer": "build-plan设计准备、build-code实施、build-code终末独立验收的UI且合法可读设计源reader；具体输入/产物/错误沿原技能和各当前Phase，不新增public入口。；P4 T012真实搜索/无匹配实例，T013读取逐原ID多ref与缺口，T014读本次已确认原型；未将局部coverage冒N52整体。",
       "module_consumers": [
         "tests/contract/design-source-extraction-collect.test.mjs"
       ],
       "named_data_readers": [
         "workflows/build-plan/SKILL.md",
-        "workflows/build-code/SKILL.md"
+        "workflows/build-code/SKILL.md",
+        "tests/contract/c09-design-source-actions.test.mjs"
       ],
       "delete_condition": "经独立审查的替代完整承接真实consumer、迁接现deps/bundle且无当前消费者后由原owner同批退役；历史task原件不删覆。",
       "retention_basis": "C04P6T011/T012登记此前P1-P5实际交付，唯一bundle承接现resolver；不是质量、许可或方法实际执行的证明。style-ref-gen未采用，版本/归档/权利分开；不建立替代selector或第二权威。"
@@ -9377,9 +9378,9 @@
       "destination": "skills/frontend-testing/scripts/collect-console.mjs",
       "status": "retain",
       "role": "production",
-      "responsibility": "当前页面审计具名产物：采集/编排/结构或引用身份检查，事实不代独立页面裁决",
+      "responsibility": "当前页面审计具名产物：采集/编排/结构或引用身份检查，事实不代独立页面裁决；C09 P4 T016仅承接已授权owned Ego page的现审计采集，不探测endpoint、不增代理或审计器；原raw-CDP职责保留，不能以新route冒旧route已测。",
       "owner": "frontend-testing方法owner",
-      "consumer": "skills/frontend-testing/references/page-audit.md → run-page-audit/具名检查器；编排器现有采集器调用",
+      "consumer": "skills/frontend-testing/references/page-audit.md → run-page-audit/具名检查器；编排器现有采集器调用；当前run-page-audit模块调用共享collect-console的owned-page接缝，复用注册有限viewport/navigation只读事实；新行为测试tests/contract/c09-owned-ego-page-audit.test.mjs证边界。",
       "module_consumers": [
         "skills/frontend-testing/scripts/run-page-audit.mjs"
       ],
@@ -9445,9 +9446,9 @@
       "destination": "skills/frontend-testing/scripts/run-page-audit.mjs",
       "status": "retain",
       "role": "production",
-      "responsibility": "当前页面审计具名产物：采集/编排/结构或引用身份检查，事实不代独立页面裁决",
+      "responsibility": "当前页面审计具名产物：采集/编排/结构或引用身份检查，事实不代独立页面裁决；C09 P4 T016仅承接已授权owned Ego page的现审计采集，不探测endpoint、不增代理或审计器；原raw-CDP职责保留，不能以新route冒旧route已测。",
       "owner": "frontend-testing方法owner",
-      "consumer": "skills/frontend-testing/references/page-audit.md → run-page-audit/具名检查器；编排器现有采集器调用",
+      "consumer": "skills/frontend-testing/references/page-audit.md → run-page-audit/具名检查器；编排器现有采集器调用；当前run-page-audit模块调用共享collect-console的owned-page接缝，复用注册有限viewport/navigation只读事实；新行为测试tests/contract/c09-owned-ego-page-audit.test.mjs证边界。",
       "module_consumers": [
         "skills/frontend-testing/scripts/run-page-audit.mjs"
       ],
@@ -9503,6 +9504,79 @@
       ],
       "delete_condition": "唯一职责由经独立验证的现有consumer承接且原引用迁移后由原owner删除；无永久兼容桥",
       "retention_basis": "当前C09 P2第3/11项修复授权；真实consumer与文件已读，新增模板在写入前登记"
+    },
+    {
+      "source": "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/index.html",
+      "destination": "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/index.html",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "当前C09两页可运行原型入口；不承接NEW_COPY最终实现",
+      "owner": "当前C09 P4 T013设计执行者",
+      "consumer": "T013浏览器/独立八维审查/用户本次展示",
+      "module_consumers": [],
+      "named_data_readers": [
+        "T013浏览器/独立八维审查/用户本次展示"
+      ],
+      "delete_condition": "当前原型/本次真实用户答复与后续实现承接且历史证据责任明确后由原owner决定，不自动删除",
+      "retention_basis": "原P4 T013冻结四文件交付；只中间原型，不冒最终两页/业务链"
+    },
+    {
+      "source": "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/styles.css",
+      "destination": "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/styles.css",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "当前有稿深色布局与交互状态样式；不新增设计权威",
+      "owner": "当前C09 P4 T013设计执行者",
+      "consumer": "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/index.html",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/index.html"
+      ],
+      "delete_condition": "当前原型/本次真实用户答复与后续实现承接且历史证据责任明确后由原owner决定，不自动删除",
+      "retention_basis": "原P4 T013冻结四文件交付；只中间原型，不冒最终两页/业务链"
+    },
+    {
+      "source": "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/app.js",
+      "destination": "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/app.js",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "原生DOM两页与本地示例行为；无真实网络/业务写入",
+      "owner": "当前C09 P4 T013设计执行者",
+      "consumer": "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/index.html",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/index.html"
+      ],
+      "delete_condition": "当前原型/本次真实用户答复与后续实现承接且历史证据责任明确后由原owner决定，不自动删除",
+      "retention_basis": "原P4 T013冻结四文件交付；只中间原型，不冒最终两页/业务链"
+    },
+    {
+      "source": "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/README.md",
+      "destination": "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/README.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "原型入口、消费/数据/验证边界交接",
+      "owner": "当前C09 P4 T013设计执行者",
+      "consumer": "T013独立审查者与T014实现者",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "当前原型/本次真实用户答复与后续实现承接且历史证据责任明确后由原owner决定，不自动删除",
+      "retention_basis": "原P4 T013冻结四文件交付；只中间原型，不冒最终两页/业务链"
+    },
+    {
+      "source": "tests/contract/c09-owned-ego-page-audit.test.mjs",
+      "destination": "tests/contract/c09-owned-ego-page-audit.test.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "C09 T016现run-page-audit已授权owned SDK page接缝的定向正反行为测试；替身非真实浏览器",
+      "owner": "frontend-testing方法owner / C09 P4唯一writer",
+      "consumer": "node --test按本文件执行，实际调用现runPageAudit；正常route与错身份/未ready/失控/多loader拒绝，不改原冻结测试",
+      "module_consumers": [
+        "skills/frontend-testing/scripts/run-page-audit.mjs"
+      ],
+      "named_data_readers": [],
+      "delete_condition": "该真实consumer职责经独立验证替代承接且旧接缝退役后由原owner删除；保原RED",
+      "retention_basis": "root本轮明确窄扩原T016能力；候选文件已读/private/tmp/c09-owned-ego-page-audit.test.mjs，现module caller/SDK guide真实读取，不新增公共命令或持久状态"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

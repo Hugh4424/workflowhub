@@ -450,7 +450,7 @@ export async function selectBrowserEngine(env=process.env,{probe}={}) {
 }
 const registeredScripts=Object.freeze(['design-source-read-v1','design-source-prepare-v1']);
 // Fixed facts are a closed name set; coordinates stay bounded data.
-const registeredFacts=Object.freeze(['scroll','hit-test','reduced-motion','active-element']);
+const registeredFacts=Object.freeze(['scroll','hit-test','reduced-motion','active-element','viewport','navigation']);
 export function assertRegisteredScript(id) {
   // unregistered identifiers are rejected before executor access.
   if(!registeredScripts.includes(id))throw safeError('UNREGISTERED_SCRIPT');
@@ -494,7 +494,7 @@ export async function runRegisteredScript(page,id,args={}) {
         value=[];
       }else{
         if(!Array.isArray(args.elements)||args.elements.length>1000)throw new Error('INVALID_COLLECTION_ELEMENTS');
-        const viewport_observed={width:window.innerWidth,height:window.innerHeight},factNames=['scroll','hit-test','reduced-motion','active-element'];
+        const viewport_observed={width:window.innerWidth,height:window.innerHeight},factNames=['scroll','hit-test','reduced-motion','active-element','viewport','navigation'];
         value=args.elements.map(({selector,properties=[],facts=[],point})=>{
           if(typeof selector!=='string'||!selector||!Array.isArray(properties)||properties.length>1000)throw new Error('INVALID_COLLECTION_ELEMENT');
           if(!Array.isArray(facts)||facts.length>factNames.length||new Set(facts).size!==facts.length||!facts.every(key=>factNames.includes(key)))throw new Error('INVALID_COLLECTION_FACTS');
@@ -507,6 +507,8 @@ export async function runRegisteredScript(page,id,args={}) {
             const collected={};
             for(const fact of facts){
               if(fact==='scroll')collected.scroll={scrollWidth:element.scrollWidth,clientWidth:element.clientWidth};
+              else if(fact==='viewport')collected.viewport={width:window.innerWidth,height:window.innerHeight,dpr:window.devicePixelRatio};
+              else if(fact==='navigation'){const n=performance.getEntriesByType('navigation')[0];collected.navigation=n?{url:window.location.href,ttfb:n.responseStart-n.requestStart,domContentLoadedEventEnd:n.domContentLoadedEventEnd,loadEventEnd:n.loadEventEnd}:null;}
               else if(fact==='hit-test'){
                 const at=point||{x:box.x+box.width/2,y:box.y+box.height/2},target=document.elementFromPoint(at.x,at.y);
                 collected.hit_test={point:{x:at.x,y:at.y},target:target?{id:target.id,tag:target.tagName,class_name:target.getAttribute('class')}:null,inside_selected:Boolean(target&&element.contains(target))};
