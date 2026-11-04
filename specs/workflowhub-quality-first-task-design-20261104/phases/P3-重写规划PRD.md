@@ -645,6 +645,7 @@ P4 只读五件：旧件字节基线、旧件整体哈希、七张只读卡切�
   - AC-PB-004｜pass｜`P3-test-acceptance.txt`（18 组；grep `什么条件（含真跑或替代`=18）
   - AC-PB-005｜pass｜`P3-test-readback.md`（独立读者；checker exit 0）
   - AC-PB-006｜pass｜`P3-gap-readback.md`、五处遗漏落点
+  - 终态外部件 sha256 `afc39e17…`（1239 行）；验收 6 在 T23a 理由句补入后由独立测试复判 pass；证据见 `P3-test-acceptance.txt` 第四次定向复验。
 
 ## 补充材料
 

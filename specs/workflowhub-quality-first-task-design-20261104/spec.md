@@ -181,7 +181,7 @@ RED（先让目标断言失败）与 GREEN（再用同一断言判通过）是�
   实读 `grep -rn "七个槽\|七槽" tests/` 无输出；删槽不破测。
   但模板内嵌示例被 4 个契约测试读取，改模板必须重跑它们。
 - **事实 15**：`skills/spec-prd/SKILL.md:51`、`:53`、`:73` 与模板 `:24`、`:75`、`:79`、`:81` 写死 16 字段。
-- **事实 16**：PaperBuilder 工作树有 1 个脏文件 `scripts/serve_f6.py`（+3/−1）。
+- **事实 16**：PaperBuilder 工作树有 3 个脏文件：`paperbuilder/components/c2_storage/metadata.py`、`scripts/serve_f6.py`（+3/−1）与未跟踪测试文件 `tests/components/test_canonical_read_admission_contention.py`。
   修改时间早于本任务；它不是本次改动，也不在本任务写集内。
 - **事实 17**：细节审查原件已完成，原件在
   `任务根/quality/reviews/2026-11-04-013-make-decision-detail.json`。
