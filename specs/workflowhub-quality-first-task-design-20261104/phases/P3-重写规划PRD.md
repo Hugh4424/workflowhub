@@ -617,6 +617,13 @@ P4 只读五件：旧件字节基线、旧件整体哈希、七张只读卡切�
 - 交回读者记录与 P3 的 Done：缺口逐条写 owner。
 - 未完成项：用户对提交的答复未取得；新件仍 `draft`，提交由用户决定。
 
+### 本 Phase 自带判据小结
+
+- **验了什么**：六条验收命令与原件（`P3-test-structure.txt`、`P3-test-slices.txt`、`P3-old-prd.sha256`、`P3-test-clean.txt`、`P3-test-acceptance.txt`、`P3-test-readback.md`、`P3-gap-readback.md`）；旧件 sha256 写前写后均 `823f101f…`；7 片逐卡相等；26 卡、4 列、18 组、`Supersedes`=1；读者形态检查 exit 0。
+- **没验什么**：产品测试未跑；T11 负控偏弱；T23a 体积大；T08 下游「三页」残留；T23a 与 AC-T02-9 文本轻微重叠；T011 中途门禁与最终 18 组口径不同，卡文未注明。
+- **未验项条件/owner**：产品测试由 P4 或后续 build-code 执行；上述文本项由 P3 作者或用户决定是否改；T011 卡文口径缺口由 P3 卡 owner 补注。
+- **norm-sync**：本 Phase 只写外部文件，未改仓内规范，无适用变化，owner 无。
+
 ## 机器字段（校验器用，人可跳过）
 
 - **全局规格**: `spec.md#实现设计全局权威`
@@ -630,10 +637,14 @@ P4 只读五件：旧件字节基线、旧件整体哈希、七张只读卡切�
 - **STOP**: 用户答复未取得或被拒就停写入路径，只读盘点继续，跨仓记 `unknown`；
   旧件哈希变化或任一检查变红即停手报主会话，回退是删掉或废弃新件。
 - **覆盖 AC**: AC-PB-001、AC-PB-002、AC-PB-003、AC-PB-004、AC-PB-005、AC-PB-006
-- **Done**: 前置（不作完成条件）：旧件可读、四组计数命令可跑、原始输出留件。
-  完成条件（只写效果）：AC-PB-001 至 AC-PB-004 四条在真实文件上成立；
-  AC-PB-005 与 AC-PB-006 由独立读者给出结论与缺口；
-  旧件哈希未变、七张只读卡切片相等；用户答复与提交决定写成待定，不写成已确认。
+- **Done**: 前置（不作完成条件）：旧件可读；六条验收命令与读数可复算；旧件 sha256 写前写后均 `823f101f…`；7 片逐卡相等；26 卡、4 列地图、18 组四行验收、`Supersedes` 1 行；读者形态检查 exit 0；未提交（跨仓，提交由用户决定）。
+  完成条件（逐条承接，AC 编号｜档位｜证据指针）：
+  - AC-PB-001｜pass｜`quality/evidence/P3-test-structure.txt`
+  - AC-PB-002｜pass｜`P3-test-slices.txt`、`P3-old-prd.sha256`
+  - AC-PB-003｜pass｜`P3-test-clean.txt`
+  - AC-PB-004｜pass｜`P3-test-acceptance.txt`（18 组；grep `什么条件（含真跑或替代`=18）
+  - AC-PB-005｜pass｜`P3-test-readback.md`（独立读者；checker exit 0）
+  - AC-PB-006｜pass｜`P3-gap-readback.md`、五处遗漏落点
 
 ## 补充材料
 
