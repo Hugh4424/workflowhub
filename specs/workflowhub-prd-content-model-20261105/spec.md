@@ -14,7 +14,7 @@
 | 技能缺陷 | 同目录 `2026-11-05-005-skill-defects.md` | 332 行 |
 | 丢失审计 | 同目录 `2026-11-05-001-prd-loss-audit.md` | 473 行 |
 | 旧 PRD | `/Users/Hugh/Hugh/Project/PaperBuilder/specs/paperbuilder-architecture-optimization-planning-20261021/prd.md` | 1,892 行 |
-| 新 PRD | 同目录 `prd-v2.md` | 998 行 / 80,373 字符 |
+| 新 PRD | 同目录 `prd-v2.md` | 1,751 行 / 77,486 字符（以磁盘为准） |
 | 决定源 | 同目录 `decision-log.md` | 533 行 / 45 条决定 |
 
 本文件的词先解释：PRD（规划用的产品需求文档）、FR（功能需求）、AC（验收判据）。

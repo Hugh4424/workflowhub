@@ -15,7 +15,7 @@
 - **工作树**：当前 worktree；分支 `task/workflowhub/workflowhub-prd-content-model-20261105`；基线 `6993f2a9`。
 - **设计来源**：`2026-11-05-004-good-prd-model.md`、`2026-11-05-005-skill-defects.md`、`2026-11-05-001-prd-loss-audit.md`（路径见「外置事实索引」）。
 - **一句话结果**：spec-prd 与 build-prd 按 7 节 + 2 附录、6 字段、决策覆盖表与 C1–C7 改写；PaperBuilder 的 `prd-v2.md` 还原为 27 张卡。
-- **边界一句话**：改方法与一份外部 PRD，不改产品代码、不改旧件 `prd.md`、不提交。
+- **边界一句话**：改方法与一份外部 PRD，不改产品代码、不改旧件 `prd.md`；提交按 build-code 既有授权执行（授权原件 `quality/evidence/human-confirmations/2026-11-05-001-build-code-authorized.json`），P1 两个提交 `9f62349b`、`b47d8b46`；P2 交付物在外部仓、不提交。
 
 完成判据：本节恰一次声明任务类型，且编号、分支、基线与本任务事实一致。
 
@@ -73,7 +73,7 @@
 
 - PaperBuilder 的旧件 `prd.md`、产品代码、其它规格与已开发内容。
 - 其它技能、runtime、stage、gate、schema、公共命令、CLI。
-- Git 提交、分支创建、归档、删除；本任务不提交。
+- Git 提交按 build-code 既有授权执行（授权原件 `quality/evidence/human-confirmations/2026-11-05-001-build-code-authorized.json`；P1 两个提交 `9f62349b`、`b47d8b46`）；分支创建、归档、删除不做；P2 交付物在外部仓、不提交。
 - 用户对还原后整稿的最终确认；未取得就保持 draft。
 
 ## 工作包与决定
@@ -359,7 +359,7 @@ C1–C7 是读法，不是比例：逐条找、逐条判，判不了就记缺口
 - 丢失审计：同目录 `2026-11-05-001-prd-loss-audit.md`（473 行）。
 - 补充证据：同目录 `2026-11-05-002-build-prd-design.md`、`2026-11-05-003-task-card-information-needs.md`。
 - 旧 PRD：`/Users/Hugh/Hugh/Project/PaperBuilder/specs/paperbuilder-architecture-optimization-planning-20261021/prd.md`（1,892 行，sha256 `823f101f7fce113f19b6e4a07478e276c2c0671e3b97b0470c32b305e1bff076`）。
-- 新 PRD：同目录 `prd-v2.md`（998 行，80,373 字符，sha256 `68fdbb8bb2bcbf7afdeb72404dfd4c431c4a05a2535764851714084ef0db946f`）。
+- 新 PRD：同目录 `prd-v2.md`（1,751 行，77,486 字符，sha256 `29788be0cffa11f71d8478eebb04934a7023f73c8cad83fd18b325eedef4c992`；以磁盘为准）。
 - 决定源：同目录 `decision-log.md`（533 行，45 个 `#### D-0nn`，sha256 `be163d359b823ed90c892cc0744f3f60b5cd25c2f15c3f506940dccb0534a98f`）。
 - 任务事实：`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-prd-content-model-20261105/task.json`（基线 `6993f2a9`）、`facts.jsonl`（写本文件时为空）。
 - 本任务材料：`specs/workflowhub-prd-content-model-20261105/`；证据放任务根 `quality/evidence/`。

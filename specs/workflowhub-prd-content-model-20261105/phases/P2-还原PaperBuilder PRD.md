@@ -347,6 +347,13 @@ node -e "const fs=require('fs');const p='/Users/Hugh/Hugh/Project/PaperBuilder/s
 - **Coverage limit**：结构只证形状；内容保真、语义与读者可用由验收 2–4 判。
 - **Done**：前置（不作完成条件）：基线与结构检查有真实输出。完成条件（只写效果）：读者能按 27 张卡判断做法与真假；C1–C7 合格；三处负例判红；旧件未动、只改 `prd-v2.md`。
 
+## Done（实际结果）
+
+- **交付**：磁盘终稿 PaperBuilder `prd-v2.md` sha256 `29788be0cffa11f71d8478eebb04934a7023f73c8cad83fd18b325eedef4c992`，1,751 行 / 77,486 字符；27 张卡、头部 + 7 节 + 附录 B/C、无附录 A；D-036 周末清单 3 行在 `:216-218`，地图第 5 列 27/27 行为 R 编号或「无」，R-013 落 T15（`P2-final-summary.txt`、`P2-recheck-C1C2.md`）。
+- **验收命令与 exit**：P2 结构门 → `{"miss":[],"extra":[],"bad":[],"ok":true}`，exit 0；增强读数 `sectionCards:27`、`mapRows:27`、`badMap:[]`、`r13:true`，exit 0（`P2-structure-green.txt`）；`shasum -a 256` 与 `wc -l -m` 见 `P2-final-summary.txt`。审查链：`2026-11-05-003` `needs_revision`（P2R-01～09）→ `2026-11-05-004` 定向 `pass`（对象 `942b517a…`）；`2026-11-05-007` §7 对 `e2f77720…` final（103/0/0、295/265），§8 对 `8536cd24…` 给「可收口，条件是第 5 列改对」。
+- **commit 与外部件 sha**：无 P2 提交；`prd-v2.md` 仍在 PaperBuilder 工作树 `M`（`P2-boundary.txt`）；终稿 `29788be0…`；旧件 `prd.md` `823f101f…`、决定日志 `be163d35…` 未动。
+- **未验项与 owner**：磁盘终稿 `29788be0…` 相对 `007` §7 的 `e2f77720…` 有后续改动（D-036 周末清单、地图第 5 列与 R-013 落点等）；`007` §8 对 `8536cd24…` 给「可收口，条件是第 5 列改对」，该条件已在 `29788be0…` 落地，但 `29788be0…` 尚无同文独立 final 确认；`008` 是 11:48 审计不是 verdict｜owner＝主会话/独立审查者；用户整稿确认 U-001 未取得，保持 `draft`｜owner＝用户；一页未渲染（`004:68,73`）与五卡读者无原始回读（`004:75`）｜owner＝下一 build-plan 作者；覆盖表 R-005/R-006 两行落点仍为「全文件」「本任务执行事实」（审计 C3）｜owner＝P2 作者/下一消费者；443 逐句 89 missing / 144 thin 与附录 C 组级已披露；PaperBuilder 实施不在本任务。
+
 ## 机器字段（校验器用，人可跳过）
 
 - **全局规格**：`spec.md#实现设计全局权威`
@@ -358,7 +365,7 @@ node -e "const fs=require('fs');const p='/Users/Hugh/Hugh/Project/PaperBuilder/s
 - **evidence_path**：任务根 `quality/evidence/`（预期；实际引用由执行者保存）
 - **STOP**：旧件/方法/结构需变时停手；不把结构绿当内容通过。
 - **覆盖 AC**：AC-013～AC-027
-- **Done**：前置（不作完成条件）：基线、结构、哈希与 diff 的实际输出可读。完成条件（只写效果）：27 张卡可独立读，C1–C7 合格，负例判红，读者不需回查旧件；缺口逐条保留。
+- **Done**：前置（不作完成条件）：P2 结构门 exit 0（`{"miss":[],"extra":[],"bad":[],"ok":true}`；`P2-structure-green.txt` 增强读数 `sectionCards:27`、`mapRows:27`、`badMap:[]`、`r13:true`）；终稿 `29788be0…`、1,751 行 / 77,486 字符（`P2-final-summary.txt`）；旧件 `prd.md` `823f101f…` 与 `decision-log.md` `be163d35…` 未动。完成条件（只写效果）：27 卡、7 节 + 附录 B/C、六字段与覆盖表可读；审查 `003`→`004` 定向 pass（对象 `942b517a…`），`007` §7 对 `e2f77720…` final（103/0/0、295/265），§8 对 `8536cd24…` 给「可收口，条件是第 5 列改对」；磁盘终稿 `29788be0…` 的后续改动待独立 final 确认；用户整稿确认 U-001 未取得，保持 `draft`；未验项与 owner 见上方 Done 表。
 
 ## 补充材料
 
