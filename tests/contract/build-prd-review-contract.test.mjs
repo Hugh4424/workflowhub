@@ -1,9 +1,12 @@
-import{afterEach,describe,expect,it}from"vitest";import{mkdtempSync,realpathSync,readFileSync,rmSync}from"node:fs";import{join}from"node:path";import{tmpdir}from"node:os";
+import{afterEach,describe,expect,it}from"vitest";import{mkdtempSync,realpathSync,readFileSync,rmSync}from"node:fs";import{join}from"node:path";import{tmpdir}from"node:os";import yaml from"js-yaml";
 import{providerMaterialEntries,providerMaterialPath}from"../../runtime/review/provider-material-projection.mjs";
 import{assertReviewIdentity,reviewRuleFor}from"../../runtime/review/review-policy.mjs";import{buildReviewMaterials}from"../../skills/wh-review/scripts/review-materials.mjs";import{createSimpleReviewPacket,runSimpleReview}from"../../skills/wh-review/scripts/simple-review-runner.mjs";
 const roots=[],ROOT=new URL("../..",import.meta.url).pathname;afterEach(()=>{for(const r of roots.splice(0))rmSync(r,{recursive:true,force:true});});function root(){const r=realpathSync(mkdtempSync(join(tmpdir(),"prd-report-packet-")));roots.push(r);return r;}const materials=()=>({decision_log:"# Decision\nparent direction",prd:"# PRD\ncomplete ordinary product",task_map:"T001: actual user output",design_facts:{ui_applicability:"non_ui",status:"not_applicable"},quality_facts:{status:"unavailable",coverage:"unknown"}});
 function dependencies(r,group,call){return{loadConfig:()=>({whReview:{},attachmentRoot:r,config:"/unused/config.json",command:["unused"]}),resolveRoute:()=>({initial:["owned"],mode:"single_round"}),selectProviders:()=>({providers:["owned"],provider_models:{owned:"owned-model"},provider_identities:{owned:{source_id:"owned-source",config_id:"owned-config"}}}),client:{runGroup:async()=>{call();return group;}}};}
 const member=(status,output,error)=>({provider:"owned",identity:{provider:"owned",adapter:"owned",source_id:"owned-source",config_id:"owned-config",model:"owned-model"},status,error,output,timing:null,usage:null});
+const EVIDENCE_SHAPE=["phase_task_facts:facts.jsonl","phase_task_facts:facts.jsonl","phase_task_facts:facts.jsonl","phase_task_facts:facts.jsonl","phase_task_facts:facts.jsonl|review:quality/reviews/","phase_task_facts:facts.jsonl"];
+const evidenceShape=manifest=>(manifest.steps??[]).map(step=>(step.completion_evidence??[]).map(entry=>`${entry.kind}:${entry.uri_or_path}`).join("|"));
+function registrationIssues(entry,bundle){const issues=[];if(entry?.local_version!=="1.2.0")issues.push("catalog local_version");if(entry?.last_reviewed_at!=="2026-11-05")issues.push("catalog last_reviewed_at");if(JSON.stringify(bundle?.files)!==JSON.stringify(["SKILL.md","templates/prd-template.md"]))issues.push("bundle files");return issues;}
 describe("build-prd ordinary report-only document review",()=>{
  it("keeps the hyphenated sentinel and rejects a formal-stage/nonstage identity conflict",()=>{expect(reviewRuleFor("build-prd")).toMatchObject({source_bundle:"none"});expect(Object.keys(reviewRuleFor("build-prd")).sort()).toEqual(["forbidden","generated","optional","required","source_bundle"]);expect(()=>reviewRuleFor("build_prd")).toThrow();expect(assertReviewIdentity({stage:"build-prd",review_kind:"build_prd"})).toMatchObject({stage:"build-prd",reviewKind:"build_prd"});expect(()=>assertReviewIdentity({stage:"build-code",review_kind:"build_prd"})).toThrow("build_prd review_kind requires stage build-prd");});
  it("registers real build-prd contract/lens without a formal-stage entry",()=>{const plan=JSON.parse(readFileSync(join(ROOT,"skills/wh-review/stage-skill-plan.json"),"utf8")),matrix=JSON.parse(readFileSync(join(ROOT,"runtime/review/stage-materials.json"),"utf8"));expect(matrix.stages).not.toHaveProperty("build-prd");expect(plan.non_stage.build_prd).toMatchObject({review_kind:"build_prd",delivery_mode:"report_only"});expect(plan.non_stage.build_prd.required_skills).toEqual(expect.arrayContaining(["review","simplicity-guard"]));});
@@ -47,8 +50,10 @@ describe("planning-hardening PRD content model flow contracts", () => {
     const manifest = JSON.parse(readFileSync(join(ROOT, "workflows/build-prd/steps.json"), "utf8"));
     expect(manifest.steps).toHaveLength(6);
     expect(manifest.steps.at(-1).step_slug).toBe("closeout");
-    expect(new Set(manifest.steps.flatMap(step => step.completion_evidence.map(entry => entry.kind))))
-      .toEqual(new Set(["phase_task_facts", "review"]));
+    expect(evidenceShape(manifest)).toEqual(EVIDENCE_SHAPE);
+    const injected = JSON.parse(JSON.stringify(manifest));
+    injected.steps[0].completion_evidence.push({ kind: "review", uri_or_path: "quality/reviews/" });
+    expect(evidenceShape(injected)).not.toEqual(EVIDENCE_SHAPE);
     expect(skill).toContain("决定清单");
     expect(skill).toMatch(/任务、结果、依赖、波次、主承接需求/);
     expect(skill).toContain("决策覆盖表");
@@ -79,5 +84,12 @@ describe("planning-hardening PRD content model review contract", () => {
     expect(rule.optional).toContain("source_facts");
     expect(rule.required).not.toContain("source_facts");
     expect(rule.forbidden).toContain("draft_plan");
+    const catalog = yaml.load(readFileSync(join(ROOT, "skills/catalog.yaml"), "utf8"));
+    const specPrd = catalog.skills.find(entry => entry.name === "spec-prd");
+    const bundle = JSON.parse(readFileSync(join(ROOT, "skills/spec-prd/skill-bundle.json"), "utf8"));
+    expect(registrationIssues(specPrd, bundle)).toEqual([]);
+    expect(registrationIssues({ ...specPrd, local_version: "1.1.0" }, bundle)).not.toEqual([]);
+    expect(registrationIssues(specPrd, { files: ["SKILL.md"] })).not.toEqual([]);
+    expect(registrationIssues(specPrd, { files: ["SKILL.md", "templates/prd-template.md", "extra.md"] })).not.toEqual([]);
   });
 });

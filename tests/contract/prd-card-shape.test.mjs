@@ -38,13 +38,24 @@ export function shapeIssues(text) {
     if (count !== 1) issues.push(`blank-card field ${field} count ${count}`);
   }
   const samples = [...text.matchAll(/^### (单卡|同卡多段|拆卡)样例[：:]/gm)].map(match => match[1]);
+  const sampleFieldCounts = { 单卡: 1, 同卡多段: 1, 拆卡: 2 };
+  const factPattern = /\d+\s*(?:毫秒|字符|次|秒)|合同值/u;
   for (const name of sampleNames) {
     if (samples.filter(sample => sample === name).length !== 1) issues.push(`sample ${name} count`);
-    const section = sampleSection(text, name);
-    if (section && !/来源：/u.test(section)) issues.push(`sample ${name} lacks source pointer`);
-    if (section && !/故意弄坏/u.test(section)) issues.push(`sample ${name} lacks deliberate break`);
-    if (section && !/\d/u.test(section)) issues.push(`sample ${name} lacks a concrete fact`);
+    const body = sampleSection(text, name).replace(/^.*\n/u, '');
+    for (const field of fields) {
+      const count = (body.match(new RegExp('^- \\*\\*' + field + '\\*\\*', 'gm')) || []).length;
+      if (count !== sampleFieldCounts[name]) issues.push(`sample ${name} field ${field} count ${count}`);
+    }
+    if (!/来源：/u.test(body)) issues.push(`sample ${name} lacks source pointer`);
+    if (!/故意弄坏/u.test(body)) issues.push(`sample ${name} lacks deliberate break`);
+    if (!factPattern.test(body)) issues.push(`sample ${name} lacks a threshold fact`);
+    if (!/不是/u.test(body)) issues.push(`sample ${name} lacks a negation`);
+    if (/- \*\*下游\*\*/u.test(body)) issues.push(`sample ${name} keeps the downstream field`);
   }
+  if (/^- \*\*下游\*\*/m.test(text)) issues.push('downstream field remains');
+  if (!/^> Supersedes[：:]/m.test(text)) issues.push('missing head Supersedes');
+  if (/^- \*\*Supersedes\*\*/m.test(text)) issues.push('Supersedes repeated in the change log');
   if (new Set(samples).size !== sampleNames.length) issues.push('sample names not distinct');
   if (!text.includes('material-writing')) issues.push('missing material-writing reference');
   if (/16\s*个?\s*(?:既有)?字段/.test(text)) issues.push('legacy 16-field text');
@@ -151,6 +162,41 @@ describe('ORACLE-PRD-MODEL', () => {
   it('rejects a template that loses the no-delete condition', () => {
     const actual = read(templatePath);
     const missing = actual.replace(/不得以删[^。\n]*/u, '');
+    expect(missing).not.toBe(actual);
+    expect(shapeIssues(missing)).not.toEqual([]);
+    expect(shapeIssues(actual)).toEqual([]);
+  });
+
+  it('rejects a template with the head Supersedes removed', () => {
+    const actual = read(templatePath);
+    const missing = actual.replace(/^> Supersedes[：:].*$/m, '');
+    expect(missing).not.toBe(actual);
+    expect(shapeIssues(missing)).not.toEqual([]);
+    expect(shapeIssues(actual)).toEqual([]);
+  });
+
+  it('rejects a sample that loses its threshold fact while keeping the negation', () => {
+    const actual = read(templatePath);
+    const missing = actual.replace(
+      '读取重试默认 3 次、单次等待默认 2000 毫秒，只作初始值，不是封顶',
+      '读取重试只作初始值，不是封顶',
+    );
+    expect(missing).not.toBe(actual);
+    expect(shapeIssues(missing)).not.toEqual([]);
+    expect(shapeIssues(actual)).toEqual([]);
+  });
+
+  it('rejects a sample card that loses one of the six fields', () => {
+    const actual = read(templatePath);
+    const missing = actual.replace(/^- \*\*风险与没定\*\*：真实非法样例.*$/m, '');
+    expect(missing).not.toBe(actual);
+    expect(shapeIssues(missing)).not.toEqual([]);
+    expect(shapeIssues(actual)).toEqual([]);
+  });
+
+  it('rejects a sample card that reintroduces the downstream field', () => {
+    const actual = read(templatePath);
+    const missing = actual.replace(/^- \*\*风险与没定\*\*：真实非法样例/m, '- **下游**：真实非法样例');
     expect(missing).not.toBe(actual);
     expect(shapeIssues(missing)).not.toEqual([]);
     expect(shapeIssues(actual)).toEqual([]);

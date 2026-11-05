@@ -162,10 +162,10 @@
 
 #### D-011 — 升版本与补编号对照位置
 
-- **做什么**：`catalog` 的 spec-prd 升 1.2.0，日期 2026-11-05；bundle 文件清单不变。
-- **不做什么**：不改其它技能版本，不改 bundle 文件清单。
+- **做什么**：`catalog` 的 spec-prd 升 1.2.0，日期 2026-11-05；bundle 文件清单不变；编号对照位置补「PRD 的附录 C」（005 §5.7），落 `skills/material-writing/SKILL.md` 的编号对照表位置清单。
+- **不做什么**：不改其它技能版本，不改 bundle 文件清单，不新建第二份编号对照表。
 - **风险**：版本与内容不一致；升版与内容同批做。
-- **改动**：`skills/catalog.yaml`。
+- **改动**：`skills/catalog.yaml`、`skills/material-writing/SKILL.md`。
 - **理由**：方法变了，登记要跟上。
 
 #### D-012 — 验收改成 C1–C7 七条读法

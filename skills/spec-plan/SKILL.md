@@ -61,7 +61,7 @@ For each applicable behavior change, build-plan authors a real executable test b
 
 Every behavior Task records project-declared testing surfaces, a reason for testing or excluding each surface, one executable Phase command for every tested surface and covered AC, a main concrete testing skill, scenario/input, fixture or service, expected exit, oracle, test path, actual RED ref or honest unavailable, GREEN evidence path, coverage limit, and STOP. Surfaces may be multiple; routing tiers are only a technical forecast, not the project's surface list. A browser-visible surface without browser end-to-end testing needs a named reason.
 
-按原 AC 的每个适用条件安排验收：在既有验收正文与 Task 的 Inputs / Scenario 中写清结果对象、真实 producer/consumer、具体输入及其提供者、执行 owner 和取得结果的时点。技术接线可在当前任务通过真实入口或具名受控反例核；自然语言质量由独立读者消费完整实际材料；真实用户效果仍需要其实际旅程和输入。同一个 AC 的技术子条件与整体效果分别给证据，全部适用条件满足才判该 AC 通过；来源送达、工具读取或结构检查不额外要求证明 provider 理解，也不能代替真实效果。验收判据不写比例、计数或零值；不设通过阈值、不写读数为零；只能靠数数或比例判的不是验收。
+按原 AC 的每个适用条件安排验收：在既有验收正文与 Task 的 Inputs / Scenario 中写清结果对象、真实 producer/consumer、具体输入及其提供者、执行 owner 和取得结果的时点。技术接线可在当前任务通过真实入口或具名受控反例核；自然语言质量由独立读者消费完整实际材料；真实用户效果仍需要其实际旅程和输入。同一个 AC 的技术子条件与整体效果分别给证据，全部适用条件满足才判该 AC 通过；来源送达、工具读取或结构检查不额外要求证明 provider 理解，也不能代替真实效果。验收判据不写比例、计数或零值；只能靠数数或比例判的不是验收。不设通过阈值、不写读数为零。
 
 每条验收先算成本、资源与范围三笔账；写不出谁做、多久、靠什么、怎么观察的验收不进 Phase 文件，细则见 `workflows/build-plan/SKILL.md` 的「设计每个 Phase 的验收」。
 
