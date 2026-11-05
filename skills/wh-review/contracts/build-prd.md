@@ -22,7 +22,8 @@ report/provider-fact surface, not a formal stage and not a completion gate.
 The provider-visible bundle contains only the complete PRD review surface:
 
 - `decision_log`: the frozen parent decision and source binding.
-- `prd`: the complete current PRD draft/body.
+- `prd`: the complete current PRD body, including the appendix B decision
+  coverage table（附录 B 决策覆盖表）.
 - `task_map`: the result-oriented task map and card ownership/dependencies.
 - `design_facts`: applicable UI/non-UI and design confirmation facts, including
   an explicit unavailable or not-applicable state when relevant.
@@ -31,15 +32,24 @@ The provider-visible bundle contains only the complete PRD review surface:
 - `review-instructions.md`: the fixed instructions generated for this surface.
 
 Optional source, confirmation, delivery, analyze, reflection, and bounded map
-facts may be supplied only when declared by the material matrix. Build-plan
-materials, engineering task rows, changes/diff, and canonical stage evidence
+facts may be supplied only when declared by the material matrix. When the PRD
+replaces an old file, the old file travels with the existing optional
+`source_facts` entry and the appendix B decision coverage table travels with
+`prd`; neither becomes a new required packet item. A review that lacks the old
+file records `incomplete` for old-file fidelity instead of writing `pass`; 缺旧件记
+`incomplete`，不写 `pass`，也不得声称覆盖完整。
+Build-plan materials, engineering task rows, changes/diff, and canonical stage evidence
 are forbidden on this surface.
 
 ## Review focus
 
 Review in this order: complete PRD coverage and task ownership, user result and
 card boundaries, dependencies and handoff, applicable design/source facts,
-acceptance and failure criteria, and unnecessary scope. `simplicity-guard`,
+acceptance and failure criteria, old-file fidelity when the PRD replaces an old
+file, and unnecessary scope. Coverage is checked by sampling the appendix B
+decision coverage table against the cards (覆盖抽读), not by reading only the
+new file; 旧件保真 compares the old file's thresholds, negations, and failure
+boundaries with the new cards. `simplicity-guard`,
 product-direction, and applicable design lenses are one packet-level lens set;
 they are not extra provider calls. Findings must be concrete and anchored to
 the submitted bundle.
