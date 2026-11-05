@@ -415,8 +415,8 @@ skills:
     update_policy: 随 make-decision 交互合同变更审查
   - name: spec-prd
     path: skills/spec-prd/SKILL.md
-    local_version: 1.1.0
-    last_reviewed_at: '2026-11-04'
+    local_version: 1.2.0
+    last_reviewed_at: '2026-11-05'
     status: native
     metrics_enabled: true
     purpose: build-prd 唯一正式 PRD 内容 owner
@@ -429,7 +429,7 @@ skills:
         skill_url: &matt_to_spec_url https://github.com/mattpocock/skills/blob/b0618bc436ad893b3c5e84e55fba86586d34a404/skills/engineering/to-spec/SKILL.md
         adopted:
           - skills/engineering/to-spec/SKILL.md#user-stories — 以真实角色、诉求、收益组织本技能User Stories；本地两步地图/详情和真实确认合同保留
-    local_changes: workflowhub 原生可搬运内容技能；只写显式提供的单一 PRD 目标，不伪造平台、确认或交付事实；来源为本仓build-prd与prd-template.md职责/确认合同，既有User Stories方法吸收Matt to-spec#user-stories，完整来源在本条upstream；本次未新增第三方字节复制。
+    local_changes: workflowhub 原生可搬运内容技能；只写显式提供的单一 PRD 目标，不伪造平台、确认或交付事实；来源为本仓build-prd与prd-template.md职责/确认合同，既有User Stories方法吸收Matt to-spec#user-stories，完整来源在本条upstream；本次未新增第三方字节复制。2026-11-05 升 1.2.0：PRD 改为头部 + 7 节 + 附录 B/C，每卡六字段逐字段内容要求，五列地图，四行写对照物与独立复算，决策覆盖表进附录 B，验收不写比例、计数或零值；bundle 文件清单不变。
     dependency_closure: ["skills/spec-specify","skills/stage-handoff","skills/project-norm-init","skills/material-writing"]
     update_policy: 随 PRD 模板、两步内容合同和 build-prd consumer 变更审查
   - name: spec-research

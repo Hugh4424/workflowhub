@@ -40,3 +40,44 @@ describe("planning-hardening portable reflection contracts", () => {
     expect(text).toMatch(/不增加第三次.*内容调用|not.*third content call/i);
   });
 });
+
+describe("planning-hardening PRD content model flow contracts", () => {
+  it("ORACLE-PRD-FLOW keeps six build-prd steps with the decision list, 5-column map, coverage table and five review items", () => {
+    const skill = readFileSync(join(ROOT, "workflows/build-prd/SKILL.md"), "utf8");
+    const manifest = JSON.parse(readFileSync(join(ROOT, "workflows/build-prd/steps.json"), "utf8"));
+    expect(manifest.steps).toHaveLength(6);
+    expect(manifest.steps.at(-1).step_slug).toBe("closeout");
+    expect(new Set(manifest.steps.flatMap(step => step.completion_evidence.map(entry => entry.kind))))
+      .toEqual(new Set(["phase_task_facts", "review"]));
+    expect(skill).toContain("决定清单");
+    expect(skill).toMatch(/任务、结果、依赖、波次、主承接需求/);
+    expect(skill).toContain("决策覆盖表");
+    expect(skill).toContain("落点为空即未完成");
+    expect(skill).toMatch(/拆卡、实现可行性、范围、验收、旧件保真/);
+    expect(skill).toMatch(/缺旧件/);
+    const steps = manifest.steps.map(step => JSON.stringify(step)).join("\n");
+    expect(steps).toContain("决定清单");
+    expect(steps).toContain("主承接需求");
+    expect(steps).toContain("决策覆盖表");
+    expect(steps).toContain("落点为空即未完成");
+    expect(steps).toContain("旧件");
+    expect(steps).toMatch(/拆卡.*实现可行性.*范围.*验收.*旧件保真/);
+  });
+});
+
+describe("planning-hardening PRD content model review contract", () => {
+  it("ORACLE-PRD-REGISTER keeps old-file fidelity and coverage readback without a new required packet item", () => {
+    const contract = readFileSync(join(ROOT, "skills/wh-review/contracts/build-prd.md"), "utf8");
+    expect(contract).toContain("旧件保真");
+    expect(contract).toMatch(/覆盖抽读|抽核/);
+    expect(contract).toContain("source_facts");
+    expect(contract).toMatch(/缺旧件/);
+    expect(contract).toContain("incomplete");
+    expect(contract).toMatch(/附录 B/);
+    const rule = reviewRuleFor("build-prd");
+    expect(rule.required).toEqual(["decision_log", "prd", "task_map", "design_facts", "quality_facts", "review_instructions"]);
+    expect(rule.optional).toContain("source_facts");
+    expect(rule.required).not.toContain("source_facts");
+    expect(rule.forbidden).toContain("draft_plan");
+  });
+});
