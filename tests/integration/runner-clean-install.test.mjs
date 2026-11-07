@@ -59,6 +59,73 @@ describe("current Runner and Skill Bundle joint installation",()=>{
   expect(validateRunnerRelease({releaseRoot:f.releaseRoot,skillBundleManifest:f.bundle})).toMatchObject({release:"workflowhub-runner"});
   // npm/Git are recorded private seams here; this is actual publication/file merge/import, not network installation.
  },60000);
+ test("installed normal caller writes a draft and reads checker, review and handoff dependencies",async()=>{
+  const f=await fixture();
+  // Exercise the real existing installer, with cached production dependencies only.
+  const env={...process.env,npm_config_offline:"true",npm_config_audit:"false",npm_config_fund:"false"};
+  expect(installRunnerRelease({...f,env}).status).toBe(0);
+  expect(fs.readFileSync(path.join(f.releaseRoot,"skill-bundle.json"),"utf8")).toBe(fs.readFileSync(path.join(f.skillBundleRoot,"skill-bundle.json"),"utf8"));
+  const cwd=path.join(f.root,"consumer");
+  const git=spawnSync("git",["worktree","add","-q","-b","normal-consumer",cwd],{cwd:f.releaseRoot,env,encoding:"utf8"});
+  expect(git.status,git.stderr).toBe(0);
+  const installed=relative=>path.join(f.releaseRoot,relative);
+  const {createTask}=await import(installed("runtime/task/task-handle.mjs"));
+  const baseline=spawnSync("git",["rev-parse","HEAD"],{cwd,encoding:"utf8"}).stdout.trim();
+  const storageRoot=path.join(cwd,".task-storage");fs.mkdirSync(storageRoot);
+  const task=await createTask({storageRoot,manifest:{schema_version:"1.0.0",project_name:"fixture",task_id:"normal-caller",created_at:new Date().toISOString(),target_repo_root:f.releaseRoot,activation_cohort:"post",write_resolution_source:"existing",baseline_commit:baseline,workspace_mode:"existing",workspace_root:cwd,issue_ids:[],inputs:{},execution_mode:"per_invocation",record_model:"vnext-single-write"}});
+  const input=path.join(cwd,"draft-input.md"),text="# Installed normal draft\n";fs.writeFileSync(input,text);
+  const run=(file,args=[])=>spawnSync(process.execPath,[installed(file),...args],{cwd,env:{...env,WORKFLOWHUB_TASK_DIR:storageRoot},encoding:"utf8"});
+  const draft=run("tools/cli/stage-runtime.mjs",["run","--action=draft","--stage=build-plan","--project=fixture","--task=normal-caller","--name=spec.md",`--input=${input}`]);
+  expect(draft.status,draft.stderr||draft.stdout).toBe(0);
+  expect(fs.readFileSync(path.join(cwd,"specs/normal-caller/spec.md"),"utf8")).toBe(text);
+  const review=run("skills/wh-review/scripts/wh-review-cli.mjs",["doctor"]);
+  expect(review.status,review.stderr||review.stdout).toBe(0);
+  const {appendRecord}=await import(installed("runtime/interface/safe-write.mjs"));
+  const record=await appendRecord(task.taskPath,"installed-handoff","md","handoff probe\n");
+  expect(fs.readFileSync(record,"utf8")).toBe("handoff probe\n");
+  const checker=run("tools/cli/check-stage-steps.mjs",["--json","--stage=build-plan",`--task-path=${task.taskPath}`]);
+  // An incomplete draft must stay incomplete, while its installed definition is available.
+  const report=JSON.parse(checker.stdout);
+  expect(report.stages.find(row=>row.stage==="build-plan").definition).toBe("available");
+  expect(report.stages.find(row=>row.stage==="build-plan").steps.some(row=>row.state!=="completed")).toBe(true);
+  const checkerPath=installed("tools/cli/check-stage-steps.mjs");fs.rmSync(checkerPath);
+  expect(run("tools/cli/check-stage-steps.mjs").status).not.toBe(0);
+  expect(()=>validateRunnerRelease({releaseRoot:f.releaseRoot,skillBundleManifest:f.bundle})).toThrow();
+  fs.copyFileSync(path.join(ROOT,"tools/cli/check-stage-steps.mjs"),checkerPath);
+  fs.rmSync(installed("workflows/build-plan/steps.json"));
+  const missing=run("tools/cli/check-stage-steps.mjs",["--json","--stage=build-plan",`--task-path=${task.taskPath}`]);
+  // This existing checker is report-only: definition availability, not exit 0, is the result.
+  expect(missing.status).toBe(0);
+  expect(JSON.parse(missing.stdout).stages.find(row=>row.stage==="build-plan").definition).toBe("unavailable");
+  expect(()=>validateRunnerRelease({releaseRoot:f.releaseRoot,skillBundleManifest:f.bundle})).toThrow();
+  fs.rmSync(path.join(f.skillBundleRoot,"skills/ui-copy-discipline/SKILL.md"));
+  expect(()=>validateSkillBundleRelease({releaseRoot:f.skillBundleRoot})).toThrow();
+ },60000);
+ test.each(["same-byte-symlink","dangling-symlink","directory"])("rejects unsafe installed Bundle manifest %s before commands",async defect=>{
+  const f=await fixture(),target=path.join(f.releaseRoot,"skill-bundle.json"),source=path.join(f.skillBundleRoot,"skill-bundle.json");
+  if(defect==="directory")fs.mkdirSync(target);
+  else fs.symlinkSync(defect==="same-byte-symlink"?source:path.join(f.root,"missing.json"),target);
+  const calls=[];
+  expect(()=>installRunnerRelease({...f,run(...args){calls.push(args);return{status:0,stdout:"",stderr:""};}})).toThrow(/installed Skill Bundle manifest is missing or unsafe/);
+  expect(calls).toEqual([]);
+  expect(()=>validateSkillBundleRelease({releaseRoot:f.skillBundleRoot})).not.toThrow();
+ },60000);
+ test("rejects an installed Bundle manifest replaced during dependency installation",async()=>{
+  const f=await fixture(),target=path.join(f.releaseRoot,"skill-bundle.json"),commands=[];
+  expect(()=>installRunnerRelease({...f,run(command){commands.push(command);fs.unlinkSync(target);fs.symlinkSync(path.join(f.skillBundleRoot,"skill-bundle.json"),target);return{status:0,stdout:"",stderr:""};}})).toThrow(/installed Skill Bundle manifest is missing or unsafe/);
+  expect(commands).toEqual(["npm"]);
+  expect(fs.existsSync(path.join(f.releaseRoot,".gitignore"))).toBe(false);
+ },60000);
+ test.each(["../outside.json","/absolute.json","flows\\outside.json"])("rejects unsafe flow data locator %s without output escape",async locator=>{
+  const f=await fixture(),definition=path.join(f.releaseRoot,"workflows/make-decision/steps.json");
+  const data=JSON.parse(fs.readFileSync(definition,"utf8"));data.flows={bad:{steps:locator}};fs.writeFileSync(definition,JSON.stringify(data));
+  const source=path.join(f.releaseRoot,locator);fs.mkdirSync(path.dirname(source),{recursive:true});fs.writeFileSync(source,"owned path boundary sentinel\n");
+  const outputDir=path.join(f.root,"nested/output"),outside=path.join(f.root,"nested/outside.json");
+  let error;try{await buildRunnerRelease({packageRoot:f.releaseRoot,outputDir});}catch(cause){error=cause;}
+  expect(fs.existsSync(outside)).toBe(false);
+  expect(error?.message).toMatch(/runner flow data path is invalid/);
+  expect(fs.readFileSync(source,"utf8")).toBe("owned path boundary sentinel\n");
+ },60000);
  test.each(["runner-manifest","bundle-manifest","missing-runner-file","missing-bundle-file","shared-bytes","major"])("rejects %s before invoking installation commands",async defect=>{
   const f=await fixture();const locator="skills/spec-plan/templates/phase-template.md";
   if(defect==="runner-manifest")fs.rmSync(path.join(f.releaseRoot,"runner-release.json"));
