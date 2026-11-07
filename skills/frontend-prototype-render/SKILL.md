@@ -11,7 +11,7 @@ build-plan UI 分支与 build-prd 条件设计分支调用：用真实组件和 
 
 先选两路输入：**有稿**取得设计来源、目标元素、属性/数值、状态、验收点五类输入，声明页面元素与状态×视口分母，读取真实源码/结构/渲染证据；源码声明与实测分开。映射组件、token、布局及其 owner，源稿缺陷单列；缺关键项只限制依赖该项的范围，按 design-source-extraction 的 freshness、pending_review 与 blocked_scope 处理，不把截图猜测当 API 或批准值。**无稿**从当前需求、真实业务语义、许可和合成数据写完整任务、IA、状态与恢复；生成前及生成后实际读取 `skills/ui-copy-discipline/SKILL.md`，必要提示词沿 `skills/figma-make-prompt/SKILL.md`，提示词不代真实代码原型。
 
-有稿、无稿、非 UI 分别回读 make-decision 的 raw_requirement/project_inventory/planned_or_changed_frontend_fact。非 UI 按真实范围给理由，不强迫生成页面。真实原型通用位置为 `specs/<task>/prototype/`，受控样本按当前 Phase 专属目录。有稿和无稿原型统一交付轻量 HTML/CSS/原生 JS 静态页面：有稿消费设计、数据和交互依据，不照搬原工程的 Next/Vite/服务运行环境；无稿也不先搭框架。取用与验收无需 npm、Next、CDN或外部字体，优先相对资源、自带数据和可直接打开的本地 HTML，必要时用标准库普通静态 HTTP 服务。保完整交互与状态，不降成静态图、空壳或 toast。本轮已存在 React 原稿可按用户明确迁移决定预编译成自包含 IIFE/CSS，以保真减返工；这是本轮转换，不成为今后默认重框架或有稿豁免。作者转换工具的依赖/锁/真实安装体积与耗时、发布文件字节、零 npm 消费者路径分别报告；可写源码与静态产物、入口/状态、CSS/fixture owner及后续工程接线边界一并交付，mock无真实 HTTP/存储/交易副作用。
+有稿、无稿、非 UI 分别回读 make-decision 的 raw_requirement/project_inventory/planned_or_changed_frontend_fact。非 UI 按真实范围给理由，不强迫生成页面。真实原型通用位置为 `specs/<task>/prototype/`，受控样本按当前 Phase 专属目录。有稿和无稿原型交付可编辑源码与轻量 HTML/CSS/JS 静态产物。有稿消费设计、数据和交互依据；作者按本次真实资产选择最小生成路线，可用已有 React 等组件及既有构建工具预编译，不默认新搭框架或复制原工程运行环境。取用与验收无需 npm、Next、CDN或外部字体，优先相对资源、自带数据和可直接打开的本地 HTML，必要时用标准库普通静态 HTTP 服务。保完整交互与状态，不降成静态图、空壳或 toast。作者预编译可输出自包含 IIFE/CSS或相对静态资源；消费者仍不安装依赖、不启动原工程服务，作者构建不代实际组件消费、完整任务或静态交付验收。作者转换工具的依赖/锁/真实安装体积与耗时、发布文件字节、零 npm 消费者路径分别报告；可写源码与静态产物、入口/状态、CSS/fixture owner及后续工程接线边界一并交付，mock无真实 HTTP/存储/交易副作用。
 
 设计依据准备执行 `skills/knowledge-graph/references/knowledge-reuse.md`：每个真实查询逐项作支持、需上下文、冲突、证据不足四判，记录采用/不用/待补证、理由与具体消费位置；图命中与索引存在只作线索。外部逐件来源/版本/权利和维护入口仅回 catalog；按来源权威与用户明确用途处理复制；unknown不冒已获grant，已明确个人研究用途时不默认作为施工门，原能力与来源/consumer义务继续。
 
