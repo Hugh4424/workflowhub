@@ -33,6 +33,105 @@ UI 适用时，先读 `skills/project-norm-init/SKILL.md` 的「规范职责」�
 
 页面模式沿[页面审计判据](../frontend-testing/references/page-audit.md)逐项记录，必要时用[形状校验器](../frontend-testing/scripts/check-page-audit.mjs)核结构；设计模式按本节原维度和实际证据执行。
 
+### 怎样核当前控件的语义？
+
+独立 reviewer 在普通八维审查中，从任务路径和适用原规则选出具名对象。
+先判断它实际表达导航、选择、展开、操作还是静态说明，再列出需要核的
+role、名称、label 关联及 current/selected/expanded/disabled 等状态。
+这里只决定采什么；属性何时适用、值应是什么仍回原专业源与任务，
+静态说明不因文字有先后就必须变成导航。无适用属性时说明依据。
+
+在同一隔离会话实际到达相关状态，取对象的 AX 名称/role 与 DOM 属性，
+执行任务中的状态变化后再次取同一对象，逐项对照预期与原始结果。
+下面复用 Ego 的已有只读 CDP API；page 必须是网关本次 owned page，
+targets 由当前对象的实际源码/DOM确定，不接用户浏览器或另开会话。
+每项只含本次审查用的公开 key 和内存 selector。采集前按任务许可选定
+publicNames/publicRoles/publicIds；这些 Set 仅含本次必要、可公开的值，
+不得由采回的内容自动扩充。以下白名单再按实际语义缩到适用属性：
+
+```js
+const stateAttrs = ['aria-current', 'aria-selected', 'aria-expanded',
+  'aria-disabled', 'disabled'];
+const relationAttrs = ['aria-labelledby', 'aria-describedby', 'for'];
+const stateValues = new Set(['', 'true', 'false', 'mixed', 'page', 'step',
+  'location', 'date', 'time', 'undefined']);
+const observations = [];
+for (const { key, selector } of targets) {
+  const { root } = await page.cdp('DOM.getDocument', { depth: 0 });
+  const { nodeId } = await page.cdp('DOM.querySelector', {
+    nodeId: root.nodeId, selector,
+  });
+  if (!nodeId) throw new Error('ELEMENT_NOT_FOUND');
+  const { attributes } = await page.cdp('DOM.getAttributes', { nodeId });
+  const attrs = new Map();
+  for (let i = 0; i < attributes.length; i += 2)
+    attrs.set(attributes[i], attributes[i + 1]);
+  const states = Object.fromEntries(stateAttrs.map(a => [a,
+    !attrs.has(a) ? { present: false } : { present: true,
+      value: stateValues.has(attrs.get(a)) ? attrs.get(a) : '[redacted]' }]));
+  const relations = Object.fromEntries(relationAttrs.map(a => [a,
+    !attrs.has(a) ? { present: false } : { present: true,
+      ids: attrs.get(a).split(/\s+/).filter(Boolean)
+        .map(id => publicIds.has(id) ? id : '[redacted]') }]));
+  const { nodes } = await page.cdp('Accessibility.getPartialAXTree', {
+    nodeId, fetchRelatives: false,
+  });
+  const has = (o, k) => o != null && Object.hasOwn(o, k);
+  const pick = (o, k, allowed) => {
+    if (!has(o, k)) return { present: false };
+    const v = o[k];
+    const visible = v === null || v === '' || allowed.has(v);
+    return { present: true, redacted: !visible,
+      ...(visible ? { value: v } : {}) };
+  };
+  const sourceTypes = new Set(['attribute', 'implicit', 'style', 'contents',
+    'placeholder', 'relatedElement']);
+  const nativeSources = new Set(['description', 'figcaption', 'label',
+    'labelfor', 'labelwrapped', 'legend', 'rubyannotation', 'tablecaption',
+    'title', 'other']);
+  const ax = nodes.filter(n => n.backendDOMNodeId !== undefined).map(n => ({
+    ignored: { present: has(n, 'ignored'), known: typeof n.ignored === 'boolean',
+      ...(typeof n.ignored === 'boolean' ? { value: n.ignored } : {}) },
+    role: { present: has(n, 'role'), field: pick(n.role, 'value', publicRoles) },
+    name: { present: has(n, 'name'), field: pick(n.name, 'value', publicNames) },
+    nameSources: !has(n.name, 'sources') ? { present: false } : {
+      present: true, array: Array.isArray(n.name.sources),
+      ...(n.name.sources === null ? { value: null } : {}),
+      ...(Array.isArray(n.name.sources) ? { items: n.name.sources.map(s => ({
+        type: pick(s, 'type', sourceTypes),
+        nativeSource: pick(s, 'nativeSource', nativeSources),
+      })) } : {}),
+    },
+  }));
+  observations.push({ key, states, relations, ax });
+}
+```
+
+完整 attributes/nodes 只在内存读取，不打印、不落盘。只保存上述已选、
+脱敏 observations；不保 style/data/value/token、SDK/Space/target 元数据。
+字段存在、空值/空数组与脱敏分别保留；ignored 仅布尔值为已知，
+缺失或非布尔值保未知，不保存 ignoredReasons。name 来源的 type 与
+nativeSource 分开投影，枚举回协议；不将缺值/未知强转 false。需更细 AX 状态或
+名称关系时，按适用规则追加该字段的白名单投影，不保存整节点。关系
+有脱敏/未解析时只保该面未证，回源码或获准 label 节点核关联，不能
+因此判关联不存在。显式 role 未提供时仍核原生元素/AX 的实际语义。
+
+raw CDP 会使旧交互 refs 失效。每次采集后先重新 snapshot，取得当前
+refs/selector 再执行状态操作；操作后等待可观察状态，重新取 document
+并定位，不复用旧 nodeId。原始接口失败保原失败，不补成空属性集合。
+将状态、动作、适用条款、最小实际字段及脱敏/未测面交回原审查记录。
+其它已选引擎用其现有只读接口，不切引擎或猜可访问名。现 page-audit
+的 a11y normalizer 只保 role/name/focusable，不含状态属性不证明属性
+不存在或正确；以上补该观察面，不改注册脚本、采集器或报告 schema。
+
+AX 字段与命名来源类型按[CDP Accessibility 协议](https://raw.githubusercontent.com/ChromeDevTools/devtools-protocol/master/pdl/domains/Accessibility.pdl)读取；协议可读不代已安装浏览器实测。
+
+源码可确定的标记/关联与实际 DOM 的状态同步分别下结论，真人读屏、
+完整键盘路径另保覆盖；缺真人条件不免除前两项。只对语义适用且证据
+支持的偏差给 finding，允许零 finding 或有据异议；缺节点、读取失败、
+尚未到达状态保原失败及影响，不能算属性缺失或通过。采集只是事实，
+仍由独立 reviewer 解释用户影响，不以自动输出代八维判断。
+
 八维分别判，逐维写输入、观察、证据与未覆盖项：
 
 - **业务任务**：任务/对象/许可/危险后果与完成信号是否真实一致，发出、等待、生效、失败、未知分开。
