@@ -70,7 +70,10 @@
 
 ### 后来改了什么，原件在哪里？
 
-目前没有需求变更（U）。变更记录的唯一原件位置按「外置事实索引」放 `requirement-change-log.md`，当前尚无内容。
+截至最终确认（2026-11-03T01:25:41.328Z），未再新增需求变更。
+此前用户答复已纳入当前决策：U-003 扩大任务范围并新增 R-021～R-023；U-007、U-008 纳入当前决策与逐包确认。
+原话见需求索引 v3 与 Talk 批次 003、005。
+仅最终确认后的新增需求变更写入 `requirement-change-log.md`；当前尚无后续变更记录文件。
 
 ## 一共分几个包，每个包是什么？
 
@@ -285,7 +288,7 @@
 - **风险**：设计源渲染与原型可能有差异，需另记。
 - **改动**：工作包 9 的视觉与判定表。
 
-#### D-020 — 无稿只跑策略快照并写完整需求
+#### D-020 — 无稿业务样本只跑策略快照并写完整需求（当前WH方法链沿D-026）
 - **做什么**：无稿闭环只跑策略快照链路；输入写成完整需求文档。
 - **不做什么**：不做取消语义；不写薄需求。
 - **风险**：取消这一面没有证据，报告记未覆盖。
@@ -308,6 +311,52 @@
 - **不做什么**：不改写各卡的方法设计，只修被点名的问题。
 - **风险**：写主扩散带来责任边界风险，由本任务承担。
 - **改动**：全部修复包的写集与报告说明。
+
+#### D-024 — AC-P01 历史事件与原执行身份的边界
+
+- **用户答复**：「授权窄幅修订 AC」。
+  问题与原话见 `quality/evidence/P1/2026-11-07-001-ac-p01-user-approval.json`。
+- **决定**：AC-P01 继续核对输入冻结和可复算性。
+  缺失的 P1/T001、T003 历史即时事件条目保持 `unavailable`。
+  P1 原执行者身份保持 `unknown`。
+  不补造、不覆盖，也不声称历史记录齐全。
+- **边界**：这两项单独缺失不否决 AC-P01，也不自动使其通过。
+  输入冻结、哈希复算、矩阵、定义早于首跑及其他原判据均不变。
+- **后续执行**：P3、P4 开跑前记录当次真实执行者、模型和工具。
+  后续动作沿既有定义即时记事件，同一模型与工具条件沿 D-009。
+- **改动**：只同步 `spec.md` 的 AC-P01 与 P1/T001、T003、T004。
+  不改其他 AC、FR、Phase 或历史首判原件。
+
+#### D-025 — 恢复 WorkflowHub 能力验收，PaperBuilder 只作限定样本（2026-11-07）
+
+- **来源与决定人**：用户本 chat 当前消息；主会话逐字转交，宿主 message id 未取得。本次原话与 HEAD 绑定确认见 `quality/evidence/human-confirmations/2026-11-07-002-build-code-scope-authorized.json`，来源说明见 `quality/evidence/decision-log-refs/2026-11-07-001-c09-scope-authorization-source.json`；不复用 D-024 的窄修授权。
+- **做什么**：恢复执行，先修本 task 材料；只补 WorkflowHub 自身 UI、前端能力和有稿/无稿两条流程的验收，复用既有证据，只对真实缺口及变更面复验。完成后沿既有 stage-close 做 Git交付、清理、知识图谱更新，分别回报实际状态。
+- **不做什么**：PaperBuilder 只提供限定真实样本与接口事实；内部并发锁、SDK、数据库专项问题记录阻塞，交原 owner，不再由 C09 深入扫描或修复。这覆盖 D-023 在 PB内部实现上的接管解释，不撤销 WorkflowHub 自身必要修复。
+- **保留什么**：两流程的真实产物消费及适用请求/处理/结果/UI读回要求仍在。样本失败则对应业务证据 incomplete/unavailable，不伪造两流程全通过；历史模型、时间、即时事件未知仍保真，不补造、不强迫重跑旧事实。
+- **取舍与风险**：WorkflowHub其余能力验收不等待 PB内部修复；报告分别说明能力、样本覆盖和效果指标。业务未证不是完整业务验收，结构通过不作能力通过。P3不承担M238完整比较/a11y/性能旧侧门；P2不扩无关全skills修复。
+- **简化与并发**：复用现有 spec/六Phase/报告/交接/TaskHandle；无新机制、账本或 gate。本轮材料由范围修订开发唯一 writer 串行修改，前 writer 已停、后续审测只读；保留既存 dirty hunks与旧证据，不覆盖历史。
+- **承接与回退位置**：`spec.md`「2026-11-07 范围修订与有限验收」、各Phase同日期节；原具体实现/业务判据及旧证据保留于原位。未解决的质量缺口仍记录原 owner，不自动接受严重风险。
+
+#### D-026 — 原PRD完整能力接回实际任务、consumer与oracle（2026-11-07）
+
+- **用户原话与身份**：本chat当前用户消息，由主会话逐字转交，宿主message id未取得；新授权见 `quality/evidence/human-confirmations/2026-11-07-003-build-code-root-cause-authorized.json`，不复用前两次scope字节。
+- **根因与历史边界**：研究 `quality/evidence/research/2026-11-07-001-c09-prd-consumption-denominator.md` 定位当前T019从真实页面/API直写HTML、旧AC-P10只验页面/业务，P6 reader又强制无稿资产未覆盖；D-025总述未修实际writer/consumer。`quality/evidence/research/2026-11-07-004-c09-p5-oracle-scope-source-correction.md`证明历史独立审计已发现缺口，随后存在缩减答复及执行解释，不改判为历史从未发现；旧原件保持。`quality/evidence/research/2026-11-07-003-c09-user-rejection-root-cause-verbatim.md`为当前真实拒绝，不能记原型批准。
+- **决定**：按原PRD C01～C08适用能力分别落实有稿/无稿：规范、知识/经验、四对象资产、设计准备、有源提炼或明确提取器N/A、原创/还原原型与独立设计审查/当前答复、规范驱动工程、页面验证/回修、更新和真实后续消费。不是只补皮肤或结构表。
+- **当前执行**：P5/T019承接无稿完整方法链，T020仍验真实策略快照业务；P4/T011～T018逐同一能力分母核原件，缺才补，真实既有两route/panel新版消费继续有效。P6/T023的reader不再要求无稿固定未覆盖，逐格按事实判。
+- **消费归属**：先核来源任务、写入/更新时点、当前真实需求。C09可作为原C02/C08来源任务之后的真实consumer；本轮新经验在C09内重放不能冒后续任务采用。组件/token版本的实际使用与经验任务采用分别核，不机械要求新建C08-FU，也不以它未建阻全链。
+- **不缩减与不扩大**：无稿的提取覆盖/禁读提取器实验按原PRD N/A；不豁免规范/知识/资产/原型/设计答复/工程/验证/更新。React、Figma等条件规则只按真实栈/来源逐条判适用，不套全链N/A。PB仍仅样本，内部失败交原owner不深修，真实业务要求不取消。旧模型/时间/失败不补造。
+- **承接**：spec的FR-C09-015、AC-P10/11与原排除段；P4原任务动作/oracle；P5原T019；P6原T023/T024及report-reader合同。复用原方法与TaskHandle，不新增stage/gate/台账。9份材料由当前唯一writer串行修改，实施者不写本轮共享材料。
+
+#### D-027 — 同输入两任务验证规范与三项能力的真实修复（2026-11-07）
+
+- **用户原话**：见普通原件 `quality/evidence/decision-log-refs/2026-11-07-002-c09-user-norms-three-functions.json`；由主会话逐字转交，宿主message id和原发时间未取得，当前收存时间不冒原发时间。它授权修复，不代表017计划或任何当前设计已批准。
+- **范围与承接**：仍在当前C09 build-code/P5、AC-P10内，原AC、六指标、N52/M238及真实业务边界不变；规范与资产选择、原型综合、独立设计判断必须经实际caller应用，不只改Skill文字/页面。017建议由032/052/053收窄解释，不把caller“需要时”预判成bug。
+- **执行事实**：主会话中继两before均已结束（含原作者修复、原独立审测受影响复验及作者final），保非阻塞partial限制；旧review局部判断已真实结束。本材料writer只引用结果ref/hash，不读作者候选/微样本/私有oracle，不重判效果。具体原件与未来读数落在P5/T019本轮节。
+- **唯一writer顺序（材料首次写入时点）**：当时只释放本材料writer，PB/WH源writer仍冻结；此句保留时点事实，不表示当前仍等待释放。PB四规范先交实际实质源，WH准备/Map再实际消费，原型作者完整综合，独立者判断/测试；before/after两任务保持共同输入，效果证据充分后才展示当前原型取真实答复。
+- **精确范围**：PB仅components/layouts/craft/quality四专业正文，中性工作树/分支及基线的原planned记录与随后实际创建事实见spec当前写边界；不改业务、API、后端、数据库或TSX。WH本轮实际增量仅norm-init/readiness/component-quality；render/review/caller本轮不新增改动，保其既存dirty不称撤销/没实现。六候选是授权上限，不是已改清单。
+- **实际续写**：实际事实续写（主会话随后串行实施，非效果结论）：PB中性工作树 `/Users/Hugh/Hugh/Project/PaperBuilder-c09-ui-sources-20261107` 与分支 `codex/c09-ui-sources-20261107` 已真实创建，HEAD `b95f11417e188dbddb767ec7af4f8501de4aa46d`；仅四规范+69行，main clean，无commit/merge/push，原件 `quality/evidence/P5/2026-11-07-021-pb-four-norms-source-implementation-ready.json`。随后WH三方法已实际写入并冻结，ready `quality/evidence/P5/2026-11-07-026-wh-three-methods-source-ready.json`，实际paired delta `quality/evidence/P5/2026-11-07-025-wh-three-methods-paired-delta.patch`；render/review/caller本轮未增改，旧dirty保留。一次真实source外审已settled available-with-failures：Kimi/Codex completed且parseOK，Antigravity packet guard unavailable，来源覆盖有限，不据此判全AC-P10。原件 `quality/evidence/P5/source-review/2026-11-07-003-actual-source-independent-review.json`。唯一有效source finding为C03残留历史台账的通用权威；原writer已窄修三处，当前C03 SHA-256 `7729db785ed7f58baba7cc02019ab89d0b148553f94227c5cc6c6660c8eee449`，原件 `quality/evidence/P5/2026-11-07-030-c03-historical-scope-repair-ready.json`，旧字节复用已保存source-request；原reviewer已定向复核关闭该唯一finding，范围内无open；原件 `quality/evidence/P5/source-review/2026-11-07-004-c03-finding-directed-recheck.json`，SHA-256 `6fdf1e7a19b102a5eddcfdf053a9346f8ed3e80d859faf60c325ac459778e1d5`。不冒provider已读新7729，不扩大为能力/效果完成。首次后续A-k7/B-n4按C03=951d…源已生成/自查，代码、失败与partial原件保留；source问题发现后不派旧两稿整套独立QA，不冒当前7729最终源的完整消费。此前待执行的最终7729现已由新上下文分别做两任务：同一033数据/条件、62逻辑源，仍仅7预定路径变化、其余55hash相同；最终中性数组已取得：`quality/evidence/research/2026-11-07-058-c09-ui-task-readable-sources-p3.json`；新作者brief为 `2026-11-07-059-ui-task-a-p3-author-brief.md` 与 `2026-11-07-060-ui-task-b-r8-author-brief.md`（均在同research目录）；技术差异 `2026-11-07-061-c09-final-source-technical-input-differences.json`，SHA-256 `bcb737d7f75f2cd81ead637a79a3ceb4de5fe55315f75b0f81d5d1fcfc1a7176`，较054仅C03变、较049仍7变55同，033复用。该句保留输入交付时点说明；当前作者真实执行与有限效果见本轮最终读回。before普通流程已结束的原事实不变；完整效果仍未证明、当前用户答复仍unknown，不标PhaseDone。
+- **最终执行/有限结果续写**：最终7729源、058/059/060和033数据已由fresh-none两作者正常caller实际完成，生成期间canonical七源同字节冻结，主会话/源writer未代补设计。两作者已finally确认本次原型与修复、无未处置finding；整体仍partial、未获用户批准、无业务验收。独立设计先将001初判落盘再读Map，指出A hover sky、B select偏tabs和Map分组投影；原作者保首稿另建修订，原reviewer009受影响复验0open。当前A最终 `ui-task-a-p3/index-revised-01.html` SHA-256 `12bc2675ac65b4ea24a078959eda85ff7facd8e06e21d2c0c0735d3444d8343b`；B最终SHA-256 `1ab8f847af2e8f02d59793a01d55aa7b1ea3987a2ef95d73e562ba43cb3401d1`，完整产物ref沿原作者final，不猜未提供文件名。有限同输入比较无整体赢家，局部得失与全部覆盖限制见P5本轮结果原件；当前设计答复unknown，业务未验收、质量available-with-failures、Git未做，原AC/六指标/238不改。本材料适用norm-sync已只读执行，原源owner结果待取得，不预填。
+- **限制**：每次UI先读充分实质源；仅missing/stale/conflict或不足以决定关键选择才回原owner按需补，不机械八expert/重建。相同输入前后与不同任务分别报告首稿/正常流程完成稿，允许无改善/变差，不能预填有效；来源/方法组合变化不单因果归某条文字，n=2不能泛化。
 
 ## 四查结论与攻击自查
 
@@ -499,7 +548,7 @@
 - 谁做、多久：C08 负责人先交付，本任务消费，预计一天。
 - 资源：C08 交付、真实变更点、下一个真实任务。
 - 范围：只证更新链能被真实消费。
-- 观察方式：变更前后、失效步骤重做、同步原件、后续消费原件；后续任务具名为 C08 已安排的后续任务（C08-FU-01），不存在时记未覆盖。
+- 观察方式：变更前后、失效步骤重做、同步与实际消费原件；D-026下按来源任务/更新时点/当前真实需求判后续采用：C09可消费原C02/C08成果，本轮新经验同任务重放不计；token/组件route/panel新版消费可复用。C08-FU-01仅历史候选，不要求新建，实际缺证才记对应面未覆盖。
 - 独立读者：能从后续任务原文追到新版使用点。
 
 ### 工作包 8：旧侧基线跑
@@ -549,9 +598,9 @@
 **AC-P10（无稿闭环）**
 - 谁做、多久：业务执行者与独立验证者，预计三到四天。
 - 资源：PaperBuilder QA 夹具、仓库外隔离存储、浏览器、服务端日志。
-- 范围：只证「从文字需求做出可操作页面，并在真实后端完成一次业务操作与读回」；取消语义不做，记未覆盖。
-- 观察方式：需求文档；由需求生成的页面能打开并操作；列表、详情凭证、创建、重复、读回、旧凭证失败六段都有请求与响应原件；权限拒绝用真实 403 路径；服务端日志或数据快照作为被测系统外的证据；取消记为未覆盖并写原因。
-- 独立读者：能在隔离实例上复跑同一条链路，并指出哪一段证据来自被测系统之外。
+- 范围：按D-026先完整执行原PRD C01～C08适用方法并证明实际消费，再在真实样本完成业务操作与读回；无稿提取器覆盖N/A不豁免方法链。原取消未覆盖事实保留，不冒覆盖。
+- 观察方式：P5/T019逐项来源→方法动作→产物→第一consumer→独立判定，当前原型的八维设计审查及真实用户答复、实现/检查/回修/更新原件；页面可达仅作启动事实；列表、详情凭证、创建、重复、读回、旧凭证失败六段都有请求与响应原件；权限拒绝用真实 403 路径；服务端日志或数据快照作为被测系统外的证据；取消记为未覆盖并写原因。
+- 独立读者：先逐项核P5/T019真实方法消费及反例，再在隔离实例复核T020业务链，指出被测系统外证据；缺任一适用能力不判AC-P10 pass。
 
 ### 工作包 11：终末质量闭合与效果报告
 
@@ -699,7 +748,7 @@
 | 7 | 被变更的规范/资产与使用点（C08 交付后由本任务消费） | 本任务执行者 | 不重写 C08 的方法设计 |
 | 8 | 旧侧载体副本、任务证据区 | 旧侧执行者 | 不读新侧产物 |
 | 9 | 指标表与比较原件、任务证据区 | 计量执行者 | 不改原始事件 |
-| 10 | PaperBuilder 仓库外 QA 存储、需求文档、任务证据区 | 业务执行者 | 不写生产库、不改 PaperBuilder 源码 |
+| 10 | PaperBuilder仓外QA存储、任务证据；本轮另限授权四设计/前端规范正文 | 原业务执行者；规范独占writer另行释放 | 仅授权规范可改；业务/API/后端/DB/TSX和生产库禁改 |
 | 11 | 报告与终末原件、任务证据区 | 主会话 | 不改各包原始件 |
 | 12 | 交接件、收口记录 | 主会话 | 不动发布卡范围 |
 
@@ -835,7 +884,7 @@ PRD 偏差（用户已批准，U-003/U-004/U-007）：
 | 入口评估原始返回 | `quality/evidence/2026-11-02-001-2026-11-03-001-entry-evaluation.json` | 核对级别事实时 |
 | Talk 批次 001 | `quality/evidence/decision-log-refs/2026-11-02-001-2026-11-03-001-talk-entry-and-research-scope.md` | 回读路线与调研范围答复时 |
 | 需求索引（当前版） | `quality/evidence/decision-log-refs/2026-11-03-005-2026-11-03-019-requirement-index-v3.md` | 核需求原义与逐字来源时；v1/v2 已被本版承接 |
-| 覆盖表（当前版） | `quality/evidence/decision-log-refs/2026-11-02-007-2026-11-03-007-coverage-matrix-5d-v2.md` | 收口核对每条需求落点时；首版 003 已被本版承接 |
+| 覆盖表（历史快照） | `quality/evidence/decision-log-refs/2026-11-02-007-2026-11-03-007-coverage-matrix-5d-v2.md` | make-decision 第 4 步（2026-11-03）生成的历史快照；表体含 R-001～R-023、U-001～U-006，未含后续 U-007/U-008。当前完整 R→FR→AC→Phase/Task 追踪见 `spec.md:1482-1519`；U 原话见需求索引 v3 与 Talk 原件。 |
 | 内部研究 001（前期准备清点） | `quality/evidence/research/2026-11-03-001-c09-preparation-inventory.md` | 核旧基线/载体/设计源/协议可复用事实时 |
 | 内部研究 002（前八卡清点） | `quality/evidence/research/2026-11-03-002-c01-c08-delivery-inventory.md` | 核各卡档位与流程链可用度时 |
 | 外部研究 003 | `quality/evidence/research/2026-11-03-003-external-methods.md` | 核对比口径与证据标准的外部依据时 |
