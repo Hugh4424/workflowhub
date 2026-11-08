@@ -63,6 +63,10 @@ function addStaticDependencies(root, locators) {
 const RUNNER_ENTRYPOINTS = Object.freeze([
   "tools/cli/stage-runtime.mjs",
   "tools/cli/check-stage-steps.mjs",
+  "tools/cli/run-checks.mjs",
+  "tools/cli/check-acceptance-object.mjs",
+  // build-code reads this existing module as its acceptance-result vocabulary.
+  "runtime/evidence/acceptance-evidence-validator.mjs",
   "tools/cli/task-bootstrap.mjs",
   "tools/cli/task-close.mjs",
   // wh-review imports the authenticated TaskHandle/Workspace runtime. Keep
@@ -102,6 +106,8 @@ function collectRunnerReleaseFiles(root) {
   const locators = new Set([
     "AGENTS.md",
     "CONSTITUTION.md",
+    // build-code/wh-review callers read this shared execution and evidence contract.
+    "docs/standard-workflow.md",
     "package.json",
     "package-lock.json",
       ...RUNNER_ENTRYPOINTS,

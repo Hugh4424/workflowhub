@@ -101,6 +101,41 @@ describe("current Runner and Skill Bundle joint installation",()=>{
   fs.rmSync(path.join(f.skillBundleRoot,"skills/ui-copy-discipline/SKILL.md"));
   expect(()=>validateSkillBundleRelease({releaseRoot:f.skillBundleRoot})).toThrow();
  },60000);
+ test("installed build-code caller executes scoped aggregate and acceptance checks",async()=>{
+  const f=await fixture(),env={...process.env,npm_config_offline:"true",npm_config_audit:"false",npm_config_fund:"false"};
+  expect(installRunnerRelease({...f,env}).status).toBe(0);
+  const cwd=path.join(f.root,"engineering"),storageRoot=path.join(f.root,"storage");fs.mkdirSync(storageRoot);
+  const git=spawnSync("git",["worktree","add","-q","-b","engineering-consumer",cwd],{cwd:f.releaseRoot,env,encoding:"utf8"});expect(git.status,git.stderr).toBe(0);
+  const installed=relative=>path.join(f.releaseRoot,relative),run=(file,args=[])=>spawnSync(process.execPath,[installed(file),...args],{cwd,env,encoding:"utf8"});
+  const {createTask}=await import(installed("runtime/task/task-handle.mjs"));
+  const head=spawnSync("git",["rev-parse","HEAD"],{cwd,encoding:"utf8"}).stdout.trim();
+  const task=await createTask({storageRoot,manifest:{schema_version:"1.0.0",project_name:"fixture",task_id:"installed-engineering",created_at:new Date().toISOString(),target_repo_root:f.releaseRoot,activation_cohort:"post",write_resolution_source:"existing",baseline_commit:head,workspace_mode:"existing",workspace_root:cwd,issue_ids:[],inputs:{},execution_mode:"per_invocation",record_model:"vnext-single-write"}});
+  // Always use the task-scoped branch, never runAggregate's repository checks.
+  const aggregate=run("tools/cli/run-checks.mjs",["--task-path",task.taskPath]);
+  expect(aggregate.status,aggregate.stderr).toBe(0);
+  const report=JSON.parse(aggregate.stdout);expect(report.rings).toHaveLength(10);
+  expect(report.missing_steps.length).toBeGreaterThan(0);expect(report.steps_unattested.length).toBeGreaterThan(0);
+  const spec=path.join(cwd,"acceptance-fixture.md"),context=path.join(cwd,"acceptance-context.json");
+  fs.writeFileSync(spec,'# Fixture\n\n### 验收对象\n\n```json\n'+JSON.stringify({workspace:cwd,service:"fixture only",route:"/fixture",state:"ready",viewport:"1440x900"})+'\n```\n');
+  fs.writeFileSync(path.join(cwd,"source.txt"),"owned source\n");
+  fs.writeFileSync(context,JSON.stringify({sources:{design_source:"./source.txt"}}));
+  const args=["--spec",spec,"--context",context,"--root",cwd,"--check-sources"];
+  const accepted=run("tools/cli/check-acceptance-object.mjs",args);expect(accepted.status,accepted.stderr).toBe(0);expect(JSON.parse(accepted.stdout).ok).toBe(true);
+  fs.unlinkSync(path.join(cwd,"source.txt"));const missing=run("tools/cli/check-acceptance-object.mjs",args);expect(missing.status).toBe(1);expect(JSON.parse(missing.stdout).missing_source_files).toEqual([{key:"design_source",path:"./source.txt"}]);
+  expect(run("tools/cli/check-acceptance-object.mjs",["--invalid"]).status).toBe(2);
+  const vocabularyPath="runtime/evidence/acceptance-evidence-validator.mjs",vocabulary=await import(installed(vocabularyPath));
+  expect(fs.readFileSync(installed(vocabularyPath)).equals(fs.readFileSync(path.join(ROOT,vocabularyPath)))).toBe(true);
+  expect(()=>vocabulary.validateAcceptanceEvidence(null)).toThrow();
+  expect(fs.readFileSync(installed("docs/standard-workflow.md"),"utf8")).toBe(fs.readFileSync(path.join(ROOT,"docs/standard-workflow.md"),"utf8"));
+  for(const relative of ["tools/cli/run-checks.mjs","tools/cli/check-acceptance-object.mjs","runtime/evidence/acceptance-evidence-validator.mjs","docs/standard-workflow.md","metrics/record-schema.mjs"]){
+   const target=installed(relative),bytes=fs.readFileSync(target);fs.unlinkSync(target);
+   expect(()=>validateRunnerRelease({releaseRoot:f.releaseRoot,skillBundleManifest:f.bundle})).toThrow();
+   if(relative==="metrics/record-schema.mjs"){
+    const broken=run("tools/cli/run-checks.mjs",["--task-path",task.taskPath]);expect(broken.status).not.toBe(0);expect(broken.stderr).toContain("record-schema.mjs");expect(broken.stderr).toContain("ERR_MODULE_NOT_FOUND");
+   }
+   fs.writeFileSync(target,bytes);
+  }
+ },60000);
  test.each(["same-byte-symlink","dangling-symlink","directory"])("rejects unsafe installed Bundle manifest %s before commands",async defect=>{
   const f=await fixture(),target=path.join(f.releaseRoot,"skill-bundle.json"),source=path.join(f.skillBundleRoot,"skill-bundle.json");
   if(defect==="directory")fs.mkdirSync(target);
