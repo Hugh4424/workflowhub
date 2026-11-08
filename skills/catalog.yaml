@@ -1355,16 +1355,18 @@ capability_decisions:
     update_policy: 用户本人（skills registry维护者，decision-log U-024）在采用前、上游变化或维护计划到期时比对该包repo/files固定/当前树path/size/sha256及git ls-remote；查询时点未发现更新，提交历史不可判定，失败保持unknown/unavailable、不报无更新，不自动追HEAD；当前HTTP/refs原件见quality/evidence/2026-10-24-138-p1-current-update-check-supplement.md；原quality/evidence/2026-10-24-108-external-update-check.md保留历史缺口，不覆盖
   - name: design-tokens
     status: absorbed
+    path: skills/external/design-tokens/SKILL.md
     purpose: 离线读取视觉token组织方法，真实值仍由项目原owner负责
     design_idea: 单文件方法保原字节，不复制项目token值，不强双主题或默认断点
     used_by_stages: [build-plan, build-code]
     local_path: skills/external/design-tokens
+    dependency_closure: ["skills/external/design-tokens/LICENSE"]
     upstream:
       - github_url: https://github.com/julianoczkowski/designer-skills
         path: design-tokens/SKILL.md
         commit: c259656c76d9758d7ead46b0d2f125cbe84f8665
         license: Apache-2.0
-    local_changes: 原字节无改动，1文件7067 bytes；原根LICENSE全文及来源通知保留在skills/external/README.md。ModelScope ui-designer包装仅交叉核对，不作第二active来源。consumer为project-norm-init视觉owner与build-plan规范来源读者；替代该方法在线字节读取，P2切入口；全部reader获批迁出后由用户维护者统一退役副本与登记。
+    local_changes: 原字节无改动，1文件7067 bytes；原根LICENSE全文及来源通知保留在skills/external/README.md；本次按该归档原字节物化同目录LICENSE并加现格式bundle供发行，不改历史单文件采用/权利事实。ModelScope ui-designer包装仅交叉核对，不作第二active来源。consumer为project-norm-init视觉owner、build-plan规范来源读者与build-code的UI token规范准备/复核reader；替代该方法在线字节读取，P2切入口；全部reader获批迁出后由用户维护者统一退役副本与登记。
     update_policy: 用户本人（skills registry维护者，decision-log U-024）在采用前、上游变化或维护计划到期时比较GitHub固定commit/tree/raw与当前git refs及所选文件；查询时点未发现更新，失败保持unknown/unavailable、不报无更新，不自动追HEAD；当前HTTP/refs原件见quality/evidence/2026-10-24-138-p1-current-update-check-supplement.md；原quality/evidence/2026-10-24-108-external-update-check.md保留历史缺口，不覆盖
   - name: superpowers-test-driven-development
     status: absorbed

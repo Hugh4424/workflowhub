@@ -1,3 +1,4 @@
+import {createHash} from 'node:crypto';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import yaml from 'js-yaml';import{afterEach,describe,expect,it}from'vitest';import{buildSkillBundleRelease,validateSkillBundleRelease,resolvePortableStageFiles}from'../../runtime/distribution/skill-bundle-release.mjs';import{resolveSkillPackage}from'../../runtime/adapters/local-skill-resolver.mjs';import{resolveStageSkillPackages}from'../../runtime/stage/stage-skill-runtime.mjs';
 import{checkSkillConsistency}from'../../tools/cli/check-skill-consistency.mjs';
 const ROOT=process.cwd(),temps=[];afterEach(()=>temps.splice(0).forEach(p=>fs.rmSync(p,{recursive:true,force:true})));
@@ -12,5 +13,41 @@ describe('C09 explicit family release closure',()=>{
  it('local payload still refuses a native dependency without its original catalog registration',()=>{const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'c09-native-owner-boundary-')));temps.push(root);const declared=resolvePortableStageFiles({packageRoot:ROOT,stage:'build-plan'});for(const ref of[...declared.files,'docs/architecture/move-map.json','workflows/build-prd/SKILL.md']){fs.mkdirSync(path.dirname(path.join(root,ref)),{recursive:true});fs.copyFileSync(path.join(ROOT,ref),path.join(root,ref));}const manifest=yaml.load(fs.readFileSync(path.join(root,'workflows/build-plan/skill-deps.yaml'),'utf8')),native=manifest.skills.find(d=>!d.bundle?.startsWith('skills/external/'));const p=path.join(root,'skills/catalog.yaml'),j=yaml.load(fs.readFileSync(p,'utf8'));expect(j.skills.some(e=>e.path===native.path)).toBe(true);j.skills=j.skills.filter(e=>e.path!==native.path);fs.writeFileSync(p,yaml.dump(j));expect(()=>resolvePortableStageFiles({packageRoot:root,stage:'build-plan'})).toThrow(/skill has no catalog owner/);},60000);
 
  it('development consistency accepts current declared families but retains foreign, traversal and illegal native rejection',async()=>{expect(checkSkillConsistency(ROOT).failures).toEqual([]);const f=await fixture();fs.copyFileSync(path.join(ROOT,'skills/catalog.yaml'),path.join(f.source,'skills/catalog.yaml'));const p=path.join(f.source,f.manifest),original=fs.readFileSync(p,'utf8');for(const[mutate,pattern]of[[j=>j.skills.find(d=>d.name==='ui-designer').path='skills/external/playbook/00-ux-spec-skill.md',/declared family/],[j=>j.skills.find(d=>d.name==='ui-designer').path='skills/external/ui-designer/../playbook/00-ux-spec-skill.md',/traverse|relative|declared family/],[j=>j.skills.find(d=>d.path==='skills/spec-plan/SKILL.md').path='skills/spec-specify/SKILL.md',/name.path mismatch spec-plan/]]){const j=yaml.load(original);mutate(j);fs.writeFileSync(p,yaml.dump(j));const result=checkSkillConsistency(f.source);expect(result.failures.some(message=>pattern.test(message)),JSON.stringify(result.failures)).toBe(true);}},60000);
+
+ it('normal stages publish original active token family and archived notice',async()=>{
+  const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'active-token-normal-')));temps.push(root);
+  const out=path.join(root,'release'),release=await buildSkillBundleRelease({packageRoot:ROOT,outputDir:out});
+  const active='skills/external/design-tokens/SKILL.md',notice='skills/external/design-tokens/LICENSE';
+  const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
+  for(const stage of['build-plan','build-code']){
+   const loaded=resolveStageSkillPackages({packageRoot:ROOT,stage}),local=resolvePortableStageFiles({packageRoot:ROOT,stage}),dep=loaded.manifest.skills.find(d=>d.name==='design-tokens');
+   expect(dep,stage+' active token dependency').toBeDefined();expect(dep.path).toBe(active);
+   const published=resolveSkillPackage({packageRoot:out,manifestPath:`workflows/${stage}/skill-deps.yaml`,dependency:dep});
+   expect(published.resolved_skill_path).toBe(path.join(out,active));
+   for(const ref of[active,notice,dep.bundle]){expect(local.files).toContain(ref);expect(release.files.some(f=>f.path===ref)).toBe(true);expect(fs.readFileSync(path.join(out,ref)).equals(fs.readFileSync(path.join(ROOT,ref)))).toBe(true);}
+  }
+  expect(digest(fs.readFileSync(path.join(out,active)))).toBe('951eb7680b1c096ebdff7cb9f1a3906ea08890afd01865512a2526b95b15da94');
+  expect(digest(fs.readFileSync(path.join(out,notice)))).toBe('639a9026a236576de100ee30fb416c45d61641da8bab00a3df8744c3e0de31c7');
+  expect(fs.readFileSync(path.join(out,active)).equals(fs.readFileSync(path.join(out,'skills/external/ui-designer/design-tokens/SKILL.md')))).toBe(false);
+ },60000);
+ it.each(['skill-bundle.json','SKILL.md','LICENSE'])('active token missing %s fails source and forged release inventory',async name=>{
+  const f=await fixture(),out=path.join(f.root,'release');await buildSkillBundleRelease({packageRoot:f.source,outputDir:out});
+  const victim='skills/external/design-tokens/'+name;fs.unlinkSync(path.join(out,victim));
+  const inventory=path.join(out,'skill-bundle.json'),j=JSON.parse(fs.readFileSync(inventory));j.files=j.files.filter(e=>e.path!==victim);fs.writeFileSync(inventory,JSON.stringify(j));
+  expect(()=>validateSkillBundleRelease({releaseRoot:out})).toThrow();
+  fs.unlinkSync(path.join(f.source,victim));
+  for(const stage of['build-plan','build-code'])expect(()=>resolveStageSkillPackages({packageRoot:f.source,stage})).toThrow();
+  await expect(buildSkillBundleRelease({packageRoot:f.source,outputDir:path.join(f.root,'bad')})).rejects.toThrow();
+ },60000);
+ it('active token local payload requires its original catalog path owner',()=>{
+  for(const stage of['build-plan','build-code']){
+   const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'active-token-owner-')));temps.push(root);
+   const declared=resolvePortableStageFiles({packageRoot:ROOT,stage});
+   for(const ref of[...declared.files,'docs/architecture/move-map.json','workflows/build-prd/SKILL.md']){fs.mkdirSync(path.dirname(path.join(root,ref)),{recursive:true});fs.copyFileSync(path.join(ROOT,ref),path.join(root,ref));}
+   const p=path.join(root,'skills/catalog.yaml'),j=yaml.load(fs.readFileSync(p,'utf8')),entry=j.capability_decisions.find(e=>e.name==='design-tokens');
+   expect(entry.path).toBe('skills/external/design-tokens/SKILL.md');delete entry.path;fs.writeFileSync(p,yaml.dump(j));
+   expect(()=>resolvePortableStageFiles({packageRoot:root,stage})).toThrow(/skill has no catalog owner: design-tokens/);
+  }
+ },60000);
 
 });

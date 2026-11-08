@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "skill": "design-tokens",
+  "files": [
+    "SKILL.md",
+    "LICENSE"
+  ],
+  "sources": [
+    {
+      "url": "https://github.com/julianoczkowski/designer-skills/blob/c259656c76d9758d7ead46b0d2f125cbe84f8665/design-tokens/SKILL.md"
+    }
+  ]
+}

@@ -50,6 +50,10 @@ skills:
     trigger: ui_scope_readable_design_source_extraction
 
   # workflows/build-code/SKILL.md#方法 -> skills/project-norm-init/SKILL.md#本地整包怎样读取：七UI方法与四playbook方法。
+  - name: design-tokens
+    path: skills/external/design-tokens/SKILL.md
+    bundle: skills/external/design-tokens/skill-bundle.json
+    trigger: ui_scope_token_norm_preparation_or_review
   - name: ui-designer
     path: skills/external/ui-designer/design-brief/SKILL.md
     bundle: skills/external/ui-designer/skill-bundle.json

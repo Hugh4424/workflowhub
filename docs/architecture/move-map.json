@@ -9609,6 +9609,66 @@
       ],
       "delete_condition": "对应实际consumer职责经独立验证替代后由owner退役；保原失败",
       "retention_basis": "root终末必要窄修授权；完整private/tmp候选已读，现唯一runCli→egoContext及原Node --test回执048已核；egoContext导出仅内部测试接缝，非公共CLI/API"
+    },
+    {
+      "source": "skills/external/design-tokens/SKILL.md",
+      "destination": "skills/external/design-tokens/SKILL.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "原固定字节active token方法正文；不含目标项目token值，ui-designer包装仍只交叉核对",
+      "owner": "C01原方法采用/发行声明维护者",
+      "consumer": "两正常build-plan/build-code声明经现externalFamily resolver/publisher读取成员；project-norm-init视觉owner在UI token规范准备/复核时消费原active方法；现安装器按原Bundle清单承接",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs",
+        "runtime/distribution/skill-bundle-release.mjs",
+        "runtime/stage/stage-skill-runtime.mjs"
+      ],
+      "named_data_readers": [
+        "skills/project-norm-init/SKILL.md"
+      ],
+      "delete_condition": "对应真实consumer已由独立验证替代完整承接、原owner决定退役后才删对应文件/登记；原采用历史README/原件保留，不连带删除未承接规则",
+      "retention_basis": "原C01已入库active方法及当前用户个人研究持续授权；本次补原active发行接线与notice，不新增parser/schema/控制面或权利结论"
+    },
+    {
+      "source": "skills/external/design-tokens/skill-bundle.json",
+      "destination": "skills/external/design-tokens/skill-bundle.json",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "原active token正文与归档notice的现格式成员清单；非新安装/质量/权利结论",
+      "owner": "C01原方法采用/发行声明维护者",
+      "consumer": "两正常build-plan/build-code声明经现externalFamily resolver/publisher读取成员；project-norm-init视觉owner在UI token规范准备/复核时消费原active方法；现安装器按原Bundle清单承接",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs",
+        "runtime/distribution/skill-bundle-release.mjs",
+        "runtime/stage/stage-skill-runtime.mjs"
+      ],
+      "named_data_readers": [
+        "workflows/build-plan/skill-deps.yaml",
+        "workflows/build-code/skill-deps.yaml",
+        "skills/catalog.yaml"
+      ],
+      "delete_condition": "对应真实consumer已由独立验证替代完整承接、原owner决定退役后才删对应文件/登记；原采用历史README/原件保留，不连带删除未承接规则",
+      "retention_basis": "原C01已入库active方法及当前用户个人研究持续授权；本次补原active发行接线与notice，不新增parser/schema/控制面或权利结论"
+    },
+    {
+      "source": "skills/external/design-tokens/LICENSE",
+      "destination": "skills/external/design-tokens/LICENSE",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "从现归档README完整Apache正文与Copyright notice逐字物化的发行读取资产；不倒填历史独立文件或新增grant",
+      "owner": "C01原方法采用/发行声明维护者",
+      "consumer": "两正常build-plan/build-code声明经现externalFamily resolver/publisher读取成员；project-norm-init视觉owner在UI token规范准备/复核时消费原active方法；现安装器按原Bundle清单承接",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs",
+        "runtime/distribution/skill-bundle-release.mjs",
+        "runtime/stage/stage-skill-runtime.mjs"
+      ],
+      "named_data_readers": [
+        "skills/external/design-tokens/skill-bundle.json",
+        "skills/catalog.yaml"
+      ],
+      "delete_condition": "对应真实consumer已由独立验证替代完整承接、原owner决定退役后才删对应文件/登记；原采用历史README/原件保留，不连带删除未承接规则",
+      "retention_basis": "原C01已入库active方法及当前用户个人研究持续授权；本次补原active发行接线与notice，不新增parser/schema/控制面或权利结论"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"
