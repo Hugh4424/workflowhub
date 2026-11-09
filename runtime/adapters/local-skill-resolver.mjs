@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 function assertRelative(locator) {
-  if (!locator || path.isAbsolute(locator)) throw new Error(`skill locator must be relative: ${locator}`);
+  if (typeof locator !== "string" || !locator || path.isAbsolute(locator)) throw new Error(`skill locator must be relative: ${locator}`);
   if (locator.split(/[\\/]/).includes("..")) throw new Error(`skill locator may not traverse: ${locator}`);
 }
 
@@ -97,14 +97,33 @@ export function validateSkillBundle(packageRoot, bundlePath, expectedSkillPath) 
   const realBundleDir = fs.realpathSync(bundleDir);
   if (realBundleDir !== realExpectedDir) throw new Error(`bundle must be directly inside skill directory: ${bundlePath}`);
   const seen = new Set();
+  const seenDestinations = new Set();
   const fileEntries = bundle.files.map(entry => {
+    if (typeof entry !== "string" && (!entry || typeof entry !== "object" || Array.isArray(entry))) {
+      throw new Error(`invalid bundle asset entry: ${bundlePath}`);
+    }
+    if (typeof entry !== "string" && Object.keys(entry).some(key => !["path", "sha256", "destination"].includes(key))) {
+      throw new Error(`invalid bundle asset entry: ${bundlePath}`);
+    }
     const locator = typeof entry === "string" ? entry : entry.path;
+    const hasDestination = typeof entry !== "string" && Object.hasOwn(entry, "destination");
+    const destination = hasDestination ? entry.destination : locator;
     assertRelative(locator);
+    assertRelative(destination);
+    if (destination.includes("\\") || /^[A-Za-z]:/.test(destination) || destination.endsWith("/") || destination === "."
+        || path.posix.normalize(destination) !== destination) {
+      throw new Error(`skill destination must be a normalized relative path: ${destination}`);
+    }
+    if (locator === path.posix.basename(bundlePath) || destination === path.posix.basename(bundlePath)) {
+      throw new Error(`bundle asset may not collide with its manifest: ${bundlePath}`);
+    }
     if (seen.has(locator)) throw new Error(`duplicate bundle asset: ${locator}`);
+    if (seenDestinations.has(destination)) throw new Error(`duplicate bundle destination: ${destination}`);
     seen.add(locator);
+    seenDestinations.add(destination);
     const absolute = path.resolve(bundleDir, locator);
     const resolved = assertRegularContainedFile(bundleDir, realBundleDir, absolute, `bundle asset ${locator}`);
-    return { path: locator, resolved };
+    return hasDestination ? { path: locator, destination, resolved } : { path: locator, resolved };
   });
   const skill = resolveLocalSkill(root, expectedSkillPath);
   if (!fileEntries.some(entry => entry.resolved === skill)) throw new Error(`bundle does not include declared SKILL.md: ${expectedSkillPath}`);

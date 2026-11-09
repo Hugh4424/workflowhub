@@ -8,8 +8,7 @@ fi
 TARGET_URL="${1:-}"
 PROFILE_MAP_FILE="${BROWSER_QA_PROFILE_MAP:-$HOME/.config/workflowhub/browser-qa-profiles.conf}"
 ENGINE="${BROWSER_QA_ENGINE:-auto}"
-if [ "$ENGINE" = auto ]; then
-  ENGINE="$(node --input-type=module - "$(cd "$(dirname "$0")" && pwd)/browser-qa-session.mjs" <<'NODE'
+ENGINE="$(node --input-type=module - "$(cd "$(dirname "$0")" && pwd)/browser-qa-session.mjs" <<'NODE'
 import {pathToFileURL} from 'node:url';
 const {selectBrowserEngine}=await import(pathToFileURL(process.argv[2]).href);
 const selected=await selectBrowserEngine(process.env);
@@ -17,7 +16,6 @@ if(selected.fallbacks.length)throw Object.assign(new Error('EGO_EXISTING_MODE_NO
 console.log(selected.engine);
 NODE
 )"
-fi
 
 case "$ENGINE" in
   ego-lite) ;;

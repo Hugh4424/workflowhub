@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import yaml from 'js-yaml';import{afterEach,describe,expect,it}from'vitest';import{buildSkillBundleRelease,validateSkillBundleRelease,resolvePortableStageFiles}from'../../runtime/distribution/skill-bundle-release.mjs';import{resolveSkillPackage}from'../../runtime/adapters/local-skill-resolver.mjs';import{resolveStageSkillPackages}from'../../runtime/stage/stage-skill-runtime.mjs';
 import{checkSkillConsistency}from'../../tools/cli/check-skill-consistency.mjs';
 const ROOT=process.cwd(),temps=[];afterEach(()=>temps.splice(0).forEach(p=>fs.rmSync(p,{recursive:true,force:true})));
@@ -9,6 +10,33 @@ describe('C09 explicit family release closure',()=>{
  it('missing declared family resource fails publisher and removing resource plus inventory entry still fails release validation',async()=>{const f=await fixture(),out=path.join(f.root,'release');await buildSkillBundleRelease({packageRoot:f.source,outputDir:out});const victim=f.members.find(p=>p.endsWith('/design-review/SKILL.md'));fs.unlinkSync(path.join(out,victim));const top=path.join(out,'skill-bundle.json'),j=JSON.parse(fs.readFileSync(top));j.files=j.files.filter(e=>e.path!==victim);fs.writeFileSync(top,JSON.stringify(j));expect(()=>validateSkillBundleRelease({releaseRoot:out})).toThrow();fs.unlinkSync(path.join(f.source,victim));await expect(buildSkillBundleRelease({packageRoot:f.source,outputDir:path.join(f.root,'bad')})).rejects.toThrow(/ENOENT|missing/);},60000);
  it('current normal stages carry both actual family consumers through local payload and default public release',async()=>{const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'c09-normal-family-')));temps.push(root);const out=path.join(root,'release'),release=await buildSkillBundleRelease({packageRoot:ROOT,outputDir:out});for(const stage of['build-plan','build-code']){const loaded=resolveStageSkillPackages({packageRoot:ROOT,stage}),local=resolvePortableStageFiles({packageRoot:ROOT,stage});for(const family of['ui-designer','playbook']){const dep=loaded.manifest.skills.find(d=>d.name===family);expect(dep,family+' actual normal '+stage).toBeDefined();const bundle=JSON.parse(fs.readFileSync(path.join(ROOT,dep.bundle)));for(const member of bundle.files){const ref=path.posix.join(path.posix.dirname(dep.bundle),typeof member==='string'?member:member.path);expect(local.files,stage+' local '+ref).toContain(ref);expect(release.files.some(x=>x.path===ref),stage+' public '+ref).toBe(true);}}}},60000);
 
+ it('maps an npm-safe AnySearch source to public .gitignore and keeps local runtime ignores',async()=>{
+  const bundlePath=path.join(ROOT,'skills/anysearch/skill-bundle.json');
+  const bundle=JSON.parse(fs.readFileSync(bundlePath,'utf8'));
+  const mapped=bundle.files.find(entry=>entry&&typeof entry==='object'&&entry.destination==='.gitignore');
+  expect(mapped).toEqual({path:'gitignore-template',destination:'.gitignore'});
+  const sourcePath=path.join(ROOT,'skills/anysearch/gitignore-template');
+  expect(fs.existsSync(sourcePath)).toBe(true);
+  expect(fs.readFileSync(sourcePath,'utf8').split(/\r?\n/u)).toEqual(expect.arrayContaining(['.env','runtime.conf','__pycache__']));
+  expect(fs.existsSync(path.join(ROOT,'skills/anysearch/.gitignore'))).toBe(false);
+  const local=resolvePortableStageFiles({packageRoot:ROOT,stage:'build-plan'});
+  expect(local.files).toContain('skills/anysearch/gitignore-template');
+  expect(local.files).not.toContain('skills/anysearch/.gitignore');
+  const output=path.join(fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'c09-anysearch-destination-'))),'release');
+  temps.push(path.dirname(output));
+  const release=await buildSkillBundleRelease({packageRoot:ROOT,outputDir:output});
+  const publicBundle=JSON.parse(fs.readFileSync(path.join(output,'skills/anysearch/skill-bundle.json'),'utf8'));
+  const publicGitignore=publicBundle.files.filter(entry=>(typeof entry==='string'?entry:entry.path)==='.gitignore');
+  expect(publicGitignore).toHaveLength(1);
+  expect(typeof publicGitignore[0]==='string'?undefined:publicGitignore[0].destination).toBeUndefined();
+  expect(fs.readFileSync(path.join(output,'skills/anysearch/.gitignore')).equals(fs.readFileSync(sourcePath))).toBe(true);
+  expect(release.files.some(entry=>entry.path==='skills/anysearch/.gitignore')).toBe(true);
+  expect(release.files.some(entry=>entry.path==='skills/anysearch/gitignore-template')).toBe(false);
+  for(const ignored of ['skills/anysearch/.env','skills/anysearch/runtime.conf','skills/anysearch/scripts/runtime.conf','skills/anysearch/__pycache__/cache.pyc','skills/anysearch/scripts/__pycache__/cache.pyc']){
+   const result=spawnSync('git',['check-ignore','--no-index','--quiet',ignored],{cwd:ROOT,encoding:'utf8'});
+   expect(result.status,`${ignored} must stay locally ignored`).toBe(0);
+  }
+ },60000);
  it('local payload keeps catalog ownership and exact resource closure, rejecting undeclared, foreign, traversing and linked resources',()=>{const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'c09-local-family-boundaries-')));temps.push(root);const declared=resolvePortableStageFiles({packageRoot:ROOT,stage:'build-plan'});for(const ref of[...declared.files,'docs/architecture/move-map.json','workflows/build-prd/SKILL.md']){fs.mkdirSync(path.dirname(path.join(root,ref)),{recursive:true});fs.copyFileSync(path.join(ROOT,ref),path.join(root,ref));}const catalog=path.join(root,'skills/catalog.yaml'),original=fs.readFileSync(catalog,'utf8');expect(resolvePortableStageFiles({packageRoot:root,stage:'build-plan'}).files).toContain('skills/external/ui-designer/LICENSE');for(const ref of['skills/external/ui-designer/undeclared.txt','skills/external/playbook/00-ux-spec-skill.md','skills/external/ui-designer/../playbook/00-ux-spec-skill.md']){const j=yaml.load(original),entry=j.capability_decisions.find(e=>e.path==='skills/external/ui-designer/design-brief/SKILL.md');entry.dependency_closure=[...entry.dependency_closure,ref];if(ref.endsWith('undeclared.txt'))fs.writeFileSync(path.join(root,ref),'controlled undeclared resource');fs.writeFileSync(catalog,yaml.dump(j));expect(()=>resolvePortableStageFiles({packageRoot:root,stage:'build-plan'}),ref).toThrow(/invalid catalog dependency/);}fs.writeFileSync(catalog,original);const license=path.join(root,'skills/external/ui-designer/LICENSE'),bytes=fs.readFileSync(license);fs.unlinkSync(license);const outside=path.join(root,'controlled-outside');fs.writeFileSync(outside,bytes);fs.symlinkSync(outside,license);expect(()=>resolvePortableStageFiles({packageRoot:root,stage:'build-plan'})).toThrow();},60000);
  it('local payload still refuses a native dependency without its original catalog registration',()=>{const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'c09-native-owner-boundary-')));temps.push(root);const declared=resolvePortableStageFiles({packageRoot:ROOT,stage:'build-plan'});for(const ref of[...declared.files,'docs/architecture/move-map.json','workflows/build-prd/SKILL.md']){fs.mkdirSync(path.dirname(path.join(root,ref)),{recursive:true});fs.copyFileSync(path.join(ROOT,ref),path.join(root,ref));}const manifest=yaml.load(fs.readFileSync(path.join(root,'workflows/build-plan/skill-deps.yaml'),'utf8')),native=manifest.skills.find(d=>!d.bundle?.startsWith('skills/external/'));const p=path.join(root,'skills/catalog.yaml'),j=yaml.load(fs.readFileSync(p,'utf8'));expect(j.skills.some(e=>e.path===native.path)).toBe(true);j.skills=j.skills.filter(e=>e.path!==native.path);fs.writeFileSync(p,yaml.dump(j));expect(()=>resolvePortableStageFiles({packageRoot:root,stage:'build-plan'})).toThrow(/skill has no catalog owner/);},60000);
 

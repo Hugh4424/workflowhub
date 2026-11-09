@@ -1,11 +1,11 @@
 import {spawn} from 'node:child_process';
 import {readFile, mkdir, realpath, mkdtemp, rm, writeFile, chmod, access, lstat} from 'node:fs/promises';
 import {createInterface} from 'node:readline';
-import {dirname,join,resolve,delimiter} from 'node:path';
+import {dirname,join,resolve,delimiter,isAbsolute} from 'node:path';
 import {constants} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {tmpdir} from 'node:os';
-import {createHash} from 'node:crypto';
+import {createHash,randomUUID} from 'node:crypto';
 import {connectCdp,validateEndpoint,makeScope,transferTargetCookies,safeError} from './browser-qa-tickets.mjs';
 const here=dirname(fileURLToPath(import.meta.url));
 const nativeHelper=join(here,'browser-qa-browser-use.py');
@@ -340,87 +340,300 @@ async function runNativeQa({env,session,evidence,scenario,scope,sourceEndpoint,m
   }
   return cancelled||code||Number(commandFailed);
 }
-// Engine discovery is separate from isolation admission and scenario execution.
-// The user-requested ego route owns a TaskSpace in the already running app.
-// taskSpace(name) is the SDK ownership admission; ownership is a creation-time
-// snapshot, so do not invent enum checks as a live control/permission guard.
-export async function runEgoWorkspace({sdk,name,url,isRunning,operation,finish=true,report=()=>{}}) {
-  if(!await isRunning())throw safeError('EGO_NOT_RUNNING');
-  const task=await sdk.taskSpace(name);
-  const handle={spaceId:task.spaceId,label:'p1'};
-  report({event:'ego-workspace-owned',...handle,storage:'shared-profile',background:'not-guaranteed'});
+export function egoTaskSpaceName(taskId,runId=randomUUID()) {
+  if(typeof taskId!=='string'||!(/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(taskId))||taskId.includes('..'))throw safeError('BROWSER_QA_TASK_HANDLE_UNAVAILABLE');
+  if(typeof runId!=='string'||!(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(runId)))throw safeError('EGO_RUN_ID_INVALID');
+  return `workflowhub-qa-${taskId}-${runId}`;
+}
+export function requireTaskIdFromHost(taskId) {
+  if(typeof taskId!=='string'||!(/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(taskId))||taskId.includes('..'))throw safeError('BROWSER_QA_TASK_HANDLE_UNAVAILABLE');
+  return taskId;
+}
+function validEgoHandle(value,expectedName) {
+  if(!value||typeof value!=='object'||value.name!==expectedName||!Number.isSafeInteger(value.spaceId)||value.spaceId<1||value.label!=='p1')throw safeError('EGO_WORKSPACE_HANDLE_INVALID');
+  return {name:value.name,spaceId:value.spaceId,label:value.label};
+}
+function safeEgoErrorCode(error) {return typeof error?.code==='string'&&/^[A-Z0-9_]+$/.test(error.code)?error.code:'EGO_WORKSPACE_FAILED';}
+function verifiedEgoFinish(outcome) {
+  const receipt=outcome?.receipt;
+  return outcome?.resolved===true&&receipt&&typeof receipt==='object'&&receipt.closed_page_label_p1===true
+    &&receipt.closed_page_count===1&&receipt.retained_page_count===0
+    &&(receipt.preserved_unmanaged_count===null
+      ||(Number.isSafeInteger(receipt.preserved_unmanaged_count)&&receipt.preserved_unmanaged_count>=0));
+}
+// One logical QA run owns one newly named TaskSpace. The injected callbacks
+// keep creation, scenario execution and exactly-once cleanup testable without
+// opening a real Ego space.
+export async function runOwnedEgoTaskSpace({taskId,createSpace,runScenario,finishSpace,report=()=>{},uuid=randomUUID}={}) {
+  if(typeof createSpace!=='function'||typeof runScenario!=='function'||typeof finishSpace!=='function')throw safeError('EGO_WORKSPACE_ADAPTER_UNAVAILABLE');
+  const name=egoTaskSpaceName(taskId,uuid());
+  let create='pending',run='not_started',cleanup='not_attempted',handle=null,value,operationError,cleanupError;
   try {
-    const page=task.page('p1');
-    await page.goto(url);
-    const result=await operation({task,page,handle});
-    // SDK control errors stop the operation. No retry/claim/alternate space.
-    if(!finish){report({event:'ego-workspace-retained',...handle,reason:'task-continues',cleanup:'not-yet-finished'});return {...handle,result};}
-    const receipt=validateEgoFinishReceipt(await task.finish({keep:[]}),handle);
-    report({event:'ego-workspace-finished',...handle,receipt});
-    return {...handle,result,receipt};
+    const created=await createSpace(name);
+    create='created';
+    handle=validEgoHandle(created?.handle??created,name);
+    report({event:'ego-workspace-created',page_label:handle.label,storage:'shared-profile',background:'not-guaranteed'});
+    if(created?.code)throw safeError('EGO_WORKSPACE_ACQUISITION_FAILED');
+    run='running';
+    value=await runScenario(handle);
+    run='succeeded';
   } catch(error) {
-    report({event:'ego-workspace-retained',...handle,reason:error.code||error.message,cleanup:'not-finished-on-error-or-control-loss'});
+    if(create==='pending')create=['CANCELLED','EGO_WORKSPACE_HANDLE_UNAVAILABLE','EGO_WORKSPACE_HANDLE_AMBIGUOUS'].includes(error?.code)?'unavailable':'failed';
+    if(create==='created'&&run==='running')run=error?.code==='CANCELLED'?'cancelled':'failed';
+    else if(create==='created'&&run==='not_started'&&handle)run='not_started';
+    operationError=error;
+  } finally {
+    if(handle) {
+      cleanup='running';
+      try {
+        const outcome=await finishSpace(handle);
+        if(!verifiedEgoFinish(outcome))throw safeError('EGO_WORKSPACE_FINISH_CONFIRMATION_UNAVAILABLE');
+        cleanup='finished';
+        report({event:'ego-workspace-finished',page_label:handle.label,receipt:outcome.receipt});
+      } catch(error) {
+        cleanup='incomplete';
+        cleanupError=error;
+        report({event:'ego-workspace-cleanup-incomplete',reason:safeEgoErrorCode(error)});
+      }
+    } else if(create==='created'||create==='unavailable')cleanup='unavailable';
+    report({event:'ego-workspace-lifecycle',create,run,cleanup});
+  }
+  if(cleanupError) {
+    const error=safeError('EGO_WORKSPACE_CLEANUP_INCOMPLETE');
+    error.cause=operationError??cleanupError;
     throw error;
   }
+  if(operationError)throw operationError;
+  return {value,lifecycle:{create,run,cleanup}};
 }
-async function egoAlreadyRunning(env) {
-  const result=await command(['ps','-ww','-axo','comm='],env);
+const egoBundleIdentifier='com.citrolabs.ego.lite';
+const egoBundleName='ego lite.app';
+const egoApplicationInventoryScript=String.raw`
+import AppKit
+import CoreServices
+import Foundation
+let target = "com.citrolabs.ego.lite"
+let targetName = "ego lite.app"
+func emit(_ state: String, _ source: String) {
+  let value = ["state": state, "source": source]
+  if let data = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]),
+     let line = String(data: data, encoding: .utf8) {
+    print(line)
+  } else {
+    print("{\"state\":\"unknown\",\"source\":\"probe-output-invalid\"}")
+  }
+}
+func verifiedBundle(_ url: URL) -> Bool? {
+  guard url.isFileURL else { return nil }
+  do {
+    let info = try Data(contentsOf: url.appendingPathComponent("Contents/Info.plist"), options: [.mappedIfSafe])
+    guard let plist = try PropertyListSerialization.propertyList(from: info, options: [], format: nil) as? [String: Any] else { return nil }
+    guard let bundleId = plist["CFBundleIdentifier"] as? String, !bundleId.isEmpty else { return false }
+    return bundleId == target
+  } catch {
+    return nil
+  }
+}
+if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: target) {
+  guard let match = verifiedBundle(url) else { emit("unknown", "launch-services-metadata-incomplete"); exit(0) }
+  if match { emit("present", "launch-services") }
+  else { emit("unknown", "launch-services-inconsistent") }
+  exit(0)
+}
+var lsError: Unmanaged<CFError>?
+if let raw = LSCopyApplicationURLsForBundleIdentifier(target as CFString, &lsError) {
+  guard let urls = raw.takeRetainedValue() as? [URL] else { emit("unknown", "launch-services-result-invalid"); exit(0) }
+  var metadataIncomplete = false
+  for url in urls {
+    guard let match = verifiedBundle(url) else { metadataIncomplete = true; continue }
+    if match { emit("present", "launch-services"); exit(0) }
+  }
+  emit("unknown", metadataIncomplete ? "launch-services-metadata-incomplete" : "launch-services-inconsistent")
+  exit(0)
+}
+if let error = lsError?.takeRetainedValue() {
+  if CFErrorGetCode(error) != Int(kLSApplicationNotFoundErr) {
+    emit("unknown", "launch-services-query-failed")
+    exit(0)
+  }
+} else {
+  emit("unknown", "launch-services-result-missing")
+  exit(0)
+}
+let roots = Array(Set(NSSearchPathForDirectoriesInDomains(.applicationDirectory, .allDomainsMask, true))).sorted()
+if roots.isEmpty { emit("unknown", "application-domain-list-unavailable"); exit(0) }
+let manager = FileManager.default
+var incomplete = false
+for path in roots {
+  let root = URL(fileURLWithPath: path, isDirectory: true).resolvingSymlinksInPath()
+  let attributes: [FileAttributeKey: Any]
+  do {
+    attributes = try manager.attributesOfItem(atPath: root.path)
+  } catch {
+    let failure = error as NSError
+    if failure.domain == NSCocoaErrorDomain && [NSFileNoSuchFileError, NSFileReadNoSuchFileError].contains(failure.code) { continue }
+    incomplete = true
+    continue
+  }
+  guard attributes[.type] as? FileAttributeType == .typeDirectory else { incomplete = true; continue }
+  guard let entries = manager.enumerator(at: root, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles, .skipsPackageDescendants], errorHandler: { _, _ in incomplete = true; return true }) else {
+    incomplete = true
+    continue
+  }
+  while let item = entries.nextObject() as? URL {
+    guard item.pathExtension.lowercased() == "app", item.lastPathComponent.lowercased() == targetName.lowercased() else { continue }
+    guard let match = verifiedBundle(item) else { incomplete = true; continue }
+    if match { emit("present", "application-domain-scan"); exit(0) }
+  }
+}
+if incomplete { emit("unknown", "application-domain-scan-incomplete") }
+else { emit("absent", "application-domain-scan-complete") }
+`;
+async function egoProcessPath(env,commandProbe=command) {
+  const result=await commandProbe(['ps','-ww','-axo','comm='],env);
   if(result.code)throw safeError('EGO_PROCESS_OBSERVATION_FAILED');
-  return result.stdout.split('\n').some(row=>/^\/.*\/ego lite\.app\/Contents\/MacOS\/ego lite$/.test(row.trim()));
+  return result.stdout.split('\n').map(row=>row.trim()).find(row=>/^\/.*\/ego lite\.app\/Contents\/MacOS\/ego lite$/.test(row))||null;
+}
+async function egoAlreadyRunning(env) {return Boolean(await egoProcessPath(env));}
+async function inspectEgoBundle(candidate,env,commandProbe=command) {
+  let resolved,info;
+  try {resolved=await realpath(candidate);info=await lstat(resolved);}
+  catch(error) {if(['ENOENT','ENOTDIR'].includes(error.code))return {state:'absent'};throw error;}
+  if(!info.isDirectory())return {state:'absent'};
+  const plist=await commandProbe(['/usr/bin/plutil','-extract','CFBundleIdentifier','raw','-o','-',join(resolved,'Contents','Info.plist')],env);
+  if(plist.code)return {state:'unknown',reason:'bundle-metadata-unavailable'};
+  if(plist.stdout.trim()!==egoBundleIdentifier)return {state:'absent'};
+  return {state:'present',appPath:resolved};
+}
+async function detectEgoApplicationDomainState(env,commandProbe) {
+  let probe;
+  try {probe=await commandProbe(['/usr/bin/swift','-e',egoApplicationInventoryScript],env);}
+  catch(error) {
+    if(error.code==='CANCELLED')throw error;
+    return {state:'unknown',reason:error.code==='EACCES'?'application-domain-probe-permission-denied':'application-domain-probe-failed'};
+  }
+  if(probe.code)return {state:'unknown',reason:'application-domain-probe-failed'};
+  let result;
+  try {result=JSON.parse(probe.stdout.trim());}
+  catch {return {state:'unknown',reason:'application-domain-probe-invalid'};}
+  if(!result||typeof result!=='object'||Array.isArray(result)||typeof result.state!=='string'||typeof result.source!=='string')return {state:'unknown',reason:'application-domain-probe-invalid'};
+  if(result.state==='present'&&['launch-services','application-domain-scan'].includes(result.source))return {state:'present'};
+  if(result.state==='absent'&&result.source==='application-domain-scan-complete')return {state:'absent',reason:'application-domain-scan-complete'};
+  if(result.state==='unknown')return {state:'unknown',reason:result.source};
+  return {state:'unknown',reason:'application-domain-probe-inconsistent'};
+}
+async function detectEgoAppInstallation(env,{platform=process.platform,appCandidates,commandProbe=command}={}) {
+  if(platform!=='darwin')return {state:'unknown',reason:'unsupported-platform'};
+  const candidates=appCandidates??['/Applications/'+egoBundleName,...(env.HOME?[join(env.HOME,'Applications',egoBundleName)]:[])];
+  let inspectionUnknown=false;
+  for(const candidate of candidates) {
+    const result=await inspectEgoBundle(candidate,env,commandProbe);
+    if(result.state==='present')return result;
+    if(result.state==='unknown')inspectionUnknown=true;
+  }
+  if(inspectionUnknown)return {state:'unknown',reason:'bundle-metadata-unavailable'};
+  let searchWasStale=false;
+  try {
+    const search=await commandProbe(['/usr/bin/mdfind','-0',`kMDItemCFBundleIdentifier == "${egoBundleIdentifier}"c`],{...env,LC_ALL:'C'});
+    if(!search.code)for(const candidate of search.stdout.split('\0').filter(Boolean)) {
+      const result=await inspectEgoBundle(candidate,env,commandProbe);
+      if(result.state==='present')return {state:'present',appPath:result.appPath};
+      if(result.state==='unknown')return result;
+      searchWasStale=true;
+    }
+  } catch(error) {
+    if(error.code==='CANCELLED')throw error;
+  }
+  const installation=await detectEgoApplicationDomainState(env,commandProbe);
+  if(installation.state==='present')return installation;
+  if(searchWasStale)return {state:'unknown',reason:'application-search-stale'};
+  return installation;
+}
+async function resolveEgoHelperPath(env) {
+  for(const root of (env.PATH||'').split(delimiter)) {
+    if(!root)continue;
+    const candidate=join(root,'ego-browser');
+    try {
+      await access(candidate,constants.X_OK);
+      const resolved=await realpath(candidate),info=await lstat(resolved);
+      if(info.isFile())return resolved;
+    } catch(error) {
+      if(['ENOENT','ENOTDIR'].includes(error.code))continue;
+      throw safeError('EGO_HELPER_UNAVAILABLE');
+    }
+  }
+  return null;
+}
+async function probeEgoEnvironment(env,requested,systemProbe={}) {
+  const installation=await detectEgoAppInstallation(env,systemProbe);
+  if(requested==='agent-browser'&&installation.state==='present')return {appInstallation:'present',appPath:installation.appPath};
+  const processPath=await egoProcessPath(env,systemProbe.commandProbe||command);
+  const appInstallation=processPath?'present':installation.state;
+  if(appInstallation!=='present')return {appInstallation,reason:installation.reason};
+  const helperPath=await resolveEgoHelperPath(env);
+  return {appInstallation,appPath:installation.appPath||processPath?.split('/Contents/')[0]||null,helperPath,running:Boolean(processPath)};
 }
 export async function executeEgoWorkspaceCommand(argv,env,signal) {
-  const result=await command(argv,env,{signal,captureStderr:true});
-  process.stdout.write(result.stdout);process.stderr.write(result.stderr);
+  let result;try{result=await command(argv,env,{signal,captureStderr:true});}catch(error){if(error.code==='COMMAND_UNAVAILABLE')throw safeError('EGO_HELPER_UNAVAILABLE');throw error;}
   const rows=(result.stdout+'\n'+result.stderr).split('\n').filter(row=>row.startsWith('WHQA_OWNED_HANDLE='));
-  if(rows.length!==1)throw safeError('EGO_WORKSPACE_HANDLE_UNAVAILABLE');
-  return {...result,handle:JSON.parse(rows[0].slice('WHQA_OWNED_HANDLE='.length))};
-}
-function invalidEgoReceipt(handle) {return Object.assign(safeError('EGO_WORKSPACE_FINISH_RECEIPT_INVALID'),{handle});}
-function validateEgoFinishReceipt(receipt,handle) {
-  const labels=value=>Array.isArray(value)&&value.every(label=>typeof label==='string')&&new Set(value).size===value.length;
-  if(!receipt||typeof receipt!=='object'||Array.isArray(receipt)||receipt.spaceId!==handle.spaceId||typeof receipt.closedSpace!=='boolean'||!labels(receipt.keptManagedLabels)||receipt.keptManagedLabels.length||!labels(receipt.closedManagedLabels)||!receipt.closedManagedLabels.includes(handle.label)||!Number.isSafeInteger(receipt.preservedUnmanagedCount)||receipt.preservedUnmanagedCount<0||receipt.closedSpace!==(receipt.preservedUnmanagedCount===0))throw invalidEgoReceipt(handle);
-  return receipt;
+  if(result.code&&!rows.length) {
+    const code=(result.stdout+'\n'+result.stderr).match(/\bEGO_[A-Z0-9_]+\b/)?.[0];
+    throw safeError(code||'EGO_WORKSPACE_CREATE_FAILED');
+  }
+  if(rows.length!==1)throw safeError(rows.length?'EGO_WORKSPACE_HANDLE_AMBIGUOUS':'EGO_WORKSPACE_HANDLE_UNAVAILABLE');
+  let handle;try{handle=JSON.parse(rows[0].slice('WHQA_OWNED_HANDLE='.length));}catch{throw safeError('EGO_WORKSPACE_HANDLE_UNAVAILABLE');}
+  return {code:result.code,handle};
 }
 export async function executeEgoFinishCommand(argv,env,signal,handle) {
-  const result=await command(argv,env,{signal,captureStderr:true});
-  process.stdout.write(result.stdout);process.stderr.write(result.stderr);
-  if(result.code)throw Object.assign(safeError('EGO_WORKSPACE_FINISH_FAILED'),{handle});
+  let result;try{result=await command(argv,env,{signal,captureStderr:true});}catch(error){if(error.code==='COMMAND_UNAVAILABLE')throw safeError('EGO_HELPER_UNAVAILABLE');throw error;}
+  if(result.code) {
+    const code=(result.stdout+'\n'+result.stderr).match(/\bEGO_[A-Z0-9_]+\b/)?.[0];
+    throw safeError(code||'EGO_WORKSPACE_FINISH_FAILED');
+  }
   const events=[];
   for(const row of (result.stdout+'\n'+result.stderr).split('\n')) {
     let event;try{event=JSON.parse(row);}catch{continue;}
     if(event?.event==='ego-workspace-finished')events.push(event);
   }
-  if(events.length!==1||events[0].spaceId!==handle.spaceId)throw invalidEgoReceipt(handle);
-  const receipt=validateEgoFinishReceipt(events[0].receipt,handle);
-  return {spaceId:handle.spaceId,receipt};
+  if(events.length!==1||events[0].resolved!==true||!events[0].receipt||typeof events[0].receipt!=='object')throw safeError('EGO_WORKSPACE_FINISH_CONFIRMATION_UNAVAILABLE');
+  return {resolved:true,receipt:events[0].receipt};
 }
-async function runEgoQa({env,session,evidence,scenario,scope,mode}) {
+export function bindEgoTaskSpaceNameToNodejsScript(script,taskSpaceName) {
+  if(typeof script!=='string')throw safeError('EGO_NODEJS_SCRIPT_UNAVAILABLE');
+  if(typeof taskSpaceName!=='string'||!taskSpaceName)return script;
+  return `process.env.BROWSER_QA_EGO_TASKSPACE_NAME=${JSON.stringify(taskSpaceName)};\n${script}`;
+}
+async function runEgoQa({env,session,evidence,scenario,scope,mode,egoHelperPath}) {
   if(mode!=='none')throw safeError('EGO_WORKSPACE_TICKET_EXPORT_UNSUPPORTED');
+  if(typeof egoHelperPath!=='string'||!isAbsolute(egoHelperPath))throw safeError('EGO_HELPER_UNAVAILABLE');
+  const taskId=requireTaskIdFromHost(env.BROWSER_QA_TASK_ID);
+  if(env.BROWSER_QA_EGO_SPACE_ID!==undefined||env.BROWSER_QA_EGO_KEEP_OPEN!==undefined)throw safeError('EGO_TASKSPACE_REUSE_OPTIONS_UNSUPPORTED');
   if(!await egoAlreadyRunning(env))throw safeError('EGO_NOT_RUNNING');
-  if(env.BROWSER_QA_EGO_SPACE_ID&&!/^[1-9][0-9]*$/.test(env.BROWSER_QA_EGO_SPACE_ID))throw safeError('INVALID_EGO_SPACE_ID');
-  if(env.BROWSER_QA_EGO_KEEP_OPEN&&!['0','1'].includes(env.BROWSER_QA_EGO_KEEP_OPEN))throw safeError('INVALID_EGO_FINISH_POLICY');
   await mkdir(resolve(evidence),{recursive:true});
-  const input={name:env.BROWSER_QA_EGO_SPACE_ID?Number(env.BROWSER_QA_EGO_SPACE_ID):session,url:scope.targetUrl};
-  // Documented SDK rounds are sequential: acquire/navigate, scenario, finish.
-  // Only nonsecret per-run metadata enters argv; ambient env never does.
-  const script=`const api=await import(${JSON.stringify(import.meta.url)});await api.runEgoWorkspace({...${JSON.stringify(input)},sdk:{taskSpace},isRunning:async()=>true,finish:false,report:fact=>{if(fact.event==='ego-workspace-owned')console.log('WHQA_OWNED_HANDLE='+JSON.stringify({spaceId:fact.spaceId,label:fact.label}));},operation:async()=>null});`;
-  const aborter=new AbortController();let cancelled=0,handle;
+  const aborter=new AbortController();let cancelled=0;
   const stop=signal=>{cancelled=signal==='SIGINT'?130:143;aborter.abort();};
   const int=()=>stop('SIGINT'),term=()=>stop('SIGTERM');process.on('SIGINT',int);process.on('SIGTERM',term);
   try {
-    const acquired=await executeEgoWorkspaceCommand(['ego-browser','nodejs','-e',script],env,aborter.signal);
-    handle=acquired.handle;
-    if(!Number.isSafeInteger(handle.spaceId)||handle.spaceId<1||handle.label!=='p1')throw safeError('EGO_WORKSPACE_HANDLE_INVALID');
-    console.log(JSON.stringify({event:'ego-workspace-owned',...handle,storage:'shared-profile',background:'not-guaranteed'}));
-    if(cancelled||acquired.code)throw safeError(cancelled?'CANCELLED':'EGO_WORKSPACE_ACQUISITION_FAILED');
-    const result=await command(scenario,{...env,BROWSER_QA_EGO_SPACE_ID:String(handle.spaceId),BROWSER_QA_EGO_PAGE_LABEL:'p1',BROWSER_QA_TARGET_URL:scope.targetUrl,BROWSER_QA_EVIDENCE_DIR:resolve(evidence)},{signal:aborter.signal,inherit:true});
-    if(cancelled||result.code)throw safeError(cancelled||result.code===130||result.code===143?'CANCELLED':'SCENARIO_FAILED');
-    if(env.BROWSER_QA_EGO_KEEP_OPEN==='1'){console.log(JSON.stringify({event:'ego-workspace-retained',...handle,reason:'task-continues',cleanup:'not-yet-finished'}));return 0;}
-    if(!await egoAlreadyRunning(env))throw safeError('EGO_NOT_RUNNING');
-    await executeEgoFinishCommand(['ego-browser','nodejs','-e',`const task=await taskSpace(${handle.spaceId});const receipt=await task.finish({keep:[]});console.log(JSON.stringify({event:'ego-workspace-finished',spaceId:${handle.spaceId},receipt}));`],env,aborter.signal,handle);
-    return 0;
+    await runOwnedEgoTaskSpace({
+      taskId,
+      createSpace:async name=>{
+        const script=`const name=${JSON.stringify(name)};const task=await taskSpace(name);if(task.name!==name)throw Object.assign(new Error('EGO_WORKSPACE_NAME_MISMATCH'),{code:'EGO_WORKSPACE_NAME_MISMATCH'});console.log('WHQA_OWNED_HANDLE='+JSON.stringify({name:task.name,spaceId:task.spaceId,label:'p1'}));`;
+        return executeEgoWorkspaceCommand([egoHelperPath,'nodejs','-e',script],env,aborter.signal);
+      },
+      runScenario:async handle=>{
+        if(cancelled)throw safeError('CANCELLED');
+        const result=await command(scenario,{...env,BROWSER_QA_EGO_TASKSPACE_NAME:handle.name,BROWSER_QA_EGO_PAGE_LABEL:handle.label,BROWSER_QA_EGO_HELPER_PATH:egoHelperPath,BROWSER_QA_TARGET_URL:scope.targetUrl,BROWSER_QA_EVIDENCE_DIR:resolve(evidence)},{signal:aborter.signal,inherit:true});
+        if(cancelled||result.code)throw safeError(cancelled||result.code===130||result.code===143?'CANCELLED':'SCENARIO_FAILED');
+        return result;
+      },
+      finishSpace:handle=>executeEgoFinishCommand(
+        [egoHelperPath,'nodejs','-e',`const name=${JSON.stringify(handle.name)};const task=await taskSpace(name);if(task.name!==name)throw Object.assign(new Error('EGO_WORKSPACE_NAME_MISMATCH'),{code:'EGO_WORKSPACE_NAME_MISMATCH'});const value=await task.finish({keep:[]});const receipt=value&&typeof value==='object'?value:{};const entries=Object.entries(receipt);const closed=entries.filter(([key,list])=>/closed/i.test(key)&&Array.isArray(list)&&list.every(label=>typeof label==='string'));const retained=entries.filter(([key,list])=>/(retained|kept)/i.test(key)&&Array.isArray(list)&&list.every(label=>typeof label==='string'));const count=lists=>lists.reduce((total,[,list])=>total+list.length,0);const closedSpace=typeof receipt.closedSpace==='boolean'?receipt.closedSpace:typeof receipt.closed_space==='boolean'?receipt.closed_space:null;const protectedCount=Number.isSafeInteger(receipt.preservedUnmanagedCount)?receipt.preservedUnmanagedCount:Number.isSafeInteger(receipt.preserved_unmanaged_count)?receipt.preserved_unmanaged_count:null;const summary={receipt_keys:Object.keys(receipt).sort(),closed_page_label_p1:closed.some(([,list])=>list.includes('p1')),closed_page_count:count(closed),retained_page_count:count(retained),closed_space:closedSpace,preserved_unmanaged_count:protectedCount};console.log(JSON.stringify({event:'ego-workspace-finished',resolved:true,receipt:summary}));`],
+        env,undefined,handle
+      ),
+      report:fact=>process.stdout.write(JSON.stringify(fact)+'\n')
+    });
+    return cancelled||0;
   } catch(error) {
-    console.error(JSON.stringify({event:'ego-workspace-retained',...(handle||{}),reason:error.code||'EGO_WORKSPACE_FAILED',cleanup:'not-finished-on-error-or-control-loss'}));
     if(cancelled)return cancelled;throw error;
   } finally {process.off('SIGINT',int);process.off('SIGTERM',term);}
 }
@@ -428,25 +641,29 @@ export function recordEngineFallback(report, reason, probe) {
   const fact={event:'engine-fallback',from:'ego-lite',to:'agent-browser',reason,probe};
   report.push(fact);return fact;
 }
-export async function selectBrowserEngine(env=process.env,{probe}={}) {
+export async function selectBrowserEngine(env=process.env,{probe,systemProbe}={}) {
   const requested=env.BROWSER_QA_ENGINE||'auto';
   if(!['auto','ego-lite','agent-browser','browser-use'].includes(requested))throw safeError('UNSUPPORTED_ENGINE');
-  if(requested!=='auto')return {engine:requested,fallbacks:[]};
-  const detect=probe||(async()=>{
-    for(const root of (env.PATH||'').split(delimiter)){
-      if(!root)continue;
-      try{await access(join(root,'ego-browser'),constants.X_OK);}catch(error){if(['ENOENT','ENOTDIR'].includes(error.code))continue;throw error;}
-      let running;try{running=await egoAlreadyRunning(env);}catch(error){if(['EACCES','CANCELLED'].includes(error.code))throw error;throw safeError('ENGINE_PROBE_UNAVAILABLE');}
-      return {available:true,running,...(!running?{reason:'not-running'}:{})};
-    }
-    return {available:false,reason:'executable-missing'};
-  });
-  const result=await detect(),fallbacks=[];
-  if(!result||typeof result.available!=='boolean'||(result.running!==undefined&&typeof result.running!=='boolean'))throw safeError('ENGINE_PROBE_INVALID');
-  if(!result.available&&!['ENOENT','executable-missing'].includes(result.reason))throw safeError(result.reason==='EACCES'?'EACCES':'ENGINE_PROBE_UNAVAILABLE');
-  if(result.available&&result.running!==false)return {engine:'ego-lite',fallbacks};
-  recordEngineFallback(fallbacks,result.available?'ego-lite not running before launch':'ego-lite executable unavailable before launch',result);
-  return {engine:'agent-browser',fallbacks};
+  if(requested==='browser-use')return {engine:'browser-use',fallbacks:[]};
+  let result;
+  try {result=await (probe||(input=>probeEgoEnvironment(input,requested,systemProbe)))(env);}
+  catch(error) {if(['CANCELLED','EACCES'].includes(error.code))throw error;throw safeError('ENGINE_PROBE_UNAVAILABLE');}
+  if(!result||!['present','absent','unknown'].includes(result.appInstallation))throw safeError('ENGINE_PROBE_INVALID');
+  if(requested==='agent-browser') {
+    if(result.appInstallation==='present')throw safeError('EGO_INSTALLED_AGENT_BROWSER_FORBIDDEN');
+    if(result.appInstallation==='unknown')throw safeError('EGO_INSTALLATION_UNAVAILABLE');
+    return {engine:'agent-browser',fallbacks:[]};
+  }
+  if(result.appInstallation==='unknown')throw safeError('EGO_INSTALLATION_UNAVAILABLE');
+  if(result.appInstallation==='absent') {
+    if(requested==='ego-lite')throw safeError('EGO_APP_NOT_INSTALLED');
+    const fallbacks=[];recordEngineFallback(fallbacks,'Ego app confirmed absent before launch',result);
+    return {engine:'agent-browser',fallbacks};
+  }
+  if(!Object.hasOwn(result,'helperPath')||result.helperPath!==null&&(typeof result.helperPath!=='string'||!isAbsolute(result.helperPath))||typeof result.running!=='boolean')throw safeError('ENGINE_PROBE_INVALID');
+  if(result.helperPath===null)throw safeError('EGO_HELPER_UNAVAILABLE');
+  if(!result.running)throw safeError('EGO_NOT_RUNNING');
+  return {engine:'ego-lite',fallbacks:[],egoHelperPath:result.helperPath};
 }
 const registeredScripts=Object.freeze(['design-source-read-v1','design-source-prepare-v1']);
 // Fixed facts are a closed name set; coordinates stay bounded data.
@@ -531,11 +748,25 @@ export async function runRegisteredScript(page,id,args={}) {
     } finally {observer?.disconnect();for(const remove of listeners.reverse())remove();for(const restore of undo.reverse())restore();}
   },{id,args});
 }
-export async function runBrowserQa(args=process.argv.slice(2),inputEnv=process.env) {
+// This runner's live selector is the sole query exception; makeScope remains the shared URL validator.
+function makeBrowserQaScope(value, topLevelSite) {
+  const input=String(value);
+  let target;
+  try { target=new URL(input); } catch { throw safeError('INVALID_TARGET_SCOPE'); }
+  const beforeHash=input.split('#',1)[0];
+  const queryIndex=beforeHash.indexOf('?');
+  const rawQuery=queryIndex<0?'':beforeHash.slice(queryIndex);
+  if(target.username||target.password||target.hash||rawQuery!==target.search)throw safeError('INVALID_TARGET_SCOPE');
+  if(rawQuery&&rawQuery!=='?source=live')throw safeError('INVALID_TARGET_SCOPE');
+  target.search='';
+  const scope=makeScope(target.href,topLevelSite);
+  return rawQuery?{...scope,targetUrl:scope.targetUrl+rawQuery}:scope;
+}
+export async function runBrowserQa(args=process.argv.slice(2),inputEnv=process.env,selectionOptions={}) {
   let url,evidence;const a=[...args];while(a.length&&a[0]!=='--'){const flag=a.shift();if(flag==='--url')url=a.shift();else if(flag==='--evidence-dir')evidence=a.shift();else throw safeError('INVALID_RUN_ARGUMENT');}if(a.shift()!=='--'||!a.length||!evidence)throw safeError('INVALID_RUN_ARGUMENT');
   const env={...inputEnv};const sourceInput=env.BROWSER_QA_TICKET_SOURCE_WS;const site=env.BROWSER_QA_TICKET_TOP_LEVEL_SITE;delete env.BROWSER_QA_TICKET_SOURCE_WS;delete env.BROWSER_QA_TICKET_TOP_LEVEL_SITE;
-  const scope=makeScope(url,site);const mode=env.BROWSER_QA_AUTH_MODE||'none';
-  const selection=await selectBrowserEngine(env);let engine=selection.engine;
+  const scope=makeBrowserQaScope(url,site);const mode=env.BROWSER_QA_AUTH_MODE||'none';
+  const selection=await selectBrowserEngine(env,selectionOptions);let engine=selection.engine;
   for(const fact of selection.fallbacks)console.log(JSON.stringify(fact));
   if(!['ego-lite','agent-browser','browser-use'].includes(engine))throw safeError('UNSUPPORTED_ENGINE');
   if(!['none','read-only-ticket-export'].includes(mode))throw safeError('UNSUPPORTED_AUTH_MODE');
@@ -546,7 +777,7 @@ export async function runBrowserQa(args=process.argv.slice(2),inputEnv=process.e
   const root=await realpath(process.cwd());const session='whqa-'+createHash('sha256').update(root).digest('hex').slice(0,8)+'-'+process.pid;
   Object.assign(env,{BROWSER_QA_SESSION:session,BROWSER_QA_ENGINE:engine,BROWSER_QA_ALLOWED_DOMAINS:allowed,BROWSER_QA_AUTH_MODE:mode});
   if(engine==='browser-use')return runNativeQa({env,session,evidence,scenario:a,scope,sourceEndpoint,mode});
-  if(engine==='ego-lite')return runEgoQa({env,session,evidence,scenario:a,scope,sourceEndpoint,mode});
+  if(engine==='ego-lite')return runEgoQa({env,session,evidence,scenario:a,scope,sourceEndpoint,mode,egoHelperPath:selection.egoHelperPath});
   await mkdir(resolve(evidence),{recursive:true});
   const ownedRoot=await mkdtemp(join(env.TMPDIR||tmpdir(),'whqa-'));
   Object.assign(env,{AGENT_BROWSER_SOCKET_DIR:ownedRoot,AGENT_BROWSER_HOME:ownedRoot});
@@ -594,4 +825,7 @@ export async function runBrowserQa(args=process.argv.slice(2),inputEnv=process.e
   }
   return cancelled||code;
 }
-if(process.argv[1]===fileURLToPath(import.meta.url))runBrowserQa().then(code=>{process.exitCode=code;}).catch(e=>{console.error(JSON.stringify({error:e.code||'QA_RUN_FAILED'}));process.exitCode=1;});
+// Node resolves an ESM URL through symlinks; compare both physical paths.
+// A missing argv path can belong to an importing eval host, not this CLI.
+const invokedModule=process.argv[1]?await realpath(process.argv[1]).catch(error=>{if(error.code==='ENOENT'||error.code==='ENOTDIR')return null;throw error;}):null;
+if(invokedModule===await realpath(fileURLToPath(import.meta.url)))runBrowserQa().then(code=>{process.exitCode=code;}).catch(e=>{console.error(JSON.stringify({error:e.code||'QA_RUN_FAILED'}));process.exitCode=1;});

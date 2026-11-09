@@ -28,8 +28,25 @@ describe("current Runner and Skill Bundle joint installation",()=>{
   const {createRequire}=await import("node:module");const require=createRequire(import.meta.url);
   prior=prior.replace('from "js-yaml"',`from ${JSON.stringify(new URL(`file://${require.resolve("js-yaml")}`).href)}`);
   const old=await import(`data:text/javascript;base64,${Buffer.from(prior).toString("base64")}`);
-  const previous=await old.buildSkillBundleRelease({packageRoot:ROOT,outputDir:path.join(f.root,"prior-default")});
-  expect(f.bundle.files.map(row=>row.path).sort()).toEqual(previous.files.map(row=>row.path).sort());
+  const previousRoot=path.join(f.root,"prior-default");
+  const previous=await old.buildSkillBundleRelease({packageRoot:ROOT,outputDir:previousRoot});
+  const mappedSource="skills/anysearch/gitignore-template",mappedDestination="skills/anysearch/.gitignore";
+  const anysearchManifest="skills/anysearch/skill-bundle.json";
+  const expectedPaths=previous.files.map(row=>row.path===mappedSource?mappedDestination:row.path).sort();
+  expect(f.bundle.files.map(row=>row.path).sort()).toEqual(expectedPaths);
+  expect(f.bundle.files.some(row=>row.path===mappedSource)).toBe(false);
+  for(const row of previous.files){
+   if(row.path===anysearchManifest)continue;
+   const currentPath=row.path===mappedSource?mappedDestination:row.path;
+   expect(fs.readFileSync(path.join(f.skillBundleRoot,currentPath)).equals(fs.readFileSync(path.join(previousRoot,row.path))),currentPath).toBe(true);
+  }
+  const previousAnysearch=JSON.parse(fs.readFileSync(path.join(previousRoot,anysearchManifest),'utf8'));
+  const expectedAnysearch={...previousAnysearch,files:previousAnysearch.files.map(entry=>{
+   if(!entry||typeof entry!=='object'||!Object.hasOwn(entry,'destination'))return entry;
+   const{destination,...normalized}=entry;normalized.path=destination;return normalized;
+  })};
+  expect(fs.readFileSync(path.join(f.skillBundleRoot,anysearchManifest))).toEqual(Buffer.from(`${JSON.stringify(expectedAnysearch,null,2)}\n`));
+  expect(fs.readFileSync(path.join(f.skillBundleRoot,mappedDestination)).equals(fs.readFileSync(path.join(ROOT,mappedSource)))).toBe(true);
   const {resolvePortableStageFiles}=await import("../../runtime/distribution/skill-bundle-release.mjs");
   for(const stage of ["make-decision","build-plan","build-code"]){
    const local=resolvePortableStageFiles({packageRoot:ROOT,stage});

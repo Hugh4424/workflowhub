@@ -23,7 +23,7 @@ These do not justify switching engines:
 
 ## Order
 
-Before launch, auto may record engine-fallback: `from` is ego-lite, `to` is agent-browser, `reason` states missing executable or not-running, and `probe` retains the observation. Probe exceptions and EACCES are TOOL_ERROR, never absence. Once selected, keep this selected engine and owned session, preserve evidence and report the actual terminal blocker.
+Before launch, auto may record engine-fallback only after the detector confirms absence. It checks Launch Services first, then scans every Foundation ApplicationDirectory domain for the visible canonical ego lite.app package and verifies its CFBundleIdentifier. A complete scan with no match is the only absence result. An indexed mdfind hit is checked as a real bundle; an empty or stale search is not absence evidence. If Launch Services fails, an application domain cannot be read, or matching bundle metadata is unreadable, retain unknown. `from` is ego-lite, `to` is agent-browser, `reason` states confirmed app absence, and `probe` retains the installation observation. An installed app with a missing helper or a stopped app is an Ego error, not absence. Unknown installation state, probe exceptions and EACCES fail closed; explicit agent-browser uses the same installation guard. Once selected, keep this engine and owned session, preserve evidence and report the actual terminal blocker.
 
 ## Report
 

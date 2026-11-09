@@ -36,6 +36,10 @@ Thumbs.db
 # OMC operational artifacts
 .omc/
 
+# AnySearch local runtime state; mirror runtime.conf and __pycache__/ in gitignore-template.
+/skills/anysearch/**/runtime.conf
+/skills/anysearch/**/__pycache__/
+
 # Worker-mode runtime state
 .worker-mode/
 reply.md

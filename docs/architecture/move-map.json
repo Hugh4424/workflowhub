@@ -2980,6 +2980,25 @@
       "retention_basis": "既有保留生产路径；本次仅归位说明"
     },
     {
+      "source": "skills/anysearch/gitignore-template",
+      "destination": "skills/anysearch/gitignore-template",
+      "status": "add",
+      "role": "production",
+      "responsibility": "AnySearch portable .gitignore规则的唯一字节源；bundle映射在发布输出为skills/anysearch/.gitignore，root .gitignore仅镜像本地runtime.conf/cache保护并由契约测试核对。",
+      "owner": "skills/anysearch维护者；C09 P2 item10维护初始映射",
+      "consumer": "local-skill-resolver.mjs读取npm安装后仍存在的源；skill-bundle-release.mjs用同一字节生成.gitignore逻辑目标。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs",
+        "runtime/distribution/skill-bundle-release.mjs"
+      ],
+      "named_data_readers": [
+        "skills/anysearch/skill-bundle.json",
+        "tests/contract/c09-family-distribution.test.mjs"
+      ],
+      "delete_condition": "AnySearch不再需要.gitignore逻辑输出，或经独立验证的可安装单一源完整承接并由AnySearch维护者决定退役后删除。",
+      "retention_basis": "C09 P2 item10 v4证据确认tarball成员随npm install消失；该普通文件保留原.gitignore字节且不靠安装脚本。"
+    },
+    {
       "source": "skills/anysearch/scripts/anysearch_cli.js",
       "destination": "skills/anysearch/scripts/anysearch_cli.js",
       "status": "retain",
@@ -3075,13 +3094,18 @@
       "destination": "skills/anysearch/skill-bundle.json",
       "status": "retain",
       "role": "production",
-      "responsibility": "既有模块／资源职责；不从登记新增能力",
-      "owner": "原路径维护 owner；P7 仅登记现职责",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
-      "named_data_readers": [],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "既有保留生产路径；本次仅归位说明"
+      "responsibility": "AnySearch资源闭包；path声明npm可安装的源路径，destination声明发布时逻辑输出路径，缺省path到path。",
+      "owner": "skills/anysearch维护者；C09 P2 item10维护该映射",
+      "consumer": "local-skill-resolver.mjs校验安装源；skill-bundle-release.mjs按destination生成逻辑输出并归一化发布manifest。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs",
+        "runtime/distribution/skill-bundle-release.mjs"
+      ],
+      "named_data_readers": [
+        "tools/cli/check-skill-consistency.mjs"
+      ],
+      "delete_condition": "AnySearch声明资源由经独立验证的替代闭包完整承接、所有上述消费者改接且AnySearch维护者决定退役后删除。",
+      "retention_basis": "C09 P2 item10：npm install会剥除tarball中的.gitignore；显式源路径到逻辑路径映射保留同一内容，不依赖postinstall。"
     },
     {
       "source": "skills/architect-code-review/SKILL.md",

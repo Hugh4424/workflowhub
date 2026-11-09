@@ -33,8 +33,9 @@
             "type": "object",
             "required": ["path"],
             "properties": {
-              "path": { "type": "string", "minLength": 1 },
-              "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+              "path": { "type": "string", "minLength": 1, "description": "Relative resource path; in source packages this is the resource source, and generated releases normalize it to the destination." },
+              "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+              "destination": { "type": "string", "minLength": 1, "description": "Optional logical output path relative to the skill directory; defaults to path." }
             },
             "additionalProperties": false
           }

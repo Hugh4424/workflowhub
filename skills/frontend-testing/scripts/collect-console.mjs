@@ -250,15 +250,15 @@ export async function ownedEgoContext(page,config,env) {
   const object={...Object.fromEntries(Object.entries(identityKeys).map(([key,name])=>[key,env[name]])),state:config.state,viewport:viewport.width+'x'+viewport.height+'@'+viewport.dpr,engine};
   const identity=compareIdentity({...object,viewport:config.viewport},{url,viewport:object.viewport});
   if(identity.mismatches.length)throw fail('IDENTITY_MISMATCH','Owned page '+identity.mismatches[0].path+' differs from declaration; no navigation issued');
-  const allowed=new Set(['Page.enable','Runtime.enable','Network.enable','Page.getFrameTree','Accessibility.enable','Accessibility.getFullAXTree']);
+  const allowed=new Set(['egoAutomated.disable','Page.enable','Runtime.enable','Network.enable','Page.getFrameTree','Accessibility.enable','Accessibility.getFullAXTree']);
   const call=(method,params={})=>{if(!allowed.has(method))throw fail('TOOL_ERROR','Unsupported owned-page audit command: '+method);return page.cdp(method,params);};
   pinnedViewport={...viewport};
   return {page,object,read,call};
 }
 export async function observeOwnedEgoReload(context,timeoutMs=5000) {
   const {page,call,read}=context;
-  // Every observer is enabled before draining old events and issuing reload.
-  await call('Page.enable');await call('Runtime.enable');await call('Network.enable');
+  // Ego page sessions hide console events until this SDK toggle is disabled; sites can detect CDP while disabled.
+  await call('egoAutomated.disable');await call('Page.enable');await call('Runtime.enable');await call('Network.enable');
   const before=(await call('Page.getFrameTree'))?.frameTree?.frame;
   if(!before?.id||!before.loaderId)throw fail('TOOL_ERROR','Owned main frame identity missing; no navigation issued');
   await page.events();
