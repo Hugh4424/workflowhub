@@ -5,7 +5,7 @@
     {
       "step_id": 1,
       "step_slug": "load-confirmed-inputs",
-      "observable_result": "父决策和必要来源可读，完整旅程、需求范围、排除理由与未知项明确；不推断缺失确认。 判定消费：SKILL.md#方法 第1步；原件：decision确认ref、原始要求与只读输入原件。",
+      "observable_result": "父决策和必要来源可读，逐条读父决策并出决定清单（编号＋一句结论＋旧位置），完整旅程、需求范围、排除理由与未知项明确；不推断缺失确认。 判定消费：SKILL.md#方法 第1步；原件：decision确认ref、原始要求与只读输入原件。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -16,7 +16,7 @@
     {
       "step_id": 2,
       "step_slug": "generate-outline-and-task-map",
-      "observable_result": "第一次spec-prd内容调用产大纲/任务地图，每需求有负责卡或明确排除；实际稿件已展示，未答仍为草稿。 判定消费：SKILL.md#方法 第2步；原件：prd地图实际稿、作者调用事实、来源覆盖。",
+      "observable_result": "第一次spec-prd内容调用产大纲与5列任务地图（任务/结果/依赖/波次/主承接需求），结果列只写用户可见结果，需求与决定的落点记在决策覆盖表；波次只排任务先后；每需求有负责卡或明确排除，实际稿件已展示，未答仍为草稿。 判定消费：SKILL.md#方法 第2步；原件：prd地图实际稿、作者调用事实、来源覆盖。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -38,7 +38,7 @@
     {
       "step_id": 4,
       "step_slug": "expand-single-prd",
-      "observable_result": "地图/设计真实答复后第二次同一spec-prd作者写完整PRD，来源/语义一致，缺口保留，不新增第三内容调用。 判定消费：SKILL.md#方法 第4步；原件：作者真实调用事实、同一prd与确认输入。",
+      "observable_result": "地图/设计真实答复后第二次同一spec-prd作者写完整PRD；同一作者同批产出决策覆盖表（行按decision-log六节实有项列，落点为空即未完成），整理覆盖表不是第三次内容调用；一个作者写整个PRD文件，不按波次切作者，来源/语义一致，缺口保留，不新增第三内容调用。 判定消费：SKILL.md#方法 第4步；原件：作者真实调用事实、同一prd、决策覆盖表与确认输入。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -49,7 +49,7 @@
     {
       "step_id": 5,
       "step_slug": "review-and-confirm-final-draft",
-      "observable_result": "完整稿经wh-review文档建议和逐项处置，最终实际展示稿取得真实confirm；版本指代不清或未答保持draft。 判定消费：SKILL.md#方法 第5步；原件：wh-review原件/处置、最终稿、confirm ref。",
+      "observable_result": "完整稿只做一次审查，由wh-review执行并只审拆卡、实现可行性、范围、验收、旧件保真五件事；审查输入含旧件与决策覆盖表，缺旧件记incomplete不写pass，抽读覆盖表落点；审查发现逐项处置；最终实际展示稿取得真实confirm，版本指代不清或未答保持draft。 判定消费：SKILL.md#方法 第5步；原件：wh-review原件/处置、最终稿、confirm ref。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
