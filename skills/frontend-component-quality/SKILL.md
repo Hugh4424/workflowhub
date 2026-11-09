@@ -21,6 +21,11 @@ UI 实施前按参考逐项核规范、资产、设计输入、检查命令与�
 - affected component、每个真实 `real consumer`、兼容影响、props/events、状态 owner 和 typed ViewModel；
 - 唯一 CSS/token owner、项目实际命令、browser scenario、viewport、fixture、截图状态和 coverage limits。
 
+页面状态与 typed ViewModel 沿真实页面投影、当前 task/API 和各自 owner
+取源，说明输入事实如何成为显示、筛选和可用操作。静态适配也须保留
+这些语义；改变原投影时说明任务依据与影响。组件的展示/事件能力与
+页面须完成的业务判断分别记录。
+
 `modify`、`extend-state-or-variant`、`add-local`、`extract-shared` 都必须记录
 `story_or_test_update`；`extract-shared` 必须有两个已确认的真实消费者；没有消费者只能
 `remove-after-no-consumers`，且必须附 `no_consumer_evidence` 或 `evidence_refs`。
@@ -33,6 +38,34 @@ scan config 和 route/import/lazy/CSS/data 的逐项 support matrix；输出按�
 排序。动态加载、生成代码、未支持框架、扫描失败和语义不确定必须带枚举 `unknown_reason`。
 人工体验/视觉语义只追加 `source=human`，不能覆盖扫描原始项；没有真实 consumer 时保留
 `unknown`，不能声称 component map 已完整。
+
+页面或布局需要组合时，在同一 Map 的用途与真实使用点中说明选择：
+已有适用资产时，实际读取其画面与对应结构，核区域、层级、密度、
+内容增长和操作关系的用途与限制。已核明确没有现产品或同场景资产，
+仅将该项资产或比较面记不适用及原因。其余现有资产和规范继续消费；
+沿真实需求、业务语义和可用专业规范形成关系，
+说明 gap 与任务局部选择。存在但未读或不可读仍为 unknown/unavailable，
+仅限制依赖该来源的判断；不捏造资产，也不因此阻断无稿原创。
+按任务选择复用、组合或补缺，
+把采用的关系交当前原型/实现作者；组件 import 只证明实现复用，
+页面组合是否成立还须对照实际呈现与完整任务。
+
+每个采用关系要能定位到真实组件/DOM 使用点及相应渲染区域，说明
+调整理由、状态与样式 owner、DOM 与视觉顺序、适用限制和未知。
+生成前记计划落点；生成后作者沿实际源码与渲染回读同一 Map，核实
+落点及采用关系，差异在原记录更正或说明。未核的仍记计划/未知，
+不把 Map 已填写当作已应用。
+对每项采用，沿真实 consumer 回读 wrapper、bootstrap/入口、主题或
+provider、global CSS 与父容器的配置及生命周期，区分资产自身合同、
+宿主提供的前提和本任务局部适配。在同一 Map 定位所需配置的 owner、
+来源及本次采用位置；只导入组件或样式不证明其宿主前提已满足。
+生成前说明沿用、适配及未知；生成后核实际配置与渲染的增长、滚动和
+操作可达，由独立 reader 按原场景观察。配置缺失只限制依赖项，
+不默认复制原入口的其它业务副作用，也不另建配置清单或状态对象。
+
+精确 API/token 仍回原源；规范不足时保原 owner 未决，任务局部选择
+与来源事实分开。作者消费这些关系形成整页方案，独立 reader 核
+实际使用；这里不生成新的共享布局包或第二套视觉规范。
 
 ### 变更影响与定向更新
 
@@ -56,13 +89,13 @@ C03资产选择之前的影响核对，直接消费者为当前UI实施者与独
 
 ### 两条链资产检查（C03）
 
-**适用范围**：回测工作台与业务日志两条链，分别核前端组件、前端布局、设计组件、设计布局。开工读当前任务的 `quality/evidence/P1-ledger.json` 对象与 `mapping`，沿条目回读真实实现、消费者及设计源；用途、约束、变体与插槽以条目语义为准，同名不等于同义。台账是唯一对象清单，本段只提供检查方法。
+**适用范围**：按当前任务分别核前端组件、前端布局、设计组件、设计布局，沿以下规则选择。回测工作台与业务日志两条链是原 C03 历史样例，不限制其它任务采用本方法。开工读当前任务已确认的具名对象输入与映射，或其适用 spec/Phase 清单，沿条目回读真实实现、消费者及设计源；缺清单时记录具体缺项、提供者和影响，不猜别的任务私有路径；用途、约束、变体与插槽以条目语义为准，同名不等于同义。上述当前任务对象输入是唯一对象权威，本段只提供检查方法；便携子任务沿其已交付输入取源，不要求额外读取宿主整份 Phase。
 
-**检查规则**：对每个选择记 `reuse`、`compose` 或 `gap`，分别说明用途依据、真实使用点、消费者与未知。用途、约束及合法变体已有对应且保留状态与插槽时选 `reuse`；现有对象需按布局组合且各自职责、状态归属仍明确时选 `compose`；两者都不能满足的具体语义缺失才记 `gap`，定位最小缺口及影响。回测链按台账区分曲线共享实现、绩效组合与声明的静态扫描范围内未见生产渲染、动态字符串／生成代码／跨项目运行时使用仍未知的旧表单；业务日志链按台账核页面、视图、行与详情浮层的职责及键盘入口，不用截图相似替代用途与真实调用。资产选择沿用项目组件、样式与交互语义；组合保留已有状态和可达操作，读改动两侧防止删掉合法分支。这里的三选一是资产判断，既有 Map 的 `action` 字段及其要求仍照上文记录。
+**检查规则**：对每个选择记 `reuse`、`compose` 或 `gap`，分别说明用途依据、真实使用点、消费者与未知。用途、约束及合法变体已有对应且保留状态与插槽时选 `reuse`；现有对象需按布局组合且各自职责、状态归属仍明确时选 `compose`；两者都不能满足的具体语义缺失才记 `gap`，定位最小缺口及影响。仅在核原 C03 两链历史样例时，沿该样例原台账使用下列专属检查：回测链区分曲线共享实现、绩效组合与声明的静态扫描范围内未见生产渲染、动态字符串／生成代码／跨项目运行时使用仍未知的旧表单；业务日志链核页面、视图、行与详情浮层的职责及键盘入口。其它任务沿当前对象用途与真实调用选择，不默认套用历史台账或上述专属检查；截图相似不能替代这些依据。资产选择沿用项目组件、样式与交互语义；组合保留已有状态和可达操作，读改动两侧防止删掉合法分支。这里的三选一是资产判断，既有 Map 的 `action` 字段及其要求仍照上文记录。
 
-**未知与缺失**：查不到的用途、消费者、合法配法或来源写 `unknown`／`unavailable`，附原因、已查范围与应补证的对象 owner；不能推成零消费者、允许删除或已批准复用。台账缺任一链的资产语义时交回台账作者，已有可定位部分继续如实记录；精确 props/API 与 token/CSS 数值回各自原源。
+**未知与缺失**：查不到的用途、消费者、合法配法或来源写 `unknown`／`unavailable`，附原因、已查范围与应补证的对象 owner；不能推成零消费者、允许删除或已批准复用。未有当前对象清单或清单缺资产语义时，记具体缺项、提供者与影响，交回原作者；已有可定位部分继续如实记录；精确 props/API 与 token/CSS 数值回各自原源。
 
-**来源与偏离**：对象依据只取当前任务 P1 台账及其原文引用。概念参考分别来自 [better-ui](https://github.com/vaferkhanom/Website-skills/blob/24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e/better-ui/SKILL.md) 的既有组件与视觉语汇保留、[better-accessibility](https://github.com/vaferkhanom/Website-skills/blob/24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e/better-accessibility/SKILL.md) 的语义与键盘操作、[interface-review](https://github.com/vaferkhanom/Website-skills/blob/24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e/interface-review/SKILL.md) 的消费者范围与删除侧读回、[vercel-composition-patterns](https://github.com/vaferkhanom/Website-skills/blob/24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e/vercel-composition-patterns/SKILL.md) 的按职责组合。该 commit 仅标本次可读镜像坐标，历史采用绑定与完整许可原件未取得，维持原缺口；本段原创表述，不复制其核心段落。C03 当时的 React/Next 参考是21行派生摘要，不视为完整上游；摘要仅保存在源仓历史记录中，不随技能包提供，历史身份见随包 [UPSTREAM](upstream/react-best-practices/UPSTREAM.md)。当前固定源见下节。该 C03 概念段的偏离是不写像素阈值、token 数值或精确 API，不将镜像整包并入该段、不新增检查器；资产检查不能冒充浏览器、可访问性或工程验收通过。C06 只读引用本段资产输入，语义变更交回本卡 owner 另立卡。
+**来源与偏离**：上述两链历史对象依据取原 C03 的 P1 台账及其原文引用；当前任务对象沿其具名清单与真实源，不移用历史私有路径。概念参考分别来自 [better-ui](https://github.com/vaferkhanom/Website-skills/blob/24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e/better-ui/SKILL.md) 的既有组件与视觉语汇保留、[better-accessibility](https://github.com/vaferkhanom/Website-skills/blob/24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e/better-accessibility/SKILL.md) 的语义与键盘操作、[interface-review](https://github.com/vaferkhanom/Website-skills/blob/24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e/interface-review/SKILL.md) 的消费者范围与删除侧读回、[vercel-composition-patterns](https://github.com/vaferkhanom/Website-skills/blob/24f2b173f84bcf661d8e912dcbfb83d5fdf73d4e/vercel-composition-patterns/SKILL.md) 的按职责组合。该 commit 仅标本次可读镜像坐标，历史采用绑定与完整许可原件未取得，维持原缺口；本段原创表述，不复制其核心段落。C03 当时的 React/Next 参考是21行派生摘要，不视为完整上游；摘要仅保存在源仓历史记录中，不随技能包提供，历史身份见随包 [UPSTREAM](upstream/react-best-practices/UPSTREAM.md)。当前固定源见下节。该 C03 概念段的偏离是不写像素阈值、token 数值或精确 API，不将镜像整包并入该段、不新增检查器；资产检查不能冒充浏览器、可访问性或工程验收通过。C06 只读引用本段资产输入，语义变更交回本卡 owner 另立卡。
 
 ## 按需查阅界面规则
 

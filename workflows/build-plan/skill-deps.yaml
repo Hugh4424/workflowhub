@@ -48,6 +48,9 @@ skills:
   - name: frontend-prototype-render
     path: skills/frontend-prototype-render/SKILL.md
     trigger: ui_scope_actual_prototype_preview
+  - name: ui-copy-discipline
+    path: skills/ui-copy-discipline/SKILL.md
+    trigger: ui_scope_prototype_generation_and_design_review
   - name: plan-design-review
     path: skills/plan-design-review/SKILL.md
     trigger: ui_scope_design_lens_in_merged_review
@@ -58,6 +61,19 @@ skills:
     path: skills/design-source-extraction/SKILL.md
     trigger: ui_scope_readable_design_source_extraction
 
+  # workflows/build-plan/SKILL.md#step-conditional-ui-readiness -> skills/project-norm-init/SKILL.md#本地整包怎样读取：七UI方法与四playbook方法。
+  - name: design-tokens
+    path: skills/external/design-tokens/SKILL.md
+    bundle: skills/external/design-tokens/skill-bundle.json
+    trigger: ui_scope_token_norm_preparation_or_review
+  - name: ui-designer
+    path: skills/external/ui-designer/design-brief/SKILL.md
+    bundle: skills/external/ui-designer/skill-bundle.json
+    trigger: ui_scope
+  - name: playbook
+    path: skills/external/playbook/00-ux-spec-skill.md
+    bundle: skills/external/playbook/skill-bundle.json
+    trigger: ui_scope
 runtime_capabilities:
   - id: node
     kind: cli

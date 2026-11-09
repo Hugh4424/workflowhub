@@ -1212,6 +1212,32 @@ skills:
     update_policy: 四owner与原窄接口/五类原源一起审查；替代完整承接且caller/bundle迁接后同批退役，历史delta不删覆；版本不自动升级。
 
 
+  - name: ui-copy-discipline
+    path: skills/ui-copy-discipline/SKILL.md
+    local_version: 1.0.0
+    status: native
+    standalone: true
+    metrics_enabled: true
+    purpose: 单一用户文案原文与四消费者/首次使用核对
+    used_by_stages: [build-plan, build-code]
+    upstream: []
+    local_changes: owner=T003方法维护者；consumer=frontend-prototype-render、plan-design-review及后续UI作者；实际输入/产物和缺口留当前任务原件；无新增stage或许可链。
+    dependency_closure: []
+    update_policy: 当前消费者合同变化时由原owner手工对比；无消费者且经独立验证替代完整承接后删除。
+
+  - name: figma-make-prompt
+    path: skills/figma-make-prompt/SKILL.md
+    local_version: 1.0.0
+    status: native
+    standalone: true
+    metrics_enabled: true
+    purpose: 真实业务输入到十项完整提示词及下游消费
+    used_by_stages: [build-plan, build-code]
+    upstream: []
+    local_changes: owner=T003方法维护者；consumer=frontend-prototype-render、plan-design-review及后续UI作者；实际输入/产物和缺口留当前任务原件；无新增stage或许可链。
+    dependency_closure: ["skills/ui-copy-discipline"]
+    update_policy: 当前消费者合同变化时由原owner手工对比；无消费者且经独立验证替代完整承接后删除。
+
 capability_decisions:
   - name: n1-observability-and-instrumentation
     status: absorbed
@@ -1329,16 +1355,18 @@ capability_decisions:
     update_policy: 用户本人（skills registry维护者，decision-log U-024）在采用前、上游变化或维护计划到期时比对该包repo/files固定/当前树path/size/sha256及git ls-remote；查询时点未发现更新，提交历史不可判定，失败保持unknown/unavailable、不报无更新，不自动追HEAD；当前HTTP/refs原件见quality/evidence/2026-10-24-138-p1-current-update-check-supplement.md；原quality/evidence/2026-10-24-108-external-update-check.md保留历史缺口，不覆盖
   - name: design-tokens
     status: absorbed
+    path: skills/external/design-tokens/SKILL.md
     purpose: 离线读取视觉token组织方法，真实值仍由项目原owner负责
     design_idea: 单文件方法保原字节，不复制项目token值，不强双主题或默认断点
     used_by_stages: [build-plan, build-code]
     local_path: skills/external/design-tokens
+    dependency_closure: ["skills/external/design-tokens/LICENSE"]
     upstream:
       - github_url: https://github.com/julianoczkowski/designer-skills
         path: design-tokens/SKILL.md
         commit: c259656c76d9758d7ead46b0d2f125cbe84f8665
         license: Apache-2.0
-    local_changes: 原字节无改动，1文件7067 bytes；原根LICENSE全文及来源通知保留在skills/external/README.md。ModelScope ui-designer包装仅交叉核对，不作第二active来源。consumer为project-norm-init视觉owner与build-plan规范来源读者；替代该方法在线字节读取，P2切入口；全部reader获批迁出后由用户维护者统一退役副本与登记。
+    local_changes: 原字节无改动，1文件7067 bytes；原根LICENSE全文及来源通知保留在skills/external/README.md；本次按该归档原字节物化同目录LICENSE并加现格式bundle供发行，不改历史单文件采用/权利事实。ModelScope ui-designer包装仅交叉核对，不作第二active来源。consumer为project-norm-init视觉owner、build-plan规范来源读者与build-code的UI token规范准备/复核reader；替代该方法在线字节读取，P2切入口；全部reader获批迁出后由用户维护者统一退役副本与登记。
     update_policy: 用户本人（skills registry维护者，decision-log U-024）在采用前、上游变化或维护计划到期时比较GitHub固定commit/tree/raw与当前git refs及所选文件；查询时点未发现更新，失败保持unknown/unavailable、不报无更新，不自动追HEAD；当前HTTP/refs原件见quality/evidence/2026-10-24-138-p1-current-update-check-supplement.md；原quality/evidence/2026-10-24-108-external-update-check.md保留历史缺口，不覆盖
   - name: superpowers-test-driven-development
     status: absorbed
@@ -2946,30 +2974,8 @@ capability_decisions:
     dependency_closure: []
     update_policy: 维护者点名时按固定skill_url与真实采用范围比较；不自动追HEAD。取得许可及历史原件后分别核当前坐标、历史绑定与权利；经独立审查的替代方法承接全部消费者且无正文引用后，由原owner删除本条并保历史原件。
 
-  - name: ui-copy-discipline
-    path: skills/ui-copy-discipline/SKILL.md
-    local_version: 1.0.0
-    status: native
-    standalone: true
-    metrics_enabled: true
-    purpose: 单一用户文案原文与四消费者/首次使用核对
-    used_by_stages: [build-plan, build-code]
-    upstream: []
-    local_changes: owner=T003方法维护者；consumer=frontend-prototype-render、plan-design-review及后续UI作者；实际输入/产物和缺口留当前任务原件；无新增stage或许可链。
-    dependency_closure: []
-    update_policy: 当前消费者合同变化时由原owner手工对比；无消费者且经独立验证替代完整承接后删除。
-  - name: figma-make-prompt
-    path: skills/figma-make-prompt/SKILL.md
-    local_version: 1.0.0
-    status: native
-    standalone: true
-    metrics_enabled: true
-    purpose: 真实业务输入到十项完整提示词及下游消费
-    used_by_stages: [build-plan, build-code]
-    upstream: []
-    local_changes: owner=T003方法维护者；consumer=frontend-prototype-render、plan-design-review及后续UI作者；实际输入/产物和缺口留当前任务原件；无新增stage或许可链。
-    dependency_closure: ["skills/ui-copy-discipline"]
-    update_policy: 当前消费者合同变化时由原owner手工对比；无消费者且经独立验证替代完整承接后删除。
+
+
   - name: c05-ui-designer-design-brief
     path: skills/external/ui-designer/design-brief/SKILL.md
     local_version: 1.0.0
@@ -3009,10 +3015,10 @@ capability_decisions:
   - name: c05-ui-designer-design-tokens
     path: skills/external/ui-designer/design-tokens/SKILL.md
     local_version: 1.0.0
-    status: absorbed
+    status: watch
     standalone: false
     metrics_enabled: false
-    purpose: 已核许可的局部方法采用；本地适配保原文并注明覆盖
+    purpose: 仅交叉核对固定包装；active token方法唯一归design-tokens，不作第二来源
     used_by_stages: [build-plan, build-code]
     upstream:
       - github_url: https://modelscope.cn/skills/WenjiaWang/ui-designer

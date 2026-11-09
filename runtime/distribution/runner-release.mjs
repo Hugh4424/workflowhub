@@ -3,6 +3,8 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
+import { WORKFLOW_STAGES } from "../stage/stage-registry.mjs";
+
 import { assertRunnerCompatibility, createRunnerContract } from "../interface/runner-contract.mjs";
 import { validateSkillBundleRelease } from "./skill-bundle-release.mjs";
 
@@ -60,6 +62,11 @@ function addStaticDependencies(root, locators) {
 // static import discovery cannot see them.
 const RUNNER_ENTRYPOINTS = Object.freeze([
   "tools/cli/stage-runtime.mjs",
+  "tools/cli/check-stage-steps.mjs",
+  "tools/cli/run-checks.mjs",
+  "tools/cli/check-acceptance-object.mjs",
+  // build-code reads this existing module as its acceptance-result vocabulary.
+  "runtime/evidence/acceptance-evidence-validator.mjs",
   "tools/cli/task-bootstrap.mjs",
   "tools/cli/task-close.mjs",
   // wh-review imports the authenticated TaskHandle/Workspace runtime. Keep
@@ -82,13 +89,33 @@ const RUNNER_SCHEMA_DEPENDENCIES = Object.freeze([
 ]);
 
 function collectRunnerReleaseFiles(root) {
+  const flows = JSON.parse(fs.readFileSync(path.join(root, "workflows/make-decision/steps.json"), "utf8")).flows ?? {};
+  const flowData = Object.entries(flows).map(([track, flow]) => {
+    const locator = typeof flow === "string" ? flow : flow?.steps;
+    // Match the existing checker owner and contained relative release locators.
+    // Reject before copying any file, including paths that normalize outside root.
+    if (typeof locator !== "string" || path.isAbsolute(locator) || locator.includes("\\")
+        || /^[A-Za-z]:/.test(locator) || locator.split("/").some(part => part === "." || part === "..")
+        || !locator.startsWith(`workflows/make-decision/flows/${track}/`)) {
+      throw new Error(`runner flow data path is invalid: ${locator}`);
+    }
+    const source = fs.realpathSync(path.join(root, locator));
+    if (!source.startsWith(`${root}${path.sep}`)) throw new Error(`runner flow data path is invalid: ${locator}`);
+    return locator;
+  });
   const locators = new Set([
     "AGENTS.md",
     "CONSTITUTION.md",
+    // build-code/wh-review callers read this shared execution and evidence contract.
+    "docs/standard-workflow.md",
     "package.json",
     "package-lock.json",
       ...RUNNER_ENTRYPOINTS,
     ...RUNNER_SCHEMA_DEPENDENCIES,
+    // The installed checker reads stage definitions and make-decision track data
+    // by filename; these are execution inputs, not JavaScript imports.
+    ...WORKFLOW_STAGES.map(stage => `workflows/${stage}/steps.json`),
+    ...flowData,
     ...filesUnder(root, "contracts", (locator) => locator.endsWith(".json")),
     ...filesUnder(root, "config", (locator) => /\.(?:ya?ml|json)$/.test(locator)),
   ]);
@@ -160,7 +187,22 @@ export function installRunnerRelease({ releaseRoot, skillBundleRoot, env, run = 
   const bundleRoot = fs.realpathSync(skillBundleRoot);
   const skillBundleManifest = validateSkillBundleRelease({ releaseRoot: bundleRoot });
   const manifest = validateRunnerRelease({ releaseRoot: root, skillBundleManifest });
-  for (const entry of skillBundleManifest.files) {
+  const bundleManifestTarget = path.join(root, "skill-bundle.json");
+  const bundleManifestBytes = fs.readFileSync(path.join(bundleRoot, "skill-bundle.json"));
+  const checkBundleManifestTarget = (allowMissing) => {
+    const stat = fs.lstatSync(bundleManifestTarget, { throwIfNoEntry: false });
+    if (!stat && allowMissing) return;
+    if (!stat || !stat.isFile() || stat.isSymbolicLink()) {
+      throw new Error("installed Skill Bundle manifest is missing or unsafe");
+    }
+    if (!fs.readFileSync(bundleManifestTarget).equals(bundleManifestBytes)) {
+      throw new Error("runner and Skill Bundle disagree on shared file: skill-bundle.json");
+    }
+  };
+  checkBundleManifestTarget(true);
+  // Keep the validated Bundle manifest beside its files: ordinary installed
+  // callers resolve the declared method closure from this single package root.
+  for (const entry of [...skillBundleManifest.files, { path: "skill-bundle.json" }]) {
     const source = path.join(bundleRoot, entry.path);
     const target = path.join(root, entry.path);
     fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -181,6 +223,7 @@ export function installRunnerRelease({ releaseRoot, skillBundleRoot, env, run = 
   // Recheck the current ordinary filename/compatibility contract after install;
   // the retired hash-manifest AJV schema is not an installation dependency.
   validateRunnerRelease({ releaseRoot: root, skillBundleManifest });
+  checkBundleManifestTarget(false);
   fs.writeFileSync(path.join(root, ".gitignore"), "node_modules/\n", { flag: "wx" });
   const gitCommands = [
     ["init", "-q"],

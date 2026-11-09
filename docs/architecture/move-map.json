@@ -1962,17 +1962,18 @@
       "destination": "runtime/distribution/skill-bundle-release.mjs",
       "status": "retain",
       "role": "production",
-      "responsibility": "技能 bundle 发布（去双层 hash 后）由本文件承接",
+      "responsibility": "技能 bundle 发布（去双层 hash 后）由本文件承接；C09 P2显式family声明沿唯一resolver验证身份，再按同一bundle目录汇集成员，发布/重建验证承接安装端。；localPayload按dependency.path读取原catalog skills/capability_decisions真实登记及其既有dependency_closure，不给无登记native或family豁免。",
       "owner": "B5/P6 / MT-1-017",
-      "consumer": "当前直接模块消费者：runtime/distribution/runner-release.mjs, tests/contract/review-input-bounds-portability.test.mjs, tests/integration/runner-clean-install.test.mjs；N11内部local payload新增外仓消费者：ModelTest build-us07-workflowhub-task.mjs/materializeStageWorkflow，经冻结distribution root调用现resolvePortableStageFiles读取各侧真实source root，不改变默认公开release枚举/政策，不授予外发或host执行权限",
+      "consumer": "当前直接模块消费者：runtime/distribution/runner-release.mjs, tests/contract/review-input-bounds-portability.test.mjs, tests/integration/runner-clean-install.test.mjs；N11内部local payload新增外仓消费者：ModelTest build-us07-workflowhub-task.mjs/materializeStageWorkflow，经冻结distribution root调用现resolvePortableStageFiles读取各侧真实source root，不改变默认公开release枚举/政策，不授予外发或host执行权限；C09显式family contract测试调用真实buildSkillBundleRelease/validateSkillBundleRelease与runner安装端，未增加发现/registry/兼容桥。",
       "module_consumers": [
         "runtime/distribution/runner-release.mjs",
         "tests/contract/review-input-bounds-portability.test.mjs",
-        "tests/integration/runner-clean-install.test.mjs"
+        "tests/integration/runner-clean-install.test.mjs",
+        "tests/contract/c09-family-distribution.test.mjs"
       ],
       "named_data_readers": [],
       "delete_condition": "remove portable collection when the portable workflow registry consumer is retired",
-      "retention_basis": "MT-1-017 / NARROW"
+      "retention_basis": "MT-1-017 / NARROW；原#10发行缺口的窄根因修复，原公开枚举不变；替代需承接当前publisher/validator/installer及local payload后原位迁接。"
     },
     {
       "source": "runtime/evidence/acceptance-evidence-validator.mjs",
@@ -2979,6 +2980,25 @@
       "retention_basis": "既有保留生产路径；本次仅归位说明"
     },
     {
+      "source": "skills/anysearch/gitignore-template",
+      "destination": "skills/anysearch/gitignore-template",
+      "status": "add",
+      "role": "production",
+      "responsibility": "AnySearch portable .gitignore规则的唯一字节源；bundle映射在发布输出为skills/anysearch/.gitignore，root .gitignore仅镜像本地runtime.conf/cache保护并由契约测试核对。",
+      "owner": "skills/anysearch维护者；C09 P2 item10维护初始映射",
+      "consumer": "local-skill-resolver.mjs读取npm安装后仍存在的源；skill-bundle-release.mjs用同一字节生成.gitignore逻辑目标。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs",
+        "runtime/distribution/skill-bundle-release.mjs"
+      ],
+      "named_data_readers": [
+        "skills/anysearch/skill-bundle.json",
+        "tests/contract/c09-family-distribution.test.mjs"
+      ],
+      "delete_condition": "AnySearch不再需要.gitignore逻辑输出，或经独立验证的可安装单一源完整承接并由AnySearch维护者决定退役后删除。",
+      "retention_basis": "C09 P2 item10 v4证据确认tarball成员随npm install消失；该普通文件保留原.gitignore字节且不靠安装脚本。"
+    },
+    {
       "source": "skills/anysearch/scripts/anysearch_cli.js",
       "destination": "skills/anysearch/scripts/anysearch_cli.js",
       "status": "retain",
@@ -3074,13 +3094,18 @@
       "destination": "skills/anysearch/skill-bundle.json",
       "status": "retain",
       "role": "production",
-      "responsibility": "既有模块／资源职责；不从登记新增能力",
-      "owner": "原路径维护 owner；P7 仅登记现职责",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
-      "module_consumers": [],
-      "named_data_readers": [],
-      "delete_condition": "原保留职责已退役且全部当前真实消费者改接后删除；不因本表产生许可或未来消费",
-      "retention_basis": "既有保留生产路径；本次仅归位说明"
+      "responsibility": "AnySearch资源闭包；path声明npm可安装的源路径，destination声明发布时逻辑输出路径，缺省path到path。",
+      "owner": "skills/anysearch维护者；C09 P2 item10维护该映射",
+      "consumer": "local-skill-resolver.mjs校验安装源；skill-bundle-release.mjs按destination生成逻辑输出并归一化发布manifest。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs",
+        "runtime/distribution/skill-bundle-release.mjs"
+      ],
+      "named_data_readers": [
+        "tools/cli/check-skill-consistency.mjs"
+      ],
+      "delete_condition": "AnySearch声明资源由经独立验证的替代闭包完整承接、所有上述消费者改接且AnySearch维护者决定退役后删除。",
+      "retention_basis": "C09 P2 item10：npm install会剥除tarball中的.gitignore；显式源路径到逻辑路径映射保留同一内容，不依赖postinstall。"
     },
     {
       "source": "skills/architect-code-review/SKILL.md",
@@ -5161,9 +5186,9 @@
       "destination": "workflows/build-code/skill-deps.yaml",
       "status": "retain",
       "role": "production",
-      "responsibility": "同 125",
+      "responsibility": "同 125；显式两family依赖承接当前SKILL经project-norm-init本地整包节读取的11方法，非新方法/新schema。",
       "owner": "B2/P3 / MT-3-131",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
+      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor；stage-skill-runtime实际按manifest解析，现publisher与localPayload沿相同完整bundle承接。",
       "module_consumers": [],
       "named_data_readers": [
         ".planning/2026-09-17-build-plan-cost-baseline-20260917/build-code-P1-phase-card.md"
@@ -5246,9 +5271,9 @@
       "destination": "workflows/build-plan/skill-deps.yaml",
       "status": "retain",
       "role": "production",
-      "responsibility": "同 125",
+      "responsibility": "同 125；显式两family依赖承接当前SKILL经project-norm-init本地整包节读取的11方法，非新方法/新schema。",
       "owner": "B2/P3 / MT-3-128",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
+      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor；stage-skill-runtime实际按manifest解析，现publisher与localPayload沿相同完整bundle承接。",
       "module_consumers": [],
       "named_data_readers": [
         "tests/contract/ui-skill-contract.test.mjs"
@@ -6588,9 +6613,9 @@
       "destination": "skills/isolated-browser-qa/scripts/browser-qa-session.mjs",
       "status": "retain",
       "role": "production",
-      "responsibility": "N3 P7已实现可取消隔离网关生命周期/finally，替代手工生命周期；私有helper，不新增公共runtime命令。",
+      "responsibility": "N3 P7已实现可取消隔离网关生命周期/finally，替代手工生命周期；私有helper，不新增公共runtime命令。；C09 P4 T016仅承接已授权owned Ego page的现审计采集，不探测endpoint、不增代理或审计器；原raw-CDP职责保留，不能以新route冒旧route已测。；现registered read仅对INPUT补input_type只读事实，供同collector安全fill判断，不新增注册名或eval入口。",
       "owner": "isolated-browser-qa / N3 P7 T007",
-      "consumer": "现browser-qa-context.sh --run exec本helper；runBrowserQa由冻结ticket test、skill-contract及真实owned Chrome场景消费。",
+      "consumer": "现browser-qa-context.sh --run exec本helper；runBrowserQa由冻结ticket test、skill-contract及真实owned Chrome场景消费。；当前run-page-audit模块调用共享collect-console的owned-page接缝，复用注册有限viewport/navigation只读事实；新行为测试tests/contract/c09-owned-ego-page-audit.test.mjs证边界。",
       "module_consumers": [
         "skills/isolated-browser-qa/scripts/browser-qa-context.sh"
       ],
@@ -8189,15 +8214,16 @@
       "destination": "skills/design-source-extraction/scripts/collect-design-source.mjs",
       "status": "retain",
       "role": "production",
-      "responsibility": "P3真实冻结清单采集与唯一产物validator/private CLI；复用P2固定注册读入口，不提供任意eval。",
+      "responsibility": "P3真实冻结清单采集与唯一产物validator/private CLI；复用P2固定注册读入口，不提供任意eval。；C09 T012原52搜索实例消费goto后受控fill数据输入，显式SDK填INPUT/TEXTAREA，既有click/固定read/覆盖/probe合同保留，不开任意脚本或协议。；终末迟到P4仅原egoContext从原plan按字节绑定读取fill动作，敏感type拒绝、argv不内联value、安全错误码，不加公共CLI/API。",
       "owner": "design-source-extraction方法维护者（当前维护者用户）",
-      "consumer": "build-plan设计准备、build-code实施、build-code终末独立验收的UI且合法可读设计源reader；具体输入/产物/错误沿原技能和各当前Phase，不新增public入口。",
+      "consumer": "build-plan设计准备、build-code实施、build-code终末独立验收的UI且合法可读设计源reader；具体输入/产物/错误沿原技能和各当前Phase，不新增public入口。；P4 T012真实搜索/无匹配实例，T013读取逐原ID多ref与缺口，T014读本次已确认原型；未将局部coverage冒N52整体。；内部egoContext导出仅供追加受控transport测试c09-terminal-input-boundaries，生产唯一caller仍本模块runCli。",
       "module_consumers": [
         "tests/contract/design-source-extraction-collect.test.mjs"
       ],
       "named_data_readers": [
         "workflows/build-plan/SKILL.md",
-        "workflows/build-code/SKILL.md"
+        "workflows/build-code/SKILL.md",
+        "tests/contract/c09-design-source-actions.test.mjs"
       ],
       "delete_condition": "经独立审查的替代完整承接真实consumer、迁接现deps/bundle且无当前消费者后由原owner同批退役；历史task原件不删覆。",
       "retention_basis": "C04P6T011/T012登记此前P1-P5实际交付，唯一bundle承接现resolver；不是质量、许可或方法实际执行的证明。style-ref-gen未采用，版本/归档/权利分开；不建立替代selector或第二权威。"
@@ -8239,9 +8265,9 @@
       "destination": "skills/design-source-extraction/skill-bundle.json",
       "status": "retain",
       "role": "production",
-      "responsibility": "既有唯一bundle声明SKILL/采集器/规范对齐/隔离消费四文件；不含task原始数据或复制外部内容。",
+      "responsibility": "既有唯一bundle声明SKILL、采集器、规范对齐、隔离消费、采集plan说明与plan样例六文件；不含task原始数据或复制外部内容。",
       "owner": "design-source-extraction方法维护者（当前维护者用户）",
-      "consumer": "runtime/adapters/local-skill-resolver.mjs与runtime/distribution/skill-bundle-release.mjs按三stage deps读取当前四file包。",
+      "consumer": "runtime/adapters/local-skill-resolver.mjs与runtime/distribution/skill-bundle-release.mjs按现有stage deps读取当前六文件包；不代正式采集或family安装证明。",
       "module_consumers": [],
       "named_data_readers": [
         "runtime/adapters/local-skill-resolver.mjs",
@@ -8822,8 +8848,12 @@
       "role": "production",
       "responsibility": "已选方法真实资源清单/原许可证与来源通知；非安装或质量事实",
       "owner": "P3/T003方法与采用维护者",
-      "consumer": "后续build-plan/原型/独立设计审查作者从原入口读取当前完整输入，产物与缺口留本任务原件；资源清单不代实际安装",
-      "module_consumers": [],
+      "consumer": "后续build-plan/原型/独立设计审查作者从原入口读取当前完整输入，产物与缺口留本任务原件；资源清单不代实际安装；两正常build-plan/build-code manifest显式读取，既有发行器发布/localPayload及安装端按同一成员闭包承接，不改变方法采用/权利事实。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs",
+        "runtime/distribution/skill-bundle-release.mjs",
+        "runtime/stage/stage-skill-runtime.mjs"
+      ],
       "named_data_readers": [
         "skills/external/README.md",
         "skills/catalog.yaml"
@@ -8838,8 +8868,12 @@
       "role": "production",
       "responsibility": "已选方法真实资源清单/原许可证与来源通知；非安装或质量事实",
       "owner": "P3/T003方法与采用维护者",
-      "consumer": "后续build-plan/原型/独立设计审查作者从原入口读取当前完整输入，产物与缺口留本任务原件；资源清单不代实际安装",
-      "module_consumers": [],
+      "consumer": "后续build-plan/原型/独立设计审查作者从原入口读取当前完整输入，产物与缺口留本任务原件；资源清单不代实际安装；两正常build-plan/build-code manifest显式读取，既有发行器发布/localPayload及安装端按同一成员闭包承接，不改变方法采用/权利事实。",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs",
+        "runtime/distribution/skill-bundle-release.mjs",
+        "runtime/stage/stage-skill-runtime.mjs"
+      ],
       "named_data_readers": [
         "skills/external/README.md",
         "skills/catalog.yaml"
@@ -9281,6 +9315,384 @@
       ],
       "delete_condition": "技能加载职责被另一已登记机制完整承接后删除；本表不产生许可或未来消费。",
       "retention_basis": "新技能按既有 skills/<name>/skill-bundle.json 登记方式加入；不新增加载器或第二权威。"
+    },
+    {
+      "source": "skills/frontend-testing/scripts/check-norm-consumption.mjs",
+      "destination": "skills/frontend-testing/scripts/check-norm-consumption.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "当前页面审计具名产物：采集/编排/结构或引用身份检查，事实不代独立页面裁决",
+      "owner": "frontend-testing方法owner",
+      "consumer": "skills/frontend-testing/references/page-audit.md → run-page-audit/具名检查器；编排器现有采集器调用",
+      "module_consumers": [
+        "skills/frontend-testing/scripts/run-page-audit.mjs"
+      ],
+      "named_data_readers": [
+        "skills/frontend-testing/references/page-audit.md"
+      ],
+      "delete_condition": "唯一职责由经独立验证的现有consumer承接且原引用迁移后由原owner删除；无永久兼容桥",
+      "retention_basis": "当前C09 P2第3/11项修复授权；真实consumer与文件已读，新增模板在写入前登记"
+    },
+    {
+      "source": "skills/frontend-testing/scripts/check-page-audit.mjs",
+      "destination": "skills/frontend-testing/scripts/check-page-audit.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "当前页面审计具名产物：采集/编排/结构或引用身份检查，事实不代独立页面裁决",
+      "owner": "frontend-testing方法owner",
+      "consumer": "skills/frontend-testing/references/page-audit.md → run-page-audit/具名检查器；编排器现有采集器调用",
+      "module_consumers": [
+        "skills/frontend-testing/scripts/run-page-audit.mjs"
+      ],
+      "named_data_readers": [
+        "skills/frontend-testing/references/page-audit.md"
+      ],
+      "delete_condition": "唯一职责由经独立验证的现有consumer承接且原引用迁移后由原owner删除；无永久兼容桥",
+      "retention_basis": "当前C09 P2第3/11项修复授权；真实consumer与文件已读，新增模板在写入前登记"
+    },
+    {
+      "source": "skills/frontend-testing/scripts/check-report-quotes.mjs",
+      "destination": "skills/frontend-testing/scripts/check-report-quotes.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "当前页面审计具名产物：采集/编排/结构或引用身份检查，事实不代独立页面裁决",
+      "owner": "frontend-testing方法owner",
+      "consumer": "页面审计作者按skills/frontend-testing/references/page-audit.md显式CLI读取真实报告/材料与期望hash，核引用限制或身份绑定；run-page-audit不调用本检查器。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/frontend-testing/references/page-audit.md"
+      ],
+      "delete_condition": "唯一职责由经独立验证的现有consumer承接且原引用迁移后由原owner删除；无永久兼容桥",
+      "retention_basis": "当前C09 P2第3/11项修复授权；真实consumer与文件已读，新增模板在写入前登记"
+    },
+    {
+      "source": "skills/frontend-testing/scripts/check-version-binding.mjs",
+      "destination": "skills/frontend-testing/scripts/check-version-binding.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "当前页面审计具名产物：采集/编排/结构或引用身份检查，事实不代独立页面裁决",
+      "owner": "frontend-testing方法owner",
+      "consumer": "页面审计作者按skills/frontend-testing/references/page-audit.md显式CLI读取真实报告/材料与期望hash，核引用限制或身份绑定；run-page-audit不调用本检查器。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/frontend-testing/references/page-audit.md"
+      ],
+      "delete_condition": "唯一职责由经独立验证的现有consumer承接且原引用迁移后由原owner删除；无永久兼容桥",
+      "retention_basis": "当前C09 P2第3/11项修复授权；真实consumer与文件已读，新增模板在写入前登记"
+    },
+    {
+      "source": "skills/frontend-testing/scripts/collect-a11y.mjs",
+      "destination": "skills/frontend-testing/scripts/collect-a11y.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "当前页面审计具名产物：采集/编排/结构或引用身份检查，事实不代独立页面裁决",
+      "owner": "frontend-testing方法owner",
+      "consumer": "skills/frontend-testing/references/page-audit.md → run-page-audit/具名检查器；编排器现有采集器调用",
+      "module_consumers": [
+        "skills/frontend-testing/scripts/run-page-audit.mjs"
+      ],
+      "named_data_readers": [
+        "skills/frontend-testing/references/page-audit.md"
+      ],
+      "delete_condition": "唯一职责由经独立验证的现有consumer承接且原引用迁移后由原owner删除；无永久兼容桥",
+      "retention_basis": "当前C09 P2第3/11项修复授权；真实consumer与文件已读，新增模板在写入前登记"
+    },
+    {
+      "source": "skills/frontend-testing/scripts/collect-console.mjs",
+      "destination": "skills/frontend-testing/scripts/collect-console.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "当前页面审计具名产物：采集/编排/结构或引用身份检查，事实不代独立页面裁决；C09 P4 T016仅承接已授权owned Ego page的现审计采集，不探测endpoint、不增代理或审计器；原raw-CDP职责保留，不能以新route冒旧route已测。",
+      "owner": "frontend-testing方法owner",
+      "consumer": "skills/frontend-testing/references/page-audit.md → run-page-audit/具名检查器；编排器现有采集器调用；当前run-page-audit模块调用共享collect-console的owned-page接缝，复用注册有限viewport/navigation只读事实；新行为测试tests/contract/c09-owned-ego-page-audit.test.mjs证边界。",
+      "module_consumers": [
+        "skills/frontend-testing/scripts/run-page-audit.mjs"
+      ],
+      "named_data_readers": [
+        "skills/frontend-testing/references/page-audit.md"
+      ],
+      "delete_condition": "唯一职责由经独立验证的现有consumer承接且原引用迁移后由原owner删除；无永久兼容桥",
+      "retention_basis": "当前C09 P2第3/11项修复授权；真实consumer与文件已读，新增模板在写入前登记"
+    },
+    {
+      "source": "skills/frontend-testing/scripts/collect-network.mjs",
+      "destination": "skills/frontend-testing/scripts/collect-network.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "当前页面审计具名产物：采集/编排/结构或引用身份检查，事实不代独立页面裁决",
+      "owner": "frontend-testing方法owner",
+      "consumer": "skills/frontend-testing/references/page-audit.md → run-page-audit/具名检查器；编排器现有采集器调用",
+      "module_consumers": [
+        "skills/frontend-testing/scripts/run-page-audit.mjs"
+      ],
+      "named_data_readers": [
+        "skills/frontend-testing/references/page-audit.md"
+      ],
+      "delete_condition": "唯一职责由经独立验证的现有consumer承接且原引用迁移后由原owner删除；无永久兼容桥",
+      "retention_basis": "当前C09 P2第3/11项修复授权；真实consumer与文件已读，新增模板在写入前登记"
+    },
+    {
+      "source": "skills/frontend-testing/scripts/collect-overflow.mjs",
+      "destination": "skills/frontend-testing/scripts/collect-overflow.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "当前页面审计具名产物：采集/编排/结构或引用身份检查，事实不代独立页面裁决",
+      "owner": "frontend-testing方法owner",
+      "consumer": "skills/frontend-testing/references/page-audit.md → run-page-audit/具名检查器；编排器现有采集器调用",
+      "module_consumers": [
+        "skills/frontend-testing/scripts/run-page-audit.mjs"
+      ],
+      "named_data_readers": [
+        "skills/frontend-testing/references/page-audit.md"
+      ],
+      "delete_condition": "唯一职责由经独立验证的现有consumer承接且原引用迁移后由原owner删除；无永久兼容桥",
+      "retention_basis": "当前C09 P2第3/11项修复授权；真实consumer与文件已读，新增模板在写入前登记"
+    },
+    {
+      "source": "skills/frontend-testing/scripts/collect-perf.mjs",
+      "destination": "skills/frontend-testing/scripts/collect-perf.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "当前页面审计具名产物：采集/编排/结构或引用身份检查，事实不代独立页面裁决",
+      "owner": "frontend-testing方法owner",
+      "consumer": "skills/frontend-testing/references/page-audit.md → run-page-audit/具名检查器；编排器现有采集器调用",
+      "module_consumers": [
+        "skills/frontend-testing/scripts/run-page-audit.mjs"
+      ],
+      "named_data_readers": [
+        "skills/frontend-testing/references/page-audit.md"
+      ],
+      "delete_condition": "唯一职责由经独立验证的现有consumer承接且原引用迁移后由原owner删除；无永久兼容桥",
+      "retention_basis": "当前C09 P2第3/11项修复授权；真实consumer与文件已读，新增模板在写入前登记"
+    },
+    {
+      "source": "skills/frontend-testing/scripts/run-page-audit.mjs",
+      "destination": "skills/frontend-testing/scripts/run-page-audit.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "当前页面审计具名产物：采集/编排/结构或引用身份检查，事实不代独立页面裁决；C09 P4 T016仅承接已授权owned Ego page的现审计采集，不探测endpoint、不增代理或审计器；原raw-CDP职责保留，不能以新route冒旧route已测。",
+      "owner": "frontend-testing方法owner",
+      "consumer": "skills/frontend-testing/references/page-audit.md → run-page-audit/具名检查器；编排器现有采集器调用；当前run-page-audit模块调用共享collect-console的owned-page接缝，复用注册有限viewport/navigation只读事实；新行为测试tests/contract/c09-owned-ego-page-audit.test.mjs证边界。",
+      "module_consumers": [
+        "skills/frontend-testing/scripts/run-page-audit.mjs"
+      ],
+      "named_data_readers": [
+        "skills/frontend-testing/references/page-audit.md"
+      ],
+      "delete_condition": "唯一职责由经独立验证的现有consumer承接且原引用迁移后由原owner删除；无永久兼容桥",
+      "retention_basis": "当前C09 P2第3/11项修复授权；真实consumer与文件已读，新增模板在写入前登记"
+    },
+    {
+      "source": "skills/frontend-testing/references/page-audit.md",
+      "destination": "skills/frontend-testing/references/page-audit.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "当前页面审计具名产物：采集/编排/结构或引用身份检查，事实不代独立页面裁决",
+      "owner": "frontend-testing方法owner",
+      "consumer": "skills/frontend-testing/SKILL.md → references/page-audit.md；build-code页面验证caller",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/frontend-testing/references/page-audit.md"
+      ],
+      "delete_condition": "唯一职责由经独立验证的现有consumer承接且原引用迁移后由原owner删除；无永久兼容桥",
+      "retention_basis": "当前C09 P2第3/11项修复授权；真实consumer与文件已读，新增模板在写入前登记"
+    },
+    {
+      "source": "skills/design-source-extraction/references/collection-plan.md",
+      "destination": "skills/design-source-extraction/references/collection-plan.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "解释既有collector的真实plan输入与冻结/probe/freshness边界，不另造schema/validator",
+      "owner": "design-source-extraction方法owner",
+      "consumer": "workflows/build-plan与workflows/build-code作者按新指针构造plan，collect-design-source.mjs读取；模板只作形状例不代真实任务输入",
+      "module_consumers": [],
+      "named_data_readers": [
+        "workflows/build-plan/SKILL.md",
+        "workflows/build-code/SKILL.md"
+      ],
+      "delete_condition": "唯一职责由经独立验证的现有consumer承接且原引用迁移后由原owner删除；无永久兼容桥",
+      "retention_basis": "当前C09 P2第3/11项修复授权；真实consumer与文件已读，新增模板在写入前登记"
+    },
+    {
+      "source": "skills/design-source-extraction/templates/collection-plan.example.json",
+      "destination": "skills/design-source-extraction/templates/collection-plan.example.json",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "解释既有collector的真实plan输入与冻结/probe/freshness边界，不另造schema/validator",
+      "owner": "design-source-extraction方法owner",
+      "consumer": "workflows/build-plan与workflows/build-code作者按新指针构造plan，collect-design-source.mjs读取；模板只作形状例不代真实任务输入",
+      "module_consumers": [],
+      "named_data_readers": [
+        "workflows/build-plan/SKILL.md",
+        "workflows/build-code/SKILL.md"
+      ],
+      "delete_condition": "唯一职责由经独立验证的现有consumer承接且原引用迁移后由原owner删除；无永久兼容桥",
+      "retention_basis": "当前C09 P2第3/11项修复授权；真实consumer与文件已读，新增模板在写入前登记"
+    },
+    {
+      "source": "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/index.html",
+      "destination": "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/index.html",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "当前C09两页可运行原型入口；不承接NEW_COPY最终实现",
+      "owner": "当前C09 P4 T013设计执行者",
+      "consumer": "T013浏览器/独立八维审查/用户本次展示",
+      "module_consumers": [],
+      "named_data_readers": [
+        "T013浏览器/独立八维审查/用户本次展示"
+      ],
+      "delete_condition": "当前原型/本次真实用户答复与后续实现承接且历史证据责任明确后由原owner决定，不自动删除",
+      "retention_basis": "原P4 T013冻结四文件交付；只中间原型，不冒最终两页/业务链"
+    },
+    {
+      "source": "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/styles.css",
+      "destination": "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/styles.css",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "当前有稿深色布局与交互状态样式；不新增设计权威",
+      "owner": "当前C09 P4 T013设计执行者",
+      "consumer": "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/index.html",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/index.html"
+      ],
+      "delete_condition": "当前原型/本次真实用户答复与后续实现承接且历史证据责任明确后由原owner决定，不自动删除",
+      "retention_basis": "原P4 T013冻结四文件交付；只中间原型，不冒最终两页/业务链"
+    },
+    {
+      "source": "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/app.js",
+      "destination": "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/app.js",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "原生DOM两页与本地示例行为；无真实网络/业务写入",
+      "owner": "当前C09 P4 T013设计执行者",
+      "consumer": "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/index.html",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/index.html"
+      ],
+      "delete_condition": "当前原型/本次真实用户答复与后续实现承接且历史证据责任明确后由原owner决定，不自动删除",
+      "retention_basis": "原P4 T013冻结四文件交付；只中间原型，不冒最终两页/业务链"
+    },
+    {
+      "source": "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/README.md",
+      "destination": "specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/prototype/README.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "原型入口、消费/数据/验证边界交接",
+      "owner": "当前C09 P4 T013设计执行者",
+      "consumer": "T013独立审查者与T014实现者",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "当前原型/本次真实用户答复与后续实现承接且历史证据责任明确后由原owner决定，不自动删除",
+      "retention_basis": "原P4 T013冻结四文件交付；只中间原型，不冒最终两页/业务链"
+    },
+    {
+      "source": "tests/contract/c09-owned-ego-page-audit.test.mjs",
+      "destination": "tests/contract/c09-owned-ego-page-audit.test.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "C09 T016现run-page-audit已授权owned SDK page接缝的定向正反行为测试；替身非真实浏览器",
+      "owner": "frontend-testing方法owner / C09 P4唯一writer",
+      "consumer": "node --test按本文件执行，实际调用现runPageAudit；正常route与错身份/未ready/失控/多loader拒绝，不改原冻结测试",
+      "module_consumers": [
+        "skills/frontend-testing/scripts/run-page-audit.mjs"
+      ],
+      "named_data_readers": [],
+      "delete_condition": "该真实consumer职责经独立验证替代承接且旧接缝退役后由原owner删除；保原RED",
+      "retention_basis": "root本轮明确窄扩原T016能力；候选文件已读/private/tmp/c09-owned-ego-page-audit.test.mjs，现module caller/SDK guide真实读取，不新增公共命令或持久状态"
+    },
+    {
+      "source": "tests/contract/c09-terminal-owned-audit.test.mjs",
+      "destination": "tests/contract/c09-terminal-owned-audit.test.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "C09迟到P4 owned审计engine一致性/根范围/拒收原件/身份停止的追加未冻结行为测试，受控transport不冒真实浏览器",
+      "owner": "frontend-testing方法owner / C09唯一writer",
+      "consumer": "npx vitest run tests/contract/c09-terminal-owned-audit.test.mjs；直接调用runPageAudit/原validator，不改原Node专用冻结suite",
+      "module_consumers": [
+        "skills/frontend-testing/scripts/run-page-audit.mjs"
+      ],
+      "named_data_readers": [],
+      "delete_condition": "该审计职责被独立验证替代后由原owner退役；保原RED/失败原件",
+      "retention_basis": "终末014原1/2/3/5/7与root必要窄修授权；目标和153真实caller已读。首次写测试早于登记的执行偏差保真，此处承接现真实consumer，不倒称提前登记"
+    },
+    {
+      "source": "tests/contract/c09-terminal-input-boundaries.test.mjs",
+      "destination": "tests/contract/c09-terminal-input-boundaries.test.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "原有限fill输入/argv不留值/plan同字节、原型恢复标签与单一Node专用runner配置的追加行为测试；受控SDK/事件fixture非真实页面",
+      "owner": "C09原P4唯一writer / 原collector与prototype owner",
+      "consumer": "npx vitest run tests/contract/c09-terminal-input-boundaries.test.mjs；直接调用现egoContext/readPlan、原原型事件listener和现vitest config",
+      "module_consumers": [
+        "skills/design-source-extraction/scripts/collect-design-source.mjs"
+      ],
+      "named_data_readers": [
+        "vitest.config.mjs"
+      ],
+      "delete_condition": "对应实际consumer职责经独立验证替代后由owner退役；保原失败",
+      "retention_basis": "root终末必要窄修授权；完整private/tmp候选已读，现唯一runCli→egoContext及原Node --test回执048已核；egoContext导出仅内部测试接缝，非公共CLI/API"
+    },
+    {
+      "source": "skills/external/design-tokens/SKILL.md",
+      "destination": "skills/external/design-tokens/SKILL.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "原固定字节active token方法正文；不含目标项目token值，ui-designer包装仍只交叉核对",
+      "owner": "C01原方法采用/发行声明维护者",
+      "consumer": "两正常build-plan/build-code声明经现externalFamily resolver/publisher读取成员；project-norm-init视觉owner在UI token规范准备/复核时消费原active方法；现安装器按原Bundle清单承接",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs",
+        "runtime/distribution/skill-bundle-release.mjs",
+        "runtime/stage/stage-skill-runtime.mjs"
+      ],
+      "named_data_readers": [
+        "skills/project-norm-init/SKILL.md"
+      ],
+      "delete_condition": "对应真实consumer已由独立验证替代完整承接、原owner决定退役后才删对应文件/登记；原采用历史README/原件保留，不连带删除未承接规则",
+      "retention_basis": "原C01已入库active方法及当前用户个人研究持续授权；本次补原active发行接线与notice，不新增parser/schema/控制面或权利结论"
+    },
+    {
+      "source": "skills/external/design-tokens/skill-bundle.json",
+      "destination": "skills/external/design-tokens/skill-bundle.json",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "原active token正文与归档notice的现格式成员清单；非新安装/质量/权利结论",
+      "owner": "C01原方法采用/发行声明维护者",
+      "consumer": "两正常build-plan/build-code声明经现externalFamily resolver/publisher读取成员；project-norm-init视觉owner在UI token规范准备/复核时消费原active方法；现安装器按原Bundle清单承接",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs",
+        "runtime/distribution/skill-bundle-release.mjs",
+        "runtime/stage/stage-skill-runtime.mjs"
+      ],
+      "named_data_readers": [
+        "workflows/build-plan/skill-deps.yaml",
+        "workflows/build-code/skill-deps.yaml",
+        "skills/catalog.yaml"
+      ],
+      "delete_condition": "对应真实consumer已由独立验证替代完整承接、原owner决定退役后才删对应文件/登记；原采用历史README/原件保留，不连带删除未承接规则",
+      "retention_basis": "原C01已入库active方法及当前用户个人研究持续授权；本次补原active发行接线与notice，不新增parser/schema/控制面或权利结论"
+    },
+    {
+      "source": "skills/external/design-tokens/LICENSE",
+      "destination": "skills/external/design-tokens/LICENSE",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "从现归档README完整Apache正文与Copyright notice逐字物化的发行读取资产；不倒填历史独立文件或新增grant",
+      "owner": "C01原方法采用/发行声明维护者",
+      "consumer": "两正常build-plan/build-code声明经现externalFamily resolver/publisher读取成员；project-norm-init视觉owner在UI token规范准备/复核时消费原active方法；现安装器按原Bundle清单承接",
+      "module_consumers": [
+        "runtime/adapters/local-skill-resolver.mjs",
+        "runtime/distribution/skill-bundle-release.mjs",
+        "runtime/stage/stage-skill-runtime.mjs"
+      ],
+      "named_data_readers": [
+        "skills/external/design-tokens/skill-bundle.json",
+        "skills/catalog.yaml"
+      ],
+      "delete_condition": "对应真实consumer已由独立验证替代完整承接、原owner决定退役后才删对应文件/登记；原采用历史README/原件保留，不连带删除未承接规则",
+      "retention_basis": "原C01已入库active方法及当前用户个人研究持续授权；本次补原active发行接线与notice，不新增parser/schema/控制面或权利结论"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

@@ -2,6 +2,7 @@ import {readFile,writeFile,open,link,lstat,unlink} from 'node:fs/promises';
 import {constants} from 'node:fs';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {runRegisteredScript} from '../../isolated-browser-qa/scripts/browser-qa-session.mjs';
 import {connectCdp,validateEndpoint} from '../../isolated-browser-qa/scripts/browser-qa-tickets.mjs';
 
 // The five portable collectors share this CLI/lifecycle; transport stays in the gateway.
@@ -225,6 +226,83 @@ export function collect(event,window={}) {
   if(p.exceptionDetails)item.exceptionDetails={...pick(p.exceptionDetails,['exceptionId','lineNumber','columnNumber','executionContextId']),...(p.exceptionDetails.url?{url:safeUrl(p.exceptionDetails.url)}:{}),...(p.exceptionDetails.stackTrace?{stackTrace:sourceStack(p.exceptionDetails.stackTrace)}:{})};
   return {...item,...pick(window,['window_id','loader_id'])};
 }
+// The SDK page is supplied by the existing QA gateway caller. No endpoint,
+// target enumeration, profile access or new browser lifecycle is introduced.
+export async function ownedEgoContext(page,config,env) {
+  const space=Number(env.BROWSER_QA_EGO_SPACE_ID);
+  if(!Number.isSafeInteger(space)||space<1||page?.spaceId!==space||page.label!=='p1'||typeof page.cdp!=='function'||typeof page.events!=='function')throw fail('IDENTITY_MISMATCH','Expected the gateway-owned Ego space and its existing p1');
+  const engine=env.BROWSER_QA_ENGINE;
+  if(!['ego-lite','ego'].includes(engine))throw fail('IDENTITY_MISMATCH','Owned Ego page cannot be relabeled as another engine');
+  for(const name of Object.values(identityKeys))if(typeof env[name]!=='string'||!env[name].trim())throw fail('IDENTITY_MISMATCH','Identity declaration missing: '+name);
+  const url=await page.url();
+  if(!routeMatches(url,env.PAGE_AUDIT_ROUTE))throw fail('IDENTITY_MISMATCH','Owned page route differs; no navigation issued');
+  let pinnedViewport;
+  const read=async()=>{
+    if(!routeMatches(await page.url(),env.PAGE_AUDIT_ROUTE))throw fail('IDENTITY_MISMATCH','Owned page route drifted');
+    const rows=await runRegisteredScript(page,'design-source-read-v1',{elements:[{selector:'html',properties:[],facts:['viewport','scroll','navigation']}]});
+    const viewport=rows?.[0]?.facts?.viewport;
+    if(!viewport)throw fail('TOOL_ERROR','Registered viewport observation missing');
+    if(!routeMatches(await page.url(),env.PAGE_AUDIT_ROUTE)||pinnedViewport&&['width','height','dpr'].some(key=>viewport[key]!==pinnedViewport[key]))throw fail('IDENTITY_MISMATCH','Owned page route or viewport/DPR drifted during audit');
+    return rows[0];
+  };
+  const observed=await read(),viewport=observed.facts.viewport;
+  if(!Number.isFinite(viewport.width)||!Number.isFinite(viewport.height)||!Number.isFinite(viewport.dpr)||viewport.dpr<=0)throw fail('TOOL_ERROR','Registered viewport coordinates invalid');
+  const object={...Object.fromEntries(Object.entries(identityKeys).map(([key,name])=>[key,env[name]])),state:config.state,viewport:viewport.width+'x'+viewport.height+'@'+viewport.dpr,engine};
+  const identity=compareIdentity({...object,viewport:config.viewport},{url,viewport:object.viewport});
+  if(identity.mismatches.length)throw fail('IDENTITY_MISMATCH','Owned page '+identity.mismatches[0].path+' differs from declaration; no navigation issued');
+  const allowed=new Set(['egoAutomated.disable','Page.enable','Runtime.enable','Network.enable','Page.getFrameTree','Accessibility.enable','Accessibility.getFullAXTree']);
+  const call=(method,params={})=>{if(!allowed.has(method))throw fail('TOOL_ERROR','Unsupported owned-page audit command: '+method);return page.cdp(method,params);};
+  pinnedViewport={...viewport};
+  return {page,object,read,call};
+}
+export async function observeOwnedEgoReload(context,timeoutMs=5000) {
+  const {page,call,read}=context;
+  // Ego page sessions hide console events until this SDK toggle is disabled; sites can detect CDP while disabled.
+  await call('egoAutomated.disable');await call('Page.enable');await call('Runtime.enable');await call('Network.enable');
+  const before=(await call('Page.getFrameTree'))?.frameTree?.frame;
+  if(!before?.id||!before.loaderId)throw fail('TOOL_ERROR','Owned main frame identity missing; no navigation issued');
+  await page.events();
+  let navigated=false;
+  try {
+    navigated=true;await page.reload();await page.waitForSelector('body');
+    const events=[],deadline=Date.now()+timeoutMs;
+    while(true){events.push(...await page.events());if(events.some(e=>e.method==='Page.loadEventFired'))break;if(Date.now()>=deadline)throw fail('TOOL_ERROR','Owned navigation load was not observed');await pause(20);}
+    await pause(Math.min(500,timeoutMs));events.push(...await page.events());
+    const frames=events.filter(e=>e.method==='Page.frameNavigated'&&!e.params?.frame?.parentId).map(e=>e.params.frame);
+    const loaders=new Set(frames.map(frame=>frame.loaderId));
+    if(loaders.size!==1||!frames.length||frames.some(frame=>frame.id!==before.id)||frames[0].loaderId===before.loaderId)throw fail('IDENTITY_MISMATCH','Owned window must contain exactly one new main-frame loader');
+    const frame=(await call('Page.getFrameTree'))?.frameTree?.frame,loaderId=frames[0].loaderId;
+    if(frame?.id!==before.id||frame.loaderId!==loaderId||!routeMatches(await page.url(),context.object.route))throw fail('IDENTITY_MISMATCH','Owned page changed during navigation observation');
+    return {events,frameId:frame.id,loaderId,windowId:crypto.randomUUID(),observation:await read()};
+  }catch(error){if(error.kind)throw error;throw fail(navigated?'UNREACHABLE':'NOT_STARTED',error.message||'Owned page control lost');}
+}
+export async function collectOwnedEgoNavigation(context,timeoutMs=5000) {
+  const doc=()=>({engine:context.object.engine,observed_at:new Date().toISOString(),object:{...context.object},items:[],failures:[]});
+  const consoleDoc=doc(),networkDoc=doc();
+  try {
+    const window=await observeOwnedEgoReload(context,timeoutMs),contexts=new Map(),requests=new Map();let committed=false;
+    for(const event of window.events){const p=event.params??{};
+      if(event.method==='Page.frameNavigated'&&p.frame?.id===window.frameId&&p.frame.loaderId===window.loaderId)committed=true;
+      if(event.method==='Runtime.executionContextCreated'&&committed&&p.context?.auxData?.frameId===window.frameId)contexts.set(p.context.id,window.loaderId);
+      if(event.method==='Network.requestWillBeSent')requests.set(p.requestId,{loaderId:p.loaderId,frameId:p.frameId});
+      if(['Network.requestWillBeSent','Network.responseReceived','Network.loadingFailed'].includes(event.method)){
+        const prior=requests.get(p.requestId),loader=p.loaderId||prior?.loaderId,frame=p.frameId||prior?.frameId;
+        if(loader===window.loaderId&&frame===window.frameId)networkDoc.items.push(collect(event,{window_id:window.windowId,loader_id:window.loaderId}));
+      }
+      if(['Runtime.consoleAPICalled','Runtime.exceptionThrown'].includes(event.method)){
+        const owner=contexts.get(p.executionContextId??p.exceptionDetails?.executionContextId);
+        if(owner===window.loaderId)consoleDoc.items.push(collect(event,{window_id:window.windowId,loader_id:window.loaderId}));
+        else if(committed)addFailure(consoleDoc,'IDENTITY_MISMATCH','Console event document ownership was not observed');
+      }
+    }
+    // A real lifecycle checkpoint distinguishes observed-zero console messages
+    // from a collector that never reached the document. It is not a log message.
+    const loaded=window.events.find(e=>e.method==='Page.loadEventFired');
+    consoleDoc.items.push(collect(loaded,{window_id:window.windowId,loader_id:window.loaderId}));
+    return {console:consoleDoc,network:networkDoc,unreachable:false};
+  }catch(error){const kind=error.kind||'TOOL_ERROR';for(const value of [consoleDoc,networkDoc])addFailure(value,kind,error.message);return {console:consoleDoc,network:networkDoc,unreachable:kind==='UNREACHABLE'};}
+}
+
 const collectConsole=(config,env)=>collectWith(config,env,context=>stream(context,'console'));
 export async function runCollectorCli(argv,env,collector) {
   let config;try{config=parse(argv,env);}catch(error){console.error(JSON.stringify({ok:false,outcome:'unavailable',errors:[{code:error.code,path:error.path,message:error.message}]}));return 2;}

@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
 
 import { createSkillBundleContract } from "../interface/runner-contract.mjs";
-import { validateSkillBundle } from "../adapters/local-skill-resolver.mjs";
+import { validateSkillBundle, resolveSkillPackage } from "../adapters/local-skill-resolver.mjs";
 import { resolveStageSkillPackages } from "../stage/stage-skill-runtime.mjs";
 
 const STAGES = FORMAL_DEVELOPMENT_STAGES;
@@ -244,23 +244,50 @@ function validatePortableReleaseDeclarations(manifest, seen, root) {
   return [...declarations.values()];
 }
 
-function addSkillClosure(root, name, locators, visited, context = {}) {
-  if (visited.has(name)) return;
-  visited.add(name);
-  const base = `skills/${name}`;
-  const bundleLocator = `${base}/skill-bundle.json`;
-  const expectedSkillPath = `${base}/SKILL.md`;
-  const { bundle } = validateSkillBundle(root, bundleLocator, expectedSkillPath);
+function registerCopySource(copySources, outputLocator, sourceLocator, locators) {
+  const previous = copySources.get(outputLocator);
+  if (previous !== undefined && previous !== sourceLocator) {
+    throw new Error(`skill bundle output path collision: ${outputLocator}`);
+  }
+  if (previous === undefined && locators.has(outputLocator) && outputLocator !== sourceLocator) {
+    throw new Error(`skill bundle output path collision: ${outputLocator}`);
+  }
+  copySources.set(outputLocator, sourceLocator);
+}
+
+function addSkillClosure(root, name, locators, visited, context = {}, dependency = null) {
+  const bundleLocator = dependency?.bundle ?? `skills/${name}/skill-bundle.json`;
+  if (visited.has(bundleLocator)) return;
+  visited.add(bundleLocator);
+  const base = path.posix.dirname(bundleLocator);
+  const expectedSkillPath = dependency?.path ?? `${base}/SKILL.md`;
+  const { bundle, fileEntries } = validateSkillBundle(root, bundleLocator, expectedSkillPath);
   locators.add(bundleLocator);
-  for (const entry of bundle.files ?? []) {
-    const locator = path.posix.join(base, typeof entry === "string" ? entry : entry.path);
-    assertLocator(locator);
-    locators.add(locator);
+  if (context.includeDestinations && context.copySources) {
+    registerCopySource(context.copySources, bundleLocator, bundleLocator, locators);
+  }
+  if (context.bundleTransforms && fileEntries.some((entry) => entry.destination !== undefined)) {
+    context.bundleTransforms.add(bundleLocator);
+  }
+  for (const entry of fileEntries) {
+    const sourceLocator = path.posix.join(base, entry.path);
+    const destinationLocator = path.posix.join(base, entry.destination ?? entry.path);
+    assertLocator(sourceLocator);
+    assertLocator(destinationLocator);
+    if (context.includeDestinations) {
+      if (context.copySources) registerCopySource(context.copySources, destinationLocator, sourceLocator, locators);
+      locators.add(destinationLocator);
+    } else {
+      locators.add(sourceLocator);
+    }
   }
   if (context.localPayload) {
-    const registration = context.registry.get(name);
+    const registration = context.registry.get(expectedSkillPath);
     if (!registration) throw new Error(`skill has no catalog owner: ${name}`);
     for (const ref of registration.dependency_closure ?? []) {
+      // A catalog dependency may name a resource already declared in this exact
+      // bundle (for example its LICENSE); it is not another native skill.
+      if (String(ref).startsWith(`${base}/`) && locators.has(ref)) continue;
       const match = String(ref).match(/^skills\/([a-z][a-z0-9-]*)(?:\/SKILL\.md)?$/);
       if (!match) throw new Error(`invalid catalog dependency: ${name} -> ${ref}`);
       addSkillClosure(root, match[1], locators, visited, context);
@@ -311,17 +338,36 @@ function addStaticImportClosure(root, locators, { requireDependencies = false, l
   }
 }
 
-function collectSourceClosure(root) {
-  return collectDeclaredClosure(root);
+function collectSourceClosure(root, copySources = new Map(), bundleTransforms = new Set()) {
+  return collectDeclaredClosure(root, {
+    includeDestinations: true,
+    copySources,
+    bundleTransforms,
+  });
 }
 
-function collectDeclaredClosure(root, { release = false, localPayload = false, stages = STAGES, includePortableWorkflows = true } = {}) {
+function collectDeclaredClosure(root, {
+  release = false,
+  localPayload = false,
+  stages = STAGES,
+  includePortableWorkflows = true,
+  includeDestinations = release,
+  copySources = null,
+  bundleTransforms = null,
+} = {}) {
   const locators = new Set();
   const visitedSkills = new Set();
-  const context = { localPayload };
+  const context = {
+    localPayload,
+    includeDestinations,
+    copySources: copySources ?? (includeDestinations ? new Map() : null),
+    bundleTransforms: bundleTransforms ?? (includeDestinations ? new Set() : null),
+  };
   if (localPayload) {
     const catalog = yaml.load(readStableFile(root, "skills/catalog.yaml", "skill registry").toString("utf8"));
-    context.registry = new Map((catalog.skills ?? []).map(entry => [entry.name, entry]));
+    // Native and adopted family members keep their existing catalog identity/owner.
+    context.registry = new Map([...(catalog.skills ?? []), ...(catalog.capability_decisions ?? [])]
+      .filter(entry => typeof entry.path === "string").map(entry => [entry.path, entry]));
     locators.add("skills/catalog.yaml");
   }
   const declaredPortableWorkflows = workflowDeclarations(root).portable
@@ -355,12 +401,13 @@ function collectDeclaredClosure(root, { release = false, localPayload = false, s
       if (release || localPayload || fs.existsSync(path.join(root, base, name))) locators.add(locator);
     }
     for (const dependency of manifest.skills ?? []) {
-      const bundleLocator = dependency?.bundle === undefined ? `skills/${dependency?.name}/skill-bundle.json` : dependency.bundle;
-      if (!dependency || !/^[a-z][a-z0-9-]*$/.test(dependency.name ?? "") || dependency.path !== `skills/${dependency.name}/SKILL.md`
-        || bundleLocator !== `skills/${dependency.name}/skill-bundle.json`) throw new Error(`skill dependency path/bundle does not match its declared name: ${workflow}`);
+      if (!dependency || !/^[a-z][a-z0-9-]*$/.test(dependency.name ?? ""))
+        throw new Error(`skill dependency path/bundle does not match its declared name: ${workflow}`);
+      // The resolver owns explicit flat/family identity and containment; publication
+      // consumes that exact declaration instead of reconstructing a second flat path.
+      resolveSkillPackage({ packageRoot: root, manifestPath: `${base}/skill-deps.yaml`, dependency });
       if (localPayload && !loaded.payloads.has(dependency.name)) throw new Error(`unresolved stage skill: ${workflow}/${dependency.name}`);
-      validateSkillBundle(root, bundleLocator, dependency.path);
-      addSkillClosure(root, dependency.name, locators, visitedSkills, context);
+      addSkillClosure(root, dependency.name, locators, visitedSkills, context, dependency);
     }
     for (const file of (localPayload ? declarationFiles.filter(file => file.endsWith(".md")) : ["SKILL.md"])) {
       const prompt = fs.readFileSync(path.join(root, base, file), "utf8");
@@ -381,23 +428,62 @@ export function resolvePortableStageFiles({ packageRoot, stage } = {}) {
   return Object.freeze({ root, stage, files: Object.freeze(files) });
 }
 
-function captureSourceBytes(root, locators) {
-  return new Map([...locators].map((locator) => [locator, readStableFile(root, locator, "release source")]));
+function captureSourceBytes(root, locators, copySources = new Map()) {
+  return new Map([...locators].map((locator) => [
+    locator,
+    readStableFile(root, copySources.get(locator) ?? locator, "release source"),
+  ]));
 }
 
-function assertSourceBytesStable(root, locators, sourceBytes, stagingDir) {
+function normalizeSkillBundleManifest(bytes, locator) {
+  let bundle;
+  try {
+    bundle = JSON.parse(bytes.toString("utf8"));
+  } catch (error) {
+    throw new Error(`skill bundle manifest is invalid: ${locator}`, { cause: error });
+  }
+  if (!Array.isArray(bundle.files)) throw new Error(`skill bundle files are invalid: ${locator}`);
+  let changed = false;
+  bundle.files = bundle.files.map((entry) => {
+    if (typeof entry === "string") return entry;
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      throw new Error(`skill bundle asset entry is invalid: ${locator}`);
+    }
+    if (!Object.hasOwn(entry, "destination")) return entry;
+    changed = true;
+    const { destination, ...outputEntry } = entry;
+    outputEntry.path = destination;
+    return outputEntry;
+  });
+  return changed ? Buffer.from(`${JSON.stringify(bundle, null, 2)}\n`) : bytes;
+}
+
+function assertSameMap(left, right) {
+  return left.size === right.size && [...left].every(([key, value]) => right.get(key) === value);
+}
+
+function assertSameSet(left, right) {
+  return left.size === right.size && [...left].every((value) => right.has(value));
+}
+
+function assertSourceBytesStable(root, locators, sourceBytes, stagingDir, copySources, bundleTransforms) {
   for (const locator of locators) {
-    const expected = sourceBytes.get(locator);
-    const current = readStableFile(root, locator, "release source");
+    const sourceLocator = copySources.get(locator) ?? locator;
+    const expectedSource = sourceBytes.get(locator);
+    const currentSource = readStableFile(root, sourceLocator, "release source");
     const copied = readStableFile(stagingDir, locator, "copied release file");
-    if (!current.equals(expected) || !copied.equals(expected)) {
+    const expectedOutput = bundleTransforms.has(locator)
+      ? normalizeSkillBundleManifest(expectedSource, sourceLocator)
+      : expectedSource;
+    if (!currentSource.equals(expectedSource) || !copied.equals(expectedOutput)) {
       throw new Error(`source changed during skill bundle release: ${locator}`);
     }
   }
 }
 
-async function copy(packageRoot, outputDir, locator) {
-  const bytes = readStableFile(packageRoot, locator, "release source");
+async function copy(packageRoot, outputDir, locator, sourceLocator, normalizeBundle) {
+  const sourceBytes = readStableFile(packageRoot, sourceLocator, "release source");
+  const bytes = normalizeBundle ? normalizeSkillBundleManifest(sourceBytes, sourceLocator) : sourceBytes;
   ensureDestinationParent(outputDir, locator);
   const target = path.join(outputDir, locator);
   await fs.promises.writeFile(target, bytes, { flag: "wx" });
@@ -419,17 +505,29 @@ export async function buildSkillBundleRelease({
   }
   let stagingDir = fs.mkdtempSync(path.join(outputParent, `.${path.basename(outputPath)}.staging-`));
   try {
-    const locators = collectSourceClosure(root);
-    const sourceBytes = captureSourceBytes(root, locators);
-    const files = await Promise.all([...locators].sort().map((locator) => copy(root, stagingDir, locator)));
-    assertSourceBytesStable(root, locators, sourceBytes, stagingDir);
+    const copySources = new Map();
+    const bundleTransforms = new Set();
+    const locators = collectSourceClosure(root, copySources, bundleTransforms);
+    const sourceBytes = captureSourceBytes(root, locators, copySources);
+    const files = await Promise.all([...locators].sort().map((locator) => copy(
+      root,
+      stagingDir,
+      locator,
+      copySources.get(locator) ?? locator,
+      bundleTransforms.has(locator),
+    )));
+    assertSourceBytesStable(root, locators, sourceBytes, stagingDir, copySources, bundleTransforms);
     // Re-resolve after copying so a manifest/import graph mutation cannot add
-    // an un-copied file or change copied source bytes.
-    const finalLocators = collectSourceClosure(root);
-    if (finalLocators.size !== locators.size || [...finalLocators].some((locator) => !locators.has(locator))) {
+    // an un-copied file, change its logical destination, or alter copied bytes.
+    const finalCopySources = new Map();
+    const finalBundleTransforms = new Set();
+    const finalLocators = collectSourceClosure(root, finalCopySources, finalBundleTransforms);
+    if (!assertSameSet(finalLocators, locators)
+        || !assertSameMap(finalCopySources, copySources)
+        || !assertSameSet(finalBundleTransforms, bundleTransforms)) {
       throw new Error("source closure changed during skill bundle release");
     }
-    const finalBytes = captureSourceBytes(root, finalLocators);
+    const finalBytes = captureSourceBytes(root, finalLocators, finalCopySources);
     for (const locator of locators) {
       if (!finalBytes.get(locator).equals(sourceBytes.get(locator))) {
         throw new Error(`source changed during skill bundle release: ${locator}`);
@@ -459,7 +557,7 @@ export async function buildSkillBundleRelease({
     const validated = validateSkillBundleRelease({ releaseRoot: stagingDir });
     // Verify the actual copied bytes again after declaration validation; the
     // current source returning to its original bytes cannot hide a changed copy.
-    assertSourceBytesStable(root, locators, sourceBytes, stagingDir);
+    assertSourceBytesStable(root, locators, sourceBytes, stagingDir, copySources, bundleTransforms);
     fs.renameSync(stagingDir, outputPath);
     stagingDir = null;
     return Object.freeze(validated);

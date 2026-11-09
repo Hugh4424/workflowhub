@@ -1,0 +1,153 @@
+{
+  "source": {
+    "type": "runnable_page",
+    "ref": "http://127.0.0.1:5199/",
+    "version": "unknown",
+    "owner": "当前设计源owner",
+    "consumer": "<actual-extraction-consumer>",
+    "scope": {
+      "pages": [
+        "page-default"
+      ],
+      "states": [
+        "default"
+      ],
+      "viewports": [
+        "desktop"
+      ],
+      "elements": [
+        "page-title"
+      ]
+    },
+    "figma": {
+      "status": "unavailable",
+      "unavailable": true,
+      "reason": "本样例采用可运行页面，不提供Figma源；实际任务须核定来源与不可用原因"
+    }
+  },
+  "execution": {
+    "task_path": "<absolute-task-root>",
+    "project_name": "<actual-project>",
+    "task_id": "<actual-task-id>",
+    "document_slug": "design-source-extraction"
+  },
+  "scope": {
+    "pages": [
+      {
+        "id": "page-default",
+        "url": "http://127.0.0.1:5199/",
+        "state": "default",
+        "state_check": {
+          "selector": "h1",
+          "text": "替换为已实测的默认页标题"
+        },
+        "actions": []
+      }
+    ],
+    "states": [
+      "default"
+    ],
+    "viewports": [
+      {
+        "id": "desktop",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "elements": [
+      "page-title"
+    ],
+    "norm_categories": [
+      "typography"
+    ],
+    "checklist": [
+      {
+        "id": "title-font-size",
+        "page": "page-default",
+        "state": "default",
+        "viewport": "desktop",
+        "element": "page-title",
+        "category": "typography",
+        "property": "font-size",
+        "selector": "h1",
+        "norm_anchor": "<real-norm-path>#<stable-heading>",
+        "locator": {
+          "tree_ref": "<actual-source-tree-ref>",
+          "business_attributes": {
+            "role": "heading"
+          }
+        }
+      }
+    ],
+    "critical": [
+      "title-font-size"
+    ],
+    "conflict_threshold": 0.1
+  },
+  "norm_basis": {
+    "owner": "当前规范owner",
+    "entries": [
+      {
+        "ref": "<real-norm-path>#<stable-heading>",
+        "version": "unknown",
+        "category": "typography",
+        "scope": "<actual-norm-applicable-scope>",
+        "owner": "<actual-norm-owner>",
+        "consumer": "<actual-norm-consumer>",
+        "anchor": "<actual-stable-heading>"
+      }
+    ],
+    "id": "<actual-norm-basis-id>",
+    "version": "unknown"
+  },
+  "inputs": {
+    "design_source": {
+      "status": "missing",
+      "blocks": [
+        "implement:page-title"
+      ],
+      "provider": "当前任务owner",
+      "reason": "仅形状样例；使用前换为本任务真实已核输入",
+      "source_ref": "<actual-input-evidence-ref>#design_source"
+    },
+    "target_elements": {
+      "status": "missing",
+      "blocks": [
+        "implement:page-title"
+      ],
+      "provider": "当前任务owner",
+      "reason": "仅形状样例；使用前换为本任务真实已核输入",
+      "source_ref": "<actual-input-evidence-ref>#target_elements"
+    },
+    "properties": {
+      "status": "missing",
+      "blocks": [
+        "implement:page-title"
+      ],
+      "provider": "当前任务owner",
+      "reason": "仅形状样例；使用前换为本任务真实已核输入",
+      "source_ref": "<actual-input-evidence-ref>#properties"
+    },
+    "states": {
+      "status": "missing",
+      "blocks": [
+        "implement:page-title"
+      ],
+      "provider": "当前任务owner",
+      "reason": "仅形状样例；使用前换为本任务真实已核输入",
+      "source_ref": "<actual-input-evidence-ref>#states"
+    },
+    "acceptance_points": {
+      "status": "missing",
+      "blocks": [
+        "implement:page-title"
+      ],
+      "provider": "当前任务owner",
+      "reason": "仅形状样例；使用前换为本任务真实已核输入",
+      "source_ref": "<actual-input-evidence-ref>#acceptance_points"
+    }
+  },
+  "low_fidelity": {
+    "ruling": "pending"
+  }
+}

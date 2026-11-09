@@ -1,8 +1,8 @@
 // build-plan 预写测试（冻结）：断言变更须走 test change request + 独立审查
 //
 // T020 / ADR-021 目标契约（当前普通 task / packet 接口；独立 TCR 记录退休机器夹具）：
-// - OCR 审查包（build-code phase 与 verify-code 终末两种）必须携带四类正文：
-//   阶段合同（contracts/build-code.md 与 contracts/verify-code.md）、
+// - OCR 审查包（build-code phase 与 terminal 两种）必须携带四类正文：
+//   阶段合同（contracts/build-code.md，含 phase 与 terminal 边界）、
 //   provider 协议（contracts/provider-protocol.md）、审查重点（stageReviewFocus）、
 //   stage-skill-plan 声明的 lens 技能正文（skills/<lens>/SKILL.md）。
 // - 合同正文从 wh-review 原路径读取（包内字节 == skills/wh-review/contracts/ 原文字节），
@@ -143,7 +143,8 @@ function bundlePaths(bundle) {
 
 function expectContractBodies(bundle) {
   const paths = bundlePaths(bundle);
-  for (const contract of ["contracts/build-code.md", "contracts/verify-code.md", "contracts/provider-protocol.md"]) {
+  expect(paths).not.toContain("contracts/verify-code.md");
+  for (const contract of ["contracts/build-code.md", "contracts/provider-protocol.md"]) {
     expect(paths, contract).toContain(contract);
     expect(readFileSync(join(bundle.bundleRoot, contract)), contract)
       .toEqual(whReviewContractBytes(contract.slice("contracts/".length)));
@@ -256,14 +257,14 @@ describe("OCR code review packet carries the reviewer contract bodies (T020)", (
     expect(readdirSync(attachmentRoot).filter(name=>name.startsWith(".ocr-code-review-") || name.startsWith("review-"))).toEqual([]);
   });
 
-  it("ships contracts, provider protocol, review focus, and lens bodies in the verify-code final packet", async () => {
+  it("ships contracts, provider protocol, review focus, and lens bodies in the build-code terminal packet", async () => {
     const state = fixture();
     writeFileSync(join(state.worktreeRoot, "README.md"), "final implementation under review\n");
     const attachmentRoot = join(state.root, "review-data");
     mkdirSync(attachmentRoot);
     const acceptance = "AC-1: the final worktree keeps the complete criterion and its failure path.";
     const request = {
-      stage: "verify-code", subject_kind: "worktree",
+      stage: "build-code", review_scope: "terminal", subject_kind: "worktree",
       materials: {
         changed_files: "README.md",
         acceptance_criteria: acceptance,
@@ -281,8 +282,8 @@ describe("OCR code review packet carries the reviewer contract bodies (T020)", (
       expectLensBodies(bundle);
       const instructions = readFileSync(join(bundle.bundleRoot, "review-instructions.md"), "utf8");
       expectInstructionSemantics(instructions);
-      // 审查重点（stageReviewFocus）：verify-code 焦点进入指令。
-      expect(instructions).toContain("current code diff, real entry points");
+      // 当前终末焦点：完整任务交付 diff 与适用 AC，阶段仍是 build-code。
+      expect(instructions).toContain("Read the entire delivery diff from task baseline to frozen implementation head");
     } finally {
       bundle.dispose();
     }
@@ -312,7 +313,6 @@ describe("OCR code review packet carries the reviewer contract bodies (T020)", (
             ["requirements/acceptance_criteria.md", materials.acceptance_criteria],
             ["review-instructions.md", materials.review_instructions],
             ["contracts/build-code.md", "reviewer contract body"],
-            ["contracts/verify-code.md", "reviewer contract body"],
             ["skills/review/SKILL.md", "lens body"],
             ["skills/simplicity-guard/SKILL.md", "lens body"],
           ];
@@ -331,7 +331,7 @@ describe("OCR code review packet carries the reviewer contract bodies (T020)", (
 
 describe("changed reviewer source and packet control paths", () => {
   function request(path) {
-    return {stage:"verify-code", subject_kind:"worktree", materials:{
+    return {stage:"build-code", review_scope:"terminal", subject_kind:"worktree", materials:{
       changed_files:path, acceptance_criteria:"AC-1: preserve the complete changed reviewer source and fixed reviewer body.",
       implementation_assessment:"Review the changed lens source as well as the fixed reviewer protocol.",
       test_context:"Owned packet construction only, no provider dispatch.", open_risks:"none declared",
@@ -409,7 +409,7 @@ describe("complete diff navigation and named per-file shards", () => {
     expect(equal,JSON.stringify({label,actual_bytes:received.length,expected_bytes:wanted.length,
       actual_sha256:hash(received),expected_sha256:hash(wanted),first_mismatch:firstMismatch})).toBe(true);
   }
-  const finalRequest = {stage:"verify-code", subject_kind:"worktree", materials:{
+  const finalRequest = {stage:"build-code", review_scope:"terminal", subject_kind:"worktree", materials:{
     changed_files:"all owned modified, deleted and renamed source paths", acceptance_criteria:"AC-1: retain every full patch byte and its current source anchors.",
     implementation_assessment:"Inspect the owned entry point, consumer and deleted paths through the complete navigation.",
     test_context:"Owned producer and anchor parser effects only; no OCR command or external provider.", open_risks:"none declared",
@@ -600,7 +600,7 @@ setInterval(()=>{},100);
     const watchdog=setTimeout(()=>{watchdogFired=true;controller.abort(new Error("owned test watchdog"));},3500);
     let recorded;
     try{
-      recorded=await recordSimpleReviewRequest({taskDir:state.taskDir,request:{stage:"verify-code",subject_kind:"worktree",surface:"code",materials:{}},signal:controller.signal,
+      recorded=await recordSimpleReviewRequest({taskDir:state.taskDir,request:{stage:"build-code",review_scope:"terminal",subject_kind:"worktree",surface:"code",materials:{}},signal:controller.signal,
         runRound:(request,options)=>runConfiguredOcrHostReview({request,packet,signal:options.signal},{
           trustedContext:{trusted:{},route:{},selection:{providers:["codex/owned"]},
             providerConfig:{providers:{"codex/owned":{enabled:true,command:executable,model:"owned-observer"}}}},
@@ -650,12 +650,11 @@ function nativeBinaryZip(size, seed) {
   return Buffer.concat([local,name,payload,central,name,end]);
 }
 function nativeBinaryFixture(kind, large=false) {
-  const root=fs.realpathSync(fs.mkdtempSync(join(fs.realpathSync(process.env.TMPDIR || "/tmp"),"ocr-native-zip-owned-")));
-  const repo=join(root,"repo"),attachments=join(root,"attachments"),taskPath=join(root,"task");
-  fs.mkdirSync(repo);fs.mkdirSync(attachments);fs.mkdirSync(taskPath);fs.mkdirSync(join(repo,"src"));
-  nativeBinaryGit(repo,["init","-q","-b","main"]);
-  nativeBinaryGit(repo,["config","user.name","Owned native ZIP diagnostic"]);
-  nativeBinaryGit(repo,["config","user.email","owned-native-zip@workflowhub.local"]);
+  // Reuse the existing real ordinary task + registered worktree fixture.
+  // Only binding changes; source bytes, ZIP construction and safety oracles stay exact.
+  const taskState=fixture(),root=taskState.root;
+  const repo=taskState.worktreeRoot,attachments=join(root,"attachments"),taskPath=taskState.taskDir;
+  fs.mkdirSync(join(repo,"src"));
   const path=kind==="text" ? null : "src/" + (kind.startsWith("zip") ? "artifact.zip" : kind==="bad-mjs" ? "bad.mjs" : "bad.dat");
   fs.writeFileSync(join(repo,"src/current.mjs"),"export const previous = true;\n");
   if(path)fs.writeFileSync(join(repo,path),kind.startsWith("zip")?nativeBinaryZip(32,7):Buffer.from([0,255,128,1]));
@@ -669,7 +668,7 @@ function nativeBinaryFixture(kind, large=false) {
     nativeBinaryAssert.match(validation,/No errors detected/);
   }
   nativeBinaryGit(repo,["add","."]);nativeBinaryGit(repo,["commit","-qm","owned diagnostic current bytes"]);
-  return {root,repo,attachments,taskPath,path,baseline,currentText,large,kind};
+  return {root,repo,attachments,taskPath,path,baseline,currentText,large,kind,taskState};
 }
 function nativeBinaryVerifiedPacket(bundle) {
   const unique=new Set();
@@ -717,12 +716,13 @@ function nativeBinaryRebuiltDiff(bundle, original, zipPath, large) {
   nativeBinaryAssert.equal(text.current_source_listed,true);nativeBinaryAssert.equal(text.current_source_ref,"src/current.mjs");
   return {mode:"sharded",shards:index.changes.reduce((count,change)=>count+change.shards.length,0),zip_shards:zip.shards.length,bytes:full.length,sha256:nativeBinaryHash(full)};
 }
-function nativeBinaryCase(kind, large=false) {
+async function nativeBinaryCase(kind, large=false) {
   const state=nativeBinaryFixture(kind,large);
   let bundle,original;
   try {
-    const context={workspace:{worktreeRoot:state.repo,baselineCommit:state.baseline},task:{taskPath:state.taskPath,identity:{taskId:"owned-native-binary-diagnostic"}}};
-    const request={stage:"verify-code",subject_kind:"worktree",materials:{
+    const originalContext=await contextFor(state.taskState);
+    const context={...originalContext,workspace:{...originalContext.workspace,baselineCommit:state.baseline}};
+    const request={stage:"build-code",review_scope:"terminal",subject_kind:"worktree",materials:{
       changed_files:state.path?[state.path,"src/current.mjs"]:["src/current.mjs"],
       acceptance_criteria:"AC-1: preserve complete source and all binary patch bytes; expose opaque ZIP metadata; retain strict source and alias rejection.",
       implementation_assessment:"Owned diagnostic fixture only; no task quality conclusion.",
@@ -796,18 +796,18 @@ nativeBinaryTest("retains bad UTF8 executable source rejection",()=>nativeBinary
 nativeBinaryTest("retains frozen-style bad UTF8 dat source rejection",()=>nativeBinaryCase("bad-dat"));
 nativeBinaryTest("verifies complete current text and packet manifest on current implementation",()=>nativeBinaryCase("text"));
 
-function nativeBinaryGuardRejection(mode) {
+async function nativeBinaryGuardRejection(mode) {
   const state=nativeBinaryFixture("zip"),archive=fs.readFileSync(join(state.repo,state.path));
   let controlDeclared=false,rejection,deliveredDiff;
-  const request={stage:"verify-code",subject_kind:"worktree",materials:{
+  const request={stage:"build-code",review_scope:"terminal",subject_kind:"worktree",materials:{
     changed_files:[state.path,"src/current.mjs"],acceptance_criteria:"AC-1: only explicit Git binary ZIPs without packet-control conflict may be opaque.",
     implementation_assessment:"Owned exception-guard negative case only.",test_context:"Real current ZIP bytes; controlled diff/control projection at existing injection seams.",
     open_risks:"No provider, archive semantics, or business acceptance.",
   }};
   try {
-    nativeBinaryAssert.throws(()=>prepareTaskBoundBuildCodeReviewBundle({
-      workspace:{worktreeRoot:state.repo,baselineCommit:state.baseline},task:{taskPath:state.taskPath,identity:{taskId:"owned-native-binary-guard"}},
-    },request,{
+    const originalContext=await contextFor(state.taskState);
+    const context={...originalContext,workspace:{...originalContext.workspace,baselineCommit:state.baseline}};
+    nativeBinaryAssert.throws(()=>prepareTaskBoundBuildCodeReviewBundle(context,request,{
       loadConfig:()=>({attachmentRoot:state.attachments}),
       captureSource:()=>{
         const source=captureReviewSource({sourceRoot:state.repo,baselineCommit:state.baseline,reviewDataRoot:state.attachments});
@@ -867,7 +867,7 @@ async function c01ScopedFixture(){
     {id:'pb',sourceRoot:pb,targetRepoRoot:pb,baseCommit:basePb,expectedHead:basePb,expectedBranch:'main',paths}],evidenceFiles:[],authorizationSource:{confirmationRef:'controlled host fixture',materialRefs:[]}};
   return {state,wh,pb,attachmentRoot,context,scope};
 }
-const c01FinalRequest=()=>({stage:'verify-code',subject_kind:'worktree',materials:{changed_files:'actual controlled committed, staged, dirty, new and deleted paths',acceptance_criteria:'AC-1: actual namespace source bytes and failure boundaries.',implementation_assessment:'Only the real prepare/capture/compact/packet seam is observed.',test_context:'Controlled Git fixtures; no model quality.',open_risks:'No external provider or production task acceptance.'}});
+const c01FinalRequest=()=>({stage:'build-code',review_scope:'terminal',subject_kind:'worktree',materials:{changed_files:'actual controlled committed, staged, dirty, new and deleted paths',acceptance_criteria:'AC-1: actual namespace source bytes and failure boundaries.',implementation_assessment:'Only the real prepare/capture/compact/packet seam is observed.',test_context:'Controlled Git fixtures; no model quality.',open_risks:'No external provider or production task acceptance.'}});
 it('C01 wiring namespaced phase and terminal source bytes',async()=>{
   const {cli}=await c01Modules(),f=await c01ScopedFixture(),{state,wh,pb,scope,context,attachmentRoot}=f;
   writeFileSync(join(wh,'README.md'),'WH COMMITTED\n');git(wh,['add','README.md']);git(wh,['commit','-qm','WH committed change']);scope.repositories[0].expectedHead=git(wh,['rev-parse','HEAD']);

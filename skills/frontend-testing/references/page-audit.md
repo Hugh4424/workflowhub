@@ -3,6 +3,37 @@
 版本：1.0.0。owner：frontend-testing 方法维护者；consumer：页面采集器、编排器、plan-design-review 页面模式与报告读取者。
 本件是唯一判据正文；采集器产事实，形状校验器只核结构，独立执行者裁决页面，不以形状合法冒页面验收。
 
+## 报告怎样产生并核对？
+
+从本件判据与当前真实对象开始，先经 isolated-browser-qa 选择一个引擎和自有会话。
+对已选 agent-browser，在同一网关scenario内用 `agent-browser --session "$BROWSER_QA_SESSION" get cdp-url` 取得实际receiver端点；不是固定端口，不取用户浏览器端点。
+既有ego路径没有承诺可交给CLI的CDP receiver端点，未取得时不能伪造端点或切引擎。当前已有自有Ego page时，可在同一已授权网关scenario内调用原模块入口，不另建审计器：
+
+`import {runPageAudit} from './skills/frontend-testing/scripts/run-page-audit.mjs'`
+
+`await runPageAudit(args,{env:{BROWSER_QA_ENGINE:'ego-lite',BROWSER_QA_EGO_SPACE_ID:String(ownedSpaceId)},egoPage:ownedPage})`
+
+args仍显式提供下述八项当前身份，不传--cdp-url；ownedPage来自本次真实owned空间的p1，不能claim用户页面或猜空间ID。模块拒绝owned page与raw CDP endpoint混用，核页面路由及viewport/DPR，并在有限只读采集前后复核绑定；控制台/网络从当前导航订阅与主loader事实取，不把旧缓存事件当本次结果。现有注册只读事实及原console/a11y/overflow/performance normalizer复用，未加任意evaluate或endpoint探测。
+
+owned路径在实际Node内用同一报告validator核最终字节；SDK宿主execPath可能是helper而非Node，不能拿它重启CLI校验。外层需要CLI形状检查时使用外层真实Node。形状0仍不等页面验收；无独立判定输入的八维保持未测/incomplete，交互性能未知不补值。原raw CDP CLI入口保持原调用方式，owned路径的实际验证不能冒旧route的真实服务覆盖。
+
+SDK控制错误立即停止该owned浏览器路径，保原件，不自动重试、claim、新建空间、切引擎或finish；只有正常结束且可回读才报告清理成功。空间not found不能反推已finish或宿主回收原因。
+
+逐字填当前身份后调用：
+`node skills/frontend-testing/scripts/run-page-audit.mjs --cdp-url "$CDP" --state "$STATE" --viewport "$VIEWPORT" --out "$REPORT" --workspace "$WORKSPACE" --service "$SERVICE" --route "$ROUTE" --object-version "$OBJECT_VERSION" --engine-session "$BROWSER_QA_SESSION" --engine "$BROWSER_QA_ENGINE"`
+其中workspace/service/route/object-version/session来自本次实际对象；out采用当前任务具名原件位置，旧报告不覆写。
+run-page-audit调用五采集器和规范消费检查，八项对象身份缺失拒2；失败/工具异常保原stdout及子原件，不能只留下成功报告。
+有报告后用同一 `node skills/frontend-testing/scripts/check-page-audit.mjs --input "$REPORT"` 核形状；0只证结构，不代页面通过。
+
+对报告的实际引用句运行 `node skills/frontend-testing/scripts/check-report-quotes.mjs --source "$REPORT" --quote "$QUOTE" --expect-source-sha256 "$REPORT_SHA256"`；批量引用改用--quotes显式JSON，窗口不唯一按--lines具名定位。
+0表示本次引用检查允许，2为限定类遗漏/哈希拒收，1为工具异常；不能丢失否定、未执行与覆盖限制。
+对本次真实材料身份清单运行 `node skills/frontend-testing/scripts/check-version-binding.mjs --materials "$MATERIALS" --criteria skills/frontend-testing/references/page-audit.md --expect-criteria-sha256 "$CRITERIA_SHA256"`。
+MATERIALS的每行含material_id/ref/sha256/bytes/role并绑定当前实际字节；批准/交付版本报告另按脚本现有version合同，未知不补值，身份数组不冒完整版本链。
+0仅证声明与字节关系，2为身份/版本/同意拒收，1为工具异常；不产生新任务授权。
+
+由独立执行者回读真实报告、原始子证据与两检查输出，逐项裁决；缺子件、失败、范围不足都保未测/incomplete。
+同一回修只复验原finding及受影响面，报告、修复记录与独立复验各留原件，历史不得覆盖。
+
 ## 八维骨架
 
 名称沿 [设计审查原文](../../plan-design-review/SKILL.md#check)，原文只读，页面模式分别交付：
@@ -149,3 +180,11 @@ mock 上写真实业务未覆盖；模拟角色只作状态输入，不冒真人
 路由表不是已读证明，执行者补本次实际版本或 hash 与用法，没读按缺源处理。
 精确 token/CSS/API 回任务提供的原专业源，本件不复制值表；规范变更交 norm-sync 及原 owner。
 个人研究适用范围与权利沿项目证据规范，许可 unknown 保留，不写成已获 grant。
+
+### 当前溢出采集实际覆盖什么？
+
+现有两条采集路径均只读根元素 html 的 scrollWidth/clientWidth。
+它们不扫描后代或内部滚动容器，根未溢出不证明内部布局无溢出。
+owned 子原件沿所选 engine 保同一身份；旧 raw 路径保原规范化合同。
+owned 候选先由原 collectErrors 校验，拒收字节和子原件保在现证据目录，
+正式 out 不发布；已发布原件不覆盖、不为重试删除。

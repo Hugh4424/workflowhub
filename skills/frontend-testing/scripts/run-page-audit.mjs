@@ -3,7 +3,10 @@ import {readFile,writeFile,mkdir,mkdtemp,access,unlink} from 'node:fs/promises';
 import {existsSync} from 'node:fs';
 import {spawn} from 'node:child_process';
 import {createHash,randomUUID} from 'node:crypto';
-import {collectPerf} from './collect-perf.mjs';
+import {collectPerf,collect as normalizePerf} from './collect-perf.mjs';
+import {collect as normalizeOverflow} from './collect-overflow.mjs';
+import {collect as normalizeA11y} from './collect-a11y.mjs';
+import {ownedEgoContext,collectOwnedEgoNavigation,observeOwnedEgoReload} from './collect-console.mjs';
 import {checkNormConsumption,applyNormFacts} from './check-norm-consumption.mjs';
 import {collectErrors} from './check-page-audit.mjs';
 import {connectCdp,validateEndpoint} from '../../isolated-browser-qa/scripts/browser-qa-tickets.mjs';
@@ -15,15 +18,16 @@ const required=['--cdp-url','--state','--viewport','--out'];
 const optional=['--engine','--collector-root','--judgments'];
 const text=v=>typeof v==='string'&&v.trim().length>0;
 const fault=(code,path,message,exitCode=1)=>Object.assign(new Error(message),{code,path,exitCode});
-export function readIdentity(argv){
+export function readIdentity(argv,{egoPage}={}){
   const values={};
   for(let i=0;i<argv.length;i++){
     const key=argv[i];if(![...required,...optional,...Object.keys(identityFlags)].includes(key)||values[key]!==undefined||argv[i+1]===undefined||argv[i+1].startsWith('--'))throw fault('E_USAGE',key,'Unknown, duplicate or missing command argument');
     values[key]=argv[++i];
   }
-  for(const key of required)if(!text(values[key]))throw fault('E_USAGE',key,'Required audit argument missing');
+  for(const key of required)if(!(egoPage&&key==='--cdp-url')&&!text(values[key]))throw fault('E_USAGE',key,'Required audit argument missing');
   if(!/^[1-9]\d*x[1-9]\d*$/.test(values['--viewport']))throw fault('E_USAGE','--viewport','Expected positive WxH');
-  try{
+  if(egoPage&&values['--cdp-url'])throw fault('E_USAGE','--cdp-url','Owned SDK page and raw endpoint cannot be mixed');
+  if(!egoPage)try{
     const u=new URL(values['--cdp-url']);
     if(u.protocol==='ws:')validateEndpoint(u.href,'receiver');
     else if(u.protocol!=='http:'||!['127.0.0.1','localhost','[::1]'].includes(u.hostname)||!u.port||u.pathname!=='/json/version'||u.search||u.hash||u.username||u.password)throw Error('Discovery must be a local /json/version endpoint');
@@ -35,10 +39,10 @@ export async function lockEngine(values,env,{probe}={}){
   const local={...env};if(values['--engine']!==undefined)local.BROWSER_QA_ENGINE=values['--engine'];
   try{return await selectBrowserEngine(local,{probe});}catch(error){error.exitCode=2;throw error;}
 }
-export async function runPageAudit(argv,{env=process.env,cwd=process.cwd(),probe,runTask,windowTimeoutMs}={}){
+export async function runPageAudit(argv,{env=process.env,cwd=process.cwd(),probe,runTask,windowTimeoutMs,egoPage}={}){
   try{
-    const values=readIdentity(argv),selection=await lockEngine(values,env,{probe});
-    return await collectAudit(values,selection,{env,cwd,runTask,windowTimeoutMs});
+    const values=readIdentity(argv,{egoPage}),selection=await lockEngine(values,env,{probe});
+    return await collectAudit(values,selection,{env,cwd,runTask,windowTimeoutMs,egoPage});
   }catch(error){return {code:error.exitCode??1,ok:false,outcome:'unavailable',errors:(error.errors??[{code:error.code??'E_AUDIT_TOOL_ERROR',path:error.path??'$',message:error.message}]).map(e=>({...e,message:e.message+(error.originals?'; originals: '+error.originals:'')})),...(error.observations?{observations:error.observations}:{})};}
 }
 const dimensions=['console','network','overflow','perf','a11y'];
@@ -160,7 +164,8 @@ export function mergeJudgments(criteria,observations,refs,{interrupted=false}={}
     return c;
   });
 }
-async function collectAudit(values,selection,{env,cwd,runTask,windowTimeoutMs=5000}){
+async function collectAudit(values,selection,{env,cwd,runTask,windowTimeoutMs=5000,egoPage}){
+  if(egoPage&&(!['ego-lite','ego'].includes(selection.engine)||runTask!==undefined))throw fault('E_USAGE','owned-page','Owned Ego page requires Ego engine; task-performance actions remain on their existing route',2);
   const out=resolve(cwd,values['--out']);
   const input=values['--judgments']?JSON.parse(await readFile(resolve(cwd,values['--judgments']),'utf8')):{criteria:bone.map((dimension,i)=>({id:'dimension-'+(i+1),dimension,state:'未测',evidence:[],untested_reason:'未提供判定文件；由页面执行者提供判定与来源后重跑'})),norm_candidates:[]};
   if(!Array.isArray(input.criteria)||!input.criteria.length)throw fault('E_USAGE','--judgments','Judgment input must have criteria[]');
@@ -172,28 +177,42 @@ async function collectAudit(values,selection,{env,cwd,runTask,windowTimeoutMs=50
   if(at<0)throw fault('E_USAGE','--out','Formal report must be inside quality/evidence');
   const evidenceRoot=out.slice(0,at),collectorRoot=values['--collector-root']?resolve(cwd,values['--collector-root']):here;
   let endpoint=values['--cdp-url'];
-  if(endpoint.startsWith('http:')){
+  if(!egoPage&&endpoint.startsWith('http:')){
     let response;try{response=await fetch(endpoint,{redirect:'error',headers:{Connection:'close'},signal:AbortSignal.timeout(3000)});}catch(error){throw fault('E_COLLECT_NOT_STARTED','--cdp-url',error.message,2);}
     if(!response.ok)throw fault('E_COLLECT_TOOL_ERROR','--cdp-url','Discovery HTTP '+response.status,2);endpoint=(await response.json()).webSocketDebuggerUrl;
   }
-  try{endpoint=validateEndpoint(endpoint,'receiver');}catch(error){throw fault('E_USAGE','--cdp-url',error.code??error.message);}
+  if(!egoPage)try{endpoint=validateEndpoint(endpoint,'receiver');}catch(error){throw fault('E_USAGE','--cdp-url',error.code??error.message);}
   await mkdir(dirname(out),{recursive:true});const dir=await mkdtemp(join(dirname(out),'p5-audit-'));
   const paths=Object.fromEntries(dimensions.map(d=>[d,join(dir,d+'.json')])),observations={};
   const local={...env,BROWSER_QA_ENGINE:selection.engine,...Object.fromEntries(Object.entries(identityFlags).map(([flag,key])=>['PAGE_AUDIT_'+key.toUpperCase(),values[flag]]))};
   for(const key of ['PAGE_AUDIT_WINDOW_DIR','PAGE_AUDIT_TARGET_ID','PAGE_AUDIT_WINDOW_ID','PAGE_AUDIT_WINDOW_TIMEOUT_MS'])delete local[key];
   const config={endpoint,viewport:values['--viewport'],state:values['--state']};
+  let owned;
+  if(egoPage)try{owned=await ownedEgoContext(egoPage,config,local);}catch(error){throw fault(error.kind==='IDENTITY_MISMATCH'?'E_COLLECT_IDENTITY_MISMATCH':'E_COLLECT_NOT_STARTED','owned-page',error.message,2);}
   try{
-    const windowResult=await runNavigationWindow({endpoint,route:values['--route'],config,env:local,cwd,dir,collectorRoot,timeoutMs:windowTimeoutMs,observations,paths});
+    let windowResult;
+    if(owned){
+      windowResult=await collectOwnedEgoNavigation(owned,windowTimeoutMs);
+      for(const dim of ['console','network']){observations[dim]=windowResult[dim];await writeFile(paths[dim],JSON.stringify(observations[dim])+'\n',{flag:'wx'});documentFailure(observations[dim],dim);}
+    }else windowResult=await runNavigationWindow({endpoint,route:values['--route'],config,env:local,cwd,dir,collectorRoot,timeoutMs:windowTimeoutMs,observations,paths});
     let interrupted=Boolean(windowResult?.unreachable)||Object.values(observations).some(doc=>doc.failures.some(f=>f.class==='UNREACHABLE'));
     for(const dim of ['overflow','perf','a11y']){
       if(interrupted)break;
-      if(dim==='perf'){observations.perf=await collectPerf(config,local,runTask);await writeFile(paths.perf,JSON.stringify(observations.perf)+'\n',{flag:'wx'});}
+      if(owned){
+        const doc={engine:owned.object.engine,observed_at:new Date().toISOString(),object:{...owned.object},items:[],failures:[]};observations[dim]=doc;
+        try{
+          if(dim==='overflow')doc.items.push(normalizeOverflow((await owned.read()).facts.scroll));
+          else if(dim==='a11y'){await owned.read();await owned.call('Accessibility.enable');const nodes=normalizeA11y(await owned.call('Accessibility.getFullAXTree'));await owned.read();doc.items.push(...nodes);}
+          else {const facts={nav:{ttfb:[],domContentLoadedEventEnd:[],loadEventEnd:[]}};for(let i=0;i<3;i++){const sample=await observeOwnedEgoReload(owned,windowTimeoutMs),nav=sample.observation.facts.navigation;if(!nav||!routeMatches(nav.url,owned.object.route))throw Object.assign(Error('Registered navigation timing identity missing'),{kind:'IDENTITY_MISMATCH'});for(const key of Object.keys(facts.nav))if(typeof nav[key]==='number'&&Number.isFinite(nav[key])&&nav[key]>=0)facts.nav[key].push(nav[key]);}doc.items.push({state:doc.object.state,viewport:doc.object.viewport,perf:normalizePerf(facts)});}
+        }catch(error){doc.failures.push({class:error.kind||'TOOL_ERROR',detail:error.message});}
+        await writeFile(paths[dim],JSON.stringify(doc)+'\n',{flag:'wx'});
+      }else if(dim==='perf'){observations.perf=await collectPerf(config,local,runTask);await writeFile(paths.perf,JSON.stringify(observations.perf)+'\n',{flag:'wx'});}
       else observations[dim]=await readDocument(launch(join(collectorRoot,'collect-'+dim+'.mjs'),{...config,out:paths[dim]},local,cwd),paths[dim],dim);
       documentFailure(observations[dim],dim);
       interrupted=observations[dim].failures.some(f=>f.class==='UNREACHABLE');
     }
     for(const [dim,doc]of Object.entries(observations))for(const [flag,key]of Object.entries(identityFlags))if(doc.object[key]!==values[flag])throw fault('E_COLLECT_IDENTITY_MISMATCH',key,'Collector '+dim+' differs from declared '+key+'; inspect '+paths[dim]+' and reacquire matching identity through the QA gateway',2);
-    const observedEngine=selection.engine==='ego-lite'?'ego':selection.engine;
+    const observedEngine=owned?selection.engine:(selection.engine==='ego-lite'?'ego':selection.engine);
     for(const [dim,doc]of Object.entries(observations))if(doc.object.state!==config.state||!doc.object.viewport?.startsWith(config.viewport+'@')||doc.object.engine!==observedEngine)throw fault('E_COLLECT_IDENTITY_MISMATCH',dim,'Observed state, viewport or engine differs; inspect '+paths[dim],2);
     const refs=Object.fromEntries(await Promise.all(Object.keys(observations).map(async d=>[d,{ref:relative(evidenceRoot,paths[d]).split(sep).join('/'),sha256:sha(await readFile(paths[d]))}])));
     let windowEvidence;
@@ -204,14 +223,18 @@ async function collectAudit(values,selection,{env,cwd,runTask,windowTimeoutMs=50
     const criteria=applyNormFacts(mergeJudgments(input.criteria,observations,refs,{interrupted}),facts).map(c=>({...c,evidence:[...(c.evidence??[]),normEvidence,...(windowEvidence?[windowEvidence]:[])]})),coverage_limits=[...(input.coverage_limits??[])];
     if(interrupted)coverage_limits.push('采集失联：仅保留已观察；后续采集未执行，恢复同一对象后重跑');
     if(criteria.some(c=>c.state==='未测'))coverage_limits.push('存在未测检查项；退出 0 仅表示报告形状合法');
+    if(owned)coverage_limits.push('溢出采集仅覆盖根元素 html 的 scrollWidth/clientWidth；未扫描后代或内部滚动容器，不能据此判全页布局无溢出');
     if(observations.perf?.items.some(i=>Object.values(i.perf?.nav??{}).some(value=>value.median==='unknown')))coverage_limits.push('导航性能未测：三次观测存在缺失，保原始unknown；由采集执行者恢复同一对象后补齐重跑');
     if(observations.perf?.items.some(i=>i.perf?.interaction.status==='unknown'))coverage_limits.push('交互性能未测：未提供动作或实际耗时缺失，不采信页面预置 measure');
     const object={...Object.fromEntries(Object.entries(identityFlags).map(([flag,key])=>[key,values[flag]])),state:config.state,viewport:observations.console?.object.viewport??config.viewport,engine:selection.engine};
     if(selection.fallbacks.length)object.engine_fallback=Object.fromEntries(['from','to','reason','probe'].map(k=>[k,selection.fallbacks[0][k]]));
     const report={object,criteria,coverage_limits,summary:{overall:coverage_limits.length?'incomplete':criteria.some(c=>c.state==='失败')?'fail':'pass'}};
-    await writeFile(out,JSON.stringify(report)+'\n',{flag:'wx'});
-    const checker=launchChecker(out,cwd),checked=await checker;
-    if(checked.code!==0){await unlink(out);if(checked.code===2){const e=fault('E_REPORT_REJECTED','$','Shape validator rejected report',2);e.errors=JSON.parse(checked.stdout).errors;throw e;}throw fault('E_AUDIT_TOOL_ERROR','$','Shape validator failed: '+checked.stderr);}
+    const reportBytes=JSON.stringify(report)+'\n';
+    if(egoPage){const errors=collectErrors(JSON.parse(reportBytes));if(errors.length){const rejected=join(dir,'report-rejected.json');await writeFile(rejected,reportBytes,{flag:'wx'});const error=fault('E_REPORT_REJECTED','$','Shape validator rejected unpublished candidate; original: '+rejected,2);error.errors=errors;throw error;}}
+    await writeFile(out,reportBytes,{flag:'wx'});
+    // Owned bytes were validated before publication; the raw endpoint keeps
+    // its existing subprocess and cleanup contract unchanged.
+    if(!egoPage){const checked=await launchChecker(out,cwd);if(checked.code!==0){await unlink(out);if(checked.code===2){const e=fault('E_REPORT_REJECTED','$','Shape validator rejected report',2);e.errors=JSON.parse(checked.stdout).errors;throw e;}throw fault('E_AUDIT_TOOL_ERROR','$','Shape validator failed: '+checked.stderr);}}
     return {code:0,report,observations,evidence_refs:refs};
   }catch(error){error.observations=observations;error.originals=dir;throw error;}
 }

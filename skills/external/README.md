@@ -254,7 +254,7 @@
 
 ## C05 两路设计方法
 
-逐件来源/固定版本/权利唯一回catalog的c05-ui-designer-*及c05-playbook-*；本节只导航。十一件已按本任务用户明确个人研究用途复制，五Apache保原文/本地适配和通知，另外六件保固定原文，source/target绑定见本任务180原件；不冒已获grant或用目录/数量代效果。现同目录两个skill-bundle只列实际资源，扁平resolveSkillPackage不支持nested family，后续作者显式沿本页逐文件读取，不冒已安装成功。
+逐件来源/固定版本/权利唯一回catalog的c05-ui-designer-*及c05-playbook-*；本节只导航。十一件已按本任务用户明确个人研究用途复制，五Apache保原文/本地适配和通知，另外六件保固定原文，source/target绑定见本任务180原件；不冒已获grant或用目录/数量代效果。现同目录两个skill-bundle只列实际资源。resolveSkillPackage允许显式family：name=ui-designer、bundle=skills/external/ui-designer/skill-bundle.json、path=该bundle内具名Markdown；playbook同理。resolver核family目录、所有父目录无symlink、bundle成员和contained regular-file，不扫描自动安装；正常作者仍按下列正文入口读取。build-plan/build-code现manifest显式声明两family，由现stage-skill-runtime与发行器复用同一resolver身份/成员边界；localPayload按原catalog真实path登记和既有dependency_closure承接，已声明同owner资源不当成另一个native技能，未声明/跨owner/穿越/链接仍拒绝。真实正常ROOT public release与临时沙盒npm/Git安装已有定向证明；host reader可读取安装根原字节，这不证明已安装工作流自动执行、方法质量或业务闭环。
 
 UI Designer：design-brief供build-plan/原型取已定意图；information-architecture供区域/导航/增长；design-tokens供单owner值映射；frontend-design供实际组件；ui-interaction-states供状态/恢复；ui-accessibility-review供证据级和键盘/辅助技术边界；design-review供独立审查并实际读同一ui-copy-discipline。Playbook：00供spec的六层完整任务；02仅场景选型参考，当前非CloudAI故其专用模板选择不适用，不冒42模板已获得；09仅结构真歧义时比较必要变体，不强多稿；08供finding回源和修复建议，不冒UES/11评分实现。调用者先读本地实际全文，再在本任务记录具体输入/产物/适用或不适用理由。
 

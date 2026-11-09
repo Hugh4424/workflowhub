@@ -65,3 +65,13 @@ build-plan 可先保存具名 Phase，再生成纯指针 index；make-decision �
 
 坏例至少暴露两处缺口：名词化动作没有首改对象，内行话没有解释；失败段也缺 owner 与恢复条件。
 好坏判断的上限是这些可观察差异，真正可用性由未参与写作的独立读者消费实际完整材料判定。
+
+## 怎样调用现有辅助检查？
+
+计划作者沿build-plan已有本契约指针读取，再按当前真实材料调用；bundle只分发这些文件，不执行脚本。
+
+- 决策基线：`node skills/spec-plan/scripts/build-decision-baseline.mjs --decision-log <当前decision-log.md> --spec <当前spec.md>`，stdout为基线Markdown；0为本次解析，1为输入/结构错误，不证明原始需求已正确理解。
+- 读者记录：`node skills/spec-plan/scripts/check-reader-record.mjs <独立读者本次记录.md>`；0仅结构齐，2为具名缺项，1为输入错误；五问答案仍由独立读者负责。
+- 作者读数：`node skills/spec-plan/scripts/check-authoring-budget.mjs <当前材料.md>`；正常读取退出0，只输出字数/句长等观察，不作可读性裁决或新门；读不到保非零原错误。
+
+命令经当前任务capture保存真实cwd/argv/exit/原输出，未知来源与未执行面不以脚本在bundle内冒通过。

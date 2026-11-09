@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 function assertRelative(locator) {
-  if (!locator || path.isAbsolute(locator)) throw new Error(`skill locator must be relative: ${locator}`);
+  if (typeof locator !== "string" || !locator || path.isAbsolute(locator)) throw new Error(`skill locator must be relative: ${locator}`);
   if (locator.split(/[\\/]/).includes("..")) throw new Error(`skill locator may not traverse: ${locator}`);
 }
 
@@ -76,9 +76,16 @@ export function validateSkillBundle(packageRoot, bundlePath, expectedSkillPath) 
   assertRelative(bundlePath);
   const root = fs.realpathSync(packageRoot);
   const skillsRoot = assertDirectory(root, "skills", "skills root");
-  const expectedName = expectedSkillPath.split("/").at(-2);
-  const expectedDir = path.join(root, "skills", expectedName);
-  const realExpectedDir = assertDirectory(path.join(root, "skills"), expectedName, `skill directory ${expectedName}`);
+  const directory = path.dirname(bundlePath);
+  const expectedName = path.basename(directory);
+  const expectedDir = path.resolve(root, directory);
+  if (!inside(path.join(root, "skills"), expectedDir) || expectedDir === path.join(root, "skills"))
+    throw new Error(`bundle must be inside a declared skill directory: ${bundlePath}`);
+  // Check every nested directory; a contained realpath does not authorize a symlink.
+  let parent = skillsRoot;
+  for (const segment of path.relative(path.join(root, "skills"), expectedDir).split(path.sep))
+    parent = assertDirectory(parent, segment, `skill directory ${segment}`);
+  const realExpectedDir = parent;
   const absoluteBundle = path.resolve(root, bundlePath);
   assertRegularContainedFile(expectedDir, realExpectedDir, absoluteBundle, `bundle ${bundlePath}`);
   const bundle = JSON.parse(fs.readFileSync(absoluteBundle, "utf8"));
@@ -90,14 +97,33 @@ export function validateSkillBundle(packageRoot, bundlePath, expectedSkillPath) 
   const realBundleDir = fs.realpathSync(bundleDir);
   if (realBundleDir !== realExpectedDir) throw new Error(`bundle must be directly inside skill directory: ${bundlePath}`);
   const seen = new Set();
+  const seenDestinations = new Set();
   const fileEntries = bundle.files.map(entry => {
+    if (typeof entry !== "string" && (!entry || typeof entry !== "object" || Array.isArray(entry))) {
+      throw new Error(`invalid bundle asset entry: ${bundlePath}`);
+    }
+    if (typeof entry !== "string" && Object.keys(entry).some(key => !["path", "sha256", "destination"].includes(key))) {
+      throw new Error(`invalid bundle asset entry: ${bundlePath}`);
+    }
     const locator = typeof entry === "string" ? entry : entry.path;
+    const hasDestination = typeof entry !== "string" && Object.hasOwn(entry, "destination");
+    const destination = hasDestination ? entry.destination : locator;
     assertRelative(locator);
+    assertRelative(destination);
+    if (destination.includes("\\") || /^[A-Za-z]:/.test(destination) || destination.endsWith("/") || destination === "."
+        || path.posix.normalize(destination) !== destination) {
+      throw new Error(`skill destination must be a normalized relative path: ${destination}`);
+    }
+    if (locator === path.posix.basename(bundlePath) || destination === path.posix.basename(bundlePath)) {
+      throw new Error(`bundle asset may not collide with its manifest: ${bundlePath}`);
+    }
     if (seen.has(locator)) throw new Error(`duplicate bundle asset: ${locator}`);
+    if (seenDestinations.has(destination)) throw new Error(`duplicate bundle destination: ${destination}`);
     seen.add(locator);
+    seenDestinations.add(destination);
     const absolute = path.resolve(bundleDir, locator);
     const resolved = assertRegularContainedFile(bundleDir, realBundleDir, absolute, `bundle asset ${locator}`);
-    return { path: locator, resolved };
+    return hasDestination ? { path: locator, destination, resolved } : { path: locator, resolved };
   });
   const skill = resolveLocalSkill(root, expectedSkillPath);
   if (!fileEntries.some(entry => entry.resolved === skill)) throw new Error(`bundle does not include declared SKILL.md: ${expectedSkillPath}`);
@@ -109,9 +135,14 @@ export function resolveSkillPackage({ packageRoot, manifestPath, dependency }) {
   try {
     const bundle = dependency?.bundle === undefined ? `skills/${skill}/skill-bundle.json` : dependency.bundle;
     if (!skill || !dependency.path || !bundle) throw new Error("skill dependency is incomplete");
-    if (bundle !== `skills/${skill}/skill-bundle.json`)
+    const externalFamily = bundle === `skills/external/${skill}/skill-bundle.json`;
+    if (!externalFamily && bundle !== `skills/${skill}/skill-bundle.json`)
       throw new Error(`skill dependency bundle does not match its declared name: ${skill}`);
-    if (dependency.path !== `skills/${skill}/SKILL.md`)
+    if (externalFamily) {
+      assertRelative(dependency.path);
+      if (!dependency.path.startsWith(`skills/external/${skill}/`) || !dependency.path.endsWith(".md"))
+        throw new Error(`skill dependency path does not match its declared family: ${skill}`);
+    } else if (dependency.path !== `skills/${skill}/SKILL.md`)
       throw new Error(`skill dependency path does not match its declared name: ${skill}`);
     const root = fs.realpathSync(packageRoot);
     assertRelative(manifestPath);

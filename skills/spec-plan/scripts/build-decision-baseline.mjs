@@ -17,6 +17,9 @@ function sourceLines(text) {
 // The current decision-log template asks the reader question
 // 「后来改了什么，原件在哪里？」; archived logs use the shorter legacy titles.
 // Keep the same semantic boundary: only these reply-section questions match.
+function requirementHeading(title) {
+  return /^(?:原始需求|原来要求做成什么)[？?]?$/.test(title) || title === '原始需求：要解决什么？';
+}
 function replyHeading(title) {
   return /^(?:需求变更记录|用户后来改了什么|后来改了什么(?:[，,]\s*原件在哪里)?)[？?]?$/.test(String(title ?? '').trim());
 }
@@ -44,7 +47,7 @@ function rows(text, kind) {
     const heading = /^(#{1,6})\s+(.+)$/.exec(line);
     if (heading) {
       table = null;
-      const requirements = /^(?:原始需求|原来要求做成什么)[？?]?$/.test(heading[2]);
+      const requirements = requirementHeading(heading[2]);
       const replies = replyHeading(heading[2]);
       if ((kind === '需求' && requirements) || (kind === '答复' && replies)) sectionDepth = heading[1].length;
       else if (requirements || replies || (sectionDepth && heading[1].length <= sectionDepth)) sectionDepth = null;
@@ -73,7 +76,7 @@ function rows(text, kind) {
   }
   const result = [...found.values()];
   const currentAbsence = /^(?:(?:已|经)(?:核对|核查|确认)[^。；;\n]*[。；;]\s*)?(?:本任务|本次(?:任务)?|当前(?:任务)?)(?:无|没有)(?:后续|新增|进一步)?(?:用户)?(?:答复|需求变更|变更)(?:或(?:需求)?变更)?[。.]?$/;
-  const noReplies = kind === '答复' && !result.length && sourceContext(sourceLines(text).map(line => line.visible ? line.text : '').join('\n'), new Set(), 'decision-log.md', '答复').some(value => currentAbsence.test(value.trim()));
+  const noReplies = kind === '答复' && !result.length && sourceContext(sourceLines(text).map(line => line.visible ? line.text : '').join('\n'), new Set(), 'decision-log.md', '答复').some(value => (currentAbsence.test(value.trim()) || /^目前没有需求变更（U）。(?:变更记录的唯一原件位置按「外置事实索引」放 `requirement-change-log\.md`，当前尚无内容。)?$/.test(value.trim())));
   if (!result.length && !noReplies) throw new Error(`BASELINE_SOURCE_INVALID: no recognized ${kind} source records in the supplied source section`);
   return { records: result, excluded };
 }
@@ -87,7 +90,7 @@ function sourceContext(text, excluded, ref, kind = null) {
     const heading = line.visible && /^(#{1,6})\s+(.+)$/.exec(line.text);
     if (heading && (!section || heading[1].length <= section)) {
       flush();
-      const requirements = /^(?:原始需求|原来要求做成什么)[？?]?$/.test(heading[2]);
+      const requirements = requirementHeading(heading[2]);
       const replies = replyHeading(heading[2]);
       const identity = kind === null && heading[2] === '任务身份';
       section = (identity || (kind !== '答复' && requirements) || (kind !== '需求' && replies)) ? heading[1].length : null;

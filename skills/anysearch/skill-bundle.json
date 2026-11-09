@@ -3,7 +3,10 @@
   "skill": "anysearch",
   "files": [
     ".env.example",
-    ".gitignore",
+    {
+      "path": "gitignore-template",
+      "destination": ".gitignore"
+    },
     "LICENSE",
     "NOTICE",
     "SECURITY.md",

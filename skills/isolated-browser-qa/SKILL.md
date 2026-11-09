@@ -5,7 +5,7 @@ description: >
   staging, and active-development web checks. Trigger it for browser testing,
   page acceptance, screenshot acceptance, flow reproduction, UI bug checks,
   localhost inspection, and post-change verification. Default to ego-lite
-  when its existing instance is running; auto records an agent-browser fallback before launch when ego is missing or not running. Explicit existing-ego requests fail without starting another browser.
+  only when the Ego app is installed, its helper resolves, and the app is running. Auto may fall back to agent-browser only after the system confirms the Ego app is absent. An installed or unknown Ego app state never selects agent-browser.
   Choose exactly one engine per QA run, run only that engine, repair only that
   engine, and stop with a clear blocker instead of mixing browser tools.
 allowed-tools: Bash(agent-browser:*), Bash(browser-use:*), Bash(bash:*), Bash(command:*), Bash(curl:*), Bash(node:*), Bash(python3:*), Bash(ps:*), Bash(lsof:*)
@@ -25,7 +25,17 @@ Use for localhost/preview/staging/deployed-page tests, screenshots, DOM/flow acc
 
 ## Engine Router
 
-ego 在跑就用；装了没开回退 agent-browser；选定后失败不切换。The single selectBrowserEngine entry owns auto discovery: only missing executable or observed not-running permits fallback, emitted once as engine-fallback with from, to, reason and probe before launch. Probe errors remain failures. Explicit engine requests bypass discovery; explicit ego acquisition never launches a backup. Browser-use is legacy: its retained native branch owns its lifecycle and cleanup. Outer isolation, permissions, navigation and scenario failures never trigger another engine; Playwright MCP remains excluded.
+已安装 Ego app 时不选择 agent-browser。
+只有系统确认 app 未安装后，auto 才能记录 from、to、reason、probe 四项 engine-fallback 事实。
+确认流程先查 Launch Services，再扫描 Foundation 返回的全部 ApplicationDirectory 域。
+扫描可见的 ego lite.app 包，并核对 Contents/Info.plist。
+只有完整扫描没有 bundle ID 匹配时才确认缺席。
+mdfind 只提供正向命中；空结果不证明缺席。
+查询、目录或目标包 metadata 不完整时保留 unknown。
+helper 缺失或 Ego 未运行时清楚失败，不切引擎。
+显式 agent-browser 使用同一安装态 guard。
+browser-use 保持原 native 分支。
+选定后，隔离、权限、导航和场景失败都不触发换引擎；Playwright MCP 仍排除。
 
 ## Standard Workflow
 
@@ -41,14 +51,14 @@ context_exports="$(bash "$SKILL_DIR/scripts/browser-qa-context.sh" "$BROWSER_QA_
 eval "$context_exports"
 ```
 
-Context-only auto discovery deliberately rejects fallback instead of exporting an implicit backup; use the direct --run entry below for the auto lifecycle and its recorded fallback. Context prints nonsecret engine/session/host/allowed-domains/auth/profile metadata. For a cancellable lifecycle use that same entry:
+Context-only auto discovery deliberately rejects fallback instead of exporting an implicit backup; use the direct --run entry below for the auto lifecycle and its recorded fallback. Context prints nonsecret engine/session/host/allowed-domains/auth/profile metadata. For Ego, the host adapter supplies `BROWSER_QA_TASK_ID` from the current authenticated TaskHandle; the caller never asks the user to type a Space ID. Missing task identity stops before TaskSpace creation. For a cancellable lifecycle use that same entry:
 
 ```bash
 bash "$SKILL_DIR/scripts/browser-qa-context.sh" --run --url "$BROWSER_QA_TARGET_URL" \
   --evidence-dir "$BROWSER_QA_EVIDENCE_DIR" -- bash "$BROWSER_QA_SCENARIO_SCRIPT"
 ```
 
-Evidence must be outside temporary browser roots. Scenario inherits the owned session. For agent-browser, runner strips source capabilities, launches native blank and caches owned CDP before target work, then finally closes receiver/cleans on success, failure and cancel. Existing ego instead follows the TaskSpace lifecycle below. Caller preserves actual exit (cancel 130/143) and rereads named evidence with size/hash after cleanup. --run is private, not another WorkflowHub command.
+Evidence must be outside temporary browser roots. Scenario inherits the owned session. For agent-browser, runner strips source capabilities, launches native blank and caches owned CDP before target work, then finally closes receiver/cleans on success, failure and cancel. Each Ego `--run` is one logical QA session: the runner creates one new TaskSpace named from the current TaskHandle `task_id` and a random UUID, shares its `p1` across every page and step in the scenario, then calls `finish({keep:[]})` once in `finally` on success, failure or cancellation. A later `--run` creates a different TaskSpace. The host adapter must inject the ID; the portable runner does not import TaskHandle or guess identity. Caller preserves actual exit (cancel 130/143) and rereads named evidence with size/hash after cleanup. --run is private, not another WorkflowHub command.
 
 For an explicitly authorized isolated exact-file experiment, read
 [the agent-browser experiment branch](references/agent-browser.md#isolated-exact-file-experiment)
@@ -66,7 +76,7 @@ Guide/dependency failure is unavailable; repair only that engine. Doctor does no
 
 ### 3. Cleanup Before Launch
 
-For agent-browser use this owned-instance cleanup. Existing ego has no instance launch or pre-run cleanup; follow its TaskSpace lifecycle below.
+For agent-browser use this owned-instance cleanup. Ego has no instance launch or pre-run cleanup; `--run` creates its owned TaskSpace and finishes it in the same invocation.
 
 ```bash
 bash "$SKILL_DIR/scripts/browser-qa-cleanup.sh" "$BROWSER_QA_SESSION" "$BROWSER_QA_ENGINE"
@@ -92,17 +102,17 @@ Preserve prior evidence, reset only this owned session and repeat the original a
 
 ### 7. Finish Cleanly
 
-For agent-browser use this cleanup. Existing ego follows normal finish versus error/control-loss retention below.
+For agent-browser use this cleanup. Ego cleanup runs from the `--run` finalizer after the scenario ends or stops.
 
 ```bash
 bash "$SKILL_DIR/scripts/browser-qa-cleanup.sh" "$BROWSER_QA_SESSION" "$BROWSER_QA_ENGINE"
 ```
 
-Verify owned PIDs/temp resources are gone, target service remains running, and original evidence remains readable. Keep partial cleanup/nonzero exits explicit. Never close all sessions or kill a target app/worktree stack.
+Verify owned PIDs/temp resources are gone, the target service remains running, and original evidence remains readable. Ego `finish({keep:[]})` closes this invocation's managed Page labels; user-created and unknown-origin tabs remain protected by the SDK. The SDK documents no separate delete API for the TaskSpace record, so report Page/space closure without claiming record deletion. A finish error, receipt mismatch, or unresolved finalizer is `incomplete`; do not retry or open another TaskSpace. Never close all sessions or kill a target app/worktree stack.
 
 ## Auth Rules
 
-Use fresh isolation by default. Before any source connection read references/auth.md: login reuse uses browser-level read-only ticket export to a different owned receiver. No user-page attach, passwords, profile copying or closing user Chrome. Missing input/capability remains unavailable; preserve authorization facts and continue safe checks. Tool/platform restrictions are not bypassed by another surface.
+Use fresh isolation by default for agent-browser and browser-use. The Ego route uses the already running app with one newly named, owned TaskSpace per logical QA session; its profile storage can be shared. Before any source connection read references/auth.md: login reuse uses browser-level read-only ticket export to a different owned receiver. No user-page attach, passwords, profile copying or closing user Chrome. Missing input/capability remains unavailable; preserve authorization facts and continue safe checks. Tool/platform restrictions are not bypassed by another surface.
 
 ## Safety Defaults
 
@@ -110,7 +120,7 @@ Keep localhost whitelist localhost,127.0.0.1 and the explicit target whitelist e
 
 ## Output Contract
 
-Report actual route/page and scenario; sample/component/fixture paths, viewport/state coverage; tool, engine, derived session and engine_switch: no. State auth mode and login state reuse (reused/fresh/none, controlled distinct from real login). Include performance measured or not_measured/not_applicable with reason; screenshots references and actual paths; test command, test file, output and exit; visual/a11y observations, coverage limits and whether cleanup completed. Cookie, token and profile content must not appear in evidence.
+Report actual route/page and scenario; sample/component/fixture paths, viewport/state coverage; tool, engine, derived session and engine_switch: no. State auth mode and login state reuse (reused/fresh/none, controlled distinct from real login). Include performance measured or not_measured/not_applicable with reason; screenshots references and actual paths; test command, test file, output and exit; visual/a11y observations, coverage limits and whether owned Page cleanup completed. State TaskSpace record deletion separately as unavailable unless the SDK documents and confirms it. Cookie, token, TaskSpace name/ID and profile content must not appear in evidence.
 
 Acceptance includes actual source/sample/scenario/tier. Missing preview/fixture, unreadable evidence, cancellation, tool/oracle error and cleanup failure retain original reasons. A fixture is not the real page; no screenshot means visual not_observed with reason, not pass. Missing a11y is not_checked with reason. Empty console proves nothing until URL/title/DOM ready are observed; report warnings/errors separately and disclose unknown source positions/cross-navigation pollution.
 
@@ -151,10 +161,10 @@ Claim verification only for executed observations; never invent flags, extra ses
 
 ## Design-source ego workspace and page-code boundary
 
-When the caller explicitly requests the already open ego instance, this route reuses that app and creates one automatically named, owned TaskSpace for the whole task, then reuses its initial p1. It never launches a browser or window, initializes a profile, imports data, calls newPage/activate, focuses an existing page, or changes user tabs. The user permits this one new workspace to naturally present; the SDK does not promise background/no-focus behavior. Record only the owned space/p1 metadata after that single creation. The documented global space list does not prove all user tabs unchanged; do not inspect their titles/URLs to fill that coverage gap. If it creates a window or persistently steals focus, stop this path without trying other methods. Do not represent a missing background option as a supported option.
+For every Ego `--run`, the host adapter supplies the current TaskHandle `task_id`; the runner combines it with a fresh random UUID and calls `taskSpace(name)` once. It uses only the returned owned handle and its initial `p1` throughout that logical session. It never launches a browser or window, initializes a profile, imports data, calls newPage/activate, focuses an existing page, or changes user tabs. The SDK does not promise background/no-focus behavior. The runner does not print the space name or numeric ID. If creation reports a name collision, fail that call without retry, claim, or alternate Space. Do not infer a background option the SDK does not provide.
 
-This is page-lifecycle ownership, not storage isolation. Cookie/cache/storage can be shared with other spaces in the profile. auth none means no proactive credential read/export/injection; it does not mean anonymous. Fixed collection never reads Cookie/storage. Read references/auth.md for this explicit exception and retain the agent-browser/browser-use fresh-instance and ticket rules unchanged. Credential export is not implicit in a workspace request.
+This is page-lifecycle ownership, not storage isolation. Cookie/cache/storage can be shared with other spaces in the profile. auth none means no proactive credential read/export/injection; it does not mean anonymous. Fixed collection never reads Cookie/storage. Read references/auth.md for this route and retain the agent-browser/browser-use fresh-instance and ticket rules unchanged. Credential export is not implicit in a workspace request.
 
-Reuse this one owned handle across the necessary P2/P3 localhost cases rather than opening a space for each case. On normal completion call finish({keep:[]}) once and verify its receipt; protected/unmanaged/user pages remain untouched. On error or user takeover follow the SDK guide and do not finish: retain the actual owned-resource handle and report the boundary for later normal cleanup. Never Browser.close, terminate the user's app, clear profile-wide storage or close unknown tabs. The original --run scenario argv/evidence/source capability stripping stays in place. A normal standalone --run finishes once. For a task explicitly continuing across rounds, BROWSER_QA_EGO_KEEP_OPEN=1 retains the printed own spaceId; subsequent --run resumes that numeric BROWSER_QA_EGO_SPACE_ID and initial p1, then the final normal round omits KEEP_OPEN and finishes once. These are per-command inputs and output facts, not a persistent session store. Source capabilities are never included. SDK control errors stop without retry or claim; ownership is only a creation-time snapshot, not a live permission check; the SDK adapter details must come from its current guide, not a second control plane.
+Keep every page and step of one QA session inside its single `--run` scenario. The gateway calls `finish({keep:[]})` exactly once in `finally` after success, failure or cancellation, then validates the returned managed-Page receipt. The SDK documents that finish closes the TaskSpace when no protected tabs remain; it does not document deletion of the TaskSpace record. If finish fails, leaves any managed Page retained, or its handle does not match the created ID, report cleanup `incomplete`, preserve the scenario result, and do not retry or create a replacement. User-created and unknown-origin tabs remain protected. Never call Browser.close, terminate the user's app, clear profile-wide storage, claim another Space, or close unknown tabs. The original scenario argv and source-capability stripping stay in place. The Skill runner receives only the host-validated `task_id`; TaskHandle loading remains in the host adapter so this Skill can move independently. Source capabilities are never included.
 
 Page-code collection accepts only the fixed versioned IDs exported from browser-qa-session.mjs. Unknown IDs fail before page access; selectors, properties and the optional fixed facts are data. The optional facts accept only the closed names `scroll`, `hit-test`, `reduced-motion` and `active-element`; a bounded finite hit point is data too, while expressions, code, paths, functions, Cookie and storage stay unread. The synchronous repository-owned wrapper blocks DOM mutation entry points and fetch/XMLHttpRequest, inspects MutationObserver records and restores descriptors in finally. Detected/attempted violations remain failures. It is not a hostile-code sandbox: page-owned scripts, cached original functions, other realms/iframes and unguarded APIs remain outside this claim. The legacy payload and return shape, original read-only interception, unknown-ID rejection and finally restore stay unchanged. Use only the registered path for collection. Preserve original failures, measured coverage and the distinction between fake seams, previous-route evidence and a real current-route run.
