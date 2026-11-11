@@ -75,6 +75,16 @@ function removeOwnedFixture(root) {
   rmSync(root, { recursive: true, force: true });
 }
 
+function enableFsmonitorNoChangeHook(state, path) {
+  const hook = join(state.root, "fsmonitor-no-change.sh");
+  writeFileSync(hook, "#!/bin/sh\nprintf 'token\\0'\n", { mode: 0o700 });
+  state.git(state.worktree, ["config", "--local", "core.fsmonitor", hook]);
+  state.git(state.worktree, ["config", "--local", "core.fsmonitorHookVersion", "2"]);
+  state.git(state.worktree, ["status", "--porcelain=v1"]);
+  state.git(state.worktree, ["update-index", "--fsmonitor"]);
+  expect(state.git(state.worktree, ["ls-files", "-f", "-z", "--", path])[0]).toBe("h");
+}
+
 describe("task worktree cleanup classification", () => {
   it("treats a root node_modules install as generated ignored content", () => {
     const root = gitFixture();
@@ -156,6 +166,206 @@ describe("task worktree cleanup classification", () => {
         expect(scan.execution_sidecars).toEqual([]);
       } finally { removeOwnedFixture(state.root); }
     }
+  });
+
+  it("blocks worktree removal when Git index flags hide tracked changes", async () => {
+    for (const flag of ["assume-unchanged", "skip-worktree"]) {
+      const state = ownedRemovalFixture(), path = join(state.worktree, "source.mjs");
+      const changedBytes = `${flag} hidden tracked change\n`;
+      try {
+        state.git(state.worktree, ["update-index", `--${flag}`, "--", "source.mjs"]);
+        writeFileSync(path, changedBytes, "utf8");
+        expect(state.git(state.worktree, ["status", "--porcelain=v1", "--", "source.mjs"])).toBe("");
+        expect(state.git(state.worktree, ["ls-files", "-v", "--", "source.mjs"])[0]).toBe(flag === "assume-unchanged" ? "h" : "S");
+
+        const removal = createTaskWorktreeRemoval(state.task), probe = removal.probe();
+        expect(probe.satisfied).toBe(false);
+        const scan = inspectWorktreeCleanup(state.worktree);
+        expect(scan.safe).toBe(false);
+        expect(scan.tracked.map(({ path: trackedPath }) => trackedPath)).toContain("source.mjs");
+        await expect(removal.execute()).rejects.toMatchObject({ code: "FORMAL_CLEANUP_UNSAFE" });
+        expect(readFileSync(path, "utf8")).toBe(changedBytes);
+        expect(existsSync(state.worktree)).toBe(true);
+        expect(state.git(state.repo, ["worktree", "list", "--porcelain"])).toContain(`worktree ${state.worktree}`);
+        expect(state.git(state.repo, ["rev-parse", `refs/heads/${state.branch}`])).toBe(state.tip);
+      } finally { removeOwnedFixture(state.root); }
+    }
+  });
+
+
+  it("keeps clean skip-worktree files fail-closed", async () => {
+    const state = ownedRemovalFixture(), path = join(state.worktree, "source.mjs");
+    const original = readFileSync(path, "utf8");
+    try {
+      state.git(state.worktree, ["update-index", "--skip-worktree", "--", "source.mjs"]);
+      expect(state.git(state.worktree, ["status", "--porcelain=v1", "--", "source.mjs"])).toBe("");
+      expect(state.git(state.worktree, ["ls-files", "-v", "-z", "--", "source.mjs"])[0]).toBe("S");
+      const scan = inspectWorktreeCleanup(state.worktree);
+      expect(scan.safe).toBe(false);
+      expect(scan.tracked.map(({ path: trackedPath }) => trackedPath)).toContain("source.mjs");
+      const removal = createTaskWorktreeRemoval(state.task);
+      await expect(removal.execute()).rejects.toMatchObject({ code: "FORMAL_CLEANUP_UNSAFE" });
+      expect(readFileSync(path, "utf8")).toBe(original);
+      expect(existsSync(state.worktree)).toBe(true);
+    } finally { removeOwnedFixture(state.root); }
+  });
+
+  it("allows a clean fsmonitor-valid worktree to be removed", async () => {
+    const state = ownedRemovalFixture();
+    try {
+      enableFsmonitorNoChangeHook(state, "source.mjs");
+      expect(state.git(state.worktree, ["ls-files", "-v", "-z", "--", "source.mjs"])[0]).toBe("H");
+      expect(state.git(state.worktree, ["ls-files", "-f", "-z", "--", "source.mjs"])[0]).toBe("h");
+      expect(inspectWorktreeCleanup(state.worktree).safe).toBe(true);
+      await createTaskWorktreeRemoval(state.task).execute();
+      expect(existsSync(state.worktree)).toBe(false);
+      expect(state.git(state.repo, ["worktree", "list", "--porcelain"])).not.toContain(`worktree ${state.worktree}`);
+      expect(state.git(state.repo, ["rev-parse", `refs/heads/${state.branch}`])).toBe(state.tip);
+    } finally { removeOwnedFixture(state.root); }
+  });
+
+  it("blocks worktree removal when stale fsmonitor-valid hides a tracked change", async () => {
+    const state = ownedRemovalFixture(), path = join(state.worktree, "source.mjs");
+    const changedBytes = "fsmonitor-valid hidden tracked change\n";
+    try {
+      enableFsmonitorNoChangeHook(state, "source.mjs");
+      expect(state.git(state.worktree, ["ls-files", "-v", "-z", "--", "source.mjs"])[0]).toBe("H");
+      expect(state.git(state.worktree, ["ls-files", "-f", "-z", "--", "source.mjs"])[0]).toBe("h");
+      writeFileSync(path, changedBytes, "utf8");
+      expect(state.git(state.worktree, ["status", "--porcelain=v1", "--", "source.mjs"])).toBe("");
+      expect(state.git(state.worktree, ["ls-files", "-f", "-z", "--", "source.mjs"])[0]).toBe("h");
+      expect(state.git(state.worktree, ["-c", "core.fsmonitor=false", "--no-optional-locks", "status", "--porcelain=v1", "--", "source.mjs"])).toContain("source.mjs");
+      const removal = createTaskWorktreeRemoval(state.task);
+      await expect(removal.execute()).rejects.toMatchObject({ code: "FORMAL_CLEANUP_UNSAFE" });
+      expect(readFileSync(path, "utf8")).toBe(changedBytes);
+      expect(existsSync(state.worktree)).toBe(true);
+      expect(state.git(state.repo, ["worktree", "list", "--porcelain"])).toContain("worktree " + state.worktree);
+      expect(state.git(state.repo, ["rev-parse", "refs/heads/" + state.branch])).toBe(state.tip);
+    } finally { removeOwnedFixture(state.root); }
+  });
+
+  it("lets Git preserve a fsmonitor-valid edit injected at final worktree removal", async () => {
+    const state = ownedRemovalFixture(), path = join(state.worktree, "source.mjs"), bytes = "last-moment fsmonitor change\n";
+    enableFsmonitorNoChangeHook(state, "source.mjs");
+    const realGit = execFileSync("/usr/bin/which", ["git"], { encoding: "utf8" }).trim();
+    const bin = join(state.root, "race-bin"), savedPath = process.env.PATH;
+    mkdirSync(bin);
+    writeFileSync(join(bin, "git"), `#!/bin/sh
+if [ "$1" = "-c" ] && [ "$2" = "core.fsmonitor=false" ] && [ "$3" = "worktree" ] && [ "$4" = "remove" ]; then
+  "${realGit}" -C "${state.worktree}" update-index --fsmonitor-valid -- source.mjs || exit $?
+  test "$("${realGit}" -C "${state.worktree}" ls-files -f -- source.mjs)" = "h source.mjs" || exit 97
+  printf "%b" ${JSON.stringify(bytes)} > ${JSON.stringify(path)}
+fi
+exec "${realGit}" "$@"
+`, { mode: 0o700 });
+    try {
+      process.env.PATH = `${bin}:${savedPath}`;
+      await expect(createTaskWorktreeRemoval(state.task).execute()).rejects.toThrow(/task worktree removal validation failed/);
+    } finally { if (savedPath === undefined) delete process.env.PATH; else process.env.PATH = savedPath; }
+    expect(readFileSync(path, "utf8")).toBe(bytes);
+    expect(existsSync(state.worktree)).toBe(true);
+    expect(state.git(state.repo, ["worktree", "list", "--porcelain"])).toContain(`worktree ${state.worktree}`);
+    expect(state.git(state.repo, ["rev-parse", `refs/heads/${state.branch}`])).toBe(state.tip);
+  });
+
+  it.each(["assume-unchanged", "skip-worktree"])("preserves a tracked edit injected with %s after the final cleanup scan", async (flag) => {
+    const state = ownedRemovalFixture(), path = join(state.worktree, "source.mjs"), bytes = "last-moment " + flag + " change\n";
+    const trigger = join(state.root, "index-flag-race-triggered"), countFile = join(state.root, "index-flag-race-count"), lockError = join(state.root, "index-lock-error");
+    const realGit = execFileSync("/usr/bin/which", ["git"], { encoding: "utf8" }).trim();
+    const bin = join(state.root, "index-flag-race-" + flag), savedPath = process.env.PATH, expectedTag = flag === "assume-unchanged" ? "h" : "S";
+    mkdirSync(bin);
+    const wrapper = [
+      "#!/bin/sh",
+      "real_git=" + JSON.stringify(realGit),
+      "status_count=" + JSON.stringify(countFile),
+      "trigger=" + JSON.stringify(trigger),
+      "lock_error=" + JSON.stringify(lockError),
+      "if [ \"$(pwd)\" = " + JSON.stringify(state.worktree) + " ] && [ \"$1\" = \"symbolic-ref\" ] && [ \"$2\" = \"--quiet\" ] && [ \"$3\" = \"--short\" ] && [ \"$4\" = \"HEAD\" ]; then",
+      "  \"$real_git\" \"$@\"",
+      "  command_status=$?",
+      "  count=0",
+      "  if [ -f \"$status_count\" ]; then read count < \"$status_count\"; fi",
+      "  count=$((count + 1))",
+      "  printf \"%s\\n\" \"$count\" > \"$status_count\"",
+      "  if [ \"$count\" -eq 3 ]; then",
+      "    env -u GIT_INDEX_FILE \"$real_git\" -C " + JSON.stringify(state.worktree) + " update-index --" + flag + " -- source.mjs || exit $?",
+      "    test \"$(env -u GIT_INDEX_FILE \"$real_git\" -C " + JSON.stringify(state.worktree) + " ls-files -v -- source.mjs)\" = " + JSON.stringify(expectedTag + " source.mjs") + " || exit 97",
+      "    printf \"%b\" " + JSON.stringify(bytes) + " > " + JSON.stringify(path),
+      "    printf \"%s\\n\" \"$count\" > \"$trigger\"",
+      "  fi",
+      "  exit \"$command_status\"",
+      "fi",
+      "if [ \"$1\" = \"-c\" ] && [ \"$2\" = \"core.fsmonitor=false\" ] && [ \"$3\" = \"worktree\" ] && [ \"$4\" = \"remove\" ]; then",
+      "  if env -u GIT_INDEX_FILE \"$real_git\" -C " + JSON.stringify(state.worktree) + " update-index --assume-unchanged -- source.mjs 2>\"$lock_error\"; then exit 98; fi",
+      "  grep -q \"index.lock\" \"$lock_error\" || exit 99",
+      "fi",
+      "exec \"$real_git\" \"$@\""
+    ].join("\n") + "\n";
+    writeFileSync(join(bin, "git"), wrapper, { mode: 0o700 });
+    let removalError;
+    try {
+      process.env.PATH = bin + ":" + savedPath;
+      await createTaskWorktreeRemoval(state.task).execute();
+    } catch (error) { removalError = error; }
+    finally { if (savedPath === undefined) delete process.env.PATH; else process.env.PATH = savedPath; }
+    expect(readFileSync(trigger, "utf8")).toBe("3\n");
+    expect(readFileSync(lockError, "utf8")).toContain("index.lock");
+    expect(removalError).toMatchObject({ message: expect.stringMatching(/task worktree removal validation failed:.*contains modified or untracked files/) });
+    expect(state.git(state.worktree, ["ls-files", "-v", "--", "source.mjs"])[0]).toBe(expectedTag);
+    expect(readFileSync(path, "utf8")).toBe(bytes);
+    expect(existsSync(state.worktree)).toBe(true);
+    expect(state.git(state.repo, ["worktree", "list", "--porcelain"])).toContain("worktree " + state.worktree);
+    expect(state.git(state.repo, ["rev-parse", "refs/heads/" + state.branch])).toBe(state.tip);
+  });
+
+  it("preserves a staged-only index change injected after the final cleanup scan", async () => {
+    const state = ownedRemovalFixture(), path = join(state.worktree, "source.mjs"), worktreeBytes = readFileSync(path, "utf8"), stagedBytes = "late staged-only content\n";
+    const trigger = join(state.root, "staged-index-race-triggered"), countFile = join(state.root, "staged-index-race-count"), lockError = join(state.root, "staged-index-lock-error");
+    const realGit = execFileSync("/usr/bin/which", ["git"], { encoding: "utf8" }).trim();
+    const bin = join(state.root, "staged-index-race-bin"), savedPath = process.env.PATH;
+    mkdirSync(bin);
+    const wrapper = [
+      "#!/bin/sh",
+      "real_git=" + JSON.stringify(realGit),
+      "status_count=" + JSON.stringify(countFile),
+      "trigger=" + JSON.stringify(trigger),
+      "lock_error=" + JSON.stringify(lockError),
+      "if [ \"$(pwd)\" = " + JSON.stringify(state.worktree) + " ] && [ \"$1\" = \"symbolic-ref\" ] && [ \"$2\" = \"--quiet\" ] && [ \"$3\" = \"--short\" ] && [ \"$4\" = \"HEAD\" ]; then",
+      "  \"$real_git\" \"$@\"",
+      "  command_status=$?",
+      "  count=0",
+      "  if [ -f \"$status_count\" ]; then read count < \"$status_count\"; fi",
+      "  count=$((count + 1))",
+      "  printf \"%s\\n\" \"$count\" > \"$status_count\"",
+      "  if [ \"$count\" -eq 3 ]; then",
+      "    printf \"%b\" " + JSON.stringify(stagedBytes) + " > " + JSON.stringify(path),
+      "    \"$real_git\" -C " + JSON.stringify(state.worktree) + " add -- source.mjs || exit $?",
+      "    printf \"%b\" " + JSON.stringify(worktreeBytes) + " > " + JSON.stringify(path),
+      "    printf \"%s\\n\" \"$count\" > \"$trigger\"",
+      "  fi",
+      "  exit \"$command_status\"",
+      "fi",
+      "if [ \"$1\" = \"-c\" ] && [ \"$2\" = \"core.fsmonitor=false\" ] && [ \"$3\" = \"worktree\" ] && [ \"$4\" = \"remove\" ]; then",
+      "  if env -u GIT_INDEX_FILE \"$real_git\" -C " + JSON.stringify(state.worktree) + " update-index --assume-unchanged -- source.mjs 2>\"$lock_error\"; then exit 98; fi",
+      "  grep -q \"index.lock\" \"$lock_error\" || exit 99",
+      "fi",
+      "exec \"$real_git\" \"$@\""
+    ].join("\n") + "\n";
+    writeFileSync(join(bin, "git"), wrapper, { mode: 0o700 });
+    let removalError;
+    try {
+      process.env.PATH = bin + ":" + savedPath;
+      await createTaskWorktreeRemoval(state.task).execute();
+    } catch (error) { removalError = error; }
+    finally { if (savedPath === undefined) delete process.env.PATH; else process.env.PATH = savedPath; }
+    expect(readFileSync(trigger, "utf8")).toBe("3\n");
+    expect(readFileSync(lockError, "utf8")).toContain("index.lock");
+    expect(removalError).toMatchObject({ message: expect.stringMatching(/task worktree removal validation failed:.*contains modified or untracked files/) });
+    expect(state.git(state.worktree, ["show", ":source.mjs"])).toBe(stagedBytes.trim());
+    expect(readFileSync(path, "utf8")).toBe(worktreeBytes);
+    expect(existsSync(state.worktree)).toBe(true);
+    expect(state.git(state.repo, ["worktree", "list", "--porcelain"])).toContain("worktree " + state.worktree);
+    expect(state.git(state.repo, ["rev-parse", "refs/heads/" + state.branch])).toBe(state.tip);
   });
 
   it("keeps unknown ignored user bytes unsafe while allowing only generated caches", () => {

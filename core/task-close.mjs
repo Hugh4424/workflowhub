@@ -11,6 +11,7 @@ import { appendRecord } from "../runtime/interface/safe-write.mjs";
 import { recordConfirmation } from "../runtime/interface/human-confirm.mjs";
 import { readTaskFacts } from "../runtime/task/task-store.mjs";
 import { openTask } from "../runtime/task/task-handle.mjs";
+import { createTaskWorktreeRemoval, inspectWorktreeCleanup } from "../runtime/task/workspace.mjs";
 import { derivePhysicalDeliveryStatus } from "../runtime/stage/current-close-projection.mjs";
 
 const OPERATIONS = new Set(["commit", "merge", "archive", "push", "cleanup", "pr"]);
@@ -129,7 +130,7 @@ function actionFacts(c, planRef) {
   return readdirSync(base).filter(name => /^\d{4}-\d{2}-\d{2}-\d{3}-close-action\.json$/.test(name)).sort().map(name => JSON.parse(readFile(base,name))).filter(row => row.plan_ref === planRef);
 }
 function entries(root) {
-  const fields = git(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]).split("\0");
+  const fields = git(root, ["-c", "core.fsmonitor=false", "status", "--porcelain=v1", "-z", "--untracked-files=all"]).split("\0");
   const rows = [];
   for (let i = 0; i < fields.length; i++) {
     const text = fields[i]; if (!text) continue;
@@ -140,12 +141,24 @@ function entries(root) {
   }
   return rows;
 }
+function trackedIndexRows(root) {
+  // `-v` exposes assume-unchanged and skip-worktree; fsmonitor-valid is checked by entries().
+  return git(root, ["ls-files", "-v", "-z"]).split("\0").filter(Boolean);
+}
 function assertNoSidecars(root, taskId) {
-  const listed = git(root, ["ls-files", "--cached", "--others", "--exclude-standard", "-z"]).split("\0").filter(Boolean);
+  const trackedRows = trackedIndexRows(root);
+  const tracked = new Set(trackedRows.map((row) => row.slice(2)));
+  // `entries()` disables fsmonitor for a full content check; non-H `-v` tags remain fail-closed.
+  const hiddenTracked = trackedRows.filter((row) => row[0] !== "H").map((row) => row.slice(2));
+  const untracked = git(root, ["ls-files", "--others", "--exclude-standard", "-z"]).split("\0").filter(Boolean);
   const ignored = git(root, ["ls-files", "--others", "--ignored", "--exclude-standard", "-z"]).split("\0").filter(Boolean);
-  const all = [...new Set([...listed, ...ignored, ...entries(root).map((r) => r.path)])];
-  const unsafe = all.filter((p) => SIDECARS.some((prefix) => p.startsWith(prefix) || p.startsWith(`specs/${taskId}/${prefix}`)));
+  const changed = new Set([...hiddenTracked, ...entries(root).flatMap((r) => [r.path, r.source_path].filter(Boolean))]);
+  const all = [...new Set([...tracked, ...untracked, ...ignored, ...changed])];
+  const isSidecar = (p) => SIDECARS.some((prefix) => p.startsWith(prefix) || p.startsWith(`specs/${taskId}/${prefix}`));
+  const unsafe = all.filter((p) => (!tracked.has(p) || changed.has(p)) && isSidecar(p));
   if (unsafe.length) throw failure("CLOSE_EXECUTION_SIDECARS", `publish task-owned execution sidecars before close: ${unsafe.join(", ")}`);
+  const hiddenTrackedSource = hiddenTracked.filter((p) => !isSidecar(p));
+  if (hiddenTrackedSource.length) throw failure("CLEANUP_UNSAFE", `tracked source paths use non-normal Git index flags: ${hiddenTrackedSource.join(", ")}`);
 }
 function sourceState(root, taskId) {
   assertNoSidecars(root, taskId);
@@ -541,14 +554,17 @@ export async function inspectDeliveryCloseState({ taskDir, planRef } = {}) {
   const merged = Boolean(target && sourceAvailable && check(git(c.root, ["merge-base", "--is-ancestor", sourceCommit, target], { optional: true }), "source/target ancestry", 1));
   const archiveRead = git(c.root, ["ls-tree", "--name-only", target ?? plan.target_head, "--", plan.spec_archive_path], { optional: true });
   const archive = check(archiveRead, "archive tree") && archiveRead.stdout.trim() !== "";
-  let existing = false, scan = [];
+  let existing = false, cleanupScan;
   try {
     try { lstatSync(plan.worktree_root); existing = true; } catch (error) { if (error.code !== "ENOENT") throw error; }
-    if (existing) { realDirectory(plan.worktree_root); scan = entries(plan.worktree_root); }
+    if (existing) {
+      realDirectory(plan.worktree_root);
+      cleanupScan = inspectWorktreeCleanup(plan.worktree_root);
+    }
   } catch (error) { readErrors.push(`worktree read: ${error.message}`); }
   const facts = { delivery_committed: sourceAvailable && Boolean(commitAction || task) && (plan.source.changes.length === 0 || sourceCommit !== plan.source.head), merge: Boolean(merged), archive,
     push: remote.status === "available" && remote.oid === target, worktree_cleanup: plan.preserve_existing_workspace ? false : !existing,
-    formal_cleanup_safe: !existing || scan.length === 0, branch_cleanup: plan.preserve_existing_workspace ? false : task === null,
+    formal_cleanup_safe: !existing || cleanupScan?.safe === true, branch_cleanup: plan.preserve_existing_workspace ? false : task === null,
     remote_branch_cleanup: plan.preserve_existing_workspace ? false : remoteTask.status === "absent",
     cleanup: plan.preserve_existing_workspace ? { skipped: true, reason: "existing workspace is not task-owned" } : { removed: !existing && task === null } };
   let pr;
@@ -636,11 +652,19 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
     let sourceHead = plan.source.head, targetHead = plan.target_head;
     const records = [];
     const priorActions = actionFacts(c, planRef);
-    if (plan.steps.includes("pr") && priorActions.some(row => row.status === "completed")) {
+    const validOid = value => typeof value === "string" && /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(value);
+    const failedCleanupRecorded = priorActions.some(row => row.operation === "cleanup" && row.status === "failed");
+    const shouldReplayActions = (plan.steps.includes("pr") && priorActions.some(row => row.status === "completed")) || failedCleanupRecorded;
+    if (shouldReplayActions) {
       const physical = await inspectDeliveryCloseState({ taskDir, planRef });
       if (physical.physical_delivery_status === "unavailable") throw failure("REMOTE_UNAVAILABLE", physical.pr?.reason ?? physical.remote.reason ?? "required close readback is unavailable");
-      const actualSource = branchOid(c.root, plan.task_branch), actualTarget = branchOid(c.root, plan.target_branch);
-      const validOid = value => typeof value === "string" && /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(value);
+      const actualSourceBranch = branchOid(c.root, plan.task_branch), actualTarget = branchOid(c.root, plan.target_branch);
+      const failedCleanup = priorActions.filter(row => row.operation === "cleanup" && row.status === "failed").at(-1);
+      const cleanupRetrySource = failedCleanup?.source_head;
+      const retrySourceIsKnown = !actualSourceBranch && validOid(cleanupRetrySource)
+        && git(c.root, ["cat-file", "-e", `${cleanupRetrySource}^{commit}`], { optional: true }).status === 0
+        && cleanupWasSent(c, plan, planRef, actualTarget);
+      const actualSource = actualSourceBranch ?? (retrySourceIsKnown ? cleanupRetrySource : null);
       const ancestor = (before, after) => validOid(before) && validOid(after) && git(c.root, ["cat-file", "-e", `${before}^{commit}`], { optional: true }).status === 0
         && git(c.root, ["cat-file", "-e", `${after}^{commit}`], { optional: true }).status === 0
         && git(c.root, ["merge-base", "--is-ancestor", before, after], { optional: true }).status === 0;
@@ -816,7 +840,12 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
           }
           const cleanupRetry = cleanupWasSent(c, plan, planRef, targetHead);
           if (!sourceExists && !cleanupRetry) throw failure("CLEANUP_UNSAFE", "task worktree is absent without a prior authorized cleanup");
-          if (branchOid(c.root, plan.task_branch) !== sourceHead) throw failure("SOURCE_HEAD_DRIFT", "task branch moved before cleanup");
+          const localTaskHead = branchOid(c.root, plan.task_branch);
+          const failedCleanup = priorActions.filter(row => row.operation === "cleanup" && row.status === "failed").at(-1);
+          const branchWasRemovedByRetry = !sourceExists && cleanupRetry && localTaskHead === null
+            && validOid(sourceHead) && failedCleanup?.source_head === sourceHead
+            && git(c.root, ["cat-file", "-e", `${sourceHead}^{commit}`], { optional: true }).status === 0;
+          if (localTaskHead !== sourceHead && !branchWasRemovedByRetry) throw failure("SOURCE_HEAD_DRIFT", "task branch moved before cleanup");
           if (git(c.root, ["merge-base", "--is-ancestor", sourceHead, targetHead], { optional: true }).status !== 0) throw failure("CLEANUP_UNSAFE", "task branch is not merged into the delivered target");
           const delivered = remoteOid(c.root, plan.remote, plan.target_branch);
           if (delivered.status !== "available" || delivered.oid !== targetHead) throw failure("PUSH_READBACK", "delivered target differs before cleanup");
@@ -826,13 +855,18 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
           if (remoteTask.oid !== (pushedTask?.source_head ?? plan.remote_task_head) && !(remoteTask.status === "absent" && cleanupRetry)) throw failure("REMOTE_TASK_DRIFT", "remote task branch differs from the actual planned publication");
           if (remoteTask.oid && (git(c.root, ["cat-file", "-e", `${remoteTask.oid}^{commit}`], { optional: true }).status !== 0 || git(c.root, ["merge-base", "--is-ancestor", remoteTask.oid, sourceHead], { optional: true }).status !== 0 || git(c.root, ["merge-base", "--is-ancestor", remoteTask.oid, targetHead], { optional: true }).status !== 0)) throw failure("REMOTE_TASK_UNMERGED", "remote task tip is unavailable or contains work not merged into the delivered source/target; refusing deletion");
           consume("cleanup");
-          if (remoteTask.oid) git(c.root, ["push", plan.remote, "--delete", plan.task_branch]);
           if (sourceExists) {
             assertNoSidecars(c.worktree, plan.task_id);
             if (entries(c.worktree).length || git(c.worktree, ["ls-files", "--others", "--ignored", "--exclude-standard", "-z"]).length) throw failure("CLEANUP_UNSAFE", "task worktree changed immediately before removal");
-            git(c.root, ["worktree", "remove", "--", c.worktree]);
+            const taskHandle = openTask(c.taskDir, { projectName: c.manifest.project_name, taskId: c.manifest.task_id });
+            await createTaskWorktreeRemoval(taskHandle).execute();
           }
-          git(c.root, ["branch", "-d", "--", plan.task_branch]);
+          if (!branchWasRemovedByRetry) git(c.root, ["branch", "-d", "--", plan.task_branch]);
+          // Keep the delayed remote deletion conditional on the checked remote tip.
+          if (remoteTask.oid) git(c.root, [
+            "push", `--force-with-lease=refs/heads/${plan.task_branch}:${remoteTask.oid}`,
+            plan.remote, "--delete", plan.task_branch,
+          ]);
         }
         const record = { operation, status: "completed", source_head: sourceHead, target_head: targetHead, ...(prResult ? { pr: prResult } : {}), recorded_at: new Date().toISOString() };
         record.ref = await writeEvidence(c, "close-action", { ...record, plan_ref: planRef }); records.push(record);
@@ -845,7 +879,7 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
         }
         if (operation === until) return { status: "partial", stopped_at: operation, records, physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
       } catch (error) {
-        const ref = await writeEvidence(c, "close-action", { operation, status: "failed", plan_ref: planRef, error: { code: error.code ?? null, message: error.message }, recorded_at: new Date().toISOString() });
+        const ref = await writeEvidence(c, "close-action", { operation, status: "failed", plan_ref: planRef, ...(operation === "cleanup" ? { source_head: sourceHead } : {}), error: { code: error.code ?? null, message: error.message }, recorded_at: new Date().toISOString() });
         return { status: "failed", operation, error: { code: error.code ?? null, message: error.message }, failure_ref: ref, records, physical: await inspectDeliveryCloseState({ taskDir, planRef }) };
       }
     }
