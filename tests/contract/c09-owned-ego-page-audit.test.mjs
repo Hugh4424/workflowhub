@@ -408,7 +408,7 @@ test('T018A owned TaskSpace name transfers to embedded Nodejs and missing name r
 
 test('T018A post-finish report uses immutable append-only versions across retries', async () => {
   const source = await readFile(t018aBrowser, 'utf8');
-  const phasePath = join(t016Wt, 'specs/workflowhub-ui-frontend-c09-dual-path-verification-20261103/phases/P4-新侧流程贯通.md');
+  const phasePath = join(t016Wt, 'specs/archive/workflowhub-ui-frontend-c09-dual-path-verification-20261103/phases/P4-新侧流程贯通.md');
   const phase = await readFile(phasePath, 'utf8');
   const eventsRow = phase.split(/\r?\n/).find(line => line.includes('T018A-browser-events-2026-11-06-001.jsonl'));
   assert(eventsRow, 'P4 still identifies the T018A browser events artifact');
