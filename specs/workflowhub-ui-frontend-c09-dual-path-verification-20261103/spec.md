@@ -1545,6 +1545,7 @@ live 状态只在新侧出现。
 | R-017、R-018 | FR-C09-001 | AC-P01 | P1/T007 | ORACLE-C09-FIXTURE |
 | R-013、R-014、R-019、R-023 | FR-C09-003、FR-C09-004、FR-C09-021 | AC-P02 | P2/T008 | ORACLE-C09-CARDS |
 | R-013、R-019、R-023 | FR-C09-003、FR-C09-004、FR-C09-021 | AC-P02 | P2/T009 | ORACLE-C09-CARDS |
+| R-013、R-017 | FR-C09-020 | AC-P02、AC-P11 | P2/T008、P2/T009、P6/T023、P6/T024 | ORACLE-C09-CARDS、ORACLE-C09-REPORT |
 | R-001、R-002、R-018 | FR-C09-010、FR-C09-011 | AC-P08 | P3/T010 | ORACLE-C09-BASE |
 | R-004、R-011、R-021、R-022 | FR-C09-005 | AC-P03 | P4/T011 | ORACLE-C09-FLOW |
 | R-004、R-018 | FR-C09-006 | AC-P04 | P4/T012 | ORACLE-C09-DESIGN |
@@ -1555,8 +1556,8 @@ live 状态只在新侧出现。
 | R-005、R-011、R-016 | FR-C09-008 | AC-P06 | P4/T017 | ORACLE-C09-RUN |
 | R-004、R-020、R-021 | FR-C09-009 | AC-P07 | P4/T018 | ORACLE-C09-UPD |
 | R-005、R-011 | FR-C09-008 | AC-P06 | P4/T018A | ORACLE-C09-RUN |
-| R-005、R-009、R-011 | FR-C09-015 | AC-P10 | P5/T019 | ORACLE-C09-VOID |
-| R-005、R-009、R-011 | FR-C09-015 | AC-P10 | P5/T020 | ORACLE-C09-VOID |
+| R-004、R-005、R-009、R-011 | FR-C09-015 | AC-P10 | P5/T019 | ORACLE-C09-VOID |
+| R-004、R-005、R-009、R-011 | FR-C09-015 | AC-P10 | P5/T020 | ORACLE-C09-VOID |
 | R-003、R-006、R-010、R-012 | FR-C09-012、FR-C09-013、FR-C09-014 | AC-P09 | P5/T021 | ORACLE-C09-METRIC |
 | R-003、R-006、R-012 | FR-C09-013、FR-C09-014 | AC-P09 | P5/T022 | ORACLE-C09-METRIC |
 | R-006、R-007、R-012、R-015、R-019、R-023 | FR-C09-016、FR-C09-017、FR-C09-019、FR-C09-004 | AC-P11、AC-P06 | P6/T023 | ORACLE-C09-REPORT |
@@ -2282,7 +2283,7 @@ P3、P4 开跑前记录当次真实执行者、模型和工具；未齐不开始
   实际路径由执行者发布，本字段不是执行结果。
 
 - [ ] **AC-P10**：无稿逐项实际应用原PRD C01～C08适用能力，完成当前设计答复、工程/页面检查与回修、更新及真实消费，再在隔离样本完成一次真实业务闭环，含权限与重复恢复；任一适用能力缺证不判pass。关联 FR-C09-015。
-  来源绑定：source=R-005、R-009、R-011；decision=D-003、
+  来源绑定：source=R-004、R-005、R-009、R-011；decision=D-003、
   D-020、D-026；source_status=current。
 判定方式：独立语义/设计/代码检查与真实环境采集分别判断，不以自动化退出码替完整方法消费。
 判定时点：阶段五任务 20 完成后首判；阶段六末验。
@@ -2585,7 +2586,7 @@ P3、P4 开跑前记录当次真实执行者、模型和工具；未齐不开始
 - **FR-C09-014**：关联 PFACT-009；SCN-C09-006；AC-P09。
   来源绑定：source=R-006；decision=D-019；source_status=current。
 - **FR-C09-015**：关联 PFACT-004、PFACT-005；SCN-C09-003；AC-P10。
-  来源绑定：source=R-005、R-009、R-011；decision=D-003、D-020；
+  来源绑定：source=R-004、R-005、R-009、R-011；decision=D-003、D-020、D-026；
   source_status=current。
 - **FR-C09-016**：关联 PFACT-012、PFACT-013；SCN-C09-004；AC-P11。
   来源绑定：source=R-006、R-007、R-012；decision=D-004、D-021；
