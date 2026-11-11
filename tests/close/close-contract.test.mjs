@@ -8,13 +8,26 @@ import { prepareDeliveryClosePlan, confirmClosePlan, authorizeClosePlan, execute
 const roots=[];let counter=0;
 afterEach(()=>{while(roots.length)rmSync(roots.pop(),{recursive:true,force:true});});
 function git(root,args){return execFileSync("git",args,{cwd:root,encoding:"utf8",stdio:["ignore","pipe","pipe"]}).trim();}
-function fixture({existing=false,remoteTask=true}={}){
+function enableFsmonitorNoChangeHook(s,path){
+ const hook=join(s.base,"fsmonitor-no-change.sh");
+ writeFileSync(hook,"#!/bin/sh\nprintf 'token\\0'\n",{mode:0o700});
+ git(s.worktree,["config","--local","core.fsmonitor",hook]);
+ git(s.worktree,["config","--local","core.fsmonitorHookVersion","2"]);
+ git(s.worktree,["status","--porcelain=v1"]);
+ git(s.worktree,["update-index","--fsmonitor"]);
+ expect(git(s.worktree,["ls-files","-f","-z","--",path])[0]).toBe("h");
+}
+function fixture({existing=false,remoteTask=true,ignoredPaths=[]}={}){
   const base=realpathSync(mkdtempSync(join(tmpdir(),"workflowhub-close-narrow-")));roots.push(base);
   const repo=join(base,"repo"),bare=join(base,"origin.git"),id=`close-${++counter}`,worktree=join(base,`repo-${id}`),taskDir=join(base,"storage","Projects","workflowhub","tasks",id);
   mkdirSync(repo);mkdirSync(bare);mkdirSync(taskDir,{recursive:true});
   git(repo,["init","-q","-b","main"]);git(repo,["config","user.name","Owned close fixture"]);git(repo,["config","user.email","fixture@local.invalid"]);
   const hooks=join(base,"hooks");mkdirSync(hooks);git(repo,["config","core.hooksPath",hooks]);
-  writeFileSync(join(repo,"README.md"),"base\n");git(repo,["add","README.md"]);git(repo,["commit","-qm","base"]);
+  writeFileSync(join(repo,"README.md"),"base\n");
+  if(ignoredPaths.length)writeFileSync(join(repo,".gitignore"),`${ignoredPaths.join("\n")}\n`);
+  mkdirSync(join(repo,"quality/evidence/build-code"),{recursive:true});
+  writeFileSync(join(repo,"quality/evidence/build-code/historical-review.md"),"committed historical review\n");
+  git(repo,["add","README.md","quality/evidence/build-code/historical-review.md",...(ignoredPaths.length?[".gitignore"]:[])]);git(repo,["commit","-qm","base"]);
   git(bare,["init","--bare","-q"]);git(repo,["remote","add","origin",bare]);git(repo,["push","-q","origin","main"]);
   const branch=`task/workflowhub/${id}`;git(repo,["worktree","add","-q","-b",branch,worktree,"main"]);
   const source=`specs/${id}`;mkdirSync(join(worktree,source),{recursive:true});writeFileSync(join(worktree,source,"decision-log.md"),"# Decision\n");writeFileSync(join(worktree,source,"spec.md"),"# Spec\n");
@@ -27,6 +40,244 @@ async function prepare(s,mode){return prepareDeliveryClosePlan({taskDir:s.taskDi
 async function confirm(s,p,outcome="confirmed",replyText="Owned fixture explicit reply"){return confirmClosePlan({taskDir:s.taskDir,planRef:p.plan_ref,outcome,replyText});}
 async function authorized(s,p){const c=await confirm(s,p);await authorizeClosePlan({taskDir:s.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref});return c;}
 async function execute(s,p,c){return executeClosePlan({taskDir:s.taskDir,planRef:p.plan_ref,confirmationRef:c.confirmation_ref});}
+
+it("allows unchanged tracked historical evidence but rejects dirty or new execution sidecars",async()=>{
+ const s=fixture(),historical="quality/evidence/build-code/historical-review.md",historicalPath=join(s.worktree,historical);
+ const original=readFileSync(historicalPath);
+ expect(original.toString("utf8")).toBe("committed historical review\n");
+ expect(git(s.worktree,["status","--porcelain=v1","--",historical])).toBe("");
+ await expect(prepare(s)).resolves.toMatchObject({quality_status:"unknown"});
+ writeFileSync(historicalPath,"changed tracked review\n");
+ expect(git(s.worktree,["status","--porcelain=v1","--",historical])).not.toBe("");
+ await expect(prepare(s)).rejects.toMatchObject({code:"CLOSE_EXECUTION_SIDECARS"});
+ writeFileSync(historicalPath,original);
+ expect(git(s.worktree,["status","--porcelain=v1","--",historical])).toBe("");
+ const sidecar="quality/evidence/build-code/current-output.json";
+ writeFileSync(join(s.worktree,sidecar),"unpublished execution output\n");
+ expect(git(s.worktree,["status","--porcelain=v1","--",sidecar])).toBe(`?? ${sidecar}`);
+ await expect(prepare(s)).rejects.toMatchObject({code:"CLOSE_EXECUTION_SIDECARS"});
+ writeFileSync(join(s.worktree,".gitignore"),"quality/evidence/build-code/ignored-output.log\n");
+ const ignored="quality/evidence/build-code/ignored-output.log";
+ writeFileSync(join(s.worktree,ignored),"ignored unpublished output\n");
+ expect(git(s.worktree,["status","--porcelain=v1","--ignored","--",ignored])).toBe(`!! ${ignored}`);
+ await expect(prepare(s)).rejects.toMatchObject({code:"CLOSE_EXECUTION_SIDECARS"});
+});
+
+it("rejects tracked sidecars hidden from status by index flags",async()=>{
+ for(const flag of ["assume-unchanged","skip-worktree"]){
+  const s=fixture(),historical="quality/evidence/build-code/historical-review.md",path=join(s.worktree,historical);
+  git(s.worktree,["update-index",`--${flag}`,"--",historical]);
+  writeFileSync(path,`${flag} changed historical review\n`);
+  expect(git(s.worktree,["status","--porcelain=v1","--",historical])).toBe("");
+  expect(git(s.worktree,["ls-files","-v","--",historical])[0]).toBe(flag==="assume-unchanged"?"h":"S");
+  await expect(prepare(s)).rejects.toMatchObject({code:"CLOSE_EXECUTION_SIDECARS"});
+ }
+});
+
+
+it("keeps clean skip-worktree sidecars fail-closed",async()=>{
+ const s=fixture(),historical="quality/evidence/build-code/historical-review.md",path=join(s.worktree,historical),original=readFileSync(path);
+ git(s.worktree,["update-index","--skip-worktree",historical]);
+ expect(git(s.worktree,["status","--porcelain=v1","--",historical])).toBe("");
+ expect(git(s.worktree,["ls-files","-v","-z","--",historical])[0]).toBe("S");
+ await expect(prepare(s)).rejects.toMatchObject({code:"CLOSE_EXECUTION_SIDECARS"});
+ expect(readFileSync(path)).toEqual(original);
+});
+
+it("allows clean fsmonitor-valid historical evidence at close planning",async()=>{
+ const s=fixture(),historical="quality/evidence/build-code/historical-review.md",path=join(s.worktree,historical);
+ enableFsmonitorNoChangeHook(s,historical);
+ expect(git(s.worktree,["status","--porcelain=v1","--",historical])).toBe("");
+ expect(git(s.worktree,["ls-files","-v","-z","--",historical])[0]).toBe("H");
+ expect(git(s.worktree,["ls-files","-f","-z","--",historical])[0]).toBe("h");
+ await expect(prepare(s)).resolves.toMatchObject({quality_status:"unknown"});
+ expect(existsSync(path)).toBe(true);
+ expect(readFileSync(path,"utf8")).toBe("committed historical review\n");
+});
+
+it("rejects stale fsmonitor-valid tracked sidecars hidden from status",async()=>{
+ const s=fixture(),historical="quality/evidence/build-code/historical-review.md",path=join(s.worktree,historical),changedBytes="fsmonitor-valid hidden historical review\n";
+ enableFsmonitorNoChangeHook(s,historical);
+ expect(git(s.worktree,["ls-files","-v","-z","--",historical])[0]).toBe("H");
+ expect(git(s.worktree,["ls-files","-f","-z","--",historical])[0]).toBe("h");
+ writeFileSync(path,changedBytes,"utf8");
+ expect(git(s.worktree,["status","--porcelain=v1","--",historical])).toBe("");
+ expect(git(s.worktree,["ls-files","-f","-z","--",historical])[0]).toBe("h");
+ expect(git(s.worktree,["-c","core.fsmonitor=false","--no-optional-locks","status","--porcelain=v1","--",historical])).toContain(historical);
+ await expect(prepare(s)).rejects.toMatchObject({code:"CLOSE_EXECUTION_SIDECARS"});
+ expect(readFileSync(path,"utf8")).toBe(changedBytes);
+});
+
+it("reports unknown ignored worktree bytes as formally unsafe", async()=>{
+ const s=fixture({ignoredPaths:["private-notes/"]}),plan=await prepare(s);
+ const path=join(s.worktree,"private-notes","note.txt");mkdirSync(dirname(path),{recursive:true});writeFileSync(path,"unique private note\n");
+ expect(git(s.worktree,["status","--porcelain=v1","--ignored","--","private-notes/note.txt"])).toBe("!! private-notes/");
+ const status=await inspectDeliveryCloseState({taskDir:s.taskDir,planRef:plan.plan_ref});
+ expect(status.facts.formal_cleanup_safe).toBe(false);
+ expect(readFileSync(path,"utf8")).toBe("unique private note\n");
+ expect(existsSync(s.worktree)).toBe(true);
+ expect(git(s.repo,["worktree","list","--porcelain"])).toContain(`worktree ${s.worktree}`);
+ expect(git(s.repo,["rev-parse",`refs/heads/${s.branch}`])).toBe(git(s.worktree,["rev-parse","HEAD"]));
+});
+
+it("retains the remote task branch when unknown ignored bytes block worktree cleanup", async()=>{
+ const s=fixture({ignoredPaths:["private-notes/"]}),plan=await prepare(s),confirmation=await authorized(s,plan);
+ const path=join(s.worktree,"private-notes","note.txt"),remoteRef=`refs/heads/${s.branch}`;
+ mkdirSync(dirname(path),{recursive:true});writeFileSync(path,"unique private note\n");
+ const remoteHead=git(s.bare,["rev-parse",remoteRef]),result=await execute(s,plan,confirmation);
+ expect(result).toMatchObject({status:"failed",operation:"cleanup",error:{code:"CLEANUP_UNSAFE"}});
+ expect(git(s.bare,["rev-parse",remoteRef])).toBe(remoteHead);
+ expect(readFileSync(path,"utf8")).toBe("unique private note\n");
+ expect(existsSync(s.worktree)).toBe(true);
+ expect(git(s.repo,["worktree","list","--porcelain"])).toContain(`worktree ${s.worktree}`);
+ expect(git(s.repo,["rev-parse",remoteRef])).toBe(git(s.worktree,["rev-parse","HEAD"]));
+});
+
+it.each(["assume-unchanged","skip-worktree"])("blocks non-sidecar tracked changes hidden by %s before close",async(flag)=>{
+ const prepared=fixture(),preparePath=join(prepared.worktree,"README.md"),preparedBytes=`${flag} hidden before prepare\n`;
+ git(prepared.worktree,["update-index",`--${flag}`,"--","README.md"]);
+ writeFileSync(preparePath,preparedBytes);
+ expect(git(prepared.worktree,["status","--porcelain=v1","--","README.md"])).toBe("");
+ expect(git(prepared.worktree,["ls-files","-v","--","README.md"])[0]).toBe(flag==="assume-unchanged"?"h":"S");
+ await expect(prepare(prepared)).rejects.toMatchObject({code:"CLEANUP_UNSAFE"});
+ expect(readFileSync(preparePath,"utf8")).toBe(preparedBytes);
+ expect(existsSync(prepared.worktree)).toBe(true);
+ expect(git(prepared.repo,["worktree","list","--porcelain"])).toContain(`worktree ${prepared.worktree}`);
+ const preparedHead=git(prepared.worktree,["rev-parse","HEAD"]);
+ expect(git(prepared.repo,["rev-parse",`refs/heads/${prepared.branch}`])).toBe(preparedHead);
+
+ const executing=fixture(),executePath=join(executing.worktree,"README.md"),executeBytes=`${flag} hidden during execute\n`;
+ const plan=await prepare(executing),confirmation=await authorized(executing,plan),executeHead=git(executing.worktree,["rev-parse","HEAD"]);
+ git(executing.worktree,["update-index",`--${flag}`,"--","README.md"]);
+ writeFileSync(executePath,executeBytes);
+ expect(git(executing.worktree,["status","--porcelain=v1","--","README.md"])).toBe("");
+ expect(git(executing.worktree,["ls-files","-v","--","README.md"])[0]).toBe(flag==="assume-unchanged"?"h":"S");
+ const status=await inspectDeliveryCloseState({taskDir:executing.taskDir,planRef:plan.plan_ref});
+ expect(status.facts.formal_cleanup_safe).toBe(false);
+ const result=await execute(executing,plan,confirmation);
+ expect(result).toMatchObject({status:"failed",operation:"commit",error:{code:"CLEANUP_UNSAFE"}});
+ expect(readFileSync(executePath,"utf8")).toBe(executeBytes);
+ expect(existsSync(executing.worktree)).toBe(true);
+ expect(git(executing.repo,["worktree","list","--porcelain"])).toContain(`worktree ${executing.worktree}`);
+ expect(git(executing.worktree,["rev-parse","HEAD"])).toBe(executeHead);
+ expect(git(executing.repo,["rev-parse",`refs/heads/${executing.branch}`])).toBe(executeHead);
+});
+
+it.each(["assume-unchanged","skip-worktree"])("rejects a tracked non-sidecar change injected by the final target push hook with %s before cleanup",async(flag)=>{
+ const s=fixture(),plan=await prepare(s);
+ expect(plan.plan.steps).toEqual(["commit","merge","archive","push","cleanup"]);
+ const confirmation=await authorized(s,plan),path=join(s.worktree,"README.md"),bytes="post-receive hidden cleanup change\n";
+ const hook=join(s.bare,"hooks","post-receive");
+ // The push hook runs after the last pre-push status guard and immediately
+ // before the close transaction enters its cleanup operation.
+ writeFileSync(hook,`#!${process.execPath}\nconst fs=require("node:fs"),cp=require("node:child_process");const input=fs.readFileSync(0,"utf8");if(!input.split(/\\r?\\n/).some(line=>line.endsWith("refs/heads/main")))process.exit(0);const env={...process.env};for(const key of Object.keys(env))if(key.startsWith("GIT_"))delete env[key];const r=cp.spawnSync("git",["update-index",${JSON.stringify(`--${flag}`)},"--","README.md"],{cwd:${JSON.stringify(s.worktree)},env,encoding:"utf8"});if(r.error)throw r.error;if(r.status!==0){process.stderr.write(r.stderr||"");process.exit(r.status??1);}fs.writeFileSync(${JSON.stringify(path)},${JSON.stringify(bytes)});\n`,{mode:0o700});
+ const result=await execute(s,plan,confirmation);
+ expect(result).toMatchObject({status:"failed",operation:"cleanup",error:{code:"CLEANUP_UNSAFE"}});
+ expect(result.records.map(row=>row.operation)).toEqual(plan.plan.steps.slice(0,-1));
+ expect(git(s.worktree,["status","--porcelain=v1","--","README.md"])).toBe("");
+ expect(git(s.worktree,["ls-files","-v","--","README.md"])[0]).toBe(flag==="assume-unchanged"?"h":"S");
+ expect(readFileSync(path,"utf8")).toBe(bytes);
+ expect(existsSync(s.worktree)).toBe(true);
+ expect(git(s.repo,["worktree","list","--porcelain"])).toContain(`worktree ${s.worktree}`);
+ expect(git(s.repo,["rev-parse",`refs/heads/${s.branch}`])).toBe(git(s.worktree,["rev-parse","HEAD"]));
+ expect(result.physical.facts.formal_cleanup_safe).toBe(false);
+});
+
+it("lets Git preserve a fsmonitor-valid edit injected at final worktree removal",async()=>{
+ const s=fixture(),path=join(s.worktree,"README.md"),bytes="last-moment fsmonitor change\n";
+ enableFsmonitorNoChangeHook(s,"README.md");
+ const plan=await prepare(s),confirmation=await authorized(s,plan),realGit=execFileSync("/usr/bin/which",["git"],{encoding:"utf8"}).trim(),bin=join(s.base,"race-bin"),savedPath=process.env.PATH;
+ mkdirSync(bin);
+ writeFileSync(join(bin,"git"),`#!/bin/sh
+if [ "$1" = "-c" ] && [ "$2" = "core.fsmonitor=false" ] && [ "$3" = "worktree" ] && [ "$4" = "remove" ]; then
+  "${realGit}" -C "${s.worktree}" update-index --fsmonitor-valid -- README.md || exit $?
+  test "$("${realGit}" -C "${s.worktree}" ls-files -f -- README.md)" = "h README.md" || exit 97
+  printf "%b" ${JSON.stringify(bytes)} > ${JSON.stringify(path)}
+fi
+exec "${realGit}" "$@"
+`,{mode:0o700});
+ let result;
+ try { process.env.PATH=`${bin}:${savedPath}`; result=await execute(s,plan,confirmation); }
+ finally { if(savedPath===undefined)delete process.env.PATH;else process.env.PATH=savedPath; }
+ expect(result).toMatchObject({status:"failed",operation:"cleanup"});
+ expect(readFileSync(path,"utf8")).toBe(bytes);
+ expect(existsSync(s.worktree)).toBe(true);
+ expect(git(s.repo,["worktree","list","--porcelain"])).toContain(`worktree ${s.worktree}`);
+ expect(git(s.repo,["rev-parse",`refs/heads/${s.branch}`])).toBe(git(s.worktree,["rev-parse","HEAD"]));
+});
+
+it.each(["assume-unchanged", "skip-worktree"])("preserves a tracked edit injected with %s after the final close scan", async (flag) => {
+ const s=fixture(),path=join(s.worktree,"README.md"),bytes="last-moment "+flag+" change\n",trigger=join(s.base,"index-flag-race-triggered"),countFile=join(s.base,"index-flag-race-count"),lockError=join(s.base,"index-lock-error"),targetHeadBefore=join(s.base,"target-head-before-remove");
+ const plan=await prepare(s),confirmation=await authorized(s,plan),realGit=execFileSync("/usr/bin/which",["git"],{encoding:"utf8"}).trim(),bin=join(s.base,"index-flag-race-"+flag),savedPath=process.env.PATH,expectedTag=flag==="assume-unchanged"?"h":"S";
+ mkdirSync(bin);
+ const wrapper=[
+  "#!/bin/sh",
+  "real_git="+JSON.stringify(realGit),
+  "status_count="+JSON.stringify(countFile),
+  "trigger="+JSON.stringify(trigger),
+  "lock_error="+JSON.stringify(lockError),
+  "target_head_before="+JSON.stringify(targetHeadBefore),
+  "if [ \"$(pwd)\" = "+JSON.stringify(s.worktree)+" ] && [ \"$1\" = \"symbolic-ref\" ] && [ \"$2\" = \"--quiet\" ] && [ \"$3\" = \"--short\" ] && [ \"$4\" = \"HEAD\" ]; then",
+  "  \"$real_git\" \"$@\"",
+  "  command_status=$?",
+  "  count=0",
+  "  if [ -f \"$status_count\" ]; then read count < \"$status_count\"; fi",
+  "  count=$((count + 1))",
+  "  printf \"%s\\n\" \"$count\" > \"$status_count\"",
+  "  if [ \"$count\" -eq 3 ]; then",
+  "    \"$real_git\" -C "+JSON.stringify(s.repo)+" rev-parse main > \"$target_head_before\" || exit $?",
+  "    env -u GIT_INDEX_FILE \"$real_git\" -C "+JSON.stringify(s.worktree)+" update-index --"+flag+" -- README.md || exit $?",
+  "    test \"$(env -u GIT_INDEX_FILE \"$real_git\" -C "+JSON.stringify(s.worktree)+" ls-files -v -- README.md)\" = "+JSON.stringify(expectedTag+" README.md")+" || exit 97",
+  "    printf \"%b\" "+JSON.stringify(bytes)+" > "+JSON.stringify(path),
+  "    printf \"%s\\n\" \"$count\" > \"$trigger\"",
+  "  fi",
+  "  exit \"$command_status\"",
+  "fi",
+  "if [ \"$1\" = \"-c\" ] && [ \"$2\" = \"core.fsmonitor=false\" ] && [ \"$3\" = \"worktree\" ] && [ \"$4\" = \"remove\" ]; then",
+  "  if env -u GIT_INDEX_FILE \"$real_git\" -C "+JSON.stringify(s.worktree)+" update-index --assume-unchanged -- README.md 2>\"$lock_error\"; then exit 98; fi",
+  "  grep -q \"index.lock\" \"$lock_error\" || exit 99",
+  "fi",
+  "exec \"$real_git\" \"$@\""
+ ].join("\n")+"\n";
+ writeFileSync(join(bin,"git"),wrapper,{mode:0o700});
+ let result;
+ try { process.env.PATH=bin+":"+savedPath; result=await execute(s,plan,confirmation); }
+ finally { if(savedPath===undefined)delete process.env.PATH;else process.env.PATH=savedPath; }
+ expect(readFileSync(trigger,"utf8")).toBe("3\n");
+ expect(readFileSync(lockError,"utf8")).toContain("index.lock");
+ expect(result).toMatchObject({status:"failed",operation:"cleanup"});
+ expect(result.error.message).toMatch(/contains modified or untracked files/);
+ expect(git(s.worktree,["ls-files","-v","--","README.md"])[0]).toBe(expectedTag);
+ expect(readFileSync(path,"utf8")).toBe(bytes);
+ expect(existsSync(s.worktree)).toBe(true);
+ expect(git(s.repo,["worktree","list","--porcelain"])).toContain("worktree "+s.worktree);
+ expect(git(s.repo,["rev-parse","refs/heads/"+s.branch])).toBe(plan.plan.source.head);
+ expect(git(s.worktree,["rev-parse","HEAD"])).toBe(plan.plan.source.head);
+ expect(git(s.repo,["rev-parse","main"])).toBe(readFileSync(targetHeadBefore,"utf8").trim());
+});
+
+it("lets Git preserve an ordinary edit injected at final worktree removal",async()=>{
+ const s=fixture(),path=join(s.worktree,"README.md"),bytes="last-moment ordinary change\n",trigger=join(s.base,"ordinary-race-triggered");
+ const plan=await prepare(s),confirmation=await authorized(s,plan),realGit=execFileSync("/usr/bin/which",["git"],{encoding:"utf8"}).trim(),bin=join(s.base,"ordinary-race-bin"),savedPath=process.env.PATH;
+ mkdirSync(bin);
+ writeFileSync(join(bin,"git"),`#!/bin/sh
+if [ "$1" = "-c" ] && [ "$2" = "core.fsmonitor=false" ] && [ "$3" = "worktree" ] && [ "$4" = "remove" ]; then
+  printf "%b" ${JSON.stringify(bytes)} > ${JSON.stringify(path)}
+  printf "triggered\\n" > ${JSON.stringify(trigger)}
+fi
+exec "${realGit}" "$@"
+`,{mode:0o700});
+ let result;
+ try { process.env.PATH=`${bin}:${savedPath}`; result=await execute(s,plan,confirmation); }
+ finally { if(savedPath===undefined)delete process.env.PATH;else process.env.PATH=savedPath; }
+ expect(readFileSync(trigger,"utf8")).toBe("triggered\n");
+ expect(result).toMatchObject({status:"failed",operation:"cleanup"});
+ expect(result.error.message).toMatch(/contains modified or untracked files/);
+ expect(readFileSync(path,"utf8")).toBe(bytes);
+ expect(existsSync(s.worktree)).toBe(true);
+ expect(git(s.repo,["worktree","list","--porcelain"])).toContain(`worktree ${s.worktree}`);
+ expect(git(s.repo,["rev-parse",`refs/heads/${s.branch}`])).toBe(git(s.worktree,["rev-parse","HEAD"]));
+});
 
 it.each(["merge", "archive", "push", "cleanup"])("N12 cancellation during %s async preflight leaves the action unsent and resumes the original plan", async (operation) => {
  const saved={...process.env},s=fixture(),bin=join(s.base,"bin"),calls=join(s.base,"preflight-calls.jsonl"),state=join(s.base,"preflight-pr.json"),identity=lstatSync(s.base);
@@ -186,6 +437,95 @@ describe("close actual transactions without retired workflow permits",()=>{
  it("requires an actual verbatim reply and keeps timeout distinct from confirmation",async()=>{const s=fixture(),p=await prepare(s);await expect(confirm(s,p,"confirmed","")).rejects.toThrow(/reply/);const c=await confirmClosePlan({taskDir:s.taskDir,planRef:p.plan_ref,outcome:"timeout"});expect(c.status).toBe("blocked");expect(JSON.parse(readFileSync(c.confirmation_ref))).not.toHaveProperty("reply");});
  it("rejects unrecorded Git authorization without changing source or target HEAD",async()=>{const s=fixture(),p=await prepare(s),c=await confirm(s,p),a=git(s.worktree,["rev-parse","HEAD"]),b=git(s.repo,["rev-parse","HEAD"]);const out=await execute(s,p,c);expect(out.status).toBe("failed");expect(out.error.code).toBe("IRREVERSIBLE_AUTHORIZATION_REQUIRED");expect(git(s.worktree,["rev-parse","HEAD"])).toBe(a);expect(git(s.repo,["rev-parse","HEAD"])).toBe(b);});
  it("preserves exactly five actions and reads their real physical results after owned cleanup",async()=>{const s=fixture(),p=await prepare(s);expect(p.plan.steps).toEqual(["commit","merge","archive","push","cleanup"]);const c=await authorized(s,p),out=await execute(s,p,c);expect(out.status).toBe("completed");expect(out.records.map(r=>r.operation)).toEqual(p.plan.steps);expect(existsSync(s.worktree)).toBe(false);expect(git(s.repo,["cat-file","-e",`main:specs/archive/${s.id}/spec.md`])).toBe("");const readback=await inspectDeliveryCloseState({taskDir:s.taskDir,planRef:p.plan_ref});for(const flag of ["delivery_committed","merge","archive","push","worktree_cleanup","branch_cleanup","remote_branch_cleanup"])expect(readback.facts[flag],flag).toBe(true);});
+ it("preserves a remote task branch that advances between validation and cleanup deletion",async()=>{
+  const savedPath=process.env.PATH,s=fixture(),bin=join(s.base,"race-bin"),race=join(s.base,"remote-race.log"),remoteRef=`refs/heads/${s.branch}`;
+  const originalHead=git(s.worktree,["rev-parse","HEAD"]),tree=git(s.worktree,["rev-parse",`${originalHead}^{tree}`]);
+  const advancedHead=execFileSync("git",["commit-tree",tree,"-p",originalHead,"-m","concurrent remote task update"],{cwd:s.repo,encoding:"utf8"}).trim();
+  const realGit=execFileSync("/usr/bin/which",["git"],{encoding:"utf8"}).trim();
+  mkdirSync(bin);
+  writeFileSync(join(bin,"git"),["#!/bin/sh",
+   "real_git="+JSON.stringify(realGit),"repo="+JSON.stringify(s.repo),"bare="+JSON.stringify(s.bare),
+   "branch_ref="+JSON.stringify(remoteRef),"branch_name="+JSON.stringify(s.branch),
+   "advanced_head="+JSON.stringify(advancedHead),"race="+JSON.stringify(race),
+   "if [ \"$1\" = push ]; then",
+   "  case \"$*\" in",
+   "    *\"--delete $branch_name\"*|*\":$branch_ref\"*)",
+   "      printf 'advanced remote before delete\\n' >> \"$race\"",
+   "      \"$real_git\" -C \"$repo\" push \"$bare\" \"$advanced_head:$branch_ref\" || exit $?",
+   "      ;;",
+   "  esac",
+   "fi",
+   "exec \"$real_git\" \"$@\"",
+   ""].join("\n"),{mode:0o700});
+  try {
+   process.env.PATH=[bin,savedPath].filter(Boolean).join(":");
+   const p=await prepare(s),c=await authorized(s,p),result=await execute(s,p,c);
+   expect(readFileSync(race,"utf8")).toBe("advanced remote before delete\n");
+   expect(result).toMatchObject({status:"failed",operation:"cleanup"});
+   expect(git(s.bare,["rev-parse",remoteRef])).toBe(advancedHead);
+  } finally { if(savedPath===undefined)delete process.env.PATH;else process.env.PATH=savedPath; }
+ });
+ it("preserves both task branches when a locked owned worktree blocks cleanup",async()=>{
+  const s=fixture(),p=await prepare(s),c=await authorized(s,p);
+  git(s.repo,["worktree","lock",s.worktree]);
+  const out=await execute(s,p,c);
+  expect(out).toMatchObject({status:"failed",operation:"cleanup"});
+  expect(out.error.message.toLowerCase()).toContain("locked");
+  expect(existsSync(s.worktree)).toBe(true);
+  expect(git(s.repo,["worktree","list","--porcelain"])).toContain("locked");
+  expect(git(s.repo,["for-each-ref","--format=%(refname)",`refs/heads/${s.branch}`])).toBe(`refs/heads/${s.branch}`);
+  expect(git(s.bare,["for-each-ref","--format=%(refname)",`refs/heads/${s.branch}`])).toBe(`refs/heads/${s.branch}`);
+ });
+ it("retries cleanup after a rejected remote task deletion using the failed action source head",async()=>{
+  const saved={...process.env},s=fixture(),bin=join(s.base,"bin"),calls=join(s.base,"calls.jsonl"),prState=join(s.base,"retry-pr.json");
+  const realGit=execFileSync("/usr/bin/which",["git"],{encoding:"utf8"}).trim();
+  mkdirSync(bin);writeFileSync(calls,"");git(s.repo,["remote","set-url","origin","https://github.com/owned/c09-close-retry.git"]);
+  writeFileSync(join(bin,"git"),`#!${process.execPath}\nconst fs=require('node:fs'),cp=require('node:child_process');let args=process.argv.slice(2);if(!process.cwd().startsWith(${JSON.stringify(s.base+'/')}))process.exit(95);fs.appendFileSync(${JSON.stringify(calls)},JSON.stringify(args)+'\\n');if(['push','fetch','ls-remote'].includes(args[0])){args=args.map(x=>x==='origin'?${JSON.stringify(s.bare)}:x);if(args.some(x=>/^https?:|^git@/.test(x)))process.exit(96);}const r=cp.spawnSync(${JSON.stringify(realGit)},args,{cwd:process.cwd(),env:process.env,encoding:'utf8'});process.stdout.write(r.stdout||'');process.stderr.write(r.stderr||'');process.exit(r.status??97);\n`,{mode:0o700});
+  writeFileSync(join(bin,"gh"),`#!${process.execPath}\nconst fs=require('node:fs'),cp=require('node:child_process'),args=process.argv.slice(2);if(!process.cwd().startsWith(${JSON.stringify(s.base+'/')}))process.exit(95);if(args[0]==='--version'){console.log('owned local gh transport');}else if(args[0]==='auth'){process.exit(0);}else if(args[0]==='repo'){console.log(JSON.stringify({nameWithOwner:'owned/c09-close-retry',defaultBranchRef:{name:'main'},viewerPermission:'WRITE'}));}else if(args[0]==='pr'&&args[1]==='create'){const oid=cp.execFileSync(${JSON.stringify(realGit)},['rev-parse','HEAD'],{encoding:'utf8'}).trim();fs.writeFileSync(${JSON.stringify(prState)},JSON.stringify({headRefName:${JSON.stringify(s.branch)},baseRefName:'main',headRefOid:oid,url:'https://github.com/owned/c09-close-retry/pull/1',number:1}));console.log('https://github.com/owned/c09-close-retry/pull/1');}else if(args[0]==='pr'&&(args[1]==='view'||args[1]==='list')){const row=fs.existsSync(${JSON.stringify(prState)})?JSON.parse(fs.readFileSync(${JSON.stringify(prState)},'utf8')):null;console.log(JSON.stringify(args[1]==='view'?(row||[]):(row?[row]:[])));}else process.exit(98);\n`,{mode:0o700});
+  try {
+   Object.assign(process.env,{PATH:bin+":"+(saved.PATH??""),WORKFLOWHUB_TASK_DIR:join(s.base,"storage")});
+   const p=await prepare(s),c=await authorized(s,p),sourceHead=git(s.repo,["rev-parse",`refs/heads/${s.branch}`]),hook=join(s.bare,"hooks","pre-receive");
+   expect(p.plan.steps).toEqual(["commit","push-task","pr","merge","archive","push","cleanup"]);
+   writeFileSync(hook,["#!/bin/sh","while read old_oid new_oid ref; do","  case \"$new_oid\" in","    0000000000000000000000000000000000000000*) echo 'reject task ref deletion' >&2; exit 1 ;;","  esac","done","exit 0",""].join("\n"),{mode:0o700});
+   const first=await execute(s,p,c);
+   expect(first).toMatchObject({status:"failed",operation:"cleanup"});
+   expect(first.error.message).toMatch(/pre-receive hook declined/);
+   expect(existsSync(s.worktree)).toBe(false);
+   expect(git(s.repo,["for-each-ref","--format=%(refname)",`refs/heads/${s.branch}`])).toBe("");
+   expect(git(s.bare,["for-each-ref","--format=%(refname)",`refs/heads/${s.branch}`])).toBe(`refs/heads/${s.branch}`);
+   const failedCleanup=JSON.parse(readFileSync(first.failure_ref,"utf8"));
+   rmSync(hook);
+   const retry=await execute(s,p,c);
+   expect({failed_cleanup_source_head:failedCleanup.source_head??null,expected_source_head:sourceHead,retry_status:retry.status,retry_error:retry.error?.code??null,retry_message:retry.error?.message??null}).toEqual({failed_cleanup_source_head:sourceHead,expected_source_head:sourceHead,retry_status:"completed",retry_error:null,retry_message:null});
+   expect(existsSync(s.worktree)).toBe(false);
+   expect(git(s.repo,["for-each-ref","--format=%(refname)",`refs/heads/${s.branch}`])).toBe("");
+   expect(git(s.bare,["for-each-ref","--format=%(refname)",`refs/heads/${s.branch}`])).toBe("");
+  } finally { for(const key of Object.keys(process.env))if(!(key in saved))delete process.env[key];Object.assign(process.env,saved); }
+ });
+ it("retries five-step cleanup after a rejected remote task deletion without a PR",async()=>{
+  const savedPath=process.env.PATH,realGit=execFileSync("/usr/bin/which",["git"],{encoding:"utf8"}).trim(),s=fixture(),gitBin=join(s.base,"stable-git-bin");
+  mkdirSync(gitBin);writeFileSync(join(gitBin,"git"),`#!/bin/sh\nexec ${JSON.stringify(realGit)} "$@"\n`,{mode:0o700});
+  try {
+   process.env.PATH=[gitBin,savedPath].filter(Boolean).join(":");
+   const p=await prepare(s),c=await authorized(s,p),sourceHead=git(s.repo,["rev-parse",`refs/heads/${s.branch}`]),hook=join(s.bare,"hooks","pre-receive");
+   expect(p.plan.steps).toEqual(["commit","merge","archive","push","cleanup"]);
+   writeFileSync(hook,["#!/bin/sh","while read old_oid new_oid ref; do","  case \"$new_oid\" in","    0000000000000000000000000000000000000000*) echo 'reject task ref deletion' >&2; exit 1 ;;","  esac","done","exit 0",""].join("\n"),{mode:0o700});
+   const first=await execute(s,p,c);
+   expect(first).toMatchObject({status:"failed",operation:"cleanup"});
+   expect(first.error.message).toMatch(/pre-receive hook declined/);
+   expect(existsSync(s.worktree)).toBe(false);
+   expect(git(s.repo,["for-each-ref","--format=%(refname)",`refs/heads/${s.branch}`])).toBe("");
+   expect(git(s.bare,["for-each-ref","--format=%(refname)",`refs/heads/${s.branch}`])).toBe(`refs/heads/${s.branch}`);
+   const failedCleanup=JSON.parse(readFileSync(first.failure_ref,"utf8"));
+   expect(failedCleanup.source_head).toBe(sourceHead);
+   rmSync(hook);
+   const retry=await execute(s,p,c);
+   expect(retry.status).toBe("completed");
+   expect(existsSync(s.worktree)).toBe(false);
+   expect(git(s.repo,["for-each-ref","--format=%(refname)",`refs/heads/${s.branch}`])).toBe("");
+   expect(git(s.bare,["for-each-ref","--format=%(refname)",`refs/heads/${s.branch}`])).toBe("");
+  } finally { if(savedPath===undefined)delete process.env.PATH;else process.env.PATH=savedPath; }
+ });
  it("captures dirty source before planning but rejects later bytes drifting from that plan",async()=>{const s=fixture();writeFileSync(join(s.worktree,"changed.txt"),"first\n");const p=await prepare(s);expect(p.plan.source.changes.map(r=>r.path)).toContain("changed.txt");const c=await authorized(s,p);writeFileSync(join(s.worktree,"changed.txt"),"second\n");const out=await execute(s,p,c);expect(out.status).toBe("failed");expect(out.error.code).toBe("SOURCE_BYTES_DRIFT");expect(readFileSync(join(s.worktree,"changed.txt"),"utf8")).toBe("second\n");});
  it("rejects dirty target before performing any source commit",async()=>{const s=fixture();writeFileSync(join(s.worktree,"change.txt"),"planned\n");const p=await prepare(s),c=await authorized(s,p),head=git(s.worktree,["rev-parse","HEAD"]);writeFileSync(join(s.repo,"unrelated.txt"),"user-owned\n");await expect(execute(s,p,c)).rejects.toThrow(/clean|dirty/i);expect(git(s.worktree,["rev-parse","HEAD"])).toBe(head);expect(readFileSync(join(s.repo,"unrelated.txt"),"utf8")).toBe("user-owned\n");});
  it("keeps existing worktrees and branches while marking cleanup skipped",async()=>{const s=fixture({existing:true}),p=await prepare(s),c=await authorized(s,p),out=await execute(s,p,c);expect(out.status).toBe("completed");expect(out.records.find(r=>r.operation==="cleanup").status).toBe("skipped");expect(existsSync(s.worktree)).toBe(true);expect(git(s.repo,["rev-parse",`refs/heads/${s.branch}`])).not.toBe("");});
@@ -230,7 +570,7 @@ it("P10 native public six actions bind real TASK and MAIN grants to cwd HEAD and
   expect(help.actions.authorize).toEqual(["commit","push","merge","archive","cleanup","pr"]);
   expect(help.behaviors).toEqual(["doctor","status","run","review","verify","confirm","authorize"]);
   const authDir=join(evidence,"git-authorizations");
-  const native=(cwd,action,operation,stepId)=>{owned(cwd);const args=[authCli,action,"--operation",operation,"--dir",authDir,action==="record"?"--confirmation-ref":"--step-id",action==="record"?confirmation.path:stepId];const pointer=JSON.parse(execFileSync(process.execPath,args,{cwd,encoding:"utf8",env:process.env,stdio:["ignore","pipe","pipe"]}));owned(pointer.path);expect(dirname(pointer.path)).toBe(authDir);return{path:pointer.path,value:JSON.parse(readFileSync(pointer.path,"utf8"))};};
+  const native=(cwd,action,operation,stepId)=>{owned(cwd);const phase=cwd===wt&&action==="consume"&&operation==="commit"?["--phase","build-code"]:[];const args=[authCli,action,"--operation",operation,...phase,"--dir",authDir,action==="record"?"--confirmation-ref":"--step-id",action==="record"?confirmation.path:stepId];const pointer=JSON.parse(execFileSync(process.execPath,args,{cwd,encoding:"utf8",env:process.env,stdio:["ignore","pipe","pipe"]}));owned(pointer.path);expect(dirname(pointer.path)).toBe(authDir);return{path:pointer.path,value:JSON.parse(readFileSync(pointer.path,"utf8"))};};
   const authorize=async(cwd,operation,suffix)=>{const head=localGit(cwd,["rev-parse","HEAD"]),actualBranch=localGit(cwd,["branch","--show-current"]);let grant;if(cwd===wt){const pointer=await stageRuntimeCliMain(["authorize",`--action=${operation}`,...common,`--subject-ref=${confirmation.path}`],{cwd});owned(pointer.path);grant={path:pointer.path,value:JSON.parse(readFileSync(pointer.path,"utf8"))};}else grant=native(cwd,"record",operation);expect(grant.value).toMatchObject({operation,branch:actualBranch,head,confirmation_ref:confirmation.path});const consumed=native(cwd,"consume",operation,`${scopeRef}:${suffix}`);expect(consumed.value).toMatchObject({operation,step_id:`${scopeRef}:${suffix}`,authorization_ref:grant.path});expect(JSON.parse(readFileSync(consumed.value.authorization_ref,"utf8"))).toEqual(grant.value);return{grant,consumed};};
   writeFileSync(join(wt,"README.md"),"after owned native change\n");await authorize(wt,"commit","commit");localGit(wt,["add","README.md","specs"]);localGit(wt,["commit","-qm","Owned delivery title"]);
   const sourceHead=localGit(wt,["rev-parse","HEAD"]),taskPush=await authorize(wt,"push","push-task");localGit(wt,["push","origin",`${branch}:${branch}`]);expect(localGit(bare,["rev-parse",`refs/heads/${branch}`])).toBe(sourceHead);

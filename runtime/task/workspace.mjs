@@ -1,6 +1,7 @@
-import { existsSync, lstatSync, realpathSync, rmSync } from "node:fs";
+import { closeSync, constants, copyFileSync, existsSync, fstatSync, lstatSync, mkdtempSync, openSync, realpathSync, rmSync, unlinkSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { basename, dirname, isAbsolute, join, parse, relative, resolve, sep } from "node:path";
+import { tmpdir } from "node:os";
 import { assertTaskHandle } from "./task-capability.mjs";
 import { inspectWorkspace } from "../interface/workspace-check.mjs";
 const EXECUTION_SIDECAR_PREFIXES = Object.freeze(["evidence/", "quality/", ".multica/"]);
@@ -23,9 +24,121 @@ const KNOWN_IGNORED_GENERATED = Object.freeze([
 ]);
 
 function gitEnvironment() { const env = { ...process.env }; for (const key of Object.keys(env)) if (key.startsWith("GIT_")) delete env[key]; return env; }
-function gitValue(cwd, args, label) {
-  try { return String(execFileSync("git", args, { cwd, env: gitEnvironment(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })).trim(); }
-  catch (error) { throw new Error(`${label} validation failed: ${error.stderr?.toString().trim() || error.message}`, { cause: error }); }
+function gitValue(cwd, args, label, { indexFile, raw = false } = {}) {
+  const env = gitEnvironment();
+  const options = { cwd, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] };
+  if (indexFile) { env.GIT_INDEX_FILE = indexFile; env.GIT_OPTIONAL_LOCKS = "0"; options.maxBuffer = 32 * 1024 * 1024; }
+  try {
+    const output = String(execFileSync("git", args, options));
+    return raw ? output : output.trim();
+  } catch (error) {
+    throw new Error(label + " validation failed: " + (error.stderr?.toString().trim() || error.message), { cause: error });
+  }
+}
+
+function acquireWorktreeIndexLock(indexFile) {
+  const lockPath = indexFile + ".lock";
+  let fd;
+  try {
+    fd = openSync(lockPath, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY | (constants.O_NOFOLLOW ?? 0), 0o600);
+  } catch (error) {
+    if (error.code === "EEXIST") throw new Error("task worktree index is already locked; refusing removal", { cause: error });
+    throw error;
+  }
+  let opened;
+  try {
+    opened = fstatSync(fd);
+    const named = lstatSync(lockPath);
+    if (named.isSymbolicLink() || !named.isFile() || named.dev !== opened.dev || named.ino !== opened.ino) {
+      throw new Error("task worktree index lock changed during acquisition");
+    }
+    return { fd, path: lockPath, dev: opened.dev, ino: opened.ino };
+  } catch (error) {
+    closeSync(fd);
+    if (!opened) throw error;
+    try {
+      const named = lstatSync(lockPath);
+      if (!named.isSymbolicLink() && named.dev === opened.dev && named.ino === opened.ino) unlinkSync(lockPath);
+    } catch (cleanupError) {
+      if (cleanupError.code !== "ENOENT") throw new AggregateError([error, cleanupError], "task worktree index lock acquisition and cleanup failed");
+    }
+    throw error;
+  }
+}
+
+function releaseWorktreeIndexLock(lock) {
+  closeSync(lock.fd);
+  try {
+    const named = lstatSync(lock.path);
+    if (named.isSymbolicLink() || !named.isFile() || named.dev !== lock.dev || named.ino !== lock.ino) {
+      throw new Error("task worktree index lock changed during removal");
+    }
+    unlinkSync(lock.path);
+  } catch (error) {
+    // Successful worktree removal deletes the worktree's administration directory, including this lock file.
+    if (error.code !== "ENOENT") throw error;
+  }
+}
+
+function withStableWorktreeRemovalIndex(worktreeRoot, remove) {
+  const indexFile = resolve(gitValue(worktreeRoot, ["rev-parse", "--path-format=absolute", "--git-path", "index"], "worktree removal index"));
+  const gitDirectory = realpathSync(gitValue(worktreeRoot, ["rev-parse", "--path-format=absolute", "--git-dir"], "worktree removal Git directory"));
+  if (dirname(indexFile) !== gitDirectory || realpathSync(dirname(indexFile)) !== gitDirectory) {
+    throw new Error("task worktree index is outside its Git administration directory");
+  }
+  const indexStat = lstatSync(indexFile);
+  if (!indexStat.isFile() || indexStat.isSymbolicLink() || realpathSync(indexFile) !== indexFile) {
+    throw new Error("task worktree index must be a canonical regular file");
+  }
+
+  const temporaryRoot = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-worktree-removal-index-")));
+  let lock, result, operationError;
+  try {
+    lock = acquireWorktreeIndexLock(indexFile);
+    const lockedIndex = lstatSync(indexFile);
+    if (!lockedIndex.isFile() || lockedIndex.isSymbolicLink() || realpathSync(indexFile) !== indexFile) {
+      throw new Error("task worktree index changed during removal");
+    }
+    const removalIndex = join(temporaryRoot, "index");
+    copyFileSync(indexFile, removalIndex, constants.COPYFILE_EXCL);
+    const indexed = gitValue(worktreeRoot, ["ls-files", "-v", "-z"], "worktree removal index scan", { indexFile: removalIndex, raw: true })
+      .split("\0").filter(Boolean);
+    for (const row of indexed) {
+      const flag = row[0], path = relativeWorktreePath(row.slice(2), "worktree removal index scan");
+      const hasAssumeUnchanged = flag === "h" || flag === "s";
+      const hasSkipWorktree = flag === "S" || flag === "s";
+      if (flag !== "H" && !hasAssumeUnchanged && !hasSkipWorktree) {
+        throw new Error("unsupported Git index flag before worktree removal: " + flag + " " + path);
+      }
+      if (hasSkipWorktree) gitValue(worktreeRoot, ["update-index", "--no-skip-worktree", "--", path], "worktree removal index normalization", { indexFile: removalIndex });
+      if (hasAssumeUnchanged) gitValue(worktreeRoot, ["update-index", "--no-assume-unchanged", "--", path], "worktree removal index normalization", { indexFile: removalIndex });
+    }
+    const normalized = gitValue(worktreeRoot, ["ls-files", "-v", "-z"], "worktree removal index verification", { indexFile: removalIndex, raw: true })
+      .split("\0").filter(Boolean);
+    if (normalized.some((row) => row[0] !== "H")) throw new Error("worktree removal index still contains non-normal Git flags");
+    const named = lstatSync(lock.path);
+    if (named.isSymbolicLink() || !named.isFile() || named.dev !== lock.dev || named.ino !== lock.ino) {
+      throw new Error("task worktree index lock changed before removal");
+    }
+    result = remove(removalIndex);
+  } catch (error) {
+    operationError = error;
+  }
+
+  const cleanupErrors = [];
+  try { rmSync(temporaryRoot, { recursive: true, force: true }); }
+  catch (error) { cleanupErrors.push(error); }
+  if (lock) {
+    try { releaseWorktreeIndexLock(lock); }
+    catch (error) { cleanupErrors.push(error); }
+  }
+  if (cleanupErrors.length) {
+    if (operationError) throw new AggregateError([operationError, ...cleanupErrors], "worktree removal and cleanup failed");
+    if (cleanupErrors.length === 1) throw cleanupErrors[0];
+    throw new AggregateError(cleanupErrors, "worktree removal cleanup failed");
+  }
+  if (operationError) throw operationError;
+  return result;
 }
 
 function gitCommonDir(root) {
@@ -84,7 +197,7 @@ function cleanupError(scan) {
 /** Classify all worktree changes before a governed cleanup operation. */
 export function inspectWorktreeCleanup(worktreeRoot) {
   const root = realGitToplevel(worktreeRoot, "task worktree cleanup scan");
-  const raw = String(execFileSync("git", ["status", "--porcelain=v1", "--ignored", "--untracked-files=all", "-z"], {
+  const raw = String(execFileSync("git", ["-c", "core.fsmonitor=false", "--no-optional-locks", "status", "--porcelain=v1", "--ignored", "--untracked-files=all", "-z"], {
     cwd: root, env: gitEnvironment(),
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
@@ -95,6 +208,7 @@ export function inspectWorktreeCleanup(worktreeRoot) {
   const execution_sidecars = [];
   const ignored_generated = [];
   const ignored_unknown = [];
+  const trackedPaths = new Set();
   for (const field of raw.split("\0").filter(Boolean)) {
     const status = field.slice(0, 2);
     const path = relativeWorktreePath(field.slice(3), "task worktree cleanup scan");
@@ -103,7 +217,19 @@ export function inspectWorktreeCleanup(worktreeRoot) {
     if (status === "??") untracked.push(entry);
     else if (status === "!!") {
       (!isExecutionSidecar(path) && isKnownIgnoredGenerated(path) ? ignored_generated : ignored_unknown).push(entry);
-    } else tracked.push(entry);
+    } else { tracked.push(entry); trackedPaths.add(path); }
+  }
+  // `-v` exposes assume-unchanged and skip-worktree; fsmonitor-valid is checked by the full status scan.
+  const indexed = String(execFileSync("git", ["ls-files", "-v", "-z"], {
+    cwd: root, env: gitEnvironment(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    maxBuffer: 32 * 1024 * 1024,
+  }));
+  for (const field of indexed.split("\0").filter(Boolean)) {
+    if (field[0] === "H") continue;
+    const path = relativeWorktreePath(field.slice(2), "task worktree cleanup index scan");
+    if (trackedPaths.has(path)) continue;
+    tracked.push(Object.freeze({ status: "", path }));
+    trackedPaths.add(path);
   }
   return Object.freeze({
     schema_version: "workflowhub-worktree-cleanup-scan.v1",
@@ -276,7 +402,9 @@ export function createTaskWorktreeRemoval(taskHandle) {
       for (const entry of cleanup.ignored_generated) removeKnownIgnoredGenerated(expected.worktreeRoot, entry);
       for (const entry of cleanup.execution_sidecars) { if (entry.status === "??" || entry.status === "!!") removeKnownExecutionSidecar(expected.worktreeRoot, entry); else restoreTrackedExecutionSidecar(expected.worktreeRoot, entry); }
       const after = inspectWorktreeCleanup(expected.worktreeRoot); if (!after.safe) throw cleanupError(after);
-      observe(); gitValue(expected.targetRepoRoot, ["worktree", "remove", "--", expected.worktreeRoot], "task worktree removal");
+      observe();
+      withStableWorktreeRemovalIndex(expected.worktreeRoot, (removalIndex) =>
+        gitValue(expected.targetRepoRoot, ["-c", "core.fsmonitor=false", "worktree", "remove", "--", expected.worktreeRoot], "task worktree removal", { indexFile: removalIndex }));
     }, verify: async value => value?.satisfied === true && value?.worktree_root === expected.worktreeRoot,
   });
 }
