@@ -76,6 +76,20 @@ function n3AgPacket() {
   return {root,cwd:view.cwd,bundle:view.bundle,inside:path.join(view.bundle,"inside.txt"),outside,clean};
 }
 function n3AgStart(s, command="/Users/Hugh/.local/bin/agy") { return antigravity.start(provider({command}),s.cwd,"Read only this current packet"); }
+// A stand-in native CLI: the packet guard must depend on the embedded hook
+// contract alone, never on a release number. `probe` records any --version
+// execution so a test can prove no version probe happens.
+function nativeHookCli({ version = "1.5.6", exit = 0, probe = null, markers = true } = {}) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "3rd-review-agy-native-"));
+  const file = path.join(root, "agy");
+  const script = ["#!/bin/sh"];
+  if (probe) script.push(`echo probe >> '${probe}'`);
+  if (version !== null) script.push(`printf '%s\\n' '${version}'`);
+  script.push(`exit ${exit}`);
+  fs.writeFileSync(file, `${markers ? "# PreToolUse .agents/hooks.json Hard block native contract\n" : ""}${script.join("\n")}\n`, { mode: 0o700 });
+  const clean = () => fs.rmSync(root, { recursive: true, force: true });
+  return { file, clean };
+}
 function n3AgHook(s) {
   const hooksFile=path.join(s.cwd,".agents","hooks.json");
   assert.ok(fs.existsSync(hooksFile),"native workspace hooks must exist before a provider plan can be launched");
@@ -107,6 +121,31 @@ test("N3 P2 direction lifecycle: AG native hook command permits exact current re
 });
 test("N3 P2 direction lifecycle: AG unknown native hook capability and missing packet cannot produce an executable provider plan",()=>{
   const s=n3AgPacket();const empty=fs.realpathSync(temp());try {assert.throws(()=>n3AgStart(s,fake),{code:"PROVIDER_PACKET_GUARD_UNAVAILABLE"});assert.throws(()=>antigravity.start(provider({command:"/Users/Hugh/.local/bin/agy"}),empty,"review"),{code:"PROVIDER_PACKET_GUARD_UNAVAILABLE"});}finally{s.clean();fs.rmSync(empty,{recursive:true,force:true});}
+});
+
+// Version independence: the packet guard is the native hook contract, so any
+// installed release (including ones newer than the adapter was written for)
+// must start, and no --version execution may happen.
+test("N3 P2 fix: AG accepts any CLI release when native hook markers exist and never probes --version",()=>{
+  for(const variant of [{version:"1.5.6",exit:0},{version:"9.9.9",exit:0},{version:null,exit:0},{version:"1.4.2",exit:1}]){
+    const s=n3AgPacket();const probe=path.join(s.root,"version-probe.log");const cli=nativeHookCli({...variant,probe});
+    try {
+      const execution=antigravity.start(provider({command:cli.file}),s.cwd,"Read only this current packet");
+      assert.equal(execution.command,cli.file);
+      assert.equal(fs.existsSync(probe),false,"the adapter must not run the CLI to verify a version");
+      const hook=n3AgHook(s);const read=p=>hook({toolCall:{name:"view_file",args:{AbsolutePath:p}}});
+      assert.equal(n3AgDecision(read(s.inside)),"allow","the installed hook still grants only exact frozen members");
+      assert.equal(n3AgDecision(read(s.outside)),"deny","the installed hook still denies outside the packet");
+    }finally{s.clean();cli.clean();}
+  }
+});
+test("N3 P2 fix: AG rejects a CLI without the native hook contract regardless of its version",()=>{
+  const s=n3AgPacket();const cli=nativeHookCli({markers:false,version:"9.9.9"});
+  try {assert.throws(()=>antigravity.start(provider({command:cli.file}),s.cwd,"review"),{code:"PROVIDER_PACKET_GUARD_UNAVAILABLE"});}finally{s.clean();cli.clean();}
+});
+test("N3 P2 fix: AG rejects a missing CLI executable",()=>{
+  const s=n3AgPacket();
+  try {assert.throws(()=>antigravity.start(provider({command:path.join(os.tmpdir(),"no-such-agy-binary")}),s.cwd,"review"),{code:"PROVIDER_PACKET_GUARD_UNAVAILABLE"});}finally{s.clean();}
 });
 
 // Correction oracle from review053 and actual native diagnosis297. Startup
