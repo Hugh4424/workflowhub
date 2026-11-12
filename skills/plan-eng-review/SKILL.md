@@ -11,7 +11,7 @@ Read the engineering draft during build-plan and return anchored observations fo
 
 ## Required material
 
-Review the current accepted specification, its global implementation design, all available Phase drafts and their task cards. In post tasks, engineering authorities are `spec.md` and `phases/P<n>.md`; `phases/index.md` only points to them. A draft index may be absent while cards are being authored; disclose this instead of inventing tasks. Historical plan/tasks remain read-only background. A provider pass does not supply missing engineering evidence.
+Review the current accepted specification, its global implementation design, all available Phase drafts and their task cards. In post tasks, engineering authorities are `spec.md` and `phases/P<n>.md`; `phases/index.md` only points to them. A draft index may be absent while cards are being authored; disclose this instead of inventing tasks. Historical plan/tasks remain read-only background. A provider pass does not supply missing engineering evidence. detail 轨只交 `approved_direction` 与 `context_map.proposal_projection`，按每个工作包回答 Check 1、6、7、9(c)(g)，不要求 Phase 草稿。
 
 ## Check
 
