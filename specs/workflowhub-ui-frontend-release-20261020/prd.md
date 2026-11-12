@@ -1,7 +1,7 @@
-# WorkflowHub UI / 前端能力升级：十任务 PRD
+# WorkflowHub UI / 前端能力升级：十二任务 PRD
 
-> 状态：C10增补草案；C01～C09父规划已于2026-10-13确认，C10/M18是本次用户明确新增，尚未再次确认、实施或发布。较早正式文档建议保留一路失败及覆盖限制，定向修订/回读结果沿下方原件。正文作者：当前主会话按spec-prd方法。
-> 当前任务：workflowhub-ui-frontend-release-20261020。它继承[已归档九卡母规划](../archive/workflowhub-ui-frontend-decision-refresh-20261013/prd.md)和[已归档母决定](../archive/workflowhub-ui-frontend-decision-refresh-20261013/decision-log.md)，本文件是C10增补后的当前规划入口；父规划及旧capability任务只读保留。
+> 状态：C11/C12已由用户于2026-11-12确认，卡内容与PRD增补稿已确认；C01～C09父规划已于2026-10-13确认，C10仍为增补，尚未实施或发布。较早正式文档建议保留一路失败及覆盖限制，定向修订/回读结果沿下方原件。正文作者：当前主会话按spec-prd方法。
+> 当前任务：workflowhub-ui-frontend-release-20261020。它继承[已归档九卡母规划](../archive/workflowhub-ui-frontend-decision-refresh-20261013/prd.md)和[已归档母决定](../archive/workflowhub-ui-frontend-decision-refresh-20261013/decision-log.md)，本文件是C10～C12增补后的当前规划入口；父规划及旧capability任务只读保留。
 
 ## 导航
 
@@ -9,7 +9,7 @@
 | --- | --- |
 | [产品总览](#overview) | 为谁解决什么问题，哪些不做 |
 | [共享定义](#shared) | 规范来源、技能分工、真实验收和计量如何统一 |
-| [任务地图与开发顺序](#map) | 十项各交什么、依赖谁、哪些可并行 |
+| [任务地图与开发顺序](#map) | 十二项各交什么、依赖谁、哪些可并行 |
 | [完整任务卡](#cards) | scope、交付物、FR、独立AC、依赖与责任 |
 | [逐项覆盖](#coverage) | 决策、调研、旧PRD是否有落实或明确替代 |
 | [开发资料与开工导航](#dev-nav) | 从哪里读准确技能、概念和调研，怎样摆脱历史工作区路径 |
@@ -25,7 +25,7 @@
 
 母决定为父规划的有效D-001～D-014；D-004仅为被D-014替代的历史。本次新增D-015，专门承接上游M18发布与接入闭环。U019/U020对父规划九卡的确认仍有效；C10是后续用户明确要求的增补，不能冒作原确认已覆盖。实际地图原话见[planning-input.md](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-decision-refresh-20261013/quality/evidence/prd-refs/planning-input.md)。
 
-十项交付的是可复用的原技能适配、方法、必要窄工具、真实接线及最终可分发包；页面/项目样本是验收载体，不以“做出一页demo”或“文件存在”替代能力。独立交付允许依赖已交付上游，不允许等待未来下游替本卡补实现或验收。每卡均承担必要来源核验、接线、针对性验证、独立检查、修复及交接。
+十二项交付的是可复用的原技能适配、方法、必要窄工具、真实接线、能力缺口修复与验收结论及最终可分发包；页面/项目样本是验收载体，不以“做出一页demo”或“文件存在”替代能力。独立交付允许依赖已交付上游，不允许等待未来下游替本卡补实现或验收。每卡均承担必要来源核验、接线、针对性验证、独立检查、修复及交接。
 
 规划对象是WorkflowHub的能力/方法改造，本轮没有待设计的业务页面、状态或viewport，故本轮真实UI设计展示为not_applicable。C05及各后续适用任务仍须展示真实原型并取得该原型答复；此处不以规划确认绕过它。
 
@@ -162,24 +162,26 @@ C09负责人从首批工作准备样本、可运行环境、固定旧WorkflowHub
 
 ## 任务地图与开发顺序
 
-这里C01～C10是本次规划卡，不是旧T01～T10，也不是十个新stage。scope大小按职责跨度，不伪报工期。C01～C09沿父规划保留，C10是M18增补卡。
+这里C01～C12是本次规划卡，不是旧T01～T10，也不是十二个新stage。scope大小按职责跨度，不伪报工期。C01～C09沿父规划保留，C10是M18增补卡，C11/C12是2026-11-12新增的能力缺口修复与能力验收卡。
 
-| 卡 | 可独立交付结果 | 主要消费者/能力owner | 实现依赖 | 验收载体 |
-| --- | --- | --- | --- | --- |
-| C01 | 八类规范有实质来源，旧规则及真实读取入口完成迁移 | 项目维护者；现规范初始化/各专业owner | 无新卡硬依赖，使用已有可信来源 | 真实项目规范及已有消费者 |
-| C02 | 知识适用性与经验形成真实查询、采用、再用闭环 | 设计/开发者；知识方法owner | 无新卡硬依赖 | 已验证经验及两次具名真实任务 |
-| C03 | 四类资产语义、对应、选型和实际使用成立 | 原型/实现者；现资产/组件质量owner | C01；只有使用C04新增输出的分支才依赖C04 | 现有真实设计/代码资产与页面 |
-| C04 | 有源提炼结果驱动实现与对照，缺项不假补 | builder/验证者；现设计源适配owner | 无新卡硬依赖；现有任务输入/源观察/实现消费者 | 真实设计源及提取器局部验证 |
-| C05 | 两路设计原型、独立审查、修正及展示答复齐备 | 设计owner/实现者；现build-plan UI准备owner | C01/C02/C03；有稿消费C04，无稿不等提取器 | 约定范围的真实原型 |
-| C06 | 规范和真实组件进入可维护实现并经代码审查修复 | 产品/维护者；现前端实施及规则维护owner | C01/C03/C05；有稿使用已交付C04输入 | 真实页面、源码diff及消费者 |
-| C07 | 各质量面可实测、问题可定位回修、失败不假绿 | 验收者；现frontend-testing/隔离QA owner | C01/C03；可先用现有运行产品，不硬等C06 | 已有真实产品或已交付C06页面 |
-| C08 | 规范/资产更新落实到使用点并由后续任务消费 | 项目维护者；各事实原owner | C01/C03/C06/C07；经验候选按需消费C02 | 真实组件与布局变更及后续任务 |
-| C09 | 两路流程/业务贯通与真实同口径效果结论，并提供发布前事实 | 用户；整体验证负责人 | 最终验证消费C01～C08已交付能力 | 原两页有稿比较、一个无稿业务闭环 |
-| C10 | 把已验收能力做成可安装、可更新、可排障、可对账的发布包，并用发布包跑通一个真实consumer | 发布/接入负责人；用户和新项目维护者 | C09；M16；M17a→M17b；X2/X3/X4兼容事实 | plugin/marketplace、接入脚本、文档、两类manifest、兼容矩阵、发布包真实流程 |
+| 卡 | 可独立交付结果 | 主要消费者/能力owner | 实现依赖 | 波次 | 主承接需求 | 验收载体 |
+| --- | --- | --- | --- | --- | --- | --- |
+| C01 | 八类规范有实质来源，旧规则及真实读取入口完成迁移 | 项目维护者；现规范初始化/各专业owner | 无新卡硬依赖，使用已有可信来源 | 首批 | US01 | 真实项目规范及已有消费者 |
+| C02 | 知识适用性与经验形成真实查询、采用、再用闭环 | 设计/开发者；知识方法owner | 无新卡硬依赖 | 首批 | US02 | 已验证经验及两次具名真实任务 |
+| C03 | 四类资产语义、对应、选型和实际使用成立 | 原型/实现者；现资产/组件质量owner | C01；只有使用C04新增输出的分支才依赖C04 | 随后 | US03 | 现有真实设计/代码资产与页面 |
+| C04 | 有源提炼结果驱动实现与对照，缺项不假补 | builder/验证者；现设计源适配owner | 无新卡硬依赖；现有任务输入/源观察/实现消费者 | 首批 | US04 | 真实设计源及提取器局部验证 |
+| C05 | 两路设计原型、独立审查、修正及展示答复齐备 | 设计owner/实现者；现build-plan UI准备owner | C01/C02/C03；有稿消费C04，无稿不等提取器 | 中期 | US05 | 约定范围的真实原型 |
+| C06 | 规范和真实组件进入可维护实现并经代码审查修复 | 产品/维护者；现前端实施及规则维护owner | C01/C03/C05；有稿使用已交付C04输入 | 中后期 | US06 | 真实页面、源码diff及消费者 |
+| C07 | 各质量面可实测、问题可定位回修、失败不假绿 | 验收者；现frontend-testing/隔离QA owner | C01/C03；可先用现有运行产品，不硬等C06 | 中期 | US07 | 已有真实产品或已交付C06页面 |
+| C08 | 规范/资产更新落实到使用点并由后续任务消费 | 项目维护者；各事实原owner | C01/C03/C06/C07；经验候选按需消费C02 | 后期 | US08 | 真实组件与布局变更及后续任务 |
+| C09 | 两路流程/业务贯通与真实同口径效果结论，并提供发布前事实 | 用户；整体验证负责人 | 最终验证消费C01～C08已交付能力 | 贯穿与收束 | US09 | 原两页有稿比较、一个无稿业务闭环 |
+| C10 | 把已验收能力做成可安装、可更新、可排障、可对账的发布包，并用发布包跑通一个真实consumer | 发布/接入负责人；用户和新项目维护者 | C12验收结论（C09只作历史）；M16；M17a→M17b；X2/X3/X4兼容事实 | 最后 | US10 | plugin/marketplace、接入脚本、文档、两类manifest、兼容矩阵、发布包真实流程 |
+| C11 | C01～C08中阻断页面链路使用的八类缺口有真实修复、定向复验与未修清单 | C12验收、页面实现者与用户；各卡方法正文仍归原owner | 无新上游；C01～C08现状即输入 | 第一波（与既有卡并行） | C09的028/009/026判词；无新故事 | 现有两页与真实使用点、原判词与原件 |
+| C12 | 现有两页与v15当前稿的UI/前端能力有可用性与页面质量的验收结论 | 用户、C10与后续项目；验收owner | C11已交付修复结果 | 第二波（接C11） | C11关闭件；无新故事 | 两页与v15当前稿的真实浏览器、设计源与C11关闭件 |
 
-建议开发顺序：首批C01/C02/C04可并行，C09同时做不阻断开发的基线准备；之后C03；然后C05与C07的既有页面验证能力可并行；C06跟随已确认设计推进；C08在真实实现及运行检查可用后交付；C09整组收束；最后C10消费C09、M16、M17a/M17b和外部依赖兼容事实完成发布闭环。C10的包结构/manifest准备可在C09后段并行，但最终验收不能早于这些前置事实。各卡在建设中用真实小范围验证，不等全部开发完再测。准备可早于实现依赖，正式写入/验收分别遵循卡内合同，不把整卡未完成当已交付接口。
+建议开发顺序：首批C01/C02/C04可并行，C09同时做不阻断开发的基线准备；之后C03；然后C05与C07的既有页面验证能力可并行；C06跟随已确认设计推进；C08在真实实现及运行检查可用后交付；C09整组收束；C11没有上游卡依赖，可与既有卡并行进入第一波；C12以C11关闭件为输入，排在C11之后作第二波能力验收；最后C10消费C12验收结论、M16、M17a/M17b和外部依赖兼容事实完成发布闭环。C10的包结构/manifest准备可在C11/C12进行时并行，但最终验收不能早于这些前置事实。各卡在建设中用真实小范围验证，不等全部开发完再测。准备可早于实现依赖，正式写入/验收分别遵循卡内合同，不把整卡未完成当已交付接口。
 
-C03依赖C04的条件分支只在确需新提炼输出时启用；已有可核设计资产/API可走现有输入。因此没有C01等C04、C04又等C01的循环；C02/C08的消费验收在本卡安排，不形成C09反向依赖。C07验收自己的检查能力不替C06代码审查，C06可用现有真实测试完成本卡验收。C10不反向成为C01～C09的开发门；它只在C09、M16、M17b和外部兼容事实齐备后做最终发布验收。
+C03依赖C04的条件分支只在确需新提炼输出时启用；已有可核设计资产/API可走现有输入。因此没有C01等C04、C04又等C01的循环；C02/C08的消费验收在本卡安排，不形成C09反向依赖。C07验收自己的检查能力不替C06代码审查，C06可用现有真实测试完成本卡验收。C10不反向成为C01～C09的开发门；它只在C12、M16、M17b和外部兼容事实齐备后做最终发布验收。C11/C12同样不反向成为C01～C08的开发门：C11只补页面链路的真实缺口，C12只给能力与页面质量的验收结论。
 
 共享写冲突：C01拥有规范来源入口与旧reader迁移；C03拥有资产约定/选型读取；C04拥有源观察生产/Read Map输入；C05拥有原型与设计审查调用；C06拥有工程消费及规则；C07拥有运行验证/失败传播；C08只改更新职责及其影响范围；C09不新增产品writer；C10只拥有发布包、接入文档、manifest/兼容矩阵和发布包消费证据，不改上游技能合同或外部依赖实现。readiness、prototype、frontend-testing等同文件修改按所属段串行合入，不能并发覆盖；各实施build-plan据真实diff细化写集及并发2–5，本文不预造并发锁平台。
 
@@ -388,22 +390,84 @@ C03依赖C04的条件分支只在确需新提炼输出时启用；已有可核�
 
 ### C10 完整发布与接入闭环
 
-1. **结果与消费方**：对应US10。交付M18要求的可分发plugin、`plugin.json`、`marketplace.json`、幂等一键接入脚本、semver与更新检查、完整使用/配置/排障文档、`repo-skills.manifest.json`、`external-skills.manifest.json`、`external-skills-compat-matrix.md`，并用发布包启动一条C09已验证的真实流程。消费者是新项目维护者、受支持宿主和C09/发布负责人；C10不接管各专业规则或外部依赖实现。
+1. **结果与消费方**：对应US10。交付M18要求的可分发plugin、`plugin.json`、`marketplace.json`、幂等一键接入脚本、semver与更新检查、完整使用/配置/排障文档、`repo-skills.manifest.json`、`external-skills.manifest.json`、`external-skills-compat-matrix.md`，并用发布包启动一条C12已验收的真实流程（具体链为T018A有稿链，009的P06-7记HTTP/SQLite层通过，由C12复核）。消费者是新项目维护者、受支持宿主和C12/发布负责人；C10不接管各专业规则或外部依赖实现。
 2. **范围**：从M16的更新候选/版本事实、M17a的repo-local skills和M17b的CLI兼容事实组装发布物；声明支持的宿主、外部依赖和版本范围；在干净目标项目安装，连续运行接入两次，执行更新检查和兼容矩阵判断，再从发布包加载真实caller/skill并完成一条真实流程。包内内容以repo-local skills和现有manifest/reuse registry为源；外部X2/X3/X4保持独立依赖。真实marketplace/registry目标和实际上线动作只有在目标、凭证和授权明确后才执行，不把未授权上线写成已完成。
-3. **流程/状态**：读取C09发布前报告和M16/M17事实→确定发布边界和支持矩阵→生成/校验唯一manifest→构建可分发包→干净安装→幂等接入→版本/更新/兼容判断→从安装结果启动真实consumer→记录审查、测试、失败和排障→给出可发布/未发布/unknown等分开的结论。缺依赖、部分安装、版本冲突、更新不可用、真实consumer未加载或证据不新鲜均保留原失败，不静默降级。
+3. **流程/状态**：读取C12验收结论和M16/M17事实→确定发布边界和支持矩阵→生成/校验唯一manifest→构建可分发包→干净安装→幂等接入→版本/更新/兼容判断→从安装结果启动真实consumer→记录审查、测试、失败和排障→给出可发布/未发布/unknown等分开的结论。缺依赖、部分安装、版本冲突、更新不可用、真实consumer未加载或证据不新鲜均保留原失败，不静默降级。
 4. **FR**：C10-F1构建可被声明支持目标安装的plugin及两个核心manifest，字段和repo-local skills/reuse registry/外部依赖来源一致；C10-F2接入脚本连续运行两次无额外副作用，覆盖已有配置、缺依赖和部分失败；C10-F3以单一版本源维护semver，更新检查能给出有/无更新/无法检查，外部依赖按同一range语义判断；C10-F4完整文档覆盖五段流程、配置、宿主差异、安装/更新和排障，并能导航到当前有效材料；C10-F5两类manifest和兼容矩阵能对账X2/X3/X4来源/版本/改造说明及兼容/不兼容例；C10-F6从发布包而非源码checkout运行一条真实consumer流程，验证实际加载、请求/处理（若适用）、结果读回和失败语义，并分别记录能力、质量、用户验收、包安装/兼容、Git/远端发布和物理清理事实。
-5. **AC**：AC-C10-1：发布包包含声明范围内的plugin/marketplace、接入脚本、文档、两类manifest和兼容矩阵；字段来自唯一真实源，路径不依赖旧worktree、`/tmp`、归档目录或源码外缓存，缺项即失败。AC-C10-2：在每个声明支持的干净目标中安装成功，接入脚本连续两次结果一致；重复写入、覆盖未授权文件、缺环境仍静默成功、部分安装冒成功即失败。AC-C10-3：用至少一个有更新和一个无更新/无法检查的版本事实验证semver与更新检查；X2/X3/X4各有兼容与不兼容判断，冲突不静默降级，无法取得版本保`unknown/unavailable`。AC-C10-4：文档实际覆盖五段流程、配置、宿主路径、安装/更新/排障，并能从发布包或当前仓内入口到达有效材料；只写README目录或复制旧摘要即失败。AC-C10-5：`repo-skills.manifest.json`与`skills/`、`reuse-registry.md`一致，`external-skills.manifest.json`登记外部来源/版本/改造说明，兼容矩阵能查出兼容和不兼容版本；不把M0索引或历史标签当当前manifest事实。AC-C10-6：从安装后的发布包加载声明支持的真实caller/skill，完成一条C09已验证的真实UI/工作流流程并读回结果；只有源码、fixture、grep、HTTP200、单测、审查回执或孤立包测试不能充数。AC-C10-7：独立审查使用真实diff/发布物和持久化原始证据；命令、stdout/stderr、exit code、版本/commit、时间和新鲜度可回读，故意改坏的受控负例能变红；缺证据保持`incomplete`，不手填verdict。AC-C10-8：发布结论拆分“能力可用、质量、用户验收、包安装/兼容、Git/远端发布、物理清理”；任何一项缺失都不能冒充完整上线，未授权的不可逆动作保持`not_released`或`unknown`。
+5. **AC**：AC-C10-1：发布包包含声明范围内的plugin/marketplace、接入脚本、文档、两类manifest和兼容矩阵；字段来自唯一真实源，路径不依赖旧worktree、`/tmp`、归档目录或源码外缓存，缺项即失败。AC-C10-2：在每个声明支持的干净目标中安装成功，接入脚本连续两次结果一致；重复写入、覆盖未授权文件、缺环境仍静默成功、部分安装冒成功即失败。AC-C10-3：用至少一个有更新和一个无更新/无法检查的版本事实验证semver与更新检查；X2/X3/X4各有兼容与不兼容判断，冲突不静默降级，无法取得版本保`unknown/unavailable`。AC-C10-4：文档实际覆盖五段流程、配置、宿主路径、安装/更新/排障，并能从发布包或当前仓内入口到达有效材料；只写README目录或复制旧摘要即失败。AC-C10-5：`repo-skills.manifest.json`与`skills/`、`reuse-registry.md`一致，`external-skills.manifest.json`登记外部来源/版本/改造说明，兼容矩阵能查出兼容和不兼容版本；不把M0索引或历史标签当当前manifest事实。AC-C10-6：从安装后的发布包加载声明支持的真实caller/skill，完成一条C12已验收的真实UI/工作流流程并读回结果；只有源码、fixture、grep、HTTP200、单测、审查回执或孤立包测试不能充数。AC-C10-7：独立审查使用真实diff/发布物和持久化原始证据；命令、stdout/stderr、exit code、版本/commit、时间和新鲜度可回读，故意改坏的受控负例能变红；缺证据保持`incomplete`，不手填verdict。AC-C10-8：发布结论拆分“能力可用、质量、用户验收、包安装/兼容、Git/远端发布、物理清理”；任何一项缺失都不能冒充完整上线，未授权的不可逆动作保持`not_released`或`unknown`。
 6. **判定器**：manifest/schema/semver定向检查，干净安装和双次幂等脚本原始输出，兼容矩阵正反例，发布包真实consumer流程，独立审查原件，失败/unknown/incomplete/not_released清单和分层发布结论。M0的M18空映射、历史对象卡和`historical-lessons-used`只作研究输入，不作发布门。
-7. **准备依赖**：C09的报告、真实consumer和未覆盖事实；M16候选/更新检查事实；M17a repo-local skills与`repo-skills.manifest.json`输入；M17b CLI映射/兼容事实；X2/X3/X4实际版本和依赖来源；M18专题研究及M0相关对象/经验卡。缺任一具体事实只影响对应发布目标，不用默认值扩大支持矩阵。
-8. **实现依赖**：C09已交付发布前事实；M16与M17a/M17b的对应完成证据；现有manifest/registry和外部依赖声明。C10不重做M16/M17，不把外部插件代码搬进workflowhub；没有合法、可运行的发布组合时保持未完成并说明影响。
-9. **验收依赖**：干净目标项目、声明支持的宿主、可用外部依赖版本、真实C09路径及独立审查/测试输入。包文件存在不能替代安装和真实consumer；C09未完成的必要业务路径不能由C10倒填。
+7. **准备依赖**：C12的验收结论、真实consumer和未覆盖事实（C09报告只作历史）；M16候选/更新检查事实；M17a repo-local skills与`repo-skills.manifest.json`输入；M17b CLI映射/兼容事实；X2/X3/X4实际版本和依赖来源；M18专题研究及M0相关对象/经验卡。缺任一具体事实只影响对应发布目标，不用默认值扩大支持矩阵。
+8. **实现依赖**：C12已交付验收结论；C09只作历史；M16与M17a/M17b的对应完成证据；现有manifest/registry和外部依赖声明。C10不重做M16/M17，不把外部插件代码搬进workflowhub；没有合法、可运行的发布组合时保持未完成并说明影响。
+9. **验收依赖**：干净目标项目、声明支持的宿主、可用外部依赖版本、真实C12验收对象及独立审查/测试输入。包文件存在不能替代安装和真实consumer；C12记未测的必要业务路径不能由C10倒填。
 10. **合并依赖**：只合入本卡发布包/manifest/脚本/文档/矩阵和必要的消费验证接线；不改C01～C09规则writer、M16/M17实现或X2/X3/X4源码。共享版本源、repo manifest和外部依赖清单按唯一owner串行，不能生成第二份真相。
-11. **共享资源冲突与集成责任**：C10负责发布边界、包形状、安装/更新/兼容、文档和包内真实consumer验证；repo-local skill owner负责技能内容，M16负责候选/更新事实，M17a负责repo-local运行时，M17b负责CLI兼容，X2/X3/X4各自负责外部实现。C09只交发布前事实，不写C10 manifest。
-12. **来源/设计**：[M18 roadmap](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/agenthub-extraction-program/artifacts/roadmap.md#L483-L503)、[上游decision-log D16/D16a/D29](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/agenthub-extraction-program/artifacts/decision-log.md#L81-L112)、[M0 INDEX](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/agenthub-extraction-program/artifacts/M0/INDEX.md)、[M0 design](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/agenthub-extraction-program/artifacts/M0/M0-design.md)、[M0 lessons使用约定](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/agenthub-extraction-program/artifacts/M0/historical-lessons-used.md)、[M18专题研究](../../docs/research/m18-skill-plugin-distribution-ecosystem-research-2026-09-03.md)、C09本卡报告和S1/S3/S7。M0只作参考，不能把其空映射、对象卡或零gate规则改成C10发布许可证。
+11. **共享资源冲突与集成责任**：C10负责发布边界、包形状、安装/更新/兼容、文档和包内真实consumer验证；repo-local skill owner负责技能内容，M16负责候选/更新事实，M17a负责repo-local运行时，M17b负责CLI兼容，X2/X3/X4各自负责外部实现。C12只交验收结论，不写C10 manifest。
+12. **来源/设计**：[M18 roadmap](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/agenthub-extraction-program/artifacts/roadmap.md#L483-L503)、[上游decision-log D16/D16a/D29](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/agenthub-extraction-program/artifacts/decision-log.md#L81-L112)、[M0 INDEX](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/agenthub-extraction-program/artifacts/M0/INDEX.md)、[M0 design](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/agenthub-extraction-program/artifacts/M0/M0-design.md)、[M0 lessons使用约定](</Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/agenthub-extraction-program/artifacts/M0/historical-lessons-used.md)、[M18专题研究](../../docs/research/m18-skill-plugin-distribution-ecosystem-research-2026-09-03.md)、C09本卡报告（历史）、C12验收结论和S1/S3/S7。M0只作参考，不能把其空映射、对象卡或零gate规则改成C10发布许可证。
 13. **局部风险**：宿主manifest字段差异、版本源漂移、外部依赖缺失/不兼容、脚本重复副作用、文档与包不一致、真实caller未接线、旧证据/归档路径泄漏、审查或测试空结果。按支持矩阵、干净安装、正反兼容例、包内真实运行和防伪证据定位；不把Claude专属机制冒成所有宿主通用能力。
 14. **可后置技术项**：未声明的宿主/registry、真正 marketplace上线、Git push、部署、分发回滚、全宿主转换器和全项目发布平台不在本卡默认承诺；但M18明确的可分发包、安装、幂等、semver、更新检查、文档、manifest、矩阵和一条真实consumer流程不能后置或删减。
 15. **最小读取集**：先用[NAV-C10](#dev-c10)定位准确入口；本卡、S1/S3/S4/S7、D-015、M18 roadmap/上游decision、M18专题研究、M0 INDEX/M0-design/historical-lessons-used及与五阶段/技能/测试/审查/插件直接相关的对象卡；再读C09实际交付、M16/M17a/M17b事实和声明宿主/外部依赖的固定版本。不要把M0全文、所有外部仓库或未声明宿主默认纳入范围。
 16. **五阶段开工说明**：后续按当前任务方法先锁发布边界、支持矩阵、真实consumer和失败语义，再实施/验证/独立审查/修复；不把C10写成新stage、gate或发布平台。实际Git/marketplace/部署/物理清理只有取得对应授权后才执行，材料和事实先如实保留。
+
+### C11/C12 的背景：C09 出了什么问题
+
+C09 要交的是整轮前端改造的最终验收与效果报告：固定旧基线、双路径、六项指标，并在最后把发布前事实交给 C10。
+
+它没有做成：spec 十二条验收里十条未通过，只有 P11 报告与 P12 交接通过；PRD 的七条验收（AC-C09-1～7）里六条未实现、一条记范围外（[041](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-dual-path-verification-20261103/quality/evidence/2026-11-12-041-c09-p11-verdict-update.md#L15-L19)、[002](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-dual-path-verification-20261103/quality/evidence/2026-11-12-002-c09-ac-crosswalk-three-verdicts.md#L51-L64)）。
+
+原因不在执行强度，而在定义：
+
+a. 最终验收建在未完成的上游上：C09 一次判 C01～C08 的组合能力，而 [028 判词](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-dual-path-verification-20261103/quality/evidence/2026-11-12-028-c09-p10-acceptance-verdict.md#L137) 记 C02/C03/C08 六点全零。
+
+b. AC 自带做不到的条件：AC-P01 要两份仓外副本各十件哈希可复算（[spec 1899–1901 行](/Users/Hugh/Hugh/Project/workflowhub/specs/archive/workflowhub-ui-frontend-c09-dual-path-verification-20261103/spec.md#L1899-L1901)），同一批副本却要重建、安装并跑旧侧实施（[spec 616–622 行](/Users/Hugh/Hugh/Project/workflowhub/specs/archive/workflowhub-ui-frontend-c09-dual-path-verification-20261103/spec.md#L616-L622)）；AC-P08 要旧侧实施段跑完并留事件（[spec 2207–2219 行](/Users/Hugh/Hugh/Project/workflowhub/specs/archive/workflowhub-ui-frontend-c09-dual-path-verification-20261103/spec.md#L2207-L2219)），支撑它的 238 场景分母从未逐 ID 枚举，实测只覆盖 2/238 格（[002 的 P08 行](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-dual-path-verification-20261103/quality/evidence/2026-11-12-002-c09-ac-crosswalk-three-verdicts.md#L60)）；AC-P09 要四格同条件可比（[spec 2254–2257 行](/Users/Hugh/Hugh/Project/workflowhub/specs/archive/workflowhub-ui-frontend-c09-dual-path-verification-20261103/spec.md#L2254-L2257)），六项指标却全 unknown、四格不齐（[002 的 P09 行](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-dual-path-verification-20261103/quality/evidence/2026-11-12-002-c09-ac-crosswalk-three-verdicts.md#L61)）；AC-P10 要八卡页面能力（[spec 2281 行](/Users/Hugh/Hugh/Project/workflowhub/specs/archive/workflowhub-ui-frontend-c09-dual-path-verification-20261103/spec.md#L2281)），而八卡当时都未完成。
+
+c. 输入在交付期漂移：设计源 2026-11-12 07:23 被整体替换，旧身份不可复算（[009 第 1 节](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-dual-path-verification-20261103/quality/evidence/2026-11-12-009-c09-p4-acceptance-verdict.md#L36-L38)）；准备期两处旧安装已被清理为零源文件（[spec 619 行](/Users/Hugh/Hugh/Project/workflowhub/specs/archive/workflowhub-ui-frontend-c09-dual-path-verification-20261103/spec.md#L619)）；PB 业务链只有 HTTP/SQLite 层通过，浏览器层与网络失败面从未跑通（[009 的 P06 行](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-dual-path-verification-20261103/quality/evidence/2026-11-12-009-c09-p4-acceptance-verdict.md#L96-L112)）。
+
+d. 用证据生产替代判定：本轮实测 quality/tests 5352 件、quality/evidence 3248 件、quality/reviews 207 件，而 P4 六轮阶段审查全部 unavailable（[009 第 9 节](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-dual-path-verification-20261103/quality/evidence/2026-11-12-009-c09-p4-acceptance-verdict.md#L166-L170)）；可回读的命令耗时汇总未取得，件数不能当判定。
+
+e. 分母到交付日还在改：PRD 七条验收在 spec 里拆成十二条（[002 第 1 节](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-dual-path-verification-20261103/quality/evidence/2026-11-12-002-c09-ac-crosswalk-three-verdicts.md#L9-L36)），D-025/D-026/D-028 在 11-07 与 11-11 反复改范围（[C09 decision-log](/Users/Hugh/Hugh/Project/workflowhub/specs/archive/workflowhub-ui-frontend-c09-dual-path-verification-20261103/decision-log.md#L330-L354)），AC 文字没有同步重写。
+
+由此定下四条约束，C11/C12 按此写：一张卡只依赖一个来源族；验收判据行为化、不靠计数；不把业务链、旧基线、238 全量放进验收；缺口先修再验，C11 修、C12 验。
+
+<a id="c11"></a>
+
+### C11 UI/前端能力缺口修复
+
+1. **结果与消费方**：背景见上一节。承接 C09 的 [028 判词](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-dual-path-verification-20261103/quality/evidence/2026-11-12-028-c09-p10-acceptance-verdict.md#L112-L119) 的结论（AC-P10 未通过，C02～C08 在页面链路上缺证）。交付 C01～C08 中阻断页面链路使用的八类缺口的真实修复与定向复验；其中 C08-FU-01 按第 5 项列未修。消费者是 C12 验收、页面实现者和用户。不重做各卡全量验收，不改各卡方法正文。
+2. **范围**：①C02 图查询结果落盘与“查询→页面选择”链（C11 修）；已验证经验被页面实际采用（C02-P2）归 C12 验，无具名后续任务时记未测；②C03 四对象页面使用点与资产/页面两层检查；③C04 v15 全状态/全视口独立对照；④C05 v15 八维独立设计审查（C11 修）；完整范围展示后的用户答复（C05-P3）需用户本人，C11 不代答，C12 记未测；⑤C06 v15 完整独立代码审查；⑥C07 读屏、200% 缩放、性能预算；⑦C08“变更→使用点同步”的定向复验（后继采用 C08-FU-01 列未修：owner=FU/Hugh，恢复条件为 PB 卡获授权实施或另立具名后续 consumer）；⑧P4 六段中第 1/3/5/6 段的下游读取回执。不含业务链、旧基线、238 全量、打包发布。
+3. **流程/状态**：逐缺口建修复项→在真实使用点改→定向验证→独立复验（OCR delegate：`runtime/review/ocr-delegation-adapter.mjs` 的 delegate 模式，`ocr delegate preview/rule`，无需登录；或 wh-review 独立来源）→登记关闭；修不了的保留未修、owner 与恢复条件；半修或未知消费者不报关闭。
+4. **FR**：C11-F1 图查询真实落盘并被页面选择消费；C11-F2 四对象各有页面使用点与两层检查；C11-F3 设计/代码/页面/性能审查面真实执行；C11-F4 更新链一次真实同步与定向复验（后继采用列未修，理由见第 5 项）；C11-F5 六段下游读取回执补齐；C11-F6 修复不重写历史、不扩范围。
+5. **AC**：AC-C11-1：“八类”是缺口台账的条目名；单缺口判据是“原缺口→改动→原件→复验”四件套，缺一即未关闭；整卡完成的判据是每条都落入“关闭（四件套）”或“未修（owner+恢复条件）”二态之一。AC-C11-2：修复落在真实使用点（代码、页面、调用），文档补写不算。AC-C11-3：历史原件不改，新版本可回读，旧失败保留。AC-C11-4：修不了的按未修登记 owner、恢复条件与影响，不冒关闭，也不阻断其余缺口关闭。AC-C11-5：独立审查用 OCR delegate（`ocr delegate preview/rule`，无需登录）或 wh-review 独立来源执行并留原件，不冒 provider 已读。
+6. **判定器**：缺口台账、真实 diff 与使用点、定向验证回执、独立复验原件、未修清单；每项能指回原判词位置、改动落点与复验结论，修不了的仍可由下一读者按 owner 与恢复条件接手。
+7. **准备依赖**：C09 的 [028 判词](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-dual-path-verification-20261103/quality/evidence/2026-11-12-028-c09-p10-acceptance-verdict.md)、[009 判词](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-dual-path-verification-20261103/quality/evidence/2026-11-12-009-c09-p4-acceptance-verdict.md)、[026 报告](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-dual-path-verification-20261103/quality/evidence/2026-11-12-026-c09-p07-fu-adoption.md)、各卡原证据、两页源码与当前设计源字节；028 已逐卡给出恢复条件，准备只需把这些原件读齐。
+8. **实现依赖**：无新上游；C01～C08 现状即输入，缺的能力按实际补。不等待 C12，C12 反过来以本卡关闭件为输入。
+9. **验收依赖**：C11 交关闭件后由 C12 验收；C11 自身的验收依赖独立审查（OCR delegate 或 wh-review 独立来源），不用实施者自评或同一会话结论。
+10. **合并依赖**：只改缺口涉及的使用点、页面、测试与调用；各卡方法正文仍归原 owner，不改写法；共享文件按现有 owner 串行合入，不并发覆盖。
+11. **共享资源冲突与集成责任**：各卡方法正文归原 owner，C11 只改使用点与缺口，不建第二写法；缺口台账是本卡唯一清单，不新增平台、第二状态或改判原判词。
+12. **来源/设计**：C09 的 028/009/026 判词（链接同上）、C01～C08 各自 AC 与本卡第 5 字段、[D-028](../archive/workflowhub-ui-frontend-c09-dual-path-verification-20261103/decision-log.md#L350)；原判词结论、旧失败与原件字节不改。
+13. **局部风险**：把“补文档”当修复、把历史当当前、扩成全量重做；用真实 diff 与使用点、当前字节和原判词位置识别，不以文件存在、新文档或旧证据代替修复。
+14. **可后置技术项**：业务链、238 全量、打包发布与旧基线都不在本卡；C08 后继采用若需 PB 业务实现，按未修登记，不在本卡做；这些不做不等于其余缺口可以不修。
+15. **最小读取集**：先用 [NAV-C11](#dev-c11) 定位准确入口。必读 028/009/026 三份判词、八卡 AC、现有两页源码与当前字节，以及设计源的 [100 指纹](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-dual-path-verification-20261103/quality/evidence/P4/2026-11-12-100-c09-p4-current-source-fingerprint.json)、[115 观察](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-dual-path-verification-20261103/quality/evidence/P4/2026-11-12-115-c09-p4-current-source-observation.md)、[117 console/network 证据](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-dual-path-verification-20261103/quality/evidence/P4/2026-11-12-117-c09-p4-console-network-evidence.json)；条件读发生缺口的具体卡原件；不读 C09 全部历史证据。
+16. **五阶段开工说明**：后续按当前任务方法先锁缺口范围与写集，再逐条修、定向测试与 OCR delegate 独立复验，最后把关闭件交 C12；修不了的保未修与 owner，不用文档补写或全量重做充数。本卡不新增 stage/gate/第二进度；关闭件只作本卡事实，不作 C12 验收或发布放行门。
+
+<a id="c12"></a>
+
+### C12 UI/前端能力验收
+
+1. **结果与消费方**：背景见 C11 前的背景节。交付“这套 UI/前端能力能不能用、效果如何”的验收结论，被测对象是现有两页（有稿链）与 v15 当前稿（无稿 T019）；消费方是用户、C10 与后续项目。不改能力实现（修复归 C11 或原 owner，C12 只登记），不把验收结论当发布放行。
+2. **范围**：两页走“设计源→提取→资产/组件复用→原型→实现→页面检查→回修→更新→后续消费”全链，回修由 C11 或原 owner 执行、C12 只登记；v15 当前稿走需求→原型→实现→页面检查→回修一段，逐项调用 C02～C07 的页面级能力。不含业务、旧基线、六项指标、238 全量。
+3. **流程/状态**：固定输入→逐能力调用→页面五维检查→设计与实现对照→更新与后续任务读回→报告；缺证记未测/不可用，不因多数项通过而补造缺项。
+4. **FR**：C12-F1 逐能力调用与消费者；C12-F2 页面五维真检；C12-F3 设计对照与偏差；C12-F4 更新与后续消费；C12-F5 报告分列能力与页面质量。
+5. **AC**：AC-C12-1：每个适用能力有调用点、输入、输出、下游消费者；文件存在或测试绿不算。AC-C12-2：真实浏览器五维检查（五维名为 console、network、溢出、a11y、性能），缺维记未测，不以截图代替。AC-C12-3：实现与设计源逐项对照，偏差登记；未批准偏差不算达标。AC-C12-4：更新后由具名后续任务读到新版内容，不是同任务重放；无具名后续任务时该条记未测（C08-FU-01 即此态）。AC-C12-5：逐能力“可用/部分可用/不可用”，页面质量单独结论；缺证不冒通过。AC-C12-6：报告与交接可被独立冷读列出缺口与下一步。
+6. **判定器**：能力调用原件、五维报告、设计对照表、更新回执、独立冷读；每条结论能指回具体原件与消费者，缺证在报告里保持未测或不可用。
+7. **准备依赖**：C11 完成；两页与 v15 当前稿可运行；设计源固定字节；OCR delegate 或 wh-review 独立来源可用。
+8. **实现依赖**：C11 的修复结果；两页与相关 skills 的当前字节。C11 未修的项在本卡记未测，不代替 C11 修。
+9. **验收依赖**：独立审查（OCR delegate 或 wh-review 独立来源）与真实浏览器；不以截图、单元测试或文件串联代替。
+10. **合并依赖**：只改验收脚本与报告，不改能力实现；共享文件按现有 owner 串行。
+11. **共享资源冲突与集成责任**：验收 owner 不改各卡 writer；能力实现修复回 C11 或原 owner，验收方只给结论与缺口。
+12. **来源/设计**：C09 的 [028 判词](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-dual-path-verification-20261103/quality/evidence/2026-11-12-028-c09-p10-acceptance-verdict.md)、[009 判词](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-dual-path-verification-20261103/quality/evidence/2026-11-12-009-c09-p4-acceptance-verdict.md)、[024 四格对照](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-dual-path-verification-20261103/quality/evidence/2026-11-12-024-c09-four-grid-visual-compare.md)、[025 四格数据](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-dual-path-verification-20261103/quality/evidence/2026-11-12-025-c09-four-grid-visual-compare-json.json)，以及 PRD C01～C08 的 AC 与 C11 关闭件。
+13. **局部风险**：用文件串联冒调用、用截图冒五维、用同任务重放冒后续采用；以调用原件、真实浏览器报告与具名后续消费者识别。
+14. **可后置技术项**：业务、238、打包不做；但能力调用、五维、设计对照、更新后由具名后续任务读到新版与报告不能后置。
+15. **最小读取集**：先用 [NAV-C12](#dev-c12) 定位准确入口。必读 C11 关闭件与未修清单、现有两页与 v15 当前稿、当前设计源字节、五维方法（frontend-testing 与隔离 QA 的 console/network/溢出/a11y/性能）；条件读 024/025 四格对照；不读 C09 全部历史。
+16. **五阶段开工说明**：后续按当前任务方法先锁被测对象、能力清单与固定输入，再执行调用与五维，由独立审查给判断，最后出报告与冷读；缺证记未测，不用文件存在或截图补通过。本卡不新增 stage/gate/第二进度；结论只作本卡事实，不作发布放行门。
 
 <a id="coverage"></a>
 
@@ -415,7 +479,7 @@ C03依赖C04的条件分支只在确需新提炼输出时启用；已有可核�
 
 | 决定 | 当前落点 | 方向验收的具体承接 |
 | --- | --- | --- |
-| D001 全链用户结果 | 十故事/十卡、S4、地图 | AC-D20：C03/C05～C10及下方16格；非十个新stage |
+| D001 全链用户结果 | 十故事、十二卡、S4、地图 | AC-D20：C03/C05～C12及下方16格；非十二个新stage |
 | D002 知识消费 | C02-F1～4、C03-F1～3 | AC-D01→AC-C02-1/2；AC-D12→AC-C02-3/4 |
 | D003 设计依据提炼 | C04-F1～6、S5 | AC-D02→AC-C04-1～5；五类缺项与评分缺失分开 |
 | D004 历史两文件 | S1/S2、C01/C08 | 明确inactive，由D014承接生成/升级，不恢复Experience分权 |
@@ -495,6 +559,27 @@ C03依赖C04的条件分支只在确需新提炼输出时启用；已有可核�
 | `artifacts/decision-log.md` D16/D16a/D29 | repo-local skills为运行时权威；外部X2/X3/X4经独立依赖和版本兼容接入 | 不复制外部插件业务逻辑（仅限插件业务代码，不含C01已选方法闭包的固定复制），不维护第二skill registry |
 | `artifacts/M0/INDEX.md`、`M0-design.md`、`historical-lessons-used.md` | 真实consumer、防孤儿、防伪、失败可见、M0只作参考 | M0零gate、零校验；引用缺失不阻断，也不能当发布许可 |
 | `docs/research/m18-skill-plugin-distribution-ecosystem-research-2026-09-03.md` | Claude plugin/marketplace、Agent Skills、宿主差异、semver和更新检查的已读事实 | 未核宿主/registry/许可/运行效果不冒成C10已支持 |
+
+### C09 十二条验收的当前去向
+
+下表说明 C09 的失败如何被拆解，不是对 C09 的重新验收。C09 的十二条验收留在原判词，不在这里重写。下表只写每条当前事实与本次两张新卡的去向：修复进 C11，复验进 C12，不再迁移的写放弃及理由。
+
+| 原验收 | 门槛一句 | C09 当前判定 | 去向 | 说明与边界 |
+| --- | --- | --- | --- | --- |
+| AC-P01 | 实验台输入固定、矩阵可复算 | 未通过（incomplete） | 放弃 | 属 C09 实验装置；C11/C12 各自锁定被测对象与设计源字节，不复用该实验台 |
+| AC-P02 | 前八卡二十项问题逐项处置 | 未通过（incomplete） | 放弃 | T008 记二十项处置为十五修好、两随 C08、两缩减、一作废；当前不满足点在 238 字面 gate、OCR 二十红、parser 一与十八文件环境红，属各卡实施与检测面，C11 不改方法正文 |
+| AC-P03 | 新建到方向审查六段有原件且被下游真读 | 未通过（incomplete） | C11 修复 | 第 1/3/5/6 段的下游读取回执即第 8 类缺口（C11-F5），C12 复验页面链路；方向审查 authoritative=false 与 13 major、NEW 规范值来源另列放弃，归原方向审查 owner 与规范 owner |
+| AC-P04 | 设计段真采集、八维审查与本次答复 | 未通过（incomplete） | C11 修复 | 取第 3、4 类（C04 全状态/视口对照、C05 八维审查）；N52/M238 全量与已替换设计源身份不复算，原失败保留 |
+| AC-P05 | 两页实现先红后绿、可运行、四维有记录 | 未通过（incomplete） | C12 验收 | 两页可运行进 C12 能力调用与页面检查；不重做 T014 红绿链，原记录保留 |
+| AC-P06 | 运行验证与有稿业务链真实采集 | 未通过（incomplete） | C12 验收 | 页面五维真检进 C12（AC-C12-2）；有稿业务链浏览器层不作 C12 判据，记历史未覆盖 |
+| AC-P07 | 更新链两类变更与后续 consumer | 未通过（incomplete） | C11 修复 | 两类变更与使用点同步的定向复验可修（C11 第 7 类）；后续采用 C08-FU-01 是 PB 空卡（026 记三文件、facts 零字节），列未修，owner=FU/Hugh，恢复条件为 PB 卡获授权实施或另立具名后续 consumer，C12 该条记未测 |
+| AC-P08 | 旧侧固定版本同输入跑完 | 未通过（incomplete） | 放弃 | 旧基线、固定版本与 238 覆盖不在 C11/C12；原件保原字节 |
+| AC-P09 | 六指标逐项有值或 unknown、四格可比 | 未通过（incomplete） | 放弃 | 效果比较与六项指标留在 C09 报告；C11/C12 不用总分、通过率或指标值作判据 |
+| AC-P10 | 无稿逐项应用 C01～C08 页面能力 | 未通过（incomplete） | C11 修复 | 八类缺口主表（C11-F1～F5）；C02-P2 与 C05-P3 由 C12 验，缺具名后续任务或用户答复时记未测；C12 逐能力复验，缺证不判通过 |
+| AC-P11 | 报告按单案例写、逐条对上验收 | 通过（041 更新；040 时点为通过一、未通过十、未测一） | 放弃 | 040 记用户批量确认时点的档位，041 据 039 独立复审与 040 更新为通过，两者是时序不是冲突；C09 报告与判词就地保留，C12 另出能力验收报告，不覆写 |
+| AC-P12 | 交接只给发布前必需事实、可回读 | 通过 | 放弃 | C09 交接保留历史；C10 的实现依赖改读 C12 验收结论（C10 第 8 项） |
+
+表中的“放弃”只表示不再从 C09 迁移新工作，不删原判词、原件和失败；C11/C12 也不把 C09 已通过的两项改写为未通过，或反过来把未通过冒作通过。
 
 ### 旧10卡全部FR/AC承接
 
@@ -771,7 +856,7 @@ C03依赖C04的条件分支只在确需新提炼输出时启用；已有可核�
 
 父规划定位（2026-10-13）：C01～C09母规划及有效D-001～D-014保存于`specs/archive/workflowhub-ui-frontend-decision-refresh-20261013/`，归档只读；当前C10增补入口为本目录。旧母规划的确认/审查章节保留形成时事实，不能扩展为C10已确认。换机器只有仓库而没有外置研究原件时仍为缺源，不用文件名/摘要替代全文。
 
-十卡各自建立开发任务，引用本PRD对应卡、D-015/父D-001～D-014、适用共享定义和下方本卡资料。先沿[make-decision](../../workflows/make-decision/SKILL.md)承接本卡已有方向和必要未知项，再沿[build-plan](../../workflows/build-plan/SKILL.md)形成自己的`spec.md`、`phases/P<n>.md`和纯指针`phases/index.md`；计划得到真实选择后实施、验证和正常收口。复杂卡在内部拆Phase，十卡数量与职责保持。子任务只读母/兄/旧材料，具体任务状态与事实写自己的当前材料及task facts，不恢复旧build-spec/plan/tasks或复制全套历史材料。
+十二卡各自建立开发任务，引用本PRD对应卡、D-015/父D-001～D-014、适用共享定义和下方本卡资料。先沿[make-decision](../../workflows/make-decision/SKILL.md)承接本卡已有方向和必要未知项，再沿[build-plan](../../workflows/build-plan/SKILL.md)形成自己的`spec.md`、`phases/P<n>.md`和纯指针`phases/index.md`；计划得到真实选择后实施、验证和正常收口。复杂卡在内部拆Phase，十二卡数量与职责保持。子任务只读母/兄/旧材料，具体任务状态与事实写自己的当前材料及task facts，不恢复旧build-spec/plan/tasks或复制全套历史材料。
 
 C02/C08的具名后续真实消费者在各自计划中安排并在本卡验收；C01计划区分首交可用规范、缺源及后续补强；C09早期准备同时核固定旧版本、有稿两页业务操作/结果读回、无稿真实对象/API和六指标原始事件采集；C10在开工前核M16/M17a/M17b和外部依赖版本事实。它们沿现卡落实，不增加独立试点，也不把整卡完成设为全主干准入门。
 
@@ -936,7 +1021,9 @@ Playbook采用固定commit `c7096e9aeee6bfa4fd3266274d321107e426185d`；准确�
 | <a id="dev-c07"></a>[C07](#c07) | [frontend-testing](../../skills/frontend-testing/SKILL.md)、[隔离QA](../../skills/isolated-browser-qa/SKILL.md)、[fullstack验证](../../skills/fullstack-slice-testing/SKILL.md)、[RS05～07](#rs05)、S5/S6 | 所选[UES固定入口](#up-ues)及对应报告模块/失败实现；真实状态/业务oracle，a11y/P0按需 |
 | <a id="dev-c08"></a>[C08](#c08) | [SDD执行/更新](#up-sdd)、[材料OPTIMIZE](#up-material)、[RS13～15](#rs13)、NORM/ASSET、[组件质量](../../skills/frontend-component-quality/SKILL.md) | 真实旧新差异/owner/直接间接consumer/后续任务；设计/工程所选原Skill、Figma/Code Connect按分支 |
 | <a id="dev-c09"></a>[C09](#c09) | S4～S7、DEC D009/D012、[baseline原件](../archive/workflowhub-ui-frontend-capability-20260904/evidence/pilot-baseline-design.md)、[fullstack](../../skills/fullstack-slice-testing/SKILL.md)、[隔离QA](../../skills/isolated-browser-qa/SKILL.md) | 早期实核两页及无稿真实业务；最终读C01～08实际交付/AC证据，偏差只追受影响具体源 |
-| <a id="dev-c10"></a>[C10](#c10) | D-015、[M18路线图](#m18-source)、[M18专题研究](../../docs/research/m18-skill-plugin-distribution-ecosystem-research-2026-09-03.md)、[M0总索引](#m18-source)、C09交付、M16/M17a/M17b事实、X2/X3/X4版本 | 先声明支持宿主/依赖和发布边界；再做干净安装、幂等接入、更新/兼容正反例、发布包真实consumer、独立审查；Git/marketplace/部署/物理清理另取授权 |
+| <a id="dev-c10"></a>[C10](#c10) | D-015、[M18路线图](#m18-source)、[M18专题研究](../../docs/research/m18-skill-plugin-distribution-ecosystem-research-2026-09-03.md)、[M0总索引](#m18-source)、C12验收结论（C09只作历史）、M16/M17a/M17b事实、X2/X3/X4版本 | 先声明支持宿主/依赖和发布边界；再做干净安装、幂等接入、更新/兼容正反例、发布包真实consumer、独立审查；Git/marketplace/部署/物理清理另取授权 |
+| <a id="dev-c11"></a>[C11](#c11) | C09的[028判词](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-dual-path-verification-20261103/quality/evidence/2026-11-12-028-c09-p10-acceptance-verdict.md)、[009判词](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-dual-path-verification-20261103/quality/evidence/2026-11-12-009-c09-p4-acceptance-verdict.md)、[026报告](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-dual-path-verification-20261103/quality/evidence/2026-11-12-026-c09-p07-fu-adoption.md)、八卡AC、现有两页源码、当前设计源字节 | 先锁缺口与写集，再逐条修；独立复验走OCR delegate或wh-review独立来源，修不了的记未修与owner；不重做各卡全量验收 |
+| <a id="dev-c12"></a>[C12](#c12) | C11关闭件与未修清单、现有两页、当前设计源字节、[frontend-testing](../../skills/frontend-testing/SKILL.md)与[隔离QA](../../skills/isolated-browser-qa/SKILL.md)的五维方法 | 先锁被测对象与能力清单，再执行；五维真检缺维记未测；更新后由具名后续任务读到新版；报告与独立冷读分开 |
 
 <a id="delivery"></a>
 
@@ -958,18 +1045,19 @@ Playbook采用固定commit `c7096e9aeee6bfa4fd3266274d321107e426185d`；准确�
 
 ### 当前材料、质量与实际交付事实
 
-- 规划：父规划九任务地图和修订后的完整详情稿已由真人批准；本successor新增C10/M18，状态为增补草案，未把父确认扩大为C10确认。较早[父规划完整稿确认原件](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-decision-refresh-20261013/quality/evidence/human-confirmations/2026-10-13-003-build-prd-approved.json)保留，新增范围以当前用户请求、D-015、M18/M0原件为准。
+- 规划：父规划九任务地图和修订后的完整详情稿已由真人批准；本successor新增C10/M18，状态为增补草案，未把父确认扩大为C10确认；2026-11-12又新增C11/C12，由主会话依判词提出，用户已确认两卡与增补稿；尚未实施。较早[父规划完整稿确认原件](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-decision-refresh-20261013/quality/evidence/human-confirmations/2026-10-13-003-build-prd-approved.json)保留，新增范围以当前用户请求、D-015、M18/M0原件为准。
 - 材料：父DEC/父PRD/原研究保持原字节；本次只写当前successor的prd.md和decision-log.md，不新建产品spec/Phase，不改产品或运行时，不回写上游roadmap/decision-log。
 - 独立核对：两路对初稿实际完成全文覆盖/独立性分析，分别核旧50FR/35AC/23R、当前D/24AC/研究候选/八类/16格；五项局部发现及一处定位备注已修，原分析者分别定向回读修订，限域未见残留。原件为[旧需求分析](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-decision-refresh-20261013/quality/evidence/prd-refs/legacy-prd-coverage-check.md)、[研究决定分析](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-decision-refresh-20261013/quality/evidence/prd-refs/research-decision-prd-check.md)及各自[旧需求回读](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-decision-refresh-20261013/quality/evidence/prd-refs/legacy-prd-repair-readback.md)/[研究回读](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-decision-refresh-20261013/quality/evidence/prd-refs/research-prd-repair-readback.md)。它们不证明零遗漏、产品能力或新版全文正式PASS。
 - 正式文档建议：[058原件](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-decision-refresh-20261013/quality/reviews/2026-10-13-058-build-prd-document.json)及[真实执行回执](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-decision-refresh-20261013/quality/evidence/prd-refs/review-execution-receipt.output)已回读。Kimi、Antigravity Flash、Codex Luna三路completed/parse ok，均未提出finding；Pi v4flash为PROCESS_STALLED（12健康间隔无语义进展），未返回语义结果，不算空发现/通过。正常记录顶层available，但实际有失败；没有补派/追空。正式请求覆盖修前f08初稿及指定八项材料，未直接投递全部底层研究，阅读覆盖为undetermined；修后a09功能条款及本次元信息更新不冒正式全文重审。处置沿[唯一处置记录](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-decision-refresh-20261013/quality/evidence/prd-refs/review-dispositions.md)。
 - 文档检查：父稿修前019、修后020目标Markdown命令均exit0（2文件、0错误）；本次新增C10已按同一16字段结构写入，尚未执行本轮正式文档审查或产品/安装测试。此处只报告实际范围，不冒产品测试、完整外部URL验证或发布通过。
 - 本轮定向核对：[来源/路径原件](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-decision-refresh-20261013/quality/evidence/prd-refs/2026-10-13-003-prd-nav-source-independent-check.md)及[语义/保全原件](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-decision-refresh-20261013/quality/evidence/prd-refs/2026-10-13-004-build-prd-semantic-preservation.md)核802行修订稿，均发现production原件第2节标题写错（同一问题出现两处）；当前正文已按真实标题修正，原失败025/026/027及分析不覆盖。024单文件Markdown检查exit0；来源分析核151次本地目标、49次显式锚点引用与53个外部URL的既有登记，语义分析核九卡/16字段/原编号/范围及两处要求。外部在线性未重验，相对路径更名为逻辑解析检查，未实际搬工作区；main尚缺新DEC/PRD，部分方法/GLOSSARY字节与当前工作区不同，未来采用当前检出版本并核差异，不声称全部已交付。本轮按用户要求做受影响修订和定向回读，不重复同scope正式外审；修后实际检查结果沿本轮人读交接引用，不用修前结果或空finding推新版全文PASS。
+- 范围边界：C11/C12不依赖PB业务链，也不做旧基线与238全量；C09的旧侧、六项指标和业务链结论只作历史，不进入这两张卡的验收判据。
 - 产品能力、安装、真实基线/两路业务实验、发布包/更新/兼容：本轮未执行，均不得依据PRD完整或文档审查推为通过。
 - Git、发布、归档、清理：本轮未执行，本次地图/PRD授权不包含这些动作。
 
 ### 最终展示稿确认
 
-用户此前确认的是父规划九卡：“确认这版完整PRD……先不启动九个任务的开发，也不提交、归档或删除工作区。”该确认原件仍有效，但不覆盖本次新增C10；本successor只记录增补草案，C10后续需按当前材料单独确认后再开发。Git、marketplace、部署、归档和工作区删除仍未启动。
+用户此前确认的是父规划九卡：“确认这版完整PRD……先不启动九个任务的开发，也不提交、归档或删除工作区。”该确认原件仍有效，但不覆盖本次新增C10；本successor只记录增补草案，C10后续需按当前材料单独确认后再开发。C11/C12由主会话依028/009/026判词提出，用户2026-11-12已确认“C11修、C12验”的两卡与增补稿；尚未实施、验收或发布。Git、marketplace、部署、归档和工作区删除仍未启动。
 
 ### 宪法逐条对照
 
@@ -993,7 +1081,7 @@ Playbook采用固定commit `c7096e9aeee6bfa4fd3266274d321107e426185d`；准确�
 | S4 | 真实必要指标沿现事实保存，缺失未知，不造计量控制面 |
 | S5 | 重读量查漏/独立检查委派，主作者单写，派发不整份继承父上下文 |
 | S6 | 两站、旧P0与官方组件/布局研究有具名取舍及反例 |
-| S7 | 十卡不是十stage/skill，沿现工作流目录及阶段职责；C10只增加发布闭环 |
+| S7 | 十二卡不是十二stage/skill，沿现工作流目录及阶段职责；C10只增加发布闭环 |
 | S8 | 主路径不强绑Figma/shadcn/单宿主，声明实际验证过的输入条件 |
 
 ## 变更说明
@@ -1004,6 +1092,13 @@ Playbook采用固定commit `c7096e9aeee6bfa4fd3266274d321107e426185d`；准确�
 
 本次successor增补：基于上游M18 roadmap/decision-log、M0档案和M18专题研究新增D-015/C10，补入发布物、安装、更新、兼容、文档、manifest和发布包真实consumer；M0零gate/历史缺口/防伪边界保留。C01～C09名称、职责、依赖、FR/AC和父确认原义不改；C10/M18安装、运行、兼容、Git/远端发布仍未执行，不因路径可解析宣称完成。
 
-父规划最终确认收口：2026-10-13用户已确认九卡母稿，正常confirm已保存真实答复；父PRD从draft更新为final。当前successor的C10是新的增补草案，不冒用户已确认；旧decision/PRD/研究/审查/失败/待确认交接继续保留原字节，当前规划完成不代表十卡已开发、质量通过、完整发布或已交付main。
+父规划最终确认收口：2026-10-13用户已确认九卡母稿，正常confirm已保存真实答复；父PRD从draft更新为final。当前successor的C10是新的增补草案，不冒用户已确认；旧decision/PRD/研究/审查/失败/待确认交接继续保留原字节，当前规划完成不代表十二卡已开发、质量通过、完整发布或已交付main。
 
 新规划不静默改变在途任务采用材料；后续子任务只读母/兄材料，按自己的当前spec/Phase执行。真正需要改变已确认承诺时说明前后差异、来源、影响和真实选择；不能用候选升级或文档格式修复偷改范围。
+
+2026-11-12，主会话依 028/009/026 判词提出新增 C11、C12，正文作者按 spec-prd 方法补写；用户当日确认“C11 修、C12 验”的两卡与增补稿。补背景：同轮按用户要求加“C11/C12 的背景”节，写 C09 的目标、实际结果、五条结构性原因与四条约束。原因：C09 的 [028 判词](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-dual-path-verification-20261103/quality/evidence/2026-11-12-028-c09-p10-acceptance-verdict.md) 把 AC-P10 判为未通过，逐卡指出 C02/C03/C04/C05/C06/C07/C08 的页面链路缺口；[009 判词](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-dual-path-verification-20261103/quality/evidence/2026-11-12-009-c09-p4-acceptance-verdict.md) 指出六段中第 1/3/5/6 段缺下游读取回执；[026 报告](/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-dual-path-verification-20261103/quality/evidence/2026-11-12-026-c09-p07-fu-adoption.md) 指出更新链没有真实后续 consumer。这些缺口阻断页面链路使用，需要一次真实修复和一次独立验收。
+
+改动：标题与状态行改为十二任务与已确认的增补稿；任务地图补波次与主承接需求两列，加 C11（第一波）、C12（第二波）两行并更新开发顺序；完整任务卡在 C10 之后加 C11、C12 两张 16 字段卡；C10 第 1、3、5、7、8、9、11、12 项的 C09 引用统一改读 C12（具体链写明 T018A 有稿链与 009 的 P06-7），C10 其余 8 个字段未动；逐项覆盖加“C09 十二条验收的当前去向”表并修正 P02/P03/P07/P10/P11 的依据；风险与交付说明加“C11/C12 不依赖 PB 业务链，也不做旧基线与 238 全量”；各卡最小读取导航加 C11、C12 两行；C08-FU-01 从修复项改为未修并给 owner 与恢复条件；独立审查表述改为 OCR delegate 或 wh-review 独立来源；正文中“十任务/十项/十卡”的计数同步为十二；同轮按独立文档审查意见收窄上述表述，并把 AC 改成“关闭/未修”二态；补 C11/C12 背景节（C09 目标、结果与五条结构性原因、四条约束）。
+
+未改：C01～C09 的名称、职责、依赖、FR/AC 与父确认原义；C10 除第 1、3、5、7、8、9、11、12 项外的 8 个字段；旧 PRD、旧判词、旧报告、原失败与历史原件；D-028 与 C09 的判定结论。未新增用户故事，US01～US10 与故事表不变。C11/C12 已确认，但尚未实施、验收或发布，正文改动不构成任何能力或质量结论。
+
