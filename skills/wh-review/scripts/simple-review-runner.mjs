@@ -837,17 +837,27 @@ function staticReviewRule(input) {
   return reviewRuleFor(stage, track, scope);
 }
 
+// direction_flow is an optional broker-owned protocol object, not a caller
+// document: omitting it injects fixedFlow below. Without this guidance a
+// caller that pastes Markdown, or a file path, only sees a raw JSON.parse or
+// protocol error that never names the contract it broke.
+const DIRECTION_FLOW_CONTRACT_MESSAGE = "the supplied direction flow must be a broker-owned direction-review.v1 protocol object, not a document: either omit direction_flow so the runner injects the fixed reconstruct -> reveal -> challenge flow, or pass the protocol JSON produced by planDirectionReviewRequests; Markdown text and file paths are not accepted";
+
 /** Fix the existing direction protocol at the actual stage/track boundary. */
 function directionRequest(input) {
   if (input.stage !== "make-decision" || input.review_track !== "direction") return input;
   const fixedFlow = validateDirectionFlow();
-  for (const value of [input.review_flow, input.reviewFlow]) if (value != null) validateDirectionFlow(value);
   const supplied = input.materials?.direction_flow;
-  if (supplied != null) {
-    const value = Buffer.isBuffer(supplied) || supplied instanceof Uint8Array
-      ? JSON.parse(Buffer.from(supplied).toString("utf8"))
-      : typeof supplied === "string" ? JSON.parse(supplied) : supplied;
-    validateDirectionFlow(value);
+  try {
+    for (const value of [input.review_flow, input.reviewFlow]) if (value != null) validateDirectionFlow(value);
+    if (supplied != null) {
+      const value = Buffer.isBuffer(supplied) || supplied instanceof Uint8Array
+        ? JSON.parse(Buffer.from(supplied).toString("utf8"))
+        : typeof supplied === "string" ? JSON.parse(supplied) : supplied;
+      validateDirectionFlow(value);
+    }
+  } catch (error) {
+    throw new TypeError(DIRECTION_FLOW_CONTRACT_MESSAGE, { cause: error });
   }
   return { ...input, review_flow: fixedFlow,
     ...(Object.hasOwn(input, "reviewFlow") ? { reviewFlow: fixedFlow } : {}),
@@ -1271,8 +1281,10 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
   try { canonicalInput = directionRequest(canonicalInput); }
   catch (error) {
     return blockedPreflight(canonicalInput, "MATERIAL_INCOMPLETE", error.message, preflightDiagnostic({
-      field: "review_flow/direction_flow", expected: "the fixed reconstruct -> reveal -> challenge protocol",
-      actual: "invalid or conflicting supplied direction flow", nextAction: "supply the existing fixed direction-review.v1 protocol or omit it",
+      field: "review_flow/direction_flow",
+      expected: "a broker-owned direction-review.v1 protocol object, or direction_flow omitted so the runner injects the fixed flow",
+      actual: "supplied direction flow that is not the direction-review.v1 protocol object (for example Markdown text or a file path)",
+      nextAction: "omit direction_flow, or pass the protocol JSON produced by planDirectionReviewRequests",
     }), pair, { material_id: null });
   }
   try {

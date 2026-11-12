@@ -20,7 +20,8 @@
           "required_skills": [
             "simplicity-guard",
             "plan-ceo-review",
-            "review"
+            "review",
+            "plan-eng-review"
           ],
           "review_mode": "lens-only",
           "lens_owner": "wh-review",

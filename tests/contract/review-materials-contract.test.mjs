@@ -11,6 +11,7 @@ describe("current packet material contracts",()=>{
  it("drops unknown keys visibly but rejects retired inputs",()=>{const b=packet({stage:"build-code",reviewScope:"terminal",source:{},materials:{...verify(),acceptance_criterias:"near miss"}});try{expect(b.discarded_facts).toEqual([expect.objectContaining({dropped_key:"acceptance_criterias",reason:"not_in_stage_material_allowlist"})]);}finally{b.dispose();}expect(()=>packet({stage:"build-code",reviewScope:"phase",materials:{phase_coverage:"retired"}})).toThrow(/MATERIAL_FORBIDDEN/);expect(()=>packet({stage:"build-code",reviewScope:"terminal",source:{},materials:Object.create({changed_files:"inherited"})})).toThrow(/plain object/);});
  it("assembles the real post Phase body and pointer index",()=>{const materials={raw_requirement:"R-1: current behavior",acceptance_criteria:"AC-1: actual",draft_spec:"AC-1: actual",phase_authorities:{"phases/P1.md":"# Phase P1\nphysical write set: src/app.mjs\n"},phase_index:"## Execution Index\n| phase | authority ref | semantic anchor | write set | dependency | consumer |\n| --- | --- | --- | --- | --- | --- |\n| P1 | phases/P1.md | phase-p1 | src/app.mjs | none | build-code |\n"};const b=packet({stage:"build-plan",activationCohort:"post",materials});try{const text=b.deliveryManifest.map(e=>readFileSync(join(b.bundleRoot,e.path),"utf8")).join("\n");expect(text).toContain("physical write set: src/app.mjs");expect(text).toContain("## Execution Index");expect(text).toContain("AC-1: actual");}finally{b.dispose();}});
  it("keeps paired direction prompts and actual declared reviewer lenses",()=>{const red=reviewInstructionsFor("make-decision","direction",false,null,null,"reconstruct","red"),blue=reviewInstructionsFor("make-decision","direction",false,null,null,"reconstruct","blue");expect(red).not.toBe(blue);expect(red).toContain("red");expect(blue).toContain("blue");expect(red).toContain("skills/intake-decision-review/SKILL.md");expect(red).toContain("no proposed solution");});
+ it("carries the four-question judgement into every delivered direction mode and the detail/build-plan lenses",()=>{const directionMode=mode=>reviewInstructionsFor("make-decision","direction",false,null,null,mode);const keys=["(1) after this outline is implemented","(2) is every function really wired","(3) is every acceptance criterion reasonable","(4) are scope, risk and dependencies covered"];for(const mode of["combined","challenge","full"])for(const key of keys)expect(directionMode(mode)).toContain(key);const detail=reviewInstructionsFor("make-decision","detail",false,null,null);expect(detail).toContain("answer four questions");for(const key of["(1) does the chosen approach deliver","(2) can acceptance be judged","(3) does it exceed the confirmed scope","(4) are failure consequences"])expect(detail).toContain(key);const planRed=reviewInstructionsFor("build-plan",null,false,null,null,"full","red");expect(planRed).toContain("answer the four questions in contracts/build-plan.md");});
  it("redacts host paths only in the provider view",()=>{const original={path:"/Users/owned/private/a.mjs",text:"original"};expect(redactProviderHostPaths(original).path).not.toContain("/Users/owned/private");expect(original.path).toBe("/Users/owned/private/a.mjs");});
   it("keeps canonical manifests deterministic and rejects generic AC maps", () => {
     expect(canonicalMaterialManifest([
@@ -137,22 +138,28 @@ describe("N3 P6 mini design lens boundary", () => {
   const controls = [
     ["detail", () => ({stage: "make-decision", reviewTrack: "detail", materials: {
       raw_requirement: "R-1: one small outcome", approved_direction: "D-1: implement that outcome with bounded scope",
+      requirement_index: "R-1 | original ref+sha256: prd.md#R-1 @ 1-8 | user reply: 2026-11-01T09:12+08:00",
+      per_package_projection: "P1 | scope: one outcome | plan: bounded change | acceptance: AC-1 | risk: none known | source_ref: decision-log.md#L3",
     }}), true],
     ["post build-plan", () => ({stage: "build-plan", activationCohort: "post", materials: {
       raw_requirement: "R-1: one small outcome", draft_spec: "AC-1: actual outcome", acceptance_criteria: "AC-1: actual outcome",
       phase_authorities: {"phases/P1.md": "# Phase P1\nphysical write set: src/app.mjs\n"},
       phase_index: "## Execution Index\n| phase | authority ref | semantic anchor | write set | dependency | consumer |\n| --- | --- | --- | --- | --- | --- |\n| P1 | phases/P1.md | phase-p1 | src/app.mjs | none | build-code |\n",
+      requirement_index: "R-1 | original ref+sha256: prd.md#R-1 @ 1-8 | user reply: 2026-11-01T09:12+08:00",
+      phase_risk_index: "P1 | failure: wrong consumer | rollback: revert | external: none | irreversible: none | owner: build-code | uncovered: none",
+      decision_log: "user reply 2026-11-01T09:12+08:00; confirmed: one bounded outcome",
     }}), true],
     ["phase build-code", () => ({stage: "build-code", reviewScope: "phase", materials: {
       approved_spec: "AC-1: actual outcome", acceptance_criteria: "AC-1: actual outcome", test_evidence: "Owned targeted output",
     }}), true],
     ["terminal build-code", () => ({stage: "build-code", reviewScope: "terminal", source: {}, materials: verify()}), true],
     ["build-prd", () => ({stage: "build-prd", reviewKind: "build_prd", materials: {
-      decision_log: "Approved bounded direction", prd: "Current complete PRD", task_map: "One independently delivered card",
+      decision_log: "Approved bounded direction", raw_requirement: "The original requirement text",
+      prd: "Current complete PRD", task_map: "One independently delivered card",
       design_facts: "CLI outcome; no product UI", quality_facts: "Packet test only; live review not observed",
     }}), true],
     ["blind direction", () => ({stage: "make-decision", reviewTrack: "direction", materials: {
-      raw_requirement: "R-1: user needs one small outcome", objective_facts: "Current tool has an existing packet builder",
+      raw_requirement: "R-1: user needs one small outcome", research_context: "Research: the existing packet builder is the only current producer; source runtime/review/provider-material-projection.mjs; known: one builder; unknown: concurrent writers; conflict: none.", objective_facts: "Current tool has an existing packet builder",
       convergence_outline: "Question: what boundary is needed? Constraint: preserve the user's scope. Failure: scope expansion. Smaller reversible options remain open.",
       current_selection: "Keep the existing packet builder", alternatives: "Add a second packet builder",
       selection_rationale: "Reuse keeps the single packet owner", key_assumptions: "The current builder still satisfies the review contract",
@@ -167,5 +174,52 @@ describe("N3 P6 mini design lens boundary", () => {
       if (expectedLens) expect(readFileSync(join(b.bundleRoot, lensPath)).equals(lensBytes())).toBe(true);
       else expect(readFileSync(join(b.bundleRoot, "review-instructions.md"), "utf8")).not.toContain(lensPath);
     } finally { b.dispose(); }
+  });
+});
+
+describe("optional requirement and risk indexes", () => {
+  const indexMaterials = () => ({
+    raw_requirement: "R-1: one small outcome",
+    requirement_index: "R-1 | original ref+sha256: prd.md#R-1 @ 1-8 | user reply: 2026-11-01T09:12+08:00",
+  });
+  it("delivers the new detail and post build-plan index keys without dropping them", () => {
+    const detail = packet({stage: "make-decision", reviewTrack: "detail", materials: {
+      ...indexMaterials(),
+      approved_direction: "D-1: implement that outcome with bounded scope",
+      per_package_projection: "P1 | scope: one outcome | plan: bounded change | acceptance: AC-1 | risk: none known | source_ref: decision-log.md#L3",
+    }});
+    try {
+      expect(detail.discarded_facts).toEqual([]);
+      const text = detail.deliveryManifest.map(entry => readFileSync(join(detail.bundleRoot, entry.path), "utf8")).join("\n");
+      expect(text).toContain("R-1 | original ref+sha256");
+      expect(text).toContain("P1 | scope: one outcome");
+    } finally { detail.dispose(); }
+    const post = packet({stage: "build-plan", activationCohort: "post", materials: {
+      ...indexMaterials(),
+      draft_spec: "AC-1: actual outcome", acceptance_criteria: "AC-1: actual outcome",
+      phase_authorities: {"phases/P1.md": "# Phase P1\nphysical write set: src/app.mjs\n"},
+      phase_index: "## Execution Index\n| phase | authority ref | semantic anchor | write set | dependency | consumer |\n| --- | --- | --- | --- | --- | --- |\n| P1 | phases/P1.md | phase-p1 | src/app.mjs | none | build-code |\n",
+      phase_risk_index: "P1 | failure: wrong consumer | rollback: revert | external: none | irreversible: none | owner: build-code | uncovered: none",
+      decision_log: "user reply 2026-11-01T09:12+08:00; confirmed: one bounded outcome",
+    }});
+    try {
+      expect(post.discarded_facts).toEqual([]);
+      const text = post.deliveryManifest.map(entry => readFileSync(join(post.bundleRoot, entry.path), "utf8")).join("\n");
+      expect(text).toContain("phase_risk_index");
+      expect(text).toContain("failure: wrong consumer");
+      expect(text).toContain("decision_log");
+    } finally { post.dispose(); }
+  });
+
+  it("keeps the indexes optional so an index-free request still builds", () => {
+    const detail = packet({stage: "make-decision", reviewTrack: "detail", materials: {
+      raw_requirement: "R-1: one small outcome", approved_direction: "D-1: implement that outcome with bounded scope",
+    }});
+    try {
+      expect(detail.discarded_facts).toEqual([]);
+      const instructions = readFileSync(join(detail.bundleRoot, "review-instructions.md"), "utf8");
+      expect(instructions).not.toContain("Supplied material is incomplete");
+      expect(detail.deliveryManifest.some(entry => entry.path === "review-instructions.md")).toBe(true);
+    } finally { detail.dispose(); }
   });
 });
