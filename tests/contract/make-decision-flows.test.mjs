@@ -129,12 +129,12 @@ const complexBaseline = [
     "step_slug": "module-convergence",
     "completion_evidence": [
       {
-        "kind": "quality_evidence",
-        "uri_or_path": "quality/evidence/decision-log-refs/convergence-checklist.md"
+        "kind": "decision_log_section",
+        "uri_or_path": "decision-log.md#每个包定了哪些决定"
       },
       {
-        "kind": "phase_task_facts",
-        "uri_or_path": "facts.jsonl"
+        "kind": "talk_original",
+        "uri_or_path": "quality/evidence/decision-log-refs/talk/"
       }
     ]
   },

@@ -688,39 +688,52 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
     const tableLines = body.split(/\r?\n/);
     const header = tableLines.find(line => /^\|\s*包\s*\|/.test(line));
     const headerCells = header ? header.split('|').slice(1, -1).map(cell => cell.trim()) : [];
-    // The current 5-column status table (包/状态/五段表位置/证据/未决) is a
-    // different format, not 10 columns of 8-field evidence. It is reported as
-    // unjudged; module-set differences remain separately verifiable.
+    // A 5-column status table (包/状态/五段表位置/证据/未决) has no 8-field
+    // evidence, but its state column is a real per-package verdict. The
+    // ten-column checklist (8 field cells + 状态, optionally followed by the
+    // five analysis columns) declares 状态 in its header too; both formats name
+    // every package whose state is not 已收敛.
     const fiveColumn = headerCells.length === 5 && headerCells[0] === '包' && headerCells[1] === '状态';
-    modules = tableLines.filter(line => /^\|\s*\d+\s/.test(line)).map(line => {
-      const cells = line.split('|').slice(1, -1).map(cell => cell.trim());
-      if (fiveColumn) return { name: cells[0], fields: [], state: cells[1] ?? '', source: convergenceRef };
-      const fields = ['目标', '边界', '方案与取舍', '验收', '风险', '依赖', '消费者', '未决/无'];
-      return { name: cells[0], fields: fields.map((name, index) => {
-        const reference=cells[index+1]??'', present=cellPresent(reference,name,/^\d+/.exec(cells[0])?.[0]);
-        if(!present)errors.push(`${cells[0]}/${name}: 未取得可回读的当前证据：${reference||'缺项'}`);
-        return {name,reference,present};
-      }), state: cells[9] ?? '', source: convergenceRef };
-    });
+    const statusColumn = fiveColumn || headerCells.includes('状态');
+    const statusIndex = fiveColumn ? 1 : statusColumn ? headerCells.indexOf('状态') : 9;
+    modules = tableLines.map((line, index) => ({ line, number: index + 1 }))
+      .filter(entry => /^\|\s*\d+\s/.test(entry.line)).map(({ line, number }) => {
+        const cells = line.split('|').slice(1, -1).map(cell => cell.trim());
+        if (fiveColumn) return { name: cells[0], fields: [], state: cells[1] ?? '', source: convergenceRef, line: number };
+        const fields = ['目标', '边界', '方案与取舍', '验收', '风险', '依赖', '消费者', '未决/无'];
+        return { name: cells[0], fields: fields.map((name, index) => {
+          const reference=cells[index+1]??'', present=cellPresent(reference,name,/^\d+/.exec(cells[0])?.[0]);
+          if(!present)errors.push(`${cells[0]}/${name}: 未取得可回读的当前证据：${reference||'缺项'}`);
+          return {name,reference,present};
+        }), state: cells[statusIndex] ?? '', source: convergenceRef, line: number };
+      });
     convergenceReadable = true;
     if (!modules.length) errors.push(`${convergenceRef}: 未读到模块行`);
-    convergenceFormat = fiveColumn ? 'five-column-status' : 'eight-field-evidence';
+    convergenceFormat = fiveColumn ? 'five-column-status' : statusColumn ? 'status-column-evidence' : 'eight-field-evidence';
   } catch (error) { errors.push(`${convergenceRef ?? '收敛清单'}: ${error.message}`); }
   const level = levelDisplay;
   const ids = modules.map(row => /^\d+/.exec(row.name)?.[0]);
   const missing = expected.filter(id => !ids.includes(id));
   const duplicate = [...new Set(ids.filter((id, index) => ids.indexOf(id) !== index))];
   const unknown = ids.filter(id => !expected.includes(id));
-  const formatUnjudged = convergenceFormat === 'five-column-status';
-  const gaps = formatUnjudged
-    ? (modules.length ? [] : ['收敛清单无可读模块行'])
-    : modules.filter(row => row.state !== '已收敛' || row.fields.some(field => !field.present)).map(row => row.name);
-  if (formatUnjudged) gaps.push('格式未判：收敛清单为 5 列状态表（包/状态/五段表位置/证据/未决），未按 8 字段判未收敛');
+  const statusColumnFormat = convergenceFormat === 'five-column-status';
+  // A 状态 cell that is not 已收敛 is a named unconverged package in every
+  // status-bearing table. Empty or missing state never passes as converged;
+  // a missing package name falls back to the row line instead of an empty
+  // string. Missing field evidence stays a separate gap.
+  const statusBearing = convergenceFormat === 'five-column-status' || convergenceFormat === 'status-column-evidence';
+  const stateGaps = modules
+    .filter(row => row.state !== '已收敛' && (statusBearing || (row.state ?? '') !== ''))
+    .map(row => '未收敛：' + (row.name || `第 ${row.line} 行`));
+  const fieldGaps = statusColumnFormat ? [] : modules.filter(row => row.fields.some(field => !field.present)).map(row => row.name);
+  const gaps = statusColumnFormat
+    ? (modules.length ? stateGaps : ['收敛清单无可读模块行'])
+    : [...stateGaps, ...fieldGaps];
   gaps.push(...missing.map(id => `缺模块 WP${id}`), ...duplicate.map(id => `重复模块 WP${id}`), ...unknown.map(id => `未知模块 WP${id}`), ...mappingGaps);
   if (!expected.length || new Set(expected).size !== expected.length) { gaps.push('权威模块集合未取得或重复'); errors.push('decision-log.md: 权威模块集合未取得或重复'); }
   if (!safeRef) gaps.push('收敛清单指针未取得');
   else if (!convergenceReadable) gaps.push('收敛清单不可读');
-  const convergence = { source: convergenceRef, expected_modules: expected, complete: !formatUnjudged && gaps.length === 0 && expected.length > 0, gaps };
+  const convergence = { source: convergenceRef, expected_modules: expected, complete: gaps.length === 0 && expected.length > 0, gaps };
   const invalidatedList = invalidated.flatMap(record => [...record.slugs, ...record.ranges.map(range => `${range.from}～${range.to}`)]);
   const unscopedInvalidations = invalidated.filter(record => !record.scope);
   if (unscopedInvalidations.length) errors.push(`失效步骤未写可识别阶段：${unscopedInvalidations.flatMap(record => [...record.slugs, ...record.ranges.map(range => `${range.from}～${range.to}`)]).join('、')}；未应用，不跨 stage 推断`);
@@ -874,18 +887,25 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
           ...(options.commit ? { commit: options.commit } : {}), ...(options.runId ? { run_id: options.runId } : {}), created_at: new Date().toISOString() };
         const path = await task.appendRecord({ dir: 'quality/evidence', slug: 'step-gap', ext: 'json', bytes: JSON.stringify(gap, null, 2) + '\n' });
         options.skipGap = { ...gap, evidence_ref: relative(task.taskPath, path) };
-        // Choosing the next card is a local reply only; no progress is written.
+        // A skip keeps the current step (with its named gap). The next card is
+        // only a hint in this same reply; report flow and progress do not move.
         const full = runStageStepsCheck({ ...options, step: undefined, card: false });
-        options.step = full.stages.find(row => row.stage === options.stage)?.steps.find(row => row.step_id > skipStep)?.step_id ?? skipStep;
+        const next = full.stages.find(row => row.stage === options.stage)?.steps.find(row => row.step_id > skipStep);
+        options.skipNext = next ? { step_id: next.step_id, step_slug: next.step_slug } : null;
       } catch (error) { inputErrors.push(`跳过未记录：${error.message}`); }
     }
   }
   options.inputErrors = inputErrors;
   const report = runStageStepsCheck(options);
+  if (options.skipNext) report.skip_next = options.skipNext;
+  // A named unconverged package is a real gap, not a format note: surface it
+  // through the exit code so a skipped convergence cannot pass as clean.
+  if (report.convergence.gaps.some(gap => String(gap).startsWith('未收敛：'))) process.exitCode = 1;
   if (json) console.log(JSON.stringify(report, null, 2));
   else {
     if (report.card) console.log(JSON.stringify(report.card, null, 2));
     console.log(`未清跳过缺口：${JSON.stringify(report.closeout)}`);
+    if (report.skip_next) console.log(`下一步卡：${report.skip_next.step_id} ${report.skip_next.step_slug}（仅同次回复提示；跳过后当前步仍为 ${options.step}，不写进度）`);
     console.log('判定：已完成＝既有 producer 判完成；已留痕＝声明原件可读但不判完成；待重做＝方向变更列出的失效步骤。');
     for (const row of report.stages) {
       if (row.definition === 'unavailable') console.log(`${row.stage} 读不到步骤定义（${row.source}）：${row.definition_error}；步骤是否完成未判定，不按「未留痕」报告`);
@@ -897,14 +917,14 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     }
     console.log(`失效步骤：${report.supersede.invalidated.length ? report.supersede.invalidated.join('、') : '无'}（${report.supersede.source}）`);
     for (const row of report.modules) {
-      if (!row.fields.length) console.log(`${row.name}：${row.state ?? '未判'}；格式未判（5列状态表）；${row.source}`);
+      if (!row.fields.length) console.log(`${row.name}：${row.state ?? '未判'}；5列状态表（按状态列判定）；${row.source}`);
       else {
         console.log(`${row.name}：${row.state}；8项非空=${row.fields.filter(field => field.present).length}/8；${row.source}`);
         for (const field of row.fields) console.log(`  ${field.name}：${field.present ? field.reference : '缺项'}；present=${field.present}`);
       }
     }
     console.log(`收敛 complete=${report.convergence.complete}；gaps=${JSON.stringify(report.convergence.gaps)}`);
-    if (report.convergence.gaps.some(gap => String(gap).startsWith('格式未判：'))) console.log('收敛格式：格式未判，不计成字段缺项或未做');
+    console.log('退出码只反映状态列的未收敛包；十列字段缺口只进上面的 complete/gaps，不改变退出码。');
     console.log(`级别：${report.level}`);
     for (const error of report.errors) console.log(`缺口：${error}`);
     console.log(report.limits.join('\n'));
