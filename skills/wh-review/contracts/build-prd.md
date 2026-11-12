@@ -31,13 +31,23 @@ The provider-visible bundle contains only the complete PRD review surface:
   facts to inspect, not a pass signal.
 - `review-instructions.md`: the fixed instructions generated for this surface.
 
+`raw_requirement` is optional on this surface: it is not in `required`. When it is
+provided, it must be the original requirement text (the PRD card's original text
+or the user's own words), not a summary and not a substitute for `prd`; the
+reviewer checks the PRD coverage against that original text. When it is absent,
+the reviewer records the coverage limit in evidence and writes a finding that
+the original requirement could not be verified; it must not infer the original
+requirement from the PRD itself. 缺原文或只给摘要时，PRD 覆盖判定记 `incomplete`，
+不记 `pass`。把该键升为 `required` 需先有真实生产者，当前不设硬门。
+
 Optional source, confirmation, delivery, analyze, reflection, and bounded map
-facts may be supplied only when declared by the material matrix. When the PRD
-replaces an old file, the old file travels with the existing optional
-`source_facts` entry and the appendix B decision coverage table travels with
-`prd`; neither becomes a new required packet item. A review that lacks the old
-file records `incomplete` for old-file fidelity instead of writing `pass`; 缺旧件记
-`incomplete`，不写 `pass`，也不得声称覆盖完整。
+facts may be supplied only when declared by the material matrix. `source_facts`
+stays optional in the matrix, but its content is mandatory when the PRD replaces
+an old file: 替换旧件时 `source_facts` 必含旧件全文、调研三类事实（已知／未知／冲突，各带来源）
+与风险事实；只给摘要或节选不算提供旧件。The appendix B decision coverage table still
+travels with `prd`. A review that lacks the old file records `incomplete` for
+old-file fidelity instead of writing `pass`; 缺旧件或只给摘要记 `incomplete`，不写 `pass`，
+也不得声称覆盖完整。
 Build-plan materials, engineering task rows, changes/diff, and canonical stage evidence
 are forbidden on this surface.
 

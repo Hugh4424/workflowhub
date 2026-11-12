@@ -11,6 +11,7 @@
       ],
       "semantic_fields": [
         "raw_requirement",
+        "research_context",
         "objective_facts",
         "convergence_outline",
         "current_selection",
@@ -36,7 +37,9 @@
         "approved_direction",
         "draft_spec_or_acceptance",
         "context_map",
-        "evidence_map"
+        "evidence_map",
+        "requirement_index",
+        "per_package_projection"
       ]
     },
     "build-plan": {
@@ -67,7 +70,10 @@
         "real_consumer",
         "state_owner",
         "typed_view_model",
-        "css_token_owner"
+        "css_token_owner",
+        "requirement_index",
+        "phase_risk_index",
+        "decision_log"
       ]
     },
     "build-code/phase": {
@@ -107,6 +113,7 @@
       ],
       "semantic_fields": [
         "decision_log",
+        "raw_requirement",
         "prd",
         "task_map",
         "map_confirmation",
@@ -158,6 +165,7 @@
         "review_instructions"
       ],
       "optional": [
+        "raw_requirement",
         "map_confirmation",
         "source_facts",
         "confirmation_facts",
@@ -189,6 +197,7 @@
           "source_bundle": "none",
           "required": [
             "raw_requirement",
+            "research_context",
             "objective_facts",
             "convergence_outline",
             "current_selection",
@@ -221,7 +230,9 @@
           "optional": [
             "draft_spec_or_acceptance",
             "context_map",
-            "evidence_map"
+            "evidence_map",
+            "requirement_index",
+            "per_package_projection"
           ],
           "generated": [
             "review_instructions"
@@ -263,7 +274,10 @@
           "optional": [
             "raw_requirement",
             "context_map",
-            "evidence_map"
+            "evidence_map",
+            "requirement_index",
+            "phase_risk_index",
+            "decision_log"
           ],
           "generated": [
             "review_instructions",

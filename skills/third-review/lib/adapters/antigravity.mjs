@@ -3,7 +3,6 @@ import { invalid, plan } from "./shared.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const self = fileURLToPath(import.meta.url);
@@ -17,15 +16,21 @@ function requireNativeHooks(provider) {
     const command = fs.realpathSync(requested);
     const stat = fs.statSync(command); const identity = `${command}:${stat.size}:${stat.mtimeMs}`;
     if (nativeSupport.has(identity)) return;
-    const version = spawnSync(command, ["--version"], { encoding: "utf8", timeout: 10_000 });
-    if (version.status !== 0 || !/^1\.4\.\d+\s*$/.test(version.stdout)) throw new Error("unverified native CLI version");
-    // The installed native CLI embeds its own hook contract. A command shim or
-    // an executor with only the same version string is not a native hook API.
+    // The installed CLI advertises its hook contract by embedding these
+    // markers. This is a capability signal, not proof: a command shim carrying
+    // the same three strings passes this check. The packet decision itself is
+    // made by the hook command this adapter installs and by the CLI executing
+    // `.agents/hooks.json`; a CLI that advertises but ignores that file would
+    // run without the read boundary. That forged/ignore-hooks CLI is the
+    // residual risk, and no local check can falsify it without a real provider
+    // call, so the marker check stays a best-effort gate. CLI version is
+    // deliberately not inspected: the hook contract, not a pinned release
+    // number, decides whether the packet guard is attempted.
     const bytes = fs.readFileSync(command);
     for (const marker of ["PreToolUse", ".agents/hooks.json", "Hard block"]) if (!bytes.includes(Buffer.from(marker))) throw new Error("native hook contract absent");
     nativeSupport.set(identity, true);
   } catch {
-    fail("PROVIDER_PACKET_GUARD_UNAVAILABLE", "Antigravity native packet hooks are unavailable or their installed version is unverified");
+    fail("PROVIDER_PACKET_GUARD_UNAVAILABLE", "Antigravity native packet hooks are unavailable in the installed CLI");
   }
 }
 

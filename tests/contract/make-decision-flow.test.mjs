@@ -75,12 +75,12 @@ const syncEvidence = {
   ],
   "9": [
     {
-      "kind": "quality_evidence",
-      "uri_or_path": "quality/evidence/decision-log-refs/convergence-checklist.md"
+      "kind": "decision_log_section",
+      "uri_or_path": "decision-log.md#每个包定了哪些决定"
     },
     {
-      "kind": "phase_task_facts",
-      "uri_or_path": "facts.jsonl"
+      "kind": "talk_original",
+      "uri_or_path": "quality/evidence/decision-log-refs/talk/"
     }
   ],
   "10": [
@@ -285,10 +285,10 @@ describe('ledger', () => {
     expect(steps.steps[9].observable_result).toContain('未收敛即停');
     expect(steps.steps[9].observable_result).toContain('收敛后重跑');
   });
-  test('retains one literal checker command and report-only exit semantics', () => {
+  test('retains one literal checker command and names unconverged packages in the exit code', () => {
     const command = 'node tools/cli/check-stage-steps.mjs --stage=make-decision --task-path=<任务目录>';
     expect(skill.split(command)).toHaveLength(2);
-    expect(section(skill, '安全写入与收口')).toContain('检查器只报告、退出 0，不证明完成');
+    expect(section(skill, '安全写入与收口')).toContain('5 列状态表点名未收敛包并以非 0 退出');
   });
 });
 
@@ -435,7 +435,7 @@ describe('review fixes', () => {
       expect(legal.convergence).toMatchObject({ complete: true, gaps: [] });
       for (const state of ['已答', '事实可定', '待你定', '待收敛']) {
         put(taskPath, ref, row.replace('已收敛', state));
-        expect(invoke().convergence).toMatchObject({ complete: false, gaps: ['1 controlled'] });
+        expect(invoke().convergence).toMatchObject({ complete: false, gaps: ['未收敛：1 controlled'] });
       }
       put(taskPath, ref, row);
       expect(invoke().convergence).toMatchObject({ complete: true, gaps: [] });

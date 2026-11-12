@@ -10,6 +10,7 @@ import { providerMaterialEntries, providerMaterialPath, redactProviderHostPaths 
 const REVEAL_KEYS = ["current_selection", "alternatives", "selection_rationale", "key_assumptions"];
 const MATERIALS = Object.freeze({
   raw_requirement: "需要可靠交付",
+  research_context: "调研结论：现状审查会重复；来源 quality/evidence/research/report.md；已知：重复发生；未知：并发边界；冲突：无。",
   objective_facts: ["当前审查重复"],
   convergence_outline: "问题：方向审查缺少揭示材料时 challenge 不可执行。",
   current_selection: "方案 A",
@@ -48,6 +49,32 @@ test("rejects a direction request that omits a reveal material instead of silent
   expect(() => validateDirectionReviewInput({ materials: incomplete }))
     .toThrow(/方向审查缺少揭示材料，challenge 无法执行/);
   expect(() => packetFor(incomplete)).toThrow(/方向审查缺少揭示材料，challenge 无法执行/);
+});
+
+test("blocks a direction request missing research_context before any packet or provider", () => {
+  const incomplete = { ...MATERIALS };
+  delete incomplete.research_context;
+  expect(() => validateDirectionReviewInput({ materials: incomplete }))
+    .toThrow(/MATERIAL_INCOMPLETE[\s\S]*research_context/);
+  expect(() => packetFor(incomplete)).toThrow(/MATERIAL_INCOMPLETE[\s\S]*research_context/);
+  const blocked = validateReviewCallerMaterials({ stage: "make-decision", review_track: "direction", materials: incomplete });
+  expect(blocked.status).toBe("unavailable");
+  expect(blocked.dispatch_state).toBe("blocked_before_dispatch");
+  expect(blocked.error.code).toBe("MATERIAL_INCOMPLETE");
+  expect(blocked.error.message).toContain("research_context");
+});
+
+test("delivers the original requirement, research context and concrete outline in the direction packet", () => {
+  const { root, packet } = packetFor(MATERIALS);
+  try {
+    const paths = packet.deliveryManifest.map((entry) => entry.path);
+    for (const key of ["raw_requirement", "research_context", "convergence_outline"]) {
+      expect(paths.some((path) => path.includes(key)), key).toBe(true);
+    }
+  } finally {
+    packet.dispose();
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("public review preflight blocks an incomplete direction request before dispatch", () => {

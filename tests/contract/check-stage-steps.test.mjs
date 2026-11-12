@@ -91,13 +91,15 @@ describe('ORACLE-P1-STAGE-STEPS checker', () => {
       put(repo, 'workflows/build-prd/steps.json', manifest);
       put(task, 'quality/evidence/decision-log-refs/controlled-convergence-checklist.md', validOne.replace('D-001 不做什么', '').replace('已收敛', '待收敛'));
       const second = invoke();
-      expect(second.status).toBe(0);
-      expect(JSON.parse(second.stdout).convergence).toMatchObject({ complete: false, gaps: ['1 controlled'] });
+      expect(second.status).toBe(1);
+      const secondConvergence = JSON.parse(second.stdout).convergence;
+      expect(secondConvergence.complete).toBe(false);
+      expect(secondConvergence.gaps).toEqual(expect.arrayContaining(['1 controlled', '未收敛：1 controlled']));
       expect(JSON.parse(second.stdout).modules[0].fields[1]).toMatchObject({ name: '边界', present: false });
       const incompleteText = textInvoke().stdout;
       expect(incompleteText).toContain('1 controlled：待收敛');
       expect(incompleteText).toContain('  边界：缺项；present=false');
-      expect(incompleteText).toContain('收敛 complete=false；gaps=["1 controlled"]');
+      expect(incompleteText).toContain('未收敛：1 controlled');
       expect(JSON.parse(second.stdout).stages[3]).toMatchObject({ mapping: '未配置' });
       expect(JSON.parse(second.stdout).stages[3].steps[0]).toMatchObject({ judgment: '映射未配置', evidence_location: null });
       const decisionPath = join(materials, 'decision-log.md');
@@ -263,15 +265,110 @@ describe('convergence evidence pointer validation', () => {
   }));
 });
 
+describe('five-column status table names unconverged packages', () => {
+  function statusFixture(rows, check) {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'p1-status-')));
+    const task = join(root, 'task'), materials = join(root, 'materials');
+    const ref = 'quality/evidence/decision-log-refs/convergence-checklist.md';
+    const put = (base, name, value) => { const path = join(base, name); mkdirSync(resolve(path, '..'), { recursive: true }); writeFileSync(path, value); };
+    const decision = '# Controlled\n## 级别与路线\n- 推荐级别：复杂\n#### WP1 — controlled\n- **结果与消费者**：受控结果；消费者是 controlled consumer。\n#### WP2 — second\n- **结果与消费者**：受控第二结果；消费者是 WP1。\n清单：`' + ref + '`\n';
+    try {
+      put(task, 'task.json', JSON.stringify({ schema_version:'1.0.0', task_id:'controlled', target_repo_root:resolve('.'), baseline_commit:'HEAD', activation_cohort:'post' }));
+      put(task, 'facts.jsonl', ''); put(materials, 'phases/index.md', '# Index\n');
+      put(materials, 'decision-log.md', decision); put(task, ref, rows);
+      const invoke = json => spawnSync(process.execPath, [entry, `--task-path=${task}`, `--material-root=${materials}`, `--repo-root=${resolve('.')}`, ...(json ? ['--json'] : [])], { encoding:'utf8' });
+      check({ invoke });
+    } finally { rmSync(root, { recursive:true }); }
+  }
+  const header = '| 包 | 状态 | 五段表位置 | 证据 | 未决 |\n| --- | --- | --- | --- | --- |\n';
+  it('names the package not marked 已收敛 and exits non-zero', () => statusFixture(header + '| 1 controlled | 未收敛 | details§1 | ev-1 | 待你定 |\n| 2 second | 已收敛 | details§2 | ev-2 | 无 |\n', ({ invoke }) => {
+    const result = invoke(true);
+    expect(result.status).not.toBe(0);
+    const report = JSON.parse(result.stdout);
+    expect(report.convergence.gaps).toContain('未收敛：1 controlled');
+    expect(report.convergence.complete).toBe(false);
+    const text = invoke(false);
+    expect(text.status).not.toBe(0);
+    expect(text.stdout).toContain('未收敛：1 controlled');
+    expect(text.stdout).not.toContain('格式未判');
+  }));
+  it('names a five-column package with an empty state and exits non-zero', () => statusFixture(header + '| 1 controlled |  | details§1 | ev-1 | 待你定 |\n| 2 second | 已收敛 | details§2 | ev-2 | 无 |\n', ({ invoke }) => {
+    const result = invoke(true);
+    expect(result.status).not.toBe(0);
+    const report = JSON.parse(result.stdout);
+    expect(report.convergence.gaps).toContain('未收敛：1 controlled');
+    expect(report.convergence.complete).toBe(false);
+    const text = invoke(false);
+    expect(text.status).not.toBe(0);
+    expect(text.stdout).toContain('未收敛：1 controlled');
+  }));
+  it('exits 0 when every five-column package is 已收敛', () => statusFixture(header + '| 1 controlled | 已收敛 | details§1 | ev-1 | 无 |\n| 2 second | 已收敛 | details§2 | ev-2 | 无 |\n', ({ invoke }) => {
+    const result = invoke(true);
+    expect(result.status).toBe(0);
+    const report = JSON.parse(result.stdout);
+    expect(report.convergence.gaps).toEqual([]);
+    expect(report.convergence.complete).toBe(true);
+  }));
+});
+
+describe('ten-column status table names unconverged packages', () => {
+  const header = '| 包 | 目标 | 边界 | 方案与取舍 | 验收 | 风险 | 依赖 | 消费者 | 未决/无 | 状态 | 目标与成功意图 | 范围与旅程 | 数据与状态 | 成功失败验收 | 约束非目标与风险 |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n';
+  const withStatus = (line, state) => line.replace('| 已收敛 |\n', `| ${state} | 已答 | 已答 | 已答 | 已答 | 已答 |\n`);
+  function tenColumnFixture(rows, check) {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'p1-ten-column-')));
+    const task = join(root, 'task'), materials = join(root, 'materials');
+    const ref = 'quality/evidence/decision-log-refs/controlled-convergence-checklist.md';
+    const put = (base, name, value) => { const path = join(base, name); mkdirSync(dirnameOf(path), { recursive: true }); writeFileSync(path, value); };
+    const decision = '# Controlled\n## 级别与路线\n- 推荐级别：复杂\n' + firstDecision + secondDecision + `清单：\`${ref}\`\n`;
+    const invoke = json => spawnSync(process.execPath, [entry, `--task-path=${task}`, `--material-root=${materials}`, `--repo-root=${resolve('.')}`, ...(json ? ['--json'] : [])], { encoding: 'utf8' });
+    try {
+      put(task, 'task.json', JSON.stringify({ schema_version:'1.0.0', task_id:'controlled', target_repo_root:resolve('.'), baseline_commit:'HEAD', activation_cohort:'post' }));
+      put(task, 'facts.jsonl', ''); put(materials, 'phases/index.md', '# Index\n');
+      put(materials, 'decision-log.md', decision); put(task, ref, rows);
+      put(task, 'quality/evidence/decision-log-refs/controlled-module-details.md', detailsBody);
+      check({ invoke });
+    } finally { rmSync(root, { recursive:true, force:true }); }
+  }
+  it('names an unconverged ten-column package and exits non-zero', () => tenColumnFixture(header + withStatus(validOne, '未收敛') + withStatus(validTwo, '已收敛'), ({ invoke }) => {
+    const result = invoke(true);
+    expect(result.status).not.toBe(0);
+    const report = JSON.parse(result.stdout);
+    expect(report.convergence.gaps).toContain('未收敛：1 controlled');
+    expect(report.convergence.gaps).not.toContain('未收敛：2 second');
+    expect(report.convergence.complete).toBe(false);
+    const text = invoke(false);
+    expect(text.status).not.toBe(0);
+    expect(text.stdout).toContain('未收敛：1 controlled');
+  }));
+  it('names a ten-column package with an empty state and exits non-zero', () => tenColumnFixture(header + withStatus(validOne, '') + withStatus(validTwo, '已收敛'), ({ invoke }) => {
+    const result = invoke(true);
+    expect(result.status).not.toBe(0);
+    const report = JSON.parse(result.stdout);
+    expect(report.convergence.gaps).toContain('未收敛：1 controlled');
+    expect(report.convergence.gaps).not.toContain('未收敛：2 second');
+    expect(report.convergence.complete).toBe(false);
+    const text = invoke(false);
+    expect(text.status).not.toBe(0);
+    expect(text.stdout).toContain('未收敛：1 controlled');
+  }));
+  it('exits 0 when every ten-column package is 已收敛', () => tenColumnFixture(header + withStatus(validOne, '已收敛') + withStatus(validTwo, '已收敛'), ({ invoke }) => {
+    const result = invoke(true);
+    expect(result.status).toBe(0);
+    const report = JSON.parse(result.stdout);
+    expect(report.convergence.gaps).toEqual([]);
+    expect(report.convergence.complete).toBe(true);
+  }));
+});
+
 // P1-TEXT-GUARD-START
 function assertP1TextContract(methods, template) {
-  const required=['缺失即未完成','跨包不合批','确认与推进分开问','少打扰不等于跳过步骤','`steps.json`','不在决策日志新增步骤节','问答原件开头写明批次类型','检查器只报告、退出 0，不证明完成','- 推荐级别：复杂','既有日志不回改'];
+  const required=['缺失即未完成','跨包不合批','确认与推进分开问','少打扰不等于跳过步骤','`steps.json`','不在决策日志新增步骤节','问答原件开头写明批次类型','不证明完成','- 推荐级别：复杂','既有日志不回改'];
   for(const [stage,body] of Object.entries(methods)) {
     const lines=body.split(/\r?\n/).filter(line=>line.startsWith('执行纪律：'));
     if(lines.length!==1)throw Error(`discipline:${stage}`);
     for(const text of required)if(!lines[0].includes(text))throw Error(`discipline:${stage}:${text}`);
     if(!lines[0].includes(`node tools/cli/check-stage-steps.mjs --stage=${stage} --task-path=<任务目录>`))throw Error(`command:${stage}`);
-    if(stage==='make-decision'&&!['第9步逐包收敛','更新8项证据指针与包状态','第10步细节审查前','有未收敛包就停在细节审查前'].every(text=>lines[0].includes(text)))throw Error('make-decision:advance');
+    if(stage==='make-decision'&&!['第9步逐包收敛','更新8项证据指针与包状态','第10步细节审查前','有未收敛包就停在细节审查前','5 列状态表点名未收敛包并以非 0 退出'].every(text=>lines[0].includes(text)))throw Error('make-decision:advance');
   }
   const pointer=template.split(/\r?\n/).filter(line=>line.includes('步骤证据清单指针'));
   if(pointer.length!==1||!pointer[0].startsWith('步骤证据清单指针：'))throw Error('template:pointer');
@@ -914,7 +1011,8 @@ describe('ORACLE-P1-CARD current step public CLI contract', () => {
         `--recovery=${recovery}`, '--phase=P1', '--card',
       ]);
       expect(skipped.status).toBe(0);
-      expect(skipped.report.card.step_id).toBe(6);
+      expect(skipped.report.card.step_id).toBe(5);
+      expect(skipped.report.skip_next).toEqual({ step_id: 6, step_slug: 'adversarial-direction-check' });
       expect(skipped.report.skip_gap).toMatchObject({
         stage: 'make-decision', step_id: 5, step_slug: 'outline-talk', reason, owner, recovery, phase: 'P1',
       });
@@ -1103,7 +1201,8 @@ describe('ORACLE-P1-CARD TCR-P1-001 current originals and unresolved gaps', () =
       const result = f.invoke(['--stage=make-decision', '--skip-with-gap=5', '--card', '--reason=missing input', '--owner=controlled owner', '--recovery=provide input', `--commit=${f.head}`]);
       expect(result.status).toBe(0);
       expect(result.report.skip_gap).toMatchObject({ commit: f.head, step_id: 5 });
-      expect(result.report.card.step_id).toBe(6);
+      expect(result.report.card.step_id).toBe(5);
+      expect(result.report.skip_next).toEqual({ step_id: 6, step_slug: 'adversarial-direction-check' });
     } finally { rmSync(f.root, { recursive: true, force: true }); }
   });
   it('real step6 does not accept an unrelated old original in a generic directory', () => {

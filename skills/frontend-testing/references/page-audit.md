@@ -87,6 +87,8 @@ spacing 取 margin/padding/gap；shadows 取 box-shadow/text-shadow；borders �
 冻结局部形状测试只要求非空 ref，校验器兼容 ref-only；提供 sha256 时核其格式，但不强制补 hash、不读文件或重算，也不核完整八项身份。
 正式报告生产者和验收消费者须逐子证据承接真实 sha256 与对象绑定，不能以本校验器 exit0 或其它未读 criteria 的检查器代替。
 object 保 workspace、service、route、state、viewport、engine、engine_session、object_version 八项身份，缺项具名报出，不填默认值。
+state 是声明的审计坐标，不是已观测状态；object.state_observation 记 `{declared, observed, result}`，observed 只取页面 URL 的 query state 参数，result 为 match、unknown 或 mismatch。hash 形式（如 `#state=…`）不计入观测，保持 unknown；要观测 hash 状态须改由页面任务作者提供可经 query 观测的入口。
+result 非 match（query 无 state 参数、参数不符，或状态只由前端内存持有而无法经 URL 观测）时，报告追加 coverage_limits，说明状态未被观测、由页面任务作者或采集执行者提供可经 URL 观测的状态后重跑，整体保持 incomplete；不把声明值呈现为已观测，也不新增评分、百分比或未知聚合。页面 URL 读取失败时 state_observation 记 reason，coverage_limits 写「状态 URL 未读到：<原因>」，不把未读当作「URL 无 state 参数」。state 不符不中止五维采集，报告记 mismatch 并保留覆盖限制；其它身份坐标不符仍按原身份不符停止。
 summary.overall 保真实整体事实词，未覆盖或未测存在时用 incomplete 等原词，保逐项四态，不给总分或百分比。
 校验命令 `node skills/frontend-testing/scripts/check-page-audit.mjs --input <report.json>`：0 仅证形状合法，2 形状拒收，其它非零为用法、读取、解析或脚本失败，不作页面裁决。
 stdout 恰好一行 JSON，形如 `{"ok":true,"errors":[]}`；各错误含 code、path、message，收集全部结构错误。

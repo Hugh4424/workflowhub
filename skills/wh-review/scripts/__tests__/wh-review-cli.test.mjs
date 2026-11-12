@@ -469,7 +469,7 @@ process.stdout.write(JSON.stringify({
       host_provider: "codex",
       direction_selection: { current_selection: "fixture choice" },
       materials: {
-        raw_requirement: "A bounded review recovery fixture.", objective_facts: "The task workspace and trusted route exist.",
+        raw_requirement: "A bounded review recovery fixture.", research_context: "Research: the task workspace and trusted route exist; source runtime/review/stage-materials.json; known: trusted route; unknown: retry behavior; conflict: none.", objective_facts: "The task workspace and trusted route exist.",
         convergence_outline: "The fixture review converges on the configured direction.",
         current_selection: "fixture choice",
         alternatives: "Leave direction unrevealed and skip challenge.",

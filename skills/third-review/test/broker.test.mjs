@@ -576,7 +576,7 @@ import { planDirectionReviewRequests as planN3Direction } from "../../wh-review/
 async function n3DirectionScenario({ mode = "normal", cancel = false, native = false } = {}) {
   const root = fs.realpathSync(temp()); const runtime = path.join(root, "runtime"); fs.mkdirSync(runtime);
   const selection = "SELECTION_ONLY_AFTER_RECONSTRUCTION_74291";
-  const materials = { raw_requirement: "Deliver reliable reports", objective_facts: "The queue has two independent consumers", convergence_outline: "Which path avoids loss?", current_selection: selection, alternatives: "B", selection_rationale: "durability", key_assumptions: "bounded input" };
+  const materials = { raw_requirement: "Deliver reliable reports", research_context: "Research: two independent queue consumers; source runtime/review/stage-materials.json; known: two consumers; unknown: retry limits; conflict: none.", objective_facts: "The queue has two independent consumers", convergence_outline: "Which path avoids loss?", current_selection: selection, alternatives: "B", selection_rationale: "durability", key_assumptions: "bounded input" };
   const flow = planN3Direction(materials).flow;
   const packet = buildN3DirectionMaterials({ attachmentRoot: root, stage: "make-decision", reviewTrack: "direction", materials: { ...materials, direction_flow: flow } });
   const ids = native ? ["antigravity", "opencode"] : ["kimi/red", "kimi/blue"];
@@ -677,7 +677,7 @@ import n3CorrectionAg from "../lib/adapters/antigravity.mjs";
 // after guarded plan construction becomes a controlled child; no model runs.
 async function n3CorrectionDirection(mode) {
   const root=fs.realpathSync(temp()),runtime=path.join(root,"runtime");fs.mkdirSync(runtime);
-  const materials={raw_requirement:"Keep delivered reports",objective_facts:"Two real queue consumers",convergence_outline:"Which path preserves reports?",current_selection:"CORRECTION_SELECTION_HIDDEN",alternatives:"B",selection_rationale:"durability",key_assumptions:"bounded queue"};
+  const materials={raw_requirement:"Keep delivered reports",research_context:"Research: two real queue consumers; source runtime/review/stage-materials.json; known: two consumers; unknown: retry limits; conflict: none.",objective_facts:"Two real queue consumers",convergence_outline:"Which path preserves reports?",current_selection:"CORRECTION_SELECTION_HIDDEN",alternatives:"B",selection_rationale:"durability",key_assumptions:"bounded queue"};
   const flow=planN3Direction(materials).flow;
   const packet=buildN3DirectionMaterials({attachmentRoot:root,stage:"make-decision",reviewTrack:"direction",materials:{...materials,direction_flow:flow}});
   const value=config(runtime,[["antigravity"]]);value.providers.antigravity.command="/Users/Hugh/.local/bin/agy";value.providers.antigravity.allow_host_state=true;
@@ -726,7 +726,7 @@ test("N3 P2 native correction: challenge still rejects an absolute host referenc
 async function n3CarrierDirection(wrap) {
   const root=fs.realpathSync(temp()),runtime=path.join(root,"runtime");fs.mkdirSync(runtime);
   const selection="CARRIER_SELECTION_ONLY_AFTER_REVEAL";
-  const materials={raw_requirement:"Preserve reports",objective_facts:"Two independent consumers",convergence_outline:"Which path avoids loss?",current_selection:selection,alternatives:"B",selection_rationale:"durability",key_assumptions:"bounded input"};
+  const materials={raw_requirement:"Preserve reports",research_context:"Research: two independent consumers; source runtime/review/stage-materials.json; known: two consumers; unknown: retry limits; conflict: none.",objective_facts:"Two independent consumers",convergence_outline:"Which path avoids loss?",current_selection:selection,alternatives:"B",selection_rationale:"durability",key_assumptions:"bounded input"};
   const flow=planN3Direction(materials).flow;
   const packet=buildN3DirectionMaterials({attachmentRoot:root,stage:"make-decision",reviewTrack:"direction",materials:{...materials,direction_flow:flow}});
   const value=config(runtime,[["antigravity"]]);value.providers.antigravity.command="/Users/Hugh/.local/bin/agy";value.providers.antigravity.allow_host_state=true;value.attachment_roots=[{root,sources:[".wh-review-packets"]}];

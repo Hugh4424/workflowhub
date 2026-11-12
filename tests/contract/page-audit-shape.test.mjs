@@ -138,6 +138,19 @@ describe('check-page-audit shape oracle',()=>{
     expectRejected(report,'E_STATE_OUT_OF_ENUM','state 限定通过');
   });
 
+  it('accepts object.state_observation structure and still rejects score-like keys inside it',()=>{
+    const report=baseReport();
+    report.object.state_observation={declared:'dialog-open',observed:null,result:'unknown'};
+    const result=runAudit(report,'state_observation unknown');
+    expect(result.status,`state_observation unknown: expected ${exitMeaning(0)} but got ${exitMeaning(result.status,result.signal)}; stderr=${clip(result.stderr)}${absentNote()}`).toBe(0);
+    const payload=readVerdict(result);
+    expect(payload.ok,`state_observation unknown: expected ok:true; stdout=${clip(result.stdout)}`).toBe(true);
+    expect(payload.errors,`state_observation unknown: expected no errors; stdout=${clip(result.stdout)}`).toHaveLength(0);
+    const scored=baseReport();
+    scored.object.state_observation={declared:'dialog-open',observed:null,result:'unknown',score:91};
+    expectRejected(scored,'E_TOTAL_SCORE','state_observation score');
+  });
+
   it('accepts a four-state report whose 通过 items carry evidence and whose 未测 item keeps overall incomplete',()=>{
     const report={
       object:{route:'/page-audit-fixture',viewport:'1440x900'},

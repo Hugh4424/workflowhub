@@ -81,6 +81,8 @@ const observedRoute=url=>{const parsed=parseUrl(url);return parsed?parsed.pathna
 // Identity is compared, never echoed. Each coordinate the page can report is
 // checked against its declaration before any dimension collects; a coordinate
 // with no observation source stays unknown and is never counted as verified.
+// A differing state parameter is not a stop here: the orchestrator records it
+// as state_observation mismatch and keeps the report incomplete.
 const unknownReason={
   workspace:'the page reports no filesystem origin for its bytes; the collector cwd is a different fact',
   object_version:'the pinned object hash is derived by the orchestrator from served bytes; the page exposes no version stamp',
@@ -156,7 +158,7 @@ export async function collectWith(config,env,observe) {
     const sessionId=attached.sessionId,call=(method,params={})=>cdp.call(method,params,sessionId);
     const observed=await evaluate(call,"({url:location.href,viewport:innerWidth+'x'+innerHeight+'@'+(devicePixelRatio||1)})");
     if(!observed||typeof observed.url!=='string'||typeof observed.viewport!=='string'||!/^\d+x\d+@[0-9.]+$/.test(observed.viewport))throw fail('TOOL_ERROR','Receiver identity observation missing');
-    const identity=compareIdentity(object,{url:observed.url,viewport:observed.viewport}),mismatch=identity.mismatches[0];
+    const identity=compareIdentity(object,{url:observed.url,viewport:observed.viewport}),mismatch=identity.mismatches.find(row=>row.path!=='state');
     if(mismatch)throw fail('IDENTITY_MISMATCH',mismatch.path+': declared '+JSON.stringify(mismatch.declared)+' but observed '+JSON.stringify(mismatch.observed));
     object.viewport=observed.viewport;
     await observe({cdp,call,sessionId,target,doc,env,config,evaluate:expression=>evaluate(call,expression),isDisconnected:()=>disconnected});
@@ -249,7 +251,7 @@ export async function ownedEgoContext(page,config,env) {
   if(!Number.isFinite(viewport.width)||!Number.isFinite(viewport.height)||!Number.isFinite(viewport.dpr)||viewport.dpr<=0)throw fail('TOOL_ERROR','Registered viewport coordinates invalid');
   const object={...Object.fromEntries(Object.entries(identityKeys).map(([key,name])=>[key,env[name]])),state:config.state,viewport:viewport.width+'x'+viewport.height+'@'+viewport.dpr,engine};
   const identity=compareIdentity({...object,viewport:config.viewport},{url,viewport:object.viewport});
-  if(identity.mismatches.length)throw fail('IDENTITY_MISMATCH','Owned page '+identity.mismatches[0].path+' differs from declaration; no navigation issued');
+  const blocking=identity.mismatches.filter(row=>row.path!=='state');if(blocking.length)throw fail('IDENTITY_MISMATCH','Owned page '+blocking[0].path+' differs from declaration; no navigation issued');
   const allowed=new Set(['egoAutomated.disable','Page.enable','Runtime.enable','Network.enable','Page.getFrameTree','Accessibility.enable','Accessibility.getFullAXTree']);
   const call=(method,params={})=>{if(!allowed.has(method))throw fail('TOOL_ERROR','Unsupported owned-page audit command: '+method);return page.cdp(method,params);};
   pinnedViewport={...viewport};
@@ -299,7 +301,7 @@ export async function collectOwnedEgoNavigation(context,timeoutMs=5000) {
     // from a collector that never reached the document. It is not a log message.
     const loaded=window.events.find(e=>e.method==='Page.loadEventFired');
     consoleDoc.items.push(collect(loaded,{window_id:window.windowId,loader_id:window.loaderId}));
-    return {console:consoleDoc,network:networkDoc,unreachable:false};
+    return {console:consoleDoc,network:networkDoc,unreachable:false,observation:window.observation};
   }catch(error){const kind=error.kind||'TOOL_ERROR';for(const value of [consoleDoc,networkDoc])addFailure(value,kind,error.message);return {console:consoleDoc,network:networkDoc,unreachable:kind==='UNREACHABLE'};}
 }
 

@@ -50,13 +50,13 @@ describe('review axes contract', () => {
     const a = calls.find(call => call.instruction.includes('role=red'));
     const b = calls.find(call => call.instruction.includes('role=blue'));
     expect(a).toBeDefined(); expect(b).toBeDefined(); expect(a.instruction).not.toBe(b.instruction);
-    expect(a.instruction).toContain('需求成立性'); expect(a.instruction).toContain('验收充分性');
-    expect(b.instruction).toContain('方案合理性'); expect(b.instruction).toContain('可执行性');
+    expect(a.instruction).toContain('方案成立吗'); expect(a.instruction).toContain('验收可判吗');
+    expect(b.instruction).toContain('范围越界吗'); expect(b.instruction).toContain('风险覆盖吗');
     expect(a.instruction).not.toContain('Do not add requirements'); expect(b.instruction).not.toContain('Do not add requirements');
     for (const call of calls) {
       const contract = call.files['contracts/build-plan.md'];
       expect(Object.entries(call.files).find(([path]) => path.includes('context_map'))?.[1]).toBe(BAD_PLAN);
-      for (const item of ['需求成立性', '验收充分性', '方案合理性', '可执行性', '锚点', '问题', '依据', '替代方案', '覆盖范围']) expect(contract).toContain(item);
+      for (const item of ['方案成立吗', '验收可判吗', '范围越界吗', '风险覆盖吗', '可执行性', '锚点', '问题', '依据', '替代方案', '覆盖范围']) expect(contract).toContain(item);
       expect(contract).toContain('authoring-contract.md');
       expect(call.instruction).toContain('recommendation'); expect(call.instruction).toContain('evidence');
     }
