@@ -11,8 +11,8 @@ import * as browserQaSession from '../../skills/isolated-browser-qa/scripts/brow
 const route='http://127.0.0.1:3100/audit',env={BROWSER_QA_ENGINE:'ego-lite',BROWSER_QA_EGO_SPACE_ID:'50'};
 // The page double is already an owned Ego page; selector state is synthetic so this transport test never probes the host's install registry.
 const ownedPageProbe=async()=>({appInstallation:'present',helperPath:'/private/tmp/c09-owned-ego-browser',running:true});
-function pageDouble(options={}){let loader='initial',buffer=[],count=0,consoleArmed=false;const calls=[];return{label:'p1',spaceId:50,calls,url:async()=>options.url||route,waitForSelector:async()=>{},async cdp(method){calls.push(method);assert(!method.startsWith('Target.'),'owned SDK must not enumerate/attach targets');if(method==='egoAutomated.disable')consoleArmed=true;if(options.notReady&&method==='Network.enable')throw Error('SDK control lost before ready');if(method==='Page.getFrameTree')return{frameTree:{frame:{id:'main',loaderId:loader}}};if(method==='Accessibility.getFullAXTree')return{nodes:[{nodeId:'1',role:{value:'main'},name:{value:'Audit'}}]};return{};},async evaluate(fn,args){assert.equal(typeof fn,'function');assert.equal(args.id,'design-source-read-v1');return[{selector:'html',viewport_observed:{width:options.width||1440,height:900},structure:{tag:'HTML',text:'audit'},rendered:{styles:{},box:{width:1440,height:900}},facts:{viewport:{width:options.width||1440,height:900,dpr:1},scroll:{scrollWidth:1440,clientWidth:1440},navigation:{url:route,ttfb:10,domContentLoadedEventEnd:20,loadEventEnd:30}}}];},async events(){if(options.lost&&count)throw Error('EGO_CONTROL_LOST');const events=buffer;buffer=[];return events;},async reload(){calls.push('reload');count++;loader='loader-'+count;buffer=[{method:'Page.frameNavigated',params:{frame:{id:'main',loaderId:loader}}},{method:'Runtime.executionContextCreated',params:{context:{id:count,auxData:{frameId:'main'}}}},{method:'Network.requestWillBeSent',params:{requestId:String(count),loaderId:loader,frameId:'main',type:'Document',request:{url:route,method:'GET',headers:{Authorization:'secret'}}}},{method:'Network.responseReceived',params:{requestId:String(count),loaderId:loader,type:'Document',response:{url:route,status:200}}},...(options.suppressConsoleUntilDisable&&!consoleArmed?[]:[{method:'Runtime.consoleAPICalled',params:{executionContextId:count,type:'log',args:[{type:'string',value:'secret'}]}}]),{method:'Page.loadEventFired',params:{timestamp:1}}];if(options.multiple)buffer.push({method:'Page.frameNavigated',params:{frame:{id:'main',loaderId:'another-loader'}}});}};}
-async function run(page,extra={}){const cwd=await mkdtemp(join(tmpdir(),'c09-owned-audit-'));await mkdir(join(cwd,'quality/evidence'),{recursive:true});const args=['--state','default','--viewport','1440x900','--out','quality/evidence/report.json','--workspace','/owned','--service','http://127.0.0.1:3100','--route',route,'--object-version','test-source-hash','--engine-session','ego-50-p1','--engine','ego-lite'];const result=await runPageAudit(args,{cwd,env,egoPage:page,probe:ownedPageProbe,windowTimeoutMs:100,...extra});return{result,cwd};}
+function pageDouble(options={}){let loader='initial',buffer=[],count=0,reads=0,consoleArmed=false;const calls=[];return{label:'p1',spaceId:50,calls,url:async()=>options.url||route,waitForSelector:async()=>{},async cdp(method){calls.push(method);assert(!method.startsWith('Target.'),'owned SDK must not enumerate/attach targets');if(method==='egoAutomated.disable')consoleArmed=true;if(options.notReady&&method==='Network.enable')throw Error('SDK control lost before ready');if(method==='Page.getFrameTree')return{frameTree:{frame:{id:'main',loaderId:loader}}};if(method==='Accessibility.getFullAXTree')return{nodes:[{nodeId:'1',role:{value:'main'},name:{value:'Audit'}}]};return{};},async evaluate(fn,args){assert.equal(typeof fn,'function');assert.equal(args.id,'design-source-read-v1');const readNumber=++reads;return[{selector:'html',viewport_observed:{width:options.width||1440,height:900},structure:{tag:'HTML',text:'audit'},rendered:{styles:{},box:{width:1440,height:900}},facts:{viewport:{width:options.width||1440,height:900,dpr:1},scroll:{scrollWidth:1440,clientWidth:1440},navigation:{url:options.stateObservationUrl&&readNumber===2?options.stateObservationUrl:(options.url||route),ttfb:10,domContentLoadedEventEnd:20,loadEventEnd:30}}}];},async events(){if(options.lost&&count)throw Error('EGO_CONTROL_LOST');const events=buffer;buffer=[];return events;},async reload(){calls.push('reload');count++;loader='loader-'+count;buffer=[{method:'Page.frameNavigated',params:{frame:{id:'main',loaderId:loader}}},{method:'Runtime.executionContextCreated',params:{context:{id:count,auxData:{frameId:'main'}}}},{method:'Network.requestWillBeSent',params:{requestId:String(count),loaderId:loader,frameId:'main',type:'Document',request:{url:route,method:'GET',headers:{Authorization:'secret'}}}},{method:'Network.responseReceived',params:{requestId:String(count),loaderId:loader,type:'Document',response:{url:route,status:200}}},...(options.suppressConsoleUntilDisable&&!consoleArmed?[]:[{method:'Runtime.consoleAPICalled',params:{executionContextId:count,type:'log',args:[{type:'string',value:'secret'}]}}]),{method:'Page.loadEventFired',params:{timestamp:1}}];if(options.multiple)buffer.push({method:'Page.frameNavigated',params:{frame:{id:'main',loaderId:'another-loader'}}});}};}
+async function run(page,extra={},state='default',auditRoute=route){const cwd=await mkdtemp(join(tmpdir(),'c09-owned-audit-'));await mkdir(join(cwd,'quality/evidence'),{recursive:true});const args=['--state',state,'--viewport','1440x900','--out','quality/evidence/report.json','--workspace','/owned','--service','http://127.0.0.1:3100','--route',auditRoute,'--object-version','test-source-hash','--engine-session','ego-50-p1','--engine','ego-lite'];const result=await runPageAudit(args,{cwd,env,egoPage:page,probe:ownedPageProbe,windowTimeoutMs:100,...extra});return{result,cwd};}
 test('existing audit accepts its already-owned SDK page without raw endpoint or target enumeration',async()=>{const page=pageDouble(),{result,cwd}=await run(page);assert.equal(result.code,0,JSON.stringify(result));const report=JSON.parse(await readFile(join(cwd,'quality/evidence/report.json'),'utf8'));assert.equal(report.object.engine,'ego-lite');assert.equal(report.object.viewport,'1440x900@1');assert.equal(report.criteria.length,8);assert.equal(report.summary.overall,'incomplete');assert(page.calls.indexOf('Network.enable')<page.calls.indexOf('reload'));assert.equal(page.calls.filter(x=>x==='reload').length,4);const network=result.observations.network;assert(network.items.some(x=>x.response?.status===200));assert(network.items.every(x=>x.window_id&&x.loader_id));assert(!JSON.stringify(result).includes('Authorization'));assert(!JSON.stringify(result).includes('secret'));});
 test('owned Ego console stream enables the documented SDK event path before Runtime',async()=>{
   const page=pageDouble({suppressConsoleUntilDisable:true}),{result}=await run(page);
@@ -21,6 +21,50 @@ test('owned Ego console stream enables the documented SDK event path before Runt
   const disable=page.calls.indexOf('egoAutomated.disable'),runtime=page.calls.indexOf('Runtime.enable'),reload=page.calls.indexOf('reload');
   assert(disable>=0&&runtime>disable&&reload>runtime,page.calls.join(' -> '));
   assert(!JSON.stringify(result.observations.console).includes('secret'),'console message text remains redacted');
+});
+test('owned audit records a declared but unobservable state as unknown, never as observed',async()=>{
+  const {result,cwd}=await run(pageDouble(),{},'dialog-open');
+  assert.equal(result.code,0,JSON.stringify(result));
+  const report=JSON.parse(await readFile(join(cwd,'quality/evidence/report.json'),'utf8'));
+  assert.equal(report.object.state,'dialog-open');
+  assert.deepEqual(report.object.state_observation,{declared:'dialog-open',observed:null,result:'unknown'});
+  assert(report.coverage_limits.some(limit=>limit.includes('状态未观测')&&limit.includes('页面任务作者')&&limit.includes('采集执行者')));
+  assert.equal(report.summary.overall,'incomplete');
+});
+test('owned audit marks a URL-observable matching state as observed',async()=>{
+  const stateRoute=route+'?state=dialog-open';
+  const {result,cwd}=await run(pageDouble({url:stateRoute}),{},'dialog-open',stateRoute);
+  assert.equal(result.code,0,JSON.stringify(result));
+  const report=JSON.parse(await readFile(join(cwd,'quality/evidence/report.json'),'utf8'));
+  assert.deepEqual(report.object.state_observation,{declared:'dialog-open',observed:'dialog-open',result:'match'});
+  assert(!report.coverage_limits.some(limit=>limit.includes('状态未观测')));
+});
+test('owned audit records a mismatching URL state as mismatch, never as observed',async()=>{
+  const stateRoute=route+'?state=closed';
+  const {result,cwd}=await run(pageDouble({url:stateRoute}),{},'dialog-open',stateRoute);
+  assert.equal(result.code,0,JSON.stringify(result));
+  const report=JSON.parse(await readFile(join(cwd,'quality/evidence/report.json'),'utf8'));
+  assert.deepEqual(report.object.state_observation,{declared:'dialog-open',observed:'closed',result:'mismatch'});
+  assert(report.coverage_limits.some(limit=>limit.includes('状态未观测')&&limit.includes('"closed"')));
+  assert.equal(report.summary.overall,'incomplete');
+});
+test('owned audit keeps a missing post-reload observation distinct from an observed URL without state',async()=>{
+  const {result,cwd}=await run(pageDouble({lost:true}),{},'dialog-open');
+  assert.equal(result.code,0,JSON.stringify(result));
+  const report=JSON.parse(await readFile(join(cwd,'quality/evidence/report.json'),'utf8'));
+  assert.equal(report.object.state_observation.result,'unknown');
+  assert.match(report.object.state_observation.reason,/EGO_CONTROL_LOST/);
+  const stateLimit=report.coverage_limits.find(limit=>limit.includes('状态 URL 未读到'));
+  assert(stateLimit,'missing observation must be named as an unread URL');
+  assert(stateLimit.includes('EGO_CONTROL_LOST'));
+  assert(!report.coverage_limits.some(limit=>limit.includes('无 state 参数')));
+});
+test('owned audit takes observed state from the reloaded navigation URL, not the declared route',async()=>{
+  const {result,cwd}=await run(pageDouble({stateObservationUrl:route+'?state=closed'}),{},'dialog-open');
+  assert.equal(result.code,0,JSON.stringify(result));
+  const report=JSON.parse(await readFile(join(cwd,'quality/evidence/report.json'),'utf8'));
+  assert.deepEqual(report.object.state_observation,{declared:'dialog-open',observed:'closed',result:'mismatch'});
+  assert(report.coverage_limits.some(limit=>limit.includes('状态未观测')&&limit.includes('"closed"')));
 });
 test('wrong route rejects before navigation',async()=>{const page=pageDouble({url:route+'-wrong'}),{result}=await run(page);assert.notEqual(result.code,0);assert.equal(page.calls.includes('reload'),false);});
 test('wrong viewport rejects before navigation',async()=>{const page=pageDouble({width:1280}),{result}=await run(page);assert.notEqual(result.code,0);assert.equal(page.calls.includes('reload'),false);});

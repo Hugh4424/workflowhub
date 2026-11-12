@@ -51,6 +51,17 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms));
 const exists=path=>access(path).then(()=>true,error=>{if(error.code==='ENOENT')return false;throw error;});
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 const routeMatches=(url,route)=>{try{const parsed=new URL(url);return /^https?:\/\//.test(route)?parsed.href===new URL(route).href:parsed.pathname+parsed.search+parsed.hash===route;}catch{return false;}};
+// A declared state is an audit coordinate, not an observation. Only the state
+// parameter carried by the observed page URL can support a match; a missing or
+// differing parameter stays unknown/mismatch and never inherits the declaration.
+export function stateObservation(declared,observedUrl,unavailableReason=null){
+  let observed=null;
+  try{observed=new URL(observedUrl).searchParams.get('state');}catch{}
+  const result=observed===null?'unknown':String(declared)===observed?'match':'mismatch';
+  // A failed URL read is not the same fact as an observed URL without a state
+  // parameter; keep the reason so the report cannot attribute it to the page.
+  return {declared:declared??null,observed,result,...(unavailableReason?{reason:String(unavailableReason)}:{})};
+}
 function launch(script,config,env,cwd){
   if(!existsSync(script))throw fault('E_COLLECT_NOT_STARTED',script,'Collector script is missing',2);
   const child=spawn(process.execPath,[script,'--cdp-url',config.endpoint,'--out',config.out,'--viewport',config.viewport,'--state',config.state],{cwd,env,stdio:['ignore','pipe','pipe']});
@@ -103,6 +114,12 @@ export async function runNavigationWindow({endpoint,route,config,env,cwd,dir,col
     await cdp.call('Page.reload',{},sessionId);
     while(!loaded){if(disconnected)break;if(Date.now()>deadline)throw fault('E_COLLECT_TOOL_ERROR','window','Window load/finish timed out',2);await delay(10);}
     if(!disconnected)await delay(500);
+    let observedUrl=null,observedUrlError=null;
+    if(!disconnected)try{
+      const tree=await cdp.call('Page.getFrameTree',{},sessionId);
+      observedUrl=tree?.frameTree?.frame?.url??null;
+      if(observedUrl===null)observedUrlError='Page.getFrameTree returned no main-frame URL';
+    }catch(error){const base=String(error?.message??error?.code??'Page.getFrameTree failed');observedUrlError=error?.method&&!base.includes(error.method)?base+' ('+error.method+')':base;}
     await writeFile(join(dir,'finish'),'finish',{flag:'wx'});
     let finishTimer;
     try{await Promise.race([Promise.all(Object.values(jobs).map(j=>j.result)),new Promise((_,reject)=>{finishTimer=setTimeout(()=>reject(fault('E_COLLECT_TOOL_ERROR','window','Collector finish timed out',2)),timeoutMs);})]);}
@@ -112,6 +129,7 @@ export async function runNavigationWindow({endpoint,route,config,env,cwd,dir,col
       if(!loaderId||loaderId==='multiple')throw fault('E_COLLECT_IDENTITY_MISMATCH','window','Expected one observed main-frame loader',2);
       for(const dim of ['console','network'])for(const item of observations[dim].items)if(item.window_id!==windowId||item.loader_id!==loaderId)throw fault('E_COLLECT_IDENTITY_MISMATCH',dim,'Window/loader differs from the navigation original',2);
     }
+    return {observedUrl,observedUrlError};
   }catch(error){
     if((!disconnected&&!collectorLost)||error.exitCode!==undefined)throw error;
     const stopped=new Set();
@@ -190,11 +208,18 @@ async function collectAudit(values,selection,{env,cwd,runTask,windowTimeoutMs=50
   let owned;
   if(egoPage)try{owned=await ownedEgoContext(egoPage,config,local);}catch(error){throw fault(error.kind==='IDENTITY_MISMATCH'?'E_COLLECT_IDENTITY_MISMATCH':'E_COLLECT_NOT_STARTED','owned-page',error.message,2);}
   try{
-    let windowResult;
+    let windowResult,observedUrl=null,observedUrlError=null;
     if(owned){
       windowResult=await collectOwnedEgoNavigation(owned,windowTimeoutMs);
+      const observation=windowResult.observation;
+      observedUrl=observation?.facts?.navigation?.url??null;
+      if(observedUrl===null)observedUrlError=observation?'owned post-reload observation carried no navigation URL':((windowResult.console?.failures?.[0]??windowResult.network?.failures?.[0])?.detail??'owned post-reload observation missing');
       for(const dim of ['console','network']){observations[dim]=windowResult[dim];await writeFile(paths[dim],JSON.stringify(observations[dim])+'\n',{flag:'wx'});documentFailure(observations[dim],dim);}
-    }else windowResult=await runNavigationWindow({endpoint,route:values['--route'],config,env:local,cwd,dir,collectorRoot,timeoutMs:windowTimeoutMs,observations,paths});
+    }else{
+      windowResult=await runNavigationWindow({endpoint,route:values['--route'],config,env:local,cwd,dir,collectorRoot,timeoutMs:windowTimeoutMs,observations,paths});
+      observedUrl=windowResult?.observedUrl??null;
+      observedUrlError=windowResult?.observedUrlError??(windowResult?.unreachable?'navigation window lost CDP before the URL observation ('+(windowResult.code??'CDP_CONNECTION_CLOSED')+')':null);
+    }
     let interrupted=Boolean(windowResult?.unreachable)||Object.values(observations).some(doc=>doc.failures.some(f=>f.class==='UNREACHABLE'));
     for(const dim of ['overflow','perf','a11y']){
       if(interrupted)break;
@@ -221,12 +246,14 @@ async function collectAudit(values,selection,{env,cwd,runTask,windowTimeoutMs=50
     await writeFile(normPath,normBytes,{flag:'wx'});
     const normEvidence={ref:relative(evidenceRoot,normPath).split(sep).join('/'),sha256:sha(normBytes)};
     const criteria=applyNormFacts(mergeJudgments(input.criteria,observations,refs,{interrupted}),facts).map(c=>({...c,evidence:[...(c.evidence??[]),normEvidence,...(windowEvidence?[windowEvidence]:[])]})),coverage_limits=[...(input.coverage_limits??[])];
+    const state_observation=stateObservation(config.state,observedUrl,observedUrlError);
+    if(state_observation.result!=='match')coverage_limits.push(state_observation.reason?'状态 URL 未读到：'+state_observation.reason+'；报告未把声明状态呈现为已观测；由采集执行者恢复同一对象的 URL 观测后重跑':'状态未观测：页面 URL 的 query '+(state_observation.observed===null?'无 state 参数（hash 参数不计入观测）':'中 state 参数为 '+JSON.stringify(state_observation.observed)+'，与声明 '+JSON.stringify(state_observation.declared)+' 不符')+'；报告未把声明状态呈现为已观测；由页面任务作者或采集执行者提供可经 URL 观测的状态后重跑');
     if(interrupted)coverage_limits.push('采集失联：仅保留已观察；后续采集未执行，恢复同一对象后重跑');
     if(criteria.some(c=>c.state==='未测'))coverage_limits.push('存在未测检查项；退出 0 仅表示报告形状合法');
     if(owned)coverage_limits.push('溢出采集仅覆盖根元素 html 的 scrollWidth/clientWidth；未扫描后代或内部滚动容器，不能据此判全页布局无溢出');
     if(observations.perf?.items.some(i=>Object.values(i.perf?.nav??{}).some(value=>value.median==='unknown')))coverage_limits.push('导航性能未测：三次观测存在缺失，保原始unknown；由采集执行者恢复同一对象后补齐重跑');
     if(observations.perf?.items.some(i=>i.perf?.interaction.status==='unknown'))coverage_limits.push('交互性能未测：未提供动作或实际耗时缺失，不采信页面预置 measure');
-    const object={...Object.fromEntries(Object.entries(identityFlags).map(([flag,key])=>[key,values[flag]])),state:config.state,viewport:observations.console?.object.viewport??config.viewport,engine:selection.engine};
+    const object={...Object.fromEntries(Object.entries(identityFlags).map(([flag,key])=>[key,values[flag]])),state:config.state,state_observation,viewport:observations.console?.object.viewport??config.viewport,engine:selection.engine};
     if(selection.fallbacks.length)object.engine_fallback=Object.fromEntries(['from','to','reason','probe'].map(k=>[k,selection.fallbacks[0][k]]));
     const report={object,criteria,coverage_limits,summary:{overall:coverage_limits.length?'incomplete':criteria.some(c=>c.state==='失败')?'fail':'pass'}};
     const reportBytes=JSON.stringify(report)+'\n';
