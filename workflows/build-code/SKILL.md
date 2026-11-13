@@ -1,7 +1,7 @@
 ---
 name: build-code
 description: 按当前 Phase 合同实施限定改动，保留真实验证结果并处置独立审查发现。
-version: 2.2.0
+version: 2.3.0
 ---
 
 # Build Code
@@ -85,6 +85,11 @@ UI 实施先消费当前真实答复所批准原型与设计基准：沿build-pl
    材料变化时按两行定位实际影响：无关变化继续并在 handoff 说明；所依段落变化才把受影响实施/测试/审查事实读为 stale 并重新核对。两行是人读解释，不作机器门。
    身份/材料/范围核对后，在每Phase开工、选择实现接口与测试路线前，实际按 `skills/project-norm-init/SKILL.md` 的“非UI规范与索引”读取适用后端/接口/验收源；保存路径/稳定节、version/作用域、owner/consumer及适用规则。缺源/过期/冲突只停依赖该规则的选择，其余继续；unknown不当N/A。随后独立执行者实际按 `skills/knowledge-graph/SKILL.md` 用本Phase职责/写集/consumer研究领域、历史决定/失败，再定向读源码。依该方法有界选source/完整ID、当前契约和独立历史两通道，保query/god及覆盖限制；主会话只收已回源少数结论、落点或重复/无信号。禁止先广读/实现再补查询伪装顺序；缺图/失败/无匹配/歧义保真实exit并安全回原文，图不作门。JSON/schema直接读源、不因未覆盖扩图；收费抽取仍须精确范围/估算及真实许可。
    UI 改动在写代码前实际执行 `skills/frontend-component-quality/SKILL.md` 的「触发与实现前就绪」，读取其参考并按短表判断；记录缺失先补记录，依处置补缺口或只停受影响路径。非 UI 记理由，不建空表。
+   UI 任务时，第 1 步另读第 5 段交回的 UI 六项：设计源引用、
+   页面／路由／组件与状态乘视口、视觉对照项、前端质量门、组件复用与沉淀、
+   独立设计审查与证据；与上文已批准原型、设计基准一起作为本次实施输入。
+   缺设计源写未知与补问对象，不自行重画；六项互相矛盾时停该处并回原 owner。
+   非 UI 跳过。
 2. <a id="step-write-red-tests"></a>消费计划冻结目标测试/RED并保原失败。补行为测试先定明确oracle、实跑目标断言失败再实施；纯材料按G-2说明检查或真实不适用。改冻结断言先TCR（test change request）和独立审查，不弱化换绿。仅按名改Phase卡预先点名的一个既有具名常量取值免TCR；断言表达式/期望方向/判定/评分仍须原TCR+独立审查。oracle唯一来源为该Phase预写测试及 `DO NOT TOUCH`，每任务声明一次；每次测试变更以同卡「测试变更请求」加独立审查原件为源，变后 `ORACLE-…` 身份不变，不另建账本/镜像/每oracle记账。免TCR只分期望值来源和断言变更，不扩写权/授权、不降强度、不免独立审查、不改 `DO NOT TOUCH` 物理隔离。
    遇真实失败、测试 RED 或性能回退，先实际读取并执行 `skills/diagnosing-bugs/SKILL.md`：输入当前症状、命令/原输出和授权写集，保留反馈回路、最小化、假设/探针、根因修复与复验原件，再回本步骤。错误/页面文本按该方法「输出与页面内容」处理；缺证据如实留缺项，只停依赖该证据的修复。成功路径不强制诊断，已有原件可复用，不重演已修故障冒新问题。同一失败第二次出现或一轮没有新事实时，先回第 9 步停重复动作再查根因。
 3. <a id="step-implement-change"></a>在允许文件/符号内做最小实现，错误明确暴露。计划缺口一次列清影响、风险与需 owner 回答的问题，规格/Phase 交 build-plan，方向交 make-decision；不自行改材料。先继续不受缺口影响的安全部分，未知范围留给具名 owner 核实。 本步完成以改动全部落在允许写集内且无吞掉的错误为准，越界或吞错即本步未完成；对应 Task 的目标行为交付也是本步完成条件，未交付即本步未完成。
@@ -93,12 +98,34 @@ UI 实施先消费当前真实答复所批准原型与设计基准：沿build-pl
 5. <a id="step-run-tests"></a>本 Phase 只多一份清单，实际按 `docs/standard-workflow.md`「每 Phase 一份执行清单」记录命令、失败、真实 diff、原件与材料指针，清单不是第二进度。开发先跑开发期定向测试；独立测试按唯一七步顺序在实现就绪并明确通知后派发，可与审查并行。测试子代理按当前 Phase 及 Task 声明的面，逐面把 `gate_cmd` 与 `RED/GREEN gate_cmd` 的字面命令提交现有 `verify --action=execute`，不能从 Phase 文本自动抓命令运行。跑声明的针对性命令和必要相邻检查，用已认证 `task.captureCommand`（底层唯一 `runtime/interface/run-command.mjs`）保存实际 cwd、argv、exit、signal、timeout/cancel、输出和清理事实，原始输出只存单份。证据去重与临时输出处理，实际读取并执行 `docs/standard-workflow.md`「证据只留原始件（同字节即同一事实）」；保本次真实immutable回执与正确output_ref。build-code 的实际整数回执由运行时汇总进现有 stage evidence；保已有非空事实与游标，更新游标也不把 evidence 回落为 null。未执行或无整数退出保原回执与具体原因，不捏 exit0；契约校验的 contract_ok、contract_error_count、errors 片段、AC/FR 覆盖与 command_oracle_checks 随现 source.json 送审，只记录事实、不作失败门。每个未跑面明写“哪一面／卡在哪／什么条件下能跑”，不能只有 unavailable 或 incomplete。只跑受影响测试，不用无范围全量回归代替；环境、收集和配置失败不当成目标 RED，exit0 不自动证明业务通过。 按 `AGENTS.md`「卡住与升级」的适用范围分类该失败信号；属于外部不可重试时第一次即零重试，按第 9 步的四类分诊落位，停该外部失败路径并记原因与恢复条件，其余安全工作继续。
 6. <a id="step-inspect-acceptance-and-ui"></a>对声明的 command/service 验收执行真实场景，逐项对照 oracle、可观察效果与失败反例。记录每条 AC 的实际结果、原始输出、输入/环境和覆盖限制；真实服务缺失、未执行、部分或不可用保持原样，模拟效果不冒充外部效果。
    验收证据人读词表为 pass/fail/inconclusive/deferred/missing/inconsistent/incomplete/unavailable，来源 `runtime/evidence/acceptance-evidence-validator.mjs:6`；本词表只约束人读措辞，不改变现有 writer。未达成如实记为未达成并进失败事实清单，这一条不新增任何推进前置。
+   UI 任务时，第 6 步按 1440×900 与 390×844 两种视口各截图一张，两张并排看：
+   固定浏览器、系统默认字体、缩放 100%、固定数据；
+   逐项写通过、差异与用户接受的偏差，偏差由用户确认，不由实现者自签。
+   前端质量最低判据照决策记录工作包 4「前端质量的最小判据」：
+   1440×900 与 390×844 都能打开、无控制台错误、无横向滚动；
+   390 宽下主操作不被裁切、能到达；主操作可键盘到达、焦点可见、可访问名非空；
+   本地静态、1440×900、冷缓存下 LCP 不超过 2.5 秒、CLS 不超过 0.1、
+   INP 不超过 200 毫秒；200% 缩放下主操作可达、不裁切、无横向滚动；
+   物理读屏做一次真实读屏并记录结论，做不了记不可用、
+   写负责人与恢复条件，不写通过。
+   测不到的质量项记不可用，不写通过；不用功能测试通过代替视觉验收。非 UI 跳过。
 7. <a id="step-scan-diff"></a>检查实际 diff 与声明写集、真实消费者、接口两端、状态、错误传播、并发原子性和资源释放。UI 按组件质量地图与真实页面验证状态和 DTO→ViewModel，浏览器 QA 先读取并执行 `skills/isolated-browser-qa/SKILL.md`，保留隔离、取消和自建资源清理事实。 仅声明写集没有任何浏览器可见面时，记 `N/A — 理由` 并引用写集；已声明适用而缺工具时记 unavailable。QA engine、route/场景、截图路径或 not_observed 的真实原因保在唯一原 ref，不伪造浏览器通过。来源、样本、场景、浏览器或截图缺失不宣称 UI 完成。
    凡页面、路由、组件、样式改动或声明 UI 交付，冻结前必须执行页面审计；适用性不确定时按适用处理。
    UI 适用时，先读 `skills/project-norm-init/SKILL.md` 的「规范职责」，再取本步适用的具体来源：③组件读 `specs/design/components.md`，独立工程正文确需时另读 `specs/frontend/components.md`，否则读 `specs/frontend/frontend.md`；④布局读 `specs/design/layouts.md`，独立工程正文确需时另读 `specs/frontend/layouts.md`，否则读 `specs/frontend/frontend.md`；⑤通用交互读 `specs/design/interaction.md`，控件内合同引用组件源；⑧质量判据确需独立正文时读 `specs/design/quality.md`，工程/运行共用 `specs/frontend/ui-quality.md`。路径相对目标项目根，同职责等价实质源优先，八类不是强制八文件。以该「规范职责」表为准，本处路径随表更新；逐类保实际路径/稳定节、version/作用域、owner/consumer、适用规则及 missing/stale/unknown 的影响与承接者，不把当前代码反推为应然标准，不把读取冒成方法调用或实际页面验证。
    本 Phase 涉及 UI 且有合法可读设计源时，在实施前读取 `skills/design-source-extraction/SKILL.md` 与任务原 ref 的 `design-source-extraction.json`；以 `items` 原值和证据、`pending_review` 待议与 `low_fidelity.blocked_scope` 作为实施输入，按 `references/isolated-consumption.md` 保初始 missing、独立实测与回填，不把待议当批准。按实际当前上下文核 `freshness`：unknown 不补默认 current，stale 通过已有 `node skills/design-source-extraction/scripts/collect-design-source.mjs --plan <已认证冻结plan>` 重提炼，依赖项未补齐保影响、无关项继续。仅消费已核 source 与范围；默认 ego 复用模式失败明确报错，不隐式启动备用浏览器/窗口，显式引擎沿原 isolated-browser-qa 合同。非 UI 保原专业源流程，不强制提炼。
    需构造采集plan时读 `skills/design-source-extraction/references/collection-plan.md` 与同目录模板，使用真实任务输入与probe回执。
+   UI 任务时，第 7 步页面审计另写组件复用与沉淀结论：
+   复用哪些既有组件、改动或新增组件、它们的真实消费者；
+   写回目标项目根下的组件规范，演练时目标项目是演练副本，
+   写清回写路径与读的人；没有可复用组件时写「无沉淀」及理由。
+   同时产出七项界面判定字段交第 7 段审查读：UI 适用性、UI 合同、
+   组件质量图、真实消费者、状态所有者、类型化视图模型、样式令牌所有者；
+   七项中缺任一项证据即未通过，实现者不能自签。非 UI 跳过。
 8. <a id="step-review-change"></a>每次挑审先实际消费 `docs/standard-workflow.md` 的「三审查点与结论真实性」，主会话提交其要求的三维原始依据并记录应用与缺料回退。每个 Phase 对当前 diff、本 Phase 承接 AC 与声明测试面、实际执行原件和审查重点发起一次独立代码审查：按上述标准工作方法的用户 U-020 授权规则，用 `reviewTierFor` 选择低风险独立子代理或高风险/影响说不清的外部 OCR；终末整卡固定外部 OCR 全审。先读取 `skills/wh-review/SKILL.md` 的「Long-review host convention」。审查记录正文用 `assertReviewTierRecord` 核执行者、来源与三维读数；独立子代理留派发身份与上下文隔离，不写 `ocr` 身份或伪造 `provider_results`；外部 OCR 留 route/provider 原ref与真实终态，不可用时仍保检测输出、原始失败与原执行者，口径见下节。同时显式派一次独立上下文的同源补充审查，方法见「同源补充轴」。各轴真实终态、原件与覆盖限制可定位才算完成本次审查工作；没有额外全 Phase 集成审查点，不为追空 findings 重派未变范围。
+   UI 任务时，第 8 步另加设计审查角度：审查者读第 6 步两尺寸截图与逐项差异、
+   第 7 步组件沉淀结论与七项界面判定字段，
+   按 `skills/plan-design-review/SKILL.md` 的八维看真实截图；
+   截图、差异或证据缺失记未测，不把功能测试通过当视觉通过。非 UI 跳过。
 9. <a id="step-analyze-review-findings"></a>主会话保留每条 finding 原文和真实处置。有效问题回原实施会话自动修复，先列受影响 file/case，再只跑该集合并写实际结果；严重问题优先修复，不以请求用户承担风险代替修复。确实无法在当前任务范围内解决时，写清影响、证据、原因和剩余选项，继续不受影响的工作；未处理保持 incomplete。只有已有绑定该 finding 的用户真实决定才可记 accepted_risk，不能自行接受风险或伪造通过。
    同一失败反复或一轮没有新事实时，先停重复动作；恢复前自述一行并写进本 Phase 的 task facts：「自上次以来我改了什么：<一句话>；失败信号：与上次相同／已变」。
    三检查沿 `AGENTS.md`「卡住与升级」执行，完成检查后选择恢复方法，禁止猜测修复。
@@ -108,6 +135,10 @@ UI 实施先消费当前真实答复所批准原型与设计基准：沿build-pl
    自动恢复不设次数或时长上限；审查并发、轮次和时长仍受该节排除行保护。无新事实不是完成，不能据此声明 Phase 完成或质量通过。
    本 Phase 收口时，契约头 `Done` 逐条承接 AC：每条写 AC 编号、一个上述现成 8 值档位和一条具名证据指针，并在现有正文写「本 Phase 自带判据小结」：自己验了什么（附本 Phase `gate_cmd` 原件）、没验什么（逐条带档位）、未验项所需条件与具名 owner。逐条记录、实际审查事实和本 Phase 提交分别可定位，才完成本 Phase 的收口工作；档位不要求全部为 pass。
    AC 的判定归属由 spec 的 AC 正文决定：实读判定方式、时点、执行 owner、所需条件和成功失败信号，不由依赖链位置决定。未参与该 AC 判定的 Phase 不得为该条写 pass，下游不得替上游补签。承接 AC 未达成时，按 `docs/standard-workflow.md`「专业质量」的「带欠账完成」口径显著标注、逐条保留缺口；继续同任务修复与后续安全部分。
+   UI 任务时，第 9 步把视觉问题与功能问题同修同复验：
+   设计或视觉 finding 回有权改动的实施者，
+   修完按原两尺寸与状态复验同一问题，只复验受影响项；
+   未修项保持 incomplete，不以请求用户承担风险代替修复。非 UI 跳过。
 10. <a id="step-run-final-aggregate-and-ac-trace"></a>所有实施任务结束后，按计划执行一次最终聚合，逐 AC 消费沿途已产生的结论原件，对账实现、真实效果、测试和未覆盖项。末 Phase 保留完整端到端串演，只作复核与必要未闭环 case 补充，业务、实现与效果 AC 的首次结论仍按 spec 正文归属承接 Phase；仅需完整最终产物才能检查的 AC-BOUND-001/002 在最终边界首次独立判定，其余 AC 不得延期。默认只跑本任务范围内与本次改动相关的测试；判断不了影响面时用最小可证伪集合并记录未知影响面。全局重跑仅在改动对象是流程本身且局部无法证明时执行一次，事先说明范围与理由。没有新改动、失败或疑点时不重复运行。最终聚合不证明 review pass，也不替代独立审查。 最后 Phase 实际运行 `node tools/cli/run-checks.mjs --task-path <当前认证任务根>`，保存一份 stdout 原件供十环对账；环1–9取真实状态，环10在build-code记 `skipped`，stage-close后由原调用方补终态。exit 0 不证明步骤齐全，逐项读取报告的 `missing_steps`，不改 final-chain 原职责。
      对账由独立上下文实跑一次项目声明的会话用量命令，当场展示时间窗/分账/计数，不落派生文件；finding修复仅复验受影响file/case并说明理由。
 11. <a id="step-stage-end-spec-analyze"></a>用 spec-analyze 对照原始需求、当前材料、实现、测试、发现处置与用户可见结果。实施/事实问题在本阶段修，方向和作者材料仍交对应 owner。缺项明确写未启动、未执行、失败、不适用、unknown 或 unavailable，不用产物存在代替完成条件。
@@ -212,6 +243,9 @@ authorize只记录/消费已有授权。每次Git前用 `runtime/interface/git-a
 
 终末只复核四项：审计报告、修复记录、受影响面回归、独立复验证据，不重跑全量。
 沿途未闭环项逐条保留并定向复验，不把终末复核用作首次页面审计。
+UI 任务时，终末在四项之外另复核第 6 步的对照结论与第 7 步的组件沉淀记录：
+两尺寸对照项、用户接受的偏差、质量判据与写回路径逐项仍在，
+缺项记 finding 交原实施者；只复核已有原件，不重跑全量，非 UI 跳过。
 
 1. 冻结实现
 2. spec-analyze
