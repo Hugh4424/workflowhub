@@ -82,6 +82,13 @@ const FROZEN_SENTENCES = [
   '缺任一项即记发现、不算通过',
 ];
 
+// The block names its three stages and excludes the direction track, so a
+// reader cannot carry the six questions into make-decision's four questions.
+const SCOPE_SENTENCES = [
+  '仅写需求、排阶段、写代码三处审查',
+  '方向审查（make-decision 四问）不加 UI 问',
+];
+
 const read = path => readFileSync(resolve(root, path), 'utf8');
 const cache = new Map();
 const gitShow = (commit, path) => {
@@ -132,6 +139,9 @@ function checkMethod(method) {
   }
   for (const sentence of FROZEN_SENTENCES) {
     if (!block.includes(sentence)) gaps.push(`证据冻结缺：${sentence}`);
+  }
+  for (const sentence of SCOPE_SENTENCES) {
+    if (!block.includes(sentence)) gaps.push(`阶段范围缺：${sentence}`);
   }
   if (!block.includes('不能自签')) gaps.push('七项判定字段用法缺：不能自签');
   for (const name of UI_SEVEN) if (!block.includes(name)) gaps.push(`七项界面判定字段缺：${name}`);
@@ -326,6 +336,14 @@ describe('ui-stage-review', () => {
     expect(changed).not.toBe(legal.method);
     const gaps = checkMethod(changed);
     expect(missing(gaps, '证据冻结缺：缺任一项即记发现、不算通过'), `缺口：${gaps.join('；')}`).toBe(true);
+  });
+
+  test('内存副本删掉方向审查排除句，断言必须变红', () => {
+    const legal = fixture();
+    const changed = legal.method.replace('方向审查（make-decision 四问）不加 UI 问', '');
+    expect(changed).not.toBe(legal.method);
+    const gaps = checkMethod(changed);
+    expect(missing(gaps, '阶段范围缺：方向审查（make-decision 四问）不加 UI 问'), `缺口：${gaps.join('；')}`).toBe(true);
   });
 
   test('内存副本删掉一问的适用阶段，断言必须变红', () => {

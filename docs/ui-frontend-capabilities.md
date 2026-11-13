@@ -25,19 +25,20 @@
 
 ### 状态依据（初值，供第 9 段对账）
 
+以下按 P1 时点写初值；P9 对账后的事实以本表「当前状态」格与括注为准，行内另写「P9 对账后：…」的以该句为准。
 初值只按仓内真实路径与真实读取处写；核不到的一律写未接线或仓外，不凭印象写已接线。
 
-- C01 部分：排阶段要求按 `skills/project-norm-init/SKILL.md` 读取（`workflows/build-plan/SKILL.md:45`、`:51`），且 `workflows/build-plan/skill-deps.yaml:42` 有 name 登记；写代码只在方法里要求读（`workflows/build-code/SKILL.md:86`、`:98`、`:230`），`workflows/build-code/skill-deps.yaml` 没有 name 条目，只有第 52 行注释；定方向在 `workflows/make-decision/SKILL.md:302` 写“跳过”，其 `skill-deps.yaml` 无该条目。缺写代码阶段的包登记，故不写已接线。
-- C02 部分：`skills/knowledge-graph/SKILL.md` 在定方向、写需求、排阶段、写代码都有读取。与决定 9（`decision-log.md:702`）的偏差：决定 9 把阶段消费者写作「定方向调研、台账」，本行按仓内读取事实另列写需求、排阶段、写代码开工，其中「台账」就是本表；承接仍记部分承接：调研使用。缺「两次具名真实任务」的再用闭环证据。
+- C01 部分：排阶段在 `workflows/build-plan/SKILL.md` 的「方法」第 5 步（UI 就绪）要求按 `skills/project-norm-init/SKILL.md` 读取，且 `workflows/build-plan/skill-deps.yaml` 有 name 条目；写代码在 `workflows/build-code/SKILL.md` 的「方法」第 1 步与第 7 步（UI 适用时「规范职责」）要求读，`workflows/build-code/skill-deps.yaml` 没有 name 条目，只有注释；定方向在 `workflows/make-decision/SKILL.md` 的「使用技能与执行分工」表把 `project-norm-init` 列为“跳过”，其 `skill-deps.yaml` 无该条目。缺写代码阶段的包登记，故不写已接线。
+- C02 部分：`skills/knowledge-graph/SKILL.md` 在定方向、写需求、排阶段、写代码都有读取。与决定 9（`decision-log.md`「决定 9 — 能力台账逐项有消费者与验收」）的偏差：决定 9 把阶段消费者写作「定方向调研、台账」，本行按仓内读取事实另列写需求、排阶段、写代码开工，其中「台账」就是本表；承接仍记部分承接：调研使用。缺「两次具名真实任务」的再用闭环证据；P9 对账后：已完成一次真实采用（`quality/evidence/rehearsal/2026-11-13-followup/c02-adoption.md`），仍缺第二次。
 - C03 部分：`skills/frontend-component-quality/SKILL.md` 在写代码与排阶段有读取；`skills/wh-review/SKILL.md` 没有读到该方法，缺审查段。
 - C04 已接线：`skills/design-source-readiness/SKILL.md` 与 `skills/design-source-extraction/SKILL.md` 在定方向与排阶段有读取。
 - C05 部分：`skills/frontend-prototype-render/SKILL.md` 与 `skills/plan-design-review/SKILL.md` 在定方向与排阶段有读取；`workflows/build-prd/SKILL.md` 没有读到，缺写需求段。
 - C06 已接线：写代码阶段同时读 `skills/project-norm-init/SKILL.md` 与 `skills/frontend-component-quality/SKILL.md`。
 - C07 部分：`skills/frontend-testing/SKILL.md` 在写代码与终末有读取；审查段没有读到，缺审查段。
-- C08 部分：`skills/norm-sync/SKILL.md` 在写代码与排阶段有读取；台账本段才建，下一个任务读取新版还没演练。
+- C08 部分：`skills/norm-sync/SKILL.md` 在写代码与排阶段有读取；台账本段才建。P9 对账后：已完成一次真实读取（`quality/evidence/rehearsal/2026-11-13-followup/c08-read.md`），仍缺下一个真实任务采用新版。
 - C09 仓外：原卡的双路径与六指标交付在仓外原任务，仓内没有对应产物路径。
 - C10 仓外：原卡的发布包、接入脚本与兼容矩阵在仓外原任务；仓内只有技能发行件，不是本卡的发布包。
-- C11 未接线：C11 关闭件在仓外原任务；第 8 段新建的 C11 示例目录当前不存在，入库未发生。
+- C11 未接线（P1 时点）：C11 关闭件在仓外原任务；第 8 段计划新建的 C11 示例目录当时尚未入库。P9 对账后：第 8 段已入库 `docs/examples/c11-ui/`，v15 可打开、`delivery.sha256` 12 行 OK，状态见上表「已接线」。
 
 ## PRD 漂移映射
 
