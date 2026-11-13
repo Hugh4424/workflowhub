@@ -48,6 +48,12 @@ skills:
   - name: stage-close
     path: skills/stage-close/SKILL.md
     trigger: small_or_normal_physical_delivery_after_implementation_and_applicable_review
+  - name: design-source-readiness
+    path: skills/design-source-readiness/SKILL.md
+    trigger: make_decision_step_one_ui_design_source_readiness
+  - name: frontend-prototype-render
+    path: skills/frontend-prototype-render/SKILL.md
+    trigger: make_decision_step_one_ui_no_draft_prototype_handoff
 runtime_capabilities:
   - id: node
     kind: cli
