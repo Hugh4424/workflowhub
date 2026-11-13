@@ -65,7 +65,7 @@
         }
       ],
       "method_anchor": "step-conditional-ui-readiness",
-      "requires_user_reply": false
+      "requires_user_reply": true
     },
     {
       "step_id": 6,
@@ -83,7 +83,7 @@
     {
       "step_id": 7,
       "step_slug": "testing-system-blueprint",
-      "observable_result": "分组：测试与验证设计；每条验收按 SKILL.md#设计每个 Phase 的验收 写成一段，风险、场景、oracle、针对性命令、原始证据位置和覆盖限制可读；行为RED只认目标断言真实失败。 判定消费：SKILL.md#方法 第7/8步；原件：Phase卡、checkAcceptanceObject实际输入/返回、目标RED或G2原件。",
+      "observable_result": "分组：测试与验证设计；每条验收按 SKILL.md#设计每个 Phase 的验收 写成一段，风险、场景、oracle、针对性命令、原始证据位置和覆盖限制可读；行为RED只认目标断言真实失败。 判定消费：SKILL.md#方法 第7/8步；原件：Phase卡、checkAcceptanceObject实际输入/返回、目标RED或G2原件。 UI Phase 另写六项可判 UI 验收：设计源引用、页面／路由／组件与状态乘视口、视觉对照项、前端质量门、组件复用与沉淀、独立设计审查与证据（详见 Phase 模板六项段）；非 UI 跳过。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
