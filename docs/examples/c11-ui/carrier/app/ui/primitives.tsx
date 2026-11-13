@@ -1,16 +1,17 @@
 // Minimal copy of PaperBuilder frontend/src/ui/primitives.tsx.
-// Kept the five shared primitives the carrier consumes (AsyncStatePanel, Metric,
-// UiStatusBadge, UiAction, UiLineage) plus the local `classes` helper.
+// Kept the four shared primitives the carrier consumes (Metric, UiStatusBadge,
+// UiAction, UiLineage) plus the local `classes` helper.
 // Removed UiTable, UiDialog, UiDialogLoading and UiDrawer, together with their
 // ../modal-focus imports; no other behaviour was changed.
+// P8 N3: removed the async-state panel (no usage point anywhere in the carrier
+// tree) and the contract symbols it alone consumed.
+// The value-tone prop stays: `app/components/simulation-board-panels.tsx:21`
+// still passes it (that file is not part of this import), so removing it would
+// make this copy diverge from its consumer without a tsc/build run to prove it.
+// P8 is the batched repair of the C11 leftovers.
 import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
 
-import {
-  uiStateMessage,
-  type LineageIdentity,
-  type UiAsyncState,
-  type UiNonReadyState,
-} from "./ui-contract";
+import { type LineageIdentity } from "./ui-contract";
 import "./tokens-base.css";
 import "./primitives.css";
 
@@ -18,23 +19,6 @@ export type UiTone = "neutral" | "success" | "warning" | "danger" | "smart";
 
 function classes(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(" ");
-}
-
-export function AsyncStatePanel({
-  state,
-  className,
-  children,
-}: {
-  state: UiAsyncState<unknown>;
-  className?: string;
-  children?: ReactNode;
-}) {
-  if (state.kind === "ready") return null;
-  const message = uiStateMessage(state as UiNonReadyState);
-  return <div className={classes("pb-ui-async-state", `pb-ui-async-state-${message.tone}`, className)} role={message.tone === "danger" ? "alert" : "status"} data-state={state.kind}>
-    {children ?? <span>{message.text}</span>}
-    {message.recovery && <span className="pb-ui-state-recovery">{message.recovery}</span>}
-  </div>;
 }
 
 export type MetricTone = "pos" | "neg" | "na";

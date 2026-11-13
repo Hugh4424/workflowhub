@@ -24,6 +24,11 @@
     }
     /* P3 修复：内联 code 用项目等宽栈，与 .code-surface 的等宽字体一致。 */
     code, kbd, samp { font-family: var(--font-mono); }
+    /* P8 R1 修复：窄屏下代码块自动换行，避免横向滚动（390×844 视口观察）。 */
+    @media (max-width: 480px) {
+      .code-surface { white-space: pre-wrap; }
+      .code-surface code { overflow-wrap: anywhere; word-break: break-word; }
+    }
   </style>
   <script defer src="./2026-11-12-002-c11-query-data.js"></script>
   <script defer src="./2026-11-11-001-t019-v15-pending-busy-app.js"></script>
@@ -50,7 +55,7 @@
       <div class="hero-copy">
         <p class="eyebrow">策略研究 · 无稿工作台</p>
         <h1 id="page-title">策略快照</h1>
-        <p class="lede">选择合成样例，核对规则并练习确认；不会保存快照。</p>
+        <p class="lede">选择一条经验候选，核对来源与规则后确认；不会发送请求，也不会保存快照。</p>
       </div>
     </section>
 

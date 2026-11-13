@@ -1,5 +1,5 @@
 /* Design tokens only. Page and component selectors live in explicit owners.
- * 色板/字体以 /Users/Hugh/Downloads/UI设计稿 为基准：Tailwind slate 阶 +
+ * 色板/字体以外部设计稿（未入库，只作色值与字体族参照）为基准：Tailwind slate 阶 +
  * sky/emerald/amber/rose 语义色，页面底 #06080d，面板 #0d111a。 */
 @font-face {
   font-family: "Inter";

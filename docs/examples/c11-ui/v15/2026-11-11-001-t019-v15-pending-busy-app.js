@@ -185,7 +185,8 @@ if(typeof document!=='undefined'){
     const first=built.options[0];
     state=transition(state,{type:'select',id:first.id,name:first.name,version:first.version});
     if(name==='ready') return;
-    if(name==='pending'){state=transition(state,{type:'submit',scenario:'success'});return;}
+    // P8 R3 修复：URL 状态入口也挂定时器，1 秒内离开等待态（与点击路径同一 150ms）。
+    if(name==='pending'){state=transition(state,{type:'submit',scenario:'success'});setTimeout(()=>{state=transition(state,{type:'resolve'});render();},150);return;}
     const scenarioFor={success:'success',duplicate:'success',empty:'empty',error:'error',permission:'permission',partial:'partial',unknown:'unknown',recovered:'partial'}[name];
     state=transition(state,{type:'submit',scenario:scenarioFor});
     state=transition(state,{type:'resolve'});

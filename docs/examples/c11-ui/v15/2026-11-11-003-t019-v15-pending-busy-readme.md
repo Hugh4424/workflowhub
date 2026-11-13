@@ -1,12 +1,17 @@
 # T019 v15：处理中状态与方法来源
 
-本候选只修复 v14 本地示例在处理中未向确认区域暴露忙状态的缺口。不是正式产品实现、独立验收、用户批准或 AC-P10 通过。作者 `/root/c09_graph_options` 为原 v11 作者当前代理树不可续后的具名继任者；旧稿与所有原件不覆写。路径相对 TaskRoot `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c09-dual-path-verification-20261103/`。
+本候选只修复 v14 本地示例在处理中未向确认区域暴露忙状态的缺口。不是正式产品实现、独立验收、用户批准或 AC-P10 通过。作者 `c09_graph_options`（原 v11 作者的代理树名）为原 v11 作者当前代理树不可续后的具名继任者；旧稿与所有原件不覆写。路径相对任务库中的 `workflowhub-ui-frontend-c09-dual-path-verification-20261103/`（外部任务记录，不在本仓）。
 
 ## 当前入口和变化
 
-- 入口 `quality/evidence/P5/void-prototype-v3/t019-wf-native-next/v15/2026-11-11-002-t019-v15-pending-busy-index.html` SHA256 `146b305983174e21198604d7f2e89b79fd170392579367ce5d28f8e8e103f9ca`。
-- 状态脚本 `quality/evidence/P5/void-prototype-v3/t019-wf-native-next/v15/2026-11-11-001-t019-v15-pending-busy-app.js` SHA256 `75a9900b75931b5243ae481842342ac04fd735cd154c434639fba3e10711dfc1`。入口还通过相对路径使用 v14 合成样例 JS、v11 和 v12 CSS，精确来源/hash 见 `quality/evidence/P5/void-prototype-v3/t019-wf-native-next/v14/2026-11-11-006-t019-v14-taskfirst-readme.md`。
-- v14 入口 SHA256 `f3abaef9b6a5b8bd1eed925249537945e98e3021709511371e9ffa36756ee724` 和 v13 状态脚本 SHA256 `41aff858071d7cdd9d0f62bae0f7a78c5e2a9245f8b78ec33a9d79219d30b8f0` 为本轮旧输入。新入口仅为确认区域加入 `id=demo-confirm-panel`、初始 `aria-busy=false`；脚本仅在 render 将该区域 busy 属性同步为 `phase==='pending'`。结果的独立 `role=status` 区域不加 busy，避免其与忙碌区域绑定。原有状态、锁定、身份、文案、样例和样式不变。本轮未访问 PB/API/数据库，不发业务请求或伪造成功。
+- 入口 `v15/2026-11-11-002-t019-v15-pending-busy-index.html` SHA256 `bb4fe6f4221fb3dfaf5bb33f2db955ada441c1d1244c271d177ebbdb6026129a`。
+- 状态脚本 `v15/2026-11-11-001-t019-v15-pending-busy-app.js` SHA256 `41f38356daf183953da2495a986be733f24c484b650c4e7ccb50027770a513da`。入口还通过相对路径使用同目录数据文件与 `../v11`、`../v12` 两份样式；三个依赖的指纹是：
+  - 数据文件 `v15/2026-11-12-002-c11-query-data.js` SHA256 `d05a12fd1d65fe74be4b79dc71afeaaaf09f770198ad95e1764f382fe0db0ab1`。
+  - v11 样式 `v11/2026-11-10-001-t019-wf-native-next-v11-styles.css` SHA256 `80e5a56a60539cb0af7f74a742410b1231c2464f55f4f72357426d0fe9bcd4de`。
+  - v12 样式 `v12/2026-11-11-009-t019-v12-local-demo-styles.css` SHA256 `0d27ac5dd5fd63dc0e94579cac361fcedc516d569ff1a4a3f02bd9b2f20a97ed`。
+- 历史里程碑 v14 入口 SHA256 `f3abaef9b6a5b8bd1eed925249537945e98e3021709511371e9ffa36756ee724` 与 v13 状态脚本 SHA256 `41aff858071d7cdd9d0f62bae0f7a78c5e2a9245f8b78ec33a9d79219d30b8f0` 只作旧输入记录，不是当前依赖。
+- 入库副本上的修复（改的是本仓 `docs/examples/c11-ui/` 里的拷贝）：页头说明改成真实候选的说法、窄屏代码块改为自动换行、`?state=pending` 入口挂定时器、数据文件里的来源图路径改成仓内相对路径。原 v15 字节与 C11 收口指纹保留在来源记录中，不复写。
+- C11 当时的改动：新入口仅为确认区域加入 `id=demo-confirm-panel`、初始 `aria-busy=false`；脚本仅在 render 将该区域 busy 属性同步为 `phase==='pending'`。结果的独立 `role=status` 区域不加 busy，避免其与忙碌区域绑定。原有状态、锁定、身份、文案、样例和样式不变。本轮未访问 PB/API/数据库，不发业务请求或伪造成功。
 
 ## 本次能回源的 C01–C08 事实
 
