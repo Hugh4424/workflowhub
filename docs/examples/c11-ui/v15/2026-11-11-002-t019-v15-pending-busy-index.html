@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="策略快照设计候选：候选内容、来源和真实业务状态分开呈现。">
+  <title>策略快照</title>
+  <link rel="stylesheet" href="../v11/2026-11-10-001-t019-wf-native-next-v11-styles.css">
+  <link rel="stylesheet" href="../v12/2026-11-11-009-t019-v12-local-demo-styles.css">
+  <style>
+    /* P3 修复：.local-demo button 覆盖了 .primary-action，主按钮与次按钮同色；提高选择器优先级让主按钮样式生效。 */
+    .local-demo button.primary-action:not(:disabled) {
+      background: var(--accent-blue);
+      border-color: var(--accent-blue);
+      color: var(--bg-app);
+      font-weight: 700;
+    }
+    .local-demo button.primary-action:disabled {
+      background: var(--bg-app);
+      border-color: var(--border-subtle);
+      color: var(--text-muted);
+      opacity: 1;
+      cursor: not-allowed;
+    }
+    /* P3 修复：内联 code 用项目等宽栈，与 .code-surface 的等宽字体一致。 */
+    code, kbd, samp { font-family: var(--font-mono); }
+  </style>
+  <script defer src="./2026-11-12-002-c11-query-data.js"></script>
+  <script defer src="./2026-11-11-001-t019-v15-pending-busy-app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到主要内容</a>
+
+  <header class="site-header">
+    <div class="brand-line">
+      <span>PaperBuilder</span>
+      <span>策略快照</span>
+    </div>
+    <nav aria-label="页面内容">
+      <ul class="section-nav">
+        <li><a href="#sample-content">内容候选</a></li>
+        <li><a href="#source-content">候选与内容</a></li>
+        <li><a href="#freeze-boundary">确认与结果</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <section class="hero" aria-labelledby="page-title">
+      <div class="hero-copy">
+        <p class="eyebrow">策略研究 · 无稿工作台</p>
+        <h1 id="page-title">策略快照</h1>
+        <p class="lede">选择合成样例，核对规则并练习确认；不会保存快照。</p>
+      </div>
+    </section>
+
+    <section id="sample-content" class="content-section" aria-labelledby="sample-section-title">
+      <div class="section-heading">
+        <p class="folio" aria-hidden="true">01</p>
+        <div>
+          <p class="eyebrow">本地阅读候选</p>
+          <h2 id="sample-section-title">看见这条候选写了什么</h2>
+          <p class="section-intro">选择一条经验候选，查看其内容。</p>
+        </div>
+      </div>
+
+      <fieldset class="sample-picker" aria-describedby="sample-boundary">
+        <legend>选择一条经验候选</legend>
+        <p id="sample-boundary" class="supporting-copy">经验候选来自项目知识图，不是实时目录。</p>
+        <div id="sample-options" class="sample-options"></div>
+      </fieldset>
+      <p id="sample-announcement" class="visually-hidden" role="status" aria-live="polite">经验候选已准备。</p>
+    </section>
+
+    <section id="source-content" class="content-section" aria-labelledby="source-section-title">
+      <div class="section-heading">
+        <p class="folio" aria-hidden="true">02</p>
+        <div>
+          <p class="eyebrow">同一版本 · 同一来源</p>
+          <h2 id="source-section-title">候选摘要与完整内容一起核对</h2>
+          <p class="section-intro">候选摘要和完整内容属于同一条经验候选。</p>
+        </div>
+      </div>
+
+      <div class="content-grid">
+        <article class="rule-panel" aria-labelledby="sample-title">
+          <div class="rule-heading">
+            <div>
+              <p class="label">当前经验候选</p>
+              <h3 id="sample-title">读取查询数据中</h3>
+            </div>
+            <span class="text-tag">经验候选 · 非实时</span>
+          </div>
+          <p id="sample-description" class="strategy-description"></p>
+          
+          <dl id="rule-fields" class="rule-list"></dl>
+        </article>
+
+        <aside class="identity-panel" aria-labelledby="identity-title">
+          <h3 id="identity-title">经验候选身份</h3>
+          <dl class="identity-list">
+            <div>
+              <dt>候选类型</dt>
+              <dd id="sample-version">未载入</dd>
+            </div>
+            <div>
+              <dt>候选标识</dt>
+              <dd><code id="sample-version-id">未载入</code></dd>
+            </div>
+          </dl>
+        </aside>
+      </div>
+
+      <div class="source-payloads">
+        <details>
+          <summary>查看完整 YAML 内容</summary>
+          <p class="supporting-copy">此文本来自查询落盘的经验候选数据；未发送到服务。</p>
+          <pre id="yaml-content" class="code-surface" role="region" tabindex="0" aria-label="当前经验候选的完整 YAML"><code></code></pre>
+        </details>
+        <details>
+          <summary>查看同版结构化内容</summary>
+          <p class="supporting-copy">与上方候选来自同一条经验候选。</p>
+          <pre id="canonical-content" class="code-surface" role="region" tabindex="0" aria-label="当前经验候选的结构化内容"><code></code></pre>
+        </details>
+      </div>
+    </section>
+
+    <section id="freeze-boundary" class="content-section local-demo" aria-labelledby="freeze-section-title">
+      <div class="section-heading"><p class="folio" aria-hidden="true">03</p><div><p class="eyebrow">本地交互</p><h2 id="freeze-section-title">确认与结果</h2><p class="section-intro">使用上方经验候选练习确认。不会发送请求或保存快照。</p></div></div>
+      <div class="freeze-grid">
+        <article id="demo-confirm-panel" class="freeze-contract" aria-labelledby="demo-title" aria-busy="false">
+          <h3 id="demo-title">核对并确认候选</h3>
+          <p>当前候选：<strong id="demo-confirm-identity">尚未选择候选</strong></p>
+          <p>保存后，快照会固定所选版本的内容。此处只展示界面，不会保存。</p>
+          <button type="button" id="demo-use-sample">使用当前候选</button>
+          <p><label for="demo-scenario">选择要查看的候选结果</label></p>
+          <select id="demo-scenario" disabled>
+            <option value="success">确认完成</option><option value="empty">没有结果</option>
+            <option value="error">处理失败</option><option value="permission">操作被拒绝</option>
+            <option value="partial">部分结果</option><option value="unknown">结果未知</option>
+          </select>
+          <p><button type="button" id="demo-confirm" class="primary-action" disabled>确认候选</button></p>
+        </article>
+        <article class="result-panel" aria-labelledby="demo-result-title">
+          <h3 id="demo-result-title">候选结果</h3>
+          <p>对应候选：<strong id="demo-result-identity">尚未选择候选</strong></p>
+          <p id="demo-result">请选择并使用一条经验候选。</p>
+          <button type="button" id="demo-recover" hidden>继续核对候选</button>
+          <button type="button" id="demo-reset">重置候选</button>
+        </article>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="page-footer">
+    <p>本地交互，不会发送请求或保存快照。</p>
+  </footer>
+</body>
+</html>
