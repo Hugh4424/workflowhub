@@ -23,6 +23,12 @@
             "review",
             "plan-eng-review"
           ],
+          "optional_skills": [
+            {
+              "name": "plan-design-review",
+              "when": "ui"
+            }
+          ],
           "review_mode": "lens-only",
           "lens_owner": "wh-review",
           "lens_dispatch": "delegated",

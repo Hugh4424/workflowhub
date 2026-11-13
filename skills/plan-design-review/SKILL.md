@@ -6,7 +6,14 @@ description: Report-only UI design lens for information architecture, states, ac
 # plan-design-review
 
 Source: adapted from the project design review baseline. Mode: `advisory`；证据级按本次真实输入声明。
-Use this lens for build-plan's actual UI scope and build-prd's conditional design material. Review the supplied journey, design sources and real previews within the existing merged document review; findings join that review instead of creating another review point.
+Use this lens for make-decision's detail track, build-plan's actual UI scope, build-code's design review angle and build-prd's conditional design material. Review the supplied journey, design sources and real previews within the existing merged document review; findings join that review instead of creating another review point.
+
+本镜头用于定方向细节审查、写需求、排阶段与写代码四个入口，不新增审查轮。
+UI 适用性按三个来源判，任一处命中即触发本镜头，不看调用者标签：
+`raw_requirement` 是原始要求里的页面、交互或非 UI 请求；
+`project_inventory` 是项目真实路由、前端技术与组件/消费者事实；
+`planned_or_changed_frontend_fact` 是已接受计划或实际前端改动。
+三来源都缺时记「未知」并写负责人与补问对象，不默认非 UI。
 
 UI 适用时，先读 `skills/project-norm-init/SKILL.md` 的「规范职责」，再按本次审查范围读取下列具体来源。路径相对目标项目根；八类不是强制八文件，同职责已有等价实质源时复用：
 
