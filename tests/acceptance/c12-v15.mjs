@@ -786,14 +786,22 @@ function requireEngineContext(engine, session, spaceName, hostTaskId, taskId) {
 // missing/invalid marker is unknown with a reason. This keeps the frozen test
 // and AC-C12-002 rule (both markers readable before match/mismatch).
 function observeState(target, observed, ariaBusy, readError = null) {
-  const readable = typeof observed === "string" && observed.length > 0 && C11_STATES.includes(observed) && (ariaBusy === "true" || ariaBusy === "false");
-  if (!readable) {
+  // Illegal or missing data-state is always unknown, never match/mismatch.
+  const stateKnown = typeof observed === "string" && observed.length > 0 && C11_STATES.includes(observed);
+  if (!stateKnown) {
     const reasons = [];
     if (readError) reasons.push(`页面标记读取失败：${readError}`);
     if (typeof observed !== "string" || !observed) reasons.push("#demo-result 的 data-state 缺失或为空");
-    else if (!C11_STATES.includes(observed)) reasons.push(`#demo-result 的 data-state 不是合法状态名：${JSON.stringify(observed)}`);
-    if (ariaBusy !== "true" && ariaBusy !== "false") reasons.push(`#demo-confirm-panel 的 aria-busy 缺失或非法：${JSON.stringify(ariaBusy)}`);
-    return {result: "unknown", observed: observed ?? null, aria_busy: ariaBusy ?? null, reason: reasons.join("；") || "页面状态标记读不出"};
+    else reasons.push(`#demo-result 的 data-state 不是合法状态名：${JSON.stringify(observed)}`);
+    return {result: "unknown", observed: observed ?? null, aria_busy: ariaBusy ?? null, reason: reasons.join("；")};
+  }
+  // A readable state with an unreadable busy marker is unknown with a reason,
+  // never mismatch; this is the frozen test and AC-C12-002 rule.
+  if (ariaBusy !== "true" && ariaBusy !== "false") {
+    const reasons = [];
+    if (readError) reasons.push(`页面标记读取失败：${readError}`);
+    reasons.push(`#demo-confirm-panel 的 aria-busy 缺失或非法：${JSON.stringify(ariaBusy)}`);
+    return {result: "unknown", observed, aria_busy: ariaBusy ?? null, reason: reasons.join("；")};
   }
   if (observed === target && ariaBusy === "false") return {result: "match", observed, aria_busy: ariaBusy};
   const reasons = [];
@@ -917,8 +925,8 @@ function capabilityDocument({coverage, interaction, checks, designRef, mappingRe
       input: "T019 需求 IA 与状态清单；query-data 候选",
       output: "可运行单页、十个稳定态结果文案、aria-busy 忙标记",
       consumer: "产品内：页面本身；验收：本段覆盖件",
-      verdict: readable === 30 && controlsRecorded === 30 ? "可用" : readable > 0 ? "部分可用" : "未测",
-      basis: `当前运行 ${readable}/30 格读到状态标记，${controlsRecorded}/30 格记了控件序列；原型达标不等于用户批准。`,
+      verdict: match === 30 && controlsRecorded === 30 ? "可用" : match > 0 ? "部分可用" : "未测",
+      basis: `当前运行 match ${match}/30、mismatch ${mismatch}、unknown ${unknown}，${controlsRecorded}/30 格记了控件序列；${mismatch > 0 ? `有 ${mismatch} 格 mismatch，判词按实际观察降级；` : ""}原型达标不等于用户批准。`,
       receipts: [coverage.identity.ref, interaction?.ref].filter(Boolean),
     },
     {
@@ -960,8 +968,8 @@ function capabilityDocument({coverage, interaction, checks, designRef, mappingRe
       input: "页内单选、#demo-use-sample、#demo-scenario、#demo-confirm、#demo-recover、#demo-reset",
       output: "phase、按钮 disabled、身份文案、aria-busy、data-state",
       consumer: "产品内：结果区、播报区；验收：本段状态观察",
-      verdict: readable === 30 && pendingObserved >= 3 ? "可用" : readable > 0 ? "部分可用" : "未测",
-      basis: `真实读到 ${readable}/30 格状态标记；pending ${pendingObserved}/3 个视口观察到 data-state=pending 与 aria-busy=true。`,
+      verdict: match === 30 && pendingObserved >= 3 ? "可用" : match > 0 ? "部分可用" : "未测",
+      basis: `真实 match ${match}/30、mismatch ${mismatch}、unknown ${unknown}；pending ${pendingObserved}/3 个视口观察到 data-state=pending 与 aria-busy=true；${mismatch > 0 ? `有 ${mismatch} 格 mismatch，判词按实际观察降级；` : ""}`,
       receipts: [coverage.identity.ref, interaction?.ref].filter(Boolean),
     },
     {
@@ -1608,11 +1616,23 @@ try {
         "物理读屏 not_checked，owner=用户，恢复条件=真人读屏环境；200% 缩放未测；对比度未取得。",
       ],
     };
+    const navigationWindowSelfCheck = (() => {
+      const empty = navigationWindowEvidence([]);
+      const actual = coverageCells.find((cell) => cell.event_reads?.navigation_window)?.event_reads.navigation_window ?? null;
+      return {
+        empty_confirmed: empty.confirmed,
+        empty_reason: empty.reason,
+        actual_confirmed: actual?.confirmed === true,
+        actual,
+        ok: empty.confirmed === false && text(empty.reason) && actual?.confirmed === true,
+      };
+    })();
     const observationRuleSelfCheck = (() => {
       const match = observeState("ready", "ready", "false");
       const mismatch = observeState("ready", "error", "false");
       const unknownMissingBusy = observeState("ready", "ready", null);
       const unknownMissingState = observeState("ready", null, "false");
+      const unknownIllegalState = observeState("ready", "illegal-state", "false");
       return {
         match: match.result,
         mismatch: mismatch.result,
@@ -1621,7 +1641,9 @@ try {
         unknown_missing_busy_reason: unknownMissingBusy.reason,
         unknown_missing_state: unknownMissingState.result,
         unknown_missing_state_reason: unknownMissingState.reason,
-        ok: match.result === "match" && mismatch.result === "mismatch" && unknownMissingBusy.result === "unknown" && unknownMissingState.result === "unknown" && text(mismatch.reason) && text(unknownMissingBusy.reason) && text(unknownMissingState.reason),
+        unknown_illegal_state: unknownIllegalState.result,
+        unknown_illegal_state_reason: unknownIllegalState.reason,
+        ok: match.result === "match" && mismatch.result === "mismatch" && unknownMissingBusy.result === "unknown" && unknownMissingState.result === "unknown" && unknownIllegalState.result === "unknown" && text(mismatch.reason) && text(unknownMissingBusy.reason) && text(unknownMissingState.reason) && text(unknownIllegalState.reason),
       };
     })();
     const checks = {
@@ -1652,6 +1674,7 @@ try {
       event_reads: coverageCells.map((cell) => ({state: cell.state, viewport: cell.viewport, ...cell.event_reads})),
       failure_path_self_check: result.checks?.failure_path ?? {ok: false, reason: "worker 未返回失败路径自检"},
       observation_rule_self_check: observationRuleSelfCheck,
+      navigation_window_self_check: navigationWindowSelfCheck,
     };
     const designSource = state.design_source_matches === true ? designIdentity() : {unavailable: true, reason: "prepare reported design source drift"};
     const negativeSearch = designNegativeSearch(designSource);
@@ -1755,7 +1778,7 @@ try {
       coverage: {ref: evidenceName(base, "coverage"), cells: coverageCells.length, dimensions: dimensionStatus.length, acquired, untested: dimensionStatus.length - acquired, viewport_checks: coverageCells.map((cell) => ({state: cell.state, viewport: cell.viewport, ...cell.viewport_check}))},
       interaction: {ref: interactionRef.ref, pending_records: coverage.pending.records.length, pending_observed: coverage.pending.records.filter((record) => record.observed).length, pending_reason: PENDING_REASON},
       design: {ref: designRef.ref, five_categories: 5, independent_review_pending: true, design_source_matches: designSource.matches === true, screenshots: screenshots.map((shot) => ({viewport: shot.viewport, available: shot.available, ref: shot.ref, sha256: shot.sha256 ?? null}))},
-      checks: {ref: evidenceName(base, "checks"), syntax_receipts: syntaxRefs, state_observation: checks.state_observation_totals, failure_path_self_check: checks.failure_path_self_check, observation_rule_self_check: checks.observation_rule_self_check},
+      checks: {ref: evidenceName(base, "checks"), syntax_receipts: syntaxRefs, state_observation: checks.state_observation_totals, failure_path_self_check: checks.failure_path_self_check, observation_rule_self_check: checks.observation_rule_self_check, navigation_window_self_check: checks.navigation_window_self_check},
       screenshots,
       interface_fields: interfaceFields,
       plan_offset_mapping: {ref: mappingRef.ref, planned: mapping.planned, actual: mapping.actual, prior_series: mapping.prior_series, p1_same_numbers: mapping.p1_same_numbers},
@@ -2044,6 +2067,28 @@ async function readMarkersSafe(page) {
     return {ok: false, markers: null, error: `${error.code ?? error.name}: ${error.message}`};
   }
 }
+// A successful empty event array is only a real zero observation when the
+// initial navigation window and its main-document events are confirmed. A
+// missing window keeps a failure original and marks the dimension 未测.
+function navigationWindowEvidence(events) {
+  const frame = events.find((event) => event.method === "Page.frameNavigated" && !event.params?.frame?.parentId)?.params?.frame ?? null;
+  const load = events.find((event) => event.method === "Page.loadEventFired");
+  const documentRequest = events.find((event) => event.method === "Network.requestWillBeSent" && event.params?.type === "Document");
+  let urlMatches = null;
+  try { urlMatches = frame?.url ? new URL(frame.url).pathname === TARGET_PATH : null; } catch { urlMatches = false; }
+  const confirmed = Boolean(frame && load && urlMatches !== false);
+  return {
+    confirmed,
+    frame_id: frame?.id ?? null,
+    loader_id: frame?.loaderId ?? null,
+    url: frame?.url ?? null,
+    url_matches: urlMatches,
+    load_event: Boolean(load),
+    document_request: Boolean(documentRequest),
+    reason: confirmed ? null : "初始导航窗口缺少目标主文档 Page.frameNavigated 与 Page.loadEventFired；空事件不能当真实零观察",
+  };
+}
+
 function normalizeWindow(events, cell, input, windowId, loaderId, previousContexts) {
   const contexts = new Map(previousContexts ?? []);
   const frame = events.find((event) => event.method === "Page.frameNavigated" && !event.params?.frame?.parentId)?.params?.frame ?? null;
@@ -2228,6 +2273,12 @@ export async function runV15Worker(input) {
         }
         await page.evaluate("(() => { window.__c12LongTasks = []; try { window.__c12LT = new PerformanceObserver((list) => window.__c12LongTasks.push(...list.getEntries().map((entry) => entry.duration))); window.__c12LT.observe({type: 'longtask', buffered: false}); } catch (error) { window.__c12LTERR = String(error); } return true; })()");
         const initialEvents = await readEvents(page);
+        const windowEvidence = navigationWindowEvidence(initialEvents.ok ? initialEvents.events : []);
+        const eventWindowError = !initialEvents.ok
+          ? `page.events() read failed: ${initialEvents.error}`
+          : !windowEvidence.confirmed
+            ? `navigation window not confirmed: ${windowEvidence.reason}`
+            : null;
         const window = normalizeWindow(initialEvents.ok ? initialEvents.events : [], cellFor("unselected", viewport), input, windowId, null, null);
         let contexts = window.contexts;
         let loaderId = window.loaderId;
@@ -2250,9 +2301,11 @@ export async function runV15Worker(input) {
           contexts = windowDoc.contexts;
           if (windowDoc.loaderId) loaderId = windowDoc.loaderId;
           const marker = {observed: markers?.observed ?? null, aria_busy: markers?.aria_busy ?? null, at: new Date().toISOString()};
-          if (!eventsRead.ok) {
-            windowDoc.console.failures.push({class: "TOOL_ERROR", detail: `page.events() read failed: ${eventsRead.error}`});
-            windowDoc.network.failures.push({class: "TOOL_ERROR", detail: `page.events() read failed: ${eventsRead.error}`});
+          const eventsConfirmed = eventsRead.ok && !eventWindowError;
+          if (!eventsConfirmed) {
+            const detail = eventWindowError ?? `page.events() read failed: ${eventsRead.error}`;
+            windowDoc.console.failures.push({class: "TOOL_ERROR", detail});
+            windowDoc.network.failures.push({class: "TOOL_ERROR", detail});
           }
           let observationFacts = null;
           let observationError = null;
@@ -2300,10 +2353,10 @@ export async function runV15Worker(input) {
           for (const dimension of ["console", "network"]) {
             documents[dimension].marker = marker;
             documents[dimension].window_id = activeWindowId;
-            documents[dimension].observed_zero = eventsRead.ok && documents[dimension].items.length === 0;
-            documents[dimension].event_read = eventsRead.ok ? "ok" : "failed";
-            if (eventsRead.ok) documents[dimension].event_read_error = null;
-            else documents[dimension].event_read_error = eventsRead.error;
+            documents[dimension].observed_zero = eventsConfirmed && documents[dimension].items.length === 0;
+            documents[dimension].event_read = eventsConfirmed ? "ok" : "failed";
+            documents[dimension].event_read_error = eventsConfirmed ? null : (eventWindowError ?? eventsRead.error);
+            documents[dimension].navigation_window = windowEvidence;
           }
           const dimensions = {};
           for (const dimension of input.dimensions) {
@@ -2325,7 +2378,7 @@ export async function runV15Worker(input) {
             controls,
             state_observation: observation,
             viewport_check: viewportCheck,
-            event_reads: {console: eventsRead.ok ? "ok" : "failed", network: eventsRead.ok ? "ok" : "failed", error: eventsRead.ok ? null : eventsRead.error},
+            event_reads: {console: eventsConfirmed ? "ok" : "failed", network: eventsConfirmed ? "ok" : "failed", error: eventsConfirmed ? null : (eventWindowError ?? eventsRead.error), navigation_window: windowEvidence},
             interaction_ms: Number.isFinite(interactionMs) ? interactionMs : null,
             dimensions,
             window_id: activeWindowId,

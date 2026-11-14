@@ -1034,7 +1034,7 @@ async function measurePagesInBrowser(input) {
         clipped_right: prect.right > innerWidth,
         clipped_bottom: prect.bottom > innerHeight,
         within_viewport: prect.right > 0 && prect.left < innerWidth && prect.bottom > 0 && prect.top < innerHeight,
-        reachable: prect.right > 0 && prect.left < innerWidth && prect.bottom > 0 && prect.top < innerHeight && prect.right <= innerWidth && prect.bottom <= innerHeight,
+        reachable: prect.right > 0 && prect.left < innerWidth && prect.bottom > 0 && prect.top < innerHeight && prect.right <= innerWidth && prect.bottom <= innerHeight && hit === true,
         center_hit: hit,
       } : null,
     };
@@ -1277,13 +1277,23 @@ console.log(JSON.stringify(out));
 // collect
 // ---------------------------------------------------------------------------
 
+function pageSyncState(page) {
+  if (!page) return "未测";
+  if (page.before === GAP_BEFORE && page.after === GAP_AFTER) return "已变化";
+  if (page.before === GAP_BEFORE && typeof page.after === "string" && page.after !== GAP_AFTER) return "未变化";
+  return "未测";
+}
 function syncVerdict({build = "success", service = "success", pages}) {
   if (build !== "success" || service !== "success") return "未测";
-  const changed = ROUTES.filter((route) => {
-    const page = (pages ?? []).find((row) => row.route === route);
-    return page?.before === GAP_BEFORE && page?.after === GAP_AFTER;
-  }).length;
-  return changed === 2 ? "可用" : changed === 1 ? "部分可用" : "不可用";
+  const states = ROUTES.map((route) => pageSyncState((pages ?? []).find((row) => row.route === route)));
+  const changed = states.filter((state) => state === "已变化").length;
+  const untested = states.filter((state) => state === "未测").length;
+  if (changed === 2) return "可用";
+  if (changed === 1) return "部分可用";
+  // No confirmed change: an unknown page means neither "unchanged" nor
+  // "unavailable" is evidenced, so the verdict stays 未测.
+  if (untested > 0) return "未测";
+  return "不可用";
 }
 function walkJsonFiles(root, {maxFiles = 2_000, maxDepth = 6} = {}) {
   const files = [];
@@ -1301,20 +1311,37 @@ function walkJsonFiles(root, {maxFiles = 2_000, maxDepth = 6} = {}) {
   }
   return files;
 }
+const C10_SUCCESS_STATUSES = new Set(["可用", "success", "succeeded", "passed", "pass", "ok", "completed", "complete", "read", "readback-ok", "read-ok"]);
 function c10ReadVerdict(doc, aggregate) {
   const object = doc?.object;
   if (object?.name !== OBJECT_NAME) return {accepted: false, reason: "object name differs from the C12 changed object"};
   if (object?.version !== aggregate) return {accepted: false, reason: "object version differs from the C12 after-change identity"};
   const task = doc?.task ?? doc?.task_id ?? doc?.executor_task ?? doc?.source_task;
   if (task !== "C10") return {accepted: false, reason: "record is not a C10 record"};
-  const status = String(doc?.status ?? doc?.result?.status ?? "").toLowerCase();
-  if (/未测|untested|planned|pending|unavailable|unknown/.test(status)) return {accepted: false, reason: `status ${status || "missing"} does not assert a completed read`};
+  if (doc?.error || doc?.failure || (Array.isArray(doc?.failures) && doc.failures.length)) {
+    return {accepted: false, reason: "record carries an error/failure; a failed attempt is not a readback"};
+  }
+  const status = String(doc?.status ?? "").trim().toLowerCase();
+  const result = doc?.result;
+  const resultStatus = typeof result === "string" ? result.trim().toLowerCase() : String(result?.status ?? "").trim().toLowerCase();
+  const successResult = doc?.success === true || C10_SUCCESS_STATUSES.has(resultStatus) || (typeof result === "object" && result?.ok === true);
+  // Only an explicit success status or an explicit success result can pass; a
+  // failed/error/empty status is never rescued by another field.
+  if (status) {
+    if (!C10_SUCCESS_STATUSES.has(status)) return {accepted: false, reason: `status ${status} is not in the explicit success whitelist`};
+  } else if (!successResult) {
+    return {accepted: false, reason: "no explicit success status or success result"};
+  }
   const action = String(doc?.action ?? doc?.operation ?? doc?.read_action ?? doc?.kind ?? "");
   const readFlag = doc?.read === true || doc?.readback === true || /read|读回|读取/i.test(action);
   if (!readFlag) return {accepted: false, reason: "no explicit read action"};
   const readAt = doc?.read_at ?? doc?.readback_at ?? doc?.observed_at ?? doc?.produced_at ?? doc?.checked_at;
   if (typeof readAt !== "string" || Number.isNaN(Date.parse(readAt))) return {accepted: false, reason: "no readable read timestamp"};
-  return {accepted: true, action, read_at: readAt, executor: doc?.executor ?? doc?.executor_task ?? null};
+  const readTime = Date.parse(readAt);
+  if (readTime < Date.parse("2000-01-01T00:00:00Z") || readTime > Date.now() + 5 * 60_000) {
+    return {accepted: false, reason: "read timestamp is outside the valid range"};
+  }
+  return {accepted: true, action, read_at: readAt, status: status || resultStatus, executor: doc?.executor ?? doc?.executor_task ?? null};
 }
 function findC10Readback(afterAggregate) {
   const attempts = [];
@@ -1473,8 +1500,19 @@ async function collect(argv) {
   const child = engine === "agent-browser"
     ? spawnSync(process.execPath, ["-e", script], {cwd: WORKTREE, env: {...process.env, BROWSER_QA_ENGINE: engine}, encoding: "utf8", timeout: 300_000, maxBuffer: 32 * 1024 * 1024})
     : spawnSync(helper, ["nodejs", "-e", script], {cwd: WORKTREE, env: {...process.env, BROWSER_QA_ENGINE: engine}, encoding: "utf8", timeout: 300_000, maxBuffer: 32 * 1024 * 1024});
-  const workerBytes = {stdout: String(child.stdout ?? "").slice(0, 8_000), stderr: String(child.stderr ?? "").slice(0, 8_000), exit_code: child.status, signal: child.signal ?? null};
-  writeFileSync(workerLog, `ATTEMPT ${attemptId}\nENGINE ${engine}\nEXIT ${child.status} SIGNAL ${child.signal}\nSTDOUT\n${child.stdout ?? ""}\nSTDERR\n${child.stderr ?? ""}\n`);
+  const workerBytes = {stdout: String(child.stdout ?? "").slice(0, 8_000), stderr: String(child.stderr ?? "").slice(0, 8_000), exit_code: child.status, signal: child.signal ?? null, error: child.error ? (child.error.code ?? child.error.message) : null};
+  writeFileSync(workerLog, `ATTEMPT ${attemptId}\nENGINE ${engine}\nEXIT ${child.status} SIGNAL ${child.signal} ERROR ${workerBytes.error}\nSTDOUT\n${child.stdout ?? ""}\nSTDERR\n${child.stderr ?? ""}\n`);
+  // The worker's exit/signal/timeout is checked before its result is consumed.
+  // A non-zero, signalled or errored child never produces a success original,
+  // even if it managed to write a result file.
+  if (child.error || child.signal || child.status !== 0) {
+    const diagnostic = readJson(workerResultPath);
+    throw await unavailable("E_WORKER_EXIT", "the browser worker exited abnormally; its result bytes are kept only as failure diagnosis and no success original is published.", {
+      attempt_ref: workerResultPath, attempt_id: attemptId, worker_log: workerLog, worker: workerBytes,
+      worker_error: workerBytes.error, worker_exit: child.status, worker_signal: child.signal ?? null,
+      worker_diagnostic: diagnostic.error ? {unreadable: diagnostic.error} : {ok: diagnostic.value?.ok ?? null, code: diagnostic.value?.code ?? null, message: diagnostic.value?.message ?? null, attempt_id: diagnostic.value?.attempt_id ?? null},
+    });
+  }
   const workerRead = readJson(workerResultPath);
   if (workerRead.error) {
     throw await unavailable("E_WORKER_RESULT", `worker result is missing: ${workerRead.error}`, {attempt_ref: workerResultPath, worker_log: workerLog, worker: workerBytes});
@@ -1575,13 +1613,32 @@ async function collect(argv) {
   const workbenchPage = pages.find((page) => page.route === "/sim-workbench");
   const viewportMatrix = pages.flatMap((page) => (page.viewports ?? []).map((row) => ({route: page.route, ...row})));
   const cellOf = (route, viewport) => viewportMatrix.find((row) => row.route === route && row.viewport === viewport) ?? null;
-  const describeCell = (cell) => cell
-    ? cell.status === "已取得"
-      ? `${cell.gap}（实测 inner ${cell.inner_width}x${cell.inner_height}，dpr ${cell.dpr}，根横向溢出 ${cell.root.overflow_px}px，P1 差 ${cell.overflow_delta_px ?? "unknown"}px；${cell.consequence}）`
-      : `未测（${cell.code ?? "no measurement"}：${cell.message ?? "missing"}）`
-    : "未测（missing cell）";
+  const describeCell = (cell) => {
+    if (!cell) return "未测（missing cell）";
+    if (cell.status !== "已取得") return `未测（${cell.code ?? "no measurement"}：${cell.message ?? "missing"}）`;
+    const readyDelta = cell.root_ready && Number.isFinite(cell.p1_reference?.root_scroll_width)
+      ? cell.root_ready.scroll_width - cell.p1_reference.root_scroll_width
+      : null;
+    return `${cell.gap}（实测 inner ${cell.inner_width}x${cell.inner_height}，dpr ${cell.dpr}，根横向溢出 ${cell.root.overflow_px}px，P1 ready 差 ${readyDelta ?? "unknown"}px；${cell.consequence}）`;
+  };
   const board390 = cellOf("/simulation-board", "390x844");
   const workbench390 = cellOf("/sim-workbench", "390x844");
+  const gapCells = ROUTES.flatMap((route) => VIEWPORTS.map((viewport) => {
+    const cell = cellOf(route, viewport.name);
+    return {route, viewport: viewport.name, cell, gap: cell?.status === "已取得" ? cell.gap : "未测"};
+  }));
+  const measuredGaps = gapCells.filter((row) => row.cell?.status === "已取得");
+  const distinctGaps = [...new Set(measuredGaps.map((row) => row.gap))];
+  const gapSummaryText = measuredGaps.length === 4 && distinctGaps.length === 1
+    ? `四格 gap 均为 ${distinctGaps[0]}`
+    : `gap 读数：${gapCells.map((row) => `${row.route === "/simulation-board" ? "board" : "workbench"} ${row.viewport}=${row.gap}`).join("；")}`;
+  const describePrimary = (cell) => {
+    const primary = cell?.primary;
+    if (!primary) return cell?.status === "已取得" ? "未找到主操作" : "未测（无读数）";
+    if (!primary.within_viewport) return `在视口外（y=${primary.rect?.y ?? "?"}，未做命中判定）`;
+    if (primary.clipped_right || primary.clipped_bottom) return `在视口内但被裁切（clipped_right=${primary.clipped_right}，clipped_bottom=${primary.clipped_bottom}）`;
+    return `在视口内；中心点命中=${primary.center_hit === true}${primary.center_hit === false ? "（被遮挡或不可点）" : ""}；可达=${primary.reachable === true}`;
+  };
   const responsive = {
     schema: "c12-update-responsive/1",
     object: "two-pages",
@@ -1593,6 +1650,7 @@ async function collect(argv) {
     viewports: VIEWPORTS.map((viewport) => viewport.name),
     method: "same owned browser session; a resize listener is installed, then CDP Emulation.setDeviceMetricsOverride per viewport; wait until innerWidth/innerHeight matches twice and record the observed resize event count; board display action re-applied per viewport",
     cells: viewportMatrix,
+    gap_summary: {cells: gapCells.map((row) => ({route: row.route, viewport: row.viewport, gap: row.gap, status: row.cell?.status ?? "未测"})), measured_cells: measuredGaps.length, distinct_gaps: distinctGaps, text: gapSummaryText},
     summary: Object.fromEntries(VIEWPORTS.map((viewport) => [viewport.name, {
       board: describeCell(cellOf("/simulation-board", viewport.name)),
       workbench: describeCell(cellOf("/sim-workbench", viewport.name)),
@@ -1621,15 +1679,25 @@ async function collect(argv) {
     main_action_390: {
       board: board390?.primary ?? null,
       workbench: workbench390?.primary ?? null,
+      board_position: board390?.primary ? (board390.primary.within_viewport ? "inside-viewport" : "outside-viewport") : "未测",
+      workbench_position: workbench390?.primary ? (workbench390.primary.within_viewport ? "inside-viewport" : "outside-viewport") : "未测",
+      board_hit: board390?.primary?.center_hit ?? null,
+      workbench_hit: workbench390?.primary?.center_hit ?? null,
       board_reachable: board390?.primary?.reachable ?? null,
       workbench_reachable: workbench390?.primary?.reachable ?? null,
       conclusion: board390?.status === "已取得" && workbench390?.status === "已取得"
-        ? `board 主操作「${board390.primary?.text ?? "未找到"}」${board390.primary?.reachable ? "在视口内且可命中" : "不在可点击视口内"}；workbench 主操作「${workbench390.primary?.text ?? "未找到"}」${workbench390.primary?.reachable ? "在视口内且可命中" : `不在可点击视口内（y=${workbench390.primary?.rect?.y ?? "?"}，需滚动；未被横向裁切=${!workbench390.primary?.clipped_right}）`}`
-        : "390×844 至少一页未测，主操作可达性不能判定；owner=采集环境 owner，恢复条件=网关会话可用时重跑 collect",
+        ? `board 主操作「${board390.primary?.text ?? "未找到"}」${describePrimary(board390)}；workbench 主操作「${workbench390.primary?.text ?? "未找到"}」${describePrimary(workbench390)}`
+        : "390×844 至少一页未测，主操作位置/命中不能判定；owner=采集环境 owner，恢复条件=网关会话可用时重跑 collect",
     },
-    conclusion: board390?.status === "已取得" && workbench390?.status === "已取得"
-      ? `1280×800 与 390×844 均已实测，gap 均为 16px。390 根横向溢出：board ready ${board390.root_ready?.overflow_px ?? "?"}px、board empty ${board390.root?.overflow_px ?? "?"}px、workbench ${workbench390.root.overflow_px}px；P1 ready 参考差 board=${board390.root_ready && Number.isFinite(board390.p1_reference?.root_scroll_width) ? board390.root_ready.scroll_width - board390.p1_reference.root_scroll_width : "unknown"}px、workbench=${workbench390.overflow_delta_px ?? "unknown"}px。${board390.consequence}${workbench390.consequence}`
-      : "1280×800 已实测；390×844 缺采，响应式后果未测，owner=采集环境 owner，恢复条件=重跑 collect 复采 390×844",
+    conclusion: (() => {
+      const parts = [`${gapSummaryText}。`];
+      if (board390 || workbench390) {
+        parts.push(`390 根横向溢出：board ready ${board390?.root_ready?.overflow_px ?? "未测"}px、board empty ${board390?.root?.overflow_px ?? "未测"}px、workbench ${workbench390?.root?.overflow_px ?? "未测"}px；P1 ready 参考差 board=${board390?.root_ready && Number.isFinite(board390.p1_reference?.root_scroll_width) ? board390.root_ready.scroll_width - board390.p1_reference.root_scroll_width : "unknown"}px、workbench=${workbench390?.overflow_delta_px ?? "unknown"}px。`);
+      }
+      parts.push(`board：${describePrimary(board390)}；workbench：${describePrimary(workbench390)}。`);
+      if (measuredGaps.length < 4) parts.push("存在缺采格；未测格保持未测，owner=采集环境 owner，恢复条件=网关会话可用时重跑 collect。");
+      return parts.join("");
+    })(),
     limitations: [
       "only the two live pages at 1280x800 and 390x844; no 200% zoom, contrast audit, physical screen reader or long-term visual regression",
     ],
@@ -1662,10 +1730,17 @@ async function collect(argv) {
       conclusion: responsive.conclusion,
     },
     sync,
-    sync_components: {board: boardPage?.before_status === "已取得" ? (boardPage.before === GAP_BEFORE && boardPage.after === GAP_AFTER ? "可用" : "不可用") : "未测", workbench: workbenchPage?.before === GAP_BEFORE && workbenchPage?.after === GAP_AFTER ? "可用" : "不可用"},
-    sync_reason: boardPage?.before_status === "未测"
-      ? "workbench before 12px→after 16px was measured; the board pre-change computed value was not captured by Phase 1, so the board half is 未测 (not 'unchanged') and the oracle verdict is 部分可用."
-      : "both page halves have measured before/after values.",
+    sync_states: {board: pageSyncState(boardPage), workbench: pageSyncState(workbenchPage)},
+    sync_components: {board: pageSyncState(boardPage) === "已变化" ? "可用" : pageSyncState(boardPage) === "未变化" ? "不可用" : "未测", workbench: pageSyncState(workbenchPage) === "已变化" ? "可用" : pageSyncState(workbenchPage) === "未变化" ? "不可用" : "未测"},
+    sync_reason: (() => {
+      const states = {board: pageSyncState(boardPage), workbench: pageSyncState(workbenchPage)};
+      const changed = Object.values(states).filter((state) => state === "已变化").length;
+      const untested = Object.values(states).filter((state) => state === "未测").length;
+      if (changed === 2) return "both page halves have measured 12px→16px changes.";
+      if (changed === 1) return `one page half has a measured 12px→16px change; ${Object.entries(states).filter(([, state]) => state !== "已变化").map(([route, state]) => `${route}=${state}`).join(", ")}. A known change plus an unknown/unchanged half is 部分可用, not 可用.`;
+      if (untested > 0) return "no page half has a confirmed 12px→16px change and at least one half is 未测; neither 不可用 nor 可用 is evidenced, so the verdict is 未测.";
+      return "both page halves are measured and unchanged (not 12px→16px); the verdict is 不可用.";
+    })(),
     attempt_id: attemptId,
     attempt_ref: workerResultPath,
     identity_ref: runState.identity_ref,
@@ -1817,43 +1892,65 @@ async function collect(argv) {
       conclusion: responsive.conclusion,
     },
     sync,
+    sync_states: computed.sync_states,
     sync_components: computed.sync_components,
     readback_status: readback.status,
     preflight: {ref: preflightRef.ref, status: preflight.status, end_to_end: preflight.end_to_end, reason: preflight.end_to_end_reason, owner: preflight.owner, recovery: preflight.recovery},
-    responsive: {
-      ref: responsiveRef.ref,
-      sha256: responsiveRef.sha256,
-      viewports: responsive.viewports,
-      overflow_after: responsive.overflow_after,
-      overflow_delta_vs_p1: responsive.overflow_delta_vs_p1,
-      main_action_390: responsive.main_action_390.conclusion,
-      conclusion: responsive.conclusion,
-    },
     untested,
     commands: result.commands,
     result_ref: resultRef.ref,
   });
-  safeUpdateRunState(statePath, {
-    status: "collected",
-    collect_ok: true,
-    collect_error: null,
-    engine_session: session,
-    session,
-    service_ref: serviceRef.ref,
-    service_sha256: serviceRef.sha256,
-    computed_ref: computedRef.ref,
-    computed_sha256: computedRef.sha256,
-    readback_ref: readbackRef.ref,
-    readback_sha256: readbackRef.sha256,
-    result_ref: resultRef.ref,
-    result_sha256: resultRef.sha256,
-    checks_ref: checks.ref,
-    preflight_ref: preflightRef.ref,
-    collect_completed_at: now(),
-    sync,
-    ac_c12_004: result.ac_c12_004,
-    commands: {...(runState.commands ?? {}), collect: {argv: process.argv.slice(), cwd: WORKTREE, exit_code: 0}},
-  });
+  try {
+    updateRunState(statePath, {
+      status: "collected",
+      collect_ok: true,
+      collect_error: null,
+      engine_session: session,
+      session,
+      service_ref: serviceRef.ref,
+      service_sha256: serviceRef.sha256,
+      computed_ref: computedRef.ref,
+      computed_sha256: computedRef.sha256,
+      readback_ref: readbackRef.ref,
+      readback_sha256: readbackRef.sha256,
+      result_ref: resultRef.ref,
+      result_sha256: resultRef.sha256,
+      checks_ref: checks.ref,
+      preflight_ref: preflightRef.ref,
+      collect_completed_at: now(),
+      sync,
+      ac_c12_004: result.ac_c12_004,
+      commands: {...(runState.commands ?? {}), collect: {argv: process.argv.slice(), cwd: WORKTREE, exit_code: 0}},
+    });
+  } catch (stateError) {
+    // The evidence originals were published, but the state that cleanup reads
+    // could not be persisted. Keep a recovery note with the pid/port/copy and
+    // force a failed collect state so cleanup never deletes on a stale success.
+    const recovery = {
+      schema: "c12-update-unavailable/1", run_id: runId, recorded_at: now(), step: "collect-state-persist",
+      code: "E_STATE_PERSIST", message: String(stateError.message).slice(0, 2000),
+      pid: runState.pid ?? null, process_identity: runState.process_identity ?? null, port: runState.port,
+      copy_root: runState.copy_root, service_ref: serviceRef.ref, computed_ref: computedRef.ref,
+      readback_ref: readbackRef.ref, result_ref: resultRef.ref, checks_ref: checks.ref,
+      collect_ok: false,
+      recovery: "cleanup can stop the recorded pid/port and keep the copy from this note even if the run state is stale",
+    };
+    const note = await recordNote(handle, `${runId}-collect-state-persist-failed`, recovery);
+    try {
+      writeRunState(statePath, {
+        ...runState,
+        status: "collect-failed",
+        collect_ok: false,
+        collect_error: {code: "E_STATE_PERSIST", message: String(stateError.message).slice(0, 2000), at: now(), ref: note},
+        service_ref: serviceRef.ref,
+        computed_ref: computedRef.ref,
+        readback_ref: readbackRef.ref,
+        result_ref: resultRef.ref,
+        checks_ref: checks.ref,
+      });
+    } catch { /* the recovery note carries the pid/port/copy */ }
+    throw fail("E_STATE_PERSIST", `collect originals were published but the run state could not be persisted: ${stateError.message}`, {exitCode: 4, unavailable_ref: note, pid: runState.pid ?? null, port: runState.port});
+  }
   process.stdout.write(`${JSON.stringify({
     ok: true, step: "collect", run_id: runId, evidence_base: evidence.base,
     service_ref: serviceRef.ref, preflight_ref: preflightRef.ref,
@@ -1886,12 +1983,49 @@ function readCopyReadback(copyRoot, identity) {
     read_at: now(),
   };
 }
+async function waitProcessGone(pid, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (processStart(pid) === null) return true;
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 100));
+  }
+  return processStart(pid) === null;
+}
+async function reclaimRecordedProcess(runState) {
+  const pid = runState.pid;
+  if (!Number.isInteger(pid) || pid <= 0) return {pid: pid ?? null, present: false, exited: true, skipped: "run state has no recorded pid"};
+  const expectedStart = runState.process_identity?.start ?? null;
+  const observedStart = processStart(pid);
+  if (!observedStart) return {pid, present: false, exited: true, expected_start: expectedStart, start: null, reason: "process not present"};
+  if (expectedStart && observedStart !== expectedStart) {
+    return {pid, present: true, exited: null, expected_start: expectedStart, start: observedStart, foreign: true, reason: "pid start time differs from the recorded process; not signalled"};
+  }
+  let signalled = false;
+  let signalError = null;
+  try { process.kill(-pid, "SIGTERM"); signalled = true; }
+  catch (error) {
+    try { process.kill(pid, "SIGTERM"); signalled = true; }
+    catch (second) { if (second.code !== "ESRCH") signalError = second.code; }
+  }
+  let forced = false;
+  let exited = await waitProcessGone(pid, 8_000);
+  if (!exited) {
+    try { process.kill(-pid, "SIGKILL"); } catch { try { process.kill(pid, "SIGKILL"); } catch { /* recorded below */ } }
+    forced = true;
+    exited = await waitProcessGone(pid, 3_000);
+  }
+  return {pid, present: true, exited, expected_start: expectedStart, start: observedStart, signalled, forced, signal_error: signalError};
+}
 async function verifyServiceClosed(runState) {
-  const stop = await stopServer(runState);
+  // Reclaim the recorded pid independently of the listener. A process stuck
+  // before it starts listening would otherwise look "closed" while still alive.
+  const processFacts = await reclaimRecordedProcess(runState);
+  const probe = await httpStatus(`http://127.0.0.1:${runState.port}${ROUTES[0]}`, 2000);
   const query = portQuery(runState.port);
   const owners = query.ok ? query.owners : null;
-  const closed = Boolean(query.ok && owners.length === 0 && !stop.post_stop_http?.ok);
-  return {stop, query, owners, closed};
+  const processGone = !processFacts.present || processFacts.exited === true;
+  const closed = Boolean(processGone && query.ok && owners.length === 0 && !probe.ok);
+  return {process: processFacts, query, owners, closed, post_stop_http: probe};
 }
 async function cleanup(argv) {
   const options = parseFlags(argv, ["run-id", "copy-root", "task-record-root"]);
@@ -1929,12 +2063,12 @@ async function cleanup(argv) {
   if (!service.closed) {
     const note = await recordNote(handle, `${runId}-cleanup-service-unverified`, {
       schema: "c12-update-unavailable/1", run_id: runId, recorded_at: now(), step: "cleanup",
-      code: "E_CLEANUP_SERVICE", stop: service.stop, port_query: service.query, owners: service.owners,
+      code: "E_CLEANUP_SERVICE", process: service.process, port_query: service.query, owners: service.owners, post_stop_http: service.post_stop_http,
       reason: "the owned service could not be proven stopped; the copy and state were kept",
       attempt_ref: runState.identity_ref ?? null,
       command: {argv: cleanupArgv, cwd: WORKTREE, exit_code: 7},
     });
-    throw fail("E_CLEANUP_SERVICE", service.query.ok ? `port ${runState.port} still has listeners` : `cannot determine listeners on ${runState.port}: ${service.query.error}`, {exitCode: 7, stop: service.stop, port_query: service.query, owners: service.owners, unavailable_ref: note});
+    throw fail("E_CLEANUP_SERVICE", service.query.ok ? `port ${runState.port} still has listeners or the recorded process is not confirmed exited` : `cannot determine listeners on ${runState.port}: ${service.query.error}`, {exitCode: 7, process: service.process, port_query: service.query, owners: service.owners, unavailable_ref: note});
   }
 
   const copyPresent = existsSync(copyRoot);
@@ -1958,10 +2092,22 @@ async function cleanup(argv) {
     process.stdout.write(`${JSON.stringify({ok: true, step: "cleanup", run_id: runId, cleanup_ref: note, copy_retained: copyPresent, service_stopped: service.closed, reason: "collect-not-successful"})}\n`);
     return 0;
   }
-  if (existsSync(join(taskRoot, evidenceFamily(Number(runState.evidence_base)).cleanup))) throw fail("E_EVIDENCE_EXISTS", `cleanup original already exists: ${evidenceFamily(Number(runState.evidence_base)).cleanup}`, {exitCode: 3});
+  const evidence = evidenceFamily(Number(runState.evidence_base));
+  const cleanupPath = join(taskRoot, evidence.cleanup);
+  const cleanupRead = existsSync(cleanupPath) ? readJson(cleanupPath) : null;
+  const cleanupAlreadyDone = cleanupRead && !cleanupRead.error && cleanupRead.value?.copy?.deleted === true;
 
   if (!copyPresent) {
-    const cleanupRef = await publish(handle, evidenceFamily(Number(runState.evidence_base)).cleanup, {
+    // A retry after a successful deletion that only failed to remove the state.
+    if (cleanupAlreadyDone) {
+      let stateRemoved = false;
+      try { rmSync(statePath, {force: true}); stateRemoved = !existsSync(statePath); } catch { /* state is not evidence */ }
+      process.stdout.write(`${JSON.stringify({ok: true, step: "cleanup", run_id: runId, cleanup_ref: evidence.cleanup, readback_ref: cleanupRead.value?.copy?.readback_ref ?? null, copy_deleted: true, already_absent: true, service_stopped: true, state_removed: stateRemoved, reused_cleanup: true})}\n`);
+      return 0;
+    }
+    if (cleanupRead?.error) throw fail("E_EVIDENCE_READ", `existing cleanup original is unreadable: ${cleanupRead.error}`, {exitCode: 3});
+    if (cleanupRead && !cleanupAlreadyDone) throw fail("E_EVIDENCE_EXISTS", `existing cleanup original does not record a completed deletion: ${evidence.cleanup}; state and copy facts were not rewritten`, {exitCode: 3});
+    const cleanupRef = await publish(handle, evidence.cleanup, {
       schema: "c12-update-cleanup/1", run_id: runId, cleaned_at: now(),
       service, service_closed: true, port_owners_after: service.owners,
       copy: {root: copyRoot, present_before: false, deleted: true, already_absent: true, readback_ref: null},
@@ -1985,30 +2131,56 @@ async function cleanup(argv) {
     });
     throw fail("E_CLEANUP_READBACK", "pre-deletion copy readback does not match the recorded after identity; the copy was kept", {exitCode: 8, unavailable_ref: note, readback});
   }
-  const evidence = evidenceFamily(Number(runState.evidence_base));
-  if (existsSync(join(taskRoot, evidence.cleanup_readback))) throw fail("E_EVIDENCE_EXISTS", `cleanup readback original already exists: ${evidence.cleanup_readback}`, {exitCode: 3});
-  // Leave the pre-deletion readback original before removing the copy.
-  const readbackRef = await publish(handle, evidence.cleanup_readback, {
-    schema: "c12-update-cleanup-readback/1",
-    run_id: runId,
-    read_at: now(),
-    copy_root: copyRoot,
-    copy_present: true,
-    expected_after: identity.after?.aggregate ?? null,
-    observed_aggregate: readback.aggregate,
-    matches_after: readback.matches_after,
-    mismatched: readback.mismatched,
-    files: readback.rows,
-    token_before_12px: readback.token_before,
-    token_after_16px: readback.token_after,
-    token_line: readback.token_line,
-    identity_ref: runState.identity_ref,
-    identity_sha256: runState.identity_sha256,
-  });
+
+  // The pre-deletion readback original is write-once. On a retry after a failed
+  // deletion, reuse it only when the bytes describe the same copy state.
+  let readbackRef;
+  if (existsSync(join(taskRoot, evidence.cleanup_readback))) {
+    const prior = readJson(join(taskRoot, evidence.cleanup_readback));
+    const same = !prior.error
+      && prior.value?.observed_aggregate === readback.aggregate
+      && prior.value?.token_after_16px === readback.token_after
+      && prior.value?.token_before_12px === readback.token_before
+      && JSON.stringify(prior.value?.files) === JSON.stringify(readback.rows);
+    if (!same) throw fail("E_EVIDENCE_EXISTS", `cleanup readback original exists but does not match the current copy: ${evidence.cleanup_readback}`, {exitCode: 3});
+    readbackRef = {ref: evidence.cleanup_readback, sha256: fileSha(join(taskRoot, evidence.cleanup_readback)), reused: true};
+  } else {
+    readbackRef = await publish(handle, evidence.cleanup_readback, {
+      schema: "c12-update-cleanup-readback/1",
+      run_id: runId,
+      read_at: now(),
+      copy_root: copyRoot,
+      copy_present: true,
+      expected_after: identity.after?.aggregate ?? null,
+      observed_aggregate: readback.aggregate,
+      matches_after: readback.matches_after,
+      mismatched: readback.mismatched,
+      files: readback.rows,
+      token_before_12px: readback.token_before,
+      token_after_16px: readback.token_after,
+      token_line: readback.token_line,
+      identity_ref: runState.identity_ref,
+      identity_sha256: runState.identity_sha256,
+    });
+  }
+
   let deleted = false;
   let deleteError = null;
   try { rmSync(copyRoot, {recursive: true, force: true}); deleted = !existsSync(copyRoot); }
   catch (error) { deleteError = `${error.code ?? error.name}: ${error.message}`; }
+  if (!deleted) {
+    // Keep the run state and the readback original so a later retry can safely
+    // re-use them; do not publish a success family file for a failed deletion.
+    const note = await recordNote(handle, `${runId}-cleanup-delete-failed`, {
+      schema: "c12-update-unavailable/1", run_id: runId, recorded_at: now(), step: "cleanup",
+      code: "E_CLEANUP_DELETE", copy_root: copyRoot, delete_error: deleteError,
+      readback_ref: readbackRef.ref, readback_sha256: readbackRef.sha256,
+      service, reason: "copy deletion failed; run state and the pre-deletion readback original were kept for a safe retry",
+      command: {argv: cleanupArgv, cwd: WORKTREE, exit_code: 8},
+    });
+    throw fail("E_CLEANUP_DELETE", `copy was not deleted: ${deleteError ?? "still present"}; state and readback kept for retry`, {exitCode: 8, unavailable_ref: note, readback_ref: readbackRef.ref});
+  }
+
   const cleanupDoc = {
     schema: "c12-update-cleanup/1",
     run_id: runId,
@@ -2019,8 +2191,8 @@ async function cleanup(argv) {
     copy: {
       root: copyRoot,
       present_before: true,
-      deleted,
-      delete_error: deleteError,
+      deleted: true,
+      delete_error: null,
       readback_ref: readbackRef.ref,
       readback_sha256: readbackRef.sha256,
       files: readback.rows.length,
@@ -2035,20 +2207,36 @@ async function cleanup(argv) {
         ? "the gateway owns the single TaskSpace for this --run and finishes it with finish({keep:[]}); this cleanup does not start or keep another session."
         : "the gateway owns its isolated Chrome and temporary profile; this cleanup does not mix an ego session.",
     },
-    command: {argv: cleanupArgv, cwd: WORKTREE, exit_code: deleted ? 0 : 8},
+    command: {argv: cleanupArgv, cwd: WORKTREE, exit_code: 0},
     notes: [
       "The pre-deletion readback original was written before the copy was removed.",
       "Only this run's recorded process and licensed copy were reclaimed; no other process or evidence was touched.",
     ],
   };
-  const cleanupRef = await publish(handle, evidence.cleanup, cleanupDoc);
+  let cleanupRef;
+  if (existsSync(cleanupPath)) {
+    const priorCleanup = readJson(cleanupPath);
+    if (priorCleanup.error || priorCleanup.value?.copy?.deleted !== true) {
+      const note = await recordNote(handle, `${runId}-cleanup-corrected`, {
+        schema: "c12-update-cleanup/1", run_id: runId, cleaned_at: now(), mode: "corrected-after-prior-stale-original",
+        prior_cleanup: evidence.cleanup, delete_error: priorCleanup.error ?? null, ...cleanupDoc,
+      });
+      cleanupRef = {ref: note, sha256: fileSha(note), corrected: true};
+    } else {
+      cleanupRef = {ref: evidence.cleanup, sha256: fileSha(cleanupPath), reused: true};
+    }
+  } else {
+    cleanupRef = await publish(handle, evidence.cleanup, cleanupDoc);
+  }
+  // Remove the run state only after the copy deletion is confirmed. A failure
+  // here is not a cleanup failure of the copy; the next cleanup reuses the
+  // cleanup original and just removes the state.
   let stateRemoved = false;
   try { rmSync(statePath, {force: true}); stateRemoved = !existsSync(statePath); } catch { /* the state is not evidence */ }
-  if (!deleted) throw fail("E_CLEANUP_DELETE", `copy was not deleted: ${deleteError ?? "still present"}`, {exitCode: 8, cleanup_ref: cleanupRef.ref, readback_ref: readbackRef.ref});
   process.stdout.write(`${JSON.stringify({
     ok: true, step: "cleanup", run_id: runId, cleanup_ref: cleanupRef.ref,
     readback_ref: readbackRef.ref, service_stopped: true, port_closed: true,
-    copy_deleted: deleted, copy_root: copyRoot, state_removed: stateRemoved,
+    copy_deleted: true, copy_root: copyRoot, state_removed: stateRemoved,
   })}\n`);
   return 0;
 }

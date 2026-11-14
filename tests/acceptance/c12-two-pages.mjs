@@ -696,31 +696,72 @@ function rawDocProblems(doc, cell, context) {
 }
 
 function liveProbe() {
-  const result = runTimeout("curl", ["-s", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "2", "http://127.0.0.1:18844/"]);
+  const args = ["-s", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "2", "http://127.0.0.1:18844/"];
+  const result = runTimeout("curl", args);
+  const code = text(result.stdout) ? result.stdout.trim() : null;
+  let state;
+  let reason;
+  if (result.error || result.status === null) {
+    state = "probe_failed";
+    reason = `curl 探测工具失败（${result.error?.code ?? "no exit code"}）；探测失败不等于端口无监听。`;
+  } else if (result.status === 0 && code && /^[1-5]\d\d$/.test(code) && code !== "000") {
+    state = "reachable_unverified";
+    reason = `127.0.0.1:18844 返回 HTTP ${code}，但 P1 未验证 live 页面；可达不等于页面可用，保持未测。`;
+  } else if (result.status === 7 || code === "000" || code === null) {
+    state = "port_closed";
+    reason = `端口无监听（curl exit ${result.status}, http=${code ?? "none"}）；不构造数据或伪格。`;
+  } else {
+    state = "probe_failed";
+    reason = `curl 探测失败（exit ${result.status}, http=${code ?? "none"}）；不据此判 live 不可用。`;
+  }
   return {
     url: "http://127.0.0.1:18844/",
-    argv: ["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "2", "http://127.0.0.1:18844/"],
+    argv: ["curl", ...args],
     exit: result.status,
-    http_code: text(result.stdout) ? result.stdout.trim() : null,
-    reachable: result.status === 0,
-    meaning: "live branch unavailable when no listener answers; no live grid is constructed",
+    http_code: code,
+    stderr: text(result.stderr) ? result.stderr.trim().slice(0, 500) : null,
+    state,
+    reachable: state === "reachable_unverified",
+    meaning: reason,
   };
 }
 
 function c11Comparison(sourceRoot) {
+  let lines;
   try {
-    const rows = readFileSync(C11_FINAL, "utf8").split("\n").map((line) => line.trim()).filter(Boolean).map((line) => {
-      const [expectedSha, path] = line.split(/\s+/);
-      return {path, expectedSha};
-    });
-    const compared = rows.map((row) => {
-      const actual = sha256(readFileSync(join(sourceRoot, row.path)));
-      return {path: row.path, expected_sha256: row.expectedSha, current_sha256: actual, matches: actual === row.expectedSha};
-    });
-    return {source: C11_FINAL, count: compared.length, matched: compared.filter((row) => row.matches).length, rows: compared};
+    lines = readFileSync(C11_FINAL, "utf8").split("\n").map((line) => line.trim()).filter(Boolean);
   } catch (error) {
-    return {source: C11_FINAL, unavailable: true, error: `${error.code ?? error.name}: ${error.message}`};
+    return {source: C11_FINAL, unavailable: true, valid: false, error: `${error.code ?? error.name}: ${error.message}`};
   }
+  // The list is an external carrier: validate it before it can support any
+  // verdict. Ten valid, unique rows inside the locked nineteen are required; a
+  // malformed or empty list is 未测, never 0/0 == 可用.
+  const validation_errors = [];
+  const rows = [];
+  for (const [index, line] of lines.entries()) {
+    const match = /^([0-9a-f]{64})\s+(\S.*)$/.exec(line);
+    if (!match) {
+      validation_errors.push(`line ${index + 1} is not "sha256  path"`);
+      continue;
+    }
+    rows.push({path: match[2], expectedSha: match[1]});
+  }
+  if (lines.length !== 10) validation_errors.push(`expected 10 list rows, got ${lines.length}`);
+  if (rows.length !== 10) validation_errors.push(`expected 10 valid rows, got ${rows.length}`);
+  const uniquePaths = new Set(rows.map((row) => row.path));
+  if (uniquePaths.size !== rows.length) validation_errors.push("list paths are not unique");
+  const unexpected = rows.filter((row) => !FILES.includes(row.path)).map((row) => row.path);
+  if (unexpected.length) validation_errors.push(`paths outside the locked nineteen: ${unexpected.slice(0, 3).join(", ")}`);
+  const valid = validation_errors.length === 0;
+  const compared = rows.map((row) => {
+    try {
+      const actual = sha256(readFileSync(join(sourceRoot, row.path)));
+      return {...row, current_sha256: actual, matches: actual === row.expectedSha, error: null};
+    } catch (error) {
+      return {...row, current_sha256: null, matches: false, error: `${error.code ?? error.name}: ${error.message}`};
+    }
+  });
+  return {source: C11_FINAL, list_rows: lines.length, valid, validation_errors, count: compared.length, matched: compared.filter((row) => row.matches).length, rows: compared};
 }
 
 // Per-route expectations come from the frozen source (DataPanel renders
@@ -806,7 +847,55 @@ function capabilityDocument({context, runState, worker, build, c11, live, eviden
   const a11yCount = acquiredCount("a11y");
   const overflowCount = acquiredCount("overflow");
   const perfCount = acquiredCount("perf");
-  const c11Verdict = c11.unavailable ? "未测" : c11.matched === c11.count ? "可用" : "部分可用";
+  const c11Verdict = c11.unavailable || c11.valid !== true ? "未测" : c11.matched === c11.count ? "可用" : "部分可用";
+  const countOf = (item, key) => Number(item?.counts?.[key] ?? 0);
+  const primitiveSpecs = [
+    {name: "Metric", key: "metric", exportNeedle: "export function Metric", file: "app/components/simulation-board-panels.tsx", needle: "import { Metric,", pages: ["board", "workbench"]},
+    {name: "UiStatusBadge", key: "badge", exportNeedle: "export function UiStatusBadge", file: "app/components/simulation-board-panels.tsx", needle: "import { Metric,", pages: ["board", "workbench"]},
+    {name: "UiAction", key: "action", exportNeedle: "export function UiAction", file: "app/components/simulation-board-panels.tsx", needle: "import { Metric,", pages: ["board", "workbench"]},
+    {name: "UiLineage", key: "lineage", exportNeedle: "export function UiLineage", file: "app/components/sim-workbench-panels.tsx", needle: "import { UiAction, UiLineage", pages: ["workbench"]},
+  ];
+  const primitiveChecks = primitiveSpecs.map((spec) => {
+    const exportLine = lineOf(primitives, spec.exportNeedle);
+    const callLine = lineOf(source(spec.file), spec.needle);
+    const counts = {board: countOf(boardFacts, spec.key), workbench: countOf(workbenchFacts, spec.key)};
+    const missing = [];
+    if (!exportLine) missing.push("primitives export missing");
+    if (!callLine) missing.push(`panel import missing (${spec.file})`);
+    if (spec.pages.includes("board") && counts.board <= 0) missing.push("board DOM count is 0");
+    if (spec.pages.includes("workbench") && counts.workbench <= 0) missing.push("workbench DOM count is 0");
+    return {primitive: spec.name, call_site: callLine ? `${spec.file}:${callLine}` : null, export_line: exportLine, counts, expected_pages: spec.pages, ok: missing.length === 0, missing};
+  });
+  const allPrimitives = primitiveChecks.every((row) => row.ok);
+  const somePrimitives = primitiveChecks.some((row) => row.ok);
+  const c03Verdict = !designFactsRef || !boardFacts || !workbenchFacts ? "未测" : allPrimitives ? "可用" : somePrimitives ? "部分可用" : "未测";
+  const c03Reason = !designFactsRef || !boardFacts || !workbenchFacts
+    ? "DOM 计数原件缺失或设计事实采集失败；不把派生件里的计数当原始回执。"
+    : allPrimitives
+      ? "四类 primitives 的源码导出、panels 调用点与两页 DOM 计数逐项一致。"
+      : `逐项校验未全通过：${primitiveChecks.filter((row) => !row.ok).map((row) => `${row.primitive}(${row.missing.join(", ")})`).join("；")}`;
+  const globalsText = (() => { try { return readFileSync(globals, "utf8"); } catch { return ""; } })();
+  const declaredMatch = globalsText.match(/--inline-action-gap:\s*([^;}\s]+)/);
+  const declaredToken = declaredMatch ? declaredMatch[1].trim() : null;
+  const recordedToken = coverage?.computed_values?.inline_action_gap ?? null;
+  const computedToken = workbenchFacts?.token ? String(workbenchFacts.token).trim() : null;
+  const computedGap = workbenchFacts?.inlineGap ? String(workbenchFacts.inlineGap).trim() : null;
+  const availableFacts = facts.filter((item) => !item.unavailable);
+  const allTokens = availableFacts.map((item) => (item.token ? String(item.token).trim() : null));
+  const allGaps = availableFacts.map((item) => (item.inlineGap ? String(item.inlineGap).trim() : null));
+  const tokenConsistent = Boolean(
+    declaredToken && computedToken && computedGap && recordedToken
+    && recordedToken.declared === declaredToken
+    && recordedToken.computed === computedToken
+    && recordedToken.gap === computedGap
+    && availableFacts.length > 0
+    && allTokens.every((value) => value === declaredToken)
+    && allGaps.every((value) => value === null || value === declaredToken)
+  );
+  const c04Verdict = !declaredToken || !computedToken ? "未测" : tokenConsistent ? "可用" : "部分可用";
+  const c04Reason = c04Verdict === "可用"
+    ? `token 三方一致：声明 ${declaredToken}、计算根值 ${computedToken}、覆盖件记录 ${recordedToken?.computed ?? "未记录"}。`
+    : `token 不一致或缺失：声明=${declaredToken ?? "未取得"}、计算=${computedToken ?? "未取得"}、gap=${computedGap ?? "未取得"}、覆盖件记录=${recordedToken ? JSON.stringify(recordedToken) : "未记录"}。`;
   const interactionVerdict = interactionSummary.complete ? "可用" : interactionSummary.any ? "部分可用" : "未测";
   const interactionReason = interactionSummary.complete
     ? "两页各六个演示态均由页内 select 实际取得，终态与源码期望一致（12/12）。"
@@ -839,25 +928,21 @@ function capabilityDocument({context, runState, worker, build, c11, live, eviden
       id: "C03-P1",
       capability: "四对象页面使用点",
       object: "two-pages",
-      call_site: {
-        board: `app/components/simulation-board-panels.tsx:${lineOf(boardPanels, "import { Metric, UiAction, UiStatusBadge }")}`,
-        workbench: `app/components/sim-workbench-panels.tsx:${lineOf(workbenchPanels, "import { UiAction, UiLineage }")}`,
-        primitives: `app/ui/primitives.tsx:${lineOf(primitives, "export function Metric")}`,
-      },
+      call_site: Object.fromEntries(primitiveChecks.map((row) => [row.primitive, row.call_site])),
       input: "primitives props 与 panels 组合；冻结样例 view-model",
       output: "DOM 标记 pb-ui-metric / pb-ui-status-badge / pb-ui-action / pb-ui-lineage",
       consumer: "产品内：两页渲染",
-      verdict: designFactsRef && boardFacts?.counts && workbenchFacts?.counts ? "可用" : "未测",
-      reason: designFactsRef && boardFacts?.counts && workbenchFacts?.counts
-        ? "DOM 计数原件（design-facts）与源码调用点同时存在。"
-        : "DOM 计数原件缺失或设计事实采集失败；不把派生件里的计数当原始回执。",
+      verdict: c03Verdict,
+      reason: c03Reason,
+      owner: c03Verdict === "可用" ? null : "实现 owner/用户",
+      recovery_condition: c03Verdict === "可用" ? null : "逐项核对 primitives 导出、panels 调用点与两页 DOM 计数；缺项修复后重采 design-facts。",
       receipts: [
         {ref: designFactsRef, note: "两页 DOM 计数原始载体（C03-P1/C04-P1）"},
         ...(dimReceipt("/simulation-board", "1280x800", "a11y") ? [dimReceipt("/simulation-board", "1280x800", "a11y")] : []),
         ...(dimReceipt("/simulation-board", "1280x800", "console") ? [dimReceipt("/simulation-board", "1280x800", "console")] : []),
         {ref: evidence.interaction},
       ].filter(Boolean),
-      runtime: {board_1280: boardFacts?.counts ?? null, workbench_1280: workbenchFacts?.counts ?? null},
+      runtime: {primitives: primitiveChecks, board_1280: boardFacts?.counts ?? null, workbench_1280: workbenchFacts?.counts ?? null},
     },
     {
       id: "C03-P2",
@@ -885,12 +970,12 @@ function capabilityDocument({context, runState, worker, build, c11, live, eviden
       input: "设计源 ui 源与 PB token 规范",
       output: "计算值 --inline-action-gap 与 .inlineactions gap",
       consumer: "产品内：两页样式；验收：P1 对照表",
-      verdict: workbenchFacts?.token && workbenchFacts?.inlineGap ? "可用" : "未测",
-      reason: workbenchFacts?.token && workbenchFacts?.inlineGap
-        ? "当前计算值与源码声明一致；计算值来自 design-facts 原始载体。"
-        : "计算值原始载体缺失，不按源码声明判可用。",
+      verdict: c04Verdict,
+      reason: c04Reason,
+      owner: c04Verdict === "可用" ? null : "实现 owner/用户",
+      recovery_condition: c04Verdict === "可用" ? null : "核对 globals.css 声明、浏览器计算值与覆盖件记录，三者一致后重采。",
       receipts: [...(designFactsRef ? [{ref: designFactsRef}] : []), {ref: evidence.design}, {ref: evidence.interaction}],
-      runtime: {token: workbenchFacts?.token ?? null, inline_gap: workbenchFacts?.inlineGap ?? null, controls: facts.map((item) => ({route: item.route, viewport: item.viewport, token: item.token, inline_gap: item.inlineGap}))},
+      runtime: {declared: declaredToken, computed: computedToken, gap: computedGap, recorded: recordedToken, facts: availableFacts.map((item) => ({route: item.route, viewport: item.viewport, token: item.token, inline_gap: item.inlineGap}))},
     },
     {
       id: "C05-P1",
@@ -963,11 +1048,11 @@ function capabilityDocument({context, runState, worker, build, c11, live, eviden
       output: "十件逐件哈希差异",
       consumer: "验收：Phase 4 报告",
       verdict: c11Verdict,
-      reason: c11.unavailable ? `C11 清单不可读：${c11.error}` : `十件中 ${c11.matched}/${c11.count} 与 C11 清单一致；四维审查原件属 C11 字节，P1 不重做。`,
+      reason: c11.unavailable ? `C11 清单不可读：${c11.error}` : c11.valid !== true ? `C11 清单不合法，未测：${(c11.validation_errors ?? []).join("; ")}` : `十件中 ${c11.matched}/${c11.count} 与 C11 清单一致；四维审查原件属 C11 字节，P1 不重做。`,
       owner: c11Verdict === "可用" ? null : "Phase 4/独立审查者",
-      recovery_condition: c11Verdict === "可用" ? null : "Phase 4 在当前字节重做四维审查或声明沿用旧字节。",
-      receipts: [evidence.identity, ...(c11.unavailable ? [] : [{ref: C11_FINAL, note: "外部清单", external: true}])],
-      runtime: c11.unavailable ? null : {matched: c11.matched, count: c11.count},
+      recovery_condition: c11Verdict === "可用" ? null : "修复 C11 清单（10 件、有效、唯一、在锁定十九件内）或 Phase 4 在当前字节重做四维审查。",
+      receipts: [evidence.identity, ...(c11.unavailable ? [] : [{ref: C11_FINAL, note: c11.valid ? "外部清单（10 件有效唯一）" : "外部清单不合法", external: true}])],
+      runtime: c11.unavailable ? null : {valid: c11.valid, validation_errors: c11.validation_errors, list_rows: c11.list_rows, matched: c11.matched, count: c11.count},
     },
     {
       id: "C07-P1",
@@ -1065,10 +1150,14 @@ function capabilityDocument({context, runState, worker, build, c11, live, eviden
       input: "live 数据源 http://127.0.0.1:18844",
       output: "live 记录",
       consumer: "产品内：两页",
-      verdict: "不可用",
-      reason: `目标端口无监听（curl exit ${live.exit}, http=${live.http_code ?? "none"}）；按事实记 unavailable，不构造数据或伪格。`,
-      owner: "用户/数据源 owner",
-      recovery_condition: "在 127.0.0.1:18844 启动两页 live 数据源后以 ?source=live 单格重采。",
+      verdict: live.state === "port_closed" ? "不可用" : "未测",
+      reason: live.meaning,
+      owner: live.state === "port_closed" ? "用户/数据源 owner" : "环境/数据源 owner",
+      recovery_condition: live.state === "port_closed"
+        ? "在 127.0.0.1:18844 启动两页 live 数据源后以 ?source=live 单格重采。"
+        : live.state === "reachable_unverified"
+          ? "确认 18844 返回两页所需 live 数据后，以 ?source=live 单格实采并验证页面。"
+          : "修复 curl 探测环境后重试；探测工具失败不判 live 不可用。",
       receipts: [],
       runtime: live,
     },
@@ -1654,10 +1743,25 @@ try {
       const result = workerResult.cells?.find((item) => item.route === cell.route && item.viewport === cell.viewport);
       const dimensions = {};
       const status = {};
+      const [targetWidth, targetHeight] = cell.viewport.split("x").map(Number);
+      const measuredViewport = result?.measured_viewport ?? null;
+      const viewportProblem = !measuredViewport
+        ? "浏览器未回报实测视口"
+        : measuredViewport.width !== targetWidth || measuredViewport.height !== targetHeight
+          ? `浏览器实测视口 ${measuredViewport.width}x${measuredViewport.height} 与目标 ${cell.viewport} 不符`
+          : null;
       for (const dimension of DIMENSIONS) {
         const entry = result?.dimensions?.[dimension];
         const rawPath = rawRefFor(evidence, cell.index, dimension);
         const label = `${cell.route} ${cell.viewport} ${dimension}`;
+        if (viewportProblem) {
+          const reason = `${viewportProblem}；该格五维不计已取得`;
+          const attemptRef = text(entry?.attempt_ref) && attemptExists(taskRoot, entry.attempt_ref) ? entry.attempt_ref : await fallbackAttempt(cell, dimension, reason);
+          dimensions[dimension] = {status: "未测", reason, attempt_ref: attemptRef};
+          status[dimension] = {status: "未测", reason, attempt_ref: attemptRef};
+          dimensionStatus.push({route: cell.route, viewport: cell.viewport, dimension, ...status[dimension]});
+          continue;
+        }
         if (entry?.status === "已取得") {
           const doc = readJson(evidenceAbs(taskRoot, rawPath));
           const problems = doc.error ? [doc.error] : rawDocProblems(doc, cell, context);
@@ -1690,6 +1794,7 @@ try {
         state: "frozen",
         state_observation: {...observation, reason: stateReason},
         console_network_window: windowId,
+        measured_viewport: measuredViewport,
         dimensions,
         notes: result?.notes ?? [],
       });
@@ -1718,6 +1823,17 @@ try {
         "本件是 P1 生产者原件，独立判定归未参与实施的测试/审查者。",
         "一个维度的失败原件只作为 attempt_ref 保留，绝不计为已取得；collect-checks 原件记录该自检结果。",
       ],
+    };
+    const tokenFacts = (workerResult.designFacts ?? []).filter((item) => !item.unavailable);
+    let declaredTokenValue = null;
+    try { declaredTokenValue = (readFileSync(join(runState.source_root, "app/globals.css"), "utf8").match(/--inline-action-gap:\s*([^;}\s]+)/) ?? [])[1] ?? null; } catch { declaredTokenValue = null; }
+    coverage.computed_values = {
+      inline_action_gap: {
+        declared: declaredTokenValue,
+        computed: tokenFacts.find((item) => item.token)?.token ?? null,
+        gap: tokenFacts.find((item) => item.inlineGap)?.inlineGap ?? null,
+        facts: tokenFacts.map((item) => ({route: item.route, viewport: item.viewport, token: item.token, inline_gap: item.inlineGap})),
+      },
     };
     const interactionSummary = collectInteractionSummary(workerResult.interaction);
     const boardPage = workerResult.interaction?.pages?.find?.((page) => page.route === "/simulation-board") ?? null;
@@ -1795,6 +1911,18 @@ try {
     // Stop the service before the service original is written, so start and stop
     // facts share one original; the finally still reclaims on any later failure.
     const stop = await stopOnce();
+    // A successful collect must prove the owned service actually stopped. A
+    // failed/blocked stop keeps the error and returns non-zero so the gate
+    // exposes it instead of recording ok=true.
+    const postStopHttp = await httpStatus(`${serviceUrl}${ROUTES[0]}`, 2000);
+    const postStopOwners = portOwners(runState.port);
+    const processGone = stop?.identity?.owned === false && String(stop?.reason ?? "").includes("not present");
+    const stopVerified = (stop?.stopped === true || processGone) && !postStopHttp.ok && postStopOwners.length === 0;
+    stop.verification = {post_stop_http: postStopHttp, port_owners: postStopOwners, verified: stopVerified};
+    if (!stopVerified) {
+      const ref = await recordFailure("E_STOP", "owned service did not stop cleanly; collect refuses to report success.", {stop, post_stop_http: postStopHttp, port_owners: postStopOwners});
+      throw fail("E_STOP", "owned service did not stop cleanly", {exitCode: 7, stop, failure_ref: ref});
+    }
     const service = {
       schema: "c12-two-pages-service/1",
       object: "two-pages",
@@ -2252,10 +2380,27 @@ export async function egoWorker(input) {
         await page.goto(`${input.serviceUrl}${cell.route}`, {timeout: 30_000});
         await page.waitForSelector("body", {timeout: 15_000});
         cellRecord.url = await page.url();
+        const measured = await page.evaluate("(() => ({width: innerWidth, height: innerHeight}))()");
+        cellRecord.measured_viewport = measured;
+        cellRecord.viewport_match = measured.width === width && measured.height === height;
+        if (!cellRecord.viewport_match) {
+          cellRecord.viewport_mismatch = `浏览器实测视口 ${measured.width}x${measured.height} 与目标 ${cell.viewport} 不符`;
+        }
         context = await ownedEgoContext(page, {viewport: cell.viewport, state: "frozen"}, envFor(cell));
         cellRecord.object = context.object;
       } catch (error) {
         cellRecord.notes.push(`owned context failed: ${error.code ?? error.kind ?? error.name}: ${String(error.message).slice(0, 300)}`);
+      }
+
+      // A cell whose observed viewport differs from the target cannot support
+      // any acquired dimension; keep an attempt original per dimension.
+      if (cellRecord.viewport_mismatch) {
+        for (const dimension of ["console", "network", "overflow", "a11y", "perf"]) {
+          cellRecord.dimensions[dimension] = await failDim(cell, dimension, `${cellRecord.viewport_mismatch}；该格五维不计已取得`, null);
+        }
+        cellRecord.console_network_window = null;
+        output.cells.push(cellRecord);
+        continue;
       }
 
       // console + network share one navigation window; a collector failure is
