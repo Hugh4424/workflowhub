@@ -14,7 +14,7 @@
 | C01 规范初始化 | 排阶段、写代码每 Phase 开工；读 `skills/project-norm-init/SKILL.md` | 阶段开工或终末需要读设计、前端、后端、接口、验收规范，且目标项目没有现成来源时 | 八类规范的来源台账：路径、稳定节、version、owner、consumer；组件规范落目标项目根下的组件规范 | 每类有真实来源与 owner；缺源写缺口，不拿标题冒充 anchor | 部分（写代码阶段缺包登记） | 接阶段读取，不新增规范 | 引用原交付，不重验 |
 | C02 知识检索 | 定方向调研、写需求/排阶段/写代码开工；读 `skills/knowledge-graph/SKILL.md` | 调研或每个 Phase 开工需要项目内领域、历史决定与失败经验时 | 有源结论、采用与否的判断与缺口，写回 decision-log、spec 或 PRD | 调研报告有 UI 候选与来源；演练中一个后续任务真实采用 | 部分（本任务演练完成一次真实采用：quality/evidence/rehearsal/2026-11-13-followup/c02-adoption.md；仍缺第二次具名任务） | 部分承接：调研使用；演练采用一次 | 原卡“知识检索被下游采用”归原交付；本任务只验一次真实采用 |
 | C03 组件与布局复用 | 写代码；审查段尚未读该方法 | 实现前选组件与布局、判断复用、抽取或删除时 | 组件质量图：复用、抽取、删除结论 | 组件质量写清复用、抽取、删除，且审查读到 | 部分（审查段未读 frontend-component-quality） | 接实现与审查 | 引用原交付，不重验 |
-| C04 设计源提炼 | 定方向、排阶段；读 `skills/design-source-readiness/SKILL.md` 与 `skills/design-source-extraction/SKILL.md` | 有设计稿或设计源，需要提炼成可核对的实现项时 | 设计源提炼结果与 Read Map 输入 | 提炼结果被排阶段消费；缺项不假补 | 已接线 | 接排阶段消费 | 引用原交付，不重验 |
+| C04 设计源提炼 | 排阶段、写代码；定方向只读 `skills/design-source-readiness/SKILL.md` | 有设计稿或设计源，需要提炼成可核对的实现项时 | 设计源提炼结果与 Read Map 输入 | 提炼结果被排阶段消费；缺项不假补 | 部分（定方向未读 design-source-extraction） | 接排阶段消费与写代码实施 | 引用原交付，不重验 |
 | C05 原型与设计审查 | 定方向、排阶段；写需求段尚未读 | 需要设计原型、方向审查或设计审查时 | 两路设计原型与独立审查结论 | 原型与设计审查有独立结论 | 部分（写需求段未读 frontend-prototype-render） | 接定方向、写需求、排阶段 | 引用原交付，不重验 |
 | C06 规范驱动实现 | 写代码 | 实现前要读规范、实现后要回写组件规范时 | 实现前的规范读回与实现后的组件规范回写 | 实现前读规范，实现后回写；组件规范落目标项目根下的组件规范 | 已接线 | 接写代码 | 引用原交付，不重验 |
 | C07 真实页面验证 | 写代码（含终末的 UI 与浏览器终验）；审查段尚未读该方法 | 页面实现后或需要真实浏览器证据时 | 页面审计报告与浏览器证据 | 页面审计与浏览器证据可读；缺工具记 unavailable | 部分（审查段未读 frontend-testing） | 接写代码、审查 | 引用原交付，不重验 |
@@ -31,7 +31,7 @@
 - C01 部分：排阶段在 `workflows/build-plan/SKILL.md` 的「方法」第 5 步（UI 就绪）要求按 `skills/project-norm-init/SKILL.md` 读取，且 `workflows/build-plan/skill-deps.yaml` 有 name 条目；写代码在 `workflows/build-code/SKILL.md` 的「方法」第 1 步与第 7 步（UI 适用时「规范职责」）要求读，`workflows/build-code/skill-deps.yaml` 没有 name 条目，只有注释；定方向在 `workflows/make-decision/SKILL.md` 的「使用技能与执行分工」表把 `project-norm-init` 列为“跳过”，其 `skill-deps.yaml` 无该条目。缺写代码阶段的包登记，故不写已接线。
 - C02 部分：`skills/knowledge-graph/SKILL.md` 在定方向、写需求、排阶段、写代码都有读取。与决定 9（`decision-log.md`「决定 9 — 能力台账逐项有消费者与验收」）的偏差：决定 9 把阶段消费者写作「定方向调研、台账」，本行按仓内读取事实另列写需求、排阶段、写代码开工，其中「台账」就是本表；承接仍记部分承接：调研使用。缺「两次具名真实任务」的再用闭环证据；P9 对账后：已完成一次真实采用（`quality/evidence/rehearsal/2026-11-13-followup/c02-adoption.md`），仍缺第二次。
 - C03 部分：`skills/frontend-component-quality/SKILL.md` 在写代码与排阶段有读取；`skills/wh-review/SKILL.md` 没有读到该方法，缺审查段。
-- C04 已接线：`skills/design-source-readiness/SKILL.md` 与 `skills/design-source-extraction/SKILL.md` 在定方向与排阶段有读取。
+- C04 部分：`skills/design-source-readiness/SKILL.md` 在定方向（`workflows/make-decision/SKILL.md` 的「使用技能与执行分工」表，按需）与排阶段（`workflows/build-plan/SKILL.md` 的「方法」第 5 步）有读取；`skills/design-source-extraction/SKILL.md` 只在排阶段（`workflows/build-plan/SKILL.md` 的「方法」第 5 步）与写代码（`workflows/build-code/SKILL.md` 的「方法」第 7 步）有读取，定方向 `workflows/make-decision/` 无该技能引用，缺定方向提炼段。
 - C05 部分：`skills/frontend-prototype-render/SKILL.md` 与 `skills/plan-design-review/SKILL.md` 在定方向与排阶段有读取；`workflows/build-prd/SKILL.md` 没有读到，缺写需求段。
 - C06 已接线：写代码阶段同时读 `skills/project-norm-init/SKILL.md` 与 `skills/frontend-component-quality/SKILL.md`。
 - C07 部分：`skills/frontend-testing/SKILL.md` 在写代码与终末有读取；审查段没有读到，缺审查段。

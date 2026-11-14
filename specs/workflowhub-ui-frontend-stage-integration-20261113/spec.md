@@ -777,7 +777,7 @@ check-skill-consistency 以任务库 `quality/tests/2026-11-13-031-baseline-chec
   旧账判据：R1 在 390×844 下代码块自动换行、无横向滚动，截图存 `quality/tests/<日期>-p8-r1-wrap.png`；
   R3 打开 `?state=pending` 入口，1 秒后离开等待态，截图存 `quality/tests/<日期>-p8-r3-pending.png`；
   N3 跑 `grep -nE 'AsyncStatePanel|valueTone' docs/examples/c11-ui/carrier/app/ui/primitives.tsx docs/examples/c11-ui/carrier/app/ui/primitives.css`，
-  命中结果与 `SOURCE.md` 写的 N3 处置一致（给使用点或删除、去掉或补复测）。
+  命中结果与 `SOURCE.md` 写的 N3 处置一致（`AsyncStatePanel` 给使用点或删除、`Metric.valueTone` 去掉；或保留并写使用点与理由，保留时必须写明未跑 tsc/构建）。
   反例：在临时副本改 v15 一个字节，交付校验必须报 FAILED；
   临时副本去掉换行样式，R1 观察必须看到横向滚动；去掉定时器，R3 等 1 秒后仍停在等待态；
   `SOURCE.md` 写 N3 已删而 grep 仍命中，必须判不一致；
