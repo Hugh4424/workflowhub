@@ -338,7 +338,7 @@ UI 任务在每个阶段多出一小段只在 UI 时出现的内容；非 UI 任
 | 第 5 段 | `workflows/build-plan/{SKILL.md,steps.json,skill-deps.yaml}`；`skills/spec-plan/templates/phase-template.md`；新建 `tests/contract/ui-stage-build-plan.test.mjs` | 无共享 |
 | 第 6 段 | `workflows/build-code/{SKILL.md,steps.json,skill-deps.yaml}`；`skills/frontend-testing/references/page-audit.md`；新建 `tests/contract/ui-stage-build-code.test.mjs` | 无共享 |
 | 第 7 段 | `skills/wh-review/SKILL.md`；`skills/plan-design-review/SKILL.md`（含触发条件与调用范围，第 7 段是唯一写者）；`skills/wh-review/contracts/make-decision.md`；`skills/wh-review/stage-skill-plan.json`；新建 `tests/contract/ui-stage-review.test.mjs` | 第 3 段写完第 10 步后才开工 |
-| 第 8 段 | 新建 `docs/examples/c11-ui/**`（v15 五件、载体 `app/ui/` 四件、`SOURCE.md`、`delivery.sha256`） | 无共享 |
+| 第 8 段 | 新建 `docs/examples/c11-ui/**`（v15 五件、v11/v12 两份样式、载体 `app/ui/` 四件、`SOURCE.md`、`delivery.sha256`，共 13 件） | 无共享 |
 | 第 9 段 | `docs/ui-frontend-capabilities.md` 状态列；任务证据区 `quality/evidence/rehearsal/` 与 `quality/tests/` | 第 1 段先写 |
 
 故意不改：`tests/contract/n10-process-repair.test.mjs`（第 2 段只改正文让它转绿）；
@@ -421,8 +421,8 @@ R-010、R-011、R-013、R-015 已在定方向阶段执行，见「已声明不�
 ```json
 {
   "workspace": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-ui-frontend-stage-integration-20261113",
-  "service": "python3 -m http.server（静态服务，根为第 9 段演练副本中的 docs/examples/c11-ui/v15）",
-  "route": "/2026-11-11-002-t019-v15-pending-busy-index.html",
+  "service": "python3 -m http.server（静态服务，根为第 9 段演练副本，即 docs/examples/c11-ui/ 的完整副本）",
+  "route": "/v15/2026-11-11-002-t019-v15-pending-busy-index.html",
   "state": "正常数据；改一个值后刷新；数据文件改坏或删除后的失败态",
   "viewport": "1440x900, 390x844",
   "owner": "第 9 段独立验收者（未参与实现）"
@@ -745,7 +745,10 @@ check-skill-consistency 以任务库 `quality/tests/2026-11-13-031-baseline-chec
 - [ ] **AC-006 C11 修复入库**：承接 P8；关联 FR-006。
   落点：P8/T011、P8/T012 与 `phases/P8-C11修复入库.md`；全 AC 末验在 P9/T018。
   判定方式：机器可判（指纹）＋需真实环境，可用自动化采集判（页面打开）。
-  目标：`docs/examples/c11-ui/` 有 v15 五件、载体 `app/ui/` 四件、来源说明、交付指纹清单；
+  目标：`docs/examples/c11-ui/` 有 v15 五件、v11/v12 两份样式、载体 `app/ui/` 四件、
+  来源说明 `SOURCE.md`、交付指纹清单 `delivery.sha256`，共 13 件；`delivery.sha256` 用 12 行相对路径
+  覆盖除它自身外的 12 件；镜像提交上 v15 五件与载体四件按 C11 原清单逐字节等于源，
+  两份样式逐件与来源比对并留原件；
   来源与交付两份指纹分开校验；N1–N3、R1、R3 有修复证据，R2 有用户接受说明，
   G8、N4、N5 写未修、负责人与恢复条件；维护者与演练能直接打开 v15。
   R1、R3 按工作包 6「旧账逐条处置」“修”；C11 收口索引第 44–46 行把它们记为待接受风险，
@@ -757,8 +760,10 @@ check-skill-consistency 以任务库 `quality/tests/2026-11-13-031-baseline-chec
   `cd docs/examples/c11-ui && shasum -a 256 -c /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c11-gap-repair-20261112/quality/evidence/c11-final-v15.sha256`
   `cd docs/examples/c11-ui/carrier && grep ' app/ui/' /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c11-gap-repair-20261112/quality/evidence/c11-final-carrier.sha256 | shasum -a 256 -c -`
   第二步在修复提交上跑交付校验：`cd docs/examples/c11-ui && shasum -a 256 -c delivery.sha256`；
-  第三步 `python3 -m http.server --directory docs/examples/c11-ui/v15 <端口>`，
-  用隔离浏览器打开 v15 页面截图关键区域。
+  两份样式不在 C11 两份清单覆盖范围内，逐件源/入库比对见
+  `quality/tests/2026-11-13-p8-fingerprint-check.output` 第 4 段（两份均 MATCH）；
+  第三步 `python3 -m http.server --directory docs/examples/c11-ui <端口>`，
+  用隔离浏览器打开 `http://127.0.0.1:<端口>/v15/2026-11-11-002-t019-v15-pending-busy-index.html` 截图关键区域。
   什么条件：先跑 `shasum -a 256 /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c11-gap-repair-20261112/quality/evidence/c11-final-v15.sha256 /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-ui-frontend-c11-gap-repair-20261112/quality/evidence/c11-final-carrier.sha256`，
   输出须与收口索引 `c11-closeout-index-v2.md` 第 61、62 行逐字一致。
   许可未核：两处仓外目录没有许可说明文件，grep 无命中（轻研究第 61 行）；
@@ -766,7 +771,7 @@ check-skill-consistency 以任务库 `quality/tests/2026-11-13-031-baseline-chec
   owner 是第 8 段开发者，任务 1 第一步先读两处目录的许可说明；
   恢复条件是取得书面许可或用户书面答复；仍不清就停该路径问用户，不得默认通过。
   体积已核：v15 五件共 52K，载体四件约 27K（轻研究第 50–51 行）。
-  怎样算通过：三条校验都退出 0 且每行 OK；页面关键区域显示；来源说明写任务、仓外路径与两份指纹；
+  怎样算通过：三条校验都退出 0 且每行 OK；两份样式逐件比对全 MATCH；页面关键区域显示；来源说明写任务、仓外路径与两份指纹；
   旧账逐条有处置，没有“已通过”与“没修”混写。
   失败信号：任一行 FAILED；页面空白或报错；目录里出现 node_modules、构建产物或证据快照。
   旧账判据：R1 在 390×844 下代码块自动换行、无横向滚动，截图存 `quality/tests/<日期>-p8-r1-wrap.png`；
