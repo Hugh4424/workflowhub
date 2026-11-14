@@ -1,0 +1,13 @@
+.local-demo button,
+.local-demo select {
+  min-height: 44px;
+  padding: 9px 14px;
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  font: inherit;
+}
+.local-demo button:not(:disabled) { cursor: pointer; }
+.local-demo button:disabled { cursor: not-allowed; opacity: 0.6; }
+.local-demo button:focus-visible,
+.local-demo select:focus-visible { outline: 2px solid var(--pb-ui-focus); outline-offset: 2px; }

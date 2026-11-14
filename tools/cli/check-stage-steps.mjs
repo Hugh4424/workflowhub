@@ -781,7 +781,11 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
     stage, step_id: current.step_id, step_slug: current.step_slug,
     result: current.result ?? '按本步方法留下具名原件；未取得不能冒完成。',
     entry: `先读本步方法；核对前置步骤具名原件与当前 ${runId ? `run ${runId}` : phase ? `Phase ${phase}` : commit ? `commit ${commit}` : '身份（尚未提供）'}，缺项如实记录。`,
-    stop: `${current.requires_user_reply ? '需要真实用户答复；未答停在本步。' : '缺少本步必需输入时停止该路径，保留原因、负责人和恢复条件。'}可读或 exit 0 不代表完成；按本步判据独立核对。`,
+    stop: `${current.requires_user_reply
+      ? current.step_slug === 'conditional-ui-readiness'
+        ? 'UI 任务需要真实用户答复；未答停在本步。非 UI 任务在本步写不适用＋理由后继续。'
+        : '需要真实用户答复；未答停在本步。'
+      : '缺少本步必需输入时停止该路径，保留原因、负责人和恢复条件。'}可读或 exit 0 不代表完成；按本步判据独立核对。`,
     paths: [...new Set([`workflows/${stage}/SKILL.md#${current.method_anchor}`, current.source,
       (current.evidence.find(item => item.present === true) ?? current.evidence.find(item => item.ref && !item.ref.endsWith('/') && item.kind !== 'task_original_ref'))?.ref].filter(Boolean))],
     evidence: current.evidence.length ? current.evidence : [{ ref: current.evidence_location, present: false, reason: '尚未取得具名原件' }],

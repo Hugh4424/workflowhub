@@ -1,0 +1,430 @@
+.pb-ui-async-state {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 10px 12px;
+  color: var(--pb-ui-text);
+  border: 1px solid var(--pb-ui-border);
+  border-radius: var(--pb-ui-radius);
+  background: var(--pb-ui-surface);
+}
+.pb-ui-state-recovery { color: inherit; opacity: 0.82; }
+
+/* Shared type roles. Feature owners may position these roles, but should not
+   redefine their semantic scale. */
+.pb-ui-page-title { margin: 0; color: var(--text-primary, var(--pb-ui-text)); font: 700 28px/1.25 var(--font-ui); }
+/* Section heads follow the design's card/section header type scale
+   (Board.tsx / Workbench.tsx: text-[14px] font-semibold text-slate-100). */
+.pb-ui-section-title { margin: 0; color: var(--text-primary, var(--pb-ui-text)); font: 600 14px/1.35 var(--font-ui); }
+.pb-ui-body-text { color: var(--text-secondary, var(--pb-ui-text)); font: 400 13px/1.5 var(--font-ui); }
+.pb-ui-label-text { color: var(--text-muted, var(--pb-ui-muted)); font: 500 11px/1.35 var(--font-ui); }
+.pb-ui-data-text { color: var(--text-secondary, var(--pb-ui-text)); font: 500 12px/1.4 var(--font-mono); font-variant-numeric: tabular-nums; }
+
+.pb-ui-status-badge { box-sizing: border-box; display: inline-flex; align-items: center; gap: 5px; min-height: 20px; padding: 2px 6px; border: 1px solid var(--pb-ui-border); border-radius: 4px; font: 500 11px/1.2 var(--font-ui); }
+.pb-ui-status-badge-neutral { color: var(--text-secondary, var(--pb-ui-text)); background: color-mix(in srgb, var(--pb-ui-muted) 8%, transparent); }
+.pb-ui-status-badge-success { border-color: color-mix(in srgb, var(--up-green) 35%, transparent); color: var(--up-green); background: color-mix(in srgb, var(--up-green) 8%, transparent); }
+.pb-ui-status-badge-warning { border-color: color-mix(in srgb, var(--warn-amber) 35%, transparent); color: var(--warn-amber); background: color-mix(in srgb, var(--warn-amber) 8%, transparent); }
+.pb-ui-status-badge-danger { border-color: color-mix(in srgb, var(--down-red) 35%, transparent); color: var(--down-red); background: color-mix(in srgb, var(--down-red) 8%, transparent); }
+.pb-ui-status-badge-smart { border-color: color-mix(in srgb, var(--accent-blue) 38%, transparent); color: var(--accent-blue); background: color-mix(in srgb, var(--accent-blue) 10%, transparent); }
+.pb-ui-action { box-sizing: border-box; font: inherit; }
+/* Native data tables share sizing/collapse; page owners set columns and density. */
+.pb-ui-table { box-sizing: border-box; width: 100%; border-collapse: collapse; }
+.pb-ui-lineage { box-sizing: border-box; display: inline-flex; flex-wrap: wrap; gap: 6px; color: var(--pb-ui-muted); font-size: 11px; }
+.pb-ui-lineage-item { box-sizing: border-box; display: inline-flex; gap: 3px; min-width: 0; padding: 1px 3px; border-radius: 4px; background: var(--bg-chart); }
+.pb-ui-lineage-item b { color: currentColor; font-weight: 600; }
+.pb-ui-layer-lineage { box-sizing: border-box; color: var(--pb-ui-muted); font-size: 11px; line-height: 1.5; }
+
+.pb-ui-async-state-warning { border-color: color-mix(in srgb, var(--warn-amber) 55%, transparent); }
+.pb-ui-async-state-danger { border-color: color-mix(in srgb, var(--down-red) 55%, transparent); }
+/* Unknown is not an empty success: it keeps the neutral tone (design.md tone
+   mapping) and adds a non-colour border shape so it cannot read as "no data".
+   Values stay inside the existing token set. */
+.pb-ui-async-state[data-state="unknown"] { border-style: dashed; }
+
+.pb-ui-metric {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 10px 12px;
+  color: var(--pb-ui-text);
+  border: 1px solid var(--pb-ui-border);
+  border-radius: var(--pb-ui-radius);
+  background: var(--pb-ui-surface);
+}
+
+.pb-ui-metric-label,
+.pb-ui-metric-description { color: var(--pb-ui-muted); font-size: 12px; }
+.pb-ui-metric-value { font-size: 18px; font-variant-numeric: tabular-nums; }
+.pb-ui-metric-bottom-label { color: var(--pb-ui-muted); font-size: 12px; }
+.pb-ui-metric-bottom-value { font-size: 15px; font-variant-numeric: tabular-nums; }
+
+.pb-ui-dialog-backdrop {
+  position: fixed;
+  z-index: 30;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: color-mix(in srgb, var(--bg-app) 72%, transparent);
+}
+
+.pb-ui-dialog {
+  width: min(100%, 640px);
+  max-height: min(720px, calc(100vh - 40px));
+  overflow: auto;
+  color: var(--pb-ui-text);
+  border: 1px solid color-mix(in srgb, var(--border-strong) 67%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--bg-surface) 60%, var(--bg-app));
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.35);
+}
+.pb-ui-drawer {
+  position: fixed;
+  z-index: 21;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(100%, 480px);
+  overflow: auto;
+  color: var(--pb-ui-text);
+  border: 0;
+  border-left: 1px solid var(--border-strong);
+  border-radius: 0;
+  background: var(--pb-ui-surface-raised);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.35);
+}
+
+.pb-ui-drawer-layer {
+  position: fixed;
+  z-index: 45;
+  inset: 0;
+  background: color-mix(in srgb, var(--bg-app) 50%, transparent);
+}
+
+.pb-ui-dialog-header,
+.pb-ui-drawer-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--pb-ui-border); }
+.pb-ui-dialog-header h2,
+.pb-ui-drawer-header h2 { margin: 0; font: inherit; font-size: 16px; font-weight: 650; }
+.pb-ui-dialog-body,
+.pb-ui-drawer-body { padding: 16px; }
+.pb-ui-dialog-close,
+.pb-ui-drawer-close { min-width: 24px; min-height: 24px; color: var(--text-dim); border: 0; border-radius: 6px; background: transparent; font: inherit; cursor: pointer; }
+.pb-ui-dialog-close:hover,
+.pb-ui-drawer-close:hover { color: var(--text-secondary); }
+.pb-ui-dialog-close:focus-visible,
+.pb-ui-drawer-close:focus-visible { outline: 2px solid var(--pb-ui-focus); outline-offset: 2px; }
+
+@media (max-width: 640px) {
+  :where(.pb-ui-dialog-backdrop) { padding: 12px; }
+  :where(.pb-ui-dialog) { max-height: calc(100vh - 24px); }
+  :where(.pb-ui-drawer) { width: 100%; }
+}
+
+/* 模拟面权益曲线统一 sky 单色规格（设计稿）：红绿分界仅用于回测面 */
+
+/* 六指标统一规格（唯一基线，逐值对齐设计稿 PerfBlocks.MetricsBlock /
+   Workbench.PerfCell）：.sc-metrics + .sc-metric 是策略卡、回测工作台、模拟工作台
+   三处网格消费点的共用容器与单元，与 ui/perf-blocks.css 的 .pb-metric-* 同值——
+   label 11px、首行值 17px/600、次行值 15px/500；首行（净利润/胜率/夏普）用主色，
+   次行（最大回撤/订单数量/盈亏比）用次级色。页面级样式只允许改列宽与容器宽度，
+   不得再改字号、色值、内边距或边框。 */
+.sc-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-content: start;
+  gap: 16px 32px;
+  width: 300px;
+  min-width: 0;
+}
+
+.pb-ui-metric.sc-metric {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-width: 74px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.pb-ui-metric.sc-metric .pb-ui-metric-label {
+  min-height: 0;
+  margin: 0;
+  color: var(--text-dim);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.pb-ui-metric.sc-metric .pb-ui-metric-value {
+  min-height: 0;
+  margin-top: 0;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 17px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 25.5px;
+  white-space: nowrap;
+}
+
+.pb-ui-metric.sc-metric:nth-child(n + 4) .pb-ui-metric-value {
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.pb-ui-metric.sc-metric .pos,
+.pb-ui-metric.sc-metric .is-pos { color: var(--up-green); }
+
+.pb-ui-metric.sc-metric .neg,
+.pb-ui-metric.sc-metric .is-neg { color: var(--down-red); }
+
+.pb-ui-metric.sc-metric .na,
+.pb-ui-metric.sc-metric .is-na { color: var(--text-muted); }
+
+/* 最小公共类（卡片 / 浮层菜单 / 动作按钮）：卡片与浮层的唯一来源，逐值对齐设计稿
+   Board.tsx / SimulationBoard.tsx 的卡片、右栏标题与「更多」浮层。页面只允许改
+   列宽、间距与定位，不得再改字号、色值、内边距或圆角。
+   动作按钮的度量与既有 .btn / .btn-blue / .btn-ghost / .btn-purple / .btn-danger
+   逐值同值（h32 / 0 14px / r4 / 12px），以 is-* 修饰类表达变体，附加类契约
+   （class="pb-ui-action btn btn-ghost btn-sm"）保持可用。 */
+/* 卡片：逐值对齐设计稿 Board.StrategyRow / SimulationBoard 的卡（圆角 12px、
+   边框 white/[0.06] → --border-subtle、卡底 → --bg-surface、内边距 20/16、
+   hover 边框 white/[0.12] → --border-strong + 卡底 → --bg-elevated）。 */
+.pb-card {
+  min-width: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--bg-surface);
+  transition: border-color .15s ease, background-color .15s ease;
+}
+
+.pb-card:hover { border-color: var(--border-strong); background: var(--bg-elevated); }
+
+.pb-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.pb-card-head h2,
+.pb-card-head h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.pb-card-body { padding: 16px 20px; }
+
+.pb-popover-anchor { position: relative; }
+
+.pb-popover {
+  position: absolute;
+  z-index: 45;
+  display: grid;
+  gap: 1px;
+  width: 160px;
+  padding: 4px;
+  border: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-chart) 78%, var(--bg-elevated) 22%);
+  box-shadow: 0 18px 45px color-mix(in srgb, var(--bg-app) 40%, transparent);
+}
+
+.pb-menu { display: grid; gap: 1px; }
+
+.pb-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  height: 34px;
+  min-height: 34px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.2;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pb-menu-item:hover:not(:disabled) { background: color-mix(in srgb, var(--text-primary) 5%, transparent); }
+
+.pb-menu-item:disabled { cursor: not-allowed; opacity: .55; }
+
+.pb-ui-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-sizing: border-box;
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+
+.pb-ui-action.is-primary {
+  border-color: transparent;
+  background: var(--accent-blue);
+  color: var(--bg-app);
+}
+
+.pb-ui-action.is-primary:hover:not(:disabled) { background: var(--accent-blue); }
+
+.pb-ui-action.is-ghost {
+  border-color: var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.pb-ui-action.is-ghost:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: color-mix(in srgb, var(--text-primary) 5%, transparent);
+  color: var(--text-primary);
+}
+
+.pb-ui-action.is-purple {
+  border-color: color-mix(in srgb, var(--accent-blue) 55%, transparent);
+  background: color-mix(in srgb, var(--accent-blue) 10%, transparent);
+  color: var(--accent-blue);
+}
+
+.pb-ui-action.is-purple:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent-blue) 72%, transparent);
+  background: color-mix(in srgb, var(--accent-blue) 18%, transparent);
+}
+
+.pb-ui-action.is-danger {
+  border-color: color-mix(in srgb, var(--down-red) 40%, transparent);
+  background: color-mix(in srgb, var(--down-red) 15%, transparent);
+  color: var(--down-red);
+}
+
+.pb-ui-action.is-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--down-red) 22%, transparent); }
+
+.pb-ui-action.is-sm {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 11px;
+}
+
+.pb-ui-action:disabled { cursor: not-allowed; opacity: .55; }
+
+.pb-ui-action:focus-visible { outline: 2px solid var(--pb-ui-focus); outline-offset: 2px; }
+
+/* One legacy-`.btn` baseline for the two screens that still render it. The
+   metric block and the blue / ghost / purple variants used to be duplicated
+   verbatim in ui/strategy-pages.css and ui/workbench-page.css; this is now the
+   single owner, so both screens resolve the identical control geometry
+   (32px / 0 14px / r4 / 12px, design board buttons ≈30px) and the identical
+   hover / disabled behaviour. Page owners keep only their own extras (for
+   example the workbench `.btn-snapshot` accent).
+   `:where()` is deliberate: it keeps this shared floor at the lowest possible
+   specificity, so every page-scoped `.btn-*` / `.btn` extra keeps winning
+   regardless of which stylesheet the bundler emits first. */
+:where(.pb-ui-strategy-screen, .pb-ui-workbench-screen) .btn { height: 32px; padding: 0 14px; border: 1px solid transparent; border-radius: 4px; font-size: 12px; }
+
+:where(.pb-ui-strategy-screen, .pb-ui-workbench-screen) .btn-blue { background: var(--accent-blue); color: var(--bg-app); }
+
+:where(.pb-ui-strategy-screen, .pb-ui-workbench-screen) .btn-blue:hover:not(:disabled) { background: var(--accent-blue); }
+
+:where(.pb-ui-strategy-screen, .pb-ui-workbench-screen) .btn-ghost { border-color: var(--border-subtle); background: transparent; color: var(--text-secondary); }
+
+:where(.pb-ui-strategy-screen, .pb-ui-workbench-screen) .btn-ghost:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: color-mix(in srgb, var(--text-primary) 5%, transparent);
+  color: var(--text-primary);
+}
+
+:where(.pb-ui-strategy-screen, .pb-ui-workbench-screen) .btn-purple {
+  border-color: color-mix(in srgb, var(--accent-blue) 55%, transparent);
+  background: color-mix(in srgb, var(--accent-blue) 10%, transparent);
+  color: var(--accent-blue);
+}
+
+:where(.pb-ui-strategy-screen, .pb-ui-workbench-screen) .btn-purple:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent-blue) 72%, transparent);
+  background: color-mix(in srgb, var(--accent-blue) 18%, transparent);
+  color: var(--accent-blue);
+}
+
+:where(.pb-ui-strategy-screen, .pb-ui-workbench-screen) .btn:disabled { cursor: not-allowed; opacity: .55; }
+
+/* A-set primary (design Board.tsx:86 / SimulationBoard.tsx:349 — sky-500, white
+   text, r6, pad 6px 16px, 12px/500, hover sky-400). Used by strategy list,
+   workbenches and simulation screens. Self-contained geometry: it wins over the
+   32px `.btn` floor above via equal specificity + later source order. */
+:where(.pb-ui-strategy-screen, .pb-ui-workbench-screen, .pb-ui-simulation-records-screen, .pb-ui-simulation-workbench-screen) .btn-sky {
+  height: auto; padding: 6px 16px; border: 1px solid var(--accent-sky);
+  border-radius: 6px; background: var(--accent-sky);
+  color: var(--text-primary); font-weight: 500;
+}
+
+:where(.pb-ui-strategy-screen, .pb-ui-workbench-screen, .pb-ui-simulation-records-screen, .pb-ui-simulation-workbench-screen) .btn-sky:hover:not(:disabled) {
+  background: var(--accent-sky-hover); border-color: var(--accent-sky-hover);
+}
+
+:where(.pb-ui-strategy-screen, .pb-ui-workbench-screen, .pb-ui-simulation-records-screen, .pb-ui-simulation-workbench-screen) .btn-sky:disabled {
+  background: color-mix(in srgb, var(--text-primary) 4%, transparent);
+  border-color: transparent; color: var(--text-faint); cursor: not-allowed;
+}
+
+/* Stop tones (design SimWorkbench.tsx TBtn — r6, pad 6px 14px, 12px/500).
+   Amber = reversible stop, rose = emergency; the pair must stay visually
+   distinct (global audit P0: both previously rendered the identical ghost). */
+:where(.pb-ui-simulation-records-screen, .pb-ui-simulation-workbench-screen) .btn-stop-amber {
+  padding: 6px 14px; border: 1px solid color-mix(in srgb, var(--warn-amber) 40%, transparent);
+  border-radius: 6px; background: color-mix(in srgb, var(--warn-amber) 10%, transparent);
+  color: color-mix(in srgb, var(--warn-amber) 75%, var(--text-primary));
+  font: 500 12px var(--font-ui); cursor: pointer;
+}
+
+:where(.pb-ui-simulation-records-screen, .pb-ui-simulation-workbench-screen) .btn-stop-amber:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--warn-amber) 20%, transparent);
+}
+
+:where(.pb-ui-simulation-records-screen, .pb-ui-simulation-workbench-screen) .btn-stop-rose {
+  padding: 6px 14px; border: 1px solid color-mix(in srgb, var(--down-red) 40%, transparent);
+  border-radius: 6px; background: color-mix(in srgb, var(--down-red) 10%, transparent);
+  color: color-mix(in srgb, var(--down-red) 75%, var(--text-primary));
+  font: 500 12px var(--font-ui); cursor: pointer;
+}
+
+:where(.pb-ui-simulation-records-screen, .pb-ui-simulation-workbench-screen) .btn-stop-rose:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--down-red) 20%, transparent);
+}
+
+:where(.pb-ui-simulation-records-screen, .pb-ui-simulation-workbench-screen) .btn-stop-amber:disabled,
+:where(.pb-ui-simulation-records-screen, .pb-ui-simulation-workbench-screen) .btn-stop-rose:disabled {
+  opacity: .3; cursor: not-allowed;
+}
+
+/* Shared controls keep the same keyboard affordance as the shell. */
+.pb-menu-item:focus-visible { outline: 2px solid var(--pb-ui-focus); outline-offset: -2px; }
+@media (prefers-reduced-motion: reduce) {
+  .pb-card, .pb-ui-action { transition: none; }
+}

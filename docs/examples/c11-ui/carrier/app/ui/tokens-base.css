@@ -1,0 +1,76 @@
+/* Design tokens only. Page and component selectors live in explicit owners.
+ * 色板/字体以外部设计稿（未入库，只作色值与字体族参照）为基准：Tailwind slate 阶 +
+ * sky/emerald/amber/rose 语义色，页面底 #06080d，面板 #0d111a。 */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url(/fonts/inter-latin-var.woff2) format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url(/fonts/jetbrains-mono-latin-var.woff2) format("woff2");
+}
+
+:root {
+  /* Existing platform-position detail colors, centralized without changing appearance. */
+  --position-detail-border: #2b3039;
+  --position-detail-text: #d6dbe2;
+  --position-detail-muted: #8c949f;
+  --position-direction-long: #6eb89c;
+  --position-direction-short: #db8585;
+
+  --pb-ui-surface: #0d111a;
+  --pb-ui-surface-raised: #0f141f;
+  --pb-ui-border: rgba(255, 255, 255, 0.12);
+  --pb-ui-text: #f1f5f9;
+  --pb-ui-muted: #94a3b8;
+  --pb-ui-focus: #38bdf8;
+  /* Board selected tabs and secondary card text: current Tailwind design source. */
+  --pb-ui-catalog-selected: oklch(82.8% 0.111 230.318);
+  --pb-ui-catalog-selected-fill: oklch(68.5% 0.169 237.323 / 0.15);
+  --pb-ui-catalog-muted: oklch(70.4% 0.04 256.788);
+  --pb-ui-radius: 8px;
+  /* Exact current design surfaces; only version history and run detail consume these. */
+  /* Shared status readback popover: preserve existing R1 surface and shadow. */
+  --bg-live-status-popover: #0c0f19;
+  --shadow-live-status-popover: #0008;
+  --bg-version-history: #0b0e15;
+  --bg-run-detail: #0a0d14;
+  /* Monitor run/source drawer and day originals: same frozen original surface, neutral responsibility. */
+  --bg-source-detail: var(--bg-run-detail);
+  --bg-app: #06080d; --bg-surface: #0d111a; --bg-elevated: #0f141f; --bg-chart: #080b11;
+  --border-subtle: rgba(255, 255, 255, 0.06); --border-strong: rgba(255, 255, 255, 0.12); --text-primary: #f1f5f9; --text-secondary: #cbd5e1; --text-muted: #aeb1c5;
+  --text-dim: #62748e; --text-faint: #45556c;
+  --up-green: #64df95; --down-red: #ff8aa1; --accent-blue: #91baff; --warn-amber: #ffd166;
+  --tp-teal: #00c9a0; --sl-coral: #ff4060; /* 实盘监控 K线 TP/SL 虚线与价签（设计稿 LiveCockpit.tsx CandleFills L758-759/L790-791） */
+  --accent-sky: #0ea5e9; --accent-sky-hover: #38bdf8;
+  --tag-violet: #c4b5fd; /* violet-300 回放执行运行类型标签 */
+  --brand-indigo: #6366f1; /* indigo-500 品牌 logo 渐变端点 */
+  --font-mono: "JetBrains Mono", "SF Mono", Menlo, monospace; --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  /* Legacy broken-chain aliases; new consumers use the canonical roles. */
+  --up-green-bg: rgba(0,200,83,.12);
+  --down-red-bg: rgba(255,23,68,.12);
+  --border: rgba(255, 255, 255, 0.12);
+  --surface: #0d111a;
+  color-scheme: dark;
+}
+
+/* C11 P2: the page-level overflow lock was removed for the carrier's two document-flow
+   routes; token values are unchanged from the PaperBuilder source. */
+html,
+body,
+#root { width: 100%; height: 100%; margin: 0; }
+
+/* The simulation list/detail routes are document-flow pages.  The legacy
+   workbench shell remains viewport-locked, so App opts these routes into
+   normal document scrolling without changing the workbench contract. */
+html.pb-document-scroll,
+body.pb-document-scroll { height: auto; min-height: 100%; overflow: visible; }
+body.pb-document-scroll #root { height: auto; min-height: 100%; overflow: visible; }
+
+body { background: var(--bg-app); color: var(--text-primary); font: 13px/1.5 var(--font-ui); }

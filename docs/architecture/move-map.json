@@ -9693,6 +9693,34 @@
       ],
       "delete_condition": "对应真实consumer已由独立验证替代完整承接、原owner决定退役后才删对应文件/登记；原采用历史README/原件保留，不连带删除未承接规则",
       "retention_basis": "原C01已入库active方法及当前用户个人研究持续授权；本次补原active发行接线与notice，不新增parser/schema/控制面或权利结论"
+    },
+    {
+      "source": "docs/ui-frontend-capabilities.md",
+      "destination": "docs/ui-frontend-capabilities.md",
+      "status": "retain",
+      "role": "documentation",
+      "responsibility": "唯一一张 UI 与前端能力台账：逐项写 C01–C11 的阶段、触发、产物、验收、状态、本任务承接与原卡验收归属，并接住 verify-code、ui-project-init 两条 PRD 漂移；不改写 PRD 历史，不作第二进度权威。",
+      "owner": "阶段方法负责人",
+      "consumer": "第 2–9 段作者按本表查本阶段能力范围；第 9 段按仓库事实改状态列；项目维护者在能力或阶段方法变更时同步本表。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "tests/contract/ui-frontend-capabilities.test.mjs"
+      ],
+      "delete_condition": "能力台账职责由经独立验证的唯一替代承接、所有引用迁移且原 owner 决定后删除；不保留第二份 UI 台账。",
+      "retention_basis": "决策记录工作包 7 决定 9 与 spec 验收 7 要求台账逐项有阶段消费者与验收；用户 2026-11-13 答复选定放在 docs/ 下单独一张表。"
+    },
+    {
+      "source": "docs/examples/c11-ui/",
+      "destination": "docs/examples/c11-ui/",
+      "status": "retain",
+      "role": "documentation",
+      "responsibility": "C11 修复入库示例目录：v15 五件、载体 app/ui/ 四件、SOURCE.md 与 delivery.sha256；第 8 段新建，本段只登记路径与职责。",
+      "owner": "C11 修复入库方法维护者",
+      "consumer": "第 8 段开发按本登记建目录并交来源与交付两份指纹清单；第 9 段演练读该目录的 v15 与 delivery.sha256 做入库复验。",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "delete_condition": "示例目录职责由经独立验证的替代承接且第 8、9 段演练不再引用后，由原 owner 决定删除；不因登记先行删除未建目录。",
+      "retention_basis": "spec 文件边界表第 1、8 段与处置原件 2026-11-13-005 第 5–8 行：move-map 由第 1 段一次登记两条，第 8 段只读不写。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

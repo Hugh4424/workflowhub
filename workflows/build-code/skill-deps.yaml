@@ -12,6 +12,7 @@ skills:
   - name: frontend-testing
     path: skills/frontend-testing/SKILL.md
     trigger: actual_frontend_test_or_browser_visible_page_audit
+    # UI 任务时：页面审计另写组件复用与沉淀结论，写回目标项目根下的组件规范（演练时即演练副本），并列七项界面判定字段，缺任一项证据即未通过；非 UI 跳过。
   - name: isolated-browser-qa
     path: skills/isolated-browser-qa/SKILL.md
     trigger: actual_browser_visible_phase_test

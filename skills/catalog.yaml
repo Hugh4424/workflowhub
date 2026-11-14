@@ -700,15 +700,15 @@ skills:
     update_policy: 随 Multica CLI、agent 绑定和 WorkflowHub 技能闭包合同变更审查
   - name: wh-review
     path: skills/wh-review/SKILL.md
-    local_version: 4.1.0
-    last_reviewed_at: "2026-07-14"
+    local_version: 4.2.0
+    last_reviewed_at: "2026-11-14"
     status: native
     metrics_enabled: true
     purpose: make-decision/build-spec/build-plan 的 authoring review；普通 build-code 代码审查由 OCR delegation 执行
     design_idea: frozen materials、一次新的 3rd-review public run、attempt/result、verify-final
     used_by_stages: *stages_code_plan_prd_decision_verify
     upstream: []
-    local_changes: authoring review 保留既有 public run；正常 build-code 每 Phase 一次 OCR，最终 aggregate 与逐 AC 结果后由 build-code 终末对最终 worktree 做一次 OCR；历史 integration 事实只读；两次代码审查由现有 review/run receipt 消费；保留路径安全与原始 provenance；来源为本仓既有review-record-route及provider协议，本文不将宿主工具声明当外部文本来源。
+    local_changes: authoring review 保留既有 public run；正常 build-code 每 Phase 一次 OCR，最终 aggregate 与逐 AC 结果后由 build-code 终末对最终 worktree 做一次 OCR；历史 integration 事实只读；两次代码审查由现有 review/run receipt 消费；保留路径安全与原始 provenance；来源为本仓既有review-record-route及provider协议，本文不将宿主工具声明当外部文本来源。2026-11-14 升 4.2.0（minor）：P7 新增 UI 任务三阶段通用六问块（UI 适用性、设计稿、视觉证据、前端质量、组件复用、真接线），并明确各问通过/失败信号与未读口径；行为变化，manifest 形状不变。
     dependency_closure: ["skills/intake-decision-review","skills/plan-ceo-review","skills/plan-design-review","skills/plan-eng-review","skills/review","skills/simplicity-guard","skills/spec-specify"]
     update_policy: 只通过本地合同和异源审查演进，禁止第二 review 路径
   - name: plan-ceo-review
@@ -737,8 +737,8 @@ skills:
     update_policy: 人工吸收审查问题，不引入 gstack runtime
   - name: plan-design-review
     path: skills/plan-design-review/SKILL.md
-    local_version: 1.0.0
-    last_reviewed_at: '2026-07-14'
+    local_version: 1.1.0
+    last_reviewed_at: '2026-11-14'
     status: adapted
     metrics_enabled: true
     purpose: UI 信息架构、状态、可访问性和响应式审查 lens
@@ -750,7 +750,7 @@ skills:
         skill_url: https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/plan-design-review
         adopted:
           - plan-design-review/SKILL.md#step-0-design-scope-assessment — 按实际页面/状态识别设计完整性和既有设计复用
-    local_changes: 裁为 report-only lens；去浏览器 daemon 和宿主命令
+    local_changes: 裁为 report-only lens；去浏览器 daemon 和宿主命令；2026-11-14 升 1.1.0（minor）：本任务扩展为定方向细节审查、写需求、排阶段、写代码四入口，UI 适用性改按 raw_requirement/project_inventory/planned_or_changed_frontend_fact 三来源证据判定；行为变化，manifest 形状不变。
     dependency_closure: *deps_spec_specify
     update_policy: 人工吸收 design checklist，不引入 gstack runtime
   - name: plan-eng-review

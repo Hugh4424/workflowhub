@@ -5,7 +5,7 @@
     {
       "step_id": 1,
       "step_slug": "read-current-task-documents",
-      "observable_result": "当前spec、物理Phase、索引与事实确定下一任务；真实工作区、分支、状态和写集已核，历史不作许可证。 判定消费：SKILL.md#方法 第1步；原件：当前spec/Phase、授权与写集核对原ref。 长任务消费已确认执行策略，记 execution_budget、retry_reserve、等待分账与检查点原ref；不新增游标字段或预算门。",
+      "observable_result": "当前spec、物理Phase、索引与事实确定下一任务；真实工作区、分支、状态和写集已核，历史不作许可证。 判定消费：SKILL.md#方法 第1步；原件：当前spec/Phase、授权与写集核对原ref。 长任务消费已确认执行策略，记 execution_budget、retry_reserve、等待分账与检查点原ref；不新增游标字段或预算门。 UI 任务时，另读第 5 段 UI 六项（设计源引用、页面／路由／组件与状态乘视口、视觉对照项、前端质量门、组件复用与沉淀、独立设计审查与证据）与上文已批准原型，缺设计源记未知与补问对象；非 UI 跳过。",
       "completion_evidence": [
         {
           "kind": "material",
@@ -98,7 +98,7 @@
     {
       "step_id": 6,
       "step_slug": "inspect-acceptance-and-ui",
-      "observable_result": "每AC的实际效果/失败反例/未执行项可读；UI按真实消费者核对；声明写集含浏览器可见面时实际执行 isolated-browser-qa，在唯一原ref留engine、route／场景、截图路径或真实not_observed及原因、命令／输出／exit；只有声明写集不含任何浏览器可见面才用 N/A 并具名判断依据，适用但缺工具记unavailable与恢复条件；模拟或缺失不冒充通过。 判定消费：SKILL.md#方法 第6/7步；原件：AC实际/反例原件、engine/route/截图或not_observed。",
+      "observable_result": "每AC的实际效果/失败反例/未执行项可读；UI按真实消费者核对；声明写集含浏览器可见面时实际执行 isolated-browser-qa，在唯一原ref留engine、route／场景、截图路径或真实not_observed及原因、命令／输出／exit；只有声明写集不含任何浏览器可见面才用 N/A 并具名判断依据，适用但缺工具记unavailable与恢复条件；模拟或缺失不冒充通过。 判定消费：SKILL.md#方法 第6/7步；原件：AC实际/反例原件、engine/route/截图或not_observed。 UI 任务时按 1440×900 与 390×844 两种视口、固定浏览器与系统默认字体、缩放 100%、固定数据截图并排看，逐项写通过、差异与用户接受的偏差，偏差由用户确认、不由实现者自签；前端质量最低判据照决策记录工作包 4「前端质量的最小判据」含两尺寸能打开、无控制台错误、无横向滚动、390 宽主操作不被裁切可到达、可键盘到达、焦点可见、可访问名非空、LCP 不超过 2.5 秒、CLS 不超过 0.1、INP 不超过 200 毫秒、200% 缩放主操作可达不裁切、读屏做不了记不可用与负责人和恢复条件；非 UI 跳过。",
       "completion_evidence": [
         {
           "kind": "task_original_ref",
@@ -115,7 +115,7 @@
     {
       "step_id": 7,
       "step_slug": "scan-diff",
-      "observable_result": "实际diff、写集、接口两端、生命周期、权限、并发和恢复边界核对，有疑点保留真实发现。 判定消费：SKILL.md#方法 第7步；原件：git diff路径、实际consumer与边界观察。",
+      "observable_result": "实际diff、写集、接口两端、生命周期、权限、并发和恢复边界核对，有疑点保留真实发现。 判定消费：SKILL.md#方法 第7步；原件：git diff路径、实际consumer与边界观察。 UI 任务时另写组件复用与沉淀结论，写回目标项目根下的组件规范并交第 7 段审查读七项界面判定字段（UI 适用性、UI 合同、组件质量图、真实消费者、状态所有者、类型化视图模型、样式令牌所有者），缺任一项证据即未通过；非 UI 跳过。",
       "completion_evidence": [
         {
           "kind": "task_original_ref",
@@ -132,7 +132,7 @@
     {
       "step_id": 8,
       "step_slug": "review-change",
-      "observable_result": "每Phase一次独立OCR审查保存真实发现；OCR 不可用如实记 unavailable/unknown，不换执行者，保留检测输出与原始失败。每 Phase 同时一次独立上下文同源补充轴，消费当前真实 diff、完整 AC、实际输出原ref与仓库规范，Standards/Spec 两镜头及 OCR/补充两轴并排、不合并排名；same_source_degraded 不计异源 quorum、不覆盖 OCR identity 或 review_result_ref，补充执行者返回原文由主会话 appendRecord 仅存一次，后续引用既有 evidence；各路失败、取消、迟到发现分开保留，不增步骤或 gate。 判定消费：SKILL.md#方法 第8步；原件：OCR/Standards/Spec原件、包与终态。",
+      "observable_result": "每Phase一次独立OCR审查保存真实发现；OCR 不可用如实记 unavailable/unknown，不换执行者，保留检测输出与原始失败。每 Phase 同时一次独立上下文同源补充轴，消费当前真实 diff、完整 AC、实际输出原ref与仓库规范，Standards/Spec 两镜头及 OCR/补充两轴并排、不合并排名；same_source_degraded 不计异源 quorum、不覆盖 OCR identity 或 review_result_ref，补充执行者返回原文由主会话 appendRecord 仅存一次，后续引用既有 evidence；各路失败、取消、迟到发现分开保留，不增步骤或 gate。 判定消费：SKILL.md#方法 第8步；原件：OCR/Standards/Spec原件、包与终态。 UI 任务时另加设计审查角度，读第 6 步两尺寸截图与逐项差异、第 7 步组件沉淀结论与七项界面判定字段，缺证据记未测；非 UI 跳过。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
@@ -149,7 +149,7 @@
     {
       "step_id": 9,
       "step_slug": "analyze-review-findings",
-      "observable_result": "原finding逐条处置，修复回原实施者并只复测受影响集合；严重未修风险取得用户具体选择。 判定消费：SKILL.md#方法 第9步；原件：原finding处置、受影响case输出、Phase Done。 独立oracle面并行只读测试与审查的两方实际回报汇合与受影响复验，开发最后确认；本步不作首次派发前置。 通用停止规则保provider/broker排除域；空心跳不续命，合法修复继续；冻结变更有请求/成本/独立批准/用户确认；大件指针与同字节provenance不丢身份。",
+      "observable_result": "原finding逐条处置，修复回原实施者并只复测受影响集合；严重未修风险取得用户具体选择。 判定消费：SKILL.md#方法 第9步；原件：原finding处置、受影响case输出、Phase Done。 独立oracle面并行只读测试与审查的两方实际回报汇合与受影响复验，开发最后确认；本步不作首次派发前置。 通用停止规则保provider/broker排除域；空心跳不续命，合法修复继续；冻结变更有请求/成本/独立批准/用户确认；大件指针与同字节provenance不丢身份。 UI 任务时视觉问题与功能问题同修同复验，修完按原两尺寸与状态复验同一问题，只复验受影响项；非 UI 跳过。",
       "completion_evidence": [
         {
           "kind": "phase_task_facts",
