@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN" data-prototype-ready="false">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="无设计稿的设计移植合成样例原型，用于验证一页、一个按钮和三种读取结果。">
+    <title>设计移植样例 · 合成原型</title>
+    <link rel="stylesheet" href="./styles.css">
+    <script src="./app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#result-title">跳到读取结果</a>
+    <div class="page-shell">
+      <header class="page-header">
+        <div class="page-identity">
+          <p class="eyebrow">WorkflowHub · 可编辑原型</p>
+          <h1>设计移植样例</h1>
+        </div>
+        <p class="sample-tag sample-tag--page">整页：合成样例</p>
+      </header>
+
+      <main>
+        <section class="intro" aria-labelledby="purpose-title">
+          <p class="state-number" id="state-number" aria-hidden="true">01</p>
+          <div class="intro-copy">
+            <h2 id="purpose-title">读取一份样例，辨认它的状态。</h2>
+            <p>无设计稿；数据只用于版式与交互验证。</p>
+          </div>
+        </section>
+
+        <section class="workbench" aria-labelledby="result-title">
+          <div class="state-rail">
+            <p class="rail-label">读取序列</p>
+            <ol>
+              <li data-state="success" aria-current="step"><span>01</span>成功</li>
+              <li data-state="empty"><span>02</span>空</li>
+              <li data-state="error"><span>03</span>错误</li>
+            </ol>
+          </div>
+
+          <div class="result-panel" id="result-panel" aria-busy="false">
+            <div class="result-heading">
+              <div>
+                <p class="sample-tag">区块：合成样例</p>
+                <h2 id="result-title">读取结果</h2>
+              </div>
+              <p class="state-label" id="state-label">成功</p>
+            </div>
+            <p class="status-message" id="status-message" role="status" aria-live="polite" aria-atomic="true">已读取成功结果样例。</p>
+            <div id="result-content">
+              <dl class="sample-values">
+                <div>
+                  <dt>记录名称</dt>
+                  <dd><span class="value-tag">样例值</span>成功结果样例</dd>
+                </div>
+                <div>
+                  <dt>数据来源</dt>
+                  <dd><span class="value-tag">样例值</span>浏览器内置合成数据</dd>
+                </div>
+                <div>
+                  <dt>用途</dt>
+                  <dd><span class="value-tag">样例值</span>检查成功态的内容与布局</dd>
+                </div>
+              </dl>
+            </div>
+            <noscript>启用 JavaScript 后可切换样例；当前成功态可直接阅读。</noscript>
+          </div>
+        </section>
+
+        <section class="action-row" aria-label="样例操作">
+          <div class="action-control">
+            <button id="next-sample" type="button" aria-describedby="action-note">读取下一份样例</button>
+            <p id="action-note">按成功、空、错误循环；无网络请求，不保存数据。</p>
+          </div>
+        </section>
+      </main>
+
+      <footer class="page-footer">
+        <p>原型范围：一页、一个按钮、1440 像素宽目视。</p>
+        <p>未接通真实设计稿、业务数据或写入接口。</p>
+      </footer>
+    </div>
+  </body>
+</html>
