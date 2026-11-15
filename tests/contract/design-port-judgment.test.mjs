@@ -206,19 +206,69 @@ describe("ORACLE-JUDGMENT awaiting confirmation pauses before verdict success",(
       }finally{rmSync(dir,{recursive:true,force:true});}
     }finally{rmSync(copy.dir,{recursive:true,force:true});}
   });
-  it("resumes only from a readable confirmation original",()=>{
+  function confirmationFile(dir,name,value){
+    const file=join(dir,name);
+    writeFileSync(file,"# 确认\n\n```json\n"+JSON.stringify(value,null,2)+"\n```\n");
+    return file;
+  }
+  it("resumes only from an explicit approval of this judgment",()=>{
     const copy=mutateJudgment(sample("adapt"),data=>{data.pending_confirmation={status:"awaiting",reason:"等方向 owner 确认"};});
     try{
-      const confirmation=join(copy.dir,"confirmation.md");
-      writeFileSync(confirmation,"# 确认\n\n方向 owner 确认按适配后套用继续。\n");
+      const confirmation=confirmationFile(copy.dir,"confirmation.md",{kind:"design-judgment-confirmation",decision:"approved",judgment_ref:copy.target,verdict:"adapt"});
       const {result,writer,target,dir}=attemptConstruction(copy.target,{confirmationRef:confirmation});
       try{
         const summary=accepted(result,"adapt");
-        expect(summary.confirmation).toMatchObject({status:"confirmed"});
+        expect(summary.confirmation).toMatchObject({status:"confirmed",decision:"approved",verdict:"adapt"});
         expect(resolve(summary.confirmation.confirmation_ref)).toBe(resolve(confirmation));
         expect(writer.calls).toEqual([target]);
         expect(JSON.parse(readFileSync(target,"utf8")).constructed).toBe(true);
       }finally{rmSync(dir,{recursive:true,force:true});}
+    }finally{rmSync(copy.dir,{recursive:true,force:true});}
+  });
+  it("keeps construction stopped when the original is a plain refusal with no machine block",()=>{
+    const copy=mutateJudgment(sample("adapt"),data=>{data.pending_confirmation={status:"awaiting",reason:"等方向 owner 确认"};});
+    try{
+      const confirmation=join(copy.dir,"refusal.md");
+      writeFileSync(confirmation,"# 确认\n\n方向 owner 拒绝按适配后套用继续；不要开工。\n");
+      const {result,writer,bytes,dir}=attemptConstruction(copy.target,{confirmationRef:confirmation});
+      try{
+        expect(result.status,result.stderr).not.toBe(0);
+        expect(result.stderr).toContain("CONFIRMATION_MACHINE_BLOCK_MISSING");
+        expect(writer.calls).toEqual([]);
+        expect(bytes).toBe(UNTOUCHED);
+      }finally{rmSync(dir,{recursive:true,force:true});}
+    }finally{rmSync(copy.dir,{recursive:true,force:true});}
+  });
+  it("keeps construction stopped when the original is an explicit rejection",()=>{
+    const copy=mutateJudgment(sample("adapt"),data=>{data.pending_confirmation={status:"awaiting",reason:"等方向 owner 确认"};});
+    try{
+      const confirmation=confirmationFile(copy.dir,"rejected.md",{kind:"design-judgment-confirmation",decision:"rejected",judgment_ref:copy.target,verdict:"adapt"});
+      const {result,writer,bytes,dir}=attemptConstruction(copy.target,{confirmationRef:confirmation});
+      try{
+        expect(result.status,result.stderr).not.toBe(0);
+        expect(result.stderr).toContain("CONFIRMATION_REJECTED");
+        expect(writer.calls).toEqual([]);
+        expect(bytes).toBe(UNTOUCHED);
+      }finally{rmSync(dir,{recursive:true,force:true});}
+    }finally{rmSync(copy.dir,{recursive:true,force:true});}
+  });
+  it("keeps construction stopped when the approval names another judgment or verdict",()=>{
+    const copy=mutateJudgment(sample("adapt"),data=>{data.pending_confirmation={status:"awaiting",reason:"等方向 owner 确认"};});
+    try{
+      const cases=[
+        [{kind:"design-judgment-confirmation",decision:"approved",judgment_ref:join(copy.dir,"other-judgment.md"),verdict:"adapt"},"other-judgment"],
+        [{kind:"design-judgment-confirmation",decision:"approved",judgment_ref:copy.target,verdict:"direct"},"other-verdict"],
+      ];
+      for(const [value,name] of cases){
+        const confirmation=confirmationFile(copy.dir,name+".md",value);
+        const {result,writer,bytes,dir}=attemptConstruction(copy.target,{confirmationRef:confirmation});
+        try{
+          expect(result.status,`${name}: ${result.stderr}`).not.toBe(0);
+          expect(result.stderr,name).toContain("CONFIRMATION_OBJECT_MISMATCH");
+          expect(writer.calls,name).toEqual([]);
+          expect(bytes,name).toBe(UNTOUCHED);
+        }finally{rmSync(dir,{recursive:true,force:true});}
+      }
     }finally{rmSync(copy.dir,{recursive:true,force:true});}
   });
   it("fails when a provided confirmation original is unreadable",()=>{

@@ -209,7 +209,19 @@ function send(response, status, payload, type = "application/json") {
   response.end(body);
 }
 
+// 无认证的本地受控服务只允许回环地址：0.0.0.0、:: 或任何外部地址都拒绝，
+// 避免把记录写接口和输出目录暴露到网络。
+const LOOPBACK_ADDRESSES = new Set(["127.0.0.1", "::1", "localhost"]);
+function loopbackOnly(listen) {
+  const value = String(listen ?? "").trim().toLowerCase();
+  if (!LOOPBACK_ADDRESSES.has(value)) {
+    throw Object.assign(new Error(`--listen must be a loopback address (127.0.0.1, ::1 or localhost): ${listen}`), {code: "LISTEN_NOT_LOOPBACK"});
+  }
+  return value;
+}
+
 export function startServe({fixtureDir, listen = "127.0.0.1", port = 8768, portOutputRecord, store}) {
+  listen = loopbackOnly(listen);
   if (!portOutputRecord || !existsSync(portOutputRecord)) {
     throw Object.assign(new Error(`--port-output-record is required and must exist: ${portOutputRecord}`), {code: "PORT_OUTPUT_RECORD_UNAVAILABLE"});
   }
@@ -224,8 +236,18 @@ export function startServe({fixtureDir, listen = "127.0.0.1", port = 8768, portO
   const storeFile = resolve(store);
   mkdirSync(join(storeFile, ".."), {recursive: true});
   if (!existsSync(storeFile)) writeFileSync(storeFile, "[]\n");
+  // 存储读不出或不是数组时保留原字节并报明确失败；只有文件首次不存在才初始化空数组，
+  // 否则下一次写入会把损坏或不可读的既有记录当空存储覆盖掉。
   const readStore = () => {
-    try { return JSON.parse(readFileSync(storeFile, "utf8")); } catch { return []; }
+    if (!existsSync(storeFile)) return {ok: true, rows: []};
+    let raw;
+    try { raw = readFileSync(storeFile, "utf8"); }
+    catch (error) { return {ok: false, code: "STORE_UNREADABLE", detail: error.message}; }
+    let rows;
+    try { rows = JSON.parse(raw); }
+    catch (error) { return {ok: false, code: "STORE_CORRUPT", detail: error.message}; }
+    if (!Array.isArray(rows)) return {ok: false, code: "STORE_CORRUPT", detail: "store must be a JSON array"};
+    return {ok: true, rows};
   };
   const writeStore = (rows) => writeFileSync(storeFile, `${JSON.stringify(rows, null, 2)}\n`);
   let startedAt = new Date().toISOString();
@@ -270,7 +292,11 @@ export function startServe({fixtureDir, listen = "127.0.0.1", port = 8768, portO
         requests.push({method: "POST", path: pathname, body: payload, at: new Date().toISOString()});
         if (typeof payload.recordId !== "string" || payload.recordId === "") return send(response, 400, {error: "RECORD_ID_REQUIRED"});
         if (typeof payload.requestId !== "string" || payload.requestId === "") return send(response, 400, {error: "REQUEST_ID_REQUIRED"});
-        const rows = readStore();
+        const storeState = readStore();
+        if (!storeState.ok) {
+          return send(response, 500, {error: storeState.code, detail: storeState.detail, recordId: payload.recordId});
+        }
+        const rows = storeState.rows;
         const receipt = {
           receipt_id: `rcpt-${String(rows.length + 1).padStart(2, "0")}`,
           recordId: payload.recordId,

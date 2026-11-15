@@ -4,8 +4,8 @@
 //
 // 输入是一份 judgment.md，正文给人读，机器块给本脚本读。
 // 退出码：0 允许施工；1 判断不完整或不允许施工；2 输入不可读或参数错误。
-import {existsSync, readFileSync} from 'node:fs';
-import {isAbsolute, posix, resolve} from 'node:path';
+import {existsSync, readFileSync, realpathSync} from 'node:fs';
+import {dirname, isAbsolute, posix, resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 
 const HARD_CONDITIONS = new Set([
@@ -139,6 +139,52 @@ export function validateJudgment(doc) {
   return null;
 }
 
+const CONFIRMATION_KIND = "design-judgment-confirmation";
+// 解除等待只认真实批准原件：原件必须带机器块，明确批准、指向同一判断对象，
+// 且结论与判断一致。拒绝、未答、纯文本或对象不符都继续停止施工。
+function readConfirmation(path, doc, judgmentAbsolute) {
+  if (!existsSync(path)) return {code: "CONFIRMATION_UNREADABLE", detail: `confirmation original not found: ${path}`};
+  let bytes;
+  try {
+    bytes = readFileSync(path, "utf8");
+  } catch (error) {
+    return {code: "CONFIRMATION_UNREADABLE", detail: String(error.message)};
+  }
+  if (bytes.trim() === "") return {code: "CONFIRMATION_UNREADABLE", detail: "confirmation original is empty"};
+  const match = /```json\r?\n([\s\S]*?)```/.exec(bytes);
+  if (!match) return {code: "CONFIRMATION_MACHINE_BLOCK_MISSING", detail: "confirmation original has no fenced json machine block"};
+  let value;
+  try {
+    value = JSON.parse(match[1]);
+  } catch (error) {
+    return {code: "CONFIRMATION_MACHINE_BLOCK_INVALID", detail: `confirmation machine block is not valid JSON: ${error.message}`};
+  }
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return {code: "CONFIRMATION_MACHINE_BLOCK_INVALID", detail: "confirmation machine block must be an object"};
+  }
+  if (value.kind !== CONFIRMATION_KIND) {
+    return {code: "CONFIRMATION_MACHINE_BLOCK_INVALID", detail: `confirmation kind must be ${CONFIRMATION_KIND}`};
+  }
+  if (value.decision !== "approved") {
+    return {code: "CONFIRMATION_REJECTED", detail: `confirmation decision is ${String(value.decision)}; only approved resumes construction`};
+  }
+  if (!text(value.judgment_ref)) {
+    return {code: "CONFIRMATION_OBJECT_MISMATCH", detail: "confirmation must name the judgment it approves"};
+  }
+  const candidates = isAbsolute(value.judgment_ref)
+    ? [resolve(value.judgment_ref)]
+    : [resolve(dirname(path), value.judgment_ref), resolve(process.cwd(), value.judgment_ref)];
+  const target = realpathSync(judgmentAbsolute);
+  const matched = candidates.some((candidate) => existsSync(candidate) && realpathSync(candidate) === target);
+  if (!matched) {
+    return {code: "CONFIRMATION_OBJECT_MISMATCH", detail: `confirmation does not approve this judgment: ${value.judgment_ref}`};
+  }
+  if (value.verdict !== doc.verdict) {
+    return {code: "CONFIRMATION_OBJECT_MISMATCH", detail: `confirmation verdict ${String(value.verdict)} does not match judgment verdict ${doc.verdict}`};
+  }
+  return {value};
+}
+
 export function main(argv = process.argv.slice(2)) {
   const options = {input: null, confirmationRef: null};
   for (let index = 0; index < argv.length; index += 1) {
@@ -183,20 +229,14 @@ export function main(argv = process.argv.slice(2)) {
       return reject("AWAITING_CONFIRMATION", "waiting for confirmation; no constructor may run", summary);
     }
     const confirmationPath = resolve(options.confirmationRef);
-    if (!existsSync(confirmationPath)) return reject("CONFIRMATION_UNREADABLE", `confirmation original not found: ${confirmationPath}`, summary);
-    let bytes;
-    try {
-      bytes = readFileSync(confirmationPath, "utf8");
-    } catch (error) {
-      return reject("CONFIRMATION_UNREADABLE", String(error.message), summary);
-    }
-    if (bytes.trim() === "") return reject("CONFIRMATION_UNREADABLE", "confirmation original is empty", summary);
+    const confirmation = readConfirmation(confirmationPath, doc, resolve(options.input));
+    if (confirmation.code) return reject(confirmation.code, confirmation.detail, summary);
     process.stdout.write(JSON.stringify({
       judgment_valid: true,
       allowed_for_construction: constructible,
       route: constructible ? "construct" : "stop_construction",
       ...summary,
-      confirmation: {status: "confirmed", confirmation_ref: confirmationPath},
+      confirmation: {status: "confirmed", confirmation_ref: confirmationPath, decision: confirmation.value.decision, verdict: confirmation.value.verdict},
     }) + "\n");
     return undefined;
   }

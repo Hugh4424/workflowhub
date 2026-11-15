@@ -8,7 +8,7 @@
 // 退出码：0 通过；1 目标检查失败；2 参数或输入不可读。
 import {existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
-import {dirname, isAbsolute, resolve} from 'node:path';
+import {basename, dirname, isAbsolute, resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 
 const MODES = new Set(["check", "generate"]);
@@ -42,32 +42,92 @@ function safeRelative(name) {
   const normalized = name.replace(/^\.\//, "");
   return !normalized.split("/").includes("..");
 }
+function insidePath(candidate, root) {
+  return candidate === root || candidate.startsWith(root + "/");
+}
+// 写盘前按真实路径判定：输出目录或目标文件经符号链接指到设计源（含其子目录）时拒绝写入。
+// 返回可写的解析目标；落在设计源树内时返回 null。
+function resolvableTarget(targetPath, designReal) {
+  const parentReal = existsSync(dirname(targetPath)) ? realpathSync(dirname(targetPath)) : null;
+  if (parentReal === null) return null;
+  const resolved = resolve(parentReal, basename(targetPath));
+  if (insidePath(resolved, designReal)) return null;
+  if (existsSync(targetPath) && insidePath(realpathSync(targetPath), designReal)) return null;
+  return resolved;
+}
 function splitSelectorList(prelude) {
   return prelude.split(",").map((item) => item.trim()).filter(Boolean);
 }
-function collectSelectors(source) {
-  const clean = source.replace(/\/\*[\s\S]*?\*\//g, "");
+function stripComments(value) {
+  return String(value).replace(/\/\*[\s\S]*?\*\//g, "");
+}
+function atRuleName(prelude) {
+  const match = /^@([\w-]+)/.exec(String(prelude).trim());
+  return match ? match[1].toLowerCase() : "";
+}
+// @keyframes（含厂商前缀）的帧选择器是关键字，不是页面内容选择器。
+function isKeyframes(name) {
+  return name === "keyframes" || name.endsWith("-keyframes");
+}
+function insideKeyframes(stack) {
+  return stack.some((entry) => entry.kind === "at" && isKeyframes(entry.name));
+}
+// 单次遍历：按花括号栈区分 at-rule、关键帧与普通规则；普通规则才带页面作用域。
+function scanStyles(source, {scope = null, rewrite = false} = {}) {
   const selectors = [];
   const stack = [];
+  let output = "";
   let buffer = "";
-  for (const character of clean) {
+  let index = 0;
+  while (index < source.length) {
+    const character = source[index];
+    if (character === "/" && source[index + 1] === "*") {
+      const end = source.indexOf("*/", index + 2);
+      const comment = end < 0 ? source.slice(index) : source.slice(index, end + 2);
+      buffer += comment;
+      index += comment.length;
+      continue;
+    }
     if (character === "{") {
-      const prelude = buffer.trim();
+      const prelude = buffer;
+      const plain = stripComments(prelude).trim();
       buffer = "";
-      if (prelude.startsWith("@")) {
-        stack.push("at");
+      if (plain.startsWith("@")) {
+        stack.push({kind: "at", name: atRuleName(plain)});
+        output += prelude + "{";
+      } else if (insideKeyframes(stack)) {
+        stack.push({kind: "frame"});
+        output += prelude + "{";
       } else {
-        stack.push("rule");
-        for (const selector of splitSelectorList(prelude)) selectors.push(selector);
+        stack.push({kind: "rule"});
+        const rules = splitSelectorList(plain);
+        if (rewrite && scope) {
+          const scoped = rules.map((selector) => withinScope(selector, scope) ? selector : `${scope} ${selector}`);
+          selectors.push(...scoped);
+          output += formatPrelude(prelude, scoped) + "{";
+        } else {
+          selectors.push(...rules);
+          output += prelude + "{";
+        }
       }
-    } else if (character === "}") {
+      index += 1;
+      continue;
+    }
+    if (character === "}") {
+      output += buffer + "}";
       buffer = "";
       stack.pop();
-    } else {
-      buffer += character;
+      index += 1;
+      continue;
     }
+    buffer += character;
+    index += 1;
   }
-  return selectors;
+  output += buffer;
+  return {text: output, selectors};
+}
+function collectSelectors(source) {
+  return scanStyles(source).selectors;
 }
 function specificity(selector) {
   const value = selector.trim();
@@ -100,33 +160,20 @@ function htmlClasses(html) {
   }
   return classes;
 }
-function rewritePrelude(prelude, scope) {
+function formatPrelude(prelude, selectors) {
   const leading = prelude.match(/^\s*/)[0];
   const trailing = prelude.match(/\s*$/)[0];
-  const body = prelude.trim();
-  const selectors = splitSelectorList(body).map((selector) => withinScope(selector, scope) ? selector : `${scope} ${selector}`);
   return `${leading}${selectors.join(", ")}${trailing}`;
 }
 function generateStyles(source, scope) {
-  const selectors = collectSelectors(source);
-  if (selectors.every((selector) => withinScope(selector, scope))) return {text: source, applied: false, selectors};
-  let output = "";
-  let buffer = "";
-  for (const character of source) {
-    if (character === "{") {
-      // At-rule preludes (@media/@supports) are structural: never prefix them
-      // with the page-root selector, or the generated CSS becomes invalid.
-      output += (buffer.trim().startsWith("@") ? buffer : rewritePrelude(buffer, scope)) + "{";
-      buffer = "";
-    } else if (character === "}") {
-      output += buffer + "}";
-      buffer = "";
-    } else {
-      buffer += character;
-    }
+  const scanned = scanStyles(source);
+  if (scanned.selectors.every((selector) => withinScope(selector, scope))) {
+    return {text: source, applied: false, selectors: scanned.selectors};
   }
-  output += buffer;
-  return {text: output, applied: true, selectors: collectSelectors(output)};
+  // At-rule preludes (@media/@supports) and @keyframes frame selectors are structural:
+  // never prefix them with the page-root selector, or the generated CSS becomes invalid.
+  const rewritten = scanStyles(source, {scope, rewrite: true});
+  return {text: rewritten.text, applied: true, selectors: rewritten.selectors};
 }
 function applyChanges(source, changes) {
   const lines = source.split("\n");
@@ -361,6 +408,7 @@ export function checkManifest(manifestPath, {designRoot, output, mode = "check"}
   }
   const manualDir = manifestDir;
   const manualSummary = [];
+  const manualPaths = new Set();
   for (const manual of manifest.manual_files) {
     const sourcePath = resolve(manualDir, manual.path);
     if (!existsSync(sourcePath)) return fail("MANUAL_FILE_MISSING", `manual file not found: ${manual.path}`);
@@ -368,7 +416,17 @@ export function checkManifest(manifestPath, {designRoot, output, mode = "check"}
     if (!manualText.split("\n").slice(0, 3).join("\n").includes(manual.sentinel)) {
       return fail("MANUAL_SENTINEL_MISSING", `${manual.path} does not carry its sentinel`);
     }
+    manualPaths.add(manual.path);
     manualSummary.push({path: manual.path, sentinel: manual.sentinel});
+  }
+  // 手改文件与生成目标必须分文件：同路径（或父/子路径）时，先写生成物会覆盖手改，
+  // 事后再报哨兵缺失已经太晚。这个保护在写入前完成，不看输出目录现状。
+  for (const [target] of expected.entries()) {
+    for (const manualPath of manualPaths) {
+      if (target === manualPath || target.startsWith(manualPath + "/") || manualPath.startsWith(target + "/")) {
+        return fail("MANUAL_TARGET_OVERLAP", `generated target ${target} overlaps manual file ${manualPath}`);
+      }
+    }
   }
   const filesSummary = [...expected.entries()].map(([target, entry]) => ({source: entry.file.source, target, mode: entry.file.mode, sha256: sha256(entry.bytes)}));
   const summary = {
@@ -387,26 +445,39 @@ export function checkManifest(manifestPath, {designRoot, output, mode = "check"}
   if (mode === "generate") {
     if (!text(output)) return usage("ARGUMENT_INVALID", "--output is required for generate");
     const outputPath = resolve(output);
-    const insideSource = outputPath === designReal || outputPath.startsWith(designReal + "/");
-    if (insideSource) return fail("OUTPUT_INSIDE_SOURCE", `output ${outputPath} must differ from the design root ${designReal}`);
+    if (insidePath(outputPath, designReal)) return fail("OUTPUT_INSIDE_SOURCE", `output ${outputPath} must differ from the design root ${designReal}`);
     mkdirSync(outputPath, {recursive: true});
-    if (realpathSync(outputPath) === designReal) return fail("OUTPUT_INSIDE_SOURCE", "output resolves to the design root");
+    const outputReal = realpathSync(outputPath);
+    if (insidePath(outputReal, designReal)) {
+      return fail("OUTPUT_INSIDE_SOURCE", `output ${outputPath} resolves into the design root ${designReal}`);
+    }
+    // 先完成全部手改保护检查，再写任何生成物；否则覆盖手改后才发现问题，原件已经丢了。
+    for (const manual of manualSummary) {
+      const manualTarget = resolve(outputPath, manual.path);
+      if (!existsSync(manualTarget)) continue;
+      const existing = readFileSync(manualTarget, "utf8");
+      if (!existing.split("\n").slice(0, 3).join("\n").includes(manual.sentinel)) {
+        return fail("MANUAL_SENTINEL_MISSING", `existing manual file ${manual.path} lost its sentinel`);
+      }
+    }
     for (const [target, entry] of expected.entries()) {
       const targetPath = resolve(outputPath, target);
       mkdirSync(dirname(targetPath), {recursive: true});
+      if (resolvableTarget(targetPath, designReal) === null) {
+        return fail("OUTPUT_INSIDE_SOURCE", `generated target ${target} resolves into the design root ${designReal}`);
+      }
       writeFileSync(targetPath, entry.bytes);
     }
     const manualResults = [];
     for (const manual of manualSummary) {
       const targetPath = resolve(outputPath, manual.path);
       if (existsSync(targetPath)) {
-        const existing = readFileSync(targetPath, "utf8");
-        if (!existing.split("\n").slice(0, 3).join("\n").includes(manual.sentinel)) {
-          return fail("MANUAL_SENTINEL_MISSING", `existing manual file ${manual.path} lost its sentinel`);
-        }
         manualResults.push({path: manual.path, status: "preserved", absolute: targetPath});
       } else {
         mkdirSync(dirname(targetPath), {recursive: true});
+        if (resolvableTarget(targetPath, designReal) === null) {
+          return fail("OUTPUT_INSIDE_SOURCE", `manual target ${manual.path} resolves into the design root ${designReal}`);
+        }
         writeFileSync(targetPath, readFileSync(resolve(manualDir, manual.path)));
         manualResults.push({path: manual.path, status: "copied", absolute: targetPath});
       }

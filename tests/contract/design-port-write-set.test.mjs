@@ -11,8 +11,8 @@ const ROOT = process.cwd();
 const SCRIPT = join(ROOT, "skills/design-source-extraction/scripts/check-write-set.mjs");
 const FIXTURE_DIR = join(ROOT, "tests/fixtures/design-port-sample/write-set");
 
-function run(dir) {
-  return spawnSync(process.execPath, [SCRIPT, "--dir", dir], {cwd: ROOT, encoding: "utf8", timeout: 60000});
+function run(dir, extra = []) {
+  return spawnSync(process.execPath, [SCRIPT, "--dir", dir, ...extra], {cwd: ROOT, encoding: "utf8", timeout: 60000});
 }
 function readJson(file) { return JSON.parse(readFileSync(file, "utf8")); }
 function writeJson(file, value) { writeFileSync(file, JSON.stringify(value, null, 2) + "\n"); }
@@ -67,6 +67,10 @@ function expectRejected({describe, it, expect}) {
       ["the only writer is not declared the unique writer", doc => { doc.writers[0].role = "参与写者"; }, "WRITE_SET_DOUBLE_WRITER"],
       ["a proof is released before it was acquired", doc => { doc.lock.proofs[0].released_at = "2026-11-15T18:59:00.000Z"; }, "WRITE_SET_LOCK_PROOF_INVALID"],
       ["a proof carries no positive pid", doc => { doc.lock.proofs[0].pid = 0; }, "WRITE_SET_LOCK_PROOF_INVALID"],
+      ["a proof records a lock taken outside the worktree root", doc => { doc.lock.proofs[0].lock_root = resolve(ROOT, "skills"); }, "WRITE_SET_LOCK_DOMAIN_INVALID"],
+      ["a proof records no lock location at all", doc => { delete doc.lock.proofs[0].lock_root; delete doc.lock.proofs[0].lock_file; }, "WRITE_SET_LOCK_PROOF_INVALID"],
+      ["a proof names a lock file other than the acquired one", doc => { doc.lock.proofs[0].lock_file = ".other.lock"; }, "WRITE_SET_LOCK_PROOF_INVALID"],
+      ["cleanup does not read back the same lock file", doc => { doc.cleanup.lock_files[0].path = ".other.lock"; }, "WRITE_SET_LOCK_PROOF_INVALID"],
     ];
     for (const [name, mutate, code] of cases) {
       it(`rejects when ${name}`, () => {
@@ -85,6 +89,22 @@ function expectRejected({describe, it, expect}) {
 {
   const vitest = await import("vitest");
   const {describe, it, expect} = vitest;
+  describe("ORACLE-WRITE-LOCK pins the lock domain to the actual worktree", () => {
+    it("rejects a record whose lock location is not the worktree the checker was given", () => {
+      const copy = withCopy(doc => {
+        doc.lock.proofs[0].lock_root = resolve(ROOT);
+        doc.lock.proofs[0].lock_file = resolve(ROOT, ".design-port-worktree.lock");
+      });
+      try {
+        const other = mkdtempSync(join(tmpdir(), "p5-write-set-other-"));
+        try {
+          const result = run(copy.dir, ["--worktree", other]);
+          expect(result.status, result.stdout + result.stderr).toBe(1);
+          expect(stderrCode(result)).toBe("WRITE_SET_LOCK_DOMAIN_INVALID");
+        } finally { rmSync(other, {recursive: true, force: true}); }
+      } finally { rmSync(copy.root, {recursive: true, force: true}); }
+    });
+  });
   describe("ORACLE-WRITE-LOCK accepts the committed write-set fixture", () => {
     it("accepts one unique writer with readable lock proofs and a complete cleanup list", () => {
       const result = run(FIXTURE_DIR);
@@ -94,7 +114,9 @@ function expectRejected({describe, it, expect}) {
       expect(report.kind).toBe("write-set");
       expect(report.writers).toEqual(["P5-dev"]);
       expect(report.shared_files).toBe(2);
-      expect(report.lock).toEqual({name: "design-port-worktree", domain: "workspace", proofs: 1});
+      expect(report.lock).toMatchObject({name: "design-port-worktree", domain: "workspace", proofs: 1});
+      expect(report.lock.root).toBe(resolve(process.cwd()));
+      expect(report.lock.files).toEqual([".design-port-worktree.lock"]);
       expect(existsSync(join(FIXTURE_DIR, "write-set.json"))).toBe(true);
     });
   });

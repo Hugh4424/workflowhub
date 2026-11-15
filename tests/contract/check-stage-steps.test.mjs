@@ -219,7 +219,7 @@ function dirnameOf(path) { return resolve(path, '..'); }
 const coldSha = text => createHash('sha256').update(text).digest('hex');
 const COLD_CARDS = 'quality/evidence/convergence/controlled-cards.md';
 const cardSection = id => `## 工作包 ${id}：受控包 ${id}\n\n一句话结果：受控结果。`;
-const coldDoc = (id, reader, answers = 5) => `# 受控冷读 ${id}\n\n- 读者：${reader}，未参与本包写作，只读本包卡。\n- 五问原答：\n${['① 改什么：受控改动。','② 为什么：受控理由。','③ 边界：受控边界。','④ 怎么验：受控验证。','⑤ 还有什么没定：无。'].slice(0, answers).join('\n')}\n- 结论：${answers === 5 ? '五问全答出' : '少答，未收敛'}；本包收敛。\n`;
+const coldDoc = (id, reader, answers = 5) => `# 受控冷读 ${id}\n\n- 读者：${reader}，未参与本包写作，只读本包卡。\n- 读的卡：\`${COLD_CARDS}#工作包-${id}\`，节摘要 sha256 \`${coldSha(cardSection(id))}\`。\n- 五问原答：\n${['① 改什么：受控改动。','② 为什么：受控理由。','③ 边界：受控边界。','④ 怎么验：受控验证。','⑤ 还有什么没定：无。'].slice(0, answers).join('\n')}\n- 结论：${answers === 5 ? '五问全答出' : '少答，未收敛'}；本包收敛。\n`;
 const coldRef = id => `quality/evidence/build-code/P1/controlled-cold-read-${id}.md`;
 const firstColdRef = id => `quality/evidence/build-code/P1/controlled-cold-read-${id}-first.md`;
 const coldSection = (id, reader) => `## 工作包 ${id}：受控包 ${id}\n\n### 收敛格（本轮）\n\n| 项 | 值 |\n| --- | --- |\n| 当前卡节 | \`${COLD_CARDS}#工作包-${id}\`；sha256 \`${coldSha(cardSection(id))}\` |\n| 当前冷读 | \`${coldRef(id)}\`；sha256 \`${coldSha(coldDoc(id, reader))}\`；读者 ${reader}；context=none |\n| 首轮冷读 | \`${coldRef(id)}\`；sha256 \`${coldSha(coldDoc(id, reader))}\`；读者 ${reader} |\n| 修订 | 无 |\n\n### 冷读记录（P${id}）\n\n- 读者：${reader}，未参与本包写作，只读本包卡。\n- 五问原答：\n① 改什么：受控改动。\n② 为什么：受控理由。\n③ 边界：受控边界。\n④ 怎么验：受控验证。\n⑤ 还有什么没定：无。\n- 结论：五问全答出；本包收敛。\n`;
@@ -429,6 +429,24 @@ describe('ten-column status table names unconverged packages', () => {
     expect(report.convergence.gaps.some(gap => gap.includes('冷读五问不全'))).toBe(true);
   }, tail => tail.replace('⑤ 还有什么没定：无。\n', '')));
   it('reports a card section digest mismatch without changing exit 0', () => evidenceGap(tail => tail.replace(coldSha(cardSection('1')), '0'.repeat(64)), '卡片摘要不符'));
+  it('reports a card edited after the cold read even when only the block digest was bumped', () => tenColumnFixture(header + withStatus(validOne, '已收敛') + withStatus(validTwo, '已收敛'), ({ invoke, task, ref, put, original }) => {
+    const edited = cardSection('1') + '\n补充：卡在冷读之后又改了一句。';
+    put(task, COLD_CARDS, edited + '\n' + cardSection('2'));
+    put(task, ref, original.replace(coldSha(cardSection('1')), coldSha(edited)));
+    const result = invoke(true);
+    expect(result.status).toBe(0);
+    const report = JSON.parse(result.stdout);
+    expect(report.convergence.complete).toBe(false);
+    expect(report.convergence.gaps.some(gap => gap.includes('卡片摘要与冷读原件不一致'))).toBe(true);
+  }));
+  it('reports a cold-read original that does not bind the card digest', () => tenColumnFixture(header + withStatus(validOne, '已收敛') + withStatus(validTwo, '已收敛'), ({ invoke, task, put }) => {
+    put(task, coldRef('1'), coldDoc('1', 'subagent:controlled-reader-1').replace(/^- 读的卡：.*\n/m, ''));
+    const result = invoke(true);
+    expect(result.status).toBe(0);
+    const report = JSON.parse(result.stdout);
+    expect(report.convergence.complete).toBe(false);
+    expect(report.convergence.gaps.some(gap => gap.includes('冷读原件未绑定卡摘要'))).toBe(true);
+  }));
   it('reports a cold-read original digest mismatch without changing exit 0', () => evidenceGap(tail => tail.replace(coldSha(coldDoc('1', 'subagent:controlled-reader-1')), '0'.repeat(64)), '冷读原件摘要不符'));
   it('reports a revised card that was not re-read by a new reader without changing exit 0', () => evidenceGap(tail => tail.replace('| 修订 | 无 |', '| 修订 | 修订：受控改动；修后复读。 |'), '修订未复读'));
   it('restores the same check after the controlled break is reverted', () => tenColumnFixture(header + withStatus(validOne, '已收敛') + withStatus(validTwo, '已收敛'), ({ invoke, task, ref, put, original }) => {

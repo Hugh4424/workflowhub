@@ -42,7 +42,7 @@ export function loadLegacyClient(appText,{origin,fetchImpl,search=""}={}){
   const documentStub={querySelector:(selector)=>element(selector),querySelectorAll:()=>[],createElement:()=>makeElement(),createTextNode:(text)=>({textContent:String(text)}),documentElement:{dataset:{}}};
   const windowStub={location:{href:String(origin)+"/index.html"+(search||""),origin:String(origin)},setTimeout:(fn,ms)=>setTimeout(fn,ms),fetch:(input,init)=>fetchImpl?fetchImpl(input,init):fetch(input,init)};
   windowStub.window=windowStub;
-  const sandbox={window:windowStub,document:documentStub,URL,JSON,Date,String,Array,Object,Number,Boolean,encodeURIComponent,setTimeout,clearTimeout,console,Error,Promise};
+  const sandbox={window:windowStub,document:documentStub,URL,JSON,Date,String,Array,Object,Number,Boolean,encodeURIComponent,setTimeout,clearTimeout,console,Error,Promise,AbortController};
   sandbox.globalThis=sandbox;
   vm.createContext(sandbox);
   vm.runInContext(String(appText),sandbox,{filename:"app.js"});

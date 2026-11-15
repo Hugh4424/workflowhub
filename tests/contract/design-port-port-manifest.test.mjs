@@ -2,7 +2,7 @@
 // 本文件通过只证明当前 manifest、固定样本与生成规则；不证明任意框架、真实数据、
 // 未来真实设计源或长期使用。所有受控破坏只发生在临时副本，原样本与原型不改。
 // RED 只落目标断言；收集、导入与环境失败另记。
-import {mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync, cpSync, readdirSync, statSync} from 'node:fs';
+import {mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync, cpSync, readdirSync, statSync, mkdirSync, symlinkSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {basename, join, resolve} from 'node:path';
 import {spawnSync} from 'node:child_process';
@@ -289,6 +289,62 @@ function definePortTests({describe,it,expect}){
         expect(regenerated.status,regenerated.stderr).not.toBe(0);
         expect(regenerated.stderr).toContain("MANUAL_SENTINEL_MISSING");
       }finally{clean(out);}
+    });
+    it("scopes loose selectors but leaves @keyframes frame selectors unscoped",()=>{
+      const ws=workspace();
+      const out=outputDir();
+      try{
+        const stylesPath=join(ws.design,"styles.css");
+        const next=readFileSync(stylesPath,"utf8")+"\n.loose-keyframe-rule {\n  animation: sample-pulse 1s;\n}\n@keyframes sample-pulse {\n  from { opacity: 0; }\n  50% { opacity: 0.5; }\n  to { opacity: 1; }\n}\n";
+        writeFileSync(stylesPath,next);
+        const manifest=readJson(ws.manifest);
+        const entry=manifest.files.find(file=>file.target==="styles.css");
+        entry.source_sha256=createHash("sha256").update(Buffer.from(next)).digest("hex");
+        manifest.used_classes.push("loose-keyframe-rule");
+        writeJson(ws.manifest,manifest);
+        const generated=generate(out,{manifest:ws.manifest,design:ws.design});
+        expect(generated.status,generated.stderr).toBe(0);
+        const css=readFileSync(join(out,"styles.css"),"utf8");
+        expect(css).toContain(".sample-page .loose-keyframe-rule");
+        expect(css).toContain("@keyframes sample-pulse");
+        expect(css).not.toMatch(/\.sample-page\s+from\s*\{/);
+        expect(css).not.toMatch(/\.sample-page\s+to\s*\{/);
+        expect(css).not.toMatch(/\.sample-page\s+50%\s*\{/);
+        const checked=check({manifest:ws.manifest,design:ws.design,output:out});
+        expect(checked.status,checked.stderr).toBe(0);
+        const rerun=generate(out,{manifest:ws.manifest,design:ws.design});
+        expect(rerun.status,rerun.stderr).toBe(0);
+        expect(sha(join(out,"styles.css"))).toBe(createHash("sha256").update(Buffer.from(css)).digest("hex"));
+      }finally{clean(out);clean(ws.root);}
+    });
+    it("rejects an output directory symlinked into the design source subtree",()=>{
+      const ws=workspace();
+      try{
+        const inside=join(ws.design,"ported-inside-source");
+        mkdirSync(inside,{recursive:true});
+        const before=readdirSync(inside).sort();
+        const link=join(ws.root,"out-link");
+        symlinkSync(inside,link);
+        const result=generate(link,{manifest:ws.manifest,design:ws.design});
+        expect(result.status,result.stderr).not.toBe(0);
+        expect(result.stderr).toContain("OUTPUT_INSIDE_SOURCE");
+        expect(readdirSync(inside).sort()).toEqual(before);
+      }finally{clean(ws.root);}
+    });
+    it("rejects a generated target that is also the registered manual file, before overwriting it",()=>{
+      const out=outputDir();
+      const ws=workspace();
+      try{
+        const manifest=readJson(ws.manifest);
+        manifest.files.find(file=>file.mode==="generated").target="manual-overrides.css";
+        writeJson(ws.manifest,manifest);
+        const handEdit=readFileSync(join(ws.base,"port","manual-overrides.css"),"utf8")+"\n.sample-page .hand-edit { color: #123456; }\n";
+        writeFileSync(join(out,"manual-overrides.css"),handEdit);
+        const result=generate(out,{manifest:ws.manifest,design:ws.design});
+        expect(result.status,result.stderr).not.toBe(0);
+        expect(result.stderr).toContain("MANUAL_TARGET_OVERLAP");
+        expect(readFileSync(join(out,"manual-overrides.css"),"utf8")).toBe(handEdit);
+      }finally{clean(out);clean(ws.root);}
     });
     it("rejects an output that resolves to the design source itself",()=>{
       const ws=workspace();

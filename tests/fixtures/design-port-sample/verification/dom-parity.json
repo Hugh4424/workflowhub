@@ -3,28 +3,170 @@
   "kind": "dom-parity-config",
   "selected_root": ".sample-page",
   "nodes": [
-    {"path": ".sample-page", "tag": "div", "classes": ["sample-page"], "direct_text": null, "depth": 0},
-    {"path": ".sample-page > .sample-page__header", "tag": "header", "classes": ["sample-page__header"], "direct_text": null, "depth": 1},
-    {"path": ".sample-page__header > h1.sample-page__title", "tag": "h1", "classes": ["sample-page__title"], "direct_text": "样例记录读取", "depth": 2},
-    {"path": ".sample-page__header > p.sample-page__eyebrow", "tag": "p", "classes": ["sample-page__eyebrow"], "direct_text": "WorkflowHub · 设计移植样本", "depth": 2},
-    {"path": ".sample-page > main.sample-page__main", "tag": "main", "classes": ["sample-page__main"], "direct_text": null, "depth": 1},
-    {"path": ".sample-page__main > section.result-panel", "tag": "section", "classes": ["result-panel"], "direct_text": null, "depth": 2},
-    {"path": ".result-panel > h2.result-panel__title", "tag": "h2", "classes": ["result-panel__title"], "direct_text": "读取结果", "depth": 3},
-    {"path": ".action-row > button.read-next-button", "tag": "button", "classes": ["read-next-button"], "direct_text": "读取下一份样例", "depth": 3}
+    {
+      "path": ".sample-page",
+      "tag": "div",
+      "classes": [
+        "sample-page"
+      ],
+      "direct_text": null,
+      "depth": 0
+    },
+    {
+      "path": ".sample-page > .sample-page__header",
+      "tag": "header",
+      "classes": [
+        "sample-page__header"
+      ],
+      "direct_text": null,
+      "depth": 1
+    },
+    {
+      "path": ".sample-page__header > h1.sample-page__title",
+      "tag": "h1",
+      "classes": [
+        "sample-page__title"
+      ],
+      "direct_text": "样例记录读取",
+      "depth": 2
+    },
+    {
+      "path": ".sample-page__header > p.sample-page__eyebrow",
+      "tag": "p",
+      "classes": [
+        "sample-page__eyebrow"
+      ],
+      "direct_text": "WorkflowHub · 设计移植样本",
+      "depth": 2
+    },
+    {
+      "path": ".sample-page > main.sample-page__main",
+      "tag": "main",
+      "classes": [
+        "sample-page__main"
+      ],
+      "direct_text": null,
+      "depth": 1
+    },
+    {
+      "path": ".sample-page__main > section.result-panel",
+      "tag": "section",
+      "classes": [
+        "result-panel"
+      ],
+      "direct_text": null,
+      "depth": 2
+    },
+    {
+      "path": ".result-panel > h2.result-panel__title",
+      "tag": "h2",
+      "classes": [
+        "result-panel__title"
+      ],
+      "direct_text": "读取结果",
+      "depth": 3
+    },
+    {
+      "path": ".action-row > button.read-next-button",
+      "tag": "button",
+      "classes": [
+        "read-next-button"
+      ],
+      "direct_text": "读取下一份样例",
+      "depth": 3
+    }
   ],
   "implementation": [
-    {"path": ".sample-page", "tag": "div", "classes": ["sample-page"], "direct_text": null, "depth": 0},
-    {"path": ".sample-page > .sample-page__header", "tag": "header", "classes": ["sample-page__header"], "direct_text": null, "depth": 1},
-    {"path": ".sample-page__header > h1.sample-page__title", "tag": "h1", "classes": ["sample-page__title"], "direct_text": "样例记录读取", "depth": 2},
-    {"path": ".sample-page__header > p.sample-page__eyebrow", "tag": "p", "classes": ["sample-page__eyebrow"], "direct_text": "WorkflowHub · 设计移植样本", "depth": 2},
-    {"path": ".sample-page > main.sample-page__main", "tag": "main", "classes": ["sample-page__main"], "direct_text": null, "depth": 1},
-    {"path": ".sample-page__main > section.result-panel", "tag": "section", "classes": ["result-panel"], "direct_text": null, "depth": 2},
-    {"path": ".result-panel > h2.result-panel__title", "tag": "h2", "classes": ["result-panel__title"], "direct_text": "读取结果", "depth": 3},
-    {"path": ".action-row > button.read-next-button", "tag": "button", "classes": ["read-next-button"], "direct_text": "读取下一份样例", "depth": 3}
+    {
+      "path": ".sample-page",
+      "tag": "div",
+      "classes": [
+        "sample-page"
+      ],
+      "direct_text": null,
+      "depth": 0
+    },
+    {
+      "path": ".sample-page > .sample-page__header",
+      "tag": "header",
+      "classes": [
+        "sample-page__header"
+      ],
+      "direct_text": null,
+      "depth": 1
+    },
+    {
+      "path": ".sample-page__header > h1.sample-page__title",
+      "tag": "h1",
+      "classes": [
+        "sample-page__title"
+      ],
+      "direct_text": "样例记录读取",
+      "depth": 2
+    },
+    {
+      "path": ".sample-page__header > p.sample-page__eyebrow",
+      "tag": "p",
+      "classes": [
+        "sample-page__eyebrow"
+      ],
+      "direct_text": "WorkflowHub · 设计移植样本",
+      "depth": 2
+    },
+    {
+      "path": ".sample-page > main.sample-page__main",
+      "tag": "main",
+      "classes": [
+        "sample-page__main"
+      ],
+      "direct_text": null,
+      "depth": 1
+    },
+    {
+      "path": ".sample-page__main > section.result-panel",
+      "tag": "section",
+      "classes": [
+        "result-panel"
+      ],
+      "direct_text": null,
+      "depth": 2
+    },
+    {
+      "path": ".result-panel > h2.result-panel__title",
+      "tag": "h2",
+      "classes": [
+        "result-panel__title"
+      ],
+      "direct_text": "读取结果",
+      "depth": 3
+    },
+    {
+      "path": ".action-row > button.read-next-button",
+      "tag": "button",
+      "classes": [
+        "read-next-button"
+      ],
+      "direct_text": "读取下一份样例",
+      "depth": 3
+    }
   ],
   "content_binding": {
-    "files": [
-      {"path": "tests/fixtures/design-port-sample/prototype/index.html", "sha256": "66b6d773f67f5c630ca0c2e380a68eb3baa732da7bf0c27bbcbff0dc0f71120a"}
-    ]
+    "design": {
+      "files": [
+        {
+          "path": "tests/fixtures/design-port-sample/prototype/index.html",
+          "sha256": "66b6d773f67f5c630ca0c2e380a68eb3baa732da7bf0c27bbcbff0dc0f71120a"
+        }
+      ]
+    },
+    "implementation": {
+      "root": "tests/fixtures/design-port-sample/port-output",
+      "files": [
+        {
+          "path": "index.html",
+          "sha256": "cf03b2ce245d2cc0618a4d852fc3d299dcb1412110bfdb8025e5348f42be3d1d"
+        }
+      ]
+    }
   }
 }

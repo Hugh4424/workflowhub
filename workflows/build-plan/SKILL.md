@@ -215,7 +215,7 @@ version: 4.2.0
 判断产物由 build-prd 记录为有稿前置，由 build-code 在施工前执行。
 `check-judgment.mjs` 读同一 `judgment.md` 的机器块，退出 0 只表示判断有效；还要 `allowed_for_construction` 为 true 才施工。
 命令是 `node skills/design-source-extraction/scripts/check-judgment.mjs --input <judgment.md>`。
-等待确认时加 `--confirmation-ref <确认原件>` 才可能恢复；未答和时间流逝都不能恢复。
+等待确认时加 `--confirmation-ref <确认原件>` 才可能恢复；原件要带 `design-judgment-confirmation` 机器块（`decision: approved`、指向本判断的 `judgment_ref` 与 `verdict`），拒绝、纯文本、未答或对象不符都继续停止。
 判断只写去向，不写产品需求；产品需求正文仍由 build-prd 的唯一作者写。
 判断之后的提炼、移植、数据接线、四类校验与目视入口，沿 `skills/design-source-extraction/SKILL.md` 的「新页面八步流程」；设计源或规范变化时沿同技能「设计稿更新后怎么同步」重新提炼，不沿用旧读数。实施中复现的坑对照同技能 `references/anti-patterns.md`，每条给可执行检查或具名 owner；这里只留条件指针，不复制正文。
 

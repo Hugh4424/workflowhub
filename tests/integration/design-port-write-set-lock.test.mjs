@@ -48,8 +48,8 @@ function runChild(childScript, args) {
     child.on("close", (code, signal) => done({code, signal, pid: child.pid, stdout, stderr}));
   });
 }
-function runCheck(dir) {
-  return spawnSync(process.execPath, [CHECK, "--dir", dir], {cwd: ROOT, encoding: "utf8", timeout: 60000});
+function runCheck(dir, extra = []) {
+  return spawnSync(process.execPath, [CHECK, "--dir", dir, ...extra], {cwd: ROOT, encoding: "utf8", timeout: 60000});
 }
 function codeOf(result) { try { return JSON.parse(result.stderr).error.code; } catch { return null; } }
 function outOf(result) { try { return JSON.parse(result.stdout); } catch { return null; } }
@@ -73,7 +73,9 @@ const {describe, it, expect, afterAll} = vitest;
 
 describe("ORACLE-WRITE-LOCK holds one real workspace lock across two real processes", () => {
   const root = mkdtempSync(join(tmpdir(), "p5-write-lock-"));
-  const lockDir = join(root, "locks");
+  // The lock is taken at the controlled worktree root itself, so the writer record can name
+  // the real acquisition location; a task-root lock would not match this root.
+  const lockDir = root;
   const target = join(root, "counter.txt");
   const log = join(root, "transactions.log");
   const childScript = join(root, "writer.mjs");
@@ -142,8 +144,8 @@ describe("ORACLE-WRITE-LOCK holds one real workspace lock across two real proces
       kind: "write-set",
       worktree: {root_ref: "测试临时工作区", branch_ref: "task/示例", session: "P5 集成测试"},
       lock: {implementation: "runtime/interface/record-lock.mjs", name: lockName, domain: "workspace", proofs: [
-        {id: "holder", pid: observed.holder.pid, host: observed.holder.host, nonce: observed.holder.nonce, started_at: observed.holder.started_at, released_at: observed.holderReleasedAt},
-        ...observed.proofs.map((proof, index) => ({id: index === 0 ? "writer-a" : "writer-b", pid: proof.owner.pid, host: proof.owner.host, nonce: proof.owner.nonce, started_at: proof.owner.started_at, released_at: proof.released_at})),
+        {id: "holder", pid: observed.holder.pid, host: observed.holder.host, nonce: observed.holder.nonce, started_at: observed.holder.started_at, released_at: observed.holderReleasedAt, lock_root: ".", lock_file: `.${lockName}.lock`},
+        ...observed.proofs.map((proof, index) => ({id: index === 0 ? "writer-a" : "writer-b", pid: proof.owner.pid, host: proof.owner.host, nonce: proof.owner.nonce, started_at: proof.owner.started_at, released_at: proof.released_at, lock_root: ".", lock_file: `.${lockName}.lock`})),
       ]},
       writers: [{id: "P5-int", role: "唯一写者", session_ref: "test:integration", files: ["临时工作区/counter.txt"]}],
       shared_files: [{path: "临时工作区/counter.txt", writer: "P5-int", lock_proof: "writer-a"}],
@@ -157,13 +159,13 @@ describe("ORACLE-WRITE-LOCK holds one real workspace lock across two real proces
     };
     const dir = join(root, "write-set");
     writeFileSync(join(dir, "write-set.json"), JSON.stringify(writeSet, null, 2) + "\n");
-    const accepted = runCheck(dir);
+    const accepted = runCheck(dir, ["--worktree", root]);
     expect(accepted.status, accepted.stdout + accepted.stderr).toBe(0);
     expect(outOf(accepted).ok).toBe(true);
     writeSet.writers.push({id: "P5-other", role: "唯一写者", session_ref: "test:other", files: ["临时工作区/counter.txt"]});
     writeSet.shared_files.push({path: "临时工作区/counter.txt", writer: "P5-other", lock_proof: "writer-b"});
     writeFileSync(join(dir, "write-set.json"), JSON.stringify(writeSet, null, 2) + "\n");
-    const rejected = runCheck(dir);
+    const rejected = runCheck(dir, ["--worktree", root]);
     expect(rejected.status).toBe(1);
     expect(outOf(rejected).error.code).toBe("WRITE_SET_DOUBLE_WRITER");
     expect(codeOf(rejected)).toBe("WRITE_SET_DOUBLE_WRITER");

@@ -27,7 +27,7 @@
 ## 内容身份凭什么算数？
 
 报告不能只记提交号：提交号相同而工作树被改过，报告会失真。
-每份配置用 `content_binding.files` 声明被比较文件的路径与 sha256；脚本用 `crypto` 重算实际字节并比对。
+每份配置用 `content_binding.design.files` 与 `content_binding.implementation.files` 两侧分别声明被比较文件的路径与 sha256；脚本用 `crypto` 重算实际字节并比对。设计侧路径相对仓库根；实施侧用 `content_binding.implementation.root` 声明实施输出目录，文件路径相对该根；缺任一侧或根目录返回未验证，不降级为只比一侧。
 被比较文件在提交后变化而声明摘要未更新，即判内容不符，报告作废。
 配置字节本身也进报告摘要，配置改过同样失配。
 被比较文件要同时覆盖**设计源与实施输出（移植件 / port-output）**：只绑设计源、不绑实施输出时，实施字节被改也察觉不到，违反「实施字节改变也必须失效」。
@@ -70,7 +70,7 @@ P2 的 `check-port-manifest` 负责**逐行移植登记与样式闭合**：导�
 
 ## 校验器用，人可跳过
 
-- 四个私有入口参数为 `--config <配置>`；配置字段结构与合法取值以各脚本的 `validateShape` 与导出常量为唯一来源，本文不复刻字段清单。
+- 四个私有入口参数为 `--config <配置>`；实施输出根由 `content_binding.implementation.root` 声明，`check-port-parity` 用该根枚举实际输出文件与编译样式。配置字段结构与合法取值以各脚本的 `validateShape` 与导出常量为唯一来源，本文不复刻字段清单。
 - 退出码：0 通过；1 目标失败；2 配置或对象不可用（对应上表三态）。
 - 后端身份是 evidence-only：四类比较器不消费，由独立审查者读 `GET /identity`、进程回执与配置摘要原件核对。
 - 写作规范见 `skills/material-writing/SKILL.md`，本文不复述。

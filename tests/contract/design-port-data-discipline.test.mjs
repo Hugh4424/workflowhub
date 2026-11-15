@@ -3,7 +3,7 @@
 // 业务服务、其它视口或长期稳定性。受控破坏只发生在临时副本，原夹具与原型不改。
 // RED 只落目标断言；收集、导入与环境失败另记。浏览器场景只读驱动实际输出，不向
 // 页面注入字节、不替页面调用网关。
-import {mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync, statSync, cpSync, readdirSync} from 'node:fs';
+import {mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync, statSync, cpSync, readdirSync, mkdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join, resolve, dirname, basename} from 'node:path';
 import {spawnSync, spawn} from 'node:child_process';
@@ -212,6 +212,54 @@ function defineTests({describe,it,expect},data){
     });
   });
 
+  describe("ORACLE-DATA-DISCIPLINE refuses to overwrite an unreadable store and non-loopback binds",()=>{
+    it("keeps corrupt store bytes and returns an explicit failure instead of a receipt",async()=>{
+      const base=mkdtempSync(join(tmpdir(),"p3-data-corrupt-"));
+      const storeFile=join(base,"store","records.json");
+      const portRecord=join(base,"p2-port-output.json");
+      mkdirSync(join(base,"store"),{recursive:true});
+      const corrupt="{not json\n";
+      writeFileSync(storeFile,corrupt);
+      writeFileSync(portRecord,JSON.stringify({output_root:PROTOTYPE})+"\n");
+      const port=await freePort();
+      const {child}=startService({port,store:storeFile,portRecord});
+      try{
+        const identity=await waitReady(`http://127.0.0.1:${port}`);
+        expect(identity).not.toBeNull();
+        const posted=await httpPost(`http://127.0.0.1:${port}/records`,{recordId:"sample-01",value:"after-corrupt",requestId:"req-99"});
+        expect(posted.status).toBe(500);
+        expect(posted.body&&posted.body.error).toBe("STORE_CORRUPT");
+        expect(readFileSync(storeFile,"utf8")).toBe(corrupt);
+      }finally{await stopService(child);clean(base);}
+    },30000);
+    it("treats a store that is not a JSON array as corrupt, not empty",async()=>{
+      const base=mkdtempSync(join(tmpdir(),"p3-data-shape-"));
+      const storeFile=join(base,"store.json");
+      writeFileSync(storeFile,JSON.stringify({records:[]})+"\n");
+      const portRecord=join(base,"p2-port-output.json");
+      writeFileSync(portRecord,JSON.stringify({output_root:PROTOTYPE})+"\n");
+      const port=await freePort();
+      const {child}=startService({port,store:storeFile,portRecord});
+      try{
+        expect(await waitReady(`http://127.0.0.1:${port}`)).not.toBeNull();
+        const posted=await httpPost(`http://127.0.0.1:${port}/records`,{recordId:"sample-01",value:"x",requestId:"req-1"});
+        expect(posted.status).toBe(500);
+        expect(posted.body&&posted.body.error).toBe("STORE_CORRUPT");
+        expect(readFileSync(storeFile,"utf8")).toBe(JSON.stringify({records:[]})+"\n");
+      }finally{await stopService(child);clean(base);}
+    },30000);
+    it("rejects a non-loopback listen address before serving",()=>{
+      const base=mkdtempSync(join(tmpdir(),"p3-data-listen-"));
+      try{
+        const portRecord=join(base,"p2-port-output.json");
+        writeFileSync(portRecord,JSON.stringify({output_root:PROTOTYPE})+"\n");
+        const result=spawnSync(process.execPath,[SCRIPT,"--mode=serve","--fixture",FIXTURE,"--listen=0.0.0.0","--port","8797","--port-output-record",portRecord,"--store",join(base,"store.json")],{cwd:ROOT,encoding:"utf8",timeout:20000});
+        expect(result.status,result.stdout+result.stderr).toBe(2);
+        expect(result.stderr).toContain("LISTEN_NOT_LOOPBACK");
+      }finally{clean(base);}
+    });
+  });
+
   describe("ORACLE-DATA-DISCIPLINE browser scenario entry (smoke: tokens present, not behaviour evidence)",()=>{
     it("declares its own service, evidence publishing, fixed viewport and wiring delegation tokens",()=>{
       const source=readFileSync(SELF_PATH,"utf8");
@@ -295,9 +343,11 @@ function evaluateDataFacts(facts,identity){
   checks.push({id:"loading-distinct",passed:loading.ariaBusy==="true"&&String(loading.buttonLabel||"").includes("读取"),observed:{aria_busy:loading.ariaBusy??null,button:loading.buttonLabel??null}});
   const real=facts.real||{};
   checks.push({id:"real-no-sample-tags",passed:Number(real.sampleTags)===0,observed:{sample_tags:real.sampleTags??null}});
+  checks.push({id:"real-idle-before-request",passed:real.idle&&real.idle.resultState==="idle"&&Number(real.idle.records)===0,observed:real.idle??null});
   checks.push({id:"real-success",passed:real.success&&real.success.resultState==="success"&&Number(real.success.records)>=1,observed:real.success??null});
   checks.push({id:"real-empty",passed:real.empty&&real.empty.resultState==="empty"&&Number(real.empty.records)===0,observed:real.empty??null});
   checks.push({id:"real-error",passed:real.error&&real.error.resultState==="error",observed:real.error??null});
+  checks.push({id:"real-timeout",passed:real.timeout&&real.timeout.resultState==="timeout"&&real.timeout.afterLateState==="timeout"&&Number(real.timeout.records)===0,observed:real.timeout??null});
   checks.push({id:"write-receipt",passed:real.write&&real.write.resultState==="receipt"&&typeof real.write.receipt==="string"&&real.write.receipt.length>0,observed:real.write??null});
   checks.push({id:"legacy-hook",passed:facts.hook==="sample-result",observed:facts.hook??null});
   return checks;
@@ -353,20 +403,27 @@ try{
   const refused=await read();
   const buttonPresent=await page.evaluate(()=>Boolean(document.querySelector("#next-sample")),{});
   result.facts.sampleWrite={resultState:refused.resultState,buttonPresent};
-  // real mode read success/empty/error and write receipt.
+  // real mode read success/empty/error, timeout page state and write receipt.
   const realRead=async(params)=>{await page.goto(input.origin+"/index.html?"+params);await page.waitForSelector("#next-sample");const init=await read();await click();await wait(500);const done=await read();return {init,done};};
   const rSuccess=await realRead("mode=real&recordId=sample-01&action=read");
   const rEmpty=await realRead("mode=real&recordId=empty&action=read");
   const rError=await realRead("mode=real&recordId=error&action=read");
   const rWrite=await realRead("mode=real&recordId=sample-01&action=write&value=legacy-write");
+  // timeout budget 25ms < fixture delay 100ms: the client must abort and keep the timeout state
+  // after the late 200 arrives.
+  const rTimeout=await realRead("mode=real&recordId=timeout&action=read&timeoutMs=25");
+  await wait(400);
+  const rTimeoutLate=await read();
   result.facts.real={
     sampleTags:rSuccess.init.sampleTags,
+    idle:{resultState:rSuccess.init.resultState,records:rSuccess.init.records},
     success:{resultState:rSuccess.done.resultState,records:rSuccess.done.records},
     empty:{resultState:rEmpty.done.resultState,records:rEmpty.done.records},
     error:{resultState:rError.done.resultState,role:rError.done.resultRole},
-    write:{resultState:rWrite.done.resultState,receipt:rWrite.done.receipt}
+    write:{resultState:rWrite.done.resultState,receipt:rWrite.done.receipt},
+    timeout:{resultState:rTimeout.done.resultState,afterLateState:rTimeoutLate.resultState,records:rTimeoutLate.records}
   };
-  result.facts.timeout_page={status:"unavailable",reason:"frozen app.js 无客户端超时接缝；timeout 在数据层真实分档并另存原件"};
+  result.facts.timeout_page={status:"observed",state:rTimeout.done.resultState,after_late:rTimeoutLate.resultState};
   await page.screenshot({path:input.screenshotPath});
   result.facts.screenshot=input.screenshotPath;
   fs.writeFileSync(input.resultPath,JSON.stringify(result));

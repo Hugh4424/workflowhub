@@ -52,9 +52,33 @@ function mutateConfig(name,mutate){
   writeFileSync(file,JSON.stringify(doc,null,2)+"\n");
   return {dir,file};
 }
-// Rewrite content_binding files with repo-root-relative or absolute paths to stable real files.
-function withBinding(doc,paths){
-  doc.content_binding={files:paths.map(p=>({path:p,sha256:sha(resolve(ROOT,p))}))};
+// Content identity has two sides. Design paths are repo-relative; implementation paths are
+// relative to content_binding.implementation.root (the committed verification output snapshot,
+// which must stay byte-identical to a fresh generation), so changing either side invalidates
+// the report.
+const DESIGN_SIDE={
+  geometry:["tests/fixtures/design-port-sample/prototype/styles.css"],
+  "dom-parity":["tests/fixtures/design-port-sample/prototype/index.html"],
+  "feature-keep":["tests/fixtures/design-port-sample/prototype/index.html"],
+  "port-parity":["tests/fixtures/design-port-sample/prototype/index.html","tests/fixtures/design-port-sample/prototype/styles.css","tests/fixtures/design-port-sample/prototype/app.js"],
+};
+const IMPLEMENTATION_SIDE={
+  geometry:["styles.css"],
+  "dom-parity":["index.html"],
+  "feature-keep":["index.html"],
+  "port-parity":["index.html","styles.css","app.js"],
+};
+const OUTPUT_ROOT="tests/fixtures/design-port-sample/port-output";
+function copyOutput(){
+  const dir=mkdtempSync(join(tmpdir(),"p4-verify-out-copy-"));
+  cpSync(resolve(ROOT,OUTPUT_ROOT),dir,{recursive:true});
+  return dir;
+}
+function bindings(name,{design=DESIGN_SIDE[name],implementation=IMPLEMENTATION_SIDE[name],implRoot=OUTPUT_ROOT}={}){
+  return {
+    design:{files:design.map(p=>({path:p,sha256:sha(resolve(ROOT,p))}))},
+    implementation:{root:implRoot,files:implementation.map(p=>({path:p,sha256:sha(resolve(ROOT,implRoot,p))}))},
+  };
 }
 
 // Standalone probe: recompute the backend identity digest from the real service response, the
@@ -68,17 +92,19 @@ if(process.argv.includes("--identity-probe")){ await identityProbe(); }
 else { const vitest=await import('vitest'); defineTests(vitest); }
 
 function defineTests({describe,it,expect}){
+  const runChecker=(name,{config=CONFIGS[name]}={})=>runCheck(SCRIPTS[name],["--config",config]);
   describe("ORACLE-PORT-VERIFICATION accepts the four verification configs",()=>{
     it("each checker exists and accepts its committed config with a content-bound report",()=>{
       for(const name of Object.keys(SCRIPTS)){
         expect(existsSync(SCRIPTS[name]),`${name} script must exist`).toBe(true);
-        const r=runCheck(SCRIPTS[name],["--config",CONFIGS[name]]);
+        const r=runChecker(name);
         expect(r.status,`${name}: ${r.stdout}${r.stderr}`).toBe(0);
         const report=outJson(r);
         expect(report.ok,`${name} ok`).toBe(true);
         expect(report.kind,name).toBe(name);
         expect(report.content&&report.content.config_sha256,`${name} config digest`).toMatch(/^[0-9a-f]{64}$/);
-        expect(Array.isArray(report.content.inputs)&&report.content.inputs.length>=1,`${name} input digests`).toBe(true);
+        const sides=(report.content.inputs||[]).map(entry=>entry.side);
+        expect(sides.includes("design")&&sides.includes("implementation"),`${name} must bind both sides`).toBe(true);
         expect(typeof report.head==="string"||report.head===null,name).toBe(true);
       }
     });
@@ -86,12 +112,12 @@ function defineTests({describe,it,expect}){
 
   describe("ORACLE-PORT-VERIFICATION reports the specified category geometry with 0.5px tolerance",()=>{
     it("accepts a diff exactly at 0.5px and rejects 0.5001px",()=>{
-      const {dir,file}=mutateConfig("geometry",doc=>{doc.probes[0].design=100;doc.probes[0].implementation=100.5;withBinding(doc,["tests/fixtures/design-port-sample/prototype/styles.css"]);});
+      const {dir,file}=mutateConfig("geometry",doc=>{doc.probes[0].design=100;doc.probes[0].implementation=100.5;doc.content_binding=bindings("geometry");});
       try{
-        const ok=runCheck(SCRIPTS.geometry,["--config",file]);
+        const ok=runChecker("geometry",{config:file});
         expect(ok.status,ok.stderr).toBe(0);
         const doc=readJson(file);doc.probes[0].implementation=100.5001;writeFileSync(file,JSON.stringify(doc,null,2)+"\n");
-        const over=runCheck(SCRIPTS.geometry,["--config",file]);
+        const over=runChecker("geometry",{config:file});
         expect(over.status,over.stdout+over.stderr).not.toBe(0);
         expect(codeOf(over)).toBe("GEOMETRY_TOLERANCE_EXCEEDED");
       }finally{clean(dir);}
@@ -117,18 +143,18 @@ function defineTests({describe,it,expect}){
     ];
     for(const [name,mutate,code] of cases){
       it(`rejects ${name} break -> ${code}`,()=>{
-        const {dir,file}=mutateConfig(name,doc=>{mutate(doc);withBinding(doc,["tests/fixtures/design-port-sample/prototype/index.html"]);});
+        const {dir,file}=mutateConfig(name,doc=>{mutate(doc);doc.content_binding=bindings(name);});
         try{
-          const r=runCheck(SCRIPTS[name],["--config",file]);
+          const r=runChecker(name,{config:file});
           expect(r.status,r.stdout+r.stderr).not.toBe(0);
           expect(codeOf(r),r.stderr).toBe(code);
         }finally{clean(dir);}
       });
     }
     it("rejects a probe missing implementation as a shape error, not a silent pass (F4)",()=>{
-      const {dir,file}=mutateConfig("geometry",doc=>{delete doc.probes[0].implementation;withBinding(doc,["tests/fixtures/design-port-sample/prototype/styles.css"]);});
+      const {dir,file}=mutateConfig("geometry",doc=>{delete doc.probes[0].implementation;doc.content_binding=bindings("geometry");});
       try{
-        const r=runCheck(SCRIPTS.geometry,["--config",file]);
+        const r=runChecker("geometry",{config:file});
         expect(r.status,r.stdout+r.stderr).toBe(2);
         expect(codeOf(r),r.stderr).toBe("GEOMETRY_SHAPE_INVALID");
       }finally{clean(dir);}
@@ -138,12 +164,13 @@ function defineTests({describe,it,expect}){
   describe("ORACLE-PORT-VERIFICATION binds current content, not only the commit id",()=>{
     it("independently recomputes config and input digests with crypto and matches the report",()=>{
       for(const name of Object.keys(SCRIPTS)){
-        const r=runCheck(SCRIPTS[name],["--config",CONFIGS[name]]);
+        const r=runChecker(name);
         expect(r.status,r.stderr).toBe(0);
         const report=outJson(r);
         expect(report.content.config_sha256,`${name} config sha`).toBe(sha(CONFIGS[name]));
         for(const entry of report.content.inputs){
-          expect(entry.sha256,`${name} input ${entry.path}`).toBe(sha(resolve(ROOT,entry.path)));
+          const root=entry.side==="implementation"?resolve(ROOT,OUTPUT_ROOT):ROOT;
+          expect(entry.sha256,`${name} ${entry.side} input ${entry.path}`).toBe(sha(resolve(root,entry.path)));
         }
       }
     });
@@ -154,36 +181,109 @@ function defineTests({describe,it,expect}){
         const target=join(copyDir,"styles.css");
         writeFileSync(target,readFileSync(SOURCE_FILES["styles.css"]));
         const doc=readJson(file);
-        doc.content_binding={files:[{path:target,sha256:sha(target)}]};
+        doc.content_binding={design:{files:[{path:target,sha256:sha(target)}]},implementation:{root:OUTPUT_ROOT,files:[{path:"styles.css",sha256:sha(resolve(ROOT,OUTPUT_ROOT,"styles.css"))}]}};
         writeFileSync(file,JSON.stringify(doc,null,2)+"\n");
-        const first=runCheck(SCRIPTS.geometry,["--config",file]);
+        const first=runChecker("geometry",{config:file});
         expect(first.status,first.stderr).toBe(0);
         writeFileSync(target,readFileSync(target,"utf8")+"\n/* dirty change after registration */\n");
-        const changed=runCheck(SCRIPTS.geometry,["--config",file]);
+        const changed=runChecker("geometry",{config:file});
         expect(changed.status,changed.stdout+changed.stderr).not.toBe(0);
         expect(codeOf(changed)).toBe("CONTENT_MISMATCH");
         clean(copyDir);
       }finally{clean(dir);}
     });
-    it("binds the implementation output bytes: changing the generated impl fails CONTENT_MISMATCH (F2/SP-F3)",()=>{
-      const base=mkdtempSync(join(tmpdir(),"p4-verify-impl-"));
-      const out=join(base,"port-output");
-      const gen=spawnSync(process.execPath,[PORT_SCRIPT,"--mode=generate","--manifest",MANIFEST,"--design-root",PROTOTYPE,"--output",out],{cwd:ROOT,encoding:"utf8",timeout:180000});
-      expect(gen.status,gen.stderr).toBe(0);
-      const implFile=join(out,"index.html");
-      const cfgDir=mkdtempSync(join(tmpdir(),"p4-verify-implcfg-"));
-      const file=join(cfgDir,"geometry.json");
-      const doc=readJson(CONFIGS.geometry);
-      doc.content_binding={files:[{path:implFile,sha256:sha(implFile)}]};
-      writeFileSync(file,JSON.stringify(doc,null,2)+"\n");
+    it("binds the implementation output bytes for every class: changing port-output fails CONTENT_MISMATCH (F2/SP-F3)",()=>{
+      for(const [name,file] of [["geometry","styles.css"],["dom-parity","index.html"],["feature-keep","index.html"],["port-parity","index.html"]]){
+        const out=copyOutput();
+        const cfgDir=mkdtempSync(join(tmpdir(),"p4-verify-implcfg-"));
+        try{
+          const file2=join(cfgDir,`${name}.json`);
+          const doc=readJson(CONFIGS[name]);
+          doc.content_binding=bindings(name,{implRoot:out});
+          writeFileSync(file2,JSON.stringify(doc,null,2)+"\n");
+          const ok=runChecker(name,{config:file2});
+          expect(ok.status,`${name}: ${ok.stderr}`).toBe(0);
+          writeFileSync(join(out,file),readFileSync(join(out,file),"utf8")+"\n/* implementation changed after registration */\n");
+          const changed=runChecker(name,{config:file2});
+          expect(changed.status,changed.stdout+changed.stderr).not.toBe(0);
+          expect(codeOf(changed),`${name} must fail on changed implementation bytes`).toBe("CONTENT_MISMATCH");
+        }finally{clean(cfgDir);clean(out);}
+      }
+    });
+    it("keeps the committed implementation snapshot byte-identical to a fresh generation",()=>{
+      const out=mkdtempSync(join(tmpdir(),"p4-verify-regen-"));
       try{
-        const ok=runCheck(SCRIPTS.geometry,["--config",file]);
-        expect(ok.status,ok.stderr).toBe(0);
-        writeFileSync(implFile,readFileSync(implFile,"utf8")+"\n<!-- implementation changed after registration -->\n");
-        const changed=runCheck(SCRIPTS.geometry,["--config",file]);
-        expect(changed.status,changed.stdout+changed.stderr).not.toBe(0);
-        expect(codeOf(changed)).toBe("CONTENT_MISMATCH");
-      }finally{clean(cfgDir);clean(base);}
+        const gen=spawnSync(process.execPath,[PORT_SCRIPT,"--mode=generate","--manifest",MANIFEST,"--design-root",PROTOTYPE,"--output",out],{cwd:ROOT,encoding:"utf8",timeout:180000});
+        expect(gen.status,gen.stderr).toBe(0);
+        for(const name of ["index.html","styles.css","app.js"]){
+          expect(sha(join(out,name)),`${name} snapshot must match a fresh generation`).toBe(sha(resolve(ROOT,OUTPUT_ROOT,name)));
+        }
+      }finally{clean(out);}
+    });
+    it("reports an unverified side when a config binds only the design source",()=>{
+      for(const name of Object.keys(SCRIPTS)){
+        const {dir,file}=mutateConfig(name,doc=>{delete doc.content_binding.implementation;});
+        try{
+          const r=runChecker(name,{config:file});
+          expect(r.status,`${name}: ${r.stdout}${r.stderr}`).toBe(2);
+          expect(codeOf(r),`${name} needs a named unverified code`).toMatch(/_CONTENT_BINDING_INCOMPLETE$/);
+        }finally{clean(dir);}
+      }
+    });
+    it("reports an unverified side when the implementation output root is not declared",()=>{
+      for(const name of Object.keys(SCRIPTS)){
+        const {dir,file}=mutateConfig(name,doc=>{delete doc.content_binding.implementation.root;});
+        try{
+          const r=runChecker(name,{config:file});
+          expect(r.status,`${name}: ${r.stdout}${r.stderr}`).toBe(2);
+          expect(codeOf(r),`${name} needs a named unverified code`).toMatch(/_CONTENT_BINDING_INCOMPLETE$/);
+        }finally{clean(dir);}
+      }
+    });
+  });
+
+  describe("ORACLE-PORT-VERIFICATION port parity reads the actual output, not only config arrays",()=>{
+    function configFor(name,out){
+      const dir=mkdtempSync(join(tmpdir(),"p4-verify-pp-cfg-"));
+      const file=join(dir,`${name}.json`);
+      const doc=readJson(CONFIGS[name]);
+      doc.content_binding=bindings(name,{implRoot:out});
+      writeFileSync(file,JSON.stringify(doc,null,2)+"\n");
+      return {dir,file,doc};
+    }
+    it("rejects a file that really exists in the output but is not registered",()=>{
+      const out=copyOutput();
+      const cfg=configFor("port-parity",out);
+      try{
+        writeFileSync(join(out,"extra-generated.css"),".sample-page .rogue { color: red; }\n");
+        const r=runChecker("port-parity",{config:cfg.file});
+        expect(r.status,r.stdout+r.stderr).not.toBe(0);
+        expect(codeOf(r)).toBe("UNREGISTERED_FILE");
+      }finally{clean(cfg.dir);clean(out);}
+    });
+    it("rejects a used class whose compiled rule is gone from the actual stylesheet",()=>{
+      const out=copyOutput();
+      const cfg=configFor("port-parity",out);
+      try{
+        const styles=join(out,"styles.css");
+        writeFileSync(styles,readFileSync(styles,"utf8").replace(/\.sample-page \.receipt-line \{[^}]*\}\n?/,""));
+        const entry=cfg.doc.content_binding.implementation.files.find(file=>file.path==="styles.css");
+        entry.sha256=sha(styles);
+        writeFileSync(cfg.file,JSON.stringify(cfg.doc,null,2)+"\n");
+        const r=runChecker("port-parity",{config:cfg.file});
+        expect(r.status,r.stdout+r.stderr).not.toBe(0);
+        expect(codeOf(r)).toBe("UNCOMPILED_CLASS");
+      }finally{clean(cfg.dir);clean(out);}
+    });
+    it("rejects a registered output missing from the actual directory",()=>{
+      const out=copyOutput();
+      const cfg=configFor("port-parity",out);
+      try{
+        rmSync(join(out,"manual-overrides.css"));
+        const r=runChecker("port-parity",{config:cfg.file});
+        expect(r.status,r.stdout+r.stderr).not.toBe(0);
+        expect(codeOf(r)).toBe("OUTPUT_FILE_MISSING");
+      }finally{clean(cfg.dir);clean(out);}
     });
   });
 
@@ -192,15 +292,15 @@ function defineTests({describe,it,expect}){
       const missing=runCheck(SCRIPTS.geometry,["--config",join(DIR,"does-not-exist.json")]);
       expect(missing.status).toBe(2);
       expect(codeOf(missing)).toBe("GEOMETRY_CONFIG_UNAVAILABLE");
-      const {dir,file}=mutateConfig("port-parity",doc=>{doc.content_binding={files:[{path:"/nonexistent/p4/object.css",sha256:"0".repeat(64)}]};});
+      const {dir,file}=mutateConfig("port-parity",doc=>{doc.content_binding={design:{files:[{path:"tests/fixtures/design-port-sample/prototype/index.html",sha256:sha(resolve(ROOT,"tests/fixtures/design-port-sample/prototype/index.html"))}]},implementation:{root:OUTPUT_ROOT,files:[{path:"/nonexistent/p4/object.css",sha256:"0".repeat(64)}]}};});
       try{
-        const unavailable=runCheck(SCRIPTS["port-parity"],["--config",file]);
+        const unavailable=runChecker("port-parity",{config:file});
         expect(unavailable.status).toBe(2);
         expect(codeOf(unavailable)).toBe("PORT_PARITY_OBJECT_UNAVAILABLE");
       }finally{clean(dir);}
-      const {dir:bd,file:bf}=mutateConfig("feature-keep",doc=>{doc.features[0].observed.text="变了";withBinding(doc,["tests/fixtures/design-port-sample/prototype/index.html"]);});
+      const {dir:bd,file:bf}=mutateConfig("feature-keep",doc=>{doc.features[0].observed.text="变了";doc.content_binding=bindings("feature-keep");});
       try{
-        const target=runCheck(SCRIPTS["feature-keep"],["--config",bf]);
+        const target=runChecker("feature-keep",{config:bf});
         expect(target.status).toBe(1);
         expect(codeOf(target)).toBe("FEATURE_TEXT_CHANGED");
       }finally{clean(bd);}
@@ -214,10 +314,10 @@ function defineTests({describe,it,expect}){
       const doc={schema_version:"1.0.0",kind:"geometry-config",tolerance_px:0.5,probes:[
         {id:"alt-w",selector:".alt-row",property:"width",unit:"px",design:320,implementation:320.4},
       ],content_binding:{files:[]}};
-      withBinding(doc,["tests/fixtures/design-port-sample/prototype/styles.css"]);
+      doc.content_binding=bindings("geometry");
       writeFileSync(file,JSON.stringify(doc,null,2)+"\n");
       try{
-        const r=runCheck(SCRIPTS.geometry,["--config",file]);
+        const r=runChecker("geometry",{config:file});
         expect(r.status,r.stderr).toBe(0);
       }finally{clean(dir);}
     });

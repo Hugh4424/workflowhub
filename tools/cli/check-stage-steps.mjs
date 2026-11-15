@@ -372,6 +372,24 @@ function cardPointer(value) {
   }
   return pointer;
 }
+// 冷读原件自己必须绑定它读的那张卡与节摘要：只在收敛格里改摘要不算复读。
+function coldCardBinding(text) {
+  const source = String(text ?? '');
+  const line = source.split(/\r?\n/).find((value) => /读的卡|当前方案卡/.test(value));
+  if (!line) return null;
+  const ref = /`([^`]+)`/.exec(line)?.[1] ?? null;
+  if (!ref) return null;
+  const digest = /sha256\s*`?([0-9a-f]{64})`?/i.exec(line)?.[1] ?? null;
+  const title = /「([^」]+)」/.exec(line)?.[1] ?? null;
+  return {ref, digest, title};
+}
+function cardIdentity(ref, title) {
+  const parts = String(ref ?? '').split('#');
+  const file = parts[0];
+  const anchor = parts.length > 1 ? parts.slice(1).join('#') : (title ?? '');
+  const number = /工作包[\s\-—–:：]*(\d+)/.exec(anchor)?.[1] ?? null;
+  return {file, anchor, number};
+}
 function discoverColdReadOriginal(taskPath, id) {
   const root = resolve(taskPath, 'quality/evidence');
   if (!existsSync(root)) return null;
@@ -479,6 +497,51 @@ function coldReadGaps({ id, body, taskPath, taskName }) {
     } catch (error) {
       gaps.push('卡片摘要不符');
       errors.push(`${taskName}/冷读: 卡片不可回读（${error.message}）`);
+    }
+  }
+  // 冷读原件绑定：原件的卡引用、节摘要与当前卡节逐项比较；缺绑定或不一致都算未复读。
+  if (coldOriginal) {
+    const bound = coldCardBinding(coldOriginal);
+    if (!bound || !bound.digest) {
+      gaps.push('冷读原件未绑定卡摘要');
+      errors.push(`${taskName}/冷读: 冷读原件未绑定当前卡节摘要`);
+    } else {
+      const boundIdentity = cardIdentity(bound.ref, bound.title);
+      if (card.ref) {
+        const blockIdentity = cardIdentity(card.ref, null);
+        // 卡文件可以被重版本（同一节字节搬到新文件），内容身份由摘要承担；
+        // 这里只要求指向同一工作包，摘要一致性由下面两条分别核对。
+        const sameSection = !boundIdentity.number || !blockIdentity.number
+          ? boundIdentity.anchor === blockIdentity.anchor
+          : boundIdentity.number === blockIdentity.number;
+        if (!sameSection) {
+          gaps.push('冷读原件读的卡与当前卡节不一致');
+          errors.push(`${taskName}/冷读: 冷读原件读的卡与当前卡节不一致`);
+        }
+        if (card.digest && bound.digest !== card.digest) {
+          gaps.push('卡片摘要与冷读原件不一致');
+          errors.push(`${taskName}/冷读: 收敛格卡摘要与冷读原件不一致`);
+        }
+      }
+      const boundRef = bound.ref.split('#')[0];
+      const boundAnchor = bound.ref.includes('#')
+        ? boundIdentity.anchor
+        : (bound.title || (boundIdentity.number ? `工作包 ${boundIdentity.number}` : null));
+      if (!boundAnchor) {
+        gaps.push('冷读原件未绑定卡摘要');
+        errors.push(`${taskName}/冷读: 冷读原件没有可回读的卡节锚点`);
+      } else {
+        try {
+          const boundSection = anchoredSection(readTaskOriginal(taskPath, boundRef), boundAnchor);
+          if (!boundSection || coldDigest(boundSection) !== bound.digest) {
+            gaps.push('卡片摘要不符');
+            errors.push(`${taskName}/冷读: 冷读原件绑定的卡节摘要不符`);
+          }
+        } catch (error) {
+          gaps.push('卡片摘要不符');
+          errors.push(`${taskName}/冷读: 冷读原件绑定的卡不可回读（${error.message}）`);
+        }
+      }
     }
   }
   const first = pointerFields(firstLine);

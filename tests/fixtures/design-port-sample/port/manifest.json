@@ -6,7 +6,7 @@
     "scope_selector": ".sample-page",
     "chrome": {
       "owner": "host",
-      "basis_ref": "../README.md:64",
+      "basis_ref": "../README.md:68",
       "basis_marker": "宿主外壳选择器是",
       "host_shell_selectors": [
         ".host-frame",
@@ -28,7 +28,7 @@
           2,
           0
         ],
-        "ref": "../README.md:72",
+        "ref": "../README.md:76",
         "marker": "`.page-shell .result-panel`"
       },
       {
@@ -38,7 +38,7 @@
           2,
           1
         ],
-        "ref": "../README.md:73",
+        "ref": "../README.md:77",
         "marker": "`.page-shell .action-row button`"
       },
       {
@@ -48,7 +48,7 @@
           3,
           0
         ],
-        "ref": "../README.md:74",
+        "ref": "../README.md:78",
         "marker": "`.page-shell .state-sequence__item.is-current`"
       },
       {
@@ -58,12 +58,12 @@
           3,
           0
         ],
-        "ref": "../README.md:75",
+        "ref": "../README.md:79",
         "marker": "`.page-shell .read-next-button:focus-visible`"
       }
     ],
     "computed_style": {
-      "ref": "../README.md:77",
+      "ref": "../README.md:81",
       "marker": "计算样式基线",
       "viewport": "1440x1000@1"
     }
@@ -105,7 +105,7 @@
       "source": "app.js",
       "target": "app.js",
       "mode": "copy",
-      "source_sha256": "15ca2f3d35664672258e1a18da7eb1a4f0515935211743d50ce82b322668affc",
+      "source_sha256": "7b850a088fa671b8d964f6ebea3af7ec3e55f46fe717b63d9b8982fe4cdb86c2",
       "import_changes": [],
       "direct_changes": []
     }

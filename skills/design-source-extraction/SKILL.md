@@ -118,7 +118,7 @@ screenshot当前明确支持合法非交错PNG：核容器chunk/CRC/压缩scanli
 | 旧功能是否真接回 | `scripts/check-wiring.mjs` | 校验旧功能接线的三链、旧接口参数、真实回执与断开负例 |
 | 几何差异是否在容差内 | `scripts/check-geometry.mjs` | 比较计算样式，按声明探针执行 0.5px 容差 |
 | DOM 结构是否与设计稿一致 | `scripts/check-dom-parity.mjs` | 比较标签、类名、直接文本与层级 |
-| 来源与生成物覆盖是否闭合 | `scripts/check-port-parity.mjs` | 扫描未登记文件、未编译类与来源覆盖 |
+| 来源与生成物覆盖是否闭合 | `scripts/check-port-parity.mjs` | 枚举实际输出，扫描未登记/缺失文件、未编译类与来源覆盖 |
 | 旧功能是否保留 | `scripts/check-feature-keep.mjs` | 功能保留检查：比较选择器、文本、控件角色与旧功能清单 |
 | 目视审查报告是否合规 | `scripts/check-visual-review.mjs` | 校验固定视口、截图、对象身份与差异结论 |
 | 共享写入是否单写者、清理是否完成 | `scripts/check-write-set.mjs` | 校验写者记录、锁证明、中断隔离与清理清单 |

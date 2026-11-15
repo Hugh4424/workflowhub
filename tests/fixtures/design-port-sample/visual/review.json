@@ -41,7 +41,7 @@
   "states_observed": ["success", "loading", "empty", "error", "sample-write-refused", "real-success", "receipt", "recovered"],
   "required_states": ["success", "loading", "empty", "error", "sample-write-refused", "real-success", "receipt", "recovered"],
   "gaps": [
-    {"state": "timeout", "status": "unavailable", "reason": "冻结 app.js 无客户端超时接缝；timeout 在数据层真实分档并另存原件"}
+    {"state": "timeout", "status": "unavailable", "reason": "固定八态未采 timeout 截图；超时页态由 P3 数据面与客户端页面反例覆盖"}
   ],
   "forbidden_old_hashes": [
     "b41709eebce97425171a749edb15d714f7ddfd6a31784f4b42391f06c9a1036a",

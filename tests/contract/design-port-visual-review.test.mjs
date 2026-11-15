@@ -15,7 +15,7 @@ const SCRIPT=join(ROOT,"skills/design-source-extraction/scripts/check-visual-rev
 const VISUAL_DIR=join(ROOT,"tests/fixtures/design-port-sample/visual");
 const SELF_PATH=fileURLToPath(import.meta.url);
 const SCENARIO=process.argv.includes("--browser-scenario");
-// P4 固定八态（实际可观察）。timeout 无客户端接缝，是 unavailable 具名缺口，不进 observed/required。
+// P4 固定八态（实际可观察）。timeout 页态不进本轮固定八态截图，是 unavailable 具名缺口，不进 observed/required。
 const REQUIRED_ACTUAL=["success","loading","empty","error","sample-write-refused","real-success","receipt","recovered"];
 
 if(SCENARIO){ await runBrowserScenario(); }
@@ -237,7 +237,7 @@ function buildReviewSkeleton({facts,identity,outputRoot,readAt,evidenceDir}){
     forbidden_old_hashes:forbidden,
     diffs:[{id:"machine-viewport",state:"success",item:"fixed viewport 1440x1000 DPR1",status:"none"}],
     unresolved:0,
-    gaps:[{state:"timeout",status:"unavailable",reason:"冻结 app.js 无客户端超时接缝；timeout 在数据层真实分档并另存原件"}],
+    gaps:[{state:"timeout",status:"unavailable",reason:"固定八态未采 timeout 截图；超时页态由 P3 数据面与客户端页面反例覆盖"}],
     note:"机器采集骨架：仅记录可机器核对的维度与真实截图字节；视觉差异结论须由独立审查者看图补全。"
   };
 }
@@ -269,7 +269,7 @@ try{
   const rw=await real("mode=real&recordId=sample-01&action=write&value=legacy-write");states.receipt=rw.done;await shot("receipt");
   const re=await real("mode=real&recordId=error&action=read");states.errorReal=re.done;
   const rrec=await real("mode=real&recordId=sample-01&action=read");states.recovered=rrec.done;await shot("recovered");
-  states.timeout={status:"unavailable",reason:"frozen app.js 无客户端超时接缝；timeout 在数据层真实分档并另存原件"};
+  states.timeout={status:"unavailable",reason:"固定八态未采 timeout 截图；超时页态由 P3 数据面与客户端页面反例覆盖"};
   result.facts.states={loading:states.loading,success:states.success,empty:states.empty,error:states.error,"sample-write-refused":states["sample-write-refused"],"real-success":states["real-success"],receipt:states.receipt,recovered:states.recovered,timeout:states.timeout};
   result.facts.hook=first.hook;
   fs.writeFileSync(path.join(input.evidenceDir,"p4-visual-observation.json"),JSON.stringify(result));
