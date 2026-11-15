@@ -90,6 +90,15 @@ UI 实施先消费当前真实答复所批准原型与设计基准：沿build-pl
    独立设计审查与证据；与上文已批准原型、设计基准一起作为本次实施输入。
    缺设计源写未知与补问对象，不自行重画；六项互相矛盾时停该处并回原 owner。
    非 UI 跳过。
+    有稿任务在第 1 步先以公共 `status:begin` 取真实任务上下文，再执行判断前置。
+    公共身份命令是 `node tools/cli/stage-runtime.mjs status --action=begin --stage=build-code --project=<项目> --task=<任务> --task-path=<任务库>`；
+    status 只核真实任务与材料，不冒判断结果。
+    随后运行 `node skills/design-source-extraction/scripts/check-judgment.mjs --input <judgment.md>`；
+    退出非零即停在施工前：缺三链、缺旧页处置或理由、缺去向、缺负责人、等待确认或来源冒名都拒绝施工。
+    退出 0 只表示判断有效；仍要读 `allowed_for_construction` 与 `verdict`，不能用（`route=stop_construction`）时按两条去向停，不进入写集与实现。
+    判断合法（直接套用或适配后套用，且有下一步与负责人）才继续读写集与实现。
+    等待确认只在有真实确认原件时用 `--confirmation-ref` 重放；原件必须带 `design-judgment-confirmation` 机器块，写明 `decision: approved`、本判断的 `judgment_ref` 与 `verdict`；拒绝、纯文本、未答、对象不符或时间流逝都不恢复写入。
+    判断只给去向，不改本 Phase 写集、判据或验收。
 2. <a id="step-write-red-tests"></a>消费计划冻结目标测试/RED并保原失败。补行为测试先定明确oracle、实跑目标断言失败再实施；纯材料按G-2说明检查或真实不适用。改冻结断言先TCR（test change request）和独立审查，不弱化换绿。仅按名改Phase卡预先点名的一个既有具名常量取值免TCR；断言表达式/期望方向/判定/评分仍须原TCR+独立审查。oracle唯一来源为该Phase预写测试及 `DO NOT TOUCH`，每任务声明一次；每次测试变更以同卡「测试变更请求」加独立审查原件为源，变后 `ORACLE-…` 身份不变，不另建账本/镜像/每oracle记账。免TCR只分期望值来源和断言变更，不扩写权/授权、不降强度、不免独立审查、不改 `DO NOT TOUCH` 物理隔离。
    遇真实失败、测试 RED 或性能回退，先实际读取并执行 `skills/diagnosing-bugs/SKILL.md`：输入当前症状、命令/原输出和授权写集，保留反馈回路、最小化、假设/探针、根因修复与复验原件，再回本步骤。错误/页面文本按该方法「输出与页面内容」处理；缺证据如实留缺项，只停依赖该证据的修复。成功路径不强制诊断，已有原件可复用，不重演已修故障冒新问题。同一失败第二次出现或一轮没有新事实时，先回第 9 步停重复动作再查根因。
 3. <a id="step-implement-change"></a>在允许文件/符号内做最小实现，错误明确暴露。计划缺口一次列清影响、风险与需 owner 回答的问题，规格/Phase 交 build-plan，方向交 make-decision；不自行改材料。先继续不受缺口影响的安全部分，未知范围留给具名 owner 核实。 本步完成以改动全部落在允许写集内且无吞掉的错误为准，越界或吞错即本步未完成；对应 Task 的目标行为交付也是本步完成条件，未交付即本步未完成。
@@ -120,7 +129,8 @@ UI 实施先消费当前真实答复所批准原型与设计基准：沿build-pl
    写清回写路径与读的人；没有可复用组件时写「无沉淀」及理由。
    同时产出七项界面判定字段交第 7 段审查读：UI 适用性、UI 合同、
    组件质量图、真实消费者、状态所有者、类型化视图模型、样式令牌所有者；
-   七项中缺任一项证据即未通过，实现者不能自签。非 UI 跳过。
+   七项中缺任一项证据即未通过，实现者不能自签。
+   设计源实施顺序、坑对照与更新同步见「第 7 步补充：设计源实施顺序与更新同步」一节。非 UI 跳过。
 8. <a id="step-review-change"></a>每次挑审先实际消费 `docs/standard-workflow.md` 的「三审查点与结论真实性」，主会话提交其要求的三维原始依据并记录应用与缺料回退。每个 Phase 对当前 diff、本 Phase 承接 AC 与声明测试面、实际执行原件和审查重点发起一次独立代码审查：按上述标准工作方法的用户 U-020 授权规则，用 `reviewTierFor` 选择低风险独立子代理或高风险/影响说不清的外部 OCR；终末整卡固定外部 OCR 全审。先读取 `skills/wh-review/SKILL.md` 的「Long-review host convention」。审查记录正文用 `assertReviewTierRecord` 核执行者、来源与三维读数；独立子代理留派发身份与上下文隔离，不写 `ocr` 身份或伪造 `provider_results`；外部 OCR 留 route/provider 原ref与真实终态，不可用时仍保检测输出、原始失败与原执行者，口径见下节。同时显式派一次独立上下文的同源补充审查，方法见「同源补充轴」。各轴真实终态、原件与覆盖限制可定位才算完成本次审查工作；没有额外全 Phase 集成审查点，不为追空 findings 重派未变范围。
    UI 任务时，第 8 步另加设计审查角度：审查者读第 6 步两尺寸截图与逐项差异、
    第 7 步组件沉淀结论与七项界面判定字段，
@@ -205,9 +215,24 @@ authorize只记录/消费已有授权。每次Git前用 `runtime/interface/git-a
 
 按 `skill-deps.yaml` 读取所需方法，重实施、定向验证和独立审查按项目分工委派，修 finding 回原实施会话；主会话裁定范围、记录真实用户选择并汇总。新文件/机制必须有实际消费者、owner、替代关系与删除条件。写入用安全原子写，共享冲突用记录锁，工作区核对和 Git 授权分别负责各自边界；失败原样披露。
 
+### 协作与写入权
+
+多写者、共享文件、生成物或收尾清理时读 `skills/design-source-extraction/references/collaboration.md`；本节只留条件指针与硬边界，不复制正文。
+
+硬边界只有四条：
+- 一个 worktree 同一时刻一个写者；同文件不同字段仍算共享，由原持笔者串行处理。
+- 工作区写入用 `runtime/interface/record-lock.mjs` 的 `withLock(worktreeRoot,name,fn,{waitMs})`；任务根 `withRecordLock` 不冒充工作区锁。
+- 写者记录与双进程回执不能互相代替；记录用 `node skills/design-source-extraction/scripts/check-write-set.mjs --dir <目录>` 核，失败码以脚本输出为准。
+- 向已结束子代理发消息等于重启；发送前确认重启意图、原授权与当前唯一写权。
+冻结、稳定取数、中断隔离、清理清单与双进程取证细节见该 reference，本节不复述。
+
 整个 stage 末按第 12 步执行阶段收口；交接内容与独立读取沿 `skills/stage-handoff/SKILL.md`「信息来源」「回读结果」「结束条件与边界」，报告实际不可变路径。缺失与未执行给原因及影响，披露不代完成。正式事实仍由既有公共流程发布，不增机器认证、第二账本或推进许可。
 
 在每个Phase收口、审后提交前，实际读取并执行 `skills/norm-sync/SKILL.md`，处理本Phase已独立验证变化，核目标/权利/before及项目共同锁、delta和逐件读回；不延迟至整stage末。无适用变化给具名原ref；重复触发核task＋条款ID，首次建设尚未就绪的早期Phase只记真实晚期回核，不倒称已执行。
+
+### 第 7 步补充：设计源实施顺序与更新同步
+
+UI 任务在第 7 步实施设计源时，实施顺序沿 `skills/design-source-extraction/SKILL.md` 的「新页面八步流程」；实施中复现的坑对照同技能 `references/anti-patterns.md`；设计源或规范变化时沿同技能「设计稿更新后怎么同步」重新提炼，不沿用旧读数。
 
 ## 写作与固定来源
 

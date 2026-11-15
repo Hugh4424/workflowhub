@@ -7,7 +7,7 @@ describe("ORACLE-EXTRACT-WIRE",()=>{
   it("wire:build-plan-reads",()=>{expect(read("workflows/build-plan/SKILL.md")).toContain("design-source-extraction");});
   it("wire:build-code-reads",()=>{expect(read("workflows/build-code/SKILL.md")).toContain("design-source-extraction");});
   it("register:move-map-entry",()=>{const mm=JSON.parse(read("docs/architecture/move-map.json"));const rows=Array.isArray(mm)?mm:mm.entries??[];expect(JSON.stringify(rows)).toContain("design-source-extraction");});
-  it("register:skill-deps",()=>{for(const p of ["workflows/build-plan/skill-deps.yaml","workflows/build-code/skill-deps.yaml"])expect(read(p),`${p} must list design-source-extraction`).toContain("design-source-extraction");});
+  it("register:skill-deps",()=>{for(const p of ["workflows/build-plan/skill-deps.yaml","workflows/build-code/skill-deps.yaml","workflows/build-prd/skill-deps.yaml"])expect(read(p),`${p} must list design-source-extraction`).toContain("design-source-extraction");});
   it("register:catalog-and-registry",()=>{expect(read("skills/catalog.yaml")).toContain("design-source-extraction");expect(read("skills/reuse-registry.md")).toContain("design-source-extraction");});
   it("external:records",()=>{const s=read("skills/design-source-extraction/SKILL.md");expect(s).toMatch(/0\.6\.0\.16|ego lite/);expect(s).toMatch(/style-ref-gen/);});
 });
@@ -19,7 +19,11 @@ const yaml=(await import('js-yaml')).default;
 const {loadStageSkillManifest}=await import('../../runtime/stage/stage-skill-runtime.mjs');
 const {resolveSkillPackage}=await import('../../runtime/adapters/local-skill-resolver.mjs');
 const stages=['build-plan','build-code'];
-const assets=['SKILL.md','scripts/collect-design-source.mjs','references/norm-alignment.md','references/isolated-consumption.md','references/collection-plan.md','templates/collection-plan.example.json'];
+const dependencyStages=['build-plan','build-code','build-prd'];
+// P5/T009 TCR-P5-002: bundle now carries the methods and private checkers that
+// P2–P4 delivered and SKILL.md navigates. The file set is the only changed oracle;
+// each asset still has to resolve to a real file and missing files still throw ENOENT.
+const assets=['SKILL.md','scripts/collect-design-source.mjs','scripts/check-judgment.mjs','scripts/check-port-manifest.mjs','scripts/check-data-discipline.mjs','scripts/check-wiring.mjs','scripts/check-geometry.mjs','scripts/check-dom-parity.mjs','scripts/check-port-parity.mjs','scripts/check-feature-keep.mjs','scripts/check-visual-review.mjs','scripts/check-write-set.mjs','references/norm-alignment.md','references/isolated-consumption.md','references/collection-plan.md','references/port-method.md','references/data-and-state.md','references/wiring.md','references/verification.md','references/visual-review.md','references/collaboration.md','references/anti-patterns.md','templates/collection-plan.example.json'];
 const producers=[...assets.map(p=>'skills/design-source-extraction/'+p),'skills/design-source-extraction/skill-bundle.json'];
 const dependency=stage=>{
   const loaded=loadStageSkillManifest(ROOT,stage);
@@ -45,7 +49,7 @@ const fixture=stage=>{
   return {root,base,manifest,dep,cleanup:()=>fs.rmSync(root,{recursive:true,force:true})};
 };
 describe('P6 real manifest and registered payload consumption',()=>{
-  it.each(stages)('%s actual loader resolves six readable delivery files',stage=>{
+  it.each(dependencyStages)('%s actual loader resolves every declared readable delivery file',stage=>{
     const {loaded,dep}=dependency(stage);
     const payload=resolveSkillPackage({packageRoot:ROOT,manifestPath:loaded.relative,dependency:dep});
     expect(payload.resolved_bundle_paths.sort()).toEqual(assets.map(p=>join(ROOT,'skills/design-source-extraction',p)).sort());
@@ -58,10 +62,23 @@ describe('P6 real manifest and registered payload consumption',()=>{
     const fields=stage==='build-plan'?['source','scope','norm_basis','items']:stage==='build-code'?['items','pending_review','blocked_scope']:['coverage','failures','commands'];
     for(const field of fields)expect(text).toContain(field);
   });
-  it('bundle declares complete six files, excluding bundle itself',()=>expect(complete(JSON.parse(read('skills/design-source-extraction/skill-bundle.json')).files)).toBe(true));
-  it('each of seven actual producer paths has one complete ownership record',()=>{
+  it('bundle declares complete 23 files, excluding bundle itself',()=>expect(complete(JSON.parse(read('skills/design-source-extraction/skill-bundle.json')).files)).toBe(true));
+  it('each of 24 actual producer paths has one complete ownership record',()=>{
     const rows=registered();expect(validEntries(rows)).toBe(true);
     for(const row of rows)for(const path of row.named_data_readers)expect(fs.existsSync(join(ROOT,path)),path).toBe(true);
+  });
+  it('new rows name readers that actually mention the source file',()=>{
+    const rows=registered().filter(row=>String(row.retention_basis).includes('design-port-flow-20261115'));
+    expect(rows.length).toBe(17);
+    for(const row of rows){
+      const name=row.source.split('/').pop();
+      for(const path of row.named_data_readers){
+        const text=read(path);
+        expect(text,`${path} must read ${name}`).toContain(name);
+      }
+      if(/\/scripts\/[^/]+\.mjs$/.test(row.source))expect(row.module_consumers.length,`${row.source} needs its test consumer`).toBeGreaterThan(0);
+      else if(/\/references\/[^/]+\.md$/.test(row.source))expect(row.module_consumers,`${row.source} is a method, not a module`).toEqual([]);
+    }
   });
   it.each(['owner','duplicate','missing'])('registration oracle rejects %s',kind=>{
     const rows=registered();expect(validEntries(rows)).toBe(true);
@@ -70,7 +87,7 @@ describe('P6 real manifest and registered payload consumption',()=>{
   });
   it('missing dependency fails explicit consumer assertion, not skipped',()=>{
     const f=fixture('build-code');try{
-      expect(resolveSkillPackage({packageRoot:f.root,manifestPath:'workflows/build-code/skill-deps.yaml',dependency:f.dep}).resolved_bundle_paths).toHaveLength(6);
+      expect(resolveSkillPackage({packageRoot:f.root,manifestPath:'workflows/build-code/skill-deps.yaml',dependency:f.dep}).resolved_bundle_paths).toHaveLength(23);
       fs.writeFileSync(f.manifest,yaml.dump({stage:'build-code',skills:[]}));
       const loaded=loadStageSkillManifest(f.root,'build-code');
       expect(()=>expect(loaded.manifest.skills.find(d=>d.name==='design-source-extraction')).toBeDefined()).toThrow();
@@ -78,16 +95,16 @@ describe('P6 real manifest and registered payload consumption',()=>{
   });
   it('declared file removed fails actual resolver',()=>{
     const f=fixture('build-code');try{
-      expect(resolveSkillPackage({packageRoot:f.root,manifestPath:'workflows/build-code/skill-deps.yaml',dependency:f.dep}).resolved_bundle_paths).toHaveLength(6);
+      expect(resolveSkillPackage({packageRoot:f.root,manifestPath:'workflows/build-code/skill-deps.yaml',dependency:f.dep}).resolved_bundle_paths).toHaveLength(23);
       fs.unlinkSync(join(f.base,assets[1]));
       expect(()=>resolveSkillPackage({packageRoot:f.root,manifestPath:'workflows/build-code/skill-deps.yaml',dependency:f.dep})).toThrow(/ENOENT/);
     }finally{f.cleanup();}
   });
-  it('omitted declaration is caught by six-file oracle, not invented resolver rule',()=>{
+  it('omitted declaration is caught by declared-file oracle, not invented resolver rule',()=>{
     const f=fixture('build-code');try{
       const bundle=JSON.parse(fs.readFileSync(join(f.base,'skill-bundle.json')));bundle.files.pop();fs.writeFileSync(join(f.base,'skill-bundle.json'),JSON.stringify(bundle));
       const resolved=resolveSkillPackage({packageRoot:f.root,manifestPath:'workflows/build-code/skill-deps.yaml',dependency:f.dep});
-      expect(resolved.resolved_bundle_paths).toHaveLength(5);
+      expect(resolved.resolved_bundle_paths).toHaveLength(22);
       expect(complete(bundle.files)).toBe(false);
     }finally{f.cleanup();}
   });

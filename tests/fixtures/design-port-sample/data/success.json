@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0.0",
+  "kind": "data-state-fixture",
+  "name": "success",
+  "state": "success",
+  "source": {
+    "role": "controlled_local_service",
+    "kind": "local_dynamic_service",
+    "ref": "tests/fixtures/design-port-sample/data",
+    "identity_route": "/identity"
+  },
+  "mode": ["real", "sample"],
+  "expected_state": "success",
+  "read_route": {
+    "record_id": "sample-01",
+    "status": 200,
+    "delay_ms": 0,
+    "body": {
+      "records": [
+        {"name": "记录名称", "value": "成功结果样例"},
+        {"name": "数据来源", "value": "本地受控服务"},
+        {"name": "用途", "value": "检查成功态的内容与布局"}
+      ]
+    }
+  },
+  "expected_records_count": 3,
+  "sample_layers": {
+    "page": true,
+    "block": true,
+    "value": true
+  },
+  "note": "真实模式的记录来自 GET /records/sample-01 的实际响应，不是页面内置样例。"
+}

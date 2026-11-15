@@ -1,0 +1,216 @@
+/* 设计移植样本样式：全部规则限定在页面根 `.sample-page` 下。 */
+/* 方向：Swiss，白色与中性灰，细线网格，唯一强调色 #002FA7。 */
+
+.sample-page {
+  --ink: #111111;
+  --muted: #5f6368;
+  --line: #d7d9dd;
+  --paper: #ffffff;
+  --accent: #002fa7;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 48px 32px 64px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+}
+
+.sample-page .sample-page__header {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+.sample-page .sample-page__eyebrow {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sample-page .sample-page__title {
+  margin: 0;
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.sample-page .sample-notice {
+  margin: 0;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.sample-page .sample-page__main {
+  display: grid;
+  gap: 32px;
+  padding-top: 32px;
+}
+
+.sample-page .sample-page__number {
+  margin: 0;
+  color: var(--accent);
+  font-size: 88px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.sample-page .state-sequence {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+
+.sample-page .state-sequence__list {
+  display: flex;
+  gap: 24px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sample-page .state-sequence__item {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.sample-page .state-sequence__item.is-current {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.sample-page .result-panel {
+  display: grid;
+  gap: 12px;
+  padding: 24px;
+  border: 1px solid var(--line);
+}
+
+.sample-page .result-panel__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sample-page .result-panel__title {
+  margin: 0;
+  font-size: 20px;
+}
+
+.sample-page .result-panel__label {
+  margin: 0;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.sample-page .result-panel__status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.sample-page .result-panel__content {
+  display: grid;
+  gap: 8px;
+}
+
+.sample-page .sample-values {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.sample-page .sample-values__row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 12px;
+  margin: 0;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+
+.sample-page .sample-values__row dt {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.sample-page .sample-values__row dd {
+  margin: 0;
+  font-size: 14px;
+}
+
+.sample-page .value-tag {
+  margin-right: 8px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.sample-page .empty-result {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.sample-page .error-result {
+  margin: 0;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.sample-page .receipt-line {
+  margin: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.sample-page .action-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.sample-page .read-next-button {
+  min-height: 44px;
+  padding: 10px 20px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--paper);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sample-page .read-next-button:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.sample-page .read-next-button[aria-disabled="true"] {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.sample-page .action-row__note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sample-page .read-next-button {
+    transition: none;
+  }
+}

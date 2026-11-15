@@ -1,11 +1,11 @@
 ---
 name: design-source-extraction
-description: 设计源准备后、实施前提炼可回读的机器JSON；来源、规范或结构变化时重新提炼，按缺项定向限制依赖步骤。
+description: 设计源准备后、实施前提炼可回读的机器JSON，并承载有稿判断后的移植、数据与状态、旧功能接线、四类机器校验、目视审查与协作写入；来源、规范或结构变化时重新提炼，按缺项与缺口定向限制依赖步骤。
 ---
 
 # Design Source Extraction
 
-给 build-plan 设计源准备读者、build-code 实施者与 build-code 终末 独立检查者使用。输入是当前 task、已确认范围、设计来源和适用规范；输出为任务证据区单份 `design-source-extraction.json`。不生成人读视图；需要查看时临时只读查询该 JSON，不保存第二份派生文件。
+给 build-prd 有稿前置记录、build-plan 设计源准备读者、build-code 实施者与终末独立检查者、独立测试者和独立设计审查者使用。输入是当前 task、已确认范围、设计来源和适用规范；提炼输出为任务证据区单份 `design-source-extraction.json`，移植、数据、接线、校验与目视方法各走本技能对应入口。不生成人读视图；需要查看时临时只读查询该 JSON，不保存第二份派生文件。
 
 ## 执行与边界
 
@@ -13,7 +13,8 @@ description: 设计源准备后、实施前提炼可回读的机器JSON；来源
 2. 先探测可达性，再在正式采集前冻结页 × 状态 × 视口 × 元素集 × 规范类别清单、关键项与冲突率阈值。探测不计覆盖。冻结后范围变化须记录原因并重新冻结，不能靠缩分母凑比例。
 3. 浏览器采集只从 `skills/isolated-browser-qa/SKILL.md` 的隔离入口执行已登记的固定脚本标识；未登记标识执行前拒绝。页面操作保持只读，页面写入与网络请求尝试必须被拒且有负向原件。外层隔离链失败停该路径，保原错误，不换直连；默认复用已开ego工作区，获取失败明确报错，不启动其它浏览器、不隐式回退。caller显式选择其它引擎时才沿该入口原生命周期合同执行，不能用回退绕过复用限制。
 4. 逐项填下述契约，事实与推断、渲染值与源码声明分开。不存在、未渲染、受限 iframe 或工具失败留原错误与影响；不默认填值，不从类名猜像素，不用截图补 DOM。完成条件是冻结清单每项有观察或具名缺口、原命令与证据能回读；不是文件存在或 exit 0。
-5. 下游先检查 `freshness`、五类输入与低保真裁决，仅停止被 `blocks` / `blocked_scope` 点名的实施步骤。对照与回填消费 `references/isolated-consumption.md`（实施消费时读取）；规范对账消费 `references/norm-alignment.md`（逐条对齐时读取）。这些后续能力未交付时记 unavailable，不把契约当采集/对账已运行。
+5. 下游先检查 `freshness`、五类输入与低保真裁决，仅停止被 `blocks` / `blocked_scope` 点名的实施步骤。
+   判断允许移植时改走「移植消费入口是什么？」按登记生成，不在实施页临时补样式或注入代码。对照与回填消费 `references/isolated-consumption.md`（实施消费时读取）；规范对账消费 `references/norm-alignment.md`（逐条对齐时读取）。这些后续能力未交付时记 unavailable，不把契约当采集/对账已运行。
 
 ## 唯一 JSON 字段契约
 
@@ -83,6 +84,66 @@ screenshot当前明确支持合法非交错PNG：核容器chunk/CRC/压缩scanli
 `low_fidelity.triggered` 为 boolean；任一必要输入缺失且不能有源补证、关键项缺失、或冲突率超过采集前冻结阈值时为 true，reasons 点名真实条件。工具失败只进 failures，不以失败计算低保真。
 
 `low_fidelity.ruling` 只取 `approved | pending | rejected | no_response`。触发后取得本次设计 owner 真实答复：approved 沿答复批准范围实施；pending 等待裁决；rejected 停被拒范围；no_response 保未答。这后三种值的 blocked_scope 必须非空，所列实施不得启动；未答、拒绝都不是同意。未触发时可记 approved 并注明不适用原因，不能伪称收到人类批准。评分子项始终 unavailable，与本非数值裁决分开。
+
+## 移植消费入口是什么？
+
+判断允许移植后，实施者从同一提炼产物和设计源进入移植；本入口只加消费面，不改旧 JSON 字段。
+移植方法与登记规则在 references/port-method.md；本节只留条件指针，不复制正文。
+
+1. 先读 `judgment.md` 的结论与去向；直接套用或适配后套用才进入移植，不能用按去向回原 owner。
+2. 在 `port/manifest.json` 写移植登记：来源与目标角色、逐文件模式、允许的导入变化、
+   直接改动、使用类名、宿主外壳归属、特异性来源和手改文件。
+3. 生成前运行 `node skills/design-source-extraction/scripts/check-port-manifest.mjs --manifest <manifest> --design-root <设计源>`；它校验移植登记与样式闭合。
+   退出 0 只表示登记与样式闭合，不表示真实项目可用。
+4. 需要真实生成时加 `--mode=generate --output <临时目录>`；重跑保留手改哨兵。
+5. 旧 `design-source-extraction.json` 的字段、五类输入与 `freshness` 语义不变；
+   移植登记是新增消费产物，不替代旧 JSON，也不成为第二份提炼事实。
+
+## 新增方法与脚本去哪找？
+
+下游按当前动作取一份入口；表只导航，不复制正文。每行给真实消费者一个可执行动作。
+
+| 要解决的问题 | 方法与脚本 | 一句话用途 |
+| --- | --- | --- |
+| 谁可以写、锁怎么用、中断怎么清 | `references/collaboration.md` | 写协作与写入权：一树一写者、同一把锁、冻结、稳定取数、中断隔离与清理 |
+| 设计稿组件怎么搬进目标页面 | `references/port-method.md` | 移植单元、逐字复制、样式闭合、三类登记与重跑保护 |
+| 页面值真假、样例与读失败怎么分 | `references/data-and-state.md` | 数据与状态纪律：显式数据档案、样例三层标注、读写回执与冲突台账 |
+| 旧功能与旧接口怎么接回 | `references/wiring.md` | 既有功能接线的三链找回、断开反例与具名缺口 |
+| 四类机器校验怎么配、怎么判 | `references/verification.md` | 几何、结构、来源与生成物覆盖、功能保留的配置与三态判据 |
+| 目视对比怎么截、差异怎么写 | `references/visual-review.md` | 固定视口、设计对分径、差异处置与「机器全绿不等于视觉通过」 |
+| 已经踩过的坑与对应检查 | `references/anti-patterns.md` | 反模式四列清单；有门禁给命令，无门禁给 owner |
+| 有稿判断是否可施工 | `scripts/check-judgment.mjs` | 校验 judgment.md 的三链、六项、三档结论与去向 |
+| 移植登记与样式是否闭合 | `scripts/check-port-manifest.mjs` | 校验逐文件模式、直接改动登记、使用类与宿主外壳 |
+| 数据与状态是否可辨 | `scripts/check-data-discipline.mjs` | 校验样例三层标注、读失败分档、写回执与冲突台账 |
+| 旧功能是否真接回 | `scripts/check-wiring.mjs` | 校验旧功能接线的三链、旧接口参数、真实回执与断开负例 |
+| 几何差异是否在容差内 | `scripts/check-geometry.mjs` | 比较计算样式，按声明探针执行 0.5px 容差 |
+| DOM 结构是否与设计稿一致 | `scripts/check-dom-parity.mjs` | 比较标签、类名、直接文本与层级 |
+| 来源与生成物覆盖是否闭合 | `scripts/check-port-parity.mjs` | 枚举实际输出，扫描未登记/缺失文件、未编译类与来源覆盖 |
+| 旧功能是否保留 | `scripts/check-feature-keep.mjs` | 功能保留检查：比较选择器、文本、控件角色与旧功能清单 |
+| 目视审查报告是否合规 | `scripts/check-visual-review.mjs` | 校验固定视口、截图、对象身份与差异结论 |
+| 共享写入是否单写者、清理是否完成 | `scripts/check-write-set.mjs` | 校验写者记录、锁证明、中断隔离与清理清单 |
+| 设计源怎么采集与重提炼 | `scripts/collect-design-source.mjs` | 按冻结 plan 采集并产出唯一 design-source-extraction.json |
+
+## 新页面八步流程
+
+1. 取设计源与适用规范：固定来源、版本、作用域和 owner，缺源记 unknown。
+2. 判有无设计稿与旧页去向：产出 `judgment.md`，三档结论带下一步与负责人。
+3. 提炼设计源：按唯一 JSON 契约生成 `design-source-extraction.json`，冻结 scope。
+4. 移植外壳与内容：沿 `references/port-method.md` 逐文件登记，生成物唯一写者。
+5. 接数据与状态：沿 `references/data-and-state.md` 区分真实、样例与读失败。
+6. 接回旧功能：沿 `references/wiring.md` 逐项找回三链，接不上给具名缺口。
+7. 跑机器校验：沿 `references/verification.md` 跑几何、结构、来源与功能保留四类。
+8. 独立目视与反模式复查：沿 `references/visual-review.md` 逐条处置差异，再对照 `references/anti-patterns.md` 收口。
+
+## 设计稿更新后怎么同步
+
+设计来源的版本、规范版本或页面结构任一变化，`freshness` 记为 stale，按下述顺序重做。
+1. 冻结变化范围与受影响页面、状态、视口，记变化来源和原因。
+2. 按原冻结 plan 重新提炼，生成新的 `design-source-extraction.json`，不复用旧明细。
+3. 重新冻结 scope 与对照清单，旧分母不删，缺口和新项分列。
+4. 更新移植登记与差异表，只改受影响的文件与条目。
+5. 复跑受影响机器校验与目视审查，读数与原件各自留一份。
+6. 未变来源和步骤继续沿用，并在 `freshness.reasons` 写明判断依据。
 
 ## 原件、引用与规范边界
 

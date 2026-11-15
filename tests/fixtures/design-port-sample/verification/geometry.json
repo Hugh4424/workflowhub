@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0.0",
+  "kind": "geometry-config",
+  "tolerance_px": 0.5,
+  "probes": [
+    {
+      "id": "title-font-size",
+      "selector": ".sample-page__title",
+      "property": "font-size",
+      "unit": "px",
+      "design": 40,
+      "implementation": 40
+    },
+    {
+      "id": "number-font-size",
+      "selector": ".sample-page__number",
+      "property": "font-size",
+      "unit": "px",
+      "design": 88,
+      "implementation": 88
+    },
+    {
+      "id": "header-padding-bottom",
+      "selector": ".sample-page__header",
+      "property": "padding-bottom",
+      "unit": "px",
+      "design": 24,
+      "implementation": 24.5
+    },
+    {
+      "id": "button-min-height",
+      "selector": ".read-next-button",
+      "property": "min-height",
+      "unit": "px",
+      "design": 44,
+      "implementation": 44
+    },
+    {
+      "id": "page-ink-color",
+      "selector": ".sample-page",
+      "property": "color",
+      "unit": "color",
+      "design": "rgb(17, 17, 17)",
+      "implementation": "rgb(17, 17, 17)"
+    }
+  ],
+  "content_binding": {
+    "design": {
+      "files": [
+        {
+          "path": "tests/fixtures/design-port-sample/prototype/styles.css",
+          "sha256": "a2cccbcd69f0839c75cb71f243bddd361bae2fa9044a434d2927ea924d702243"
+        }
+      ]
+    },
+    "implementation": {
+      "root": "tests/fixtures/design-port-sample/port-output",
+      "files": [
+        {
+          "path": "styles.css",
+          "sha256": "a2cccbcd69f0839c75cb71f243bddd361bae2fa9044a434d2927ea924d702243"
+        }
+      ]
+    }
+  }
+}

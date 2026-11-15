@@ -8198,12 +8198,13 @@
       "destination": "skills/design-source-extraction/SKILL.md",
       "status": "retain",
       "role": "production",
-      "responsibility": "P1设计源提炼输入/单JSON产物/未知与定向阻断方法；不替代readiness或规范owner批准。",
+      "responsibility": "设计源提炼与移植消费方法：P1 单 JSON 契约、判断后八步流程、数据与状态、既有功能接线、四类机器校验、目视审查与协作写入；不替代 readiness 或规范 owner 批准。",
       "owner": "design-source-extraction方法维护者（当前维护者用户）",
-      "consumer": "build-plan设计准备、build-code实施、build-code终末独立验收的UI且合法可读设计源reader；具体输入/产物/错误沿原技能和各当前Phase，不新增public入口。",
+      "consumer": "build-prd 有稿前置记录、build-plan 设计准备、build-code 实施与终末独立验收的 UI 且合法可读设计源 reader；具体输入/产物/错误沿原技能和各当前 Phase，不新增 public 入口。",
       "module_consumers": [],
       "named_data_readers": [
         "workflows/build-plan/SKILL.md",
+        "workflows/build-prd/SKILL.md",
         "workflows/build-code/SKILL.md"
       ],
       "delete_condition": "经独立审查的替代完整承接真实consumer、迁接现deps/bundle且无当前消费者后由原owner同批退役；历史task原件不删覆。",
@@ -8265,9 +8266,9 @@
       "destination": "skills/design-source-extraction/skill-bundle.json",
       "status": "retain",
       "role": "production",
-      "responsibility": "既有唯一bundle声明SKILL、采集器、规范对齐、隔离消费、采集plan说明与plan样例六文件；不含task原始数据或复制外部内容。",
+      "responsibility": "技能唯一 bundle 声明 SKILL、采集器、11 个私有检查脚本、10 份 references 与 plan 样例共 23 文件；不含 task 原始数据或复制外部内容。",
       "owner": "design-source-extraction方法维护者（当前维护者用户）",
-      "consumer": "runtime/adapters/local-skill-resolver.mjs与runtime/distribution/skill-bundle-release.mjs按现有stage deps读取当前六文件包；不代正式采集或family安装证明。",
+      "consumer": "runtime/adapters/local-skill-resolver.mjs 与 runtime/distribution/skill-bundle-release.mjs 按现有 stage deps 读取当前 23 文件包；不代正式采集或 family 安装证明。",
       "module_consumers": [],
       "named_data_readers": [
         "runtime/adapters/local-skill-resolver.mjs",
@@ -9721,6 +9722,290 @@
       "named_data_readers": [],
       "delete_condition": "示例目录职责由经独立验证的替代承接且第 8、9 段演练不再引用后，由原 owner 决定删除；不因登记先行删除未建目录。",
       "retention_basis": "spec 文件边界表第 1、8 段与处置原件 2026-11-13-005 第 5–8 行：move-map 由第 1 段一次登记两条，第 8 段只读不写。"
+    },
+    {
+      "source": "skills/design-source-extraction/references/collaboration.md",
+      "destination": "skills/design-source-extraction/references/collaboration.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "多写者协作与工作区锁方法：一树一写者、同一把锁回调、共享文件冻结、稳定取数、中断隔离和收尾清理。",
+      "owner": "design-source-extraction方法维护者（当前维护者用户）",
+      "consumer": "skills/design-source-extraction/SKILL.md 的导航与 workflows/build-code/SKILL.md「协作与写入权」按条件读取；独立测试者按本方法核对双进程、写者记录与清理。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/design-source-extraction/SKILL.md",
+        "workflows/build-code/SKILL.md"
+      ],
+      "delete_condition": "经独立审查的替代完整承接真实consumer、迁接现deps/bundle且无当前消费者后由原owner同批退役；历史task原件不删覆。",
+      "retention_basis": "design-port-flow-20261115 P2–P5 实际交付；真实consumer见consumer与named_data_readers；登记不证明质量或未来消费。"
+    },
+    {
+      "source": "skills/design-source-extraction/references/anti-patterns.md",
+      "destination": "skills/design-source-extraction/references/anti-patterns.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "设计移植反模式四列清单：现象、根因、对应检查、正确做法；有门禁给命令，无门禁给 owner。",
+      "owner": "design-source-extraction方法维护者（当前维护者用户）",
+      "consumer": "skills/design-source-extraction/SKILL.md 导航、build-plan/build-prd/build-code 主会话与独立审查者按条件读取；每条对应可执行检查或具名缺口 owner。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/design-source-extraction/SKILL.md",
+        "workflows/build-plan/SKILL.md",
+        "workflows/build-prd/SKILL.md",
+        "workflows/build-code/SKILL.md",
+        "tests/contract/design-port-flow.test.mjs"
+      ],
+      "delete_condition": "经独立审查的替代完整承接真实consumer、迁接现deps/bundle且无当前消费者后由原owner同批退役；历史task原件不删覆。",
+      "retention_basis": "design-port-flow-20261115 P2–P5 实际交付；真实consumer见consumer与named_data_readers；登记不证明质量或未来消费。"
+    },
+    {
+      "source": "skills/design-source-extraction/references/port-method.md",
+      "destination": "skills/design-source-extraction/references/port-method.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "移植实施方法：移植单元、逐字复制只改 import、渲染值与交互形态、样式作用域、三类登记、手改隔离与生成器自证。",
+      "owner": "design-source-extraction方法维护者（当前维护者用户）",
+      "consumer": "skills/design-source-extraction/SKILL.md「移植消费入口」与八步流程按条件读取；实施者据此生成移植件与登记。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/design-source-extraction/SKILL.md"
+      ],
+      "delete_condition": "经独立审查的替代完整承接真实consumer、迁接现deps/bundle且无当前消费者后由原owner同批退役；历史task原件不删覆。",
+      "retention_basis": "design-port-flow-20261115 P2–P5 实际交付；真实consumer见consumer与named_data_readers；登记不证明质量或未来消费。"
+    },
+    {
+      "source": "skills/design-source-extraction/references/data-and-state.md",
+      "destination": "skills/design-source-extraction/references/data-and-state.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "数据与状态方法：显式数据档案与默认源、样例三层标注、缺失值语义、读失败分档、写回执与冲突裁定台账。",
+      "owner": "design-source-extraction方法维护者（当前维护者用户）",
+      "consumer": "skills/design-source-extraction/SKILL.md 八步流程按条件读取；数据实施者与独立数据测试者据此核对样例、读失败与回执。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/design-source-extraction/SKILL.md"
+      ],
+      "delete_condition": "经独立审查的替代完整承接真实consumer、迁接现deps/bundle且无当前消费者后由原owner同批退役；历史task原件不删覆。",
+      "retention_basis": "design-port-flow-20261115 P2–P5 实际交付；真实consumer见consumer与named_data_readers；登记不证明质量或未来消费。"
+    },
+    {
+      "source": "skills/design-source-extraction/references/wiring.md",
+      "destination": "skills/design-source-extraction/references/wiring.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "既有功能接线方法：三链找回、旧接口与入口复用、旧 DOM 钩子、断开反例与具名缺口。",
+      "owner": "design-source-extraction方法维护者（当前维护者用户）",
+      "consumer": "skills/design-source-extraction/SKILL.md 八步流程按条件读取；旧功能实施者与独立接线测试者据此核三链与缺失处理。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/design-source-extraction/SKILL.md"
+      ],
+      "delete_condition": "经独立审查的替代完整承接真实consumer、迁接现deps/bundle且无当前消费者后由原owner同批退役；历史task原件不删覆。",
+      "retention_basis": "design-port-flow-20261115 P2–P5 实际交付；真实consumer见consumer与named_data_readers；登记不证明质量或未来消费。"
+    },
+    {
+      "source": "skills/design-source-extraction/references/verification.md",
+      "destination": "skills/design-source-extraction/references/verification.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "四类机器校验配置与判据：几何、DOM 结构、来源与生成物覆盖、功能保留；三态、内容身份与进入目视条件。",
+      "owner": "design-source-extraction方法维护者（当前维护者用户）",
+      "consumer": "skills/design-source-extraction/SKILL.md 八步流程按条件读取；实施者与独立审查者据此选四类校验配置与进入目视条件。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/design-source-extraction/SKILL.md"
+      ],
+      "delete_condition": "经独立审查的替代完整承接真实consumer、迁接现deps/bundle且无当前消费者后由原owner同批退役；历史task原件不删覆。",
+      "retention_basis": "design-port-flow-20261115 P2–P5 实际交付；真实consumer见consumer与named_data_readers；登记不证明质量或未来消费。"
+    },
+    {
+      "source": "skills/design-source-extraction/references/visual-review.md",
+      "destination": "skills/design-source-extraction/references/visual-review.md",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "目视审查方法：固定视口、设计对分径、截图与环境身份、差异处置和「机器全绿不等于视觉通过」。",
+      "owner": "design-source-extraction方法维护者（当前维护者用户）",
+      "consumer": "skills/design-source-extraction/SKILL.md 八步流程按条件读取；独立设计审查者据此固定视口、设计对与差异处置。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/design-source-extraction/SKILL.md"
+      ],
+      "delete_condition": "经独立审查的替代完整承接真实consumer、迁接现deps/bundle且无当前消费者后由原owner同批退役；历史task原件不删覆。",
+      "retention_basis": "design-port-flow-20261115 P2–P5 实际交付；真实consumer见consumer与named_data_readers；登记不证明质量或未来消费。"
+    },
+    {
+      "source": "skills/design-source-extraction/scripts/check-judgment.mjs",
+      "destination": "skills/design-source-extraction/scripts/check-judgment.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "判断产物私有校验入口：三链、六项判断、三档结论、去向与负责人、等待确认与施工前拒绝。",
+      "owner": "design-source-extraction方法维护者（当前维护者用户）",
+      "consumer": "workflows/build-plan/SKILL.md 判断作者与 workflows/build-code/SKILL.md 施工前置按条件执行；只暴露私有 CLI。",
+      "module_consumers": [
+        "tests/contract/design-port-judgment.test.mjs"
+      ],
+      "named_data_readers": [
+        "workflows/build-plan/SKILL.md",
+        "workflows/build-code/SKILL.md"
+      ],
+      "delete_condition": "经独立审查的替代完整承接真实consumer、迁接现deps/bundle且无当前消费者后由原owner同批退役；历史task原件不删覆。",
+      "retention_basis": "design-port-flow-20261115 P2–P5 实际交付；真实consumer见consumer与named_data_readers；登记不证明质量或未来消费。"
+    },
+    {
+      "source": "skills/design-source-extraction/scripts/check-port-manifest.mjs",
+      "destination": "skills/design-source-extraction/scripts/check-port-manifest.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "移植登记与样式闭合私有校验入口：逐文件模式、直接改动、使用类、宿主外壳、特异性与重跑手改保护。",
+      "owner": "design-source-extraction方法维护者（当前维护者用户）",
+      "consumer": "skills/design-source-extraction/SKILL.md「移植消费入口」按条件执行；移植实施者、独立测试者与四类校验消费；只暴露私有 CLI。",
+      "module_consumers": [
+        "tests/contract/design-port-port-manifest.test.mjs",
+        "tests/contract/design-port-verification.test.mjs"
+      ],
+      "named_data_readers": [
+        "skills/design-source-extraction/SKILL.md"
+      ],
+      "delete_condition": "经独立审查的替代完整承接真实consumer、迁接现deps/bundle且无当前消费者后由原owner同批退役；历史task原件不删覆。",
+      "retention_basis": "design-port-flow-20261115 P2–P5 实际交付；真实consumer见consumer与named_data_readers；登记不证明质量或未来消费。"
+    },
+    {
+      "source": "skills/design-source-extraction/scripts/check-data-discipline.mjs",
+      "destination": "skills/design-source-extraction/scripts/check-data-discipline.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "数据与状态私有校验入口：样例三层标注、读失败分档、写回执、冲突台账与样例残留。",
+      "owner": "design-source-extraction方法维护者（当前维护者用户）",
+      "consumer": "skills/design-source-extraction/SKILL.md 八步流程按条件执行；独立数据测试者消费；只暴露私有 CLI。",
+      "module_consumers": [
+        "tests/contract/design-port-data-discipline.test.mjs"
+      ],
+      "named_data_readers": [
+        "skills/design-source-extraction/SKILL.md"
+      ],
+      "delete_condition": "经独立审查的替代完整承接真实consumer、迁接现deps/bundle且无当前消费者后由原owner同批退役；历史task原件不删覆。",
+      "retention_basis": "design-port-flow-20261115 P2–P5 实际交付；真实consumer见consumer与named_data_readers；登记不证明质量或未来消费。"
+    },
+    {
+      "source": "skills/design-source-extraction/scripts/check-wiring.mjs",
+      "destination": "skills/design-source-extraction/scripts/check-wiring.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "旧功能接线私有校验入口：三链、旧接口参数、页面回执、断开负例与恢复。",
+      "owner": "design-source-extraction方法维护者（当前维护者用户）",
+      "consumer": "skills/design-source-extraction/SKILL.md 八步流程按条件执行；独立接线测试者消费；只暴露私有 CLI。",
+      "module_consumers": [
+        "tests/contract/design-port-wiring.test.mjs"
+      ],
+      "named_data_readers": [
+        "skills/design-source-extraction/SKILL.md"
+      ],
+      "delete_condition": "经独立审查的替代完整承接真实consumer、迁接现deps/bundle且无当前消费者后由原owner同批退役；历史task原件不删覆。",
+      "retention_basis": "design-port-flow-20261115 P2–P5 实际交付；真实consumer见consumer与named_data_readers；登记不证明质量或未来消费。"
+    },
+    {
+      "source": "skills/design-source-extraction/scripts/check-geometry.mjs",
+      "destination": "skills/design-source-extraction/scripts/check-geometry.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "几何校验私有入口：比较计算样式并按声明探针执行 0.5px 容差。",
+      "owner": "design-source-extraction方法维护者（当前维护者用户）",
+      "consumer": "skills/design-source-extraction/SKILL.md 八步流程按条件执行；实施者与独立审查者消费；只暴露私有 CLI。",
+      "module_consumers": [
+        "tests/contract/design-port-verification.test.mjs"
+      ],
+      "named_data_readers": [
+        "skills/design-source-extraction/SKILL.md"
+      ],
+      "delete_condition": "经独立审查的替代完整承接真实consumer、迁接现deps/bundle且无当前消费者后由原owner同批退役；历史task原件不删覆。",
+      "retention_basis": "design-port-flow-20261115 P2–P5 实际交付；真实consumer见consumer与named_data_readers；登记不证明质量或未来消费。"
+    },
+    {
+      "source": "skills/design-source-extraction/scripts/check-dom-parity.mjs",
+      "destination": "skills/design-source-extraction/scripts/check-dom-parity.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "DOM 结构校验私有入口：比较标签、类名、直接文本与层级。",
+      "owner": "design-source-extraction方法维护者（当前维护者用户）",
+      "consumer": "skills/design-source-extraction/SKILL.md 八步流程按条件执行；实施者与独立审查者消费；只暴露私有 CLI。",
+      "module_consumers": [
+        "tests/contract/design-port-verification.test.mjs"
+      ],
+      "named_data_readers": [
+        "skills/design-source-extraction/SKILL.md"
+      ],
+      "delete_condition": "经独立审查的替代完整承接真实consumer、迁接现deps/bundle且无当前消费者后由原owner同批退役；历史task原件不删覆。",
+      "retention_basis": "design-port-flow-20261115 P2–P5 实际交付；真实consumer见consumer与named_data_readers；登记不证明质量或未来消费。"
+    },
+    {
+      "source": "skills/design-source-extraction/scripts/check-port-parity.mjs",
+      "destination": "skills/design-source-extraction/scripts/check-port-parity.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "来源与生成物覆盖校验私有入口：扫描未登记文件、未编译类与来源覆盖。",
+      "owner": "design-source-extraction方法维护者（当前维护者用户）",
+      "consumer": "skills/design-source-extraction/SKILL.md 八步流程按条件执行；实施者与独立审查者消费；只暴露私有 CLI。",
+      "module_consumers": [
+        "tests/contract/design-port-verification.test.mjs"
+      ],
+      "named_data_readers": [
+        "skills/design-source-extraction/SKILL.md"
+      ],
+      "delete_condition": "经独立审查的替代完整承接真实consumer、迁接现deps/bundle且无当前消费者后由原owner同批退役；历史task原件不删覆。",
+      "retention_basis": "design-port-flow-20261115 P2–P5 实际交付；真实consumer见consumer与named_data_readers；登记不证明质量或未来消费。"
+    },
+    {
+      "source": "skills/design-source-extraction/scripts/check-feature-keep.mjs",
+      "destination": "skills/design-source-extraction/scripts/check-feature-keep.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "功能保留校验私有入口：比较选择器、文本、控件角色与旧功能清单。",
+      "owner": "design-source-extraction方法维护者（当前维护者用户）",
+      "consumer": "skills/design-source-extraction/SKILL.md 八步流程按条件执行；实施者与独立审查者消费；只暴露私有 CLI。",
+      "module_consumers": [
+        "tests/contract/design-port-verification.test.mjs"
+      ],
+      "named_data_readers": [
+        "skills/design-source-extraction/SKILL.md"
+      ],
+      "delete_condition": "经独立审查的替代完整承接真实consumer、迁接现deps/bundle且无当前消费者后由原owner同批退役；历史task原件不删覆。",
+      "retention_basis": "design-port-flow-20261115 P2–P5 实际交付；真实consumer见consumer与named_data_readers；登记不证明质量或未来消费。"
+    },
+    {
+      "source": "skills/design-source-extraction/scripts/check-visual-review.mjs",
+      "destination": "skills/design-source-extraction/scripts/check-visual-review.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "目视审查报告私有校验入口：固定视口、截图与对象身份、设计对分径与差异结论。",
+      "owner": "design-source-extraction方法维护者（当前维护者用户）",
+      "consumer": "skills/design-source-extraction/SKILL.md 八步流程按条件执行；独立设计审查者与独立测试者消费；只暴露私有 CLI。",
+      "module_consumers": [
+        "tests/contract/design-port-visual-review.test.mjs"
+      ],
+      "named_data_readers": [
+        "skills/design-source-extraction/SKILL.md"
+      ],
+      "delete_condition": "经独立审查的替代完整承接真实consumer、迁接现deps/bundle且无当前消费者后由原owner同批退役；历史task原件不删覆。",
+      "retention_basis": "design-port-flow-20261115 P2–P5 实际交付；真实consumer见consumer与named_data_readers；登记不证明质量或未来消费。"
+    },
+    {
+      "source": "skills/design-source-extraction/scripts/check-write-set.mjs",
+      "destination": "skills/design-source-extraction/scripts/check-write-set.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "写者记录私有校验入口：单写者、锁证明、锁域、中断隔离与清理清单。",
+      "owner": "design-source-extraction方法维护者（当前维护者用户）",
+      "consumer": "workflows/build-code/SKILL.md「协作与写入权」与 skills/design-source-extraction/SKILL.md 导航按条件执行；build-code 主会话与独立测试者消费；只暴露私有 CLI，不证明未走锁的外部直写。",
+      "module_consumers": [
+        "tests/contract/design-port-write-set.test.mjs",
+        "tests/integration/design-port-write-set-lock.test.mjs"
+      ],
+      "named_data_readers": [
+        "skills/design-source-extraction/SKILL.md",
+        "workflows/build-code/SKILL.md"
+      ],
+      "delete_condition": "经独立审查的替代完整承接真实consumer、迁接现deps/bundle且无当前消费者后由原owner同批退役；历史task原件不删覆。",
+      "retention_basis": "design-port-flow-20261115 P2–P5 实际交付；真实consumer见consumer与named_data_readers；登记不证明质量或未来消费。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

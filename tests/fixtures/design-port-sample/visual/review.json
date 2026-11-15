@@ -1,0 +1,59 @@
+{
+  "schema_version": "1.0.0",
+  "kind": "visual-review",
+  "verify_screenshot_bytes": false,
+  "viewport": {"width": 1440, "height": 1000, "dpr": 1},
+  "environment": {
+    "browser": "ego-lite / chromium 156.0.8078.74",
+    "font": "Helvetica Neue",
+    "dpr": 1,
+    "os": "macOS"
+  },
+  "read_at": "2026-11-15T11:58:00.000Z",
+  "object_identity": {
+    "workspace": "tests/fixtures/design-port-sample",
+    "service": "http://127.0.0.1:8768",
+    "route": "/index.html",
+    "state": "success",
+    "viewport": "1440x1000@1",
+    "engine": "ego-lite / chromium 156.0.8078.74",
+    "engine_session": "owned-p1",
+    "object_version": "cf03b2ce245d2cc0618a4d852fc3d299dcb1412110bfdb8025e5348f42be3d1d"
+  },
+  "design_pairs": [
+    {
+      "state": "success",
+      "design": {"path": "tests/fixtures/design-port-sample/prototype/index.html", "sha256": "66b6d773f67f5c630ca0c2e380a68eb3baa732da7bf0c27bbcbff0dc0f71120a"},
+      "implementation": {"path": "port-output/index.html", "sha256": "cf03b2ce245d2cc0618a4d852fc3d299dcb1412110bfdb8025e5348f42be3d1d"},
+      "url": "http://127.0.0.1:8768/index.html"
+    }
+  ],
+  "screenshots": [
+    {"state": "loading", "path": "screenshots/loading-1440x1000.png", "sha256": "1111111111111111111111111111111111111111111111111111111111111111", "viewport": "1440x1000@1"},
+    {"state": "success", "path": "screenshots/success-1440x1000.png", "sha256": "2222222222222222222222222222222222222222222222222222222222222222", "viewport": "1440x1000@1"},
+    {"state": "empty", "path": "screenshots/empty-1440x1000.png", "sha256": "3333333333333333333333333333333333333333333333333333333333333333", "viewport": "1440x1000@1"},
+    {"state": "error", "path": "screenshots/error-1440x1000.png", "sha256": "4444444444444444444444444444444444444444444444444444444444444444", "viewport": "1440x1000@1"},
+    {"state": "real-success", "path": "screenshots/real-success-1440x1000.png", "sha256": "5555555555555555555555555555555555555555555555555555555555555555", "viewport": "1440x1000@1"},
+    {"state": "receipt", "path": "screenshots/receipt-1440x1000.png", "sha256": "6666666666666666666666666666666666666666666666666666666666666666", "viewport": "1440x1000@1"},
+    {"state": "recovered", "path": "screenshots/recovered-1440x1000.png", "sha256": "7777777777777777777777777777777777777777777777777777777777777777", "viewport": "1440x1000@1"},
+    {"state": "sample-write-refused", "path": "screenshots/sample-write-refused-1440x1000.png", "sha256": "8888888888888888888888888888888888888888888888888888888888888888", "viewport": "1440x1000@1"}
+  ],
+  "states_observed": ["success", "loading", "empty", "error", "sample-write-refused", "real-success", "receipt", "recovered"],
+  "required_states": ["success", "loading", "empty", "error", "sample-write-refused", "real-success", "receipt", "recovered"],
+  "gaps": [
+    {"state": "timeout", "status": "unavailable", "reason": "固定八态未采 timeout 截图；超时页态由 P3 数据面与客户端页面反例覆盖"}
+  ],
+  "forbidden_old_hashes": [
+    "b41709eebce97425171a749edb15d714f7ddfd6a31784f4b42391f06c9a1036a",
+    "27297fc76ab60060c16ff8c9c81f7e13a07aea26dd1d5826d669c75867c22215",
+    "4f56ec7c607ddf05b433a4d98083bcc0d7b618b45be20cdbf9d59163b683c15e",
+    "9a280f284e8d3211d55780e77d8efc315eb2d2cee01febe4aa63241f7b79a2c2"
+  ],
+  "diffs": [
+    {"id": "d1", "state": "success", "item": "标题字号 40px", "status": "none"},
+    {"id": "d2", "state": "success", "item": "强调色 #002FA7", "status": "fixed"},
+    {"id": "d3", "state": "empty", "item": "空态说明间距", "status": "accepted", "reason": "设计稿未定该间距，按现有栅格保留，独立审查者接受"}
+  ],
+  "unresolved": 0,
+  "note": "形状夹具：截图字节用占位摘要，verify_screenshot_bytes=false；真实报告须由独立审查者 appendRecord 到真实目录、置 verify_screenshot_bytes=true 并让 required_states 覆盖固定八态。forbidden_old_hashes 为 build-plan 034/039/041/043 旧原型截图真实哈希。"
+}

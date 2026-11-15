@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0.0",
+  "kind": "data-state-fixture",
+  "name": "write-receipt",
+  "state": "receipt",
+  "source": {
+    "role": "controlled_local_service",
+    "kind": "local_dynamic_service",
+    "ref": "tests/fixtures/design-port-sample/data",
+    "identity_route": "/identity"
+  },
+  "mode": ["real"],
+  "expected_state": "receipt",
+  "write_route": {
+    "method": "POST",
+    "path": "/records"
+  },
+  "request": {
+    "recordId": "sample-01",
+    "value": "legacy-write",
+    "requestId": "req-01"
+  },
+  "expected_receipt": {
+    "receipt_id": "rcpt-01",
+    "recordId": "sample-01",
+    "value": "legacy-write",
+    "requestId": "req-01",
+    "status": "stored",
+    "source": "service_store"
+  },
+  "receipt_source": "service_store",
+  "success_requires_receipt": true,
+  "note": "页面回显不是存储真相；成功只认服务侧 store 中与回执同一条记录。"
+}

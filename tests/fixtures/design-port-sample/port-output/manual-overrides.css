@@ -1,0 +1,6 @@
+/* KEEP:manual-overrides */
+/* 目标项目手改样式：生成器不覆盖本文件，首行哨兵必须保留。 */
+
+.sample-page .result-panel__status {
+  font-weight: 600;
+}

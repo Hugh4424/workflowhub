@@ -1,0 +1,162 @@
+{
+  "schema_version": "1.0.0",
+  "design_root": "../prototype",
+  "target": {
+    "name": "sample-implementation",
+    "scope_selector": ".sample-page",
+    "chrome": {
+      "owner": "host",
+      "basis_ref": "../README.md:68",
+      "basis_marker": "宿主外壳选择器是",
+      "host_shell_selectors": [
+        ".host-frame",
+        ".host-chrome"
+      ],
+      "content_selectors": [
+        ".sample-page"
+      ]
+    }
+  },
+  "specificity_basis": {
+    "source_status": "read",
+    "read_at": "2026-11-15",
+    "host_rules": [
+      {
+        "selector": ".page-shell .result-panel",
+        "specificity": [
+          0,
+          2,
+          0
+        ],
+        "ref": "../README.md:76",
+        "marker": "`.page-shell .result-panel`"
+      },
+      {
+        "selector": ".page-shell .action-row button",
+        "specificity": [
+          0,
+          2,
+          1
+        ],
+        "ref": "../README.md:77",
+        "marker": "`.page-shell .action-row button`"
+      },
+      {
+        "selector": ".page-shell .state-sequence__item.is-current",
+        "specificity": [
+          0,
+          3,
+          0
+        ],
+        "ref": "../README.md:78",
+        "marker": "`.page-shell .state-sequence__item.is-current`"
+      },
+      {
+        "selector": ".page-shell .read-next-button:focus-visible",
+        "specificity": [
+          0,
+          3,
+          0
+        ],
+        "ref": "../README.md:79",
+        "marker": "`.page-shell .read-next-button:focus-visible`"
+      }
+    ],
+    "computed_style": {
+      "ref": "../README.md:81",
+      "marker": "计算样式基线",
+      "viewport": "1440x1000@1"
+    }
+  },
+  "files": [
+    {
+      "source": "index.html",
+      "target": "index.html",
+      "mode": "changed",
+      "source_sha256": "66b6d773f67f5c630ca0c2e380a68eb3baa732da7bf0c27bbcbff0dc0f71120a",
+      "import_changes": [
+        {
+          "line": 7,
+          "from": "    <link rel=\"stylesheet\" href=\"./styles.css\">",
+          "to": "    <link rel=\"stylesheet\" href=\"./styles.css\">\n    <link rel=\"stylesheet\" href=\"./manual-overrides.css\">",
+          "reason": "登记移植样式入口，纯拷贝之外的唯一导入差异"
+        }
+      ],
+      "direct_changes": [
+        {
+          "id": "page-title",
+          "line": 6,
+          "from": "    <title>设计移植样例 · 合成原型</title>",
+          "to": "    <title>设计移植样例 · 实施页</title>",
+          "reason": "目标页标题去掉原型标识",
+          "owner": "移植实施 owner"
+        }
+      ]
+    },
+    {
+      "source": "styles.css",
+      "target": "styles.css",
+      "mode": "generated",
+      "source_sha256": "a2cccbcd69f0839c75cb71f243bddd361bae2fa9044a434d2927ea924d702243",
+      "import_changes": [],
+      "direct_changes": []
+    },
+    {
+      "source": "app.js",
+      "target": "app.js",
+      "mode": "copy",
+      "source_sha256": "7b850a088fa671b8d964f6ebea3af7ec3e55f46fe717b63d9b8982fe4cdb86c2",
+      "import_changes": [],
+      "direct_changes": []
+    }
+  ],
+  "used_classes": [
+    "action-row",
+    "action-row__note",
+    "empty-result",
+    "error-result",
+    "is-current",
+    "read-next-button",
+    "receipt-line",
+    "result-panel",
+    "result-panel__content",
+    "result-panel__heading",
+    "result-panel__label",
+    "result-panel__status",
+    "result-panel__title",
+    "sample-notice",
+    "sample-page",
+    "sample-page__eyebrow",
+    "sample-page__header",
+    "sample-page__main",
+    "sample-page__number",
+    "sample-page__title",
+    "sample-values",
+    "sample-values__row",
+    "state-sequence",
+    "state-sequence__item",
+    "state-sequence__list",
+    "value-tag"
+  ],
+  "client_adapter": {
+    "source": "app.js",
+    "gateway_class": "LegacySampleGateway",
+    "methods": {
+      "read": "readRecord",
+      "write": "writeRecord"
+    },
+    "endpoints": {
+      "read": "GET /records/:recordId",
+      "write": "POST /records"
+    },
+    "handler": "#next-sample",
+    "generated": "copied-without-modification",
+    "runtime_injection": false
+  },
+  "manual_files": [
+    {
+      "path": "manual-overrides.css",
+      "sentinel": "/* KEEP:manual-overrides */"
+    }
+  ]
+}
