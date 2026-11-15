@@ -121,7 +121,7 @@ UI 实施先消费当前真实答复所批准原型与设计基准：沿build-pl
 7. <a id="step-scan-diff"></a>检查实际 diff 与声明写集、真实消费者、接口两端、状态、错误传播、并发原子性和资源释放。UI 按组件质量地图与真实页面验证状态和 DTO→ViewModel，浏览器 QA 先读取并执行 `skills/isolated-browser-qa/SKILL.md`，保留隔离、取消和自建资源清理事实。 仅声明写集没有任何浏览器可见面时，记 `N/A — 理由` 并引用写集；已声明适用而缺工具时记 unavailable。QA engine、route/场景、截图路径或 not_observed 的真实原因保在唯一原 ref，不伪造浏览器通过。来源、样本、场景、浏览器或截图缺失不宣称 UI 完成。
    凡页面、路由、组件、样式改动或声明 UI 交付，冻结前必须执行页面审计；适用性不确定时按适用处理。
    UI 适用时，先读 `skills/project-norm-init/SKILL.md` 的「规范职责」，再取本步适用的具体来源：③组件读 `specs/design/components.md`，独立工程正文确需时另读 `specs/frontend/components.md`，否则读 `specs/frontend/frontend.md`；④布局读 `specs/design/layouts.md`，独立工程正文确需时另读 `specs/frontend/layouts.md`，否则读 `specs/frontend/frontend.md`；⑤通用交互读 `specs/design/interaction.md`，控件内合同引用组件源；⑧质量判据确需独立正文时读 `specs/design/quality.md`，工程/运行共用 `specs/frontend/ui-quality.md`。路径相对目标项目根，同职责等价实质源优先，八类不是强制八文件。以该「规范职责」表为准，本处路径随表更新；逐类保实际路径/稳定节、version/作用域、owner/consumer、适用规则及 missing/stale/unknown 的影响与承接者，不把当前代码反推为应然标准，不把读取冒成方法调用或实际页面验证。
-   本 Phase 涉及 UI 且有合法可读设计源时，在实施前读取 `skills/design-source-extraction/SKILL.md` 与任务原 ref 的 `design-source-extraction.json`；以 `items` 原值和证据、`pending_review` 待议与 `low_fidelity.blocked_scope` 作为实施输入，按 `references/isolated-consumption.md` 保初始 missing、独立实测与回填，不把待议当批准。按实际当前上下文核 `freshness`：unknown 不补默认 current，stale 通过已有 `node skills/design-source-extraction/scripts/collect-design-source.mjs --plan <已认证冻结plan>` 重提炼，依赖项未补齐保影响、无关项继续。仅消费已核 source 与范围；默认 ego 复用模式失败明确报错，不隐式启动备用浏览器/窗口，显式引擎沿原 isolated-browser-qa 合同。非 UI 保原专业源流程，不强制提炼。
+   本 Phase 涉及 UI 且有合法可读设计源时，在实施前读取 `skills/design-source-extraction/SKILL.md` 与任务原 ref 的 `design-source-extraction.json`；以 `items` 原值和证据、`pending_review` 待议与 `low_fidelity.blocked_scope` 作为实施输入，按 `references/isolated-consumption.md` 保初始 missing、独立实测与回填，不把待议当批准。按实际当前上下文核 `freshness`：unknown 不补默认 current，stale 通过已有 `node skills/design-source-extraction/scripts/collect-design-source.mjs --plan <已认证冻结plan>` 重提炼，依赖项未补齐保影响、无关项继续。仅消费已核 source 与范围；默认 ego 复用模式失败明确报错，不隐式启动备用浏览器/窗口，显式引擎沿原 isolated-browser-qa 合同。非 UI 保原专业源流程，不强制提炼。实施顺序沿同技能「新页面八步流程」；实施中复现的坑对照 `skills/design-source-extraction/references/anti-patterns.md`；设计源或规范变化沿同技能「设计稿更新后怎么同步」重新提炼，不沿用旧读数。
    需构造采集plan时读 `skills/design-source-extraction/references/collection-plan.md` 与同目录模板，使用真实任务输入与probe回执。
    UI 任务时，第 7 步页面审计另写组件复用与沉淀结论：
    复用哪些既有组件、改动或新增组件、它们的真实消费者；
@@ -213,6 +213,17 @@ authorize只记录/消费已有授权。每次Git前用 `runtime/interface/git-a
 ## 使用技能与收口
 
 按 `skill-deps.yaml` 读取所需方法，重实施、定向验证和独立审查按项目分工委派，修 finding 回原实施会话；主会话裁定范围、记录真实用户选择并汇总。新文件/机制必须有实际消费者、owner、替代关系与删除条件。写入用安全原子写，共享冲突用记录锁，工作区核对和 Git 授权分别负责各自边界；失败原样披露。
+
+### 协作与写入权
+
+多写者、共享文件、生成物或收尾清理时读 `skills/design-source-extraction/references/collaboration.md`；本节只留条件指针与硬边界，不复制正文。
+
+硬边界只有四条：
+- 一个 worktree 同一时刻一个写者；同文件不同字段仍算共享，由原持笔者串行处理。
+- 工作区写入用 `runtime/interface/record-lock.mjs` 的 `withLock(worktreeRoot,name,fn,{waitMs})`；任务根 `withRecordLock` 不冒充工作区锁。
+- 写者记录与双进程回执不能互相代替；记录用 `node skills/design-source-extraction/scripts/check-write-set.mjs --dir <目录>` 核，失败码以脚本输出为准。
+- 向已结束子代理发消息等于重启；发送前确认重启意图、原授权与当前唯一写权。
+冻结、稳定取数、中断隔离、清理清单与双进程取证细节见该 reference，本节不复述。
 
 整个 stage 末按第 12 步执行阶段收口；交接内容与独立读取沿 `skills/stage-handoff/SKILL.md`「信息来源」「回读结果」「结束条件与边界」，报告实际不可变路径。缺失与未执行给原因及影响，披露不代完成。正式事实仍由既有公共流程发布，不增机器认证、第二账本或推进许可。
 

@@ -2,6 +2,7 @@
 import { WORKFLOW_STAGES } from '../../runtime/stage/stage-registry.mjs';
 // Report-only consumer of the existing final-chain evidence producer.
 import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { resolve, dirname, relative, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runFinalChainCheck } from '../../runtime/task/final-chain-runner.mjs';
@@ -320,6 +321,184 @@ function completedHumanOriginals(row) {
   return (row?.basis ?? []).filter(proof => proof.evidence_level === 'record_ref' && proof.conclusion === 'completed');
 }
 
+function sectionRange(text, pattern) {
+  const lines = String(text ?? '').split(/\r?\n/);
+  const matches = lines.map((line, index) => pattern.test(line) ? index : -1).filter(index => index >= 0);
+  if (matches.length !== 1) return null;
+  const start = matches[0];
+  const depth = /^#+/.exec(lines[start])?.[0].length ?? 0;
+  let end = start + 1;
+  while (end < lines.length && !new RegExp(`^#{1,${depth}}\\s`).test(lines[end])) end += 1;
+  return { lines, start, end };
+}
+const PACKAGE_SECTION = /^##\s*工作包\s*[（(]?\s*(\d+)\s*[）)]?\s*(?:[—–\-:：]|$)/;
+const coldDigest = text => createHash('sha256').update(text).digest('hex');
+function pointerFields(value) {
+  const ref = /`([^`]+)`/.exec(value)?.[1] ?? null;
+  const digest = /sha256\s*`?([0-9a-f]{64})`?/i.exec(value)?.[1] ?? null;
+  const reader = /读者\s+([^；;\s）)]+)/.exec(value)?.[1] ?? null;
+  return { ref, digest, reader };
+}
+function readTaskOriginal(taskPath, ref) {
+  if (typeof ref !== 'string' || !ref || isAbsolute(ref) || ref.split('/').some(part => part === '..' || part === '.')) {
+    throw Error(`冷读指针越界：${ref ?? '缺路径'}`);
+  }
+  const root = realpathSync(taskPath);
+  const path = realpathSync(resolve(taskPath, ref));
+  const rel = relative(root, path);
+  if (rel === '..' || rel.startsWith('../') || isAbsolute(rel)) throw Error(`冷读指针越出任务根：${ref}`);
+  return readFileSync(path, 'utf8');
+}
+function anchoredSection(text, anchor) {
+  const target = String(anchor ?? '').replace(/^#/, '');
+  if (!target) return null;
+  const escaped = target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/-/g, '[\\s\\-—–:：]*');
+  const range = sectionRange(text, new RegExp(`^(#{2,6})\\s*${escaped}.*$`));
+  return range ? range.lines.slice(range.start, range.end).join('\n').trim() : null;
+}
+function tableValue(block, label) {
+  const line = block.split(/\r?\n/).find(value => new RegExp(`^\\|\\s*${label}\\s*\\|`).test(value));
+  return line ? line.split('|').slice(2, -1).map(cell => cell.trim()).join(' | ') : '';
+}
+function numberedPointer(block, number, label) {
+  const line = block.split(/\r?\n/).find(value => new RegExp(`^${number}\\.\\s*${label}[：:]`).test(value.trim()));
+  return line ? line.trim() : '';
+}
+function cardPointer(value) {
+  const pointer = pointerFields(value);
+  if (pointer.ref && !pointer.ref.includes('#')) {
+    const packageNumber = /工作包\s*(\d+)/.exec(value)?.[1];
+    if (packageNumber) pointer.ref = `${pointer.ref}#工作包-${packageNumber}`;
+  }
+  return pointer;
+}
+function discoverColdReadOriginal(taskPath, id) {
+  const root = resolve(taskPath, 'quality/evidence');
+  if (!existsSync(root)) return null;
+  const pattern = new RegExp(`cold-read-p0?${Number(id)}\\.md$`);
+  const matches = readdirSync(root, { recursive: true }).filter(file => pattern.test(String(file)));
+  if (matches.length !== 1) return null;
+  return `quality/evidence/${String(matches[0])}`;
+}
+function coldReadGaps({ id, body, taskPath, taskName }) {
+  const gaps = [], errors = [];
+  const lines = body.split(/\r?\n/);
+  const start = lines.findIndex(line => {
+    const match = PACKAGE_SECTION.exec(line);
+    return match && String(Number(match[1])) === String(Number(id));
+  });
+  if (start < 0) {
+    gaps.push('缺冷读记录');
+    errors.push(`${taskName}/冷读: 缺工作包 ${id} 的收敛块`);
+    return { gaps, errors };
+  }
+  let end = lines.length;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (/^##\s/.test(lines[index])) { end = index; break; }
+  }
+  const block = lines.slice(start, end).join('\n');
+  const coldRange = sectionRange(block, new RegExp(`^###\\s*冷读记录\\s*[（(]\\s*P?${Number(id)}\\s*[）)]\\s*$`));
+  const cold = coldRange ? coldRange.lines.slice(coldRange.start, coldRange.end).join('\n') : '';
+  // The method's shape records the read in the 收敛 cell of the per-package five-row
+  // table, with a separate cold-read original. Both that shape and the current
+  // four-row 收敛格 shape are read; neither is invented by the tests.
+  const convergenceCell = tableValue(block, '收敛');
+  const cardLine = tableValue(block, '当前卡节') || numberedPointer(block, '4', '当前方案卡') || (cold || '');
+  const currentLine = tableValue(block, '当前冷读') || numberedPointer(block, '5', '当前冷读') || convergenceCell;
+  const firstLine = tableValue(block, '首轮冷读') || numberedPointer(block, '6', '复读对照');
+  const revisionText = tableValue(block, '修订');
+  const readerMatch = (text) => /读者[：:]\s*([^\n，,；;]+)/.exec(text)?.[1]?.trim() ?? '';
+  const reader = readerMatch(cold) || readerMatch(convergenceCell) || '';
+  const independent = /未参与本[包卡]写作|独立读者/.test(`${cold}\n${convergenceCell}`);
+  let currentPointer = pointerFields(currentLine);
+  if (!currentPointer.ref) {
+    const discovered = discoverColdReadOriginal(taskPath, id);
+    if (discovered) currentPointer = { ref: discovered, digest: null, reader: null };
+  }
+  const hasEvidence = Boolean(reader || currentPointer.ref || convergenceCell || /[①②③④⑤]/.test(cold));
+  if (!hasEvidence) {
+    gaps.push('缺冷读记录');
+    errors.push(`${taskName}/冷读: 缺冷读记录或可回读的冷读原件`);
+    return { gaps, errors };
+  }
+  if (!currentPointer.ref) {
+    gaps.push('缺冷读原件');
+    errors.push(`${taskName}/冷读: 缺可回读的逐包冷读原件`);
+  }
+  let coldOriginal = '';
+  let currentDigest = null;
+  if (currentPointer.ref) {
+    try {
+      coldOriginal = readTaskOriginal(taskPath, currentPointer.ref);
+      currentDigest = coldDigest(coldOriginal);
+      if (currentPointer.digest && currentDigest !== currentPointer.digest) {
+        gaps.push('冷读原件摘要不符');
+        errors.push(`${taskName}/冷读: 冷读原件摘要不符`);
+      }
+    } catch (error) {
+      gaps.push('冷读原件摘要不符');
+      errors.push(`${taskName}/冷读: 冷读原件不可回读（${error.message}）`);
+    }
+  }
+  const candidates = [cold, convergenceCell, coldOriginal].filter(Boolean);
+  const readerFinal = readerMatch(coldOriginal) || reader;
+  if (!readerFinal || !(independent || /未参与本[包卡]写作/.test(coldOriginal))) {
+    gaps.push('冷读读者未声明独立');
+    errors.push(`${taskName}/冷读: 读者或“未参与本包写作”缺失`);
+  }
+  const answers = new Map();
+  for (const candidate of candidates) {
+    for (const line of candidate.split(/\r?\n/)) {
+      const match = /^([①②③④⑤])\s*(.+)$/.exec(line.trim());
+      if (!match || answers.has(match[1])) continue;
+      const content = match[2].replace(/^[^：:]*[：:]\s*/, '').trim();
+      if (content) answers.set(match[1], content);
+    }
+  }
+  const missing = ['①', '②', '③', '④', '⑤'].filter(mark => !answers.get(mark) || /^(?:待补|未答|TODO)/i.test(answers.get(mark)));
+  if (missing.length) {
+    gaps.push('冷读五问不全');
+    errors.push(`${taskName}/冷读: 五问少答 ${missing.join('')}`);
+  }
+  if (!candidates.some(text => /五问全答出/.test(text))) {
+    gaps.push('冷读结论未写五问全答出');
+    errors.push(`${taskName}/冷读: 结论未写“五问全答出”`);
+  }
+  const card = cardPointer(cardLine);
+  if (!card.ref || !card.ref.includes('#') || !card.digest) {
+    gaps.push('收敛格缺当前卡节');
+    errors.push(`${taskName}/冷读: 缺可回读的当前卡节与摘要`);
+  } else {
+    try {
+      const [ref, anchor] = card.ref.split('#');
+      const sectionText = anchoredSection(readTaskOriginal(taskPath, ref), anchor);
+      if (!sectionText || coldDigest(sectionText) !== card.digest) {
+        gaps.push('卡片摘要不符');
+        errors.push(`${taskName}/冷读: 卡片摘要不符`);
+      }
+    } catch (error) {
+      gaps.push('卡片摘要不符');
+      errors.push(`${taskName}/冷读: 卡片不可回读（${error.message}）`);
+    }
+  }
+  const first = pointerFields(firstLine);
+  const revised = (revisionText && !/^(?:无|不适用)/.test(revisionText))
+    || Boolean(first.ref && /复读/.test(firstLine) && first.digest !== currentDigest);
+  if (revised) {
+    const firstReader = first.reader || readerMatch(firstLine);
+    if (!first.ref || !first.digest) {
+      gaps.push('修订未复读');
+      errors.push(`${taskName}/冷读: 有修订但缺首轮冷读对照`);
+    } else if (firstReader && readerFinal && firstReader === readerFinal) {
+      gaps.push('修订未复读');
+      errors.push(`${taskName}/冷读: 修订后仍由原读者复读`);
+    } else if (first.digest === currentDigest) {
+      gaps.push('修订未复读');
+      errors.push(`${taskName}/冷读: 修订后冷读原件未变化`);
+    }
+  }
+  return { gaps, errors };
+}
 export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = repository, stage, step: selectedStep, card = false, runId, phase, commit, skipGap = null, inputErrors = [] } = {}) {
   const errors = [];
   errors.push(...inputErrors);
@@ -569,12 +748,8 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
   const pointers = [...new Set([...decision.matchAll(/`(quality\/evidence\/[^`\n]*convergence-checklist[^`\n]*\.md)`/g)].map(match => match[1]))];
   // Resolve only the current decision's own references; prose alone is not proof.
   const section = (body, pattern) => {
-    const lines = body.split(/\r?\n/), matches = lines.map((line,index)=>pattern.test(line)?index:-1).filter(index=>index>=0);
-    if(matches.length!==1)return '';
-    const start=matches[0], depth=/^#+/.exec(lines[start])?.[0].length ?? 0;
-    let end=start+1;
-    while(end<lines.length && !new RegExp(`^#{1,${depth}}\\s`).test(lines[end]))end++;
-    return lines.slice(start+1,end).join('\n');
+    const range = sectionRange(body, pattern);
+    return range ? range.lines.slice(range.start + 1, range.end).join('\n') : '';
   };
   const moduleBody = id => {
     const lines=decision.split(/\r?\n/);
@@ -705,10 +880,36 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
           const reference=cells[index+1]??'', present=cellPresent(reference,name,/^\d+/.exec(cells[0])?.[0]);
           if(!present)errors.push(`${cells[0]}/${name}: 未取得可回读的当前证据：${reference||'缺项'}`);
           return {name,reference,present};
-        }), state: cells[statusIndex] ?? '', source: convergenceRef, line: number };
+        }), state: cells[statusIndex] ?? '', analysis: cells.slice(statusIndex + 1), source: convergenceRef, line: number };
       });
     convergenceReadable = true;
     if (!modules.length) errors.push(`${convergenceRef}: 未读到模块行`);
+    // A self-declared 已收敛 row still has to show its own independent cold read:
+    // a per-package 冷读记录 section that safely reads back the card section
+    // digest, the cold-read original digest and the five answers, and that a
+    // revision was re-read by a new reader.  Bare markers and headings do not pass.
+    // Cold-read readback applies to every format that can say 已收敛, including a
+    // five-column status table. These gaps stay in complete/gaps only: the public
+    // exit code reflects the 状态 column, as make-decision states.
+    const fullTen = headerCells.includes('目标与成功意图');
+    if (fiveColumn || fullTen) for (const row of modules) {
+      if (row.state !== '已收敛') continue;
+      const id = /^\d+/.exec(row.name)?.[0];
+      const gaps = [];
+      if ((row.analysis ?? []).some(cell => /待你定/.test(cell))) {
+        gaps.push('分析仍待定');
+        errors.push(`${row.name}/五类分析: 已收敛行仍有待你定项`);
+      }
+      if (id) {
+        const cold = coldReadGaps({ id, body, taskPath, taskName: row.name });
+        gaps.push(...cold.gaps);
+        errors.push(...cold.errors);
+      } else {
+        gaps.push('缺冷读记录');
+        errors.push(`${row.name}/冷读: 已收敛行缺包编号，无法回读冷读`);
+      }
+      if (gaps.length) row.evidenceGaps = [...new Set(gaps)];
+    }
     convergenceFormat = fiveColumn ? 'five-column-status' : statusColumn ? 'status-column-evidence' : 'eight-field-evidence';
   } catch (error) { errors.push(`${convergenceRef ?? '收敛清单'}: ${error.message}`); }
   const level = levelDisplay;
@@ -725,10 +926,13 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
   const stateGaps = modules
     .filter(row => row.state !== '已收敛' && (statusBearing || (row.state ?? '') !== ''))
     .map(row => '未收敛：' + (row.name || `第 ${row.line} 行`));
+  // Evidence gaps are reported and make complete=false, but never change the exit
+  // code: make-decision defines exit 1 as the 状态 column only.
+  const evidenceGaps = modules.flatMap(row => (row.evidenceGaps ?? []).map(gap => `${row.name || `第 ${row.line} 行`}：${gap}`));
   const fieldGaps = statusColumnFormat ? [] : modules.filter(row => row.fields.some(field => !field.present)).map(row => row.name);
   const gaps = statusColumnFormat
-    ? (modules.length ? stateGaps : ['收敛清单无可读模块行'])
-    : [...stateGaps, ...fieldGaps];
+    ? (modules.length ? [...stateGaps, ...evidenceGaps] : ['收敛清单无可读模块行'])
+    : [...stateGaps, ...evidenceGaps, ...fieldGaps];
   gaps.push(...missing.map(id => `缺模块 WP${id}`), ...duplicate.map(id => `重复模块 WP${id}`), ...unknown.map(id => `未知模块 WP${id}`), ...mappingGaps);
   if (!expected.length || new Set(expected).size !== expected.length) { gaps.push('权威模块集合未取得或重复'); errors.push('decision-log.md: 权威模块集合未取得或重复'); }
   if (!safeRef) gaps.push('收敛清单指针未取得');

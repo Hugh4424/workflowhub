@@ -1,9 +1,15 @@
+// P5/T009 ORACLE-FLOW-HARDENING: a 已收敛 ten-column row must read back its own
+// cold-read card section digest, five answers and revision re-read; bare markers fail.
+// TCR-P5-001: the ten-column fixture now supplies valid cold-read originals so the
+// existing ten-column cases keep their original meaning while the new negative cases
+// exercise the hardening. No other oracle in this file changed.
 import { describe, it, expect } from 'vitest';
 import { resolve } from 'node:path';
 import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, realpathSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { runFinalChainCheck } from '../../runtime/task/final-chain-runner.mjs';
 
 const firstDecision = `#### WP1 — controlled
@@ -207,6 +213,25 @@ function convergenceFixture(check) {
 }
 function dirnameOf(path) { return resolve(path, '..'); }
 
+// Shared cold-read fixture shapes for the status-table oracles. Both the current
+// four-row 收敛格 shape and the method's five-row table + cold-read original are
+// exercised; neither is the only accepted shape.
+const coldSha = text => createHash('sha256').update(text).digest('hex');
+const COLD_CARDS = 'quality/evidence/convergence/controlled-cards.md';
+const cardSection = id => `## 工作包 ${id}：受控包 ${id}\n\n一句话结果：受控结果。`;
+const coldDoc = (id, reader, answers = 5) => `# 受控冷读 ${id}\n\n- 读者：${reader}，未参与本包写作，只读本包卡。\n- 五问原答：\n${['① 改什么：受控改动。','② 为什么：受控理由。','③ 边界：受控边界。','④ 怎么验：受控验证。','⑤ 还有什么没定：无。'].slice(0, answers).join('\n')}\n- 结论：${answers === 5 ? '五问全答出' : '少答，未收敛'}；本包收敛。\n`;
+const coldRef = id => `quality/evidence/build-code/P1/controlled-cold-read-${id}.md`;
+const firstColdRef = id => `quality/evidence/build-code/P1/controlled-cold-read-${id}-first.md`;
+const coldSection = (id, reader) => `## 工作包 ${id}：受控包 ${id}\n\n### 收敛格（本轮）\n\n| 项 | 值 |\n| --- | --- |\n| 当前卡节 | \`${COLD_CARDS}#工作包-${id}\`；sha256 \`${coldSha(cardSection(id))}\` |\n| 当前冷读 | \`${coldRef(id)}\`；sha256 \`${coldSha(coldDoc(id, reader))}\`；读者 ${reader}；context=none |\n| 首轮冷读 | \`${coldRef(id)}\`；sha256 \`${coldSha(coldDoc(id, reader))}\`；读者 ${reader} |\n| 修订 | 无 |\n\n### 冷读记录（P${id}）\n\n- 读者：${reader}，未参与本包写作，只读本包卡。\n- 五问原答：\n① 改什么：受控改动。\n② 为什么：受控理由。\n③ 边界：受控边界。\n④ 怎么验：受控验证。\n⑤ 还有什么没定：无。\n- 结论：五问全答出；本包收敛。\n`;
+const validTail = (ids = ['1', '2']) => '\n' + ids.map(id => coldSection(id, `subagent:controlled-reader-${id}`)).join('\n');
+function coldFixtureFiles(put, task) {
+  put(task, COLD_CARDS, ['1', '2'].map(cardSection).join('\n'));
+  for (const id of ['1', '2']) put(task, coldRef(id), coldDoc(id, `subagent:controlled-reader-${id}`));
+}
+function methodSection(id, reader, firstReader, answers = 5) {
+  return `## 工作包 ${id}：受控包 ${id}\n\n### 五行表\n\n| 项 | 值 |\n| --- | --- |\n| 调研 | 已有 |\n| 发散 | 已做 |\n| 收敛 | 读者：${reader}，未参与本包写作；五问原答见本包冷读原件。 |\n| 就地讨论 | 无 |\n| 定验收 | 已定 |\n\n### 8 项证据指针\n\n4. 当前方案卡：\`${COLD_CARDS}#工作包-${id}\`，节 sha256 \`${coldSha(cardSection(id))}\`。\n5. 当前冷读：\`${coldRef(id)}\`，sha256 \`${coldSha(coldDoc(id, reader, answers))}\`，读者 ${reader}。\n6. 复读对照：首轮 \`${firstColdRef(id)}\`（sha256 \`${coldSha(coldDoc(id, firstReader))}\`，读者 ${firstReader}）→ 本轮 \`${coldRef(id)}\`。\n`;
+}
+
 describe('convergence evidence pointer validation', () => {
   it('rejects nonempty claims without readable anchors and preserves their text', () => convergenceFixture(({task,ref,put,invoke}) => {
     put(task, ref, '| 1 controlled | goal | boundary | choice | AC | risk | none | consumer | none | 已收敛 |\n' + validTwo);
@@ -266,16 +291,18 @@ describe('convergence evidence pointer validation', () => {
 });
 
 describe('five-column status table names unconverged packages', () => {
-  function statusFixture(rows, check) {
+  function statusFixture(rows, check, tail) {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'p1-status-')));
     const task = join(root, 'task'), materials = join(root, 'materials');
     const ref = 'quality/evidence/decision-log-refs/convergence-checklist.md';
-    const put = (base, name, value) => { const path = join(base, name); mkdirSync(resolve(path, '..'), { recursive: true }); writeFileSync(path, value); };
+    const put = (base, name, value) => { const path = join(base, name); mkdirSync(dirnameOf(path), { recursive: true }); writeFileSync(path, value); };
     const decision = '# Controlled\n## 级别与路线\n- 推荐级别：复杂\n#### WP1 — controlled\n- **结果与消费者**：受控结果；消费者是 controlled consumer。\n#### WP2 — second\n- **结果与消费者**：受控第二结果；消费者是 WP1。\n清单：`' + ref + '`\n';
     try {
       put(task, 'task.json', JSON.stringify({ schema_version:'1.0.0', task_id:'controlled', target_repo_root:resolve('.'), baseline_commit:'HEAD', activation_cohort:'post' }));
       put(task, 'facts.jsonl', ''); put(materials, 'phases/index.md', '# Index\n');
-      put(materials, 'decision-log.md', decision); put(task, ref, rows);
+      put(materials, 'decision-log.md', decision);
+      coldFixtureFiles(put, task);
+      put(task, ref, rows + (tail === undefined ? validTail() : tail));
       const invoke = json => spawnSync(process.execPath, [entry, `--task-path=${task}`, `--material-root=${materials}`, `--repo-root=${resolve('.')}`, ...(json ? ['--json'] : [])], { encoding:'utf8' });
       check({ invoke });
     } finally { rmSync(root, { recursive:true }); }
@@ -302,19 +329,26 @@ describe('five-column status table names unconverged packages', () => {
     expect(text.status).not.toBe(0);
     expect(text.stdout).toContain('未收敛：1 controlled');
   }));
-  it('exits 0 when every five-column package is 已收敛', () => statusFixture(header + '| 1 controlled | 已收敛 | details§1 | ev-1 | 无 |\n| 2 second | 已收敛 | details§2 | ev-2 | 无 |\n', ({ invoke }) => {
+  it('exits 0 when every five-column package is 已收敛 with its own cold read', () => statusFixture(header + '| 1 controlled | 已收敛 | details§1 | ev-1 | 无 |\n| 2 second | 已收敛 | details§2 | ev-2 | 无 |\n', ({ invoke }) => {
     const result = invoke(true);
     expect(result.status).toBe(0);
     const report = JSON.parse(result.stdout);
     expect(report.convergence.gaps).toEqual([]);
     expect(report.convergence.complete).toBe(true);
   }));
+  it('reports a five-column 已收敛 package without a cold read in gaps without changing exit 0', () => statusFixture(header + '| 1 controlled | 已收敛 | details§1 | ev-1 | 无 |\n| 2 second | 已收敛 | details§2 | ev-2 | 无 |\n', ({ invoke }) => {
+    const result = invoke(true);
+    expect(result.status).toBe(0);
+    const report = JSON.parse(result.stdout);
+    expect(report.convergence.complete).toBe(false);
+    expect(report.convergence.gaps.some(gap => gap.includes('缺冷读记录'))).toBe(true);
+  }, ''));
 });
 
 describe('ten-column status table names unconverged packages', () => {
   const header = '| 包 | 目标 | 边界 | 方案与取舍 | 验收 | 风险 | 依赖 | 消费者 | 未决/无 | 状态 | 目标与成功意图 | 范围与旅程 | 数据与状态 | 成功失败验收 | 约束非目标与风险 |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n';
   const withStatus = (line, state) => line.replace('| 已收敛 |\n', `| ${state} | 已答 | 已答 | 已答 | 已答 | 已答 |\n`);
-  function tenColumnFixture(rows, check) {
+  function tenColumnFixture(rows, check, mutateTail) {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'p1-ten-column-')));
     const task = join(root, 'task'), materials = join(root, 'materials');
     const ref = 'quality/evidence/decision-log-refs/controlled-convergence-checklist.md';
@@ -324,9 +358,12 @@ describe('ten-column status table names unconverged packages', () => {
     try {
       put(task, 'task.json', JSON.stringify({ schema_version:'1.0.0', task_id:'controlled', target_repo_root:resolve('.'), baseline_commit:'HEAD', activation_cohort:'post' }));
       put(task, 'facts.jsonl', ''); put(materials, 'phases/index.md', '# Index\n');
-      put(materials, 'decision-log.md', decision); put(task, ref, rows);
+      put(materials, 'decision-log.md', decision);
       put(task, 'quality/evidence/decision-log-refs/controlled-module-details.md', detailsBody);
-      check({ invoke });
+      coldFixtureFiles(put, task);
+      const generated = validTail();
+      put(task, ref, rows + (mutateTail ? mutateTail(generated) : generated));
+      check({ invoke, task, ref, put, original: rows + generated, generated });
     } finally { rmSync(root, { recursive:true, force:true }); }
   }
   it('names an unconverged ten-column package and exits non-zero', () => tenColumnFixture(header + withStatus(validOne, '未收敛') + withStatus(validTwo, '已收敛'), ({ invoke }) => {
@@ -351,12 +388,96 @@ describe('ten-column status table names unconverged packages', () => {
     expect(text.status).not.toBe(0);
     expect(text.stdout).toContain('未收敛：1 controlled');
   }));
-  it('exits 0 when every ten-column package is 已收敛', () => tenColumnFixture(header + withStatus(validOne, '已收敛') + withStatus(validTwo, '已收敛'), ({ invoke }) => {
+  it('exits 0 when every ten-column package is 已收敛 with its own cold read', () => tenColumnFixture(header + withStatus(validOne, '已收敛') + withStatus(validTwo, '已收敛'), ({ invoke }) => {
     const result = invoke(true);
     expect(result.status).toBe(0);
     const report = JSON.parse(result.stdout);
     expect(report.convergence.gaps).toEqual([]);
     expect(report.convergence.complete).toBe(true);
+  }));
+  // Evidence gaps below stay in complete/gaps only; the exit code reflects 状态.
+  const evidenceGap = (mutate, needle) => tenColumnFixture(header + withStatus(validOne, '已收敛') + withStatus(validTwo, '已收敛'), ({ invoke }) => {
+    const result = invoke(true);
+    expect(result.status).toBe(0);
+    const report = JSON.parse(result.stdout);
+    expect(report.convergence.complete).toBe(false);
+    expect(report.convergence.gaps.some(gap => gap.includes(needle))).toBe(true);
+  }, mutate);
+  it('reports a 待你定 analysis cell in gaps without changing exit 0', () => tenColumnFixture(header + withStatus(validOne, '已收敛').replace('| 已答 | 已答 | 已答 | 已答 | 已答 |\n', '| 待你定 | 已答 | 已答 | 已答 | 已答 |\n') + withStatus(validTwo, '已收敛'), ({ invoke }) => {
+    const result = invoke(true);
+    expect(result.status).toBe(0);
+    const report = JSON.parse(result.stdout);
+    expect(report.convergence.complete).toBe(false);
+    expect(report.convergence.gaps.some(gap => gap.includes('分析仍待定'))).toBe(true);
+  }));
+  it('reports a bare cold-read marker without changing exit 0', () => tenColumnFixture(header + withStatus(validOne, '已收敛') + withStatus(validTwo, '已收敛'), ({ invoke }) => {
+    const result = invoke(true);
+    expect(result.status).toBe(0);
+    expect(JSON.parse(result.stdout).convergence.gaps.some(gap => gap.includes('缺冷读记录'))).toBe(true);
+  }, () => '\n### 冷读记录（P1）\n### 冷读记录（P2）\n'));
+  it('reports a missing cold-read section without changing exit 0', () => tenColumnFixture(header + withStatus(validOne, '已收敛') + withStatus(validTwo, '已收敛'), ({ invoke }) => {
+    const result = invoke(true);
+    expect(result.status).toBe(0);
+    expect(JSON.parse(result.stdout).convergence.gaps.some(gap => gap.includes('缺冷读记录'))).toBe(true);
+  }, () => ''));
+  it('reports fewer than five answers without changing exit 0', () => tenColumnFixture(header + withStatus(validOne, '已收敛') + withStatus(validTwo, '已收敛'), ({ invoke, task, put }) => {
+    put(task, coldRef('1'), coldDoc('1', 'subagent:controlled-reader-1', 4));
+    const result = invoke(true);
+    expect(result.status).toBe(0);
+    const report = JSON.parse(result.stdout);
+    expect(report.convergence.complete).toBe(false);
+    expect(report.convergence.gaps.some(gap => gap.includes('冷读五问不全'))).toBe(true);
+  }, tail => tail.replace('⑤ 还有什么没定：无。\n', '')));
+  it('reports a card section digest mismatch without changing exit 0', () => evidenceGap(tail => tail.replace(coldSha(cardSection('1')), '0'.repeat(64)), '卡片摘要不符'));
+  it('reports a cold-read original digest mismatch without changing exit 0', () => evidenceGap(tail => tail.replace(coldSha(coldDoc('1', 'subagent:controlled-reader-1')), '0'.repeat(64)), '冷读原件摘要不符'));
+  it('reports a revised card that was not re-read by a new reader without changing exit 0', () => evidenceGap(tail => tail.replace('| 修订 | 无 |', '| 修订 | 修订：受控改动；修后复读。 |'), '修订未复读'));
+  it('restores the same check after the controlled break is reverted', () => tenColumnFixture(header + withStatus(validOne, '已收敛') + withStatus(validTwo, '已收敛'), ({ invoke, task, ref, put, original }) => {
+    put(task, ref, original.replace(coldSha(cardSection('2')), '0'.repeat(64)));
+    expect(invoke(true).status).toBe(0);
+    expect(JSON.parse(invoke(true).stdout).convergence.complete).toBe(false);
+    put(task, ref, original);
+    const restored = invoke(true);
+    expect(restored.status).toBe(0);
+    expect(JSON.parse(restored.stdout).convergence.complete).toBe(true);
+  }));
+});
+
+describe('method-shape cold read is accepted without inventing a third shape', () => {
+  function methodFixture(answers, check) {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'p1-method-cold-')));
+    const task = join(root, 'task'), materials = join(root, 'materials');
+    const ref = 'quality/evidence/decision-log-refs/controlled-convergence-checklist.md';
+    const header = '| 包 | 目标 | 边界 | 方案与取舍 | 验收 | 风险 | 依赖 | 消费者 | 未决/无 | 状态 | 目标与成功意图 | 范围与旅程 | 数据与状态 | 成功失败验收 | 约束非目标与风险 |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n';
+    const withStatus = (line, state) => line.replace('| 已收敛 |\n', `| ${state} | 已答 | 已答 | 已答 | 已答 | 已答 |\n`);
+    const put = (base, name, value) => { const path = join(base, name); mkdirSync(dirnameOf(path), { recursive: true }); writeFileSync(path, value); };
+    const decision = '# Controlled\n## 级别与路线\n- 推荐级别：复杂\n' + firstDecision + secondDecision + `清单：\`${ref}\`\n`;
+    const invoke = json => spawnSync(process.execPath, [entry, `--task-path=${task}`, `--material-root=${materials}`, `--repo-root=${resolve('.')}`, ...(json ? ['--json'] : [])], { encoding: 'utf8' });
+    try {
+      put(task, 'task.json', JSON.stringify({ schema_version:'1.0.0', task_id:'controlled', target_repo_root:resolve('.'), baseline_commit:'HEAD', activation_cohort:'post' }));
+      put(task, 'facts.jsonl', ''); put(materials, 'phases/index.md', '# Index\n');
+      put(materials, 'decision-log.md', decision);
+      put(task, 'quality/evidence/decision-log-refs/controlled-module-details.md', detailsBody);
+      put(task, COLD_CARDS, ['1', '2'].map(cardSection).join('\n'));
+      put(task, coldRef('1'), coldDoc('1', 'subagent:method-reader-1', answers));
+      put(task, firstColdRef('1'), coldDoc('1', 'subagent:method-first-1'));
+      put(task, coldRef('2'), coldDoc('2', 'subagent:controlled-reader-2'));
+      put(task, ref, header + withStatus(validOne, '已收敛') + withStatus(validTwo, '已收敛') + '\n' + methodSection('1', 'subagent:method-reader-1', 'subagent:method-first-1', answers) + '\n' + coldSection('2', 'subagent:controlled-reader-2'));
+      check({ invoke });
+    } finally { rmSync(root, { recursive:true, force:true }); }
+  }
+  it('accepts the five-row 收敛 cell plus a separate cold-read original', () => methodFixture(5, ({ invoke }) => {
+    const result = invoke(true);
+    expect(result.status).toBe(0);
+    const report = JSON.parse(result.stdout);
+    expect(report.convergence.complete).toBe(true);
+    expect(report.convergence.gaps).toEqual([]);
+  }));
+  it('reports a method-shape cold read with fewer answers in gaps without changing exit 0', () => methodFixture(4, ({ invoke }) => {
+    const result = invoke(true);
+    expect(result.status).toBe(0);
+    const report = JSON.parse(result.stdout);
+    expect(report.convergence.complete).toBe(false);
+    expect(report.convergence.gaps.some(gap => gap.includes('冷读五问不全'))).toBe(true);
   }));
 });
 

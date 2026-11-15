@@ -1077,12 +1077,12 @@ skills:
     last_reviewed_at: '2026-10-25'
     status: native
     metrics_enabled: true
-    purpose: 设计源准备后提炼单份机器JSON，供规划、实施与独立检查回读
-    design_idea: 五类输入定向阻断、八类规范四态对账、渲染与声明分开、失败保真
+    purpose: 设计源准备后提炼单份机器JSON，并承载移植、数据与状态、既有功能接线、四类机器校验与目视审查的消费入口
+    design_idea: 五类输入定向阻断、八类规范四态对账、渲染与声明分开、失败保真；移植登记与样式闭合、样例与真实值分层、三链接回、四类机器校验、固定视口目视与工作区协作写入
     standalone: true
-    used_by_stages: [build-plan, build-code]
+    used_by_stages: [build-prd, build-plan, build-code]
     upstream: []
-    local_changes: WorkflowHub原生字段与方法契约；owner为设计源提炼方法维护者，consumer为build-plan设计源准备读者、build-code实施者与build-code终末独立检查者；P1只交契约，采集/对账/消费/三阶段接线由后续Phase承接，不以登记冒真实执行；不替代readiness、不自动晋升规范；delete-condition为经独立审查的替代者完整承接真实consumer。外部工具只沿isolated-browser-qa既有入口，固定参考ego lite 0.6.0.16与agent-browser 0.36.0，许可和归档绑定未核部分unknown；style-ref-gen因许可未声明不采用，不复制外部内容。
+    local_changes: WorkflowHub原生字段与方法契约；owner为设计源提炼方法维护者，consumer为build-prd有稿前置记录、build-plan设计源准备读者、build-code实施者与终末独立检查者、独立测试者与独立设计审查者；P1只交契约，采集/对账/消费/三阶段接线由后续Phase承接，不以登记冒真实执行；不替代readiness、不自动晋升规范；delete-condition为经独立审查的替代者完整承接真实consumer。后续Phase新增references/port-method.md、data-and-state.md、wiring.md、verification.md、visual-review.md、collaboration.md、anti-patterns.md及scripts/check-judgment、check-port-manifest、check-data-discipline、check-wiring、check-geometry、check-dom-parity、check-port-parity、check-feature-keep、check-visual-review、check-write-set；均私有入口或方法正文，真实consumer与删除条件见move-map与skill-bundle。外部工具只沿isolated-browser-qa既有入口，固定参考ego lite 0.6.0.16与agent-browser 0.36.0，许可和归档绑定未核部分unknown；style-ref-gen因许可未声明不采用，不复制外部内容。
     dependency_closure: ["skills/project-norm-init", "skills/design-source-readiness", "skills/isolated-browser-qa", "skills/spec-specify"]
     update_policy: 来源版本、规范版本或结构变化时重提炼；升级外部工具先给差异并取得用户决定，不自动追HEAD；任务明细保原证据区，规范晋升归原owner
   - name: design-source-readiness

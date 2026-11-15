@@ -15,6 +15,9 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     trigger: final_prd_document_review
+  - name: design-source-extraction
+    path: skills/design-source-extraction/SKILL.md
+    trigger: ui_scope_draft_judgment_pointer_and_following_port_entry
   - name: stage-reflection
     path: skills/stage-reflection/SKILL.md
     trigger: actual_stage_end_process_issue_optional

@@ -1,0 +1,76 @@
+{
+  "schema_version": "1.0.0",
+  "kind": "write-set",
+  "worktree": {
+    "root_ref": "当前认证 worktree",
+    "branch_ref": "task/示例",
+    "session": "P5 示例写者"
+  },
+  "lock": {
+    "implementation": "runtime/interface/record-lock.mjs",
+    "name": "design-port-worktree",
+    "domain": "workspace",
+    "proofs": [
+      {
+        "id": "p5-sample-acquire",
+        "pid": 51234,
+        "host": "sample-host",
+        "nonce": "00000000-0000-4000-8000-000000000001",
+        "started_at": "2026-11-15T19:00:00.000Z",
+        "released_at": "2026-11-15T19:05:00.000Z"
+      }
+    ]
+  },
+  "writers": [
+    {
+      "id": "P5-dev",
+      "role": "唯一写者",
+      "session_ref": "subagent:P5-development",
+      "files": [
+        "skills/design-source-extraction/references/collaboration.md",
+        "workflows/build-code/SKILL.md"
+      ]
+    }
+  ],
+  "shared_files": [
+    {
+      "path": "skills/design-source-extraction/references/collaboration.md",
+      "writer": "P5-dev",
+      "lock_proof": "p5-sample-acquire"
+    },
+    {
+      "path": "workflows/build-code/SKILL.md",
+      "writer": "P5-dev",
+      "lock_proof": "p5-sample-acquire"
+    }
+  ],
+  "interrupted": [
+    {
+      "id": "p5-sample-half-work",
+      "path": "临时工作区/p5-lock-probe",
+      "isolated": true,
+      "sent_for_verification": false
+    }
+  ],
+  "cleanup": {
+    "temp_paths": [
+      {
+        "path": "临时工作区/p5-lock-probe",
+        "state": "removed"
+      }
+    ],
+    "processes": [
+      {
+        "pid": 51235,
+        "state": "stopped"
+      }
+    ],
+    "lock_files": [
+      {
+        "path": ".design-port-worktree.lock",
+        "state": "removed"
+      }
+    ],
+    "verified_at": "2026-11-15T19:06:00.000Z"
+  }
+}

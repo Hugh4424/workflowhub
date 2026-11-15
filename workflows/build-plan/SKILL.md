@@ -217,6 +217,7 @@ version: 4.2.0
 命令是 `node skills/design-source-extraction/scripts/check-judgment.mjs --input <judgment.md>`。
 等待确认时加 `--confirmation-ref <确认原件>` 才可能恢复；未答和时间流逝都不能恢复。
 判断只写去向，不写产品需求；产品需求正文仍由 build-prd 的唯一作者写。
+判断之后的提炼、移植、数据接线、四类校验与目视入口，沿 `skills/design-source-extraction/SKILL.md` 的「新页面八步流程」；设计源或规范变化时沿同技能「设计稿更新后怎么同步」重新提炼，不沿用旧读数。实施中复现的坑对照同技能 `references/anti-patterns.md`，每条给可执行检查或具名 owner；这里只留条件指针，不复制正文。
 
 ## UI 组件与真实消费者
 
