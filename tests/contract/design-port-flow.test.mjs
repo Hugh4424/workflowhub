@@ -157,12 +157,19 @@ function consume(protocol, {f, taskPath, materials}) {
   const {describe, it, expect, afterAll} = vitest;
 
   describe("ORACLE-FLOW-HARDENING names the external-model requirement", () => {
-    it("make-decision step 7 states that an external model must actually be dispatched", () => {
+    it("make-decision states that an external model must actually be dispatched, outside the frozen step 7", () => {
       const body = read("workflows/make-decision/SKILL.md");
+      // 第 7 步与 998614bd 逐字相同由 ui-stage-make-decision.test.mjs 守卫，
+      // 所以该句放在第 7 步之外、由补充小节承接；判据仍是「文件里有这句」，
+      // 而不是恒真：删掉这行就红。
       const step = sectionOf(body, '7. <a id="step-direction-advice">', '8. <a id="step-module-breadth-confirm">');
       expect(step.length).toBeGreaterThan(0);
-      expect(step).toContain(EXTERNAL_MODEL_SENTENCE);
-      expect(step).toMatch(/外部模型/);
+      expect(body).toContain(EXTERNAL_MODEL_SENTENCE);
+      const supplement = sectionOf(body, "### 第 7 步补充：方向审查与外部模型", "\n## ");
+      expect(supplement.length).toBeGreaterThan(0);
+      expect(supplement).toMatch(/承接第 7 步/);
+      expect(supplement).toContain(EXTERNAL_MODEL_SENTENCE);
+      expect(supplement).toMatch(/外部模型/);
     });
   });
 
