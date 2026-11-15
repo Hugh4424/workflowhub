@@ -48,6 +48,7 @@ version: 4.2.0
    本步原型作者实际执行上述两路方法：有稿五输入与范围/映射/缺陷先于实现，无稿需求/真实语义/许可/合成数据先于原创；必要Figma Make提示词读取 `skills/figma-make-prompt/SKILL.md`。完成可运行原型后交未参与实现者作八维独立设计审查、修复并复验，再展示当前完整范围取得用户真实答复；未答/拒绝/工具失败保对应未完成，不以静态稿或提示词代原型。C05受控样本专属位置 `specs/<task>/samples/A` 与 `samples/B`；只在本任务指定的验证Phase执行，不改通用原型位置或12个step身份。
    UI 且已有合法可读设计源时，完成 design-source-readiness 后读取 `skills/design-source-extraction/SKILL.md`，沿任务原 ref 消费单份机器产物 `design-source-extraction.json`（原件可带日期，不复制重命名）。将 `source`、`scope`、`norm_basis`、`items` 与实际证据用于本 spec 设计依据及 Phase 输入；声明、渲染值与待议规范分开。按 `references/norm-alignment.md`、`references/isolated-consumption.md` 对账与交接，不用模板占位或原型值当产品规范。核 `freshness` 与当前来源/规范/结构；unknown 补具名材料，stale 先沿已有 `node skills/design-source-extraction/scripts/collect-design-source.mjs --plan <已认证冻结plan>` 重提炼，未执行保未执行。非 UI 或无合法设计源说明适用范围与缺口，不给其它任务增加提炼门。
    需构造采集plan时读 `skills/design-source-extraction/references/collection-plan.md` 与同目录模板，使用真实任务输入与probe回执。
+    有稿任务在本步按「有稿判断怎么写？」产出 `judgment.md`，结论供 build-prd 与 build-code 消费；未答不代批准。
    第 5 步的答复标记表示该步需要真实答复：UI 任务的设计稿确认并入这次答复，不另开确认门；
    答复原文与位置记在本步原件（问题、答复与影响同处），未答时停在该步、记 awaiting_user，
    不把沉默当同意；非 UI 任务在本步写不适用＋一句理由后直接往下走，不等答复、不新增确认。
@@ -176,6 +177,46 @@ version: 4.2.0
 
 验收因标准设计不合理而长期停在 `incomplete`／`unavailable` 的，属于标准缺陷：先改标准，不许一直挂着。
 档位细则见 Phase 模板的「档位使用规则」，此处不复述。
+
+## 有稿判断怎么写？
+
+有稿任务先判旧页去向，再判设计稿可用性；两项结论都写进 `judgment.md`，缺去向或缺负责人不得进入实施。
+
+判断只看三类真实输入：旧页、设计稿来源、目标页与旧接口的真实位置。
+设计稿的真实来源固定为 `specs/design/prototypes/`；当前原型与实施夹具不能冒充真实设计源。
+判断产物是一份 `judgment.md`，人读正文写结论，末尾机器块供 `check-judgment.mjs` 读。
+
+### 三链要写哪三条？
+
+三链是页面链、数据链、功能链，逐条写清旧对象到目标对象的对应关系。
+页面链写旧页入口与目标页组件；数据链写页面区域与旧接口；功能链写用户操作与结果回执。
+三链缺一条，判断不完整，施工前置会拒绝进入实施。
+
+### 六项判断各写什么？
+
+1. 旧页现状：逐页写旧页是否还在、路由和当前字节。
+2. 改造或重写：逐旧页写结论与依据；没有旧页写不适用的理由。
+3. 设计稿来源：写来源角色与真实位置；原型和夹具不能当真实设计稿。
+4. 可用性：写三档结论及其依据。
+5. 适配项：逐项写差异、来源与去向；没有就写「无」。
+6. 去向与负责人：写下一步、负责人和仍需确认的对象。
+
+### 三档结论按什么分？
+
+三档是直接套用、适配后套用、不能用；硬条件优先，适配项数量不改变结论。
+硬条件是来源角色冲突、稿件与目标页不是同一范围、关键交互无法移植、权利未明、关键数据不一致。
+任一硬条件命中就判不能用；没有硬条件时，适配项再多也仍判适配后套用。
+不能用必须给两条去向与各自负责人；三档都要写下一步与负责人。
+判断有效的不能用仍退出 0，但 `allowed_for_construction` 为假并路由到停止施工。
+等待确认是只读分支：合法结论也不能越过它；解除等待要有真实确认原件。
+
+### 判断写完后谁消费？
+
+判断产物由 build-prd 记录为有稿前置，由 build-code 在施工前执行。
+`check-judgment.mjs` 读同一 `judgment.md` 的机器块，退出 0 只表示判断有效；还要 `allowed_for_construction` 为 true 才施工。
+命令是 `node skills/design-source-extraction/scripts/check-judgment.mjs --input <judgment.md>`。
+等待确认时加 `--confirmation-ref <确认原件>` 才可能恢复；未答和时间流逝都不能恢复。
+判断只写去向，不写产品需求；产品需求正文仍由 build-prd 的唯一作者写。
 
 ## UI 组件与真实消费者
 

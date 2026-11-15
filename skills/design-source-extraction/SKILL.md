@@ -13,7 +13,8 @@ description: 设计源准备后、实施前提炼可回读的机器JSON；来源
 2. 先探测可达性，再在正式采集前冻结页 × 状态 × 视口 × 元素集 × 规范类别清单、关键项与冲突率阈值。探测不计覆盖。冻结后范围变化须记录原因并重新冻结，不能靠缩分母凑比例。
 3. 浏览器采集只从 `skills/isolated-browser-qa/SKILL.md` 的隔离入口执行已登记的固定脚本标识；未登记标识执行前拒绝。页面操作保持只读，页面写入与网络请求尝试必须被拒且有负向原件。外层隔离链失败停该路径，保原错误，不换直连；默认复用已开ego工作区，获取失败明确报错，不启动其它浏览器、不隐式回退。caller显式选择其它引擎时才沿该入口原生命周期合同执行，不能用回退绕过复用限制。
 4. 逐项填下述契约，事实与推断、渲染值与源码声明分开。不存在、未渲染、受限 iframe 或工具失败留原错误与影响；不默认填值，不从类名猜像素，不用截图补 DOM。完成条件是冻结清单每项有观察或具名缺口、原命令与证据能回读；不是文件存在或 exit 0。
-5. 下游先检查 `freshness`、五类输入与低保真裁决，仅停止被 `blocks` / `blocked_scope` 点名的实施步骤。对照与回填消费 `references/isolated-consumption.md`（实施消费时读取）；规范对账消费 `references/norm-alignment.md`（逐条对齐时读取）。这些后续能力未交付时记 unavailable，不把契约当采集/对账已运行。
+5. 下游先检查 `freshness`、五类输入与低保真裁决，仅停止被 `blocks` / `blocked_scope` 点名的实施步骤。
+   判断允许移植时改走「移植消费入口是什么？」按登记生成，不在实施页临时补样式或注入代码。对照与回填消费 `references/isolated-consumption.md`（实施消费时读取）；规范对账消费 `references/norm-alignment.md`（逐条对齐时读取）。这些后续能力未交付时记 unavailable，不把契约当采集/对账已运行。
 
 ## 唯一 JSON 字段契约
 
@@ -83,6 +84,20 @@ screenshot当前明确支持合法非交错PNG：核容器chunk/CRC/压缩scanli
 `low_fidelity.triggered` 为 boolean；任一必要输入缺失且不能有源补证、关键项缺失、或冲突率超过采集前冻结阈值时为 true，reasons 点名真实条件。工具失败只进 failures，不以失败计算低保真。
 
 `low_fidelity.ruling` 只取 `approved | pending | rejected | no_response`。触发后取得本次设计 owner 真实答复：approved 沿答复批准范围实施；pending 等待裁决；rejected 停被拒范围；no_response 保未答。这后三种值的 blocked_scope 必须非空，所列实施不得启动；未答、拒绝都不是同意。未触发时可记 approved 并注明不适用原因，不能伪称收到人类批准。评分子项始终 unavailable，与本非数值裁决分开。
+
+## 移植消费入口是什么？
+
+判断允许移植后，实施者从同一提炼产物和设计源进入移植；本入口只加消费面，不改旧 JSON 字段。
+移植方法与登记规则在 references/port-method.md；本节只留条件指针，不复制正文。
+
+1. 先读 `judgment.md` 的结论与去向；直接套用或适配后套用才进入移植，不能用按去向回原 owner。
+2. 在 `port/manifest.json` 写移植登记：来源与目标角色、逐文件模式、允许的导入变化、
+   直接改动、使用类名、宿主外壳归属、特异性来源和手改文件。
+3. 生成前运行 `node skills/design-source-extraction/scripts/check-port-manifest.mjs --manifest <manifest> --design-root <设计源>`；
+   退出 0 只表示登记与样式闭合，不表示真实项目可用。
+4. 需要真实生成时加 `--mode=generate --output <临时目录>`；重跑保留手改哨兵。
+5. 旧 `design-source-extraction.json` 的字段、五类输入与 `freshness` 语义不变；
+   移植登记是新增消费产物，不替代旧 JSON，也不成为第二份提炼事实。
 
 ## 原件、引用与规范边界
 

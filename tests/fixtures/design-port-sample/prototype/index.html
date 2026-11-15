@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN" data-sample-ready="false">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>设计移植样例 · 合成原型</title>
+    <link rel="stylesheet" href="./styles.css">
+    <script src="./app.js" defer></script>
+  </head>
+  <body>
+    <div class="sample-page" data-sample-root>
+      <header class="sample-page__header">
+        <p class="sample-page__eyebrow">WorkflowHub · 设计移植样本</p>
+        <h1 class="sample-page__title">样例记录读取</h1>
+        <p class="sample-notice" data-sample-tag="page">整页：合成样例</p>
+      </header>
+      <main class="sample-page__main">
+        <p class="sample-page__number" id="state-number" aria-hidden="true">01</p>
+        <section class="state-sequence" aria-label="读取序列">
+          <ol class="state-sequence__list">
+            <li class="state-sequence__item is-current" data-state="success" aria-current="step">01 成功</li>
+            <li class="state-sequence__item" data-state="empty">02 空</li>
+            <li class="state-sequence__item" data-state="error">03 错误</li>
+          </ol>
+        </section>
+        <section class="result-panel" id="result-panel" data-legacy-hook="sample-result" aria-busy="false">
+          <p class="sample-notice" data-sample-tag="block">区块：合成样例</p>
+          <div class="result-panel__heading">
+            <h2 class="result-panel__title" id="result-title">读取结果</h2>
+            <p class="result-panel__label" id="state-label">成功</p>
+          </div>
+          <p class="result-panel__status" id="status-message" role="status" aria-live="polite" aria-atomic="true">已读取成功样例。</p>
+          <div class="result-panel__content" id="result-content"></div>
+        </section>
+        <section class="action-row" aria-label="样例操作">
+          <button class="read-next-button" id="next-sample" type="button" aria-describedby="action-note">读取下一份样例</button>
+          <p class="action-row__note" id="action-note">样例模式只读；写操作被拒绝。</p>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

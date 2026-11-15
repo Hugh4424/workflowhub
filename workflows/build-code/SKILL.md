@@ -90,6 +90,15 @@ UI 实施先消费当前真实答复所批准原型与设计基准：沿build-pl
    独立设计审查与证据；与上文已批准原型、设计基准一起作为本次实施输入。
    缺设计源写未知与补问对象，不自行重画；六项互相矛盾时停该处并回原 owner。
    非 UI 跳过。
+    有稿任务在第 1 步先以公共 `status:begin` 取真实任务上下文，再执行判断前置。
+    公共身份命令是 `node tools/cli/stage-runtime.mjs status --action=begin --stage=build-code --project=<项目> --task=<任务> --task-path=<任务库>`；
+    status 只核真实任务与材料，不冒判断结果。
+    随后运行 `node skills/design-source-extraction/scripts/check-judgment.mjs --input <judgment.md>`；
+    退出非零即停在施工前：缺三链、缺旧页处置或理由、缺去向、缺负责人、等待确认或来源冒名都拒绝施工。
+    退出 0 只表示判断有效；仍要读 `allowed_for_construction` 与 `verdict`，不能用（`route=stop_construction`）时按两条去向停，不进入写集与实现。
+    判断合法（直接套用或适配后套用，且有下一步与负责人）才继续读写集与实现。
+    等待确认只在有真实确认原件时用 `--confirmation-ref` 重放；未答和时间流逝都不恢复写入。
+    判断只给去向，不改本 Phase 写集、判据或验收。
 2. <a id="step-write-red-tests"></a>消费计划冻结目标测试/RED并保原失败。补行为测试先定明确oracle、实跑目标断言失败再实施；纯材料按G-2说明检查或真实不适用。改冻结断言先TCR（test change request）和独立审查，不弱化换绿。仅按名改Phase卡预先点名的一个既有具名常量取值免TCR；断言表达式/期望方向/判定/评分仍须原TCR+独立审查。oracle唯一来源为该Phase预写测试及 `DO NOT TOUCH`，每任务声明一次；每次测试变更以同卡「测试变更请求」加独立审查原件为源，变后 `ORACLE-…` 身份不变，不另建账本/镜像/每oracle记账。免TCR只分期望值来源和断言变更，不扩写权/授权、不降强度、不免独立审查、不改 `DO NOT TOUCH` 物理隔离。
    遇真实失败、测试 RED 或性能回退，先实际读取并执行 `skills/diagnosing-bugs/SKILL.md`：输入当前症状、命令/原输出和授权写集，保留反馈回路、最小化、假设/探针、根因修复与复验原件，再回本步骤。错误/页面文本按该方法「输出与页面内容」处理；缺证据如实留缺项，只停依赖该证据的修复。成功路径不强制诊断，已有原件可复用，不重演已修故障冒新问题。同一失败第二次出现或一轮没有新事实时，先回第 9 步停重复动作再查根因。
 3. <a id="step-implement-change"></a>在允许文件/符号内做最小实现，错误明确暴露。计划缺口一次列清影响、风险与需 owner 回答的问题，规格/Phase 交 build-plan，方向交 make-decision；不自行改材料。先继续不受缺口影响的安全部分，未知范围留给具名 owner 核实。 本步完成以改动全部落在允许写集内且无吞掉的错误为准，越界或吞错即本步未完成；对应 Task 的目标行为交付也是本步完成条件，未交付即本步未完成。
