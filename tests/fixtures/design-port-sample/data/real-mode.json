@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0.0",
+  "kind": "data-state-fixture",
+  "name": "real-mode",
+  "state": "real",
+  "source": {
+    "role": "controlled_local_service",
+    "kind": "local_dynamic_service",
+    "ref": "tests/fixtures/design-port-sample/data",
+    "identity_route": "/identity"
+  },
+  "mode": ["real"],
+  "expected_state": "real",
+  "sample_annotations_expected": 0,
+  "conflict_rulings": [
+    {
+      "id": "cr-sample-labels",
+      "parties": [
+        {"source": "prototype/app.js", "view": "样例模式保留整页、区块、样例值三层标注"},
+        {"source": "real-mode", "view": "真实模式移除全部样例标注"}
+      ],
+      "adjudicator": "阶段 2 移植实施 owner（app.js 原写者）",
+      "conclusion": "同一客户端按 mode 分支：样例保留三层，真实模式进入时删除全部 [data-sample-tag] 并改说明文案。",
+      "impact": "真实模式页面残留样例标识即为失败；样例模式仍可独立展示且拒绝写入。"
+    }
+  ],
+  "note": "口径冲突不静默选边，写进同一裁定记录，含双方、裁定人、结论与影响。"
+}

@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0.0",
+  "kind": "data-state-fixture",
+  "name": "error",
+  "state": "error",
+  "source": {
+    "role": "controlled_local_service",
+    "kind": "local_dynamic_service",
+    "ref": "tests/fixtures/design-port-sample/data",
+    "identity_route": "/identity"
+  },
+  "mode": ["real", "sample"],
+  "expected_state": "error",
+  "read_route": {
+    "record_id": "error",
+    "status": 500,
+    "delay_ms": 0,
+    "body": {
+      "error": "READ_FAILED",
+      "code": "E_SERVER"
+    }
+  },
+  "failure_class": "server_error",
+  "unknown_code_policy": "conservative_failure",
+  "detail": "有源读取失败，不填样例值。",
+  "classification_cases": [
+    {"input": {"status": 0, "error_name": "", "code": ""}, "expected": "unknown_failure"},
+    {"input": {"status": 500, "error_name": "", "code": ""}, "expected": "server_error"},
+    {"input": {"status": 404, "error_name": "", "code": ""}, "expected": "not_found"},
+    {"input": {"status": 400, "error_name": "", "code": ""}, "expected": "client_error"},
+    {"input": {"status": 200, "error_name": "AbortError", "code": "TIMEOUT"}, "expected": "timeout"}
+  ],
+  "note": "未知错误码进入保守失败档 unknown_failure，绝不落入成功。"
+}

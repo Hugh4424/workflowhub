@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0.0",
+  "kind": "data-state-fixture",
+  "name": "timeout",
+  "state": "timeout",
+  "source": {
+    "role": "controlled_local_service",
+    "kind": "local_dynamic_service",
+    "ref": "tests/fixtures/design-port-sample/data",
+    "identity_route": "/identity"
+  },
+  "mode": ["real"],
+  "expected_state": "timeout",
+  "read_route": {
+    "record_id": "timeout",
+    "status": 200,
+    "delay_ms": 100,
+    "body": {
+      "records": [
+        {"name": "记录名称", "value": "超时前应已中止，不应展示"}
+      ]
+    }
+  },
+  "timeout_ms": 25,
+  "delay_ms": 100,
+  "failure_class": "timeout",
+  "distinct_from": ["error", "success"],
+  "note": "服务延迟 delay_ms=100 大于客户端 budget timeout_ms=25，真实请求被中止并按 timeout 分档，不能落入 success 或普通 error。"
+}

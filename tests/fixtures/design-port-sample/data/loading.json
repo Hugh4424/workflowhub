@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0.0",
+  "kind": "data-state-fixture",
+  "name": "loading",
+  "state": "loading",
+  "source": {
+    "role": "controlled_local_service",
+    "kind": "local_dynamic_service",
+    "ref": "tests/fixtures/design-port-sample/data",
+    "identity_route": "/identity"
+  },
+  "mode": ["real", "sample"],
+  "expected_state": "loading",
+  "read_route": {
+    "record_id": "sample-01",
+    "status": 200,
+    "delay_ms": 0,
+    "body": {
+      "records": [
+        {"name": "记录名称", "value": "成功结果样例"},
+        {"name": "数据来源", "value": "本地受控服务"},
+        {"name": "用途", "value": "检查成功态的内容与布局"}
+      ]
+    }
+  },
+  "ui_binding": {
+    "aria_busy": "true",
+    "button_text": "正在读取…",
+    "pending_marker": "pending"
+  },
+  "distinct_from": ["success", "empty", "error", "timeout"],
+  "note": "读取中由按钮文案与 aria-busy 承载，是等待期的可辨状态，不新增独立 ViewModel kind。"
+}

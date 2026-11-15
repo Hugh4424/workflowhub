@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0.0",
+  "kind": "data-state-fixture",
+  "name": "empty",
+  "state": "empty",
+  "source": {
+    "role": "controlled_local_service",
+    "kind": "local_dynamic_service",
+    "ref": "tests/fixtures/design-port-sample/data",
+    "identity_route": "/identity"
+  },
+  "mode": ["real", "sample"],
+  "expected_state": "empty",
+  "read_route": {
+    "record_id": "empty",
+    "status": 200,
+    "delay_ms": 0,
+    "body": {
+      "records": []
+    }
+  },
+  "expected_records_count": 0,
+  "fill_policy": "no_fill",
+  "detail": "空态不补零，也不填入虚构记录。",
+  "note": "服务返回零条记录时判定为空态；页面不生成任何占位记录。"
+}

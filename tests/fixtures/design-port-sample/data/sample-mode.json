@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0.0",
+  "kind": "data-state-fixture",
+  "name": "sample-mode",
+  "state": "sample",
+  "source": {
+    "role": "synthetic_sample",
+    "kind": "synthetic",
+    "ref": "tests/fixtures/design-port-sample/prototype/app.js",
+    "detail": "页面内置 SAMPLE_INPUTS 合成数据，不发起网络请求"
+  },
+  "mode": ["sample"],
+  "expected_state": "sample",
+  "annotations": {
+    "page": {"selector": "[data-sample-tag=\"page\"]", "count": 1},
+    "block": {"selector": "[data-sample-tag=\"block\"]", "count": 1},
+    "value": {"selector": ".value-tag", "count_min": 1},
+    "layer_count": 3
+  },
+  "write_policy": {
+    "allowed": false,
+    "reason": "样例模式没有请求目标，因此不发起写入。",
+    "control": "present"
+  },
+  "note": "样例态是交付物，但必须三层可辨并拒绝写入；控件保留，不静默降级。"
+}
