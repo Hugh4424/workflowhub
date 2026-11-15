@@ -277,6 +277,31 @@ function definePortTests({describe,it,expect}){
         expect(failed(result,"SPECIFICITY_BASIS_MISMATCH"),result.stderr).toBe(true);
       }finally{clean(ws.root);}
     });
+    it("rejects a manifest without the client adapter registration and accepts it again once restored",()=>{
+      const ws=workspace();
+      try{
+        const manifest=readJson(ws.manifest);
+        const adapter=manifest.client_adapter;
+        delete manifest.client_adapter;
+        writeJson(ws.manifest,manifest);
+        const broken=check({manifest:ws.manifest,design:ws.design});
+        expect(failed(broken,"CLIENT_ADAPTER_MISSING"),broken.stderr).toBe(true);
+        manifest.client_adapter=adapter;
+        writeJson(ws.manifest,manifest);
+        const restored=check({manifest:ws.manifest,design:ws.design});
+        expect(restored.status,restored.stderr).toBe(0);
+      }finally{clean(ws.root);}
+    });
+    it("rejects a client adapter declaration that the generated implementation does not match",()=>{
+      const ws=workspace();
+      try{
+        const manifest=readJson(ws.manifest);
+        manifest.client_adapter.gateway_class="RenamedSampleGateway";
+        writeJson(ws.manifest,manifest);
+        const result=check({manifest:ws.manifest,design:ws.design});
+        expect(failed(result,"CLIENT_ADAPTER_MISMATCH"),result.stderr).toBe(true);
+      }finally{clean(ws.root);}
+    });
     it("rejects a manual file whose sentinel is missing, in both check and generate",()=>{
       const out=outputDir();
       try{

@@ -305,6 +305,61 @@ function validateSpecificityBasis(manifest, manifestDir) {
   }
   return {code: null, budget: componentwiseMax(basis.host_rules)};
 }
+// 客户端适配是具名登记项：先核声明形状，再核实现侧（登记的来源文件及其生成字节）能对上声明。
+// 只校验已有字段，不新增字段或验收面。
+function validateClientAdapter(manifest, expected) {
+  const adapter = manifest.client_adapter;
+  if (adapter === undefined || adapter === null) return {code: "CLIENT_ADAPTER_MISSING", detail: "client_adapter is missing"};
+  if (typeof adapter !== "object" || Array.isArray(adapter)) return {code: "CLIENT_ADAPTER_INVALID", detail: "client_adapter must be an object"};
+  if (!safeRelative(adapter.source)) return {code: "CLIENT_ADAPTER_INVALID", detail: "client_adapter.source must be a relative path"};
+  if (!text(adapter.gateway_class)) return {code: "CLIENT_ADAPTER_INVALID", detail: "client_adapter.gateway_class is missing"};
+  for (const key of ["read", "write"]) {
+    if (!adapter.methods || typeof adapter.methods !== "object" || !text(adapter.methods[key])) {
+      return {code: "CLIENT_ADAPTER_INVALID", detail: `client_adapter.methods.${key} is missing`};
+    }
+    const endpoint = adapter.endpoints && typeof adapter.endpoints === "object" ? adapter.endpoints[key] : null;
+    if (!text(endpoint) || !/^(GET|POST|PUT|PATCH|DELETE) \/\S+$/.test(endpoint)) {
+      return {code: "CLIENT_ADAPTER_INVALID", detail: `client_adapter.endpoints.${key} must read "<METHOD> /path"`};
+    }
+  }
+  if (!text(adapter.handler) || !adapter.handler.startsWith("#")) {
+    return {code: "CLIENT_ADAPTER_INVALID", detail: "client_adapter.handler must be an id selector"};
+  }
+  if (adapter.generated !== "copied-without-modification") {
+    return {code: "CLIENT_ADAPTER_INVALID", detail: "client_adapter.generated must be copied-without-modification"};
+  }
+  if (adapter.runtime_injection !== false) {
+    return {code: "CLIENT_ADAPTER_INVALID", detail: "client_adapter.runtime_injection must be false"};
+  }
+  const registered = manifest.files.filter((file) => file && file.source === adapter.source);
+  if (registered.length !== 1) {
+    return {code: "CLIENT_ADAPTER_MISSING", detail: `client_adapter.source is not a registered file: ${adapter.source}`};
+  }
+  const file = registered[0];
+  if (file.mode !== "copy") {
+    return {code: "CLIENT_ADAPTER_MISMATCH", detail: `client_adapter.source is registered as ${String(file.mode)}, not an unmodified copy`};
+  }
+  const entry = expected.get(file.target);
+  const sourceText = entry ? entry.bytes.toString("utf8") : "";
+  if (!sourceText.includes(`class ${adapter.gateway_class}`)) {
+    return {code: "CLIENT_ADAPTER_MISMATCH", detail: `declared gateway class is not implemented: ${adapter.gateway_class}`};
+  }
+  for (const key of ["read", "write"]) {
+    const method = adapter.methods[key];
+    const methodPattern = new RegExp(`(^|[^\\w$])${method.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\(`, "m");
+    if (!methodPattern.test(sourceText)) {
+      return {code: "CLIENT_ADAPTER_MISMATCH", detail: `declared adapter method is not implemented: ${method}`};
+    }
+    const staticPath = adapter.endpoints[key].split(/\s+/)[1].split("/:")[0] || "/";
+    if (!sourceText.includes(staticPath)) {
+      return {code: "CLIENT_ADAPTER_MISMATCH", detail: `declared endpoint is not implemented: ${adapter.endpoints[key]}`};
+    }
+  }
+  if (!sourceText.includes(adapter.handler)) {
+    return {code: "CLIENT_ADAPTER_MISMATCH", detail: `declared handler is not implemented: ${adapter.handler}`};
+  }
+  return null;
+}
 function validateNormalization(manifest) {
   if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) return {code: "MANIFEST_INVALID", detail: "manifest must be an object"};
   if (manifest.schema_version !== "1.0.0") return {code: "MANIFEST_INVALID", detail: "schema_version must be 1.0.0"};
@@ -395,6 +450,8 @@ export function checkManifest(manifestPath, {designRoot, output, mode = "check"}
     bytes = Buffer.from(result.text);
     expected.set(file.target, {file, bytes, selectors: null});
   }
+  const adapterIssue = validateClientAdapter(manifest, expected);
+  if (adapterIssue) return fail(adapterIssue.code, adapterIssue.detail);
   const htmlEntry = [...expected.entries()].find(([target]) => /\.html$/.test(target));
   if (!htmlEntry) return fail("MANIFEST_INVALID", "no generated html target");
   const htmlSet = htmlClasses(htmlEntry[1].bytes.toString("utf8"));
