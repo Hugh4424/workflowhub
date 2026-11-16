@@ -136,8 +136,13 @@ function missingParents(directory, base) {
 /** Inspect one host skill-directory link against the package skills root. */
 export function inspectSkillLink(link, skillsRoot) {
   const target = dirname(link);
-  const content = relative(target, skillsRoot);
-  if (content === "") throw fail("TARGET_UNSAFE", `skills root equals its own link path: ${link}`, { path: link });
+  // Normalize both ends through realpath-of-existing-prefix before computing
+  // the relative link: a purely lexical relative path across filesystem aliases
+  // (macOS /var vs /private/var) produces a link that does not resolve.
+  const normalizedParent = realpathOfExistingPrefix(target);
+  const normalizedSkillsRoot = realpathOfExistingPrefix(skillsRoot);
+  if (normalizedParent === normalizedSkillsRoot) throw fail("TARGET_UNSAFE", `skills root equals its own link path: ${link}`, { path: link });
+  const content = relative(normalizedParent, normalizedSkillsRoot);
   let stat;
   try { stat = lstatSync(link); }
   catch (error) {
@@ -150,11 +155,12 @@ export function inspectSkillLink(link, skillsRoot) {
   }
   const existing = readlinkSync(link);
   const resolvedExisting = resolve(target, existing);
-  if (resolvedExisting === resolve(skillsRoot)) return Object.freeze({ state: "noop", link_content: content, existing });
+  const normalizedExisting = realpathOfExistingPrefix(resolvedExisting);
+  if (normalizedExisting === normalizedSkillsRoot) return Object.freeze({ state: "noop", link_content: content, existing });
   // Only ENOENT is a genuinely broken link. ELOOP/EACCES/ENOTDIR/EIO mean the
   // target is unreachable, not absent: never delete or rebuild the user link.
   let targetState = "exists";
-  try { statSync(resolvedExisting); }
+  try { statSync(normalizedExisting); }
   catch (error) { targetState = error.code ?? "UNKNOWN"; }
   if (targetState === "ENOENT") {
     return Object.freeze({ state: "replace-broken", link_content: content, existing, broken_target: resolvedExisting });
@@ -366,6 +372,19 @@ export async function applySkillLink(action, { skillsRoot, base } = {}) {
       if (current.state === "conflict") return { ...action, status: "conflict", reason: current.reason };
       if (current.state === "replace-broken") replaceBrokenSymlink(action.path, current.existing);
       symlinkSync(current.link_content, action.path);
+      const created = lstatSync(action.path);
+      try {
+        const realSkills = realpathSync(skillsRoot);
+        const resolvedLink = realpathSync(action.path);
+        const realRelative = relative(realSkills, resolvedLink);
+        if (realRelative !== "" && (realRelative.startsWith("..") || isAbsolute(realRelative))) {
+          throw fail("LINK_TARGET_OUTSIDE", `created link does not resolve inside ${skillsRoot}: ${resolvedLink}`, { path: action.path });
+        }
+      } catch (error) {
+        const currentLink = lstatSync(action.path, { throwIfNoEntry: false });
+        if (currentLink && currentLink.ino === created.ino) unlinkSync(action.path);
+        throw error;
+      }
       return { ...action, status: "created", link_content: current.link_content };
     });
   } catch (error) {

@@ -507,6 +507,26 @@ describe("C10 P2 onboarding CLI black box", () => {
     expect(JSON.stringify(result.json.config.problems)).toContain("CONFIG_WH_REVIEW_ROUTE_INVALID");
   });
 
+  it("builds a resolving link when the release root and host directory use different real aliases", () => {
+    const f = fixture();
+    // macOS exposes /private/var as /var; use the lexical alias for HOME while
+    // the release root keeps the real path, so a purely lexical relative link
+    // would point through the alias and dangle.
+    if (!f.root.startsWith("/private/var/")) return;
+    const aliasHome = join("/var", f.root.slice("/private/var/".length), "home");
+    const result = spawnSync(process.execPath, [CLI, "--apply", `--package-root=${f.packageRoot}`], {
+      env: { ...process.env, ...f.env, HOME: aliasHome }, encoding: "utf8", timeout: 60000,
+    });
+    expect(result.status, result.stderr).toBe(0);
+    const link = join(aliasHome, ".claude", "skills");
+    expect(lstatSync(link).isSymbolicLink()).toBe(true);
+    let resolved;
+    try { resolved = realpathSync(link); }
+    catch { resolved = null; }
+    expect(resolved).not.toBeNull();
+    expect(resolved).toBe(realpathSync(join(f.packageRoot, "runner", "skills")));
+  });
+
   it("rejects ambiguous arguments before touching any target", () => {
     const f = fixture();
     const before = snapshot(f.home);
