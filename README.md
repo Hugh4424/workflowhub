@@ -1,6 +1,8 @@
 # workflowhub
 
-给命令行 AI 助手（Claude Code、Codex CLI）复用的开发工作流编排工具：把需求收敛、计划、实施和独立审查按阶段固定下来，并把方法、技能和运行时一起打包。版本以发布根 `release.json` 的 `version` 为准；支持到哪、哪些还没验证，只读[发布支持矩阵](docs/release-support-matrix.md)和[外部工具兼容矩阵](docs/external-skills-compat-matrix.md)，本文件不另写一套版本结论。
+给命令行 AI 助手（Claude Code、Codex CLI）复用的开发工作流编排工具：把需求收敛、计划、实施和独立审查按阶段固定下来，并把方法、技能和运行时一起打包。版本以发布根 `release.json` 的 `version` 为准。
+
+支持到哪、哪些还没验证，权威一直在[发布支持矩阵](docs/release-support-matrix.md)和[外部工具兼容矩阵](docs/external-skills-compat-matrix.md)。本文件只**为"能不能开始"列一份关键数字**（版本下限、本机读数、许可状态），不另写一套版本结论，也不与矩阵分叉。
 
 这份文件写给**第一次拿到本项目的人**：照它做能装上、完成宿主接入、跑通一条真实命令；出错时能看懂提示并知道下一步。它同时服务两种入手方式——**源码检出**（能自己构建）和**别人给的发布文件夹**（只能装和接），两种位置的文件差集会逐处写明。
 
@@ -15,8 +17,8 @@
 | 项目 | 要求 | 说明 |
 | --- | --- | --- |
 | Node.js | **≥ 24** | 低于 24 会被前置检查直接拒绝（见[排障](#排障)）。本机实测 24.14.0；其它 24.x 行为未验证。 |
-| git | 未声明版本下限 | 只有安装 runner 时用到（`git init/add/commit`），接入命令本身不需要。 |
-| npm | 随 Node 安装，未声明版本下限 | 只有安装 runner 时用到（`npm ci`），接入命令本身不需要。 |
+| git | 未声明版本下限 | 只有安装 runner 时用到（`git init/add/commit`），接入命令本身不需要。缺它时步骤 2 会在 Git 初始化那步失败：`runner Git identity setup failed: spawnSync git ENOENT`（实测）。 |
+| npm | 随 Node 安装，未声明版本下限 | 只有安装 runner 时用到（`npm ci`），接入命令本身不需要。缺它时步骤 2 会在依赖安装步失败：`runner clean install failed: spawnSync npm ENOENT`（实测）。 |
 | open-code-review（`ocr`） | **≥ 1.12.9** | 代码审查必需；低于下限或探针失败按 `not_installed`/`unavailable` 报告，不换替代执行者。本机 1.13.10。 |
 | ego-browser | 未声明支持区间 | 浏览器动作必需。本机只读元数据 0.6.2.9（guide 2.2.0），catalog 记 0.6.0.16（旧值），官方样例 0.6.3.6——三个值分列，**不构成 `>=` 区间**。 |
 | anysearch | 需要 key | 搜索动作必需；缺 `ANYSEARCH_API_KEY` 按缺失报告，不静默走匿名。 |
@@ -41,6 +43,8 @@ node --version
 | 工具 | 安装来源 | 自检 |
 | --- | --- | --- |
 | open-code-review（`ocr`） | `npm install -g @alibaba-group/open-code-review`（npm 上最新为 1.13.10 一线，要求 ≥ 1.12.9） | `ocr --version` |
+| git | 官方安装页 <https://git-scm.com/downloads>，或用你系统上的包管理器装；装完新开终端 | `git --version` |
+| npm | 随 Node 一起装（见上面的 Node 来源）；不需要单独装 | `npm --version` |
 | ego lite | <https://github.com/citrolabs/ego-lite>（MIT），装好后 `ego-browser` 应在 PATH；已装在别处就用 `EGO_BROWSER_BIN` 指到 helper | `--check` 的 `tools.ego` 不再是 missing |
 | anysearch | 不用装：CLI 随包在 `<release-root>/runner/skills/anysearch/scripts/anysearch_cli.js`；只需要在执行搜索动作的 shell 里设 `ANYSEARCH_API_KEY` | `--check` 的 `tools.anysearch` 变成 ok |
 
@@ -71,7 +75,7 @@ test -f release.json && echo "发布文件夹" || echo "源码检出"
 判据只有一条：**发布文件夹带 `release.json`、`runner/`、`skill-bundle/`；源码检出带 `runtime/`、`tests/`、`specs/`，没有 `release.json` 也没有 `runner/`。**
 
 - **你有源码检出**：自己构建并安装，步骤 1、2、3 全走。
-- **你只拿到别人给的发布文件夹**：确认对方已经执行过步骤 2。这是**人工确认项，不是自动门**——只剩 1 个技能时 `--check` 照样 exit 0（实测），所以别拿 exit code 当"装好了"的证据。自己数：`ls -A <release-root>/runner/skills` 装好后应是 43 个条目，其中 40 个是含 `SKILL.md` 的技能目录；`--check` 输出的 `skills` 数组就是这 40 个。没装过的包里只有 `resolving-merge-conflicts` 一个完整技能。确认完直接做步骤 3。
+- **你只拿到别人给的发布文件夹**：确认对方已经执行过步骤 2。这是**人工确认项，不是自动门**——技能不全时 `--check` 照样 exit 0（实测只剩 1 个技能时也是 exit 0），别拿 exit code 当"装好了"的证据。自己数：`ls -A <release-root>/runner/skills | wc -l` 得到条目数，再看这些条目里有几个是含 `SKILL.md` 的技能目录；装前只会有 `resolving-merge-conflicts` 一个完整技能，装后 `--check` 的 `skills` 数组会明显变长。准确数以你自己那次的输出为准。确认完直接做步骤 3。
 
 另外，发布根里本来就有 `.claude/skills`、`.agents/skills` 两条符号链接（指向 `../runner/skills`），是打包时建给"直接把发布包当技能目录加载"的宿主用的：装之前它们指向的目录只有本包自带的少量支撑文件，装着之后才是完整的技能集。它们**不是**你 HOME 下那两条接入链接，不需要你创建，也不要用去替换 HOME 里的。
 
@@ -95,7 +99,7 @@ node --input-type=module -e 'import { installRunnerRelease } from "./runtime/dis
 
 它会依次：把 `skill-bundle` 的文件复制进 `runner/`，在 `runner/` 里执行 `npm ci --ignore-scripts --omit=dev`，再执行 `git init/add/commit`。需要 npm、git 和能取到依赖的网络。
 
-预期输出形如 `{"status":0,"npm":"added 7 packages ..."}`，exit 0。`npm` 那段文本随 npm 版本与依赖缓存变化（可能很长、含换行），**判据是 `status` 为 0**，再加下面这个计数：`runner/skills` 变成 43 个条目 —— 40 个含 `SKILL.md` 的技能目录，加 `catalog.yaml`、`external/`、`third-review/`；`--check` 的 `skills` 数组正好是那 40 个技能。
+预期输出形如 `{"status":0,"npm":"added 7 packages ..."}`，exit 0。`npm` 那段文本随 npm 版本与依赖缓存变化（可能很长、含换行），**判据是 `status` 为 0**。装没装成看两个数：`ls -A <release-root>/runner/skills | wc -l` 的条目数（装前是个位数，装后会明显变大），以及 `--check` 输出里 `skills` 数组的长度；本文件不复制这两个数，以你自己那次的输出为准。
 
 同一个 `runner/` 不要装第二次：会以 `EEXIST: ... runner/.gitignore` 失败。要重装就重新构建一个新的发布目录。
 
@@ -108,6 +112,10 @@ node tools/cli/onboard-release.mjs --check --package-root=<release-root>
 node tools/cli/onboard-release.mjs --dry-run --package-root=<release-root>
 node tools/cli/onboard-release.mjs --apply --package-root=<release-root>
 ```
+
+（这里写的是**在发布根目录**、用包里那份入口的形式；如果你在源码检出根目录，同一条命令换成 `node tools/cli/onboard-release.mjs …` 即可，两个位置的相对路径相同。）
+
+链接是**相对符号链接**：发布根和目标目录要用同一种真实路径写法。macOS 上 `/tmp` 是指向 `private/tmp` 的符号链接，一边写 `/tmp/...`、另一边写 `/private/tmp/...` 会算出错位的相对路径（实测出现断链）；两边统一写法（都用 `/tmp` 或都用 `/private/tmp`）就正常。
 
 三条命令看同一份计划，只读程度依次递减：
 
@@ -126,7 +134,7 @@ node tools/cli/onboard-release.mjs --apply --package-root=<release-root>
 **什么算"接入完成"**——分作用域看：
 
 - **用户作用域**（不带 `--target`）四条：① `--apply` exit 0；② `summary` 里只有 `created` 和 `noop`；③ `readlink -f <home>/.claude/skills <home>/.agents/skills` 两条都解析到同一个 `<release-root>/runner/skills`；④ 再跑一次 `--apply` 得到 `noop 3`。
-- **项目作用域**（带 `--target`）：三条可自动判——① `--apply` exit 0；② `summary` 只有 `created`/`noop`/`report-only`，没有 `conflict`/`failed`/`blocked`；③ 再跑一次得到 **`noop 2` + `report-only 1`**（项目级不会像用户作用域那样出现 `noop 3`，因为全局配置那项恒为 `report-only`）。链接自检同样用 `readlink -f <target>/.claude/skills <target>/.agents/skills`。
+- **项目作用域**（带 `--target`）：三条可自动判——① `--apply` exit 0；② `summary` 只有 `created`/`noop`/`report-only`，没有 `conflict`/`failed`/`blocked`；③ 再跑一次得到 **`noop 2` + `report-only 1`**（项目级不会像用户作用域那样出现 `noop 3`，因为全局配置那项恒为 `report-only`）。链接自检同样用 `readlink -f <target>/.claude/skills <target>/.agents/skills`。前提是先有一份**通过配置校验**的用户配置；否则第①条就过不了（`blocked 3`）。这里同样只是"接好了"，不是"能跑审查"。
 
 **四层状态别读混**：输出里同时有 `required`、`tools`、`review_readiness`、`blocking`，各自的含义不同：
 
@@ -140,11 +148,11 @@ node tools/cli/onboard-release.mjs --apply --package-root=<release-root>
 
 所以：`tools` 是 blocked（例如没设 `ANYSEARCH_API_KEY`）、`review_readiness` 是 blocked（静态模式不探测版本，`ocr` 恒为 `unknown`），接入仍然可以 exit 0；反过来，`--package-root` 指错时 `required` 仍是 `ready`（它只看 node 和 config），但 `blocking` 里有 `LAYOUT_MISSING`，所以 exit 1。**判断以 `blocking` 和 exit code 为准，不要只看 `required`**；配置本身有问题时也一样——`required` 可能还是 `ready`，但 `config.status` 是 `blocked` 且进了 `blocking`。
 
-**接入完成 ≠ 能跑审查**：`--check` **不校验 3rd-review broker 配置是否存在**。实测把 `third_review.config` 指向一个不存在的文件，`--check` 照样 exit 0；问题只出现在 `review_readiness` 里（`provider_config`、`provider` 变 `missing`，code `PROVIDER_CONFIG_NOT_FOUND`）。所以"接入完成"只说明宿主链接和 WorkflowHub 配置就位；要判断审查能不能跑，看 `review_readiness.checks` 里的 `provider_config`/`provider`/`route`，不是看 exit code。
+**接入完成 ≠ 能跑审查**：先把两个说法定死——**通过配置校验** = `required.config` 为 ok（WorkflowHub 配置存在、路径与形状合格）；**能跑审查** = `review_readiness` 里 `provider_config`/`provider`/`route`/`ocr` 都不缺（broker 配置真实存在、provider 可执行、路由已配、ocr 版本达标）。`--check` **不校验 3rd-review broker 配置是否存在**：实测把 `third_review.config` 指向一个不存在的文件，`--check` 照样 exit 0（配置"通过校验"），问题只出现在 `review_readiness` 里（`provider_config`、`provider` 变 `missing`，code `PROVIDER_CONFIG_NOT_FOUND`）。所以"接入完成"只说明宿主链接和 WorkflowHub 配置就位；要判断审查能不能跑，看 `review_readiness.checks` 里的 `provider_config`/`provider`/`route`，不是看 exit code。
 
 可选作用域与选项：
 
-- `--target=<绝对路径项目目录>`：项目内接入，只在该目录下写 `.claude/skills`、`.agents/skills`；全局配置只报告不修改（`"status": "report-only"`）。目标目录不存在会以 `LAYOUT_MISSING` 失败，先建好目录。
+- `--target=<绝对路径项目目录>`：项目内接入，只在该目录下写 `.claude/skills`、`.agents/skills`；全局配置只报告不修改（`"status": "report-only"`）。目标目录不存在会以 `LAYOUT_MISSING` 失败，先建好目录。**项目级仍然需要一份"通过配置校验"的用户配置**（HOME 或 `XDG_CONFIG_HOME` 下那一份）：没有它，`--apply --target=…` 直接 exit 1、`"summary": {"blocked": 3}`（两条链接 + 配置，`CONFIG_MISSING`）。"通过配置校验"只表示结构合格（`required.config` 为 ok），**不等于能跑审查**——后者要另外看 `review_readiness`（见下文）。
 - `--write-config`：允许补全配置里缺失的非敏感骨架（见[配置](#配置)）。
 - `--source-version=<semver>` 或 `--source-package=<绝对路径>`：报告版本三态（有更新 / 无更新 / 无法检查）。两个不能同时给。
 
@@ -175,7 +183,14 @@ node tools/cli/onboard-release.mjs --apply --package-root=<release-root>
    ```
 
    第二个宿主同理（`~/.agents/skills` 各自独立，一个改名不影响另一个）。旧技能仍在 `skills.bak-20261117` 里，随时可以取回。
-2. **不想动 HOME：走项目级**——在项目根执行 `--apply --target=<项目根>`，只在该项目的 `.claude/skills`、`.agents/skills` 建链接，HOME 下已有的技能目录和链接都不会被碰。但**项目级仍然需要一份可用的用户配置**（就是[配置](#配置)那一份）：HOME 下没有配置时，`--apply --target=…` 会 exit 1、`"summary": {"blocked": 3}`（两条链接 + 配置，`CONFIG_MISSING`）。所以先用配置节把配置建好（或设好 `XDG_CONFIG_HOME`），再做项目级。项目里若已有同名目录，同样会判 conflict，处理方式同上。
+2. **不想动 HOME：走项目级**——只在指定项目的 `.claude/skills`、`.agents/skills` 建链接，HOME 下已有的技能目录和链接都不会被碰：
+
+   ```bash
+   node tools/cli/onboard-release.mjs --apply --package-root=<release-root> --target=<项目根>          # 在源码检出根目录
+   node <release-root>/tools/cli/onboard-release.mjs --apply --package-root=<release-root> --target=<项目根>   # 在发布包内
+   ```
+
+   但**项目级仍然需要一份通过配置校验的用户配置**（就是[配置](#配置)那一份）：HOME 下没有配置时，`--apply --target=…` 会 exit 1、`"summary": {"blocked": 3}`（两条链接 + 配置，`CONFIG_MISSING`）。所以先用配置节把配置建好（或设好 `XDG_CONFIG_HOME`），再做项目级——注意"通过配置校验"只表示结构合格，不等于能跑审查。项目里若已有同名目录，同样会判 conflict，处理方式同上。
 3. **维持现状**：保留现有目录、不接入这个包。这样没有冲突，但这个包也不会被宿主加载。
 
 自检：`readlink -f ~/.claude/skills` 应打印以 `<release-root>/runner/skills` 结尾的真实路径（前面怎么绕无关，落到 `runner/skills` 就对）。要退回原状：删掉新链接，把备份目录改名回 `skills`。
@@ -248,16 +263,20 @@ node tools/cli/build-skill-manifests.mjs --check
 
 | 值 | 从哪来 |
 | --- | --- |
-| `command` | 本仓源码检出的 `skills/third-review/scripts/3rd-review.mjs`；版本与来源以 `skills/catalog.yaml`（发布包内为 `runner/skills/catalog.yaml`）的 `third-review` 条目为准（本条目只记来源 commit，没有公开 URL，所以交付方式就是源码检出整目录）。 |
+| `command` | 指向 **broker 目录**里的 `scripts/3rd-review.mjs`，写成 `["node", "<broker 目录>/scripts/3rd-review.mjs"]`；只写目录名不行。broker 目录怎么来见下一小节；版本与来源以 `skills/catalog.yaml`（发布包内为 `runner/skills/catalog.yaml`）的 `third-review` 条目为准。 |
 | `config` | 3rd-review 自己的配置（例如 `$HOME/.config/3rd-review/config.json`）。从源码检出 `skills/third-review/config.example.json` 复制起步，至少填 `runtime.root`、`attachment_roots`、`providers`、`tiers`；每个 provider 的 `command` 必须是存在且可执行的 CLI。 |
 | `attachment_root` | 必须是上面那份 3rd-review 配置里 `attachment_roots[].root` 之一，且该条目的 `sources` 要包含 `.wh-review-packets`，否则 `--check` 的 `review_readiness.provider` 会报 `fixed packet source .wh-review-packets is not allowlisted`。 |
 
-**发布包里的 `runner/skills/third-review/` 只有支撑库**（`lib/`），没有 `scripts/3rd-review.mjs`，也没有 `config.example.json`——它只够别的运行时校验 provider ID，不能当 broker 用。要跑审查，broker 必须从源码检出的 `skills/third-review/` 整目录取。
+**发布包里的 `runner/skills/third-review/` 只有支撑库**（`lib/`），没有 `scripts/3rd-review.mjs`，也没有 `config.example.json`——它只够别的运行时校验 provider ID，不能当 broker 用。
 
-改完用 broker 自检（不联网、不跑真实审查）：
+#### 没有源码检出时怎么拿到 broker
+
+**当前没有公开下载地址或 tag 可给**：catalog 的 `third-review` 条目只记了 `local_version` 和来源 commit，没有记录可访问的仓库地址；发布包也不带它。所以唯一的取得方式是**向持有源码检出的交付方索取 `skills/third-review/` 整目录**（整目录，别只拿 `lib/`）。
+
+收到的目录应包含：`package.json`、`scripts/3rd-review.mjs`、`config.example.json`、`lib/`、`LICENSE`，以及 `skill-bundle.json`（它列了该技能应当包含的文件清单，可拿来点数核对）。拿到后先自检，exit 0 才算可用：
 
 ```bash
-node <源码检出>/skills/third-review/scripts/3rd-review.mjs doctor --config=<你的 3rd-review 配置> --attachments-root=<attachment_root>
+node <broker 目录>/scripts/3rd-review.mjs doctor --config=<你的 3rd-review 配置> --attachments-root=<attachment_root>
 ```
 
 看到 `"attachment_root": {"status": "ready"}` 和 provider 的 `"status": "ready"` 就算这一层通了。注意它自己的说明：`doctor does not verify model authentication or a real review` —— provider 只证"可执行文件在"，不证模型能跑通。
@@ -307,7 +326,7 @@ node <源码检出>/skills/third-review/scripts/3rd-review.mjs doctor --config=<
 | `CONFIG_THIRD_REVIEW_*` | `third_review` 段缺失/不是对象/`command` 或 `config` 或 `attachment_root` 不合法，逐项点名 |
 | `CONFIG_WH_REVIEW_VERSION_UNSUPPORTED` | 顶层 `wh_review` 不是 version 2：`... must be version 2; the original file is preserved and no migration is performed` |
 | `CONFIG_WH_REVIEW_RETIRED_FIELD` / `CONFIG_WH_REVIEW_UNKNOWN_KEY` | **只在顶层 `wh_review`**：用了退役字段（`profiles`、`priority`）或未知键 |
-| `CONFIG_WH_REVIEW_ROUTE_INVALID` | 单条路由或阶段键不对（阶段名非法、`make-decision` 扁平、`mode` 不匹配），顶层形状问题不会用这个 code |
+| `CONFIG_WH_REVIEW_ROUTE_INVALID` | 路由形状不对：单条路由、阶段键、`mode`，以及 `stages`/`non_stage` 本身不是对象（实测消息 `workflowhub host wh_review.stages must be an object`）都用这个 code |
 | `CONFIG_SYMLINK_DANGLING` | 配置文件是一条指向不存在目标的符号链接 |
 
 v1 不会被自动迁移；任何一项不合格都保持 exit 1，你的字节原样保留。
@@ -346,7 +365,7 @@ cp "<config>.bak-<UTC 时间戳>-<8 位随机>" "<config>"
 
 **项目作用域**（`--target` 建的链接）：
 
-- **更新**：重建发布包后，**带着同一个 `--target`** 重跑 `--apply`。旧链接仍指向旧目录，会判 `conflict`（`already links to a different live target`），先删掉 `<target>/.claude/skills`、`<target>/.agents/skills` 再跑。
+- **更新**：重建发布包后，**带着同一个 `--target`** 重跑 `--apply`（命令形式同上一节，加上 `--target=<项目根>`；包的入口在 `<release-root>/tools/cli/onboard-release.mjs`）。旧链接仍指向旧目录，会判 `conflict`（`already links to a different live target`），先删掉 `<target>/.claude/skills`、`<target>/.agents/skills` 再跑。
 - **卸载**：删 `<target>/.claude/skills`、`<target>/.agents/skills` 两条链接即可；HOME 下的链接不受影响（如果之前没建过，本来也没有）。全局配置不属于项目作用域，不会因此改动。
 
 ## 排障
@@ -381,14 +400,18 @@ cp "<config>.bak-<UTC 时间戳>-<8 位随机>" "<config>"
 1. **真实远端发布未验证**。版本检查只比"已装 `runner` 版本"和"你显式给的来源版本"，三态是：有更新、无更新、无法检查；不联网、不猜。不给 `--source-version`/`--source-package` 就是"无法检查"（`status: unavailable`）。
 2. **Ego 的版本支持子面仍是 unknown**。本机 0.6.2.9、catalog 的 0.6.0.16、官方样例 0.6.3.6 三个值按各自来源分列，不连接成 `>=` 区间，也不互相覆盖；真实支持区间与不兼容版本未取得。
 3. **provider 缺 key / 401 / 额度不足属于权限或环境事实**，不是版本或协议负例；矩阵里对应的"未知"保持 unknown，不改写成兼容结论。
-4. **裸 wh-review 脚本默认读 `$HOME/.config/workflowhub/config.json`，忽略 `XDG_CONFIG_HOME`**。自定义 XDG 时请走 WorkflowHub 入口，它会用 `workflowHubConfigPath()` 解析（尊重 XDG）并把真实路径显式传给审查配置加载器：
+4. **裸 wh-review 脚本默认读 `$HOME/.config/workflowhub/config.json`，忽略 `XDG_CONFIG_HOME`**。自定义 XDG 时请走 WorkflowHub 入口，它会用 `workflowHubConfigPath()` 解析（尊重 XDG）并把真实路径显式传给审查配置加载器。入口在两种位置各有一份：
+
+   - 源码检出根：`tools/cli/stage-runtime.mjs`
+   - 发布包内：`<release-root>/runner/tools/cli/stage-runtime.mjs`（**发布根的 `tools/cli/` 只有 `onboard-release.mjs`**，没有这个文件）
 
    ```bash
-   node tools/cli/stage-runtime.mjs --help     # 列出 behaviors 与各自允许的 --action=
-   node tools/cli/stage-runtime.mjs doctor --action=workspace --stage=build-code --project=<项目名> --task=<任务 id>
+   <入口> --help     # 列出 behaviors 与各自允许的 --action=
+   <入口> doctor --action=workspace --stage=build-code --project=<项目名> --task=<任务 id>
+   <入口> review --action=record --stage=build-code --project=<项目名> --task=<任务 id> --input=<review request.json>
    ```
 
-   其余行为同形（`status`/`run`/`review`/`verify`/`confirm`/`authorize`，每个必须带且只带一个 `--action=`）。注意 `--project` 要的是**项目名**（单个路径段，例如 `workflowhub`），不是项目路径——传绝对路径会报 `project_name must be a safe single path segment`。裸脚本 `skills/wh-review/scripts/*.mjs` 仍是读 HOME 的那条路。
+   `doctor --action=workspace` 是只读自检（实测 exit 0）；`review --action=record` 会**真的派发一次审查并落记录**（本任务没有执行，别拿它当试跑）。`--input` 指向一份 review request JSON，是必填项（缺了会报 `review-record requires --input`）。这两条要在**任务 worktree 里**跑：当前目录和任务声明的 workspace 不一致会报 `CURRENT_WORKTREE_MISMATCH: declared task workspace differs from cwd`（实测）。其余行为同形（`status`/`run`/`verify`/`confirm`/`authorize`，每个必须带且只带一个 `--action=`）。注意 `--project` 要的是**项目名**（单个路径段，例如 `workflowhub`），不是项目路径——传绝对路径会报 `project_name must be a safe single path segment`。裸脚本 `skills/wh-review/scripts/*.mjs` 仍是读 HOME 的那条路。
 5. **宿主发现与真实调用未验证**。链接、check/dry-run/apply、二次 no-op、冲突与断链保护都已验证；但真实 Claude Code / Codex CLI 的发现与调用、多 24.x Node 行为、Windows 都留给最终安装验证，本文件不声称通过。
 6. **安装器和 3rd-review broker 都只在源码检出里**：发布文件夹不含 `runtime/distribution/runner-release.mjs`；也不含完整的 `skills/third-review/`，包内 `runner/skills/third-review/` 只有 `lib/` 支撑库，没有 `scripts/3rd-review.mjs`、没有 `config.example.json`。只拿到发布文件夹时，让交付方先完成步骤 2，broker 须自己从源码检出取。
 7. **审查就绪不等于审查可用**：`--check` 的 `review_readiness` 只证明结构、路径与可执行文件在；`doctor` 也明说 `does not verify model authentication or a real review`。**本发布没有任何一个 provider/model 被验证过可用**：矩阵里列出的路由是当前使用者的配置事实，不是产品默认值，也不是可用性承诺；provider 的账号、额度、登录状态归 3rd-review owner，缺 key/401/额度不足属于权限与环境事实，本文件与矩阵都不声称通过。
