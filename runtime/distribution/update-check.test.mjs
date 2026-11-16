@@ -32,7 +32,17 @@ describe("ORACLE-VERSIONED-RELEASE semantic versions", () => {
     expect(compareSemver("1.0.0-alpha", "1.0.0-beta")).toBe(-1);
     expect(compareSemver("1.0.0+build.7", "1.0.0")).toBe(0);
     expect(parseSemver("1.12.9")).toMatchObject({ major: 1, minor: 12, patch: 9, prerelease: [] });
-    for (const invalid of ["1.0", "v1.0.0", "01.0.0", "", null, "1.0.0.0"]) expect(parseSemver(invalid)).toBeNull();
+    // SemVer 2.0.0: numeric prerelease identifiers must not carry leading zeros;
+    // "0" alone is legal, and alphanumeric identifiers stay legal. In
+    // "1.0.0-alpha.01" the final "01" is a numeric identifier, so the version is
+    // invalid even though "alpha" itself is alphanumeric.
+    for (const invalid of ["1.0", "v1.0.0", "01.0.0", "", null, "1.0.0.0", "1.0.0-01", "1.0.0-00", "1.0.0-alpha.01"]) {
+      expect(parseSemver(invalid), String(invalid)).toBeNull();
+    }
+    for (const valid of ["1.0.0-0", "1.0.0-alpha", "1.0.0-alpha1", "1.0.0-beta-1", "1.0.0-0.1"]) {
+      expect(parseSemver(valid), String(valid)).not.toBeNull();
+    }
+    expect(compareSemver("1.0.0-0", "1.0.0-alpha")).toBe(-1);
   });
 });
 
@@ -53,6 +63,19 @@ describe("ORACLE-VERSIONED-RELEASE update three states", () => {
     const ahead = checkForUpdate({ installedVersion: "1.2.0", sourceVersion: "1.1.9", source: "package.json@source" });
     expect(ahead).toMatchObject({ status: "up_to_date", installed_version: "1.2.0", source_version: "1.1.9" });
     expect(ahead.reason).toMatch(/ahead/);
+  });
+
+  it("treats a leading-zero numeric prerelease as invalid instead of up_to_date", () => {
+    const installedInvalid = checkForUpdate({ installedVersion: "1.0.0-01", sourceVersion: "1.0.0" });
+    expect(installedInvalid).toMatchObject({ status: "unavailable", code: "VERSION_INVALID", installed_version: "1.0.0-01" });
+    const sourceInvalid = checkForUpdate({ installedVersion: "1.0.0", sourceVersion: "1.0.0-00" });
+    expect(sourceInvalid).toMatchObject({ status: "unavailable", code: "VERSION_INVALID", source_version: "1.0.0-00" });
+    const bothInvalid = checkForUpdate({ installedVersion: "1.0.0-00", sourceVersion: "1.0.0-00" });
+    expect(bothInvalid.status).toBe("unavailable");
+    const zero = checkForUpdate({ installedVersion: "1.0.0-0", sourceVersion: "1.0.0-0" });
+    expect(zero).toMatchObject({ status: "up_to_date", installed_version: "1.0.0-0" });
+    const ahead = checkForUpdate({ installedVersion: "1.0.0-0", sourceVersion: "1.0.0-alpha" });
+    expect(ahead).toMatchObject({ status: "update_available", source_version: "1.0.0-alpha" });
   });
 
   it("reports unavailable for a missing, invalid or unreadable version instead of no update", () => {

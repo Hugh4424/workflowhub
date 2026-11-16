@@ -10,16 +10,26 @@ function versionError(message) {
   return Object.assign(new Error(message), { code: "VERSION_INVALID" });
 }
 
+// SemVer 2.0.0: a prerelease identifier made only of digits must not carry a
+// leading zero ("0" alone is allowed); mixed identifiers such as "alpha1" or
+// "beta-1" stay alphanumeric. The coarse character class above cannot express
+// that, so the parsed identifiers are validated explicitly.
+function validPrereleaseIdentifiers(identifiers) {
+  return identifiers.every((identifier) => !/^\d+$/.test(identifier) || identifier === "0" || !identifier.startsWith("0"));
+}
+
 /** Parse a strict semantic version; build metadata is retained but ignored for precedence. */
 export function parseSemver(value) {
   if (typeof value !== "string") return null;
   const match = SEMVER.exec(value);
   if (!match) return null;
+  const identifiers = match[4] ? match[4].split(".") : [];
+  if (!validPrereleaseIdentifiers(identifiers)) return null;
   return Object.freeze({
     major: Number(match[1]),
     minor: Number(match[2]),
     patch: Number(match[3]),
-    prerelease: match[4] ? Object.freeze(match[4].split(".")) : Object.freeze([]),
+    prerelease: Object.freeze(identifiers),
     build: match[5] ?? null,
   });
 }
@@ -86,13 +96,14 @@ export function readPackageVersion(target) {
   return Object.freeze({ version: value.version.trim(), path: file });
 }
 
-function unavailable({ installedVersion, sourceVersion, source, reason }) {
+function unavailable({ installedVersion, sourceVersion, source, reason, code = null }) {
   return Object.freeze({
     status: "unavailable",
     installed_version: typeof installedVersion === "string" ? installedVersion : null,
     source_version: typeof sourceVersion === "string" ? sourceVersion : null,
     source: source ?? null,
     reason,
+    ...(code === null ? {} : { code }),
   });
 }
 
@@ -105,13 +116,13 @@ export function checkForUpdate({ installedVersion, sourceVersion, source = null 
     return unavailable({ installedVersion, sourceVersion, source, reason: "no installed version was provided; the installation is not readable" });
   }
   if (!parseSemver(installedVersion)) {
-    return unavailable({ installedVersion, sourceVersion, source, reason: `invalid installed version: ${String(installedVersion)}` });
+    return unavailable({ installedVersion, sourceVersion, source, reason: `invalid installed version: ${String(installedVersion)}`, code: "VERSION_INVALID" });
   }
   if (sourceVersion === undefined || sourceVersion === null || sourceVersion === "") {
     return unavailable({ installedVersion, sourceVersion, source, reason: "no explicit source version was provided; pass --source-version or --source-package" });
   }
   if (!parseSemver(sourceVersion)) {
-    return unavailable({ installedVersion, sourceVersion, source, reason: `invalid source version: ${String(sourceVersion)}` });
+    return unavailable({ installedVersion, sourceVersion, source, reason: `invalid source version: ${String(sourceVersion)}`, code: "VERSION_INVALID" });
   }
   const comparison = compareSemver(sourceVersion, installedVersion);
   if (comparison > 0) {
