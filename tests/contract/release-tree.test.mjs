@@ -371,21 +371,40 @@ describe('C10 P4 ORACLE-VERSIONED-RELEASE final composer', () => {
   });
 });
 
-function realProviderRoutes() {
+function readProviderFacts() {
   // The product owns no default provider route; the declared routes are the
   // current user configuration fact. Read them from the same config owner the
-  // runtime uses; absent/unreadable config means the case is explicitly skipped.
+  // runtime uses. Absent/unreadable config means the cases are explicitly
+  // skipped with a printed reason, never silently passed.
   try {
     const file = workflowHubConfigPath({ env: process.env, home: process.env.HOME ?? homedir() });
     const config = JSON.parse(fs.readFileSync(file, 'utf8'));
-    const routes = new Set();
-    const visit = (value) => {
-      if (Array.isArray(value)) { for (const item of value) if (typeof item === 'string' && /^[a-z][a-z0-9-]*\/[a-z][a-z0-9-]*$/.test(item)) routes.add(item); else visit(item); return; }
-      if (value && typeof value === 'object') for (const item of Object.values(value)) visit(item);
+    const placements = new Map();
+    const add = (stage, route) => {
+      if (!placements.has(route)) placements.set(route, new Set());
+      placements.get(route).add(stage);
     };
-    visit(config.wh_review);
-    return routes.size > 0 ? [...routes].sort() : null;
+    const walk = (stage, value) => {
+      if (Array.isArray(value)) {
+        for (const item of value) if (typeof item === 'string' && /^[a-z][a-z0-9-]*\/[a-z][a-z0-9-]*$/.test(item)) add(stage, item);
+        return;
+      }
+      if (!value || typeof value !== 'object') return;
+      for (const [key, next] of Object.entries(value)) if (key !== 'mode') walk(stage, next);
+    };
+    for (const [stage, value] of Object.entries(config.wh_review?.stages ?? {})) walk(stage, value);
+    for (const [stage, value] of Object.entries(config.wh_review?.non_stage ?? {})) walk(stage, value);
+    if (placements.size === 0) return null;
+    return {
+      routes: [...placements.keys()].sort(),
+      placements: Object.fromEntries([...placements].map(([route, stages]) => [route, [...stages].sort()])),
+    };
   } catch { return null; }
+}
+
+const providerFacts = readProviderFacts();
+if (providerFacts === null) {
+  console.warn('[C10 P4] current WorkflowHub provider routes are not readable; the per-route positive/executable-missing/id-missing and placement assertions are explicitly skipped (no pass claimed). Point HOME/XDG_CONFIG_HOME at the real config to run them.');
 }
 
 describe('C10 P4 fixed compatibility inputs for the declared tools and provider route', () => {
@@ -413,8 +432,8 @@ describe('C10 P4 fixed compatibility inputs for the declared tools and provider 
     expect(failing.status).toBe('unavailable');
   });
 
-  it.skipIf(realProviderRoutes() === null)('accepts every current review provider route and rejects that same route when undefined', () => {
-    const routes = realProviderRoutes();
+  it.skipIf(providerFacts === null)('asserts ok / executable-missing / id-missing fixed inputs for every current review provider route', () => {
+    const routes = providerFacts.routes;
     const root = path.join(temp.path, 'provider');
     const home = path.join(root, 'home');
     const bin = path.join(root, 'bin');
@@ -444,19 +463,25 @@ describe('C10 P4 fixed compatibility inputs for the declared tools and provider 
       expect(ready.checks.find((check) => check.id === 'provider'), `positive fixed input for ${route}`).toMatchObject({ status: 'ok' });
       writeBroker(routes, route);
       const missingExecutable = precheckForActions(['review-full'], { env, home, requestedStage: 'build-code' });
-      expect(missingExecutable.checks.find((check) => check.id === 'provider'), `missing executable fixed input for ${route}`).toMatchObject({ status: 'missing', code: 'PROVIDER_EXECUTABLE_NOT_FOUND' });
+      expect(missingExecutable.checks.find((check) => check.id === 'provider'), `missing executable fixed input for ${route}`).toMatchObject({
+        status: 'missing', code: 'PROVIDER_EXECUTABLE_NOT_FOUND', path: path.join(root, 'missing-provider-executable'),
+      });
       writeBroker(routes.filter((candidate) => candidate !== route));
       const rejected = precheckForActions(['review-full'], { env, home, requestedStage: 'build-code' });
       expect(rejected.checks.find((check) => check.id === 'provider'), `undefined provider fixed input for ${route}`).toMatchObject({ status: 'missing', code: 'PROVIDER_NOT_DEFINED' });
     }
   });
 
-  it.skipIf(realProviderRoutes() === null)('documents exactly the current review provider routes and no inferred route', () => {
-    const routes = realProviderRoutes();
+  it.skipIf(providerFacts === null)('documents exactly the current review provider routes and their stage placement', () => {
+    const routes = providerFacts.routes;
     const matrix = fs.readFileSync(path.join(source, 'docs', 'external-skills-compat-matrix.md'), 'utf8');
     const section = matrix.slice(matrix.indexOf('## review provider routes'), matrix.indexOf('## ', matrix.indexOf('## review provider routes') + 5));
     const documented = new Set([...section.matchAll(/`([a-z][a-z0-9-]*\/[a-z][a-z0-9-]*)`/g)].map((match) => match[1]));
     expect([...documented].sort()).toEqual(routes);
+    for (const row of section.split('\n').filter((line) => /^\| `[a-z][a-z0-9-]*\/[a-z][a-z0-9-]*` \|/.test(line))) {
+      const [, route, stages] = row.match(/^\| `([^`]+)` \| ([^|]+) \|/);
+      expect(stages.split('、').map((stage) => stage.trim()).sort(), `stage placement for ${route}`).toEqual(providerFacts.placements[route]);
+    }
     expect(matrix).not.toContain('codex/luna');
   });
 });

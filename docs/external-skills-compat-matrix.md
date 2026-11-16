@@ -42,19 +42,19 @@
 
 | 路由 | 出现位置 |
 | --- | --- |
-| `kimi/pro` | make-decision、build-plan、build-code、verify-code |
+| `kimi/pro` | make-decision、build-plan、build-code、verify-code、build_prd |
 | `antigravity/hydrogen` | make-decision、build-plan、build-code、verify-code、build_prd |
 | `codex/sol` | make-decision、build-plan、build_prd |
 | `codex/terra` | build-code、verify-code |
-| `pi/v4flash` | build_prd |
+| `pi/v4flash` | build-plan、build_prd |
 
-provider/model 定义、账号与额度归 3rd-review 配置；WorkflowHub 只持 `wh_review` 路由。
+provider/model 定义、账号与额度不在本矩阵，仍归 3rd-review 配置；本矩阵只核对 WorkflowHub `wh_review` 路由及其阶段位置。
 
 | 项 | 事实与来源 |
 | --- | --- |
 | 正例固定输入 | 对每条当前路由：隔离配置在 `providers` 定义该 ID 且 `command=process.execPath`（存在可执行）→ `precheckForActions(['review-full'])` 的 `provider` 检查为 `ok`（本段发布契约测试，源码仓，不随包） |
-| 反例固定输入 | 对同一路由：从 providers 删除该 ID → `PROVIDER_NOT_DEFINED`；该 ID 的可执行缺失 → `PROVIDER_EXECUTABLE_NOT_FOUND`；均不换默认 provider |
-| 测试入口 | 契约测试从 `workflowHubConfigPath` 读取当前真实路由逐条断言；配置不可读时明确 skip，不用推断或官方样例代替 |
+| 反例固定输入 | 对同一路由：该 ID 定义存在但 command 指向不存在路径 → `PROVIDER_EXECUTABLE_NOT_FOUND`；从 providers 删除该 ID → `PROVIDER_NOT_DEFINED`；两条都使 provider 检查为 missing、review-full 阻断，测试断言的是 missing 而不是任何成功或回退结果 |
+| 测试入口与断言映射 | 契约测试从 `workflowHubConfigPath` 读取当前真实路由并逐条断言：定义+可执行→ok；定义在但可执行不可用→`PROVIDER_EXECUTABLE_NOT_FOUND`（含路径）；删除 ID→`PROVIDER_NOT_DEFINED`；路由的阶段位置与本表逐条一致。配置不可读时显式 skip 并打印原因，不用推断或官方样例代替，不冒通过 |
 | 未知 | 未执行真实 provider 审查；provider/models 定义与账号权限归 3rd-review owner，真实 401/额度不足属权限/环境，不是版本负例 |
 
 ## Claude Code (host)
