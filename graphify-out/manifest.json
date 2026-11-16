@@ -5472,10 +5472,10 @@
     "semantic_hash": ""
   },
   "skills/decision-log/templates/decision-log-template.md": {
-    "mtime": 1794736363.9035563,
-    "seen": 1794786075.762005,
+    "mtime": 1794786405.672301,
+    "seen": 1794788095.494574,
     "ast_hash": "8f8408323aeeea0a56dbb7c0aff4e894",
-    "semantic_hash": ""
+    "semantic_hash": "8f8408323aeeea0a56dbb7c0aff4e894"
   },
   "skills/deep-research/SKILL.md": {
     "mtime": 1794702632.3094049,
@@ -11274,10 +11274,10 @@
     "semantic_hash": "1cb957e1a949077e99d2e1d54d5e3433"
   },
   "workflows/build-code/SKILL.md": {
-    "mtime": 1794760815.9461927,
-    "seen": 1794786075.762754,
+    "mtime": 1794786405.6896749,
+    "seen": 1794788095.494602,
     "ast_hash": "3fd6394b08abb9da374beb15a9a4fbdc",
-    "semantic_hash": ""
+    "semantic_hash": "3fd6394b08abb9da374beb15a9a4fbdc"
   },
   "workflows/build-code/skill-deps.yaml": {
     "mtime": 1794702632.7305639,
@@ -11286,10 +11286,10 @@
     "semantic_hash": ""
   },
   "workflows/build-plan/SKILL.md": {
-    "mtime": 1794749837.678298,
-    "seen": 1794786075.7627552,
+    "mtime": 1794786405.6899188,
+    "seen": 1794788095.494603,
     "ast_hash": "4bfe9b8c6a70778f3fc8d84948f2762f",
-    "semantic_hash": ""
+    "semantic_hash": "4bfe9b8c6a70778f3fc8d84948f2762f"
   },
   "workflows/build-plan/skill-deps.yaml": {
     "mtime": 1794702632.7320375,
@@ -14070,10 +14070,10 @@
     "semantic_hash": ""
   },
   "skills/design-source-extraction/SKILL.md": {
-    "mtime": 1794749767.3861637,
-    "seen": 1794786075.762006,
+    "mtime": 1794786405.6728303,
+    "seen": 1794788095.494584,
     "ast_hash": "85980fad35a80734cd725b093a1e2d99",
-    "semantic_hash": ""
+    "semantic_hash": "85980fad35a80734cd725b093a1e2d99"
   },
   "skills/design-source-extraction/references/collection-plan.md": {
     "mtime": 1794702632.3103926,
@@ -17237,12 +17237,6 @@
     "ast_hash": "eb04e8ec7960cc515c30489f79e908ac",
     "semantic_hash": ""
   },
-  "specs/workflowhub-design-port-flow-20261115/prototype/app.js": {
-    "mtime": 1794716625.1564462,
-    "seen": 1794786075.7616398,
-    "ast_hash": "65c41a317d82c88b08c418395b2f1c44",
-    "semantic_hash": ""
-  },
   "tests/contract/convergence-card-contract.test.mjs": {
     "mtime": 1794737375.8121502,
     "seen": 1794786075.761727,
@@ -17412,184 +17406,106 @@
     "semantic_hash": ""
   },
   "skills/design-source-extraction/references/anti-patterns.md": {
-    "mtime": 1794750257.7590759,
-    "seen": 1794786075.762006,
+    "mtime": 1794786405.673036,
+    "seen": 1794788095.4945862,
     "ast_hash": "b73be3afadc69a0f75aacaf574caa8c9",
-    "semantic_hash": ""
+    "semantic_hash": "b73be3afadc69a0f75aacaf574caa8c9"
   },
   "skills/design-source-extraction/references/collaboration.md": {
-    "mtime": 1794749919.236637,
-    "seen": 1794786075.762007,
+    "mtime": 1794786405.6731534,
+    "seen": 1794788095.494588,
     "ast_hash": "3aaf4f2b3d1b26305e25f7e5ccbca667",
-    "semantic_hash": ""
+    "semantic_hash": "3aaf4f2b3d1b26305e25f7e5ccbca667"
   },
   "skills/design-source-extraction/references/data-and-state.md": {
-    "mtime": 1794742872.4904194,
-    "seen": 1794786075.762008,
+    "mtime": 1794786405.6733181,
+    "seen": 1794788095.4945889,
     "ast_hash": "aa97503aba40ccff9e253f29390efcb6",
-    "semantic_hash": ""
+    "semantic_hash": "aa97503aba40ccff9e253f29390efcb6"
   },
   "skills/design-source-extraction/references/port-method.md": {
-    "mtime": 1794784322.2755313,
-    "seen": 1794786075.7620091,
+    "mtime": 1794786405.6735375,
+    "seen": 1794788095.49459,
     "ast_hash": "5b88d868d16b2f0693c3db7aeace7d43",
-    "semantic_hash": ""
+    "semantic_hash": "5b88d868d16b2f0693c3db7aeace7d43"
   },
   "skills/design-source-extraction/references/verification.md": {
-    "mtime": 1794750257.7586613,
-    "seen": 1794786075.76201,
+    "mtime": 1794786405.6736455,
+    "seen": 1794788095.494591,
     "ast_hash": "b9de754bdc5020d4038f14acd7dd3ad4",
-    "semantic_hash": ""
+    "semantic_hash": "b9de754bdc5020d4038f14acd7dd3ad4"
   },
   "skills/design-source-extraction/references/visual-review.md": {
-    "mtime": 1794744624.8891797,
-    "seen": 1794786075.76201,
+    "mtime": 1794786405.6738515,
+    "seen": 1794788095.494591,
     "ast_hash": "e449a2a228612c4c645300df0348f59e",
-    "semantic_hash": ""
+    "semantic_hash": "e449a2a228612c4c645300df0348f59e"
   },
   "skills/design-source-extraction/references/wiring.md": {
-    "mtime": 1794742880.4445662,
-    "seen": 1794786075.7620108,
+    "mtime": 1794786405.6742473,
+    "seen": 1794788095.494593,
     "ast_hash": "508264cd8b6429850a286e042c5d555a",
-    "semantic_hash": ""
-  },
-  "specs/workflowhub-design-port-flow-20261115/decision-log.md": {
-    "mtime": 1794784889.0583851,
-    "seen": 1794786075.762718,
-    "ast_hash": "ccb90521cfcfb20a32068a40af0e56f7",
-    "semantic_hash": ""
-  },
-  "specs/workflowhub-design-port-flow-20261115/phases/P1-\u65b9\u6848\u6536\u655b.md": {
-    "mtime": 1794738948.6533785,
-    "seen": 1794786075.762719,
-    "ast_hash": "bd81d51b4a174d5b17da0d185c209f4b",
-    "semantic_hash": ""
-  },
-  "specs/workflowhub-design-port-flow-20261115/phases/P2-\u5224\u65ad\u4e0e\u79fb\u690d.md": {
-    "mtime": 1794748651.437818,
-    "seen": 1794786075.76272,
-    "ast_hash": "08a4e417db41efe7c3e684c33251bc57",
-    "semantic_hash": ""
-  },
-  "specs/workflowhub-design-port-flow-20261115/phases/P3-\u6570\u636e\u4e0e\u65e7\u529f\u80fd.md": {
-    "mtime": 1794750676.7511752,
-    "seen": 1794786075.762721,
-    "ast_hash": "bfa472997d157617b8887d2ea2345de9",
-    "semantic_hash": ""
-  },
-  "specs/workflowhub-design-port-flow-20261115/phases/P4-\u673a\u5668\u4e0e\u76ee\u89c6\u6821\u9a8c.md": {
-    "mtime": 1794750680.7154226,
-    "seen": 1794786075.762721,
-    "ast_hash": "b9d04e36e3e83d6acedfda14b943cfe3",
-    "semantic_hash": ""
-  },
-  "specs/workflowhub-design-port-flow-20261115/phases/P5-\u534f\u4f5c\u4e0e\u89c4\u8303.md": {
-    "mtime": 1794748721.4746916,
-    "seen": 1794786075.762722,
-    "ast_hash": "b3287b71c00a7b735ac1ae0e474ae6bc",
-    "semantic_hash": ""
-  },
-  "specs/workflowhub-design-port-flow-20261115/phases/P6-\u6574\u4f53\u9a8c\u6536.md": {
-    "mtime": 1794763912.4408505,
-    "seen": 1794786075.762722,
-    "ast_hash": "c52c225e4abc52314aa0bf26b7d56a4e",
-    "semantic_hash": ""
-  },
-  "specs/workflowhub-design-port-flow-20261115/phases/index.md": {
-    "mtime": 1794724362.0024693,
-    "seen": 1794786075.762723,
-    "ast_hash": "0d8c3a388eb8e3dc52c7e0dc4384680e",
-    "semantic_hash": ""
-  },
-  "specs/workflowhub-design-port-flow-20261115/prototype/README.md": {
-    "mtime": 1794717123.1013446,
-    "seen": 1794786075.762723,
-    "ast_hash": "7b9567579a923ea18a83947cc940bf98",
-    "semantic_hash": ""
-  },
-  "specs/workflowhub-design-port-flow-20261115/prototype/REVIEW.md": {
-    "mtime": 1794717123.1781995,
-    "seen": 1794786075.7627242,
-    "ast_hash": "f38a9654557040221f1fdcbcfe02af85",
-    "semantic_hash": ""
-  },
-  "specs/workflowhub-design-port-flow-20261115/prototype/index.html": {
-    "mtime": 1794716625.137367,
-    "seen": 1794786075.7627242,
-    "ast_hash": "926248ea843f5a9ebf074bdcbc8a6ac6",
-    "semantic_hash": ""
-  },
-  "specs/workflowhub-design-port-flow-20261115/spec.md": {
-    "mtime": 1794727411.8736963,
-    "seen": 1794786075.762725,
-    "ast_hash": "abe1a3d2b03489faed80e7330b68618f",
-    "semantic_hash": ""
-  },
-  "specs/workflowhub-design-port-flow-20261115/step-consumer-design.md": {
-    "mtime": 1794702728.2354188,
-    "seen": 1794786075.762725,
-    "ast_hash": "adbcde21b3d7dc151d55bb04ddf65344",
-    "semantic_hash": ""
+    "semantic_hash": "508264cd8b6429850a286e042c5d555a"
   },
   "tests/fixtures/design-port-sample/README.md": {
-    "mtime": 1794750259.971784,
-    "seen": 1794786075.762733,
+    "mtime": 1794786405.6843917,
+    "seen": 1794788095.494594,
     "ast_hash": "d48794ba26b1cc43a0933184cc06073b",
-    "semantic_hash": ""
+    "semantic_hash": "d48794ba26b1cc43a0933184cc06073b"
   },
   "tests/fixtures/design-port-sample/judgment/adapt/judgment.md": {
-    "mtime": 1794738574.4287202,
-    "seen": 1794786075.762733,
+    "mtime": 1794786405.6856189,
+    "seen": 1794788095.494595,
     "ast_hash": "b84979622ff75a0001f2ca5df617bc49",
-    "semantic_hash": ""
+    "semantic_hash": "b84979622ff75a0001f2ca5df617bc49"
   },
   "tests/fixtures/design-port-sample/judgment/direct/judgment.md": {
-    "mtime": 1794738574.417947,
-    "seen": 1794786075.7627342,
+    "mtime": 1794786405.6857817,
+    "seen": 1794788095.494595,
     "ast_hash": "802d9053ddceb0e5fa42aa53cbdead05",
-    "semantic_hash": ""
+    "semantic_hash": "802d9053ddceb0e5fa42aa53cbdead05"
   },
   "tests/fixtures/design-port-sample/judgment/no-old-page/judgment.md": {
-    "mtime": 1794738590.4848406,
-    "seen": 1794786075.7627342,
+    "mtime": 1794786405.6859512,
+    "seen": 1794788095.494596,
     "ast_hash": "53c62e53a30aaa3bcc985dc744cfa690",
-    "semantic_hash": ""
+    "semantic_hash": "53c62e53a30aaa3bcc985dc744cfa690"
   },
   "tests/fixtures/design-port-sample/judgment/unusable-missing-next/judgment.md": {
-    "mtime": 1794738605.5911734,
-    "seen": 1794786075.7627351,
+    "mtime": 1794786405.686153,
+    "seen": 1794788095.4945972,
     "ast_hash": "fcb660fcb7cc7de4f2ff8493f565a559",
-    "semantic_hash": ""
+    "semantic_hash": "fcb660fcb7cc7de4f2ff8493f565a559"
   },
   "tests/fixtures/design-port-sample/judgment/unusable-missing-owner/judgment.md": {
-    "mtime": 1794738605.6025128,
-    "seen": 1794786075.7627351,
+    "mtime": 1794786405.6862862,
+    "seen": 1794788095.4945972,
     "ast_hash": "41aa9966865bed702b42b608c2babc6b",
-    "semantic_hash": ""
+    "semantic_hash": "41aa9966865bed702b42b608c2babc6b"
   },
   "tests/fixtures/design-port-sample/judgment/unusable/judgment.md": {
-    "mtime": 1794738590.3129005,
-    "seen": 1794786075.7627351,
+    "mtime": 1794786405.6864116,
+    "seen": 1794788095.494598,
     "ast_hash": "f95b829fff7ca434f041643ae6216b61",
-    "semantic_hash": ""
+    "semantic_hash": "f95b829fff7ca434f041643ae6216b61"
   },
   "tests/fixtures/design-port-sample/port-output/index.html": {
-    "mtime": 1794750213.0152855,
-    "seen": 1794786075.762736,
+    "mtime": 1794786405.6867018,
+    "seen": 1794788095.494598,
     "ast_hash": "ec793c28d5a6a3ca37da16f7682c91ad",
-    "semantic_hash": ""
+    "semantic_hash": "ec793c28d5a6a3ca37da16f7682c91ad"
   },
   "tests/fixtures/design-port-sample/prototype/index.html": {
-    "mtime": 1794738479.049769,
-    "seen": 1794786075.762736,
+    "mtime": 1794786405.6874318,
+    "seen": 1794788095.4945998,
     "ast_hash": "65f420b79dd3072d8808b4bae59303d1",
-    "semantic_hash": ""
+    "semantic_hash": "65f420b79dd3072d8808b4bae59303d1"
   },
   "tests/fixtures/design-port-sample/wiring/wiring.md": {
-    "mtime": 1794742857.7484386,
-    "seen": 1794786075.7627368,
+    "mtime": 1794786405.6884565,
+    "seen": 1794788095.494601,
     "ast_hash": "bc9c6483eec5edb570d73f728d993c0b",
-    "semantic_hash": ""
+    "semantic_hash": "bc9c6483eec5edb570d73f728d993c0b"
   },
   "package-lock.json": {
     "mtime": 1794702632.2629442,
