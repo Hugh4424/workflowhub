@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "kind": "external-tools",
+  "maintenance": "人工维护的受检投影：本文件列外部工具/宿主的来源指针、版本或 unknown、改造与 rights unknown，供清单工具校验。它不是唯一权威，也不代替 skills/catalog.yaml——来源、版本与许可的唯一权威仍是 catalog；本文件不由 catalog 派生，二者分列、不合并、不互相覆盖。",
+  "entries": [
+    {
+      "id": "open-code-review",
+      "kind": "review-cli",
+      "source": "https://github.com/alibaba/open-code-review",
+      "version": "1.13.10",
+      "minimum_version": "1.12.9",
+      "version_basis": "ocr --version 输出 open-code-review v1.13.10 (7e5ce06c) darwin/arm64，2026-11-16 本机实读；1.12.9 是 WorkflowHub 审查下限，不是上游支持策略。",
+      "modification": "none",
+      "rights": "unknown",
+      "rights_basis": "未取得该版本的许可 grant 或绑定；上游仓库存在许可文件不等于本次版本授权，沿个人研究范围保 unknown。",
+      "matrix_ref": "docs/external-skills-compat-matrix.md#open-code-review-ocr"
+    },
+    {
+      "id": "claude-code",
+      "kind": "host-agent",
+      "source": "https://github.com/anthropics/claude-code",
+      "version": "2.1.322",
+      "minimum_version": "unknown",
+      "version_basis": "claude --version 输出 2.1.322 (Claude Code)，2026-11-16 本机实读；未取得支持区间。",
+      "modification": "none",
+      "rights": "unknown",
+      "rights_basis": "未取得该版本许可 grant；只作本机宿主版本读数。",
+      "matrix_ref": "docs/external-skills-compat-matrix.md#claude-code-host"
+    },
+    {
+      "id": "codex",
+      "kind": "host-agent",
+      "source": "https://github.com/openai/codex",
+      "version": "0.166.0",
+      "minimum_version": "unknown",
+      "version_basis": "codex --version 输出 codex-cli 0.166.0，2026-11-16 本机实读；未取得支持区间。",
+      "modification": "none",
+      "rights": "unknown",
+      "rights_basis": "未取得该版本许可 grant；只作本机宿主版本读数。",
+      "matrix_ref": "docs/external-skills-compat-matrix.md#codex-cli-host"
+    },
+    {
+      "id": "ego",
+      "kind": "browser",
+      "source": "https://github.com/citrolabs/ego-lite",
+      "version": "unknown",
+      "minimum_version": "unknown",
+      "version_basis": "版本事实分列、不合并：本机 helper 只读元数据 ego-browser 0.6.2.9 / guide v2.2.0；catalog 的 design-source-extraction 条目记 ego lite 0.6.0.16（旧值，owner=catalog 维护者，本段只读不改）；官方文档样例 app 0.6.3.6 / guide 2.2.1 只作来源，不连成区间。真实支持区间、真实 finish 原回执与有源不兼容 release 均未取得，故 version 保持 unknown。",
+      "modification": "unknown",
+      "rights": "unknown",
+      "rights_basis": "未取得该版本许可 grant；本机安装字节不证明来源绑定或授权。",
+      "matrix_ref": "docs/external-skills-compat-matrix.md#ego-browser"
+    },
+    {
+      "id": "anysearch",
+      "kind": "search-cli",
+      "source": "https://github.com/anysearch-ai/anysearch-skill/tree/db3d76e5597aec7261257be5322dd211c9d9bb87",
+      "version": "unknown",
+      "minimum_version": "unknown",
+      "version_basis": "上游无 semver。固定 commit db3d76e5597aec7261257be5322dd211c9d9bb87 的单个 scripts/anysearch_cli.js，SHA256 2f94ff9aa2091234ac225bfe8f16e02a148eba141b49921a8740c2d36ff4e980；真实父 commit 9b0d9e4b81f2ffa3ffe8d8439e015c9df3b4b4b8 对同一 --sdp 命令不兼容。",
+      "modification": "仓内只 vendor 单个 CLI JavaScript 文件；不采用上游整仓 tree，也不改本机全局安装。",
+      "rights": "unknown",
+      "rights_basis": "catalog 声明 Apache-2.0，但该固定 tree 无 LICENSE/NOTICE，未取得版本绑定的 grant 或版权依据；不写成 grant。",
+      "matrix_ref": "docs/external-skills-compat-matrix.md#anysearch-cli"
+    }
+  ]
+}

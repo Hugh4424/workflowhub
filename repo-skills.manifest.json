@@ -1,0 +1,1343 @@
+{
+  "schema_version": 1,
+  "kind": "repo-skills",
+  "source": "skills/catalog.yaml",
+  "derived_from": {
+    "catalog": "skills/catalog.yaml",
+    "catalog_sha256": "befbb3afc564dc03ba61c46d11abb41e03f2537d0922949231008b9360c3c6cf",
+    "reuse_registry": "skills/reuse-registry.md",
+    "reuse_registry_sha256": "8adc897c20b1a8fc4b5ab359f24af73977b52f8dd6367f58eb88095100781b98"
+  },
+  "skills": [
+    {
+      "name": "answer-as-page",
+      "path": "skills/answer-as-page/SKILL.md",
+      "local_version": null,
+      "status": "adapted",
+      "used_by_stages": [
+        "make-decision"
+      ],
+      "dependency_closure": [
+        "skills/isolated-browser-qa",
+        "skills/spec-specify"
+      ],
+      "local_changes": "改写中文宿主中立方法，owner=P5/T005及后续技能维护者，consumer=用户直接调用和当前任务驾驶舱生成者；替代宿主绑定renderer，不引入程序/后台更新/服务/always-on/清理；Release v0.5.5版本事实单列，其tag指向bc3798a87c5721b296b2d0f464c8fc4a0bcea2a5，采用pin是7acea240而非tag；只核v0.5.5且unsigned，其余tag未核。pstack沿其独立登记，提交未证实事实不改变。U1–U13处置见reuse；不设content_sha256，非vendor。删除条件=替代技能承接真实消费者或整体退役时同步bundle/登记，不删历史原件。",
+      "upstream": [
+        {
+          "github_url": "https://github.com/QingYunA/answer-me-with-html",
+          "commit": "7acea24024923eaae8647f5988e826062456dc86",
+          "path": "skills/answer-me-with-html/SKILL.md",
+          "license": "MIT",
+          "reviewed_at": "2026-10-19",
+          "review_outcome": "accepted_with_local_boundaries"
+        }
+      ]
+    },
+    {
+      "name": "anysearch",
+      "path": "skills/anysearch/SKILL.md",
+      "local_version": "1.0.0",
+      "status": "adopted",
+      "used_by_stages": [
+        "make-decision"
+      ],
+      "dependency_closure": [
+        "skills/spec-specify"
+      ],
+      "local_changes": "仓内打包；通过 stage manifest 按需加载；不做全局安装；固定db3d76e完整tree无LICENSE/NOTICE，Apache-2.0为既有声明，当前grant/版权绑定unknown；owner来源维护者须向AnySearch取得该版本授权依据，未扩大复制范围。",
+      "upstream": [
+        {
+          "github_url": "https://github.com/anysearch-ai/anysearch-skill",
+          "commit": "db3d76e5597aec7261257be5322dd211c9d9bb87",
+          "path": "SKILL.md",
+          "license": "Apache-2.0",
+          "reviewed_at": "2026-07-14",
+          "review_outcome": "accepted"
+        },
+        {
+          "github_url": "https://github.com/anysearch-ai/anysearch-skill",
+          "commit": "db3d76e5597aec7261257be5322dd211c9d9bb87",
+          "path": "scripts/anysearch_cli.js",
+          "license": "Apache-2.0",
+          "reviewed_at": "2026-07-14",
+          "review_outcome": "accepted"
+        }
+      ]
+    },
+    {
+      "name": "architect-code-review",
+      "path": "skills/architect-code-review/SKILL.md",
+      "local_version": "1.1.0",
+      "status": "adapted",
+      "used_by_stages": [
+        "build-code"
+      ],
+      "dependency_closure": [
+        "skills/review",
+        "skills/spec-specify"
+      ],
+      "local_changes": "保留合并代码审查、简化、文档、prose 和过程叙述的独立 skill；历史 AC-REVIEW-011 已归档于 specs/archive/workflowhub-thin-core-card-05-20260919/spec.md:30/:78/:94；该历史任务的 Architect 替代、recordDshCodeReviewResult、receipts.quality_review、dsh-code-review provider 与原 OCR attempt 为旧审查来源，不据此声明当前执行者或验收通过；当前 architect-code-review 是与 OCR 可用性无关的独立同源补充轴，实际范围按当前 workflow；显式诊断仅作诊断事实，不新增 dispatch/provider/控制面",
+      "upstream": [
+        {
+          "github_url": "https://github.com/deepseek-ai/deepseek-harness",
+          "commit": "99f6f02fecdb7dff40c3fbc9470f5907c29f74ca",
+          "path": ".agents/skills/dsh-code-review/SKILL.md",
+          "license": "MIT",
+          "reviewed_at": "2026-07-14",
+          "review_outcome": "accepted"
+        },
+        {
+          "github_url": "https://github.com/deepseek-ai/deepseek-harness",
+          "commit": "99f6f02fecdb7dff40c3fbc9470f5907c29f74ca",
+          "path": ".agents/skills/dsh-find-simplifications/SKILL.md",
+          "license": "MIT",
+          "reviewed_at": "2026-07-14",
+          "review_outcome": "accepted"
+        },
+        {
+          "github_url": "https://github.com/deepseek-ai/deepseek-harness",
+          "commit": "99f6f02fecdb7dff40c3fbc9470f5907c29f74ca",
+          "path": ".agents/skills/dsh-doc-standards/SKILL.md",
+          "license": "MIT",
+          "reviewed_at": "2026-07-14",
+          "review_outcome": "accepted"
+        },
+        {
+          "github_url": "https://github.com/deepseek-ai/deepseek-harness",
+          "commit": "99f6f02fecdb7dff40c3fbc9470f5907c29f74ca",
+          "path": ".agents/skills/dsh-prose-standard/SKILL.md",
+          "license": "MIT",
+          "reviewed_at": "2026-07-14",
+          "review_outcome": "accepted"
+        },
+        {
+          "github_url": "https://github.com/deepseek-ai/deepseek-harness",
+          "commit": "99f6f02fecdb7dff40c3fbc9470f5907c29f74ca",
+          "path": ".agents/skills/dsh-trim-cot-leakage/SKILL.md",
+          "license": "MIT",
+          "reviewed_at": "2026-07-14",
+          "review_outcome": "accepted"
+        }
+      ]
+    },
+    {
+      "name": "backend-testing",
+      "path": "skills/backend-testing/SKILL.md",
+      "local_version": "1.0.0",
+      "status": "adapted",
+      "used_by_stages": [
+        "build-code"
+      ],
+      "dependency_closure": [
+        "skills/spec-specify"
+      ],
+      "local_changes": "只保留测试方法和证据字段；失败是质量事实，不是推进 gate；2026-10-16固定258f5a2的LICENSE实际为modified Apache-2.0，含第三方hosted/embedded商业服务授权及frontend logo/copyright条件；旧MIT登记不实。抽取技能文字的适用性unknown，由来源维护者向权利owner核具体grant，当前不扩采用/分发范围，不视为已接受附加条款。",
+      "upstream": [
+        {
+          "github_url": "https://github.com/Hugh4424/AgentHub",
+          "commit": "258f5a2548fa8cc15325c6aa18dd107c1fc497b9",
+          "path": "packages/core/agenthub/skills/backend-testing/SKILL.md",
+          "license": "Modified Apache-2.0 with additional commercial-service and frontend-logo/copyright conditions; applicability to extracted skill text unknown",
+          "reviewed_at": "2026-07-14",
+          "review_outcome": "accepted"
+        }
+      ]
+    },
+    {
+      "name": "debate",
+      "path": null,
+      "local_version": "1.0.0",
+      "status": "retired",
+      "used_by_stages": [],
+      "dependency_closure": [],
+      "local_changes": "保留仓内 provenance；仅作可选诊断，不进入核心 Bundle 或生产扫描；测试文件不纳入可分发 bundle；bundle 按普通文件名登记，resolver 保留路径包含与逃逸检查",
+      "upstream": [
+        {
+          "github_url": "https://github.com/Hugh4424/debate",
+          "commit": "af121a1e24ae3af48f5e132d3de1342d16eccf31",
+          "path": "SKILL.md",
+          "license": "MIT",
+          "reviewed_at": "2026-07-14",
+          "review_outcome": "accepted"
+        }
+      ]
+    },
+    {
+      "name": "decision-log",
+      "path": "skills/decision-log/SKILL.md",
+      "local_version": "1.0.0",
+      "status": "native",
+      "used_by_stages": [
+        "make-decision"
+      ],
+      "dependency_closure": [
+        "skills/grill-with-docs",
+        "skills/material-writing",
+        "skills/spec-specify"
+      ],
+      "local_changes": "workflowhub 原生实现；当前交互真相仅为 decision-log.md 直接字段，make-decision 的完成与审查消费者不读取 interaction aggregate；历史 aggregate 只读保留，不新增独立 runtime；来源为本仓decision-log模板、make-decision与grill-with-docs领域方法；外源完整登记沿后者catalog条目，不重复登记为本技能外源。",
+      "upstream": []
+    },
+    {
+      "name": "deep-research",
+      "path": "skills/deep-research/SKILL.md",
+      "local_version": "1.0.0",
+      "status": "native",
+      "used_by_stages": [
+        "build-plan",
+        "make-decision"
+      ],
+      "dependency_closure": [
+        "skills/anysearch",
+        "skills/spec-specify"
+      ],
+      "local_changes": "workflowhub 原生方法；方向问题供 make-decision Talk，深报告写任务约定普通研究原件；轻研究承接 spec-research 点状规划职责，仅返回既有内存 spec-research-result.v1，不强制深报告或另写文件；母方向变化交回调用者，缺工具/来源/失败/取消保真实限制，不新增 gate",
+      "upstream": [
+        {
+          "github_url": "https://github.com/mattpocock/skills",
+          "commit": "b0618bc436ad893b3c5e84e55fba86586d34a404",
+          "path": "skills/engineering/research/SKILL.md",
+          "license": "MIT",
+          "reviewed_at": "2026-10-16",
+          "review_outcome": "accepted"
+        }
+      ]
+    },
+    {
+      "name": "design-source-extraction",
+      "path": "skills/design-source-extraction/SKILL.md",
+      "local_version": "1.0.0",
+      "status": "native",
+      "used_by_stages": [
+        "build-code",
+        "build-plan",
+        "build-prd"
+      ],
+      "dependency_closure": [
+        "skills/design-source-readiness",
+        "skills/isolated-browser-qa",
+        "skills/project-norm-init",
+        "skills/spec-specify"
+      ],
+      "local_changes": "WorkflowHub原生字段与方法契约；owner为设计源提炼方法维护者，consumer为build-prd有稿前置记录、build-plan设计源准备读者、build-code实施者与终末独立检查者、独立测试者与独立设计审查者；P1只交契约，采集/对账/消费/三阶段接线由后续Phase承接，不以登记冒真实执行；不替代readiness、不自动晋升规范；delete-condition为经独立审查的替代者完整承接真实consumer。后续Phase新增references/port-method.md、data-and-state.md、wiring.md、verification.md、visual-review.md、collaboration.md、anti-patterns.md及scripts/check-judgment、check-port-manifest、check-data-discipline、check-wiring、check-geometry、check-dom-parity、check-port-parity、check-feature-keep、check-visual-review、check-write-set；均私有入口或方法正文，真实consumer与删除条件见move-map与skill-bundle。外部工具只沿isolated-browser-qa既有入口，固定参考ego lite 0.6.0.16与agent-browser 0.36.0，许可和归档绑定未核部分unknown；style-ref-gen因许可未声明不采用，不复制外部内容。",
+      "upstream": []
+    },
+    {
+      "name": "design-source-readiness",
+      "path": "skills/design-source-readiness/SKILL.md",
+      "local_version": "1.0.0",
+      "status": "native",
+      "used_by_stages": [
+        "build-plan"
+      ],
+      "dependency_closure": [
+        "skills/project-norm-init",
+        "skills/spec-specify"
+      ],
+      "local_changes": "WorkflowHub 原生只读 lens；owner 是 UI 来源只读作者，consumer 是现 build-plan UI 分支和 build-prd 条件设计分支的 plan-design-review 输入；按project-norm-init职责读实际路径/稳定节/version/作用域及各类缺口，旧Design/Experience只作历史或可信输入；delete-condition consumer 经已审替代承接后",
+      "upstream": []
+    },
+    {
+      "name": "diagnosing-bugs",
+      "path": "skills/diagnosing-bugs/SKILL.md",
+      "local_version": "1.0.0",
+      "status": "adapted",
+      "used_by_stages": [
+        "build-code"
+      ],
+      "dependency_closure": [
+        "skills/spec-specify"
+      ],
+      "local_changes": "保留仓内 provenance；根因事实由当前 build-code 直接记录，不进入核心 Bundle 或生产扫描",
+      "upstream": [
+        {
+          "github_url": "https://github.com/mattpocock/skills",
+          "commit": "b0618bc436ad893b3c5e84e55fba86586d34a404",
+          "path": "skills/engineering/diagnosing-bugs",
+          "license": "MIT",
+          "reviewed_at": "2026-07-14",
+          "review_outcome": "accepted"
+        },
+        {
+          "github_url": "https://github.com/obra/superpowers",
+          "commit": "d884ae04edebef577e82ff7c4e143debd0bbec99",
+          "path": "skills/systematic-debugging",
+          "license": "MIT",
+          "reviewed_at": "2026-07-14",
+          "review_outcome": "accepted"
+        },
+        {
+          "github_url": "https://github.com/garrytan/gstack",
+          "commit": "7c9df1c568a9ea745508f679a329332b2c338063",
+          "path": "investigate",
+          "license": "MIT",
+          "reviewed_at": "2026-07-14",
+          "review_outcome": "accepted"
+        }
+      ]
+    },
+    {
+      "name": "figma-make-prompt",
+      "path": "skills/figma-make-prompt/SKILL.md",
+      "local_version": "1.0.0",
+      "status": "native",
+      "used_by_stages": [
+        "build-code",
+        "build-plan"
+      ],
+      "dependency_closure": [
+        "skills/ui-copy-discipline"
+      ],
+      "local_changes": "owner=T003方法维护者；consumer=frontend-prototype-render、plan-design-review及后续UI作者；实际输入/产物和缺口留当前任务原件；无新增stage或许可链。",
+      "upstream": []
+    },
+    {
+      "name": "frontend-component-quality",
+      "path": "skills/frontend-component-quality/SKILL.md",
+      "local_version": "1.0.0",
+      "status": "adapted",
+      "used_by_stages": [
+        "build-code",
+        "build-plan"
+      ],
+      "dependency_closure": [
+        "skills/project-norm-init",
+        "skills/spec-specify"
+      ],
+      "local_changes": "公开唯一组件质量入口；上游规则仅按适用条件只读，现有项目规范优先；web 与 better-ui 在各固定提交有 MIT LICENSE 原件，未新增本地 LICENSE；个人研究范围内复制，不推定其他分发权利。owner 是组件质量方法维护者；consumer 是 build-plan/build-code 前端实施者与 bundle resolver；delete-condition 所有当前 consumer 经独立验证的替代承接后。",
+      "upstream": [
+        {
+          "github_url": "https://github.com/vercel-labs/agent-skills",
+          "commit": "dd089a8c752c966dee8bf0f27cb625ba193ffd9e",
+          "path": "skills/react-best-practices/AGENTS.md",
+          "license": "MIT",
+          "reviewed_at": "2026-08-22",
+          "review_outcome": "accepted"
+        },
+        {
+          "github_url": "https://github.com/vercel-labs/web-interface-guidelines",
+          "commit": "434b7f91364665f2f733b310ec54809bf8f37937",
+          "path": "command.md",
+          "license": "MIT",
+          "reviewed_at": null,
+          "review_outcome": null
+        },
+        {
+          "github_url": "https://github.com/jakubkrehel/skills",
+          "commit": "1eb03d2b145df1c6cd84ab54a337600a2a379017",
+          "path": "skills/better-ui",
+          "license": "MIT",
+          "reviewed_at": null,
+          "review_outcome": null
+        }
+      ]
+    },
+    {
+      "name": "frontend-prototype-render",
+      "path": "skills/frontend-prototype-render/SKILL.md",
+      "local_version": "1.0.0",
+      "status": "native",
+      "used_by_stages": [
+        "build-plan"
+      ],
+      "dependency_closure": [
+        "skills/isolated-browser-qa",
+        "skills/project-norm-init",
+        "skills/spec-specify"
+      ],
+      "local_changes": "WorkflowHub 原生渲染入口；owner 是 UI 方法当前调用主会话，consumer 是 workflows/build-plan/SKILL.md:19 与 frontend-prototype-render/SKILL.md:9 的 build-prd 条件设计分支；test=tests/contract/ui-skill-contract.test.mjs；不改产品源码；delete-condition 两个当前方法 consumer 退役或由已审替代方法承接后",
+      "upstream": []
+    },
+    {
+      "name": "frontend-testing",
+      "path": "skills/frontend-testing/SKILL.md",
+      "local_version": "1.0.0",
+      "status": "adapted",
+      "used_by_stages": [
+        "build-code"
+      ],
+      "dependency_closure": [
+        "skills/backend-testing",
+        "skills/isolated-browser-qa",
+        "skills/project-norm-init",
+        "skills/spec-specify"
+      ],
+      "local_changes": "保留状态/交互维度、UI phase/task 字段和失败证据；owner 是 build-code 前端测试路由，consumer 是真实 UI changed files；适用 UI attempt 经官方 build-code seam 一次调用 isolated-browser-qa，绑定 Design/Experience、service/API/DTO identity 和 cleanup；截图或 browser pass 不变成普遍 gate；不新增 Runner；delete-condition 为 frontend-testing 退役且无阶段引用；2026-10-16固定258f5a2的LICENSE实际为modified Apache-2.0，含第三方hosted/embedded商业服务授权及frontend logo/copyright条件；旧MIT登记不实。抽取技能文字的适用性unknown，由来源维护者向权利owner核具体grant，当前不扩采用/分发范围，不视为已接受附加条款。",
+      "upstream": [
+        {
+          "github_url": "https://github.com/Hugh4424/AgentHub",
+          "commit": "258f5a2548fa8cc15325c6aa18dd107c1fc497b9",
+          "path": "packages/core/agenthub/skills/frontend-testing/SKILL.md",
+          "license": "Modified Apache-2.0 with additional commercial-service and frontend-logo/copyright conditions; applicability to extracted skill text unknown",
+          "reviewed_at": "2026-07-14",
+          "review_outcome": "accepted"
+        }
+      ]
+    },
+    {
+      "name": "fullstack-slice-testing",
+      "path": "skills/fullstack-slice-testing/SKILL.md",
+      "local_version": "1.0.0",
+      "status": "adapted",
+      "used_by_stages": [
+        "build-code"
+      ],
+      "dependency_closure": [
+        "skills/backend-testing",
+        "skills/spec-specify"
+      ],
+      "local_changes": "适配为风险证据技能；不恢复强制 commit/worktree/release gate；2026-10-16固定258f5a2的LICENSE实际为modified Apache-2.0，含第三方hosted/embedded商业服务授权及frontend logo/copyright条件；旧MIT登记不实。抽取技能文字的适用性unknown，由来源维护者向权利owner核具体grant，当前不扩采用/分发范围，不视为已接受附加条款。",
+      "upstream": [
+        {
+          "github_url": "https://github.com/Hugh4424/AgentHub",
+          "commit": "258f5a2548fa8cc15325c6aa18dd107c1fc497b9",
+          "path": "packages/core/agenthub/skills/fullstack-slice-testing/SKILL.md",
+          "license": "Modified Apache-2.0 with additional commercial-service and frontend-logo/copyright conditions; applicability to extracted skill text unknown",
+          "reviewed_at": "2026-07-14",
+          "review_outcome": "accepted"
+        }
+      ]
+    },
+    {
+      "name": "grill-with-docs",
+      "path": "skills/grill-with-docs/SKILL.md",
+      "local_version": "1.0.0",
+      "status": "adapted",
+      "used_by_stages": [
+        "make-decision"
+      ],
+      "dependency_closure": [
+        "skills/spec-specify"
+      ],
+      "local_changes": "保留四项退出记录和可批量的大白话问题卡；先自行诊断和安全重试，只把方向问题交给用户，未完成不得跳过",
+      "upstream": [
+        {
+          "github_url": "https://github.com/mattpocock/skills",
+          "commit": "b0618bc436ad893b3c5e84e55fba86586d34a404",
+          "path": "skills/engineering/grill-with-docs/SKILL.md",
+          "license": "MIT",
+          "reviewed_at": "2026-07-14",
+          "review_outcome": "accepted"
+        },
+        {
+          "github_url": "https://github.com/mattpocock/skills",
+          "commit": "b0618bc436ad893b3c5e84e55fba86586d34a404",
+          "path": "skills/engineering/domain-modeling/SKILL.md",
+          "license": "MIT",
+          "reviewed_at": "2026-07-14",
+          "review_outcome": "accepted"
+        },
+        {
+          "github_url": "https://github.com/mattpocock/skills",
+          "commit": "b0618bc436ad893b3c5e84e55fba86586d34a404",
+          "path": "skills/productivity/grilling/SKILL.md",
+          "license": "MIT",
+          "reviewed_at": "2026-07-14",
+          "review_outcome": "accepted"
+        },
+        {
+          "github_url": "https://github.com/mattpocock/skills",
+          "commit": "b0618bc436ad893b3c5e84e55fba86586d34a404",
+          "path": "skills/engineering/domain-modeling/GLOSSARY-FORMAT.md",
+          "license": "MIT",
+          "reviewed_at": "2026-10-16",
+          "review_outcome": "accepted"
+        },
+        {
+          "github_url": "https://github.com/mattpocock/skills",
+          "commit": "b0618bc436ad893b3c5e84e55fba86586d34a404",
+          "path": "skills/engineering/domain-modeling/ADR-FORMAT.md",
+          "license": "MIT",
+          "reviewed_at": "2026-10-16",
+          "review_outcome": "accepted"
+        },
+        {
+          "github_url": "https://github.com/addyosmani/agent-skills",
+          "commit": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+          "path": "skills/interview-me/SKILL.md",
+          "license": "MIT",
+          "reviewed_at": "2026-10-19",
+          "review_outcome": "accepted with local adaptation; clause disposition and pin limits in reuse-registry.md N6提问方法采用索引"
+        }
+      ]
+    },
+    {
+      "name": "intake-decision-review",
+      "path": "skills/intake-decision-review/SKILL.md",
+      "local_version": "1.0.0",
+      "status": "native",
+      "used_by_stages": [
+        "make-decision"
+      ],
+      "dependency_closure": [
+        "skills/spec-specify"
+      ],
+      "local_changes": "裁为 wh-review direction 纯 lens；禁止候选方案、交互确认和第二 provider 路径",
+      "upstream": []
+    },
+    {
+      "name": "isolated-browser-qa",
+      "path": "skills/isolated-browser-qa/SKILL.md",
+      "local_version": "1.0.0",
+      "status": "adopted",
+      "used_by_stages": [
+        "build-code"
+      ],
+      "dependency_closure": [
+        "skills/diagnosing-bugs",
+        "skills/spec-specify"
+      ],
+      "local_changes": "搬入完整闭包；去个人绝对路径；owner 是 isolated browser QA，consumer 是官方 build-code controlled QA seam 与 build-code 终末；一次 invocation 按当前 task/spec/Phase 记录各适用专业来源/版本/作用域与 service/API/DTO identity，pre/history snapshot 只读保留，blocked/unknown 保留 failure_reason，取消和 cleanup 必须可见；新增两个私有helper承接现context --run生命周期与memory-only票据，不新增公共Runner；delete-condition 为 browser QA 路由退役或被唯一替代；本地来源snapshot_sha256缺失，采集字节及原位置unknown；owner来源维护者需权利人提供原件与可核快照，当前保既有授权，不补假commit/hash。",
+      "upstream": [
+        {
+          "github_url": null,
+          "commit": null,
+          "path": "isolated-browser-qa",
+          "license": "user-owned",
+          "reviewed_at": "2026-07-14",
+          "review_outcome": "accepted"
+        }
+      ]
+    },
+    {
+      "name": "knowledge-graph",
+      "path": "skills/knowledge-graph/SKILL.md",
+      "local_version": "1.0.0",
+      "status": "native",
+      "used_by_stages": [
+        "build-code",
+        "build-plan",
+        "build-prd",
+        "make-decision"
+      ],
+      "dependency_closure": [
+        "skills/spec-specify"
+      ],
+      "local_changes": "包装graphify现有CLI/库，保原查询/更新/降级；新增references/knowledge-reuse.md原创任务判断方法及两workflow真实入口，复用bundle。Design-wiki许可unknown仅重写方法，不复制原文/源码；不采用其候选存储/命令/站点，不建新runtime adapter/门/API key/hook/记忆回写。图工具原方法/许可绑定unknown仍交来源维护者。",
+      "upstream": []
+    },
+    {
+      "name": "material-writing",
+      "path": "skills/material-writing/SKILL.md",
+      "local_version": "1.0.0",
+      "status": "native",
+      "used_by_stages": [],
+      "dependency_closure": [
+        "skills/spec-specify"
+      ],
+      "local_changes": "workflowhub 原生；从 skills/spec-specify/SKILL.md「材料写作标准（唯一）」原字节迁出十一条与编号对照表规则，只补写完自检九条；不新增校验器、机器必填字段、stage 或 gate。",
+      "upstream": []
+    },
+    {
+      "name": "norm-sync",
+      "path": "skills/norm-sync/SKILL.md",
+      "local_version": "1.0.0",
+      "status": "native",
+      "used_by_stages": [
+        "build-code"
+      ],
+      "dependency_closure": [
+        "skills/spec-specify"
+      ],
+      "local_changes": "原生方法复用record-lock/safe-write/task handle，不导入同步引擎；owner为规范同步维护者，consumer为build-code每Phase、verify终末、reflection经验前、closeout任务前；保未解判断与独立质量，不建候选/状态/历史账本。",
+      "upstream": []
+    },
+    {
+      "name": "plan-ceo-review",
+      "path": "skills/plan-ceo-review/SKILL.md",
+      "local_version": "1.0.0",
+      "status": "adapted",
+      "used_by_stages": [
+        "make-decision"
+      ],
+      "dependency_closure": [
+        "skills/spec-specify"
+      ],
+      "local_changes": "裁为 report-only lens；去 runtime/gbrain/telemetry",
+      "upstream": [
+        {
+          "github_url": "https://github.com/garrytan/gstack",
+          "commit": "7c9df1c568a9ea745508f679a329332b2c338063",
+          "path": "plan-ceo-review",
+          "license": "MIT",
+          "reviewed_at": "2026-07-14",
+          "review_outcome": "accepted"
+        }
+      ]
+    },
+    {
+      "name": "plan-design-review",
+      "path": "skills/plan-design-review/SKILL.md",
+      "local_version": "1.1.0",
+      "status": "adapted",
+      "used_by_stages": [
+        "build-plan"
+      ],
+      "dependency_closure": [
+        "skills/spec-specify"
+      ],
+      "local_changes": "裁为 report-only lens；去浏览器 daemon 和宿主命令；2026-11-14 升 1.1.0（minor）：本任务扩展为定方向细节审查、写需求、排阶段、写代码四入口，UI 适用性改按 raw_requirement/project_inventory/planned_or_changed_frontend_fact 三来源证据判定；行为变化，manifest 形状不变。",
+      "upstream": [
+        {
+          "github_url": "https://github.com/garrytan/gstack",
+          "commit": "7c9df1c568a9ea745508f679a329332b2c338063",
+          "path": "plan-design-review",
+          "license": "MIT",
+          "reviewed_at": "2026-07-14",
+          "review_outcome": "accepted"
+        }
+      ]
+    },
+    {
+      "name": "plan-eng-review",
+      "path": "skills/plan-eng-review/SKILL.md",
+      "local_version": "1.0.0",
+      "status": "adapted",
+      "used_by_stages": [
+        "build-plan"
+      ],
+      "dependency_closure": [
+        "skills/spec-plan",
+        "skills/spec-specify"
+      ],
+      "local_changes": "裁为 report-only lens；去 gstack 编排依赖",
+      "upstream": [
+        {
+          "github_url": "https://github.com/garrytan/gstack",
+          "commit": "7c9df1c568a9ea745508f679a329332b2c338063",
+          "path": "plan-eng-review",
+          "license": "MIT",
+          "reviewed_at": "2026-07-14",
+          "review_outcome": "accepted"
+        }
+      ]
+    },
+    {
+      "name": "project-norm-init",
+      "path": "skills/project-norm-init/SKILL.md",
+      "local_version": "2.0.0",
+      "status": "native",
+      "used_by_stages": [
+        "build-code",
+        "build-plan"
+      ],
+      "dependency_closure": [
+        "skills/frontend-component-quality",
+        "skills/frontend-testing",
+        "skills/grill-with-docs",
+        "skills/isolated-browser-qa",
+        "skills/spec-specify"
+      ],
+      "local_changes": "WorkflowHub 原生薄入口；owner 是五类专业规范接线维护者，各类规则仍归原专业owner。local_version沿既有2.0.0，不把本次审查日期冒新发行版本。\nconsumer 为 workflows/build-plan/SKILL.md 的既有UI trigger及设计/测试蓝图前非UI显式读取、workflows/build-code/SKILL.md每Phase接口/测试选择前、workflows/build-code/SKILL.md终末验收准备；build-prd经readiness/render间接读同一来源指针，不据此增加直接运行路由。\n五类规范、原八UI子类职责及三起点只引用 skills/project-norm-init/SKILL.md「规范职责/非UI规范与索引/方法」，各正文仍归原专业 owner；\ndelete-condition 为所有上述真实直接与间接consumer均由已审替代方法承接后。SDD、markdown 材料子技能及 design-tokens\n已由 C01 复制入库，登记见 catalog 同名 absorbed 条目与 skills/external/README.md；\n许可未声明的事实仍保留，脚本入库不执行。其余下列能力仍为在线参考，不是已导入的可运行 skill；\nupstream=[] 保无外源代码导入，dependency_closure 只包含现仓内入口，不加入任何未安装资源。\n\n以下保留旧任务的阅读/执行provenance，不作三份复制件的当前登记；当前来源以同名absorbed条目为准。\nSDD：原 owner WenjiaWang/spec-driven-production，Source=ModelScope，SourceURL 空；\n固定 commit 000b04a2a3553bddcf991b3dc42f9a5a2746fa6f，\n原方法 https://modelscope.cn/skills/WenjiaWang/spec-driven-production/resolve/000b04a2a3553bddcf991b3dc42f9a5a2746fa6f/SKILL.md；\n同固定根 references/execution.md 在⑥分责或更新动作到达时完整读。\n声明必需闭包为 SKILL.md、assets/templates/【模板】SDD 首轮需求输入文档.md、\nassets/templates/【模板】Spec 评审文档.md、references/design-spec.md、experience-spec.md、\nengineering-spec.md、collaborative-review.md、execution.md、sources.md（references/ 同目录）。\n完整存在/身份核对见本任务061原输出；本次选用SKILL/execution全文已读，其余本次仅身份核验。\n当前 consumer 为 P6真实分责/影响应用和 project-norm-init 的⑥前端工程 owner；P7正文应用尚未执行。\n保现 spec/Phase/facts 分责，不迁六材料双写/reopen；无终端依赖的Markdown人读分支已实际应用134。\n元数据 License 空，固定闭包无可核grant；复制/分发权限 unknown，由实际权利 owner 提供，\n上述旧任务未复制；当前 C01 U-008/U-009 已明确选择复制，仓内副本与许可事实以同名 absorbed 条目为准。\n\n材料：原 owner WenjiaWang/material-agent-readiness-eval，Source=ModelScope，SourceURL 空；\n固定 commit b62e87f3f91868033106b21f6398f0fd6d3d2043，\n原方法 https://modelscope.cn/skills/WenjiaWang/material-agent-readiness-eval/resolve/b62e87f3f91868033106b21f6398f0fd6d3d2043/skills/material-agent-readiness-eval-markdown/SKILL.md。\n同固定根 skills/material-agent-readiness-eval-markdown/ 下必需十一资源为 SKILL.md；\nreferences/layer-model.md、assessment-profiles.md、audit-method.md、report-format.md；\nscripts/scan_markdown.py、build-report.mjs、validate-report.mjs、readiness-model.mjs；\nassets/material-agent-readiness-eval-markdown-report-template.html、report-locales.json。\nGUIDE需全文原方法/layer-model/assessment-profiles；AUDIT另需原脚本、report方法和assets，\n旧任务完整存在/身份核对见061，当时只全文读取GUIDE必读三件；当前 C01 已复制 scripts/assets，不执行。\nconsumer 为现材料准备执行者；本次134完成用途解释和PB旧规范输入盘点，\n源方法要求用户先确认纯视觉组合还是完整交互组件实现：具名原答复未找到可复用选择，\n定制GUIDE当前未完成，由用户/产品owner给真实选择后GUIDE执行者按原法继续，不从代码推用途。\nAUDIT当前 unavailable：未取得获准执行入口/资源操作范围，无builder/validator/HTML或评分输出；\n元数据 License 空且固定闭包无可核grant，复制/分发权限 unknown，由实际权利owner提供，\n执行者须核具体操作授权和所用资源许可后执行固定原方法，不以空license断言所有阅读/执行违法。\nGUIDE盘点不冒AUDIT；不自建评分器、validator、gate或替代原能力。P7新正文未交付不称已消费。\n\nUI Designer：原 owner WenjiaWang/ui-designer，固定 commit c7317a841b6427360bc1b94151a03cf023e6643e，\n共同原根 https://modelscope.cn/skills/WenjiaWang/ui-designer/resolve/c7317a841b6427360bc1b94151a03cf023e6643e/。\n②原方法 skills/design-tokens/SKILL.md、④skills/information-architecture/SKILL.md、\n⑦skills/design-brief/SKILL.md 各为单文件Markdown闭包，通知THIRD_PARTY_NOTICES.md说明来自\njulianoczkowski/designer-skills@c259656c76d9758d7ead46b0d2f125cbe84f8665原样复制；\n正确原根 https://raw.githubusercontent.com/julianoczkowski/designer-skills/c259656c76d9758d7ead46b0d2f125cbe84f8665/\n下 design-tokens/SKILL.md、information-architecture/SKILL.md、design-brief/SKILL.md 与ModelScope字节一致，\n原根 LICENSE 为Apache-2.0。固定skills/frontend-design/SKILL.md和同目录LICENSE.txt构成其闭包，\n自带Apache-2.0；在②方向需要或⑦文案动作时读取，不以宿主同名技能代固定原件。\n⑤skills/ui-interaction-states/SKILL.md为单文件方法，optional agents/openai.yaml仅展示metadata；\n此项为原包本地原创，无可核单独grant，副本/分发权限unknown，不能套其他子项Apache。\n逐类实际许可/原文字节依据为本任务工程研究186–204与P3现入口45行；原件不镜像。\nconsumer/适用输入和本地偏离逐类在project-norm-init「四类固定在线方法」：\n②token owner、④IA owner、⑤交互owner、⑦内容owner；值留CSS，任务状态/权限恢复留task spec，\n不强双主题/默认数值、新.design输出、重复访谈或机械全状态。各专业expert实际应用归P7，当前计划未执行。\n维护者为当前采用登记owner，各权利owner补grant；本段除 design-tokens 已由 C01 复制入库外，其余仍只在线参考，未copy/install/vendor。\n\n本次S3查新：061实际固定/current API各返回上述SDD/材料固定commit，仅在该UTC查询范围未显示更新，\n不宣全市场无更新/最优；受控不存在路径HTTP400是查询失败反例，非上游事故或AUDIT失败。\n实际原件在 task quality/tests/2026-10-14-061-c01-p6-source-check.output 及同名.json；\n真实SDD应用/有界候选比较、GUIDE前置输入与具体未做项在 task\nquality/evidence/2026-10-14-134-c01-p6-method-application.md。登记/可读/字面GREEN不能替实际采用或全AC。\n",
+      "upstream": []
+    },
+    {
+      "name": "resolving-merge-conflicts",
+      "path": "skills/resolving-merge-conflicts/SKILL.md",
+      "local_version": "1.0.0",
+      "status": "native",
+      "used_by_stages": [
+        "build-prd"
+      ],
+      "dependency_closure": [],
+      "local_changes": "WorkflowHub close 冲突恢复约束；由stage-close在目标分支同步预演发现冲突时复用；消费者为skills/stage-close/SKILL.md与core/task-close.mjs:1411",
+      "upstream": []
+    },
+    {
+      "name": "review",
+      "path": "skills/review/SKILL.md",
+      "local_version": "1.0.0",
+      "status": "adapted",
+      "used_by_stages": [
+        "build-code",
+        "build-plan",
+        "build-prd",
+        "make-decision"
+      ],
+      "dependency_closure": [
+        "skills/spec-specify"
+      ],
+      "local_changes": "裁为 wh-review lens；禁止自动修复和第二 review flow",
+      "upstream": [
+        {
+          "github_url": "https://github.com/garrytan/gstack",
+          "commit": "7c9df1c568a9ea745508f679a329332b2c338063",
+          "path": "review",
+          "license": "MIT",
+          "reviewed_at": "2026-07-14",
+          "review_outcome": "accepted"
+        },
+        {
+          "github_url": "https://github.com/mattpocock/skills",
+          "commit": "b0618bc436ad893b3c5e84e55fba86586d34a404",
+          "path": "skills/engineering/code-review/SKILL.md",
+          "license": "MIT",
+          "reviewed_at": "2026-10-16",
+          "review_outcome": "accepted"
+        }
+      ]
+    },
+    {
+      "name": "simplicity-guard",
+      "path": "skills/simplicity-guard/SKILL.md",
+      "local_version": "1.0.0",
+      "status": "native",
+      "used_by_stages": [
+        "build-code",
+        "build-plan",
+        "build-prd",
+        "make-decision"
+      ],
+      "dependency_closure": [
+        "skills/spec-specify"
+      ],
+      "local_changes": "workflowhub 原生 review-only lens；不参与 stage 生成；正文参考ponytail七阶梯YAGNI与andrej-karpathy-skills三纪律，来源仓/版本/许可未核；owner来源维护者补原出处和grant前不扩大采用。",
+      "upstream": []
+    },
+    {
+      "name": "spec-analyze",
+      "path": "skills/spec-analyze/SKILL.md",
+      "local_version": "1.0.0",
+      "status": "native",
+      "used_by_stages": [
+        "build-code",
+        "build-plan",
+        "make-decision"
+      ],
+      "dependency_closure": [
+        "skills/spec-specify"
+      ],
+      "local_changes": "workflowhub 原生 report-only validator/lens；make-decision、build-spec（pre）、build-code 和 pre build-plan 保持既有 stage-end 语义检查与质量事实契约；post build-plan 仅报告材料结构，语义由现有 merged review 和 finding dispositions 负责；build-code 终末代码审查由 OCR delegation 执行；现有 stage publication 是唯一写入路径，原子写入 quality/facts 与 acceptance evidence；当前 build-plan consumer 仍使用 planning_artifacts packet projection 和 contract tests，runtime 在既有 stage outcome 中认证 packet/result 与当前快照、材料、analyzer step、spec-analyze skill 的绑定；检查实际语义、场景、oracle、产物和 fresh evidence，不把编号或文件存在当作证明；结果复用既有 quality-fact 路径；DEFER/OPEN 按条目上下文检查 handoff；不直接改四份材料、不创建第二 store、projection 或门禁；six-part summary 随现有 stage outcome 交接；finding 先在当前 stage 修复并重跑；unavailable 不等于 pass；没有 runtime work gate、provider pass predicate 或新质量 gate，但缺失或不一致会如实降低当前 stage quality；当现有 consumer 移除且无历史材料引用时删除",
+      "upstream": []
+    },
+    {
+      "name": "spec-clarify",
+      "path": "skills/spec-clarify/SKILL.md",
+      "local_version": "1.1.0",
+      "status": "adapted",
+      "used_by_stages": [
+        "build-plan"
+      ],
+      "dependency_closure": [
+        "skills/spec-specify"
+      ],
+      "local_changes": "保留可独立搬运的十维歧义扫描合同和批量问题卡；post cohort 由 build-plan 唯一消费，build-spec 只读，不能在 make-decision 再接入第二套 Clarify；closure test 校验唯一归属",
+      "upstream": [
+        {
+          "github_url": "https://github.com/github/spec-kit",
+          "commit": "b7e67f55bf7a937aaa57dbe0a8198774e285de3a",
+          "path": "templates/commands/clarify.md",
+          "license": "MIT",
+          "reviewed_at": "2026-07-14",
+          "review_outcome": "accepted"
+        },
+        {
+          "github_url": "https://github.com/mattpocock/skills",
+          "commit": "b0618bc436ad893b3c5e84e55fba86586d34a404",
+          "path": "skills/productivity/grilling/SKILL.md",
+          "license": "MIT",
+          "reviewed_at": "2026-10-16",
+          "review_outcome": "accepted"
+        }
+      ]
+    },
+    {
+      "name": "spec-plan",
+      "path": "skills/spec-plan/SKILL.md",
+      "local_version": "1.3.0",
+      "status": "adapted",
+      "used_by_stages": [
+        "build-plan"
+      ],
+      "dependency_closure": [
+        "skills/material-writing",
+        "skills/simplicity-guard",
+        "skills/spec-specify"
+      ],
+      "local_changes": "post cohort 只写 spec.md 实现设计与独立 phases/P<n>.md；旧 plan 模板仅历史只读，不纳入可分发 bundle；owner 为 build-plan。现有 bundle 增 check-reader-record（第11步核七段/五问/命令退出的记录形态）、check-authoring-budget（逐材料只报告结构读数，超预算仍退0）、authoring-contract（第6/7步作者与brief实际读取），consumer 为 build-plan作者、独立冷读者、build-code和spec-analyze。测试为 post-cohort-authoring-files及C07七个具名authoring契约测试；当这三职责由独立验证的既有替代完整承接且本附件无真实消费者时删除相应附件/指针，保历史原件；不新增控制面或质量裁决",
+      "upstream": [
+        {
+          "github_url": "https://github.com/github/spec-kit",
+          "commit": "b7e67f55bf7a937aaa57dbe0a8198774e285de3a",
+          "path": "templates/commands/plan.md",
+          "license": "MIT",
+          "reviewed_at": "2026-07-14",
+          "review_outcome": "accepted"
+        },
+        {
+          "github_url": "https://github.com/obra/superpowers",
+          "commit": "d884ae04edebef577e82ff7c4e143debd0bbec99",
+          "path": "skills/writing-plans/SKILL.md",
+          "license": "MIT",
+          "reviewed_at": "2026-07-14",
+          "review_outcome": "accepted"
+        },
+        {
+          "github_url": "https://github.com/mattpocock/skills",
+          "commit": "b0618bc436ad893b3c5e84e55fba86586d34a404",
+          "path": "skills/engineering/to-tickets/SKILL.md",
+          "license": "MIT",
+          "reviewed_at": "2026-10-16",
+          "review_outcome": "accepted"
+        },
+        {
+          "github_url": "https://github.com/mattpocock/skills",
+          "commit": "b0618bc436ad893b3c5e84e55fba86586d34a404",
+          "path": "skills/engineering/tdd/SKILL.md",
+          "license": "MIT",
+          "reviewed_at": "2026-10-16",
+          "review_outcome": "accepted"
+        },
+        {
+          "github_url": "https://github.com/mattpocock/skills",
+          "commit": "b0618bc436ad893b3c5e84e55fba86586d34a404",
+          "path": "skills/engineering/codebase-design/SKILL.md",
+          "license": "MIT",
+          "reviewed_at": "2026-10-16",
+          "review_outcome": "accepted"
+        },
+        {
+          "github_url": "https://github.com/mattpocock/skills",
+          "commit": "b0618bc436ad893b3c5e84e55fba86586d34a404",
+          "path": "skills/productivity/writing-for-agents/SKILL.md",
+          "license": "MIT",
+          "reviewed_at": "2026-10-16",
+          "review_outcome": "accepted"
+        },
+        {
+          "github_url": "https://github.com/mattpocock/skills",
+          "commit": "b0618bc436ad893b3c5e84e55fba86586d34a404",
+          "path": "skills/productivity/writing-for-agents/SKILL-MECHANICS.md",
+          "license": "MIT",
+          "reviewed_at": "2026-10-16",
+          "review_outcome": "accepted"
+        }
+      ]
+    },
+    {
+      "name": "spec-prd",
+      "path": "skills/spec-prd/SKILL.md",
+      "local_version": "1.2.0",
+      "status": "native",
+      "used_by_stages": [
+        "build-prd"
+      ],
+      "dependency_closure": [
+        "skills/material-writing",
+        "skills/project-norm-init",
+        "skills/spec-specify",
+        "skills/stage-handoff"
+      ],
+      "local_changes": "workflowhub 原生可搬运内容技能；只写显式提供的单一 PRD 目标，不伪造平台、确认或交付事实；来源为本仓build-prd与prd-template.md职责/确认合同，既有User Stories方法吸收Matt to-spec#user-stories，完整来源在本条upstream；本次未新增第三方字节复制。2026-11-05 升 1.2.0：PRD 改为头部 + 7 节 + 附录 B/C，每卡六字段逐字段内容要求，五列地图，四行写对照物与独立复算，决策覆盖表进附录 B，验收不写比例、计数或零值；bundle 文件清单不变。",
+      "upstream": [
+        {
+          "github_url": "https://github.com/mattpocock/skills",
+          "commit": "b0618bc436ad893b3c5e84e55fba86586d34a404",
+          "path": "skills/engineering/to-spec/SKILL.md",
+          "license": "MIT",
+          "reviewed_at": "2026-10-16",
+          "review_outcome": "accepted"
+        }
+      ]
+    },
+    {
+      "name": "spec-research",
+      "path": null,
+      "local_version": "1.0.0",
+      "status": "retired",
+      "used_by_stages": [],
+      "dependency_closure": [],
+      "local_changes": "workflowhub 原生实现",
+      "upstream": []
+    },
+    {
+      "name": "spec-specify",
+      "path": "skills/spec-specify/SKILL.md",
+      "local_version": "1.2.0",
+      "status": "adapted",
+      "used_by_stages": [
+        "build-plan"
+      ],
+      "dependency_closure": [
+        "skills/decision-log",
+        "skills/material-writing",
+        "skills/simplicity-guard",
+        "skills/spec-plan"
+      ],
+      "local_changes": "post cohort 由 build-plan 写 spec.md 产品规格与全局实现设计，pre cohort 由 build-spec 读取旧材料；consumer 为 spec-plan、spec-analyze、build-code；owner 为 build-plan；测试为 post-cohort-spec-design-authority；当单一 spec 作者机制被审查后的替代机制取代时删除",
+      "upstream": [
+        {
+          "github_url": "https://github.com/github/spec-kit",
+          "commit": "b7e67f55bf7a937aaa57dbe0a8198774e285de3a",
+          "path": "templates/commands/specify.md",
+          "license": "MIT",
+          "reviewed_at": "2026-07-14",
+          "review_outcome": "accepted"
+        },
+        {
+          "github_url": "https://github.com/mattpocock/skills",
+          "commit": "b0618bc436ad893b3c5e84e55fba86586d34a404",
+          "path": "skills/productivity/writing-for-agents/SKILL.md",
+          "license": "MIT",
+          "reviewed_at": "2026-10-16",
+          "review_outcome": "accepted"
+        },
+        {
+          "github_url": "https://github.com/mattpocock/skills",
+          "commit": "b0618bc436ad893b3c5e84e55fba86586d34a404",
+          "path": "skills/productivity/writing-for-agents/SKILL-MECHANICS.md",
+          "license": "MIT",
+          "reviewed_at": "2026-10-16",
+          "review_outcome": "accepted"
+        },
+        {
+          "github_url": "https://github.com/mattpocock/skills",
+          "commit": "b0618bc436ad893b3c5e84e55fba86586d34a404",
+          "path": "skills/engineering/to-spec/SKILL.md",
+          "license": "MIT",
+          "reviewed_at": "2026-10-16",
+          "review_outcome": "accepted"
+        }
+      ]
+    },
+    {
+      "name": "spec-tasks",
+      "path": null,
+      "local_version": "2.2.0",
+      "status": "retired",
+      "used_by_stages": [],
+      "dependency_closure": [],
+      "local_changes": "post cohort 只写 phases/index.md；旧 tasks 模板仅历史只读，不纳入可分发 bundle；consumer 为 build-code 和 spec-analyze；owner 为 build-plan；测试为 post-cohort-authoring-files；当 Phase 索引被审查后的替代机制取代时删除",
+      "upstream": [
+        {
+          "github_url": "https://github.com/github/spec-kit",
+          "commit": "b7e67f55bf7a937aaa57dbe0a8198774e285de3a",
+          "path": "templates/commands/tasks.md",
+          "license": "MIT",
+          "reviewed_at": "2026-07-14",
+          "review_outcome": "accepted"
+        },
+        {
+          "github_url": "https://github.com/obra/superpowers",
+          "commit": "d884ae04edebef577e82ff7c4e143debd0bbec99",
+          "path": "skills/writing-plans/SKILL.md",
+          "license": "MIT",
+          "reviewed_at": "2026-07-14",
+          "review_outcome": "accepted"
+        }
+      ]
+    },
+    {
+      "name": "stage-close",
+      "path": "skills/stage-close/SKILL.md",
+      "local_version": "1.1.0",
+      "status": "native",
+      "used_by_stages": [
+        "build-code",
+        "build-prd",
+        "make-decision"
+      ],
+      "dependency_closure": [
+        "skills/knowledge-graph",
+        "skills/norm-sync",
+        "skills/resolving-merge-conflicts",
+        "skills/spec-specify"
+      ],
+      "local_changes": "C10 P3 起 build-code 终末 caller 经同一方法实际执行收尾，used_by_stages 随真实调用登记。抽取既有安全收口方法；保质量与事实caller owner、普通Git和workspace窄工具，不恢复close-plan或新增执行器；按用户指出的缺口新增目标分支独有提交/路径核对，按任务依赖决定是否同步，冲突复用既有解决方法；PR合并可能自动删除源分支时纳入同一物理范围确认；来源为本仓原verify-code（历史）授权/安全收口、docs/standard-workflow.md和resolving-merge-conflicts方法；本仓方法抽取，不伪造GitHub外源。",
+      "upstream": []
+    },
+    {
+      "name": "stage-handoff",
+      "path": "skills/stage-handoff/SKILL.md",
+      "local_version": "1.0.0",
+      "status": "native",
+      "used_by_stages": [
+        "build-code",
+        "build-plan",
+        "build-prd",
+        "make-decision"
+      ],
+      "dependency_closure": [
+        "skills/spec-specify"
+      ],
+      "local_changes": "复用原发布owner、四类来源和七阶段值；收口调用者提供结果，交接独立读取；不新增writer、facts字段、schema、公共命令或持久对象",
+      "upstream": []
+    },
+    {
+      "name": "stage-reflection",
+      "path": "skills/stage-reflection/SKILL.md",
+      "local_version": "1.0.0",
+      "status": "native",
+      "used_by_stages": [
+        "build-code",
+        "build-plan",
+        "build-prd",
+        "make-decision"
+      ],
+      "dependency_closure": [
+        "skills/material-writing",
+        "skills/norm-sync",
+        "skills/spec-specify",
+        "skills/stage-handoff"
+      ],
+      "local_changes": "复用既有收口、交接与成本入口；保用户真选检查与人确认清理，直接落账与待批分开，业务仓specs经验按下一步加现象判重，无来源不编、越权不回落；不新增writer或控制面",
+      "upstream": [
+        {
+          "github_url": "https://github.com/mattpocock/skills",
+          "commit": "b0618bc436ad893b3c5e84e55fba86586d34a404",
+          "path": "skills/engineering/retro/SKILL.md",
+          "license": "MIT",
+          "reviewed_at": "2026-10-16",
+          "review_outcome": "accepted"
+        },
+        {
+          "github_url": "https://github.com/backnotprop/pstack",
+          "commit": "1f0f9c3bac03c4297f6fc8f7644fa412eda57085",
+          "path": "skills/correct/SKILL.md",
+          "license": "MIT",
+          "reviewed_at": "2026-10-16",
+          "review_outcome": "accepted"
+        },
+        {
+          "github_url": "https://github.com/backnotprop/pstack",
+          "commit": "1f0f9c3bac03c4297f6fc8f7644fa412eda57085",
+          "path": "skills/principle-encode-lessons-in-structure/SKILL.md",
+          "license": "MIT",
+          "reviewed_at": "2026-10-16",
+          "review_outcome": "accepted"
+        }
+      ]
+    },
+    {
+      "name": "talk-with-zhipeng",
+      "path": "skills/talk-with-zhipeng/SKILL.md",
+      "local_version": "1.0.0",
+      "status": "native",
+      "used_by_stages": [
+        "make-decision"
+      ],
+      "dependency_closure": [
+        "skills/spec-specify"
+      ],
+      "local_changes": "workflowhub 原生实现；问题卡支持一组独立问题、编号选项、后果和风险，用户可部分回答后重新排序；AgentHub历史导入取回坐标packages/core/agenthub/skills/talk-with-zhipeng/SKILL.md，最后变更2468b5e6907c67d7518583982c5729dcc98e414a；旧2026-07-26对HEAD fabc82100b3dde2678a5fb81484bab3149c1e72d的无更新观察仅历史事实。该原pin许可当前未核，不能借258f5a2许可推定；owner来源维护者须取原pin和grant。",
+      "upstream": [
+        {
+          "github_url": "https://github.com/mattpocock/skills",
+          "commit": "b0618bc436ad893b3c5e84e55fba86586d34a404",
+          "path": "skills/productivity/grilling/SKILL.md",
+          "license": "MIT",
+          "reviewed_at": "2026-10-16",
+          "review_outcome": "accepted"
+        },
+        {
+          "github_url": "https://github.com/addyosmani/agent-skills",
+          "commit": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+          "path": "skills/idea-refine/SKILL.md",
+          "license": "MIT",
+          "reviewed_at": "2026-10-19",
+          "review_outcome": "accepted with local adaptation; clause disposition and pin limits in reuse-registry.md N6提问方法采用索引"
+        }
+      ]
+    },
+    {
+      "name": "test-routing-advisor",
+      "path": "skills/test-routing-advisor/SKILL.md",
+      "local_version": "1.0.0",
+      "status": "adapted",
+      "used_by_stages": [
+        "build-code",
+        "build-plan"
+      ],
+      "dependency_closure": [
+        "skills/spec-specify"
+      ],
+      "local_changes": "保留三档路由判断；build-plan 写入预判，build-code 按真实 changed files 必要时重判；2026-10-16固定258f5a2的LICENSE实际为modified Apache-2.0，含第三方hosted/embedded商业服务授权及frontend logo/copyright条件；旧MIT登记不实。抽取技能文字的适用性unknown，由来源维护者向权利owner核具体grant，当前不扩采用/分发范围，不视为已接受附加条款。",
+      "upstream": [
+        {
+          "github_url": "https://github.com/Hugh4424/AgentHub",
+          "commit": "258f5a2548fa8cc15325c6aa18dd107c1fc497b9",
+          "path": "packages/core/agenthub/skills/test-routing-advisor/SKILL.md",
+          "license": "Modified Apache-2.0 with additional commercial-service and frontend-logo/copyright conditions; applicability to extracted skill text unknown",
+          "reviewed_at": "2026-07-14",
+          "review_outcome": "accepted"
+        }
+      ]
+    },
+    {
+      "name": "testing-system-blueprint",
+      "path": "skills/testing-system-blueprint/SKILL.md",
+      "local_version": "1.0.0",
+      "status": "adapted",
+      "used_by_stages": [
+        "build-plan"
+      ],
+      "dependency_closure": [
+        "skills/backend-testing",
+        "skills/spec-specify"
+      ],
+      "local_changes": "作为 build-plan 的 advisory 测试设计输入，并由 build-code 消费；不新增 AgentHub release gate 或执行器控制面；2026-10-16固定258f5a2的LICENSE实际为modified Apache-2.0，含第三方hosted/embedded商业服务授权及frontend logo/copyright条件；旧MIT登记不实。抽取技能文字的适用性unknown，由来源维护者向权利owner核具体grant，当前不扩采用/分发范围，不视为已接受附加条款。",
+      "upstream": [
+        {
+          "github_url": "https://github.com/Hugh4424/AgentHub",
+          "commit": "258f5a2548fa8cc15325c6aa18dd107c1fc497b9",
+          "path": "packages/core/agenthub/skills/testing-system-blueprint/SKILL.md",
+          "license": "Modified Apache-2.0 with additional commercial-service and frontend-logo/copyright conditions; applicability to extracted skill text unknown",
+          "reviewed_at": "2026-07-14",
+          "review_outcome": "accepted"
+        }
+      ]
+    },
+    {
+      "name": "third-review",
+      "path": "skills/third-review/SKILL.md",
+      "local_version": "4.0.0",
+      "status": "native",
+      "used_by_stages": [],
+      "dependency_closure": [
+        "skills/spec-specify"
+      ],
+      "local_changes": "来源：3rd-review v4.0.0，commit 97132960d7dab9145cbd0bdf610e09bf422e2ec0；仅测试框架和夹具位置适配",
+      "upstream": []
+    },
+    {
+      "name": "ui-copy-discipline",
+      "path": "skills/ui-copy-discipline/SKILL.md",
+      "local_version": "1.0.0",
+      "status": "native",
+      "used_by_stages": [
+        "build-code",
+        "build-plan"
+      ],
+      "dependency_closure": [],
+      "local_changes": "owner=T003方法维护者；consumer=frontend-prototype-render、plan-design-review及后续UI作者；实际输入/产物和缺口留当前任务原件；无新增stage或许可链。",
+      "upstream": []
+    },
+    {
+      "name": "wh-review",
+      "path": "skills/wh-review/SKILL.md",
+      "local_version": "4.2.0",
+      "status": "native",
+      "used_by_stages": [
+        "build-code",
+        "build-plan",
+        "build-prd",
+        "make-decision"
+      ],
+      "dependency_closure": [
+        "skills/intake-decision-review",
+        "skills/plan-ceo-review",
+        "skills/plan-design-review",
+        "skills/plan-eng-review",
+        "skills/review",
+        "skills/simplicity-guard",
+        "skills/spec-specify"
+      ],
+      "local_changes": "authoring review 保留既有 public run；正常 build-code 每 Phase 一次 OCR，最终 aggregate 与逐 AC 结果后由 build-code 终末对最终 worktree 做一次 OCR；历史 integration 事实只读；两次代码审查由现有 review/run receipt 消费；保留路径安全与原始 provenance；来源为本仓既有review-record-route及provider协议，本文不将宿主工具声明当外部文本来源。2026-11-14 升 4.2.0（minor）：P7 新增 UI 任务三阶段通用六问块（UI 适用性、设计稿、视觉证据、前端质量、组件复用、真接线），并明确各问通过/失败信号与未读口径；行为变化，manifest 形状不变。",
+      "upstream": []
+    },
+    {
+      "name": "workflowhub-host-protocol",
+      "path": "skills/workflowhub-host-protocol/SKILL.md",
+      "local_version": "0.1.1",
+      "status": "native",
+      "used_by_stages": [],
+      "dependency_closure": [
+        "skills/architect-code-review",
+        "skills/stage-handoff",
+        "skills/wh-review"
+      ],
+      "local_changes": "宿主直接调度三阶段 portable package；删除 host bridge、receipt 门禁和评论状态机，保留 worktree 隔离与真实通知；N2 P3更正无源adapted误登记：原始本仓登记：55e56137d76cd18da54c66a3f53bea576d01231c:skills/catalog.yaml仅含host-protocol(native/upstream[])；fe991fac228f954b9a066989dcda162adaef2f38:skills/catalog.yaml两项均native/upstream[]，sync首次新增于fe991fac；upstream仍空，无伪造外源。",
+      "upstream": []
+    },
+    {
+      "name": "workflowhub-multica-sync",
+      "path": "skills/workflowhub-multica-sync/SKILL.md",
+      "local_version": "1.3.0",
+      "status": "native",
+      "used_by_stages": [],
+      "dependency_closure": [
+        "skills/spec-specify"
+      ],
+      "local_changes": "只读审计和显式确认后的 Multica CLI 同步；阶段只认 SKILL.md、skill-deps.yaml、steps.json；不改运行时；N2 P3更正无源adapted误登记：原始本仓登记：55e56137d76cd18da54c66a3f53bea576d01231c:skills/catalog.yaml仅含host-protocol(native/upstream[])；fe991fac228f954b9a066989dcda162adaef2f38:skills/catalog.yaml两项均native/upstream[]，sync首次新增于fe991fac；upstream仍空，无伪造外源。",
+      "upstream": []
+    }
+  ],
+  "reuse_entries": [
+    {
+      "name": "anysearch",
+      "entry": "skills/anysearch/SKILL.md"
+    },
+    {
+      "name": "architect-code-review",
+      "entry": "skills/architect-code-review/SKILL.md"
+    },
+    {
+      "name": "backend-testing",
+      "entry": "skills/backend-testing/SKILL.md"
+    },
+    {
+      "name": "build-code",
+      "entry": "workflows/build-code/SKILL.md"
+    },
+    {
+      "name": "build-plan",
+      "entry": "workflows/build-plan/SKILL.md"
+    },
+    {
+      "name": "build-prd",
+      "entry": "workflows/build-prd/SKILL.md"
+    },
+    {
+      "name": "decision-log",
+      "entry": "skills/decision-log/SKILL.md"
+    },
+    {
+      "name": "deep-research",
+      "entry": "skills/deep-research/SKILL.md"
+    },
+    {
+      "name": "design-source-extraction",
+      "entry": "skills/design-source-extraction/SKILL.md"
+    },
+    {
+      "name": "design-source-readiness",
+      "entry": "skills/design-source-readiness/SKILL.md"
+    },
+    {
+      "name": "diagnosing-bugs",
+      "entry": "skills/diagnosing-bugs/SKILL.md"
+    },
+    {
+      "name": "frontend-component-quality",
+      "entry": "skills/frontend-component-quality/SKILL.md"
+    },
+    {
+      "name": "frontend-prototype-render",
+      "entry": "skills/frontend-prototype-render/SKILL.md"
+    },
+    {
+      "name": "frontend-testing",
+      "entry": "skills/frontend-testing/SKILL.md"
+    },
+    {
+      "name": "fullstack-slice-testing",
+      "entry": "skills/fullstack-slice-testing/SKILL.md"
+    },
+    {
+      "name": "grill-with-docs",
+      "entry": "skills/grill-with-docs/SKILL.md"
+    },
+    {
+      "name": "intake-decision-review",
+      "entry": "skills/intake-decision-review/SKILL.md"
+    },
+    {
+      "name": "isolated-browser-qa",
+      "entry": "skills/isolated-browser-qa/SKILL.md"
+    },
+    {
+      "name": "knowledge-graph",
+      "entry": "skills/knowledge-graph/SKILL.md"
+    },
+    {
+      "name": "make-decision",
+      "entry": "workflows/make-decision/SKILL.md"
+    },
+    {
+      "name": "material-writing",
+      "entry": "skills/material-writing/SKILL.md"
+    },
+    {
+      "name": "norm-sync",
+      "entry": "skills/norm-sync/SKILL.md"
+    },
+    {
+      "name": "plan-ceo-review",
+      "entry": "skills/plan-ceo-review/SKILL.md"
+    },
+    {
+      "name": "plan-design-review",
+      "entry": "skills/plan-design-review/SKILL.md"
+    },
+    {
+      "name": "plan-eng-review",
+      "entry": "skills/plan-eng-review/SKILL.md"
+    },
+    {
+      "name": "project-norm-init",
+      "entry": "skills/project-norm-init/SKILL.md"
+    },
+    {
+      "name": "resolving-merge-conflicts",
+      "entry": "skills/resolving-merge-conflicts/SKILL.md"
+    },
+    {
+      "name": "review",
+      "entry": "skills/review/SKILL.md"
+    },
+    {
+      "name": "simplicity-guard",
+      "entry": "skills/simplicity-guard/SKILL.md"
+    },
+    {
+      "name": "spec-analyze",
+      "entry": "skills/spec-analyze/SKILL.md"
+    },
+    {
+      "name": "spec-clarify",
+      "entry": "skills/spec-clarify/SKILL.md"
+    },
+    {
+      "name": "spec-plan",
+      "entry": "skills/spec-plan/SKILL.md"
+    },
+    {
+      "name": "spec-prd",
+      "entry": "skills/spec-prd/SKILL.md"
+    },
+    {
+      "name": "spec-specify",
+      "entry": "skills/spec-specify/SKILL.md"
+    },
+    {
+      "name": "stage-close",
+      "entry": "skills/stage-close/SKILL.md"
+    },
+    {
+      "name": "stage-handoff",
+      "entry": "skills/stage-handoff/SKILL.md"
+    },
+    {
+      "name": "stage-reflection",
+      "entry": "skills/stage-reflection/SKILL.md"
+    },
+    {
+      "name": "talk-with-zhipeng",
+      "entry": "skills/talk-with-zhipeng/SKILL.md"
+    },
+    {
+      "name": "test-routing-advisor",
+      "entry": "skills/test-routing-advisor/SKILL.md"
+    },
+    {
+      "name": "testing-system-blueprint",
+      "entry": "skills/testing-system-blueprint/SKILL.md"
+    },
+    {
+      "name": "third-review",
+      "entry": "skills/third-review/SKILL.md"
+    },
+    {
+      "name": "wh-review",
+      "entry": "skills/wh-review/SKILL.md"
+    },
+    {
+      "name": "workflowhub-host-protocol",
+      "entry": "skills/workflowhub-host-protocol/SKILL.md"
+    },
+    {
+      "name": "workflowhub-multica-sync",
+      "entry": "skills/workflowhub-multica-sync/SKILL.md"
+    }
+  ]
+}

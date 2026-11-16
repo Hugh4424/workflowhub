@@ -30,13 +30,15 @@ async function loadRuntimeModule(relativePath, label) {
   return import(pathToFileURL(file).href);
 }
 
-const [{ withLock }, configBootstrapModule, precheckModule] = await Promise.all([
+const [{ withLock }, configBootstrapModule, precheckModule, updateCheckModule] = await Promise.all([
   loadRuntimeModule("interface/record-lock.mjs", "record lock"),
   loadRuntimeModule("distribution/config-bootstrap.mjs", "configuration bootstrap"),
   loadRuntimeModule("distribution/precheck.mjs", "precheck"),
+  loadRuntimeModule("distribution/update-check.mjs", "update check"),
 ]);
 const { applyHostConfigBootstrap, inspectHostConfig, planHostConfigBootstrap } = configBootstrapModule;
 const { precheckForActions } = precheckModule;
+const { checkForUpdate, readPackageVersion } = updateCheckModule;
 
 function absolute(value, label) {
   if (typeof value !== "string" || value.trim() === "" || !isAbsolute(value)) {
@@ -165,12 +167,36 @@ export function inspectSkillLink(link, skillsRoot) {
     reason: `${link} target is not reachable (${targetState}); the user link is preserved` });
 }
 
+/**
+ * Append the release version state to the existing onboarding result. The
+ * installed fact comes from the package's runner root; the source version must
+ * be explicit. Missing/unreadable sources are "cannot check", never "no update".
+ */
+export function inspectReleaseVersion({ packageRoot, sourceVersion, sourcePackage } = {}) {
+  let installed = null;
+  try { installed = readPackageVersion(join(packageRoot, "runner", "package.json")); }
+  catch { installed = null; }
+  const installedVersion = installed?.version ?? null;
+  if (typeof sourcePackage === "string" && sourcePackage !== "") {
+    let source;
+    try { source = readPackageVersion(sourcePackage); }
+    catch (error) {
+      return Object.freeze({
+        status: "unavailable", installed_version: installedVersion, source_version: null,
+        source: `--source-package=${sourcePackage}`, reason: `source version is unreadable: ${error.message}`,
+      });
+    }
+    return checkForUpdate({ installedVersion, sourceVersion: source.version, source: `--source-package=${sourcePackage}` });
+  }
+  return checkForUpdate({ installedVersion, sourceVersion, source: typeof sourceVersion === "string" && sourceVersion !== "" ? "--source-version" : null });
+}
+
 function scopeBase({ target, home }) {
   return target === undefined ? home : target;
 }
 
 /** Compute the single action plan shared by check, dry-run and apply. */
-export function planOnboarding({ packageRoot, target, env = process.env, home, requestedStage = "build-code", requestedTrack = null, requestedReviewKind = null, probe = "static" } = {}) {
+export function planOnboarding({ packageRoot, target, env = process.env, home, requestedStage = "build-code", requestedTrack = null, requestedReviewKind = null, probe = "static", sourceVersion, sourcePackage } = {}) {
   if (typeof home !== "string" || !isAbsolute(home)) throw new TypeError("home must be an absolute path");
   const layout = inspectPackageLayout(packageRoot);
   const scope = target === undefined ? "user" : "project";
@@ -229,6 +255,7 @@ export function planOnboarding({ packageRoot, target, env = process.env, home, r
     config_plan: configPlan,
     config: configAction,
     actions: Object.freeze(actions),
+    version: inspectReleaseVersion({ packageRoot: layout.package_root, sourceVersion, sourcePackage }),
     required: precheck,
     tools,
     review_readiness: reviewReadiness,
@@ -377,6 +404,7 @@ function resultEnvelope(plan, mode, results, extra = {}) {
     skills: plan.skills,
     config: results.find((item) => item.kind === "config") ?? plan.config,
     actions: Object.freeze(results.filter((item) => item.kind !== "config")),
+    version: plan.version,
     required: plan.required,
     tools: plan.tools,
     review_readiness: plan.review_readiness,
@@ -388,14 +416,16 @@ function resultEnvelope(plan, mode, results, extra = {}) {
 }
 
 /** Execute the plan. check/dry-run never write; apply only touches named targets. */
-export async function onboardRelease({ mode, packageRoot, target, env = process.env, home, writeConfig = false } = {}) {
+export async function onboardRelease({ mode, packageRoot, target, env = process.env, home, writeConfig = false, sourceVersion, sourcePackage } = {}) {
   if (!["check", "dry-run", "apply"].includes(mode)) throw fail("INVALID_ARGUMENTS", "exactly one of --check, --dry-run or --apply is required");
-  const plan = planOnboarding({ packageRoot, target, env, home, probe: "static" });
+  if (sourceVersion !== undefined && sourcePackage !== undefined) throw fail("INVALID_ARGUMENTS", "use either --source-version or --source-package, not both");
+  const plan = planOnboarding({ packageRoot, target, env, home, probe: "static", sourceVersion, sourcePackage });
   const layoutProblems = [...plan.layout.problems, ...plan.target_problems];
   if (layoutProblems.length) {
     return Object.freeze({
       mode, scope: plan.scope, base: plan.base, package_root: plan.package_root, skills_root: plan.skills_root,
-      skills: plan.skills, config: plan.config, actions: Object.freeze([]), required: plan.required, tools: plan.tools,
+      skills: plan.skills, config: plan.config, actions: Object.freeze([]), version: plan.version,
+      required: plan.required, tools: plan.tools,
       review_readiness: plan.review_readiness,
       problems: Object.freeze(layoutProblems), next_action: plan.layout.next_action ?? null,
       summary: Object.freeze({}), blocking: Object.freeze(layoutProblems), exit_code: 1,
@@ -465,7 +495,7 @@ function parseArguments(argv) {
     if (!token.startsWith("--")) throw fail("INVALID_ARGUMENTS", `unknown argument: ${token}`);
     const separator = token.indexOf("=");
     const name = separator < 0 ? token.slice(2) : token.slice(2, separator);
-    if (!["package-root", "target"].includes(name)) throw fail("INVALID_ARGUMENTS", `unknown option: --${name}`);
+    if (!["package-root", "target", "source-version", "source-package"].includes(name)) throw fail("INVALID_ARGUMENTS", `unknown option: --${name}`);
     const value = separator < 0 ? argv[(index += 1)] : token.slice(separator + 1);
     if (value === undefined || value === "") throw fail("INVALID_ARGUMENTS", `--${name} requires a value`);
     if (Object.hasOwn(values, name)) throw fail("INVALID_ARGUMENTS", `--${name} may be given once`);
@@ -473,6 +503,9 @@ function parseArguments(argv) {
   }
   if (mode === null) throw fail("INVALID_ARGUMENTS", "exactly one of --check, --dry-run or --apply is required");
   if (!Object.hasOwn(values, "package-root")) throw fail("INVALID_ARGUMENTS", "--package-root is required");
+  if (Object.hasOwn(values, "source-version") && Object.hasOwn(values, "source-package")) {
+    throw fail("INVALID_ARGUMENTS", "use either --source-version or --source-package, not both");
+  }
   return { help: false, values, mode };
 }
 
@@ -480,20 +513,31 @@ export async function onboardReleaseCliMain(argv = process.argv.slice(2), { env 
   const parsed = parseArguments(argv);
   if (parsed.help) {
     return Object.freeze({
-      usage: "node tools/cli/onboard-release.mjs --check|--dry-run|--apply --package-root=<absolute> [--target=<absolute project>] [--write-config]",
+      usage: "node tools/cli/onboard-release.mjs --check|--dry-run|--apply --package-root=<absolute> [--target=<absolute project>] [--write-config] [--source-version=<semver> | --source-package=<absolute>]",
       notes: [
         "user-level default targets: <home>/.claude/skills and <home>/.agents/skills",
         "project-level targets require an explicit --target and only write inside it",
         "the bare wh-review scripts still default to <home>/.config/workflowhub/config.json; custom XDG_CONFIG_HOME is used by WorkflowHub callers",
         "the non-sensitive configuration merge is opt-in with --write-config; it is never applied in project scope",
         "this command never installs a release, never runs npm or Git, and never executes tool version probes",
+        "the version state is reported only for the installed runner package and one explicit source version; without a source it reports cannot check",
       ],
     });
   }
-  return onboardRelease({ mode: parsed.mode, packageRoot: parsed.values["package-root"], target: parsed.values.target, env, home, writeConfig: parsed.values.writeConfig === true });
+  return onboardRelease({ mode: parsed.mode, packageRoot: parsed.values["package-root"], target: parsed.values.target, env, home,
+    writeConfig: parsed.values.writeConfig === true, sourceVersion: parsed.values["source-version"], sourcePackage: parsed.values["source-package"] });
 }
 
-if (process.argv[1] !== undefined && process.argv[1] === fileURLToPath(import.meta.url)) {
+// Resolve symbolic-link invocations to the real file before deciding whether
+// this module is the process entry point; otherwise a /tmp alias silently
+// exits 0 without running the CLI.
+function isDirectInvocation() {
+  if (process.argv[1] === undefined) return false;
+  try { return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)); }
+  catch { return false; }
+}
+
+if (isDirectInvocation()) {
   onboardReleaseCliMain(process.argv.slice(2), { env: process.env, home: process.env.HOME })
     .then((result) => {
       process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
