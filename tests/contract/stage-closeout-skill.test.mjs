@@ -18,7 +18,7 @@ describe('ORACLE-KG-P3 standalone closeout discovery and portable closure', () =
     const result = validateSkillBundle(root, 'skills/stage-close/skill-bundle.json', entry.path);
     expect(result.bundle.skill).toBe('stage-close');
     expect(result.bundle.files, 'ORACLE-KG-P3: pure method does not package a second Git executor').toEqual(['SKILL.md']);
-    expect(new Set(entry.used_by_stages)).toEqual(new Set(['build-prd', 'verify-code', 'make-decision']));
+    expect(new Set(entry.used_by_stages)).toEqual(new Set(['build-prd', 'make-decision', 'build-code']));
   });
 
   it('resolves its declared graph dependency with the existing bundle consumer', () => {

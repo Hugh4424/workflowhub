@@ -10177,6 +10177,19 @@
       "tests": ["tests/contract/precheck-entry.test.mjs", "tests/contract/code-review-ocr.test.mjs"],
       "delete_condition": "当配置显式传参与派发前缺项诊断职责由经独立验证的替代承接后由原 owner 收回；原七类命令语义保持。",
       "retention_basis": "C10 P2/T002 的 modify 增量；不新增公共命令、不改无关动作的既有语义与错误码。"
+    },
+    {
+      "source": "tests/contract/terminal-close-consumption.test.mjs",
+      "destination": "tests/contract/terminal-close-consumption.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "C10 P3 终末收尾消费契约：installed build-code 闭包可达唯一 stage-close 及其依赖；终末节实际加载并消费 final-report，代码图/文档图分别读回，免费缓存优先且付费未批准时保文档未更新；图 allowlist 进最终提交，授权与一次最终范围确认有效，重入不重复 PR/merge/删除；单关闭 owner 不被第二执行器替代。",
+      "owner": "C10 P3 唯一开发writer",
+      "consumer": "node node_modules/vitest/vitest.mjs run tests/contract/terminal-close-consumption.test.mjs；P3 独立测试与审查者、P4/P6 消费者只读。",
+      "module_consumers": [],
+      "named_data_readers": ["workflows/build-code/skill-deps.yaml", "workflows/build-code/SKILL.md", "workflows/build-code/steps.json", "skills/catalog.yaml", "skills/stage-close/SKILL.md"],
+      "delete_condition": "当终末收尾接线职责退役或被经独立验证的替代测试承接后删除；原失败与历史原件保留。",
+      "retention_basis": "C10 P3/T003 声明的具名接线契约；只证接线，不冒真实远端发布、用户答复或付费图完成。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

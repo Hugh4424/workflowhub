@@ -38,6 +38,9 @@ skills:
   - name: stage-reflection
     path: skills/stage-reflection/SKILL.md
     trigger: actual_stage_end_process_issue_optional
+  - name: stage-close
+    path: skills/stage-close/SKILL.md
+    trigger: terminal_closeout_after_final_report_actual_invocation
   - name: diagnosing-bugs
     path: skills/diagnosing-bugs/SKILL.md
     trigger: actual_failure_reproduction_before_hypothesis

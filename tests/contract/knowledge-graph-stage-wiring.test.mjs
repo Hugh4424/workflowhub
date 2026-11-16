@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { validateSkillBundle } from '../../runtime/adapters/local-skill-resolver.mjs';
 
 const root = resolve(import.meta.dirname, '../..');
-const stages = ['make-decision', 'build-prd', 'build-plan', 'build-code', 'verify-code'];
+const stages = ['make-decision', 'build-prd', 'build-plan', 'build-code'];
 
 describe('ORACLE-KG-STAGE portable stage discovery', () => {
   it.each(stages)('%s resolves the graph method through its actual dependency manifest', stage => {
@@ -19,7 +19,7 @@ describe('ORACLE-KG-STAGE portable stage discovery', () => {
     expect(graph[0].trigger.trim().length).toBeGreaterThan(0);
     validateSkillBundle(root, 'skills/knowledge-graph/skill-bundle.json', graph[0].path);
     expect(prompt, `ORACLE-KG-STAGE:${stage}: host cannot discover the declared method`).toContain(graph[0].path);
-    if (stage === 'build-prd' || stage === 'verify-code') {
+    if (stage === 'build-prd' || stage === 'build-code') {
       const closeout = manifest.skills.filter(skill => skill.name === 'stage-close');
       expect(closeout, `ORACLE-KG-STAGE:${stage}: shared closeout is unreachable`).toHaveLength(1);
       expect(closeout[0].path).toBe('skills/stage-close/SKILL.md');
