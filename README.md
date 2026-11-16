@@ -281,9 +281,25 @@ node tools/cli/build-skill-manifests.mjs --check
 
 | 还能用 | 会失败或只能记不可用 |
 | --- | --- |
-| 接入三命令 `--check`/`--dry-run`/`--apply`（实测 broker 配置缺失时三者都 exit 0）；安装 runner 与技能加载；`doctor`、`status`（实测 `ready`，它们不要求审查） | 需要审查的动作：审查派发（实测 `review` 维度 blocked：`PROVIDER_CONFIG_NOT_FOUND`、`ROUTE_STAGE_ABSENT`；完整审查前置还多一条 `ocr: unknown`）；以审查结论为前提的收尾 |
+| 接入三命令 `--check`/`--dry-run`/`--apply`（实测 broker 配置缺失时三者都 exit 0）；安装 runner 与技能加载；`doctor`、`status`（实测 `ready`，它们不要求审查） | 需要审查的动作：审查派发 `<入口> review --action=record …`（实测 `review` 维度 blocked：`PROVIDER_CONFIG_NOT_FOUND`、`ROUTE_STAGE_ABSENT`；完整审查前置还多一条 `ocr: unknown`）；以审查结论为前提的收尾，见下 |
 
-把这件事记成"审查暂不可用 + 交付方待提供"，不要为了让它变绿去伪造 provider 或换默认执行者。**没有真实审查就不能声称本任务完成**——只能如实记"审查不可用"，把缺口和等待的交付方写出来。
+`doctor` 与 `status` 在这里就能查，两条都要在**任务 worktree 里**跑，`<入口>` 在源码检出是 `tools/cli/stage-runtime.mjs`、在发布包内是 `<release-root>/runner/tools/cli/stage-runtime.mjs`：
+
+```bash
+<入口> doctor --action=workspace --stage=build-code --project=<项目名> --task=<任务 id>
+<入口> status --action=begin  --stage=build-code --project=<项目名> --task=<任务 id>
+```
+
+看哪些字段：
+
+- `doctor`：`workspace.registered`（是否已注册）、`workspace.branch`（应是本任务分支）、`baseline_commit`、`workspace.counts`（tracked/staged/unstaged/untracked 各几项）与 `workspace.dirty_paths`。判断依据是"注册在、分支对、干净程度与你实际改动一致"。
+- `status`：`work_status`（`ready` 才算可继续）、`missing_materials`（应为空）、`quality_status` 与 `quality.review_origin`/`quality.review_result_ref`（审查事实在这里，缺审查时不会是 `pass`）、`phase_progress.freshness`（`current` 才表示游标没过期）。
+
+注意一个坑：用**发布包内**那份入口时要用真实路径调用。它判断"是否直接执行"用的是字面路径比较，`/tmp` 这类符号别名（真实路径 `/private/tmp`）会让它**静默 exit 0、什么都不做**（实测：`/tmp/...` 调用输出 0 字节，`/private/tmp/...` 调用正常出 JSON）。
+
+**以审查结论为前提的收尾**，具体是这几处：① 审查派发本身 `<入口> review --action=record …`（缺 broker 直接失败）；② 交付收口 `node tools/cli/task-close.mjs status|prepare|confirm|execute|complete|close --project=<项目名> --task=<任务 id> …`——命令本身不校验审查（实测 `status` 只读可用，返回 `status`、`quality_status`、`facts`），但它的 `quality_status` 会停在 `unknown`/`incomplete`，不能拿来宣称完成；③ build-code 的终末判断同样以本次审查事实为前提。
+
+所以缺审查时的替代做法是：**如实记"审查暂不可用 + 交付方待提供"**，把 `quality_status` 留在不通过的状态继续做别的安全工作；**不要**用跳过审查、伪造 review 记录或换默认 provider 来把收口"凑绿"。
 
 收到的目录应包含：`package.json`、`scripts/3rd-review.mjs`、`config.example.json`、`lib/`、`LICENSE`，以及 `skill-bundle.json`（它列了该技能应当包含的文件清单，可拿来点数核对）。拿到后先自检，exit 0 才算可用：
 
