@@ -10454,7 +10454,7 @@
       "destination": "docs/architecture/move-map.json",
       "status": "retain",
       "role": "production",
-      "responsibility": "C10 P4 增量：登记发布组合、清单、update-check、两类清单/矩阵/T004 测试及 package/lock 的真实职责、consumer、测试与删除条件。",
+      "responsibility": "C10 P4 增量：登记发布组合、清单、update-check、两类清单/矩阵/T004 测试及 package/lock 的真实职责、consumer、测试与删除条件。C10 P6 增量（合并进本条目，不新增同 destination 的第二条）：登记复制根 guard 窄扩与 P6 目标驱动两条目的真实职责、consumer、测试与删除条件。",
       "owner": "C10 P4 唯一开发writer / 原迁移表维护者",
       "consumer": "目录职责读者与后续发布维护者；本表不是阶段质量或许可。",
       "module_consumers": [],
@@ -10463,8 +10463,36 @@
         "tests/contract/release-tree.test.mjs",
         "tests/contract/skill-manifests.test.mjs"
       ],
-      "delete_condition": "无删除条件：迁移表保留；P4 条目随对应文件退役而更新。",
-      "retention_basis": "C10 P4/T004 的登记增量。"
+      "delete_condition": "无删除条件：迁移表保留；本条目随对应文件退役而更新（P4 与 P6 增量同条目维护）。",
+      "retention_basis": "C10 P4/T004 的登记增量；C10 P6/T006 的登记增量合并于同一条目（同 destination 不重复登记）。"
+    },
+    {
+      "source": "tests/acceptance/c12-update-chain.mjs",
+      "destination": "tests/acceptance/c12-update-chain.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "C10 P6 增量：只窄扩复制根 guard——除 C12 许可的 /tmp/c12-c12-p1/carrier 外，仅接受当前 C10 TaskHandle 自己 tracked 临时父根下的固定子目录 carrier（marker owner/uid/dev/ino、父目录非符号链接、其它 root 一律拒绝）；同一谓词供 prepare 与 cleanup 复用，C12 默认行为与既有错误码不变。prepare/browser-env/collect/cleanup 的复制、身份、token、构建、服务、浏览器采集与清理行为不改。",
+      "owner": "C10 P6 唯一开发writer",
+      "consumer": "P6/T006 的隔离浏览器读回驱动与 P6 目标测试 tests/acceptance/installed-release-flow.test.mjs；不是通用三模式 driver。",
+      "module_consumers": [],
+      "named_data_readers": ["runtime/interface/temp-dir.mjs", "runtime/task/task-handle.mjs"],
+      "tests": ["tests/acceptance/installed-release-flow.test.mjs", "tests/acceptance/c12-update-chain.test.mjs"],
+      "delete_condition": "当 C12 更新链驱动及其读回消费者被经独立验证的替代实现承接、且 C10 读回原件已归档后，由原 owner 删除；C12 冻结判定器不得放宽。",
+      "retention_basis": "C10 P6/T006 的 modify；只改复制根 guard 的许可集合。"
+    },
+    {
+      "source": "tests/acceptance/installed-release-flow.test.mjs",
+      "destination": "tests/acceptance/installed-release-flow.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "C10 P6 目标驱动：①真实 prepare guard 接受认证 C10 owned tracked 根并停在下游缺原件处；②foreign/未标记/符号父根/伪 marker uid 仍被拒绝且无副作用；③C12 默认复制根扩展后仍被接受；④真实安装 caller 与具体 HTTP/外部只读 SQLite 的卡级 cancel/restore/409/404 断言在缺 C10_DATA_READY_REF/C10_ENV_READY_REF 时显式 skip；⑤真实 TaskHandle 与形状 producer 的反例。",
+      "owner": "C10 P6 唯一开发writer",
+      "consumer": "P6 独立测试/读者复放，作为 ORACLE-CROSS-TASK-READBACK 与 ORACLE-INSTALLED-FLOW 的具名门禁；不证明外部服务、UI 或远端上线。",
+      "module_consumers": [],
+      "named_data_readers": ["runtime/task/task-handle.mjs", "runtime/interface/temp-dir.mjs", "skills/wh-review/scripts/review-materials.mjs", "runtime/evidence/acceptance-evidence-validator.mjs"],
+      "tests": ["tests/acceptance/c12-update-chain.mjs"],
+      "delete_condition": "当该驱动的门禁由经独立验证的替代测试承接后由原 owner 删除；真实业务缺口随就绪件补齐另行执行，不靠删除断言求绿。",
+      "retention_basis": "C10 P6/T006–T008 的 add；固定替身与真实运行分层，不以 fixture 冒业务。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

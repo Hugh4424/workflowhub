@@ -30,12 +30,12 @@
 import {spawn, spawnSync} from "node:child_process";
 import {createHash, randomUUID} from "node:crypto";
 import {
-  closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync,
+  closeSync, existsSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync,
   readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, writeSync,
 } from "node:fs";
 import {cp} from "node:fs/promises";
 import {constants as fsConstants} from "node:fs";
-import {dirname, isAbsolute, join, resolve, sep} from "node:path";
+import {basename, dirname, isAbsolute, join, resolve, sep} from "node:path";
 import {fileURLToPath, pathToFileURL} from "node:url";
 import {openTask} from "../../runtime/task/task-handle.mjs";
 
@@ -47,6 +47,16 @@ const SOURCE_ROOT_DEFAULT = "/Users/Hugh/Hugh/Project/c09-carrier-new-20261103";
 const OBJECT_NAME = SOURCE_ROOT_DEFAULT.split("/").pop();
 const COPY_ROOT_DEFAULT = "/tmp/c12-c12-p1/carrier";
 const RUN_DIR_DEFAULT = "/tmp/c12-c12-p1";
+// C10 P6 narrow extension: the only non-C12 root this guard may accept is the
+// current C10 task's own tracked temporary parent plus its fixed `carrier`
+// child. The C12 default keeps its exact previous behaviour; foreign, unmarked,
+// symbolic or foreign-uid parents are still refused before any side effect.
+const C10_TASK_ID = "workflowhub-ui-frontend-c10-release-onboarding-20261103";
+const C10_COPY_PARENT_PREFIX = "wh-c10-";
+const COPY_CHILD_NAME = "carrier";
+const TRACKED_MARKER_NAME = ".workflowhub-temp.json";
+const TRACKED_MARKER_OWNER = "workflowhub-temp-dir-v1";
+const RUN_ROOT_MAX_AGE_MS = 30 * 60 * 1000;
 const PORT_DEFAULT = 41923;
 const P1_RUN_ID = "c12-p1";
 const ENGINE_ALLOWED = ["ego-lite", "agent-browser"];
@@ -69,9 +79,22 @@ const FILES = [
   "app/ui/tokens-base.css", "app/ui/ui-contract.ts",
 ];
 const ROUTES = ["/simulation-board", "/sim-workbench"];
+// C10 P6 needs BOTH declared cells per route. A legacy 1280x800-only result, a
+// missing 390x844 row or any undeclared viewport is not accepted coverage.
+export function validateP6ViewportCoverage(rows) {
+  const required = VIEWPORTS.map((viewport) => viewport.name);
+  const observed = [...new Set((Array.isArray(rows) ? rows : []).filter((row) => row && row.status !== "未测").map((row) => row.viewport))];
+  const missing = required.filter((name) => !observed.includes(name));
+  const unexpected = observed.filter((name) => !required.includes(name));
+  return {ok: missing.length === 0 && unexpected.length === 0, required, observed, missing, unexpected};
+}
 const MEASURE_ROUTES = ["/sim-workbench", "/simulation-board"];
+// C10 P6 observes the two pages at 1440x900 and 390x844 (P6 card UI section).
+// P1 design facts exist only at 1280x800, so those rows are recorded as an
+// unavailable reference rather than silently reused as this viewport's value.
+const DESKTOP_VIEWPORT = "1440x900";
 const VIEWPORTS = [
-  {name: "1280x800", width: 1280, height: 800},
+  {name: DESKTOP_VIEWPORT, width: 1440, height: 900},
   {name: "390x844", width: 390, height: 844},
 ];
 const TOKEN_PATH = "app/globals.css";
@@ -449,11 +472,65 @@ function updateRunState(path, patch) {
 function safeUpdateRunState(path, patch) {
   try { return updateRunState(path, patch); } catch { return null; }
 }
-function assertCopyRootSafe(copyRoot) {
+// Why this copy root may be mutated. Returns a reason string instead of
+// throwing so both prepare and cleanup can reuse one predicate and keep their
+// distinct legacy codes. Nothing is created, copied or deleted here.
+function c10OwnedCopyRootReason(copyRoot, taskRecordRoot, runId) {
+  if (typeof taskRecordRoot !== "string" || taskRecordRoot === "") return "no --task-record-root was given";
+  if (typeof runId !== "string" || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(runId)) return "no valid --run-id was given to bind this run";
+  let handle;
+  try { handle = openHandle(resolve(taskRecordRoot)); }
+  catch (error) { return `task record root is not an openable task: ${error.message}`; }
+  if (handle.identity.taskId !== C10_TASK_ID) return `task ${handle.identity.taskId} is not the authenticated C10 task`;
+  const parent = dirname(copyRoot);
+  if (basename(copyRoot) !== COPY_CHILD_NAME) return `the copy must be this task's fixed ${COPY_CHILD_NAME} child directory`;
+  let parentStat;
+  try { parentStat = lstatSync(parent); } catch (error) { return `copy parent is not readable: ${error.code ?? error.message}`; }
+  if (!parentStat.isDirectory() || parentStat.isSymbolicLink()) return "copy parent must be a real non-symbolic directory";
+  if (realpathSync(parent) !== parent) return "copy parent path must not traverse a symbolic link";
+  const uid = process.getuid?.() ?? null;
+  if (uid !== null && parentStat.uid !== uid) return "copy parent must be owned by this user";
+  const markerPath = join(parent, TRACKED_MARKER_NAME);
+  let markerStat;
+  try { markerStat = lstatSync(markerPath); } catch (error) { return `copy parent carries no tracked marker (${error.code ?? error.message})`; }
+  if (!markerStat.isFile() || markerStat.isSymbolicLink() || markerStat.nlink !== 1) return "tracked marker must be a single-link regular file";
+  if ((markerStat.mode & 0o077) !== 0 || markerStat.size > 4096) return "tracked marker must be private to this user";
+  let marker;
+  try { marker = JSON.parse(readFileSync(markerPath, "utf8")); } catch (error) { return `tracked marker is unreadable: ${error.code ?? error.message}`; }
+  if (marker?.owner !== TRACKED_MARKER_OWNER) return "tracked marker was not written by this tool";
+  if (marker.uid !== uid) return "tracked marker uid differs from this user";
+  if (marker.dev !== parentStat.dev || marker.ino !== parentStat.ino) return "tracked marker identity differs from the directory";
+  // Proof of THIS run, not merely "a same-uid wh-c10- directory": the prefix
+  // must carry this run id, the marker must have been written by this process
+  // (same Node lifecycle) or by its direct parent, and it must be recent. An
+  // older same-uid sibling is a foreign root and must never be deleted.
+  const expectedPrefix = `${C10_COPY_PARENT_PREFIX}${runId}-`;
+  if (marker.prefix !== expectedPrefix) return `tracked parent belongs to a different run (prefix ${String(marker.prefix)} is not ${expectedPrefix})`;
+  const creator = Number(marker.pid);
+  if (creator !== process.pid && creator !== process.ppid) return `tracked parent was not created by this process or its direct parent (pid ${String(marker.pid)}; self ${process.pid}; parent ${process.ppid})`;
+  const createdAt = Date.parse(String(marker.created_at ?? ""));
+  const ageMs = Date.now() - createdAt;
+  if (!Number.isFinite(createdAt) || ageMs < -60_000 || ageMs > RUN_ROOT_MAX_AGE_MS) return `tracked parent is outside this run's time window (created_at ${String(marker.created_at)}, age ${Number.isFinite(ageMs) ? Math.round(ageMs / 1000) + "s" : "unparseable"})`;
+  return null;
+}
+// kind = "legacy" | "c10-owned" | null (refused). Legacy equality keeps the
+// original C12 default and its read-only source rejection byte-for-byte.
+function copyRootScope(copyRoot, taskRecordRoot, runId) {
   const resolved = resolve(copyRoot);
-  if (resolved !== COPY_ROOT_DEFAULT) throw fail("E_COPY_ROOT_SCOPE", `copy root must be the licensed Phase 1 copy ${COPY_ROOT_DEFAULT}; observed ${resolved}`, {exitCode: 2});
-  if (resolved === SOURCE_ROOT_DEFAULT) throw fail("E_COPY_ROOT_SCOPE", "copy root equals the read-only source root", {exitCode: 2});
-  return resolved;
+  if (resolved === COPY_ROOT_DEFAULT) {
+    return resolved === SOURCE_ROOT_DEFAULT
+      ? {resolved, kind: null, reason: "copy root equals the read-only source root", code: "E_COPY_ROOT_SCOPE"}
+      : {resolved, kind: "legacy", reason: null};
+  }
+  const reason = c10OwnedCopyRootReason(resolved, taskRecordRoot, runId);
+  return {resolved, kind: reason ? null : "c10-owned", reason};
+}
+function assertCopyRootSafe(copyRoot, taskRecordRoot, runId) {
+  const scope = copyRootScope(copyRoot, taskRecordRoot, runId);
+  if (scope.kind === null) {
+    throw fail("E_COPY_ROOT_SCOPE", `copy root must be the licensed Phase 1 copy ${COPY_ROOT_DEFAULT} or this C10 task's own tracked copy${scope.reason ? ` (${scope.reason})` : ""}; observed ${scope.resolved}`, {exitCode: 2, observed: scope.resolved, reason: scope.reason});
+  }
+  return scope.resolved;
 }
 async function assertPortFree(port) {
   const query = portQuery(port);
@@ -532,7 +609,7 @@ function publishBoundary(handle, ref, {runId, sourceRoot, copyRoot, before, p1})
 async function prepare(argv) {
   const options = parseFlags(argv, ["run-id", "copy-root", "port", "task-record-root"], ["source-root", "evidence-series", "p1-identity", "p1-service", "p1-design", "p1-interaction"]);
   const runId = options["run-id"];
-  const copyRoot = assertCopyRootSafe(options["copy-root"]);
+  const copyRoot = assertCopyRootSafe(options["copy-root"], options["task-record-root"], runId);
   const sourceRoot = resolve(options["source-root"] ?? SOURCE_ROOT_DEFAULT);
   const taskRoot = resolve(options["task-record-root"]);
   const port = Number(options.port);
@@ -564,9 +641,12 @@ async function prepare(argv) {
   }
   await assertPortFree(port);
 
-  // 3. Persist a cleanup identity BEFORE any copy mutation. If the build or the
-  // service start later fails, cleanup can still find and stop this run's
-  // process and keep the copy.
+  // 3. Persist a cleanup identity BEFORE any copy mutation.
+  // The copy's own dev/ino is recorded when a copy already exists so a later
+  // replacement can prove it deletes the same directory it inspected.
+  // If the build or the service start later fails, cleanup can still find and
+  // stop this run's process and keep the copy.
+  const existingCopyStat = lstatSync(copyRoot, {throwIfNoEntry: false});
   const p1Summary = {
     identity_ref: p1.identity.ref, identity_path: p1.identity.path, identity_sha256: p1.identity.sha256, identity_aggregate: p1.identity.aggregate,
     service_ref: p1.service.ref, service_path: p1.service.path, service_sha256: p1.service.sha256,
@@ -593,6 +673,8 @@ async function prepare(argv) {
     ready: null,
     engine: p1.service.engine,
     engine_session: null,
+    copy_identity: existingCopyStat && !existingCopyStat.isSymbolicLink() && existingCopyStat.isDirectory()
+      ? {dev: existingCopyStat.dev, ino: existingCopyStat.ino} : null,
     p1: p1Summary,
     evidence_base: null,
     identity_ref: null,
@@ -651,7 +733,22 @@ async function prepare(argv) {
     }
   }
 
-  // 5. Rebuild from source with the Phase 1 algorithm and verify again.
+  // 5. Rebuild from source with the Phase 1 algorithm and verify again. The
+  // replacement deletes the validated copy, so re-prove that the directory at
+  // this exact path is still the same real directory we just inspected: a
+  // swapped symlink or a different inode stops before any recursive removal.
+  const beforeDelete = lstatSync(copyRoot, {throwIfNoEntry: false});
+  if (beforeDelete !== undefined) {
+    if (beforeDelete.isSymbolicLink() || !beforeDelete.isDirectory()) {
+      const error = fail("E_COPY_IDENTITY", "the copy root is no longer a real directory; nothing was deleted", {exitCode: 4, observed: {is_symbolic_link: beforeDelete.isSymbolicLink(), is_directory: beforeDelete.isDirectory()}});
+      await failPrepare(error, {identity_ref: p1.identity.path});
+    }
+    const expectedDevIno = readJson(statePath).value?.copy_identity;
+    if (expectedDevIno && (expectedDevIno.dev !== beforeDelete.dev || expectedDevIno.ino !== beforeDelete.ino)) {
+      const error = fail("E_COPY_IDENTITY", "the copy root inode differs from the prepared identity; nothing was deleted", {exitCode: 4, expected: expectedDevIno, observed: {dev: beforeDelete.dev, ino: beforeDelete.ino}});
+      await failPrepare(error, {identity_ref: p1.identity.path});
+    }
+  }
   rmSync(copyRoot, {recursive: true, force: true});
   await cp(sourceRoot, copyRoot, {
     recursive: true,
@@ -1142,9 +1239,14 @@ async function measurePagesInBrowser(input) {
           });
         }
       }
-      const primary = pageRecord.viewports.find((row) => row.viewport === "1280x800" && row.status !== "未测");
+      const coverage = validateP6ViewportCoverage(pageRecord.viewports);
+      const primary = pageRecord.viewports.find((row) => row.viewport === DESKTOP_VIEWPORT && row.status !== "未测");
       if (!primary) {
-        output.errors.push({route, code: "E_PRIMARY_VIEWPORT", message: "1280x800 .inlineactions measurement is missing"});
+        output.errors.push({route, code: "E_PRIMARY_VIEWPORT", message: `${DESKTOP_VIEWPORT} .inlineactions measurement is missing`, coverage});
+        continue;
+      }
+      if (!coverage.ok) {
+        output.errors.push({route, code: "E_VIEWPORT_COVERAGE", message: `P6 requires ${coverage.required.join(" + ")}; missing ${coverage.missing.join(",") || "none"}; undeclared ${coverage.unexpected.join(",") || "none"}`, coverage});
         continue;
       }
       pageRecord.before = input.beforeGap;
@@ -1656,15 +1758,15 @@ async function collect(argv) {
       workbench: describeCell(cellOf("/sim-workbench", viewport.name)),
     }])),
     state_context: {
-      "1280x800": {board: cellOf("/simulation-board", "1280x800")?.state_context ?? null, workbench: cellOf("/sim-workbench", "1280x800")?.state_context ?? null},
+      [DESKTOP_VIEWPORT]: {board: cellOf("/simulation-board", DESKTOP_VIEWPORT)?.state_context ?? null, workbench: cellOf("/sim-workbench", DESKTOP_VIEWPORT)?.state_context ?? null},
       "390x844": {board: board390?.state_context ?? null, workbench: workbench390?.state_context ?? null},
     },
     p1_reference_context: "P1 design-facts rows are the frozen ready state at the stored viewport; the board row here is measured after the required empty-state display action, so board ready-vs-empty deltas are state differences, not token effects.",
     overflow_after: {
-      "1280x800": {
-        board_ready: cellOf("/simulation-board", "1280x800")?.root_ready?.overflow_px ?? null,
-        board_empty: cellOf("/simulation-board", "1280x800")?.root?.overflow_px ?? null,
-        workbench: cellOf("/sim-workbench", "1280x800")?.root?.overflow_px ?? null,
+      [DESKTOP_VIEWPORT]: {
+        board_ready: cellOf("/simulation-board", DESKTOP_VIEWPORT)?.root_ready?.overflow_px ?? null,
+        board_empty: cellOf("/simulation-board", DESKTOP_VIEWPORT)?.root?.overflow_px ?? null,
+        workbench: cellOf("/sim-workbench", DESKTOP_VIEWPORT)?.root?.overflow_px ?? null,
       },
       "390x844": {
         board_ready: board390?.root_ready?.overflow_px ?? null,
@@ -1673,7 +1775,7 @@ async function collect(argv) {
       },
     },
     overflow_delta_vs_p1: {
-      "1280x800": {board_ready: cellOf("/simulation-board", "1280x800")?.root_ready ? (cellOf("/simulation-board", "1280x800").root_ready.scroll_width - (cellOf("/simulation-board", "1280x800").p1_reference?.root_scroll_width ?? cellOf("/simulation-board", "1280x800").root_ready.scroll_width)) : null, workbench: cellOf("/sim-workbench", "1280x800")?.overflow_delta_px ?? null},
+      [DESKTOP_VIEWPORT]: {board_ready: cellOf("/simulation-board", DESKTOP_VIEWPORT)?.root_ready ? (cellOf("/simulation-board", DESKTOP_VIEWPORT).root_ready.scroll_width - (cellOf("/simulation-board", DESKTOP_VIEWPORT).p1_reference?.root_scroll_width ?? cellOf("/simulation-board", DESKTOP_VIEWPORT).root_ready.scroll_width)) : null, workbench: cellOf("/sim-workbench", DESKTOP_VIEWPORT)?.overflow_delta_px ?? null},
       "390x844": {board_ready: board390?.root_ready && Number.isFinite(board390.p1_reference?.root_scroll_width) ? board390.root_ready.scroll_width - board390.p1_reference.root_scroll_width : null, workbench: workbench390?.overflow_delta_px ?? null},
     },
     main_action_390: {
@@ -1699,7 +1801,7 @@ async function collect(argv) {
       return parts.join("");
     })(),
     limitations: [
-      "only the two live pages at 1280x800 and 390x844; no 200% zoom, contrast audit, physical screen reader or long-term visual regression",
+      `only the two live pages at ${DESKTOP_VIEWPORT} and 390x844; P1 design facts exist only at 1280x800, so that row is recorded as an unavailable reference rather than reused; no 200% zoom, contrast audit, physical screen reader or long-term visual regression`,
     ],
   };
   const responsiveRef = await publish(handle, evidence.responsive, responsive);
@@ -2055,7 +2157,8 @@ async function cleanup(argv) {
   const runState = stateRead.value;
   if (resolve(runState.copy_root) !== copyRoot) throw fail("E_COPY_IDENTITY", `cleanup copy root ${copyRoot} differs from prepared ${runState.copy_root}; nothing deleted`, {exitCode: 3});
   if (runState.task_root !== taskRoot) throw fail("E_RUN_STATE", `run state task root ${runState.task_root} differs from ${taskRoot}`, {exitCode: 2});
-  if (copyRoot !== COPY_ROOT_DEFAULT) throw fail("E_COPY_SCOPE", `cleanup refuses to delete ${copyRoot}; only ${COPY_ROOT_DEFAULT} is licensed`, {exitCode: 3});
+  const cleanupScope = copyRootScope(copyRoot, taskRoot, runId);
+  if (cleanupScope.kind === null) throw fail("E_COPY_SCOPE", `cleanup refuses to delete ${copyRoot}; only ${COPY_ROOT_DEFAULT} or this C10 task's own tracked copy is licensed${cleanupScope.reason ? ` (${cleanupScope.reason})` : ""}`, {exitCode: 3, observed: copyRoot, reason: cleanupScope.reason});
 
   // Stop the owned service first, regardless of the copy's state. A drift or a
   // failed collect must never leave this run's listener behind.
