@@ -277,7 +277,13 @@ node tools/cli/build-skill-manifests.mjs --check
 
 **当前没有公开下载地址或 tag 可给**：catalog 的 `third-review` 条目只记了 `local_version` 和来源 commit，没有记录可访问的仓库地址；发布包也不带它。所以唯一的取得方式是**向持有源码检出的交付方索取 `skills/third-review/` 整目录**（整目录，别只拿 `lib/`）。
 
-**如果对方给不了**：那就没法启用审查——但接入本身（`--check`/`--dry-run`/`--apply`）不受影响（实测 broker 配置缺失时 `--check` 仍 exit 0）。把这件事记成"审查暂不可用"，不要为了让它变绿去伪造 provider 或换默认执行者。
+**如果对方给不了**：那就没法启用审查。具体会怎样，分清两类：
+
+| 还能用 | 会失败或只能记不可用 |
+| --- | --- |
+| 接入三命令 `--check`/`--dry-run`/`--apply`（实测 broker 配置缺失时三者都 exit 0）；安装 runner 与技能加载；`doctor`、`status`（实测 `ready`，它们不要求审查） | 需要审查的动作：审查派发（实测 `review` 维度 blocked：`PROVIDER_CONFIG_NOT_FOUND`、`ROUTE_STAGE_ABSENT`；完整审查前置还多一条 `ocr: unknown`）；以审查结论为前提的收尾 |
+
+把这件事记成"审查暂不可用 + 交付方待提供"，不要为了让它变绿去伪造 provider 或换默认执行者。**没有真实审查就不能声称本任务完成**——只能如实记"审查不可用"，把缺口和等待的交付方写出来。
 
 收到的目录应包含：`package.json`、`scripts/3rd-review.mjs`、`config.example.json`、`lib/`、`LICENSE`，以及 `skill-bundle.json`（它列了该技能应当包含的文件清单，可拿来点数核对）。拿到后先自检，exit 0 才算可用：
 
@@ -396,7 +402,7 @@ cp "<config>.bak-<UTC 时间戳>-<8 位随机>" "<config>"
 | `open-code-review: ocr is not on PATH` | 没装代码审查工具 | 装 `ocr` ≥ 1.12.9 并放进 PATH，用 `ocr --version` 自证；不换替代执行者。 |
 | `ego-browser helper: ego-browser is not on PATH` | 浏览器动作缺工具 | 装 ego lite 让 `ego-browser` 上 PATH，或用 `EGO_BROWSER_BIN` 指到已装的 helper；不回退到别的浏览器。 |
 | `ANYSEARCH_API_KEY is not set in the current environment` | 搜索动作缺 key | 在执行该动作的 shell 里设好 key；不会静默用匿名。 |
-| `npm: npm is not on PATH` / `git is not on PATH` | 安装 runner 的前置缺了 | 装好放进 PATH，再回到步骤 2。 |
+| `npm: npm is not on PATH` / `git is not on PATH` | 安装 runner 的前置缺了（缺 git 时失败点在 "Git identity setup"，此时 bundle 与 npm 已完成） | 装好放进 PATH；然后**先按步骤 1 重建一个新的发布目录，再走步骤 2**——直接在同目录重跑会立刻撞 `EEXIST: ... .gitignore`。 |
 | `<home>/.claude/skills exists and is not a symlink; the user value is preserved` | 目标位置已有你自己的目录 | 命令拒绝覆盖（exit 1）。按[已有技能目录](#已经有-claudeskills-或-agentsskills-时)那节处理。 |
 | `conflict ... configuration bytes changed after planning` | 有人同时在改配置 | 重读配置文件，重新规划后再写；你的字节没有被覆盖。 |
 
