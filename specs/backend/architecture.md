@@ -1,6 +1,6 @@
 # WorkflowHub 后端架构
 
-版本/最后更新：2026-10-25。作用域：本项目当前任务。owner：原架构/运行时owner；consumer：规划、实现与代码审查者。
+版本/最后更新：2026-11-16。作用域：本项目当前任务。owner：原架构/运行时owner；consumer：规划、实现与代码审查者。
 
 ## 依据与职责
 
@@ -15,6 +15,8 @@
 ## 真实consumer与接缝
 
 `runtime/interface/runtime-facade.mjs` → `createRuntimeFacade/invokeRuntimeCommand`；`runtime/task/task-handle.mjs` → `openTask`；真正调用路径是`tools/cli/stage-runtime.mjs`到既有stageRuntimeCliMain及其delegates，不在本文增加入口。
+
+用户配置路径的唯一owner是`runtime/evidence/storage-root.mjs`的`workflowHubConfigPath`；`tools/cli/stage-runtime.mjs`、`runtime/distribution/config-bootstrap.mjs`、`runtime/distribution/precheck.mjs`与`tools/cli/onboard-release.mjs`显式传入该路径，不各自复制XDG/HOME规则，可搬运的`skills/wh-review/scripts/third-review-host-config.mjs`保留自有HOME默认；职责、consumer与删除条件登记在[目录职责](../../docs/architecture/move-map.json)，本件不复制。
 
 ## 反例与核对
 

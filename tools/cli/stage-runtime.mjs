@@ -24,7 +24,8 @@ import { withLock } from "../../runtime/interface/record-lock.mjs";
 import { recordConfirmation } from "../../runtime/interface/human-confirm.mjs";
 import { confirmClosePlan } from "../../core/task-close.mjs";
 import { validateTaskId } from "../../runtime/task/task-identity.mjs";
-import { resolveStorageRoot, resolveStorageRootDetails } from "../../runtime/evidence/storage-root.mjs";
+import { resolveStorageRoot, resolveStorageRootDetails, workflowHubConfigPath } from "../../runtime/evidence/storage-root.mjs";
+import { precheckForActions } from "../../runtime/distribution/precheck.mjs";
 import { AUTHENTICATED_EVIDENCE_PATH, redactProviderHostPaths } from "../../runtime/review/provider-material-projection.mjs";
 import { deliveredMaterialId, authenticatedEvidenceBytes } from "../../runtime/review/review-packet-identity.mjs";
 import { runSimpleReview, validateReviewSupplement, validateReviewCallerMaterials } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
@@ -678,7 +679,9 @@ export function prepareTaskBoundBuildCodeReviewBundle(context, request, {
   if (candidateExperiment && reviewScope === "terminal") {
     validateVerifyAcceptanceSummary(request.materials?.acceptance_criteria);
   }
-  const trusted = loadConfig({ requestedStage: request.stage, requestedTrack: request.review_track ?? request.reviewTrack ?? null,
+  // Bind the unique XDG/HOME owner path explicitly; the portable wh-review
+  // loader keeps its documented HOME default for bare callers.
+  const trusted = loadConfig({ hostConfigPath: workflowHubConfigPath(), requestedStage: request.stage, requestedTrack: request.review_track ?? request.reviewTrack ?? null,
     requestedReviewKind: request.review_kind ?? request.reviewKind ?? null });
   const cursorDiffBase = phaseReviewDiffBase(context, request);
   const scope=trustedReviewReadScope(context,request,typeof resolveReviewReadScope==='function' ? resolveReviewReadScope({task:context.task,workspace:context.workspace,stage:request.stage,phaseId:request.phase_id??null}) : reviewReadScope);
@@ -1606,6 +1609,22 @@ function requireOptions(values, names, operation) {
   if (unknown.length) throw new TypeError(`${operation} has unknown options: ${unknown.join(", ")}`);
 }
 
+// A real provider spawn/permission failure is post-dispatch, but the caller
+// still needs the provider names, the config path and the next executable step.
+function enrichOcrProviderDiagnostic(result, trustedContext) {
+  if (!result || result.status !== "unavailable" || result.error?.diagnostic) return result;
+  const failures = (result.provider_results ?? []).filter((member) => member && member.status !== "completed");
+  if (failures.length === 0) return result;
+  const names = failures.map((member) => member.provider).filter((name) => typeof name === "string");
+  const configPath = trustedContext?.trusted?.config ?? null;
+  return {...result, error:{...(result.error ?? {}),
+    diagnostic:{field:"provider",expected:"installed provider executable for every selected route provider",
+      actual:failures.map((member) => ({provider:member.provider ?? null,code:member.error?.code ?? "PROVIDER_FAILED",message:member.error?.message ?? null})),
+      ...(configPath === null ? {} : {config_path:configPath}),
+      next_action:`install or repair the executable for ${names.length ? names.join(", ") : "the selected providers"} (providers.<id>.command in ${configPath ?? "the 3rd-review config"}), then rerun the review`},
+  }};
+}
+
 async function recordTaskReview(context, input, values, services = {}) {
     if(!input || typeof input!=="object" || Array.isArray(input) || !input.request || input.result!==undefined) throw new TypeError("review --action=record requires a request; importing caller-authored results is retired");
     const original=input.request;
@@ -1634,9 +1653,23 @@ async function recordTaskReview(context, input, values, services = {}) {
       if(!codeSurface)return whReview(current,{...options,readSupplementRecord,onManagedStall:services.onManagedStall ?? writeManagedStallDiagnostic});
       const materialPreflight=validateReviewCallerMaterials(current);
       if(materialPreflight)return {...materialPreflight,executor:"ocr"};
+      // Only the current user config and trusted review route are missing inputs
+      // at this dispatch point; installed-provider failure stays a post-dispatch
+      // fact and unrelated doctor/status/draft entries never reach this gate.
+      const dispatchPrecheck=precheckForActions(["review"],{requestedStage:current.stage,
+        requestedTrack:current.review_track??current.reviewTrack??null,
+        requestedReviewKind:current.review_kind??current.reviewKind??null});
+      const missingInput=dispatchPrecheck.missing[0];
+      if(missingInput)return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",
+        error:{code:"ROUTE_UNAVAILABLE",message:redactProviderHostPaths(String(missingInput.message)),
+          diagnostic:{field:missingInput.id,expected:"current user configuration and trusted review route",
+            actual:missingInput.code??missingInput.status,next_action:missingInput.next_action??"repair the reported review input before dispatch"}}};
       const detection=detectOcr();
-      if(detection.status==="unavailable")return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:detection.error?.code ?? "OCR_DETECTION_UNAVAILABLE",message:detection.reason,detected_by:detection.detected_by}};
-      if(detection.status==="not_installed")return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:"OCR_NOT_INSTALLED",message:detection.reason,detected_by:detection.detected_by}};
+      const ocrNextAction="install open-code-review at version 1.12.9 or newer (the open-code-review/ocr CLI on PATH), then verify with `ocr --version`; no substitute executor is used";
+      if(detection.status==="unavailable")return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:detection.error?.code ?? "OCR_DETECTION_UNAVAILABLE",message:detection.reason,detected_by:detection.detected_by,
+        diagnostic:{field:"ocr",expected:"open-code-review >= 1.12.9 on PATH",actual:String(detection.reason),next_action:ocrNextAction}}};
+      if(detection.status==="not_installed")return {status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:"OCR_NOT_INSTALLED",message:detection.reason,detected_by:detection.detected_by,
+        diagnostic:{field:"ocr",expected:"open-code-review >= 1.12.9 on PATH",actual:String(detection.reason),next_action:ocrNextAction}}};
       const onProviderHealth=services.onOcrProviderHealth ?? writeOcrProviderHealthDiagnostic;
       if(typeof onProviderHealth!=="function")throw new TypeError("OCR health observer must be a function");
       const ocrRunner=services.runOcrDelegationRound;
@@ -1661,7 +1694,8 @@ async function recordTaskReview(context, input, values, services = {}) {
           if (options.signal?.aborted) throw Object.assign(new Error("review cancelled after material observation"), { code: "REVIEW_CANCELLED", dispatch_state: "blocked_before_dispatch" });
         }
         let trustedContext;
-        try{trustedContext=prepareConfiguredOcrHostContext(current);}catch(error){
+        try{trustedContext=prepareConfiguredOcrHostContext(current,{loadConfig:options=>loadTrustedThirdReviewConfig({hostConfigPath:workflowHubConfigPath(),
+          requestedStage:options?.requestedStage??current.stage,requestedTrack:options?.requestedTrack??null,requestedReviewKind:options?.requestedReviewKind??null})});}catch(error){
           return retainSource({status:"unavailable",outcome:"unavailable",dispatch_state:"blocked_before_dispatch",provider_results:[],findings:[],executor:"ocr",error:{code:error.code??"ROUTE_UNAVAILABLE",message:redactProviderHostPaths(String(error.message)),diagnostic:{field:"route/provider_selection",expected:"one current trusted code route and valid provider configuration",actual:"invalid",next_action:"repair current route/configuration before dispatch"}}});
         }
         let subset;
@@ -1672,7 +1706,7 @@ async function recordTaskReview(context, input, values, services = {}) {
           // Only selection is narrowed. Preserve the full trusted configuration SHA and route identity drift checks.
           trustedContext={...trustedContext,selection:{...original,providers:subset,eligibleProfiles:original.eligibleProfiles.filter(p=>selected.has(p)),requestedProfiles:original.requestedProfiles.filter(p=>selected.has(p)),requestedProfileSpecs:original.requestedProfileSpecs.filter(p=>selected.has(typeof p==="string"?p:p.provider??p.id)),provider_identities:filterMap(original.provider_identities),provider_models:filterMap(original.provider_models)}};
         }
-        if(typeof ocrRunner==="function")return retainSource({...await ocrRunner(current,{...options,onProviderHealth,bundle,trustedContext}),executor:"ocr"});
+        if(typeof ocrRunner==="function")return retainSource({...enrichOcrProviderDiagnostic(await ocrRunner(current,{...options,onProviderHealth,bundle,trustedContext}),trustedContext),executor:"ocr"});
         const result=await runOcrDelegationRound(current,{buildBundle:()=>bundle,signal:options.signal,
           onProviderResult: async ({ result: providerResult }) => {
             // The host has already persisted each original stream before settling.
@@ -1682,7 +1716,7 @@ async function recordTaskReview(context, input, values, services = {}) {
           executor:params=>runConfiguredOcrHostReview(params,{trustedContext,sourceBundle:bundle,onProviderHealth,
             onProviderResult:params.onProviderResult,
             rawOutputSink:async (hint,bytes,metadata={})=>options.onProviderOutput({provider:metadata.provider ?? "ocr",role:null,channel:metadata.stream ?? "raw-output",output:bytes})})});
-        return retainSource({...result,executor:"ocr"});
+        return retainSource({...enrichOcrProviderDiagnostic(result,trustedContext),executor:"ocr"});
       } catch(error){if(sourceMetadata)Object.assign(error,sourceMetadata);throw error;} finally {bundle?.dispose();}
     };
     const saved=await recordSimpleReviewRequest({taskDir:context.task.taskPath,request,runRound:runner,signal:services.reviewSignal ?? null});

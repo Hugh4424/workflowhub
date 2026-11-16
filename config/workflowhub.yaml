@@ -1,2 +1,7 @@
-# Task execution records directory.
-task_dir: ./tasks/
+# 非生效历史样例（C10 P2 起）
+# 本文件不是配置源，WorkflowHub 不读取它；保留以满足历史样例与人工导航。
+# 唯一生效的用户配置由 storage-root 的 workflowHubConfigPath 决定：
+#   $XDG_CONFIG_HOME/workflowhub/config.json（未设 XDG_CONFIG_HOME 时为 $HOME/.config/workflowhub/config.json）
+# 结构见同目录 workflowhub.config.template.json；provider/model 定义仍归 3rd-review 配置。
+# 旧写法 `task_dir: ./tasks/` 为相对路径，按现合同不是合法的 task_dir；不要从本 YAML 恢复读取行为。
+sample_task_dir: ./tasks/

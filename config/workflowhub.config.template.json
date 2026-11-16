@@ -1,0 +1,13 @@
+{
+  "task_dir": "<absolute task storage root chosen by the user>",
+  "third_review": {
+    "command": ["<absolute path to the installed 3rd-review broker CLI>"],
+    "config": "<absolute path to the existing 3rd-review config>",
+    "attachment_root": "<absolute real packet directory already allowlisted by that config>"
+  },
+  "wh_review": {
+    "version": 2,
+    "stages": {},
+    "non_stage": {}
+  }
+}
