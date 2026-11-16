@@ -2,13 +2,28 @@ import { homedir } from "node:os";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 
-function workflowHubConfigPath({ env = process.env, home = homedir() } = {}) {
+/**
+ * Unique owner of the WorkflowHub user configuration path.
+ *
+ * Callers that already know the current stage must pass this value explicitly
+ * instead of re-deriving the XDG/HOME rule. The portable wh-review scripts keep
+ * their own documented HOME default; WorkflowHub callers bind this path.
+ */
+export function workflowHubConfigPath({ env = process.env, home = homedir() } = {}) {
   const xdgConfigHome = env?.XDG_CONFIG_HOME;
   const configHome = typeof xdgConfigHome === "string" && xdgConfigHome.trim() !== ""
     ? xdgConfigHome.trim()
     : join(home, ".config");
   if (!isAbsolute(configHome)) throw new TypeError(`WorkflowHub config home must be absolute: ${configHome}`);
   return join(resolve(configHome), "workflowhub", "config.json");
+}
+
+function safeJsonPosition(error) {
+  const message = String(error?.message ?? "");
+  const located = /line (\d+) column (\d+)/.exec(message);
+  if (located) return `line ${located[1]}, column ${located[2]}`;
+  const positioned = /at position (\d+)/.exec(message);
+  return positioned ? `position ${positioned[1]}` : "position unknown";
 }
 
 function readConfiguredTaskDir({ env, home }) {
@@ -18,7 +33,7 @@ function readConfiguredTaskDir({ env, home }) {
   try {
     config = JSON.parse(readFileSync(path, "utf8"));
   } catch (error) {
-    throw new TypeError(`invalid WorkflowHub config JSON at ${path}: ${error.message}`);
+    throw new TypeError(`invalid WorkflowHub config JSON at ${path} (${safeJsonPosition(error)}); parser content is not echoed`);
   }
   if (!config || typeof config !== "object" || Array.isArray(config)) {
     throw new TypeError(`WorkflowHub config must be a JSON object: ${path}`);

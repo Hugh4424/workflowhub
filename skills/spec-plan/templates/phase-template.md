@@ -681,18 +681,18 @@ build-code 结束统一提醒逐条列
 - **输入**: [当前材料引用、产出它的 Task、已核实的接口或夹具；沿所属验收条件写结果 producer 与 consumer、具体输入与提供者、执行 owner 与时点；若本 Task 独立，写 `none` 并给理由]
 - **文件 / 符号**: [本 Phase 写入集内的新增或修改路径；既有符号或签名或消费者与核实来源；未知项要写明负责人与停止条件]
 - **动作**: [在每个锚点上的有序改动或操作、数据与控制流、兼容边界；要足以让读者不必猜产品就找到第一处改动]
-- **输出 / 失败**: [可观察的接口、schema 或状态结果，非法输入与失败信号，清理或回滚效果]
+- **输出 / 失败**: [可观察的接口、schema 或状态结果，非法输入与失败信号，清理或回滚效果；临时工作命令在 `finally` 回收可再生 scratch，交付包、原始证据与 provider TTL 不在回收范围]
 - **边界 / 禁止改动**: [精确的受保护文件或范围；以及为什么本 Task 不能改它们]
 - **依赖**: [引用更早的 Task 编号；没有 P/T 引用时整串只写 `无` 或 `none`，理由写到别的字段]
 - **测试层级 / 技能**: [当前项目「测试标准」自行声明的面的子集，可多选；每面测或不测的理由、所关联验收与同 Phase 可执行命令；一个适用的主测试技能。路由档位仅是技术预判，不替面声明]
-- **场景 / 夹具或服务**: [正常用例与具名的反向用例；搭建与清理]
+- **场景 / 夹具或服务**: [正常用例与具名的反向用例；搭建与清理。临时工作命令用同进程创建、消费和 `finally` 回收；反向用例含目标断言失败、SIGINT/TERM、SIGKILL 残留下次受控回收、活 PID/符号链接/换 inode 保留]
 - **RED/GREEN 门禁命令**: [本 Task 的目标 RED 与配对 GREEN 共用同一条可执行、有范围的命令；若确实不适用，说明理由并给出客观替代]
 - **预期退出码**: [行为或混合任务写 `RED nonzero; GREEN 0`；RED 由具名目标断言产生，不是 setup 失败；纯文档 G-2 按下例给客观检查与真实限制]
 - **RED 目标失败**: [稳定的判定器编号，以及改动之前必须失败的那条确切断言或拒绝；setup 或收集失败不算 RED]
 - **GREEN 判定器**: [同一个判定器编号；改动之后的通过信号，以及具名的反向行为；不加反引号，整段以 `ORACLE-` 开头]
 - **证据**: [相对任务根的计划 RED 与 GREEN 证据引用；真实结果属于任务事实库]
 - **覆盖上限**: [本 Task 的证据无法确立的东西]
-- **停止 / 恢复**: [精确的不匹配或未知项、负责修复的执行单元与材料、安全恢复方式；不得静默回退]
+- **停止 / 恢复**: [精确的不匹配或未知项、负责修复的执行单元与材料、安全恢复方式；不得静默回退。找不到同进程入口、清理改变业务失败、误删未知字节或现 helper 反例不满足时，停该回收路径，回原 writer 修方法/测试，原错误不删]
 - **完成**: [要诚实下结论所需的验收结果、目标测试、反向用例、证据或回读，以及任何审查事实；每条验收项写成**没参与实现的执行单元能用一条命令重放**的判据，或独立判定者能照着复读的观察协议；两种都写不出才算未达成，不得记为达成。分两栏写：前置（不作完成条件）放 gate 命令、结构检查与命令退出码；完成条件（只写效果）放消费者可观察结果、反例与证据。语义判定未执行记 `incomplete`，写判定者、观察协议与证据落点]
 
 ### G-2 纯文档示例（既有字段，无新增运行行为）
@@ -762,6 +762,49 @@ reader 只校验材料声明，不验证实际 diff；真实改动是否仅为�
 上面 18 个字段都在卡末，放在「校验器用，人可跳过」之后。
 文件级另有 10 个机器字段：全局规格、写入集、依赖、消费者、gate_cmd、oracle、evidence_path、STOP、覆盖 AC、Done。
 它们的写法在文件末「机器字段」一节，同样逐字读取。
+
+### 临时工作命令怎么写？
+
+触发类：任务中为一次性探测、夹具或验证新建、可由同输入重建的临时路径；长期产物、交付包和其它任务目录不在内。
+任务卡写到「临时目录」时，必须落到同一进程的创建、消费和 `finally` 回收；只写「用完清理」不算。
+先按 `skills/spec-plan/SKILL.md` 的「Scratch lifetime and original-evidence boundary」分类：可删 scratch、交付包、原始证据、带独立 TTL 的 provider packet。
+前缀由已认证 task 身份与用途决定（`task.json` 的 task_id 加用途 slug），禁止通用 `wh-` 或旧 `/tmp`；canonical 根与精确前缀的记录位置以该节为准，本模板不重写。
+运行前提：片段用 `node --input-type=module -e` 从工作区根执行，相对导入按 cwd 解析；存成 `tests/` 或任务目录文件时把导入改成模块绝对 URL，否则导入失败。
+由 `task.captureCommand`（或同接口 `runtime/interface/run-command.mjs` 的 `captureCommand`）在创建前启动并落盘，stdout/stderr 与退出码从盘上回读；上面的片段是它的 `argv` 内容。
+替换 `{{SCRATCH_ROOT}}` 用 `JSON.stringify(root)` 生成字符串字面量，含引号或反斜杠的 TMPDIR 不破坏语法。
+`{{SETTLE}}` 换成应用自有的 drain/provider settle 等待（没有就写 `Promise.resolve()`）；清理在它结束后才执行，取消期间 scratch 仍可访问。
+业务用非零 `process.exitCode` 表示失败时，清理失败只上报、保留原退出码。
+非 Node 临时命令必须用现有等效 owner，或交给 Node owner 运行并等待结束；做不到就停掉这条临时工作路径，不能用「不适用」豁免。
+
+<!-- scratch-lifecycle-example -->
+```js
+import { createTrackedTempDir } from "./runtime/interface/temp-dir.mjs";
+const scratch = createTrackedTempDir("{{TASK_ID}}-{{PURPOSE}}-", { root: {{SCRATCH_ROOT}} });
+let fatal;
+try {
+  process.stdout.write(`${scratch.path}\n`);
+  {{WORK}}
+} finally {
+  try {
+    await {{SETTLE}};
+  } catch (error) {
+    fatal = error;
+    process.stderr.write(`TEMP_SETTLE_FAILED: ${error?.message ?? error}\n`);
+  }
+  try {
+    scratch.dispose();
+  } catch (error) {
+    fatal ??= error;
+    process.stderr.write(`TEMP_CLEANUP_FAILED: ${error.code ?? "ERROR"}: ${error.message}\n`);
+  }
+}
+if (fatal && (process.exitCode ?? 0) === 0) throw fatal;
+```
+
+目标断言失败时 `finally` 仍只回收可再生 scratch，业务失败和已捕获输出保持可读；`dispose()` 失败只单独报告，不得覆盖业务失败；业务成功而清理失败时以非零退出，不能冒成功；业务已给出非零 `process.exitCode` 时保留该码。
+SIGKILL 不可捕获：下一次只对本任务记录的前缀调用 `cleanupStaleTempDirs`。
+活 PID、权限不明 PID、符号链接、换 inode、错 marker、未足龄一律保留；不扫其它任务、通用 `wh-` 前缀或未知目录。
+不新增第二套清理、锁账本或控制面。
 
 ### 六类人读内容归到哪个字段？
 

@@ -27,7 +27,7 @@ function gitEnv() {
   return env;
 }
 function git(root, argv, { optional = false } = {}) {
-  const result = spawnSync("git", argv, { cwd: root, env: gitEnv(), encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
+  const result = spawnSync("git", argv, { cwd: root, env: gitEnv(), encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
   if (result.error) throw result.error;
   if (result.status !== 0 && !optional) throw failure("GIT_COMMAND_FAILED", `git ${argv.join(" ")} failed: ${result.stderr}`);
   return optional ? result : result.stdout.trimEnd();
@@ -615,7 +615,7 @@ export async function inspectDeliveryCloseState({ taskDir, planRef } = {}) {
               const result = git(c.root, ["ls-tree", "--name-only", sourceAnchor, "--", change.path], { optional: true });
               return check(result, "committed deletion tree") && result.stdout.trim() === "";
             }
-            const blob = spawnSync("git", ["show", `${sourceAnchor}:${change.path}`], { cwd: c.root, env: gitEnv(), maxBuffer: 32 * 1024 * 1024 });
+            const blob = spawnSync("git", ["show", `${sourceAnchor}:${change.path}`], { cwd: c.root, env: gitEnv(), maxBuffer: 256 * 1024 * 1024 });
             if (blob.error) { readErrors.push(`committed planned blob: ${blob.error.message}`); return false; }
             return check({ ...blob, stderr: blob.stderr?.toString("utf8") }, "committed planned blob") && digest(blob.stdout) === change.sha256;
           });
@@ -677,7 +677,7 @@ export async function executeClosePlan({ taskDir, planRef, confirmationRef, sign
             if (row.target_head !== plan.target_head || !physical.facts.delivery_committed || existsSync(c.worktree) && entries(c.worktree).length || plan.source.changes.length && actualSource === plan.source.head) return false;
             return plan.source.changes.every(change => {
               if (change.sha256 === null) return git(c.root, ["ls-tree", "--name-only", actualSource, "--", change.path]).trim() === "";
-              const blob = spawnSync("git", ["show", `${actualSource}:${change.path}`], { cwd: c.root, env: gitEnv(), maxBuffer: 32 * 1024 * 1024 });
+              const blob = spawnSync("git", ["show", `${actualSource}:${change.path}`], { cwd: c.root, env: gitEnv(), maxBuffer: 256 * 1024 * 1024 });
               return !blob.error && blob.status === 0 && digest(blob.stdout) === change.sha256;
             });
           }

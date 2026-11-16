@@ -1714,15 +1714,13 @@
       "destination": "config/workflowhub.yaml",
       "status": "retain",
       "role": "production",
-      "responsibility": "`task_dir` 等必要键（任务目录解析）；M2 registry 与 metrics_path 删除",
-      "owner": "B2/P3 / MT-2-040",
-      "consumer": "无当前直接模块消费者；按原保留职责仅可人读／显式调用，不新增未来 actor",
+      "responsibility": "C10 P2 起仅为非生效历史样例并指向唯一 JSON 配置（$XDG_CONFIG_HOME/workflowhub/config.json 或 $HOME/.config/...）；不承载 task_dir 解析或任何读取。metrics/collector.mjs:49 仅剩一句注释引用，属 metrics owner，不由本任务改。",
+      "owner": "B2/P3 / MT-2-040（原登记）；C10 P2 改为非生效样例的 writer 为 P2 开发writer",
+      "consumer": "无当前直接模块消费者；只读人读导航，不新增未来 actor",
       "module_consumers": [],
-      "named_data_readers": [
-        "metrics/collector.mjs"
-      ],
-      "delete_condition": "remove the portable entry when build-prd has no registry consumer",
-      "retention_basis": "MT-2-040 / NARROW"
+      "named_data_readers": [],
+      "delete_condition": "历史保留；仅当原 owner 明确该样例无保留价值并确认删除时处理，不借迁移重写读取行为。",
+      "retention_basis": "MT-2-040 / NARROW；C10 P2/T002 改为非生效样例（原文与原因保留，不删历史）。"
     },
     {
       "source": "contracts/component-output.contract.json",
@@ -10006,6 +10004,495 @@
       ],
       "delete_condition": "经独立审查的替代完整承接真实consumer、迁接现deps/bundle且无当前消费者后由原owner同批退役；历史task原件不删覆。",
       "retention_basis": "design-port-flow-20261115 P2–P5 实际交付；真实consumer见consumer与named_data_readers；登记不证明质量或未来消费。"
+    },
+    {
+      "source": "tests/contract/phase-scratch-lifecycle.test.mjs",
+      "destination": "tests/contract/phase-scratch-lifecycle.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "C10 P1 具名生命周期契约测试；消费真实 temp-dir 与作者方法/模板，核正常、目标断言失败、SIGINT/TERM、SIGKILL 后受控回收，以及活 PID/符号链接/换 inode/未知目录保留、交付包与原始证据可读和方法示例可执行。",
+      "owner": "C10 P1 唯一开发writer / spec-plan 作者方法owner",
+      "consumer": "node node_modules/vitest/vitest.mjs run tests/contract/phase-scratch-lifecycle.test.mjs；任务P1开发与后置独立测试/审查者",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/spec-plan/SKILL.md",
+        "skills/spec-plan/templates/phase-template.md",
+        "workflows/build-plan/SKILL.md"
+      ],
+      "delete_condition": "本具名职责经独立验证由既有替代完整承接且当前消费者均改接后删除；历史原件与冻结失败保留。",
+      "retention_basis": "C10 P1 T001 声明的唯一新增测试；写集见 phases/P1-scratch-lifecycle.md；不新增阶段、公共命令或持久控制面。"
+    },
+    {
+      "source": "runtime/distribution/config-bootstrap.mjs",
+      "destination": "runtime/distribution/config-bootstrap.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "C10 P2 唯一配置读取/检测/最小补齐 owner：以 storage-root 的 workflowHubConfigPath 读取现 XDG JSON，区分无文件、坏 JSON、非对象、不支持的 wh_review 形状与合法缺键；只合并可安全默认的非敏感结构键，写前唯一备份、原子 rename，冲突不覆盖并保留原字节；内层 v2 路由按现 loader 合同校验并接受 retired verify-code 被动路由，保证 loader 接受的配置不被前置门判 unsupported；坏 JSON 只报路径与位置、不回显内容；provider 定义仍归 3rd-review 配置。；config/workflowhub.config.template.json 只作文本引用，不是数据读取路径。",
+      "owner": "C10 P2 开发writer / 配置读取 owner；收口后 owner：wh_review v2 键集与路由合同由 skills/wh-review/scripts/third-review-host-config.mjs 的 loader owner 承接，模板结构与填写说明由 P4 发布文档 / P5 README owner 承接",
+      "consumer": "runtime/distribution/precheck.mjs（静态直调，配置缺项状态）；tools/cli/onboard-release.mjs（动态 import，非静态直调，用于 apply 的最小补齐）；P4 发布作者与 P5 README 作者只读消费接口与结果。config/workflowhub.config.template.json 仅为下一步提示的文本引用（CONFIG_TEMPLATE_REFERENCE），不是命名数据读取路径。",
+      "module_consumers": [
+        "runtime/distribution/precheck.mjs"
+      ],
+      "named_data_readers": [
+        "runtime/evidence/storage-root.mjs",
+        "runtime/interface/record-lock.mjs"
+      ],
+      "tests": [
+        "runtime/distribution/config-bootstrap.test.mjs",
+        "tests/contract/onboard-release.test.mjs"
+      ],
+      "delete_condition": "当前无具名替代；保留至 third-review-host-config loader owner 与 P4/P5 发布文档 owner 确认唯一配置读取与最小补齐由具名替代承接、所有消费者迁移后由原 owner 退役；历史原件与失败 capture 保留。",
+      "retention_basis": "C10 P2/T002 声明的新增生产文件；不新增配置源、不恢复 profiles/priority、不重做 v1→v2 迁移。"
+    },
+    {
+      "source": "runtime/distribution/precheck.mjs",
+      "destination": "runtime/distribution/precheck.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "C10 P2 按动作需求汇总配置/OCR/provider/路由/Ego/anysearch/Node/npm/git 缺项，逐项给路径、来源与下一步；doctor/status/draft 无外部依赖项，不被审查资源缺项阻断；只探测不安装、不换执行者、不静默回退。",
+      "owner": "C10 P2 开发writer / 前置检查 owner；收口后 owner：review 派发门由 runtime/review OCR owner 与 skills/wh-review loader owner 承接，onboard 的探测报告由 P4 发布文档 / P6 安装验收 owner 承接",
+      "consumer": "tools/cli/stage-runtime.mjs（review:record 真实派发前的具名缺项诊断）、tools/cli/onboard-release.mjs（check/dry-run/apply 的工具与依赖逐项状态）；P4/P5 只读消费输出。",
+      "module_consumers": [
+        "tools/cli/stage-runtime.mjs"
+      ],
+      "named_data_readers": [
+        "runtime/distribution/config-bootstrap.mjs",
+        "runtime/evidence/storage-root.mjs",
+        "runtime/review/ocr-delegation-adapter.mjs",
+        "skills/wh-review/scripts/third-review-host-config.mjs"
+      ],
+      "tests": [
+        "runtime/distribution/precheck.test.mjs",
+        "tests/contract/precheck-entry.test.mjs"
+      ],
+      "delete_condition": "当前无具名替代；保留至上述 owner 确认各动作的缺项探测由具名替代完整承接、所有消费者迁移后由原 owner 退役；历史失败原件保留。",
+      "retention_basis": "C10 P2/T002 声明的新增生产文件；复用现 OCR/provider/配置 owner，不新增公共子命令或持久状态。"
+    },
+    {
+      "source": "runtime/distribution/config-bootstrap.test.mjs",
+      "destination": "runtime/distribution/config-bootstrap.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "C10 P2 就近测试：无文件/坏 JSON/非对象/不支持 wh_review/合法缺键的区分，最小合并、唯一备份、原子写、冲突不覆盖、权限/写失败与坏输入原字节保全。",
+      "owner": "C10 P2 唯一开发writer",
+      "consumer": "node node_modules/vitest/vitest.mjs run runtime/distribution/config-bootstrap.test.mjs；P2 独立测试与审查者只读消费。",
+      "module_consumers": [],
+      "named_data_readers": ["runtime/distribution/config-bootstrap.mjs", "runtime/evidence/storage-root.mjs"],
+      "delete_condition": "当被测职责退役或被经独立验证的替代测试完整承接后删除；冻结失败原件保留。",
+      "retention_basis": "C10 P2/T002 声明的四份具名测试之一；只测受控隔离目录，不读写真实用户配置。"
+    },
+    {
+      "source": "runtime/distribution/precheck.test.mjs",
+      "destination": "runtime/distribution/precheck.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "C10 P2 就近测试：Node<24、缺配置、缺 OCR、缺 provider、缺 Ego、缺 anysearch key、缺 npm/git 的具名缺项与路径/来源/下一步，以及 doctor/status/draft 无关动作不被阻断。",
+      "owner": "C10 P2 唯一开发writer",
+      "consumer": "node node_modules/vitest/vitest.mjs run runtime/distribution/precheck.test.mjs；P2 独立测试与审查者只读消费。",
+      "module_consumers": [],
+      "named_data_readers": ["runtime/distribution/precheck.mjs", "runtime/distribution/config-bootstrap.mjs"],
+      "delete_condition": "当被测职责退役或被经独立验证的替代测试完整承接后删除；冻结失败原件保留。",
+      "retention_basis": "C10 P2/T002 声明的四份具名测试之一；隔离 PATH/HOME/XDG 与假 key，不访问真实服务。"
+    },
+    {
+      "source": "tools/cli/onboard-release.mjs",
+      "destination": "tools/cli/onboard-release.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "C10 P2 接入 CLI：check/dry-run/apply 共用一次动作计划；按发布根 runner/runtime 或源码 runtime 解析同源 owner，package-root 与可选项目目标必须为明确绝对路径，用户级默认 .claude/skills 与 .agents/skills，项目级须显式 --target；只建已声明相对软链，配置不可用时停止建链，非敏感配置补齐须 --write-config 显式授权且项目作用域只报告不写，冲突保字节、断链替换、二次 apply 报 no-op、权限/部分失败逐项具名并给恢复命令；只读模式不执行外部工具探测；不调用 installRunnerRelease、不触发 npm/Git 写。；runtime 模块经动态 import 解析。C10 P4 增量：在 P2 安全接入接口上追加版本状态，读安装 runner/package.json 与显式 --source-version/--source-package，经 update-check 输出有更新/无更新/无法检查三态及理由/来源；缺来源或不可读只报无法检查，不改 check/dry-run/apply 写语义；入口守卫用 realpath 识别软链调用。",
+      "owner": "C10 P2 唯一开发writer / 接入入口 owner",
+      "consumer": "新维护者与 P4 完整发布作者、P5 README 作者（按实测命令写文档）、P6 安装验证者；tests/contract/onboard-release.test.mjs 黑盒消费，tests/contract/release-tree.test.mjs 消费 P4 版本三态与软链调用。runtime 模块经 pathToFileURL 动态 import 使用（非静态直调，不列 module_consumers）；安装版本读 runner/package.json，显式来源目录/版本为运行输入。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "runner/package.json"
+      ],
+      "tests": [
+        "tests/contract/onboard-release.test.mjs",
+        "tests/contract/release-tree.test.mjs"
+      ],
+      "delete_condition": "当前无已具名替代（installRunnerRelease 明确不由本入口调用）；保留至 P4 发布包与 P6 安装验收确认宿主接入由具名安装/适配入口承接并迁移消费者后，由原 owner 退役；原失败原件保留。",
+      "retention_basis": "C10 P2/T002 声明的唯一新增 CLI；P4 只追加版本输出，不另建第二接入器。"
+    },
+    {
+      "source": "config/workflowhub.config.template.json",
+      "destination": "config/workflowhub.config.template.json",
+      "status": "add",
+      "role": "production",
+      "responsibility": "C10 P2 合法非敏感配置模板：task_dir 绝对根、third_review 的 command/config/attachment_root 与 wh_review v2 stages/non_stage 形状；占位符只示范结构，不含真实用户值、key 或 provider 定义。",
+      "owner": "C10 P2 唯一开发writer",
+      "consumer": "runtime/distribution/config-bootstrap.mjs 与 tools/cli/onboard-release.mjs 的下一步提示；P5 README 与 P6 安装验证者只读。",
+      "module_consumers": [],
+      "named_data_readers": ["runtime/distribution/precheck.mjs", "tools/cli/onboard-release.mjs"],
+      "tests": ["runtime/distribution/config-bootstrap.test.mjs", "tests/contract/onboard-release.test.mjs"],
+      "delete_condition": "当 P4 发布包与 P5 README 以实测命令承接模板结构展示、且 config-bootstrap/precheck 的文本引用迁移后，由新 owner 退役；历史模板字节保留在 Git 历史。",
+      "retention_basis": "C10 P2/T002 声明的模板；不建立第二配置源，config/workflowhub.yaml 仅为非生效样例。"
+    },
+    {
+      "source": "tests/contract/onboard-release.test.mjs",
+      "destination": "tests/contract/onboard-release.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "C10 P2 接入 CLI 黑盒契约：隔离 HOME/XDG/项目目标下 check/dry-run/apply/第二 apply、用户同字节、断链替换、同名冲突、不可写目标、项目级显式目标、缺布局、不触发 Git/npm 写。",
+      "owner": "C10 P2 唯一开发writer",
+      "consumer": "node node_modules/vitest/vitest.mjs run tests/contract/onboard-release.test.mjs；P2 独立测试与审查者、P4/P6 消费者只读。",
+      "module_consumers": [],
+      "named_data_readers": ["tools/cli/onboard-release.mjs", "runtime/distribution/config-bootstrap.mjs"],
+      "delete_condition": "当接入职责退役或被经独立验证的替代测试承接后删除；冻结失败原件保留。",
+      "retention_basis": "C10 P2/T002 声明的具名黑盒测试；只操作隔离临时目录，不触碰真实用户配置。"
+    },
+    {
+      "source": "tests/contract/precheck-entry.test.mjs",
+      "destination": "tests/contract/precheck-entry.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "C10 P2 实际派发点契约：build-code 审查 bundle 调用绑定唯一 XDG hostConfigPath；缺配置时真实入口给具名缺口与下一步；doctor/status 等无关动作不被审查工具缺项阻断；便携 loader 显式完整结构与裸默认 HOME 限制。",
+      "owner": "C10 P2 唯一开发writer",
+      "consumer": "node node_modules/vitest/vitest.mjs run tests/contract/precheck-entry.test.mjs；P2 独立测试与审查者只读。",
+      "module_consumers": [],
+      "named_data_readers": ["tools/cli/stage-runtime.mjs", "runtime/distribution/precheck.mjs", "skills/wh-review/scripts/third-review-host-config.mjs"],
+      "delete_condition": "当真实派发点的配置绑定与缺项诊断职责退役或被经独立验证的替代测试承接后删除；冻结失败原件保留。",
+      "retention_basis": "C10 P2/T002 声明的具名测试；预写字节已另存 build-plan 原件后扩写，不改旧断言方向。"
+    },
+    {
+      "source": "runtime/evidence/storage-root.mjs",
+      "destination": "runtime/evidence/storage-root.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "C10 P2 增量：导出既有 workflowHubConfigPath 作为唯一配置路径 owner，供 config-bootstrap/precheck/onboard 复用；resolveStorageRootDetails 现优先级与错误不变，不新写第二 XDG 规则。",
+      "owner": "C10 P2 唯一开发writer / 原 B6 storage-root owner",
+      "consumer": "runtime/distribution/config-bootstrap.mjs、runtime/distribution/precheck.mjs、tools/cli/onboard-release.mjs、tools/cli/stage-runtime.mjs（hostConfigPath 显式传参）；P4/P5 只读。",
+      "module_consumers": ["runtime/distribution/config-bootstrap.mjs", "runtime/distribution/precheck.mjs", "tools/cli/onboard-release.mjs", "tools/cli/stage-runtime.mjs"],
+      "named_data_readers": ["runtime/task/load-config.mjs", "tools/cli/task-bootstrap.mjs"],
+      "tests": ["runtime/distribution/config-bootstrap.test.mjs", "runtime/distribution/precheck.test.mjs", "tests/contract/precheck-entry.test.mjs"],
+      "delete_condition": "原保留职责不变；仅当唯一配置路径 owner 被经独立验证的替代完整承接且现消费者迁移后，由原 owner 处理。",
+      "retention_basis": "C10 P2/T002 的 modify 增量；只导出既有函数，不改存储根优先级、错误语义或环境变量行为。"
+    },
+    {
+      "source": "tools/cli/stage-runtime.mjs",
+      "destination": "tools/cli/stage-runtime.mjs",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "C10 P2 增量：build-code 审查 bundle 的 loadConfig 显式传 storage-root 的同一 hostConfigPath；review:record 在真实派发前调用 precheck 并给出具名缺项/下一步，OCR host 配置由同一显式路径注入，派发后 provider spawn 失败补 provider/路径/next_action 诊断；doctor/status/draft 等无关入口语义不变。",
+      "owner": "C10 P2 唯一开发writer / 原 stage-runtime owner",
+      "consumer": "七类公共命令调用者；P2 独立测试/审查者与 P4/P6 消费者只读。",
+      "module_consumers": [],
+      "named_data_readers": ["runtime/distribution/precheck.mjs", "runtime/evidence/storage-root.mjs", "skills/wh-review/scripts/third-review-host-config.mjs"],
+      "tests": ["tests/contract/precheck-entry.test.mjs", "tests/contract/code-review-ocr.test.mjs"],
+      "delete_condition": "当配置显式传参与派发前缺项诊断职责由经独立验证的替代承接后由原 owner 收回；原七类命令语义保持。",
+      "retention_basis": "C10 P2/T002 的 modify 增量；不新增公共命令、不改无关动作的既有语义与错误码。"
+    },
+    {
+      "source": "tests/contract/terminal-close-consumption.test.mjs",
+      "destination": "tests/contract/terminal-close-consumption.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "C10 P3 终末收尾消费契约：installed build-code 闭包可达唯一 stage-close 及其依赖；终末节实际加载并消费 final-report，代码图/文档图分别读回，免费缓存优先且付费未批准时保文档未更新；图 allowlist 进最终提交，授权与一次最终范围确认有效，重入不重复 PR/merge/删除；单关闭 owner 不被第二执行器替代。",
+      "owner": "C10 P3 唯一开发writer",
+      "consumer": "node node_modules/vitest/vitest.mjs run tests/contract/terminal-close-consumption.test.mjs；P3 独立测试与审查者、P4/P6 消费者只读。",
+      "module_consumers": [],
+      "named_data_readers": ["workflows/build-code/skill-deps.yaml", "workflows/build-code/SKILL.md", "workflows/build-code/steps.json", "skills/catalog.yaml", "skills/stage-close/SKILL.md"],
+      "delete_condition": "当终末收尾接线职责退役或被经独立验证的替代测试承接后删除；原失败与历史原件保留。",
+      "retention_basis": "C10 P3/T003 声明的具名接线契约；只证接线，不冒真实远端发布、用户答复或付费图完成。"
+    },
+    {
+      "source": "tools/cli/build-release.mjs",
+      "destination": "tools/cli/build-release.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "C10 P4 完整发布组合入口：对最终布局的 skill-bundle/ 与 runner/ 实际调用既有 build*/validate*；外层只补具名 README/清单/矩阵/接入入口与 .claude、.agents 适配链接；把安装态便携解析实际读取的 catalog/registry 等作为 declared support files 写入 release.json；非空目标、越界/断链/污染与版本分叉明确失败。",
+      "owner": "C10 P4 唯一开发writer",
+      "consumer": "本段 CLI 与发布维护者；P5 README 作者、P6 安装验证者只读消费；不新增第二发布owner。",
+      "module_consumers": [
+        "runtime/stage/stage-registry.mjs",
+        "runtime/distribution/skill-bundle-release.mjs",
+        "runtime/distribution/runner-release.mjs",
+        "runtime/interface/temp-dir.mjs",
+        "runtime/distribution/update-check.mjs"
+      ],
+      "named_data_readers": [
+        "docs/architecture/move-map.json"
+      ],
+      "tests": [
+        "tests/contract/release-tree.test.mjs"
+      ],
+      "delete_condition": "当完整发布组合职责被经独立验证的替代入口承接、且 P5/P6 消费者迁移后删除；现 publisher/validator/runner 算法保持原 owner。",
+      "retention_basis": "C10 P4/T004 的 add 入口；只编排既有算法，不改闭包、安全拒绝或安装器。"
+    },
+    {
+      "source": "tools/cli/build-skill-manifests.mjs",
+      "destination": "tools/cli/build-skill-manifests.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "C10 P4 两类清单入口：从真实 skills/catalog.yaml 与 skills/reuse-registry.md 派生 repo-skills.manifest.json；校验唯一人工维护的 external-skills.manifest.json（来源指针、版本、改造、rights unknown、矩阵锚点）；--check 对差异与坏行拒绝；写仓内清单走既有 withLock。",
+      "owner": "C10 P4 唯一开发writer",
+      "consumer": "发布维护者与独立来源读者；P6 只读复核；清单不是第二 source。",
+      "module_consumers": [
+        "runtime/interface/record-lock.mjs",
+        "runtime/distribution/update-check.mjs"
+      ],
+      "named_data_readers": [
+        "skills/catalog.yaml",
+        "skills/reuse-registry.md",
+        "repo-skills.manifest.json",
+        "external-skills.manifest.json",
+        "docs/external-skills-compat-matrix.md"
+      ],
+      "tests": [
+        "tests/contract/skill-manifests.test.mjs"
+      ],
+      "delete_condition": "当清单投影或外部清单校验职责由经独立验证的替代承接、且当前发布消费者迁移后删除；catalog/reuse 原 owner 不变。",
+      "retention_basis": "C10 P4/T004 的 add 入口；只读 catalog/reuse，条件字段修正回原 owner。"
+    },
+    {
+      "source": "runtime/distribution/update-check.mjs",
+      "destination": "runtime/distribution/update-check.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "C10 P4 版本更新薄比较：严格 semver、prerelease/build 语义；安装版本 + 明确来源版本输出 update_available/up_to_date/unavailable 三态及理由/来源；非法或不可读来源不冒无更新；只读显式 package 路径，不联网、不复制配置owner。消费方为外层 tools/cli/onboard-release.mjs（P4 只追加版本状态，不改接入语义）。",
+      "owner": "C10 P4 唯一开发writer",
+      "consumer": "外层 tools/cli/onboard-release.mjs；P5/P6 只读引用；无网络版本服务。",
+      "module_consumers": [
+        "tools/cli/onboard-release.mjs"
+      ],
+      "named_data_readers": [
+        "package.json",
+        "package-lock.json",
+        "runner/package.json"
+      ],
+      "tests": [
+        "runtime/distribution/update-check.test.mjs",
+        "tests/contract/release-tree.test.mjs"
+      ],
+      "delete_condition": "当版本比较职责被经独立验证的替代 module 承接且 onboard 消费者迁移后删除；不保留兼容桥。",
+      "retention_basis": "C10 P4/T004 的 add 模块；只做本地比较。"
+    },
+    {
+      "source": "runtime/distribution/update-check.test.mjs",
+      "destination": "runtime/distribution/update-check.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "C10 P4 update-check 契约：semver/prerelease、三态与理由/来源、非法/不可读来源、package 与 lock 同源 1.0.0、目录与显式 package.json 读取。",
+      "owner": "C10 P4 唯一开发writer",
+      "consumer": "独立测试/审查者复放；targeted 运行，不全量回归。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "package.json",
+        "package-lock.json"
+      ],
+      "tests": [
+        "runtime/distribution/update-check.mjs"
+      ],
+      "delete_condition": "当 update-check 行为契约被经独立验证的替代测试承接后由原 owner 删除；原失败保留。",
+      "retention_basis": "C10 P4/T004 的 test add。"
+    },
+    {
+      "source": "repo-skills.manifest.json",
+      "destination": "repo-skills.manifest.json",
+      "status": "add",
+      "role": "production",
+      "responsibility": "C10 P4 仓内技能发布投影：由 catalog/reuse 真实源派生（含 catalog/reuse sha256、逐技能 path/local_version/status/used_by_stages/dependency_closure/local_changes/upstream 与 reuse 入口），不是第二清单 source；--check 对差异与坏行拒绝。",
+      "owner": "C10 P4 唯一开发writer（generated）",
+      "consumer": "docs/release-support-matrix.md 与 P6 来源读者；外部清单仍为唯一人工源。",
+      "module_consumers": [
+        "tools/cli/build-skill-manifests.mjs"
+      ],
+      "named_data_readers": [
+        "skills/catalog.yaml",
+        "skills/reuse-registry.md"
+      ],
+      "tests": [
+        "tests/contract/skill-manifests.test.mjs"
+      ],
+      "delete_condition": "当清单投影消费者迁移或 catalog/reuse 由经独立验证的替代投影承接后删除；上游 catalog/reuse 原 owner 不变。",
+      "retention_basis": "C10 P4/T004 的 generated add；失配即拒绝，不手改求绿。"
+    },
+    {
+      "source": "external-skills.manifest.json",
+      "destination": "external-skills.manifest.json",
+      "status": "add",
+      "role": "production",
+      "responsibility": "C10 P4 外部工具唯一人工清单：OCR/Claude Code/Codex/Ego/anysearch 的来源指针、版本或 unknown、版本依据、改造、rights unknown 与矩阵锚点；由 build-skill-manifests 校验，坏版本/来源/权利/锚点拒绝。",
+      "owner": "C10 P4 唯一开发writer（人工维护）",
+      "consumer": "发布维护者、docs/external-skills-compat-matrix.md 与 P6 只读读者。",
+      "module_consumers": [
+        "tools/cli/build-skill-manifests.mjs"
+      ],
+      "named_data_readers": [
+        "docs/external-skills-compat-matrix.md"
+      ],
+      "tests": [
+        "tests/contract/skill-manifests.test.mjs"
+      ],
+      "delete_condition": "当外部工具来源/版本职责由经独立验证的替代清单承接且矩阵迁移后删除；原研究原件保留。",
+      "retention_basis": "C10 P4/T004 的 add；不猜版本区间或许可 grant。"
+    },
+    {
+      "source": "docs/release-support-matrix.md",
+      "destination": "docs/release-support-matrix.md",
+      "status": "add",
+      "role": "documentation",
+      "responsibility": "C10 P4 发布支持矩阵：1.0.0 双根/外层/安装参数、宿主与工具档位、已验证与未验证边界、版本三态；外部工具细节只指向兼容矩阵。",
+      "owner": "C10 P4 唯一开发writer",
+      "consumer": "P5 README 作者、P6 安装验证者、发布维护者。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "docs/external-skills-compat-matrix.md",
+        "external-skills.manifest.json"
+      ],
+      "tests": [
+        "tests/contract/release-tree.test.mjs"
+      ],
+      "delete_condition": "当发布支持事实由经独立验证的替代文档承接且 README/P6 迁移后删除；不复制第二套外部工具判据。",
+      "retention_basis": "C10 P4/T004 的 add 文档。"
+    },
+    {
+      "source": "docs/external-skills-compat-matrix.md",
+      "destination": "docs/external-skills-compat-matrix.md",
+      "status": "add",
+      "role": "documentation",
+      "responsibility": "C10 P4 外部工具兼容矩阵：按 OCR/Ego/anysearch/声明 provider 与两宿主逐项给具名版本或 commit、正反固定输入与断言、unknown 与来源；不推广 semver 区间、不以缺 key/401/不可达作版本负例。",
+      "owner": "C10 P4 唯一开发writer",
+      "consumer": "发布维护者、P5/P6 与独立来源读者；fixed 输入原件在 tests/contract/release-tree.test.mjs 与任务库。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "tests/contract/release-tree.test.mjs",
+        "external-skills.manifest.json"
+      ],
+      "tests": [
+        "tests/contract/release-tree.test.mjs"
+      ],
+      "delete_condition": "当外部工具兼容事实被经独立验证的替代矩阵承接后删除；研究原件与失败保留。",
+      "retention_basis": "C10 P4/T004 的 add 文档；不新增兼容判断器。"
+    },
+    {
+      "source": "tests/contract/release-tree.test.mjs",
+      "destination": "tests/contract/release-tree.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "C10 P4 发布契约：真实两 builder/validator/installer 基线；最终组合根、外层白名单/污染拒绝、适配链接绝对/越界/断链、版本分叉、非空输出、安装态便携闭包；OCR 下限与声明 provider 正反；Ego/anysearch 具名合同正反。",
+      "owner": "C10 P4 唯一开发writer；076/007 增补来源为原独立读者与官方研究",
+      "consumer": "独立测试/审查者复放；P5/P6 只读。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "runtime/distribution/skill-bundle-release.mjs",
+        "runtime/distribution/runner-release.mjs",
+        "tools/cli/build-release.mjs"
+      ],
+      "tests": [
+        "tools/cli/build-release.mjs",
+        "runtime/review/ocr-delegation-adapter.mjs",
+        "runtime/distribution/precheck.mjs"
+      ],
+      "delete_condition": "当发布契约由经独立验证的替代测试承接后由原 owner 删除；不得放宽既有期望方向求绿。",
+      "retention_basis": "C10 P4/T004 的 test add。"
+    },
+    {
+      "source": "tests/contract/skill-manifests.test.mjs",
+      "destination": "tests/contract/skill-manifests.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "C10 P4 清单契约：真实 catalog/reuse 投影与 on-disk 一致；改坏具名版本/上游来源/catalog 后重放拒绝；外部清单坏版本/来源/权利/矩阵锚点拒绝；同一 CLI --check 退出码。",
+      "owner": "C10 P4 唯一开发writer",
+      "consumer": "独立来源读者复放；不覆盖生产文件。",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/catalog.yaml",
+        "skills/reuse-registry.md"
+      ],
+      "tests": [
+        "tools/cli/build-skill-manifests.mjs"
+      ],
+      "delete_condition": "当清单契约由经独立验证的替代测试承接后由原 owner 删除；原失败保留。",
+      "retention_basis": "C10 P4/T004 的 test add。"
+    },
+    {
+      "source": "package.json",
+      "destination": "package.json",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "C10 P4 增量：version 由 0.0.0 落为 1.0.0；dependencies/devDependencies/private 与 scripts 不变。",
+      "owner": "C10 P4 唯一开发writer",
+      "consumer": "runner-release/发布 release.json/onboard 版本输出与 update-check 同源读取。",
+      "module_consumers": [
+        "runtime/distribution/runner-release.mjs",
+        "tools/cli/build-release.mjs",
+        "tools/cli/onboard-release.mjs"
+      ],
+      "named_data_readers": [
+        "package-lock.json"
+      ],
+      "tests": [
+        "runtime/distribution/update-check.test.mjs",
+        "tests/contract/release-tree.test.mjs"
+      ],
+      "delete_condition": "无删除条件：版本源保持唯一；升级由后续发布任务按同源规则修改。",
+      "retention_basis": "C10 P4/T004 的 modify；只改 version。"
+    },
+    {
+      "source": "package-lock.json",
+      "destination": "package-lock.json",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "C10 P4 增量：根 version 与 packages[\"\"].version 同步 1.0.0；dependencies 与 resolved 锁定不变。",
+      "owner": "C10 P4 唯一开发writer",
+      "consumer": "installRunnerRelease 的 npm ci 与 package.json 版本同源核对。",
+      "module_consumers": [
+        "runtime/distribution/runner-release.mjs"
+      ],
+      "named_data_readers": [
+        "package.json"
+      ],
+      "tests": [
+        "runtime/distribution/update-check.test.mjs",
+        "tests/contract/release-tree.test.mjs"
+      ],
+      "delete_condition": "无删除条件：锁文件保持单一依赖事实；升级走同源修改。",
+      "retention_basis": "C10 P4/T004 的 modify；不换依赖。"
+    },
+    {
+      "source": "docs/architecture/move-map.json",
+      "destination": "docs/architecture/move-map.json",
+      "status": "retain",
+      "role": "production",
+      "responsibility": "C10 P4 增量：登记发布组合、清单、update-check、两类清单/矩阵/T004 测试及 package/lock 的真实职责、consumer、测试与删除条件。C10 P6 增量（合并进本条目，不新增同 destination 的第二条）：登记复制根 guard 窄扩与 P6 目标驱动两条目的真实职责、consumer、测试与删除条件。",
+      "owner": "C10 P4 唯一开发writer / 原迁移表维护者",
+      "consumer": "目录职责读者与后续发布维护者；本表不是阶段质量或许可。",
+      "module_consumers": [],
+      "named_data_readers": [],
+      "tests": [
+        "tests/contract/release-tree.test.mjs",
+        "tests/contract/skill-manifests.test.mjs"
+      ],
+      "delete_condition": "无删除条件：迁移表保留；本条目随对应文件退役而更新（P4 与 P6 增量同条目维护）。",
+      "retention_basis": "C10 P4/T004 的登记增量；C10 P6/T006 的登记增量合并于同一条目（同 destination 不重复登记）。"
+    },
+    {
+      "source": "tests/acceptance/c12-update-chain.mjs",
+      "destination": "tests/acceptance/c12-update-chain.mjs",
+      "status": "retain",
+      "role": "test",
+      "responsibility": "C10 P6 增量：只窄扩复制根 guard——除 C12 许可的 /tmp/c12-c12-p1/carrier 外，仅接受当前 C10 TaskHandle 自己 tracked 临时父根下的固定子目录 carrier（marker owner/uid/dev/ino、父目录非符号链接、其它 root 一律拒绝）；同一谓词供 prepare 与 cleanup 复用，C12 默认行为与既有错误码不变。prepare/browser-env/collect/cleanup 的复制、身份、token、构建、服务、浏览器采集与清理行为不改。",
+      "owner": "C10 P6 唯一开发writer",
+      "consumer": "P6/T006 的隔离浏览器读回驱动与 P6 目标测试 tests/acceptance/installed-release-flow.test.mjs；不是通用三模式 driver。",
+      "module_consumers": [],
+      "named_data_readers": ["runtime/interface/temp-dir.mjs", "runtime/task/task-handle.mjs"],
+      "tests": ["tests/acceptance/installed-release-flow.test.mjs", "tests/acceptance/c12-update-chain.test.mjs"],
+      "delete_condition": "当 C12 更新链驱动及其读回消费者被经独立验证的替代实现承接、且 C10 读回原件已归档后，由原 owner 删除；C12 冻结判定器不得放宽。",
+      "retention_basis": "C10 P6/T006 的 modify；只改复制根 guard 的许可集合。"
+    },
+    {
+      "source": "tests/acceptance/installed-release-flow.test.mjs",
+      "destination": "tests/acceptance/installed-release-flow.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "C10 P6 目标驱动：①真实 prepare guard 接受认证 C10 owned tracked 根并停在下游缺原件处；②foreign/未标记/符号父根/伪 marker uid 仍被拒绝且无副作用；③C12 默认复制根扩展后仍被接受；④真实安装 caller 与具体 HTTP/外部只读 SQLite 的卡级 cancel/restore/409/404 断言在缺 C10_DATA_READY_REF/C10_ENV_READY_REF 时显式 skip；⑤真实 TaskHandle 与形状 producer 的反例。",
+      "owner": "C10 P6 唯一开发writer",
+      "consumer": "P6 独立测试/读者复放，作为 ORACLE-CROSS-TASK-READBACK 与 ORACLE-INSTALLED-FLOW 的具名门禁；不证明外部服务、UI 或远端上线。",
+      "module_consumers": [],
+      "named_data_readers": ["runtime/task/task-handle.mjs", "runtime/interface/temp-dir.mjs", "skills/wh-review/scripts/review-materials.mjs", "runtime/evidence/acceptance-evidence-validator.mjs"],
+      "tests": ["tests/acceptance/c12-update-chain.mjs"],
+      "delete_condition": "当该驱动的门禁由经独立验证的替代测试承接后由原 owner 删除；真实业务缺口随就绪件补齐另行执行，不靠删除断言求绿。",
+      "retention_basis": "C10 P6/T006–T008 的 add；固定替身与真实运行分层，不以 fixture 冒业务。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"
