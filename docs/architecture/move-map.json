@@ -10006,6 +10006,23 @@
       ],
       "delete_condition": "经独立审查的替代完整承接真实consumer、迁接现deps/bundle且无当前消费者后由原owner同批退役；历史task原件不删覆。",
       "retention_basis": "design-port-flow-20261115 P2–P5 实际交付；真实consumer见consumer与named_data_readers；登记不证明质量或未来消费。"
+    },
+    {
+      "source": "tests/contract/phase-scratch-lifecycle.test.mjs",
+      "destination": "tests/contract/phase-scratch-lifecycle.test.mjs",
+      "status": "add",
+      "role": "test",
+      "responsibility": "C10 P1 具名生命周期契约测试；消费真实 temp-dir 与作者方法/模板，核正常、目标断言失败、SIGINT/TERM、SIGKILL 后受控回收，以及活 PID/符号链接/换 inode/未知目录保留、交付包与原始证据可读和方法示例可执行。",
+      "owner": "C10 P1 唯一开发writer / spec-plan 作者方法owner",
+      "consumer": "node node_modules/vitest/vitest.mjs run tests/contract/phase-scratch-lifecycle.test.mjs；任务P1开发与后置独立测试/审查者",
+      "module_consumers": [],
+      "named_data_readers": [
+        "skills/spec-plan/SKILL.md",
+        "skills/spec-plan/templates/phase-template.md",
+        "workflows/build-plan/SKILL.md"
+      ],
+      "delete_condition": "本具名职责经独立验证由既有替代完整承接且当前消费者均改接后删除；历史原件与冻结失败保留。",
+      "retention_basis": "C10 P1 T001 声明的唯一新增测试；写集见 phases/P1-scratch-lifecycle.md；不新增阶段、公共命令或持久控制面。"
     }
   ],
   "coverage_limit": "本表是目录职责材料，不是阶段质量或推进许可。module_consumers 为当前直接静态调用；named_data_readers 仅显式数据路径，不能称全动态执行覆盖。原无当前消费者的保留模块不据此新增 actor。旧原件/历史只读归 retention-manifest；Phase完成仍按原 literal gates。"

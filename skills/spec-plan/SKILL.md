@@ -79,6 +79,23 @@ Cross-check the original requirement, decision, `spec.md`, every `phases/P<n>.md
 
 Return the actual spec/Phase paths and the design/verification limits. Read current required materials directly; missing input is unavailable with impact and next action, not empty content. No packet hash, snapshot or actual independent review receipt is a prerequisite.
 
+## Scratch lifetime and original-evidence boundary
+
+This boundary applies to temporary work commands: commands or probes that create regenerable temporary paths during a Task (fixtures, one-off probes, validation runs). The shipped executable form is Node; non-Node commands must use an existing equivalent owner, or be run under the Node owner with completion awaited; when neither is possible, stop that temporary work path instead of running it unowned. Every such Task classifies each path before creating it and delivers creation, consumption and reaping as one increment. This is an author obligation; it adds no runtime gate, cleanup owner or second mechanism.
+
+Classify first, then create:
+
+- regenerable scratch: created through `createTrackedTempDir` from `runtime/interface/temp-dir.mjs`; disposable because the same recorded input rebuilds it;
+- delivery package: bytes shipped to a real consumer; written outside scratch and never reaped by scratch cleanup;
+- original evidence: captured command output, failures and task-library records; written outside scratch from before the work starts and never reaped with scratch;
+- provider packet with its own TTL: retained by the provider owner; this method neither deletes nor extends that TTL.
+
+The prefix is derived from the certified task identity and purpose — `task.json`'s task_id plus a purpose slug — never a generic `wh-` or an old `/tmp`. Record the canonical root and exact prefix in the live capture record (`cwd` and `argv` on the receipt plus the captured real path in `output_ref`), and pass only those values to later `cleanupStaleTempDirs` calls. This section is the single authority for that record location; the template points here instead of restating it.
+
+The same Node process creates, consumes and reaps scratch; `templates/phase-template.md` carries the executable example (marker `scratch-lifecycle-example`). Run it with `node --input-type=module -e` from the worktree root so its relative import resolves; when it is saved as a file under `tests/` or the task root, rewrite the import to the module's absolute URL. Start it through the existing capture producer (`task.captureCommand`, or `captureCommand` from `runtime/interface/run-command.mjs` for a record directory) before creation, and read stdout/stderr and the exit code back from disk. Do not print the path and let a later shell command consume it: a post-exit consumer cannot protect the capture or reap after failure. `dispose()` runs in `finally`, so a failing target assertion still reaps only regenerable work and keeps its own failure signal. Await the application-owned drain or provider settle before `dispose()`, so a cancellation never deletes scratch a running drain still uses. Report a cleanup or `dispose()` failure separately and never let it replace the business failure; when the work succeeded, that cleanup failure is a real failure, not a silent pass. Preserve a business nonzero `process.exitCode` when cleanup fails: report the cleanup failure separately instead of replacing that code.
+
+SIGINT/SIGTERM keep the process signal and exit semantics; the existing owner defers cleanup until an application-owned drain ends. SIGKILL cannot be trapped: a later run may only call `cleanupStaleTempDirs` with this task's recorded exact prefix, and reaps only a directory whose marker owner, prefix, UID, dev/ino identity, age and dead-PID probe all match. A live PID, EPERM/unknown PID, symbolic link, replaced inode or mismatched marker stays retained. Never sweep another task, a generic `wh-` prefix or an unknown directory. Do not create a second cleanup mechanism, control plane or lock ledger; `runtime/interface/temp-dir.mjs` stays the only lifetime owner.
+
 ## Pure pointer index
 
 独立 Phase 写完后，读取当前 decision-log、spec 与每个实际具名 `phases/P<n>-<结果短名>.md` 的契约头，渲染 `phases/index.md`。模板使用一次预置的条件指针：`templates/index-template.md` 已实际存在且已登记在本技能 `skill-bundle.json` 时使用该附件；附件不满足条件时如实报告具体缺口。所需附件不可读时报告 unavailable、具名 owner 与下一动作，不凭未来路径捏模板。
