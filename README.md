@@ -14,13 +14,15 @@
 
 ## 前置条件
 
+下面表里的数字只为让你能开始（最低要求、是否满足）；**版本事实、本机读数和边界一律以[发布支持矩阵](docs/release-support-matrix.md)与[外部工具兼容矩阵](docs/external-skills-compat-matrix.md)为准**，本文件不复制它们。
+
 | 项目 | 要求 | 说明 |
 | --- | --- | --- |
-| Node.js | **≥ 24** | 低于 24 会被前置检查直接拒绝（见[排障](#排障)）。本机实测 24.14.0；其它 24.x 行为未验证。 |
+| Node.js | **≥ 24** | 低于 24 会被前置检查直接拒绝（见[排障](#排障)）；本机读数与其它 24.x 边界见矩阵。 |
 | git | 未声明版本下限 | 只有安装 runner 时用到（`git init/add/commit`），接入命令本身不需要。缺它时步骤 2 会在 Git 初始化那步失败：`runner Git identity setup failed: spawnSync git ENOENT`（实测）。 |
 | npm | 随 Node 安装，未声明版本下限 | 只有安装 runner 时用到（`npm ci`），接入命令本身不需要。缺它时步骤 2 会在依赖安装步失败：`runner clean install failed: spawnSync npm ENOENT`（实测）。 |
-| open-code-review（`ocr`） | **≥ 1.12.9** | 代码审查必需；低于下限或探针失败按 `not_installed`/`unavailable` 报告，不换替代执行者。本机 1.13.10。 |
-| ego-browser | 未声明支持区间 | 浏览器动作必需。本机只读元数据 0.6.2.9（guide 2.2.0），catalog 记 0.6.0.16（旧值），官方样例 0.6.3.6——三个值分列，**不构成 `>=` 区间**。 |
+| open-code-review（`ocr`） | **≥ 1.12.9** | 代码审查必需；低于下限或探针失败按 `not_installed`/`unavailable` 报告，不换替代执行者。读数与正反例见矩阵。 |
+| ego-browser | 未声明支持区间 | 浏览器动作必需；版本子面仍是 unknown，三个来源的取值与边界在矩阵里分列，**不构成 `>=` 区间**。 |
 | anysearch | 需要 key | 搜索动作必需；缺 `ANYSEARCH_API_KEY` 按缺失报告，不静默走匿名。 |
 | 3rd-review broker | 见[配置](#3rd-review-从哪来) | 审查路由真正调用它；**不随发布包分发**，只有源码检出的 `skills/third-review/` 是全的。 |
 | 平台 | macOS 已实测 | Windows 与其它宿主未声明，不在当前发布的支持范围。 |
@@ -42,7 +44,7 @@ node --version
 
 | 工具 | 安装来源 | 自检 |
 | --- | --- | --- |
-| open-code-review（`ocr`） | `npm install -g @alibaba-group/open-code-review`（npm 上最新为 1.13.10 一线，要求 ≥ 1.12.9） | `ocr --version` |
+| open-code-review（`ocr`） | `npm install -g @alibaba-group/open-code-review`（要求 ≥ 1.12.9，实际装到的版本以 npm 与你机器为准） | `ocr --version` |
 | git | 官方安装页 <https://git-scm.com/downloads>，或用你系统上的包管理器装；装完新开终端 | `git --version` |
 | npm | 随 Node 一起装（见上面的 Node 来源）；不需要单独装 | `npm --version` |
 | ego lite | <https://github.com/citrolabs/ego-lite>（MIT），装好后 `ego-browser` 应在 PATH；已装在别处就用 `EGO_BROWSER_BIN` 指到 helper | `--check` 的 `tools.ego` 不再是 missing |
@@ -153,6 +155,8 @@ node tools/cli/onboard-release.mjs --apply --package-root=<release-root>
 而且 `review_readiness` **也不校验 broker 脚本本体是否存在**：实测把 `third_review.command` 指向一个不存在的 `3rd-review.mjs`、同时配好 `build-code` 路由，`provider_config`/`provider`/`route` 仍然全是 `ok`（只有 `ocr` 是静态 `unknown`），`--check` 依旧 exit 0 —— 这种"检查全绿、派发才失败"的情况只能自己挡。自检办法：确认 `third_review.command` 里那个脚本真实存在且可执行，例如 `test -x <broker 脚本> && echo ok`（不存在就按[3rd-review 从哪来](#3rd-review-从哪来)取得）。
 
 所以"接入完成"只说明宿主链接和 WorkflowHub 配置就位；要判断审查能不能跑，看 `review_readiness.checks` 里的 `provider_config`/`provider`/`route`，并且自己确认 broker 脚本在。
+
+还有一条别误读：`--check` 只校验**接入布局与配置**（发布根结构、两条宿主链接的计划、配置形状），**不校验声明闭包完整性**——技能是否齐全归发布物的 builder/validator。所以它的 exit 0 **不是**"这个包是完整的"的证据。
 
 可选作用域与选项：
 
@@ -427,7 +431,7 @@ cp "<config>.bak-<UTC 时间戳>-<8 位随机>" "<config>"
 ## 已知限制
 
 1. **真实远端发布未验证**。版本检查只比"已装 `runner` 版本"和"你显式给的来源版本"，三态是：有更新、无更新、无法检查；不联网、不猜。不给 `--source-version`/`--source-package` 就是"无法检查"（`status: unavailable`）。
-2. **Ego 的版本支持子面仍是 unknown**。本机 0.6.2.9、catalog 的 0.6.0.16、官方样例 0.6.3.6 三个值按各自来源分列，不连接成 `>=` 区间，也不互相覆盖；真实支持区间与不兼容版本未取得。
+2. **Ego 的版本支持子面仍是 unknown**。本机读数、catalog 旧值与官方样例三个来源在矩阵里按各自出处分列，不连接成 `>=` 区间，也不互相覆盖；真实支持区间与不兼容版本未取得（取值见[外部工具兼容矩阵](docs/external-skills-compat-matrix.md)）。
 3. **provider 缺 key / 401 / 额度不足属于权限或环境事实**，不是版本或协议负例；矩阵里对应的"未知"保持 unknown，不改写成兼容结论。
 4. **裸 wh-review 脚本默认读 `$HOME/.config/workflowhub/config.json`，忽略 `XDG_CONFIG_HOME`**。自定义 XDG 时请走 WorkflowHub 入口，它会用 `workflowHubConfigPath()` 解析（尊重 XDG）并把真实路径显式传给审查配置加载器。入口在两种位置各有一份：
 
@@ -444,7 +448,7 @@ cp "<config>.bak-<UTC 时间戳>-<8 位随机>" "<config>"
 5. **宿主发现与真实调用未验证**。链接、check/dry-run/apply、二次 no-op、冲突与断链保护都已验证；但真实 Claude Code / Codex CLI 的发现与调用、多 24.x Node 行为、Windows 都留给最终安装验证，本文件不声称通过。
 6. **安装器和 3rd-review broker 都只在源码检出里**：发布文件夹不含 `runtime/distribution/runner-release.mjs`；也不含完整的 `skills/third-review/`，包内 `runner/skills/third-review/` 只有 `lib/` 支撑库，没有 `scripts/3rd-review.mjs`、没有 `config.example.json`。只拿到发布文件夹时，让交付方先完成步骤 2，broker 须自己从源码检出取。
 7. **审查就绪不等于审查可用**：`--check` 的 `review_readiness` 只证明结构、路径与可执行文件在；它**不校验 broker 脚本本体是否存在**（`third_review.command` 指向不存在的文件、路由配好时，`provider_config`/`provider`/`route` 仍全是 `ok`，实测 exit 0），也不校验真实派发；`doctor` 同样明说 `does not verify model authentication or a real review`。**本发布没有任何一个 provider/model 被验证过可用**：矩阵里列出的路由是当前使用者的配置事实，不是产品默认值，也不是可用性承诺；provider 的账号、额度、登录状态归 3rd-review owner，缺 key/401/额度不足属于权限与环境事实，本文件与矩阵都不声称通过。
-8. **Node < 24 的拒绝行为只在模块级复放过**：本机只有 24.14.0，`Node.js <版本> is below the required >=24` 这条消息是用 `precheckForActions({nodeVersion})` 在旧版本号下复现的，**没有在真实 Node 22 下启动过 CLI**。其余命令都是在本任务内实跑的。
+8. **Node < 24 的拒绝行为只在模块级复放过**：本机只装了 24 线的一个版本（读数见矩阵），`Node.js <版本> is below the required >=24` 这条消息是用 `precheckForActions({nodeVersion})` 在旧版本号下复现的，**没有在真实 Node 22 下启动过 CLI**。其余命令都是在本任务内实跑的。
 
 ## 五段流程
 
