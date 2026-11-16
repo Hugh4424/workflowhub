@@ -101,7 +101,7 @@ node --input-type=module -e 'import { installRunnerRelease } from "./runtime/dis
 
 预期输出形如 `{"status":0,"npm":"added 7 packages ..."}`，exit 0。`npm` 那段文本随 npm 版本与依赖缓存变化（可能很长、含换行），**判据是 `status` 为 0**。装没装成看两个数：`ls -A <release-root>/runner/skills | wc -l` 的条目数（装前是个位数，装后会明显变大），以及 `--check` 输出里 `skills` 数组的长度；本文件不复制这两个数，以你自己那次的输出为准。
 
-同一个 `runner/` 不要装第二次：会以 `EEXIST: ... runner/.gitignore` 失败。要重装就重新构建一个新的发布目录。
+同一个 `runner/` 不要装第二次：会以 `EEXIST: ... runner/.gitignore` 失败。**如果安装中途失败**（例如缺 git，失败点在 "Git identity setup" 那步——此时 bundle 已复制、`npm ci` 已跑完、`.gitignore` 也已写入），重跑同一个目录会撞同样的 `EEXIST: ... .gitignore`（实测）。别在那里反复重试：按步骤 1 重建一个新的发布目录，再装一次。
 
 ### 步骤 3：接入宿主（check → dry-run → apply）
 
@@ -148,7 +148,11 @@ node tools/cli/onboard-release.mjs --apply --package-root=<release-root>
 
 所以：`tools` 是 blocked（例如没设 `ANYSEARCH_API_KEY`）、`review_readiness` 是 blocked（静态模式不探测版本，`ocr` 恒为 `unknown`），接入仍然可以 exit 0；反过来，`--package-root` 指错时 `required` 仍是 `ready`（它只看 node 和 config），但 `blocking` 里有 `LAYOUT_MISSING`，所以 exit 1。**判断以 `blocking` 和 exit code 为准，不要只看 `required`**；配置本身有问题时也一样——`required` 可能还是 `ready`，但 `config.status` 是 `blocked` 且进了 `blocking`。
 
-**接入完成 ≠ 能跑审查**：先把两个说法定死——**通过配置校验** = `required.config` 为 ok（WorkflowHub 配置存在、路径与形状合格）；**能跑审查** = `review_readiness` 里 `provider_config`/`provider`/`route`/`ocr` 都不缺（broker 配置真实存在、provider 可执行、路由已配、ocr 版本达标）。`--check` **不校验 3rd-review broker 配置是否存在**：实测把 `third_review.config` 指向一个不存在的文件，`--check` 照样 exit 0（配置"通过校验"），问题只出现在 `review_readiness` 里（`provider_config`、`provider` 变 `missing`，code `PROVIDER_CONFIG_NOT_FOUND`）。所以"接入完成"只说明宿主链接和 WorkflowHub 配置就位；要判断审查能不能跑，看 `review_readiness.checks` 里的 `provider_config`/`provider`/`route`，不是看 exit code。
+**接入完成 ≠ 能跑审查**：先把两个说法定死——**通过配置校验** = `required.config` 为 ok（WorkflowHub 配置存在、路径与形状合格）；**能跑审查** = `review_readiness` 里 `provider_config`/`provider`/`route`/`ocr` 都不缺（broker 配置真实存在、provider 可执行、路由已配、ocr 版本达标）。`--check` **不校验 3rd-review broker 配置是否存在**：实测把 `third_review.config` 指向一个不存在的文件，`--check` 照样 exit 0（配置"通过校验"），问题只出现在 `review_readiness` 里（`provider_config`、`provider` 变 `missing`，code `PROVIDER_CONFIG_NOT_FOUND`）。
+
+而且 `review_readiness` **也不校验 broker 脚本本体是否存在**：实测把 `third_review.command` 指向一个不存在的 `3rd-review.mjs`、同时配好 `build-code` 路由，`provider_config`/`provider`/`route` 仍然全是 `ok`（只有 `ocr` 是静态 `unknown`），`--check` 依旧 exit 0 —— 这种"检查全绿、派发才失败"的情况只能自己挡。自检办法：确认 `third_review.command` 里那个脚本真实存在且可执行，例如 `test -x <broker 脚本> && echo ok`（不存在就按[3rd-review 从哪来](#3rd-review-从哪来)取得）。
+
+所以"接入完成"只说明宿主链接和 WorkflowHub 配置就位；要判断审查能不能跑，看 `review_readiness.checks` 里的 `provider_config`/`provider`/`route`，并且自己确认 broker 脚本在。
 
 可选作用域与选项：
 
@@ -273,6 +277,8 @@ node tools/cli/build-skill-manifests.mjs --check
 
 **当前没有公开下载地址或 tag 可给**：catalog 的 `third-review` 条目只记了 `local_version` 和来源 commit，没有记录可访问的仓库地址；发布包也不带它。所以唯一的取得方式是**向持有源码检出的交付方索取 `skills/third-review/` 整目录**（整目录，别只拿 `lib/`）。
 
+**如果对方给不了**：那就没法启用审查——但接入本身（`--check`/`--dry-run`/`--apply`）不受影响（实测 broker 配置缺失时 `--check` 仍 exit 0）。把这件事记成"审查暂不可用"，不要为了让它变绿去伪造 provider 或换默认执行者。
+
 收到的目录应包含：`package.json`、`scripts/3rd-review.mjs`、`config.example.json`、`lib/`、`LICENSE`，以及 `skill-bundle.json`（它列了该技能应当包含的文件清单，可拿来点数核对）。拿到后先自检，exit 0 才算可用：
 
 ```bash
@@ -386,6 +392,7 @@ cp "<config>.bak-<UTC 时间戳>-<8 位随机>" "<config>"
 | `fixed packet source .wh-review-packets is not allowlisted` | 3rd-review 的 `attachment_roots` 没允许这个固定来源 | 在那条 `attachment_roots[].sources` 里加 `.wh-review-packets`。 |
 | `required` 是 `ready` 但命令 exit 1 | 失败在 `blocking`（布局、链接、配置），不是 `required` | 看 `blocking`、`config.status` 与 `problems[].code`；`required` 只覆盖 node 与 config 两项。 |
 | `--check` exit 0 但审查跑不起来 | `--check` 不校验 broker 配置；`review_readiness` 才是依据（可能是 `PROVIDER_CONFIG_NOT_FOUND` 或 `ROUTE_STAGE_ABSENT`） | 看 `review_readiness.checks` 里的 `provider_config`/`provider`/`route`，按[配置](#配置)补齐。 |
+| `review_readiness` 全 ok，派发时才失败 | 它也不校验 broker 脚本本体是否存在 | `test -x <third_review.command 指向的脚本>`；不存在就按[3rd-review 从哪来](#3rd-review-从哪来)取得 broker。 |
 | `open-code-review: ocr is not on PATH` | 没装代码审查工具 | 装 `ocr` ≥ 1.12.9 并放进 PATH，用 `ocr --version` 自证；不换替代执行者。 |
 | `ego-browser helper: ego-browser is not on PATH` | 浏览器动作缺工具 | 装 ego lite 让 `ego-browser` 上 PATH，或用 `EGO_BROWSER_BIN` 指到已装的 helper；不回退到别的浏览器。 |
 | `ANYSEARCH_API_KEY is not set in the current environment` | 搜索动作缺 key | 在执行该动作的 shell 里设好 key；不会静默用匿名。 |
@@ -414,7 +421,7 @@ cp "<config>.bak-<UTC 时间戳>-<8 位随机>" "<config>"
    `doctor --action=workspace` 是只读自检（实测 exit 0）；`review --action=record` 会**真的派发一次审查并落记录**（本任务没有执行，别拿它当试跑）。`--input` 指向一份 review request JSON，是必填项（缺了会报 `review-record requires --input`）。这两条要在**任务 worktree 里**跑：当前目录和任务声明的 workspace 不一致会报 `CURRENT_WORKTREE_MISMATCH: declared task workspace differs from cwd`（实测）。其余行为同形（`status`/`run`/`verify`/`confirm`/`authorize`，每个必须带且只带一个 `--action=`）。注意 `--project` 要的是**项目名**（单个路径段，例如 `workflowhub`），不是项目路径——传绝对路径会报 `project_name must be a safe single path segment`。裸脚本 `skills/wh-review/scripts/*.mjs` 仍是读 HOME 的那条路。
 5. **宿主发现与真实调用未验证**。链接、check/dry-run/apply、二次 no-op、冲突与断链保护都已验证；但真实 Claude Code / Codex CLI 的发现与调用、多 24.x Node 行为、Windows 都留给最终安装验证，本文件不声称通过。
 6. **安装器和 3rd-review broker 都只在源码检出里**：发布文件夹不含 `runtime/distribution/runner-release.mjs`；也不含完整的 `skills/third-review/`，包内 `runner/skills/third-review/` 只有 `lib/` 支撑库，没有 `scripts/3rd-review.mjs`、没有 `config.example.json`。只拿到发布文件夹时，让交付方先完成步骤 2，broker 须自己从源码检出取。
-7. **审查就绪不等于审查可用**：`--check` 的 `review_readiness` 只证明结构、路径与可执行文件在；`doctor` 也明说 `does not verify model authentication or a real review`。**本发布没有任何一个 provider/model 被验证过可用**：矩阵里列出的路由是当前使用者的配置事实，不是产品默认值，也不是可用性承诺；provider 的账号、额度、登录状态归 3rd-review owner，缺 key/401/额度不足属于权限与环境事实，本文件与矩阵都不声称通过。
+7. **审查就绪不等于审查可用**：`--check` 的 `review_readiness` 只证明结构、路径与可执行文件在；它**不校验 broker 脚本本体是否存在**（`third_review.command` 指向不存在的文件、路由配好时，`provider_config`/`provider`/`route` 仍全是 `ok`，实测 exit 0），也不校验真实派发；`doctor` 同样明说 `does not verify model authentication or a real review`。**本发布没有任何一个 provider/model 被验证过可用**：矩阵里列出的路由是当前使用者的配置事实，不是产品默认值，也不是可用性承诺；provider 的账号、额度、登录状态归 3rd-review owner，缺 key/401/额度不足属于权限与环境事实，本文件与矩阵都不声称通过。
 8. **Node < 24 的拒绝行为只在模块级复放过**：本机只有 24.14.0，`Node.js <版本> is below the required >=24` 这条消息是用 `precheckForActions({nodeVersion})` 在旧版本号下复现的，**没有在真实 Node 22 下启动过 CLI**。其余命令都是在本任务内实跑的。
 
 ## 五段流程
