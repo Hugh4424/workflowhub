@@ -18,7 +18,7 @@ freezeChecklist只验证分母/定位，不能证明正式模板可用。正式�
 
 ## 怎样探测、冻结和正式采集？
 
-先按 isolated-browser-qa 取得本任务自有页面；已有ego模式由同一 owned TaskSpace 的真实 BROWSER_QA_EGO_SPACE_ID 承接，不能假造ID或隐式开备用浏览器。
+普通采集调用由 isolated-browser-qa 创建本轮自有命名 TaskSpace，内部场景承接 `BROWSER_QA_EGO_TASKSPACE_NAME` 并始终复用其 `p1`，外层结束时清理一次；不传旧 SPACE_ID／KEEP_OPEN，不另开浏览器。
 用认证 task.captureCommand 执行 `node skills/design-source-extraction/scripts/collect-design-source.mjs --plan <本任务plan绝对路径> --probe`，保存真实原始回执与输出。
 原输出须逐项 observed_ids 与清单顺序一致、无 failures；失败保原错误与未覆盖，不冻结假通过。
 探测通过后，在同一plan写 scope.frozen_at 与 probe_ref（真实探测回执路径），集合不变；正式调用删去 --probe，其它输入沿该冻结plan。
