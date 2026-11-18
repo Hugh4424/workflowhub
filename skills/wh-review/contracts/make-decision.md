@@ -43,6 +43,34 @@ detail 轨的 `requirement_index` 与 `per_package_projection` 是可选键，�
 
 **设计审查镜头（仅 UI 包）**：detail 审查在四问之外加一个镜头，核对 UI 需求是否收敛、设计源是否确认、验收是否可判；缺设计源、缺对照项或缺反例都具名报出，写清第几包、缺哪份证据、该谁补。非 UI 包不加镜头。
 
+## 方向审查的差异判定与空拒绝处置
+
+本节只补 direction 轨的判定口径，不改变方向包字段、调用方式或轮次。
+上面 direction 段的字节受既有冻结保护；freeze 只保字节，不改判据强度。本节只给映射，不改变该段第①问的原判据强度。
+
+reconstruct 之后、challenge 之前，逐包写三句：我会怎么做、你选了什么、差在哪。
+三句写在 reveal 后返回的 `revealed_choice`（每包一条）上，不另存第二张表。
+差异只有在缺证据或存在交付风险时才是 finding。
+免除只针对等价替代的差异说明：等价或仅措辞不同可不写 finding；理由写得清也不豁免实质交付风险（如破坏旧数据兼容）。
+reveal 前由调用方或宿主把 `rejected-candidates.md` 条目写入包内 `alternatives`（或等价包内字段）；
+台账为空时在包内显式标注为空。
+审查者只按包内内容判断；包内没有条目也没有标注时，按缺料记 finding＋覆盖限制，不得推断为空。
+
+四镜头（安全、兼容、性能、成本）各给三态之一：
+通过（有证据支持）、finding（缺证据或存在交付风险）、
+可推迟（写推迟理由、owner 与最迟承接点；可推迟不算通过，也不阻断本步）。
+本节自足，不依赖包外文件。
+第⑤问（效果谁看）留 P9 统一承接，本节不写。
+
+键级异常与审查发现的通道不同：
+
+- 建包前 `alternatives` 等必填键缺失或为空，由入口抛 `MATERIAL_INCOMPLETE` 并拦下，不建包。
+- reveal 之后审查者只能回 findings。
+  拒绝表为空或无物可质询时，写 finding（第几问、缺哪份证据、谁补）＋ evidence 覆盖限制，
+整轮记 unavailable/incomplete。
+- 不得在 reveal 后写 `MATERIAL_INCOMPLETE`，也不得记 available/checked_no_gap。
+  空 findings 不证明无物可质询。
+
 ## 输出与真实边界
 
 使用 provider-protocol 的一个 findings JSON，保留实际严重证据、锚点、provider/role 来源和分歧。没有可信终态、坏 JSON、路径/协议错误、超时、取消等保留 unavailable/incomplete，不能改成无问题或通过。空 findings 不证明 checked_no_gap、逐条问题覆盖、阶段完成或用户批准。
