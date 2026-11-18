@@ -1181,6 +1181,16 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
     .filter(row => row.state !== '已收敛' && (statusBearing || (row.state ?? '') !== ''))
     .map(row => '未收敛：' + (row.name || `第 ${row.line} 行`));
   // 「无（…）」不是无：括号里交代了未测/交接但仍写「无」，按未收敛点名。
+  const ordinaryPendingGaps = modules
+    .filter(row => /^已收敛/.test(String(row.state ?? '')))
+    .filter(row => {
+      const pending = String(row.pending ?? '').trim();
+      if (!pending || /^(?:无|—|-|不适用|无未决)$/.test(pending)) return false;
+      if (/^无\s*[（(]/.test(pending)) return false;
+      if (/^可推迟\s*[:：]\s*无/.test(pending)) return false;
+      return true;
+    })
+    .map(row => '未收敛：' + (row.name || `第 ${row.line} 行`));
   const parenthesizedPendingGaps = modules
     .filter(row => /^无\s*[（(]/.test(String(row.pending ?? '')))
     .filter(row => !/^无\s*[（(]\s*(?:理由|原因|可推迟|不适用|本包无未决|已核)/.test(String(row.pending ?? '')))
@@ -1192,7 +1202,7 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
   const fieldGaps = statusColumnFormat ? [] : modules.filter(row => row.fields.some(field => !field.present)).map(row => row.name);
   const strictGaps = [...new Set([...deferralGaps, ...strictUnconverged])];
   const gaps = statusColumnFormat
-    ? (modules.length ? [...stateGaps, ...parenthesizedPendingGaps, ...strictGaps, ...evidenceGaps, ...batchGaps] : ['收敛清单无可读模块行'])
+    ? (modules.length ? [...stateGaps, ...parenthesizedPendingGaps, ...ordinaryPendingGaps, ...strictGaps, ...evidenceGaps, ...batchGaps] : ['收敛清单无可读模块行'])
     : [...stateGaps, ...parenthesizedPendingGaps, ...strictGaps, ...evidenceGaps, ...fieldGaps, ...batchGaps];
   gaps.push(...missing.map(id => `缺模块 WP${id}`), ...duplicate.map(id => `重复模块 WP${id}`), ...unknown.map(id => `未知模块 WP${id}`), ...mappingGaps);
   if (!expected.length || new Set(expected).size !== expected.length) { gaps.push('权威模块集合未取得或重复'); errors.push('decision-log.md: 权威模块集合未取得或重复'); }
