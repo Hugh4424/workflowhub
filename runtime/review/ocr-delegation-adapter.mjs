@@ -1219,7 +1219,13 @@ function inspectAgTranscriptRead({sessionId,pre,post,root,expected}){
   const source=readStableAgInspectionFile(frozenPath,16*1024*1024);if(source.bytes.length!==expected.bytes||sha256(source.bytes)!==expected.sha256)throw new Error("AG frozen source changed after hook");
   const sourceText=new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(source.bytes);if(!sourceText||/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\ufeff]/.test(sourceText))throw new Error("AG transcript unsupported source text representation");
   const logical=sourceText.split('\n');if(sourceText.endsWith('\n'))logical.pop();
-  const prefix=/^Created At: ([^\n]+)\nCompleted At: ([^\n]+)\n/.exec(result.content);
+  // agy >= 1.5.6 repeats the Created At/Completed At block before the display
+  // range. Consume the whole contiguous run and bind the first pair, so a
+  // native read stays verifiable across that echo without loosening the range,
+  // content or time checks below.
+  const headerRun=/^(?:Created At: [^\n]+\nCompleted At: [^\n]+\n)+/.exec(result.content);
+  const firstPair=headerRun?/^Created At: ([^\n]+)\nCompleted At: ([^\n]+)\n/.exec(headerRun[0]):null;
+  const prefix=headerRun&&firstPair?[headerRun[0],firstPair[1],firstPair[2]]:null;
   const header=prefix&&(/^Showing lines ([1-9]\d*)-([1-9]\d*) of ([1-9]\d*)\n/.exec(result.content.slice(prefix[0].length))||/^Partial read \(lines ([1-9]\d*)-([1-9]\d*) of ([1-9]\d*)\)\. Showing bytes (0|[1-9]\d*)-(0|[1-9]\d*) of ([1-9]\d*) in this line range(?:\.|, truncated at the [1-9]\d*-byte limit\. To read the rest of this line range, call this tool again with the same StartLine and EndLine and ByteOffset=(0|[1-9]\d*)\.)\n/.exec(result.content.slice(prefix[0].length)));
   const startLine=header?Number(header[1]):null,endLine=header?Number(header[2]):null,totalLines=header?Number(header[3]):null;
   if(!prefix||!header||totalLines!==logical.length||startLine>endLine||endLine>totalLines||requestedStart!==null&&requestedStart!==startLine||requestedEnd!==null&&requestedEnd!==endLine)throw new Error("AG transcript display range is not bound to the requested file");

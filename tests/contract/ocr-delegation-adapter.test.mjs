@@ -1905,7 +1905,10 @@ for(const [index,file]of ['review-prompt.md','src/reviewed.mjs'].entries()){
   if(scenario==='suffix')shown.push('Unrecognized native trailer');
  }
  if(!(index===0&&bytePageScenario))body=shown.join('\n');
- const content='Created At: '+started+'\nCompleted At: '+(index===1&&scenario==='bad-time'?'2000-01-01T00:00:00Z':completed)+'\n'+title+'\n'+body;
+ const headerBlock='Created At: '+started+'\nCompleted At: '+(index===1&&scenario==='bad-time'?'2000-01-01T00:00:00Z':completed)+'\n';
+ // agy >= 1.5.6 echoes the Created At/Completed At block twice before the
+ // display range; keep the real native shape in the fixture.
+ const content=(scenario==='doubled-header'?headerBlock+headerBlock:headerBlock)+title+'\n'+body;
  const call={step_index:step-1,source:'MODEL',type:'PLANNER_RESPONSE',status:'DONE',created_at:started,tool_calls:[{name:'read_file',args:{Path:full,...(index===1&&scenario==='ranged'?{StartLine:2,EndLine:2}:{}),...(index===0&&(pagedLineScenario||mixedScenario)?{StartLine:1,EndLine:promptPageEnd}:{}),...(index===0&&scenario==='byte-explicit-partial'?{StartLine:2,EndLine:lines.length}:{})}}]};
  const result={step_index:step,source:'MODEL',type:'GENERIC',status:'DONE',created_at:started,content};
  if(index===1){
@@ -1986,12 +1989,12 @@ process.stdout.write(JSON.stringify({event:'result',result:{conversation_id:sess
   return { executable, reportPath, sessionRoot };
 }
 
-async function p4RunTranscript(scenario, source = "first\nsecond\nthird\n") {
+async function p4RunTranscript(scenario, source = "first\nsecond\nthird\n", requestOverrides = { stage: "verify-code", review_scope: null, phase_id: null }) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-p4-display-"))); roots.push(root);
   const cli = p4TranscriptCli(root, scenario), raw = new Map();
   mkdirSync(join(root, "quality", "reviews"), { recursive: true });
   try {
-    const result = await runConfiguredOcrHostReview({ request: { ...request, stage: "verify-code", review_scope: null, phase_id: null }, packet: configuredPacket(source) }, {
+    const result = await runConfiguredOcrHostReview({ request: { ...request, ...requestOverrides }, packet: configuredPacket(source) }, {
       trustedContext: configuredContext(["antigravity/flash"], cli.executable),
       rawOutputSink: async (_hint, bytes, meta) => {
         const saved = await appendRecord(join(root, "quality", "reviews"), meta.stream, "output", bytes);
@@ -2058,6 +2061,12 @@ describe("P4 transcript full logical line consumer", () => {
   it("accepts a single logical-line page followed by the remaining lines", async () => {
     const { result } = await p4RunTranscript("paged-single-line", "first\nsecond\nthird\n");
     expect(result.provider_results[0], JSON.stringify(result)).toMatchObject({ status: "completed", parse_outcome: "ok" });
+    expect(result.provider_results[0].coverage.read_confirmed).toBe(true);
+  }, 15000);
+  it("accepts a repeated native read header block", async () => {
+    const { result } = await p4RunTranscript("doubled-header", "first\nsecond\nthird\n", {});
+    expect(result.provider_results[0], JSON.stringify(result)).toMatchObject({ status: "completed", parse_outcome: "ok" });
+    expect(result.provider_results[0].material_coverage.read).toContain("src/reviewed.mjs");
     expect(result.provider_results[0].coverage.read_confirmed).toBe(true);
   }, 15000);
   it("accepts only the native byte-truncation to logical-line recovery transition", async () => {
