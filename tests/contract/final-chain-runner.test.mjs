@@ -650,6 +650,18 @@ describe('final-chain report index and scoped write-set sources',()=>{
     if(conflict)expect(JSON.stringify(ringAt(value,6))).toContain(path);
   });
 });
+describe('P11 ring6 index write-set authority',()=>{
+  it('reports a Chinese-header index extra path as a conflict',async()=>{
+    const f=taskFixture();implementation(f);
+    put(f.materialRoot,'phases/P1.md','# Phase P1\n- **Write set**：`owned.mjs`\n- **Dependency**：none\n- **Consumer**：reader\n- **gate_cmd**：`node owned-check.mjs`\n- **oracle**：ORACLE-OWNED\n- **Done**：actual\n');
+    put(f.materialRoot,'phases/index.md','# Phase index\n| phase | authority ref | semantic anchor | 写入集 | dependency | consumer |\n| --- | --- | --- | --- | --- | --- |\n| `P1` | `phases/P1.md` | `phase-p1` | `owned.mjs`、`runtime/task/extra-demo.mjs` | none | reader |\n');
+    const conflict=await report(f),bad=ringAt(conflict,6);
+    expect(bad.write_set_conflict).toContain('runtime/task/extra-demo.mjs');
+    expect(bad.state).toBe('incomplete');
+    expect(bad.write_set).toContain('runtime/task/extra-demo.mjs');
+    expect(bad.spec_write_set).toContain('runtime/task/extra-demo.mjs');
+  });
+});
 describe('final-chain report real stage denominator sources',()=>{
   it.each(['small','normal','planning'])('uses the real %s flow and a canonical actual make-decision row as one stage',async(level)=>{
     const f=taskFixture();writerIdentity(f);choice(f,level);const source=actualWorkflowSources(f,level);

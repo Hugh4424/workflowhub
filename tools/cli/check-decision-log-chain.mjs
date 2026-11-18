@@ -265,8 +265,9 @@ function parseRequirementIndex(markdown) {
   return null;
 }
 
-function normalizeQuote(value) {
-  return String(value).replace(/[`*]/g, "").replace(/\s+/g, " ").trim();
+export function normalizeQuote(value) {
+  // Keep literal *, backticks and command syntax; only normalize whitespace.
+  return String(value).replace(/\s+/g, " ").trim();
 }
 
 export function stripLeadingMarker(value) {
@@ -652,7 +653,7 @@ function declaresAnswerSource(markdown) {
 // and topic, so discovery accepts a `需求索引：<ref>` declaration or a name
 // ending in requirement-index.md. Fenced examples are not declarations. Two
 // distinct declarations are an input error, not a reason to pick one.
-function requirementIndexPointers(markdown) {
+export function requirementIndexPointers(markdown) {
   const found = new Set();
   let fence = null;
   for (const line of markdown.split("\n")) {
@@ -664,7 +665,6 @@ function requirementIndexPointers(markdown) {
     const bare = /需求索引\s*[：:]\s*([^\s|`]+\.md)/.exec(line)?.[1];
     if (bare) found.add(bare);
   }
-  for (const match of markdown.matchAll(/([^\s|`'":：)]*requirement-index\.md)/g)) found.add(match[1]);
   return [...found];
 }
 

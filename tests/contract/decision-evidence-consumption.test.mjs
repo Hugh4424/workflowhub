@@ -673,3 +673,72 @@ describe("ORACLE-MD-P11-FINAL page and terminal consumption", () => {
     expect(pageData.objects.filter(object => object.kind === "wp").length).toBeGreaterThan(0);
   });
 });
+
+// P11 remaining controlled cases (page trigger, UI section, chain fences and
+// literal quote comparison) live here because these are the consumers' own
+// contract tests for the files changed in the same batch.
+describe("P11 page trigger and UI section contracts", () => {
+  it("names missing/partial page_trigger and accepts the complete declaration", async () => {
+    const { pageTriggerGapFor } = await import("../../tools/cli/check-stage-steps.mjs");
+    const step = (text) => ({ step_slug: "approve-decision", observable_result: text });
+    expect(pageTriggerGapFor(step("收口"), "make-decision")).toContain("page_trigger");
+    expect(pageTriggerGapFor(step("page_trigger：① 分支 ② 一句事实"), "make-decision")).toContain("三问不全");
+    expect(pageTriggerGapFor(step("page_trigger：① 三个以上 ② 小聊 ③ 理由"), "make-decision")).toBe(null);
+    expect(pageTriggerGapFor(step("page_trigger：① 三个以上 ② 小聊 ③ 理由"), "build-code")).toBe(null);
+    expect(pageTriggerGapFor(step("page_trigger：① 三个以上 ② 小聊 ③ 理由；本次命中"), "make-decision")).toContain("命中却未出页");
+    expect(pageTriggerGapFor(step("page_trigger：① 三个以上 ② 小聊 ③ 理由；本次命中；出页回执：`quality/evidence/page.md`"), "make-decision")).toBe(null);
+    expect(pageTriggerGapFor(step("page_trigger：① 三个以上 ② 小聊 ③ 理由；本次均否"), "make-decision")).toContain("均否无理由");
+    expect(pageTriggerGapFor(step("page_trigger：① 三个以上 ② 小聊 ③ 理由；本次均否；理由：纯文字"), "make-decision")).toBe(null);
+  });
+  it("reports a missing UI section only when the material carries UI evidence", async () => {
+    const { uiCardContext } = await import("../../tools/cli/check-stage-steps.mjs");
+    const root = temp("p11-ui-");
+    const put = (name, value) => { mkdirSync(root, { recursive: true }); writeFileSync(join(root, name), value); };
+    put("decision-log.md", "# T\nraw_requirement 提到页面。\n");
+    expect(uiCardContext(root)?.gap).toContain("是不是 UI");
+    put("decision-log.md", "# T\n## UI 范围与设计基准\n| 是不是 UI | 否；纯 CLI |\n");
+    expect(uiCardContext(root)?.isUi).toBe(false);
+    expect(uiCardContext(root)?.gap).toBeUndefined();
+    put("decision-log.md", "# T\n纯 CLI，无前端迹象。\n");
+    expect(uiCardContext(root)?.gap).toBeUndefined();
+  });
+});
+
+describe("P11 chain fence and literal quote contracts", () => {
+  it("ignores a requirement-index mention inside a fence", async () => {
+    const { requirementIndexPointers } = await import("../../tools/cli/check-decision-log-chain.mjs");
+    const markdown = ["- 需求索引：`quality/evidence/decision-log-refs/one.md`", "~~~", "- 需求索引：`other/requirement-index.md`", "~~~"].join("\n");
+    expect(requirementIndexPointers(markdown)).toEqual(["quality/evidence/decision-log-refs/one.md"]);
+  });
+  it("keeps wildcard and command syntax rather than deleting it", async () => {
+    const { normalizeQuote, checkDecisionLogChain } = await import("../../tools/cli/check-decision-log-chain.mjs");
+    expect(normalizeQuote("run `npm test` -- --filter=*")).toContain("*");
+    expect(normalizeQuote("run `npm test`")).toContain("`");
+    const source = join(temp("p11-wild-"), "source.md");
+    writeFileSync(source, "run npm test -- --filter=app\n");
+    const index = [INDEX_HEADER, INDEX_RULE, `| U-1 | 自由手写 | run npm test -- --filter=* | permit | \`${source}#L1-L1\` | 2026-11-18 | 1 |`].join("\n");
+    const doc = ["# C", "### D-001 — c", "- 做什么：跑。", "- 不做什么：不改。", "- 风险：误。", "- 改动：m。", "- source_id: U-1", "- modality: permit", "- 来源身份：用户答复"].join("\n");
+    const result = checkDecisionLogChain({ markdown: doc, source_ref: "controlled.md", requirement_index_markdown: index, read_source: ref => readFileSync(String(ref).split("#")[0], "utf8") });
+    expect(result.warnings.map(w => w.code)).toContain("ANSWER_SOURCE_UNVERIFIABLE");
+  });
+});
+
+describe("P11 run-checks material convergence gaps", () => {
+  const runMaterial = (dir) => spawnSync(process.execPath, [join(ROOT, "tools/cli/run-checks.mjs"), `--material-root=${dir}`, "--stage=make-decision"], { cwd: ROOT, encoding: "utf8" });
+  function material(ledger) {
+    const dir = temp("p11-rc-");
+    mkdirSync(join(dir, "quality/evidence/decision-log-refs"), { recursive: true });
+    writeFileSync(join(dir, "decision-log.md"), ["# T", "## 级别与路线", "- 推荐级别：复杂", "清单：`quality/evidence/decision-log-refs/convergence-checklist.md`", ""].join("\n"));
+    if (ledger !== undefined) writeFileSync(join(dir, "quality/evidence/decision-log-refs/convergence-checklist.md"), ledger);
+    return dir;
+  }
+  it("returns non-zero for a converged package without evidence originals", () => {
+    const dir = material(["# 清单", "| 包 | 状态 | 位置 | 证据 | 未决 |", "| --- | --- | --- | --- | --- |", "| 1 | 已收敛 | x | y | 无 |", "", "## 工作包 1：测试"].join("\n"));
+    expect(runMaterial(dir).status).toBe(1);
+  });
+  it("returns zero when no convergence pointer is declared", () => {
+    const dir = temp("p11-rc0-");
+    writeFileSync(join(dir, "decision-log.md"), "# T\n## 级别与路线\n- 推荐级别：复杂\n");
+    expect(runMaterial(dir).status).toBe(0);
+  });
+});

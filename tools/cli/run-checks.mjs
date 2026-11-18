@@ -248,6 +248,27 @@ async function materialTaskRecordRoot(materialRoot) {
   } catch { return undefined; }
 }
 
+function materialConvergenceErrors(root, files) {
+  const decision = String(files?.['decision-log.md'] ?? '');
+  const pointer = /清单：`([^`\n]*convergence-checklist[^`\n]*\.md)`/.exec(decision)?.[1];
+  if (!pointer) return [];
+  const candidates = [resolve(root, pointer), resolve(root, 'quality/evidence/decision-log-refs', pointer)];
+  const ledgerPath = candidates.find(candidate => existsSync(candidate));
+  if (!ledgerPath) return [`收敛清单不可读：${pointer}`];
+  let ledger = '';
+  try { ledger = readFileSync(ledgerPath, 'utf8'); } catch { return [`收敛清单不可读：${pointer}`]; }
+  const errors = [];
+  for (const line of ledger.split('\n')) {
+    if (!/^\s*\|/.test(line)) continue;
+    const cells = line.split('|').map(cell => cell.trim());
+    const id = cells[1], state = cells[2];
+    if (!/^\d+$/.test(id) || !/^已收敛/.test(state ?? '')) continue;
+    const block = new RegExp(`##\\s*工作包\\s*${id}(?![0-9])[\\s\\S]*?(?=\\n##\\s*工作包\\s*\\d|$)`).exec(ledger)?.[0] ?? '';
+    if (!/冷读|真实问答|聊天呈现/.test(block)) errors.push(`包 ${id} 已收敛但缺冷读/真实问答原件`);
+  }
+  return errors;
+}
+
 async function runMaterialChecks(root, { stage } = {}) {
   try {
     const rootStat = statSync(root);
@@ -283,7 +304,9 @@ async function runMaterialChecks(root, { stage } = {}) {
       const errors = [...inspection.errors];
       if (!String(inspection.files["decision-log.md"] ?? "").trim()) errors.push("decision-log.md 未取得：make-decision 阶段至少要有一份可读决策日志");
       for (const error of errors) console.log(`[run-checks][material] ${root} ${error}`);
-      if (errors.length) { console.log(`[run-checks][material] errors=${errors.length}`); return false; }
+      const convergenceErrors = materialConvergenceErrors(root, inspection.files);
+      errors.push(...convergenceErrors);
+      if (errors.length) { console.log(`[run-checks][material] errors=${errors.length}`); for (const error of errors) console.log(`[run-checks][material] ${root} ${error}`); return false; }
       console.log(`[run-checks][material] ${root} stage=make-decision：本次只核 decision-log 可读与材料结构错误=0；未要求 spec.md/phases，不判阶段完成，也不证明步骤齐备`);
       return 'partial';
     }
@@ -434,8 +457,19 @@ async function main() {
       ...(options.workflowRoot === undefined ? {} : { workflowRoot: options.workflowRoot }),
     });
     const { exit_code, ...coverage } = stepCoverageExit(report);
+    let convergenceExit = exit_code;
+    try {
+      const manifest = JSON.parse(readFileSync(joinPath(resolve(options.taskPath), "task.json"), "utf8"));
+      const material = joinPath(manifest.target_repo_root, "specs", manifest.task_id);
+      if (existsSync(material)) {
+        const { runStageStepsCheck } = await import("./check-stage-steps.mjs");
+        const checked = runStageStepsCheck({ taskPath: resolve(options.taskPath), materialRoot: material, repoRoot: options.workflowRoot ?? undefined, stage: "make-decision" });
+        const gaps = checked.convergence?.gaps ?? [];
+        if (gaps.some(gap => /缺冷读原件|收敛格缺当前卡节|聊天呈现未取得|缺真实问答指针|冷读五问未绑定|先设计后提问缺证|UI设计源首问|冷读原件摘要不符|卡片摘要不符/.test(String(gap)))) convergenceExit = 1;
+      }
+    } catch { /* a missing material root leaves the existing aggregate unchanged */ }
     process.stdout.write(`${JSON.stringify({ ...report, ...coverage }, null, 2)}\n`);
-    process.exitCode = exit_code;
+    process.exitCode = convergenceExit;
   } catch (error) {
     console.error(error.message);
     process.exitCode = 2;

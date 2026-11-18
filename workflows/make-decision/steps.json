@@ -226,7 +226,7 @@
     {
       "step_id": 14,
       "step_slug": "approve-decision",
-      "observable_result": "一致性准备完成后，把方向/范围（含第 1 步的独立可交付验收单元数与是否需用户在场/真实凭证的动作）、风险、验收和 spec-analyze 缺口/处置展示给用户并取得真实确认；拒绝/未答仍为草稿。 判定消费：SKILL.md#方法 第14步；原件：human-confirm原件、materialRefs、spec-analyze ref。 最终确认＝阶段收口：确认原件由现human-confirm owner保存；下一阶段由用户决定。 留痕边界：确认目录含多类确认，不区分本步最终确认。 UI 任务时最终确认引一行「UI 范围与设计基准」；非 UI 跳过。",
+      "observable_result": "一致性准备完成后，把方向/范围（含第 1 步的独立可交付验收单元数与是否需用户在场/真实凭证的动作）、风险、验收和 spec-analyze 缺口/处置展示给用户并取得真实确认；拒绝/未答仍为草稿。 判定消费：SKILL.md#方法 第14步；原件：human-confirm原件、materialRefs、spec-analyze ref。 最终确认＝阶段收口：确认原件由现human-confirm owner保存；下一阶段由用户决定。 留痕边界：确认目录含多类确认，不区分本步最终确认。 UI 任务时最终确认引一行「UI 范围与设计基准」；非 UI 跳过。 page_trigger：① 三个以上相关概念/分支/多维对比/层级关系？② 小聊/一句事实/纯文字？③ 本次理由？任一命中即出页；均否写理由。",
       "completion_evidence": [
         {
           "kind": "human_confirmation",

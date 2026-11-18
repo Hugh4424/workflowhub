@@ -339,13 +339,31 @@ function pointerFields(value) {
   const reader = /读者\s+([^；;\s）)]+)/.exec(value)?.[1] ?? null;
   return { ref, digest, reader };
 }
-function uiCardContext(materialRoot) {
+export function pageTriggerGapFor(step, stage) {
+  if (stage !== 'make-decision' || step.step_slug !== 'approve-decision') return null;
+  const text = step.observable_result ?? '';
+  if (!/page_trigger/.test(text)) return 'page_trigger：出页三问未声明';
+  const asked = [/三个以上|分支|多维对比|层级/.test(text), /小聊|一句事实|纯文字/.test(text), /理由/.test(text)];
+  if (asked.filter(Boolean).length < 3) return 'page_trigger：三问不全';
+  // Only an explicit outcome ("本次命中/本次均否") is checked here; the step
+  // declaration itself states the rule, not this task's outcome.
+  if (/本次命中/.test(text) && !/出页回执|出页证据|页面[:：]\s*`|\.html|quality\/evidence/.test(text)) {
+    return 'page_trigger：命中却未出页';
+  }
+  if (/本次均否/.test(text) && !/理由\s*[:：]\s*\S/.test(text)) return 'page_trigger：均否无理由';
+  return null;
+}
+
+export function uiCardContext(materialRoot) {
   if (!materialRoot) return null;
   let decision = '';
   try { decision = readFileSync(join(materialRoot, 'decision-log.md'), 'utf8'); } catch { return null; }
   if (/## 非UI及理由/.test(decision)) return { isUi: false };
   const section = /## UI 范围与设计基准[\s\S]*?(?=\n## |$)/.exec(decision)?.[0];
-  if (!section) return { isUi: false };
+  if (!section) {
+    if (/raw_requirement|设计源|UI 范围与设计基准/.test(decision)) return { isUi: false, gap: 'UI范围与设计基准：缺「是不是 UI」判定' };
+    return { isUi: false };
+  }
   const row = /\|\s*是不是 UI\s*\|\s*([^|\n]*)/.exec(section)?.[1]?.trim() ?? '';
   if (!row) return { isUi: false, gap: 'UI范围与设计基准：缺「是不是 UI」行' };
   if (/^否/.test(row)) return { isUi: false };
@@ -869,6 +887,7 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
       const original = checks.find(check => check.present === true) ?? null;
       const declaredPhysical = declared.filter(entry => entry.kind !== 'task_original_ref' && !FACTS_EVIDENCE(entry.uri_or_path));
       const declaredPhysicalMissing = declaredPhysical.length > 0 && !checks.some(check => check.present === true && declaredPhysical.some(entry => entry.uri_or_path === check.ref));
+      const pageTriggerGap = pageTriggerGapFor(step, name);
       const uiSlotDeclared = declared.some(entry => entry.uri_or_path === 'ui_source_reply');
       const uiApplicable = name === 'make-decision' && step.step_slug === 'load-context';
       const uiCard = uiApplicable ? uiCardContext(materialRoot) : null;
@@ -880,6 +899,7 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
       const identity = { stage: name, step_id: step.step_id, step_slug: step.step_slug, source,
         evidence_location: mapping?.[2] ?? null, consumer: mapping?.[1] ?? null,
         evidence: checks, result: step.observable_result, method_anchor: step.method_anchor ?? '方法', requires_user_reply: step.requires_user_reply === true };
+      if (pageTriggerGap) return { ...identity, judgment: '未收敛', state: 'incomplete', basis: [], gap: pageTriggerGap };
       if (uiGap) return { ...identity, judgment: '未收敛', state: 'incomplete', basis: [], gap: uiGap };
       if (producerFailure) return { ...identity, judgment: '未判定', state: 'unavailable', basis: [],
         gap: `读不到步骤定义：证据生产者未能从材料仓读取 ${source}；本条不是「步骤没做」` };
