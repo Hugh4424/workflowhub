@@ -211,7 +211,8 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
   const n=/^工作包\s*(\d+)\s*[:：]/.exec(block.heading)?.[1];if(!n)continue;
   const mapped=decisionMappings.get(`工作包 ${n}`);
   if(!mapped||!/^WP-?\d+$/.test(mapped)){
-   const missing=node('wp',`缺：工作包 ${n} 的 WP 编号映射`,decisionPath,`line:${block.line}；工作包 ${n}`,{missing:true,id:`wp-missing-${n}`,summary:`工作包 ${n} 未取得 WP 旧编号映射`});
+   const title=block.heading.replace(/^工作包\s*\d+\s*[:：]\s*/,'').trim()||`工作包 ${n}`;
+   const missing=node('wp',title,decisionPath,`line:${block.line}；工作包 ${n}`,{missing:true,id:`wp-missing-${n}`,summary:`工作包 ${n} 未取得 WP 旧编号映射`});
    missing.source_id=`工作包 ${n}`;packages.push(missing);continue;
   }
   packageBlocks.push({block,sourceId:mapped.replace(/^WP-?/,'WP'),title:block.heading.replace(/^工作包\s*\d+\s*[:：]\s*/,''),shape:'new'});
@@ -532,8 +533,8 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
   for(const o of objects.filter(o=>['req','wp','task'].includes(o.kind)))for(const claim of o.acceptance?.results??[])for(const ref of claim.refs??[])o.src.push(source(join(task.taskPath,ref.ref),'public status 已核AC原件 '+claim.id));
   fingerprints.terminal_status_sha256=hash(JSON.stringify(stageStatus));
  }
- const pageData={task:businessTitle,taskIdentity:`${manifest.project_name}/${manifest.task_id}`,stageLabel:stageStatus?stageStatus.stage+' · '+stageNames[stageStatus.stage]:stageLabel,...(stageStatus?{stageStatus}:{}),sourceDir:material,stages,currentObjectId:objects.find(o=>o.kind==='task'&&o.source_id===cursor?.task_id)?.id??null,initialSelection:objects.find(o=>o.kind==='task'&&o.source_id===cursor?.task_id)?.id??'progress',hasPhase:objects.some(o=>o.kind==='phase'),objects,edges,sideEdges,phaseTasks,progress:{reqIds:objects.filter(o=>o.kind==='req').map(o=>o.id),unlinkedTaskIds:objects.filter(o=>o.kind==='task'&&!o.phase).map(o=>o.id)},changedChips:[],initialChanged:[]};
- return {pageData,report,decisionLogPath:decisionPath,decisionMissing:decision===null,workspaceRoot:root,taskIdentity:task.identity,sourceFingerprint:fingerprints,factsProvenance:{ref:factsPath,sha256:factsHash},excludedCommandRefs,gaps:objects.filter(o=>o.status.text==='缺').map(o=>({kind:o.kind,reason:o.title})),factsRows:rows.length,contractFacts:contract.facts,contractErrors:contract.errors};
+ const pageData={task:businessTitle,generatedAt:new Date().toISOString(),taskIdentity:`${manifest.project_name}/${manifest.task_id}`,stageLabel:stageStatus?stageStatus.stage+' · '+stageNames[stageStatus.stage]:stageLabel,...(stageStatus?{stageStatus}:{}),sourceDir:material,stages,currentObjectId:objects.find(o=>o.kind==='task'&&o.source_id===cursor?.task_id)?.id??null,initialSelection:objects.find(o=>o.kind==='task'&&o.source_id===cursor?.task_id)?.id??'progress',hasPhase:objects.some(o=>o.kind==='phase'),objects,edges,sideEdges,phaseTasks,progress:{reqIds:objects.filter(o=>o.kind==='req').map(o=>o.id),unlinkedTaskIds:objects.filter(o=>o.kind==='task'&&!o.phase).map(o=>o.id)},changedChips:[],initialChanged:[]};
+ return {pageData,report,decisionLogPath:decisionPath,decisionMissing:decision===null,workspaceRoot:root,taskIdentity:task.identity,sourceFingerprint:fingerprints,factsProvenance:{ref:factsPath,sha256:factsHash},excludedCommandRefs,gaps:objects.filter(o=>o.status.text==='缺').map(o=>({kind:o.kind,reason:o.summary||o.title})),factsRows:rows.length,contractFacts:contract.facts,contractErrors:contract.errors};
 }
 export async function main(argv=process.argv.slice(2)){if(argv.length!==4||argv[0]!=='--task-path'||argv[2]!=='--report')throw Error('usage: --task-path <absolute root> --report <report>');return buildPageData({taskPath:argv[1],reportPath:argv[3]});}
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href)main().then(r=>console.log(JSON.stringify(r))).catch(e=>{console.error(e.message);process.exitCode=1;});

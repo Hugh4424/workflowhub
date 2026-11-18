@@ -648,3 +648,28 @@ describe("P10 UI source slot on the template shape", () => {
     expect(step?.gap ?? "").not.toContain("UI设计源首问");
   });
 });
+
+// P11 final consumers: these run against a real task only when its root is
+// provided (the card's final replay command exports P11_TASK_PATH); without it
+// they stay visibly skipped instead of inventing page facts.
+const P11_TASK = process.env.P11_TASK_PATH;
+const P11_REPORT = process.env.P11_REPORT_PATH;
+describe("ORACLE-MD-P11-FINAL page and terminal consumption", () => {
+  it.skipIf(!P11_TASK || !P11_REPORT)("ORACLE-MD-P11-FINAL consumes a real page report and names page mismatches", async () => {
+    const { checkPageContent } = await import("../../skills/answer-as-page/scripts/check-page-content.mjs");
+    const result = await checkPageContent({ taskPath: P11_TASK, reportPath: P11_REPORT });
+    expect(result.ok).toBe(true);
+    expect(result.errors).toEqual([]);
+    expect(result.task).toBeTruthy();
+  });
+  it.skipIf(!P11_TASK || !P11_REPORT)("ORACLE-MD-011 keeps task, stage and ring fields derived from the same task", async () => {
+    const { buildPageData } = await import("../../skills/answer-as-page/scripts/build-page-data.mjs");
+    const { pageData, report } = await buildPageData({ taskPath: P11_TASK, reportPath: P11_REPORT });
+    const manifest = JSON.parse(readFileSync(join(P11_TASK, "task.json"), "utf8"));
+    expect(pageData.task).toBeTruthy();
+    expect(pageData.taskIdentity).toContain(manifest.task_id);
+    expect(pageData.stageLabel).toBeTruthy();
+    expect(report.rings.length).toBeGreaterThan(0);
+    expect(pageData.objects.filter(object => object.kind === "wp").length).toBeGreaterThan(0);
+  });
+});

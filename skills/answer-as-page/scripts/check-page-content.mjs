@@ -8,9 +8,10 @@ import { buildPageData } from './build-page-data.mjs';
 const USAGE = 'usage: --task-path <root> --report <report> [--material-root <dir>]';
 const TITLE_BAD = /^缺[：:]|未取得/;
 
-function errorsFor({ taskPath, reportPath, materialRoot }) {
+export async function checkPageContent({ taskPath, reportPath, materialRoot, htmlPath, nodesPath }) {
   return buildPageData({ taskPath, reportPath }).then(({ pageData, report, contractErrors }) => {
     const errors = [];
+    const stampExists = Boolean(pageData.generatedAt);
     const add = (code, message) => errors.push({ code, message });
     for (const error of contractErrors ?? []) add('CONTRACT', error);
     const material = materialRoot
@@ -50,11 +51,22 @@ function errorsFor({ taskPath, reportPath, materialRoot }) {
     for (const scope of ring6?.write_set ?? []) {
       if (typeof scope !== 'string' || !index.includes(scope.replace(/[*].*$/, ''))) add('WRITESET_FAKE', `环6写集不在当前索引：${scope}`);
     }
-    const stamp = pageData.generatedAt ? Date.parse(pageData.generatedAt) : NaN;
-    try {
-      const changedAt = Math.max(...['decision-log.md', 'spec.md'].map(name => { try { return statSync(join(material, name)).mtimeMs; } catch { return 0; } }));
-      if (Number.isFinite(stamp) && changedAt > stamp) add('STALE_MATERIAL', '材料在页面生成后变化，页面需标过期');
-    } catch { /* unreadable material is already named above */ }
+    const changedAt = Math.max(...['decision-log.md', 'spec.md'].map(name => { try { return statSync(join(material, name)).mtimeMs; } catch { return 0; } }));
+    let pageAt = NaN;
+    if (htmlPath && existsSync(htmlPath)) pageAt = statSync(htmlPath).mtimeMs;
+    else if (stampExists) pageAt = Date.parse(pageData.generatedAt);
+    if (Number.isFinite(pageAt) && changedAt > pageAt) add('STALE_MATERIAL', '材料在页面生成后变化，页面需标过期');
+    if (htmlPath && !existsSync(htmlPath)) add('MISSING_HTML', `页面 HTML 不可读：${htmlPath}`);
+    if (nodesPath) {
+      if (!existsSync(nodesPath)) add('MISSING_SIDECAR', `页面侧车不可读：${nodesPath}`);
+      else {
+        try {
+          const sidecar = JSON.parse(readFileSync(nodesPath, 'utf8'));
+          if (sidecar.task !== undefined && sidecar.task !== pageData.task) add('SIDECAR_MISMATCH', '侧车任务与 pageData 不一致');
+          if (sidecar.stage !== undefined && sidecar.stage !== pageData.stageLabel) add('SIDECAR_MISMATCH', '侧车阶段与 pageData 不一致');
+        } catch { add('SIDECAR_MISMATCH', `侧车 JSON 不可读：${nodesPath}`); }
+      }
+    }
     return { ok: errors.length === 0, errors, stage: pageData.stageLabel, task: pageData.task };
   });
 }
@@ -63,11 +75,11 @@ export async function main(argv = process.argv.slice(2)) {
   const values = {};
   for (let index = 0; index < argv.length; index += 2) {
     const key = argv[index];
-    if (!['--task-path', '--report', '--material-root'].includes(key) || argv[index + 1] === undefined) throw new Error(USAGE);
+    if (!['--task-path', '--report', '--material-root', '--html-path', '--nodes-path'].includes(key) || argv[index + 1] === undefined) throw new Error(USAGE);
     values[key.slice(2)] = argv[index + 1];
   }
   if (!values['task-path'] || !values.report) throw new Error(USAGE);
-  const result = await errorsFor({ taskPath: resolve(values['task-path']), reportPath: resolve(values.report), materialRoot: values['material-root'] });
+  const result = await checkPageContent({ taskPath: resolve(values['task-path']), reportPath: resolve(values.report), materialRoot: values['material-root'], htmlPath: values['html-path'] ? resolve(values['html-path']) : undefined, nodesPath: values['nodes-path'] ? resolve(values['nodes-path']) : undefined });
   console.log(JSON.stringify(result, null, 2));
   if (!result.ok) process.exitCode = 1;
   return result;
