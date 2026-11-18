@@ -1,0 +1,5 @@
+{
+  "captured_from": "agy 1.5.10 transcript_full.jsonl (2026-11-18); header block shape captured verbatim, body tokenized",
+  "source": "alpha\nbeta\ngamma\n",
+  "content_template": "Created At: {{created}}\nCompleted At: {{completed}}\nCreated At: {{created}}\nCompleted At: {{completed}}\nShowing lines 1-{{total}} of {{total}}\n{{body}}"
+}
