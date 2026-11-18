@@ -50,7 +50,23 @@ function parse(stdout, _stderr = "", expectedSession = null) {
   if (phase !== "settled") return invalid("Pi did not settle its agent turn");
   if (final.stop_reason !== "stop") return invalid("Pi emitted no successful final assistant message");
   const result = text(final.text);
-  return result ? { ok: true, text: result, session_id: session, usage: final.usage ?? null } : invalid("Pi emitted no final assistant text");
+  return result ? { ok: true, text: result, session_id: session, usage: publicUsage(final.usage) } : invalid("Pi emitted no final assistant text");
+}
+
+// Pi reports provider bookkeeping flags (for example totalFromProvider) inside
+// usage.cost. The public result contract accepts numeric amounts only, so keep
+// the numeric usage and drop flags the host cannot represent.
+function publicUsage(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const usage = {};
+  for (const [key, amount] of Object.entries(value)) {
+    if (Number.isSafeInteger(amount) && amount >= 0) usage[key] = amount;
+    else if (key === "cost" && amount && typeof amount === "object" && !Array.isArray(amount)) {
+      const cost = Object.fromEntries(Object.entries(amount).filter(([, price]) => typeof price === "number" && Number.isFinite(price) && price >= 0));
+      if (Object.keys(cost).length > 0) usage.cost = cost;
+    }
+  }
+  return Object.keys(usage).length > 0 ? usage : null;
 }
 
 // Pi reports provider failures inside the assistant message rather than through
