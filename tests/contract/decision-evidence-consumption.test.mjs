@@ -614,3 +614,37 @@ describe("ORACLE-MD-007 checker exit and shape boundaries", () => {
     expect(result.warnings.map(warning => warning.code)).toContain("no_decision_entries");
   });
 });
+
+describe("P10 UI source slot on the template shape", () => {
+  function uiFixture({ question = true, answer = true, taskId = "ui-task" } = {}) {
+    const root = temp("p10-ui-"), task = join(root, "task"), materials = join(root, "materials");
+    const put = (base, name, value) => { const file = join(base, name); mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, value); };
+    put(task, "task.json", JSON.stringify({ schema_version: "1.0.0", task_id: "ui-task", target_repo_root: ROOT, baseline_commit: "HEAD", activation_cohort: "post" }));
+    put(task, "facts.jsonl", "");
+    put(materials, "phases/index.md", "# Index\n");
+    const tuple = ["request_user_input_async", "call_ui_1", 0];
+    put(task, "quality/evidence/ui-question.md", ["# 问题原件", "批次类型：UI批次。", `questionItemId=${JSON.stringify(tuple)}`, "axis: design_source", "## 问题原文", "有稿还是无稿？"].join("\n"));
+    put(task, "quality/evidence/ui-answer.md", ["# 答复原件", "批次类型：UI批次。", `questionItemId=${JSON.stringify(tuple)}`, `task_id：${taskId}`, "## 用户答复原文", "沿用现有页面。"].join("\n"));
+    put(materials, "decision-log.md", ["# Controlled", "## 级别与路线", "- 推荐级别：复杂", "## UI 范围与设计基准", "", "| 项 | 当前事实 |", "| --- | --- |", "| 是不是 UI | 是；raw_requirement 为页面内容可达 |", "| 页面、路由与组件 | /overview |", "| 设计源、提供者 | 沿用现有页面 |", "| 验收基准 | 原页面 |", "| 缺什么与风险 | 无 |", "", `UI设计源问题原件：\`${question ? "quality/evidence/ui-question.md" : "quality/evidence/missing-question.md"}\``, `UI设计源答复原件：\`${answer ? "quality/evidence/ui-answer.md" : "quality/evidence/missing-answer.md"}\``, ""].join("\n"));
+    return { task, materials };
+  }
+  const stepOne = (fixture, stage) => runStageStepsCheck({ taskPath: fixture.task, materialRoot: fixture.materials, repoRoot: ROOT, stage }).stages.find(row => row.stage === stage)?.steps.find(step => step.step_id === 1);
+  it("reports the named question gap on the template card shape", () => {
+    const step = stepOne(uiFixture({ question: false }), "make-decision");
+    expect(step.gap).toContain("UI设计源首问：问题原件未取得");
+    expect(step.state).toBe("incomplete");
+  });
+  it("keeps a bound template-shaped card free of the UI gap", () => {
+    const step = stepOne(uiFixture(), "make-decision");
+    expect(step.gap).not.toContain("UI设计源首问");
+  });
+  it("reports a mismatched reply task_id", () => {
+    const step = stepOne(uiFixture({ taskId: "other-task" }), "make-decision");
+    expect(step.gap).toContain("UI设计源首问：答复任务/批次/调用不匹配");
+    expect(step.state).toBe("incomplete");
+  });
+  it("does not apply the make-decision UI slot to build-code step 1", () => {
+    const step = stepOne(uiFixture({ question: false }), "build-code");
+    expect(step?.gap ?? "").not.toContain("UI设计源首问");
+  });
+});

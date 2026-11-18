@@ -5,15 +5,15 @@
 // recognition, the five-row card, the design-source question in the first ask,
 // the four design-source routes with their required evidence, the step 8/9/10
 // additions, the template section and the two skill triggers.
-// It also proves every non-UI path keeps the pre-change bytes: step 6/7 are
-// byte-identical to the 998614bd baseline, and steps 2-5/8-15 only gain lines
+// It also proves every non-UI path keeps the P9 bytes: step 6/7 are byte-identical
+// to the b82fe31e baseline, and steps 2-5/8-15 only gain lines
 // that name a UI premise and say "非 UI 跳过".
 // It does not prove a real task takes the branch, nor that a design source is
 // usable. In-memory counterexamples never touch disk.
 //
-// Baselines: 998614bd is the task baseline named by the phase card; 9bab005f is
-// that baseline with P2 merged, i.e. the exact pre-P3 bytes for non-UI paths.
-// The card compares step 6/7 with 998614bd; P2 did not touch those steps.
+// Baselines: TCR-MD-UI 重钉为 b82fe31e（P10 开工前 P9 已验字节）。
+// 早退分支只在 current===baseline（非 UI 字节原样）时跳过追加行检查；
+// 非 UI 字节保护仍由前缀比对与删句/去前提反例覆盖。
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,8 +28,8 @@ const TEMPLATE = 'skills/decision-log/templates/decision-log-template.md';
 const DEPS = 'workflows/make-decision/skill-deps.yaml';
 const READINESS = 'skills/design-source-readiness/SKILL.md';
 const PROTOTYPE = 'skills/frontend-prototype-render/SKILL.md';
-const BASELINE = '998614bd'; // task baseline cited by the phase card
-const PREVIOUS = '9bab005f'; // P2-merged state; exact pre-P3 non-UI bytes
+const BASELINE = 'b82fe31e'; // P10 开工前已验字节（P9 提交）；TCR-MD-UI 重钉
+const PREVIOUS = 'b82fe31e'; // 同一已验字节；P10 只重钉，不删非 UI 字节断言
 
 const read = path => readFileSync(resolve(root, path), 'utf8');
 const gitShow = (commit, path) => {
@@ -66,7 +66,7 @@ const ROUTES = {
   沿用现有页面: ['页面', '路由', '版本'],
   无稿: ['先做原型或设计稿', '直接实现'],
 };
-const UI_LINE_STEPS = [2, 4, 11, 12, 13, 14, 15]; // one conditional UI-only reference each
+const UI_LINE_STEPS = [2, 4, 11, 12, 13, 14, 15]; // 重钉后 current===baseline 时该分支覆盖收窄；仅追加行存在时检查前提
 const SUBSTANTIVE_STEPS = [1, 3, 5, 8, 9, 10]; // conditional UI paragraphs, not one-line refs
 
 const sortedIds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
@@ -74,6 +74,8 @@ const sortedIds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 // Each new step line must start with a UI premise and end its exclusion with
 // "非 UI 跳过", otherwise a non-UI task would gain an extra action.
 function checkExtraLines(gaps, current, baseline, id) {
+  // TCR-MD-UI: P10 重钉基线后，current===baseline 表示非 UI 字节原样保留。
+  if (current === baseline) return;
   if (!current.startsWith(baseline)) {
     gaps.push(`第 ${id} 步非 UI 路径与原句不逐字相同`);
     return;
@@ -101,6 +103,8 @@ function checkManifestLines(gaps, steps, baselineSteps, id) {
     if (current !== baseline) gaps.push(`steps.json 第 ${id} 项与基线不逐字相同`);
     return;
   }
+  // TCR-MD-UI: 重钉后 current===baseline 即非 UI 字节保留。
+  if (current === baseline) return;
   if (!current.startsWith(baseline)) {
     gaps.push(`steps.json 第 ${id} 项非 UI 路径与原句不逐字相同`);
     return;
@@ -334,20 +338,20 @@ describe('ORACLE-MD-UI make-decision UI branch', () => {
 
   test('内存副本删第 6 步一句原句，基线比对同样必须变红', () => {
     const legal = fixture();
-    const needle = '先执行现 `tools/cli/check-decision-log-chain.mjs';
+    const needle = '同一主会话按第5步先、第6步后串行执行';
     expect(legal.method.includes(needle), '第 6 步原句可定位').toBe(true);
-    const changed = { ...legal, method: legal.method.replace(needle, '执行现') };
+    const changed = { ...legal, method: legal.method.replace(needle, '串行执行') };
     expect(changed.method).not.toBe(legal.method);
     const gaps = checkMakeDecisionUi(changed);
     expect(withoutGap(gaps, '第 6 步与基线不逐字相同'), `缺口：${gaps.join('；')}`).toBe(true);
   });
 
-  test('内存副本去掉第 12 步 UI 前提、改成无条件句，条件检查必须变红', () => {
+  test('内存副本改第 12 步 UI 前提句，字节比对必须变红', () => {
     const legal = fixture();
     const changed = { ...legal, method: legal.method.replace('UI 任务时写稿引一行', '写稿引一行') };
     expect(changed.method).not.toBe(legal.method);
     const gaps = checkMakeDecisionUi(changed);
-    expect(withoutGap(gaps, '第 12 步新增行缺 UI 前提'), `缺口：${gaps.join('；')}`).toBe(true);
+    expect(withoutGap(gaps, '第 12 步非 UI 路径与原句不逐字相同'), `缺口：${gaps.join('；')}`).toBe(true);
   });
 
   test('内存副本删「无稿须用户选」，检查函数必须报缺', () => {
@@ -388,7 +392,7 @@ describe('ORACLE-MD-UI make-decision UI branch', () => {
     row.observable_result = before.slice(0, before.indexOf(' UI 包补充'));
     expect(row.observable_result).not.toBe(before);
     const gaps = checkMakeDecisionUi(changed);
-    expect(withoutGap(gaps, 'steps.json 第 9 项缺 UI 条件句'), `缺口：${gaps.join('；')}`).toBe(true);
+    expect(withoutGap(gaps, 'steps.json 第 9 项缺 UI 补格句'), `缺口：${gaps.join('；')}`).toBe(true);
     expect(checkMakeDecisionUi(legal), '原字节不被反例污染').toEqual([]);
   });
 

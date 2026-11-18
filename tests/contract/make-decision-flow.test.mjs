@@ -41,6 +41,10 @@ const syncEvidence = {
     {
       "kind": "phase_task_facts",
       "uri_or_path": "facts.jsonl"
+    },
+    {
+      "kind": "task_original_ref",
+      "uri_or_path": "ui_source_reply"
     }
   ],
   "3": [

@@ -339,6 +339,59 @@ function pointerFields(value) {
   const reader = /读者\s+([^；;\s）)]+)/.exec(value)?.[1] ?? null;
   return { ref, digest, reader };
 }
+function uiCardContext(materialRoot) {
+  if (!materialRoot) return null;
+  let decision = '';
+  try { decision = readFileSync(join(materialRoot, 'decision-log.md'), 'utf8'); } catch { return null; }
+  if (/## 非UI及理由/.test(decision)) return { isUi: false };
+  const section = /## UI 范围与设计基准[\s\S]*?(?=\n## |$)/.exec(decision)?.[0];
+  if (!section) return { isUi: false };
+  const row = /\|\s*是不是 UI\s*\|\s*([^|\n]*)/.exec(section)?.[1]?.trim() ?? '';
+  if (!row) return { isUi: false, gap: 'UI范围与设计基准：缺「是不是 UI」行' };
+  if (/^否/.test(row)) return { isUi: false };
+  return { isUi: /^是/.test(row), section };
+}
+
+function uiSourceGap({ taskPath, materialRoot }) {
+  const card = uiCardContext(materialRoot);
+  if (!card?.isUi) return null;
+  const questionRef = /UI设计源问题原件：`([^`]+)`/.exec(card.section)?.[1];
+  const answerRef = /UI设计源答复原件：`([^`]+)`/.exec(card.section)?.[1];
+  const root = realpathSync(taskPath) + '/';
+  const read = (ref) => {
+    const file = isAbsolute(ref) ? ref : join(taskPath, ref);
+    try {
+      const real = realpathSync(file);
+      if (!real.startsWith(root)) return { file: real, outside: true };
+      return { file: real, text: readTaskOriginal(taskPath, ref) };
+    } catch { return null; }
+  };
+  const tupleOf = (text) => {
+    const raw = /questionItemId=(\[[^\n]+?\])/.exec(text)?.[1];
+    try { return JSON.parse(raw); } catch { return null; }
+  };
+  const question = questionRef ? read(questionRef) : null;
+  const questionTuple = question ? tupleOf(question.text) : null;
+  const questionBatch = question ? /批次类型：([^\n。]+)/.exec(question.text)?.[1]?.trim() : null;
+  if (!question || !/axis:\s*design_source/.test(question.text) || !questionTuple || questionTuple[2] !== 0) {
+    return 'UI设计源首问：问题原件未取得';
+  }
+  const answer = answerRef ? read(answerRef) : null;
+  if (answer?.outside) return 'UI设计源首问：答复任务/批次/调用不匹配';
+  if (!answer || !/## 用户答复原文[\s\S]*?\S/.test(answer.text)) return 'UI设计源首问：真实答复未取得';
+  const answerTuple = tupleOf(answer.text);
+  const answerBatch = /批次类型：([^\n。]+)/.exec(answer.text)?.[1]?.trim();
+  if (!answer.file.startsWith(root)) return 'UI设计源首问：答复任务/批次/调用不匹配';
+  const declaredTask = /task_id[:：]\s*([^\n]+)/.exec(answer.text)?.[1]?.trim();
+  const manifestTask = (() => { try { return JSON.parse(readFileSync(join(taskPath, 'task.json'), 'utf8')).task_id; } catch { return null; } })();
+  if (declaredTask && manifestTask && declaredTask !== manifestTask) return 'UI设计源首问：答复任务/批次/调用不匹配';
+  if (!questionBatch || answerBatch !== questionBatch || !answerTuple
+      || answerTuple[1] !== questionTuple[1] || answerTuple[2] !== 0) {
+    return 'UI设计源首问：答复任务/批次/调用不匹配';
+  }
+  return null;
+}
+
 function readTaskOriginal(taskPath, ref) {
   if (typeof ref !== 'string' || !ref || isAbsolute(ref) || ref.split('/').some(part => part === '..' || part === '.')) {
     throw Error(`冷读指针越界：${ref ?? '缺路径'}`);
@@ -815,9 +868,18 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
       const original = checks.find(check => check.present === true) ?? null;
       const declaredPhysical = declared.filter(entry => entry.kind !== 'task_original_ref' && !FACTS_EVIDENCE(entry.uri_or_path));
       const declaredPhysicalMissing = declaredPhysical.length > 0 && !checks.some(check => check.present === true && declaredPhysical.some(entry => entry.uri_or_path === check.ref));
+      const uiSlotDeclared = declared.some(entry => entry.uri_or_path === 'ui_source_reply');
+      const uiApplicable = name === 'make-decision' && step.step_slug === 'load-context';
+      const uiCard = uiApplicable ? uiCardContext(materialRoot) : null;
+      const uiGap = uiApplicable
+        ? (uiCard?.gap ?? (uiCard?.isUi
+          ? (uiSlotDeclared ? uiSourceGap({ taskPath, materialRoot }) : 'UI设计源首问：槽未声明（ui_source_reply）')
+          : null))
+        : null;
       const identity = { stage: name, step_id: step.step_id, step_slug: step.step_slug, source,
         evidence_location: mapping?.[2] ?? null, consumer: mapping?.[1] ?? null,
         evidence: checks, result: step.observable_result, method_anchor: step.method_anchor ?? '方法', requires_user_reply: step.requires_user_reply === true };
+      if (uiGap) return { ...identity, judgment: '未收敛', state: 'incomplete', basis: [], gap: uiGap };
       if (producerFailure) return { ...identity, judgment: '未判定', state: 'unavailable', basis: [],
         gap: `读不到步骤定义：证据生产者未能从材料仓读取 ${source}；本条不是「步骤没做」` };
       const row = evidence.find(row => row.source === source && row.step_slug === step.step_slug);
