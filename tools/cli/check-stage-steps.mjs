@@ -378,7 +378,8 @@ function uiSourceGap({ taskPath, materialRoot }) {
   }
   const answer = answerRef ? read(answerRef) : null;
   if (answer?.outside) return 'UI设计源首问：答复任务/批次/调用不匹配';
-  if (!answer || !/## 用户答复原文[\s\S]*?\S/.test(answer.text)) return 'UI设计源首问：真实答复未取得';
+  const reply = answer ? /## 用户答复原文\s*\n([\s\S]*?)(?=\n## |$)/.exec(answer.text)?.[1]?.trim() : '';
+  if (!reply) return 'UI设计源首问：真实答复未取得';
   const answerTuple = tupleOf(answer.text);
   const answerBatch = /批次类型：([^\n。]+)/.exec(answer.text)?.[1]?.trim();
   if (!answer.file.startsWith(root)) return 'UI设计源首问：答复任务/批次/调用不匹配';
@@ -386,7 +387,7 @@ function uiSourceGap({ taskPath, materialRoot }) {
   const manifestTask = (() => { try { return JSON.parse(readFileSync(join(taskPath, 'task.json'), 'utf8')).task_id; } catch { return null; } })();
   if (declaredTask && manifestTask && declaredTask !== manifestTask) return 'UI设计源首问：答复任务/批次/调用不匹配';
   if (!questionBatch || answerBatch !== questionBatch || !answerTuple
-      || answerTuple[1] !== questionTuple[1] || answerTuple[2] !== 0) {
+      || answerTuple[0] !== questionTuple[0] || answerTuple[1] !== questionTuple[1] || answerTuple[2] !== 0) {
     return 'UI设计源首问：答复任务/批次/调用不匹配';
   }
   return null;
@@ -1377,6 +1378,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     /冷读五问不全/, /冷读结论未写五问全答出/, /冷读原件未绑定卡摘要/,
     /冷读原件摘要不符/, /修订未复读/,
     /先设计后提问缺证/, /冷读原件读的卡与当前卡节不一致/, /卡片摘要与冷读原件不一致/,
+    /UI设计源首问/,
   ];
   if (report.convergence.gaps.some(gap => EVIDENCE_GAP.some(pattern => pattern.test(String(gap))))) process.exitCode = 1;
   if (json) console.log(JSON.stringify(report, null, 2));
