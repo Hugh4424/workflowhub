@@ -456,7 +456,7 @@ export async function buildPageData({ taskPath, reportPath } = {}) {
  const requirementMapping=req=>{const owners=(req.declared_wp_ids??[]).map(id=>packages.find(wp=>wp.source_id===id));return {complete:owners.every(wp=>Array.isArray(wp?.ac_ids)&&wp.ac_ids.length>0)&&!(handling.get(req.id)??[]).some(record=>record.unsupportedAC),ids:[...new Set([...(req.ac_ids??[]),...owners.flatMap(wp=>wp?.ac_ids??[])])]};};
  const setRequirementAcceptance=(req,a,mapping)=>{
   const reason=req.acceptance?.reason??'',text=!mapping.complete?'验收归属未取得':mapping.ids.length?a.text:reason?(/不(?:直接)?适用代码AC|无本任务代码AC/.test(reason)?'代码验收不适用（来源说明）':'代码验收未取得'):a.text;
-  req.acceptance={text,results:a.claims??[],...(reason?{reason}:{})};req.status={text:req.implementation?.text??((req.source==='原件未取得'||req.status.text==='缺'?'缺：原话来源未取得':'需求已记录')+' · '+text),tone:req.implementation?'unk':a.tone};
+  req.acceptance={text,results:a.claims??[],...(reason?{reason}:{})};req.status={text:req.implementation?.text??(req.source==='原件未取得'||req.status.text==='缺'?'缺':'需求已记录 · '+text),tone:req.implementation?'unk':a.tone};
  };
  const wpMappings=sections(spec,3).filter(block=>/^\s*\|\s*WP\d+\b.*AC-[A-Z]+-\d{3}/m.test(block.body));
  for(const req of objects.filter(o=>o.kind==='req'))for(const wpId of req.declared_wp_ids??[]){const wp=packages.find(o=>o.source_id===wpId);if(wp)edge(edges,req.id,wp.id);else{req.status.text=req.status.text==='缺'?'缺':'归属未取得';req.unresolved_refs=[...(req.unresolved_refs??[]),wpId];}}

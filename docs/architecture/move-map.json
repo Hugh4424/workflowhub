@@ -8292,6 +8292,21 @@
       "retention_basis": "P1/T001，FR-REVIEW-001/002；复用review-policy唯一入口，无公共命令或schema新增。"
     },
     {
+      "source": "skills/answer-as-page/scripts/check-page-content.mjs",
+      "destination": "skills/answer-as-page/scripts/check-page-content.mjs",
+      "status": "add",
+      "role": "production",
+      "responsibility": "私有只读页面内容校验器：对当前任务/报告逐块核缺源、乱标题、旧阶段、同命令红绿、环6假写集与材料过期",
+      "owner": "answer-as-page 技能维护者；维护者为用户",
+      "consumer": "answer-as-page 技能与 P11 页面验收；不新增公共命令或进度权威",
+      "module_consumers": [],
+      "named_data_readers": [
+        "specs/make-decision-requirements-design-20261117/phases/P11.md"
+      ],
+      "delete_condition": "唯一消费者由经独立审查的替代承接或该技能退役时删除；保留原失败与历史页",
+      "retention_basis": "P11/T011 批准写集；卡要求新增私有只读校验器并登记 consumer/owner/替代/删除条件。"
+    },
+    {
       "source": "skills/answer-as-page/scripts/build-page-data.mjs",
       "destination": "skills/answer-as-page/scripts/build-page-data.mjs",
       "status": "add",
@@ -10077,7 +10092,10 @@
       "owner": "C10 P2 唯一开发writer",
       "consumer": "node node_modules/vitest/vitest.mjs run runtime/distribution/config-bootstrap.test.mjs；P2 独立测试与审查者只读消费。",
       "module_consumers": [],
-      "named_data_readers": ["runtime/distribution/config-bootstrap.mjs", "runtime/evidence/storage-root.mjs"],
+      "named_data_readers": [
+        "runtime/distribution/config-bootstrap.mjs",
+        "runtime/evidence/storage-root.mjs"
+      ],
       "delete_condition": "当被测职责退役或被经独立验证的替代测试完整承接后删除；冻结失败原件保留。",
       "retention_basis": "C10 P2/T002 声明的四份具名测试之一；只测受控隔离目录，不读写真实用户配置。"
     },
@@ -10090,7 +10108,10 @@
       "owner": "C10 P2 唯一开发writer",
       "consumer": "node node_modules/vitest/vitest.mjs run runtime/distribution/precheck.test.mjs；P2 独立测试与审查者只读消费。",
       "module_consumers": [],
-      "named_data_readers": ["runtime/distribution/precheck.mjs", "runtime/distribution/config-bootstrap.mjs"],
+      "named_data_readers": [
+        "runtime/distribution/precheck.mjs",
+        "runtime/distribution/config-bootstrap.mjs"
+      ],
       "delete_condition": "当被测职责退役或被经独立验证的替代测试完整承接后删除；冻结失败原件保留。",
       "retention_basis": "C10 P2/T002 声明的四份具名测试之一；隔离 PATH/HOME/XDG 与假 key，不访问真实服务。"
     },
@@ -10122,8 +10143,14 @@
       "owner": "C10 P2 唯一开发writer",
       "consumer": "runtime/distribution/config-bootstrap.mjs 与 tools/cli/onboard-release.mjs 的下一步提示；P5 README 与 P6 安装验证者只读。",
       "module_consumers": [],
-      "named_data_readers": ["runtime/distribution/precheck.mjs", "tools/cli/onboard-release.mjs"],
-      "tests": ["runtime/distribution/config-bootstrap.test.mjs", "tests/contract/onboard-release.test.mjs"],
+      "named_data_readers": [
+        "runtime/distribution/precheck.mjs",
+        "tools/cli/onboard-release.mjs"
+      ],
+      "tests": [
+        "runtime/distribution/config-bootstrap.test.mjs",
+        "tests/contract/onboard-release.test.mjs"
+      ],
       "delete_condition": "当 P4 发布包与 P5 README 以实测命令承接模板结构展示、且 config-bootstrap/precheck 的文本引用迁移后，由新 owner 退役；历史模板字节保留在 Git 历史。",
       "retention_basis": "C10 P2/T002 声明的模板；不建立第二配置源，config/workflowhub.yaml 仅为非生效样例。"
     },
@@ -10136,7 +10163,10 @@
       "owner": "C10 P2 唯一开发writer",
       "consumer": "node node_modules/vitest/vitest.mjs run tests/contract/onboard-release.test.mjs；P2 独立测试与审查者、P4/P6 消费者只读。",
       "module_consumers": [],
-      "named_data_readers": ["tools/cli/onboard-release.mjs", "runtime/distribution/config-bootstrap.mjs"],
+      "named_data_readers": [
+        "tools/cli/onboard-release.mjs",
+        "runtime/distribution/config-bootstrap.mjs"
+      ],
       "delete_condition": "当接入职责退役或被经独立验证的替代测试承接后删除；冻结失败原件保留。",
       "retention_basis": "C10 P2/T002 声明的具名黑盒测试；只操作隔离临时目录，不触碰真实用户配置。"
     },
@@ -10149,7 +10179,11 @@
       "owner": "C10 P2 唯一开发writer",
       "consumer": "node node_modules/vitest/vitest.mjs run tests/contract/precheck-entry.test.mjs；P2 独立测试与审查者只读。",
       "module_consumers": [],
-      "named_data_readers": ["tools/cli/stage-runtime.mjs", "runtime/distribution/precheck.mjs", "skills/wh-review/scripts/third-review-host-config.mjs"],
+      "named_data_readers": [
+        "tools/cli/stage-runtime.mjs",
+        "runtime/distribution/precheck.mjs",
+        "skills/wh-review/scripts/third-review-host-config.mjs"
+      ],
       "delete_condition": "当真实派发点的配置绑定与缺项诊断职责退役或被经独立验证的替代测试承接后删除；冻结失败原件保留。",
       "retention_basis": "C10 P2/T002 声明的具名测试；预写字节已另存 build-plan 原件后扩写，不改旧断言方向。"
     },
@@ -10161,9 +10195,21 @@
       "responsibility": "C10 P2 增量：导出既有 workflowHubConfigPath 作为唯一配置路径 owner，供 config-bootstrap/precheck/onboard 复用；resolveStorageRootDetails 现优先级与错误不变，不新写第二 XDG 规则。",
       "owner": "C10 P2 唯一开发writer / 原 B6 storage-root owner",
       "consumer": "runtime/distribution/config-bootstrap.mjs、runtime/distribution/precheck.mjs、tools/cli/onboard-release.mjs、tools/cli/stage-runtime.mjs（hostConfigPath 显式传参）；P4/P5 只读。",
-      "module_consumers": ["runtime/distribution/config-bootstrap.mjs", "runtime/distribution/precheck.mjs", "tools/cli/onboard-release.mjs", "tools/cli/stage-runtime.mjs"],
-      "named_data_readers": ["runtime/task/load-config.mjs", "tools/cli/task-bootstrap.mjs"],
-      "tests": ["runtime/distribution/config-bootstrap.test.mjs", "runtime/distribution/precheck.test.mjs", "tests/contract/precheck-entry.test.mjs"],
+      "module_consumers": [
+        "runtime/distribution/config-bootstrap.mjs",
+        "runtime/distribution/precheck.mjs",
+        "tools/cli/onboard-release.mjs",
+        "tools/cli/stage-runtime.mjs"
+      ],
+      "named_data_readers": [
+        "runtime/task/load-config.mjs",
+        "tools/cli/task-bootstrap.mjs"
+      ],
+      "tests": [
+        "runtime/distribution/config-bootstrap.test.mjs",
+        "runtime/distribution/precheck.test.mjs",
+        "tests/contract/precheck-entry.test.mjs"
+      ],
       "delete_condition": "原保留职责不变；仅当唯一配置路径 owner 被经独立验证的替代完整承接且现消费者迁移后，由原 owner 处理。",
       "retention_basis": "C10 P2/T002 的 modify 增量；只导出既有函数，不改存储根优先级、错误语义或环境变量行为。"
     },
@@ -10176,8 +10222,15 @@
       "owner": "C10 P2 唯一开发writer / 原 stage-runtime owner",
       "consumer": "七类公共命令调用者；P2 独立测试/审查者与 P4/P6 消费者只读。",
       "module_consumers": [],
-      "named_data_readers": ["runtime/distribution/precheck.mjs", "runtime/evidence/storage-root.mjs", "skills/wh-review/scripts/third-review-host-config.mjs"],
-      "tests": ["tests/contract/precheck-entry.test.mjs", "tests/contract/code-review-ocr.test.mjs"],
+      "named_data_readers": [
+        "runtime/distribution/precheck.mjs",
+        "runtime/evidence/storage-root.mjs",
+        "skills/wh-review/scripts/third-review-host-config.mjs"
+      ],
+      "tests": [
+        "tests/contract/precheck-entry.test.mjs",
+        "tests/contract/code-review-ocr.test.mjs"
+      ],
       "delete_condition": "当配置显式传参与派发前缺项诊断职责由经独立验证的替代承接后由原 owner 收回；原七类命令语义保持。",
       "retention_basis": "C10 P2/T002 的 modify 增量；不新增公共命令、不改无关动作的既有语义与错误码。"
     },
@@ -10190,7 +10243,13 @@
       "owner": "C10 P3 唯一开发writer",
       "consumer": "node node_modules/vitest/vitest.mjs run tests/contract/terminal-close-consumption.test.mjs；P3 独立测试与审查者、P4/P6 消费者只读。",
       "module_consumers": [],
-      "named_data_readers": ["workflows/build-code/skill-deps.yaml", "workflows/build-code/SKILL.md", "workflows/build-code/steps.json", "skills/catalog.yaml", "skills/stage-close/SKILL.md"],
+      "named_data_readers": [
+        "workflows/build-code/skill-deps.yaml",
+        "workflows/build-code/SKILL.md",
+        "workflows/build-code/steps.json",
+        "skills/catalog.yaml",
+        "skills/stage-close/SKILL.md"
+      ],
       "delete_condition": "当终末收尾接线职责退役或被经独立验证的替代测试承接后删除；原失败与历史原件保留。",
       "retention_basis": "C10 P3/T003 声明的具名接线契约；只证接线，不冒真实远端发布、用户答复或付费图完成。"
     },
@@ -10475,8 +10534,14 @@
       "owner": "C10 P6 唯一开发writer",
       "consumer": "P6/T006 的隔离浏览器读回驱动与 P6 目标测试 tests/acceptance/installed-release-flow.test.mjs；不是通用三模式 driver。",
       "module_consumers": [],
-      "named_data_readers": ["runtime/interface/temp-dir.mjs", "runtime/task/task-handle.mjs"],
-      "tests": ["tests/acceptance/installed-release-flow.test.mjs", "tests/acceptance/c12-update-chain.test.mjs"],
+      "named_data_readers": [
+        "runtime/interface/temp-dir.mjs",
+        "runtime/task/task-handle.mjs"
+      ],
+      "tests": [
+        "tests/acceptance/installed-release-flow.test.mjs",
+        "tests/acceptance/c12-update-chain.test.mjs"
+      ],
       "delete_condition": "当 C12 更新链驱动及其读回消费者被经独立验证的替代实现承接、且 C10 读回原件已归档后，由原 owner 删除；C12 冻结判定器不得放宽。",
       "retention_basis": "C10 P6/T006 的 modify；只改复制根 guard 的许可集合。"
     },
@@ -10489,8 +10554,15 @@
       "owner": "C10 P6 唯一开发writer",
       "consumer": "P6 独立测试/读者复放，作为 ORACLE-CROSS-TASK-READBACK 与 ORACLE-INSTALLED-FLOW 的具名门禁；不证明外部服务、UI 或远端上线。",
       "module_consumers": [],
-      "named_data_readers": ["runtime/task/task-handle.mjs", "runtime/interface/temp-dir.mjs", "skills/wh-review/scripts/review-materials.mjs", "runtime/evidence/acceptance-evidence-validator.mjs"],
-      "tests": ["tests/acceptance/c12-update-chain.mjs"],
+      "named_data_readers": [
+        "runtime/task/task-handle.mjs",
+        "runtime/interface/temp-dir.mjs",
+        "skills/wh-review/scripts/review-materials.mjs",
+        "runtime/evidence/acceptance-evidence-validator.mjs"
+      ],
+      "tests": [
+        "tests/acceptance/c12-update-chain.mjs"
+      ],
       "delete_condition": "当该驱动的门禁由经独立验证的替代测试承接后由原 owner 删除；真实业务缺口随就绪件补齐另行执行，不靠删除断言求绿。",
       "retention_basis": "C10 P6/T006–T008 的 add；固定替身与真实运行分层，不以 fixture 冒业务。"
     }
