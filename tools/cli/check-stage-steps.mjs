@@ -417,7 +417,8 @@ function tableCells(line) {
 function normalizeBatch(value) {
   return String(value ?? '').replace(/`/g, '')
     .replace(/[（(][^（）()]*[）)]/g, '')
-    .replace(/[。，,；;、\s]+$/g, '')
+    .replace(/[，,]\s*(?:与冷读|同批|与讨论|见冷读|冷读)[\s\S]*$/, '')
+    .replace(/[。、，,\s]+$/g, '')
     .trim();
 }
 function packageBatches(block) {
@@ -1121,8 +1122,9 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
     .filter(row => /^无\s*[（(]/.test(String(row.pending ?? '')))
     .filter(row => !/^无\s*[（(]\s*(?:理由|原因|可推迟|不适用|本包无未决|已核)/.test(String(row.pending ?? '')))
     .map(row => '未收敛：' + (row.name || `第 ${row.line} 行`));
-  // Evidence gaps are reported and make complete=false, but never change the exit
-  // code: make-decision defines exit 1 as the 状态 column only.
+  // ORACLE-MD-007: evidence-class gaps are real failures and set exit 1 below;
+  // naming/format notes stay report-only. Keep this list aligned with the
+  // gaps.push sites in coldReadGaps/packageBlock and with SKILL:382/462.
   const evidenceGaps = modules.flatMap(row => (row.evidenceGaps ?? []).map(gap => `${row.name || `第 ${row.line} 行`}：${gap}`));
   const fieldGaps = statusColumnFormat ? [] : modules.filter(row => row.fields.some(field => !field.present)).map(row => row.name);
   const strictGaps = [...new Set([...deferralGaps, ...strictUnconverged])];
@@ -1305,6 +1307,16 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   // A named unconverged package is a real gap, not a format note: surface it
   // through the exit code so a skipped convergence cannot pass as clean.
   if (report.convergence.gaps.some(gap => String(gap).startsWith('未收敛：'))) process.exitCode = 1;
+  // ORACLE-MD-007: evidence-class gaps fail the exit; naming/format notes stay
+  // report-only. The list is the single source shared with SKILL:382/462.
+  const EVIDENCE_GAP = [
+    /聊天呈现未取得/, /卡片摘要不符/, /缺少?真实问答指针/, /冷读五问未绑定/,
+    /缺冷读记录/, /缺冷读原件/, /收敛格缺当前卡节/, /冷读读者未声明独立/,
+    /冷读五问不全/, /冷读结论未写五问全答出/, /冷读原件未绑定卡摘要/,
+    /冷读原件摘要不符/, /修订未复读/,
+    /先设计后提问缺证/, /冷读原件读的卡与当前卡节不一致/, /卡片摘要与冷读原件不一致/,
+  ];
+  if (report.convergence.gaps.some(gap => EVIDENCE_GAP.some(pattern => pattern.test(String(gap))))) process.exitCode = 1;
   if (json) console.log(JSON.stringify(report, null, 2));
   else {
     if (report.card) console.log(JSON.stringify(report.card, null, 2));
@@ -1328,7 +1340,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       }
     }
     console.log(`收敛 complete=${report.convergence.complete}；gaps=${JSON.stringify(report.convergence.gaps)}`);
-    console.log('退出码反映状态列未收敛包与「未收敛：」点名（含括号未决/可推迟）；十列字段缺口与其它 gaps 只进上面的 complete/gaps，不改变退出码。');
+    console.log('退出码反映状态列未收敛包、「未收敛：」点名与证据类具名缺口；格式/命名缺口与十列字段缺口只进上面的 complete/gaps。');
     console.log(`级别：${report.level}`);
     for (const error of report.errors) console.log(`缺口：${error}`);
     console.log(report.limits.join('\n'));

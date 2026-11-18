@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync, realpathSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -12,6 +12,41 @@ describe('ORACLE-P1-STAGE-STEPS zero attestation', () => {
       { stage: 'build-code', source: 'steps.json', step_slug: 'done', state: 'completed' },
       { stage: 'build-code', source: 'steps.json', step_slug: 'missing', state: 'incomplete' },
     ] })).toEqual({ exit_code: 0, steps_unattested: [], missing_steps: [{ source: 'steps.json', step_slug: 'missing', state: 'incomplete' }] });
+  });
+  it('returns non-zero for a make-decision evidence gap but keeps build-code at zero', () => {
+    const basis = [{ evidence_level: 'record_ref', conclusion: 'incomplete', reason: 'named discussion original missing' }];
+    expect(stepCoverageExit({ workflow_steps: [
+      { stage: 'make-decision', source: 'steps.json', step_slug: 'gap', state: 'incomplete', basis },
+    ] }).exit_code).toBe(1);
+    expect(stepCoverageExit({ workflow_steps: [
+      { stage: 'build-code', source: 'steps.json', step_slug: 'gap', state: 'incomplete', basis },
+    ] }).exit_code).toBe(0);
+  });
+  it('runs the real CLI on a controlled task and returns its exit code', () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'p8-runchecks-')));
+    try {
+      const repo = join(root, 'repo'), task = join(root, 'task'), materials = join(repo, 'specs/controlled');
+      const put = (base, path, value) => { const file = join(base, path); mkdirSync(join(file, '..'), { recursive: true }); writeFileSync(file, typeof value === 'string' ? value : JSON.stringify(value)); };
+      mkdirSync(materials, { recursive: true });
+      put(task, 'task.json', { schema_version: '1.0.0', task_id: 'controlled', baseline_commit: 'HEAD', target_repo_root: repo, activation_cohort: 'post' });
+      put(materials, 'decision-log.md', '# Controlled complex fixture\n');
+      const source = 'workflows/make-decision/steps.json';
+      const slugs = ['first-owned-step', 'second-owned-step'];
+      const steps = slugs.map((slug, index) => ({ step_id: index + 1, step_slug: slug, observable_result: 'Read the exact controlled observation. 判定消费：SKILL.md#方法；原件：controlled human record', completion_evidence: [{ kind: 'phase_task_facts', uri_or_path: 'facts.jsonl' }] }));
+      put(repo, source, { schema_version: '2.0.0', stage_slug: 'make-decision', steps });
+      put(repo, 'workflows/make-decision/SKILL.md', '# Controlled method\n## 方法\nRead the controlled observation.\n');
+      put(materials, 'step-consumer-design.md', slugs.map(slug => `| [controlled](../../${source}#L1) \`${slug}\` | observation | human | owner |`).join('\n'));
+      const entries = slugs.map(slug => {
+        const ref = `quality/evidence/${slug}.json`;
+        put(task, ref, { source, step_slug: slug, reader: 'controlled fixture reader', inputs: ['controlled observation'], observation: 'The named controlled output was read.', criteria_ref: 'workflows/make-decision/SKILL.md#方法', conclusion: 'completed', limits: [] });
+        return { ref, source, step_slug: slug };
+      });
+      put(task, 'facts.jsonl', JSON.stringify({ record_kind: 'stage', task_id: 'controlled', stage: 'make-decision', source: 'controlled test inputs, not real user approval', evidence: { value: entries } }) + '\n');
+      const result = spawnSync(process.execPath, [resolve('tools/cli/run-checks.mjs'), '--task-path', task, '--workflow-root', repo], { cwd: repo, encoding: 'utf8' });
+      expect(result.stderr).toBe('');
+      expect(result.status).toBe(0);
+      expect(JSON.parse(result.stdout).missing_steps).toEqual([]);
+    } finally { rmSync(root, { recursive: true, force: true }); }
   });
   it('rejects malformed reports instead of reporting success', () => {
     expect(() => stepCoverageExit({})).toThrow('workflow_steps');

@@ -75,12 +75,8 @@ function decisionIdMappings(markdown) {  const mappings = new Map();
   let inSection = false;
   let sectionLevel = 0;
   for (const line of lines) {
-    const marker = /^\s*(`{3,}|~{3,})/.exec(line);
-    if (marker) {
-      if (!fence) fence = marker[1];
-      else if (marker[1][0] === fence[0] && marker[1].length >= fence.length) fence = null;
-      continue;
-    }
+    const nextFence = fenceStep(line, fence);
+    if (nextFence !== fence) { fence = nextFence; continue; }
     if (fence) continue;
     const heading = /^(#{1,6})\s+(.+?)(?:\s+#+)?\s*$/.exec(line);
     if (heading) {
@@ -111,16 +107,25 @@ function decisionIdMappings(markdown) {  const mappings = new Map();
 function mappingSectionDeclared(markdown) {
   let fence = null;
   for (const line of markdown.split("\n")) {
-    const marker = /^\s*(`{3,}|~{3,})/.exec(line);
-    if (marker) {
-      if (!fence) fence = marker[1];
-      else if (marker[1][0] === fence[0] && marker[1].length >= fence.length) fence = null;
-      continue;
-    }
+    const nextFence = fenceStep(line, fence);
+    if (nextFence !== fence) { fence = nextFence; continue; }
     if (fence) continue;
     if (/^#{1,6}[ \t]+.*旧编号对照/.test(line)) return true;
   }
   return false;
+}
+
+function fenceMarker(line) {
+  const match = /^( {0,3})(`{3,}|~{3,})([^`~]*)$/.exec(line);
+  return match ? { char: match[2][0], length: match[2].length, rest: match[3] } : null;
+}
+
+export function fenceStep(line, fence) {
+  const marker = fenceMarker(line);
+  if (!marker) return fence;
+  if (!fence) return { char: marker.char, length: marker.length };
+  if (marker.char === fence.char && marker.length >= fence.length && marker.rest.trim() === '') return null;
+  return fence;
 }
 
 function decisionSections(markdown, mappings = new Map()) {
@@ -135,15 +140,13 @@ function decisionSections(markdown, mappings = new Map()) {
   // instead of collapsing the whole file into "no decision entries". Fenced
   // examples are not declarations.
   const mappingDeclared = mappingSectionDeclared(markdown);
-  let inFence = false;
+  let fence = null;
   let current = null;
   let headingLevel = 0;
   for (const [index, line] of lines.entries()) {
-    if (/^\s*```/.test(line)) {
-      inFence = !inFence;
-      continue;
-    }
-    if (inFence) continue;
+    const nextFence = fenceStep(line, fence);
+    if (nextFence !== fence) { fence = nextFence; continue; }
+    if (fence) continue;
     const heading = /^(#{1,6})\s+(.+?)(?:\s+#+)?\s*$/.exec(line);
     if (heading) {
       headingLevel = heading[1].length;
@@ -193,13 +196,8 @@ function unitWarnings(markdown) {
   let columns = null;
   let fence = null;
   for (const line of markdown.split("\n")) {
-    const marker = /^\s*(`{3,}|~{3,})/.exec(line);
-    if (marker) {
-      if (!fence) fence = marker[1];
-      else if (marker[1][0] === fence[0] && marker[1].length >= fence.length) fence = null;
-      columns = null;
-      continue;
-    }
+    const nextFence = fenceStep(line, fence);
+    if (nextFence !== fence) { fence = nextFence; columns = null; continue; }
     if (fence) continue;
     if (!/^\s*\|/.test(line)) { columns = null; continue; }
     const cells = tableCells(line);
@@ -239,13 +237,8 @@ function parseRequirementIndex(markdown) {
   let newShape = false;
   let legacyShape = false;
   for (const line of markdown.split("\n")) {
-    const marker = /^\s*(`{3,}|~{3,})/.exec(line);
-    if (marker) {
-      if (!fence) fence = marker[1];
-      else if (marker[1][0] === fence[0] && marker[1].length >= fence.length) fence = null;
-      columns = null;
-      continue;
-    }
+    const nextFence = fenceStep(line, fence);
+    if (nextFence !== fence) { fence = nextFence; columns = null; continue; }
     if (fence) continue;
     if (!/^\s*\|/.test(line)) { columns = null; continue; }
     const cells = tableCells(line).map((value) => value.replace(/\*\*|`/g, ""));
@@ -276,10 +269,10 @@ function normalizeQuote(value) {
   return String(value).replace(/[`*]/g, "").replace(/\s+/g, " ").trim();
 }
 
-function stripLeadingMarker(value) {
+export function stripLeadingMarker(value) {
   // Only one leading list number/bullet is removed: 3. / 3、 / 3) / 3） /
   // （3） / (3) / - / * / +. Parenthesized numbers inside the reply stay.
-  return value.replace(/^\s*(?:[-*+]\s+|\d+\s*[.、)）]\s*|[（(]\d+[）)]\s*)/, "");
+  return value.replace(/^\s*(?:[-*+]\s+|\d+\s*[.、)）](?!\d)\s*|[（(]\d+[）)]\s*)/, "");
 }
 
 // 答复原文 must be the reply payload of the cited line, not a fragment of it.
@@ -647,12 +640,8 @@ function declaredTaskBase(markdown) {
 function declaresAnswerSource(markdown) {
   let fence = null;
   for (const line of markdown.split("\n")) {
-    const marker = /^\s*(`{3,}|~{3,})/.exec(line);
-    if (marker) {
-      if (!fence) fence = marker[1];
-      else if (marker[1][0] === fence[0] && marker[1].length >= fence.length) fence = null;
-      continue;
-    }
+    const nextFence = fenceStep(line, fence);
+    if (nextFence !== fence) { fence = nextFence; continue; }
     if (fence) continue;
     if (/^(?:[-*+]\s+)?(?:\*\*)?(?:source_id|modality|来源身份)(?:\*\*)?\s*[:：]/.test(line)) return true;
   }
@@ -667,12 +656,8 @@ function requirementIndexPointers(markdown) {
   const found = new Set();
   let fence = null;
   for (const line of markdown.split("\n")) {
-    const marker = /^\s*(`{3,}|~{3,})/.exec(line);
-    if (marker) {
-      if (!fence) fence = marker[1];
-      else if (marker[1][0] === fence[0] && marker[1].length >= fence.length) fence = null;
-      continue;
-    }
+    const nextFence = fenceStep(line, fence);
+    if (nextFence !== fence) { fence = nextFence; continue; }
     if (fence) continue;
     if (!/^\s*(?:\|\s*|[-*+]\s+)需求索引/.test(line)) continue;
     for (const match of line.matchAll(/`([^`\s]+\.md)`/g)) found.add(match[1]);

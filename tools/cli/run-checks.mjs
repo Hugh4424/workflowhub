@@ -184,7 +184,7 @@ async function runAggregate({ materialRoot, stage } = {}) {
   }
 
   // 3. check-decision-log-chain (FR-DLOG-003 — advisory only; never a gate)
-  console.log("[run-checks] running check-decision-log-chain (non-blocking) ...");
+  console.log("[run-checks] running check-decision-log-chain (advisory warnings; make-decision named evidence gaps return non-zero) ...");
   const decisionLogChainCode = runChecker("check-decision-log-chain", []);
   if (decisionLogChainCode !== 0) {
     console.error(`[run-checks] check-decision-log-chain advisory failed (exit ${decisionLogChainCode}); not added to failures`);
@@ -385,8 +385,13 @@ export function stepCoverageExit(report) {
       if (state !== "completed" && state !== "not_applicable") missing_steps.push({ source, step_slug, state });
     }
   }
+  // S4: a make-decision row whose named evidence basis is incomplete returns 1;
+  // build-code rows and rows without basis stay report-only.
+  const namedEvidenceGap = (stages.get('make-decision') ?? []).some((row) =>
+    row.state === 'incomplete' && Array.isArray(row.basis)
+    && row.basis.some(item => item && item.conclusion === 'incomplete'));
   return {
-    exit_code: 0, missing_steps, steps_unattested,
+    exit_code: namedEvidenceGap ? 1 : 0, missing_steps, steps_unattested,
     ...(definition_unavailable.length ? {
       definition_unavailable: {
         stages: definition_unavailable,

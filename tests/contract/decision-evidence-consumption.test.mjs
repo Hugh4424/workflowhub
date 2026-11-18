@@ -10,6 +10,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { runStageStepsCheck } from "../../tools/cli/check-stage-steps.mjs";
+import { checkDecisionLogChain, stripLeadingMarker, fenceStep } from "../../tools/cli/check-decision-log-chain.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const CLI = join(ROOT, "tools/cli/check-decision-log-chain.mjs");
@@ -528,5 +529,88 @@ describe("P5 stage-steps evidence gaps", () => {
   it("keeps a clean full package set free of other gaps", () => {
     const report = p5Check(p5Fixture({ chatFor: () => true, orderFor: () => true }));
     expect(report.convergence.gaps).toEqual([]);
+  });
+});
+
+// P8 ORACLE-MD-007: named missing evidence must reach the CLI exit; numbering
+// and ~~~ fences must not create false source failures.
+describe("ORACLE-MD-007 checker exit and shape boundaries", () => {
+  function stageFixture({ withCold = true } = {}) {
+    const root = temp("p8-exit-");
+    const task = join(root, "task");
+    const materials = join(root, "materials");
+    const put = (base, name, value) => {
+      const path = join(base, name);
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, value);
+    };
+    put(task, "task.json", JSON.stringify({ schema_version: "1.0.0", task_id: "task", target_repo_root: ROOT, baseline_commit: "HEAD", activation_cohort: "post" }));
+    put(task, "facts.jsonl", "");
+    put(materials, "phases/index.md", "# Index\n");
+    put(materials, "decision-log.md", [
+      "# Controlled", "## 级别与路线", "- 推荐级别：复杂",
+      "#### WP1 — controlled", "- **结果与消费者**：受控；消费者是 consumer。",
+      "清单：`quality/evidence/decision-log-refs/convergence-checklist.md`", "",
+    ].join("\n"));
+    const card = "## 工作包 1：受控包 1\n\n一句话结果：受控结果。";
+    put(task, "quality/evidence/convergence/cards.md", card);
+    const cold = `# 受控冷读 1\n\n- 读者：subagent:reader-1，未参与本包写作，只读本包卡。\n- 读的卡：\`quality/evidence/convergence/cards.md#工作包-1\`，节摘要 sha256 \`${p5Sha(card)}\`。\n- 五问原答：\n① 改什么：改。\n② 为什么：因。\n③ 边界：界。\n④ 怎么验：验。\n⑤ 还有什么没定：无。\n- 结论：五问全答出；本包收敛。\n`;
+    if (withCold) put(task, "quality/evidence/cold-read-p1.md", cold);
+    const coldRef = withCold ? "quality/evidence/cold-read-p1.md" : "quality/evidence/missing-cold-read-p1.md";
+    const coldLine = withCold
+      ? `| 当前冷读 | \`${coldRef}\`；sha256 \`${p5Sha(cold)}\`；读者 subagent:reader-1；context=none |`
+      : null;
+    put(task, "quality/evidence/decision-log-refs/convergence-checklist.md", [
+      "# 收敛清单", "",
+      "| 包 | 状态 | 五段表位置 | 证据 | 未决 |", "| --- | --- | --- | --- | --- |",
+      "| 1 | 已收敛 | 本文件“工作包 1” | evidence-1 | 无 |", "",
+      "## 工作包 1：受控包 1", "", "### 收敛格（本轮）", "", "| 项 | 值 |", "| --- | --- |",
+      `| 当前卡节 | \`quality/evidence/convergence/cards.md#工作包-1\`；sha256 \`${p5Sha(card)}\` |`,
+      ...(coldLine ? [coldLine] : []),
+      "### 冷读记录（P1）", "",
+      "- 读者：subagent:reader-1，未参与本包写作，只读本包卡。",
+      "- 五问原答：", "① 改什么：改。", "② 为什么：因。", "③ 边界：界。", "④ 怎么验：验。", "⑤ 还有什么没定：无。",
+      "- 结论：五问全答出；本包收敛。", "",
+    ].join("\n"));
+    return { task, materials };
+  }
+  const run = ({ task, materials }) => spawnSync(process.execPath, [join(ROOT, "tools/cli/check-stage-steps.mjs"), `--task-path=${task}`, `--material-root=${materials}`, `--repo-root=${ROOT}`, "--stage=make-decision", "--json"], { encoding: "utf8" });
+  it("exits non-zero when a converged package declares an unreadable cold-read original", () => {
+    const result = run(stageFixture({ withCold: false }));
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain("缺冷读原件");
+  });
+  it("keeps a complete controlled package at exit 0", () => {
+    const result = run(stageFixture());
+    expect(result.status).toBe(0);
+  });
+  it("keeps version-like prefixes when stripping one list marker", () => {
+    expect(stripLeadingMarker("3.14 是圆周率")).toBe("3.14 是圆周率");
+    expect(stripLeadingMarker("2026.11 发布")).toBe("2026.11 发布");
+    expect(stripLeadingMarker("3. 是列表")).toBe("是列表");
+  });
+  it("closes a fence only on a fence-only line", () => {
+    const open = { char: "`", length: 3 };
+    expect(fenceStep("```js", open)).toBe(open);
+    expect(fenceStep("```", open)).toBe(null);
+  });
+  it("does not strip version-like leading numbers as list markers", () => {
+    const root = temp("p8-number-");
+    const talk = join(root, "talk.md");
+    writeFileSync(talk, "3.14 是圆周率\n");
+    const index = [INDEX_HEADER, INDEX_RULE, `| U-1 | 自由手写 | 3.14 是圆周率 | permit | \`${talk}#L1-L1\` | 2026-11-18 | 1 |`].join("\n");
+    const doc = ["# Controlled", "### D-001 — controlled", "- 做什么：读文本。", "- 不做什么：不改。", "- 风险：误报。", "- 改动：方法。", "- source_id: U-1", "- modality: permit", "- 来源身份：用户答复"].join("\n");
+    const result = checkDecisionLogChain({ markdown: doc, source_ref: "controlled/decision-log.md", requirement_index_markdown: index, read_source: ref => readFileSync(String(ref).split("#")[0], "utf8") });
+    expect(result.warnings.map(warning => warning.code)).not.toContain("ANSWER_SOURCE_UNVERIFIABLE");
+  });
+  it("does not close a longer fence on an info-string line", () => {
+    const markdown = ["# Controlled", "## 旧编号对照", "| 正文编号 | 机器编号 | 说明 |", "| --- | --- | --- |", "| 决定 1 | 决定 1 | x |", "", "~~~", "```js", "### D-070 — 围栏内", "~~~", ""].join("\n");
+    const result = checkDecisionLogChain({ markdown, source_ref: "controlled/decision-log.md", requirement_index_markdown: "", read_source: () => "" });
+    expect(result.warnings.map(warning => warning.code)).toContain("no_decision_entries");
+  });
+  it("does not read decision headings inside ~~~ fences", () => {
+    const markdown = ["# Controlled", "## 旧编号对照", "| 正文编号 | 机器编号 | 说明 |", "| --- | --- | --- |", "| 决定 1 | 决定 1 | x |", "", "~~~", "## 决定 1：围栏内", "~~~", ""].join("\n");
+    const result = checkDecisionLogChain({ markdown, source_ref: "controlled/decision-log.md", requirement_index_markdown: "", read_source: () => "" });
+    expect(result.warnings.map(warning => warning.code)).toContain("no_decision_entries");
   });
 });
