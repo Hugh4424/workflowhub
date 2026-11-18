@@ -68,8 +68,8 @@ export function validateDesignSource(doc) {
     return {code: "ROLE_CONFLICT", detail: `${role} cannot pose as a design source`};
   }
   if (role === "real_design_source") {
-    if (!/^specs\/design\/prototypes\//.test(normalized)) {
-      return {code: "ROLE_CONFLICT", detail: "a real design source must live under specs/design/prototypes/"};
+    if (!/^specs\/design\/(?:prototypes\/|UI(?:\/|$))/.test(normalized)) {
+      return {code: "ROLE_CONFLICT", detail: "a real design source must live under specs/design/UI or specs/design/prototypes/"};
     }
   } else if (role === "sample_design_source") {
     if (!/^tests\/fixtures\//.test(normalized)) {

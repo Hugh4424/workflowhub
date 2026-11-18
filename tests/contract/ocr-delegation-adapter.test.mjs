@@ -511,7 +511,7 @@ process.stdout.write(JSON.stringify({type:"turn.completed",usage:{input_tokens:3
 
   it("uses the generated Antigravity hook for positive packet reads and default-denied tools without weakening Codex sibling outcomes", async () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-owned-ag-"))); roots.push(root);
-    const cli = ownedPacketCli(root), input = {...request,stage:"verify-code",review_scope:null,phase_id:null};
+    const cli = ownedPacketCli(root), input = {...request};
     mkdirSync(join(root,"quality","reviews"),{recursive:true});
     for(const acknowledged of [undefined,false,true]){
       const context = configuredContext(["antigravity/flash"],cli.executable);context.providerConfig.providers["antigravity/flash"].allow_host_state=acknowledged;
@@ -977,7 +977,7 @@ describe("OCR delegation adapter", () => {
   it("returns MATERIAL_INCOMPLETE as unavailable without dispatching", async () => {
     let calls = 0;
     const result = await runOcrDelegationRound(request, {
-      buildBundle: () => { throw new Error("MATERIAL_INCOMPLETE: verify-code acceptance_criteria is empty"); },
+      buildBundle: () => { throw new Error("MATERIAL_INCOMPLETE: build-code acceptance_criteria is empty"); },
       executor: async () => { calls += 1; return { status: "available", outcome: "completed", findings: [] }; },
     });
 
@@ -1027,9 +1027,9 @@ describe("OCR delegation adapter", () => {
     expect(existsSync(packetRoot)).toBe(false);
   });
 
-  it.skipIf(realOcrMissing)("binds verify-code semantic OCR output to redacted request evidence instead of forged executor fields", async () => {
+  it.skipIf(realOcrMissing)("binds build-code semantic OCR output to redacted request evidence instead of forged executor fields", async () => {
     const authenticatedEvidence = { reviewed_execution: { ref: "quality/evidence/current.json" }, source_path: "/Users/Hugh/private/reviewed.mjs" };
-    const result = await runOcrDelegationRound({ stage: "verify-code", authenticated_evidence: authenticatedEvidence }, {
+    const result = await runOcrDelegationRound({ stage: "build-code", review_scope: "phase", authenticated_evidence: authenticatedEvidence }, {
       buildBundle: bundle,
       executor: async () => ({
         status: "available", outcome: "completed", findings: [], provider_results: [],
@@ -1047,7 +1047,7 @@ describe("OCR delegation adapter", () => {
 
   it.skipIf(realOcrMissing)("keeps the original unavailable OCR error with the same redacted evidence digest", async () => {
     const authenticatedEvidence = { reviewed_execution: { ref: "quality/evidence/current.json" }, source_path: "/Users/Hugh/private/reviewed.mjs" };
-    const result = await runOcrDelegationRound({ stage: "verify-code", authenticated_evidence: authenticatedEvidence }, {
+    const result = await runOcrDelegationRound({ stage: "build-code", review_scope: "phase", authenticated_evidence: authenticatedEvidence }, {
       buildBundle: bundle,
     });
 
@@ -1731,7 +1731,7 @@ async function p4RunNativeConsumer(mode, shape = "native") {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-p4-native-consumer-"))); roots.push(root);
   const cli = p4NativeConsumerCli(root, mode, shape), raw = new Map();
   mkdirSync(join(root, "quality", "reviews"), { recursive: true });
-  const result = await runConfiguredOcrHostReview({ request: { ...request, stage: "verify-code", review_scope: null, phase_id: null }, packet: configuredPacket() }, {
+  const result = await runConfiguredOcrHostReview({ request: { ...request }, packet: configuredPacket() }, {
     trustedContext: configuredContext(["antigravity/flash"], cli.executable),
     rawOutputSink: async (_hint, bytes, meta) => {
       const saved = await appendRecord(join(root, "quality", "reviews"), meta.stream, "output", bytes);
@@ -1800,7 +1800,7 @@ async function p4RunAfterConfirmedRead(attempt) {
   expect(script.split("function finish(){")).toHaveLength(2);
   writeFileSync(cli.executable, script.replace("function finish(){", `function finish(){hook('pre',${probe});`));
   mkdirSync(join(root, "quality", "reviews"), { recursive: true });
-  const result = await runConfiguredOcrHostReview({ request: { ...request, stage: "verify-code", review_scope: null, phase_id: null }, packet: configuredPacket() }, {
+  const result = await runConfiguredOcrHostReview({ request: { ...request }, packet: configuredPacket() }, {
     trustedContext: configuredContext(["antigravity/flash"], cli.executable),
     rawOutputSink: async (_hint, bytes, meta) => {
       const saved = await appendRecord(join(root, "quality", "reviews"), meta.stream, "output", bytes);
@@ -1847,6 +1847,9 @@ import { homedir as p4TranscriptHome } from "node:os";
 // controlled native-shape log. This constructs display input, never parses it.
 function p4TranscriptCli(root, scenario) {
   const executable = join(root, "p4-transcript-cli"), reportPath = join(root, "report.json");
+  const capturedDisplay = scenario === "captured-display"
+    ? JSON.parse(readFileSync(new URL("../fixtures/ag/read-display-doubled-header.json", import.meta.url), "utf8")).content_template
+    : null;
   const session = root.split("/").at(-1);
   const sessionRoot = join(p4TranscriptHome(), ".gemini", "antigravity-cli", "brain", session);
   // Non-recursive creation proves ownership; EEXIST never registers cleanup.
@@ -1854,7 +1857,7 @@ function p4TranscriptCli(root, scenario) {
   roots.push(sessionRoot);
   writeFileSync(executable, String.raw`#!/usr/bin/env node
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),{spawnSync}=require('node:child_process');
-const root=${JSON.stringify(root)},scenario=${JSON.stringify(scenario)},session=${JSON.stringify(session)},artifact=${JSON.stringify(sessionRoot)},reportPath=${JSON.stringify(reportPath)};
+const root=${JSON.stringify(root)},scenario=${JSON.stringify(scenario)},session=${JSON.stringify(session)},artifact=${JSON.stringify(sessionRoot)},reportPath=${JSON.stringify(reportPath)},capturedDisplay=${JSON.stringify(capturedDisplay)};
 const cwd=fs.realpathSync(process.cwd()),config=JSON.parse(fs.readFileSync(path.join(cwd,'.agents/hooks.json'),'utf8'))['workflowhub-packet-reader'];
 const logs=path.join(artifact,'.system_generated','logs');fs.mkdirSync(logs,{recursive:true,mode:0o700});
 let transcript=path.join(logs,'transcript_full.jsonl');
@@ -1905,7 +1908,13 @@ for(const [index,file]of ['review-prompt.md','src/reviewed.mjs'].entries()){
   if(scenario==='suffix')shown.push('Unrecognized native trailer');
  }
  if(!(index===0&&bytePageScenario))body=shown.join('\n');
- const content='Created At: '+started+'\nCompleted At: '+(index===1&&scenario==='bad-time'?'2000-01-01T00:00:00Z':completed)+'\n'+title+'\n'+body;
+ const headerBlock='Created At: '+started+'\nCompleted At: '+(index===1&&scenario==='bad-time'?'2000-01-01T00:00:00Z':completed)+'\n';
+ // The captured fixture keeps the real agy 1.5.10 header shape; the body is
+ // generated from the frozen file so the display checks stay meaningful.
+ let content;
+ if(scenario==='captured-display')content=capturedDisplay.replaceAll('{{created}}',started).replaceAll('{{completed}}',completed).replaceAll('{{total}}',String(lines.length)).replace('{{body}}',body);
+ else if(scenario==='unknown-display')content=headerBlock+headerBlock+'Native read display v9\n'+body;
+ else content=(scenario==='doubled-header'?headerBlock+headerBlock:headerBlock)+title+'\n'+body;
  const call={step_index:step-1,source:'MODEL',type:'PLANNER_RESPONSE',status:'DONE',created_at:started,tool_calls:[{name:'read_file',args:{Path:full,...(index===1&&scenario==='ranged'?{StartLine:2,EndLine:2}:{}),...(index===0&&(pagedLineScenario||mixedScenario)?{StartLine:1,EndLine:promptPageEnd}:{}),...(index===0&&scenario==='byte-explicit-partial'?{StartLine:2,EndLine:lines.length}:{})}}]};
  const result={step_index:step,source:'MODEL',type:'GENERIC',status:'DONE',created_at:started,content};
  if(index===1){
@@ -1986,12 +1995,12 @@ process.stdout.write(JSON.stringify({event:'result',result:{conversation_id:sess
   return { executable, reportPath, sessionRoot };
 }
 
-async function p4RunTranscript(scenario, source = "first\nsecond\nthird\n") {
+async function p4RunTranscript(scenario, source = "first\nsecond\nthird\n", requestOverrides = {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-p4-display-"))); roots.push(root);
   const cli = p4TranscriptCli(root, scenario), raw = new Map();
   mkdirSync(join(root, "quality", "reviews"), { recursive: true });
   try {
-    const result = await runConfiguredOcrHostReview({ request: { ...request, stage: "verify-code", review_scope: null, phase_id: null }, packet: configuredPacket(source) }, {
+    const result = await runConfiguredOcrHostReview({ request: { ...request, ...requestOverrides }, packet: configuredPacket(source) }, {
       trustedContext: configuredContext(["antigravity/flash"], cli.executable),
       rawOutputSink: async (_hint, bytes, meta) => {
         const saved = await appendRecord(join(root, "quality", "reviews"), meta.stream, "output", bytes);
@@ -2060,6 +2069,27 @@ describe("P4 transcript full logical line consumer", () => {
     expect(result.provider_results[0], JSON.stringify(result)).toMatchObject({ status: "completed", parse_outcome: "ok" });
     expect(result.provider_results[0].coverage.read_confirmed).toBe(true);
   }, 15000);
+  it("accepts a repeated native read header block", async () => {
+    const { result } = await p4RunTranscript("doubled-header", "first\nsecond\nthird\n", {});
+    expect(result.provider_results[0], JSON.stringify(result)).toMatchObject({ status: "completed", parse_outcome: "ok" });
+    expect(result.provider_results[0].material_coverage.read).toContain("src/reviewed.mjs");
+    expect(result.provider_results[0].coverage.read_confirmed).toBe(true);
+  }, 15000);
+  it("confirms a read from the captured agy 1.5.10 doubled-header transcript", async () => {
+    const fixture = JSON.parse(readFileSync(new URL("../fixtures/ag/read-display-doubled-header.json", import.meta.url), "utf8"));
+    const { result } = await p4RunTranscript("captured-display", fixture.source, {});
+    expect(result.provider_results[0], JSON.stringify(result)).toMatchObject({ status: "completed", parse_outcome: "ok" });
+    expect(result.provider_results[0].material_coverage.read).toContain("src/reviewed.mjs");
+    expect(result.provider_results[0].coverage.read_confirmed).toBe(true);
+  }, 15000);
+  it("keeps the provider usable when the native display format is unrecognized", async () => {
+    const { result } = await p4RunTranscript("unknown-display", "first\nsecond\nthird\n", {});
+    const member = result.provider_results[0];
+    expect(member.status).toBe("completed");
+    expect(member.coverage.read_confirmed).toBe(false);
+    expect(member.material_coverage.read).not.toContain("src/reviewed.mjs");
+    expect(member.material_coverage.undetermined).toContain("src/reviewed.mjs");
+  }, 15000);
   it("accepts only the native byte-truncation to logical-line recovery transition", async () => {
     const { result } = await p4RunTranscript("mixed-byte-line", "first\nsecond\nthird\nfourth\nfifth\n");
     expect(result.provider_results[0], JSON.stringify(result)).toMatchObject({ status: "completed", parse_outcome: "ok" });
@@ -2111,7 +2141,7 @@ async function p4RunReverseHookOrder(representation) {
   writeFileSync(cli.executable, script);
   const raw = new Map(); mkdirSync(join(root, "quality", "reviews"), { recursive: true });
   try {
-    const result = await runConfiguredOcrHostReview({ request: { ...request, stage: "verify-code", review_scope: null, phase_id: null }, packet: configuredPacket() }, {
+    const result = await runConfiguredOcrHostReview({ request: { ...request }, packet: configuredPacket() }, {
       trustedContext: configuredContext(["antigravity/flash"], cli.executable),
       rawOutputSink: async (_hint, bytes, meta) => {
         const saved = await appendRecord(join(root, "quality", "reviews"), meta.stream, "output", bytes);
@@ -2258,7 +2288,7 @@ async function p4RunNativeHealth(kind) {
     forceOwnedDescendantGroup();
   }, 3500);
   try {
-    pending = runConfiguredOcrHostReview({ request: { ...request, stage: "verify-code", review_scope: null, phase_id: null }, packet: configuredPacket(), signal: controller.signal }, {
+    pending = runConfiguredOcrHostReview({ request: { ...request }, packet: configuredPacket(), signal: controller.signal }, {
       trustedContext: context,
       // Existing PID-observation injection only; it never counts health windows.
       ...(descendantCase ? { healthPollMs: 20 } : {}),
@@ -2425,7 +2455,7 @@ async function p4RunTerminalBeforeCancel(firstStatus) {
   mkdirSync(join(root, "quality", "reviews"), { recursive: true });
   const watchdog = setTimeout(() => { watchdogFired = true; controller.abort(new Error("owned terminal-cancel watchdog")); }, 3500);
   try {
-    pending = runConfiguredOcrHostReview({ request: { ...request, stage: "verify-code", review_scope: null, phase_id: null }, packet: configuredPacket(), signal: controller.signal }, {
+    pending = runConfiguredOcrHostReview({ request: { ...request }, packet: configuredPacket(), signal: controller.signal }, {
       trustedContext: configuredContext(["antigravity/health"], cli.executable),
       onProviderHealth: health => {
         if (!abortAfterCompleteTerminal && health.status === "running" && health.stdout_bytes >= consumedBytes) {
@@ -2601,7 +2631,7 @@ describe('P1 tier boundary: adapter execution is external only when the selected
     expect(reviewTierFor(input)).toBe('独立子代理');
     expect(()=>assertReviewTierRecord({executor:'独立子代理',input,identity:'ocr',source:{dispatch_identity:'owned-reader',context_isolation:'none'}})).toThrow(/OCR/);
     input.risks.publicContractCriticalPath='present';expect(reviewTierFor(input)).toBe('外部 OCR');
-    input.risks.publicContractCriticalPath='none';input.identity={stage:'verify-code'};expect(reviewTierFor(input)).toBe('外部 OCR');
+    input.risks.publicContractCriticalPath='none';input.identity={stage:'build-code',review_scope:'terminal'};expect(reviewTierFor(input)).toBe('外部 OCR');
     const record={executor:'外部 OCR',input,status:'unavailable',reason:'ENOENT',source:{route:'configured/single_round'},detection_output_ref:'quality/tests/version.output',failure_ref:'quality/tests/failure.json'};
     expect(assertReviewTierRecord(record)).toBe(record);expect(record.provider_results).toBeUndefined();
   });

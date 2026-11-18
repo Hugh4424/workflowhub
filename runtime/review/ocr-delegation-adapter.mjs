@@ -1199,6 +1199,17 @@ function agStrictTime(value){
   const time=Date.parse(value);return Number.isFinite(time)?time:null;
 }
 function agNoTruncation(row){return row.truncated_fields===undefined||row.truncated_fields===null||(Array.isArray(row.truncated_fields)&&row.truncated_fields.length===0);}
+const AG_SHOWING_LINE=/^Showing lines ([1-9]\d*)-([1-9]\d*) of ([1-9]\d*)$/;
+const AG_PARTIAL_LINE=/^Partial read \(lines ([1-9]\d*)-([1-9]\d*) of ([1-9]\d*)\)\. Showing bytes (0|[1-9]\d*)-(0|[1-9]\d*) of ([1-9]\d*) in this line range(?:\.|, truncated at the [1-9]\d*-byte limit\. To read the rest of this line range, call this tool again with the same StartLine and EndLine and ByteOffset=(0|[1-9]\d*)\.)$/;
+const agDisplayLine=line=>AG_SHOWING_LINE.exec(line)??AG_PARTIAL_LINE.exec(line);
+const AG_TRANSCRIPT_SHAPE_UNVERIFIED=new Set([
+  "AG transcript call identity unavailable",
+  "AG transcript incomplete JSONL tail",
+  "AG transcript line budget/shape rejected",
+  "AG transcript duplicate/unknown step shape",
+  "AG transcript result is not one unique completed read call",
+]);
+
 function inspectAgTranscriptRead({sessionId,pre,post,root,expected}){
   if(!/^[A-Za-z0-9][A-Za-z0-9._-]{0,200}$/.test(sessionId)||!Number.isSafeInteger(post.step_idx)||post.step_idx<1||pre.step_idx!==post.step_idx||pre.error||post.error)throw new Error("AG transcript call identity unavailable");
   const artifact=join(homedir(),'.gemini','antigravity-cli','brain',sessionId),transcript=join(artifact,'.system_generated','logs','transcript_full.jsonl');
@@ -1219,14 +1230,30 @@ function inspectAgTranscriptRead({sessionId,pre,post,root,expected}){
   const source=readStableAgInspectionFile(frozenPath,16*1024*1024);if(source.bytes.length!==expected.bytes||sha256(source.bytes)!==expected.sha256)throw new Error("AG frozen source changed after hook");
   const sourceText=new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(source.bytes);if(!sourceText||/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\ufeff]/.test(sourceText))throw new Error("AG transcript unsupported source text representation");
   const logical=sourceText.split('\n');if(sourceText.endsWith('\n'))logical.pop();
-  const prefix=/^Created At: ([^\n]+)\nCompleted At: ([^\n]+)\n/.exec(result.content);
-  const header=prefix&&(/^Showing lines ([1-9]\d*)-([1-9]\d*) of ([1-9]\d*)\n/.exec(result.content.slice(prefix[0].length))||/^Partial read \(lines ([1-9]\d*)-([1-9]\d*) of ([1-9]\d*)\)\. Showing bytes (0|[1-9]\d*)-(0|[1-9]\d*) of ([1-9]\d*) in this line range(?:\.|, truncated at the [1-9]\d*-byte limit\. To read the rest of this line range, call this tool again with the same StartLine and EndLine and ByteOffset=(0|[1-9]\d*)\.)\n/.exec(result.content.slice(prefix[0].length)));
-  const startLine=header?Number(header[1]):null,endLine=header?Number(header[2]):null,totalLines=header?Number(header[3]):null;
-  if(!prefix||!header||totalLines!==logical.length||startLine>endLine||endLine>totalLines||requestedStart!==null&&requestedStart!==startLine||requestedEnd!==null&&requestedEnd!==endLine)throw new Error("AG transcript display range is not bound to the requested file");
+  // agy echoes its Created At/Completed At block before the display range and
+  // may add preamble lines. Locate the first display header, collect the
+  // timestamp pairs from the preamble, and bind the read to a pair that fits
+  // the hook audit window. An unrecognized display is tagged so the guard can
+  // degrade to undetermined coverage instead of dropping the provider.
+  const contentLines=result.content.split('\n');
+  const displayIndex=contentLines.findIndex(line=>agDisplayLine(line)!==null);
+  if(displayIndex<0)throw Object.assign(new Error("AG transcript display format is unrecognized"),{code:"AG_DISPLAY_UNRECOGNIZED"});
+  const preamble=contentLines.slice(0,displayIndex),pairs=[];
+  for(let lineIndex=0;lineIndex<preamble.length-1;lineIndex++){
+    const created=/^Created At: ([^\n]+)$/.exec(preamble[lineIndex]),completed=/^Completed At: ([^\n]+)$/.exec(preamble[lineIndex+1]);
+    if(created&&completed){pairs.push([created[1],completed[1]]);lineIndex+=1;}
+  }
+  if(pairs.length===0)throw Object.assign(new Error("AG transcript display timestamps are unrecognized"),{code:"AG_DISPLAY_UNRECOGNIZED"});
+  const header=agDisplayLine(contentLines[displayIndex]);
+  if(!header)throw Object.assign(new Error("AG transcript display format is unrecognized"),{code:"AG_DISPLAY_UNRECOGNIZED"});
+  const startLine=Number(header[1]),endLine=Number(header[2]),totalLines=Number(header[3]);
+  if(totalLines!==logical.length||startLine>endLine||endLine>totalLines||requestedStart!==null&&requestedStart!==startLine||requestedEnd!==null&&requestedEnd!==endLine)throw new Error("AG transcript display range is not bound to the requested file");
   if(requestedStart===null&&requestedEnd===null&&(startLine!==1||endLine!==totalLines))throw new Error("AG transcript omitted a required full display range");
-  const started=agStrictTime(prefix[1]),ended=agStrictTime(prefix[2]),callAt=agStrictTime(call.created_at),resultAt=agStrictTime(result.created_at);
-  if([started,ended,callAt,resultAt].some(t=>t===null)||!Number.isSafeInteger(pre.observed_at_ms)||!Number.isSafeInteger(post.observed_at_ms)||started>ended||started<pre.observed_at_ms-1000||ended>post.observed_at_ms+1000||callAt>started+1000||resultAt<started-1000||resultAt>ended+1000)throw new Error("AG transcript times do not bind this read");
-  const displayText=logical.slice(startLine-1,endLine).map((line,i)=>(startLine+i)+': '+line).join('\n'),displayBytes=Buffer.from(displayText),fullDisplayText=logical.map((line,i)=>(i+1)+': '+line).join('\n'),fullDisplayBytes=Buffer.from(fullDisplayText),displayLineStarts=[];let displayCursor=0;for(const [lineIndex,line]of logical.entries()){displayLineStarts.push(displayCursor);displayCursor+=Buffer.byteLength((lineIndex+1)+': '+line);if(lineIndex<logical.length-1)displayCursor+=1;}const displayStart=displayLineStarts[startLine-1],lineForDisplayOffset=(offset)=>{let low=0,high=displayLineStarts.length-1;while(low<high){const middle=Math.ceil((low+high)/2);if(displayLineStarts[middle]<=offset)low=middle;else high=middle-1;}return low+1;},bodyOffset=prefix[0].length+header[0].length,bodyBytes=Buffer.from(result.content.slice(bodyOffset));
+  const callAt=agStrictTime(call.created_at),resultAt=agStrictTime(result.created_at),boundPair=Number.isSafeInteger(pre.observed_at_ms)&&Number.isSafeInteger(post.observed_at_ms)&&callAt!==null&&resultAt!==null
+    ? pairs.map(([created,ended])=>[agStrictTime(created),agStrictTime(ended)]).find(([started,ended])=>started!==null&&ended!==null&&started<=ended&&started>=pre.observed_at_ms-1000&&ended<=post.observed_at_ms+1000&&callAt<=started+1000&&resultAt>=started-1000&&resultAt<=ended+1000)
+    : null;
+  if(!boundPair)throw new Error("AG transcript times do not bind this read");
+  const displayText=logical.slice(startLine-1,endLine).map((line,i)=>(startLine+i)+': '+line).join('\n'),displayBytes=Buffer.from(displayText),fullDisplayText=logical.map((line,i)=>(i+1)+': '+line).join('\n'),fullDisplayBytes=Buffer.from(fullDisplayText),displayLineStarts=[];let displayCursor=0;for(const [lineIndex,line]of logical.entries()){displayLineStarts.push(displayCursor);displayCursor+=Buffer.byteLength((lineIndex+1)+': '+line);if(lineIndex<logical.length-1)displayCursor+=1;}const displayStart=displayLineStarts[startLine-1],lineForDisplayOffset=(offset)=>{let low=0,high=displayLineStarts.length-1;while(low<high){const middle=Math.ceil((low+high)/2);if(displayLineStarts[middle]<=offset)low=middle;else high=middle-1;}return low+1;},bodyOffset=preamble.join('\n').length+(displayIndex>0?1:0)+contentLines[displayIndex].length+(contentLines.length>displayIndex+1?1:0),bodyBytes=Buffer.from(result.content.slice(bodyOffset));
   if(header[0].startsWith("Partial read ")){
     const byteStart=Number(header[4]),byteEnd=Number(header[5]),byteTotal=Number(header[6]);
     if(byteTotal!==displayBytes.length||byteStart>byteEnd||byteEnd>byteTotal||(requestedOffset??0)!==byteStart||bodyBytes.length!==byteEnd-byteStart||!bodyBytes.equals(displayBytes.subarray(byteStart,byteEnd)))throw new Error("AG transcript byte range/content differs from frozen logical display");
@@ -1274,7 +1301,7 @@ function installAgPacketGuard(materials) {
       const rows = auditBytes.toString("utf8").trim().split(/\r?\n/).filter(Boolean).map(line=>JSON.parse(line));
       const own = rows.filter(row=>row.conversation_id === sessionId);
       if (own.length === 0 || own.some(row=>row.error && row.phase === "pre")) throw new Error("AG packet hook payload/handler failed");
-      const groups=new Map(),ranges=new Map(),complete=new Set(),limits=[];
+      const groups=new Map(),ranges=new Map(),complete=new Set(),limits=[],unverified=[];
       for(const [auditIndex,row] of own.entries()){
         const expected=files[row.path];if(!['view_file','read_file'].includes(row.tool)||row.error||!expected||row.sha256!==expected.sha256)continue;
         const key=JSON.stringify([row.path,row.tool,row.range_requested,row.StartLine,row.EndLine,row.ByteOffset,row.step_idx??null,row.transcript_path??null,row.artifact_directory_path??null]);
@@ -1296,7 +1323,11 @@ function installAgPacketGuard(materials) {
             ranges.set(post.path, pages);
           }
         }
-        catch(error){limits.push({path:post.path,reason:error.message});evidence={result_basis:'transcript_logical_lines',confirmation_error:error.message};}
+        catch(error){
+          if(error?.code==="AG_DISPLAY_UNRECOGNIZED"||AG_TRANSCRIPT_SHAPE_UNVERIFIED.has(error?.message))unverified.push({path:post.path,reason:error.message});
+          else limits.push({path:post.path,reason:error.message});
+          evidence={result_basis:'transcript_logical_lines',confirmation_error:error.message};
+        }
         const fd=openSync(events,constants.O_WRONLY|constants.O_APPEND|constants.O_NOFOLLOW);
         try{writeFileSync(fd,JSON.stringify({phase:'inspect',conversation_id:sessionId,tool:post.tool,path:post.path,step_idx:post.step_idx,sha256:files[post.path].sha256,full_file_result:confirmed,...evidence})+'\n');}finally{closeSync(fd);}
       }
@@ -1323,10 +1354,19 @@ function installAgPacketGuard(materials) {
       }
       if (!complete.has("review-prompt.md")) {
         const promptLimits=limits.filter(item=>item?.path==="review-prompt.md").map(item=>item.reason).filter(Boolean);
+        const promptUnverified=unverified.filter(item=>item?.path==="review-prompt.md");
+        // A native read that the hook allowed but whose display shape this
+        // version cannot parse stays usable: coverage is undetermined, never
+        // claimed as confirmed. Hard mismatches still fail below.
+        if (promptUnverified.length>0&&promptLimits.length===0) {
+          return {read_confirmed:false,
+            read:materials.deliveryManifest.filter(entry=>complete.has(entry.path)).map(entry=>entry.path),
+            unverified,limits,display_format_unverified:true};
+        }
         throw new Error(`AG native packet prompt read was not confirmed${promptLimits.length?`: ${promptLimits.join("; ")}`:""}`);
       }
       return {read_confirmed:materials.deliveryManifest.every(entry=>complete.has(entry.path)),
-        read:materials.deliveryManifest.filter(entry=>complete.has(entry.path)).map(entry=>entry.path),limits};
+        read:materials.deliveryManifest.filter(entry=>complete.has(entry.path)).map(entry=>entry.path),limits,unverified};
     },
   };
 }

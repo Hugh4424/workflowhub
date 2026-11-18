@@ -93,6 +93,21 @@ test("Pi parser requires an exact settled successful session transcript", () => 
   assert.equal(pi.parse(complete("pi-session", { stopReason: "error", errorMessage: "429 overloaded", settled: false }), "", "pi-session").error.code, "RATE_LIMITED");
 });
 
+test("Pi usage drops provider bookkeeping flags the public result contract cannot represent", () => {
+  const source = transcript([
+    { type: "pi.session", id: "pi-session", version: 3 },
+    { type: "pi.progress", event: "thinking_delta" },
+    { type: "pi.final", text: "PI_FINAL", model: "k3",
+      usage: { input: 12, output: 5, cost: { input: 0.25, output: 0.5, totalFromProvider: false } }, stop_reason: "stop" },
+    { type: "pi.agent_end", will_retry: false },
+    { type: "pi.agent_settled" },
+  ]);
+  assert.deepEqual(pi.parse(source, "", "pi-session"), {
+    ok: true, text: "PI_FINAL", session_id: "pi-session",
+    usage: { input: 12, output: 5, cost: { input: 0.25, output: 0.5 } },
+  });
+});
+
 test("Pi progress does not preserve repeated raw thinking snapshots", () => {
   assert.deepEqual(pi.observeLine("stdout", JSON.stringify({ type: "pi.session", id: "pi-session" })), { liveness: true, progress: false, event: "pi.session", session_id: "pi-session" });
   assert.deepEqual(pi.observeLine("stdout", JSON.stringify({ type: "pi.progress", event: "thinking_delta" })), { liveness: true, progress: true, event: "thinking_delta" });
