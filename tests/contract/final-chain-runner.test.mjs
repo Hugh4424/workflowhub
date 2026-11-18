@@ -398,7 +398,7 @@ describe('run-checks task path',()=>{
   it('preserves the no-argument aggregate output and exit in an owned exact import fixture',async()=>{
     const root=await aggregateFixture(), result=cli([],root,join(root,'tools/cli/run-checks.mjs'));
     expect(result.error).toBeUndefined();expect(result.signal).toBeNull();expect(result.status,result.stderr).toBe(0);expect(result.stderr).toBe('[run-checks] material check not run: no --material-root\n');
-    expect(result.stdout).toBe('[run-checks] running check-anti-host ...\n[run-checks] running check-metrics-schema ...\n[check-metrics-schema] PASS — retained validator and contract samples checked\n[run-checks] running skill-static-deps ...\n[skill-static-deps] PASS — retained validator and contract samples checked\n[run-checks] running check-skill-consistency ...\n[run-checks] running check-stage-quality ...\n[run-checks] running check-decision-log-chain (non-blocking) ...\n[run-checks] ALL CHECKS PASSED\n');
+    expect(result.stdout).toBe('[run-checks] running check-anti-host ...\n[run-checks] running check-metrics-schema ...\n[check-metrics-schema] PASS — retained validator and contract samples checked\n[run-checks] running skill-static-deps ...\n[skill-static-deps] PASS — retained validator and contract samples checked\n[run-checks] running check-skill-consistency ...\n[run-checks] running check-stage-quality ...\n[run-checks] running check-decision-log-chain (advisory warnings; make-decision named evidence gaps return non-zero) ...\n[run-checks] ALL CHECKS PASSED\n');
   });
 });
 
@@ -648,6 +648,18 @@ describe('final-chain report index and scoped write-set sources',()=>{
     put(f.materialRoot,'phases/P1.md',readFileSync(join(f.materialRoot,'phases/P1.md'),'utf8').replace('`owned.mjs`',`\`${path}\``));
     const value=await report(f);expect(ringAt(value,6).state).toBe(conflict?'incomplete':'completed');
     if(conflict)expect(JSON.stringify(ringAt(value,6))).toContain(path);
+  });
+});
+describe('P11 ring6 index write-set authority',()=>{
+  it('reports a Chinese-header index extra path as a conflict',async()=>{
+    const f=taskFixture();implementation(f);
+    put(f.materialRoot,'phases/P1.md','# Phase P1\n- **Write set**：`owned.mjs`\n- **Dependency**：none\n- **Consumer**：reader\n- **gate_cmd**：`node owned-check.mjs`\n- **oracle**：ORACLE-OWNED\n- **Done**：actual\n');
+    put(f.materialRoot,'phases/index.md','# Phase index\n| phase | authority ref | semantic anchor | 写入集 | dependency | consumer |\n| --- | --- | --- | --- | --- | --- |\n| `P1` | `phases/P1.md` | `phase-p1` | `owned.mjs`、`runtime/task/extra-demo.mjs` | none | reader |\n');
+    const conflict=await report(f),bad=ringAt(conflict,6);
+    expect(bad.write_set_conflict).toContain('runtime/task/extra-demo.mjs');
+    expect(bad.state).toBe('incomplete');
+    expect(bad.write_set).toContain('runtime/task/extra-demo.mjs');
+    expect(bad.spec_write_set).toContain('runtime/task/extra-demo.mjs');
   });
 });
 describe('final-chain report real stage denominator sources',()=>{
@@ -1246,7 +1258,7 @@ describe('final-chain report ordinary physical PR handoff combination',()=>{
 });
 async function canonicalMainDiffFixture() {
   const f=await ordinaryCloseHandoffFixture(),manifest=JSON.parse(readFileSync(join(f.taskPath,'task.json'),'utf8'));
-  git(f,['checkout','-q','-b','main',manifest.baseline_commit]);
+  git(f,['checkout','-q','-B','main',manifest.baseline_commit]);
   const output=git(f,['merge','--no-ff','-m','controlled task merge','task/workflowhub/owned-task']);
   put(f.taskPath,'quality/tests/owned-merge.output',output+'\n');
   const r=JSON.parse(readFileSync(join(f.taskPath,'quality/tests/owned-merge.json'),'utf8'));r.argv=['git','merge','--no-ff','-m','controlled task merge','task/workflowhub/owned-task'];put(f.taskPath,'quality/tests/owned-merge.json',r);

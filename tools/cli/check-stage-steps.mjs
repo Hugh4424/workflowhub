@@ -339,6 +339,78 @@ function pointerFields(value) {
   const reader = /读者\s+([^；;\s）)]+)/.exec(value)?.[1] ?? null;
   return { ref, digest, reader };
 }
+export function pageTriggerGapFor(step, stage) {
+  if (stage !== 'make-decision' || step.step_slug !== 'approve-decision') return null;
+  const text = step.observable_result ?? '';
+  if (!/page_trigger/.test(text)) return 'page_trigger：出页三问未声明';
+  const asked = [/三个以上|分支|多维对比|层级/.test(text), /小聊|一句事实|纯文字/.test(text), /理由/.test(text)];
+  if (asked.filter(Boolean).length < 3) return 'page_trigger：三问不全';
+  // Only an explicit outcome ("本次命中/本次均否") is checked here; the step
+  // declaration itself states the rule, not this task's outcome.
+  if (/本次命中/.test(text) && !/出页回执|出页证据|页面[:：]\s*`|\.html|quality\/evidence/.test(text)) {
+    return 'page_trigger：命中却未出页';
+  }
+  if (/本次均否/.test(text) && !/理由\s*[:：]\s*\S/.test(text)) return 'page_trigger：均否无理由';
+  return null;
+}
+
+export function uiCardContext(materialRoot) {
+  if (!materialRoot) return null;
+  let decision = '';
+  try { decision = readFileSync(join(materialRoot, 'decision-log.md'), 'utf8'); } catch { return null; }
+  if (/## 非UI及理由/.test(decision)) return { isUi: false };
+  const section = /## UI 范围与设计基准[\s\S]*?(?=\n## |$)/.exec(decision)?.[0];
+  if (!section) {
+    if (/raw_requirement|设计源|UI 范围与设计基准/.test(decision)) return { isUi: false, gap: 'UI范围与设计基准：缺「是不是 UI」判定' };
+    return { isUi: false };
+  }
+  const row = /\|\s*是不是 UI\s*\|\s*([^|\n]*)/.exec(section)?.[1]?.trim() ?? '';
+  if (!row) return { isUi: false, gap: 'UI范围与设计基准：缺「是不是 UI」行' };
+  if (/^否/.test(row)) return { isUi: false };
+  return { isUi: /^是/.test(row), section };
+}
+
+function uiSourceGap({ taskPath, materialRoot }) {
+  const card = uiCardContext(materialRoot);
+  if (!card?.isUi) return null;
+  const questionRef = /UI设计源问题原件：`([^`]+)`/.exec(card.section)?.[1];
+  const answerRef = /UI设计源答复原件：`([^`]+)`/.exec(card.section)?.[1];
+  const root = realpathSync(taskPath) + '/';
+  const read = (ref) => {
+    const file = isAbsolute(ref) ? ref : join(taskPath, ref);
+    try {
+      const real = realpathSync(file);
+      if (!real.startsWith(root)) return { file: real, outside: true };
+      return { file: real, text: readTaskOriginal(taskPath, ref) };
+    } catch { return null; }
+  };
+  const tupleOf = (text) => {
+    const raw = /questionItemId=(\[[^\n]+?\])/.exec(text)?.[1];
+    try { return JSON.parse(raw); } catch { return null; }
+  };
+  const question = questionRef ? read(questionRef) : null;
+  const questionTuple = question ? tupleOf(question.text) : null;
+  const questionBatch = question ? /批次类型：([^\n。]+)/.exec(question.text)?.[1]?.trim() : null;
+  if (!question || !/axis:\s*design_source/.test(question.text) || !questionTuple || questionTuple[2] !== 0) {
+    return 'UI设计源首问：问题原件未取得';
+  }
+  const answer = answerRef ? read(answerRef) : null;
+  if (answer?.outside) return 'UI设计源首问：答复任务/批次/调用不匹配';
+  const reply = answer ? /## 用户答复原文\s*\n([\s\S]*?)(?=\n## |$)/.exec(answer.text)?.[1]?.trim() : '';
+  if (!reply) return 'UI设计源首问：真实答复未取得';
+  const answerTuple = tupleOf(answer.text);
+  const answerBatch = /批次类型：([^\n。]+)/.exec(answer.text)?.[1]?.trim();
+  if (!answer.file.startsWith(root)) return 'UI设计源首问：答复任务/批次/调用不匹配';
+  const declaredTask = /task_id[:：]\s*([^\n]+)/.exec(answer.text)?.[1]?.trim();
+  const manifestTask = (() => { try { return JSON.parse(readFileSync(join(taskPath, 'task.json'), 'utf8')).task_id; } catch { return null; } })();
+  if (declaredTask && manifestTask && declaredTask !== manifestTask) return 'UI设计源首问：答复任务/批次/调用不匹配';
+  if (!questionBatch || answerBatch !== questionBatch || !answerTuple
+      || answerTuple[0] !== questionTuple[0] || answerTuple[1] !== questionTuple[1] || answerTuple[2] !== 0) {
+    return 'UI设计源首问：答复任务/批次/调用不匹配';
+  }
+  return null;
+}
+
 function readTaskOriginal(taskPath, ref) {
   if (typeof ref !== 'string' || !ref || isAbsolute(ref) || ref.split('/').some(part => part === '..' || part === '.')) {
     throw Error(`冷读指针越界：${ref ?? '缺路径'}`);
@@ -397,6 +469,92 @@ function discoverColdReadOriginal(taskPath, id) {
   const matches = readdirSync(root, { recursive: true }).filter(file => pattern.test(String(file)));
   if (matches.length !== 1) return null;
   return `quality/evidence/${String(matches[0])}`;
+}
+function packageBlock(body, id) {
+  const lines = String(body ?? '').split(/\r?\n/);
+  const start = lines.findIndex(line => {
+    const match = PACKAGE_SECTION.exec(line);
+    return match && String(Number(match[1])) === String(Number(id));
+  });
+  if (start < 0) return null;
+  let end = lines.length;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (/^##\s/.test(lines[index])) { end = index; break; }
+  }
+  return lines.slice(start, end).join('\n');
+}
+function tableCells(line) {
+  return String(line).split('|').slice(1, -1).map(cell => cell.trim());
+}
+function normalizeBatch(value) {
+  return String(value ?? '').replace(/`/g, '')
+    .replace(/[（(][^（）()]*[）)]/g, '')
+    .replace(/[，,]\s*(?:与冷读|同批|与讨论|见冷读|冷读)[\s\S]*$/, '')
+    .replace(/[。、，,\s]+$/g, '')
+    .trim();
+}
+function packageBatches(block) {
+  const out = new Set();
+  const lines = String(block ?? '').split(/\r?\n/);
+  for (const line of lines) {
+    const colon = /(?:讨论批次|批次号)\s*[:：]\s*([^|；;]+)/.exec(line);
+    if (colon) out.add(normalizeBatch(colon[1]));
+  }
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!/^\|/.test(lines[index]) || !/批次/.test(lines[index])) continue;
+    const header = tableCells(lines[index]);
+    const column = header.indexOf('批次');
+    if (column < 0) continue;
+    for (let row = index + 2; row < lines.length && /^\|/.test(lines[row]); row += 1) {
+      if (/^\|\s*-/.test(lines[row])) continue;
+      const value = tableCells(lines[row])[column];
+      if (value && !/^批次$/.test(value)) out.add(normalizeBatch(value));
+    }
+  }
+  return [...out].filter(Boolean);
+}
+function chatReceiptOk({ id, block, taskPath, batch }) {
+  const line = String(block ?? '').split(/\r?\n/).find(value => /聊天/.test(value) && /`[^`]+`/.test(value));
+  if (!line) return false;
+  const refs = [...line.matchAll(/`([^`]+)`/g)].map(match => match[1]);
+  const digests = [...line.matchAll(/sha256\s*`?([0-9a-f]{64})`?/gi)].map(match => match[1]);
+  const receiptRef = refs[0], cardRef = refs.find(value => /cards?-|cards\.md|convergence/.test(value));
+  if (!receiptRef || !digests.length) return false;
+  try {
+    const text = readTaskOriginal(taskPath, receiptRef.split('#')[0]);
+    if (createHash('sha256').update(text).digest('hex') !== digests[0]) return false;
+    if (!new RegExp(`工作包\\s*${Number(id)}`).test(text)) return false;
+    if (batch && !text.includes(batch)) return false;
+    if (!cardRef || digests.length < 2) return false;
+    const cardBytes = readTaskOriginal(taskPath, cardRef.split('#')[0]);
+    const anchor = cardRef.split('#')[1] ?? '';
+    const cardText = anchor ? (anchoredSection(cardBytes, anchor) ?? '') : cardBytes.trim();
+    if (!cardText) return false;
+    if (createHash('sha256').update(cardText).digest('hex') !== digests[1]) return false;
+    return true;
+  } catch { return false; }
+}
+function discussionBindingOk({ id, block, taskPath, batch }) {
+  const line = String(block ?? '').split(/\r?\n/).find(value => /就地讨论|讨论原件/.test(value) && /`[^`]+`/.test(value));
+  if (!line) return false;
+  const ref = /`([^`]+)`/.exec(line)?.[1];
+  if (!ref) return false;
+  try {
+    const text = readTaskOriginal(taskPath, ref.split('#')[0]);
+    if (!new RegExp(`工作包\\s*${Number(id)}`).test(text)) return false;
+    if (batch && !text.includes(batch)) return false;
+    const four = /工作包/.test(text) && /讨论前展示/.test(text)
+      && /复述/.test(text) && /(原话|用户)/.test(text) && /批次/.test(text);
+    return four;
+  } catch { return false; }
+}
+function p5StrictGaps({ id, block, taskPath, batch }) {
+  const gaps = [];
+  if (!/真实问答/.test(block ?? '')) gaps.push('缺真实问答指针');
+  if (!batch || !discussionBindingOk({ id, block, taskPath, batch })) gaps.push('冷读五问未绑定');
+  if (!chatReceiptOk({ id, block, taskPath, batch })) gaps.push('聊天呈现未取得');
+  if (!/(先设计|先给设计|设计先于|先展示后提问|设计后提问)/.test(block ?? '')) gaps.push('先设计后提问缺证');
+  return gaps;
 }
 function coldReadGaps({ id, body, taskPath, taskName }) {
   const gaps = [], errors = [];
@@ -729,9 +887,20 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
       const original = checks.find(check => check.present === true) ?? null;
       const declaredPhysical = declared.filter(entry => entry.kind !== 'task_original_ref' && !FACTS_EVIDENCE(entry.uri_or_path));
       const declaredPhysicalMissing = declaredPhysical.length > 0 && !checks.some(check => check.present === true && declaredPhysical.some(entry => entry.uri_or_path === check.ref));
+      const pageTriggerGap = pageTriggerGapFor(step, name);
+      const uiSlotDeclared = declared.some(entry => entry.uri_or_path === 'ui_source_reply');
+      const uiApplicable = name === 'make-decision' && step.step_slug === 'load-context';
+      const uiCard = uiApplicable ? uiCardContext(materialRoot) : null;
+      const uiGap = uiApplicable
+        ? (uiCard?.gap ?? (uiCard?.isUi
+          ? (uiSlotDeclared ? uiSourceGap({ taskPath, materialRoot }) : 'UI设计源首问：槽未声明（ui_source_reply）')
+          : null))
+        : null;
       const identity = { stage: name, step_id: step.step_id, step_slug: step.step_slug, source,
         evidence_location: mapping?.[2] ?? null, consumer: mapping?.[1] ?? null,
         evidence: checks, result: step.observable_result, method_anchor: step.method_anchor ?? '方法', requires_user_reply: step.requires_user_reply === true };
+      if (pageTriggerGap) return { ...identity, judgment: '未收敛', state: 'incomplete', basis: [], gap: pageTriggerGap };
+      if (uiGap) return { ...identity, judgment: '未收敛', state: 'incomplete', basis: [], gap: uiGap };
       if (producerFailure) return { ...identity, judgment: '未判定', state: 'unavailable', basis: [],
         gap: `读不到步骤定义：证据生产者未能从材料仓读取 ${source}；本条不是「步骤没做」` };
       const row = evidence.find(row => row.source === source && row.step_slug === step.step_slug);
@@ -775,6 +944,9 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
   }
   if (stage && !stages.includes(stage)) errors.push(`未知阶段：${stage}`);
   let modules = [];
+  let batchGaps = [];
+  let deferralGaps = [];
+  let strictUnconverged = [];
   let convergenceReadable = false;
   let convergenceFormat = null;
   // The current decision owns both the module set and its evidence pointer.
@@ -937,13 +1109,13 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
     modules = tableLines.map((line, index) => ({ line, number: index + 1 }))
       .filter(entry => /^\|\s*\d+\s/.test(entry.line)).map(({ line, number }) => {
         const cells = line.split('|').slice(1, -1).map(cell => cell.trim());
-        if (fiveColumn) return { name: cells[0], fields: [], state: cells[1] ?? '', source: convergenceRef, line: number };
+        if (fiveColumn) return { name: cells[0], fields: [], state: cells[1] ?? '', pending: cells[4] ?? '', source: convergenceRef, line: number };
         const fields = ['目标', '边界', '方案与取舍', '验收', '风险', '依赖', '消费者', '未决/无'];
         return { name: cells[0], fields: fields.map((name, index) => {
           const reference=cells[index+1]??'', present=cellPresent(reference,name,/^\d+/.exec(cells[0])?.[0]);
           if(!present)errors.push(`${cells[0]}/${name}: 未取得可回读的当前证据：${reference||'缺项'}`);
           return {name,reference,present};
-        }), state: cells[statusIndex] ?? '', analysis: cells.slice(statusIndex + 1), source: convergenceRef, line: number };
+        }), state: cells[statusIndex] ?? '', pending: cells[8] ?? '', analysis: cells.slice(statusIndex + 1), source: convergenceRef, line: number };
       });
     convergenceReadable = true;
     if (!modules.length) errors.push(`${convergenceRef}: 未读到模块行`);
@@ -955,6 +1127,11 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
     // five-column status table. These gaps stay in complete/gaps only: the public
     // exit code reflects the 状态 column, as make-decision states.
     const fullTen = headerCells.includes('目标与成功意图');
+    const modsForStrict = modules;
+    const packageBatchMap = new Map(modules.map(row => {
+      const id = /^\d+/.exec(row.name)?.[0];
+      return [id, id ? packageBatches(packageBlock(body, id)) : []];
+    }));
     if (fiveColumn || fullTen) for (const row of modules) {
       if (row.state !== '已收敛') continue;
       const id = /^\d+/.exec(row.name)?.[0];
@@ -967,6 +1144,17 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
         const cold = coldReadGaps({ id, body, taskPath, taskName: row.name });
         gaps.push(...cold.gaps);
         errors.push(...cold.errors);
+        // P5/ORACLE-MD-005: every包 in a full ledger (>=3 packages) must bind a
+        // readable chat receipt, the discussion batch and design order; missing
+        // the 真实问答 pointer itself is a gap. Two-package controlled fixtures
+        // stay governed by their own frozen oracles.
+        const block = packageBlock(body, id);
+        if (block && Array.isArray(modsForStrict) && modsForStrict.length >= 3) {
+          const batch = (packageBatchMap.get(id) ?? [])[0] ?? null;
+          gaps.push(...p5StrictGaps({ id, block, taskPath, batch }));
+          // 讨论原件四要素/批次对不上：不是证据缺口，而是未收敛点名。
+          if (!batch || !discussionBindingOk({ id, block, taskPath, batch })) strictUnconverged.push('未收敛：' + row.name);
+        }
       } else {
         gaps.push('缺冷读记录');
         errors.push(`${row.name}/冷读: 已收敛行缺包编号，无法回读冷读`);
@@ -974,6 +1162,29 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
       if (gaps.length) row.evidenceGaps = [...new Set(gaps)];
     }
     convergenceFormat = fiveColumn ? 'five-column-status' : statusColumn ? 'status-column-evidence' : 'eight-field-evidence';
+    // 跨包不合批：同一讨论批次被多个包共用就是病根，直接点名，不靠目录非空。
+    const batchUse = new Map();
+    for (const row of modules) {
+      const id = /^\d+/.exec(row.name)?.[0];
+      if (!id) continue;
+      for (const batch of packageBatchMap.get(id) ?? []) {
+        const list = batchUse.get(batch) ?? [];
+        list.push(row.name);
+        batchUse.set(batch, list);
+      }
+    }
+    batchGaps = [...batchUse.entries()].filter(([, names]) => new Set(names).size > 1)
+      .map(([batch, names]) => `跨包合批：批次 ${batch} 被包 ${[...new Set(names)].join('、')} 共用`);
+    // 已收敛但带可推迟项的包：可推迟不是通过。
+    const deferralRows = modules.filter(row => {
+      const id = /^\d+/.exec(row.name)?.[0];
+      if (!id || row.state !== '已收敛') return false;
+      const visible = (packageBlock(body, id) ?? '').split(/\r?\n/)
+        .filter(line => !/无\s*[（(][^）)]*可推迟/.test(line))
+        .filter(line => !/可推迟\s*[:：]\s*无/.test(line)).join('\n');
+      return /可推迟/.test(visible);
+    }).map(row => '未收敛：' + row.name);
+    deferralGaps = deferralRows;
   } catch (error) { errors.push(`${convergenceRef ?? '收敛清单'}: ${error.message}`); }
   const level = levelDisplay;
   const ids = modules.map(row => /^\d+/.exec(row.name)?.[0]);
@@ -989,13 +1200,30 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
   const stateGaps = modules
     .filter(row => row.state !== '已收敛' && (statusBearing || (row.state ?? '') !== ''))
     .map(row => '未收敛：' + (row.name || `第 ${row.line} 行`));
-  // Evidence gaps are reported and make complete=false, but never change the exit
-  // code: make-decision defines exit 1 as the 状态 column only.
+  // 「无（…）」不是无：括号里交代了未测/交接但仍写「无」，按未收敛点名。
+  const ordinaryPendingGaps = modules
+    .filter(row => /^已收敛/.test(String(row.state ?? '')))
+    .filter(row => {
+      const pending = String(row.pending ?? '').trim();
+      if (!pending || /^(?:无|—|-|不适用|无未决)$/.test(pending)) return false;
+      if (/^无\s*[（(]/.test(pending)) return false;
+      if (/^可推迟\s*[:：]\s*无/.test(pending)) return false;
+      return true;
+    })
+    .map(row => '未收敛：' + (row.name || `第 ${row.line} 行`));
+  const parenthesizedPendingGaps = modules
+    .filter(row => /^无\s*[（(]/.test(String(row.pending ?? '')))
+    .filter(row => !/^无\s*[（(]\s*(?:理由|原因|可推迟|不适用|本包无未决|已核)/.test(String(row.pending ?? '')))
+    .map(row => '未收敛：' + (row.name || `第 ${row.line} 行`));
+  // ORACLE-MD-007: evidence-class gaps are real failures and set exit 1 below;
+  // naming/format notes stay report-only. Keep this list aligned with the
+  // gaps.push sites in coldReadGaps/packageBlock and with SKILL:382/462.
   const evidenceGaps = modules.flatMap(row => (row.evidenceGaps ?? []).map(gap => `${row.name || `第 ${row.line} 行`}：${gap}`));
   const fieldGaps = statusColumnFormat ? [] : modules.filter(row => row.fields.some(field => !field.present)).map(row => row.name);
+  const strictGaps = [...new Set([...deferralGaps, ...strictUnconverged])];
   const gaps = statusColumnFormat
-    ? (modules.length ? [...stateGaps, ...evidenceGaps] : ['收敛清单无可读模块行'])
-    : [...stateGaps, ...evidenceGaps, ...fieldGaps];
+    ? (modules.length ? [...stateGaps, ...parenthesizedPendingGaps, ...ordinaryPendingGaps, ...strictGaps, ...evidenceGaps, ...batchGaps] : ['收敛清单无可读模块行'])
+    : [...stateGaps, ...parenthesizedPendingGaps, ...strictGaps, ...evidenceGaps, ...fieldGaps, ...batchGaps];
   gaps.push(...missing.map(id => `缺模块 WP${id}`), ...duplicate.map(id => `重复模块 WP${id}`), ...unknown.map(id => `未知模块 WP${id}`), ...mappingGaps);
   if (!expected.length || new Set(expected).size !== expected.length) { gaps.push('权威模块集合未取得或重复'); errors.push('decision-log.md: 权威模块集合未取得或重复'); }
   if (!safeRef) gaps.push('收敛清单指针未取得');
@@ -1172,6 +1400,17 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   // A named unconverged package is a real gap, not a format note: surface it
   // through the exit code so a skipped convergence cannot pass as clean.
   if (report.convergence.gaps.some(gap => String(gap).startsWith('未收敛：'))) process.exitCode = 1;
+  // ORACLE-MD-007: evidence-class gaps fail the exit; naming/format notes stay
+  // report-only. The list is the single source shared with SKILL:382/462.
+  const EVIDENCE_GAP = [
+    /聊天呈现未取得/, /卡片摘要不符/, /缺少?真实问答指针/, /冷读五问未绑定/,
+    /缺冷读记录/, /缺冷读原件/, /收敛格缺当前卡节/, /冷读读者未声明独立/,
+    /冷读五问不全/, /冷读结论未写五问全答出/, /冷读原件未绑定卡摘要/,
+    /冷读原件摘要不符/, /修订未复读/,
+    /先设计后提问缺证/, /冷读原件读的卡与当前卡节不一致/, /卡片摘要与冷读原件不一致/,
+    /UI设计源首问/,
+  ];
+  if (report.convergence.gaps.some(gap => EVIDENCE_GAP.some(pattern => pattern.test(String(gap))))) process.exitCode = 1;
   if (json) console.log(JSON.stringify(report, null, 2));
   else {
     if (report.card) console.log(JSON.stringify(report.card, null, 2));
@@ -1195,7 +1434,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       }
     }
     console.log(`收敛 complete=${report.convergence.complete}；gaps=${JSON.stringify(report.convergence.gaps)}`);
-    console.log('退出码只反映状态列的未收敛包；十列字段缺口只进上面的 complete/gaps，不改变退出码。');
+    console.log('退出码反映状态列未收敛包、「未收敛：」点名与证据类具名缺口；格式/命名缺口与十列字段缺口只进上面的 complete/gaps。');
     console.log(`级别：${report.level}`);
     for (const error of report.errors) console.log(`缺口：${error}`);
     console.log(report.limits.join('\n'));

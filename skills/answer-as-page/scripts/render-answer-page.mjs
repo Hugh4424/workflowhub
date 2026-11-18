@@ -9,6 +9,7 @@ import { withLock } from '../../../runtime/interface/record-lock.mjs';
 import { openTask } from '../../../runtime/task/task-handle.mjs';
 import { openCurrentTaskWorkspace } from '../../../runtime/task/workspace.mjs';
 import { buildPageData } from './build-page-data.mjs';
+import { checkPageContent } from './check-page-content.mjs';
 import { openInSystemBrowser } from './open-page.mjs';
 import { RING_STATES } from '../../../runtime/task/final-chain.mjs';
 
@@ -217,11 +218,14 @@ export async function renderAnswerPage({ taskPath, reportPath, decisionLogPath, 
   }:undefined;
   const publication = await publishPair(directory, htmlName, html, nodesName, `${JSON.stringify(sidecar, null, 2)}\n`, Boolean(derived), taskOutput,prepareHtml);
   const htmlPath = join(directory, htmlName), nodesPath = join(directory, nodesName);
+  const contentCheck = reportPath
+    ? await checkPageContent({ taskPath, reportPath, htmlPath, nodesPath }).catch(error => ({ ok: false, errors: [{ code: 'CHECK_FAILED', message: error.message }] }))
+    : { ok: true, errors: [] };
   try {
     if (typeof open !== 'function') throw Error('缺宿主浏览器能力');
     if (await open(htmlPath) !== true) throw Error('宿主未打开');
-    return { htmlPath, nodesPath, opened: true, ...publication };
-  } catch (error) { return { htmlPath, nodesPath, opened: false, open_reason: `未自动打开: ${error.message}`, ...publication }; }
+    return { htmlPath, nodesPath, opened: true, content_errors: contentCheck.errors, ...publication };
+  } catch (error) { return { htmlPath, nodesPath, opened: false, content_errors: contentCheck.errors, open_reason: `未自动打开: ${error.message}`, ...publication }; }
 }
 
 export const EVENTS = Object.freeze(['skeleton-confirmed','package-converged','direction-scope-acceptance-changed','phase-closed','build-code-ended','stage-closed']);

@@ -333,15 +333,36 @@ function commands(facts, taskPath, materialRoot, limits, taskId, allowedCwds, hi
 }
 const safeScopePath = value => text(value) && !isAbsolute(value) && !value.includes("\\") && !value.includes("\0") && !value.split("/").some(part=>part === ".." || part === "." || !part);
 const scopeContains = (pattern,path) => safeScopePath(pattern) && safeScopePath(path) && (pattern.endsWith("/**") ? path.startsWith(pattern.slice(0,-2)) && path.length > pattern.length-2 : pattern === path);
-function writeSets(spec, phases, missingPhases) {
+function writeSets(spec, phases, missingPhases, phaseIndex = null) {
   const design = section(spec,"全局文件边界与依赖") || section(spec,"实现设计");
   const specLines = design.split("\n").filter(line => /(?:新增|修改)/.test(line));
   const declared = specLines.length ? [...new Set(specLines.flatMap(line => [...line.matchAll(/`([^`]+)`/g)].map(match=>match[1])))] : null;
   const values = phases.map(({raw}) => raw.match(/\*\*Write set\*\*\s*[:：]\s*([^\n]+)/)?.[1]);
-  const phaseWriteSet = !missingPhases.length && values.length && values.every(text) ? [...new Set(values.flatMap(value=>[...value.matchAll(/`([^`]+)`/g)].map(match=>match[1])))] : null;
+  const bodyWriteSet = !missingPhases.length && values.length && values.every(text) ? [...new Set(values.flatMap(value=>[...value.matchAll(/`([^`]+)`/g)].map(match=>match[1])))] : null;
+  // 环6 authority is the phases/index.md write-set column when that column
+  // exists; the Phase body is the cross-check and the fallback for older
+  // two/three-column indexes. Header controls the column, never row order.
+  const indexLines = (phaseIndex ?? "").split("\n").filter(line => /^\s*\|/.test(line));
+  const header = indexLines.find(line => /\bwrite\s*set\b|写入集/i.test(line)) ?? null;
+  const writeColumn = header ? header.split("|").map(cell => cell.trim()).findIndex(cell => /^(?:write\s*set|写入集)$/i.test(cell)) : -1;
+  const indexWrites = writeColumn > 0 ? [...new Set(indexLines
+    .filter(line => /\bP[1-9][0-9]*\b/.test(line) && line.split("|").length > writeColumn)
+    .flatMap(line => {
+      const scope = line.split("|")[writeColumn] ?? "";
+      return [...scope.matchAll(/`([^`]+)`/g)].map(match => match[1]);
+    }))] : null;
+  const phaseWriteSet = indexWrites?.length ? indexWrites : bodyWriteSet;
+  let conflict = null;
+  if (indexWrites?.length && bodyWriteSet) {
+    const onlyIndex = indexWrites.filter(path => !bodyWriteSet.includes(path));
+    const onlyBody = bodyWriteSet.filter(path => !indexWrites.includes(path));
+    if (onlyIndex.length || onlyBody.length) conflict = `phases/index.md 写集与 Phase 正文不一致：索引多=${onlyIndex.join(",") || "无"}；正文多=${onlyBody.join(",") || "无"}`;
+  }
   // Expand only paths proved covered by a real trailing /** declaration; never union unknown Phase paths into spec authority.
   const covered = Array.isArray(declared) && Array.isArray(phaseWriteSet) ? phaseWriteSet.filter(path=>declared.some(pattern=>scopeContains(pattern,path))) : [];
-  return {specWriteSet:declared ? [...new Set([...declared,...covered])] : null,phaseWriteSet};
+  // The index column is the authority; the spec declaration is only a
+  // coverage/cross-check input. Without an index the body remains the fallback.
+  return {specWriteSet:indexWrites?.length ? indexWrites : (declared ? [...new Set([...declared,...covered])] : phaseWriteSet),phaseWriteSet,writeSetConflict:conflict};
 }
 function contractOriginal(facts, read, materialRoot, spec, phaseIndex, phases, limits, commands) {
   const field = (raw,name) => raw.match(new RegExp(`^\\s*-\\s+\\*\\*${name}\\*\\*\\s*[:：]\\s*(.+?)\\s*$`,"m"))?.[1]?.trim() ?? null;
@@ -947,7 +968,7 @@ export function runFinalChainCheck({taskPath,materialRoot,workflowRoot} = {}) {
   const phaseRefs = phaseIndex ? [...new Set(phaseIndex.split("\n").filter(line=>line.trim().startsWith("|")).flatMap(line=>[...line.matchAll(/`(phases\/P[1-9][0-9]*(?:-[^`/\\\n]+)?\.md)`/g)].map(match=>match[1])))] : [];
   const phases = phaseRefs.map(ref=>({ref,raw:optional(materialRoot,ref,limits)})).filter(item=>item.raw !== null);
   const missingPhases = phaseRefs.filter(ref=>!phases.some(phase=>phase.ref === ref));
-  const sets = writeSets(spec ?? "",phases,missingPhases);
+  const sets = writeSets(spec ?? "",phases,missingPhases,phaseIndex);
   if (diff) {
     diff.phase_write_set = sets.phaseWriteSet;
     diff.spec_write_set = sets.specWriteSet;
@@ -983,7 +1004,7 @@ export function runFinalChainCheck({taskPath,materialRoot,workflowRoot} = {}) {
     3:research,
     4:spec === null ? {readable:false,unavailable:true} : {...fileEvidence("spec.md",spec),rows:table,rows_readable:true},
     5:spec === null || !ordinaryContract || ordinaryContract.unavailable ? {readable:false,unavailable:true} : {...fileEvidence("spec.md",spec),nonempty:spec.trim().length>0,scan_count:ordinaryContract.scan_count,required_sections_present:requiredHeadingsPresent(spec,SPEC_REQUIRED_HEADINGS),contract_ok:ordinaryContract.contract_ok,basis:[fileEvidence("spec.md",spec),ordinaryContract]},
-    6:phaseIndex === null ? {readable:false,unavailable:true} : {...fileEvidence("phases/index.md",phaseIndex),phase_refs:phaseRefs},
+    6:phaseIndex === null ? {readable:false,unavailable:true} : {...fileEvidence("phases/index.md",phaseIndex),phase_refs:phaseRefs,nonempty:Boolean((sets.phaseWriteSet??[]).length),write_set:sets.phaseWriteSet,spec_write_set:sets.specWriteSet,write_set_conflict:sets.writeSetConflict ?? null,...(sets.writeSetConflict ? {verified:false,conflict:sets.writeSetConflict} : {})},
     7:diff ?? {readable:false,unavailable:true},8:test ?? {readable:false,unavailable:true},9:review,
   };
   if (delivery.conflict && delivery.pr?.verified) rings[10]={...delivery.pr,conflict:delivery.conflict};
@@ -992,7 +1013,10 @@ export function runFinalChainCheck({taskPath,materialRoot,workflowRoot} = {}) {
   for (const [number,item] of Object.entries(rings)) {
     if (item.verified && text(item.ref) && !item.ref.startsWith("git:")) rings[number] = checkedOriginal(item,taskId,taskPath,materialRoot,limits,`ring-${number}`,number === "1" ? exactRaw?.scope : undefined);
   }
+  if (rings[6] && sets.phaseWriteSet) Object.assign(rings[6], { write_set: sets.phaseWriteSet, spec_write_set: sets.specWriteSet, write_set_conflict: sets.writeSetConflict ?? null });
   const results = RINGS.map(({ring})=>evaluateRing(bundle,ring,level));
+  const resultSix = results.find(item => item.ring === 6);
+  if (resultSix && sets.phaseWriteSet) Object.assign(resultSix, { write_set: sets.phaseWriteSet, spec_write_set: sets.specWriteSet, write_set_conflict: sets.writeSetConflict ?? null });
   const statuses = {completed:"completed",skipped:"in-progress",incomplete:"failed",unavailable:"unverified"};
   const chain = stateForStepResults(results.filter(row=>row.state !== "not_applicable").map(row=>({step_slug:`ring-${row.ring}`,status:statuses[row.state]})));
   if (review.unavailable || results[8].state === "unavailable") limits.push("环 9 不可机判：整次实现/交付身份、当前 diff 或真实 provider 原件未取得；交独立审查 reader");

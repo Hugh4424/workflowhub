@@ -151,7 +151,7 @@ UI 实施先消费当前真实答复所批准原型与设计基准：沿build-pl
    未修项保持 incomplete，不以请求用户承担风险代替修复。非 UI 跳过。
 10. <a id="step-run-final-aggregate-and-ac-trace"></a>所有实施任务结束后，按计划执行一次最终聚合，逐 AC 消费沿途已产生的结论原件，对账实现、真实效果、测试和未覆盖项。末 Phase 保留完整端到端串演，只作复核与必要未闭环 case 补充，业务、实现与效果 AC 的首次结论仍按 spec 正文归属承接 Phase；仅需完整最终产物才能检查的 AC-BOUND-001/002 在最终边界首次独立判定，其余 AC 不得延期。默认只跑本任务范围内与本次改动相关的测试；判断不了影响面时用最小可证伪集合并记录未知影响面。全局重跑仅在改动对象是流程本身且局部无法证明时执行一次，事先说明范围与理由。没有新改动、失败或疑点时不重复运行。最终聚合不证明 review pass，也不替代独立审查。 最后 Phase 实际运行 `node tools/cli/run-checks.mjs --task-path <当前认证任务根>`，保存一份 stdout 原件供十环对账；环1–9取真实状态，环10在build-code记 `skipped`，stage-close后由原调用方补终态。exit 0 不证明步骤齐全，逐项读取报告的 `missing_steps`，不改 final-chain 原职责。
      对账由独立上下文实跑一次项目声明的会话用量命令，当场展示时间窗/分账/计数，不落派生文件；finding修复仅复验受影响file/case并说明理由。
-11. <a id="step-stage-end-spec-analyze"></a>用 spec-analyze 对照原始需求、当前材料、实现、测试、发现处置与用户可见结果。实施/事实问题在本阶段修，方向和作者材料仍交对应 owner。缺项明确写未启动、未执行、失败、不适用、unknown 或 unavailable，不用产物存在代替完成条件。
+11. <a id="step-stage-end-spec-analyze"></a>用 spec-analyze 对照原始需求、当前材料、实现、测试、发现处置与用户可见结果。原需回读供件与失败语义按 `skills/spec-analyze/SKILL.md`「真实效果回读」；本 caller 只增：实施 diff、测试与质量原件；上游原话摘要不能替全文，缺件记 incomplete。实施/事实问题在本阶段修，方向和作者材料仍交对应 owner。缺项明确写未启动、未执行、失败、不适用、unknown 或 unavailable，不用产物存在代替完成条件。
 12. <a id="step-closeout"></a>整个 stage 末由当前主会话按 `skills/stage-reflection/SKILL.md`「方法」「用户选择后的归口」「判断词表与完成检查」执行阶段收口，保存并读回最终报告，说明交付行为、实际测试/AC限制、原始发现与处置、风险及关闭方法下一步。局部 Phase 摘要不触发 stage-end 或固定复盘。结束时按 spec 模板验收流程统一提醒每条 incomplete 的真实尝试 ref、阻塞条件、提供者与恢复条件；最终报告逐条列缺口，不宣称完成。
     人读结论用达成／未达成（写明下一步）／退役；退役须有真实退出决定，不用模糊延期替代。
 

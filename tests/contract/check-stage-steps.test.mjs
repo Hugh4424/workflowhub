@@ -336,9 +336,9 @@ describe('five-column status table names unconverged packages', () => {
     expect(report.convergence.gaps).toEqual([]);
     expect(report.convergence.complete).toBe(true);
   }));
-  it('reports a five-column 已收敛 package without a cold read in gaps without changing exit 0', () => statusFixture(header + '| 1 controlled | 已收敛 | details§1 | ev-1 | 无 |\n| 2 second | 已收敛 | details§2 | ev-2 | 无 |\n', ({ invoke }) => {
+  it('reports a five-column 已收敛 package without a cold read in gaps and exits 1', () => statusFixture(header + '| 1 controlled | 已收敛 | details§1 | ev-1 | 无 |\n| 2 second | 已收敛 | details§2 | ev-2 | 无 |\n', ({ invoke }) => {
     const result = invoke(true);
-    expect(result.status).toBe(0);
+    expect(result.status).toBe(1);
     const report = JSON.parse(result.stdout);
     expect(report.convergence.complete).toBe(false);
     expect(report.convergence.gaps.some(gap => gap.includes('缺冷读记录'))).toBe(true);
@@ -395,10 +395,10 @@ describe('ten-column status table names unconverged packages', () => {
     expect(report.convergence.gaps).toEqual([]);
     expect(report.convergence.complete).toBe(true);
   }));
-  // Evidence gaps below stay in complete/gaps only; the exit code reflects 状态.
+  // Evidence-class gaps below drive exit 1 (ORACLE-MD-007); format notes stay in complete/gaps.
   const evidenceGap = (mutate, needle) => tenColumnFixture(header + withStatus(validOne, '已收敛') + withStatus(validTwo, '已收敛'), ({ invoke }) => {
     const result = invoke(true);
-    expect(result.status).toBe(0);
+    expect(result.status).toBe(1);
     const report = JSON.parse(result.stdout);
     expect(report.convergence.complete).toBe(false);
     expect(report.convergence.gaps.some(gap => gap.includes(needle))).toBe(true);
@@ -410,31 +410,31 @@ describe('ten-column status table names unconverged packages', () => {
     expect(report.convergence.complete).toBe(false);
     expect(report.convergence.gaps.some(gap => gap.includes('分析仍待定'))).toBe(true);
   }));
-  it('reports a bare cold-read marker without changing exit 0', () => tenColumnFixture(header + withStatus(validOne, '已收敛') + withStatus(validTwo, '已收敛'), ({ invoke }) => {
+  it('reports a bare cold-read marker and exits 1', () => tenColumnFixture(header + withStatus(validOne, '已收敛') + withStatus(validTwo, '已收敛'), ({ invoke }) => {
     const result = invoke(true);
-    expect(result.status).toBe(0);
+    expect(result.status).toBe(1);
     expect(JSON.parse(result.stdout).convergence.gaps.some(gap => gap.includes('缺冷读记录'))).toBe(true);
   }, () => '\n### 冷读记录（P1）\n### 冷读记录（P2）\n'));
-  it('reports a missing cold-read section without changing exit 0', () => tenColumnFixture(header + withStatus(validOne, '已收敛') + withStatus(validTwo, '已收敛'), ({ invoke }) => {
+  it('reports a missing cold-read section and exits 1', () => tenColumnFixture(header + withStatus(validOne, '已收敛') + withStatus(validTwo, '已收敛'), ({ invoke }) => {
     const result = invoke(true);
-    expect(result.status).toBe(0);
+    expect(result.status).toBe(1);
     expect(JSON.parse(result.stdout).convergence.gaps.some(gap => gap.includes('缺冷读记录'))).toBe(true);
   }, () => ''));
-  it('reports fewer than five answers without changing exit 0', () => tenColumnFixture(header + withStatus(validOne, '已收敛') + withStatus(validTwo, '已收敛'), ({ invoke, task, put }) => {
+  it('reports fewer than five answers and exits 1', () => tenColumnFixture(header + withStatus(validOne, '已收敛') + withStatus(validTwo, '已收敛'), ({ invoke, task, put }) => {
     put(task, coldRef('1'), coldDoc('1', 'subagent:controlled-reader-1', 4));
     const result = invoke(true);
-    expect(result.status).toBe(0);
+    expect(result.status).toBe(1);
     const report = JSON.parse(result.stdout);
     expect(report.convergence.complete).toBe(false);
     expect(report.convergence.gaps.some(gap => gap.includes('冷读五问不全'))).toBe(true);
   }, tail => tail.replace('⑤ 还有什么没定：无。\n', '')));
-  it('reports a card section digest mismatch without changing exit 0', () => evidenceGap(tail => tail.replace(coldSha(cardSection('1')), '0'.repeat(64)), '卡片摘要不符'));
+  it('reports a card section digest mismatch and exits 1', () => evidenceGap(tail => tail.replace(coldSha(cardSection('1')), '0'.repeat(64)), '卡片摘要不符'));
   it('reports a card edited after the cold read even when only the block digest was bumped', () => tenColumnFixture(header + withStatus(validOne, '已收敛') + withStatus(validTwo, '已收敛'), ({ invoke, task, ref, put, original }) => {
     const edited = cardSection('1') + '\n补充：卡在冷读之后又改了一句。';
     put(task, COLD_CARDS, edited + '\n' + cardSection('2'));
     put(task, ref, original.replace(coldSha(cardSection('1')), coldSha(edited)));
     const result = invoke(true);
-    expect(result.status).toBe(0);
+    expect(result.status).toBe(1);
     const report = JSON.parse(result.stdout);
     expect(report.convergence.complete).toBe(false);
     expect(report.convergence.gaps.some(gap => gap.includes('卡片摘要与冷读原件不一致'))).toBe(true);
@@ -442,16 +442,16 @@ describe('ten-column status table names unconverged packages', () => {
   it('reports a cold-read original that does not bind the card digest', () => tenColumnFixture(header + withStatus(validOne, '已收敛') + withStatus(validTwo, '已收敛'), ({ invoke, task, put }) => {
     put(task, coldRef('1'), coldDoc('1', 'subagent:controlled-reader-1').replace(/^- 读的卡：.*\n/m, ''));
     const result = invoke(true);
-    expect(result.status).toBe(0);
+    expect(result.status).toBe(1);
     const report = JSON.parse(result.stdout);
     expect(report.convergence.complete).toBe(false);
     expect(report.convergence.gaps.some(gap => gap.includes('冷读原件未绑定卡摘要'))).toBe(true);
   }));
-  it('reports a cold-read original digest mismatch without changing exit 0', () => evidenceGap(tail => tail.replace(coldSha(coldDoc('1', 'subagent:controlled-reader-1')), '0'.repeat(64)), '冷读原件摘要不符'));
-  it('reports a revised card that was not re-read by a new reader without changing exit 0', () => evidenceGap(tail => tail.replace('| 修订 | 无 |', '| 修订 | 修订：受控改动；修后复读。 |'), '修订未复读'));
+  it('reports a cold-read original digest mismatch and exits 1', () => evidenceGap(tail => tail.replace(coldSha(coldDoc('1', 'subagent:controlled-reader-1')), '0'.repeat(64)), '冷读原件摘要不符'));
+  it('reports a revised card that was not re-read by a new reader and exits 1', () => evidenceGap(tail => tail.replace('| 修订 | 无 |', '| 修订 | 修订：受控改动；修后复读。 |'), '修订未复读'));
   it('restores the same check after the controlled break is reverted', () => tenColumnFixture(header + withStatus(validOne, '已收敛') + withStatus(validTwo, '已收敛'), ({ invoke, task, ref, put, original }) => {
     put(task, ref, original.replace(coldSha(cardSection('2')), '0'.repeat(64)));
-    expect(invoke(true).status).toBe(0);
+    expect(invoke(true).status).toBe(1);
     expect(JSON.parse(invoke(true).stdout).convergence.complete).toBe(false);
     put(task, ref, original);
     const restored = invoke(true);
@@ -490,9 +490,9 @@ describe('method-shape cold read is accepted without inventing a third shape', (
     expect(report.convergence.complete).toBe(true);
     expect(report.convergence.gaps).toEqual([]);
   }));
-  it('reports a method-shape cold read with fewer answers in gaps without changing exit 0', () => methodFixture(4, ({ invoke }) => {
+  it('reports a method-shape cold read with fewer answers and exits 1', () => methodFixture(4, ({ invoke }) => {
     const result = invoke(true);
-    expect(result.status).toBe(0);
+    expect(result.status).toBe(1);
     const report = JSON.parse(result.stdout);
     expect(report.convergence.complete).toBe(false);
     expect(report.convergence.gaps.some(gap => gap.includes('冷读五问不全'))).toBe(true);
