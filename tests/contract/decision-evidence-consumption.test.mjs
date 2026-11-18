@@ -8,6 +8,8 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
+import { runStageStepsCheck } from "../../tools/cli/check-stage-steps.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const CLI = join(ROOT, "tools/cli/check-decision-log-chain.mjs");
@@ -379,5 +381,152 @@ describe("ORACLE-MD-P1 answer source and tone consumption", () => {
     const result = run(log);
     expect(result.status, result.output).toBe(0);
     expect(result.output).not.toContain("no decision entries");
+  });
+});
+
+// P5 ORACLE-MD-005: a converged package in a full ledger (>=3 packages) must
+// bind a readable chat receipt, its discussion batch and design order; a self
+// report ("已发") is not evidence; 「无（交接/未测）」 is not none; a deferred
+// item under 已收敛 is unconverged.
+
+const p5Sha = (text) => createHash("sha256").update(text).digest("hex");
+
+function p5Fixture({ packages = 3, format = 'five', batchFor = (id) => `batch-${id}`, chatFor = () => false, realQaFor = () => true, orderFor = () => false, deferFor = () => false, deferValue, cardsExtra = '', pendingFor = () => "无" } = {}) {
+  const root = temp("p5-stage-steps-");
+  const task = join(root, "task");
+  const materials = join(root, "materials");
+  const put = (base, name, value) => {
+    const path = join(base, name);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, value);
+  };
+  put(task, "task.json", JSON.stringify({ schema_version: "1.0.0", task_id: "task", target_repo_root: ROOT, baseline_commit: "HEAD", activation_cohort: "post" }));
+  put(task, "facts.jsonl", "");
+  put(materials, "phases/index.md", "# Index\n");
+  const decision = ["# Controlled", "## 级别与路线", "- 推荐级别：复杂"];
+  const rows = [];
+  const sections = [];
+  for (let id = 1; id <= packages; id += 1) {
+    decision.push(`#### WP${id} — controlled`, `- **结果与消费者**：受控结果；消费者是 consumer。`);
+    const cards = `quality/evidence/convergence/cards-${id}.md`;
+    const card = `## 工作包 ${id}：受控包 ${id}\n\n一句话结果：受控结果。`;
+    const coldRef = `quality/evidence/cold-read-p${id}.md`;
+    const cold = `# 受控冷读 ${id}\n\n- 读者：subagent:reader-${id}，未参与本包写作，只读本包卡。\n- 读的卡：\`${cards}#工作包-${id}\`，节摘要 sha256 \`${p5Sha(card)}\`。\n- 五问原答：\n① 改什么：受控改动。\n② 为什么：受控理由。\n③ 边界：受控边界。\n④ 怎么验：受控验证。\n⑤ 还有什么没定：无。\n- 结论：五问全答出；本包收敛。\n`;
+    put(task, cards, `${card}${cardsExtra}`);
+    put(task, coldRef, cold);
+    const batch = batchFor(id);
+    const discussion = `工作包 ${id} 讨论原件\n\n讨论前展示：已给十格卡。\n复述：受控复述。\n用户原话：可以。\n批次：${batch}\n`;
+    const discussionRef = `quality/evidence/talk/discussion-p${id}.md`;
+    put(task, discussionRef, discussion);
+    let chatLine = "聊天展示：已发十格卡。";
+    if (chatFor(id)) {
+      const receipt = `工作包 ${id} 聊天回执\n\n批次：${batch}\n卡：工作包 ${id}\n`;
+      const receiptRef = `quality/evidence/talk/chat-p${id}.md`;
+      put(task, receiptRef, receipt);
+      chatLine = `聊天回执：\`${receiptRef}\`；sha256 \`${p5Sha(receipt)}\`；批次 ${batch}；卡 \`${cards}#工作包-${id}\`；sha256 \`${p5Sha(card)}\``;
+    }
+    const marks = [chatLine];
+    if (orderFor(id)) marks.push("先设计后提问：先给设计稿，只有真歧义才问。");
+    if (deferFor(id)) marks.push("可推迟：性能镜头推迟，owner=后续阶段，最迟承接=终末验收。");
+    if (deferValue !== undefined) marks.push(`可推迟：${deferValue}`);
+    rows.push(format === 'ten'
+      ? `| ${id} | D-00${id} | D-00${id} | D-00${id} | AC-01 | D-00${id} | 无 | consumer | ${pendingFor(id)} | 已收敛 | 已答 | 已答 | 已答 | 已答 | 已答 |`
+      : `| ${id} | 已收敛 | 本文件“工作包 ${id}” | evidence-${id} | ${pendingFor(id)} |`);
+    sections.push([
+      `## 工作包 ${id}：受控包 ${id}`, "",
+      "### 五段过程", "", "| 段 | 结论 | 原件指针 | 批次 |", "| --- | --- | --- | --- |",
+      `| 调研 | 已有 | \`quality/evidence/research.md\` | ${batch} |`,
+      `| 发散 | 已做 | \`quality/evidence/research.md\` | ${batch} |`,
+      `| 收敛 | 已收敛 | \`quality/evidence/decision-log-refs/convergence-checklist.md\` | ${batch} |`,
+      `| 就地讨论 | 已确认 | \`${discussionRef}\` | ${batch} |`,
+      `| 定验收 | 已定 | \`quality/evidence/coverage-matrix-5d.md\` | ${batch} |`, "",
+      "### 收敛格（本轮）", "", "| 项 | 值 |", "| --- | --- |",
+      `| 当前卡节 | \`${cards}#工作包-${id}\`；sha256 \`${p5Sha(card)}\` |`,
+      `| 当前冷读 | \`${coldRef}\`；sha256 \`${p5Sha(cold)}\`；读者 subagent:reader-${id}；context=none |`,
+      `| 首轮冷读 | \`${coldRef}\`；sha256 \`${p5Sha(cold)}\`；读者 subagent:reader-${id} |`,
+      "| 修订 | 无 |", "",
+      `### 冷读记录（P${id}）`, "",
+      `- 读者：subagent:reader-${id}，未参与本包写作，只读本包卡。`,
+      "- 五问原答：", "① 改什么：受控改动。", "② 为什么：受控理由。", "③ 边界：受控边界。", "④ 怎么验：受控验证。", "⑤ 还有什么没定：无。",
+      "- 结论：五问全答出；本包收敛。", "",
+      "### 8 项证据指针", "",
+      "1. 原始需求：`quality/evidence/requirement-index.md`。",
+      "2. 调研结论：`quality/evidence/research.md`。",
+      ...(realQaFor(id) ? [`3. 真实问答：\`quality/evidence/talk/chat-p${id}.md\`。`] : []),
+      `4. 当前方案卡：\`${cards}#工作包-${id}\`，节 sha256 \`${p5Sha(card)}\`。`,
+      `5. 当前冷读：\`${coldRef}\`，sha256 \`${p5Sha(cold)}\`，读者 subagent:reader-${id}。`,
+      `6. 复读对照：首轮 \`${coldRef}\`（sha256 \`${p5Sha(cold)}\`，读者 subagent:reader-${id}）→ 本轮。`,
+      "7. 验收：`quality/evidence/coverage-matrix-5d.md` 的 AC-01。",
+      "8. 审查处置：`quality/reviews/direction.json`。", "",
+      ...marks, "",
+    ].join("\n"));
+  }
+  decision.push("清单：`quality/evidence/decision-log-refs/convergence-checklist.md`", "");
+  put(materials, "decision-log.md", decision.join("\n"));
+  put(task, "quality/evidence/decision-log-refs/convergence-checklist.md", [
+    "# 收敛清单", "",
+    ...(format === 'ten'
+      ? ["| 包 | 目标 | 边界 | 方案与取舍 | 验收 | 风险 | 依赖 | 消费者 | 未决/无 | 状态 | 目标与成功意图 | 范围与旅程 | 数据与状态 | 成功失败验收 | 约束非目标与风险 |",
+         "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
+      : ["| 包 | 状态 | 五段表位置 | 证据 | 未决 |", "| --- | --- | --- | --- | --- |"]),
+    ...rows, "", ...sections,
+  ].join("\n"));
+  return { task, materials };
+}
+
+const p5Check = (fixture) => runStageStepsCheck({ taskPath: fixture.task, materialRoot: fixture.materials, repoRoot: ROOT, stage: "make-decision" });
+
+describe("P5 stage-steps evidence gaps", () => {
+  it("names a self-reported chat, missing design order and a missing real-qa pointer", () => {
+    const report = p5Check(p5Fixture({ realQaFor: (id) => id !== 1, orderFor: () => false }));
+    expect(report.convergence.gaps).toEqual(expect.arrayContaining([
+      "1：聊天呈现未取得", "1：先设计后提问缺证", "1：缺真实问答指针",
+    ]));
+  });
+  it("accepts a readable chat receipt and explicit design order", () => {
+    const report = p5Check(p5Fixture({ chatFor: () => true, orderFor: () => true }));
+    for (const gap of ["1：聊天呈现未取得", "1：先设计后提问缺证", "1：缺真实问答指针"]) {
+      expect(report.convergence.gaps).not.toContain(gap);
+    }
+  });
+  it("does not accept 已发/已展示 self report as chat evidence", () => {
+    const report = p5Check(p5Fixture({ chatFor: () => false, orderFor: () => true }));
+    expect(report.convergence.gaps).toContain("1：聊天呈现未取得");
+  });
+  it("treats 无（交接/未测） as unconverged but accepts 无（理由…）", () => {
+    const bad = p5Check(p5Fixture({ pendingFor: (id) => (id === 1 ? "无（C05-P3 归 C12）" : "无") }));
+    expect(bad.convergence.gaps).toContain("未收敛：1");
+    const good = p5Check(p5Fixture({ pendingFor: () => "无（理由：本包无未决）" }));
+    expect(good.convergence.gaps.some((gap) => gap === "未收敛：1")).toBe(false);
+  });
+  it("treats a deferred item under 已收敛 as unconverged", () => {
+    const report = p5Check(p5Fixture({ deferFor: (id) => id === 1, chatFor: () => true, orderFor: () => true }));
+    expect(report.convergence.gaps).toContain("未收敛：1");
+  });
+  it("names one batch shared by all packages", () => {
+    const report = p5Check(p5Fixture({ batchFor: () => "007", chatFor: () => true, orderFor: () => true }));
+    expect(report.convergence.gaps).toContain("跨包合批：批次 007 被包 1、2、3 共用");
+  });
+  it("hashes only the declared card section in a multi-section cards file", () => {
+    const report = p5Check(p5Fixture({ chatFor: () => true, orderFor: () => true, cardsExtra: "\n## 工作包 99：其他\n\n无关字节。\n" }));
+    expect(report.convergence.gaps).not.toContain("1：聊天呈现未取得");
+  });
+  it("strips one parenthetical suffix and trailing punctuation from batches", () => {
+    const report = p5Check(p5Fixture({ batchFor: () => "batch-001（同批）。", chatFor: () => true, orderFor: () => true }));
+    expect(report.convergence.gaps).toContain("跨包合批：批次 batch-001 被包 1、2、3 共用");
+  });
+  it("treats 可推迟：无 as none but 可推迟：X as unconverged", () => {
+    const none = p5Check(p5Fixture({ chatFor: () => true, orderFor: () => true, deferValue: "无" }));
+    expect(none.convergence.gaps.some((gap) => gap === "未收敛：1")).toBe(false);
+    const some = p5Check(p5Fixture({ chatFor: () => true, orderFor: () => true, deferValue: "性能镜头，owner=后续" }));
+    expect(some.convergence.gaps).toContain("未收敛：1");
+  });
+  it("applies the strict package checks to a ten-column ledger too", () => {
+    const report = p5Check(p5Fixture({ format: 'ten', chatFor: () => false, orderFor: () => true }));
+    expect(report.convergence.gaps).toContain("1：聊天呈现未取得");
+  });
+  it("keeps a clean full package set free of other gaps", () => {
+    const report = p5Check(p5Fixture({ chatFor: () => true, orderFor: () => true }));
+    expect(report.convergence.gaps).toEqual([]);
   });
 });

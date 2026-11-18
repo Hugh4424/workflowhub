@@ -398,6 +398,91 @@ function discoverColdReadOriginal(taskPath, id) {
   if (matches.length !== 1) return null;
   return `quality/evidence/${String(matches[0])}`;
 }
+function packageBlock(body, id) {
+  const lines = String(body ?? '').split(/\r?\n/);
+  const start = lines.findIndex(line => {
+    const match = PACKAGE_SECTION.exec(line);
+    return match && String(Number(match[1])) === String(Number(id));
+  });
+  if (start < 0) return null;
+  let end = lines.length;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (/^##\s/.test(lines[index])) { end = index; break; }
+  }
+  return lines.slice(start, end).join('\n');
+}
+function tableCells(line) {
+  return String(line).split('|').slice(1, -1).map(cell => cell.trim());
+}
+function normalizeBatch(value) {
+  return String(value ?? '').replace(/`/g, '')
+    .replace(/[（(][^（）()]*[）)]/g, '')
+    .replace(/[。，,；;、\s]+$/g, '')
+    .trim();
+}
+function packageBatches(block) {
+  const out = new Set();
+  const lines = String(block ?? '').split(/\r?\n/);
+  for (const line of lines) {
+    const colon = /(?:讨论批次|批次号)\s*[:：]\s*([^|；;]+)/.exec(line);
+    if (colon) out.add(normalizeBatch(colon[1]));
+  }
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!/^\|/.test(lines[index]) || !/批次/.test(lines[index])) continue;
+    const header = tableCells(lines[index]);
+    const column = header.indexOf('批次');
+    if (column < 0) continue;
+    for (let row = index + 2; row < lines.length && /^\|/.test(lines[row]); row += 1) {
+      if (/^\|\s*-/.test(lines[row])) continue;
+      const value = tableCells(lines[row])[column];
+      if (value && !/^批次$/.test(value)) out.add(normalizeBatch(value));
+    }
+  }
+  return [...out].filter(Boolean);
+}
+function chatReceiptOk({ id, block, taskPath, batch }) {
+  const line = String(block ?? '').split(/\r?\n/).find(value => /聊天/.test(value) && /`[^`]+`/.test(value));
+  if (!line) return false;
+  const refs = [...line.matchAll(/`([^`]+)`/g)].map(match => match[1]);
+  const digests = [...line.matchAll(/sha256\s*`?([0-9a-f]{64})`?/gi)].map(match => match[1]);
+  const receiptRef = refs[0], cardRef = refs.find(value => /cards?-|cards\.md|convergence/.test(value));
+  if (!receiptRef || !digests.length) return false;
+  try {
+    const text = readTaskOriginal(taskPath, receiptRef.split('#')[0]);
+    if (createHash('sha256').update(text).digest('hex') !== digests[0]) return false;
+    if (!new RegExp(`工作包\\s*${Number(id)}`).test(text)) return false;
+    if (batch && !text.includes(batch)) return false;
+    if (!cardRef || digests.length < 2) return false;
+    const cardBytes = readTaskOriginal(taskPath, cardRef.split('#')[0]);
+    const anchor = cardRef.split('#')[1] ?? '';
+    const cardText = anchor ? (anchoredSection(cardBytes, anchor) ?? '') : cardBytes.trim();
+    if (!cardText) return false;
+    if (createHash('sha256').update(cardText).digest('hex') !== digests[1]) return false;
+    return true;
+  } catch { return false; }
+}
+function discussionBindingOk({ id, block, taskPath, batch }) {
+  const line = String(block ?? '').split(/\r?\n/).find(value => /就地讨论|讨论原件/.test(value) && /`[^`]+`/.test(value));
+  if (!line) return false;
+  const ref = /`([^`]+)`/.exec(line)?.[1];
+  if (!ref) return false;
+  try {
+    const text = readTaskOriginal(taskPath, ref.split('#')[0]);
+    if (!new RegExp(`工作包\\s*${Number(id)}`).test(text)) return false;
+    if (batch && !text.includes(batch)) return false;
+    const four = /工作包/.test(text) && /讨论前展示/.test(text)
+      && /复述/.test(text) && /(原话|用户)/.test(text) && /批次/.test(text);
+    return four;
+  } catch { return false; }
+}
+function p5StrictGaps({ id, block, taskPath, batch }) {
+  const gaps = [];
+  if (!/真实问答/.test(block ?? '')) gaps.push('缺真实问答指针');
+  if (!batch || !discussionBindingOk({ id, block, taskPath, batch })) gaps.push('冷读五问未绑定');
+  if (!chatReceiptOk({ id, block, taskPath, batch })) gaps.push('聊天呈现未取得');
+  if (!/(先设计|先给设计|设计先于|先展示后提问|设计后提问)/.test(block ?? '')) gaps.push('先设计后提问缺证');
+  return gaps;
+}
 function coldReadGaps({ id, body, taskPath, taskName }) {
   const gaps = [], errors = [];
   const lines = body.split(/\r?\n/);
@@ -775,6 +860,9 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
   }
   if (stage && !stages.includes(stage)) errors.push(`未知阶段：${stage}`);
   let modules = [];
+  let batchGaps = [];
+  let deferralGaps = [];
+  let strictUnconverged = [];
   let convergenceReadable = false;
   let convergenceFormat = null;
   // The current decision owns both the module set and its evidence pointer.
@@ -937,13 +1025,13 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
     modules = tableLines.map((line, index) => ({ line, number: index + 1 }))
       .filter(entry => /^\|\s*\d+\s/.test(entry.line)).map(({ line, number }) => {
         const cells = line.split('|').slice(1, -1).map(cell => cell.trim());
-        if (fiveColumn) return { name: cells[0], fields: [], state: cells[1] ?? '', source: convergenceRef, line: number };
+        if (fiveColumn) return { name: cells[0], fields: [], state: cells[1] ?? '', pending: cells[4] ?? '', source: convergenceRef, line: number };
         const fields = ['目标', '边界', '方案与取舍', '验收', '风险', '依赖', '消费者', '未决/无'];
         return { name: cells[0], fields: fields.map((name, index) => {
           const reference=cells[index+1]??'', present=cellPresent(reference,name,/^\d+/.exec(cells[0])?.[0]);
           if(!present)errors.push(`${cells[0]}/${name}: 未取得可回读的当前证据：${reference||'缺项'}`);
           return {name,reference,present};
-        }), state: cells[statusIndex] ?? '', analysis: cells.slice(statusIndex + 1), source: convergenceRef, line: number };
+        }), state: cells[statusIndex] ?? '', pending: cells[8] ?? '', analysis: cells.slice(statusIndex + 1), source: convergenceRef, line: number };
       });
     convergenceReadable = true;
     if (!modules.length) errors.push(`${convergenceRef}: 未读到模块行`);
@@ -955,6 +1043,11 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
     // five-column status table. These gaps stay in complete/gaps only: the public
     // exit code reflects the 状态 column, as make-decision states.
     const fullTen = headerCells.includes('目标与成功意图');
+    const modsForStrict = modules;
+    const packageBatchMap = new Map(modules.map(row => {
+      const id = /^\d+/.exec(row.name)?.[0];
+      return [id, id ? packageBatches(packageBlock(body, id)) : []];
+    }));
     if (fiveColumn || fullTen) for (const row of modules) {
       if (row.state !== '已收敛') continue;
       const id = /^\d+/.exec(row.name)?.[0];
@@ -967,6 +1060,17 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
         const cold = coldReadGaps({ id, body, taskPath, taskName: row.name });
         gaps.push(...cold.gaps);
         errors.push(...cold.errors);
+        // P5/ORACLE-MD-005: every包 in a full ledger (>=3 packages) must bind a
+        // readable chat receipt, the discussion batch and design order; missing
+        // the 真实问答 pointer itself is a gap. Two-package controlled fixtures
+        // stay governed by their own frozen oracles.
+        const block = packageBlock(body, id);
+        if (block && Array.isArray(modsForStrict) && modsForStrict.length >= 3) {
+          const batch = (packageBatchMap.get(id) ?? [])[0] ?? null;
+          gaps.push(...p5StrictGaps({ id, block, taskPath, batch }));
+          // 讨论原件四要素/批次对不上：不是证据缺口，而是未收敛点名。
+          if (!batch || !discussionBindingOk({ id, block, taskPath, batch })) strictUnconverged.push('未收敛：' + row.name);
+        }
       } else {
         gaps.push('缺冷读记录');
         errors.push(`${row.name}/冷读: 已收敛行缺包编号，无法回读冷读`);
@@ -974,6 +1078,29 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
       if (gaps.length) row.evidenceGaps = [...new Set(gaps)];
     }
     convergenceFormat = fiveColumn ? 'five-column-status' : statusColumn ? 'status-column-evidence' : 'eight-field-evidence';
+    // 跨包不合批：同一讨论批次被多个包共用就是病根，直接点名，不靠目录非空。
+    const batchUse = new Map();
+    for (const row of modules) {
+      const id = /^\d+/.exec(row.name)?.[0];
+      if (!id) continue;
+      for (const batch of packageBatchMap.get(id) ?? []) {
+        const list = batchUse.get(batch) ?? [];
+        list.push(row.name);
+        batchUse.set(batch, list);
+      }
+    }
+    batchGaps = [...batchUse.entries()].filter(([, names]) => new Set(names).size > 1)
+      .map(([batch, names]) => `跨包合批：批次 ${batch} 被包 ${[...new Set(names)].join('、')} 共用`);
+    // 已收敛但带可推迟项的包：可推迟不是通过。
+    const deferralRows = modules.filter(row => {
+      const id = /^\d+/.exec(row.name)?.[0];
+      if (!id || row.state !== '已收敛') return false;
+      const visible = (packageBlock(body, id) ?? '').split(/\r?\n/)
+        .filter(line => !/无\s*[（(][^）)]*可推迟/.test(line))
+        .filter(line => !/可推迟\s*[:：]\s*无/.test(line)).join('\n');
+      return /可推迟/.test(visible);
+    }).map(row => '未收敛：' + row.name);
+    deferralGaps = deferralRows;
   } catch (error) { errors.push(`${convergenceRef ?? '收敛清单'}: ${error.message}`); }
   const level = levelDisplay;
   const ids = modules.map(row => /^\d+/.exec(row.name)?.[0]);
@@ -989,13 +1116,19 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
   const stateGaps = modules
     .filter(row => row.state !== '已收敛' && (statusBearing || (row.state ?? '') !== ''))
     .map(row => '未收敛：' + (row.name || `第 ${row.line} 行`));
+  // 「无（…）」不是无：括号里交代了未测/交接但仍写「无」，按未收敛点名。
+  const parenthesizedPendingGaps = modules
+    .filter(row => /^无\s*[（(]/.test(String(row.pending ?? '')))
+    .filter(row => !/^无\s*[（(]\s*(?:理由|原因|可推迟|不适用|本包无未决|已核)/.test(String(row.pending ?? '')))
+    .map(row => '未收敛：' + (row.name || `第 ${row.line} 行`));
   // Evidence gaps are reported and make complete=false, but never change the exit
   // code: make-decision defines exit 1 as the 状态 column only.
   const evidenceGaps = modules.flatMap(row => (row.evidenceGaps ?? []).map(gap => `${row.name || `第 ${row.line} 行`}：${gap}`));
   const fieldGaps = statusColumnFormat ? [] : modules.filter(row => row.fields.some(field => !field.present)).map(row => row.name);
+  const strictGaps = [...new Set([...deferralGaps, ...strictUnconverged])];
   const gaps = statusColumnFormat
-    ? (modules.length ? [...stateGaps, ...evidenceGaps] : ['收敛清单无可读模块行'])
-    : [...stateGaps, ...evidenceGaps, ...fieldGaps];
+    ? (modules.length ? [...stateGaps, ...parenthesizedPendingGaps, ...strictGaps, ...evidenceGaps, ...batchGaps] : ['收敛清单无可读模块行'])
+    : [...stateGaps, ...parenthesizedPendingGaps, ...strictGaps, ...evidenceGaps, ...fieldGaps, ...batchGaps];
   gaps.push(...missing.map(id => `缺模块 WP${id}`), ...duplicate.map(id => `重复模块 WP${id}`), ...unknown.map(id => `未知模块 WP${id}`), ...mappingGaps);
   if (!expected.length || new Set(expected).size !== expected.length) { gaps.push('权威模块集合未取得或重复'); errors.push('decision-log.md: 权威模块集合未取得或重复'); }
   if (!safeRef) gaps.push('收敛清单指针未取得');
@@ -1195,7 +1328,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       }
     }
     console.log(`收敛 complete=${report.convergence.complete}；gaps=${JSON.stringify(report.convergence.gaps)}`);
-    console.log('退出码只反映状态列的未收敛包；十列字段缺口只进上面的 complete/gaps，不改变退出码。');
+    console.log('退出码反映状态列未收敛包与「未收敛：」点名（含括号未决/可推迟）；十列字段缺口与其它 gaps 只进上面的 complete/gaps，不改变退出码。');
     console.log(`级别：${report.level}`);
     for (const error of report.errors) console.log(`缺口：${error}`);
     console.log(report.limits.join('\n'));
