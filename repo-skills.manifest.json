@@ -4,7 +4,7 @@
   "source": "skills/catalog.yaml",
   "derived_from": {
     "catalog": "skills/catalog.yaml",
-    "catalog_sha256": "befbb3afc564dc03ba61c46d11abb41e03f2537d0922949231008b9360c3c6cf",
+    "catalog_sha256": "14e1bc114ab383734f9be8bf509adf247fbf93b39041d0f5518baccf8da7f65e",
     "reuse_registry": "skills/reuse-registry.md",
     "reuse_registry_sha256": "8adc897c20b1a8fc4b5ab359f24af73977b52f8dd6367f58eb88095100781b98"
   },
@@ -176,6 +176,23 @@
         "skills/spec-specify"
       ],
       "local_changes": "workflowhub 原生实现；当前交互真相仅为 decision-log.md 直接字段，make-decision 的完成与审查消费者不读取 interaction aggregate；历史 aggregate 只读保留，不新增独立 runtime；来源为本仓decision-log模板、make-decision与grill-with-docs领域方法；外源完整登记沿后者catalog条目，不重复登记为本技能外源。",
+      "upstream": []
+    },
+    {
+      "name": "decision-maker",
+      "path": "skills/decision-maker/SKILL.md",
+      "local_version": "0.1.0",
+      "status": "native",
+      "used_by_stages": [
+        "make-decision"
+      ],
+      "dependency_closure": [
+        "skills/decision-log",
+        "skills/material-writing",
+        "skills/talk-with-zhipeng",
+        "skills/wh-review"
+      ],
+      "local_changes": "workflowhub 原生；每包最多 3 个子代理；主会话唯一 writer；配套与影响含配套调整/迁移/移除/影响范围；脚本只做机械检查，不代替冷读/对抗/用户判断。",
       "upstream": []
     },
     {

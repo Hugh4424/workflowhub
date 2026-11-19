@@ -2,7 +2,7 @@
 import { STAGE, WORKFLOW_STAGES } from "../../runtime/stage/stage-registry.mjs";
 
 import { closeSync, fstatSync, openSync, constants as fsConstants, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
@@ -1053,6 +1053,66 @@ async function recordBuildCodeCommandEvidence(context, receipt) {
   });
 }
 
+function readinessProbeRows(text) {
+  const lines = String(text ?? "").split("\n");
+  const start = lines.findIndex((line) => line.includes("开工就绪表"));
+  if (start < 0) return [];
+  let header = -1;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (/^\s*\|/.test(lines[index])) { header = index; break; }
+    if (/^\s*##/.test(lines[index])) break;
+  }
+  if (header < 0) return [];
+  const cells = (line) => line.split("|").slice(1, -1).map((cell) => cell.trim());
+  const rows = [];
+  for (let index = header + 2; index < lines.length; index += 1) {
+    if (!/^\s*\|/.test(lines[index])) break;
+    const row = cells(lines[index]);
+    if (row.length < 5) continue;
+    rows.push({
+      command: row[0].replace(/`/g, "").trim(),
+      expected: row[1].replace(/`/g, "").trim(),
+      evidence: row[2],
+      mode: row[3],
+      owner: row[4],
+    });
+  }
+  return rows;
+}
+
+function assertBuildCodeReadiness(context, materials, phaseId) {
+  const spec = materials["spec.md"];
+  const index = materials["phases/index.md"];
+  const phases = Object.fromEntries(Object.entries(materials).filter(([file]) =>
+    file.startsWith("phases/") && file !== "phases/index.md"));
+  const parsed = validatePostPhaseContract({ spec, index, phases });
+  if (!parsed.ok) throw new Error(`ORACLE-PHASE-READINESS: ${parsed.errors.join("; ")}`);
+  const phaseFile = Object.keys(phases).find((file) => file === `phases/${phaseId}.md` || file.startsWith(`phases/${phaseId}-`));
+  if (!phaseFile) throw new Error(`ORACLE-PHASE-READINESS: phase ${phaseId} is not in current materials`);
+  const rows = readinessProbeRows(phases[phaseFile]);
+  if (!rows.length) throw new Error(`ORACLE-PHASE-READINESS: ${phaseFile} readiness table has no probe rows`);
+  for (const row of rows) {
+    if (!row.command) throw new Error(`ORACLE-PHASE-READINESS: ${phaseFile} has an empty readiness probe`);
+    if (!row.evidence || !row.owner) throw new Error(`ORACLE-PHASE-READINESS: ${phaseFile} readiness row lacks evidence or owner`);
+    const mode = row.mode.toLowerCase();
+    if (mode.includes("人") || mode.includes("human") || mode.includes("manual")) continue;
+    if (!mode.includes("机器") && !mode.includes("machine")) {
+      throw new Error(`ORACLE-PHASE-READINESS: ${phaseFile} readiness row has unknown judgement mode ${JSON.stringify(row.mode)}`);
+    }
+    const expected = Number(row.expected);
+    if (!Number.isInteger(expected)) throw new Error(`ORACLE-PHASE-READINESS: ${phaseFile} readiness row expects a non-integer exit ${JSON.stringify(row.expected)}`);
+    const result = spawnSync(row.command, {
+      shell: true,
+      cwd: context.workspace.worktreeRoot,
+      encoding: "utf8",
+      timeout: 30_000,
+    });
+    if (result.status !== expected) {
+      throw new Error(`ORACLE-PHASE-READINESS: probe failed in ${phaseFile}: command=${JSON.stringify(row.command)} expected=${expected} actual=${result.status ?? result.signal ?? "no-exit"} stderr=${String(result.stderr ?? "").trim().slice(0, 300)}`);
+    }
+  }
+}
+
 async function writeBuildCodePhaseProgressCursor(context, inputCursor) {
   return withLock(context.task.taskPath, "workflowhub-build-code-row", async () => {
     if (!inputCursor || typeof inputCursor !== "object" || Array.isArray(inputCursor)
@@ -1068,6 +1128,7 @@ async function writeBuildCodePhaseProgressCursor(context, inputCursor) {
     if (!phaseProgressTargetExists(inputCursor, materials)) {
       throw new TypeError(`phase_progress target ${inputCursor.phase_id}/${inputCursor.task_id} is not in the current indexed Phase files`);
     }
+    assertBuildCodeReadiness(context, materials, inputCursor.phase_id);
     const currentRow = readTaskFacts(context.task.taskPath).find((row) =>
       row?.record_kind === "stage" && row.stage === "build-code") ?? null;
     const cursor = currentRow?.phase_progress;

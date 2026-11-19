@@ -97,6 +97,56 @@ describe('ORACLE-C07-REVIEW materials', () => {
     expect(result).toContain('**理由**：避免丢失用户输入。');
   });
 
+  it('reads the numbered new-template log: bold requirement records, reply index and per-package design', () => {
+    const source = `# 决策日志
+### 1.3 原始需求（翻译后）
+
+**需求 1**
+- 原话：“把设计写清楚”。
+- 要什么：每包十项，含配套与影响。
+- 怎么算完成：build-plan 不重读聊天也能写 spec。
+
+**需求 2**
+- 原话：“别丢过程”。
+- 要什么：写最初方案与被否。
+
+### 1.4 范围和不做什么
+
+不做业务实现。
+
+### 2.6 原话与答复索引
+
+| 编号 | 答复摘要 | 原件/状态 |
+| --- | --- | --- |
+| U-001 | 走复杂路线 | talk/001 |
+| U-004..U-007 | 结构四问 | talk/004..007 |
+
+## 4. 每包设计
+
+### 4.1 技能安装
+
+**配套与影响**：配套调整、配套迁移、配套移除、影响范围。
+
+## 5. 跨包共享
+
+### 5.2 决定索引
+
+| 决定 | 内容 | 落点 |
+| --- | --- | --- |
+| D-001 | 12 包合并为 9 包 | 包 3/10 |
+`;
+    const baseline = buildDecisionBaseline({ decisionLog: source, decisionRef: 'specs/new/decision-log.md' });
+    expect(baseline).toContain('需求 1：');
+    expect(baseline).toContain('把设计写清楚');
+    expect(baseline).toContain('需求 2：');
+    expect(baseline).toContain('U-001');
+    expect(baseline).toContain('U-004..U-007');
+    expect(baseline).toContain('D-001');
+    expect(baseline).toContain('## 每包设计');
+    expect(baseline).toContain('配套与影响');
+    expect(baseline).toContain('specs/new/decision-log.md#L');
+  });
+
 
   it('accepts exact authoring question heading and explicit current U absence with pointer', () => {
     const source = decisionLog.replace('原来要求做成什么？', '原始需求：要解决什么？').replace(/## 用户后来改了什么？[\s\S]*?(?=## 工作包)/, '### 后来改了什么，原件在哪里？\n\n目前没有需求变更（U）。变更记录的唯一原件位置按「外置事实索引」放 \x60requirement-change-log.md\x60，当前尚无内容。\n');
@@ -246,6 +296,47 @@ U-014 最小决定：此前把取消等同删除的建议作废，保留关闭�
     await runSimpleReview({ stage: 'build-plan', activation_cohort: 'post', materials: m }, dependencies);
     expect(calls).toHaveLength(2);
     for (const files of calls) expect(Object.entries(files).find(([path]) => path.includes('decision_baseline'))?.[1]).toBe(result.stdout);
+  });
+
+  it('v2 log evidence through actual consumers (ORACLE-LOG-V2-TERMINAL): the current requirement blocks and their source lines reach the portable baseline CLI and both review packets', async () => {
+    const logPath = 'specs/execution-quality-build-code-hardening-20261119/decision-log.md';
+    const lines = readFileSync(logPath, 'utf8').split('\n');
+    const records = [];
+    lines.forEach((line, index) => {
+      const marker = /^\*\*需求\s+(\d+)\s*(?:[：:](.+?))?\*\*$/.exec(line.trim());
+      if (!marker) return;
+      let body = index + 1;
+      while (body < lines.length && !lines[body].trim()) body += 1;
+      records.push({ id: marker[1], title: (marker[2] ?? '').trim(), line: index + 1, body: (lines[body] ?? '').trim() });
+    });
+    expect(records.map(record => record.id), 'ORACLE-LOG-V2-TERMINAL: the frozen v2 log declares requirements 1-14').toEqual(Array.from({ length: 14 }, (_value, index) => String(index + 1)));
+    const legacy = buildDecisionBaseline({ decisionLog });
+    expect(legacy).toContain('需求 1：取消后保留草稿');
+    expect(legacy).toContain('需求 2：删除草稿须明确确认');
+    expect(legacy).toContain('决定 1 — 保留草稿直到确认删除');
+    const result = spawnSync(process.execPath, [join(process.cwd(), 'skills/spec-plan/scripts/build-decision-baseline.mjs'), '--decision-log', logPath], { cwd: process.cwd(), encoding: 'utf8' });
+    expect(result.status, result.stderr).toBe(0);
+    const requirements = result.stdout.slice(result.stdout.indexOf('## 原始需求'), result.stdout.indexOf('## 用户答复'));
+    expect(requirements, 'ORACLE-LOG-V2-TERMINAL: every requirement record must reach the actual baseline, not only 1-3').toContain(`## 原始需求（${records.length} 条）`);
+    for (const record of records) {
+      const label = `ORACLE-LOG-V2-TERMINAL: requirement ${record.id} from ${logPath}:${record.line}`;
+      expect(requirements, label).toContain(`需求 ${record.id}：`);
+      if (record.title) expect(requirements, label).toContain(record.title);
+      expect(requirements, label).toContain(record.body);
+      expect(requirements, label).toContain(`#L${record.line}`);
+    }
+    expect(result.stdout).toContain('## 每包设计');
+    for (const item of ['原始需求', '最初方案', '发散与被否', '调研', '最终决定', '完整方案', '验收', '风险/回退', '未决/消费者/证据', '配套与影响']) expect(result.stdout).toContain(item);
+    const m = materials(), { calls, dependencies } = transport(root());
+    m.decision_baseline = result.stdout;
+    await runSimpleReview({ stage: 'build-plan', activation_cohort: 'post', materials: m }, dependencies);
+    expect(calls).toHaveLength(2);
+    for (const files of calls) {
+      const delivered = Object.entries(files).find(([path]) => path.includes('decision_baseline'))?.[1];
+      expect(delivered).toBe(result.stdout);
+      expect(delivered, 'ORACLE-LOG-V2-TERMINAL: both review packets must carry the v2 requirement set and per-package design').toContain(`## 原始需求（${records.length} 条）`);
+      expect(delivered).toContain('## 每包设计');
+    }
   });
 
   it('accepts compact nonempty post materials without a minimum byte quota', async () => {

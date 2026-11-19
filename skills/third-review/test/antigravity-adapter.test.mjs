@@ -31,6 +31,17 @@ test("Antigravity uses the supported noninteractive plan-mode contract", async (
   } finally { packet.clean(); }
 });
 
+test("Antigravity attaches the first hook denial to a failed terminal result", () => {
+  const packet = n3AgPacket();
+  try {
+    const execution = antigravity.start(provider({ command: "/Users/Hugh/.local/bin/agy" }), packet.cwd, "review");
+    execution.observeLine("stdout", JSON.stringify({ event: "step_update", step_update: { tool_info: { error: { message: "tool call denied by pre-tool hook" } } } }));
+    const terminal = execution.observeLine("stdout", JSON.stringify({ event: "result", result: { status: "ERROR", response: "" } })).terminal;
+    assert.equal(terminal.error.code, "PROVIDER_HEALTH_FAILED");
+    assert.equal(terminal.error.diagnostic, "tool call denied by pre-tool hook");
+  } finally { packet.clean(); }
+});
+
 test("Antigravity rejects unsupported generic effort but preserves large prompts", () => {
   const packet = n3AgPacket();
   try {

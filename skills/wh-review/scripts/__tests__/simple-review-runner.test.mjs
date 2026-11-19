@@ -1067,6 +1067,12 @@ describe("simple material-only review", () => {
     expect(parsed.findings[0]).toHaveProperty("evidence_kind");
   });
 
+  it("RESULT_PROMPT detects bundle/ before reading the packet root", async () => {
+    const source = readFileSync(new URL("../simple-review-runner.mjs", import.meta.url), "utf8");
+    expect(source).toContain("Read bundle/review-instructions.md and bundle/manifest.json first");
+    expect(source).toContain("read review-instructions.md and manifest.json at the packet root");
+  });
+
   it("returns a recordable unavailable result when route loading fails", async () => {
     const result = await runSimpleReview({
       stage: "verify-code",

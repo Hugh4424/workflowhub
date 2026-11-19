@@ -1499,3 +1499,61 @@ describe('P7 terminal current-proof regression', () => {
     } finally { rmSync(f.root, { recursive: true, force: true }); }
   });
 });
+
+// ORACLE-P1-CURRENT-SKILL-LOAD, frozen before implementation: a step that only has an
+// earlier producer completion, or only an earlier call's skill read receipt, must not be
+// projected as completed for the current step. The real CLI is driven on the existing
+// controlled temporary task; nothing about the checker is mocked. A failure outside the
+// named assertions is reported as 装置失败 so it cannot be read as the target RED.
+describe('ORACLE-P1-CURRENT-SKILL-LOAD current step needs its own skill read receipt', () => {
+  const device = (condition, message) => { if (!condition) throw Error(`装置失败：${message}`); };
+  it('does not complete the current step from a missing or stale skill load', () => {
+    const f = p1CurrentCardFixture({ singleStep: true });
+    try {
+      const source = 'workflows/make-decision/steps.json';
+      const skill = 'workflows/make-decision/SKILL.md';
+      const ref = 'quality/evidence/2026-11-20-099-current-observation.json';
+      const body = '# Controlled\n## 方法\nOwned observation.\n';
+      f.put(f.repo, skill, body);
+      f.put(f.materials, 'decision-log.md', '# Controlled\n## 级别与路线\n- 推荐级别：复杂\n');
+      f.put(f.materials, 'step-consumer-design.md', `| [controlled](../../${source}#L1) \`current-step\` | observation | human | owner |`);
+      f.put(f.task, ref, { task_id: 'card-case', source, step_slug: 'current-step', phase: 'P1',
+        reader: 'controlled independent reader', inputs: ['owned observation'], observation: 'Read current owned result.',
+        criteria_ref: 'workflows/make-decision/SKILL.md#方法', conclusion: 'completed', limits: [],
+        created_at: '2026-02-01T00:00:00.000Z' });
+      f.put(f.task, 'facts.jsonl', [f.cursor, { record_kind: 'stage', task_id: 'card-case', stage: 'make-decision',
+        source: 'controlled', evidence: { value: [{ ref, source, step_slug: 'current-step' }] } }]
+        .map(row => JSON.stringify(row)).join('\n') + '\n');
+      // Precondition: the existing producer really reports this step completed from the
+      // earlier original. If not, the fixture (not the oracle) is the failure.
+      const producer = runFinalChainCheck({ taskPath: f.task, materialRoot: f.materials, workflowRoot: f.repo });
+      const produced = producer.workflow_steps.find(row => row.source === source && row.step_slug === 'current-step');
+      device(produced?.state === 'completed', `受控任务没有被既有 producer 判为完成：${JSON.stringify(producer.limits)}`);
+
+      // An earlier call's skill read receipt: real event fields, but a past capture time.
+      const oldRef = 'quality/tests/2026-11-20-old-skill-load-receipt.json';
+      f.put(f.task, oldRef, {
+        argv: [process.execPath, entry, `--read-step-skill=${skill}`, '--stage=make-decision', '--step=1',
+          `--task-path=${f.task}`, `--material-root=${f.materials}`, '--commit=0000000000000000000000000000000000000000'],
+        cwd: f.materials, at: '2026-11-01T00:00:00.000Z', exit_code: 0,
+        output: JSON.stringify({ stage: 'make-decision', step: 1, skill_path: skill,
+          sha256: createHash('sha256').update(Buffer.from(body)).digest('hex'), bytes: Buffer.byteLength(body),
+          at: '2026-11-01T00:00:00.000Z' }) + '\n',
+      });
+
+      const missing = f.invoke(['--stage=make-decision', '--step=1', '--phase=P1']);
+      device(missing.status === 0, `检查模式真实退出 ${missing.status}：${missing.stderr}`);
+      const missingStep = missing.report.stages[0].steps[0];
+      device(missingStep !== undefined, '检查报告没有投影受控任务的第 1 步');
+      expect.soft(missingStep.state, 'ORACLE-P1-CURRENT-SKILL-LOAD 目标断言：缺当次技能读取回执时，当前步骤不得报为完成').not.toBe('completed');
+      expect.soft(missingStep.judgment, 'ORACLE-P1-CURRENT-SKILL-LOAD 目标断言：缺当次技能读取回执时，判定不得为已完成').not.toBe('已完成');
+
+      const stale = f.invoke(['--stage=make-decision', '--step=1', '--phase=P1', `--current-read-receipt=${oldRef}`]);
+      device(stale.status === 0, `检查模式真实退出 ${stale.status}：${stale.stderr}`);
+      const staleStep = stale.report.stages[0].steps[0];
+      device(staleStep !== undefined, '检查报告没有投影受控任务的第 1 步');
+      expect.soft(staleStep.state, 'ORACLE-P1-CURRENT-SKILL-LOAD 目标断言：上一轮技能读取回执不得让当前步骤完成').not.toBe('completed');
+      expect.soft(staleStep.judgment, 'ORACLE-P1-CURRENT-SKILL-LOAD 目标断言：陈旧加载下判定不得为已完成').not.toBe('已完成');
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
+  });
+});

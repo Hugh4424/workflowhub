@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill": "decision-maker",
+  "files": [
+    "SKILL.md",
+    "templates/package-context.md",
+    "templates/card.md",
+    "templates/cold-read.md",
+    "templates/adversarial.md",
+    "scripts/validate-card.mjs",
+    "scripts/dispatch.mjs",
+    "scripts/status.mjs"
+  ]
+}

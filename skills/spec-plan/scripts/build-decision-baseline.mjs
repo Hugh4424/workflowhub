@@ -17,11 +17,17 @@ function sourceLines(text) {
 // The current decision-log template asks the reader question
 // 「后来改了什么，原件在哪里？」; archived logs use the shorter legacy titles.
 // Keep the same semantic boundary: only these reply-section questions match.
+// New logs use numbered section titles such as 「1.3 原始需求（翻译后）」 and
+// 「2.6 原话与答复索引」; the leading section number is navigation, not meaning.
+function headingTitle(title) {
+  return String(title ?? '').trim().replace(/^\d+(?:\.\d+)*[.、]?\s*/, '');
+}
 function requirementHeading(title) {
-  return /^(?:原始需求|原来要求做成什么)[？?]?$/.test(title) || title === '原始需求：要解决什么？';
+  const text = headingTitle(title);
+  return /^(?:原始需求|原来要求做成什么)(?:[（(]翻译后[）)])?[？?]?$/.test(text) || text === '原始需求：要解决什么？';
 }
 function replyHeading(title) {
-  return /^(?:需求变更记录|用户后来改了什么|后来改了什么(?:[，,]\s*原件在哪里)?)[？?]?$/.test(String(title ?? '').trim());
+  return /^(?:需求变更记录|用户后来改了什么|后来改了什么(?:[，,]\s*原件在哪里)?|原话与答复索引)[？?]?$/.test(headingTitle(title));
 }
 function tableCells(line) {
   const cells = []; let start = 0, escaped = false;
@@ -42,10 +48,21 @@ function rows(text, kind) {
     found.set(id, { id, text: body, context, line: index + 1, raw, displayId });
     excluded.add(index);
   };
+  // Newer logs write each requirement as a bold block (「**需求 1**」 followed by
+  // indented bullets) instead of a table row; both shapes carry the same record.
+  let block = null;
+  const flushBlock = () => {
+    if (!block) return;
+    const current = block;
+    block = null;
+    add(current.id, current.lines.join('\n'), '', current.index);
+    for (const lineIndex of current.marks) excluded.add(lineIndex);
+  };
   for (const { text: line, index, visible } of sourceLines(text)) {
-    if (!visible) { table = null; continue; }
+    if (!visible) { table = null; flushBlock(); continue; }
     const heading = /^(#{1,6})\s+(.+)$/.exec(line);
     if (heading) {
+      flushBlock();
       table = null;
       const requirements = requirementHeading(heading[2]);
       const replies = replyHeading(heading[2]);
@@ -56,24 +73,36 @@ function rows(text, kind) {
     if (!sectionDepth) continue;
     if (!line.trim().startsWith('|')) {
       table = null;
+      const marker = kind === '需求' && /^\*\*需求\s+(\d+)\*\*$/.exec(line.trim());
+      if (marker) {
+        flushBlock();
+        block = { id: marker[1], lines: [], index, marks: [index] };
+        continue;
+      }
+      if (block) {
+        if (line.trim()) { block.lines.push(line.trim()); block.marks.push(index); } else flushBlock();
+        continue;
+      }
       const paragraph = kind === '答复' && /^(?:written(?:[。.:：]\s*|\s+))?(U-(?:[A-Z0-9]+-)*\d+)\s+(.+)$/.exec(line.trim());
       if (paragraph) add(paragraph[1], paragraph[2], '', index, line.trim());
       continue;
     }
+    flushBlock();
     const cells = tableCells(line);
     const column = kind === '需求' ? /需求|约束|要求|内容|原义/ : /答复|最小决定|用户要什么|原义/;
-    const idColumn = ['source_id', ...(kind === '需求' ? ['source_id 范围'] : []), '来源编号', kind, ...(kind === '答复' ? ['U'] : []), '来源'].map(label => cells.indexOf(label)).find(i => i >= 0) ?? -1;
+    const idColumn = ['source_id', ...(kind === '需求' ? ['source_id 范围'] : []), '来源编号', '编号', kind, ...(kind === '答复' ? ['U'] : []), '来源'].map(label => cells.indexOf(label)).find(i => i >= 0) ?? -1;
     const textColumn = cells.findIndex((cell, i) => i !== idColumn && column.test(cell));
     if (idColumn >= 0 && textColumn >= 0) { table = { idColumn, textColumn }; excluded.add(index); continue; }
     if (!table) continue;
     if (cells.every(cell => /^:?-+:?$/.test(cell))) { excluded.add(index); continue; }
     const idText = cells[table.idColumn] ?? '';
     const legacy = new RegExp(`^${kind}\\s+(\\d+)$`).exec(idText);
-    const sourceIds = idText.split(/[／/～~、]/);
+    const sourceIds = idText.split(/[／/～~、]|\.\./);
     const source = sourceIds.length && sourceIds.every(id => new RegExp(`^${prefix}-(?:[A-Z0-9]+-)*\\d+$`).test(id.trim()));
     if (!legacy && !source) throw new Error(`BASELINE_SOURCE_INVALID: invalid ${kind} source ${idText}`);
     add(legacy ? Number(legacy[1]) : idText, cells[table.textColumn], cells.filter((_cell, i) => i !== table.idColumn && i !== table.textColumn).join('；'), index, null, legacy ? legacy[1] : idText);
   }
+  flushBlock();
   const result = [...found.values()];
   const currentAbsence = /^(?:(?:已|经)(?:核对|核查|确认)[^。；;\n]*[。；;]\s*)?(?:本任务|本次(?:任务)?|当前(?:任务)?)(?:无|没有)(?:后续|新增|进一步)?(?:用户)?(?:答复|需求变更|变更)(?:或(?:需求)?变更)?[。.]?$/;
   const noReplies = kind === '答复' && !result.length && sourceContext(sourceLines(text).map(line => line.visible ? line.text : '').join('\n'), new Set(), 'decision-log.md', '答复').some(value => (currentAbsence.test(value.trim()) || /^目前没有需求变更（U）。(?:变更记录的唯一原件位置按「外置事实索引」放 `requirement-change-log\.md`，当前尚无内容。)?$/.test(value.trim())));
@@ -142,6 +171,27 @@ export function buildDecisionBaseline({ decisionLog, spec = '', decisionRef = 'd
   lines.push('## 已记录决定', '');
   const source = sourceLines(decisionLog), ids = new Set();
   let decisionCount = 0;
+  // Newer logs index decisions in a table under 「决定索引」 instead of one
+  // heading per decision; a row is the same record, not a second authority.
+  const decisionId = /^(?:决定\s+\d+|(?:ADR|D|N|M)-?\d[A-Za-z0-9-]*)$/;
+  let inIndex = false;
+  for (let index = 0; index < source.length; index++) {
+    const line = source[index];
+    if (!line.visible) { inIndex = false; continue; }
+    const heading = /^(#{1,6})\s+(.+)$/.exec(line.text);
+    if (heading) { inIndex = /^(?:决定索引|决定记录)$/.test(headingTitle(heading[2])); continue; }
+    if (!inIndex || !line.text.trim().startsWith('|')) continue;
+    const cells = tableCells(line.text);
+    if (cells.every(cell => /^:?-+:?$/.test(cell))) continue;
+    if (!decisionId.test(cells[0] ?? '')) continue;
+    const id = cells[0];
+    if (ids.has(id)) throw new Error(`BASELINE_SOURCE_INVALID: duplicate decision ${id}`);
+    ids.add(id);
+    const body = cells.slice(1).filter(Boolean).join('；');
+    if (!body) throw new Error(`BASELINE_SOURCE_INVALID: empty decision ${id}`);
+    lines.push(`- ${id} — ${body}`, `来源：${decisionRef}#L${index + 1}`, '');
+    decisionCount++;
+  }
   for (let index = 0; index < source.length; index++) {
     if (!source[index].visible) continue;
     const heading = /^(#{3,6})\s+((?:决定\s+\d+|(?:ADR|D|N|M)-?\d[A-Za-z0-9-]*)\s*[—–-].+)$/.exec(source[index].text);
@@ -163,6 +213,26 @@ export function buildDecisionBaseline({ decisionLog, spec = '', decisionRef = 'd
     index = end - 1;
   }
   if (!decisionCount) throw new Error('BASELINE_SOURCE_INVALID: no decision bodies found');
+  // build-plan consumes the per-package design, so the baseline carries it as a
+  // verbatim excerpt instead of a summary; the item list is the template's own
+  // definition of a package record, not a new gate.
+  const designHeading = /^(?:每包设计)$/;
+  let designed = 0;
+  for (let index = 0; index < source.length; index++) {
+    if (!source[index].visible) continue;
+    const heading = /^(#{1,6})\s+(.+)$/.exec(source[index].text);
+    if (!heading || !designHeading.test(headingTitle(heading[2]))) continue;
+    let end = index + 1;
+    while (end < source.length) {
+      const match = source[end].visible && /^(#{1,6})\s+/.exec(source[end].text);
+      if (match && match[1].length <= heading[1].length) break;
+      end++;
+    }
+    if (!designed) lines.push('## 每包设计（模板十项：原始需求、最初方案、发散与被否、调研、最终决定、完整方案、验收、风险/回退、未决/消费者/证据、配套与影响）', '');
+    lines.push(source.slice(index + 1, end).map(line => line.text).join('\n').trimEnd(), `来源：${decisionRef}#L${index + 1}-L${end}`, '');
+    designed++;
+    index = end - 1;
+  }
   const result = lines.join('\n') + '\n';
   return result;
 }

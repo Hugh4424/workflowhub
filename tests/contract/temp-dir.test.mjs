@@ -1,8 +1,9 @@
 import { afterEach, expect, it } from "vitest";
-import { spawn, execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { spawn, execFileSync, spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const roots = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
@@ -92,4 +93,48 @@ it("defers tracked cleanup until an application-owned signal drain exits", async
   } finally {
     if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
   }
+});
+
+const p4PrepareScript = new URL("../fixtures/execution-quality/prepare-test-data.mjs", import.meta.url);
+const runP4Prepare = (args, { cwd, env }) => spawnSync(process.execPath, [fileURLToPath(p4PrepareScript), ...args], { cwd, env, encoding: "utf8" });
+
+it("ORACLE-P4-ISOLATED-TEST-DATA: 缺显式隔离根、实际配置缺失与过期样本都必须具名失败而非回退读出准备结果", () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-p4-isolated-"))); roots.push(root);
+  const dataRoot = join(root, "data-root"), fallbackCwd = join(root, "fallback-cwd");
+  const env = { PATH: process.env.PATH ?? "", HOME: join(root, "home"), TMPDIR: join(root, "tmp") };
+  for (const path of [dataRoot, fallbackCwd, env.HOME, env.TMPDIR]) mkdirSync(path);
+  // 受控假准备结果：只放在 cwd 与默认临时根旁，绝不接真库或真实产品库。
+  const preparedToken = "P4-PREPARED-RESULT-ORACLE";
+  writeFileSync(join(fallbackCwd, "prepared-test-data.json"), JSON.stringify({ oracle: preparedToken }));
+
+  // 装置前置：目标断言只对 P4 受控夹具入口成立。夹具未实现时如实记装置失败，
+  // 不把缺失入口当成目标 RED（P4「RED 目标失败」段）。
+  if (!existsSync(fileURLToPath(p4PrepareScript))) {
+    throw new Error("装置失败：tests/fixtures/execution-quality/prepare-test-data.mjs 未实现，未到目标断言，不判为目标 RED/GREEN。");
+  }
+
+  const textOf = (result) => `${result.stdout}${result.stderr}`;
+  const expectNamedFailure = (result, label) => {
+    expect(result.status, `ORACLE-P4-ISOLATED-TEST-DATA: ${label} 必须非零退出`).toBeGreaterThan(0);
+    const text = textOf(result);
+    expect(text, `ORACLE-P4-ISOLATED-TEST-DATA: ${label} 不得回退读出准备结果`).not.toContain(preparedToken);
+    return text;
+  };
+
+  // A. 省略 --data-root：不得回退默认根，也不得从 cwd 读出准备结果。
+  const missingRoot = expectNamedFailure(runP4Prepare([], { cwd: fallbackCwd, env }), "省略 --data-root");
+  expect(missingRoot, "ORACLE-P4-ISOLATED-TEST-DATA: 缺根失败须具名指出 --data-root").toContain("--data-root");
+  expect(readdirSync(fallbackCwd), "ORACLE-P4-ISOLATED-TEST-DATA: 回退目录不得被写入或复制").toEqual(["prepared-test-data.json"]);
+  expect(readdirSync(env.TMPDIR), "ORACLE-P4-ISOLATED-TEST-DATA: 默认临时根不得被当作回退目标").toEqual([]);
+
+  // B. 实际配置缺失（显式隔离根已给，但夹具要求的样本版本未具名）：须具名失败，
+  // 不得改读 cwd 准备结果，也不得先产生样本（夹具只接受显式 --data-root 与样本版本）。
+  const missingConfig = expectNamedFailure(runP4Prepare(["--data-root", dataRoot], { cwd: fallbackCwd, env }), "样本版本配置缺失");
+  expect(missingConfig, "ORACLE-P4-ISOLATED-TEST-DATA: 配置缺失失败须具名指出 --sample-version").toContain("--sample-version");
+  expect(readdirSync(dataRoot), "ORACLE-P4-ISOLATED-TEST-DATA: 具名失败前不得生成样本").toEqual([]);
+
+  // C. 过期样本版本：须报出请求版本并给出要求/现状版本，不得静默放行。
+  const staleVersion = expectNamedFailure(runP4Prepare(["--data-root", dataRoot, "--sample-version", "0.0.0"], { cwd: fallbackCwd, env }), "过期样本版本");
+  expect(staleVersion, "ORACLE-P4-ISOLATED-TEST-DATA: 过期失败须点名请求版本").toContain("0.0.0");
+  expect(staleVersion, "ORACLE-P4-ISOLATED-TEST-DATA: 过期失败须带版本诊断").toMatch(/stale|outdated|older|required|expected|current|过期|要求/i);
 });

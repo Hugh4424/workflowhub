@@ -5,7 +5,8 @@ import {mkdtempSync,realpathSync,mkdirSync,writeFileSync,readFileSync,rmSync} fr
 import {tmpdir} from 'node:os';
 import {join,dirname,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {execFileSync} from 'node:child_process';
+import {execFileSync,spawnSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
 import {runFinalChainCheck} from '../../runtime/task/final-chain-runner.mjs';
 import {captureCommand} from '../../runtime/interface/run-command.mjs';
 import {evaluateRing,resolveLevel,evaluateWorkflowSteps} from '../../runtime/task/final-chain.mjs';
@@ -234,5 +235,40 @@ describe('P3 OCR707 independent metric arithmetic',()=>{
  });
  it('trusted pure caller confirmed skip is exactly 1/4; it does not claim any persisted skip producer',()=>{
   const pure=summarizeWorkflow([{source:'owned/source.json',step_slug:'observed',state:'unavailable',basis:[]}],{verified:true,declared:['make-decision','build-plan','build-code','verify-code'],actual:[{stage:'make-decision'},{stage:'build-plan'},{stage:'build-code'}],skipped:[{stage:'verify-code',confirmed:true,rule_ref:'trusted-caller-confirmed-skip'}]});expect(pure.stage_skip_numerator).toBe(1);expect(pure.stage_skip_denominator).toBe(4);expect(pure.stage_skip_rate).toBe(1/4);
+ });
+});
+
+// ORACLE-CLOSE-CLAIMS-REPLAY — P9/T009. Independent expectations from the P9 phase
+// and the live decision log (AC-P7-002). Production, spec, phases and existing
+// fixtures stay read-only; the replay case files are built in an owned temp root.
+describe('ORACLE-CLOSE-CLAIMS-REPLAY target replay',()=>{
+ it('matched target replay: an unmatched environment hash and a swapped fixture are never counted as the named red',()=>{
+  const root=temporary(),casesDir=join(root,'quality','evidence','replay-cases');
+  mkdirSync(casesDir,{recursive:true});
+  const redBytes="console.error('T6 controlled target failure: required original missing');\nprocess.exit(1);\n";
+  const greenBytes="console.log('fixture replaced: the target now behaves green');\n";
+  const red=join(casesDir,'target-red.mjs'),green=join(casesDir,'swapped-green.mjs');
+  writeFileSync(red,redBytes);writeFileSync(green,greenBytes);
+  // Device sanity is asserted apart from the target: the frozen copy is genuinely red,
+  // the swapped copy genuinely green. A broken device cannot stand in for the red.
+  const exitOf=file=>spawnSync(process.execPath,[file],{encoding:'utf8'}).status;
+  expect(exitOf(red)).toBe(1);expect(exitOf(green)).toBe(0);
+  const sha=value=>createHash('sha256').update(value).digest('hex');
+  const expected={exit:1,gap:'required-original-missing'};
+  const cases={schema_version:'1.0.0',cases:[
+   {id:'t6-frozen-red-env-unmatched',source:'T6 controlled copy; the original is unavailable',input:'target-red.mjs',input_sha256:sha(redBytes),target:{argv:[process.execPath,red],expected},environment:{hash:'0'.repeat(64)}},
+   {id:'t6-swapped-fixture',source:'same frozen case after the fixture bytes were replaced',input:'swapped-green.mjs',input_sha256:sha(redBytes),target:{argv:[process.execPath,green],expected},environment:{hash:'0'.repeat(64)}},
+  ]};
+  const casesFile=join(casesDir,'replay-cases.json');writeFileSync(casesFile,JSON.stringify(cases,null,2));
+  // Real read-only entry, never mocked: the CLI must read these cases and judge them.
+  const cli=join(ROOT,'tools/cli/check-replay.mjs');
+  const run=spawnSync(process.execPath,[cli,`--cases=${casesFile}`],{cwd:root,encoding:'utf8'});
+  expect(run.error,`ORACLE-CLOSE-CLAIMS-REPLAY replay entry absent: ${cli} (${run.error?.code??'no error'})`).toBeUndefined();
+  const output=`${run.stdout??''}${run.stderr??''}`;
+  // Both cases must be reported, and neither may end as a replayed pass.
+  expect(output,`ORACLE-CLOSE-CLAIMS-REPLAY: the real replay entry must judge both frozen cases and report their ids; got:\n${output}`).toContain('t6-frozen-red-env-unmatched');expect(output).toContain('t6-swapped-fixture');
+  expect(run.status,`replay must not report these case ids as a passing replay:\n${output}`).not.toBe(0);
+  expect(output).not.toMatch(/"verdict"\s*:\s*"pass"|"status"\s*:\s*"passed"|"matched"\s*:\s*true|已回放/);
+  expect(output).toMatch(/不可比|incomparable|mismatch|不匹配|environment/i);
  });
 });
