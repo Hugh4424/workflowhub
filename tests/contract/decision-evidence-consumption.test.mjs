@@ -1,7 +1,8 @@
 // P1 ORACLE-MD-001: answer source class and four-grade tone stay bound to the
 // original reply. The checker is advisory for old shapes; a new-shape log that
 // declares source_id/modality/来源身份 must report the named code and exit
-// non-zero only for those three semantic failures.
+// non-zero only for its named semantic failures (the P1 three plus the P2
+// self-reference code).
 import { afterEach, describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
@@ -14,7 +15,7 @@ import { checkDecisionLogChain, stripLeadingMarker, fenceStep } from "../../tool
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const CLI = join(ROOT, "tools/cli/check-decision-log-chain.mjs");
-const FLAGS = ["ANSWER_MODALITY_MISMATCH", "ANSWER_SOURCE_UNVERIFIABLE", "ANSWER_INFERENCE_AS_USER"];
+const FLAGS = ["ANSWER_MODALITY_MISMATCH", "ANSWER_SOURCE_UNVERIFIABLE", "ANSWER_INFERENCE_AS_USER", "ANSWER_SOURCE_SELF_REFERENCE"];
 const temporary = [];
 afterEach(() => { for (const root of temporary.splice(0)) rmSync(root, { recursive: true, force: true }); });
 const temp = (prefix) => { const root = mkdtempSync(join(tmpdir(), prefix)); temporary.push(root); return root; };
@@ -740,5 +741,90 @@ describe("P11 run-checks material convergence gaps", () => {
     const dir = temp("p11-rc0-");
     writeFileSync(join(dir, "decision-log.md"), "# T\n## 级别与路线\n- 推荐级别：复杂\n");
     expect(runMaterial(dir).status).toBe(0);
+  });
+});
+
+// P2/T002 ORACLE-P2-BOUND-HANDOFF
+// Oracle provenance (corrected): there is NO pre-frozen independent script for
+// this oracle. The 020/021 originals under the task library belong to the
+// checklist oracle (ORACLE-P2-CURRENT-V2-CHECKLIST), not to this one; they must
+// not be cited as this case's author. What this block encodes is the Phase card's
+// RED/GREEN semantics for AC-P2-001, written by the implementer against the
+// existing checker surface. That absence of an independent frozen author is
+// recorded as a gap, not papered over. No pre-existing assertion in this file
+// changed.
+// Content: the source pointer and the confirmation must
+// land on one original. A pointer that resolves back into the decision log is a
+// self-reference rather than an original; a one-line offset is drift and must
+// name the cited position; a declared file with no reader is a static receipt,
+// not evidence. The frozen Git object is replayed by an independent reader and
+// the decision-log bytes stay identical across the check.
+describe("ORACLE-P2-BOUND-HANDOFF bound original and named failures", () => {
+  const QUOTE = "允许升一次数据库结构";
+
+  it("names a source pointer that resolves to the decision log itself", () => {
+    const { log, index } = fixture({});
+    const before = `${readFileSync(log, "utf8")}${QUOTE}\n`;
+    writeFileSync(log, before);
+    const position = before.split("\n").length - 1;
+    writeFileSync(index, [
+      "# Controlled index; U-901 is a replay label",
+      INDEX_HEADER, INDEX_RULE,
+      `| U-901 | 保存转录 | ${QUOTE} | permit | specs/p1-fixture/decision-log.md#L${position}-L${position} | 2026-11-12（原件） | 1 |`,
+      "",
+    ].join("\n"));
+    const result = run(log);
+    expect(result.status, result.output).toBe(1);
+    expect(result.output).toContain("ANSWER_SOURCE_SELF_REFERENCE");
+    expect(result.output).toContain("D-901");
+    expect(readFileSync(log, "utf8")).toBe(before);
+  });
+
+  it("names the cited position when the original drifts by one line", () => {
+    const { log } = fixture({ line: 7, ref: "#L8-L8" });
+    const before = readFileSync(log, "utf8");
+    const result = run(log);
+    expect(result.status, result.output).toBe(1);
+    expect(result.output).toContain("ANSWER_SOURCE_UNVERIFIABLE");
+    expect(result.output).toContain("#L8-L8");
+    expect(readFileSync(log, "utf8")).toBe(before);
+  });
+
+  it("keeps a static receipt distinguishable from a real read", () => {
+    const { log, index } = fixture({});
+    const markdown = readFileSync(log, "utf8");
+    const requirementIndex = readFileSync(index, "utf8");
+    const receiptOnly = checkDecisionLogChain({ markdown, source_ref: "decision-log.md", requirement_index_markdown: requirementIndex });
+    expect(receiptOnly.warnings.map(item => item.code)).toContain("ANSWER_SOURCE_UNVERIFIABLE");
+    const read = checkDecisionLogChain({
+      markdown, source_ref: "decision-log.md", requirement_index_markdown: requirementIndex,
+      read_source: ref => readFileSync(String(ref).split("#")[0], "utf8"),
+    });
+    expect(read.warnings.map(item => item.code)).not.toContain("ANSWER_SOURCE_UNVERIFIABLE");
+  });
+
+  it("replays a frozen Git object and keeps the log bytes unchanged", () => {
+    const dir = temp("p2-bound-object-");
+    const git = args => spawnSync("git", args, { cwd: dir, encoding: "utf8" });
+    expect(git(["init", "-q"]).status).toBe(0);
+    const path = join(dir, "reply.md");
+    const lines = Array.from({ length: 9 }, (_, number) => `${number + 1}. filler line`);
+    lines[6] = `3. ${QUOTE}`;
+    writeFileSync(path, `${lines.join("\n")}\n`);
+    expect(git(["add", "reply.md"]).status).toBe(0);
+    expect(git(["-c", "user.name=p2", "-c", "user.email=p2@example.invalid", "commit", "-qm", "controlled original"]).status).toBe(0);
+    const blob = git(["rev-parse", "HEAD:reply.md"]).stdout.trim();
+    expect(blob).toMatch(/^[0-9a-f]{40}$/);
+    expect(git(["cat-file", "-e", blob]).status).toBe(0);
+    const shown = spawnSync("git", ["show", blob], { cwd: dir });
+    expect(shown.status).toBe(0);
+    const frozen = shown.stdout;
+    expect(createHash("sha256").update(frozen).digest("hex")).toBe(createHash("sha256").update(readFileSync(path)).digest("hex"));
+    const frozenLines = frozen.toString("utf8").split("\n");
+    expect(frozenLines[6]).toContain(QUOTE);
+    expect(frozenLines[7]).not.toContain(QUOTE);
+    writeFileSync(path, `inserted line\n${lines.join("\n")}\n`);
+    expect(spawnSync("git", ["show", blob], { cwd: dir }).stdout.equals(frozen)).toBe(true);
+    expect(readFileSync(path).equals(frozen)).toBe(false);
   });
 });

@@ -6,7 +6,8 @@
  * Old-shape materials stay advisory: malformed or stale chain fields are
  * printed as facts and the process exits 0. A new-shape material that declares
  * answer source_id/modality/来源身份 is checked against the requirement index;
- * its three named answer-source codes make the process exit 1, because a
+ * its four named answer-source codes (unverifiable, modality mismatch,
+ * inference-as-user, self-reference) make the process exit 1, because a
  * citation that cannot be verified must not look like a pass. The function's
  * result.exit_code carries the same distinction for private callers.
  * Only local text structure, the declared index and explicitly authorized
@@ -35,7 +36,7 @@ const SOURCE_FIELDS = ["source_id", "modality", "来源身份"];
 const SOURCE_GRADES = ["自由手写", "明确选项采纳", "保存转录", "作者推断"];
 const SOURCE_IDENTITIES = ["用户答复", "作者推断"];
 const TONE_GRADES = ["permit", "require", "recommend", "reject"];
-const ANSWER_FLAGS = ["ANSWER_SOURCE_UNVERIFIABLE", "ANSWER_MODALITY_MISMATCH", "ANSWER_INFERENCE_AS_USER"];
+const ANSWER_FLAGS = ["ANSWER_SOURCE_UNVERIFIABLE", "ANSWER_MODALITY_MISMATCH", "ANSWER_INFERENCE_AS_USER", "ANSWER_SOURCE_SELF_REFERENCE"];
 const INDEX_COLUMNS = ["编号", "来源分级", "答复原文", "语气", "原件ref与行位", "时点", "所属包"];
 // Accepted original-position spellings: path#L7-L7, path#L7, path:7, path:7-9.
 const SOURCE_REF = /^(.*?)(?:#L|:)(\d+)(?:-(?:L)?(\d+))?$/;
@@ -293,7 +294,7 @@ function quoteMatches(observed, quote) {
 
 // Only declarations made by a decision and a matching index row participate.
 // A log or index without the new fields keeps its old shape (shape note only).
-function answerSourceWarnings(sections, requirement_index_markdown, read_source) {
+function answerSourceWarnings(sections, requirement_index_markdown, read_source, identity = {}) {
   const warnings = [];
   if (requirement_index_markdown === undefined) return warnings;
   if (typeof requirement_index_markdown !== "string") {
@@ -369,6 +370,21 @@ function answerSourceWarnings(sections, requirement_index_markdown, read_source)
       warnings.push(warning("ANSWER_SOURCE_UNVERIFIABLE", decision_id, "答复原文", `${decision_id} reply ${sourceId} has an empty quote`));
       continue;
     }
+    // A pointer has to name an original. When the reader can also report the
+    // real path it resolved, a pointer back into the decision log or into the
+    // derived requirement index is a self-reference, not a citation: the bytes
+    // would match while nothing independent was ever read.
+    if (read_source && typeof read_source.resolve === "function" && (identity.log_path || identity.index_path)) {
+      let real = null;
+      try { real = read_source.resolve(ref[1]); } catch { real = null; }
+      const self = real && identity.log_path && real === identity.log_path;
+      const derived = real && identity.index_path && real === identity.index_path;
+      if (self || derived) {
+        warnings.push(warning("ANSWER_SOURCE_SELF_REFERENCE", decision_id, "原件ref与行位",
+          `${decision_id} reply ${sourceId} cites ${row.ref}, which resolves to ${self ? "the decision log itself" : "the requirement index"}; ${self ? "a log cannot be its own original" : "the index is derived from the original, not the original"}`));
+        continue;
+      }
+    }
     if (typeof read_source !== "function") {
       warnings.push(warning("ANSWER_SOURCE_UNVERIFIABLE", decision_id, "read_source", `${decision_id} reply ${sourceId} has no reader to verify the original line`));
       continue;
@@ -396,7 +412,17 @@ function answerSourceWarnings(sections, requirement_index_markdown, read_source)
   return warnings;
 }
 
-export function checkDecisionLogChain({ markdown, source_ref = "decision-log.md", requirement_index_markdown, read_source } = {}) {
+/**
+ * Text-only chain warnings for one decision log.
+ *
+ * `log_path` / `index_path` are the real absolute paths of the decision log and
+ * the requirement index being checked. They are optional: a private caller that
+ * omits them still gets every other warning, but the self-reference check cannot
+ * run, because a pointer can only be compared to an identity the caller supplies.
+ * The CLI always passes both (see main), so the unknown-original check is real on
+ * the public entry; a direct in-process call without them is not equivalent.
+ */
+export function checkDecisionLogChain({ markdown, source_ref = "decision-log.md", requirement_index_markdown, read_source, log_path, index_path } = {}) {
   if (typeof markdown !== "string") {
     return {
       schema_version: "decision-log-chain-warning.v1",
@@ -566,7 +592,7 @@ export function checkDecisionLogChain({ markdown, source_ref = "decision-log.md"
     }
   }
 
-  warnings.push(...answerSourceWarnings(answerSections, requirement_index_markdown, read_source));
+  warnings.push(...answerSourceWarnings(answerSections, requirement_index_markdown, read_source, { log_path, index_path }));
 
   return {
     schema_version: "decision-log-chain-warning.v1",
@@ -708,9 +734,11 @@ function worktreeRootOf(file) {
 // input authorizes their root with --source-root. Everything is resolved to its
 // real path before the containment check, so a symlink cannot escape a declared
 // root and a relative `..` segment is refused before touching the filesystem.
+// `.resolve` exposes that same real path so a caller can tell an original from
+// the decision log or the requirement index itself; reading stays text-only.
 function createSourceReader({ base, worktree, sourceRoots }) {
   const roots = [...new Set([base, worktree, ...sourceRoots].filter(Boolean).map((path) => realpathSync(path)))];
-  return (ref) => {
+  const locate = (ref) => {
     if (typeof ref !== "string" || !ref) throw Object.assign(new Error("source reference is not a path"), { code: "INVALID_SOURCE_REF" });
     if (ref.split(/[\\/]/).includes("..")) throw Object.assign(new Error(`source reference ${ref} uses directory traversal`), { code: "TRAVERSAL" });
     const candidates = isAbsolute(ref)
@@ -730,10 +758,13 @@ function createSourceReader({ base, worktree, sourceRoots }) {
         lastError = Object.assign(new Error(`source ${real} is not a regular single-link file`), { code: "INVALID_SOURCE_FILE" });
         continue;
       }
-      return new TextDecoder("utf-8", { fatal: true }).decode(readFileSync(real));
+      return real;
     }
     throw lastError;
   };
+  const read = (ref) => new TextDecoder("utf-8", { fatal: true }).decode(readFileSync(locate(ref)));
+  read.resolve = (ref) => locate(ref);
+  return read;
 }
 
 export function main(args = process.argv.slice(2)) {
@@ -778,16 +809,19 @@ export function main(args = process.argv.slice(2)) {
         console.error(`[check-decision-log-chain] ${input.source_ref} declares ${pointers.length} requirement-index pointers; expected one`);
         hadReadError = true; continue;
       } else if (pointers.length === 1) {
-        let base, indexText, read_source;
+        let base, indexText, read_source, indexPath;
         try {
           base = authenticatedTaskBase(declaredTaskBase(markdown));
           read_source = createSourceReader({ base, worktree: worktreeRootOf(input.path), sourceRoots: values.sourceRoots });
-          indexText = read_source(resolveIndexPointer(pointers[0], base, read_source));
+          const indexRef = resolveIndexPointer(pointers[0], base, read_source);
+          indexText = read_source(indexRef);
+          indexPath = read_source.resolve(indexRef);
         } catch (error) {
           console.error(`[check-decision-log-chain] cannot read declared requirement index in ${input.source_ref}: ${error.code ?? error.message}`);
           hadReadError = true; continue;
         }
-        result = checkDecisionLogChain({ markdown, source_ref: input.source_ref, requirement_index_markdown: indexText, read_source });
+        result = checkDecisionLogChain({ markdown, source_ref: input.source_ref, requirement_index_markdown: indexText, read_source,
+          log_path: realpathSync(input.path), index_path: indexPath });
       } else {
         console.error(`[check-decision-log-chain] ${input.source_ref} declares source_id but has no requirement-index pointer; source and tone cannot be checked`);
         hadReadError = true; continue;

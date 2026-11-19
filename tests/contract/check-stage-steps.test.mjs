@@ -1601,3 +1601,164 @@ describe('ORACLE-P1-CURRENT-SKILL-LOAD current step needs its own skill read rec
     } finally { rmSync(f.root, { recursive: true, force: true }); }
   });
 });
+
+// P2/T002 ORACLE-P2-CURRENT-V2-CHECKLIST
+// Oracle provenance (F3): the named-case shape follows the pre-frozen
+// independent script quality/tests/2026-11-19-020-build-plan-p2-v2-checklist-target-red.mjs
+// (positive: convergence.source + expected_modules=['1'] + module source/line=3
+// + frozen ledger bytes) plus the Phase card's RED/GREEN semantics. This block
+// is stronger than 020: the row names real task originals (not ev-1/details§1)
+// and asserts the digests the checker itself reports, so the read is proven
+// rather than re-hashed by the test.
+describe('ORACLE-P2-CURRENT-V2-CHECKLIST current v2 package set and checklist', () => {
+  const ref = 'quality/evidence/decision-log-refs/convergence-checklist.md';
+  const cardRef = 'quality/evidence/convergence/controlled-cards.md';
+  const coldRef = 'quality/evidence/build-code/P1/controlled-cold-read-1.md';
+  const evidenceRef = 'quality/evidence/convergence/p1-evidence.md';
+  const reader = 'subagent:controlled-reader-1';
+  const sha = bytes => createHash('sha256').update(bytes).digest('hex');
+  const card = '## 工作包 1：受控包 1\n\n一句话结果：受控结果。';
+  const answers = '① 改什么：受控改动。\n② 为什么：受控理由。\n③ 边界：受控边界。\n④ 怎么验：受控验证。\n⑤ 还有什么没定：无。';
+  const cold = `# 受控冷读 1\n\n- 读者：${reader}，未参与本包写作，只读本包卡。\n- 读的卡：\`${cardRef}#工作包-1\`，节摘要 sha256 \`${sha(card)}\`。\n- 五问原答：\n${answers}\n- 结论：五问全答出；本包收敛。\n`;
+  const evidenceBody = '# 受控证据\n\n包 1 的真实原件内容。\n';
+  // The five-column tail every ledger variant shares: the per-package cold-read
+  // readback that a 已收敛 row must carry. 五段表位置 is a locator label, not an
+  // evidence cell; the 证据 cell is the only one read and hashed.
+  const tail = `\n## 工作包 1：受控包 1\n\n### 收敛格（本轮）\n\n| 项 | 值 |\n| --- | --- |\n| 当前卡节 | \`${cardRef}#工作包-1\`；sha256 \`${sha(card)}\` |\n| 当前冷读 | \`${coldRef}\`；sha256 \`${sha(cold)}\`；读者 ${reader}；context=none |\n| 首轮冷读 | \`${coldRef}\`；sha256 \`${sha(cold)}\`；读者 ${reader} |\n| 修订 | 无 |\n\n### 冷读记录（P1）\n\n- 读者：${reader}，未参与本包写作，只读本包卡。\n- 五问原答：\n${answers}\n- 结论：五问全答出；本包收敛。\n`;
+  const ledgerFor = (evidenceCell, position = 'details§1', state = '已收敛') =>
+    `| 包 | 状态 | 五段表位置 | 证据 | 未决 |\n| --- | --- | --- | --- | --- |\n| 1 受控包 | ${state} | ${position} | ${evidenceCell} | 无 |\n${tail}`;
+  const checklist = ledgerFor(`\`${evidenceRef}\``);
+  const pointer = `\n清单：\`${ref}\`\n`;
+  const level = '# Controlled decision\n\n## 级别与路线\n- 推荐级别：复杂\n\n';
+  // The current v2 material: an ordered package directory and 4.n section headings.
+  const current = `${level}## 3. 包目录\n\n1. **受控包** —— 报告同包原件。\n\n## 4. 每包设计\n\n### 4.1 受控包\n\n- **结果与消费者**：受控结果；消费者是规划作者。\n${pointer}`;
+  const legacy = `${level}#### WP1 — 受控包\n- **结果与消费者**：受控结果；消费者是规划作者。\n${pointer}`;
+  const frozenChecklist = sha(checklist);
+  const runCheck = ({ decision, ledger }) => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'p2-v2-checklist-')));
+    const task = join(root, 'task'), materials = join(root, 'materials');
+    const put = (base, name, value) => { const file = join(base, name); mkdirSync(join(file, '..'), { recursive: true }); writeFileSync(file, value); };
+    mkdirSync(materials, { recursive: true });
+    put(task, 'task.json', JSON.stringify({ schema_version: '1.0.0', task_id: 'controlled', target_repo_root: resolve('.'), baseline_commit: 'HEAD', activation_cohort: 'post' }));
+    put(task, 'facts.jsonl', '');
+    put(materials, 'decision-log.md', decision);
+    put(materials, 'phases/index.md', '# Index\n');
+    put(task, 'quality/evidence/decision-log-refs/convergence-checklist.md', checklist);
+    put(task, cardRef, card);
+    put(task, coldRef, cold);
+    put(task, evidenceRef, evidenceBody);
+    if (ledger === null) rmSync(join(task, ref));
+    else if (ledger !== undefined) put(task, ref, ledger);
+    const result = spawnSync(process.execPath, [entry, '--stage=make-decision', `--task-path=${task}`, `--material-root=${materials}`, '--json'], { cwd: resolve('.'), encoding: 'utf8' });
+    const report = result.status === null || !result.stdout ? null : JSON.parse(result.stdout);
+    rmSync(root, { recursive: true });
+    return { status: result.status, report, stderr: result.stderr };
+  };
+
+  it('binds a legal current v2 package to the read-back checklist and evidence bytes', () => {
+    const { status, report, stderr } = runCheck({ decision: current });
+    expect(stderr).toBe('');
+    expect(status, stderr).toBe(0);
+    expect(report.convergence).toEqual({ source: ref, expected_modules: ['1'], complete: true, gaps: [] });
+    expect(report.modules).toHaveLength(1);
+    expect(report.modules[0]).toMatchObject({ source: ref, line: 3, state: '已收敛' });
+    // The checker reports the digest of the very bytes it opened; the frozen
+    // ledger and evidence digests must match what it reports.
+    expect(report.modules[0].source_digest).toBe(frozenChecklist);
+    expect(report.modules[0].evidence).toMatchObject({ ref: evidenceRef, present: true });
+    expect(report.modules[0].evidence.digest).toBe(sha(evidenceBody));
+    expect(report.errors).toEqual([]);
+  });
+
+  it('reads an evidence cell that carries an anchor without treating it as a file name', () => {
+    const anchored = `${evidenceRef}#工作包-1`;
+    const { report } = runCheck({ decision: current, ledger: ledgerFor(`\`${anchored}\``) });
+    expect(report.modules[0].evidence).toMatchObject({ ref: anchored, present: true, anchor: '#工作包-1' });
+    expect(report.modules[0].evidence.digest).toBe(sha(evidenceBody));
+    expect(report.convergence.gaps).toEqual([]);
+    expect(report.errors).toEqual([]);
+  });
+
+  it('reports a label-shaped evidence cell as a label rather than as a read original', () => {
+    const { report } = runCheck({ decision: current, ledger: ledgerFor('ev-1') });
+    // The frozen five-column oracle accepts `ev-1` with an empty gap list, so a
+    // label cannot be upgraded to a named gap without a TCR; it is reported as
+    // label=true / present=null instead of silently passing as a read original.
+    expect(report.modules[0].evidence).toMatchObject({ ref: 'ev-1', present: null, label: true });
+    expect(report.modules[0].evidence.digest).toBeUndefined();
+    expect(report.convergence.gaps).toEqual([]);
+  });
+
+  it('keeps the legacy WPn package control on its previous result', () => {
+    const { status, report } = runCheck({ decision: legacy });
+    expect(status).toBe(0);
+    expect(report.convergence).toEqual({ source: ref, expected_modules: ['1'], complete: true, gaps: [] });
+  });
+
+  it('names a missing pointer, an unreadable ledger and an out-of-range ledger separately', () => {
+    const missing = runCheck({ decision: level + '#### WP1 — 受控包\n- **结果与消费者**：受控结果；消费者是规划作者。\n' }).report;
+    expect(missing.convergence.gaps).toContain('收敛清单指针未取得');
+    expect(missing.convergence.complete).toBe(false);
+    const unreadable = runCheck({ decision: legacy, ledger: null }).report;
+    expect(unreadable.convergence.gaps).toContain('收敛清单不可读');
+    // A ledger that could not be opened must not also claim, per package, that a
+    // row is missing (F6).
+    expect(unreadable.convergence.gaps.join('\n')).not.toContain('缺模块');
+    const outOfRange = runCheck({ decision: legacy.replace(ref, 'quality/evidence/../escape-convergence-checklist.md') });
+    expect(outOfRange.report.convergence.gaps.some(gap => /^收敛清单越界/.test(gap))).toBe(true);
+    expect(outOfRange.report.convergence.gaps).not.toContain('收敛清单不可读');
+    expect(outOfRange.report.convergence.gaps.join('\n')).not.toContain('缺模块');
+    expect(outOfRange.report.convergence.complete).toBe(false);
+    // Two declared checklists is a non-unique pointer. A physically older ledger
+    // carries no version field, so this case pins the pointer rule only; the same
+    // boundary is published in the report's limits.
+    const duplicatePointer = runCheck({ decision: `${legacy}\n清单：\`quality/evidence/another-convergence-checklist.md\`\n` }).report;
+    expect(duplicatePointer.convergence.gaps).toContain('收敛清单指针未取得');
+    expect(duplicatePointer.limits.join('\n')).toContain('旧清单与当前清单物理不可区分');
+  });
+
+  it('names the wrong package instead of reporting the same bytes as converged', () => {
+    const wrong = runCheck({ decision: legacy, ledger: checklist.replace('| 1 受控包 |', '| 3 受控包 |') });
+    expect(wrong.report.convergence.gaps).toEqual(expect.arrayContaining(['未知模块 WP3', '缺模块 WP1']));
+    expect(wrong.report.convergence.complete).toBe(false);
+  });
+
+  it('reports a package directory that contradicts the authoritative package sections', () => {
+    const contradictory = `${level}## 3. 包目录\n\n1. **受控包** —— 报告同包原件。\n2. **幻影包** —— 只有目录没有包节。\n\n## 4. 每包设计\n\n### 4.1 受控包\n\n- **结果与消费者**：受控结果；消费者是规划作者。\n\n\`\`\`\n### 4.2 幻影包\n\`\`\`\n${pointer}`;
+    const { report } = runCheck({ decision: contradictory });
+    // The fenced 4.2 section is an example, not a package; the directory-only
+    // entry is a named gap instead of a silent add.
+    expect(report.convergence.expected_modules).toEqual(['1']);
+    expect(report.convergence.gaps).toContain('包目录与包节不一致：包 2 只有目录无包节');
+    expect(report.convergence.complete).toBe(false);
+  });
+
+  it('reads a package directory table row as the directory form', () => {
+    const table = `${level}## 3. 包目录\n\n| 包 | 名字 |\n| --- | --- |\n| 1 | 受控包 |\n\n## 4. 每包设计\n\n### 4.1 受控包\n\n- **结果与消费者**：受控结果；消费者是规划作者。\n${pointer}`;
+    const { report } = runCheck({ decision: table });
+    expect(report.convergence.expected_modules).toEqual(['1']);
+    expect(report.convergence.gaps).toEqual([]);
+    expect(report.convergence.complete).toBe(true);
+  });
+
+  it('names an empty package directory instead of silently agreeing', () => {
+    const empty = `${level}## 3. 包目录\n\n（无）\n\n## 4. 每包设计\n\n### 4.1 受控包\n\n- **结果与消费者**：受控结果；消费者是规划作者。\n${pointer}`;
+    const { report } = runCheck({ decision: empty });
+    expect(report.convergence.gaps).toContain('包目录未列任何包：目录索引为空，不能核对包节');
+    expect(report.convergence.complete).toBe(false);
+  });
+
+  it('does not mint a package from a numbered heading outside 每包设计', () => {
+    const outside = `${level}## 3. 包目录\n\n1. **受控包** —— 报告同包原件。\n\n## 4. 每包设计\n\n### 4.1 受控包\n\n- **结果与消费者**：受控结果；消费者是规划作者。\n\n## 5. 验收\n\n### 4.2 幻影包\n\n受控。\n${pointer}`;
+    const { report } = runCheck({ decision: outside });
+    expect(report.convergence.expected_modules).toEqual(['1']);
+    expect(report.convergence.gaps).toEqual([]);
+  });
+
+  it('reports the same checklist digest on repeated runs of the same bytes', () => {
+    const first = runCheck({ decision: current });
+    const second = runCheck({ decision: current });
+    expect(first.report.modules[0].source_digest).toBe(frozenChecklist);
+    expect(second.report.modules[0].source_digest).toBe(first.report.modules[0].source_digest);
+  });
+});

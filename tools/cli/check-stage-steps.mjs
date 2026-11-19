@@ -1172,30 +1172,109 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
   // different WP id; without one the Chinese number itself is the module id.
   const mappingGaps = [];
   const expected = [];
-  const unpairedHeadings = { wp: new Map(), chinese: new Map() };
+  const unpairedHeadings = { wp: new Map(), chinese: new Map(), v2: new Map() };
   const headingNumber = match => match[1] ?? packageNumber(match[2] ?? match[3]);
   const mappedPackageId = number => {
     const mapped = mappings.get(`工作包 ${number}`);
     return mapped && /^WP-?\d+$/.test(mapped) ? String(Number(mapped.match(/\d+/)[0])) : number;
   };
-  for (const match of decision.matchAll(new RegExp(PACKAGE_HEADING.source, 'gm'))) {
-    const number = headingNumber(match);
-    if (number === null) continue;
-    const form = match[1] ? 'wp' : 'chinese';
-    const id = form === 'wp' ? number : mappedPackageId(number);
-    const other = form === 'wp' ? 'chinese' : 'wp';
-    const paired = unpairedHeadings[other].get(id) ?? 0;
-    if (paired > 0) { unpairedHeadings[other].set(id, paired - 1); continue; }
+  // Fenced examples are examples: a fenced `### 4.1` or a fenced 包目录 row must
+  // not create a phantom package. Scan line by line with an explicit mask.
+  const decisionLines = decision.split(/\r?\n/);
+  const fencedLine = (() => {
+    const mask = [];
+    let fence = null;
+    for (const line of decisionLines) {
+      const marker = /^\s*(`{3,}|~{3,})/.exec(line);
+      if (marker) {
+        if (!fence) fence = marker[1];
+        else if (marker[1][0] === fence[0] && marker[1].length >= fence.length) fence = null;
+        mask.push(true);
+        continue;
+      }
+      mask.push(fence !== null);
+    }
+    return mask;
+  })();
+  // The current v2 material separates navigation from content: 「## <n>. 包目录」
+  // is an ordered/table index only, and 「## <n>. 每包设计」 carries one
+  // `### <n>.<package>` section per package. The package sections are
+  // authoritative for the module set (they hold the design); the directory is
+  // compared against them and any one-sided entry is a named gap, never silently
+  // added or dropped. The section number is read from the real heading instead
+  // of assuming 4, and a log without that section keeps the old WP/Chinese
+  // reading unchanged.
+  const sectionHeadingIndex = (number, title) => decisionLines.findIndex((line, index) =>
+    !fencedLine[index] && new RegExp(`^##\\s*${number}\\.\\s*${title}\\s*$`).test(line));
+  const anySectionHeadingIndex = title => decisionLines.findIndex((line, index) =>
+    !fencedLine[index] && new RegExp(`^##\\s*\\d+\\.\\s*${title}\\s*$`).test(line));
+  const designIndex = anySectionHeadingIndex('每包设计');
+  const designNumber = designIndex >= 0 ? /^##\s*(\d+)\./.exec(decisionLines[designIndex])[1] : null;
+  const v2Heading = designNumber ? new RegExp(`^###\\s+${designNumber}\\.(\\d+)\\s`) : null;
+  // The v2 section form counts only inside 「每包设计」; a `### <n>.<m>` heading in
+  // any other section is that section's numbering, not a package.
+  const designEnd = designIndex < 0 ? -1 : (() => {
+    for (let index = designIndex + 1; index < decisionLines.length; index += 1) {
+      if (/^##\s/.test(decisionLines[index])) return index;
+    }
+    return decisionLines.length;
+  })();
+  const inDesignSection = index => designIndex >= 0 && index > designIndex && index < designEnd;
+  const pairPackage = (id, form) => {
+    for (const [name, bucket] of Object.entries(unpairedHeadings)) {
+      if (name === form) continue;
+      const paired = bucket.get(id) ?? 0;
+      if (paired > 0) { bucket.set(id, paired - 1); return; }
+    }
     expected.push(id);
     unpairedHeadings[form].set(id, (unpairedHeadings[form].get(id) ?? 0) + 1);
-  }
-  const headingWpId = line => {
+  };
+  const packageEntries = [];
+  const packageIdAt = decisionLines.map((line, index) => {
+    if (fencedLine[index]) return null;
+    if (v2Heading && inDesignSection(index)) {
+      const v2 = v2Heading.exec(line);
+      if (v2) { const id = String(Number(v2[1])); packageEntries.push({ id, form: 'v2' }); return id; }
+    }
     const match = PACKAGE_HEADING.exec(line);
     if (!match) return null;
     const number = headingNumber(match);
     if (number === null) return null;
-    return match[1] ? number : mappedPackageId(number);
-  };
+    const form = match[1] ? 'wp' : 'chinese';
+    const id = form === 'wp' ? number : mappedPackageId(number);
+    packageEntries.push({ id, form });
+    return id;
+  });
+  for (const { id, form } of packageEntries) pairPackage(id, form);
+  // A 包目录 that contradicts the authoritative 包节 is a named gap. Only the
+  // bounded 包目录 section is read, and only fenced-free lines, so prose and
+  // example rows cannot mint packages.
+  const directoryIds = (() => {
+    const start = sectionHeadingIndex('\\d+', '包目录');
+    if (start < 0) return null;
+    let end = decisionLines.length;
+    for (let index = start + 1; index < decisionLines.length; index += 1) {
+      if (/^##\s/.test(decisionLines[index])) { end = index; break; }
+    }
+    const ids = [];
+    for (let index = start + 1; index < end; index += 1) {
+      if (fencedLine[index]) continue;
+      const row = /^\|\s*(?:包\s*)?(\d+)\s*\|/.exec(decisionLines[index]);
+      const item = /^(\d+)\.\s/.exec(decisionLines[index]);
+      if (row) ids.push(String(Number(row[1])));
+      else if (item) ids.push(String(Number(item[1])));
+    }
+    return ids;
+  })();
+  const packageSetGaps = [];
+  // A declared 包目录 with no readable entry is a named gap: an empty index can
+  // neither confirm nor contradict the authoritative package sections.
+  if (v2Heading && directoryIds && directoryIds.length === 0) packageSetGaps.push('包目录未列任何包：目录索引为空，不能核对包节');
+  if (v2Heading && directoryIds) {
+    const sectionIds = packageEntries.filter(entry => entry.form === 'v2').map(entry => entry.id);
+    for (const id of new Set(directoryIds.filter(value => !sectionIds.includes(value)))) packageSetGaps.push(`包目录与包节不一致：包 ${id} 只有目录无包节`);
+    for (const id of new Set(sectionIds.filter(value => !directoryIds.includes(value)))) packageSetGaps.push(`包目录与包节不一致：包 ${id} 只有包节无目录`);
+  }
   const pointers = [...new Set([...decision.matchAll(/`(quality\/evidence\/[^`\n]*convergence-checklist[^`\n]*\.md)`/g)].map(match => match[1]))];
   // Resolve only the current decision's own references; prose alone is not proof.
   const section = (body, pattern) => {
@@ -1203,12 +1282,11 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
     return range ? range.lines.slice(range.start + 1, range.end).join('\n') : '';
   };
   const moduleBody = id => {
-    const lines=decision.split(/\r?\n/);
-    const starts=lines.map((line,index)=>headingWpId(line)===id?index:-1).filter(index=>index>=0);
+    const starts=decisionLines.map((line,index)=>packageIdAt[index]===id?index:-1).filter(index=>index>=0);
     if(starts.length!==1)return '';
     let end=starts[0]+1;
-    while(end<lines.length&&!headingWpId(lines[end])&&!/^#{1,3}\s/.test(lines[end]))end++;
-    return lines.slice(starts[0]+1,end).join('\n');
+    while(end<decisionLines.length&&!packageIdAt[end]&&!/^#{1,3}\s/.test(decisionLines[end]))end++;
+    return decisionLines.slice(starts[0]+1,end).join('\n');
   };
   const decisionBody = id => {
     const direct=section(decision,new RegExp(`^#{1,6}\\s+${id}\\s*[—–-]`));
@@ -1304,13 +1382,55 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
   };
   const convergenceRef = pointers.length === 1 ? pointers[0] : null;
   const safeRef = convergenceRef && !convergenceRef.split('/').some(part => part === '..' || part === '.') && !convergenceRef.includes('\\');
+  // A missing pointer and a pointer that escapes the task evidence range are
+  // different failures: the first has no reference at all, the second has one
+  // that resolves outside the only place a current checklist may live.
+  let rangeGap = null;
+  let checklistDigest = null;
+  const originalEvidenceGaps = [];
+  // A package row may name its own original as a task-relative path, optionally
+  // with a `#anchor`. Only the path part is opened; the anchor is kept in the
+  // report but never resolved as a file name. A label-shaped cell (ev-1) is not
+  // a readable original: it is reported as label=true / present=null instead of
+  // silently counting as read. Upgrading that to a named gap would contradict
+  // the frozen five-column oracle that accepts `ev-1`, so it stays a recorded
+  // limit until a TCR changes that oracle.
+  const packageEvidence = (cell, id) => {
+    const text = String(cell ?? '').trim();
+    const raw = /`([^`]+)`/.exec(text)?.[1]
+      ?? (/^quality\/\S+\.(?:md|json|txt|output)(?:#\S*)?$/.test(text) ? text : null);
+    if (!raw) {
+      if (!text || /^[\s—\-]*$/.test(text)) return null;
+      return { ref: text, present: null, label: true };
+    }
+    const [ref, anchor] = raw.split('#');
+    if (!ref || !/^quality\//.test(ref) || ref.split(/[\\/]/).includes('..')) {
+      return { ref: text, present: null, label: true };
+    }
+    try {
+      const evidenceRoot = realpathSync(resolve(taskPath, 'quality/evidence'));
+      const resolved = realpathSync(resolve(taskPath, ref));
+      const evidenceRel = relative(evidenceRoot, resolved);
+      if (evidenceRel === '..' || evidenceRel.startsWith('../') || isAbsolute(evidenceRel)) throw Error('越出当前任务证据范围');
+      const bytes = readFileSync(resolved);
+      return { ref: raw, present: true, digest: createHash('sha256').update(bytes).digest('hex'),
+        ...(anchor ? { anchor: `#${anchor}` } : {}) };
+    } catch (error) {
+      originalEvidenceGaps.push(`证据原件不可读：${id ? `包 ${id} ` : ''}${ref}（${error.message}）`);
+      errors.push(`${id}/证据: 原件不可读：${ref}（${error.message}）`);
+      return { ref: raw, present: false, reason: error.message, ...(anchor ? { anchor: `#${anchor}` } : {}) };
+    }
+  };
   try {
-    if (!safeRef) throw Error('未取得唯一当前任务收敛清单指针');
+    if (!convergenceRef) throw Error('未取得唯一当前任务收敛清单指针');
+    if (!safeRef) { rangeGap = '指针越出当前任务证据目录'; throw Error(`收敛清单越界：${convergenceRef}（${rangeGap}；未取得唯一当前任务收敛清单指针）`); }
     const root = realpathSync(resolve(taskPath, 'quality/evidence'));
     const path = realpathSync(resolve(taskPath, convergenceRef));
     const rel = relative(root, path);
-    if (rel === '..' || rel.startsWith('../') || isAbsolute(rel)) throw Error('收敛清单越出当前任务证据范围');
-    const body = readFileSync(path, 'utf8');
+    if (rel === '..' || rel.startsWith('../') || isAbsolute(rel)) { rangeGap = '实际路径越出当前任务证据目录'; throw Error(`收敛清单越界：${convergenceRef}（${rangeGap}）`); }
+    const bodyBytes = readFileSync(path);
+    checklistDigest = createHash('sha256').update(bodyBytes).digest('hex');
+    const body = bodyBytes.toString('utf8');
     const tableLines = body.split(/\r?\n/);
     const header = tableLines.find(line => /^\|\s*包\s*\|/.test(line));
     const headerCells = header ? header.split('|').slice(1, -1).map(cell => cell.trim()) : [];
@@ -1325,13 +1445,16 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
     modules = tableLines.map((line, index) => ({ line, number: index + 1 }))
       .filter(entry => /^\|\s*\d+\s/.test(entry.line)).map(({ line, number }) => {
         const cells = line.split('|').slice(1, -1).map(cell => cell.trim());
-        if (fiveColumn) return { name: cells[0], fields: [], state: cells[1] ?? '', pending: cells[4] ?? '', source: convergenceRef, line: number };
+        const packageId = /^\d+/.exec(cells[0])?.[0];
+        if (fiveColumn) return { name: cells[0], fields: [], state: cells[1] ?? '', pending: cells[4] ?? '', source: convergenceRef, line: number,
+          source_digest: checklistDigest, evidence: packageEvidence(cells[3], packageId) };
         const fields = ['目标', '边界', '方案与取舍', '验收', '风险', '依赖', '消费者', '未决/无'];
         return { name: cells[0], fields: fields.map((name, index) => {
-          const reference=cells[index+1]??'', present=cellPresent(reference,name,/^\d+/.exec(cells[0])?.[0]);
+          const reference=cells[index+1]??'', present=cellPresent(reference,name,packageId);
           if(!present)errors.push(`${cells[0]}/${name}: 未取得可回读的当前证据：${reference||'缺项'}`);
           return {name,reference,present};
-        }), state: cells[statusIndex] ?? '', pending: cells[8] ?? '', analysis: cells.slice(statusIndex + 1), source: convergenceRef, line: number };
+        }), state: cells[statusIndex] ?? '', pending: cells[8] ?? '', analysis: cells.slice(statusIndex + 1), source: convergenceRef, line: number,
+          source_digest: checklistDigest };
       });
     convergenceReadable = true;
     if (!modules.length) errors.push(`${convergenceRef}: 未读到模块行`);
@@ -1440,9 +1563,14 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
   const gaps = statusColumnFormat
     ? (modules.length ? [...stateGaps, ...parenthesizedPendingGaps, ...ordinaryPendingGaps, ...strictGaps, ...evidenceGaps, ...batchGaps] : ['收敛清单无可读模块行'])
     : [...stateGaps, ...parenthesizedPendingGaps, ...strictGaps, ...evidenceGaps, ...fieldGaps, ...batchGaps];
-  gaps.push(...missing.map(id => `缺模块 WP${id}`), ...duplicate.map(id => `重复模块 WP${id}`), ...unknown.map(id => `未知模块 WP${id}`), ...mappingGaps);
+  // A package is only "missing" once the current checklist itself was read; an
+  // absent or out-of-range ledger is already named by the pointer gap and must
+  // not also claim, per package, a fact about bytes nobody opened.
+  gaps.push(...(convergenceReadable ? missing.map(id => `缺模块 WP${id}`) : []), ...duplicate.map(id => `重复模块 WP${id}`), ...unknown.map(id => `未知模块 WP${id}`), ...mappingGaps,
+    ...packageSetGaps, ...originalEvidenceGaps);
   if (!expected.length || new Set(expected).size !== expected.length) { gaps.push('权威模块集合未取得或重复'); errors.push('decision-log.md: 权威模块集合未取得或重复'); }
-  if (!safeRef) gaps.push('收敛清单指针未取得');
+  if (!convergenceRef) gaps.push('收敛清单指针未取得');
+  else if (rangeGap) gaps.push(`收敛清单越界：${convergenceRef}（${rangeGap}）`);
   else if (!convergenceReadable) gaps.push('收敛清单不可读');
   const convergence = { source: convergenceRef, expected_modules: expected, complete: gaps.length === 0 && expected.length > 0, gaps };
   const invalidatedList = invalidated.flatMap(record => [...record.slugs, ...record.ranges.map(range => `${range.from}～${range.to}`)]);
@@ -1539,7 +1667,7 @@ export function runStageStepsCheck({ taskPath, materialRoot, repoRoot = reposito
     closeout: { state: skipGaps.length || errors.some(error => error.startsWith('跳过缺口不可读')) ? 'incomplete' : 'unavailable', gaps: skipGaps,
       reason: '收口必须逐项消费未清缺口；无跳过缺口也不证明步骤或阶段完成。' },
     modules, convergence, level, supersede: { source: 'decision-log.md', invalidated: invalidatedList }, errors,
-    limits: ['只报告映射、声明原件的可读性、既有 producer 判定与模块结构；不证明步骤完成或模块语义。未留痕只表示机检未读到声明原件，不证明步骤未执行；无持久原件的方法交既有 decision/GLOSSARY/ADR 原件由独立读者判断。失效步骤只按当前 decision-log 行读取，删行不重建历史。每步完成都要求本次 --current-read-receipt 绑定的命令捕获原件：缺当次回执、无任何加载记录、旧回执或内联输出均记未判定；校验重算原输出并与当前声明技能字节三方比对，改自洽的正文也不能通过。同 task/step/HEAD/字节的多份回执，本检查在存在更晚同步骤捕获时拒绝传入的更早件，不按时间挑最新；没有更晚件也没有会话标识时，单份旧回执与本次读取物理不可区分，记该能力边界。每步必需子技能清单未在本卡声明，本检查只覆盖该步声明的技能文件。读取动作按当前卡投影定位声明技能，依赖同一次只读检查报告；该依赖不写状态，影响是读取成本与同一路由，不建新抽象。', ...(invalidationLimit ? [invalidationLimit] : []), ...producerLimits] };
+    limits: [`收敛清单版本：${convergenceRef ? `当前声明的唯一指针是 ${convergenceRef}` : '当前没有取得唯一清单指针'}；v2 清单格式没有版本元数据，旧清单与当前清单物理不可区分，本检查只按日志声明的指针读，不声称会拒绝旧版。`, '只报告映射、声明原件的可读性、既有 producer 判定与模块结构；不证明步骤完成或模块语义。未留痕只表示机检未读到声明原件，不证明步骤未执行；无持久原件的方法交既有 decision/GLOSSARY/ADR 原件由独立读者判断。失效步骤只按当前 decision-log 行读取，删行不重建历史。每步完成都要求本次 --current-read-receipt 绑定的命令捕获原件：缺当次回执、无任何加载记录、旧回执或内联输出均记未判定；校验重算原输出并与当前声明技能字节三方比对，改自洽的正文也不能通过。同 task/step/HEAD/字节的多份回执，本检查在存在更晚同步骤捕获时拒绝传入的更早件，不按时间挑最新；没有更晚件也没有会话标识时，单份旧回执与本次读取物理不可区分，记该能力边界。每步必需子技能清单未在本卡声明，本检查只覆盖该步声明的技能文件。读取动作按当前卡投影定位声明技能，依赖同一次只读检查报告；该依赖不写状态，影响是读取成本与同一路由，不建新抽象。', ...(invalidationLimit ? [invalidationLimit] : []), ...producerLimits] };
 }
 
 function validateSkipIdentity(options, task) {
